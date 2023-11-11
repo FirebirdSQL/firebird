@@ -35,6 +35,7 @@
 
 #include "../jrd/flags.h"
 #include "../jrd/constants.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <firebird/Interface.h>
 

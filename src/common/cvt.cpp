@@ -58,6 +58,7 @@
 #include "../common/utils_proto.h"
 #include "../common/StatusArg.h"
 #include "../common/status.h"
+#include "../common/TimeZones.h"
 
 
 #ifdef HAVE_SYS_TYPES_H
@@ -105,7 +106,8 @@ using namespace Firebird;
 #define FLOAT_MAX 3.402823466E+38F // max float (32 bit) value
 #endif
 
-#define LETTER7(c)      ((c) >= 'A' && (c) <= 'Z')
+#define LETTER7_UPPER(c)      ((c) >= 'A' && (c) <= 'Z')
+#define LETTER(c) (((c) >= 'a' && (c) <= 'z') || ((c) >= 'A' && (c) <= 'Z'))
 #define DIGIT(c)        ((c) >= '0' && (c) <= '9')
 #define ABSOLUT(x)      ((x) < 0 ? -(x) : (x))
 
@@ -145,6 +147,126 @@ static void make_null_string(const dsc*, USHORT, const char**, vary*, USHORT, Fi
 
 class DummyException {};
 
+namespace
+{
+	class TimeZoneTrie
+	{
+	public:
+		static constexpr int EnglishAlphabet = 26;
+		static constexpr int Digits = 10;
+		static constexpr int OtherSymbols = 4; // '/' + '-' + '+' + '_'
+
+		static constexpr int MaxPatternDiversity = EnglishAlphabet + Digits + OtherSymbols;
+
+		static constexpr USHORT UninitializedTimezoneId = 0;
+
+		struct TrieNode
+		{
+			AutoPtr<TrieNode> childrens[MaxPatternDiversity];
+			USHORT timezoneId = UninitializedTimezoneId;
+		};
+
+		TimeZoneTrie(MemoryPool& pool)
+			: m_root(FB_NEW_POOL(pool) TrieNode()), m_pool(pool)
+		{
+			USHORT id = 0;
+			for (const char* p : BUILTIN_TIME_ZONE_LIST)
+			{
+				string timezoneName(p);
+				timezoneName.upper();
+				insertValue(timezoneName.c_str(), MAX_USHORT - id++);
+			}
+		}
+
+		bool contains(const char* value, USHORT& outTimezoneId, int& outParsedTimezoneLength)
+		{
+			const TrieNode* currentNode = m_root;
+			FB_SIZE_T valueLength = fb_strlen(value);
+
+			for (outParsedTimezoneLength = 0; outParsedTimezoneLength < valueLength; outParsedTimezoneLength++)
+			{
+				int index = calculateIndex(value[outParsedTimezoneLength]);
+
+				if (index < 0 || currentNode->childrens[index] == nullptr)
+					break;
+				currentNode = currentNode->childrens[index];
+			}
+
+			if (currentNode->timezoneId == UninitializedTimezoneId)
+				return false;
+
+			outTimezoneId = currentNode->timezoneId;
+			return true;
+		}
+
+	private:
+		void insertValue(const char* value, USHORT timezoneId)
+		{
+			TrieNode* currentNode = m_root;
+			FB_SIZE_T valueLength = fb_strlen(value);
+
+			for (int i = 0; i < valueLength; i++)
+			{
+				int index = calculateIndex(value[i]);
+
+				if (currentNode->childrens[index] == nullptr)
+					currentNode->childrens[index] = FB_NEW_POOL(m_pool) TrieNode();
+				currentNode = currentNode->childrens[index];
+			}
+
+			currentNode->timezoneId = timezoneId;
+		}
+
+		int calculateIndex(char symbol) const
+		{
+			int index = -1;
+			symbol = UPPER(symbol);
+
+			if (symbol >= '0' && symbol <= '9')
+				index = symbol - '0';
+			else if (symbol >= 'A' && symbol <= 'Z')
+				index = symbol - 'A' + Digits;
+			else
+			{
+				switch (symbol)
+				{
+					case '/': index = Digits + EnglishAlphabet; break;
+					case '-': index = Digits + EnglishAlphabet + 1; break;
+					case '+': index = Digits + EnglishAlphabet + 2; break;
+					case '_': index = Digits + EnglishAlphabet + 3; break;
+				}
+			}
+
+			fb_assert(index < MaxPatternDiversity);
+			return index;
+		}
+
+	private:
+		AutoPtr<TrieNode> m_root;
+		MemoryPool& m_pool;
+	};
+}
+
+enum class ExpectedDateType
+{
+	TIME,
+	DATE,
+	TIMEZONE
+};
+
+static const char* const TO_DATETIME_PATTERNS[] = {
+	"YEAR", "YYYY", "YYY", "YY", "Y", "Q", "MM", "MON", "MONTH", "RM", "WW", "W",
+	"D", "DAY", "DD", "DDD", "DY", "J", "HH", "HH12", "HH24", "MI", "SS", "SSSSS",
+	"FF1", "FF2", "FF3", "FF4", "FF5", "FF6", "FF7", "FF8", "FF9", "TZH", "TZM", "TZR"
+};
+
+static const char* const TO_STRING_PATTERNS[] = {
+	"YEAR", "YYYY", "YYY", "YY", "Y", "MM", "MON", "MONTH", "RM", "DD", "J", "HH", "HH12",
+	"HH24", "MI", "SS", "SSSSS", "FF1", "FF2", "FF3", "FF4", "TZH", "TZM", "TZR"
+};
+
+static InitInstance<TimeZoneTrie> timeZoneTrie;
+
 
 //#ifndef WORDS_BIGENDIAN
 //static const SQUAD quad_min_int = { 0, SLONG_MIN };
@@ -157,6 +279,12 @@ class DummyException {};
 
 static const double eps_double = 1e-14;
 static const double eps_float  = 1e-5;
+
+template <typename T>
+static constexpr int sign(T value)
+{
+	return (value >= T(0)) ? 1 : -1;
+}
 
 
 static void float_to_text(const dsc* from, dsc* to, Callbacks* cb)
@@ -630,7 +758,7 @@ void CVT_string_to_datetime(const dsc* desc,
 			}
 			description[i] = precision;
 		}
-		else if (LETTER7(c) && !have_english_month && i - start_component < 2)
+		else if (LETTER7_UPPER(c) && !have_english_month && i - start_component < 2)
 		{
 			TEXT temp[sizeof(YESTERDAY) + 1];
 
@@ -638,7 +766,7 @@ void CVT_string_to_datetime(const dsc* desc,
 			while ((p < end) && (t < &temp[sizeof(temp) - 1]))
 			{
 				c = UPPER7(*p);
-				if (!LETTER7(c))
+				if (!LETTER7_UPPER(c))
 					break;
 				*t++ = c;
 				p++;
@@ -1030,6 +1158,979 @@ void CVT_string_to_datetime(const dsc* desc,
 		else if (expect_type == expect_timestamp)
 			*(ISC_TIMESTAMP*) date = TimeZoneUtil::timeStampTzToTimeStamp(*date, sessionTimeZone);
 	}
+}
+
+
+static void date_type_check(ExpectedDateType expected, const dsc* desc, std::string_view pattern, Firebird::Callbacks* cb)
+{
+	switch (expected)
+	{
+		case ExpectedDateType::TIME:
+			if (!desc->isDate())
+				return;
+			break;
+
+		case ExpectedDateType::DATE:
+			if (!desc->isTime())
+				return;
+			break;
+
+		case ExpectedDateType::TIMEZONE:
+			if (desc->isDateTimeTz())
+				return;
+			break;
+
+		default:
+			break;
+	}
+
+	cb->err(Arg::Gds(isc_incompatible_date_format_with_current_date_type) << string(pattern.data(), pattern.length()));
+}
+
+
+static string int_to_roman(int num)
+{
+	static const char* const symbols[] = {"M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I"};
+	static const int values[] = {1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1};
+
+	string roman;
+	for (int i = 0; i < 13; i++)
+	{
+		while (num >= values[i])
+		{
+			roman += symbols[i];
+			num -= values[i];
+		}
+	}
+	return roman;
+}
+
+
+static SSHORT extract_timezone_offset(const dsc* desc)
+{
+	SSHORT timezoneOffset = 0;
+
+	switch (desc->dsc_dtype)
+	{
+		case dtype_sql_time_tz:
+		case dtype_ex_time_tz:
+			TimeZoneUtil::extractOffset(*(ISC_TIME_TZ*) desc->dsc_address, &timezoneOffset);
+			break;
+
+		case dtype_timestamp_tz:
+		case dtype_ex_timestamp_tz:
+			TimeZoneUtil::extractOffset(*(ISC_TIMESTAMP_TZ*) desc->dsc_address, &timezoneOffset);
+			break;
+	}
+
+	return timezoneOffset;
+}
+
+
+static string extract_timezone_name(const dsc* desc)
+{
+	char timezoneBuffer[TimeZoneUtil::MAX_SIZE];
+	unsigned int length = 0;
+
+	switch (desc->dsc_dtype)
+	{
+		case dtype_sql_time_tz:
+		case dtype_ex_time_tz:
+			length = TimeZoneUtil::format(timezoneBuffer, sizeof(timezoneBuffer),
+				((ISC_TIME_TZ*) desc->dsc_address)->time_zone);
+			break;
+
+		case dtype_timestamp_tz:
+		case dtype_ex_timestamp_tz:
+			length = TimeZoneUtil::format(timezoneBuffer, sizeof(timezoneBuffer),
+				((ISC_TIMESTAMP_TZ*) desc->dsc_address)->time_zone);
+			break;
+	}
+
+	return string(timezoneBuffer, length);
+}
+
+
+static bool is_separator(char symbol)
+{
+	switch (symbol)
+	{
+		case '.':
+		case '/':
+		case ',':
+		case ';':
+		case ':':
+		case ' ':
+		case '-':
+		case '\"':
+			return true;
+
+		default:
+			return false;
+	}
+}
+
+
+static void invalid_pattern_exception(std::string_view pattern, Callbacks* cb)
+{
+	cb->err(Arg::Gds(isc_invalid_date_format) << string(pattern.data(), pattern.length()));
+}
+
+
+static string datetime_to_format_string_pattern_matcher(const dsc* desc, std::string_view pattern,
+	std::string_view previousPattern, const struct tm& times, int fractions,
+	Firebird::Callbacks* cb)
+{
+	string patternResult;
+
+	switch (pattern[0])
+	{
+		case 'Y':
+		{
+			date_type_check(ExpectedDateType::DATE, desc, pattern, cb);
+
+			int year = times.tm_year + 1900;
+			if (pattern == "Y")
+				patternResult.printf("%d", year % 10);
+			else if (pattern == "YY")
+				patternResult.printf("%02d", year % 100);
+			else if (pattern == "YYY")
+				patternResult.printf("%03d", year % 1000);
+			else if (pattern == "YYYY")
+				patternResult.printf("%04d", year % 10000);
+			else if (pattern == "YEAR")
+				patternResult.printf("%d", year);
+			break;
+		}
+
+		case 'Q':
+			date_type_check(ExpectedDateType::DATE, desc, pattern, cb);
+
+			if (pattern == "Q")
+			{
+				int quarter = times.tm_mon / 3 + 1;
+
+				patternResult.printf("%d", quarter);
+			}
+			break;
+
+		case 'M':
+			if (pattern == "MI")
+			{
+				date_type_check(ExpectedDateType::TIME, desc, pattern, cb);
+
+				patternResult.printf("%02d", times.tm_min);
+				break;
+			}
+
+			date_type_check(ExpectedDateType::DATE, desc, pattern, cb);
+
+			if (pattern == "MM")
+				patternResult.printf("%02d", (times.tm_mon + 1));
+			else if (pattern == "MON")
+				patternResult.printf("%s", FB_SHORT_MONTHS[times.tm_mon]);
+			else if (pattern == "MONTH")
+				patternResult.printf("%s", FB_LONG_MONTHS_UPPER[times.tm_mon]);
+			break;
+
+		case 'R':
+			date_type_check(ExpectedDateType::DATE, desc, pattern, cb);
+
+			if (pattern == "RM")
+			{
+				string roman = int_to_roman(times.tm_mon + 1);
+				patternResult.printf("%s", roman.c_str());
+			}
+			break;
+
+		case 'W':
+			date_type_check(ExpectedDateType::DATE, desc, pattern, cb);
+
+			if (pattern == "W")
+			{
+				int week = (times.tm_mday - 1) / 7;
+				patternResult.printf("%d", week + 1);
+			}
+			else if (pattern == "WW")
+			{
+				int week = NoThrowTimeStamp::convertGregorianDateToWeekDate(times);
+				patternResult.printf("%02d", week);
+			}
+			break;
+
+		case 'D':
+			date_type_check(ExpectedDateType::DATE, desc, pattern, cb);
+
+			if (pattern == "D")
+				patternResult.printf("%d", times.tm_wday + 1);
+			else if (pattern == "DAY")
+				patternResult.printf("%s", FB_LONG_DAYS_UPPER[times.tm_wday]);
+			else if (pattern == "DD")
+				patternResult.printf("%02d", times.tm_mday);
+			else if (pattern == "DDD")
+			{
+				int daysInYear = times.tm_yday + 1;
+				patternResult.printf("%03d", daysInYear);
+			}
+			else if (pattern == "DY")
+				patternResult.printf("%s", FB_SHORT_DAYS[times.tm_wday]);
+			break;
+
+		case 'J':
+			date_type_check(ExpectedDateType::DATE, desc, pattern, cb);
+
+			if (pattern == "J")
+			{
+				int JulianDay = NoThrowTimeStamp::convertGregorianDateToJulianDate(times.tm_year + 1900, times.tm_mon + 1,
+					times.tm_mday);
+
+				patternResult.printf("%d", JulianDay);
+			}
+			break;
+
+		case 'H':
+			date_type_check(ExpectedDateType::TIME, desc, pattern, cb);
+
+			if (pattern == "HH"||
+				pattern == "HH12")
+			{
+				const char* period;
+				int hours = times.tm_hour;
+
+				if (hours >= 12)
+				{
+					period = "PM";
+					if (hours > 12)
+						hours -= 12;
+				}
+				else
+				{
+					period = "AM";
+					if (hours == 0)
+						hours = 12;
+				}
+
+				patternResult.printf("%02d %s", hours, period);
+			}
+			else if (pattern == "HH24")
+				patternResult.printf("%02d", times.tm_hour);
+			break;
+
+		case 'S':
+			date_type_check(ExpectedDateType::TIME, desc, pattern, cb);
+
+			if (pattern == "SS")
+				patternResult.printf("%02d", times.tm_sec);
+			else if (pattern == "SSSSS")
+			{
+				int secondsInDay = times.tm_hour * 60 * 60 + times.tm_min * 60 + times.tm_sec;
+				patternResult.printf("%d", secondsInDay);
+			}
+			break;
+
+		case 'F':
+			date_type_check(ExpectedDateType::TIME, desc, pattern, cb);
+
+			if (!strncmp(pattern.data(), "FF", pattern.length() - 1))
+			{
+				int number = pattern.back() - '0';
+				if (number < 1 || number > 9)
+				{
+					invalid_pattern_exception(pattern, cb);
+				}
+
+				const int fractionsPrecision = fractions != 0 ? std::log10(fractions) + 1 : 1;
+				int additionalZerosCount = 0;
+				if (number > fractionsPrecision)
+				{
+					additionalZerosCount = number - fractionsPrecision;
+					number = fractionsPrecision;
+				}
+
+				patternResult.printf("%d%.*s", fractions / (int) powf(10, fractionsPrecision - number),
+					additionalZerosCount, "00000000");
+			}
+			break;
+
+		case 'T':
+			date_type_check(ExpectedDateType::TIMEZONE, desc, pattern, cb);
+
+			if (pattern == "TZH")
+			{
+				SSHORT timezoneOffset = extract_timezone_offset(desc);
+				int timezoneSign = sign(timezoneOffset);
+				SSHORT offsetInHours = abs(timezoneOffset / 60);
+
+				string printfFormat = "%02d";
+
+				if (previousPattern != "TZM")
+				{
+					if (timezoneSign < 0)
+						printfFormat = "-" + printfFormat;
+					else
+						printfFormat = "+" + printfFormat;
+				}
+
+				patternResult.printf(printfFormat.c_str(), offsetInHours);
+			}
+			else if (pattern == "TZM")
+			{
+				SSHORT timezoneOffset = extract_timezone_offset(desc);
+				int timezoneSign = sign(timezoneOffset);
+				SSHORT offsetInMinutes = abs(timezoneOffset % 60);
+
+				string printfFormat = "%02d";
+
+				if (previousPattern != "TZH")
+				{
+					if (timezoneSign < 0)
+						printfFormat = "-" + printfFormat;
+					else if (timezoneOffset >= 0)
+						printfFormat = "+" + printfFormat;
+				}
+
+				patternResult.printf(printfFormat.c_str(), offsetInMinutes);
+			}
+			else if (pattern == "TZR")
+				patternResult = extract_timezone_name(desc);
+			break;
+
+		default:
+			invalid_pattern_exception(pattern, cb);
+	}
+
+	if (patternResult.isEmpty())
+		invalid_pattern_exception(pattern, cb);
+
+	return patternResult;
+}
+
+
+string CVT_datetime_to_format_string(const dsc* desc, const string& format, Callbacks* cb)
+{
+	if (format.isEmpty())
+		cb->err(Arg::Gds(isc_sysf_invalid_null_empty) << Arg::Str(STRINGIZE(format)));
+
+	struct tm times;
+	memset(&times, 0, sizeof(struct tm));
+
+	int fractions = 0;
+
+	switch (desc->dsc_dtype)
+	{
+		case dtype_sql_time:
+			Firebird::TimeStamp::decode_time(*(GDS_TIME*) desc->dsc_address,
+				&times.tm_hour, &times.tm_min, &times.tm_sec, &fractions);
+			break;
+
+		case dtype_sql_time_tz:
+		case dtype_ex_time_tz:
+			TimeZoneUtil::decodeTime(*(ISC_TIME_TZ*) desc->dsc_address,
+				true, TimeZoneUtil::NO_OFFSET, &times, &fractions);
+			break;
+
+		case dtype_sql_date:
+			Firebird::TimeStamp::decode_date(*(GDS_DATE*) desc->dsc_address, &times);
+			break;
+
+		case dtype_timestamp:
+			Firebird::TimeStamp::decode_timestamp(*(GDS_TIMESTAMP*) desc->dsc_address, &times, &fractions);
+			break;
+
+		case dtype_timestamp_tz:
+		case dtype_ex_timestamp_tz:
+			TimeZoneUtil::decodeTimeStamp(*(ISC_TIMESTAMP_TZ*) desc->dsc_address,
+				true, TimeZoneUtil::NO_OFFSET, &times, &fractions);
+			break;
+
+		default:
+			cb->err(Arg::Gds(isc_invalid_data_type_for_date_format));
+	}
+
+	string formatUpper(format);
+	for (int i = 0; i < formatUpper.length(); i++)
+	{
+		const char symbol = formatUpper[i];
+		if (symbol != '\"')
+		{
+			formatUpper[i] = toupper(symbol);
+			continue;
+		}
+
+		while(true)
+		{
+			int pos = formatUpper.find('\"', i + 1);
+			if (pos == string::npos)
+				cb->err(Arg::Gds(isc_invalid_raw_string_in_date_format));
+			int tempPos = pos;
+			if (formatUpper[--tempPos] == '\\')
+			{
+				int backslashCount = 1;
+				while(formatUpper[--tempPos] == '\\')
+					backslashCount++;
+				if (backslashCount % 2 == 1)
+				{
+					i = pos;
+					continue;
+				}
+			}
+			i = pos;
+			break;
+		}
+	}
+
+	string result;
+	int formatOffset = 0;
+	std::string_view pattern;
+	std::string_view previousPattern;
+
+	for (int i = 0; i < formatUpper.length(); i++)
+	{
+		const char symbol = formatUpper[i];
+
+		if (is_separator(symbol))
+		{
+			if (formatOffset != i)
+			{
+				result += datetime_to_format_string_pattern_matcher(desc, pattern, previousPattern, times,
+					fractions, cb);
+				previousPattern = pattern;
+			}
+			if (symbol == '\"')
+			{
+				i++;
+				int rawStringLength = formatUpper.length() - i;
+				string rawString(rawStringLength, '\0');
+				for (int j = 0; j < rawStringLength; j++, i++)
+				{
+					if (formatUpper[i] == '\"')
+						break;
+					else if (formatUpper[i] == '\\')
+						rawString[j] = formatUpper[++i];
+					else
+						rawString[j] = formatUpper[i];
+				}
+				rawString.recalculate_length();
+				result += rawString;
+			}
+			else
+				result += symbol;
+
+			formatOffset = i + 1;
+			continue;
+		}
+
+		pattern = std::string_view(formatUpper.c_str() + formatOffset, i - formatOffset + 1);
+		bool isFound = false;
+		for (int j = 0; j < FB_NELEM(TO_DATETIME_PATTERNS); j++)
+		{
+			if (!strncmp(TO_DATETIME_PATTERNS[j], pattern.data(), pattern.length()))
+			{
+				isFound = true;
+				if (i == formatUpper.length() - 1)
+				{
+					result += datetime_to_format_string_pattern_matcher(desc, pattern, previousPattern, times,
+						fractions, cb);
+				}
+				break;
+			}
+		}
+		if (isFound)
+			continue;
+
+		if (pattern.length() <= 1)
+			invalid_pattern_exception(pattern, cb);
+
+		pattern = pattern.substr(0, pattern.length() - 1);
+		result += datetime_to_format_string_pattern_matcher(desc, pattern, previousPattern, times,
+			fractions, cb);
+		previousPattern = pattern;
+		formatOffset = i;
+		i--;
+	}
+
+	return result;
+}
+
+
+static int roman_to_int(const char* str, int length, int& offset)
+{
+	int result = 0;
+	int temp = 0;
+
+	for (; offset < length; offset++)
+	{
+		int value = 0;
+
+		switch (str[offset])
+		{
+			case 'I': value = 1; break;
+			case 'V': value = 5; break;
+			case 'X': value = 10; break;
+			case 'L': value = 50; break;
+			case 'C': value = 100; break;
+			case 'D': value = 500; break;
+			case 'M': value = 1000; break;
+			default: return 0;
+		}
+
+		result += value;
+		if (temp < value)
+			result -= temp * 2;
+		temp = value;
+	}
+
+	return result;
+}
+
+
+static int parse_string_to_get_int(const char* str, int length, int& offset, int parseLength, bool withSign = false)
+{
+	int result = 0;
+	int sign = 1;
+
+	if (withSign)
+	{
+		// To check '-' sign we need to move back, cuz '-' is also used as separator,
+		// so it will be skipped when we trying to remove "empty" space between values
+		if (str[offset] == '+')
+			offset++;
+		else if (offset != 0 && str[offset - 1] == '-')
+			sign = -1;
+	}
+
+	const int parseLengthWithOffset = offset + parseLength;
+	for (; offset < parseLengthWithOffset && offset < length; offset++)
+	{
+		if (!DIGIT(str[offset]))
+			return result * sign;
+
+		result = result * 10 + (str[offset] - '0');
+	}
+
+	return result * sign;
+}
+
+
+static std::string_view parse_string_to_get_first_word(const char* str, int length, int& offset, int parseLength)
+{
+	int wordLen = 0;
+	int startPoint = offset;
+
+	const int parseLengthWithOffset = offset + parseLength;
+	for (; offset < parseLengthWithOffset && offset < length; offset++)
+	{
+		if (!LETTER(str[offset]))
+			break;
+
+		++wordLen;
+	}
+
+	return std::string_view(str + startPoint, wordLen);
+}
+
+
+static void string_to_format_datetime_pattern_matcher(std::string_view pattern, std::string_view previousPattern,
+	const char* str, int strLength, int& strOffset, struct tm& outTimes, int& outFractions,
+	SSHORT& outTimezoneInMinutes, USHORT& outTimezoneId, Firebird::Callbacks* cb)
+{
+	switch (pattern[0])
+	{
+		case 'Y':
+			if (pattern == "Y")
+			{
+				int year = parse_string_to_get_int(str, strLength, strOffset, 1);
+				outTimes.tm_year = 2000 + year - 1900;
+				return;
+			}
+			else if (pattern == "YY")
+			{
+				int year = parse_string_to_get_int(str, strLength, strOffset, 2);
+				outTimes.tm_year = (year > 45 ? 1900 + year : 2000 + year) - 1900;
+				return;
+			}
+			else if (pattern == "YYY")
+			{
+				int year = parse_string_to_get_int(str, strLength, strOffset, 3);
+				outTimes.tm_year = (year > 450 ? 1000 + year : 2000 + year) - 1900;
+				return;
+			}
+			else if (pattern == "YYYY")
+			{
+				int year = parse_string_to_get_int(str, strLength, strOffset, 4);
+				outTimes.tm_year = year - 1900;
+				return;
+			}
+			else if (pattern == "YEAR")
+			{
+				int year = parse_string_to_get_int(str, strLength, strOffset, strLength - strOffset);
+				if (year > 9999)
+				{
+					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+						string(pattern.data(), pattern.length()) << Arg::Num(0) << Arg::Num(9999));
+				}
+				outTimes.tm_year = year - 1900;
+				return;
+			}
+			break;
+
+		case 'M':
+			if (pattern == "MI")
+			{
+				int minutes = parse_string_to_get_int(str, strLength, strOffset, 2);
+				if (minutes > 59)
+				{
+					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+						string(pattern.data(), pattern.length()) << Arg::Num(0) << Arg::Num(59));
+				}
+
+				outTimes.tm_min = minutes;
+				return;
+			}
+			else if (pattern == "MM")
+			{
+				int month = parse_string_to_get_int(str, strLength, strOffset, 2);
+				if (month < 1 || month > 12)
+				{
+					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+						string(pattern.data(), pattern.length()) << Arg::Num(1) << Arg::Num(12));
+				}
+
+				outTimes.tm_mon = month - 1;
+				return;
+			}
+			else if (pattern == "MON")
+			{
+				std::string_view monthShortName = parse_string_to_get_first_word(str, strLength, strOffset, 3);
+				int month = -1;
+				for (int i = 0; i < FB_NELEM(FB_SHORT_MONTHS) - 1; i++)
+				{
+					if (std::equal(monthShortName.begin(), monthShortName.end(),
+							FB_SHORT_MONTHS[i], FB_SHORT_MONTHS[i] + strlen(FB_SHORT_MONTHS[i]),
+							[](char a, char b) { return a == UPPER(b); }))
+					{
+						outTimes.tm_mon = i;
+						return;
+					}
+				}
+
+				cb->err(Arg::Gds(isc_month_name_mismatch) << string(monthShortName.data(), monthShortName.length()));
+			}
+			else if (pattern == "MONTH")
+			{
+				std::string_view monthFullName = parse_string_to_get_first_word(str, strLength, strOffset, strLength - strOffset);
+				for (int i = 0; i < FB_NELEM(FB_LONG_MONTHS_UPPER) - 1; i++)
+				{
+					if (std::equal(monthFullName.begin(), monthFullName.end(),
+							FB_LONG_MONTHS_UPPER[i], FB_LONG_MONTHS_UPPER[i] + strlen(FB_LONG_MONTHS_UPPER[i]),
+							[](char a, char b) { return a == UPPER(b); }))
+					{
+						outTimes.tm_mon = i;
+						return;
+					}
+				}
+
+				cb->err(Arg::Gds(isc_month_name_mismatch) << string(monthFullName.data(), monthFullName.length()));
+			}
+			break;
+
+		case 'R':
+			if (pattern == "RM")
+			{
+				int month = roman_to_int(str, strLength, strOffset);
+				if (month == 0 || month > 12)
+				{
+					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+						string(pattern.data(), pattern.length()) << Arg::Num(1) << Arg::Num(12));
+				}
+
+				outTimes.tm_mon = month - 1;
+				return;
+			}
+			break;
+
+		case 'D':
+			if (pattern == "DD")
+			{
+				int day = parse_string_to_get_int(str, strLength, strOffset, 2);
+				if (day == 0 || day > 31)
+				{
+					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+						string(pattern.data(), pattern.length()) << Arg::Num(1) << Arg::Num(31));
+				}
+
+				outTimes.tm_mday = day;
+				return;
+			}
+			break;
+
+		case 'J':
+			if (pattern == "J")
+			{
+				int JDN = parse_string_to_get_int(str, strLength, strOffset, strLength - strOffset);
+
+				constexpr int minJDN = 1721426; // 0.0.0
+				constexpr int maxJDN = 5373484; // 31.12.9999
+				if (JDN < minJDN || JDN > maxJDN)
+				{
+					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+						string(pattern.data(), pattern.length()) << Arg::Num(minJDN) << Arg::Num(maxJDN));
+				}
+
+				int year, month, day;
+				NoThrowTimeStamp::convertJulianDateToGregorianDate(JDN, year, month, day);
+				outTimes.tm_year = year - 1900;
+				outTimes.tm_mon = month - 1;
+				outTimes.tm_mday = day;
+				return;
+			}
+			break;
+
+		case 'H':
+			if (pattern == "HH"||
+				pattern == "HH12")
+			{
+				int hours = parse_string_to_get_int(str, strLength, strOffset, 2);
+				if (hours > 12)
+				{
+					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+						string(pattern.data(), pattern.length()) << Arg::Num(0) << Arg::Num(12));
+				}
+
+				if (str[strOffset] == ' ')
+					strOffset++;
+
+				std::string_view period = parse_string_to_get_first_word(str, strLength, strOffset, 2);
+				if (period == "AM")
+				{
+					outTimes.tm_hour = hours == 12 ? 0 : hours;
+					return;
+				}
+				else if (period == "PM")
+				{
+					outTimes.tm_hour = hours == 12 ? hours : 12 + hours;
+					return;
+				}
+
+				cb->err(Arg::Gds(isc_incorrect_hours_period) << string(period.data(), period.length()));
+			}
+			else if (pattern == "HH24")
+			{
+				int hours = parse_string_to_get_int(str, strLength, strOffset, 2);
+				if (hours > 23)
+				{
+					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+						string(pattern.data(), pattern.length()) << Arg::Num(0) << Arg::Num(23));
+				}
+
+				outTimes.tm_hour = hours;
+				return;
+			}
+			break;
+
+		case 'S':
+			if (pattern == "SS")
+			{
+				int seconds = parse_string_to_get_int(str, strLength, strOffset, 2);
+				if (seconds > 59)
+				{
+					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+						string(pattern.data(), pattern.length()) << Arg::Num(0) << Arg::Num(59));
+				}
+
+				outTimes.tm_sec = seconds;
+				return;
+			}
+			else if (pattern == "SSSSS")
+			{
+				constexpr int maximumSecondsInDay = 24 * 60 * 60 - 1;
+
+				int secondsInDay = parse_string_to_get_int(str, strLength, strOffset, 5);
+				if (secondsInDay > maximumSecondsInDay)
+				{
+					cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+						string(pattern.data(), pattern.length()) << Arg::Num(0) << Arg::Num(maximumSecondsInDay));
+				}
+
+				int hours = secondsInDay / 24;
+				int minutes = secondsInDay / 60 - hours * 60;
+				int seconds = secondsInDay - minutes * 60 - hours * 60 * 60;
+
+				outTimes.tm_hour = hours;
+				outTimes.tm_min = minutes;
+				outTimes.tm_sec = seconds;
+				return;
+			}
+			break;
+
+		case 'F':
+			if (!strncmp(pattern.data(), "FF", pattern.length() - 1))
+			{
+				int number = pattern.back() - '0';
+				if (number < 1 || number > -ISC_TIME_SECONDS_PRECISION_SCALE)
+				{
+					invalid_pattern_exception(pattern, cb);
+				}
+
+				const int fractions = parse_string_to_get_int(str, strLength, strOffset, number);
+				outFractions = fractions * pow(10, -ISC_TIME_SECONDS_PRECISION_SCALE - number);
+				return;
+			}
+			break;
+
+		case 'T':
+			if (pattern == "TZH")
+			{
+				if (previousPattern == "TZM")
+				{
+					outTimezoneInMinutes += sign(outTimezoneInMinutes) *
+						parse_string_to_get_int(str, strLength, strOffset, strLength - strOffset) * 60;
+				}
+				else
+					outTimezoneInMinutes = parse_string_to_get_int(str, strLength, strOffset, strLength - strOffset, true) * 60;
+				return;
+			}
+			else if (pattern == "TZM")
+			{
+				if (previousPattern == "TZH")
+				{
+					outTimezoneInMinutes += sign(outTimezoneInMinutes) *
+						parse_string_to_get_int(str, strLength, strOffset, strLength - strOffset);
+				}
+				else
+					outTimezoneInMinutes = parse_string_to_get_int(str, strLength, strOffset, strLength - strOffset, true);
+				return;
+			}
+			else if (pattern == "TZR")
+			{
+				USHORT timezoneId;
+
+				int parsedTimezoneNameLength;
+				bool timezoneNameIsCorrect = timeZoneTrie().contains(str + strOffset, outTimezoneId, parsedTimezoneNameLength);
+				if (!timezoneNameIsCorrect)
+					status_exception::raise(Arg::Gds(isc_invalid_timezone_region) << string(str + strOffset, parsedTimezoneNameLength));
+
+				strOffset += parsedTimezoneNameLength;
+				return;
+			}
+			break;
+	}
+
+	invalid_pattern_exception(pattern, cb);
+}
+
+
+ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::string& format, Firebird::Callbacks* cb)
+{
+	if (!DTYPE_IS_TEXT(desc->dsc_dtype))
+		cb->err(Arg::Gds(isc_invalid_data_type_for_date_format));
+
+	if (format.isEmpty())
+		cb->err(Arg::Gds(isc_sysf_invalid_null_empty) << Arg::Str(STRINGIZE(format)));
+
+	USHORT dtype;
+	UCHAR* sourceString;
+	USHORT stringLength = CVT_get_string_ptr_common(desc, &dtype, &sourceString, nullptr, 0, 0, cb);
+
+	string stringUpper(stringLength, '\0');
+	for (int i = 0; i < stringLength; i++)
+		stringUpper[i] = toupper(sourceString[i]);
+
+	string formatUpper(format.length(), '\0');
+	for (int i = 0; i < format.length(); i++)
+		formatUpper[i] = toupper(format[i]);
+
+	struct tm times;
+	memset(&times, 0, sizeof(struct tm));
+	times.tm_year = 1 - 1900;
+	times.tm_mday = 1;
+
+	int fractions = 0;
+
+	constexpr SSHORT uninitializedTimezoneOffsetValue = INT16_MIN;
+	SSHORT timezoneOffsetInMinutes = uninitializedTimezoneOffsetValue;
+	USHORT timezoneId = TimeZoneTrie::UninitializedTimezoneId;
+
+	int formatOffset = 0;
+	int stringOffset = 0;
+
+	std::string_view pattern;
+	std::string_view previousPattern;
+
+	for (int i = 0; i < formatUpper.length(); i++)
+	{
+		const char symbol = formatUpper[i];
+
+		if (is_separator(symbol))
+		{
+			if (formatOffset != i)
+			{
+				string_to_format_datetime_pattern_matcher(pattern, previousPattern, stringUpper.c_str(),
+					stringLength, stringOffset, times, fractions, timezoneOffsetInMinutes, timezoneId, cb);
+				previousPattern = pattern;
+			}
+
+			formatOffset = i + 1;
+			continue;
+		}
+
+		for (; stringOffset < stringLength; stringOffset++)
+		{
+			if (!is_separator(stringUpper[stringOffset]))
+				break;
+		}
+
+		pattern = std::string_view(formatUpper.c_str() + formatOffset, i - formatOffset + 1);
+		bool isFound = false;
+		for (int j = 0; j < FB_NELEM(TO_STRING_PATTERNS); j++)
+		{
+			if (!strncmp(TO_STRING_PATTERNS[j], pattern.data(), pattern.length()))
+			{
+				isFound = true;
+				if (i == formatUpper.length() - 1)
+				{
+					string_to_format_datetime_pattern_matcher(pattern, previousPattern, stringUpper.c_str(),
+						stringLength, stringOffset, times, fractions, timezoneOffsetInMinutes, timezoneId, cb);
+				}
+				break;
+			}
+		}
+		if (isFound)
+			continue;
+
+		if (pattern.length() <= 1)
+			invalid_pattern_exception(pattern, cb);
+
+		pattern = pattern.substr(0, pattern.length() - 1);
+		string_to_format_datetime_pattern_matcher(pattern, previousPattern, stringUpper.c_str(),
+			stringLength, stringOffset, times, fractions, timezoneOffsetInMinutes, timezoneId, cb);
+		previousPattern = pattern;
+		formatOffset = i;
+		i--;
+	}
+
+	for (; stringOffset < stringLength; stringOffset++)
+	{
+		if (!is_separator(stringUpper[stringOffset]))
+			break;
+	}
+
+	if (stringOffset < stringLength)
+		cb->err(Arg::Gds(isc_trailing_part_of_string) << string(stringUpper.c_str() + stringOffset));
+
+	ISC_TIMESTAMP_TZ timestampTZ;
+	if (timezoneOffsetInMinutes == uninitializedTimezoneOffsetValue && timezoneId == TimeZoneTrie::UninitializedTimezoneId)
+		timestampTZ.time_zone = cb->getSessionTimeZone();
+	else if (timezoneId != TimeZoneTrie::UninitializedTimezoneId)
+		timestampTZ.time_zone = timezoneId;
+	else
+	{
+		timestampTZ.time_zone = TimeZoneUtil::makeFromOffset(sign(timezoneOffsetInMinutes),
+			abs(timezoneOffsetInMinutes) / 60, abs(timezoneOffsetInMinutes) % 60);
+	}
+	timestampTZ.utc_timestamp = NoThrowTimeStamp::encode_timestamp(&times, fractions);
+
+	return timestampTZ;
 }
 
 

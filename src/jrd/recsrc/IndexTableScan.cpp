@@ -390,7 +390,7 @@ void IndexTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsi
 		planEntry.alias = m_alias;
 
 	if (m_inversion)
-		printInversion(tdbb, m_inversion, planEntry.lines, true, 1, false);
+		printInversion(tdbb, m_inversion, planEntry.lines, true, 2, false);
 }
 
 int IndexTableScan::compareKeys(const index_desc* idx,

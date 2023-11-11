@@ -356,6 +356,16 @@ public:
 
 	static double getSelectivity(const BoolExprNode* node)
 	{
+		if (const auto listNode = nodeAs<InListBoolNode>(node))
+		{
+			const auto selectivity = REDUCE_SELECTIVITY_FACTOR_EQUALITY *
+				listNode->list->items.getCount();
+			return MIN(selectivity, MAXIMUM_SELECTIVITY);
+		}
+
+		if (nodeIs<MissingBoolNode>(node))
+			return REDUCE_SELECTIVITY_FACTOR_EQUALITY;
+
 		if (const auto cmpNode = nodeAs<ComparativeBoolNode>(node))
 		{
 			switch (cmpNode->blrOp)
@@ -381,16 +391,6 @@ public:
 			default:
 				break;
 			}
-		}
-		else if (const auto listNode = nodeAs<InListBoolNode>(node))
-		{
-			const auto selectivity = REDUCE_SELECTIVITY_FACTOR_EQUALITY *
-				listNode->list->items.getCount();
-			return MIN(selectivity, MAXIMUM_SELECTIVITY);
-		}
-		else if (nodeIs<MissingBoolNode>(node))
-		{
-			return REDUCE_SELECTIVITY_FACTOR_EQUALITY;
 		}
 
 		return REDUCE_SELECTIVITY_FACTOR_OTHER;

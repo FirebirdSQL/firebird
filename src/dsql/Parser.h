@@ -261,13 +261,13 @@ private:
 		}
 	}
 
-	void setClause(TriState& clause, const char* duplicateMsg, bool value)
+	void setClause(Firebird::TriState& clause, const char* duplicateMsg, bool value)
 	{
 		checkDuplicateClause(clause, duplicateMsg);
 		clause = value;
 	}
 
-	void setClause(TriState& clause, const char* duplicateMsg, const TriState& value)
+	void setClause(Firebird::TriState& clause, const char* duplicateMsg, const Firebird::TriState& value)
 	{
 		if (value.isAssigned())
 		{
@@ -322,7 +322,7 @@ private:
 		return clause.hasData();
 	}
 
-	bool isDuplicateClause(const TriState& clause)
+	bool isDuplicateClause(const Firebird::TriState& clause)
 	{
 		return clause.isAssigned();
 	}

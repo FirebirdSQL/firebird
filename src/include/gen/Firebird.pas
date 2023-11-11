@@ -5704,6 +5704,15 @@ const
 	 isc_param_not_exist = 335545290;
 	 isc_param_no_default_not_specified = 335545291;
 	 isc_param_multiple_assignments = 335545292;
+	 isc_invalid_date_format = 335545293;
+	 isc_invalid_raw_string_in_date_format = 335545294;
+	 isc_invalid_data_type_for_date_format = 335545295;
+	 isc_incompatible_date_format_with_current_date_type = 335545296;
+	 isc_value_for_pattern_is_out_of_range = 335545297;
+	 isc_month_name_mismatch = 335545298;
+	 isc_incorrect_hours_period = 335545299;
+	 isc_data_for_format_is_exhausted = 335545300;
+	 isc_trailing_part_of_string = 335545301;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;

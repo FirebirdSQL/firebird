@@ -257,6 +257,8 @@ enum att_type {
 	att_database_sql_security_deprecated,	// can be removed later
 	att_replica_mode,		// replica mode
 	att_database_sql_security,	// default sql security value
+	att_default_pub_active, // default publication status
+	att_default_pub_auto_enable,
 
 	// Relation attributes
 
@@ -735,8 +737,7 @@ enum fld_flags_vals {
 	FLD_update_missing		= 8,
 	FLD_null_flag			= 16,
 	FLD_charset_flag		= 32,	// column has global charset
-	FLD_collate_flag		= 64,	// local column has specific collation
-	FLD_system_domain		= 128	// field uses a system domain (on restore)
+	FLD_collate_flag		= 64	// local column has specific collation
 };
 
 // relation definition - holds useful relation type stuff
@@ -961,6 +962,7 @@ public:
 		  GblPool(us->isService()),
 		  gbl_sw_par_workers(1),
 		  defaultCollations(getPool()),
+		  systemFields(getPool()),
 		  gbl_dpb_data(*getDefaultMemoryPool()),
 		  uSvc(us),
 		  master(true),
@@ -1065,6 +1067,8 @@ public:
 	UCHAR*		gbl_crypt_buffer;
 	ULONG		gbl_crypt_left;
 	UCHAR*      gbl_decompress;
+	bool		gbl_default_pub_active = false;
+	bool		gbl_default_pub_auto_enable = false;
 
 	burp_rel*	relations;
 	burp_pkg*	packages;
@@ -1196,6 +1200,7 @@ public:
 
 	Firebird::Array<Firebird::Pair<Firebird::NonPooled<Firebird::MetaString, Firebird::MetaString> > >
 		defaultCollations;
+	Firebird::SortedArray<Firebird::MetaString> systemFields;
 	Firebird::Array<UCHAR> gbl_dpb_data;
 	Firebird::UtilSvc* uSvc;
 	bool master;			// set for master thread only

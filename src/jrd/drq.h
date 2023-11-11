@@ -176,11 +176,13 @@ enum drq_type_t
 	drq_s_funcs2,			// store functions (CreateAlterFunctionNode)
 	drq_s_func_args2,		// store function arguments (CreateAlterFunctionNode)
 	drq_m_funcs2,			// modify functions (CreateAlterFunctionNode)
+	drq_m_prm_funcs2,		// modify individual function parameters (CreateAlterFunctionNode)
 	drq_e_func_args2,		// erase function arguments (CreateAlterFunctionNode)
 	drq_s_prcs2,
 	drq_s_prms4,
 	drq_s_prm_src2,
 	drq_m_prcs2,
+	drq_m_prm_prcs2,		// modify individual procedure parameters (CreateAlterProcedureNode)
 	drq_e_prms2,
 	drq_m_trigger2,
 	drq_e_prcs2,
@@ -198,6 +200,7 @@ enum drq_type_t
 	drq_m_pkg_prc,			// drop package body
 	drq_m_pkg_fun,			// drop package body
 	drq_m_pkg,				// alter package
+	drq_m_prm_pkg,			// modify individual package parameters
 	drq_l_pkg_funcs,		// lookup packaged functions
 	drq_l_pkg_func_args,	// lookup packaged function arguments
 	drq_l_pkg_procs,		// lookup packaged procedures

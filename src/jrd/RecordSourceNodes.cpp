@@ -1130,7 +1130,9 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 
 		node->inputTargets = FB_NEW_POOL(pool) ValueListNode(pool, node->procedure->getInputFields().getCount());
 
-		Arg::StatusVector mismatchStatus= CMP_procedure_arguments(
+		Arg::StatusVector mismatchStatus;
+
+		if (!CMP_procedure_arguments(
 			tdbb,
 			csb,
 			node->procedure,
@@ -1139,10 +1141,12 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 			inArgNames,
 			node->inputSources,
 			node->inputTargets,
-			node->inputMessage);
-
-		if (mismatchStatus.hasData())
-			status_exception::raise(Arg::Gds(isc_prcmismat) << node->procedure->getName().toString() << mismatchStatus);
+			node->inputMessage,
+			mismatchStatus))
+		{
+			status_exception::raise(Arg::Gds(isc_prcmismat) <<
+				node->procedure->getName().toString() << mismatchStatus);
+		}
 
 		if (csb->collectingDependencies() && !node->procedure->isSubRoutine())
 		{

@@ -701,7 +701,7 @@ IndexScanListIterator::IndexScanListIterator(thread_db* tdbb, const IndexRetriev
 
 	fb_assert(m_segno < count);
 
-	// Copy the sorted values, skipping duplicates
+	// Copy the sorted values, skipping NULLs and duplicates
 
 	const auto sortedList = retrieval->irb_list->init(tdbb, tdbb->getRequest());
 	fb_assert(sortedList);
@@ -709,7 +709,7 @@ IndexScanListIterator::IndexScanListIterator(thread_db* tdbb, const IndexRetriev
 	const SortValueItem* prior = nullptr;
 	for (const auto& item : *sortedList)
 	{
-		if (!prior || *prior != item)
+		if (item.desc && (!prior || *prior != item))
 			m_listValues.add(item.value);
 		prior = &item;
 	}

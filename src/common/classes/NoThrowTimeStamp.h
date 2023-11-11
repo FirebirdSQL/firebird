@@ -168,6 +168,10 @@ public:
 	static void add10msec(ISC_TIMESTAMP* v, SINT64 msec, SINT64 multiplier);
 	static void round_time(ISC_TIME& ntime, const int precision);
 
+	static int convertGregorianDateToWeekDate(const struct tm& times);
+	static int convertGregorianDateToJulianDate(int year, int month, int day);
+	static void convertJulianDateToGregorianDate(int jdn, int& outYear, int& outMonth, int& outDay);
+
 	static inline bool isLeapYear(const int year) noexcept
 	{
 		return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);

@@ -388,8 +388,10 @@ const char
 	WIRE_CRYPT_PLUGIN_NAME[] = "WIRE_CRYPT_PLUGIN",
 	CLIENT_ADDRESS_NAME[] = "CLIENT_ADDRESS",
 	CLIENT_HOST_NAME[] = "CLIENT_HOST",
+	CLIENT_OS_USER_NAME[] = "CLIENT_OS_USER",
 	CLIENT_PID_NAME[] = "CLIENT_PID",
 	CLIENT_PROCESS_NAME[] = "CLIENT_PROCESS",
+	CLIENT_VERSION_NAME[] = "CLIENT_VERSION",
 	CURRENT_USER_NAME[] = "CURRENT_USER",
 	CURRENT_ROLE_NAME[] = "CURRENT_ROLE",
 	SESSION_IDLE_TIMEOUT[] = "SESSION_IDLE_TIMEOUT",
@@ -4641,6 +4643,13 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 
 			resultStr = attachment->att_remote_host;
 		}
+		else if (nameStr == CLIENT_OS_USER_NAME)
+		{
+			if (attachment->att_remote_os_user.isEmpty())
+				return NULL;
+
+			resultStr = attachment->att_remote_os_user;
+		}
 		else if (nameStr == CLIENT_PID_NAME)
 		{
 			if (!attachment->att_remote_pid)
@@ -4654,6 +4663,13 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 				return NULL;
 
 			resultStr = attachment->att_remote_process.ToString();
+		}
+		else if (nameStr == CLIENT_VERSION_NAME)
+		{
+			if (attachment->att_client_version.isEmpty())
+				return NULL;
+
+			resultStr = attachment->att_client_version;
 		}
 		else if (nameStr == CURRENT_USER_NAME)
 		{

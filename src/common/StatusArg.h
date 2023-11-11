@@ -162,6 +162,10 @@ public:
 	StatusVector();
 	~StatusVector() { }
 
+	// copying is prohibited
+	StatusVector(const StatusVector&) = delete;
+	void operator=(const StatusVector&) = delete;
+
 	const ISC_STATUS* value() const noexcept { return implementation->value(); }
 	unsigned int length() const noexcept { return implementation->length(); }
 	bool hasData() const noexcept { return implementation->hasData(); }

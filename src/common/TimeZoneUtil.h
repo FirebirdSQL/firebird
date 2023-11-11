@@ -97,6 +97,8 @@ public:
 	static void extractOffset(const ISC_TIMESTAMP_TZ& timeStampTz, SSHORT* offset);
 	static void extractOffset(const ISC_TIME_TZ& timeTz, SSHORT* offset);
 
+	static USHORT makeFromOffset(int sign, unsigned tzh, unsigned tzm);
+
 	static void localTimeToUtc(ISC_TIME& time, ISC_USHORT timeZone);
 	static void localTimeToUtc(ISC_TIME_TZ& timeTz);
 

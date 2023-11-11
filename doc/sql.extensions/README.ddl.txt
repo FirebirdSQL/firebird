@@ -604,7 +604,22 @@ ALTER TABLE <name> ... [ {ENABLE | DISABLE} PUBLICATION ]
 Defines whether replication is enabled for the specified table.
 If not specified in the CREATE TABLE statement, the database-level default behaviour is applied.
 
-24) COLLATE clause can be used as a part of character data type as per SQL standard.
+24) Added the ability to change deterministic and sql security option without specifying the entire body of the function.
+(Alexander Zhdanov)
+
+ALTER FUNCTION <name> [ {DETERMINISTIC | NOT DETERMINISTIC} ] [ SQL SECURITY {DEFINER | INVOKER} | DROP SQL SECURITY ]
+
+25) Added the ability to change sql security option without specifying the entire body of the procedure
+(Alexander Zhdanov)
+
+ALTER PROCEDURE <name> SQL SECURITY {DEFINER | INVOKER} | DROP SQL SECURITY
+
+26) Added the ability to change sql security option without specifying the entire body of the package
+(Alexander Zhdanov)
+
+ALTER PACKAGE <name> SQL SECURITY {DEFINER | INVOKER} | DROP SQL SECURITY
+
+27) COLLATE clause can be used as a part of character data type as per SQL standard.
 (Dmitry Sibiryakov)
 
 If is used twice, an error is returned.

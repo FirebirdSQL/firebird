@@ -264,9 +264,9 @@ public:
 	TrigVector*	rel_post_store;			// Post-operation store trigger
 	prim		rel_primary_dpnds;		// foreign dependencies on this relation's primary key
 	frgn		rel_foreign_refs;		// foreign references to other relations' primary keys
-	TriState	rel_ss_definer;
 
-	TriState	rel_repl_state;			// replication state
+	Firebird::TriState	rel_ss_definer;
+	Firebird::TriState	rel_repl_state;			// replication state
 
 	Firebird::Mutex rel_drop_mutex;
 

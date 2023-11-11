@@ -700,6 +700,7 @@ using namespace Firebird;
 
 %token <metaNamePtr> ANY_VALUE
 %token <metaNamePtr> CALL
+%token <metaNamePtr> FORMAT
 %token <metaNamePtr> NAMED_ARG_ASSIGN
 
 // precedence declarations for expression evaluation
@@ -735,8 +736,8 @@ using namespace Firebird;
 	{}
 
 	std::optional<int> nullableIntVal;
-	TriState triState;
-	std::optional<Jrd::TriggerDefinition::SqlSecurity> nullableSqlSecurityVal;
+	Firebird::TriState triState;
+	std::optional<Jrd::SqlSecurity> nullableSqlSecurityVal;
 	std::optional<Jrd::OverrideClause> nullableOverrideClause;
 	struct { bool first; bool second; } boolPair;
 	bool boolVal;
@@ -2706,7 +2707,7 @@ procedure_clause
 
 %type <createAlterProcedureNode> psql_procedure_clause
 psql_procedure_clause
-	: procedure_clause_start sql_security_clause_opt AS local_declarations_opt full_proc_block
+	: procedure_clause_start optional_sql_security_full_alter_clause AS local_declarations_opt full_proc_block
 		{
 			$$ = $1;
 			$$->ssDefiner = $2;
@@ -2735,9 +2736,26 @@ procedure_clause_start
 			{ $$ = $2; }
 	;
 
+%type <createAlterProcedureNode> partial_alter_procedure_clause
+partial_alter_procedure_clause
+	: symbol_procedure_name
+			{ $$ = newNode<CreateAlterProcedureNode>(*$1); }
+		optional_sql_security_partial_alter_clause
+			{
+				$$ = $2;
+				$$->ssDefiner = $3;
+			}
+	;
+
 %type <createAlterProcedureNode> alter_procedure_clause
 alter_procedure_clause
 	: procedure_clause
+		{
+			$$ = $1;
+			$$->alter = true;
+			$$->create = false;
+		}
+	| partial_alter_procedure_clause
 		{
 			$$ = $1;
 			$$->alter = true;
@@ -2834,9 +2852,10 @@ function_clause
 	: psql_function_clause
 	| external_function_clause;
 
+
 %type <createAlterFunctionNode> psql_function_clause
 psql_function_clause
-	: function_clause_start sql_security_clause_opt AS local_declarations_opt full_proc_block
+	: function_clause_start optional_sql_security_full_alter_clause AS local_declarations_opt full_proc_block
 		{
 			$$ = $1;
 			$$->ssDefiner = $2;
@@ -2862,7 +2881,7 @@ function_clause_start
 	: symbol_UDF_name
 			{ $$ = newNode<CreateAlterFunctionNode>(*$1); }
 		input_parameters(NOTRIAL(&$2->parameters))
-		RETURNS domain_or_non_array_type collate_clause deterministic_opt
+		RETURNS domain_or_non_array_type collate_clause deterministic_clause_opt
 			{
 				$$ = $2;
 				$$->returnType = newNode<ParameterClause>($5);
@@ -2871,11 +2890,38 @@ function_clause_start
 			}
 	;
 
-%type <boolVal> deterministic_opt
-deterministic_opt
-	:					{ $$ = false; }
-	| NOT DETERMINISTIC	{ $$ = false; }
+%type <createAlterFunctionNode> partial_alter_function_clause
+partial_alter_function_clause
+	: symbol_UDF_name
+			{ $$ = newNode<CreateAlterFunctionNode>(*$1); }
+		alter_individual_ops($2)
+			{ $$ = $2; }
+	;
+
+%type alter_individual_ops(<createAlterFunctionNode>)
+alter_individual_ops($createAlterFunctionNode)
+	: alter_individual_op($createAlterFunctionNode)
+	| alter_individual_ops alter_individual_op($createAlterFunctionNode)
+	;
+
+%type alter_individual_op(<createAlterFunctionNode>)
+alter_individual_op($createAlterFunctionNode)
+	: deterministic_clause
+		{ setClause($createAlterFunctionNode->deterministic, "DETERMINISTIC", $1); }
+	| optional_sql_security_partial_alter_clause
+		{ setClause($createAlterFunctionNode->ssDefiner, "SQL SECURITY", $1); }
+	;
+
+%type <boolVal> deterministic_clause
+deterministic_clause
+	: NOT DETERMINISTIC	{ $$ = false; }
 	| DETERMINISTIC		{ $$ = true; }
+	;
+
+%type <boolVal> deterministic_clause_opt
+deterministic_clause_opt
+	:						{ $$ = false; }
+	| deterministic_clause	{ $$ = $1; }
 	;
 
 %type <externalClause> external_clause
@@ -2907,6 +2953,12 @@ alter_function_clause
 			$$->alter = true;
 			$$->create = false;
 		}
+	| partial_alter_function_clause
+		{
+			$$ = $1;
+			$$->alter = true;
+			$$->create = false;
+		}
 	;
 
 %type <createAlterFunctionNode> replace_function_clause
@@ -2923,12 +2975,22 @@ replace_function_clause
 
 %type <createAlterPackageNode> package_clause
 package_clause
-	: symbol_package_name sql_security_clause_opt AS BEGIN package_items_opt END
+	: symbol_package_name optional_sql_security_full_alter_clause AS BEGIN package_items_opt END
 		{
 			CreateAlterPackageNode* node = newNode<CreateAlterPackageNode>(*$1);
 			node->ssDefiner = $2;
 			node->source = makeParseStr(YYPOSNARG(4), YYPOSNARG(6));
 			node->items = $5;
+			$$ = node;
+		}
+	;
+
+%type <createAlterPackageNode> partial_alter_package_clause
+partial_alter_package_clause
+	: symbol_package_name optional_sql_security_partial_alter_clause
+		{
+			CreateAlterPackageNode* node = newNode<CreateAlterPackageNode>(*$1);
+			node->ssDefiner = $2;
 			$$ = node;
 		}
 	;
@@ -2965,6 +3027,12 @@ package_item
 %type <createAlterPackageNode> alter_package_clause
 alter_package_clause
 	: package_clause
+		{
+			$$ = $1;
+			$$->alter = true;
+			$$->create = false;
+		}
+	| partial_alter_package_clause
 		{
 			$$ = $1;
 			$$->alter = true;
@@ -3153,7 +3221,7 @@ local_declaration_subfunc_start
 				$$->dsqlBlock = newNode<ExecBlockNode>();
 			}
 		input_parameters(NOTRIAL(&$4->dsqlBlock->parameters))
-		RETURNS domain_or_non_array_type collate_clause deterministic_opt
+		RETURNS domain_or_non_array_type collate_clause deterministic_clause_opt
 			{
 				$$ = $4;
 				setCollate($7, $8);
@@ -4654,16 +4722,38 @@ trigger_type_opt	// we do not allow alter database triggers, hence we do not use
 		{ $$ = std::nullopt; }
 	;
 
+%type <nullableSqlSecurityVal> optional_sql_security_clause
+optional_sql_security_clause
+	: SQL SECURITY DEFINER
+		{ $$ = SS_DEFINER; }
+	| SQL SECURITY INVOKER
+		{ $$ = SS_INVOKER; }
+	;
+
+%type <nullableSqlSecurityVal> optional_sql_security_full_alter_clause
+optional_sql_security_full_alter_clause
+	: optional_sql_security_clause
+		{ $$ = $1; }
+	| // nothing
+		{ $$ = std::nullopt; }
+	;
+
+%type <nullableSqlSecurityVal> optional_sql_security_partial_alter_clause
+optional_sql_security_partial_alter_clause
+	: optional_sql_security_clause
+		{ $$ = $1; }
+	| DROP SQL SECURITY
+		{ $$ = SS_DROP; }
+	;
+
 %type <nullableSqlSecurityVal> trg_sql_security_clause
 trg_sql_security_clause
 	: // nothing
 		{ $$ = std::nullopt; }
-	| SQL SECURITY DEFINER
-		{ $$ = TriggerDefinition::SS_DEFINER; }
-	| SQL SECURITY INVOKER
-		{ $$ = TriggerDefinition::SS_INVOKER; }
+	| optional_sql_security_clause
+		{ $$ = $1; }
 	| DROP SQL SECURITY
-		{ $$ = TriggerDefinition::SS_DROP; }
+		{ $$ = SS_DROP; }
 	;
 
 // DROP metadata operations
@@ -4844,6 +4934,7 @@ non_charset_simple_type
 	| numeric_type
 	| float_type
 	| decfloat_type
+	| date_time_type
 	| BIGINT
 		{
 			$$ = newNode<dsql_fld>();
@@ -4885,60 +4976,6 @@ non_charset_simple_type
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_short;
 			$$->length = sizeof(SSHORT);
-			$$->flags |= FLD_has_prec;
-		}
-	| DATE
-		{
-			$$ = newNode<dsql_fld>();
-			stmt_ambiguous = true;
-
-			if (client_dialect <= SQL_DIALECT_V5)
-			{
-				// Post warning saying that DATE is equivalent to TIMESTAMP
-				ERRD_post_warning(Arg::Warning(isc_sqlwarn) << Arg::Num(301) <<
-								  Arg::Warning(isc_dtype_renamed));
-				$$->dtype = dtype_timestamp;
-				$$->length = sizeof(GDS_TIMESTAMP);
-			}
-			else if (client_dialect == SQL_DIALECT_V6_TRANSITION)
-				yyabandon(YYPOSNARG(1), -104, isc_transitional_date);
-			else
-			{
-				$$->dtype = dtype_sql_date;
-				$$->length = sizeof(ULONG);
-			}
-			$$->flags |= FLD_has_prec;
-		}
-	| TIME without_time_zone_opt
-		{
-			$$ = newNode<dsql_fld>();
-
-			checkTimeDialect();
-			$$->dtype = dtype_sql_time;
-			$$->length = sizeof(SLONG);
-			$$->flags |= FLD_has_prec;
-		}
-	| TIME WITH TIME ZONE
-		{
-			$$ = newNode<dsql_fld>();
-
-			checkTimeDialect();
-			$$->dtype = dtype_sql_time_tz;
-			$$->length = sizeof(ISC_TIME_TZ);
-			$$->flags |= FLD_has_prec;
-		}
-	| TIMESTAMP without_time_zone_opt
-		{
-			$$ = newNode<dsql_fld>();
-			$$->dtype = dtype_timestamp;
-			$$->length = sizeof(GDS_TIMESTAMP);
-			$$->flags |= FLD_has_prec;
-		}
-	| TIMESTAMP WITH TIME ZONE
-		{
-			$$ = newNode<dsql_fld>();
-			$$->dtype = dtype_timestamp_tz;
-			$$->length = sizeof(ISC_TIMESTAMP_TZ);
 			$$->flags |= FLD_has_prec;
 		}
 	| BOOLEAN
@@ -6083,7 +6120,7 @@ query_spec
 			rse->dsqlFirst = $2 ? $2->items[1] : NULL;
 			rse->dsqlSkip = $2 ? $2->items[0] : NULL;
 			rse->dsqlDistinct = $3;
-			rse->dsqlSelectList = $4;
+			rse->dsqlSelectList = $4->items.hasData() ? $4 : nullptr;
 			rse->dsqlFrom = $5;
 			rse->dsqlWhere = $6;
 			rse->dsqlGroup = $7;
@@ -6118,14 +6155,14 @@ skip_clause
 
 %type <valueListNode> distinct_clause
 distinct_clause
-	: DISTINCT		{ $$ = newNode<ValueListNode>(0); }
+	: DISTINCT		{ $$ = newNode<ValueListNode>(0u); }
 	| all_noise		{ $$ = NULL; }
 	;
 
 %type <valueListNode> select_list
 select_list
 	: select_items	{ $$ = $1; }
-	| '*'			{ $$ = NULL; }
+	| '*'			{ $$ = newNode<ValueListNode>(0u); }
 	;
 
 %type <valueListNode> select_items
@@ -8709,6 +8746,77 @@ named_argument
 cast_specification
 	: CAST '(' value AS data_type_descriptor ')'
 		{ $$ = newNode<CastNode>($3, $5); }
+	| CAST '(' value AS cast_format_type cast_format_clause utf_string ')'
+		{ $$ = newNode<CastNode>($3, $5, *$7); }
+	;
+
+%type <metaNamePtr> cast_format_clause
+cast_format_clause
+	: FORMAT
+	;
+
+%type <legacyField> date_time_type
+date_time_type
+	: DATE
+		{
+			$$ = newNode<dsql_fld>();
+			stmt_ambiguous = true;
+
+			if (client_dialect <= SQL_DIALECT_V5)
+			{
+				// Post warning saying that DATE is equivalent to TIMESTAMP
+				ERRD_post_warning(Arg::Warning(isc_sqlwarn) << Arg::Num(301) <<
+								  Arg::Warning(isc_dtype_renamed));
+				$$->dtype = dtype_timestamp;
+				$$->length = sizeof(GDS_TIMESTAMP);
+			}
+			else if (client_dialect == SQL_DIALECT_V6_TRANSITION)
+				yyabandon(YYPOSNARG(1), -104, isc_transitional_date);
+			else
+			{
+				$$->dtype = dtype_sql_date;
+				$$->length = sizeof(ULONG);
+			}
+			$$->flags |= FLD_has_prec;
+		}
+	| TIME without_time_zone_opt
+		{
+			$$ = newNode<dsql_fld>();
+
+			checkTimeDialect();
+			$$->dtype = dtype_sql_time;
+			$$->length = sizeof(SLONG);
+			$$->flags |= FLD_has_prec;
+		}
+	| TIME WITH TIME ZONE
+		{
+			$$ = newNode<dsql_fld>();
+
+			checkTimeDialect();
+			$$->dtype = dtype_sql_time_tz;
+			$$->length = sizeof(ISC_TIME_TZ);
+			$$->flags |= FLD_has_prec;
+		}
+	| TIMESTAMP without_time_zone_opt
+		{
+			$$ = newNode<dsql_fld>();
+			$$->dtype = dtype_timestamp;
+			$$->length = sizeof(GDS_TIMESTAMP);
+			$$->flags |= FLD_has_prec;
+		}
+	| TIMESTAMP WITH TIME ZONE
+		{
+			$$ = newNode<dsql_fld>();
+			$$->dtype = dtype_timestamp_tz;
+			$$->length = sizeof(ISC_TIMESTAMP_TZ);
+			$$->flags |= FLD_has_prec;
+		}
+	;
+
+%type <legacyField> cast_format_type
+cast_format_type
+	: character_type
+	| date_time_type
 	;
 
 // case expressions
@@ -9372,6 +9480,7 @@ non_reserved_word
 	| UNICODE_VAL
 	// added in FB 6.0
 	| ANY_VALUE
+	| FORMAT
 	;
 
 %%

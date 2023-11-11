@@ -1340,7 +1340,7 @@ public:
 public:
 	NestConst<SelectExprNode> selectExpr;
 	NestConst<RseNode> rse;
-	TriState optimizeForFirstRows;
+	Firebird::TriState optimizeForFirstRows;
 	bool forUpdate = false;
 	bool withLock = false;
 	bool skipLocked = false;
@@ -1626,12 +1626,12 @@ public:
 	std::optional<CommitNumber> atSnapshotNumber;
 	std::optional<unsigned> isoLevel;
 	std::optional<USHORT> lockTimeout;
-	TriState readOnly;
-	TriState wait;
-	TriState noAutoUndo;
-	TriState ignoreLimbo;
-	TriState restartRequests;
-	TriState autoCommit;
+	Firebird::TriState readOnly;
+	Firebird::TriState wait;
+	Firebird::TriState noAutoUndo;
+	Firebird::TriState ignoreLimbo;
+	Firebird::TriState restartRequests;
+	Firebird::TriState autoCommit;
 };
 
 
@@ -1901,7 +1901,7 @@ public:
 	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const;
 
 public:
-	TriState optimizeMode;
+	Firebird::TriState optimizeMode;
 };
 
 

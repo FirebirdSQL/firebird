@@ -640,7 +640,7 @@ public:
 	USHORT att_original_timezone;
 	USHORT att_current_timezone;
 	int att_parallel_workers;
-	TriState att_opt_first_rows;
+	Firebird::TriState att_opt_first_rows;
 
 	PageToBufferMap* att_bdb_cache;			// managed in CCH, created in att_pool, freed with it
 
@@ -736,7 +736,7 @@ public:
 	void signalCancel();
 	void signalShutdown(ISC_STATUS code);
 
-	void mergeStats();
+	void mergeStats(bool pageStatsOnly = false);
 	bool hasActiveRequests() const;
 
 	bool backupStateWriteLock(thread_db* tdbb, SSHORT wait);

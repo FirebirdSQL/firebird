@@ -637,11 +637,15 @@ void Jrd::Attachment::signalShutdown(ISC_STATUS code)
 }
 
 
-void Jrd::Attachment::mergeStats()
+void Jrd::Attachment::mergeStats(bool pageStatsOnly)
 {
 	MutexLockGuard guard(att_database->dbb_stats_mutex, FB_FUNCTION);
-	att_database->dbb_stats.adjust(att_base_stats, att_stats, true);
-	att_base_stats.assign(att_stats);
+	att_database->dbb_stats.adjustPageStats(att_base_stats, att_stats);
+	if (!pageStatsOnly)
+	{
+		att_database->dbb_stats.adjust(att_base_stats, att_stats, true);
+		att_base_stats.assign(att_stats);
+	}
 }
 
 

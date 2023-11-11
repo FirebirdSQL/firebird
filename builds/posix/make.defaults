@@ -424,6 +424,7 @@ SECURITY_FDB	= $(FIREBIRD)/security6.fdb
 
 # From isql
 ISQL            = $(BIN)/isql$(EXEC_EXT)
+ISQL_TEST       = $(FB_TESTS_DIR)/isql_test$(EXEC_EXT)
 RUN_ISQL        = $(RBIN)/isql$(EXEC_EXT)
 
 # From burp

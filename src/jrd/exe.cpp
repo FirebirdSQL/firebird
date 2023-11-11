@@ -532,9 +532,9 @@ void EXE_execute_db_triggers(thread_db* tdbb, jrd_tra* transaction, TriggerActio
  *	Execute database triggers
  *
  **************************************/
-	Jrd::Attachment* attachment = tdbb->getAttachment();
+	const auto attachment = tdbb->getAttachment();
 
- 	// Do nothing if user doesn't want database triggers.
+	// Do nothing if user doesn't want database triggers
 	if (attachment->att_flags & ATT_no_db_triggers)
 		return;
 
@@ -569,20 +569,13 @@ void EXE_execute_db_triggers(thread_db* tdbb, jrd_tra* transaction, TriggerActio
 
 	if (attachment->att_triggers[type])
 	{
-		jrd_tra* old_transaction = tdbb->getTransaction();
-		tdbb->setTransaction(transaction);
+		AutoSetRestore2<jrd_tra*, thread_db> tempTrans(tdbb,
+			&thread_db::getTransaction,
+			&thread_db::setTransaction,
+			transaction);
 
-		try
-		{
-			EXE_execute_triggers(tdbb, &attachment->att_triggers[type],
-				NULL, NULL, trigger_action, StmtNode::ALL_TRIGS);
-			tdbb->setTransaction(old_transaction);
-		}
-		catch (const Exception&)
-		{
-			tdbb->setTransaction(old_transaction);
-			throw;
-		}
+		EXE_execute_triggers(tdbb, &attachment->att_triggers[type],
+			NULL, NULL, trigger_action, StmtNode::ALL_TRIGS);
 	}
 }
 
@@ -590,58 +583,19 @@ void EXE_execute_db_triggers(thread_db* tdbb, jrd_tra* transaction, TriggerActio
 // Execute DDL triggers.
 void EXE_execute_ddl_triggers(thread_db* tdbb, jrd_tra* transaction, bool preTriggers, int action)
 {
-	Jrd::Attachment* attachment = tdbb->getAttachment();
+	const auto attachment = tdbb->getAttachment();
 
-	// Our caller verifies (ATT_no_db_triggers) if DDL triggers should not run.
+	// Our caller verifies (ATT_no_db_triggers) if DDL triggers should not run
 
 	if (attachment->att_ddl_triggers)
 	{
-		TrigVector triggers;
-		TrigVector* triggersPtr = &triggers;
-		HalfStaticArray<Trigger*, 4> cachedTriggers;
+		AutoSetRestore2<jrd_tra*, thread_db> tempTrans(tdbb,
+			&thread_db::getTransaction,
+			&thread_db::setTransaction,
+			transaction);
 
-		for (auto& trigger : *attachment->att_ddl_triggers)
-		{
-			const auto type = trigger.type & ~TRIGGER_TYPE_MASK;
-			const bool preTrigger = ((type & 1) == 0);
-
-			if ((type & (1LL << action)) && (preTriggers == preTrigger))
-			{
-				triggers.add() = trigger;
-				cachedTriggers.add(&trigger);
-			}
-		}
-
-		if (triggers.hasData())
-		{
-			FbLocalStatus tempStatus;
-
-			jrd_tra* const oldTransaction = tdbb->getTransaction();
-			tdbb->setTransaction(transaction);
-
-			try
-			{
-				EXE_execute_triggers(tdbb, &triggersPtr, NULL, NULL, TRIGGER_DDL,
-					preTriggers ? StmtNode::PRE_TRIG : StmtNode::POST_TRIG);
-			}
-			catch (const Exception& ex)
-			{
-				ex.stuffException(&tempStatus);
-			}
-
-			tdbb->setTransaction(oldTransaction);
-
-			// Triggers could be compiled inside EXE_execute_triggers(),
-			// so ensure the new pointers are copied back to the cache
-			fb_assert(triggers.getCount() == cachedTriggers.getCount());
-			for (unsigned i = 0; i < triggers.getCount(); i++)
-			{
-				*cachedTriggers[i] = triggers[i];
-				triggers[i].extTrigger = nullptr; // avoid deletion inside d'tor
-			}
-
-			tempStatus.check();
-		}
+		EXE_execute_triggers(tdbb, &attachment->att_ddl_triggers, NULL, NULL, TRIGGER_DDL,
+			preTriggers ? StmtNode::PRE_TRIG : StmtNode::POST_TRIG, action);
 	}
 }
 
@@ -1166,7 +1120,8 @@ void EXE_execute_triggers(thread_db* tdbb,
 						  record_param* old_rpb,
 						  record_param* new_rpb,
 						  TriggerAction trigger_action,
-						  StmtNode::WhichTrigger which_trig)
+						  StmtNode::WhichTrigger which_trig,
+						  int ddl_action)
 {
 /**************************************
  *
@@ -1219,6 +1174,20 @@ void EXE_execute_triggers(thread_db* tdbb,
 	{
 		for (TrigVector::iterator ptr = vector->begin(); ptr != vector->end(); ++ptr)
 		{
+			if (trigger_action == TRIGGER_DDL && ddl_action)
+			{
+				// Skip triggers not matching our action
+
+				fb_assert(which_trig == StmtNode::PRE_TRIG || which_trig == StmtNode::POST_TRIG);
+				const bool preTriggers = (which_trig == StmtNode::PRE_TRIG);
+
+				const auto type = ptr->type & ~TRIGGER_TYPE_MASK;
+				const bool preTrigger = ((type & 1) == 0);
+
+				if (!(type & (1LL << ddl_action)) || preTriggers != preTrigger)
+					continue;
+			}
+
 			ptr->compile(tdbb);
 
 			trigger = ptr->statement->findRequest(tdbb);

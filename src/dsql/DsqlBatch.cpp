@@ -627,7 +627,7 @@ private:
 							}
 						}
 
-						blob->BLB_put_segment(tdbb, flow.data, dataSize);
+						blob->BLB_put_data(tdbb, flow.data, dataSize);
 						flow.move(dataSize);
 					}
 				}
@@ -690,6 +690,7 @@ private:
 				continue;
 			}
 
+			const bool start = startRequest;
 			if (startRequest)
 			{
 				EXE_unwind(tdbb, req);
@@ -721,7 +722,8 @@ private:
 			}
 
 			// map message to internal engine format
-			m_dsqlRequest->mapInOut(tdbb, false, message, m_meta, NULL, data);
+			// pass m_meta one time only to avoid parsing its metadata for every message
+			m_dsqlRequest->mapInOut(tdbb, false, message, start ? m_meta : nullptr, nullptr, data);
 			data += m_messageSize;
 			remains -= m_messageSize;
 

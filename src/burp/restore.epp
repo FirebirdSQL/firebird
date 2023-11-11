@@ -198,7 +198,7 @@ static inline UCHAR get(BurpGlobals* tdgbl)
 	return tdgbl->get();
 }
 
-static inline FB_BOOLEAN get_boolean(BurpGlobals* tdgbl, bool deprecated)
+static inline FB_BOOLEAN get_boolean(BurpGlobals* tdgbl, bool deprecated = false)
 {
 	if (!deprecated)
 	{
@@ -526,6 +526,40 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 		ON_ERROR
 			MISC_release_request_silent(req_handle1);
 			general_on_error ();
+		END_ERROR;
+
+		MISC_release_request_silent(req_handle1);
+	}
+
+	// If the default publication was backed up with non-default values,
+	// update the table accordingly.
+	// NOTE: This change should be performed in the last transaction
+	// of the restore process, to avoid generating a replication stream
+	// before the database is restored successfully.
+
+	if ((tdgbl->gbl_default_pub_active || tdgbl->gbl_default_pub_auto_enable) &&
+		tdgbl->runtimeODS >= DB_VERSION_DDL12)
+	{
+		FOR (REQUEST_HANDLE req_handle1)
+			PUB IN RDB$PUBLICATIONS
+			WITH PUB.RDB$PUBLICATION_NAME EQ DEFAULT_PUBLICATION
+		{
+			fb_assert(PUB.RDB$SYSTEM_FLAG != 0);
+
+			MODIFY PUB USING
+				PUB.RDB$ACTIVE_FLAG.NULL = FALSE;
+				PUB.RDB$ACTIVE_FLAG = tdgbl->gbl_default_pub_active ? 1 : 0;
+
+				PUB.RDB$AUTO_ENABLE.NULL = FALSE;
+				PUB.RDB$AUTO_ENABLE = tdgbl->gbl_default_pub_auto_enable ? 1 : 0;
+			END_MODIFY;
+			ON_ERROR
+				general_on_error();
+			END_ERROR;
+		}
+		END_FOR;
+		ON_ERROR
+			general_on_error();
 		END_ERROR;
 
 		MISC_release_request_silent(req_handle1);
@@ -3810,7 +3844,6 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation)
 				case att_field_system_flag:
 					X.RDB$SYSTEM_FLAG = (USHORT) get_int32(tdgbl);
 					X.RDB$SYSTEM_FLAG.NULL = FALSE;
-					field->fld_flags |= FLD_system_domain;
 					break;
 
 				case att_view_context:
@@ -4015,7 +4048,6 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation)
 				case att_field_system_flag:
 					X.RDB$SYSTEM_FLAG = (USHORT) get_int32(tdgbl);
 					X.RDB$SYSTEM_FLAG.NULL = FALSE;
-					field->fld_flags |= FLD_system_domain;
 					break;
 
 				case att_view_context:
@@ -7472,8 +7504,6 @@ bool get_publication(BurpGlobals* tdgbl)
  *
  **************************************/
 	att_type attribute;
-	TEXT temp[GDS_NAME_LEN];
-	SSHORT len;
 	scan_attr_t scan_next_attr;
 
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL13)
@@ -7571,8 +7601,6 @@ bool get_pub_table(BurpGlobals* tdgbl)
  *
  **************************************/
 	att_type attribute;
-	TEXT temp[GDS_NAME_LEN];
-	SSHORT len;
 	scan_attr_t scan_next_attr;
 
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL13)
@@ -10391,6 +10419,28 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 	Firebird::IRequest* req_handle4 = nullptr;
 	Firebird::IRequest* req_handle5 = nullptr;
 
+	// Collect system fields
+	{
+		Firebird::IRequest* req_handle = nullptr;
+		tdgbl->systemFields.setSortMode(Firebird::FB_ARRAY_SORT_MANUAL);
+
+		FOR(REQUEST_HANDLE req_handle)
+			X IN RDB$FIELDS WITH
+			X.RDB$SYSTEM_FLAG EQ 1
+
+			const auto len = MISC_symbol_length(X.RDB$FIELD_NAME, sizeof(X.RDB$FIELD_NAME));
+			MetaString name(X.RDB$FIELD_NAME, len);
+			tdgbl->systemFields.add(name);
+
+		END_FOR;
+		ON_ERROR
+			general_on_error();
+		END_ERROR;
+
+		MISC_release_request_silent(req_handle);
+		tdgbl->systemFields.sort();
+	}
+
 	while (get_attribute(&attribute, tdgbl) != att_end)
 	{
 		switch (attribute)
@@ -10488,6 +10538,28 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 				else
 					get_boolean(tdgbl, attribute == att_database_sql_security_deprecated);
 			}
+			else
+			{
+				// Functions that use scan_next_attr initialize it to NO_SKIP using skip_init().
+				// Here we don't use that logic, hence the first param to bad_attribute is hardcoded.
+				bad_attribute(NO_SKIP, attribute, 352);
+			}
+			break;
+
+		case att_default_pub_active:
+			if (tdgbl->RESTORE_format >= 11)
+				tdgbl->gbl_default_pub_active = get_boolean(tdgbl);
+			else
+			{
+				// Functions that use scan_next_attr initialize it to NO_SKIP using skip_init().
+				// Here we don't use that logic, hence the first param to bad_attribute is hardcoded.
+				bad_attribute(NO_SKIP, attribute, 352);
+			}
+			break;
+
+		case att_default_pub_auto_enable:
+			if (tdgbl->RESTORE_format >= 11)
+				tdgbl->gbl_default_pub_auto_enable = get_boolean(tdgbl);
 			else
 			{
 				// Functions that use scan_next_attr initialize it to NO_SKIP using skip_init().
@@ -11585,6 +11657,12 @@ void WriteRelationMeta::setRelation(BurpGlobals* tdgbl, const burp_rel* relation
 
 	if (tdgbl->gbl_network_protocol == 0)
 	{
+		// If user relation uses system field there is a chance that definition of such
+		// system field was changed in target database. Old, BLR-based code, didn't
+		// coerce data types thus error could happen. To avoid it, let use SQL-based
+		// approach, while it is a bit slower in embedded mode.
+		// Here we are mostly interested in legacy UNICODE_FSS fields - see #7611.
+
 		bool sysDomFlag = false;
 		burp_fld* field;
 
@@ -11593,27 +11671,7 @@ void WriteRelationMeta::setRelation(BurpGlobals* tdgbl, const burp_rel* relation
 			if (field->fld_flags & FLD_computed)
 				continue;
 
-			const char* dom = field->fld_source;
-
-			if (strncmp(dom, "RDB$", 4) == 0)
-			{
-				for (dom += 4; *dom; ++dom)
-				{
-#ifdef HAVE_CTYPE_H
-					if (!isdigit(*dom))
-#else
-					if (*dom < '0' || *dom > '9')
-#endif
-					{
-						sysDomFlag = true;
-						break;
-					}
-				}
-			}
-
-			// Not all system domains starts with RDB$
-			// There is also SEC$ fields. Here we are mostly interested in legacy UNICODE_FSS fields - see #7611.
-			if (field->fld_flags & FLD_system_domain)
+			if (tdgbl->systemFields.exist(field->fld_source))
 			{
 				sysDomFlag = true;
 				break;

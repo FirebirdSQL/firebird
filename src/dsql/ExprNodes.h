@@ -242,7 +242,8 @@ public:
 class CastNode final : public TypedNode<ValueExprNode, ExprNode::TYPE_CAST>
 {
 public:
-	explicit CastNode(MemoryPool& pool, ValueExprNode* aSource = NULL, dsql_fld* aDsqlField = NULL);
+	explicit CastNode(MemoryPool& pool, ValueExprNode* aSource = NULL, dsql_fld* aDsqlField = NULL,
+		const Firebird::string& aFormat = NULL);
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
@@ -274,13 +275,14 @@ public:
 	virtual dsc* execute(thread_db* tdbb, Request* request) const;
 
 	static dsc* perform(thread_db* tdbb, impure_value* impure, dsc* value,
-		const dsc* castDesc, const ItemInfo* itemInfo);
+		const dsc* castDesc, const ItemInfo* itemInfo, const Firebird::string& format = nullptr);
 
 public:
 	MetaName dsqlAlias;
 	dsql_fld* dsqlField;
 	NestConst<ValueExprNode> source;
 	NestConst<ItemInfo> itemInfo;
+	Firebird::string format;
 	dsc castDesc;
 	bool artificial;
 };

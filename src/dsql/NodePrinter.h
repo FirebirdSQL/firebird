@@ -267,7 +267,7 @@ public:
 			print(s, *array);
 	}
 
-	void print(const Firebird::string& s, const TriState& triState)
+	void print(const Firebird::string& s, const Firebird::TriState& triState)
 	{
 		if (triState.isAssigned())
 			print(s, triState.asBool());

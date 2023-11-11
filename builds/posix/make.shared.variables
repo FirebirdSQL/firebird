@@ -179,7 +179,9 @@ AllObjects += $(GSPLIT_Objects)
 # Interactive sql
 ISQL_Objects:= $(call dirObjects,isql)
 
-AllObjects += $(ISQL_Objects)
+ISQL_Test_Objects:= $(call dirObjects,isql/tests)
+
+AllObjects += $(ISQL_Objects) $(ISQL_Test_Objects)
 
 
 # Legacy users management in security database

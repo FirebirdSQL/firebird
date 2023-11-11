@@ -260,7 +260,21 @@ public:
 				addRelCounts(baseStats.rel_counts, false);
 			}
 		}
+	}
 
+	void adjustPageStats(RuntimeStatistics& baseStats, const RuntimeStatistics& newStats)
+	{
+		if (baseStats.allChgNumber != newStats.allChgNumber)
+		{
+			allChgNumber++;
+			for (size_t i = 0; i < REL_BASE_OFFSET; ++i)
+			{
+				const SINT64 delta = newStats.values[i] - baseStats.values[i];
+
+				values[i] += delta;
+				baseStats.values[i] += delta;
+			}
+		}
 	}
 
 	// copy counters values from other instance

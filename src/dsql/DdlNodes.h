@@ -40,6 +40,13 @@
 
 namespace Jrd {
 
+enum SqlSecurity
+{
+	SS_INVOKER,
+	SS_DEFINER,
+	SS_DROP
+};
+
 class LocalDeclarationsNode;
 class RelationSourceNode;
 class ValueListNode;
@@ -414,7 +421,6 @@ public:
 		  create(true),
 		  alter(false),
 		  external(NULL),
-		  deterministic(false),
 		  parameters(pool),
 		  returnType(NULL),
 		  localDeclList(NULL),
@@ -455,6 +461,8 @@ private:
 	void executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 	bool executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		bool secondPass, bool runTriggers);
+	bool executeAlterIndividualParameters(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
+		bool secondPass, bool runTriggers);
 
 	void storeArgument(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		unsigned pos, bool returnArg, ParameterClause* parameter,
@@ -467,7 +475,7 @@ public:
 	bool create;
 	bool alter;
 	NestConst<ExternalClause> external;
-	bool deterministic;
+	Firebird::TriState deterministic;
 	Firebird::Array<NestConst<ParameterClause> > parameters;
 	NestConst<ParameterClause> returnType;
 	NestConst<LocalDeclarationsNode> localDeclList;
@@ -480,7 +488,7 @@ public:
 	bool privateScope;
 	bool preserveDefaults;
 	SLONG udfReturnPos;
-	TriState ssDefiner;
+	std::optional<SqlSecurity> ssDefiner;
 };
 
 
@@ -592,6 +600,9 @@ private:
 	void executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 	bool executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		bool secondPass, bool runTriggers);
+	bool executeAlterIndividualParameters(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
+		bool secondPass, bool runTriggers);
+
 	void storeParameter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		USHORT parameterType, unsigned pos, ParameterClause* parameter,
 		const CollectedParameter* collectedParameter);
@@ -614,7 +625,7 @@ public:
 	MetaName packageOwner;
 	bool privateScope;
 	bool preserveDefaults;
-	TriState ssDefiner;
+	std::optional<SqlSecurity> ssDefiner;
 };
 
 
@@ -659,12 +670,6 @@ typedef RecreateNode<CreateAlterProcedureNode, DropProcedureNode, isc_dsql_recre
 class TriggerDefinition
 {
 public:
-	enum SqlSecurity
-	{
-		SS_INVOKER,
-		SS_DEFINER,
-		SS_DROP
-	};
 
 	explicit TriggerDefinition(MemoryPool& p)
 		: name(p),
@@ -698,7 +703,7 @@ public:
 	MetaName name;
 	MetaName relationName;
 	std::optional<FB_UINT64> type;
-	TriState active;
+	Firebird::TriState active;
 	std::optional<int> position;
 	NestConst<ExternalClause> external;
 	Firebird::string source;
@@ -988,7 +993,7 @@ public:
 	NestConst<ValueSourceClause> setDefault;
 	MetaName renameTo;
 	Firebird::AutoPtr<dsql_fld> type;
-	TriState notNullFlag;	// true = NOT NULL / false = NULL
+	Firebird::TriState notNullFlag;	// true = NOT NULL / false = NULL
 };
 
 
@@ -1212,7 +1217,7 @@ public:
 		MetaName identitySequence;
 		std::optional<IdentityType> identityType;
 		std::optional<USHORT> collationId;
-		TriState notNullFlag;	// true = NOT NULL / false = NULL
+		Firebird::TriState notNullFlag;	// true = NOT NULL / false = NULL
 		std::optional<USHORT> position;
 		Firebird::string defaultSource;
 		Firebird::ByteChunk defaultValue;
@@ -1551,8 +1556,8 @@ public:
 	NestConst<RelationSourceNode> dsqlNode;
 	MetaName name;
 	Firebird::Array<NestConst<Clause> > clauses;
-	TriState ssDefiner;
-	TriState replicationState;
+	Firebird::TriState ssDefiner;
+	Firebird::TriState replicationState;
 };
 
 
@@ -1724,9 +1729,9 @@ public:
 
 		MetaName relation;
 		Firebird::ObjectsArray<MetaName> columns;
-		TriState unique;
-		TriState descending;
-		TriState inactive;
+		Firebird::TriState unique;
+		Firebird::TriState descending;
+		Firebird::TriState inactive;
 		SSHORT type;
 		bid expressionBlr;
 		bid expressionSource;
@@ -2217,8 +2222,8 @@ public:
 	Firebird::string* lastName;
 	MetaName* plugin;
 	Firebird::string* comment;
-	TriState adminRole;
-	TriState active;
+	Firebird::TriState adminRole;
+	Firebird::TriState active;
 	Mode mode;
 
 	void addProperty(MetaName* pr, Firebird::string* val = NULL)
@@ -2459,7 +2464,7 @@ public:
 	Firebird::Array<NestConst<DbFileClause> > files;
 	MetaName cryptPlugin;
 	MetaName keyName;
-	TriState ssDefiner;
+	Firebird::TriState ssDefiner;
 	Firebird::Array<MetaName> pubTables;
 };
 

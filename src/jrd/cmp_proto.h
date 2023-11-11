@@ -46,7 +46,7 @@ Jrd::IndexLock* CMP_get_index_lock(Jrd::thread_db*, Jrd::jrd_rel*, USHORT);
 Jrd::Request* CMP_make_request(Jrd::thread_db*, Jrd::CompilerScratch*, bool);
 Jrd::ItemInfo* CMP_pass2_validation(Jrd::thread_db*, Jrd::CompilerScratch*, const Jrd::Item&);
 
-Firebird::Arg::StatusVector CMP_procedure_arguments(
+bool CMP_procedure_arguments(
 	Jrd::thread_db* tdbb,
 	Jrd::CompilerScratch* csb,
 	Jrd::Routine* routine,
@@ -55,7 +55,8 @@ Firebird::Arg::StatusVector CMP_procedure_arguments(
 	Firebird::ObjectsArray<Jrd::MetaName>* argNames,
 	NestConst<Jrd::ValueListNode>& sources,
 	NestConst<Jrd::ValueListNode>& targets,
-	NestConst<Jrd::MessageNode>& message);
+	NestConst<Jrd::MessageNode>& message,
+	Firebird::Arg::StatusVector& mismatchStatus);
 
 void CMP_post_access(Jrd::thread_db*, Jrd::CompilerScratch*, const Jrd::MetaName&, SLONG ssRelationId,
 					 Jrd::SecurityClass::flags_t, ObjectType obj_type, const Jrd::MetaName&,

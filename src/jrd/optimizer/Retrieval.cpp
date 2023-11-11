@@ -104,6 +104,34 @@ namespace
 		return newValue;
 	}
 
+	bool matchSubset(const BoolExprNode* boolean, const BoolExprNode* sub)
+	{
+		if (boolean->sameAs(sub, true))
+			return true;
+
+		auto binaryNode = nodeAs<BinaryBoolNode>(boolean);
+		if (binaryNode && binaryNode->blrOp == blr_or)
+		{
+			if (matchSubset(binaryNode->arg1, sub) ||
+				matchSubset(binaryNode->arg2, sub))
+			{
+				return true;
+			}
+
+			binaryNode = nodeAs<BinaryBoolNode>(sub);
+			if (binaryNode && binaryNode->blrOp == blr_or)
+			{
+				if (matchSubset(boolean, binaryNode->arg1) &&
+					matchSubset(boolean, binaryNode->arg2))
+				{
+					return true;
+				}
+			}
+		}
+
+		return false;
+	};
+
 } // namespace
 
 
@@ -723,24 +751,22 @@ bool Retrieval::checkIndexCondition(index_desc& idx, MatchedBooleanList& matches
 		const auto boolean = idxIter.object();
 
 		// If the index condition is (A OR B) and any of the {A, B} is present
-		// among the available booleans, then the index is possibly usable
-		const auto binaryNode = nodeAs<BinaryBoolNode>(boolean);
-		if (binaryNode && binaryNode->blrOp == blr_or)
+		// among the available booleans, then the index is possibly usable.
+		// Note: this check also includes the exact match.
+
+		for (iter.rewind(); iter.hasData(); ++iter)
 		{
-			for (iter.rewind(); iter.hasData(); ++iter)
+			if (matchSubset(boolean, *iter))
 			{
-				if (binaryNode->arg1->sameAs(*iter, true) ||
-					binaryNode->arg2->sameAs(*iter, true))
-				{
-					matches.add(*iter);
-					break;
-				}
+				matches.add(*iter);
+				break;
 			}
 		}
 
 		// If the index condition is (A IS NOT NULL) and the available booleans
 		// includes any comparative predicate that explicitly mentions A,
 		// then the index is possibly usable
+
 		const auto notNode = nodeAs<NotBoolNode>(boolean);
 		const auto missingNode = notNode ? nodeAs<MissingBoolNode>(notNode->arg) : nullptr;
 		if (missingNode)
@@ -764,17 +790,6 @@ bool Retrieval::checkIndexCondition(index_desc& idx, MatchedBooleanList& matches
 						break;
 					}
 				}
-			}
-		}
-
-		// If conjunct of the index condition matches any available boolean,
-		// then the index is possibly usable
-		for (iter.rewind(); iter.hasData(); ++iter)
-		{
-			if (idxIter.object()->sameAs(*iter, true))
-			{
-				matches.add(*iter);
-				break;
 			}
 		}
 
@@ -833,7 +848,7 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 		if (scratch.candidate)
 		{
 			matches.assign(scratch.matches);
-			scratch.selectivity = idx->idx_fraction;
+			scratch.selectivity = MAXIMUM_SELECTIVITY;
 
 			bool unique = false;
 			unsigned listCount = 0;
@@ -1027,7 +1042,7 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 
 				const auto invCandidate = FB_NEW_POOL(getPool()) InversionCandidate(getPool());
 				invCandidate->unique = unique;
-				invCandidate->selectivity = selectivity;
+				invCandidate->selectivity = idx->idx_fraction * selectivity;
 				invCandidate->cost = cost;
 				invCandidate->nonFullMatchedSegments = scratch.nonFullMatchedSegments;
 				invCandidate->matchedSegments = MAX(scratch.lowerCount, scratch.upperCount);
@@ -1054,6 +1069,13 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 			invCandidate->scratch = &scratch;
 			invCandidate->matches.assign(scratch.matches);
 
+			for (auto match : invCandidate->matches)
+			{
+				match->findDependentFromStreams(csb, stream,
+					&invCandidate->dependentFromStreams);
+			}
+
+			invCandidate->dependencies = invCandidate->dependentFromStreams.getCount();
 			inversions.add(invCandidate);
 		}
 	}
@@ -1376,6 +1398,9 @@ InversionCandidate* Retrieval::makeInversion(InversionCandidateList& inversions)
 						break;
 					}
 				}
+
+				if (currentInv->boolean && matches.exist(currentInv->boolean))
+					anyMatchAlreadyUsed = true;
 
 				if (anyMatchAlreadyUsed && !customPlan)
 				{

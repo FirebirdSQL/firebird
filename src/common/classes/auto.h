@@ -136,12 +136,22 @@ public:
 		return *this;
 	}
 
-	Where* get() const
+	const Where* get() const
 	{
 		return ptr;
 	}
 
-	operator Where*() const
+	operator const Where*() const
+	{
+		return ptr;
+	}
+
+	Where* get()
+	{
+		return ptr;
+	}
+
+	operator Where*()
 	{
 		return ptr;
 	}

@@ -3228,7 +3228,9 @@ DmlNode* ExecProcedureNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 
 	node->inputTargets = FB_NEW_POOL(pool) ValueListNode(pool, node->procedure->getInputFields().getCount());
 
-	Arg::StatusVector mismatchStatus = CMP_procedure_arguments(
+	Arg::StatusVector mismatchStatus;
+
+	CMP_procedure_arguments(
 		tdbb,
 		csb,
 		node->procedure,
@@ -3237,9 +3239,10 @@ DmlNode* ExecProcedureNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 		inArgNames,
 		node->inputSources,
 		node->inputTargets,
-		node->inputMessage);
+		node->inputMessage,
+		mismatchStatus);
 
-	mismatchStatus << CMP_procedure_arguments(
+	CMP_procedure_arguments(
 		tdbb,
 		csb,
 		node->procedure,
@@ -3248,10 +3251,14 @@ DmlNode* ExecProcedureNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 		outArgNames,
 		node->outputTargets,
 		node->outputSources,
-		node->outputMessage);
+		node->outputMessage,
+		mismatchStatus);
 
 	if (mismatchStatus.hasData())
-		status_exception::raise(Arg::Gds(isc_prcmismat) << node->procedure->getName().toString() << mismatchStatus);
+	{
+		status_exception::raise(Arg::Gds(isc_prcmismat) <<
+			node->procedure->getName().toString() << mismatchStatus);
+	}
 
 	if (csb->collectingDependencies() && !node->procedure->isSubRoutine())
 	{
@@ -10964,7 +10971,7 @@ static ReturningClause* dsqlProcessReturning(DsqlCompilerScratch* dsqlScratch, d
 
 	auto inputFirst = input->first;
 
-	if (!inputFirst)
+	if (inputFirst->items.isEmpty())
 	{
 		// Process RETURNING *
 		inputFirst = FB_NEW_POOL(pool) ValueListNode(pool, 0u);

@@ -459,7 +459,7 @@ ItemInfo* CMP_pass2_validation(thread_db* tdbb, CompilerScratch* csb, const Item
 }
 
 
-Arg::StatusVector CMP_procedure_arguments(
+bool CMP_procedure_arguments(
 	thread_db* tdbb,
 	CompilerScratch* csb,
 	Routine* routine,
@@ -468,10 +468,9 @@ Arg::StatusVector CMP_procedure_arguments(
 	ObjectsArray<MetaName>* argNames,
 	NestConst<ValueListNode>& sources,
 	NestConst<ValueListNode>& targets,
-	NestConst<MessageNode>& message)
+	NestConst<MessageNode>& message,
+	Arg::StatusVector& mismatchStatus)
 {
-	Arg::StatusVector mismatchStatus;
-
 	auto& pool = *tdbb->getDefaultPool();
 	auto& fields = isInput ? routine->getInputFields() : routine->getOutputFields();
 	const auto format = isInput ? routine->getInputFormat() : routine->getOutputFormat();
@@ -610,7 +609,7 @@ Arg::StatusVector CMP_procedure_arguments(
 		}
 	}
 
-	return mismatchStatus;
+	return mismatchStatus.isEmpty();
 }
 
 

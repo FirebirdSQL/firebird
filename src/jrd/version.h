@@ -138,6 +138,9 @@
 #elif defined RC_TARGET_engine_test
 #define VER_FILEDESC "Engine Tests"
 
+#elif defined RC_TARGET_isql_test
+#define VER_FILEDESC "ISQL Tests"
+
 #else
 #define VER_FILEDESC "SQL Server"
 
