@@ -658,6 +658,9 @@ public:
 		target = node ? node->dsqlFieldRemapper(visitor) : NULL;
 	}
 
+	// Check if expression returns deterministic result
+	virtual bool deterministic() const;
+
 	// Check if expression could return NULL or expression can turn NULL into a true/false.
 	virtual bool possiblyUnknown() const;
 
@@ -1182,6 +1185,11 @@ public:
 	virtual void genBlr(DsqlCompilerScratch* /*dsqlScratch*/)
 	{
 		fb_assert(false);
+	}
+
+	virtual bool deterministic() const override
+	{
+		return false;
 	}
 
 	virtual bool possiblyUnknown() const

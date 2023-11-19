@@ -62,6 +62,7 @@ public:
 	static const SysFunction* lookup(const Jrd::MetaName& name);
 
 	void checkArgsMismatch(int count) const;
+	bool deterministic() const;
 
 private:
 	const static SysFunction functions[];

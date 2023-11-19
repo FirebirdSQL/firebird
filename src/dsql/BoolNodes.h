@@ -274,6 +274,11 @@ public:
 		return true;
 	}
 
+	virtual bool deterministic() const override
+	{
+		return false;
+	}
+
 	virtual bool possiblyUnknown() const
 	{
 		return true;

@@ -6962,3 +6962,16 @@ void SysFunction::checkArgsMismatch(int count) const
 		status_exception::raise(Arg::Gds(isc_funmismat) << Arg::Str(name));
 	}
 }
+
+
+bool SysFunction::deterministic() const
+{
+	const MetaName funcName(name);
+
+	return (funcName != "GEN_UUID" &&
+			funcName != "RAND" &&
+			funcName != "RSA_PRIVATE" &&
+			funcName != "RSA_PUBLIC" &&
+			funcName != "RDB_GET_CONTEXT" &&
+			funcName != "RDB_SET_CONTEXT");
+}
