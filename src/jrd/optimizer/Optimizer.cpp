@@ -1055,6 +1055,14 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 		rsb = FB_NEW_POOL(getPool()) LockedStream(csb, rsb);
 	}
 
+	if (rse->hasSkipLocked())
+	{
+		for (const auto compileStream : compileStreams)
+		{
+			csb->csb_rpt[compileStream].csb_flags |= csb_skip_locked;
+		}
+	}
+
 	if (rse->isScrollable())
 		rsb = FB_NEW_POOL(getPool()) BufferedStream(csb, rsb);
 

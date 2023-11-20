@@ -5689,16 +5689,6 @@ StmtNode* ForNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	if (rse->hasWriteLock())
 		withLock = true;
 
-	if (rse->hasSkipLocked())
-	{
-		SortedStreamList streamList;
-		rse->collectStreams(streamList);
-		for (auto stream : streamList)
-		{
-			csb->csb_rpt[stream].csb_flags |= csb_skip_locked;
-		}
-	}
-
 	if (marks & MARK_MERGE)
 		impureOffset = csb->allocImpure<ImpureMerge>();
 	else
