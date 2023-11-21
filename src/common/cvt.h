@@ -110,6 +110,6 @@ void CVT_string_to_datetime(const dsc*, ISC_TIMESTAMP_TZ*, bool*, const Firebird
 const UCHAR* CVT_get_bytes(const dsc*, unsigned&);
 Firebird::string CVT_datetime_to_format_string(const dsc* desc, const Firebird::string& format, Firebird::Callbacks* cb);
 ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::string& format, Firebird::Callbacks* cb,
-	bool convertToUtc);
+	const Firebird::EXPECT_DATETIME expectedType);
 
 #endif //COMMON_CVT_H
