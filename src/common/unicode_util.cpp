@@ -446,6 +446,7 @@ private:
 		getEntryPoint("ucal_getTZDataVersion", inModule, ucalGetTZDataVersion);
 		getEntryPoint("ucal_getDefaultTimeZone", inModule, ucalGetDefaultTimeZone);
 		getEntryPoint("ucal_open", inModule, ucalOpen);
+		getEntryPoint("ucal_clone", inModule, ucalClone);
 		getEntryPoint("ucal_close", inModule, ucalClose);
 		getEntryPoint("ucal_setAttribute", inModule, ucalSetAttribute);
 		getEntryPoint("ucal_setMillis", inModule, ucalSetMillis);

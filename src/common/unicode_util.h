@@ -130,6 +130,7 @@ public:
 		int32_t (U_EXPORT2* ucalGetDefaultTimeZone) (UChar* result, int32_t resultCapacity, UErrorCode* ec);
 		UCalendar* (U_EXPORT2* ucalOpen) (const UChar* zoneID, int32_t len, const char* locale, UCalendarType type,
 			UErrorCode* err);
+		UCalendar* (U_EXPORT2* ucalClone)(const UCalendar* cal, UErrorCode* status);
 		void (U_EXPORT2* ucalClose) (UCalendar* cal);
 		void (U_EXPORT2* ucalSetAttribute) (UCalendar* cal, UCalendarAttribute attr, int32_t newValue);
 		void (U_EXPORT2* ucalSetMillis) (UCalendar* cal, UDate dateTime, UErrorCode* err);
