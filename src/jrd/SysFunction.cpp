@@ -434,9 +434,9 @@ static const char
 
 // Get pages
 const char
-    PAGES_ALLOCATED[]="PAGES_ALLOCATED",
-    PAGES_USED[]="PAGES_USED",
-    PAGES_FREE[]="PAGES_FREE";
+    PAGES_ALLOCATED[] = "PAGES_ALLOCATED",
+    PAGES_USED[] = "PAGES_USED",
+    PAGES_FREE[] = "PAGES_FREE";
 
 
 double fbcot(double value) noexcept
@@ -4593,19 +4593,19 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
         else if (nameStr == PAGES_ALLOCATED)
         {
 
-            resultStr.printf("Number of DB pages allocated = %" SQUADFORMAT, PageSpace::actAlloc(dbb));
+            resultStr.printf("%lu", PageSpace::actAlloc(dbb));
         }
 
         else if (nameStr == PAGES_USED)
         {
 
-            resultStr.printf("Number of DB pages used = %" SQUADFORMAT, PageSpace::usedPages(dbb));
+            resultStr.printf("%lu", PageSpace::usedPages(dbb));
         }
 
         else if (nameStr == PAGES_FREE)
         {
 
-            resultStr.printf("Number of DB pages free = %" SQUADFORMAT, PageSpace::maxAlloc(dbb) - PageSpace::usedPages(dbb));
+            resultStr.printf("%lu", PageSpace::maxAlloc(dbb) - PageSpace::usedPages(dbb));
         }
 
 		else if (nameStr == DATABASE_FILE_ID)
