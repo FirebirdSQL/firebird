@@ -176,6 +176,7 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\..\src\isql\tests\FrontendLexerTest.cpp" />
     <ClCompile Include="..\..\..\src\isql\tests\ISqlTest.cpp" />
   </ItemGroup>
   <ItemGroup>

@@ -104,6 +104,11 @@ const USHORT PROTOCOL_VERSION17 = (FB_PROTOCOL_FLAG | 17);
 const USHORT PROTOCOL_VERSION18 = (FB_PROTOCOL_FLAG | 18);
 const USHORT PROTOCOL_FETCH_SCROLL = PROTOCOL_VERSION18;
 
+// Protocol 19:
+//	- supports passing flags to IStatement::prepare
+
+const USHORT PROTOCOL_VERSION19 = (FB_PROTOCOL_FLAG | 19);
+
 // Architecture types
 
 enum P_ARCH
@@ -612,6 +617,7 @@ typedef struct p_sqlst
     USHORT	p_sqlst_messages;			// Number of messages
     CSTRING	p_sqlst_out_blr;			// blr describing output message
     USHORT	p_sqlst_out_message_number;
+	USHORT	p_sqlst_flags;				// prepare flags
 } P_SQLST;
 
 typedef struct p_sqldata

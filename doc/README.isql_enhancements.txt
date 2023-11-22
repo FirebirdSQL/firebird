@@ -330,7 +330,7 @@ SQL> SET PER_TAB OFF;
 Isql enhancements in Firebird v6.
 ---------------------------------
 
-EXPLAIN statement.
+12) EXPLAIN statement.
 
 Author: Adriano dos Santos Fernandes
 
@@ -353,3 +353,69 @@ CON>     select id from employees where id = ? into id;
 CON> end!
 SQL>
 SQL> set term ;!
+
+
+13) SET AUTOTERM ON/OFF
+
+Author: Adriano dos Santos Fernandes
+
+When set to ON, terminator defined with SET TERM is changed to semicolon and a new logic
+for TERM detection is used, where engine helps ISQL to detect valid usage of semicolons
+inside statements.
+
+At each semicolon (outside quotes or comments), ISQL prepares the query buffer with
+engine using flag IStatement::PREPARE_REQUIRE_SEMICOLON.
+
+If engine prepares the statement correctly, it's run and ISQL is put in new statement
+mode.
+
+If engine returns error isc_command_end_err2, then ISQL is put in statement
+continuation mode and asks for another line, repeating the process.
+
+If engine returns a different error, the error is shown and ISQL is put in new statement
+mode.
+
+Notes:
+- This option can also be activated with command line parameter -autot(erm)
+- It can only be used with Firebird engine/server v6 or later
+- SET TERM command automatically sets AUTOTERM to OFF
+- SET AUTOTERM ON command automatically sets TERM to semicolon
+- While AUTOTERM ON can be used in non-interactive scripts, at each semicolon,
+  statement may be tried to be compiled using the server/engine.
+  That may be slow for big scripts with PSQL statements spanning many lines.
+
+Examples:
+
+SQL> SET AUTOTERM ON;
+
+SQL> execute block returns (o1 integer)
+CON> as
+CON> begin
+CON>     o1 = 1;
+CON>     suspend;
+CON> end;
+
+          O1
+============
+           1
+
+SQL> select 1 from rdb$database;
+
+    CONSTANT
+============
+           1
+
+SQL> select 1
+CON>     from rdb$database;
+
+    CONSTANT
+============
+           1
+
+SQL> select 1
+CON>     from rdb$database
+CON>     where true;
+
+    CONSTANT
+============
+           1

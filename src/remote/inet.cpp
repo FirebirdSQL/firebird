@@ -716,7 +716,8 @@ rem_port* INET_analyze(ClntAuthBlock* cBlock,
 		REMOTE_PROTOCOL(PROTOCOL_VERSION15, ptype_lazy_send, 6),
 		REMOTE_PROTOCOL(PROTOCOL_VERSION16, ptype_lazy_send, 7),
 		REMOTE_PROTOCOL(PROTOCOL_VERSION17, ptype_lazy_send, 8),
-		REMOTE_PROTOCOL(PROTOCOL_VERSION18, ptype_lazy_send, 9)
+		REMOTE_PROTOCOL(PROTOCOL_VERSION18, ptype_lazy_send, 9),
+		REMOTE_PROTOCOL(PROTOCOL_VERSION19, ptype_lazy_send, 10)
 	};
 	fb_assert(FB_NELEM(protocols_to_try) <= FB_NELEM(cnct->p_cnct_versions));
 	cnct->p_cnct_count = FB_NELEM(protocols_to_try);

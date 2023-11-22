@@ -54,6 +54,7 @@
 #include <math.h>
 #include <ctype.h>
 #include <errno.h>
+#include "../isql/FrontendLexer.h"
 #include "../common/utils_proto.h"
 #include "../common/classes/array.h"
 #include "../common/classes/init.h"
@@ -123,10 +124,7 @@ enum literal_string_type
 #include "../common/classes/MsgPrint.h"
 #include "../common/classes/array.h"
 
-using Firebird::string;
-using Firebird::PathName;
-using Firebird::TempFile;
-using Firebird::TimeZoneUtil;
+using namespace Firebird;
 using MsgFormat::SafeArg;
 
 #include "../isql/ColList.h"
@@ -304,11 +302,6 @@ static inline int fb_isspace(const char c)
 	return isspace((int)(UCHAR)c);
 }
 
-static inline int fb_isspace(const SSHORT c)
-{
-	return isspace((int)(UCHAR)c);
-}
-
 static inline int fb_isdigit(const char c)
 {
 	return isdigit((int)(UCHAR)c);
@@ -466,6 +459,7 @@ static processing_state add_row(TEXT*);
 static processing_state blobedit(const TEXT*, const TEXT* const*);
 static processing_state bulk_insert_hack(const char* command);
 static bool bulk_insert_retriever(const char* prompt);
+static void check_autoterm();
 static bool check_date(const tm& times);
 static bool check_time(const tm& times);
 static bool check_timestamp(const tm& times, const int msec);
@@ -488,7 +482,6 @@ static void frontend_load_parms(const TEXT* p, TEXT* parms[], TEXT* lparms[],
 static processing_state do_set_command(const TEXT*, bool*);
 static processing_state get_dialect(const char* const dialect_str,
 	char* const bad_dialect_buf, bool& bad_dialect);
-static processing_state get_statement(string&, const TEXT*);
 static bool get_numeric(const UCHAR*, USHORT, SSHORT*, SINT64*);
 static void print_set(const char* str, bool v);
 static processing_state print_sets();
@@ -515,7 +508,7 @@ static void process_plan();
 static void process_exec_path();
 static SINT64 process_record_count(const unsigned statement_type);
 static unsigned process_message_display(Firebird::IMessageMetadata* msg, unsigned pad[]);
-static processing_state process_statement(const TEXT*);
+static processing_state process_statement(const std::string&);
 #ifdef WIN_NT
 static BOOL CALLBACK query_abort(DWORD);
 #else
@@ -581,6 +574,7 @@ public:
 		Plan = false;
 		Planonly = false;
 		ExplainPlan = false;
+		AutoTerm = false;
 		Heading = true;
 		BailOnError = false;
 		StmtTimeout = 0;
@@ -607,6 +601,7 @@ public:
 	bool Plan;
 	bool Planonly;
 	bool ExplainPlan;
+	bool AutoTerm;
 	bool Heading;
 	bool BailOnError;
 	unsigned int StmtTimeout;
@@ -625,7 +620,7 @@ static FILE* Help;
 
 static const TEXT* const sql_prompt = "SQL> ";
 
-// Keep in sync with the chars that have their own "case" in get_statement(...).
+// Keep in sync with the chars that have their own "case" in the frontend lexer.
 static const char FORBIDDEN_TERM_CHARS[] = { '\n', '-', '*', '/', SINGLE_QUOTE, DBL_QUOTE };
 static const char FORBIDDEN_TERM_CHARS_DISPLAY[] = "<ENTER>, -, *, /, SINGLE_QUOTE, DOUBLE_QUOTE";
 
@@ -719,6 +714,32 @@ private:
 };
 
 static Firebird::GlobalPtr<PerTableStats> perTableStats;
+
+
+class StatementGetter
+{
+public:
+	StatementGetter()
+	{
+		// Lookup the continuation prompt once
+		if (!*conPrompt)
+			IUTILS_msg_get(CON_PROMPT, conPrompt);
+	}
+
+public:
+	std::pair<FrontendLexer::SingleStatement, processing_state> getStatement();
+
+	void rewind()
+	{
+		lexer.rewind();
+	}
+
+private:
+	static TEXT conPrompt[MSG_LENGTH];
+	FrontendLexer lexer;
+};
+
+TEXT StatementGetter::conPrompt[MSG_LENGTH] = "";
 
 
 static UCHAR predefined_blob_subtype_bpb[] =
@@ -3984,6 +4005,51 @@ static bool bulk_insert_retriever(const char* prompt)
 }
 
 
+// Check if SET AUTOTERM is allowed. If not, disable it.
+static void check_autoterm()
+{
+	if (!DB || !setValues.AutoTerm)
+		return;
+
+	static const UCHAR protocolInfo[] =
+	{
+		fb_info_protocol_version,
+		isc_info_end
+	};
+
+	UCHAR buffer[BUFFER_LENGTH128];
+
+	DB->getInfo(fbStatus, sizeof(protocolInfo), protocolInfo, sizeof(buffer), buffer);
+	if (ISQL_errmsg(fbStatus))
+		return;
+
+	SLONG protocolVersion = -1;
+
+	for (ClumpletReader p(ClumpletReader::InfoResponse, buffer, sizeof(buffer)); !p.isEof(); p.moveNext())
+	{
+		switch (p.getClumpTag())
+		{
+			case isc_info_end:
+				break;
+
+			case fb_info_protocol_version:
+				protocolVersion = p.getInt();
+				break;
+		}
+	}
+
+	if (!(protocolVersion == 0 || protocolVersion >= 19) &&	// PROTOCOL_VERSION19
+		  ENCODE_ODS(isqlGlob.major_ods, isqlGlob.minor_ods) >= ODS_13_2)
+	{
+		setValues.AutoTerm = false;
+
+		TEXT errbuf[MSG_LENGTH];
+		IUTILS_msg_get(AUTOTERM_NOT_SUPPORTED, errbuf);
+		STDERROUT(errbuf);
+	}
+}
+
+
 // *******************
 // c h e c k _ d a t e
 // *******************
@@ -4432,13 +4498,11 @@ static void do_isql()
 	// Read statements and process them from Ifp until the ret
 	// code tells us we are done
 
-	string stmt;
-	processing_state ret;
-
+	StatementGetter statementGetter;
 	bool done = false;
+
 	while (!done)
 	{
-
 		if (Abort_flag)
 		{
 			if (D__trans)
@@ -4498,7 +4562,10 @@ static void do_isql()
 			}
 		}
 
-		ret = get_statement(stmt, sql_prompt);
+		auto [statement, ret] = statementGetter.getStatement();
+
+		if (!statement.withoutSemicolon.empty())
+			ret = frontend(FrontendLexer::stripComments(statement.withoutSemicolon).c_str());
 
 		// If there is no database yet, remind us of the need to connect
 
@@ -4511,6 +4578,7 @@ static void do_isql()
 				IUTILS_msg_get(NO_DB, errbuf);
 				STDERROUT(errbuf);
 			}
+
 			if (!Interactive && setValues.BailOnError)
 				ret = FAIL;
 			else
@@ -4520,16 +4588,29 @@ static void do_isql()
 		switch (ret)
 		{
 		case CONT:
-			if (process_statement(stmt.c_str()) == ps_ERR)
+			switch (process_statement(setValues.AutoTerm ? statement.withSemicolon : statement.withoutSemicolon))
 			{
-				Exit_value = FINI_ERROR;
-				if (!Interactive && setValues.BailOnError)
-					Abort_flag = true;
+				case TRUNCATED:
+					statementGetter.rewind();
+					break;
+
+				case ps_ERR:
+					Exit_value = FINI_ERROR;
+					if (!Interactive && setValues.BailOnError)
+						Abort_flag = true;
+					[[fallthrough]];
+
+				default:
+					// Place each non frontend statement in the temp file if we are reading from stdin.
+					Filelist->saveCommand(
+						(setValues.AutoTerm ? statement.withSemicolon : statement.withoutSemicolon).c_str(),
+						(setValues.AutoTerm ? "" : isqlGlob.global_Term));
+					break;
 			}
 			break;
 
 		case END:
-		case EOF:
+		case FOUND_EOF:
 		case EXIT:
 			if (Abort_flag)
 			{
@@ -4622,10 +4703,6 @@ static void do_isql()
 
 			done = true;
 			break;
-
-		case ERR_BUFFER_OVERFLOW:
-			IUTILS_msg_get(BUFFER_OVERFLOW, errbuf);
-			STDERROUT(errbuf);
 
 		case EXTRACT:
 		case EXTRACTALL:
@@ -5368,7 +5445,7 @@ static processing_state frontend_set(const char* cmd, const char* const* parms,
 		enum set_commands
 		{
 			stat, count, list, plan, planonly, explain, blobdisplay, echo, autoddl,
-			width, transaction, terminator, names, time,
+			autoterm, width, transaction, terminator, names, time,
 			sqlda_display,
 			exec_path_display,
 			sql, warning, sqlCont, heading, bail,
@@ -5392,6 +5469,7 @@ static processing_state frontend_set(const char* cmd, const char* const* parms,
 		{SetOptions::blobdisplay, "BLOBDISPLAY", 4},
 		{SetOptions::echo, "ECHO", 0},
 		{SetOptions::autoddl, "AUTODDL", 4},
+		{SetOptions::autoterm, "AUTOTERM", 5},
 		{SetOptions::width, "WIDTH", 0},
 		{SetOptions::transaction, "TRANSACTION", 5},
 		{SetOptions::terminator, "TERMINATOR", 4},
@@ -5482,6 +5560,15 @@ static processing_state frontend_set(const char* cmd, const char* const* parms,
 		ret = do_set_command(parms[2], &setValues.Autocommit);
 		break;
 
+	case SetOptions::autoterm:
+		ret = do_set_command(parms[2], &setValues.AutoTerm);
+		if (setValues.AutoTerm)
+		{
+			isqlGlob.Termlen = 1;
+			strcpy(isqlGlob.global_Term, ";");
+		}
+		break;
+
 	case SetOptions::width:
 		ret = newsize(parms[2][0] == '"' ? lparms[2] : parms[2], parms[3]);
 		break;
@@ -5503,6 +5590,8 @@ static processing_state frontend_set(const char* cmd, const char* const* parms,
 					return ps_ERR;
 				}
 			}
+
+			setValues.AutoTerm = false;
 
 			isqlGlob.Termlen = strlen(a);
 			if (isqlGlob.Termlen < MAXTERM_SIZE)
@@ -5808,85 +5897,59 @@ static processing_state get_dialect(const char* const dialect_str,
 }
 
 
-static processing_state get_statement(string& statement,
-							const TEXT* statement_prompt)
+std::pair<FrontendLexer::SingleStatement, processing_state> StatementGetter::getStatement()
 {
-/**************************************
- *
- *	g e t _ s t a t e m e n t
- *
- **************************************
- *
- * Functional description
- *	Get an SQL statement, or QUIT/EXIT command to process
- *
- *	Arguments:  Pointer to statement, size of statement_buffer and prompt msg.
- *
- **************************************/
-	processing_state ret = CONT;
-
-	// Lookup the continuation prompt once
-	TEXT con_prompt[MSG_LENGTH];
-	IUTILS_msg_get(CON_PROMPT, con_prompt);
-
-	if ((Interactive && !Input_file) || setValues.Echo) {
-		ISQL_prompt(statement_prompt);
-	}
-
-	// Clear out statement buffer
-	statement.resize(0);
-
-	// Set count of characters to zero
-
-	size_t valuable_count = 0; // counter of valuable (non-space) chars
-	size_t comment_pos = 0; // position of block comment start
-	size_t non_comment_pos = 0; // position of char after block comment
-	const size_t term_length = isqlGlob.Termlen - 1; // additional variable for decreasing calculation
-
 	Filelist->Ifp().indev_line = Filelist->Ifp().indev_aux;
-	bool done = false;
 
-	enum
+	const auto* prompt = lexer.isBufferEmpty() ? sql_prompt : conPrompt;
+	std::string_view term(isqlGlob.global_Term, isqlGlob.Termlen);
+	std::string buffer;
+
+	while (true)
 	{
-		normal,
-		in_single_line_comment,
-		in_block_comment,
-		in_single_quoted_string,
-		in_double_quoted_string
-	} state = normal;
+		if ((Interactive && !Input_file) || setValues.Echo)
+			ISQL_prompt(prompt);
 
-	char lastChar = '\0';
-	char altQuoteChar = '\0';
-	unsigned altQuoteStringLength = 0;
-
-	while (!done)
-	{
 		SSHORT c = getNextInputChar();
-		switch (c)
+
+		if (c == EOF)
 		{
-		case EOF:
 			// Go back to getc if we get interrupted by a signal.
 
 			if (SYSCALL_INTERRUPTED(errno))
 			{
 				errno = 0;
-				break;
+				continue;
 			}
 
+			lexer.appendBuffer(buffer);
+			buffer.clear();
+
 			// If there was something valuable before EOF - error
-			if (valuable_count > 0)
+			if (!lexer.isBufferEmpty())
 			{
-				TEXT errbuf[MSG_LENGTH];
-				IUTILS_msg_get(UNEXPECTED_EOF, errbuf);
-				STDERROUT(errbuf);
-				Exit_value = FINI_ERROR;
-				ret = FAIL;
+				bool isEmpty = false;
+
+				try
+				{
+					isEmpty = FrontendLexer::stripComments(lexer.getBuffer()).empty();
+				}
+				catch (const FrontendLexer::IncompleteTokenError&)
+				{
+				}
+
+				if (!isEmpty)
+				{
+					TEXT errbuf[MSG_LENGTH];
+					IUTILS_msg_get(UNEXPECTED_EOF, errbuf);
+					STDERROUT(errbuf);
+				}
 			}
 
 			// If we hit EOF at the top of the flist, exit time
 
 			if (Filelist->count() == 1)
-				return FOUND_EOF;
+				return {{}, FOUND_EOF};
 
 			// If this is not tmpfile, close it
 
@@ -5898,7 +5961,7 @@ static processing_state get_statement(string& statement,
 			Filelist->removeIntoIfp();
 
 			if ((Interactive && !Input_file) || setValues.Echo)
-				ISQL_prompt(statement_prompt);
+				prompt = sql_prompt;
 
 			// CVC: Let's detect if we went back to the first level.
 			if (Filelist->readingStdin())
@@ -5910,182 +5973,43 @@ static processing_state get_statement(string& statement,
 			// Try to convince the new routines to go back to previous file(s)
 			// This should fix the INPUT bug introduced with editline.
 			getColumn = -1;
-			break;
 
-		case '\n':
-//		case '\0': // In particular with readline the \n is removed
-			if (state == in_single_line_comment)
+			if (!lexer.isBufferEmpty())
 			{
-				state = normal;
-			}
-
-			// Catch the help ? without a terminator
-			if (statement.length() == 1 && statement[0] == '?')
-			{
-				c = 0;
-				done = true;
-				break;
-			}
-
-			// If in a comment, keep reading
-			if ((Interactive && !Input_file) || setValues.Echo)
-			{
-				if (state == in_block_comment)
-				{
-					//  Block comment prompt.
-					ISQL_prompt("--> ");
-				}
-				else if (valuable_count == 0)
-				{
-					// Ignore a series of nothing at the beginning
-					ISQL_prompt(statement_prompt);
-				}
-				else
-				{
-					ISQL_prompt(con_prompt);
-				}
-			}
-
-			break;
-
-		case '-':
-			// Could this the be start of a single-line comment.
-			if (state == normal && statement.length() > 0 &&
-				statement[statement.length() - 1] == '-')
-			{
-				state = in_single_line_comment;
-				if (valuable_count == 1)
-					valuable_count = 0;
-			}
-			break;
-
-		case '*':
-			// Could this the be start of a comment.  We can only look back,
-			// not forward.
-			// Ignore possibilities of a comment beginning inside
-			// quoted strings.
-			if (state == normal && statement.length() > 0 &&
-				statement[statement.length() - 1] == '/' && statement.length() != non_comment_pos)
-			{
-				state = in_block_comment;
-				comment_pos = statement.length() - 1;
-				if (valuable_count == 1)
-					valuable_count = 0;
-			}
-			break;
-
-		case '/':
-			// Perhaps this is the end of a comment.
-			// Ignore possibilities of a comment ending inside
-			// quoted strings.
-			// Ignore things like /*/ since it isn't a block comment; only the start of it. Or end.
-			if (state == in_block_comment && statement.length() > 2 &&
-				statement[statement.length() - 1] == '*' && statement.length() > comment_pos + 2)
-			{
-				state = normal;
-				non_comment_pos = statement.length() + 1; // mark start of non-comment to track this: /**/*
-				valuable_count--; // This char is not valuable
-			}
-			break;
-
-		case SINGLE_QUOTE:
-			switch (state)
-			{
-				case normal:
-					if (lastChar == 'q' || lastChar == 'Q')
-					{
-						statement += (lastChar = c);
-						altQuoteChar = c = getNextInputChar();
-						altQuoteStringLength = statement.length();
-
-						switch (altQuoteChar)
-						{
-							case '{':
-								altQuoteChar = '}';
-								break;
-							case '(':
-								altQuoteChar = ')';
-								break;
-							case '[':
-								altQuoteChar = ']';
-								break;
-							case '<':
-								altQuoteChar = '>';
-								break;
-						}
-					}
-					else
-						altQuoteChar = '\0';
-
-					state = in_single_quoted_string;
-					break;
-				case in_single_quoted_string:
-					if (!altQuoteChar || (statement.length() != altQuoteStringLength + 1 && lastChar == altQuoteChar))
-						state = normal;
-					break;
-			}
-			break;
-
-		case DBL_QUOTE:
-			switch (state)
-			{
-				case normal:
-					state = in_double_quoted_string;
-					break;
-				case in_double_quoted_string:
-					state = normal;
-					break;
-			}
-			break;
-
-
-		default:
-			if (state == normal && c == isqlGlob.global_Term[term_length] &&
-				// one-char terminator or the beginning also match
-				(isqlGlob.Termlen == 1u ||
-				 (valuable_count >= term_length &&
-				  strncmp(&statement[statement.length() - term_length],
-				  	isqlGlob.global_Term, term_length) == 0)))
-			{
-				c = 0;
-				done = true;
-				statement.resize(statement.length() - term_length);
+				lexer.reset();
+				Exit_value = FINI_ERROR;
+				return {{}, FAIL};
 			}
 		}
-
-		// Any non-space character is significant if not in comment
-		if (state != in_block_comment &&
-			state != in_single_line_comment &&
-			!fb_isspace(c) && c != EOF)
+		else
 		{
-			valuable_count++;
-			if (valuable_count == 1) // this is the first valuable char in stream
+			buffer += (char) c;
+
+			if (c == '\n' ||
+				(buffer.length() >= isqlGlob.Termlen &&
+					std::equal(buffer.end() - isqlGlob.Termlen, buffer.end(), term.begin())))
 			{
-				// ignore all previous crap
-				statement.resize(0);
-				non_comment_pos = 0;
+				lexer.appendBuffer(buffer);
+				buffer.clear();
+
+				const auto singleStatementVar = lexer.getSingleStatement(term);
+
+				if (const auto singleStatement = std::get_if<FrontendLexer::SingleStatement>(&singleStatementVar))
+					return {*singleStatement, CONT};
+				else if (const auto incompleteTokenError =
+							std::get_if<FrontendLexer::IncompleteTokenError>(&singleStatementVar))
+				{
+					prompt =
+						incompleteTokenError->insideComment ? "---> " :
+						lexer.isBufferEmpty() ? sql_prompt :
+						conPrompt;
+				}
 			}
 		}
-
-		statement += (lastChar = c);
 	}
 
-	// If this was a null statement, skip it
-	if (ret == CONT && statement.isEmpty())
-		ret = SKIP;
-
-	if (ret == CONT)
-		ret = frontend(statement.c_str());
-
-	if (ret == CONT)
-	{
-		// Place each non frontend statement in the temp file if we are reading
-		// from stdin.
-
-		Filelist->saveCommand(statement.c_str(), isqlGlob.global_Term);
-	}
-
-	return ret;
+	fb_assert(false);
+	return {{}, FOUND_EOF};
 }
 
 
@@ -6484,6 +6408,9 @@ static processing_state print_sets()
 			p = p->next;
 		}
 	}
+
+	print_set("Auto Term:", setValues.AutoTerm);
+
 	isqlGlob.printf("%-25s%s%s", "Terminator:", isqlGlob.global_Term, NEWLINE);
 
 	print_set("Time:", setValues.Time_display);
@@ -6991,6 +6918,8 @@ static processing_state newdb(TEXT* dbname,
 
 	global_Stmt = NULL;
 
+	check_autoterm();
+
 	return SKIP;
 }
 
@@ -7463,6 +7392,7 @@ static processing_state parse_arg(int argc, SCHAR** argv, SCHAR* tabname)
 					break;
 
 				case IN_SW_ISQL_TERM:
+					setValues.AutoTerm = false;
 					isqlGlob.Termlen = strlen(swarg_str);
 					if (isqlGlob.Termlen >= MAXTERM_SIZE) {
 						isqlGlob.Termlen = MAXTERM_SIZE - 1;
@@ -7602,6 +7532,10 @@ static processing_state parse_arg(int argc, SCHAR** argv, SCHAR* tabname)
 							requested_SQL_dialect = SQL_DIALECT_V6;
 						}
 					}
+					break;
+
+				case IN_SW_ISQL_AUTOTERM:
+					setValues.AutoTerm = true;
 					break;
 
 				case IN_SW_ISQL_HELP:
@@ -8942,7 +8876,7 @@ static unsigned process_message_display(Firebird::IMessageMetadata* message, uns
 }
 
 
-static processing_state process_statement(const TEXT* str2)
+static processing_state process_statement(const std::string& str)
 {
 /**************************************
  *
@@ -9033,9 +8967,20 @@ static processing_state process_statement(const TEXT* str2)
 			flags |= Firebird::IStatement::PREPARE_PREFETCH_LEGACY_PLAN;
 	}
 
-	global_Stmt = DB->prepare(fbStatus, prepare_trans, 0, str2, isqlGlob.SQL_dialect, flags);
+	if (setValues.AutoTerm)
+		flags |= IStatement::PREPARE_REQUIRE_SEMICOLON;
+
+	global_Stmt = DB->prepare(fbStatus, prepare_trans,
+		0, str.c_str(), isqlGlob.SQL_dialect, flags);
+
 	if (failed())
 	{
+		if (setValues.AutoTerm &&
+			fb_utils::containsErrorCode(fbStatus->getErrors(), isc_command_end_err2))
+		{
+			return TRUNCATED;
+		}
+
 		if (isqlGlob.SQL_dialect == SQL_DIALECT_V6_TRANSITION && Input_file)
 		{
 			isqlGlob.printf("%s%s%s%s%s%s",
@@ -9043,7 +8988,7 @@ static processing_state process_statement(const TEXT* str2)
 							"**** Error preparing statement:",
 							NEWLINE,
 							NEWLINE,
-							str2,
+							str.c_str(),
 							NEWLINE);
 		}
 		ISQL_errmsg(fbStatus);
@@ -9160,7 +9105,7 @@ static processing_state process_statement(const TEXT* str2)
 			(statement_type == isc_info_sql_stmt_ddl ||
 			 statement_type == isc_info_sql_stmt_set_generator))
 		{
-			DB->execute(fbStatus, D__trans, 0, str2, isqlGlob.SQL_dialect, NULL, NULL, NULL, NULL);
+			DB->execute(fbStatus, D__trans, 0, str.c_str(), isqlGlob.SQL_dialect, NULL, NULL, NULL, NULL);
 			setValues.StmtTimeout = 0;
 			if (ISQL_errmsg(fbStatus))
 			{
@@ -9195,9 +9140,9 @@ static processing_state process_statement(const TEXT* str2)
 		if (statement_type == isc_info_sql_stmt_start_trans)
 		{
 			// CVC: Starting a txn can fail, too. Let's check it, although I
-			// suspect isql will catch it in frontend_set() through get_statement(),
+			// suspect isql will catch it in frontend_set() through StatementGetter,
 			// so this place has little chance to be reached.
-			if (newtrans(str2) == FAIL)
+			if (newtrans(str.c_str()) == FAIL)
 				return ps_ERR;
 
 			if (setValues.Stats && (print_performance(perf_before) == ps_ERR))

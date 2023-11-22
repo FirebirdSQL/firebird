@@ -27,6 +27,9 @@
     <ClCompile Include="..\..\..\src\common\fb_exception.cpp">
       <Filter>ISQL files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\isql\FrontendLexer.cpp">
+      <Filter>ISQL files</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\isql\InputDevices.cpp">
       <Filter>ISQL files</Filter>
     </ClCompile>
@@ -65,6 +68,9 @@
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\isql\extra_proto.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\isql\FrontendLexer.h">
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\isql\InputDevices.h">

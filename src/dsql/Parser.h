@@ -132,7 +132,8 @@ public:
 
 public:
 	Parser(thread_db* tdbb, MemoryPool& pool, MemoryPool* aStatementPool, DsqlCompilerScratch* aScratch,
-		USHORT aClientDialect, USHORT aDbDialect, const TEXT* string, size_t length, SSHORT charSetId);
+		USHORT aClientDialect, USHORT aDbDialect, bool aRequireSemicolon,
+		const TEXT* string, size_t length, SSHORT charSetId);
 	~Parser();
 
 public:
@@ -363,6 +364,7 @@ private:
 	DsqlCompilerScratch* scratch;
 	USHORT client_dialect;
 	USHORT db_dialect;
+	const bool requireSemicolon;
 	USHORT parser_version;
 	CharSet* charSet;
 

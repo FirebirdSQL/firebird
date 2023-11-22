@@ -868,8 +868,15 @@ using namespace Firebird;
 // list of possible statements
 
 top
-	: statement			{ parsedStatement = $1; }
-	| statement ';'		{ parsedStatement = $1; }
+	: statement
+		{
+			if (requireSemicolon)
+				yyerrorIncompleteCmd(YYPOSNARG(1));
+
+			parsedStatement = $1;
+		}
+	| statement ';'
+		{ parsedStatement = $1; }
 	;
 
 %type <dsqlStatement> statement
