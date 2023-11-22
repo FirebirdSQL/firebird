@@ -1747,11 +1747,11 @@ static void string_to_format_datetime_pattern_matcher(std::string_view pattern, 
 			{
 				tm currentTm;
 				TimeStamp::getCurrentTimeStamp().decode(&currentTm);
-				// set 2 last digits to zero
+				// Set 2 last digits to zero
 				int currentAge = (currentTm.tm_year + 1900) / 100 * 100;
 
 				outTimes.tm_year = parse_string_to_get_int(str, strLength, strOffset, 2);
-				outTimes.tm_year += outTimes.tm_year < (currentTm.tm_year - 50) % 100
+				outTimes.tm_year += outTimes.tm_year < (currentTm.tm_year + 1900 - 50) % 100
 					? currentAge
 					: currentAge - 100;
 
@@ -1762,7 +1762,7 @@ static void string_to_format_datetime_pattern_matcher(std::string_view pattern, 
 			{
 				tm currentTm;
 				TimeStamp::getCurrentTimeStamp().decode(&currentTm);
-				// set 3 last digits to zero
+				// Set 3 last digits to zero
 				int currentThousand = (currentTm.tm_year + 1900) / 1000 * 1000;
 
 				outTimes.tm_year = parse_string_to_get_int(str, strLength, strOffset, 3);
