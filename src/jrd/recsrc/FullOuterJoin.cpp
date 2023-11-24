@@ -105,7 +105,7 @@ bool FullOuterJoin::refetchRecord(thread_db* /*tdbb*/) const
 	return true;
 }
 
-WriteLockResult FullOuterJoin::lockRecord(thread_db* tdbb, bool skipLocked) const
+WriteLockResult FullOuterJoin::lockRecord(thread_db* tdbb) const
 {
 	SET_TDBB(tdbb);
 

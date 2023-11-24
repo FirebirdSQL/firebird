@@ -41,12 +41,14 @@ using namespace Jrd;
 
 
 Parser::Parser(thread_db* tdbb, MemoryPool& pool, MemoryPool* aStatementPool, DsqlCompilerScratch* aScratch,
-			USHORT aClientDialect, USHORT aDbDialect, const TEXT* string, size_t length, SSHORT charSetId)
+			USHORT aClientDialect, USHORT aDbDialect, bool aRequireSemicolon,
+			const TEXT* string, size_t length, SSHORT charSetId)
 	: PermanentStorage(pool),
 	  statementPool(aStatementPool),
 	  scratch(aScratch),
 	  client_dialect(aClientDialect),
 	  db_dialect(aDbDialect),
+	  requireSemicolon(aRequireSemicolon),
 	  transformedString(pool),
 	  strMarks(pool),
 	  stmt_ambiguous(false)

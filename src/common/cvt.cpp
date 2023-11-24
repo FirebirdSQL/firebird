@@ -1745,14 +1745,32 @@ static void string_to_format_datetime_pattern_matcher(std::string_view pattern, 
 			}
 			else if (pattern == "YY")
 			{
-				int year = parse_string_to_get_int(str, strLength, strOffset, 2);
-				outTimes.tm_year = (year > 45 ? 1900 + year : 2000 + year) - 1900;
+				tm currentTm;
+				TimeStamp::getCurrentTimeStamp().decode(&currentTm);
+				// Set 2 last digits to zero
+				int currentAge = (currentTm.tm_year + 1900) / 100 * 100;
+
+				outTimes.tm_year = parse_string_to_get_int(str, strLength, strOffset, 2);
+				outTimes.tm_year += outTimes.tm_year < (currentTm.tm_year + 1900 - 50) % 100
+					? currentAge
+					: currentAge - 100;
+
+				outTimes.tm_year -= 1900;
 				return;
 			}
 			else if (pattern == "YYY")
 			{
-				int year = parse_string_to_get_int(str, strLength, strOffset, 3);
-				outTimes.tm_year = (year > 450 ? 1000 + year : 2000 + year) - 1900;
+				tm currentTm;
+				TimeStamp::getCurrentTimeStamp().decode(&currentTm);
+				// Set 3 last digits to zero
+				int currentThousand = (currentTm.tm_year + 1900) / 1000 * 1000;
+
+				outTimes.tm_year = parse_string_to_get_int(str, strLength, strOffset, 3);
+				outTimes.tm_year += outTimes.tm_year < (currentTm.tm_year + 1900 - 500) % 1000
+					? currentThousand
+					: currentThousand - 1000;
+
+				outTimes.tm_year -= 1900;
 				return;
 			}
 			else if (pattern == "YYYY")
@@ -2020,7 +2038,8 @@ static void string_to_format_datetime_pattern_matcher(std::string_view pattern, 
 }
 
 
-ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::string& format, Firebird::Callbacks* cb)
+ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::string& format, Firebird::Callbacks* cb,
+	const EXPECT_DATETIME expectedType)
 {
 	if (!DTYPE_IS_TEXT(desc->dsc_dtype))
 		cb->err(Arg::Gds(isc_invalid_data_type_for_date_format));
@@ -2080,6 +2099,9 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 				break;
 		}
 
+		if (stringOffset >= stringLength)
+			cb->err(Arg::Gds(isc_data_for_format_is_exhausted) << string(formatUpper.c_str() + formatOffset));
+
 		pattern = std::string_view(formatUpper.c_str() + formatOffset, i - formatOffset + 1);
 		bool isFound = false;
 		for (int j = 0; j < FB_NELEM(TO_STRING_PATTERNS); j++)
@@ -2119,8 +2141,12 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 		cb->err(Arg::Gds(isc_trailing_part_of_string) << string(stringUpper.c_str() + stringOffset));
 
 	ISC_TIMESTAMP_TZ timestampTZ;
+	timestampTZ.utc_timestamp = NoThrowTimeStamp::encode_timestamp(&times, fractions);
+
+	ISC_USHORT sessionTimeZone = cb->getSessionTimeZone();
+
 	if (timezoneOffsetInMinutes == uninitializedTimezoneOffsetValue && timezoneId == TimeZoneTrie::UninitializedTimezoneId)
-		timestampTZ.time_zone = cb->getSessionTimeZone();
+		timestampTZ.time_zone = sessionTimeZone;
 	else if (timezoneId != TimeZoneTrie::UninitializedTimezoneId)
 		timestampTZ.time_zone = timezoneId;
 	else
@@ -2128,7 +2154,22 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 		timestampTZ.time_zone = TimeZoneUtil::makeFromOffset(sign(timezoneOffsetInMinutes),
 			abs(timezoneOffsetInMinutes) / 60, abs(timezoneOffsetInMinutes) % 60);
 	}
-	timestampTZ.utc_timestamp = NoThrowTimeStamp::encode_timestamp(&times, fractions);
+
+	if (expectedType == expect_sql_time_tz || expectedType == expect_timestamp_tz || timestampTZ.time_zone != sessionTimeZone)
+		TimeZoneUtil::localTimeStampToUtc(timestampTZ);
+
+	if (timestampTZ.time_zone != sessionTimeZone)
+	{
+		if (expectedType == expect_sql_time)
+		{
+			ISC_TIME_TZ timeTz;
+			timeTz.utc_time = timestampTZ.utc_timestamp.timestamp_time;
+			timeTz.time_zone = timestampTZ.time_zone;
+			timestampTZ.utc_timestamp.timestamp_time = TimeZoneUtil::timeTzToTime(timeTz, cb);
+		}
+		else if (expectedType == expect_timestamp)
+			*(ISC_TIMESTAMP*) &timestampTZ = TimeZoneUtil::timeStampTzToTimeStamp(timestampTZ, sessionTimeZone);
+	}
 
 	return timestampTZ;
 }

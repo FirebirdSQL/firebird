@@ -127,6 +127,7 @@ const USHORT RPB_s_no_data	= 0x02;	// nobody is going to access the data
 const USHORT RPB_s_sweeper	= 0x04;	// garbage collector - skip swept pages
 const USHORT RPB_s_unstable = 0x08;	// don't use undo log, used with unstable explicit cursors
 const USHORT RPB_s_bulk		= 0x10;	// bulk operation (currently insert only)
+const USHORT RPB_s_skipLocked = 0x20;	// skip locked record
 
 // Runtime flags
 

@@ -104,11 +104,11 @@ bool openDb(const char* securityDb, RefPtr<IAttachment>& att, RefPtr<ITransactio
 
 namespace Jrd {
 
-bool checkCreateDatabaseGrant(const MetaString& userName, const MetaString& trustedRole,
+CreateGrant checkCreateDatabaseGrant(const MetaString& userName, const MetaString& trustedRole,
 	const MetaString& sqlRole, const char* securityDb)
 {
 	if (userName == DBA_USER_NAME)
-		return true;
+		return CreateGrant::ASSUMED;
 
 	RefPtr<IAttachment> att;
 	RefPtr<ITransaction> tra;
@@ -169,10 +169,10 @@ bool checkCreateDatabaseGrant(const MetaString& userName, const MetaString& trus
 		role = trustedRole;
 
 	if (role == ADMIN_ROLE)
-		return true;
+		return CreateGrant::ASSUMED;
 
 	if (!hasDb)
-		return false;
+		return CreateGrant::NONE;
 
 	// check db creators table
 	Message gr;
@@ -198,13 +198,13 @@ bool checkCreateDatabaseGrant(const MetaString& userName, const MetaString& trus
 		{
 			// isc_dsql_relation_err when exec SQL - i.e. table RDB$DB_CREATORS
 			// is missing due to non-FB3 security DB
-			return false;
+			return CreateGrant::NONE;
 		}
 		check("IAttachment::execute", &st);
 	}
 
 	if (cnt > 0)
-		return true;
+		return CreateGrant::GRANTED;
 
 	if (!role.hasData())
 		role = "NONE";
@@ -247,7 +247,7 @@ bool checkCreateDatabaseGrant(const MetaString& userName, const MetaString& trus
 
 	check("IResultSet::fetchNext", &st);
 
-	return wrk.test(CREATE_DATABASE);
+	return wrk.test(CREATE_DATABASE) ? CreateGrant::GRANTED : CreateGrant::NONE;
 }
 
 

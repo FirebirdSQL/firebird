@@ -141,9 +141,9 @@ bool SingularStream::refetchRecord(thread_db* tdbb) const
 	return m_next->refetchRecord(tdbb);
 }
 
-WriteLockResult SingularStream::lockRecord(thread_db* tdbb, bool skipLocked) const
+WriteLockResult SingularStream::lockRecord(thread_db* tdbb) const
 {
-	return m_next->lockRecord(tdbb, skipLocked);
+	return m_next->lockRecord(tdbb);
 }
 
 void SingularStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const

@@ -191,6 +191,9 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 			if (tail->csb_flags & csb_unstable)
 				rpb->rpb_stream_flags |= RPB_s_unstable;
 
+			if (tail->csb_flags & csb_skip_locked)
+				rpb->rpb_stream_flags |= RPB_s_skipLocked;
+
 			rpb->rpb_relation = tail->csb_relation;
 
 			delete tail->csb_fields;

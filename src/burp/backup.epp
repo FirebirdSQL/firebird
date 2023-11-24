@@ -1031,6 +1031,7 @@ void put_array( burp_fld* field, burp_rel* relation, ISC_QUAD* blob_id)
 	case blr_long:
 	case blr_quad:
 	case blr_int64:
+	case blr_int128:
 		add_byte(blr, field->fld_scale);
 		break;
 	case blr_text:

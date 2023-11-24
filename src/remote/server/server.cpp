@@ -1925,7 +1925,7 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 	{
 		if ((protocol->p_cnct_version == PROTOCOL_VERSION10 ||
 			 (protocol->p_cnct_version >= PROTOCOL_VERSION11 &&
-			  protocol->p_cnct_version <= PROTOCOL_VERSION18)) &&
+			  protocol->p_cnct_version <= PROTOCOL_VERSION19)) &&
 			 (protocol->p_cnct_architecture == arch_generic ||
 			  protocol->p_cnct_architecture == ARCHITECTURE) &&
 			protocol->p_cnct_weight >= weight)
@@ -4840,7 +4840,8 @@ ISC_STATUS rem_port::prepare_statement(P_SQLST * prepareL, PACKET* sendL)
 	// stuff isc_info_length in front of info items buffer
 	*info = isc_info_length;
 	memmove(info + 1, prepareL->p_sqlst_items.cstr_address, infoLength++);
-	const unsigned int flags = StatementMetadata::buildInfoFlags(infoLength, info);
+	unsigned flags = StatementMetadata::buildInfoFlags(infoLength, info) |
+		prepareL->p_sqlst_flags;
 
 	ITransaction* iface = NULL;
 	if (transaction)

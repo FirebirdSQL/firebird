@@ -1533,6 +1533,7 @@ type
 		const PREPARE_PREFETCH_DETAILED_PLAN = Cardinal($10);
 		const PREPARE_PREFETCH_AFFECTED_RECORDS = Cardinal($20);
 		const PREPARE_PREFETCH_FLAGS = Cardinal($40);
+		const PREPARE_REQUIRE_SEMICOLON = Cardinal($80);
 		const PREPARE_PREFETCH_METADATA = Cardinal(IStatement.PREPARE_PREFETCH_TYPE or IStatement.PREPARE_PREFETCH_FLAGS or IStatement.PREPARE_PREFETCH_INPUT_PARAMETERS or IStatement.PREPARE_PREFETCH_OUTPUT_PARAMETERS);
 		const PREPARE_PREFETCH_ALL = Cardinal(IStatement.PREPARE_PREFETCH_METADATA or IStatement.PREPARE_PREFETCH_LEGACY_PLAN or IStatement.PREPARE_PREFETCH_DETAILED_PLAN or IStatement.PREPARE_PREFETCH_AFFECTED_RECORDS);
 		const FLAG_HAS_CURSOR = Cardinal($1);
@@ -4044,6 +4045,7 @@ const
 	isc_dpb_upgrade_db = byte(97);
 	isc_dpb_parallel_workers = byte(100);
 	isc_dpb_worker_attach = byte(101);
+	isc_dpb_owner = byte(102);
 	isc_dpb_address = byte(1);
 	isc_dpb_addr_protocol = byte(1);
 	isc_dpb_addr_endpoint = byte(2);

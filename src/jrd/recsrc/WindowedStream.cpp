@@ -55,7 +55,7 @@ namespace
 		void close(thread_db* tdbb) const override;
 
 		bool refetchRecord(thread_db* tdbb) const override;
-		WriteLockResult lockRecord(thread_db* tdbb, bool skipLocked) const override;
+		WriteLockResult lockRecord(thread_db* tdbb) const override;
 
 		void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override;
 
@@ -143,9 +143,9 @@ namespace
 		return m_next->refetchRecord(tdbb);
 	}
 
-	WriteLockResult BufferedStreamWindow::lockRecord(thread_db* tdbb, bool skipLocked) const
+	WriteLockResult BufferedStreamWindow::lockRecord(thread_db* tdbb) const
 	{
-		return m_next->lockRecord(tdbb, skipLocked);
+		return m_next->lockRecord(tdbb);
 	}
 
 	void BufferedStreamWindow::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
@@ -402,7 +402,7 @@ bool WindowedStream::refetchRecord(thread_db* tdbb) const
 	return m_joinedStream->refetchRecord(tdbb);
 }
 
-WriteLockResult WindowedStream::lockRecord(thread_db* /*tdbb*/, bool /*skipLocked*/) const
+WriteLockResult WindowedStream::lockRecord(thread_db* /*tdbb*/) const
 {
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
 }

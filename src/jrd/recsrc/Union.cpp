@@ -151,7 +151,7 @@ bool Union::refetchRecord(thread_db* tdbb) const
 	return m_args[impure->irsb_count]->refetchRecord(tdbb);
 }
 
-WriteLockResult Union::lockRecord(thread_db* tdbb, bool skipLocked) const
+WriteLockResult Union::lockRecord(thread_db* tdbb) const
 {
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -159,7 +159,7 @@ WriteLockResult Union::lockRecord(thread_db* tdbb, bool skipLocked) const
 	if (impure->irsb_count >= m_args.getCount())
 		return WriteLockResult::CONFLICTED;
 
-	return m_args[impure->irsb_count]->lockRecord(tdbb, skipLocked);
+	return m_args[impure->irsb_count]->lockRecord(tdbb);
 }
 
 void Union::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const

@@ -32,36 +32,37 @@ enum isql_switches
 {
 	IN_SW_ISQL_0			= 0,
 	IN_SW_ISQL_EXTRACTALL	= 1,
-	IN_SW_ISQL_BAIL 		= 2,
-	IN_SW_ISQL_CACHE		= 3,
-	IN_SW_ISQL_CHARSET		= 4,
-	IN_SW_ISQL_DATABASE 	= 5,
-	IN_SW_ISQL_ECHO 		= 6,
-	IN_SW_ISQL_EXTRACT		= 7,
-	IN_SW_ISQL_FETCHPASS	= 8,
-	IN_SW_ISQL_INPUT		= 9,
-	IN_SW_ISQL_MERGE		= 10,
-	IN_SW_ISQL_MERGE2		= 11,
-	IN_SW_ISQL_NOAUTOCOMMIT = 12,
-	IN_SW_ISQL_NODBTRIGGERS = 13,
-	IN_SW_ISQL_NOWARN		= 14,
-	IN_SW_ISQL_OUTPUT		= 15,
-	IN_SW_ISQL_PAGE 		= 16,
-	IN_SW_ISQL_PASSWORD 	= 17,
-	IN_SW_ISQL_QUIET		= 18,
-	IN_SW_ISQL_ROLE 		= 19,
-	IN_SW_ISQL_ROLE2		= 20,
-	IN_SW_ISQL_SQLDIALECT	= 21,
-	IN_SW_ISQL_TERM 		= 22,
+	IN_SW_ISQL_AUTOTERM		= 2,
+	IN_SW_ISQL_BAIL 		= 3,
+	IN_SW_ISQL_CACHE		= 4,
+	IN_SW_ISQL_CHARSET		= 5,
+	IN_SW_ISQL_DATABASE 	= 6,
+	IN_SW_ISQL_ECHO 		= 7,
+	IN_SW_ISQL_EXTRACT		= 8,
+	IN_SW_ISQL_FETCHPASS	= 9,
+	IN_SW_ISQL_INPUT		= 10,
+	IN_SW_ISQL_MERGE		= 11,
+	IN_SW_ISQL_MERGE2		= 12,
+	IN_SW_ISQL_NOAUTOCOMMIT = 13,
+	IN_SW_ISQL_NODBTRIGGERS = 14,
+	IN_SW_ISQL_NOWARN		= 15,
+	IN_SW_ISQL_OUTPUT		= 16,
+	IN_SW_ISQL_PAGE 		= 17,
+	IN_SW_ISQL_PASSWORD 	= 18,
+	IN_SW_ISQL_QUIET		= 19,
+	IN_SW_ISQL_ROLE 		= 20,
+	IN_SW_ISQL_ROLE2		= 21,
+	IN_SW_ISQL_SQLDIALECT	= 22,
+	IN_SW_ISQL_TERM 		= 23,
 #ifdef TRUSTED_AUTH
-	IN_SW_ISQL_TRUSTED		= 23,
+	IN_SW_ISQL_TRUSTED		= 24,
 #endif
-	IN_SW_ISQL_USER 		= 24,
-	IN_SW_ISQL_VERSION		= 25,
+	IN_SW_ISQL_USER 		= 25,
+	IN_SW_ISQL_VERSION		= 26,
 #ifdef DEV_BUILD
-	IN_SW_ISQL_EXTRACTTBL	= 26,
+	IN_SW_ISQL_EXTRACTTBL	= 27,
 #endif
-	IN_SW_ISQL_HELP 		= 27
+	IN_SW_ISQL_HELP 		= 28
 };
 
 
@@ -69,7 +70,8 @@ enum IsqlOptionType { iqoArgNone, iqoArgInteger, iqoArgString };
 
 static const Switches::in_sw_tab_t isql_in_sw_table[] =
 {
-	{IN_SW_ISQL_EXTRACTALL	, 0, "ALL"				, 0, 0, 0, false, false, 11	, 1, NULL, iqoArgNone},
+	{IN_SW_ISQL_EXTRACTALL	, 0, "ALL"				, 0, 0, 0, false, false, 11		, 1, NULL, iqoArgNone},
+	{IN_SW_ISQL_AUTOTERM	, 0, "AUTOTERM"			, 0, 0, 0, false, false, 206	, 5, NULL, iqoArgNone},
 	{IN_SW_ISQL_BAIL 		, 0, "BAIL"				, 0, 0, 0, false, false, 104	, 1, NULL, iqoArgNone},
 	{IN_SW_ISQL_CACHE		, 0, "CACHE"			, 0, 0, 0, false, false, 111	, 1, NULL, iqoArgInteger},
 	{IN_SW_ISQL_CHARSET		, 0, "CHARSET"			, 0, 0, 0, false, false, 122	, 2, NULL, iqoArgString},

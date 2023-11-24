@@ -132,6 +132,7 @@
 #define isc_dpb_upgrade_db				  97
 #define isc_dpb_parallel_workers		 100
 #define isc_dpb_worker_attach			 101
+#define isc_dpb_owner					 102
 
 
 /**************************************************/

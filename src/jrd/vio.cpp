@@ -166,7 +166,7 @@ enum class PrepareResult
 };
 
 static PrepareResult prepare_update(thread_db*, jrd_tra*, TraNumber commit_tid_read, record_param*,
-	record_param*, record_param*, PageStack&, TriState writeLockSkipLocked = {});
+	record_param*, record_param*, PageStack&, bool);
 
 static void protect_system_table_insert(thread_db* tdbb, const Request* req, const jrd_rel* relation,
 	bool force_flag = false);
@@ -688,12 +688,13 @@ inline void check_gbak_cheating_delete(thread_db* tdbb, const jrd_rel* relation)
 	}
 }
 
-inline int wait(thread_db* tdbb, jrd_tra* transaction, const record_param* rpb)
+inline int wait(thread_db* tdbb, jrd_tra* transaction, const record_param* rpb, bool probe)
 {
-	if (transaction->getLockWait())
+	if (!probe && transaction->getLockWait())
 		tdbb->bumpRelStats(RuntimeStatistics::RECORD_WAITS, rpb->rpb_relation->rel_id);
 
-	return TRA_wait(tdbb, transaction, rpb->rpb_transaction_nr, jrd_tra::tra_wait);
+	return TRA_wait(tdbb, transaction, rpb->rpb_transaction_nr,
+		probe ? jrd_tra::tra_probe : jrd_tra::tra_wait);
 }
 
 inline bool checkGCActive(thread_db* tdbb, record_param* rpb, int& state)
@@ -1109,7 +1110,7 @@ void VIO_backout(thread_db* tdbb, record_param* rpb, const jrd_tra* transaction)
 
 bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 							  jrd_tra* transaction, MemoryPool* pool,
-							  RecordLock recordLock, bool noundo)
+							  bool writelock, bool noundo)
 {
 /**************************************
  *
@@ -1211,6 +1212,14 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 	RuntimeStatistics::Accumulator backversions(tdbb, relation,
 												RuntimeStatistics::RECORD_BACKVERSION_READS);
 
+	const bool skipLocked = rpb->rpb_stream_flags & RPB_s_skipLocked;
+
+	if (skipLocked && (state == tra_active || state == tra_limbo))
+	{
+		CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
+		return false;
+	}
+
 	// First, save the record indentifying information to be restored on exit
 
 	while (true)
@@ -1258,15 +1267,14 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 		// If the transaction is a read committed and chooses the no version
 		// option, wait for reads also!
 
-		if (recordLock != RecordLock::SKIP &&
-			(transaction->tra_flags & TRA_read_committed) &&
+		if ((transaction->tra_flags & TRA_read_committed) &&
 			!(transaction->tra_flags & TRA_read_consistency) &&
-			(!(transaction->tra_flags & TRA_rec_version) || recordLock == RecordLock::LOCK))
+			(!(transaction->tra_flags & TRA_rec_version) || writelock))
 		{
 			if (state == tra_limbo)
 			{
 				CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
-				state = wait(tdbb, transaction, rpb);
+				state = wait(tdbb, transaction, rpb, false);
 
 				if (!DPM_get(tdbb, rpb, LCK_read))
 					return false;
@@ -1297,7 +1305,7 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 				// of a dead record version.
 
 				CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
-				state = wait(tdbb, transaction, rpb);
+				state = wait(tdbb, transaction, rpb, false);
 
 				if (state == tra_committed)
 					state = check_precommitted(transaction, rpb);
@@ -1896,12 +1904,16 @@ static bool check_prepare_result(PrepareResult prepare_result, jrd_tra* transact
  *  read consistency transaction or lock error happens or if request is already
  *  in update conflict mode. In latter case set TRA_ex_restart flag to correctly
  *  handle request restart.
+ *	If record should be skipped, return false also.
  *
  **************************************/
-	fb_assert(prepare_result != PrepareResult::SKIP_LOCKED);
-
 	if (prepare_result == PrepareResult::SUCCESS)
 		return true;
+
+	if ((rpb->rpb_stream_flags & RPB_s_skipLocked) && prepare_result == PrepareResult::SKIP_LOCKED)
+		return false;
+
+	fb_assert(prepare_result != PrepareResult::SKIP_LOCKED);
 
 	Request* top_request = request->req_snapshot.m_owner;
 
@@ -1976,7 +1988,7 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 	if (rpb->rpb_runtime_flags & (RPB_refetch | RPB_undo_read))
 	{
-		VIO_refetch_record(tdbb, rpb, transaction, RecordLock::NONE, true);
+		VIO_refetch_record(tdbb, rpb, transaction, false, true);
 		rpb->rpb_runtime_flags &= ~RPB_refetch;
 		fb_assert(!(rpb->rpb_runtime_flags & RPB_undo_read));
 	}
@@ -2363,7 +2375,7 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 	{
 		// Update stub didn't find one page -- do a long, hard update
 		PageStack stack;
-		const auto prepare_result = prepare_update(tdbb, transaction, tid_fetch, rpb, &temp, 0, stack);
+		const auto prepare_result = prepare_update(tdbb, transaction, tid_fetch, rpb, &temp, 0, stack, false);
 		if (!check_prepare_result(prepare_result, transaction, request, rpb))
 			return false;
 
@@ -2483,6 +2495,13 @@ static void delete_version_chain(thread_db* tdbb, record_param* rpb, bool delete
 		rpb->rpb_flags, rpb->rpb_b_page, rpb->rpb_b_line,
 		rpb->rpb_f_page, rpb->rpb_f_line);
 #endif
+
+	// It's possible to get rpb_page == 0 from VIO_intermediate_gc via
+	// staying_chain_rpb. This case happens there when the staying record
+	// stack has 1 item at the moment this rpb is created. So return to
+	// avoid an error on DPM_fetch below.
+	if (!rpb->rpb_page)
+		return;
 
 	ULONG prior_page = 0;
 
@@ -2907,7 +2926,7 @@ bool VIO_get(thread_db* tdbb, record_param* rpb, jrd_tra* transaction, MemoryPoo
 	const USHORT lock_type = (rpb->rpb_stream_flags & RPB_s_update) ? LCK_write : LCK_read;
 
 	if (!DPM_get(tdbb, rpb, lock_type) ||
-		!VIO_chase_record_version(tdbb, rpb, transaction, pool, RecordLock::NONE, false))
+		!VIO_chase_record_version(tdbb, rpb, transaction, pool, false, false))
 	{
 		return false;
 	}
@@ -3075,7 +3094,7 @@ bool VIO_get_current(thread_db* tdbb,
 		// Wait as long as it takes for an active transaction which has modified
 		// the record.
 
-		state = wait(tdbb, transaction, rpb);
+		state = wait(tdbb, transaction, rpb, false);
 
 		if (state == tra_committed)
 			state = check_precommitted(transaction, rpb);
@@ -3282,7 +3301,7 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 			old_record->copyFrom(org_rpb->rpb_record);
 		}
 
-		VIO_refetch_record(tdbb, org_rpb, transaction, RecordLock::NONE, true);
+		VIO_refetch_record(tdbb, org_rpb, transaction, false, true);
 		org_rpb->rpb_runtime_flags &= ~RPB_refetch;
 		fb_assert(!(org_rpb->rpb_runtime_flags & RPB_undo_read));
 
@@ -3664,7 +3683,7 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 	record_param temp;
 	PageStack stack;
 	const auto prepare_result = prepare_update(tdbb, transaction, org_rpb->rpb_transaction_nr, org_rpb,
-										&temp, new_rpb, stack);
+										&temp, new_rpb, stack, false);
 	if (!check_prepare_result(prepare_result, transaction, tdbb->getRequest(), org_rpb))
 		return false;
 
@@ -3765,7 +3784,7 @@ bool VIO_next_record(thread_db* tdbb,
 		{
 			return false;
 		}
-	} while (!VIO_chase_record_version(tdbb, rpb, transaction, pool, RecordLock::NONE, false));
+	} while (!VIO_chase_record_version(tdbb, rpb, transaction, pool, false, false));
 
 	if (rpb->rpb_runtime_flags & RPB_undo_data)
 		fb_assert(rpb->getWindow(tdbb).win_bdb == NULL);
@@ -3843,7 +3862,7 @@ Record* VIO_record(thread_db* tdbb, record_param* rpb, const Format* format, Mem
 
 
 bool VIO_refetch_record(thread_db* tdbb, record_param* rpb, jrd_tra* transaction,
-						RecordLock recordLock, bool noundo)
+						bool writelock, bool noundo)
 {
 /**************************************
  *
@@ -3866,9 +3885,9 @@ bool VIO_refetch_record(thread_db* tdbb, record_param* rpb, jrd_tra* transaction
 	const TraNumber tid_fetch = rpb->rpb_transaction_nr;
 
 	if (!DPM_get(tdbb, rpb, LCK_read) ||
-		!VIO_chase_record_version(tdbb, rpb, transaction, tdbb->getDefaultPool(), recordLock, noundo))
+		!VIO_chase_record_version(tdbb, rpb, transaction, tdbb->getDefaultPool(), writelock, noundo))
 	{
-		if (recordLock == RecordLock::LOCK)
+		if (writelock)
 			return false;
 
 		ERR_post(Arg::Gds(isc_no_cur_rec));
@@ -3892,7 +3911,7 @@ bool VIO_refetch_record(thread_db* tdbb, record_param* rpb, jrd_tra* transaction
 	// make sure the record has not been updated.  Also, punt after
 	// VIO_data() call which will release the page.
 
-	if (recordLock != RecordLock::LOCK &&
+	if (!writelock &&
 		(transaction->tra_flags & TRA_read_committed) &&
 		(tid_fetch != rpb->rpb_transaction_nr) &&
 		// added to check that it was not current transaction,
@@ -4452,7 +4471,7 @@ bool VIO_sweep(thread_db* tdbb, jrd_tra* transaction, TraceSweepEvent* traceSwee
 }
 
 
-WriteLockResult VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* transaction, bool skipLocked)
+WriteLockResult VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* transaction)
 {
 /**************************************
  *
@@ -4480,6 +4499,8 @@ WriteLockResult VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* t
 		org_rpb->rpb_f_page, org_rpb->rpb_f_line);
 #endif
 
+	const bool skipLocked = org_rpb->rpb_stream_flags & RPB_s_skipLocked;
+
 	if (transaction->tra_flags & TRA_system)
 	{
 		// Explicit locks are not needed in system transactions
@@ -4488,7 +4509,7 @@ WriteLockResult VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* t
 
 	if (org_rpb->rpb_runtime_flags & (RPB_refetch | RPB_undo_read))
 	{
-		if (!VIO_refetch_record(tdbb, org_rpb, transaction, (skipLocked ? RecordLock::SKIP : RecordLock::LOCK), true))
+		if (!VIO_refetch_record(tdbb, org_rpb, transaction, true, true))
 			return WriteLockResult::CONFLICTED;
 
 		org_rpb->rpb_runtime_flags &= ~RPB_refetch;
@@ -4544,7 +4565,7 @@ WriteLockResult VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* t
 	record_param temp;
 	PageStack stack;
 	switch (prepare_update(tdbb, transaction, org_rpb->rpb_transaction_nr, org_rpb, &temp, &new_rpb,
-						   stack, TriState(skipLocked)))
+						   stack, true))
 	{
 		case PrepareResult::DELETED:
 			if (skipLocked && (transaction->tra_flags & TRA_read_committed))
@@ -5990,7 +6011,7 @@ static void notify_garbage_collector(thread_db* tdbb, record_param* rpb, TraNumb
 
 
 static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNumber commit_tid_read,
-	record_param* rpb, record_param* temp, record_param* new_rpb, PageStack& stack, TriState writeLockSkipLocked)
+	record_param* rpb, record_param* temp, record_param* new_rpb, PageStack& stack, bool writelock)
 {
 /**************************************
  *
@@ -6114,6 +6135,7 @@ static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNu
 	// was the same one we stored above.
 	record_param org_rpb;
 	TraNumber update_conflict_trans = MAX_TRA_NUMBER; //-1;
+	const bool skipLocked = rpb->rpb_stream_flags & RPB_s_skipLocked;
 	while (true)
 	{
 		org_rpb.rpb_flags = rpb->rpb_flags;
@@ -6179,7 +6201,7 @@ static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNu
 
 				delete_record(tdbb, temp, 0, NULL);
 
-				if (writeLockSkipLocked.isAssigned() || (transaction->tra_flags & TRA_read_consistency))
+				if (writelock || skipLocked || (transaction->tra_flags & TRA_read_consistency))
 				{
 					tdbb->bumpRelStats(RuntimeStatistics::RECORD_CONFLICTS, relation->rel_id);
 					return PrepareResult::DELETED;
@@ -6275,9 +6297,7 @@ static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNu
 			// Wait as long as it takes (if not skipping locks) for an active
 			// transaction which has modified the record.
 
-			state = writeLockSkipLocked.asBool() ?
-				TRA_wait(tdbb, transaction, rpb->rpb_transaction_nr, jrd_tra::tra_probe) :
-				wait(tdbb, transaction, rpb);
+			state = wait(tdbb, transaction, rpb, skipLocked);
 
 			if (state == tra_committed)
 				state = check_precommitted(transaction, rpb);
@@ -6309,7 +6329,7 @@ static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNu
 				{
 					tdbb->bumpRelStats(RuntimeStatistics::RECORD_CONFLICTS, relation->rel_id);
 
-					if (writeLockSkipLocked.asBool())
+					if (skipLocked)
 						return PrepareResult::SKIP_LOCKED;
 
 					// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
@@ -6328,7 +6348,7 @@ static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNu
 				// fall thru
 
 			case tra_active:
-				return writeLockSkipLocked.asBool() ? PrepareResult::SKIP_LOCKED : PrepareResult::LOCK_ERROR;
+				return skipLocked ? PrepareResult::SKIP_LOCKED : PrepareResult::LOCK_ERROR;
 
 			case tra_dead:
 				break;

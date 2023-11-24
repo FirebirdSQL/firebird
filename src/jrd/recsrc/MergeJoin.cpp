@@ -340,7 +340,7 @@ bool MergeJoin::refetchRecord(thread_db* /*tdbb*/) const
 	return true;
 }
 
-WriteLockResult MergeJoin::lockRecord(thread_db* /*tdbb*/, bool /*skipLocked*/) const
+WriteLockResult MergeJoin::lockRecord(thread_db* /*tdbb*/) const
 {
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
 }

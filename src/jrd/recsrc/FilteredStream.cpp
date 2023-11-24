@@ -111,9 +111,9 @@ bool FilteredStream::refetchRecord(thread_db* tdbb) const
 		m_boolean->execute(tdbb, request);
 }
 
-WriteLockResult FilteredStream::lockRecord(thread_db* tdbb, bool skipLocked) const
+WriteLockResult FilteredStream::lockRecord(thread_db* tdbb) const
 {
-	return m_next->lockRecord(tdbb, skipLocked);
+	return m_next->lockRecord(tdbb);
 }
 
 void FilteredStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const

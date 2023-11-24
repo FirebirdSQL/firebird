@@ -1111,6 +1111,7 @@ namespace Jrd
 		PathName	dpb_set_bind;
 		string	dpb_decfloat_round;
 		string	dpb_decfloat_traps;
+		string	dpb_owner;
 
 	public:
 		static const ULONG DPB_FLAGS_MASK = DBB_damaged;
@@ -1337,7 +1338,7 @@ static void		start_transaction(thread_db* tdbb, bool transliterate, jrd_tra** tr
 static void		rollback(thread_db*, jrd_tra*, const bool);
 static void		purge_attachment(thread_db* tdbb, StableAttachmentPart* sAtt, unsigned flags = 0);
 static void		getUserInfo(UserId&, const DatabaseOptions&, const char*,
-	const RefPtr<const Config>*, bool, Mapping& mapping, bool);
+	const RefPtr<const Config>*, Mapping& mapping, bool);
 static void		waitForShutdown(Semaphore&);
 
 static THREAD_ENTRY_DECLARE shutdown_thread(THREAD_ENTRY_PARAM);
@@ -1353,7 +1354,7 @@ TraceFailedConnection::TraceFailedConnection(const char* filename, const Databas
 {
 	Mapping mapping(Mapping::MAP_ERROR_HANDLER, NULL);
 	mapping.setAuthBlock(m_options->dpb_auth_block);
-	getUserInfo(m_id, *m_options, m_filename, NULL, false, mapping, false);
+	getUserInfo(m_id, *m_options, m_filename, NULL, mapping, false);
 }
 
 
@@ -1949,7 +1950,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				try
 				{
 					mapping.setDb(filename, expanded_name.c_str(), jAtt);
-					getUserInfo(userId, options, filename, &config, false, mapping, options.dpb_reset_icu);
+					getUserInfo(userId, options, filename, &config, mapping, options.dpb_reset_icu);
 				}
 				catch(const Exception&)
 				{
@@ -2847,7 +2848,41 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 
 			// Check for correct credentials supplied
 			mapping.setSecurityDbAlias(config->getSecurityDatabase(), nullptr);
-			getUserInfo(userId, options, filename, &config, true, mapping, false);
+			getUserInfo(userId, options, filename, &config, mapping, false);
+
+			// Check user's power level
+			CreateGrant powerLevel = CreateGrant::ASSUMED; // By default it is a boot build or embedded mode where everything is allowed
+			if (options.dpb_auth_block.hasData())
+			{
+				powerLevel = checkCreateDatabaseGrant(userId.getUserName(), userId.getTrustedRole(), userId.getSqlRole(), config->getSecurityDatabase());
+			}
+
+			switch (powerLevel)
+			{
+			case CreateGrant::NONE:
+					(Arg::Gds(isc_no_priv) << "CREATE" << "DATABASE" << filename).raise();
+
+			case CreateGrant::ASSUMED:
+				if (options.dpb_owner.hasData())
+				{
+					// Superuser can create databases for anyone other
+					fb_utils::dpbItemUpper(options.dpb_owner);
+					userId.setUserName(options.dpb_owner);
+				}
+				break;
+
+			case CreateGrant::GRANTED:
+				if (options.dpb_owner.hasData())
+				{
+					// Superuser can create databases for anyone other
+					fb_utils::dpbItemUpper(options.dpb_owner);
+					if (userId.getUserName() != options.dpb_owner)
+					{
+						(Arg::Gds(isc_no_priv) << "IMPERSONATE USER" << "DATABASE" << filename).raise();
+					}
+				}
+				break;
+			}
 
 #ifdef WIN_NT
 			guardDbInit.enter();		// Required to correctly expand name of just created database
@@ -7274,6 +7309,10 @@ void DatabaseOptions::get(const UCHAR* dpb, USHORT dpb_length, bool& invalid_cli
 			dpb_upgrade_db = true;
 			break;
 
+		case isc_dpb_owner:
+			getString(rdr, dpb_owner);
+			break;
+
 		default:
 			break;
 		}
@@ -8543,13 +8582,12 @@ static VdnResult verifyDatabaseName(const PathName& name, FbStatusVector* status
     @param aliasName
     @param dbName
     @param config
-    @param creating
     @param iAtt
     @param cryptCb
 
  **/
 static void getUserInfo(UserId& user, const DatabaseOptions& options, const char* aliasName,
-	const RefPtr<const Config>* config, bool creating, Mapping& mapping, bool icuReset)
+	const RefPtr<const Config>* config, Mapping& mapping, bool icuReset)
 {
 	bool wheel = false;
 	int id = -1, group = -1;	// CVC: This var contained trash
@@ -8580,12 +8618,6 @@ static void getUserInfo(UserId& user, const DatabaseOptions& options, const char
 
 			if (mapping.mapUser(name, trusted_role) & Mapping::MAP_DOWN)
 				user.setFlag(USR_mapdown);
-
-			if (creating && config)		// when config is NULL we are in error handler
-			{
-				if (!checkCreateDatabaseGrant(name, trusted_role, options.dpb_role_name, (*config)->getSecurityDatabase()))
-					(Arg::Gds(isc_no_priv) << "CREATE" << "DATABASE" << aliasName).raise();
-			}
 		}
 		else
 		{

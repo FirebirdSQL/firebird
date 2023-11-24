@@ -36,7 +36,14 @@
 
 namespace Jrd {
 
-bool checkCreateDatabaseGrant(const Firebird::MetaString& userName, const Firebird::MetaString& trustedRole,
+enum class CreateGrant
+{
+	NONE,		// This user cannot create databases
+	GRANTED,	// User was granted privilege to create database
+	ASSUMED		// User is admin and has all rights
+};
+
+CreateGrant checkCreateDatabaseGrant(const Firebird::MetaString& userName, const Firebird::MetaString& trustedRole,
 	const Firebird::MetaString& sqlRole, const char* securityDb);
 
 class DbCreatorsScan: public VirtualTableScan

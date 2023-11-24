@@ -4,26 +4,22 @@ FROM mcr.microsoft.com/dotnet/framework/sdk:4.8-windowsservercore-ltsc2022
 
 SHELL ["cmd", "/S", "/C"]
 
-# set visualstudio2022buildtools --version and --installChannelUri.
-#
-# Open https://learn.microsoft.com/en-us/visualstudio/releases/2022/release-history
-# Download BuildTools for a specific version.
-# Open (extract) the downloaded file.
-# Open file vs_setup_bootstrapper.json and extract the installChannelUri value and update in --installChannelUri.
-#
-# 17.7.4 - https://aka.ms/vs/17/release/134599118_118780349/channel
-#
-# Replace URL below to the link to vs_BuildTools.exe
+# Installation of specific Visual Studio build tools version:
+# - Open https://learn.microsoft.com/en-us/visualstudio/releases/2022/release-history
+# - Download BuildTools for a specific version.
+# - Open (extract) the downloaded file, for example using 7-Zip.
+# - Open file vs_setup_bootstrapper.json and extract the installChannelUri to VS_INSTALL_CHANNEL_URI.
 
-ADD https://download.visualstudio.microsoft.com/download/pr/e514a25b-a89d-4051-a63c-05ccd9be41e9/6ca2980598be2c888c3bb3b288c688a04b3fc1f1acb62d7c3cdaada47b36c3ea/vs_BuildTools.exe C:/temp/vs_BuildTools.exe
+# 17.7.4
+ARG VS_INSTALL_CHANNEL_URI=https://aka.ms/vs/17/release/134599118_118780349/channel
+
+ADD https://aka.ms/vs/17/release/vs_buildtools.exe C:/temp/vs_BuildTools.exe
 
 RUN `
-    set chocolateyUseWindowsCompression='false' && `
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))" && `
-    set "PATH=%PATH%;%ALLUSERSPROFILE%\chocolatey\bin" && `
-    `
     (start /w C:\temp\vs_BuildTools.exe `
-        --installChannelUri https://aka.ms/vs/17/release/134599118_118780349/channel `
+        --installPath C:\VisualStudio `
+        --channelUri %VS_INSTALL_CHANNEL_URI% `
+        --installChannelUri %VS_INSTALL_CHANNEL_URI% `
         --quiet --wait --norestart --nocache --noUpdateInstaller `
         --locale en-US `
         --add Microsoft.Component.MSBuild `
@@ -40,6 +36,11 @@ RUN `
         --remove Microsoft.VisualStudio.Component.Windows10SDK.14393 `
         --remove Microsoft.VisualStudio.Component.Windows81SDK `
         || if "%ERRORLEVEL%"=="3010" exit 0) && `
+    `
+    set chocolateyUseWindowsCompression='false' && `
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))" && `
+    set "PATH=%PATH%;%ALLUSERSPROFILE%\chocolatey\bin" && `
+    `
     choco install --no-progress --yes git --version=2.33.1 && `
     choco install --no-progress --yes 7zip.install --version=19.0 && `
     choco install --no-progress --yes innosetup --version=6.1.2 && `

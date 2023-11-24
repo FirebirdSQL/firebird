@@ -73,7 +73,7 @@ enum processing_state {
 	EXTRACTALL	=	8,
 	FETCH		=	9,
 	OBJECT_NOT_FOUND = 10,
-	ERR_BUFFER_OVERFLOW = 11
+	TRUNCATED = 11
 };
 
 // Which blob subtypes to print

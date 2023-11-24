@@ -202,3 +202,6 @@ FB_IMPL_MSG_SYMBOL(ISQL, 202, NO_PUBLICATIONS, "There is no publications in this
 FB_IMPL_MSG_SYMBOL(ISQL, 203, MSG_PUBLICATIONS, "Publications:")
 FB_IMPL_MSG_SYMBOL(ISQL, 204, MSG_PROCEDURES, "Procedures:")
 FB_IMPL_MSG_SYMBOL(ISQL, 205, HLP_EXPLAIN, "EXPLAIN                    -- explain a query access plan")
+FB_IMPL_MSG_SYMBOL(ISQL, 206, USAGE_AUTOTERM, "	-autot(erm)             use auto statement terminator (set autoterm on)")
+FB_IMPL_MSG_SYMBOL(ISQL, 207, AUTOTERM_NOT_SUPPORTED, "SET AUTOTERM ON is not supported in engine/server and has been disabled")
+FB_IMPL_MSG_SYMBOL(ISQL, 208, HLP_SETAUTOTERM, "    SET AUTOTERM           -- toggle auto statement terminator")

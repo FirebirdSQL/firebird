@@ -700,6 +700,10 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 		MAP(xdr_long, reinterpret_cast<SLONG&>(prep_stmt->p_sqlst_buffer_length));
 		// p_sqlst_buffer_length was USHORT in older versions
 		fixupLength(xdrs, prep_stmt->p_sqlst_buffer_length);
+
+		if (port->port_protocol >= PROTOCOL_VERSION19)
+			MAP(xdr_short, reinterpret_cast<SSHORT&>(prep_stmt->p_sqlst_flags));
+
 		DEBUG_PRINTSIZE(xdrs, p->p_operation);
 		return P_TRUE(xdrs, p);
 

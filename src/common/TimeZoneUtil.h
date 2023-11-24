@@ -27,6 +27,7 @@
 #ifndef COMMON_TIME_ZONE_UTIL_H
 #define COMMON_TIME_ZONE_UTIL_H
 
+#include <atomic>
 #include <functional>
 #include "../common/classes/fb_string.h"
 #include "../common/classes/timestamp.h"
@@ -142,11 +143,56 @@ public:
 	static ISC_TIMESTAMP_TZ dateToTimeStampTz(const ISC_DATE& date, Callbacks* cb);
 };
 
+class IcuCalendarWrapper
+{
+public:
+	IcuCalendarWrapper(UCalendar* aWrapped, std::atomic<UCalendar*>* aCachePtr)
+		: wrapped(aWrapped),
+		  cachePtr(aCachePtr)
+	{}
+
+	~IcuCalendarWrapper()
+	{
+		if (wrapped)
+		{
+			auto newCached = cachePtr->exchange(wrapped);
+
+			if (newCached)
+			{
+				auto& icuLib = Jrd::UnicodeUtil::getConversionICU();
+				icuLib.ucalClose(newCached);
+			}
+		}
+	}
+
+	IcuCalendarWrapper(const IcuCalendarWrapper&) = delete;
+	IcuCalendarWrapper& operator=(const IcuCalendarWrapper&) = delete;
+
+public:
+	UCalendar* operator->()
+	{
+		return wrapped;
+	}
+
+	operator UCalendar*()
+	{
+		return wrapped;
+	}
+
+	bool operator!() const
+	{
+		return !wrapped;
+	}
+
+private:
+	UCalendar* wrapped;
+	std::atomic<UCalendar*>* cachePtr;
+};
+
 class TimeZoneRuleIterator
 {
 public:
 	TimeZoneRuleIterator(USHORT aId, const ISC_TIMESTAMP_TZ& aFrom, const ISC_TIMESTAMP_TZ& aTo);
-	~TimeZoneRuleIterator();
 
 public:
 	bool next();
@@ -162,7 +208,7 @@ private:
 	Jrd::UnicodeUtil::ConversionICU& icuLib;
 	SINT64 startTicks;
 	SINT64 toTicks;
-	UCalendar* icuCalendar;
+	IcuCalendarWrapper icuCalendar;
 	UDate icuDate;
 };
 

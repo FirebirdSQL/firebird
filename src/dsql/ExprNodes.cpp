@@ -3811,26 +3811,45 @@ dsc* CastNode::perform(thread_db* tdbb, impure_value* impure, dsc* value,
 		}
 		else
 		{
-			ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format, &EngineCallbacks::instance);
 			switch (impure->vlu_desc.dsc_dtype)
 			{
 				case dtype_sql_time:
+				{
+					ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format, &EngineCallbacks::instance,
+						expect_sql_time);
 					*(ISC_TIME*) impure->vlu_desc.dsc_address = timestampTZ.utc_timestamp.timestamp_time;
 					break;
+				}
 				case dtype_sql_date:
+				{
+					ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format, &EngineCallbacks::instance,
+						expect_sql_date);
 					*(ISC_DATE*) impure->vlu_desc.dsc_address = timestampTZ.utc_timestamp.timestamp_date;
 					break;
+				}
 				case dtype_timestamp:
+				{
+					ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format, &EngineCallbacks::instance,
+						expect_timestamp);
 					*(ISC_TIMESTAMP*) impure->vlu_desc.dsc_address = timestampTZ.utc_timestamp;
 					break;
+				}
 				case dtype_sql_time_tz:
 				case dtype_ex_time_tz:
+				{
+					ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format, &EngineCallbacks::instance,
+						expect_sql_time_tz);
 					*(ISC_TIME_TZ*) impure->vlu_desc.dsc_address = TimeZoneUtil::timeStampTzToTimeTz(timestampTZ);
 					break;
+				}
 				case dtype_timestamp_tz:
 				case dtype_ex_timestamp_tz:
+				{
+					ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format, &EngineCallbacks::instance,
+						expect_timestamp_tz);
 					*(ISC_TIMESTAMP_TZ*) impure->vlu_desc.dsc_address = timestampTZ;
 					break;
+				}
 			}
 		}
 	}
@@ -8754,35 +8773,10 @@ ValueExprNode* DerivedFieldNode::dsqlFieldRemapper(FieldRemapper& visitor)
 
 void DerivedFieldNode::setParameterName(dsql_par* parameter) const
 {
-	const dsql_ctx* context = NULL;
-	const FieldNode* fieldNode = NULL;
-	const RecordKeyNode* dbKeyNode = NULL;
-
-	const DerivedFieldNode* drvField = nodeAs<DerivedFieldNode>(value);
-
-	while (drvField)
-	{
-		if ((fieldNode = nodeAs<FieldNode>(drvField->value)))
-			break;
-
-		if ((dbKeyNode = nodeAs<RecordKeyNode>(drvField->value)))
-			break;
-
-		drvField = nodeAs<DerivedFieldNode>(drvField->value);
-	}
-
-	if (fieldNode || (fieldNode = nodeAs<FieldNode>(value)))
-	{
-		parameter->par_name = fieldNode->dsqlField->fld_name.c_str();
-		context = fieldNode->dsqlContext;
-	}
-	else if (dbKeyNode || (dbKeyNode = nodeAs<RecordKeyNode>(value)))
-		dbKeyNode->setParameterName(parameter);
+	value->setParameterName(parameter);
 
 	parameter->par_alias = name;
-	setParameterInfo(parameter, context);
-
-	parameter->par_rel_alias = this->context->ctx_alias;
+	parameter->par_rel_alias = context->ctx_alias;
 }
 
 void DerivedFieldNode::genBlr(DsqlCompilerScratch* dsqlScratch)

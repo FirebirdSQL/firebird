@@ -27,7 +27,7 @@ framework:
 	-$(RM) -rf $(FB_FW)
 	mkdir -p $(FB_FW)/Versions/A/Libraries
 
-	ln -s Versions/Current/Firebird $(FB_FW)/Firebird
+	ln -s Versions/Current/Libraries/libfbclient.dylib $(FB_FW)/Firebird
 	ln -s Versions/Current/Headers $(FB_FW)/Headers
 	ln -s Versions/Current/Resources $(FB_FW)/Resources
 	ln -s Versions/Current/Libraries $(FB_FW)/Libraries

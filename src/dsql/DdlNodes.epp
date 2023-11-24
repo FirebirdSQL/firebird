@@ -1725,7 +1725,7 @@ void CreateAlterFunctionNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsql
 	AutoSavePoint savePoint(tdbb, transaction);
 	bool altered = false;
 
-	const bool alterIndividualParameters = (alter && !returnType && !(body || external));
+	const bool alterIndividualParameters = (!create && alter && !returnType && !(body || external));
 
 	// first pass
 	if (alterIndividualParameters)
@@ -2100,14 +2100,14 @@ bool CreateAlterFunctionNode::executeAlterIndividualParameters(thread_db* tdbb, 
 		}
 
 		MODIFY FUN
-			if(deterministic.isAssigned())
+			if (deterministic.isAssigned())
 			{
 				FUN.RDB$DETERMINISTIC_FLAG.NULL = FALSE;
 				FUN.RDB$DETERMINISTIC_FLAG = deterministic.asBool() ? TRUE : FALSE;
 			}
 			if (ssDefiner.has_value())
 			{
-				if(ssDefiner.value() != SqlSecurity::SS_DROP)
+				if (ssDefiner.value() != SqlSecurity::SS_DROP)
 				{
 					FUN.RDB$SQL_SECURITY.NULL = FALSE;
 					FUN.RDB$SQL_SECURITY = ssDefiner.value() == SqlSecurity::SS_DEFINER ? FB_TRUE : FB_FALSE;
@@ -2741,7 +2741,7 @@ void CreateAlterProcedureNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsq
 	AutoSavePoint savePoint(tdbb, transaction);
 	bool altered = false;
 
-	const bool alterIndividualParameters = (alter && !(body || external));
+	const bool alterIndividualParameters = (!create && alter && !(body || external));
 
 	// first pass
 	if (alterIndividualParameters)
@@ -3065,7 +3065,7 @@ bool CreateAlterProcedureNode::executeAlterIndividualParameters(thread_db* tdbb,
 		MODIFY P
 			if (ssDefiner.has_value())
 			{
-				if(ssDefiner.value() != SqlSecurity::SS_DROP)
+				if (ssDefiner.value() != SqlSecurity::SS_DROP)
 				{
 					P.RDB$SQL_SECURITY.NULL = FALSE;
 					P.RDB$SQL_SECURITY = ssDefiner.value() == SqlSecurity::SS_DEFINER ? FB_TRUE : FB_FALSE;

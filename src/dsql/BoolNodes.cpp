@@ -663,7 +663,9 @@ bool ComparativeBoolNode::execute(thread_db* tdbb, Request* request) const
 
 	desc[0] = EVL_expr(tdbb, request, arg1);
 
-	const ULONG flags = request->req_flags;
+	// arg1 IS NULL
+	const bool null1 = (request->req_flags & req_null);
+
 	request->req_flags &= ~req_null;
 	bool force_equal = (request->req_flags & req_same_tx_upd) != 0;
 
@@ -728,19 +730,22 @@ bool ComparativeBoolNode::execute(thread_db* tdbb, Request* request) const
 	else
 		desc[1] = EVL_expr(tdbb, request, arg2);
 
+	// arg2 IS NULL
+	const bool null2 = (request->req_flags & req_null);
+
 	// An equivalence operator evaluates to true when both operands
 	// are NULL and behaves like an equality operator otherwise.
 	// Note that this operator never sets req_null flag
 
 	if (blrOp == blr_equiv)
 	{
-		if ((flags & req_null) && (request->req_flags & req_null))
+		if (null1 && null2)
 		{
 			request->req_flags &= ~req_null;
 			return true;
 		}
 
-		if ((flags & req_null) || (request->req_flags & req_null))
+		if (null1 || null2)
 		{
 			request->req_flags &= ~req_null;
 			return false;
@@ -748,13 +753,15 @@ bool ComparativeBoolNode::execute(thread_db* tdbb, Request* request) const
 	}
 
 	// If either of expressions above returned NULL set req_null flag
-	// and return false
+	// and return false. The exception is BETWEEN operator that could
+	// return FALSE even when arg2 IS NULL, for example:
+	//   1 BETWEEN NULL AND 0
 
-	if (flags & req_null)
+	if (null1 || (null2 && (blrOp != blr_between)))
+	{
 		request->req_flags |= req_null;
-
-	if (request->req_flags & req_null)
 		return false;
+	}
 
 	force_equal |= (request->req_flags & req_same_tx_upd) != 0;
 	int comparison; // while the two switch() below are in sync, no need to initialize
@@ -768,8 +775,19 @@ bool ComparativeBoolNode::execute(thread_db* tdbb, Request* request) const
 		case blr_lss:
 		case blr_leq:
 		case blr_neq:
-		case blr_between:
 			comparison = MOV_compare(tdbb, desc[0], desc[1]);
+			break;
+
+		case blr_between:
+			if (!null2)
+			{
+				comparison = MOV_compare(tdbb, desc[0], desc[1]);
+				if (comparison < 0)
+					return false;
+			}
+			else
+				comparison = -1;
+			break;
 	}
 
 	// If we are checking equality of record_version
@@ -806,8 +824,22 @@ bool ComparativeBoolNode::execute(thread_db* tdbb, Request* request) const
 		case blr_between:
 			desc[1] = EVL_expr(tdbb, request, arg3);
 			if (request->req_flags & req_null)
+			{
+				if (!null2 && comparison < 0)
+					request->req_flags &= ~req_null;
 				return false;
-			return comparison >= 0 && MOV_compare(tdbb, desc[0], desc[1]) <= 0;
+			}
+			{
+				// arg1 <= arg3
+				const bool cmp1_3 = (MOV_compare(tdbb, desc[0], desc[1]) <= 0);
+				if (null2)
+				{
+					if (cmp1_3)
+						request->req_flags |= req_null;
+					return false;
+				}
+				return cmp1_3;
+			}
 
 		case blr_containing:
 		case blr_starting:

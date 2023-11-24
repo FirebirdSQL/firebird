@@ -4131,6 +4131,7 @@ Statement* Attachment::prepare(CheckStatusWrapper* status, ITransaction* apiTra,
 		prepare->p_sqlst_items.cstr_length = (ULONG) items.getCount();
 		prepare->p_sqlst_items.cstr_address = items.begin();
 		prepare->p_sqlst_buffer_length = (ULONG) buffer.getCount();
+		prepare->p_sqlst_flags = flags;
 
 		send_packet(rdb->rdb_port, packet);
 

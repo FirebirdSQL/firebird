@@ -309,6 +309,9 @@ public:
 			iter->flags = 0;
 		}
 
+		// Assignment is not currently used in the code and I doubt it should be
+		ConjunctIterator& operator=(const ConjunctIterator& other) = delete;
+
 	private:
 		Conjunct* const begin;
 		const Conjunct* const end;
@@ -320,7 +323,7 @@ public:
 			rewind();
 		}
 
-		explicit ConjunctIterator(const ConjunctIterator& other)
+		ConjunctIterator(const ConjunctIterator& other)
 			: begin(other.begin), end(other.end), iter(other.iter)
 		{}
 	};

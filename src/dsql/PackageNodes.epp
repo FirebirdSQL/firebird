@@ -322,7 +322,7 @@ void CreateAlterPackageNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 
-	const bool alterIndividualParameters = (alter && !items);
+	const bool alterIndividualParameters = (!create && alter && !items);
 
 	if (alter)
 	{
