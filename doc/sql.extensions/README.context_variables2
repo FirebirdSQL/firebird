@@ -142,6 +142,12 @@ Usage:
                                 |
    DECFLOAT_TRAPS               | Exceptional conditions in operations with DECFLOAT
                                 | values that cause a trap.
+                                |
+   PAGES_ALLOCATED              | Current value of allocated pages in the database.
+                                |
+   PAGES_USED                   | Current value of allocated pages in the database.
+                                |
+   PAGES_FREE                   | Current value of free pages in the database.
 
 Notes:
    To prevent DoS attacks against Firebird Server you are not allowed to have
