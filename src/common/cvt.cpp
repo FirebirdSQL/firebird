@@ -289,6 +289,51 @@ static constexpr int sign(T value)
 	return (value >= T(0)) ? 1 : -1;
 }
 
+static void validateTimeStamp(const ISC_TIMESTAMP timestamp, const EXPECT_DATETIME expectedType, const dsc* desc,
+	Callbacks* cb)
+{
+	if (!NoThrowTimeStamp::isValidTimeStamp(timestamp))
+	{
+		switch (expectedType)
+		{
+			case expect_sql_date:
+				cb->err(Arg::Gds(isc_date_range_exceeded));
+				break;
+			case expect_sql_time:
+			case expect_sql_time_tz:
+				cb->err(Arg::Gds(isc_time_range_exceeded));
+				break;
+			case expect_timestamp:
+			case expect_timestamp_tz:
+				cb->err(Arg::Gds(isc_datetime_range_exceeded));
+				break;
+			default: // this should never happen!
+				CVT_conversion_error(desc, cb->err);
+				break;
+		}
+	}
+}
+
+static void timeStampToUtc(ISC_TIMESTAMP_TZ& timestampTZ, USHORT sessionTimeZone, const EXPECT_DATETIME expectedType,
+	Callbacks* cb)
+{
+	if (expectedType == expect_sql_time_tz || expectedType == expect_timestamp_tz || timestampTZ.time_zone != sessionTimeZone)
+		TimeZoneUtil::localTimeStampToUtc(timestampTZ);
+
+	if (timestampTZ.time_zone != sessionTimeZone)
+	{
+		if (expectedType == expect_sql_time)
+		{
+			ISC_TIME_TZ timeTz;
+			timeTz.utc_time = timestampTZ.utc_timestamp.timestamp_time;
+			timeTz.time_zone = timestampTZ.time_zone;
+			timestampTZ.utc_timestamp.timestamp_time = TimeZoneUtil::timeTzToTime(timeTz, cb);
+		}
+		else if (expectedType == expect_timestamp)
+			*(ISC_TIMESTAMP*) &timestampTZ = TimeZoneUtil::timeStampTzToTimeStamp(timestampTZ, sessionTimeZone);
+	}
+}
+
 
 static void float_to_text(const dsc* from, dsc* to, Callbacks* cb)
 {
@@ -1099,27 +1144,7 @@ void CVT_string_to_datetime(const dsc* desc,
 	// This catches things like 29-Feb-1995 (not a leap year)
 
 	Firebird::TimeStamp ts(times);
-
-	if (!ts.isValid())
-	{
-		switch (expect_type)
-		{
-			case expect_sql_date:
-				cb->err(Arg::Gds(isc_date_range_exceeded));
-				break;
-			case expect_sql_time:
-			case expect_sql_time_tz:
-				cb->err(Arg::Gds(isc_time_range_exceeded));
-				break;
-			case expect_timestamp:
-			case expect_timestamp_tz:
-				cb->err(Arg::Gds(isc_datetime_range_exceeded));
-				break;
-			default: // this should never happen!
-				CVT_conversion_error(desc, cb->err);
-				break;
-		}
-	}
+	validateTimeStamp(ts.value(), expect_type, desc, cb);
 
 	if (expect_type != expect_sql_time && expect_type != expect_sql_time_tz)
 	{
@@ -1146,21 +1171,7 @@ void CVT_string_to_datetime(const dsc* desc,
 	date->utc_timestamp.timestamp_time += components[6];
 	date->time_zone = zone;
 
-	if (expect_type == expect_sql_time_tz || expect_type == expect_timestamp_tz || zone != sessionTimeZone)
-		TimeZoneUtil::localTimeStampToUtc(*date);
-
-	if (zone != sessionTimeZone)
-	{
-		if (expect_type == expect_sql_time)
-		{
-			ISC_TIME_TZ timeTz;
-			timeTz.utc_time = date->utc_timestamp.timestamp_time;
-			timeTz.time_zone = zone;
-			date->utc_timestamp.timestamp_time = TimeZoneUtil::timeTzToTime(timeTz, cb);
-		}
-		else if (expect_type == expect_timestamp)
-			*(ISC_TIMESTAMP*) date = TimeZoneUtil::timeStampTzToTimeStamp(*date, sessionTimeZone);
-	}
+	timeStampToUtc(*date, sessionTimeZone, expect_type, cb);
 }
 
 
@@ -2149,6 +2160,7 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 	if (stringOffset < stringLength)
 		cb->err(Arg::Gds(isc_trailing_part_of_string) << string(stringUpper.c_str() + stringOffset));
 
+
 	ISC_TIMESTAMP_TZ timestampTZ;
 	timestampTZ.utc_timestamp = NoThrowTimeStamp::encode_timestamp(&times, fractions);
 
@@ -2164,21 +2176,9 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 			abs(timezoneOffsetInMinutes) / 60, abs(timezoneOffsetInMinutes) % 60);
 	}
 
-	if (expectedType == expect_sql_time_tz || expectedType == expect_timestamp_tz || timestampTZ.time_zone != sessionTimeZone)
-		TimeZoneUtil::localTimeStampToUtc(timestampTZ);
+	timeStampToUtc(timestampTZ, sessionTimeZone, expectedType, cb);
 
-	if (timestampTZ.time_zone != sessionTimeZone)
-	{
-		if (expectedType == expect_sql_time)
-		{
-			ISC_TIME_TZ timeTz;
-			timeTz.utc_time = timestampTZ.utc_timestamp.timestamp_time;
-			timeTz.time_zone = timestampTZ.time_zone;
-			timestampTZ.utc_timestamp.timestamp_time = TimeZoneUtil::timeTzToTime(timeTz, cb);
-		}
-		else if (expectedType == expect_timestamp)
-			*(ISC_TIMESTAMP*) &timestampTZ = TimeZoneUtil::timeStampTzToTimeStamp(timestampTZ, sessionTimeZone);
-	}
+	validateTimeStamp(timestampTZ.utc_timestamp, expectedType, desc, cb);
 
 	return timestampTZ;
 }
