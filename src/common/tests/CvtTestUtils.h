@@ -29,19 +29,24 @@ static constexpr int sign(T value)
 	return (T(0) < value) - (value < T(0));
 }
 
+// Pass 0 to year, month and day to use CurrentTimeStamp for them
 static struct tm initTMStruct(int year, int month, int day)
 {
+	struct tm currentTime;
+	Firebird::TimeStamp::getCurrentTimeStamp().decode(&currentTime);
+
 	struct tm times;
 	memset(&times, 0, sizeof(struct tm));
 
-	times.tm_year = year - 1900;
-	times.tm_mon = month - 1;
-	times.tm_mday = day;
+	times.tm_year = year > 0 ? year - 1900 : currentTime.tm_year;
+	times.tm_mon = month > 0 ? month - 1 : currentTime.tm_mon;
+	times.tm_mday = day > 0 ? day : currentTime.tm_mday;
 	mktime(&times);
 
 	return times;
 }
 
+// Pass 0 to year, month and day to use CurrentTimeStamp for them
 static ISC_DATE createDate(int year, int month, int day)
 {
 	struct tm times = initTMStruct(year, month, day);
@@ -53,6 +58,7 @@ static ISC_TIME createTime(int hours, int minutes, int seconds, int fractions = 
 	return NoThrowTimeStamp::encode_time(hours, minutes, seconds, fractions);
 }
 
+// Pass 0 to year, month and day to use CurrentTimeStamp for them
 static ISC_TIMESTAMP createTimeStamp(int year, int month, int day, int hours, int minutes, int seconds, int fractions = 0)
 {
 	struct tm times = initTMStruct(year, month, day);
@@ -63,6 +69,7 @@ static ISC_TIMESTAMP createTimeStamp(int year, int month, int day, int hours, in
 	return NoThrowTimeStamp::encode_timestamp(&times, fractions);
 }
 
+// Pass 0 to year, month and day to use CurrentTimeStamp for them
 static ISC_TIMESTAMP_TZ createTimeStampTZ(int year, int month, int day, int hours, int minutes, int seconds,
 	int offsetInMinutes, int fractions = 0)
 {
