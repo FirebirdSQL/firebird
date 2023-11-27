@@ -314,10 +314,12 @@ BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_DATE)
 
 	testCVTStringToFormatDateTimeExpectDate("1", "YYY", createTimeStampTZ(2001, 0, 0, 0, 0, 0, 0), cb);
 	testCVTStringToFormatDateTimeExpectDate("522", "YYY", createTimeStampTZ(2522, 0, 0, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectDate("523", "YYY", createTimeStampTZ(1523, 0, 0, 0, 0, 0, 0), cb);
 	testCVTStringToFormatDateTimeExpectDate("999", "YYY", createTimeStampTZ(1999, 0, 0, 0, 0, 0, 0), cb);
 
 	testCVTStringToFormatDateTimeExpectDate("1", "YY", createTimeStampTZ(2001, 0, 0, 0, 0, 0, 0), cb);
 	testCVTStringToFormatDateTimeExpectDate("72", "YY", createTimeStampTZ(2072, 0, 0, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectDate("73", "YY", createTimeStampTZ(1973, 0, 0, 0, 0, 0, 0), cb);
 	testCVTStringToFormatDateTimeExpectDate("99", "YY", createTimeStampTZ(1999, 0, 0, 0, 0, 0, 0), cb);
 
 	testCVTStringToFormatDateTimeExpectDate("1", "Y", createTimeStampTZ(2001, 0, 0, 0, 0, 0, 0), cb);
