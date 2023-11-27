@@ -245,27 +245,30 @@ namespace
 		AutoPtr<TrieNode> m_root;
 		MemoryPool& m_pool;
 	};
+
+	enum class ExpectedDateType
+	{
+		TIME,
+		DATE,
+		TIMEZONE
+	};
+
+	const char* const TO_DATETIME_PATTERNS[] = {
+		"YEAR", "YYYY", "YYY", "YY", "Y", "Q", "MM", "MON", "MONTH", "RM", "WW", "W",
+		"D", "DAY", "DD", "DDD", "DY", "J", "HH", "HH12", "HH24", "MI", "SS", "SSSSS",
+		"FF1", "FF2", "FF3", "FF4", "FF5", "FF6", "FF7", "FF8", "FF9", "TZH", "TZM", "TZR"
+	};
+
+	const char* const TO_STRING_PATTERNS[] = {
+		"YEAR", "YYYY", "YYY", "YY", "Y", "MM", "MON", "MONTH", "RM", "DD", "J", "HH", "HH12",
+		"HH24", "MI", "SS", "SSSSS", "FF1", "FF2", "FF3", "FF4", "TZH", "TZM", "TZR"
+	};
+
+	constexpr char AM_PERIOD[] = "A.M.";
+	constexpr char PM_PERIOD[] = "P.M.";
+
+	InitInstance<TimeZoneTrie> timeZoneTrie;
 }
-
-enum class ExpectedDateType
-{
-	TIME,
-	DATE,
-	TIMEZONE
-};
-
-static const char* const TO_DATETIME_PATTERNS[] = {
-	"YEAR", "YYYY", "YYY", "YY", "Y", "Q", "MM", "MON", "MONTH", "RM", "WW", "W",
-	"D", "DAY", "DD", "DDD", "DY", "J", "HH", "HH12", "HH24", "MI", "SS", "SSSSS",
-	"FF1", "FF2", "FF3", "FF4", "FF5", "FF6", "FF7", "FF8", "FF9", "TZH", "TZM", "TZR"
-};
-
-static const char* const TO_STRING_PATTERNS[] = {
-	"YEAR", "YYYY", "YYY", "YY", "Y", "MM", "MON", "MONTH", "RM", "DD", "J", "HH", "HH12",
-	"HH24", "MI", "SS", "SSSSS", "FF1", "FF2", "FF3", "FF4", "TZH", "TZM", "TZR"
-};
-
-static InitInstance<TimeZoneTrie> timeZoneTrie;
 
 
 //#ifndef WORDS_BIGENDIAN
@@ -1399,13 +1402,13 @@ static string datetime_to_format_string_pattern_matcher(const dsc* desc, std::st
 
 				if (hours >= 12)
 				{
-					period = "PM";
+					period = PM_PERIOD;
 					if (hours > 12)
 						hours -= 12;
 				}
 				else
 				{
-					period = "AM";
+					period = AM_PERIOD;
 					if (hours == 0)
 						hours = 12;
 				}
@@ -1671,7 +1674,7 @@ static int roman_to_int(const char* str, int length, int& offset)
 			case 'C': value = 100; break;
 			case 'D': value = 500; break;
 			case 'M': value = 1000; break;
-			default: return 0;
+			default: return result;
 		}
 
 		result += value;
@@ -1918,13 +1921,15 @@ static void string_to_format_datetime_pattern_matcher(std::string_view pattern, 
 				if (str[strOffset] == ' ')
 					strOffset++;
 
-				std::string_view period = parse_string_to_get_first_word(str, strLength, strOffset, 2);
-				if (period == "AM")
+				std::string_view period(str + strOffset, sizeof(AM_PERIOD) - 1);
+				strOffset += period.length();
+
+				if (period == AM_PERIOD)
 				{
 					outTimes.tm_hour = hours == 12 ? 0 : hours;
 					return;
 				}
-				else if (period == "PM")
+				else if (period == PM_PERIOD)
 				{
 					outTimes.tm_hour = hours == 12 ? hours : 12 + hours;
 					return;
@@ -2059,10 +2064,14 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 	for (int i = 0; i < format.length(); i++)
 		formatUpper[i] = toupper(format[i]);
 
+	struct tm currentTime;
+	TimeStamp::getCurrentTimeStamp().decode(&currentTime);
+
 	struct tm times;
-	memset(&times, 0, sizeof(struct tm));
-	times.tm_year = 1 - 1900;
-	times.tm_mday = 1;
+	memset(&times, 0, sizeof(times));
+	times.tm_year = currentTime.tm_year;
+	times.tm_mon = currentTime.tm_mon;
+	times.tm_mday = currentTime.tm_mday;
 
 	int fractions = 0;
 
