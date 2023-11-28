@@ -26,14 +26,25 @@ namespace CvtTestUtils {
 template<typename T>
 static constexpr int sign(T value)
 {
-	return (T(0) < value) - (value < T(0));
+	return (value >= T(0)) ? 1 : -1;
 }
+
+static ISC_DATE mockGetLocalDate()
+{
+	struct tm time;
+	memset(&time, 0, sizeof(time));
+	time.tm_year = 2023 - 1900;
+	time.tm_mon = 0;
+	time.tm_mday = 1;
+	return NoThrowTimeStamp::encode_date(&time);
+}
+
 
 // Pass 0 to year, month and day to use CurrentTimeStamp for them
 static struct tm initTMStruct(int year, int month, int day)
 {
 	struct tm currentTime;
-	Firebird::TimeStamp::getCurrentTimeStamp().decode(&currentTime);
+	NoThrowTimeStamp::decode_date(mockGetLocalDate(), &currentTime);
 
 	struct tm times;
 	memset(&times, 0, sizeof(struct tm));
@@ -91,10 +102,10 @@ static ISC_TIME_TZ createTimeTZ(int hours, int minutes, int seconds, int offsetI
 }
 
 
-class CVTCallback : public Firebird::Callbacks
+class MockCallback : public Firebird::Callbacks
 {
 public:
-	explicit CVTCallback(ErrorFunction aErr) : Callbacks(aErr)
+	explicit MockCallback(ErrorFunction aErr) : Callbacks(aErr)
 	{}
 
 public:
@@ -104,7 +115,12 @@ public:
 	void validateData(Jrd::CharSet* toCharset, SLONG length, const UCHAR* q) override { }
 	ULONG validateLength(Jrd::CharSet* charSet, CHARSET_ID charSetId, ULONG length, const UCHAR* start,
 		const USHORT size) override { return 0; }
-	SLONG getLocalDate() override { return 0; }
+
+	SLONG getLocalDate() override
+	{
+		return mockGetLocalDate();
+	}
+
 	ISC_TIMESTAMP getCurrentGmtTimeStamp() override { ISC_TIMESTAMP ts; return ts; }
 	USHORT getSessionTimeZone() override { return 1439; } // 1439 is ONE_DAY, so we have no offset
 	void isVersion4(bool& v4) override { }

@@ -1759,32 +1759,30 @@ static void string_to_format_datetime_pattern_matcher(std::string_view pattern, 
 			}
 			else if (pattern == "YY")
 			{
-				tm currentTm;
-				TimeStamp::getCurrentTimeStamp().decode(&currentTm);
 				// Set 2 last digits to zero
-				int currentAge = (currentTm.tm_year + 1900) / 100 * 100;
+				int currentAge = (outTimes.tm_year + 1900) / 100 * 100;
+				int parsedYear = parse_string_to_get_int(str, strLength, strOffset, 2);
 
-				outTimes.tm_year = parse_string_to_get_int(str, strLength, strOffset, 2);
-				outTimes.tm_year += outTimes.tm_year < (currentTm.tm_year + 1900 - 50) % 100
+				// ourTimes already contains current date
+				outTimes.tm_year = parsedYear < (outTimes.tm_year + 1900 - 50) % 100
 					? currentAge
 					: currentAge - 100;
 
-				outTimes.tm_year -= 1900;
+				outTimes.tm_year += parsedYear - 1900;
 				return;
 			}
 			else if (pattern == "YYY")
 			{
-				tm currentTm;
-				TimeStamp::getCurrentTimeStamp().decode(&currentTm);
 				// Set 3 last digits to zero
-				int currentThousand = (currentTm.tm_year + 1900) / 1000 * 1000;
+				int currentThousand = (outTimes.tm_year + 1900) / 1000 * 1000;
+				int parsedYear = parse_string_to_get_int(str, strLength, strOffset, 3);
 
-				outTimes.tm_year = parse_string_to_get_int(str, strLength, strOffset, 3);
-				outTimes.tm_year += outTimes.tm_year < (currentTm.tm_year + 1900 - 500) % 1000
+				// ourTimes already contains current date
+				outTimes.tm_year = parsedYear < (outTimes.tm_year + 1900 - 500) % 1000
 					? currentThousand
 					: currentThousand - 1000;
 
-				outTimes.tm_year -= 1900;
+				outTimes.tm_year += parsedYear - 1900;
 				return;
 			}
 			else if (pattern == "YYYY")
@@ -2054,8 +2052,8 @@ static void string_to_format_datetime_pattern_matcher(std::string_view pattern, 
 }
 
 
-ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::string& format, Firebird::Callbacks* cb,
-	const EXPECT_DATETIME expectedType)
+ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::string& format,
+	const EXPECT_DATETIME expectedType, Firebird::Callbacks* cb)
 {
 	if (!DTYPE_IS_TEXT(desc->dsc_dtype))
 		cb->err(Arg::Gds(isc_invalid_data_type_for_date_format));
@@ -2075,14 +2073,10 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 	for (int i = 0; i < format.length(); i++)
 		formatUpper[i] = toupper(format[i]);
 
-	struct tm currentTime;
-	TimeStamp::getCurrentTimeStamp().decode(&currentTime);
 
 	struct tm times;
 	memset(&times, 0, sizeof(times));
-	times.tm_year = currentTime.tm_year;
-	times.tm_mon = currentTime.tm_mon;
-	times.tm_mday = currentTime.tm_mday;
+	NoThrowTimeStamp::decode_date(cb->getLocalDate(), &times);
 
 	int fractions = 0;
 

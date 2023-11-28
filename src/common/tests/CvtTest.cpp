@@ -6,19 +6,6 @@ using namespace Firebird;
 using namespace Jrd;
 using namespace CvtTestUtils;
 
-// Some kind of mocking getCurrentTimeStamp()
-namespace Firebird
-{
-	TimeStamp TimeStamp::getCurrentTimeStamp()
-	{
-		struct tm time;
-		memset(&time, 0, sizeof(time));
-		time.tm_year = 2023 - 1900;
-		time.tm_mon = 0;
-		time.tm_mday = 1;
-		return TimeStamp(time);
-	}
-}
 
 BOOST_AUTO_TEST_SUITE(CVTSuite)
 BOOST_AUTO_TEST_SUITE(CVTDatetimeFormat)
@@ -29,7 +16,7 @@ static void errFunc(const Firebird::Arg::StatusVector& v)
 	v.raise();
 }
 
-CVTCallback cb(errFunc);
+MockCallback cb(errFunc);
 
 BOOST_AUTO_TEST_SUITE(CVTDatetimeToFormatString)
 
@@ -253,7 +240,7 @@ static void testCVTStringToFormatDateTime(const string& date, const string& form
 		BOOST_TEST_INFO("INPUT: " << "\"" << date.c_str() << "\"");
 		BOOST_TEST_INFO("FORMAT: " << "\"" << format.c_str() << "\"");
 
-		const ISC_TIMESTAMP_TZ result = CVT_string_to_format_datetime(&desc, format, &cb, expectedType);
+		const ISC_TIMESTAMP_TZ result = CVT_string_to_format_datetime(&desc, format, expectedType, &cb);
 
 		struct tm resultTimes;
 		memset(&resultTimes, 0, sizeof(resultTimes));
