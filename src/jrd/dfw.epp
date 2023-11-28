@@ -721,6 +721,9 @@ namespace
 					if (!routine)
 						return false;
 
+					routine->flags &= ~Routine::FLAG_BEING_ALTERED;
+					routine->flags |= Routine::FLAG_OBSOLETE;
+
 					if (routine->existenceLock)
 						LCK_convert(tdbb, routine->existenceLock, LCK_SR, transaction->getLockWait());
 
@@ -870,6 +873,8 @@ namespace
 					routine = lookupById(tdbb, work->dfw_id, false, true, 0);
 					if (!routine)
 						return false;
+
+					routine->flags |= Routine::FLAG_OBSOLETE;
 
 					if (routine->existenceLock)
 						LCK_convert(tdbb, routine->existenceLock, LCK_SR, transaction->getLockWait());
