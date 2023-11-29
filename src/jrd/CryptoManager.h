@@ -312,16 +312,16 @@ private:
 	public:
 		operator Ods::pag*()
 		{
-			return reinterpret_cast<Ods::pag*>(FB_ALIGN(buf, PAGE_ALIGNMENT));
+			return reinterpret_cast<Ods::pag*>(FB_ALIGN(buf, DIRECT_IO_BLOCK_SIZE));
 		}
 
 		Ods::pag* operator->()
 		{
-			return reinterpret_cast<Ods::pag*>(FB_ALIGN(buf, PAGE_ALIGNMENT));
+			return reinterpret_cast<Ods::pag*>(FB_ALIGN(buf, DIRECT_IO_BLOCK_SIZE));
 		}
 
 	private:
-		char buf[MAX_PAGE_SIZE + PAGE_ALIGNMENT - 1];
+		char buf[MAX_PAGE_SIZE + DIRECT_IO_BLOCK_SIZE];
 	};
 
 	class DbInfo;

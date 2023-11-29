@@ -55,6 +55,14 @@ namespace Jrd
 		return pageSpace->onRawDevice();
 	}
 
+	ULONG Database::getIOBlockSize() const
+	{
+		if ((dbb_flags & DBB_no_fs_cache) || onRawDevice())
+			return DIRECT_IO_BLOCK_SIZE;
+
+		return PAGE_ALIGNMENT;
+	}
+
 	AttNumber Database::generateAttachmentId()
 	{
 		fb_assert(dbb_tip_cache);

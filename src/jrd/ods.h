@@ -920,6 +920,11 @@ Firebird::string pagtype(UCHAR type);
 // alignment for raw page access
 const USHORT PAGE_ALIGNMENT = 1024;
 
+// alignment and IO block size/offset multiplier for non-buffered file access
+const ULONG DIRECT_IO_BLOCK_SIZE = 4096;
+
+static_assert(MIN_PAGE_SIZE >= DIRECT_IO_BLOCK_SIZE, "check DIRECT_IO_BLOCK_SIZE");
+
 // size of raw I/O operation for header page
 const USHORT RAW_HEADER_SIZE = 1024;	// ROUNDUP(HDR_SIZE, PAGE_ALIGNMENT);
 //static_assert(RAW_HEADER_SIZE >= HDR_SIZE, "RAW_HEADER_SIZE is less than HDR_SIZE");

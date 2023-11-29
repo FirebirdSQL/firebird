@@ -612,9 +612,9 @@ int gstat(Firebird::UtilSvc* uSvc)
 
 	dba_fil* current = db_open(fileName.c_str(), fileName.length());
 
-	SCHAR temp[RAW_HEADER_SIZE];
-	tddba->page_size = sizeof(temp);
-	tddba->global_buffer = (pag*) temp;
+	SCHAR temp[RAW_HEADER_SIZE + DIRECT_IO_BLOCK_SIZE];
+	tddba->page_size = MAX(RAW_HEADER_SIZE, DIRECT_IO_BLOCK_SIZE);
+	tddba->global_buffer = (pag*) FB_ALIGN(temp, DIRECT_IO_BLOCK_SIZE);
 	tddba->page_number = -1;
 	const header_page* header = (const header_page*) db_read((SLONG) 0);
 
@@ -639,9 +639,14 @@ int gstat(Firebird::UtilSvc* uSvc)
 	tddba->page_size = header->hdr_page_size;
 	tddba->dp_per_pp = Ods::dataPagesPerPP(tddba->page_size);
 	tddba->max_records = Ods::maxRecsPerDP(tddba->page_size);
-	tddba->buffer1 = (pag*) alloc(tddba->page_size);
-	tddba->buffer2 = (pag*) alloc(tddba->page_size);
-	tddba->global_buffer = (pag*) alloc(tddba->page_size);
+	{ // scope
+		char* buff = alloc(tddba->page_size * 3 + DIRECT_IO_BLOCK_SIZE);
+		buff = FB_ALIGN(buff, DIRECT_IO_BLOCK_SIZE);
+
+		tddba->buffer1 = (pag*) buff;
+		tddba->buffer2 = (pag*) (buff + tddba->page_size);
+		tddba->global_buffer = (pag*) (buff + tddba->page_size * 2);
+	}
 	tddba->page_number = -1;
 
 	// gather continuation files

@@ -425,6 +425,16 @@ public:
 		return data;
 	}
 
+	// prepare array to be used as a buffer of capacity bytes aligned on given alignment
+	T* getAlignedBuffer(const size_type capacityL, const size_type alignL)
+	{
+		static_assert(sizeof(T) == 1, "sizeof(T) != 1");
+
+		ensureCapacity(capacityL + alignL, false);
+		count = capacityL + alignL;
+		return FB_ALIGN(data, alignL);
+	}
+
 	// clear array and release dinamically allocated memory
 	void free()
 	{

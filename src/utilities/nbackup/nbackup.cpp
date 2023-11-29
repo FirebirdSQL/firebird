@@ -1341,10 +1341,14 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 		// Read database header
 		char unaligned_header_buffer[RAW_HEADER_SIZE + SECTOR_ALIGNMENT];
 
-		auto header = reinterpret_cast<Ods::header_page*>(
-			FB_ALIGN(unaligned_header_buffer, SECTOR_ALIGNMENT));
+		const ULONG ioBlockSize = direct_io ? DIRECT_IO_BLOCK_SIZE : PAGE_ALIGNMENT;
+		const ULONG headerSize = MAX(RAW_HEADER_SIZE, ioBlockSize);
 
-		if (read_file(dbase, header, RAW_HEADER_SIZE) != RAW_HEADER_SIZE)
+		Array<UCHAR> header_buffer;
+		Ods::header_page* header = reinterpret_cast<Ods::header_page*>
+			(header_buffer.getAlignedBuffer(headerSize, ioBlockSize));
+
+		if (read_file(dbase, header, headerSize) != headerSize)
 			status_exception::raise(Arg::Gds(isc_nbackup_err_eofhdrdb) << dbname.c_str() << Arg::Num(1));
 
 		if (!Ods::isSupported(header))
@@ -1360,11 +1364,9 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 		if ((header->hdr_flags & Ods::hdr_backup_mask) != Ods::hdr_nbak_stalled)
 			status_exception::raise(Arg::Gds(isc_nbackup_db_notlock) << Arg::Num(header->hdr_flags));
 
-		Array<UCHAR> unaligned_page_buffer;
-		{ // scope
-			UCHAR* buf = unaligned_page_buffer.getBuffer(header->hdr_page_size + SECTOR_ALIGNMENT);
-			page_buff = reinterpret_cast<Ods::pag*>(FB_ALIGN(buf, SECTOR_ALIGNMENT));
-		} // end scope
+		Array<UCHAR> page_buffer;
+		Ods::pag* page_buff = reinterpret_cast<Ods::pag*>
+			(page_buffer.getAlignedBuffer(header->hdr_page_size, ioBlockSize));
 
 		ULONG db_size = db_size_pages;
 		seek_file(dbase, 0);
@@ -1427,12 +1429,10 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 		ULONG scnsSlot = 0;
 		const ULONG pagesPerSCN = Ods::pagesPerSCN(header->hdr_page_size);
 
-		Array<UCHAR> unaligned_scns_buffer;
-		Ods::scns_page* scns = NULL, *scns_buf = NULL;
-		{ // scope
-			UCHAR* buf = unaligned_scns_buffer.getBuffer(header->hdr_page_size + SECTOR_ALIGNMENT);
-			scns_buf = reinterpret_cast<Ods::scns_page*>(FB_ALIGN(buf, SECTOR_ALIGNMENT));
-		}
+		Array<UCHAR> scns_buffer;
+		Ods::scns_page* scns = NULL;
+		Ods::scns_page* scns_buf = reinterpret_cast<Ods::scns_page*>
+			(scns_buffer.getAlignedBuffer(header->hdr_page_size, ioBlockSize));
 
 		while (true)
 		{

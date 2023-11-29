@@ -548,6 +548,9 @@ public:
 	// returns an unique ID string for a database file
 	const Firebird::string& getUniqueFileId();
 
+	// returns the minimum IO block size
+	ULONG getIOBlockSize() const;
+
 #ifdef DEV_BUILD
 	// returns true if main lock is in exclusive state
 	bool locked() const

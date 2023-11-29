@@ -1261,10 +1261,13 @@ void PAG_header_init(thread_db* tdbb)
 	// and unit of transfer is a multiple of physical disk
 	// sector for raw disk access.
 
-	UCHAR temp_buffer[RAW_HEADER_SIZE + PAGE_ALIGNMENT];
-	UCHAR* const temp_page = FB_ALIGN(temp_buffer, PAGE_ALIGNMENT);
+	const ULONG ioBlockSize = dbb->getIOBlockSize();
+	const ULONG headerSize = MAX(RAW_HEADER_SIZE, ioBlockSize);
 
-	PIO_header(tdbb, temp_page, RAW_HEADER_SIZE);
+	HalfStaticArray<UCHAR, RAW_HEADER_SIZE + PAGE_ALIGNMENT> temp;
+	UCHAR* const temp_page = temp.getAlignedBuffer(headerSize, ioBlockSize);
+
+	PIO_header(tdbb, temp_page, headerSize);
 	const header_page* header = (header_page*) temp_page;
 
 	if (header->hdr_header.pag_type != pag_header || header->hdr_sequence)
@@ -1377,8 +1380,7 @@ void PAG_init2(thread_db* tdbb, USHORT shadow_number)
 	// the temporary page buffer for raw disk access.
 
 	Array<UCHAR> temp;
-	UCHAR* const temp_page =
-		FB_ALIGN(temp.getBuffer(dbb->dbb_page_size + PAGE_ALIGNMENT), PAGE_ALIGNMENT);
+	UCHAR* const temp_page = temp.getAlignedBuffer(dbb->dbb_page_size, dbb->getIOBlockSize());
 
 	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 	jrd_file* file = pageSpace->file;
@@ -2603,7 +2605,7 @@ ULONG PAG_page_count(thread_db* tdbb)
 	Database* const dbb = tdbb->getDatabase();
 	Array<UCHAR> temp;
 	page_inv_page* pip = reinterpret_cast<Ods::page_inv_page*>
-		(FB_ALIGN(temp.getBuffer(dbb->dbb_page_size + PAGE_ALIGNMENT), PAGE_ALIGNMENT));
+		(temp.getAlignedBuffer(dbb->dbb_page_size, dbb->getIOBlockSize()));
 
 	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 	fb_assert(pageSpace);

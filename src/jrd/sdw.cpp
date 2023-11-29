@@ -186,98 +186,80 @@ int SDW_add_file(thread_db* tdbb, const TEXT* file_name, SLONG start, USHORT sha
 	// and set up to release it in case of error. Align
 	// the spare page buffer for raw disk access.
 
-	SCHAR* const spare_buffer =
-		FB_NEW_POOL(*tdbb->getDefaultPool()) char[dbb->dbb_page_size + PAGE_ALIGNMENT];
-	// And why doesn't the code check that the allocation succeeds?
+	Array<UCHAR> temp;
+	UCHAR* const spare_page = temp.getAlignedBuffer(dbb->dbb_page_size, dbb->getIOBlockSize());
 
-	SCHAR* spare_page = FB_ALIGN(spare_buffer, PAGE_ALIGNMENT);
+	// create the header using the spare_buffer
 
-	try {
+	header_page* header = (header_page*) spare_page;
+	header->hdr_header.pag_type = pag_header;
+	header->hdr_sequence = sequence;
+	header->hdr_page_size = dbb->dbb_page_size;
+	header->hdr_data[0] = HDR_end;
+	header->hdr_end = HDR_SIZE;
+	header->hdr_next_page = 0;
 
-		// create the header using the spare_buffer
+	// fool PIO_write into writing the scratch page into the correct place
+	BufferDesc temp_bdb(dbb->dbb_bcb);
+	temp_bdb.bdb_page = next->fil_min_page;
+	temp_bdb.bdb_buffer = (PAG) header;
+	header->hdr_header.pag_pageno = temp_bdb.bdb_page.getPageNum();
+	// It's header, never encrypted
+	if (!PIO_write(tdbb, shadow_file, &temp_bdb, reinterpret_cast<Ods::pag*>(header), 0))
+		return 0;
 
-		header_page* header = (header_page*) spare_page;
-		header->hdr_header.pag_type = pag_header;
-		header->hdr_sequence = sequence;
-		header->hdr_page_size = dbb->dbb_page_size;
+	next->fil_fudge = 1;
+
+	// Update the previous header page to point to new file --
+	//	we can use the same header page, suitably modified,
+	// because they all look pretty much the same at this point
+
+	/*******************
+	Fix for bug 7925. drop_gdb wan not dropping secondary file in
+	multi-shadow files. The structure was not being filled with the
+	info. Commented some code so that the structure will always be filled.
+
+		-Sudesh 07/06/95
+
+	The original code :
+	===
+	if (shadow_file == file)
+		copy_header(tdbb);
+	else
+	===
+	************************/
+
+	// Temporarly reverting the change ------- Sudesh 07/07/95 *******
+
+	if (shadow_file == file)
+	{
+		copy_header(tdbb);
+	}
+	else
+	{
+		--start;
 		header->hdr_data[0] = HDR_end;
 		header->hdr_end = HDR_SIZE;
 		header->hdr_next_page = 0;
 
-		// fool PIO_write into writing the scratch page into the correct place
-		BufferDesc temp_bdb(dbb->dbb_bcb);
-		temp_bdb.bdb_page = next->fil_min_page;
-		temp_bdb.bdb_buffer = (PAG) header;
+		PAG_add_header_entry(tdbb, header, HDR_file, static_cast<USHORT>(strlen(file_name)),
+								reinterpret_cast<const UCHAR*>(file_name));
+		PAG_add_header_entry(tdbb, header, HDR_last_page, sizeof(start),
+								reinterpret_cast<const UCHAR*>(&start));
+		file->fil_fudge = 0;
+		temp_bdb.bdb_page = file->fil_min_page;
 		header->hdr_header.pag_pageno = temp_bdb.bdb_page.getPageNum();
 		// It's header, never encrypted
 		if (!PIO_write(tdbb, shadow_file, &temp_bdb, reinterpret_cast<Ods::pag*>(header), 0))
-		{
-			delete[] spare_buffer;
 			return 0;
-		}
-		next->fil_fudge = 1;
-
-		// Update the previous header page to point to new file --
-		//	we can use the same header page, suitably modified,
-		// because they all look pretty much the same at this point
-
-		/*******************
-		Fix for bug 7925. drop_gdb wan not dropping secondary file in
-		multi-shadow files. The structure was not being filled with the
-		info. Commented some code so that the structure will always be filled.
-
-			-Sudesh 07/06/95
-
-		The original code :
-		===
-		if (shadow_file == file)
-		    copy_header(tdbb);
-		else
-		===
-		************************/
-
-		// Temporarly reverting the change ------- Sudesh 07/07/95 *******
-
-		if (shadow_file == file)
-		{
-			copy_header(tdbb);
-		}
-		else
-		{
-			--start;
-			header->hdr_data[0] = HDR_end;
-			header->hdr_end = HDR_SIZE;
-			header->hdr_next_page = 0;
-
-			PAG_add_header_entry(tdbb, header, HDR_file, static_cast<USHORT>(strlen(file_name)),
-								 reinterpret_cast<const UCHAR*>(file_name));
-			PAG_add_header_entry(tdbb, header, HDR_last_page, sizeof(start),
-								 reinterpret_cast<const UCHAR*>(&start));
-			file->fil_fudge = 0;
-			temp_bdb.bdb_page = file->fil_min_page;
-			header->hdr_header.pag_pageno = temp_bdb.bdb_page.getPageNum();
-			// It's header, never encrypted
-			if (!PIO_write(tdbb, shadow_file, &temp_bdb, reinterpret_cast<Ods::pag*>(header), 0))
-			{
-				delete[] spare_buffer;
-				return 0;
-			}
-			if (file->fil_min_page) {
-				file->fil_fudge = 1;
-			}
-		}
 
 		if (file->fil_min_page) {
 			file->fil_fudge = 1;
 		}
+	}
 
-		delete[] spare_buffer;
-
-	}	// try
-	catch (const Firebird::Exception&)
-	{
-		delete[] spare_buffer;
-		throw;
+	if (file->fil_min_page) {
+		file->fil_fudge = 1;
 	}
 
 	return sequence;
@@ -1004,9 +986,9 @@ void SDW_start(thread_db* tdbb, const TEXT* file_name,
 	// catch errors: delete the shadow file if missing, and deallocate the spare buffer
 
 	shadow = NULL;
-	SLONG* const spare_buffer =
-		FB_NEW_POOL(*tdbb->getDefaultPool()) SLONG[(dbb->dbb_page_size + PAGE_ALIGNMENT) / sizeof(SLONG)];
-	UCHAR* spare_page = FB_ALIGN((UCHAR*) spare_buffer, PAGE_ALIGNMENT);
+
+	Array<UCHAR> temp;
+	UCHAR* const spare_page = temp.getAlignedBuffer(dbb->dbb_page_size, dbb->getIOBlockSize());
 
 	WIN window(DB_PAGE_SPACE, -1);
 	jrd_file* shadow_file = 0;
@@ -1087,8 +1069,6 @@ void SDW_start(thread_db* tdbb, const TEXT* file_name,
 
 	PAG_init2(tdbb, shadow_number);
 
-	delete[] spare_buffer;
-
 	}	// try
 	catch (const Firebird::Exception& ex)
 	{
@@ -1101,7 +1081,7 @@ void SDW_start(thread_db* tdbb, const TEXT* file_name,
 			PIO_close(shadow_file);
 			delete shadow_file;
 		}
-		delete[] spare_buffer;
+
 		if ((file_flags & FILE_manual) && !delete_files) {
 			ERR_post(Arg::Gds(isc_shadow_missing) << Arg::Num(shadow_number));
 		}

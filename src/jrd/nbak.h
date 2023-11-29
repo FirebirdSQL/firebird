@@ -493,7 +493,7 @@ private:
 	AllocItemTree* alloc_table; // Cached allocation table of pages in difference file
 	USHORT backup_state;
 	ULONG last_allocated_page; // Last physical page allocated in the difference file
-	BYTE *temp_buffers_space;
+	Firebird::Array<UCHAR> temp_buffers_space;
 	ULONG *alloc_buffer, *empty_buffer, *spare_buffer;
 	ULONG current_scn;
 	Firebird::PathName diff_name;
