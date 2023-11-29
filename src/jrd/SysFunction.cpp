@@ -432,6 +432,12 @@ static const char
 	FALSE_VALUE[] = "FALSE",
 	TRUE_VALUE[] = "TRUE";
 
+// Get pages
+const char
+    PAGES_ALLOCATED[] = "PAGES_ALLOCATED",
+    PAGES_USED[] = "PAGES_USED",
+    PAGES_FREE[] = "PAGES_FREE";
+
 
 double fbcot(double value) noexcept
 {
@@ -4583,6 +4589,18 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 			GuidToString(guidBuffer, &dbb->dbb_guid);
 			resultStr = string(guidBuffer);
 		}
+        else if (nameStr == PAGES_ALLOCATED)
+        {
+            resultStr.printf("%" ULONGFORMAT, PageSpace::actAlloc(dbb));
+        }
+        else if (nameStr == PAGES_USED)
+        {
+            resultStr.printf("%" ULONGFORMAT, PageSpace::usedPages(dbb));
+        }
+        else if (nameStr == PAGES_FREE)
+        {
+            resultStr.printf("%" ULONGFORMAT, PageSpace::maxAlloc(dbb) - PageSpace::usedPages(dbb));
+        }
 		else if (nameStr == DATABASE_FILE_ID)
 		{
 			resultStr = dbb->getUniqueFileId();
