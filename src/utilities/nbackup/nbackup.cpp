@@ -1339,8 +1339,6 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 		open_database_scan();
 
 		// Read database header
-		char unaligned_header_buffer[RAW_HEADER_SIZE + SECTOR_ALIGNMENT];
-
 		const ULONG ioBlockSize = direct_io ? DIRECT_IO_BLOCK_SIZE : PAGE_ALIGNMENT;
 		const ULONG headerSize = MAX(RAW_HEADER_SIZE, ioBlockSize);
 
