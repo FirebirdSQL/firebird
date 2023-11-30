@@ -612,9 +612,9 @@ int gstat(Firebird::UtilSvc* uSvc)
 
 	dba_fil* current = db_open(fileName.c_str(), fileName.length());
 
-	SCHAR temp[RAW_HEADER_SIZE + DIRECT_IO_BLOCK_SIZE];
+	alignas(DIRECT_IO_BLOCK_SIZE) SCHAR temp[MAX(RAW_HEADER_SIZE, DIRECT_IO_BLOCK_SIZE)];
 	tddba->page_size = MAX(RAW_HEADER_SIZE, DIRECT_IO_BLOCK_SIZE);
-	tddba->global_buffer = (pag*) FB_ALIGN(temp, DIRECT_IO_BLOCK_SIZE);
+	tddba->global_buffer = (pag*) temp;
 	tddba->page_number = -1;
 	const header_page* header = (const header_page*) db_read((SLONG) 0);
 
