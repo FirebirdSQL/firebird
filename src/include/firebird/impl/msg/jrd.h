@@ -978,6 +978,6 @@ FB_IMPL_MSG(JRD, 975, invalid_data_type_for_date_format, -901, "HY", "000", "It 
 FB_IMPL_MSG(JRD, 976, incompatible_date_format_with_current_date_type, -901, "HY", "000", "Cannot use \"@1\" format with current date type")
 FB_IMPL_MSG(JRD, 977, value_for_pattern_is_out_of_range, -901, "HY", "000", "Value for @1 pattern is out of range [@2, @3]")
 FB_IMPL_MSG(JRD, 978, month_name_mismatch, -901, "HY", "000", "@1 is not MONTH")
-FB_IMPL_MSG(JRD, 979, incorrect_hours_period, -901, "HY", "000", "@1 is incorrect period for 12H, it should be AM or PM")
+FB_IMPL_MSG(JRD, 979, incorrect_hours_period, -901, "HY", "000", "@1 is incorrect period for 12H, it should be A.M. or P.M.")
 FB_IMPL_MSG(JRD, 980, data_for_format_is_exhausted, -901, "HY", "000", "All data has been read, but format pattern wants more. Unfilled patterns: \"@1\"")
 FB_IMPL_MSG(JRD, 981, trailing_part_of_string, -901, "HY", "000", "There is a trailing part of input string that does not fit into FORMAT: \"@1\"")

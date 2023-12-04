@@ -21,7 +21,7 @@ The following flags are currently implemented for datetime to string conversion:
 | DDD | Day of the Year (001 - 366) |
 | DY | Short name of the Day (Mon) |
 | J | Julian Day (number of days since January 1, 4712 BC) |
-| HH / HH12 | Hour of the Day (01 - 12) with period (AM, PM)  |
+| HH / HH12 | Hour of the Day (01 - 12) with period (A.M., P.M.)  |
 | HH24 | Hour of the Day (00 - 23) |
 | MI | Minutes (00 - 59) |
 | SS | Seconds (00 - 59) |
@@ -75,7 +75,7 @@ The following flags are currently implemented for string to datetime conversion:
 | RM | Roman representation of the Month (I - XII) |
 | DD | Day of the Month (1 - 31) |
 | J | Julian Day (number of days since January 1, 4712 BC) |
-| HH / HH12 | Hour of the Day (1 - 12) with period (AM, PM)  |
+| HH / HH12 | Hour of the Day (1 - 12) with period (A.M., P.M.) |
 | HH24 | Hour of the Day (0 - 23) |
 | MI | Minutes (0 - 59) |
 | SS | Seconds (0 - 59) |
