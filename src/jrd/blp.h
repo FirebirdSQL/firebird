@@ -251,7 +251,7 @@ static const struct
 	// New BLR in FB5.0
 	{"dcl_local_table", dcl_local_table},
 	{"local_table_truncate", one_word},
-	{"local_table_id", local_table},
+	{"local_table_id", local_table}, // 220
 	{"outer_map", outer_map},
 	{NULL, NULL},	// blr_json_function
 	{"skip_locked", zero},
@@ -259,5 +259,7 @@ static const struct
 	{"invoke_procedure", invsel_procedure},
 	{"select_procedure", invsel_procedure},
 	{"blr_default_arg", zero},
+	// New BLR in FB6.0
+	{"cast_format", cast_format},
 	{0, 0}
 };

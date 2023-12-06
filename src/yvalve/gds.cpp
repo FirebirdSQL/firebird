@@ -419,7 +419,8 @@ static const UCHAR
 	outer_map[] = { op_outer_map, 0 },
 	in_list[] = { op_line, op_verb, op_indent, op_word, op_line, op_args, 0},
 	invoke_function[] = { op_invoke_function, 0 },
-	invsel_procedure[] = { op_invsel_procedure, 0 };
+	invsel_procedure[] = { op_invsel_procedure, 0 },
+	cast_format[] = { op_byte, op_literal, op_dtype, op_line, op_verb, 0 };
 
 
 #include "../jrd/blp.h"
