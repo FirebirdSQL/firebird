@@ -2888,7 +2888,9 @@ RseNode* RseNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 void RseNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 	BoolExprNode** boolean, RecordSourceNodeStack& stack)
 {
-	if (rse_jointype != blr_inner)
+	const auto dbb = tdbb->getDatabase();
+
+	if (rse_jointype != blr_inner && dbb->dbb_config->getOuterJoinConversion())
 	{
 		// Check whether any of the upper level booleans (those belonging to the WHERE clause)
 		// is able to filter out rows from the "inner" streams. If this is the case,
