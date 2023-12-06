@@ -255,11 +255,11 @@ static const struct
 	{"outer_map", outer_map},
 	{NULL, NULL},	// blr_json_function
 	{"skip_locked", zero},
+	// New BLR in FB6.0
 	{"invoke_function", invoke_function},
 	{"invoke_procedure", invsel_procedure},
 	{"select_procedure", invsel_procedure},
 	{"blr_default_arg", zero},
-	// New BLR in FB6.0
 	{"cast_format", cast_format},
 	{0, 0}
 };
