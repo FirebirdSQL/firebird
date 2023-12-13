@@ -4146,7 +4146,10 @@ public:
 		Firebird::PathName msgPrefix;
 		if (!fb_utils::readenv(FB_MSG_ENV, msgPrefix))
 		{
-			msgPrefix = FB_MSGDIR[0] ? FB_MSGDIR : prefix;
+			if (FB_MSGDIR[0] && PathUtils::isRelative(FB_MSGDIR))
+				PathUtils::concatPath(msgPrefix, prefix, FB_MSGDIR);
+			else
+				msgPrefix = FB_MSGDIR[0] ? FB_MSGDIR : prefix;
 		}
 		msgPrefix.copyTo(fb_prefix_msg_val, sizeof(fb_prefix_msg_val));
 		fb_prefix_msg = fb_prefix_msg_val;

@@ -121,7 +121,9 @@ namespace
 			PathName temp;
 
 			// Could not call fb_utils::getPrefix here.
-			if (FB_TZDATADIR[0])
+			if (FB_TZDATADIR[0] && PathUtils::isRelative(FB_TZDATADIR))
+				PathUtils::concatPath(temp, Config::getRootDirectory(), FB_TZDATADIR);
+			else if (FB_TZDATADIR[0])
 				temp = FB_TZDATADIR;
 			else
 			{

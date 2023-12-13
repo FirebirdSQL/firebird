@@ -1232,11 +1232,19 @@ Firebird::PathName getPrefix(unsigned int prefType, const char* name)
 	{
 		if (prefType != Firebird::IConfigManager::DIR_CONF &&
 			prefType != Firebird::IConfigManager::DIR_MSG &&
+			prefType != Firebird::IConfigManager::DIR_TZDATA &&
 			configDir[prefType][0])
 		{
 			// Value is set explicitly and is not environment overridable
 			PathUtils::concatPath(s, configDir[prefType], name);
-			return s;
+
+			if (PathUtils::isRelative(s))
+			{
+				gds__prefix(tmp, s.c_str());
+				return tmp;
+			}
+			else
+				return s;
 		}
 	}
 
@@ -1316,11 +1324,11 @@ Firebird::PathName getPrefix(unsigned int prefType, const char* name)
 	}
 
 	if (s.hasData() && name[0])
-	{
 		s += PathUtils::dir_sep;
-	}
+
 	s += name;
 	gds__prefix(tmp, s.c_str());
+
 	return tmp;
 #endif
 }
