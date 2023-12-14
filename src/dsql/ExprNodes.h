@@ -783,7 +783,7 @@ public:
 
 	virtual bool deterministic() const override
 	{
-		return false;
+		return true;
 	}
 
 	virtual bool possiblyUnknown() const
@@ -1625,7 +1625,7 @@ public:
 
 	virtual bool deterministic() const override
 	{
-		return false;
+		return true;
 	}
 
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
@@ -1677,7 +1677,7 @@ public:
 
 	virtual bool deterministic() const override
 	{
-		return false;
+		return true;
 	}
 
 	virtual bool possiblyUnknown() const
@@ -1944,11 +1944,6 @@ public:
 	virtual ValueExprNode* dsqlFieldRemapper(FieldRemapper& visitor);
 
 	virtual bool unmappable(const MapNode* /*mapNode*/, StreamType /*shellStream*/) const
-	{
-		return false;
-	}
-
-	virtual bool deterministic() const override
 	{
 		return false;
 	}

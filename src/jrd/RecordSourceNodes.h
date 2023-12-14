@@ -479,6 +479,11 @@ public:
 	{
 	}
 
+	virtual bool deterministic() const
+	{
+		return false;
+	}
+
 	virtual bool computable(CompilerScratch* csb, StreamType stream,
 		bool allowOnlyCurrentStream, ValueExprNode* value);
 	virtual void findDependentFromStreams(const CompilerScratch* csb,
