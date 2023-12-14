@@ -1243,8 +1243,8 @@ Firebird::PathName getPrefix(unsigned int prefType, const char* name)
 				gds__prefix(tmp, s.c_str());
 				return tmp;
 			}
-			else
-				return s;
+
+			return s;
 		}
 	}
 
