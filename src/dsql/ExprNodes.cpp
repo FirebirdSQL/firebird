@@ -12349,7 +12349,7 @@ void SysFuncCallNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 
 bool SysFuncCallNode::deterministic() const
 {
-	return ExprNode::deterministic() && function->deterministic();
+	return ExprNode::deterministic() && function->deterministic;
 }
 
 void SysFuncCallNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)

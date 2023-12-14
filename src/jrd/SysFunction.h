@@ -54,6 +54,7 @@ public:
 	const char* name;
 	int minArgCount;
 	int maxArgCount;	// -1 for no limit
+	bool deterministic;
 	SetParamsFunc setParamsFunc;
 	MakeFunc makeFunc;
 	EvlFunc evlFunc;
@@ -62,7 +63,6 @@ public:
 	static const SysFunction* lookup(const Jrd::MetaName& name);
 
 	void checkArgsMismatch(int count) const;
-	bool deterministic() const;
 
 private:
 	const static SysFunction functions[];
