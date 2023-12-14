@@ -27,9 +27,10 @@
 #include "../common/classes/fb_string.h"
 #include <firebird/Interface.h>
 #include "../jrd/obj.h"
+#include <string>
 
 void	SHOW_comments(bool force);
-bool	SHOW_dbb_parameters (Firebird::IAttachment*, SCHAR*, const UCHAR*, unsigned, bool, const char*);
+bool	SHOW_dbb_parameters (Firebird::IAttachment*, std::string&, const UCHAR*, unsigned, bool, const char*);
 processing_state	SHOW_grants (const SCHAR*, const SCHAR*, ObjectType);
 processing_state	SHOW_grants2 (const SCHAR*, const SCHAR*, ObjectType, const TEXT*, bool);
 void	SHOW_grant_roles (const SCHAR*, bool*);
