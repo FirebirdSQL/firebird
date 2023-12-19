@@ -539,6 +539,8 @@ namespace Jrd
 		m_replMgr = nullptr;
 
 		delete entry;
+
+		fb_assert(m_tempCacheUsage == 0);
 	}
 
 	LockManager* Database::GlobalObjectHolder::getLockManager()
@@ -578,6 +580,28 @@ namespace Jrd
 				m_replMgr = FB_NEW Replication::Manager(m_id, m_replConfig);
 		}
 		return m_replMgr;
+	}
+
+	bool Database::GlobalObjectHolder::incTempSpaceUsage(FB_SIZE_T size, FB_UINT64 limit)
+	{
+		if (m_tempCacheUsage + size > limit)
+			return false;
+
+		const auto old = m_tempCacheUsage.fetch_add(size);
+		if (old + size > limit)
+		{
+			m_tempCacheUsage.fetch_sub(size);
+			return false;
+		}
+
+		return true;
+	}
+
+	void Database::GlobalObjectHolder::decTempSpaceUsage(FB_SIZE_T size)
+	{
+		fb_assert(m_tempCacheUsage >= size);
+
+		m_tempCacheUsage.fetch_sub(size);
 	}
 
 	GlobalPtr<Database::GlobalObjectHolder::DbIdHash>
