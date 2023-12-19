@@ -46,23 +46,23 @@ namespace
 {
 	const size_t MIN_TEMP_BLOCK_SIZE = 64 * 1024;
 
-	class TempSpaceGuard
+	class TempCacheLimitGuard
 	{
 	public:
-		explicit TempSpaceGuard(Database* dbb) :
+		explicit TempCacheLimitGuard(Database* dbb) :
 			m_dbb(dbb),
 			m_size(0)
 		{}
 
-		~TempSpaceGuard()
+		~TempCacheLimitGuard()
 		{
 			if (m_size)
-				m_dbb->decTempSpaceUsage(m_size);
+				m_dbb->decTempCacheUsage(m_size);
 		}
 
 		bool reserve(FB_SIZE_T size)
 		{
-			if (m_dbb->incTempSpaceUsage(size))
+			if (m_dbb->incTempCacheUsage(size))
 			{
 				m_size = size;
 				return true;
@@ -177,7 +177,7 @@ TempSpace::~TempSpace()
 	if (localCacheUsage)
 	{
 		Database* const dbb = GET_DBB();
-		dbb->decTempSpaceUsage(localCacheUsage);
+		dbb->decTempCacheUsage(localCacheUsage);
 	}
 
 	while (tempFiles.getCount())
@@ -315,7 +315,7 @@ void TempSpace::extend(FB_SIZE_T size)
 		Block* block = NULL;
 
 		{	// scope
-			TempSpaceGuard guard(GET_DBB());
+			TempCacheLimitGuard guard(GET_DBB());
 
 			if (guard.reserve(size))
 			{

@@ -582,13 +582,13 @@ namespace Jrd
 		return m_replMgr;
 	}
 
-	bool Database::GlobalObjectHolder::incTempSpaceUsage(FB_SIZE_T size, FB_UINT64 limit)
+	bool Database::GlobalObjectHolder::incTempCacheUsage(FB_SIZE_T size)
 	{
-		if (m_tempCacheUsage + size > limit)
+		if (m_tempCacheUsage + size > m_tempCacheLimit)
 			return false;
 
 		const auto old = m_tempCacheUsage.fetch_add(size);
-		if (old + size > limit)
+		if (old + size > m_tempCacheLimit)
 		{
 			m_tempCacheUsage.fetch_sub(size);
 			return false;
@@ -597,7 +597,7 @@ namespace Jrd
 		return true;
 	}
 
-	void Database::GlobalObjectHolder::decTempSpaceUsage(FB_SIZE_T size)
+	void Database::GlobalObjectHolder::decTempCacheUsage(FB_SIZE_T size)
 	{
 		fb_assert(m_tempCacheUsage >= size);
 
