@@ -390,8 +390,7 @@ void SHOW_comments(bool force)
 }
 
 
-bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
-						 SCHAR* info_buf,
+void SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 						 const UCHAR* db_itemsL,
 						 unsigned item_length,
 						 bool translate,
@@ -408,7 +407,6 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
  *
  *	Arguments:
  *	    db_handle -- database handle
- *	    info_buf -- info_bufput file pointer
  *	    db_itemsL -- list of db_info items to process
  *
  **************************************/
@@ -420,12 +418,9 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 	Firebird::CheckStatusWrapper statusWrapper(status_vector);
 	db_handle->getInfo(&statusWrapper, item_length, db_itemsL, sizeof(buffer), buffer);
 	if (ISQL_errmsg(status_vector))
-		return false;
+		return;
 
 	bool crdatePrinted = false;
-
-	*info_buf = '\0';
-	SCHAR* info = info_buf;
 
 	for (Firebird::ClumpletReader p(Firebird::ClumpletReader::InfoResponse, buffer, sizeof(buffer)); !p.isEof(); p.moveNext())
 	{
@@ -445,7 +440,7 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 
 		case isc_info_page_size:
 			value_out = p.getInt();
-			sprintf(info, "PAGE_SIZE %" SQUADFORMAT"%s", value_out, separator);
+			isqlGlob.printf("PAGE_SIZE %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case isc_info_db_size_in_pages:
@@ -453,10 +448,10 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 			if (translate)
 			{
 				IUTILS_msg_get(NUMBER_PAGES, msg, SafeArg() << value_out);
-				sprintf(info, "%s%s", msg, separator);
+				isqlGlob.printf("%s%s", msg, separator);
 			}
 			else
-				sprintf(info, "Number of DB pages allocated = %" SQUADFORMAT"%s", value_out, separator);
+				isqlGlob.printf("Number of DB pages allocated = %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case fb_info_pages_used:
@@ -464,10 +459,10 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 			if (translate)
 			{
 				IUTILS_msg_get(NUMBER_USED_PAGES, msg, SafeArg() << value_out);
-				sprintf(info, "%s%s", msg, separator);
+				isqlGlob.printf("%s%s", msg, separator);
 			}
 			else
-				sprintf(info, "Number of DB pages used = %" SQUADFORMAT"%s", value_out, separator);
+				isqlGlob.printf("Number of DB pages used = %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case fb_info_pages_free:
@@ -475,10 +470,10 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 			if (translate)
 			{
 				IUTILS_msg_get(NUMBER_FREE_PAGES, msg, SafeArg() << value_out);
-				sprintf(info, "%s%s", msg, separator);
+				isqlGlob.printf("%s%s", msg, separator);
 			}
 			else
-				sprintf(info, "Number of DB pages free = %" SQUADFORMAT"%s", value_out, separator);
+				isqlGlob.printf("Number of DB pages free = %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case fb_info_crypt_state:
@@ -500,11 +495,11 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 					s += msg;
 				}
 
-				sprintf(info, "%s%s", s.c_str(), separator);
+				isqlGlob.printf("%s%s", s.c_str(), separator);
 			}
 			else
 			{
-				sprintf(info, "DB %sencrypted%s%s",
+				isqlGlob.printf("DB %sencrypted%s%s",
 					(value_out & fb_info_crypt_encrypted ? "" : "not "),
 					(value_out & fb_info_crypt_process ? ", crypt thread not complete" : ""),
 					separator);
@@ -516,35 +511,35 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 			if (translate)
 			{
 				IUTILS_msg_get(SWEEP_INTERV, msg, SafeArg() << value_out);
-				sprintf(info, "%s%s", msg, separator);
+				isqlGlob.printf("%s%s", msg, separator);
 			}
 			else
-				sprintf(info, "Sweep interval = %" SQUADFORMAT"%s", value_out, separator);
+				isqlGlob.printf("Sweep interval = %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case isc_info_forced_writes:
 			value_out = p.getInt();
-			sprintf (info, "Forced Writes are %s%s", (value_out == 1 ? "ON" : "OFF"), separator);
+			isqlGlob.printf("Forced Writes are %s%s", (value_out == 1 ? "ON" : "OFF"), separator);
 			break;
 
 		case isc_info_oldest_transaction :
 			value_out = p.getInt();
-			sprintf(info, "Transaction - oldest = %" SQUADFORMAT"%s", value_out, separator);
+			isqlGlob.printf("Transaction - oldest = %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case isc_info_oldest_active :
 			value_out = p.getInt();
-			sprintf(info, "Transaction - oldest active = %" SQUADFORMAT"%s", value_out, separator);
+			isqlGlob.printf("Transaction - oldest active = %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case isc_info_oldest_snapshot :
 			value_out = p.getInt();
-			sprintf(info, "Transaction - oldest snapshot = %" SQUADFORMAT"%s", value_out, separator);
+			isqlGlob.printf("Transaction - oldest snapshot = %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case isc_info_next_transaction :
 			value_out = p.getInt();
-			sprintf (info, "Transaction - Next = %" SQUADFORMAT"%s", value_out, separator);
+			isqlGlob.printf("Transaction - Next = %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case isc_info_base_level:
@@ -552,10 +547,10 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 			if (translate)
 			{
 				IUTILS_msg_get(BASE_LEVEL, msg, SafeArg() << value_out);
-				sprintf(info, "%s%s", msg, separator);
+				isqlGlob.printf("%s%s", msg, separator);
 			}
 			else
-				sprintf(info, "Base level = %" SQUADFORMAT"%s", value_out, separator);
+				isqlGlob.printf("Base level = %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case isc_info_limbo:
@@ -563,10 +558,10 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 			if (translate)
 			{
 				IUTILS_msg_get(LIMBO, msg, SafeArg() << value_out);
-				sprintf(info, "%s%s", msg, separator);
+				isqlGlob.printf("%s%s", msg, separator);
 			}
 			else
-				sprintf(info, "Transaction in limbo = %" SQUADFORMAT"%s", value_out, separator);
+				isqlGlob.printf("Transaction in limbo = %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case isc_info_ods_version:
@@ -574,21 +569,21 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 			break;
 		case isc_info_ods_minor_version:
 			value_out = p.getInt();
-			sprintf(info, "ODS = %" SLONGFORMAT".%" SQUADFORMAT"%s",
+			isqlGlob.printf("ODS = %" SLONGFORMAT".%" SQUADFORMAT"%s",
 					(SLONG) isqlGlob.major_ods, value_out, separator);
 			break;
 
 		case fb_info_wire_crypt:
 			if (p.getClumpLength())
-				sprintf (info, "Wire crypt plugin: %.*s%s", p.getClumpLength(), p.getBytes(), separator);
+				isqlGlob.printf("Wire crypt plugin: %.*s%s", p.getClumpLength(), p.getBytes(), separator);
 			break;
 
 		case fb_info_protocol_version:
 			value_out = p.getInt();
 			if (value_out)
-				sprintf(info, "Protocol version = %" SQUADFORMAT"%s", value_out, separator);
+				isqlGlob.printf("Protocol version = %" SQUADFORMAT"%s", value_out, separator);
 			else
-				sprintf(info, "Embedded connection%s", separator);
+				isqlGlob.printf("Embedded connection%s", separator);
 			break;
 
 		case isc_info_creation_date:
@@ -604,7 +599,7 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 				struct tm time;
 				isc_decode_timestamp(&ts, &time);
 
-				sprintf(info, "Creation date: %s %d, %d %d:%02d:%02d%s",
+				isqlGlob.printf("Creation date: %s %d, %d %d:%02d:%02d%s",
 					FB_SHORT_MONTHS[time.tm_mon], time.tm_mday, time.tm_year + 1900,
 					time.tm_hour, time.tm_min, time.tm_sec, separator);
 			}
@@ -631,7 +626,7 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 				if (ISQL_errmsg(fbStatus))
 					break;
 
-				sprintf(info, "Creation date: %s %d, %d %d:%02d:%02d %s%s",
+				isqlGlob.printf("Creation date: %s %d, %d %d:%02d:%02d %s%s",
 					FB_SHORT_MONTHS[month - 1], day, year,
 					hours, minutes, seconds, timeZone, separator);
 
@@ -648,12 +643,12 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 				const UCHAR* end = s + p.getClumpLength();
 				++s; // Skip useless indicator.
 				int len = *s++;
-				printf("DB = %.*s\n", len, s);
+				isqlGlob.printf("DB = %.*s\n", len, s);
 				s += len;
 				while (s < end)
 				{
 					len = *s++;
-					printf("Host = %.*s\n", len, s);
+					isqlGlob.printf("Host = %.*s\n", len, s);
 					s += len;
 				}
 			}
@@ -668,17 +663,14 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 					(value_out == fb_info_replica_read_only) ? "READ_ONLY" :
 					(value_out == fb_info_replica_read_write) ? "READ_WRITE" :
 					"unknown";
-				sprintf(info, "Replica mode: %s%s", mode, separator);
+				isqlGlob.printf("Replica mode: %s%s", mode, separator);
 			}
 			break;
 
 		case isc_info_truncated:
-			return info > info_buf; // If we got some items, we are (partially) successful.
+			return;
 		}
-		info += strlen(info);
 	}
-
-	return info > info_buf;
 }
 
 
@@ -3673,15 +3665,11 @@ static void show_db()
 		return;
 	END_ERROR;
 
-	SCHAR info_buf[BUFFER_LENGTH512];
-
 	// First general database parameters
 
 	bool translate = true;
 
-	if (SHOW_dbb_parameters(DB, info_buf, db_items, sizeof(db_items), translate, NEWLINE)) {
-		isqlGlob.prints(info_buf);
-	}
+	SHOW_dbb_parameters(DB, db_items, sizeof(db_items), translate, NEWLINE);
 
 	FOR DBB IN RDB$DATABASE
 		CROSS CS IN RDB$CHARACTER_SETS

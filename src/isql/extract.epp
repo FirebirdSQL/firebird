@@ -2102,13 +2102,11 @@ static void list_create_db()
 	isqlGlob.printf("CREATE DATABASE '%s' ", isqlGlob.global_Target_db);
 
 	// Get the page size from db_info call
-	SCHAR info_buf[20];
 	// CVC: Finally I got the idea: translate is associated with WISQL that
 	// no longer exists. Localizing the messages means also not printing
 	// any CRLF and therefore the output looks ugly.
 	const bool translate = true;
-	if (SHOW_dbb_parameters(DB, info_buf, page_items, sizeof(page_items), translate, " "))
-		isqlGlob.printf("%s", info_buf);
+	SHOW_dbb_parameters(DB, page_items, sizeof(page_items), translate, " ");
 
 	FOR DBP IN RDB$DATABASE
 		WITH DBP.RDB$CHARACTER_SET_NAME NOT MISSING
