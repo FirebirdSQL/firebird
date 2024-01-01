@@ -276,8 +276,9 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 		return;
 	}
 
-	if (modifying)
+	if (modifying && !field->charSet.hasData() && !field->collate.hasData())
 	{
+		// Use charset and collation from already existing field if any
 		const dsql_fld* afield = field->fld_next;
 		USHORT bpc = 0;
 
@@ -310,10 +311,10 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 		}
 	}
 
-	if (!(field->charSet.hasData() || field->charSetId.has_value() ||	// set if a domain
+	if (!modifying && !(field->charSet.hasData() || field->charSetId.has_value() ||	// set if a domain
 		(field->flags & FLD_national)))
 	{
-		// Attach the database default character set, if not otherwise specified
+		// Attach the database default character set to the new field, if not otherwise specified
 
 		MetaName defaultCharSet;
 

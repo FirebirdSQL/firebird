@@ -8287,6 +8287,18 @@ void AlterRelationNode::modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 								FLD.RDB$SEGMENT_LENGTH.NULL, FLD.RDB$SEGMENT_LENGTH);
 						END_MODIFY
 
+						MODIFY RFR USING
+							if (field->explicitCollation)
+							{
+								RFR.RDB$COLLATION_ID.NULL = FALSE;
+								RFR.RDB$COLLATION_ID = field->collationId;
+							}
+							else
+							{
+								RFR.RDB$COLLATION_ID.NULL = TRUE;	// CORE-2426 and Issue #7924
+							}
+						END_MODIFY
+
 						newDom.dyn_fld_source = origDom.dyn_fld_source;
 					}
 					else	// Case b2: Domain -> internal domain.
