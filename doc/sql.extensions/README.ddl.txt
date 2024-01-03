@@ -629,3 +629,32 @@ Only users with administrator rights can use this option.
 (Dmitry Sibiryakov)
 
 If is used twice, an error is returned.
+
+
+DDL enhancements in Firebird v6.
+--------------------------------
+
+1) DROP [IF EXISTS]
+
+Using subclause IF EXISTS, it's now possible to try to drop objects and do not get errors when they di not exists.
+
+DROP EXCEPTION [IF EXISTS] <exception>
+DROP INDEX [IF EXISTS] <index>
+DROP PROCEDURE [IF EXISTS] <procedure>
+DROP TABLE [IF EXISTS] <table>
+DROP TRIGGER [IF EXISTS] <trigger>
+DROP VIEW [IF EXISTS] <view>
+DROP FILTER [IF EXISTS] <filter>
+DROP DOMAIN [IF EXISTS] <domain>
+DROP [EXTERNAL] FUNCTION [IF EXISTS] <function>
+DROP SHADOW [IF EXISTS] <shadow>
+DROP ROLE [IF EXISTS] <role>
+DROP GENERATOR [IF EXISTS] <generator>
+DROP SEQUENCE [IF EXISTS] <sequence>
+DROP COLLATION [IF EXISTS] <collation>
+DROP USER [IF EXISTS] <user> [USING PLUGIN <plugin>]
+DROP PACKAGE [IF EXISTS] <package>
+DROP PACKAGE BODY [IF EXISTS] <package>
+DROP [GLOBAL] MAPPING [IF EXISTS] <mapping>
+ALTER TABLE <table> DROP [IF EXISTS] <column>
+ALTER TABLE <table> DROP CONSTRAINT [IF EXISTS] <constraint>

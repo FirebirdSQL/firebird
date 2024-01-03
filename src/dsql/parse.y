@@ -4249,17 +4249,19 @@ alter_ops($relationNode)
 
 %type alter_op(<relationNode>)
 alter_op($relationNode)
-	: DROP symbol_column_name drop_behaviour
+	: DROP if_exists_opt symbol_column_name drop_behaviour
 		{
 			RelationNode::DropColumnClause* clause = newNode<RelationNode::DropColumnClause>();
-			clause->name = *$2;
-			clause->cascade = $3;
+			clause->silent = $2;
+			clause->name = *$3;
+			clause->cascade = $4;
 			$relationNode->clauses.add(clause);
 		}
-	| DROP CONSTRAINT symbol_constraint_name
+	| DROP CONSTRAINT if_exists_opt symbol_constraint_name
 		{
 			RelationNode::DropConstraintClause* clause = newNode<RelationNode::DropConstraintClause>();
-			clause->name = *$3;
+			clause->silent = $3;
+			clause->name = *$4;
 			$relationNode->clauses.add(clause);
 		}
 	| ADD column_def($relationNode)
@@ -4775,48 +4777,138 @@ drop
 
 %type <ddlNode> drop_clause
 drop_clause
-	: EXCEPTION symbol_exception_name
-		{ $$ = newNode<DropExceptionNode>(*$2); }
-	| INDEX symbol_index_name
-		{ $$ = newNode<DropIndexNode>(*$2); }
-	| PROCEDURE symbol_procedure_name
-		{ $$ = newNode<DropProcedureNode>(*$2); }
-	| TABLE symbol_table_name
-		{ $$ = newNode<DropRelationNode>(*$2, false); }
-	| TRIGGER symbol_trigger_name
-		{ $$ = newNode<DropTriggerNode>(*$2); }
-	| VIEW symbol_view_name
-		{ $$ = newNode<DropRelationNode>(*$2, true); }
-	| FILTER symbol_filter_name
-		{ $$ = newNode<DropFilterNode>(*$2); }
-	| DOMAIN symbol_domain_name
-		{ $$ = newNode<DropDomainNode>(*$2); }
-	| EXTERNAL FUNCTION symbol_UDF_name
-		{ $$ = newNode<DropFunctionNode>(*$3); }
-	| FUNCTION symbol_UDF_name
-		{ $$ = newNode<DropFunctionNode>(*$2); }
-	| SHADOW pos_short_integer opt_no_file_delete
-		{ $$ = newNode<DropShadowNode>($2, $3); }
-	| ROLE symbol_role_name
-		{ $$ = newNode<DropRoleNode>(*$2); }
-	| GENERATOR symbol_generator_name
-		{ $$ = newNode<DropSequenceNode>(*$2); }
-	| SEQUENCE symbol_generator_name
-		{ $$ = newNode<DropSequenceNode>(*$2); }
-	| COLLATION symbol_collation_name
-		{ $$ = newNode<DropCollationNode>(*$2); }
-	| USER symbol_user_name USING PLUGIN valid_symbol_name
-		{ $$ = newNode<DropUserNode>(*$2, $5); }
-	| USER symbol_user_name
-		{ $$ = newNode<DropUserNode>(*$2); }
-	| PACKAGE symbol_package_name
-		{ $$ = newNode<DropPackageNode>(*$2); }
-	| PACKAGE BODY symbol_package_name
-		{ $$ = newNode<DropPackageBodyNode>(*$3); }
-	| MAPPING drop_map_clause(false)
-		{ $$ = $2; }
-	| GLOBAL MAPPING drop_map_clause(true)
-		{ $$ = $3; }
+	: EXCEPTION if_exists_opt symbol_exception_name
+		{
+			const auto node = newNode<DropExceptionNode>(*$3);
+			node->silent = $2;
+			$$ = node;
+		}
+	| INDEX if_exists_opt symbol_index_name
+		{
+			const auto node = newNode<DropIndexNode>(*$3);
+			node->silent = $2;
+			$$ = node;
+		}
+	| PROCEDURE if_exists_opt symbol_procedure_name
+		{
+			const auto node = newNode<DropProcedureNode>(*$3);
+			node->silent = $2;
+			$$ = node;
+		}
+	| TABLE if_exists_opt symbol_table_name
+		{
+			const auto node = newNode<DropRelationNode>(*$3, false);
+			node->silent = $2;
+			$$ = node;
+		}
+	| TRIGGER if_exists_opt symbol_trigger_name
+		{
+			const auto node = newNode<DropTriggerNode>(*$3);
+			node->silent = $2;
+			$$ = node;
+		}
+	| VIEW if_exists_opt symbol_view_name
+		{
+			const auto node = newNode<DropRelationNode>(*$3, true);
+			node->silent = $2;
+			$$ = node;
+		}
+	| FILTER if_exists_opt symbol_filter_name
+		{
+			const auto node = newNode<DropFilterNode>(*$3);
+			node->silent = $2;
+			$$ = node;
+		}
+	| DOMAIN if_exists_opt symbol_domain_name
+		{
+			const auto node = newNode<DropDomainNode>(*$3);
+			node->silent = $2;
+			$$ = node;
+		}
+	| EXTERNAL FUNCTION if_exists_opt symbol_UDF_name
+		{
+			const auto node = newNode<DropFunctionNode>(*$4);
+			node->silent = $3;
+			$$ = node;
+		}
+	| FUNCTION if_exists_opt symbol_UDF_name
+		{
+			const auto node = newNode<DropFunctionNode>(*$3);
+			node->silent = $2;
+			$$ = node;
+		}
+	| SHADOW if_exists_opt pos_short_integer opt_no_file_delete
+		{
+			const auto node = newNode<DropShadowNode>($3, $4);
+			// DROP SHADOW implicitly has IF EXISTS behavior
+			$$ = node;
+		}
+	| ROLE if_exists_opt symbol_role_name
+		{
+			const auto node = newNode<DropRoleNode>(*$3);
+			node->silent = $2;
+			$$ = node;
+		}
+	| GENERATOR if_exists_opt symbol_generator_name
+		{
+			const auto node = newNode<DropSequenceNode>(*$3);
+			node->silent = $2;
+			$$ = node;
+		}
+	| SEQUENCE if_exists_opt symbol_generator_name
+		{
+			const auto node = newNode<DropSequenceNode>(*$3);
+			node->silent = $2;
+			$$ = node;
+		}
+	| COLLATION if_exists_opt symbol_collation_name
+		{
+			const auto node = newNode<DropCollationNode>(*$3);
+			node->silent = $2;
+			$$ = node;
+		}
+	| USER if_exists_opt symbol_user_name USING PLUGIN valid_symbol_name
+		{
+			const auto node = newNode<DropUserNode>(*$3, $6);
+			node->silent = $2;
+			$$ = node;
+		}
+	| USER if_exists_opt symbol_user_name
+		{
+			const auto node = newNode<DropUserNode>(*$3);
+			node->silent = $2;
+			$$ = node;
+		}
+	| PACKAGE if_exists_opt symbol_package_name
+		{
+			const auto node = newNode<DropPackageNode>(*$3);
+			node->silent = $2;
+			$$ = node;
+		}
+	| PACKAGE BODY if_exists_opt symbol_package_name
+		{
+			const auto node = newNode<DropPackageBodyNode>(*$4);
+			node->silent = $3;
+			$$ = node;
+		}
+	| MAPPING if_exists_opt drop_map_clause(false)
+		{
+			const auto node = $3;
+			node->silentDrop = $2;
+			$$ = node;
+		}
+	| GLOBAL MAPPING if_exists_opt drop_map_clause(true)
+		{
+			const auto node = $4;
+			node->silentDrop = $3;
+			$$ = node;
+		}
+	;
+
+%type <boolVal> if_exists_opt
+if_exists_opt
+	: /* nothing */		{ $$ = false; }
+	| IF EXISTS			{ $$ = true; }
 	;
 
 %type <boolVal> opt_no_file_delete

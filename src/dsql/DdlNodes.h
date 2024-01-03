@@ -918,6 +918,7 @@ protected:
 
 public:
 	MetaName name;
+	bool silent = false;
 };
 
 
@@ -1025,6 +1026,7 @@ private:
 
 public:
 	MetaName name;
+	bool silent = false;
 };
 
 
@@ -1301,6 +1303,7 @@ public:
 
 		MetaName name;
 		Firebird::AutoPtr<Constraint> create;
+		bool silent = false;
 	};
 
 	struct Clause
@@ -1484,13 +1487,13 @@ public:
 	{
 		explicit DropColumnClause(MemoryPool& p)
 			: Clause(p, TYPE_DROP_COLUMN),
-			  name(p),
-			  cascade(false)
+			  name(p)
 		{
 		}
 
 		MetaName name;
-		bool cascade;
+		bool cascade = false;
+		bool silent = false;
 	};
 
 	struct DropConstraintClause : public Clause
@@ -1502,12 +1505,13 @@ public:
 		}
 
 		MetaName name;
+		bool silent = false;
 	};
 
 	RelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode);
 
 	static void deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
-		const MetaName& relationName, const MetaName& fieldName);
+		const MetaName& relationName, const MetaName& fieldName, bool silent);
 
 	static void addToPublication(thread_db* tdbb, jrd_tra* transaction,
 		const MetaName& tableName, const MetaName& pubTame);
@@ -1858,6 +1862,7 @@ protected:
 
 public:
 	MetaName name;
+	bool silent = false;
 };
 
 
@@ -1946,6 +1951,7 @@ protected:
 
 public:
 	MetaName name;
+	bool silent = false;
 };
 
 
@@ -2081,16 +2087,7 @@ public:
 		: DdlNode(p),
 		  name(p, nm),
 		  fromUtf8(p),
-		  plugin(NULL),
-		  db(NULL),
-		  fromType(NULL),
-		  from(NULL),
-		  to(NULL),
-		  comment(NULL),
-		  op(o),
-		  mode('#'),
-		  global(false),
-		  role(false)
+		  op(o)
 	{
 	}
 
@@ -2117,16 +2114,17 @@ private:
 public:
 	MetaName name;
 	Firebird::string fromUtf8;
-	MetaName* plugin;
-	MetaName* db;
-	MetaName* fromType;
-	IntlString* from;
-	MetaName* to;
-	Firebird::string* comment;
+	MetaName* plugin = nullptr;
+	MetaName* db = nullptr;
+	MetaName* fromType = nullptr;
+	IntlString* from = nullptr;
+	MetaName* to = nullptr;
+	Firebird::string* comment = nullptr;
 	OP op;
-	char mode;	// * - any source, P - plugin, M - mapping, S - any serverwide plugin
-	bool global;
-	bool role;
+	char mode = '#';	// * - any source, P - plugin, M - mapping, S - any serverwide plugin
+	bool global = false;
+	bool role = false;
+	bool silentDrop = false;
 };
 
 
@@ -2152,6 +2150,7 @@ protected:
 
 public:
 	MetaName name;
+	bool silent = false;
 };
 
 

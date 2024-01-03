@@ -4335,7 +4335,7 @@ void DropCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_DROP_COLLATION,
 			name, NULL);
 	}
-	else
+	else if (!silent)
 		status_exception::raise(Arg::Gds(isc_dyn_collation_not_found) << Arg::Str(name));
 
 	savePoint.release();	// everything is ok
@@ -5406,7 +5406,7 @@ void DropDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_DROP_DOMAIN,
 			name, NULL);
 	}
-	else
+	else if (!silent)
 	{
 		// msg 89: "Domain not found"
 		status_exception::raise(Arg::PrivateDyn(89));
@@ -6236,7 +6236,7 @@ void RelationNode::FieldDefinition::store(thread_db* tdbb, jrd_tra* transaction)
 // done by code and system triggers. See the functional description of
 // deleteKeyConstraint function for detail.
 void RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
-	const MetaName& relationName, const MetaName& fieldName)
+	const MetaName& relationName, const MetaName& fieldName, bool silent)
 {
 	AutoCacheRequest request(tdbb, drq_l_dep_flds, DYN_REQUESTS);
 	bool found = false;
@@ -6358,7 +6358,7 @@ void RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 	}
 	END_FOR
 
-	if (!found)
+	if (!found && !silent)
 	{
 		// msg 176: "column %s does not exist in table/view %s"
 		status_exception::raise(Arg::PrivateDyn(176) << fieldName << relationName);
@@ -7828,7 +7828,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 							Arg::Gds(isc_dsql_construct_err));
 					}
 
-					deleteLocalField(tdbb, transaction, name, clause->name);
+					deleteLocalField(tdbb, transaction, name, clause->name, clause->silent);
 					break;
 				}
 
@@ -7840,8 +7840,8 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 				case Clause::TYPE_DROP_CONSTRAINT:
 				{
 					CreateDropConstraint& dropConstraint = constraints.add();
-					dropConstraint.name =
-						static_cast<const DropConstraintClause*>(i->getObject())->name;
+					dropConstraint.name = static_cast<const DropConstraintClause*>(i->getObject())->name;
+					dropConstraint.silent = static_cast<const DropConstraintClause*>(i->getObject())->silent;
 					break;
 				}
 
@@ -7933,7 +7933,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 				}
 				END_FOR
 
-				if (!found)
+				if (!found && !constraint->silent)
 				{
 					// msg 130: "CONSTRAINT %s does not exist."
 					status_exception::raise(Arg::PrivateDyn(130) << constraint->name);
@@ -9222,7 +9222,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		for (dsql_fld* relField = modifyingView->rel_fields; relField; relField = relField->fld_next)
 		{
 			if (!modifiedFields.exist(relField))
-				deleteLocalField(tdbb, transaction, name, relField->fld_name);
+				deleteLocalField(tdbb, transaction, name, relField->fld_name, false);
 		}
 	}
 
@@ -10154,7 +10154,7 @@ void DropIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_DROP_INDEX,
 			name, NULL);
 	}
-	else
+	else if (!silent)
 	{
 		// msg 48: "Index not found"
 		status_exception::raise(Arg::PrivateDyn(48));
@@ -10283,7 +10283,7 @@ void DropFilterNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScratch
 	}
 	END_FOR
 
-	if (!found)
+	if (!found && !silent)
 	{
 		// msg 37: "Blob Filter %s not found"
 		status_exception::raise(Arg::PrivateDyn(37) << name);
@@ -10990,9 +10990,13 @@ void MappingNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd
 		break;
 
 	case MAP_MOD:
-	case MAP_DROP:
 	case MAP_COMMENT:
 		if (!found)
+			(Arg::Gds(isc_map_not_exists) << name).raise();
+		break;
+
+	case MAP_DROP:
+		if (!found && !silentDrop)
 			(Arg::Gds(isc_map_not_exists) << name).raise();
 		break;
 	}
@@ -11083,7 +11087,7 @@ void DropRoleNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jr
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_DROP_ROLE,
 			name, NULL);
 	}
-	else
+	else if (!silent)
 	{
 		// msg 155: "Role %s not found"
 		status_exception::raise(Arg::PrivateDyn(155) << name);
