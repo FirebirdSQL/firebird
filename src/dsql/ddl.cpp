@@ -276,7 +276,7 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 		return;
 	}
 
-	if (modifying && field->charSet.empty() && field->collate.empty())
+	if (modifying && field->charSet.isEmpty() && field->collate.isEmpty())
 	{
 		// Use charset and collation from already existing field if any
 		const dsql_fld* afield = field->fld_next;

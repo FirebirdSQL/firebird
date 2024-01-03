@@ -258,11 +258,6 @@ public:
 		return !word;
 	}
 
-	bool empty() const
-	{
-		return !word;
-	}
-
 	bool hasData() const
 	{
 		return word;
