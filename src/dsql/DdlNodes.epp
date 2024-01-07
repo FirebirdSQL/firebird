@@ -11001,12 +11001,13 @@ void MappingNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd
 		break;
 	}
 
-	fb_assert(ddlTriggerAction > 0 || op == MAP_COMMENT);
+	fb_assert(ddlTriggerAction > 0 || op == MAP_COMMENT || (op == MAP_DROP && silentDrop));
 	if (ddlTriggerAction > 0)
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, ddlTriggerAction, name, NULL);
 
 	if (op != MAP_COMMENT)
 		DFW_post_work(transaction, dfw_clear_cache, NULL, Mapping::MAPPING_CACHE);
+
 	savePoint.release();	// everything is ok
 }
 
