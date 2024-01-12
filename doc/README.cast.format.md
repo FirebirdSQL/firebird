@@ -87,6 +87,8 @@ The following flags are currently implemented for string to datetime conversion:
 
 Dividers are the same as for datetime to string conversion and can also be omitted.
 
+Year, month and day will be taken from current date if these components are not used in pattern (this applies only to data types that contain a date component).
+
 Example:
 ```
 SELECT CAST('2000.12.08 12:35:30.5000' AS TIMESTAMP FORMAT 'YEAR.MM.DD HH24:MI:SS.FF4') FROM RDB$DATABASE;
