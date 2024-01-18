@@ -790,18 +790,20 @@ install install-embedded silent_install package packages dist:
 
 .PHONY:	tests tests_process run_tests run_tests_process
 
+log_level ?= all
+
 tests:
 	$(MAKE) TARGET?=$(DefaultTarget) tests_process
 
 tests_process: $(COMMON_TEST) $(ENGINE_TEST) $(ISQL_TEST)
 
 run_tests:
-	$(MAKE) TARGET?=$(DefaultTarget) run_tests_process
+	$(MAKE) TARGET?=$(DefaultTarget) LOG_LEVEL?=$(log_level) run_tests_process
 
 run_tests_process: tests_process
-	$(COMMON_TEST) --log_level=all
-	$(ENGINE_TEST) --log_level=all
-	$(ISQL_TEST) --log_level=all
+	$(COMMON_TEST) --log_level=$(LOG_LEVEL)
+	$(ENGINE_TEST) --log_level=$(LOG_LEVEL)
+	$(ISQL_TEST) --log_level=$(LOG_LEVEL)
 
 
 #___________________________________________________________________________
