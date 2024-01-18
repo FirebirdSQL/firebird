@@ -16,7 +16,7 @@ static void errFunc(const Firebird::Arg::StatusVector& v)
 	v.raise();
 }
 
-MockCallback cb(errFunc);
+MockCallback cb(errFunc, std::bind(mockGetLocalDate, 2023));
 
 BOOST_AUTO_TEST_SUITE(CVTDatetimeToFormatString)
 
@@ -148,9 +148,47 @@ BOOST_AUTO_TEST_CASE(CVTDatetimeToFormatStringTest_DATE)
 
 BOOST_AUTO_TEST_CASE(CVTDatetimeToFormatStringTest_TIME)
 {
-	testCVTDatetimeToFormatString(createTime(0, 0, 0), "HH-HH12.HH24,MI/SS SSSSS", "12 A.M.-12 A.M..00,00/00 0", cb);
-	testCVTDatetimeToFormatString(createTime(12, 35, 15), "HH.HH12:HH24;MI-SS/SSSSS", "12 P.M..12 P.M.:12;35-15/45315", cb);
-	testCVTDatetimeToFormatString(createTime(23, 59, 59), " HH - HH12 . HH24 , MI / SS SSSSS ", " 11 P.M. - 11 P.M. . 23 , 59 / 59 86399 ", cb);
+	testCVTDatetimeToFormatString(createTime(0, 0, 0), "HH24", "00", cb);
+	testCVTDatetimeToFormatString(createTime(12, 0, 0), "HH24", "12", cb);
+	testCVTDatetimeToFormatString(createTime(23, 0, 0), "HH24", "23", cb);
+
+	testCVTDatetimeToFormatString(createTime(0, 0, 0), "HH A.M.", "12 A.M.", cb);
+	testCVTDatetimeToFormatString(createTime(0, 0, 0), "HH P.M.", "12 A.M.", cb);
+	testCVTDatetimeToFormatString(createTime(11, 0, 0), "HH A.M.", "11 A.M.", cb);
+	testCVTDatetimeToFormatString(createTime(11, 0, 0), "HH P.M.", "11 A.M.", cb);
+	testCVTDatetimeToFormatString(createTime(12, 0, 0), "HH A.M.", "12 P.M.", cb);
+	testCVTDatetimeToFormatString(createTime(12, 0, 0), "HH P.M.", "12 P.M.", cb);
+	testCVTDatetimeToFormatString(createTime(13, 0, 0), "HH A.M.", "01 P.M.", cb);
+	testCVTDatetimeToFormatString(createTime(13, 0, 0), "HH P.M.", "01 P.M.", cb);
+	testCVTDatetimeToFormatString(createTime(23, 0, 0), "HH A.M.", "11 P.M.", cb);
+	testCVTDatetimeToFormatString(createTime(23, 0, 0), "HH P.M.", "11 P.M.", cb);
+
+	testCVTDatetimeToFormatString(createTime(0, 0, 0), "HH12 A.M.", "12 A.M.", cb);
+	testCVTDatetimeToFormatString(createTime(0, 0, 0), "HH12 P.M.", "12 A.M.", cb);
+	testCVTDatetimeToFormatString(createTime(11, 0, 0), "HH12 A.M.", "11 A.M.", cb);
+	testCVTDatetimeToFormatString(createTime(11, 0, 0), "HH12 P.M.", "11 A.M.", cb);
+	testCVTDatetimeToFormatString(createTime(12, 0, 0), "HH12 A.M.", "12 P.M.", cb);
+	testCVTDatetimeToFormatString(createTime(12, 0, 0), "HH12 P.M.", "12 P.M.", cb);
+	testCVTDatetimeToFormatString(createTime(13, 0, 0), "HH12 A.M.", "01 P.M.", cb);
+	testCVTDatetimeToFormatString(createTime(13, 0, 0), "HH12 P.M.", "01 P.M.", cb);
+	testCVTDatetimeToFormatString(createTime(23, 0, 0), "HH12 A.M.", "11 P.M.", cb);
+	testCVTDatetimeToFormatString(createTime(23, 0, 0), "HH12 P.M.", "11 P.M.", cb);
+
+	testCVTDatetimeToFormatString(createTime(0, 0, 0), "MI", "00", cb);
+	testCVTDatetimeToFormatString(createTime(0, 30, 0), "MI", "30", cb);
+	testCVTDatetimeToFormatString(createTime(0, 59, 0), "MI", "59", cb);
+
+	testCVTDatetimeToFormatString(createTime(0, 0, 0), "SS", "00", cb);
+	testCVTDatetimeToFormatString(createTime(0, 0, 30), "SS", "30", cb);
+	testCVTDatetimeToFormatString(createTime(0, 0, 59), "SS", "59", cb);
+
+	testCVTDatetimeToFormatString(createTime(0, 0, 0), "SSSSS", "0", cb);
+	testCVTDatetimeToFormatString(createTime(12, 30, 15), "SSSSS", "45015", cb);
+	testCVTDatetimeToFormatString(createTime(23, 59, 59), "SSSSS", "86399", cb);
+
+	testCVTDatetimeToFormatString(createTime(0, 0, 0), "HH-HH12 A.M..HH24,MI/SS SSSSS", "12-12 A.M..00,00/00 0", cb);
+	testCVTDatetimeToFormatString(createTime(12, 35, 15), "HH.HH12 P.M.:HH24;MI-SS/SSSSS", "12.12 P.M.:12;35-15/45315", cb);
+	testCVTDatetimeToFormatString(createTime(23, 59, 59), " HH P.M. - HH12 . HH24 , MI / SS SSSSS ", " 11 P.M. - 11 . 23 , 59 / 59 86399 ", cb);
 
 	testCVTDatetimeToFormatString(createTime(0, 0, 0, 1), "FF1.FF2/FF3;FF4:FF5-FF6,FF7-FF8 FF9", "1.10/100;1000:10000-100000,1000000-10000000 100000000", cb);
 	testCVTDatetimeToFormatString(createTime(0, 0, 0, 1000), "FF1.FF2/FF3;FF4:FF5-FF6,FF7-FF8 FF9", "1.10/100;1000:10000-100000,1000000-10000000 100000000", cb);
@@ -164,12 +202,12 @@ BOOST_AUTO_TEST_CASE(CVTDatetimeToFormatStringTest_TIMESTAMP)
 	testCVTDatetimeToFormatString(timestamp, "YEAR.YYYY.YYY.YY.Y/J", "1982.1982.982.82.2/2445081", cb);
 	testCVTDatetimeToFormatString(timestamp, "Q-MM-RM-MON-MONTH", "2-04-IV-Apr-APRIL", cb);
 	testCVTDatetimeToFormatString(timestamp, "WW,W-D;DAY:DD DDD.DY", "16,3-4;WEDNESDAY:21 111.Wed", cb);
-	testCVTDatetimeToFormatString(timestamp, "HH-HH12-HH24-MI-SS-SSSSS.FF2", "01 A.M.-01 A.M.-01-34-15-5655.25", cb);
+	testCVTDatetimeToFormatString(timestamp, "HH-HH12 P.M.-HH24-MI-SS-SSSSS.FF2", "01-01 A.M.-01-34-15-5655.25", cb);
 }
 
 BOOST_AUTO_TEST_CASE(CVTDatetimeToFormatStringTest_TIME_TZ)
 {
-	testCVTDatetimeToFormatString(createTimeTZ(15, 35, 59, 0, 900), "HH-HH12-HH24-MI-SS-SSSSS.FF1/TZH/TZM", "03 P.M.-03 P.M.-15-35-59-56159.9/+00/00", cb);
+	testCVTDatetimeToFormatString(createTimeTZ(15, 35, 59, 0, 900), "HH A.M.-HH12-HH24-MI-SS-SSSSS.FF1/TZH/TZM", "03 P.M.-03-15-35-59-56159.9/+00/00", cb);
 	testCVTDatetimeToFormatString(createTimeTZ(15, 35, 59, 160), "HH24:MI-TZH:TZM", "15:35-+02:40", cb);
 	testCVTDatetimeToFormatString(createTimeTZ(15, 35, 59, -160), "HH24:MI TZH:TZM", "15:35 -02:40", cb);
 
@@ -185,7 +223,7 @@ BOOST_AUTO_TEST_CASE(CVTDatetimeToFormatStringTest_TIMESTAMP_TZ)
 	testCVTDatetimeToFormatString(timestampTZ, "YEAR.YYYY.YYY.YY.Y/J", "1982.1982.982.82.2/2445081", cb);
 	testCVTDatetimeToFormatString(timestampTZ, "Q-MM-RM-MON-MONTH", "2-04-IV-Apr-APRIL", cb);
 	testCVTDatetimeToFormatString(timestampTZ, "WW,W-D;DAY:DD DDD.DY", "16,3-4;WEDNESDAY:21 111.Wed", cb);
-	testCVTDatetimeToFormatString(timestampTZ, "HH-HH12-HH24-MI-SS-SSSSS.FF2/TZH/TZM", "01 A.M.-01 A.M.-01-34-15-5655.50/+00/00", cb);
+	testCVTDatetimeToFormatString(timestampTZ, "HH A.M.-HH12-HH24-MI-SS-SSSSS.FF2/TZH/TZM", "01 A.M.-01-01-34-15-5655.50/+00/00", cb);
 
 	testCVTDatetimeToFormatString(createTimeStampTZ(1982, 4, 21, 1, 34, 15, 70), "HH24:MI-TZH:TZM", "01:34-+01:10", cb);
 	testCVTDatetimeToFormatString(createTimeStampTZ(1982, 4, 21, 1, 34, 15, -70), "HH24:MI TZH:TZM", "01:34 -01:10", cb);
@@ -202,7 +240,7 @@ BOOST_AUTO_TEST_CASE(CVTDatetimeToFormatStringTest_SOLID_PATTERNS)
 	testCVTDatetimeToFormatString(timestampTZ, "YEARYYYYYYYYYYJ", "198219821982822445081", cb);
 	testCVTDatetimeToFormatString(timestampTZ, "QMMRMMONMONTH", "204IVAprAPRIL", cb);
 	testCVTDatetimeToFormatString(timestampTZ, "WWWD/DAYDDDDDDY", "1634/WEDNESDAY1111112", cb);
-	testCVTDatetimeToFormatString(timestampTZ, "HHHH12HH24MISSSSSSSFF2TZHTZM", "01 A.M.01 A.M.013456551550+0000", cb);
+	testCVTDatetimeToFormatString(timestampTZ, "HHHH12A.M.HH24MISSSSSSSFF2TZHTZM", "0101A.M.013456551550+0000", cb);
 }
 
 BOOST_AUTO_TEST_CASE(CVTDatetimeToFormatStringTest_RAW_TEXT)
@@ -287,33 +325,96 @@ static void testCVTStringToFormatDateTimeExpectTimeTZ(const string& date, const 
 	testCVTStringToFormatDateTime(date, format, expected, expect_sql_time_tz, cb);
 };
 
+static void testExceptionCvtStringToFormatDateTime(const string& date, const string& format, Callbacks& cb)
+{
+	string varyingString = "xx";
+	varyingString += date;
+	*(USHORT*) varyingString.data() = varyingString.size() - sizeof(USHORT);
+
+	dsc desc;
+	desc.dsc_dtype = dtype_varying;
+	desc.dsc_length = varyingString.size() + sizeof(USHORT);
+	desc.dsc_address = (UCHAR*) varyingString.data();
+	desc.dsc_scale = 0;
+
+	BOOST_TEST_INFO("INPUT: " << "\"" << date.c_str() << "\"");
+	BOOST_TEST_INFO("FORMAT: " << "\"" << format.c_str() << "\"");
+
+	BOOST_CHECK_THROW(CVT_string_to_format_datetime(&desc, format, expect_timestamp_tz, &cb), status_exception);
+}
+
 BOOST_AUTO_TEST_SUITE(FunctionalTest)
 
 BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_DATE)
 {
 	testCVTStringToFormatDateTimeExpectDate("1", "YEAR", createTimeStampTZ(1, 0, 0, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectDate("0001", "YEAR", createTimeStampTZ(1, 0, 0, 0, 0, 0, 0), cb);
 	testCVTStringToFormatDateTimeExpectDate("1234", "YEAR", createTimeStampTZ(1234, 0, 0, 0, 0, 0, 0), cb);
 	testCVTStringToFormatDateTimeExpectDate("9999", "YEAR", createTimeStampTZ(9999, 0, 0, 0, 0, 0, 0), cb);
 
 	testCVTStringToFormatDateTimeExpectDate("1", "YYYY", createTimeStampTZ(1, 0, 0, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectDate("0001", "YYYY", createTimeStampTZ(1, 0, 0, 0, 0, 0, 0), cb);
 	testCVTStringToFormatDateTimeExpectDate("1234", "YYYY", createTimeStampTZ(1234, 0, 0, 0, 0, 0, 0), cb);
 	testCVTStringToFormatDateTimeExpectDate("9999", "YYYY", createTimeStampTZ(9999, 0, 0, 0, 0, 0, 0), cb);
 
 	testCVTStringToFormatDateTimeExpectDate("1", "YYY", createTimeStampTZ(2001, 0, 0, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectDate("001", "YYY", createTimeStampTZ(2001, 0, 0, 0, 0, 0, 0), cb);
 	testCVTStringToFormatDateTimeExpectDate("522", "YYY", createTimeStampTZ(2522, 0, 0, 0, 0, 0, 0), cb);
-	testCVTStringToFormatDateTimeExpectDate("523", "YYY", createTimeStampTZ(1523, 0, 0, 0, 0, 0, 0), cb);
-	testCVTStringToFormatDateTimeExpectDate("999", "YYY", createTimeStampTZ(1999, 0, 0, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectDate("523", "YYY", createTimeStampTZ(2523, 0, 0, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectDate("999", "YYY", createTimeStampTZ(2999, 0, 0, 0, 0, 0, 0), cb);
 
 	testCVTStringToFormatDateTimeExpectDate("1", "YY", createTimeStampTZ(2001, 0, 0, 0, 0, 0, 0), cb);
-	testCVTStringToFormatDateTimeExpectDate("72", "YY", createTimeStampTZ(2072, 0, 0, 0, 0, 0, 0), cb);
-	testCVTStringToFormatDateTimeExpectDate("73", "YY", createTimeStampTZ(1973, 0, 0, 0, 0, 0, 0), cb);
-	testCVTStringToFormatDateTimeExpectDate("99", "YY", createTimeStampTZ(1999, 0, 0, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectDate("01", "YY", createTimeStampTZ(2001, 0, 0, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectDate("50", "YY", createTimeStampTZ(2050, 0, 0, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectDate("99", "YY", createTimeStampTZ(2099, 0, 0, 0, 0, 0, 0), cb);
 
-	testCVTStringToFormatDateTimeExpectDate("1", "Y", createTimeStampTZ(2001, 0, 0, 0, 0, 0, 0), cb);
-	testCVTStringToFormatDateTimeExpectDate("9", "Y", createTimeStampTZ(2009, 0, 0, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectDate("1", "Y", createTimeStampTZ(2021, 0, 0, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectDate("9", "Y", createTimeStampTZ(2029, 0, 0, 0, 0, 0, 0), cb);
+
+	{
+		// RR pattern depends on last 2 digits of current year
+		MockCallback cb_2000(errFunc, std::bind(mockGetLocalDate, 2000));
+		MockCallback cb_2049(errFunc, std::bind(mockGetLocalDate, 2049));
+		MockCallback cb_2050(errFunc, std::bind(mockGetLocalDate, 2050));
+		MockCallback cb_2099(errFunc, std::bind(mockGetLocalDate, 2099));
+
+		testCVTStringToFormatDateTimeExpectDate("1", "RR", createTimeStampTZ(2001, 0, 0, 0, 0, 0, 0), cb_2000);
+		testCVTStringToFormatDateTimeExpectDate("1", "RR", createTimeStampTZ(2001, 0, 0, 0, 0, 0, 0), cb_2049);
+		testCVTStringToFormatDateTimeExpectDate("1", "RR", createTimeStampTZ(2101, 0, 0, 0, 0, 0, 0), cb_2050);
+		testCVTStringToFormatDateTimeExpectDate("1", "RR", createTimeStampTZ(2101, 0, 0, 0, 0, 0, 0), cb_2099);
+
+		testCVTStringToFormatDateTimeExpectDate("01", "RR", createTimeStampTZ(2001, 0, 0, 0, 0, 0, 0), cb_2000);
+		testCVTStringToFormatDateTimeExpectDate("01", "RR", createTimeStampTZ(2001, 0, 0, 0, 0, 0, 0), cb_2049);
+		testCVTStringToFormatDateTimeExpectDate("01", "RR", createTimeStampTZ(2101, 0, 0, 0, 0, 0, 0), cb_2050);
+		testCVTStringToFormatDateTimeExpectDate("01", "RR", createTimeStampTZ(2101, 0, 0, 0, 0, 0, 0), cb_2099);
+
+		testCVTStringToFormatDateTimeExpectDate("49", "RR", createTimeStampTZ(2049, 0, 0, 0, 0, 0, 0), cb_2000);
+		testCVTStringToFormatDateTimeExpectDate("49", "RR", createTimeStampTZ(2049, 0, 0, 0, 0, 0, 0), cb_2049);
+		testCVTStringToFormatDateTimeExpectDate("49", "RR", createTimeStampTZ(2149, 0, 0, 0, 0, 0, 0), cb_2050);
+		testCVTStringToFormatDateTimeExpectDate("49", "RR", createTimeStampTZ(2149, 0, 0, 0, 0, 0, 0), cb_2099);
+
+		testCVTStringToFormatDateTimeExpectDate("50", "RR", createTimeStampTZ(1950, 0, 0, 0, 0, 0, 0), cb_2000);
+		testCVTStringToFormatDateTimeExpectDate("50", "RR", createTimeStampTZ(1950, 0, 0, 0, 0, 0, 0), cb_2049);
+		testCVTStringToFormatDateTimeExpectDate("50", "RR", createTimeStampTZ(2050, 0, 0, 0, 0, 0, 0), cb_2050);
+		testCVTStringToFormatDateTimeExpectDate("50", "RR", createTimeStampTZ(2050, 0, 0, 0, 0, 0, 0), cb_2099);
+
+		testCVTStringToFormatDateTimeExpectDate("99", "RR", createTimeStampTZ(1999, 0, 0, 0, 0, 0, 0), cb_2000);
+		testCVTStringToFormatDateTimeExpectDate("99", "RR", createTimeStampTZ(1999, 0, 0, 0, 0, 0, 0), cb_2049);
+		testCVTStringToFormatDateTimeExpectDate("99", "RR", createTimeStampTZ(2099, 0, 0, 0, 0, 0, 0), cb_2050);
+		testCVTStringToFormatDateTimeExpectDate("99", "RR", createTimeStampTZ(2099, 0, 0, 0, 0, 0, 0), cb_2099);
+
+		testCVTStringToFormatDateTimeExpectDate("1", "RRRR", createTimeStampTZ(2001, 0, 0, 0, 0, 0, 0), cb_2000);
+		testCVTStringToFormatDateTimeExpectDate("99", "RRRR", createTimeStampTZ(1999, 0, 0, 0, 0, 0, 0), cb_2000);
+		testCVTStringToFormatDateTimeExpectDate("0001", "RRRR", createTimeStampTZ(1, 0, 0, 0, 0, 0, 0), cb_2000);
+		testCVTStringToFormatDateTimeExpectDate("0099", "RRRR", createTimeStampTZ(99, 0, 0, 0, 0, 0, 0), cb_2000);
+		testCVTStringToFormatDateTimeExpectDate("1000", "RRRR", createTimeStampTZ(1000, 0, 0, 0, 0, 0, 0), cb_2000);
+		testCVTStringToFormatDateTimeExpectDate("9999", "RRRR", createTimeStampTZ(9999, 0, 0, 0, 0, 0, 0), cb_2000);
+	}
 
 	testCVTStringToFormatDateTimeExpectDate("1", "MM", createTimeStampTZ(0, 1, 0, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectDate("01", "MM", createTimeStampTZ(0, 1, 0, 0, 0, 0, 0), cb);
 	testCVTStringToFormatDateTimeExpectDate("6", "MM", createTimeStampTZ(0, 6, 0, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectDate("06", "MM", createTimeStampTZ(0, 6, 0, 0, 0, 0, 0), cb);
 	testCVTStringToFormatDateTimeExpectDate("12", "MM", createTimeStampTZ(0, 12, 0, 0, 0, 0, 0), cb);
 
 	testCVTStringToFormatDateTimeExpectDate("Jan", "MON", createTimeStampTZ(0, 1, 0, 0, 0, 0, 0), cb);
@@ -356,6 +457,7 @@ BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_DATE)
 	testCVTStringToFormatDateTimeExpectDate("XII",  "RM", createTimeStampTZ(0, 12, 0, 0, 0, 0, 0), cb);
 
 	testCVTStringToFormatDateTimeExpectDate("1", "DD", createTimeStampTZ(0, 0, 1, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectDate("01", "DD", createTimeStampTZ(0, 0, 1, 0, 0, 0, 0), cb);
 	testCVTStringToFormatDateTimeExpectDate("15", "DD", createTimeStampTZ(0, 0, 15, 0, 0, 0, 0), cb);
 	testCVTStringToFormatDateTimeExpectDate("31", "DD", createTimeStampTZ(0, 0, 31, 0, 0, 0, 0), cb);
 
@@ -377,35 +479,68 @@ BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_DATE)
 
 BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_TIME)
 {
-	testCVTStringToFormatDateTimeExpectTime("12 A.M.", "HH", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0), cb);
-	testCVTStringToFormatDateTimeExpectTime("1 A.M.", "HH", createTimeStampTZ(0, 0, 0, 1, 0, 0, 0), cb);
-	testCVTStringToFormatDateTimeExpectTime("11 A.M.", "HH", createTimeStampTZ(0, 0, 0, 11, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("12 A.M.", "HH A.M.", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("12 A.M.", "HH P.M.", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("1 A.M.", "HH A.M.", createTimeStampTZ(0, 0, 0, 1, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("01 A.M.", "HH A.M.", createTimeStampTZ(0, 0, 0, 1, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("1 A.M.", "HH P.M.", createTimeStampTZ(0, 0, 0, 1, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("01 A.M.", "HH P.M.", createTimeStampTZ(0, 0, 0, 1, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("11 A.M.", "HH A.M.", createTimeStampTZ(0, 0, 0, 11, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("11 A.M.", "HH P.M.", createTimeStampTZ(0, 0, 0, 11, 0, 0, 0), cb);
 
-	testCVTStringToFormatDateTimeExpectTime("12 P.M.", "HH", createTimeStampTZ(0, 0, 0, 12, 0, 0, 0), cb);
-	testCVTStringToFormatDateTimeExpectTime("1 P.M.", "HH", createTimeStampTZ(0, 0, 0, 13, 0, 0, 0), cb);
-	testCVTStringToFormatDateTimeExpectTime("11 P.M.", "HH", createTimeStampTZ(0, 0, 0, 23, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("12 P.M.", "HH A.M.", createTimeStampTZ(0, 0, 0, 12, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("12 P.M.", "HH P.M.", createTimeStampTZ(0, 0, 0, 12, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("1 P.M.", "HH A.M.", createTimeStampTZ(0, 0, 0, 13, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("01 P.M.", "HH A.M.", createTimeStampTZ(0, 0, 0, 13, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("1 P.M.", "HH P.M.", createTimeStampTZ(0, 0, 0, 13, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("01 P.M.", "HH P.M.", createTimeStampTZ(0, 0, 0, 13, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("11 P.M.", "HH A.M.", createTimeStampTZ(0, 0, 0, 23, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("11 P.M.", "HH P.M.", createTimeStampTZ(0, 0, 0, 23, 0, 0, 0), cb);
 
-	testCVTStringToFormatDateTimeExpectTime("12 A.M.", "HH12", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0), cb);
-	testCVTStringToFormatDateTimeExpectTime("1 A.M.", "HH12", createTimeStampTZ(0, 0, 0, 1, 0, 0, 0), cb);
-	testCVTStringToFormatDateTimeExpectTime("11 A.M.", "HH12", createTimeStampTZ(0, 0, 0, 11, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("12 A.M.", "HH12 A.M.", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("12 A.M.", "HH12 P.M.", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("1 A.M.", "HH12 A.M.", createTimeStampTZ(0, 0, 0, 1, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("01 A.M.", "HH12 A.M.", createTimeStampTZ(0, 0, 0, 1, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("1 A.M.", "HH12 P.M.", createTimeStampTZ(0, 0, 0, 1, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("01 A.M.", "HH12 P.M.", createTimeStampTZ(0, 0, 0, 1, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("11 A.M.", "HH12 A.M.", createTimeStampTZ(0, 0, 0, 11, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("11 A.M.", "HH12 P.M.", createTimeStampTZ(0, 0, 0, 11, 0, 0, 0), cb);
 
-	testCVTStringToFormatDateTimeExpectTime("12 P.M.", "HH12", createTimeStampTZ(0, 0, 0, 12, 0, 0, 0), cb);
-	testCVTStringToFormatDateTimeExpectTime("1 P.M.", "HH12", createTimeStampTZ(0, 0, 0, 13, 0, 0, 0), cb);
-	testCVTStringToFormatDateTimeExpectTime("11 P.M.", "HH12", createTimeStampTZ(0, 0, 0, 23, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("12 P.M.", "HH12 A.M.", createTimeStampTZ(0, 0, 0, 12, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("12 P.M.", "HH12 P.M.", createTimeStampTZ(0, 0, 0, 12, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("1 P.M.", "HH12 A.M.", createTimeStampTZ(0, 0, 0, 13, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("01 P.M.", "HH12 A.M.", createTimeStampTZ(0, 0, 0, 13, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("1 P.M.", "HH12 P.M.", createTimeStampTZ(0, 0, 0, 13, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("01 P.M.", "HH12 P.M.", createTimeStampTZ(0, 0, 0, 13, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("11 P.M.", "HH12 A.M.", createTimeStampTZ(0, 0, 0, 23, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("11 P.M.", "HH12 P.M.", createTimeStampTZ(0, 0, 0, 23, 0, 0, 0), cb);
+
+	testCVTStringToFormatDateTimeExpectTime("A.M. 12", "A.M. HH", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("A.M. 1", "P.M. HH", createTimeStampTZ(0, 0, 0, 1, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("A.M. 01", "P.M. HH", createTimeStampTZ(0, 0, 0, 1, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("A.M. 11", "A.M. HH", createTimeStampTZ(0, 0, 0, 11, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("P.M. 12", "A.M. HH", createTimeStampTZ(0, 0, 0, 12, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("P.M. 1", "P.M. HH", createTimeStampTZ(0, 0, 0, 13, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("P.M. 01", "P.M. HH", createTimeStampTZ(0, 0, 0, 13, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("P.M. 11", "A.M. HH", createTimeStampTZ(0, 0, 0, 23, 0, 0, 0), cb);
 
 	testCVTStringToFormatDateTimeExpectTime("0", "HH24", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("00", "HH24", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0), cb);
 	testCVTStringToFormatDateTimeExpectTime("12", "HH24", createTimeStampTZ(0, 0, 0, 12, 0, 0, 0), cb);
 	testCVTStringToFormatDateTimeExpectTime("23", "HH24", createTimeStampTZ(0, 0, 0, 23, 0, 0, 0), cb);
 
 	testCVTStringToFormatDateTimeExpectTime("0", "MI", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("00", "MI", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0), cb);
 	testCVTStringToFormatDateTimeExpectTime("30", "MI", createTimeStampTZ(0, 0, 0, 0, 30, 0, 0), cb);
 	testCVTStringToFormatDateTimeExpectTime("59", "MI", createTimeStampTZ(0, 0, 0, 0, 59, 0, 0), cb);
 
 	testCVTStringToFormatDateTimeExpectTime("0", "SS", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("00", "SS", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0), cb);
 	testCVTStringToFormatDateTimeExpectTime("30", "SS", createTimeStampTZ(0, 0, 0, 0, 0, 30, 0), cb);
 	testCVTStringToFormatDateTimeExpectTime("59", "SS", createTimeStampTZ(0, 0, 0, 0, 0, 59, 0), cb);
 
 	testCVTStringToFormatDateTimeExpectTime("0", "SSSSS", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTime("00000", "SSSSS", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0), cb);
 	testCVTStringToFormatDateTimeExpectTime("45315", "SSSSS", createTimeStampTZ(0, 0, 0, 12, 35, 15, 0), cb);
 	testCVTStringToFormatDateTimeExpectTime("86399", "SSSSS", createTimeStampTZ(0, 0, 0, 23, 59, 59, 0), cb);
 
@@ -431,7 +566,7 @@ BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_TIME)
 	testCVTStringToFormatDateTimeExpectTime("5000", "FF4", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 5000), cb);
 	testCVTStringToFormatDateTimeExpectTime("9999", "FF4", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 9999), cb);
 
-	testCVTStringToFormatDateTimeExpectTime("1 P.M. - 25 - 45 - 200", "HH.MI.SS.FF4", createTimeStampTZ(0, 0, 0, 13, 25, 45, 0, 200), cb);
+	testCVTStringToFormatDateTimeExpectTime("1 P.M. - 25 - 45 - 200", "HH P.M. MI.SS.FF4", createTimeStampTZ(0, 0, 0, 13, 25, 45, 0, 200), cb);
 	testCVTStringToFormatDateTimeExpectTime("15:0:15:2", "HH24.MI.SS.FF1", createTimeStampTZ(0, 0, 0, 15, 0, 15, 0, 2000), cb);
 }
 
@@ -446,8 +581,36 @@ BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_TZ)
 
 BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_SOLID_PATTERNS)
 {
-	testCVTStringToFormatDateTimeExpectTime("1 P.M. - 25 - 45 - 200", "HHMISSFF4", createTimeStampTZ(0, 0, 0, 13, 25, 45, 0, 200), cb);
+	testCVTStringToFormatDateTimeExpectTime("1 P.M. - 25 - 45 - 200", "HHA.M.MISSFF4", createTimeStampTZ(0, 0, 0, 13, 25, 45, 0, 200), cb);
 	testCVTStringToFormatDateTimeExpectDate("1981-8/13", "YEARMMDD", createTimeStampTZ(1981, 8, 13, 0, 0, 0, 0), cb);
+}
+
+BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_EXCEPTION_CHECK)
+{
+	testExceptionCvtStringToFormatDateTime("2000.12.11", "WRONG FORMAT", cb);
+	testExceptionCvtStringToFormatDateTime("2000.12.11", "YYYY.MM.DD SS", cb);
+	testExceptionCvtStringToFormatDateTime("2000.12", "YYYY.MM.DD", cb);
+
+	testExceptionCvtStringToFormatDateTime("1 A.G.", "HH12 A.M.", cb);
+	testExceptionCvtStringToFormatDateTime("1 A.G.", "HH12 A.P.", cb);
+
+	testExceptionCvtStringToFormatDateTime("24 12 A.M.", "HH24 HH12 P.M.", cb);
+	testExceptionCvtStringToFormatDateTime("24 12", "HH24 HH12", cb);
+	testExceptionCvtStringToFormatDateTime("24 A.M.", "HH24 P.M.", cb);
+	testExceptionCvtStringToFormatDateTime("12", "HH12", cb);
+	testExceptionCvtStringToFormatDateTime("A.M.", "P.M.", cb);
+	testExceptionCvtStringToFormatDateTime("P.M.", "A.M.", cb);
+
+	testExceptionCvtStringToFormatDateTime("1 1 A.M.", "SSSSS HH12 A.M.", cb);
+	testExceptionCvtStringToFormatDateTime("1 1 A.M.", "SSSSS HH12 P.M.", cb);
+	testExceptionCvtStringToFormatDateTime("1 1 A.M.", "SSSSS HH A.M.", cb);
+	testExceptionCvtStringToFormatDateTime("1 1 A.M.", "SSSSS HH P.M.", cb);
+	testExceptionCvtStringToFormatDateTime("1 1",      "SSSSS HH24", cb);
+	testExceptionCvtStringToFormatDateTime("1 1",      "SSSSS MI", cb);
+	testExceptionCvtStringToFormatDateTime("1 1",      "SSSSS SS", cb);
+
+	testExceptionCvtStringToFormatDateTime("30 1", "TZM SS", cb);
+	testExceptionCvtStringToFormatDateTime("30", "TZM", cb);
 }
 
 BOOST_AUTO_TEST_SUITE_END()	// FunctionalTest

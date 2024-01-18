@@ -29,11 +29,11 @@ static constexpr int sign(T value)
 	return (value >= T(0)) ? 1 : -1;
 }
 
-static ISC_DATE mockGetLocalDate()
+static ISC_DATE mockGetLocalDate(int year = 2023)
 {
 	struct tm time;
 	memset(&time, 0, sizeof(time));
-	time.tm_year = 2023 - 1900;
+	time.tm_year = year - 1900;
 	time.tm_mon = 0;
 	time.tm_mday = 1;
 	return NoThrowTimeStamp::encode_date(&time);
@@ -105,7 +105,8 @@ static ISC_TIME_TZ createTimeTZ(int hours, int minutes, int seconds, int offsetI
 class MockCallback : public Firebird::Callbacks
 {
 public:
-	explicit MockCallback(ErrorFunction aErr) : Callbacks(aErr)
+	explicit MockCallback(ErrorFunction aErr, std::function<SLONG()> mockGetLocalDateFunc)
+		: Callbacks(aErr), m_mockGetLocalDateFunc(mockGetLocalDateFunc)
 	{}
 
 public:
@@ -118,12 +119,15 @@ public:
 
 	SLONG getLocalDate() override
 	{
-		return mockGetLocalDate();
+		return m_mockGetLocalDateFunc();
 	}
 
 	ISC_TIMESTAMP getCurrentGmtTimeStamp() override { ISC_TIMESTAMP ts; return ts; }
 	USHORT getSessionTimeZone() override { return 1439; } // 1439 is ONE_DAY, so we have no offset
 	void isVersion4(bool& v4) override { }
+
+private:
+	std::function<SLONG()> m_mockGetLocalDateFunc;
 };
 
 
