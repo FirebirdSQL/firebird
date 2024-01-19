@@ -4384,7 +4384,6 @@ static processing_state show_functions(const SCHAR* funcname, bool quoted, bool 
 
 	processing_state return_state = OBJECT_NOT_FOUND;
 
-	bool first = true;
 	MetaString package, function;
 	if (quoted)
 		function = funcname;
@@ -4392,8 +4391,7 @@ static processing_state show_functions(const SCHAR* funcname, bool quoted, bool 
 		parse_package(funcname, package, function);
 
 	FOR FUN IN RDB$FUNCTIONS
-		WITH FUN.RDB$SYSTEM_FLAG EQ systemFlag
-			AND FUN.RDB$FUNCTION_NAME EQ function.c_str()
+		WITH FUN.RDB$FUNCTION_NAME EQ function.c_str()
 			AND FUN.RDB$PACKAGE_NAME EQUIV NULLIF(package.c_str(), '')
 
 		if (!FUN.RDB$MODULE_NAME.NULL)
