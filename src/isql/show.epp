@@ -99,8 +99,7 @@ static processing_state show_dialect();
 static processing_state show_domains(const SCHAR*);
 static processing_state show_exceptions(const SCHAR*);
 static processing_state show_filters(const SCHAR*);
-static processing_state show_functions(const SCHAR*, bool);
-static processing_state show_sys_functions(const char* msg);
+static processing_state show_functions(const SCHAR* funcname, bool quoted, bool system, const SCHAR* msg = nullptr);
 static processing_state show_func_legacy(const MetaString&);
 static processing_state show_func(const MetaString&, const MetaString&);
 static processing_state show_generators(const SCHAR*);
@@ -2303,7 +2302,7 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 				break;
 
 			case ShowOptions::function:
-				show_sys_functions(NULL);
+				show_functions(nullptr, false, true);
 				break;
 
 			case ShowOptions::table:
@@ -2337,7 +2336,7 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 			isqlGlob.printf("%s%s", msg, NEWLINE);
 			show_all_tables(1);
 			IUTILS_msg_get(MSG_FUNCTIONS, msg);
-			show_sys_functions(msg);
+			show_functions(nullptr, false, true, msg);
 			IUTILS_msg_get(MSG_PROCEDURES, msg);
 			show_proc(NULL, false, true, msg);
 			IUTILS_msg_get(MSG_PACKAGES, msg);
@@ -2442,10 +2441,10 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 		if (*cmd[2] == '"')
 		{
 			remove_delimited_double_quotes(lcmd[2]);
-			ret = show_functions(lcmd[2], true);
+			ret = show_functions(lcmd[2], true, false);
 		}
 		else
-			ret = show_functions(cmd[2], false);
+			ret = show_functions(cmd[2], false, false);
 
 		if (ret == OBJECT_NOT_FOUND)
 		{
@@ -4272,49 +4271,7 @@ static processing_state show_filters(const SCHAR* object)
 }
 
 
-static processing_state show_sys_functions(const SCHAR* msg)
-{
-/**************************************
- *
- *	s h o w _ s y s _ f u n c t i o n s
- *
- **************************************
- *
- * Functional description
- *	Show system functions.
- *
- **************************************/
-
-	bool first = true;
-
-	FOR FUN IN RDB$FUNCTIONS
-		WITH FUN.RDB$SYSTEM_FLAG EQ 1
-		SORTED BY FUN.RDB$PACKAGE_NAME, FUN.RDB$FUNCTION_NAME
-	{
-		if (first)
-		{
-			first = false;
-			if (msg)
-				isqlGlob.printf("%s%s", msg, NEWLINE);
-		}
-
-		// Strip trailing blanks
-		MetaString package(FUN.RDB$PACKAGE_NAME);
-		MetaString function(FUN.RDB$FUNCTION_NAME);
-
-		isqlGlob.printf("%s%s%s%s", package.c_str(), package.hasData() ? "." : "", function.c_str(), NEWLINE);
-	}
-	END_FOR
-	ON_ERROR
-		ISQL_errmsg(fbStatus);
-		return ps_ERR;
-	END_ERROR;
-
-	return SKIP;
-}
-
-
-static processing_state show_functions(const SCHAR* funcname, bool quoted)
+static processing_state show_functions(const SCHAR* funcname, bool quoted, bool system, const SCHAR* msg)
 {
 /**************************************
  *
@@ -4327,8 +4284,9 @@ static processing_state show_functions(const SCHAR* funcname, bool quoted)
  *
  **************************************/
 
-	// If no function name was given, just list the functions
+	int systemFlag = system ? 1 : 0;
 
+	// If no function name was given, just list the functions
 	if (!funcname || !strlen(funcname))
 	{
 		bool first = true;
@@ -4337,9 +4295,15 @@ static processing_state show_functions(const SCHAR* funcname, bool quoted)
 		// gets all the dependencies if any
 
 		FOR FUN IN RDB$FUNCTIONS
+			WITH FUN.RDB$SYSTEM_FLAG EQ systemFlag
 			SORTED BY FUN.RDB$PACKAGE_NAME, FUN.RDB$FUNCTION_NAME
 		{
-			first = false;
+			if (first)
+			{
+				first = false;
+				if (msg)
+					isqlGlob.printf("%s%s", msg, NEWLINE);
+			}
 
 			MetaString package(FUN.RDB$PACKAGE_NAME);
 			MetaString function(FUN.RDB$FUNCTION_NAME);
@@ -4400,7 +4364,8 @@ static processing_state show_functions(const SCHAR* funcname, bool quoted)
 		parse_package(funcname, package, function);
 
 	FOR FUN IN RDB$FUNCTIONS
-		WITH FUN.RDB$FUNCTION_NAME EQ function.c_str()
+		WITH FUN.RDB$SYSTEM_FLAG EQ systemFlag
+			AND FUN.RDB$FUNCTION_NAME EQ function.c_str()
 			AND FUN.RDB$PACKAGE_NAME EQUIV NULLIF(package.c_str(), '')
 
 		if (!FUN.RDB$MODULE_NAME.NULL)
