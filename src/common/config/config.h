@@ -156,7 +156,6 @@ enum ConfigKey
 	KEY_RELAXED_ALIAS_CHECKING,
 	KEY_TRACE_CONFIG,
 	KEY_MAX_TRACELOG_SIZE,
-	KEY_FILESYSTEM_CACHE_SIZE,
 	KEY_PLUG_PROVIDERS,
 	KEY_PLUG_AUTH_SERVER,
 	KEY_PLUG_AUTH_CLIENT,
@@ -261,7 +260,6 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_BOOLEAN,	"RelaxedAliasChecking",		true,	false},		// if true relax strict alias checking rules in DSQL a bit
 	{TYPE_STRING,	"AuditTraceConfigFile",		true,	""},		// location of audit trace configuration file
 	{TYPE_INTEGER,	"MaxUserTraceLogSize",		true,	10},		// maximum size of user session trace log
-	{TYPE_INTEGER,	"FileSystemCacheSize",		true,	0},			// percent
 	{TYPE_STRING,	"Providers",				false,	"Remote, " CURRENT_ENGINE ", Loopback"},
 	{TYPE_STRING,	"AuthServer",				false,	"Srp256"},
 #ifdef WIN_NT
@@ -575,8 +573,6 @@ public:
 	CONFIG_GET_PER_DB_INT(getDatabaseGrowthIncrement, KEY_DATABASE_GROWTH_INCREMENT);
 
 	CONFIG_GET_PER_DB_INT(getFileSystemCacheThreshold, KEY_FILESYSTEM_CACHE_THRESHOLD);
-
-	CONFIG_GET_GLOBAL_KEY(FB_UINT64, getFileSystemCacheSize, KEY_FILESYSTEM_CACHE_SIZE, getInt);
 
 	CONFIG_GET_GLOBAL_BOOL(getRelaxedAliasChecking, KEY_RELAXED_ALIAS_CHECKING);
 

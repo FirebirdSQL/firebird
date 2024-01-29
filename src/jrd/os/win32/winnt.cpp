@@ -109,14 +109,6 @@ static bool	maybeCloseFile(HANDLE&);
 static jrd_file* seek_file(jrd_file*, BufferDesc*, OVERLAPPED*);
 static jrd_file* setup_file(Database*, const Firebird::PathName&, HANDLE, bool, bool);
 static bool nt_error(const TEXT*, const jrd_file*, ISC_STATUS, FbStatusVector* const);
-static void adjustFileSystemCacheSize();
-
-struct AdjustFsCache
-{
-	static void init() { adjustFileSystemCacheSize(); }
-};
-
-static InitMutex<AdjustFsCache> adjustFsCacheOnce("AdjustFsCacheOnce");
 
 inline static DWORD getShareFlags(const bool shared_access, bool temporary = false)
 {
@@ -192,8 +184,6 @@ jrd_file* PIO_create(thread_db* tdbb, const Firebird::PathName& string,
  *	Create a new database file.
  *
  **************************************/
-	adjustFsCacheOnce.init();
-
 	Database* const dbb = tdbb->getDatabase();
 
 	const TEXT* file_name = string.c_str();
@@ -514,8 +504,6 @@ jrd_file* PIO_open(thread_db* tdbb,
 	const TEXT* const ptr = (string.hasData() ? string : file_name).c_str();
 	bool readOnly = false;
 	const bool shareMode = dbb->dbb_config->getServerMode() != MODE_SUPER;
-
-	adjustFsCacheOnce.init();
 
 	HANDLE desc = CreateFile(ptr,
 					  GENERIC_READ | GENERIC_WRITE,
@@ -953,160 +941,4 @@ static bool nt_error(const TEXT* string,
 	iscLogStatus(NULL, status_vector);
 
 	return false;
-}
-
-// These are defined in Windows Server 2008 SDK
-#ifndef FILE_CACHE_FLAGS_DEFINED
-#define FILE_CACHE_MAX_HARD_ENABLE      0x00000001
-#define FILE_CACHE_MAX_HARD_DISABLE     0x00000002
-#define FILE_CACHE_MIN_HARD_ENABLE      0x00000004
-#define FILE_CACHE_MIN_HARD_DISABLE     0x00000008
-#endif // FILE_CACHE_FLAGS_DEFINED
-
-BOOL SetPrivilege(
-	HANDLE hToken,			// access token handle
-	LPCTSTR lpszPrivilege,	// name of privilege to enable/disable
-	BOOL bEnablePrivilege)	// to enable or disable privilege
-{
-	TOKEN_PRIVILEGES tp;
-	LUID luid;
-
-	if (!LookupPrivilegeValue(
-			NULL,			// lookup privilege on local system
-			lpszPrivilege,	// privilege to lookup
-			&luid))			// receives LUID of privilege
-	{
-		// gds__log("LookupPrivilegeValue error: %u", GetLastError() );
-		return FALSE;
-	}
-
-	tp.PrivilegeCount = 1;
-	tp.Privileges[0].Luid = luid;
-	if (bEnablePrivilege)
-		tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
-	else
-		tp.Privileges[0].Attributes = 0;
-
-	// Enable or disable the privilege
-
-	if (!AdjustTokenPrivileges(hToken, FALSE, &tp, sizeof(TOKEN_PRIVILEGES),
-			(PTOKEN_PRIVILEGES) NULL, (PDWORD) NULL))
-	{
-		//gds__log("AdjustTokenPrivileges error: %u", GetLastError() );
-		return FALSE;
-	}
-
-	if (GetLastError() == ERROR_NOT_ALL_ASSIGNED)
-	{
-		//gds__log("The token does not have the specified privilege");
-		return FALSE;
-	}
-
-	return TRUE;
-}
-
-static void adjustFileSystemCacheSize()
-{
-	int percent = Config::getFileSystemCacheSize();
-
-	// firebird.conf asks to do nothing
-	if (percent == 0)
-		return;
-
-	// Ensure that the setting has a sensible value
-	if (percent > 95 || percent < 10)
-	{
-		gds__log("Incorrect FileSystemCacheSize setting %d. Using default (30 percent).", percent);
-		percent = 30;
-	}
-
-	HMODULE hmodKernel32 = GetModuleHandle("kernel32.dll");
-
-	// This one requires 64-bit XP or Windows Server 2003 SP1
-	typedef BOOL (WINAPI *PFnSetSystemFileCacheSize)(SIZE_T, SIZE_T, DWORD);
-
-	typedef BOOL (WINAPI *PFnGetSystemFileCacheSize)(PSIZE_T, PSIZE_T, PDWORD);
-
-	// This one needs any NT, but load it dynamically anyways just in case
-	typedef BOOL (WINAPI *PFnGlobalMemoryStatusEx)(LPMEMORYSTATUSEX);
-
-	PFnSetSystemFileCacheSize pfnSetSystemFileCacheSize =
-		(PFnSetSystemFileCacheSize) GetProcAddress(hmodKernel32, "SetSystemFileCacheSize");
-	PFnGetSystemFileCacheSize pfnGetSystemFileCacheSize =
-		(PFnGetSystemFileCacheSize) GetProcAddress(hmodKernel32, "GetSystemFileCacheSize");
-	PFnGlobalMemoryStatusEx pfnGlobalMemoryStatusEx =
-		(PFnGlobalMemoryStatusEx) GetProcAddress(hmodKernel32, "GlobalMemoryStatusEx");
-
-	// If we got too old OS and functions are not there - do not bother
-	if (!pfnGetSystemFileCacheSize || !pfnSetSystemFileCacheSize || !pfnGlobalMemoryStatusEx)
-		return;
-
-	MEMORYSTATUSEX msex;
-	msex.dwLength = sizeof(msex);
-
-	// This should work
-	if (!pfnGlobalMemoryStatusEx(&msex))
-		system_call_failed::raise("GlobalMemoryStatusEx", GetLastError());
-
-	SIZE_T origMinimumFileCacheSize, origMaximumFileCacheSize;
-	DWORD origFlags;
-
-	BOOL result = pfnGetSystemFileCacheSize(&origMinimumFileCacheSize,
-		&origMaximumFileCacheSize, &origFlags);
-
-	if (!result)
-	{
-		const DWORD error = GetLastError();
-#ifndef _WIN64
-		// This error is returned on 64-bit Windows when the file cache size
-		// overflows the ULONG limit restricted by the 32-bit Windows API.
-		// Let's avoid writing it into the log as it's not a critical failure.
-		if (error != ERROR_ARITHMETIC_OVERFLOW)
-#endif
-		gds__log("GetSystemFileCacheSize error %d", error);
-		return;
-	}
-
-	// Somebody has already configured maximum cache size limit
-	// Hope it is a sensible one - do not bother to adjust it
-	if ((origFlags & FILE_CACHE_MAX_HARD_ENABLE) != 0)
-		return;
-
-	DWORDLONG maxMem = (msex.ullTotalPhys / 100) * percent;
-
-#ifndef _WIN64
-	// If we are trying to set the limit so high that it doesn't fit
-	// in 32-bit API - leave settings alone and write a message to log file
-	if (maxMem > (SIZE_T)(-2))
-	{
-		gds__log("Could not use 32-bit SetSystemFileCacheSize API to set cache size limit to %I64d."
-				" Please use 64-bit engine or configure cache size limit externally", maxMem);
-		return;
-	}
-#endif
-
-	HANDLE hToken;
-	if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES, &hToken))
-	{
-		gds__log("OpenProcessToken error %d", GetLastError());
-		return;
-	}
-
-	if (SetPrivilege(hToken, "SeIncreaseQuotaPrivilege", TRUE))
-	{
-		result = pfnSetSystemFileCacheSize(0, maxMem, FILE_CACHE_MAX_HARD_ENABLE);
-		const DWORD error = GetLastError();
-		SetPrivilege(hToken, "SeIncreaseQuotaPrivilege", FALSE);
-
-		if (!result)
-		{
-			// If we do not have enough permissions - silently ignore the error
-			gds__log("SetSystemFileCacheSize error %d. "
-				"The engine will continue to operate, but the system "
-				"performance may degrade significantly when working with "
-				"large databases", error);
-		}
-	}
-
-	CloseHandle(hToken);
 }
