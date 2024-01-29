@@ -4384,6 +4384,7 @@ bool get_function(BurpGlobals* tdgbl)
 			X.RDB$OWNER_NAME.NULL = TRUE;
 			X.RDB$MODULE_NAME.NULL = TRUE;
 			X.RDB$ENTRYPOINT.NULL = TRUE;
+			X.RDB$RETURN_ARGUMENT.NULL = TRUE;
 
 			X.RDB$SYSTEM_FLAG.NULL = FALSE;
 			X.RDB$SYSTEM_FLAG = 0;
@@ -4440,6 +4441,7 @@ bool get_function(BurpGlobals* tdgbl)
 					break;
 
 				case att_function_return_arg:
+					X.RDB$RETURN_ARGUMENT.NULL = FALSE;
 					X.RDB$RETURN_ARGUMENT = (USHORT) get_int32(tdgbl);
 					break;
 
@@ -4599,6 +4601,7 @@ bool get_function(BurpGlobals* tdgbl)
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_function_req_handle1)
 			X IN RDB$FUNCTIONS
+			X.RDB$RETURN_ARGUMENT.NULL = TRUE;
 			X.RDB$SYSTEM_FLAG = 0;
 			X.RDB$SYSTEM_FLAG.NULL = FALSE;
 			X.RDB$DESCRIPTION.NULL = TRUE;
@@ -4634,6 +4637,7 @@ bool get_function(BurpGlobals* tdgbl)
 					break;
 
 				case att_function_return_arg:
+					X.RDB$RETURN_ARGUMENT.NULL = FALSE;
 					X.RDB$RETURN_ARGUMENT = (USHORT) get_int32(tdgbl);
 					break;
 
@@ -4851,6 +4855,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_function_arg_req_handle1)
 			X IN RDB$FUNCTION_ARGUMENTS
+			X.RDB$ARGUMENT_POSITION.NULL = TRUE;
 			X.RDB$FIELD_SUB_TYPE.NULL = TRUE;
 			X.RDB$CHARACTER_SET_ID.NULL = TRUE;
 			X.RDB$FIELD_PRECISION.NULL = TRUE;
@@ -4894,6 +4899,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 					break;
 
 				case att_functionarg_position:
+					X.RDB$ARGUMENT_POSITION.NULL = FALSE;
 					X.RDB$ARGUMENT_POSITION = (USHORT) get_int32(tdgbl);
 					break;
 
@@ -5061,6 +5067,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_function_arg_req_handle1)
 			X IN RDB$FUNCTION_ARGUMENTS
+			X.RDB$ARGUMENT_POSITION.NULL = TRUE;
 			X.RDB$FIELD_SUB_TYPE.NULL = TRUE;
 			X.RDB$CHARACTER_SET_ID.NULL = TRUE;
 			X.RDB$FIELD_PRECISION.NULL  = TRUE;
@@ -5078,6 +5085,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 					break;
 
 				case att_functionarg_position:
+					X.RDB$ARGUMENT_POSITION.NULL = FALSE;
 					X.RDB$ARGUMENT_POSITION = (USHORT) get_int32(tdgbl);
 					break;
 
@@ -5175,6 +5183,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_function_arg_req_handle1)
 			X IN RDB$FUNCTION_ARGUMENTS
+			X.RDB$ARGUMENT_POSITION.NULL = TRUE;
 			X.RDB$FIELD_SUB_TYPE.NULL = TRUE;
 			X.RDB$CHARACTER_SET_ID.NULL = TRUE;
 
@@ -5191,6 +5200,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 					break;
 
 				case att_functionarg_position:
+					X.RDB$ARGUMENT_POSITION.NULL = FALSE;
 					X.RDB$ARGUMENT_POSITION = (USHORT) get_int32(tdgbl);
 					break;
 

@@ -152,7 +152,6 @@ enum ConfigKey
 	KEY_GC_POLICY,
 	KEY_REDIRECTION,
 	KEY_DATABASE_GROWTH_INCREMENT,
-	KEY_RELAXED_ALIAS_CHECKING,
 	KEY_TRACE_CONFIG,
 	KEY_MAX_TRACELOG_SIZE,
 	KEY_FILESYSTEM_CACHE_SIZE,
@@ -256,7 +255,6 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_STRING,	"GCPolicy",					false,	nullptr},	// garbage collection policy
 	{TYPE_BOOLEAN,	"Redirection",				true,	false},
 	{TYPE_INTEGER,	"DatabaseGrowthIncrement",	false,	128 * 1048576},	// bytes
-	{TYPE_BOOLEAN,	"RelaxedAliasChecking",		true,	false},		// if true relax strict alias checking rules in DSQL a bit
 	{TYPE_STRING,	"AuditTraceConfigFile",		true,	""},		// location of audit trace configuration file
 	{TYPE_INTEGER,	"MaxUserTraceLogSize",		true,	10},		// maximum size of user session trace log
 	{TYPE_INTEGER,	"FileSystemCacheSize",		true,	0},			// percent
@@ -573,8 +571,6 @@ public:
 	CONFIG_GET_PER_DB_INT(getDatabaseGrowthIncrement, KEY_DATABASE_GROWTH_INCREMENT);
 
 	CONFIG_GET_GLOBAL_KEY(FB_UINT64, getFileSystemCacheSize, KEY_FILESYSTEM_CACHE_SIZE, getInt);
-
-	CONFIG_GET_GLOBAL_BOOL(getRelaxedAliasChecking, KEY_RELAXED_ALIAS_CHECKING);
 
 	CONFIG_GET_GLOBAL_STR(getAuditTraceConfigFile, KEY_TRACE_CONFIG);
 

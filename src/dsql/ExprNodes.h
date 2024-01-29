@@ -829,7 +829,7 @@ public:
 
 private:
 	static dsql_fld* resolveContext(DsqlCompilerScratch* dsqlScratch,
-		const MetaName& qualifier, dsql_ctx* context, bool resolveByAlias);
+		const MetaName& qualifier, dsql_ctx* context);
 
 public:
 	MetaName dsqlQualifier;
