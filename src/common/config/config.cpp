@@ -415,8 +415,6 @@ void Config::checkValues()
 			values[KEY_SERVER_MODE] = defaults[KEY_SERVER_MODE];
 	}
 
-	checkIntForLoBound(KEY_FILESYSTEM_CACHE_THRESHOLD, 0, true);
-
 	checkIntForLoBound(KEY_SNAPSHOTS_MEM_SIZE, 1, true);
 	checkIntForHiBound(KEY_SNAPSHOTS_MEM_SIZE, MAX_ULONG, true);
 
@@ -724,12 +722,6 @@ int Config::getWireCrypt(WireCryptMode wcMode) const
 	}
 
 	return wcMode == WC_CLIENT ? WIRE_CRYPT_ENABLED : WIRE_CRYPT_REQUIRED;
-}
-
-bool Config::getUseFileSystemCache(bool* pPresent) const
-{
-	DECLARE_PER_DB_KEY(KEY_USE_FILESYSTEM_CACHE);
-	return getBool(key, pPresent);
 }
 
 
