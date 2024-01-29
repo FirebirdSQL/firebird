@@ -2839,7 +2839,10 @@ void write_functions()
 			BURP_verbose (147, temp);
 			// msg 147 writing function %.*s
 			put_source_blob (att_function_description2, att_function_description, X.RDB$DESCRIPTION);
-			put_int32 (att_function_return_arg, X.RDB$RETURN_ARGUMENT);
+
+			if (!X.RDB$RETURN_ARGUMENT.NULL)
+				put_int32 (att_function_return_arg, X.RDB$RETURN_ARGUMENT);
+
 			put_int32 (att_function_type, X.RDB$FUNCTION_TYPE);
 			PUT_TEXT (att_function_query_name, X.RDB$QUERY_NAME);
 
@@ -2893,7 +2896,10 @@ void write_functions()
 			put_source_blob (att_function_description2, att_function_description, X.RDB$DESCRIPTION);
 			PUT_TEXT (att_function_module_name, X.RDB$MODULE_NAME);
 			PUT_TEXT (att_function_entrypoint, X.RDB$ENTRYPOINT);
-			put_int32 (att_function_return_arg, X.RDB$RETURN_ARGUMENT);
+
+			if (!X.RDB$RETURN_ARGUMENT.NULL)
+				put_int32 (att_function_return_arg, X.RDB$RETURN_ARGUMENT);
+
 			put_int32 (att_function_type, X.RDB$FUNCTION_TYPE);
 			PUT_TEXT (att_function_query_name, X.RDB$QUERY_NAME);
 			put(tdgbl, att_end);
@@ -2955,7 +2961,9 @@ void write_function_args(const GDS_NAME package, GDS_NAME funcptr)
 			BURP_verbose (141, temp);
 			// msg 141 writing argument for function %s
 
-			put_int32 (att_functionarg_position, X.RDB$ARGUMENT_POSITION);
+			if (!X.RDB$ARGUMENT_POSITION.NULL)
+				put_int32 (att_functionarg_position, X.RDB$ARGUMENT_POSITION);
+
 			put_int32 (att_functionarg_passing_mechanism, X.RDB$MECHANISM);
 			put_int32 (att_functionarg_field_type, X.RDB$FIELD_TYPE);
 			put_int32 (att_functionarg_field_scale, X.RDB$FIELD_SCALE);
@@ -3006,7 +3014,10 @@ void write_function_args(const GDS_NAME package, GDS_NAME funcptr)
 			MISC_terminate (X.RDB$FUNCTION_NAME, temp, l, sizeof(temp));
 			BURP_verbose (141, temp);
 			// msg 141 writing argument for function %s
-			put_int32 (att_functionarg_position, X.RDB$ARGUMENT_POSITION);
+
+			if (!X.RDB$ARGUMENT_POSITION.NULL)
+				put_int32 (att_functionarg_position, X.RDB$ARGUMENT_POSITION);
+
 			put_int32 (att_functionarg_passing_mechanism, X.RDB$MECHANISM);
 			put_int32 (att_functionarg_field_type, X.RDB$FIELD_TYPE);
 			put_int32 (att_functionarg_field_scale, X.RDB$FIELD_SCALE);
@@ -3034,7 +3045,10 @@ void write_function_args(const GDS_NAME package, GDS_NAME funcptr)
 			MISC_terminate (X.RDB$FUNCTION_NAME, temp, l, sizeof(temp));
 			BURP_verbose (141, temp);
 			// msg 141 writing argument for function %s
-			put_int32 (att_functionarg_position, X.RDB$ARGUMENT_POSITION);
+
+			if (!X.RDB$ARGUMENT_POSITION.NULL)
+				put_int32 (att_functionarg_position, X.RDB$ARGUMENT_POSITION);
+
 			put_int32 (att_functionarg_passing_mechanism, X.RDB$MECHANISM);
 			put_int32 (att_functionarg_field_type, X.RDB$FIELD_TYPE);
 			put_int32 (att_functionarg_field_scale, X.RDB$FIELD_SCALE);

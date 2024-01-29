@@ -152,8 +152,6 @@ enum ConfigKey
 	KEY_GC_POLICY,
 	KEY_REDIRECTION,
 	KEY_DATABASE_GROWTH_INCREMENT,
-	KEY_FILESYSTEM_CACHE_THRESHOLD,
-	KEY_RELAXED_ALIAS_CHECKING,
 	KEY_TRACE_CONFIG,
 	KEY_MAX_TRACELOG_SIZE,
 	KEY_PLUG_PROVIDERS,
@@ -256,8 +254,6 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_STRING,	"GCPolicy",					false,	nullptr},	// garbage collection policy
 	{TYPE_BOOLEAN,	"Redirection",				true,	false},
 	{TYPE_INTEGER,	"DatabaseGrowthIncrement",	false,	128 * 1048576},	// bytes
-	{TYPE_INTEGER,	"FileSystemCacheThreshold",	false,	65536},		// page buffers
-	{TYPE_BOOLEAN,	"RelaxedAliasChecking",		true,	false},		// if true relax strict alias checking rules in DSQL a bit
 	{TYPE_STRING,	"AuditTraceConfigFile",		true,	""},		// location of audit trace configuration file
 	{TYPE_INTEGER,	"MaxUserTraceLogSize",		true,	10},		// maximum size of user session trace log
 	{TYPE_STRING,	"Providers",				false,	"Remote, " CURRENT_ENGINE ", Loopback"},
@@ -572,10 +568,6 @@ public:
 
 	CONFIG_GET_PER_DB_INT(getDatabaseGrowthIncrement, KEY_DATABASE_GROWTH_INCREMENT);
 
-	CONFIG_GET_PER_DB_INT(getFileSystemCacheThreshold, KEY_FILESYSTEM_CACHE_THRESHOLD);
-
-	CONFIG_GET_GLOBAL_BOOL(getRelaxedAliasChecking, KEY_RELAXED_ALIAS_CHECKING);
-
 	CONFIG_GET_GLOBAL_STR(getAuditTraceConfigFile, KEY_TRACE_CONFIG);
 
 	CONFIG_GET_GLOBAL_KEY(FB_UINT64, getMaxUserTraceLogSize, KEY_MAX_TRACELOG_SIZE, getInt);
@@ -619,7 +611,7 @@ public:
 
 	CONFIG_GET_PER_DB_STR(getDataTypeCompatibility, KEY_DATA_TYPE_COMPATIBILITY);
 
-	bool getUseFileSystemCache(bool* pPresent = nullptr) const;
+	CONFIG_GET_PER_DB_BOOL(getUseFileSystemCache, KEY_USE_FILESYSTEM_CACHE);
 
 	CONFIG_GET_PER_DB_KEY(ULONG, getInlineSortThreshold, KEY_INLINE_SORT_THRESHOLD, getInt);
 

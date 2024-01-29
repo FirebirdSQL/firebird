@@ -389,3 +389,19 @@ Firebird 5.0
 	TIMEZONE_NAME
 	UNICODE_CHAR
 	UNICODE_VAL
+
+Firebird 6.0
+------------
+
+  Added as reserved words:
+
+	CALL
+
+  Added as non-reserved words:
+
+    ANY_VALUE
+	FORMAT
+
+  Moved from reserved words to non-reserved:
+
+	OWNER

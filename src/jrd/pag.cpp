@@ -1147,7 +1147,9 @@ void PAG_header(thread_db* tdbb, bool info)
 	dbb->dbb_creation_date.utc_timestamp = *(ISC_TIMESTAMP*) header->hdr_creation_date;
 	dbb->dbb_creation_date.time_zone = TimeZoneUtil::GMT_ZONE;
 
-	if (header->hdr_flags & hdr_read_only)
+	const bool readOnly = header->hdr_flags & hdr_read_only;
+
+	if (readOnly)
 	{
 		// If Header Page flag says the database is ReadOnly, gladly accept it.
 		dbb->dbb_flags &= ~DBB_being_opened_read_only;
@@ -1155,7 +1157,7 @@ void PAG_header(thread_db* tdbb, bool info)
 	}
 
 	// If hdr_read_only is not set...
-	if (!(header->hdr_flags & hdr_read_only) && (dbb->dbb_flags & DBB_being_opened_read_only))
+	if (!readOnly && (dbb->dbb_flags & DBB_being_opened_read_only))
 	{
 		// Looks like the Header page says, it is NOT ReadOnly!! But the database
 		// file system permission gives only ReadOnly access. Punt out with
@@ -1166,34 +1168,22 @@ void PAG_header(thread_db* tdbb, bool info)
 	}
 
 
-	bool present;
-	bool useFSCache = dbb->dbb_config->getUseFileSystemCache(&present);
+	const bool useFSCache = dbb->dbb_config->getUseFileSystemCache();
+	const bool forceWrite = header->hdr_flags & hdr_force_write;
 
-	if (!present)
+	if (forceWrite || !useFSCache)
 	{
-		useFSCache = dbb->dbb_bcb->bcb_count <
-			ULONG(dbb->dbb_config->getFileSystemCacheThreshold());
-	}
-
-	if ((header->hdr_flags & hdr_force_write) || !useFSCache)
-	{
-		dbb->dbb_flags |=
-			(header->hdr_flags & hdr_force_write ? DBB_force_write : 0) |
-			(useFSCache ? 0 : DBB_no_fs_cache);
-
-		const bool forceWrite = dbb->dbb_flags & DBB_force_write;
-		const bool notUseFSCache = dbb->dbb_flags & DBB_no_fs_cache;
+		dbb->dbb_flags |= (forceWrite ? DBB_force_write : 0) |
+						  (useFSCache ? 0 : DBB_no_fs_cache);
 
 		PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 		for (jrd_file* file = pageSpace->file; file; file = file->fil_next)
 		{
-			PIO_force_write(file,
-				forceWrite && !(header->hdr_flags & hdr_read_only),
-				notUseFSCache);
+			PIO_force_write(file, forceWrite && !readOnly, !useFSCache);
 		}
 
 		if (dbb->dbb_backup_manager->getState() != Ods::hdr_nbak_normal)
-			dbb->dbb_backup_manager->setForcedWrites(forceWrite, notUseFSCache);
+			dbb->dbb_backup_manager->setForcedWrites(forceWrite, !useFSCache);
 	}
 
 	if (header->hdr_flags & hdr_no_reserve)

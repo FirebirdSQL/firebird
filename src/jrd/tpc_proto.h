@@ -57,12 +57,13 @@ public:
 	explicit TipCache(Database* dbb);
 	~TipCache();
 
-	// Attach to shared memory objects and populate process-local structures.
-	// If shared memory area did not exist - populate initial TIP by reading cache
-	// from disk.
-	// This function has no in-process synchronization, assuming caller prevents
-	// concurrent use of object being initialized.
-	void initializeTpc(thread_db *tdbb);
+	static TipCache* create(thread_db* tdbb)
+	{
+		const auto dbb = tdbb->getDatabase();
+		Firebird::AutoPtr<TipCache> tipCache(FB_NEW_POOL(*dbb->dbb_permanent) TipCache(dbb));
+		tipCache->initializeTpc(tdbb);
+		return tipCache.release();
+	}
 
 	// Disconnect from shared memory objects
 	void finalizeTpc(thread_db* tdbb);
@@ -298,6 +299,13 @@ private:
 	BlocksMemoryMap m_blocks_memory;
 
 	Firebird::SyncObject m_sync_status;
+
+	// Attach to shared memory objects and populate process-local structures.
+	// If shared memory area did not exist - populate initial TIP by reading cache
+	// from disk.
+	// This function has no in-process synchronization, assuming caller prevents
+	// concurrent use of object being initialized.
+	void initializeTpc(thread_db *tdbb);
 
 	void initTransactionsPerBlock(ULONG blockSize);
 
