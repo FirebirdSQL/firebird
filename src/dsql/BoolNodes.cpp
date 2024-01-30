@@ -46,12 +46,86 @@
 using namespace Firebird;
 using namespace Jrd;
 
-namespace Jrd {
+namespace
+{
+	// Maximum members in "IN" list. For eg. SELECT * FROM T WHERE F IN (1, 2, 3, ...)
+	// Beware: raising the limit beyond the 16-bit boundaries would be an incompatible BLR change.
+	static const unsigned MAX_MEMBER_LIST = MAX_USHORT;
 
+	// Compare two comparisons with the boolean literal of the form:
+	//   <value> { = | <> | IS [NOT] | IS [NOT] DISTINCT FROM } {TRUE | FALSE}
+	// and detect whether they're logically the same.
+	// For example: (NOT A) == (A = FALSE) == (A IS NOT TRUE) etc.
 
-// Maximum members in "IN" list. For eg. SELECT * FROM T WHERE F IN (1, 2, 3, ...)
-// Beware: raising the limit beyond the 16-bit boundaries would be an incompatible BLR change.
-static const unsigned MAX_MEMBER_LIST = MAX_USHORT;
+	bool sameBoolComparison(const ComparativeBoolNode* node1, const ComparativeBoolNode* node2, bool ignoreStreams)
+	{
+		fb_assert(node1 && node2);
+
+		if (node1->blrOp != blr_eql && node1->blrOp != blr_equiv && node1->blrOp != blr_neq)
+			return false;
+
+		if (node2->blrOp != blr_eql && node2->blrOp != blr_equiv && node2->blrOp != blr_neq)
+			return false;
+
+		bool isTrue1 = false;
+		const ValueExprNode* arg1 = nullptr;
+
+		if (const auto literal = nodeAs<LiteralNode>(node1->arg1))
+		{
+			if (literal->litDesc.isBoolean())
+			{
+				isTrue1 = literal->getBoolean();
+				arg1 = node1->arg2;
+			}
+		}
+		else if (const auto literal = nodeAs<LiteralNode>(node1->arg2))
+		{
+			if (literal->litDesc.isBoolean())
+			{
+				isTrue1 = literal->getBoolean();
+				arg1 = node1->arg1;
+			}
+		}
+
+		if (!arg1)
+			return false;
+
+		if (node1->blrOp == blr_neq)
+			isTrue1 = !isTrue1;
+
+		bool isTrue2 = false;
+		const ValueExprNode* arg2 = nullptr;
+
+		if (const auto literal = nodeAs<LiteralNode>(node2->arg1))
+		{
+			if (literal->litDesc.isBoolean())
+			{
+				isTrue2 = literal->getBoolean();
+				arg2 = node2->arg2;
+			}
+		}
+		else if (const auto literal = nodeAs<LiteralNode>(node2->arg2))
+		{
+			if (literal->litDesc.isBoolean())
+			{
+				isTrue2 = literal->getBoolean();
+				arg2 = node2->arg1;
+			}
+		}
+
+		if (!arg2)
+			return false;
+
+		if (node2->blrOp == blr_neq)
+			isTrue2 = !isTrue2;
+
+		if (!arg1->sameAs(arg2, ignoreStreams) || isTrue1 != isTrue2)
+			return false;
+
+		return true;
+	}
+
+} // namespace
 
 
 //--------------------
@@ -509,7 +583,13 @@ bool ComparativeBoolNode::sameAs(const ExprNode* other, bool ignoreStreams) cons
 {
 	const ComparativeBoolNode* const otherNode = nodeAs<ComparativeBoolNode>(other);
 
-	if (!otherNode || blrOp != otherNode->blrOp)
+	if (!otherNode)
+		return false;
+
+	if (sameBoolComparison(this, otherNode, ignoreStreams))
+		return true;
+
+	if (blrOp != otherNode->blrOp)
 		return false;
 
 	bool matching = arg1->sameAs(otherNode->arg1, ignoreStreams) &&
@@ -1635,14 +1715,50 @@ BoolExprNode* NotBoolNode::process(DsqlCompilerScratch* dsqlScratch, bool invert
 	if (!invert)
 		return arg->dsqlPass(dsqlScratch);
 
-	ComparativeBoolNode* cmpArg = nodeAs<ComparativeBoolNode>(arg);
-	BinaryBoolNode* binArg = nodeAs<BinaryBoolNode>(arg);
+	const auto cmpArg = nodeAs<ComparativeBoolNode>(arg);
+	const auto binArg = nodeAs<BinaryBoolNode>(arg);
 
 	// Do not handle special case: <value> NOT IN <list>
 
 	if (cmpArg && (!cmpArg->dsqlSpecialArg || !nodeIs<ValueListNode>(cmpArg->dsqlSpecialArg)))
 	{
-		// Invert the given boolean.
+		// Invert the given boolean
+
+		// For (A = TRUE/FALSE), invert only the boolean value, not the condition itself
+
+		if (cmpArg->blrOp == blr_eql || cmpArg->blrOp == blr_equiv)
+		{
+			auto newArg1 = cmpArg->arg1;
+			auto newArg2 = cmpArg->arg2;
+
+			if (const auto literal = nodeAs<LiteralNode>(cmpArg->arg1))
+			{
+				if (literal->litDesc.isBoolean())
+				{
+					const auto invertedVal = literal->getBoolean() ? "" : "1";
+					newArg1 = MAKE_constant(invertedVal, CONSTANT_BOOLEAN);
+				}
+			}
+			else if (const auto literal = nodeAs<LiteralNode>(cmpArg->arg2))
+			{
+				if (literal->litDesc.isBoolean())
+				{
+					const auto invertedVal = literal->getBoolean() ? "" : "1";
+					newArg2 = MAKE_constant(invertedVal, CONSTANT_BOOLEAN);
+				}
+			}
+
+			if (cmpArg->arg1 != newArg1 || cmpArg->arg2 != newArg2)
+			{
+				ComparativeBoolNode* node = FB_NEW_POOL(pool) ComparativeBoolNode(
+					pool, cmpArg->blrOp, newArg1, newArg2);
+				node->dsqlSpecialArg = cmpArg->dsqlSpecialArg;
+				node->dsqlCheckBoolean = cmpArg->dsqlCheckBoolean;
+
+				return node->dsqlPass(dsqlScratch);
+			}
+		}
+
 		switch (cmpArg->blrOp)
 		{
 			case blr_eql:
@@ -2084,6 +2200,3 @@ BoolExprNode* RseBoolNode::convertNeqAllToNotAny(thread_db* tdbb, CompilerScratc
 	SubExprNodeCopier copier(csb->csb_pool, csb);
 	return copier.copy(tdbb, static_cast<BoolExprNode*>(newNode));
 }
-
-
-}	// namespace Jrd
