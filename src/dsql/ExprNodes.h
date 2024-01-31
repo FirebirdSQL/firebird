@@ -958,7 +958,7 @@ public:
 	bool getBoolean() const
 	{
 		fb_assert(litDesc.dsc_dtype == dtype_boolean);
-		return *reinterpret_cast<bool*>(litDesc.dsc_address);
+		return *litDesc.dsc_address != '\0';
 	}
 
 	SLONG getSlong() const
