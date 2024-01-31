@@ -121,20 +121,11 @@ void TraceSvcJrd::startSession(TraceSession& session, bool interactive)
 		session.ses_role = role.c_str();
 
 		session.ses_flags = trs_active;
-		if (m_admin) {
+		if (m_admin)
 			session.ses_flags |= trs_admin;
-		}
 
 		if (interactive)
-		{
-			Guid guid;
-			GenerateGuid(&guid);
-
-			char* buff = session.ses_logfile.getBuffer(GUID_BUFF_SIZE);
-			GuidToString(buff, &guid);
-
-			session.ses_logfile.insert(0, FB_TRACE_FILE);
-		}
+			session.ses_logfile = FB_TRACE_FILE + Guid::generate().toPathName();
 
 		storage->addSession(session);
 		m_chg_number = storage->getChangeNumber();

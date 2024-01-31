@@ -342,15 +342,14 @@ void BackupManager::beginBackup(thread_db* tdbb)
 		if (!PIO_write(tdbb, diff_file, &temp_bdb, temp_bdb.bdb_buffer, tdbb->tdbb_status_vector))
 			ERR_punt();
 		NBAK_TRACE(("Set backup state in header"));
-		Guid guid;
-		GenerateGuid(&guid);
+
 		// Set state in database header page. All changes are written to main database file yet.
 		CCH_MARK_MUST_WRITE(tdbb, &window);
 		const int newState = Ods::hdr_nbak_stalled; // Should be USHORT?
 		header->hdr_flags = (header->hdr_flags & ~Ods::hdr_backup_mask) | newState;
 		const ULONG adjusted_scn = ++header->hdr_header.pag_scn; // Generate new SCN
-		PAG_replace_entry_first(tdbb, header, Ods::HDR_backup_guid, sizeof(guid),
-			reinterpret_cast<const UCHAR*>(&guid));
+		PAG_replace_entry_first(tdbb, header, Ods::HDR_backup_guid,
+			Guid::SIZE, Guid::generate().getData());
 
 		REPL_journal_switch(tdbb);
 

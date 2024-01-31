@@ -451,7 +451,7 @@ void getUniqueFileId(HANDLE fd, UCharBuffer& id)
 				if (path.find_first_of('{') == pos1 && pos2 != string::npos)
 				{
 					fb_assert(id.isEmpty());
-					id.resize(sizeof(Guid));
+					id.resize(Guid::SIZE);
 					UCHAR* ptr = id.begin();
 					bool num_start = true;
 

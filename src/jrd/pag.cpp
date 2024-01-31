@@ -1388,18 +1388,22 @@ void PAG_init2(thread_db* tdbb, USHORT shadow_number)
 				break;
 
 			case HDR_last_page:
+				fb_assert(p[1] == sizeof(last_page));
 				memcpy(&last_page, p + 2, sizeof(last_page));
 				break;
 
 			case HDR_sweep_interval:
+				fb_assert(p[1] == sizeof(SLONG));
 				memcpy(&dbb->dbb_sweep_interval, p + 2, sizeof(SLONG));
 				break;
 
 			case HDR_db_guid:
-				memcpy(&dbb->dbb_guid, p + 2, sizeof(Guid));
+				fb_assert(p[1] == Guid::SIZE);
+				dbb->dbb_guid.assign(p + 2);
 				break;
 
 			case HDR_repl_seq:
+				fb_assert(p[1] == sizeof(FB_UINT64));
 				memcpy(&dbb->dbb_repl_sequence, p + 2, sizeof(FB_UINT64));
 				break;
 			}
@@ -1579,7 +1583,7 @@ void PAG_set_db_guid(thread_db* tdbb, const Guid& guid)
  *
  **************************************/
  	SET_TDBB(tdbb);
-	storeClump(tdbb, HDR_db_guid, sizeof(Guid), (UCHAR*) &guid);
+	storeClump(tdbb, HDR_db_guid, Guid::SIZE, guid.getData());
 }
 
 

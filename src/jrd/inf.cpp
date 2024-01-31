@@ -910,9 +910,8 @@ void INF_database_info(thread_db* tdbb,
 
 		case fb_info_db_guid:
 			{
-				char guidBuffer[GUID_BUFF_SIZE];
-				GuidToString(guidBuffer, &dbb->dbb_guid);
-				if (!(info = INF_put_item(item, strlen(guidBuffer), guidBuffer, info, end)))
+				const auto guidStr = dbb->dbb_guid.toString();
+				if (!(info = INF_put_item(item, guidStr.length(), guidStr.c_str(), info, end)))
 					return;
 			}
 			continue;

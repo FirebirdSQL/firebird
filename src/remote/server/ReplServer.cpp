@@ -154,14 +154,11 @@ namespace
 					TransactionList& transactions)
 			: AutoFile(init(directory, guid))
 		{
-			char guidStr[GUID_BUFF_SIZE];
-			GuidToString(guidStr, &guid);
-
-			const PathName filename = directory + guidStr;
+			const PathName filename = directory + guid.toPathName();
 
 #ifdef WIN_NT
 			string name;
-			name.printf("firebird_replctl_%s", guidStr);
+			name.printf("firebird_replctl_%s", guid.toString().c_str());
 			m_mutex = CreateMutex(ISC_get_security_desc(), FALSE, name.c_str());
 			if (WaitForSingleObject(m_mutex, INFINITE) != WAIT_OBJECT_0)
 #else // POSIX
@@ -312,10 +309,7 @@ namespace
 #else
 			const mode_t ACCESS_MODE = 0664;
 #endif
-			char guidStr[GUID_BUFF_SIZE];
-			GuidToString(guidStr, &guid);
-
-			const PathName filename = directory + guidStr;
+			const PathName filename = directory + guid.toPathName();
 
 			const int fd = os_utils::open(filename.c_str(),
 				O_CREAT | O_RDWR | O_BINARY, ACCESS_MODE);
@@ -365,13 +359,7 @@ namespace
 
 		bool checkGuid(const Guid& guid)
 		{
-			if (!m_config->sourceGuid.Data1)
-				return true;
-
-			if (!memcmp(&guid, &m_config->sourceGuid, sizeof(Guid)))
-				return true;
-
-			return false;
+			return (m_config->sourceGuid.isEmpty() || m_config->sourceGuid == guid);
 		}
 
 		FB_UINT64 initReplica()
@@ -719,13 +707,11 @@ namespace
 					continue;
 				}
 
-				if (!target->checkGuid(header.hdr_guid))
+				const Guid guid(header.hdr_guid);
+				if (!target->checkGuid(guid))
 				{
-					char buff[GUID_BUFF_SIZE];
-					GuidToString(buff, &header.hdr_guid);
-					const string guidStr(buff);
 					target->verbose("Skipping file (%s) due to GUID mismatch (found %s)",
-									filename.c_str(), guidStr.c_str());
+									filename.c_str(), guid.toString().c_str());
 					continue;
 				}
 /*
@@ -758,7 +744,7 @@ namespace
 					return PROCESS_SHUTDOWN;
 
 				const FB_UINT64 sequence = segment->header.hdr_sequence;
-				const Guid& guid = segment->header.hdr_guid;
+				const Guid guid(segment->header.hdr_guid);
 
 				ControlFile control(target->getDirectory(), guid, sequence, transactions);
 

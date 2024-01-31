@@ -375,9 +375,9 @@ namespace Jrd
 		if (readOnly())
 			return;
 
-		if (!dbb_guid.Data1) // It would be better to full check but one field should be enough
+		if (dbb_guid.isEmpty())
 		{
-			GenerateGuid(&dbb_guid);
+			dbb_guid = Guid::generate();
 			PAG_set_db_guid(tdbb, dbb_guid);
 		}
 	}

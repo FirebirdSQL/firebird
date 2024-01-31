@@ -137,7 +137,7 @@ void ChangeLog::Segment::init(FB_UINT64 sequence, const Guid& guid)
 	strcpy(m_header->hdr_signature, CHANGELOG_SIGNATURE);
 	m_header->hdr_version = CHANGELOG_CURRENT_VERSION;
 	m_header->hdr_state = SEGMENT_STATE_USED;
-	memcpy(&m_header->hdr_guid, &guid, sizeof(Guid));
+	guid.copyTo(m_header->hdr_guid);
 	m_header->hdr_sequence = sequence;
 	m_header->hdr_length = sizeof(SegmentHeader);
 
@@ -160,7 +160,7 @@ bool ChangeLog::Segment::validate(const Guid& guid) const
 		return false;
 	}
 
-	if (memcmp(&m_header->hdr_guid, &guid, sizeof(Guid)))
+	if (Guid(m_header->hdr_guid) != guid)
 		return false;
 
 	return true;
@@ -314,11 +314,9 @@ ChangeLog::ChangeLog(MemoryPool& pool,
 					 const FB_UINT64 sequence,
 					 const Replication::Config* config)
 	: PermanentStorage(pool),
-	  m_dbId(dbId), m_config(config), m_segments(pool),
+	  m_dbId(dbId), m_guid(guid), m_config(config), m_segments(pool),
 	  m_sequence(sequence), m_generation(0), m_shutdown(false)
 {
-	memcpy(&m_guid, &guid, sizeof(Guid));
-
 	initSharedFile();
 
 	{ // scope

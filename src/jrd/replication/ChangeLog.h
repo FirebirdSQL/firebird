@@ -50,7 +50,7 @@ namespace Replication
 		char hdr_signature[12];
 		USHORT hdr_version;
 		SegmentState hdr_state;
-		Firebird::Guid hdr_guid;
+		UUID hdr_guid;
 		FB_UINT64 hdr_sequence;
 		FB_UINT64 hdr_length;
 	};
@@ -245,11 +245,11 @@ namespace Replication
 		void switchActiveSegment();
 
 		const Firebird::string& m_dbId;
+		const Firebird::Guid& m_guid;
 		const Config* const m_config;
 		Firebird::Array<Segment*> m_segments;
 		Firebird::AutoPtr<Firebird::SharedMemory<State> > m_sharedMemory;
 		Firebird::Mutex m_localMutex;
-		Firebird::Guid m_guid;
 		const FB_UINT64 m_sequence;
 		ULONG m_generation;
 

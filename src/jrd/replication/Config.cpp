@@ -391,7 +391,7 @@ void Config::enumerate(ReplicaList& replicas)
 				}
 				else if (key == "source_guid")
 				{
-					if (!StringToGuid(&config->sourceGuid, value.c_str()))
+					if (!config->sourceGuid.fromString(value))
 						configError("invalid (misformatted) value", key, value);
 				}
 				else if (key == "verbose_logging")

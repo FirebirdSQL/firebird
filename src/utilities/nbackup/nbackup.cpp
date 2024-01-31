@@ -260,8 +260,8 @@ struct inc_header
 	SSHORT version;			// Incremental backup format version.
 	SSHORT level;			// Backup level.
 	// \\\\\ ---- this is 8 bytes. should not cause alignment problems
-	Guid backup_guid;		// GUID of this backup
-	Guid prev_guid;			// GUID of previous level backup
+	UUID backup_guid;		// GUID of this backup
+	UUID prev_guid;			// GUID of previous level backup
 	ULONG page_size;		// Size of pages in the database and backup file
 	// These fields are currently filled, but not used. May be used in future versions
 	ULONG backup_scn;		// SCN of this backup
@@ -874,10 +874,8 @@ void NBackup::fixup_database(bool repl_seq, bool set_readonly)
 			if (*p == Ods::HDR_db_guid)
 			{
 				// Replace existing database GUID with a regenerated one
-				Guid guid;
-				GenerateGuid(&guid);
-				fb_assert(p[1] == sizeof(guid));
-				memcpy(p + 2, &guid, sizeof(guid));
+				fb_assert(p[1] == Guid::SIZE);
+				Guid::generate().copyTo(p + 2);
 			}
 			else if (*p == Ods::HDR_repl_seq)
 			{
@@ -1197,8 +1195,7 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 	// We set this flag when backup file is in inconsistent state
 	bool delete_backup = false;
 	ULONG prev_scn = 0;
-	char prev_guid[GUID_BUFF_SIZE] = "";
-	char str_guid[GUID_BUFF_SIZE] = "";
+	Guid prev_guid;
 	Ods::pag* page_buff = NULL;
 	attach_database();
 	ULONG page_writes = 0, page_reads = 0;
@@ -1221,13 +1218,13 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 	} //
 #endif
 
-	try {
+	try
+	{
+		const auto str_guid = (level < 0) ? guid.toString().c_str() : nullptr;
+
 		// Look for SCN and GUID of previous-level backup in history table
 		if (level)
 		{
-			if (level < 0)
-				GuidToString(str_guid, &guid);
-
 			if (isc_start_transaction(status, &trans, 1, &newdb, 0, NULL))
 				pr_error(status, "start transaction");
 			char out_sqlda_data[XSQLDA_LENGTH(2)];
@@ -1256,8 +1253,9 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 			if (isc_dsql_describe(status, &stmt, 1, out_sqlda))
 				pr_error(status, "describe history query");
 			short guid_null, scn_null;
+			char guid_value[GUID_BUFF_SIZE];
 			out_sqlda->sqlvar[0].sqlind = &guid_null;
-			out_sqlda->sqlvar[0].sqldata = prev_guid;
+			out_sqlda->sqlvar[0].sqldata = guid_value;
 			out_sqlda->sqlvar[1].sqlind = &scn_null;
 			out_sqlda->sqlvar[1].sqldata = (char*) &prev_scn;
 			if (isc_dsql_execute(status, &trans, &stmt, 1, NULL))
@@ -1276,18 +1274,23 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 					status_exception::raise(Arg::Gds(isc_nbackup_lostrec_guid_db) << database.c_str() <<
 											Arg::Str(str_guid));
 				}
+				break; // avoid compiler warnings
 
 			case 0:
 				if (guid_null || scn_null)
 					status_exception::raise(Arg::Gds(isc_nbackup_lostguid_db));
-				prev_guid[sizeof(prev_guid) - 1] = 0;
+				guid_value[sizeof(guid_value) - 1] = 0;
 				break;
+
 			default:
 				pr_error(status, "fetch history query");
 			}
+
 			isc_dsql_free_statement(status, &stmt, DSQL_drop);
 			if (isc_commit_transaction(status, &trans))
 				pr_error(status, "commit history query");
+
+			prev_guid.fromString(guid_value);
 		}
 
 		// Lock database for backup
@@ -1375,25 +1378,21 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 		page_reads++;
 
 		Guid backup_guid;
-		bool guid_found = false;
 		auto p = reinterpret_cast<Ods::header_page*>(page_buff)->hdr_data;
 		const auto end = reinterpret_cast<UCHAR*>(page_buff) + header->hdr_page_size;
 		while (p < end && *p != Ods::HDR_end)
 		{
 			if (*p == Ods::HDR_backup_guid)
 			{
-				if (p[1] == sizeof(Guid))
-				{
-					memcpy(&backup_guid, p + 2, sizeof(Guid));
-					guid_found = true;
-				}
+				if (p[1] == Guid::SIZE)
+					backup_guid.assign(p + 2);
 				break;
 			}
 
 			p += p[1] + 2;
 		}
 
-		if (!guid_found)
+		if (backup_guid.isEmpty())
 			status_exception::raise(Arg::Gds(isc_nbackup_lostguid_bk));
 
 		// Write data to backup file
@@ -1404,8 +1403,8 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 			memcpy(bh.signature, backup_signature, sizeof(backup_signature));
 			bh.version = BACKUP_VERSION;
 			bh.level = level > 0 ? level : 0;
-			bh.backup_guid = backup_guid;
-			StringToGuid(&bh.prev_guid, prev_guid);
+			backup_guid.copyTo(bh.backup_guid);
+			prev_guid.copyTo(bh.prev_guid);
 			bh.page_size = header->hdr_page_size;
 			bh.backup_scn = backup_scn;
 			bh.prev_scn = prev_scn;
@@ -1583,9 +1582,8 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 			in_sqlda->sqlvar[0].sqldata = NULL;
 			in_sqlda->sqlvar[0].sqlind = &null_ind;
 		}
-		char temp[GUID_BUFF_SIZE];
-		GuidToString(temp, &backup_guid);
-		in_sqlda->sqlvar[1].sqldata = temp;
+
+		in_sqlda->sqlvar[1].sqldata = (char*) backup_guid.toString().c_str();
 		in_sqlda->sqlvar[1].sqlind = &null_flag;
 		in_sqlda->sqlvar[2].sqldata = (char*) &backup_scn;
 		in_sqlda->sqlvar[2].sqlind = &null_flag;
@@ -1751,7 +1749,7 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 						Arg::Num(bakheader.level) << bakname.c_str() << Arg::Num(curLevel));
 				}
 				// We may also add SCN check, but GUID check covers this case too
-				if (memcmp(&bakheader.prev_guid, &prev_guid, sizeof(Guid)) != 0)
+				if (Guid(bakheader.prev_guid) != prev_guid)
 					status_exception::raise(Arg::Gds(isc_nbackup_wrong_orderbk) << bakname.c_str());
 
 				// Emulate seek_file(backup, bakheader.page_size)
@@ -1816,24 +1814,21 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 				if (read_file(dbase, page_ptr, header.hdr_page_size) != header.hdr_page_size)
 					status_exception::raise(Arg::Gds(isc_nbackup_err_eofhdr_restdb) << Arg::Num(2));
 
-				bool guid_found = false;
+				prev_guid.clear();
 				auto p = reinterpret_cast<Ods::header_page*>(page_ptr)->hdr_data;
 				const auto end = page_ptr + header.hdr_page_size;
 				while (p < end && *p != Ods::HDR_end)
 				{
 					if (*p == Ods::HDR_backup_guid)
 					{
-						if (p[1] == sizeof(Guid))
-						{
-							memcpy(&prev_guid, p + 2, sizeof(Guid));
-							guid_found = true;
-						}
+						if (p[1] == Guid::SIZE)
+							prev_guid.assign(p + 2);
 						break;
 					}
 
 					p += p[1] + 2;
 				}
-				if (!guid_found)
+				if (prev_guid.isEmpty())
 					status_exception::raise(Arg::Gds(isc_nbackup_lostguid_l0bk));
 				// We are likely to have normal database here
 				delete_database = false;
@@ -2051,7 +2046,7 @@ void nbackup(UtilSvc* uSvc)
 				missingParameterForSwitch(uSvc, argv[itr - 1]);
 
 			if (argv[itr][0] == '{')
-				StringToGuid(&guid, argv[itr]);
+				guid.fromString(argv[itr]);
 			else
 				level = atoi(argv[itr]);
 

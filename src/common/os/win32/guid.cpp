@@ -74,7 +74,7 @@ void GenerateRandomBytes(void* buffer, FB_SIZE_T size)
 	CryptReleaseContext(hProv, 0);
 }
 
-void GenerateGuid(Guid* guid)
+void GenerateGuid(UUID* guid)
 {
 	const HRESULT error = CoCreateGuid(guid);
 	if (!SUCCEEDED(error))
