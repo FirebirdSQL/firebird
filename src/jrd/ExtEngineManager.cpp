@@ -39,6 +39,7 @@
 #include "../jrd/cmp_proto.h"
 #include "../jrd/cvt_proto.h"
 #include "../jrd/evl_proto.h"
+#include "../jrd/exe_proto.h"
 #include "../jrd/intl_proto.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/mov_proto.h"
@@ -48,6 +49,7 @@
 #include "../jrd/SystemPackages.h"
 #include "../common/isc_proto.h"
 #include "../common/classes/auto.h"
+#include "../common/classes/fb_pair.h"
 #include "../common/classes/fb_string.h"
 #include "../common/classes/init.h"
 #include "../common/classes/objects_array.h"
@@ -65,12 +67,65 @@ static EngineCheckout::Type checkoutType(IExternalEngine* engine);
 
 namespace
 {
+	// Compare two formats for equivalence, excluding fmt_defaults field.
+	bool sameFormats(const Format* fmt1, const Format* fmt2)
+	{
+		return fmt1->fmt_length == fmt2->fmt_length &&
+			fmt1->fmt_count == fmt2->fmt_count &&
+			fmt1->fmt_version == fmt2->fmt_version &&
+			fmt1->fmt_desc == fmt2->fmt_desc;
+	}
+
+	// Copy message between different formats.
+	void copyMessage(thread_db* tdbb,
+		const Format* srcFormat, UCHAR* srcMsg,
+		const Format* dstFormat, UCHAR* dstMsg)
+	{
+		fb_assert(srcFormat->fmt_desc.getCount() == dstFormat->fmt_desc.getCount());
+
+		const auto srcDescEnd = srcFormat->fmt_desc.begin() + (srcFormat->fmt_desc.getCount() / 2 * 2);
+		auto srcDescIt = srcFormat->fmt_desc.begin();
+		auto dstDescIt = dstFormat->fmt_desc.begin();
+
+		while (srcDescIt < srcDescEnd)
+		{
+			fb_assert(srcDescIt[1].dsc_dtype == dtype_short);
+			fb_assert(dstDescIt[1].dsc_dtype == dtype_short);
+
+			const auto srcArgOffset = (IPTR) srcDescIt[0].dsc_address;
+			const auto srcNullOffset = (IPTR) srcDescIt[1].dsc_address;
+			const auto srcNullPtr = reinterpret_cast<const SSHORT*>(srcMsg + srcNullOffset);
+
+			const auto dstArgOffset = (IPTR) dstDescIt[0].dsc_address;
+			const auto dstNullOffset = (IPTR) dstDescIt[1].dsc_address;
+			const auto dstNullPtr = reinterpret_cast<SSHORT*>(dstMsg + dstNullOffset);
+
+			if (!*srcNullPtr)
+			{
+				dsc srcDesc = srcDescIt[0];
+				srcDesc.dsc_address = srcMsg + srcArgOffset;
+
+				dsc dstDesc = dstDescIt[0];
+				dstDesc.dsc_address = dstMsg + dstArgOffset;
+
+				MOV_move(tdbb, &srcDesc, &dstDesc);
+
+				*dstNullPtr = 0;
+			}
+			else
+				*dstNullPtr = -1;
+
+			srcDescIt += 2;
+			dstDescIt += 2;
+		}
+	}
+
 	// Internal message node.
 	class IntMessageNode : public MessageNode
 	{
 	public:
 		IntMessageNode(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, USHORT message,
-				Array<NestConst<Parameter> >& aParameters, const Format* aFormat)
+				Array<NestConst<Parameter>>& aParameters, const Format* aFormat)
 			: MessageNode(pool),
 			  parameters(aParameters),
 			  format(aFormat)
@@ -78,8 +133,8 @@ namespace
 			setup(tdbb, csb, message, format->fmt_count);
 		}
 
-		virtual USHORT setupDesc(thread_db* tdbb, CompilerScratch* csb, USHORT index,
-			dsc* desc, ItemInfo* itemInfo)
+		USHORT setupDesc(thread_db* tdbb, CompilerScratch* csb, USHORT index,
+			dsc* desc, ItemInfo* itemInfo) override
 		{
 			*desc = format->fmt_desc[index];
 
@@ -115,8 +170,8 @@ namespace
 		}
 
 	public:
-		Array<NestConst<Parameter> >& parameters;
-		const Format* format;
+		Array<NestConst<Parameter>>& parameters;
+		const Format* const format;
 	};
 
 	// External message node.
@@ -130,14 +185,14 @@ namespace
 			setup(tdbb, csb, message, format->fmt_count);
 		}
 
-		virtual USHORT setupDesc(thread_db* tdbb, CompilerScratch* csb, USHORT index,
-			dsc* desc, ItemInfo* itemInfo)
+		USHORT setupDesc(thread_db* tdbb, CompilerScratch* csb, USHORT index,
+			dsc* desc, ItemInfo* itemInfo) override
 		{
 			*desc = format->fmt_desc[index];
 			return type_alignments[desc->dsc_dtype];
 		}
 
-		virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const
+		const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override
 		{
 			if (request->req_operation == Request::req_evaluate)
 			{
@@ -150,99 +205,103 @@ namespace
 		}
 
 	public:
-		const Format* format;
+		const Format* const format;
 	};
 
 	// Initialize output parameters with their domains default value or NULL.
 	// Kind of blr_init_variable, but for parameters.
-	class InitParameterNode final : public TypedNode<StmtNode, StmtNode::TYPE_EXT_INIT_PARAMETER>
+	class InitParametersNode final : public TypedNode<StmtNode, StmtNode::TYPE_EXT_INIT_PARAMETERS>
 	{
 	public:
-		InitParameterNode(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
-				Array<NestConst<Parameter> >& parameters, MessageNode* aMessage, USHORT aArgNumber)
-			: TypedNode<StmtNode, StmtNode::TYPE_EXT_INIT_PARAMETER>(pool),
-			  message(aMessage),
-			  argNumber(aArgNumber)
+		InitParametersNode(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
+				Array<NestConst<Parameter>>& parameters, MessageNode* aMessage)
+			: TypedNode<StmtNode, StmtNode::TYPE_EXT_INIT_PARAMETERS>(pool),
+			  message(aMessage)
 		{
-			Parameter* parameter = parameters[argNumber / 2];
-			defaultValueNode = NULL;
+			// Iterate over the format items, except the EOF item.
+			const unsigned paramCount = message->format->fmt_count / 2;
 
-			if (parameter->prm_mechanism != prm_mech_type_of &&
-				!fb_utils::implicit_domain(parameter->prm_field_source.c_str()))
+			defaultValuesNode = FB_NEW_POOL(pool) ValueListNode(pool, paramCount);
+
+			for (unsigned paramIndex = 0; paramIndex < paramCount; ++paramIndex)
 			{
-				MetaNamePair namePair(parameter->prm_field_source, "");
+				const auto parameter = parameters[paramIndex];
 
-				FieldInfo fieldInfo;
-				bool exist = csb->csb_map_field_info.get(namePair, fieldInfo);
+				if (parameter->prm_mechanism != prm_mech_type_of &&
+					!fb_utils::implicit_domain(parameter->prm_field_source.c_str()))
+				{
+					MetaNamePair namePair(parameter->prm_field_source, "");
 
-				if (exist && fieldInfo.defaultValue)
-					defaultValueNode = CMP_clone_node(tdbb, csb, fieldInfo.defaultValue);
+					FieldInfo fieldInfo;
+					bool exist = csb->csb_map_field_info.get(namePair, fieldInfo);
+
+					if (exist && fieldInfo.defaultValue)
+						defaultValuesNode->items[paramIndex] = CMP_clone_node(tdbb, csb, fieldInfo.defaultValue);
+				}
 			}
 		}
 
-		string internalPrint(NodePrinter& printer) const
+		string internalPrint(NodePrinter& printer) const override
 		{
 			StmtNode::internalPrint(printer);
 
 			NODE_PRINT(printer, message);
-			NODE_PRINT(printer, argNumber);
-			NODE_PRINT(printer, defaultValueNode);
+			NODE_PRINT(printer, defaultValuesNode);
 
-			return "InitParameterNode";
+			return "InitParametersNode";
 		}
 
-		void genBlr(DsqlCompilerScratch* /*dsqlScratch*/)
+		void genBlr(DsqlCompilerScratch* /*dsqlScratch*/) override
 		{
 		}
 
-		InitParameterNode* pass1(thread_db* tdbb, CompilerScratch* csb)
+		InitParametersNode* pass1(thread_db* tdbb, CompilerScratch* csb) override
 		{
-			doPass1(tdbb, csb, &defaultValueNode);
+			doPass1(tdbb, csb, &defaultValuesNode);
 			return this;
 		}
 
-		InitParameterNode* pass2(thread_db* tdbb, CompilerScratch* csb)
+		InitParametersNode* pass2(thread_db* tdbb, CompilerScratch* csb) override
 		{
-			ExprNode::doPass2(tdbb, csb, &defaultValueNode);
+			ExprNode::doPass2(tdbb, csb, &defaultValuesNode);
 			return this;
 		}
 
-		const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* /*exeState*/) const
+		const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* /*exeState*/) const override
 		{
 			if (request->req_operation == Request::req_evaluate)
 			{
-				dsc* defaultDesc = NULL;
+				const auto msg = request->getImpure<UCHAR>(message->impureOffset);
+				const auto paramCount = defaultValuesNode->items.getCount();
 
-				if (defaultValueNode)
+				for (unsigned paramIndex = 0; paramIndex < paramCount; ++paramIndex)
 				{
-					defaultDesc = EVL_expr(tdbb, request, defaultValueNode);
+					const auto defaultValueNode = defaultValuesNode->items[paramIndex];
+					dsc* defaultDesc = nullptr;
 
-					if (request->req_flags & req_null)
-						defaultDesc = NULL;
-				}
+					if (defaultValueNode)
+					{
+						defaultDesc = EVL_expr(tdbb, request, defaultValueNode);
 
-				if (defaultDesc)
-				{
-					// Initialize the value. The null flag is already initialized to not-null
-					// by the ExtMessageNode.
+						if (request->req_flags & req_null)
+							defaultDesc = nullptr;
+					}
 
-					dsc desc = message->format->fmt_desc[argNumber];
-					desc.dsc_address = request->getImpure<UCHAR>(
-						message->impureOffset + (IPTR) desc.dsc_address);
+					const auto formatIndex = paramIndex * 2;
+					const auto& nullDesc = message->format->fmt_desc[formatIndex + 1];
+					fb_assert(nullDesc.dsc_dtype == dtype_short);
 
-					MOV_move(tdbb, defaultDesc, &desc);
-				}
-				else
-				{
-					SSHORT tempValue = -1;
-					dsc temp;
-					temp.makeShort(0, &tempValue);
+					if (defaultDesc)
+					{
+						// Initialize the value. The null flag is already initialized to not-null.
+						fb_assert(*(SSHORT*) (msg + (IPTR) nullDesc.dsc_address) != -1);
 
-					dsc desc = message->format->fmt_desc[argNumber + 1];
-					desc.dsc_address = request->getImpure<UCHAR>(
-						message->impureOffset + (IPTR) desc.dsc_address);
-
-					MOV_move(tdbb, &temp, &desc);
+						dsc desc = message->format->fmt_desc[formatIndex];
+						desc.dsc_address = msg + (IPTR) desc.dsc_address;
+						MOV_move(tdbb, defaultDesc, &desc);
+					}
+					else
+						*(SSHORT*) (msg + (IPTR) nullDesc.dsc_address) = -1;
 				}
 
 				request->req_operation = Request::req_return;
@@ -252,27 +311,8 @@ namespace
 		}
 
 		private:
-			MessageNode* message;
-			USHORT argNumber;
-			ValueExprNode* defaultValueNode;
-	};
-
-	// Output parameters initialization.
-	class InitOutputNode : public CompoundStmtNode
-	{
-	public:
-		InitOutputNode(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
-				Array<NestConst<Parameter> >& parameters, MessageNode* message)
-			: CompoundStmtNode(pool)
-		{
-			// Iterate over the format items, except the EOF item.
-			for (USHORT i = 0; i < (message->format->fmt_count / 2) * 2; i += 2)
-			{
-				InitParameterNode* init = FB_NEW_POOL(pool) InitParameterNode(
-					tdbb, pool, csb, parameters, message, i);
-				statements.add(init);
-			}
-		}
+			MessageNode* const message;
+			ValueListNode* defaultValuesNode;
 	};
 
 	// Move parameters from a message to another, validating theirs values.
@@ -285,14 +325,14 @@ namespace
 			  checkMessageEof(aCheckMessageEof)
 		{
 			// Iterate over the format items, except the EOF item.
-			for (USHORT i = 0; i < (fromMessage->format->fmt_count / 2) * 2; i += 2)
+			for (unsigned i = 0; i < (fromMessage->format->fmt_count / 2) * 2; i += 2)
 			{
-				ParameterNode* flag = FB_NEW_POOL(pool) ParameterNode(pool);
+				auto flag = FB_NEW_POOL(pool) ParameterNode(pool);
 				flag->messageNumber = fromMessage->messageNumber;
 				flag->message = fromMessage;
 				flag->argNumber = i + 1;
 
-				ParameterNode* param = FB_NEW_POOL(pool) ParameterNode(pool);
+				auto param = FB_NEW_POOL(pool) ParameterNode(pool);
 				param->messageNumber = fromMessage->messageNumber;
 				param->message = fromMessage;
 				param->argNumber = i;
@@ -337,38 +377,6 @@ namespace
 		MessageNode* checkMessageEof;
 	};
 
-	// External function node.
-	class ExtFunctionNode : public SuspendNode
-	{
-	public:
-		ExtFunctionNode(MemoryPool& pool, const MessageNode* aExtInMessageNode, const MessageNode* aExtOutMessageNode,
-				const ExtEngineManager::Function* aFunction)
-			: SuspendNode(pool),
-			  extInMessageNode(aExtInMessageNode),
-			  extOutMessageNode(aExtOutMessageNode),
-			  function(aFunction)
-		{
-		}
-
-		virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const
-		{
-			if (request->req_operation == Request::req_evaluate)
-			{
-				UCHAR* inMsg = extInMessageNode ? request->getImpure<UCHAR>(extInMessageNode->impureOffset) : NULL;
-				UCHAR* outMsg = request->getImpure<UCHAR>(extOutMessageNode->impureOffset);
-
-				function->execute(tdbb, inMsg, outMsg);
-			}
-
-			return SuspendNode::execute(tdbb, request, exeState);
-		}
-
-	private:
-		const MessageNode* extInMessageNode;
-		const MessageNode* extOutMessageNode;
-		const ExtEngineManager::Function* function;
-	};
-
 	// External procedure node.
 	class ExtProcedureNode : public CompoundStmtNode
 	{
@@ -390,7 +398,7 @@ namespace
 			statements.add(FB_NEW_POOL(pool) StallNode(pool));
 		}
 
-		virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const
+		const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override
 		{
 			impure_state* const impure = request->getImpure<impure_state>(impureOffset);
 			ExtEngineManager::ResultSet*& resultSet = request->req_ext_resultset;
@@ -462,27 +470,27 @@ namespace
 		{
 		}
 
-		string internalPrint(NodePrinter& printer) const
+		string internalPrint(NodePrinter& printer) const override
 		{
 			StmtNode::internalPrint(printer);
 			return "ExtTriggerNode";
 		}
 
-		void genBlr(DsqlCompilerScratch* /*dsqlScratch*/)
+		void genBlr(DsqlCompilerScratch* /*dsqlScratch*/) override
 		{
 		}
 
-		ExtTriggerNode* pass1(thread_db* /*tdbb*/, CompilerScratch* /*csb*/)
-		{
-			return this;
-		}
-
-		ExtTriggerNode* pass2(thread_db* /*tdbb*/, CompilerScratch* /*csb*/)
+		ExtTriggerNode* pass1(thread_db* /*tdbb*/, CompilerScratch* /*csb*/) override
 		{
 			return this;
 		}
 
-		const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* /*exeState*/) const
+		ExtTriggerNode* pass2(thread_db* /*tdbb*/, CompilerScratch* /*csb*/) override
+		{
+			return this;
+		}
+
+		const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* /*exeState*/) const override
 		{
 			if (request->req_operation == Request::req_evaluate)
 			{
@@ -501,7 +509,6 @@ namespace
 			return request->req_rpb.getCount() > n && request->req_rpb[n].rpb_number.isValid() ?
 				&request->req_rpb[n] : NULL;
 		}
-
 
 	private:
 		const ExtEngineManager::Trigger* trigger;
@@ -757,13 +764,133 @@ void ExtEngineManager::ExtRoutine::PluginDeleter::operator()(IPluginBase* ptr)
 //---------------------
 
 
-ExtEngineManager::Function::Function(thread_db* tdbb, ExtEngineManager* aExtManager,
-		IExternalEngine* aEngine, RoutineMetadata* aMetadata, IExternalFunction* aFunction,
+struct ExtEngineManager::Function::Impl final
+{
+	Impl(MemoryPool& pool)
+		: inValidations(pool),
+		  outValidations(pool),
+		  outDefaults(pool)
+	{
+	}
+
+	Array<NonPooledPair<Item, ItemInfo*>> inValidations;
+	Array<NonPooledPair<Item, ItemInfo*>> outValidations;
+	Array<unsigned> outDefaults;
+};
+
+
+ExtEngineManager::Function::Function(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
+		ExtEngineManager* aExtManager, IExternalEngine* aEngine,
+		RoutineMetadata* aMetadata, IExternalFunction* aFunction,
+		RefPtr<IMessageMetadata> extInputParameters, RefPtr<IMessageMetadata> extOutputParameters,
 		const Jrd::Function* aUdf)
 	: ExtRoutine(tdbb, aExtManager, aEngine, aMetadata),
 	  function(aFunction),
-	  udf(aUdf)
+	  udf(aUdf),
+	  impl(FB_NEW_POOL(pool) Impl(pool))
 {
+	extInputFormat.reset(Routine::createFormat(pool, extInputParameters, false));
+	extOutputFormat.reset(Routine::createFormat(pool, extOutputParameters, true));
+
+	const bool useExtInMessage = udf->getInputFields().hasData() &&
+		!sameFormats(extInputFormat, udf->getInputFormat());
+
+	if (useExtInMessage)
+		extInputImpureOffset = csb->allocImpure(FB_ALIGNMENT, extInputFormat->fmt_length);
+	else
+		extInputFormat.reset();
+
+	const bool useExtOutMessage = udf->getOutputFields().hasData() &&
+		!sameFormats(extOutputFormat, udf->getOutputFormat());
+
+	if (useExtOutMessage)
+		extOutputImpureOffset = csb->allocImpure(FB_ALIGNMENT, extOutputFormat->fmt_length);
+	else
+		extOutputFormat.reset();
+
+	// Get input parameters that have validation expressions.
+	for (const auto param : udf->getInputFields())
+	{
+		FieldInfo fieldInfo;
+		ItemInfo itemInfo;
+
+		if (param->prm_mechanism != prm_mech_type_of &&
+			!fb_utils::implicit_domain(param->prm_field_source.c_str()))
+		{
+			const MetaNamePair namePair(param->prm_field_source, "");
+			const bool exist = csb->csb_map_field_info.get(namePair, fieldInfo);
+
+			if (!exist)
+			{
+				dsc dummyDesc;
+				MET_get_domain(tdbb, csb->csb_pool, param->prm_field_source, &dummyDesc, &fieldInfo);
+				csb->csb_map_field_info.put(namePair, fieldInfo);
+			}
+
+			itemInfo.field = namePair;
+			itemInfo.nullable = fieldInfo.nullable;
+			itemInfo.fullDomain = true;
+		}
+
+		itemInfo.name = param->prm_name;
+
+		if (!param->prm_nullable)
+			itemInfo.nullable = false;
+
+		if (itemInfo.isSpecial())
+		{
+			Item item(Item::TYPE_PARAMETER, 0, (param->prm_number - 1) * 2);
+			csb->csb_map_item_info.put(item, itemInfo);
+
+			impl->inValidations.ensureCapacity(udf->getInputFields().getCount() - (param->prm_number - 1));
+			impl->inValidations.push({item, CMP_pass2_validation(tdbb, csb, item)});
+		}
+	}
+
+	// Get output parameters that have default or validation expressions.
+	for (const auto param : udf->getOutputFields())
+	{
+		FieldInfo fieldInfo;
+		ItemInfo itemInfo;
+
+		if (param->prm_mechanism != prm_mech_type_of &&
+			!fb_utils::implicit_domain(param->prm_field_source.c_str()))
+		{
+			const MetaNamePair namePair(param->prm_field_source, "");
+			const bool exist = csb->csb_map_field_info.get(namePair, fieldInfo);
+
+			if (!exist)
+			{
+				dsc dummyDesc;
+				MET_get_domain(tdbb, csb->csb_pool, param->prm_field_source, &dummyDesc, &fieldInfo);
+				csb->csb_map_field_info.put(namePair, fieldInfo);
+			}
+
+			if (fieldInfo.defaultValue)
+			{
+				impl->outDefaults.ensureCapacity(udf->getOutputFields().getCount() - param->prm_number);
+				impl->outDefaults.push(param->prm_number);
+			}
+
+			itemInfo.field = namePair;
+			itemInfo.nullable = fieldInfo.nullable;
+			itemInfo.fullDomain = true;
+		}
+
+		itemInfo.name = param->prm_name;
+
+		if (!param->prm_nullable)
+			itemInfo.nullable = false;
+
+		if (itemInfo.isSpecial())
+		{
+			Item item(Item::TYPE_PARAMETER, 1, param->prm_number * 2);
+			csb->csb_map_item_info.put(item, itemInfo);
+
+			impl->outValidations.ensureCapacity(udf->getOutputFields().getCount());
+			impl->outValidations.push({item, CMP_pass2_validation(tdbb, csb, item)});
+		}
+	}
 }
 
 
@@ -774,20 +901,124 @@ ExtEngineManager::Function::~Function()
 }
 
 
-void ExtEngineManager::Function::execute(thread_db* tdbb, UCHAR* inMsg, UCHAR* outMsg) const
+// Execute an external function starting with an inactive request and ending with an active one.
+void ExtEngineManager::Function::execute(thread_db* tdbb, Request* request, jrd_tra* transaction,
+	unsigned inMsgLength, UCHAR* inMsg, unsigned outMsgLength, UCHAR* outMsg) const
 {
-	EngineAttachmentInfo* attInfo = extManager->getEngineAttachment(tdbb, engine.get());
-	const MetaString& userName = udf->invoker ? udf->invoker->getUserName() : "";
-	ContextManager<IExternalFunction> ctxManager(tdbb, attInfo, function,
-		(udf->getName().package.isEmpty() ?
-			CallerName(obj_udf, udf->getName().identifier, userName) :
-			CallerName(obj_package_header, udf->getName().package, userName)));
+	AutoSetRestore2<Request*, thread_db> autoSetRequest(
+		tdbb, &thread_db::getRequest, &thread_db::setRequest, request);
 
-	EngineCheckout cout(tdbb, FB_FUNCTION, checkoutType(attInfo->engine));
+	EXE_activate(tdbb, request, transaction);
 
-	FbLocalStatus status;
-	function->execute(&status, attInfo->context, inMsg, outMsg);
-	status.check();
+	fb_assert(inMsgLength == udf->getInputFormat()->fmt_length);
+	fb_assert(outMsgLength == udf->getOutputFormat()->fmt_length);
+
+	// Validate input parameters (internal message).
+	validateParameters(tdbb, inMsg, true);
+
+	// If there is a need for an external input message, copy the internal message to it and switch the message.
+	if (extInputImpureOffset.has_value())
+	{
+		const auto extInMsg = request->getImpure<UCHAR>(extInputImpureOffset.value());
+		copyMessage(tdbb, udf->getInputFormat(), inMsg, extInputFormat, extInMsg);
+		inMsg = extInMsg;
+		///inMsgLength = extInputFormat->fmt_length;
+	}
+
+	// Initialize outputs in the internal message.
+	{	// scope
+		fb_assert(udf->getOutputFormat()->fmt_desc.getCount() / 2 == udf->getOutputFields().getCount());
+
+		// Initialize everything to NULL (-1).
+		memset(outMsg, 0xFF, udf->getOutputFormat()->fmt_length);
+
+		for (const auto paramNumber : impl->outDefaults)
+		{
+			const auto param = udf->getOutputFields()[paramNumber];
+			const MetaNamePair namePair(param->prm_field_source, "");
+			FieldInfo fieldInfo;
+
+			dsc* defaultValue = nullptr;
+
+			if (request->getStatement()->mapFieldInfo.get(namePair, fieldInfo) &&
+				fieldInfo.defaultValue)
+			{
+				defaultValue = EVL_expr(tdbb, request, fieldInfo.defaultValue);
+
+				if (request->req_flags & req_null)
+					defaultValue = nullptr;
+			}
+
+			const auto& paramDesc = udf->getOutputFormat()->fmt_desc[paramNumber * 2];
+			const auto& nullDesc = udf->getOutputFormat()->fmt_desc[paramNumber * 2 + 1];
+
+			fb_assert(nullDesc.dsc_dtype == dtype_short);
+
+			if (defaultValue)
+			{
+				dsc desc = paramDesc;
+				desc.dsc_address = outMsg + (IPTR) desc.dsc_address;
+				MOV_move(tdbb, defaultValue, &desc);
+
+				*(SSHORT*) (outMsg + (IPTR) nullDesc.dsc_address) = 0;
+			}
+			else
+				*(SSHORT*) (outMsg + (IPTR) nullDesc.dsc_address) = -1;
+		}
+	}
+
+	const auto extOutMsg = extOutputImpureOffset.has_value() ?
+		request->getImpure<UCHAR>(extOutputImpureOffset.value()) : nullptr;
+
+	// If there is a need for an external output message, copy the internal message to it.
+	if (extOutMsg)
+		copyMessage(tdbb, udf->getOutputFormat(), outMsg, extOutputFormat, extOutMsg);
+
+	// Call external.
+	{	// scope
+		EngineAttachmentInfo* attInfo = extManager->getEngineAttachment(tdbb, engine.get());
+		const MetaString& userName = udf->invoker ? udf->invoker->getUserName() : "";
+		ContextManager<IExternalFunction> ctxManager(tdbb, attInfo, function,
+			(udf->getName().package.isEmpty() ?
+				CallerName(obj_udf, udf->getName().identifier, userName) :
+				CallerName(obj_package_header, udf->getName().package, userName)));
+
+		EngineCheckout cout(tdbb, FB_FUNCTION, checkoutType(attInfo->engine));
+
+		FbLocalStatus status;
+		function->execute(&status, attInfo->context, inMsg, (extOutMsg ? extOutMsg : outMsg));
+		status.check();
+	}
+
+	// If there is an external output message, copy it to the internal message.
+	if (extOutMsg)
+		copyMessage(tdbb, extOutputFormat, extOutMsg, udf->getOutputFormat(), outMsg);
+
+	// Validate output parameters (internal message).
+	validateParameters(tdbb, outMsg, false);
+}
+
+void ExtEngineManager::Function::validateParameters(thread_db* tdbb, UCHAR* msg, bool input) const
+{
+	const auto format = input ? udf->getInputFormat() : udf->getOutputFormat();
+	const auto& validations = input ? impl->inValidations : impl->outValidations;
+	const UCHAR messageNumber = input ? 0 : 1;
+
+	for (const auto& [item, itemInfo] : validations)
+	{
+		const unsigned paramNumber = item.index / 2;
+		const auto& paramDesc = format->fmt_desc[paramNumber * 2];
+		const auto& nullDesc = format->fmt_desc[paramNumber * 2 + 1];
+
+		fb_assert(nullDesc.dsc_dtype == dtype_short);
+
+		dsc value = paramDesc;
+		value.dsc_address = msg + (IPTR) value.dsc_address;
+
+		const auto isNull = *(SSHORT*) (msg + (IPTR) nullDesc.dsc_address) != 0;
+
+		EVL_validate(tdbb, Item(Item::TYPE_PARAMETER, messageNumber, paramNumber), itemInfo, &value, isNull);
+	}
 }
 
 
@@ -1391,63 +1622,16 @@ void ExtEngineManager::makeFunction(thread_db* tdbb, CompilerScratch* csb, Jrd::
 		status.check();
 	}
 
-	const Format* extInputFormat = Routine::createFormat(pool, extInputParameters, false);
-	const Format* extOutputFormat = Routine::createFormat(pool, extOutputParameters, true);
-
 	try
 	{
-		udf->fun_external = FB_NEW_POOL(pool) Function(tdbb, this, attInfo->engine,
-			metadata.release(), externalFunction, udf);
+		udf->fun_external = FB_NEW_POOL(pool) Function(tdbb, pool, csb, this, attInfo->engine,
+			metadata.release(), externalFunction, extInputParameters, extOutputParameters, udf);
 
-		MemoryPool& csbPool = csb->csb_pool;
+		// This is necessary for compilation, but will never be executed.
+		const auto dummyNode = FB_NEW_POOL(csb->csb_pool) CompoundStmtNode(csb->csb_pool);
 
-		CompoundStmtNode* mainNode = FB_NEW_POOL(csbPool) CompoundStmtNode(csbPool);
-
-		IntMessageNode* intInMessageNode = udf->getInputFields().hasData() ?
-			FB_NEW_POOL(csbPool) IntMessageNode(tdbb, csbPool, csb, 0,
-				udf->getInputFields(), udf->getInputFormat()) :
-			NULL;
-		ExtMessageNode* extInMessageNode = NULL;
-
-		if (intInMessageNode)
-		{
-			mainNode->statements.add(intInMessageNode);
-
-			extInMessageNode = FB_NEW_POOL(csbPool) ExtMessageNode(tdbb, csbPool, csb, 2, extInputFormat);
-			mainNode->statements.add(extInMessageNode);
-		}
-
-		IntMessageNode* intOutMessageNode = FB_NEW_POOL(csbPool) IntMessageNode(tdbb, csbPool, csb, 1,
-			udf->getOutputFields(), udf->getOutputFormat());
-		mainNode->statements.add(intOutMessageNode);
-
-		ExtMessageNode* extOutMessageNode = FB_NEW_POOL(csbPool) ExtMessageNode(tdbb, csbPool, csb, 3,
-			extOutputFormat);
-		mainNode->statements.add(extOutMessageNode);
-
-		// Initialize the output fields into the external message.
-		InitOutputNode* initOutputNode = FB_NEW_POOL(csbPool) InitOutputNode(
-			tdbb, csbPool, csb, udf->getOutputFields(), extOutMessageNode);
-		mainNode->statements.add(initOutputNode);
-
-		if (intInMessageNode)
-		{
-			ReceiveNode* receiveNode = intInMessageNode ? FB_NEW_POOL(csbPool) ReceiveNode(csbPool) : NULL;
-			receiveNode->message = intInMessageNode;
-			receiveNode->statement = FB_NEW_POOL(csbPool) MessageMoverNode(
-				csbPool, intInMessageNode, extInMessageNode);
-			mainNode->statements.add(receiveNode);
-		}
-
-		ExtFunctionNode* extFunctionNode = FB_NEW_POOL(csbPool) ExtFunctionNode(csbPool,
-			extInMessageNode, extOutMessageNode, udf->fun_external);
-		mainNode->statements.add(extFunctionNode);
-		extFunctionNode->message = intOutMessageNode;
-		extFunctionNode->statement = FB_NEW_POOL(csbPool) MessageMoverNode(
-			csbPool, extOutMessageNode, intOutMessageNode);
-
-		Statement* statement = udf->getStatement();
-		PAR_preparsed_node(tdbb, NULL, mainNode, NULL, &csb, &statement, false, 0);
+		auto statement = udf->getStatement();
+		PAR_preparsed_node(tdbb, nullptr, dummyNode, nullptr, &csb, &statement, false, 0);
 		udf->setStatement(statement);
 	}
 	catch (...)
@@ -1563,9 +1747,9 @@ void ExtEngineManager::makeProcedure(thread_db* tdbb, CompilerScratch* csb, jrd_
 		mainNode->statements.add(extOutMessageNode);
 
 		// Initialize the output fields into the external message.
-		InitOutputNode* initOutputNode = FB_NEW_POOL(csbPool) InitOutputNode(
+		InitParametersNode* initParametersNode = FB_NEW_POOL(csbPool) InitParametersNode(
 			tdbb, csbPool, csb, prc->getOutputFields(), extOutMessageNode);
-		mainNode->statements.add(initOutputNode);
+		mainNode->statements.add(initParametersNode);
 
 		ReceiveNode* receiveNode = intInMessageNode ?
 			FB_NEW_POOL(csbPool) ReceiveNode(csbPool) : NULL;

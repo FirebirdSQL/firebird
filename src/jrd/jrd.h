@@ -211,7 +211,7 @@ const int DYN_REQUESTS				= 2;
 
 // Procedure block
 
-class jrd_prc : public Routine
+class jrd_prc final : public Routine
 {
 public:
 	const Format*	prc_record_format;
@@ -233,38 +233,38 @@ public:
 	}
 
 public:
-	virtual int getObjectType() const
+	int getObjectType() const override
 	{
 		return obj_procedure;
 	}
 
-	virtual SLONG getSclType() const
+	SLONG getSclType() const override
 	{
 		return obj_procedures;
 	}
 
-	virtual void releaseFormat()
+	void releaseFormat() override
 	{
 		delete prc_record_format;
 		prc_record_format = NULL;
 	}
 
-	virtual ~jrd_prc()
+	~jrd_prc() override
 	{
 		delete prc_external;
 	}
 
-	virtual bool checkCache(thread_db* tdbb) const;
-	virtual void clearCache(thread_db* tdbb);
+	bool checkCache(thread_db* tdbb) const override;
+	void clearCache(thread_db* tdbb) override;
 
-	virtual void releaseExternal()
+	void releaseExternal() override
 	{
 		delete prc_external;
 		prc_external = NULL;
 	}
 
 protected:
-	virtual bool reload(thread_db* tdbb);	// impl is in met.epp
+	bool reload(thread_db* tdbb) override;	// impl is in met.epp
 };
 
 

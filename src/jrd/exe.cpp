@@ -848,18 +848,9 @@ void EXE_send(thread_db* tdbb, Request* request, USHORT msg, ULONG length, const
 }
 
 
-void EXE_start(thread_db* tdbb, Request* request, jrd_tra* transaction)
+// Mark a request as active.
+void EXE_activate(thread_db* tdbb, Request* request, jrd_tra* transaction)
 {
-/**************************************
- *
- *	E X E _ s t a r t
- *
- **************************************
- *
- * Functional description
- *	Start an execution running.
- *
- **************************************/
 	SET_TDBB(tdbb);
 
 	BLKCHK(request, type_req);
@@ -923,10 +914,15 @@ void EXE_start(thread_db* tdbb, Request* request, jrd_tra* transaction)
 	request->req_src_column = 0;
 
 	TRA_setup_request_snapshot(tdbb, request);
+}
 
-	execute_looper(tdbb, request, transaction,
-				   request->getStatement()->topNode,
-				   Request::req_evaluate);
+
+// Start and execute a request.
+void EXE_start(thread_db* tdbb, Request* request, jrd_tra* transaction)
+{
+	EXE_activate(tdbb, request, transaction);
+
+	execute_looper(tdbb, request, transaction, request->getStatement()->topNode, Request::req_evaluate);
 }
 
 

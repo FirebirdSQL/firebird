@@ -26,6 +26,7 @@
 #include "firebird/Interface.h"
 
 #include <memory>
+#include <optional>
 
 #include "../common/classes/array.h"
 #include "../common/classes/fb_string.h"
@@ -218,6 +219,7 @@ public:
 	public:
 		ExtRoutine(thread_db* tdbb, ExtEngineManager* aExtManager,
 			Firebird::IExternalEngine* aEngine, RoutineMetadata* aMetadata);
+		virtual ~ExtRoutine() = default;
 
 	private:
 		class PluginDeleter
@@ -233,42 +235,56 @@ public:
 		Database* database;
 	};
 
-	class Function : public ExtRoutine
+	class Function final : public ExtRoutine
 	{
+	private:
+		struct Impl;	// hack to avoid circular inclusion of headers
+
 	public:
-		Function(thread_db* tdbb, ExtEngineManager* aExtManager,
+		Function(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, ExtEngineManager* aExtManager,
 			Firebird::IExternalEngine* aEngine,
 			RoutineMetadata* aMetadata,
 			Firebird::IExternalFunction* aFunction,
+			Firebird::RefPtr<Firebird::IMessageMetadata> extInputParameters,
+			Firebird::RefPtr<Firebird::IMessageMetadata> extOutputParameters,
 			const Jrd::Function* aUdf);
-		~Function();
+		~Function() override;
 
-		void execute(thread_db* tdbb, UCHAR* inMsg, UCHAR* outMsg) const;
+		void execute(thread_db* tdbb, Request* request, jrd_tra* transaction,
+			unsigned inMsgLength, UCHAR* inMsg, unsigned outMsgLength, UCHAR* outMsg) const;
+
+	private:
+		void validateParameters(thread_db* tdbb, UCHAR* msg, bool input) const;
 
 	private:
 		Firebird::IExternalFunction* function;
 		const Jrd::Function* udf;
+		Firebird::AutoPtr<Format> extInputFormat;
+		Firebird::AutoPtr<Format> extOutputFormat;
+		Firebird::AutoPtr<Impl> impl;
+		std::optional<ULONG> extInputImpureOffset;
+		std::optional<ULONG> extOutputImpureOffset;
 	};
 
 	class ResultSet;
 
-	class Procedure : public ExtRoutine
+	class Procedure final : public ExtRoutine
 	{
+	friend class ResultSet;
+
 	public:
 		Procedure(thread_db* tdbb, ExtEngineManager* aExtManager,
 			Firebird::IExternalEngine* aEngine,
 			RoutineMetadata* aMetadata,
 			Firebird::IExternalProcedure* aProcedure,
 			const jrd_prc* aPrc);
-		~Procedure();
+		~Procedure() override;
 
 		ResultSet* open(thread_db* tdbb, UCHAR* inMsg, UCHAR* outMsg) const;
 
 	private:
 		Firebird::IExternalProcedure* procedure;
 		const jrd_prc* prc;
-
-	friend class ResultSet;
 	};
 
 	class ResultSet
@@ -288,13 +304,13 @@ public:
 		USHORT charSet;
 	};
 
-	class Trigger : public ExtRoutine
+	class Trigger final : public ExtRoutine
 	{
 	public:
 		Trigger(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, ExtEngineManager* aExtManager,
 			Firebird::IExternalEngine* aEngine, RoutineMetadata* aMetadata,
 			Firebird::IExternalTrigger* aTrigger, const Jrd::Trigger* aTrg);
-		~Trigger();
+		~Trigger() override;
 
 		void execute(thread_db* tdbb, Request* request, unsigned action,
 			record_param* oldRpb, record_param* newRpb) const;

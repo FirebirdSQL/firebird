@@ -428,9 +428,8 @@ public:
 	bool fullDomain;
 };
 
-typedef Firebird::GenericMap<Firebird::Pair<Firebird::Left<MetaNamePair, FieldInfo> > >
-	MapFieldInfo;
-typedef Firebird::GenericMap<Firebird::Pair<Firebird::Right<Item, ItemInfo> > > MapItemInfo;
+typedef Firebird::LeftPooledMap<MetaNamePair, FieldInfo> MapFieldInfo;
+typedef Firebird::RightPooledMap<Item, ItemInfo> MapItemInfo;
 
 // Compile scratch block
 

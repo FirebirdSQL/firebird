@@ -13051,7 +13051,7 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 		if (argCount > node->function->fun_inputs)
 			mismatchStatus << Arg::Gds(isc_wronumarg);
 
-		for (auto pos = 0; pos < positionalArgCount; ++pos)
+		for (auto pos = 0u; pos < positionalArgCount; ++pos)
 		{
 			if (pos < node->function->fun_inputs)
 			{
@@ -13505,12 +13505,20 @@ dsc* UdfCallNode::execute(thread_db* tdbb, Request* request) const
 
 			funcRequest->setGmtTimeStamp(request->getGmtTimeStamp());
 
-			EXE_start(tdbb, funcRequest, transaction);
+			if (function->fun_external)
+			{
+				function->fun_external->execute(
+					tdbb, funcRequest, transaction, inMsgLength, inMsg, outMsgLength, outMsg);
+			}
+			else
+			{
+				EXE_start(tdbb, funcRequest, transaction);
 
-			if (inMsgLength != 0)
-				EXE_send(tdbb, funcRequest, 0, inMsgLength, inMsg);
+				if (inMsgLength != 0)
+					EXE_send(tdbb, funcRequest, 0, inMsgLength, inMsg);
 
-			EXE_receive(tdbb, funcRequest, 1, outMsgLength, outMsg);
+				EXE_receive(tdbb, funcRequest, 1, outMsgLength, outMsg);
+			}
 
 			// Clean up all savepoints started during execution of the function
 
