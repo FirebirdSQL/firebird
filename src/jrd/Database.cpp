@@ -370,18 +370,6 @@ namespace Jrd
 			dbb_modules.add(module);
 	}
 
-	void Database::ensureGuid(thread_db* tdbb)
-	{
-		if (readOnly())
-			return;
-
-		if (dbb_guid.isEmpty())
-		{
-			dbb_guid = Guid::generate();
-			PAG_set_db_guid(tdbb, dbb_guid);
-		}
-	}
-
 	FB_UINT64 Database::getReplSequence(thread_db* tdbb)
 	{
 		USHORT length = sizeof(FB_UINT64);

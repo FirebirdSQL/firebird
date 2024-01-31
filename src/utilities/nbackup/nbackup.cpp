@@ -35,6 +35,8 @@
 #include <string.h>
 #include <time.h>
 
+#include <optional>
+
 #include "../common/db_alias.h"
 #include "../jrd/ods.h"
 #include "../yvalve/gds_proto.h"
@@ -1377,7 +1379,7 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 		--db_size;
 		page_reads++;
 
-		Guid backup_guid;
+		std::optional<Guid> backup_guid;
 		auto p = reinterpret_cast<Ods::header_page*>(page_buff)->hdr_data;
 		const auto end = reinterpret_cast<UCHAR*>(page_buff) + header->hdr_page_size;
 		while (p < end && *p != Ods::HDR_end)
@@ -1385,14 +1387,14 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 			if (*p == Ods::HDR_backup_guid)
 			{
 				if (p[1] == Guid::SIZE)
-					backup_guid.assign(p + 2);
+					backup_guid = Guid(p + 2);
 				break;
 			}
 
 			p += p[1] + 2;
 		}
 
-		if (backup_guid.isEmpty())
+		if (!backup_guid.has_value())
 			status_exception::raise(Arg::Gds(isc_nbackup_lostguid_bk));
 
 		// Write data to backup file
@@ -1403,7 +1405,7 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 			memcpy(bh.signature, backup_signature, sizeof(backup_signature));
 			bh.version = BACKUP_VERSION;
 			bh.level = level > 0 ? level : 0;
-			backup_guid.copyTo(bh.backup_guid);
+			backup_guid.value().copyTo(bh.backup_guid);
 			prev_guid.copyTo(bh.prev_guid);
 			bh.page_size = header->hdr_page_size;
 			bh.backup_scn = backup_scn;
@@ -1583,7 +1585,7 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 			in_sqlda->sqlvar[0].sqlind = &null_ind;
 		}
 
-		in_sqlda->sqlvar[1].sqldata = (char*) backup_guid.toString().c_str();
+		in_sqlda->sqlvar[1].sqldata = (char*) backup_guid.value().toString().c_str();
 		in_sqlda->sqlvar[1].sqlind = &null_flag;
 		in_sqlda->sqlvar[2].sqldata = (char*) &backup_scn;
 		in_sqlda->sqlvar[2].sqlind = &null_flag;
@@ -1663,9 +1665,9 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 	try
 	{
 		Array<UCHAR> page_buffer;
-
 		int curLevel = 0;
-		Guid prev_guid;
+		std::optional<Guid> prev_guid;
+
 		while (true)
 		{
 			if (!filecount)
@@ -1749,7 +1751,7 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 						Arg::Num(bakheader.level) << bakname.c_str() << Arg::Num(curLevel));
 				}
 				// We may also add SCN check, but GUID check covers this case too
-				if (Guid(bakheader.prev_guid) != prev_guid)
+				if (Guid(bakheader.prev_guid) != prev_guid.value())
 					status_exception::raise(Arg::Gds(isc_nbackup_wrong_orderbk) << bakname.c_str());
 
 				// Emulate seek_file(backup, bakheader.page_size)
@@ -1814,7 +1816,7 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 				if (read_file(dbase, page_ptr, header.hdr_page_size) != header.hdr_page_size)
 					status_exception::raise(Arg::Gds(isc_nbackup_err_eofhdr_restdb) << Arg::Num(2));
 
-				prev_guid.clear();
+				prev_guid.reset();
 				auto p = reinterpret_cast<Ods::header_page*>(page_ptr)->hdr_data;
 				const auto end = page_ptr + header.hdr_page_size;
 				while (p < end && *p != Ods::HDR_end)
@@ -1822,13 +1824,13 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 					if (*p == Ods::HDR_backup_guid)
 					{
 						if (p[1] == Guid::SIZE)
-							prev_guid.assign(p + 2);
+							prev_guid = Guid(p + 2);
 						break;
 					}
 
 					p += p[1] + 2;
 				}
-				if (prev_guid.isEmpty())
+				if (!prev_guid.has_value())
 					status_exception::raise(Arg::Gds(isc_nbackup_lostguid_l0bk));
 				// We are likely to have normal database here
 				delete_database = false;

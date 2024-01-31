@@ -68,7 +68,6 @@
 IMPLEMENT_TRACE_ROUTINE(nbak_trace, "NBAK")
 #endif
 
-
 using namespace Jrd;
 using namespace Firebird;
 

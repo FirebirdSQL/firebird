@@ -359,7 +359,7 @@ namespace
 
 		bool checkGuid(const Guid& guid)
 		{
-			return (m_config->sourceGuid.isEmpty() || m_config->sourceGuid == guid);
+			return (!m_config->sourceGuid.has_value() || m_config->sourceGuid.value() == guid);
 		}
 
 		FB_UINT64 initReplica()

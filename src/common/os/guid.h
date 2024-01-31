@@ -62,12 +62,11 @@ void GenerateGuid(UUID* guid);
 // Wrapper class around UUID
 
 class Guid
-
 {
 	// Some versions of MSVC cannot recognize hh specifier but MSVC 2015 has it
-	const char* const GUID_FORMAT =
+	static constexpr const char* GUID_FORMAT =
 		"{%08X-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX}";
-	const int GUID_FORMAT_ARGS = 11;
+	static constexpr int GUID_FORMAT_ARGS = 11;
 
 public:
 	static constexpr ULONG SIZE = sizeof(UUID);
@@ -76,30 +75,27 @@ public:
 	{}
 
 	Guid(const Guid& other)
-		: m_data(other.m_data), m_initialized(other.m_initialized)
+		: m_data(other.m_data)
 	{}
 
 	Guid(const UUID& uuid)
-		: m_data(uuid), m_initialized(true)
+		: m_data(uuid)
 	{}
 
 	explicit Guid(const UCHAR* data)
 	{
 		memcpy(&m_data, data, sizeof(UUID));
-		m_initialized = true;
 	}
 
 	Guid& operator=(const Guid& other)
 	{
-		m_data = other.m_data;
-		m_initialized = other.m_initialized;
+		m_data = other.m_data; // copy struct by value
 		return *this;
 	}
 
 	bool operator==(const Guid& other) const
 	{
-		return (m_initialized == other.m_initialized &&
-			(!m_initialized || !memcmp(&m_data, &other.m_data, sizeof(UUID))));
+		return memcmp(&m_data, &other.m_data, sizeof(UUID)) == 0;
 	}
 
 	bool operator!=(const Guid& other) const
@@ -115,22 +111,6 @@ public:
 	void assign(const UCHAR* buffer)
 	{
 		memcpy(&m_data, buffer, sizeof(UUID));
-		m_initialized = true;
-	}
-
-	void clear()
-	{
-		m_initialized = false;
-	}
-
-	bool hasData() const
-	{
-		return m_initialized;
-	}
-
-	bool isEmpty() const
-	{
-		return !m_initialized;
 	}
 
 	void toString(char* buffer) const
@@ -164,13 +144,7 @@ public:
 			&m_data.Data4[0], &m_data.Data4[1], &m_data.Data4[2], &m_data.Data4[3],
 			&m_data.Data4[4], &m_data.Data4[5], &m_data.Data4[6], &m_data.Data4[7]);
 
-		if (result == GUID_FORMAT_ARGS)
-		{
-			m_initialized = true;
-			return true;
-		}
-
-		return false;
+		return (result == GUID_FORMAT_ARGS);
 	}
 
 	bool fromString(const Firebird::string& str)
@@ -216,13 +190,11 @@ public:
 	{
 		Guid guid;
 		GenerateGuid(&guid.m_data);
-		guid.m_initialized = true;
 		return guid;
 	}
 
 private:
 	UUID m_data;
-	bool m_initialized = false;
 };
 
 }	// namespace

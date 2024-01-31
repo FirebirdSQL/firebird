@@ -119,7 +119,6 @@ Config::Config()
 	  archiveTimeout(DEFAULT_ARCHIVE_TIMEOUT),
 	  syncReplicas(getPool()),
 	  sourceDirectory(getPool()),
-	  sourceGuid{},
 	  verboseLogging(false),
 	  applyIdleTimeout(DEFAULT_APPLY_IDLE_TIMEOUT),
 	  applyErrorTimeout(DEFAULT_APPLY_ERROR_TIMEOUT),
@@ -146,7 +145,6 @@ Config::Config(const Config& other)
 	  archiveTimeout(other.archiveTimeout),
 	  syncReplicas(getPool(), other.syncReplicas),
 	  sourceDirectory(getPool(), other.sourceDirectory),
-	  sourceGuid{},
 	  verboseLogging(other.verboseLogging),
 	  applyIdleTimeout(other.applyIdleTimeout),
 	  applyErrorTimeout(other.applyErrorTimeout),
@@ -391,8 +389,10 @@ void Config::enumerate(ReplicaList& replicas)
 				}
 				else if (key == "source_guid")
 				{
-					if (!config->sourceGuid.fromString(value))
+					Guid guid;
+					if (!guid.fromString(value))
 						configError("invalid (misformatted) value", key, value);
+					config->sourceGuid = guid;
 				}
 				else if (key == "verbose_logging")
 				{

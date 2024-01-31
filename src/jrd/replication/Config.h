@@ -24,6 +24,8 @@
 #ifndef JRD_REPLICATION_CONFIG_H
 #define JRD_REPLICATION_CONFIG_H
 
+#include <optional>
+
 #include "../common/classes/array.h"
 #include "../common/classes/objects_array.h"
 #include "../common/classes/fb_string.h"
@@ -55,7 +57,7 @@ namespace Replication
 		ULONG archiveTimeout;
 		Firebird::ObjectsArray<Firebird::string> syncReplicas;
 		Firebird::PathName sourceDirectory;
-		Firebird::Guid sourceGuid;
+		std::optional<Firebird::Guid> sourceGuid;
 		bool verboseLogging;
 		ULONG applyIdleTimeout;
 		ULONG applyErrorTimeout;
