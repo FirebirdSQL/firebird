@@ -124,7 +124,7 @@ using namespace Firebird;
 static const mode_t MASK = 0660;
 
 static jrd_file* seek_file(jrd_file*, BufferDesc*, FB_UINT64*, FbStatusVector*);
-static jrd_file* setup_file(Database*, const PathName&, int, bool, bool, bool, bool);
+static jrd_file* setup_file(Database*, const PathName&, int, bool, bool, bool, bool, bool);
 static void lockDatabaseFile(int& desc, const bool shareMode, const bool temporary,
 							 const char* fileName, ISC_STATUS operation);
 static bool unix_error(const TEXT*, const jrd_file*, ISC_STATUS, FbStatusVector* = NULL);
@@ -218,6 +218,7 @@ jrd_file* PIO_create(thread_db* tdbb, const PathName& file_name,
  *
  **************************************/
 	const auto dbb = tdbb->getDatabase();
+	const bool forceWrite = !temporary && (dbb->dbb_flags & DBB_force_write) != 0;
 	const bool notUseFSCache = !dbb->dbb_config->getUseFileSystemCache();
 	bool onRawDevice = false;
 
@@ -232,6 +233,8 @@ jrd_file* PIO_create(thread_db* tdbb, const PathName& file_name,
 		flag |= O_CREAT;
 #endif
 	flag |= overwrite ? O_TRUNC : O_EXCL;
+	if (forceWrite)
+		flag |= SYNC;
 	if (notUseFSCache)
 		flag |= O_DIRECT;
 #endif
@@ -293,7 +296,8 @@ jrd_file* PIO_create(thread_db* tdbb, const PathName& file_name,
 	PathName expanded_name(file_name);
 	ISC_expand_filename(expanded_name, false);
 
-	return setup_file(dbb, expanded_name, desc, false, shareMode, notUseFSCache, onRawDevice);
+	return setup_file(dbb, expanded_name, desc, false, shareMode,
+					  forceWrite, notUseFSCache, onRawDevice);
 }
 
 
@@ -415,7 +419,7 @@ void PIO_flush(thread_db* tdbb, jrd_file* main_file)
 }
 
 
-void PIO_force_write(jrd_file* file, const bool forcedWrites)
+void PIO_force_write(jrd_file* file, const bool forceWrite)
 {
 /**************************************
  *
@@ -433,16 +437,16 @@ void PIO_force_write(jrd_file* file, const bool forcedWrites)
 #ifndef SUPERSERVER_V2
 	const bool oldForce = (file->fil_flags & FIL_force_write) != 0;
 
-	if (forcedWrites != oldForce)
+	if (forceWrite != oldForce)
 	{
-		const int control = forcedWrites ? SYNC : 0;
+		const int control = forceWrite ? SYNC : 0;
 
 		if (fcntl(file->fil_desc, F_SETFL, control) == -1)
 		{
 			unix_error("fcntl() SYNC/DIRECT", file, isc_io_access_err);
 		}
 
-		if (forcedWrites)
+		if (forceWrite)
 			file->fil_flags |= FIL_force_write;
 		else
 			file->fil_flags &= ~FIL_force_write;
@@ -651,21 +655,22 @@ jrd_file* PIO_open(thread_db* tdbb,
  *	Open a database file.
  *
  **************************************/
-	Database* const dbb = tdbb->getDatabase();
+	const auto dbb = tdbb->getDatabase();
 
 	bool readOnly = false;
+	const bool forceWrite = (dbb->dbb_flags & DBB_force_write) != 0;
 	const bool notUseFSCache = !dbb->dbb_config->getUseFileSystemCache();
 
 	const PathName& expandedName(string.hasData() ? string : file_name);
 	const PathName& originalName(file_name.hasData() ? file_name : string);
-	int desc = openFile(expandedName, false, notUseFSCache, false);
+	int desc = openFile(expandedName, forceWrite, notUseFSCache, false);
 
 	if (desc == -1)
 	{
 		// Try opening the database file in ReadOnly mode. The database file could
 		// be on a RO medium (CD-ROM etc.). If this fileopen fails, return error.
 
-		desc = openFile(expandedName, false, notUseFSCache, true);
+		desc = openFile(expandedName, forceWrite, notUseFSCache, true);
 		if (desc == -1)
 		{
 			ERR_post(Arg::Gds(isc_io_error) << Arg::Str("open") << Arg::Str(originalName) <<
@@ -690,7 +695,7 @@ jrd_file* PIO_open(thread_db* tdbb,
 		// being opened ReadOnly. This flag will be used later to compare with
 		// the Header Page flag setting to make sure that the database is set ReadOnly.
 
-		PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+		const auto pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 		if (!pageSpace->file)
 			dbb->dbb_flags |= DBB_being_opened_read_only;
 	}
@@ -726,7 +731,8 @@ jrd_file* PIO_open(thread_db* tdbb,
 	}
 #endif // SUPPORT_RAW_DEVICES
 
-	return setup_file(dbb, expandedName, desc, readOnly, shareMode, notUseFSCache, onRawDevice);
+	return setup_file(dbb, expandedName, desc, readOnly, shareMode,
+					  forceWrite, notUseFSCache, onRawDevice);
 }
 
 
@@ -876,7 +882,7 @@ static jrd_file* seek_file(jrd_file* file, BufferDesc* bdb, FB_UINT64* offset,
 }
 
 
-static int openFile(const PathName& name, const bool forcedWrites,
+static int openFile(const PathName& name, const bool forceWrite,
 	const bool notUseFSCache, const bool readOnly)
 {
 /**************************************
@@ -895,7 +901,7 @@ static int openFile(const PathName& name, const bool forcedWrites,
 	flag |= SYNC;
 	// what to do with O_DIRECT here ?
 #else
-	if (forcedWrites)
+	if (forceWrite)
 		flag |= SYNC;
 	if (notUseFSCache)
 		flag |= O_DIRECT;
@@ -931,6 +937,7 @@ static jrd_file* setup_file(Database* dbb,
 							int desc,
 							bool readOnly,
 							bool shareMode,
+							bool forceWrite,
 							bool notUseFSCache,
 							bool onRawDevice)
 {
@@ -957,6 +964,8 @@ static jrd_file* setup_file(Database* dbb,
 			file->fil_flags |= FIL_readonly;
 		if (shareMode)
 			file->fil_flags |= FIL_sh_write;
+		if (forceWrite)
+			file->fil_flags |= FIL_force_write;
 		if (notUseFSCache)
 			file->fil_flags |= FIL_no_fs_cache;
 		if (onRawDevice)

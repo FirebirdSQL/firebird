@@ -46,7 +46,7 @@ bool	PAG_delete_clump_entry(Jrd::thread_db* tdbb, USHORT);
 void	PAG_format_header(Jrd::thread_db*);
 void	PAG_format_pip(Jrd::thread_db*, Jrd::PageSpace& pageSpace);
 bool	PAG_get_clump(Jrd::thread_db*, USHORT, USHORT*, UCHAR*);
-void	PAG_header(Jrd::thread_db*, bool);
+void	PAG_header(Jrd::thread_db*, bool, const Firebird::TriState newForceWrite = Firebird::TriState());
 void	PAG_header_init(Jrd::thread_db*);
 void	PAG_init(Jrd::thread_db*);
 void	PAG_init2(Jrd::thread_db*, USHORT);

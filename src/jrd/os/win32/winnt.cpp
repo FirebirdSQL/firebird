@@ -107,7 +107,7 @@ using namespace Firebird;
 
 static bool	maybeCloseFile(HANDLE&);
 static jrd_file* seek_file(jrd_file*, BufferDesc*, OVERLAPPED*);
-static jrd_file* setup_file(Database*, const Firebird::PathName&, HANDLE, bool, bool, bool);
+static jrd_file* setup_file(Database*, const Firebird::PathName&, HANDLE, bool, bool, bool, bool);
 static bool nt_error(const TEXT*, const jrd_file*, ISC_STATUS, FbStatusVector* const);
 
 inline static DWORD getShareFlags(const bool shared_access, bool temporary = false)
@@ -185,6 +185,7 @@ jrd_file* PIO_create(thread_db* tdbb, const Firebird::PathName& string,
  *
  **************************************/
 	const auto dbb = tdbb->getDatabase();
+	const bool forceWrite = !temporary && (dbb->dbb_flags & DBB_force_write) != 0;
 	const bool notUseFSCache = !dbb->dbb_config->getUseFileSystemCache();
 	const bool shareMode = dbb->dbb_config->getServerMode() != MODE_SUPER;
 
@@ -196,6 +197,9 @@ jrd_file* PIO_create(thread_db* tdbb, const Firebird::PathName& string,
 
 	if (temporary)
 		dwFlagsAndAttributes |= g_dwExtraTempFlags;
+
+	if (forceWrite)
+		dwFlagsAndAttributes |= FILE_FLAG_WRITE_THROUGH;
 
 	if (notUseFSCache)
 		dwFlagsAndAttributes |= FILE_FLAG_NO_BUFFERING;
@@ -220,7 +224,7 @@ jrd_file* PIO_create(thread_db* tdbb, const Firebird::PathName& string,
 	Firebird::PathName workspace(string);
 	ISC_expand_filename(workspace, false);
 
-	return setup_file(dbb, workspace, desc, false, shareMode, notUseFSCache);
+	return setup_file(dbb, workspace, desc, false, shareMode, forceWrite, notUseFSCache);
 }
 
 
@@ -355,7 +359,7 @@ void PIO_force_write(jrd_file* file, const bool forceWrite)
 					 Arg::Gds(isc_io_access_err) << Arg::Windows(GetLastError()));
 		}
 
-		if (forcedWrites)
+		if (forceWrite)
 			file->fil_flags |= FIL_force_write;
 		else
 			file->fil_flags &= ~FIL_force_write;
@@ -496,6 +500,7 @@ jrd_file* PIO_open(thread_db* tdbb,
  *
  **************************************/
 	const auto dbb = tdbb->getDatabase();
+	const bool forceWrite = (dbb->dbb_flags & DBB_force_write) != 0;
 	const bool notUseFSCache = !dbb->dbb_config->getUseFileSystemCache();
 	const bool shareMode = dbb->dbb_config->getServerMode() != MODE_SUPER;
 
@@ -503,6 +508,9 @@ jrd_file* PIO_open(thread_db* tdbb,
 	bool readOnly = false;
 
 	DWORD dwFlagsAndAttributes = FILE_ATTRIBUTE_NORMAL | g_dwExtraFlags;
+
+	if (forceWrite)
+		dwFlagsAndAttributes |= FILE_FLAG_WRITE_THROUGH;
 
 	if (notUseFSCache)
 		dwFlagsAndAttributes |= FILE_FLAG_NO_BUFFERING;
@@ -547,7 +555,7 @@ jrd_file* PIO_open(thread_db* tdbb,
 
 	SetFileCompletionNotificationModes(desc, FILE_SKIP_SET_EVENT_ON_HANDLE);
 
-	return setup_file(dbb, string, desc, readOnly, shareMode, notUseFSCache);
+	return setup_file(dbb, string, desc, readOnly, shareMode, forceWrite, notUseFSCache);
 }
 
 
@@ -844,6 +852,7 @@ static jrd_file* setup_file(Database* dbb,
 							HANDLE desc,
 							bool readOnly,
 							bool shareMode,
+							bool forceWrite,
 							bool notUseFSCache)
 {
 /**************************************
@@ -869,12 +878,14 @@ static jrd_file* setup_file(Database* dbb,
 			file->fil_flags |= FIL_readonly;
 		if (shareMode)
 			file->fil_flags |= FIL_sh_write;
+		if (forceWrites)
+			file->fil_flags |= FIL_force_write;
 		if (notUseFSCache)
 			file->fil_flags |= FIL_no_fs_cache;
 
 		// If this isn't the primary file, we're done
 
-		const PageSpace* const pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+		const auto pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 		if (pageSpace && pageSpace->file)
 			return file;
 

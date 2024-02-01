@@ -226,9 +226,6 @@ void BackupManager::openDelta(thread_db* tdbb)
 {
 	fb_assert(!diff_file);
 	diff_file = PIO_open(tdbb, diff_name, diff_name);
-
-	if (database->dbb_flags & DBB_force_write)
-		setForcedWrites(true);
 }
 
 void BackupManager::closeDelta(thread_db* tdbb)
@@ -292,9 +289,6 @@ void BackupManager::beginBackup(thread_db* tdbb)
 	}
 
 	{ // logical scope
-		if (database->dbb_flags & DBB_force_write)
-			setForcedWrites(true);
-
 #ifdef UNIX
 		// adjust difference file access rights to make it match main DB ones
 		if (diff_file && geteuid() == 0)
