@@ -51,13 +51,16 @@ namespace Jrd
 {
 	bool Database::onRawDevice() const
 	{
-		const PageSpace* const pageSpace = dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+		const auto pageSpace = dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 		return pageSpace->onRawDevice();
 	}
 
 	ULONG Database::getIOBlockSize() const
 	{
-		if ((dbb_flags & DBB_no_fs_cache) || onRawDevice())
+		const auto pageSpace = dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+		fb_assert(pageSpace && pageSpace->file);
+
+		if ((pageSpace->file->fil_flags & FIL_no_fs_cache) || pageSpace->onRawDevice())
 			return DIRECT_IO_BLOCK_SIZE;
 
 		return PAGE_ALIGNMENT;
