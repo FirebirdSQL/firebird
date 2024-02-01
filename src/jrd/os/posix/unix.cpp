@@ -226,17 +226,20 @@ jrd_file* PIO_create(thread_db* tdbb, const PathName& file_name,
 	const int flag = SYNC | O_RDWR | O_CREAT | (overwrite ? O_TRUNC : O_EXCL) | O_BINARY;
 #else
 	int flag = O_RDWR | O_BINARY;
+
 #ifdef SUPPORT_RAW_DEVICES
 	if (PIO_on_raw_device(file_name))
 		onRawDevice = true;
-	else
-		flag |= O_CREAT;
 #endif
+
 	flag |= overwrite ? O_TRUNC : O_EXCL;
+
 	if (forceWrite)
 		flag |= SYNC;
 	if (notUseFSCache)
 		flag |= O_DIRECT;
+	if (!onRawDevice)
+		flag |= O_CREAT;
 #endif
 
 	int desc = os_utils::open(file_name.c_str(), flag, 0666);
