@@ -878,7 +878,7 @@ static jrd_file* setup_file(Database* dbb,
 			file->fil_flags |= FIL_readonly;
 		if (shareMode)
 			file->fil_flags |= FIL_sh_write;
-		if (forceWrites)
+		if (forceWrite)
 			file->fil_flags |= FIL_force_write;
 		if (notUseFSCache)
 			file->fil_flags |= FIL_no_fs_cache;
