@@ -971,6 +971,77 @@ const int HIGH_WORD		= 0;
 #endif
 #endif
 
+
+#define DEFINE_ENUM_BITWISE_OPERATORS(enumType) \
+	constexpr inline enumType operator|(enumType lhs, enumType rhs) \
+	{ \
+		using T = std::underlying_type_t<enumType>; \
+		return static_cast<enumType>(static_cast<T>(lhs) | static_cast<T>(rhs)); \
+	} \
+\
+	constexpr inline enumType operator&(enumType lhs, enumType rhs) \
+	{ \
+		using T = std::underlying_type_t<enumType>; \
+		return static_cast<enumType>(static_cast<T>(lhs) & static_cast<T>(rhs)); \
+	} \
+\
+	constexpr inline enumType operator^(enumType lhs, enumType rhs) \
+	{ \
+		using T = std::underlying_type_t<enumType>; \
+		return static_cast<enumType>(static_cast<T>(lhs) ^ static_cast<T>(rhs)); \
+	} \
+\
+	constexpr inline enumType& operator|=(enumType& lhs, enumType rhs) \
+	{ \
+		return lhs = lhs | rhs; \
+	} \
+\
+	constexpr inline enumType& operator&=(enumType& lhs, enumType rhs) \
+	{ \
+		return lhs = lhs & rhs; \
+	} \
+\
+	constexpr inline enumType& operator^=(enumType& lhs, enumType rhs) \
+	{ \
+		return lhs = lhs ^ rhs; \
+	}
+
+#define DEFINE_ENUM_LOGICAL_OPERATORS(enumType) \
+	constexpr inline bool operator&&(enumType lhs, enumType rhs) \
+	{ \
+		using T = std::underlying_type_t<enumType>; \
+		return static_cast<T>(lhs) && static_cast<T>(rhs); \
+	} \
+\
+	constexpr inline bool operator||(enumType lhs, enumType rhs) \
+	{ \
+		using T = std::underlying_type_t<enumType>; \
+		return static_cast<T>(lhs) || static_cast<T>(rhs); \
+	} \
+\
+	constexpr inline bool operator!(enumType lhs) \
+	{ \
+		using T = std::underlying_type_t<enumType>; \
+		return !static_cast<T>(lhs); \
+	}
+
+#define DEFINE_ENUM_LOGICAL_OPERATORS_WITH_BOOL(enumType) \
+	constexpr inline bool operator&&(enumType lhs, bool rhs) \
+	{ \
+		return static_cast<bool>(lhs) && rhs; \
+	} \
+\
+	constexpr inline bool operator||(enumType lhs, bool rhs) \
+	{ \
+		return static_cast<bool>(lhs) || rhs; \
+	}
+
+#define DEFINE_ENUM_ALL_OPERATORS(enumType) \
+	DEFINE_ENUM_BITWISE_OPERATORS(enumType) \
+	DEFINE_ENUM_LOGICAL_OPERATORS(enumType) \
+	DEFINE_ENUM_LOGICAL_OPERATORS_WITH_BOOL(enumType)
+
+
 inline const TEXT FB_SHORT_MONTHS[][4] =
 {
 	"Jan", "Feb", "Mar",

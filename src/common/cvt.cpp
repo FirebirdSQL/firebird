@@ -136,76 +136,6 @@ const SINT64 INT64_LIMIT = ((((SINT64) 1) << 62) / 5);
 // AP,2012: Looks like there is no need making len zero, but I keep old define for a reference.
 // {if (len) {memcpy(to, from, len); from += len; to += len; len = 0;} }
 
-#define DEFINE_ENUM_BITWISE_OPERATORS(enumType) \
-	constexpr inline enumType operator|(enumType lhs, enumType rhs) \
-	{ \
-		using T = std::underlying_type_t<enumType>; \
-		return static_cast<enumType>(static_cast<T>(lhs) | static_cast<T>(rhs)); \
-	} \
-\
-	constexpr inline enumType operator&(enumType lhs, enumType rhs) \
-	{ \
-		using T = std::underlying_type_t<enumType>; \
-		return static_cast<enumType>(static_cast<T>(lhs) & static_cast<T>(rhs)); \
-	} \
-\
-	constexpr inline enumType operator^(enumType lhs, enumType rhs) \
-	{ \
-		using T = std::underlying_type_t<enumType>; \
-		return static_cast<enumType>(static_cast<T>(lhs) ^ static_cast<T>(rhs)); \
-	} \
-\
-	constexpr inline enumType& operator|=(enumType& lhs, enumType rhs) \
-	{ \
-		return lhs = lhs | rhs; \
-	} \
-\
-	constexpr inline enumType& operator&=(enumType& lhs, enumType rhs) \
-	{ \
-		return lhs = lhs & rhs; \
-	} \
-\
-	constexpr inline enumType& operator^=(enumType& lhs, enumType rhs) \
-	{ \
-		return lhs = lhs ^ rhs; \
-	}
-
-#define DEFINE_ENUM_LOGICAL_OPERATORS(enumType) \
-	constexpr inline bool operator&&(enumType lhs, enumType rhs) \
-	{ \
-		using T = std::underlying_type_t<enumType>; \
-		return static_cast<T>(lhs) && static_cast<T>(rhs); \
-	} \
-\
-	constexpr inline bool operator||(enumType lhs, enumType rhs) \
-	{ \
-		using T = std::underlying_type_t<enumType>; \
-		return static_cast<T>(lhs) || static_cast<T>(rhs); \
-	} \
-\
-	constexpr inline bool operator!(enumType lhs) \
-	{ \
-		using T = std::underlying_type_t<enumType>; \
-		return !static_cast<T>(lhs); \
-	}
-
-#define DEFINE_ENUM_LOGICAL_OPERATORS_WITH_BOOL(enumType) \
-	constexpr inline bool operator&&(enumType lhs, bool rhs) \
-	{ \
-		return static_cast<bool>(lhs) && rhs; \
-	} \
-\
-	constexpr inline bool operator||(enumType lhs, bool rhs) \
-	{ \
-		return static_cast<bool>(lhs) || rhs; \
-	}
-
-#define DEFINE_ENUM_ALL_OPERATORS(enumType) \
-	DEFINE_ENUM_BITWISE_OPERATORS(enumType) \
-	DEFINE_ENUM_LOGICAL_OPERATORS(enumType) \
-	DEFINE_ENUM_LOGICAL_OPERATORS_WITH_BOOL(enumType)
-
-
 static void datetime_to_text(const dsc*, dsc*, Callbacks*);
 static void float_to_text(const dsc*, dsc*, Callbacks*);
 static void decimal_float_to_text(const dsc*, dsc*, DecimalStatus, Callbacks*);
@@ -316,21 +246,24 @@ namespace
 		MemoryPool& m_pool;
 	};
 
-	enum class FormatPatterns : unsigned
+	namespace Format
 	{
-		NONE = 0,
-		HH24 = 1 << 0,
-		HH12 = 1 << 1,
-		AM = 1 << 2,
-		PM = 1 << 3,
-		AM_OR_PM_FIRST = 1 << 4,
-		SSSSS = 1 << 5,
-		MI = 1 << 6,
-		SS = 1 << 7,
-		TZH = 1 << 8,
-		TZM = 1 << 9
-	};
-	DEFINE_ENUM_ALL_OPERATORS(FormatPatterns);
+		enum Patterns : unsigned
+		{
+			NONE = 0,
+			HH24 = 1 << 0,
+			HH12 = 1 << 1,
+			AM = 1 << 2,
+			PM = 1 << 3,
+			AM_OR_PM_FIRST = 1 << 4,
+			SSSSS = 1 << 5,
+			MI = 1 << 6,
+			SS = 1 << 7,
+			TZH = 1 << 8,
+			TZM = 1 << 9
+		};
+		DEFINE_ENUM_ALL_OPERATORS(Patterns);
+	}
 
 	enum class ExpectedDateType
 	{
@@ -1925,21 +1858,21 @@ static std::string_view parse_string_to_get_substring(const char* str, int lengt
 }
 
 
-static FormatPatterns apply_period(std::string_view period, struct tm& outTimes, Firebird::Callbacks* cb)
+static Format::Patterns apply_period(std::string_view period, struct tm& outTimes, Firebird::Callbacks* cb)
 {
 	if (period == AM_PERIOD)
 	{
 		if (outTimes.tm_hour == 12)
 			outTimes.tm_hour = 0;
 
-		return FormatPatterns::AM;
+		return Format::AM;
 	}
 	else if (period == PM_PERIOD)
 	{
 		int hours = outTimes.tm_hour;
 		outTimes.tm_hour = hours == 12 ? hours : 12 + hours;
 
-		return FormatPatterns::PM;
+		return Format::PM;
 	}
 
 	cb->err(Arg::Gds(isc_incorrect_hours_period) << string(period.data(), period.length()));
@@ -1970,7 +1903,7 @@ static int round_year_pattern_implementation(int parsedRRValue, int currentYear)
 }
 
 
-static void string_to_format_datetime_pattern_matcher(std::string_view pattern, FormatPatterns& formatFlags, std::string_view previousPattern,
+static void string_to_format_datetime_pattern_matcher(std::string_view pattern, Format::Patterns& formatFlags, std::string_view previousPattern,
 	const char* str, int strLength, int& strOffset, struct tm& outTimes, int& outFractions,
 	SSHORT& outTimezoneInMinutes, USHORT& outTimezoneId, Firebird::Callbacks* cb)
 {
@@ -2027,7 +1960,7 @@ static void string_to_format_datetime_pattern_matcher(std::string_view pattern, 
 		case 'M':
 			if (pattern == "MI")
 			{
-				formatFlags |= FormatPatterns::MI;
+				formatFlags |= Format::MI;
 
 				int minutes = parse_string_to_get_int(str, strLength, strOffset, 2);
 				if (minutes > 59)
@@ -2162,7 +2095,7 @@ static void string_to_format_datetime_pattern_matcher(std::string_view pattern, 
 			if (pattern == "HH"||
 				pattern == "HH12")
 			{
-				formatFlags |= FormatPatterns::HH12;
+				formatFlags |= Format::HH12;
 
 				int hours = parse_string_to_get_int(str, strLength, strOffset, 2);
 				if (hours < 1 || hours > 12)
@@ -2176,7 +2109,7 @@ static void string_to_format_datetime_pattern_matcher(std::string_view pattern, 
 			}
 			else if (pattern == "HH24")
 			{
-				formatFlags |= FormatPatterns::HH24;
+				formatFlags |= Format::HH24;
 
 				int hours = parse_string_to_get_int(str, strLength, strOffset, 2);
 				if (hours > 23)
@@ -2193,7 +2126,7 @@ static void string_to_format_datetime_pattern_matcher(std::string_view pattern, 
 		case 'S':
 			if (pattern == "SS")
 			{
-				formatFlags |= FormatPatterns::SS;
+				formatFlags |= Format::SS;
 
 				int seconds = parse_string_to_get_int(str, strLength, strOffset, 2);
 				if (seconds > 59)
@@ -2207,7 +2140,7 @@ static void string_to_format_datetime_pattern_matcher(std::string_view pattern, 
 			}
 			else if (pattern == "SSSSS")
 			{
-				formatFlags |= FormatPatterns::SSSSS;
+				formatFlags |= Format::SSSSS;
 
 				constexpr int maximumSecondsInDay = NoThrowTimeStamp::SECONDS_PER_DAY - 1;
 
@@ -2249,7 +2182,7 @@ static void string_to_format_datetime_pattern_matcher(std::string_view pattern, 
 			{
 				// If we get A.M or P.M first, set flag, so we can calculate hours later
 				if (outTimes.tm_hour == 0)
-					formatFlags |= FormatPatterns::AM_OR_PM_FIRST;
+					formatFlags |= Format::AM_OR_PM_FIRST;
 
 				std::string_view period = parse_string_to_get_substring(str, strLength, strOffset, sizeof(AM_PERIOD) - 1, false);
 				formatFlags |= apply_period(period, outTimes, cb);
@@ -2262,7 +2195,7 @@ static void string_to_format_datetime_pattern_matcher(std::string_view pattern, 
 			{
 				// If we get A.M or P.M first, set flag, so we can calculate hours later
 				if (outTimes.tm_hour == 0)
-					formatFlags |= FormatPatterns::AM_OR_PM_FIRST;
+					formatFlags |= Format::AM_OR_PM_FIRST;
 
 				std::string_view period = parse_string_to_get_substring(str, strLength, strOffset, sizeof(PM_PERIOD) - 1, false);
 				formatFlags |= apply_period(period, outTimes, cb);
@@ -2273,7 +2206,7 @@ static void string_to_format_datetime_pattern_matcher(std::string_view pattern, 
 		case 'T':
 			if (pattern == "TZH")
 			{
-				formatFlags |= FormatPatterns::TZH;
+				formatFlags |= Format::TZH;
 
 				if (previousPattern == "TZM")
 				{
@@ -2286,7 +2219,7 @@ static void string_to_format_datetime_pattern_matcher(std::string_view pattern, 
 			}
 			else if (pattern == "TZM")
 			{
-				formatFlags |= FormatPatterns::TZM;
+				formatFlags |= Format::TZM;
 
 				if (previousPattern == "TZH")
 				{
@@ -2314,18 +2247,17 @@ static void string_to_format_datetime_pattern_matcher(std::string_view pattern, 
 }
 
 // These rules are taken from ISO/IEC 9075-2:2023(E) 9.52 Datetime templates
-static void validate_format_flags(FormatPatterns formatFlags, Callbacks* cb)
+static void validate_format_flags(Format::Patterns formatFlags, Callbacks* cb)
 {
-	if (static_cast<bool>((formatFlags & (FormatPatterns::HH12 | FormatPatterns::AM | FormatPatterns::PM))))
+	if (formatFlags & (Format::HH12 | Format::AM | Format::PM))
 	{
 		// If CT contains <datetime template 24-hour>, then CT shall not contain <datetime template 12-hour> or <datetime template am/pm>.
-		if (static_cast<bool>(formatFlags & FormatPatterns::HH24))
+		if (formatFlags & Format::HH24)
 			cb->err(Arg::Gds(isc_incompatible_format_patterns) << Arg::Str("HH24") << Arg::Str("HH/HH12/A.M./P.M."));
 
 		// If CT contains <datetime template 12-hour>, then CT shall contain <datetime template am/pm> and shall not contain <datetime template 24-hour>.
 		// If CT contains <datetime template am/pm>, then CT shall contain <datetime template 12-hour> and shall not contain <datetime template 24-hour>.
-		if (static_cast<bool>(!(static_cast<bool>(formatFlags & FormatPatterns::HH12)
-			== (formatFlags & FormatPatterns::AM || formatFlags & FormatPatterns::PM))))
+		if (!(formatFlags & Format::HH12) == (formatFlags & Format::AM || formatFlags & Format::PM))
 		{
 			cb->err(Arg::Gds(isc_pattern_cant_be_used_without_other_pattern_and_vice_versa)
 				<< Arg::Str("HH/HH12") << Arg::Str("A.M./P.M."));
@@ -2335,22 +2267,22 @@ static void validate_format_flags(FormatPatterns formatFlags, Callbacks* cb)
 	// If CT contains <datetime template second of day>, then CT shall not contain any of the following:
 	// <datetime template 12-hour>, <datetime template 24-hour>, <datetime template minute>, <datetime
 	// template second of minute>, or <datetime template am/pm>.
-	if (static_cast<bool>(formatFlags & FormatPatterns::SSSSS))
+	if (formatFlags & Format::SSSSS)
 	{
-		if (static_cast<bool>(formatFlags & FormatPatterns::HH12))
+		if (formatFlags & Format::HH12)
 			cb->err(Arg::Gds(isc_incompatible_format_patterns) << Arg::Str("SSSSS") << Arg::Str("HH/HH12"));
-		if (static_cast<bool>(formatFlags & FormatPatterns::HH24))
+		if (formatFlags & Format::HH24)
 			cb->err(Arg::Gds(isc_incompatible_format_patterns) << Arg::Str("SSSSS") << Arg::Str("HH24"));
-		if (static_cast<bool>(formatFlags & FormatPatterns::MI))
+		if (formatFlags & Format::MI)
 			cb->err(Arg::Gds(isc_incompatible_format_patterns) << Arg::Str("SSSSS") << Arg::Str("MI"));
-		if (static_cast<bool>(formatFlags & FormatPatterns::SS))
+		if (formatFlags & Format::SS)
 			cb->err(Arg::Gds(isc_incompatible_format_patterns) << Arg::Str("SSSSS") << Arg::Str("HH/HH12"));
-		if (static_cast<bool>(formatFlags & (FormatPatterns::AM | FormatPatterns::PM)))
+		if (formatFlags & (Format::AM | Format::PM))
 			cb->err(Arg::Gds(isc_incompatible_format_patterns) << Arg::Str("SSSSS") << Arg::Str("A.M./P.M."));
 	}
 
 	// If CT contains <datetime template time zone minute>, then CT shall contain <datetime template time zone hour>.
-	if (formatFlags & FormatPatterns::TZM && !static_cast<bool>(formatFlags & FormatPatterns::TZH))
+	if (formatFlags & Format::TZM && !(formatFlags & Format::TZH))
 		cb->err(Arg::Gds(isc_pattern_cant_be_used_without_other_pattern) << Arg::Str("TZM") << Arg::Str("TZH"));
 }
 
@@ -2394,7 +2326,7 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 	std::string_view pattern;
 	std::string_view previousPattern;
 
-	FormatPatterns formatFlags = FormatPatterns::NONE;
+	Format::Patterns formatFlags = Format::NONE;
 
 	for (int i = 0; i < formatLength; i++)
 	{
@@ -2469,9 +2401,9 @@ ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::
 	validate_format_flags(formatFlags, cb);
 
 	// Deferred application of 12h period, if period was encountered first
-	if (static_cast<std::underlying_type_t<FormatPatterns>>(formatFlags & FormatPatterns::AM_OR_PM_FIRST))
+	if (formatFlags & Format::AM_OR_PM_FIRST)
 	{
-		bool periodIsAm = static_cast<bool>(formatFlags & FormatPatterns::AM);
+		bool periodIsAm = static_cast<bool>(formatFlags & Format::AM);
 		apply_period(periodIsAm ? AM_PERIOD : PM_PERIOD, times, cb);
 	}
 
