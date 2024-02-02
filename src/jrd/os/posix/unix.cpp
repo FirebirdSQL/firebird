@@ -133,7 +133,7 @@ using namespace Firebird;
 static const mode_t MASK = 0660;
 
 static jrd_file* seek_file(jrd_file*, BufferDesc*, FB_UINT64*, FbStatusVector*);
-static jrd_file* setup_file(Database*, const PathName&, int, bool, bool, bool, bool, bool);
+static jrd_file* setup_file(Database*, const PathName&, int, USHORT);
 static void lockDatabaseFile(int& desc, const bool shareMode, const bool temporary,
 							 const char* fileName, ISC_STATUS operation);
 static bool unix_error(const TEXT*, const jrd_file*, ISC_STATUS, FbStatusVector* = NULL);
@@ -308,8 +308,13 @@ jrd_file* PIO_create(thread_db* tdbb, const PathName& file_name,
 	PathName expanded_name(file_name);
 	ISC_expand_filename(expanded_name, false);
 
-	return setup_file(dbb, expanded_name, desc, false, shareMode,
-					  forceWrite, notUseFSCache, onRawDevice);
+	const USHORT flags =
+		(shareMode ? FIL_sh_write : 0) |
+		(forceWrite ? FIL_force_write : 0) |
+		(notUseFSCache ? FIL_no_fs_cache : 0) |
+		(onRawDevice ? FIL_raw_device : 0);
+
+	return setup_file(dbb, expanded_name, desc, flags);
 }
 
 
@@ -769,8 +774,14 @@ jrd_file* PIO_open(thread_db* tdbb,
 	}
 #endif // SUPPORT_RAW_DEVICES
 
-	return setup_file(dbb, expandedName, desc, readOnly, shareMode,
-					  forceWrite, notUseFSCache, onRawDevice);
+	const USHORT flags =
+		(readOnly ? FIL_readonly : 0) |
+		(shareMode ? FIL_sh_write : 0) |
+		(forceWrite ? FIL_force_write : 0) |
+		(notUseFSCache ? FIL_no_fs_cache : 0) |
+		(onRawDevice ? FIL_raw_device : 0);
+
+	return setup_file(dbb, expandedName, desc, flags);
 }
 
 
@@ -970,14 +981,7 @@ static void maybeCloseFile(int& desc)
 }
 
 
-static jrd_file* setup_file(Database* dbb,
-							const PathName& file_name,
-							int desc,
-							bool readOnly,
-							bool shareMode,
-							bool forceWrite,
-							bool notUseFSCache,
-							bool onRawDevice)
+static jrd_file* setup_file(Database* dbb, const PathName& file_name, int desc, USHORT flags)
 {
 /**************************************
  *
@@ -996,18 +1000,8 @@ static jrd_file* setup_file(Database* dbb,
 		file = FB_NEW_RPT(*dbb->dbb_permanent, file_name.length() + 1) jrd_file();
 		file->fil_desc = desc;
 		file->fil_max_page = MAX_ULONG;
+		file->fil_flags |= flags;
 		strcpy(file->fil_string, file_name.c_str());
-
-		if (readOnly)
-			file->fil_flags |= FIL_readonly;
-		if (shareMode)
-			file->fil_flags |= FIL_sh_write;
-		if (forceWrite)
-			file->fil_flags |= FIL_force_write;
-		if (notUseFSCache)
-			file->fil_flags |= FIL_no_fs_cache;
-		if (onRawDevice)
-			file->fil_flags |= FIL_raw_device;
 	}
 	catch (const Exception&)
 	{

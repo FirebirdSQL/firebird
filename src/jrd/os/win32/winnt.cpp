@@ -107,7 +107,7 @@ using namespace Firebird;
 
 static bool	maybeCloseFile(HANDLE&);
 static jrd_file* seek_file(jrd_file*, BufferDesc*, OVERLAPPED*);
-static jrd_file* setup_file(Database*, const Firebird::PathName&, HANDLE, bool, bool, bool, bool);
+static jrd_file* setup_file(Database*, const Firebird::PathName&, HANDLE, USHORT);
 static bool nt_error(const TEXT*, const jrd_file*, ISC_STATUS, FbStatusVector* const);
 
 inline static DWORD getShareFlags(const bool shared_access, bool temporary = false)
@@ -224,7 +224,12 @@ jrd_file* PIO_create(thread_db* tdbb, const Firebird::PathName& string,
 	Firebird::PathName workspace(string);
 	ISC_expand_filename(workspace, false);
 
-	return setup_file(dbb, workspace, desc, false, shareMode, forceWrite, notUseFSCache);
+	const USHORT flags =
+		(shareMode ? FIL_sh_write : 0) |
+		(forceWrite ? FIL_force_write : 0) |
+		(notUseFSCache ? FIL_no_fs_cache : 0);
+
+	return setup_file(dbb, workspace, desc, flags);
 }
 
 
@@ -555,7 +560,13 @@ jrd_file* PIO_open(thread_db* tdbb,
 
 	SetFileCompletionNotificationModes(desc, FILE_SKIP_SET_EVENT_ON_HANDLE);
 
-	return setup_file(dbb, string, desc, readOnly, shareMode, forceWrite, notUseFSCache);
+	const USHORT flags =
+		(readOnly ? FIL_readonly : 0) |
+		(shareMode ? FIL_sh_write : 0) |
+		(forceWrite ? FIL_force_write : 0) |
+		(notUseFSCache ? FIL_no_fs_cache : 0);
+
+	return setup_file(dbb, string, desc, flags);
 }
 
 
@@ -847,13 +858,7 @@ static jrd_file* seek_file(jrd_file*	file,
 }
 
 
-static jrd_file* setup_file(Database* dbb,
-							const Firebird::PathName& file_name,
-							HANDLE desc,
-							bool readOnly,
-							bool shareMode,
-							bool forceWrite,
-							bool notUseFSCache)
+static jrd_file* setup_file(Database* dbb, const Firebird::PathName& file_name, HANDLE desc, USHORT flags)
 {
 /**************************************
  *
@@ -872,16 +877,8 @@ static jrd_file* setup_file(Database* dbb,
 		file = FB_NEW_RPT(*dbb->dbb_permanent, file_name.length() + 1) jrd_file();
 		file->fil_desc = desc;
 		file->fil_max_page = MAX_ULONG;
+		file->fil_flags = flags;
 		strcpy(file->fil_string, file_name.c_str());
-
-		if (readOnly)
-			file->fil_flags |= FIL_readonly;
-		if (shareMode)
-			file->fil_flags |= FIL_sh_write;
-		if (forceWrite)
-			file->fil_flags |= FIL_force_write;
-		if (notUseFSCache)
-			file->fil_flags |= FIL_no_fs_cache;
 
 		// If this isn't the primary file, we're done
 
