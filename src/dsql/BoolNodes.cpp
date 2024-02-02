@@ -53,18 +53,18 @@ namespace
 	static const unsigned MAX_MEMBER_LIST = MAX_USHORT;
 
 	// Compare two comparisons with the boolean literal of the form:
-	//   <value> { = | <> | IS [NOT] | IS [NOT] DISTINCT FROM } {TRUE | FALSE}
+	//   [NOT] <value> [{ = | <> } { TRUE | FALSE }]
 	// and detect whether they're logically the same.
-	// For example: (NOT A) == (A = FALSE) == (A IS NOT TRUE) etc.
+	// For example: (NOT A) == (A = FALSE) == (A <> TRUE) == NOT (A = TRUE) etc.
 
 	bool sameBoolComparison(const ComparativeBoolNode* node1, const ComparativeBoolNode* node2, bool ignoreStreams)
 	{
 		fb_assert(node1 && node2);
 
-		if (node1->blrOp != blr_eql && node1->blrOp != blr_equiv && node1->blrOp != blr_neq)
+		if (node1->blrOp != blr_eql && node1->blrOp != blr_neq)
 			return false;
 
-		if (node2->blrOp != blr_eql && node2->blrOp != blr_equiv && node2->blrOp != blr_neq)
+		if (node2->blrOp != blr_eql && node2->blrOp != blr_neq)
 			return false;
 
 		bool isTrue1 = false;
@@ -1726,7 +1726,7 @@ BoolExprNode* NotBoolNode::process(DsqlCompilerScratch* dsqlScratch, bool invert
 
 		// For (A = TRUE/FALSE), invert only the boolean value, not the condition itself
 
-		if (cmpArg->blrOp == blr_eql || cmpArg->blrOp == blr_equiv)
+		if (cmpArg->blrOp == blr_eql)
 		{
 			auto newArg1 = cmpArg->arg1;
 			auto newArg2 = cmpArg->arg2;
