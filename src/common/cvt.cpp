@@ -248,21 +248,19 @@ namespace
 
 	namespace Format
 	{
-		enum Patterns : unsigned
-		{
-			NONE = 0,
-			HH24 = 1 << 0,
-			HH12 = 1 << 1,
-			AM = 1 << 2,
-			PM = 1 << 3,
-			AM_OR_PM_FIRST = 1 << 4,
-			SSSSS = 1 << 5,
-			MI = 1 << 6,
-			SS = 1 << 7,
-			TZH = 1 << 8,
-			TZM = 1 << 9
-		};
-		DEFINE_ENUM_ALL_OPERATORS(Patterns);
+		typedef unsigned Patterns;
+
+		constexpr Patterns NONE = 0;
+		constexpr Patterns HH24 = 1 << 0;
+		constexpr Patterns HH12 = 1 << 1;
+		constexpr Patterns AM = 1 << 2;
+		constexpr Patterns PM = 1 << 3;
+		constexpr Patterns AM_OR_PM_FIRST = 1 << 4;
+		constexpr Patterns SSSSS = 1 << 5;
+		constexpr Patterns MI = 1 << 6;
+		constexpr Patterns SS = 1 << 7;
+		constexpr Patterns TZH = 1 << 8;
+		constexpr Patterns TZM = 1 << 9;
 	}
 
 	enum class ExpectedDateType
