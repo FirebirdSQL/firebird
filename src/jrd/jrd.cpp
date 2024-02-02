@@ -1793,7 +1793,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				// We don't know the database FW mode before the header page is read.
 				// However, given that the default behaviour is FW = ON, it makes sense
 				// to assume this unless the opposite is explicitly specified in DPB.
-				// The actual FW mode (if different) will be fixed afterwards by PIO_header_init().
+				// The actual FW mode (if different) will be fixed afterwards by PIO_header().
 
 				const TriState newForceWrite = options.dpb_set_force_write ?
 					TriState(options.dpb_force_write) : TriState();
@@ -3014,13 +3014,6 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 
 			TRA_init(attachment);
 
-			// By default, we create a database with FW = ON (unless explicitly specified in DPB)
-			const bool forceWrite = options.dpb_set_force_write ? options.dpb_force_write : true;
-
-			// Set the FW flag inside the database block to be considered by PIO routines
-			if (forceWrite)
-				dbb->dbb_flags |= DBB_force_write;
-
 			PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 			try
 			{
@@ -3220,6 +3213,11 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			}
 
 			CCH_flush(tdbb, FLUSH_FINI, 0);
+
+			// The newly created database should have FW = ON, unless the opposite is specified in DPB
+			const bool forceWrite = options.dpb_set_force_write ? options.dpb_force_write : true;
+			if (forceWrite)
+				PAG_set_force_write(tdbb, options.dpb_force_write);
 
 			dbb->dbb_crypto_manager->attach(tdbb, attachment);
 			dbb->dbb_backup_manager->dbCreating = false;
