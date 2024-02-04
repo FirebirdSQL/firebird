@@ -1000,7 +1000,7 @@ static jrd_file* setup_file(Database* dbb, const PathName& file_name, int desc, 
 		file = FB_NEW_RPT(*dbb->dbb_permanent, file_name.length() + 1) jrd_file();
 		file->fil_desc = desc;
 		file->fil_max_page = MAX_ULONG;
-		file->fil_flags |= flags;
+		file->fil_flags = flags;
 		strcpy(file->fil_string, file_name.c_str());
 	}
 	catch (const Exception&)
