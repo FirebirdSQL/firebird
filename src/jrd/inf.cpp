@@ -910,7 +910,7 @@ void INF_database_info(thread_db* tdbb,
 
 		case fb_info_db_guid:
 			{
-				const auto guidStr = dbb->dbb_guid.toString();
+				const auto guidStr = dbb->dbb_guid.value().toString();
 				if (!(info = INF_put_item(item, guidStr.length(), guidStr.c_str(), info, end)))
 					return;
 			}

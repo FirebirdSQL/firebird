@@ -942,7 +942,7 @@ void Monitoring::putDatabase(thread_db* tdbb, SnapshotData::DumpRecord& record)
 	record.storeInteger(f_mon_db_na, dbb->getLatestAttachmentId());
 	record.storeInteger(f_mon_db_ns, dbb->getLatestStatementId());
 
-	record.storeString(f_mon_db_guid, dbb->dbb_guid.toString());
+	record.storeString(f_mon_db_guid, dbb->dbb_guid.value().toString());
 	record.storeString(f_mon_db_file_id, dbb->getUniqueFileId());
 
 	record.storeInteger(f_mon_db_repl_mode, dbb->dbb_replica_mode);

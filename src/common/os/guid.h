@@ -31,6 +31,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <optional>
 
 #include "../common/classes/fb_string.h"
 
@@ -135,19 +136,20 @@ public:
 		return result;
 	}
 
-	bool fromString(const char* buffer)
+	static std::optional<Guid> fromString(const char* buffer)
 	{
 		fb_assert(buffer);
 
+		UUID uuid;
 		const auto result = sscanf(buffer, GUID_FORMAT,
-			&m_data.Data1, &m_data.Data2, &m_data.Data3,
-			&m_data.Data4[0], &m_data.Data4[1], &m_data.Data4[2], &m_data.Data4[3],
-			&m_data.Data4[4], &m_data.Data4[5], &m_data.Data4[6], &m_data.Data4[7]);
+			&uuid.Data1, &uuid.Data2, &uuid.Data3,
+			&uuid.Data4[0], &uuid.Data4[1], &uuid.Data4[2], &uuid.Data4[3],
+			&uuid.Data4[4], &uuid.Data4[5], &uuid.Data4[6], &uuid.Data4[7]);
 
-		return (result == GUID_FORMAT_ARGS);
+		return (result == GUID_FORMAT_ARGS) ? std::optional<Guid>(uuid) : std::nullopt;
 	}
 
-	bool fromString(const Firebird::string& str)
+	static std::optional<Guid> fromString(const Firebird::string& str)
 	{
 		return fromString(str.nullStr());
 	}

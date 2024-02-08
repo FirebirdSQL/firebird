@@ -3116,7 +3116,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			dbb->dbb_page_manager.initTempPageSpace(tdbb);
 
 			dbb->dbb_guid = Guid::generate();
-			PAG_set_db_guid(tdbb, dbb->dbb_guid);
+			PAG_set_db_guid(tdbb, dbb->dbb_guid.value());
 
 			if (options.dpb_set_page_buffers)
 				PAG_set_page_buffers(tdbb, options.dpb_page_buffers);

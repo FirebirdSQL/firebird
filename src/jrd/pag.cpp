@@ -1399,7 +1399,7 @@ void PAG_init2(thread_db* tdbb, USHORT shadow_number)
 
 			case HDR_db_guid:
 				fb_assert(p[1] == Guid::SIZE);
-				dbb->dbb_guid.assign(p + 2);
+				dbb->dbb_guid = Guid(p + 2);
 				break;
 
 			case HDR_repl_seq:

@@ -110,7 +110,7 @@ Manager::Manager(const string& dbId,
 	const auto tdbb = JRD_get_thread_data();
 	const auto dbb = tdbb->getDatabase();
 
-	const auto& guid = dbb->dbb_guid;
+	const auto& guid = dbb->dbb_guid.value();
 	m_sequence = dbb->dbb_repl_sequence;
 
 	if (config->journalDirectory.hasData())

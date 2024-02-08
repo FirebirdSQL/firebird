@@ -1394,7 +1394,7 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 			p += p[1] + 2;
 		}
 
-		if (!backup_guid.has_value())
+		if (!backup_guid)
 			status_exception::raise(Arg::Gds(isc_nbackup_lostguid_bk));
 
 		// Write data to backup file
@@ -1830,7 +1830,7 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 
 					p += p[1] + 2;
 				}
-				if (!prev_guid.has_value())
+				if (!prev_guid)
 					status_exception::raise(Arg::Gds(isc_nbackup_lostguid_l0bk));
 				// We are likely to have normal database here
 				delete_database = false;
