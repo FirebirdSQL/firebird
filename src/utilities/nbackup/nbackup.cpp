@@ -316,7 +316,7 @@ public:
 	void fixup_database(bool repl_seq, bool set_readonly = false);
 	void lock_database(bool get_size);
 	void unlock_database();
-	void backup_database(int level, Guid& guid, const PathName& fname);
+	void backup_database(int level, const string& guidStr, const PathName& fname);
 	void restore_database(const BackupFiles& files, bool repl_seq, bool inc_rest);
 
 	bool printed() const
@@ -1191,13 +1191,13 @@ void NBackup::unlock_database()
 	detach_database();
 }
 
-void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
+void NBackup::backup_database(int level, const string& guidStr, const PathName& fname)
 {
 	bool database_locked = false;
 	// We set this flag when backup file is in inconsistent state
 	bool delete_backup = false;
 	ULONG prev_scn = 0;
-	Guid prev_guid;
+	std::optional<Guid> prev_guid;
 	Ods::pag* page_buff = NULL;
 	attach_database();
 	ULONG page_writes = 0, page_reads = 0;
@@ -1222,8 +1222,6 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 
 	try
 	{
-		const auto str_guid = (level < 0) ? guid.toString().c_str() : nullptr;
-
 		// Look for SCN and GUID of previous-level backup in history table
 		if (level)
 		{
@@ -1248,7 +1246,7 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 			else
 			{
 				sprintf(str, "SELECT RDB$GUID, RDB$SCN FROM RDB$BACKUP_HISTORY "
-					"WHERE RDB$GUID = '%s'", str_guid);
+					"WHERE RDB$GUID = '%s'", guidStr.c_str());
 			}
 			if (isc_dsql_prepare(status, &trans, &stmt, 0, str, 1, NULL))
 				pr_error(status, "prepare history query");
@@ -1274,7 +1272,7 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 				else
 				{
 					status_exception::raise(Arg::Gds(isc_nbackup_lostrec_guid_db) << database.c_str() <<
-											Arg::Str(str_guid));
+											Arg::Str(guidStr));
 				}
 				break; // avoid compiler warnings
 
@@ -1292,7 +1290,9 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 			if (isc_commit_transaction(status, &trans))
 				pr_error(status, "commit history query");
 
-			prev_guid.fromString(guid_value);
+			prev_guid = Guid::fromString(guid_value);
+			if (!prev_guid)
+				status_exception::raise(Arg::Gds(isc_nbackup_lostguid_db));
 		}
 
 		// Lock database for backup
@@ -1316,7 +1316,7 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 			}
 			else
 			{
-				bakname.printf("%s-%s-%04d%02d%02d-%02d%02d.nbk", fil.c_str(), str_guid,
+				bakname.printf("%s-%s-%04d%02d%02d-%02d%02d.nbk", fil.c_str(), guidStr.c_str(),
 					today.tm_year + 1900, today.tm_mon + 1, today.tm_mday,
 					today.tm_hour, today.tm_min);
 			}
@@ -1406,7 +1406,7 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 			bh.version = BACKUP_VERSION;
 			bh.level = level > 0 ? level : 0;
 			backup_guid.value().copyTo(bh.backup_guid);
-			prev_guid.copyTo(bh.prev_guid);
+			prev_guid.value().copyTo(bh.prev_guid);
 			bh.page_size = header->hdr_page_size;
 			bh.backup_scn = backup_scn;
 			bh.prev_scn = prev_scn;
@@ -1914,7 +1914,7 @@ void nbackup(UtilSvc* uSvc)
 #endif
 	NBackup::BackupFiles backup_files;
 	int level = -1;
-	Guid guid;
+	std::optional<Guid> guid;
 	bool print_size = false, version = false, inc_rest = false, repl_seq = false;
 	string onOff;
 	bool cleanHistory = false;
@@ -2047,9 +2047,8 @@ void nbackup(UtilSvc* uSvc)
 			if (++itr >= argc)
 				missingParameterForSwitch(uSvc, argv[itr - 1]);
 
-			if (argv[itr][0] == '{')
-				guid.fromString(argv[itr]);
-			else
+			guid = Guid::fromString(argv[itr]);
+			if (!guid)
 				level = atoi(argv[itr]);
 
 			if (++itr >= argc)
@@ -2178,6 +2177,8 @@ void nbackup(UtilSvc* uSvc)
 		usage(uSvc, isc_nbackup_clean_hist_missed);
 	}
 
+	const string guidStr = guid ? guid.value().toString() : "";
+
 	NBackup nbk(uSvc, database, username, role, password, run_db_triggers, direct_io,
 				decompress, cleanHistKind, keepHistValue);
 	try
@@ -2197,7 +2198,7 @@ void nbackup(UtilSvc* uSvc)
 				break;
 
 			case nbBackup:
-				nbk.backup_database(level, guid, filename);
+				nbk.backup_database(level, guidStr, filename);
 				break;
 
 			case nbRestore:

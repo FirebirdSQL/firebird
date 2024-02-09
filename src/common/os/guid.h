@@ -72,8 +72,7 @@ class Guid
 public:
 	static constexpr ULONG SIZE = sizeof(UUID);
 
-	Guid()
-	{}
+	Guid() = delete;
 
 	Guid(const Guid& other)
 		: m_data(other.m_data)
@@ -190,9 +189,9 @@ public:
 
 	static Guid generate()
 	{
-		Guid guid;
-		GenerateGuid(&guid.m_data);
-		return guid;
+		UUID uuid;
+		GenerateGuid(&uuid);
+		return Guid(uuid);
 	}
 
 private:
