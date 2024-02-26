@@ -133,8 +133,6 @@ inline InputDevices::~InputDevices()
 	for (unsigned n = 0; n < commands.getCount(); ++n)
 		delete commands[n];
 
-	commands.clear();
-
 	clear();
 }
 
