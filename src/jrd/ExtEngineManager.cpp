@@ -109,11 +109,9 @@ namespace
 				dstDesc.dsc_address = dstMsg + dstArgOffset;
 
 				MOV_move(tdbb, &srcDesc, &dstDesc);
-
-				*dstNullPtr = 0;
 			}
-			else
-				*dstNullPtr = -1;
+
+			*dstNullPtr = *srcNullPtr;
 
 			srcDescIt += 2;
 			dstDescIt += 2;
@@ -280,12 +278,7 @@ namespace
 					dsc* defaultDesc = nullptr;
 
 					if (defaultValueNode)
-					{
 						defaultDesc = EVL_expr(tdbb, request, defaultValueNode);
-
-						if (request->req_flags & req_null)
-							defaultDesc = nullptr;
-					}
 
 					const auto formatIndex = paramIndex * 2;
 					const auto& nullDesc = message->format->fmt_desc[formatIndex + 1];
@@ -294,14 +287,14 @@ namespace
 					if (defaultDesc)
 					{
 						// Initialize the value. The null flag is already initialized to not-null.
-						fb_assert(*(SSHORT*) (msg + (IPTR) nullDesc.dsc_address) != -1);
+						fb_assert(!*(SSHORT*) (msg + (IPTR) nullDesc.dsc_address));
 
 						dsc desc = message->format->fmt_desc[formatIndex];
 						desc.dsc_address = msg + (IPTR) desc.dsc_address;
 						MOV_move(tdbb, defaultDesc, &desc);
 					}
 					else
-						*(SSHORT*) (msg + (IPTR) nullDesc.dsc_address) = -1;
+						*(SSHORT*) (msg + (IPTR) nullDesc.dsc_address) = FB_TRUE;
 				}
 
 				request->req_operation = Request::req_return;
@@ -926,11 +919,11 @@ void ExtEngineManager::Function::execute(thread_db* tdbb, Request* request, jrd_
 	}
 
 	// Initialize outputs in the internal message.
-	{	// scope
+	{
 		fb_assert(udf->getOutputFormat()->fmt_desc.getCount() / 2 == udf->getOutputFields().getCount());
 
-		// Initialize everything to NULL (-1).
-		memset(outMsg, 0xFF, udf->getOutputFormat()->fmt_length);
+		// Initialize everything to NULL (FB_TRUE).
+		memset(outMsg, FB_TRUE, udf->getOutputFormat()->fmt_length);
 
 		for (const auto paramNumber : impl->outDefaults)
 		{
@@ -940,14 +933,8 @@ void ExtEngineManager::Function::execute(thread_db* tdbb, Request* request, jrd_
 
 			dsc* defaultValue = nullptr;
 
-			if (request->getStatement()->mapFieldInfo.get(namePair, fieldInfo) &&
-				fieldInfo.defaultValue)
-			{
+			if (request->getStatement()->mapFieldInfo.get(namePair, fieldInfo) && fieldInfo.defaultValue)
 				defaultValue = EVL_expr(tdbb, request, fieldInfo.defaultValue);
-
-				if (request->req_flags & req_null)
-					defaultValue = nullptr;
-			}
 
 			const auto& paramDesc = udf->getOutputFormat()->fmt_desc[paramNumber * 2];
 			const auto& nullDesc = udf->getOutputFormat()->fmt_desc[paramNumber * 2 + 1];
@@ -960,10 +947,10 @@ void ExtEngineManager::Function::execute(thread_db* tdbb, Request* request, jrd_
 				desc.dsc_address = outMsg + (IPTR) desc.dsc_address;
 				MOV_move(tdbb, defaultValue, &desc);
 
-				*(SSHORT*) (outMsg + (IPTR) nullDesc.dsc_address) = 0;
+				*(SSHORT*) (outMsg + (IPTR) nullDesc.dsc_address) = FB_FALSE;
 			}
 			else
-				*(SSHORT*) (outMsg + (IPTR) nullDesc.dsc_address) = -1;
+				*(SSHORT*) (outMsg + (IPTR) nullDesc.dsc_address) = FB_TRUE;
 		}
 	}
 
@@ -1015,7 +1002,7 @@ void ExtEngineManager::Function::validateParameters(thread_db* tdbb, UCHAR* msg,
 		dsc value = paramDesc;
 		value.dsc_address = msg + (IPTR) value.dsc_address;
 
-		const auto isNull = *(SSHORT*) (msg + (IPTR) nullDesc.dsc_address) != 0;
+		const bool isNull = *(SSHORT*) (msg + (IPTR) nullDesc.dsc_address);
 
 		EVL_validate(tdbb, Item(Item::TYPE_PARAMETER, messageNumber, paramNumber), itemInfo, &value, isNull);
 	}
@@ -1339,9 +1326,9 @@ void ExtEngineManager::Trigger::setValues(thread_db* tdbb, Request* request, Arr
 			const DeclareVariableNode* varDecl = varDecls[computedVarId++];
 			impure_value* varImpure = request->getImpure<impure_value>(varDecl->impureOffset);
 
-			*nullTarget = (varImpure->vlu_desc.dsc_flags & DSC_null) != 0 ? -1 : 0;
+			*nullTarget = (varImpure->vlu_desc.dsc_flags & DSC_null) ? FB_TRUE : FB_FALSE;
 
-			if (*nullTarget == 0)
+			if (!*nullTarget)
 				MOV_move(tdbb, &varImpure->vlu_desc, &target);
 		}
 		else
@@ -1349,9 +1336,9 @@ void ExtEngineManager::Trigger::setValues(thread_db* tdbb, Request* request, Arr
 			if (!EVL_field(rpb->rpb_relation, rpb->rpb_record, fieldPos, &source))
 				source.dsc_flags |= DSC_null;
 
-			*nullTarget = (source.dsc_flags & DSC_null) != 0 ? -1 : 0;
+			*nullTarget = (source.dsc_flags & DSC_null) ? FB_TRUE : FB_FALSE;
 
-			if (*nullTarget == 0)
+			if (!*nullTarget)
 				MOV_move(tdbb, &source, &target);
 		}
 	}
