@@ -955,7 +955,9 @@ void EXE_execute_function(thread_db* tdbb, Request* request, jrd_tra* transactio
 
 			const auto profilerManager = attachment->isProfilerActive() && !request->hasInternalStatement() ?
 				attachment->getProfilerManager(tdbb) : nullptr;
-			SINT64 profilerInitialTicks = profilerManager ? profilerManager->queryTicks() : 0;
+			const SINT64 profilerInitialTicks = profilerManager ? profilerManager->queryTicks() : 0;
+			const SINT64 profilerInitialAccumulatedOverhead = profilerManager ?
+				profilerManager->getAccumulatedOverhead() : 0;
 
 			try
 			{
@@ -983,6 +985,15 @@ void EXE_execute_function(thread_db* tdbb, Request* request, jrd_tra* transactio
 					stuff_stack_trace(request);
 					tdbb->tdbb_flags |= TDBB_stack_trace_done;
 				}
+			}
+
+			if (profilerInitialTicks && attachment->isProfilerActive())
+			{
+				const SINT64 currentProfilerTicks = profilerManager->queryTicks();
+				const SINT64 elapsedTicks = profilerManager->getElapsedTicksAndAdjustOverhead(
+					currentProfilerTicks, profilerInitialTicks, profilerInitialAccumulatedOverhead);
+
+				request->req_profiler_ticks += elapsedTicks;
 			}
 
 			request->adjustCallerStats();
