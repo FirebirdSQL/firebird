@@ -258,11 +258,59 @@ static void execute_looper(thread_db*, Request*, jrd_tra*, const StmtNode*, Requ
 static void looper_seh(thread_db*, Request*, const StmtNode*);
 static void release_blobs(thread_db*, Request*);
 static void trigger_failure(thread_db*, Request*);
-static void savepointForget(thread_db* tdbb, Request* request, jrd_tra* transaction, SavNumber savNumber);
-static SavNumber savepointStart(Request* request, jrd_tra* transaction);
 static void stuff_stack_trace(const Request*);
 
 const size_t MAX_STACK_TRACE = 2048;
+
+
+namespace
+{
+	void forgetSavepoint(thread_db* tdbb, Request* request, jrd_tra* transaction, SavNumber savNumber);
+	SavNumber startSavepoint(Request* request, jrd_tra* transaction);
+
+	void forgetSavepoint(thread_db* tdbb, Request* request, jrd_tra* transaction, SavNumber savNumber)
+	{
+		while (transaction->tra_save_point &&
+			transaction->tra_save_point->getNumber() >= savNumber)
+		{
+			const auto savepoint = transaction->tra_save_point;
+			// Forget about any undo for this verb
+			fb_assert(!transaction->tra_save_point->isChanging());
+			transaction->releaseSavepoint(tdbb);
+			// Preserve savepoint for reuse
+			fb_assert(savepoint == transaction->tra_save_free);
+			transaction->tra_save_free = savepoint->moveToStack(request->req_savepoints);
+			fb_assert(savepoint != transaction->tra_save_free);
+
+			// Ensure that the priorly existing savepoints are preserved,
+			// e.g. 10-11-12-(5-6-7) where savNumber == 5. This may happen
+			// due to looper savepoints being reused in subsequent invokations.
+			if (savepoint->getNumber() == savNumber)
+				break;
+		}
+	}
+
+	SavNumber startSavepoint(Request* request, jrd_tra* transaction)
+	{
+		if (!(request->req_flags & req_proc_fetch) && request->req_transaction)
+		{
+			if (transaction && !(transaction->tra_flags & TRA_system))
+			{
+				if (request->req_savepoints)
+				{
+					request->req_savepoints =
+						request->req_savepoints->moveToStack(transaction->tra_save_point);
+				}
+				else
+					transaction->startSavepoint();
+
+				return transaction->tra_save_point->getNumber();
+			}
+		}
+
+		return 0;
+	}
+}	// anonymous namespace
 
 
 // Perform an assignment.
@@ -935,7 +983,7 @@ void EXE_execute_function(thread_db* tdbb, Request* request, jrd_tra* transactio
 		if (lock && lock->lck_logical == LCK_none)
 			LCK_lock(tdbb, lock, LCK_SR, LCK_WAIT);
 
-		const SavNumber savNumber = savepointStart(request, transaction);
+		const SavNumber savNumber = startSavepoint(request, transaction);
 
 		if (!request->req_transaction)
 			ERR_post(Arg::Gds(isc_req_no_trans));
@@ -1046,7 +1094,7 @@ void EXE_execute_function(thread_db* tdbb, Request* request, jrd_tra* transactio
 			// There should be no other savepoint but the one started by ourselves.
 			fb_assert(transaction->tra_save_point && transaction->tra_save_point->getNumber() == savNumber);
 
-			savepointForget(tdbb, request, transaction, savNumber);
+			forgetSavepoint(tdbb, request, transaction, savNumber);
 		}
 	}
 	else
@@ -1186,7 +1234,7 @@ static void execute_looper(thread_db* tdbb,
 	if (lock && lock->lck_logical == LCK_none)
 		LCK_lock(tdbb, lock, LCK_SR, LCK_WAIT);
 
-	const SavNumber savNumber = savepointStart(request, transaction);
+	const SavNumber savNumber = startSavepoint(request, transaction);
 
 	request->req_flags &= ~req_stall;
 	request->req_operation = next_state;
@@ -1215,7 +1263,7 @@ static void execute_looper(thread_db* tdbb,
 			(transaction->tra_save_point &&
 				transaction->tra_save_point->getNumber() == savNumber));
 
-		savepointForget(tdbb, request, transaction, savNumber);
+		forgetSavepoint(tdbb, request, transaction, savNumber);
 	}
 }
 
@@ -1463,51 +1511,6 @@ bool EXE_get_stack_trace(const Request* request, string& sTrace)
 	}
 
 	return sTrace.hasData();
-}
-
-
-static void savepointForget(thread_db* tdbb, Request* request, jrd_tra* transaction, SavNumber savNumber)
-{
-	while (transaction->tra_save_point &&
-		transaction->tra_save_point->getNumber() >= savNumber)
-	{
-		const auto savepoint = transaction->tra_save_point;
-		// Forget about any undo for this verb
-		fb_assert(!transaction->tra_save_point->isChanging());
-		transaction->releaseSavepoint(tdbb);
-		// Preserve savepoint for reuse
-		fb_assert(savepoint == transaction->tra_save_free);
-		transaction->tra_save_free = savepoint->moveToStack(request->req_savepoints);
-		fb_assert(savepoint != transaction->tra_save_free);
-
-		// Ensure that the priorly existing savepoints are preserved,
-		// e.g. 10-11-12-(5-6-7) where savNumber == 5. This may happen
-		// due to looper savepoints being reused in subsequent invokations.
-		if (savepoint->getNumber() == savNumber)
-			break;
-	}
-}
-
-
-static SavNumber savepointStart(Request* request, jrd_tra* transaction)
-{
-	if (!(request->req_flags & req_proc_fetch) && request->req_transaction)
-	{
-		if (transaction && !(transaction->tra_flags & TRA_system))
-		{
-			if (request->req_savepoints)
-			{
-				request->req_savepoints =
-					request->req_savepoints->moveToStack(transaction->tra_save_point);
-			}
-			else
-				transaction->startSavepoint();
-
-			return transaction->tra_save_point->getNumber();
-		}
-	}
-
-	return 0;
 }
 
 
