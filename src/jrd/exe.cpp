@@ -961,9 +961,9 @@ void EXE_execute_function(thread_db* tdbb, Request* request, jrd_tra* transactio
 
 			try
 			{
-				JRD_reschedule(tdbb);
-
 				function->fun_external->execute(tdbb, request, transaction, inMsgLength, inMsg, outMsgLength, outMsg);
+
+				tdbb->checkCancelState();
 			}
 			catch (const Exception& ex)
 			{
