@@ -4220,53 +4220,85 @@ bool get_files(BurpGlobals* tdgbl)
 	att_type		attribute;
 	scan_attr_t		scan_next_attr;
 
-	STORE (REQUEST_HANDLE tdgbl->handles_get_files_req_handle1)
-		X IN RDB$FILES
-		X.RDB$FILE_FLAGS = 0;
+	BASED_ON RDB$FILES.RDB$FILE_NAME filename = "";
+	SSHORT flags = 0, sequence = 0, number = 0;
+	SLONG start = 0, length = 0;
 
-		skip_init(&scan_next_attr);
-		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
+	skip_init(&scan_next_attr);
+	while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
+	{
+		switch (attribute)
 		{
-			switch (attribute)
-			{
-			case att_file_filename:
-				GET_TEXT(X.RDB$FILE_NAME);
-				BURP_verbose (116, X.RDB$FILE_NAME);
-				// msg 116 restoring file %s
-				break;
+		case att_file_filename:
+			GET_TEXT(filename);
+			break;
 
-			case att_file_sequence:
-				X.RDB$FILE_SEQUENCE = (USHORT) get_int32(tdgbl);
-				break;
+		case att_file_sequence:
+			sequence = (SSHORT) get_int32(tdgbl);
+			break;
 
-			case att_file_start:
-				X.RDB$FILE_START = get_int32(tdgbl);
-				break;
+		case att_file_start:
+			start = get_int32(tdgbl);
+			break;
 
-			case att_file_length:
-				X.RDB$FILE_LENGTH = get_int32(tdgbl);
-				break;
+		case att_file_length:
+			length = get_int32(tdgbl);
+			break;
 
-			case att_file_flags:
-				X.RDB$FILE_FLAGS |= get_int32(tdgbl);
-				break;
+		case att_file_flags:
+			flags |= (SSHORT) get_int32(tdgbl);
+			break;
 
-			case att_shadow_number:
-				X.RDB$SHADOW_NUMBER = (USHORT) get_int32(tdgbl);
-				if (tdgbl->gbl_sw_kill && X.RDB$SHADOW_NUMBER)
-					X.RDB$FILE_FLAGS |= FILE_inactive;
-				break;
+		case att_shadow_number:
+			number = (SSHORT) get_int32(tdgbl);
+			if (tdgbl->gbl_sw_kill && number)
+				flags |= FILE_inactive;
+			break;
 
-			default:
-				bad_attribute(scan_next_attr, attribute, 85);
-				// msg 85 file
-				break;
-			}
+		default:
+			bad_attribute(scan_next_attr, attribute, 85);
+			// msg 85 file
+			break;
 		}
-	END_STORE;
-	ON_ERROR
-		general_on_error ();
-	END_ERROR;
+	}
+
+	const bool multiFileSupport = (tdgbl->runtimeODS <= DB_VERSION_DDL13_1);
+
+	if ((multiFileSupport || !sequence) && filename[0])
+	{
+		BURP_verbose (116, filename);
+		// msg 116 restoring file %s
+
+		STORE (REQUEST_HANDLE tdgbl->handles_get_files_req_handle1)
+			X IN RDB$FILES
+
+			strncpy(X.RDB$FILE_NAME, filename, sizeof(X.RDB$FILE_NAME));
+			X.RDB$FILE_FLAGS = flags;
+			X.RDB$SHADOW_NUMBER = number;
+
+			if (multiFileSupport)
+			{
+				X.RDB$FILE_SEQUENCE.NULL = FALSE;
+				X.RDB$FILE_SEQUENCE = sequence;
+
+				X.RDB$FILE_START.NULL = FALSE;
+				X.RDB$FILE_START = start;
+
+				X.RDB$FILE_LENGTH.NULL = FALSE;
+				X.RDB$FILE_LENGTH = length;
+			}
+			else
+			{
+				X.RDB$FILE_SEQUENCE.NULL = TRUE;
+				X.RDB$FILE_START.NULL = TRUE;
+				X.RDB$FILE_LENGTH.NULL = TRUE;
+			}
+
+		END_STORE;
+		ON_ERROR
+			general_on_error ();
+		END_ERROR;
+	}
 
 	return true;
 }

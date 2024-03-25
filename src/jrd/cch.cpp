@@ -2489,15 +2489,6 @@ bool CCH_write_all_shadows(thread_db* tdbb, Shadow* shadow, BufferDesc* bdb, Ods
 			PAG_add_header_entry(tdbb, header, HDR_root_file_name,
 								 (USHORT) strlen((const char*) q), q);
 
-			jrd_file* next_file = shadow_file->fil_next;
-			if (next_file)
-			{
-				q = (UCHAR *) next_file->fil_string;
-				const SLONG last = next_file->fil_min_page - 1;
-				PAG_add_header_entry(tdbb, header, HDR_file, (USHORT) strlen((const char*) q), q);
-				PAG_add_header_entry(tdbb, header, HDR_last_page, sizeof(last), (const UCHAR*) &last);
-			}
-
 			header->hdr_flags |= hdr_active_shadow;
 			header->hdr_header.pag_pageno = bdb->bdb_page.getPageNum();
 		}

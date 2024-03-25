@@ -36,7 +36,6 @@ namespace Ods {
 	struct pag;
 }
 
-int		PIO_add_file(Jrd::thread_db*, Jrd::jrd_file*, const Firebird::PathName&, SLONG);
 void	PIO_close(Jrd::jrd_file*);
 Jrd::jrd_file*	PIO_create(Jrd::thread_db*, const Firebird::PathName&,
 							const bool, const bool);
