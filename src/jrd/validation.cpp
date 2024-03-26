@@ -1800,8 +1800,11 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 				{
 					const TraNumber transaction = Ods::getTraNum(header);
 
+					// If the transaction number is greater than NT and seems corrupted, treat its
+					// state as tra_active to avoid an attempt to fetch a non-existing TIP page
 					const int state = (transaction < dbb->dbb_oldest_transaction) ?
-						tra_committed : TRA_fetch_state(vdr_tdbb, transaction);
+						tra_committed : (transaction > vdr_max_transaction) ?
+						tra_active : TRA_fetch_state(vdr_tdbb, transaction);
 
 					if (!deleted_flag && (state == tra_committed || state == tra_limbo) ||
 						deleted_flag && state != tra_committed)
