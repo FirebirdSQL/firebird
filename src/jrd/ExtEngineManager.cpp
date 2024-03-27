@@ -898,11 +898,6 @@ ExtEngineManager::Function::~Function()
 void ExtEngineManager::Function::execute(thread_db* tdbb, Request* request, jrd_tra* transaction,
 	unsigned inMsgLength, UCHAR* inMsg, unsigned outMsgLength, UCHAR* outMsg) const
 {
-	AutoSetRestore2<Request*, thread_db> autoSetRequest(
-		tdbb, &thread_db::getRequest, &thread_db::setRequest, request);
-
-	EXE_activate(tdbb, request, transaction);
-
 	fb_assert(inMsgLength == udf->getInputFormat()->fmt_length);
 	fb_assert(outMsgLength == udf->getOutputFormat()->fmt_length);
 

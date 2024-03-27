@@ -253,6 +253,7 @@ string StatusXcp::as_text() const
 }
 
 
+static void activate_request(thread_db* tdbb, Request* request, jrd_tra* transaction);
 static void execute_looper(thread_db*, Request*, jrd_tra*, const StmtNode*, Request::req_s);
 static void looper_seh(thread_db*, Request*, const StmtNode*);
 static void release_blobs(thread_db*, Request*);
@@ -260,6 +261,56 @@ static void trigger_failure(thread_db*, Request*);
 static void stuff_stack_trace(const Request*);
 
 const size_t MAX_STACK_TRACE = 2048;
+
+
+namespace
+{
+	void forgetSavepoint(thread_db* tdbb, Request* request, jrd_tra* transaction, SavNumber savNumber);
+	SavNumber startSavepoint(Request* request, jrd_tra* transaction);
+
+	void forgetSavepoint(thread_db* tdbb, Request* request, jrd_tra* transaction, SavNumber savNumber)
+	{
+		while (transaction->tra_save_point &&
+			transaction->tra_save_point->getNumber() >= savNumber)
+		{
+			const auto savepoint = transaction->tra_save_point;
+			// Forget about any undo for this verb
+			fb_assert(!transaction->tra_save_point->isChanging());
+			transaction->releaseSavepoint(tdbb);
+			// Preserve savepoint for reuse
+			fb_assert(savepoint == transaction->tra_save_free);
+			transaction->tra_save_free = savepoint->moveToStack(request->req_savepoints);
+			fb_assert(savepoint != transaction->tra_save_free);
+
+			// Ensure that the priorly existing savepoints are preserved,
+			// e.g. 10-11-12-(5-6-7) where savNumber == 5. This may happen
+			// due to looper savepoints being reused in subsequent invokations.
+			if (savepoint->getNumber() == savNumber)
+				break;
+		}
+	}
+
+	SavNumber startSavepoint(Request* request, jrd_tra* transaction)
+	{
+		if (!(request->req_flags & req_proc_fetch) && request->req_transaction)
+		{
+			if (transaction && !(transaction->tra_flags & TRA_system))
+			{
+				if (request->req_savepoints)
+				{
+					request->req_savepoints =
+						request->req_savepoints->moveToStack(transaction->tra_save_point);
+				}
+				else
+					transaction->startSavepoint();
+
+				return transaction->tra_save_point->getNumber();
+			}
+		}
+
+		return 0;
+	}
+}	// anonymous namespace
 
 
 // Perform an assignment.
@@ -850,7 +901,7 @@ void EXE_send(thread_db* tdbb, Request* request, USHORT msg, ULONG length, const
 
 
 // Mark a request as active.
-void EXE_activate(thread_db* tdbb, Request* request, jrd_tra* transaction)
+static void activate_request(thread_db* tdbb, Request* request, jrd_tra* transaction)
 {
 	SET_TDBB(tdbb);
 
@@ -918,10 +969,151 @@ void EXE_activate(thread_db* tdbb, Request* request, jrd_tra* transaction)
 }
 
 
+// Execute function. A shortcut for node-based function but required for external functions.
+void EXE_execute_function(thread_db* tdbb, Request* request, jrd_tra* transaction,
+	ULONG inMsgLength, UCHAR* inMsg, ULONG outMsgLength, UCHAR* outMsg)
+{
+	if (const auto function = request->getStatement()->function; function && function->fun_external)
+	{
+		activate_request(tdbb, request, transaction);
+
+		const auto attachment = tdbb->getAttachment();
+
+		// Ensure the cancellation lock can be triggered
+		const auto lock = attachment->att_cancel_lock;
+		if (lock && lock->lck_logical == LCK_none)
+			LCK_lock(tdbb, lock, LCK_SR, LCK_WAIT);
+
+		const SavNumber savNumber = startSavepoint(request, transaction);
+
+		if (!request->req_transaction)
+			ERR_post(Arg::Gds(isc_req_no_trans));
+
+		try
+		{
+			// Save the old pool and request to restore on exit
+			StmtNode::ExeState exeState(tdbb, request, request->req_transaction);
+			Jrd::ContextPoolHolder context(tdbb, request->req_pool);
+
+			fb_assert(!request->req_caller);
+			request->req_caller = exeState.oldRequest;
+
+			tdbb->tdbb_flags &= ~(TDBB_stack_trace_done | TDBB_sys_error);
+
+			// Execute stuff until we drop
+
+			const auto profilerManager = attachment->isProfilerActive() && !request->hasInternalStatement() ?
+				attachment->getProfilerManager(tdbb) : nullptr;
+			const SINT64 profilerInitialTicks = profilerManager ? profilerManager->queryTicks() : 0;
+			const SINT64 profilerInitialAccumulatedOverhead = profilerManager ?
+				profilerManager->getAccumulatedOverhead() : 0;
+
+			try
+			{
+				function->fun_external->execute(tdbb, request, transaction, inMsgLength, inMsg, outMsgLength, outMsg);
+
+				tdbb->checkCancelState();
+			}
+			catch (const Exception& ex)
+			{
+				ex.stuffException(tdbb->tdbb_status_vector);
+
+				request->adjustCallerStats();
+
+				// Ensure the transaction hasn't disappeared in the meantime
+				fb_assert(request->req_transaction);
+
+				// If the database is already bug-checked, then get out
+				if (tdbb->getDatabase()->dbb_flags & DBB_bugcheck)
+					status_exception::raise(tdbb->tdbb_status_vector);
+
+				exeState.errorPending = true;
+
+				if (!(tdbb->tdbb_flags & TDBB_stack_trace_done) && !(tdbb->tdbb_flags & TDBB_sys_error))
+				{
+					stuff_stack_trace(request);
+					tdbb->tdbb_flags |= TDBB_stack_trace_done;
+				}
+			}
+
+			if (profilerInitialTicks && attachment->isProfilerActive())
+			{
+				const SINT64 currentProfilerTicks = profilerManager->queryTicks();
+				const SINT64 elapsedTicks = profilerManager->getElapsedTicksAndAdjustOverhead(
+					currentProfilerTicks, profilerInitialTicks, profilerInitialAccumulatedOverhead);
+
+				request->req_profiler_ticks += elapsedTicks;
+			}
+
+			request->adjustCallerStats();
+
+			if (!exeState.errorPending)
+				TRA_release_request_snapshot(tdbb, request);
+
+			request->req_flags &= ~(req_active | req_reserved);
+			request->invalidateTimeStamp();
+
+			if (profilerInitialTicks && attachment->isProfilerActive())
+			{
+				ProfilerManager::Stats stats(request->req_profiler_ticks);
+				profilerManager->onRequestFinish(request, stats);
+			}
+
+			fb_assert(request->req_caller == exeState.oldRequest);
+			request->req_caller = nullptr;
+
+			// Ensure the transaction hasn't disappeared in the meantime
+			fb_assert(request->req_transaction);
+
+			// In the case of a pending error condition (one which did not
+			// result in a exception to the top of looper), we need to
+			// release the request snapshot
+
+			if (exeState.errorPending)
+			{
+				TRA_release_request_snapshot(tdbb, request);
+				ERR_punt();
+			}
+
+			if (request->req_flags & req_abort)
+				ERR_post(Arg::Gds(isc_req_sync));
+		}
+		catch (const Exception&)
+		{
+			// In the case of error, undo changes performed under our savepoint
+
+			if (savNumber)
+				transaction->rollbackToSavepoint(tdbb, savNumber);
+
+			throw;
+		}
+
+		// If any requested modify/delete/insert ops have completed, forget them
+
+		if (savNumber)
+		{
+			// There should be no other savepoint but the one started by ourselves.
+			fb_assert(transaction->tra_save_point && transaction->tra_save_point->getNumber() == savNumber);
+
+			forgetSavepoint(tdbb, request, transaction, savNumber);
+		}
+	}
+	else
+	{
+		EXE_start(tdbb, request, transaction);
+
+		if (inMsgLength != 0)
+			EXE_send(tdbb, request, 0, inMsgLength, inMsg);
+
+		EXE_receive(tdbb, request, 1, outMsgLength, outMsg);
+	}
+}
+
+
 // Start and execute a request.
 void EXE_start(thread_db* tdbb, Request* request, jrd_tra* transaction)
 {
-	EXE_activate(tdbb, request, transaction);
+	activate_request(tdbb, request, transaction);
 
 	execute_looper(tdbb, request, transaction, request->getStatement()->topNode, Request::req_evaluate);
 }
@@ -1043,25 +1235,7 @@ static void execute_looper(thread_db* tdbb,
 	if (lock && lock->lck_logical == LCK_none)
 		LCK_lock(tdbb, lock, LCK_SR, LCK_WAIT);
 
-	// Start a save point
-
-	SavNumber savNumber = 0;
-
-	if (!(request->req_flags & req_proc_fetch) && request->req_transaction)
-	{
-		if (transaction && !(transaction->tra_flags & TRA_system))
-		{
-			if (request->req_savepoints)
-			{
-				request->req_savepoints =
-					request->req_savepoints->moveToStack(transaction->tra_save_point);
-			}
-			else
-				transaction->startSavepoint();
-
-			savNumber = transaction->tra_save_point->getNumber();
-		}
-	}
+	const SavNumber savNumber = startSavepoint(request, transaction);
 
 	request->req_flags &= ~req_stall;
 	request->req_operation = next_state;
@@ -1090,24 +1264,7 @@ static void execute_looper(thread_db* tdbb,
 			(transaction->tra_save_point &&
 				transaction->tra_save_point->getNumber() == savNumber));
 
-		while (transaction->tra_save_point &&
-			transaction->tra_save_point->getNumber() >= savNumber)
-		{
-			const auto savepoint = transaction->tra_save_point;
-			// Forget about any undo for this verb
-			fb_assert(!transaction->tra_save_point->isChanging());
-			transaction->releaseSavepoint(tdbb);
-			// Preserve savepoint for reuse
-			fb_assert(savepoint == transaction->tra_save_free);
-			transaction->tra_save_free = savepoint->moveToStack(request->req_savepoints);
-			fb_assert(savepoint != transaction->tra_save_free);
-
-			// Ensure that the priorly existing savepoints are preserved,
-			// e.g. 10-11-12-(5-6-7) where savNumber == 5. This may happen
-			// due to looper savepoints being reused in subsequent invokations.
-			if (savepoint->getNumber() == savNumber)
-				break;
-		}
+		forgetSavepoint(tdbb, request, transaction, savNumber);
 	}
 }
 
@@ -1356,6 +1513,7 @@ bool EXE_get_stack_trace(const Request* request, string& sTrace)
 
 	return sTrace.hasData();
 }
+
 
 static void stuff_stack_trace(const Request* request)
 {

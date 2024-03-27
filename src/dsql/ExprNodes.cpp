@@ -13567,20 +13567,7 @@ dsc* UdfCallNode::execute(thread_db* tdbb, Request* request) const
 
 			funcRequest->setGmtTimeStamp(request->getGmtTimeStamp());
 
-			if (function->fun_external)
-			{
-				function->fun_external->execute(
-					tdbb, funcRequest, transaction, inMsgLength, inMsg, outMsgLength, outMsg);
-			}
-			else
-			{
-				EXE_start(tdbb, funcRequest, transaction);
-
-				if (inMsgLength != 0)
-					EXE_send(tdbb, funcRequest, 0, inMsgLength, inMsg);
-
-				EXE_receive(tdbb, funcRequest, 1, outMsgLength, outMsg);
-			}
+			EXE_execute_function(tdbb, funcRequest, transaction, inMsgLength, inMsg, outMsgLength, outMsg);
 
 			// Clean up all savepoints started during execution of the function
 
