@@ -232,6 +232,16 @@ public:
 	// The same routine, but more easily callable from the debugger
 	void print_contents(const char* filename, unsigned flags = 0, const char* filter_path = 0) noexcept;
 
+	inline bool operator==(const MemoryPool& rhs) const
+	{
+		return pool == rhs.pool;
+	}
+
+	inline bool operator!=(const MemoryPool& rhs) const
+	{
+		return !operator==(rhs);
+	}
+
 public:
 	struct Finalizer
 	{
