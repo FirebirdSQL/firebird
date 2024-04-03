@@ -3140,7 +3140,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			INI_format(tdbb, options.dpb_set_db_charset);
 
 			// If we have not allocated first TIP page, do it now.
-			if (!dbb->dbb_t_pages || !dbb->dbb_t_pages->count())
+			if (!dbb->getKnownPagesCount(pag_transactions))
 				TRA_extend_tip(tdbb, 0);
 
 			// There is no point to move database online at database creation since it is online by default.

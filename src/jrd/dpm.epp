@@ -1355,26 +1355,27 @@ SINT64 DPM_gen_id(thread_db* tdbb, SLONG generator, bool initialize, SINT64 val)
 	const USHORT offset = generator % dbb->dbb_page_manager.gensPerPage;
 
 	WIN window(DB_PAGE_SPACE, -1);
-	vcl* vector = dbb->dbb_gen_id_pages;
-	if (!vector || (sequence >= vector->count()) || !((*vector)[sequence]))
+	ULONG pageNumber = dbb->getKnownPage(pag_ids, sequence);
+	if (!pageNumber)
 	{
 		DPM_scan_pages(tdbb);
-		if (!(vector = dbb->dbb_gen_id_pages) ||
-			(sequence >= vector->count()) || !((*vector)[sequence]))
+
+		pageNumber = dbb->getKnownPage(pag_ids, sequence);
+		if (!pageNumber)
 		{
 			generator_page* page = (generator_page*) DPM_allocate(tdbb, &window);
 			page->gpg_header.pag_type = pag_ids;
 			page->gpg_sequence = sequence;
 			CCH_must_write(tdbb, &window);
 			CCH_RELEASE(tdbb, &window);
-			DPM_pages(tdbb, 0, pag_ids, (ULONG) sequence, window.win_page.getPageNum());
-			vector = dbb->dbb_gen_id_pages =
-				vcl::newVector(*dbb->dbb_permanent, dbb->dbb_gen_id_pages, sequence + 1);
-			(*vector)[sequence] = window.win_page.getPageNum();
+
+			pageNumber = window.win_page.getPageNum();
+			dbb->setKnownPage(pag_ids, sequence, pageNumber);
+			DPM_pages(tdbb, 0, pag_ids, sequence, pageNumber);
 		}
 	}
 
-	window.win_page = (*vector)[sequence];
+	window.win_page = pageNumber;
 	window.win_flags = 0;
 
 	// As a special exception that allows physical backups for read-only replicas,
@@ -2041,6 +2042,9 @@ void DPM_scan_pages( thread_db* tdbb)
 
 	CCH_RELEASE(tdbb, &window);
 
+	HalfStaticArray<ULONG, 256> tipSeqList;
+	HalfStaticArray<ULONG, 4> genSeqList;
+
 	AutoCacheRequest request(tdbb, irq_r_pages, IRQ_REQUESTS);
 
 	FOR(REQUEST_HANDLE request) X IN RDB$PAGES
@@ -2048,33 +2052,39 @@ void DPM_scan_pages( thread_db* tdbb)
 		relation = MET_relation(tdbb, X.RDB$RELATION_ID);
 		relPages = relation->getBasePages();
 		sequence = X.RDB$PAGE_SEQUENCE;
-		MemoryPool* pool = dbb->dbb_permanent;
+
 		switch (X.RDB$PAGE_TYPE)
 		{
 		case pag_root:
 			relPages->rel_index_root = X.RDB$PAGE_NUMBER;
-			continue;
+			break;
 
 		case pag_pointer:
-			address = &relPages->rel_pages;
-			pool = relation->rel_pool;
+			relPages->rel_pages = vcl::newVector(*relation->rel_pool, relPages->rel_pages, sequence + 1);
+			(*relPages->rel_pages)[sequence] = X.RDB$PAGE_NUMBER;
 			break;
 
 		case pag_transactions:
-			address = &dbb->dbb_t_pages;
+			tipSeqList.resize(sequence + 1);
+			tipSeqList[sequence] = X.RDB$PAGE_NUMBER;
 			break;
 
 		case pag_ids:
-			address = &dbb->dbb_gen_id_pages;
+			genSeqList.resize(sequence + 1);
+			genSeqList[sequence] = X.RDB$PAGE_NUMBER;
 			break;
 
 		default:
 			CORRUPT(257);		// msg 257 bad record in RDB$PAGES
 		}
-		vector = *address = vcl::newVector(*pool, *address, sequence + 1);
-		(*vector)[sequence] = X.RDB$PAGE_NUMBER;
 	}
 	END_FOR
+
+	if (const auto count = tipSeqList.getCount())
+		dbb->copyKnownPages(pag_transactions, count, tipSeqList.begin());
+
+	if (const auto count = genSeqList.getCount())
+		dbb->copyKnownPages(pag_ids, count, genSeqList.begin());
 }
 
 

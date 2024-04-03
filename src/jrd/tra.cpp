@@ -589,24 +589,24 @@ void TRA_extend_tip(thread_db* tdbb, ULONG sequence) //, WIN* precedence_window)
 	CCH_must_write(tdbb, &window);
 	CCH_RELEASE(tdbb, &window);
 
+	const ULONG pageNumber = window.win_page.getPageNum();
+
 	// Release prior page
 
 	if (sequence)
 	{
 		CCH_MARK_MUST_WRITE(tdbb, &prior_window);
-		prior_tip->tip_next = window.win_page.getPageNum();
+		prior_tip->tip_next = pageNumber;
 		CCH_RELEASE(tdbb, &prior_window);
 	}
 
 	// Link into internal data structures
 
-	vcl* vector = dbb->dbb_t_pages =
-		vcl::newVector(*dbb->dbb_permanent, dbb->dbb_t_pages, sequence + 1);
-	(*vector)[sequence] = window.win_page.getPageNum();
+	dbb->setKnownPage(pag_transactions, sequence, pageNumber);
 
 	// Write into pages relation
 
-	DPM_pages(tdbb, 0, pag_transactions, sequence, window.win_page.getPageNum());
+	DPM_pages(tdbb, 0, pag_transactions, sequence, pageNumber);
 }
 
 
@@ -2378,19 +2378,21 @@ static ULONG inventory_page(thread_db* tdbb, ULONG sequence)
 	Database* dbb = tdbb->getDatabase();
 	CHECK_DBB(dbb);
 
-	WIN window(DB_PAGE_SPACE, -1);
-	vcl* vector = dbb->dbb_t_pages;
-	while (!vector || sequence >= vector->count())
+	if (const ULONG pageno = dbb->getKnownPage(pag_transactions, sequence))
+		return pageno;
+
+	while (sequence >= dbb->getKnownPagesCount(pag_transactions))
 	{
 		DPM_scan_pages(tdbb);
 
-		if ((vector = dbb->dbb_t_pages) && sequence < vector->count())
+		const ULONG tipCount = dbb->getKnownPagesCount(pag_transactions);
+		if (sequence < tipCount)
 			break;
 
-		if (!vector)
+		if (!tipCount)
 			BUGCHECK(165);		// msg 165 cannot find tip page
 
-		window.win_page = (*vector)[vector->count() - 1];
+		WIN window(DB_PAGE_SPACE, dbb->getKnownPage(pag_transactions, tipCount - 1));
 		tx_inv_page* tip = (tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_transactions);
 		const ULONG next = tip->tip_next;
 		CCH_RELEASE(tdbb, &window);
@@ -2400,10 +2402,10 @@ static ULONG inventory_page(thread_db* tdbb, ULONG sequence)
 		// Type check it
 		tip = (tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_transactions);
 		CCH_RELEASE(tdbb, &window);
-		DPM_pages(tdbb, 0, pag_transactions, vector->count(), window.win_page.getPageNum());
+		DPM_pages(tdbb, 0, pag_transactions, tipCount, window.win_page.getPageNum());
 	}
 
-	return (*vector)[sequence];
+	return dbb->getKnownPage(pag_transactions, sequence);
 }
 
 

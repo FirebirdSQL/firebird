@@ -1937,21 +1937,19 @@ void Validation::walk_generators()
 
 	WIN window(DB_PAGE_SPACE, -1);
 
-	vcl* vector = dbb->dbb_gen_id_pages;
-	if (vector)
+	if (const auto idsCount = dbb->getKnownPagesCount(pag_ids))
 	{
-        vcl::iterator ptr, end;
-		for (ptr = vector->begin(), end = vector->end(); ptr < end; ++ptr)
+		for (ULONG sequence = 0; sequence < idsCount; sequence++)
 		{
-			if (*ptr)
+			if (const auto pageNumber = dbb->getKnownPage(pag_ids, sequence))
 			{
 #ifdef DEBUG_VAL_VERBOSE
 				if (VAL_debug_level)
-					fprintf(stdout, "walk_generator: page %d\n", *ptr);
+					fprintf(stdout, "walk_generator: page %d\n", pageNumber);
 #endif
 				// It doesn't make a difference generator_page or pointer_page because it's not used.
 				generator_page* page = NULL;
-				fetch_page(true, *ptr, pag_ids, &window, &page);
+				fetch_page(true, pageNumber, pag_ids, &window, &page);
 				release_page(&window);
 			}
 		}
@@ -3276,8 +3274,7 @@ Validation::RTN Validation::walk_tip(TraNumber transaction)
  **************************************/
 	Database* dbb = vdr_tdbb->getDatabase();
 
-	const vcl* vector = dbb->dbb_t_pages;
-	if (!vector)
+	if (!dbb->getKnownPagesCount(pag_transactions))
 		return corrupt(VAL_TIP_LOST, 0);
 
 	tx_inv_page* page = 0;
@@ -3285,25 +3282,28 @@ Validation::RTN Validation::walk_tip(TraNumber transaction)
 
 	for (ULONG sequence = 0; sequence <= pages; sequence++)
 	{
-		if (!(*vector)[sequence] || sequence >= vector->count())
+		auto pageNumber = dbb->getKnownPage(pag_transactions, sequence);
+		if (!pageNumber)
 		{
 			corrupt(VAL_TIP_LOST_SEQUENCE, 0, sequence);
 			if (!(vdr_flags & VDR_repair))
 				continue;
 
 			TRA_extend_tip(vdr_tdbb, sequence);
-			vector = dbb->dbb_t_pages;
 			vdr_fixed++;
+
+			pageNumber = dbb->getKnownPage(pag_transactions, sequence);
 		}
 
 		WIN window(DB_PAGE_SPACE, -1);
-		fetch_page(true, (*vector)[sequence], pag_transactions, &window, &page);
+		fetch_page(true, pageNumber, pag_transactions, &window, &page);
 
 #ifdef DEBUG_VAL_VERBOSE
 		if (VAL_debug_level)
-			fprintf(stdout, "walk_tip: page %d next %d\n", (*vector)[sequence], page->tip_next);
+			fprintf(stdout, "walk_tip: page %d next %d\n", pageNumber, page->tip_next);
 #endif
-		if (page->tip_next && page->tip_next != (*vector)[sequence + 1])
+		const auto next = dbb->getKnownPage(pag_transactions, sequence + 1);
+		if (page->tip_next && page->tip_next != next)
 		{
 			corrupt(VAL_TIP_CONFUSED, 0, sequence);
 		}
