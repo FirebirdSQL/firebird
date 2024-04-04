@@ -468,7 +468,7 @@ namespace Jrd
 			dbb_filename, dbb_config));
 	}
 
-	// Methods incapsulating operations with vectors of known pages
+	// Methods encapsulating operations with vectors of known pages
 
 	ULONG Database::getKnownPagesCount(SCHAR ptype)
 	{

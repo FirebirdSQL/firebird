@@ -591,7 +591,7 @@ public:
 		return ENCODE_ODS(dbb_ods_version, dbb_minor_version);
 	}
 
-	// Methods incapsulating operations with vectors of known pages
+	// Methods encapsulating operations with vectors of known pages
 	ULONG getKnownPagesCount(SCHAR ptype);
 	ULONG getKnownPage(SCHAR ptype, ULONG sequence);
 	void setKnownPage(SCHAR ptype, ULONG sequence, ULONG value);
