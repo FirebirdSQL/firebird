@@ -80,9 +80,6 @@ static void defineComputed(DsqlCompilerScratch* dsqlScratch, RelationSourceNode*
 	dsql_fld* field, ValueSourceClause* clause, string& source, BlrDebugWriter::BlrData& value);
 static void deleteKeyConstraint(thread_db* tdbb, jrd_tra* transaction,
 	const MetaName& relationName, const MetaName& constraintName, const MetaName& indexName);
-static void defineFile(thread_db* tdbb, jrd_tra* transaction, SLONG shadowNumber, bool manualShadow,
-	bool conditionalShadow, SLONG& dbAlloc,
-	const PathName& name, SLONG start, SLONG length);
 static bool fieldExists(thread_db* tdbb, jrd_tra* transaction, const MetaName& relationName,
 	const MetaName& fieldName);
 static bool isItSqlRole(thread_db* tdbb, jrd_tra* transaction, const MetaName& inputName,
@@ -488,46 +485,6 @@ static void deleteKeyConstraint(thread_db* tdbb, jrd_tra* transaction,
 		status_exception::raise(
 			Arg::PrivateDyn(130) << constraintName);
 	}
-}
-
-// Define a database or shadow file.
-static void defineFile(thread_db* tdbb, jrd_tra* transaction, SLONG shadowNumber, bool manualShadow,
-	bool conditionalShadow, SLONG& dbAlloc, const PathName& name, SLONG start, SLONG length)
-{
-	PathName expandedName = name;
-
-	if (!ISC_expand_filename(expandedName, false))
-		status_exception::raise(Arg::PrivateDyn(231));	// File name is invalid.
-
-	if (tdbb->getDatabase()->dbb_filename == expandedName)
-		status_exception::raise(Arg::PrivateDyn(166));
-
-	AutoCacheRequest request(tdbb, drq_l_files, DYN_REQUESTS);
-
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		FIRST 1 X IN RDB$FILES
-		WITH X.RDB$FILE_NAME EQ expandedName.c_str()
-	{
-		status_exception::raise(Arg::PrivateDyn(166));
-	}
-	END_FOR
-
-	request.reset(tdbb, drq_s_files, DYN_REQUESTS);
-
-	STORE(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		X IN RDB$FILES
-	{
-		expandedName.copyTo(X.RDB$FILE_NAME, sizeof(X.RDB$FILE_NAME));
-		X.RDB$SHADOW_NUMBER = shadowNumber;
-		X.RDB$FILE_FLAGS = (manualShadow ? FILE_manual : 0) |
-			(conditionalShadow ? FILE_conditional : 0);
-
-		dbAlloc = MAX(dbAlloc, start);
-		X.RDB$FILE_START = dbAlloc;
-		X.RDB$FILE_LENGTH = length;
-		dbAlloc += length;
-	}
-	END_STORE
 }
 
 // Checks to see if the given field already exists in a relation.
@@ -10370,7 +10327,7 @@ string CreateShadowNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, number);
 	NODE_PRINT(printer, manual);
 	NODE_PRINT(printer, conditional);
-	NODE_PRINT(printer, files);
+	NODE_PRINT(printer, fileName);
 
 	return "CreateShadowNode";
 }
@@ -10394,7 +10351,7 @@ void CreateShadowNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScrat
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 
-	// If a shadow set identified by the shadow number already exists return error.
+	// If a shadow set identified by the shadow number already exists return error
 
 	AutoCacheRequest request(tdbb, drq_l_shadow, DYN_REQUESTS);
 
@@ -10407,25 +10364,34 @@ void CreateShadowNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScrat
 	}
 	END_FOR
 
-	SLONG start = 0;
+	PathName expandedName = fileName.ToPathName();
 
-	for (NestConst<DbFileClause>* i = files.begin(); i != files.end(); ++i)
+	if (!ISC_expand_filename(expandedName, false))
+		status_exception::raise(Arg::PrivateDyn(231));	// File name is invalid
+
+	if (tdbb->getDatabase()->dbb_filename == expandedName)
+		status_exception::raise(Arg::PrivateDyn(166));
+
+	request.reset(tdbb, drq_l_files, DYN_REQUESTS);
+
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		FIRST 1 X IN RDB$FILES
+		WITH X.RDB$FILE_NAME EQ expandedName.c_str()
 	{
-		bool first = i == files.begin();
-		DbFileClause* file = *i;
-
-		if (!first && i[-1]->length == 0 && file->start == 0)
-		{
-			// Preceding file did not specify length, so %s must include starting page number
-			status_exception::raise(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-				Arg::Gds(isc_dsql_command_err) <<
-				Arg::Gds(isc_dsql_file_length_err) << file->name);
-		}
-
-		defineFile(tdbb, transaction, number, manual && first, conditional && first,
-			start, file->name.c_str(), file->start, file->length);
+		status_exception::raise(Arg::PrivateDyn(166));
 	}
+	END_FOR
+
+	request.reset(tdbb, drq_s_files, DYN_REQUESTS);
+
+	STORE(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		X IN RDB$FILES
+	{
+		expandedName.copyTo(X.RDB$FILE_NAME, sizeof(X.RDB$FILE_NAME));
+		X.RDB$SHADOW_NUMBER = number;
+		X.RDB$FILE_FLAGS = (manual ? FILE_manual : 0) | (conditional ? FILE_conditional : 0);
+	}
+	END_STORE
 
 	savePoint.release();	// everything is ok
 }
@@ -12637,13 +12603,11 @@ string AlterDatabaseNode::internalPrint(NodePrinter& printer) const
 	DdlNode::internalPrint(printer);
 
 	NODE_PRINT(printer, create);
-	NODE_PRINT(printer, createLength);
 	NODE_PRINT(printer, linger);
 	NODE_PRINT(printer, clauses);
 	NODE_PRINT(printer, differenceFile);
 	NODE_PRINT(printer, setDefaultCharSet);
 	NODE_PRINT(printer, setDefaultCollation);
-	NODE_PRINT(printer, files);
 	NODE_PRINT(printer, cryptPlugin);
 	NODE_PRINT(printer, keyName);
 
@@ -12819,18 +12783,6 @@ void AlterDatabaseNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 		}
 	}
 
-	SLONG dbAlloc = PageSpace::maxAlloc(tdbb->getDatabase());
-	SLONG start = create ? createLength + 1 : 0;
-	for (NestConst<DbFileClause>* i = files.begin(); i != files.end(); ++i)
-	{
-		DbFileClause* file = *i;
-
-		start = MAX(start, file->start);
-		defineFile(tdbb, transaction, 0, false, false, dbAlloc,
-			file->name.c_str(), start, file->length);
-		start += file->length;
-	}
-
 	if (differenceFile.hasData())
 		defineDifference(tdbb, transaction, differenceFile.c_str());
 
@@ -12959,7 +12911,6 @@ void AlterDatabaseNode::changeBackupMode(thread_db* tdbb, jrd_tra* transaction, 
 			X IN RDB$FILES
 		{
 			X.RDB$FILE_FLAGS = FILE_difference | FILE_backing_up;
-			X.RDB$FILE_START = 0;
 		}
 		END_STORE
 
@@ -13011,7 +12962,6 @@ void AlterDatabaseNode::defineDifference(thread_db* tdbb, jrd_tra* transaction, 
 
 		strcpy(FIL.RDB$FILE_NAME, file.c_str());
 		FIL.RDB$FILE_FLAGS = FILE_difference;
-		FIL.RDB$FILE_START = 0;
 	}
 	END_STORE
 }

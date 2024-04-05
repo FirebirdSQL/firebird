@@ -164,10 +164,6 @@ struct dba_rel
 
 struct dba_fil
 {
-	dba_fil* fil_next;			// Next file in database
-	ULONG fil_min_page;			// Minimum page number in file
-	ULONG fil_max_page;			// Maximum page number in file
-	USHORT fil_fudge;			// Fudge factor for page relocation
 #ifdef WIN_NT
 	void *fil_desc;
 #else
@@ -216,16 +212,6 @@ static void print_help();
 
 #include "../utilities/gstat/dba_proto.h"
 
-struct open_files
-{
-#ifdef WIN_NT
-	void* desc;
-#else
-	int desc;
-#endif
-	open_files* open_files_next;
-};
-
 struct dba_mem
 {
 	char* memory;
@@ -241,7 +227,7 @@ public:
 		: ThreadData(tddDBA), uSvc(us)
 	{
 		//dba_throw = false;
-		files = 0;
+		file = 0;
 		relations = 0;
 		page_size = 0;
 		dp_per_pp = 0;
@@ -252,14 +238,13 @@ public:
 		global_buffer = 0;
 		exit_code = 0;
 		head_of_mem_list = 0;
-		head_of_files_list = 0;
 		memset(dba_status_vector, 0, sizeof (dba_status_vector));
 		dba_status = dba_status_vector;
 	}
 
 	//bool dba_throw;
 	Firebird::UtilSvc* uSvc;
-	dba_fil* files;
+	dba_fil* file;
 	dba_rel* relations;
 	USHORT page_size;
 	USHORT dp_per_pp;
@@ -270,7 +255,6 @@ public:
 	pag* global_buffer;
 	int exit_code;
 	dba_mem *head_of_mem_list;
-	open_files *head_of_files_list;
 	ISC_STATUS *dba_status;
 	ISC_STATUS_ARRAY dba_status_vector;
 
@@ -613,7 +597,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 	expandDatabaseName(fileName, tempStr, NULL);
 	fileName = tempStr;
 
-	dba_fil* current = db_open(fileName.c_str(), fileName.length());
+	dba_fil* file = db_open(fileName.c_str(), fileName.length());
 
 	alignas(DIRECT_IO_BLOCK_SIZE) SCHAR temp[MAX(RAW_HEADER_SIZE, DIRECT_IO_BLOCK_SIZE)];
 	tddba->page_size = MAX(RAW_HEADER_SIZE, DIRECT_IO_BLOCK_SIZE);
@@ -661,38 +645,6 @@ int gstat(Firebird::UtilSvc* uSvc)
 	if (sw_header)
 		dba_exit(FINI_OK, tddba);
 
-	// gather continuation files
-
-	while (true)
-	{
-		if (page != HEADER_PAGE)
-		{
-			current = db_open(file_name, static_cast<USHORT>(strlen(file_name)));
-			header = (const header_page*) db_read(page);
-		}
-
-		if (current != tddba->files)
-			current->fil_fudge = 1;	// ignore header page once read it
-
-		PathName nextFileName;
-
-		const UCHAR* vp = header->hdr_data;
-		for (const auto vend = reinterpret_cast<const UCHAR*>(header) + header->hdr_page_size;
-			 vp < vend && *vp != HDR_end; vp += 2 + vp[1])
-		{
-			if (*vp == HDR_file)
-				nextFileName.assign(vp + 2, vp[1]);
-
-			if (*vp == HDR_last_page)
-				memcpy(&current->fil_max_page, vp + 2, sizeof(current->fil_max_page));
-		}
-
-		if (nextFileName.isEmpty())
-			break;
-
-		page = current->fil_max_page + 1;	// first page of next file
-	}
-
 	if (sw_enc)
 	{
 		class Statist
@@ -724,6 +676,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 		private:
 			ULONG enc, non;
 		};
+
 		Statist data, index, blob, generator, other;
 
 		ULONG last = lastUsedPage(header->hdr_page_size);
@@ -765,18 +718,6 @@ int gstat(Firebird::UtilSvc* uSvc)
 
 		dba_exit(FINI_OK, tddba);
 	}
-
-	// print continuation file sequence
-
-	dba_print(false, 7);
-	// msg 7: \n\nDatabase file sequence:
-	for (current = tddba->files; current->fil_next; current = current->fil_next)
-	{
-		dba_print(false, 8, SafeArg() << current->fil_string << current->fil_next->fil_string);
-		// msg 8: File %s continues as file %s
-	}
-	dba_print(false, 9, SafeArg() << current->fil_string << ((current == tddba->files) ? "only" : "last"));
-	// msg 9: File %s is the %s file\n
 
 	// Check to make sure that the user accessing the database is either
 	// SYSDBA or owner of the database
@@ -1192,22 +1133,11 @@ int gstat(Firebird::UtilSvc* uSvc)
 		alloced = alloced->mem_next;
 	}
 
-	// close files
-	open_files* open_file = tddba->head_of_files_list;
-	while (open_file)
-	{
-		db_close(open_file->desc);
-		open_file = open_file->open_files_next;
-	}
+	// close file
+	if (tddba->file)
+		db_close(tddba->file->fil_desc);
 
 	// free linked lists
-	while (tddba->head_of_files_list != 0)
-	{
-		open_files* tmp1 = tddba->head_of_files_list;
-		tddba->head_of_files_list = tddba->head_of_files_list->open_files_next;
-		delete tmp1;
-	}
-
 	while (tddba->head_of_mem_list != 0)
 	{
 		dba_mem* tmp2 = tddba->head_of_mem_list;
@@ -1865,27 +1795,10 @@ static dba_fil* db_open(const char* file_name, USHORT file_length)
  **************************************/
 	tdba* tddba = tdba::getSpecific();
 
-	dba_fil* fil;
+	const auto file = (dba_fil*) alloc(sizeof(dba_fil) + file_length + 1);
 
-	if (tddba->files)
-	{
-		for (fil = tddba->files; fil->fil_next; fil = fil->fil_next);
-		fil->fil_next = (dba_fil*) alloc(sizeof(dba_fil) + file_length + 1);
-		fil->fil_next->fil_min_page = fil->fil_max_page + 1;
-		fil = fil->fil_next;
-	}
-	else
-	{
-		// empty list
-		fil = tddba->files = (dba_fil*) alloc(sizeof(dba_fil) + file_length + 1);
-		fil->fil_min_page = 0L;
-	}
-
-	fil->fil_next = NULL;
 	strcpy(fil->fil_string, file_name);
 	fil->fil_length = file_length;
-	fil->fil_fudge = 0;
-	fil->fil_max_page = 0L;
 
 	fil->fil_desc = CreateFile(	file_name,
 								GENERIC_READ,
@@ -1895,31 +1808,15 @@ static dba_fil* db_open(const char* file_name, USHORT file_length)
 								FILE_ATTRIBUTE_NORMAL,
 								0);
 
-	if (fil->fil_desc  == INVALID_HANDLE_VALUE)
+	if (fil->fil_desc == INVALID_HANDLE_VALUE)
 	{
 		tddba->uSvc->getStatusAccessor().setServiceStatus(GSTAT_MSG_FAC, 29, SafeArg() << file_name);
 		// msg 29: Can't open database file %s
 		db_error(GetLastError());
 	}
 
-	open_files* file_list = FB_NEW_POOL(*getDefaultMemoryPool()) open_files;
-	if (!file_list)
-	{
-		// NOMEM: return error
-		dba_error(31);
-	}
-	file_list->desc = fil->fil_desc;
-	file_list->open_files_next = 0;
-
-	if (tddba->head_of_files_list == 0)
-		tddba->head_of_files_list = file_list;
-	else
-	{
-		file_list->open_files_next = tddba->head_of_files_list;
-		tddba->head_of_files_list = file_list;
-	}
-
-	return fil;
+	tddba->file = file;
+	return file;
 }
 
 
@@ -1945,17 +1842,9 @@ static const pag* db_read( SLONG page_number, bool ok_enc)
 
 	tddba->page_number = page_number;
 
-	dba_fil* fil;
-	for (fil = tddba->files; page_number > (SLONG) fil->fil_max_page && fil->fil_next;)
-	{
-		 fil = fil->fil_next;
-	}
-
-	page_number -= fil->fil_min_page - fil->fil_fudge;
-
 	LARGE_INTEGER liOffset;
 	liOffset.QuadPart = UInt32x32To64((DWORD) page_number, (DWORD) tddba->page_size);
-	if (SetFilePointer(fil->fil_desc, (LONG) liOffset.LowPart, &liOffset.HighPart, FILE_BEGIN) ==
+	if (SetFilePointer(tddba->file->fil_desc, (LONG) liOffset.LowPart, &liOffset.HighPart, FILE_BEGIN) ==
 		(DWORD) -1)
 	{
 		int lastError = GetLastError();
@@ -1968,7 +1857,7 @@ static const pag* db_read( SLONG page_number, bool ok_enc)
 	}
 
 	SLONG actual_length;
-	if (!ReadFile(	fil->fil_desc,
+	if (!ReadFile(	tddba->file->fil_desc,
 					tddba->global_buffer,
 					tddba->page_size,
 					reinterpret_cast<LPDWORD>(&actual_length),
@@ -2057,54 +1946,20 @@ static dba_fil* db_open(const char* file_name, USHORT file_length)
  **************************************/
 	tdba* tddba = tdba::getSpecific();
 
-	dba_fil* fil;
-	if (tddba->files)
-	{
-		for (fil = tddba->files; fil->fil_next; fil = fil->fil_next)
-			;
-		fil->fil_next = (dba_fil*) alloc(sizeof(dba_fil) + file_length + 1);
-		fil->fil_next->fil_min_page = fil->fil_max_page + 1;
-		fil = fil->fil_next;
-	}
-	else
-	{
-		// empty list
+	const auto file = (dba_fil*) alloc(sizeof(dba_fil) + file_length + 1);
 
-		fil = tddba->files = (dba_fil*) alloc(sizeof(dba_fil) + file_length + 1);
-		fil->fil_min_page = 0L;
-	}
+	strcpy(file->fil_string, file_name);
+	file->fil_length = file_length;
 
-	fil->fil_next = NULL;
-	strcpy(fil->fil_string, file_name);
-	fil->fil_length = file_length;
-	fil->fil_fudge = 0;
-	fil->fil_max_page = 0L;
-
-	if ((fil->fil_desc = os_utils::open(file_name, O_RDONLY)) == -1)
+	if ((file->fil_desc = os_utils::open(file_name, O_RDONLY)) == -1)
 	{
 		tddba->uSvc->getStatusAccessor().setServiceStatus(GSTAT_MSG_FAC, 29, SafeArg() << file_name);
 		// msg 29: Can't open database file %s
 		db_error(errno);
 	}
 
-	open_files* file_list = FB_NEW_POOL(*getDefaultMemoryPool()) open_files;
-	if (!file_list)
-	{
-		// NOMEM: return error
-		dba_error(31);
-	}
-	file_list->desc = fil->fil_desc;
-	file_list->open_files_next = 0;
-
-	if (tddba->head_of_files_list == 0)
-		tddba->head_of_files_list = file_list;
-	else
-	{
-		file_list->open_files_next = tddba->head_of_files_list;
-		tddba->head_of_files_list = file_list;
-	}
-
-	return fil;
+	tddba->file = file;
+	return file;
 }
 
 
@@ -2127,15 +1982,8 @@ static const pag* db_read( SLONG page_number, bool ok_enc)
 
 	tddba->page_number = page_number;
 
-	dba_fil* fil;
-	for (fil = tddba->files; page_number > (SLONG) fil->fil_max_page && fil->fil_next;)
-	{
-		fil = fil->fil_next;
-	}
-
-	page_number -= fil->fil_min_page - fil->fil_fudge;
 	const FB_UINT64 offset = ((FB_UINT64) page_number) * ((FB_UINT64) tddba->page_size);
-	if (os_utils::lseek (fil->fil_desc, offset, 0) == -1)
+	if (os_utils::lseek (tddba->file->fil_desc, offset, 0) == -1)
 	{
 		tddba->uSvc->getStatusAccessor().setServiceStatus(GSTAT_MSG_FAC, 30, SafeArg());
 		// msg 30: Can't read a database page
@@ -2145,7 +1993,7 @@ static const pag* db_read( SLONG page_number, bool ok_enc)
 	USHORT length = tddba->page_size;
 	for (SCHAR* p = (SCHAR *) tddba->global_buffer; length > 0;)
 	{
-		const int l = read(fil->fil_desc, p, length);
+		const int l = read(tddba->file->fil_desc, p, length);
 		if (l < 0)
 		{
 			tddba->uSvc->getStatusAccessor().setServiceStatus(GSTAT_MSG_FAC, 30, SafeArg());

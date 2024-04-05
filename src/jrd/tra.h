@@ -475,7 +475,6 @@ enum dfw_t {
 	dfw_create_index,
 	dfw_delete_index,
 	dfw_compute_security,
-	dfw_add_file,
 	dfw_add_shadow,
 	dfw_delete_shadow,
 	dfw_delete_shadow_nodelete,
