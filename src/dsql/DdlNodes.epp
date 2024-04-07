@@ -1789,6 +1789,9 @@ void CreateAlterFunctionNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch
 
 	if (package.isEmpty())
 	{
+		if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_udf))
+			return;
+
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 			DDL_TRIGGER_CREATE_FUNCTION, name, NULL);
 
@@ -2804,6 +2807,9 @@ void CreateAlterProcedureNode::executeCreate(thread_db* tdbb, DsqlCompilerScratc
 
 	if (package.isEmpty())
 	{
+		if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_procedure))
+			return;
+
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 			DDL_TRIGGER_CREATE_PROCEDURE, name, NULL);
 
@@ -3724,8 +3730,13 @@ void CreateAlterTriggerNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 void CreateAlterTriggerNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_trigger))
+		return;
+
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_CREATE_TRIGGER,
 		name, NULL);
+
+	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_trigger);
 
 	store(tdbb, dsqlScratch, transaction);
 
@@ -4010,8 +4021,13 @@ void CreateCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_collation))
+		return;
+
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 		DDL_TRIGGER_CREATE_COLLATION, name, NULL);
+
+	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_collation);
 
 	AutoCacheRequest request(tdbb, drq_s_colls, DYN_REQUESTS);
 
@@ -4400,8 +4416,13 @@ void CreateDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, nameType->name, obj_field))
+		return;
+
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 		DDL_TRIGGER_CREATE_DOMAIN, nameType->name, NULL);
+
+	DYN_UTIL_check_unique_name(tdbb, transaction, nameType->name, obj_field);
 
 	storeGlobalField(tdbb, transaction, nameType->name, type);
 
@@ -5539,6 +5560,9 @@ void CreateAlterExceptionNode::executeCreate(thread_db* tdbb, DsqlCompilerScratc
 	Attachment* const attachment = transaction->getAttachment();
 	const MetaString& ownerName = attachment->getEffectiveUserName();
 
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_exception))
+		return;
+
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 		DDL_TRIGGER_CREATE_EXCEPTION, name, NULL);
 
@@ -5766,8 +5790,13 @@ void CreateAlterSequenceNode::putErrorPrefix(Firebird::Arg::StatusVector& status
 void CreateAlterSequenceNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_generator))
+		return;
+
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_CREATE_SEQUENCE,
 		name, NULL);
+
+	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_generator);
 
 	const SINT64 val = value.value_or(1);
 	SLONG initialStep = 1;
@@ -5777,6 +5806,7 @@ void CreateAlterSequenceNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch
 		if (initialStep == 0)
 			status_exception::raise(Arg::Gds(isc_dyn_cant_use_zero_increment) << Arg::Str(name));
 	}
+
 	store(tdbb, transaction, name, fb_sysflag_user, val, initialStep);
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_CREATE_SEQUENCE,
@@ -6398,11 +6428,25 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	const ObjectsArray<MetaName>* pkCols)
 {
 	dsql_fld* field = clause->field;
+	dsql_rel* relation = dsqlScratch->relation;
+
+	if (clause->createIfNotExistsOnly)
+	{
+		AutoCacheRequest request(tdbb, drq_l_rel_fld_name, DYN_REQUESTS);
+
+		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			RFL IN RDB$RELATION_FIELDS
+			WITH RFL.RDB$RELATION_NAME = relation->rel_name.c_str() AND
+				 RFL.RDB$FIELD_NAME = field->fld_name.c_str()
+		{
+			return;
+		}
+		END_FOR
+	}
 
 	// Add the field to the relation being defined for parsing purposes.
 
 	bool permanent = false;
-	dsql_rel* relation = dsqlScratch->relation;
 	if (relation != NULL)
 	{
 		if (!(relation->rel_flags & REL_new_relation))
@@ -6596,11 +6640,25 @@ bool RelationNode::defineDefault(thread_db* /*tdbb*/, DsqlCompilerScratch* dsqlS
 }
 
 // Make a constraint object from a legacy node.
-void RelationNode::makeConstraint(thread_db* /*tdbb*/, DsqlCompilerScratch* dsqlScratch,
+void RelationNode::makeConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction, AddConstraintClause* clause,
 	ObjectsArray<CreateDropConstraint>& constraints, bool* notNull)
 {
 	MemoryPool& pool = dsqlScratch->getPool();
+
+	if (clause->createIfNotExistsOnly)
+	{
+		AutoCacheRequest request(tdbb, drq_l_rel_con, DYN_REQUESTS);
+
+		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			RC IN RDB$RELATION_CONSTRAINTS
+			WITH RC.RDB$CONSTRAINT_NAME EQ clause->name.c_str() AND
+				 RC.RDB$RELATION_NAME EQ name.c_str()
+		{
+			return;
+		}
+		END_FOR
+	}
 
 	switch (clause->constraintType)
 	{
@@ -7474,6 +7532,9 @@ void CreateRelationNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_relation))
+		return;
+
 	saveRelation(tdbb, dsqlScratch, name, false, true);
 
 	if (externalFile)
@@ -8790,6 +8851,9 @@ void CreateAlterViewNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_relation))
+		return;
+
 	Attachment* const attachment = transaction->tra_attachment;
 	const MetaString& ownerName = attachment->getEffectiveUserName();
 
@@ -9962,6 +10026,9 @@ void CreateIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_index))
+		return;
+
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_CREATE_INDEX,
 		name, NULL);
 
@@ -10402,6 +10469,9 @@ void CreateShadowNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScrat
 		FIRST 1 X IN RDB$FILES
 		WITH X.RDB$SHADOW_NUMBER EQ number
 	{
+		if (createIfNotExistsOnly)
+			return;
+
 		// msg 165: "Shadow %ld already exists"
 		status_exception::raise(Arg::PrivateDyn(165) << Arg::Num(number));
 	}
@@ -10522,6 +10592,10 @@ void CreateAlterRoleNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
+	MetaName dummyName;
+
+	if (createIfNotExistsOnly && isItSqlRole(tdbb, transaction, name, dummyName))
+		return;
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 		createFlag ? DDL_TRIGGER_CREATE_ROLE : DDL_TRIGGER_ALTER_ROLE, name, NULL);
@@ -10544,7 +10618,6 @@ void CreateAlterRoleNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		status_exception::raise(Arg::PrivateDyn(193) << name);
 	}
 
-	MetaName dummyName;
 	if (createFlag && isItSqlRole(tdbb, transaction, name, dummyName))
 	{
 		// msg 194: "SQL role @1 already exists"
@@ -10701,6 +10774,8 @@ void MappingNode::runInSecurityDb(SecDbContext* secDbContext)
 	{
 	case MAP_ADD:
 		ddl = "CREATE MAPPING ";
+		if (createIfNotExistsOnly)
+			ddl += "IF NOT EXISTS ";
 		break;
 	case MAP_MOD:
 		ddl = "ALTER MAPPING ";
@@ -11014,6 +11089,8 @@ void MappingNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd
 	case MAP_ADD:
 		if (found)
 		{
+			if (createIfNotExistsOnly)
+				return;
 			(Arg::Gds(isc_map_already_exists) << name).raise();
 		}
 		// fall through ...
@@ -11260,6 +11337,8 @@ void CreateAlterUserNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		if (text.isEmpty())
 			(Arg::Gds(isc_random) << "Missing user name for ALTER CURRENT USER").raise();
 	}
+
+	userData->createIfNotExistsOnly = createIfNotExistsOnly;
 
 	Firebird::LocalStatus s;
 	CheckStatusWrapper statusWrapper(&s);

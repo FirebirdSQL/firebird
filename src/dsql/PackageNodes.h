@@ -107,6 +107,7 @@ public:
 	MetaName name;
 	bool create;
 	bool alter;
+	bool createIfNotExistsOnly = false;
 	Firebird::string source;
 	Firebird::Array<Item>* items;
 	Firebird::SortedArray<MetaName> functionNames;
@@ -179,6 +180,7 @@ public:
 	Firebird::string source;
 	Firebird::Array<CreateAlterPackageNode::Item>* declaredItems;
 	Firebird::Array<CreateAlterPackageNode::Item>* items;
+	bool createIfNotExistsOnly = false;
 
 private:
 	Firebird::string owner;
