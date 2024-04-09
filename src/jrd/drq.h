@@ -249,6 +249,8 @@ enum drq_type_t
 	drq_l_pub_rel_name,		// lookup relation by name
 	drq_l_pub_all_rels,		// iterate through all user relations
 	drq_e_pub_tab_all,		// erase relation from all publication
+	drq_get_constr_type,	// get constraint type
+	drq_c_active_fk,		// check if active FK references this index
 
 	drq_MAX
 };

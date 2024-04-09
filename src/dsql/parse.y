@@ -702,6 +702,7 @@ using namespace Firebird;
 %token <metaNamePtr> ANY_VALUE
 %token <metaNamePtr> BTRIM
 %token <metaNamePtr> CALL
+%token <metaNamePtr> ENFORCED
 %token <metaNamePtr> FORMAT
 %token <metaNamePtr> LTRIM
 %token <metaNamePtr> NAMED_ARG_ASSIGN
@@ -4267,6 +4268,13 @@ alter_op($relationNode)
 			clause->name = *$4;
 			$relationNode->clauses.add(clause);
 		}
+	| ALTER CONSTRAINT symbol_constraint_name constraint_enforcement
+		{
+			RelationNode::AlterConstraintClause* clause = newNode<RelationNode::AlterConstraintClause>();
+			clause->name = *$3;
+			clause->enforced = $4;
+			$relationNode->clauses.add(clause);
+		}
 	| ADD column_def($relationNode)
 	| ADD table_constraint_definition($relationNode)
 	| col_opt alter_column_name POSITION pos_short_integer
@@ -4396,6 +4404,12 @@ alter_op($relationNode)
 %type <metaNamePtr> alter_column_name
 alter_column_name
 	: keyword_or_column
+	;
+
+%type <boolVal> constraint_enforcement
+constraint_enforcement
+	: NOT ENFORCED	{ $$ = false; }
+	| ENFORCED		{ $$ = true; }
 	;
 
 // below are reserved words that could be used as column identifiers
@@ -9615,6 +9629,7 @@ non_reserved_word
 	| UNICODE_VAL
 	// added in FB 6.0
 	| ANY_VALUE
+	| ENFORCED
 	| FORMAT
 	| OWNER
 	;

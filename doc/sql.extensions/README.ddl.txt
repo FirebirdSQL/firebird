@@ -666,3 +666,16 @@ DROP PACKAGE BODY [IF EXISTS] <package>
 DROP [GLOBAL] MAPPING [IF EXISTS] <mapping>
 ALTER TABLE <table> DROP [IF EXISTS] <column>
 ALTER TABLE <table> DROP CONSTRAINT [IF EXISTS] <constraint>
+
+2) ALTER CONSTRAINT
+
+ANSI standard compliant ALTER CONSTRAINT clause for ALTER TABLE statement.
+
+ALTER TABLE ALTER CONSTRAINT <constraint name> [NOT] ENFORCED
+
+Supported for UNIQUE, PRIMARY KEY and FOREIGN KEY constraints.
+Primary and unique keys cannot be deactivated if they are referenced by any active foreign key.
+
+The corresponding non-standard ALTER INDEX statement is allowed as well.
+
+ODS 13.2 is required.
