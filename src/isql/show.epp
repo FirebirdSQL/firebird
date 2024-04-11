@@ -3030,6 +3030,10 @@ static processing_state show_check(const SCHAR* object)
 
 		if (!TRG.RDB$TRIGGER_SOURCE.NULL)
 			SHOW_print_metadata_text_blob (isqlGlob.Out, &TRG.RDB$TRIGGER_SOURCE);
+
+		if (TRG.RDB$TRIGGER_INACTIVE == 1)
+			isqlGlob.printf(" Not enforced");
+
 		isqlGlob.printf(NEWLINE);
 
 	END_FOR

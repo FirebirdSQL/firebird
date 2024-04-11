@@ -251,6 +251,7 @@ enum drq_type_t
 	drq_e_pub_tab_all,		// erase relation from all publication
 	drq_get_constr_type,	// get constraint type
 	drq_c_active_fk,		// check if active FK references this index
+	drq_m_check_trgs,		// activate/deactivate triggers for check constraint
 
 	drq_MAX
 };

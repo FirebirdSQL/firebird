@@ -3558,7 +3558,6 @@ bool TriggerDefinition::modify(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		{
 			switch (TRG.RDB$SYSTEM_FLAG)
 			{
-				case fb_sysflag_check_constraint:
 				case fb_sysflag_referential_constraint:
 				case fb_sysflag_view_check:
 					status_exception::raise(Arg::Gds(isc_dyn_cant_modify_auto_trig));
@@ -7952,16 +7951,33 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 						{
 							// Deactivation of primary/unique key requires check for active foreign keys
 							checkIndexReferenced(tdbb, transaction, RC.RDB$INDEX_NAME);
+							modifyIndex(tdbb, transaction, RC.RDB$INDEX_NAME, clause->enforced);
 						}
 						else if (strcmp(RC.RDB$CONSTRAINT_TYPE, FOREIGN_KEY) == 0)
 						{
 							// Activation of foreign key requires check for active partner which is done on index activation
-							// so there is nothing to do here
+							// so there is nothing to check here
+							modifyIndex(tdbb, transaction, RC.RDB$INDEX_NAME, clause->enforced);
+						}
+						else if (strcmp(RC.RDB$CONSTRAINT_TYPE, CHECK_CNSTRT) == 0)
+						{
+							AutoCacheRequest requestHandle(tdbb, drq_m_check_trgs, DYN_REQUESTS);
+
+							FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+								TRG IN RDB$TRIGGERS CROSS
+								CHK IN RDB$CHECK_CONSTRAINTS WITH
+								TRG.RDB$RELATION_NAME EQ name.c_str() AND
+								TRG.RDB$TRIGGER_NAME EQ CHK.RDB$TRIGGER_NAME AND
+								CHK.RDB$CONSTRAINT_NAME EQ clause->name.c_str()
+							{
+								MODIFY TRG
+									TRG.RDB$TRIGGER_INACTIVE = clause->enforced ? FALSE : TRUE;
+								END_MODIFY
+							}
+							END_FOR
 						}
 						else
 							status_exception::raise(Arg::Gds(isc_wish_list) << Arg::Gds(isc_ref_cnstrnt_update));
-
-						modifyIndex(tdbb, transaction, RC.RDB$INDEX_NAME, clause->enforced);
 					}
 					END_FOR
 

@@ -667,15 +667,15 @@ DROP [GLOBAL] MAPPING [IF EXISTS] <mapping>
 ALTER TABLE <table> DROP [IF EXISTS] <column>
 ALTER TABLE <table> DROP CONSTRAINT [IF EXISTS] <constraint>
 
-2) ALTER CONSTRAINT
+2) ALTER CONSTRAINT clause for ALTER TABLE statement.
 
-ANSI standard compliant ALTER CONSTRAINT clause for ALTER TABLE statement.
+Syntax:
 
 ALTER TABLE ALTER CONSTRAINT <constraint name> [NOT] ENFORCED
 
-Supported for UNIQUE, PRIMARY KEY and FOREIGN KEY constraints.
+Supported for UNIQUE, PRIMARY KEY, FOREIGN KEY and CHECK constraints.
 Primary and unique keys cannot be deactivated if they are referenced by any active foreign key.
 
-The corresponding non-standard ALTER INDEX statement is allowed as well.
+The corresponding ALTER INDEX and ALTER TRIGGER statements are allowed as well.
 
 ODS 13.2 is required.
