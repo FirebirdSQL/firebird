@@ -673,7 +673,7 @@ Syntax:
 
 ALTER TABLE ALTER CONSTRAINT <constraint name> [NOT] ENFORCED
 
-Supported for UNIQUE, PRIMARY KEY, FOREIGN KEY and CHECK constraints.
+Supported for UNIQUE, PRIMARY KEY, FOREIGN KEY, CHECK AND NOT NULL constraints.
 Primary and unique keys cannot be deactivated if they are referenced by any active foreign key.
 
 The corresponding ALTER INDEX and ALTER TRIGGER statements are allowed as well.

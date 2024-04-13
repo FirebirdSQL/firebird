@@ -7965,13 +7965,66 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 							FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
 								TRG IN RDB$TRIGGERS CROSS
-								CHK IN RDB$CHECK_CONSTRAINTS WITH
-								TRG.RDB$RELATION_NAME EQ name.c_str() AND
-								TRG.RDB$TRIGGER_NAME EQ CHK.RDB$TRIGGER_NAME AND
-								CHK.RDB$CONSTRAINT_NAME EQ clause->name.c_str()
+								CHK IN RDB$CHECK_CONSTRAINTS
+								WITH TRG.RDB$RELATION_NAME EQ name.c_str() AND
+									 TRG.RDB$TRIGGER_NAME EQ CHK.RDB$TRIGGER_NAME AND
+									 CHK.RDB$CONSTRAINT_NAME EQ clause->name.c_str()
 							{
 								MODIFY TRG
 									TRG.RDB$TRIGGER_INACTIVE = clause->enforced ? FALSE : TRUE;
+								END_MODIFY
+							}
+							END_FOR
+						}
+						else if (strcmp(RC.RDB$CONSTRAINT_TYPE, NOT_NULL_CNSTRT) == 0)
+						{
+							AutoRequest requestHandle;
+
+							FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+								CHK IN RDB$CHECK_CONSTRAINTS CROSS
+								RF  IN RDB$RELATION_FIELDS
+								WITH CHK.RDB$CONSTRAINT_NAME EQ clause->name.c_str() AND
+									 CHK.RDB$TRIGGER_NAME EQ RF.RDB$FIELD_NAME AND
+									 RF.RDB$RELATION_NAME EQ name.c_str()
+							{
+								// Identity column cannot be NULL-able.
+								if (RF.RDB$IDENTITY_TYPE.NULL == FALSE)
+								{
+									fb_utils::exact_name(RF.RDB$FIELD_NAME);
+									// msg 274: Identity column @1 of table @2 cannot be changed to NULLable
+									status_exception::raise(Arg::PrivateDyn(274) << RF.RDB$FIELD_NAME << name.c_str());
+								}
+
+								// Column of an active primary key cannot be nullable
+								AutoRequest request3;
+
+								FOR (REQUEST_HANDLE request3 TRANSACTION_HANDLE transaction)
+									ISG IN RDB$INDEX_SEGMENTS CROSS
+									IDX IN RDB$INDICES CROSS
+									RC2 IN RDB$RELATION_CONSTRAINTS
+									WITH ISG.RDB$FIELD_NAME EQ RF.RDB$FIELD_NAME AND
+										 ISG.RDB$INDEX_NAME EQ IDX.RDB$INDEX_NAME AND
+										 IDX.RDB$RELATION_NAME EQ name.c_str() AND
+										 (IDX.RDB$INDEX_INACTIVE EQ 0 OR IDX.RDB$INDEX_INACTIVE MISSING) AND
+										 RC2.RDB$INDEX_NAME EQ IDX.RDB$INDEX_NAME AND
+										 RC2.RDB$CONSTRAINT_TYPE EQ PRIMARY_KEY
+								{
+									status_exception::raise(Arg::Gds(isc_primary_key_notnull));
+								}
+								END_FOR
+
+								// Otherwise it is fine
+								MODIFY RF
+									if (clause->enforced)
+									{
+										RF.RDB$NULL_FLAG.NULL = FALSE;
+										RF.RDB$NULL_FLAG = TRUE;
+									}
+									else
+									{
+										RF.RDB$NULL_FLAG.NULL = TRUE;
+										RF.RDB$NULL_FLAG = FALSE; // For symmetry
+									}
 								END_MODIFY
 							}
 							END_FOR
