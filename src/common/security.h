@@ -220,6 +220,7 @@ public:
 	unsigned int op;
 	int trustedAuth;
 	bool silent;
+	bool createIfNotExistsOnly = false;
 	CharField user, pass, first, last, middle, com, attr;
 	IntField adm, act;
 	CharField database, dba, dbaPassword, role;

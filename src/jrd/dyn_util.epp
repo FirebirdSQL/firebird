@@ -78,23 +78,16 @@ static const UCHAR gen_id_blr2[] =
 		blr_parameter, 0, 0, 0, blr_end, blr_end, blr_end, blr_eoc
 };
 
-void DYN_UTIL_check_unique_name(thread_db* tdbb, jrd_tra* transaction,
-	const MetaName& object_name, int object_type)
+// Check if an object already exists. If yes, return false.
+bool DYN_UTIL_check_unique_name_nothrow(thread_db* tdbb, jrd_tra* transaction,
+	const MetaName& object_name, int object_type, USHORT* errorCode)
 {
-/**************************************
- *
- *	D Y N _ U T I L _ c h e c k _ u n i q u e _ n a m e
- *
- **************************************
- *
- * Functional description
- *	Check if an object already exists.
- *	If yes then return error.
- *
- **************************************/
 	SET_TDBB(tdbb);
 
-	USHORT error_code = 0;
+	USHORT tempErrorCode;
+	errorCode = errorCode ? errorCode : &tempErrorCode;
+	*errorCode = 0;
+
 	AutoCacheRequest request;
 
 	switch (object_type)
@@ -106,11 +99,11 @@ void DYN_UTIL_check_unique_name(thread_db* tdbb, jrd_tra* transaction,
 			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 				EREL IN RDB$RELATIONS WITH EREL.RDB$RELATION_NAME EQ object_name.c_str()
 			{
-				error_code = 132;
+				*errorCode = 132;
 			}
 			END_FOR
 
-			if (!error_code)
+			if (!*errorCode)
 			{
 				request.reset(tdbb, drq_l_prc_name, DYN_REQUESTS);
 
@@ -119,7 +112,7 @@ void DYN_UTIL_check_unique_name(thread_db* tdbb, jrd_tra* transaction,
 					WITH EPRC.RDB$PROCEDURE_NAME EQ object_name.c_str() AND
 						 EPRC.RDB$PACKAGE_NAME MISSING
 				{
-					error_code = 135;
+					*errorCode = 135;
 				}
 				END_FOR
 			}
@@ -131,7 +124,7 @@ void DYN_UTIL_check_unique_name(thread_db* tdbb, jrd_tra* transaction,
 			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 				EIDX IN RDB$INDICES WITH EIDX.RDB$INDEX_NAME EQ object_name.c_str()
 			{
-				error_code = 251;
+				*errorCode = 251;
 			}
 			END_FOR
 
@@ -143,7 +136,7 @@ void DYN_UTIL_check_unique_name(thread_db* tdbb, jrd_tra* transaction,
 			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 				EXCP IN RDB$EXCEPTIONS WITH EXCP.RDB$EXCEPTION_NAME EQ object_name.c_str()
 			{
-				error_code = 253;
+				*errorCode = 253;
 			}
 			END_FOR
 
@@ -155,7 +148,7 @@ void DYN_UTIL_check_unique_name(thread_db* tdbb, jrd_tra* transaction,
 			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 				EGEN IN RDB$GENERATORS WITH EGEN.RDB$GENERATOR_NAME EQ object_name.c_str()
 			{
-				error_code = 254;
+				*errorCode = 254;
 			}
 			END_FOR
 
@@ -169,7 +162,59 @@ void DYN_UTIL_check_unique_name(thread_db* tdbb, jrd_tra* transaction,
 				WITH EFUN.RDB$FUNCTION_NAME EQ object_name.c_str() AND
 					 EFUN.RDB$PACKAGE_NAME MISSING
 			{
-				error_code = 268;
+				*errorCode = 268;
+			}
+			END_FOR
+
+			break;
+
+		case obj_trigger:
+			request.reset(tdbb, drq_l_trg_name, DYN_REQUESTS);
+
+			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+				TRG IN RDB$TRIGGERS
+				WITH TRG.RDB$TRIGGER_NAME EQ object_name.c_str()
+			{
+				*errorCode = 310;
+			}
+			END_FOR
+
+			break;
+
+		case obj_field:
+			request.reset(tdbb, drq_l_fld_name, DYN_REQUESTS);
+
+			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+				FLD IN RDB$FIELDS
+				WITH FLD.RDB$FIELD_NAME EQ object_name.c_str()
+			{
+				*errorCode = 311;
+			}
+			END_FOR
+
+			break;
+
+		case obj_collation:
+			request.reset(tdbb, drq_l_coll_name, DYN_REQUESTS);
+
+			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+				COLL IN RDB$COLLATIONS
+				WITH COLL.RDB$COLLATION_NAME EQ object_name.c_str()
+			{
+				*errorCode = 312;
+			}
+			END_FOR
+
+			break;
+
+		case obj_package_header:
+			request.reset(tdbb, drq_l_pkg_name, DYN_REQUESTS);
+
+			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+				PKG IN RDB$PACKAGES
+				WITH PKG.RDB$PACKAGE_NAME EQ object_name.c_str()
+			{
+				*errorCode = 313;
 			}
 			END_FOR
 
@@ -179,8 +224,16 @@ void DYN_UTIL_check_unique_name(thread_db* tdbb, jrd_tra* transaction,
 			fb_assert(false);
 	}
 
-	if (error_code)
-		status_exception::raise(Arg::PrivateDyn(error_code) << object_name.c_str());
+	return *errorCode == 0;
+}
+
+// Check if an object already exists. If yes, throw error.
+void DYN_UTIL_check_unique_name(thread_db* tdbb, jrd_tra* transaction, const MetaName& object_name, int object_type)
+{
+	USHORT errorCode;
+
+	if (!DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, object_name, object_type, &errorCode))
+		status_exception::raise(Arg::PrivateDyn(errorCode) << object_name.c_str());
 }
 
 

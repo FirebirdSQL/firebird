@@ -482,8 +482,13 @@ void UserManagement::execute(USHORT id)
 	}
 
 	int errcode = manager->execute(&statusWrapper, command, NULL);
-	if (!command->silent)
+
+	if (!command->silent &&
+		!(command->createIfNotExistsOnly &&
+			fb_utils::containsErrorCode(status.getErrors(), isc_unique_key_violation)))
+	{
 		checkSecurityResult(errcode, &status, command->userName()->get(), command->operation());
+	}
 
 	delete commands[id];
 	commands[id] = NULL;

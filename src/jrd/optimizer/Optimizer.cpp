@@ -3158,6 +3158,8 @@ ValueExprNode* Optimizer::optimizeLikeSimilar(ComparativeBoolNode* cmpNode)
 
 		MoveBuffer prefixBuffer;
 		ULONG charLen = 0;
+		bool specialCharFound = false;
+		FB_SIZE_T prevPrefixSize = 0;
 
 		while (IntlUtil::readOneChar(matchCharset, &patternPtr, patternEnd, &charLen))
 		{
@@ -3172,9 +3174,36 @@ ValueExprNode* Optimizer::optimizeLikeSimilar(ComparativeBoolNode* cmpNode)
 				}
 			}
 			else if (charLen == 1 && SimilarToRegex::isSpecialChar(*patternPtr))
-				break;
+			{
+				const auto patternChar = *patternPtr;
 
-			prefixBuffer.push(patternPtr, charLen);
+				// If there are any branches, we assume there is no commom prefix.
+				if (patternChar == '|')
+					return nullptr;
+
+				if (!specialCharFound)
+				{
+					switch (patternChar)
+					{
+						// These patterns may make the previous char optional.
+						case '*':
+						case '?':
+						case '{':
+							prefixBuffer.resize(prevPrefixSize);
+							break;
+					}
+
+					specialCharFound = true;
+				}
+
+				break;
+			}
+
+			if (!specialCharFound)
+			{
+				prevPrefixSize = prefixBuffer.getCount();
+				prefixBuffer.push(patternPtr, charLen);
+			}
 		}
 
 		if (prefixBuffer.isEmpty())

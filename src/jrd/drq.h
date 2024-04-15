@@ -249,6 +249,12 @@ enum drq_type_t
 	drq_l_pub_rel_name,		// lookup relation by name
 	drq_l_pub_all_rels,		// iterate through all user relations
 	drq_e_pub_tab_all,		// erase relation from all publication
+	drq_l_trg_name,			// lookup trigger name
+	drq_l_fld_name,			// lookup field name
+	drq_l_coll_name,		// lookup collation name
+	drq_l_pkg_name,			// lookup package name
+	drq_l_rel_con,			// lookup relation constraint
+	drq_l_rel_fld_name,		// lookup relation field name
 	drq_get_constr_type,	// get constraint type
 	drq_c_active_fk,		// check if active FK references this index
 	drq_m_check_trgs,		// activate/deactivate triggers for check constraint
