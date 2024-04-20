@@ -1546,18 +1546,19 @@ create_clause
 			node->createIfNotExistsOnly = $2;
 			$$ = node;
 		}
-	| unique_opt order_direction INDEX if_not_exists_opt symbol_index_name ON simple_table_name
+	| unique_opt order_direction INDEX if_not_exists_opt symbol_index_name index_active_opt ON simple_table_name
 			{
 				const auto node = newNode<CreateIndexNode>(*$5);
+				node->active = $6;
 				node->unique = $1;
 				node->descending = $2;
 				node->createIfNotExistsOnly = $4;
-				node->relation = $7;
+				node->relation = $8;
 				$$ = node;
 			}
-		index_definition(static_cast<CreateIndexNode*>($8))
+		index_definition(static_cast<CreateIndexNode*>($9))
 			{
-				$$ = $8;
+				$$ = $9;
 			}
 	| FUNCTION if_not_exists_opt function_clause
 		{
@@ -1752,6 +1753,12 @@ alter_exception_clause
 
 
 // CREATE INDEX
+
+%type <boolVal> index_active_opt
+index_active_opt
+	: /* nothing */		{ $$ = true; }
+	| index_active		{ $$ = $1; }
+	;
 
 %type <boolVal> unique_opt
 unique_opt
@@ -4676,8 +4683,16 @@ drop_behaviour
 
 %type <ddlNode>	alter_index_clause
 alter_index_clause
-	: symbol_index_name ACTIVE		{ $$ = newNode<AlterIndexNode>(*$1, true); }
-	| symbol_index_name INACTIVE	{ $$ = newNode<AlterIndexNode>(*$1, false); }
+	: symbol_index_name index_active
+		{
+			$$ = newNode<AlterIndexNode>(*$1, $2);
+		}
+	;
+
+%type <boolVal> index_active
+index_active
+	: ACTIVE	{ $$ = true; }
+	| INACTIVE	{ $$ = false; }
 	;
 
 %type <ddlNode>	alter_udf_clause

@@ -10062,7 +10062,7 @@ void CreateIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	definition.relation = relation->dsqlName;
 	definition.unique = unique;
 	definition.descending = descending;
-	definition.inactive = false;
+	definition.inactive = !active;
 
 	if (columns)
 	{
