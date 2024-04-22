@@ -3345,10 +3345,11 @@ static void list_indexes()
 					SQL_identifier2);
 		}
 		else
-			isqlGlob.printf("CREATE%s%s INDEX %s ON %s",
+			isqlGlob.printf("CREATE%s%s INDEX %s%s ON %s",
 					(IDX.RDB$UNIQUE_FLAG ? " UNIQUE" : ""),
 					(IDX.RDB$INDEX_TYPE ? " DESCENDING" : ""),
 					IDX.RDB$INDEX_NAME,
+					(IDX.RDB$INDEX_INACTIVE ? " INACTIVE" : ""),
 					IDX.RDB$RELATION_NAME);
 
 		// Get index expression or column names
