@@ -705,13 +705,49 @@ CREATE [GLOBAL] MAPPING [IF NOT EXISTS] ...
 ALTER TABLE <table> ADD [IF NOT EXISTS] <column name> ...
 ALTER TABLE <table> ADD CONSTRAINT [IF NOT EXISTS] <constraint name> ...
 
-3) ALTER CONSTRAINT clause for ALTER TABLE statement.
+3) Non-enforced constraints.
+
+CREATE/ALTER TABLE supports creation of non-enforced constraints.
 
 Syntax:
 
-ALTER TABLE ALTER CONSTRAINT <constraint name> [NOT] ENFORCED
+<col_constraint> ::=
+  [CONSTRAINT constr_name]
+    { PRIMARY KEY [<using_index>]
+    | UNIQUE      [<using_index>]
+    | REFERENCES other_table [(colname)] [<using_index>]
+        [ON DELETE {NO ACTION | CASCADE | SET DEFAULT | SET NULL}]
+        [ON UPDATE {NO ACTION | CASCADE | SET DEFAULT | SET NULL}]
+    | CHECK (<check_condition>)
+    | NOT NULL }
+  [<constraint characteristics>]
+     
+<tconstraint> ::=
+  [CONSTRAINT constr_name]
+    { PRIMARY KEY (<col_list>) [<using_index>]
+    | UNIQUE      (<col_list>) [<using_index>]
+    | FOREIGN KEY (<col_list>)
+        REFERENCES other_table [(<col_list>)] [<using_index>]
+        [ON DELETE {NO ACTION | CASCADE | SET DEFAULT | SET NULL}]
+        [ON UPDATE {NO ACTION | CASCADE | SET DEFAULT | SET NULL}]
+    | CHECK (<check_condition>) }
+  [<constraint characteristics>]
 
-Supported for UNIQUE, PRIMARY KEY, FOREIGN KEY, CHECK AND NOT NULL constraints.
+<constraint characteristics> ::=
+  <constraint enforcement>
+
+<constraint enforcement> ::=
+  [ NOT ] ENFORCED
+
+Note: In contrast to ANSI SQL standard PRIMARY KEY and UNIQUE constraint
+are allowed to be not enforced.
+
+Also ALTER CONSTRAINT clause is added to ALTER TABLE statement.
+
+Syntax:
+
+ALTER TABLE ALTER CONSTRAINT <constraint name> <constraint enforcement>
+
 Primary and unique keys cannot be deactivated if they are referenced by any active foreign key.
 
 The corresponding ALTER INDEX and ALTER TRIGGER statements are allowed as well.

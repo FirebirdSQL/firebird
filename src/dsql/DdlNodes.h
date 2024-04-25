@@ -1300,6 +1300,7 @@ public:
 		const char* refDeleteAction;
 		Firebird::ObjectsArray<TriggerDefinition> triggers;
 		Firebird::ObjectsArray<BlrWriter> blrWritersHolder;
+		bool enforced = true;
 	};
 
 	struct CreateDropConstraint
@@ -1389,6 +1390,7 @@ public:
 		NestConst<RefActionClause> refAction;
 		NestConst<BoolSourceClause> check;
 		bool createIfNotExistsOnly = false;
+		bool enforced = true;
 	};
 
 	struct IdentityOptions

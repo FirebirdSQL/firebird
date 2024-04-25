@@ -6714,11 +6714,18 @@ void RelationNode::makeConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 				constraint.create = FB_NEW_POOL(pool) Constraint(pool);
 				constraint.create->type = Constraint::TYPE_NOT_NULL;
 				if (clause->constraintType == AddConstraintClause::CTYPE_NOT_NULL)
+				{
 					constraint.name = clause->name;
+					constraint.create->enforced = clause->enforced;
+					*notNull = clause->enforced;
+				}
+				// NOT NULL for PRIMARY KEY is always enforced
 			}
 
 			if (clause->constraintType == AddConstraintClause::CTYPE_NOT_NULL)
+			{
 				break;
+			}
 			// AddConstraintClause::CTYPE_PK falls into
 
 		case AddConstraintClause::CTYPE_UNIQUE:
@@ -6732,6 +6739,7 @@ void RelationNode::makeConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 			if (constraint.create->index && constraint.create->index->name.isEmpty())
 				constraint.create->index->name = constraint.name;
 			constraint.create->columns = clause->columns;
+			constraint.create->enforced = clause->enforced;
 			break;
 		}
 
@@ -6744,6 +6752,7 @@ void RelationNode::makeConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 			constraint.create->columns = clause->columns;
 			constraint.create->refRelation = clause->refRelation;
 			constraint.create->refColumns = clause->refColumns;
+			constraint.create->enforced = clause->enforced;
 
 			// If there is a referenced table name but no referenced field names, the
 			// primary key of the referenced table designates the referenced fields.
@@ -6858,6 +6867,7 @@ void RelationNode::makeConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 			CreateDropConstraint& constraint = constraints.add();
 			constraint.create = FB_NEW_POOL(pool) Constraint(pool);
 			constraint.create->type = Constraint::TYPE_CHECK;
+			constraint.create->enforced = clause->enforced;
 			constraint.name = clause->name;
 			defineCheckConstraint(dsqlScratch, *constraint.create, clause->check);
 			break;
@@ -6924,7 +6934,7 @@ void RelationNode::defineConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 				definition.unique = constraint.type != Constraint::TYPE_FK;
 				if (constraint.index->descending)
 					definition.descending = true;
-				definition.inactive = false;
+				definition.inactive = !constraint.enforced;
 				definition.columns = constraint.columns;
 				definition.refRelation = constraint.refRelation;
 				definition.refColumns = constraint.refColumns;
@@ -7185,6 +7195,7 @@ void RelationNode::defineCheckConstraintTrigger(DsqlCompilerScratch* dsqlScratch
 	trigger.type = triggerType;
 	trigger.source = clause->source;
 	trigger.blrData = blrWriter.getBlrData();
+	trigger.active = constraint.enforced;
 }
 
 // Define "on delete|update set default" trigger (for referential integrity) along with its blr.
