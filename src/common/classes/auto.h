@@ -269,6 +269,12 @@ public:
 		*value |= oldValue;
 	}
 
+	void release(T cleanBit)
+	{
+		bit &= ~cleanBit;
+		oldValue &= ~cleanBit;
+	}
+
 private:
 	// copying is prohibited
 	AutoSetRestoreFlag(const AutoSetRestoreFlag&);

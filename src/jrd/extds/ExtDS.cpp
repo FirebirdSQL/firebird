@@ -441,9 +441,9 @@ void Provider::jrdAttachmentEnd(thread_db* tdbb, Jrd::Attachment* att, bool forc
 void Provider::releaseConnection(thread_db* tdbb, Connection& conn, bool inPool)
 {
 	ConnectionsPool* connPool = conn.getConnPool();
+	Attachment* att = conn.getBoundAtt();
 
 	{ // m_mutex scope
-		Attachment* att = conn.getBoundAtt();
 		MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
 		bool found = false;
@@ -464,7 +464,14 @@ void Provider::releaseConnection(thread_db* tdbb, Connection& conn, bool inPool)
 			m_connections.add(AttToConn(NULL, &conn));
 	}
 
-	if (!inPool || !connPool || !connPool->getMaxCount() || !conn.isConnected() || !conn.resetSession(tdbb))
+	ULONG depth = att && !(att->att_flags & ATT_no_db_triggers) && att->att_triggers[DB_TRIGGER_DISCONNECT] ?
+		att->att_ext_call_depth : 0;
+
+	if (inPool && connPool && connPool->getMaxCount() && conn.isConnected() && conn.resetSession(tdbb))
+	{
+		connPool->putConnection(tdbb, &conn);
+	}
+	else
 	{
 		{	// scope
 			MutexLockGuard guard(m_mutex, FB_FUNCTION);
@@ -478,8 +485,6 @@ void Provider::releaseConnection(thread_db* tdbb, Connection& conn, bool inPool)
 
 		Connection::deleteConnection(tdbb, &conn);
 	}
-	else
-		connPool->putConnection(tdbb, &conn);
 }
 
 void Provider::clearConnections(thread_db* tdbb)
@@ -1900,6 +1905,11 @@ void Statement::close(thread_db* tdbb, bool invalidTran)
 	m_error = false;
 	m_transaction = NULL;
 	m_connection.releaseStatement(tdbb, this);
+	if ((!doPunt) && tdbb->tdbb_status_vector->hasData() &&
+		fb_utils::containsErrorCode(tdbb->tdbb_status_vector->getErrors(), isc_ses_reset_failed))
+	{
+		doPunt = true;
+	}
 
 	if (doPunt) {
 		ERR_punt();

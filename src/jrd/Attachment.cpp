@@ -602,6 +602,12 @@ void Jrd::Attachment::resetSession(thread_db* tdbb, jrd_tra** traHandle)
 	}
 	catch (const Exception& ex)
 	{
+		if (att_ext_call_depth && !shutAtt)
+		{
+			flags.release(ATT_resetting);		// reset is incomplete - keep state
+			shutAtt = true;
+		}
+
 		if (shutAtt)
 			signalShutdown(isc_ses_reset_failed);
 

@@ -8353,7 +8353,7 @@ static void purge_attachment(thread_db* tdbb, StableAttachmentPart* sAtt, unsign
 				attachment->att_triggers[DB_TRIGGER_DISCONNECT];
 
 			if (!forcedPurge &&
-				!(attachment->att_flags & ATT_no_db_triggers) &&
+				!(attachment->att_flags & (ATT_no_db_triggers | ATT_resetting)) &&
 				trig_disconnect && !trig_disconnect->isEmpty())
 			{
 				ThreadStatusGuard temp_status(tdbb);
