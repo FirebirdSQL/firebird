@@ -464,9 +464,6 @@ void Provider::releaseConnection(thread_db* tdbb, Connection& conn, bool inPool)
 			m_connections.add(AttToConn(NULL, &conn));
 	}
 
-	ULONG depth = att && !(att->att_flags & ATT_no_db_triggers) && att->att_triggers[DB_TRIGGER_DISCONNECT] ?
-		att->att_ext_call_depth : 0;
-
 	if (inPool && connPool && connPool->getMaxCount() && conn.isConnected() && conn.resetSession(tdbb))
 	{
 		connPool->putConnection(tdbb, &conn);
