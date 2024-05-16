@@ -2751,13 +2751,13 @@ bool CVT_get_boolean(const dsc* desc, ErrorFunction err)
 
 			// Remove heading and trailing spaces.
 
-			while (len > 0 && isspace((UCHAR) *p))
+			while (len > 0 && fb_utils::isspace(*p))
 			{
 				++p;
 				--len;
 			}
 
-			while (len > 0 && isspace((UCHAR) p[len - 1]))
+			while (len > 0 && fb_utils::isspace(p[len - 1]))
 				--len;
 
 			if (len == 4 && fb_utils::strnicmp(p, "TRUE", len) == 0)
