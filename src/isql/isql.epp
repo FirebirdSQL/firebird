@@ -297,11 +297,6 @@ static inline bool commit_trans(Firebird::ITransaction** x)
 	return true;
 }
 
-static inline int fb_isspace(const char c)
-{
-	return isspace((int)(UCHAR)c);
-}
-
 static inline int fb_isdigit(const char c)
 {
 	return isdigit((int)(UCHAR)c);
@@ -2307,7 +2302,7 @@ void ISQL_print_validation(FILE* fp,
 		{
 			// computed field SQL syntax correction
 
-			while (fb_isspace(*p))
+			while (fb_utils::isspace(*p))
 				p++;
 			if (*p == '(')
 				issql = true;
@@ -2316,7 +2311,7 @@ void ISQL_print_validation(FILE* fp,
 		{
 			// Validation SQL syntax correction
 
-			while (fb_isspace(*p))
+			while (fb_utils::isspace(*p))
 				p++;
 			if (!fb_utils::strnicmp(p, "CHECK", 5))
 				issql = true;
@@ -5005,7 +5000,7 @@ static processing_state escape(const TEXT* cmd)
 	shellcmd += strlen("shell");
 
 	// Eat whitespace at beginning of command
-	while (*shellcmd && fb_isspace(*shellcmd))
+	while (*shellcmd && fb_utils::isspace(*shellcmd))
 		shellcmd++;
 
 #ifdef WIN_NT
@@ -5418,7 +5413,7 @@ static void frontend_load_parms(const TEXT* p, TEXT* parms[], TEXT* lparms[],
 		else
 		{
 			//  Prevent overflow. Do not copy the string (redundant).
-			while (*p && !fb_isspace(*p) && j < BUFFER_LENGTH256 - 1)
+			while (*p && !fb_utils::isspace(*p) && j < BUFFER_LENGTH256 - 1)
 			{
 				j++;
 				++p;
@@ -5430,7 +5425,7 @@ static void frontend_load_parms(const TEXT* p, TEXT* parms[], TEXT* lparms[],
 		lparms[i] = (TEXT*) ISQL_ALLOC((SLONG) (length + 1));
 		memcpy(parms[i], quoted ? buffer : p - j, length);
 		parms[i][length] = 0;
-		while (*p && fb_isspace(*p))
+		while (*p && fb_utils::isspace(*p))
 			p++;
 		strcpy(lparms[i], parms[i]);
 		if (!role_found)

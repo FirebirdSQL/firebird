@@ -29,6 +29,7 @@
 #ifndef INCLUDE_UTILS_PROTO_H
 #define INCLUDE_UTILS_PROTO_H
 
+#include <cctype>
 #include <string.h>
 #include "../common/classes/fb_string.h"
 #include "../common/classes/array.h"
@@ -97,6 +98,13 @@ namespace fb_utils
 #else
 #error dont know how to compare counted length strings case insensitive on this system
 #endif
+	}
+
+	// std::isspace behavior is undefined with char and signed char.
+	// https://en.cppreference.com/w/cpp/string/byte/isspace
+	static inline int isspace(const char c)
+	{
+		return std::isspace((int)(UCHAR)c);
 	}
 
 #ifdef WIN_NT
