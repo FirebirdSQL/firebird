@@ -430,16 +430,19 @@ void DsqlCompilerScratch::genReturn(bool eosFlag)
 	appendUChar(1);
 	appendUChar(blr_begin);
 
-	for (Array<dsql_var*>::const_iterator i = outputVariables.begin(); i != outputVariables.end(); ++i)
+	if (hasEos && !eosFlag) // Generate full assignment list only if it is not EOS assignment. See CORE-2204.
 	{
-		const dsql_var* variable = *i;
-		appendUChar(blr_assignment);
-		appendUChar(blr_variable);
-		appendUShort(variable->number);
-		appendUChar(blr_parameter2);
-		appendUChar(variable->msgNumber);
-		appendUShort(variable->msgItem);
-		appendUShort(variable->msgItem + 1);
+		for (Array<dsql_var*>::const_iterator i = outputVariables.begin(); i != outputVariables.end(); ++i)
+		{
+			const dsql_var* variable = *i;
+			appendUChar(blr_assignment);
+			appendUChar(blr_variable);
+			appendUShort(variable->number);
+			appendUChar(blr_parameter2);
+			appendUChar(variable->msgNumber);
+			appendUShort(variable->msgItem);
+			appendUShort(variable->msgItem + 1);
+		}
 	}
 
 	if (hasEos)
