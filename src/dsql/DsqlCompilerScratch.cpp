@@ -430,7 +430,7 @@ void DsqlCompilerScratch::genReturn(bool eosFlag)
 	appendUChar(1);
 	appendUChar(blr_begin);
 
-	if (hasEos && !eosFlag) // Generate full assignment list only if it is not EOS assignment. See CORE-2204.
+	if (!hasEos || !eosFlag) // Generate full assignment list only if it is not EOS assignment. See CORE-2204.
 	{
 		for (Array<dsql_var*>::const_iterator i = outputVariables.begin(); i != outputVariables.end(); ++i)
 		{
