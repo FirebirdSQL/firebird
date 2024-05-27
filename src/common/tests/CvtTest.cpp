@@ -590,9 +590,16 @@ BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_EXCEPTION_CHECK)
 	testExceptionCvtStringToFormatDateTime("2000.12.11", "WRONG FORMAT", cb);
 	testExceptionCvtStringToFormatDateTime("2000.12.11", "YYYY.MM.DD SS", cb);
 	testExceptionCvtStringToFormatDateTime("2000.12", "YYYY.MM.DD", cb);
+	testExceptionCvtStringToFormatDateTime("2000.12", "YYYY", cb);
 
-	testExceptionCvtStringToFormatDateTime("1 A.G.", "HH12 A.M.", cb);
-	testExceptionCvtStringToFormatDateTime("1 A.G.", "HH12 A.P.", cb);
+	testExceptionCvtStringToFormatDateTime("2 20 200 2000 2000", "Y YY YYY YYYY YEAR", cb);
+	testExceptionCvtStringToFormatDateTime("20 2000", "RR RRRR", cb);
+
+	testExceptionCvtStringToFormatDateTime("2000 2000", "YYYY RRRR", cb);
+	testExceptionCvtStringToFormatDateTime("2000 20", "YYYY RR", cb);
+
+	testExceptionCvtStringToFormatDateTime("200 2", "DDD MM", cb);
+	testExceptionCvtStringToFormatDateTime("200 2", "DDD DD", cb);
 
 	testExceptionCvtStringToFormatDateTime("24 12 A.M.", "HH24 HH12 P.M.", cb);
 	testExceptionCvtStringToFormatDateTime("24 12", "HH24 HH12", cb);
@@ -600,6 +607,10 @@ BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_EXCEPTION_CHECK)
 	testExceptionCvtStringToFormatDateTime("12", "HH12", cb);
 	testExceptionCvtStringToFormatDateTime("A.M.", "P.M.", cb);
 	testExceptionCvtStringToFormatDateTime("P.M.", "A.M.", cb);
+	testExceptionCvtStringToFormatDateTime("10 P.M. A.M.", "HH P.M. A.M.", cb);
+
+	testExceptionCvtStringToFormatDateTime("1 A.G.", "HH12 A.M.", cb);
+	testExceptionCvtStringToFormatDateTime("1 A.G.", "HH12 A.P.", cb);
 
 	testExceptionCvtStringToFormatDateTime("1 1 A.M.", "SSSSS HH12 A.M.", cb);
 	testExceptionCvtStringToFormatDateTime("1 1 A.M.", "SSSSS HH12 P.M.", cb);
@@ -611,6 +622,8 @@ BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_EXCEPTION_CHECK)
 
 	testExceptionCvtStringToFormatDateTime("30 1", "TZM SS", cb);
 	testExceptionCvtStringToFormatDateTime("30", "TZM", cb);
+
+	testExceptionCvtStringToFormatDateTime("12 12", "HH24 HH24", cb);
 }
 
 BOOST_AUTO_TEST_SUITE_END()	// FunctionalTest
