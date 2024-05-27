@@ -5727,6 +5727,7 @@ const
 	 isc_pattern_cant_be_used_without_other_pattern = 335545302;
 	 isc_pattern_cant_be_used_without_other_pattern_and_vice_versa = 335545303;
 	 isc_incompatible_format_patterns = 335545304;
+	 isc_only_one_pattern_can_be_used = 335545305;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;
