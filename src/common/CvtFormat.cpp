@@ -815,7 +815,7 @@ namespace
 				case Format::FF8:
 				case Format::FF9:
 				{
-					const int number = it->patternStr.back() - '0';
+					int number = it->patternStr.back() - '0';
 
 					const int fractionsPrecision = fractions != 0 ? std::log10(fractions) + 1 : 1;
 					int additionalZerosCount = 0;
