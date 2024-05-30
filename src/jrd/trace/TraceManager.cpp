@@ -440,11 +440,11 @@ void TraceManager::event_dsql_execute(Attachment* att, jrd_tra* transaction,
 }
 
 void TraceManager::event_dsql_restart(Attachment* att, jrd_tra* transaction,
-	DsqlRequest* statement, int number)
+	DsqlRequest* statement, const UCHAR* data, int number)
 {
 	TraceConnectionImpl conn(att);
 	TraceTransactionImpl tran(transaction);
-	TraceSQLStatementImpl stmt(statement, NULL);
+	TraceSQLStatementImpl stmt(statement, nullptr, data);
 
 	att->att_trace_manager->event_dsql_restart(&conn, transaction ? &tran : NULL, &stmt,
 											   (unsigned) number);

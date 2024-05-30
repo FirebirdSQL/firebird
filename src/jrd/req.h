@@ -163,6 +163,14 @@ private:
 	int modifiedRows;
 };
 
+// Record key
+
+struct RecordKey
+{
+	RecordNumber::Packed recordNumber;
+	TraNumber recordVersion;
+};
+
 // request block
 
 class Request : public pool_alloc<type_req>
@@ -464,6 +472,10 @@ public:
 	template <typename T> T* getImpure(unsigned offset)
 	{
 		return reinterpret_cast<T*>(&impureArea[offset]);
+	}
+	template <typename T> const T* getImpure(unsigned offset) const
+	{
+		return reinterpret_cast<const T*>(&impureArea[offset]);
 	}
 
 	void adjustCallerStats()

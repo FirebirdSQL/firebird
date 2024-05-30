@@ -1605,7 +1605,7 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
+	void getChildren(NodeRefsHolder& holder, bool dsql) const override
 	{
 		ValueExprNode::getChildren(holder, dsql);
 
@@ -1613,40 +1613,41 @@ public:
 			holder.add(argFlag);
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
-	virtual ParameterNode* dsqlFieldRemapper(FieldRemapper& visitor)
+	ParameterNode* dsqlFieldRemapper(FieldRemapper& visitor) override
 	{
 		ValueExprNode::dsqlFieldRemapper(visitor);
 		return this;
 	}
 
-	virtual void setParameterName(dsql_par* /*parameter*/) const
+	void setParameterName(dsql_par* /*parameter*/) const override
 	{
 	}
 
-	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,
-		std::function<void (dsc*)> makeDesc, bool forceVarChar);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
-	virtual bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const;
+	bool setParameterType(DsqlCompilerScratch* dsqlScratch,
+		std::function<void (dsc*)> makeDesc, bool forceVarChar) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
 
 	Request* getParamRequest(Request* request) const;
 
-	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
-	virtual ParameterNode* copy(thread_db* tdbb, NodeCopier& copier) const;
-	virtual ParameterNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual ParameterNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual dsc* execute(thread_db* tdbb, Request* request) const;
+	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
+	ParameterNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	ParameterNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	ParameterNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	dsc* execute(thread_db* tdbb, Request* request) const override;
 
 public:
-	dsql_msg* dsqlMessage = nullptr;
 	dsql_par* dsqlParameter = nullptr;
 	NestConst<MessageNode> message;
 	NestConst<ParameterNode> argFlag;
 	NestConst<ItemInfo> argInfo;
 	USHORT dsqlParameterIndex = 0;
+	// This is an initial number as got from BLR.
+	// Message can be modified during merge of SP/view subtrees
 	USHORT messageNumber = MAX_USHORT;
 	USHORT argNumber = 0;
 	bool outerDecl = false;

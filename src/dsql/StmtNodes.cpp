@@ -73,9 +73,6 @@ namespace Jrd {
 
 template <typename T> static void dsqlExplodeFields(dsql_rel* relation, Array<NestConst<T> >& fields,
 	bool includeComputed);
-static dsql_par* dsqlFindDbKey(const DsqlDmlStatement*, const RelationSourceNode*);
-static dsql_par* dsqlFindRecordVersion(const DsqlDmlStatement*, const RelationSourceNode*);
-static void dsqlGenEofAssignment(DsqlCompilerScratch* dsqlScratch, SSHORT value);
 static void dsqlGenReturning(DsqlCompilerScratch* dsqlScratch, ReturningClause* returning,
 	std::optional<USHORT> localTableNumber);
 static void dsqlGenReturningLocalTableCursor(DsqlCompilerScratch* dsqlScratch, ReturningClause* returning,
@@ -3903,8 +3900,8 @@ void ExecProcedureNode::executeProcedure(thread_db* tdbb, Request* request) cons
 
 	if (inputMessage)
 	{
-		inMsgLength = inputMessage->format->fmt_length;
-		inMsg = request->getImpure<UCHAR>(inputMessage->impureOffset);
+		inMsgLength = inputMessage->getFormat(request)->fmt_length;
+		inMsg = inputMessage->getBuffer(request);
 	}
 
 	const Format* format = NULL;
@@ -3914,9 +3911,9 @@ void ExecProcedureNode::executeProcedure(thread_db* tdbb, Request* request) cons
 
 	if (outputMessage)
 	{
-		format = outputMessage->format;
+		format = outputMessage->getFormat(request);
 		outMsgLength = format->fmt_length;
-		outMsg = request->getImpure<UCHAR>(outputMessage->impureOffset);
+		outMsg = outputMessage->getBuffer(request);
 	}
 	else
 	{
@@ -4950,6 +4947,8 @@ ExecBlockNode* ExecBlockNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		statement->setType(DsqlStatement::TYPE_EXEC_BLOCK);
 
 	dsqlScratch->flags |= DsqlCompilerScratch::FLAG_BLOCK;
+	if (!(dsqlScratch->flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE))
+		dsqlScratch->flags |=  DsqlCompilerScratch::FLAG_EXEC_BLOCK;
 	dsqlScratch->reserveInitialVarNumbers(parameters.getCount() + returns.getCount());
 
 	ExecBlockNode* node = FB_NEW_POOL(dsqlScratch->getPool()) ExecBlockNode(dsqlScratch->getPool());
@@ -5079,16 +5078,14 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		DsqlDescMaker::fromNode(dsqlScratch, &param->par_desc, varNode, true);
 	}
 
-	// Set up parameter to handle EOF
-	dsql_par* param = MAKE_parameter(statement->getReceiveMsg(), false, false, 0, NULL);
-	statement->setEof(param);
-	param->par_desc.dsc_dtype = dtype_short;
-	param->par_desc.dsc_scale = 0;
-	param->par_desc.dsc_length = sizeof(SSHORT);
-
-	revertParametersOrder(statement->getReceiveMsg()->msg_parameters);
-	if (!subRoutine)
-		GEN_port(dsqlScratch, statement->getReceiveMsg());
+	if (returns.hasData())
+	{
+		revertParametersOrder(statement->getReceiveMsg()->msg_parameters);
+		if (!subRoutine)
+			GEN_port(dsqlScratch, statement->getReceiveMsg());
+	}
+	else
+		statement->setReceiveMsg(nullptr);
 
 	if (subRoutine)
 	{
@@ -5143,7 +5140,11 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	dsqlScratch->putOuterMaps();
 	GEN_hidden_variables(dsqlScratch);
 
-	dsqlScratch->appendUChar(blr_stall);
+	// This verb delays execution until the next call of EXE_receive()
+	// which should allow it to create its savepoint in the right place on stack.
+	// But for EB without returning values it is just a waste of time.
+	if (returns.hasData())
+		dsqlScratch->appendUChar(blr_stall);
 	// Put a label before body of procedure, so that
 	// any exit statement can get out
 	dsqlScratch->appendUChar(blr_label);
@@ -5157,7 +5158,8 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		statement->setType(DsqlStatement::TYPE_EXEC_BLOCK);
 
 	dsqlScratch->appendUChar(blr_end);
-	dsqlScratch->genReturn(true);
+	if (subRoutine)
+		dsqlScratch->genReturn(true);
 	dsqlScratch->appendUChar(blr_end);
 
 	dsqlScratch->endDebug();
@@ -7099,7 +7101,7 @@ void MessageNode::setup(thread_db* tdbb, CompilerScratch* csb, USHORT message, U
 	bool shouldPad = csb->csb_message_pad.get(messageNumber, padField);
 
 	// Get the number of parameters in the message and prepare to fill out the format block.
-
+	fb_assert(format == nullptr);
 	format = Format::newFormat(*tdbb->getDefaultPool(), count);
 	USHORT maxAlignment = 0;
 	ULONG offset = 0;
@@ -7178,7 +7180,7 @@ MessageNode* MessageNode::pass2(thread_db* /*tdbb*/, CompilerScratch* csb)
 {
 	fb_assert(format);
 
-	impureOffset = csb->allocImpure(FB_ALIGNMENT, FB_ALIGN(format->fmt_length, 2));
+	impureOffset = csb->allocImpure<MessageBuffer>();
 	impureFlags = csb->allocImpure(FB_ALIGNMENT, sizeof(USHORT) * format->fmt_count);
 
 	return this;
@@ -7196,6 +7198,50 @@ const StmtNode* MessageNode::execute(thread_db* /*tdbb*/, Request* request, ExeS
 	return parentStmt;
 }
 
+UCHAR* MessageNode::getBuffer(Request* request) const
+{
+	MessageBuffer* buffer = request->getImpure<MessageBuffer>(impureOffset);
+	if (buffer->buffer == nullptr)
+	{
+		size_t length = buffer->format == nullptr ? format->fmt_length : buffer->format->fmt_length;
+		buffer->buffer = reinterpret_cast<UCHAR*>(request->req_pool->calloc(length ALLOC_ARGS));
+	}
+	return buffer->buffer;
+}
+
+const Format* MessageNode::getFormat(const Request* request) const
+{
+	if (request != nullptr)
+	{
+		const MessageBuffer* buffer = request->getImpure<const MessageBuffer>(impureOffset);
+		if (buffer->format != nullptr)
+		{
+			return buffer->format;
+		}
+	}
+	return format.getObject();
+}
+
+void MessageNode::setFormat(Request* request, Format* newFormat)
+{
+	fb_assert(request != nullptr);
+	MessageBuffer* buffer = request->getImpure<MessageBuffer>(impureOffset);
+	ULONG oldLength = format->fmt_length;
+	if (buffer->format != nullptr)
+	{
+		oldLength = buffer->format->fmt_length;
+		delete buffer->format;
+	}
+	buffer->format = newFormat;
+
+	// Take care about existing buffer because it is the last point where its size is (roughly) known
+	if (buffer->buffer != nullptr && oldLength < newFormat->fmt_length)
+	{
+		request->req_pool->deallocate(buffer->buffer);
+		buffer->buffer = nullptr;
+		// but leave allocation of the new buffer to following getBuffer() if any
+	}
+}
 
 //--------------------
 
@@ -7466,6 +7512,11 @@ string ModifyNode::internalPrint(NodePrinter& printer) const
 
 void ModifyNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
+	if (dsqlScratch->recordKeyMessage)
+	{
+		GEN_port(dsqlScratch, dsqlScratch->recordKeyMessage);
+	}
+
 	if (dsqlReturning && !dsqlScratch->isPsql())
 	{
 		if (dsqlCursorName.isEmpty())
@@ -8993,7 +9044,7 @@ RseNode* SelectNode::dsqlProcess(DsqlCompilerScratch* dsqlScratch)
 	const auto processedRse = PASS1_rse(dsqlScratch, selectExpr, this);
 	dsqlScratch->context->clear(base);
 
-	if (forUpdate)
+	if (forUpdate && !processedRse->dsqlDistinct)
 	{
 		statement->setType(DsqlStatement::TYPE_SELECT_UPD);
 		statement->addFlags(DsqlStatement::FLAG_NO_BATCH);
@@ -9028,50 +9079,6 @@ SelectNode* SelectNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		const auto parameter = MAKE_parameter(statement->getReceiveMsg(), true, true, 0, item);
 		parameter->par_node = item;
 		DsqlDescMaker::fromNode(dsqlScratch, &parameter->par_desc, item);
-	}
-
-	// Set up parameter to handle EOF.
-
-	const auto parameterEof = MAKE_parameter(statement->getReceiveMsg(), false, false, 0, nullptr);
-	statement->setEof(parameterEof);
-	parameterEof->par_desc.dsc_dtype = dtype_short;
-	parameterEof->par_desc.dsc_scale = 0;
-	parameterEof->par_desc.dsc_length = sizeof(SSHORT);
-
-	// Save DBKEYs for possible update later.
-
-	if (forUpdate && !node->rse->dsqlDistinct)
-	{
-		for (const auto item : node->rse->dsqlStreams->items)
-		{
-			//// TODO: LocalTableSourceNode
-			if (auto relNode = nodeAs<RelationSourceNode>(item))
-			{
-				dsql_ctx* context = relNode->dsqlContext;
-
-				if (const auto* const relation = context->ctx_relation)
-				{
-					// Set up dbkey.
-					auto parameter = MAKE_parameter(statement->getReceiveMsg(), false, false, 0, nullptr);
-
-					parameter->par_dbkey_relname = relation->rel_name;
-					parameter->par_context = context;
-
-					parameter->par_desc.dsc_dtype = dtype_text;
-					parameter->par_desc.dsc_ttype() = ttype_binary;
-					parameter->par_desc.dsc_length = relation->rel_dbkey_length;
-
-					// Set up record version.
-					parameter = MAKE_parameter(statement->getReceiveMsg(), false, false, 0, nullptr);
-					parameter->par_rec_version_relname = relation->rel_name;
-					parameter->par_context = context;
-
-					parameter->par_desc.dsc_dtype = dtype_text;
-					parameter->par_desc.dsc_ttype() = ttype_binary;
-					parameter->par_desc.dsc_length = sizeof(SINT64);
-				}
-			}
-		}
 	}
 
 	return node;
@@ -9130,17 +9137,6 @@ void SelectNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	// Build body of FOR loop.
 
-	SSHORT constant;
-	dsc constantDesc;
-	constantDesc.makeShort(0, &constant);
-
-	// Add invalid usage here.
-
-	dsqlScratch->appendUChar(blr_assignment);
-	constant = 1;
-	LiteralNode::genConstant(dsqlScratch, &constantDesc, false);
-	GEN_parameter(dsqlScratch, statement->getEof());
-
 	for (const auto parameter : message->msg_parameters)
 	{
 		if (parameter->par_node)
@@ -9149,33 +9145,9 @@ void SelectNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			GEN_expr(dsqlScratch, parameter->par_node);
 			GEN_parameter(dsqlScratch, parameter);
 		}
-
-		if (parameter->par_dbkey_relname.hasData() && parameter->par_context)
-		{
-			dsqlScratch->appendUChar(blr_assignment);
-			dsqlScratch->appendUChar(blr_dbkey);
-			GEN_stuff_context(dsqlScratch, parameter->par_context);
-			GEN_parameter(dsqlScratch, parameter);
-		}
-
-		if (parameter->par_rec_version_relname.hasData() && parameter->par_context)
-		{
-			dsqlScratch->appendUChar(blr_assignment);
-			dsqlScratch->appendUChar(blr_record_version);
-			GEN_stuff_context(dsqlScratch, parameter->par_context);
-			GEN_parameter(dsqlScratch, parameter);
-		}
 	}
 
 	dsqlScratch->appendUChar(blr_end);
-
-	dsqlScratch->appendUChar(blr_send);
-	dsqlScratch->appendUChar(message->msg_number);
-
-	dsqlScratch->appendUChar(blr_assignment);
-	constant = 0;
-	LiteralNode::genConstant(dsqlScratch, &constantDesc, false);
-	GEN_parameter(dsqlScratch, statement->getEof());
 }
 
 
@@ -9364,7 +9336,7 @@ const StmtNode* StallNode::execute(thread_db* /*tdbb*/, Request* request, ExeSta
 		case Request::req_return:
 			request->req_message = this;
 			request->req_operation = Request::req_return;
-			request->req_flags |= req_stall;
+			request->req_flags |= req_stall; // Signal looper to return
 			return this;
 
 		case Request::req_proceed:
@@ -9455,13 +9427,24 @@ const StmtNode* SuspendNode::execute(thread_db* tdbb, Request* request, ExeState
 	switch (request->req_operation)
 	{
 		case Request::req_evaluate:
+			// Signal EXE_receive that we are ready to assign data
+			request->req_operation = Request::req_send;
+			request->req_message = message;
+			request->req_flags |= req_stall; // Signal looper to return
+			return this;
+
+		case Request::req_proceed:
 		{
+			// EXE_receive prepared everything and ask us to proceed assignments
+			request->req_operation = Request::req_evaluate;
+
 			// ASF: If this is the send in the tail of a procedure and the procedure was called
 			// with a SELECT, don't run all the send statements. It may make validations fail when
 			// the procedure didn't return any rows. See CORE-2204.
 			// But we should run the last assignment, as it's the one who make the procedure stop.
 
-			if (!(request->req_flags & req_proc_fetch))
+			// req_proc_fetch is used by both SP and EB but EB doesn't generate EOS parameter
+			if (!(request->req_flags & req_proc_select))
 				return statement;
 
 			const CompoundStmtNode* list = nodeAs<CompoundStmtNode>(parentStmt);
@@ -9470,30 +9453,27 @@ const StmtNode* SuspendNode::execute(thread_db* tdbb, Request* request, ExeState
 			{
 				list = nodeAs<CompoundStmtNode>(statement);
 
-				if (list && list->onlyAssignments && list->statements.hasData())
+				if (list && list->onlyAssignments && list->statements.getCount() > 1)
 				{
-					// This is the assignment that sets the EOS parameter.
+					// This should be the assignment that sets the old-fashioned EOS parameter.
 					const AssignmentNode* assign = static_cast<const AssignmentNode*>(
 						list->statements[list->statements.getCount() - 1].getObject());
 					EXE_assignment(tdbb, assign);
-				}
-				else
-					return statement;
-			}
-			else
-				return statement;
 
-			// fall into
+					// Perform normal return but without stopping of looper because request in this case is expected to finish
+					// execution till the end.
+					request->req_operation = Request::req_return;
+					request->req_message = message; // Just in case if it has been changed in-between
+					return parentStmt;
+				}
+			}
+			return statement;
 		}
 
 		case Request::req_return:
-			request->req_operation = Request::req_send;
-			request->req_message = message;
-			request->req_flags |= req_stall;
-			return this;
-
-		case Request::req_proceed:
-			request->req_operation = Request::req_return;
+			// Inner nodes finished and there is nothing to do anymore so we can return as well
+			request->req_message = message; // Just in case if it has been changed in-between
+			request->req_flags |= req_stall; // but still looper must stop processing nodes because who knows what code is after SUSPEND...
 			return parentStmt;
 
 		default:
@@ -10505,66 +10485,6 @@ static void dsqlExplodeFields(dsql_rel* relation, Array<NestConst<T> >& fields, 
 	}
 }
 
-// Find dbkey for named relation in statement's saved dbkeys.
-static dsql_par* dsqlFindDbKey(const DsqlDmlStatement* statement, const RelationSourceNode* relation_name)
-{
-	DEV_BLKCHK(relation_name, dsql_type_nod);
-
-	const dsql_msg* message = statement->getReceiveMsg();
-	dsql_par* candidate = NULL;
-	const MetaName& relName = relation_name->dsqlName;
-
-	for (FB_SIZE_T i = 0; i < message->msg_parameters.getCount(); ++i)
-	{
-		dsql_par* parameter = message->msg_parameters[i];
-
-		if (parameter->par_dbkey_relname.hasData() && parameter->par_dbkey_relname == relName)
-		{
-			if (candidate)
-				return NULL;
-
-			candidate = parameter;
-		}
-	}
-
-	return candidate;
-}
-
-// Find record version for relation in statement's saved record version.
-static dsql_par* dsqlFindRecordVersion(const DsqlDmlStatement* statement, const RelationSourceNode* relation_name)
-{
-	const dsql_msg* message = statement->getReceiveMsg();
-	dsql_par* candidate = NULL;
-	const MetaName& relName = relation_name->dsqlName;
-
-	for (FB_SIZE_T i = 0; i < message->msg_parameters.getCount(); ++i)
-	{
-		dsql_par* parameter = message->msg_parameters[i];
-
-		if (parameter->par_rec_version_relname.hasData() &&
-			parameter->par_rec_version_relname == relName)
-		{
-			if (candidate)
-				return NULL;
-
-			candidate = parameter;
-		}
-	}
-
-	return candidate;
-}
-
-// Generate assignment to EOF parameter.
-static void dsqlGenEofAssignment(DsqlCompilerScratch* dsqlScratch, SSHORT value)
-{
-	dsc valueDesc;
-	valueDesc.makeShort(0, &value);
-
-	dsqlScratch->appendUChar(blr_assignment);
-	LiteralNode::genConstant(dsqlScratch, &valueDesc, false);
-	GEN_parameter(dsqlScratch, dsqlScratch->getDsqlStatement()->getEof());
-}
-
 static void dsqlGenReturning(DsqlCompilerScratch* dsqlScratch, ReturningClause* returning,
 	std::optional<USHORT> localTableNumber)
 {
@@ -10615,8 +10535,6 @@ static void dsqlGenReturning(DsqlCompilerScratch* dsqlScratch, ReturningClause* 
 static void dsqlGenReturningLocalTableCursor(DsqlCompilerScratch* dsqlScratch, ReturningClause* returning,
 	USHORT localTableNumber)
 {
-	dsqlGenEofAssignment(dsqlScratch, 1);
-
 	const USHORT localForContext = dsqlScratch->contextNumber++;
 
 	dsqlScratch->appendUChar(blr_for);
@@ -10646,10 +10564,6 @@ static void dsqlGenReturningLocalTableCursor(DsqlCompilerScratch* dsqlScratch, R
 	}
 
 	dsqlScratch->appendUChar(blr_end);
-
-	dsqlScratch->appendUChar(blr_send);
-	dsqlScratch->appendUChar(dsqlScratch->getDsqlStatement()->getReceiveMsg()->msg_number);
-	dsqlGenEofAssignment(dsqlScratch, 0);
 }
 
 // Generate BLR for returning's local table declaration.
@@ -10882,7 +10796,8 @@ static RseNode* dsqlPassCursorReference(DsqlCompilerScratch* dsqlScratch, const 
 	DEV_BLKCHK(dsqlScratch, dsql_type_req);
 
 	thread_db* tdbb = JRD_get_thread_data();
-	MemoryPool& pool = *tdbb->getDefaultPool();
+	// Use scratch pool because none of created object is stored anywhere
+	MemoryPool& pool = dsqlScratch->getPool();
 
 	// Lookup parent dsqlScratch
 
@@ -10896,26 +10811,54 @@ static RseNode* dsqlPassCursorReference(DsqlCompilerScratch* dsqlScratch, const 
 				  Arg::Gds(isc_dsql_cursor_not_found) << cursor);
 	}
 
-	auto parent = *symbol;
+	DsqlDmlRequest* parent = *symbol;
 
 	// Verify that the cursor is appropriate and updatable
 
-	dsql_par* source = dsqlFindDbKey(parent->getDsqlStatement(), relation_name);
-	dsql_par* rv_source = dsqlFindRecordVersion(parent->getDsqlStatement(), relation_name);
-
-	if (!source || !rv_source)
+	if (parent->getDsqlStatement()->getType() != DsqlStatement::TYPE_SELECT_UPD)
 	{
 		// cursor is not updatable
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-510) <<
 				  Arg::Gds(isc_dsql_cursor_update_err) << cursor);
 	}
 
-	const auto statement = static_cast<DsqlDmlStatement*>(dsqlScratch->getDsqlStatement());
+	// Check that it contains this relation name
+	Request* request = parent->getRequest();
 
-	statement->setParentRequest(parent);
-	statement->setParentDbKey(source);
-	statement->setParentRecVersion(rv_source);
-	parent->cursors.add(statement);
+	const MetaName& relName = relation_name->dsqlName;
+	bool found = false;
+	for (FB_SIZE_T i = 0; i < request->req_rpb.getCount(); ++i)
+	{
+		jrd_rel* relation = request->req_rpb[i].rpb_relation;
+
+		if (relation && relation->rel_name == relName)
+		{
+			if (found)
+			{
+				// Relation is used twice in cursor
+				ERRD_post(Arg::Gds(isc_dsql_cursor_err)
+							<< Arg::Gds(isc_dsql_cursor_rel_ambiguous) << relName << cursor);
+			}
+			found = true;
+		}
+	}
+
+	if (!found)
+	{
+		// Relation is not in cursor
+		ERRD_post(Arg::Gds(isc_dsql_cursor_err)
+					<< Arg::Gds(isc_dsql_cursor_rel_not_found) << relName << cursor);
+	}
+
+	DsqlStatement* stmt = dsqlScratch->getDsqlStatement();
+	fb_assert(stmt->isDml());
+	DsqlDmlStatement* dstmt = static_cast<DsqlDmlStatement*>(stmt);
+	dstmt->parentCursorName = cursor;
+
+	// Create side-channel message to deliver keys from parent cursor
+	dsql_msg* message = FB_NEW_POOL(pool) dsql_msg(pool);
+	message->msg_number = 2; // Magic numbers are not good but input and output messages used them so far
+	dsqlScratch->recordKeyMessage = message;
 
 	// Build record selection expression
 
@@ -10927,30 +10870,26 @@ static RseNode* dsqlPassCursorReference(DsqlCompilerScratch* dsqlScratch, const 
 	RecordKeyNode* dbKeyNode = FB_NEW_POOL(pool) RecordKeyNode(pool, blr_dbkey);
 	dbKeyNode->dsqlRelation = relation_node;
 
-	dsql_par* parameter = MAKE_parameter(statement->getSendMsg(), false, false, 0, NULL);
-	statement->setDbKey(parameter);
+	RecordKeyNode* recVerNode = FB_NEW_POOL(pool) RecordKeyNode(pool, blr_record_version);
+	recVerNode->dsqlRelation = relation_node;
+
+	// Order of parameters in resulting message is reversed
+	dsql_par* verParameter = MAKE_parameter(message, false, false, 0, NULL);
+	recVerNode->make(dsqlScratch, &verParameter->par_desc);
+	dsql_par* keyParameter = MAKE_parameter(message, false, false, 1, nullptr);
+	dbKeyNode->make(dsqlScratch, &keyParameter->par_desc);
 
 	ParameterNode* paramNode = FB_NEW_POOL(pool) ParameterNode(pool);
-	paramNode->dsqlParameterIndex = parameter->par_index;
-	paramNode->dsqlParameter = parameter;
-	parameter->par_desc = source->par_desc;
+	paramNode->dsqlParameter = keyParameter;
 
 	ComparativeBoolNode* eqlNode1 =
 		FB_NEW_POOL(pool) ComparativeBoolNode(pool, blr_eql, dbKeyNode, paramNode);
 
-	dbKeyNode = FB_NEW_POOL(pool) RecordKeyNode(pool, blr_record_version);
-	dbKeyNode->dsqlRelation = relation_node;
-
-	parameter = MAKE_parameter(statement->getSendMsg(), false, false, 0, NULL);
-	statement->setRecVersion(parameter);
-
 	paramNode = FB_NEW_POOL(pool) ParameterNode(pool);
-	paramNode->dsqlParameterIndex = parameter->par_index;
-	paramNode->dsqlParameter = parameter;
-	parameter->par_desc = rv_source->par_desc;
+	paramNode->dsqlParameter = verParameter;
 
 	ComparativeBoolNode* eqlNode2 =
-		FB_NEW_POOL(pool) ComparativeBoolNode(pool, blr_eql, dbKeyNode, paramNode);
+		FB_NEW_POOL(pool) ComparativeBoolNode(pool, blr_eql, recVerNode, paramNode);
 
 	rse->dsqlWhere = PASS1_compose(eqlNode1, eqlNode2, blr_and);
 
@@ -11169,16 +11108,6 @@ static ReturningClause* dsqlProcessReturning(DsqlCompilerScratch* dsqlScratch, d
 			}
 
 			dsqlScratch->returningClause = node;
-
-			if (!singleton)
-			{
-				// Set up parameter to handle EOF
-				auto parameter = MAKE_parameter(dsqlScratch->getDsqlStatement()->getReceiveMsg(), false, false, 0, nullptr);
-				dsqlScratch->getDsqlStatement()->setEof(parameter);
-				parameter->par_desc.dsc_dtype = dtype_short;
-				parameter->par_desc.dsc_scale = 0;
-				parameter->par_desc.dsc_length = sizeof(SSHORT);
-			}
 		}
 	}
 

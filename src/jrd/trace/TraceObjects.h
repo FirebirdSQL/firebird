@@ -221,11 +221,11 @@ class TraceSQLStatementImpl :
 	public StatementHolder
 {
 public:
-	TraceSQLStatementImpl(DsqlRequest* stmt, Firebird::PerformanceInfo* perf) :
+	TraceSQLStatementImpl(DsqlRequest* stmt, Firebird::PerformanceInfo* perf, const UCHAR* inputBuffer) :
 		StatementHolder(stmt ? stmt->getStatement() : nullptr),
 		m_stmt(stmt),
 		m_perf(perf),
-		m_inputs(stmt)
+		m_inputs(stmt, inputBuffer)
 	{}
 
 	// TraceSQLStatement implementation
@@ -250,11 +250,9 @@ private:
 		public Firebird::AutoIface<Firebird::ITraceParamsImpl<DSQLParamsImpl, Firebird::CheckStatusWrapper> >
 	{
 	public:
-		explicit DSQLParamsImpl(DsqlRequest* const stmt) :
-			m_stmt(stmt)
+		explicit DSQLParamsImpl(DsqlRequest* const stmt, const UCHAR* const inputBuffer) :
+			m_stmt(stmt), m_buffer(inputBuffer)
 		{
-			if (const auto msg = m_stmt->getDsqlStatement()->getSendMsg())
-				m_params = &msg->msg_parameters;
 		}
 
 		FB_SIZE_T getCount();
@@ -265,7 +263,7 @@ private:
 		void fillParams();
 
 		DsqlRequest* const m_stmt;
-		const Firebird::Array<dsql_par*>* m_params = nullptr;
+		const UCHAR* m_buffer;
 		Firebird::HalfStaticArray<dsc, 16> m_descs;
 		Firebird::string temp_utf8_text;
 	};

@@ -1132,7 +1132,7 @@ ULONG INF_request_info(const Request* request,
 					if (item == isc_info_message_number)
 						length = INF_convert(node->messageNumber, buffer_ptr);
 					else
-						length = INF_convert(node->format->fmt_length, buffer_ptr);
+						length = INF_convert(node->getFormat(request)->fmt_length, buffer_ptr);
 				}
 				else
 					length = 0;

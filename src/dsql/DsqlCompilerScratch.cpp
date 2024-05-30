@@ -421,10 +421,7 @@ dsql_var* DsqlCompilerScratch::resolveVariable(const MetaName& varName)
 // Generate BLR for a return.
 void DsqlCompilerScratch::genReturn(bool eosFlag)
 {
-	const bool hasEos = !(flags & (FLAG_TRIGGER | FLAG_FUNCTION));
-
-	if (hasEos && !eosFlag)
-		appendUChar(blr_begin);
+	const bool hasEos = !(flags & (FLAG_TRIGGER | FLAG_FUNCTION | FLAG_EXEC_BLOCK));
 
 	appendUChar(blr_send);
 	appendUChar(1);
@@ -455,12 +452,6 @@ void DsqlCompilerScratch::genReturn(bool eosFlag)
 	}
 
 	appendUChar(blr_end);
-
-	if (hasEos && !eosFlag)
-	{
-		appendUChar(blr_stall);
-		appendUChar(blr_end);
-	}
 }
 
 void DsqlCompilerScratch::genParameters(Array<NestConst<ParameterClause> >& parameters,

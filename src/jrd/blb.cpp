@@ -1498,8 +1498,11 @@ blb* blb::open2(thread_db* tdbb,
 		{
 			if (!to_type_specified)
 				to = isc_blob_text;
+			// Source is either a temporary BLOB already created by data coercion logic
+			// or a permanent blob which ID was delivered to client "as is" i.e. data coercion is not needed.
+			// In either case it is already in needed character set and further filtering is not needed
 			if (!to_charset_specified)
-				to_charset = CS_dynamic;
+				to_charset = blob->blb_charset;
 		}
 
 		BLB_gen_bpb(from, to, from_charset, to_charset, new_bpb);
