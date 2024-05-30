@@ -14019,11 +14019,7 @@ ValueExprNode* VariableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		{
 			node->outerDecl = true;
 
-			const bool execBlock = (dsqlScratch->mainScratch->flags & DsqlCompilerScratch::FLAG_BLOCK) &&
-				!(dsqlScratch->mainScratch->flags &
-				  (DsqlCompilerScratch::FLAG_PROCEDURE |
-				   DsqlCompilerScratch::FLAG_TRIGGER |
-				   DsqlCompilerScratch::FLAG_FUNCTION));
+			const bool execBlock = (dsqlScratch->mainScratch->flags & DsqlCompilerScratch::FLAG_EXEC_BLOCK);
 
 			if (node->dsqlVar->type == dsql_var::TYPE_INPUT && !execBlock)
 			{
@@ -14060,11 +14056,7 @@ void VariableNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	auto varScratch = outerDecl ? dsqlScratch->mainScratch : dsqlScratch;
 
-	const bool execBlock = (varScratch->flags & DsqlCompilerScratch::FLAG_BLOCK) &&
-		!(varScratch->flags &
-		  (DsqlCompilerScratch::FLAG_PROCEDURE |
-		   DsqlCompilerScratch::FLAG_TRIGGER |
-		   DsqlCompilerScratch::FLAG_FUNCTION));
+	const bool execBlock = (varScratch->flags & DsqlCompilerScratch::FLAG_EXEC_BLOCK);
 
 	if (dsqlVar->type == dsql_var::TYPE_INPUT && !execBlock)
 	{

@@ -678,7 +678,7 @@ void EXE_receive(thread_db* tdbb,
 	jrd_tra* transaction = request->req_transaction;
 
 	if (!(request->req_flags & req_active))
-		ERR_post(Arg::Gds(isc_req_sync));
+		ERR_post(Arg::Gds(isc_req_sync) << Arg::Gds(isc_random) << Arg::Str("Receive from inactive request"));
 
 	SavNumber savNumber = 0;
 
@@ -709,63 +709,79 @@ void EXE_receive(thread_db* tdbb,
 
 	try
 	{
-		if (nodeIs<StallNode>(request->req_message))
-			execute_looper(tdbb, request, transaction, request->req_next, Request::req_sync);
-
-		if (!(request->req_flags & req_active) || request->req_operation != Request::req_send)
-			ERR_post(Arg::Gds(isc_req_sync));
-
-		const MessageNode* message = nodeAs<MessageNode>(request->req_message);
-		const Format* format = message->format;
-
-		if (msg != message->messageNumber)
-			ERR_post(Arg::Gds(isc_req_sync));
-
-		if (length != format->fmt_length)
-			ERR_post(Arg::Gds(isc_port_len) << Arg::Num(length) << Arg::Num(format->fmt_length));
-
-		memcpy(buffer, request->getImpure<UCHAR>(message->impureOffset), length);
-
-		// ASF: temporary blobs returned to the client should not be released
-		// with the request, but in the transaction end.
-		if (top_level || transaction->tra_temp_blobs_count)
+		while ((request->req_flags & req_active) && request->req_operation != Request::req_send)
 		{
-			for (int i = 0; i < format->fmt_count; ++i)
+			// Several reasons to get here:
+			// 1) Execution flow didn't advance since last req_send
+			// 2) StallNode has been encountered
+			// 3) Request needs to receive
+			// Just run execution skipping all StallNodes until the end, get needed state or encounter req_receive
+
+			// This is obvious problem in blr logic
+			if (request->req_operation == Request::req_receive)
 			{
-				const DSC* desc = &format->fmt_desc[i];
+				ERR_post(Arg::Gds(isc_req_sync) << Arg::Gds(isc_random) << Arg::Str("Request expected to send but need to receive"));
+			}
 
-				if (desc->isBlob())
+			execute_looper(tdbb, request, transaction, request->req_next, Request::req_sync);
+		}
+
+		if (request->req_flags & req_active)
+		{
+			const MessageNode* message = nodeAs<MessageNode>(request->req_message);
+			const Format* format = message->format;
+
+			// Sanity checks first
+			if (msg != message->messageNumber)
+				ERR_post(Arg::Gds(isc_req_sync) << Arg::Gds(isc_random) << Arg::Str("Request got wrong message number"));
+
+			if (length != format->fmt_length)
+				ERR_post(Arg::Gds(isc_port_len) << Arg::Num(length) << Arg::Num(format->fmt_length));
+
+			// Proceed assignments then
+			execute_looper(tdbb, request, transaction, request->req_next, Request::req_proceed);
+
+			memcpy(buffer, request->getImpure<UCHAR>(message->impureOffset), length);
+
+			// ASF: temporary blobs returned to the client should not be released
+			// with the request, but in the transaction end.
+			if (top_level || transaction->tra_temp_blobs_count)
+			{
+				for (int i = 0; i < format->fmt_count; ++i)
 				{
-					const bid* id = (bid*) (static_cast<UCHAR*>(buffer) + (ULONG)(IPTR) desc->dsc_address);
+					const DSC* desc = &format->fmt_desc[i];
 
-					if (transaction->tra_blobs->locate(id->bid_temp_id()))
+					if (desc->isBlob())
 					{
-						BlobIndex* current = &transaction->tra_blobs->current();
+						const bid* id = (bid*) (static_cast<UCHAR*>(buffer) + (ULONG)(IPTR) desc->dsc_address);
 
-						if (top_level &&
-							current->bli_request &&
-							current->bli_request->req_blobs.locate(id->bid_temp_id()))
+						if (transaction->tra_blobs->locate(id->bid_temp_id()))
 						{
-							current->bli_request->req_blobs.fastRemove();
-							current->bli_request = NULL;
-						}
+							BlobIndex* current = &transaction->tra_blobs->current();
 
-						if (!current->bli_materialized &&
-							(current->bli_blob_object->blb_flags & (BLB_close_on_read | BLB_stream)) ==
-								(BLB_close_on_read | BLB_stream))
-						{
-							current->bli_blob_object->BLB_close(tdbb);
+							if (top_level &&
+								current->bli_request &&
+								current->bli_request->req_blobs.locate(id->bid_temp_id()))
+							{
+								current->bli_request->req_blobs.fastRemove();
+								current->bli_request = NULL;
+							}
+
+							if (!current->bli_materialized &&
+								(current->bli_blob_object->blb_flags & (BLB_close_on_read | BLB_stream)) ==
+									(BLB_close_on_read | BLB_stream))
+							{
+								current->bli_blob_object->BLB_close(tdbb);
+							}
 						}
-					}
-					else if (top_level)
-					{
-						transaction->checkBlob(tdbb, id, NULL, false);
+						else if (top_level)
+						{
+							transaction->checkBlob(tdbb, id, NULL, false);
+						}
 					}
 				}
 			}
 		}
-
-		execute_looper(tdbb, request, transaction, request->req_next, Request::req_proceed);
 	}
 	catch (const Exception&)
 	{
@@ -864,11 +880,22 @@ void EXE_send(thread_db* tdbb, Request* request, USHORT msg, ULONG length, const
 
 	JRD_reschedule(tdbb);
 
-	if (!(request->req_flags & req_active))
-		ERR_post(Arg::Gds(isc_req_sync));
+	while ((request->req_flags & req_active) && request->req_operation != Request::req_receive)
+	{
+		// Several reasons to get here:
+		// 1) Execution flow didn't advance since last req_send
+		// 2) StallNode has been encountered
+		// Just run execution skipping all StallNodes until the end, get needed state or encounter req_send
 
-	if (request->req_operation != Request::req_receive)
-		ERR_post(Arg::Gds(isc_req_sync));
+		// This is obvious problem in blr logic
+		if (request->req_operation == Request::req_send)
+			ERR_post(Arg::Gds(isc_req_sync) << Arg::Gds(isc_random) << Arg::Str("Request expected to receive but need to send"));
+
+		execute_looper(tdbb, request, request->req_transaction, request->req_next, Request::req_sync);
+	}
+
+	if (!(request->req_flags & req_active))
+		ERR_post(Arg::Gds(isc_req_sync) << Arg::Gds(isc_random) << Arg::Str("Send data to inactive request"));
 
 	const auto node = request->req_message;
 	const StmtNode* message = nullptr;
@@ -902,6 +929,7 @@ void EXE_send(thread_db* tdbb, Request* request, USHORT msg, ULONG length, const
 
 	memcpy(request->getImpure<UCHAR>(message->impureOffset), buffer, length);
 
+	// Process received data
 	execute_looper(tdbb, request, request->req_transaction, request->req_next, Request::req_proceed);
 }
 
@@ -915,7 +943,11 @@ static void activate_request(thread_db* tdbb, Request* request, jrd_tra* transac
 	BLKCHK(transaction, type_tra);
 
 	if (request->req_flags & req_active)
-		ERR_post(Arg::Gds(isc_req_sync) << Arg::Gds(isc_reqinuse));
+	{
+		// Nothing special for old-style BLR which does EOS signalling by hand instead of checking request's activity
+		// Just kill previous incarnation for them.
+		EXE_unwind(tdbb, request);
+	}
 
 	if (transaction->tra_flags & TRA_prepared)
 		ERR_post(Arg::Gds(isc_req_no_trans));

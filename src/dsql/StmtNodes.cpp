@@ -75,7 +75,6 @@ template <typename T> static void dsqlExplodeFields(dsql_rel* relation, Array<Ne
 	bool includeComputed);
 static dsql_par* dsqlFindDbKey(const DsqlDmlStatement*, const RelationSourceNode*);
 static dsql_par* dsqlFindRecordVersion(const DsqlDmlStatement*, const RelationSourceNode*);
-static void dsqlGenEofAssignment(DsqlCompilerScratch* dsqlScratch, SSHORT value);
 static void dsqlGenReturning(DsqlCompilerScratch* dsqlScratch, ReturningClause* returning,
 	std::optional<USHORT> localTableNumber);
 static void dsqlGenReturningLocalTableCursor(DsqlCompilerScratch* dsqlScratch, ReturningClause* returning,
@@ -4949,7 +4948,7 @@ ExecBlockNode* ExecBlockNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	else
 		statement->setType(DsqlStatement::TYPE_EXEC_BLOCK);
 
-	dsqlScratch->flags |= DsqlCompilerScratch::FLAG_BLOCK;
+	dsqlScratch->flags |= DsqlCompilerScratch::FLAG_BLOCK | DsqlCompilerScratch::FLAG_EXEC_BLOCK;
 	dsqlScratch->reserveInitialVarNumbers(parameters.getCount() + returns.getCount());
 
 	ExecBlockNode* node = FB_NEW_POOL(dsqlScratch->getPool()) ExecBlockNode(dsqlScratch->getPool());
@@ -5079,13 +5078,6 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		DsqlDescMaker::fromNode(dsqlScratch, &param->par_desc, varNode, true);
 	}
 
-	// Set up parameter to handle EOF
-	dsql_par* param = MAKE_parameter(statement->getReceiveMsg(), false, false, 0, NULL);
-	statement->setEof(param);
-	param->par_desc.dsc_dtype = dtype_short;
-	param->par_desc.dsc_scale = 0;
-	param->par_desc.dsc_length = sizeof(SSHORT);
-
 	revertParametersOrder(statement->getReceiveMsg()->msg_parameters);
 	if (!subRoutine)
 		GEN_port(dsqlScratch, statement->getReceiveMsg());
@@ -5143,7 +5135,6 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	dsqlScratch->putOuterMaps();
 	GEN_hidden_variables(dsqlScratch);
 
-	dsqlScratch->appendUChar(blr_stall);
 	// Put a label before body of procedure, so that
 	// any exit statement can get out
 	dsqlScratch->appendUChar(blr_label);
@@ -5157,7 +5148,6 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		statement->setType(DsqlStatement::TYPE_EXEC_BLOCK);
 
 	dsqlScratch->appendUChar(blr_end);
-	dsqlScratch->genReturn(true);
 	dsqlScratch->appendUChar(blr_end);
 
 	dsqlScratch->endDebug();
@@ -9029,14 +9019,6 @@ SelectNode* SelectNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		DsqlDescMaker::fromNode(dsqlScratch, &parameter->par_desc, item);
 	}
 
-	// Set up parameter to handle EOF.
-
-	const auto parameterEof = MAKE_parameter(statement->getReceiveMsg(), false, false, 0, nullptr);
-	statement->setEof(parameterEof);
-	parameterEof->par_desc.dsc_dtype = dtype_short;
-	parameterEof->par_desc.dsc_scale = 0;
-	parameterEof->par_desc.dsc_length = sizeof(SSHORT);
-
 	// Save DBKEYs for possible update later.
 
 	if (forUpdate && !node->rse->dsqlDistinct)
@@ -9129,17 +9111,6 @@ void SelectNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	// Build body of FOR loop.
 
-	SSHORT constant;
-	dsc constantDesc;
-	constantDesc.makeShort(0, &constant);
-
-	// Add invalid usage here.
-
-	dsqlScratch->appendUChar(blr_assignment);
-	constant = 1;
-	LiteralNode::genConstant(dsqlScratch, &constantDesc, false);
-	GEN_parameter(dsqlScratch, statement->getEof());
-
 	for (const auto parameter : message->msg_parameters)
 	{
 		if (parameter->par_node)
@@ -9167,14 +9138,6 @@ void SelectNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	}
 
 	dsqlScratch->appendUChar(blr_end);
-
-	dsqlScratch->appendUChar(blr_send);
-	dsqlScratch->appendUChar(message->msg_number);
-
-	dsqlScratch->appendUChar(blr_assignment);
-	constant = 0;
-	LiteralNode::genConstant(dsqlScratch, &constantDesc, false);
-	GEN_parameter(dsqlScratch, statement->getEof());
 }
 
 
@@ -9363,7 +9326,7 @@ const StmtNode* StallNode::execute(thread_db* /*tdbb*/, Request* request, ExeSta
 		case Request::req_return:
 			request->req_message = this;
 			request->req_operation = Request::req_return;
-			request->req_flags |= req_stall;
+			request->req_flags |= req_stall; // Signal looper to return
 			return this;
 
 		case Request::req_proceed:
@@ -9454,13 +9417,24 @@ const StmtNode* SuspendNode::execute(thread_db* tdbb, Request* request, ExeState
 	switch (request->req_operation)
 	{
 		case Request::req_evaluate:
+			// Signal EXE_receive that we are ready to assign data
+			request->req_operation = Request::req_send;
+			request->req_message = message;
+			request->req_flags |= req_stall; // Signal looper to return
+			return this;
+
+		case Request::req_proceed:
 		{
+			// EXE_receive prepared everything and ask us to proceed assignments
+			request->req_operation = Request::req_evaluate;
+
 			// ASF: If this is the send in the tail of a procedure and the procedure was called
 			// with a SELECT, don't run all the send statements. It may make validations fail when
 			// the procedure didn't return any rows. See CORE-2204.
 			// But we should run the last assignment, as it's the one who make the procedure stop.
 
-			if (!(request->req_flags & req_proc_fetch))
+			// req_proc_fetch is used by both SP and EB but EB doesn't generate EOS parameter
+			if (!(request->req_flags & req_proc_select))
 				return statement;
 
 			const CompoundStmtNode* list = nodeAs<CompoundStmtNode>(parentStmt);
@@ -9469,30 +9443,27 @@ const StmtNode* SuspendNode::execute(thread_db* tdbb, Request* request, ExeState
 			{
 				list = nodeAs<CompoundStmtNode>(statement);
 
-				if (list && list->onlyAssignments && list->statements.hasData())
+				if (list && list->onlyAssignments && list->statements.getCount() > 1)
 				{
-					// This is the assignment that sets the EOS parameter.
+					// This should be the assignment that sets the old-fashioned EOS parameter.
 					const AssignmentNode* assign = static_cast<const AssignmentNode*>(
 						list->statements[list->statements.getCount() - 1].getObject());
 					EXE_assignment(tdbb, assign);
-				}
-				else
-					return statement;
-			}
-			else
-				return statement;
 
-			// fall into
+					// Perform normal return but without stopping of looper because request in this case is expected to finish
+					// execution till the end.
+					request->req_operation = Request::req_return;
+					request->req_message = message; // Just in case if it has been changed in-between
+					return parentStmt;
+				}
+			}
+			return statement;
 		}
 
 		case Request::req_return:
-			request->req_operation = Request::req_send;
-			request->req_message = message;
-			request->req_flags |= req_stall;
-			return this;
-
-		case Request::req_proceed:
-			request->req_operation = Request::req_return;
+			// Inner nodes finished and there is nothing to do anymore so we can return as well
+			request->req_message = message; // Just in case if it has been changed in-between
+			request->req_flags |= req_stall; // but still looper must stop processing nodes because who knows what code is after SUSPEND...
 			return parentStmt;
 
 		default:
@@ -10553,17 +10524,6 @@ static dsql_par* dsqlFindRecordVersion(const DsqlDmlStatement* statement, const 
 	return candidate;
 }
 
-// Generate assignment to EOF parameter.
-static void dsqlGenEofAssignment(DsqlCompilerScratch* dsqlScratch, SSHORT value)
-{
-	dsc valueDesc;
-	valueDesc.makeShort(0, &value);
-
-	dsqlScratch->appendUChar(blr_assignment);
-	LiteralNode::genConstant(dsqlScratch, &valueDesc, false);
-	GEN_parameter(dsqlScratch, dsqlScratch->getDsqlStatement()->getEof());
-}
-
 static void dsqlGenReturning(DsqlCompilerScratch* dsqlScratch, ReturningClause* returning,
 	std::optional<USHORT> localTableNumber)
 {
@@ -10614,8 +10574,6 @@ static void dsqlGenReturning(DsqlCompilerScratch* dsqlScratch, ReturningClause* 
 static void dsqlGenReturningLocalTableCursor(DsqlCompilerScratch* dsqlScratch, ReturningClause* returning,
 	USHORT localTableNumber)
 {
-	dsqlGenEofAssignment(dsqlScratch, 1);
-
 	const USHORT localForContext = dsqlScratch->contextNumber++;
 
 	dsqlScratch->appendUChar(blr_for);
@@ -10645,10 +10603,6 @@ static void dsqlGenReturningLocalTableCursor(DsqlCompilerScratch* dsqlScratch, R
 	}
 
 	dsqlScratch->appendUChar(blr_end);
-
-	dsqlScratch->appendUChar(blr_send);
-	dsqlScratch->appendUChar(dsqlScratch->getDsqlStatement()->getReceiveMsg()->msg_number);
-	dsqlGenEofAssignment(dsqlScratch, 0);
 }
 
 // Generate BLR for returning's local table declaration.
@@ -11168,16 +11122,6 @@ static ReturningClause* dsqlProcessReturning(DsqlCompilerScratch* dsqlScratch, d
 			}
 
 			dsqlScratch->returningClause = node;
-
-			if (!singleton)
-			{
-				// Set up parameter to handle EOF
-				auto parameter = MAKE_parameter(dsqlScratch->getDsqlStatement()->getReceiveMsg(), false, false, 0, nullptr);
-				dsqlScratch->getDsqlStatement()->setEof(parameter);
-				parameter->par_desc.dsc_dtype = dtype_short;
-				parameter->par_desc.dsc_scale = 0;
-				parameter->par_desc.dsc_length = sizeof(SSHORT);
-			}
 		}
 	}
 

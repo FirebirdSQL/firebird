@@ -394,6 +394,16 @@ bool DsqlDmlRequest::fetch(thread_db* tdbb, UCHAR* msgBuffer)
 	Jrd::Attachment* att = req_dbb->dbb_attachment;
 	TraceDSQLFetch trace(att, this);
 
+	// Fetch from already finished request should not produce error
+	if (!(request->req_flags & req_active))
+	{
+		if (req_timer)
+			req_timer->stop();
+
+		trace.fetch(true, ITracePlugin::RESULT_SUCCESS);
+		return false;
+	}
+
 	thread_db::TimerGuard timerGuard(tdbb, req_timer, false);
 	if (req_timer && req_timer->expired())
 		tdbb->checkCancelState();
@@ -409,15 +419,13 @@ bool DsqlDmlRequest::fetch(thread_db* tdbb, UCHAR* msgBuffer)
 		fb_assert(tra == req_transaction);
 	}
 	else
+	{
 		JRD_receive(tdbb, request, message->msg_number, message->msg_length, dsqlMsgBuffer);
+	}
 
 	firstRowFetched = true;
 
-	const dsql_par* const eof = dsqlStatement->getEof();
-	const USHORT* eofPtr = eof ? (USHORT*) (dsqlMsgBuffer + (IPTR) eof->par_desc.dsc_address) : NULL;
-	const bool eofReached = eof && !(*eofPtr);
-
-	if (eofReached)
+	if (!(request->req_flags & req_active))
 	{
 		if (req_timer)
 			req_timer->stop();
@@ -589,11 +597,6 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 	if (dsqlStatement->getType() == DsqlStatement::TYPE_SELECT_BLOCK)
 		request->req_flags |= req_proc_fetch;
 
-	// TYPE_EXEC_BLOCK has no outputs so there are no out_msg
-	// supplied from client side, but TYPE_EXEC_BLOCK requires
-	// 2-byte message for EOS synchronization
-	const bool isBlock = (dsqlStatement->getType() == DsqlStatement::TYPE_EXEC_BLOCK);
-
 	message = dsqlStatement->getReceiveMsg();
 
 	if (outMetadata == DELAYED_OUT_FORMAT)
@@ -603,25 +606,13 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 	}
 
 	if (outMetadata && message)
-		parseMetadata(outMetadata, message->msg_parameters);
-
-	if ((outMsg && message) || isBlock)
 	{
-		UCHAR temp_buffer[FB_DOUBLE_ALIGN * 2];
-		dsql_msg temp_msg(*getDefaultMemoryPool());
+		parseMetadata(outMetadata, message->msg_parameters);
+	}
 
-		// Insure that the metadata for the message is parsed, regardless of
-		// whether anything is found by the call to receive.
-
+	if (outMsg && message)
+	{
 		UCHAR* msgBuffer = req_msg_buffers[message->msg_buffer_number];
-
-		if (!outMetadata && isBlock)
-		{
-			message = &temp_msg;
-			temp_msg.msg_number = 1;
-			temp_msg.msg_length = 2;
-			msgBuffer = FB_ALIGN(temp_buffer, FB_DOUBLE_ALIGN);
-		}
 
 		JRD_receive(tdbb, request, message->msg_number, message->msg_length, msgBuffer);
 
@@ -630,7 +621,7 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 
 		// if this is a singleton select, make sure there's in fact one record
 
-		if (singleton)
+		if (singleton && (request->req_flags & req_active))
 		{
 			USHORT counter;
 
@@ -720,7 +711,9 @@ void DsqlDmlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 
 	const dsql_msg* message = dsqlStatement->getSendMsg();
 	if (message)
+	{
 		mapInOut(tdbb, false, message, inMetadata, NULL, inMsg);
+	}
 
 	// we need to mapInOut() before tracing of execution start to let trace
 	// manager know statement parameters values
