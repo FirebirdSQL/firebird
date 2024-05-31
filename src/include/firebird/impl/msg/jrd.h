@@ -984,4 +984,5 @@ FB_IMPL_MSG(JRD, 981, trailing_part_of_string, -901, "HY", "000", "There is a tr
 FB_IMPL_MSG(JRD, 982, pattern_cant_be_used_without_other_pattern, -901, "HY", "000", "@1 can't be used without @2")
 FB_IMPL_MSG(JRD, 983, pattern_cant_be_used_without_other_pattern_and_vice_versa, -901, "HY", "000", "@1 can't be used without @2 and vice versa")
 FB_IMPL_MSG(JRD, 984, incompatible_format_patterns, -901, "HY", "000", "@1 incompatible with @2")
-FB_IMPL_MSG(JRD, 985, only_one_pattern_can_be_used, -901, "HY", "000", "Can use only one of this patterns @1")
+FB_IMPL_MSG(JRD, 985, only_one_pattern_can_be_used, -901, "HY", "000", "Can use only one of these patterns @1")
+FB_IMPL_MSG(JRD, 986, can_not_use_same_pattern_twice, -901, "HY", "000", "Cannot use the same pattern twice: @1")

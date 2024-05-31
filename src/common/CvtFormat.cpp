@@ -146,10 +146,10 @@ namespace
 	#define CVT_FORMAT_FLAG(id, format) constexpr Patterns format = 1llu << id - 1;
 	namespace Format
 	{
-		typedef long long unsigned Patterns;
+		typedef FB_UINT64 Patterns;
 
 		constexpr Patterns NONE = 0;
-		#include "CvtFormats.h"
+		#include "CvtFormatImpl.h"
 	}
 	#undef CVT_FORMAT
 	#undef CVT_FORMAT_FLAG
@@ -160,7 +160,7 @@ namespace
 	#define CVT_FORMAT_FLAG(id, format)
 	namespace FormatStr
 	{
-		#include "CvtFormats.h"
+		#include "CvtFormatImpl.h"
 	}
 	#undef CVT_FORMAT
 	#undef CVT_FORMAT2
@@ -543,7 +543,7 @@ namespace
 				continue;
 			}
 
-			while(true)
+			while (true)
 			{
 				const FB_SIZE_T pos = formatUpper.find('\"', i + 1);
 				if (pos == string::npos)
@@ -552,7 +552,7 @@ namespace
 				if (formatUpper[--tempPos] == '\\')
 				{
 					int backslashCount = 1;
-					while(formatUpper[--tempPos] == '\\')
+					while (formatUpper[--tempPos] == '\\')
 						backslashCount++;
 					if (backslashCount % 2 == 1)
 					{
@@ -621,16 +621,29 @@ namespace
 
 	string intToRoman(int num)
 	{
-		constexpr const char* const symbols[] = {"M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I"};
-		constexpr int values[] = {1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1};
+		constexpr std::pair<const char* const, const int> romanNumeralsMap[] = {
+			{"M",  1000},
+			{"CM", 900},
+			{"D",  500},
+			{"CD", 400},
+			{"C",  100},
+			{"XC", 90},
+			{"L",  50},
+			{"XL", 40},
+			{"X",  10},
+			{"IX", 9},
+			{"V",  5},
+			{"IV", 4},
+			{"I",  1}
+		};
 
 		string roman;
-		for (int i = 0; i < 13; i++)
+		for (const auto& romanNumeralsPair : romanNumeralsMap)
 		{
-			while (num >= values[i])
+			while (num >= romanNumeralsPair.second)
 			{
-				roman += symbols[i];
-				num -= values[i];
+				roman += romanNumeralsPair.first;
+				num -= romanNumeralsPair.second;
 			}
 		}
 		return roman;
@@ -652,7 +665,7 @@ namespace
 				hours = 12;
 		}
 
-		return { hours, period };
+		return {hours, period};
 	}
 
 	SSHORT extractTimezoneOffset(const dsc* desc)
@@ -702,7 +715,7 @@ namespace
 	{
 		string result;
 
-		auto begin = tokens.begin();
+		const auto begin = tokens.begin();
 		for (auto it = begin; it != tokens.end(); it++)
 		{
 			string patternResult;
@@ -955,8 +968,10 @@ namespace
 				formatOffset, i);
 
 			const Format::Patterns pattern = mapFormatStrToFormatPattern(patternStr);
-			if (pattern == Format::NONE || outFormatPatterns & pattern)
+			if (pattern == Format::NONE)
 				invalidPatternException(patternStr, cb);
+			if (outFormatPatterns & pattern)
+				cb->err(Arg::Gds(isc_can_not_use_same_pattern_twice) << string(patternStr.data(), patternStr.length()));
 			if (!patternIsCompatibleWithDscType(desc, pattern))
 				incompatibleDateFormatException(patternStr, cb);
 
@@ -1618,7 +1633,7 @@ namespace
 	}
 }
 
-string CVT_datetime_to_format_string(const dsc* desc, const string& format, Callbacks* cb)
+string CVT_format_datetime_to_string(const dsc* desc, const string& format, Callbacks* cb)
 {
 	if (format.isEmpty())
 		cb->err(Arg::Gds(isc_sysf_invalid_null_empty) << Arg::Str(STRINGIZE(format)));
@@ -1637,7 +1652,7 @@ string CVT_datetime_to_format_string(const dsc* desc, const string& format, Call
 	return result;
 }
 
-ISC_TIMESTAMP_TZ CVT_string_to_format_datetime(const dsc* desc, const Firebird::string& format,
+ISC_TIMESTAMP_TZ CVT_format_string_to_datetime(const dsc* desc, const Firebird::string& format,
 	const EXPECT_DATETIME expectedType, Firebird::Callbacks* cb)
 {
 	if (!DTYPE_IS_TEXT(desc->dsc_dtype))

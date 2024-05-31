@@ -25,6 +25,7 @@
 #include "../common/TimeZoneUtil.h"
 #include "../common/classes/FpeControl.h"
 #include "../common/classes/VaryStr.h"
+#include "../common/CvtFormat.h"
 #include "../dsql/ExprNodes.h"
 #include "../dsql/BoolNodes.h"
 #include "../dsql/StmtNodes.h"
@@ -3789,7 +3790,7 @@ dsc* CastNode::perform(thread_db* tdbb, impure_value* impure, dsc* value,
 	{
 		if (DTYPE_IS_TEXT(impure->vlu_desc.dsc_dtype))
 		{
-			string result = CVT_datetime_to_format_string(value, format, &EngineCallbacks::instance);
+			string result = CVT_format_datetime_to_string(value, format, &EngineCallbacks::instance);
 			USHORT dscLength = DSC_string_length(&impure->vlu_desc);
 			string::size_type resultLength = result.length();
 			if (resultLength > dscLength)
@@ -3815,21 +3816,21 @@ dsc* CastNode::perform(thread_db* tdbb, impure_value* impure, dsc* value,
 			{
 				case dtype_sql_time:
 				{
-					ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format, expect_sql_time,
+					ISC_TIMESTAMP_TZ timestampTZ = CVT_format_string_to_datetime(value, format, expect_sql_time,
 						&EngineCallbacks::instance);
 					*(ISC_TIME*) impure->vlu_desc.dsc_address = timestampTZ.utc_timestamp.timestamp_time;
 					break;
 				}
 				case dtype_sql_date:
 				{
-					ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format, expect_sql_date,
+					ISC_TIMESTAMP_TZ timestampTZ = CVT_format_string_to_datetime(value, format, expect_sql_date,
 						&EngineCallbacks::instance);
 					*(ISC_DATE*) impure->vlu_desc.dsc_address = timestampTZ.utc_timestamp.timestamp_date;
 					break;
 				}
 				case dtype_timestamp:
 				{
-					ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format, expect_timestamp,
+					ISC_TIMESTAMP_TZ timestampTZ = CVT_format_string_to_datetime(value, format, expect_timestamp,
 						&EngineCallbacks::instance);
 					*(ISC_TIMESTAMP*) impure->vlu_desc.dsc_address = timestampTZ.utc_timestamp;
 					break;
@@ -3837,7 +3838,7 @@ dsc* CastNode::perform(thread_db* tdbb, impure_value* impure, dsc* value,
 				case dtype_sql_time_tz:
 				case dtype_ex_time_tz:
 				{
-					ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format, expect_sql_time_tz,
+					ISC_TIMESTAMP_TZ timestampTZ = CVT_format_string_to_datetime(value, format, expect_sql_time_tz,
 						&EngineCallbacks::instance);
 					*(ISC_TIME_TZ*) impure->vlu_desc.dsc_address = TimeZoneUtil::timeStampTzToTimeTz(timestampTZ);
 					break;
@@ -3845,7 +3846,7 @@ dsc* CastNode::perform(thread_db* tdbb, impure_value* impure, dsc* value,
 				case dtype_timestamp_tz:
 				case dtype_ex_timestamp_tz:
 				{
-					ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format, expect_timestamp_tz,
+					ISC_TIMESTAMP_TZ timestampTZ = CVT_format_string_to_datetime(value, format, expect_timestamp_tz,
 						&EngineCallbacks::instance);
 					*(ISC_TIMESTAMP_TZ*) impure->vlu_desc.dsc_address = timestampTZ;
 					break;
