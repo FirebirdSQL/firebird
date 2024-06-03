@@ -54,49 +54,6 @@
 
 #include <windows.h>
 
-namespace Jrd {
-
-class FileExtendLockGuard
-{
-public:
-	FileExtendLockGuard(Firebird::RWLock* lock, bool exclusive) :
-	  m_lock(lock), m_exclusive(exclusive)
-	{
-		if (m_exclusive) {
-			fb_assert(m_lock);
-		}
-		if (m_lock)
-		{
-			if (m_exclusive)
-				m_lock->beginWrite(FB_FUNCTION);
-			else
-				m_lock->beginRead(FB_FUNCTION);
-		}
-	}
-
-	~FileExtendLockGuard()
-	{
-		if (m_lock)
-		{
-			if (m_exclusive)
-				m_lock->endWrite();
-			else
-				m_lock->endRead();
-		}
-	}
-
-private:
-	// copying is prohibited
-	FileExtendLockGuard(const FileExtendLockGuard&);
-	FileExtendLockGuard& operator=(const FileExtendLockGuard&);
-
-	Firebird::RWLock* const m_lock;
-	const bool m_exclusive;
-};
-
-
-} // namespace Jrd
-
 using namespace Jrd;
 using namespace Firebird;
 
@@ -174,6 +131,7 @@ void PIO_close(jrd_file* main_file)
  **************************************/
 	for (jrd_file* file = main_file; file; file = file->fil_next)
 	{
+		WriteLockGuard writeGuard(file->fil_desc_lock, FB_FUNCTION);
 		maybeCloseFile(file->fil_desc);
 	}
 }
@@ -271,7 +229,7 @@ void PIO_extend(thread_db* tdbb, jrd_file* main_file, const ULONG extPages, cons
 		return;
 
 	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
-	FileExtendLockGuard extLock(main_file->fil_ext_lock, true);
+	WriteLockGuard extLock(main_file->fil_ext_lock, FB_FUNCTION);
 
 	ULONG leftPages = extPages;
 	for (jrd_file* file = main_file; file && leftPages; file = file->fil_next)
@@ -283,6 +241,7 @@ void PIO_extend(thread_db* tdbb, jrd_file* main_file, const ULONG extPages, cons
 		{
 			const ULONG extendBy = MIN(fileMaxPages - filePages + file->fil_fudge, leftPages);
 
+			ReadLockGuard readGuard(file->fil_desc_lock, FB_FUNCTION);
 			HANDLE hFile = file->fil_desc;
 
 			LARGE_INTEGER newSize;
@@ -317,7 +276,10 @@ void PIO_flush(thread_db* tdbb, jrd_file* main_file)
 	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 
 	for (jrd_file* file = main_file; file; file = file->fil_next)
+	{
+		ReadLockGuard readGuard(file->fil_desc_lock, FB_FUNCTION);
 		FlushFileBuffers(file->fil_desc);
+	}
 }
 
 
@@ -344,7 +306,9 @@ void PIO_force_write(jrd_file* file, const bool forceWrite, const bool notUseFSC
 		const int writeMode = (file->fil_flags & FIL_readonly) ? 0 : GENERIC_WRITE;
 		const bool sharedMode = (file->fil_flags & FIL_sh_write);
 
-        HANDLE& hFile = file->fil_desc;
+		WriteLockGuard writeGuard(file->fil_desc_lock, FB_FUNCTION);
+
+		HANDLE& hFile = file->fil_desc;
 		maybeCloseFile(hFile);
 		hFile = CreateFile(file->fil_string,
 						  GENERIC_READ | writeMode,
@@ -399,6 +363,8 @@ void PIO_header(thread_db* tdbb, UCHAR* address, int length)
 
 	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 	jrd_file* file = pageSpace->file;
+
+	ReadLockGuard readGuard(file->fil_desc_lock, FB_FUNCTION);
 	HANDLE desc = file->fil_desc;
 
 	OVERLAPPED overlapped;
@@ -441,7 +407,7 @@ USHORT PIO_init_data(thread_db* tdbb, jrd_file* main_file, FbStatusVector* statu
 	Database* const dbb = tdbb->getDatabase();
 
 	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
-	FileExtendLockGuard extLock(main_file->fil_ext_lock, false);
+	ReadLockGuard extLock(main_file->fil_ext_lock, FB_FUNCTION);
 
 	// Fake buffer, used in seek_file. Page space ID doesn't matter there
 	// as we already know file to work with
@@ -474,6 +440,8 @@ USHORT PIO_init_data(thread_db* tdbb, jrd_file* main_file, FbStatusVector* statu
 
 		const DWORD to_write = (DWORD) write_pages * dbb->dbb_page_size;
 		DWORD written;
+
+		ReadLockGuard readGuard(file->fil_desc_lock, FB_FUNCTION);
 		BOOL ret = WriteFile(file->fil_desc, zero_buff, to_write, &written, &overlapped);
 		if (!ret)
 		{
@@ -579,12 +547,13 @@ bool PIO_read(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page, 
 	const DWORD size = dbb->dbb_page_size;
 
 	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
-	FileExtendLockGuard extLock(file->fil_ext_lock, false);
+	ReadLockGuard extLock(file->fil_ext_lock, FB_FUNCTION);
 
 	OVERLAPPED overlapped;
 	if (!(file = seek_file(file, bdb, &overlapped)))
 		return false;
 
+	ReadLockGuard readGuard(file->fil_desc_lock, FB_FUNCTION);
 	HANDLE desc = file->fil_desc;
 
 	DWORD actual_length;
@@ -756,13 +725,14 @@ bool PIO_write(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page,
 	const DWORD size = dbb->dbb_page_size;
 
 	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
-	FileExtendLockGuard extLock(file->fil_ext_lock, false);
+	ReadLockGuard extLock(file->fil_ext_lock, FB_FUNCTION);
 
 	OVERLAPPED overlapped;
 	file = seek_file(file, bdb, &overlapped);
 	if (!file)
 		return false;
 
+	ReadLockGuard readGuard(file->fil_desc_lock, FB_FUNCTION);
 	HANDLE desc = file->fil_desc;
 
 	DWORD actual_length;
@@ -792,6 +762,9 @@ ULONG PIO_get_number_of_pages(const jrd_file* file, const USHORT pagesize)
  *	Compute number of pages in file, based only on file size.
  *
  **************************************/
+
+	ReadLockGuard readGuard(file->fil_desc_lock, FB_FUNCTION);
+
 	HANDLE hFile = file->fil_desc;
 
 	DWORD dwFileSizeHigh;
@@ -800,7 +773,7 @@ ULONG PIO_get_number_of_pages(const jrd_file* file, const USHORT pagesize)
 	if ((dwFileSizeLow == INVALID_FILE_SIZE) && (GetLastError() != NO_ERROR))
 		nt_error("GetFileSize", file, isc_io_access_err, 0);
 
-    const ULONGLONG ullFileSize = (((ULONGLONG) dwFileSizeHigh) << 32) + dwFileSizeLow;
+	const ULONGLONG ullFileSize = (((ULONGLONG) dwFileSizeHigh) << 32) + dwFileSizeLow;
 	return (ULONG) ((ullFileSize + pagesize - 1) / pagesize);
 }
 
@@ -835,7 +808,7 @@ static jrd_file* seek_file(jrd_file*	file,
 
 	page -= file->fil_min_page - file->fil_fudge;
 
-    LARGE_INTEGER liOffset;
+	LARGE_INTEGER liOffset;
 	liOffset.QuadPart = UInt32x32To64((DWORD) page, (DWORD) bcb->bcb_page_size);
 
 	overlapped->Offset = liOffset.LowPart;

@@ -108,6 +108,7 @@ static void add_clump(thread_db* tdbb, USHORT type, USHORT len, const UCHAR* ent
 static ULONG ensureDiskSpace(thread_db* tdbb, WIN* pip_window, const PageNumber pageNum, ULONG pipUsed);
 static void find_clump_space(thread_db* tdbb, WIN*, pag**, USHORT, USHORT, const UCHAR*);
 static bool find_type(thread_db* tdbb, WIN*, pag**, USHORT, USHORT, UCHAR**, const UCHAR**);
+static void reopenFilesWithForcedWriteFlag(thread_db* tdbb, bool flag);
 
 inline void err_post_if_database_is_readonly(const Database* dbb)
 {
@@ -1676,6 +1677,19 @@ void PAG_set_force_write(thread_db* tdbb, bool flag)
 
 	err_post_if_database_is_readonly(dbb);
 
+	if (dbb->dbb_config->getServerMode() == MODE_SUPER || dbb->dbb_flags & (DBB_new | DBB_creating))
+		reopenFilesWithForcedWriteFlag(tdbb, flag);
+	else
+	{
+		if (CCH_exclusive(tdbb, LCK_PW, LCK_NO_WAIT, NULL))
+		{
+			reopenFilesWithForcedWriteFlag(tdbb, flag);
+			CCH_release_exclusive(tdbb);
+		}
+		else
+			ERR_post(Arg::Gds(isc_forced_write_change_err));
+	}
+
 	WIN window(HEADER_PAGE_NUMBER);
 	header_page* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 	CCH_MARK_MUST_WRITE(tdbb, &window);
@@ -1692,18 +1706,6 @@ void PAG_set_force_write(thread_db* tdbb, bool flag)
 	}
 
 	CCH_RELEASE(tdbb, &window);
-
-	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
-	for (jrd_file* file = pageSpace->file; file; file = file->fil_next) {
-		PIO_force_write(file, flag, dbb->dbb_flags & DBB_no_fs_cache);
-	}
-
-	for (Shadow* shadow = dbb->dbb_shadow; shadow; shadow = shadow->sdw_next)
-	{
-		for (jrd_file* file = shadow->sdw_file; file; file = file->fil_next) {
-			PIO_force_write(file, flag, dbb->dbb_flags & DBB_no_fs_cache);
-		}
-	}
 }
 
 
@@ -2115,6 +2117,23 @@ static bool find_type(thread_db* tdbb,
 			*ppage = CCH_HANDOFF(tdbb, window, next_page, lock, pag_header);
 		else
 			return false;
+	}
+}
+
+static void reopenFilesWithForcedWriteFlag(thread_db* tdbb, bool forceWrite)
+{
+	Database* dbb = tdbb->getDatabase();
+	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+
+	for (jrd_file* file = pageSpace->file; file; file = file->fil_next) {
+		PIO_force_write(file, forceWrite, dbb->dbb_flags & DBB_no_fs_cache);
+	}
+
+	for (Shadow* shadow = dbb->dbb_shadow; shadow; shadow = shadow->sdw_next)
+	{
+		for (jrd_file* file = shadow->sdw_file; file; file = file->fil_next) {
+			PIO_force_write(file, forceWrite, dbb->dbb_flags & DBB_no_fs_cache);
+		}
 	}
 }
 
