@@ -30,6 +30,9 @@
     <ClCompile Include="..\..\..\src\common\cvt.cpp">
       <Filter>common</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\common\CvtFormat.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\common\db_alias.cpp">
       <Filter>common</Filter>
     </ClCompile>
@@ -273,6 +276,12 @@
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\cvt.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\common\CvtFormat.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\common\CvtFormatImpl.h">
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\db_alias.h">
