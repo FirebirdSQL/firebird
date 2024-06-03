@@ -218,12 +218,12 @@ namespace
 		return (value >= T(0)) ? 1 : -1;
 	}
 
-	constexpr bool isDigit(char symbol)
+	bool isDigit(char symbol)
 	{
 		return std::isdigit(static_cast<unsigned char>(symbol));
 	}
 
-	constexpr bool isAlpha(char symbol)
+	bool isAlpha(char symbol)
 	{
 		return std::isalpha(static_cast<unsigned char>(symbol));
 	}
