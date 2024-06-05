@@ -149,12 +149,6 @@ ISC_STATUS stuff_exception(ISC_STATUS *status_vector, const Firebird::Exception&
 void makePermanentVector(ISC_STATUS* perm, const ISC_STATUS* trans, FB_THREAD_ID thr = getThreadId()) throw();
 void makePermanentVector(ISC_STATUS* v, FB_THREAD_ID thr = getThreadId()) throw();
 
-// Catch synchronous exceptions in UNIX
-#ifdef UNIX
-void sync_signals_set(void*);
-void sync_signals_reset();
-#endif
-
 }	// namespace Firebird
 
 

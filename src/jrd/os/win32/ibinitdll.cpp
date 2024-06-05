@@ -29,6 +29,8 @@
 
 using namespace Firebird;
 
+// implemented in common/fb_exception.cpp
+void threadCleanup();
 
 BOOL WINAPI DllMain(HINSTANCE h, DWORD reason, LPVOID /*reserved*/)
 {
@@ -39,6 +41,10 @@ BOOL WINAPI DllMain(HINSTANCE h, DWORD reason, LPVOID /*reserved*/)
 #if defined(EMBEDDED)
 			bEmbedded = true;
 #endif
+			break;
+
+		case DLL_THREAD_DETACH:
+			threadCleanup();
 			break;
 	}
 
