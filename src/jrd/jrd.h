@@ -1061,4 +1061,10 @@ namespace Jrd {
 Firebird::Mutex& JRD_get_dbinitmutex();
 #endif
 
+// Catch synchronous exceptions in UNIX
+#ifdef UNIX
+void sync_signals_set(void*);
+void sync_signals_reset();
+#endif
+
 #endif // JRD_JRD_H

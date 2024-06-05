@@ -128,7 +128,7 @@ static UBool checkISOLanguage(char* language) {
     int i = 0;
     int result = -1;
 
-    while(ISOLanguages[i] != '\0') {
+    while(ISOLanguages[i] != NULL) {
         result = uprv_strcmp(language, ISOLanguages[i]);
         if(result == 0) {
             return TRUE;
@@ -143,7 +143,7 @@ static UBool checkISOCountry(char* country) {
     int i = 0;
     int result = -1;
 
-    while(ISOCountries[i]!='\0') {
+    while(ISOCountries[i] != NULL) {
         result = uprv_strcmp(country, ISOCountries[i]);
         if(result == 0) {
             return TRUE;

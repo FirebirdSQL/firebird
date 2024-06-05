@@ -132,6 +132,17 @@
 #include "../dsql/dsql_proto.h"
 #include "../common/dllinst.h"
 
+#ifdef UNIX
+#ifdef HAVE_SETJMP_H
+#include <setjmp.h>
+#endif
+
+#ifdef HAVE_SIGNAL_H
+#include <signal.h>
+#endif
+#endif // UNIX
+
+
 using namespace Jrd;
 using namespace Firebird;
 
@@ -7542,4 +7553,91 @@ Mutex& JRD_get_dbinitmutex()
 {
 	return dbInitMutex;
 }
+#endif
+
+
+#ifdef UNIX
+
+static TLS_DECLARE(sigjmp_buf*, sigjmp_ptr);
+static void longjmp_sig_handler(int);
+// Here we can't use atomic counter instead mutex/counter pair - or some thread may leave sync_signals_set()
+// before signals are actually set in the other thread, which incremented counter first
+static Firebird::GlobalPtr<Firebird::Mutex> sync_enter_mutex;
+static int sync_enter_counter = 0;
+
+#if defined FREEBSD || defined NETBSD || defined DARWIN || defined HPUX
+#define sigset      signal
+#endif
+
+
+void sync_signals_set(void* arg)
+{
+/**************************************
+ *
+ *	T H D _ s y n c _ s i g n a l s _ s e t ( U N I X )
+ *
+ **************************************
+ *
+ * Functional description
+ *	Set all the synchronous signals for a particular thread
+ *
+ **************************************/
+	sigjmp_buf* const sigenv = static_cast<sigjmp_buf*>(arg);
+	TLS_SET(sigjmp_ptr, sigenv);
+
+	Firebird::MutexLockGuard g(sync_enter_mutex);
+
+	if (sync_enter_counter++ == 0)
+	{
+		sigset(SIGILL, longjmp_sig_handler);
+		sigset(SIGFPE, longjmp_sig_handler);
+		sigset(SIGBUS, longjmp_sig_handler);
+		sigset(SIGSEGV, longjmp_sig_handler);
+	}
+}
+
+
+void sync_signals_reset()
+{
+/**************************************
+ *
+ *	s y n c _ s i g n a l s _ r e s e t ( U N I X )
+ *
+ **************************************
+ *
+ * Functional description
+ *	Reset all the synchronous signals for a particular thread
+ * to default.
+ *
+ **************************************/
+
+	Firebird::MutexLockGuard g(sync_enter_mutex);
+
+	fb_assert(sync_enter_counter > 0);
+
+	if (--sync_enter_counter == 0)
+	{
+		sigset(SIGILL, SIG_DFL);
+		sigset(SIGFPE, SIG_DFL);
+		sigset(SIGBUS, SIG_DFL);
+		sigset(SIGSEGV, SIG_DFL);
+	}
+}
+
+static void longjmp_sig_handler(int sig_num)
+{
+/**************************************
+ *
+ *	l o n g j m p _ s i g _ h a n d l e r
+ *
+ **************************************
+ *
+ * Functional description
+ *	The generic signal handler for all signals in a thread.
+ *
+ **************************************/
+
+	siglongjmp(*TLS_GET(sigjmp_ptr), sig_num);
+}
+
 #endif

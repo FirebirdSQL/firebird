@@ -81,7 +81,7 @@ struct IndicClassTable
         SF_NO_POST_BASE_LIMIT   = 0x00007FFF
     };
 
-    typedef le_int32 ScriptFlags;
+    typedef le_uint32 ScriptFlags;
 
     LEUnicode firstChar;
     LEUnicode lastChar;

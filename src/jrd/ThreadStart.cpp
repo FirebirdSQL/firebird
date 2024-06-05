@@ -78,6 +78,8 @@ int API_ROUTINE gds__thread_start(ThreadEntryPoint* entrypoint,
 	return rc;
 }
 
+// implemented in common/fb_exception.cpp
+void threadCleanup();
 
 namespace
 {
@@ -91,6 +93,7 @@ THREAD_ENTRY_DECLARE threadStart(THREAD_ENTRY_PARAM arg)
 		ThreadPriorityScheduler* tps = static_cast<ThreadPriorityScheduler*>(arg);
 		try {
 			tps->run();
+			threadCleanup();
 		}
 		catch (...) {
 			tps->detach();
@@ -137,6 +140,7 @@ THREAD_ENTRY_DECLARE threadStart(THREAD_ENTRY_PARAM arg)
 	ThreadArgs localArgs(*static_cast<ThreadArgs*>(arg));
 	delete static_cast<ThreadArgs*>(arg);
 	localArgs.run();
+	threadCleanup();
 	return 0;
 }
 
