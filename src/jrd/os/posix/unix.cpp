@@ -136,7 +136,7 @@ static jrd_file* seek_file(jrd_file*, BufferDesc*, FB_UINT64*, FbStatusVector*);
 static jrd_file* setup_file(Database*, const PathName&, int, USHORT);
 static void lockDatabaseFile(int& desc, const bool shareMode, const bool temporary,
 							 const char* fileName, ISC_STATUS operation);
-static bool unix_error(const TEXT*, const jrd_file*, ISC_STATUS, FbStatusVector* = NULL);
+static bool unix_error(const TEXT*, const jrd_file*, ISC_STATUS, FbStatusVector* = NULL, bool print_errno = true);
 static bool block_size_error(const jrd_file*, off_t, FbStatusVector* = NULL);
 #if !(defined HAVE_PREAD && defined HAVE_PWRITE)
 static SLONG pread(int, SCHAR*, SLONG, SLONG);
@@ -512,7 +512,7 @@ ULONG PIO_get_number_of_pages(const jrd_file* file, const USHORT pagesize)
  **************************************/
 
 	if (file->fil_desc == -1)
-		unix_error("fstat", file, isc_io_access_err);
+		unix_error("PIO_get_number_of_pages", file, isc_io_access_err, NULL, false);
 
 	struct STAT statistics;
 	if (os_utils::fstat(file->fil_desc, &statistics))
@@ -578,7 +578,7 @@ void PIO_header(thread_db* tdbb, UCHAR* address, int length)
 	jrd_file* file = pageSpace->file;
 
 	if (file->fil_desc == -1)
-		unix_error("PIO_header", file, isc_io_read_err);
+		unix_error("PIO_header", file, isc_io_read_err, NULL, false);
 
 	for (i = 0; i < IO_RETRY; i++)
 	{
@@ -802,7 +802,7 @@ bool PIO_read(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page, 
 	FB_UINT64 offset;
 
 	if (file->fil_desc == -1)
-		return unix_error("read", file, isc_io_read_err, status_vector);
+		return unix_error("PIO_read", file, isc_io_read_err, status_vector, false);
 
 	Database* const dbb = tdbb->getDatabase();
 
@@ -854,7 +854,7 @@ bool PIO_write(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page,
 	FB_UINT64 offset;
 
 	if (file->fil_desc == -1)
-		return unix_error("write", file, isc_io_write_err, status_vector);
+		return unix_error("PIO_write", file, isc_io_write_err, status_vector, false);
 
 	Database* const dbb = tdbb->getDatabase();
 
@@ -910,7 +910,7 @@ static jrd_file* seek_file(jrd_file* file, BufferDesc* bdb, FB_UINT64* offset,
 
 	if (file->fil_desc == -1)
 	{
-		unix_error("lseek", file, isc_io_access_err, status_vector);
+		unix_error("seek_file", file, isc_io_access_err, status_vector, false);
 		return 0;
 	}
 
@@ -1054,7 +1054,7 @@ static void lockDatabaseFile(int& desc, const bool share, const bool temporary,
 
 static bool unix_error(const TEXT* string,
 					   const jrd_file* file, ISC_STATUS operation,
-					   FbStatusVector* status_vector)
+					   FbStatusVector* status_vector, bool print_errno)
 {
 /**************************************
  *
@@ -1069,7 +1069,10 @@ static bool unix_error(const TEXT* string,
  **************************************/
 	Arg::Gds err(isc_io_error);
 	err << string << file->fil_string <<
-		Arg::Gds(operation) << Arg::Unix(errno);
+		Arg::Gds(operation);
+
+	if (print_errno)
+		err << Arg::Unix(errno);
 
 	if (!status_vector)
 		ERR_post(err);
