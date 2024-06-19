@@ -848,7 +848,8 @@ const Validation::MSG_ENTRY Validation::vdr_msg_table[VAL_MAX_ERROR] =
 	{true, isc_info_ppage_errors,	"Data page %" ULONGFORMAT" is not in PP (%" ULONGFORMAT"). Slot (%d) is not found"},
 	{true, isc_info_ppage_errors,	"Data page %" ULONGFORMAT" is not in PP (%" ULONGFORMAT"). Slot (%d) has value %" ULONGFORMAT},
 	{true, isc_info_ppage_errors,	"Pointer page is not found for data page %" ULONGFORMAT". dpg_sequence (%" ULONGFORMAT") is invalid"},
-	{true, isc_info_dpage_errors,	"Data page %" ULONGFORMAT" {sequence %" ULONGFORMAT"} marked as secondary but contains primary record versions"}
+	{true, isc_info_dpage_errors,	"Data page %" ULONGFORMAT" {sequence %" ULONGFORMAT"} marked as secondary but contains primary record versions"},
+	{true, isc_info_tpage_errors,	"Transaction inventory page %" ULONGFORMAT" {sequence %" ULONGFORMAT"} has transaction with non-zero state which number is greater than Next transaction"}
 };
 
 Validation::Validation(thread_db* tdbb, UtilSvc* uSvc)
@@ -1615,7 +1616,7 @@ void Validation::walk_database()
 	WIN window(DB_PAGE_SPACE, -1);
 	header_page* page = 0;
 	fetch_page(true, HEADER_PAGE, pag_header, &window, &page);
- 	TraNumber next = vdr_max_transaction = Ods::getNT(page);
+ 	vdr_max_transaction = Ods::getNT(page);
 
 	if (vdr_flags & VDR_online) {
 		release_page(&window);
@@ -1623,9 +1624,10 @@ void Validation::walk_database()
 
 	if (!(vdr_flags & VDR_partial))
 	{
+		fb_assert(!(vdr_flags & VDR_online));
 		walk_pip();
 		walk_scns();
-		walk_tip(next);
+		walk_tip();
 		walk_generators();
 	}
 
@@ -1800,8 +1802,11 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 				{
 					const TraNumber transaction = Ods::getTraNum(header);
 
+					// If the transaction number is greater than NT and seems corrupted, treat its
+					// state as tra_active to avoid an attempt to fetch a non-existing TIP page
 					const int state = (transaction < dbb->dbb_oldest_transaction) ?
-						tra_committed : TRA_fetch_state(vdr_tdbb, transaction);
+						tra_committed : (transaction > vdr_max_transaction) ?
+						tra_active : TRA_fetch_state(vdr_tdbb, transaction);
 
 					if (!deleted_flag && (state == tra_committed || state == tra_limbo) ||
 						deleted_flag && state != tra_committed)
@@ -3260,7 +3265,7 @@ Validation::RTN Validation::walk_root(jrd_rel* relation, bool getInfo)
 	return rtn_ok;
 }
 
-Validation::RTN Validation::walk_tip(TraNumber transaction)
+Validation::RTN Validation::walk_tip()
 {
 /**************************************
  *
@@ -3278,36 +3283,77 @@ Validation::RTN Validation::walk_tip(TraNumber transaction)
 		return corrupt(VAL_TIP_LOST, 0);
 
 	tx_inv_page* page = 0;
-	const ULONG pages = transaction / dbb->dbb_page_manager.transPerTIP;
+	const ULONG trans_per_tip = dbb->dbb_page_manager.transPerTIP;
+	const ULONG last = vdr_max_transaction / trans_per_tip;
+	ULONG saved_tip_next = 0;
+	TraNumber advanced_NT = 0;
 
-	for (ULONG sequence = 0; sequence <= pages; sequence++)
+	for (ULONG sequence = 0; sequence <= last; sequence++)
 	{
 		auto pageNumber = dbb->getKnownPage(pag_transactions, sequence);
 		if (!pageNumber)
 		{
 			corrupt(VAL_TIP_LOST_SEQUENCE, 0, sequence);
-			if (!(vdr_flags & VDR_repair))
-				continue;
 
-			TRA_extend_tip(vdr_tdbb, sequence);
-			vdr_fixed++;
+			if (saved_tip_next)
+				dbb->setKnownPage(pag_transactions, sequence, saved_tip_next);
+			else
+			{
+				if ((vdr_flags & VDR_repair) && sequence >= dbb->getKnownPagesCount(pag_transactions))
+				{
+					TRA_extend_tip(vdr_tdbb, sequence);
+					vdr_fixed++;
+				}
+				else
+					continue;
+			}
 
 			pageNumber = dbb->getKnownPage(pag_transactions, sequence);
 		}
+	
+		if (saved_tip_next && saved_tip_next != pageNumber)
+			corrupt(VAL_TIP_CONFUSED, 0, sequence - 1);
 
 		WIN window(DB_PAGE_SPACE, -1);
 		fetch_page(true, pageNumber, pag_transactions, &window, &page);
+		saved_tip_next = page->tip_next;
 
 #ifdef DEBUG_VAL_VERBOSE
 		if (VAL_debug_level)
 			fprintf(stdout, "walk_tip: page %d next %d\n", pageNumber, page->tip_next);
 #endif
-		const auto next = dbb->getKnownPage(pag_transactions, sequence + 1);
-		if (page->tip_next && page->tip_next != next)
+		if (sequence == last)
 		{
-			corrupt(VAL_TIP_CONFUSED, 0, sequence);
+			for (ULONG number = (vdr_max_transaction % trans_per_tip) + 1; number < trans_per_tip; number++)
+			{
+				const ULONG byte = TRANS_OFFSET(number);
+				const USHORT shift = TRANS_SHIFT(number);
+				const int state = (page->tip_transactions[byte] >> shift) & TRA_MASK;
+
+				if (state != tra_active)
+				{
+					if (!advanced_NT)
+						corrupt(VAL_TIP_NON_ACTIVE_AFTER_NT, 0, pageNumber, sequence);
+						
+					advanced_NT = sequence * trans_per_tip + number;
+				}
+			}
 		}
+
 		release_page(&window);
+	}
+
+	if ((vdr_flags & VDR_repair) && advanced_NT)
+	{
+		WIN window(DB_PAGE_SPACE, -1);
+		header_page* header = 0;
+		fetch_page(false, HEADER_PAGE, pag_header, &window, &header);
+		CCH_MARK(vdr_tdbb, &window);
+		writeNT(header, advanced_NT);
+		release_page(&window);
+
+		vdr_max_transaction = advanced_NT;
+		vdr_fixed++;
 	}
 
 	return rtn_ok;
