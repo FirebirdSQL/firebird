@@ -600,12 +600,10 @@ bool CMP_procedure_arguments(
 
 			const auto paramNode = FB_NEW_POOL(csb->csb_pool) ParameterNode(csb->csb_pool);
 			paramNode->messageNumber = message->messageNumber;
-			paramNode->message = message;
 			paramNode->argNumber = parameter->prm_number * 2;
 
 			const auto paramFlagNode = FB_NEW_POOL(csb->csb_pool) ParameterNode(csb->csb_pool);
 			paramFlagNode->messageNumber = message->messageNumber;
-			paramFlagNode->message = message;
 			paramFlagNode->argNumber = parameter->prm_number * 2 + 1;
 
 			paramNode->argFlag = paramFlagNode;

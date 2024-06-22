@@ -4841,7 +4841,7 @@ void JAttachment::transactRequest(CheckStatusWrapper* user_status, ITransaction*
 													   Arg::Num(len));
 				}
 
-				memcpy(request->getImpure<UCHAR>(inMessage->impureOffset), in_msg, in_msg_length);
+				memcpy(inMessage->getBuffer(request), in_msg, in_msg_length);
 			}
 
 			EXE_start(tdbb, request, transaction);
@@ -4856,8 +4856,7 @@ void JAttachment::transactRequest(CheckStatusWrapper* user_status, ITransaction*
 
 			if (out_msg_length)
 			{
-				memcpy(out_msg, request->getImpure<UCHAR>(outMessage->impureOffset),
-					out_msg_length);
+				memcpy(out_msg, outMessage->getBuffer(request), out_msg_length);
 			}
 
 			check_autocommit(tdbb, request);

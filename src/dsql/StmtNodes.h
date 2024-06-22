@@ -1114,10 +1114,15 @@ public:
 
 class MessageNode : public TypedNode<StmtNode, StmtNode::TYPE_MESSAGE>
 {
+	struct MessageBuffer
+	{
+		const Format* format; // Message format derived from user MessageMetadata. Overrides default format.
+		UCHAR* buffer = nullptr;
+	};
+
 public:
 	explicit MessageNode(MemoryPool& pool)
-		: TypedNode<StmtNode, StmtNode::TYPE_MESSAGE>(pool),
-		  itemsUsedInSubroutines(pool)
+		: TypedNode<StmtNode, StmtNode::TYPE_MESSAGE>(pool)
 	{
 	}
 
@@ -1137,11 +1142,15 @@ public:
 	virtual MessageNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
 
+	UCHAR* getBuffer(Request* request) const;
+
 public:
-	Firebird::SortedArray<USHORT> itemsUsedInSubroutines;
 	NestConst<Format> format;
 	ULONG impureFlags = 0;
 	USHORT messageNumber = 0;
+
+private:
+	using StmtNode::impureOffset; // Made private to incapsulate it's interpretation logic
 };
 
 

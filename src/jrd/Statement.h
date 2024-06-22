@@ -114,6 +114,7 @@ public:
 	Firebird::RefStrPtr sqlText;		// SQL text (encoded in the metadata charset)
 	Firebird::Array<UCHAR> blr;			// BLR for non-SQL query
 	MapFieldInfo mapFieldInfo;			// Map field name to field info
+	Firebird::Array<MessageNode*> messages;	// Input/output messages
 };
 
 

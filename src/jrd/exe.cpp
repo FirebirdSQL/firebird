@@ -384,7 +384,6 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 
 	if (toParam)
 	{
-		const MessageNode* message = toParam->message;
 		const auto paramRequest = toParam->getParamRequest(request);
 
 		if (toParam->argInfo)
@@ -392,12 +391,12 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 			AutoSetRestore2<Request*, thread_db> autoSetRequest(
 				tdbb, &thread_db::getRequest, &thread_db::setRequest, paramRequest);
 
-			EVL_validate(tdbb, Item(Item::TYPE_PARAMETER, message->messageNumber, toParam->argNumber),
+			EVL_validate(tdbb, Item(Item::TYPE_PARAMETER, toParam->messageNumber, toParam->argNumber),
 				toParam->argInfo, from_desc, null == -1);
 		}
 
 		impure_flags = paramRequest->getImpure<USHORT>(
-			message->impureFlags + (sizeof(USHORT) * toParam->argNumber));
+			paramRequest->getStatement()->messages[toParam->messageNumber]->impureFlags + (sizeof(USHORT) * toParam->argNumber));
 	}
 	else if (toVar)
 	{
@@ -738,10 +737,13 @@ void EXE_receive(thread_db* tdbb,
 			if (length != format->fmt_length)
 				ERR_post(Arg::Gds(isc_port_len) << Arg::Num(length) << Arg::Num(format->fmt_length));
 
+			UCHAR* msgBuffer = message->getBuffer(request);
+
 			// Proceed assignments then
 			execute_looper(tdbb, request, transaction, request->req_next, Request::req_proceed);
 
-			memcpy(buffer, request->getImpure<UCHAR>(message->impureOffset), length);
+			// Copy data
+			memcpy(buffer, msgBuffer, length);
 
 			// ASF: temporary blobs returned to the client should not be released
 			// with the request, but in the transaction end.
@@ -919,15 +921,18 @@ void EXE_send(thread_db* tdbb, Request* request, USHORT msg, ULONG length, const
 	else
 		BUGCHECK(167);	// msg 167 invalid SEND request
 
-	const auto format = nodeAs<MessageNode>(message)->format;
+	const auto messageNode = nodeAs<MessageNode>(message);
+	const auto format = messageNode->format;
 
-	if (msg != nodeAs<MessageNode>(message)->messageNumber)
+	if (msg != messageNode->messageNumber)
 		ERR_post(Arg::Gds(isc_req_sync));
 
 	if (length != format->fmt_length)
 		ERR_post(Arg::Gds(isc_port_len) << Arg::Num(length) << Arg::Num(format->fmt_length));
 
-	memcpy(request->getImpure<UCHAR>(message->impureOffset), buffer, length);
+	// Set data buffer to read parameters from
+	UCHAR* msgBuffer = messageNode->getBuffer(request);
+	memcpy(msgBuffer, buffer, length);
 
 	// Process received data
 	execute_looper(tdbb, request, request->req_transaction, request->req_next, Request::req_proceed);

@@ -3903,7 +3903,7 @@ void ExecProcedureNode::executeProcedure(thread_db* tdbb, Request* request) cons
 	if (inputMessage)
 	{
 		inMsgLength = inputMessage->format->fmt_length;
-		inMsg = request->getImpure<UCHAR>(inputMessage->impureOffset);
+		inMsg = inputMessage->getBuffer(request);
 	}
 
 	const Format* format = NULL;
@@ -3913,9 +3913,10 @@ void ExecProcedureNode::executeProcedure(thread_db* tdbb, Request* request) cons
 
 	if (outputMessage)
 	{
+		// These buffers are not actually needed, this method can map procedure data buffers to caller's data buffers directly
 		format = outputMessage->format;
 		outMsgLength = format->fmt_length;
-		outMsg = request->getImpure<UCHAR>(outputMessage->impureOffset);
+		outMsg = outputMessage->getBuffer(request);
 	}
 	else
 	{
@@ -7168,7 +7169,7 @@ MessageNode* MessageNode::pass2(thread_db* /*tdbb*/, CompilerScratch* csb)
 {
 	fb_assert(format);
 
-	impureOffset = csb->allocImpure(FB_ALIGNMENT, FB_ALIGN(format->fmt_length, 2));
+	impureOffset = csb->allocImpure<MessageBuffer>();
 	impureFlags = csb->allocImpure(FB_ALIGNMENT, sizeof(USHORT) * format->fmt_count);
 
 	return this;
@@ -7186,6 +7187,16 @@ const StmtNode* MessageNode::execute(thread_db* /*tdbb*/, Request* request, ExeS
 	return parentStmt;
 }
 
+UCHAR* MessageNode::getBuffer(Request* request) const
+{
+	MessageBuffer* buffer = request->getImpure<MessageBuffer>(impureOffset);
+	if (buffer->buffer == nullptr)
+	{
+		buffer->buffer = reinterpret_cast<UCHAR*>(request->req_pool->calloc(format->fmt_length ALLOC_ARGS));
+	}
+	return buffer->buffer;
+
+}
 
 //--------------------
 

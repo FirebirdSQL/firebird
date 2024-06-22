@@ -75,7 +75,8 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 	  localTables(*p),
 	  invariants(*p),
 	  blr(*p),
-	  mapFieldInfo(*p)
+	  mapFieldInfo(*p),
+	  messages(*p, csb->csb_rpt.getCount())
 {
 	try
 	{
@@ -198,6 +199,16 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 
 			delete tail->csb_fields;
 			tail->csb_fields = NULL;
+		}
+
+		messages.grow(csb->csb_rpt.getCount());
+		for (decltype(messages)::size_type i = 0; i < csb->csb_rpt.getCount(); ++i)
+		{
+			if (auto message = csb->csb_rpt[i].csb_message)
+			{
+				fb_assert(i == message->messageNumber);
+				messages[i] = message;
+			}
 		}
 
 		if (csb->csb_variables)
