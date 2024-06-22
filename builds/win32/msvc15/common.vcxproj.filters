@@ -491,6 +491,9 @@
     <ClInclude Include="..\..\..\src\common\classes\UserBlob.h">
       <Filter>headers</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\common\classes\Uuid.h">
+      <Filter>headers</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\VaryStr.h">
       <Filter>headers</Filter>
     </ClInclude>

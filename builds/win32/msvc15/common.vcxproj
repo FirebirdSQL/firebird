@@ -161,6 +161,7 @@
     <ClInclude Include="..\..\..\src\common\classes\tree.h" />
     <ClInclude Include="..\..\..\src\common\classes\TriState.h" />
     <ClInclude Include="..\..\..\src\common\classes\UserBlob.h" />
+    <ClInclude Include="..\..\..\src\common\classes\Uuid.h" />
     <ClInclude Include="..\..\..\src\common\classes\VaryStr.h" />
     <ClInclude Include="..\..\..\src\common\classes\vector.h" />
     <ClInclude Include="..\..\..\src\common\classes\zip.h" />

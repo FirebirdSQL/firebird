@@ -550,17 +550,20 @@ Function:
     Returns an universal unique number in CHAR(16) OCTETS type.
 
 Format:
-    GEN_UUID()
+    GEN_UUID([<version>])
 
 Important:
     Before Firebird 2.5.2, GEN_UUID was returning completely random strings. This is not compliant
     with the RFC-4122 (UUID specification).
-    This was fixed in Firebird 2.5.2 and 3.0. Now GEN_UUID returns a compliant UUID version 4
-    string, where some bits are reserved and the others are random. The string format of a compliant
-    UUID is XXXXXXXX-XXXX-4XXX-YXXX-XXXXXXXXXXXX, where 4 is fixed (version) and Y is 8, 9, A or B.
+    This was fixed in Firebird 2.5.2 and 3.0. Now GEN_UUID returns a compliant UUID accordingly to the specified
+    version (4 or 7, with default being 4) string, where some bits are reserved and the others are random.
+    The string format of a compliant UUID v4/v7 is XXXXXXXX-XXXX-YXXX-ZXXX-XXXXXXXXXXXX, where Y is the version (4 or 7)
+    and Z is 8, 9, A or B.
+    Before Firebird 6, this function does not accept the version argument.
 
 Example:
     insert into records (id) value (gen_uuid());
+    insert into records (id) value (gen_uuid(7));
 
 See also: CHAR_TO_UUID and UUID_TO_CHAR
 

@@ -5729,6 +5729,7 @@ const
 	 isc_incompatible_format_patterns = 335545304;
 	 isc_only_one_pattern_can_be_used = 335545305;
 	 isc_can_not_use_same_pattern_twice = 335545306;
+	 isc_sysf_invalid_gen_uuid_version = 335545307;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;

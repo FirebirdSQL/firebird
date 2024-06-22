@@ -33,6 +33,7 @@
 #include "../common/TimeZoneUtil.h"
 #include "../common/classes/VaryStr.h"
 #include "../common/classes/Hash.h"
+#include "../common/classes/Uuid.h"
 #include "../jrd/SysFunction.h"
 #include "../jrd/DataTypeUtil.h"
 #include "../include/fb_blk.h"
@@ -1920,7 +1921,7 @@ void makeUnicodeChar(DataTypeUtilBase*, const SysFunction* function, dsc* result
 void makeUuid(DataTypeUtilBase*, const SysFunction* function, dsc* result,
 	int argsCount, const dsc** args)
 {
-	fb_assert(argsCount == function->minArgCount);
+	fb_assert(argsCount >= function->minArgCount);
 
 	if (argsCount > 0 && args[0]->isNull())
 		result->makeNullString();
@@ -4519,12 +4520,38 @@ dsc* evlFloor(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 dsc* evlGenUuid(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	impure_value* impure)
 {
-	fb_assert(args.isEmpty());
+	const auto request = tdbb->getRequest();
+
+	fb_assert(args.getCount() <= 1);
 
 	// Generate UUID and convert it into platform-independent format
 	UCHAR data[Guid::SIZE];
+	SLONG version = 4;
 
-	Guid::generate().convert(data);
+	if (args.getCount() > 0)
+	{
+		const auto* const versionDsc = EVL_expr(tdbb, request, args[0]);
+
+		if (request->req_flags & req_null)
+			return nullptr;
+
+		version = MOV_get_long(tdbb, versionDsc, 0);
+	}
+
+	switch (version)
+	{
+		case 4:
+			Guid::generate().convert(data);
+			break;
+
+		case 7:
+			Uuid::generate(version).extractBytes(data, sizeof(data));
+			break;
+
+		default:
+			status_exception::raise(Arg::Gds(isc_sysf_invalid_gen_uuid_version) << Arg::Num(version));
+			break;
+	}
 
 	dsc result;
 	result.makeText(Guid::SIZE, ttype_binary, data);
@@ -6885,7 +6912,7 @@ const SysFunction SysFunction::functions[] =
 		{"EXP", 1, 1, setParamsDblDec, makeDblDecResult, evlExp, NULL},
 		{"FIRST_DAY", 2, 2, setParamsFirstLastDay, makeFirstLastDayResult, evlFirstLastDay, (void*) funFirstDay},
 		{"FLOOR", 1, 1, setParamsDblDec, makeCeilFloor, evlFloor, NULL},
-		{"GEN_UUID", 0, 0, NULL, makeUuid, evlGenUuid, NULL},
+		{"GEN_UUID", 0, 1, NULL, makeUuid, evlGenUuid, NULL},
 		{"HASH", 1, 2, setParamsHash, makeHash, evlHash, NULL},
 		{"HEX_DECODE", 1, 1, NULL, makeDecodeHex, evlDecodeHex, NULL},
 		{"HEX_ENCODE", 1, 1, NULL, makeEncodeHex, evlEncodeHex, NULL},
