@@ -44,6 +44,10 @@ private:
 	{
 		switch (version)
 		{
+			case 4:
+				generateV4();
+				break;
+
 			case 7:
 				generateV7();
 				break;
@@ -80,6 +84,15 @@ public:
 	}
 
 private:
+	void generateV4()
+	{
+		GenerateRandomBytes(bytes.data(), bytes.size());
+
+		// version and variant
+		bytes[6] = (bytes[6] & 0x0F) | 0x40;
+		bytes[8] = (bytes[8] & 0x3F) | 0x80;
+	}
+
 	void generateV7()
 	{
 		GenerateRandomBytes(bytes.data() + 6, bytes.size() - 6);

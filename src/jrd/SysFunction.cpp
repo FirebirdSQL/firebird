@@ -83,9 +83,6 @@ namespace {
 #pragma message("Ensure the 'hh' size modifier is supported")
 #endif
 
-const char* const BYTE_GUID_FORMAT =
-	"%02hhX%02hhX%02hhX%02hhX-%02hhX%02hhX-%02hhX%02hhX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX";
-
 // function types handled in generic functions
 enum Function
 {
@@ -644,7 +641,7 @@ void setParamsBlobAppend(DataTypeUtilBase*, const SysFunction*, int argsCount, d
 void setParamsCharToUuid(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
 {
 	if (argsCount >= 1 && args[0]->isUnknown())
-		args[0]->makeText(GUID_BODY_SIZE, ttype_ascii);
+		args[0]->makeText(Uuid::STR_LEN, ttype_ascii);
 }
 
 
@@ -1946,7 +1943,7 @@ void makeUuidToChar(DataTypeUtilBase*, const SysFunction* function, dsc* result,
 		return;
 	}
 
-	result->makeText(GUID_BODY_SIZE, ttype_ascii);
+	result->makeText(Uuid::STR_LEN, ttype_ascii);
 	result->setNullable(value->isNullable());
 }
 
@@ -2601,12 +2598,12 @@ dsc* evlCharToUuid(thread_db* tdbb, const SysFunction* function, const NestValue
 	USHORT len = MOV_get_string(tdbb, value, &data_temp, NULL, 0);
 	const UCHAR* data;
 
-	if (len > GUID_BODY_SIZE)
+	if (len > Uuid::STR_LEN)
 	{
 		// Verify if only spaces exists after the expected length. See CORE-5062.
-		data = data_temp + GUID_BODY_SIZE;
+		data = data_temp + Uuid::STR_LEN;
 
-		while (len > GUID_BODY_SIZE)
+		while (len > Uuid::STR_LEN)
 		{
 			if (*data++ != ASCII_SPACE)
 				break;
@@ -2618,15 +2615,15 @@ dsc* evlCharToUuid(thread_db* tdbb, const SysFunction* function, const NestValue
 	data = data_temp;
 
 	// validate the UUID
-	if (len != GUID_BODY_SIZE) // 36
+	if (len != Uuid::STR_LEN)
 	{
 		status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
 									Arg::Gds(isc_sysf_argviolates_uuidlen) <<
-										Arg::Num(GUID_BODY_SIZE) <<
+										Arg::Num(Uuid::STR_LEN) <<
 										Arg::Str(function->name));
 	}
 
-	for (int i = 0; i < GUID_BODY_SIZE; ++i)
+	for (int i = 0; i < Uuid::STR_LEN; ++i)
 	{
 		if (i == 8 || i == 13 || i == 18 || i == 23)
 		{
@@ -2655,11 +2652,10 @@ dsc* evlCharToUuid(thread_db* tdbb, const SysFunction* function, const NestValue
 		}
 	}
 
-	UCHAR bytes[Guid::SIZE];
-	fb_assert(sizeof(bytes) == 16);
+	UCHAR bytes[Uuid::BYTE_LEN];
 
 	const auto count = sscanf(reinterpret_cast<const char*>(data),
-		BYTE_GUID_FORMAT,
+		Uuid::STR_FORMAT,
 		&bytes[0], &bytes[1], &bytes[2], &bytes[3],
 		&bytes[4], &bytes[5], &bytes[6], &bytes[7],
 		&bytes[8], &bytes[9], &bytes[10], &bytes[11],
@@ -2667,7 +2663,7 @@ dsc* evlCharToUuid(thread_db* tdbb, const SysFunction* function, const NestValue
 	fb_assert(count == 16);
 
 	dsc result;
-	result.makeText(Guid::SIZE, ttype_binary, bytes);
+	result.makeText(Uuid::BYTE_LEN, ttype_binary, bytes);
 	EVL_make_value(tdbb, &result, impure);
 
 	return &impure->vlu_desc;
@@ -4525,7 +4521,7 @@ dsc* evlGenUuid(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	fb_assert(args.getCount() <= 1);
 
 	// Generate UUID and convert it into platform-independent format
-	UCHAR data[Guid::SIZE];
+	UCHAR data[Uuid::BYTE_LEN];
 	SLONG version = 4;
 
 	if (args.getCount() > 0)
@@ -4541,11 +4537,8 @@ dsc* evlGenUuid(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	switch (version)
 	{
 		case 4:
-			Guid::generate().convert(data);
-			break;
-
 		case 7:
-			Uuid::generate(version).extractBytes(data, sizeof(data));
+			Uuid::generate((unsigned) version).extractBytes(data, sizeof(data));
 			break;
 
 		default:
@@ -4554,7 +4547,7 @@ dsc* evlGenUuid(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	}
 
 	dsc result;
-	result.makeText(Guid::SIZE, ttype_binary, data);
+	result.makeText(Uuid::BYTE_LEN, ttype_binary, data);
 	EVL_make_value(tdbb, &result, impure);
 
 	return &impure->vlu_desc;
@@ -6723,24 +6716,24 @@ dsc* evlUuidToChar(thread_db* tdbb, const SysFunction* function, const NestValue
 	}
 
 	UCHAR* data;
-	if (MOV_get_string(tdbb, value, &data, NULL, 0) != Guid::SIZE)
+	if (MOV_get_string(tdbb, value, &data, NULL, 0) != Uuid::BYTE_LEN)
 	{
 		status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
 									Arg::Gds(isc_sysf_binuuid_wrongsize) <<
-										Arg::Num(Guid::SIZE) <<
+										Arg::Num(Uuid::BYTE_LEN) <<
 										Arg::Str(function->name));
 	}
 
 	UCHAR buffer[GUID_BUFF_SIZE];
 	sprintf(reinterpret_cast<char*>(buffer),
-		BYTE_GUID_FORMAT,
+		Uuid::STR_FORMAT,
 		data[0], data[1], data[2], data[3], data[4],
 		data[5], data[6], data[7], data[8], data[9],
 		data[10], data[11], data[12], data[13], data[14],
 		data[15]);
 
 	dsc result;
-	result.makeText(GUID_BODY_SIZE, ttype_ascii, buffer);
+	result.makeText(Uuid::STR_LEN, ttype_ascii, buffer);
 	EVL_make_value(tdbb, &result, impure);
 
 	return &impure->vlu_desc;
