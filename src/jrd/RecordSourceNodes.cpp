@@ -52,6 +52,124 @@ static void genDeliverUnmapped(CompilerScratch* csb, const BoolExprNodeStack& pa
 static ValueExprNode* resolveUsingField(DsqlCompilerScratch* dsqlScratch, const MetaName& name,
 	ValueListNode* list, const FieldNode* flawedNode, const TEXT* side, dsql_ctx*& ctx);
 
+namespace
+{
+	// Search through the list of ANDed booleans to find comparisons
+	// referring streams of other select expressions.
+	// Extract those booleans and return them to the caller.
+
+	bool findDependentBooleans(CompilerScratch* csb,
+							   const StreamList& rseStreams,
+							   BoolExprNode** parentBoolean,
+							   BoolExprNodeStack& booleanStack)
+	{
+		const auto boolean = *parentBoolean;
+
+		const auto binaryNode = nodeAs<BinaryBoolNode>(boolean);
+		if (binaryNode && binaryNode->blrOp == blr_and)
+		{
+			const bool found1 = findDependentBooleans(csb, rseStreams,
+				binaryNode->arg1.getAddress(), booleanStack);
+			const bool found2 = findDependentBooleans(csb, rseStreams,
+				binaryNode->arg2.getAddress(), booleanStack);
+
+			if (!binaryNode->arg1 && !binaryNode->arg2)
+				*parentBoolean = nullptr;
+			else if (!binaryNode->arg1)
+				*parentBoolean = binaryNode->arg2;
+			else if (!binaryNode->arg2)
+				*parentBoolean = binaryNode->arg1;
+
+			return (found1 || found2);
+		}
+
+		if (const auto cmpNode = nodeAs<ComparativeBoolNode>(boolean))
+		{
+			SortedStreamList streams;
+			cmpNode->collectStreams(streams);
+
+			for (const auto stream : streams)
+			{
+				if (!rseStreams.exist(stream))
+				{
+					booleanStack.push(boolean);
+					*parentBoolean = nullptr;
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	// Search through the list of ANDed booleans to find correlated EXISTS/IN sub-queries.
+	// They are candidates to be converted into semi- or anti-joins.
+
+	bool findPossibleJoins(CompilerScratch* csb,
+						   BoolExprNode** parentBoolean,
+						   RecordSourceNodeStack& rseStack,
+						   BoolExprNodeStack& booleanStack)
+	{
+		auto boolNode = *parentBoolean;
+
+		const auto binaryNode = nodeAs<BinaryBoolNode>(boolNode);
+		if (binaryNode && binaryNode->blrOp == blr_and)
+		{
+			const bool found1 = findPossibleJoins(csb, binaryNode->arg1.getAddress(),
+				rseStack, booleanStack);
+			const bool found2 = findPossibleJoins(csb, binaryNode->arg2.getAddress(),
+				rseStack, booleanStack);
+
+			if (!binaryNode->arg1 && !binaryNode->arg2)
+				*parentBoolean = nullptr;
+			else if (!binaryNode->arg1)
+				*parentBoolean = binaryNode->arg2;
+			else if (!binaryNode->arg2)
+				*parentBoolean = binaryNode->arg1;
+
+			return (found1 || found2);
+		}
+
+		const auto rseNode = nodeAs<RseBoolNode>(boolNode);
+		// Both EXISTS (blr_any) and IN (blr_ansi_any) sub-queries are handled
+		if (rseNode && (rseNode->blrOp == blr_any || rseNode->blrOp == blr_ansi_any))
+		{
+			auto rse = rseNode->rse;
+			fb_assert(rse);
+
+			if (rse->rse_boolean)
+			{
+				StreamList streams;
+				rse->computeRseStreams(streams);
+
+				BoolExprNodeStack booleans;
+				if (findDependentBooleans(csb, streams,
+										  rse->rse_boolean.getAddress(),
+										  booleans))
+				{
+					fb_assert(booleans.hasData());
+					auto boolean = booleans.pop();
+					while (booleans.hasData())
+					{
+						const auto andNode = FB_NEW_POOL(csb->csb_pool)
+							BinaryBoolNode(csb->csb_pool, blr_and);
+						andNode->arg1 = boolean;
+						andNode->arg2 = booleans.pop();
+						boolean = andNode;
+					}
+
+					rse->flags |= RseNode::FLAG_SEMI_JOINED;
+					rseStack.push(rse);
+					booleanStack.push(boolean);
+					*parentBoolean = nullptr;
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+}
 
 //--------------------
 
@@ -2994,6 +3112,9 @@ RseNode* RseNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 {
 	SET_TDBB(tdbb);
 
+	if (const auto newRse = processPossibleJoins(tdbb, csb))
+		return newRse->pass1(tdbb, csb);
+
 	// for scoping purposes, maintain a stack of RseNode's which are
 	// currently being parsed; if there are none on the stack as
 	// yet, mark the RseNode as variant to make sure that statement-
@@ -3099,6 +3220,12 @@ RseNode* RseNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 void RseNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 	BoolExprNode** boolean, RecordSourceNodeStack& stack)
 {
+	if (const auto newRse = processPossibleJoins(tdbb, csb))
+	{
+		newRse->pass1Source(tdbb, csb, rse, boolean, stack);
+		return;
+	}
+
 	if (rse_jointype != blr_inner)
 	{
 		// Check whether any of the upper level booleans (those belonging to the WHERE clause)
@@ -3152,7 +3279,7 @@ void RseNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 		}
 	}
 
-	// in the case of an RseNode, it is possible that a new RseNode will be generated,
+	// In the case of an RseNode, it is possible that a new RseNode will be generated,
 	// so wait to process the source before we push it on the stack (bug 8039)
 
 	// The addition of the JOIN syntax for specifying inner joins causes an
@@ -3160,7 +3287,7 @@ void RseNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 	// where we are just trying to inner join more than 2 streams. If possible,
 	// try to flatten the tree out before we go any further.
 
-	if (!isLateral() &&
+	if (!isLateral() && !isSemiJoined() &&
 		rse->rse_jointype == blr_inner &&
 		rse_jointype == blr_inner &&
 		!rse_sorted && !rse_projection &&
@@ -3265,11 +3392,11 @@ RecordSource* RseNode::compile(thread_db* tdbb, Optimizer* opt, bool innerSubStr
 
 		StreamStateHolder stateHolder(csb, opt->getOuterStreams());
 
-		if (opt->isLeftJoin() || isLateral())
+		if (opt->isLeftJoin() || isLateral() || isSemiJoined())
 		{
 			stateHolder.activate();
 
-			if (opt->isLeftJoin())
+			if (opt->isLeftJoin() || isSemiJoined())
 			{
 				// Push all conjuncts except "missing" ones (e.g. IS NULL)
 				for (auto iter = opt->getConjuncts(false, true); iter.hasData(); ++iter)
@@ -3290,6 +3417,42 @@ RecordSource* RseNode::compile(thread_db* tdbb, Optimizer* opt, bool innerSubStr
 		conjunctStack.push(iter);
 
 	return opt->compile(this, &conjunctStack);
+}
+
+RseNode* RseNode::processPossibleJoins(thread_db* tdbb, CompilerScratch* csb)
+{
+	if (rse_jointype != blr_inner || !rse_boolean)
+		return nullptr;
+
+	RecordSourceNodeStack rseStack;
+	BoolExprNodeStack booleanStack;
+
+	// Find possibly joinable sub-queries
+
+	if (!findPossibleJoins(csb, rse_boolean.getAddress(), rseStack, booleanStack))
+		return nullptr;
+
+	fb_assert(rseStack.hasData() && booleanStack.hasData());
+	fb_assert(rseStack.getCount() == booleanStack.getCount());
+
+	// Create joins between the original node and detected joinable nodes
+
+	auto rse = this;
+	while (rseStack.hasData())
+	{
+		const auto newRse = FB_NEW_POOL(*tdbb->getDefaultPool())
+			RseNode(*tdbb->getDefaultPool());
+
+		newRse->rse_relations.add(rse);
+		newRse->rse_relations.add(rseStack.pop());
+
+		newRse->rse_jointype = blr_inner;
+		newRse->rse_boolean = booleanStack.pop();
+
+		rse = newRse;
+	}
+
+	return rse;
 }
 
 // Check that all streams in the RseNode have a plan specified for them.
