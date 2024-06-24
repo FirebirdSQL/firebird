@@ -316,8 +316,11 @@ int CLIB_ROUTINE main( int argc, char** argv)
 		ISC_set_prefix(0, 0);
 
 		// set shutdown signals handler for listener
-		set_signal(SIGTERM, shutdown_handler);
-		set_signal(SIGINT, shutdown_handler);
+		if (standaloneClassic)
+		{
+			set_signal(SIGTERM, shutdown_handler);
+			set_signal(SIGINT, shutdown_handler);
+		}
 
 		// ignore some signals
 		set_signal(SIGPIPE, signal_handler);
@@ -513,8 +516,11 @@ int CLIB_ROUTINE main( int argc, char** argv)
 		}
 
 		// set default handlers for child processes
-		signal(SIGTERM, SIG_DFL);
-		signal(SIGINT, SIG_DFL);
+		if (standaloneClassic)
+		{
+			signal(SIGTERM, SIG_DFL);
+			signal(SIGINT, SIG_DFL);
+		}
 
 		if (classic)
 		{
