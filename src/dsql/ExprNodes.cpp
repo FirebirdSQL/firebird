@@ -9780,7 +9780,7 @@ void ParameterNode::getDesc(thread_db* /*tdbb*/, CompilerScratch* csb, dsc* desc
 	if (!message)
 		status_exception::raise(Arg::Gds(isc_badmsgnum));
 
-	const auto format = message->format;
+	const auto format = message->getFormat(nullptr);
 
 	if (argNumber >= format->fmt_count)
 		status_exception::raise(Arg::Gds(isc_badparnum));
@@ -9813,7 +9813,7 @@ ParameterNode* ParameterNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 	if (!message)
 		status_exception::raise(Arg::Gds(isc_badmsgnum));
 
-	const auto format = message->format;
+	const auto format = message->getFormat(nullptr);
 
 	if (argNumber >= format->fmt_count)
 		status_exception::raise(Arg::Gds(isc_badparnum));
@@ -9887,7 +9887,7 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 
 	// Parameters preserve message number during mapping
 	MessageNode* message = paramRequest->getStatement()->messages[messageNumber];
-	desc = &message->format->fmt_desc[argNumber];
+	desc = &message->getFormat(paramRequest)->fmt_desc[argNumber];
 
 	retDesc->dsc_address = message->getBuffer(paramRequest) + (IPTR) desc->dsc_address;
 	retDesc->dsc_dtype = desc->dsc_dtype;

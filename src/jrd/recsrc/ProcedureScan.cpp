@@ -90,7 +90,7 @@ void ProcedureScan::internalOpen(thread_db* tdbb) const
 
 	if (m_sourceList)
 	{
-		iml = m_message->format->fmt_length;
+		iml = m_message->getFormat(request)->fmt_length;
 		im = m_message->getBuffer(request);
 
 		const NestConst<ValueExprNode>* const sourceEnd = m_sourceList->items.end();

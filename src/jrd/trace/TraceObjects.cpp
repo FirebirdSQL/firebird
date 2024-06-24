@@ -412,7 +412,7 @@ void TraceDscFromValues::fillParams()
 		{
 			//const impure_value* impure = m_request->getImpure<impure_value>(param->impureOffset)
 			const MessageNode* message = m_request->getStatement()->messages[param->messageNumber];
-			const Format* format = message->format;
+			const Format* format = message->getFormat(m_request);
 			const int arg_number = param->argNumber;
 
 			desc = format->fmt_desc[arg_number];

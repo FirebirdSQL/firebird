@@ -145,7 +145,7 @@ dsc* EVL_assign_to(thread_db* tdbb, const ValueExprNode* node)
 		auto paramRequest = paramNode->getParamRequest(request);
 		auto message = paramRequest->getStatement()->messages[paramNode->messageNumber];
 		auto arg_number = paramNode->argNumber;
-		auto desc = &message->format->fmt_desc[arg_number];
+		auto desc = &message->getFormat(request)->fmt_desc[arg_number];
 
 		auto impure = request->getImpure<impure_value>(node->impureOffset);
 

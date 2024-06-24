@@ -728,12 +728,12 @@ void EXE_receive(thread_db* tdbb,
 		if (request->req_flags & req_active)
 		{
 			const MessageNode* message = nodeAs<MessageNode>(request->req_message);
-			const Format* format = message->format;
 
 			// Sanity checks first
-			if (msg != message->messageNumber)
-				ERR_post(Arg::Gds(isc_req_sync) << Arg::Gds(isc_random) << Arg::Str("Request got wrong message number"));
+			if (message == nullptr || msg != message->messageNumber)
+				ERR_post(Arg::Gds(isc_req_sync) << Arg::Gds(isc_random) << Arg::Str("Request got wrong message"));
 
+			const Format* format = message->getFormat(request);
 			if (length != format->fmt_length)
 				ERR_post(Arg::Gds(isc_port_len) << Arg::Num(length) << Arg::Num(format->fmt_length));
 
@@ -922,7 +922,7 @@ void EXE_send(thread_db* tdbb, Request* request, USHORT msg, ULONG length, const
 		BUGCHECK(167);	// msg 167 invalid SEND request
 
 	const auto messageNode = nodeAs<MessageNode>(message);
-	const auto format = messageNode->format;
+	const auto format = messageNode->getFormat(request);
 
 	if (msg != messageNode->messageNumber)
 		ERR_post(Arg::Gds(isc_req_sync));

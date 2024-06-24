@@ -3902,7 +3902,7 @@ void ExecProcedureNode::executeProcedure(thread_db* tdbb, Request* request) cons
 
 	if (inputMessage)
 	{
-		inMsgLength = inputMessage->format->fmt_length;
+		inMsgLength = inputMessage->getFormat(request)->fmt_length;
 		inMsg = inputMessage->getBuffer(request);
 	}
 
@@ -3914,7 +3914,7 @@ void ExecProcedureNode::executeProcedure(thread_db* tdbb, Request* request) cons
 	if (outputMessage)
 	{
 		// These buffers are not actually needed, this method can map procedure data buffers to caller's data buffers directly
-		format = outputMessage->format;
+		format = outputMessage->getFormat(request);
 		outMsgLength = format->fmt_length;
 		outMsg = outputMessage->getBuffer(request);
 	}
@@ -7090,7 +7090,7 @@ void MessageNode::setup(thread_db* tdbb, CompilerScratch* csb, USHORT message, U
 	bool shouldPad = csb->csb_message_pad.get(messageNumber, padField);
 
 	// Get the number of parameters in the message and prepare to fill out the format block.
-
+	fb_assert(format == nullptr);
 	format = Format::newFormat(*tdbb->getDefaultPool(), count);
 	USHORT maxAlignment = 0;
 	ULONG offset = 0;
@@ -7195,7 +7195,19 @@ UCHAR* MessageNode::getBuffer(Request* request) const
 		buffer->buffer = reinterpret_cast<UCHAR*>(request->req_pool->calloc(format->fmt_length ALLOC_ARGS));
 	}
 	return buffer->buffer;
+}
 
+const Format* MessageNode::getFormat(const Request* request) const
+{
+	if (request != nullptr)
+	{
+		const MessageBuffer* buffer = request->getImpure<const MessageBuffer>(impureOffset);
+		if (buffer->format != nullptr)
+		{
+			return buffer->format;
+		}
+	}
+	return format.getObject();
 }
 
 //--------------------

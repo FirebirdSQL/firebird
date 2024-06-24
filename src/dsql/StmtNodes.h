@@ -1125,6 +1125,14 @@ public:
 		: TypedNode<StmtNode, StmtNode::TYPE_MESSAGE>(pool)
 	{
 	}
+	// This constructor is temporary workaround for copying of existing format.
+	// For details look at comment in CMP_procedure_arguments()
+	explicit MessageNode(MemoryPool& pool, const Format& oldFormat)
+		: TypedNode<StmtNode, StmtNode::TYPE_MESSAGE>(pool)
+	{
+		format = Format::newFormat(pool, oldFormat.fmt_count);
+		*format = oldFormat;
+	}
 
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
@@ -1143,14 +1151,15 @@ public:
 	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
 
 	UCHAR* getBuffer(Request* request) const;
+	const Format* getFormat(const Request* request) const;
 
 public:
-	NestConst<Format> format;
 	ULONG impureFlags = 0;
 	USHORT messageNumber = 0;
 
 private:
 	using StmtNode::impureOffset; // Made private to incapsulate it's interpretation logic
+	NestConst<Format> format;
 };
 
 
