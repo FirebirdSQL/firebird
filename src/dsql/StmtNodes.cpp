@@ -7192,7 +7192,8 @@ UCHAR* MessageNode::getBuffer(Request* request) const
 	MessageBuffer* buffer = request->getImpure<MessageBuffer>(impureOffset);
 	if (buffer->buffer == nullptr)
 	{
-		buffer->buffer = reinterpret_cast<UCHAR*>(request->req_pool->calloc(format->fmt_length ALLOC_ARGS));
+		size_t length = buffer->format == nullptr ? format->fmt_length : buffer->format->fmt_length;
+		buffer->buffer = reinterpret_cast<UCHAR*>(request->req_pool->calloc(length ALLOC_ARGS));
 	}
 	return buffer->buffer;
 }
@@ -7208,6 +7209,27 @@ const Format* MessageNode::getFormat(const Request* request) const
 		}
 	}
 	return format.getObject();
+}
+
+void MessageNode::setFormat(Request* request, Format* newFormat)
+{
+	fb_assert(request != nullptr);
+	MessageBuffer* buffer = request->getImpure<MessageBuffer>(impureOffset);
+	ULONG oldLength = format->fmt_length;
+	if (buffer->format != nullptr)
+	{
+		oldLength = buffer->format->fmt_length;
+		delete buffer->format;
+	}
+	buffer->format = newFormat;
+
+	// Take care about existing buffer because it is the last point where its size is (roughly) known
+	if (buffer->buffer != nullptr && oldLength < newFormat->fmt_length)
+	{
+		request->req_pool->deallocate(buffer->buffer);
+		buffer->buffer = nullptr;
+		// but leave allocation of the new buffer to following getBuffer() if any
+	}
 }
 
 //--------------------

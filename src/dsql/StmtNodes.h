@@ -1152,6 +1152,7 @@ public:
 
 	UCHAR* getBuffer(Request* request) const;
 	const Format* getFormat(const Request* request) const;
+	void setFormat(Request* request, Format* newFormat);
 
 public:
 	ULONG impureFlags = 0;

@@ -25,6 +25,7 @@
 #include "../dsql/DsqlBatch.h"
 ///#include "../dsql/DsqlStatementCache.h"
 #include "../dsql/Nodes.h"
+#include "../dsql/StmtNodes.h"
 #include "../jrd/Statement.h"
 #include "../jrd/req.h"
 #include "../jrd/tra.h"
@@ -382,13 +383,16 @@ bool DsqlDmlRequest::fetch(thread_db* tdbb, UCHAR* msgBuffer)
 				  Arg::Gds(isc_unprepared_stmt));
 	}
 
-	dsql_msg* message = (dsql_msg*) dsqlStatement->getReceiveMsg();
+	const dsql_msg* message = dsqlStatement->getReceiveMsg();
+	MessageNode* msg = dsqlStatement->getStatement()->messages[message->msg_number];
 
 	if (delayedFormat && message)
 	{
-		parseMetadata(delayedFormat, message->msg_parameters);
+		metadataToFormat(delayedFormat, msg);
 		delayedFormat = NULL;
 	}
+
+	const Format* fmt = msg->getFormat(request);
 
 	// Set up things for tracing this call
 	Jrd::Attachment* att = req_dbb->dbb_attachment;
@@ -408,7 +412,6 @@ bool DsqlDmlRequest::fetch(thread_db* tdbb, UCHAR* msgBuffer)
 	if (req_timer && req_timer->expired())
 		tdbb->checkCancelState();
 
-	UCHAR* dsqlMsgBuffer = req_msg_buffers[message->msg_buffer_number];
 	if (!firstRowFetched && needRestarts())
 	{
 		// Note: tra_handle can't be changed by executeReceiveWithRestarts below
@@ -420,7 +423,7 @@ bool DsqlDmlRequest::fetch(thread_db* tdbb, UCHAR* msgBuffer)
 	}
 	else
 	{
-		JRD_receive(tdbb, request, message->msg_number, message->msg_length, dsqlMsgBuffer);
+		JRD_receive(tdbb, request, msg->messageNumber, fmt->fmt_length, msgBuffer);
 	}
 
 	firstRowFetched = true;
@@ -432,14 +435,6 @@ bool DsqlDmlRequest::fetch(thread_db* tdbb, UCHAR* msgBuffer)
 
 		trace.fetch(true, ITracePlugin::RESULT_SUCCESS);
 		return false;
-	}
-
-	if (msgBuffer)
-	{
-		Request* old = tdbb->getRequest();
-		Cleanup restoreRequest([tdbb, old] {tdbb->setRequest(old);});
-		tdbb->setRequest(request);
-		mapInOut(tdbb, true, message, NULL, msgBuffer);
 	}
 
 	trace.fetch(false, ITracePlugin::RESULT_SUCCESS);
@@ -605,65 +600,67 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 		outMetadata = NULL;
 	}
 
-	if (outMetadata && message)
+	if (message)
 	{
-		parseMetadata(outMetadata, message->msg_parameters);
-	}
-
-	if (outMsg && message)
-	{
-		UCHAR* msgBuffer = req_msg_buffers[message->msg_buffer_number];
-
-		JRD_receive(tdbb, request, message->msg_number, message->msg_length, msgBuffer);
+		MessageNode* msg = dsqlStatement->getStatement()->messages[message->msg_number];
+		if (outMetadata)
+		{
+			metadataToFormat(outMetadata, msg);
+		}
 
 		if (outMsg)
-			mapInOut(tdbb, true, message, NULL, outMsg);
-
-		// if this is a singleton select, make sure there's in fact one record
-
-		if (singleton && (request->req_flags & req_active))
 		{
-			USHORT counter;
-
-			// Create a temp message buffer and try two more receives.
-			// If both succeed then the first is the next record and the
-			// second is either another record or the end of record message.
-			// In either case, there's more than one record.
-
-			UCHAR* message_buffer = (UCHAR*) gds__alloc(message->msg_length);
-
-			ISC_STATUS status = FB_SUCCESS;
 			FbLocalStatus localStatus;
+			ULONG outMsgLength = outMetadata->getMessageLength(&localStatus);
+			checkD(&localStatus);
 
-			for (counter = 0; counter < 2 && !status; counter++)
+			JRD_receive(tdbb, request, message->msg_number, outMsgLength, outMsg);
+
+			// if this is a singleton select, make sure there's in fact one record
+
+			if (singleton && (request->req_flags & req_active))
 			{
-				localStatus->init();
-				AutoSetRestore<Jrd::FbStatusVector*> autoStatus(&tdbb->tdbb_status_vector, &localStatus);
+				USHORT counter;
 
-				try
+				// Create a temp message buffer and try two more receives.
+				// If both succeed then the first is the next record and the
+				// second is either another record or the end of record message.
+				// In either case, there's more than one record.
+
+				UCHAR* message_buffer = (UCHAR*) gds__alloc(outMsgLength);
+
+				ISC_STATUS status = FB_SUCCESS;
+
+				for (counter = 0; counter < 2 && !status; counter++)
 				{
-					JRD_receive(tdbb, request, message->msg_number,
-						message->msg_length, message_buffer);
-					status = FB_SUCCESS;
+					localStatus->init();
+					AutoSetRestore<Jrd::FbStatusVector*> autoStatus(&tdbb->tdbb_status_vector, &localStatus);
+
+					try
+					{
+						JRD_receive(tdbb, request, message->msg_number,
+							outMsgLength, message_buffer);
+						status = FB_SUCCESS;
+					}
+					catch (Exception&)
+					{
+						status = tdbb->tdbb_status_vector->getErrors()[1];
+					}
 				}
-				catch (Exception&)
-				{
-					status = tdbb->tdbb_status_vector->getErrors()[1];
-				}
+
+				gds__free(message_buffer);
+
+				// two successful receives means more than one record
+				// a req_sync error on the first pass above means no records
+				// a non-req_sync error on any of the passes above is an error
+
+				if (!status)
+					status_exception::raise(Arg::Gds(isc_sing_select_err));
+				else if (status == isc_req_sync && counter == 1)
+					status_exception::raise(Arg::Gds(isc_stream_eof));
+				else if (status != isc_req_sync)
+					status_exception::raise(&localStatus);
 			}
-
-			gds__free(message_buffer);
-
-			// two successful receives means more than one record
-			// a req_sync error on the first pass above means no records
-			// a non-req_sync error on any of the passes above is an error
-
-			if (!status)
-				status_exception::raise(Arg::Gds(isc_sing_select_err));
-			else if (status == isc_req_sync && counter == 1)
-				status_exception::raise(Arg::Gds(isc_stream_eof));
-			else if (status != isc_req_sync)
-				status_exception::raise(&localStatus);
 		}
 	}
 
@@ -761,9 +758,10 @@ void DsqlDmlRequest::executeReceiveWithRestarts(thread_db* tdbb, jrd_tra** traHa
 				fb_assert(dsqlStatement->isCursorBased());
 
 				const dsql_msg* message = dsqlStatement->getReceiveMsg();
+				MessageNode* msg = dsqlStatement->getStatement()->messages[message->msg_number];
+				const Format* fmt = msg->getFormat(request);
 
-				UCHAR* dsqlMsgBuffer = req_msg_buffers[message->msg_buffer_number];
-				JRD_receive(tdbb, request, message->msg_number, message->msg_length, dsqlMsgBuffer);
+				JRD_receive(tdbb, request, message->msg_number, fmt->fmt_length, outMsg);
 			}
 		}
 		catch (const status_exception&)
@@ -1006,6 +1004,61 @@ void DsqlDmlRequest::mapInOut(thread_db* tdbb, bool toExternal, const dsql_msg* 
 			*flag = 0;
 		}
 	}
+}
+
+void DsqlDmlRequest::metadataToFormat(Firebird::IMessageMetadata* meta, Jrd::MessageNode* message)
+{
+	FbLocalStatus st;
+	unsigned count = meta->getCount(&st);
+	checkD(&st);
+
+	unsigned count2 = message->getFormat(nullptr)->fmt_count;
+
+	if (count * 2 != count2)
+	{
+		ERRD_post(Arg::Gds(isc_dsql_sqlda_err) <<
+				  Arg::Gds(isc_dsql_wrong_param_num) <<Arg::Num(count2) << Arg::Num(count));
+	}
+
+	// Dumb pointer is fine: on error request pool will be destructed anyway
+	Format* newFormat = Format::newFormat(*request->req_pool, count2);
+
+	newFormat->fmt_length = meta->getMessageLength(&st);
+	checkD(&st);
+
+	for (unsigned index = 0; index < count; ++index)
+	{
+		unsigned sqlType = meta->getType(&st, index);
+		checkD(&st);
+		unsigned sqlLength = meta->getLength(&st, index);
+		checkD(&st);
+
+		// For unknown reason parameters in Format has reversed order
+		dsc& desc = newFormat->fmt_desc[count2 - index * 2 - 1];
+		desc.dsc_flags = 0;
+		desc.dsc_dtype = fb_utils::sqlTypeToDscType(sqlType);
+		desc.dsc_length = sqlLength;
+		if (sqlType == SQL_VARYING)
+			desc.dsc_length += sizeof(USHORT);
+		desc.dsc_scale = meta->getScale(&st, index);
+		checkD(&st);
+		desc.dsc_sub_type = meta->getSubType(&st, index);
+		checkD(&st);
+		unsigned textType = meta->getCharSet(&st, index);
+		checkD(&st);
+		desc.setTextType(textType);
+		desc.dsc_address = (UCHAR*)(IPTR) meta->getOffset(&st, index);
+		checkD(&st);
+
+		dsc& null = newFormat->fmt_desc[count2 - index * 2 - 2];
+		null.dsc_dtype = dtype_short;
+		null.dsc_scale = 0;
+		null.dsc_length = sizeof(SSHORT);
+		null.dsc_address = (UCHAR*)(IPTR) meta->getNullOffset(&st, index);
+		checkD(&st);
+	}
+
+	message->setFormat(request, newFormat);
 }
 
 
