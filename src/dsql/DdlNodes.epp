@@ -1902,16 +1902,45 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 						// CVC: This is case of "returns <type> [by value|reference]".
 						// Some data types can not be returned as value.
 
-						if (returnType->udfMechanism.value == FUN_value &&
-							(field->dtype == dtype_text || field->dtype == dtype_varying ||
-							 field->dtype == dtype_cstring || field->dtype == dtype_blob ||
-							 field->dtype == dtype_timestamp))
+						if (returnType->udfMechanism.value == FUN_value)
 						{
-							// Return mode by value not allowed for this data type.
-							status_exception::raise(
-								Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-								Arg::Gds(isc_dsql_command_err) <<
-								Arg::Gds(isc_return_mode_err));
+							switch(field->dtype)
+							{
+								case dtype_short:
+								case dtype_long:
+								case dtype_int64:
+								case dtype_real:
+								case dtype_double:
+								case dtype_d_float: //deprecated
+								case dtype_boolean:
+								case dtype_sql_date:
+								case dtype_sql_time:
+									break;
+								case dtype_text:
+								case dtype_varying:
+								case dtype_cstring:
+								case dtype_blob:
+								case dtype_timestamp:
+								case dtype_dec64:
+								case dtype_dec128:
+								case dtype_int128: //it is a structure
+								case dtype_timestamp_tz:
+								case dtype_sql_time_tz:
+								{
+									// Return mode by value not allowed for this data type.
+									status_exception::raise(
+										Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+										Arg::Gds(isc_dsql_command_err) <<
+										Arg::Gds(isc_return_mode_err));
+								}
+								default:
+								{
+									fb_assert(false); // it is an abnormal situation
+									status_exception::raise(
+										Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+										Arg::Gds(isc_random) << Arg::Str("UDF returns an unknown data type"));
+								}
+							}
 						}
 
 						// For functions returning a blob, coerce return argument position to
