@@ -418,7 +418,7 @@ bool DsqlDmlRequest::fetch(thread_db* tdbb, UCHAR* msgBuffer)
 		// and outMetadata and outMsg in not used there, so passing NULL's is safe.
 		jrd_tra* tra = req_transaction;
 
-		executeReceiveWithRestarts(tdbb, &tra, NULL, NULL, false, false, true);
+		executeReceiveWithRestarts(tdbb, &tra, NULL, msgBuffer, false, false, true);
 		fb_assert(tra == req_transaction);
 	}
 	else
@@ -579,7 +579,9 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 	const dsql_msg* message = dsqlStatement->getSendMsg();
 
 	if (!message)
+	{
 		JRD_start(tdbb, request, req_transaction);
+	}
 	else
 	{
 		UCHAR* msgBuffer = req_msg_buffers[message->msg_buffer_number];
@@ -610,9 +612,8 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 
 		if (outMsg)
 		{
-			FbLocalStatus localStatus;
-			ULONG outMsgLength = outMetadata->getMessageLength(&localStatus);
-			checkD(&localStatus);
+			// outMetadata can be nullptr. If not - it is already converted to message above
+			ULONG outMsgLength = msg->getFormat(request)->fmt_length;
 
 			JRD_receive(tdbb, request, message->msg_number, outMsgLength, outMsg);
 
@@ -620,46 +621,18 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 
 			if (singleton && (request->req_flags & req_active))
 			{
-				USHORT counter;
+				// Create a temp message buffer and try one more receive.
+				// If it succeed then the next record exists.
 
-				// Create a temp message buffer and try two more receives.
-				// If both succeed then the first is the next record and the
-				// second is either another record or the end of record message.
-				// In either case, there's more than one record.
+				std::unique_ptr<UCHAR[]> message_buffer(new UCHAR[outMsgLength]);
 
-				UCHAR* message_buffer = (UCHAR*) gds__alloc(outMsgLength);
+				JRD_receive(tdbb, request, message->msg_number, outMsgLength, message_buffer.get());
 
-				ISC_STATUS status = FB_SUCCESS;
-
-				for (counter = 0; counter < 2 && !status; counter++)
+				// Still active request means that second record exists
+				if ((request->req_flags & req_active))
 				{
-					localStatus->init();
-					AutoSetRestore<Jrd::FbStatusVector*> autoStatus(&tdbb->tdbb_status_vector, &localStatus);
-
-					try
-					{
-						JRD_receive(tdbb, request, message->msg_number,
-							outMsgLength, message_buffer);
-						status = FB_SUCCESS;
-					}
-					catch (Exception&)
-					{
-						status = tdbb->tdbb_status_vector->getErrors()[1];
-					}
-				}
-
-				gds__free(message_buffer);
-
-				// two successful receives means more than one record
-				// a req_sync error on the first pass above means no records
-				// a non-req_sync error on any of the passes above is an error
-
-				if (!status)
 					status_exception::raise(Arg::Gds(isc_sing_select_err));
-				else if (status == isc_req_sync && counter == 1)
-					status_exception::raise(Arg::Gds(isc_stream_eof));
-				else if (status != isc_req_sync)
-					status_exception::raise(&localStatus);
+				}
 			}
 		}
 	}
@@ -813,6 +786,8 @@ void DsqlDmlRequest::executeReceiveWithRestarts(thread_db* tdbb, jrd_tra** traHa
 
 		// When restart we must execute query
 		exec = true;
+		// Next fetch will be performed by doExecute(), so do not call JRD_receive again
+		fetch = false;
 	}
 }
 

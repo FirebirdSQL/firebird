@@ -465,7 +465,7 @@ public:
 	{
 		return reinterpret_cast<T*>(&impureArea[offset]);
 	}
-	template <typename T> T* getImpure(unsigned offset) const
+	template <typename T> const T* getImpure(unsigned offset) const
 	{
 		return reinterpret_cast<const T*>(&impureArea[offset]);
 	}
