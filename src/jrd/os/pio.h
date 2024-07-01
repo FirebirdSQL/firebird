@@ -46,8 +46,9 @@ public:
 	ULONG fil_max_page;			// Maximum page number in file
 	USHORT fil_sequence;		// Sequence number of file
 	USHORT fil_fudge;			// Fudge factor for page relocation
-	int fil_desc;
+	int fil_desc;				// Lock fil_desc_lock before using
 	Firebird::Mutex fil_mutex;
+	mutable Firebird::RWLock fil_desc_lock;
 	USHORT fil_flags;
 	SCHAR fil_string[1];		// Expanded file name
 };
@@ -74,8 +75,9 @@ public:
 	ULONG fil_max_page;					// Maximum page number in file
 	USHORT fil_sequence;				// Sequence number of file
 	USHORT fil_fudge;					// Fudge factor for page relocation
-	HANDLE fil_desc;					// File descriptor
+	HANDLE fil_desc;					// File descriptor, lock fil_desc_lock before using
 	Firebird::RWLock* fil_ext_lock;		// file extend lock
+	mutable Firebird::RWLock fil_desc_lock;
 	USHORT fil_flags;
 	SCHAR fil_string[1];				// Expanded file name
 };

@@ -309,9 +309,13 @@ void BackupManager::beginBackup(thread_db* tdbb)
 			PageSpace* pageSpace = database->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 			const char* func = NULL;
 
-			if (os_utils::fstat(pageSpace->file->fil_desc, &st) != 0)
 			{
-				func = "fstat";
+				jrd_file* file = pageSpace->file;
+				ReadLockGuard readGuard(file->fil_desc_lock, FB_FUNCTION);
+				if (os_utils::fstat(file->fil_desc, &st) != 0)
+				{
+					func = "fstat";
+				}
 			}
 
 			while (!func && fchown(diff_file->fil_desc, st.st_uid, st.st_gid) != 0)
