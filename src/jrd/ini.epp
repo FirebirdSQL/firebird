@@ -138,15 +138,9 @@ namespace
 		{ "RDB$TRIGGER_19", (UCHAR) nam_indices,
 			RDB$TRIGGERS.RDB$TRIGGER_TYPE.PRE_ERASE, sizeof(trigger19), trigger19,
 			0, ODS_8_0 },
-		{ "RDB$TRIGGER_20", (UCHAR) nam_indices,
-			RDB$TRIGGERS.RDB$TRIGGER_TYPE.PRE_MODIFY, sizeof(trigger20),
-			trigger20, 0, ODS_8_0 },
 		{ "RDB$TRIGGER_21", (UCHAR) nam_trgs,
 			RDB$TRIGGERS.RDB$TRIGGER_TYPE.PRE_ERASE, sizeof(trigger21), trigger21,
 			0, ODS_8_0 },
-		{ "RDB$TRIGGER_22", (UCHAR) nam_trgs,
-			RDB$TRIGGERS.RDB$TRIGGER_TYPE.PRE_MODIFY, sizeof(trigger22),
-			trigger22, 0, ODS_8_0 },
 		{ "RDB$TRIGGER_23", (UCHAR) nam_r_fields,
 			RDB$TRIGGERS.RDB$TRIGGER_TYPE.PRE_ERASE, sizeof(trigger23), trigger23,
 			0, ODS_8_0 },
@@ -183,11 +177,7 @@ namespace
 		{ "RDB$TRIGGER_3", 0, "systrig_update", ODS_8_0 },
 		{ "RDB$TRIGGER_24", 1, "cnstrnt_fld_rename", ODS_8_0 },
 		{ "RDB$TRIGGER_23", 1, "cnstrnt_fld_del", ODS_8_0 },
-		{ "RDB$TRIGGER_22", 1, "check_trig_update", ODS_8_0 },
 		{ "RDB$TRIGGER_21", 1, "check_trig_del", ODS_8_0 },
-		{ "RDB$TRIGGER_20", 1, "integ_index_mod", ODS_8_0 },
-		{ "RDB$TRIGGER_20", 2, "integ_index_deactivate", ODS_8_0 },
-		{ "RDB$TRIGGER_20", 3, "integ_deactivate_primary", ODS_8_0 },
 		{ "RDB$TRIGGER_19", 1, "integ_index_del", ODS_8_0 },
 		{ "RDB$TRIGGER_18", 1, "integ_index_seg_mod", ODS_8_0 },
 		{ "RDB$TRIGGER_17", 1, "integ_index_seg_del", ODS_8_0 },
@@ -539,7 +529,7 @@ namespace
 			const char* users[] = {userName, "PUBLIC"};
 			int grantOptions[] = {WITH_GRANT_OPTION, 0};
 
-			for (unsigned i = 0; i < FB_NELEM(users); i++)
+			for (int i = 0; i < FB_NELEM(users); i++)
 			{
 				STORE(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
 					PRIV IN RDB$USER_PRIVILEGES
@@ -1378,6 +1368,32 @@ void INI_upgrade(thread_db* tdbb)
 	context = "triggers";
 	handle.reset();
 
+	// To be able to erase system triggers we must deactivate trigger4 first
+	jrd_rel* relTriggers = MET_lookup_relation_id(tdbb, rel_triggers, false);
+	relTriggers->rel_pre_erase->clear();
+
+	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
+		TRG IN RDB$TRIGGERS
+		WITH TRG.RDB$SYSTEM_FLAG EQ 1
+	{
+		fb_utils::exact_name(TRG.RDB$TRIGGER_NAME);
+		bool found = false;
+		for (const jrd_trg* trigger = triggers; trigger->trg_name; ++trigger)
+		{
+			if (strcmp(TRG.RDB$TRIGGER_NAME, trigger->trg_name) == 0)
+			{
+				found = true;
+				break;
+			}
+		}
+		if (!found)
+		{
+			ERASE TRG;
+		}
+	}
+	END_FOR
+	handle.reset();
+
 	for (const jrd_trg* trigger = triggers; trigger->trg_relation; ++trigger)
 	{
 		if (trigger->trg_ods_version > odsVersion)
@@ -1387,6 +1403,27 @@ void INI_upgrade(thread_db* tdbb)
 	context = "trigger messages";
 	handle.reset();
 
+	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
+		MSG IN RDB$TRIGGER_MESSAGES
+	{
+		fb_utils::exact_name(MSG.RDB$TRIGGER_NAME);
+		bool found = false;
+		for (const jrd_trg* trigger = triggers; trigger->trg_name; ++trigger)
+		{
+			if (strcmp(MSG.RDB$TRIGGER_NAME, trigger->trg_name) == 0)
+			{
+				found = true;
+				break;
+			}
+		}
+		if (!found)
+		{
+			ERASE MSG;
+		}
+	}
+	END_FOR
+	handle.reset();
+
 	for (const trigger_msg* message = trigger_messages; message->trigmsg_name; ++message)
 	{
 		if (message->trg_ods_version > odsVersion)
@@ -1394,7 +1431,6 @@ void INI_upgrade(thread_db* tdbb)
 	}
 
 	// Create new system generators
-
 	context = "generators";
 	handle.reset();
 
