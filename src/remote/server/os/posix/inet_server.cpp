@@ -115,6 +115,7 @@ const char* TEMP_DIR = "/tmp";
 
 static void set_signal(int, void (*)(int));
 static void signal_handler(int);
+static void shutdown_handler(int);
 
 static TEXT protocol[128];
 static int INET_SERVER_start = 0;
@@ -314,6 +315,13 @@ int CLIB_ROUTINE main( int argc, char** argv)
 		// activate paths set with -e family of switches
 		ISC_set_prefix(0, 0);
 
+		// set shutdown signals handler for listener
+		if (standaloneClassic)
+		{
+			set_signal(SIGTERM, shutdown_handler);
+			set_signal(SIGINT, shutdown_handler);
+		}
+
 		// ignore some signals
 		set_signal(SIGPIPE, signal_handler);
 		set_signal(SIGUSR1, signal_handler);
@@ -507,6 +515,13 @@ int CLIB_ROUTINE main( int argc, char** argv)
 			}
 		}
 
+		// set default handlers for child processes
+		if (standaloneClassic)
+		{
+			signal(SIGTERM, SIG_DFL);
+			signal(SIGINT, SIG_DFL);
+		}
+
 		if (classic)
 		{
 			port = INET_server(channel);
@@ -631,6 +646,23 @@ static void signal_handler(int)
 	++INET_SERVER_start;
 }
 
+static void shutdown_handler(int)
+{
+/**************************************
+ *
+ *	s h u t d o w n _ h a n d l e r
+ *
+ **************************************
+ *
+ * Functional description
+ *	Forward sigterm signal to all child processes.
+ *
+ **************************************/
+
+	kill(-1 * getpid(), SIGTERM);
+
+	exit(FINI_OK);
+}
 
 #ifdef FB_RAISE_LIMITS
 static void raiseLimit(int resource)
