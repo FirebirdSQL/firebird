@@ -131,10 +131,6 @@ public:
 	const dsql_msg* getReceiveMsg() const { return receiveMsg; }
 	void setReceiveMsg(dsql_msg* value) { receiveMsg = value; }
 
-	dsql_par* getEof() { return eof; }
-	const dsql_par* getEof() const { return eof; }
-	void setEof(dsql_par* value) { eof = value; }
-
 	void setCacheKey(Firebird::RefStrPtr& value) { cacheKey = value; }
 	void resetCacheKey() { cacheKey = nullptr; }
 
@@ -182,7 +178,6 @@ protected:
 	Firebird::Array<dsql_msg*> ports;			// Port messages
 	dsql_msg* sendMsg = nullptr;				// Message to be sent to start request
 	dsql_msg* receiveMsg = nullptr;				// Per record message to be received
-	dsql_par* eof = nullptr;					// End of file parameter
 	DsqlCompilerScratch* scratch = nullptr;
 
 private:

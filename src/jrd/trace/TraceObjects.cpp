@@ -411,14 +411,13 @@ void TraceDscFromValues::fillParams()
 		if ((param = nodeAs<ParameterNode>(prm)))
 		{
 			//const impure_value* impure = m_request->getImpure<impure_value>(param->impureOffset)
-			const MessageNode* message = param->message;
-			const Format* format = message->format;
+			const MessageNode* message = m_request->getStatement()->messages[param->messageNumber];
+			const Format* format = message->getFormat(m_request);
 			const int arg_number = param->argNumber;
 
 			desc = format->fmt_desc[arg_number];
 			from_desc = &desc;
-			desc.dsc_address = m_request->getImpure<UCHAR>(
-				message->impureOffset + (IPTR) desc.dsc_address);
+			desc.dsc_address = message->getBuffer(m_request) + (IPTR) desc.dsc_address;
 
 			// handle null flag if present
 			if (param->argFlag)

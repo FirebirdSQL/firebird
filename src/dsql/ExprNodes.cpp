@@ -9584,7 +9584,6 @@ string ParameterNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, dsqlParameterIndex);
 	NODE_PRINT(printer, dsqlParameter);
-	NODE_PRINT(printer, message);
 	NODE_PRINT(printer, argNumber);
 	NODE_PRINT(printer, argFlag);
 	NODE_PRINT(printer, argInfo);
@@ -9601,8 +9600,7 @@ ValueExprNode* ParameterNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 					Arg::Gds(isc_dsql_command_err));
 	}
 
-	auto msg = dsqlMessage ? dsqlMessage :
-		dsqlParameter ? dsqlParameter->par_message :
+	auto msg = dsqlParameter ? dsqlParameter->par_message :
 		dsqlScratch->getDsqlStatement()->getSendMsg();
 
 	auto node = FB_NEW_POOL(dsqlScratch->getPool()) ParameterNode(dsqlScratch->getPool());
@@ -9777,37 +9775,27 @@ Request* ParameterNode::getParamRequest(Request* request) const
 	return paramRequest;
 }
 
-void ParameterNode::getDesc(thread_db* /*tdbb*/, CompilerScratch* /*csb*/, dsc* desc)
+void ParameterNode::getDesc(thread_db* /*tdbb*/, CompilerScratch* csb, dsc* desc)
 {
-	*desc = message->format->fmt_desc[argNumber];
+	auto message = csb->csb_rpt[messageNumber].csb_message;
+	if (!message)
+		status_exception::raise(Arg::Gds(isc_badmsgnum));
+
+	const auto format = message->getFormat(nullptr);
+
+	if (argNumber >= format->fmt_count)
+		status_exception::raise(Arg::Gds(isc_badparnum));
+
+	*desc = format->fmt_desc[argNumber];
 	// Must reset dsc_address because it's used in others places to read literals, but here it was
 	// an offset in the message.
-	desc->dsc_address = NULL;
+	desc->dsc_address = nullptr;
 }
 
 ParameterNode* ParameterNode::copy(thread_db* tdbb, NodeCopier& copier) const
 {
 	ParameterNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) ParameterNode(*tdbb->getDefaultPool());
 	node->argNumber = argNumber;
-
-	// dimitr:	IMPORTANT!!!
-	// nod_message copying must be done in the only place
-	// (the nod_procedure code). Hence we don't call
-	// copy() here to keep argument->nod_arg[e_arg_message]
-	// and procedure->nod_arg[e_prc_in_msg] in sync. The
-	// message is passed to copy() as a parameter. If the
-	// passed message is NULL, it means nod_argument is
-	// cloned outside nod_procedure (e.g. in the optimizer)
-	// and we must keep the input message.
-	// ASF: We should only use "message" if its number matches the number
-	// in nod_argument. If it doesn't, it may be an input parameter cloned
-	// in RseBoolNode::convertNeqAllToNotAny - see CORE-3094.
-
-	if (copier.message && copier.message->messageNumber == messageNumber)
-		node->message = copier.message;
-	else
-		node->message = message;
-
 	node->messageNumber = messageNumber;
 	node->argFlag = copier.copy(tdbb, argFlag);
 	node->outerDecl = outerDecl;
@@ -9817,23 +9805,22 @@ ParameterNode* ParameterNode::copy(thread_db* tdbb, NodeCopier& copier) const
 
 ParameterNode* ParameterNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 {
-	// If message is already defined (for example from ParameterNode::copy), we should not do anything here.
+	if (messageNumber >= csb->csb_rpt.getCount())
+		status_exception::raise(Arg::Gds(isc_badmsgnum));
+
+	outerDecl = csb->outerMessagesMap.exist(messageNumber);
+
+	auto message = csb->csb_rpt[messageNumber].csb_message;
 	if (!message)
-	{
-		if (messageNumber >= csb->csb_rpt.getCount() || !(message = csb->csb_rpt[messageNumber].csb_message))
-			status_exception::raise(Arg::Gds(isc_badmsgnum));
+		status_exception::raise(Arg::Gds(isc_badmsgnum));
 
-		outerDecl = csb->outerMessagesMap.exist(messageNumber);
-	}
-
-	const auto format = message->format;
+	const auto format = message->getFormat(nullptr);
 
 	if (argNumber >= format->fmt_count)
 		status_exception::raise(Arg::Gds(isc_badparnum));
 
 	if (argFlag)
 	{
-		argFlag->message = message;
 		argFlag->outerDecl = outerDecl;
 
 		if (argFlag->argNumber >= format->fmt_count)
@@ -9844,8 +9831,8 @@ ParameterNode* ParameterNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 	{
 		fb_assert(csb->mainCsb);
 
-		if (csb->mainCsb)
-			message->itemsUsedInSubroutines.add(argNumber);
+		if (!csb->mainCsb)
+			status_exception::raise(Arg::Gds(isc_ctxnotdef) << Arg::Gds(isc_random) << Arg::Str("Outer parameter has no outer scratch"));
 	}
 
 	return this;
@@ -9856,14 +9843,11 @@ ParameterNode* ParameterNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	const auto paramCsb = outerDecl ? csb->mainCsb : csb;
 
 	argInfo = CMP_pass2_validation(tdbb, paramCsb,
-		Item(Item::TYPE_PARAMETER, message->messageNumber, argNumber));
+		Item(Item::TYPE_PARAMETER, messageNumber, argNumber));
 
 	ValueExprNode::pass2(tdbb, csb);
 
-	dsc desc;
-	getDesc(tdbb, csb, &desc);
-
-	if (message->itemsUsedInSubroutines.exist(argNumber))
+	if (outerDecl)
 		impureOffset = csb->allocImpure<impure_value>();
 	else
 		impureOffset = csb->allocImpure<dsc>();
@@ -9876,7 +9860,7 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 	dsc* retDesc;
 	impure_value* impureForOuter;
 
-	if (message->itemsUsedInSubroutines.exist(argNumber))
+	if (outerDecl)
 	{
 		impureForOuter = request->getImpure<impure_value>(impureOffset);
 		retDesc = &impureForOuter->vlu_desc;
@@ -9902,10 +9886,11 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 			request->req_flags |= req_null;
 	}
 
-	desc = &message->format->fmt_desc[argNumber];
+	// Parameters preserve message number during mapping
+	MessageNode* message = paramRequest->getStatement()->messages[messageNumber];
+	desc = &message->getFormat(paramRequest)->fmt_desc[argNumber];
 
-	retDesc->dsc_address = paramRequest->getImpure<UCHAR>(
-		message->impureOffset + (IPTR) desc->dsc_address);
+	retDesc->dsc_address = message->getBuffer(paramRequest) + (IPTR) desc->dsc_address;
 	retDesc->dsc_dtype = desc->dsc_dtype;
 	retDesc->dsc_length = desc->dsc_length;
 	retDesc->dsc_scale = desc->dsc_scale;
@@ -9937,7 +9922,7 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 				switch (retDesc->dsc_dtype)
 				{
 					case dtype_cstring:
-						len = strnlen((const char*) p, maxLen);
+						len = static_cast<decltype(len)>(strnlen((const char*) p, maxLen));
 						--maxLen;
 						break;
 
@@ -9977,7 +9962,7 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 
 		if (argInfo)
 		{
-			EVL_validate(tdbb, Item(Item::TYPE_PARAMETER, message->messageNumber, argNumber),
+			EVL_validate(tdbb, Item(Item::TYPE_PARAMETER, messageNumber, argNumber),
 				argInfo, retDesc, request->req_flags & req_null);
 		}
 
@@ -12172,7 +12157,7 @@ dsc* SubstringSimilarNode::execute(thread_db* tdbb, Request* request) const
 
 	MoveBuffer escapeBuffer;
 	UCHAR* escapeStr;
-	int escapeLen = MOV_make_string2(tdbb, escapeDesc, textType, &escapeStr, escapeBuffer);
+	ULONG escapeLen = MOV_make_string2(tdbb, escapeDesc, textType, &escapeStr, escapeBuffer);
 
 	// Verify the correctness of the escape character.
 	if (escapeLen == 0 || charSet->length(escapeLen, escapeStr, true) != 1)
@@ -14011,11 +13996,7 @@ ValueExprNode* VariableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		{
 			node->outerDecl = true;
 
-			const bool execBlock = (dsqlScratch->mainScratch->flags & DsqlCompilerScratch::FLAG_BLOCK) &&
-				!(dsqlScratch->mainScratch->flags &
-				  (DsqlCompilerScratch::FLAG_PROCEDURE |
-				   DsqlCompilerScratch::FLAG_TRIGGER |
-				   DsqlCompilerScratch::FLAG_FUNCTION));
+			const bool execBlock = (dsqlScratch->mainScratch->flags & DsqlCompilerScratch::FLAG_EXEC_BLOCK);
 
 			if (node->dsqlVar->type == dsql_var::TYPE_INPUT && !execBlock)
 			{
@@ -14023,7 +14004,7 @@ ValueExprNode* VariableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				{
 					// 0 = input, 1 = output. Start outer messages with 2.
 					dsqlScratch->outerMessagesMap.put(
-						node->dsqlVar->msgNumber, 2 + dsqlScratch->outerMessagesMap.count());
+						node->dsqlVar->msgNumber, static_cast<decltype(dsqlScratch->outerMessagesMap)::ValueType>(2 + dsqlScratch->outerMessagesMap.count()));
 				}
 			}
 			else
@@ -14052,11 +14033,7 @@ void VariableNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	auto varScratch = outerDecl ? dsqlScratch->mainScratch : dsqlScratch;
 
-	const bool execBlock = (varScratch->flags & DsqlCompilerScratch::FLAG_BLOCK) &&
-		!(varScratch->flags &
-		  (DsqlCompilerScratch::FLAG_PROCEDURE |
-		   DsqlCompilerScratch::FLAG_TRIGGER |
-		   DsqlCompilerScratch::FLAG_FUNCTION));
+	const bool execBlock = (varScratch->flags & DsqlCompilerScratch::FLAG_EXEC_BLOCK);
 
 	if (dsqlVar->type == dsql_var::TYPE_INPUT && !execBlock)
 	{

@@ -186,13 +186,19 @@ private:
 	bool needRestarts();
 
 	void doExecute(thread_db* tdbb, jrd_tra** traHandle,
+		const UCHAR* inMsg, // Only data buffer, metadata must be synchronized before call
 		Firebird::IMessageMetadata* outMetadata, UCHAR* outMsg,
 		bool singleton);
 
 	// [Re]start part of "request restarts" algorithm
 	void executeReceiveWithRestarts(thread_db* tdbb, jrd_tra** traHandle,
+		const UCHAR* inMsg,
 		Firebird::IMessageMetadata* outMetadata, UCHAR* outMsg,
 		bool singleton, bool exec, bool fetch);
+
+	// Convert IMessageMetadata to Format and force it into given MessageNode for current request.
+	// After that this MessageNode and corresponding ParameterNodes can work with client message buffer directly
+	void metadataToFormat(Firebird::IMessageMetadata* metadata, Jrd::MessageNode* message);
 
 public:
 	Firebird::Array<UCHAR*>	req_msg_buffers;
