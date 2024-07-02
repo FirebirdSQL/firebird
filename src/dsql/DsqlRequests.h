@@ -186,11 +186,13 @@ private:
 	bool needRestarts();
 
 	void doExecute(thread_db* tdbb, jrd_tra** traHandle,
+		const UCHAR* inMsg, // Only data buffer, metadata must be synchronized before call
 		Firebird::IMessageMetadata* outMetadata, UCHAR* outMsg,
 		bool singleton);
 
 	// [Re]start part of "request restarts" algorithm
 	void executeReceiveWithRestarts(thread_db* tdbb, jrd_tra** traHandle,
+		const UCHAR* inMsg,
 		Firebird::IMessageMetadata* outMetadata, UCHAR* outMsg,
 		bool singleton, bool exec, bool fetch);
 

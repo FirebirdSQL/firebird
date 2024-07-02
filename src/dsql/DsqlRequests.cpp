@@ -418,7 +418,7 @@ bool DsqlDmlRequest::fetch(thread_db* tdbb, UCHAR* msgBuffer)
 		// and outMetadata and outMsg in not used there, so passing NULL's is safe.
 		jrd_tra* tra = req_transaction;
 
-		executeReceiveWithRestarts(tdbb, &tra, NULL, msgBuffer, false, false, true);
+		executeReceiveWithRestarts(tdbb, &tra, nullptr, nullptr, msgBuffer, false, false, true);
 		fb_assert(tra == req_transaction);
 	}
 	else
@@ -572,7 +572,7 @@ bool DsqlDmlRequest::needRestarts()
 
 // Execute a dynamic SQL statement
 void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
-	IMessageMetadata* outMetadata, UCHAR* outMsg,
+	const UCHAR* inMsg, IMessageMetadata* outMetadata, UCHAR* outMsg,
 	bool singleton)
 {
 	firstRowFetched = false;
@@ -584,9 +584,13 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 	}
 	else
 	{
-		UCHAR* msgBuffer = req_msg_buffers[message->msg_buffer_number];
+		MessageNode* msg = dsqlStatement->getStatement()->messages[message->msg_number];
+
+		fb_assert(msg != nullptr && inMsg != nullptr);
+
+		ULONG inMsgLength = msg->getFormat(request)->fmt_length;
 		JRD_start_and_send(tdbb, request, req_transaction, message->msg_number,
-			message->msg_length, msgBuffer);
+			inMsgLength, inMsg);
 	}
 
 	// Selectable execute block should get the "proc fetch" flag assigned,
@@ -682,7 +686,12 @@ void DsqlDmlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 	const dsql_msg* message = dsqlStatement->getSendMsg();
 	if (message)
 	{
-		mapInOut(tdbb, false, message, inMetadata, NULL, inMsg);
+		// If this is not first call of execute(), metadata most likely is already converted to message
+		// but there is no easy way to check if they match so conversion is unconditional.
+		// Even if value of inMetadata is the same, other instance could be placed in the same memory.
+		// Even if the instance is the same, its content may be different from previous call.
+		MessageNode* msg = dsqlStatement->getStatement()->messages[message->msg_number];
+		metadataToFormat(inMetadata, msg);
 	}
 
 	// we need to mapInOut() before tracing of execution start to let trace
@@ -696,15 +705,16 @@ void DsqlDmlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 	thread_db::TimerGuard timerGuard(tdbb, req_timer, !have_cursor);
 
 	if (needRestarts())
-		executeReceiveWithRestarts(tdbb, traHandle, outMetadata, outMsg, singleton, true, false);
+		executeReceiveWithRestarts(tdbb, traHandle, inMsg, outMetadata, outMsg, singleton, true, false);
 	else {
-		doExecute(tdbb, traHandle, outMetadata, outMsg, singleton);
+		doExecute(tdbb, traHandle, inMsg, outMetadata, outMsg, singleton);
 	}
 
 	trace.finish(have_cursor, ITracePlugin::RESULT_SUCCESS);
 }
 
 void DsqlDmlRequest::executeReceiveWithRestarts(thread_db* tdbb, jrd_tra** traHandle,
+	const UCHAR* inMsg,
 	IMessageMetadata* outMetadata, UCHAR* outMsg,
 	bool singleton, bool exec, bool fetch)
 {
@@ -724,7 +734,7 @@ void DsqlDmlRequest::executeReceiveWithRestarts(thread_db* tdbb, jrd_tra** traHa
 		try
 		{
 			if (exec)
-				doExecute(tdbb, traHandle, outMetadata, outMsg, singleton);
+				doExecute(tdbb, traHandle, inMsg, outMetadata, outMsg, singleton);
 
 			if (fetch)
 			{
