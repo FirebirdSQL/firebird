@@ -31,6 +31,7 @@ class IbUtil
 {
 public:
 	static void initialize();
+	static void finalize();
 
 	static void* alloc(long size);
 	static bool free(void* ptr);

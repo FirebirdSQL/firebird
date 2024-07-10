@@ -31,6 +31,7 @@
  */
 
 #include "firebird.h"
+#include <atomic>
 #include <cmath>
 #include <stdlib.h>
 #include <stdio.h>
@@ -78,7 +79,8 @@ using namespace Firebird;
 
 namespace
 {
-	bool volatile initDone = false;
+	const ModuleLoader::Module* bootModule = reinterpret_cast<ModuleLoader::Module*>(0x1);
+	std::atomic<const ModuleLoader::Module*> ibUtilModule;
 
 	struct IbUtilStartup
 	{
@@ -123,7 +125,7 @@ namespace
 		}
 
 		ibUtilUnit(IbUtil::alloc);
-		initDone = true;
+		ibUtilModule = module;
 
 		return true;
 	}
@@ -132,9 +134,12 @@ namespace
 
 void IbUtil::initialize()
 {
-	if (initDone || fb_utils::bootBuild())
+	if (ibUtilModule)
+		return;
+
+	if (fb_utils::bootBuild())
 	{
-		initDone = true;
+		ibUtilModule = bootModule;
 		return;
 	}
 
@@ -170,6 +175,16 @@ void IbUtil::initialize()
 	gds__log("ib_util init failed, UDFs can't be used - looks like firebird misconfigured\n"
 			 "\t%s\n\t%s\n\t%s\n\t%s", message[0].c_str(), message[1].c_str(),
 									   message[2].c_str(), message[3].c_str());
+}
+
+void IbUtil::finalize()
+{
+	const ModuleLoader::Module* module = ibUtilModule.exchange(nullptr);
+
+	if (!module || module == bootModule)
+		return;
+
+	delete module;
 }
 
 void* IbUtil::alloc(long size)
@@ -322,7 +337,7 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
  *
  **************************************/
 	// We may be in danger of AV in UDF if ib_util init failed
-	if (!initDone)
+	if (!ibUtilModule)
 	{
 		ERR_post(Arg::Gds(isc_random) << "ib_util init failed - UDF usage disabled");
 	}
