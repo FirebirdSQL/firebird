@@ -238,6 +238,15 @@ Monitoring tables
       - MON$TABLE_NAME (table name)
       - MON$RECORD_STAT_ID (record-level statistics ID, refers to MON$RECORD_STATS)
 
+    MON$COMPILED_STATEMENTS (compiled statements)
+      - MON$COMPILED_STATEMENT_ID (compiled statement ID)
+	  - MON$SQL_TEXT (statement text, if appropriate)
+	  - MON$EXPLAINED_PLAN (explained query plan)
+	  - MON$OBJECT_NAME (PSQL object name)
+	  - MON$OBJECT_TYPE (PSQL object type)
+	  - MON$PACKAGE_NAME (PSQL object package name)
+	  - MON$STAT_ID (statistics ID)
+
   Notes:
     1) Textual descriptions of all "state" and "mode" values can be found
        in the system table RDB$TYPES

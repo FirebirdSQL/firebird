@@ -118,6 +118,7 @@ const USHORT rpb_damaged		= 128;		// record is busted
 const USHORT rpb_gc_active		= 256;		// garbage collecting dead record version
 const USHORT rpb_uk_modified	= 512;		// record key field values are changed
 const USHORT rpb_long_tranum	= 1024;		// transaction number is 64-bit
+const USHORT rpb_not_packed		= 2048;		// record (or delta) is stored "as is"
 
 // Stream flags
 
@@ -125,6 +126,8 @@ const USHORT RPB_s_update	= 0x01;	// input stream fetched for update
 const USHORT RPB_s_no_data	= 0x02;	// nobody is going to access the data
 const USHORT RPB_s_sweeper	= 0x04;	// garbage collector - skip swept pages
 const USHORT RPB_s_unstable = 0x08;	// don't use undo log, used with unstable explicit cursors
+const USHORT RPB_s_bulk		= 0x10;	// bulk operation (currently insert only)
+const USHORT RPB_s_skipLocked = 0x20;	// skip locked record
 
 // Runtime flags
 
@@ -136,9 +139,6 @@ const USHORT RPB_just_deleted	= 0x10;	// record was just deleted by us
 
 const USHORT RPB_UNDO_FLAGS		= (RPB_undo_data | RPB_undo_read | RPB_undo_deleted);
 const USHORT RPB_CLEAR_FLAGS	= (RPB_UNDO_FLAGS | RPB_just_deleted);
-
-const unsigned int MAX_DIFFERENCES	= 1024;	// Max length of generated Differences string
-											// between two records
 
 // List of active blobs controlled by request
 
@@ -174,14 +174,15 @@ private:
 		void invalidate()
 		{
 			gmtTimeStamp.invalidate();
+			localTimeStampValid = localTimeValid = false;
 		}
 
 		ISC_TIMESTAMP getLocalTimeStamp(USHORT currentTimeZone) const
 		{
 			fb_assert(!gmtTimeStamp.isEmpty());
 
-			if (timeZone != currentTimeZone)
-				update(currentTimeZone);
+			if (!localTimeStampValid || timeZone != currentTimeZone)
+				update(currentTimeZone, true);
 
 			return localTimeStamp;
 		}
@@ -195,7 +196,7 @@ private:
 		void setGmtTimeStamp(USHORT currentTimeZone, ISC_TIMESTAMP ts)
 		{
 			gmtTimeStamp = ts;
-			update(currentTimeZone);
+			update(currentTimeZone, false);
 		}
 
 		ISC_TIMESTAMP_TZ getTimeStampTz(USHORT currentTimeZone) const
@@ -215,7 +216,7 @@ private:
 			ISC_TIME_TZ timeTz;
 
 			if (timeZone != currentTimeZone)
-				update(currentTimeZone);
+				update(currentTimeZone, false);
 
 			if (localTimeValid)
 			{
@@ -242,15 +243,20 @@ private:
 			if (gmtTimeStamp.isEmpty())
 			{
 				Firebird::TimeZoneUtil::validateGmtTimeStamp(gmtTimeStamp);
-				update(currentTimeZone);
+				update(currentTimeZone, false);
 			}
 		}
 
 	private:
-		void update(USHORT currentTimeZone) const
+		void update(USHORT currentTimeZone, bool updateLocalTimeStamp) const
 		{
-			localTimeStamp = Firebird::TimeZoneUtil::timeStampTzToTimeStamp(
-				getTimeStampTz(currentTimeZone), currentTimeZone);
+			if (updateLocalTimeStamp)
+			{
+				localTimeStamp = Firebird::TimeZoneUtil::timeStampTzToTimeStamp(
+					getTimeStampTz(currentTimeZone), currentTimeZone);
+			}
+
+			localTimeStampValid = updateLocalTimeStamp;
 			timeZone = currentTimeZone;
 			localTimeValid = false;
 		}
@@ -258,19 +264,57 @@ private:
 	private:
 		Firebird::TimeStamp gmtTimeStamp;		// Start time of request in GMT time zone
 
+		mutable bool localTimeStampValid;		// localTimeStamp calculation is expensive. So is it valid (calculated)?
+		mutable bool localTimeValid;			// localTime calculation is expensive. So is it valid (calculated)?
 		// These are valid only when !gmtTimeStamp.isEmpty(), so no initialization is necessary.
 		mutable ISC_TIMESTAMP localTimeStamp;	// Timestamp in timeZone's zone
 		mutable ISC_USHORT timeZone;			// Timezone borrowed from the attachment when updated
 		mutable ISC_TIME localTime;				// gmtTimeStamp converted to local time (WITH TZ)
-		mutable bool localTimeValid;			// localTime calculation is expensive. So is it valid (calculated)?
+	};
+
+	// Fields to support read consistency in READ COMMITTED transactions
+
+	struct SnapshotData
+	{
+		Request*		m_owner;
+		SnapshotHandle	m_handle;
+		CommitNumber	m_number;
+
+		void init()
+		{
+			m_owner = nullptr;
+			m_handle = 0;
+			m_number = 0;
+		}
+	};
+
+	// Context data saved/restored with every new autonomous transaction
+
+	struct AutoTranCtx
+	{
+		AutoTranCtx()
+		{
+			m_snapshot.init();
+		};
+
+		AutoTranCtx(const Request* request) :
+			m_transaction(request->req_transaction),
+			m_savepoints(request->req_savepoints),
+			m_proc_savepoints(request->req_proc_sav_point),
+			m_snapshot(request->req_snapshot)
+		{}
+
+		jrd_tra*		m_transaction = nullptr;
+		Savepoint*		m_savepoints = nullptr;
+		Savepoint*		m_proc_savepoints = nullptr;
+		SnapshotData	m_snapshot;
 	};
 
 public:
-	Request(Attachment* attachment, /*const*/ Statement* aStatement,
-			Firebird::MemoryStats* parent_stats)
+	Request(Firebird::AutoMemoryPool& pool, Attachment* attachment, /*const*/ Statement* aStatement)
 		: statement(aStatement),
-		  req_pool(statement->pool),
-		  req_memory_stats(parent_stats),
+		  req_pool(pool),
+		  req_memory_stats(&aStatement->pool->getStatsGroup()),
 		  req_blobs(req_pool),
 		  req_stats(*req_pool),
 		  req_base_stats(*req_pool),
@@ -279,15 +323,18 @@ public:
 		  req_ext_resultset(NULL),
 		  req_timeout(0),
 		  req_domain_validation(NULL),
-		  req_sorts(*req_pool),
+		  req_auto_trans(*req_pool),
+		  req_sorts(*req_pool, attachment->att_database),
 		  req_rpb(*req_pool),
-		  impureArea(*req_pool),
-		  req_auto_trans(*req_pool)
+		  impureArea(*req_pool)
 	{
 		fb_assert(statement);
 		setAttachment(attachment);
 		req_rpb = statement->rpbsSetup;
 		impureArea.grow(statement->impureSize);
+
+		pool->setStatsGroup(req_memory_stats);
+		pool.release();
 	}
 
 	Statement* getStatement()
@@ -313,8 +360,6 @@ public:
 	void setAttachment(Attachment* newAttachment)
 	{
 		req_attachment = newAttachment;
-		charSetId = statement->flags & Statement::FLAG_INTERNAL ?
-			CS_METADATA : req_attachment->att_charset;
 	}
 
 	bool isRoot() const
@@ -351,9 +396,9 @@ private:
 
 public:
 	MemoryPool* req_pool;
+	Firebird::MemoryStats req_memory_stats;
 	Attachment*	req_attachment;			// database attachment
 	USHORT		req_incarnation;		// incarnation number
-	Firebird::MemoryStats req_memory_stats;
 
 	// Transaction pointer and doubly linked list pointers for requests in this
 	// transaction. Maintained by TRA_attach_request/TRA_detach_request.
@@ -373,6 +418,7 @@ public:
 	RuntimeStatistics	req_stats;
 	RuntimeStatistics	req_base_stats;
 	AffectedRows req_records_affected;	// records affected by the last statement
+	FB_UINT64 req_profiler_ticks;		// profiler ticks
 
 	const StmtNode*	req_next;			// next node for execution
 	EDS::Statement*	req_ext_stmt;		// head of list of active dynamic statements
@@ -396,49 +442,14 @@ public:
 	ULONG req_src_column;
 
 	dsc*			req_domain_validation;	// Current VALUE for constraint validation
+	Firebird::Stack<AutoTranCtx> req_auto_trans;	// Autonomous transactions
 	SortOwner req_sorts;
 	Firebird::Array<record_param> req_rpb;	// record parameter blocks
 	Firebird::Array<UCHAR> impureArea;		// impure area
-	USHORT charSetId;						// "client" character set of the request
 	TriggerAction req_trigger_action;		// action that caused trigger to fire
-
-	// Fields to support read consistency in READ COMMITTED transactions
-	struct snapshot_data
-	{
-		Request*		m_owner;
-		SnapshotHandle	m_handle;
-		CommitNumber	m_number;
-
-		void init()
-		{
-			m_owner = nullptr;
-			m_handle = 0;
-			m_number = 0;
-		}
-	};
-
-	snapshot_data req_snapshot;
-
-	// Context data saved\restored with every new autonomous transaction
-	struct auto_tran_ctx
-	{
-		auto_tran_ctx() :
-			m_transaction(nullptr)
-		{
-			m_snapshot.init();
-		};
-
-		auto_tran_ctx(jrd_tra* const tran, const snapshot_data& snap) :
-			m_transaction(tran),
-			m_snapshot(snap)
-		{
-		};
-
-		jrd_tra*		m_transaction;
-		snapshot_data	m_snapshot;
-	};
-
-	Firebird::Stack<auto_tran_ctx> req_auto_trans;	// Autonomous transactions
+	SnapshotData req_snapshot;
+	StatusXcp req_last_xcp;			// last known exception
+	bool req_batch_mode;
 
 	enum req_s {
 		req_evaluate,
@@ -449,9 +460,6 @@ public:
 		req_sync,
 		req_unwind
 	} req_operation;				// operation for next node
-
-	StatusXcp req_last_xcp;			// last known exception
-	bool req_batch_mode;
 
 	template <typename T> T* getImpure(unsigned offset)
 	{
@@ -466,17 +474,25 @@ public:
 		req_base_stats.assign(req_stats);
 	}
 
-	// Save transaction and snapshot context when switching to the autonomous transaction
-	void pushTransaction(jrd_tra* const transaction)
+	// Save context when switching to the autonomous transaction
+	void pushTransaction()
 	{
-		req_auto_trans.push(auto_tran_ctx(transaction, req_snapshot));
+		fb_assert(req_transaction); // must be attached
+
+		req_auto_trans.push(this);
+		req_savepoints = nullptr;
+		req_proc_sav_point = nullptr;
 		req_snapshot.init();
 	}
 
-	// Restore transaction and snapshot context
+	// Restore context
 	jrd_tra* popTransaction()
 	{
-		const auto_tran_ctx tmp = req_auto_trans.pop();
+		fb_assert(!req_transaction); // must be detached
+
+		const auto tmp = req_auto_trans.pop();
+		req_savepoints = tmp.m_savepoints;
+		req_proc_sav_point = tmp.m_proc_savepoints;
 		req_snapshot = tmp.m_snapshot;
 
 		return tmp.m_transaction;
@@ -529,10 +545,11 @@ const ULONG req_warning			= 0x40L;
 const ULONG req_in_use			= 0x80L;
 const ULONG req_continue_loop	= 0x100L;		// PSQL continue statement
 const ULONG req_proc_fetch		= 0x200L;		// Fetch from procedure in progress
-const ULONG req_same_tx_upd		= 0x400L;		// record was updated by same transaction
-const ULONG req_reserved		= 0x800L;		// Request reserved for client
-const ULONG req_update_conflict	= 0x1000L;		// We need to restart request due to update conflict
-const ULONG req_restart_ready	= 0x2000L;		// Request is ready to restart in case of update conflict
+const ULONG req_proc_select		= 0x400L;		// Select from procedure in progress
+const ULONG req_same_tx_upd		= 0x800L;		// record was updated by same transaction
+const ULONG req_reserved		= 0x1000L;		// Request reserved for client
+const ULONG req_update_conflict	= 0x2000L;		// We need to restart request due to update conflict
+const ULONG req_restart_ready	= 0x4000L;		// Request is ready to restart in case of update conflict
 
 
 // Index lock block

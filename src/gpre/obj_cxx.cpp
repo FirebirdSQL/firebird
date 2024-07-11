@@ -1413,6 +1413,16 @@ static int gen_cursor_open( const act* action, const gpre_req* request, int colu
 //		Generate insertion text for the database statement.
 //
 
+static void ifndef(const char* nm, const char* nm2 = "")
+{
+	fprintf(gpreGlob.out_file, "\n#ifndef %s%s", nm, nm2);
+}
+
+static void endif()
+{
+	fprintf(gpreGlob.out_file, "\n#endif");
+}
+
 static void gen_database(int column)
 {
 	if (global_first_flag)
@@ -1427,8 +1437,10 @@ static void gen_database(int column)
 	fprintf(gpreGlob.out_file, "#define CAST_CONST_MSG(A) (reinterpret_cast<const unsigned char*>(A))\n");
 	fprintf(gpreGlob.out_file, "#define CAST_MSG(A) (reinterpret_cast<unsigned char*>(A))\n");
 
+	ifndef("fbBlobNull");
 	printa(column, "static %sISC_QUAD", CONST_STR);
 	printa(column + INDENT, "fbBlobNull = {0, 0};\t/* initializer for blobs */");
+	endif();
 
 	const TEXT* scope = "";
 
@@ -1440,6 +1452,8 @@ static void gen_database(int column)
 	{
 		all_static = all_static && (db->dbb_scope == DBB_STATIC);
 		all_extern = all_extern && (db->dbb_scope == DBB_EXTERN);
+
+		ifndef(db->dbb_name->sym_string);
 		if (db->dbb_scope == DBB_STATIC)
 			scope = "static ";
 		else if (db->dbb_scope == DBB_EXTERN)
@@ -1449,6 +1463,7 @@ static void gen_database(int column)
 			printa(column + INDENT, "%s = 0;\t\t/* database handle */\n", db->dbb_name->sym_string);
 		else
 			printa(column + INDENT, "%s;\t\t/* database handle */\n", db->dbb_name->sym_string);
+		endif();
 	}
 
 	if (all_static)
@@ -1456,6 +1471,7 @@ static void gen_database(int column)
 	else if (all_extern)
 		scope = "extern ";
 
+	ifndef(gpreGlob.transaction_name);
 	printa(column, "%sFirebird::ITransaction*", scope);
 	if (!all_extern)
 		printa(column + INDENT, "%s = 0;\t\t/* default transaction handle */",
@@ -1463,33 +1479,43 @@ static void gen_database(int column)
 	else
 		printa(column + INDENT, "%s;\t\t/* default transaction handle */",
 			   gpreGlob.transaction_name);
+	endif();
 
+	ifndef("fbMaster");
 	printa(column, "%sFirebird::IMaster* fbMaster%s;\t\t/* master interface */",
 		scope, all_extern ? "" : " = Firebird::fb_get_master_interface()");
+	endif();
+
+	ifndef("fbProvider");
 	printa(column, "%sFirebird::IProvider* fbProvider%s;\t\t/* provider interface */",
 		scope, all_extern ? "" : " = fbMaster->getDispatcher()");
+	endif();
 
+	ifndef(global_status_name);
 	printa(column, "%sFirebird::CheckStatusWrapper %sObj%s;\t/* status vector */",
 		scope, global_status_name, all_extern ? "" : "(fbMaster->getStatus())");
-	printa(column, "%sFirebird::CheckStatusWrapper %s2Obj%s;\t/* status vector */",
-		scope, global_status_name, all_extern ? "" : "(fbMaster->getStatus())");
-
 	if (all_extern)
-	{
 		printa(column, "%sFirebird::CheckStatusWrapper* %s;\t/* status vector */",
 			scope, global_status_name);
-		printa(column, "%sFirebird::CheckStatusWrapper* %s2;\t/* status vector */",
-			scope, global_status_name);
-	}
 	else
-	{
 		printa(column, "%sFirebird::CheckStatusWrapper* %s = &%sObj;\t/* status vector */",
 			scope, global_status_name, global_status_name);
+	endif();
+
+	ifndef(global_status_name, "2");
+	printa(column, "%sFirebird::CheckStatusWrapper %s2Obj%s;\t/* status vector */",
+		scope, global_status_name, all_extern ? "" : "(fbMaster->getStatus())");
+	if (all_extern)
+		printa(column, "%sFirebird::CheckStatusWrapper* %s2;\t/* status vector */",
+			scope, global_status_name);
+	else
 		printa(column, "%sFirebird::CheckStatusWrapper* %s2 = &%s2Obj;\t/* status vector */",
 			scope, global_status_name, global_status_name);
-	}
+	endif();
 
+	ifndef("fbIStatus");
 	printa(column, "%sint fbIStatus;\t/* last completion code */", scope);
+	endif();
 
 	for (db = gpreGlob.isc_databases; db; db = db->dbb_next)
 		for (const tpb* tpb_iterator = db->dbb_tpbs; tpb_iterator;

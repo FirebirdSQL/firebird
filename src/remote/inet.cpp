@@ -573,7 +573,6 @@ static int		send_partial(rem_port*, PACKET *);
 
 static RemoteXdr*		xdrinet_create(rem_port*, UCHAR *, USHORT, enum xdr_op);
 static bool		setNoNagleOption(rem_port*);
-static bool		setFastLoopbackOption(rem_port*, SOCKET s = INVALID_SOCKET);
 static bool		setKeepAlive(SOCKET);
 static FPTR_INT	tryStopMainThread = 0;
 
@@ -717,7 +716,8 @@ rem_port* INET_analyze(ClntAuthBlock* cBlock,
 		REMOTE_PROTOCOL(PROTOCOL_VERSION15, ptype_lazy_send, 6),
 		REMOTE_PROTOCOL(PROTOCOL_VERSION16, ptype_lazy_send, 7),
 		REMOTE_PROTOCOL(PROTOCOL_VERSION17, ptype_lazy_send, 8),
-		REMOTE_PROTOCOL(PROTOCOL_VERSION18, ptype_lazy_send, 9)
+		REMOTE_PROTOCOL(PROTOCOL_VERSION18, ptype_lazy_send, 9),
+		REMOTE_PROTOCOL(PROTOCOL_VERSION19, ptype_lazy_send, 10)
 	};
 	fb_assert(FB_NELEM(protocols_to_try) <= FB_NELEM(cnct->p_cnct_versions));
 	cnct->p_cnct_count = FB_NELEM(protocols_to_try);
@@ -1039,8 +1039,6 @@ rem_port* INET_connect(const TEXT* name,
 			gds__log("setsockopt: error setting TCP_NODELAY");
 		else
 		{
-			setFastLoopbackOption(port);
-
 			n = connect(port->port_handle, pai->ai_addr, pai->ai_addrlen);
 			if (n != -1)
 			{
@@ -1164,8 +1162,6 @@ static rem_port* listener_socket(rem_port* port, USHORT flag, const addrinfo* pa
 	{
 		inet_error(false, port, "listen", isc_net_connect_listen_err, INET_ERRNO);
 	}
-
-	setFastLoopbackOption(port);
 
 	inet_ports->registerPort(port);
 
@@ -1583,7 +1579,6 @@ static rem_port* aux_connect(rem_port* port, PACKET* packet)
 	}
 
 	setKeepAlive(n);
-	setFastLoopbackOption(new_port, n);
 
 	status = address.connect(n);
 	if (status < 0)
@@ -1673,8 +1668,6 @@ static rem_port* aux_request( rem_port* port, PACKET* packet)
 
 	new_port->port_server_flags = port->port_server_flags;
 	new_port->port_channel = (int) n;
-
-	setFastLoopbackOption(new_port, n);
 
 	P_RESP* response = &packet->p_resp;
 
@@ -1850,8 +1843,9 @@ static void force_close(rem_port* port)
 	if (port->port_state != rem_port::PENDING)
 		return;
 
-	port->port_state = rem_port::BROKEN;
+	RefMutexGuard guard(*port->port_write_sync, FB_FUNCTION);
 
+	port->port_state = rem_port::BROKEN;
 	if (port->port_handle != INVALID_SOCKET)
 	{
 		shutdown(port->port_handle, 2);
@@ -3342,26 +3336,6 @@ static bool setNoNagleOption(rem_port* port)
 		}
 	}
 	return true;
-}
-
-bool setFastLoopbackOption(rem_port* port, SOCKET s)
-{
-#ifdef WIN_NT
-	if (port->getPortConfig()->getTcpLoopbackFastPath())
-	{
-		if (s == INVALID_SOCKET)
-			s = port->port_handle;
-
-		int optval = 1;
-		DWORD bytes = 0;
-
-		int ret = WSAIoctl(s, SIO_LOOPBACK_FAST_PATH, &optval, sizeof(optval),
-			NULL, 0, &bytes, 0, 0);
-
-		return (ret == 0);
-	}
-#endif
-	return false;
 }
 
 static bool setKeepAlive(SOCKET s)

@@ -66,6 +66,7 @@ public:
 
 	void reset(UCHAR tag = 0);
 	void reset(const UCHAR* buffer, const FB_SIZE_T buffLen);
+	void reset(const ClumpletWriter& from);
 	void clear();
 
 	// Methods to create new clumplet at current position

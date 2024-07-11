@@ -59,7 +59,7 @@ namespace Firebird {
 
 Int128 Int128::set(const char* value)
 {
-// This is simplified method - it does not perform all what's needed for CVT_decompose
+// This is simplified method - it does not perform all what's needed for full conversion
 	for (v = 0; ; ++value)
 	{
 		if (*value < '0' or *value > '9')
@@ -319,7 +319,7 @@ Int128 Int128::set(SINT64 value, int scale)
 
 Int128 Int128::set(const char* value)
 {
-// This is simplified method - it does not perform all what's needed for CVT_decompose
+// This is simplified method - it does not perform all what's needed for full conversion
 	v.FromString(value);
 	return *this;
 }
@@ -612,6 +612,7 @@ void Int128::overflow()
 	(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_integer_overflow)).raise();
 }
 
+
 #ifdef DEV_BUILD
 const char* Int128::show()
 {
@@ -645,4 +646,34 @@ CInt128 MAX_Int128(CInt128::MkMax);
 } // namespace Firebird
 
 #endif // FB_USE_ABSEIL_INT128
+
+
+// implementation independent part
+
+namespace Firebird
+{
+
+ULONG Int128::makeIndexKey(vary* buf, int exp)
+{
+	fb_assert(-128 <= exp && exp <= 127);
+
+	unsigned char coeff[PMAX + 2];
+	unsigned char* c = &coeff[PMAX];
+
+	for (Int128 v = sign() > 0 ? -*this : *this ; v.sign(); )
+	{
+		int m;
+		v.divMod(10, &m);
+
+		fb_assert(-m < 10);
+		fb_assert(c > coeff);
+		*--c = -m;
+	}
+
+	memset(coeff, 0, c - coeff);
+
+	return Decimal128::makeBcdKey(buf, coeff, sign() < 0, exp, BIAS, PMAX);
+}
+
+} // namespace Firebird
 

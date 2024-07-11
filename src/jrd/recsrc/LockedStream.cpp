@@ -24,6 +24,7 @@
 #include "../jrd/jrd.h"
 #include "../jrd/req.h"
 #include "../jrd/cmp_proto.h"
+#include "../jrd/vio_proto.h"
 
 #include "RecordSource.h"
 
@@ -35,14 +36,16 @@ using namespace Jrd;
 // ------------------------------------
 
 LockedStream::LockedStream(CompilerScratch* csb, RecordSource* next)
-	: m_next(next)
+	: RecordSource(csb),
+	  m_next(next)
 {
 	fb_assert(m_next);
 
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = next->getCardinality();
 }
 
-void LockedStream::open(thread_db* tdbb) const
+void LockedStream::internalOpen(thread_db* tdbb) const
 {
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -68,7 +71,7 @@ void LockedStream::close(thread_db* tdbb) const
 	}
 }
 
-bool LockedStream::getRecord(thread_db* tdbb) const
+bool LockedStream::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -82,8 +85,13 @@ bool LockedStream::getRecord(thread_db* tdbb) const
 	{
 		do {
 			// Attempt to lock the record
-			if (m_next->lockRecord(tdbb))
+			const auto lockResult = m_next->lockRecord(tdbb);
+
+			if (lockResult == WriteLockResult::LOCKED)
 				return true;	// locked
+
+			if (lockResult == WriteLockResult::SKIPPED)
+				break;	// skip locked record
 
 			// Refetch the record and ensure it still fulfils the search condition
 		} while (m_next->refetchRecord(tdbb));
@@ -97,17 +105,28 @@ bool LockedStream::refetchRecord(thread_db* tdbb) const
 	return m_next->refetchRecord(tdbb);
 }
 
-bool LockedStream::lockRecord(thread_db* tdbb) const
+WriteLockResult LockedStream::lockRecord(thread_db* tdbb) const
 {
 	return m_next->lockRecord(tdbb);
 }
 
-void LockedStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void LockedStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	if (detailed)
-		plan += printIndent(++level) + "Write Lock";
+	m_next->getLegacyPlan(tdbb, plan, level);
+}
 
-	m_next->print(tdbb, plan, detailed, level);
+void LockedStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
+{
+	planEntry.className = "LockedStream";
+
+	planEntry.lines.add().text = "Write Lock";
+	printOptInfo(planEntry.lines);
+
+	if (recurse)
+	{
+		++level;
+		m_next->getPlan(tdbb, planEntry.children.add(), level, recurse);
+	}
 }
 
 void LockedStream::markRecursive()

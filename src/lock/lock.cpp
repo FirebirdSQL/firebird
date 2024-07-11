@@ -302,16 +302,15 @@ bool LockManager::init_shared_file(CheckStatusWrapper* statusVector)
 		SharedMemory<lhb>* tmp = FB_NEW_POOL(getPool()) SharedMemory<lhb>(name.c_str(), m_memorySize, this);
 		// initialize will reset m_sharedMemory
 		fb_assert(m_sharedMemory == tmp);
+
+		const auto header = tmp->getHeader();
+		checkHeader(header);
 	}
 	catch (const Exception& ex)
 	{
 		ex.stuffException(statusVector);
 		return false;
 	}
-
-	fb_assert(m_sharedMemory->getHeader()->mhb_type == SharedMemoryBase::SRAM_LOCK_MANAGER);
-	fb_assert(m_sharedMemory->getHeader()->mhb_header_version == MemoryHeader::HEADER_VERSION);
-	fb_assert(m_sharedMemory->getHeader()->mhb_version == LHB_VERSION);
 
 #ifdef USE_SHMEM_EXT
 	m_extents[0] = *this;
@@ -414,7 +413,7 @@ void LockManager::shutdownOwner(thread_db* tdbb, SRQ_PTR* owner_handle)
 	{
 		{ // checkout scope
 			LockTableCheckout checkout(this, FB_FUNCTION);
-			EngineCheckout cout(tdbb, FB_FUNCTION, true);
+			EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 			Thread::sleep(10);
 		}
 
@@ -1231,7 +1230,7 @@ UCHAR* LockManager::alloc(USHORT size, CheckStatusWrapper* statusVector)
 
 	if (m_sharedMemory->getHeader()->lhb_used + size > m_sharedMemory->getHeader()->lhb_length)
 	{
-		// New table size shouldn't exceed max table length 
+		// New table size shouldn't exceed max table length
 		if (m_sharedMemory->getHeader()->lhb_length + memorySize > MAX_TABLE_LENGTH)
 		{
 			if (m_sharedMemory->getHeader()->lhb_used + size <= MAX_TABLE_LENGTH)
@@ -1398,8 +1397,20 @@ void LockManager::blocking_action(thread_db* tdbb, SRQ_PTR blocking_owner_offset
 
 			{ // checkout scope
 				LockTableCheckout checkout(this, FB_FUNCTION);
-				EngineCheckout cout(tdbb, FB_FUNCTION, true);
-				(*routine)(arg);
+				EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
+
+				try
+				{
+					(*routine)(arg);
+				}
+				catch (const Exception& ex)
+				{
+					iscLogException("Exception from AST routine - this should never happen", ex);
+				}
+				catch (...)
+				{
+					gds__log("Unknown C++ exception from AST routine - this should never happen");
+				}
 			}
 
 			owner = (own*) SRQ_ABS_PTR(blocking_owner_offset);
@@ -1643,19 +1654,6 @@ SRQ_PTR LockManager::create_owner(CheckStatusWrapper* statusVector,
  *	Create an owner block.
  *
  **************************************/
-	if (m_sharedMemory->getHeader()->mhb_type != SharedMemoryBase::SRAM_LOCK_MANAGER ||
-		m_sharedMemory->getHeader()->mhb_header_version != MemoryHeader::HEADER_VERSION ||
-		m_sharedMemory->getHeader()->mhb_version != LHB_VERSION)
-	{
-		TEXT bug_buffer[BUFFER_TINY];
-		sprintf(bug_buffer, "inconsistent lock table type/version; found %d/%d:%d, expected %d/%d:%d",
-			m_sharedMemory->getHeader()->mhb_type,
-			m_sharedMemory->getHeader()->mhb_header_version,
-			m_sharedMemory->getHeader()->mhb_version,
-			SharedMemoryBase::SRAM_LOCK_MANAGER, MemoryHeader::HEADER_VERSION, LHB_VERSION);
-		bug(statusVector, bug_buffer);
-		return 0;
-	}
 
 	// Allocate a process block, if required
 
@@ -2294,8 +2292,8 @@ bool LockManager::initialize(SharedMemoryBase* sm, bool initializeMemory)
 
 	lhb* hdr = m_sharedMemory->getHeader();
 	memset(hdr, 0, sizeof(lhb));
-	hdr->init(SharedMemoryBase::SRAM_LOCK_MANAGER, LHB_VERSION);
 
+	initHeader(hdr);
 	hdr->lhb_type = type_lhb;
 
 	// Mark ourselves as active owner to prevent fb_assert() checks
@@ -3279,9 +3277,7 @@ void LockManager::validate_lhb(const lhb* alhb)
 		return;
 
 	CHECK(alhb != NULL);
-	CHECK(alhb->mhb_type == SharedMemoryBase::SRAM_LOCK_MANAGER);
-	CHECK(alhb->mhb_header_version == MemoryHeader::HEADER_VERSION);
-	CHECK(alhb->mhb_version == LHB_VERSION);
+	CHECK(checkHeader(alhb, false));
 
 	CHECK(alhb->lhb_type == type_lhb);
 
@@ -3826,7 +3822,7 @@ void LockManager::wait_for_request(thread_db* tdbb, lrq* request, SSHORT lck_wai
 				}
 
 				{ // scope
-					EngineCheckout cout(tdbb, FB_FUNCTION, true);
+					EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 					ret = m_sharedMemory->eventWait(&owner->own_wakeup, value, (timeout - current_time) * 1000000);
 					--m_waitingOwners;
 				}
@@ -3999,6 +3995,26 @@ void LockManager::mutexBug(int state, char const* text)
 	message.printf("%s: error code %d\n", text, state);
 	bug(NULL, message.c_str());
 }
+
+bool LockManager::checkHeader(const MemoryHeader* header, bool raiseError)
+{
+	fb_assert(header);
+
+	if (raiseError &&
+		header->mhb_type == getType() &&
+		header->mhb_header_version == MemoryHeader::HEADER_VERSION &&
+		header->mhb_version != getVersion() &&
+		(header->mhb_version & ~PLATFORM_LHB_VERSION) == BASE_LHB_VERSION)
+	{
+		// @1-bit engine can't open database already opened by @2-bit engine
+		if (LHB_VERSION == BASE_LHB_VERSION)
+			(Arg::Gds(isc_wrong_shmem_bitness) << Arg::Num(32) << Arg::Num(64)).raise();
+		else
+			(Arg::Gds(isc_wrong_shmem_bitness) << Arg::Num(64) << Arg::Num(32)).raise();
+	}
+
+	return IpcObject::checkHeader(header, raiseError);
+};
 
 #ifdef USE_SHMEM_EXT
 void LockManager::Extent::assign(const SharedMemoryBase& p)

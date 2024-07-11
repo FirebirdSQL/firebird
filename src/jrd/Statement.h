@@ -24,8 +24,11 @@
 #include "../include/fb_blk.h"
 #include "../jrd/exe.h"
 #include "../jrd/EngineInterface.h"
+#include <functional>
 
 namespace Jrd {
+
+class PlanEntry;
 
 // Compiled statement.
 class Statement : public pool_alloc<type_req>
@@ -45,7 +48,15 @@ private:
 	Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb);
 
 public:
-	static Statement* makeStatement(thread_db* tdbb, CompilerScratch* csb, bool internalFlag);
+	static Statement* makeStatement(thread_db* tdbb, CompilerScratch* csb, bool internalFlag,
+		std::function<void ()> beforeCsbRelease = nullptr);
+
+	static Statement* makeBoolExpression(thread_db* tdbb, BoolExprNode*& node,
+		CompilerScratch* csb, bool internalFlag);
+
+	static Statement* makeValueExpression(thread_db* tdbb, ValueExprNode*& node, dsc& desc,
+		CompilerScratch* csb, bool internalFlag);
+
 	static Request* makeRequest(thread_db* tdbb, CompilerScratch* csb, bool internalFlag);
 
 	StmtNumber getStatementId() const
@@ -53,6 +64,11 @@ public:
 		if (!id)
 			id = JRD_get_thread_data()->getDatabase()->generateStatementId();
 		return id;
+	}
+
+	unsigned getSize() const
+	{
+		return (unsigned) pool->getStatsGroup().getCurrentUsage();
 	}
 
 	const Routine* getRoutine() const;
@@ -64,6 +80,7 @@ public:
 	void release(thread_db* tdbb);
 
 	Firebird::string getPlan(thread_db* tdbb, bool detailed) const;
+	void getPlan(thread_db* tdbb, PlanEntry& planEntry) const;
 
 private:
 	static void verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation, TrigVector* triggers,
@@ -78,6 +95,7 @@ public:
 	unsigned blrVersion;
 	ULONG impureSize;					// Size of impure area
 	mutable StmtNumber id;				// statement identifier
+	USHORT charSetId;					// client character set (CS_METADATA for internal statements)
 	Firebird::Array<record_param> rpbsSetup;
 	Firebird::Array<Request*> requests;	// vector of requests
 	ExternalAccessList externalList;	// Access to procedures/triggers to be checked
@@ -90,13 +108,12 @@ public:
 	Statement* parentStatement;		// Sub routine's parent statement
 	Firebird::Array<Statement*> subStatements;	// Array of subroutines' statements
 	const StmtNode* topNode;			// top of execution tree
-	Firebird::Array<const RecordSource*> fors;	// record sources
+	Firebird::Array<const Select*> fors;	// select expressions
 	Firebird::Array<const DeclareLocalTableNode*> localTables;	// local tables
 	Firebird::Array<ULONG*> invariants;	// pointer to nodes invariant offsets
 	Firebird::RefStrPtr sqlText;		// SQL text (encoded in the metadata charset)
 	Firebird::Array<UCHAR> blr;			// BLR for non-SQL query
 	MapFieldInfo mapFieldInfo;			// Map field name to field info
-	MapItemInfo mapItemInfo;			// Map item to item info
 };
 
 

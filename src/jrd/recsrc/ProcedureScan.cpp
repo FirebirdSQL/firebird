@@ -29,6 +29,7 @@
 #include "../jrd/vio_proto.h"
 #include "../jrd/trace/TraceManager.h"
 #include "../jrd/trace/TraceJrdHelpers.h"
+#include "../jrd/optimizer/Optimizer.h"
 
 #include "RecordSource.h"
 
@@ -46,6 +47,7 @@ ProcedureScan::ProcedureScan(CompilerScratch* csb, const string& alias, StreamTy
 	  m_procedure(procedure), m_sourceList(sourceList), m_targetList(targetList), m_message(message)
 {
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = DEFAULT_CARDINALITY;
 
 	fb_assert(!sourceList == !targetList);
 
@@ -53,13 +55,19 @@ ProcedureScan::ProcedureScan(CompilerScratch* csb, const string& alias, StreamTy
 		fb_assert(sourceList->items.getCount() == targetList->items.getCount());
 }
 
-void ProcedureScan::open(thread_db* tdbb) const
+void ProcedureScan::internalOpen(thread_db* tdbb) const
 {
 	if (!m_procedure->isImplemented())
 	{
 		status_exception::raise(
 			Arg::Gds(isc_proc_pack_not_implemented) <<
 				Arg::Str(m_procedure->getName().identifier) << Arg::Str(m_procedure->getName().package));
+	}
+	else if (!m_procedure->isDefined())
+	{
+		status_exception::raise(
+			Arg::Gds(isc_prcnotdef) << Arg::Str(m_procedure->getName().toString()) <<
+			Arg::Gds(isc_modnotfound));
 	}
 
 	const_cast<jrd_prc*>(m_procedure)->checkReload(tdbb);
@@ -103,8 +111,8 @@ void ProcedureScan::open(thread_db* tdbb) const
 
 	// req_proc_fetch flag used only when fetching rows, so
 	// is set at end of open()
-
 	proc_request->req_flags &= ~req_proc_fetch;
+	AutoSetRestoreFlag<ULONG> autoSetReqProcSelect(&proc_request->req_flags, req_proc_select, true);
 
 	try
 	{
@@ -159,7 +167,7 @@ void ProcedureScan::close(thread_db* tdbb) const
 	}
 }
 
-bool ProcedureScan::getRecord(thread_db* tdbb) const
+bool ProcedureScan::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -189,6 +197,7 @@ bool ProcedureScan::getRecord(thread_db* tdbb) const
 
 	TraceProcFetch trace(tdbb, proc_request);
 
+	AutoSetRestoreFlag<ULONG> autoSetReqProcSelect(&proc_request->req_flags, req_proc_select, true);
 	AutoSetRestore<USHORT> autoOriginalTimeZone(
 		&tdbb->getAttachment()->att_original_timezone,
 		tdbb->getAttachment()->att_current_timezone);
@@ -235,29 +244,35 @@ bool ProcedureScan::refetchRecord(thread_db* /*tdbb*/) const
 	return true;
 }
 
-bool ProcedureScan::lockRecord(thread_db* /*tdbb*/) const
+WriteLockResult ProcedureScan::lockRecord(thread_db* /*tdbb*/) const
 {
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
-	return false; // compiler silencer
 }
 
-void ProcedureScan::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void ProcedureScan::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	if (detailed)
-	{
-		plan += printIndent(++level) + "Procedure " +
-			printName(tdbb, m_procedure->getName().toString(), m_alias) + " Scan";
-	}
-	else
-	{
-		if (!level)
-			plan += "(";
+	if (!level)
+		plan += "(";
 
-		plan += printName(tdbb, m_alias, false) + " NATURAL";
+	plan += printName(tdbb, m_alias, false) + " NATURAL";
 
-		if (!level)
-			plan += ")";
-	}
+	if (!level)
+		plan += ")";
+}
+
+void ProcedureScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
+{
+	planEntry.className = "ProcedureScan";
+
+	planEntry.lines.add().text = "Procedure " + printName(tdbb, m_procedure->getName().toString(), m_alias) + " Scan";
+	printOptInfo(planEntry.lines);
+
+	planEntry.objectType = obj_procedure;
+	planEntry.packageName = m_procedure->getName().package;
+	planEntry.objectName = m_procedure->getName().identifier;
+
+	if (m_alias.hasData() && m_procedure->getName().toString() != m_alias)
+		planEntry.alias = m_alias;
 }
 
 void ProcedureScan::assignParams(thread_db* tdbb,

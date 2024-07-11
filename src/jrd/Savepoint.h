@@ -94,7 +94,7 @@ namespace Jrd
 		UndoItemTree*	vct_undo;		// Data for undo records
 
 		void mergeTo(thread_db* tdbb, jrd_tra* transaction, VerbAction* nextAction);
-		void undo(thread_db* tdbb, jrd_tra* transaction, bool preserveLocks, 
+		void undo(thread_db* tdbb, jrd_tra* transaction, bool preserveLocks,
 				  VerbAction* preserveAction);
 		void garbageCollectIdxLite(thread_db* tdbb, jrd_tra* transaction, SINT64 recordNumber,
 								   VerbAction* nextAction, Record* goingRecord);
@@ -291,6 +291,15 @@ namespace Jrd
 					++m_savepoint->m_count;
 			}
 
+			void done()
+			{
+				if (m_savepoint)
+				{
+					--m_savepoint->m_count;
+					m_savepoint = nullptr;
+				}
+			}
+
 			~ChangeMarker()
 			{
 				if (m_savepoint)
@@ -301,7 +310,7 @@ namespace Jrd
 			ChangeMarker(const ChangeMarker&);
 			ChangeMarker& operator=(const ChangeMarker&);
 
-			Savepoint* const m_savepoint;
+			Savepoint* m_savepoint;
 		};
 
 	private:
@@ -330,7 +339,7 @@ namespace Jrd
 	class AutoSavePoint
 	{
 	public:
-		AutoSavePoint(thread_db* tdbb, jrd_tra* trans);
+		AutoSavePoint(thread_db* tdbb, jrd_tra* trans, bool cond = true);
 		~AutoSavePoint();
 
 		void release();

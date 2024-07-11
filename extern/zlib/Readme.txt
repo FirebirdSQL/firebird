@@ -4,9 +4,9 @@ architectures.
 
 The source code of zlib library was downloaded from 
 
-  http://zlib.net/zlib1211.zip
+  https://www.zlib.net/zlib131.zip
 
-It was built with MSVC17 compilers using commands specified at win32/Makefile.msc:
+It was built with VS 2022 compilers using commands specified at win32/Makefile.msc:
 
 win32: 
 nmake -f win32/Makefile.msc 

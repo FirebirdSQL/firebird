@@ -49,36 +49,35 @@ namespace
 	class TempCacheLimitGuard
 	{
 	public:
-		explicit TempCacheLimitGuard(FB_SIZE_T size)
-			: m_dbb(GET_DBB()), m_size(size),
-			  m_guard(m_dbb->dbb_temp_cache_mutex, FB_FUNCTION)
+		explicit TempCacheLimitGuard(Database* dbb) :
+			m_dbb(dbb),
+			m_size(0)
+		{}
+
+		~TempCacheLimitGuard()
 		{
-			m_allowed = (m_dbb->dbb_temp_cache_size + size <= m_dbb->dbb_config->getTempCacheLimit());
+			if (m_size)
+				m_dbb->decTempCacheUsage(m_size);
 		}
 
-		bool isAllowed() const
+		bool reserve(FB_SIZE_T size)
 		{
-			return m_allowed;
+			if (m_dbb->incTempCacheUsage(size))
+			{
+				m_size = size;
+				return true;
+			}
+			return false;
 		}
 
-		void increment()
+		void commit()
 		{
-			fb_assert(m_allowed);
-			m_dbb->dbb_temp_cache_size += m_size;
-		}
-
-		static void decrement(FB_SIZE_T size)
-		{
-			Database* const dbb = GET_DBB();
-			MutexLockGuard guard(dbb->dbb_temp_cache_mutex, FB_FUNCTION);
-			dbb->dbb_temp_cache_size -= size;
+			m_size = 0;
 		}
 
 	private:
 		Database* const m_dbb;
 		FB_SIZE_T m_size;
-		MutexLockGuard m_guard;
-		bool m_allowed;
 	};
 }
 
@@ -175,7 +174,11 @@ TempSpace::~TempSpace()
 		head = temp;
 	}
 
-	TempCacheLimitGuard::decrement(localCacheUsage);
+	if (localCacheUsage)
+	{
+		Database* const dbb = GET_DBB();
+		dbb->decTempCacheUsage(localCacheUsage);
+	}
 
 	while (tempFiles.getCount())
 		delete tempFiles.pop();
@@ -312,16 +315,16 @@ void TempSpace::extend(FB_SIZE_T size)
 		Block* block = NULL;
 
 		{	// scope
-			TempCacheLimitGuard guard(size);
+			TempCacheLimitGuard guard(GET_DBB());
 
-			if (guard.isAllowed())
+			if (guard.reserve(size))
 			{
 				try
 				{
 					// allocate block in virtual memory
 					block = FB_NEW_POOL(pool) MemoryBlock(FB_NEW_POOL(pool) UCHAR[size], tail, size);
 					localCacheUsage += size;
-					guard.increment();
+					guard.commit();
 				}
 				catch (const BadAlloc&)
 				{

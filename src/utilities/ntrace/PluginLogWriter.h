@@ -62,10 +62,12 @@ public:
 	~PluginLogWriter();
 
 	// TraceLogWriter implementation
-	virtual FB_SIZE_T write(const void* buf, FB_SIZE_T size);
-	virtual FB_SIZE_T write_s(Firebird::CheckStatusWrapper* status, const void* buf, unsigned size);
+	virtual FB_SIZE_T write(const void* buf, FB_SIZE_T size) override;
+	virtual FB_SIZE_T write_s(Firebird::CheckStatusWrapper* status, const void* buf, unsigned size) override;
 
 private:
+	const USHORT PLUGIN_LOG_VERSION = 1;
+
 	SINT64 seekToEnd();
 	void reopen();
 	void checkErrno(const char* operation);
@@ -81,8 +83,12 @@ private:
 	// better as in this case syncronization is performed by OS kernel itself.
 	// Mutex on Posix is needed to rotate log file.
 
-	void mutexBug(int osErrorCode, const char* text);
-	bool initialize(Firebird::SharedMemoryBase*, bool);
+	void mutexBug(int osErrorCode, const char* text) override;
+	bool initialize(Firebird::SharedMemoryBase*, bool) override;
+
+	USHORT getType() const override { return Firebird::SharedMemoryBase::SRAM_TRACE_AUDIT_MTX; };
+	USHORT getVersion() const override { return PLUGIN_LOG_VERSION; };
+	const char* getName() const override { return "AuditLogMutex"; };
 
 	void lock();
 	void unlock();

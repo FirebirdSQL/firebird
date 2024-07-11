@@ -302,8 +302,6 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 	case SpbSendItems:
 		switch (tag)
 		{
-		case isc_info_svc_auth_block:
-			return Wide;
 		case isc_info_end:
 		case isc_info_truncated:
 		case isc_info_error:
@@ -346,6 +344,7 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 				return StringSpb;
 			case isc_spb_bkp_factor:
 			case isc_spb_bkp_length:
+			case isc_spb_bkp_parallel_workers:
 			case isc_spb_res_length:
 			case isc_spb_res_buffers:
 			case isc_spb_res_page_size:
@@ -369,6 +368,7 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 			case isc_spb_rpr_commit_trans:
 			case isc_spb_rpr_rollback_trans:
 			case isc_spb_rpr_recover_two_phase:
+			case isc_spb_rpr_par_workers:
 				return IntSpb;
 			case isc_spb_rpr_commit_trans_64:
 			case isc_spb_rpr_rollback_trans_64:
@@ -456,7 +456,11 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 				return StringSpb;
 			case isc_spb_nbk_level:
 			case isc_spb_options:
+			case isc_spb_nbk_keep_days:
+			case isc_spb_nbk_keep_rows:
 				return IntSpb;
+			case isc_spb_nbk_clean_history:
+				return SingleTpb;
 			}
 			invalid_structure("unknown parameter for nbackup", tag);
 			break;
@@ -684,6 +688,20 @@ void ClumpletReader::moveNext()
 {
 	if (isEof())
 		return;		// no need to raise useless exceptions
+
+	switch (kind)
+	{
+	case InfoResponse:
+		switch (getClumpTag())
+		{
+		case isc_info_end:
+		case isc_info_truncated:
+			// terminating clumplet
+			cur_offset = getBufferLength();
+			return;
+		}
+	}
+
 	FB_SIZE_T cs = getClumpletSize(true, true, true);
 	adjustSpbState();
 	cur_offset += cs;

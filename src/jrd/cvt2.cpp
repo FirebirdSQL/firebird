@@ -101,9 +101,9 @@ const BYTE CVT2_compare_priority[] =
 	10,	// dtype_int64 - goes right after long
 	25,	// dtype_dbkey - compares with nothing except itself
 	26,	// dtype_boolean - compares with nothing except itself
-	12,	// dtype_int128 - go after quad
 	16,	// dec64 - go after dtype_d_float
 	17,	// dec128 - go after dec64 and before dtype_sql_date
+	12,	// dtype_int128 - go after quad
 	20,	// dtype_sql_time_tz - go after dtype_sql_time
 	22,	// dtype_timestamp_tz - go after dtype_timestamp
 	99, // dtype_ex_time_tz - should not be used here
@@ -200,6 +200,39 @@ bool CVT2_get_binary_comparable_desc(dsc* result, const dsc* arg1, const dsc* ar
 	}
 
 	return true;
+}
+
+
+static int cmp_numeric_string(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt)
+{
+/**************************************
+ *
+ *	c m p _ n u m e r i c _ s t r i n g
+ *
+ **************************************
+ *
+ * Functional description
+ *	Compare any numeric value with string.  Return (-1, 0, 1) if a<b, a=b, or a>b.
+ *
+ **************************************/
+	fb_assert(arg1->isNumeric());
+	fb_assert(arg2->isText());
+
+	Decimal128 buffer;		// enough to fit any required data
+	SSHORT scale = 0;
+	UCHAR* text = arg2->dsc_address;
+	if (arg2->dsc_dtype == dtype_varying)
+		text += sizeof(USHORT);
+
+	dsc num2;
+	num2.dsc_dtype = CVT_get_numeric(text, TEXT_LEN(arg2), &scale, &buffer);
+	num2.dsc_address = (UCHAR*)&buffer;
+	num2.dsc_scale = scale;
+	num2.dsc_length = type_lengths[num2.dsc_dtype];
+	num2.dsc_sub_type = 0;
+	num2.dsc_flags = 0;
+
+	return CVT2_compare(arg1, &num2, decSt);
 }
 
 
@@ -520,13 +553,13 @@ int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt
 
 	case dtype_short:
 		{
-			SSHORT scale;
-			if (arg2->dsc_dtype > dtype_varying)
-				scale = MIN(arg1->dsc_scale, arg2->dsc_scale);
-			else
-				scale = arg1->dsc_scale;
+			if (arg2->isText())
+				return cmp_numeric_string(arg1, arg2, decSt);
+
+			SSHORT scale = MIN(arg1->dsc_scale, arg2->dsc_scale);
 			const SLONG temp1 = CVT_get_long(arg1, scale, decSt, ERR_post);
 			const SLONG temp2 = CVT_get_long(arg2, scale, decSt, ERR_post);
+
 			if (temp1 == temp2)
 				return 0;
 			if (temp1 > temp2)
@@ -538,13 +571,13 @@ int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt
 		// Since longs may overflow when scaled, use int64 instead
 	case dtype_int64:
 		{
-			SSHORT scale;
-			if (arg2->dsc_dtype > dtype_varying)
-				scale = MIN(arg1->dsc_scale, arg2->dsc_scale);
-			else
-				scale = arg1->dsc_scale;
+			if (arg2->isText())
+				return cmp_numeric_string(arg1, arg2, decSt);
+
+			SSHORT scale = MIN(arg1->dsc_scale, arg2->dsc_scale);
 			const SINT64 temp1 = CVT_get_int64(arg1, scale, decSt, ERR_post);
 			const SINT64 temp2 = CVT_get_int64(arg2, scale, decSt, ERR_post);
+
 			if (temp1 == temp2)
 				return 0;
 			if (temp1 > temp2)
@@ -554,11 +587,10 @@ int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt
 
 	case dtype_quad:
 		{
-			SSHORT scale;
-			if (arg2->dsc_dtype > dtype_varying)
-				scale = MIN(arg1->dsc_scale, arg2->dsc_scale);
-			else
-				scale = arg1->dsc_scale;
+			if (arg2->isText())
+				return cmp_numeric_string(arg1, arg2, decSt);
+
+			SSHORT scale = MIN(arg1->dsc_scale, arg2->dsc_scale);
 			const SQUAD temp1 = CVT_get_quad(arg1, scale, decSt, ERR_post);
 			const SQUAD temp2 = CVT_get_quad(arg2, scale, decSt, ERR_post);
 			return QUAD_COMPARE(&temp1, &temp2);
@@ -566,6 +598,9 @@ int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt
 
 	case dtype_real:
 		{
+			if (arg2->isText())
+				return cmp_numeric_string(arg1, arg2, decSt);
+
 			const float temp1 = (float) CVT_get_double(arg1, decSt, ERR_post);
 			const float temp2 = (float) CVT_get_double(arg2, decSt, ERR_post);
 			if (temp1 == temp2)
@@ -577,6 +612,9 @@ int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt
 
 	case dtype_double:
 		{
+			if (arg2->isText())
+				return cmp_numeric_string(arg1, arg2, decSt);
+
 			const double temp1 = CVT_get_double(arg1, decSt, ERR_post);
 			const double temp2 = CVT_get_double(arg2, decSt, ERR_post);
 			if (temp1 == temp2)
@@ -588,6 +626,9 @@ int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt
 
 	case dtype_dec64:
 		{
+			if (arg2->isText())
+				return cmp_numeric_string(arg1, arg2, decSt);
+
 			const Decimal64 temp1 = CVT_get_dec64(arg1, decSt, ERR_post);
 			const Decimal64 temp2 = CVT_get_dec64(arg2, decSt, ERR_post);
 			return temp1.compare(decSt, temp2);
@@ -602,12 +643,10 @@ int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt
 
 	case dtype_int128:
 		{
-			SSHORT scale;
-			if (arg2->dsc_dtype > dtype_varying)
-				scale = MIN(arg1->dsc_scale, arg2->dsc_scale);
-			else
-				scale = arg1->dsc_scale;
+			if (arg2->isText())
+				return cmp_numeric_string(arg1, arg2, decSt);
 
+			SSHORT scale = MIN(arg1->dsc_scale, arg2->dsc_scale);
 			const Int128 temp1 = CVT_get_int128(arg1, scale, decSt, ERR_post);
 			const Int128 temp2 = CVT_get_int128(arg2, scale, decSt, ERR_post);
 			return temp1.compare(temp2);

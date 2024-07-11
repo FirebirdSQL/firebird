@@ -32,8 +32,10 @@
 #ifndef COMMON_FILE_PARAMS_H
 #define COMMON_FILE_PARAMS_H
 
-#define COMMON_FILE_PREFIX "13"
+// Derived from Firebird major version
+#define COMMON_FILE_PREFIX "60"
 
+// Per-database usage
 static const char* const EVENT_FILE		= "fb_event_%s";
 static const char* const LOCK_FILE		= "fb_lock_%s";
 static const char* const MONITOR_FILE	= "fb_monitor_%s";
@@ -41,10 +43,19 @@ static const char* const REPL_FILE 		= "fb_repl_%s";
 static const char* const TPC_HDR_FILE	= "fb_tpc_%s";
 static const char* const TPC_BLOCK_FILE = "fb_tpc_%s_%" UQUADFORMAT;
 static const char* const SNAPSHOTS_FILE	= "fb_snap_%s";
+static const char* const PROFILER_FILE	= "fb_profiler_%s_%" UQUADFORMAT;
 
+// Global usage
 static const char* const TRACE_FILE		= "fb" COMMON_FILE_PREFIX "_trace";
 static const char* const USER_MAP_FILE	= "fb" COMMON_FILE_PREFIX "_user_mapping";
+static const char* const SHARED_EVENT	= "fb" COMMON_FILE_PREFIX "_process%u_signal%d";
+
+// Per-log file usage (for audit logging)
 static const char* const FB_TRACE_LOG_MUTEX = "fb_trace_log_mutex";
+
+// Per-trace session usage (for interactive trace)
+static const char* const FB_TRACE_FILE = "fb_trace.";
+
 
 #ifdef UNIX
 static const char* const INIT_FILE		= "fb_init";
@@ -82,7 +93,7 @@ static const char MSG_FILE_LANG[]	= "intl/%.10s.msg";
 static const char* const LOCKDIR	= "firebird";		// created in WORKFILE
 static const char* const LOGFILE	= FB_LOGFILENAME;
 static const char* const MSG_FILE	= "firebird.msg";
-static const char* const SECURITY_DB	= "security5.fdb";
+static const char* const SECURITY_DB	= "security6.fdb";
 
 // Keep in sync with MSG_FILE_LANG
 const int LOCALE_MAX	= 10;

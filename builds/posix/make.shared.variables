@@ -36,6 +36,13 @@ Common_Objects:= $(CO1) $(CO2) $(CO3) $(CO4)
 
 AllObjects += $(Common_Objects)
 
+# Common test files
+COT1:= $(call dirObjects,common/tests)
+COT2:= $(call dirObjects,common/classes/tests)
+Common_Test_Objects:= $(COT1) $(COT2) $(call makeObjects,yvalve,gds.cpp)
+
+AllObjects += $(Common_Test_Objects)
+
 
 # gpre
 GPRE_Common_Objects:= $(call dirObjects,gpre) $(call makeObjects,gpre/languages,@GPRE_LANGUAGE_MODULES@)
@@ -72,15 +79,21 @@ AllObjects += $(Remote_Common) $(Remote_Server) $(Remote_Client)
 
 # Chacha plugin
 Chacha_Objects:= $(call dirObjects,plugins/crypt/chacha)
-
 AllObjects += $(Chacha_Objects)
+
+# Profiler plugin
+Profiler_Objects:= $(call dirObjects,plugins/profiler)
+AllObjects += $(Profiler_Objects)
 
 # Engine
 Engine_Objects:= $(call dirObjects,jrd) $(call dirObjects,dsql) $(call dirObjects,jrd/extds) \
-				 $(call dirObjects,jrd/optimizer) $(call dirObjects,jrd/recsrc) $(call dirObjects,jrd/replication) $(call dirObjects,jrd/trace) \
+				 $(call dirObjects,jrd/optimizer) $(call dirObjects,jrd/recsrc) $(call dirObjects,jrd/replication) \
+				 $(call dirObjects,jrd/sys-packages) $(call dirObjects,jrd/trace) \
 				 $(call makeObjects,lock,lock.cpp)
 
-AllObjects += $(Engine_Objects)
+Engine_Test_Objects:= $(call dirObjects,jrd/tests)
+
+AllObjects += $(Engine_Objects) $(Engine_Test_Objects)
 
 
 # services
@@ -166,7 +179,9 @@ AllObjects += $(GSPLIT_Objects)
 # Interactive sql
 ISQL_Objects:= $(call dirObjects,isql)
 
-AllObjects += $(ISQL_Objects)
+ISQL_Test_Objects:= $(call dirObjects,isql/tests)
+
+AllObjects += $(ISQL_Objects) $(ISQL_Test_Objects)
 
 
 # Legacy users management in security database
@@ -206,7 +221,7 @@ UTIL_Objects:= $(call makeObjects,extlib,ib_util.cpp)
 # UDR backward compatible with distributed UDFs
 COMPAT_Objects:= $(call makeObjects,extlib,UdfBackwardCompatibility.cpp)
 SRC_COMPAT_SQL:= $(SRC_ROOT)/extlib/UdfBackwardCompatibility.sql
-COMPAT_SQL:= $(PLUGINS)/udr/udf_compat.sql
+COMPAT_SQL?= $(call buildSubDirectory,plugins/udr)/udf_compat.sql
 
 AllObjects += $(UTIL_Objects) $(COMPAT_Objects)
 

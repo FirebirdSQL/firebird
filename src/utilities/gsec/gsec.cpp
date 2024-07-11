@@ -91,8 +91,10 @@ int GSEC_main(Firebird::UtilSvc* uSvc)
 	{
 		Firebird::StaticStatusVector status;
 		e.stuffException(status);
-		uSvc->initStatus();
-		uSvc->setServiceStatus(status.begin());
+
+		Firebird::UtilSvc::StatusAccessor sa = uSvc->getStatusAccessor();
+		sa.init();
+		sa.setServiceStatus(status.begin());
 		exit_code = FB_FAILURE;
 	}
 
@@ -676,7 +678,7 @@ int gsec(Firebird::UtilSvc* uSvc)
 
 	if (ret && status[1])
 	{
-		uSvc->setServiceStatus(status);
+		uSvc->getStatusAccessor().setServiceStatus(status);
 	}
 
 	if (sHandle)
@@ -709,8 +711,10 @@ int gsec(Firebird::UtilSvc* uSvc)
 		tdsec->tsec_throw = false;
 
 		GSEC_print_status(status.begin());
-		uSvc->initStatus();
-		uSvc->setServiceStatus(status.begin());
+
+		Firebird::UtilSvc::StatusAccessor sa = uSvc->getStatusAccessor();
+		sa.init();
+		sa.setServiceStatus(status.begin());
 
 		exit_code = FINI_ERROR;
 	}
@@ -1579,10 +1583,11 @@ void GSEC_error(USHORT errcode, const ISC_STATUS* status_vector)
 	static const SafeArg dummy;
 
 	tsec* tdsec = tsec::getSpecific();
-	tdsec->utilSvc->setServiceStatus(GSEC_MSG_FAC, errcode, dummy);
+	auto sa = tdsec->utilSvc->getStatusAccessor();
+	sa.setServiceStatus(GSEC_MSG_FAC, errcode, dummy);
 	if (status_vector)
 	{
-		tdsec->utilSvc->setServiceStatus(status_vector);
+		sa.setServiceStatus(status_vector);
 	}
 	tdsec->utilSvc->started();
 

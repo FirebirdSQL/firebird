@@ -158,6 +158,56 @@ namespace Firebird
 	typedef EnsureUnlock<Mutex, NotRefCounted> MutexEnsureUnlock;
 	typedef EnsureUnlock<RefMutex> RefMutexEnsureUnlock;
 
+
+	// Holds mutex lock and reference to data structure, containing that mutex.
+	// Lock is never taken in ctor, explicit call 'lock()' is needed later.
+
+	class LateRefGuard
+	{
+	public:
+		LateRefGuard(const char* aReason)
+			: m_lock(nullptr), m_ref(nullptr), m_from(aReason)
+		{ }
+
+		void lock(Mutex* aLock, RefCounted* aRef)
+		{
+			fb_assert(aLock);
+			fb_assert(!m_lock);
+			m_lock = aLock;
+			fb_assert(aRef);
+			fb_assert(!m_ref);
+			m_ref = aRef;
+
+			m_lock->enter(m_from);
+			m_ref->assertNonZero();
+			m_ref->addRef();
+		}
+
+		~LateRefGuard()
+		{
+			try
+			{
+				if (m_lock)
+					m_lock->leave();
+				if (m_ref)
+					m_ref->release();
+			}
+			catch (const Exception&)
+			{
+				DtorException::devHalt();
+			}
+		}
+
+	private:
+		// Forbid copying
+		LateRefGuard(const LateRefGuard&);
+		LateRefGuard& operator=(const LateRefGuard&);
+
+		Mutex* m_lock;
+		RefCounted* m_ref;
+		const char* m_from;
+	};
+
 } // namespace
 
 #endif // CLASSES_REF_MUTEX_H

@@ -72,7 +72,7 @@ public:
 		fb_utils::init_status(this->getBuffer(3));
 	}
 
-	void save(unsigned int length, const ISC_STATUS* status, bool warningMode) throw()
+	void save(unsigned int length, const ISC_STATUS* status, bool warningMode) noexcept
 	{
 		try
 		{
@@ -113,7 +113,7 @@ public:
 		}
 	}
 
-	ISC_STATUS save(const ISC_STATUS* status, bool warningMode = false) throw()
+	ISC_STATUS save(const ISC_STATUS* status, bool warningMode = false) noexcept
 	{
 		save(fb_utils::statusLength(status), status, warningMode);
 		return status[1];

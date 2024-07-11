@@ -23,6 +23,8 @@
  */
 
 #include "firebird.h"
+#include <algorithm>
+#include <iterator>
 #include <string.h>
 #include <stdio.h>
 
@@ -60,6 +62,7 @@ static const FPTR_BFILTER_CALLBACK filters[] =
 	filter_trans,
 	filter_trans,				// should be filter_external_file
 	filter_debug_info
+	// Add new entries to isInternalFilter
 };
 
 
@@ -67,6 +70,26 @@ static void open_blob(thread_db*, jrd_tra*, BlobControl**, bid*,
 					  USHORT, const UCHAR*,
 					  FPTR_BFILTER_CALLBACK,
 					  USHORT, BlobFilter*);
+
+
+// Check if this is an internal filter.
+static bool isInternalFilter(BlobControl* control)
+{
+	const auto routine = control->ctl_source;
+	const bool isInternal =
+		routine == filter_text ||
+		routine == filter_transliterate_text ||
+		routine == filter_blr ||
+		routine == filter_acl ||
+		routine == filter_runtime ||
+		routine == filter_format ||
+		routine == filter_trans ||
+		routine == filter_debug_info;
+
+	fb_assert(isInternal == (std::find(std::begin(filters), std::end(filters), routine) != std::end(filters)));
+
+	return isInternal;
+}
 
 
 void BLF_close_blob(thread_db* tdbb, BlobControl** filter_handle)
@@ -170,9 +193,14 @@ ISC_STATUS BLF_get_segment(thread_db* tdbb,
 
 	ISC_STATUS status;
 
-	START_CHECK_FOR_EXCEPTIONS(control->ctl_exception_message.c_str())
-	status = (*control->ctl_source) (isc_blob_filter_get_segment, control);
-	END_CHECK_FOR_EXCEPTIONS(control->ctl_exception_message.c_str())
+	if (isInternalFilter(control))
+		status = (*control->ctl_source)(isc_blob_filter_get_segment, control);
+	else
+	{
+		START_CHECK_FOR_EXCEPTIONS(control->ctl_exception_message.c_str())
+		status = (*control->ctl_source)(isc_blob_filter_get_segment, control);
+		END_CHECK_FOR_EXCEPTIONS(control->ctl_exception_message.c_str())
+	}
 
 	if (!status || status == isc_segment)
 		*length = control->ctl_segment_length;
@@ -284,9 +312,14 @@ void BLF_put_segment(thread_db* tdbb,
 
 	ISC_STATUS status;
 
-	START_CHECK_FOR_EXCEPTIONS(control->ctl_exception_message.c_str())
-	status = (*control->ctl_source) (isc_blob_filter_put_segment, control);
-	END_CHECK_FOR_EXCEPTIONS(control->ctl_exception_message.c_str())
+	if (isInternalFilter(control))
+		status = (*control->ctl_source)(isc_blob_filter_put_segment, control);
+	else
+	{
+		START_CHECK_FOR_EXCEPTIONS(control->ctl_exception_message.c_str())
+		status = (*control->ctl_source)(isc_blob_filter_put_segment, control);
+		END_CHECK_FOR_EXCEPTIONS(control->ctl_exception_message.c_str())
+	}
 
 	if (status)
 	{

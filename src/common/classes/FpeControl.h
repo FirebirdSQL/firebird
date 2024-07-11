@@ -60,7 +60,7 @@ public:
 	// the ContextPoolHolder for memory allocation.
 
 	// on modern systems, the default is to mask exceptions
-	FpeControl() throw()
+	FpeControl() noexcept
 	{
 		getCurrentMask(savedMask);
 		if (!areExceptionsMasked(savedMask))
@@ -69,7 +69,7 @@ public:
 		}
 	}
 
-	~FpeControl() throw()
+	~FpeControl() noexcept
 	{
 		// change it back if necessary
 		if (!areExceptionsMasked(savedMask))
@@ -79,7 +79,7 @@ public:
 	}
 
 #if defined(WIN_NT)
-	static void maskAll() throw()
+	static void maskAll() noexcept
 	{
 		_clearfp(); // always call _clearfp() before setting control word
 
@@ -95,12 +95,12 @@ private:
 	typedef unsigned int Mask;
 	Mask savedMask;
 
-	static bool areExceptionsMasked(const Mask& m) throw()
+	static bool areExceptionsMasked(const Mask& m) noexcept
 	{
 		return m == _CW_DEFAULT;
 	}
 
-	static void getCurrentMask(Mask& m) throw()
+	static void getCurrentMask(Mask& m) noexcept
 	{
 #ifdef AMD64
 		m = _controlfp(0, 0);
@@ -109,7 +109,7 @@ private:
 #endif
 	}
 
-	void restoreMask() throw()
+	void restoreMask() noexcept
 	{
 		_clearfp(); // always call _clearfp() before setting control word
 
@@ -122,7 +122,7 @@ private:
 	}
 
 #elif defined(HAVE_FEGETENV)
-	static void maskAll() throw()
+	static void maskAll() noexcept
 	{
 		fesetenv(FE_DFL_ENV);
 	}
@@ -146,18 +146,18 @@ private:
 
 	fenv_t savedMask;
 
-	static bool areExceptionsMasked(const fenv_t& m) throw()
+	static bool areExceptionsMasked(const fenv_t& m) noexcept
 	{
 		const static DefaultEnvironment defaultEnvironment;
 		return memcmp(&defaultEnvironment.clean, &m, sizeof(fenv_t)) == 0;
 	}
 
-	static void getCurrentMask(fenv_t& m) throw()
+	static void getCurrentMask(fenv_t& m) noexcept
 	{
 		fegetenv(&m);
 	}
 
-	void restoreMask() throw()
+	void restoreMask() noexcept
 	{
 		fesetenv(&savedMask);
 	}
@@ -165,7 +165,7 @@ private:
 	// ok to remove this when Solaris 9 is no longer supported
 	// Solaris without fegetenv() implies Solaris 9 or older. In this case we
 	// have to use the Solaris FPE routines.
-	static void maskAll() throw()
+	static void maskAll() noexcept
 	{
 		fpsetmask(~(FP_X_OFL | FP_X_INV | FP_X_UFL | FP_X_DZ | FP_X_IMP));
 	}
@@ -190,18 +190,18 @@ private:
 
 	fp_except savedMask;
 
-	static bool areExceptionsMasked(const fp_except& m) throw()
+	static bool areExceptionsMasked(const fp_except& m) noexcept
 	{
 		const static DefaultEnvironment defaultEnvironment;
 		return memcmp(&defaultEnvironment.clean, &m, sizeof(fp_except)) == 0;
 	}
 
-	static void getCurrentMask(fp_except& m) throw()
+	static void getCurrentMask(fp_except& m) noexcept
 	{
 		m = fpgetmask();
 	}
 
-	void restoreMask() throw()
+	void restoreMask() noexcept
 	{
 		fpsetsticky(0); // clear exception sticky flags
 		fpsetmask(savedMask);

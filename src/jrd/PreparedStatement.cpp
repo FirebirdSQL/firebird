@@ -173,6 +173,54 @@ void PreparedStatement::Builder::moveFromResultSet(thread_db* tdbb, ResultSet* r
 {
 	for (Array<OutputSlot>::const_iterator i = outputSlots.begin(); i != outputSlots.end(); ++i)
 	{
+		if (i->isOptional)
+		{
+			const bool isNull = rs->isNull(i->number);
+
+			switch (i->type)
+			{
+				case TYPE_SSHORT:
+					*(std::optional<SSHORT>*) i->address = isNull ?
+						std::nullopt : std::optional{rs->getSmallInt(tdbb, i->number)};
+					break;
+
+				case TYPE_SLONG:
+					*(std::optional<SLONG>*) i->address = isNull ?
+						std::nullopt : std::optional{rs->getInt(tdbb, i->number)};
+					break;
+
+				case TYPE_SINT64:
+					*(std::optional<SINT64>*) i->address = isNull ?
+						std::nullopt : std::optional{rs->getBigInt(tdbb, i->number)};
+					break;
+
+				case TYPE_DOUBLE:
+					*(std::optional<double>*) i->address = isNull ?
+						std::nullopt : std::optional{rs->getDouble(tdbb, i->number)};
+					break;
+
+				case TYPE_STRING:
+					*(std::optional<string>*) i->address = isNull ?
+						std::nullopt : std::optional{rs->getString(tdbb, i->number)};
+					break;
+
+				case TYPE_METANAME:
+					*(std::optional<MetaName>*) i->address = isNull ?
+						std::nullopt : std::optional{rs->getMetaName(tdbb, i->number)};
+					break;
+
+				case TYPE_METASTRING:
+					*(std::optional<MetaString>*) i->address = isNull ?
+						std::nullopt : std::optional{rs->getMetaString(tdbb, i->number)};
+					break;
+
+				default:
+					fb_assert(false);
+			}
+
+			continue;
+		}
+
 		switch (i->type)
 		{
 			case TYPE_SSHORT:
@@ -192,11 +240,8 @@ void PreparedStatement::Builder::moveFromResultSet(thread_db* tdbb, ResultSet* r
 				break;
 
 			case TYPE_STRING:
-			{
-				AbstractString* str = (AbstractString*) i->address;
-				str->replace(0, str->length(), rs->getString(tdbb, i->number));
+				*(string*) i->address = rs->getString(tdbb, i->number);
 				break;
-			}
 
 			case TYPE_METANAME:
 				*(MetaName*) i->address = rs->getMetaName(tdbb, i->number);
@@ -209,9 +254,6 @@ void PreparedStatement::Builder::moveFromResultSet(thread_db* tdbb, ResultSet* r
 			default:
 				fb_assert(false);
 		}
-
-		if (i->specifiedAddress && rs->isNull(i->number))
-			*i->specifiedAddress = false;
 	}
 }
 
@@ -221,8 +263,70 @@ void PreparedStatement::Builder::moveToStatement(thread_db* tdbb, PreparedStatem
 {
 	for (Array<InputSlot>::const_iterator i = inputSlots.begin(); i != inputSlots.end(); ++i)
 	{
-		if (i->specifiedAddress && !*i->specifiedAddress)
+		if (i->isOptional)
 		{
+			switch (i->type)
+			{
+				case TYPE_SSHORT:
+					if (const auto optional = (std::optional<SSHORT>*) i->address; optional->has_value())
+					{
+						stmt->setSmallInt(tdbb, i->number, optional->value());
+						continue;
+					}
+					break;
+
+				case TYPE_SLONG:
+					if (const auto optional = (std::optional<SLONG>*) i->address; optional->has_value())
+					{
+						stmt->setInt(tdbb, i->number, optional->value());
+						continue;
+					}
+					break;
+
+				case TYPE_SINT64:
+					if (const auto optional = (std::optional<SINT64>*) i->address; optional->has_value())
+					{
+						stmt->setBigInt(tdbb, i->number, optional->value());
+						continue;
+					}
+					break;
+
+				case TYPE_DOUBLE:
+					if (const auto optional = (std::optional<double>*) i->address; optional->has_value())
+					{
+						stmt->setDouble(tdbb, i->number, optional->value());
+						continue;
+					}
+					break;
+
+				case TYPE_STRING:
+					if (const auto optional = (std::optional<string>*) i->address; optional->has_value())
+					{
+						stmt->setString(tdbb, i->number, optional->value());
+						continue;
+					}
+					break;
+
+				case TYPE_METANAME:
+					if (const auto optional = (std::optional<MetaName>*) i->address; optional->has_value())
+					{
+						stmt->setMetaName(tdbb, i->number, optional->value());
+						continue;
+					}
+					break;
+
+				case TYPE_METASTRING:
+					if (const auto optional = (std::optional<MetaString>*) i->address; optional->has_value())
+					{
+						stmt->setMetaString(tdbb, i->number, optional->value());
+						continue;
+					}
+					break;
+
+				default:
+					fb_assert(false);
+			}
+
 			stmt->setNull(i->number);
 			continue;
 		}
@@ -246,7 +350,7 @@ void PreparedStatement::Builder::moveToStatement(thread_db* tdbb, PreparedStatem
 				break;
 
 			case TYPE_STRING:
-				stmt->setString(tdbb, i->number, *(AbstractString*) i->address);
+				stmt->setString(tdbb, i->number, *(string*) i->address);
 				break;
 
 			case TYPE_METANAME:

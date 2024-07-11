@@ -43,6 +43,7 @@
 #include "../burp/burp_proto.h"
 #include "../burp/mvol_proto.h"
 #include "../burp/split/spit.h"
+#include "../burp/BurpTasks.h"
 #include "../yvalve/gds_proto.h"
 #include "../common/gdsassert.h"
 #include "../common/os/os_utils.h"
@@ -69,6 +70,7 @@
 
 using MsgFormat::SafeArg;
 using Firebird::FbLocalStatus;
+using namespace Burp;
 
 const int open_mask	= 0666;
 
@@ -108,8 +110,6 @@ static inline void put(BurpGlobals* tdgbl, UCHAR c)
 #ifdef DEBUG
 static UCHAR debug_on = 0;		// able to turn this on in debug mode
 #endif
-
-const int burp_msg_fac = 12;
 
 #ifdef HAVE_ZLIB_H
 static Firebird::InitInstance<Firebird::ZLib> zlib;
@@ -638,7 +638,8 @@ FB_UINT64 mvol_fini_write(BurpGlobals* tdgbl, int* io_cnt, UCHAR** io_ptr)
 	}
 
 	tdgbl->file_desc = INVALID_HANDLE_VALUE;
-	BURP_free(tdgbl->mvol_io_header);
+	BURP_free(tdgbl->mvol_io_memory);
+	tdgbl->mvol_io_memory = NULL;
 	tdgbl->mvol_io_header = NULL;
 	tdgbl->mvol_io_buffer = NULL;
 	tdgbl->blk_io_cnt = 0;
@@ -749,6 +750,10 @@ void mvol_init_read(BurpGlobals* tdgbl, const char* file_name, USHORT* format, i
 		tdgbl->mvol_io_ptr = new_buffer + (tdgbl->mvol_io_ptr - tdgbl->mvol_io_buffer);
 		tdgbl->mvol_io_buffer = new_buffer;
 	}
+	else
+	{
+		temp_buffer_size = (tdgbl->mvol_actual_buffer_size / temp_buffer_size) * temp_buffer_size;
+	}
 
 	tdgbl->mvol_actual_buffer_size = tdgbl->mvol_io_buffer_size = temp_buffer_size;
 	*cnt = tdgbl->mvol_io_cnt;
@@ -803,7 +808,9 @@ void mvol_init_write(BurpGlobals* tdgbl, const char* file_name, int* cnt, UCHAR*
 
 	tdgbl->mvol_actual_buffer_size = tdgbl->mvol_io_buffer_size;
 	const ULONG temp_buffer_size = tdgbl->mvol_io_buffer_size * tdgbl->gbl_sw_blk_factor;
-	tdgbl->mvol_io_ptr = tdgbl->mvol_io_buffer = BURP_alloc(temp_buffer_size + MAX_HEADER_SIZE);
+	tdgbl->mvol_io_memory = BURP_alloc(temp_buffer_size + MAX_HEADER_SIZE * 2);
+	tdgbl->mvol_io_ptr = tdgbl->mvol_io_buffer =
+		(UCHAR*) FB_ALIGN((U_IPTR) tdgbl->mvol_io_memory, MAX_HEADER_SIZE);
 	tdgbl->mvol_io_cnt = tdgbl->mvol_actual_buffer_size;
 
 	while (!write_header(tdgbl->file_desc, temp_buffer_size, false))
@@ -830,6 +837,14 @@ void mvol_init_write(BurpGlobals* tdgbl, const char* file_name, int* cnt, UCHAR*
 void MVOL_read(BurpGlobals* tdgbl)
 {
 	// Setup our pointer
+	if (!tdgbl->master)
+	{
+		// hvlad: it will throw ExcReadDone exception when there is nothing to read
+		RestoreRelationTask::renewBuffer(tdgbl);
+		tdgbl->mvol_io_ptr = tdgbl->mvol_io_buffer;
+		return;
+	}
+
 	tdgbl->gbl_io_ptr = tdgbl->gbl_compress_buffer;
 	tdgbl->gbl_io_cnt = unzip_read_block(tdgbl, tdgbl->gbl_io_ptr, ZC_BUFSIZE);
 }
@@ -875,6 +890,8 @@ static void os_read(int* cnt, UCHAR** ptr)
 {
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
+	fb_assert(tdgbl->master);
+
 	for (;;)
 	{
 		tdgbl->mvol_io_cnt = read(tdgbl->file_desc, tdgbl->mvol_io_buffer, tdgbl->mvol_io_buffer_size);
@@ -918,6 +935,7 @@ static void os_read(int* cnt, UCHAR** ptr)
 {
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
+	fb_assert(tdgbl->master);
 	fb_assert(tdgbl->blk_io_cnt <= 0);
 
 	for (;;)
@@ -1025,11 +1043,13 @@ DESC NT_tape_open(const char* name, ULONG mode, ULONG create)
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
+	const DWORD flags = tdgbl->gbl_sw_direct_io ? FILE_FLAG_NO_BUFFERING : 0;
+
 	if (strnicmp(name, "\\\\.\\tape", 8))
 	{
 		handle = CreateFile(name, mode,
 							mode == MODE_WRITE ? 0 : FILE_SHARE_READ,
-							NULL, create, FILE_ATTRIBUTE_NORMAL, NULL);
+							NULL, create, FILE_ATTRIBUTE_NORMAL | flags, NULL);
 	}
 	else
 	{
@@ -1048,7 +1068,7 @@ DESC NT_tape_open(const char* name, ULONG mode, ULONG create)
 		//
 		handle = CreateFile(name, mode | MODE_READ,
 							mode == MODE_WRITE ? FILE_SHARE_WRITE : FILE_SHARE_READ,
-							0, OPEN_EXISTING, 0, NULL);
+							NULL, OPEN_EXISTING, flags, NULL);
 		if (handle != INVALID_HANDLE_VALUE)
 		{
 			// emulate UNIX rewinding the tape on open:
@@ -1082,6 +1102,12 @@ DESC NT_tape_open(const char* name, ULONG mode, ULONG create)
 //
 void MVOL_write(BurpGlobals* tdgbl)
 {
+	if (!tdgbl->master)
+	{
+		BackupRelationTask::renewBuffer(tdgbl);
+		return;
+	}
+
 	fb_assert(tdgbl->gbl_io_ptr >= tdgbl->gbl_compress_buffer);
 	fb_assert(tdgbl->gbl_io_ptr <= tdgbl->gbl_compress_buffer + ZC_BUFSIZE);
 
@@ -1097,6 +1123,14 @@ UCHAR mvol_write(const UCHAR c, int* io_cnt, UCHAR** io_ptr)
 	ULONG cnt = 0;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+
+	if (!tdgbl->master)
+	{
+		BackupRelationTask::renewBuffer(tdgbl);
+		*(*io_ptr)++ = c;
+		(*io_cnt)--;
+		return c;
+	}
 
 	const ULONG size_to_write = BURP_UP_TO_BLOCK(*io_ptr - tdgbl->mvol_io_buffer);
 	FB_UINT64 left = size_to_write;
@@ -1317,10 +1351,17 @@ const UCHAR* MVOL_write_block(BurpGlobals* tdgbl, const UCHAR* ptr, ULONG count)
 		// If buffer full, write it
 		if (tdgbl->gbl_io_cnt <= 0)
 		{
-			zip_write_block(tdgbl, tdgbl->gbl_compress_buffer, tdgbl->gbl_io_ptr - tdgbl->gbl_compress_buffer, false);
+			if (!tdgbl->master)
+			{
+				BackupRelationTask::renewBuffer(tdgbl);
+			}
+			else
+			{
+				zip_write_block(tdgbl, tdgbl->gbl_compress_buffer, tdgbl->gbl_io_ptr - tdgbl->gbl_compress_buffer, false);
 
-			tdgbl->gbl_io_ptr = tdgbl->gbl_compress_buffer;
-			tdgbl->gbl_io_cnt = ZC_BUFSIZE;
+				tdgbl->gbl_io_ptr = tdgbl->gbl_compress_buffer;
+				tdgbl->gbl_io_cnt = ZC_BUFSIZE;
+			}
 		}
 
 		const ULONG n = MIN(count, (ULONG) tdgbl->gbl_io_cnt);
@@ -1510,7 +1551,11 @@ static DESC next_volume( DESC handle, ULONG mode, bool full_buffer)
 		new_desc = NT_tape_open(new_file, mode, OPEN_ALWAYS);
 		if (new_desc == INVALID_HANDLE_VALUE)
 #else
-		new_desc = os_utils::open(new_file, mode, open_mask);
+		ULONG mode2 = mode;
+		if (mode == MODE_WRITE && tdgbl->gbl_sw_direct_io)
+			mode2 |= O_DIRECT;
+
+		new_desc = open(new_file, mode2, open_mask);
 		if (new_desc < 0)
 #endif // WIN_NT
 		{
@@ -2001,7 +2046,8 @@ static bool write_header(DESC handle, ULONG backup_buffer_size, bool full_buffer
 
 		put(tdgbl, att_end);
 
-		tdgbl->mvol_io_data = tdgbl->mvol_io_ptr;
+		tdgbl->mvol_io_data = (UCHAR*) FB_ALIGN((U_IPTR) tdgbl->mvol_io_ptr, MAX_HEADER_SIZE);
+		fb_assert(tdgbl->mvol_io_data == tdgbl->mvol_io_header + MAX_HEADER_SIZE);
 	}
 	else
 	{

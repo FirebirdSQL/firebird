@@ -113,6 +113,12 @@ void IscConnection::attach(thread_db* tdbb)
 	validatePassword(tdbb, m_dbName, newDpb);
 	newDpb.insertInt(isc_dpb_ext_call_depth, attachment->att_ext_call_depth + 1);
 
+	if (newDpb.getBufferLength() > MAX_USHORT)
+	{
+		ERR_post(Arg::Gds(isc_imp_exc) <<
+			Arg::Gds(isc_random) << Arg::Str("DPB size greater than 64KB"));
+	}
+
 	FbLocalStatus status;
 	{
 		EngineCallbackGuard guard(tdbb, *this, FB_FUNCTION);
@@ -158,37 +164,34 @@ void IscConnection::attach(thread_db* tdbb)
 	memset(m_features, false, sizeof(m_features));
 	m_sqlDialect = 1;
 
-	const unsigned char* p = buff, *end = buff + sizeof(buff);
-	while (p < end)
+	for (ClumpletReader p(ClumpletReader::InfoResponse, buff, sizeof(buff)); !p.isEof(); p.moveNext())
 	{
-		const UCHAR item = *p++;
-		const USHORT len = m_iscProvider.isc_vax_integer(p, sizeof(USHORT));
-		p += sizeof(USHORT);
-
-		switch (item)
+		const UCHAR* b = p.getBytes();
+		switch (p.getClumpTag())
 		{
 			case isc_info_db_sql_dialect:
-				m_sqlDialect = m_iscProvider.isc_vax_integer(p, len);
+				m_sqlDialect = p.getInt();
 				break;
 
 			case fb_info_features:
-				for (int i = 0; i < len; i++)
+				for (unsigned i = 0; i < p.getClumpLength(); i++)
 				{
-					if (p[i] == 0)
+					if (b[i] == 0)
 						ERR_post(Arg::Gds(isc_random) << Arg::Str("Bad provider feature value"));
 
-					if (p[i] < fb_feature_max)
-						setFeature(static_cast<info_features>(p[i]));
+					if (b[i] < fb_feature_max)
+						setFeature(static_cast<info_features>(b[i]));
 					// else this provider supports unknown feature, ignore it.
 				}
 				break;
 
 			case isc_info_error:
+				if (p.getClumpLength() > 1)
 				{
-					const ULONG err = m_iscProvider.isc_vax_integer(p + 1, len - 1);
+					const ULONG err = m_iscProvider.isc_vax_integer(b + 1, p.getClumpLength() - 1);
 					if (err == isc_infunk)
 					{
-						if (*p == fb_info_features)
+						if (b[0] == fb_info_features)
 						{
 							// Used provider follow Firebird error reporting conventions but is not aware of
 							// this info item. Assume Firebird 3 or earlier.
@@ -198,19 +201,13 @@ void IscConnection::attach(thread_db* tdbb)
 						}
 						break;
 					}
-					ERR_post(Arg::Gds(isc_random) << Arg::Str("Unexpected error in isc_database_info"));
 				}
+				ERR_post(Arg::Gds(isc_random) << Arg::Str("Unexpected error in isc_database_info"));
 
 			case isc_info_truncated:
 				ERR_post(Arg::Gds(isc_random) << Arg::Str("Result truncation in isc_database_info"));
-
-			case isc_info_end:
-				p = end;
-				break;
 		}
-		p += len;
 	}
-
 }
 
 void IscConnection::doDetach(thread_db* tdbb)
@@ -277,6 +274,7 @@ bool IscConnection::resetSession(thread_db* tdbb)
 		return true;
 	}
 
+	ERR_post_nothrow(&status);
 	return false;
 }
 

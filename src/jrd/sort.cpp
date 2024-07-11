@@ -68,12 +68,6 @@ const USHORT MAX_MERGE_LEVEL	= 2;
 using namespace Jrd;
 using namespace Firebird;
 
-void SortOwner::unlinkAll()
-{
-	while (sorts.getCount())
-		delete sorts.pop();
-}
-
 // The sort buffer size should be just under a multiple of the
 // hardware memory page size to account for memory allocator
 // overhead. On most platforms, this saves 4KB to 8KB per sort
@@ -165,10 +159,11 @@ Sort::Sort(Database* dbb,
 		   FPTR_REJECT_DUP_CALLBACK call_back,
 		   void* user_arg,
 		   FB_UINT64 max_records)
-	: m_dbb(dbb), m_last_record(NULL), m_next_pointer(NULL), m_records(0),
+	: m_dbb(dbb), m_owner(owner),
+	  m_last_record(NULL), m_next_pointer(NULL), m_records(0),
 	  m_runs(NULL), m_merge(NULL), m_free_runs(NULL),
 	  m_flags(0), m_merge_pool(NULL),
-	  m_description(owner->getPool(), keys)
+	  m_description(m_owner->getPool(), keys)
 {
 /**************************************
  *
@@ -185,7 +180,7 @@ Sort::Sort(Database* dbb,
  *		  includes index key (which must be unique) and record numbers.
  *
  **************************************/
-	fb_assert(owner);
+	fb_assert(m_owner);
 	fb_assert(unique_keys <= keys);
 
 	try
@@ -194,13 +189,13 @@ Sort::Sort(Database* dbb,
 		// key description vector. Round the record length up to the next
 		// longword, and add a longword to a pointer back to the pointer slot.
 
-		MemoryPool& pool = owner->getPool();
+		MemoryPool& pool = m_owner->getPool();
 
 		const ULONG record_size = ROUNDUP(record_length + SIZEOF_SR_BCKPTR, FB_ALIGNMENT);
 		m_longs = record_size >> SHIFTLONG;
 
 		m_min_alloc_size = record_size * MIN_RECORDS_TO_ALLOC;
-		m_max_alloc_size = MAX(record_size * MIN_RECORDS_TO_ALLOC, MAX_SORT_BUFFER_SIZE);
+		m_max_alloc_size = MAX(m_min_alloc_size, MAX_SORT_BUFFER_SIZE);
 
 		m_dup_callback = call_back;
 		m_dup_callback_arg = user_arg;
@@ -248,8 +243,7 @@ Sort::Sort(Database* dbb,
 
 		// Link in new sort block
 
-		m_owner = owner;
-		owner->linkSort(this);
+		m_owner->linkSort(this);
 	}
 	catch (const BadAlloc&)
 	{
@@ -315,27 +309,7 @@ void Sort::get(thread_db* tdbb, ULONG** record_address)
 
 	try
 	{
-		// If there weren't any runs, everything fit in memory. Just return stuff.
-
-		if (!m_merge)
-		{
-			while (true)
-			{
-				if (m_records == 0)
-				{
-					record = NULL;
-					break;
-				}
-				m_records--;
-				if ( (record = *m_next_pointer++) )
-					break;
-			}
-		}
-		else
-		{
-			record = getMerge(m_merge);
-		}
-
+		record = getRecord();
 		*record_address = (ULONG*) record;
 
 		if (record)
@@ -630,15 +604,13 @@ void Sort::sort(thread_db* tdbb)
 
 void Sort::allocateBuffer(MemoryPool& pool)
 {
-	if (m_dbb->dbb_sort_buffers.hasData() && m_max_alloc_size <= MAX_SORT_BUFFER_SIZE)
+	if (m_max_alloc_size <= MAX_SORT_BUFFER_SIZE)
 	{
-		SyncLockGuard guard(&m_dbb->dbb_sortbuf_sync, SYNC_EXCLUSIVE, "Sort::allocateBuffer");
-
-		if (m_dbb->dbb_sort_buffers.hasData())
+		m_memory = m_owner->allocateBuffer();
+		if (m_memory)
 		{
-			// The sort buffer cache has at least one big block, let's use it
 			m_size_memory = MAX_SORT_BUFFER_SIZE;
-			m_memory = m_dbb->dbb_sort_buffers.pop();
+			m_flags |= scb_reuse_buffer;
 			return;
 		}
 	}
@@ -655,6 +627,10 @@ void Sort::allocateBuffer(MemoryPool& pool)
 	{
 		m_size_memory = m_max_alloc_size;
 		m_memory = FB_NEW_POOL(*m_dbb->dbb_permanent) UCHAR[m_size_memory];
+
+		// Mark the buffer as cacheable for future reuse
+		if (m_size_memory == MAX_SORT_BUFFER_SIZE)
+			m_flags |= scb_reuse_buffer;
 	}
 	catch (const BadAlloc&)
 	{
@@ -666,6 +642,7 @@ void Sort::allocateBuffer(MemoryPool& pool)
 			{
 				m_size_memory /= 2;
 				m_memory = FB_NEW_POOL(pool) UCHAR[m_size_memory];
+				m_flags &= ~scb_reuse_buffer;
 				break;
 			}
 			catch (const BadAlloc&)
@@ -680,16 +657,11 @@ void Sort::allocateBuffer(MemoryPool& pool)
 
 void Sort::releaseBuffer()
 {
-	// Here we cache blocks to be reused later, but only the biggest ones
-
-	const size_t MAX_CACHED_SORT_BUFFERS = 8; // 1MB
-
-	SyncLockGuard guard(&m_dbb->dbb_sortbuf_sync, SYNC_EXCLUSIVE, "Sort::releaseBuffer");
-
-	if (m_size_memory == MAX_SORT_BUFFER_SIZE &&
-		m_dbb->dbb_sort_buffers.getCount() < MAX_CACHED_SORT_BUFFERS)
+	if (m_flags & scb_reuse_buffer)
 	{
-		m_dbb->dbb_sort_buffers.push(m_memory);
+		fb_assert(m_size_memory == MAX_SORT_BUFFER_SIZE);
+		m_flags &= ~scb_reuse_buffer;
+		m_owner->releaseBuffer(m_memory);
 	}
 	else
 		delete[] m_memory;
@@ -1373,6 +1345,33 @@ sort_record* Sort::getMerge(merge_control* merge)
 	// recent record, or end of file, as appropriate.
 
 	return eof ? NULL : record;
+}
+
+
+sort_record* Sort::getRecord()
+{
+	sort_record* record = NULL;
+
+	// If there weren't any runs, everything fit in memory. Just return stuff.
+
+	if (!m_merge)
+	{
+		while (true)
+		{
+			if (m_records == 0)
+			{
+				record = NULL;
+				break;
+			}
+			m_records--;
+			if ((record = *m_next_pointer++))
+				break;
+		}
+	}
+	else
+		record = getMerge(m_merge);
+
+	return record;
 }
 
 
@@ -2161,4 +2160,284 @@ void Sort::sortRunsBySeek(int n)
 		run = rs->run;
 	}
 	run->run_next = tail;
+}
+
+
+/// class SortOwner
+
+UCHAR* SortOwner::allocateBuffer()
+{
+	if (buffers.hasData())
+		return buffers.pop();
+
+	if (dbb->dbb_sort_buffers.hasData())
+	{
+		SyncLockGuard guard(&dbb->dbb_sortbuf_sync, SYNC_EXCLUSIVE, FB_FUNCTION);
+
+		// The sort buffer cache has at least one big block, let's use it
+		if (dbb->dbb_sort_buffers.hasData())
+			return dbb->dbb_sort_buffers.pop();
+	}
+
+	return nullptr;
+}
+
+void SortOwner::releaseBuffer(UCHAR* memory)
+{
+	buffers.push(memory);
+}
+
+
+void SortOwner::unlinkAll()
+{
+	while (sorts.getCount())
+		delete sorts.pop();
+
+	if (buffers.hasData())
+	{
+		// Move cached buffers to the database level cache to be reused later by other attachments
+
+		const size_t MAX_CACHED_SORT_BUFFERS = 8; // 1MB
+
+		SyncLockGuard guard(&dbb->dbb_sortbuf_sync, SYNC_EXCLUSIVE, FB_FUNCTION);
+
+		while (buffers.hasData() && dbb->dbb_sort_buffers.getCount() < MAX_CACHED_SORT_BUFFERS)
+			dbb->dbb_sort_buffers.push(buffers.pop());
+	}
+
+	while (buffers.hasData())
+		delete[] buffers.pop();
+}
+
+
+/// class PartitionedSort
+
+
+PartitionedSort::PartitionedSort(Database* dbb, SortOwner* owner) :
+	m_owner(owner),
+	m_parts(owner->getPool()),
+	m_nodes(owner->getPool()),
+	m_merge(NULL)
+{
+}
+
+PartitionedSort::~PartitionedSort()
+{
+//	for (ULONG p = 0; p < m_parts.getCount(); p++)
+//		delete m_parts[p].srt_sort;
+}
+
+void PartitionedSort::buildMergeTree()
+{
+	ULONG count = m_parts.getCount();
+	if (count <= 0)
+		return;
+
+	MemoryPool& pool = m_owner->getPool();
+
+	HalfStaticArray<run_merge_hdr*, 8> streams(pool);
+
+	run_merge_hdr** m1 = streams.getBuffer(count);
+	for (sort_control* sort = m_parts.begin(); sort < m_parts.end(); sort++)
+		*m1++ = &sort->srt_header;
+
+	merge_control* node = m_nodes.getBuffer(count - 1);
+	while (count > 1)
+	{
+		run_merge_hdr** m2 = m1 = streams.begin();
+
+		// "m1" is used to sequence through the runs being merged,
+		// while "m2" points at the new merged run
+
+		while (count >= 2)
+		{
+			m_merge = node++;
+			m_merge->mrg_header.rmh_type = RMH_TYPE_MRG;
+
+			// garbage watch
+			fb_assert(((*m1)->rmh_type == RMH_TYPE_MRG) || ((*m1)->rmh_type == RMH_TYPE_SORT));
+
+			(*m1)->rmh_parent = m_merge;
+			m_merge->mrg_stream_a = *m1++;
+
+			// garbage watch
+			fb_assert(((*m1)->rmh_type == RMH_TYPE_MRG) || ((*m1)->rmh_type == RMH_TYPE_SORT));
+
+			(*m1)->rmh_parent = m_merge;
+			m_merge->mrg_stream_b = *m1++;
+
+			m_merge->mrg_record_a = NULL;
+			m_merge->mrg_record_b = NULL;
+
+			*m2++ = (run_merge_hdr*)m_merge;
+			count -= 2;
+		}
+
+		if (count)
+			*m2++ = *m1++;
+		count = m2 - streams.begin();
+	}
+
+	if (m_merge)
+		m_merge->mrg_header.rmh_parent = NULL;
+}
+
+void PartitionedSort::get(thread_db* tdbb, ULONG** record_address)
+{
+	sort_record* record = NULL;
+
+	if (!m_merge)
+		record = m_parts[0].srt_sort->getRecord();
+	else
+		record = getMerge();
+
+	*record_address = (ULONG*)record;
+
+	if (record)
+		m_parts[0].srt_sort->diddleKey((UCHAR*)record->sort_record_key, false, true);
+}
+
+sort_record* PartitionedSort::getMerge()
+{
+	Sort* aSort = m_parts[0].srt_sort;
+	merge_control* merge = m_merge;
+	sort_record* record = NULL;
+	bool eof = false;
+
+	while (merge)
+	{
+		// If node is a run_control, get the next record (or not) and back to parent
+
+		if (merge->mrg_header.rmh_type == RMH_TYPE_SORT)
+		{
+			sort_control* sort = (sort_control*)merge;
+			merge = sort->srt_header.rmh_parent;
+
+			// check for end-of-file condition in either direction
+
+			record = sort->srt_sort->getRecord();
+
+			if (!record)
+			{
+				record = (sort_record*)-1;
+				eof = true;
+				continue;
+			}
+
+			eof = false;
+			continue;
+		}
+
+		// If've we got a record, somebody asked for it. Find out who.
+
+		if (record)
+		{
+			if (merge->mrg_stream_a && !merge->mrg_record_a)
+			{
+				if (eof)
+					merge->mrg_stream_a = NULL;
+				else
+					merge->mrg_record_a = record;
+			}
+			else if (eof)
+				merge->mrg_stream_b = NULL;
+			else
+				merge->mrg_record_b = record;
+		}
+
+		// If either streams need a record and is still active, loop back to pick
+		// up the record. If either stream is dry, return the record of the other.
+		// If both are dry, indicate eof for this stream.
+
+		record = NULL;
+		eof = false;
+
+		if (!merge->mrg_record_a && merge->mrg_stream_a)
+		{
+			merge = (merge_control*)merge->mrg_stream_a;
+			continue;
+		}
+
+		if (!merge->mrg_record_b)
+		{
+			if (merge->mrg_stream_b) {
+				merge = (merge_control*)merge->mrg_stream_b;
+			}
+			else if ((record = merge->mrg_record_a))
+			{
+				merge->mrg_record_a = NULL;
+				merge = merge->mrg_header.rmh_parent;
+			}
+			else
+			{
+				eof = true;
+				record = (sort_record*)-1;
+				merge = merge->mrg_header.rmh_parent;
+			}
+			continue;
+		}
+
+		if (!merge->mrg_record_a)
+		{
+			record = merge->mrg_record_b;
+			merge->mrg_record_b = NULL;
+			merge = merge->mrg_header.rmh_parent;
+			continue;
+		}
+
+		// We have prospective records from each of the sub-streams. Compare them.
+		// If equal, offer each to user routine for possible sacrifice.
+
+		SORTP *p = merge->mrg_record_a->sort_record_key;
+		SORTP *q = merge->mrg_record_b->sort_record_key;
+		//l = m_key_length;
+		ULONG l = aSort->m_unique_length;
+
+		DO_32_COMPARE(p, q, l);
+
+		if (l == 0 && aSort->m_dup_callback)
+		{
+			UCHAR* rec_a = (UCHAR*)merge->mrg_record_a;
+			UCHAR* rec_b = (UCHAR*)merge->mrg_record_a;
+
+			aSort->diddleKey(rec_a, false, true);
+			aSort->diddleKey(rec_b, false, true);
+
+			if ((*aSort->m_dup_callback) ((const UCHAR*)merge->mrg_record_a,
+				(const UCHAR*)merge->mrg_record_b,
+				aSort->m_dup_callback_arg))
+			{
+				merge->mrg_record_a = NULL;
+				aSort->diddleKey(rec_b, true, true);
+				continue;
+			}
+			aSort->diddleKey(rec_a, true, true);
+			aSort->diddleKey(rec_b, true, true);
+		}
+
+		if (l == 0)
+		{
+			l = aSort->m_key_length - aSort->m_unique_length;
+			if (l != 0)
+				DO_32_COMPARE(p, q, l);
+		}
+
+		if (p[-1] < q[-1])
+		{
+			record = merge->mrg_record_a;
+			merge->mrg_record_a = NULL;
+		}
+		else
+		{
+			record = merge->mrg_record_b;
+			merge->mrg_record_b = NULL;
+		}
+
+		merge = merge->mrg_header.rmh_parent;
+	}
+
+	// Merge pointer is null; we're done. Return either the most
+	// recent record, or end of file, as appropriate.
+
+	return eof ? NULL : record;
 }

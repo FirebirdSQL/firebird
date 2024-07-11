@@ -26,6 +26,7 @@
 #include "../jrd/cmp_proto.h"
 #include "../jrd/evl_proto.h"
 #include "../jrd/mov_proto.h"
+#include "../jrd/optimizer/Optimizer.h"
 
 #include "RecordSource.h"
 
@@ -37,14 +38,21 @@ using namespace Jrd;
 // --------------------------------
 
 FirstRowsStream::FirstRowsStream(CompilerScratch* csb, RecordSource* next, ValueExprNode* value)
-	: m_next(next), m_value(value)
+	: RecordSource(csb),
+	  m_next(next),
+	  m_value(value)
 {
 	fb_assert(m_next && m_value);
 
 	m_impure = csb->allocImpure<Impure>();
+
+	const auto valueConst = nodeAs<LiteralNode>(value);
+	const auto valueDesc = valueConst ? &valueConst->litDesc : nullptr;
+	m_cardinality = (valueDesc && valueDesc->dsc_dtype == dtype_long) ?
+		valueConst->getSlong() : DEFAULT_CARDINALITY;
 }
 
-void FirstRowsStream::open(thread_db* tdbb) const
+void FirstRowsStream::internalOpen(thread_db* tdbb) const
 {
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -81,7 +89,7 @@ void FirstRowsStream::close(thread_db* tdbb) const
 	}
 }
 
-bool FirstRowsStream::getRecord(thread_db* tdbb) const
+bool FirstRowsStream::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -107,17 +115,28 @@ bool FirstRowsStream::refetchRecord(thread_db* tdbb) const
 	return m_next->refetchRecord(tdbb);
 }
 
-bool FirstRowsStream::lockRecord(thread_db* tdbb) const
+WriteLockResult FirstRowsStream::lockRecord(thread_db* tdbb) const
 {
 	return m_next->lockRecord(tdbb);
 }
 
-void FirstRowsStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void FirstRowsStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	if (detailed)
-		plan += printIndent(++level) + "First N Records";
+	m_next->getLegacyPlan(tdbb, plan, level);
+}
 
-	m_next->print(tdbb, plan, detailed, level);
+void FirstRowsStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
+{
+	planEntry.className = "FirstRowsStream";
+
+	planEntry.lines.add().text = "First N Records";
+	printOptInfo(planEntry.lines);
+
+	if (recurse)
+	{
+		++level;
+		m_next->getPlan(tdbb, planEntry.children.add(), level, recurse);
+	}
 }
 
 void FirstRowsStream::markRecursive()

@@ -70,6 +70,7 @@ public:
 
 	MetaString& assign(const char* s, FB_SIZE_T l);
 	MetaString& assign(const char* s) { return assign(s, s ? fb_strlen(s) : 0); }
+	MetaString& clear() { return assign(nullptr, 0); }
 	MetaString& operator=(const char* s) { return assign(s); }
 	MetaString& operator=(const AbstractString& s) { return assign(s.c_str(), s.length()); }
 	MetaString& operator=(const MetaString& m) { return set(m); }

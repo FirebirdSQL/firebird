@@ -102,6 +102,9 @@ const int IN_SW_BURP_TS_MAPPING_FILE	= 54;	// mapping file for tablespaces
 const int IN_SW_BURP_TS_ORIGINAL_PATHS	= 55;	// restore tablespaces to their original paths
 const int IN_SW_BURP_TS_PATH			= 56;	// set a path for a tablespace
 
+const int IN_SW_BURP_PARALLEL_WORKERS	= 54;	// parallel workers
+const int IN_SW_BURP_DIRECT_IO			= 55;	// direct IO for backup files
+
 /**************************************************************************/
 
 static const char* const BURP_SW_MODE_NONE = "NONE";
@@ -124,6 +127,8 @@ static const Switches::in_sw_tab_t reference_burp_in_sw_table[] =
 				// msg 254: @1CO(NVERT)  backup external files as tables
 	{IN_SW_BURP_CRYPT,	isc_spb_bkp_crypt,		"CRYPT", 			0, 0, 0, false, false,	373,	3, NULL, boGeneral},
 				// msg 373:@1CRY(PT) plugin name
+	{IN_SW_BURP_DIRECT_IO, isc_spb_bkp_direct_io,"DIRECT_IO",		0, 0, 0, false, true,	409,	1, NULL, boGeneral},
+				// msg 409: @1D(IRECT_IO)            direct IO for backup file(s)
 	{IN_SW_BURP_E,	  isc_spb_bkp_expand,		"EXPAND",			0, 0, 0, false, true,	97, 	1, NULL, boBackup},
 				// msg 97: @1EXPAND no data compression
 	{IN_SW_BURP_FA,   isc_spb_bkp_factor,		"FACTOR",			0, 0, 0, false, false,	181,	2, NULL, boBackup},
@@ -167,6 +172,8 @@ static const Switches::in_sw_tab_t reference_burp_in_sw_table[] =
 				// msg 186: @1OLD_DESCRIPTIONS save old style metadata descriptions
 	{IN_SW_BURP_P,	isc_spb_res_page_size,		"PAGE_SIZE",		0, 0, 0, false, false,	101,	1, NULL, boRestore},
 				// msg 101: @1PAGE_SIZE override default page size
+	{IN_SW_BURP_PARALLEL_WORKERS, isc_spb_bkp_parallel_workers, "PARALLEL", 0, 0, 0, false, false, 406, 3, NULL, boGeneral},
+				// msg 406: @1PAR(ALLEL)          parallel workers
 	{IN_SW_BURP_PASS, 0,						"PASSWORD", 		0, 0, 0, false, false,	190,	3, NULL, boGeneral},
 				// msg 190: @1PA(SSWORD) Firebird password
 	{IN_SW_BURP_RECREATE, 0,					"RECREATE_DATABASE", 0, 0, 0, false, false,	284,	1, NULL, boMain},
@@ -227,9 +234,9 @@ static const Switches::in_sw_tab_t reference_burp_in_sw_table[] =
 	{IN_SW_BURP_HIDDEN_RDONLY,	isc_spb_res_am_readonly,	"MODE READ_ONLY",	0, 0, 0, false, false,	0, 14, NULL, boRestore},
 	{IN_SW_BURP_HIDDEN_RDWRITE, isc_spb_res_am_readwrite,	"MODE READ_WRITE",	0, 0, 0, false, false,	0, 15, NULL, boRestore},
 /**************************************************************************/
-	{IN_SW_BURP_TS_MAPPING_FILE,	0,	"TS_MAPPING_FILE",	0, 0, 0, false, false,	410, 6, NULL, boRestore},
-	{IN_SW_BURP_TS_PATH,	0,	"TS",	0, 0, 0, false, false,	413, 2, NULL, boRestore},
-	{IN_SW_BURP_TS_ORIGINAL_PATHS,	0,	"TS_ORIGINAL_PATHS",	0, 0, 0, false, false,	412, 7, NULL, boRestore},
+	{IN_SW_BURP_TS_MAPPING_FILE,	0,	"TS_MAPPING_FILE",	0, 0, 0, false, false,	415, 6, NULL, boRestore},
+	{IN_SW_BURP_TS_PATH,	0,	"TS",	0, 0, 0, false, false,	418, 2, NULL, boRestore},
+	{IN_SW_BURP_TS_ORIGINAL_PATHS,	0,	"TS_ORIGINAL_PATHS",	0, 0, 0, false, false,	417, 7, NULL, boRestore},
 	{IN_SW_BURP_0,		 0, NULL,			0, 0, 0, false, false,	0, 0, NULL, boGeneral}
 };
 

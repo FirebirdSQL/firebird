@@ -60,9 +60,11 @@
 #include "../common/classes/BlobWrapper.h"
 #include "../common/classes/MsgPrint.h"
 #include "../burp/OdsDetection.h"
+#include "../burp/BurpTasks.h"
 
 using MsgFormat::SafeArg;
-using Firebird::FbLocalStatus;
+using namespace Firebird;
+using namespace Burp;
 
 
 // For service APIs the follow DB handle is a value stored
@@ -70,14 +72,18 @@ using Firebird::FbLocalStatus;
 // GPRE.  This is to avoid multiple threading problems with module
 // level statics.
 
-DATABASE DB = STATIC FILENAME "yachts.lnk" RUNTIME * dbb_file;
-
 #define DB			tdgbl->db_handle
 #define fbTrans		tdgbl->tr_handle
 #define gds_trans	tdgbl->tr_handle
 #define fbStatus	(&tdgbl->status_vector)
 #define isc_status	(&tdgbl->status_vector)
 #define gds_status	(&tdgbl->status_vector)
+
+// unused
+#define fbProvider
+#define fbStatus2
+
+DATABASE DB = STATIC FILENAME "yachts.lnk" RUNTIME * dbb_file;
 
 namespace // unnamed, private
 {
@@ -111,7 +117,7 @@ void put_array(burp_fld*, burp_rel*, ISC_QUAD*);
 void put_asciz(const att_type, const TEXT*);
 void put_blob(burp_fld*, ISC_QUAD&);
 bool put_blr_blob(att_type, ISC_QUAD&);
-void put_data(burp_rel*);
+void put_data(burp_rel*, ReadRelationReq*);
 void put_index(burp_rel*);
 int put_message(att_type, att_type, const TEXT*, const ULONG);
 void put_int32(att_type, SLONG);
@@ -247,6 +253,59 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 			EXEC SQL SET TRANSACTION NAME gds_trans;
 	}
 
+	// get shared snapshot number if asked for parallel backup
+	tdgbl->tr_snapshot = 0;
+	if (gds_trans && tdgbl->gbl_sw_par_workers > 1)
+	{
+		UCHAR in_buf[] = {fb_info_tra_snapshot_number, isc_info_end};
+		UCHAR out_buf[16] = {0};
+
+		gds_trans->getInfo(fbStatus, sizeof(in_buf), in_buf, sizeof(out_buf), out_buf);
+		if (fbStatus->isEmpty())
+		{
+			UCHAR* p = out_buf, *e = out_buf + sizeof(out_buf);
+			while (p < e)
+			{
+				SSHORT len;
+				switch (*p++)
+				{
+				case isc_info_error:
+				case isc_info_end:
+					p = e;
+					break;
+
+				case fb_info_tra_snapshot_number:
+					len = isc_portable_integer(p, 2);
+					p += 2;
+					tdgbl->tr_snapshot = isc_portable_integer(p, len);
+					p += len;
+					break;
+				}
+			}
+		}
+		if (tdgbl->tr_snapshot == 0)
+			tdgbl->gbl_sw_par_workers = 1;
+	}
+
+	// detect if MAKE_DBKEY is supported and decide kind of read relation query
+	if (tdgbl->gbl_sw_par_workers > 1)
+	{
+		const char* sql = "SELECT MAKE_DBKEY(0, 0) FROM RDB$DATABASE";
+		IStatement* stmt = DB->prepare(fbStatus, gds_trans, 0, sql, 3, 0);
+		if (fbStatus->getState() & IStatus::RESULT_ERROR)
+		{
+			// BURP_print_status(false, isc_status);
+			tdgbl->gbl_sw_par_workers = 1;
+		}
+		if (stmt)
+			stmt->free(fbStatus);
+	}
+
+	if (tdgbl->gbl_sw_par_workers)
+	{
+		BURP_verbose(410, SafeArg() << tdgbl->gbl_sw_par_workers);
+		// msg 410 use up to @1 parallel workers
+	}
 
 	// decide what type of database we've got
 
@@ -347,11 +406,15 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
 	{
 		// Write tablespaces
-		BURP_verbose(406);	// msg 406 writing tablespaces
+		BURP_verbose(411);	// msg 411 writing tablespaces
 		write_tablespaces();
 	}
 
 	// Now go back and write all data
+
+	{
+	Coordinator coord(getDefaultMemoryPool());
+	BackupRelationTask task(tdgbl);
 
 	for (burp_rel* relation = tdgbl->relations; relation; relation = relation->rel_next)
 	{
@@ -363,10 +426,17 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 		{
 			put_index(relation);
 			if (!(tdgbl->gbl_sw_meta || tdgbl->skipRelation(relation->rel_name)))
-				put_data(relation);
+			{
+				task.SetRelation(relation);
+				coord.runSync(&task);
+
+				if (!task.getResult(NULL))
+					BURP_exit_local(FINI_ERROR, tdgbl);
+			}
 		}
 
 		put(tdgbl, (UCHAR) rec_relation_end);
+	}
 	}
 
 	// now for the new triggers in rdb$triggers
@@ -557,8 +627,7 @@ void general_on_error()
  **************************************/
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
-	BURP_print_status(true, isc_status);
-	BURP_abort();
+	BURP_abort(isc_status);
 }
 
 
@@ -973,6 +1042,7 @@ void put_array( burp_fld* field, burp_rel* relation, ISC_QUAD* blob_id)
 	case blr_long:
 	case blr_quad:
 	case blr_int64:
+	case blr_int128:
 		add_byte(blr, field->fld_scale);
 		break;
 	case blr_text:
@@ -1047,6 +1117,7 @@ void put_array( burp_fld* field, burp_rel* relation, ISC_QUAD* blob_id)
 
 	if (!status_vector.isSuccess())
 	{
+		BurpMaster master;
 		BURP_print(false, 81, field->fld_name);
 		// msg 81 error accessing blob field %s -- continuing
 		BURP_print_status(false, &status_vector);
@@ -1192,6 +1263,7 @@ void put_blob( burp_fld* field, ISC_QUAD& blob_id)
 
 	if (!blob.open(DB, gds_trans, blob_id))
 	{
+		BurpMaster master;
 		BURP_print(false, 81, field->fld_name);
 		// msg 81 error accessing blob field %s -- continuing
 		BURP_print_status(false, &status_vector);
@@ -1415,7 +1487,7 @@ bool put_blr_blob( att_type attribute, ISC_QUAD& blob_id)
 }
 
 
-void put_data(burp_rel* relation)
+void put_data(burp_rel* relation, ReadRelationReq* request)
 {
 /**************************************
  *
@@ -1428,296 +1500,73 @@ void put_data(burp_rel* relation)
  *
  **************************************/
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
-	USHORT field_count = 1;	// eof field
+	BackupRelationTask* task = BackupRelationTask::getBackupTask(tdgbl);
+	const ReadRelationMeta* reqMeta = request->getMeta();
+
+	HalfStaticArray<burp_fld*, 4> blobFlds;
+	HalfStaticArray<burp_fld*, 4> arrayFlds;
+
+	SSHORT count = 0;
 	burp_fld* field;
 	for (field = relation->rel_fields; field; field = field->fld_next)
 	{
-		if (!(field->fld_flags & FLD_computed))
-		{
-			field_count += 2;
-		}
-	}
-	fb_assert(field_count > 0 && field_count * 9 > 0 && field_count * 9 + 200 > 0);
-
-	// Time to generate blr to fetch data.  Make sure we allocate a BLR buffer
-	// large enough to handle the per field overhead
-	UCHAR* const blr_buffer = BURP_alloc(200 + field_count * 9);
-	UCHAR* blr = blr_buffer;
-	add_byte(blr, blr_version4);
-	add_byte(blr, blr_begin);
-	add_byte(blr, blr_message);
-	add_byte(blr, 0);				// Message number
-	add_word(blr, field_count);		// Number of fields, counting eof
-
-	RCRD_OFFSET offset = 0;
-	USHORT count = 0;   // This is param count.
-
-	for (field = relation->rel_fields; field; field = field->fld_next)
-	{
 		if (field->fld_flags & FLD_computed)
 			continue;
-		SSHORT alignment = 4;
-		FLD_LENGTH length = field->fld_length;
-		SSHORT dtype = field->fld_type;
+
+		count += 2;
+
 		if (field->fld_flags & FLD_array)
-		{
-			dtype = blr_blob;
-			length = 8;
-		}
-		switch (dtype)
-		{
-		case blr_text:
-			alignment = type_alignments[dtype_text];
-			add_byte(blr, field->fld_type);
-			add_word(blr, field->fld_length);
-			break;
-
-		case blr_varying:
-			alignment = type_alignments[dtype_varying];
-			add_byte(blr, field->fld_type);
-			add_word(blr, field->fld_length);
-			length += sizeof(USHORT);
-			break;
-
-		case blr_short:
-			alignment = type_alignments[dtype_short];
-			add_byte(blr, field->fld_type);
-			add_byte(blr, field->fld_scale);
-			break;
-
-		case blr_long:
-			alignment = type_alignments[dtype_long];
-			add_byte(blr, field->fld_type);
-			add_byte(blr, field->fld_scale);
-			break;
-
-		case blr_quad:
-			alignment = type_alignments[dtype_quad];
-			add_byte(blr, field->fld_type);
-			add_byte(blr, field->fld_scale);
-			break;
-
-		case blr_int64:
-			alignment = type_alignments[dtype_int64];
-			add_byte(blr, field->fld_type);
-			add_byte(blr, field->fld_scale);
-			break;
-
-		case blr_int128:
-			alignment = type_alignments[dtype_int128];
-			add_byte(blr, field->fld_type);
-			add_byte(blr, field->fld_scale);
-			break;
-
-		case blr_double:
-			alignment = type_alignments[dtype_double];
-			add_byte(blr, field->fld_type);
-			break;
-
-		case blr_timestamp:
-			alignment = type_alignments[dtype_timestamp];
-			add_byte(blr, field->fld_type);
-			break;
-
-		case blr_timestamp_tz:
-			alignment = type_alignments[dtype_timestamp_tz];
-			add_byte(blr, field->fld_type);
-			break;
-
-		case blr_sql_time:
-			alignment = type_alignments[dtype_sql_time];
-			add_byte(blr, field->fld_type);
-			break;
-
-		case blr_sql_time_tz:
-			alignment = type_alignments[dtype_sql_time_tz];
-			add_byte(blr, field->fld_type);
-			break;
-
-		case blr_sql_date:
-			alignment = type_alignments[dtype_sql_date];
-			add_byte(blr, field->fld_type);
-			break;
-
-		case blr_float:
-			alignment = type_alignments[dtype_real];
-			add_byte(blr, field->fld_type);
-			break;
-
-		case blr_blob:
-			alignment = type_alignments[dtype_blob];
-			add_byte(blr, blr_quad);
-			add_byte(blr, 0);
-			break;
-
-		case blr_bool:
-			alignment = type_alignments[dtype_boolean];
-			add_byte(blr, field->fld_type);
-			break;
-
-		case blr_dec64:
-		case blr_dec128:
-			alignment = type_alignments[dtype];
-			add_byte(blr, field->fld_type);
-			break;
-
-		default:
-			BURP_error_redirect(NULL, 26, SafeArg() << field->fld_type);
-			// msg 26 datatype %ld not understood
-			break;
-		}
-
-		if (alignment)
-			offset = FB_ALIGN(offset, alignment);
-
-		field->fld_offset = offset;
-		field->fld_parameter = count++;
-		offset += length;
+			arrayFlds.add(field);
+		else if (field->fld_type == blr_blob)
+			blobFlds.add(field);
 	}
+	count++; // eof
 
-	// Next, build fields for null flags
-
-	for (field = relation->rel_fields; field; field = field->fld_next)
+	FbLocalStatus status;
+	request->start(&status, gds_trans);
+	if (status->getState() & IStatus::STATE_ERRORS)
 	{
-		if (field->fld_flags & FLD_computed)
-			continue;
-		add_byte(blr, blr_short);
-		add_byte(blr, 0);
-		offset = FB_ALIGN(offset, sizeof(SSHORT));
-		field->fld_missing_parameter = count++;
-		offset += sizeof(SSHORT);
-	}
-
-	// Finally, make up an EOF field
-
-	add_byte(blr, blr_short);			// eof field
-	add_byte(blr, 0);					// scale for eof field
-	SSHORT eof_parameter = count++;
-	RCRD_OFFSET record_length = offset;
-	RCRD_OFFSET eof_offset = FB_ALIGN(offset, sizeof(SSHORT));
-	// To be used later for the buffer size to receive data
-	const RCRD_LENGTH length = (RCRD_LENGTH) (eof_offset + sizeof(SSHORT));
-
-	// Build FOR loop, body, and eof handler
-
-	add_byte(blr, blr_for);
-	add_byte(blr, blr_rse);
-	add_byte(blr, 1);					// count of relations
-	add_byte(blr, blr_rid);
-	add_word(blr, relation->rel_id);
-	add_byte(blr, 0);					// context variable
-	add_byte(blr, blr_end);
-
-	add_byte(blr, blr_send);
-	add_byte(blr, 0);
-	add_byte(blr, blr_begin);
-	add_byte(blr, blr_assignment);
-	add_byte(blr, blr_literal);
-	add_byte(blr, blr_short);
-	add_byte(blr, 0);
-	add_word(blr, 1);
-	add_byte(blr, blr_parameter);
-	add_byte(blr, 0);
-	add_word(blr, eof_parameter);
-
-	for (field = relation->rel_fields; field; field = field->fld_next)
-	{
-		if (field->fld_flags & FLD_computed)
-			continue;
-		add_byte(blr, blr_assignment);
-		add_byte(blr, blr_fid);
-		add_byte(blr, 0);
-		add_word(blr, field->fld_id);
-		add_byte(blr, blr_parameter2);
-		add_byte(blr, 0);
-		add_word(blr, field->fld_parameter);
-		add_word(blr, field->fld_missing_parameter);
-	}
-
-	add_byte(blr, blr_end);
-
-	add_byte(blr, blr_send);
-	add_byte(blr, 0);
-	add_byte(blr, blr_assignment);
-	add_byte(blr, blr_literal);
-	add_byte(blr, blr_short);
-	add_byte(blr, 0);
-	add_word(blr, 0);
-	add_byte(blr, blr_parameter);
-	add_byte(blr, 0);
-	add_word(blr, eof_parameter);
-
-	add_byte(blr, blr_end);
-	add_byte(blr, blr_eoc);
-
-	unsigned blr_length = blr - blr_buffer;
-
-#ifdef DEBUG
-	if (debug_on)
-		fb_print_blr(blr_buffer, blr_length, NULL, NULL, 0);
-#endif
-
-	// Compile request
-
-	FbLocalStatus status_vector;
-	Firebird::IRequest* request = DB->compileRequest(&status_vector, blr_length, blr_buffer);
-	if (!status_vector.isSuccess())
-	{
-		BURP_error_redirect(&status_vector, 27);
-		// msg 27 isc_compile_request failed
-		fb_print_blr(blr_buffer, blr_length, NULL, NULL, 0);
-	}
-
-	BURP_free(blr_buffer);
-
-	BURP_verbose(142, relation->rel_name);
-	// msg 142  writing data for relation %s
-
-	request->start(&status_vector, gds_trans, 0);
-	if (!status_vector.isSuccess())
-	{
-		BURP_error_redirect(&status_vector, 28);
+		BURP_error_redirect(&status, 28);
 		// msg 28 isc_start_request failed
 	}
 
 	// Here is the crux of the problem -- writing data.  All this work
 	// for the following small loop.
 
-	UCHAR* buffer = BURP_alloc(length);
-	SSHORT* eof = (SSHORT *) (buffer + eof_offset);
+	const UCHAR* buffer = request->getData();
 
 	// the XDR representation may be even fluffier
 	lstring xdr_buffer;
 	if (tdgbl->gbl_sw_transportable)
 	{
-		xdr_buffer.lstr_length = xdr_buffer.lstr_allocated = length + count * 3;
+		xdr_buffer.lstr_length = xdr_buffer.lstr_allocated = reqMeta->m_outMsgLen + count * 3;
 		xdr_buffer.lstr_address = BURP_alloc(xdr_buffer.lstr_length);
 	}
 	else
 		xdr_buffer.lstr_address = NULL;
 
-	FB_UINT64 records = 0;
+	RCRD_LENGTH record_length = reqMeta->m_outRecLen;
+
 	while (true)
 	{
-		request->receive(&status_vector, 0, 0, length, buffer);
-		if (!status_vector.isSuccess())
+		if (task->isStopped())
+			break;
+
+		request->receive(&status);
+		if (status->getState() & IStatus::STATE_ERRORS)
 		{
-			BURP_error_redirect(&status_vector, 29);
+			BURP_error_redirect(&status, 29);
 			// msg 29 isc_receive failed
 		}
-		if (!*eof)
+		if (!request->eof())
 			break;
-		records++;
-		// Verbose records
-		if ((records % tdgbl->verboseInterval) == 0)
-			BURP_verbose(108, SafeArg() << records);
 
 		put(tdgbl, (UCHAR) rec_data);
 		put_int32(att_data_length, record_length);
 		const UCHAR* p;
 		if (tdgbl->gbl_sw_transportable)
 		{
-			record_length = CAN_encode_decode(relation, &xdr_buffer, buffer, true);
+			record_length = CAN_encode_decode(relation, &xdr_buffer, const_cast<UCHAR*>(buffer), TRUE);
 			put_int32(att_xdr_length, record_length);
 			p = xdr_buffer.lstr_address;
 		}
@@ -1731,38 +1580,31 @@ void put_data(burp_rel* relation)
 
 		// Look for any blobs to write
 
-		for (field = relation->rel_fields; field; field = field->fld_next)
+		for (burp_fld** pField = blobFlds.begin(); pField < blobFlds.end(); pField++)
 		{
-			if (field->fld_type == blr_blob &&
-				!(field->fld_flags & FLD_computed) && !(field->fld_flags & FLD_array))
-			{
-				put_blob(field, *(ISC_QUAD*) (buffer + field->fld_offset));
-			}
+			if (task->isStopped())
+				break;
+
+			field = *pField;
+			put_blob(field, *(ISC_QUAD*) (buffer + field->fld_offset));
 		}
 
 		// Look for any array to write
 		// we got back the blob_id for the array from isc_receive in the second param.
-		for (field = relation->rel_fields; field; field = field->fld_next)
+		for (burp_fld** pField = arrayFlds.begin(); pField < arrayFlds.end(); pField++)
 		{
-			if (field->fld_flags & FLD_array)
-			{
-				put_array(field, relation, (ISC_QUAD*) (buffer + field->fld_offset));
-			}
-		}
-	}
+			if (task->isStopped())
+				break;
 
-	BURP_free(buffer);
+			field = *pField;
+			put_array(field, relation, (ISC_QUAD*)(buffer + field->fld_offset));
+		}
+
+		BackupRelationTask::recordAdded(tdgbl);
+	}
 
 	if (xdr_buffer.lstr_address)
 		BURP_free(xdr_buffer.lstr_address);
-
-	BURP_verbose(108, SafeArg() << records);
-	// msg 108 %ld records written
-
-	request->free(&status_vector);
-	if (!status_vector.isSuccess())
-		BURP_error_redirect(&status_vector, 30);
-	// msg 30 isc_release_request failed
 }
 
 
@@ -1791,73 +1633,158 @@ void put_index( burp_rel* relation)
 	// requests--this requires more code but it is well worth it
 	// for the performance benefits, especially remotely--deej
 
-	FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle1)
-		X IN RDB$INDICES WITH
-		X.RDB$RELATION_NAME EQ relation->rel_name
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL13_1)
+	{
+		FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle1)
+			X IN RDB$INDICES WITH
+			X.RDB$RELATION_NAME EQ relation->rel_name
 
-		count = 0;
-		FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle2)
-			I_S IN RDB$INDEX_SEGMENTS CROSS
-			RFR IN RDB$RELATION_FIELDS WITH
-			I_S.RDB$FIELD_NAME = RFR.RDB$FIELD_NAME AND
-			I_S.RDB$INDEX_NAME = X.RDB$INDEX_NAME AND
-			RFR.RDB$RELATION_NAME = relation->rel_name
+			count = 0;
+			FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle2)
+				I_S IN RDB$INDEX_SEGMENTS CROSS
+				RFR IN RDB$RELATION_FIELDS WITH
+				I_S.RDB$FIELD_NAME = RFR.RDB$FIELD_NAME AND
+				I_S.RDB$INDEX_NAME = X.RDB$INDEX_NAME AND
+				RFR.RDB$RELATION_NAME = relation->rel_name
 
-			count++;
+				count++;
+
+			END_FOR;
+			ON_ERROR
+				general_on_error();
+			END_ERROR;
+
+			if (count != (ULONG) X.RDB$SEGMENT_COUNT)
+			{
+				BURP_print(true, 180, SafeArg() << X.RDB$INDEX_NAME << count << X.RDB$SEGMENT_COUNT);
+				continue;
+			}
+
+			put(tdgbl, rec_index);
+			const ULONG l = PUT_TEXT (att_index_name, X.RDB$INDEX_NAME);
+			MISC_terminate (X.RDB$INDEX_NAME, temp, l, sizeof(temp));
+			BURP_verbose (151, temp);
+			// msg 151 writing index %s
+			put_int32 (att_segment_count, X.RDB$SEGMENT_COUNT);
+			put_int32 (att_index_inactive, X.RDB$INDEX_INACTIVE);
+			put_int32 (att_index_unique_flag, X.RDB$UNIQUE_FLAG);
+
+			FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle5)
+				Y IN RDB$INDEX_SEGMENTS WITH
+				Y.RDB$INDEX_NAME EQ X.RDB$INDEX_NAME
+				SORTED BY Y.RDB$FIELD_POSITION
+
+				PUT_TEXT (att_index_field_name, Y.RDB$FIELD_NAME);
+
+			END_FOR;
+			ON_ERROR
+				general_on_error();
+			END_ERROR;
+
+			put_source_blob (att_index_description2, att_index_description, X.RDB$DESCRIPTION);
+			put_int32 (att_index_type, X.RDB$INDEX_TYPE);
+
+			if (!X.RDB$EXPRESSION_SOURCE.NULL)
+			{
+				put_source_blob(att_index_expression_source, att_index_expression_source,
+								X.RDB$EXPRESSION_SOURCE);
+			}
+			if (!X.RDB$EXPRESSION_BLR.NULL)
+				put_blr_blob(att_index_expression_blr, X.RDB$EXPRESSION_BLR);
+
+			if (!X.RDB$FOREIGN_KEY.NULL)
+				PUT_TEXT (att_index_foreign_key, X.RDB$FOREIGN_KEY);
+
+			if (!X.RDB$TABLESPACE_NAME.NULL)
+				PUT_TEXT (att_index_tablespace_name, X.RDB$TABLESPACE_NAME);
+
+			if (!X.RDB$CONDITION_SOURCE.NULL)
+			{
+				put_source_blob(att_index_condition_source, att_index_condition_source,
+								X.RDB$CONDITION_SOURCE);
+			}
+			if (!X.RDB$CONDITION_BLR.NULL)
+				put_blr_blob(att_index_condition_blr, X.RDB$CONDITION_BLR);
+
+			put(tdgbl, att_end);
 
 		END_FOR;
 		ON_ERROR
 			general_on_error();
 		END_ERROR;
+	}
+	else
+	{
+		FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle1)
+			X IN RDB$INDICES WITH
+			X.RDB$RELATION_NAME EQ relation->rel_name
 
-		if (count != (ULONG) X.RDB$SEGMENT_COUNT)
-		{
-			BURP_print(true, 180, SafeArg() << X.RDB$INDEX_NAME << count << X.RDB$SEGMENT_COUNT);
-			continue;
-		}
+			count = 0;
+			FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle2)
+				I_S IN RDB$INDEX_SEGMENTS CROSS
+				RFR IN RDB$RELATION_FIELDS WITH
+				I_S.RDB$FIELD_NAME = RFR.RDB$FIELD_NAME AND
+				I_S.RDB$INDEX_NAME = X.RDB$INDEX_NAME AND
+				RFR.RDB$RELATION_NAME = relation->rel_name
 
-		put(tdgbl, rec_index);
-		const ULONG l = PUT_TEXT (att_index_name, X.RDB$INDEX_NAME);
-		MISC_terminate (X.RDB$INDEX_NAME, temp, l, sizeof(temp));
-		BURP_verbose (151, temp);
-		// msg 151 writing index %s
-		put_int32 (att_segment_count, X.RDB$SEGMENT_COUNT);
-		put_int32 (att_index_inactive, X.RDB$INDEX_INACTIVE);
-		put_int32 (att_index_unique_flag, X.RDB$UNIQUE_FLAG);
+				count++;
 
-		FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle5)
-			Y IN RDB$INDEX_SEGMENTS WITH
-			Y.RDB$INDEX_NAME EQ X.RDB$INDEX_NAME
-			SORTED BY Y.RDB$FIELD_POSITION
+			END_FOR;
+			ON_ERROR
+				general_on_error();
+			END_ERROR;
 
-			PUT_TEXT (att_index_field_name, Y.RDB$FIELD_NAME);
+			if (count != (ULONG) X.RDB$SEGMENT_COUNT)
+			{
+				BURP_print(true, 180, SafeArg() << X.RDB$INDEX_NAME << count << X.RDB$SEGMENT_COUNT);
+				continue;
+			}
+
+			put(tdgbl, rec_index);
+			const ULONG l = PUT_TEXT (att_index_name, X.RDB$INDEX_NAME);
+			MISC_terminate (X.RDB$INDEX_NAME, temp, l, sizeof(temp));
+			BURP_verbose (151, temp);
+			// msg 151 writing index %s
+			put_int32 (att_segment_count, X.RDB$SEGMENT_COUNT);
+			put_int32 (att_index_inactive, X.RDB$INDEX_INACTIVE);
+			put_int32 (att_index_unique_flag, X.RDB$UNIQUE_FLAG);
+
+			FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle5)
+				Y IN RDB$INDEX_SEGMENTS WITH
+				Y.RDB$INDEX_NAME EQ X.RDB$INDEX_NAME
+				SORTED BY Y.RDB$FIELD_POSITION
+
+				PUT_TEXT (att_index_field_name, Y.RDB$FIELD_NAME);
+
+			END_FOR;
+			ON_ERROR
+				general_on_error();
+			END_ERROR;
+
+			put_source_blob (att_index_description2, att_index_description, X.RDB$DESCRIPTION);
+			put_int32 (att_index_type, X.RDB$INDEX_TYPE);
+
+			if (!X.RDB$EXPRESSION_SOURCE.NULL)
+			{
+				put_source_blob(att_index_expression_source, att_index_expression_source,
+								X.RDB$EXPRESSION_SOURCE);
+			}
+			if (!X.RDB$EXPRESSION_BLR.NULL)
+				put_blr_blob(att_index_expression_blr, X.RDB$EXPRESSION_BLR);
+
+			if (!X.RDB$FOREIGN_KEY.NULL)
+				PUT_TEXT (att_index_foreign_key, X.RDB$FOREIGN_KEY);
+
+			if (!X.RDB$TABLESPACE_NAME.NULL)	// For old versions I expect it will be NULL here. Right?
+				PUT_TEXT (att_index_tablespace_name, X.RDB$TABLESPACE_NAME);
+
+			put(tdgbl, att_end);
 
 		END_FOR;
 		ON_ERROR
 			general_on_error();
 		END_ERROR;
-
-		put_source_blob (att_index_description2, att_index_description, X.RDB$DESCRIPTION);
-		put_int32 (att_index_type, X.RDB$INDEX_TYPE);
-
-		if (!X.RDB$EXPRESSION_SOURCE.NULL)
-			put_source_blob (att_index_expression_source, att_index_expression_source,
-							 X.RDB$EXPRESSION_SOURCE);
-		if (!X.RDB$EXPRESSION_BLR.NULL)
-			put_blr_blob (att_index_expression_blr, X.RDB$EXPRESSION_BLR);
-		if (!X.RDB$FOREIGN_KEY.NULL)
-			PUT_TEXT (att_index_foreign_key, X.RDB$FOREIGN_KEY);
-
-		// ODS 14
-		if (!X.RDB$TABLESPACE_NAME.NULL) // For older ODS NULL is expected here
-			PUT_TEXT(att_index_tablespace_name, X.RDB$TABLESPACE_NAME);
-
-		put(tdgbl, att_end);
-
-	END_FOR;
-	ON_ERROR
-		general_on_error();
-	END_ERROR;
+	}
 }
 
 
@@ -2181,7 +2108,19 @@ void put_relation( burp_rel* relation)
 			END_ERROR;
 		}
 	}
-	put(tdgbl, (UCHAR) rec_relation_end);
+	else if (!tdgbl->gbl_sw_meta)
+	{
+		FOR(REQUEST_HANDLE tdgbl->handles_put_relation_req_handle3)
+			FIRST 1 P IN RDB$PAGES WITH P.RDB$RELATION_ID EQ relation->rel_id
+			AND P.RDB$PAGE_TYPE = pag_pointer
+			SORTED BY DESCENDING P.RDB$PAGE_SEQUENCE
+			relation->rel_max_pp = P.RDB$PAGE_SEQUENCE;
+		END_FOR;
+		ON_ERROR
+			general_on_error();
+		END_ERROR;
+	}
+	put(tdgbl, (UCHAR)rec_relation_end);
 }
 
 
@@ -2599,6 +2538,7 @@ void write_database( const TEXT* dbb_file)
 	FbLocalStatus status_vector;
 	UCHAR buffer[256];
 	Firebird::IRequest* req_handle1 = nullptr;
+	Firebird::IRequest* req_handle2 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -2701,6 +2641,26 @@ void write_database( const TEXT* dbb_file)
 		ON_ERROR
 			general_on_error();
 		END_ERROR;
+
+		if (tdgbl->runtimeODS >= DB_VERSION_DDL13)
+		{
+			FOR (REQUEST_HANDLE req_handle2)
+				PUB IN RDB$PUBLICATIONS
+				WITH PUB.RDB$PUBLICATION_NAME EQ DEFAULT_PUBLICATION
+			{
+				fb_assert(PUB.RDB$SYSTEM_FLAG != 0);
+
+				if (!PUB.RDB$ACTIVE_FLAG.NULL)
+					put_boolean(att_default_pub_active, PUB.RDB$ACTIVE_FLAG);
+
+				if (!PUB.RDB$AUTO_ENABLE.NULL)
+					put_boolean(att_default_pub_auto_enable, PUB.RDB$AUTO_ENABLE);
+			}
+			END_FOR
+			ON_ERROR
+				general_on_error();
+			END_ERROR
+		}
 	}
 	else
 	{
@@ -2718,6 +2678,7 @@ void write_database( const TEXT* dbb_file)
 	}
 
 	MISC_release_request_silent(req_handle1);
+	MISC_release_request_silent(req_handle2);
 
 	put(tdgbl, att_end);
 }
@@ -2902,7 +2863,10 @@ void write_functions()
 			BURP_verbose (147, temp);
 			// msg 147 writing function %.*s
 			put_source_blob (att_function_description2, att_function_description, X.RDB$DESCRIPTION);
-			put_int32 (att_function_return_arg, X.RDB$RETURN_ARGUMENT);
+
+			if (!X.RDB$RETURN_ARGUMENT.NULL)
+				put_int32 (att_function_return_arg, X.RDB$RETURN_ARGUMENT);
+
 			put_int32 (att_function_type, X.RDB$FUNCTION_TYPE);
 			PUT_TEXT (att_function_query_name, X.RDB$QUERY_NAME);
 
@@ -2956,7 +2920,10 @@ void write_functions()
 			put_source_blob (att_function_description2, att_function_description, X.RDB$DESCRIPTION);
 			PUT_TEXT (att_function_module_name, X.RDB$MODULE_NAME);
 			PUT_TEXT (att_function_entrypoint, X.RDB$ENTRYPOINT);
-			put_int32 (att_function_return_arg, X.RDB$RETURN_ARGUMENT);
+
+			if (!X.RDB$RETURN_ARGUMENT.NULL)
+				put_int32 (att_function_return_arg, X.RDB$RETURN_ARGUMENT);
+
 			put_int32 (att_function_type, X.RDB$FUNCTION_TYPE);
 			PUT_TEXT (att_function_query_name, X.RDB$QUERY_NAME);
 			put(tdgbl, att_end);
@@ -3018,7 +2985,9 @@ void write_function_args(const GDS_NAME package, GDS_NAME funcptr)
 			BURP_verbose (141, temp);
 			// msg 141 writing argument for function %s
 
-			put_int32 (att_functionarg_position, X.RDB$ARGUMENT_POSITION);
+			if (!X.RDB$ARGUMENT_POSITION.NULL)
+				put_int32 (att_functionarg_position, X.RDB$ARGUMENT_POSITION);
+
 			put_int32 (att_functionarg_passing_mechanism, X.RDB$MECHANISM);
 			put_int32 (att_functionarg_field_type, X.RDB$FIELD_TYPE);
 			put_int32 (att_functionarg_field_scale, X.RDB$FIELD_SCALE);
@@ -3069,7 +3038,10 @@ void write_function_args(const GDS_NAME package, GDS_NAME funcptr)
 			MISC_terminate (X.RDB$FUNCTION_NAME, temp, l, sizeof(temp));
 			BURP_verbose (141, temp);
 			// msg 141 writing argument for function %s
-			put_int32 (att_functionarg_position, X.RDB$ARGUMENT_POSITION);
+
+			if (!X.RDB$ARGUMENT_POSITION.NULL)
+				put_int32 (att_functionarg_position, X.RDB$ARGUMENT_POSITION);
+
 			put_int32 (att_functionarg_passing_mechanism, X.RDB$MECHANISM);
 			put_int32 (att_functionarg_field_type, X.RDB$FIELD_TYPE);
 			put_int32 (att_functionarg_field_scale, X.RDB$FIELD_SCALE);
@@ -3097,7 +3069,10 @@ void write_function_args(const GDS_NAME package, GDS_NAME funcptr)
 			MISC_terminate (X.RDB$FUNCTION_NAME, temp, l, sizeof(temp));
 			BURP_verbose (141, temp);
 			// msg 141 writing argument for function %s
-			put_int32 (att_functionarg_position, X.RDB$ARGUMENT_POSITION);
+
+			if (!X.RDB$ARGUMENT_POSITION.NULL)
+				put_int32 (att_functionarg_position, X.RDB$ARGUMENT_POSITION);
+
 			put_int32 (att_functionarg_passing_mechanism, X.RDB$MECHANISM);
 			put_int32 (att_functionarg_field_type, X.RDB$FIELD_TYPE);
 			put_int32 (att_functionarg_field_scale, X.RDB$FIELD_SCALE);
@@ -4276,7 +4251,7 @@ void write_tablespaces()
 		const SSHORT l = PUT_TEXT(att_ts_name, X.RDB$TABLESPACE_NAME);
 		MISC_terminate(X.RDB$TABLESPACE_NAME, temp, l, sizeof(temp));
 
-		BURP_verbose(407, temp);	// msg 407 writing tablespace @1
+		BURP_verbose(412, temp);	// msg 412 writing tablespace @1
 
 		if (!X.RDB$SECURITY_CLASS.NULL)
 			PUT_TEXT(att_ts_security_class, X.RDB$SECURITY_CLASS);
@@ -4609,3 +4584,443 @@ void write_user_privileges()
 
 } // namespace
 
+namespace Burp {
+
+/// class ReadRelationMeta
+
+void ReadRelationMeta::setRelation(const burp_rel* relation, bool partition)
+{
+	m_relation = relation;
+
+	// Build request BLR. There could be two kind of requests :
+	// a) partition == true
+	//		SELECT * FROM relation
+	//		 WHERE dbkey >= MAKE_DBKEY(rel_id, 0, 0, :loPP)
+	//		   AND dbkey  < MAKE_DBKEY(rel_id, 0, 0, :hiPP)
+	// b) partition = false
+	//		SELECT * FROM relation
+	// Note, computed fields are not included into results
+
+	// CVC: A signed short isn't enough if the engine allows near 32K fields,
+	// each being char(1) ASCII in the worst case. Looking at BLR generation
+	// below, it's clear an extreme case won't compile => blr_length >= 32K.
+	// However, SSHORT is the limit for request_length in isc_compile_request.
+	m_fldCount = 1;
+	burp_fld* field;
+
+	for (field = relation->rel_fields; field; field = field->fld_next)
+	{
+		if (!(field->fld_flags & FLD_computed))
+		{
+			m_fldCount += 2;
+		}
+	}
+	fb_assert(m_fldCount > 0 && m_fldCount * 9 > 0 && m_fldCount * 9 + 200 > 0);
+
+	// Time to generate blr to fetch data.  Make sure we allocate a BLR buffer
+	// large enough to handle the per field overhead
+	UCHAR* const blr_buffer = m_blr.getBuffer(200 + m_fldCount * 9);
+	UCHAR* blr = blr_buffer;
+	add_byte(blr, blr_version4);
+	add_byte(blr, blr_begin);
+
+	// in message
+	m_inMgsNum = m_outMgsNum = 0;
+	if (partition)
+	{
+		add_byte(blr, blr_message);
+		add_byte(blr, m_inMgsNum);		// Message number
+		add_word(blr, 2);				//
+		add_byte(blr, blr_long);		// loPP
+		add_byte(blr, 0);
+		add_byte(blr, blr_long);		// hiPP
+		add_byte(blr, 0);
+
+		m_outMgsNum = m_inMgsNum + 1;
+	}
+
+	// out message
+	add_byte(blr, blr_message);
+	add_byte(blr, m_outMgsNum);		// Message number
+	add_word(blr, m_fldCount);		// Number of fields, counting eof
+
+	RCRD_OFFSET offset = 0;
+	SSHORT count = 0;   // This is param count.
+
+	for (field = relation->rel_fields; field; field = field->fld_next)
+	{
+		if (field->fld_flags & FLD_computed)
+			continue;
+		SSHORT alignment = 4;
+		FLD_LENGTH length = field->fld_length;
+		SSHORT dtype = field->fld_type;
+		if (field->fld_flags & FLD_array)
+		{
+			dtype = blr_blob;
+			length = 8;
+		}
+		switch (dtype)
+		{
+		case blr_text:
+			alignment = type_alignments[dtype_text];
+			add_byte(blr, field->fld_type);
+			add_word(blr, field->fld_length);
+			break;
+
+		case blr_varying:
+			alignment = type_alignments[dtype_varying];
+			add_byte(blr, field->fld_type);
+			add_word(blr, field->fld_length);
+			length += sizeof(USHORT);
+			break;
+
+		case blr_short:
+			alignment = type_alignments[dtype_short];
+			add_byte(blr, field->fld_type);
+			add_byte(blr, field->fld_scale);
+			break;
+
+		case blr_long:
+			alignment = type_alignments[dtype_long];
+			add_byte(blr, field->fld_type);
+			add_byte(blr, field->fld_scale);
+			break;
+
+		case blr_quad:
+			alignment = type_alignments[dtype_quad];
+			add_byte(blr, field->fld_type);
+			add_byte(blr, field->fld_scale);
+			break;
+
+		case blr_int64:
+			alignment = type_alignments[dtype_int64];
+			add_byte(blr, field->fld_type);
+			add_byte(blr, field->fld_scale);
+			break;
+
+		case blr_int128:
+			alignment = type_alignments[dtype_int128];
+			add_byte(blr, field->fld_type);
+			add_byte(blr, field->fld_scale);
+			break;
+
+		case blr_double:
+			alignment = type_alignments[dtype_double];
+			add_byte(blr, field->fld_type);
+			break;
+
+		case blr_timestamp:
+			alignment = type_alignments[dtype_timestamp];
+			add_byte(blr, field->fld_type);
+			break;
+
+		case blr_timestamp_tz:
+			alignment = type_alignments[dtype_timestamp_tz];
+			add_byte(blr, field->fld_type);
+			break;
+
+		case blr_sql_time:
+			alignment = type_alignments[dtype_sql_time];
+			add_byte(blr, field->fld_type);
+			break;
+
+		case blr_sql_time_tz:
+			alignment = type_alignments[dtype_sql_time_tz];
+			add_byte(blr, field->fld_type);
+			break;
+
+		case blr_sql_date:
+			alignment = type_alignments[dtype_sql_date];
+			add_byte(blr, field->fld_type);
+			break;
+
+		case blr_float:
+			alignment = type_alignments[dtype_real];
+			add_byte(blr, field->fld_type);
+			break;
+
+		case blr_blob:
+			alignment = type_alignments[dtype_blob];
+			add_byte(blr, blr_quad);
+			add_byte(blr, 0);
+			break;
+
+		case blr_bool:
+			alignment = type_alignments[dtype_boolean];
+			add_byte(blr, field->fld_type);
+			break;
+
+		case blr_dec64:
+		case blr_dec128:
+			alignment = type_alignments[dtype];
+			add_byte(blr, field->fld_type);
+			break;
+
+		default:
+			BURP_error_redirect(NULL, 26, SafeArg() << field->fld_type);
+			// msg 26 datatype %ld not understood
+			break;
+		}
+		if (alignment)
+			offset = FB_ALIGN(offset, alignment);
+		field->fld_offset = offset;
+		field->fld_parameter = count++;
+		offset += length;
+	}
+
+	// Next, build fields for null flags
+
+	for (field = relation->rel_fields; field; field = field->fld_next)
+	{
+		if (field->fld_flags & FLD_computed)
+			continue;
+		add_byte(blr, blr_short);
+		add_byte(blr, 0);
+		offset = FB_ALIGN(offset, sizeof(SSHORT));
+		field->fld_missing_parameter = count++;
+		offset += sizeof(SSHORT);
+	}
+
+	// Finally, make up an EOF field
+
+	add_byte(blr, blr_short);			// eof field
+	add_byte(blr, 0);					// scale for eof field
+	const SSHORT eof_parameter = count++;
+	m_outRecLen = offset;
+	m_outEofOffset = FB_ALIGN(offset, sizeof(SSHORT));
+	// To be used later for the buffer size to receive data
+	m_outMsgLen = m_outEofOffset + sizeof(SSHORT);
+
+	if (partition)
+	{
+		add_byte(blr, blr_receive);
+		add_byte(blr, m_inMgsNum);
+	}
+
+	// Build FOR loop, body, and eof handler
+
+	add_byte(blr, blr_for);
+	add_byte(blr, blr_rse);
+	add_byte(blr, 1);					// count of relations
+	add_byte(blr, blr_rid);
+	add_word(blr, relation->rel_id);
+	add_byte(blr, 0);					// context variable
+
+	if (partition)
+	{
+		// add boolean condition
+		add_byte(blr, blr_boolean);
+		add_byte(blr, blr_and);
+		add_byte(blr, blr_geq);
+		add_byte(blr, blr_dbkey);
+		add_byte(blr, 0);
+		add_byte(blr, blr_sys_function);
+		add_string(blr, "MAKE_DBKEY");
+		add_byte(blr, 4);
+		add_byte(blr, blr_literal);		// relID
+		add_byte(blr, blr_long);
+		add_byte(blr, 0);
+		add_long(blr, relation->rel_id);
+		add_byte(blr, blr_literal);		// recNo
+		add_byte(blr, blr_long);
+		add_byte(blr, 0);
+		add_long(blr, 0);
+		add_byte(blr, blr_literal);		// DP
+		add_byte(blr, blr_long);
+		add_byte(blr, 0);
+		add_long(blr, 0);
+		add_byte(blr, blr_parameter);	// PP
+		add_byte(blr, m_inMgsNum);
+		add_word(blr, 0);
+		add_byte(blr, blr_lss);
+		add_byte(blr, blr_dbkey);
+		add_byte(blr, 0);
+		add_byte(blr, blr_sys_function);
+		add_string(blr, "MAKE_DBKEY");
+		add_byte(blr, 4);
+		add_byte(blr, blr_literal);		// relID
+		add_byte(blr, blr_long);
+		add_byte(blr, 0);
+		add_long(blr, relation->rel_id);
+		add_byte(blr, blr_literal);		// recNo
+		add_byte(blr, blr_long);
+		add_byte(blr, 0);
+		add_long(blr, 0);
+		add_byte(blr, blr_literal);		// DP
+		add_byte(blr, blr_long);
+		add_byte(blr, 0);
+		add_long(blr, 0);
+		add_byte(blr, blr_parameter);	// PP
+		add_byte(blr, m_inMgsNum);
+		add_word(blr, 1);
+	}
+
+	// rse end
+	add_byte(blr, blr_end);
+
+	add_byte(blr, blr_send);
+	add_byte(blr, m_outMgsNum);
+	add_byte(blr, blr_begin);
+	add_byte(blr, blr_assignment);
+	add_byte(blr, blr_literal);
+	add_byte(blr, blr_short);
+	add_byte(blr, 0);
+	add_word(blr, 1);
+	add_byte(blr, blr_parameter);
+	add_byte(blr, m_outMgsNum);
+	add_word(blr, eof_parameter);
+
+	for (field = relation->rel_fields; field; field = field->fld_next)
+	{
+		if (field->fld_flags & FLD_computed)
+			continue;
+		add_byte(blr, blr_assignment);
+		add_byte(blr, blr_fid);
+		add_byte(blr, 0);						// context
+		add_word(blr, field->fld_id);
+		add_byte(blr, blr_parameter2);
+		add_byte(blr, m_outMgsNum);				// message number
+		add_word(blr, field->fld_parameter);
+		add_word(blr, field->fld_missing_parameter);
+	}
+
+	add_byte(blr, blr_end);
+
+	add_byte(blr, blr_send);
+	add_byte(blr, m_outMgsNum);
+	add_byte(blr, blr_assignment);
+	add_byte(blr, blr_literal);
+	add_byte(blr, blr_short);
+	add_byte(blr, 0);
+	add_word(blr, 0);
+	add_byte(blr, blr_parameter);
+	add_byte(blr, m_outMgsNum);
+	add_word(blr, eof_parameter);
+
+	add_byte(blr, blr_end);
+	add_byte(blr, blr_eoc);
+
+	const FB_SIZE_T blr_length = blr - blr_buffer;
+	m_blr.shrink(blr_length);
+
+#ifdef DEBUG
+	if (debug_on)
+		fb_print_blr(blr_buffer, blr_length, NULL, NULL, 0);
+#endif
+}
+
+void ReadRelationMeta::clear()
+{
+	m_relation = NULL;
+	m_fldCount = 0;
+	m_blr.clear();
+	m_inMgsNum = m_outMgsNum = 0;
+	m_outMsgLen = m_outRecLen = m_outEofOffset = 0;
+}
+
+
+/// class ReadRelationReq
+
+void ReadRelationReq::reset(const ReadRelationMeta* meta)
+{
+	if (m_meta == meta && meta != NULL && m_relation == meta->m_relation)
+		return;
+
+	if (m_meta)
+		clear();
+
+	m_meta = meta;
+	if (m_meta)
+	{
+		m_relation = m_meta->m_relation;
+
+		BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+		FbLocalStatus status;
+		compile(&status, DB);
+		if (status->getState() & IStatus::STATE_ERRORS)
+		{
+			BURP_error_redirect(&status, 27);
+			// msg 27 isc_compile_request failed
+			fb_print_blr(m_meta->m_blr.begin(), m_meta->m_blr.getCount(), NULL, NULL, 0);
+		}
+
+		UCHAR* data = m_outMsg.getBuffer(m_meta->m_outMsgLen);
+		m_eof = reinterpret_cast<SSHORT*> (data + m_meta->m_outEofOffset);
+	}
+	else
+	{
+		m_relation = NULL;
+		m_request = 0;
+		m_eof = NULL;
+	}
+
+	memset(&m_inMgs, 0, sizeof(m_inMgs));
+}
+
+void ReadRelationReq::clear()
+{
+	m_relation = NULL;
+	m_meta = NULL;
+	m_eof = NULL;
+	m_outMsg.clear();
+
+	if (m_request)
+	{
+		FbLocalStatus status;
+		release(&status);
+	}
+}
+
+void ReadRelationReq::compile(CheckStatusWrapper* status, IAttachment* att)
+{
+	m_request = att->compileRequest(status, m_meta->m_blr.getCount(), m_meta->m_blr.begin());
+}
+
+void ReadRelationReq::release(CheckStatusWrapper* status)
+{
+	if (m_request)
+	{
+		m_request->free(status);
+
+		if (!(status->getState() & IStatus::STATE_ERRORS))
+		{
+			m_request = nullptr;
+			clear();
+		}
+	}
+}
+
+void ReadRelationReq::setParams(ULONG loPP, ULONG hiPP)
+{
+	m_inMgs.loPP = loPP;
+	m_inMgs.hiPP = hiPP;
+}
+
+void ReadRelationReq::start(CheckStatusWrapper* status, ITransaction* tran)
+{
+	if (m_meta->haveInputs())
+		m_request->startAndSend(status, tran, 0, m_meta->m_inMgsNum, sizeof(m_inMgs), &m_inMgs);
+	else
+		m_request->start(status, tran, 0);
+}
+
+void ReadRelationReq::receive(CheckStatusWrapper* status)
+{
+	m_request->receive(status, 0, m_meta->m_outMgsNum, m_meta->m_outMsgLen, m_outMsg.begin());
+}
+
+
+/// class BackupRelationTask
+
+bool BackupRelationTask::tableReader(Item& item)
+{
+	item.m_request.reset(&m_metadata);
+	item.m_request.setParams(item.m_ppSequence, item.m_ppSequence + 1);
+
+	put_data(item.m_relation, &item.m_request);
+
+	item.getBackupTask()->releaseBuffer(item);
+	return true;
+}
+
+} // namespace Burp

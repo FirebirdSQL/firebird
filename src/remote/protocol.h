@@ -104,6 +104,11 @@ const USHORT PROTOCOL_VERSION17 = (FB_PROTOCOL_FLAG | 17);
 const USHORT PROTOCOL_VERSION18 = (FB_PROTOCOL_FLAG | 18);
 const USHORT PROTOCOL_FETCH_SCROLL = PROTOCOL_VERSION18;
 
+// Protocol 19:
+//	- supports passing flags to IStatement::prepare
+
+const USHORT PROTOCOL_VERSION19 = (FB_PROTOCOL_FLAG | 19);
+
 // Architecture types
 
 enum P_ARCH
@@ -316,6 +321,7 @@ enum P_OP
 	op_info_batch			= 111,
 
 	op_fetch_scroll			= 112,
+	op_info_cursor			= 113,
 
 	op_max
 };
@@ -323,11 +329,15 @@ enum P_OP
 
 // Count String Structure
 
+class RemoteXdr;
+
 typedef struct cstring
 {
 	ULONG	cstr_length;
 	ULONG	cstr_allocated;
 	UCHAR*	cstr_address;
+
+	void	free(RemoteXdr* xdrs = nullptr);
 } CSTRING;
 
 // CVC: Only used in p_blob, p_sgmt & p_ddl, to validate constness.
@@ -611,6 +621,7 @@ typedef struct p_sqlst
     USHORT	p_sqlst_messages;			// Number of messages
     CSTRING	p_sqlst_out_blr;			// blr describing output message
     USHORT	p_sqlst_out_message_number;
+	USHORT	p_sqlst_flags;				// prepare flags
 } P_SQLST;
 
 typedef struct p_sqldata

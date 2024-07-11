@@ -6,10 +6,10 @@
 BuildVersion="$Id: writeBuildNum.sh,v 1.28732 2010/05/29 13:12:08 fsg Exp $"
 
 BuildType=T
-MajorVer=5
+MajorVer=6
 MinorVer=0
 RevNo=0
-BuildNum=426
+BuildNum=392
 
 NowAt=`pwd`
 cd `dirname $0`

@@ -822,7 +822,7 @@ void INF_database_info(thread_db* tdbb,
 
 		case fb_info_crypt_state:
 			length = INF_convert(dbb->dbb_crypto_manager ?
-				dbb->dbb_crypto_manager->getCurrentState() : 0, buffer);
+				dbb->dbb_crypto_manager->getCurrentState(tdbb) : 0, buffer);
 			break;
 
 		case fb_info_crypt_key:
@@ -910,9 +910,8 @@ void INF_database_info(thread_db* tdbb,
 
 		case fb_info_db_guid:
 			{
-				char guidBuffer[GUID_BUFF_SIZE];
-				GuidToString(guidBuffer, &dbb->dbb_guid);
-				if (!(info = INF_put_item(item, strlen(guidBuffer), guidBuffer, info, end)))
+				const auto guidStr = dbb->dbb_guid.value().toString();
+				if (!(info = INF_put_item(item, guidStr.length(), guidStr.c_str(), info, end)))
 					return;
 			}
 			continue;
@@ -946,6 +945,10 @@ void INF_database_info(thread_db* tdbb,
 					return;
 			}
 			continue;
+
+		case fb_info_parallel_workers:
+			length = INF_convert(att->att_parallel_workers, buffer);
+			break;
 
 		default:
 			buffer[0] = item;

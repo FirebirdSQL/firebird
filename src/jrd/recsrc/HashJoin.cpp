@@ -30,6 +30,7 @@
 #include "../jrd/evl_proto.h"
 #include "../jrd/mov_proto.h"
 #include "../jrd/intl_proto.h"
+#include "../jrd/optimizer/Optimizer.h"
 
 #include "RecordSource.h"
 
@@ -43,6 +44,15 @@ using namespace Jrd;
 // NS: FIXME - Why use static hash table here??? Hash table shall support dynamic resizing
 static const ULONG HASH_SIZE = 1009;
 static const ULONG BUCKET_PREALLOCATE_SIZE = 32;	// 256 bytes per slot
+
+unsigned HashJoin::maxCapacity()
+{
+	// Binary search across 1000 collisions is computationally similar to
+	// linear search across 10 collisions. We use this number as a rough
+	// estimation of whether the lookup performance is likely to be acceptable.
+	return HASH_SIZE * 1000;
+}
+
 
 class HashJoin::HashTable : public PermanentStorage
 {
@@ -208,8 +218,10 @@ private:
 
 
 HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
-				   RecordSource* const* args, NestValueArray* const* keys)
-	: m_args(csb->csb_pool, count - 1)
+				   RecordSource* const* args, NestValueArray* const* keys,
+				   double selectivity)
+	: RecordSource(csb),
+	  m_args(csb->csb_pool, count - 1)
 {
 	fb_assert(count >= 2);
 
@@ -220,6 +232,8 @@ HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
 	const FB_SIZE_T leaderKeyCount = m_leader.keys->getCount();
 	m_leader.keyLengths = FB_NEW_POOL(csb->csb_pool) ULONG[leaderKeyCount];
 	m_leader.totalKeyLength = 0;
+
+	m_cardinality = m_leader.source->getCardinality();
 
 	for (FB_SIZE_T j = 0; j < leaderKeyCount; j++)
 	{
@@ -243,10 +257,14 @@ HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
 		m_leader.totalKeyLength += keyLength;
 	}
 
+	auto keyCount = 0;
+
 	for (FB_SIZE_T i = 1; i < count; i++)
 	{
 		RecordSource* const sub_rsb = args[i];
 		fb_assert(sub_rsb);
+
+		m_cardinality *= sub_rsb->getCardinality();
 
 		SubStream sub;
 		sub.buffer = FB_NEW_POOL(csb->csb_pool) BufferedStream(csb, sub_rsb);
@@ -254,6 +272,8 @@ HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
 		const FB_SIZE_T subKeyCount = sub.keys->getCount();
 		sub.keyLengths = FB_NEW_POOL(csb->csb_pool) ULONG[subKeyCount];
 		sub.totalKeyLength = 0;
+
+		keyCount += subKeyCount;
 
 		for (FB_SIZE_T j = 0; j < subKeyCount; j++)
 		{
@@ -279,9 +299,18 @@ HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
 
 		m_args.add(sub);
 	}
+
+	if (!selectivity)
+	{
+		selectivity = MAXIMUM_SELECTIVITY;
+		while (keyCount--)
+			selectivity *= REDUCE_SELECTIVITY_FACTOR_EQUALITY;
+	}
+
+	m_cardinality *= selectivity;
 }
 
-void HashJoin::open(thread_db* tdbb) const
+void HashJoin::internalOpen(thread_db* tdbb) const
 {
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -289,35 +318,10 @@ void HashJoin::open(thread_db* tdbb) const
 	impure->irsb_flags = irsb_open | irsb_mustread;
 
 	delete impure->irsb_hash_table;
+	impure->irsb_hash_table = nullptr;
+
 	delete[] impure->irsb_leader_buffer;
-
-	MemoryPool& pool = *tdbb->getDefaultPool();
-
-	const FB_SIZE_T argCount = m_args.getCount();
-
-	impure->irsb_hash_table = FB_NEW_POOL(pool) HashTable(pool, argCount);
-	impure->irsb_leader_buffer = FB_NEW_POOL(pool) UCHAR[m_leader.totalKeyLength];
-
-	UCharBuffer buffer(pool);
-
-	for (FB_SIZE_T i = 0; i < argCount; i++)
-	{
-		// Read and cache the inner streams. While doing that,
-		// hash the join condition values and populate hash tables.
-
-		m_args[i].buffer->open(tdbb);
-
-		ULONG counter = 0;
-		UCHAR* const keyBuffer = buffer.getBuffer(m_args[i].totalKeyLength, false);
-
-		while (m_args[i].buffer->getRecord(tdbb))
-		{
-			const ULONG hash = computeHash(tdbb, request, m_args[i], keyBuffer);
-			impure->irsb_hash_table->put(i, hash, counter++);
-		}
-	}
-
-	impure->irsb_hash_table->sort();
+	impure->irsb_leader_buffer = nullptr;
 
 	m_leader.source->open(tdbb);
 }
@@ -334,10 +338,10 @@ void HashJoin::close(thread_db* tdbb) const
 		impure->irsb_flags &= ~irsb_open;
 
 		delete impure->irsb_hash_table;
-		impure->irsb_hash_table = NULL;
+		impure->irsb_hash_table = nullptr;
 
 		delete[] impure->irsb_leader_buffer;
-		impure->irsb_leader_buffer = NULL;
+		impure->irsb_leader_buffer = nullptr;
 
 		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
 			m_args[i].buffer->close(tdbb);
@@ -346,7 +350,7 @@ void HashJoin::close(thread_db* tdbb) const
 	}
 }
 
-bool HashJoin::getRecord(thread_db* tdbb) const
+bool HashJoin::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -364,6 +368,38 @@ bool HashJoin::getRecord(thread_db* tdbb) const
 
 			if (!m_leader.source->getRecord(tdbb))
 				return false;
+
+			// We have something to join with, so ensure the hash table is initialized
+
+			if (!impure->irsb_hash_table && !impure->irsb_leader_buffer)
+			{
+				auto& pool = *tdbb->getDefaultPool();
+				const auto argCount = m_args.getCount();
+
+				impure->irsb_hash_table = FB_NEW_POOL(pool) HashTable(pool, argCount);
+				impure->irsb_leader_buffer = FB_NEW_POOL(pool) UCHAR[m_leader.totalKeyLength];
+
+				UCharBuffer buffer(pool);
+
+				for (FB_SIZE_T i = 0; i < argCount; i++)
+				{
+					// Read and cache the inner streams. While doing that,
+					// hash the join condition values and populate hash tables.
+
+					m_args[i].buffer->open(tdbb);
+
+					ULONG counter = 0;
+					const auto keyBuffer = buffer.getBuffer(m_args[i].totalKeyLength, false);
+
+					while (m_args[i].buffer->getRecord(tdbb))
+					{
+						const auto hash = computeHash(tdbb, request, m_args[i], keyBuffer);
+						impure->irsb_hash_table->put(i, hash, counter++);
+					}
+				}
+
+				impure->irsb_hash_table->sort();
+			}
 
 			// Compute and hash the comparison keys
 
@@ -420,37 +456,42 @@ bool HashJoin::refetchRecord(thread_db* /*tdbb*/) const
 	return true;
 }
 
-bool HashJoin::lockRecord(thread_db* /*tdbb*/) const
+WriteLockResult HashJoin::lockRecord(thread_db* /*tdbb*/) const
 {
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
-	return false; // compiler silencer
 }
 
-void HashJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void HashJoin::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	if (detailed)
+	level++;
+	plan += "HASH (";
+	m_leader.source->getLegacyPlan(tdbb, plan, level);
+	plan += ", ";
+	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
 	{
-		plan += printIndent(++level) + "Hash Join (inner)";
+		if (i)
+			plan += ", ";
 
-		m_leader.source->print(tdbb, plan, true, level);
-
-		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-			m_args[i].source->print(tdbb, plan, true, level);
+		m_args[i].source->getLegacyPlan(tdbb, plan, level);
 	}
-	else
-	{
-		level++;
-		plan += "HASH (";
-		m_leader.source->print(tdbb, plan, false, level);
-		plan += ", ";
-		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		{
-			if (i)
-				plan += ", ";
+	plan += ")";
+}
 
-			m_args[i].source->print(tdbb, plan, false, level);
-		}
-		plan += ")";
+void HashJoin::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
+{
+	planEntry.className = "HashJoin";
+
+	planEntry.lines.add().text = "Hash Join (inner)";
+	printOptInfo(planEntry.lines);
+
+	if (recurse)
+	{
+		++level;
+
+		m_leader.source->getPlan(tdbb, planEntry.children.add(), level, recurse);
+
+		for (const auto& arg : m_args)
+			arg.source->getPlan(tdbb, planEntry.children.add(), level, recurse);
 	}
 }
 

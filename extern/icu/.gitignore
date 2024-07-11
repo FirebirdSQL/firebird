@@ -3,6 +3,7 @@ include/
 lib/
 Win32/
 x64/
+tzdata-extract/
 icudt63l.dat
 icudt63l_empty.dat
 license.html

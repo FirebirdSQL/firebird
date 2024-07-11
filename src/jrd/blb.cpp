@@ -59,6 +59,7 @@
 #include "../jrd/dpm_proto.h"
 #include "../jrd/err_proto.h"
 #include "../jrd/evl_proto.h"
+#include "../jrd/exe_proto.h"
 #include "../jrd/filte_proto.h"
 #include "../yvalve/gds_proto.h"
 #include "../jrd/intl_proto.h"
@@ -113,7 +114,12 @@ void blb::BLB_cancel(thread_db* tdbb)
 	// Release filter control resources
 
 	if (blb_flags & BLB_temporary)
+	{
+		if (!(blb_flags & BLB_closed))
+			blb_transaction->tra_temp_blobs_count--;
+
 		delete_blob(tdbb, 0);
+	}
 
 	destroy(true);
 }
@@ -189,11 +195,14 @@ bool blb::BLB_close(thread_db* tdbb)
 
 	SET_TDBB(tdbb);
 
+	const bool alreadyClosed = (blb_flags & BLB_closed);
+
 	// Release filter control resources
 
 	if (blb_filter)
 		BLF_close_blob(tdbb, &blb_filter);
 
+	blb_flags &= ~BLB_close_on_read;
 	blb_flags |= BLB_closed;
 
 	if (!(blb_flags & BLB_temporary))
@@ -201,6 +210,9 @@ bool blb::BLB_close(thread_db* tdbb)
 		destroy(true);
 		return true;
 	}
+
+	if (!alreadyClosed)
+		blb_transaction->tra_temp_blobs_count--;
 
 	if (blb_level == 0)
 	{
@@ -267,6 +279,40 @@ blb* blb::create2(thread_db* tdbb,
 	Database* dbb = tdbb->getDatabase();
 	CHECK_DBB(dbb);
 
+	const int maxTempBlobs = MAX_TEMP_BLOBS;
+	if (maxTempBlobs > 0 && transaction->tra_temp_blobs_count >= maxTempBlobs)
+	{
+		const Request* request = tdbb->getRequest();
+		string info;
+
+		if (userBlob)
+		{
+			Attachment* att = tdbb->getAttachment();
+			info = "By user application";
+			if (att->att_remote_process.hasData())
+			{
+				info += string(" (") + att->att_remote_process.c_str() + ")";
+			}
+		}
+		else if (request)
+		{
+			const Statement* const statement = request->getStatement();
+			if (statement && statement->sqlText)
+				info = string("By query: ") + *statement->sqlText;
+
+			string stack;
+			if (EXE_get_stack_trace(request, stack))
+			{
+				info += "\n";
+				info += stack;
+			}
+		}
+
+		gds__log("Too many temporary blobs (%i allowed)\n%s", maxTempBlobs, info.c_str());
+
+		ERR_post(Arg::Gds(isc_random) << Arg::Str("Too many temporary blobs"));
+	}
+
 	// Create a blob large enough to hold a single data page
 	SSHORT from, to;
 	SSHORT from_charset, to_charset;
@@ -322,6 +368,7 @@ blb* blb::create2(thread_db* tdbb,
 
 	blob->blb_space_remaining = blob->blb_clump_size;
 	blob->blb_flags |= BLB_temporary;
+	blob->blb_transaction->tra_temp_blobs_count++;
 
 	if (filter_required)
 	{
@@ -401,6 +448,7 @@ void BLB_garbage_collect(thread_db* tdbb,
  **************************************/
 	SET_TDBB(tdbb);
 
+	fb_assert(prior_page > 0);
 	RecordBitmap bmGoing;
 	ULONG cntGoing = 0;
 
@@ -681,7 +729,7 @@ USHORT blb::BLB_get_segment(thread_db* tdbb, void* segment, USHORT buffer_length
 		else
 		{
 			blb_space_remaining = blb_length - seek;
-			blb_segment = getBuffer() + seek;
+			blb_segment = ((UCHAR*) ((blob_page*) getBuffer())->blp_page) + seek;
 		}
 	}
 
@@ -950,7 +998,7 @@ SLONG blb::BLB_lseek(USHORT mode, SLONG offset)
 // compiler allows to modify from_desc->dsc_address' contents when from_desc is
 // constant, this is misleading so I didn't make the source descriptor constant.
 void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
-			   jrd_rel* relation, Record* record, USHORT fieldId)
+			   jrd_rel* relation, Record* record, USHORT fieldId, bool bulk)
 {
 /**************************************
  *
@@ -1162,7 +1210,10 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 
 				if (!blob || !(blob->blb_flags & BLB_closed))
 				{
-					ERR_post(Arg::Gds(isc_bad_segstr_id));
+					if (blob && (blob->blb_flags & BLB_close_on_read))
+						blob->BLB_close(tdbb);
+					else
+						ERR_post(Arg::Gds(isc_bad_segstr_id));
 				}
 
 				if (blob->blb_level && (blob->blb_pg_space_id != relPages->rel_pg_space_id))
@@ -1206,6 +1257,9 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 #ifdef CHECK_BLOB_FIELD_ACCESS_FOR_SELECT
 	blob->blb_fld_id = fieldId;
 #endif
+	if (bulk)
+		blob->blb_flags |= BLB_bulk;
+
 	destination->set_permanent(relation->rel_id, DPM_store_blob(tdbb, blob, record));
 	// This is the only place in the engine where blobs are materialized
 	// If new places appear code below should transform to common sub-routine
@@ -1326,7 +1380,7 @@ blb* blb::open2(thread_db* tdbb,
 			 */
 
 			// Search the index of transaction blobs for a match
-			const blb* new_blob = NULL;
+			blb* new_blob = NULL;
 			if (transaction->tra_blobs->locate(blobId.bid_temp_id()))
 			{
 				current = &transaction->tra_blobs->current();
@@ -1341,7 +1395,10 @@ blb* blb::open2(thread_db* tdbb,
 				if (!new_blob || !(new_blob->blb_flags & BLB_temporary) ||
 					!(new_blob->blb_flags & BLB_closed))
 				{
-					ERR_post(Arg::Gds(isc_bad_segstr_id));
+					if (new_blob && (new_blob->blb_flags & BLB_close_on_read))
+						new_blob->BLB_close(tdbb);
+					else
+						ERR_post(Arg::Gds(isc_bad_segstr_id));
 				}
 
 				blob->blb_lead_page = new_blob->blb_lead_page;
@@ -1425,7 +1482,7 @@ blb* blb::open2(thread_db* tdbb,
 		// Get first data page in anticipation of reading.
 
 		if (blob->blb_level == 0)
-			blob->blb_segment = blob->getBuffer();
+			blob->blb_segment = (UCHAR*) ((blob_page*) blob->getBuffer())->blp_page;
 	}
 
 	UCharBuffer new_bpb;
@@ -1541,7 +1598,7 @@ void blb::BLB_put_segment(thread_db* tdbb, const void* seg, USHORT segment_lengt
 
 	// Make sure blob is a temporary blob.  If not, complain bitterly.
 
-	if (!(blb_flags & BLB_temporary))
+	if (!(blb_flags & BLB_temporary) || (blb_flags & BLB_closed))
 		ERR_post(Arg::Gds(isc_cannot_update_old_blob));
 
 	if (blb_filter)
@@ -2095,11 +2152,13 @@ blb* blb::copy_blob(thread_db* tdbb, const bid* source, bid* destination,
 	}
 
 	HalfStaticArray<UCHAR, 2048> buffer;
-	UCHAR* buff = buffer.getBuffer(input->blb_max_segment);
+	UCHAR* buff = buffer.getBuffer(input->isSegmented() ?
+		input->blb_max_segment :
+		MIN(input->blb_length, 32768));
 
 	while (true)
 	{
-		const USHORT length = input->BLB_get_segment(tdbb, buff, input->blb_max_segment);
+		const USHORT length = input->BLB_get_segment(tdbb, buff, buffer.getCapacity());
 		if (input->blb_flags & BLB_eof) {
 			break;
 		}
@@ -2545,8 +2604,7 @@ static void move_from_string(thread_db* tdbb, const dsc* from_desc, dsc* to_desc
 	temp_bid.clear();
 	blb* blob = blb::create2(tdbb, transaction, &temp_bid, bpb.getCount(), bpb.begin());
 
-	DSC blob_desc;
-	blob_desc.clear();
+	dsc blob_desc;
 
 	blob_desc.dsc_scale = to_desc->dsc_scale;	// blob charset
 	blob_desc.dsc_flags = (blob_desc.dsc_flags & 0xFF) | (to_desc->dsc_flags & 0xFF00);	// blob collation
@@ -2911,7 +2969,7 @@ void blb::getFromPage(USHORT length, const UCHAR* data)
 {
 	if (blb_level == 0)
 	{
-		blb_space_remaining = length;
+		blb_space_remaining = length - BLH_SIZE;
 		if (length)
 			memcpy(getBuffer(), data, length);
 	}

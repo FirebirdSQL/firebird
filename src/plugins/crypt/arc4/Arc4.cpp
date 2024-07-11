@@ -37,7 +37,7 @@ namespace
 class Cypher : public GlobalStorage
 {
 public:
-	Cypher(unsigned int l, const unsigned char* key) throw()
+	Cypher(unsigned int l, const unsigned char* key) noexcept
 		: s1(0), s2(0)
 	{
 		for (unsigned int n = 0; n < sizeof(state); ++n)
@@ -52,7 +52,7 @@ public:
 		}
 	}
 
-	void transform(unsigned int length, const void* from, void* to) throw()
+	void transform(unsigned int length, const void* from, void* to) noexcept
 	{
 		unsigned char* t = static_cast<unsigned char*>(to);
 		const unsigned char* f = static_cast<const unsigned char*>(from);
@@ -72,7 +72,7 @@ private:
 	unsigned char s1;
 	unsigned char s2;
 
-	void swap(unsigned char& c1, unsigned char& c2) throw()
+	void swap(unsigned char& c1, unsigned char& c2) noexcept
 	{
 		unsigned char temp = c1;
 		c1 = c2;

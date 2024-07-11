@@ -112,6 +112,8 @@ Token& Lexer::getToken(Token& token)
 			token.type = Token::TYPE_CALL;
 		else if (token.text == "defaultAction")
 			token.type = Token::TYPE_DEFAULT_ACTION;
+		else if (token.text == "stub")
+			token.type = Token::TYPE_STUB;
 		// types
 		else if (token.text == "void")
 			token.type = Token::TYPE_VOID;

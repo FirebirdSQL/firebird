@@ -41,8 +41,7 @@
 using namespace Ods;
 using Firebird::Guid;
 
-void PPG_print_header(const header_page* header, ULONG page,
-					  bool nocreation, Firebird::UtilSvc* uSvc)
+void PPG_print_header(const header_page* header, bool nocreation, Firebird::UtilSvc* uSvc)
 {
 /**************************************
  *
@@ -54,63 +53,51 @@ void PPG_print_header(const header_page* header, ULONG page,
  *	Print database header page.
  *
  **************************************/
-	if (page == HEADER_PAGE)
-		uSvc->printf(false, "Database header page information:\n");
-	else
-		uSvc->printf(false, "Database overflow header page information:\n");
+	uSvc->printf(false, "Database header page information:\n");
 
-	if (page == HEADER_PAGE)
-	{
-		uSvc->printf(false, "\tFlags\t\t\t%d\n", header->hdr_header.pag_flags);
-		//uSvc->printf("\tChecksum\t\t%d\n", header->hdr_header.pag_checksum);
-		uSvc->printf(false, "\tGeneration\t\t%" ULONGFORMAT"\n", header->hdr_header.pag_generation);
-		uSvc->printf(false, "\tSystem Change Number\t%" ULONGFORMAT"\n", header->hdr_header.pag_scn);
-		uSvc->printf(false, "\tPage size\t\t%d\n", header->hdr_page_size);
-		uSvc->printf(false, "\tODS version\t\t%d.%d\n",
-				header->hdr_ods_version & ~ODS_FIREBIRD_FLAG, header->hdr_ods_minor);
-		uSvc->printf(false, "\tOldest transaction\t%" SQUADFORMAT"\n", Ods::getOIT(header));
-		uSvc->printf(false, "\tOldest active\t\t%" SQUADFORMAT"\n", Ods::getOAT(header));
-		uSvc->printf(false, "\tOldest snapshot\t\t%" SQUADFORMAT"\n", Ods::getOST(header));
-		uSvc->printf(false, "\tNext transaction\t%" SQUADFORMAT"\n", Ods::getNT(header));
-		uSvc->printf(false, "\tSequence number\t\t%d\n", header->hdr_sequence);
-		uSvc->printf(false, "\tNext attachment ID\t%" SQUADFORMAT"\n", Ods::getAttID(header));
+	uSvc->printf(false, "\tFlags\t\t\t%d\n", header->hdr_header.pag_flags);
+	//uSvc->printf("\tChecksum\t\t%d\n", header->hdr_header.pag_checksum);
+	uSvc->printf(false, "\tGeneration\t\t%" ULONGFORMAT"\n", header->hdr_header.pag_generation);
+	uSvc->printf(false, "\tSystem Change Number\t%" ULONGFORMAT"\n", header->hdr_header.pag_scn);
+	uSvc->printf(false, "\tPage size\t\t%d\n", header->hdr_page_size);
+	uSvc->printf(false, "\tODS version\t\t%d.%d\n",
+			header->hdr_ods_version & ~ODS_FIREBIRD_FLAG, header->hdr_ods_minor);
+	uSvc->printf(false, "\tOldest transaction\t%" SQUADFORMAT"\n", Ods::getOIT(header));
+	uSvc->printf(false, "\tOldest active\t\t%" SQUADFORMAT"\n", Ods::getOAT(header));
+	uSvc->printf(false, "\tOldest snapshot\t\t%" SQUADFORMAT"\n", Ods::getOST(header));
+	uSvc->printf(false, "\tNext transaction\t%" SQUADFORMAT"\n", Ods::getNT(header));
+	uSvc->printf(false, "\tSequence number\t\t%d\n", header->hdr_sequence);
+	uSvc->printf(false, "\tNext attachment ID\t%" SQUADFORMAT"\n", Ods::getAttID(header));
 
-		Firebird::DbImplementation imp(header);
-		uSvc->printf(false, "\tImplementation\t\tHW=%s %s-endian OS=%s CC=%s\n",
-							 imp.cpu(), imp.endianess(), imp.os(), imp.cc());
-		uSvc->printf(false, "\tShadow count\t\t%" SLONGFORMAT"\n", header->hdr_shadow_count);
-		uSvc->printf(false, "\tPage buffers\t\t%" ULONGFORMAT"\n", header->hdr_page_buffers);
-	}
+	Firebird::DbImplementation imp(header);
+	uSvc->printf(false, "\tImplementation\t\tHW=%s %s-endian OS=%s CC=%s\n",
+						 imp.cpu(), imp.endianess(), imp.os(), imp.cc());
+	uSvc->printf(false, "\tShadow count\t\t%" SLONGFORMAT"\n", header->hdr_shadow_count);
+	uSvc->printf(false, "\tPage buffers\t\t%" ULONGFORMAT"\n", header->hdr_page_buffers);
 
-	uSvc->printf(false, "\tNext header page\t%" ULONGFORMAT"\n", header->hdr_next_page);
 #ifdef DEV_BUILD
 	uSvc->printf(false, "\tClumplet End\t\t%d\n", header->hdr_end);
 #endif
 
-	if (page == HEADER_PAGE)
+	// If the database dialect is not set to 3, then we need to
+	// assume it was set to 1.  The reason for this is that a dialect
+	// 1 database has no dialect information written to the header.
+	if (header->hdr_flags & hdr_SQL_dialect_3)
+		uSvc->printf(false, "\tDatabase dialect\t3\n");
+	else
+		uSvc->printf(false, "\tDatabase dialect\t1\n");
+
+	if (!nocreation)
 	{
-
-		// If the database dialect is not set to 3, then we need to
-		// assume it was set to 1.  The reason for this is that a dialect
-		// 1 database has no dialect information written to the header.
-		if (header->hdr_flags & hdr_SQL_dialect_3)
-			uSvc->printf(false, "\tDatabase dialect\t3\n");
-		else
-			uSvc->printf(false, "\tDatabase dialect\t1\n");
-
-		if (!nocreation)
-		{
-			struct tm time;
-			isc_decode_timestamp(reinterpret_cast<const ISC_TIMESTAMP*>(header->hdr_creation_date),
-							&time);
-			uSvc->printf(false, "\tCreation date\t\t%s %d, %d %d:%02d:%02d\n",
-					FB_SHORT_MONTHS[time.tm_mon], time.tm_mday, time.tm_year + 1900,
-					time.tm_hour, time.tm_min, time.tm_sec);
-		}
+		struct tm time;
+		isc_decode_timestamp(reinterpret_cast<const ISC_TIMESTAMP*>(header->hdr_creation_date),
+						&time);
+		uSvc->printf(false, "\tCreation date\t\t%s %d, %d %d:%02d:%02d\n",
+				FB_SHORT_MONTHS[time.tm_mon], time.tm_mday, time.tm_year + 1900,
+				time.tm_hour, time.tm_min, time.tm_sec);
 	}
 
-	ULONG flags;
-	if ((page == HEADER_PAGE) && (flags = header->hdr_flags))
+	if (const auto flags = header->hdr_flags)
 	{
 		int flag_count = 0;
 
@@ -231,7 +218,8 @@ void PPG_print_header(const header_page* header, ULONG page,
 	TEXT temp[257];
 
 	const UCHAR* p = header->hdr_data;
-	for (const UCHAR* const end = p + header->hdr_page_size; p < end && *p != HDR_end; p += 2 + p[1])
+	for (const auto end = reinterpret_cast<const UCHAR*>(header) + header->hdr_page_size;
+		p < end && *p != HDR_end; p += 2 + p[1])
 	{
 		SLONG number;
 
@@ -267,9 +255,9 @@ void PPG_print_header(const header_page* header, ULONG page,
 
 		case HDR_backup_guid:
 		{
-			char buff[Firebird::GUID_BUFF_SIZE];
-			Firebird::GuidToString(buff, reinterpret_cast<const Guid*>(p + 2));
-			uSvc->printf(false, "\tDatabase backup GUID:\t%s\n", buff);
+			fb_assert(p[1] == Guid::SIZE);
+			const Guid guid(p + 2);
+			uSvc->printf(false, "\tDatabase backup GUID:\t%s\n", guid.toString().c_str());
 			break;
 		}
 
@@ -287,9 +275,9 @@ void PPG_print_header(const header_page* header, ULONG page,
 
 		case HDR_db_guid:
 		{
-			char buff[Firebird::GUID_BUFF_SIZE];
-			Firebird::GuidToString(buff, reinterpret_cast<const Guid*>(p + 2));
-			uSvc->printf(false, "\tDatabase GUID:\t%s\n", buff);
+			fb_assert(p[1] == Guid::SIZE);
+			const Guid guid(p + 2);
+			uSvc->printf(false, "\tDatabase GUID:\t%s\n", guid.toString().c_str());
 			break;
 		}
 

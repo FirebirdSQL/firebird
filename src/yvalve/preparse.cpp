@@ -47,7 +47,8 @@ enum pp_vals {
 	PP_PAGE = 9,
 	PP_SET = 10,
 	PP_NAMES = 11,
-	PP_ROLE = 12
+	PP_ROLE = 12,
+	PP_OWNER = 13
 };
 
 
@@ -76,6 +77,7 @@ static const pp_table pp_symbols[] =
 	{"SET", PP_SET},
 	{"NAMES", PP_NAMES},
 	{"ROLE", PP_ROLE},
+	{"OWNER", PP_OWNER},
 	{"", 0}
 };
 
@@ -308,6 +310,13 @@ bool PREPARSE_execute(CheckStatusWrapper* status, Why::YAttachment** ptrAtt,
 
 						case PP_PAGE:
 						case PP_PAGES:
+							matched = true;
+							break;
+
+						case PP_OWNER:
+							token = getToken(pos, tks);
+
+							dpb.insertString(isc_dpb_owner, token);
 							matched = true;
 							break;
 						} // switch

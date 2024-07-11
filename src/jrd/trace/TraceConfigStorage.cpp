@@ -87,12 +87,11 @@ void checkFileError(const char* filename, const char* operation, ISC_STATUS iscE
 ConfigStorage::ConfigStorage()
 	: m_timer(FB_NEW TouchFile),
 	  m_sharedMemory(NULL),
+	  m_filename(getPool()),
 	  m_recursive(0),
 	  m_mutexTID(0),
-	  m_dirty(false),
-	  m_nextIdx(0)
+	  m_dirty(false)
 {
-	PathName filename;
 #ifdef WIN_NT
 	DWORD sesID = 0;
 
@@ -103,41 +102,29 @@ ConfigStorage::ConfigStorage()
 	PFnProcessIdToSessionId pfnProcessIdToSessionId =
 		(PFnProcessIdToSessionId) GetProcAddress(hmodKernel32, "ProcessIdToSessionId");
 
-	if (fb_utils::isGlobalKernelPrefix() ||
+	if (fb_utils::privateNameSpaceReady() ||
+		fb_utils::isGlobalKernelPrefix() ||
 		!pfnProcessIdToSessionId ||
 		pfnProcessIdToSessionId(GetCurrentProcessId(), &sesID) == 0 ||
 		sesID == 0)
 	{
-		filename.printf(TRACE_FILE); // TODO: it must be per engine instance
+		m_filename.printf(TRACE_FILE); // TODO: it must be per engine instance
 	}
 	else
 	{
-		filename.printf("%s.%u", TRACE_FILE, sesID);
+		m_filename.printf("%s.%u", TRACE_FILE, sesID);
 	}
 #else
-	filename.printf(TRACE_FILE); // TODO: it must be per engine instance
+	m_filename.printf(TRACE_FILE); // TODO: it must be per engine instance
 #endif
 
-	try
-	{
-		m_sharedMemory.reset(FB_NEW_POOL(getPool())
-			SharedMemory<TraceCSHeader>(filename.c_str(), TraceCSHeader::TRACE_STORAGE_MIN_SIZE, this));
-	}
-	catch (const Exception& ex)
-	{
-		iscLogException("ConfigStorage: Cannot initialize the shared memory region", ex);
-		throw;
-	}
-
-	fb_assert(m_sharedMemory->getHeader());
-	fb_assert(m_sharedMemory->getHeader()->mhb_version == TraceCSHeader::TRACE_STORAGE_VERSION);
+	initSharedFile();
 
 	StorageGuard guard(this);
 	checkAudit();
 
 	TEXT fullName[MAXPATHLEN];
-	iscPrefixLock(fullName, filename.c_str(), false);
-
+	iscPrefixLock(fullName, m_filename.c_str(), false);
 	m_timer->start(fullName);	// do we still need a timer ?
 
 	++(m_sharedMemory->getHeader()->cnt_uses);
@@ -146,6 +133,22 @@ ConfigStorage::ConfigStorage()
 ConfigStorage::~ConfigStorage()
 {
 	fb_assert(!m_timer);
+}
+
+void ConfigStorage::initSharedFile()
+{
+	try
+	{
+		m_sharedMemory.reset(FB_NEW_POOL(getPool())
+			SharedMemory<TraceCSHeader>(m_filename.c_str(), TraceCSHeader::TRACE_STORAGE_MIN_SIZE, this));
+
+		checkHeader(m_sharedMemory->getHeader());
+	}
+	catch (const Exception& ex)
+	{
+		iscLogException("ConfigStorage: Cannot initialize the shared memory region", ex);
+		throw;
+	}
 }
 
 void ConfigStorage::shutdown()
@@ -186,7 +189,7 @@ bool ConfigStorage::initialize(SharedMemoryBase* sm, bool init)
 	// Initialize the shared data header
 	if (init)
 	{
-		header->init(SharedMemoryBase::SRAM_TRACE_CONFIG, TraceCSHeader::TRACE_STORAGE_VERSION);
+		initHeader(header);
 
 		header->change_number = 0;
 		header->session_number = 1;
@@ -199,12 +202,6 @@ bool ConfigStorage::initialize(SharedMemoryBase* sm, bool init)
 		header->slots_free = 0;
 		header->slots_cnt = 0;
 		memset(header->slots, 0, sizeof(TraceCSHeader::slots));
-	}
-	else
-	{
-		fb_assert(header->mhb_type == SharedMemoryBase::SRAM_TRACE_CONFIG);
-		fb_assert(header->mhb_header_version == MemoryHeader::HEADER_VERSION);
-		fb_assert(header->mhb_version == TraceCSHeader::TRACE_STORAGE_VERSION);
 	}
 
 	return true;
@@ -258,7 +255,7 @@ void ConfigStorage::checkAudit()
 			}
 			p[len] = 0;
 		}
-		else 
+		else
 		{
 			gds__log("Audit configuration file \"%s\" is empty", configFileName.c_str());
 			return;
@@ -298,6 +295,20 @@ void ConfigStorage::acquire()
 
 	fb_assert(m_mutexTID == 0);
 	m_mutexTID = currTID;
+
+	while (m_sharedMemory->getHeader()->isDeleted())
+	{
+		// Shared memory must be empty at this point
+		fb_assert(m_sharedMemory->getHeader()->cnt_uses == 0);
+
+		m_sharedMemory->mutexUnlock();
+		m_sharedMemory.reset();
+
+		Thread::yield();
+
+		initSharedFile();
+		m_sharedMemory->mutexLock();
+	}
 
 	TraceCSHeader* header = m_sharedMemory->getHeader();
 	if (header->mem_allocated > m_sharedMemory->sh_mem_length_mapped)
@@ -443,7 +454,7 @@ struct SlotByOffset
 	static ULONG generate(const SlotByOffset& i) { return i.offset; }
 };
 
-typedef SortedArray<SlotByOffset, EmptyStorage<SlotByOffset>, ULONG, SlotByOffset> 
+typedef SortedArray<SlotByOffset, EmptyStorage<SlotByOffset>, ULONG, SlotByOffset>
 			SlotsByOffsetArray;
 
 
@@ -461,7 +472,7 @@ void ConfigStorage::compact()
 	// collect used slots, sort them by offset
 	for (TraceCSHeader::Slot* slot = header->slots; slot < header->slots + header->slots_cnt; slot++)
 	{
-		if (!slot->used && slot->ses_pid != pid &&
+		if (slot->used && slot->ses_pid != pid &&
 			!ISC_check_process_existence(slot->ses_pid))
 		{
 			header->cnt_uses--; // Process that created trace session disappeared, count it out
@@ -632,10 +643,10 @@ bool ConfigStorage::validate()
 ULONG ConfigStorage::getSessionSize(const TraceSession& session)
 {
 	ULONG ret = 1; // tagEnd
-	const ULONG sz = 1 + sizeof(ULONG);		// sizeof tag + sizeof len 
+	const ULONG sz = 1 + sizeof(ULONG);		// sizeof tag + sizeof len
 
 	ULONG len = session.ses_name.length();
-	if (len) 
+	if (len)
 		ret += sz + len;
 
 	if ((len = session.ses_auth.getCount()))
@@ -732,19 +743,14 @@ bool ConfigStorage::getSession(Firebird::TraceSession& session, GET_FLAGS getFla
 	return readSession(slot, session, getFlag);
 }
 
-void ConfigStorage::restart()
-{
-	m_nextIdx = 0;
-}
-
-bool ConfigStorage::getNextSession(TraceSession& session, GET_FLAGS getFlag)
+bool ConfigStorage::getNextSession(TraceSession& session, GET_FLAGS getFlag, ULONG& nextIdx)
 {
 	TraceCSHeader* header = m_sharedMemory->getHeader();
 
-	while (m_nextIdx < header->slots_cnt)
+	while (nextIdx < header->slots_cnt)
 	{
-		TraceCSHeader::Slot* slot = header->slots + m_nextIdx;
-		m_nextIdx++;
+		TraceCSHeader::Slot* slot = header->slots + nextIdx;
+		nextIdx++;
 
 		if (slot->used)
 			return readSession(slot, session, getFlag);
@@ -881,6 +887,31 @@ void ConfigStorage::updateFlags(TraceSession& session)
 
 	setDirty();
 	slot->ses_flags = session.ses_flags;
+}
+
+bool ConfigStorage::Accessor::getNext(TraceSession& session, GET_FLAGS getFlag)
+{
+	if (m_guard)
+		return m_storage->getNextSession(session, getFlag, m_nextIdx);
+
+	StorageGuard guard(m_storage);
+
+	// Restore position, if required: find index of slot with session ID greater than m_sesId.
+	if (m_change_number != m_storage->getChangeNumber())
+	{
+		if (m_storage->findSession(m_sesId, m_nextIdx))
+			m_nextIdx++;
+
+		m_change_number = m_storage->getChangeNumber();
+	}
+
+	if (m_storage->getNextSession(session, getFlag, m_nextIdx))
+	{
+		m_sesId = session.ses_id;
+		return true;
+	}
+
+	return false;
 }
 
 void ConfigStorage::Writer::write(ITEM tag, ULONG len, const void* data)

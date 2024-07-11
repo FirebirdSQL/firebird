@@ -265,3 +265,20 @@ Samples of use of new parameter in fbsvcmgr utility (supposing login and
 password are set using some other method):
   fbsvcmgr - action_nfix dbname /tmp/ecopy.fdb
 
+
+9) Services API extension - support of new nbackup feature to clean history table.
+(Khorsun Vlad, hvlad@users.sourceforge.net, 2022)
+
+Action isc_action_svc_nbak get new parameter tags
+  isc_spb_nbk_clean_history		: tell nbackup to clean RDB$HISTORY table
+  isc_spb_nbk_keep_days <int>	: specify how many recent rows should be kept in the history
+  isc_spb_nbk_keep_rows <int>	: specify how days back from today should be kept in the history
+
+Examples:
+- make backup of level 1, clean RDB$HISTORY table and keep 1 recent row in it:
+
+  fbsvcmgr action_nbak dbfile db.fdb nbk_file db.nbk nbk_level 1 nbk_clean_history nbk_keep_rows 1
+
+- make backup of level 2, clean RDB$HISTORY table and keep rows for the last 7 days in it:
+
+  fbsvcmgr action_nbak dbfile db.fdb nbk_file db.nbk nbk_level 2 nbk_clean_history nbk_keep_days 7

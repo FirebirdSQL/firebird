@@ -38,14 +38,17 @@ using namespace Jrd;
 // ----------------------------
 
 FullOuterJoin::FullOuterJoin(CompilerScratch* csb, RecordSource* arg1, RecordSource* arg2)
-	: m_arg1(arg1), m_arg2(arg2)
+	: RecordSource(csb),
+	  m_arg1(arg1),
+	  m_arg2(arg2)
 {
 	fb_assert(m_arg1 && m_arg2);
 
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = arg1->getCardinality() + arg2->getCardinality();
 }
 
-void FullOuterJoin::open(thread_db* tdbb) const
+void FullOuterJoin::internalOpen(thread_db* tdbb) const
 {
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -74,7 +77,7 @@ void FullOuterJoin::close(thread_db* tdbb) const
 	}
 }
 
-bool FullOuterJoin::getRecord(thread_db* tdbb) const
+bool FullOuterJoin::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -102,30 +105,35 @@ bool FullOuterJoin::refetchRecord(thread_db* /*tdbb*/) const
 	return true;
 }
 
-bool FullOuterJoin::lockRecord(thread_db* tdbb) const
+WriteLockResult FullOuterJoin::lockRecord(thread_db* tdbb) const
 {
 	SET_TDBB(tdbb);
 
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
-	return false; // compiler silencer
 }
 
-void FullOuterJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void FullOuterJoin::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	if (detailed)
+	level++;
+	plan += "JOIN (";
+	m_arg1->getLegacyPlan(tdbb, plan, level);
+	plan += ", ";
+	m_arg2->getLegacyPlan(tdbb, plan, level);
+	plan += ")";
+}
+
+void FullOuterJoin::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
+{
+	planEntry.className = "FullOuterJoin";
+
+	planEntry.lines.add().text = "Full Outer Join";
+	printOptInfo(planEntry.lines);
+
+	if (recurse)
 	{
-		plan += printIndent(++level) + "Full Outer Join";
-		m_arg1->print(tdbb, plan, true, level);
-		m_arg2->print(tdbb, plan, true, level);
-	}
-	else
-	{
-		level++;
-		plan += "JOIN (";
-		m_arg1->print(tdbb, plan, false, level);
-		plan += ", ";
-		m_arg2->print(tdbb, plan, false, level);
-		plan += ")";
+		++level;
+		m_arg1->getPlan(tdbb, planEntry.children.add(), level, recurse);
+		m_arg2->getPlan(tdbb, planEntry.children.add(), level, recurse);
 	}
 }
 

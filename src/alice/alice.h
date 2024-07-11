@@ -73,7 +73,6 @@ enum alice_repl_mode {
 
 struct user_action
 {
-	ULONG ua_switches;
 	const char* ua_user;
 	const char* ua_role;
 	const char* ua_password;
@@ -93,6 +92,7 @@ struct user_action
 	USHORT ua_db_SQL_dialect;
 	alice_shut_mode ua_shutdown_mode;
 	alice_repl_mode ua_replica_mode;
+	SSHORT ua_parallel_workers;
 };
 
 
@@ -113,6 +113,10 @@ struct tdr : public pool_alloc<alice_type_tdr>
 	FB_API_HANDLE tdr_db_handle;		// re-attached database handle
 	USHORT tdr_db_caps;					// capabilities of database
 	USHORT tdr_state;					// see flags below
+
+	tdr(Firebird::MemoryPool& p)
+		: tdr_fullpath(p), tdr_filename(p), tdr_host_site(p), tdr_remote_site(p)
+	{ }
 };
 
 // CVC: This information should match Transaction Description Record constants in acl.h

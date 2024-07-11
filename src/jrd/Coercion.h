@@ -41,23 +41,19 @@ class TypeClause;
 class CoercionRule
 {
 public:
-	CoercionRule()
-		: fromMask(0), toMask(0)
-	{
-		fromDsc.clear();
-		toDsc.clear();
-	}
-
 	void setRule(const TypeClause* from, const TypeClause *to);
 	dsc* makeLegacy(USHORT mask = 0);
-	bool coerce(dsc* d) const;
+	bool coerce(thread_db* tdbb, dsc* d) const;
 	bool match(const dsc* d) const;
 	bool operator==(const CoercionRule& rule) const;
 
 private:
 	void raiseError();
-	dsc fromDsc, toDsc;
-	USHORT fromMask, toMask;
+
+	dsc fromDsc;
+	dsc toDsc;
+	USHORT fromMask = 0;
+	USHORT toMask = 0;
 };
 
 class CoercionArray : public Firebird::HalfStaticArray<CoercionRule, 4>
@@ -68,7 +64,7 @@ public:
 	{
 	}
 
-	bool coerce(dsc* d, unsigned startItem = 0) const;
+	bool coerce(thread_db* tdbb, dsc* d, unsigned startItem = 0) const;
 	void setRule(const TypeClause* from, const TypeClause *to);
 };
 

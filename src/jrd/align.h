@@ -84,7 +84,7 @@ static const USHORT gds_cvt_blr_dtype[DTYPE_BLR_MAX + 1] =
 	dtype_varying,				/* blr_varying2 == 38 */
 	0,
 	dtype_cstring,				/* blr_cstring == 40 */
-	dtype_cstring,				/* blr_cstring == 41 */
+	dtype_cstring,				/* blr_cstring2 == 41 */
 	0, 0, 0, 0
 };
 

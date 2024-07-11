@@ -35,9 +35,9 @@ using namespace Jrd;
 
 Union::Union(CompilerScratch* csb, StreamType stream,
 			 FB_SIZE_T argCount, RecordSource* const* args, NestConst<MapNode>* maps,
-			 FB_SIZE_T streamCount, const StreamType* streams)
+			 const StreamList& streams)
 	: RecordStream(csb, stream), m_args(csb->csb_pool), m_maps(csb->csb_pool),
-	  m_streams(csb->csb_pool)
+	  m_streams(csb->csb_pool, streams)
 {
 	fb_assert(argCount);
 
@@ -46,20 +46,18 @@ Union::Union(CompilerScratch* csb, StreamType stream,
 	m_args.resize(argCount);
 
 	for (FB_SIZE_T i = 0; i < argCount; i++)
+	{
 		m_args[i] = args[i];
+		m_cardinality += args[i]->getCardinality();
+	}
 
 	m_maps.resize(argCount);
 
 	for (FB_SIZE_T i = 0; i < argCount; i++)
 		m_maps[i] = maps[i];
-
-	m_streams.resize(streamCount);
-
-	for (FB_SIZE_T i = 0; i < streamCount; i++)
-		m_streams[i] = streams[i];
 }
 
-void Union::open(thread_db* tdbb) const
+void Union::internalOpen(thread_db* tdbb) const
 {
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -97,7 +95,7 @@ void Union::close(thread_db* tdbb) const
 	}
 }
 
-bool Union::getRecord(thread_db* tdbb) const
+bool Union::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -153,41 +151,47 @@ bool Union::refetchRecord(thread_db* tdbb) const
 	return m_args[impure->irsb_count]->refetchRecord(tdbb);
 }
 
-bool Union::lockRecord(thread_db* tdbb) const
+WriteLockResult Union::lockRecord(thread_db* tdbb) const
 {
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	if (impure->irsb_count >= m_args.getCount())
-		return false;
+		return WriteLockResult::CONFLICTED;
 
 	return m_args[impure->irsb_count]->lockRecord(tdbb);
 }
 
-void Union::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void Union::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	if (detailed)
-	{
-		plan += printIndent(++level) + (m_args.getCount() == 1 ? "Materialize" : "Union");
+	if (!level)
+		plan += "(";
 
-		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-			m_args[i]->print(tdbb, plan, true, level);
+	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
+	{
+		if (i)
+			plan += ", ";
+
+		m_args[i]->getLegacyPlan(tdbb, plan, level + 1);
 	}
-	else
+
+	if (!level)
+		plan += ")";
+}
+
+void Union::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
+{
+	planEntry.className = "Union";
+
+	planEntry.lines.add().text = (m_args.getCount() == 1 ? "Materialize" : "Union");
+	printOptInfo(planEntry.lines);
+
+	if (recurse)
 	{
-		if (!level)
-			plan += "(";
+		++level;
 
-		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		{
-			if (i)
-				plan += ", ";
-
-			m_args[i]->print(tdbb, plan, false, level + 1);
-		}
-
-		if (!level)
-			plan += ")";
+		for (const auto arg : m_args)
+			arg->getPlan(tdbb, planEntry.children.add(), level, recurse);
 	}
 }
 

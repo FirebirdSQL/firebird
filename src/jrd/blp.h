@@ -89,7 +89,7 @@ static const struct
 	{"missing", one},
 	{"unique", one},
 	{"like", two},
-	{NULL, NULL},
+	{"in_list", in_list},
 	{NULL, NULL},
 	{NULL, NULL},
 	{"rse", rse},
@@ -199,7 +199,7 @@ static const struct
 	{"agg_list", two}, // 170
 	{"agg_list_distinct", two},
 	{"modify2", modify2},
-	{NULL, NULL},
+	{"erase2", erase2},
 	// New BLR in FB1
 	{"current_role", zero},
 	{"skip", one},
@@ -251,7 +251,15 @@ static const struct
 	// New BLR in FB5.0
 	{"dcl_local_table", dcl_local_table},
 	{"local_table_truncate", one_word},
-	{"local_table_id", local_table},
+	{"local_table_id", local_table}, // 220
 	{"outer_map", outer_map},
+	{NULL, NULL},	// blr_json_function
+	{"skip_locked", zero},
+	// New BLR in FB6.0
+	{"invoke_function", invoke_function},
+	{"invoke_procedure", invsel_procedure},
+	{"select_procedure", invsel_procedure},
+	{"blr_default_arg", zero},
+	{"cast_format", cast_format},
 	{0, 0}
 };

@@ -27,6 +27,10 @@
 #include "../common/classes/RefCounted.h"
 #include "../common/config/config.h"
 
+bool resolveAlias(const Firebird::PathName& alias,
+				  Firebird::PathName& file,
+				  Firebird::RefPtr<const Firebird::Config>* config);
+
 bool expandDatabaseName(Firebird::PathName alias,
 						Firebird::PathName& file,
 						Firebird::RefPtr<const Firebird::Config>* config);

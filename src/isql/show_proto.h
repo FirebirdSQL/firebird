@@ -29,7 +29,7 @@
 #include "../jrd/obj.h"
 
 void	SHOW_comments(bool force);
-bool	SHOW_dbb_parameters (Firebird::IAttachment*, SCHAR*, const UCHAR*, unsigned, bool, const char*);
+void	SHOW_dbb_parameters (Firebird::IAttachment*, const UCHAR*, unsigned, bool, const char*);
 processing_state	SHOW_grants (const SCHAR*, const SCHAR*, ObjectType);
 processing_state	SHOW_grants2 (const SCHAR*, const SCHAR*, ObjectType, const TEXT*, bool);
 void	SHOW_grant_roles (const SCHAR*, bool*);

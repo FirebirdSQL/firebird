@@ -561,7 +561,7 @@ bool METD_get_domain(jrd_tra* transaction, TypeClause* field, const MetaName& na
 		field->subType = FLX.RDB$FIELD_SUB_TYPE;
 		field->dimensions = FLX.RDB$DIMENSIONS.NULL ? 0 : FLX.RDB$DIMENSIONS;
 
-		field->charSetId = Nullable<SSHORT>::empty();
+		field->charSetId = std::nullopt;
 		if (!FLX.RDB$CHARACTER_SET_ID.NULL)
 			field->charSetId = FLX.RDB$CHARACTER_SET_ID;
 		field->collationId = 0;
@@ -730,39 +730,52 @@ dsql_udf* METD_get_function(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 				else
 				{
 					DSC d;
-					d.dsc_dtype = (F.RDB$FIELD_TYPE != blr_blob) ?
-						gds_cvt_blr_dtype[F.RDB$FIELD_TYPE] : dtype_blob;
-					// dimitr: adjust the UDF arguments for CSTRING
-					if (d.dsc_dtype == dtype_cstring) {
-						d.dsc_dtype = dtype_text;
-					}
-					d.dsc_scale = F.RDB$FIELD_SCALE;
-					if (!F.RDB$FIELD_SUB_TYPE.NULL) {
-						d.dsc_sub_type = F.RDB$FIELD_SUB_TYPE;
-					}
-					else {
+
+					if (X.RDB$MECHANISM == FUN_scalar_array)
+					{
+						d.dsc_dtype = dtype_array;
+						d.dsc_scale = 0;
 						d.dsc_sub_type = 0;
-					}
-					d.dsc_length = F.RDB$FIELD_LENGTH;
-					if (d.dsc_dtype == dtype_varying) {
-						d.dsc_length += sizeof(USHORT);
-					}
-					d.dsc_address = NULL;
-
-					if (!F.RDB$CHARACTER_SET_ID.NULL)
-					{
-						if (d.dsc_dtype != dtype_blob) {
-							d.dsc_ttype() = F.RDB$CHARACTER_SET_ID;
-						}
-						else {
-							d.dsc_scale = F.RDB$CHARACTER_SET_ID;
-						}
-					}
-
-					if (X.RDB$MECHANISM != FUN_value && X.RDB$MECHANISM != FUN_reference)
-					{
+						d.dsc_length = sizeof(ISC_QUAD);
 						d.dsc_flags = DSC_nullable;
 					}
+					else
+					{
+						d.dsc_dtype = (F.RDB$FIELD_TYPE != blr_blob) ?
+							gds_cvt_blr_dtype[F.RDB$FIELD_TYPE] : dtype_blob;
+						// dimitr: adjust the UDF arguments for CSTRING
+						if (d.dsc_dtype == dtype_cstring) {
+							d.dsc_dtype = dtype_text;
+						}
+						d.dsc_scale = F.RDB$FIELD_SCALE;
+						if (!F.RDB$FIELD_SUB_TYPE.NULL) {
+							d.dsc_sub_type = F.RDB$FIELD_SUB_TYPE;
+						}
+						else {
+							d.dsc_sub_type = 0;
+						}
+						d.dsc_length = F.RDB$FIELD_LENGTH;
+						if (d.dsc_dtype == dtype_varying) {
+							d.dsc_length += sizeof(USHORT);
+						}
+
+						if (!F.RDB$CHARACTER_SET_ID.NULL)
+						{
+							if (d.dsc_dtype != dtype_blob) {
+								d.dsc_ttype() = F.RDB$CHARACTER_SET_ID;
+							}
+							else {
+								d.dsc_scale = F.RDB$CHARACTER_SET_ID;
+							}
+						}
+
+						if (X.RDB$MECHANISM != FUN_value && X.RDB$MECHANISM != FUN_reference)
+						{
+							d.dsc_flags = DSC_nullable;
+						}
+					}
+
+					d.dsc_address = NULL;
 
 					if (!X.RDB$DEFAULT_VALUE.NULL ||
 						(fb_utils::implicit_domain(F.RDB$FIELD_NAME) && !F.RDB$DEFAULT_VALUE.NULL))
@@ -770,7 +783,9 @@ dsql_udf* METD_get_function(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 						defaults++;
 					}
 
-					userFunc->udf_arguments.add(d);
+					auto& argument = userFunc->udf_arguments.add();
+					argument.name = X.RDB$ARGUMENT_NAME;
+					argument.desc = d;
 				}
 			}
 			END_FOR
@@ -803,46 +818,61 @@ dsql_udf* METD_get_function(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 			else
 			{
 				DSC d;
-				d.dsc_dtype = (X.RDB$FIELD_TYPE != blr_blob) ?
-					gds_cvt_blr_dtype[X.RDB$FIELD_TYPE] : dtype_blob;
-				// dimitr: adjust the UDF arguments for CSTRING
-				if (d.dsc_dtype == dtype_cstring) {
-					d.dsc_dtype = dtype_text;
-				}
-				d.dsc_scale = X.RDB$FIELD_SCALE;
-				if (!X.RDB$FIELD_SUB_TYPE.NULL) {
-					d.dsc_sub_type = X.RDB$FIELD_SUB_TYPE;
-				}
-				else {
+
+				if (X.RDB$MECHANISM == FUN_scalar_array)
+				{
+					d.dsc_dtype = dtype_array;
+					d.dsc_scale = 0;
 					d.dsc_sub_type = 0;
-				}
-				d.dsc_length = X.RDB$FIELD_LENGTH;
-				if (d.dsc_dtype == dtype_varying) {
-					d.dsc_length += sizeof(USHORT);
-				}
-				d.dsc_address = NULL;
-
-				if (!X.RDB$CHARACTER_SET_ID.NULL)
-				{
-					if (d.dsc_dtype != dtype_blob) {
-						d.dsc_ttype() = X.RDB$CHARACTER_SET_ID;
-					}
-					else {
-						d.dsc_scale = X.RDB$CHARACTER_SET_ID;
-					}
-				}
-
-				if (X.RDB$MECHANISM != FUN_value && X.RDB$MECHANISM != FUN_reference)
-				{
+					d.dsc_length = sizeof(ISC_QUAD);
 					d.dsc_flags = DSC_nullable;
 				}
+				else
+				{
+					d.dsc_dtype = (X.RDB$FIELD_TYPE != blr_blob) ?
+						gds_cvt_blr_dtype[X.RDB$FIELD_TYPE] : dtype_blob;
+					// dimitr: adjust the UDF arguments for CSTRING
+					if (d.dsc_dtype == dtype_cstring) {
+						d.dsc_dtype = dtype_text;
+					}
+					d.dsc_scale = X.RDB$FIELD_SCALE;
+					if (!X.RDB$FIELD_SUB_TYPE.NULL) {
+						d.dsc_sub_type = X.RDB$FIELD_SUB_TYPE;
+					}
+					else {
+						d.dsc_sub_type = 0;
+					}
+					d.dsc_length = X.RDB$FIELD_LENGTH;
+					if (d.dsc_dtype == dtype_varying) {
+						d.dsc_length += sizeof(USHORT);
+					}
+
+					if (!X.RDB$CHARACTER_SET_ID.NULL)
+					{
+						if (d.dsc_dtype != dtype_blob) {
+							d.dsc_ttype() = X.RDB$CHARACTER_SET_ID;
+						}
+						else {
+							d.dsc_scale = X.RDB$CHARACTER_SET_ID;
+						}
+					}
+
+					if (X.RDB$MECHANISM != FUN_value && X.RDB$MECHANISM != FUN_reference)
+					{
+						d.dsc_flags = DSC_nullable;
+					}
+				}
+
+				d.dsc_address = NULL;
 
 				if (!X.RDB$DEFAULT_VALUE.NULL)
 				{
 					defaults++;
 				}
 
-				userFunc->udf_arguments.add(d);
+				auto& argument = userFunc->udf_arguments.add();
+				argument.name = X.RDB$ARGUMENT_NAME;
+				argument.desc = d;
 			}
 		}
 	}
@@ -1524,8 +1554,9 @@ dsql_rel* METD_get_view_base(jrd_tra* transaction, DsqlCompilerScratch* dsqlScra
 }
 
 
-dsql_rel* METD_get_view_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScratch,
-	const char* view_name, const char* relation_or_alias)
+bool METD_get_view_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScratch,
+	const Jrd::MetaName& view_name, const Jrd::MetaName& relation_or_alias,
+	dsql_rel*& relation, dsql_prc*& procedure)
 {
 /**************************************
  *
@@ -1543,32 +1574,36 @@ dsql_rel* METD_get_view_relation(jrd_tra* transaction, DsqlCompilerScratch* dsql
 
 	validateTransaction(transaction);
 
-	dsql_rel* relation = NULL;
-
 	AutoCacheRequest handle(tdbb, irq_view, IRQ_REQUESTS);
 
 	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
-		X IN RDB$VIEW_RELATIONS WITH X.RDB$VIEW_NAME EQ view_name
+		X IN RDB$VIEW_RELATIONS WITH X.RDB$VIEW_NAME EQ view_name.c_str()
 	{
 		fb_utils::exact_name(X.RDB$CONTEXT_NAME);
 		fb_utils::exact_name(X.RDB$RELATION_NAME);
 
-		if (!strcmp(X.RDB$RELATION_NAME, relation_or_alias) ||
-			!strcmp(X.RDB$CONTEXT_NAME, relation_or_alias))
+		if (relation_or_alias == X.RDB$RELATION_NAME ||
+			relation_or_alias == X.RDB$CONTEXT_NAME)
 		{
-			relation = METD_get_relation(transaction, dsqlScratch, X.RDB$RELATION_NAME);
-			return relation;
+			if ( (relation = METD_get_relation(transaction, dsqlScratch, X.RDB$RELATION_NAME)) )
+				return true;
+
+			const QualifiedName procName(X.RDB$RELATION_NAME,
+				X.RDB$PACKAGE_NAME.NULL ? nullptr : X.RDB$PACKAGE_NAME);
+
+			if ( (procedure = METD_get_procedure(transaction, dsqlScratch, procName)) )
+				return true;
 		}
 
-		relation = METD_get_view_relation(transaction, dsqlScratch, X.RDB$RELATION_NAME,
-			relation_or_alias);
-
-		if (relation)
-			return relation;
+		if (METD_get_view_relation(transaction, dsqlScratch, X.RDB$RELATION_NAME,
+			relation_or_alias, relation, procedure))
+		{
+			return true;
+		}
 	}
 	END_FOR
 
-	return NULL;
+	return false;
 }
 
 

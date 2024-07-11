@@ -74,6 +74,7 @@
 #include "../utilities/nbackup/nbkswi.h"
 #include "../jrd/trace/traceswi.h"
 #include "../jrd/val_proto.h"
+#include "../jrd/ThreadCollect.h"
 
 // Service threads
 #include "../burp/burp_proto.h"
@@ -120,6 +121,7 @@ int main_gstat(Firebird::UtilSvc* uSvc);
 
 
 using namespace Firebird;
+using namespace Jrd;
 
 const int SVC_user_dba			= 2;
 const int SVC_user_any			= 1;
@@ -138,64 +140,9 @@ namespace {
 	GlobalPtr<Mutex> globalServicesMutex;
 
 	// All that we need to shutdown service threads when shutdown in progress
-	typedef Array<Jrd::Service*> AllServices;
+	typedef Array<Service*> AllServices;
 	GlobalPtr<AllServices> allServices;	// protected by globalServicesMutex
 	volatile bool svcShutdown = false;
-
-	class ThreadCollect
-	{
-	public:
-		ThreadCollect(MemoryPool& p)
-			: threads(p)
-		{ }
-
-		void join()
-		{
-			// join threads to be sure they are gone when shutdown is complete
-			// no need locking something cause this is expected to run when services are closing
-			waitFor(threads);
-		}
-
-		void add(const Thread::Handle& h)
-		{
-			// put thread into completion wait queue when it finished running
-			MutexLockGuard g(threadsMutex, FB_FUNCTION);
-			fb_assert(h);
-			threads.add(h);
-		}
-
-		void houseKeeping()
-		{
-			if (!threads.hasData())
-				return;
-
-			// join finished threads
-			AllThreads t;
-			{ // mutex scope
-				MutexLockGuard g(threadsMutex, FB_FUNCTION);
-				t.assign(threads);
-				threads.clear();
-			}
-
-			waitFor(t);
-		}
-
-	private:
-		typedef Array<Thread::Handle> AllThreads;
-
-		static void waitFor(AllThreads& thr)
-		{
-			while (thr.hasData())
-			{
-				Thread::Handle h(thr.pop());
-				Thread::waitForCompletion(h);
-			}
-		}
-
-		AllThreads threads;
-		Mutex threadsMutex;
-	};
-
 	GlobalPtr<ThreadCollect> threadCollect;
 
 	void spbVersionError()
@@ -206,8 +153,6 @@ namespace {
 
 } // anonymous namespace
 
-
-using namespace Jrd;
 
 namespace {
 const serv_entry services[] =
@@ -244,9 +189,9 @@ Service::Validate::Validate(Service* svc)
 {
 	sharedGuard.enter();
 
-	if (!svc->locateInAllServices())
+	if (! (svc && svc->locateInAllServices()))
 	{
-		// Service is so old that it's even missing in allServices array
+		// Service is null or so old that it's even missing in allServices array
 		Arg::Gds(isc_bad_svc_handle).raise();
 	}
 
@@ -577,6 +522,7 @@ void Service::setServiceStatus(const ISC_STATUS* status_vector)
 	}
 
 	Arg::StatusVector passed(status_vector);
+	MutexLockGuard g(svc_status_mutex, FB_FUNCTION);
 	ERR_post_nothrow(passed, &svc_status);
 }
 
@@ -601,6 +547,7 @@ void Service::setServiceStatus(const USHORT facility, const USHORT errcode,
 		put_status_arg(status, args.getCell(loop));
 	}
 
+	MutexLockGuard g(svc_status_mutex, FB_FUNCTION);
 	ERR_post_nothrow(status, &svc_status);
 }
 
@@ -636,14 +583,9 @@ void Service::hidePasswd(ArgvType&, int)
 	// no action
 }
 
-const FbStatusVector* Service::getStatus()
+Service::StatusAccessor Service::getStatusAccessor()
 {
-	return &svc_status;
-}
-
-void Service::initStatus()
-{
-	svc_status->init();
+	return StatusAccessor(svc_status_mutex, &svc_status, this);
 }
 
 void Service::checkService()
@@ -751,11 +693,12 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 	svc_stdout_head(0), svc_stdout_tail(0), svc_service_run(NULL),
 	svc_resp_alloc(getPool()), svc_resp_buf(0), svc_resp_ptr(0), svc_resp_buf_len(0),
 	svc_resp_len(0), svc_flags(SVC_finished), svc_user_flag(0), svc_spb_version(0),
-	svc_do_shutdown(false), svc_shutdown_in_progress(false), svc_timeout(false),
+	svc_shutdown_server(false), svc_shutdown_request(false),
+	svc_shutdown_in_progress(false), svc_timeout(false),
 	svc_username(getPool()), svc_sql_role(getPool()), svc_auth_block(getPool()),
 	svc_expected_db(getPool()), svc_trusted_role(false), svc_utf8(false),
 	svc_switches(getPool()), svc_perm_sw(getPool()), svc_address_path(getPool()),
-	svc_command_line(getPool()),
+	svc_command_line(getPool()), svc_parallel_workers(0),
 	svc_network_protocol(getPool()), svc_remote_address(getPool()), svc_remote_process(getPool()),
 	svc_remote_pid(0), svc_trace_manager(NULL), svc_crypt_callback(crypt_callback),
 	svc_existence(FB_NEW_POOL(*getDefaultMemoryPool()) SvcMutex(this)),
@@ -765,7 +708,7 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 	, svc_debug(false)
 #endif
 {
-	initStatus();
+	svc_status->init();
 
 	{	// scope
 		// Account service block in global array
@@ -785,6 +728,8 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 		if (svcname == "@@@")
 			svc_debug = true;
 #endif
+		// Could be overrided in SPB
+		svc_parallel_workers = Config::getParallelWorkers();
 
 		// Process the service parameter block.
 		ClumpletReader spb(ClumpletReader::spbList, spb_data, spb_length, spbVersionError);
@@ -927,7 +872,7 @@ void Service::detach()
 	}
 
 	// save it cause after call to finish() we can't access class members any more
-	const bool localDoShutdown = svc_do_shutdown;
+	const bool localDoShutdown = svc_shutdown_server;
 
 	if (svc_trace_manager->needs(ITraceFactory::TRACE_EVENT_SERVICE_DETACH))
 	{
@@ -1013,7 +958,7 @@ ULONG Service::totalCount()
 
 bool Service::checkForShutdown()
 {
-	if (svcShutdown)
+	if (svcShutdown || svc_shutdown_request)
 	{
 		if (svc_shutdown_in_progress)
 		{
@@ -1026,6 +971,20 @@ bool Service::checkForShutdown()
 	}
 
 	return false;
+}
+
+
+void Service::cancel(thread_db* /*tdbb*/)
+{
+	svc_shutdown_request = true;
+
+	// signal once
+	if (!(svc_flags & SVC_finished))
+		svc_detach_sem.release();
+	if (svc_stdin_size_requested)
+		svc_stdin_semaphore.release();
+
+	svc_sem_full.release();
 }
 
 
@@ -1221,7 +1180,7 @@ ISC_STATUS Service::query2(thread_db* /*tdbb*/,
 			*info++ = item;
 			if (svc_user_flag & SVC_user_dba)
 			{
-				svc_do_shutdown = false;
+				svc_shutdown_server = false;
 			}
 			else
 				need_admin_privs(status, "isc_info_svc_svr_online");
@@ -1231,7 +1190,7 @@ ISC_STATUS Service::query2(thread_db* /*tdbb*/,
 			*info++ = item;
 			if (svc_user_flag & SVC_user_dba)
 			{
-				svc_do_shutdown = true;
+				svc_shutdown_server = true;
 			}
 			else
 				need_admin_privs(status, "isc_info_svc_svr_offline");
@@ -1573,6 +1532,7 @@ ISC_STATUS Service::query2(thread_db* /*tdbb*/,
 		throw;
 	}
 
+	// no need locking svc_status_mutex - check single element of status vector
 	return svc_status[1];
 }
 
@@ -1676,7 +1636,7 @@ void Service::query(USHORT			send_item_length,
 			*info++ = item;
 			if (svc_user_flag & SVC_user_dba)
 			{
-				svc_do_shutdown = false;
+				svc_shutdown_server = false;
 				*info++ = 0;	// Success
 			}
 			else
@@ -1687,7 +1647,7 @@ void Service::query(USHORT			send_item_length,
 			*info++ = item;
 			if (svc_user_flag & SVC_user_dba)
 			{
-				svc_do_shutdown = true;
+				svc_shutdown_server = true;
 				*info++ = 0;	// Success
 			}
 			else
@@ -1975,7 +1935,7 @@ THREAD_ENTRY_DECLARE Service::run(THREAD_ENTRY_PARAM arg)
 		svc->unblockQueryGet();
 		svc->finish(SVC_finished);
 
-		threadCollect->add(thrHandle);
+		threadCollect->ending(thrHandle);
 	}
 	catch (const Exception& ex)
 	{
@@ -2000,6 +1960,9 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 
 	try
 	{
+	if (!svcShutdown)
+		svc_shutdown_request = svc_shutdown_in_progress = false;
+
 	ClumpletReader spb(ClumpletReader::SpbStart, spb_data, spb_length);
 
 	// The name of the service is the first element of the buffer
@@ -2128,7 +2091,10 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 	parseSwitches();
 
 	// The service block can be reused hence init a status vector.
-	initStatus();
+	{
+		MutexLockGuard g(svc_status_mutex, FB_FUNCTION);
+		svc_status->init();
+	}
 
 	if (serv->serv_thd)
 	{
@@ -2184,7 +2150,7 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 		throw;
 	}
 
-	if (this->svc_trace_manager->needs(ITraceFactory::TRACE_EVENT_SERVICE_START))
+	if (svc_trace_manager->needs(ITraceFactory::TRACE_EVENT_SERVICE_START))
 	{
 		TraceServiceImpl service(this);
 		this->svc_trace_manager->event_service_start(&service,
@@ -2213,7 +2179,10 @@ void Service::readFbLog()
 	{
 		if (file != NULL)
 		{
-			initStatus();
+			{
+				MutexLockGuard g(svc_status_mutex, FB_FUNCTION);
+				svc_status->init();
+			}
 			started();
 			svc_started = true;
 			TEXT buffer[100];
@@ -2232,6 +2201,7 @@ void Service::readFbLog()
 
 		if (!file || (file && ferror(file)))
 		{
+			MutexLockGuard g(svc_status_mutex, FB_FUNCTION);
 			(Arg::Gds(isc_sys_request) << Arg::Str(file ? "fgets" : "fopen") <<
 										  SYS_ERR(errno)).copyTo(&svc_status);
 			if (!svc_started)
@@ -2243,6 +2213,8 @@ void Service::readFbLog()
 	catch (const Firebird::Exception& e)
 	{
 		setDataMode(false);
+
+		MutexLockGuard g(svc_status_mutex, FB_FUNCTION);
 		e.stuffException(&svc_status);
 	}
 
@@ -2643,6 +2615,8 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 	string nbk_database, nbk_file, nbk_guid;
 	int nbk_level = -1;
 
+	bool cleanHistory = false, keepHistory = false;
+
 	bool val_database = false;
 	bool found = false;
 	string::size_type userPos = string::npos;
@@ -2711,6 +2685,30 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 					return false;
 				}
 				get_action_svc_string(spb, switches);
+				break;
+
+			case isc_spb_nbk_clean_history:
+				if (cleanHistory)
+				{
+					(Arg::Gds(isc_unexp_spb_form) << Arg::Str("only one isc_spb_nbk_clean_history")).raise();
+				}
+				if (!get_action_svc_parameter(spb.getClumpTag(), nbackup_action_in_sw_table, switches))
+				{
+					return false;
+				}
+				cleanHistory = true;
+				break;
+
+			case isc_spb_nbk_keep_days:
+			case isc_spb_nbk_keep_rows:
+				if (keepHistory)
+				{
+					(Arg::Gds(isc_unexp_spb_form) << Arg::Str("only one isc_spb_nbk_keep_days or isc_spb_nbk_keep_rows")).raise();
+				}
+				switches += "-KEEP ";
+				get_action_svc_data(spb, switches, false);
+				switches += spb.getClumpTag() == isc_spb_nbk_keep_days ? "DAYS " : "ROWS ";
+				keepHistory = true;
 				break;
 
 			default:
@@ -2963,6 +2961,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 				get_action_svc_data(spb, burp_database, bigint);
 				break;
 			case isc_spb_bkp_factor:
+			case isc_spb_bkp_parallel_workers:
 			case isc_spb_res_buffers:
 			case isc_spb_res_page_size:
 			case isc_spb_verbint:
@@ -3046,6 +3045,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			case isc_spb_rpr_commit_trans:
 			case isc_spb_rpr_rollback_trans:
 			case isc_spb_rpr_recover_two_phase:
+			case isc_spb_rpr_par_workers:
 				if (!get_action_svc_parameter(spb.getClumpTag(), alice_in_sw_table, switches))
 				{
 					return false;
@@ -3210,6 +3210,16 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			}
 			else
 				switches += nbk_guid;
+
+			if (!cleanHistory && keepHistory)
+			{
+				(Arg::Gds(isc_missing_required_spb) << Arg::Str("isc_spb_nbk_clean_history")).raise();
+			}
+
+			if (cleanHistory && !keepHistory)
+			{
+				(Arg::Gds(isc_missing_required_spb) << Arg::Str("isc_spb_nbk_keep_days or isc_spb_nbk_keep_rows")).raise();
+			}
 		}
 		switches += nbk_database;
 		switches += nbk_file;

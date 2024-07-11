@@ -74,7 +74,7 @@ public:
 		return sAtt;
 	}
 
-	blb* getHandle() throw()
+	blb* getHandle() noexcept
 	{
 		return blob;
 	}
@@ -118,7 +118,7 @@ public:
 public:
 	JTransaction(jrd_tra* handle, StableAttachmentPart* sa);
 
-	jrd_tra* getHandle() throw()
+	jrd_tra* getHandle() noexcept
 	{
 		return transaction;
 	}
@@ -169,13 +169,16 @@ public:
 	void close(Firebird::CheckStatusWrapper* status) override;
 	void deprecatedClose(Firebird::CheckStatusWrapper* status) override;
 	void setDelayedOutputFormat(Firebird::CheckStatusWrapper* status, Firebird::IMessageMetadata* format) override;
+	void getInfo(Firebird::CheckStatusWrapper* status,
+		unsigned int itemsLength, const unsigned char* items,
+		unsigned int bufferLength, unsigned char* buffer) override;
 
 public:
 	JResultSet(DsqlCursor* handle, JStatement* aStatement);
 
 	StableAttachmentPart* getAttachment();
 
-	DsqlCursor* getHandle() throw()
+	DsqlCursor* getHandle() noexcept
 	{
 		return cursor;
 	}
@@ -221,7 +224,7 @@ public:
 
 	StableAttachmentPart* getAttachment();
 
-	DsqlBatch* getHandle() throw()
+	DsqlBatch* getHandle() noexcept
 	{
 		return batch;
 	}
@@ -257,7 +260,7 @@ public:
 		return sAtt;
 	}
 
-	Applier* getHandle() throw()
+	Applier* getHandle() noexcept
 	{
 		return applier;
 	}
@@ -312,7 +315,7 @@ public:
 		return sAtt;
 	}
 
-	DsqlRequest* getHandle() throw()
+	DsqlRequest* getHandle() noexcept
 	{
 		return statement;
 	}
@@ -353,7 +356,7 @@ public:
 		return sAtt;
 	}
 
-	Statement* getHandle() throw()
+	Statement* getHandle() noexcept
 	{
 		return rq;
 	}
@@ -376,7 +379,7 @@ public:
 public:
 	JEvents(int aId, StableAttachmentPart* sa, Firebird::IEventCallback* aCallback);
 
-	JEvents* getHandle() throw()
+	JEvents* getHandle() noexcept
 	{
 		return this;
 	}
@@ -460,15 +463,15 @@ public:
 public:
 	explicit JAttachment(StableAttachmentPart* js);
 
-	StableAttachmentPart* getStable() throw()
+	StableAttachmentPart* getStable() noexcept
 	{
 		return att;
 	}
 
-	Jrd::Attachment* getHandle() throw();
-	const Jrd::Attachment* getHandle() const throw();
+	Jrd::Attachment* getHandle() noexcept;
+	const Jrd::Attachment* getHandle() const noexcept;
 
-	StableAttachmentPart* getAttachment() throw()
+	StableAttachmentPart* getAttachment() noexcept
 	{
 		return att;
 	}
@@ -506,6 +509,7 @@ public:
 		unsigned int bufferLength, unsigned char* buffer) override;
 	void start(Firebird::CheckStatusWrapper* status,
 		unsigned int spbLength, const unsigned char* spb) override;
+	void cancel(Firebird::CheckStatusWrapper* status) override;
 
 public:
 	explicit JService(Jrd::Service* handle);

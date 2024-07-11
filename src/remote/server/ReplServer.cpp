@@ -35,8 +35,8 @@
 #include "../common/ThreadStart.h"
 #include "../common/utils_proto.h"
 #include "../common/classes/ParsedList.h"
+#include "../common/status.h"
 
-#include "../jrd/replication/Applier.h"
 #include "../jrd/replication/ChangeLog.h"
 #include "../jrd/replication/Config.h"
 #include "../jrd/replication/Protocol.h"
@@ -75,8 +75,23 @@ namespace
 	const USHORT CTL_VERSION1 = 1;
 	const USHORT CTL_CURRENT_VERSION = CTL_VERSION1;
 
-	volatile bool* shutdownPtr = NULL;
+	volatile bool shutdownFlag = false;
 	AtomicCounter activeThreads;
+	Semaphore shutdownSemaphore;
+
+	int shutdownHandler(const int, const int, void*)
+	{
+		if (!shutdownFlag && activeThreads.value())
+		{
+			shutdownFlag = true;
+			shutdownSemaphore.release(activeThreads.value() + 1);
+
+			while (activeThreads.value())
+				Thread::sleep(10);
+		}
+
+		return 0;
+	}
 
 	struct ActiveTransaction
 	{
@@ -139,15 +154,12 @@ namespace
 					TransactionList& transactions)
 			: AutoFile(init(directory, guid))
 		{
-			char guidStr[GUID_BUFF_SIZE];
-			GuidToString(guidStr, &guid);
-
-			const PathName filename = directory + guidStr;
+			const PathName filename = directory + guid.toPathName();
 
 #ifdef WIN_NT
 			string name;
-			name.printf("firebird_replctl_%s", guidStr);
-			m_mutex = CreateMutex(NULL, FALSE, name.c_str());
+			name.printf("firebird_replctl_%s", guid.toString().c_str());
+			m_mutex = CreateMutex(ISC_get_security_desc(), FALSE, name.c_str());
 			if (WaitForSingleObject(m_mutex, INFINITE) != WAIT_OBJECT_0)
 #else // POSIX
 #ifdef HAVE_FLOCK
@@ -297,10 +309,7 @@ namespace
 #else
 			const mode_t ACCESS_MODE = 0664;
 #endif
-			char guidStr[GUID_BUFF_SIZE];
-			GuidToString(guidStr, &guid);
-
-			const PathName filename = directory + guidStr;
+			const PathName filename = directory + guid.toPathName();
 
 			const int fd = os_utils::open(filename.c_str(),
 				O_CREAT | O_RDWR | O_BINARY, ACCESS_MODE);
@@ -350,13 +359,7 @@ namespace
 
 		bool checkGuid(const Guid& guid)
 		{
-			if (!m_config->sourceGuid.Data1)
-				return true;
-
-			if (!memcmp(&guid, &m_config->sourceGuid, sizeof(Guid)))
-				return true;
-
-			return false;
+			return (!m_config->sourceGuid.has_value() || m_config->sourceGuid.value() == guid);
 		}
 
 		FB_UINT64 initReplica()
@@ -544,30 +547,12 @@ namespace
 			(SINT64) finish.value().timestamp_time / 10;
 
 		const SINT64 delta = finishMsec - startMsec;
+		const double seconds = (double) delta / 1000;
 
 		string value;
-
-		if (delta < 1000) // less than 1 second
-			value.printf("%u ms", (unsigned) delta);
-		else if (delta < 60 * 1000) // less than 1 minute
-			value.printf("%u second(s)", (unsigned) (delta / 1000));
-		else if (delta < 60 * 60 * 1000) // less than 1 hour
-			value.printf("%u minute(s)", (unsigned) (delta / 1000 / 60));
-		else if (delta < 24 * 60 * 60 * 1000) // less than 1 day
-			value.printf("%u hour(s)", (unsigned) (delta / 1000 / 60 / 60));
-		else
-			value.printf("%u day(s)", (unsigned) (delta / 1000 / 60 / 60 / 24));
+		value.printf("%.3lfs", seconds);
 
 		return value;
-	}
-
-	void readConfig(TargetList& targets)
-	{
-		Array<Replication::Config*> replicas;
-		Replication::Config::enumerate(replicas);
-
-		for (auto replica : replicas)
-			targets.add(FB_NEW Target(replica));
 	}
 
 	bool validateHeader(const SegmentHeader* header)
@@ -626,7 +611,7 @@ namespace
 		}
 	}
 
-	enum ProcessStatus { PROCESS_SUSPEND, PROCESS_CONTINUE, PROCESS_ERROR };
+	enum ProcessStatus { PROCESS_SUSPEND, PROCESS_CONTINUE, PROCESS_ERROR, PROCESS_SHUTDOWN };
 
 	ProcessStatus process_archive(MemoryPool& pool, Target* target)
 	{
@@ -645,6 +630,9 @@ namespace
 			for (iter = PathUtils::newDirIterator(pool, config->sourceDirectory);
 				*iter; ++(*iter))
 			{
+				if (shutdownFlag)
+					return PROCESS_SHUTDOWN;
+
 				const auto filename = **iter;
 
 #ifdef PRESERVE_LOG
@@ -719,13 +707,11 @@ namespace
 					continue;
 				}
 
-				if (!target->checkGuid(header.hdr_guid))
+				const Guid guid(header.hdr_guid);
+				if (!target->checkGuid(guid))
 				{
-					char buff[GUID_BUFF_SIZE];
-					GuidToString(buff, &header.hdr_guid);
-					const string guidStr(buff);
 					target->verbose("Skipping file (%s) due to GUID mismatch (found %s)",
-									filename.c_str(), guidStr.c_str());
+									filename.c_str(), guid.toString().c_str());
 					continue;
 				}
 /*
@@ -737,12 +723,11 @@ namespace
 
 			if (queue.isEmpty())
 			{
-				target->verbose("No new segments found, suspending for %u seconds",
-								config->applyIdleTimeout);
+				target->verbose("No new segments found, suspending");
 				return ret;
 			}
 
-			target->verbose("Added %u segment(s) to the processing queue", (ULONG) queue.getCount());
+			target->verbose("Added %u segment(s) to the queue", (ULONG) queue.getCount());
 
 			// Second pass: replicate the chain of contiguous segments
 
@@ -753,11 +738,13 @@ namespace
 			FB_UINT64 next_sequence = 0;
 			const bool restart = target->isShutdown();
 
-			for (Segment** iter = queue.begin(); iter != queue.end(); ++iter)
+			for (auto segment : queue)
 			{
-				Segment* const segment = *iter;
+				if (shutdownFlag)
+					return PROCESS_SHUTDOWN;
+
 				const FB_UINT64 sequence = segment->header.hdr_sequence;
-				const Guid& guid = segment->header.hdr_guid;
+				const Guid guid(segment->header.hdr_guid);
 
 				ControlFile control(target->getDirectory(), guid, sequence, transactions);
 
@@ -788,8 +775,7 @@ namespace
 				// then there's no point in replaying the whole sequence
 				if (max_sequence == last_sequence && !last_offset)
 				{
-					target->verbose("No new segments found, suspending for %u seconds",
-									config->applyIdleTimeout);
+					target->verbose("No new segments found, suspending");
 					return ret;
 				}
 
@@ -845,6 +831,9 @@ namespace
 				ULONG totalLength = sizeof(SegmentHeader);
 				while (totalLength < segment->header.hdr_length)
 				{
+					if (shutdownFlag)
+						return PROCESS_SHUTDOWN;
+
 					Block header;
 					if (read(file, &header, sizeof(Block)) != sizeof(Block))
 						raiseError("Journal file %s read failed (error %d)", segment->filename.c_str(), ERRNO);
@@ -887,12 +876,12 @@ namespace
 				if (oldest)
 				{
 					const TraNumber oldest_trans = oldest->tra_id;
-					extra.printf("preserving the file due to %u active transaction(s) (oldest: %" UQUADFORMAT " in segment %" UQUADFORMAT ")",
-								 (unsigned) transactions.getCount(), oldest_trans, oldest_sequence);
+					extra.printf("preserving (OAT: %" UQUADFORMAT " in segment %" UQUADFORMAT ")",
+								 oldest_trans, oldest_sequence);
 				}
 				else
 				{
-					extra += "deleting the file";
+					extra = "deleting";
 				}
 
 				target->verbose("Segment %" UQUADFORMAT " (%u bytes) is replicated in %s, %s",
@@ -946,7 +935,7 @@ namespace
 
 			target->logError(message);
 
-			target->verbose("Suspending for %u seconds", config->applyErrorTimeout);
+			target->verbose("Disconnecting and suspending");
 
 			ret = PROCESS_ERROR;
 		}
@@ -959,18 +948,17 @@ namespace
 
 	THREAD_ENTRY_DECLARE process_thread(THREAD_ENTRY_PARAM arg)
 	{
-		fb_assert(shutdownPtr);
-
 		AutoPtr<Target> target(static_cast<Target*>(arg));
 		const auto config = target->getConfig();
+		const auto dbName = config->dbName.c_str();
 
-		target->verbose("Started replication thread");
+		AutoMemoryPool workingPool(MemoryPool::createPool());
+		ContextPoolHolder threadContext(workingPool);
 
-		while (!*shutdownPtr)
+		target->verbose("Started replication for database %s", dbName);
+
+		while (!shutdownFlag)
 		{
-			AutoMemoryPool workingPool(MemoryPool::createPool());
-			ContextPoolHolder threadContext(workingPool);
-
 			const ProcessStatus ret = process_archive(*workingPool, target);
 
 			if (ret == PROCESS_CONTINUE)
@@ -978,42 +966,42 @@ namespace
 
 			target->shutdown();
 
-			if (!*shutdownPtr)
+			if (ret != PROCESS_SHUTDOWN)
 			{
 				const ULONG timeout =
 					(ret == PROCESS_SUSPEND) ? config->applyIdleTimeout : config->applyErrorTimeout;
 
-				Thread::sleep(timeout * 1000);
+				shutdownSemaphore.tryEnter(timeout);
 			}
 		}
 
-		target->verbose("Finished replication thread");
-
+		target->verbose("Finished replication for database %s", dbName);
 		--activeThreads;
 
 		return 0;
 	}
 }
 
-bool REPL_server(CheckStatusWrapper* status, bool wait, bool* aShutdownPtr)
+
+bool REPL_server(CheckStatusWrapper* status, const Replication::Config::ReplicaList& replicas, bool wait)
 {
 	try
 	{
-		shutdownPtr = aShutdownPtr;
+		fb_shutdown_callback(0, shutdownHandler, fb_shut_preproviders, 0);
 
-		TargetList targets;
-		readConfig(targets);
-
-		for (auto target : targets)
+		for (const auto replica : replicas)
 		{
+			const auto target = FB_NEW Target(replica);
+			Thread::start(process_thread, target, THREAD_medium, NULL);
 			++activeThreads;
-			Thread::start((ThreadEntryPoint*) process_thread, target, THREAD_medium, NULL);
 		}
 
 		if (wait)
 		{
+			shutdownSemaphore.enter();
+
 			do {
-				Thread::sleep(100);
+				Thread::sleep(10);
 			} while (activeThreads.value());
 		}
 	}

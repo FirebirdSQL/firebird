@@ -145,10 +145,12 @@ struct CallerName
 };
 
 typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<SINT64, ULONG> > > ReplBlobMap;
+typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<SLONG, blb*> > > BlobUtilMap;
 
 const int DEFAULT_LOCK_TIMEOUT = -1; // infinite
 const char* const TRA_BLOB_SPACE = "fb_blob_";
 const char* const TRA_UNDO_SPACE = "fb_undo_";
+const int MAX_TEMP_BLOBS = 1000;
 
 class jrd_tra : public pool_alloc<type_tra>
 {
@@ -173,6 +175,7 @@ public:
 		tra_blobs(outer ? outer->tra_blobs : &tra_blobs_tree),
 		tra_fetched_blobs(p),
 		tra_repl_blobs(*p),
+		tra_blob_util_map(*p),
 		tra_arrays(NULL),
 		tra_deferred_job(NULL),
 		tra_resources(*p),
@@ -184,7 +187,7 @@ public:
 		tra_outer(outer),
 		tra_snapshot_handle(0),
 		tra_snapshot_number(0),
-		tra_sorts(*p),
+		tra_sorts(*p, attachment->att_database),
 		tra_gen_ids(NULL),
 		tra_replicator(NULL),
 		tra_interface(NULL),
@@ -268,6 +271,7 @@ public:
 	BlobIndexTree* tra_blobs;			// pointer to actual list of active blobs
 	FetchedBlobIdTree tra_fetched_blobs;	// list of fetched blobs
 	ReplBlobMap tra_repl_blobs;			// map of blob IDs replicated in this transaction
+	BlobUtilMap tra_blob_util_map;		// map of blob IDs for RDB$BLOB_UTIL package
 	ArrayField*	tra_arrays;				// Linked list of active arrays
 	Lock*		tra_lock;				// lock for transaction
 	Lock*		tra_alter_db_lock;		// lock for ALTER DATABASE statement(s)
@@ -285,6 +289,7 @@ public:
 	UCHAR tra_callback_count;			// callback count for 'execute statement'
 	SSHORT tra_lock_timeout;			// in seconds, -1 means infinite, 0 means NOWAIT
 	ULONG tra_next_blob_id;     		// ID of the previous blob or array created in this transaction
+	ULONG tra_temp_blobs_count;			// Number of active temporary blobs
 	const ISC_TIMESTAMP_TZ tra_timestamp;	// transaction start time
 	Request* tra_requests;				// Doubly linked list of requests active in this transaction
 	MonitoringSnapshot* tra_mon_snapshot;	// Database state snapshot (for monitoring purposes)
@@ -296,6 +301,7 @@ public:
 	SnapshotHandle tra_snapshot_handle;
 	CommitNumber tra_snapshot_number;
 	SortOwner tra_sorts;
+	SLONG tra_blob_util_next = 1;
 
 	EDS::Transaction *tra_ext_common;
 	//Transaction *tra_ext_two_phase;
@@ -358,15 +364,16 @@ public:
 			Record* const record = *iter;
 			fb_assert(record);
 
-			if (!record->testFlags(REC_undo_active))
+			if (!record->isTempActive())
 			{
 				// initialize record for reuse
-				record->reset(format, REC_undo_active);
+				record->reset(format);
+				record->setTempActive();
 				return record;
 			}
 		}
 
-		Record* const record = FB_NEW_POOL(*tra_pool) Record(*tra_pool, format, REC_undo_active);
+		Record* const record = FB_NEW_POOL(*tra_pool) Record(*tra_pool, format, true);
 		tra_undo_records.add(record);
 
 		return record;
@@ -426,6 +433,7 @@ const ULONG TRA_own_interface		= 0x20000L;		// tra_interface was created for int
 const ULONG TRA_read_consistency	= 0x40000L; 	// ensure read consistency in this transaction
 const ULONG TRA_ex_restart			= 0x80000L; 	// Exception was raised to restart request
 const ULONG TRA_replicating			= 0x100000L;	// transaction is allowed to be replicated
+const ULONG TRA_no_blob_check		= 0x200000L;	// disable blob access checking
 
 // flags derived from TPB, see also transaction_options() at tra.cpp
 const ULONG TRA_OPTIONS_MASK = (TRA_degree3 | TRA_readonly | TRA_ignore_limbo | TRA_read_committed |
@@ -488,7 +496,6 @@ enum dfw_t {
 	dfw_revoke,
 	dfw_scan_relation,
 	dfw_create_expression_index,
-	dfw_delete_expression_index,
 	dfw_create_procedure,
 	dfw_modify_procedure,
 	dfw_delete_procedure,
@@ -506,6 +513,7 @@ enum dfw_t {
 	dfw_begin_backup,
 	dfw_end_backup,
 	dfw_user_management,
+	dfw_modify_package_header,
 	dfw_drop_package_header,
 	dfw_drop_package_body,
 	dfw_check_not_null,
@@ -521,7 +529,7 @@ enum dfw_t {
 	dfw_clear_indexpages,
 
 	// deferred works argument types
-	dfw_arg_index_name,		// index name for dfw_delete_expression_index, mandatory
+	dfw_arg_index_name,		// index name for dfw_delete_index, mandatory
 	dfw_arg_partner_rel_id,	// partner relation id for dfw_delete_index if index is FK, optional
 	dfw_arg_proc_name,		// procedure name for dfw_delete_prm, mandatory
 	dfw_arg_force_computed,	// we need to drop dependencies from a field that WAS computed

@@ -119,7 +119,6 @@ Config::Config()
 	  archiveTimeout(DEFAULT_ARCHIVE_TIMEOUT),
 	  syncReplicas(getPool()),
 	  sourceDirectory(getPool()),
-	  sourceGuid{},
 	  verboseLogging(false),
 	  applyIdleTimeout(DEFAULT_APPLY_IDLE_TIMEOUT),
 	  applyErrorTimeout(DEFAULT_APPLY_ERROR_TIMEOUT),
@@ -146,7 +145,6 @@ Config::Config(const Config& other)
 	  archiveTimeout(other.archiveTimeout),
 	  syncReplicas(getPool(), other.syncReplicas),
 	  sourceDirectory(getPool(), other.sourceDirectory),
-	  sourceGuid{},
 	  verboseLogging(other.verboseLogging),
 	  applyIdleTimeout(other.applyIdleTimeout),
 	  applyErrorTimeout(other.applyErrorTimeout),
@@ -303,7 +301,11 @@ Config* Config::get(const PathName& lookupName)
 
 		if (config->journalDirectory.hasData() || config->syncReplicas.hasData())
 		{
-			// If log_directory is specified, then replication is enabled
+			// If either journal_directory or sync_replicas is specified,
+			// then replication is enabled
+
+			if (config->dbName.isEmpty())
+				config->dbName = lookupName;
 
 			if (config->filePrefix.isEmpty())
 			{
@@ -329,7 +331,7 @@ Config* Config::get(const PathName& lookupName)
 // This routine is used to retrieve the list of replica databases.
 // Therefore it checks only the necessary settings.
 
-void Config::enumerate(Firebird::Array<Config*>& replicas)
+void Config::enumerate(ReplicaList& replicas)
 {
 	PathName dbName;
 
@@ -387,7 +389,8 @@ void Config::enumerate(Firebird::Array<Config*>& replicas)
 				}
 				else if (key == "source_guid")
 				{
-					if (!StringToGuid(&config->sourceGuid, value.c_str()))
+					config->sourceGuid = Guid::fromString(value);
+					if (!config->sourceGuid)
 						configError("invalid (misformatted) value", key, value);
 				}
 				else if (key == "verbose_logging")

@@ -143,6 +143,10 @@
 #define FB_CPU CpuRiscV64
 #endif /* RISCV64 */
 
+#ifdef LOONGARCH
+#define FB_CPU CpuLoongArch
+#endif /* LOONGARCH */
+
 #ifdef sparc
 #define FB_CPU CpuUltraSparc
 #define RISC_ALIGNMENT
@@ -150,11 +154,18 @@
 
 #ifdef MIPSEL
 #define FB_CPU CpuMipsel
+#define RISC_ALIGNMENT
 #endif /* mipsel */
 
 #ifdef MIPSEB
 #define FB_CPU CpuMips
+#define RISC_ALIGNMENT
 #endif /* mips */
+
+#ifdef MIPS64EL
+#define FB_CPU CpuMips64el
+#define RISC_ALIGNMENT
+#endif /* mips64el */
 
 #ifdef IA64
 #define FB_CPU CpuIa64
@@ -262,7 +273,7 @@
 
 
 /*****************************************************
-* FreeBSD for Intel platforms
+* FreeBSD
 *****************************************************/
 #ifdef FREEBSD
 
@@ -274,7 +285,21 @@
 
 #ifdef AMD64
 #define FB_CPU CpuAmd
-#else
+#endif
+
+#ifdef PPC64EL
+#define FB_CPU CpuPowerPc64el
+#endif
+
+#ifdef PPC64
+#define FB_CPU CpuPowerPc64
+#endif
+
+#ifdef PPC
+#define FB_CPU CpuPowerPc
+#endif
+
+#if defined(i386) || defined(__i386) || defined(__i386__)
 #define I386
 #define FB_CPU CpuIntel
 #endif
@@ -946,7 +971,8 @@ const int HIGH_WORD		= 0;
 #endif
 #endif
 
-static const TEXT FB_SHORT_MONTHS[][4] =
+
+inline const TEXT FB_SHORT_MONTHS[][4] =
 {
 	"Jan", "Feb", "Mar",
 	"Apr", "May", "Jun",
@@ -955,7 +981,7 @@ static const TEXT FB_SHORT_MONTHS[][4] =
 	"\0"
 };
 
-static const TEXT* const FB_LONG_MONTHS_UPPER[] =
+inline const TEXT* const FB_LONG_MONTHS_UPPER[] =
 {
 	"JANUARY",
 	"FEBRUARY",
@@ -970,6 +996,32 @@ static const TEXT* const FB_LONG_MONTHS_UPPER[] =
 	"NOVEMBER",
 	"DECEMBER",
 	0
+};
+
+// Starts with SUNDAY cuz tm.tm_wday starts with it
+inline const TEXT FB_SHORT_DAYS[][4] =
+{
+	"Sun",
+	"Mon",
+	"Tue",
+	"Wed",
+	"Thu",
+	"Fri",
+	"Sat",
+	"\0"
+};
+
+// Starts with SUNDAY cuz tm.tm_wday starts with it
+inline const TEXT* const FB_LONG_DAYS_UPPER[] =
+{
+	"SUNDAY",
+	"MONDAY",
+	"TUESDAY",
+	"WEDNESDAY",
+	"THURSDAY",
+	"FRIDAY",
+	"SATURDAY",
+	"\0"
 };
 
 const FB_SIZE_T FB_MAX_SIZEOF = ~FB_SIZE_T(0); // Assume FB_SIZE_T is unsigned

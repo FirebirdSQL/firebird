@@ -114,33 +114,6 @@ public:
 		: port(prt), replyLength(0), replyData(NULL), stopped(false), wake(false)
 	{ }
 
-	unsigned int callback(unsigned int dataLength, const void* data,
-		unsigned int bufferLength, void* buffer)
-	{
-		if (stopped)
-			return 0;
-
-		if (port->port_protocol < PROTOCOL_VERSION13 || port->port_type != rem_port::INET)
-			return 0;
-
-		Reference r(*port);
-
-		replyData = buffer;
-		replyLength = bufferLength;
-
-		PACKET p;
-		p.p_operation = op_crypt_key_callback;
-		p.p_cc.p_cc_data.cstr_length = dataLength;
-		p.p_cc.p_cc_data.cstr_address = (UCHAR*) data;
-		p.p_cc.p_cc_reply = bufferLength;
-		port->send(&p);
-
-		if (!sem.tryEnter(60))
-			return 0;
-
-		return replyLength;
-	}
-
 	void wakeup(unsigned int wakeLength, const void* wakeData)
 	{
 		if (replyLength > wakeLength)
@@ -167,6 +140,34 @@ public:
 		return stopped;
 	}
 
+	// ICryptKeyCallback implementation
+	unsigned int callback(unsigned int dataLength, const void* data,
+		unsigned int bufferLength, void* buffer) override
+	{
+		if (stopped)
+			return 0;
+
+		if (port->port_protocol < PROTOCOL_VERSION13 || port->port_type != rem_port::INET)
+			return 0;
+
+		Reference r(*port);
+
+		replyData = buffer;
+		replyLength = bufferLength;
+
+		PACKET p;
+		p.p_operation = op_crypt_key_callback;
+		p.p_cc.p_cc_data.cstr_length = dataLength;
+		p.p_cc.p_cc_data.cstr_address = (UCHAR*) data;
+		p.p_cc.p_cc_reply = bufferLength;
+		port->send(&p);
+
+		if (!sem.tryEnter(60))
+			return 0;
+
+		return replyLength;
+	}
+
 private:
 	rem_port* port;
 	Semaphore sem;
@@ -187,27 +188,9 @@ public:
 
 	~CryptKeyCallback()
 	{
+		dispose();
 		if (keyHolder)
 			PluginManagerInterfacePtr()->releasePlugin(keyHolder);
-	}
-
-	unsigned int callback(unsigned int dataLength, const void* data,
-		unsigned int bufferLength, void* buffer)
-	{
-		if (keyCallback)
-			return keyCallback->callback(dataLength, data, bufferLength, buffer);
-
-		if (networkCallback.isStopped())
-			return 0;
-
-		Reference r(*port);
-		loadClientKey();
-		unsigned rc = keyCallback ?
-			keyCallback->callback(dataLength, data, bufferLength, buffer) :
-			// use legacy behavior if holders do wish to accept keys from client
-			networkCallback.callback(dataLength, data, bufferLength, buffer);
-
-		return rc;
 	}
 
 	void loadClientKey()
@@ -256,6 +239,43 @@ public:
 		networkCallback.stop();
 	}
 
+	// ICryptKeyCallback implementation
+	unsigned int callback(unsigned int dataLength, const void* data,
+		unsigned int bufferLength, void* buffer) override
+	{
+		if (keyCallback)
+			return keyCallback->callback(dataLength, data, bufferLength, buffer);
+
+		if (networkCallback.isStopped())
+			return 0;
+
+		Reference r(*port);
+		loadClientKey();
+		unsigned rc = keyCallback ?
+			keyCallback->callback(dataLength, data, bufferLength, buffer) :
+			// use legacy behavior if holders do wish to accept keys from client
+			networkCallback.callback(dataLength, data, bufferLength, buffer);
+
+		return rc;
+	}
+
+	unsigned afterAttach(Firebird::CheckStatusWrapper* st, const char* dbName,
+		const Firebird::IStatus* attStatus) override
+	{
+		return NO_RETRY;
+	}
+
+	void dispose() override
+	{
+		if (keyCallback)
+		{
+			LocalStatus ls;
+			CheckStatusWrapper st(&ls);
+			keyCallback->dispose();
+			keyCallback = nullptr;
+		}
+	}
+
 private:
 	rem_port* port;
 	NetworkCallback networkCallback;
@@ -273,20 +293,25 @@ public:
 	~ServerCallback()
 	{ }
 
-	void wakeup(unsigned int length, const void* data)
+	void wakeup(unsigned int length, const void* data) override
 	{
 		cryptCallback.wakeup(length, data);
 	}
 
-	ICryptKeyCallback* getInterface()
+	ICryptKeyCallback* getInterface() override
 	{
 		cryptCallback.loadClientKey();
 		return &cryptCallback;
 	}
 
-	void stop()
+	void stop() override
 	{
 		cryptCallback.stop();
+	}
+
+	void destroy() override
+	{
+		cryptCallback.dispose();
 	}
 
 private:
@@ -730,8 +755,13 @@ public:
 
 		if (st.hasData())
 		{
-			if (st.getErrors()[1] == isc_missing_data_structures)
+			switch (st.getErrors()[1])
+			{
+			case isc_missing_data_structures:
+			case isc_login:
 				status_exception::raise(&st);
+				break;
+			}
 
 			iscLogStatus("Authentication error", &st);
 			Arg::Gds loginError(isc_login_error);
@@ -1920,7 +1950,7 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 	{
 		if ((protocol->p_cnct_version == PROTOCOL_VERSION10 ||
 			 (protocol->p_cnct_version >= PROTOCOL_VERSION11 &&
-			  protocol->p_cnct_version <= PROTOCOL_VERSION18)) &&
+			  protocol->p_cnct_version <= PROTOCOL_VERSION19)) &&
 			 (protocol->p_cnct_architecture == arch_generic ||
 			  protocol->p_cnct_architecture == ARCHITECTURE) &&
 			protocol->p_cnct_weight >= weight)
@@ -2026,9 +2056,9 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 			HANDSHAKE_DEBUG(fprintf(stderr, "Srv: accept_connection: calls createPluginsItr\n"));
 			port->port_srv_auth_block->createPluginsItr();
 
-			if (port->port_srv_auth_block->plugins)		// We have all required data and iterator was created
+			AuthServerPlugins* const plugins = port->port_srv_auth_block->plugins;
+			if (plugins && plugins->hasData())		// We have all required data and iterator was created
 			{
-				AuthServerPlugins* const plugins = port->port_srv_auth_block->plugins;
 				NoCaseString clientPluginName(port->port_srv_auth_block->getPluginName());
 				// If there is plugin matching client's one it will be
 				HANDSHAKE_DEBUG(fprintf(stderr, "Srv: accept_connection: client plugin='%s' server='%s'\n",
@@ -2100,19 +2130,25 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 		HANDSHAKE_DEBUG(fprintf(stderr, "!accepted, sending reject\n"));
 		if (status.getState() & Firebird::IStatus::STATE_ERRORS)
 		{
-			if (status.getErrors()[1] != isc_missing_data_structures)
+			switch (status.getErrors()[1])
 			{
-				iscLogStatus("Authentication error", &status);
-				Arg::Gds loginError(isc_login_error);
-#ifdef DEV_BUILD
-				loginError << Arg::StatusVector(&status);
-#endif
-				LocalStatus tmp;
-				loginError.copyTo(&tmp);
-				port->send_response(send, 0, 0, &tmp, false);
-			}
-			else
+			case isc_missing_data_structures:
+			case isc_login:
 				port->send_response(send, 0, 0, &status, false);
+				break;
+
+			default:
+				{
+					iscLogStatus("Authentication error", &status);
+					Arg::Gds loginError(isc_login_error);
+#ifdef DEV_BUILD
+					loginError << Arg::StatusVector(&status);
+#endif
+					LocalStatus tmp;
+					loginError.copyTo(&tmp);
+					port->send_response(send, 0, 0, &tmp, false);
+				}
+			}
 		}
 		else
 			port->send(send);
@@ -2456,6 +2492,7 @@ void DatabaseAuth::accept(PACKET* send, Auth::WriterImplementation* authBlock)
 		// remove tags for specific internal attaches
 		case isc_dpb_map_attach:
 		case isc_dpb_sec_attach:
+		case isc_dpb_worker_attach:
 
 		// remove client's config information
 		case isc_dpb_config:
@@ -2482,6 +2519,7 @@ void DatabaseAuth::accept(PACKET* send, Auth::WriterImplementation* authBlock)
 	CheckStatusWrapper status_vector(&ls);
 
 	fb_assert(authPort->port_server_crypt_callback);
+	authPort->port_server_crypt_callback->destroy();
 	provider->setDbCryptCallback(&status_vector, authPort->port_server_crypt_callback->getInterface());
 
 	if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
@@ -2500,12 +2538,13 @@ void DatabaseAuth::accept(PACKET* send, Auth::WriterImplementation* authBlock)
 #endif
 			rdb->rdb_port = authPort;
 			rdb->rdb_iface = iface;
+
+			authPort->port_server_crypt_callback->stop();
 		}
 	}
 
 	CSTRING* const s = &send->p_resp.p_resp_data;
 	authPort->extractNewKeys(s);
-	authPort->port_server_crypt_callback->stop();
 	authPort->send_response(send, 0, s->cstr_length, &status_vector, false);
 }
 
@@ -2681,23 +2720,28 @@ static void cancel_operation(rem_port* port, USHORT kind)
 	if ((port->port_flags & (PORT_async | PORT_disconnect)) || !(port->port_context))
 		return;
 
-	ServAttachment iface;
+	ServAttachment dbIface;
+	ServService svcIface;
 	{
 		RefMutexGuard portGuard(*port->port_cancel_sync, FB_FUNCTION);
 
-		Rdb* rdb;
-		if ((port->port_flags & PORT_disconnect) || !(rdb = port->port_context))
+		Rdb* rdb = port->port_context;
+		if ((port->port_flags & PORT_disconnect) || !rdb)
 			return;
 
-		iface = rdb->rdb_iface;
+		if (rdb->rdb_svc)
+			svcIface = rdb->rdb_svc->svc_iface;
+		else
+			dbIface = rdb->rdb_iface;
 	}
 
-	if (iface)
-	{
-		LocalStatus ls;
-		CheckStatusWrapper status_vector(&ls);
-		iface->cancelOperation(&status_vector, kind);
-	}
+	LocalStatus ls;
+	CheckStatusWrapper status_vector(&ls);
+
+	if (dbIface)
+		dbIface->cancelOperation(&status_vector, kind);
+	else if (svcIface && kind == fb_cancel_raise)
+		svcIface->cancel(&status_vector);
 }
 
 
@@ -2748,11 +2792,11 @@ static USHORT check_statement_type( Rsr* statement)
 
 	if (!(local_status.getState() & Firebird::IStatus::STATE_ERRORS))
 	{
-		for (const UCHAR* info = buffer; (*info != isc_info_end) && !done;)
+		for (ClumpletReader p(ClumpletReader::InfoResponse, buffer, sizeof(buffer)); !p.isEof(); p.moveNext())
 		{
-			const USHORT l = (USHORT) gds__vax_integer(info + 1, 2);
-			const USHORT type = (USHORT) gds__vax_integer(info + 3, l);
-			switch (*info)
+			const USHORT type = (USHORT) p.getInt();
+
+			switch (p.getClumpTag())
 			{
 			case isc_info_sql_stmt_type:
 				switch (type)
@@ -2767,17 +2811,12 @@ static USHORT check_statement_type( Rsr* statement)
 					break;
 				}
 				break;
+
 			case isc_info_sql_batch_fetch:
 				if (type == 0)
 					ret |= STMT_NO_BATCH;
 				break;
-			case isc_info_error:
-			case isc_info_truncated:
-				done = true;
-				break;
-
 			}
-			info += 3 + l;
 		}
 	}
 
@@ -3003,6 +3042,8 @@ void rem_port::disconnect(PACKET* sendL, PACKET* receiveL)
 
 	if (rdb->rdb_svc.hasData() && rdb->rdb_svc->svc_iface)
 	{
+		RefMutexGuard portGuard(*port_cancel_sync, FB_FUNCTION);
+
 		rdb->rdb_svc->svc_iface->detach(&status_vector);
 		rdb->rdb_svc->svc_iface = NULL;
 	}
@@ -3485,6 +3526,10 @@ void rem_port::batch_create(P_BATCH_CREATE* batch, PACKET* sendL)
 	Rsr* statement;
 	getHandle(statement, batch->p_batch_statement);
 	statement->checkIface();
+
+	// Check for previously opened batch for the statement
+	if (statement->rsr_batch)
+		Arg::Gds(isc_batch_open).raise();
 
 	const ULONG blr_length = batch->p_batch_blr.cstr_length;
 	const UCHAR* blr = batch->p_batch_blr.cstr_address;
@@ -4594,7 +4639,7 @@ void rem_port::info(P_OP op, P_INFO* stuff, PACKET* sendL)
 
 	case op_info_sql:
 		getHandle(statement, stuff->p_info_object);
-		statement->checkIface(isc_info_unprepared_stmt);
+		statement->checkIface();
 
 		statement->rsr_iface->getInfo(&status_vector, info_len, info_buffer,
 			buffer_length, buffer);
@@ -4608,6 +4653,18 @@ void rem_port::info(P_OP op, P_INFO* stuff, PACKET* sendL)
 		statement->rsr_batch->getInfo(&status_vector, info_len, info_buffer,
 			buffer_length, buffer);
 		break;
+
+	case op_info_cursor:
+		getHandle(statement, stuff->p_info_object);
+		statement->checkIface();
+		statement->checkCursor();
+
+		statement->rsr_cursor->getInfo(&status_vector, info_len, info_buffer,
+			buffer_length, buffer);
+		break;
+
+	default:
+		fb_assert(false);
 	}
 
 	// Send a response that includes the segment.
@@ -4810,7 +4867,8 @@ ISC_STATUS rem_port::prepare_statement(P_SQLST * prepareL, PACKET* sendL)
 	// stuff isc_info_length in front of info items buffer
 	*info = isc_info_length;
 	memmove(info + 1, prepareL->p_sqlst_items.cstr_address, infoLength++);
-	const unsigned int flags = StatementMetadata::buildInfoFlags(infoLength, info);
+	unsigned flags = StatementMetadata::buildInfoFlags(infoLength, info) |
+		prepareL->p_sqlst_flags;
 
 	ITransaction* iface = NULL;
 	if (transaction)
@@ -4840,13 +4898,6 @@ ISC_STATUS rem_port::prepare_statement(P_SQLST * prepareL, PACKET* sendL)
 		prepareL->p_sqlst_SQL_dialect, flags);
 	if (status_vector.getState() & Firebird::IStatus::STATE_ERRORS)
 		return this->send_response(sendL, 0, 0, &status_vector, false);
-
-	if (statement->rsr_cursor_name.hasData())
-	{
-		statement->rsr_iface->setCursorName(&status_vector, statement->rsr_cursor_name.c_str());
-		if (status_vector.getState() & Firebird::IStatus::STATE_ERRORS)
-			return this->send_response(sendL, 0, 0, &status_vector, false);
-	}
 
 	LocalStatus ls2;
 	CheckStatusWrapper s2(&ls2);
@@ -5089,6 +5140,7 @@ static bool process_packet(rem_port* port, PACKET* sendL, PACKET* receive, rem_p
 		case op_service_info:
 		case op_info_sql:
 		case op_info_batch:
+		case op_info_cursor:
 			port->info(op, &receive->p_info, sendL);
 			break;
 
@@ -5215,8 +5267,11 @@ static bool process_packet(rem_port* port, PACKET* sendL, PACKET* receive, rem_p
 		{
 			if (!port->port_parent)
 			{
-				if (!Worker::isShuttingDown() && !(port->port_flags & (PORT_rdb_shutdown | PORT_detached)))
+				if (!Worker::isShuttingDown() && !(port->port_flags & (PORT_rdb_shutdown | PORT_detached)) &&
+					((port->port_server_flags & (SRVR_server | SRVR_multi_client)) != SRVR_server))
+				{
 					gds__log("SERVER/process_packet: broken port, server exiting");
+				}
 				port->disconnect(sendL, receive);
 				return false;
 			}
@@ -6186,6 +6241,7 @@ ISC_STATUS rem_port::service_attach(const char* service_name,
 	CheckStatusWrapper status_vector(&ls);
 
 	fb_assert(port_server_crypt_callback);
+	port_server_crypt_callback->destroy();
 	provider->setDbCryptCallback(&status_vector, port_server_crypt_callback->getInterface());
 
 	if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
@@ -6205,9 +6261,10 @@ ISC_STATUS rem_port::service_attach(const char* service_name,
 			rdb->rdb_port = this;
 			Svc* svc = rdb->rdb_svc = FB_NEW Svc;
 			svc->svc_iface = iface;
+
+			port_server_crypt_callback->stop();
 		}
 	}
-	port_server_crypt_callback->stop();
 
 	return this->send_response(sendL, 0, sendL->p_resp.p_resp_data.cstr_length, &status_vector,
 		false);
@@ -6233,12 +6290,15 @@ ISC_STATUS rem_port::service_end(P_RLSE* /*release*/, PACKET* sendL)
 	if (bad_service(&status_vector, rdb))
 		return this->send_response(sendL, 0, 0, &status_vector, false);
 
-	rdb->rdb_svc->svc_iface->detach(&status_vector);
+	{ // scope
+		RefMutexGuard portGuard(*port_cancel_sync, FB_FUNCTION);
+		rdb->rdb_svc->svc_iface->detach(&status_vector);
 
-	if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
-	{
-		port_flags |= PORT_detached;
-		rdb->rdb_svc->svc_iface = NULL;
+		if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
+		{
+			port_flags |= PORT_detached;
+			rdb->rdb_svc->svc_iface = NULL;
+		}
 	}
 
 	return this->send_response(sendL, 0, 0, &status_vector, false);

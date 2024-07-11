@@ -69,8 +69,12 @@ void ConfigRoot::osConfigInstallDir()
 		char* temp = br_find_exe_dir(NULL);
 		if (temp)
 		{
+#ifdef ANDROID
+			install_dir = temp;
+#else
 			string dummy;
 			PathUtils::splitLastComponent(install_dir, dummy, temp);
+#endif
 			free(temp);
 			return;
 		}

@@ -320,6 +320,7 @@ static tdr* get_description(ISC_QUAD* blob_id)
 	Firebird::string database_path;
 
 	const TEXT* p = buffer.begin();
+	Firebird::MemoryPool& pool(*tdgbl->getDefaultPool());
 
 	// skip version number
 	++p;
@@ -345,11 +346,11 @@ static tdr* get_description(ISC_QUAD* blob_id)
 			id = isc_portable_integer(reinterpret_cast<const UCHAR*>(p), id_length);
 			p += id_length;
 			if (!trans) {
-				trans = ptr = FB_NEW_POOL(*tdgbl->getDefaultPool()) tdr;
+				trans = ptr = FB_NEW_POOL(pool) tdr(pool);
 			}
 			else
 			{
-				ptr->tdr_next = FB_NEW_POOL(*tdgbl->getDefaultPool()) tdr;
+				ptr->tdr_next = FB_NEW_POOL(pool) tdr(pool);
 				ptr = ptr->tdr_next;
 			}
 			ptr->tdr_host_site = host_site;

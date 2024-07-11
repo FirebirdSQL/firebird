@@ -14,6 +14,7 @@ PAS_ROOT=$(MISC)\pascal
 PASCAL_SOURCES=$(PAS_ROOT)\Pascal.interface.pas $(PAS_ROOT)\Pascal.implementation.pas
 TMP_FUNCS_PAS=$(FB_GEN_DIR)\misc\func.pas
 XPB_CONSTS=$(FB_ROOT_PATH)\src\include\firebird\impl\consts_pub.h
+INF_CONSTS=$(FB_ROOT_PATH)\src\include\firebird\impl\inf_pub.h
 ERR_CONSTS_PAS=$(FB_ROOT_PATH)\src\misc\pascal\gds_codes.pas
 RPL_AWK=$(FB_GEN_DIR)\def_awk.exe
 RPL_AWK_SRC=$(MISC)\def_awk.c
@@ -53,9 +54,10 @@ $(FB_GEN_DIR)\iberror.pas: $(ERR_CONSTS_PAS) $(FB_ROOT_PATH)\src\include\firebir
 	copy $(ERR_CONSTS_PAS) $(FB_GEN_DIR)\iberror.pas
 	type $(FB_GEN_DIR)\iberror_codes.pas >> $(FB_GEN_DIR)\iberror.pas
 
-$(TMP_FUNCS_PAS): $(PAS_ROOT)\fb_get_master_interface.pas $(XPB_CONSTS) $(FB_GEN_DIR)\iberror.pas $(RPL_AWK) $(RPL_GREP)
+$(TMP_FUNCS_PAS): $(PAS_ROOT)\fb_get_master_interface.pas $(XPB_CONSTS) $(INF_CONSTS) $(FB_GEN_DIR)\iberror.pas $(RPL_AWK) $(RPL_GREP)
 	copy $(PAS_ROOT)\fb_get_master_interface.pas $(TMP_FUNCS_PAS)
 	$(RPL_AWK) <$(XPB_CONSTS) >>$(TMP_FUNCS_PAS)
+	$(RPL_AWK) <$(INF_CONSTS) >>$(TMP_FUNCS_PAS)
 	$(RPL_GREP) <$(FB_GEN_DIR)\iberror.pas >>$(TMP_FUNCS_PAS)
 
 $(API_PAS_FILE): $(IDL_FILE) $(PASCAL_SOURCES) $(TMP_FUNCS_PAS)

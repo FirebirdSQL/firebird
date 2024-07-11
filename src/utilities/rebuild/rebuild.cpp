@@ -952,7 +952,6 @@ static void print_db_header( FILE* file, const header_page* header)
 		header->hdr_ods_version & ~ODS_TYPE_MASK,
 		header->hdr_ods_version & ODS_TYPE_MASK);
 	fprintf(file, "    PAGES\t\t\t%d\n", header->hdr_PAGES);
-	fprintf(file, "    next page\t\t\t%d\n", header->hdr_next_page);
 	fprintf(file, "    Oldest transaction\t\t%lu\n", header->hdr_oldest_transaction);
 	fprintf(file, "    Oldest active\t\t%lu\n", header->hdr_oldest_active);
 	fprintf(file, "    Oldest snapshot\t\t%lu\n", header->hdr_oldest_snapshot);

@@ -63,6 +63,9 @@ TraceLog::TraceLog(MemoryPool& pool, const PathName& fileName, bool reader) :
 	{
 		m_sharedMemory.reset(FB_NEW_POOL(pool)
 			SharedMemory<TraceLogHeader>(fileName.c_str(), INIT_LOG_SIZE, this));
+
+		const auto* header = m_sharedMemory->getHeader();
+		checkHeader(header);
 	}
 	catch (const Exception& ex)
 	{
@@ -235,10 +238,24 @@ void TraceLog::extend(FB_SIZE_T size)
 		const FB_SIZE_T toMoveR = oldSize - header->readPos;
 
 		char* data = reinterpret_cast<char*> (header);
+		const FB_SIZE_T deltaSize = newSize - oldSize;
+
 		if (toMoveW < toMoveR)
 		{
-			memcpy(data + oldSize, data + sizeof(TraceLogHeader), toMoveW);
-			header->writePos = oldSize + toMoveW;
+			if (toMoveW <= deltaSize)
+			{
+				memcpy(data + oldSize, data + sizeof(TraceLogHeader), toMoveW);
+				header->writePos = oldSize + toMoveW;
+
+				if (header->writePos == header->allocated)
+					header->writePos = sizeof(TraceLogHeader);
+			}
+			else
+			{
+				memcpy(data + oldSize, data + sizeof(TraceLogHeader), deltaSize);
+				memcpy(data + sizeof(TraceLogHeader), data + sizeof(TraceLogHeader) + deltaSize, toMoveW - deltaSize);
+				header->writePos -= deltaSize;
+			}
 		}
 		else
 		{
@@ -293,18 +310,12 @@ bool TraceLog::initialize(SharedMemoryBase* sm, bool initialize)
 	TraceLogHeader* hdr = reinterpret_cast<TraceLogHeader*>(sm->sh_mem_header);
 	if (initialize)
 	{
-		hdr->init(SharedMemoryBase::SRAM_TRACE_LOG, TraceLogHeader::TRACE_LOG_VERSION);
+		initHeader(hdr);
 
 		hdr->readPos = hdr->writePos = sizeof(TraceLogHeader);
 		hdr->maxSize = Config::getMaxUserTraceLogSize() * 1024 * 1024;
 		hdr->allocated = sm->sh_mem_length_mapped;
 		hdr->flags = 0;
-	}
-	else
-	{
-		fb_assert(hdr->mhb_type == SharedMemoryBase::SRAM_TRACE_LOG);
-		fb_assert(hdr->mhb_header_version == MemoryHeader::HEADER_VERSION);
-		fb_assert(hdr->mhb_version == TraceLogHeader::TRACE_LOG_VERSION);
 	}
 
 	return true;

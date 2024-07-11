@@ -31,26 +31,22 @@ namespace Jrd {
 	class PageSpace;
 	struct win;
 }
+
 namespace Ods {
 	struct pag;
 	struct header_page;
-	//enum ClumpOper { CLUMP_ADD, CLUMP_REPLACE, CLUMP_REPLACE_ONLY };
-
 }
 
-//void	PAG_add_clump(Jrd::thread_db* tdbb, SLONG, USHORT, USHORT, const UCHAR*, Ods::ClumpOper);
 USHORT	PAG_add_file(Jrd::thread_db* tdbb, const TEXT*, SLONG);
-bool	PAG_add_header_entry(Jrd::thread_db* tdbb, Ods::header_page*, USHORT, USHORT, const UCHAR*);
-//void	PAG_attach_temp_pages(Jrd::thread_db*, USHORT pageSpaceID);
+void	PAG_add_header_entry(Jrd::thread_db* tdbb, Ods::header_page*, USHORT, USHORT, const UCHAR*);
 bool	PAG_replace_entry_first(Jrd::thread_db* tdbb, Ods::header_page*, USHORT, USHORT, const UCHAR*);
-Ods::pag*	PAG_allocate(Jrd::thread_db* tdbb, Jrd::win*);
 Ods::pag*	PAG_allocate_pages(Jrd::thread_db* tdbb, Jrd::win* window, unsigned cntAlloc, bool aligned);
 AttNumber	PAG_attachment_id(Jrd::thread_db*);
 bool	PAG_delete_clump_entry(Jrd::thread_db* tdbb, USHORT);
 void	PAG_format_header(Jrd::thread_db*);
 void	PAG_format_pip(Jrd::thread_db*, Jrd::PageSpace& pageSpace);
 bool	PAG_get_clump(Jrd::thread_db*, USHORT, USHORT*, UCHAR*);
-void	PAG_header(Jrd::thread_db*, bool);
+void	PAG_header(Jrd::thread_db*, bool, const Firebird::TriState newForceWrite = Firebird::TriState());
 void	PAG_header_init(Jrd::thread_db*);
 void	PAG_init(Jrd::thread_db*);
 void	PAG_init2(Jrd::thread_db*, USHORT);
@@ -69,5 +65,10 @@ void	PAG_set_page_scn(Jrd::thread_db* tdbb, Jrd::win* window);
 void	PAG_set_repl_sequence(Jrd::thread_db* tdbb, FB_UINT64);
 void	PAG_set_sweep_interval(Jrd::thread_db* tdbb, SLONG);
 ULONG	PAG_page_count(Jrd::thread_db*);
+
+inline Ods::pag* PAG_allocate(Jrd::thread_db* tdbb, Jrd::win* window)
+{
+	return PAG_allocate_pages(tdbb, window, 1, false);
+}
 
 #endif // JRD_PAG_PROTO_H

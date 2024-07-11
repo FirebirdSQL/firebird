@@ -30,76 +30,491 @@
 
 using namespace Jrd;
 
+// Compression (run-length encoding aka RLE) scheme:
+//
+// positive length [1 .. 127] - up to 127 following bytes are copied "as is"
+// negative length [-3 .. -128] - the following byte is repeated up to 128 times
+// zero length bytes may be used as padding (if necessary), they are skipped during decoding
+//
+// In ODS 13.1, two priorly unused lengths (-1 and -2) are used as special markers
+// for longer compressable runs:
+//
+// {-1 , two-byte counter, byte value} - repeating sequences between 129 bytes and 64KB in length
+// {-2 , four-byte counter, byte value} - repeating sequences longer than 64KB in length
+//
+// Compressable runs of length 3 are in fact meaningless, if located between two
+// non-compressable runs. Compressable runs between 4 and 8 bytes are somewhat border case, as
+// they do not compress much but increase total number of runs thus affecting decompression speed.
+// Starting from Firebird v5, we don't compress runs shorter than 8 bytes. But this rule is not
+// set in stone, so let's not use lenghts between 4 and 7 bytes as some other special markers.
 
-Compressor::Compressor(MemoryPool& pool, FB_SIZE_T length, const UCHAR* data)
-	: m_control(pool), m_length(0)
+namespace
 {
-	UCHAR* control = m_control.getBuffer((length + 1) / 2, false);
-	const UCHAR* const end = data + length;
+	const unsigned MIN_COMPRESS_RUN = 8; // minimal length of compressable run
 
-	FB_SIZE_T count;
-	FB_SIZE_T max;
-	while ( (count = end - data) )
+	const int MAX_NONCOMP_RUN = MAX_SCHAR;	// 127
+
+	const int MAX_SHORT_RUN = -MIN_SCHAR;	// 128
+	const int MAX_MEDIUM_RUN = MAX_USHORT;	// 2^16
+	const int MAX_LONG_RUN = MAX_SLONG;		// 2^31
+
+	inline int adjustRunLength(unsigned length)
 	{
-		const UCHAR* start = data;
+		return (length <= MAX_SHORT_RUN) ? 0 :
+			(length <= MAX_MEDIUM_RUN) ? sizeof(USHORT) : sizeof(ULONG);
+	}
+};
+
+unsigned Compressor::nonCompressableRun(unsigned length)
+{
+	fb_assert(length && length <= MAX_NONCOMP_RUN);
+
+	auto result = length;
+
+	// If the prior run was also non-compressable and it wasn't fully utilized,
+	// merge our run there. Otherwise, create a new run.
+
+	if (m_runs.hasData() && m_runs.back() > 0 && m_runs.back() < MAX_NONCOMP_RUN)
+	{
+		const auto max = MIN(MAX_NONCOMP_RUN - m_runs.back(), length);
+		length -= max;
+		m_runs.back() += max;
+	}
+
+	if (length)
+	{
+		m_runs.add(length);
+		result++;
+	}
+
+	fb_assert(m_runs.back() > 0 && m_runs.back() <= MAX_NONCOMP_RUN);
+
+	return result;
+}
+
+Compressor::Compressor(thread_db* tdbb, ULONG length, const UCHAR* data)
+	: Compressor(
+		*tdbb->getDefaultPool(),
+		tdbb->getDatabase()->getEncodedOdsVersion() >= ODS_13_1,
+		tdbb->getDatabase()->getEncodedOdsVersion() >= ODS_13_1,
+		length,
+		data)
+{
+}
+
+Compressor::Compressor(MemoryPool& pool, bool allowLongRuns, bool allowUnpacked, ULONG length, const UCHAR* data)
+	: m_runs(pool),
+	  m_allowLongRuns(allowLongRuns),
+	  m_allowUnpacked(allowUnpacked)
+{
+	const auto end = data + length;
+	const auto input = data;
+
+	while (auto count = end - data)
+	{
+		auto start = data;
 
 		// Find length of non-compressable run
 
-		if ((max = count - 1) > 1)
+		if (count >= MIN_COMPRESS_RUN)
 		{
+			auto max = count - 1;
+			fb_assert(max > 1);
+
 			do {
-				if (data[0] != data[1] || data[0] != data[2])
-				{
-					data++;
-				}
-				else
+				if (data[0] == data[1] && data[0] == data[2])
 				{
 					count = data - start;
 					break;
 				}
+
+				data++;
+
 			} while (--max > 1);
 		}
 
 		data = start + count;
 
-		// Non-compressable runs are limited to 127 bytes
+		// Store this run as non-compressable
 
 		while (count)
 		{
-			max = MIN(count, 127U);
-			m_length += 1 + max;
+			const auto max = MIN(count, MAX_NONCOMP_RUN);
+			m_length += nonCompressableRun(max);
 			count -= max;
-			*control++ = (UCHAR) max;
 		}
 
-		// Find compressible run. Compressable runs are limited to 128 bytes.
+		// Find a compressable run which is long enough.
+		// Avoid compressing too short runs, this badly affects decompression speed.
 
-		if ((max = MIN(128, end - data)) >= 3)
+		auto max = end - data;
+
+		if (max < MIN_COMPRESS_RUN)
+			continue;
+
+		start = data;
+		const auto c = *data;
+
+		do
 		{
-			start = data;
-			const UCHAR c = *data;
-			do
+			if (*data != c)
+				break;
+
+			++data;
+
+		} while (--max);
+
+		count = data - start;
+
+		if (count < MIN_COMPRESS_RUN)
+		{
+			m_length += nonCompressableRun(count);
+			continue;
+		}
+
+		// We have found a compressable run which is long enough
+
+		if (m_allowLongRuns)
+		{
+			m_runs.add(-count);
+			m_length += 2 + adjustRunLength(count);
+		}
+		else
+		{
+			while (count)
 			{
-				if (*data != c)
+				const auto max = MIN(count, MAX_SHORT_RUN);
+				if (max < 3) // -1 and -2 should never appear in legacy runs
 				{
+					data -= max;
 					break;
 				}
-				++data;
-			} while (--max);
-
-			*control++ = (UCHAR) (start - data);
-			m_length += 2;
+				m_runs.add(-max);
+				m_length += 2;
+				count -= max;
+			}
 		}
 	}
 
-	// set array size to the really used length
-	m_control.shrink(control - m_control.begin());
+	// If the compressed length is longer than the original one, then
+	// claim ourselves being incompressible. But only for ODS 13.1 and newer,
+	// as this implies using a new record-level ODS flag.
+	//
+	// dimitr:	maybe we need some more complicated threshold,
+	//			e.g. 80-90% of the original length?
+
+	if (m_allowUnpacked && m_length >= length)
+	{
+		m_runs.clear();
+		m_length = length;
+	}
 }
 
-FB_SIZE_T Compressor::applyDiff(FB_SIZE_T diffLength,
-							 const UCHAR* differences,
-							 FB_SIZE_T outLength,
-							 UCHAR* const output)
+void Compressor::pack(const UCHAR* input, UCHAR* output) const
+{
+/**************************************
+ *
+ *	Compress a string into a sufficiently large area.
+ *	Don't check nuttin' -- go for speed, man, raw SPEED!
+ *
+ **************************************/
+	if (m_runs.isEmpty())
+	{
+		// Perform raw byte copying instead of compressing
+		memcpy(output, input, m_length);
+		return;
+	}
+
+	for (const auto length : m_runs)
+	{
+		if (length < 0)
+		{
+			const auto zipLength = (unsigned) -length;
+
+			if (zipLength <= MAX_SHORT_RUN)
+			{
+				*output++ = (UCHAR) length;
+			}
+			else if (zipLength <= MAX_MEDIUM_RUN)
+			{
+				*output++ = (UCHAR) -1;
+				put_short(output, zipLength);
+				output += sizeof(USHORT);
+			}
+			else if (zipLength <= MAX_LONG_RUN)
+			{
+				*output++ = (UCHAR) -2;
+				put_long(output, zipLength);
+				output += sizeof(ULONG);
+			}
+			else
+				fb_assert(false);
+
+			*output++ = *input;
+			input += zipLength;
+		}
+		else
+		{
+			fb_assert(length > 0 && length <= MAX_NONCOMP_RUN);
+
+			*output++ = (UCHAR) length;
+			memcpy(output, input, length);
+			output += length;
+			input += length;
+		}
+	}
+}
+
+ULONG Compressor::truncate(ULONG outLength)
+{
+/**************************************
+ *
+ *	Reset to pack only a leading fragment of the input, restricted by the output length.
+ *	Return the number of leading input bytes that fit the given output length.
+ *
+ **************************************/
+	fb_assert(m_length > outLength);
+
+	if (m_runs.isEmpty())
+	{
+		m_length = outLength;
+		return outLength;
+	}
+
+	auto space = (int) outLength;
+	ULONG inLength = 0;
+	ULONG keepRuns = 0;
+	m_length = 0;
+
+	for (auto& length : m_runs)
+	{
+		if (--space <= 0)
+			break;
+
+		if (length < 0)
+		{
+			const auto zipLength = (unsigned) -length;
+			const auto runLength = 1 + adjustRunLength(zipLength);
+
+			if ((space -= runLength) < 0)
+				break;
+
+			m_length += runLength + 1;
+			inLength += zipLength;
+		}
+		else
+		{
+			fb_assert(length > 0 && length <= MAX_NONCOMP_RUN);
+
+			if ((space -= length) < 0)
+			{
+				length += space; // how many bytes fit
+
+				m_length += length + 1;
+				inLength += length;
+				keepRuns++;
+				break;
+			}
+
+			m_length += length + 1;
+			inLength += length;
+		}
+
+		keepRuns++;
+	}
+
+	if (m_length > outLength)
+		BUGCHECK(178);	// msg 178 record length inconsistent
+
+	// Check whether the remaining part is still compressible
+	if (m_allowUnpacked && m_length >= inLength)
+	{
+		keepRuns = 0;
+		m_length = inLength = outLength;
+	}
+
+	m_runs.resize(keepRuns);
+	return inLength;
+}
+
+ULONG Compressor::truncateTail(ULONG outLength)
+{
+/**************************************
+ *
+ *	Reset to pack the input excluding a trailing fragment, restricted by the output length.
+ *	Return the number of trailing input bytes that fit the given output length.
+ *
+ **************************************/
+	fb_assert(m_length > outLength);
+
+	if (m_runs.isEmpty())
+	{
+		m_length -= outLength;
+		return outLength;
+	}
+
+	auto space = (int) outLength;
+	ULONG inLength = 0;
+
+	while (m_runs.hasData())
+	{
+		if (--space <= 0)
+			break;
+
+		auto length = m_runs.back();
+
+		if (length < 0)
+		{
+			const auto zipLength = (unsigned) -length;
+			const auto runLength = 1 + adjustRunLength(zipLength);
+
+			if ((space -= runLength) < 0)
+				break;
+
+			m_length -= runLength + 1;
+			inLength += zipLength;
+		}
+		else
+		{
+			fb_assert(length > 0 && length <= MAX_NONCOMP_RUN);
+
+			if ((space -= length) < 0)
+			{
+				length += space; // how many bytes fit
+
+				m_runs.back() -= length;
+				m_length -= length;
+				inLength += length;
+				break;
+			}
+
+			m_length -= length + 1;
+			inLength += length;
+		}
+
+		m_runs.pop();
+	}
+
+	fb_assert(m_runs.hasData());
+
+	if (m_allowUnpacked)
+	{
+		// Check whether the remaining part is still compressible
+		ULONG orgLength = 0;
+		for (const auto run : m_runs)
+			orgLength += abs(run);
+
+		if (m_length >= orgLength)
+		{
+			m_runs.clear();
+			m_length = orgLength;
+		}
+	}
+
+	return inLength;
+}
+
+ULONG Compressor::getUnpackedLength(ULONG inLength, const UCHAR* input)
+{
+/**************************************
+ *
+ *	Calculate the unpacked length of the input compressed string.
+ *
+ **************************************/
+	const auto end = input + inLength;
+	ULONG result = 0;
+
+	while (input < end)
+	{
+		const int length = (signed char) *input++;
+
+		if (length < 0)
+		{
+			auto zipLength = (unsigned) -length;
+
+			if (length == -1)
+			{
+				zipLength = get_short(input);
+				input += sizeof(USHORT);
+			}
+			else if (length == -2)
+			{
+				zipLength = get_long(input);
+				input += sizeof(ULONG);
+			}
+
+			if (input >= end)
+				return 0; // decompression error
+
+			input++;
+			result += zipLength;
+		}
+		else
+		{
+			result += length;
+			input += length;
+		}
+	}
+
+	return result;
+}
+
+UCHAR* Compressor::unpack(ULONG inLength, const UCHAR* input,
+						  ULONG outLength, UCHAR* output)
+{
+/**************************************
+ *
+ *	Decompress a compressed string into a buffer.
+ *	Return the address where the output stopped.
+ *
+ **************************************/
+	const auto end = input + inLength;
+	const auto output_end = output + outLength;
+
+	while (input < end)
+	{
+		const int length = (signed char) *input++;
+
+		if (length < 0)
+		{
+			auto zipLength = (unsigned) -length;
+
+			if (length == -1)
+			{
+				zipLength = get_short(input);
+				input += sizeof(USHORT);
+			}
+			else if (length == -2)
+			{
+				zipLength = get_long(input);
+				input += sizeof(ULONG);
+			}
+
+			if (input >= end || output + zipLength > output_end)
+				BUGCHECK(179);	// msg 179 decompression overran buffer
+
+			const auto c = *input++;
+			memset(output, c, zipLength);
+			output += zipLength;
+		}
+		else
+		{
+			if (input + length > end || output + length > output_end)
+				BUGCHECK(179);	// msg 179 decompression overran buffer
+
+			memcpy(output, input, length);
+			output += length;
+			input += length;
+		}
+	}
+
+	if (output > output_end)
+		BUGCHECK(179);	// msg 179 decompression overran buffer
+
+	return output;
+}
+
+ULONG Difference::apply(ULONG diffLength, ULONG outLength, UCHAR* const output)
 {
 /**************************************
  *
@@ -108,13 +523,12 @@ FB_SIZE_T Compressor::applyDiff(FB_SIZE_T diffLength,
  *
  **************************************/
 	if (diffLength > MAX_DIFFERENCES)
-	{
-		BUGCHECK(176);			// msg 176 bad difference record
-	}
+		BUGCHECK(176);	// msg 176 bad difference record
 
-	const UCHAR* const end = differences + diffLength;
-	UCHAR* p = output;
-	const UCHAR* const p_end = output + outLength;
+	auto differences = m_differences;
+	const auto end = differences + diffLength;
+	auto p = output;
+	const auto p_end = output + outLength;
 
 	while (differences < end && p < p_end)
 	{
@@ -123,13 +537,11 @@ FB_SIZE_T Compressor::applyDiff(FB_SIZE_T diffLength,
 		if (l > 0)
 		{
 			if (p + l > p_end)
-			{
 				BUGCHECK(177);	// msg 177 applied differences will not fit in record
-			}
+
 			if (differences + l > end)
-			{
 				BUGCHECK(176);	// msg 176 bad difference record
-			}
+
 			memcpy(p, differences, l);
 			p += l;
 			differences += l;
@@ -140,202 +552,48 @@ FB_SIZE_T Compressor::applyDiff(FB_SIZE_T diffLength,
 		}
 	}
 
-	const FB_SIZE_T length = p - output;
-
-	if (length > outLength || differences < end)
+	while (differences < end)
 	{
-		BUGCHECK(177);			// msg 177 applied differences will not fit in record
+		if (*differences++)
+			BUGCHECK(177);	// msg 177 applied differences will not fit in record
 	}
+
+	const auto length = p - output;
+
+	if (length > outLength)
+		BUGCHECK(177);	// msg 177 applied differences will not fit in record
 
 	return length;
 }
 
-FB_SIZE_T Compressor::pack(const UCHAR* input, FB_SIZE_T outLength, UCHAR* output) const
-{
-/**************************************
- *
- *	Compress a string into an area of known length.
- *	If it doesn't fit, throw BUGCHECK error.
- *
- **************************************/
-	const UCHAR* const start = input;
-
-	const UCHAR* control = m_control.begin();
-	const UCHAR* const dcc_end = m_control.end();
-
-	int space = (int) outLength;
-
-	while (control < dcc_end)
-	{
-		if (--space <= 0)
-		{
-			if (space == 0)
-			{
-				*output = 0;
-			}
-			return input - start;
-		}
-
-		int length = (signed char) *control++;
-		*output++ = (UCHAR) length;
-
-		if (length < 0)
-		{
-			--space;
-			*output++ = *input;
-			input += (-length) & 255;
-		}
-		else
-		{
-			if ((space -= length) < 0)
-			{
-				length += space;
-				output[-1] = (UCHAR) length;
-				if (length > 0)
-				{
-					memcpy(output, input, length);
-					input += length;
-				}
-				return input - start;
-			}
-
-			if (length > 0)
-			{
-				memcpy(output, input, length);
-				output += length;
-				input += length;
-			}
-		}
-	}
-
-	BUGCHECK(178);	// msg 178 record length inconsistent
-	return 0;	// shut up compiler warning
-}
-
-FB_SIZE_T Compressor::getPartialLength(FB_SIZE_T inLength, const UCHAR* input) const
-{
-/**************************************
- *
- *	Same as pack() without the output.
- *	If it doesn't fit, return the number of bytes that did.
- *
- **************************************/
-	const UCHAR* const start = input;
-
-	const UCHAR* control = m_control.begin();
-	const UCHAR* const dcc_end = m_control.end();
-
-	int space = (int) inLength;
-
-	while (control < dcc_end)
-	{
-		if (--space <= 0)
-		{
-			return input - start;
-		}
-
-		int length = (signed char) *control++;
-
-		if (length < 0)
-		{
-			--space;
-			input += (-length) & 255;
-		}
-		else
-		{
-			if ((space -= length) < 0)
-			{
-				length += space;
-				input += length;
-				return input - start;
-			}
-			input += length;
-		}
-	}
-
-	BUGCHECK(178);	// msg 178 record length inconsistent
-	return 0;	// shut up compiler warning
-}
-
-UCHAR* Compressor::unpack(FB_SIZE_T inLength,
-						  const UCHAR* input,
-						  FB_SIZE_T outLength,
-						  UCHAR* output)
-{
-/**************************************
- *
- *	Decompress a compressed string into a buffer.
- *	Return the address where the output stopped.
- *
- **************************************/
-	const UCHAR* const end = input + inLength;
-	const UCHAR* const output_end = output + outLength;
-
-	while (input < end)
-	{
-		const int len = (signed char) *input++;
-
-		if (len < 0)
-		{
-			if (input >= end || (output - len) > output_end)
-			{
-				BUGCHECK(179);	// msg 179 decompression overran buffer
-			}
-
-			const UCHAR c = *input++;
-			memset(output, c, (-1 * len));
-			output -= len;
-		}
-		else
-		{
-			if ((output + len) > output_end)
-			{
-				BUGCHECK(179);	// msg 179 decompression overran buffer
-			}
-			memcpy(output, input, len);
-			output += len;
-			input += len;
-		}
-	}
-
-	if (output > output_end)
-	{
-		BUGCHECK(179);			// msg 179 decompression overran buffer
-	}
-
-	return output;
-}
-
-FB_SIZE_T Compressor::makeNoDiff(FB_SIZE_T outLength, UCHAR* output)
+ULONG Difference::makeNoDiff(ULONG length)
 {
 /**************************************
  *
  *  Generates differences record marking that there are no differences.
  *
  **************************************/
-	UCHAR* temp = output;
-	int length = (int) outLength;
+	auto output = m_differences;
+	const auto end = output + MAX_DIFFERENCES;
 
-	while (length > 127)
+	while (length)
 	{
-		*temp++ = -127;
-		length -= 127;
+		if (output >= end)
+			return 0;
+
+		const auto max = MIN(length, 127);
+		*output++ = -max;
+		length -= max;
 	}
 
-	if (length)
-	{
-		*temp++ = (UCHAR) -length;
-	}
+	const auto diffLength = output - m_differences;
+	fb_assert(diffLength <= MAX_DIFFERENCES);
 
-	return temp - output;
+	return diffLength;
 }
 
-FB_SIZE_T Compressor::makeDiff(FB_SIZE_T length1,
-							const UCHAR* rec1,
-							FB_SIZE_T length2,
-							UCHAR* rec2,
-							FB_SIZE_T outLength,
-							UCHAR* output)
+ULONG Difference::make(ULONG length1, const UCHAR* rec1,
+					   ULONG length2, const UCHAR* rec2)
 {
 /**************************************
  *
@@ -348,114 +606,68 @@ FB_SIZE_T Compressor::makeDiff(FB_SIZE_T length1,
  *	    control_string := <positive_integer> <positive_integer data bytes>
  *				:= <negative_integer>
  *
- *	Return the total length of the differences string.
+ *	Return length of the difference record if it fits the internal buffer.
+ *	Otherwise, return zero.
  *
  **************************************/
-	UCHAR *p;
-
-#define STUFF(val)	if (output < end) *output++ = val; else return MAX_ULONG;
-
-	/* WHY IS THIS RETURNING MAX_ULONG ???
-	* It returns a large positive value to indicate to the caller that we ran out
-	* of buffer space in the 'out' argument. Thus we could not create a
-	* successful differences record. Now it is upto the caller to check the
-	* return value of this function and figure out whether the differences record
-	* was created or not. Check prepare_update() (JRD/vio.c) for further
-	* information. Of course, the size for a 'differences' record is not expected
-	* to go near 2^32 in the future.
-	*
-	* This was investigated as a part of solving bug 10206, bsriram - 25-Feb-1999.
-	*/
-
-	const UCHAR* const start = output;
-	const UCHAR* const end = output + outLength;
-	const UCHAR* const end1 = rec1 + MIN(length1, length2);
-	const UCHAR* const end2 = rec2 + length2;
+	auto output = m_differences;
+	const auto end = output + MAX_DIFFERENCES;
+	const auto end1 = rec1 + MIN(length1, length2);
+	const auto end2 = rec2 + length2;
 
 	while (end1 - rec1 > 2)
 	{
 		if (rec1[0] != rec2[0] || rec1[1] != rec2[1])
 		{
-			p = output++;
+			auto p = output++;
 
-			// cast this to LONG to take care of OS/2 pointer arithmetic
-			// when rec1 is at the end of a segment, to avoid wrapping around
-
-			const UCHAR* yellow = (UCHAR*) MIN((U_IPTR) end1, ((U_IPTR) rec1 + 127)) - 1;
+			const auto yellow = (UCHAR*) MIN((U_IPTR) end1, ((U_IPTR) rec1 + 127)) - 1;
 			while (rec1 <= yellow && (rec1[0] != rec2[0] || (rec1 < yellow && rec1[1] != rec2[1])))
 			{
-				STUFF(*rec2++);
+				if (output >= end)
+					return 0;
+
+				*output++ = *rec2++;
 				++rec1;
 			}
+
 			*p = output - p - 1;
 			continue;
 		}
 
-		for (p = rec2; rec1 < end1 && *rec1 == *rec2; rec1++, rec2++)
-			; // no-op
+		unsigned count = 0;
+		while (rec1 < end1 && *rec1 == *rec2)
+			rec1++, rec2++, count++;
 
-		// This "l" could be more than 32K since the Old and New records
-		// could be the same for more than 32K characters.
-		// MAX record size is currently 64K. Hence it is defined as "int".
-		int l = p - rec2;
-
-		while (l < -127)
+		while (count)
 		{
-			STUFF(-127);
-			l += 127;
-		}
+			if (output >= end)
+				return 0;
 
-		if (l)
-		{
-			STUFF(l);
+			const auto max = MIN(count, 127);
+			*output++ = -max;
+			count -= max;
 		}
 	}
 
 	while (rec2 < end2)
 	{
-		p = output++;
+		auto p = output++;
 
-		// cast this to LONG to take care of OS/2 pointer arithmetic
-		// when rec1 is at the end of a segment, to avoid wrapping around
-
-		const UCHAR* yellow = (UCHAR*) MIN((U_IPTR) end2, ((U_IPTR) rec2 + 127));
+		const auto yellow = (UCHAR*) MIN((U_IPTR) end2, ((U_IPTR) rec2 + 127));
 		while (rec2 < yellow)
 		{
-			STUFF(*rec2++);
+			if (output >= end)
+				return 0;
+
+			*output++ = *rec2++;
 		}
+
 		*p = output - p - 1;
 	}
 
-	return output - start;
-#undef STUFF
-}
+	const auto diffLength = output - m_differences;
+	fb_assert(diffLength);
 
-void Compressor::pack(const UCHAR* input, UCHAR* output) const
-{
-/**************************************
- *
- *	Compress a string into a sufficiently large area.
- *	Don't check nuttin' -- go for speed, man, raw SPEED!
- *
- **************************************/
-	const UCHAR* control = m_control.begin();
-	const UCHAR* const dcc_end = m_control.end();
-
-	while (control < dcc_end)
-	{
-		const int length = (signed char) *control++;
-		*output++ = (UCHAR) length;
-
-		if (length < 0)
-		{
-			*output++ = *input;
-			input -= length;
-		}
-		else if (length > 0)
-		{
-			memcpy(output, input, length);
-			output += length;
-			input += length;
-		}
-	}
+	return (diffLength <= MAX_DIFFERENCES) ? diffLength : 0;
 }

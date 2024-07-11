@@ -80,8 +80,11 @@ void Replicator::storeBlob(Transaction* transaction, ISC_QUAD blobId)
 {
 	FbLocalStatus localStatus;
 
+	// We need the blob exactly as stored, without possible transliteration to the connection charset
+	const UCHAR bpb[] = {isc_bpb_version1, isc_bpb_target_interp, 1, CS_NONE};
+
 	BlobWrapper blob(&localStatus);
-	if (!blob.open(m_attachment, transaction->getInterface(), blobId))
+	if (!blob.open(m_attachment, transaction->getInterface(), blobId, sizeof(bpb), bpb))
 		localStatus.raise();
 
 	UCharBuffer buffer;

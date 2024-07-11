@@ -18,6 +18,11 @@ set projects=
 	set config=debug
 )
 
+:: Special case for CDS, set in make_boot only
+@if "%FB_LIBCDS%"=="1" (
+	set config=%config%-static
+)
+
 shift
 shift
 

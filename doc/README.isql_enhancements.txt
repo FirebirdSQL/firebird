@@ -161,7 +161,7 @@ Isql enhancements in Firebird v3.
 
 9) SET KEEP_TRAN_PARAMS option.
 
-Author: Vladyslav Khorsun <hvlad at users sourcefoege net>
+Author: Vladyslav Khorsun <hvlad at users sourceforge net>
 
 When set to ON, isql keeps text of following successful SET TRANSACTION statement and
 new DML transactions is started using the same SQL text (instead of defaul CONCURRENCY
@@ -253,3 +253,169 @@ It requires server v4.0.1 or greater to work.
 Warning: this feature is very tied to engine internals and its usage is discouraged
 if you do not understand very well how these internals are subject to change between
 versions.
+
+
+
+Isql enhancements in Firebird v5.
+---------------------------------
+
+11) SET PER_TABLE_STATS option.
+
+Author: Vladyslav Khorsun <hvlad at users sourceforge net>
+
+When set to ON show per-table run-time statistics after query execution.
+It is set to OFF by default. Also, it is independent of SET STATS option.
+The name PER_TABLE_STATS could be shortened up to PER_TAB. Tables in output
+are sorted by its relation id's.
+
+Example:
+
+-- check current value
+SQL> SET;
+...
+Print per-table stats:   OFF
+...
+
+-- turn per-table stats on
+SQL> SET PER_TABLE_STATS ON;
+SQL>
+SQL> SELECT COUNT(*) FROM RDB$RELATIONS JOIN RDB$RELATION_FIELDS USING (RDB$RELATION_NAME);
+
+                COUNT
+=====================
+                  534
+
+Per table statistics:
+--------------------------------+---------+---------+---------+---------+---------+---------+---------+---------+
+ Table name                     | Natural | Index   | Insert  | Update  | Delete  | Backout | Purge   | Expunge |
+--------------------------------+---------+---------+---------+---------+---------+---------+---------+---------+
+RDB$INDICES                     |         |        3|         |         |         |         |         |         |
+RDB$RELATION_FIELDS             |         |      534|         |         |         |         |         |         |
+RDB$RELATIONS                   |       59|         |         |         |         |         |         |         |
+RDB$SECURITY_CLASSES            |         |        3|         |         |         |         |         |         |
+--------------------------------+---------+---------+---------+---------+---------+---------+---------+---------+
+
+Note, here are present some system tables that was not listed in query - it is
+because engine reads some metadata when preparing the query.
+
+-- turn common stats on
+SQL> SET STATS ON;
+SQL> SELECT COUNT(*) FROM RDB$RELATIONS JOIN RDB$RELATION_FIELDS USING (RDB$RELATION_NAME);
+
+                COUNT
+=====================
+                  534
+
+Current memory = 3828960
+Delta memory = 208
+Max memory = 3858576
+Elapsed time = 0.001 sec
+Buffers = 256
+Reads = 0
+Writes = 0
+Fetches = 715
+Per table statistics:
+--------------------------------+---------+---------+---------+---------+---------+---------+---------+---------+
+ Table name                     | Natural | Index   | Insert  | Update  | Delete  | Backout | Purge   | Expunge |
+--------------------------------+---------+---------+---------+---------+---------+---------+---------+---------+
+RDB$RELATION_FIELDS             |         |      534|         |         |         |         |         |         |
+RDB$RELATIONS                   |       59|         |         |         |         |         |         |         |
+--------------------------------+---------+---------+---------+---------+---------+---------+---------+---------+
+
+-- turn per-table stats off, using shortened name
+SQL> SET PER_TAB OFF;
+
+
+
+Isql enhancements in Firebird v6.
+---------------------------------
+
+12) EXPLAIN statement.
+
+Author: Adriano dos Santos Fernandes
+
+A new ISQL statement was created to easily show a query plan without execute it.
+
+Note: If SET STATS is ON, stats are still shown.
+
+Examples:
+
+SQL> explain select * from employees where id = ?;
+
+SQL> set term !;
+SQL>
+SQL> explain
+CON> execute block
+CON> as
+CON>     declare id integer;
+CON> begin
+CON>     select id from employees where id = ? into id;
+CON> end!
+SQL>
+SQL> set term ;!
+
+
+13) SET AUTOTERM ON/OFF
+
+Author: Adriano dos Santos Fernandes
+
+When set to ON, terminator defined with SET TERM is changed to semicolon and a new logic
+for TERM detection is used, where engine helps ISQL to detect valid usage of semicolons
+inside statements.
+
+At each semicolon (outside quotes or comments), ISQL prepares the query buffer with
+engine using flag IStatement::PREPARE_REQUIRE_SEMICOLON.
+
+If engine prepares the statement correctly, it's run and ISQL is put in new statement
+mode.
+
+If engine returns error isc_command_end_err2, then ISQL is put in statement
+continuation mode and asks for another line, repeating the process.
+
+If engine returns a different error, the error is shown and ISQL is put in new statement
+mode.
+
+Notes:
+- This option can also be activated with command line parameter -autot(erm)
+- It can only be used with Firebird engine/server v6 or later
+- SET TERM command automatically sets AUTOTERM to OFF
+- SET AUTOTERM ON command automatically sets TERM to semicolon
+- While AUTOTERM ON can be used in non-interactive scripts, at each semicolon,
+  statement may be tried to be compiled using the server/engine.
+  That may be slow for big scripts with PSQL statements spanning many lines.
+
+Examples:
+
+SQL> SET AUTOTERM ON;
+
+SQL> execute block returns (o1 integer)
+CON> as
+CON> begin
+CON>     o1 = 1;
+CON>     suspend;
+CON> end;
+
+          O1
+============
+           1
+
+SQL> select 1 from rdb$database;
+
+    CONSTANT
+============
+           1
+
+SQL> select 1
+CON>     from rdb$database;
+
+    CONSTANT
+============
+           1
+
+SQL> select 1
+CON>     from rdb$database
+CON>     where true;
+
+    CONSTANT
+============
+           1

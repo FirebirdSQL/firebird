@@ -28,6 +28,7 @@
 #include "../intl/ld_proto.h"
 #include "../intl/cs_icu.h"
 #include "../intl/lc_icu.h"
+#include "../common/utils_proto.h"
 #include "fb_exception.h"
 
 #ifdef HAVE_SYS_PARAM_H
@@ -491,26 +492,20 @@ FB_DLL_EXPORT INTL_BOOL LD_lookup_charset(charset* cs, const ASCII* name, const 
 }
 
 
-FB_DLL_EXPORT INTL_BOOL LD_lookup_texttype(texttype* tt, const ASCII* texttype_name, const ASCII* charset_name,
-										   USHORT attributes, const UCHAR* specific_attributes,
-										   ULONG specific_attributes_length, INTL_BOOL ignore_attributes,
-										   const ASCII* config_info)
+FB_DLL_EXPORT INTL_BOOL LD_lookup_texttype_with_status(char* status_buffer, ULONG status_buffer_length,
+	texttype* tt, const ASCII* texttype_name, const ASCII* charset_name,
+	USHORT attributes, const UCHAR* specific_attributes,
+	ULONG specific_attributes_length, INTL_BOOL ignore_attributes,
+	const ASCII* config_info)
 {
-	const ASCII* configInfo;
-
-	// ASF: We can't read config_info if version < INTL_VERSION_2,
-	// since it wasn't pushed in the stack by the engine.
-	if (version >= INTL_VERSION_2)
-		configInfo = config_info;
-	else
-		configInfo = "";
-
 	if (ignore_attributes)
 	{
 		attributes = TEXTTYPE_ATTR_PAD_SPACE;
 		specific_attributes = NULL;
 		specific_attributes_length = 0;
 	}
+
+	string errorMsg;
 
 	try
 	{
@@ -527,7 +522,7 @@ FB_DLL_EXPORT INTL_BOOL LD_lookup_texttype(texttype* tt, const ASCII* texttype_n
 				{
 					if (strcmp(charSets[j].charSetName, charset_name) == 0)
 					{
-						if (LD_lookup_charset(&cs, charset_name, configInfo))
+						if (LD_lookup_charset(&cs, charset_name, config_info))
 							break;
 
 						return false;
@@ -547,13 +542,50 @@ FB_DLL_EXPORT INTL_BOOL LD_lookup_texttype(texttype* tt, const ASCII* texttype_n
 
 		return LCICU_texttype_init(
 			tt, texttype_name, charset_name, attributes, specific_attributes,
-			specific_attributes_length, configInfo);
+			specific_attributes_length, config_info);
 	}
-	catch (const Firebird::BadAlloc&)
+	catch (const Firebird::status_exception& ex)
+	{
+		auto status = ex.value();
+		TEXT temp[BUFFER_LARGE];
+
+		while (fb_interpret(temp, sizeof(temp), &status))
+		{
+			if (errorMsg.hasData())
+				errorMsg += "\n-";
+
+			errorMsg += temp;
+		}
+	}
+	catch (...)
 	{
 		fb_assert(false);
-		return false;
+		errorMsg = "Uncaught exception";
 	}
+
+	if (status_buffer_length)
+		fb_utils::copy_terminate(status_buffer, errorMsg.c_str(), status_buffer_length);
+
+	return false;
+}
+
+
+FB_DLL_EXPORT INTL_BOOL LD_lookup_texttype(texttype* tt, const ASCII* texttype_name, const ASCII* charset_name,
+										   USHORT attributes, const UCHAR* specific_attributes,
+										   ULONG specific_attributes_length, INTL_BOOL ignore_attributes,
+										   const ASCII* config_info)
+{
+	const ASCII* configInfo;
+
+	// ASF: We can't read config_info if version < INTL_VERSION_2,
+	// since it wasn't pushed in the stack by the engine.
+	if (version >= INTL_VERSION_2)
+		configInfo = config_info;
+	else
+		configInfo = "";
+
+	return LD_lookup_texttype_with_status(nullptr, 0, tt, texttype_name, charset_name, attributes, specific_attributes,
+		specific_attributes_length, ignore_attributes, configInfo);
 }
 
 

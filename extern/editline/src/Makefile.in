@@ -95,7 +95,7 @@ srcdir = .
 
 BUILT_SOURCES = vi.h emacs.h common.h fcns.h help.h fcns.c help.c \
 	$(append_1)
-AHDR = vi.h emacs.h common.h 
+AHDR = vi.h emacs.h common.h
 ASRC = $(srcdir)/vi.c $(srcdir)/emacs.c $(srcdir)/common.c
 CLEANFILES = $(BUILT_SOURCES)
 LIBRARY = libedit.a

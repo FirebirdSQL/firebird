@@ -29,30 +29,24 @@
 
 namespace Jrd
 {
-	// Record flags
-	const UCHAR REC_fake_nulls	= 1;	// all fields simulate being NULLs
-	const UCHAR REC_gc_active	= 2;	// relation garbage collect record block in use
-	const UCHAR REC_undo_active	= 4;	// record block in use for undo purposes
-
 	class Record
 	{
-		template <UCHAR FLAG> friend class AutoTempRecord;
+		friend class AutoTempRecord;
 
 	public:
-		Record(MemoryPool& p, const Format* format, UCHAR flags = 0)
-			: m_precedence(p), m_data(p)
+		Record(MemoryPool& p, const Format* format, const bool temp_active = false)
+			: m_precedence(p), m_data(p), m_fake_nulls(false), m_temp_active(temp_active)
 		{
 			m_data.resize(format->fmt_length);
 			m_format = format;
-			m_flags = flags;
 		}
 
 		Record(MemoryPool& p, const Record* other)
 			: m_precedence(p), m_data(p, other->m_data),
-			  m_format(other->m_format), m_flags(other->m_flags)
+			  m_format(other->m_format), m_fake_nulls(other->m_fake_nulls), m_temp_active(false)
 		{}
 
-		void reset(const Format* format = NULL, UCHAR flags = 0)
+		void reset(const Format* format = NULL)
 		{
 			if (format && format != m_format)
 			{
@@ -60,24 +54,24 @@ namespace Jrd
 				m_format = format;
 			}
 
-			m_flags = flags;
+			m_fake_nulls = false;
 		}
 
 		void setNull(USHORT id)
 		{
-			fb_assert(!(m_flags & REC_fake_nulls));
+			fb_assert(!m_fake_nulls);
 			getData()[id >> 3] |= (1 << (id & 7));
 		}
 
 		void clearNull(USHORT id)
 		{
-			fb_assert(!(m_flags & REC_fake_nulls));
+			fb_assert(!m_fake_nulls);
 			getData()[id >> 3] &= ~(1 << (id & 7));
 		}
 
 		bool isNull(USHORT id) const
 		{
-			if (m_flags & REC_fake_nulls)
+			if (m_fake_nulls)
 				return true;
 
 			return ((getData()[id >> 3] & (1 << (id & 7))) != 0);
@@ -91,7 +85,7 @@ namespace Jrd
 			memset(getData() + null_bytes, 0, getLength() - null_bytes);
 
 			// Record has real NULLs now, so clear the "fake-nulls" flag
-			m_flags &= ~REC_fake_nulls;
+			m_fake_nulls = false;
 		}
 
 		PageStack& getPrecedence()
@@ -107,7 +101,7 @@ namespace Jrd
 		void copyFrom(const Record* other)
 		{
 			m_format = other->m_format;
-			m_flags = other->m_flags;
+			m_fake_nulls = other->m_fake_nulls;
 
 			copyDataFrom(other);
 		}
@@ -137,12 +131,12 @@ namespace Jrd
 
 		void fakeNulls()
 		{
-			m_flags |= REC_fake_nulls;
+			m_fake_nulls = true;
 		}
 
 		bool isNull() const
 		{
-			return (m_flags & REC_fake_nulls);
+			return m_fake_nulls;
 		}
 
 		ULONG getLength() const
@@ -160,9 +154,14 @@ namespace Jrd
 			return m_data.begin();
 		}
 
-		bool testFlags(UCHAR mask) const
+		bool isTempActive() const
 		{
-			return ((m_flags & mask) != 0);
+			return m_temp_active;
+		}
+
+		void setTempActive()
+		{
+			m_temp_active = true;
 		}
 
 		TraNumber getTransactionNumber() const
@@ -179,13 +178,13 @@ namespace Jrd
 		PageStack m_precedence;			// stack of higher precedence pages/transactions
 		Firebird::Array<UCHAR> m_data;	// space for record data
 		const Format* m_format;			// what the data looks like
-		UCHAR m_flags;					// misc record flags
-		TraNumber m_transaction_nr;   // transaction number for a record
+		TraNumber m_transaction_nr;		// transaction number for a record
+		bool m_fake_nulls;				// all fields simulate being NULLs
+		bool m_temp_active;				// record block in use for garbage collection or undo purposes
 	};
 
 	// Wrapper for reusable temporary records
 
-	template <UCHAR FLAG>
 	class AutoTempRecord
 	{
 	public:
@@ -193,7 +192,7 @@ namespace Jrd
 			: m_record(record)
 		{
 			// validate record and its flag
-			fb_assert(!record || (record->m_flags & FLAG));
+			fb_assert(!record || record->m_temp_active);
 		}
 
 		~AutoTempRecord()
@@ -206,7 +205,7 @@ namespace Jrd
 			// class object can be initialized just once
 			fb_assert(!m_record);
 			// validate record and its flag
-			fb_assert(!record || (record->m_flags & FLAG));
+			fb_assert(!record || record->m_temp_active);
 
 			m_record = record;
 			return m_record;
@@ -216,7 +215,8 @@ namespace Jrd
 		{
 			if (m_record)
 			{
-				m_record->m_flags &= ~FLAG;
+				fb_assert(m_record->m_temp_active);
+				m_record->m_temp_active = false;
 				m_record = NULL;
 			}
 		}
@@ -234,9 +234,6 @@ namespace Jrd
 	private:
 		Record* m_record;
 	};
-
-	typedef AutoTempRecord<REC_gc_active> AutoGCRecord;
-	typedef AutoTempRecord<REC_undo_active> AutoUndoRecord;
 } // namespace
 
 #endif // JRD_RECORD_H

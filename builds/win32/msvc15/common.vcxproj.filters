@@ -30,6 +30,9 @@
     <ClCompile Include="..\..\..\src\common\cvt.cpp">
       <Filter>common</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\common\CvtFormat.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\common\db_alias.cpp">
       <Filter>common</Filter>
     </ClCompile>
@@ -243,10 +246,10 @@
     <ClCompile Include="..\..\..\src\common\classes\ParsedList.cpp">
       <Filter>classes</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\src\common\keywords.cpp">
+    <ClCompile Include="..\..\..\src\common\Int128.cpp">
       <Filter>common</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\src\common\Int128.cpp">
+    <ClCompile Include="..\..\..\src\common\Task.cpp">
       <Filter>common</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\common\classes\TimerImpl.cpp">
@@ -273,6 +276,12 @@
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\cvt.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\common\CvtFormat.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\common\CvtFormatImpl.h">
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\db_alias.h">
@@ -392,6 +401,9 @@
     <ClInclude Include="..\..\..\src\common\classes\DbImplementation.h">
       <Filter>headers</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\common\classes\DoublyLinkedList.h">
+      <Filter>headers</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\fb_atomic.h">
       <Filter>headers</Filter>
     </ClInclude>
@@ -434,9 +446,6 @@
     <ClInclude Include="..\..\..\src\common\classes\NestConst.h">
       <Filter>headers</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\common\classes\Nullable.h">
-      <Filter>headers</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\objects_array.h">
       <Filter>headers</Filter>
     </ClInclude>
@@ -476,7 +485,13 @@
     <ClInclude Include="..\..\..\src\common\classes\tree.h">
       <Filter>headers</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\common\classes\TriState.h">
+      <Filter>headers</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\UserBlob.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\common\classes\Uuid.h">
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\VaryStr.h">
@@ -575,6 +590,9 @@
     <ClInclude Include="..\..\..\src\common\classes\BlobWrapper.h">
       <Filter>headers</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\common\ParserTokens.h">
+      <Filter>headers</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\src\common\sha2\sha2.h">
       <Filter>headers</Filter>
     </ClInclude>
@@ -593,10 +611,13 @@
     <ClInclude Include="..\..\..\src\common\classes\ParsedList.h">
       <Filter>headers</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\common\keywords.h">
+    <ClInclude Include="..\..\..\src\common\Int128.h">
       <Filter>headers</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\common\Int128.h">
+    <ClInclude Include="..\..\..\src\common\Task.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\common\Token.h">
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\TimerImpl.h">

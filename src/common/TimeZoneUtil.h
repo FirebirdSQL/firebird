@@ -27,6 +27,7 @@
 #ifndef COMMON_TIME_ZONE_UTIL_H
 #define COMMON_TIME_ZONE_UTIL_H
 
+#include <atomic>
 #include <functional>
 #include "../common/classes/fb_string.h"
 #include "../common/classes/timestamp.h"
@@ -97,6 +98,8 @@ public:
 	static void extractOffset(const ISC_TIMESTAMP_TZ& timeStampTz, SSHORT* offset);
 	static void extractOffset(const ISC_TIME_TZ& timeTz, SSHORT* offset);
 
+	static USHORT makeFromOffset(int sign, unsigned tzh, unsigned tzm);
+
 	static void localTimeToUtc(ISC_TIME& time, ISC_USHORT timeZone);
 	static void localTimeToUtc(ISC_TIME_TZ& timeTz);
 
@@ -112,6 +115,13 @@ public:
 
 	static ISC_TIMESTAMP_TZ getCurrentSystemTimeStamp();
 	static ISC_TIMESTAMP_TZ getCurrentGmtTimeStamp();
+
+	static ISC_TIMESTAMP_TZ getCurrentTimeStamp(USHORT timeZone)
+	{
+		auto tsTz = getCurrentGmtTimeStamp();
+		tsTz.time_zone = timeZone;
+		return tsTz;
+	}
 
 	static void validateGmtTimeStamp(NoThrowTimeStamp& ts);
 
@@ -133,11 +143,63 @@ public:
 	static ISC_TIMESTAMP_TZ dateToTimeStampTz(const ISC_DATE& date, Callbacks* cb);
 };
 
+class IcuCalendarWrapper
+{
+public:
+	IcuCalendarWrapper(UCalendar* aWrapped, std::atomic<UCalendar*>* aCachePtr)
+		: wrapped(aWrapped),
+		  cachePtr(aCachePtr)
+	{}
+
+	IcuCalendarWrapper(IcuCalendarWrapper&& o)
+		: wrapped(o.wrapped),
+		  cachePtr(o.cachePtr)
+	{
+		o.wrapped = nullptr;
+	}
+
+	~IcuCalendarWrapper()
+	{
+		if (wrapped)
+		{
+			auto newCached = cachePtr->exchange(wrapped);
+
+			if (newCached)
+			{
+				auto& icuLib = UnicodeUtil::getConversionICU();
+				icuLib.ucalClose(newCached);
+			}
+		}
+	}
+
+	IcuCalendarWrapper(const IcuCalendarWrapper&) = delete;
+	IcuCalendarWrapper& operator=(const IcuCalendarWrapper&) = delete;
+
+public:
+	UCalendar* operator->()
+	{
+		return wrapped;
+	}
+
+	operator UCalendar*()
+	{
+		return wrapped;
+	}
+
+	bool operator!() const
+	{
+		return !wrapped;
+	}
+
+private:
+	UCalendar* wrapped;
+	std::atomic<UCalendar*>* cachePtr;
+};
+
 class TimeZoneRuleIterator
 {
 public:
 	TimeZoneRuleIterator(USHORT aId, const ISC_TIMESTAMP_TZ& aFrom, const ISC_TIMESTAMP_TZ& aTo);
-	~TimeZoneRuleIterator();
 
 public:
 	bool next();
@@ -150,10 +212,10 @@ public:
 
 private:
 	const USHORT id;
-	Jrd::UnicodeUtil::ConversionICU& icuLib;
+	UnicodeUtil::ConversionICU& icuLib;
 	SINT64 startTicks;
 	SINT64 toTicks;
-	UCalendar* icuCalendar;
+	IcuCalendarWrapper icuCalendar;
 	UDate icuDate;
 };
 

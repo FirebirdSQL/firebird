@@ -38,14 +38,14 @@ namespace Jrd {
 class Lock;
 class BaseSubstringSimilarMatcher;
 
-class Collation : public TextType
+class Collation : public Firebird::TextType
 {
 public:
-	static Collation* createInstance(MemoryPool& pool, TTYPE_ID id, texttype* tt, USHORT attributes, CharSet* cs);
+	static Collation* createInstance(MemoryPool& pool, TTYPE_ID id, texttype* tt, USHORT attributes, Firebird::CharSet* cs);
 
 protected:
-	Collation(TTYPE_ID id, texttype *a_tt, USHORT a_attributes, CharSet* a_cs)
-		: TextType(id, a_tt, a_attributes, a_cs),
+	Collation(TTYPE_ID id, texttype *a_tt, USHORT a_attributes, Firebird::CharSet* a_cs)
+		: Firebird::TextType(id, a_tt, a_attributes, a_cs),
 		  useCount(0),
 		  existenceLock(NULL),
 		  obsolete(false)

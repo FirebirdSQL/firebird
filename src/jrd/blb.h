@@ -109,7 +109,7 @@ public:
 	static SLONG get_slice(Jrd::thread_db*, Jrd::jrd_tra*, const Jrd::bid*, const UCHAR*, USHORT,
 					const UCHAR*, SLONG, UCHAR*);
 	SLONG	BLB_lseek(USHORT, SLONG);
-	static void	move(thread_db* tdbb, dsc* from_desc, dsc* to_desc, jrd_rel* relation = nullptr, Record* record = nullptr, USHORT fieldId = 0);
+	static void	move(thread_db* tdbb, dsc* from_desc, dsc* to_desc, jrd_rel* relation = nullptr, Record* record = nullptr, USHORT fieldId = 0, bool bulk = false);
 	static blb* open(thread_db*, jrd_tra*, const bid*);
 	static blb* open2(thread_db*, jrd_tra*, const bid*, USHORT, const UCHAR*, bool = false);
 	void	BLB_put_data(thread_db*, const UCHAR*, SLONG);
@@ -179,6 +179,8 @@ const int BLB_closed		= 8;		// Temporary blob has been closed
 const int BLB_damaged		= 16;		// Blob is busted
 const int BLB_seek			= 32;		// Seek is pending
 const int BLB_large_scan	= 64;		// Blob is larger than page buffer cache
+const int BLB_close_on_read = 128;		// Temporary blob is not closed until read
+const int BLB_bulk			= 256;		// Blob created by bulk insert operation
 
 /* Blob levels are:
 

@@ -93,15 +93,15 @@ const UCHAR type_lpr	= 7;
 
 // Version number of the lock table.
 // Must be increased every time the shmem layout is changed.
-const USHORT BASE_LHB_VERSION = 18;
+const USHORT BASE_LHB_VERSION = 19;
+const USHORT PLATFORM_LHB_VERSION = 128;	// 64-bit target
 
 #if SIZEOF_VOID_P == 8
-const USHORT PLATFORM_LHB_VERSION = 128;	// 64-bit target
+const USHORT LHB_VERSION = PLATFORM_LHB_VERSION | BASE_LHB_VERSION;
 #else
-const USHORT PLATFORM_LHB_VERSION	= 0;	// 32-bit target
+const USHORT LHB_VERSION = BASE_LHB_VERSION;
 #endif
 
-const USHORT LHB_VERSION	= PLATFORM_LHB_VERSION + BASE_LHB_VERSION;
 
 // Lock header block -- one per lock file, lives up front
 
@@ -467,8 +467,13 @@ private:
 		lockMgr->blocking_action_thread();
 	}
 
-	bool initialize(Firebird::SharedMemoryBase* sm, bool init);
-	void mutexBug(int osErrorCode, const char* text);
+	bool initialize(Firebird::SharedMemoryBase* sm, bool init) override;
+	void mutexBug(int osErrorCode, const char* text) override;
+	bool checkHeader(const Firebird::MemoryHeader* header, bool raiseError = true) override;
+
+	USHORT getType() const override { return Firebird::SharedMemoryBase::SRAM_LOCK_MANAGER; }
+	USHORT getVersion() const override { return LHB_VERSION; }
+	const char* getName() const override { return "LockManager"; }
 
 	bool m_bugcheck;
 	prc* m_process;

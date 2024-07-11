@@ -79,6 +79,16 @@ private:
 		rtn_eof
 	};
 
+	struct IdxInfo
+	{
+		IdxInfo()
+		{}
+
+		index_desc m_desc;
+		RecordBitmap* m_recs = nullptr;
+		IndexCondition* m_condition = nullptr;
+	};
+
 	enum VAL_ERRORS
 	{
 		VAL_PAG_WRONG_TYPE			= 0,
@@ -145,12 +155,13 @@ private:
 	// Note vdr_backversion_pages and vdr_chain_pages are reset check every relation
 	// so it's not necessary to keep page space but we can know it from relation context
 	FB_UINT64 vdr_rel_backversion_counter;	// Counts slots w/rhd_chain
-	PageBitmap* vdr_backversion_pages;      // 1 bit per visited table page
+	PageBitmap* vdr_backversion_pages;		// 1 bit per visited table page
 	FB_UINT64 vdr_rel_chain_counter;		// Counts chains w/rdr_chain
 	PageBitmap* vdr_chain_pages;    // 1 bit per visited record chain page
 
 	RecordBitmap* vdr_rel_records;			// 1 bit per valid record
 	RecordBitmap* vdr_idx_records;			// 1 bit per index item
+	Firebird::Array<IdxInfo> vdr_cond_idx;	// one entry per condition index for current relation
 	PageBitmap* vdr_page_bitmap[TRANS_PAGE_SPACE];	// fetched pages in every tablespace
 	ULONG vdr_err_counts[VAL_MAX_ERROR];
 
@@ -206,13 +217,12 @@ private:
 	RTN walk_data_page(jrd_rel*, ULONG, ULONG, UCHAR&);
 	void walk_database();
 	void walk_generators();
-	void walk_header(ULONG);
 	RTN walk_index(jrd_rel*, Ods::index_root_page&, USHORT);
 	void walk_pip();
 	RTN walk_pointer_page(jrd_rel*, ULONG);
 	RTN walk_record(jrd_rel*, const Ods::rhd*, USHORT, RecordNumber, bool);
 	RTN walk_relation(jrd_rel*);
-	RTN walk_root(jrd_rel*);
+	RTN walk_root(jrd_rel*, bool);
 	RTN walk_scns();
 	RTN walk_tip(TraNumber);
 };

@@ -458,29 +458,23 @@ void UtilInterface::getFbVersion(CheckStatusWrapper* status, IAttachment* att,
 			if (status->getState() & Firebird::IStatus::STATE_ERRORS)
 				return;
 
-			const UCHAR* p = buf;
-			redo = false;
+			ClumpletReader p(ClumpletReader::InfoResponse, buf, buf_len);
 
-			while (!redo && *p != isc_info_end && p < buf + buf_len)
+			for (redo = false; !(redo || p.isEof()); p.moveNext())
 			{
-				const UCHAR item = *p++;
-				const USHORT len = static_cast<USHORT>(gds__vax_integer(p, 2));
-
-				p += 2;
-
-				switch (item)
+				switch (p.getClumpTag())
 				{
 				case isc_info_firebird_version:
-					versions = (TEXT*) p;
+					versions = (TEXT*) p.getBytes();
 					break;
 
 				case isc_info_implementation:
-					implementations = (TEXT*) p;
+					implementations = (TEXT*) p.getBytes();
 					break;
 
 				case fb_info_implementation:
-					dbis = p;
-					if (dbis[0] * 6 + 1 > len)
+					dbis = p.getBytes();
+					if (dbis[0] * 6u + 1u > p.getClumpLength())
 					{
 						// fb_info_implementation value appears incorrect
 						dbis = NULL;
@@ -493,13 +487,13 @@ void UtilInterface::getFbVersion(CheckStatusWrapper* status, IAttachment* att,
 
 				case isc_info_truncated:
 					redo = true;
+					// fall down...
+				case isc_info_end:
 					break;
 
 				default:
 					(Arg::Gds(isc_random) << "Invalid info item").raise();
 				}
-
-				p += len;
 			}
 
 			// Our buffer wasn't large enough to hold all the information,
@@ -1441,37 +1435,35 @@ int API_ROUTINE gds__blob_size(FB_API_HANDLE* b, SLONG* size, SLONG* seg_count, 
  *
  **************************************/
 	ISC_STATUS_ARRAY status_vector;
-	SCHAR buffer[64];
+	UCHAR buffer[64];
 
-	if (isc_blob_info(status_vector, b, sizeof(blob_items), blob_items, sizeof(buffer), buffer))
+	if (isc_blob_info(status_vector, b, sizeof(blob_items), blob_items, sizeof(buffer), (SCHAR*)buffer))
 	{
 		isc_print_status(status_vector);
 		return FALSE;
 	}
 
-	const UCHAR* p = reinterpret_cast<UCHAR*>(buffer);
-	UCHAR item;
-	while ((item = *p++) != isc_info_end)
+	for (ClumpletReader p(ClumpletReader::InfoResponse, buffer, sizeof(buffer)); !p.isEof(); p.moveNext())
 	{
-		const USHORT l = gds__vax_integer(p, 2);
-		p += 2;
-		const SLONG n = gds__vax_integer(p, l);
-		p += l;
+		UCHAR item = p.getClumpTag();
+		if (item == isc_info_end)
+			break;
+
 		switch (item)
 		{
 		case isc_info_blob_max_segment:
 			if (max_seg)
-				*max_seg = n;
+				*max_seg = p.getInt();
 			break;
 
 		case isc_info_blob_num_segments:
 			if (seg_count)
-				*seg_count = n;
+				*seg_count = p.getInt();
 			break;
 
 		case isc_info_blob_total_length:
 			if (size)
-				*size = n;
+				*size = p.getInt();
 			break;
 
 		default:
@@ -2976,16 +2968,10 @@ static void get_ods_version(CheckStatusWrapper* status, IAttachment* att,
 	if (status->getState() & Firebird::IStatus::STATE_ERRORS)
 		return;
 
-	const UCHAR* p = buffer;
-	UCHAR item;
-
-	while ((item = *p++) != isc_info_end)
+	for (ClumpletReader p(ClumpletReader::InfoResponse, buffer, sizeof(buffer)); !p.isEof(); p.moveNext())
 	{
-		const USHORT l = static_cast<USHORT>(gds__vax_integer(p, 2));
-		p += 2;
-		const USHORT n = static_cast<USHORT>(gds__vax_integer(p, l));
-		p += l;
-		switch (item)
+		const USHORT n = static_cast<USHORT>(p.getInt());
+		switch (p.getClumpTag())
 		{
 		case isc_info_ods_version:
 			*ods_version = n;
@@ -2993,6 +2979,9 @@ static void get_ods_version(CheckStatusWrapper* status, IAttachment* att,
 
 		case isc_info_ods_minor_version:
 			*ods_minor_version = n;
+			break;
+
+		case isc_info_end:
 			break;
 
 		default:
@@ -3441,7 +3430,7 @@ const char* circularAlloc(const char* s, unsigned len)
 
 // CVC: Do not let "perm" be incremented before "trans", because it may lead to serious memory errors,
 // since our code blindly passes the same vector twice.
-void makePermanentVector(ISC_STATUS* perm, const ISC_STATUS* trans) throw()
+void makePermanentVector(ISC_STATUS* perm, const ISC_STATUS* trans) noexcept
 {
 	try
 	{
@@ -3501,7 +3490,7 @@ void makePermanentVector(ISC_STATUS* perm, const ISC_STATUS* trans) throw()
 
 } // anonymous namespace
 
-void makePermanentVector(ISC_STATUS* v) throw()
+void makePermanentVector(ISC_STATUS* v) noexcept
 {
 	makePermanentVector(v, v);
 }

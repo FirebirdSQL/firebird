@@ -1,0 +1,52 @@
+name: QA
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        type: string
+        description: Branch name
+        required: true
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout firebird-qa
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+          repository: FirebirdSQL/firebird-qa
+          path: firebird-qa
+
+      - name: Download firebird installer
+        id: download-artifact
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          workflow: main.yml
+          workflow_conclusion: success
+          branch: ${{ github.event.inputs.branch }}
+          name: firebird-linux-x64
+          name_is_regexp: false
+          path: firebird-installer
+
+      - name: Run firebird-qa
+        run: |
+          export FBQA_INSTALLER=$(echo ./firebird-installer/*.tar.gz)
+          export FBQA_OUT=out
+          ./firebird-qa/run-docker.sh --timeout 250 ./tests/ | tee out/out.txt
+
+      - name: Update summary
+        if: always()
+        run: |
+          cat out/md_report.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload result
+        uses: actions/upload-artifact@main
+        if: always()
+        with:
+          name: firebird-qa
+          path: out/

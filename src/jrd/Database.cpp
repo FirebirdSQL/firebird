@@ -51,8 +51,19 @@ namespace Jrd
 {
 	bool Database::onRawDevice() const
 	{
-		const PageSpace* const pageSpace = dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+		const auto pageSpace = dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 		return pageSpace->onRawDevice();
+	}
+
+	ULONG Database::getIOBlockSize() const
+	{
+		const auto pageSpace = dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+		fb_assert(pageSpace && pageSpace->file);
+
+		if ((pageSpace->file->fil_flags & FIL_no_fs_cache) || pageSpace->onRawDevice())
+			return DIRECT_IO_BLOCK_SIZE;
+
+		return PAGE_ALIGNMENT;
 	}
 
 	AttNumber Database::generateAttachmentId()
@@ -100,6 +111,19 @@ namespace Jrd
 		if (!dbb_tip_cache || !dbb_tip_cache->isInitialized())
 			return 0;
 		return dbb_tip_cache->getLatestStatementId();
+	}
+
+	ULONG Database::getMonitorGeneration() const
+	{
+		if (!dbb_tip_cache)
+			return 0;
+		return dbb_tip_cache->getMonitorGeneration();
+	}
+
+	ULONG Database::newMonitorGeneration() const
+	{
+		fb_assert(dbb_tip_cache);
+		return dbb_tip_cache->newMonitorGeneration();
 	}
 
 	const Firebird::string& Database::getUniqueFileId()
@@ -349,18 +373,6 @@ namespace Jrd
 			dbb_modules.add(module);
 	}
 
-	void Database::ensureGuid(thread_db* tdbb)
-	{
-		if (readOnly())
-			return;
-
-		if (!dbb_guid.Data1) // It would be better to full check but one field should be enough
-		{
-			GenerateGuid(&dbb_guid);
-			PAG_set_db_guid(tdbb, dbb_guid);
-		}
-	}
-
 	FB_UINT64 Database::getReplSequence(thread_db* tdbb)
 	{
 		USHORT length = sizeof(FB_UINT64);
@@ -407,14 +419,14 @@ namespace Jrd
 			}
 		}
 
-		return dbb_repl_state.value;
+		return dbb_repl_state.asBool();
 	}
 
 	void Database::invalidateReplState(thread_db* tdbb, bool broadcast)
 	{
 		SyncLockGuard guard(&dbb_repl_sync, SYNC_EXCLUSIVE, FB_FUNCTION);
 
-		dbb_repl_state.invalidate();
+		dbb_repl_state.reset();
 
 		if (broadcast)
 		{
@@ -452,8 +464,67 @@ namespace Jrd
 
 	void Database::initGlobalObjects()
 	{
-		dbb_gblobj_holder =
-			GlobalObjectHolder::init(getUniqueFileId(), dbb_filename, dbb_config);
+		dbb_gblobj_holder.assignRefNoIncr(GlobalObjectHolder::init(getUniqueFileId(),
+			dbb_filename, dbb_config));
+	}
+
+	// Methods encapsulating operations with vectors of known pages
+
+	ULONG Database::getKnownPagesCount(SCHAR ptype)
+	{
+		fb_assert(ptype == pag_transactions || ptype == pag_ids);
+
+		SyncLockGuard guard(&dbb_pages_sync, SYNC_SHARED, FB_FUNCTION);
+
+		const auto vector =
+			(ptype == pag_transactions) ? dbb_tip_pages :
+			(ptype == pag_ids) ? dbb_gen_pages :
+			nullptr;
+
+		return vector ? (ULONG) vector->count() : 0;
+	}
+
+	ULONG Database::getKnownPage(SCHAR ptype, ULONG sequence)
+	{
+		fb_assert(ptype == pag_transactions || ptype == pag_ids);
+
+		SyncLockGuard guard(&dbb_pages_sync, SYNC_SHARED, FB_FUNCTION);
+
+		const auto vector =
+			(ptype == pag_transactions) ? dbb_tip_pages :
+			(ptype == pag_ids) ? dbb_gen_pages :
+			nullptr;
+
+		if (!vector || sequence >= vector->count())
+			return 0;
+
+		return (*vector)[sequence];
+	}
+
+	void Database::setKnownPage(SCHAR ptype, ULONG sequence, ULONG value)
+	{
+		fb_assert(ptype == pag_transactions || ptype == pag_ids);
+
+		SyncLockGuard guard(&dbb_pages_sync, SYNC_EXCLUSIVE, FB_FUNCTION);
+
+		auto& rvector = (ptype == pag_transactions) ? dbb_tip_pages : dbb_gen_pages;
+
+		rvector = vcl::newVector(*dbb_permanent, rvector, sequence + 1);
+
+		(*rvector)[sequence] = value;
+	}
+
+	void Database::copyKnownPages(SCHAR ptype, ULONG count, ULONG* data)
+	{
+		fb_assert(ptype == pag_transactions || ptype == pag_ids);
+
+		SyncLockGuard guard(&dbb_pages_sync, SYNC_EXCLUSIVE, FB_FUNCTION);
+
+		auto& rvector = (ptype == pag_transactions) ? dbb_tip_pages : dbb_gen_pages;
+
+		rvector = vcl::newVector(*dbb_permanent, rvector, count);
+
+		memcpy(rvector->memPtr(), data, count * sizeof(ULONG));
 	}
 
 	// Database::Linger class implementation
@@ -493,6 +564,15 @@ namespace Jrd
 
 	// Database::GlobalObjectHolder class implementation
 
+	int Database::GlobalObjectHolder::release() const
+	{
+		// Release should be executed under g_mutex protection
+		// in order to modify reference counter & hash table atomically
+		MutexLockGuard guard(g_mutex, FB_FUNCTION);
+
+		return RefCounted::release();
+	}
+
 	Database::GlobalObjectHolder* Database::GlobalObjectHolder::init(const string& id,
 																	 const PathName& filename,
 																	 RefPtr<const Config> config)
@@ -507,27 +587,31 @@ namespace Jrd
 			g_hashTable->add(entry);
 		}
 
+		entry->holder->addRef();
 		return entry->holder;
 	}
 
 	Database::GlobalObjectHolder::~GlobalObjectHolder()
 	{
-		// here we cleanup what should not be globally protected
-		if (m_replMgr)
-			m_replMgr->shutdown();
-
-		MutexLockGuard guard(g_mutex, FB_FUNCTION);
-
+		// dtor is executed under g_mutex protection
 		Database::GlobalObjectHolder::DbId* entry = g_hashTable->lookup(m_id);
 		if (!g_hashTable->remove(m_id))
 			fb_assert(false);
 
-		// these objects should be deleted under g_mutex protection
+		{ // scope
+			// here we cleanup what should not be globally protected
+			MutexUnlockGuard guard(g_mutex, FB_FUNCTION);
+			if (m_replMgr)
+				m_replMgr->shutdown();
+		}
+
 		m_lockMgr = nullptr;
 		m_eventMgr = nullptr;
 		m_replMgr = nullptr;
 
 		delete entry;
+
+		fb_assert(m_tempCacheUsage == 0);
 	}
 
 	LockManager* Database::GlobalObjectHolder::getLockManager()
@@ -567,6 +651,28 @@ namespace Jrd
 				m_replMgr = FB_NEW Replication::Manager(m_id, m_replConfig);
 		}
 		return m_replMgr;
+	}
+
+	bool Database::GlobalObjectHolder::incTempCacheUsage(FB_SIZE_T size)
+	{
+		if (m_tempCacheUsage + size > m_tempCacheLimit)
+			return false;
+
+		const auto old = m_tempCacheUsage.fetch_add(size);
+		if (old + size > m_tempCacheLimit)
+		{
+			m_tempCacheUsage.fetch_sub(size);
+			return false;
+		}
+
+		return true;
+	}
+
+	void Database::GlobalObjectHolder::decTempCacheUsage(FB_SIZE_T size)
+	{
+		fb_assert(m_tempCacheUsage >= size);
+
+		m_tempCacheUsage.fetch_sub(size);
 	}
 
 	GlobalPtr<Database::GlobalObjectHolder::DbIdHash>

@@ -1,5 +1,4 @@
 #!/bin/sh
 export CROSS_BUILD_DIR=`realpath ../linux`
-export ANDROID_NDK=${NDK}
-export ANDROID_TOOLCHAIN=${NDK_TOOLCHAIN}
-export PATH=$ANDROID_TOOLCHAIN/bin:$PATH
+[ -z "$NDK_TOOLCHAIN" ] && export NDK_TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64
+export PATH=$NDK_TOOLCHAIN/bin:$PATH

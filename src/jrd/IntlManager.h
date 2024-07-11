@@ -47,7 +47,7 @@ public:
 
 	static bool lookupCharSet(const Firebird::string& charSetName, charset* cs);
 
-	static bool lookupCollation(const Firebird::string& collationName,
+	static void lookupCollation(const Firebird::string& collationName,
 								const Firebird::string& charSetName,
 								USHORT attributes, const UCHAR* specificAttributes,
 								ULONG specificAttributesLen, bool ignoreAttributes,

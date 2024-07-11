@@ -36,6 +36,7 @@
 #include "../common/classes/objects_array.h"
 #include "../common/classes/condition.h"
 #include "../jrd/MetaName.h"
+#include "../jrd/Attachment.h"
 #include "../common/classes/GetPlugins.h"
 #include "../common/ThreadStart.h"
 #include "../jrd/ods.h"
@@ -266,7 +267,6 @@ class CryptoManager final : public Firebird::PermanentStorage, public BarSync::I
 {
 public:
 	typedef Firebird::GetPlugins<Firebird::IDbCryptPlugin> Factory;
-	typedef Firebird::HalfStaticArray<Attachment*, 16> AttVector;
 
 	explicit CryptoManager(thread_db* tdbb);
 	~CryptoManager();
@@ -298,7 +298,7 @@ public:
 	void setDbInfo(Firebird::IDbCryptPlugin* cp);
 
 	ULONG getCurrentPage(thread_db* tdbb) const;
-	UCHAR getCurrentState() const;
+	UCHAR getCurrentState(thread_db* tdbb) const;
 	const char* getKeyName() const;
 	const char* getPluginName() const;
 
@@ -312,16 +312,16 @@ private:
 	public:
 		operator Ods::pag*()
 		{
-			return reinterpret_cast<Ods::pag*>(FB_ALIGN(buf, PAGE_ALIGNMENT));
+			return reinterpret_cast<Ods::pag*>(buf);
 		}
 
 		Ods::pag* operator->()
 		{
-			return reinterpret_cast<Ods::pag*>(FB_ALIGN(buf, PAGE_ALIGNMENT));
+			return reinterpret_cast<Ods::pag*>(buf);
 		}
 
 	private:
-		char buf[MAX_PAGE_SIZE + PAGE_ALIGNMENT - 1];
+		alignas(DIRECT_IO_BLOCK_SIZE) char buf[MAX_PAGE_SIZE];
 	};
 
 	class DbInfo;
@@ -374,7 +374,7 @@ private:
 	MetaName keyName, pluginName;
 	ULONG currentPage;
 	Firebird::Mutex pluginLoadMtx, cryptThreadMtx, holdersMutex;
-	AttVector keyProviders, keyConsumers;
+	AttachmentsRefHolder keyProviders, keyConsumers;
 	Firebird::string hash;
 	Firebird::RefPtr<DbInfo> dbInfo;
 	Thread::Handle cryptThreadId;

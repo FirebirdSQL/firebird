@@ -248,7 +248,7 @@ copyFiles() {
 	chown root:wheel ${TargetDir}@FB_PLUGDIR@/*.so*
 	chmod 0755 ${TargetDir}@FB_PLUGDIR@/*.so*
 
-	makeDirs ${TargetDir}@FB_TZDATADIR@
+	makeDirs @FB_TZDATADIR@
 	cp $BuiltFBDir/tzdata/*.res ${TargetDir}@FB_TZDATADIR@
 	chmod 0444 ${TargetDir}@FB_TZDATADIR@/*.res
 

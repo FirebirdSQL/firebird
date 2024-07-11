@@ -54,6 +54,7 @@
 #include <math.h>
 #include <ctype.h>
 #include <errno.h>
+#include "../isql/FrontendLexer.h"
 #include "../common/utils_proto.h"
 #include "../common/classes/array.h"
 #include "../common/classes/init.h"
@@ -121,10 +122,9 @@ enum literal_string_type
 #include "../isql/PtrSentry.h"
 #include "../common/classes/UserBlob.h"
 #include "../common/classes/MsgPrint.h"
+#include "../common/classes/array.h"
 
-using Firebird::PathName;
-using Firebird::TempFile;
-using Firebird::TimeZoneUtil;
+using namespace Firebird;
 using MsgFormat::SafeArg;
 
 #include "../isql/ColList.h"
@@ -297,20 +297,118 @@ static inline bool commit_trans(Firebird::ITransaction** x)
 	return true;
 }
 
-static inline int fb_isspace(const char c)
-{
-	return isspace((int)(UCHAR)c);
-}
-
-static inline int fb_isspace(const SSHORT c)
-{
-	return isspace((int)(UCHAR)c);
-}
-
 static inline int fb_isdigit(const char c)
 {
 	return isdigit((int)(UCHAR)c);
 }
+
+
+#ifdef WIN_NT
+// This function is highly based on code written by https://github.com/xenu
+// He permitted our usage here: https://github.com/Perl/perl5/pull/18702#issuecomment-1156050577
+static int win32ReadConsole(FILE* file, char* buffer, size_t bufferSize)
+{
+	// This function is a workaround for a bug in Windows:
+	// https://github.com/microsoft/terminal/issues/4551
+	// tl;dr: ReadFile() and ReadConsoleA() return garbage when reading
+	// non-ASCII characters from the console with the 65001 codepage.
+	auto handle = (HANDLE) _get_osfhandle(fileno(file));
+
+	if (handle == INVALID_HANDLE_VALUE)
+	{
+		fb_assert(false);
+		return -1;
+	}
+
+	DWORD mode;
+	if (!GetConsoleMode(handle, &mode))
+	{
+		fb_assert(false);
+		return -1;
+	}
+
+	size_t leftToRead = bufferSize;
+
+	while (leftToRead)
+	{
+		// The purpose of convertedBuf is to preserve partial UTF-8 (or of any
+		// other multibyte encoding) code points between read() calls. Since
+		// there's only one console, the buffer is global. It's needed because
+		// ReadConsoleW() returns a string of UTF-16 code units and its result,
+		// after conversion to the current console codepage, may not fit in the
+		// return buffer.
+		//
+		// The buffer's size is 8 because it will contain at most two UTF-8 code
+		// points.
+		static char convertedBuf[8];
+		static size_t convertedBufLen = 0;
+
+		if (convertedBufLen)
+		{
+			bool newline = false;
+			const size_t toWrite = MIN(convertedBufLen, leftToRead);
+
+			// Don't read anything if the *first* character is ^Z and
+			// ENABLE_PROCESSED_INPUT is enabled. On some versions of Windows,
+			// ReadFile() ignores ENABLE_PROCESSED_INPUT, but apparently it's a
+			// bug: https://github.com/microsoft/terminal/issues/4958
+			if (leftToRead == bufferSize && (mode & ENABLE_PROCESSED_INPUT) && convertedBuf[0] == 0x1A)
+				break;
+
+			// Are we returning a newline?
+			if (memchr(convertedBuf, '\n', toWrite) != 0)
+				newline = true;
+
+			memcpy(buffer, convertedBuf, toWrite);
+			buffer += toWrite;
+
+			// If there's anything left in convertedBuf, move it to the beginning of the buffer.
+			convertedBufLen -= toWrite;
+
+			if (convertedBufLen)
+				memmove(convertedBuf, convertedBuf + toWrite, convertedBufLen);
+
+			leftToRead -= toWrite;
+
+			// With ENABLE_LINE_INPUT enabled, we stop reading after the first
+			// newline, otherwise we stop reading after the first character.
+			if (!leftToRead || newline || (mode & ENABLE_LINE_INPUT) == 0)
+				break;
+		}
+
+		WCHAR wideBuf[2];
+		DWORD charsRead;
+
+		// Reading one code unit at a time is inefficient, but since this code
+		// is used only for the interactive console, that shouldn't matter.
+		if (!ReadConsoleW(handle, wideBuf, 1, &charsRead, 0))
+			return -1;
+
+		if (!charsRead)
+			break;
+
+		DWORD wideBufLen = 1;
+
+		if (wideBuf[0] >= 0xD800 && wideBuf[0] <= 0xDBFF)
+		{
+			// High surrogate, read one more code unit.
+			if (!ReadConsoleW(handle, wideBuf + 1, 1, &charsRead, 0))
+				return -1;
+
+			if (charsRead)
+				++wideBufLen;
+		}
+
+		convertedBufLen = WideCharToMultiByte(GetConsoleCP(), 0, wideBuf, wideBufLen,
+			convertedBuf, sizeof(convertedBuf), NULL, NULL);
+
+		if (!convertedBufLen)
+			return -1;
+	}
+
+	return bufferSize - leftToRead;
+}
+#endif
 
 
 IsqlGlobals::IsqlGlobals()
@@ -356,6 +454,7 @@ static processing_state add_row(TEXT*);
 static processing_state blobedit(const TEXT*, const TEXT* const*);
 static processing_state bulk_insert_hack(const char* command);
 static bool bulk_insert_retriever(const char* prompt);
+static void check_autoterm();
 static bool check_date(const tm& times);
 static bool check_time(const tm& times);
 static bool check_timestamp(const tm& times, const int msec);
@@ -378,10 +477,10 @@ static void frontend_load_parms(const TEXT* p, TEXT* parms[], TEXT* lparms[],
 static processing_state do_set_command(const TEXT*, bool*);
 static processing_state get_dialect(const char* const dialect_str,
 	char* const bad_dialect_buf, bool& bad_dialect);
-static processing_state get_statement(Firebird::string&, const TEXT*);
 static bool get_numeric(const UCHAR*, USHORT, SSHORT*, SINT64*);
 static void print_set(const char* str, bool v);
 static processing_state print_sets();
+static processing_state explain(const TEXT*);
 static processing_state help(const TEXT*);
 static bool isyesno(const TEXT*);
 static processing_state newdb(TEXT*, const TEXT*, const TEXT*, int, const TEXT*, bool);
@@ -404,7 +503,7 @@ static void process_plan();
 static void process_exec_path();
 static SINT64 process_record_count(const unsigned statement_type);
 static unsigned process_message_display(Firebird::IMessageMetadata* msg, unsigned pad[]);
-static processing_state process_statement(const TEXT*);
+static processing_state process_statement(const std::string&);
 #ifdef WIN_NT
 static BOOL CALLBACK query_abort(DWORD);
 #else
@@ -445,7 +544,7 @@ static bool Interactive = true;
 static bool Input_file = false;
 
 static const char* DEFAULT_DML_TRANS_SQL = "SET TRANSACTION";
-static Firebird::GlobalPtr<Firebird::string> TranParams;
+static Firebird::GlobalPtr<string> TranParams;
 
 // Values used in the SET command.
 // Initial options set exclusively from the command line are not included here.
@@ -470,12 +569,15 @@ public:
 		Plan = false;
 		Planonly = false;
 		ExplainPlan = false;
+		AutoTerm = false;
 		Heading = true;
 		BailOnError = false;
 		StmtTimeout = 0;
 		ISQL_charset[0] = 0;
 		KeepTranParams = true;
 		TranParams->assign(DEFAULT_DML_TRANS_SQL);
+		PerTableStats = false;
+		ExplainCommand = false;
 	}
 
 	ColList global_Cols;
@@ -494,11 +596,14 @@ public:
 	bool Plan;
 	bool Planonly;
 	bool ExplainPlan;
+	bool AutoTerm;
 	bool Heading;
 	bool BailOnError;
 	unsigned int StmtTimeout;
 	SCHAR ISQL_charset[MAXCHARSET_SIZE];
 	bool KeepTranParams;
+	bool PerTableStats;
+	bool ExplainCommand;
 };
 
 static SetValues setValues;
@@ -510,7 +615,7 @@ static FILE* Help;
 
 static const TEXT* const sql_prompt = "SQL> ";
 
-// Keep in sync with the chars that have their own "case" in get_statement(...).
+// Keep in sync with the chars that have their own "case" in the frontend lexer.
 static const char FORBIDDEN_TERM_CHARS[] = { '\n', '-', '*', '/', SINGLE_QUOTE, DBL_QUOTE };
 static const char FORBIDDEN_TERM_CHARS_DISPLAY[] = "<ENTER>, -, *, /, SINGLE_QUOTE, DOUBLE_QUOTE";
 
@@ -537,6 +642,100 @@ static const SCHAR* alpha_months[] =
 	"NOV",
 	"DEC"
 };
+
+class PerTableStats
+{
+public:
+	PerTableStats(Firebird::MemoryPool& pool) :
+		m_initialized(false),
+		m_stat(pool),
+		m_relNames(pool)
+	{}
+
+	void getStats(Firebird::IAttachment* att, bool initial);
+	void reset();
+
+private:
+	void printStats(Firebird::IAttachment* att);
+	unsigned loadRelNames(Firebird::IAttachment* att);
+
+	struct StatItem
+	{
+		StatItem() :
+			relId(0),
+			statId(0),
+			value(0)
+		{}
+
+		StatItem(USHORT aRelId, UCHAR  aStatID) :
+			relId(aRelId),
+			statId(aStatID),
+			value(0)
+		{}
+
+		USHORT relId;
+		UCHAR  statId;
+		SINT64 value;
+
+		static bool greaterThan(const StatItem& i1, const StatItem& i2)
+		{
+			if (i1.relId < i2.relId)
+				return false;
+
+			if (i1.relId > i2.relId)
+				return true;
+
+			if (i1.statId <= i2.statId)
+				return false;
+
+			return true;
+		}
+	};
+
+	using StatArray = Firebird::SortedArray<
+		StatItem,
+		Firebird::EmptyStorage<StatItem>,
+		StatItem,
+		Firebird::DefaultKeyValue<StatItem>,
+		StatItem>;
+
+	bool m_initialized;		// initial (before) stats loaded OK
+	StatArray m_stat;
+	Firebird::GenericMap<Firebird::Right<USHORT, string>> m_relNames;
+
+	static const unsigned ITEM_COUNT = 8;
+	static const unsigned char m_items[ITEM_COUNT + 1];
+	static const char* m_itemNames[ITEM_COUNT];
+};
+
+static Firebird::GlobalPtr<PerTableStats> perTableStats;
+
+
+class StatementGetter
+{
+public:
+	StatementGetter()
+	{
+		// Lookup the continuation prompt once
+		if (!*conPrompt)
+			IUTILS_msg_get(CON_PROMPT, conPrompt);
+	}
+
+public:
+	std::pair<FrontendLexer::SingleStatement, processing_state> getStatement();
+
+	void rewind()
+	{
+		lexer.rewind();
+	}
+
+private:
+	static TEXT conPrompt[MSG_LENGTH];
+	FrontendLexer lexer;
+};
+
+TEXT StatementGetter::conPrompt[MSG_LENGTH] = "";
+
 
 static UCHAR predefined_blob_subtype_bpb[] =
 {
@@ -625,25 +824,6 @@ static void atexit_fb_shutdown()
 {
 	fb_shutdown(0, fb_shutrsn_app_stopped);
 }
-
-int CLIB_ROUTINE main(int argc, char* argv[])
-{
-/**************************************
- *
- *	m a i n
- *
- **************************************
- *
- * Functional description
- *	This calls ISQL_main, and exists to
- *	isolate main which does not exist under
- *	MS Windows.
- *
- **************************************/
-
-	return ISQL_main(argc, argv);
-}
-
 
 int ISQL_main(int argc, char* argv[])
 {
@@ -914,18 +1094,29 @@ static void readNextInputLine(const char* prompt)
 		fflush(stdout);
 	}
 
-	Firebird::string line;
+	string line;
 	bool end = false;
 
 	do
 	{
 		// Read the line
 		char buffer[MAX_USHORT];
+		int lineSize;
 
-		if (fgets(buffer, sizeof(buffer), Filelist->Ifp().indev_fpointer) != NULL)
+#ifdef WIN_NT
+		if (!Input_file && isatty(fileno(Filelist->Ifp().indev_fpointer)))
+			lineSize = win32ReadConsole(Filelist->Ifp().indev_fpointer, buffer, sizeof(buffer));
+		else
+#endif
 		{
-			size_t lineSize = strlen(buffer);
+			if (fgets(buffer, sizeof(buffer), Filelist->Ifp().indev_fpointer) != NULL)
+				lineSize = strlen(buffer);
+			else
+				lineSize = -1;
+		}
 
+		if (lineSize > 0)
+		{
 			// If the last non empty line doesn't end in '\n', indev_aux won't be
 			// updated, but then there're no more commands, so it's irrelevant.
 			while (lineSize > 0 &&
@@ -1045,25 +1236,10 @@ bool ISQL_errmsg(Firebird::IStatus* st)
 			}
 		}
 
-		/*
-		if (state & Firebird::IStatus::STATE_WARNINGS)
-		{
-			const ISC_STATUS* w = st->getWarnings();
-			TEXT* err = errbuf;
-			unsigned es = sizeof(errbuf);
-			while (fb_interpret(err, es, &w)) {
-				STDERROUT(errbuf);
-				if (err == errbuf)
-				{
-					*err++ = '-';
-					--es;
-				}
-			}
-		}
-		*/
-
 		if (Input_file)
 		{
+			// This must be done before call ISQL_warning, as it init the status object.
+
 			int linenum = -1;
 			if (status[0] == isc_arg_gds && status[1] == isc_dsql_error &&
 				status[2] == isc_arg_gds && status[3] == isc_sqlerr && vec > &status[9])
@@ -1116,15 +1292,19 @@ bool ISQL_errmsg(Firebird::IStatus* st)
 			else
                 IUTILS_msg_get(AFTERLINE, errbuf, SafeArg() << Ifp.indev_line << Ifp.fileName(true).c_str());
 
+			ISQL_warning(st);
+
 			STDERROUT(errbuf);
 		}
+		else
+			ISQL_warning(st);
 	}
 
 	return (state & Firebird::IStatus::STATE_ERRORS);
 }
 
 
-void ISQL_warning(Firebird::CheckStatusWrapper* st)
+void ISQL_warning(Firebird::IStatus* st)
 {
 /**************************************
  *
@@ -1262,7 +1442,8 @@ SSHORT ISQL_get_char_length(
 }
 
 
-void ISQL_get_character_sets(SSHORT char_set_id, SSHORT collation, bool collate_only,
+void ISQL_get_character_sets(SSHORT char_set_id, SSHORT collation,
+							 SSHORT default_char_set_id, Get what,
 							 bool not_null, bool quote, TEXT* string)
 {
 /**************************************
@@ -1284,91 +1465,93 @@ void ISQL_get_character_sets(SSHORT char_set_id, SSHORT collation, bool collate_
 	if (!frontendTransaction())
 		return;
 
-	//if (collation) {
-	if (collation || collate_only)
-	{
-		FOR FIRST 1 COL IN RDB$COLLATIONS CROSS
-			CST IN RDB$CHARACTER_SETS WITH
-			COL.RDB$CHARACTER_SET_ID EQ CST.RDB$CHARACTER_SET_ID AND
-			COL.RDB$COLLATION_ID EQ collation AND
-			CST.RDB$CHARACTER_SET_ID EQ char_set_id
-			SORTED BY COL.RDB$COLLATION_NAME, CST.RDB$CHARACTER_SET_NAME
+	FOR FIRST 1 COL IN RDB$COLLATIONS CROSS
+		CST IN RDB$CHARACTER_SETS WITH
+		COL.RDB$CHARACTER_SET_ID EQ CST.RDB$CHARACTER_SET_ID AND
+		COL.RDB$COLLATION_ID EQ collation AND
+		CST.RDB$CHARACTER_SET_ID EQ char_set_id
+		SORTED BY COL.RDB$COLLATION_NAME, CST.RDB$CHARACTER_SET_NAME
 
 #ifdef DEV_BUILD
-			found = true;
+		found = true;
 #endif
-			fb_utils::exact_name(CST.RDB$CHARACTER_SET_NAME);
-			fb_utils::exact_name(COL.RDB$COLLATION_NAME);
-			fb_utils::exact_name(CST.RDB$DEFAULT_COLLATE_NAME);
+		fb_utils::exact_name(CST.RDB$CHARACTER_SET_NAME);
+		fb_utils::exact_name(COL.RDB$COLLATION_NAME);
+		fb_utils::exact_name(CST.RDB$DEFAULT_COLLATE_NAME);
 
-			char charSetName[QUOTED_NAME_SIZE];
-			char collateName[QUOTED_NAME_SIZE];
+		char charSetName[QUOTED_NAME_SIZE];
+		char collateName[QUOTED_NAME_SIZE];
 
-			if (quote && isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-			{
-				IUTILS_copy_SQL_id(CST.RDB$CHARACTER_SET_NAME, charSetName, DBL_QUOTE);
-				IUTILS_copy_SQL_id(COL.RDB$COLLATION_NAME, collateName, DBL_QUOTE);
-			}
-			else
-			{
-				strcpy(charSetName, CST.RDB$CHARACTER_SET_NAME);
-				strcpy(collateName, COL.RDB$COLLATION_NAME);
-			}
-
-			// Is specified collation the default collation for character set?
-			if (strcmp (CST.RDB$DEFAULT_COLLATE_NAME, COL.RDB$COLLATION_NAME) == 0)
-			{
-				if (!collate_only)
-					sprintf (string, " CHARACTER SET %s%s", charSetName, notNullStr);
-			}
-			else if (collate_only)
-				sprintf (string, "%s COLLATE %s", notNullStr, collateName);
-			else
-				sprintf (string, " CHARACTER SET %s%s COLLATE %s",
-						 charSetName, notNullStr, collateName);
-		END_FOR
-		ON_ERROR
-			ISQL_errmsg(fbStatus);
-			return;
-		END_ERROR;
-#ifdef DEV_BUILD
-		if (!found)
+		if (quote && isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
 		{
-			TEXT Print_buffer[PRINT_BUFFER_LENGTH];
-			sprintf(Print_buffer,
-					"ISQL_get_character_set: charset %d collation %d not found.\n",
-					char_set_id, collation);
-			STDERROUT(Print_buffer);
+			IUTILS_copy_SQL_id(CST.RDB$CHARACTER_SET_NAME, charSetName, DBL_QUOTE);
+			IUTILS_copy_SQL_id(COL.RDB$COLLATION_NAME, collateName, DBL_QUOTE);
 		}
-#endif
-	}
-	else
-	{
-		FOR FIRST 1 CST IN RDB$CHARACTER_SETS WITH
-			CST.RDB$CHARACTER_SET_ID EQ char_set_id
-			SORTED BY CST.RDB$CHARACTER_SET_NAME
-
-#ifdef DEV_BUILD
-			found = true;
-#endif
-			fb_utils::exact_name(CST.RDB$CHARACTER_SET_NAME);
-
-			sprintf (string, " CHARACTER SET %s%s", CST.RDB$CHARACTER_SET_NAME, notNullStr);
-		END_FOR
-		ON_ERROR
-			ISQL_errmsg(fbStatus);
-			return;
-		END_ERROR;
-#ifdef DEV_BUILD
-		if (!found)
+		else
 		{
-			TEXT Print_buffer[PRINT_BUFFER_LENGTH];
-			sprintf(Print_buffer, "ISQL_get_character_set: charset %d not found.\n",
-					char_set_id);
-			STDERROUT(Print_buffer);
+			strcpy(charSetName, CST.RDB$CHARACTER_SET_NAME);
+			strcpy(collateName, COL.RDB$COLLATION_NAME);
 		}
-#endif
+
+		bool charsetIsDefault = char_set_id == default_char_set_id;
+		bool collationIsDefault = strcmp(CST.RDB$DEFAULT_COLLATE_NAME, COL.RDB$COLLATION_NAME) == 0;
+
+		switch (what)
+		{
+		case Get::CHARSET_ONLY:
+			// Charset is printed if it is not default one
+			// or if collation is not default to preserve stability of output script
+			// Because otherwise it would fail with "collation not found for character set" error
+			// if global default charset has been changed.
+			if (!charsetIsDefault || !collationIsDefault)
+			{
+				sprintf(string, " CHARACTER SET %s%s", charSetName, notNullStr);
+				return;
+			}
+			break;
+
+		case Get::COLLATE_ONLY:
+			// Default colation is not printed to allow easy global change
+			if (!collationIsDefault)
+			{
+				sprintf(string, "%s COLLATE %s", notNullStr, collateName);
+				return;
+			}
+			break;
+
+		case Get::BOTH:
+			// If they both are default - supress output completely
+			if (!charsetIsDefault || !collationIsDefault)
+			{
+				if (collationIsDefault) // Suppress collation only
+					sprintf(string, " CHARACTER SET %s%s", charSetName, notNullStr);
+				else
+					sprintf(string, " CHARACTER SET %s%s COLLATE %s", charSetName, notNullStr, collateName);
+				return;
+			}
+			break;
+
+		}
+		// No need to write charset or collation but still must print "NOT NULL"
+		if (not_null)
+		{
+			sprintf(string, "%s", notNullStr);
+		}
+	END_FOR
+	ON_ERROR
+		ISQL_errmsg(fbStatus);
+		return;
+	END_ERROR;
+#ifdef DEV_BUILD
+	if (!found)
+	{
+		TEXT Print_buffer[PRINT_BUFFER_LENGTH];
+		sprintf(Print_buffer,
+				"ISQL_get_character_set: charset %d collation %d not found.\n",
+				char_set_id, collation);
+		STDERROUT(Print_buffer);
 	}
+#endif
 }
 
 
@@ -2104,7 +2287,7 @@ void ISQL_print_validation(FILE* fp,
 	bool issql = false;
 	bool firsttime = true;
 	TEXT buffer[BUFFER_LENGTH512];
-	Firebird::string fullText;
+	string fullText;
 
 	do
 	{
@@ -2119,7 +2302,7 @@ void ISQL_print_validation(FILE* fp,
 		{
 			// computed field SQL syntax correction
 
-			while (fb_isspace(*p))
+			while (fb_utils::isspace(*p))
 				p++;
 			if (*p == '(')
 				issql = true;
@@ -2128,7 +2311,7 @@ void ISQL_print_validation(FILE* fp,
 		{
 			// Validation SQL syntax correction
 
-			while (fb_isspace(*p))
+			while (fb_utils::isspace(*p))
 				p++;
 			if (!fb_utils::strnicmp(p, "CHECK", 5))
 				issql = true;
@@ -2159,7 +2342,7 @@ void ISQL_print_validation(FILE* fp,
 }
 
 
-static Firebird::string get_numeric_value(const char* fromStr)
+static string get_numeric_value(const char* fromStr)
 {
 /**************************************
  *
@@ -2171,7 +2354,7 @@ static Firebird::string get_numeric_value(const char* fromStr)
  *	Prepares data for converting into decfloat by interface function.
  *
  **************************************/
-	Firebird::string val;
+	string val;
 	for (const char* q = fromStr; *q; ++q)
 	{
 		switch (*q)
@@ -2248,7 +2431,7 @@ static processing_state add_row(TEXT* tabname)
 		IUTILS_make_upper(tabname);
 
 	// Query to obtain relation information
-	Firebird::string str2;
+	string str2;
 	str2.printf("SELECT * FROM %s", tabname);
 
 	if (global_Stmt)
@@ -2283,7 +2466,7 @@ static processing_state add_row(TEXT* tabname)
 
 	// Create the new INSERT statement from the sqlda info
 
-	Firebird::string insertstring;
+	string insertstring;
 
 	// There is a question mark for each column that's known to be updatable.
 
@@ -2478,7 +2661,7 @@ static processing_state add_row(TEXT* tabname)
 
 					if (!strcmp(cmd, "EDIT")) // If edit, we edit a temp file.
 					{
-						const Firebird::PathName ftmp = TempFile::create(SCRATCH);
+						const PathName ftmp = TempFile::create(SCRATCH);
 						if (ftmp.empty())
 							res = 0;
 						else
@@ -2603,7 +2786,7 @@ static processing_state add_row(TEXT* tabname)
 				case SQL_TIME_TZ_EX:
 				case SQL_TIME_TZ:
 					{
-						Firebird::string tmp(lastInputLine, length);
+						string tmp(lastInputLine, length);
 						unsigned hours, minutes, seconds;
 						char timeZone[TimeZoneUtil::MAX_SIZE];
 						fb_assert(TimeZoneUtil::MAX_SIZE - 1 == 32);
@@ -2664,7 +2847,7 @@ static processing_state add_row(TEXT* tabname)
 				case SQL_TIMESTAMP_TZ_EX:
 				case SQL_TIMESTAMP_TZ:
 					{
-						Firebird::string tmp(lastInputLine, length);
+						string tmp(lastInputLine, length);
 						unsigned year, month, day;
 						unsigned hours, minutes, seconds, fractions;
 						char timeZone[TimeZoneUtil::MAX_SIZE];
@@ -3441,7 +3624,7 @@ static processing_state bulk_insert_hack(const char* command)
 				case SQL_TIME_TZ_EX:
 				case SQL_TIME_TZ:
 					{
-						Firebird::string tmp(lastPos, length);
+						string tmp(lastPos, length);
 						unsigned hours, minutes, seconds;
 						char timeZone[TimeZoneUtil::MAX_SIZE];
 						fb_assert(TimeZoneUtil::MAX_SIZE - 1 == 32);
@@ -3503,7 +3686,7 @@ static processing_state bulk_insert_hack(const char* command)
 				case SQL_TIMESTAMP_TZ_EX:
 				case SQL_TIMESTAMP_TZ:
 					{
-						Firebird::string tmp(lastPos, length);
+						string tmp(lastPos, length);
 						unsigned year, month, day;
 						unsigned hours, minutes, seconds, fractions;
 						char timeZone[TimeZoneUtil::MAX_SIZE];
@@ -3817,6 +4000,51 @@ static bool bulk_insert_retriever(const char* prompt)
 }
 
 
+// Check if SET AUTOTERM is allowed. If not, disable it.
+static void check_autoterm()
+{
+	if (!DB || !setValues.AutoTerm)
+		return;
+
+	static const UCHAR protocolInfo[] =
+	{
+		fb_info_protocol_version,
+		isc_info_end
+	};
+
+	UCHAR buffer[BUFFER_LENGTH128];
+
+	DB->getInfo(fbStatus, sizeof(protocolInfo), protocolInfo, sizeof(buffer), buffer);
+	if (ISQL_errmsg(fbStatus))
+		return;
+
+	SLONG protocolVersion = -1;
+
+	for (ClumpletReader p(ClumpletReader::InfoResponse, buffer, sizeof(buffer)); !p.isEof(); p.moveNext())
+	{
+		switch (p.getClumpTag())
+		{
+			case isc_info_end:
+				break;
+
+			case fb_info_protocol_version:
+				protocolVersion = p.getInt();
+				break;
+		}
+	}
+
+	if (!(protocolVersion == 0 || protocolVersion >= 19) &&	// PROTOCOL_VERSION19
+		  ENCODE_ODS(isqlGlob.major_ods, isqlGlob.minor_ods) >= ODS_13_2)
+	{
+		setValues.AutoTerm = false;
+
+		TEXT errbuf[MSG_LENGTH];
+		IUTILS_msg_get(AUTOTERM_NOT_SUPPORTED, errbuf);
+		STDERROUT(errbuf);
+	}
+}
+
+
 // *******************
 // c h e c k _ d a t e
 // *******************
@@ -3950,7 +4178,7 @@ static processing_state copy_table(TEXT* source,
 	// If there is an alternate database, extract the domains
 	const bool domain_flag = otherdb[0];
 
-	const Firebird::PathName ftmp = TempFile::create(SCRATCH);
+	const PathName ftmp = TempFile::create(SCRATCH);
 	isqlGlob.Out = os_utils::fopen(ftmp.c_str(), "w+b");
 	if (!isqlGlob.Out)
 	{
@@ -4027,7 +4255,7 @@ static processing_state copy_table(TEXT* source,
 }
 
 
-static void appendClause(Firebird::string& to, const char* label, const TEXT* value, char quote = 0)
+static void appendClause(string& to, const char* label, const TEXT* value, char quote = 0)
 {
 	to += ' ';
 	to += label;
@@ -4067,7 +4295,7 @@ static processing_state create_db(const TEXT* statement, TEXT* d_name)
 
 	// Parse statement to tokens
 	const char* quotes = "\"'";
-	Firebird::string nlStatement(statement);
+	string nlStatement(statement);
 	nlStatement += '\n';
 	Firebird::Tokens toks;
 	toks.quotes(quotes);
@@ -4119,7 +4347,7 @@ static processing_state create_db(const TEXT* statement, TEXT* d_name)
 		TEXT psw[PASSWORD_LENGTH];
 		TEXT role[ROLE_LENGTH];
 
-		Firebird::string modifiedCreateStatement(statement);
+		string modifiedCreateStatement(statement);
 
 		TEXT quote = DBL_QUOTE;
 		const TEXT* p = NULL;
@@ -4132,7 +4360,7 @@ static processing_state create_db(const TEXT* statement, TEXT* d_name)
 			strip_quotes(Password, psw);
 			strcpy(role, isqlGlob.Role);
 
-			Firebird::string clauses;
+			string clauses;
 
 			if (global_usr && !keys[KEY_USER].has)
 				appendClause(clauses, keys[KEY_USER].text, usr);
@@ -4145,7 +4373,7 @@ static processing_state create_db(const TEXT* statement, TEXT* d_name)
 
 			if (*setValues.ISQL_charset && strcmp(setValues.ISQL_charset, DEFCHARSET)&& !keys[KEY_NAMES].has)
 			{
-				Firebird::string setNames = keys[KEY_SET].text;
+				string setNames = keys[KEY_SET].text;
 				setNames += ' ';
 				setNames += keys[KEY_NAMES].text;
 				appendClause(clauses, setNames.c_str(), setValues.ISQL_charset, SINGLE_QUOTE);
@@ -4193,7 +4421,7 @@ static processing_state create_db(const TEXT* statement, TEXT* d_name)
 		// CVC: Someone may decide to play strange games with undocumented ability
 		// to write crap between CREATE DATABASE and the db name, as described by
 		// Helen on CORE-932. Let's see if we can discover the real db name.
-		Firebird::string s;
+		string s;
 		if (toks.getCount() > 2)
 			s.assign(toks[2].text, toks[2].length);
 		else
@@ -4265,13 +4493,11 @@ static void do_isql()
 	// Read statements and process them from Ifp until the ret
 	// code tells us we are done
 
-	Firebird::string stmt;
-	processing_state ret;
-
+	StatementGetter statementGetter;
 	bool done = false;
+
 	while (!done)
 	{
-
 		if (Abort_flag)
 		{
 			if (D__trans)
@@ -4331,7 +4557,18 @@ static void do_isql()
 			}
 		}
 
-		ret = get_statement(stmt, sql_prompt);
+		auto [statement, ret] = statementGetter.getStatement();
+
+		if (ret == CONT)
+		{
+			const auto statementWithoutSemicolonWithoutComments =
+				FrontendLexer::stripComments(statement.withoutSemicolon);
+
+			if (statementWithoutSemicolonWithoutComments.empty())
+				ret = SKIP;
+			else
+				ret = frontend(FrontendLexer::stripComments(statementWithoutSemicolonWithoutComments).c_str());
+		}
 
 		// If there is no database yet, remind us of the need to connect
 
@@ -4344,6 +4581,7 @@ static void do_isql()
 				IUTILS_msg_get(NO_DB, errbuf);
 				STDERROUT(errbuf);
 			}
+
 			if (!Interactive && setValues.BailOnError)
 				ret = FAIL;
 			else
@@ -4353,16 +4591,29 @@ static void do_isql()
 		switch (ret)
 		{
 		case CONT:
-			if (process_statement(stmt.c_str()) == ps_ERR)
+			switch (process_statement(setValues.AutoTerm ? statement.withSemicolon : statement.withoutSemicolon))
 			{
-				Exit_value = FINI_ERROR;
-				if (!Interactive && setValues.BailOnError)
-					Abort_flag = true;
+				case TRUNCATED:
+					statementGetter.rewind();
+					break;
+
+				case ps_ERR:
+					Exit_value = FINI_ERROR;
+					if (!Interactive && setValues.BailOnError)
+						Abort_flag = true;
+					[[fallthrough]];
+
+				default:
+					// Place each non frontend statement in the temp file if we are reading from stdin.
+					Filelist->saveCommand(
+						(setValues.AutoTerm ? statement.withSemicolon : statement.withoutSemicolon).c_str(),
+						(setValues.AutoTerm ? "" : isqlGlob.global_Term));
+					break;
 			}
 			break;
 
 		case END:
-		case EOF:
+		case FOUND_EOF:
 		case EXIT:
 			if (Abort_flag)
 			{
@@ -4455,10 +4706,6 @@ static void do_isql()
 
 			done = true;
 			break;
-
-		case ERR_BUFFER_OVERFLOW:
-			IUTILS_msg_get(BUFFER_OVERFLOW, errbuf);
-			STDERROUT(errbuf);
 
 		case EXTRACT:
 		case EXTRACTALL:
@@ -4601,7 +4848,7 @@ static processing_state edit(const TEXT* const* cmd)
 		if (!Ofp.indev_fpointer)
 		{
 			// File used to edit sessions
-			const Firebird::PathName filename = TempFile::create(SCRATCH);
+			const PathName filename = TempFile::create(SCRATCH);
 			const char* Tmpfile = filename.c_str();
 			FILE* f = os_utils::fopen(Tmpfile, "w+"); // It was w+b
 			if (f)
@@ -4753,7 +5000,7 @@ static processing_state escape(const TEXT* cmd)
 	shellcmd += strlen("shell");
 
 	// Eat whitespace at beginning of command
-	while (*shellcmd && fb_isspace(*shellcmd))
+	while (*shellcmd && fb_utils::isspace(*shellcmd))
 		shellcmd++;
 
 #ifdef WIN_NT
@@ -4833,7 +5080,7 @@ static processing_state frontend(const TEXT* statement)
 		{
 			show, add, copy,
 			blobview, output, shell, set, create, drop, connect,
-			edit, input, quit, exit, help,
+			edit, input, quit, exit, explain, help,
 #ifdef DEV_BUILD
 			passthrough,
 #endif
@@ -4863,6 +5110,7 @@ static processing_state frontend(const TEXT* statement)
 		{FrontOptions::input, "INPUT", 2},
 		{FrontOptions::quit, "QUIT", 0},
 		{FrontOptions::exit, "EXIT", 0},
+		{FrontOptions::explain, "EXPLAIN", 0},
 		{FrontOptions::help, "?", 0},
 		{FrontOptions::help, "HELP", 0}
 #ifdef DEV_BUILD
@@ -5060,6 +5308,10 @@ static processing_state frontend(const TEXT* statement)
 		ret = EXIT;
 		break;
 
+	case FrontOptions::explain:
+		ret = explain(cmd + 7);
+		break;
+
 	case FrontOptions::help:
 		ret = help(parms[1]);
 		break;
@@ -5161,7 +5413,7 @@ static void frontend_load_parms(const TEXT* p, TEXT* parms[], TEXT* lparms[],
 		else
 		{
 			//  Prevent overflow. Do not copy the string (redundant).
-			while (*p && !fb_isspace(*p) && j < BUFFER_LENGTH256 - 1)
+			while (*p && !fb_utils::isspace(*p) && j < BUFFER_LENGTH256 - 1)
 			{
 				j++;
 				++p;
@@ -5173,7 +5425,7 @@ static void frontend_load_parms(const TEXT* p, TEXT* parms[], TEXT* lparms[],
 		lparms[i] = (TEXT*) ISQL_ALLOC((SLONG) (length + 1));
 		memcpy(parms[i], quoted ? buffer : p - j, length);
 		parms[i][length] = 0;
-		while (*p && fb_isspace(*p))
+		while (*p && fb_utils::isspace(*p))
 			p++;
 		strcpy(lparms[i], parms[i]);
 		if (!role_found)
@@ -5196,12 +5448,12 @@ static processing_state frontend_set(const char* cmd, const char* const* parms,
 		enum set_commands
 		{
 			stat, count, list, plan, planonly, explain, blobdisplay, echo, autoddl,
-			width, transaction, terminator, names, time,
+			autoterm, width, transaction, terminator, names, time,
 			sqlda_display,
 			exec_path_display,
 			sql, warning, sqlCont, heading, bail,
 			bulk_insert, maxrows, stmtTimeout,
-			keepTranParams,
+			keepTranParams,	perTableStats,
 			wrong
 		};
 		SetOptions(const optionsMap* inmap, size_t insize, int wrongval)
@@ -5220,6 +5472,7 @@ static processing_state frontend_set(const char* cmd, const char* const* parms,
 		{SetOptions::blobdisplay, "BLOBDISPLAY", 4},
 		{SetOptions::echo, "ECHO", 0},
 		{SetOptions::autoddl, "AUTODDL", 4},
+		{SetOptions::autoterm, "AUTOTERM", 5},
 		{SetOptions::width, "WIDTH", 0},
 		{SetOptions::transaction, "TRANSACTION", 5},
 		{SetOptions::terminator, "TERMINATOR", 4},
@@ -5242,6 +5495,7 @@ static processing_state frontend_set(const char* cmd, const char* const* parms,
 		{SetOptions::stmtTimeout, "LOCAL_TIMEOUT", 0},
 		{SetOptions::sqlCont, "DECFLOAT", 0},
 		{SetOptions::keepTranParams, "KEEP_TRAN_PARAMS", 9},
+		{SetOptions::perTableStats, "PER_TABLE_STATS", 7}
 	};
 
 	// Display current set options
@@ -5309,6 +5563,15 @@ static processing_state frontend_set(const char* cmd, const char* const* parms,
 		ret = do_set_command(parms[2], &setValues.Autocommit);
 		break;
 
+	case SetOptions::autoterm:
+		ret = do_set_command(parms[2], &setValues.AutoTerm);
+		if (setValues.AutoTerm)
+		{
+			isqlGlob.Termlen = 1;
+			strcpy(isqlGlob.global_Term, ";");
+		}
+		break;
+
 	case SetOptions::width:
 		ret = newsize(parms[2][0] == '"' ? lparms[2] : parms[2], parms[3]);
 		break;
@@ -5330,6 +5593,8 @@ static processing_state frontend_set(const char* cmd, const char* const* parms,
 					return ps_ERR;
 				}
 			}
+
+			setValues.AutoTerm = false;
 
 			isqlGlob.Termlen = strlen(a);
 			if (isqlGlob.Termlen < MAXTERM_SIZE)
@@ -5475,6 +5740,10 @@ static processing_state frontend_set(const char* cmd, const char* const* parms,
 				TranParams->assign(setValues.KeepTranParams ? DEFAULT_DML_TRANS_SQL : "");
 		}
 
+		break;
+
+	case SetOptions::perTableStats:
+		ret = do_set_command(parms[2], &setValues.PerTableStats);
 		break;
 
 	default:
@@ -5631,85 +5900,60 @@ static processing_state get_dialect(const char* const dialect_str,
 }
 
 
-static processing_state get_statement(Firebird::string& statement,
-							const TEXT* statement_prompt)
+std::pair<FrontendLexer::SingleStatement, processing_state> StatementGetter::getStatement()
 {
-/**************************************
- *
- *	g e t _ s t a t e m e n t
- *
- **************************************
- *
- * Functional description
- *	Get an SQL statement, or QUIT/EXIT command to process
- *
- *	Arguments:  Pointer to statement, size of statement_buffer and prompt msg.
- *
- **************************************/
-	processing_state ret = CONT;
-
-	// Lookup the continuation prompt once
-	TEXT con_prompt[MSG_LENGTH];
-	IUTILS_msg_get(CON_PROMPT, con_prompt);
-
-	if ((Interactive && !Input_file) || setValues.Echo) {
-		ISQL_prompt(statement_prompt);
-	}
-
-	// Clear out statement buffer
-	statement.resize(0);
-
-	// Set count of characters to zero
-
-	size_t valuable_count = 0; // counter of valuable (non-space) chars
-	size_t comment_pos = 0; // position of block comment start
-	size_t non_comment_pos = 0; // position of char after block comment
-	const size_t term_length = isqlGlob.Termlen - 1; // additional variable for decreasing calculation
-
 	Filelist->Ifp().indev_line = Filelist->Ifp().indev_aux;
-	bool done = false;
 
-	enum
+	const auto* prompt = lexer.isBufferEmpty() ? sql_prompt : conPrompt;
+	std::string_view term(isqlGlob.global_Term, isqlGlob.Termlen);
+	std::string buffer;
+
+	while (true)
 	{
-		normal,
-		in_single_line_comment,
-		in_block_comment,
-		in_single_quoted_string,
-		in_double_quoted_string
-	} state = normal;
+		if ((Interactive && !Input_file) || setValues.Echo)
+			ISQL_prompt(prompt);
 
-	char lastChar = '\0';
-	char altQuoteChar = '\0';
-	unsigned altQuoteStringLength = 0;
-
-	while (!done)
-	{
 		SSHORT c = getNextInputChar();
-		switch (c)
+
+		if (c == EOF)
 		{
-		case EOF:
 			// Go back to getc if we get interrupted by a signal.
 
 			if (SYSCALL_INTERRUPTED(errno))
 			{
 				errno = 0;
-				break;
+				continue;
 			}
 
+			buffer += '\n';
+			lexer.appendBuffer(buffer);
+			buffer.clear();
+
+			bool isBufferEmpty = lexer.isBufferEmpty();
+
 			// If there was something valuable before EOF - error
-			if (valuable_count > 0)
+			if (!isBufferEmpty)
 			{
-				TEXT errbuf[MSG_LENGTH];
-				IUTILS_msg_get(UNEXPECTED_EOF, errbuf);
-				STDERROUT(errbuf);
-				Exit_value = FINI_ERROR;
-				ret = FAIL;
+				try
+				{
+					isBufferEmpty = FrontendLexer::stripComments(lexer.getBuffer()).empty();
+				}
+				catch (const FrontendLexer::IncompleteTokenError&)
+				{
+				}
+
+				if (!isBufferEmpty)
+				{
+					TEXT errbuf[MSG_LENGTH];
+					IUTILS_msg_get(UNEXPECTED_EOF, errbuf);
+					STDERROUT(errbuf);
+				}
 			}
 
 			// If we hit EOF at the top of the flist, exit time
 
 			if (Filelist->count() == 1)
-				return FOUND_EOF;
+				return {{}, FOUND_EOF};
 
 			// If this is not tmpfile, close it
 
@@ -5721,7 +5965,7 @@ static processing_state get_statement(Firebird::string& statement,
 			Filelist->removeIntoIfp();
 
 			if ((Interactive && !Input_file) || setValues.Echo)
-				ISQL_prompt(statement_prompt);
+				prompt = sql_prompt;
 
 			// CVC: Let's detect if we went back to the first level.
 			if (Filelist->readingStdin())
@@ -5733,182 +5977,43 @@ static processing_state get_statement(Firebird::string& statement,
 			// Try to convince the new routines to go back to previous file(s)
 			// This should fix the INPUT bug introduced with editline.
 			getColumn = -1;
-			break;
 
-		case '\n':
-//		case '\0': // In particular with readline the \n is removed
-			if (state == in_single_line_comment)
+			if (!isBufferEmpty)
 			{
-				state = normal;
-			}
-
-			// Catch the help ? without a terminator
-			if (statement.length() == 1 && statement[0] == '?')
-			{
-				c = 0;
-				done = true;
-				break;
-			}
-
-			// If in a comment, keep reading
-			if ((Interactive && !Input_file) || setValues.Echo)
-			{
-				if (state == in_block_comment)
-				{
-					//  Block comment prompt.
-					ISQL_prompt("--> ");
-				}
-				else if (valuable_count == 0)
-				{
-					// Ignore a series of nothing at the beginning
-					ISQL_prompt(statement_prompt);
-				}
-				else
-				{
-					ISQL_prompt(con_prompt);
-				}
-			}
-
-			break;
-
-		case '-':
-			// Could this the be start of a single-line comment.
-			if (state == normal && statement.length() > 0 &&
-				statement[statement.length() - 1] == '-')
-			{
-				state = in_single_line_comment;
-				if (valuable_count == 1)
-					valuable_count = 0;
-			}
-			break;
-
-		case '*':
-			// Could this the be start of a comment.  We can only look back,
-			// not forward.
-			// Ignore possibilities of a comment beginning inside
-			// quoted strings.
-			if (state == normal && statement.length() > 0 &&
-				statement[statement.length() - 1] == '/' && statement.length() != non_comment_pos)
-			{
-				state = in_block_comment;
-				comment_pos = statement.length() - 1;
-				if (valuable_count == 1)
-					valuable_count = 0;
-			}
-			break;
-
-		case '/':
-			// Perhaps this is the end of a comment.
-			// Ignore possibilities of a comment ending inside
-			// quoted strings.
-			// Ignore things like /*/ since it isn't a block comment; only the start of it. Or end.
-			if (state == in_block_comment && statement.length() > 2 &&
-				statement[statement.length() - 1] == '*' && statement.length() > comment_pos + 2)
-			{
-				state = normal;
-				non_comment_pos = statement.length() + 1; // mark start of non-comment to track this: /**/*
-				valuable_count--; // This char is not valuable
-			}
-			break;
-
-		case SINGLE_QUOTE:
-			switch (state)
-			{
-				case normal:
-					if (lastChar == 'q' || lastChar == 'Q')
-					{
-						statement += (lastChar = c);
-						altQuoteChar = c = getNextInputChar();
-						altQuoteStringLength = statement.length();
-
-						switch (altQuoteChar)
-						{
-							case '{':
-								altQuoteChar = '}';
-								break;
-							case '(':
-								altQuoteChar = ')';
-								break;
-							case '[':
-								altQuoteChar = ']';
-								break;
-							case '<':
-								altQuoteChar = '>';
-								break;
-						}
-					}
-					else
-						altQuoteChar = '\0';
-
-					state = in_single_quoted_string;
-					break;
-				case in_single_quoted_string:
-					if (!altQuoteChar || (statement.length() != altQuoteStringLength + 1 && lastChar == altQuoteChar))
-						state = normal;
-					break;
-			}
-			break;
-
-		case DBL_QUOTE:
-			switch (state)
-			{
-				case normal:
-					state = in_double_quoted_string;
-					break;
-				case in_double_quoted_string:
-					state = normal;
-					break;
-			}
-			break;
-
-
-		default:
-			if (state == normal && c == isqlGlob.global_Term[term_length] &&
-				// one-char terminator or the beginning also match
-				(isqlGlob.Termlen == 1u ||
-				 (valuable_count >= term_length &&
-				  strncmp(&statement[statement.length() - term_length],
-				  	isqlGlob.global_Term, term_length) == 0)))
-			{
-				c = 0;
-				done = true;
-				statement.resize(statement.length() - term_length);
+				lexer.reset();
+				Exit_value = FINI_ERROR;
+				return {{}, FAIL};
 			}
 		}
-
-		// Any non-space character is significant if not in comment
-		if (state != in_block_comment &&
-			state != in_single_line_comment &&
-			!fb_isspace(c) && c != EOF)
+		else
 		{
-			valuable_count++;
-			if (valuable_count == 1) // this is the first valuable char in stream
+			buffer += (char) c;
+
+			if (c == '\n' ||
+				(buffer.length() >= isqlGlob.Termlen &&
+					std::equal(buffer.end() - isqlGlob.Termlen, buffer.end(), term.begin())))
 			{
-				// ignore all previous crap
-				statement.resize(0);
-				non_comment_pos = 0;
+				lexer.appendBuffer(buffer);
+				buffer.clear();
+
+				const auto singleStatementVar = lexer.getSingleStatement(term);
+
+				if (const auto singleStatement = std::get_if<FrontendLexer::SingleStatement>(&singleStatementVar))
+					return {*singleStatement, CONT};
+				else if (const auto incompleteTokenError =
+							std::get_if<FrontendLexer::IncompleteTokenError>(&singleStatementVar))
+				{
+					prompt =
+						incompleteTokenError->insideComment ? "---> " :
+						lexer.isBufferEmpty() ? sql_prompt :
+						conPrompt;
+				}
 			}
 		}
-
-		statement += (lastChar = c);
 	}
 
-	// If this was a null statement, skip it
-	if (ret == CONT && statement.isEmpty())
-		ret = SKIP;
-
-	if (ret == CONT)
-		ret = frontend(statement.c_str());
-
-	if (ret == CONT)
-	{
-		// Place each non frontend statement in the temp file if we are reading
-		// from stdin.
-
-		Filelist->saveCommand(statement.c_str(), isqlGlob.global_Term);
-	}
-
-	return ret;
+	fb_assert(false);
+	return {{}, FOUND_EOF};
 }
 
 
@@ -5965,22 +6070,22 @@ void ISQL_get_version(bool call_by_create_db)
 		return;
 	}
 
-	const UCHAR* p = buffer;
-	while (*p != isc_info_end && *p != isc_info_truncated && p < buffer + sizeof(buffer))
+	for (Firebird::ClumpletReader p(Firebird::ClumpletReader::InfoResponse, buffer, sizeof(buffer)); !p.isEof(); p.moveNext())
 	{
-		const UCHAR item = (UCHAR) *p++;
-		const USHORT length = gds__vax_integer(p, sizeof(USHORT));
-		p += sizeof(USHORT);
+		UCHAR item = p.getClumpTag();
+		if (item == isc_info_end)
+			break;
+
 		switch (item)
 		{
 		case isc_info_ods_version:
-			isqlGlob.major_ods = gds__vax_integer(p, length);
+			isqlGlob.major_ods = p.getInt();
 			break;
 		case isc_info_ods_minor_version:
-			isqlGlob.minor_ods = gds__vax_integer(p, length);
+			isqlGlob.minor_ods = p.getInt();
 			break;
 		case isc_info_db_sql_dialect:
-			global_dialect_spoken = gds__vax_integer(p, length);
+			global_dialect_spoken = p.getInt();
 			if (isqlGlob.major_ods < ODS_VERSION10)
 			{
 				if (isqlGlob.SQL_dialect > SQL_DIALECT_V5 && setValues.Warnings)
@@ -6029,7 +6134,7 @@ void ISQL_get_version(bool call_by_create_db)
 		case isc_info_error:
 			// Error indicates an option was not understood by the
 			// remote server.
-			if (*p == isc_info_firebird_version)
+			if (p.getBytes()[0] == isc_info_firebird_version)
 			{
 				// must be an old or non Firebird server
 				break;
@@ -6075,8 +6180,8 @@ void ISQL_get_version(bool call_by_create_db)
 				// to put it all. It's a FULL or NOTHING answer. It grows with redirection.
 				// The command SHOW version that calls isc_version() will return more info.
 				isqlGlob.printf("Server version:%s", NEWLINE);
-				const UCHAR* q = p; // We don't want to spoil p with a wrong calculation.
-				const UCHAR* limit = q + length;
+				const UCHAR* q = p.getBytes(); // We don't want to spoil p with a wrong calculation.
+				const UCHAR* limit = q + p.getClumpLength();
 				for (int times = *q++; times && q < limit; --times)
 				{
 					int l = *q++;
@@ -6090,7 +6195,7 @@ void ISQL_get_version(bool call_by_create_db)
 			break;
 
 		case frb_info_att_charset:
-			isqlGlob.att_charset = gds__vax_integer(p, length);
+			isqlGlob.att_charset = p.getInt();
 			break;
 
 		default:
@@ -6098,7 +6203,6 @@ void ISQL_get_version(bool call_by_create_db)
 							item, NEWLINE);
 			break;
 		}
-		p += length;
 	}
 
 	if (isqlGlob.major_ods < ODS_VERSION8)
@@ -6267,6 +6371,7 @@ static processing_state print_sets()
  **************************************/
 
 	print_set("Print statistics:", setValues.Stats);
+	print_set("Print per-table stats:", setValues.PerTableStats);
 	print_set("Echo commands:", setValues.Echo);
 	print_set("List format:", setValues.List);
 	print_set("Show Row Count:", setValues.Docount);
@@ -6307,6 +6412,9 @@ static processing_state print_sets()
 			p = p->next;
 		}
 	}
+
+	print_set("Auto Term:", setValues.AutoTerm);
+
 	isqlGlob.printf("%-25s%s%s", "Terminator:", isqlGlob.global_Term, NEWLINE);
 
 	print_set("Time:", setValues.Time_display);
@@ -6316,6 +6424,20 @@ static processing_state print_sets()
 	print_set("Keep transaction params:", setValues.KeepTranParams);
 	if (setValues.KeepTranParams)
 		isqlGlob.printf("    %s%s", TranParams->c_str(), NEWLINE);
+	return SKIP;
+}
+
+
+static processing_state explain(const TEXT* command)
+{
+	Firebird::AutoSetRestore autoExplainCommand(&setValues.ExplainCommand, true);
+	Firebird::AutoSetRestore autoPlanonly(&setValues.Planonly, true);
+	Firebird::AutoSetRestore autoPlan(&setValues.Plan, true);
+	Firebird::AutoSetRestore autoExplainPlan(&setValues.ExplainPlan, true);
+	Firebird::AutoSetRestore autoSqldaDisplay(&setValues.Sqlda_display, false);
+
+	process_statement(command);
+
 	return SKIP;
 }
 
@@ -6342,6 +6464,7 @@ static processing_state help(const TEXT* what)
 		HLP_BLOBED,				// BLOBVIEW <blobid>		-- view BLOB in text editor
 		HLP_EDIT,				// EDIT	 [<filename>]		-- edit SQL script file and execute
 		HLP_EDIT2,				// EDIT						-- edit current command buffer and execute
+		HLP_EXPLAIN,			// EXPLAIN					-- explain a query access plan
 		HLP_HELP,				// HELP						-- display this menu
 		HLP_INPUT,				// INput	<filename>		-- take input from the named SQL file
 		HLP_OUTPUT,				// OUTput   [<filename>]	-- write output to named file
@@ -6364,6 +6487,7 @@ static processing_state help(const TEXT* what)
 		HLP_SETCOM,				//Set commands:
 		HLP_SET,				//	SET						-- display current SET options
 		HLP_SETAUTO,			//	SET AUTOddl				-- toggle autocommit of DDL statements
+		HLP_SETAUTOTERM,		//	SET AUTOTERM			-- toggle auto statement terminator with semicolon
 		HLP_SETBAIL,			//	SET BAIL				-- toggle bailing out on errors in non-interactive mode
 		HLP_SETBLOB,			//	SET BLOB [ALL|<n>]		-- display BLOBS of subtype <n> or ALL
 		HLP_SETBLOB2,			//	SET BLOB				-- turn off BLOB display
@@ -6372,8 +6496,10 @@ static processing_state help(const TEXT* what)
 		HLP_SETECHO,			//	SET ECHO				-- toggle command echo on/off
 		HLP_SETEXPLAIN,			//	SET EXPLAIN				-- toggle display of query plan in the explained form
 		HLP_SETHEADING,			//  SET HEADING 	        -- toggle column titles display on/off
+		HLP_SETKEEPTRAN,		//	SET KEEP_TRAN_params	-- toggle to keep or not to keep text of following successful SET TRANSACTION statement
 		HLP_SETLIST,			//	SET LIST				-- toggle column or table display format
 		HLP_SETNAMES,			//	SET NAMES <csname>		-- set name of runtime character set
+		HLP_SETPERTAB,			//	SET PER_TABle_stats		-- toggle display of detailed per-table statistics
 		HLP_SETPLAN,			//	SET PLAN				-- toggle display of query access plan
 		HLP_SETPLANONLY,		//	SET PLANONLY			-- toggle display of query plan without executing
 		HLP_SETSQLDIALECT,		//	SET SQL DIALECT <n>		-- set sql dialect to <n>
@@ -6441,7 +6567,7 @@ static bool printUser(const char* dbName)
 {
 	unsigned char info[] = {fb_info_username, fb_info_sqlrole};
 	unsigned char buffer[(1 + 2 + MAX_SQL_IDENTIFIER_SIZE) * 2 + 2];
-	Firebird::string login, role;
+	string login, role;
 
 	DB->getInfo(fbStatus, sizeof(info), info, sizeof(buffer), buffer);
 	if (failed())
@@ -6559,7 +6685,7 @@ static bool printUser(const char* dbName)
 		if (*v.nullInd)
 			continue;
 
-		Firebird::string txt;
+		string txt;
 		switch(v.type & ~1)
 		{
 		case SQL_TEXT:
@@ -6719,6 +6845,8 @@ static processing_state newdb(TEXT* dbname,
 		DB->cancelOperation(fbStatus, fb_cancel_disable);
 	} // scope
 
+	perTableStats->reset();
+
 	ISQL_get_version(false);
 
 	if (*local_sql_role)
@@ -6794,6 +6922,8 @@ static processing_state newdb(TEXT* dbname,
 		execSetDebugCommand();
 
 	global_Stmt = NULL;
+
+	check_autoterm();
 
 	return SKIP;
 }
@@ -7144,7 +7274,7 @@ static processing_state parse_arg(int argc, SCHAR** argv, SCHAR* tabname)
 			int swarg_int = 0;
 			char* swarg_str = NULL;
 
-			Firebird::string s2(s);
+			string s2(s);
 			Switches::in_sw_tab_t* option = switches.findSwitchMod(s2);
 			if (option)
 			{
@@ -7267,6 +7397,7 @@ static processing_state parse_arg(int argc, SCHAR** argv, SCHAR* tabname)
 					break;
 
 				case IN_SW_ISQL_TERM:
+					setValues.AutoTerm = false;
 					isqlGlob.Termlen = strlen(swarg_str);
 					if (isqlGlob.Termlen >= MAXTERM_SIZE) {
 						isqlGlob.Termlen = MAXTERM_SIZE - 1;
@@ -7406,6 +7537,10 @@ static processing_state parse_arg(int argc, SCHAR** argv, SCHAR* tabname)
 							requested_SQL_dialect = SQL_DIALECT_V6;
 						}
 					}
+					break;
+
+				case IN_SW_ISQL_AUTOTERM:
+					setValues.AutoTerm = true;
 					break;
 
 				case IN_SW_ISQL_HELP:
@@ -7619,7 +7754,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 					break;
 				}
 
-				Firebird::string str_buf;
+				string str_buf;
 				print_item_numeric(value, length, dscale, str_buf.getBuffer(length));
 				sprintf(p, "%s ", str_buf.c_str());
 				if (setValues.List)
@@ -8299,7 +8434,7 @@ static processing_state print_performance(const SINT64* perf_before)
 {
 	// Translation of report strings. Do not remove "static" modifier.
 	static bool have_report = false;
-	static Firebird::GlobalPtr<Firebird::string> diag;
+	static Firebird::GlobalPtr<string> diag;
 
 	SINT64 perf_after[ISQL_COUNTERS];
 	Firebird::UtilInterfacePtr()->getPerfCounters(fbStatus, DB, ISQL_COUNTERS_SET, perf_after);
@@ -8325,10 +8460,10 @@ static processing_state print_performance(const SINT64* perf_before)
 		// Buffers = !b\nReads = !r\nWrites = !w\nFetches = !f\n
 		diag->append(report_1);
 
-		Firebird::string::size_type p;
-		while ((p = diag->find('!')) != Firebird::string::npos)
+		string::size_type p;
+		while ((p = diag->find('!')) != string::npos)
 			diag->replace(p, 1, "%" SQUADFORMAT);
-		while ((p = diag->find('~')) != Firebird::string::npos)
+		while ((p = diag->find('~')) != string::npos)
 			diag->replace(p, 1, "%" SQUADFORMAT".%.3" SQUADFORMAT);
 
 		have_report = true;
@@ -8467,70 +8602,14 @@ static void process_plan()
 	if (!global_Stmt)
 		return;
 
-	// Bug 7565: A plan larger than plan_buffer will not be displayed
-	// Bug 7565: Note also that the plan must fit into Print_Buffer
+	const char* plan = global_Stmt->getPlan(fbStatus, setValues.ExplainPlan ? FB_TRUE : FB_FALSE);
+	if (ISQL_errmsg(fbStatus))
+		return;
 
-	UCHAR plan_info[1];
-	plan_info[0] = setValues.ExplainPlan ? isc_info_sql_explain_plan : isc_info_sql_get_plan;
+	ISQL_warning(fbStatus);
 
-	Firebird::HalfStaticArray<UCHAR, MAX_SSHORT> planBuffer;
-	unsigned planSize = MAX_SSHORT;
-	UCHAR* planPtr = planBuffer.getBuffer(planSize);
-
-	Firebird::string planString;
-
-	for (int i = 0; i < 2; ++i)
-	{
-		global_Stmt->getInfo(fbStatus, sizeof(plan_info), plan_info, planSize, planPtr);
-		if (ISQL_errmsg(fbStatus))
-			return;
-
-		bool truncated = false;
-
-		for (const UCHAR* ptr = planPtr; ptr < planPtr + planSize;)
-		{
-			const UCHAR tag = *ptr++;
-
-			switch (tag)
-			{
-			case isc_info_sql_get_plan:
-			case isc_info_sql_explain_plan:
-				{
-					const USHORT len = (USHORT) gds__vax_integer(ptr, sizeof(USHORT));
-					ptr += sizeof(USHORT);
-					planString.assign((const char*) ptr, len);
-					ptr += len;
-				}
-				break;
-			case isc_info_truncated:
-				truncated = true;
-				break;
-			case isc_info_end:
-				break;
-			default:
-				IUTILS_printf2(Diag, "Unknown error while retrieving plan%s", NEWLINE);
-				return;
-			}
-
-			if (tag == isc_info_end || tag == isc_info_truncated)
-				break;
-		}
-
-		if (truncated && i == 0 &&
-			// Probably FB 2.1 and before will crash with MAX_USHORT
-			ENCODE_ODS(isqlGlob.major_ods, isqlGlob.minor_ods) >= ODS_11_2)
-		{
-			planSize = MAX_USHORT;
-			planBuffer.resize(planSize);
-			planPtr = planBuffer.begin();
-			continue;
-		}
-
-		break;
-	}
-
-	if (planString.hasData())
-		IUTILS_printf2(Diag, "%s%s", planString.c_str(), NEWLINE);
+	if (plan != nullptr)
+		IUTILS_printf2(Diag, "%s%s", plan, NEWLINE);
 }
 
 
@@ -8549,7 +8628,7 @@ static void process_exec_path()
 		if (ISQL_errmsg(fbStatus))
 			return;
 
-		Firebird::string pathString;
+		string pathString;
 
 		for (const UCHAR* ptr = pathBuffer.begin(); ptr < pathBuffer.end();)
 		{
@@ -8668,8 +8747,8 @@ static unsigned process_message_display(Firebird::IMessageMetadata* message, uns
 		// Record the length of name and var, then convert to print
 		// length, later to be stored in pad array
 
-		unsigned data_length, disp_length, alignment;
-		data_length = disp_length = alignment = var.length;
+		unsigned disp_length, alignment;
+		disp_length = alignment = var.length;
 		unsigned namelength = IcuUtil::charLength(isqlGlob.att_charset,
 			static_cast<unsigned>(strlen(var.alias)), var.alias);
 
@@ -8727,7 +8806,6 @@ static unsigned process_message_display(Firebird::IMessageMetadata* message, uns
 			break;
 		case SQL_TEXT:
 			alignment = 1;
-			data_length++;
 			// OCTETS data is displayed in hex
 			if (charSet == CS_BINARY)
 				disp_length = 2 * var.length;
@@ -8737,7 +8815,6 @@ static unsigned process_message_display(Firebird::IMessageMetadata* message, uns
 				disp_length /= 4;
 			break;
 		case SQL_VARYING:
-			data_length += sizeof(USHORT) + 1;
 			alignment = sizeof(USHORT);
 			// OCTETS data is displayed in hex
 			if (charSet == CS_BINARY)
@@ -8804,7 +8881,7 @@ static unsigned process_message_display(Firebird::IMessageMetadata* message, uns
 }
 
 
-static processing_state process_statement(const TEXT* str2)
+static processing_state process_statement(const std::string& str)
 {
 /**************************************
  *
@@ -8870,6 +8947,9 @@ static processing_state process_statement(const TEXT* str2)
 		}
 	}
 
+	if (setValues.PerTableStats)
+		perTableStats->getStats(DB, true);
+
 	// Prepare the dynamic query stored in string.
 	// But put this on the DDL transaction to get maximum visibility of
 	// metadata.
@@ -8883,10 +8963,29 @@ static processing_state process_statement(const TEXT* str2)
 			return (SKIP);
 	}
 
-	global_Stmt = DB->prepare(fbStatus, prepare_trans, 0, str2, isqlGlob.SQL_dialect,
-		Firebird::IStatement::PREPARE_PREFETCH_METADATA);
+	unsigned flags = Firebird::IStatement::PREPARE_PREFETCH_METADATA;
+	if (setValues.Plan)
+	{
+		if (setValues.ExplainPlan)
+			flags |= Firebird::IStatement::PREPARE_PREFETCH_DETAILED_PLAN;
+		else
+			flags |= Firebird::IStatement::PREPARE_PREFETCH_LEGACY_PLAN;
+	}
+
+	if (setValues.AutoTerm)
+		flags |= IStatement::PREPARE_REQUIRE_SEMICOLON;
+
+	global_Stmt = DB->prepare(fbStatus, prepare_trans,
+		0, str.c_str(), isqlGlob.SQL_dialect, flags);
+
 	if (failed())
 	{
+		if (setValues.AutoTerm &&
+			fb_utils::containsErrorCode(fbStatus->getErrors(), isc_command_end_err2))
+		{
+			return TRUNCATED;
+		}
+
 		if (isqlGlob.SQL_dialect == SQL_DIALECT_V6_TRANSITION && Input_file)
 		{
 			isqlGlob.printf("%s%s%s%s%s%s",
@@ -8894,7 +8993,7 @@ static processing_state process_statement(const TEXT* str2)
 							"**** Error preparing statement:",
 							NEWLINE,
 							NEWLINE,
-							str2,
+							str.c_str(),
 							NEWLINE);
 		}
 		ISQL_errmsg(fbStatus);
@@ -8928,8 +9027,21 @@ static processing_state process_statement(const TEXT* str2)
 
 	// Find out what kind of statement this is
 	const unsigned statement_type = global_Stmt->getType(fbStatus);
-	if (!statement_type)
+	if (failed())
+	{
+		ISQL_errmsg(fbStatus);
 		return ps_ERR;
+	}
+	if (!statement_type)
+	{
+		TEXT msg[MSG_LENGTH];
+		IUTILS_msg_get(BAD_STMT_TYPE, msg);
+		// Statement type is not recognized
+		isqlGlob.printf("%s%s", msg, NEWLINE);
+		return ps_ERR;
+	}
+
+	ISQL_warning(fbStatus);
 
 	if (setValues.Sqlda_display)
 	{
@@ -8970,10 +9082,18 @@ static processing_state process_statement(const TEXT* str2)
 		statement_type != isc_info_sql_stmt_set_generator)
 	{
 		process_plan();
-		if (setValues.Planonly && !is_selectable)
+
+		if (setValues.ExplainCommand)
 		{
-			return ret;	// do not execute
+			if (setValues.Stats && (print_performance(perf_before) == ps_ERR))
+				ret = ps_ERR;
+
+			if (setValues.PerTableStats)
+				perTableStats->getStats(DB, false);
 		}
+
+		if (setValues.Planonly && (!is_selectable || setValues.ExplainCommand))
+			return ret;	// do not execute
 	}
 
 	if (setValues.ExecPathDisplay[0])
@@ -8990,7 +9110,7 @@ static processing_state process_statement(const TEXT* str2)
 			(statement_type == isc_info_sql_stmt_ddl ||
 			 statement_type == isc_info_sql_stmt_set_generator))
 		{
-			DB->execute(fbStatus, D__trans, 0, str2, isqlGlob.SQL_dialect, NULL, NULL, NULL, NULL);
+			DB->execute(fbStatus, D__trans, 0, str.c_str(), isqlGlob.SQL_dialect, NULL, NULL, NULL, NULL);
 			setValues.StmtTimeout = 0;
 			if (ISQL_errmsg(fbStatus))
 			{
@@ -9013,6 +9133,10 @@ static processing_state process_statement(const TEXT* str2)
 
 			if (setValues.Stats && (print_performance(perf_before) == ps_ERR))
 				ret = ps_ERR;
+
+			if (setValues.PerTableStats)
+				perTableStats->getStats(DB, false);
+
 			return ret;
 		}
 
@@ -9021,13 +9145,17 @@ static processing_state process_statement(const TEXT* str2)
 		if (statement_type == isc_info_sql_stmt_start_trans)
 		{
 			// CVC: Starting a txn can fail, too. Let's check it, although I
-			// suspect isql will catch it in frontend_set() through get_statement(),
+			// suspect isql will catch it in frontend_set() through StatementGetter,
 			// so this place has little chance to be reached.
-			if (newtrans(str2) == FAIL)
+			if (newtrans(str.c_str()) == FAIL)
 				return ps_ERR;
 
 			if (setValues.Stats && (print_performance(perf_before) == ps_ERR))
 				ret = ps_ERR;
+
+			if (setValues.PerTableStats)
+				perTableStats->getStats(DB, false);
+
 			return ret;
 		}
 
@@ -9071,6 +9199,10 @@ static processing_state process_statement(const TEXT* str2)
 
 		if (setValues.Stats && (print_performance(perf_before) == ps_ERR))
 			ret = ps_ERR;
+
+		if (setValues.PerTableStats)
+			perTableStats->getStats(DB, false);
+
 		return ret;
 	}
 
@@ -9263,6 +9395,9 @@ static processing_state process_statement(const TEXT* str2)
 	if (setValues.Stats && (print_performance(perf_before) == ps_ERR))
 		ret = ps_ERR;
 
+	if (setValues.PerTableStats)
+		perTableStats->getStats(DB, false);
+
 	if (pad)
 		ISQL_FREE(pad);
 	if (line)
@@ -9337,7 +9472,7 @@ static bool stdin_redirected()
 #ifdef WIN_NT
 	HANDLE in = GetStdHandle(STD_INPUT_HANDLE);
 	const DWORD file_type = GetFileType(in);
-	if (file_type == FILE_TYPE_CHAR || file_type == FILE_TYPE_PIPE)
+	if (file_type == FILE_TYPE_CHAR)
 		return false;
 #else
 	if (isatty(fileno(stdin)))
@@ -9460,11 +9595,11 @@ static const char* charset_to_string(unsigned charset)
  *	Return a more readable version of SQLDA.sqltype
  *
  **************************************/
-	static Firebird::GlobalPtr<Firebird::GenericMap<Firebird::Pair<Firebird::Right<unsigned, Firebird::string> > > > csMap;
+	static Firebird::GlobalPtr<Firebird::GenericMap<Firebird::Pair<Firebird::Right<unsigned, string> > > > csMap;
 
 	charset = TTYPE_TO_CHARSET(charset);
 
-	Firebird::string* text = csMap->get(charset);
+	string* text = csMap->get(charset);
 	if (text)
 		return text->c_str();
 
@@ -9499,4 +9634,264 @@ static const char* charset_to_string(unsigned charset)
 		return text->c_str();
 
 	return UNKNOWN;
+}
+
+
+/// class PerTableStats
+
+const unsigned char PerTableStats::m_items[] =
+{
+	isc_info_read_seq_count, isc_info_read_idx_count,
+	isc_info_insert_count, isc_info_update_count, isc_info_delete_count,
+	isc_info_backout_count, isc_info_purge_count, isc_info_expunge_count,
+	isc_info_end
+};
+
+const char* PerTableStats::m_itemNames[] =
+{
+	" Natural", " Index",
+	" Insert",  " Update", " Delete",
+	" Backout", " Purge",  " Expunge"
+};
+
+
+void PerTableStats::getStats(Firebird::IAttachment* att, bool initial)
+{
+	if (initial)
+		m_stat.clear();
+	else if (!m_initialized)
+		return;
+
+	Firebird::Array<unsigned char> buffer(*getDefaultMemoryPool(), 32 * 1024);
+	unsigned char* buff = buffer.begin();
+
+	att->getInfo(fbStatus, sizeof(m_items), m_items, buffer.getCapacity(), buff);
+
+	if (ISQL_errmsg(fbStatus))
+		return;
+
+	const unsigned char* p = buff;
+	const unsigned char* end = buff + buffer.getCapacity();
+	while (p < end)
+	{
+		StatItem item;
+
+		item.statId = *p++;
+		if (item.statId == isc_info_end)
+			break;
+
+		const FB_SIZE_T len = isc_portable_integer(p, 2);
+		p += 2;
+		const unsigned char* const end2 = p + len;
+		while (p < end2)
+		{
+			item.relId = isc_portable_integer(p, 2);
+			p += 2;
+			item.value = isc_portable_integer(p, 4);
+			p += 4;
+
+			if (initial)
+			{
+				if (item.value)
+					m_stat.add(item);
+			}
+			else
+			{
+				FB_SIZE_T pos;
+				if (m_stat.find(item, pos))
+				{
+					m_stat[pos].value = item.value - m_stat[pos].value;
+					if (m_stat[pos].value == 0)
+						m_stat.remove(pos);
+				}
+				else if (item.value)
+					m_stat.add(item);
+			}
+		}
+	}
+
+	if (!initial)
+	{
+		printStats(att);
+		m_stat.clear();
+	}
+	m_initialized = initial;
+}
+
+void PerTableStats::reset()
+{
+	m_relNames.clear();
+}
+
+void PerTableStats::printStats(Firebird::IAttachment* att)
+{
+	if (m_stat.isEmpty())
+		return;
+
+	unsigned maxTabLen = loadRelNames(att);
+
+	IUTILS_printf2(Diag, "Per table statistics:%s", NEWLINE);
+
+	string h;
+
+	unsigned lenTable = maxTabLen < 32 ? 32 : FB_ALIGN(maxTabLen, 4);
+	unsigned lenValue = 9;
+
+	h.append(lenTable, '-');
+	h.append(1, '+');
+
+	for (unsigned i = 0; i < ITEM_COUNT; i++)
+	{
+		h.append(lenValue, '-');
+		h.append(1, '+');
+	}
+
+	IUTILS_printf2(Diag, "%s%s", h.c_str(), NEWLINE);
+
+	string s;
+	s.printf("%-*s|", lenTable, " Table name");
+
+	for (unsigned i = 0; i < ITEM_COUNT; i++)
+	{
+		string l;
+		l.printf("%-*s|", lenValue, m_itemNames[i]);
+
+		s.append(l);
+	}
+	IUTILS_printf2(Diag, "%s%s", s.c_str(), NEWLINE);
+
+	s = h;
+	USHORT relId = MAX_USHORT;
+	FB_SIZE_T lenName;
+	for (const auto& item : m_stat)
+	{
+		if (relId != item.relId)
+		{
+			IUTILS_printf2(Diag, "%s%s", s.c_str(), NEWLINE);
+
+			relId = item.relId;
+
+			if (string* relName = m_relNames.get(relId))
+			{
+				IcuUtil::pad(s.getBuffer(lenTable * 4 + 1), isqlGlob.att_charset,
+							 relName->length(), relName->c_str(),
+							 lenTable, false);
+				s.recalculate_length();
+				lenName = s.length();
+				s += '|';
+			}
+			else
+				s.printf("%-*d|", lenTable, item.relId);
+
+			for (unsigned i = 0; i < ITEM_COUNT; i++)
+			{
+				s.append(lenValue, ' ');
+				s.append(1, '|');
+			}
+		}
+
+		for (unsigned i = 0; i < FB_NELEM(m_items) - 1; i++)
+		{
+			if (m_items[i] == item.statId)
+			{
+				string v;
+				v.printf("%*" UQUADFORMAT, lenValue, item.value);
+
+				FB_SIZE_T pos = lenName + 1 + (lenValue + 1) * i;
+				pos += lenValue - v.length();
+				s.replace(pos, v.length(), v.begin(), v.length());
+			}
+		}
+	}
+
+	if (relId)
+	{
+		IUTILS_printf2(Diag, "%s%s", s.c_str(), NEWLINE);
+		IUTILS_printf2(Diag, "%s%s", h.c_str(), NEWLINE);
+	}
+}
+
+unsigned PerTableStats::loadRelNames(Firebird::IAttachment* att)
+{
+	string sIds;
+
+	unsigned maxLen = 0;
+	USHORT relId = MAX_USHORT;
+	for (StatItem* item = m_stat.begin(); item < m_stat.end(); item++)
+	{
+		if (relId == item->relId)
+			continue;
+
+		relId = item->relId;
+
+		if (m_relNames.exist(relId))
+		{
+			const auto str = m_relNames.get(relId);
+			const unsigned len = IcuUtil::charLength(isqlGlob.att_charset, str->length(), str->c_str());
+			if (maxLen < len)
+				maxLen = len;
+
+			continue;
+		}
+
+		string s;
+		s.printf("%u", relId);
+
+		if (!sIds.isEmpty())
+			sIds.append(", ");
+		sIds.append(s);
+	}
+
+	if (sIds.isEmpty())
+		return maxLen;
+
+	if (!frontendTransaction())
+		return maxLen; // ?
+
+	string sql;
+	sql.printf("SELECT RDB$RELATION_ID, RDB$RELATION_NAME FROM RDB$RELATIONS WHERE RDB$RELATION_ID IN (%s)",
+				sIds.c_str());
+
+	Firebird::IResultSet* rs = att->openCursor(fbStatus, fbTrans,
+		sql.length(), sql.c_str(), SQL_DIALECT_CURRENT,
+		NULL, NULL, NULL, NULL,
+		Firebird::IStatement::PREPARE_PREFETCH_METADATA);
+
+	Firebird::IMessageMetadata* outMeta = rs->getMetadata(fbStatus);
+
+	unsigned msgLen = outMeta->getMessageLength(fbStatus);
+	Firebird::HalfStaticArray<char, 512> buff(msgLen);
+
+	char* msg = buff.getBuffer(msgLen);
+
+	if (outMeta->getType(fbStatus, 0) != SQL_SHORT)
+		return maxLen;
+	if (outMeta->getType(fbStatus, 1) != SQL_TEXT)
+		return maxLen;
+
+	SSHORT* pRelID = (SSHORT*) (msg + outMeta->getOffset(fbStatus, 0));
+	SSHORT* pRelID_Null = (SSHORT*)(msg + outMeta->getNullOffset(fbStatus, 0));
+
+	char* pRelName = msg + outMeta->getOffset(fbStatus, 1);
+	SSHORT* pRelName_Null = (SSHORT*)(msg + outMeta->getNullOffset(fbStatus, 1));
+	const unsigned relNameSize = outMeta->getLength(fbStatus, 1);
+
+	while (rs->fetchNext(fbStatus, msg) != Firebird::IStatus::RESULT_NO_DATA)
+	{
+		if (*pRelID_Null == FB_TRUE || *pRelName_Null == FB_TRUE)
+			continue;
+
+		pRelName[relNameSize] = 0;
+		char* name = fb_utils::exact_name(pRelName);
+		const unsigned len = IcuUtil::charLength(isqlGlob.att_charset, strlen(name), pRelName);
+		if (maxLen < len)
+			maxLen = len;
+
+		m_relNames.put(*pRelID, name);
+	}
+
+	outMeta->release();
+	rs->release();
+
+	return maxLen;
 }

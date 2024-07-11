@@ -46,6 +46,7 @@
 #include "firebird/Interface.h"
 
 #include <type_traits>	// std::is_unsigned
+#include <atomic>
 
 #ifndef WIN_NT
 #include <signal.h>
@@ -177,13 +178,13 @@ private:
 	ThreadId		rdb_async_thread_id;	// Id of async thread (when active)
 
 public:
-	Firebird::Mutex	rdb_async_lock;			// Sync to avoid 2 async calls at once
+	std::atomic<int> rdb_async_lock;		// Atomic to avoid >1 async calls at once
 
 public:
 	Rdb() :
 		rdb_iface(NULL), rdb_port(0),
 		rdb_transactions(0), rdb_requests(0), rdb_events(0), rdb_sql_requests(0),
-		rdb_id(0), rdb_async_thread_id(0)
+		rdb_id(0), rdb_async_thread_id(0), rdb_async_lock(0)
 	{
 	}
 
@@ -414,8 +415,8 @@ public:
 
 	static ISC_STATUS badHandle() { return isc_bad_req_handle; }
 
-	void saveStatus(const Firebird::Exception& ex) throw();
-	void saveStatus(Firebird::IStatus* ex) throw();
+	void saveStatus(const Firebird::Exception& ex) noexcept;
+	void saveStatus(Firebird::IStatus* ex) noexcept;
 };
 
 
@@ -711,6 +712,7 @@ public:
 	virtual void wakeup(unsigned int length, const void* data) = 0;
 	virtual Firebird::ICryptKeyCallback* getInterface() = 0;
 	virtual void stop() = 0;
+	virtual void destroy() = 0;
 };
 
 // CryptKey implementation
@@ -858,21 +860,76 @@ private:
 	unsigned nextKey;							// First key to be analyzed
 
 	class ClientCrypt final :
-		public Firebird::VersionedIface<Firebird::ICryptKeyCallbackImpl<ClientCrypt, Firebird::CheckStatusWrapper> >
+		public Firebird::VersionedIface<Firebird::ICryptKeyCallbackImpl<ClientCrypt, Firebird::CheckStatusWrapper> >,
+		public Firebird::GlobalStorage
 	{
 	public:
 		ClientCrypt()
-			: pluginItr(Firebird::IPluginManager::TYPE_KEY_HOLDER, "NoDefault"), currentIface(nullptr)
+			: pluginItr(Firebird::IPluginManager::TYPE_KEY_HOLDER, "NoDefault"),
+			  currentIface(nullptr), afterIface(nullptr),
+			  triedPlugins(getPool())
 		{ }
+
+		~ClientCrypt()
+		{
+			destroy();
+		}
 
 		Firebird::ICryptKeyCallback* create(const Firebird::Config* conf);
 
 		// Firebird::ICryptKeyCallback implementation
 		unsigned callback(unsigned dataLength, const void* data, unsigned bufferLength, void* buffer);
+		unsigned afterAttach(Firebird::CheckStatusWrapper* st, const char* dbName, const Firebird::IStatus* attStatus);
+		void destroy();
 
-	private:
-		Firebird::GetPlugins<Firebird::IKeyHolderPlugin> pluginItr;
-		Firebird::ICryptKeyCallback* currentIface;
+ 	private:
+		typedef Firebird::GetPlugins<Firebird::IKeyHolderPlugin> KeyHolderItr;
+		KeyHolderItr pluginItr;
+ 		Firebird::ICryptKeyCallback* currentIface;
+		Firebird::ICryptKeyCallback* afterIface;
+
+		class TriedPlugins
+		{
+			typedef Firebird::Pair<Firebird::Left<Firebird::PathName, Firebird::IKeyHolderPlugin*> > TriedPlugin;
+			Firebird::ObjectsArray<TriedPlugin> data;
+
+		public:
+			TriedPlugins(MemoryPool& p)
+				: data(p)
+			{ }
+
+			void add(KeyHolderItr& itr)
+			{
+				for (auto& p : data)
+				{
+					if (p.first == itr.name())
+					return;
+				}
+
+				TriedPlugin tp(itr.name(), itr.plugin());
+				data.add(tp);
+				tp.second->addRef();
+			}
+
+			void remove()
+			{
+				fb_assert(data.hasData());
+				data[0].second->release();
+				data.remove(0);
+			}
+
+			bool hasData() const
+			{
+				return data.hasData();
+			}
+
+			Firebird::IKeyHolderPlugin* get()
+			{
+				return data[0].second;
+			}
+		};
+
+		TriedPlugins triedPlugins;
 	};
 	ClientCrypt clientCrypt;
 	Firebird::ICryptKeyCallback** createdInterface;
@@ -1490,26 +1547,31 @@ class PortsCleanup
 public:
 	PortsCleanup() :
 	  m_ports(NULL),
-	  m_mutex()
+	  m_mutex(),
+	  closing(false)
 	{}
 
 	explicit PortsCleanup(MemoryPool&) :
 	  m_ports(NULL),
-	  m_mutex()
+	  m_mutex(),
+	  closing(false)
 	{}
 
-	~PortsCleanup()
+	virtual ~PortsCleanup()
 	{}
 
 	void registerPort(rem_port*);
 	void unRegisterPort(rem_port*);
 
 	void closePorts();
+	virtual void closePort(rem_port*);
+	virtual void delay();
 
 private:
 	typedef Firebird::SortedArray<rem_port*> PortsArray;
 	PortsArray*		m_ports;
 	Firebird::Mutex	m_mutex;
+	bool closing;
 };
 
 #endif // REMOTE_REMOTE_H

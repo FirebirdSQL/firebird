@@ -25,6 +25,7 @@
  */
 
 #include "../interfaces/ifaceExamples.h"
+#include <atomic>
 
 using namespace Firebird;
 
@@ -67,7 +68,7 @@ private:
 class DbCrypt : public IDbCryptPluginImpl<DbCrypt, CheckStatusWrapper>
 {
 public:
-	explicit DbCrypt(IPluginConfig* cnf) throw()
+	explicit DbCrypt(IPluginConfig* cnf) noexcept
 		: config(cnf), key(0), refCounter(0), owner(NULL)
 	{
 		config->addRef();
@@ -121,7 +122,7 @@ private:
 	char savedKeyName[32];
 	ISC_UCHAR key;
 
-	FbSampleAtomic refCounter;
+	std::atomic_int refCounter;
 	IReferenceCounted* owner;
 
 	void noKeyError(CheckStatusWrapper* status);

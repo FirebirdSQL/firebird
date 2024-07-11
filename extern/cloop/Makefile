@@ -61,10 +61,14 @@ $1/%.o: %.cpp | $1
 	$(CXX) -c $$(CXX_FLAGS) $$< -o $$@
 endef
 
-.PHONY: all mkdirs clean
+.PHONY: all core mkdirs clean
 
-all: mkdirs \
-	$(BIN_DIR)/cloop	\
+all: core tests
+
+core: mkdirs \
+	$(BIN_DIR)/cloop
+
+tests: mkdirs	\
 	$(BIN_DIR)/test1-c$(SHRLIB_EXT)	\
 	$(BIN_DIR)/test1-c$(EXE_EXT)	\
 	$(BIN_DIR)/test1-cpp$(SHRLIB_EXT)	\
@@ -94,7 +98,7 @@ $(BIN_DIR)/cloop: \
 	$(OBJ_DIR)/cloop/Main.o \
 	| $(BIN_DIR)
 
-	$(LD) $^ -o $@ $(LIBS)
+	$(LD) $(LD_FLAGS) $^ -o $@ $(LIBS)
 
 $(SRC_DIR)/tests/test1/CalcCApi.h: $(BIN_DIR)/cloop $(SRC_DIR)/tests/test1/Interface.idl
 	$(BIN_DIR)/cloop $(SRC_DIR)/tests/test1/Interface.idl c-header $@ CALC_C_API_H CALC_I
@@ -121,23 +125,23 @@ $(BIN_DIR)/test1-c$(SHRLIB_EXT): \
 	$(OBJ_DIR)/tests/test1/CalcCApi.o \
 	$(OBJ_DIR)/tests/test1/CTest.o \
 
-	$(LD) $^ -shared $(DL_LIB) -o $@ $(LIBS)
+	$(LD) $(LD_FLAGS) $^ -shared $(DL_LIB) -o $@ $(LIBS)
 
 $(BIN_DIR)/test1-c$(EXE_EXT): \
 	$(OBJ_DIR)/tests/test1/CalcCApi.o \
 	$(OBJ_DIR)/tests/test1/CTest.o \
 
-	$(LD) $^ $(DL_LIB) -o $@ $(LIBS)
+	$(LD) $(LD_FLAGS) $^ $(DL_LIB) -o $@ $(LIBS)
 
 $(BIN_DIR)/test1-cpp$(SHRLIB_EXT): \
 	$(OBJ_DIR)/tests/test1/CppTest.o \
 
-	$(LD) $^ -shared $(DL_LIB) -o $@ $(LIBS)
+	$(LD) $(LD_FLAGS) $^ -shared $(DL_LIB) -o $@ $(LIBS)
 
 $(BIN_DIR)/test1-cpp$(EXE_EXT): \
 	$(OBJ_DIR)/tests/test1/CppTest.o \
 
-	$(LD) $^ $(DL_LIB) -o $@ $(LIBS)
+	$(LD) $(LD_FLAGS) $^ $(DL_LIB) -o $@ $(LIBS)
 
 $(BIN_DIR)/test1-pascal$(SHRLIB_EXT): \
 	$(SRC_DIR)/tests/test1/PascalClasses.pas \

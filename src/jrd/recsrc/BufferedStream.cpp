@@ -40,11 +40,14 @@ using namespace Jrd;
 // --------------------------
 
 BufferedStream::BufferedStream(CompilerScratch* csb, RecordSource* next)
-	: m_next(next), m_map(csb->csb_pool)
+	: BaseBufferedStream(csb),
+	  m_next(next),
+	  m_map(csb->csb_pool)
 {
 	fb_assert(m_next);
 
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = next->getCardinality();
 
 	StreamList streams;
 	m_next->findUsedStreams(streams);
@@ -112,7 +115,7 @@ BufferedStream::BufferedStream(CompilerScratch* csb, RecordSource* next)
 	m_format = format;
 }
 
-void BufferedStream::open(thread_db* tdbb) const
+void BufferedStream::internalOpen(thread_db* tdbb) const
 {
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -147,7 +150,7 @@ void BufferedStream::close(thread_db* tdbb) const
 	}
 }
 
-bool BufferedStream::getRecord(thread_db* tdbb) const
+bool BufferedStream::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -306,22 +309,30 @@ bool BufferedStream::refetchRecord(thread_db* tdbb) const
 	return m_next->refetchRecord(tdbb);
 }
 
-bool BufferedStream::lockRecord(thread_db* tdbb) const
+WriteLockResult BufferedStream::lockRecord(thread_db* tdbb) const
 {
 	return m_next->lockRecord(tdbb);
 }
 
-void BufferedStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void BufferedStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	if (detailed)
-	{
-		string extras;
-		extras.printf(" (record length: %" ULONGFORMAT")", m_format->fmt_length);
+	m_next->getLegacyPlan(tdbb, plan, level);
+}
 
-		plan += printIndent(++level) + "Record Buffer" + extras;
-	}
+void BufferedStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
+{
+	planEntry.className = "BufferedStream";
 
-	m_next->print(tdbb, plan, detailed, level);
+	string extras;
+	extras.printf(" (record length: %" ULONGFORMAT")", m_format->fmt_length);
+
+	planEntry.lines.add().text = "Record Buffer" + extras;
+	printOptInfo(planEntry.lines);
+
+	planEntry.recordLength = m_format->fmt_length;
+
+	if (recurse)
+		m_next->getPlan(tdbb, planEntry.children.add(), ++level, recurse);
 }
 
 void BufferedStream::markRecursive()

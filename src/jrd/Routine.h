@@ -28,7 +28,6 @@
 #include "../jrd/QualifiedName.h"
 #include "../common/classes/NestConst.h"
 #include "../common/MsgMetadata.h"
-#include "../common/classes/Nullable.h"
 
 namespace Jrd
 {

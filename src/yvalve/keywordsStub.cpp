@@ -32,6 +32,15 @@
 
 #include "keywordsStub.h"
 
+#define PARSER_TOKEN(ident, str, nonReserved) \
+	{MAX_USHORT, str, nonReserved},
+
+static const Token tokens[] =
+{
+#include "../common/ParserTokens.h"
+	{0, NULL, false}
+};
+
 // This method is currently used in isql/isql.epp to check if a
 // user field is a reserved word, and hence needs to be quoted.
 // Obviously a hash table would make this a little quicker.
@@ -41,21 +50,22 @@ extern "C" {
 
 int API_ROUTINE KEYWORD_stringIsAToken(const char* in_str)
 {
-	for (const TOK* tok_ptr = keywordGetTokens(); tok_ptr->tok_string; ++tok_ptr)
+	for (auto token = tokens; token->tok_string; ++token)
 	{
-		if (!tok_ptr->nonReserved && !strcmp(tok_ptr->tok_string, in_str))
+		if (!token->nonReserved && !strcmp(token->tok_string, in_str))
 			return true;
 	}
 
 	return false;
 }
 
-Tokens API_ROUTINE KEYWORD_getTokens()
+ConstTokenPtr API_ROUTINE KEYWORD_getTokens()
 {
 	// This function should not be used but appeared in FB3.
-	// As long as we keep TOK structure as is we may have it deprecated.
+	// As long as we keep Token structure as is we may have it deprecated.
 	// Later sooner of all it will be removed at all.
-	return keywordGetTokens();
+	// ASF: The tokens will be returned with all tok_ident set to MAX_USHORT.
+	return tokens;
 }
 
 }

@@ -59,19 +59,6 @@ namespace
 
 	const char* const ALIAS_FILE = "databases.conf";
 
-	void replace_dir_sep(PathName& s)
-	{
-		const char correct_dir_sep = PathUtils::dir_sep;
-		const char incorrect_dir_sep = (correct_dir_sep == '/') ? '\\' : '/';
-		for (char* itr = s.begin(); itr < s.end(); ++itr)
-		{
-			if (*itr == incorrect_dir_sep)
-			{
-				*itr = correct_dir_sep;
-			}
-		}
-	}
-
 	struct CalcHash
 	{
 		static FB_SIZE_T chash(FB_SIZE_T sum, FB_SIZE_T hashSize)
@@ -291,11 +278,11 @@ namespace
 				const ConfigFile::Parameter* par = &params[n];
 
 				PathName file(par->value.ToPathName());
-				replace_dir_sep(file);
-				if (PathUtils::isRelative(file))
+				PathUtils::fixupSeparators(file);
+				if (PathUtils::isRelative(file) && !ISC_check_if_remote(file, false))
 				{
 					gds__log("Value %s configured for alias %s "
-						"is not a fully qualified path name, ignored",
+						"is not a fully qualified path name nor remote server reference, ignored",
 								file.c_str(), par->name.c_str());
 					continue;
 				}
@@ -343,7 +330,7 @@ namespace
 				}
 
 				PathName correctedAlias(par->name.ToPathName());
-				replace_dir_sep(correctedAlias);
+				PathUtils::fixupSeparators(correctedAlias);
 				AliasName* alias = aliasHash.lookup(correctedAlias);
 				if (alias)
 				{
@@ -423,12 +410,12 @@ static inline bool hasSeparator(const PathName& name)
 	return false;
 }
 
-// Search for 'alias' in databases.conf, return its value in 'file' if found. Else set file to alias.
+// Search for 'alias' in databases.conf, return its value in 'file' if found.
 // Returns true if alias is found in databases.conf.
-static bool resolveAlias(const PathName& alias, PathName& file, RefPtr<const Config>* config)
+bool resolveAlias(const PathName& alias, PathName& file, RefPtr<const Config>* config)
 {
 	PathName correctedAlias = alias;
-	replace_dir_sep(correctedAlias);
+	PathUtils::fixupSeparators(correctedAlias);
 
 	AliasName* a = aliasesConf().aliasHash.lookup(correctedAlias);
 	DbName* db = a ? a->database : NULL;
@@ -557,7 +544,12 @@ bool expandDatabaseName(Firebird::PathName alias,
 			{
 				Id* i = aliasesConf().idHash.lookup(id);
 				if (i)
-					db = i->db;
+				{
+					UCharBuffer oldId;
+					os_utils::getUniqueFileId(i->db->name.c_str(), oldId);
+					if (oldId == id)	// Yes, that's really same file, and we should use same config
+						db = i->db;
+				}
 			}
 		}
 #endif

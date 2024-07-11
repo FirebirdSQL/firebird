@@ -35,13 +35,23 @@ void	ISQL_array_dimensions(const TEXT*);
 bool	ISQL_dbcheck();
 void	ISQL_disconnect_database(bool);
 bool	ISQL_errmsg(Firebird::IStatus*);
-void	ISQL_warning(ISC_STATUS*);
+void	ISQL_warning(Firebird::IStatus*);
 void	ISQL_exit_db();
 // CVC: Not found.
 //int		ISQL_extract(TEXT*, int, FILE*, FILE*, FILE*);
 int		ISQL_frontend_command(TEXT*, FILE*, FILE*, FILE*);
 bool	ISQL_get_base_column_null_flag(const TEXT*, const SSHORT, const TEXT*);
-void	ISQL_get_character_sets(SSHORT, SSHORT, bool, bool, bool, TEXT*);
+// Shall become obsolete when collation become a part of data type as in SQL standard
+enum class Get
+{
+	CHARSET_ONLY,
+	COLLATE_ONLY,
+	BOTH
+};
+void	ISQL_get_character_sets(
+	SSHORT char_set_id, SSHORT collation,
+	SSHORT default_char_set_id, Get what,
+	bool not_null, bool quote, TEXT* string);
 SSHORT	ISQL_get_default_char_set_id();
 void	ISQL_get_default_source(const TEXT*, TEXT*, ISC_QUAD*);
 SSHORT	ISQL_get_field_length(const TEXT*);

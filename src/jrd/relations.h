@@ -100,6 +100,8 @@ RELATION(nam_indices, rel_indices, ODS_8_0, rel_persistent)
 	FIELD(f_idx_exp_source, nam_exp_source, fld_source, 1, ODS_8_0)
 	FIELD(f_idx_statistics, nam_statistics, fld_statistics, 1, ODS_8_0)
 	FIELD(f_idx_ts_name, nam_ts_name, fld_ts_name, 1, ODS_14_0)
+	FIELD(f_idx_cond_blr, nam_cond_blr, fld_value, 1, ODS_13_1)
+	FIELD(f_idx_cond_source, nam_cond_source, fld_source, 1, ODS_13_1)
 END_RELATION
 
 // Relation 5 (RDB$RELATION_FIELDS)
@@ -535,6 +537,7 @@ RELATION(nam_mon_attachments, rel_mon_attachments, ODS_11_1, rel_virtual)
 	FIELD(f_mon_att_wire_encrypted, nam_wire_encrypted, fld_bool, 0, ODS_13_0)
 	FIELD(f_mon_att_remote_crypt, nam_wire_crypt_plugin, fld_remote_crypt, 0, ODS_13_0)
 	FIELD(f_mon_att_session_tz, nam_mon_session_tz, fld_tz_name, 0, ODS_13_1)
+	FIELD(f_mon_att_par_workers, nam_par_workers, fld_par_workers, 0, ODS_13_1)
 END_RELATION
 
 // Relation 35 (MON$TRANSACTIONS)
@@ -690,6 +693,7 @@ RELATION(nam_sec_global_auth_mapping, rel_global_auth_mapping, ODS_12_0, rel_vir
 	FIELD(f_sec_map_from, nam_sec_map_from, fld_map_from, 0, ODS_12_0)
 	FIELD(f_sec_map_to_type, nam_sec_map_to_type, fld_obj_type, 0, ODS_12_0)
 	FIELD(f_sec_map_to, nam_sec_map_to, fld_map_to, 0, ODS_12_0)
+	FIELD(f_sec_map_comment, nam_sec_description, fld_description, 0, ODS_13_1)
 END_RELATION
 
 // Relation 47 (RDB$DB_CREATORS)
@@ -757,6 +761,7 @@ RELATION(nam_mon_compiled_statements, rel_mon_compiled_statements, ODS_13_1, rel
 	FIELD(f_mon_cmp_stmt_name, nam_mon_obj_name, fld_gnr_name, 0, ODS_13_1)
 	FIELD(f_mon_cmp_stmt_type, nam_mon_obj_type, fld_obj_type, 0, ODS_13_1)
 	FIELD(f_mon_cmp_stmt_pkg_name, nam_mon_pkg_name, fld_pkg_name, 0, ODS_13_1)
+	FIELD(f_mon_cmp_stmt_stat_id, nam_mon_stat_id, fld_stat_id, 0, ODS_13_1)
 END_RELATION
 
 // Relation 56 (RDB$TABLESPACES)

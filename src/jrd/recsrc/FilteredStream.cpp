@@ -25,6 +25,7 @@
 #include "../jrd/evl_proto.h"
 #include "../jrd/mov_proto.h"
 #include "../jrd/evl_proto.h"
+#include "../jrd/optimizer/Optimizer.h"
 
 #include "RecordSource.h"
 
@@ -35,23 +36,36 @@ using namespace Jrd;
 // Data access: predicate driven filter
 // ------------------------------------
 
-FilteredStream::FilteredStream(CompilerScratch* csb, RecordSource* next, BoolExprNode* boolean)
-	: m_next(next), m_boolean(boolean), m_anyBoolean(NULL),
-	  m_ansiAny(false), m_ansiAll(false), m_ansiNot(false)
+FilteredStream::FilteredStream(CompilerScratch* csb, RecordSource* next,
+							   BoolExprNode* boolean, double selectivity)
+	: RecordSource(csb),
+	  m_next(next),
+	  m_boolean(boolean),
+	  m_anyBoolean(NULL),
+	  m_ansiAny(false),
+	  m_ansiAll(false),
+	  m_ansiNot(false)
 {
 	fb_assert(m_next && m_boolean);
 
 	m_impure = csb->allocImpure<Impure>();
+
+	const auto cardinality = next->getCardinality();
+	Optimizer::adjustSelectivity(selectivity, MAXIMUM_SELECTIVITY, cardinality);
+	m_cardinality = cardinality * selectivity;
 }
 
-void FilteredStream::open(thread_db* tdbb) const
+void FilteredStream::internalOpen(thread_db* tdbb) const
 {
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
-	impure->irsb_flags = irsb_open;
+	if (!m_invariant || m_boolean->execute(tdbb, request))
+	{
+		impure->irsb_flags = irsb_open;
 
-	m_next->open(tdbb);
+		m_next->open(tdbb);
+	}
 }
 
 void FilteredStream::close(thread_db* tdbb) const
@@ -70,7 +84,7 @@ void FilteredStream::close(thread_db* tdbb) const
 	}
 }
 
-bool FilteredStream::getRecord(thread_db* tdbb) const
+bool FilteredStream::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -97,17 +111,29 @@ bool FilteredStream::refetchRecord(thread_db* tdbb) const
 		m_boolean->execute(tdbb, request);
 }
 
-bool FilteredStream::lockRecord(thread_db* tdbb) const
+WriteLockResult FilteredStream::lockRecord(thread_db* tdbb) const
 {
 	return m_next->lockRecord(tdbb);
 }
 
-void FilteredStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void FilteredStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	if (detailed)
-		plan += printIndent(++level) + "Filter";
+	m_next->getLegacyPlan(tdbb, plan, level);
+}
 
-	m_next->print(tdbb, plan, detailed, level);
+void FilteredStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
+{
+	planEntry.className = "FilteredStream";
+
+	planEntry.lines.add().text = "Filter";
+
+	if (m_invariant)
+		planEntry.lines.back().text += " (preliminary)";
+
+	printOptInfo(planEntry.lines);
+
+	if (recurse)
+		m_next->getPlan(tdbb, planEntry.children.add(), ++level, recurse);
 }
 
 void FilteredStream::markRecursive()

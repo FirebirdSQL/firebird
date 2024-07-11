@@ -49,6 +49,7 @@
 
 #include <stdlib.h>
 #include <time.h>
+#include <atomic>
 
 using namespace Firebird;
 using namespace Replication;
@@ -80,15 +81,17 @@ namespace
 			char host[BUFFER_LARGE];
 			ISC_get_host(host, sizeof(host));
 			m_hostname = host;
+			m_error = false;
 #ifdef WIN_NT
-			m_mutex = CreateMutex(NULL, FALSE, "firebird_repl_mutex");
+			m_mutex = CreateMutex(ISC_get_security_desc(), FALSE, "firebird_repl_mutex");
 #endif
 		}
 
 		~LogWriter()
 		{
 #ifdef WIN_NT
-			CloseHandle(m_mutex);
+			if (m_mutex != INVALID_HANDLE_VALUE)
+				CloseHandle(m_mutex);
 #endif
 		}
 
@@ -107,6 +110,9 @@ namespace
 					return;
 				}
 
+				if (m_error)
+					m_error = false;
+
 				string dbname, text;
 
 				if (database.hasData())
@@ -121,25 +127,34 @@ namespace
 				fclose(file);
 				unlock();
 			}
+			else if (!m_error && !m_error.exchange(true))
+			{
+				gds__log("Failed to open log file \'%s\', errno %d",
+					m_filename.c_str(), errno);
+			}
 		}
 
 	private:
 		bool lock(FILE* file)
 		{
+			const bool ret =
 #ifdef WIN_NT
-			return (WaitForSingleObject(m_mutex, INFINITE) == WAIT_OBJECT_0);
+				(WaitForSingleObject(m_mutex, INFINITE) == WAIT_OBJECT_0);
 #else
 #ifdef HAVE_FLOCK
-			if (flock(fileno(file), LOCK_EX))
+				flock(fileno(file), LOCK_EX) == 0;
 #else
-			if (os_utils::lockf(fileno(file), F_LOCK, 0))
+				os_utils::lockf(fileno(file), F_LOCK, 0) == 0;
 #endif
+#endif
+
+			if (!ret && !m_error && !m_error.exchange(true))
 			{
-				return false;
+				gds__log("Failed to lock log file \'%s\', error %d",
+					m_filename.c_str(), ERRNO);
 			}
 
-			return true;
-#endif
+			return ret;
 		}
 
 		void unlock()
@@ -154,6 +169,8 @@ namespace
 #ifdef WIN_NT
 		HANDLE m_mutex;
 #endif
+		// used to not pollute firebird.log with too many messages
+		std::atomic_bool m_error;
 	};
 
 	void logMessage(LogMsgSide side, LogMsgType type,

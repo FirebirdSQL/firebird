@@ -1,10 +1,8 @@
 @echo off
 
 :: Set env vars
-@call setenvvar.bat
+@call setenvvar.bat %*
 @if errorlevel 1 (goto :EOF)
-
-@call set_build_target.bat %*
 
 :: verify that boot was run before
 @if not exist %FB_BIN_DIR%\isql.exe (goto :HELP_BOOT & goto :EOF)
@@ -131,9 +129,9 @@ copy %FB_ROOT_PATH%\examples\package\* %FB_OUTPUT_DIR%\examples\package > nul
 copy %FB_ROOT_PATH%\examples\stat\* %FB_OUTPUT_DIR%\examples\stat > nul
 copy %FB_ROOT_PATH%\examples\udf\* %FB_OUTPUT_DIR%\examples\udf > nul
 copy %FB_ROOT_PATH%\examples\udr\* %FB_OUTPUT_DIR%\examples\udr > nul
-copy %FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\firebird\plugins\udr\*.dll %FB_OUTPUT_DIR%\plugins\udr >nul
 copy %FB_ROOT_PATH%\examples\prebuilt\%FB_OBJ_DIR%\bin\*.exe %FB_OUTPUT_DIR%\examples\prebuilt\bin > nul
 copy %FB_ROOT_PATH%\examples\prebuilt\%FB_OBJ_DIR%\plugins\*.dll %FB_OUTPUT_DIR%\examples\prebuilt\plugins > nul
+copy %FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\firebird\plugins\udr\*.dll %FB_OUTPUT_DIR%\plugins\udr >nul
 
 ::@copy %FB_GEN_DIR%\examples\empbuild.cpp %FB_OUTPUT_DIR%\examples\empbuild\ > nul
 ::@copy %FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\examples\empbuild.exe %FB_GEN_DIR%\examples\empbuild.exe > nul

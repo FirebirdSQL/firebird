@@ -51,6 +51,72 @@ class UtilSvc : public Firebird::GlobalStorage
 public:
 	typedef Firebird::HalfStaticArray<const char*, 20> ArgvType;
 
+	// Services is rare for our code case where status vector is accessed from 2 different threads
+	// in async way. To ensure it's stability appropriate protection is needed.
+	class StatusAccessor
+	{
+	public:
+		StatusAccessor(Mutex& mtx, Firebird::CheckStatusWrapper* st, UtilSvc* u)
+			: mutex(&mtx), status(st), uSvc(u)
+		{
+			mutex->enter(FB_FUNCTION);
+		}
+
+		StatusAccessor()
+			: mutex(nullptr), status(nullptr), uSvc(nullptr)
+		{ }
+
+		StatusAccessor(StatusAccessor&& sa)
+			: mutex(sa.mutex), status(sa.status), uSvc(sa.uSvc)
+		{
+			sa.mutex = nullptr;
+			sa.uSvc = nullptr;
+			sa.status = nullptr;
+		}
+
+		operator const Firebird::CheckStatusWrapper*() const
+		{
+			return status;
+		}
+
+		const Firebird::CheckStatusWrapper* operator->() const
+		{
+			return status;
+		}
+
+		void init()
+		{
+			if (status)
+				status->init();
+		}
+
+		void setServiceStatus(const ISC_STATUS* status)
+		{
+			if (uSvc)
+				uSvc->setServiceStatus(status);
+		}
+
+		void setServiceStatus(const USHORT fac, const USHORT code, const MsgFormat::SafeArg& args)
+		{
+			if (uSvc)
+				uSvc->setServiceStatus(fac, code, args);
+		}
+
+		~StatusAccessor()
+		{
+			if (mutex)
+				mutex->leave();
+		}
+
+		StatusAccessor(const StatusAccessor&) = delete;
+		StatusAccessor& operator=(const StatusAccessor&) = delete;
+
+	private:
+		Mutex* mutex;
+		Firebird::CheckStatusWrapper* status;
+		UtilSvc* uSvc;
+	};
+
 public:
 	UtilSvc() : argv(getPool()), usvcDataMode(false) { }
 
@@ -66,10 +132,13 @@ public:
 	virtual void putChar(char, char) = 0;
 	virtual void putBytes(const UCHAR*, FB_SIZE_T) = 0;
 	virtual ULONG getBytes(UCHAR*, ULONG) = 0;
+
+private:
 	virtual void setServiceStatus(const ISC_STATUS*) = 0;
 	virtual void setServiceStatus(const USHORT, const USHORT, const MsgFormat::SafeArg&) = 0;
-	virtual const Firebird::CheckStatusWrapper* getStatus() = 0;
-	virtual void initStatus() = 0;
+
+public:
+	virtual StatusAccessor getStatusAccessor() = 0;
 	virtual void checkService() = 0;
 	virtual void hidePasswd(ArgvType&, int) = 0;
 	virtual void fillDpb(Firebird::ClumpletWriter& dpb) = 0;
@@ -77,6 +146,7 @@ public:
 	virtual unsigned int getAuthBlock(const unsigned char** bytes) = 0;
 	virtual bool utf8FileNames() = 0;
 	virtual Firebird::ICryptKeyCallback* getCryptCallback() = 0;
+	virtual int getParallelWorkers() = 0;
 
 	void setDataMode(bool value)
 	{

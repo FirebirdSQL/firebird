@@ -31,17 +31,45 @@
 #include <unicode/ucnv.h>
 #include "../common/unicode_util.h"
 
+namespace {
+
+static void U_EXPORT2 FB_UCNV_FROM_U_CALLBACK_STOP(
+                const void* /*context*/,
+                UConverterFromUnicodeArgs* /*fromUArgs*/,
+                const UChar* /*codeUnits*/,
+                int32_t /*length*/,
+                UChar32 /*codePoint*/,
+                UConverterCallbackReason /*reason*/,
+                UErrorCode* /*err*/)
+{
+	/*
+	 * A stable implementation of callback function UCNV_FROM_U_CALLBACK_STOP.
+	 *
+	 * It is equal to a behaviour of old ICU (from FB2.1 and FB3).
+	 *
+	 * ICU from FB4 (v63.1) translates "ignorable" symbols (..., 0x115F, ...) into an empty string
+	 * and this is incompatible with conversion of built-in charsets where
+	 * a such case leads to a translation error.
+	 *
+	 */
+
+	/* the caller must have set the error code accordingly */
+	return;
+}
+
+} // namespace
+
 
 static UConverter* create_converter(csconvert* cv, UErrorCode* status)
 {
-	Jrd::UnicodeUtil::ConversionICU& cIcu(Jrd::UnicodeUtil::getConversionICU());
+	Firebird::UnicodeUtil::ConversionICU& cIcu(Firebird::UnicodeUtil::getConversionICU());
 	UConverter* conv = cIcu.ucnv_open(cv->csconvert_impl->cs->charset_name, status);
 	const void* oldContext;
 
 	UConverterFromUCallback oldFromAction;
 	cIcu.ucnv_setFromUCallBack(
 		conv,
-		cIcu.UCNV_FROM_U_CALLBACK_STOP,
+		FB_UCNV_FROM_U_CALLBACK_STOP,
 		NULL,
 		&oldFromAction,
 		&oldContext,
@@ -90,7 +118,7 @@ static ULONG unicode_to_icu(csconvert* cv,
 	Firebird::Aligner<UChar> alignedSource(src, srcLen);
 	const UChar* source = alignedSource;
 	char* target = reinterpret_cast<char*>(dst);
-	Jrd::UnicodeUtil::ConversionICU& cIcu(Jrd::UnicodeUtil::getConversionICU());
+	Firebird::UnicodeUtil::ConversionICU& cIcu(Firebird::UnicodeUtil::getConversionICU());
 	cIcu.ucnv_fromUnicode(conv, &target, target + dstLen, &source,
 		source + srcLen / sizeof(UChar), NULL, TRUE, &status);
 
@@ -146,7 +174,7 @@ static ULONG icu_to_unicode(csconvert* cv,
 	const char* source = reinterpret_cast<const char*>(src);
 	Firebird::OutAligner<UChar> alignedTarget(dst, dstLen);
 	UChar* target = alignedTarget;
-	Jrd::UnicodeUtil::ConversionICU& cIcu(Jrd::UnicodeUtil::getConversionICU());
+	Firebird::UnicodeUtil::ConversionICU& cIcu(Firebird::UnicodeUtil::getConversionICU());
 	cIcu.ucnv_toUnicode(conv, &target, target + dstLen / sizeof(UChar), &source,
 		source + srcLen, NULL, TRUE, &status);
 

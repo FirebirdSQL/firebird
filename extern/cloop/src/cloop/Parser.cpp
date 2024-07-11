@@ -94,7 +94,7 @@ void Parser::parse()
 		}
 	}
 
-	// Check types.
+	// Check types, assign statusName to methods.
 
 	for (vector<Interface*>::iterator i = interfaces.begin(); i != interfaces.end(); ++i)
 	{
@@ -114,6 +114,13 @@ void Parser::parse()
 			{
 				Parameter* parameter = *k;
 				checkType(parameter->typeRef);
+			}
+
+			if (!method->parameters.empty() &&
+				exceptionInterface &&
+				method->parameters.front()->typeRef.token.text == exceptionInterface->name)
+			{
+				method->statusName = method->parameters.front()->name;
 			}
 		}
 	}
@@ -194,6 +201,7 @@ void Parser::parseItem()
 {
 	Expr* notImplementedExpr = nullptr;
 	Action* notImplementedAction = nullptr;
+	Action* stubAction = nullptr;
 	std::string onError;
 
 	while (lexer->getToken(token).type == TOKEN('['))
@@ -224,6 +232,12 @@ void Parser::parseItem()
 				notImplementedAction = parseAction(DefAction::DEF_NOT_IMPLEMENTED);
 				break;
 
+			case Token::TYPE_STUB:
+				if (stubAction)
+					syntaxError(token);
+				stubAction = parseAction(DefAction::DEF_IGNORE);
+				break;
+
 			default:
 				syntaxError(token);
 				break;
@@ -248,7 +262,7 @@ void Parser::parseItem()
 	}
 
 	getToken(token, TOKEN('('));
-	parseMethod(typeRef, name, notImplementedExpr, onError, notImplementedAction);
+	parseMethod(typeRef, name, notImplementedExpr, onError, notImplementedAction, stubAction);
 }
 
 void Parser::parseConstant(const TypeRef& typeRef, const string& name)
@@ -326,7 +340,7 @@ Action* Parser::parseDefAction(DefAction::DefType dt)
 }
 
 void Parser::parseMethod(const TypeRef& returnTypeRef, const string& name, Expr* notImplementedExpr,
-	const string& onError, Action* notImplementedAction)
+	const string& onError, Action* notImplementedAction, Action* stubAction)
 {
 	Method* method = new Method();
 	interface->methods.push_back(method);
@@ -336,6 +350,7 @@ void Parser::parseMethod(const TypeRef& returnTypeRef, const string& name, Expr*
 	method->version = interface->version;
 	method->notImplementedExpr = notImplementedExpr;
 	method->notImplementedAction = notImplementedAction;
+	method->stubAction = stubAction;
 	method->onErrorFunction = onError;
 
 	if (lexer->getToken(token).type != TOKEN(')'))

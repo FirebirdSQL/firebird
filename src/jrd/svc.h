@@ -32,6 +32,7 @@
 #include "../jrd/svc_undoc.h"
 #include "../common/ThreadStart.h"
 
+#include "../common/classes/locks.h"
 #include "../common/classes/semaphore.h"
 #include "../common/classes/array.h"
 #include "../common/classes/SafeArg.h"
@@ -108,58 +109,61 @@ class Service : public Firebird::UtilSvc, public TypedHandle<type_svc>
 {
 public:		// utilities interface with service
 	// output to svc_stdout verbose info
-	virtual void outputVerbose(const char* text);
+	void outputVerbose(const char* text) override;
 	// outpur error text
-	virtual void outputError(const char* text);
+	void outputError(const char* text) override;
 	// output some data to service
-	virtual void outputData(const void* data, FB_SIZE_T len);
+	void outputData(const void* data, FB_SIZE_T len) override;
 	// printf() to svc_stdout
-    virtual void printf(bool err, const SCHAR* format, ...);
+    void printf(bool err, const SCHAR* format, ...) override;
 	// returns true - it's service :)
-	virtual bool isService();
+	bool isService() override;
 	// client thread started
-	virtual void started();
+	void started() override;
 	// put various info items in info buffer
-    virtual void putLine(char tag, const char* val);
-    virtual void putSLong(char tag, SLONG val);
-    virtual void putSInt64(char tag, SINT64 val);
-	virtual void putChar(char tag, char val);
+    void putLine(char tag, const char* val) override;
+    void putSLong(char tag, SLONG val) override;
+    void putSInt64(char tag, SINT64 val) override;
+	void putChar(char tag, char val) override;
 	// put raw bytes to svc_stdout
-	virtual void putBytes(const UCHAR*, FB_SIZE_T);
+	void putBytes(const UCHAR*, FB_SIZE_T) override;
 	// get raw bytes from svc_stdin
-	virtual ULONG getBytes(UCHAR*, ULONG);
-	// append status_vector to service's status
-	virtual void setServiceStatus(const ISC_STATUS* status_vector);
-	// append error message to service's status
-	virtual void setServiceStatus(const USHORT facility, const USHORT errcode, const MsgFormat::SafeArg& args);
-	// no-op for services
-	virtual void hidePasswd(ArgvType&, int);
-	// return service status
-    virtual const FbStatusVector* getStatus();
-	// reset service status
-	virtual void initStatus();
-	// no-op for services
-	virtual void checkService();
-	// add address path and utf8 flag (taken from spb) to dpb if present
-	virtual void fillDpb(Firebird::ClumpletWriter& dpb);
-	// encoding for string parameters passed to utility
-	virtual bool utf8FileNames();
-	// get database encryption key transfer callback routine
-	virtual Firebird::ICryptKeyCallback* getCryptCallback();
+	ULONG getBytes(UCHAR*, ULONG) override;
 
-	virtual TraceManager* getTraceManager()
+private:
+	// append status_vector to service's status
+	void setServiceStatus(const ISC_STATUS* status_vector) override;
+	// append error message to service's status
+	void setServiceStatus(const USHORT facility, const USHORT errcode, const MsgFormat::SafeArg& args) override;
+
+public:
+	// no-op for services
+	void hidePasswd(ArgvType&, int) override;
+	// return service status
+    StatusAccessor getStatusAccessor() override;
+	// no-op for services
+	void checkService() override;
+	// add address path and utf8 flag (taken from spb) to dpb if present
+	void fillDpb(Firebird::ClumpletWriter& dpb) override;
+	// encoding for string parameters passed to utility
+	bool utf8FileNames() override;
+	// get database encryption key transfer callback routine
+	Firebird::ICryptKeyCallback* getCryptCallback() override;
+	int getParallelWorkers() override { return svc_parallel_workers; }
+
+	TraceManager* getTraceManager()
 	{
 		return svc_trace_manager;
 	}
 
-	virtual bool finished()
+	bool finished() override
 	{
 		return ((svc_flags & (SVC_finished | SVC_detached)) != 0)
 			|| checkForShutdown();
 	}
 
 	// Get authentication block if present
-	virtual unsigned int getAuthBlock(const unsigned char** bytes);
+	unsigned int getAuthBlock(const unsigned char** bytes) override;
 
 public:		// external interface with service
 	// Attach - service ctor
@@ -172,6 +176,8 @@ public:		// external interface with service
 			   const UCHAR* recv_items, USHORT buffer_length, UCHAR* info);
 	ISC_STATUS query2(thread_db* tdbb, USHORT send_item_length, const UCHAR* send_items,
 			   USHORT recv_item_length, const UCHAR* recv_items, USHORT buffer_length, UCHAR* info);
+	// Cancel wait in query service
+	void cancel(thread_db* tdbb);
 	// Detach from service
 	void detach();
 	// get service version
@@ -283,7 +289,7 @@ private:
 	// Does info buffer have enough space for SLONG?
 	static bool ck_space_for_numeric(UCHAR*& info, const UCHAR* const end);
 	// Make status vector permamnent, if one present in worker thread's space
-	void makePermanentStatusVector() throw();
+	void makePermanentStatusVector() noexcept;
 	// Read SPB on attach
 	void getOptions(Firebird::ClumpletReader&);
 	// Invoke appropriate service thread entry and finalize it correctly
@@ -291,6 +297,7 @@ private:
 
 private:
 	Firebird::FbLocalStatus svc_status;				// status vector for running service
+	Firebird::Mutex svc_status_mutex;				// protects svc_status from access in different threads
 	Firebird::string svc_parsed_sw;					// Here point elements of argv
 	ULONG	svc_stdout_head;
 	ULONG	svc_stdout_tail;
@@ -305,7 +312,8 @@ private:
 	USHORT	svc_flags;
 	USHORT	svc_user_flag;
 	USHORT	svc_spb_version;
-	bool	svc_do_shutdown;
+	bool	svc_shutdown_server;
+	bool	svc_shutdown_request;
 	bool	svc_shutdown_in_progress;
 	bool	svc_timeout;
 	char	svc_arg_conv[MsgFormat::SAFEARG_MAX_ARG * 2];
@@ -321,6 +329,7 @@ private:
 	Firebird::string	svc_perm_sw;	// Switches, taken from services table and/or passed using spb_command_line
 	Firebird::UCharBuffer	svc_address_path;
 	Firebird::string	svc_command_line;
+	int					svc_parallel_workers;
 
 	Firebird::string	svc_network_protocol;
 	Firebird::string	svc_remote_address;
@@ -351,6 +360,7 @@ private:
 
 	void unblockQueryGet(bool over = false);
 
+public:
 	class Validate
 	{
 	public:
@@ -358,6 +368,7 @@ private:
 		Firebird::MutexEnsureUnlock sharedGuard;
 	};
 
+private:
 	class SafeMutexLock : private Validate
 	{
 	public:

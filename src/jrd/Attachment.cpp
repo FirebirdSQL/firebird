@@ -24,6 +24,7 @@
 
 #include "firebird.h"
 #include "../jrd/Attachment.h"
+#include "../jrd/MetaName.h"
 #include "../jrd/Database.h"
 #include "../jrd/Function.h"
 #include "../jrd/nbak.h"
@@ -43,12 +44,13 @@
 #include "../jrd/tpc_proto.h"
 
 #include "../jrd/extds/ExtDS.h"
-
+#include "../jrd/ProfilerManager.h"
 #include "../jrd/replication/Applier.h"
 #include "../jrd/replication/Manager.h"
 
+#include "../dsql/DsqlStatementCache.h"
+
 #include "../common/classes/fb_string.h"
-#include "../jrd/MetaName.h"
 #include "../common/StatusArg.h"
 #include "../common/TimeZoneUtil.h"
 #include "../common/isc_proto.h"
@@ -146,6 +148,8 @@ void Jrd::Attachment::destroy(Attachment* const attachment)
 MemoryPool* Jrd::Attachment::createPool()
 {
 	MemoryPool* const pool = MemoryPool::createPool(att_pool, att_memory_stats);
+	auto stats = FB_NEW_POOL(*pool) MemoryStats(&att_memory_stats);
+	pool->setStatsGroup(*stats);
 	att_pools.add(pool);
 	return pool;
 }
@@ -155,9 +159,7 @@ void Jrd::Attachment::deletePool(MemoryPool* pool)
 {
 	if (pool)
 	{
-		FB_SIZE_T pos;
-		if (att_pools.find(pool, pos))
-			att_pools.remove(pos);
+		att_pools.findAndRemove(pool);
 
 #ifdef DEBUG_LCK_LIST
 		// hvlad: this could be slow, use only when absolutely necessary
@@ -223,7 +225,8 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider
 	: att_pool(pool),
 	  att_memory_stats(&dbb->dbb_memory_stats),
 	  att_database(dbb),
-	  att_ss_user(NULL),
+	  att_user(nullptr),
+	  att_ss_user(nullptr),
 	  att_user_ids(*pool),
 	  att_active_snapshots(*pool),
 	  att_tablespaces(*pool),
@@ -256,6 +259,7 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider
 	  att_dest_bind(&att_bindings),
 	  att_original_timezone(TimeZoneUtil::getSystemTimeZone()),
 	  att_current_timezone(att_original_timezone),
+	  att_parallel_workers(0),
 	  att_repl_appliers(*pool),
 	  att_utility(UTIL_NONE),
 	  att_procedures(*pool),
@@ -604,6 +608,12 @@ void Jrd::Attachment::resetSession(thread_db* tdbb, jrd_tra** traHandle)
 	}
 	catch (const Exception& ex)
 	{
+		if (att_ext_call_depth && !shutAtt)
+		{
+			flags.release(ATT_resetting);		// reset is incomplete - keep state
+			shutAtt = true;
+		}
+
 		if (shutAtt)
 			signalShutdown(isc_ses_reset_failed);
 
@@ -639,11 +649,15 @@ void Jrd::Attachment::signalShutdown(ISC_STATUS code)
 }
 
 
-void Jrd::Attachment::mergeStats()
+void Jrd::Attachment::mergeStats(bool pageStatsOnly)
 {
 	MutexLockGuard guard(att_database->dbb_stats_mutex, FB_FUNCTION);
-	att_database->dbb_stats.adjust(att_base_stats, att_stats, true);
-	att_base_stats.assign(att_stats);
+	att_database->dbb_stats.adjustPageStats(att_base_stats, att_stats);
+	if (!pageStatsOnly)
+	{
+		att_database->dbb_stats.adjust(att_base_stats, att_stats, true);
+		att_base_stats.assign(att_stats);
+	}
 }
 
 
@@ -733,6 +747,12 @@ void Jrd::Attachment::initLocks(thread_db* tdbb)
 		lock = FB_NEW_RPT(*att_pool, 0)
 			Lock(tdbb, 0, LCK_repl_tables, this, blockingAstReplSet);
 		att_repl_lock = lock;
+
+		lock = FB_NEW_RPT(*att_pool, 0)
+			Lock(tdbb, sizeof(AttNumber), LCK_profiler_listener, this, ProfilerManager::blockingAst);
+		att_profiler_listener_lock = lock;
+		lock->setKey(att_attachment_id);
+		LCK_lock(tdbb, lock, LCK_EX, LCK_WAIT);
 	}
 }
 
@@ -846,6 +866,11 @@ void Jrd::Attachment::releaseLocks(thread_db* tdbb)
 	for (bool getResult = accessor.getFirst(); getResult; getResult = accessor.getNext())
 		LCK_release(tdbb, accessor.current()->second.lock);
 
+	// Release DSQL statement cache lock
+
+	if (att_dsql_instance)
+		att_dsql_instance->dbb_statement_cache->shutdown(tdbb);
+
 	// Release the remaining locks
 
 	if (att_id_lock)
@@ -862,6 +887,9 @@ void Jrd::Attachment::releaseLocks(thread_db* tdbb)
 
 	if (att_repl_lock)
 		LCK_release(tdbb, att_repl_lock);
+
+	if (att_profiler_listener_lock)
+		LCK_release(tdbb, att_profiler_listener_lock);
 
 	// And release the system requests
 
@@ -970,28 +998,28 @@ int Jrd::Attachment::blockingAstCancel(void* ast_object)
 
 int Jrd::Attachment::blockingAstMonitor(void* ast_object)
 {
-	Jrd::Attachment* const attachment = static_cast<Jrd::Attachment*>(ast_object);
+	const auto attachment = static_cast<Jrd::Attachment*>(ast_object);
 
 	try
 	{
-		Database* const dbb = attachment->att_database;
+		const auto dbb = attachment->att_database;
 
 		AsyncContextHolder tdbb(dbb, FB_FUNCTION, attachment->att_monitor_lock);
 
-		if (!(attachment->att_flags & ATT_monitor_done))
+		if (const auto generation = Monitoring::checkGeneration(dbb, attachment))
 		{
 			try
 			{
-				Monitoring::dumpAttachment(tdbb, attachment);
+				Monitoring::dumpAttachment(tdbb, attachment, generation);
 			}
 			catch (const Exception& ex)
 			{
 				iscLogException("Cannot dump the monitoring data", ex);
 			}
-
-			LCK_downgrade(tdbb, attachment->att_monitor_lock);
-			attachment->att_flags |= ATT_monitor_done;
 		}
+
+		LCK_downgrade(tdbb, attachment->att_monitor_lock);
+		attachment->att_flags |= ATT_monitor_disabled;
 	}
 	catch (const Exception&)
 	{} // no-op
@@ -1054,7 +1082,7 @@ void StableAttachmentPart::manualAsyncUnlock(ULONG& flags)
 	}
 }
 
-void StableAttachmentPart::onIdleTimer(TimerImpl*)
+void StableAttachmentPart::doOnIdleTimer(TimerImpl*)
 {
 	// Ensure attachment is still alive and still idle
 
@@ -1067,7 +1095,7 @@ void StableAttachmentPart::onIdleTimer(TimerImpl*)
 	JRD_shutdown_attachment(att);
 }
 
-JAttachment* Attachment::getInterface() throw()
+JAttachment* Attachment::getInterface() noexcept
 {
 	return att_stable->getInterface();
 }
@@ -1093,8 +1121,11 @@ void Attachment::setupIdleTimer(bool clear)
 	{
 		if (!att_idle_timer)
 		{
-			att_idle_timer = FB_NEW IdleTimer(getStable());
-			att_idle_timer->setOnTimer(&StableAttachmentPart::onIdleTimer);
+			using IdleTimer = TimerWithRef<StableAttachmentPart>;
+
+			auto idleTimer = FB_NEW IdleTimer(getStable());
+			idleTimer->setOnTimer(&StableAttachmentPart::onIdleTimer);
+			att_idle_timer = idleTimer;
 		}
 
 		att_idle_timer->reset(timeout);
@@ -1129,17 +1160,6 @@ void Attachment::checkReplSetLock(thread_db* tdbb)
 
 void Attachment::invalidateReplSet(thread_db* tdbb, bool broadcast)
 {
-	att_flags |= ATT_repl_reset;
-
-	if (att_relations)
-	{
-		for (auto relation : *att_relations)
-		{
-			if (relation)
-				relation->rel_repl_state.invalidate();
-		}
-	}
-
 	if (broadcast)
 	{
 		// Signal other attachments about the changed state
@@ -1147,6 +1167,20 @@ void Attachment::invalidateReplSet(thread_db* tdbb, bool broadcast)
 			LCK_lock(tdbb, att_repl_lock, LCK_EX, LCK_WAIT);
 		else
 			LCK_convert(tdbb, att_repl_lock, LCK_EX, LCK_WAIT);
+	}
+
+	if (att_flags & ATT_repl_reset)
+		return;
+
+	att_flags |= ATT_repl_reset;
+
+	if (att_relations)
+	{
+		for (auto relation : *att_relations)
+		{
+			if (relation)
+				relation->rel_repl_state.reset();
+		}
 	}
 
 	LCK_release(tdbb, att_repl_lock);
@@ -1168,4 +1202,31 @@ int Attachment::blockingAstReplSet(void* ast_object)
 	{} // no-op
 
 	return 0;
+}
+
+ProfilerManager* Attachment::getProfilerManager(thread_db* tdbb)
+{
+	auto profilerManager = att_profiler_manager.get();
+	if (!profilerManager)
+		att_profiler_manager.reset(profilerManager = ProfilerManager::create(tdbb));
+	return profilerManager;
+}
+
+ProfilerManager* Attachment::getActiveProfilerManagerForNonInternalStatement(thread_db* tdbb)
+{
+	const auto request = tdbb->getRequest();
+
+	return isProfilerActive() && !request->hasInternalStatement() ?
+		getProfilerManager(tdbb) :
+		nullptr;
+}
+
+bool Attachment::isProfilerActive()
+{
+	return att_profiler_manager && att_profiler_manager->isActive();
+}
+
+void Attachment::releaseProfilerManager()
+{
+	att_profiler_manager.reset();
 }

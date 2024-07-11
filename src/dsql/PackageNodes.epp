@@ -27,12 +27,14 @@
 #include "../jrd/jrd.h"
 #include "../jrd/tra.h"
 #include "../jrd/dfw_proto.h"
+#include "../jrd/dyn_ut_proto.h"
 #include "../jrd/exe_proto.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/vio_proto.h"
 #include "../dsql/make_proto.h"
 #include "../dsql/pass1_proto.h"
 #include "../common/StatusArg.h"
+#include "../common/classes/TriState.h"
 #include "../jrd/Attachment.h"
 #include "../jrd/scl_proto.h"
 
@@ -214,6 +216,9 @@ string CreateAlterPackageNode::internalPrint(NodePrinter& printer) const
 
 DdlNode* CreateAlterPackageNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
+	if (alter && !items)
+		return DdlNode::dsqlPass(dsqlScratch);
+
 	MemoryPool& pool = dsqlScratch->getPool();
 
 	source.ltrim("\n\r\t ");
@@ -279,6 +284,11 @@ DdlNode* CreateAlterPackageNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		itemScratch->flags |= DsqlCompilerScratch::FLAG_DDL;
 		itemScratch->package = name;
 
+		if (itemScratch->clientDialect > SQL_DIALECT_V5)
+			itemStatement->setBlrVersion(5);
+		else
+			itemStatement->setBlrVersion(4);
+
 		ddlNode->dsqlPass(itemScratch);
 	}
 
@@ -313,9 +323,18 @@ void CreateAlterPackageNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 
+	const bool alterIndividualParameters = (!create && alter && !items);
+
 	if (alter)
 	{
-		if (!executeAlter(tdbb, dsqlScratch, transaction))
+		if (alterIndividualParameters)
+		{
+			if (!executeAlterIndividualParameters(tdbb, dsqlScratch, transaction))
+				status_exception::raise(
+					Arg::Gds(isc_no_meta_update) <<
+					Arg::Gds(isc_dyn_package_not_found) << Arg::Str(name));
+		}
+		else if (!executeAlter(tdbb, dsqlScratch, transaction))
 		{
 			if (create)	// create or alter
 				executeCreate(tdbb, dsqlScratch, transaction);
@@ -326,6 +345,11 @@ void CreateAlterPackageNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 					Arg::Gds(isc_dyn_package_not_found) << Arg::Str(name));
 			}
 		}
+
+		dsc desc;
+		desc.makeText(name.length(), ttype_metadata,
+			(UCHAR*) const_cast<char*>(name.c_str()));	// safe const_cast
+		DFW_post_work(transaction, dfw_modify_package_header, &desc, 0);
 	}
 	else
 		executeCreate(tdbb, dsqlScratch, transaction);
@@ -340,8 +364,13 @@ void CreateAlterPackageNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch*
 	Attachment* const attachment = transaction->getAttachment();
 	const MetaString& ownerName = attachment->getEffectiveUserName();
 
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_package_header))
+		return;
+
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 		DDL_TRIGGER_CREATE_PACKAGE, name, NULL);
+
+	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_package_header);
 
 	AutoCacheRequest requestHandle(tdbb, drq_s_pkg, DYN_REQUESTS);
 
@@ -360,10 +389,10 @@ void CreateAlterPackageNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch*
 		PKG.RDB$PACKAGE_HEADER_SOURCE.NULL = FALSE;
 		attachment->storeMetaDataBlob(tdbb, transaction, &PKG.RDB$PACKAGE_HEADER_SOURCE, source);
 
-		if (ssDefiner.specified)
+		if (ssDefiner.has_value())
 		{
 			PKG.RDB$SQL_SECURITY.NULL = FALSE;
-			PKG.RDB$SQL_SECURITY = ssDefiner.value ? FB_TRUE : FB_FALSE;
+			PKG.RDB$SQL_SECURITY = ssDefiner.value() == SqlSecurity::SS_DEFINER ? FB_TRUE : FB_FALSE;
 		}
 		else
 			PKG.RDB$SQL_SECURITY.NULL = TRUE;
@@ -434,10 +463,10 @@ bool CreateAlterPackageNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* 
 			if (!PKG.RDB$VALID_BODY_FLAG.NULL)
 				PKG.RDB$VALID_BODY_FLAG = FALSE;
 
-			if (ssDefiner.specified)
+			if (ssDefiner.has_value())
 			{
 				PKG.RDB$SQL_SECURITY.NULL = FALSE;
-				PKG.RDB$SQL_SECURITY = ssDefiner.value ? FB_TRUE : FB_FALSE;
+				PKG.RDB$SQL_SECURITY = ssDefiner.value() == SqlSecurity::SS_DEFINER ? FB_TRUE : FB_FALSE;
 			}
 			else
 				PKG.RDB$SQL_SECURITY.NULL = TRUE;
@@ -463,6 +492,44 @@ bool CreateAlterPackageNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* 
 	return modified;
 }
 
+
+bool CreateAlterPackageNode::executeAlterIndividualParameters(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
+{
+	AutoCacheRequest requestHandle(tdbb, drq_m_prm_pkg, DYN_REQUESTS);
+	bool modified = false;
+
+	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		PKG IN RDB$PACKAGES
+		WITH PKG.RDB$PACKAGE_NAME EQ name.c_str()
+	{
+		modified = true;
+
+		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
+			DDL_TRIGGER_ALTER_PACKAGE, name, NULL);
+
+		MODIFY PKG
+			if (ssDefiner.has_value())
+			{
+				if (ssDefiner.value() != SqlSecurity::SS_DROP)
+				{
+					PKG.RDB$SQL_SECURITY.NULL = FALSE;
+					PKG.RDB$SQL_SECURITY = ssDefiner.value() == SqlSecurity::SS_DEFINER ? FB_TRUE : FB_FALSE;
+				}
+				else
+					PKG.RDB$SQL_SECURITY.NULL = TRUE;
+			}
+		END_MODIFY
+	}
+	END_FOR
+
+	if (modified)
+	{
+		executeDdlTrigger(tdbb, dsqlScratch, transaction,
+			DTW_AFTER, DDL_TRIGGER_ALTER_PACKAGE, name, NULL);
+	}
+
+	return modified;
+}
 
 void CreateAlterPackageNode::executeItems(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
@@ -691,6 +758,11 @@ DdlNode* CreatePackageBodyNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			itemScratch->flags |= DsqlCompilerScratch::FLAG_DDL;
 			itemScratch->package = name;
 
+			if (itemScratch->clientDialect > SQL_DIALECT_V5)
+				itemStatement->setBlrVersion(5);
+			else
+				itemStatement->setBlrVersion(4);
+
 			ddlNode->dsqlPass(itemScratch);
 		}
 	}
@@ -723,6 +795,9 @@ void CreatePackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 	{
 		if (!PKG.RDB$VALID_BODY_FLAG.NULL && PKG.RDB$VALID_BODY_FLAG != 0)
 		{
+			if (createIfNotExistsOnly)
+				return;
+
 			status_exception::raise(
 				Arg::Gds(isc_no_meta_update) <<
 				Arg::Gds(isc_dyn_package_body_exists) << Arg::Str(name));
@@ -929,6 +1004,12 @@ void DropPackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 
 	if (!found)
 	{
+		if (silent)
+		{
+			savePoint.release();
+			return;
+		}
+
 		status_exception::raise(
 			Arg::Gds(isc_no_meta_update) <<
 			Arg::Gds(isc_dyn_package_not_found) << Arg::Str(name));

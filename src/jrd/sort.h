@@ -33,6 +33,7 @@ namespace Jrd {
 
 // Forward declaration
 class Attachment;
+class Sort;
 class SortOwner;
 struct merge_control;
 
@@ -221,6 +222,7 @@ struct run_merge_hdr
 
 const int RMH_TYPE_RUN	= 0;
 const int RMH_TYPE_MRG	= 1;
+const int RMH_TYPE_SORT = 2;
 
 
 // Run control block
@@ -253,13 +255,27 @@ struct merge_control
 	run_merge_hdr*	mrg_stream_b;
 };
 
+// Sort control block, for partitioned sort
+
+struct sort_control
+{
+	run_merge_hdr	srt_header;
+	Sort*	srt_sort;
+};
+
 
 // Sort class
 
 typedef bool (*FPTR_REJECT_DUP_CALLBACK)(const UCHAR*, const UCHAR*, void*);
 
+// flags as set in m_flags
+
+const int scb_sorted		= 1;	// stream has been sorted
+const int scb_reuse_buffer	= 2;	// reuse buffer if possible
+
 class Sort
 {
+	friend class PartitionedSort;
 public:
 	Sort(Database*, SortOwner*,
 		 ULONG, FB_SIZE_T, FB_SIZE_T, const sort_key_def*,
@@ -269,6 +285,11 @@ public:
 	void get(Jrd::thread_db*, ULONG**);
 	void put(Jrd::thread_db*, ULONG**);
 	void sort(Jrd::thread_db*);
+
+	bool isSorted() const
+	{
+		return m_flags & scb_sorted;
+	}
 
 	static FB_UINT64 readBlock(TempSpace* space, FB_UINT64 seek, UCHAR* address, ULONG length)
 	{
@@ -290,6 +311,7 @@ private:
 
 	void diddleKey(UCHAR*, bool, bool);
 	sort_record* getMerge(merge_control*);
+	sort_record* getRecord();
 	ULONG allocate(ULONG, ULONG, bool);
 	void init();
 	void mergeRuns(USHORT);
@@ -333,15 +355,42 @@ private:
 	Firebird::Array<sort_key_def> m_description;
 };
 
-// flags as set in m_flags
 
-const int scb_sorted = 1;	// stream has been sorted
+class PartitionedSort
+{
+public:
+	PartitionedSort(Database*, SortOwner*);
+	~PartitionedSort();
+
+	void get(Jrd::thread_db*, ULONG**);
+
+	void addPartition(Sort* sort)
+	{
+		sort_control item;
+		item.srt_header.rmh_type = RMH_TYPE_SORT;
+		item.srt_header.rmh_parent = NULL;
+		item.srt_sort = sort;
+
+		m_parts.add(item);
+	}
+
+	void buildMergeTree();
+
+private:
+	sort_record* getMerge();
+
+	SortOwner* m_owner;
+	Firebird::HalfStaticArray<sort_control, 8> m_parts;
+	Firebird::HalfStaticArray<merge_control, 8> m_nodes;	// nodes of merge tree
+	merge_control* m_merge;				// root of merge tree
+};
+
 
 class SortOwner
 {
 public:
-	explicit SortOwner(MemoryPool& p)
-		: pool(p), sorts(p)
+	SortOwner(MemoryPool& p, Database* database)
+		: pool(p), dbb(database), sorts(p), buffers(p)
 	{}
 
 	~SortOwner()
@@ -377,9 +426,14 @@ public:
 		return pool;
 	}
 
+	UCHAR* allocateBuffer();
+	void releaseBuffer(UCHAR*);
+
 private:
 	MemoryPool& pool;
+	Database* const dbb;
 	Firebird::SortedArray<Sort*> sorts;
+	Firebird::HalfStaticArray<UCHAR*, 4> buffers;
 };
 
 } //namespace Jrd

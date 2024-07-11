@@ -3,228 +3,590 @@ name: CI
 on: [push, pull_request]
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-    container: ${{ matrix.container }}
+
+  build-linux-ubuntu-x64-clang:
+    if: github.ref_type != 'tag'
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
+
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
+
+      - name: Prepare
+        run: |
+          sudo apt-get install libtool-bin libtomcrypt1 libtomcrypt-dev libtommath1 libtommath-dev libicu-dev zlib1g-dev cmake
+
+      - name: Build
+        run: |
+          CC=clang CXX=clang++ ./autogen.sh --enable-binreloc --prefix=/opt/firebird
+          make -j4
+          make tests -j4
+          make run_tests
+          make dist
+          tar xzvf gen/Firebird-*-linux-x64.tar.gz
+          (cd Firebird-*-linux-x64; sudo ./install.sh -silent)
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebird-ubuntu-20.04-clang-x64
+          path: gen/Firebird-*-linux-x64.tar.gz
+
+  build-linux-docker:
+    name: build-linux-docker-${{ matrix.arch }}
+    runs-on: ubuntu-22.04
     env:
-      VS_VERSION: ${{ matrix.os == 'windows-2016' && '2017' || (matrix.os == 'windows-2019' && '2019' || (matrix.os == 'windows-2022' && '2022' || '')) }}
+      FB_DOCKER_PATH: ${{ (startsWith(matrix.arch, 'arm') && 'arm32-arm64') || 'x86-x64' }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - x86
+          - x64
+          - arm32
+          - arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
+
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
+
+      - name: Get Release Notes
+        uses: ./.github/actions/get-release-notes
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        if: ${{ startsWith(matrix.arch, 'arm') }}
+
+      - name: Build
+        run: |
+          cd builds/docker/linux/$FB_DOCKER_PATH
+          ./run-${{ matrix.arch }}.sh
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebird-linux-${{ matrix.arch }}
+          path: gen/Firebird-*-linux-${{ matrix.arch }}.tar.gz
+
+      - name: Upload debug symbols
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebird-linux-${{ matrix.arch }}-debugSymbols
+          path: gen/Firebird-*-linux-${{ matrix.arch }}-debugSymbols.tar.gz
+
+      - name: Create release
+        uses: ./.github/actions/create-release
+        with:
+          token: ${{ secrets.SNAPSHOT_RELEASE_TOKEN }}
+          deletePatterns: Firebird-*-linux-${{ matrix.arch }}*.tar.gz
+          uploadFiles: gen/Firebird-*-linux-${{ matrix.arch }}*.tar.gz
+
+  build-src-bundle-docker:
+    name: build-src-bundle-docker
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
+
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
+
+      - name: Get Release Notes
+        uses: ./.github/actions/get-release-notes
+
+      - name: Build
+        run: |
+          cd builds/docker/linux/x86-x64
+          ./run-src-bundle.sh
+
+      - name: Create release
+        uses: ./.github/actions/create-release
+        with:
+          token: ${{ secrets.SNAPSHOT_RELEASE_TOKEN }}
+          deletePatterns: Firebird-*-source.tar.xz
+          uploadFiles: gen/Firebird-*-source.tar.xz
+
+  build-alpine-x64:
+    if: github.ref_type != 'tag'
+    runs-on: ubuntu-22.04
+    container: alpine:3.14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
+
+      - name: Prepare
+        run: apk update && apk --no-cache --update add build-base libtool git autoconf automake cmake zlib-dev icu-dev ncurses-dev libedit-dev linux-headers tar sed
+
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
+
+      - name: Build
+        run: |
+          ./autogen.sh --enable-binreloc-threads --with-builtin-tommath --with-builtin-tomcrypt --prefix=/opt/firebird
+          make -j4
+          make tests -j4
+          make run_tests
+          make dist
+          tar xzvf gen/Firebird-*-linux-x64.tar.gz
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebird-alpine-x64
+          path: gen/Firebird-*-linux-x64.tar.gz
+
+  build-windows:
+    if: github.ref_type != 'tag'
+    runs-on: ${{ matrix.os }}
+    env:
+      VS_VERSION: ${{ (matrix.os == 'windows-2019' && '2019' || (matrix.os == 'windows-2022' && '2022' || '')) }}
 
     strategy:
       fail-fast: false
       matrix:
         os:
-          - windows-2016
+          - windows-2022
           - windows-2019
         platform: [x64, x86]
-        include:
-          - os: ubuntu-18.04
-            platform: x64
-            container: alpine:3.14
-          - os: ubuntu-20.04
-            platform: x64
-            compiler: clang
-          - os: ubuntu-20.04
-            platform: x64
-            container: asfernandes/firebird-builder:x86_64-5
-          - os: ubuntu-20.04
-            platform: x86
-            # This build is failing at actions/upload-artifact when using the "container" way.
-            #container: asfernandes/firebird-builder:i586-5
-            docker: "docker"
-          - os: windows-2022
-            platform: x64
-            docker: "docker"
-          - os: windows-2022
-            platform: x86
-            docker: "docker"
-          - os: windows-2022
-            platform: x64
-          - os: windows-2022
-            platform: x86
-          - os: macOS-latest
-            platform: x64
 
     steps:
-    - uses: actions/checkout@v1
-      with:
-        fetch-depth: 10
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
 
-    - name: Prepare (Ubuntu)
-      if: startsWith(matrix.os, 'ubuntu-') && !matrix.container && !matrix.docker
-      run: |
-        sudo apt-get install libtool-bin libtomcrypt1 libtomcrypt-dev libtommath1 libtommath-dev libicu-dev zlib1g-dev
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
 
-    - name: Build (Ubuntu)
-      if: startsWith(matrix.os, 'ubuntu-') && !matrix.container && !matrix.docker
-      run: |
-        CC=clang CXX=clang++ ./autogen.sh --enable-binreloc --prefix=/opt/firebird
-        make -j4
-        make dist
-        tar xzvf gen/Firebird-[0-9]*.tar.gz
-        (cd Firebird-[0-9]*; sudo ./install.sh -silent)
+      - name: Prepare
+        shell: cmd
+        run: |
+          for /r %%i in (*.bat) do unix2dos "%%i"
+          choco uninstall --no-progress --yes innosetup
+          choco install --no-progress --yes innosetup --version=6.1.2
 
-    - name: Build (Linux, Docker)
-      if: startsWith(matrix.container, 'asfernandes/firebird-builder')
-      run: /entry.sh
+      - name: Build
+        shell: cmd
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          VS_SCRIPT: ${{ matrix.os == 'windows-2022' && 'C:\Program Files\Microsoft Visual Studio\%VS_VERSION%\Enterprise\Common7\Tools\VsDevCmd.bat' || 'C:\Program Files (x86)\Microsoft Visual Studio\%VS_VERSION%\Enterprise\Common7\Tools\VsDevCmd.bat' }}
+        run: |
+          set SEVENZIP=C:\Program Files\7-Zip
+          set INNO6_SETUP_PATH=C:\Program Files (x86)\Inno Setup 6
+          if "%PLATFORM%" == "x64" set FB_VS_ARCH=amd64
+          if "%PLATFORM%" == "x64" set FB_PROCESSOR_ARCHITECTURE=AMD64
+          if "%PLATFORM%" == "x86" set FB_VS_ARCH=x86
+          if "%PLATFORM%" == "x86" set FB_PROCESSOR_ARCHITECTURE=x86
+          call "%VS_SCRIPT%" -arch=%FB_VS_ARCH%
+          cd builds\win32
+          call run_all.bat
+          call run_tests.bat
 
-    # asfernandes/firebird-builder:i586-5
-    - name: Build (Linux, Docker)
-      if: startsWith(matrix.os, 'ubuntu-') && matrix.docker
-      run: |
-        cd builds/docker/linux/i586-x86_64
-        ./run-i586.sh
+      - name: Upload zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebird-windows-vs-${{ env.VS_VERSION }}-${{ matrix.platform }}-zip
+          path: builds/install_images/Firebird-*-windows-${{ matrix.platform }}.zip
 
-    - name: Prepare (Linux, Alpine)
-      if: startsWith(matrix.container, 'alpine')
-      run: apk update && apk --no-cache --update add build-base libtool git autoconf automake zlib-dev icu-dev ncurses-dev libedit-dev linux-headers tar
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebird-windows-vs-${{ env.VS_VERSION }}-${{ matrix.platform }}-installer
+          path: builds/install_images/*-windows-${{ matrix.platform }}.exe
 
-    - name: Build (Linux, Alpine)
-      if: startsWith(matrix.container, 'alpine')
-      run: |
-        ./autogen.sh --enable-binreloc-threads --with-builtin-tommath --with-builtin-tomcrypt --prefix=/opt/firebird
-        make -j4
-        make dist
-        tar xzvf gen/Firebird-[0-9]*.tar.gz
+  build-windows-docker:
+    runs-on: windows-2022
 
-    - name: Prepare (MacOS)
-      if: matrix.os == 'macOS-latest'
-      run: |
-        brew install automake libtool
-        export LIBTOOLIZE=glibtoolize
-        export LIBTOOL=glibtool
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [x64, x86]
 
-        mkdir extern/icu-macos
-        pushd extern/icu-macos
-        curl -OL https://github.com/unicode-org/icu/releases/download/release-63-2/icu4c-63_2-src.tgz
-        curl -OL https://github.com/unicode-org/icu/commit/24aeb9a5a5874f4ce5db912e30670ac3ae236971.patch
-        tar xzf icu4c-63_2-src.tgz
-        ICU_INSTALL_PATH=`pwd`/install
-        cd icu/source
-        patch -p3 < ../../24aeb9a5a5874f4ce5db912e30670ac3ae236971.patch
-        ./runConfigureICU MacOSX --prefix=$ICU_INSTALL_PATH
-        make -j4
-        make install
-        install_name_tool -id @rpath/lib/libicuuc.dylib $ICU_INSTALL_PATH/lib/libicuuc.dylib
-        install_name_tool -id @rpath/lib/libicui18n.dylib $ICU_INSTALL_PATH/lib/libicui18n.dylib
-        install_name_tool -id @rpath/lib/libicudata.dylib $ICU_INSTALL_PATH/lib/libicudata.dylib
-        install_name_tool -change libicudata.63.dylib @loader_path/libicudata.63.dylib $ICU_INSTALL_PATH/lib/libicuuc.63.dylib
-        install_name_tool -change libicudata.63.dylib @loader_path/libicudata.63.dylib $ICU_INSTALL_PATH/lib/libicui18n.63.dylib
-        install_name_tool -change libicuuc.63.dylib @loader_path/libicuuc.63.dylib $ICU_INSTALL_PATH/lib/libicui18n.63.dylib
-        popd
-        mkdir -p gen/Release/firebird/lib
-        mkdir -p gen/Debug/firebird/lib
-        cp $ICU_INSTALL_PATH/lib/libicu{data,i18n,uc}.*dylib gen/Release/firebird/lib/
-        cp $ICU_INSTALL_PATH/lib/libicu{data,i18n,uc}.*dylib gen/Debug/firebird/lib/
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
 
-    - name: Build (MacOS)
-      if: matrix.os == 'macOS-latest'
-      run: |
-        export LIBTOOLIZE=glibtoolize
-        export LIBTOOL=glibtool
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
 
-        ICU_INSTALL_PATH=`pwd`/extern/icu-macos/install
+      - name: Get Release Notes
+        uses: ./.github/actions/get-release-notes
 
-        export C_INCLUDE_PATH="$ICU_INSTALL_PATH/include:$C_INCLUDE_PATH"
-        export CPLUS_INCLUDE_PATH="$ICU_INSTALL_PATH/include:$CPLUS_INCLUDE_PATH"
+      - name: Build x86 for client package in x64
+        id: build-x86
+        shell: cmd
+        if: ${{ matrix.platform == 'x64' }}
+        run: |
+          mkdir builds\install_images
+          cd builds\docker\windows
+          call build.bat
+          call run.bat C:\fbscripts\build-x86.bat
 
-        LIBRARY_PATH="$ICU_INSTALL_PATH/lib:$LIBRARY_PATH" ./autogen.sh --with-builtin-tommath --with-builtin-tomcrypt
-        make -j4
+      - name: Build
+        id: build
+        shell: cmd
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          mkdir builds\install_images
+          cd builds\docker\windows
+          call build.bat
+          call run.bat C:\fbscripts\build-%PLATFORM%.bat
 
-        (cd gen; make -B -f make.platform.postfix ICU_LOC="$ICU_INSTALL_PATH/lib/")
-        (cd gen; make -B -f Makefile.install)
+      - name: Upload zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebird-windows-${{ matrix.platform }}-zip
+          path: builds/install_images/Firebird-*-windows-${{ matrix.platform }}.zip
 
-        # Rename directory to make sure the build is relocatable.
-        mv gen gen2
-        sudo installer -pkg gen2/Release/*.pkg -verbose -target /
+      - name: Upload zip (withDebugSymbols)
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebird-windows-${{ matrix.platform }}-withDebugSymbols-zip
+          path: builds/install_images/Firebird-*-windows-${{ matrix.platform }}-withDebugSymbols.zip
 
-        export FIREBIRD_LOCK=`pwd`/temp
-        echo "create database 't.fdb'; select '1' from rdb\$database; select _win1252 '2' from rdb\$database; select _utf8 '3' collate unicode from rdb\$database;" | /Library/Frameworks/Firebird.framework/Resources/bin/isql
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebird-windows-${{ matrix.platform }}-installer
+          path: builds/install_images/*-windows-${{ matrix.platform }}.exe
 
-        echo "create database 'localhost:/tmp/t.fdb' user sysdba password 'masterkey'; select '11' from rdb\$database; select _win1252 '22' from rdb\$database; select _utf8 '33' collate unicode from rdb\$database;" | /Library/Frameworks/Firebird.framework/Resources/bin/isql
+      - name: Upload installer (withDebugSymbols)
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebird-windows-${{ matrix.platform }}-withDebugSymbols-installer
+          path: builds/install_images/*-windows-${{ matrix.platform }}-withDebugSymbols.exe
 
-        mv gen2 gen
-        mkdir gen/artifacts
-        mv gen/Release/*.pkg gen/artifacts
+      - name: Create release
+        uses: ./.github/actions/create-release
+        with:
+          token: ${{ secrets.SNAPSHOT_RELEASE_TOKEN }}
+          deletePatterns:  |
+            Firebird-*-windows-${{ matrix.platform }}*.exe
+            Firebird-*-windows-${{ matrix.platform }}*.zip
+          uploadFiles: |
+            builds/install_images/Firebird-*-windows-${{ matrix.platform }}*.exe
+            builds/install_images/Firebird-*-windows-${{ matrix.platform }}*.zip
 
-    - name: Prepare (Windows)
-      if: startsWith(matrix.os, 'windows-')
-      shell: cmd
-      run: |
-        for /r %%i in (*.bat) do unix2dos "%%i"
+  build-macos:
+    name: build-macos-${{ matrix.arch }}
+    runs-on: ${{ (matrix.arch == 'arm64' && 'macos-14') || 'macos-12' }}
 
-    - name: Build (Windows)
-      if: startsWith(matrix.os, 'windows-') && !matrix.docker
-      shell: cmd
-      env:
-        PLATFORM: ${{ matrix.platform }}
-        VS_SCRIPT: ${{ matrix.os == 'windows-2022' && 'C:\Program Files\Microsoft Visual Studio\%VS_VERSION%\Enterprise\Common7\Tools\VsDevCmd.bat' || 'C:\Program Files (x86)\Microsoft Visual Studio\%VS_VERSION%\Enterprise\Common7\Tools\VsDevCmd.bat' }}
-      run: |
-        if "%PLATFORM%" == "x64" set FB_VS_ARCH=amd64
-        if "%PLATFORM%" == "x64" set FB_PROCESSOR_ARCHITECTURE=AMD64
-        if "%PLATFORM%" == "x64" set FB_OUTPUT_SUFFIX=x64
-        if "%PLATFORM%" == "x86" set FB_VS_ARCH=x86
-        if "%PLATFORM%" == "x86" set FB_PROCESSOR_ARCHITECTURE=x86
-        if "%PLATFORM%" == "x86" set FB_OUTPUT_SUFFIX=win32
-        call "%VS_SCRIPT%" -arch=%FB_VS_ARCH%
-        cd builds\win32
-        run_all.bat JUSTBUILD
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - x64
+          - arm64
 
-    - name: Build (Windows, Docker)
-      if: startsWith(matrix.os, 'windows-') && matrix.docker
-      shell: cmd
-      env:
-        PLATFORM: ${{ matrix.platform }}
-      run: |
-        mkdir output
-        cd builds\docker\windows
-        call build.bat
-        call run.bat C:\fbscripts\build-%PLATFORM%.bat
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
+          submodules: 'true'
 
-    - name: Upload (Ubuntu)
-      if: startsWith(matrix.os, 'ubuntu-') && !matrix.container && !matrix.docker
-      uses: actions/upload-artifact@main
-      with:
-        name: firebird-ubuntu-20.04-clang-${{ matrix.platform }}
-        path: gen/Firebird-*.tar.gz
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
 
-    - name: Upload (Linux, Docker)
-      if: startsWith(matrix.container, 'asfernandes/firebird-builder') || (startsWith(matrix.os, 'ubuntu-') && matrix.docker)
-      uses: actions/upload-artifact@main
-      with:
-        name: firebird-linux-${{ matrix.platform }}
-        path: gen/Firebird-*.tar.gz
+      - name: Prepare - Install tools
+        run: |
+          brew install automake autoconf-archive cmake libtool ninja
 
-    - name: Upload (Linux, Alpine)
-      if: startsWith(matrix.container, 'alpine')
-      uses: actions/upload-artifact@main
-      with:
-        name: firebird-alpine-x64
-        path: gen/Firebird-*.tar.gz
+      # libcxx build is not working with python >= 3.12
+      - name: Do not use preinstalled python >= 3.12
+        run: |
+          brew uninstall --ignore-dependencies python@3.12
+          [ -e /Library/Frameworks/Python.framework ] && \
+            sudo mv /Library/Frameworks/Python.framework /Library/Frameworks/Python.framework.dont-look-at-this
+          brew install python@3.11
+          ln -s "$(brew --prefix python@3.11)/bin/python3" "$(brew --prefix python@3.11)/bin/python"
 
-    - name: Upload (MacOS)
-      if: matrix.os == 'macOS-latest'
-      uses: actions/upload-artifact@main
-      with:
-        name: firebird-macos
-        path: gen/artifacts
+      - name: Cache - vcpkg
+        uses: actions/cache@v4
+        with:
+          key: ${{ runner.os }}-vcpkg-0
+          path: |
+            $HOME/.cache/vcpkg/archives
 
-    - name: Upload (Windows x64)
-      if: startsWith(matrix.os, 'windows-') && !matrix.docker && matrix.platform == 'x64'
-      uses: actions/upload-artifact@main
-      with:
-        name: firebird-windows-vs-${{ env.VS_VERSION }}-x64
-        path: output_x64
+      - name: Build
+        run: |
+          export LIBTOOLIZE=glibtoolize
+          export LIBTOOL=glibtool
+          export PATH="$(brew --prefix python@3.11)/bin:$PATH"
 
-    - name: Upload (Windows x86)
-      if: startsWith(matrix.os, 'windows-') && !matrix.docker && matrix.platform == 'x86'
-      uses: actions/upload-artifact@main
-      with:
-        name: firebird-windows-vs-${{ env.VS_VERSION }}-x86
-        path: output_win32
+          ./autogen.sh --with-builtin-tommath --with-builtin-tomcrypt
+          make -j4
+          make tests -j4
+          make run_tests
 
-    - name: Upload (Windows, Docker)
-      if: startsWith(matrix.os, 'windows-') && matrix.docker
-      uses: actions/upload-artifact@main
-      with:
-        name: firebird-windows-${{ matrix.platform }}
-        path: output
+          make -C gen -B -f make.platform.postfix
+          make -C gen -B -f Makefile.install
+
+          # Rename directory to make sure the build is relocatable.
+          mv gen gen2
+          sudo installer -pkg gen2/Release/*.pkg -verbose -target /
+
+          export FIREBIRD_LOCK=`pwd`/temp
+          echo "create database 't.fdb'; select '1' from rdb\$database; select _win1252 '2' from rdb\$database; select _utf8 '3' collate unicode from rdb\$database;" | /Library/Frameworks/Firebird.framework/Resources/bin/isql
+
+          echo "create database 'localhost:/tmp/t.fdb' user sysdba password 'masterkey'; select '11' from rdb\$database; select _win1252 '22' from rdb\$database; select _utf8 '33' collate unicode from rdb\$database;" | /Library/Frameworks/Firebird.framework/Resources/bin/isql
+
+          mv gen2 gen
+          mkdir gen/artifacts
+          mv gen/Release/*.pkg gen/artifacts
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebird-macos-${{ matrix.arch }}
+          path: gen/artifacts
+
+      - name: Create release
+        uses: ./.github/actions/create-release
+        with:
+          token: ${{ secrets.SNAPSHOT_RELEASE_TOKEN }}
+          deletePatterns: Firebird-*-macos-${{ matrix.arch }}*.pkg
+          uploadFiles: gen/artifacts/Firebird-*-macos-${{ matrix.arch }}*.pkg
+
+  build-android-initial:
+    name: build-android-${{ matrix.arch }}-initial
+    runs-on: ubuntu-22.04
+    env:
+      NDK: /home/runner/Android/Ndk
+      ARCH: ${{ matrix.arch }}
+      FB_PREFIX: ${{ (matrix.arch == 'arm32' && 'arme') || (matrix.arch == 'x64' && 'x86_64') || matrix.arch }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - arm32
+          - arm64
+          - x86
+          - x64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
+
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
+
+      - name: Prepare - install Linux tools
+        run: |
+          sudo apt-get install libtool-bin libtomcrypt1 libtomcrypt-dev libtommath1 libtommath-dev libicu-dev zlib1g-dev
+
+      - name: Prepare - Download and install Android NDK
+        run: |
+          mkdir downloads
+          pushd downloads
+          curl -OL https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
+          mkdir -p $NDK
+          unzip android-ndk-r25b-linux.zip -d $NDK && f=("$NDK"/*) && mv "$NDK"/*/* "$NDK" && rmdir "${f[@]}"
+
+      - name: Build
+        run: |
+          ./autogen.sh --prefix=/opt/firebird --enable-binreloc --with-cross-build=android.$FB_PREFIX --without-editline
+          make -j4
+          make CROSS_OUT=Y tests -j4
+          builds/install/arch-specific/android/BuildPackage.sh $ARCH
+
+      - name: Upload initial build
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebird-android-initial-${{ matrix.arch }}
+          path: |
+            gen/Firebird-*-android-initial-${{ matrix.arch }}*.tar.gz
+            gen/Make.Version
+
+  build-android-final:
+    name: build-android-${{ matrix.arch }}-final
+    needs: build-android-initial
+    runs-on: ubuntu-latest
+    env:
+      ARCH: ${{ matrix.arch }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - arm32
+          - arm64
+          - x86
+          - x64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
+
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Download initial build
+        uses: actions/download-artifact@v4
+        with:
+          name: firebird-android-initial-${{ matrix.arch }}
+          path: gen
+
+      - name: Cache - AVD
+        uses: actions/cache@v4
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-v7
+
+      - name: Create AVD and generate snapshot for caching
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          avd-name: firebird-builder
+          arch: x86_64
+          api-level: 30
+          target: google_apis
+          ndk: 25.1.8937393
+          emulator-options: -no-window -noaudio -no-boot-anim -camera-back none -port 5554
+          emulator-boot-timeout: 900
+          script: |
+            echo "Generated AVD snapshot for caching."
+
+      - name: Create necessary files in Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          avd-name: firebird-builder
+          arch: x86_64
+          api-level: 30
+          target: google_apis
+          ndk: 25.1.8937393
+          emulator-options: -no-snapshot-save -no-window -noaudio -no-boot-anim -camera-back none -port 5554
+          emulator-boot-timeout: 900
+          script: |
+            adb wait-for-device
+            adb root
+            NDK=/usr/local/lib/android/sdk/ndk/25.1.8937393 builds/install/arch-specific/android/BuildFinalPackage.sh $ARCH
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebird-android-${{ matrix.arch }}
+          path: gen/Firebird-*-android-${{ matrix.arch }}.tar.gz
+
+      - name: Upload installer (withDebugSymbols)
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebird-android-${{ matrix.arch }}-withDebugSymbols
+          path: gen/Firebird-*-android-${{ matrix.arch }}-withDebugSymbols.tar.gz
+
+      - name: Delete initial build
+        uses: geekyeggo/delete-artifact@v5
+        with:
+          name: firebird-android-initial-${{ matrix.arch }}
+
+      - name: Create release
+        uses: ./.github/actions/create-release
+        with:
+          token: ${{ secrets.SNAPSHOT_RELEASE_TOKEN }}
+          deletePatterns: Firebird-*-android-${{ matrix.arch }}*.tar.gz
+          uploadFiles: gen/Firebird-*-android-${{ matrix.arch }}*.tar.gz
+
+  build-android-aar:
+    needs: build-android-final
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
+
+      - name: Adjust snapshot build number
+        uses: ./.github/actions/adjust-snapshot-buildno
+
+      - name: Download final build (x86)
+        uses: actions/download-artifact@v4
+        with:
+          name: firebird-android-x86
+          path: android/temp
+
+      - name: Download final build (x64)
+        uses: actions/download-artifact@v4
+        with:
+          name: firebird-android-x64
+          path: android/temp
+
+      - name: Download final build (arm32)
+        uses: actions/download-artifact@v4
+        with:
+          name: firebird-android-arm32
+          path: android/temp
+
+      - name: Download final build (arm64)
+        uses: actions/download-artifact@v4
+        with:
+          name: firebird-android-arm64
+          path: android/temp
+
+      - name: Extract final builds
+        working-directory: android
+        run: |
+          mkdir -p embedded/src/main/jniLibs/{x86,x86_64,armeabi-v7a,arm64-v8a}
+          tar xzvf temp/Firebird-*-android-x86.tar.gz -C embedded/src/main/jniLibs/x86 --strip-components=1
+          tar xzvf temp/Firebird-*-android-x64.tar.gz -C embedded/src/main/jniLibs/x86_64 --strip-components=1
+          tar xzvf temp/Firebird-*-android-arm32.tar.gz -C embedded/src/main/jniLibs/armeabi-v7a --strip-components=1
+          tar xzvf temp/Firebird-*-android-arm64.tar.gz -C embedded/src/main/jniLibs/arm64-v8a --strip-components=1
+
+          mkdir -p embedded/src/main/assets/firebird
+          mv embedded/src/main/jniLibs/x86/{*.conf,*.msg,*.dat,*.res} embedded/src/main/assets/firebird/
+          find embedded/src/main/jniLibs -type f ! -iname "*.so" -delete
+
+      - name: Assemble AAR
+        working-directory: android
+        run: |
+          ./gradlew assembleRelease
+          FB_VERSION=`cd ../src/misc/ && . writeBuildNum.sh && echo $PRODUCT_VER_STRING-$FIREBIRD_PACKAGE_VERSION`
+          mv embedded/build/outputs/aar/firebird-embedded-release.aar \
+             embedded/build/outputs/aar/Firebird-$FB_VERSION-android-embedded.aar
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebird-android-aar
+          path: android/embedded/build/outputs/aar/Firebird-*-android-embedded.aar
+
+      - name: Create release
+        uses: ./.github/actions/create-release
+        with:
+          token: ${{ secrets.SNAPSHOT_RELEASE_TOKEN }}
+          deletePatterns: Firebird-*-android-embedded.aar
+          uploadFiles: android/embedded/build/outputs/aar/Firebird-*-android-embedded.aar

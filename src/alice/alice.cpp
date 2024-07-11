@@ -113,7 +113,7 @@ int ALICE_main(Firebird::UtilSvc* uSvc)
 	{
 		Firebird::StaticStatusVector status;
 		e.stuffException(status);
-		uSvc->setServiceStatus(status.begin());
+		uSvc->getStatusAccessor().setServiceStatus(status.begin());
 		uSvc->started();
 		exit_code = FB_FAILURE;
 	}
@@ -146,6 +146,7 @@ int alice(Firebird::UtilSvc* uSvc)
 #ifdef TRUSTED_AUTH
 	tdgbl->ALICE_data.ua_trusted = false;
 #endif
+	tdgbl->ALICE_data.ua_parallel_workers = uSvc->getParallelWorkers();
 
 	//  Start by parsing switches
 
@@ -269,6 +270,18 @@ int alice(Firebird::UtilSvc* uSvc)
 			}
 			if (tdgbl->ALICE_data.ua_page_buffers < 0) {
 				ALICE_error(114);	// msg 114: positive or zero numeric value required
+			}
+		}
+
+		if (table->in_sw_value & sw_parallel_workers)
+		{
+			if (--argc <= 0) {	// TODO: error message!
+				ALICE_error(6);	// msg 6: number of page buffers for cache required
+			}
+			ALICE_upper_case(*argv++, string, sizeof(string));
+			if ((!(tdgbl->ALICE_data.ua_parallel_workers = atoi(string))) && (strcmp(string, "0")))
+			{
+				ALICE_error(7);	// msg 7: numeric value required
 			}
 		}
 
@@ -414,7 +427,7 @@ int alice(Firebird::UtilSvc* uSvc)
 			}
 		}
 
-		if (table->in_sw_value & (sw_attach | sw_force | sw_tran | sw_cache))
+		if (table->in_sw_value & (sw_attach | sw_force | sw_tran))
 		{
 			if (--argc <= 0) {
 				ALICE_error(17);	// msg 17: number of seconds required
@@ -468,7 +481,7 @@ int alice(Firebird::UtilSvc* uSvc)
 
 	// put this here since to put it above overly complicates the parsing.
 	// can't use tbl_requires since it only looks backwards on command line.
-	if ((flags & sw_shut) && !(flags & ((sw_attach | sw_force | sw_tran | sw_cache))))
+	if ((flags & sw_shut) && !(flags & ((sw_attach | sw_force | sw_tran))))
 	{
 		ALICE_error(19);	// msg 19: must specify type of shutdown
 	}
@@ -493,7 +506,7 @@ int alice(Firebird::UtilSvc* uSvc)
 	{
 		if (uSvc->isService())
 		{
-			uSvc->setServiceStatus(ALICE_MSG_FAC, 20, MsgFormat::SafeArg());
+			uSvc->getStatusAccessor().setServiceStatus(ALICE_MSG_FAC, 20, MsgFormat::SafeArg());
 		}
 		else
 		{
@@ -594,8 +607,9 @@ int alice(Firebird::UtilSvc* uSvc)
 	if ((exit_code != FINI_OK) && uSvc->isService() &&
 		(tdgbl->status[0] == 1) && (tdgbl->status[1] != 0))
 	{
-		uSvc->initStatus();
-		uSvc->setServiceStatus(tdgbl->status);
+		Firebird::UtilSvc::StatusAccessor sa = uSvc->getStatusAccessor();
+		sa.init();
+		uSvc->getStatusAccessor().setServiceStatus(tdgbl->status);
 	}
 	tdgbl->uSvc->started();
 
@@ -628,7 +642,7 @@ void ALICE_print(USHORT	number, const SafeArg& arg)
 	AliceGlobals* tdgbl = AliceGlobals::getSpecific();
 	if (tdgbl->uSvc->isService())
 	{
-		tdgbl->uSvc->setServiceStatus(ALICE_MSG_FAC, number, arg);
+		tdgbl->uSvc->getStatusAccessor().setServiceStatus(ALICE_MSG_FAC, number, arg);
 		tdgbl->uSvc->started();
 		return;
 	}
@@ -651,7 +665,7 @@ void ALICE_print_status(bool error, const ISC_STATUS* status_vector)
 	{
 		const ISC_STATUS* vector = status_vector;
 		AliceGlobals* tdgbl = AliceGlobals::getSpecific();
-		tdgbl->uSvc->setServiceStatus(status_vector);
+		tdgbl->uSvc->getStatusAccessor().setServiceStatus(status_vector);
 
 		if (error && tdgbl->uSvc->isService())
 		{
@@ -683,7 +697,7 @@ void ALICE_error(USHORT	number, const SafeArg& arg)
 	AliceGlobals* tdgbl = AliceGlobals::getSpecific();
 	TEXT buffer[256];
 
-	tdgbl->uSvc->setServiceStatus(ALICE_MSG_FAC, number, arg);
+	tdgbl->uSvc->getStatusAccessor().setServiceStatus(ALICE_MSG_FAC, number, arg);
 	if (!tdgbl->uSvc->isService())
 	{
 		fb_msg_format(0, ALICE_MSG_FAC, number, sizeof(buffer), buffer, arg);

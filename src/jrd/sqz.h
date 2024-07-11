@@ -29,41 +29,73 @@
 
 namespace Jrd
 {
+	class thread_db;
+
 	class Compressor
 	{
 	public:
-		Compressor(MemoryPool& pool, FB_SIZE_T length, const UCHAR* data);
+		Compressor(thread_db* tdbb, ULONG length, const UCHAR* data);
+		Compressor(MemoryPool& pool, bool allowLongRuns, bool allowUnpacked, ULONG length, const UCHAR* data);
 
-		FB_SIZE_T getPackedLength() const
+		ULONG getPackedLength() const
 		{
 			return m_length;
 		}
 
-		const UCHAR* getControl() const
+		bool isPacked() const
 		{
-			return m_control.begin();
+			return m_runs.hasData();
 		}
 
-		FB_SIZE_T getControlSize() const
-		{
-			return m_control.getCount();
-		}
+		void pack(const UCHAR* input, UCHAR* output) const;
+		ULONG truncate(ULONG outLength);
+		ULONG truncateTail(ULONG outLength);
 
-		void pack(const UCHAR*, UCHAR*) const;
-		FB_SIZE_T pack(const UCHAR*, FB_SIZE_T, UCHAR*) const;
-		FB_SIZE_T getPartialLength(FB_SIZE_T, const UCHAR*) const;
-
-		static UCHAR* unpack(FB_SIZE_T, const UCHAR*, FB_SIZE_T, UCHAR*);
-		static FB_SIZE_T applyDiff(FB_SIZE_T, const UCHAR*, FB_SIZE_T, UCHAR* const);
-		static FB_SIZE_T makeDiff(FB_SIZE_T, const UCHAR*, FB_SIZE_T, UCHAR*, FB_SIZE_T, UCHAR*);
-		static FB_SIZE_T makeNoDiff(FB_SIZE_T, UCHAR*);
+		static ULONG getUnpackedLength(ULONG inLength, const UCHAR* input);
+		static UCHAR* unpack(ULONG inLength, const UCHAR* input,
+							 ULONG outLength, UCHAR* output);
 
 	private:
-		Firebird::HalfStaticArray<UCHAR, 2048> m_control;
-		FB_SIZE_T m_length;
+		unsigned nonCompressableRun(unsigned length);
+
+		Firebird::HalfStaticArray<int, 256> m_runs;
+		ULONG m_length = 0;
+
+		// Compatibility options
+		bool m_allowLongRuns = true;
+		bool m_allowUnpacked = true;
+	};
+
+	class Difference
+	{
+		// Max length of generated differences string between two records
+		static const unsigned MAX_DIFFERENCES = 1024;
+
+	public:
+		UCHAR* getData()
+		{
+			return m_differences;
+		}
+
+		const UCHAR* getData() const
+		{
+			return m_differences;
+		}
+
+		ULONG getCapacity() const
+		{
+			return MAX_DIFFERENCES;
+		}
+
+		ULONG apply(ULONG diffLength, ULONG outLength, UCHAR* output);
+		ULONG make(ULONG length1, const UCHAR* rec1,
+				   ULONG length2, const UCHAR* rec2);
+		ULONG makeNoDiff(ULONG length);
+
+	private:
+		UCHAR m_differences[MAX_DIFFERENCES];
 	};
 
 } //namespace Jrd
 
 #endif // JRD_SQZ_H
-

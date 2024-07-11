@@ -75,6 +75,8 @@ enum lck_t {
 	LCK_alter_database,			// ALTER DATABASE lock
 	LCK_repl_state,				// Replication state lock
 	LCK_repl_tables,			// Replication set lock
+	LCK_dsql_statement_cache,	// DSQL statement cache lock
+	LCK_profiler_listener,		// Remote profiler listener
 	LCK_tablespace_exist		// Tablespace existance lock
 };
 
@@ -143,15 +145,16 @@ public:
 	UCHAR lck_physical;				// Physical lock level
 	LOCK_DATA_T lck_data;			// Data associated with a lock
 
+	static constexpr size_t KEY_STATIC_SIZE = sizeof(SINT64);
+
 private:
-
-	static const size_t KEY_STATIC_SIZE = sizeof(SINT64);
-
 	union
 	{
 		UCHAR key_string[KEY_STATIC_SIZE];
 		SINT64 key_long;
 	} lck_key;						// Lock key string
+
+	static_assert(KEY_STATIC_SIZE >= sizeof(lck_key), "Wrong KEY_STATIC_SIZE");
 
 public:
 

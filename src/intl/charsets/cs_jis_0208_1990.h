@@ -4,46 +4,12 @@
 
    Unicode mapping table generated from file asia/JIS/JIS0208.TXT
 
-#
 #	Name:             JIS X 0208 (1990) to Unicode
 #	Unicode version:  1.1
 #	Table version:    0.9
 #	Table format:     Format A
 #	Date:             8 March 1994
-#	Authors:          Glenn Adams <glenn@metis.com>
-#                     John H. Jenkins <John_Jenkins@taligent.com>
-#
-#
-#	This file is provided as-is by Unicode, Inc. (The Unicode Consortium).
-#	No claims are made as to fitness for any particular purpose.  No
-#	warranties of any kind are expressed or implied.  The recipient
-#	agrees to determine applicability of information provided.  If this
-#	file has been provided on magnetic media by Unicode, Inc., the sole
-#	remedy for any claim will be exchange of defective media within 90
-#	days of receipt.
-#
-#	Recipient is granted the right to make copies in any form for
-#	internal distribution and to freely use the information supplied
-#	in the creation of products supporting Unicode.  Unicode, Inc.
-#	specifically excludes the right to re-distribute this file directly
-#	to third parties or other organizations whether for profit or not.
-#
-#	General notes:
-#
-#	The following algorithms can be used to change the hex form
-#		of JIS 0208 to other standard forms:
-#
-#		To change hex to EUC form, add 0x8080
-#		To change hex to kuten form, first subtract 0x2020.  Then
-#			the high and low bytes correspond to the ku and ten of
-#			the kuten form.  For example, 0x2121 -> 0x0101 -> 0101;
-#			0x7426 -> 0x5406 -> 8406
-#
-#   The kanji mappings are a normative part of ISO/IEC 10646.  The
-#       non-kanji mappings are provisional, pending definition of
-#       official mappings by Japanese standards bodies
-#
-#	Any comments or problems, contact <John_Jenkins@taligent.com>
+
 * The contents of this file are subject to the Interbase Public
 * License Version 1.0 (the "License"); you may not use this file
 * except in compliance with the License. You may obtain a copy

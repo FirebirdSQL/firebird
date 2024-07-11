@@ -285,6 +285,13 @@ public:
 		return rc;
 	}
 
+	void divMod(int divisor, int* remainder)
+	{
+		absl::int128 d = divisor;
+		*remainder = int(v % d);
+		v /= d;
+	}
+
 	// returns internal data in per-32bit form
 	void getTable32(unsigned* dwords) const
 	{
@@ -300,7 +307,17 @@ public:
 
 	UCHAR* getBytes()
 	{
-		return (UCHAR*)(&v); 
+		return (UCHAR*)(&v);
+	}
+
+	static const unsigned BIAS = 128;
+	static const unsigned PMAX = 38;
+
+	ULONG makeIndexKey(vary* buf, int scale);
+
+	static ULONG getIndexKeyLength()
+	{
+		return 19;
 	}
 
 protected:
@@ -532,6 +549,13 @@ public:
 		return rc;
 	}
 
+	void divMod(int divisor, int* remainder)
+	{
+		ttmath::sint rem;
+		v.DivInt(divisor, &rem);
+		*remainder = rem;
+	}
+
 	void getTable32(unsigned* dwords) const;		// internal data in per-32bit form
 	void setTable32(const unsigned* dwords);
 	void setScale(int scale);
@@ -539,6 +563,16 @@ public:
 	UCHAR* getBytes()
 	{
 		return (UCHAR*)(v.table);
+	}
+
+	static const unsigned BIAS = 128;
+	static const unsigned PMAX = 39;
+
+	ULONG makeIndexKey(vary* buf, int scale);
+
+	static ULONG getIndexKeyLength()
+	{
+		return 19;
 	}
 
 protected:

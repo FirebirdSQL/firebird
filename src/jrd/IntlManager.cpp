@@ -41,6 +41,10 @@
 #include "../common/ScanDir.h"
 #include "../common/config/config_file.h"
 
+#ifdef ANDROID
+#include "../common/os/path_utils.h"
+#endif
+
 using namespace Firebird;
 
 
@@ -475,6 +479,16 @@ bool IntlManager::initialize()
 					if (!exists)
 					{
 						mod = ModuleLoader::fixAndLoadModule(status, filename);
+
+#ifdef ANDROID
+						if (!mod)
+						{
+							PathName path, file;
+							PathUtils::splitLastComponent(path, file, filename);
+							mod = ModuleLoader::fixAndLoadModule(status, file);
+						}
+#endif
+
 						if (mod)
 						{
 							exists = modules->exist(filename);
@@ -625,7 +639,7 @@ bool IntlManager::lookupCharSet(const string& charSetName, charset* cs)
 }
 
 
-bool IntlManager::lookupCollation(const string& collationName,
+void IntlManager::lookupCollation(const string& collationName,
 								  const string& charSetName,
 								  USHORT attributes, const UCHAR* specificAttributes,
 								  ULONG specificAttributesLen, bool ignoreAttributes,
@@ -633,32 +647,56 @@ bool IntlManager::lookupCollation(const string& collationName,
 {
 	ExternalInfo charSetExternalInfo;
 	ExternalInfo collationExternalInfo;
+	char statusBuffer[BUFFER_LARGE] = "";
 
 	if (charSetCollations->get(charSetName + ":" + charSetName, charSetExternalInfo) &&
 		charSetCollations->get(charSetName + ":" + collationName, collationExternalInfo))
 	{
-		pfn_INTL_lookup_texttype lookupFunction = NULL;
+		ModuleLoader::Module* module = nullptr;
+
+		if (collationExternalInfo.moduleName.hasData())
+			modules->get(collationExternalInfo.moduleName, module);
+
+		pfn_INTL_lookup_texttype_with_status lookupStatusFunction = nullptr;
 
 		if (collationExternalInfo.moduleName.isEmpty())
-			lookupFunction = INTL_builtin_lookup_texttype;
-		else
-		{
-			ModuleLoader::Module* module;
+			lookupStatusFunction = INTL_builtin_lookup_texttype_status;
+		else if (module)
+			module->findSymbol(nullptr, STRINGIZE(TEXTTYPE_WITH_STATUS_ENTRYPOINT), lookupStatusFunction);
 
-			if (modules->get(collationExternalInfo.moduleName, module) && module)
-				module->findSymbol(NULL, STRINGIZE(TEXTTYPE_ENTRYPOINT), lookupFunction);
+		if (lookupStatusFunction)
+		{
+			if ((*lookupStatusFunction)(statusBuffer, sizeof(statusBuffer),
+					tt, collationExternalInfo.name.c_str(), charSetExternalInfo.name.c_str(),
+					attributes, specificAttributes, specificAttributesLen, ignoreAttributes,
+					collationExternalInfo.configInfo.c_str()))
+			{
+				return;
+			}
 		}
-
-		if (lookupFunction &&
-			(*lookupFunction)(tt, collationExternalInfo.name.c_str(), charSetExternalInfo.name.c_str(),
-							  attributes, specificAttributes, specificAttributesLen, ignoreAttributes,
-							  collationExternalInfo.configInfo.c_str()))
+		else if (module)
 		{
-			return true;
+			pfn_INTL_lookup_texttype lookupFunction = nullptr;
+			module->findSymbol(nullptr, STRINGIZE(TEXTTYPE_ENTRYPOINT), lookupFunction);
+
+			if (lookupFunction &&
+				(*lookupFunction)(tt, collationExternalInfo.name.c_str(), charSetExternalInfo.name.c_str(),
+								attributes, specificAttributes, specificAttributesLen, ignoreAttributes,
+								collationExternalInfo.configInfo.c_str()))
+			{
+				return;
+			}
 		}
 	}
 
-	return false;
+	if (statusBuffer[0])
+	{
+		(Arg::Gds(isc_collation_not_installed) << collationName << charSetName <<
+			Arg::Gds(isc_random) << statusBuffer
+		).raise();
+	}
+	else
+		(Arg::Gds(isc_collation_not_installed) << collationName << charSetName).raise();
 }
 
 

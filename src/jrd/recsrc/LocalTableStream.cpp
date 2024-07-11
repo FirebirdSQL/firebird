@@ -25,6 +25,7 @@
 #include "../jrd/jrd.h"
 #include "../jrd/req.h"
 #include "../dsql/StmtNodes.h"
+#include "../jrd/optimizer/Optimizer.h"
 
 #include "RecordSource.h"
 
@@ -42,9 +43,10 @@ LocalTableStream::LocalTableStream(CompilerScratch* csb, StreamType stream, cons
 	fb_assert(m_table);
 
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = DEFAULT_CARDINALITY;
 }
 
-void LocalTableStream::open(thread_db* tdbb) const
+void LocalTableStream::internalOpen(thread_db* tdbb) const
 {
 	const auto request = tdbb->getRequest();
 	const auto impure = request->getImpure<Impure>(m_impure);
@@ -69,7 +71,7 @@ void LocalTableStream::close(thread_db* tdbb) const
 		impure->irsb_flags &= ~irsb_open;
 }
 
-bool LocalTableStream::getRecord(thread_db* tdbb) const
+bool LocalTableStream::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -102,27 +104,31 @@ bool LocalTableStream::refetchRecord(thread_db* tdbb) const
 	return true;
 }
 
-bool LocalTableStream::lockRecord(thread_db* tdbb) const
+WriteLockResult LocalTableStream::lockRecord(thread_db* tdbb) const
 {
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
-	return false;	// compiler silencer
 }
 
-void LocalTableStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void LocalTableStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
 	//// TODO: Use Local Table name/alias.
 
-	if (detailed)
-		plan += printIndent(++level) + "Local Table Full Scan";
-	else
-	{
-		if (!level)
-			plan += "(";
+	if (!level)
+		plan += "(";
 
-		plan += "Local_Table";
-		plan += " NATURAL";
+	plan += "Local_Table";
+	plan += " NATURAL";
 
-		if (!level)
-			plan += ")";
-	}
+	if (!level)
+		plan += ")";
+}
+
+void LocalTableStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
+{
+	planEntry.className = "LocalTableStream";
+
+	//// TODO: Use Local Table name/alias.
+
+	planEntry.lines.add().text = "Local Table Full Scan";
+	printOptInfo(planEntry.lines);
 }

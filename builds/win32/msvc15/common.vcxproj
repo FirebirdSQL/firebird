@@ -62,6 +62,7 @@
       <EnableEnhancedInstructionSet Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
     </ClCompile>
     <ClCompile Include="..\..\..\src\common\cvt.cpp" />
+    <ClCompile Include="..\..\..\src\common\CvtFormat.cpp" />
     <ClCompile Include="..\..\..\src\common\db_alias.cpp" />
     <ClCompile Include="..\..\..\src\common\DecFloat.cpp" />
     <ClCompile Include="..\..\..\src\common\dllinst.cpp" />
@@ -75,7 +76,6 @@
     <ClCompile Include="..\..\..\src\common\isc.cpp" />
     <ClCompile Include="..\..\..\src\common\isc_file.cpp" />
     <ClCompile Include="..\..\..\src\common\isc_sync.cpp" />
-    <ClCompile Include="..\..\..\src\common\keywords.cpp" />
     <ClCompile Include="..\..\..\src\common\MsgMetadata.cpp" />
     <ClCompile Include="..\..\..\src\common\MsgUtil.cpp" />
     <ClCompile Include="..\..\..\src\common\os\win32\fbsyslog.cpp" />
@@ -94,6 +94,7 @@
     <ClCompile Include="..\..\..\src\common\StatementMetadata.cpp" />
     <ClCompile Include="..\..\..\src\common\StatusArg.cpp" />
     <ClCompile Include="..\..\..\src\common\StatusHolder.cpp" />
+    <ClCompile Include="..\..\..\src\common\Task.cpp" />
     <ClCompile Include="..\..\..\src\common\TextType.cpp" />
     <ClCompile Include="..\..\..\src\common\ThreadData.cpp" />
     <ClCompile Include="..\..\..\src\common\ThreadStart.cpp" />
@@ -124,6 +125,7 @@
     <ClInclude Include="..\..\..\src\common\classes\ClumpletWriter.h" />
     <ClInclude Include="..\..\..\src\common\classes\condition.h" />
     <ClInclude Include="..\..\..\src\common\classes\DbImplementation.h" />
+    <ClInclude Include="..\..\..\src\common\classes\DoublyLinkedList.h" />
     <ClInclude Include="..\..\..\src\common\classes\fb_atomic.h" />
     <ClInclude Include="..\..\..\src\common\classes\fb_pair.h" />
     <ClInclude Include="..\..\..\src\common\classes\fb_string.h" />
@@ -140,7 +142,6 @@
     <ClInclude Include="..\..\..\src\common\classes\MsgPrint.h" />
     <ClInclude Include="..\..\..\src\common\classes\NestConst.h" />
     <ClInclude Include="..\..\..\src\common\classes\NoThrowTimeStamp.h" />
-    <ClInclude Include="..\..\..\src\common\classes\Nullable.h" />
     <ClInclude Include="..\..\..\src\common\classes\objects_array.h" />
     <ClInclude Include="..\..\..\src\common\classes\ParsedList.h" />
     <ClInclude Include="..\..\..\src\common\classes\QualifiedName.h" />
@@ -158,7 +159,9 @@
     <ClInclude Include="..\..\..\src\common\classes\TimerImpl.h" />
     <ClInclude Include="..\..\..\src\common\classes\timestamp.h" />
     <ClInclude Include="..\..\..\src\common\classes\tree.h" />
+    <ClInclude Include="..\..\..\src\common\classes\TriState.h" />
     <ClInclude Include="..\..\..\src\common\classes\UserBlob.h" />
+    <ClInclude Include="..\..\..\src\common\classes\Uuid.h" />
     <ClInclude Include="..\..\..\src\common\classes\VaryStr.h" />
     <ClInclude Include="..\..\..\src\common\classes\vector.h" />
     <ClInclude Include="..\..\..\src\common\classes\zip.h" />
@@ -169,6 +172,8 @@
     <ClInclude Include="..\..\..\src\common\config\dir_list.h" />
     <ClInclude Include="..\..\..\src\common\CsConvert.h" />
     <ClInclude Include="..\..\..\src\common\cvt.h" />
+    <ClInclude Include="..\..\..\src\common\CvtFormat.h" />
+    <ClInclude Include="..\..\..\src\common\CvtFormatImpl.h" />
     <ClInclude Include="..\..\..\src\common\db_alias.h" />
     <ClInclude Include="..\..\..\src\common\DecFloat.h" />
     <ClInclude Include="..\..\..\src\common\dllinst.h" />
@@ -187,9 +192,8 @@
     <ClInclude Include="..\..\..\src\common\isc_f_proto.h" />
     <ClInclude Include="..\..\..\src\common\isc_proto.h" />
     <ClInclude Include="..\..\..\src\common\isc_s_proto.h" />
-    <ClInclude Include="..\..\..\src\common\keywords.h" />
     <ClInclude Include="..\..\..\src\common\MsgMetadata.h" />
-	<ClInclude Include="..\..\..\src\common\MsgUtil.h" />
+    <ClInclude Include="..\..\..\src\common\MsgUtil.h" />
     <ClInclude Include="..\..\..\src\common\os\divorce.h" />
     <ClInclude Include="..\..\..\src\common\os\fbsyslog.h" />
     <ClInclude Include="..\..\..\src\common\os\guid.h" />
@@ -197,6 +201,7 @@
     <ClInclude Include="..\..\..\src\common\os\mod_loader.h" />
     <ClInclude Include="..\..\..\src\common\os\os_utils.h" />
     <ClInclude Include="..\..\..\src\common\os\path_utils.h" />
+    <ClInclude Include="..\..\..\src\common\ParserTokens.h" />
     <ClInclude Include="..\..\..\src\common\prett_proto.h" />
     <ClInclude Include="..\..\..\src\common\ScanDir.h" />
     <ClInclude Include="..\..\..\src\common\sdl.h" />
@@ -210,11 +215,13 @@
     <ClInclude Include="..\..\..\src\common\StatusArg.h" />
     <ClInclude Include="..\..\..\src\common\StatusHolder.h" />
     <ClInclude Include="..\..\..\src\common\stuff.h" />
+    <ClInclude Include="..\..\..\src\common\Task.h" />
     <ClInclude Include="..\..\..\src\common\TextType.h" />
     <ClInclude Include="..\..\..\src\common\ThreadData.h" />
     <ClInclude Include="..\..\..\src\common\ThreadStart.h" />
     <ClInclude Include="..\..\..\src\common\TimeZones.h" />
     <ClInclude Include="..\..\..\src\common\TimeZoneUtil.h" />
+    <ClInclude Include="..\..\..\src\common\Token.h" />
     <ClInclude Include="..\..\..\src\common\Tokens.h" />
     <ClInclude Include="..\..\..\src\common\unicode_util.h" />
     <ClInclude Include="..\..\..\src\common\UtilSvc.h" />
@@ -224,6 +231,9 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{15605F44-BFFD-444F-AD4C-55DC9D704465}</ProjectGuid>
+    <WindowsTargetPlatformVersion Condition="'$(VisualStudioVersion)'=='15.0'">10.0.17763.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion Condition="'$(VisualStudioVersion)'=='16.0'">10.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion Condition="'$(VisualStudioVersion)'=='17.0'">10.0</WindowsTargetPlatformVersion>
     <RootNamespace>common</RootNamespace>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -231,7 +241,7 @@
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
-    <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141_xp</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='16.0'">v142</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='17.0'">v143</PlatformToolset>
   </PropertyGroup>
@@ -239,7 +249,7 @@
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
-    <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141_xp</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='16.0'">v142</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='17.0'">v143</PlatformToolset>
   </PropertyGroup>
@@ -304,14 +314,10 @@
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
-      <Optimization>MaxSpeed</Optimization>
-      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;SUPERSERVER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Lib>
-      <AdditionalDependencies>ws2_32.lib;../../../extern/libtommath/lib/$(PlatformName)\$(Configuration)\tommath.lib;../../../extern/libtomcrypt/lib/$(PlatformName)\$(Configuration)\tomcrypt.lib;../../../extern/decNumber/lib/$(PlatformName)\$(Configuration)\decnumber.lib;../../../extern/re2/builds/$(PlatformName)\$(Configuration)\re2.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ws2_32.lib;../../../extern/libtommath/lib/$(PlatformName)\$(Configuration)\tommath.lib;../../../extern/libtomcrypt/lib/$(PlatformName)\$(Configuration)\tomcrypt.lib;../../../extern/decNumber/lib/$(PlatformName)\$(Configuration)\decnumber.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Lib>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -323,7 +329,7 @@
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
     </ClCompile>
     <Lib>
-      <AdditionalDependencies>ws2_32.lib;../../../extern/libtommath/lib/$(PlatformName)\$(Configuration)\tommath.lib;../../../extern/libtomcrypt/lib/$(PlatformName)\$(Configuration)\tomcrypt.lib;../../../extern/decNumber/lib/$(PlatformName)\$(Configuration)\decnumber.lib;../../../extern/re2/builds/$(PlatformName)\$(Configuration)\re2.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ws2_32.lib;../../../extern/libtommath/lib/$(PlatformName)\$(Configuration)\tommath.lib;../../../extern/libtomcrypt/lib/$(PlatformName)\$(Configuration)\tomcrypt.lib;../../../extern/decNumber/lib/$(PlatformName)\$(Configuration)\decnumber.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Lib>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -331,14 +337,10 @@
       <TargetEnvironment>X64</TargetEnvironment>
     </Midl>
     <ClCompile>
-      <Optimization>MaxSpeed</Optimization>
-      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;SUPERSERVER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Lib>
-      <AdditionalDependencies>ws2_32.lib;../../../extern/libtommath/lib/$(PlatformName)\$(Configuration)\tommath.lib;../../../extern/libtomcrypt/lib/$(PlatformName)\$(Configuration)\tomcrypt.lib;../../../extern/decNumber/lib/$(PlatformName)\$(Configuration)\decnumber.lib;$(TargetDir)\ttmathuint_x86_64_msvc.obj;../../../extern/re2/builds/$(PlatformName)\$(Configuration)\re2.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ws2_32.lib;../../../extern/libtommath/lib/$(PlatformName)\$(Configuration)\tommath.lib;../../../extern/libtomcrypt/lib/$(PlatformName)\$(Configuration)\tomcrypt.lib;../../../extern/decNumber/lib/$(PlatformName)\$(Configuration)\decnumber.lib;../../../extern/ttmath\$(Configuration)\ttmathuint_x86_64_msvc.obj;%(AdditionalDependencies)</AdditionalDependencies>
     </Lib>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -352,7 +354,7 @@
       </PrecompiledHeader>
     </ClCompile>
     <Lib>
-      <AdditionalDependencies>ws2_32.lib;../../../extern/libtommath/lib/$(PlatformName)\$(Configuration)\tommath.lib;../../../extern/libtomcrypt/lib/$(PlatformName)\$(Configuration)\tomcrypt.lib;../../../extern/decNumber/lib/$(PlatformName)\$(Configuration)\decnumber.lib;../../../extern/re2/builds/$(PlatformName)\$(Configuration)\re2.lib;$(TargetDir)\ttmathuint_x86_64_msvc.obj;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ws2_32.lib;../../../extern/libtommath/lib/$(PlatformName)\$(Configuration)\tommath.lib;../../../extern/libtomcrypt/lib/$(PlatformName)\$(Configuration)\tomcrypt.lib;../../../extern/decNumber/lib/$(PlatformName)\$(Configuration)\decnumber.lib;../../../extern/ttmath\$(Configuration)\ttmathuint_x86_64_msvc.obj;%(AdditionalDependencies)</AdditionalDependencies>
     </Lib>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

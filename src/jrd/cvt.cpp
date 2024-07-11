@@ -236,10 +236,10 @@ UCHAR CVT_get_numeric(const UCHAR* string, const USHORT length, SSHORT* scale, v
 
 			if (!over)
 			{
-				if (value >= NUMERIC_LIMIT)
+				if (static_cast<FB_UINT64>(value) >= NUMERIC_LIMIT)
 				{
 					// possibility of an overflow
-					if ((value > NUMERIC_LIMIT) || (*p > '8' && sign == -1) || (*p > '7' && sign != -1))
+					if ((static_cast<FB_UINT64>(value) > NUMERIC_LIMIT) || (*p > '8' && sign == -1) || (*p > '7' && sign != -1))
 						over = true;
 				}
 
@@ -264,6 +264,8 @@ UCHAR CVT_get_numeric(const UCHAR* string, const USHORT length, SSHORT* scale, v
 			sign = 1;
 		else if (*p == 'e' || *p == 'E')
 			break;
+		else if (*p == '\0')
+			break;
 		else if (*p != ' ')
 			CVT_conversion_error(&desc, ERR_post);
 	}
@@ -274,9 +276,7 @@ UCHAR CVT_get_numeric(const UCHAR* string, const USHORT length, SSHORT* scale, v
 	if ((local_scale > MAX_SCHAR) || (local_scale < MIN_SCHAR))
 		over = true;
 
-	*scale = local_scale;
-
-	if ((!over) && ((p < end) ||		// there is an exponent
+	if ((!over) && (((p < end) && *p) ||		// there is an exponent
 		((value < 0) && (sign != -1)))) // MAX_SINT64+1 wrapped around
 	{
 		// convert to double
@@ -284,6 +284,8 @@ UCHAR CVT_get_numeric(const UCHAR* string, const USHORT length, SSHORT* scale, v
 		if (!over)
 			return dtype_double;
 	}
+
+	*scale = local_scale;
 
 	if (over)
 	{

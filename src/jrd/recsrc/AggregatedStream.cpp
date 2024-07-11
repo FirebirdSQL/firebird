@@ -27,6 +27,7 @@
 #include "../jrd/mov_proto.h"
 #include "../jrd/vio_proto.h"
 #include "../jrd/Attachment.h"
+#include "../jrd/optimizer/Optimizer.h"
 
 #include "RecordSource.h"
 
@@ -48,11 +49,21 @@ BaseAggWinStream<ThisType, NextType>::BaseAggWinStream(thread_db* tdbb, Compiler
 	  m_oneRowWhenEmpty(oneRowWhenEmpty)
 {
 	fb_assert(m_next);
+
 	m_impure = csb->allocImpure<typename ThisType::Impure>();
+
+	if (group)
+	{
+		m_cardinality = next->getCardinality();
+		for (auto count = group->getCount(); count; count--)
+			m_cardinality *= REDUCE_SELECTIVITY_FACTOR_EQUALITY;
+	}
+	else
+		m_cardinality = MINIMUM_CARDINALITY;
 }
 
 template <typename ThisType, typename NextType>
-void BaseAggWinStream<ThisType, NextType>::open(thread_db* tdbb) const
+void BaseAggWinStream<ThisType, NextType>::internalOpen(thread_db* tdbb) const
 {
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = getImpure(request);
@@ -98,10 +109,9 @@ bool BaseAggWinStream<ThisType, NextType>::refetchRecord(thread_db* tdbb) const
 }
 
 template <typename ThisType, typename NextType>
-bool BaseAggWinStream<ThisType, NextType>::lockRecord(thread_db* /*tdbb*/) const
+WriteLockResult BaseAggWinStream<ThisType, NextType>::lockRecord(thread_db* /*tdbb*/) const
 {
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
-	return false; // compiler silencer
 }
 
 template <typename ThisType, typename NextType>
@@ -365,15 +375,26 @@ AggregatedStream::AggregatedStream(thread_db* tdbb, CompilerScratch* csb, Stream
 	fb_assert(map);
 }
 
-void AggregatedStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void AggregatedStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	if (detailed)
-		plan += printIndent(++level) + "Aggregate";
-
-	m_next->print(tdbb, plan, detailed, level);
+	m_next->getLegacyPlan(tdbb, plan, level);
 }
 
-bool AggregatedStream::getRecord(thread_db* tdbb) const
+void AggregatedStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
+{
+	planEntry.className = "AggregatedStream";
+
+	planEntry.lines.add().text = "Aggregate";
+	printOptInfo(planEntry.lines);
+
+	if (recurse)
+	{
+		++level;
+		m_next->getPlan(tdbb, planEntry.children.add(), level, recurse);
+	}
+}
+
+bool AggregatedStream::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 

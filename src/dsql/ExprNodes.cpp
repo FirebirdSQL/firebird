@@ -25,6 +25,7 @@
 #include "../common/TimeZoneUtil.h"
 #include "../common/classes/FpeControl.h"
 #include "../common/classes/VaryStr.h"
+#include "../common/CvtFormat.h"
 #include "../dsql/ExprNodes.h"
 #include "../dsql/BoolNodes.h"
 #include "../dsql/StmtNodes.h"
@@ -85,6 +86,32 @@ namespace
 				node2->args->items[1]->sameAs(node1->trueValue, ignoreStreams))
 			{
 				return true;
+			}
+		}
+
+		return false;
+	}
+
+	// In previous versions COALESCE is automatically wrapped by a CAST.
+	bool sameNodes(const CoalesceNode* coalesceNode, const CastNode* castNode, bool ignoreStreams)
+	{
+		if (coalesceNode && castNode)
+		{
+			if (const auto castCoalesceNode = nodeAs<CoalesceNode>(castNode->source))
+			{
+				const auto desc1 = &castCoalesceNode->castDesc;
+				const auto desc2 = &castNode->castDesc;
+
+				if (DSC_EQUIV(desc1, desc2, true) ||
+					(desc1->isText() && desc2->isText() && desc1->getTextType() == desc2->getTextType()) ||
+					(desc1->isNumeric() && desc2->isNumeric()))
+				{
+					return castCoalesceNode->sameAs(coalesceNode, ignoreStreams);
+				}
+			}
+			else if (const auto castValueIfNode = nodeAs<ValueIfNode>(castNode->source))
+			{
+				return sameNodes(castValueIfNode, coalesceNode, ignoreStreams);
 			}
 		}
 
@@ -159,9 +186,7 @@ namespace
 		for (ExprNode** node = csb->csb_current_nodes.end() - 1;
 			 node >= csb->csb_current_nodes.begin(); --node)
 		{
-			RseNode* const rseNode = nodeAs<RseNode>(*node);
-
-			if (rseNode)
+			if (const auto rseNode = nodeAs<RseNode>(*node))
 			{
 				if (rseNode->containsStream(stream))
 					break;
@@ -190,6 +215,88 @@ static SINT64 getTimeStampToIscTicks(thread_db* tdbb, const dsc* d);
 static bool isDateAndTime(const dsc& d1, const dsc& d2);
 static void setParameterInfo(dsql_par* parameter, const dsql_ctx* context);
 
+
+//--------------------
+
+
+int SortValueItem::compare(const dsc* desc1, const dsc* desc2)
+{
+	if (!desc1 && !desc2)
+		return 0;
+
+	if (!desc1)
+		return -1;
+
+	if (!desc2)
+		return 1;
+
+	return MOV_compare(JRD_get_thread_data(), desc1, desc2);
+}
+
+LookupValueList::LookupValueList(MemoryPool& pool, ValueListNode* values, ULONG impure)
+	: m_values(pool, values->items.getCount()), m_impureOffset(impure)
+{
+	for (auto& item : values->items)
+		m_values.add(item);
+}
+
+const SortedValueList* LookupValueList::init(thread_db* tdbb, Request* request) const
+{
+	auto createList = [&]()
+	{
+		const auto sortedList = FB_NEW_POOL(*tdbb->getDefaultPool())
+			SortedValueList(*tdbb->getDefaultPool(), m_values.getCount());
+
+		sortedList->setSortMode(FB_ARRAY_SORT_MANUAL);
+
+		for (const auto value : m_values)
+		{
+			const auto valueDesc = EVL_expr(tdbb, request, value);
+			sortedList->add(SortValueItem(value, valueDesc));
+		}
+
+		sortedList->sort();
+
+		return sortedList;
+	};
+
+	// Non-zero impure offset means that the list expression is invariant,
+	// so the sorted list can be cached inside the impure area
+
+	if (m_impureOffset)
+	{
+		const auto impure = request->getImpure<impure_value>(m_impureOffset);
+		auto sortedList = impure->vlu_misc.vlu_sortedList;
+
+		if (!(impure->vlu_flags & VLU_computed))
+		{
+			delete impure->vlu_misc.vlu_sortedList;
+			impure->vlu_misc.vlu_sortedList = nullptr;
+
+			sortedList = impure->vlu_misc.vlu_sortedList = createList();
+			impure->vlu_flags |= VLU_computed;
+		}
+
+		return sortedList;
+	}
+
+	// Otherwise, create a temporary list for early evaluation during index lookup
+
+	return createList();
+}
+
+bool LookupValueList::find(thread_db* tdbb, Request* request, const ValueExprNode* value, const dsc* desc) const
+{
+	const auto sortedList = init(tdbb, request);
+	fb_assert(sortedList && sortedList->hasData());
+
+	if (!sortedList->front().desc)
+		request->req_flags |= req_null;
+	else
+		request->req_flags &= ~req_null;
+
+	return sortedList->exist(SortValueItem(value, desc));
+}
 
 //--------------------
 
@@ -260,7 +367,7 @@ bool ExprNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other
 
 bool ExprNode::sameAs(const ExprNode* other, bool ignoreStreams) const
 {
-	if (other->getType() != getType())
+	if (!other || other->getType() != getType())
 		return false;
 
 	NodeRefsHolder thisHolder;
@@ -297,6 +404,20 @@ bool ExprNode::possiblyUnknown() const
 	for (auto i : holder.refs)
 	{
 		if (*i && (*i)->possiblyUnknown())
+			return true;
+	}
+
+	return false;
+}
+
+bool ExprNode::ignoreNulls(const StreamList& streams) const
+{
+	NodeRefsHolder holder;
+	getChildren(holder, false);
+
+	for (auto i : holder.refs)
+	{
+		if (*i && (*i)->ignoreNulls(streams))
 			return true;
 	}
 
@@ -432,6 +553,28 @@ Firebird::string ValueListNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, items);
 
 	return "ValueListNode";
+}
+
+
+void ValueListNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
+{
+	HalfStaticArray<dsc, INITIAL_CAPACITY> descs;
+	descs.resize(items.getCount());
+
+	unsigned i = 0;
+	HalfStaticArray<const dsc*, INITIAL_CAPACITY> descPtrs;
+	descPtrs.resize(items.getCount());
+
+	for (auto& value : items)
+	{
+		value->getDesc(tdbb, csb, &descs[i]);
+		descPtrs[i] = &descs[i];
+		++i;
+	}
+
+	DataTypeUtil(tdbb).makeFromList(desc, "LIST", descPtrs.getCount(), descPtrs.begin());
+
+	desc->setNullable(true);
 }
 
 
@@ -2695,7 +2838,7 @@ dsc* ArithmeticNode::addSqlTime(thread_db* tdbb, const dsc* desc, impure_value* 
 	bool op1_is_time = op1_desc->isTime();
 	bool op2_is_time = op2_desc->isTime();
 
-	Nullable<USHORT> op1_tz, op2_tz;
+	std::optional<USHORT> op1_tz, op2_tz;
 
 	if (op1_desc->dsc_dtype == dtype_sql_time_tz)
 		op1_tz = ((ISC_TIME_TZ*) op1_desc->dsc_address)->time_zone;
@@ -2706,14 +2849,14 @@ dsc* ArithmeticNode::addSqlTime(thread_db* tdbb, const dsc* desc, impure_value* 
 	dsc op1_tz_desc, op2_tz_desc;
 	ISC_TIME_TZ op1_time_tz, op2_time_tz;
 
-	if (op1_desc->dsc_dtype == dtype_sql_time && op2_is_time && op2_tz.specified)
+	if (op1_desc->dsc_dtype == dtype_sql_time && op2_is_time && op2_tz.has_value())
 	{
 		op1_tz_desc.makeTimeTz(&op1_time_tz);
 		MOV_move(tdbb, const_cast<dsc*>(op1_desc), &op1_tz_desc);
 		op1_desc = &op1_tz_desc;
 	}
 
-	if (op2_desc->dsc_dtype == dtype_sql_time && op1_is_time && op1_tz.specified)
+	if (op2_desc->dsc_dtype == dtype_sql_time && op1_is_time && op1_tz.has_value())
 	{
 		op2_tz_desc.makeTimeTz(&op2_time_tz);
 		MOV_move(tdbb, const_cast<dsc*>(op2_desc), &op2_tz_desc);
@@ -2781,18 +2924,18 @@ dsc* ArithmeticNode::addSqlTime(thread_db* tdbb, const dsc* desc, impure_value* 
 
 	value->vlu_misc.vlu_sql_time_tz.utc_time = d2;
 
-	result->dsc_dtype = op1_tz.specified || op2_tz.specified ? dtype_sql_time_tz : dtype_sql_time;
+	result->dsc_dtype = op1_tz.has_value() || op2_tz.has_value() ? dtype_sql_time_tz : dtype_sql_time;
 	result->dsc_length = type_lengths[result->dsc_dtype];
 	result->dsc_scale = 0;
 	result->dsc_sub_type = 0;
 	result->dsc_address = (UCHAR*) &value->vlu_misc.vlu_sql_time_tz;
 
-	fb_assert(!(op1_tz.specified && op2_tz.specified));
+	fb_assert(!(op1_tz.has_value() && op2_tz.has_value()));
 
-	if (op1_tz.specified)
-		value->vlu_misc.vlu_sql_time_tz.time_zone = op1_tz.value;
-	else if (op2_tz.specified)
-		value->vlu_misc.vlu_sql_time_tz.time_zone = op2_tz.value;
+	if (op1_tz.has_value())
+		value->vlu_misc.vlu_sql_time_tz.time_zone = op1_tz.value();
+	else if (op2_tz.has_value())
+		value->vlu_misc.vlu_sql_time_tz.time_zone = op2_tz.value();
 
 	return result;
 }
@@ -2810,7 +2953,7 @@ dsc* ArithmeticNode::addTimeStamp(thread_db* tdbb, const dsc* desc, impure_value
 	const dsc* op1_desc = &value->vlu_desc;
 	const dsc* op2_desc = desc;
 
-	Nullable<USHORT> op1_tz, op2_tz;
+	std::optional<USHORT> op1_tz, op2_tz;
 
 	if (op1_desc->dsc_dtype == dtype_sql_time_tz)
 		op1_tz = ((ISC_TIME_TZ*) op1_desc->dsc_address)->time_zone;
@@ -2827,7 +2970,7 @@ dsc* ArithmeticNode::addTimeStamp(thread_db* tdbb, const dsc* desc, impure_value
 	ISC_TIME_TZ op1_time_tz, op2_time_tz;
 
 	if ((op1_desc->dsc_dtype == dtype_sql_time || op1_desc->dsc_dtype == dtype_timestamp) &&
-		op2_desc->isDateTime() && op2_tz.specified)
+		op2_desc->isDateTime() && op2_tz.has_value())
 	{
 		if (op1_desc->dsc_dtype == dtype_sql_time)
 			op1_tz_desc.makeTimeTz(&op1_time_tz);
@@ -2839,7 +2982,7 @@ dsc* ArithmeticNode::addTimeStamp(thread_db* tdbb, const dsc* desc, impure_value
 	}
 
 	if ((op2_desc->dsc_dtype == dtype_sql_time || op2_desc->dsc_dtype == dtype_timestamp) &&
-		op1_desc->isDateTime() && op1_tz.specified)
+		op1_desc->isDateTime() && op1_tz.has_value())
 	{
 		if (op2_desc->dsc_dtype == dtype_sql_time)
 			op2_tz_desc.makeTimeTz(&op2_time_tz);
@@ -3015,18 +3158,18 @@ dsc* ArithmeticNode::addTimeStamp(thread_db* tdbb, const dsc* desc, impure_value
 			ERR_post(Arg::Gds(isc_datetime_range_exceeded));
 	}
 
-	fb_assert(!(op1_tz.specified && op2_tz.specified));
+	fb_assert(!(op1_tz.has_value() && op2_tz.has_value()));
 
-	result->dsc_dtype = op1_tz.specified || op2_tz.specified ? dtype_timestamp_tz : dtype_timestamp;
+	result->dsc_dtype = op1_tz.has_value() || op2_tz.has_value() ? dtype_timestamp_tz : dtype_timestamp;
 	result->dsc_length = type_lengths[result->dsc_dtype];
 	result->dsc_scale = 0;
 	result->dsc_sub_type = 0;
 	result->dsc_address = (UCHAR*) &value->vlu_misc.vlu_timestamp_tz;
 
-	if (op1_tz.specified)
-		value->vlu_misc.vlu_timestamp_tz.time_zone = op1_tz.value;
-	else if (op2_tz.specified)
-		value->vlu_misc.vlu_timestamp_tz.time_zone = op2_tz.value;
+	if (op1_tz.has_value())
+		value->vlu_misc.vlu_timestamp_tz.time_zone = op1_tz.value();
+	else if (op2_tz.has_value())
+		value->vlu_misc.vlu_timestamp_tz.time_zone = op2_tz.value();
 
 	return result;
 }
@@ -3339,7 +3482,7 @@ dsc* BoolAsValueNode::execute(thread_db* tdbb, Request* request) const
 	if (request->req_flags & req_null)
 		return NULL;
 
-	impure_value* impure = request->getImpure<impure_value>(impureOffset);
+	const auto impure = request->getImpure<impure_value>(impureOffset);
 
 	dsc desc;
 	desc.makeBoolean(&booleanVal);
@@ -3352,23 +3495,29 @@ dsc* BoolAsValueNode::execute(thread_db* tdbb, Request* request) const
 //--------------------
 
 
-static RegisterNode<CastNode> regCastNode({blr_cast});
+static RegisterNode<CastNode> regCastNode({blr_cast, blr_cast_format});
 
-CastNode::CastNode(MemoryPool& pool, ValueExprNode* aSource, dsql_fld* aDsqlField)
+CastNode::CastNode(MemoryPool& pool, ValueExprNode* aSource, dsql_fld* aDsqlField, const string& aFormat)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_CAST>(pool),
 	  dsqlAlias("CAST"),
 	  dsqlField(aDsqlField),
 	  source(aSource),
 	  itemInfo(NULL),
+	  format(pool, aFormat),
 	  artificial(false)
 {
 	castDesc.clear();
 }
 
 // Parse a datatype cast.
-DmlNode* CastNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR /*blrOp*/)
+DmlNode* CastNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp)
 {
+	fb_assert(blrOp == blr_cast || blrOp == blr_cast_format);
+
 	CastNode* node = FB_NEW_POOL(pool) CastNode(pool);
+
+	if (blrOp == blr_cast_format)
+		csb->csb_blr_reader.getString(node->format);
 
 	ItemInfo itemInfo;
 	PAR_desc(tdbb, csb, &node->castDesc, &itemInfo);
@@ -3378,11 +3527,11 @@ DmlNode* CastNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb
 	if (itemInfo.isSpecial())
 		node->itemInfo = FB_NEW_POOL(*tdbb->getDefaultPool()) ItemInfo(*tdbb->getDefaultPool(), itemInfo);
 
-	if ((csb->csb_g_flags & csb_get_dependencies) && itemInfo.explicitCollation)
+	if (csb->collectingDependencies() && itemInfo.explicitCollation)
 	{
 		CompilerScratch::Dependency dependency(obj_collation);
 		dependency.number = INTL_TEXT_TYPE(node->castDesc);
-		csb->csb_dependencies.push(dependency);
+		csb->addDependency(dependency);
 	}
 
 	return node;
@@ -3397,6 +3546,7 @@ string CastNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, castDesc);
 	NODE_PRINT(printer, source);
 	NODE_PRINT(printer, itemInfo);
+	NODE_PRINT(printer, format);
 
 	return "CastNode";
 }
@@ -3407,6 +3557,7 @@ ValueExprNode* CastNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	node->dsqlAlias = dsqlAlias;
 	node->source = doDsqlPass(dsqlScratch, source);
 	node->dsqlField = dsqlField;
+	node->format = format;
 
 	DDL_resolve_intl_type(dsqlScratch, node->dsqlField, NULL);
 	node->setParameterType(dsqlScratch, NULL, false);
@@ -3451,8 +3602,16 @@ bool CastNode::setParameterType(DsqlCompilerScratch* /*dsqlScratch*/,
 // Generate BLR for a data-type cast operation.
 void CastNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
-	dsqlScratch->appendUChar(blr_cast);
+	if (format.hasData())
+	{
+		dsqlScratch->appendUChar(blr_cast_format);
+		dsqlScratch->appendString(0, format);
+	}
+	else
+		dsqlScratch->appendUChar(blr_cast);
+
 	dsqlScratch->putDtype(dsqlField, true);
+
 	GEN_expr(dsqlScratch, source);
 }
 
@@ -3498,6 +3657,7 @@ ValueExprNode* CastNode::copy(thread_db* tdbb, NodeCopier& copier) const
 	node->source = copier.copy(tdbb, source);
 	node->castDesc = castDesc;
 	node->itemInfo = itemInfo;
+	node->format = format;
 
 	return node;
 }
@@ -3510,18 +3670,21 @@ bool CastNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other
 	const CastNode* o = nodeAs<CastNode>(other);
 	fb_assert(o);
 
-	return dsqlField == o->dsqlField;
+	return dsqlField == o->dsqlField && format == o->format;
 }
 
 bool CastNode::sameAs(const ExprNode* other, bool ignoreStreams) const
 {
+	if (sameNodes(nodeAs<CoalesceNode>(other), this, ignoreStreams))
+		return true;
+
 	if (!ExprNode::sameAs(other, ignoreStreams))
 		return false;
 
 	const CastNode* const otherNode = nodeAs<CastNode>(other);
 	fb_assert(otherNode);
 
-	return DSC_EQUIV(&castDesc, &otherNode->castDesc, true);
+	return DSC_EQUIV(&castDesc, &otherNode->castDesc, true) && format == otherNode->format;
 }
 
 ValueExprNode* CastNode::pass1(thread_db* tdbb, CompilerScratch* csb)
@@ -3557,17 +3720,24 @@ dsc* CastNode::execute(thread_db* tdbb, Request* request) const
 	dsc* value = EVL_expr(tdbb, request, source);
 
 	if (request->req_flags & req_null)
-		value = NULL;
+		value = nullptr;
 
+	const auto impure = request->getImpure<impure_value>(impureOffset);
+
+	return perform(tdbb, impure, value, &castDesc, itemInfo, format);
+}
+
+// Cast from one datatype to another.
+dsc* CastNode::perform(thread_db* tdbb, impure_value* impure, dsc* value,
+	const dsc* castDesc, const ItemInfo* itemInfo, const Firebird::string& format)
+{
 	// If validation is not required and the source value is either NULL
 	// or already in the desired data type, simply return it "as is"
 
-	if (!itemInfo && (!value || DSC_EQUIV(value, &castDesc, true)))
+	if (!itemInfo && (!value || DSC_EQUIV(value, castDesc, true)))
 		return value;
 
-	impure_value* impure = request->getImpure<impure_value>(impureOffset);
-
-	impure->vlu_desc = castDesc;
+	impure->vlu_desc = *castDesc;
 	impure->vlu_desc.dsc_address = (UCHAR*) &impure->vlu_misc;
 
 	if (DTYPE_IS_TEXT(impure->vlu_desc.dsc_dtype))
@@ -3592,12 +3762,12 @@ dsc* CastNode::execute(thread_db* tdbb, Request* request) const
 
 		// Allocate a string block of sufficient size.
 
-		VaryingString* string = impure->vlu_string;
+		auto string = impure->vlu_string;
 
 		if (string && string->str_length < length)
 		{
 			delete string;
-			string = NULL;
+			string = nullptr;
 		}
 
 		if (!string)
@@ -3610,12 +3780,82 @@ dsc* CastNode::execute(thread_db* tdbb, Request* request) const
 	}
 
 	EVL_validate(tdbb, Item(Item::TYPE_CAST), itemInfo,
-		value, value == NULL || (value->dsc_flags & DSC_null));
+		value, !value || (value->dsc_flags & DSC_null));
 
 	if (!value)
-		return NULL;
+		return nullptr;
 
-	MOV_move(tdbb, value, &impure->vlu_desc);
+
+	if (format.hasData())
+	{
+		if (DTYPE_IS_TEXT(impure->vlu_desc.dsc_dtype))
+		{
+			string result = CVT_format_datetime_to_string(value, format, &EngineCallbacks::instance);
+			USHORT dscLength = DSC_string_length(&impure->vlu_desc);
+			string::size_type resultLength = result.length();
+			if (resultLength > dscLength)
+			{
+				ERR_post(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
+					Arg::Gds(isc_trunc_limits) << Arg::Num(dscLength) << Arg::Num(resultLength));
+			}
+
+			USHORT dscOffset = 0;
+			if (impure->vlu_desc.dsc_dtype == dtype_cstring)
+				dscOffset = 1;
+			else if (impure->vlu_desc.dsc_dtype == dtype_varying)
+			{
+				dscOffset = sizeof(USHORT);
+				((vary*) impure->vlu_desc.dsc_address)->vary_length = resultLength;
+			}
+
+			memcpy(impure->vlu_desc.dsc_address + dscOffset, result.c_str(), resultLength);
+		}
+		else
+		{
+			switch (impure->vlu_desc.dsc_dtype)
+			{
+				case dtype_sql_time:
+				{
+					ISC_TIMESTAMP_TZ timestampTZ = CVT_format_string_to_datetime(value, format, expect_sql_time,
+						&EngineCallbacks::instance);
+					*(ISC_TIME*) impure->vlu_desc.dsc_address = timestampTZ.utc_timestamp.timestamp_time;
+					break;
+				}
+				case dtype_sql_date:
+				{
+					ISC_TIMESTAMP_TZ timestampTZ = CVT_format_string_to_datetime(value, format, expect_sql_date,
+						&EngineCallbacks::instance);
+					*(ISC_DATE*) impure->vlu_desc.dsc_address = timestampTZ.utc_timestamp.timestamp_date;
+					break;
+				}
+				case dtype_timestamp:
+				{
+					ISC_TIMESTAMP_TZ timestampTZ = CVT_format_string_to_datetime(value, format, expect_timestamp,
+						&EngineCallbacks::instance);
+					*(ISC_TIMESTAMP*) impure->vlu_desc.dsc_address = timestampTZ.utc_timestamp;
+					break;
+				}
+				case dtype_sql_time_tz:
+				case dtype_ex_time_tz:
+				{
+					ISC_TIMESTAMP_TZ timestampTZ = CVT_format_string_to_datetime(value, format, expect_sql_time_tz,
+						&EngineCallbacks::instance);
+					*(ISC_TIME_TZ*) impure->vlu_desc.dsc_address = TimeZoneUtil::timeStampTzToTimeTz(timestampTZ);
+					break;
+				}
+				case dtype_timestamp_tz:
+				case dtype_ex_timestamp_tz:
+				{
+					ISC_TIMESTAMP_TZ timestampTZ = CVT_format_string_to_datetime(value, format, expect_timestamp_tz,
+						&EngineCallbacks::instance);
+					*(ISC_TIMESTAMP_TZ*) impure->vlu_desc.dsc_address = timestampTZ;
+					break;
+				}
+			}
+		}
+	}
+	else
+		MOV_move(tdbb, value, &impure->vlu_desc);
 
 	if (impure->vlu_desc.dsc_dtype == dtype_text)
 		INTL_adjust_text_descriptor(tdbb, &impure->vlu_desc);
@@ -3671,11 +3911,6 @@ bool CoalesceNode::setParameterType(DsqlCompilerScratch* dsqlScratch,
 
 void CoalesceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
-	dsc desc;
-	make(dsqlScratch, &desc);
-	dsqlScratch->appendUChar(blr_cast);
-	GEN_descriptor(dsqlScratch, &desc, true);
-
 	dsqlScratch->appendUChar(blr_coalesce);
 	dsqlScratch->appendUChar(args->items.getCount());
 
@@ -3711,6 +3946,7 @@ ValueExprNode* CoalesceNode::copy(thread_db* tdbb, NodeCopier& copier) const
 {
 	CoalesceNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) CoalesceNode(*tdbb->getDefaultPool());
 	node->args = copier.copy(tdbb, args);
+	node->castDesc = castDesc;
 	return node;
 }
 
@@ -3719,30 +3955,38 @@ bool CoalesceNode::sameAs(const ExprNode* other, bool ignoreStreams) const
 	if (ExprNode::sameAs(other, ignoreStreams))
 		return true;
 
-	return sameNodes(nodeAs<ValueIfNode>(other), this, ignoreStreams);
+	return sameNodes(this, nodeAs<CastNode>(other), ignoreStreams) ||
+		sameNodes(nodeAs<ValueIfNode>(other), this, ignoreStreams);
 }
 
 ValueExprNode* CoalesceNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
 	ValueExprNode::pass2(tdbb, csb);
 
-	dsc desc;
-	getDesc(tdbb, csb, &desc);
+	getDesc(tdbb, csb, &castDesc);
+	impureOffset = csb->allocImpure<impure_value>();
 
 	return this;
 }
 
 dsc* CoalesceNode::execute(thread_db* tdbb, Request* request) const
 {
+	dsc* value = nullptr;
+
 	for (auto& item : args->items)
 	{
-		dsc* desc = EVL_expr(tdbb, request, item);
+		value = EVL_expr(tdbb, request, item);
 
-		if (desc && !(request->req_flags & req_null))
-			return desc;
+		if (value)
+			break;
 	}
 
-	return NULL;
+	if (!value || DSC_EQUIV(value, &castDesc, true))
+		return value;
+
+	const auto impure = request->getImpure<impure_value>(impureOffset);
+
+	return CastNode::perform(tdbb, impure, value, &castDesc, nullptr);
 }
 
 
@@ -4730,9 +4974,7 @@ void DecodeNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	dsqlScratch->appendUChar(conditions->items.getCount());
 
 	for (auto& condition : conditions->items)
-	{
 		condition->genBlr(dsqlScratch);
-	}
 
 	dsqlScratch->appendUChar(values->items.getCount());
 
@@ -4833,12 +5075,12 @@ DmlNode* DefaultNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 	csb->csb_blr_reader.getMetaName(relationName);
 	csb->csb_blr_reader.getMetaName(fieldName);
 
-	if (csb->csb_g_flags & csb_get_dependencies)
+	if (csb->collectingDependencies())
 	{
 		CompilerScratch::Dependency dependency(obj_relation);
 		dependency.relation = MET_lookup_relation(tdbb, relationName);
 		dependency.subName = FB_NEW_POOL(pool) MetaName(fieldName);
-		csb->csb_dependencies.push(dependency);
+		csb->addDependency(dependency);
 	}
 
 	jrd_fld* fld = NULL;
@@ -4889,10 +5131,10 @@ ValueExprNode* DefaultNode::createFromField(thread_db* tdbb, CompilerScratch* cs
 
 		bool sysGen = false;
 		if (!MET_load_generator(tdbb, genNode->generator, &sysGen, &genNode->step))
-			PAR_error(csb, Arg::Gds(isc_gennotdef) << Arg::Str(fld->fld_generator_name));
+			status_exception::raise(Arg::Gds(isc_gennotdef) << Arg::Str(fld->fld_generator_name));
 
 		if (sysGen)
-			PAR_error(csb, Arg::Gds(isc_cant_modify_sysobj) << "generator" << fld->fld_generator_name);
+			status_exception::raise(Arg::Gds(isc_cant_modify_sysobj) << "generator" << fld->fld_generator_name);
 
 		return genNode;
 	}
@@ -5075,7 +5317,7 @@ ValueExprNode* DerivedExprNode::copy(thread_db* tdbb, NodeCopier& copier) const
 			i = copier.remap[i];
 	}
 
-	fb_assert(!cursorNumber.specified);
+	fb_assert(!cursorNumber.has_value());
 
 	return node;
 }
@@ -5093,11 +5335,8 @@ ValueExprNode* DerivedExprNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 	SortedStreamList newStreams;
 
-	for (const auto i : internalStreamList)
-	{
-		markVariant(csb, i);
-		expandViewStreams(csb, i, newStreams);
-	}
+	for (const auto stream : internalStreamList)
+		expandViewStreams(csb, stream, newStreams);
 
 #ifdef CMP_DEBUG
 	for (const auto i : newStreams)
@@ -5105,7 +5344,10 @@ ValueExprNode* DerivedExprNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 	csb->dump("\n");
 #endif
 
-	internalStreamList.assign(newStreams.begin(), newStreams.getCount());
+	for (const auto stream : newStreams)
+		markVariant(csb, stream);
+
+	internalStreamList.assign(newStreams);
 
 	return this;
 }
@@ -5125,8 +5367,8 @@ ValueExprNode* DerivedExprNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 dsc* DerivedExprNode::execute(thread_db* tdbb, Request* request) const
 {
-	if (cursorNumber.specified)
-		request->req_cursors[cursorNumber.value]->checkState(request);
+	if (cursorNumber.has_value())
+		request->req_cursors[cursorNumber.value()]->checkState(request);
 
 	dsc* value = NULL;
 
@@ -5262,6 +5504,7 @@ ValueExprNode* ExtractNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	switch (blrSubOp)
 	{
 		case blr_extract_year:
+		case blr_extract_quarter:
 		case blr_extract_month:
 		case blr_extract_day:
 		case blr_extract_weekday:
@@ -5588,6 +5831,10 @@ dsc* ExtractNode::execute(thread_db* tdbb, Request* request) const
 			part = times.tm_year + 1900;
 			break;
 
+		case blr_extract_quarter:
+			part = times.tm_mon / 3 + 1;
+			break;
+
 		case blr_extract_month:
 			part = times.tm_mon + 1;
 			break;
@@ -5622,55 +5869,7 @@ dsc* ExtractNode::execute(thread_db* tdbb, Request* request) const
 
 		case blr_extract_week:
 		{
-			// Algorithm for Converting Gregorian Dates to ISO 8601 Week Date by Rick McCarty, 1999
-			// http://personal.ecu.edu/mccartyr/ISOwdALG.txt
-
-			const int y = times.tm_year + 1900;
-			const int dayOfYearNumber = times.tm_yday + 1;
-
-			// Find the jan1Weekday for y (Monday=1, Sunday=7)
-			const int yy = (y - 1) % 100;
-			const int c = (y - 1) - yy;
-			const int g = yy + yy / 4;
-			const int jan1Weekday = 1 + (((((c / 100) % 4) * 5) + g) % 7);
-
-			// Find the weekday for y m d
-			const int h = dayOfYearNumber + (jan1Weekday - 1);
-			const int weekday = 1 + ((h - 1) % 7);
-
-			// Find if y m d falls in yearNumber y-1, weekNumber 52 or 53
-			int yearNumber, weekNumber;
-
-			if ((dayOfYearNumber <= (8 - jan1Weekday)) && (jan1Weekday > 4))
-			{
-				yearNumber = y - 1;
-				weekNumber = ((jan1Weekday == 5) || ((jan1Weekday == 6) &&
-					TimeStamp::isLeapYear(yearNumber))) ? 53 : 52;
-			}
-			else
-			{
-				yearNumber = y;
-
-				// Find if y m d falls in yearNumber y+1, weekNumber 1
-				int i = TimeStamp::isLeapYear(y) ? 366 : 365;
-
-				if ((i - dayOfYearNumber) < (4 - weekday))
-				{
-					yearNumber = y + 1;
-					weekNumber = 1;
-				}
-			}
-
-			// Find if y m d falls in yearNumber y, weekNumber 1 through 53
-			if (yearNumber == y)
-			{
-				int j = dayOfYearNumber + (7 - weekday) + (jan1Weekday - 1);
-				weekNumber = j / 7;
-				if (jan1Weekday > 4)
-					weekNumber--;
-			}
-
-			part = weekNumber;
+			part = NoThrowTimeStamp::convertGregorianDateToWeekDate(times);
 			break;
 		}
 
@@ -5861,7 +6060,7 @@ DmlNode* FieldNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* cs
 	// use it because when restoring the database the field
 	// id's may not be valid yet
 
-	if (csb->csb_g_flags & csb_get_dependencies)
+	if (csb->collectingDependencies())
 	{
 		if (blrOp == blr_fid)
 			PAR_dependency(tdbb, csb, stream, id, "");
@@ -5986,214 +6185,100 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 	ValueExprNode* node = NULL; // This var must be initialized.
 	DsqlContextStack ambiguousCtxStack;
 
-	bool resolveByAlias = true;
-	const bool relaxedAliasChecking = Config::getRelaxedAliasChecking();
-
-	while (true)
+	// AB: Loop through the scope_levels starting by its own.
+	bool done = false;
+	USHORT currentScopeLevel = dsqlScratch->scopeLevel + 1;
+	for (; currentScopeLevel > 0 && !done; --currentScopeLevel)
 	{
-		// AB: Loop through the scope_levels starting by its own.
-		bool done = false;
-		USHORT currentScopeLevel = dsqlScratch->scopeLevel + 1;
-		for (; currentScopeLevel > 0 && !done; --currentScopeLevel)
+		// If we've found a node we're done.
+		if (node)
+			break;
+
+		for (DsqlContextStack::iterator stack(*dsqlScratch->context); stack.hasData(); ++stack)
 		{
-			// If we've found a node we're done.
-			if (node)
-				break;
+			dsql_ctx* context = stack.object();
 
-			for (DsqlContextStack::iterator stack(*dsqlScratch->context); stack.hasData(); ++stack)
+			if (context->ctx_scope_level != currentScopeLevel - 1 ||
+				((context->ctx_flags & CTX_cursor) && dsqlQualifier.isEmpty()) ||
+				(!(context->ctx_flags & CTX_cursor) && dsqlCursorField))
 			{
-				dsql_ctx* context = stack.object();
+				continue;
+			}
 
-				if (context->ctx_scope_level != currentScopeLevel - 1 ||
-					((context->ctx_flags & CTX_cursor) && dsqlQualifier.isEmpty()) ||
-					(!(context->ctx_flags & CTX_cursor) && dsqlCursorField))
+			dsql_fld* field = resolveContext(dsqlScratch, dsqlQualifier, context);
+
+			// AB: When there's no relation and no procedure then we have a derived table.
+			const bool isDerivedTable =
+				(!context->ctx_procedure && !context->ctx_relation && context->ctx_rse);
+
+			if (field)
+			{
+				// If there's no name then we have most probable an asterisk that
+				// needs to be exploded. This should be handled by the caller and
+				// when the caller can handle this, list is true.
+				if (dsqlName.isEmpty())
 				{
-					continue;
+					if (list)
+					{
+						dsql_ctx* stackContext = stack.object();
+
+						if (context->ctx_relation)
+						{
+							RelationSourceNode* relNode = FB_NEW_POOL(*tdbb->getDefaultPool())
+								RelationSourceNode(*tdbb->getDefaultPool());
+							relNode->dsqlContext = stackContext;
+							*list = relNode;
+						}
+						else if (context->ctx_procedure)
+						{
+							ProcedureSourceNode* procNode = FB_NEW_POOL(*tdbb->getDefaultPool())
+								ProcedureSourceNode(*tdbb->getDefaultPool());
+							procNode->dsqlContext = stackContext;
+							*list = procNode;
+						}
+						//// TODO: LocalTableSourceNode
+
+						fb_assert(*list);
+						return NULL;
+					}
+
+					break;
 				}
 
-				dsql_fld* field = resolveContext(dsqlScratch, dsqlQualifier, context, resolveByAlias);
+				NestConst<ValueExprNode> usingField = NULL;
 
-				// AB: When there's no relation and no procedure then we have a derived table.
-				const bool isDerivedTable =
-					(!context->ctx_procedure && !context->ctx_relation && context->ctx_rse);
-
-				if (field)
+				for (; field; field = field->fld_next)
 				{
-					// If there's no name then we have most probable an asterisk that
-					// needs to be exploded. This should be handled by the caller and
-					// when the caller can handle this, list is true.
-					if (dsqlName.isEmpty())
+					if (field->fld_name == dsqlName.c_str())
 					{
-						if (list)
+						if (dsqlQualifier.isEmpty())
 						{
-							dsql_ctx* stackContext = stack.object();
-
-							if (context->ctx_relation)
+							if (!context->getImplicitJoinField(field->fld_name, usingField))
 							{
-								RelationSourceNode* relNode = FB_NEW_POOL(*tdbb->getDefaultPool())
-									RelationSourceNode(*tdbb->getDefaultPool());
-								relNode->dsqlContext = stackContext;
-								*list = relNode;
-							}
-							else if (context->ctx_procedure)
-							{
-								ProcedureSourceNode* procNode = FB_NEW_POOL(*tdbb->getDefaultPool())
-									ProcedureSourceNode(*tdbb->getDefaultPool());
-								procNode->dsqlContext = stackContext;
-								*list = procNode;
-							}
-							//// TODO: LocalTableSourceNode
-
-							fb_assert(*list);
-							return NULL;
-						}
-
-						break;
-					}
-
-					NestConst<ValueExprNode> usingField = NULL;
-
-					for (; field; field = field->fld_next)
-					{
-						if (field->fld_name == dsqlName.c_str())
-						{
-							if (dsqlQualifier.isEmpty())
-							{
-								if (!context->getImplicitJoinField(field->fld_name, usingField))
-								{
-									field = NULL;
-									break;
-								}
-
-								if (usingField)
-									field = NULL;
-							}
-
-							ambiguousCtxStack.push(context);
-							break;
-						}
-					}
-
-					if ((context->ctx_flags & CTX_view_with_check_store) && !field)
-					{
-						node = NullNode::instance();
-						/*** Do not set line/column of shared node.
-						node->line = line;
-						node->column = column;
-						***/
-					}
-					else if (dsqlQualifier.hasData() && !field)
-					{
-						if (!(context->ctx_flags & CTX_view_with_check_modify))
-						{
-							// If a qualifier was present and we didn't find
-							// a matching field then we should stop searching.
-							// Column unknown error will be raised at bottom of function.
-							done = true;
-							break;
-						}
-					}
-					else if (field || usingField)
-					{
-						// Intercept any reference to a field with datatype that
-						// did not exist prior to V6 and post an error
-
-						// CVC: Stop here if this is our second or third iteration.
-						// Anyway, we can't report more than one ambiguity to the status vector.
-						// AB: But only if we're on different scope level, because a
-						// node inside the same context should have priority.
-						if (node)
-							continue;
-
-						ValueListNode* indices = dsqlIndices ?
-							doDsqlPass(dsqlScratch, dsqlIndices, false) : NULL;
-
-						if (context->ctx_flags & CTX_null)
-							node = NullNode::instance();
-						else
-						{
-							if (field)
-								node = MAKE_field(context, field, indices);
-							else
-								node = list ? usingField.getObject() : doDsqlPass(dsqlScratch, usingField, false);
-
-							node->line = line;
-							node->column = column;
-						}
-					}
-				}
-				else if (isDerivedTable)
-				{
-					// if an qualifier is present check if we have the same derived
-					// table else continue;
-					if (dsqlQualifier.hasData())
-					{
-						if (context->ctx_alias.hasData())
-						{
-							if (dsqlQualifier != context->ctx_alias)
-								continue;
-						}
-						else
-							continue;
-					}
-
-					// If there's no name then we have most probable a asterisk that
-					// needs to be exploded. This should be handled by the caller and
-					// when the caller can handle this, list is true.
-					if (dsqlName.isEmpty())
-					{
-						if (list)
-						{
-							// Return node which PASS1_expand_select_node() can deal with it.
-							*list = context->ctx_rse;
-							return NULL;
-						}
-
-						break;
-					}
-
-					// Because every select item has an alias we can just walk
-					// through the list and return the correct node when found.
-					ValueListNode* rseItems = context->ctx_rse->dsqlSelectList;
-
-					for (auto& rseItem : rseItems->items)
-					{
-						DerivedFieldNode* selectItem = nodeAs<DerivedFieldNode>(rseItem);
-
-						// select-item should always be a alias!
-						if (selectItem)
-						{
-							NestConst<ValueExprNode> usingField = NULL;
-
-							if (dsqlQualifier.isEmpty())
-							{
-								if (!context->getImplicitJoinField(dsqlName, usingField))
-									break;
-							}
-
-							if (dsqlName == selectItem->name || usingField)
-							{
-								// This is a matching item so add the context to the ambiguous list.
-								ambiguousCtxStack.push(context);
-
-								// Stop here if this is our second or more iteration.
-								if (node)
-									break;
-
-								node = usingField ? usingField : rseItem;
+								field = NULL;
 								break;
 							}
-						}
-						else
-						{
-							// Internal dsql error: alias type expected by pass1_field
-							ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-									  Arg::Gds(isc_dsql_command_err) <<
-									  Arg::Gds(isc_dsql_derived_alias_field));
-						}
-					}
 
-					if (!node && dsqlQualifier.hasData())
+							if (usingField)
+								field = NULL;
+						}
+
+						ambiguousCtxStack.push(context);
+						break;
+					}
+				}
+
+				if ((context->ctx_flags & CTX_view_with_check_store) && !field)
+				{
+					node = NullNode::instance();
+					/*** Do not set line/column of shared node.
+					node->line = line;
+					node->column = column;
+					***/
+				}
+				else if (dsqlQualifier.hasData() && !field)
+				{
+					if (!(context->ctx_flags & CTX_view_with_check_modify))
 					{
 						// If a qualifier was present and we didn't find
 						// a matching field then we should stop searching.
@@ -6202,16 +6287,116 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 						break;
 					}
 				}
+				else if (field || usingField)
+				{
+					// Intercept any reference to a field with datatype that
+					// did not exist prior to V6 and post an error
+
+					// CVC: Stop here if this is our second or third iteration.
+					// Anyway, we can't report more than one ambiguity to the status vector.
+					// AB: But only if we're on different scope level, because a
+					// node inside the same context should have priority.
+					if (node)
+						continue;
+
+					ValueListNode* indices = dsqlIndices ?
+						doDsqlPass(dsqlScratch, dsqlIndices, false) : NULL;
+
+					if (context->ctx_flags & CTX_null)
+						node = NullNode::instance();
+					else
+					{
+						if (field)
+							node = MAKE_field(context, field, indices);
+						else
+							node = list ? usingField.getObject() : doDsqlPass(dsqlScratch, usingField, false);
+
+						node->line = line;
+						node->column = column;
+					}
+				}
+			}
+			else if (isDerivedTable)
+			{
+				// if an qualifier is present check if we have the same derived
+				// table else continue;
+				if (dsqlQualifier.hasData())
+				{
+					if (context->ctx_alias.hasData())
+					{
+						if (dsqlQualifier != context->ctx_alias)
+							continue;
+					}
+					else
+						continue;
+				}
+
+				// If there's no name then we have most probable a asterisk that
+				// needs to be exploded. This should be handled by the caller and
+				// when the caller can handle this, list is true.
+				if (dsqlName.isEmpty())
+				{
+					if (list)
+					{
+						// Return node which PASS1_expand_select_node() can deal with it.
+						*list = context->ctx_rse;
+						return NULL;
+					}
+
+					break;
+				}
+
+				// Because every select item has an alias we can just walk
+				// through the list and return the correct node when found.
+				ValueListNode* rseItems = context->ctx_rse->dsqlSelectList;
+
+				for (auto& rseItem : rseItems->items)
+				{
+					DerivedFieldNode* selectItem = nodeAs<DerivedFieldNode>(rseItem);
+
+					// select-item should always be a alias!
+					if (selectItem)
+					{
+						NestConst<ValueExprNode> usingField = NULL;
+
+						if (dsqlQualifier.isEmpty())
+						{
+							if (!context->getImplicitJoinField(dsqlName, usingField))
+								break;
+						}
+
+						if (dsqlName == selectItem->name || usingField)
+						{
+							// This is a matching item so add the context to the ambiguous list.
+							ambiguousCtxStack.push(context);
+
+							// Stop here if this is our second or more iteration.
+							if (node)
+								break;
+
+							node = usingField ? usingField : rseItem;
+							break;
+						}
+					}
+					else
+					{
+						// Internal dsql error: alias type expected by pass1_field
+						ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+								  Arg::Gds(isc_dsql_command_err) <<
+								  Arg::Gds(isc_dsql_derived_alias_field));
+					}
+				}
+
+				if (!node && dsqlQualifier.hasData())
+				{
+					// If a qualifier was present and we didn't find
+					// a matching field then we should stop searching.
+					// Column unknown error will be raised at bottom of function.
+					done = true;
+					break;
+				}
 			}
 		}
-
-		if (node)
-			break;
-
-		if (resolveByAlias && !dsqlScratch->checkConstraintTrigger && relaxedAliasChecking)
-			resolveByAlias = false;
-		else
-			break;
 	}
 
 	// CVC: We can't return blindly if this is a check constraint, because there's
@@ -6225,19 +6410,14 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 	// Clean up stack
 	ambiguousCtxStack.clear();
 
-	if (node)
-		return node;
+	if (!node)
+		PASS1_field_unknown(dsqlQualifier.nullStr(), dsqlName.nullStr(), this);
 
-	PASS1_field_unknown(dsqlQualifier.nullStr(), dsqlName.nullStr(), this);
-
-	// CVC: PASS1_field_unknown() calls ERRD_post() that never returns, so the next line
-	// is only to make the compiler happy.
-	return NULL;
+	return node;
 }
 
 // Attempt to resolve field against context. Return first field in context if successful, NULL if not.
-dsql_fld* FieldNode::resolveContext(DsqlCompilerScratch* dsqlScratch, const MetaName& qualifier,
-	dsql_ctx* context, bool resolveByAlias)
+dsql_fld* FieldNode::resolveContext(DsqlCompilerScratch* dsqlScratch, const MetaName& qualifier, dsql_ctx* context)
 {
 	// CVC: Warning: the second param, "name" is not used anymore and
 	// therefore it was removed. Thus, the local variable "table_name"
@@ -6249,20 +6429,20 @@ dsql_fld* FieldNode::resolveContext(DsqlCompilerScratch* dsqlScratch, const Meta
 	if ((dsqlScratch->flags & DsqlCompilerScratch::FLAG_RETURNING_INTO) &&
 		(context->ctx_flags & CTX_returning))
 	{
-		return NULL;
+		return nullptr;
 	}
 
 	dsql_rel* relation = context->ctx_relation;
 	dsql_prc* procedure = context->ctx_procedure;
 	if (!relation && !procedure)
-		return NULL;
+		return nullptr;
 
 	// if there is no qualifier, then we cannot match against
 	// a context of a different scoping level
 	// AB: Yes we can, but the scope level where the field is has priority.
 	/***
 	if (qualifier.isEmpty() && context->ctx_scope_level != dsqlScratch->scopeLevel)
-		return NULL;
+		return nullptr;
 	***/
 
 	// AB: If this context is a system generated context as in NEW/OLD inside
@@ -6272,43 +6452,38 @@ dsql_fld* FieldNode::resolveContext(DsqlCompilerScratch* dsqlScratch, const Meta
 	// An exception is a check-constraint that is allowed to reference fields
 	// without the qualifier.
 	if (!dsqlScratch->checkConstraintTrigger && (context->ctx_flags & CTX_system) && qualifier.isEmpty())
-		return NULL;
+		return nullptr;
 
-	const TEXT* table_name = NULL;
-	if (context->ctx_internal_alias.hasData() && resolveByAlias)
-		table_name = context->ctx_internal_alias.c_str();
+	MetaString aliasName = context->ctx_internal_alias;
 
 	// AB: For a check constraint we should ignore the alias if the alias
 	// contains the "NEW" alias. This is because it is possible
 	// to reference a field by the complete table-name as alias
 	// (see EMPLOYEE table in examples for a example).
-	if (dsqlScratch->checkConstraintTrigger && table_name)
+	if (dsqlScratch->checkConstraintTrigger && aliasName.hasData())
 	{
 		// If a qualifier is present and it's equal to the alias then we've already the right table-name
-		if (!(qualifier.hasData() && qualifier == table_name))
+		if (qualifier.isEmpty() || qualifier != aliasName)
 		{
-			if (strcmp(table_name, NEW_CONTEXT_NAME) == 0)
-				table_name = NULL;
-			else if (strcmp(table_name, OLD_CONTEXT_NAME) == 0)
+			if (aliasName == NEW_CONTEXT_NAME)
+				aliasName.clear();
+			else if (aliasName == OLD_CONTEXT_NAME)
 			{
 				// Only use the OLD context if it is explicit used. That means the
 				// qualifer should hold the "OLD" alias.
-				return NULL;
+				return nullptr;
 			}
 		}
 	}
 
-	if (!table_name)
-	{
-		if (relation)
-			table_name = relation->rel_name.c_str();
-		else
-			table_name = procedure->prc_name.identifier.c_str();
-	}
+	if (aliasName.isEmpty())
+		aliasName = relation ? relation->rel_name : procedure->prc_name.identifier;
+
+	fb_assert(aliasName.hasData());
 
 	// If a context qualifier is present, make sure this is the proper context
-	if (qualifier.hasData() && qualifier != table_name)
-		return NULL;
+	if (qualifier.hasData() && qualifier != aliasName)
+		return nullptr;
 
 	// Lookup field in relation or procedure
 
@@ -6542,15 +6717,13 @@ ValueExprNode* FieldNode::copy(thread_db* tdbb, NodeCopier& copier) const
 		stream = copier.remap[stream];
 	}
 
-	fb_assert(!cursorNumber.specified);
+	fb_assert(!cursorNumber.has_value());
 	return PAR_gen_field(tdbb, stream, fldId, byId);
 }
 
 ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 {
 	StreamType stream = fieldStream;
-
-	markVariant(csb, stream);
 
 	CompilerScratch::csb_repeat* tail = &csb->csb_rpt[stream];
 	jrd_rel* relation = tail->csb_relation;
@@ -6562,6 +6735,7 @@ ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 		if (relation && (relation->rel_flags & REL_being_scanned))
 			csb->csb_g_flags |= csb_reload;
 
+		markVariant(csb, stream);
 		return ValueExprNode::pass1(tdbb, csb);
 	}
 
@@ -6639,9 +6813,11 @@ ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 	if (!(sub = field->fld_computation) && !(sub = field->fld_source))
 	{
-
 		if (!relation->rel_view_rse)
+		{
+			markVariant(csb, stream);
 			return ValueExprNode::pass1(tdbb, csb);
+		}
 
 		// Msg 364 "cannot access column %s in view %s"
 		ERR_post(Arg::Gds(isc_no_field_access) << Arg::Str(field->fld_name) <<
@@ -6662,7 +6838,10 @@ ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 		// dimitr:	added an extra check for views, because we don't
 		//			want their old/new contexts to be substituted
 		if (relation->rel_view_rse || !field->fld_computation)
+		{
+			markVariant(csb, stream);
 			return ValueExprNode::pass1(tdbb, csb);
+		}
 	}
 
 	StreamMap localMap;
@@ -6716,7 +6895,7 @@ ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 	}
 
 	AutoSetRestore<jrd_rel*> autoRelationStream(&csb->csb_parent_relation,
-		relation->rel_ss_definer.value ? relation : NULL);
+		relation->rel_ss_definer.asBool() ? relation : NULL);
 
 	if (relation->rel_view_rse)
 	{
@@ -6769,11 +6948,7 @@ ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 	if (computingField)
 	{
-		FB_SIZE_T pos;
-
-		if (csb->csb_computing_fields.find(field, pos))
-			csb->csb_computing_fields.remove(pos);
-		else
+		if (!csb->csb_computing_fields.findAndRemove(field))
 			fb_assert(false);
 	}
 
@@ -6800,8 +6975,8 @@ dsc* FieldNode::execute(thread_db* tdbb, Request* request) const
 {
 	impure_value* const impure = request->getImpure<impure_value>(impureOffset);
 
-	if (cursorNumber.specified)
-		request->req_cursors[cursorNumber.value]->checkState(request);
+	if (cursorNumber.has_value())
+		request->req_cursors[cursorNumber.value()]->checkState(request);
 
 	record_param& rpb = request->req_rpb[fieldStream];
 	Record* record = rpb.rpb_record;
@@ -6812,7 +6987,7 @@ dsc* FieldNode::execute(thread_db* tdbb, Request* request) const
 	{
 		// Computed fields shouldn't be present at this point
 		jrd_fld* field = MET_get_field(relation, fieldId);
-		fb_assert(field && !field->fld_computation);
+		fb_assert(!field || !field->fld_computation);
 	}
 #endif
 
@@ -6908,11 +7083,11 @@ DmlNode* GenIdNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* cs
 	else if (!MET_load_generator(tdbb, node->generator, &node->sysGen, &node->step))
 		PAR_error(csb, Arg::Gds(isc_gennotdef) << Arg::Str(name));
 
-	if (csb->csb_g_flags & csb_get_dependencies)
+	if (csb->collectingDependencies())
 	{
 		CompilerScratch::Dependency dependency(obj_generator);
 		dependency.number = node->generator.id;
-		csb->csb_dependencies.push(dependency);
+		csb->addDependency(dependency);
 	}
 
 	return node;
@@ -7375,13 +7550,6 @@ ValueExprNode* InternalInfoNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 
 static RegisterNode<LiteralNode> regLiteralNode({blr_literal});
-
-LiteralNode::LiteralNode(MemoryPool& pool)
-	: TypedNode<ValueExprNode, ExprNode::TYPE_LITERAL>(pool),
-	  dsqlStr(NULL), litNumStringLength(0)
-{
-	litDesc.clear();
-}
 
 // Parse a literal value.
 DmlNode* LiteralNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR /*blrOp*/)
@@ -8582,35 +8750,10 @@ ValueExprNode* DerivedFieldNode::dsqlFieldRemapper(FieldRemapper& visitor)
 
 void DerivedFieldNode::setParameterName(dsql_par* parameter) const
 {
-	const dsql_ctx* context = NULL;
-	const FieldNode* fieldNode = NULL;
-	const RecordKeyNode* dbKeyNode = NULL;
-
-	const DerivedFieldNode* drvField = nodeAs<DerivedFieldNode>(value);
-
-	while (drvField)
-	{
-		if ((fieldNode = nodeAs<FieldNode>(drvField->value)))
-			break;
-
-		if ((dbKeyNode = nodeAs<RecordKeyNode>(drvField->value)))
-			break;
-
-		drvField = nodeAs<DerivedFieldNode>(drvField->value);
-	}
-
-	if (fieldNode || (fieldNode = nodeAs<FieldNode>(value)))
-	{
-		parameter->par_name = fieldNode->dsqlField->fld_name.c_str();
-		context = fieldNode->dsqlContext;
-	}
-	else if (dbKeyNode || (dbKeyNode = nodeAs<RecordKeyNode>(value)))
-		dbKeyNode->setParameterName(parameter);
+	value->setParameterName(parameter);
 
 	parameter->par_alias = name;
-	setParameterInfo(parameter, context);
-
-	parameter->par_rel_alias = this->context->ctx_alias;
+	parameter->par_rel_alias = context->ctx_alias;
 }
 
 void DerivedFieldNode::genBlr(DsqlCompilerScratch* dsqlScratch)
@@ -9419,41 +9562,17 @@ ParameterNode::ParameterNode(MemoryPool& pool)
 
 DmlNode* ParameterNode::parse(thread_db* /*tdbb*/, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp)
 {
-	MessageNode* message = nullptr;
-	const USHORT messageNum = csb->csb_blr_reader.getByte();
-
-	if (messageNum >= csb->csb_rpt.getCount() || !(message = csb->csb_rpt[messageNum].csb_message))
-		PAR_error(csb, Arg::Gds(isc_badmsgnum));
-
 	const auto node = FB_NEW_POOL(pool) ParameterNode(pool);
-	node->message = message;
+
+	node->messageNumber = csb->csb_blr_reader.getByte();
 	node->argNumber = csb->csb_blr_reader.getWord();
-	node->outerDecl = csb->outerMessagesMap.exist(messageNum);
-
-	const auto format = message->format;
-
-	if (node->argNumber >= format->fmt_count)
-		PAR_error(csb, Arg::Gds(isc_badparnum));
 
 	if (blrOp != blr_parameter)
 	{
 		const auto flagNode = FB_NEW_POOL(pool) ParameterNode(pool);
-		flagNode->message = message;
+		flagNode->messageNumber = node->messageNumber;
 		flagNode->argNumber = csb->csb_blr_reader.getWord();
-		flagNode->outerDecl = node->outerDecl;
-
-		if (flagNode->argNumber >= format->fmt_count)
-			PAR_error(csb, Arg::Gds(isc_badparnum));
-
 		node->argFlag = flagNode;
-	}
-
-	if (node->outerDecl)
-	{
-		fb_assert(csb->mainCsb);
-
-		if (csb->mainCsb)
-			message->itemsUsedInSubroutines.add(node->argNumber);
 	}
 
 	return node;
@@ -9666,7 +9785,7 @@ void ParameterNode::getDesc(thread_db* /*tdbb*/, CompilerScratch* /*csb*/, dsc* 
 	desc->dsc_address = NULL;
 }
 
-ValueExprNode* ParameterNode::copy(thread_db* tdbb, NodeCopier& copier) const
+ParameterNode* ParameterNode::copy(thread_db* tdbb, NodeCopier& copier) const
 {
 	ParameterNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) ParameterNode(*tdbb->getDefaultPool());
 	node->argNumber = argNumber;
@@ -9684,18 +9803,55 @@ ValueExprNode* ParameterNode::copy(thread_db* tdbb, NodeCopier& copier) const
 	// in nod_argument. If it doesn't, it may be an input parameter cloned
 	// in RseBoolNode::convertNeqAllToNotAny - see CORE-3094.
 
-	if (copier.message && copier.message->messageNumber == message->messageNumber)
+	if (copier.message && copier.message->messageNumber == messageNumber)
 		node->message = copier.message;
 	else
 		node->message = message;
 
+	node->messageNumber = messageNumber;
 	node->argFlag = copier.copy(tdbb, argFlag);
 	node->outerDecl = outerDecl;
 
 	return node;
 }
 
-ValueExprNode* ParameterNode::pass2(thread_db* tdbb, CompilerScratch* csb)
+ParameterNode* ParameterNode::pass1(thread_db* tdbb, CompilerScratch* csb)
+{
+	// If message is already defined (for example from ParameterNode::copy), we should not do anything here.
+	if (!message)
+	{
+		if (messageNumber >= csb->csb_rpt.getCount() || !(message = csb->csb_rpt[messageNumber].csb_message))
+			status_exception::raise(Arg::Gds(isc_badmsgnum));
+
+		outerDecl = csb->outerMessagesMap.exist(messageNumber);
+	}
+
+	const auto format = message->format;
+
+	if (argNumber >= format->fmt_count)
+		status_exception::raise(Arg::Gds(isc_badparnum));
+
+	if (argFlag)
+	{
+		argFlag->message = message;
+		argFlag->outerDecl = outerDecl;
+
+		if (argFlag->argNumber >= format->fmt_count)
+			status_exception::raise(Arg::Gds(isc_badparnum));
+	}
+
+	if (outerDecl)
+	{
+		fb_assert(csb->mainCsb);
+
+		if (csb->mainCsb)
+			message->itemsUsedInSubroutines.add(argNumber);
+	}
+
+	return this;
+}
+
+ParameterNode* ParameterNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
 	const auto paramCsb = outerDecl ? csb->mainCsb : csb;
 
@@ -9922,45 +10078,34 @@ ValueExprNode* RecordKeyNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	}
 	else
 	{
-		const bool cfgRlxAlias = Config::getRelaxedAliasChecking();
-		bool rlxAlias = false;
-
-		for (;;)
+		for (DsqlContextStack::iterator stack(*dsqlScratch->context); stack.hasData(); ++stack)
 		{
-			for (DsqlContextStack::iterator stack(*dsqlScratch->context); stack.hasData(); ++stack)
+			dsql_ctx* context = stack.object();
+
+			if ((!context->ctx_relation ||
+				context->ctx_relation->rel_name != dsqlQualifier ||
+				context->ctx_internal_alias.hasData()) &&
+				(context->ctx_internal_alias.isEmpty() ||
+				strcmp(dsqlQualifier.c_str(), context->ctx_internal_alias.c_str()) != 0))
 			{
-				dsql_ctx* context = stack.object();
-
-				if ((!context->ctx_relation ||
-						context->ctx_relation->rel_name != dsqlQualifier ||
-						!rlxAlias && context->ctx_internal_alias.hasData()) &&
-					(context->ctx_internal_alias.isEmpty() ||
-						strcmp(dsqlQualifier.c_str(), context->ctx_internal_alias.c_str()) != 0))
-				{
-					continue;
-				}
-
-				if (!context->ctx_relation)
-					raiseError(context);
-
-				if (context->ctx_flags & CTX_null)
-					return NullNode::instance();
-
-				//// TODO: LocalTableSourceNode
-				auto relNode = FB_NEW_POOL(dsqlScratch->getPool()) RelationSourceNode(
-					dsqlScratch->getPool());
-				relNode->dsqlContext = context;
-
-				auto node = FB_NEW_POOL(dsqlScratch->getPool()) RecordKeyNode(dsqlScratch->getPool(), blrOp);
-				node->dsqlRelation = relNode;
-
-				return node;
+				continue;
 			}
 
-			if (rlxAlias == cfgRlxAlias)
-				break;
+			if (!context->ctx_relation)
+				raiseError(context);
 
-			rlxAlias = cfgRlxAlias;
+			if (context->ctx_flags & CTX_null)
+				return NullNode::instance();
+
+			//// TODO: LocalTableSourceNode
+			auto relNode = FB_NEW_POOL(dsqlScratch->getPool()) RelationSourceNode(
+				dsqlScratch->getPool());
+			relNode->dsqlContext = context;
+
+			auto node = FB_NEW_POOL(dsqlScratch->getPool()) RecordKeyNode(dsqlScratch->getPool(), blrOp);
+			node->dsqlRelation = relNode;
+
+			return node;
 		}
 	}
 
@@ -11022,6 +11167,7 @@ DmlNode* SubQueryNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch*
 	SubQueryNode* node = FB_NEW_POOL(pool) SubQueryNode(pool, (blrOp == blr_from ? blr_via : blrOp));
 
 	node->rse = PAR_rse(tdbb, csb);
+	node->rse->flags |= RseNode::FLAG_SUB_QUERY;
 
 	if (blrOp != blr_count)
 		node->value1 = PAR_parse_value(tdbb, csb);
@@ -11035,6 +11181,12 @@ DmlNode* SubQueryNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch*
 
 		if (csb->csb_currentDMLNode)
 			node->ownSavepoint = false;
+
+		if (!csb->csb_currentForNode && !csb->csb_currentDMLNode &&
+			(csb->csb_g_flags & csb_computed_field))
+		{
+			node->ownSavepoint = false;
+		}
 	}
 
 	return node;
@@ -11078,10 +11230,13 @@ ValueExprNode* SubQueryNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	const DsqlContextStack::iterator base(*dsqlScratch->context);
 
-	RseNode* rse = PASS1_rse(dsqlScratch, nodeAs<SelectExprNode>(dsqlRse), false);
+	RseNode* rse = PASS1_rse(dsqlScratch, nodeAs<SelectExprNode>(dsqlRse));
 
 	SubQueryNode* node = FB_NEW_POOL(dsqlScratch->getPool()) SubQueryNode(dsqlScratch->getPool(), blrOp, rse,
 		rse->dsqlSelectList->items[0], NullNode::instance());
+
+	node->line = line;
+	node->column = column;
 
 	// Finish off by cleaning up contexts.
 	dsqlScratch->context->clear(base);
@@ -11097,7 +11252,10 @@ void SubQueryNode::setParameterName(dsql_par* parameter) const
 void SubQueryNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	dsqlScratch->appendUChar(blrOp);
+
+	dsqlScratch->putDebugSrcInfo(line, column);
 	GEN_expr(dsqlScratch, dsqlRse);
+
 	GEN_expr(dsqlScratch, value1);
 	GEN_expr(dsqlScratch, value2);
 }
@@ -11306,11 +11464,13 @@ ValueExprNode* SubQueryNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	if (!rse)
 		ERR_post(Arg::Gds(isc_wish_list));
 
-	if (!(rse->flags & RseNode::FLAG_VARIANT))
+	if (rse->isInvariant())
 	{
 		nodFlags |= FLAG_INVARIANT;
 		csb->csb_invariants.push(&impureOffset);
 	}
+
+	AutoSetCurrentCursorId autoSetCurrentCursorId(csb);
 
 	rse->pass2Rse(tdbb, csb);
 
@@ -11322,6 +11482,7 @@ ValueExprNode* SubQueryNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 		dsc desc;
 		getDesc(tdbb, csb, &desc);
 	}
+
 	if (blrOp == blr_average && !(nodFlags & FLAG_DECFLOAT))
 		nodFlags |= FLAG_DOUBLE;
 
@@ -11343,9 +11504,8 @@ ValueExprNode* SubQueryNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	// Finish up processing of record selection expressions.
 
 	RecordSource* const rsb = CMP_post_rse(tdbb, csb, rse);
-	csb->csb_fors.add(rsb);
-
-	subQuery = FB_NEW_POOL(*tdbb->getDefaultPool()) SubQuery(rsb, rse->rse_invariants);
+	subQuery = FB_NEW_POOL(*tdbb->getDefaultPool()) SubQuery(csb, rsb, rse);
+	csb->csb_fors.add(subQuery);
 
 	return this;
 }
@@ -11950,11 +12110,12 @@ ValueExprNode* SubstringSimilarNode::pass1(thread_db* tdbb, CompilerScratch* csb
 
 	// If there is no top-level RSE present and patterns are not constant, unmark node as invariant
 	// because it may be dependent on data or variables.
-	if ((nodFlags & FLAG_INVARIANT) && (!nodeIs<LiteralNode>(pattern) || !nodeIs<LiteralNode>(escape)))
+	if ((nodFlags & FLAG_INVARIANT) &&
+		(!nodeIs<LiteralNode>(pattern) || !nodeIs<LiteralNode>(escape)))
 	{
 		for (const auto& ctxNode : csb->csb_current_nodes)
 		{
-			if (nodeAs<RseNode>(ctxNode))
+			if (nodeIs<RseNode>(ctxNode))
 				return this;
 		}
 
@@ -12160,6 +12321,23 @@ DmlNode* SysFuncCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScrat
 
 	node->args = PAR_args(tdbb, csb);
 
+	if (name == "MAKE_DBKEY")
+	{
+		// Special handling for system function MAKE_DBKEY:
+		// convert constant relation name into ID at the parsing time
+
+		auto literal = nodeAs<LiteralNode>(node->args->items[0]);
+
+		if (literal && literal->litDesc.isText())
+		{
+			const MetaName relName = literal->getText();
+			const jrd_rel* const relation = MET_lookup_relation(tdbb, relName);
+
+			if (relation)
+				node->args->items[0] = MAKE_const_slong(relation->rel_id);
+		}
+	}
+
 	return node;
 }
 
@@ -12301,32 +12479,6 @@ ValueExprNode* SysFuncCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	if (node->function)
 	{
-		if (name == "MAKE_DBKEY")
-		{
-			// Special handling for system function MAKE_DBKEY:
-			// convert constant relation name into ID at the parsing time
-
-			auto literal = nodeAs<LiteralNode>(node->args->items[0]);
-
-			if (literal && literal->litDesc.isText())
-			{
-				const MetaName relName = literal->getText();
-
-				const dsql_rel* const relation =
-					METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, relName);
-
-				if (!relation)
-				{
-					status_exception::raise(
-						Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-						Arg::Gds(isc_dsql_command_err) <<
-						Arg::Gds(isc_dsql_table_not_found) << relName);
-				}
-
-				node->args->items[0] = MAKE_const_slong(relation->rel_id);
-			}
-		}
-
 		if (node->function->setParamsFunc)
 		{
 			Array<dsc> tempDescs(node->args->items.getCount());
@@ -12371,9 +12523,10 @@ ValueExprNode* SysFuncCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 static RegisterNode<TrimNode> regTrimNode({blr_trim});
 
-TrimNode::TrimNode(MemoryPool& pool, UCHAR aWhere, ValueExprNode* aValue, ValueExprNode* aTrimChars)
+TrimNode::TrimNode(MemoryPool& pool, UCHAR aWhere, UCHAR aWhat, ValueExprNode* aValue, ValueExprNode* aTrimChars)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_TRIM>(pool),
 	  where(aWhere),
+	  what(aWhat),
 	  value(aValue),
 	  trimChars(aTrimChars)
 {
@@ -12384,9 +12537,9 @@ DmlNode* TrimNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb
 	UCHAR where = csb->csb_blr_reader.getByte();
 	UCHAR what = csb->csb_blr_reader.getByte();
 
-	TrimNode* node = FB_NEW_POOL(pool) TrimNode(pool, where);
+	TrimNode* node = FB_NEW_POOL(pool) TrimNode(pool, where, what);
 
-	if (what == blr_trim_characters)
+	if (what == blr_trim_characters || what == blr_trim_multi_characters)
 		node->trimChars = PAR_parse_value(tdbb, csb);
 
 	node->value = PAR_parse_value(tdbb, csb);
@@ -12407,7 +12560,7 @@ string TrimNode::internalPrint(NodePrinter& printer) const
 
 ValueExprNode* TrimNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	TrimNode* node = FB_NEW_POOL(dsqlScratch->getPool()) TrimNode(dsqlScratch->getPool(), where,
+	TrimNode* node = FB_NEW_POOL(dsqlScratch->getPool()) TrimNode(dsqlScratch->getPool(), where, what,
 		doDsqlPass(dsqlScratch, value), doDsqlPass(dsqlScratch, trimChars));
 
 	// Try to force trimChars to be same type as value: TRIM(? FROM FIELD)
@@ -12435,7 +12588,7 @@ void TrimNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	if (trimChars)
 	{
-		dsqlScratch->appendUChar(blr_trim_characters);
+		dsqlScratch->appendUChar(what);
 		GEN_expr(dsqlScratch, trimChars);
 	}
 	else
@@ -12505,7 +12658,7 @@ void TrimNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 
 ValueExprNode* TrimNode::copy(thread_db* tdbb, NodeCopier& copier) const
 {
-	TrimNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) TrimNode(*tdbb->getDefaultPool(), where);
+	TrimNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) TrimNode(*tdbb->getDefaultPool(), where, what);
 	node->value = copier.copy(tdbb, value);
 	if (trimChars)
 		node->trimChars = copier.copy(tdbb, trimChars);
@@ -12640,34 +12793,87 @@ dsc* TrimNode::execute(thread_db* tdbb, Request* request) const
 
 	SLONG offsetLead = 0;
 	SLONG offsetTrail = valueCanonicalLen;
+	const bool multi = what == blr_trim_multi_characters;
 
 	// CVC: Avoid endless loop with zero length trim chars.
 	if (charactersCanonicalLen)
 	{
-		if (where == blr_trim_both || where == blr_trim_leading)
+		int charSize = charactersCanonical.getCount() / charactersLength;
+		if (!multi)
 		{
-			// CVC: Prevent surprises with offsetLead < valueCanonicalLen; it may fail.
-			for (; offsetLead + charactersCanonicalLen <= valueCanonicalLen;
-				 offsetLead += charactersCanonicalLen)
+			if (where == blr_trim_both || where == blr_trim_leading)
 			{
-				if (memcmp(charactersCanonical.begin(), &valueCanonical[offsetLead],
-						charactersCanonicalLen) != 0)
+				// CVC: Prevent surprises with offsetLead < valueCanonicalLen; it may fail.
+				for (; offsetLead + charactersCanonicalLen <= valueCanonicalLen;
+					 offsetLead += charactersCanonicalLen)
 				{
-					break;
+					if (memcmp(charactersCanonical.begin(), &valueCanonical[offsetLead],
+							   charactersCanonicalLen) != 0)
+					{
+						break;
+					}
+				}
+			}
+
+			if (where == blr_trim_both || where == blr_trim_trailing)
+			{
+				for (; offsetTrail - charactersCanonicalLen >= offsetLead;
+					 offsetTrail -= charactersCanonicalLen)
+				{
+					if (memcmp(charactersCanonical.begin(),
+							   &valueCanonical[offsetTrail - charactersCanonicalLen],
+							   charactersCanonicalLen) != 0)
+					{
+						break;
+					}
 				}
 			}
 		}
-
-		if (where == blr_trim_both || where == blr_trim_trailing)
+		else
 		{
-			for (; offsetTrail - charactersCanonicalLen >= offsetLead;
-				 offsetTrail -= charactersCanonicalLen)
+			if (where == blr_trim_both || where == blr_trim_leading)
 			{
-				if (memcmp(charactersCanonical.begin(),
-						&valueCanonical[offsetTrail - charactersCanonicalLen],
-						charactersCanonicalLen) != 0)
+				while (offsetLead < valueCanonicalLen)
 				{
-					break;
+					bool found = false;
+					for (int i = 0; i < charactersCanonicalLen; i += charSize)
+					{
+						if (memcmp(&charactersCanonical[i],
+								   &valueCanonical[offsetLead],
+								   charSize) == 0)
+						{
+							found = true;
+							break;
+						}
+					}
+					if (!found)
+					{
+						break;
+					}
+					offsetLead += charSize;
+				}
+			}
+
+			if (where == blr_trim_both || where == blr_trim_trailing)
+			{
+				while (offsetTrail - charSize >= offsetLead)
+				{
+					bool found = false;
+					for (int i = 0; i < charactersCanonicalLen; i += charSize)
+					{
+						if (memcmp(&charactersCanonical[i],
+								   &valueCanonical[offsetTrail - charSize],
+								   charSize) == 0)
+						{
+							found = true;
+							break;
+						}
+					}
+					if (!found)
+					{
+						break;
+					}
+					offsetTrail -= charSize;
 				}
 			}
 		}
@@ -12707,102 +12913,304 @@ dsc* TrimNode::execute(thread_db* tdbb, Request* request) const
 //--------------------
 
 
-static RegisterNode<UdfCallNode> regUdfCallNode({blr_function, blr_function2, blr_subfunc});
+static RegisterNode<UdfCallNode> regUdfCallNode({blr_function, blr_function2, blr_subfunc, blr_invoke_function});
 
-UdfCallNode::UdfCallNode(MemoryPool& pool, const QualifiedName& aName, ValueListNode* aArgs)
+UdfCallNode::UdfCallNode(MemoryPool& pool, const QualifiedName& aName,
+		ValueListNode* aArgs, ObjectsArray<MetaName>* aDsqlArgNames)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_UDF_CALL>(pool),
 	  name(pool, aName),
 	  args(aArgs),
-	  function(NULL),
-	  dsqlFunction(NULL),
-	  isSubRoutine(false)
+	  dsqlArgNames(aDsqlArgNames)
 {
 }
 
 DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
 	const UCHAR blrOp)
 {
-	const UCHAR* savePos = csb->csb_blr_reader.getPos();
+	const auto predateCheck = [&](bool condition, const char* preVerb, const char* postVerb)
+	{
+		if (!condition)
+		{
+			string str;
+			str.printf("%s should predate %s", preVerb, postVerb);
+			PAR_error(csb, Arg::Gds(isc_random) << str);
+		}
+	};
 
+	auto& blrReader = csb->csb_blr_reader;
+	const UCHAR* startPos = csb->csb_blr_reader.getPos();
+
+	const UCHAR* argNamesPos = nullptr;
+	ObjectsArray<MetaName>* argNames = nullptr;
+	USHORT argCount = 0;
 	QualifiedName name;
 
-	if (blrOp == blr_function2)
-		csb->csb_blr_reader.getMetaName(name.package);
+	const auto node = FB_NEW_POOL(pool) UdfCallNode(pool);
 
-	csb->csb_blr_reader.getMetaName(name.identifier);
-
-	const USHORT count = name.package.length() + name.identifier.length();
-
-	UdfCallNode* node = FB_NEW_POOL(pool) UdfCallNode(pool, name);
-
-	if (blrOp == blr_function &&
-		(name.identifier == "RDB$GET_CONTEXT" || name.identifier == "RDB$SET_CONTEXT"))
+	if (blrOp == blr_invoke_function)
 	{
-		csb->csb_blr_reader.setPos(savePos);
-		return SysFuncCallNode::parse(tdbb, pool, csb, blr_sys_function);
-	}
+		UCHAR subCode;
 
-	if (blrOp == blr_subfunc)
-	{
-		DeclareSubFuncNode* declareNode;
-
-		for (auto curCsb = csb; curCsb && !node->function; curCsb = curCsb->mainCsb)
+		while ((subCode = blrReader.getByte()) != blr_end)
 		{
-			if (curCsb->subFunctions.get(name.identifier, declareNode))
-				node->function = declareNode->routine;
-		}
-	}
-
-	Function* function = node->function;
-
-	if (!function)
-		function = node->function = Function::lookup(tdbb, name, false);
-
-	if (function)
-	{
-		if (function->isImplemented() && !function->isDefined())
-		{
-			if (tdbb->getAttachment()->isGbak() || (tdbb->tdbb_flags & TDBB_replicator))
+			switch (subCode)
 			{
-				PAR_warning(Arg::Warning(isc_funnotdef) << Arg::Str(name.toString()) <<
-							Arg::Warning(isc_modnotfound));
-			}
-			else
-			{
-				csb->csb_blr_reader.seekBackward(count);
-				PAR_error(csb, Arg::Gds(isc_funnotdef) << Arg::Str(name.toString()) <<
-						   Arg::Gds(isc_modnotfound));
+				case blr_invoke_function_type:
+				{
+					UCHAR functionType = blrReader.getByte();
+
+					switch (functionType)
+					{
+						case blr_invoke_function_type_packaged:
+							blrReader.getMetaName(name.package);
+							break;
+
+						case blr_invoke_function_type_standalone:
+						case blr_invoke_function_type_sub:
+							break;
+
+						default:
+							PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_invoke_function_type");
+							break;
+					}
+
+					blrReader.getMetaName(name.identifier);
+
+					if (functionType == blr_invoke_function_type_sub)
+					{
+						for (auto curCsb = csb; curCsb && !node->function; curCsb = curCsb->mainCsb)
+						{
+							if (DeclareSubFuncNode* declareNode; curCsb->subFunctions.get(name.identifier, declareNode))
+								node->function = declareNode->routine;
+						}
+					}
+					else if (!node->function)
+						node->function = Function::lookup(tdbb, name, false);
+
+					if (!node->function)
+					{
+						blrReader.setPos(startPos);
+						PAR_error(csb, Arg::Gds(isc_funnotdef) << name.toString());
+					}
+
+					break;
+				}
+
+				case blr_invoke_function_arg_names:
+				{
+					predateCheck(node->function, "blr_invoke_function_type", "blr_invoke_function_arg_names");
+					predateCheck(!node->args, "blr_invoke_function_arg_names", "blr_invoke_function_args");
+
+					argNamesPos = blrReader.getPos();
+					USHORT argNamesCount = blrReader.getWord();
+					MetaName argName;
+
+					argNames = FB_NEW_POOL(pool) ObjectsArray<MetaName>(pool);
+
+					while (argNamesCount--)
+					{
+						blrReader.getMetaName(argName);
+						argNames->add(argName);
+					}
+
+					break;
+				}
+
+				case blr_invoke_function_args:
+					predateCheck(node->function, "blr_invoke_function_type", "blr_invoke_function_args");
+
+					argCount = blrReader.getWord();
+					node->args = PAR_args(tdbb, csb, argCount, MAX(argCount, node->function->fun_inputs));
+					break;
+
+				default:
+					PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_invoke_function sub code");
 			}
 		}
 	}
 	else
 	{
-		csb->csb_blr_reader.seekBackward(count);
-		PAR_error(csb, Arg::Gds(isc_funnotdef) << Arg::Str(name.toString()));
+		if (blrOp == blr_function2)
+			blrReader.getMetaName(name.package);
+
+		blrReader.getMetaName(name.identifier);
+
+		if (blrOp == blr_function &&
+			(name.identifier == "RDB$GET_CONTEXT" || name.identifier == "RDB$SET_CONTEXT"))
+		{
+			blrReader.setPos(startPos);
+			return SysFuncCallNode::parse(tdbb, pool, csb, blr_sys_function);
+		}
+
+		if (blrOp == blr_subfunc)
+		{
+			for (auto curCsb = csb; curCsb && !node->function; curCsb = curCsb->mainCsb)
+			{
+				if (DeclareSubFuncNode* declareNode; curCsb->subFunctions.get(name.identifier, declareNode))
+					node->function = declareNode->routine;
+			}
+		}
+		else if (!node->function)
+			node->function = Function::lookup(tdbb, name, false);
+
+		if (!node->function)
+		{
+			blrReader.setPos(startPos);
+			PAR_error(csb, Arg::Gds(isc_funnotdef) << name.toString());
+		}
+
+		argCount = blrReader.getByte();
+		node->args = PAR_args(tdbb, csb, argCount, MAX(argCount, node->function->fun_inputs));
 	}
 
-	node->isSubRoutine = function->isSubRoutine();
-
-	const UCHAR argCount = csb->csb_blr_reader.getByte();
-
-	// Check to see if the argument count matches.
-	if (argCount < function->fun_inputs - function->getDefaultCount() || argCount > function->fun_inputs)
-		PAR_error(csb, Arg::Gds(isc_funmismat) << name.toString());
-
-	node->args = PAR_args(tdbb, csb, argCount, function->fun_inputs);
-
-	for (USHORT i = argCount; i < function->fun_inputs; ++i)
+	if (argNames && argNames->getCount() > argCount)
 	{
-		Parameter* const parameter = function->getInputFields()[i];
-		node->args->items[i] = CMP_clone_node(tdbb, csb, parameter->prm_default_value);
+		blrReader.setPos(argNamesPos);
+		PAR_error(csb,
+			Arg::Gds(isc_random) <<
+			"blr_invoke_function_arg_names count cannot be greater than blr_invoke_function_args");
 	}
+
+	fb_assert(node->function);
+
+	if (node->function->isImplemented() && !node->function->isDefined())
+	{
+		if (tdbb->getAttachment()->isGbak() || (tdbb->tdbb_flags & TDBB_replicator))
+		{
+			PAR_warning(Arg::Warning(isc_funnotdef) << name.toString() <<
+						Arg::Warning(isc_modnotfound));
+		}
+		else
+		{
+			blrReader.setPos(startPos);
+			PAR_error(csb, Arg::Gds(isc_funnotdef) << name.toString() <<
+						Arg::Gds(isc_modnotfound));
+		}
+	}
+
+	node->name = name;
+	node->isSubRoutine = node->function->isSubRoutine();
+
+	Arg::StatusVector mismatchStatus;
+
+	if (!node->args)
+		node->args = FB_NEW_POOL(pool) ValueListNode(pool);
+
+	const auto positionalArgCount = argNames ? argCount - argNames->getCount() : argCount;
+	auto argIt = node->args->items.begin();
+	LeftPooledMap<MetaName, NestConst<ValueExprNode>> argsByName;
+
+	if (positionalArgCount)
+	{
+		if (argCount > node->function->fun_inputs)
+			mismatchStatus << Arg::Gds(isc_wronumarg);
+
+		for (auto pos = 0u; pos < positionalArgCount; ++pos)
+		{
+			if (pos < node->function->fun_inputs)
+			{
+				const auto& parameter = node->function->getInputFields()[pos];
+
+				if (parameter->prm_name.hasData() && argsByName.put(parameter->prm_name, *argIt))
+					mismatchStatus << Arg::Gds(isc_param_multiple_assignments) << parameter->prm_name;
+			}
+
+			++argIt;
+		}
+	}
+
+	if (argNames)
+	{
+		for (const auto& argName : *argNames)
+		{
+			if (argsByName.put(argName, *argIt++))
+				mismatchStatus << Arg::Gds(isc_param_multiple_assignments) << argName;
+		}
+	}
+
+	node->args->items.resize(node->function->getInputFields().getCount());
+	argIt = node->args->items.begin();
+
+	for (auto& parameter : node->function->getInputFields())
+	{
+		NestConst<Jrd::ValueExprNode>* argValue;
+		bool argExists = false;
+
+		if (parameter->prm_name.hasData())
+		{
+			argExists = argsByName.exist(parameter->prm_name);
+			argValue = argsByName.get(parameter->prm_name);
+
+			if (argValue)
+			{
+				*argIt = *argValue;
+				argsByName.remove(parameter->prm_name);
+			}
+		}
+		else	// no parameter name in UDFs
+			argValue = argIt;
+
+		if (!argValue || !*argValue)
+		{
+			if (parameter->prm_default_value)
+				*argIt = CMP_clone_node(tdbb, csb, parameter->prm_default_value);
+			else if (argExists)	// explicit DEFAULT in caller
+			{
+				FieldInfo fieldInfo;
+
+				if (parameter->prm_mechanism != prm_mech_type_of &&
+					!fb_utils::implicit_domain(parameter->prm_field_source.c_str()))
+				{
+					const MetaNamePair namePair(parameter->prm_field_source, "");
+
+					if (!csb->csb_map_field_info.get(namePair, fieldInfo))
+					{
+						dsc dummyDesc;
+						MET_get_domain(tdbb, csb->csb_pool, parameter->prm_field_source, &dummyDesc, &fieldInfo);
+						csb->csb_map_field_info.put(namePair, fieldInfo);
+					}
+				}
+
+				if (fieldInfo.defaultValue)
+					*argIt = CMP_clone_node(tdbb, csb, fieldInfo.defaultValue);
+				else
+					*argIt = NullNode::instance();
+			}
+			else
+				mismatchStatus << Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
+		}
+
+		++argIt;
+	}
+
+	if (argsByName.hasData())
+	{
+		for (const auto& argPair : argsByName)
+			mismatchStatus << Arg::Gds(isc_param_not_exist) << argPair.first;
+	}
+
+	if (mismatchStatus.hasData())
+		status_exception::raise(Arg::Gds(isc_fun_param_mismatch) << name.toString() << mismatchStatus);
 
 	// CVC: I will track ufds only if a function is not being dropped.
-	if (!function->isSubRoutine() && (csb->csb_g_flags & csb_get_dependencies))
+	if (!node->function->isSubRoutine() && csb->collectingDependencies())
 	{
-		CompilerScratch::Dependency dependency(obj_udf);
-		dependency.function = function;
-		csb->csb_dependencies.push(dependency);
+		{	// scope
+			CompilerScratch::Dependency dependency(obj_udf);
+			dependency.function = node->function;
+			csb->addDependency(dependency);
+		}
+
+		if (argNames)
+		{
+			for (const auto& argName : *argNames)
+			{
+				CompilerScratch::Dependency dependency(obj_udf);
+				dependency.function = node->function;
+				dependency.subName = &argName;
+				csb->addDependency(dependency);
+			}
+		}
 	}
 
 	return node;
@@ -12825,6 +13233,45 @@ void UdfCallNode::setParameterName(dsql_par* parameter) const
 
 void UdfCallNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
+	if (dsqlArgNames || args->items.getCount() >= UCHAR_MAX)
+	{
+		dsqlScratch->appendUChar(blr_invoke_function);
+
+		dsqlScratch->appendUChar(blr_invoke_function_type);
+
+		if (dsqlFunction->udf_name.package.hasData())
+		{
+			dsqlScratch->appendUChar(blr_invoke_function_type_packaged);
+			dsqlScratch->appendMetaString(dsqlFunction->udf_name.package.c_str());
+		}
+		else
+		{
+			dsqlScratch->appendUChar((dsqlFunction->udf_flags & UDF_subfunc) ?
+				blr_invoke_function_type_sub : blr_invoke_function_type_standalone);
+		}
+
+		dsqlScratch->appendMetaString(dsqlFunction->udf_name.identifier.c_str());
+
+		if (dsqlArgNames && dsqlArgNames->hasData())
+		{
+			dsqlScratch->appendUChar(blr_invoke_function_arg_names);
+			dsqlScratch->appendUShort(dsqlArgNames->getCount());
+
+			for (auto& argName : *dsqlArgNames)
+				dsqlScratch->appendMetaString(argName.c_str());
+		}
+
+		dsqlScratch->appendUChar(blr_invoke_function_args);
+		dsqlScratch->appendUShort(args->items.getCount());
+
+		for (auto& arg : args->items)
+			GEN_arg(dsqlScratch, arg);
+
+		dsqlScratch->appendUChar(blr_end);
+
+		return;
+	}
+
 	if (dsqlFunction->udf_name.package.isEmpty())
 		dsqlScratch->appendUChar((dsqlFunction->udf_flags & UDF_subfunc) ? blr_subfunc : blr_function);
 	else
@@ -12837,7 +13284,7 @@ void UdfCallNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	dsqlScratch->appendUChar(args->items.getCount());
 
 	for (auto& arg : args->items)
-		GEN_expr(dsqlScratch, arg);
+		GEN_arg(dsqlScratch, arg);
 }
 
 void UdfCallNode::make(DsqlCompilerScratch* /*dsqlScratch*/, dsc* desc)
@@ -12850,10 +13297,11 @@ void UdfCallNode::make(DsqlCompilerScratch* /*dsqlScratch*/, dsc* desc)
 	// pointer.
 	desc->setNullable(true);
 
-	if (desc->dsc_dtype <= dtype_any_text)
-		desc->dsc_ttype() = dsqlFunction->udf_character_set_id;
-	else
+	if (!desc->isText())
 		desc->dsc_ttype() = dsqlFunction->udf_sub_type;
+
+	if (desc->isText() || (desc->isBlob() && desc->getBlobSubType() == isc_blob_text))
+		desc->setTextType(dsqlFunction->udf_character_set_id);
 }
 
 void UdfCallNode::getDesc(thread_db* /*tdbb*/, CompilerScratch* /*csb*/, dsc* desc)
@@ -12914,7 +13362,7 @@ ValueExprNode* UdfCallNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 				if (!ssRelationId && csb->csb_parent_relation)
 				{
-					fb_assert(csb->csb_parent_relation->rel_ss_definer.value);
+					fb_assert(csb->csb_parent_relation->rel_ss_definer.asBool());
 					ssRelationId = csb->csb_parent_relation->rel_id;
 				}
 
@@ -13111,12 +13559,7 @@ dsc* UdfCallNode::execute(thread_db* tdbb, Request* request) const
 
 			funcRequest->setGmtTimeStamp(request->getGmtTimeStamp());
 
-			EXE_start(tdbb, funcRequest, transaction);
-
-			if (inMsgLength != 0)
-				EXE_send(tdbb, funcRequest, 0, inMsgLength, inMsg);
-
-			EXE_receive(tdbb, funcRequest, 1, outMsgLength, outMsg);
+			EXE_execute_function(tdbb, funcRequest, transaction, inMsgLength, inMsg, outMsgLength, outMsg);
 
 			// Clean up all savepoints started during execution of the function
 
@@ -13187,8 +13630,11 @@ dsc* UdfCallNode::execute(thread_db* tdbb, Request* request) const
 
 ValueExprNode* UdfCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	UdfCallNode* node = FB_NEW_POOL(dsqlScratch->getPool()) UdfCallNode(dsqlScratch->getPool(), name,
-		doDsqlPass(dsqlScratch, args));
+	const auto node = FB_NEW_POOL(dsqlScratch->getPool()) UdfCallNode(dsqlScratch->getPool(), name,
+		doDsqlPass(dsqlScratch, args),
+		dsqlArgNames ?
+			FB_NEW_POOL(dsqlScratch->getPool()) ObjectsArray<MetaName>(dsqlScratch->getPool(), *dsqlArgNames) :
+			nullptr);
 
 	if (name.package.isEmpty())
 	{
@@ -13206,28 +13652,48 @@ ValueExprNode* UdfCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				  Arg::Gds(isc_random) << Arg::Str(name.toString()));
 	}
 
-	const USHORT arg_count = node->dsqlFunction->udf_arguments.getCount();
-	const USHORT count = node->args->items.getCount();
-	if (count > arg_count || count < arg_count - node->dsqlFunction->udf_def_count)
-		ERRD_post(Arg::Gds(isc_fun_param_mismatch) << Arg::Str(name.toString()));
-
+	auto argIt = node->args->items.begin();
 	unsigned pos = 0;
 
-	for (auto& arg : node->args->items)
+	while (pos < node->args->items.getCount() - (node->dsqlArgNames ? node->dsqlArgNames->getCount() : 0))
 	{
 		if (pos < node->dsqlFunction->udf_arguments.getCount())
 		{
-			PASS1_set_parameter_type(dsqlScratch, arg,
-				[&] (dsc* desc) { *desc = node->dsqlFunction->udf_arguments[pos]; },
+			PASS1_set_parameter_type(dsqlScratch, *argIt++,
+				[&] (dsc* desc) { *desc = node->dsqlFunction->udf_arguments[pos].desc; },
 				false);
-		}
-		else
-		{
-			// We should complain here in the future! The parameter is
-			// out of bounds or the function doesn't declare input params.
 		}
 
 		++pos;
+	}
+
+	if (node->dsqlArgNames)
+	{
+		fb_assert(node->dsqlArgNames->getCount() <= node->args->items.getCount());
+
+		LeftPooledMap<MetaName, const dsc*> argsByName;
+
+		for (const auto& arg : node->dsqlFunction->udf_arguments)
+			argsByName.put(arg.name, &arg.desc);
+
+		Arg::StatusVector mismatchStatus;
+
+		for (const auto& argName : *node->dsqlArgNames)
+		{
+			if (const auto argDescPtr = argsByName.get(argName))
+			{
+				PASS1_set_parameter_type(dsqlScratch, *argIt,
+					[&] (dsc* desc) { *desc = **argDescPtr; },
+					false);
+			}
+			else
+				mismatchStatus << Arg::Gds(isc_param_not_exist) << argName;
+
+			++argIt;
+		}
+
+		if (mismatchStatus.hasData())
+			status_exception::raise(Arg::Gds(isc_fun_param_mismatch) << name.toString() << mismatchStatus);
 	}
 
 	return node;
@@ -13412,6 +13878,7 @@ ValueExprNode* ValueIfNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		doDsqlPass(dsqlScratch, condition),
 		doDsqlPass(dsqlScratch, trueValue),
 		doDsqlPass(dsqlScratch, falseValue));
+	node->dsqlGenCast = dsqlGenCast;
 
 	PASS1_set_parameter_type(dsqlScratch, node->trueValue, node->falseValue, false);
 	PASS1_set_parameter_type(dsqlScratch, node->falseValue, node->trueValue, false);
@@ -13435,8 +13902,12 @@ void ValueIfNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	dsc desc;
 	make(dsqlScratch, &desc);
-	dsqlScratch->appendUChar(blr_cast);
-	GEN_descriptor(dsqlScratch, &desc, true);
+
+	if (dsqlGenCast)
+	{
+		dsqlScratch->appendUChar(blr_cast);
+		GEN_descriptor(dsqlScratch, &desc, true);
+	}
 
 	dsqlScratch->appendUChar(blr_value_if);
 	GEN_expr(dsqlScratch, condition);
@@ -13509,20 +13980,8 @@ VariableNode::VariableNode(MemoryPool& pool)
 
 DmlNode* VariableNode::parse(thread_db* /*tdbb*/, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp)
 {
-	const USHORT n = csb->csb_blr_reader.getWord();
-
 	VariableNode* node = FB_NEW_POOL(pool) VariableNode(pool);
-	node->varId = n;
-	node->outerDecl = csb->outerVarsMap.exist(n);
-
-	if (node->outerDecl)
-	{
-		fb_assert(csb->mainCsb);
-
-		if (csb->mainCsb)
-			csb->mainCsb->csb_variables_used_in_subroutines.add(node->varId);
-	}
-
+	node->varId = csb->csb_blr_reader.getWord();
 	return node;
 }
 
@@ -13570,13 +14029,16 @@ ValueExprNode* VariableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			else
 			{
 				if (!dsqlScratch->outerVarsMap.exist(node->dsqlVar->number))
-					dsqlScratch->outerVarsMap.put(node->dsqlVar->number, dsqlScratch->hiddenVarsNumber++);
+					dsqlScratch->outerVarsMap.put(node->dsqlVar->number, dsqlScratch->reserveVarNumber());
 			}
 		}
 	}
 
-	if (!node->dsqlVar)
+	if (!node->dsqlVar ||
+		(node->dsqlVar->type == dsql_var::TYPE_LOCAL && !node->dsqlVar->initialized && !dsqlScratch->mainScratch))
+	{
 		PASS1_field_unknown(NULL, dsqlName.c_str(), this);
+	}
 
 	return node;
 }
@@ -13685,10 +14147,12 @@ ValueExprNode* VariableNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 {
 	ValueExprNode::pass1(tdbb, csb);
 
+	outerDecl = csb->outerVarsMap.exist(varId);
+
 	vec<DeclareVariableNode*>* vector = csb->csb_variables;
 
 	if (!vector || varId >= vector->count() || !(varDecl = (*vector)[varId]))
-		PAR_error(csb, Arg::Gds(isc_badvarnum));
+		status_exception::raise(Arg::Gds(isc_badvarnum));
 
 	return this;
 }
@@ -13714,6 +14178,15 @@ dsc* VariableNode::execute(thread_db* tdbb, Request* request) const
 	const auto varRequest = getVarRequest(request);
 	const auto varImpure = varRequest->getImpure<impure_value>(varDecl->impureOffset);
 
+	if (!(varImpure->vlu_flags & VLU_initialized))
+	{
+		const Item item(Item::TYPE_VARIABLE, varId);
+
+		//// FIXME: Variable with simple type has no varInfo.
+		const auto s = item.getDescription(request, varInfo);
+		ERR_post(Arg::Gds(isc_uninitialized_var) << s);
+	}
+
 	request->req_flags &= ~req_null;
 
 	dsc* desc;
@@ -13726,10 +14199,12 @@ dsc* VariableNode::execute(thread_db* tdbb, Request* request) const
 			request->req_flags |= req_null;
 		else
 		{
-			EVL_make_value(tdbb, &varImpure->vlu_desc, impure);
+			auto varDesc = varImpure->vlu_desc;
 
-			if (impure->vlu_desc.dsc_dtype == dtype_text)
-				INTL_adjust_text_descriptor(tdbb, &impure->vlu_desc);
+			if (varDesc.dsc_dtype == dtype_text)
+				INTL_adjust_text_descriptor(tdbb, &varDesc);
+
+			EVL_make_value(tdbb, &varDesc, impure);
 		}
 
 		if (!(varImpure->vlu_flags & VLU_checked))

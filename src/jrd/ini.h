@@ -75,7 +75,7 @@ const USHORT TIMESTAMP_TZ_SIZE	= 12;
 // Pick up global ids
 
 
-#define FIELD(type, name, dtype, length, sub_type, dflt_blr, nullable)	type,
+#define FIELD(type, name, dtype, length, sub_type, dflt_blr, nullable, ods)	type,
 enum gflds
 {
 #include "../jrd/fields.h"
@@ -88,11 +88,11 @@ typedef gflds GFLDS;
 // Pick up actual global fields
 
 #ifndef GPRE
-#define FIELD(type, name, dtype, length, sub_type, dflt_blr, nullable)	\
-	{ (int) type, (int) name, dtype, length, sub_type, dflt_blr, sizeof(dflt_blr), nullable },
+#define FIELD(type, name, dtype, length, sub_type, dflt_blr, nullable, ods)	\
+	{ (int) type, (int) name, dtype, length, sub_type, dflt_blr, sizeof(dflt_blr), nullable, ods },
 #else
-#define FIELD(type, name, dtype, length, sub_type, dflt_blr, nullable)	\
-	{ (int) type, (int) name, dtype, length, sub_type, NULL, 0, true },
+#define FIELD(type, name, dtype, length, sub_type, dflt_blr, nullable, ods)	\
+	{ (int) type, (int) name, dtype, length, sub_type, NULL, 0, true, ods },
 #endif
 
 struct gfld
@@ -105,12 +105,13 @@ struct gfld
 	const UCHAR*	gfld_dflt_blr;
 	USHORT			gfld_dflt_len;
 	bool			gfld_nullable;
+	USHORT			gfld_ods_version;
 };
 
 static const struct gfld gfields[] =
 {
 #include "../jrd/fields.h"
-	{ 0, 0, dtype_unknown, 0, 0, NULL, 0, false }
+	{ 0, 0, dtype_unknown, 0, 0, NULL, 0, false, 0 }
 };
 #undef FIELD
 

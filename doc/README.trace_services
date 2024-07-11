@@ -98,7 +98,8 @@ I. Sample configuration files for user trace sessions:
 	
 a) Trace prepare, free and execution of all statements within connection 12345
 
-<database>
+database
+{
 	enabled			true
 	connection_id		12345
 	log_statement_prepare	true
@@ -106,13 +107,14 @@ a) Trace prepare, free and execution of all statements within connection 12345
 	log_statement_start	true
 	log_statement_finish	true
 	time_threshold		0
-</database>
+}
 
 b) Trace all connections of given user to database mydatabase.fdb
    Log executed INSERT, UPDATE and DELETE statements, nested calls to procedures
    and triggers and show corresponding PLAN's and performance statistics.
 
-<database %[\\/]mydatabase.fdb>
+database = %[\\/]mydatabase.fdb
+{
 	enabled			true
 	include_filter		(%)(INSERT|UPDATE|DELETE)(%)
 	log_statement_finish	true
@@ -121,19 +123,21 @@ b) Trace all connections of given user to database mydatabase.fdb
 	print_plan		true
 	print_perf		true
 	time_threshold		0
-</database>
+}
 	
 c) Trace connections and transactions in all databases except of security database
 
-<database>
+database
+{
 	enabled			true
 	log_connections		true
 	log_transactions	true
-</database>
+}
 
-<database security2.fdb>
+database = security.db
+{
 	enabled			false
-</database>
+}
 
 
 

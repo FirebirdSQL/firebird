@@ -23,7 +23,8 @@ FB_RES="$FB_FW/Versions/A/Resources"
 # Now create the firebird group
 echo "Create the Firebird group 10.7+"
 if dscl localhost -read /Local/Default/Groups/firebird 2&>1 /dev/null; then
-	echo "Group Found"
+	gid=$(dscl localhost -read /Local/Default/Groups/firebird PrimaryGroupID | awk '($1 == "PrimaryGroupID:") { print $2 }')
+	echo "Group Found $gid"
 else
 gid=501
 dscl localhost -search /Local/Default/Groups PrimaryGroupID $gid | grep $gid
@@ -73,7 +74,7 @@ chown -R firebird:firebird "$FB_FW"
 # set the permissions correctly
 echo "Set the permissions correctly"
     chmod 777 "$FB_FW/Resources/"
-    chmod 660 "$FB_FW/Resources/security5.fdb"
+    chmod 660 "$FB_FW/Resources/security6.fdb"
 
 # Remove all older traces of Classic first
 echo "Remove all older traces of Classic first"
@@ -94,7 +95,7 @@ fi
 # Install the saved security database, if any
 echo "Install the saved security database"
 if test -f /tmp/fb-security-database-update5.fdb; then
-	mv -f /tmp/fb-security-database-update5.fdb "$FB_RES/security5.fdb"
+	mv -f /tmp/fb-security-database-update5.fdb "$FB_RES/security6.fdb"
 	rm -f /tmp/fb-security-database-update5.fdb
 fi
 
@@ -117,7 +118,7 @@ cp /tmp/UDF_Save/*.* $FB_RES/UDF/
 rm -fr /tmp/UDF_save
 
 # Test for saved security database
-if test -f "$FB_RES/security5.fdb"; then
+if test -f "$FB_RES/security6.fdb"; then
 echo "Security database has been preserved"
 fi
 

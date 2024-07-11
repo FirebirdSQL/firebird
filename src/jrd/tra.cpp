@@ -238,6 +238,15 @@ void TRA_detach_request(Jrd::Request* request)
 
 	// Release stored looper savepoints
 	Savepoint::destroy(request->req_savepoints);
+	fb_assert(!request->req_savepoints);
+
+	// Release procedure savepoints used by this request
+	if (request->req_proc_sav_point)
+	{
+		fb_assert(request->req_flags & req_proc_fetch);
+		Savepoint::destroy(request->req_proc_sav_point);
+		fb_assert(!request->req_proc_sav_point);
+	}
 
 	// Remove request from the doubly linked list
 	if (request->req_tra_next)
@@ -581,24 +590,24 @@ void TRA_extend_tip(thread_db* tdbb, ULONG sequence) //, WIN* precedence_window)
 	CCH_must_write(tdbb, &window);
 	CCH_RELEASE(tdbb, &window);
 
+	const ULONG pageNumber = window.win_page.getPageNum();
+
 	// Release prior page
 
 	if (sequence)
 	{
 		CCH_MARK_MUST_WRITE(tdbb, &prior_window);
-		prior_tip->tip_next = window.win_page.getPageNum();
+		prior_tip->tip_next = pageNumber;
 		CCH_RELEASE(tdbb, &prior_window);
 	}
 
 	// Link into internal data structures
 
-	vcl* vector = dbb->dbb_t_pages =
-		vcl::newVector(*dbb->dbb_permanent, dbb->dbb_t_pages, sequence + 1);
-	(*vector)[sequence] = window.win_page.getPageNum();
+	dbb->setKnownPage(pag_transactions, sequence, pageNumber);
 
 	// Write into pages relation
 
-	DPM_pages(tdbb, 0, pag_transactions, sequence, window.win_page.getPageNum());
+	DPM_pages(tdbb, 0, pag_transactions, sequence, pageNumber);
 }
 
 
@@ -805,8 +814,7 @@ void TRA_init(Jrd::Attachment* attachment)
 	CHECK_DBB(dbb);
 
 	MemoryPool* const pool = dbb->dbb_permanent;
-	jrd_tra* const trans = FB_NEW_POOL(*pool) jrd_tra(pool, &dbb->dbb_memory_stats, NULL, NULL);
-	trans->tra_attachment = attachment;
+	jrd_tra* const trans = FB_NEW_POOL(*pool) jrd_tra(pool, &dbb->dbb_memory_stats, attachment, NULL);
 	attachment->setSysTransaction(trans);
 	trans->tra_flags |= TRA_system | TRA_ignore_limbo;
 }
@@ -828,7 +836,7 @@ void TRA_invalidate(thread_db* tdbb, ULONG mask)
 
 	Database* const database = tdbb->getDatabase();
 
-	EngineCheckout cout(tdbb, FB_FUNCTION, true);
+	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 
 	SyncLockGuard dbbSync(&database->dbb_sync, SYNC_SHARED, "TRA_invalidate");
 
@@ -1223,6 +1231,17 @@ void TRA_release_transaction(thread_db* tdbb, jrd_tra* transaction, Jrd::TraceTr
 
 	if (!transaction->tra_outer)
 	{
+		for (auto& item : transaction->tra_blob_util_map)
+		{
+			auto blb = item.second;
+
+			// Let temporary blobs be cancelled in the block below.
+			if (!(blb->blb_flags & BLB_temporary))
+				blb->BLB_close(tdbb);
+		}
+
+		transaction->tra_blob_util_map.clear();
+
 		if (transaction->tra_blobs->getFirst())
 		{
 			while (true)
@@ -1246,6 +1265,8 @@ void TRA_release_transaction(thread_db* tdbb, jrd_tra* transaction, Jrd::TraceTr
 		while (transaction->tra_arrays)
 			blb::release_array(transaction->tra_arrays);
 	}
+
+	fb_assert(transaction->tra_temp_blobs_count == 0);
 
 	if (transaction->tra_pool)
 	{
@@ -1717,7 +1738,11 @@ jrd_tra* TRA_start(thread_db* tdbb, ULONG flags, SSHORT lock_timeout, Jrd::jrd_t
 	Database* const dbb = tdbb->getDatabase();
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
 
-	if (dbb->dbb_ast_flags & DBB_shut_tran)
+	// Starting new transactions should be allowed for threads which
+	// are running purge_attachment() because it's needed for
+	// ON DISCONNECT triggers
+	if (dbb->dbb_ast_flags & DBB_shut_tran &&
+		attachment->att_purge_tid != Thread::getId())
 	{
 		ERR_post(Arg::Gds(isc_shutinprog) << Arg::Str(attachment->att_filename));
 	}
@@ -1770,7 +1795,11 @@ jrd_tra* TRA_start(thread_db* tdbb, int tpb_length, const UCHAR* tpb, Jrd::jrd_t
 	Database* dbb = tdbb->getDatabase();
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 
-	if (dbb->dbb_ast_flags & DBB_shut_tran)
+	// Starting new transactions should be allowed for threads which
+	// are running purge_attachment() because it's needed for
+	// ON DISCONNECT triggers
+	if (dbb->dbb_ast_flags & DBB_shut_tran &&
+		attachment->att_purge_tid != Thread::getId())
 	{
 		ERR_post(Arg::Gds(isc_shutinprog) << Arg::Str(attachment->att_filename));
 	}
@@ -2377,19 +2406,21 @@ static ULONG inventory_page(thread_db* tdbb, ULONG sequence)
 	Database* dbb = tdbb->getDatabase();
 	CHECK_DBB(dbb);
 
-	WIN window(DB_PAGE_SPACE, -1);
-	vcl* vector = dbb->dbb_t_pages;
-	while (!vector || sequence >= vector->count())
+	if (const ULONG pageno = dbb->getKnownPage(pag_transactions, sequence))
+		return pageno;
+
+	while (sequence >= dbb->getKnownPagesCount(pag_transactions))
 	{
 		DPM_scan_pages(tdbb, pag_transactions);
 
-		if ((vector = dbb->dbb_t_pages) && sequence < vector->count())
+		const ULONG tipCount = dbb->getKnownPagesCount(pag_transactions);
+		if (sequence < tipCount)
 			break;
 
-		if (!vector)
+		if (!tipCount)
 			BUGCHECK(165);		// msg 165 cannot find tip page
 
-		window.win_page = (*vector)[vector->count() - 1];
+		WIN window(DB_PAGE_SPACE, dbb->getKnownPage(pag_transactions, tipCount - 1));
 		tx_inv_page* tip = (tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_transactions);
 		const ULONG next = tip->tip_next;
 		CCH_RELEASE(tdbb, &window);
@@ -2399,10 +2430,10 @@ static ULONG inventory_page(thread_db* tdbb, ULONG sequence)
 		// Type check it
 		tip = (tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_transactions);
 		CCH_RELEASE(tdbb, &window);
-		DPM_pages(tdbb, 0, pag_transactions, vector->count(), window.win_page.getPageNum());
+		DPM_pages(tdbb, 0, pag_transactions, tipCount, window.win_page.getPageNum());
 	}
 
-	return (*vector)[sequence];
+	return dbb->getKnownPage(pag_transactions, sequence);
 }
 
 
@@ -2667,10 +2698,8 @@ static void retain_context(thread_db* tdbb, jrd_tra* transaction, bool commit, i
 		// Set the state on the inventory page
 		TRA_set_state(tdbb, transaction, old_number, state);
 	}
-	if (dbb->dbb_config->getClearGTTAtRetaining())
-		release_temp_tables(tdbb, transaction);
-	else
-		retain_temp_tables(tdbb, transaction, new_number);
+
+	retain_temp_tables(tdbb, transaction, new_number);
 
 	transaction->tra_number = new_number;
 
@@ -2719,11 +2748,6 @@ namespace {
 			: dbb(d)
 		{ }
 
-		void waitForStartup()
-		{
-			sem.enter();
-		}
-
 		static void runSweep(SweepParameter* par)
 		{
 			FbLocalStatus status;
@@ -2746,7 +2770,6 @@ namespace {
 				prov->setDbCryptCallback(&status, cryptCallback);
 				status.check();
 			}
-			par->sem.release();
 
 			AutoDispose<IXpbBuilder> dpb(UtilInterfacePtr()->getXpbBuilder(&status, IXpbBuilder::DPB, nullptr, 0));
 			status.check();
@@ -2770,14 +2793,26 @@ namespace {
 			ex.stuffException(&st);
 			if (st->getErrors()[1] != isc_att_shutdown)
 				iscLogException("Automatic sweep error", ex);
+
+			if (dbb)
+			{
+				dbb->clearSweepStarting();
+				SPTHR_DEBUG(fprintf(stderr, "called clearSweepStarting() dbb=%p par=%p\n", dbb, this));
+				dbb = nullptr;
+			}
+		}
+
+		static void cleanup(SweepParameter* par)
+		{
+			SPTHR_DEBUG(fprintf(stderr, "Cleanup dbb=%p par=%p\n", par->dbb, par));
+			delete par;
 		}
 
 	private:
-		Semaphore sem;
 		Database* dbb;
 	};
 
-	typedef ThreadFinishSync<SweepParameter*> SweepSync;
+	typedef ThreadFinishSync<SweepParameter*, SweepParameter::cleanup> SweepSync;
 	InitInstance<HalfStaticArray<SweepSync*, 16> > sweepThreads;
 	GlobalPtr<Mutex> swThrMutex;
 	bool sweepDown = false;
@@ -2849,10 +2884,9 @@ static void start_sweeper(thread_db* tdbb)
 		}
 
 		AutoPtr<SweepSync> sweepSync(FB_NEW SweepSync(*getDefaultMemoryPool(), SweepParameter::runSweep));
-		SweepParameter swPar(dbb);
-		sweepSync->run(&swPar);
+		SweepParameter* swPar = FB_NEW SweepParameter(dbb);
+		sweepSync->run(swPar);
 		started = true;
-		swPar.waitForStartup();
 		sweepThreads().add(sweepSync.release());
 	}
 	catch (const Exception&)
@@ -2989,7 +3023,7 @@ static void transaction_options(thread_db* tdbb,
 		case isc_tpb_wait:
 			if (!wait.assignOnce(true))
 			{
-				if (!wait.value)
+				if (!wait.asBool())
 				{
 					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
 							 Arg::Gds(isc_tpb_conflicting_options) << Arg::Str("isc_tpb_wait") <<
@@ -3070,7 +3104,7 @@ static void transaction_options(thread_db* tdbb,
 				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
 					// 'Option @1 is not valid if @2 was used previously in TPB'
 					Arg::Gds(isc_tpb_conflicting_options) <<
-					Arg::Str("isc_tpb_read_consistency") << (rec_version.value ?
+					Arg::Str("isc_tpb_read_consistency") << (rec_version.asBool() ?
 						Arg::Str("isc_tpb_rec_version") : Arg::Str("isc_tpb_no_rec_version")) );
 			}
 
@@ -3078,7 +3112,7 @@ static void transaction_options(thread_db* tdbb,
 			break;
 
 		case isc_tpb_nowait:
-			if (lock_timeout.value)
+			if (lock_timeout.asBool())
 			{
 				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
 						 Arg::Gds(isc_tpb_conflicting_options) << Arg::Str("isc_tpb_nowait") <<
@@ -3087,7 +3121,7 @@ static void transaction_options(thread_db* tdbb,
 
 			if (!wait.assignOnce(false))
 			{
-				if (wait.value)
+				if (wait.asBool())
 				{
 					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
 							 Arg::Gds(isc_tpb_conflicting_options) << Arg::Str("isc_tpb_nowait") <<
@@ -3106,7 +3140,7 @@ static void transaction_options(thread_db* tdbb,
 		case isc_tpb_read:
 			if (!read_only.assignOnce(true))
 			{
-				if (!read_only.value)
+				if (!read_only.asBool())
 				{
 					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
 							 Arg::Gds(isc_tpb_conflicting_options) << Arg::Str("isc_tpb_read") <<
@@ -3132,7 +3166,7 @@ static void transaction_options(thread_db* tdbb,
 		case isc_tpb_write:
 			if (!read_only.assignOnce(false))
 			{
-				if (read_only.value)
+				if (read_only.asBool())
 				{
 					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
 							 Arg::Gds(isc_tpb_conflicting_options) << Arg::Str("isc_tpb_write") <<
@@ -3158,7 +3192,7 @@ static void transaction_options(thread_db* tdbb,
 
 		case isc_tpb_lock_write:
 			// Cannot set a R/W table reservation if the whole txn is R/O.
-			if (read_only.value)
+			if (read_only.asBool())
 			{
 				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
 						 Arg::Gds(isc_tpb_writelock_after_readtxn));
@@ -3284,7 +3318,7 @@ static void transaction_options(thread_db* tdbb,
 
 		case isc_tpb_lock_timeout:
 			{
-				if (wait.isAssigned() && !wait.value)
+				if (wait.isAssigned() && !wait.asBool())
 				{
 					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
 							 Arg::Gds(isc_tpb_conflicting_options) << Arg::Str("isc_tpb_lock_timeout") <<
@@ -3418,7 +3452,7 @@ static void transaction_options(thread_db* tdbb,
 
 	if (rec_version.isAssigned() && !(transaction->tra_flags & TRA_read_committed))
 	{
-		if (rec_version.value)
+		if (rec_version.asBool())
 		{
 			ERR_post(Arg::Gds(isc_bad_tpb_content) <<
 					 Arg::Gds(isc_tpb_option_without_rc) << Arg::Str("isc_tpb_rec_version"));
@@ -3435,6 +3469,9 @@ static void transaction_options(thread_db* tdbb,
 		if (tdbb->getDatabase()->dbb_config->getReadConsistency())
 			transaction->tra_flags |= TRA_read_consistency | TRA_rec_version;
 	}
+
+	if (transaction->tra_attachment->isGbak())
+		transaction->tra_flags |= TRA_no_blob_check;
 
 	// If there aren't any relation locks to seize, we're done.
 
@@ -3586,16 +3623,8 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 
 		if (!(trans->tra_flags & TRA_read_committed))
 		{
-			try
-			{
-				trans->tra_snapshot_handle = dbb->dbb_tip_cache->beginSnapshot(
-					tdbb, attachment->att_attachment_id, trans->tra_snapshot_number);
-			}
-			catch (const Firebird::Exception&)
-			{
-				LCK_release(tdbb, lock);
-				throw;
-			}
+			trans->tra_snapshot_handle = dbb->dbb_tip_cache->beginSnapshot(
+				tdbb, attachment->att_attachment_id, trans->tra_snapshot_number);
 		}
 
 		// Next task is to find the oldest active transaction on the system.  This
@@ -3774,6 +3803,8 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 	}
 	catch (const Firebird::Exception&)
 	{
+		LCK_release(tdbb, lock);
+		trans->tra_lock = nullptr;
 		trans->unlinkFromAttachment();
 		throw;
  	}
@@ -4066,11 +4097,11 @@ void jrd_tra::releaseSavepoint(thread_db* tdbb)
 
 void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id, jrd_fld* fld, bool punt)
 {
-	USHORT rel_id = blob_id->bid_internal.bid_relation_id;
+	const USHORT rel_id = blob_id->bid_internal.bid_relation_id;
 
-	if (tra_attachment->isGbak() ||
-		(tra_attachment->locksmith(tdbb, SELECT_ANY_OBJECT_IN_DATABASE)) ||
-		rel_id == 0)
+	if (rel_id == 0 ||
+		(tra_flags & TRA_no_blob_check) ||
+		tra_attachment->locksmith(tdbb, SELECT_ANY_OBJECT_IN_DATABASE))
 	{
 		return;
 	}
@@ -4081,13 +4112,17 @@ void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id, jrd_fld* fld, bool 
 		vec<jrd_rel*>* vector = tra_attachment->att_relations;
 		jrd_rel* blb_relation;
 
-		if (rel_id < vector->count() &&	(blb_relation = (*vector)[rel_id]))
+		if ((rel_id < vector->count() && (blb_relation = (*vector)[rel_id])) ||
+			(blb_relation = MET_relation(tdbb, rel_id)))
 		{
-			const MetaName security_name = fld ?
+			MetaName security_name = (fld && fld->fld_security_name.hasData()) ?
 				fld->fld_security_name : blb_relation->rel_security_name;
 
 			if (security_name.isEmpty())
+			{
 				MET_scan_relation(tdbb, blb_relation);
+				security_name = blb_relation->rel_security_name;
+			}
 
 			SecurityClass* s_class = SCL_get_class(tdbb, security_name.c_str());
 
@@ -4183,12 +4218,11 @@ TraceSweepEvent::TraceSweepEvent(thread_db* tdbb)
 
 	TraceManager* trace_mgr = att->att_trace_manager;
 
+	m_start_clock = fb_utils::query_performance_counter();
 	m_need_trace = trace_mgr->needs(ITraceFactory::TRACE_EVENT_SWEEP);
 
 	if (!m_need_trace)
 		return;
-
-	m_start_clock = fb_utils::query_performance_counter();
 
 	TraceConnectionImpl conn(att);
 	trace_mgr->event_sweep(&conn, &m_sweep_info, ITracePlugin::SWEEP_STATE_STARTED);
@@ -4258,12 +4292,19 @@ void TraceSweepEvent::report(ntrace_process_state_t state)
 {
 	Attachment* att = m_tdbb->getAttachment();
 
+	const SINT64 finiTime = fb_utils::query_performance_counter() - m_start_clock;
+
 	if (state == ITracePlugin::SWEEP_STATE_FINISHED)
 	{
+		const SINT64 timeMs = finiTime * 1000 / fb_utils::query_performance_frequency();
+
 		gds__log("Sweep is finished\n"
 			"\tDatabase \"%s\" \n"
+			"\t%i workers, time %" SLONGFORMAT ".%03d sec \n"
 			"\tOIT %" SQUADFORMAT", OAT %" SQUADFORMAT", OST %" SQUADFORMAT", Next %" SQUADFORMAT,
 			att->att_filename.c_str(),
+			att->att_parallel_workers,
+			(int) timeMs / 1000, (unsigned int) timeMs % 1000,
 			m_sweep_info.getOIT(),
 			m_sweep_info.getOAT(),
 			m_sweep_info.getOST(),
@@ -4284,9 +4325,7 @@ void TraceSweepEvent::report(ntrace_process_state_t state)
 
 	jrd_tra* tran = m_tdbb->getTransaction();
 
-	TraceRuntimeStats stats(att, &m_base_stats, &att->att_stats,
-		fb_utils::query_performance_counter() - m_start_clock,
-		0);
+	TraceRuntimeStats stats(att, &m_base_stats, &att->att_stats, finiTime, 0);
 
 	m_sweep_info.setPerf(stats.getPerf());
 	trace_mgr->event_sweep(&conn, &m_sweep_info, state);

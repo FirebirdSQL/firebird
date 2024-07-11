@@ -41,7 +41,8 @@ using namespace Jrd;
 
 IndexTableScan::IndexTableScan(CompilerScratch* csb, const string& alias,
 							   StreamType stream, jrd_rel* relation,
-							   InversionNode* index, USHORT length)
+							   InversionNode* index, USHORT length,
+							   double selectivity)
 	: RecordStream(csb, stream),
 	  m_alias(csb->csb_pool, alias), m_relation(relation), m_index(index),
 	  m_inversion(NULL), m_condition(NULL), m_length(length), m_offset(0)
@@ -57,9 +58,10 @@ IndexTableScan::IndexTableScan(CompilerScratch* csb, const string& alias,
 	size += sizeof(index_desc);
 
 	m_impure = csb->allocImpure(FB_ALIGNMENT, static_cast<ULONG>(size));
+	m_cardinality = csb->csb_rpt[stream].csb_cardinality * selectivity;
 }
 
-void IndexTableScan::open(thread_db* tdbb) const
+void IndexTableScan::internalOpen(thread_db* tdbb) const
 {
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -70,6 +72,12 @@ void IndexTableScan::open(thread_db* tdbb) const
 	RLCK_reserve_relation(tdbb, request->req_transaction, m_relation, false);
 
 	rpb->rpb_number.setValue(BOF_NUMBER);
+
+	fb_assert(!impure->irsb_nav_lower);
+	impure->irsb_nav_current_lower = impure->irsb_nav_lower = FB_NEW_POOL(*tdbb->getDefaultPool()) temporary_key;
+
+	fb_assert(!impure->irsb_nav_upper);
+	impure->irsb_nav_current_upper = impure->irsb_nav_upper = FB_NEW_POOL(*tdbb->getDefaultPool()) temporary_key;
 }
 
 void IndexTableScan::close(thread_db* tdbb) const
@@ -99,14 +107,35 @@ void IndexTableScan::close(thread_db* tdbb) const
 		if (impure->irsb_nav_btr_gc_lock)
 		{
 #ifdef DEBUG_LCK_LIST
-			if (!impure->irsb_nav_page)
-				gds__log("DEBUG_LCK_LIST: irsb_nav_btr_gc_lock && !irsb_nav_page");
+			if (!impure->irsb_nav_page && impure->irsb_nav_btr_gc_lock->isActive())
+				gds__log("DEBUG_LCK_LIST: irsb_nav_btr_gc_lock->isActive() && !irsb_nav_page");
 #endif
-			impure->irsb_nav_btr_gc_lock->enablePageGC(tdbb);
+			if (impure->irsb_nav_btr_gc_lock->isActive())
+				impure->irsb_nav_btr_gc_lock->enablePageGC(tdbb);
+
 			delete impure->irsb_nav_btr_gc_lock;
 			impure->irsb_nav_btr_gc_lock = NULL;
 		}
+
 		impure->irsb_nav_page = 0;
+
+		if (impure->irsb_nav_lower)
+		{
+			delete impure->irsb_nav_lower;
+			impure->irsb_nav_current_lower = impure->irsb_nav_lower = NULL;
+		}
+
+		if (impure->irsb_nav_upper)
+		{
+			delete impure->irsb_nav_upper;
+			impure->irsb_nav_current_upper = impure->irsb_nav_upper = NULL;
+		}
+
+		if (impure->irsb_iterator)
+		{
+			delete impure->irsb_iterator;
+			impure->irsb_iterator = NULL;
+		}
 	}
 #ifdef DEBUG_LCK_LIST
 	// paranoid check
@@ -114,7 +143,9 @@ void IndexTableScan::close(thread_db* tdbb) const
 	{
 		gds__log("DEBUG_LCK_LIST: irsb_nav_btr_gc_lock && !(irsb_flags & irsb_open)");
 
-		impure->irsb_nav_btr_gc_lock->enablePageGC(tdbb);
+		if (impure->irsb_nav_btr_gc_lock->isActive())
+			impure->irsb_nav_btr_gc_lock->enablePageGC(tdbb);
+
 		delete impure->irsb_nav_btr_gc_lock;
 		impure->irsb_nav_btr_gc_lock = NULL;
 		impure->irsb_nav_page = 0;
@@ -122,7 +153,7 @@ void IndexTableScan::close(thread_db* tdbb) const
 #endif
 }
 
-bool IndexTableScan::getRecord(thread_db* tdbb) const
+bool IndexTableScan::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -140,6 +171,30 @@ bool IndexTableScan::getRecord(thread_db* tdbb) const
 	{
 		impure->irsb_flags &= ~irsb_first;
 		setPage(tdbb, impure, NULL);
+
+		impure->irsb_iterator = m_index->retrieval->irb_list ?
+			FB_NEW_POOL(*tdbb->getDefaultPool()) IndexScanListIterator(tdbb, m_index->retrieval) :
+			nullptr;
+
+		USHORT dummy = 0;		// exclude upper/lower bits are not used here,
+								// i.e. additional forced include not needed
+		if (!BTR_make_bounds(tdbb, m_index->retrieval, impure->irsb_iterator,
+							 impure->irsb_nav_lower, impure->irsb_nav_upper, dummy))
+		{
+			rpb->rpb_number.setValid(false);
+			return false;
+		}
+	}
+
+	// If this is the first time, start at the beginning
+	if (!impure->irsb_nav_page)
+	{
+		// initialize for a retrieval
+		if (!setupBitmaps(tdbb, impure))
+		{
+			rpb->rpb_number.setValid(false);
+			return false;
+		}
 	}
 
 	index_desc* const idx = (index_desc*) ((SCHAR*) impure + m_offset);
@@ -148,153 +203,196 @@ bool IndexTableScan::getRecord(thread_db* tdbb) const
 	const USHORT pageSpaceID = idx->idx_pg_space_id;
 	win window(pageSpaceID, impure->irsb_nav_page);
 
-	UCHAR* nextPointer = getPosition(tdbb, impure, &window);
-	if (!nextPointer)
-	{
-		rpb->rpb_number.setValid(false);
-		return false;
-	}
-
-	temporary_key key;
-	memcpy(key.key_data, impure->irsb_nav_data, impure->irsb_nav_length);
-
 	const IndexRetrieval* const retrieval = m_index->retrieval;
 	const USHORT flags = retrieval->irb_generic & (irb_descending | irb_partial | irb_starting);
 
-	// set the upper (or lower) limit for navigational retrieval
-	temporary_key upper;
-	if (retrieval->irb_upper_count)
+	do
 	{
-		upper.key_length = impure->irsb_nav_upper_length;
-		memcpy(upper.key_data, impure->irsb_nav_data + m_length, upper.key_length);
-	}
-
-	// Find the next interesting node. If necessary, skip to the next page.
-	RecordNumber number;
-	IndexNode node;
-	while (true)
-	{
-		Ods::btree_page* page = (Ods::btree_page*) window.win_buffer;
-
-		UCHAR* pointer = nextPointer;
-		if (pointer)
-		{
-			node.readNode(pointer, true);
-			number = node.recordNumber;
-		}
-
-		if (node.isEndLevel)
-			break;
-
-		if (node.isEndBucket)
-		{
-			page = (Ods::btree_page*) CCH_HANDOFF(tdbb, &window, page->btr_sibling, LCK_read, pag_index);
-			nextPointer = page->btr_nodes + page->btr_jump_size;
-			continue;
-		}
-
-		// Build the current key value from the prefix and current node data.
-		memcpy(key.key_data + node.prefix, node.data, node.length);
-		key.key_length = node.length + node.prefix;
-
-		// Make sure we haven't hit the upper (or lower) limit.
-		if (retrieval->irb_upper_count &&
-			compareKeys(idx, key.key_data, key.key_length, &upper, flags) > 0)
-		{
-			break;
-		}
-
-		// skip this record if:
-		// 1) there is an inversion tree for this index and this record
-		//    is not in the bitmap for the inversion, or
-		// 2) the record has already been visited
-
-		if ((!(impure->irsb_flags & irsb_mustread) &&
-			 (!impure->irsb_nav_bitmap ||
-				!RecordBitmap::test(*impure->irsb_nav_bitmap, number.getValue()))) ||
-			RecordBitmap::test(impure->irsb_nav_records_visited, number.getValue()))
-		{
-			nextPointer = node.readNode(pointer, true);
-			continue;
-		}
-
-		// reset the current navigational position in the index
-		rpb->rpb_number = number;
-		setPosition(tdbb, impure, rpb, &window, pointer, key);
-
-		CCH_RELEASE(tdbb, &window);
-
-		if (VIO_get(tdbb, rpb, request->req_transaction, request->req_pool))
-		{
-			temporary_key value;
-
-			const idx_e result = BTR_key(tdbb, m_relation, rpb->rpb_record, idx, &value, false);
-
-			if (result != idx_e_ok)
-			{
-				IndexErrorContext context(m_relation, idx);
-				context.raise(tdbb, result, rpb->rpb_record);
-			}
-
-			if (!compareKeys(idx, key.key_data, key.key_length, &value, 0))
-			{
-				// mark in the navigational bitmap that we have visited this record
-				RBM_SET(tdbb->getDefaultPool(), &impure->irsb_nav_records_visited,
-						rpb->rpb_number.getValue());
-
-				rpb->rpb_number.setValid(true);
-				return true;
-			}
-		}
-
-		nextPointer = getPosition(tdbb, impure, &window);
+		UCHAR* nextPointer = getPosition(tdbb, impure, &window);
 		if (!nextPointer)
 		{
 			rpb->rpb_number.setValid(false);
 			return false;
 		}
-	}
 
-	CCH_RELEASE(tdbb, &window);
+		temporary_key key;
+		memcpy(key.key_data, impure->irsb_nav_data, impure->irsb_nav_length);
+
+		// set the upper (or lower) limit for navigational retrieval
+		temporary_key upper;
+		if (retrieval->irb_upper_count)
+		{
+			upper.key_length = impure->irsb_nav_upper_length;
+			memcpy(upper.key_data, impure->irsb_nav_data + m_length, upper.key_length);
+		}
+
+		IndexKey recordKey(tdbb, m_relation, idx);
+
+		// Find the next interesting node. If necessary, skip to the next page.
+		RecordNumber number;
+		IndexNode node;
+		while (true)
+		{
+			Ods::btree_page* page = (Ods::btree_page*) window.win_buffer;
+
+			UCHAR* pointer = nextPointer;
+			if (pointer)
+			{
+				node.readNode(pointer, true);
+				number = node.recordNumber;
+			}
+
+			if (node.isEndLevel)
+				break;
+
+			if (node.isEndBucket)
+			{
+				page = (Ods::btree_page*) CCH_HANDOFF(tdbb, &window, page->btr_sibling, LCK_read, pag_index);
+				nextPointer = page->btr_nodes + page->btr_jump_size;
+				continue;
+			}
+
+			// Build the current key value from the prefix and current node data.
+			memcpy(key.key_data + node.prefix, node.data, node.length);
+			key.key_length = node.length + node.prefix;
+
+			// Make sure we haven't hit the upper (or lower) limit.
+			if (retrieval->irb_upper_count &&
+				compareKeys(idx, key.key_data, key.key_length, &upper, flags) > 0)
+			{
+				const auto nextLower = impure->irsb_nav_current_lower;
+				const auto nextUpper = impure->irsb_nav_current_upper;
+
+				if (impure->irsb_iterator && impure->irsb_iterator->getNext(tdbb, nextLower, nextUpper))
+				{
+					if (retrieval->irb_generic & irb_root_list_scan)
+					{
+						CCH_RELEASE(tdbb, &window);
+						page = BTR_find_page(tdbb, retrieval, &window, idx, nextLower, nextUpper);
+						setPage(tdbb, impure, &window);
+					}
+
+					// If END_BUCKET is reached BTR_find_leaf will return NULL
+					while (!(nextPointer = BTR_find_leaf(page, nextLower, nullptr, nullptr,
+						(idx->idx_flags & idx_descending),
+						(retrieval->irb_generic & (irb_starting | irb_partial)))))
+					{
+						page = (Ods::btree_page*) CCH_HANDOFF(tdbb, &window, page->btr_sibling, LCK_read, pag_index);
+					}
+
+					// Update the local keys
+					key.key_length = nextLower->key_length;
+					memcpy(key.key_data, nextLower->key_data, key.key_length);
+					upper.key_length = nextUpper->key_length;
+					memcpy(upper.key_data, nextUpper->key_data, upper.key_length);
+
+					// Update the keys in the impure area
+					impure->irsb_nav_length = key.key_length;
+					impure->irsb_nav_upper_length = MIN(m_length + 1, upper.key_length);
+					memcpy(impure->irsb_nav_data + m_length, upper.key_data, impure->irsb_nav_upper_length);
+
+					continue;
+				}
+
+				break;
+			}
+
+			// skip this record if:
+			// 1) there is an inversion tree for this index and this record
+			//    is not in the bitmap for the inversion, or
+			// 2) the record has already been visited
+
+			if ((!(impure->irsb_flags & irsb_mustread) &&
+				(!impure->irsb_nav_bitmap ||
+					!RecordBitmap::test(*impure->irsb_nav_bitmap, number.getValue()))) ||
+				RecordBitmap::test(impure->irsb_nav_records_visited, number.getValue()))
+			{
+				nextPointer = node.readNode(pointer, true);
+				continue;
+			}
+
+			// reset the current navigational position in the index
+			rpb->rpb_number = number;
+			setPosition(tdbb, impure, rpb, &window, pointer, key);
+
+			CCH_RELEASE(tdbb, &window);
+
+			if (VIO_get(tdbb, rpb, request->req_transaction, request->req_pool))
+			{
+				if (const auto result = recordKey.compose(rpb->rpb_record))
+				{
+					IndexErrorContext context(m_relation, idx);
+					context.raise(tdbb, result, rpb->rpb_record);
+				}
+
+				if (!compareKeys(idx, key.key_data, key.key_length, recordKey, 0))
+				{
+					// mark in the navigational bitmap that we have visited this record
+					RBM_SET(tdbb->getDefaultPool(), &impure->irsb_nav_records_visited,
+							rpb->rpb_number.getValue());
+
+					rpb->rpb_number.setValid(true);
+					return true;
+				}
+			}
+
+			nextPointer = getPosition(tdbb, impure, &window);
+			if (!nextPointer)
+			{
+				rpb->rpb_number.setValid(false);
+				return false;
+			}
+		}
+
+		CCH_RELEASE(tdbb, &window);
+
+		advanceStream(tdbb, impure, &window);
+	} while (true);
 
 	// bof or eof must have been set at this point
 	rpb->rpb_number.setValid(false);
 	return false;
 }
 
-void IndexTableScan::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void IndexTableScan::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	if (detailed)
+	if (!level)
+		plan += "(";
+
+	plan += printName(tdbb, m_alias, false) + " ORDER ";
+	string index;
+	printLegacyInversion(tdbb, m_index, index);
+	plan += index;
+
+	if (m_inversion)
 	{
-		plan += printIndent(++level) + "Table " +
-			printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Access By ID";
-
-		printInversion(tdbb, m_index, plan, true, level, true);
-
-		if (m_inversion)
-			printInversion(tdbb, m_inversion, plan, true, ++level);
+		plan += " INDEX (";
+		string indices;
+		printLegacyInversion(tdbb, m_inversion, indices);
+		plan += indices + ")";
 	}
-	else
-	{
-		if (!level)
-			plan += "(";
 
-		plan += printName(tdbb, m_alias, false) + " ORDER ";
-		string index;
-		printInversion(tdbb, m_index, index, false, level);
-		plan += index;
+	if (!level)
+		plan += ")";
+}
 
-		if (m_inversion)
-		{
-			plan += " INDEX (";
-			string indices;
-			printInversion(tdbb, m_inversion, indices, false, level);
-			plan += indices + ")";
-		}
+void IndexTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
+{
+	planEntry.className = "IndexTableScan";
 
-		if (!level)
-			plan += ")";
-	}
+	planEntry.lines.add().text = "Table " + printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Access By ID";
+	printOptInfo(planEntry.lines);
+
+	printInversion(tdbb, m_index, planEntry.lines, true, 1, true);
+
+	planEntry.objectType = m_relation->getObjectType();
+	planEntry.objectName = m_relation->rel_name;
+
+	if (m_alias.hasData() && m_relation->rel_name != m_alias)
+		planEntry.alias = m_alias;
+
+	if (m_inversion)
+		printInversion(tdbb, m_inversion, planEntry.lines, true, 2, false);
 }
 
 int IndexTableScan::compareKeys(const index_desc* idx,
@@ -460,13 +558,33 @@ bool IndexTableScan::findSavedNode(thread_db* tdbb, Impure* impure, win* window,
 	}
 }
 
+void IndexTableScan::advanceStream(thread_db* tdbb, Impure* impure, win* window) const
+{
+	impure->irsb_nav_current_lower = impure->irsb_nav_current_lower->key_next.get();
+	impure->irsb_nav_current_upper = impure->irsb_nav_current_upper->key_next.get();
+	setPage(tdbb, impure, NULL);
+	window->win_page = 0;
+}
+
 UCHAR* IndexTableScan::getPosition(thread_db* tdbb, Impure* impure, win* window) const
 {
-	// If this is the first time, start at the beginning
-	if (!window->win_page.getPageNum())
+	while (impure->irsb_nav_current_lower)
 	{
-		return openStream(tdbb, impure, window);
+		UCHAR* position = getStreamPosition(tdbb, impure, window);
+
+		if (position)
+			return position;
+
+		advanceStream(tdbb, impure, window);
 	}
+
+	return NULL;
+}
+
+UCHAR* IndexTableScan::getStreamPosition(thread_db* tdbb, Impure* impure, win* window) const
+{
+	if (!window->win_page.getPageNum())
+		return openStream(tdbb, impure, window);
 
 	// Re-fetch page and get incarnation counter
 	Ods::btree_page* page = (Ods::btree_page*) CCH_FETCH(tdbb, window, LCK_read, pag_index);
@@ -504,9 +622,8 @@ UCHAR* IndexTableScan::getPosition(thread_db* tdbb, Impure* impure, win* window)
 
 UCHAR* IndexTableScan::openStream(thread_db* tdbb, Impure* impure, win* window) const
 {
-	// initialize for a retrieval
-	if (!setupBitmaps(tdbb, impure))
-		return NULL;
+	temporary_key* lower = impure->irsb_nav_current_lower;
+	temporary_key* upper = impure->irsb_nav_current_upper;
 
 	setPage(tdbb, impure, NULL);
 	impure->irsb_nav_length = 0;
@@ -514,8 +631,8 @@ UCHAR* IndexTableScan::openStream(thread_db* tdbb, Impure* impure, win* window) 
 	// Find the starting leaf page
 	const IndexRetrieval* const retrieval = m_index->retrieval;
 	index_desc* const idx = (index_desc*) ((SCHAR*) impure + m_offset);
-	temporary_key lower, upper;
-	Ods::btree_page* page = BTR_find_page(tdbb, retrieval, window, idx, &lower, &upper);
+
+	Ods::btree_page* page = BTR_find_page(tdbb, retrieval, window, idx, lower, upper);
 	setPage(tdbb, impure, window);
 
 	// find the upper limit for the search
@@ -525,12 +642,12 @@ UCHAR* IndexTableScan::openStream(thread_db* tdbb, Impure* impure, win* window) 
 		// If upper key length is greater than declared key length, we need
 		// one "excess" byte for correct comparison. Without it there could
 		// be false equality hits.
-		impure->irsb_nav_upper_length = MIN(m_length + 1, upper.key_length);
-		memcpy(impure->irsb_nav_data + m_length, upper.key_data, impure->irsb_nav_upper_length);
+		impure->irsb_nav_upper_length = MIN(m_length + 1, upper->key_length);
+		memcpy(impure->irsb_nav_data + m_length, upper->key_data, impure->irsb_nav_upper_length);
 	}
 
 	if (retrieval->irb_lower_count)
-		limit_ptr = &lower;
+		limit_ptr = lower;
 
 	// If there is a starting descriptor, search down index to starting position.
 	// This may involve sibling buckets if splits are in progress.  If there
@@ -586,6 +703,10 @@ void IndexTableScan::setPage(thread_db* tdbb, Impure* impure, win* window) const
 		}
 
 		impure->irsb_nav_page = newPage;
+
+		// clear position as page was changed
+		impure->irsb_nav_incarnation = 0;
+		impure->irsb_nav_offset = 0;
 	}
 }
 
@@ -598,8 +719,10 @@ void IndexTableScan::setPosition(thread_db* tdbb,
 {
 	// We can actually set position without having a data page
 	// fetched; if not, just set the incarnation to the lowest possible
-	impure->irsb_nav_incarnation = CCH_get_incarnation(window);
+	// Note, setPage could clear position (incarnation and offset).
+
 	setPage(tdbb, impure, window);
+	impure->irsb_nav_incarnation = CCH_get_incarnation(window);
 	impure->irsb_nav_number = rpb->rpb_number;
 
 	// save the current key value

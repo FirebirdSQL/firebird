@@ -61,8 +61,12 @@ private:
 	const ULONG FLAG_FULL = 0x0001;		// log is full, set by writer, reset by reader
 	const ULONG FLAG_DONE = 0x0002;		// set when reader is gone
 
-	void mutexBug(int osErrorCode, const char* text);
-	bool initialize(Firebird::SharedMemoryBase*, bool);
+	void mutexBug(int osErrorCode, const char* text) override;
+	bool initialize(Firebird::SharedMemoryBase*, bool) override;
+
+	USHORT getType() const override { return Firebird::SharedMemoryBase::SRAM_TRACE_LOG; }
+	USHORT getVersion() const override { return TraceLogHeader::TRACE_LOG_VERSION; }
+	const char* getName() const override { return "TraceLog"; }
 
 	void lock();
 	void unlock();

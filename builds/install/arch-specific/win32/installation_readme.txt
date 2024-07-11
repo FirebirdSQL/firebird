@@ -40,10 +40,10 @@ See the UNINSTALL section below for more info on this.
 Installation of the Guardian
 ----------------------------
 
-We are hoping to phase out the Guardian. It doesn't 
-work with the Classic server and the binary installer 
-does not offer it at install time if Classic is 
-chosen. If SuperServer or SuperClassic are chosen 
+We are hoping to phase out the Guardian. It doesn't
+work with the Classic server and the binary installer
+does not offer it at install time if Classic is
+chosen. If SuperServer or SuperClassic are chosen
 it is offered but not selected by default.
 
 
@@ -52,7 +52,7 @@ Re-installation of Firebird
 
 The binary installer does its best to detect and
 preserve a previous install. If the installer detects
-firebird.conf or security5.fdb it will not offer the
+firebird.conf or security$MAJOR.fdb it will not offer the
 option to set the SYSDBA username and password.
 
 
@@ -74,16 +74,23 @@ o The service installer (instsvc) uses the same
   installations. This is by design. Services exist
   in a single name space.
 
-o Be sure to install as an administrator. ie, if 
-  using the binary installer right click and choose 
-  'Run as administrator'. Otherwise the installer 
+o Be sure to install as an administrator. ie, if
+  using the binary installer right click and choose
+  'Run as administrator'. Otherwise the installer
   may be unable to start the Firebird service at
   the end of installation.
 
-o Libraries deployed by instclient may fail to load if
-  the MS runtime libraries have not been installed. 
-  This may be a problem if installing on older Windows
-  platforms.
+o Installation may fail on older versions of windows up
+  to Win 8.1 and Windows Server 2008 if the most recent
+  security updates have not been installed. This will
+  also affect users of the zip packs as the problem
+  lies with runtime library dependencies of
+  applications such as instclient and instsvc.
+
+  If you do run into this problem you should consult
+  the microsoft knowledge base article KB2999226 for more
+  information on how to upgrade your version of windows
+  to use the latest run time libraries.
 
 
 Uninstallation
@@ -112,7 +119,7 @@ o Uninstallation leaves six files in the install
   - fbtrace.conf
   - replication.conf
   - firebird.log
-  - security5.fdb
+  - security$MAJOR.fdb
 
   This is intentional. These files are all
   potentially modifiable by users and may be required

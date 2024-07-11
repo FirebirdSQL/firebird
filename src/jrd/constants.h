@@ -61,8 +61,6 @@ const int TEMP_STR_LENGTH = 128;
 
 // Metadata constants
 
-// When changing these constants, change MaxIdentifierByteLength and MaxIdentifierCharLength in
-// firebird.conf too.
 const unsigned METADATA_IDENTIFIER_CHAR_LEN	= 63;
 const unsigned METADATA_BYTES_PER_CHAR		= 4;
 
@@ -284,7 +282,8 @@ enum stat_group_t {
 	stat_attachment = 1,
 	stat_transaction = 2,
 	stat_statement = 3,
-	stat_call = 4
+	stat_call = 4,
+	stat_cmp_statement = 5
 };
 
 enum InfoType

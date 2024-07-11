@@ -36,7 +36,7 @@ const ObjectType obj_trigger = 2;
 const ObjectType obj_computed = 3;
 const ObjectType obj_validation = 4;
 const ObjectType obj_procedure = 5;
-const ObjectType obj_expression_index = 6;
+const ObjectType obj_index_expression = 6;
 const ObjectType obj_exception = 7;
 const ObjectType obj_user = 8;
 const ObjectType obj_field = 9;
@@ -72,8 +72,9 @@ const ObjectType obj_filters = 33;
 const ObjectType obj_jobs = 34;
 const ObjectType obj_tablespace = 35;
 const ObjectType obj_tablespaces = 36;
+const ObjectType obj_index_condition = 37;
 
-const ObjectType obj_type_MAX = 37;
+const ObjectType obj_type_MAX = 38;
 
 // used in the parser only / no relation with obj_type_MAX (should be greater)
 const ObjectType obj_user_or_role= 100;

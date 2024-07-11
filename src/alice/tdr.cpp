@@ -288,22 +288,22 @@ void TDR_list_limbo(FB_API_HANDLE handle, const TEXT* name, const SINT64 switche
 
     TraNumber id;
    	tdr* trans;
-	UCHAR* ptr = buffer;
-	bool flag = true;
 
-	while (flag)
+	for (Firebird::ClumpletReader p(Firebird::ClumpletReader::InfoResponse, buffer, sizeof(buffer));
+		!p.isEof(); p.moveNext())
 	{
-		const USHORT item = *ptr++;
-		const USHORT length = (USHORT) gds__vax_integer(ptr, 2);
-		ptr += 2;
+		UCHAR item = p.getClumpTag();
+		if (item == isc_info_end)
+			break;
+
+		const USHORT length = (USHORT) p.getClumpLength();
 		switch (item)
 		{
 		case isc_info_limbo:
-			id = isc_portable_integer(ptr, length);
+			id = p.getBigInt();
 			if (switches & (sw_commit | sw_rollback | sw_two_phase | sw_prompt))
 			{
 				TDR_reconnect_multiple(handle, id, name, switches);
-				ptr += length;
 				break;
 			}
 			if (!tdgbl->uSvc->isService())
@@ -326,7 +326,6 @@ void TDR_list_limbo(FB_API_HANDLE handle, const TEXT* name, const SINT64 switche
 				tdgbl->uSvc->putSInt64(isc_spb_single_tra_id_64, id);
 			else
 				tdgbl->uSvc->putSLong(isc_spb_single_tra_id, (SLONG) id);
-			ptr += length;
 			break;
 
 		case isc_info_truncated:
@@ -336,10 +335,6 @@ void TDR_list_limbo(FB_API_HANDLE handle, const TEXT* name, const SINT64 switche
 				// msg 72: More limbo transactions than fit.  Try again
 				// And how it's going to retry with a bigger buffer if the buffer is fixed size?
 			}
-			// fall through
-
-		case isc_info_end:
-			flag = false;
 			break;
 
 		default:

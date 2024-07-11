@@ -283,12 +283,25 @@ public:
 		return NULL;
 	}
 
+	// If the key is not present, add it. Not synchronized.
+	ValueType* getOrPut(const KeyType& key)
+	{
+		if (auto value = get(key))
+			return value;
+
+		return put(key);
+	}
+
 	bool exist(const KeyType& key) const
 	{
 		return ConstTreeAccessor(&tree).locate(key);
 	}
 
 	size_t count() const { return mCount; }
+
+	bool isEmpty() const { return mCount == 0; }
+
+	bool hasData() const { return mCount != 0; }
 
 	Accessor accessor()
 	{
@@ -370,16 +383,16 @@ private:
 typedef GenericMap<Pair<Full<string, string> > > StringMap;
 
 template <typename T, typename V, typename KeyComparator = DefaultComparator<T>>
-using NonPooledMap = GenericMap<Pair<NonPooled<T, V>>, KeyComparator>;
+using NonPooledMap = GenericMap<NonPooledPair<T, V>, KeyComparator>;
 
 template <typename T, typename V, typename KeyComparator = DefaultComparator<T>>
-using LeftPooledMap = GenericMap<Pair<Left<T, V>>, KeyComparator>;
+using LeftPooledMap = GenericMap<LeftPooledPair<T, V>, KeyComparator>;
 
 template <typename T, typename V, typename KeyComparator = DefaultComparator<T>>
-using RightPooledMap = GenericMap<Pair<Right<T, V>>, KeyComparator>;
+using RightPooledMap = GenericMap<RightPooledPair<T, V>, KeyComparator>;
 
 template <typename T, typename V, typename KeyComparator = DefaultComparator<T>>
-using FullPooledMap = GenericMap<Pair<Full<T, V>>, KeyComparator>;
+using FullPooledMap = GenericMap<FullPooledPair<T, V>, KeyComparator>;
 
 }
 

@@ -144,6 +144,18 @@ template<typename BasePair>
 		}
 	};
 
+template<typename parLeft, typename parRight>
+using NonPooledPair = Pair<NonPooled<parLeft, parRight>>;
+
+template<typename parLeft, typename parRight>
+using LeftPooledPair = Pair<Left<parLeft, parRight>>;
+
+template<typename parLeft, typename parRight>
+using RightPooledPair = Pair<Right<parLeft, parRight>>;
+
+template<typename parLeft, typename parRight>
+using FullPooledPair = Pair<Full<parLeft, parRight>>;
+
 template <typename P>
 	class FirstKey
 	{

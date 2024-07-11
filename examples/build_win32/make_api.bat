@@ -1,5 +1,5 @@
 
-call setenvvar.bat
+call setenvvar.bat %*
 
 :: CLEANING
 call clean_api.bat
@@ -11,7 +11,7 @@ call clean_api.bat
 cd %ROOT_PATH%\examples\api\
 :: OLD FLAGS (to analyze)
 :: /c /AL /Ge /Zi /Mq /Od /G2 /Zp1 /W3
-set CLFLAGS=-I %ROOT_PATH%\include -I %ROOT_PATH%\examples\include 
+set CLFLAGS=-I %ROOT_PATH%\include -I %ROOT_PATH%\examples\include
 
 cl %CLFLAGS% %ROOT_PATH%\lib\gds32_ms.lib %ROOT_PATH%\examples\api\api1.c
 cl %CLFLAGS% %ROOT_PATH%\lib\gds32_ms.lib %ROOT_PATH%\examples\api\api2.c

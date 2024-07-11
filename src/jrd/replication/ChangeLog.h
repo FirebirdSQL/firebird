@@ -24,8 +24,10 @@
 #ifndef JRD_REPLICATION_CHANGELOG_H
 #define JRD_REPLICATION_CHANGELOG_H
 
+#include "../common/classes/alloc.h"
 #include "../common/classes/array.h"
 #include "../common/classes/semaphore.h"
+#include "../common/classes/fb_string.h"
 #include "../common/os/guid.h"
 #include "../common/isc_s_proto.h"
 
@@ -33,6 +35,8 @@
 
 namespace Replication
 {
+	struct Config;
+
 	enum SegmentState : USHORT
 	{
 		SEGMENT_STATE_FREE = 0,
@@ -46,7 +50,7 @@ namespace Replication
 		char hdr_signature[12];
 		USHORT hdr_version;
 		SegmentState hdr_state;
-		Firebird::Guid hdr_guid;
+		UUID hdr_guid;
 		FB_UINT64 hdr_sequence;
 		FB_UINT64 hdr_length;
 	};
@@ -181,6 +185,8 @@ namespace Replication
 				return m_filename;
 			}
 
+			void closeFile();
+
 		private:
 			void mapHeader();
 			void unmapHeader();
@@ -188,6 +194,7 @@ namespace Replication
 			Firebird::PathName m_filename;
 			int m_handle;
 			SegmentHeader* m_header;
+			SegmentHeader m_builtinHeader;		// used by free segments when there is no mapping
 
 	#ifdef WIN_NT
 			HANDLE m_mapping;
@@ -216,8 +223,12 @@ namespace Replication
 		void linkSelf();
 		bool unlinkSelf();
 
-		bool initialize(Firebird::SharedMemoryBase* shmem, bool init);
-		void mutexBug(int osErrorCode, const char* text);
+		bool initialize(Firebird::SharedMemoryBase* shmem, bool init) override;
+		void mutexBug(int osErrorCode, const char* text) override;
+
+		USHORT getType() const override { return Firebird::SharedMemoryBase::SRAM_CHANGELOG_STATE; }
+		USHORT getVersion() const override { return STATE_VERSION; };
+		const char* getName() const override { return "ChangeLog"; }
 
 		bool validateSegment(const Segment* segment)
 		{
@@ -237,11 +248,11 @@ namespace Replication
 		void switchActiveSegment();
 
 		const Firebird::string& m_dbId;
+		const Firebird::Guid& m_guid;
 		const Config* const m_config;
 		Firebird::Array<Segment*> m_segments;
 		Firebird::AutoPtr<Firebird::SharedMemory<State> > m_sharedMemory;
 		Firebird::Mutex m_localMutex;
-		Firebird::Guid m_guid;
 		const FB_UINT64 m_sequence;
 		ULONG m_generation;
 

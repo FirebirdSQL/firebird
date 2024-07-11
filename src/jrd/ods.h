@@ -70,7 +70,6 @@ const USHORT ODS_VERSION10	= 10;		// V6.0 features. SQL delimited idetifier,
 const USHORT ODS_VERSION11	= 11;		// Firebird 2.x features
 const USHORT ODS_VERSION12	= 12;		// Firebird 3.x features
 const USHORT ODS_VERSION13	= 13;		// Firebird 4.x features
-const USHORT ODS_VERSION14	= 14;
 
 // ODS minor version -- minor versions ARE compatible, but may be
 // increasingly functional.  Add new minor versions, but leave previous
@@ -124,13 +123,9 @@ const USHORT ODS_CURRENT12		= 0;
 // Minor versions for ODS 13
 
 const USHORT ODS_CURRENT13_0	= 0;	// Firebird 4.0 features
-const USHORT ODS_CURRENT13_1	= 1;	// Firebird 4.1 features
-const USHORT ODS_CURRENT13		= 1;
-
-// Minor versions for ODS 14
-
-const USHORT ODS_CURRENT14_0	= 0;
-const USHORT ODS_CURRENT14		= 0;
+const USHORT ODS_CURRENT13_1	= 1;	// Firebird 5.0 features
+const USHORT ODS_CURRENT13_2	= 2;	// Firebird 6.0 features
+const USHORT ODS_CURRENT13		= 2;
 
 // useful ODS macros. These are currently used to flag the version of the
 // system triggers and system indices in ini.e
@@ -152,7 +147,7 @@ const USHORT ODS_11_2		= ENCODE_ODS(ODS_VERSION11, 2);
 const USHORT ODS_12_0		= ENCODE_ODS(ODS_VERSION12, 0);
 const USHORT ODS_13_0		= ENCODE_ODS(ODS_VERSION13, 0);
 const USHORT ODS_13_1		= ENCODE_ODS(ODS_VERSION13, 1);
-const USHORT ODS_14_0		= ENCODE_ODS(ODS_VERSION14, 0);
+const USHORT ODS_13_2		= ENCODE_ODS(ODS_VERSION13, 2);
 
 const USHORT ODS_FIREBIRD_FLAG = 0x8000;
 
@@ -171,16 +166,16 @@ inline USHORT DECODE_ODS_MINOR(USHORT ods_version)
 
 // Set current ODS major and minor version
 
-const USHORT ODS_VERSION = ODS_VERSION14;		// Current ODS major version -- always
+const USHORT ODS_VERSION = ODS_VERSION13;		// Current ODS major version -- always
 												// the highest.
 
-const USHORT ODS_RELEASED = ODS_CURRENT14_0;	// The lowest stable minor version
+const USHORT ODS_RELEASED = ODS_CURRENT13_0;	// The lowest stable minor version
 												// number for this ODS_VERSION!
 
-const USHORT ODS_CURRENT = ODS_CURRENT14;		// The highest defined minor version
+const USHORT ODS_CURRENT = ODS_CURRENT13;		// The highest defined minor version
 												// number for this ODS_VERSION!
 
-const USHORT ODS_CURRENT_VERSION = ODS_14_0;	// Current ODS version in use which includes
+const USHORT ODS_CURRENT_VERSION = ODS_13_2;	// Current ODS version in use which includes
 												// both major and minor ODS versions!
 
 
@@ -425,6 +420,7 @@ const USHORT irt_in_progress	= 4;
 const USHORT irt_foreign		= 8;
 const USHORT irt_primary		= 16;
 const USHORT irt_expression		= 32;
+const USHORT irt_condition		= 64;
 
 inline USHORT index_root_page::irt_repeat::getRootPageSpaceId() const
 {
@@ -474,7 +470,7 @@ struct header_page
 	USHORT hdr_page_size;			// Page size of database
 	USHORT hdr_ods_version;			// Version of on-disk structure
 	ULONG hdr_PAGES;				// Page number of PAGES relation
-	ULONG hdr_next_page;			// Page number of next hdr page
+	ULONG hdr_unused;				// Unused (was: Page number of next hdr page)
 	ULONG hdr_oldest_transaction;	// Oldest interesting transaction
 	ULONG hdr_oldest_active;		// Oldest transaction thought active
 	ULONG hdr_next_transaction;		// Next transaction id
@@ -504,7 +500,7 @@ static_assert(offsetof(struct header_page, hdr_header) == 0, "hdr_header offset 
 static_assert(offsetof(struct header_page, hdr_page_size) == 16, "hdr_page_size offset mismatch");
 static_assert(offsetof(struct header_page, hdr_ods_version) == 18, "hdr_ods_version offset mismatch");
 static_assert(offsetof(struct header_page, hdr_PAGES) == 20, "hdr_PAGES offset mismatch");
-static_assert(offsetof(struct header_page, hdr_next_page) == 24, "hdr_next_page offset mismatch");
+static_assert(offsetof(struct header_page, hdr_unused) == 24, "hdr_unused offset mismatch");
 static_assert(offsetof(struct header_page, hdr_oldest_transaction) == 28, "hdr_oldest_transaction offset mismatch");
 static_assert(offsetof(struct header_page, hdr_oldest_active) == 32, "hdr_oldest_active offset mismatch");
 static_assert(offsetof(struct header_page, hdr_next_transaction) == 36, "hdr_next_transaction offset mismatch");
@@ -852,6 +848,7 @@ const USHORT rhd_damaged		= 128;		// object is known to be damaged
 const USHORT rhd_gc_active		= 256;		// garbage collecting dead record version
 const USHORT rhd_uk_modified	= 512;		// record key field values are changed
 const USHORT rhd_long_tranum	= 1024;		// transaction number is 64-bit
+const USHORT rhd_not_packed		= 2048;		// record (or delta) is stored "as is"
 
 
 // This (not exact) copy of class DSC is used to store descriptors on disk.
@@ -932,6 +929,11 @@ Firebird::string pagtype(UCHAR type);
 
 // alignment for raw page access
 const USHORT PAGE_ALIGNMENT = 1024;
+
+// alignment and IO block size/offset multiplier for non-buffered file access
+const ULONG DIRECT_IO_BLOCK_SIZE = 4096;
+
+static_assert(MIN_PAGE_SIZE >= DIRECT_IO_BLOCK_SIZE, "check DIRECT_IO_BLOCK_SIZE");
 
 // size of raw I/O operation for header page
 const USHORT RAW_HEADER_SIZE = 1024;	// ROUNDUP(HDR_SIZE, PAGE_ALIGNMENT);

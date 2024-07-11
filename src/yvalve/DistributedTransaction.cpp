@@ -32,6 +32,7 @@
 
 #include "../yvalve/MasterImplementation.h"
 #include "../common/classes/rwlock.h"
+#include "../common/classes/ClumpletReader.h"
 #include "firebird/impl/inf_pub.h"
 #include "../common/isc_proto.h"
 #include "../jrd/acl.h"
@@ -66,6 +67,10 @@ public:
 	void deprecatedDisconnect(CheckStatusWrapper* status);
 
 private:
+	void internalCommit(CheckStatusWrapper* status);
+	void internalRollback(CheckStatusWrapper* status);
+	void internalDisconnect(CheckStatusWrapper* status);
+
 	typedef HalfStaticArray<ITransaction*, 8> SubArray;
 	typedef HalfStaticArray<UCHAR, 1024> TdrBuffer;
 	SubArray sub;
@@ -103,36 +108,26 @@ bool DTransaction::buildPrepareInfo(CheckStatusWrapper* status, TdrBuffer& tdr, 
 	if (status->getState() & IStatus::STATE_ERRORS)
 		return false;
 
-	UCHAR* const end = bigBuffer.end();
-
-	while (buf < end)
+	for (ClumpletReader p(ClumpletReader::InfoResponse, buf, bigBuffer.getCount()); !p.isEof(); p.moveNext())
 	{
-		UCHAR item = buf[0];
-		++buf;
-		const USHORT length = (USHORT) gds__vax_integer(buf, 2);
+		const USHORT length = (USHORT) p.getClumpLength();
 		// Prevent information out of sync.
 		UCHAR lengthByte = length > MAX_UCHAR ? MAX_UCHAR : length;
-		buf += 2;
 
-		switch(item)
+		switch(p.getClumpTag())
 		{
 			case isc_info_tra_id:
 				tdr.add(TDR_TRANSACTION_ID);
 				tdr.add(lengthByte);
-				tdr.add(buf, lengthByte);
+				tdr.add(p.getBytes(), lengthByte);
 				break;
 
 			case fb_info_tra_dbpath:
 				tdr.add(TDR_DATABASE_PATH);
 				tdr.add(lengthByte);
-				tdr.add(buf, lengthByte);
+				tdr.add(p.getBytes(), lengthByte);
 				break;
-
-			case isc_info_end:
-				return true;
 		}
-
-		buf += length;
 	}
 
 	return true;
@@ -248,7 +243,7 @@ void DTransaction::prepare(CheckStatusWrapper* status,
 	}
 }
 
-void DTransaction::commit(CheckStatusWrapper* status)
+void DTransaction::internalCommit(CheckStatusWrapper* status)
 {
 	try
 	{
@@ -309,7 +304,7 @@ void DTransaction::commitRetaining(CheckStatusWrapper* status)
 	}
 }
 
-void DTransaction::rollback(CheckStatusWrapper* status)
+void DTransaction::internalRollback(CheckStatusWrapper* status)
 {
 	try
 	{
@@ -361,7 +356,7 @@ void DTransaction::rollbackRetaining(CheckStatusWrapper* status)
 	}
 }
 
-void DTransaction::disconnect(CheckStatusWrapper* status)
+void DTransaction::internalDisconnect(CheckStatusWrapper* status)
 {
 	try
 	{
@@ -392,17 +387,38 @@ void DTransaction::disconnect(CheckStatusWrapper* status)
 
 void DTransaction::deprecatedCommit(CheckStatusWrapper* status)
 {
-	commit(status);
+	internalCommit(status);
 }
 
 void DTransaction::deprecatedRollback(CheckStatusWrapper* status)
 {
-	rollback(status);
+	internalRollback(status);
 }
 
 void DTransaction::deprecatedDisconnect(CheckStatusWrapper* status)
 {
-	disconnect(status);
+	internalDisconnect(status);
+}
+
+void DTransaction::disconnect(CheckStatusWrapper* status)
+{
+	internalDisconnect(status);
+	if (status->isEmpty())
+		release();
+}
+
+void DTransaction::rollback(CheckStatusWrapper* status)
+{
+	internalRollback(status);
+	if (status->isEmpty())
+		release();
+}
+
+void DTransaction::commit(CheckStatusWrapper* status)
+{
+	internalCommit(status);
+	if (status->isEmpty())
+		release();
 }
 
 

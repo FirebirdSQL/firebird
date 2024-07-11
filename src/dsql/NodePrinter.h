@@ -23,7 +23,9 @@
 #ifndef DSQL_NODE_PRINTER_H
 #define DSQL_NODE_PRINTER_H
 
+#include <optional>
 #include "../dsql/Nodes.h"
+#include "../common/classes/TriState.h"
 
 #define NODE_PRINT(var, property)	var.print(STRINGIZE(property), property)
 #define NODE_PRINT_ENUM(var, property)	var.print(STRINGIZE(property), (int) property)
@@ -265,11 +267,17 @@ public:
 			print(s, *array);
 	}
 
-	template <typename T>
-	void print(const Firebird::string& s, const BaseNullable<T>& nullable)
+	void print(const Firebird::string& s, const Firebird::TriState& triState)
 	{
-		if (nullable.specified)
-			print(s, nullable.value);
+		if (triState.isAssigned())
+			print(s, triState.asBool());
+	}
+
+	template <typename T>
+	void print(const Firebird::string& s, const std::optional<T>& optional)
+	{
+		if (optional.has_value())
+			print(s, optional.value());
 	}
 
 	template <typename T>

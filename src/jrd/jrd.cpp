@@ -110,8 +110,10 @@
 #include "../yvalve/why_proto.h"
 #include "../jrd/flags.h"
 #include "../jrd/Mapping.h"
+#include "../jrd/ThreadCollect.h"
 
 #include "../jrd/Database.h"
+#include "../jrd/WorkerAttachment.h"
 
 #include "../common/config/config.h"
 #include "../common/config/dir_list.h"
@@ -126,6 +128,7 @@
 #include "../common/classes/ClumpletWriter.h"
 #include "../common/classes/RefMutex.h"
 #include "../common/classes/ParsedList.h"
+#include "../common/classes/semaphore.h"
 #include "../common/utils_proto.h"
 #include "../jrd/DebugInterface.h"
 #include "../jrd/CryptoManager.h"
@@ -134,6 +137,7 @@
 #include "../dsql/dsql.h"
 #include "../dsql/dsql_proto.h"
 #include "../dsql/DsqlBatch.h"
+#include "../dsql/DsqlStatementCache.h"
 
 #ifdef WIN_NT
 #include <process.h>
@@ -264,12 +268,12 @@ JAttachment::JAttachment(StableAttachmentPart* sa)
 {
 }
 
-Attachment* JAttachment::getHandle() throw()
+Attachment* JAttachment::getHandle() noexcept
 {
 	return att ? att->getHandle() : NULL;
 }
 
-const Attachment* JAttachment::getHandle() const throw()
+const Attachment* JAttachment::getHandle() const noexcept
 {
 	return att ? att->getHandle() : NULL;
 }
@@ -380,6 +384,9 @@ static void threadDetach()
 {
 	ThreadSync* thd = ThreadSync::findThread();
 	delete thd;
+
+	if (cds::threading::Manager::isThreadAttached())
+		cds::threading::Manager::detachThread();
 }
 
 static void shutdownBeforeUnload()
@@ -472,6 +479,16 @@ extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(IMaster* master)
 namespace
 {
 	using Jrd::Attachment;
+
+	// Required to sync attachment shutdown threads with provider shutdown
+	GlobalPtr<ThreadCollect> shutThreadCollect;
+
+	struct AttShutParams
+	{
+		Semaphore thdStartedSem, startCallCompleteSem;
+		Thread::Handle thrHandle;
+		AttachmentsRefHolder* attachments;
+	};
 
 	// Flag engineShutdown guarantees that no new attachment is created after setting it
 	// and helps avoid more than 1 shutdown threads running simultaneously.
@@ -708,118 +725,6 @@ namespace
 		validateHandle(tdbb, applier->getAttachment());
 	}
 
-	class AttachmentHolder
-	{
-	public:
-		static const unsigned ATT_LOCK_ASYNC			= 1;
-		static const unsigned ATT_DONT_LOCK				= 2;
-		static const unsigned ATT_NO_SHUTDOWN_CHECK		= 4;
-		static const unsigned ATT_NON_BLOCKING			= 8;
-
-		AttachmentHolder(thread_db* tdbb, StableAttachmentPart* sa, unsigned lockFlags, const char* from)
-			: sAtt(sa),
-			  async(lockFlags & ATT_LOCK_ASYNC),
-			  nolock(lockFlags & ATT_DONT_LOCK),
-			  blocking(!(lockFlags & ATT_NON_BLOCKING))
-		{
-			if (!sa)
-				Arg::Gds(isc_att_shutdown).raise();
-
-			if (blocking)
-				sAtt->getBlockingMutex()->enter(from);
-
-			try
-			{
-				if (!nolock)
-					sAtt->getSync(async)->enter(from);
-
-				Jrd::Attachment* attachment = sAtt->getHandle();	// Must be done after entering mutex
-
-				try
-				{
-					if (!attachment || (engineShutdown && !(lockFlags & ATT_NO_SHUTDOWN_CHECK)))
-					{
-						// This shutdown check is an optimization, threads can still enter engine
-						// with the flag set cause shutdownMutex mutex is not locked here.
-						// That's not a danger cause check of att_use_count
-						// in shutdown code makes it anyway safe.
-						Arg::Gds err(isc_att_shutdown);
-						if (sAtt->getShutError())
-							err << Arg::Gds(sAtt->getShutError());
-
-						err.raise();
-					}
-
-					tdbb->setAttachment(attachment);
-					tdbb->setDatabase(attachment->att_database);
-
-					if (!async)
-					{
-						attachment->att_use_count++;
-						attachment->setupIdleTimer(true);
-					}
-				}
-				catch (const Firebird::Exception&)
-				{
-					if (!nolock)
-						sAtt->getSync(async)->leave();
-					throw;
-				}
-			}
-			catch (const Firebird::Exception&)
-			{
-				if (blocking)
-					sAtt->getBlockingMutex()->leave();
-				throw;
-			}
-		}
-
-		~AttachmentHolder()
-		{
-			Jrd::Attachment* attachment = sAtt->getHandle();
-
-			if (attachment && !async)
-			{
-				attachment->att_use_count--;
-				if (!attachment->att_use_count)
-					attachment->setupIdleTimer(false);
-			}
-
-			if (!nolock)
-				sAtt->getSync(async)->leave();
-
-			if (blocking)
-				sAtt->getBlockingMutex()->leave();
-		}
-
-	private:
-		RefPtr<StableAttachmentPart> sAtt;
-		bool async;			// async mutex should be locked instead normal
-		bool nolock; 		// if locked manually, no need to take lock recursively
-		bool blocking;		// holder instance is blocking other instances
-
-	private:
-		// copying is prohibited
-		AttachmentHolder(const AttachmentHolder&);
-		AttachmentHolder& operator =(const AttachmentHolder&);
-	};
-
-	class EngineContextHolder : public ThreadContextHolder, private AttachmentHolder,
-		private DatabaseContextHolder
-	{
-	public:
-		template <typename I>
-		EngineContextHolder(CheckStatusWrapper* status, I* interfacePtr, const char* from,
-							unsigned lockFlags = 0)
-			: ThreadContextHolder(status),
-			  AttachmentHolder(*this, interfacePtr->getAttachment(), lockFlags, from),
-			  DatabaseContextHolder(operator thread_db*())
-		{
-			validateHandle(*this, interfacePtr->getHandle());
-		}
-
-	};
-
 	void validateAccess(thread_db* tdbb, Jrd::Attachment* attachment, SystemPrivilege sp)
 	{
 		if (!attachment->locksmith(tdbb, sp))
@@ -863,6 +768,101 @@ namespace
 } // anonymous
 
 
+AttachmentHolder::AttachmentHolder(thread_db* tdbb, StableAttachmentPart* sa, unsigned lockFlags, const char* from)
+	: sAtt(sa),
+	  async(lockFlags & ATT_LOCK_ASYNC),
+	  nolock(lockFlags & ATT_DONT_LOCK),
+	  blocking(!(lockFlags & ATT_NON_BLOCKING))
+{
+	if (!sa)
+		Arg::Gds(isc_att_shutdown).raise();
+
+	if (blocking)
+		sAtt->getBlockingMutex()->enter(from);
+
+	try
+	{
+		if (!nolock)
+			sAtt->getSync(async)->enter(from);
+
+		Jrd::Attachment* attachment = sAtt->getHandle();	// Must be done after entering mutex
+
+		try
+		{
+			if (!attachment || (engineShutdown && !(lockFlags & ATT_NO_SHUTDOWN_CHECK)))
+			{
+				// This shutdown check is an optimization, threads can still enter engine
+				// with the flag set cause shutdownMutex mutex is not locked here.
+				// That's not a danger cause check of att_use_count
+				// in shutdown code makes it anyway safe.
+				Arg::Gds err(isc_att_shutdown);
+				if (sAtt->getShutError())
+					err << Arg::Gds(sAtt->getShutError());
+
+				err.raise();
+			}
+
+			tdbb->setAttachment(attachment);
+			tdbb->setDatabase(attachment->att_database);
+
+			if (!async)
+			{
+				attachment->att_use_count++;
+				attachment->setupIdleTimer(true);
+			}
+		}
+		catch (const Firebird::Exception&)
+		{
+			if (!nolock)
+				sAtt->getSync(async)->leave();
+			throw;
+		}
+	}
+	catch (const Firebird::Exception&)
+	{
+		if (blocking)
+			sAtt->getBlockingMutex()->leave();
+		throw;
+	}
+}
+
+AttachmentHolder::~AttachmentHolder()
+{
+	Jrd::Attachment* attachment = sAtt->getHandle();
+
+	if (attachment)
+		attachment->mergeStats(true);
+
+	if (attachment && !async)
+	{
+		attachment->att_use_count--;
+		if (!attachment->att_use_count)
+			attachment->setupIdleTimer(false);
+	}
+
+	if (!nolock)
+		sAtt->getSync(async)->leave();
+
+	if (blocking)
+		sAtt->getBlockingMutex()->leave();
+}
+
+
+template <typename I>
+EngineContextHolder::EngineContextHolder(CheckStatusWrapper* status, I* interfacePtr, const char* from,
+			unsigned lockFlags)
+	: ThreadContextHolder(status),
+	  AttachmentHolder(*this, interfacePtr->getAttachment(), lockFlags, from),
+	  DatabaseContextHolder(operator thread_db*())
+{
+	validateHandle(*this, interfacePtr->getHandle());
+}
+
+// Used in ProfilerManager.cpp
+template EngineContextHolder::EngineContextHolder(
+	CheckStatusWrapper* status, JAttachment* interfacePtr, const char* from, unsigned lockFlags);
+
+
 #ifdef  WIN_NT
 #include <windows.h>
 // these should stop a most annoying warning
@@ -877,85 +877,83 @@ bool Trigger::isActive() const
 
 void Trigger::compile(thread_db* tdbb)
 {
-	SET_TDBB(tdbb);
-
-	Database* dbb = tdbb->getDatabase();
-	Jrd::Attachment* const att = tdbb->getAttachment();
-
-	if (extTrigger)
+	if (extTrigger || statement)
 		return;
 
-	if (!statement)
+	const auto dbb = tdbb->getDatabase();
+	const auto att = tdbb->getAttachment();
+
+	// Allocate statement memory pool
+	MemoryPool* new_pool = att->createPool();
+
+	// Trigger request is not compiled yet. Lets do it now
+	USHORT par_flags = (USHORT) (flags & TRG_ignore_perm) ? csb_ignore_perm : 0;
+
+	if (type & 1)
+		par_flags |= csb_pre_trigger;
+	else
+		par_flags |= csb_post_trigger;
+
+	try
 	{
-		// Allocate statement memory pool
-		MemoryPool* new_pool = att->createPool();
-		// Trigger request is not compiled yet. Lets do it now
-		USHORT par_flags = (USHORT) (flags & TRG_ignore_perm) ? csb_ignore_perm : 0;
-		if (type & 1)
-			par_flags |= csb_pre_trigger;
+		Jrd::ContextPoolHolder context(tdbb, new_pool);
+
+		AutoPtr<CompilerScratch> auto_csb(FB_NEW_POOL(*new_pool) CompilerScratch(*new_pool));
+		CompilerScratch* csb = auto_csb;
+
+		csb->csb_g_flags |= par_flags;
+
+		if (engine.isEmpty())
+		{
+			TraceTrigCompile trace(tdbb, this);
+
+			if (debugInfo.hasData())
+			{
+				DBG_parse_debug_info((ULONG) debugInfo.getCount(), debugInfo.begin(),
+									 *csb->csb_dbg_info);
+			}
+
+			PAR_blr(tdbb, relation, blr.begin(), (ULONG) blr.getCount(), NULL, &csb, &statement,
+				(relation ? true : false), par_flags);
+
+			trace.finish(statement, ITracePlugin::RESULT_SUCCESS);
+		}
 		else
-			par_flags |= csb_post_trigger;
-
-		try
 		{
-			Jrd::ContextPoolHolder context(tdbb, new_pool);
-
-			AutoPtr<CompilerScratch> auto_csb(FB_NEW_POOL(*new_pool) CompilerScratch(*new_pool));
-			CompilerScratch* csb = auto_csb;
-
-			csb->csb_g_flags |= par_flags;
-
-			if (engine.isEmpty())
-			{
-				if (debugInfo.hasData())
-				{
-					DBG_parse_debug_info((ULONG) debugInfo.getCount(), debugInfo.begin(),
-										 *csb->csb_dbg_info);
-				}
-
-				PAR_blr(tdbb, relation, blr.begin(), (ULONG) blr.getCount(), NULL, &csb, &statement,
-					(relation ? true : false), par_flags);
-			}
-			else
-			{
-				dbb->dbb_extManager->makeTrigger(tdbb, csb, this, engine, entryPoint, extBody.c_str(),
-					(relation ?
-						(type & 1 ? IExternalTrigger::TYPE_BEFORE : IExternalTrigger::TYPE_AFTER) :
-						IExternalTrigger::TYPE_DATABASE));
-			}
+			dbb->dbb_extManager->makeTrigger(tdbb, csb, this, engine, entryPoint, extBody.c_str(),
+				(relation ?
+					(type & 1 ? IExternalTrigger::TYPE_BEFORE : IExternalTrigger::TYPE_AFTER) :
+					IExternalTrigger::TYPE_DATABASE));
 		}
-		catch (const Exception&)
-		{
-			if (statement)
-			{
-				statement->release(tdbb);
-				statement = NULL;
-			}
-			else
-				att->deletePool(new_pool);
-
-			throw;
-		}
-
-		statement->triggerName = name;
-		if (ssDefiner.orElse(false))
-			statement->triggerInvoker = att->getUserId(owner);
-
-		if (sysTrigger)
-			statement->flags |= Statement::FLAG_SYS_TRIGGER;
-
-		if (flags & TRG_ignore_perm)
-			statement->flags |= Statement::FLAG_IGNORE_PERM;
 	}
+	catch (const Exception&)
+	{
+		if (statement)
+		{
+			statement->release(tdbb);
+			statement = NULL;
+		}
+		else
+			att->deletePool(new_pool);
+
+		throw;
+	}
+
+	statement->triggerName = name;
+
+	if (ssDefiner.asBool())
+		statement->triggerInvoker = att->getUserId(owner);
+
+	if (sysTrigger)
+		statement->flags |= Statement::FLAG_SYS_TRIGGER | Statement::FLAG_INTERNAL;
+
+	if (flags & TRG_ignore_perm)
+		statement->flags |= Statement::FLAG_IGNORE_PERM;
 }
 
 void Trigger::release(thread_db* tdbb)
 {
-	if (extTrigger)
-	{
-		delete extTrigger;
-		extTrigger = NULL;
-	}
+	extTrigger.reset();
 
 	// dimitr:	We should never release triggers created by MET_parse_sys_trigger().
 	//			System triggers do have BLR, but it's not stored inside the trigger object.
@@ -1081,9 +1079,12 @@ namespace Jrd
 		bool	dpb_reset_icu;
 		bool	dpb_map_attach;
 		ULONG	dpb_remote_flags;
+		SSHORT	dpb_parallel_workers;
+		bool	dpb_worker_attach;
 		ReplicaMode	dpb_replica_mode;
 		bool	dpb_set_db_replica;
 		bool	dpb_clear_map;
+		bool	dpb_upgrade_db;
 
 		// here begin compound objects
 		// for constructor to work properly dpb_user_name
@@ -1110,6 +1111,7 @@ namespace Jrd
 		PathName	dpb_set_bind;
 		string	dpb_decfloat_round;
 		string	dpb_decfloat_traps;
+		string	dpb_owner;
 
 	public:
 		static const ULONG DPB_FLAGS_MASK = DBB_damaged;
@@ -1318,21 +1320,26 @@ static void			check_single_maintenance(thread_db* tdbb);
 
 namespace {
 	enum VdnResult {VDN_FAIL, VDN_OK/*, VDN_SECURITY*/};
+
+	const unsigned UNWIND_INTERNAL = 1;
+	const unsigned UNWIND_CREATE = 2;
+	const unsigned UNWIND_NEW = 4;
 }
 static VdnResult	verifyDatabaseName(const PathName&, FbStatusVector*, bool);
 
-static void		unwindAttach(thread_db* tdbb, const Exception& ex, FbStatusVector* userStatus, bool internalFlag);
+static void		unwindAttach(thread_db* tdbb, const char* filename, const Exception& ex,
+	FbStatusVector* userStatus, unsigned flags, const DatabaseOptions& options, Mapping& mapping, ICryptKeyCallback* callback);
 static JAttachment*	initAttachment(thread_db*, const PathName&, const PathName&, RefPtr<const Config>, bool,
 	const DatabaseOptions&, RefMutexUnlock&, IPluginConfig*, JProvider*);
 static JAttachment*	create_attachment(const PathName&, Database*, JProvider* provider, const DatabaseOptions&, bool newDb);
 static void		prepare_tra(thread_db*, jrd_tra*, USHORT, const UCHAR*);
-static void		release_attachment(thread_db*, Attachment*);
+static void		release_attachment(thread_db*, Attachment*, XThreadEnsureUnlock* = nullptr);
 static void		start_transaction(thread_db* tdbb, bool transliterate, jrd_tra** tra_handle,
 	Jrd::Attachment* attachment, unsigned int tpb_length, const UCHAR* tpb);
 static void		rollback(thread_db*, jrd_tra*, const bool);
 static void		purge_attachment(thread_db* tdbb, StableAttachmentPart* sAtt, unsigned flags = 0);
 static void		getUserInfo(UserId&, const DatabaseOptions&, const char*,
-	const RefPtr<const Config>*, bool, Mapping& mapping, bool);
+	const RefPtr<const Config>*, Mapping& mapping, bool);
 static void		waitForShutdown(Semaphore&);
 
 static THREAD_ENTRY_DECLARE shutdown_thread(THREAD_ENTRY_PARAM);
@@ -1348,7 +1355,7 @@ TraceFailedConnection::TraceFailedConnection(const char* filename, const Databas
 {
 	Mapping mapping(Mapping::MAP_ERROR_HANDLER, NULL);
 	mapping.setAuthBlock(m_options->dpb_auth_block);
-	getUserInfo(m_id, *m_options, m_filename, NULL, false, mapping, false);
+	getUserInfo(m_id, *m_options, m_filename, NULL, mapping, false);
 }
 
 
@@ -1408,7 +1415,7 @@ static void successful_completion(CheckStatusWrapper* s, ISC_STATUS acceptCode =
 
 // Stuff exception transliterated to the client charset.
 static ISC_STATUS transliterateException(thread_db* tdbb, const Exception& ex, FbStatusVector* vector,
-	const char* func) throw()
+	const char* func) noexcept
 {
 	ex.stuffException(vector);
 
@@ -1428,7 +1435,7 @@ static ISC_STATUS transliterateException(thread_db* tdbb, const Exception& ex, F
 
 
 // Transliterate status vector to the client charset.
-void JRD_transliterate(thread_db* tdbb, Firebird::IStatus* vector) throw()
+void JRD_transliterate(thread_db* tdbb, Firebird::IStatus* vector) noexcept
 {
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 	USHORT charSet;
@@ -1537,40 +1544,35 @@ static void trace_warning(thread_db* tdbb, FbStatusVector* userStatus, const cha
 }
 
 
-static void trace_failed_attach(TraceManager* traceManager, const char* filename,
-	const DatabaseOptions& options, bool create, FbStatusVector* status)
+// Report to Trace API that attachment has not been created
+static void trace_failed_attach(const char* filename, const DatabaseOptions& options,
+	unsigned flags, FbStatusVector* status, ICryptKeyCallback* callback)
 {
-	// Report to Trace API that attachment has not been created
+	// Avoid uncontrolled recursion
+	if (options.dpb_map_attach)
+		return;
+
 	const char* origFilename = filename;
 	if (options.dpb_org_filename.hasData())
 		origFilename = options.dpb_org_filename.c_str();
 
+	// Create trivial trace object for connection
 	TraceFailedConnection conn(origFilename, &options);
 	TraceStatusVectorImpl traceStatus(status, TraceStatusVectorImpl::TS_ERRORS);
 
 	ISC_STATUS s = status->getErrors()[1];
 	const ntrace_result_t result = (s == isc_login || s == isc_no_priv) ?
 		ITracePlugin::RESULT_UNAUTHORIZED : ITracePlugin::RESULT_FAILED;
-	const char* func = create ? "JProvider::createDatabase" : "JProvider::attachDatabase";
+	const char* func = flags & UNWIND_CREATE ? "JProvider::createDatabase" : "JProvider::attachDatabase";
 
-	if (!traceManager)
-	{
-		TraceManager tempMgr(origFilename);
+	// Perform actual trace
+	TraceManager tempMgr(origFilename, callback, flags & UNWIND_NEW);
 
-		if (tempMgr.needs(ITraceFactory::TRACE_EVENT_ATTACH))
-			tempMgr.event_attach(&conn, create, result);
+	if (tempMgr.needs(ITraceFactory::TRACE_EVENT_ATTACH))
+		tempMgr.event_attach(&conn, flags & UNWIND_CREATE, result);
 
-		if (tempMgr.needs(ITraceFactory::TRACE_EVENT_ERROR))
-			tempMgr.event_error(&conn, &traceStatus, func);
-	}
-	else
-	{
-		if (traceManager->needs(ITraceFactory::TRACE_EVENT_ATTACH))
-			traceManager->event_attach(&conn, create, result);
-
-		if (traceManager->needs(ITraceFactory::TRACE_EVENT_ERROR))
-			traceManager->event_error(&conn, &traceStatus, func);
-	}
+	if (tempMgr.needs(ITraceFactory::TRACE_EVENT_ERROR))
+		tempMgr.event_error(&conn, &traceStatus, func);
 }
 
 
@@ -1629,6 +1631,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 		PathName org_filename, expanded_name;
 		bool is_alias = false;
 		MutexEnsureUnlock guardDbInit(dbInitMutex, FB_FUNCTION);
+		LateRefGuard lateBlocking(FB_FUNCTION);
 		Mapping mapping(Mapping::MAP_THROW_NOT_FOUND, cryptCallback);
 
 		try
@@ -1693,7 +1696,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 		catch (const Exception& ex)
 		{
 			ex.stuffException(user_status);
-			trace_failed_attach(NULL, filename, options, false, user_status);
+			trace_failed_attach(filename, options, 0, user_status, cryptCallback);
 			throw;
 		}
 
@@ -1701,13 +1704,12 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 		const VdnResult vdn = verifyDatabaseName(expanded_name, tdbb->tdbb_status_vector, is_alias);
 		if (!is_alias && vdn == VDN_FAIL)
 		{
-			trace_failed_attach(NULL, filename, options, false, tdbb->tdbb_status_vector);
+			trace_failed_attach(filename, options, 0, tdbb->tdbb_status_vector, cryptCallback);
 			status_exception::raise(tdbb->tdbb_status_vector);
 		}
 
 		Database* dbb = NULL;
 		Jrd::Attachment* attachment = NULL;
-		bool attachTraced = false;
 
 		// Initialize special error handling
 		try
@@ -1742,7 +1744,10 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				guardDbInit.leave();
 			}
 
-			EngineContextHolder tdbb(user_status, jAtt, FB_FUNCTION, AttachmentHolder::ATT_DONT_LOCK);
+			// Don't pass user_status into ctor to keep warnings
+			EngineContextHolder tdbb(nullptr, jAtt, FB_FUNCTION, AttachmentHolder::ATT_DONT_LOCK);
+			tdbb->tdbb_status_vector = user_status;
+			lateBlocking.lock(jAtt->getStable()->getBlockingMutex(), jAtt->getStable());
 
 			attachment->att_crypt_callback = getDefCryptCallback(cryptCallback);
 			attachment->att_client_charset = attachment->att_charset = options.dpb_interp;
@@ -1786,7 +1791,19 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				else
 					dbb->dbb_database_name = expanded_name;
 
-				PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+				// We don't know the database FW mode before the header page is read.
+				// However, given that the default behaviour is FW = ON, it makes sense
+				// to assume this unless the opposite is explicitly specified in DPB.
+				// The actual FW mode (if different) will be fixed afterwards by PIO_header().
+
+				const TriState newForceWrite = options.dpb_set_force_write ?
+					TriState(options.dpb_force_write) : TriState();
+
+				// Set the FW flag inside the database block to be considered by PIO routines
+				if (newForceWrite.valueOr(true))
+					dbb->dbb_flags |= DBB_force_write;
+
+				const auto pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 				pageSpace->file = PIO_open(tdbb, expanded_name, org_filename);
 
 				// Initialize the global objects
@@ -1802,7 +1819,6 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				INI_init(tdbb);
 				SHUT_init(tdbb);
 				PAG_header_init(tdbb);
-				INI_init2(tdbb);
 				PAG_init(tdbb);
 
 				if (options.dpb_set_page_buffers)
@@ -1825,7 +1841,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				dbb->dbb_monitoring_data = FB_NEW_POOL(*dbb->dbb_permanent) MonitoringData(dbb);
 
 				PAG_init2(tdbb, 0);
-				PAG_header(tdbb, false);
+				PAG_header(tdbb, false, newForceWrite);
 				dbb->dbb_page_manager.initTempPageSpace(tdbb);
 				dbb->dbb_crypto_manager->attach(tdbb, attachment);
 
@@ -1835,8 +1851,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 
 				// Initialize TIP cache. We do this late to give SDW a chance to
 				// work while we read states for all interesting transactions
-				dbb->dbb_tip_cache = FB_NEW_POOL(*dbb->dbb_permanent) TipCache(dbb);
-				dbb->dbb_tip_cache->initializeTpc(tdbb);
+				dbb->dbb_tip_cache = TipCache::create(tdbb);
 
 				// linger
 				dbb->dbb_linger_seconds = MET_get_linger(tdbb);
@@ -1862,7 +1877,6 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				jAtt->getStable()->manualAsyncUnlock(attachment->att_flags);
 
 				INI_init(tdbb);
-				INI_init2(tdbb);
 				PAG_header(tdbb, true);
 				dbb->dbb_crypto_manager->attach(tdbb, attachment);
 			}
@@ -1948,7 +1962,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				try
 				{
 					mapping.setDb(filename, expanded_name.c_str(), jAtt);
-					getUserInfo(userId, options, filename, &config, false, mapping, options.dpb_reset_icu);
+					getUserInfo(userId, options, filename, &config, mapping, options.dpb_reset_icu);
 				}
 				catch(const Exception&)
 				{
@@ -2061,6 +2075,18 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 					USE_GSTAT_UTILITY);
 			}
 
+			if (options.dpb_upgrade_db)
+			{
+				validateAccess(tdbb, attachment, USE_GFIX_UTILITY);
+				if (!CCH_exclusive(tdbb, LCK_EX, WAIT_PERIOD, NULL))
+				{
+					ERR_post(Arg::Gds(isc_lock_timeout) <<
+							 Arg::Gds(isc_obj_in_use) << Arg::Str(org_filename));
+				}
+
+				INI_upgrade(tdbb);
+			}
+
 			if (options.dpb_verify)
 			{
 				validateAccess(tdbb, attachment, USE_GFIX_UTILITY);
@@ -2147,6 +2173,11 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				}
 			}
 
+			if (options.dpb_parallel_workers)
+			{
+				attachment->att_parallel_workers = options.dpb_parallel_workers;
+			}
+
 			if (options.dpb_set_db_readonly)
 			{
 				validateAccess(tdbb, attachment, CHANGE_HEADER_SETTINGS);
@@ -2185,7 +2216,6 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				TraceConnectionImpl conn(attachment);
 				attachment->att_trace_manager->event_attach(&conn, false, ITracePlugin::RESULT_SUCCESS);
 			}
-			attachTraced = true;
 
 			// Recover database after crash during backup difference file merge
 			dbb->dbb_backup_manager->endBackup(tdbb, true); // true = do recovery
@@ -2241,6 +2271,11 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				}
 			}
 
+			if (options.dpb_worker_attach)
+				attachment->att_flags |= ATT_worker;
+			else
+				WorkerAttachment::incUserAtts(dbb->dbb_filename);
+
 			jAtt->getStable()->manualUnlock(attachment->att_flags);
 
 			return jAtt;
@@ -2248,27 +2283,8 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 		catch (const Exception& ex)
 		{
 			ex.stuffException(user_status);
-			if (attachTraced)
-			{
-				TraceManager* traceManager = attachment->att_trace_manager;
-				TraceConnectionImpl conn(attachment);
-				TraceStatusVectorImpl traceStatus(user_status, TraceStatusVectorImpl::TS_ERRORS);
-
-				if (traceManager->needs(ITraceFactory::TRACE_EVENT_ERROR))
-					traceManager->event_error(&conn, &traceStatus, "JProvider::attachDatabase");
-
-				if (traceManager->needs(ITraceFactory::TRACE_EVENT_DETACH))
-					traceManager->event_detach(&conn, false);
-			}
-			else
-			{
-				trace_failed_attach(attachment && attachment->att_trace_manager &&
-					attachment->att_trace_manager->isActive() ? attachment->att_trace_manager : NULL,
-					filename, options, false, user_status);
-			}
-
-			mapping.clearMainHandle();
-			unwindAttach(tdbb, ex, user_status, existingId);
+			unwindAttach(tdbb, filename, ex, user_status, existingId ? UNWIND_INTERNAL : 0,
+				options, mapping, cryptCallback);
 		}
 	}
 	catch (const Exception& ex)
@@ -2798,6 +2814,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 		bool is_alias = false;
 		Firebird::RefPtr<const Config> config;
 		Mapping mapping(Mapping::MAP_THROW_NOT_FOUND, cryptCallback);
+		LateRefGuard lateBlocking(FB_FUNCTION);
 
 		try
 		{
@@ -2843,7 +2860,41 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 
 			// Check for correct credentials supplied
 			mapping.setSecurityDbAlias(config->getSecurityDatabase(), nullptr);
-			getUserInfo(userId, options, filename, &config, true, mapping, false);
+			getUserInfo(userId, options, filename, &config, mapping, false);
+
+			// Check user's power level
+			CreateGrant powerLevel = CreateGrant::ASSUMED; // By default it is a boot build or embedded mode where everything is allowed
+			if (options.dpb_auth_block.hasData())
+			{
+				powerLevel = checkCreateDatabaseGrant(userId.getUserName(), userId.getTrustedRole(), userId.getSqlRole(), config->getSecurityDatabase());
+			}
+
+			switch (powerLevel)
+			{
+			case CreateGrant::NONE:
+					(Arg::Gds(isc_no_priv) << "CREATE" << "DATABASE" << filename).raise();
+
+			case CreateGrant::ASSUMED:
+				if (options.dpb_owner.hasData())
+				{
+					// Superuser can create databases for anyone other
+					fb_utils::dpbItemUpper(options.dpb_owner);
+					userId.setUserName(options.dpb_owner);
+				}
+				break;
+
+			case CreateGrant::GRANTED:
+				if (options.dpb_owner.hasData())
+				{
+					// Superuser can create databases for anyone other
+					fb_utils::dpbItemUpper(options.dpb_owner);
+					if (userId.getUserName() != options.dpb_owner)
+					{
+						(Arg::Gds(isc_no_priv) << "IMPERSONATE USER" << "DATABASE" << filename).raise();
+					}
+				}
+				break;
+			}
 
 #ifdef WIN_NT
 			guardDbInit.enter();		// Required to correctly expand name of just created database
@@ -2865,7 +2916,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 		catch (const Exception& ex)
 		{
 			ex.stuffException(user_status);
-			trace_failed_attach(NULL, filename, options, true, user_status);
+			trace_failed_attach(filename, options, UNWIND_CREATE, user_status, cryptCallback);
 			throw;
 		}
 
@@ -2873,7 +2924,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 		const VdnResult vdn = verifyDatabaseName(expanded_name, tdbb->tdbb_status_vector, is_alias);
 		if (!is_alias && vdn == VDN_FAIL)
 		{
-			trace_failed_attach(NULL, filename, options, true, tdbb->tdbb_status_vector);
+			trace_failed_attach(filename, options, UNWIND_CREATE, tdbb->tdbb_status_vector, cryptCallback);
 			status_exception::raise(tdbb->tdbb_status_vector);
 		}
 
@@ -2911,7 +2962,10 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			Sync dbbGuard(&dbb->dbb_sync, "createDatabase");
 			dbbGuard.lock(SYNC_EXCLUSIVE);
 
-			EngineContextHolder tdbb(user_status, jAtt, FB_FUNCTION, AttachmentHolder::ATT_DONT_LOCK);
+			// Don't pass user_status into ctor to keep warnings
+			EngineContextHolder tdbb(nullptr, jAtt, FB_FUNCTION, AttachmentHolder::ATT_DONT_LOCK);
+			tdbb->tdbb_status_vector = user_status;
+			lateBlocking.lock(jAtt->getStable()->getBlockingMutex(), jAtt->getStable());
 
 			attachment->att_crypt_callback = getDefCryptCallback(cryptCallback);
 
@@ -3070,13 +3124,12 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			dbb->dbb_monitoring_data = FB_NEW_POOL(*dbb->dbb_permanent) MonitoringData(dbb);
 
 			PAG_format_header(tdbb);
-			INI_init2(tdbb);
 			PAG_format_pip(tdbb, *pageSpace);
 
 			dbb->dbb_page_manager.initTempPageSpace(tdbb);
 
-			GenerateGuid(&dbb->dbb_guid);
-			PAG_set_db_guid(tdbb, dbb->dbb_guid);
+			dbb->dbb_guid = Guid::generate();
+			PAG_set_db_guid(tdbb, dbb->dbb_guid.value());
 
 			if (options.dpb_set_page_buffers)
 				PAG_set_page_buffers(tdbb, options.dpb_page_buffers);
@@ -3085,10 +3138,10 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 				PAG_set_no_reserve(tdbb, options.dpb_no_reserve);
 
 			fb_assert(attachment->att_user);	// set by UserId::sclInit()
-			INI_format(attachment->getUserName().c_str(), options.dpb_set_db_charset.c_str());
+			INI_format(tdbb, options.dpb_set_db_charset);
 
 			// If we have not allocated first TIP page, do it now.
-			if (!dbb->dbb_t_pages || !dbb->dbb_t_pages->count())
+			if (!dbb->getKnownPagesCount(pag_transactions))
 				TRA_extend_tip(tdbb, 0);
 
 			// There is no point to move database online at database creation since it is online by default.
@@ -3106,9 +3159,6 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 				dbb->dbb_sweep_interval = options.dpb_sweep_interval;
 			}
 
-			if (options.dpb_set_force_write)
-				PAG_set_force_write(tdbb, options.dpb_force_write);
-
 			// initialize shadowing semaphore as soon as the database is ready for it
 			// but before any real work is done
 
@@ -3116,6 +3166,11 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 
 			CCH_init2(tdbb);
 			VIO_init(tdbb);
+
+			if (options.dpb_parallel_workers)
+			{
+				attachment->att_parallel_workers = options.dpb_parallel_workers;
+			}
 
 			if (options.dpb_set_db_readonly)
 			{
@@ -3160,7 +3215,8 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 
 			CCH_flush(tdbb, FLUSH_FINI, 0);
 
-			if (!options.dpb_set_force_write)
+			// The newly created database should have FW = ON, unless the opposite is specified in DPB
+			if (!options.dpb_set_force_write || options.dpb_force_write)
 				PAG_set_force_write(tdbb, true);
 
 			dbb->dbb_crypto_manager->attach(tdbb, attachment);
@@ -3169,8 +3225,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			config->notify();
 
 			// Initialize TIP cache
-			dbb->dbb_tip_cache = FB_NEW_POOL(*dbb->dbb_permanent) TipCache(dbb);
-			dbb->dbb_tip_cache->initializeTpc(tdbb);
+			dbb->dbb_tip_cache = TipCache::create(tdbb);
 
 			// Init complete - we can release dbInitMutex
 			dbb->dbb_flags &= ~(DBB_new | DBB_creating);
@@ -3186,6 +3241,8 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 				attachment->att_trace_manager->event_attach(&conn, true, ITracePlugin::RESULT_SUCCESS);
 			}
 
+			WorkerAttachment::incUserAtts(dbb->dbb_filename);
+
 			jAtt->getStable()->manualUnlock(attachment->att_flags);
 
 			return jAtt;
@@ -3193,12 +3250,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 		catch (const Exception& ex)
 		{
 			ex.stuffException(user_status);
-			trace_failed_attach(attachment && attachment->att_trace_manager &&
-				attachment->att_trace_manager->isActive() ? attachment->att_trace_manager : NULL,
-				filename, options, true, user_status);
-
-			mapping.clearMainHandle();
-			unwindAttach(tdbb, ex, user_status, false);
+			unwindAttach(tdbb, filename, ex, user_status, UNWIND_CREATE, options, mapping, cryptCallback);
 		}
 	}
 	catch (const Exception& ex)
@@ -3313,15 +3365,15 @@ void JAttachment::freeEngineData(CheckStatusWrapper* user_status, bool forceFree
 
 			unsigned flags = PURGE_LINGER;
 
-			if (engineShutdown ||
+			if (engineShutdown)
+				flags |= PURGE_FORCE;
+
+			if (forceFree ||
 				(dbb->dbb_ast_flags & DBB_shutdown) ||
 				(attachment->att_flags & ATT_shutdown))
 			{
-				flags |= PURGE_FORCE;
-			}
-
-			if (forceFree)
 				flags |= PURGE_NOCHECK;
+			}
 
 			ISC_STATUS reason = 0;
 			if (!forceFree)
@@ -3405,6 +3457,8 @@ void JAttachment::internalDropDatabase(CheckStatusWrapper* user_status)
 			// Prepare to set ODS to 0
    			WIN window(HEADER_PAGE_NUMBER);
 			Ods::header_page* header = NULL;
+			XThreadEnsureUnlock threadGuard(dbb->dbb_thread_mutex, FB_FUNCTION);
+
 			ObjectsArray<PathName> tsFiles;
 
 			try
@@ -3431,11 +3485,21 @@ void JAttachment::internalDropDatabase(CheckStatusWrapper* user_status)
 					ERR_post(Arg::Gds(isc_att_shutdown));
 				}
 
+				// try to block special threads before taking exclusive lock on database
+				if (!threadGuard.tryEnter())
+				{
+					ERR_post(Arg::Gds(isc_no_meta_update) <<
+							 Arg::Gds(isc_obj_in_use) << Arg::Str("DATABASE"));
+				}
+
 				if (!CCH_exclusive(tdbb, LCK_PW, WAIT_PERIOD, NULL))
 				{
 					ERR_post(Arg::Gds(isc_lock_timeout) <<
 							 Arg::Gds(isc_obj_in_use) << Arg::Str(file_name));
 				}
+
+				if (!attachment->isWorker())
+					WorkerAttachment::decUserAtts(dbb->dbb_filename);
 
 				// Lock header page before taking database lock
 				header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
@@ -3486,7 +3550,7 @@ void JAttachment::internalDropDatabase(CheckStatusWrapper* user_status)
 			}
 
 			// Unlink attachment from database
-			release_attachment(tdbb, attachment);
+			release_attachment(tdbb, attachment, &threadGuard);
 			att = NULL;
 			attachment = NULL;
 			guard.leave();
@@ -4371,15 +4435,37 @@ void JService::query(CheckStatusWrapper* user_status,
 					    receiveItems, bufferLength, buffer);
 
 			// If there is a status vector from a service thread, copy it into the thread status
-			const FbStatusVector* from = svc->getStatus();
-			if (from->getState())
+			Service::StatusAccessor status = svc->getStatusAccessor();
+			if (status->getState())
 			{
-				fb_utils::copyStatus(user_status, from);
+				fb_utils::copyStatus(user_status, status);
 				// Empty out the service status vector
-				svc->initStatus();
+				status.init();
 				return;
 			}
 		}
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(user_status);
+		return;
+	}
+
+	successful_completion(user_status);
+}
+
+
+void JService::cancel(CheckStatusWrapper* user_status)
+{
+	try
+	{
+		ThreadContextHolder tdbb(user_status);
+
+		// Use class Validate here instead validateHandle() because
+		// global services list should be locked during cancel() call
+		Service::Validate guard(svc);
+
+		svc->cancel(tdbb);
 	}
 	catch (const Exception& ex)
 	{
@@ -4416,9 +4502,10 @@ void JService::start(CheckStatusWrapper* user_status, unsigned int spbLength, co
 
 		svc->start(spbLength, spb);
 
-		if (svc->getStatus()->getState() & IStatus::STATE_ERRORS)
+		UtilSvc::StatusAccessor status = svc->getStatusAccessor();
+		if (status->getState() & IStatus::STATE_ERRORS)
 		{
-			fb_utils::copyStatus(user_status, svc->getStatus());
+			fb_utils::copyStatus(user_status, status);
 			return;
 		}
 	}
@@ -4563,61 +4650,66 @@ void JProvider::shutdown(CheckStatusWrapper* status, unsigned int timeout, const
  **************************************/
 	try
 	{
-		MutexLockGuard guard(shutdownMutex, FB_FUNCTION);
-
-		if (engineShutdown)
-		{
-			return;
-		}
 		{ // scope
-			MutexLockGuard guard(newAttachmentMutex, FB_FUNCTION);
-			engineShutdown = true;
+			MutexLockGuard guard(shutdownMutex, FB_FUNCTION);
+
+			if (engineShutdown)
+			{
+				return;
+			}
+			{ // scope
+				MutexLockGuard guard(newAttachmentMutex, FB_FUNCTION);
+				engineShutdown = true;
+			}
+
+			ThreadContextHolder tdbb;
+			WorkerAttachment::shutdown();
+			EDS::Manager::shutdown();
+
+			ULONG attach_count, database_count, svc_count;
+			JRD_enum_attachments(NULL, attach_count, database_count, svc_count);
+
+			if (attach_count > 0 || svc_count > 0)
+			{
+				gds__log("Shutting down the server with %d active connection(s) to %d database(s), "
+						 "%d active service(s)",
+					attach_count, database_count, svc_count);
+			}
+
+			if (reason == fb_shutrsn_exit_called)
+			{
+				// Starting threads may fail when task is going to close.
+				// This happens at least with some microsoft C runtimes.
+				// If people wish to have timeout, they should better call fb_shutdown() themselves.
+				// Therefore:
+				timeout = 0;
+			}
+
+			if (timeout)
+			{
+				Semaphore shutdown_semaphore;
+
+				Thread::Handle h;
+				Thread::start(shutdown_thread, &shutdown_semaphore, THREAD_medium, &h);
+
+				if (!shutdown_semaphore.tryEnter(0, timeout))
+					waitForShutdown(shutdown_semaphore);
+
+				Thread::waitForCompletion(h);
+			}
+			else
+			{
+				shutdown_thread(NULL);
+			}
+
+			// Do not put it into separate shutdown thread - during shutdown of TraceManager
+			// PluginManager wants to lock a mutex, which is sometimes already locked in current thread
+			TraceManager::shutdown();
+			Mapping::shutdownIpc();
 		}
 
-		ThreadContextHolder tdbb;
-
-		EDS::Manager::shutdown();
-
-		ULONG attach_count, database_count, svc_count;
-		JRD_enum_attachments(NULL, attach_count, database_count, svc_count);
-
-		if (attach_count > 0 || svc_count > 0)
-		{
-			gds__log("Shutting down the server with %d active connection(s) to %d database(s), "
-					 "%d active service(s)",
-				attach_count, database_count, svc_count);
-		}
-
-		if (reason == fb_shutrsn_exit_called)
-		{
-			// Starting threads may fail when task is going to close.
-			// This happens at least with some microsoft C runtimes.
-			// If people wish to have timeout, they should better call fb_shutdown() themselves.
-			// Therefore:
-			timeout = 0;
-		}
-
-		if (timeout)
-		{
-			Semaphore shutdown_semaphore;
-
-			Thread::Handle h;
-			Thread::start(shutdown_thread, &shutdown_semaphore, THREAD_medium, &h);
-
-			if (!shutdown_semaphore.tryEnter(0, timeout))
-				waitForShutdown(shutdown_semaphore);
-
-			Thread::waitForCompletion(h);
-		}
-		else
-		{
-			shutdown_thread(NULL);
-		}
-
-		// Do not put it into separate shutdown thread - during shutdown of TraceManager
-		// PluginManager wants to lock a mutex, which is sometimes already locked in current thread
-		TraceManager::shutdown();
-		Mapping::shutdownIpc();
+		// Wait for completion of all attacment shutdown threads
+		shutThreadCollect->join();
 	}
 	catch (const Exception& ex)
 	{
@@ -4720,13 +4812,9 @@ void JAttachment::transactRequest(CheckStatusWrapper* user_status, ITransaction*
 				CompilerScratch* csb = PAR_parse(tdbb, reinterpret_cast<const UCHAR*>(blr),
 					blr_length, false);
 
-				request = Statement::makeRequest(tdbb, csb, false);
-				request->getStatement()->verifyAccess(tdbb);
-
 				for (FB_SIZE_T i = 0; i < csb->csb_rpt.getCount(); i++)
 				{
-					const MessageNode* node = csb->csb_rpt[i].csb_message;
-					if (node)
+					if (const auto node = csb->csb_rpt[i].csb_message)
 					{
 						if (node->messageNumber == 0)
 							inMessage = node;
@@ -4734,6 +4822,9 @@ void JAttachment::transactRequest(CheckStatusWrapper* user_status, ITransaction*
 							outMessage = node;
 					}
 				}
+
+				request = Statement::makeRequest(tdbb, csb, false);
+				request->getStatement()->verifyAccess(tdbb);
 			}
 			catch (const Exception&)
 			{
@@ -4965,10 +5056,16 @@ void SysStableAttachment::initDone()
 {
 	Jrd::Attachment* attachment = getHandle();
 	Database* dbb = attachment->att_database;
-	SyncLockGuard guard(&dbb->dbb_sys_attach, SYNC_EXCLUSIVE, "SysStableAttachment::initDone");
 
-	attachment->att_next = dbb->dbb_sys_attachments;
-	dbb->dbb_sys_attachments = attachment;
+	{ // scope
+		SyncLockGuard guard(&dbb->dbb_sys_attach, SYNC_EXCLUSIVE, "SysStableAttachment::initDone");
+
+		attachment->att_next = dbb->dbb_sys_attachments;
+		dbb->dbb_sys_attachments = attachment;
+	}
+
+	// make system attachments traceable
+	attachment->att_trace_manager->activate();
 }
 
 
@@ -5153,7 +5250,7 @@ ITransaction* JAttachment::execute(CheckStatusWrapper* user_status, ITransaction
 			DSQL_execute_immediate(tdbb, getHandle(), &tra, length, string, dialect,
 				inMetadata, static_cast<UCHAR*>(inBuffer),
 				outMetadata, static_cast<UCHAR*>(outBuffer),
-				false);
+				getHandle()->att_in_system_routine);
 
 			jt = checkTranIntf(getStable(), jt, tra);
 		}
@@ -5477,6 +5574,34 @@ IMessageMetadata* JResultSet::getMetadata(CheckStatusWrapper* user_status)
 }
 
 
+void JResultSet::getInfo(CheckStatusWrapper* user_status,
+						 unsigned int itemsLength, const unsigned char* items,
+						 unsigned int bufferLength, unsigned char* buffer)
+{
+	try
+	{
+		EngineContextHolder tdbb(user_status, this, FB_FUNCTION);
+		check_database(tdbb);
+
+		try
+		{
+			cursor->getInfo(tdbb, itemsLength, items, bufferLength, buffer);
+		}
+		catch (const Exception& ex)
+		{
+			transliterateException(tdbb, ex, user_status, "JResultSet::getInfo");
+			return;
+		}
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(user_status);
+		return;
+	}
+
+	successful_completion(user_status);
+}
+
 void JResultSet::deprecatedClose(CheckStatusWrapper* user_status)
 {
 	freeEngineData(user_status);
@@ -5565,7 +5690,7 @@ JStatement* JAttachment::prepare(CheckStatusWrapper* user_status, ITransaction* 
 			StatementMetadata::buildInfoItems(items, flags);
 
 			statement = DSQL_prepare(tdbb, getHandle(), tra, stmtLength, sqlStmt, dialect, flags,
-				&items, &buffer, false);
+				&items, &buffer, getHandle()->att_in_system_routine);
 			rc = FB_NEW JStatement(statement, getStable(), buffer);
 			rc->addRef();
 
@@ -6413,14 +6538,12 @@ void JReplicator::freeEngineData(Firebird::CheckStatusWrapper* user_status)
 {
 	try
 	{
-		EngineContextHolder tdbb(user_status, this, FB_FUNCTION);
-		check_database(tdbb);
+		EngineContextHolder tdbb(user_status, this, FB_FUNCTION, AttachmentHolder::ATT_NO_SHUTDOWN_CHECK);
 
 		try
 		{
-			AutoPtr<Applier> cleanupApplier(applier);
-			cleanupApplier->shutdown(tdbb);
-			fb_assert(!applier);
+			applier->shutdown(tdbb);
+			applier = nullptr;
 		}
 		catch (const Exception& ex)
 		{
@@ -6818,13 +6941,12 @@ void DatabaseOptions::get(const UCHAR* dpb, USHORT dpb_length, bool& invalid_cli
  *	Parse database parameter block picking up options and things.
  *
  **************************************/
-	SSHORT num_old_files = 0;
-
 	dpb_buffers = 0;
 	dpb_sweep_interval = -1;
 	dpb_overwrite = false;
 	dpb_sql_dialect = 99;
 	invalid_client_SQL_dialect = false;
+	dpb_parallel_workers = Config::getParallelWorkers();
 
 	if (dpb_length == 0)
 		return;
@@ -6925,10 +7047,7 @@ void DatabaseOptions::get(const UCHAR* dpb, USHORT dpb_length, bool& invalid_cli
 			break;
 
 		case isc_dpb_old_file:
-			//if (num_old_files >= MAX_OLD_FILES) complain here, for now.
-				ERR_post(Arg::Gds(isc_num_old_files));
-			// following code is never executed now !
-			num_old_files++;
+			ERR_post(Arg::Gds(isc_num_old_files));
 			break;
 
 		case isc_dpb_wal_chkptlen:
@@ -7207,6 +7326,38 @@ void DatabaseOptions::get(const UCHAR* dpb, USHORT dpb_length, bool& invalid_cli
 			dpb_clear_map = rdr.getBoolean();
 			break;
 
+		case isc_dpb_parallel_workers:
+			dpb_parallel_workers = (SSHORT) rdr.getInt();
+
+			{
+				const auto maxWorkers = Config::getMaxParallelWorkers();
+				if (dpb_parallel_workers > maxWorkers || dpb_parallel_workers < 0)
+				{
+					// "Wrong parallel workers value @1, valid range are from 1 to @2"
+					ERR_post_warning(Arg::Warning(isc_bad_par_workers) <<
+						Arg::Num(dpb_parallel_workers) <<
+						Arg::Num(maxWorkers));
+
+					if (dpb_parallel_workers < 0)
+						dpb_parallel_workers = 1;
+					else
+						dpb_parallel_workers = maxWorkers;
+				}
+			}
+			break;
+
+		case isc_dpb_worker_attach:
+			dpb_worker_attach = true;
+			break;
+
+		case isc_dpb_upgrade_db:
+			dpb_upgrade_db = true;
+			break;
+
+		case isc_dpb_owner:
+			getString(rdr, dpb_owner);
+			break;
+
 		default:
 			break;
 		}
@@ -7214,6 +7365,12 @@ void DatabaseOptions::get(const UCHAR* dpb, USHORT dpb_length, bool& invalid_cli
 
 	if (! rdr.isEof())
 		ERR_post(Arg::Gds(isc_bad_dpb_form));
+
+	if (dpb_worker_attach)
+	{
+		dpb_parallel_workers = 1;
+		dpb_no_db_triggers = true;
+	}
 }
 
 
@@ -7480,11 +7637,17 @@ static JAttachment* create_attachment(const PathName& alias_name,
 
 static void check_single_maintenance(thread_db* tdbb)
 {
-	UCHAR spare_memory[RAW_HEADER_SIZE + PAGE_ALIGNMENT];
-	UCHAR* header_page_buffer = FB_ALIGN(spare_memory, PAGE_ALIGNMENT);
+	Database* const dbb = tdbb->getDatabase();
+
+	const ULONG ioBlockSize = dbb->getIOBlockSize();
+	const ULONG headerSize = MAX(RAW_HEADER_SIZE, ioBlockSize);
+
+	HalfStaticArray<UCHAR, RAW_HEADER_SIZE + PAGE_ALIGNMENT> temp;
+	UCHAR* header_page_buffer = temp.getAlignedBuffer(headerSize, ioBlockSize);
+
 	Ods::header_page* const header_page = reinterpret_cast<Ods::header_page*>(header_page_buffer);
 
-	PIO_header(tdbb, header_page_buffer, RAW_HEADER_SIZE);
+	PIO_header(tdbb, header_page_buffer, headerSize);
 
 	if ((header_page->hdr_flags & Ods::hdr_shutdown_mask) == Ods::hdr_shutdown_single)
 	{
@@ -7565,7 +7728,7 @@ static void prepare_tra(thread_db* tdbb, jrd_tra* transaction, USHORT length, co
 }
 
 
-void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment)
+void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment, XThreadEnsureUnlock* dropGuard)
 {
 /**************************************
  *
@@ -7585,13 +7748,15 @@ void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment)
 	if (!attachment)
 		return;
 
+	attachment->releaseProfilerManager();
+
 	attachment->att_replicator = nullptr;
 
+	if (attachment->att_dsql_instance)
+		attachment->att_dsql_instance->dbb_statement_cache->shutdown(tdbb);
+
 	while (attachment->att_repl_appliers.hasData())
-	{
-		AutoPtr<Applier> cleanupApplier(attachment->att_repl_appliers.pop());
-		cleanupApplier->shutdown(tdbb);
-	}
+		attachment->att_repl_appliers.pop()->shutdown(tdbb);
 
 	if (dbb->dbb_crypto_manager)
 		dbb->dbb_crypto_manager->detach(tdbb, attachment);
@@ -7643,8 +7808,14 @@ void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment)
 	Sync sync(&dbb->dbb_sync, "jrd.cpp: release_attachment");
 
 	// avoid races with special threads
+	// take into an account lock earlier taken in DROP DATABASE
 	XThreadEnsureUnlock threadGuard(dbb->dbb_thread_mutex, FB_FUNCTION);
-	threadGuard.enter();
+	XThreadEnsureUnlock* activeThreadGuard = dropGuard;
+	if (!activeThreadGuard)
+	{
+		threadGuard.enter();
+		activeThreadGuard = &threadGuard;
+	}
 
 	sync.lock(SYNC_EXCLUSIVE);
 
@@ -7678,7 +7849,7 @@ void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment)
 		}
 
 		// Notify special threads
-		threadGuard.leave();
+		activeThreadGuard->leave();
 
 		// Sync with special threads
 		if (!other)
@@ -7769,7 +7940,7 @@ static void setEngineReleaseDelay(Database* dbb)
 	if (!dbb->dbb_plugin_config)
 		return;
 
-	unsigned maxLinger = 0;
+	time_t maxLinger = 0;
 
 	{ // scope
 		MutexLockGuard listGuardForLinger(databases_mutex, FB_FUNCTION);
@@ -7870,6 +8041,8 @@ bool JRD_shutdown_database(Database* dbb, const unsigned flags)
 	dbb->dbb_init_fini->destroy();
 
 	fb_assert(!dbb->locked());
+
+	WorkerAttachment::shutdownDbb(dbb);
 
 	try
 	{
@@ -8148,7 +8321,7 @@ static void purge_attachment(thread_db* tdbb, StableAttachmentPart* sAtt, unsign
 
 	if (attachment && attachment->att_purge_tid == Thread::getId())
 	{
-		fb_assert(false); // recursive call - impossible ?
+//		fb_assert(false); // recursive call - impossible ?
 		return;
 	}
 
@@ -8216,8 +8389,11 @@ static void purge_attachment(thread_db* tdbb, StableAttachmentPart* sAtt, unsign
 			const TrigVector* const trig_disconnect =
 				attachment->att_triggers[DB_TRIGGER_DISCONNECT];
 
+			// ATT_resetting may be set here only in a case when running on disconnect triggers
+			// in ALTER SESSION RESET already failed and attachment was shut down.
+			// Trying them once again here makes no sense.
 			if (!forcedPurge &&
-				!(attachment->att_flags & ATT_no_db_triggers) &&
+				!(attachment->att_flags & (ATT_no_db_triggers | ATT_resetting)) &&
 				trig_disconnect && !trig_disconnect->isEmpty())
 			{
 				ThreadStatusGuard temp_status(tdbb);
@@ -8233,8 +8409,13 @@ static void purge_attachment(thread_db* tdbb, StableAttachmentPart* sAtt, unsign
 					transaction = TRA_start(tdbb, 0, NULL);
 					attachment->att_flags = save_flags;
 
+					// Allow cancelling while ON DISCONNECT triggers are running
+					tdbb->tdbb_flags &= ~TDBB_detaching;
+
 					// run ON DISCONNECT triggers
 					EXE_execute_db_triggers(tdbb, transaction, TRIGGER_DISCONNECT);
+
+					tdbb->tdbb_flags |= TDBB_detaching;
 
 					// and commit the transaction
 					TRA_commit(tdbb, transaction, false);
@@ -8242,6 +8423,18 @@ static void purge_attachment(thread_db* tdbb, StableAttachmentPart* sAtt, unsign
 				catch (const Exception& ex)
 				{
 					attachment->att_flags = save_flags;
+					tdbb->tdbb_flags |= TDBB_detaching;
+
+					if (attachment->att_trace_manager->needs(ITraceFactory::TRACE_EVENT_ERROR))
+					{
+						FbLocalStatus status;
+						ex.stuffException(&status);
+
+						TraceConnectionImpl conn(attachment);
+						TraceStatusVectorImpl traceStatus(&status, TraceStatusVectorImpl::TS_ERRORS);
+
+						attachment->att_trace_manager->event_error(&conn, &traceStatus, FB_FUNCTION);
+					}
 
 					string s;
 					s.printf("Database: %s\n\tError at disconnect:", attachment->att_filename.c_str());
@@ -8321,6 +8514,9 @@ static void purge_attachment(thread_db* tdbb, StableAttachmentPart* sAtt, unsign
 		shutdownFlags |= SHUT_DBB_LINGER;
 	if (attachment->att_flags & ATT_overwrite_check)
 		shutdownFlags |= SHUT_DBB_OVERWRITE_CHECK;
+
+	if (!attachment->isWorker())
+		WorkerAttachment::decUserAtts(dbb->dbb_filename);
 
 	// Unlink attachment from database
 	release_attachment(tdbb, attachment);
@@ -8440,13 +8636,12 @@ static VdnResult verifyDatabaseName(const PathName& name, FbStatusVector* status
     @param aliasName
     @param dbName
     @param config
-    @param creating
     @param iAtt
     @param cryptCb
 
  **/
 static void getUserInfo(UserId& user, const DatabaseOptions& options, const char* aliasName,
-	const RefPtr<const Config>* config, bool creating, Mapping& mapping, bool icuReset)
+	const RefPtr<const Config>* config, Mapping& mapping, bool icuReset)
 {
 	bool wheel = false;
 	int id = -1, group = -1;	// CVC: This var contained trash
@@ -8477,12 +8672,6 @@ static void getUserInfo(UserId& user, const DatabaseOptions& options, const char
 
 			if (mapping.mapUser(name, trusted_role) & Mapping::MAP_DOWN)
 				user.setFlag(USR_mapdown);
-
-			if (creating && config)		// when config is NULL we are in error handler
-			{
-				if (!checkCreateDatabaseGrant(name, trusted_role, options.dpb_role_name, (*config)->getSecurityDatabase()))
-					(Arg::Gds(isc_no_priv) << "CREATE" << "DATABASE" << aliasName).raise();
-			}
 		}
 		else
 		{
@@ -8540,18 +8729,63 @@ static void getUserInfo(UserId& user, const DatabaseOptions& options, const char
 	}
 }
 
-static void unwindAttach(thread_db* tdbb, const Exception& ex, FbStatusVector* userStatus, bool internalFlag)
+static void unwindAttach(thread_db* tdbb, const char* filename, const Exception& ex,
+	FbStatusVector* userStatus, unsigned flags, const DatabaseOptions& options, Mapping& mapping, ICryptKeyCallback* callback)
 {
-	transliterateException(tdbb, ex, userStatus, NULL);
+	FbLocalStatus savUserStatus;		// Required to save status before transliterate
+	bool traced = false;
 
+	// Trace almost completed attachment
 	try
 	{
+		const auto att = tdbb->getAttachment();
+		TraceManager* traceManager = att ? att->att_trace_manager : nullptr;
+		if (att && traceManager && traceManager->isActive())
+		{
+			TraceConnectionImpl conn(att);
+			TraceStatusVectorImpl traceStatus(userStatus, TraceStatusVectorImpl::TS_ERRORS);
+
+			if (traceManager->needs(ITraceFactory::TRACE_EVENT_ATTACH))
+				traceManager->event_attach(&conn, flags & UNWIND_CREATE, ITracePlugin::RESULT_FAILED);
+
+			traced = true;
+		}
+		else
+		{
+			auto dbb = tdbb->getDatabase();
+			if (dbb && (dbb->dbb_flags & DBB_new))
+			{
+				// attach failed before completion of DBB initialization
+				// that's hardly recoverable error - avoid extra problems in mapping
+				flags |= UNWIND_NEW;
+			}
+
+			savUserStatus.loadFrom(userStatus);
+		}
+
+		const char* func = flags & UNWIND_CREATE ? "JProvider::createDatabase" : "JProvider::attachDatabase";
+		transliterateException(tdbb, ex, userStatus, func);
+	}
+	catch (const Exception&)
+	{
+		// no-op
+	}
+
+	// Actual unwind
+	try
+	{
+		mapping.clearMainHandle();
+
 		const auto dbb = tdbb->getDatabase();
 
 		if (dbb)
 		{
 			fb_assert(!dbb->locked());
 			ThreadStatusGuard temp_status(tdbb);
+
+			// In case when sweep attachment failed try to release appropriate lock
+			if (options.dpb_sweep)
+				dbb->clearSweepStarting();
 
 			const auto attachment = tdbb->getAttachment();
 
@@ -8570,17 +8804,44 @@ static void unwindAttach(thread_db* tdbb, const Exception& ex, FbStatusVector* u
 				sAtt->manualLock(flags);
 				if (sAtt->getHandle())
 				{
+					TraceManager* traceManager = attachment->att_trace_manager;
+					TraceConnectionImpl conn(attachment);
+
+					if (traceManager->needs(ITraceFactory::TRACE_EVENT_DETACH))
+						traceManager->event_detach(&conn, false);
+
 					attachment->att_flags |= flags;
-					release_attachment(tdbb, attachment);
+					try
+					{
+						release_attachment(tdbb, attachment);
+					}
+					catch (const Exception&)
+					{
+						// Minimum cleanup instead is needed to avoid repeated call
+						// of release_attachment() when decrementing reference counter of jAtt.
+						try
+						{
+							Attachment::destroy(attachment);
+						}
+						catch (const Exception&)
+						{
+							// Let's be absolutely minimalistic though
+							// this will almost for sure cause assertion in DEV_BUILD.
+							sAtt->cancel();
+							attachment->setStable(NULL);
+							sAtt->manualUnlock(attachment->att_flags);
+						}
+					}
 				}
 				else
 				{
+					tdbb->setAttachment(nullptr);
 					sAtt->manualUnlock(flags);
 				}
 			}
 
 			JRD_shutdown_database(dbb, SHUT_DBB_RELEASE_POOLS |
-				(internalFlag ? SHUT_DBB_OVERWRITE_CHECK : 0));
+				(flags & UNWIND_INTERNAL ? SHUT_DBB_OVERWRITE_CHECK : 0));
 		}
 	}
 	catch (const Exception&)
@@ -8588,7 +8849,18 @@ static void unwindAttach(thread_db* tdbb, const Exception& ex, FbStatusVector* u
 		// no-op
 	}
 
-	return;
+	// Trace attachment that failed before enough for normal trace context of it was established
+	if (!traced)
+	{
+		try
+		{
+			trace_failed_attach(filename, options, flags, &savUserStatus, callback);
+		}
+		catch (const Exception&)
+		{
+			// no-op
+		}
+	}
 }
 
 
@@ -8636,7 +8908,7 @@ namespace
 				{
 					// purge attachment, rollback any open transactions
 					attachment->att_use_count++;
-					purge_attachment(tdbb, sAtt, PURGE_FORCE);
+					purge_attachment(tdbb, sAtt, engineShutdown ? PURGE_FORCE : PURGE_NOCHECK);
 				}
 				catch (const Exception& ex)
 				{
@@ -8660,22 +8932,37 @@ namespace
 		ThreadModuleRef thdRef(attachmentShutdownThread, &engineShutdown);
 #endif
 
+		AttShutParams* params = static_cast<AttShutParams*>(arg);
+		AttachmentsRefHolder* attachments = params->attachments;
+
 		try
 		{
-			MutexLockGuard guard(shutdownMutex, FB_FUNCTION);
-			if (engineShutdown)
-			{
-				// Shutdown was done, all attachmnets are gone
-				return 0;
-			}
+			params->startCallCompleteSem.enter();
+		}
+		catch (const Exception& ex)
+		{
+			iscLogException("attachmentShutdownThread", ex);
+			return 0;
+		}
 
-			shutdownAttachments(static_cast<AttachmentsRefHolder*>(arg), isc_att_shut_db_down);
+		Thread::Handle th = params->thrHandle;
+		fb_assert(th);
+
+		try
+		{
+			shutThreadCollect->running(th);
+			params->thdStartedSem.release();
+
+			MutexLockGuard guard(shutdownMutex, FB_FUNCTION);
+			if (!engineShutdown)
+				shutdownAttachments(attachments, isc_att_shut_db_down);
 		}
 		catch (const Exception& ex)
 		{
 			iscLogException("attachmentShutdownThread", ex);
 		}
 
+		shutThreadCollect->ending(th);
 		return 0;
 	}
 } // anonymous namespace
@@ -8684,7 +8971,7 @@ namespace
 static void waitForShutdown(Semaphore& shutdown_semaphore)
 {
 	const int pid = getpid();
-	unsigned int timeout = 10000;	// initial value, 10 sec
+	unsigned int timeout = 10;	// initial value, 10 sec
 	bool done = false;
 
 	for (int i = 0; i < 5; i++)
@@ -8942,8 +9229,10 @@ void thread_db::setRequest(Request* val)
 
 SSHORT thread_db::getCharSet() const
 {
-	if (request && request->charSetId != CS_dynamic)
-		return request->charSetId;
+	USHORT charSetId;
+
+	if (request && (charSetId = request->getStatement()->charSetId) != CS_dynamic)
+		return charSetId;
 
 	return attachment->att_charset;
 }
@@ -8958,11 +9247,8 @@ ISC_STATUS thread_db::getCancelState(ISC_STATUS* secondary)
 	if (tdbb_flags & (TDBB_verb_cleanup | TDBB_dfw_cleanup | TDBB_detaching | TDBB_wait_cancel_disable))
 		return FB_SUCCESS;
 
-	if (attachment)
+	if (attachment && attachment->att_purge_tid != Thread::getId())
 	{
-		if (attachment->att_purge_tid == Thread::getId())
-			return FB_SUCCESS;
-
 		if (attachment->att_flags & ATT_shutdown)
 		{
 			if (database->dbb_ast_flags & DBB_shutdown)
@@ -9463,13 +9749,20 @@ void JRD_shutdown_attachment(Attachment* attachment)
 		fb_assert(attachment->att_flags & ATT_shutdown);
 
 		MemoryPool& pool = *getDefaultMemoryPool();
-		AttachmentsRefHolder* queue = FB_NEW_POOL(pool) AttachmentsRefHolder(pool);
+		AutoPtr<AttachmentsRefHolder> queue(FB_NEW_POOL(pool) AttachmentsRefHolder(pool));
 
 		fb_assert(attachment->getStable());
 		attachment->getStable()->addRef();
 		queue->add(attachment->getStable());
 
-		Thread::start(attachmentShutdownThread, queue, THREAD_high);
+		AttShutParams params;
+		params.attachments = queue;
+		Thread::start(attachmentShutdownThread, &params, THREAD_high, &params.thrHandle);
+		params.startCallCompleteSem.release();
+
+		queue.release();
+		shutThreadCollect->houseKeeping();
+		params.thdStartedSem.enter();
 	}
 	catch (const Exception&)
 	{} // no-op
@@ -9517,8 +9810,17 @@ void JRD_shutdown_attachments(Database* dbb)
 			}
 		}
 
-		if (queue.hasData())
-			Thread::start(attachmentShutdownThread, queue.release(), THREAD_high);
+		if (queue->hasData())
+		{
+			AttShutParams params;
+			params.attachments = queue;
+			Thread::start(attachmentShutdownThread, &params, THREAD_high, &params.thrHandle);
+			params.startCallCompleteSem.release();
+
+			queue.release();
+			shutThreadCollect->houseKeeping();
+			params.thdStartedSem.enter();
+		}
 	}
 	catch (const Exception&)
 	{} // no-op
@@ -9596,6 +9898,8 @@ void TrigVector::release()
 
 void TrigVector::release(thread_db* tdbb)
 {
+	fb_assert(useCount.value() > 0);
+
 	if (--useCount == 0)
 	{
 		decompile(tdbb);

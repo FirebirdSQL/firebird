@@ -134,9 +134,9 @@ void EventManager::init_shared_file()
 
 	// initialize will reset m_sharedMemory
 	fb_assert(m_sharedMemory == tmp);
-	fb_assert(m_sharedMemory->getHeader()->mhb_type == SharedMemoryBase::SRAM_EVENT_MANAGER);
-	fb_assert(m_sharedMemory->getHeader()->mhb_header_version == MemoryHeader::HEADER_VERSION);
-	fb_assert(m_sharedMemory->getHeader()->mhb_version == EVENT_VERSION);
+
+	const auto* header = m_sharedMemory->getHeader();
+	checkHeader(header);
 }
 
 
@@ -1031,7 +1031,7 @@ bool EventManager::initialize(SharedMemoryBase* sm, bool init)
 	{
 		evh* header = m_sharedMemory->getHeader();
 
-		header->init(SharedMemoryBase::SRAM_EVENT_MANAGER, EVENT_VERSION);
+		initHeader(header);
 
 		header->evh_length = sm->sh_mem_length_mapped;
 		header->evh_request_id = 0;

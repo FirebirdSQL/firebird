@@ -32,6 +32,7 @@
 #include "../jrd/met_proto.h"
 #include "../jrd/mov_proto.h"
 #include "../jrd/vio_proto.h"
+#include "../jrd/optimizer/Optimizer.h"
 
 #include "RecordSource.h"
 
@@ -43,14 +44,20 @@ using namespace Jrd;
 // -----------------------------
 
 SortedStream::SortedStream(CompilerScratch* csb, RecordSource* next, SortMap* map)
-	: m_next(next), m_map(map)
+	: RecordSource(csb),
+	  m_next(next),
+	  m_map(map)
 {
 	fb_assert(m_next && m_map);
 
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = next->getCardinality();
+
+	if (m_map->flags & FLAG_PROJECT)
+		m_cardinality *= DEFAULT_SELECTIVITY;
 }
 
-void SortedStream::open(thread_db* tdbb) const
+void SortedStream::internalOpen(thread_db* tdbb) const
 {
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -84,7 +91,7 @@ void SortedStream::close(thread_db* tdbb) const
 	}
 }
 
-bool SortedStream::getRecord(thread_db* tdbb) const
+bool SortedStream::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -109,34 +116,46 @@ bool SortedStream::refetchRecord(thread_db* tdbb) const
 	return m_next->refetchRecord(tdbb);
 }
 
-bool SortedStream::lockRecord(thread_db* tdbb) const
+WriteLockResult SortedStream::lockRecord(thread_db* tdbb) const
 {
 	return m_next->lockRecord(tdbb);
 }
 
-void SortedStream::print(thread_db* tdbb, string& plan,
-						 bool detailed, unsigned level) const
+void SortedStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	if (detailed)
+	level++;
+	plan += "SORT (";
+	m_next->getLegacyPlan(tdbb, plan, level);
+	plan += ")";
+}
+
+void SortedStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
+{
+	planEntry.className = "SortedStream";
+
+	string extras;
+	extras.printf(" (record length: %" ULONGFORMAT", key length: %" ULONGFORMAT")",
+		m_map->length, m_map->keyLength);
+
+	auto planDescription = &planEntry.lines.add();
+
+	if (m_map->flags & FLAG_REFETCH)
 	{
-		string extras;
-		extras.printf(" (record length: %" ULONGFORMAT", key length: %" ULONGFORMAT")",
-					  m_map->length, m_map->keyLength);
-
-		if (m_map->flags & FLAG_REFETCH)
-			plan += printIndent(++level) + "Refetch";
-
-		plan += printIndent(++level) +
-			((m_map->flags & FLAG_PROJECT) ? "Unique Sort" : "Sort") + extras;
-
-		m_next->print(tdbb, plan, true, level);
+		planDescription->text = "Refetch";
+		planDescription = &planEntry.lines.add();
+		++level;
 	}
-	else
+
+	planDescription->text += ((m_map->flags & FLAG_PROJECT) ? "Unique Sort" : "Sort") + extras;
+	printOptInfo(planEntry.lines);
+
+	planEntry.recordLength = m_map->length;
+	planEntry.keyLength = m_map->keyLength;
+
+	if (recurse)
 	{
-		level++;
-		plan += "SORT (";
-		m_next->print(tdbb, plan, false, level);
-		plan += ")";
+		++level;
+		m_next->getPlan(tdbb, planEntry.children.add(), level, recurse);
 	}
 }
 
@@ -165,7 +184,6 @@ Sort* SortedStream::init(thread_db* tdbb) const
 	Request* const request = tdbb->getRequest();
 
 	m_next->open(tdbb);
-	ULONG records = 0;
 
 	// Initialize for sort. If this is really a project operation,
 	// establish a callback routine to reject duplicate records.
@@ -184,8 +202,6 @@ Sort* SortedStream::init(thread_db* tdbb) const
 
 	while (m_next->getRecord(tdbb))
 	{
-		records++;
-
 		// "Put" a record to sort. Actually, get the address of a place
 		// to build a record.
 
@@ -381,8 +397,9 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 					if (!refetchStreams.exist(item.stream))
 						refetchStreams.add(item.stream);
 				}
-				else // delay refetch until really necessary
-					rpb->rpb_runtime_flags |= RPB_refetch;
+
+				// Ensure records are also refetched before update/delete
+				rpb->rpb_runtime_flags |= RPB_refetch;
 			}
 
 			continue;

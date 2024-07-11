@@ -19,7 +19,7 @@
 #  All Rights Reserved.
 #  Contributor(s): ______________________________________.
 #
-# 
+#
 #
 ROOT=..
 
@@ -42,6 +42,10 @@ include     $(ROOT)/gen/make.shared.variables
 # root of the build tree.
 
 BuildRoot=$(GEN_ROOT)
+CLIENT_ONLY_FLG=@CLIENT_ONLY_FLG@
+WITH_TOMCRYPT=@WITH_TOMCRYPT@
+
+TAR=tar --owner root --group root
 
 InstallRoot=.
 
@@ -53,10 +57,10 @@ Version=$(BuildVersion)-$(PackageVersion)
 
 # This means something like: FirebirdCS-*.0.0-*.i386.tar.gz
 
-TarDir= Firebird-$(Version).$(CpuType)
-TarFile=Firebird-$(Version).$(CpuType).tar.gz
-DebugDir=Firebird-debuginfo-$(Version).$(CpuType)
-DebugFile=Firebird-debuginfo-$(Version).$(CpuType).tar.gz
+TarDir=Firebird-$(Version)-linux-$(CpuType)
+TarFile=Firebird-$(Version)-linux-$(CpuType).tar.gz
+DebugDir=Firebird-$(Version)-linux-$(CpuType)-debugSymbols
+DebugFile=Firebird-$(Version)-linux-$(CpuType)-debugSymbols.tar.gz
 
 
 PkgSrcDir=$(InstallRoot)/$(ArchType)
@@ -78,12 +82,12 @@ packages: tarfile debugfile
 tarfile:  $(TarFile)
 
 $(TarFile) :  buildTarDir
-	(cd $(GEN_ROOT); tar -czf $(TarFile) $(TarDir))
+	(cd $(GEN_ROOT); $(TAR) -czf $(TarFile) $(TarDir))
 
 debugfile:  $(DebugFile)
 
 $(DebugFile) :  buildImageDir
-	(cd $(GEN_ROOT)/$(DebugDir); tar -czf ../$(DebugFile) .)
+	(cd $(GEN_ROOT)/$(DebugDir); $(TAR) -czf ../$(DebugFile) `find . -not -type d`)
 
 buildRoot:
 	(cd $(GEN_ROOT); ./install/makeInstallImage.sh)
@@ -93,13 +97,13 @@ buildDebugInfo: buildRoot
 	for x in `(cd $(GEN_ROOT)/buildroot; find)`; do \
         FIL=$(GEN_ROOT)/buildroot/$$x; \
         D_FIL=$(GEN_ROOT)/$(DebugDir)/`dirname $${x}`/.debug/`basename $${x}`.debug; \
-        if [ ! -h $$FIL ] && readelf -h $$FIL > /dev/null 2> /dev/null; then \
+        if [ ! -h $$FIL ] && $(READELF) -h $$FIL > /dev/null 2> /dev/null; then \
             mkdir -p $(GEN_ROOT)/$(DebugDir)/`dirname $$x`/.debug; \
             echo Generating external debug info for $$x; \
             cp $${FIL} $${D_FIL}; \
-            objcopy --add-gnu-debuglink=$${D_FIL} $${FIL}; \
+            $(OBJCOPY) --add-gnu-debuglink=$${D_FIL} $${FIL}; \
             echo Stripping unneeded symbols from $${x}; \
-            objcopy --strip-debug --strip-unneeded $${FIL}; \
+            $(OBJCOPY) --strip-debug --strip-unneeded $${FIL}; \
         fi; \
     done
 	(cd $(GEN_ROOT)/$(DebugDir); mkdir -p ./$(MiscDir); \
@@ -112,10 +116,12 @@ buildImageDir: buildDebugInfo
 
 buildTarDir: buildImageDir
 	mkdir -p $(GEN_ROOT)/$(TarDir)
+ifeq ($(CLIENT_ONLY_FLG),N)
 	cp -r $(GEN_ROOT)/install/install.sh $(GEN_ROOT)/$(TarDir)
 	chmod a+x $(GEN_ROOT)/$(TarDir)/*.sh
-	(cd $(GEN_ROOT)/$(TarDir); tar -C ../buildroot -czf buildroot.tar.gz . )
-	(cd $(GEN_ROOT)/$(TarDir); tar -tzf buildroot.tar.gz > manifest.txt )
+endif
+	(cd $(GEN_ROOT)/$(TarDir); $(TAR) -C ../buildroot -czf buildroot.tar.gz . )
+	(cd $(GEN_ROOT)/$(TarDir); $(TAR) -tzf buildroot.tar.gz > manifest.txt )
 
 
 install: buildTarDir

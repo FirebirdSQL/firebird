@@ -94,6 +94,7 @@
 #include "../common/classes/MsgPrint.h"
 #include "../jrd/Function.h"
 #include "../jrd/Tablespace.h"
+#include "../jrd/trace/TraceJrdHelpers.h"
 
 
 #ifdef HAVE_CTYPE_H
@@ -116,7 +117,7 @@ static int partners_ast_relation(void*);
 static int rescan_ast_relation(void*);
 static ULONG get_rel_flags_from_FLAGS(USHORT);
 static void get_trigger(thread_db*, jrd_rel*, bid*, bid*, TrigVector**, const TEXT*, FB_UINT64, bool,
-	USHORT, const MetaName&, const string&, const bid*, Nullable<bool> ssDefiner);
+	USHORT, const MetaName&, const string&, const bid*, TriState ssDefiner);
 static bool get_type(thread_db*, USHORT*, const UCHAR*, const TEXT*);
 static void lookup_view_contexts(thread_db*, jrd_rel*);
 static void make_relation_scope_name(const TEXT*, const USHORT, string& str);
@@ -125,10 +126,8 @@ static BoolExprNode* parse_field_validation_blr(thread_db* tdbb, bid* blob_id, c
 static bool resolve_charset_and_collation(thread_db*, USHORT*, const UCHAR*, const UCHAR*);
 static void save_trigger_data(thread_db*, TrigVector**, jrd_rel*, Statement*, blb*, blb*,
 	const TEXT*, FB_UINT64, bool, USHORT, const MetaName&, const string&,
-	const bid*, Nullable<bool> ssDefiner);
+	const bid*, TriState ssDefiner);
 static void scan_partners(thread_db*, jrd_rel*);
-static void store_dependencies(thread_db*, CompilerScratch*, const jrd_rel*,
-	const MetaName&, int, jrd_tra*);
 static bool verify_TRG_ignore_perm(thread_db*, const MetaName&);
 
 
@@ -351,9 +350,9 @@ void MET_update_partners(thread_db* tdbb)
 			continue;
 
 		// signal other processes
+		relation->rel_flags |= REL_check_partners;
 		LCK_lock(tdbb, relation->rel_partners_lock, LCK_EX, LCK_WAIT);
 		LCK_release(tdbb, relation->rel_partners_lock);
-		relation->rel_flags |= REL_check_partners;
 	}
 }
 
@@ -687,109 +686,66 @@ void MET_clear_cache(thread_db* tdbb)
 		}
 	}
 
+	const auto walkProcFunc = [&att](std::function<void (Routine*)> func)
+	{
+		for (const auto routine : att->att_procedures)
+		{
+			if (routine)
+				func(routine);
+		}
+
+		for (const auto routine : att->att_functions)
+		{
+			if (routine)
+				func(routine);
+		}
+	};
+
 	// Walk routines and calculate internal dependencies.
 
-	for (jrd_prc** iter = att->att_procedures.begin(); iter != att->att_procedures.end(); ++iter)
+	walkProcFunc([](Routine* routine)
 	{
-		Routine* const routine = *iter;
-
-		if (routine && routine->getStatement() &&
+		if (routine->getStatement() &&
 			!(routine->flags & Routine::FLAG_OBSOLETE) )
 		{
 			inc_int_use_count(routine->getStatement());
 		}
-	}
-
-	for (Function** iter = att->att_functions.begin(); iter != att->att_functions.end(); ++iter)
-	{
-		Function* const routine = *iter;
-
-		if (routine && routine->getStatement() &&
-			!(routine->flags & Routine::FLAG_OBSOLETE) )
-		{
-			inc_int_use_count(routine->getStatement());
-		}
-	}
+	});
 
 	// Walk routines again and adjust dependencies for routines which will not be removed.
 
-	for (jrd_prc** iter = att->att_procedures.begin(); iter != att->att_procedures.end(); ++iter)
+	walkProcFunc([](Routine* routine)
 	{
-		Routine* const routine = *iter;
-
-		if (routine && routine->getStatement() &&
+		if (routine->getStatement() &&
 			!(routine->flags & Routine::FLAG_OBSOLETE) &&
 			routine->useCount != routine->intUseCount )
 		{
 			adjust_dependencies(routine);
 		}
-	}
-
-	for (Function** iter = att->att_functions.begin(); iter != att->att_functions.end(); ++iter)
-	{
-		Function* const routine = *iter;
-
-		if (routine && routine->getStatement() &&
-			!(routine->flags & Routine::FLAG_OBSOLETE) &&
-			routine->useCount != routine->intUseCount )
-		{
-			adjust_dependencies(routine);
-		}
-	}
+	});
 
 	// Deallocate all used requests.
 
-	for (jrd_prc** iter = att->att_procedures.begin(); iter != att->att_procedures.end(); ++iter)
+	walkProcFunc([&tdbb](Routine* routine)
 	{
-		Routine* const routine = *iter;
-
-		if (routine)
+		if (routine->getStatement() && !(routine->flags & Routine::FLAG_OBSOLETE) &&
+			routine->intUseCount >= 0 &&
+			routine->useCount == routine->intUseCount)
 		{
-			if (routine->getStatement() && !(routine->flags & Routine::FLAG_OBSOLETE) &&
-				routine->intUseCount >= 0 &&
-				routine->useCount == routine->intUseCount)
-			{
-				routine->releaseStatement(tdbb);
+			routine->releaseStatement(tdbb);
 
-				if (routine->existenceLock)
-					LCK_release(tdbb, routine->existenceLock);
-				routine->existenceLock = NULL;
-				routine->flags |= Routine::FLAG_OBSOLETE;
-			}
-
-			// Leave it in state 0 to avoid extra pass next time to clear it
-			// Note: we need to adjust intUseCount for all routines
-			// in cache because any of them may have been affected from
-			// dependencies earlier. Even routines that were not scanned yet !
-			routine->intUseCount = 0;
+			if (routine->existenceLock)
+				LCK_release(tdbb, routine->existenceLock);
+			routine->existenceLock = NULL;
+			routine->flags |= Routine::FLAG_OBSOLETE;
 		}
-	}
 
-	for (Function** iter = att->att_functions.begin(); iter != att->att_functions.end(); ++iter)
-	{
-		Function* const routine = *iter;
-
-		if (routine)
-		{
-			if (routine->getStatement() && !(routine->flags & Routine::FLAG_OBSOLETE) &&
-				routine->intUseCount >= 0 &&
-				routine->useCount == routine->intUseCount)
-			{
-				routine->releaseStatement(tdbb);
-
-				if (routine->existenceLock)
-					LCK_release(tdbb, routine->existenceLock);
-				routine->existenceLock = NULL;
-				routine->flags |= Routine::FLAG_OBSOLETE;
-			}
-
-			// Leave it in state 0 to avoid extra pass next time to clear it
-			// Note: we need to adjust intUseCount for all routines
-			// in cache because any of them may have been affected from
-			// dependencies earlier. Even routines that were not scanned yet !
-			routine->intUseCount = 0;
-		}
-	}
+		// Leave it in state 0 to avoid extra pass next time to clear it
+		// Note: we need to adjust intUseCount for all routines
+		// in cache because any of them may have been affected from
+		// dependencies earlier. Even routines that were not scanned yet !
+		routine->intUseCount = 0;
+	});
 
 #ifdef DEV_BUILD
 	MET_verify_cache(tdbb);
@@ -1446,6 +1402,10 @@ Format* MET_format(thread_db* tdbb, jrd_rel* relation, USHORT number)
 		return format;
 	}
 
+	// System relations don't have their formats stored inside RDB$FORMATS,
+	// so it's absolutely pointless trying to find one there
+	fb_assert(!relation->isSystem());
+
 	format = NULL;
 	AutoCacheRequest request(tdbb, irq_r_format, IRQ_REQUESTS);
 
@@ -1713,14 +1673,14 @@ DmlNode* MET_get_dependencies(thread_db* tdbb,
 		if (type != obj_package_body)
 			MET_delete_dependencies(tdbb, domainName, type, transaction);
 
-		store_dependencies(tdbb, csb, relation, domainName, type, transaction);
+		MET_store_dependencies(tdbb, csb->csb_dependencies, relation, domainName, type, transaction);
 	}
 	else
 	{
 		if (type != obj_package_body)
 			MET_delete_dependencies(tdbb, object_name, type, transaction);
 
-		store_dependencies(tdbb, csb, relation, object_name, type, transaction);
+		MET_store_dependencies(tdbb, csb->csb_dependencies, relation, object_name, type, transaction);
 	}
 
 	if (csb_ptr)
@@ -1924,6 +1884,7 @@ void MET_load_ddl_triggers(thread_db* tdbb)
 
 	attachment->att_ddl_triggers = FB_NEW_POOL(*attachment->att_pool)
 		TrigVector(*attachment->att_pool);
+	attachment->att_ddl_triggers->addRef();
 
 	AutoRequest trigger_request;
 
@@ -2023,7 +1984,7 @@ void MET_load_trigger(thread_db* tdbb,
 		if (!TRG.RDB$ENTRYPOINT.NULL)	// ODS_12_0
 			entryPoint = TRG.RDB$ENTRYPOINT;
 
-		Nullable<bool> ssDefiner;
+		TriState ssDefiner;
 
 		// If SQL SECURITY for relation was not specified it will re-use DB default so we should not care about it
 		if (!TRG.RDB$SQL_SECURITY.NULL)
@@ -2033,17 +1994,19 @@ void MET_load_trigger(thread_db* tdbb,
 
 		if (TRG.RDB$RELATION_NAME.NULL)
 		{
+			fb_assert(!relation);
+
 			if ((TRG.RDB$TRIGGER_TYPE & TRIGGER_TYPE_MASK) == TRIGGER_TYPE_DB ||
 				(TRG.RDB$TRIGGER_TYPE & TRIGGER_TYPE_MASK) == TRIGGER_TYPE_DDL)
 			{
-				// this is a database trigger
+				// this is a database or DDL trigger
 				get_trigger(tdbb,
 							relation,
 							&TRG.RDB$TRIGGER_BLR,
 							&debug_blob_id,
 							triggers,
 							TRG.RDB$TRIGGER_NAME,
-							TRG.RDB$TRIGGER_TYPE & ~TRIGGER_TYPE_MASK,
+							TRG.RDB$TRIGGER_TYPE,
 							(bool) TRG.RDB$SYSTEM_FLAG,
 							trig_flags,
 							engine,
@@ -2563,6 +2526,98 @@ SLONG MET_lookup_index_name(thread_db* tdbb,
 }
 
 
+void MET_lookup_index_condition(thread_db* tdbb, jrd_rel* relation, index_desc* idx)
+{
+/**************************************
+*
+*	M E T _ l o o k u p _ i n d e x _ c o n d i t i o n
+*
+**************************************
+*
+* Functional description
+*	Lookup information about an index, in
+*	the metadata cache if possible.
+*
+**************************************/
+	SET_TDBB(tdbb);
+	const auto attachment = tdbb->getAttachment();
+
+	// Check the index blocks for the relation to see if we have a cached block
+
+	IndexBlock* index_block;
+	for (index_block = relation->rel_index_blocks; index_block; index_block = index_block->idb_next)
+	{
+		if (index_block->idb_id == idx->idx_id)
+			break;
+	}
+
+	if (index_block && index_block->idb_condition)
+	{
+		idx->idx_condition = index_block->idb_condition;
+		idx->idx_condition_statement = index_block->idb_condition_statement;
+		return;
+	}
+
+	const auto dbb = tdbb->getDatabase();
+	if (dbb->getEncodedOdsVersion() < ODS_13_1)
+		return;
+
+	if (!(relation->rel_flags & REL_scanned) || (relation->rel_flags & REL_being_scanned))
+		MET_scan_relation(tdbb, relation);
+
+	CompilerScratch* csb = nullptr;
+	AutoCacheRequest request(tdbb, irq_l_cond_index, IRQ_REQUESTS);
+
+	FOR(REQUEST_HANDLE request)
+		IDX IN RDB$INDICES WITH
+		IDX.RDB$RELATION_NAME EQ relation->rel_name.c_str() AND
+		IDX.RDB$INDEX_ID EQ idx->idx_id + 1
+	{
+		if (idx->idx_condition_statement)
+		{
+			idx->idx_condition_statement->release(tdbb);
+			idx->idx_condition_statement = nullptr;
+		}
+
+		// Parse the blr, making sure to create the resulting expression
+		// tree and request in its own pool so that it may be cached
+		// with the index block in the "permanent" metadata cache
+
+		{ // scope
+			Jrd::ContextPoolHolder context(tdbb, attachment->createPool());
+
+			MET_parse_blob(tdbb, relation, &IDX.RDB$CONDITION_BLR, &csb, nullptr, false, false);
+
+			idx->idx_condition_statement = Statement::makeBoolExpression(tdbb,
+				idx->idx_condition, csb, false);
+		} // end scope
+	}
+	END_FOR
+
+	delete csb;
+
+	// If there is no existing index block for this index, create
+	// one and link it in with the index blocks for this relation
+
+	if (!index_block)
+		index_block = IDX_create_index_block(tdbb, relation, idx->idx_id);
+
+	// If we can't get the lock, no big deal: just give up on caching the index info
+
+	if (!LCK_lock(tdbb, index_block->idb_lock, LCK_SR, LCK_NO_WAIT))
+	{
+		// clear lock error from status vector
+		fb_utils::init_status(tdbb->tdbb_status_vector);
+		return;
+	}
+
+	// Fill in the cached information about the index
+
+	index_block->idb_condition = idx->idx_condition;
+	index_block->idb_condition_statement = idx->idx_condition_statement;
+}
+
+
 void MET_lookup_index_expression(thread_db* tdbb, jrd_rel* relation, index_desc* idx)
 {
 /**************************************
@@ -2592,7 +2647,7 @@ void MET_lookup_index_expression(thread_db* tdbb, jrd_rel* relation, index_desc*
 	{
 		idx->idx_expression = index_block->idb_expression;
 		idx->idx_expression_statement = index_block->idb_expression_statement;
-		memcpy(&idx->idx_expression_desc, &index_block->idb_expression_desc, sizeof(struct dsc));
+		idx->idx_expression_desc = index_block->idb_expression_desc;
 		return;
 	}
 
@@ -2612,7 +2667,7 @@ void MET_lookup_index_expression(thread_db* tdbb, jrd_rel* relation, index_desc*
 		if (idx->idx_expression_statement)
 		{
 			idx->idx_expression_statement->release(tdbb);
-			idx->idx_expression_statement = NULL;
+			idx->idx_expression_statement = nullptr;
 		}
 
 		// parse the blr, making sure to create the resulting expression
@@ -2621,15 +2676,14 @@ void MET_lookup_index_expression(thread_db* tdbb, jrd_rel* relation, index_desc*
 
 		{ // scope
 			Jrd::ContextPoolHolder context(tdbb, attachment->createPool());
-			idx->idx_expression = static_cast<ValueExprNode*>(MET_parse_blob(
-				tdbb, relation, &IDX.RDB$EXPRESSION_BLR, &csb,
-				&idx->idx_expression_statement, false, false));
+
+			MET_parse_blob(tdbb, relation, &IDX.RDB$EXPRESSION_BLR, &csb, nullptr, false, false);
+
+			idx->idx_expression_statement = Statement::makeValueExpression(tdbb,
+				idx->idx_expression, idx->idx_expression_desc, csb, false);
 		} // end scope
 	}
 	END_FOR
-
-	if (csb)
-		idx->idx_expression->getDesc(tdbb, csb, &idx->idx_expression_desc);
 
 	delete csb;
 
@@ -2654,6 +2708,41 @@ void MET_lookup_index_expression(thread_db* tdbb, jrd_rel* relation, index_desc*
 	index_block->idb_expression = idx->idx_expression;
 	index_block->idb_expression_statement = idx->idx_expression_statement;
 	memcpy(&index_block->idb_expression_desc, &idx->idx_expression_desc, sizeof(struct dsc));
+}
+
+
+bool MET_lookup_index_expr_cond_blr(thread_db* tdbb, const MetaName& index_name, bid& expr_blob_id, bid& cond_blob_id)
+{
+/**************************************
+ *
+ *      M E T _ l o o k u p _ i n d e x _ e x p r _ c o n d _ b l r
+ *
+ **************************************
+ *
+ * Functional description
+ *		Lookup index expression and\or condition blob ID to use it later by many
+ *		attachments and avoid of run of same lookup queries by all of them.
+ *		Used by parallel index creation code.
+ *
+ **************************************/
+
+	SET_TDBB(tdbb);
+	Attachment* attachment = tdbb->getAttachment();
+
+	bool found = false;
+	AutoCacheRequest request(tdbb, irq_l_exp_index_blr, IRQ_REQUESTS);
+
+	FOR(REQUEST_HANDLE request)
+		IDX IN RDB$INDICES WITH
+		IDX.RDB$INDEX_NAME EQ index_name.c_str()
+	{
+		found = !IDX.RDB$EXPRESSION_BLR.NULL || !IDX.RDB$CONDITION_BLR.NULL;
+		expr_blob_id = IDX.RDB$EXPRESSION_BLR;
+		cond_blob_id = IDX.RDB$CONDITION_BLR;
+	}
+	END_FOR;
+
+	return found;
 }
 
 
@@ -2976,9 +3065,13 @@ jrd_rel* MET_lookup_relation(thread_db* tdbb, const MetaName& name)
 		if (check_relation != relation)
 		{
 			LCK_release(tdbb, check_relation->rel_existence_lock);
-			LCK_release(tdbb, check_relation->rel_partners_lock);
+			if (!(check_relation->rel_flags & REL_check_partners))
+			{
+				check_relation->rel_flags |= REL_check_partners;
+				LCK_release(tdbb, check_relation->rel_partners_lock);
+				check_relation->rel_flags &= ~REL_check_partners;
+			}
 			LCK_release(tdbb, check_relation->rel_rescan_lock);
-			check_relation->rel_flags &= ~REL_check_partners;
 			check_relation->rel_flags |= REL_deleted;
 		}
 	}
@@ -3059,9 +3152,13 @@ jrd_rel* MET_lookup_relation_id(thread_db* tdbb, SLONG id, bool return_deleted)
 		if (check_relation != relation)
 		{
 			LCK_release(tdbb, check_relation->rel_existence_lock);
-			LCK_release(tdbb, check_relation->rel_partners_lock);
+			if (!(check_relation->rel_flags & REL_check_partners))
+			{
+				check_relation->rel_flags |= REL_check_partners;
+				LCK_release(tdbb, check_relation->rel_partners_lock);
+				check_relation->rel_flags &= ~REL_check_partners;
+			}
 			LCK_release(tdbb, check_relation->rel_rescan_lock);
-			check_relation->rel_flags &= ~REL_check_partners;
 			check_relation->rel_flags |= REL_deleted;
 		}
 	}
@@ -3208,12 +3305,12 @@ void MET_parse_sys_trigger(thread_db* tdbb, jrd_rel* relation)
 
 			statement->triggerName = name;
 
-			statement->flags |= Statement::FLAG_SYS_TRIGGER;
+			statement->flags |= Statement::FLAG_SYS_TRIGGER | Statement::FLAG_INTERNAL;
 			if (trig_flags & TRG_ignore_perm)
 				statement->flags |= Statement::FLAG_IGNORE_PERM;
 
 			save_trigger_data(tdbb, ptr, relation, statement, NULL, NULL, NULL, type, true, 0, "",
-				"", NULL, Nullable<bool>());
+				"", NULL, TriState());
 		}
 	}
 	END_FOR
@@ -3368,7 +3465,7 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 			}
 
 			procedure->setId(P.RDB$PROCEDURE_ID);
-			Nullable<bool> ssDefiner;
+			TriState ssDefiner;
 
 			if (!P.RDB$SECURITY_CLASS.NULL)
 				procedure->setSecurityName(P.RDB$SECURITY_CLASS);
@@ -3389,7 +3486,7 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 				END_FOR
 			}
 
-			if (!ssDefiner.specified)
+			if (ssDefiner.isUnknown())
 			{
 				if (!P.RDB$SQL_SECURITY.NULL)
 					ssDefiner = (bool) P.RDB$SQL_SECURITY;
@@ -3399,10 +3496,11 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 
 			procedure->owner = P.RDB$OWNER_NAME;
 
-			if (ssDefiner.orElse(false))
+			if (ssDefiner.asBool())
 				procedure->invoker = attachment->getUserId(procedure->owner);
 
 			procedure->setImplemented(true);
+			procedure->setDefined(true);
 			procedure->getInputFields().resize(P.RDB$PROCEDURE_INPUTS);
 			procedure->getOutputFields().resize(P.RDB$PROCEDURE_OUTPUTS);
 			procedure->setDefaultCount(0);
@@ -3442,6 +3540,18 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 									F.RDB$FIELD_SCALE, F.RDB$FIELD_LENGTH,
 									F.RDB$FIELD_SUB_TYPE, F.RDB$CHARACTER_SET_ID,
 									(pa_collation_id_null ? F.RDB$COLLATION_ID : pa_collation_id));
+
+				if (parameter->prm_desc.isText() && parameter->prm_desc.getTextType() != CS_NONE)
+				{
+					if (!pa_collation_id_null || fb_utils::implicit_domain(PA.RDB$FIELD_SOURCE))
+						parameter->prm_text_type = parameter->prm_desc.getTextType();
+				}
+
+				if (!PA.RDB$RELATION_NAME.NULL)
+					parameter->prm_type_of_table = PA.RDB$RELATION_NAME;
+
+				if (!PA.RDB$FIELD_NAME.NULL)
+					parameter->prm_type_of_column = PA.RDB$FIELD_NAME;
 
 				if (PA.RDB$PARAMETER_TYPE == 0 &&
 					(!pa_default_value_null ||
@@ -3527,19 +3637,27 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 
 						dbb->dbb_extManager->makeProcedure(tdbb, csb, procedure, P.RDB$ENGINE_NAME,
 							(P.RDB$ENTRYPOINT.NULL ? "" : P.RDB$ENTRYPOINT), body.begin());
+
+						if (!procedure->getExternal())
+							procedure->setDefined(false);
 					}
 					else
 					{
+						const string name = procedure->getName().toString();
+
 						try
 						{
+							TraceProcCompile trace(tdbb, name);
+
 							procedure->parseBlr(tdbb, csb, &P.RDB$PROCEDURE_BLR,
 								P.RDB$DEBUG_INFO.NULL ? NULL : &P.RDB$DEBUG_INFO);
+
+							trace.finish(procedure->getStatement(), ITracePlugin::RESULT_SUCCESS);
 						}
 						catch (const Exception& ex)
 						{
 							StaticStatusVector temp_status;
 							ex.stuffException(temp_status);
-							const string name = procedure->getName().toString();
 							(Arg::Gds(isc_bad_proc_BLR) << Arg::Str(name)
 								<< Arg::StatusVector(temp_status.begin())).raise();
 						}
@@ -3555,7 +3673,7 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 					throw;
 				}
 
-				fb_assert(procedure->getStatement()->procedure == procedure);
+				fb_assert(!procedure->isDefined() || procedure->getStatement()->procedure == procedure);
 			}
 			else
 			{
@@ -3721,8 +3839,7 @@ jrd_rel* MET_relation(thread_db* tdbb, USHORT id)
 		lock->setKey(relation->rel_id);
 	}
 
-	// This should check system flag instead.
-	if (relation->rel_id <= max_sys_rel)
+	if (relation->rel_id < rel_MAX)
 		return relation;
 
 	{ // Scope block.
@@ -4020,6 +4137,7 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
 					field->fld_default_value = NULL;
 					field->fld_validation = NULL;
 					field->fld_not_null = NULL;
+					field->fld_generator_name = NULL;
 				}
 
 				array = NULL;
@@ -4063,7 +4181,7 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
 					csb->csb_g_flags |= csb_get_dependencies;
 					field->fld_source = PAR_make_field(tdbb, csb, view_context, (TEXT*) p);
 					const MetaName depName(REL.RDB$RELATION_NAME);
-					store_dependencies(tdbb, csb, 0, depName, obj_view, depTrans);
+					MET_store_dependencies(tdbb, csb->csb_dependencies, 0, depName, obj_view, depTrans);
 				}
 				else
 					field->fld_source = PAR_make_field(tdbb, csb, view_context, (TEXT*) p);
@@ -4087,8 +4205,8 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
 
 					DmlNode* nod = dependencies ?
 						MET_get_dependencies(tdbb, relation, p, length, csb, NULL, NULL, NULL,
-							field->fld_name, obj_computed, 0, depTrans) :
-						PAR_blr(tdbb, relation, p, length, csb, NULL, NULL, false, 0);
+							field->fld_name, obj_computed, csb_computed_field, depTrans) :
+						PAR_blr(tdbb, relation, p, length, csb, NULL, NULL, false, csb_computed_field);
 
 					field->fld_computation = static_cast<ValueExprNode*>(nod);
 				}
@@ -4143,7 +4261,7 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
 
 			case RSR_field_generator_name:
 				field->fld_generator_name = (const TEXT*) p;
-				if (!field->fld_identity_type.specified)
+				if (!field->fld_identity_type.has_value())
 					field->fld_identity_type = IDENT_TYPE_BY_DEFAULT;
 				break;
 
@@ -4442,7 +4560,7 @@ static int blocking_ast_relation(void* ast_object)
 
 			if (relation->rel_use_count)
 				relation->rel_flags |= REL_blocking;
-			else
+			else if (!(relation->rel_flags & REL_deleting))
 			{
 				relation->rel_flags &= ~REL_blocking;
 				relation->rel_flags |= REL_check_existence;
@@ -4467,8 +4585,11 @@ static int partners_ast_relation(void* ast_object)
 
 		AsyncContextHolder tdbb(dbb, FB_FUNCTION, relation->rel_partners_lock);
 
-		LCK_release(tdbb, relation->rel_partners_lock);
-		relation->rel_flags |= REL_check_partners;
+		if (!(relation->rel_flags & REL_check_partners))
+		{
+			relation->rel_flags |= REL_check_partners;
+			LCK_release(tdbb, relation->rel_partners_lock);
+		}
 	}
 	catch (const Exception&)
 	{} // no-op
@@ -4564,7 +4685,7 @@ static void get_trigger(thread_db* tdbb, jrd_rel* relation,
 						const TEXT* name, FB_UINT64 type,
 						bool sys_trigger, USHORT flags,
 						const MetaName& engine, const string& entryPoint,
-						const bid* body, Nullable<bool> ssDefiner)
+						const bid* body, TriState ssDefiner)
 {
 /**************************************
  *
@@ -4946,7 +5067,7 @@ static void save_trigger_data(thread_db* tdbb, TrigVector** ptr, jrd_rel* relati
 							  const TEXT* name, FB_UINT64 type,
 							  bool sys_trigger, USHORT flags,
 							  const MetaName& engine, const string& entryPoint,
-							  const bid* body, Nullable<bool> ssDefiner)
+							  const bid* body, TriState ssDefiner)
 {
 /**************************************
  *
@@ -5041,28 +5162,36 @@ void scan_partners(thread_db* tdbb, jrd_rel* relation)
  **************************************/
 	Attachment* attachment = tdbb->getAttachment();
 
-	AutoCacheRequest request(tdbb, irq_foreign1, IRQ_REQUESTS);
-	frgn* references = &relation->rel_foreign_refs;
-	int index_number = 0;
+	while (relation->rel_flags & REL_check_partners)
+	{
+		relation->rel_flags &= ~REL_check_partners;
+		LCK_lock(tdbb, relation->rel_partners_lock, LCK_SR, LCK_WAIT);
 
-	if (references->frgn_reference_ids)
-	{
-		delete references->frgn_reference_ids;
-		references->frgn_reference_ids = NULL;
-	}
-	if (references->frgn_relations)
-	{
-		delete references->frgn_relations;
-		references->frgn_relations = NULL;
-	}
-	if (references->frgn_indexes)
-	{
-		delete references->frgn_indexes;
-		references->frgn_indexes = NULL;
-	}
+		if (relation->rel_flags & REL_check_partners)
+			continue;
 
-	FOR(REQUEST_HANDLE request)
-		IDX IN RDB$INDICES CROSS
+		AutoCacheRequest request(tdbb, irq_foreign1, IRQ_REQUESTS);
+		frgn* references = &relation->rel_foreign_refs;
+		int index_number = 0;
+
+		if (references->frgn_reference_ids)
+		{
+			delete references->frgn_reference_ids;
+			references->frgn_reference_ids = NULL;
+		}
+		if (references->frgn_relations)
+		{
+			delete references->frgn_relations;
+			references->frgn_relations = NULL;
+		}
+		if (references->frgn_indexes)
+		{
+			delete references->frgn_indexes;
+			references->frgn_indexes = NULL;
+		}
+
+		FOR(REQUEST_HANDLE request)
+			IDX IN RDB$INDICES CROSS
 			RC IN RDB$RELATION_CONSTRAINTS
 			OVER RDB$INDEX_NAME CROSS
 			IND IN RDB$INDICES WITH
@@ -5072,104 +5201,102 @@ void scan_partners(thread_db* tdbb, jrd_rel* relation)
 			IDX.RDB$INDEX_ID > 0 AND
 			IND.RDB$INDEX_ID > 0 AND
 			IND.RDB$UNIQUE_FLAG = 1
-	{
-		//// ASF: Hack fix for CORE-4304, until nasty interactions between dfw and met are not resolved.
-		const jrd_rel* partner_relation = relation->rel_name == IND.RDB$RELATION_NAME ?
-			relation : MET_lookup_relation(tdbb, IND.RDB$RELATION_NAME);
-
-		if (partner_relation && !IDX.RDB$INDEX_INACTIVE && !IND.RDB$INDEX_INACTIVE)
 		{
-			// This seems a good candidate for vcl.
-			references->frgn_reference_ids =
-				vec<int>::newVector(*relation->rel_pool, references->frgn_reference_ids,
-							   index_number + 1);
+			//// ASF: Hack fix for CORE-4304, until nasty interactions between dfw and met are not resolved.
+			const jrd_rel* partner_relation = relation->rel_name == IND.RDB$RELATION_NAME ?
+				relation : MET_lookup_relation(tdbb, IND.RDB$RELATION_NAME);
 
-			(*references->frgn_reference_ids)[index_number] = IDX.RDB$INDEX_ID - 1;
+			if (partner_relation && !IDX.RDB$INDEX_INACTIVE && !IND.RDB$INDEX_INACTIVE)
+			{
+				// This seems a good candidate for vcl.
+				references->frgn_reference_ids =
+					vec<int>::newVector(*relation->rel_pool, references->frgn_reference_ids,
+					index_number + 1);
 
-			references->frgn_relations =
-				vec<int>::newVector(*relation->rel_pool, references->frgn_relations,
-							   index_number + 1);
+				(*references->frgn_reference_ids)[index_number] = IDX.RDB$INDEX_ID - 1;
 
-			(*references->frgn_relations)[index_number] = partner_relation->rel_id;
+				references->frgn_relations =
+					vec<int>::newVector(*relation->rel_pool, references->frgn_relations,
+					index_number + 1);
 
-			references->frgn_indexes =
-				vec<int>::newVector(*relation->rel_pool, references->frgn_indexes,
-							   index_number + 1);
+				(*references->frgn_relations)[index_number] = partner_relation->rel_id;
 
-			(*references->frgn_indexes)[index_number] = IND.RDB$INDEX_ID - 1;
+				references->frgn_indexes =
+					vec<int>::newVector(*relation->rel_pool, references->frgn_indexes,
+					index_number + 1);
 
-			index_number++;
+				(*references->frgn_indexes)[index_number] = IND.RDB$INDEX_ID - 1;
+
+				index_number++;
+			}
 		}
-	}
-	END_FOR
+		END_FOR
 
-	// Prepare for rescan of primary dependencies on relation's primary key and stale vectors.
+		// Prepare for rescan of primary dependencies on relation's primary key and stale vectors.
 
-	request.reset(tdbb, irq_foreign2, IRQ_REQUESTS);
-	prim* dependencies = &relation->rel_primary_dpnds;
-	index_number = 0;
+		request.reset(tdbb, irq_foreign2, IRQ_REQUESTS);
+		prim* dependencies = &relation->rel_primary_dpnds;
+		index_number = 0;
 
-	if (dependencies->prim_reference_ids)
-	{
-		delete dependencies->prim_reference_ids;
-		dependencies->prim_reference_ids = NULL;
-	}
-	if (dependencies->prim_relations)
-	{
-		delete dependencies->prim_relations;
-		dependencies->prim_relations = NULL;
-	}
-	if (dependencies->prim_indexes)
-	{
-		delete dependencies->prim_indexes;
-		dependencies->prim_indexes = NULL;
-	}
+		if (dependencies->prim_reference_ids)
+		{
+			delete dependencies->prim_reference_ids;
+			dependencies->prim_reference_ids = NULL;
+		}
+		if (dependencies->prim_relations)
+		{
+			delete dependencies->prim_relations;
+			dependencies->prim_relations = NULL;
+		}
+		if (dependencies->prim_indexes)
+		{
+			delete dependencies->prim_indexes;
+			dependencies->prim_indexes = NULL;
+		}
 
-	FOR(REQUEST_HANDLE request)
-		IDX IN RDB$INDICES CROSS
+		FOR(REQUEST_HANDLE request)
+			IDX IN RDB$INDICES CROSS
 			IND IN RDB$INDICES WITH
 			IDX.RDB$UNIQUE_FLAG = 1 AND
 			IDX.RDB$INDEX_ID > 0 AND
 			IND.RDB$INDEX_ID > 0 AND
 			IDX.RDB$RELATION_NAME EQ relation->rel_name.c_str() AND
 			IND.RDB$FOREIGN_KEY EQ IDX.RDB$INDEX_NAME
-	{
-		//// ASF: Hack fix for CORE-4304, until nasty interactions between dfw and met are not resolved.
-		const jrd_rel* partner_relation = relation->rel_name == IND.RDB$RELATION_NAME ?
-			relation : MET_lookup_relation(tdbb, IND.RDB$RELATION_NAME);
-
-		if (partner_relation && !IDX.RDB$INDEX_INACTIVE && !IND.RDB$INDEX_INACTIVE)
 		{
-			dependencies->prim_reference_ids =
-				vec<int>::newVector(*relation->rel_pool, dependencies->prim_reference_ids,
-							   index_number + 1);
+			//// ASF: Hack fix for CORE-4304, until nasty interactions between dfw and met are not resolved.
+			const jrd_rel* partner_relation = relation->rel_name == IND.RDB$RELATION_NAME ?
+				relation : MET_lookup_relation(tdbb, IND.RDB$RELATION_NAME);
 
-			(*dependencies->prim_reference_ids)[index_number] = IDX.RDB$INDEX_ID - 1;
+			if (partner_relation && !IDX.RDB$INDEX_INACTIVE && !IND.RDB$INDEX_INACTIVE)
+			{
+				dependencies->prim_reference_ids =
+					vec<int>::newVector(*relation->rel_pool, dependencies->prim_reference_ids,
+					index_number + 1);
 
-			dependencies->prim_relations =
-				vec<int>::newVector(*relation->rel_pool, dependencies->prim_relations,
-							   index_number + 1);
+				(*dependencies->prim_reference_ids)[index_number] = IDX.RDB$INDEX_ID - 1;
 
-			(*dependencies->prim_relations)[index_number] = partner_relation->rel_id;
+				dependencies->prim_relations =
+					vec<int>::newVector(*relation->rel_pool, dependencies->prim_relations,
+					index_number + 1);
 
-			dependencies->prim_indexes =
-				vec<int>::newVector(*relation->rel_pool, dependencies->prim_indexes,
-							   index_number + 1);
+				(*dependencies->prim_relations)[index_number] = partner_relation->rel_id;
 
-			(*dependencies->prim_indexes)[index_number] = IND.RDB$INDEX_ID - 1;
+				dependencies->prim_indexes =
+					vec<int>::newVector(*relation->rel_pool, dependencies->prim_indexes,
+					index_number + 1);
 
-			index_number++;
+				(*dependencies->prim_indexes)[index_number] = IND.RDB$INDEX_ID - 1;
+
+				index_number++;
+			}
 		}
+		END_FOR
 	}
-	END_FOR
-
-	LCK_lock(tdbb, relation->rel_partners_lock, LCK_SR, LCK_WAIT);
-	relation->rel_flags &= ~REL_check_partners;
 }
 
 
-static void store_dependencies(thread_db* tdbb,
-							   CompilerScratch* csb,
+void MET_store_dependencies(thread_db* tdbb,
+							   Array<CompilerScratch::Dependency>& dependencies,
 							   const jrd_rel* dep_rel,
 							   const MetaName& object_name,
 							   int dependency_type,
@@ -5204,9 +5331,9 @@ static void store_dependencies(thread_db* tdbb,
 			(t = findTrigger(dep_rel->rel_post_store, object_name))
 		) && t && (t->sysTrigger);
 
-	while (csb->csb_dependencies.hasData())
+	while (dependencies.hasData())
 	{
-		CompilerScratch::Dependency dependency = csb->csb_dependencies.pop();
+		CompilerScratch::Dependency dependency = dependencies.pop();
 
 		if (!dependency.relation && !dependency.function && !dependency.procedure &&
 			!dependency.name && !dependency.number)
@@ -5426,10 +5553,8 @@ static bool verify_TRG_ignore_perm(thread_db* tdbb, const MetaName& trig_name)
 
 	// See if this is a system trigger, with the flag set as TRG_ignore_perm
 
-	if (INI_get_trig_flags(trig_name.c_str()) & TRG_ignore_perm)
-	{
+	if (INI_get_trig_flags(trig_name) & TRG_ignore_perm)
 		return true;
-	}
 
 	// See if this is a RI trigger
 
@@ -5490,7 +5615,7 @@ int MET_get_linger(thread_db* tdbb)
 	return rc;
 }
 
-Nullable<bool> MET_get_ss_definer(Jrd::thread_db* tdbb)
+TriState MET_get_ss_definer(Jrd::thread_db* tdbb)
 {
 /**************************************
  *
@@ -5504,7 +5629,7 @@ Nullable<bool> MET_get_ss_definer(Jrd::thread_db* tdbb)
  **************************************/
 	SET_TDBB(tdbb);
 	Attachment* attachment = tdbb->getAttachment();
-	Nullable<bool> r;
+	TriState r;
 
 	AutoCacheRequest request(tdbb, irq_dbb_ss_definer, IRQ_REQUESTS);
 

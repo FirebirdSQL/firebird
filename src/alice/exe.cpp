@@ -126,7 +126,7 @@ int EXE_action(const TEXT* database, const SINT64 switches)
 
 		if (error)
 		{
-			tdgbl->uSvc->setServiceStatus(tdgbl->status);
+			tdgbl->uSvc->getStatusAccessor().setServiceStatus(tdgbl->status);
 		}
 	}
 
@@ -182,7 +182,7 @@ int EXE_two_phase(const TEXT* database, const SINT64 switches)
 
 		if (error)
 		{
-			tdgbl->uSvc->setServiceStatus(tdgbl->status);
+			tdgbl->uSvc->getStatusAccessor().setServiceStatus(tdgbl->status);
 		}
 	}
 
@@ -256,8 +256,6 @@ static void buildDpb(Firebird::ClumpletWriter& dpb, const SINT64 switches)
 		UCHAR b = 0;
 		if (switches & sw_attach)
 			b |= isc_dpb_shut_attachment;
-		else if (switches & sw_cache)
-			b |= isc_dpb_shut_cache;
 		else if (switches & sw_force)
 			b |= isc_dpb_shut_force;
 		else if (switches & sw_tran)
@@ -325,11 +323,18 @@ static void buildDpb(Firebird::ClumpletWriter& dpb, const SINT64 switches)
 		dpb.insertByte(isc_dpb_set_db_replica, tdgbl->ALICE_data.ua_replica_mode);
 	}
 
+	if (tdgbl->ALICE_data.ua_parallel_workers > 0) {
+		dpb.insertInt(isc_dpb_parallel_workers, tdgbl->ALICE_data.ua_parallel_workers);
+	}
+
 	if (switches & sw_nolinger)
 		dpb.insertTag(isc_dpb_nolinger);
 
 	if (switches & sw_icu)
 		dpb.insertTag(isc_dpb_reset_icu);
+
+	if (switches & sw_upgrade)
+		dpb.insertTag(isc_dpb_upgrade_db);
 
 	const unsigned char* authBlock;
 	unsigned int authBlockSize = tdgbl->uSvc->getAuthBlock(&authBlock);

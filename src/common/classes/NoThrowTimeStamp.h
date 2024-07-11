@@ -117,7 +117,7 @@ public:
 	}
 
 	// Assign current date/time to the timestamp
-	void validate() throw()
+	void validate() noexcept
 	{
 		if (isEmpty())
 		{
@@ -138,7 +138,7 @@ public:
 	const ISC_TIMESTAMP& value() const { return mValue; }
 
 	// Return current timestamp value
-	static NoThrowTimeStamp getCurrentTimeStamp(const char** error) throw();
+	static NoThrowTimeStamp getCurrentTimeStamp(const char** error) noexcept;
 
 	// Validation routines
 	static bool isValidDate(const ISC_DATE ndate)
@@ -157,18 +157,22 @@ public:
 	}
 
 	// ISC date/time helper routines
-	static ISC_DATE encode_date(const struct tm* times) throw();
-	static ISC_TIME encode_time(int hours, int minutes, int seconds, int fractions = 0) throw();
-	static ISC_TIMESTAMP encode_timestamp(const struct tm* times, const int fractions = 0) throw();
+	static ISC_DATE encode_date(const struct tm* times) noexcept;
+	static ISC_TIME encode_time(int hours, int minutes, int seconds, int fractions = 0) noexcept;
+	static ISC_TIMESTAMP encode_timestamp(const struct tm* times, const int fractions = 0) noexcept;
 
-	static void decode_date(ISC_DATE nday, struct tm* times) throw();
-	static void decode_time(ISC_TIME ntime, int* hours, int* minutes, int* seconds, int* fractions = NULL) throw();
-	static void decode_timestamp(const ISC_TIMESTAMP ntimestamp, struct tm* times, int* fractions = NULL) throw();
+	static void decode_date(ISC_DATE nday, struct tm* times) noexcept;
+	static void decode_time(ISC_TIME ntime, int* hours, int* minutes, int* seconds, int* fractions = NULL) noexcept;
+	static void decode_timestamp(const ISC_TIMESTAMP ntimestamp, struct tm* times, int* fractions = NULL) noexcept;
 
 	static void add10msec(ISC_TIMESTAMP* v, SINT64 msec, SINT64 multiplier);
 	static void round_time(ISC_TIME& ntime, const int precision);
 
-	static inline bool isLeapYear(const int year) throw()
+	static int convertGregorianDateToWeekDate(const struct tm& times);
+	static int convertGregorianDateToJulianDate(int year, int month, int day);
+	static void convertJulianDateToGregorianDate(int jdn, int& outYear, int& outMonth, int& outDay);
+
+	static inline bool isLeapYear(const int year) noexcept
 	{
 		return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
 	}
@@ -191,7 +195,7 @@ public:
 private:
 	ISC_TIMESTAMP mValue;
 
-	static int yday(const struct tm* times) throw();
+	static int yday(const struct tm* times) noexcept;
 };
 
 }	// namespace Firebird

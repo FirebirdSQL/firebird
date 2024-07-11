@@ -24,13 +24,15 @@
  *  Contributor(s): ______________________________________.
  */
 
-#ifndef JRD_UNICODE_UTIL_H
-#define JRD_UNICODE_UTIL_H
+#ifndef COMMON_UNICODE_UTIL_H
+#define COMMON_UNICODE_UTIL_H
 
 #include "intlobj_new.h"
 #include "../common/IntlUtil.h"
 #include "../common/os/mod_loader.h"
+#include "../common/classes/array.h"
 #include "../common/classes/fb_string.h"
+#include "../common/classes/GenericMap.h"
 #include "../common/classes/objects_array.h"
 #include <unicode/ucnv.h>
 #include <unicode/ucal.h>
@@ -38,7 +40,7 @@
 struct UCollator;
 struct USet;
 
-namespace Jrd {
+namespace Firebird {
 
 class UnicodeUtil
 {
@@ -64,14 +66,6 @@ public:
 
 		UChar32 (U_EXPORT2* utf8_nextCharSafeBody) (const uint8_t* s, int32_t* pi, int32_t length, UChar32 c, UBool strict);
 
-		void (U_EXPORT2* UCNV_FROM_U_CALLBACK_STOP) (
-                const void *context,
-                UConverterFromUnicodeArgs *fromUArgs,
-                const UChar* codeUnits,
-                int32_t length,
-                UChar32 codePoint,
-                UConverterCallbackReason reason,
-                UErrorCode * err);
 		void (U_EXPORT2* UCNV_TO_U_CALLBACK_STOP) (
                 const void *context,
                 UConverterToUnicodeArgs *toUArgs,
@@ -175,7 +169,8 @@ public:
 
 	static ConversionICU& getConversionICU();
 	static ICU* loadICU(const Firebird::string& icuVersion, const Firebird::string& configInfo);
-	static bool getCollVersion(const Firebird::string& icuVersion,
+	static void getICUVersion(ICU* icu, int& majorVersion, int& minorVersion);
+	static ICU* getCollVersion(const Firebird::string& icuVersion,
 		const Firebird::string& configInfo, Firebird::string& collVersion);
 
 	class Utf16Collation
@@ -200,8 +195,47 @@ public:
 		ULONG canonical(ULONG srcLen, const USHORT* src, ULONG dstLen, ULONG* dst, const ULONG* exceptions);
 
 	private:
-		static ICU* loadICU(const Firebird::string& collVersion, const Firebird::string& locale,
-			const Firebird::string& configInfo);
+		template <typename T>
+		class ArrayComparator
+		{
+		public:
+			static bool greaterThan(const Firebird::Array<T>& i1, const Firebird::Array<T>& i2)
+			{
+				FB_SIZE_T minCount = MIN(i1.getCount(), i2.getCount());
+				int cmp = memcmp(i1.begin(), i2.begin(), minCount * sizeof(T));
+
+				if (cmp != 0)
+					return cmp > 0;
+
+				return i1.getCount() > i2.getCount();
+			}
+
+			static bool greaterThan(const Firebird::Array<T>* i1, const Firebird::Array<T>* i2)
+			{
+				return greaterThan(*i1, *i2);
+			}
+		};
+
+		typedef Firebird::SortedObjectsArray<
+					Firebird::Array<UCHAR>,
+					Firebird::InlineStorage<Firebird::Array<UCHAR>*, 3>,
+					Firebird::Array<UCHAR>,
+					Firebird::DefaultKeyValue<const Firebird::Array<UCHAR>*>,
+					ArrayComparator<UCHAR>
+				> SortKeyArray;
+
+		typedef Firebird::GenericMap<
+					Firebird::Pair<
+						Firebird::Full<
+							Firebird::Array<USHORT>,	// UTF-16 string
+							SortKeyArray				// sort keys
+						>
+					>,
+					ArrayComparator<USHORT>
+				> ContractionsPrefixMap;
+
+		static ICU* loadICU(const Firebird::string& icuVersion, const Firebird::string& collVersion,
+			const Firebird::string& locale, const Firebird::string& configInfo);
 
 		void normalize(ULONG* strLen, const USHORT** str, bool forNumericSort,
 			Firebird::HalfStaticArray<USHORT, BUFFER_SMALL / 2>& buffer) const;
@@ -212,7 +246,7 @@ public:
 		UCollator* compareCollator;
 		UCollator* partialCollator;
 		UCollator* sortCollator;
-		Firebird::SortedObjectsArray<Firebird::string> contractionsPrefix;	// UTF-16 string
+		ContractionsPrefixMap contractionsPrefix;
 		unsigned maxContractionsPrefixLength;	// number of characters
 		bool numericSort;
 	};
@@ -220,6 +254,6 @@ public:
 	friend class Utf16Collation;
 };
 
-}	// namespace Jrd
+}	// namespace Firebird
 
-#endif	// JRD_UNICODE_UTIL_H
+#endif	// COMMON_UNICODE_UTIL_H

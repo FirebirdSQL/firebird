@@ -61,6 +61,8 @@ public:
 	virtual void setActive(ULONG id, bool active);
 	virtual void listSessions();
 
+	os_utils::CtrlCHandler ctrlCHandler;
+
 private:
 	void runService(size_t spbSize, const UCHAR* spb);
 
@@ -202,8 +204,6 @@ void TraceSvcUtil::listSessions()
 
 void TraceSvcUtil::runService(size_t spbSize, const UCHAR* spb)
 {
-	os_utils::CtrlCHandler ctrlCHandler;
-
 	ISC_STATUS_ARRAY status;
 
 	if (isc_service_start(status, &m_svcHandle, 0,
@@ -321,20 +321,23 @@ int CLIB_ROUTINE main(int argc, char* argv[])
 	fb_utils::FbShutdown appShutdown(fb_shutrsn_app_stopped);
 
 	AutoPtr<UtilSvc> uSvc(UtilSvc::createStandalone(argc, argv));
+	TraceSvcUtil traceUtil;
+
 	try
 	{
-		TraceSvcUtil traceUtil;
-
  		fbtrace(uSvc, &traceUtil);
 	}
 	catch (const Firebird::Exception& ex)
 	{
- 		Firebird::StaticStatusVector temp;
+		if (!traceUtil.ctrlCHandler.getTerminated())
+		{
+	 		Firebird::StaticStatusVector temp;
 
-		ex.stuffException(temp);
-		isc_print_status(temp.begin());
+			ex.stuffException(temp);
+			isc_print_status(temp.begin());
 
-		return FINI_ERROR;
+			return FINI_ERROR;
+		}
 	}
 
 	return FINI_OK;

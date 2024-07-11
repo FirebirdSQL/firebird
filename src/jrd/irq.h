@@ -84,6 +84,8 @@ enum irq_type_t
 
 	irq_c_exp_index,		// create expression index
 	irq_l_exp_index,		// lookup expression index
+	irq_l_exp_index_blr,	// lookup expression index BLR
+	irq_l_cond_index,		// lookup condition index
 
 	irq_l_rel_id,			// lookup relation id
 	irq_l_procedure,		// lookup procedure name
@@ -185,7 +187,8 @@ enum irq_type_t
 	irq_find_idx_ts,		// find tablespace options for index
 	irq_find_ts,			// find tablespace options by name
 	irq_find_ts_id,			// find tablespace options by id
-	irq_out_proc_param_dep,	// check output procedure parameter dependency
+	irq_proc_param_dep,		// check procedure parameter dependency
+	irq_func_param_dep,		// check function parameter dependency
 	irq_l_pub_tab_state,	// lookup publication state for a table
 	irq_list_ts_files,		// list tablespace files
 	irq_find_ts_dfw,		// find tablespace options by name in dfw

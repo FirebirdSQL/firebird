@@ -63,6 +63,7 @@
 #include "../common/classes/init.h"
 #include "../common/classes/vector.h"
 #include "../common/classes/RefMutex.h"
+#include "../common/config/config.h"
 #include "../common/os/os_utils.h"
 #include "../common/os/fbsyslog.h"
 #include "iberror.h"
@@ -70,12 +71,7 @@
 #ifdef USE_VALGRIND
 #include <valgrind/memcheck.h>
 
-#ifndef VALGRIND_MAKE_WRITABLE	// Valgrind 3.3
-#define VALGRIND_MAKE_WRITABLE	VALGRIND_MAKE_MEM_UNDEFINED
-#define VALGRIND_MAKE_NOACCESS	VALGRIND_MAKE_MEM_NOACCESS
-#endif
-
-#define VALGRIND_FIX_IT		// overrides suspicious valgrind behavior
+//#define VALGRIND_FIX_IT		// overrides suspicious valgrind behavior
 #endif	// USE_VALGRIND
 
 namespace {
@@ -109,7 +105,12 @@ T absVal(T n) noexcept
 	return n < 0 ? -n : n;
 }
 
-#ifdef USE_VALGRIND
+#undef DELAYED_FREE
+#if defined(USE_VALGRIND) || defined(MEM_DEBUG)
+#define DELAYED_FREE
+#endif
+
+#ifdef DELAYED_FREE
 // When memory block is deallocated by user from the pool it must pass queue of this
 // length before it is actually deallocated and access protection from it removed.
 #define DELAYED_FREE_COUNT 1024
@@ -124,7 +125,6 @@ struct DelayedExtent
 {
 	void* memory; // Extent pointer
 	size_t size;  // Size of extent
-	int handle;   // Valgrind handle of protected extent block
 };
 
 DelayedExtent delayedExtents[DELAYED_EXTENT_COUNT];
@@ -164,10 +164,10 @@ FailedBlock* failedList = NULL;
 
 void corrupt(const char* text) noexcept
 {
-#ifdef DEV_BUILD
-	fprintf(stderr, "%s\n", text);
-	abort();
-#endif
+	bool bcAbort = Firebird::Config::getBugcheckAbort();
+	Firebird::Syslog::Record(bcAbort ? Firebird::Syslog::Error : Firebird::Syslog::Warning, text);
+	if (bcAbort)
+		abort();
 }
 
 Firebird::Mutex* cache_mutex = NULL;
@@ -271,11 +271,14 @@ class MemMediumHunk;
 class MemHeader
 {
 public:
-	static const size_t SIZE_MASK = 0xFFF8;
-	static const size_t MEM_MASK = 0x7;
+	static const size_t SIZE_MASK = 0xFFF0;
+	static const size_t MEM_MASK = 0xF;
 	static const size_t MEM_HUGE = 0x1;
 	static const size_t MEM_REDIRECT = 0x2;
 	static const size_t MEM_EXTENT = 0x4;
+#ifdef DELAYED_FREE
+	static const size_t MEM_ACTIVE = 0x8;
+#endif
 	static const unsigned OFFSET_SHIFT = 16;
 
 	enum HugeBlock {HUGE_BLOCK};
@@ -293,7 +296,7 @@ public:
 #ifdef DEBUG_GDS_ALLOC
 	INT32		lineNumber;
 	const char	*fileName;
-#elif (SIZEOF_VOID_P == 4) && (ALLOC_ALIGNMENT == 16)
+#elif (SIZEOF_VOID_P == 4)
 	FB_UINT64 dummyAlign;
 #endif
 #if defined(USE_VALGRIND) && (VALGRIND_REDZONE != 0)
@@ -345,6 +348,8 @@ public:
 
 	void resetRedirect(MemPool* parent)
 	{
+		valgrindInternal();
+
 		fb_assert(redirected());
 		hdrLength &= ~MEM_REDIRECT;
 		pool = parent;
@@ -363,7 +368,6 @@ public:
 
 	void resetExtent()
 	{
-		fb_assert(isExtent());
 		hdrLength &= ~MEM_EXTENT;
 	}
 
@@ -372,25 +376,49 @@ public:
 		return hdrLength & MEM_EXTENT;
 	}
 
+#ifdef DELAYED_FREE
+	void setActive()
+	{
+		fb_assert(!isActive());
+		hdrLength |= MEM_ACTIVE;
+	}
+
+	void resetActive()
+	{
+		fb_assert(isActive());
+		hdrLength &= ~MEM_ACTIVE;
+	}
+
+	bool isActive() const
+	{
+		return hdrLength & MEM_ACTIVE;
+	}
+#else
+	bool isActive() const
+	{
+		return true;
+	}
+#endif
+
 	void assertBig()
 	{
 		fb_assert(hdrLength & MEM_HUGE);
 	}
 
 #ifdef MEM_DEBUG
-	void print_contents(bool used, FILE* file, bool used_only,
+	void print_contents(FILE* file, bool used_only,
 		const char* filter_path, const size_t filter_len) noexcept
 	{
-		if (used || !used_only)
+		if (isActive() || !used_only)
 		{
 			bool filter = filter_path != NULL;
 
-			if (used && filter && fileName)
+			if (isActive() && filter && fileName)
 				filter = strncmp(filter_path, fileName, filter_len) != 0;
 
 			if (!filter)
 			{
-				if (used || redirected())
+				if (isActive() || redirected())
 				{
 					fprintf(file, "%s %p: size=%" SIZEFORMAT " allocated at %s:%d",
 						isExtent() ? "EXTN" : redirected() ? "RDIR" : "USED",
@@ -413,6 +441,8 @@ public:
 		if (p == pool && !isExtent())
 			vUse += getSize();
 	}
+
+	void valgrindInternal();
 };
 
 class MemBlock : public MemHeader
@@ -437,6 +467,13 @@ public:
 	{ }
 };
 
+inline void MemHeader::valgrindInternal()
+{
+#ifdef USE_VALGRIND
+	VALGRIND_MAKE_MEM_DEFINED(this, sizeof(MemBlock));
+	VALGRIND_MAKE_MEM_UNDEFINED(((UCHAR*)this) + sizeof(MemBlock), getSize() - sizeof(MemBlock));
+#endif
+}
 
 template <typename H>
 class MemBaseHunk
@@ -478,9 +515,6 @@ public:
 			block->validate(pool, vUse);
 			m += block->getSize();
 		}
-
-		if (next)
-			next->validate(pool, hdr, vMap, vUse);
 	}
 
 #ifdef MEM_DEBUG
@@ -490,7 +524,7 @@ public:
 		while (m < memory)
 		{
 			MemBlock* block = (MemBlock*)m;
-			block->print_contents(block->pool == pool, file, used_only, filter_path, filter_len);
+			block->print_contents(file, used_only, filter_path, filter_len);
 			m += block->getSize();
 		}
 	}
@@ -636,7 +670,7 @@ public:
 	{
 		fprintf(file, "Big hunk %p: memory=%p length=%" SIZEFORMAT "\n",
 			this, block, length);
-		block->print_contents(true, file, used_only, filter_path, filter_len);
+		block->print_contents(file, used_only, filter_path, filter_len);
 	}
 #endif
 
@@ -659,172 +693,6 @@ public:
 
 enum GetSlotFor { SLOT_ALLOC, SLOT_FREE };
 
-#if ALLOC_ALIGNMENT == 8
-const unsigned char lowSlots[] =
-{
-	0, // 24
-	1, // 32
-	2, // 40
-	3, // 48
-	4, // 56
-	5, // 64
-	6, // 72
-	7, // 80
-	8, // 88
-	8, // 96
-	9, // 104
-	9, // 112
-	10, // 120
-	10, // 128
-	11, // 136
-	11, // 144
-	12, // 152
-	12, // 160
-	13, // 168
-	13, // 176
-	13, // 184
-	14, // 192
-	14, // 200
-	14, // 208
-	15, // 216
-	15, // 224
-	15, // 232
-	16, // 240
-	16, // 248
-	16, // 256
-	16, // 264
-	17, // 272
-	17, // 280
-	17, // 288
-	17, // 296
-	18, // 304
-	18, // 312
-	18, // 320
-	18, // 328
-	18, // 336
-	19, // 344
-	19, // 352
-	19, // 360
-	19, // 368
-	19, // 376
-	20, // 384
-	20, // 392
-	20, // 400
-	20, // 408
-	20, // 416
-	20, // 424
-	21, // 432
-	21, // 440
-	21, // 448
-	21, // 456
-	21, // 464
-	21, // 472
-	22, // 480
-	22, // 488
-	22, // 496
-	22, // 504
-	22, // 512
-	22, // 520
-	22, // 528
-	23, // 536
-	23, // 544
-	23, // 552
-	23, // 560
-	23, // 568
-	23, // 576
-	23, // 584
-	23, // 592
-	24, // 600
-	24, // 608
-	24, // 616
-	24, // 624
-	24, // 632
-	24, // 640
-	24, // 648
-	24, // 656
-	24, // 664
-	25, // 672
-	25, // 680
-	25, // 688
-	25, // 696
-	25, // 704
-	25, // 712
-	25, // 720
-	25, // 728
-	25, // 736
-	25, // 744
-	26, // 752
-	26, // 760
-	26, // 768
-	26, // 776
-	26, // 784
-	26, // 792
-	26, // 800
-	26, // 808
-	26, // 816
-	26, // 824
-	26, // 832
-	27, // 840
-	27, // 848
-	27, // 856
-	27, // 864
-	27, // 872
-	27, // 880
-	27, // 888
-	27, // 896
-	27, // 904
-	27, // 912
-	27, // 920
-	27, // 928
-	28, // 936
-	28, // 944
-	28, // 952
-	28, // 960
-	28, // 968
-	28, // 976
-	28, // 984
-	28, // 992
-	28, // 1000
-	28, // 1008
-	28, // 1016
-	28, // 1024
-};
-
-const unsigned short lowLimits[] =
-{
-	24, // 0
-	32, // 1
-	40, // 2
-	48, // 3
-	56, // 4
-	64, // 5
-	72, // 6
-	80, // 7
-	96, // 8
-	112, // 9
-	128, // 10
-	144, // 11
-	160, // 12
-	184, // 13
-	208, // 14
-	232, // 15
-	264, // 16
-	296, // 17
-	336, // 18
-	376, // 19
-	424, // 20
-	472, // 21
-	528, // 22
-	592, // 23
-	664, // 24
-	744, // 25
-	832, // 26
-	928, // 27
-	1024, // 28
-};
-
-const int SLOT_SHIFT = 3;
-#elif ALLOC_ALIGNMENT == 16
 const unsigned char lowSlots[] =
 {
 	0, // 32
@@ -921,7 +789,6 @@ const unsigned short lowLimits[] =
 };
 
 const int SLOT_SHIFT = 4;
-#endif
 
 const size_t TINY_SLOTS = FB_NELEM(lowLimits);
 const unsigned short* TINY_BLOCK_LIMIT = &lowLimits[TINY_SLOTS - 1];
@@ -931,11 +798,7 @@ const unsigned short* TINY_BLOCK_LIMIT = &lowLimits[TINY_SLOTS - 1];
 class LowLimits
 {
 public:
-#if ALLOC_ALIGNMENT == 8
-	static const unsigned TOTAL_ELEMENTS = 29;		// TINY_SLOTS
-#elif ALLOC_ALIGNMENT == 16
 	static const unsigned TOTAL_ELEMENTS = 24;		// TINY_SLOTS
-#endif
 	static const unsigned TOP_LIMIT = 1024;			// TINY_BLOCK_LIMIT
 
 	static unsigned getSlot(size_t size, GetSlotFor mode)
@@ -1583,7 +1446,7 @@ public:
 		for (; block; block = block->next)
 		{
 			if (block->getSize() != length)
-				corrupt("length trashed for block in slot");
+				corrupt("length trashed for block in small slot");
 		}
 	}
 };
@@ -1619,7 +1482,7 @@ public:
 		for (; block; block = block->next)
 		{
 			if (block->getSize() != length)
-				corrupt("length trashed for block in slot");
+				corrupt("length trashed for block in medium slot");
 			SemiDoubleLink::validate(block);
 		}
 	}
@@ -1710,8 +1573,8 @@ public:
 		for (unsigned int slot = 0; slot < Limits::TOTAL_ELEMENTS; ++slot)
 			ListBuilder::validate(freeObjects[slot], Limits::getSize(slot));
 
-		if (currentExtent)
-			currentExtent->validate(pool, currentExtent->hdrSize(), vMap, vUse);
+		for (Extent* ext = currentExtent; ext; ext = ext->next)
+			ext->validate(pool, ext->hdrSize(), vMap, vUse);
 	}
 
 private:
@@ -1811,12 +1674,12 @@ private:
 	};
 #endif // VALIDATE_POOL
 
-	MemBlock* alloc(size_t from, size_t& length, bool flagRedirect);
+	MemBlock* allocateInternal(size_t from, size_t& length, bool flagRedirect);
 	void releaseBlock(MemBlock *block, bool flagDecr) noexcept;
 
 public:
 	void* allocate(size_t size ALLOC_PARAMS);
-	MemBlock* allocate2(size_t from, size_t& size ALLOC_PARAMS);
+	MemBlock* allocateRange(size_t from, size_t& size ALLOC_PARAMS);
 
 private:
 	virtual void memoryIsExhausted(void);
@@ -1833,7 +1696,7 @@ public:
 	void newExtent(size_t& size, Extent** linkedList);
 
 private:
-#ifdef USE_VALGRIND
+#ifdef DELAYED_FREE
 	// Circular FIFO buffer of read/write protected blocks pending free operation
 	MemBlock* delayedFree[DELAYED_FREE_COUNT];
 	size_t delayedFreeCount;
@@ -1849,6 +1712,11 @@ public:
 
 	// Create memory pool instance
 	static MemPool* createPool(MemPool* parent, MemoryStats& stats);
+
+	MemoryStats& getStatsGroup() noexcept
+	{
+		return *stats;
+	}
 
 	// Set statistics group for pool. Usage counters will be decremented from
 	// previously set group and added to new
@@ -2060,12 +1928,9 @@ void MemoryPool::initDefaultPool()
 void MemoryPool::cleanupDefaultPool()
 {
 #ifdef VALGRIND_FIX_IT
-	VALGRIND_DISCARD(
-		VALGRIND_MAKE_MEM_DEFINED(cache_mutex, sizeof(Mutex)));
-	VALGRIND_DISCARD(
-		VALGRIND_MAKE_MEM_DEFINED(default_stats_group, sizeof(MemoryStats)));
-	VALGRIND_DISCARD(
-		VALGRIND_MAKE_MEM_DEFINED(defaultMemoryManager, sizeof(MemPool)));
+	VALGRIND_MAKE_MEM_DEFINED(cache_mutex, sizeof(Mutex));
+	VALGRIND_MAKE_MEM_DEFINED(default_stats_group, sizeof(MemoryStats));
+	VALGRIND_MAKE_MEM_DEFINED(defaultMemoryManager, sizeof(MemPool));
 #endif
 
 	if (defaultMemoryManager)
@@ -2115,10 +1980,12 @@ void MemPool::initialize()
 	blocksAllocated = 0;
 	blocksActive = 0;
 
-#ifdef USE_VALGRIND
+#ifdef DELAYED_FREE
 	delayedFreeCount = 0;
 	delayedFreePos = 0;
+#endif
 
+#ifdef USE_VALGRIND
 	VALGRIND_CREATE_MEMPOOL(this, VALGRIND_REDZONE, 0);
 #endif
 
@@ -2147,17 +2014,8 @@ MemPool::~MemPool(void)
 #ifdef USE_VALGRIND
 	VALGRIND_DESTROY_MEMPOOL(this);
 
-	// Do not forget to discard stack traces for delayed free blocks
 	for (size_t i = 0; i < delayedFreeCount; i++)
-	{
-		MemBlock* block = delayedFree[i];
-		void* object = &block->body;
-
-		VALGRIND_DISCARD(
-            VALGRIND_MAKE_MEM_DEFINED(block, offsetof(MemBlock, body)));
-		VALGRIND_DISCARD(
-            VALGRIND_MAKE_WRITABLE(object, block->getSize()));
-	}
+		delayedFree[i]->valgrindInternal();
 #endif
 
 	// release big objects
@@ -2178,6 +2036,25 @@ MemPool::~MemPool(void)
 		{
 			MemBlock* block = parentRedirected.pop();
 			block->resetRedirect(parent);
+#ifdef DELAYED_FREE
+			if (!block->isActive())
+			{
+				bool found = false;
+				for (size_t i = 0; i < delayedFreeCount; i++)
+				{
+					if (delayedFree[i] == block)
+					{
+						found = true;
+						break;
+					}
+				}
+				fb_assert(found);
+			}
+			else
+				block->resetActive();
+
+			block->resetExtent();
+#endif
 			parent->releaseBlock(block, false);
 		}
 	}
@@ -2262,15 +2139,23 @@ void MemPool::setStatsGroup(MemoryStats& newStats) noexcept
 	stats->increment_usage(sav_used_memory);
 }
 
+MemoryStats& MemoryPool::getStatsGroup() noexcept
+{
+	return pool->getStatsGroup();
+}
+
 void MemoryPool::setStatsGroup(MemoryStats& newStats) noexcept
 {
 	pool->setStatsGroup(newStats);
 }
 
-MemBlock* MemPool::alloc(size_t from, size_t& length, bool flagRedirect)
+MemBlock* MemPool::allocateInternal(size_t from, size_t& length, bool flagRedirect)
 {
-	MutexEnsureUnlock guard(mutex, "MemPool::alloc");
+	MutexEnsureUnlock guard(mutex, "MemPool::allocateInternal");
 	guard.enter();
+
+	++blocksAllocated;
+	++blocksActive;
 
 	// If this is a small block, look for it there
 
@@ -2278,10 +2163,12 @@ MemBlock* MemPool::alloc(size_t from, size_t& length, bool flagRedirect)
 	if (block)
 		return block;
 
+	// Parent redirection of medium blocks
+
 	if (parent_redirect && flagRedirect && length < PARENT_REDIRECT_THRESHOLD)
 	{
 		guard.leave();
-		block = parent->alloc(from, length, false);
+		block = parent->allocateInternal(from, length, false);
 		guard.enter();
 
 		if (block)
@@ -2322,21 +2209,20 @@ MemBlock* MemPool::alloc(size_t from, size_t& length, bool flagRedirect)
 	return hunk->block;
 }
 
-MemBlock* MemPool::allocate2(size_t from, size_t& size
+MemBlock* MemPool::allocateRange(size_t from, size_t& size
 #ifdef DEBUG_GDS_ALLOC
 	, const char* fileName, int line
 #endif
 )
 {
 	size_t length = from ? size : ROUNDUP(size + VALGRIND_REDZONE, roundingSize) + GUARD_BYTES;
-	MemBlock* memory = alloc(from, length, true);
+	MemBlock* memory = allocateInternal(from, length, true);
 	size = length - (VALGRIND_REDZONE + GUARD_BYTES);
+	memory->pool = this;
 
 #ifdef USE_VALGRIND
 	VALGRIND_MEMPOOL_ALLOC(this, &memory->body, size);
 #endif
-
-	memory->pool = this;
 
 #ifdef DEBUG_GDS_ALLOC
 	memory->fileName = fileName;
@@ -2348,8 +2234,9 @@ MemBlock* MemPool::allocate2(size_t from, size_t& size
 	memset(&memory->body + size, GUARD_BYTE, memory->getSize() - offsetof(MemBlock,body) - size);
 #endif
 
-	++blocksAllocated;
-	++blocksActive;
+#ifdef DELAYED_FREE
+	memory->setActive();
+#endif
 
 	fb_assert((U_IPTR)(&memory->body) % ALLOC_ALIGNMENT == 0);
 	return memory;
@@ -2363,7 +2250,7 @@ void* MemPool::allocate(size_t size ALLOC_PARAMS)
 	Validator vld(this);
 #endif
 
-	MemBlock* memory = allocate2(0, size ALLOC_PASS_ARGS);
+	MemBlock* memory = allocateRange(0, size ALLOC_PASS_ARGS);
 
 	increment_usage(memory->getSize());
 
@@ -2376,23 +2263,33 @@ void MemPool::releaseMemory(void* object, bool flagExtent) noexcept
 	if (object)
 	{
 		MemBlock* block = (MemBlock*) ((UCHAR*) object - offsetof(MemBlock, body));
-		MemPool* pool = block->pool;
+#ifdef DELAYED_FREE
+		if (!block->isActive())
+		{
+			corrupt("Try delete not active block (double free?)");
+			return;
+		}
+#endif
 
+		MemPool* pool = block->pool;
 #ifdef VALIDATE_POOL
 		MutexLockGuard guard(pool->mutex, "MemPool::releaseMemory");
 #endif
-		if (flagExtent)
-			block->resetExtent();
+		fb_assert(block->isExtent() == flagExtent);
+
+#ifdef DELAYED_FREE
+		// Synchronize delayed free queue using pool mutex
+		MutexLockGuard guard(pool->mutex, FB_FUNCTION);
+
+		block->resetActive();
 
 #ifdef USE_VALGRIND
-		// Synchronize delayed free queue using pool mutex
-		MutexLockGuard guard(pool->mutex, "MemPool::deallocate USE_VALGRIND");
-
 		// Notify Valgrind that block is freed from the pool
 		VALGRIND_MEMPOOL_FREE(pool, object);
 
 		// block is placed in delayed buffer - mark as NOACCESS for that time
-		VALGRIND_DISCARD(VALGRIND_MAKE_NOACCESS(block, offsetof(MemBlock, body)));
+		VALGRIND_MAKE_MEM_NOACCESS(block, block->getSize());
+#endif
 
 		// Extend circular buffer if possible
 		if (pool->delayedFreeCount < FB_NELEM(pool->delayedFree))
@@ -2407,18 +2304,7 @@ void MemPool::releaseMemory(void* object, bool flagExtent) noexcept
 
 		block = pool->delayedFree[pool->delayedFreePos];
 		object = &block->body;
-
-		// Re-enable access to MemBlock
-		VALGRIND_DISCARD(VALGRIND_MAKE_MEM_DEFINED(block, offsetof(MemBlock, body)));
-
-		// Remove protection from memory block
-#ifdef VALGRIND_FIX_IT
-		VALGRIND_DISCARD(
-			VALGRIND_MAKE_MEM_DEFINED(object, block->getSize() - VALGRIND_REDZONE));
-#else
-		VALGRIND_DISCARD(
-			VALGRIND_MAKE_WRITABLE(object, block->getSize() - VALGRIND_REDZONE));
-#endif
+		flagExtent = block->isExtent();
 
 		// Replace element in circular buffer
 		pool->delayedFree[pool->delayedFreePos] = requested_block;
@@ -2428,17 +2314,30 @@ void MemPool::releaseMemory(void* object, bool flagExtent) noexcept
 			pool->delayedFreePos = 0;
 #endif
 
+		// Re-enable access to MemBlock
+		block->valgrindInternal();
+
 #ifdef DEBUG_GDS_ALLOC
 		block->fileName = NULL;
 #endif
+
+		// Finally delete it
+		block->resetExtent();
 		pool->releaseBlock(block, !flagExtent);
 	}
 }
 
 void MemPool::releaseBlock(MemBlock* block, bool decrUsage) noexcept
 {
+#ifdef DELAYED_FREE
+	fb_assert(!block->isActive());
+#endif
+
 	if (block->pool != this)
+	{
 		corrupt("bad block released");
+		return;
+	}
 
 #ifdef MEM_DEBUG
 	for (const UCHAR* end = (UCHAR*) block + block->getSize(), *p = end - GUARD_BYTES; p < end;)
@@ -2448,11 +2347,12 @@ void MemPool::releaseBlock(MemBlock* block, bool decrUsage) noexcept
 	}
 #endif
 
-	--blocksActive;
 	const size_t length = block->getSize();
 
 	MutexEnsureUnlock guard(mutex, "MemPool::releaseBlock");
 	guard.enter();
+
+	--blocksActive;
 
 	Validator vld(decrUsage ? this : NULL);
 
@@ -2573,7 +2473,7 @@ void* MemPool::allocRaw(size_t size)
 
 #ifdef USE_VALGRIND
 	// Let Valgrind forget that block was zero-initialized
-	VALGRIND_DISCARD(VALGRIND_MAKE_WRITABLE(result, size));
+	VALGRIND_MAKE_MEM_UNDEFINED(result, size);
 #endif
 
 	increment_mapping(size);
@@ -2586,7 +2486,7 @@ void* MemPool::getExtent(size_t from, size_t& to)		// pass desired minimum size,
 #ifdef VALIDATE_POOL
 	MutexLockGuard guard(mutex, "MemPool::getExtent");
 #endif
-	MemBlock* extent = allocate2(from, to ALLOC_ARGS);
+	MemBlock* extent = allocateRange(from, to ALLOC_ARGS);
 	extent->setExtent();
 	return &extent->body;
 }
@@ -2607,7 +2507,7 @@ void MemPool::releaseExtent(bool destroying, void* block, size_t size, MemPool* 
 
 void MemPool::releaseRaw(bool destroying, void* block, size_t size, ExtentsCache* extentsCache) noexcept
 {
-#ifndef USE_VALGRIND
+#ifndef DELAYED_FREE
 	if (extentsCache && (size == DEFAULT_ALLOCATION))
 	{
 		MutexLockGuard guard(cache_mutex, "MemPool::releaseRaw");
@@ -2617,9 +2517,15 @@ void MemPool::releaseRaw(bool destroying, void* block, size_t size, ExtentsCache
 			return;
 		}
 	}
+
+#define unmapBlockPtr block
+#define unmapBlockSize size
+
 #else
+#ifdef VALGRIND
 	// Set access protection for block to prevent memory from deleted pool being accessed
-	int handle = /* //VALGRIND_MAKE_NOACCESS */ VALGRIND_MAKE_MEM_DEFINED(block, size);
+	VALGRIND_MAKE_MEM_NOACCESS(block, size);
+#endif
 
 	size = FB_ALIGN(size, get_map_page_size());
 
@@ -2639,15 +2545,11 @@ void MemPool::releaseRaw(bool destroying, void* block, size_t size, ExtentsCache
 			DelayedExtent* item = &delayedExtents[delayedExtentCount];
 			item->memory = block;
 			item->size = size;
-			item->handle = handle;
 			delayedExtentCount++;
 			return;
 		}
 
 		DelayedExtent* item = &delayedExtents[delayedExtentsPos];
-
-		// Free message associated with old extent in Valgrind
-		VALGRIND_DISCARD(item->handle);
 
 		// Set up the block we are going to unmap
 		unmapBlockPtr = item->memory;
@@ -2655,18 +2557,12 @@ void MemPool::releaseRaw(bool destroying, void* block, size_t size, ExtentsCache
 
 		// Replace element in circular buffer
 		item->memory = block;
-		item->handle = handle;
 		item->size = size;
 
 		// Move queue pointer to next element and cycle if needed
 		delayedExtentsPos++;
 		if (delayedExtentsPos >= FB_NELEM(delayedExtents))
 			delayedExtentsPos = 0;
-	}
-	else
-	{
-		// Let Valgrind forget about unmapped block
-		VALGRIND_DISCARD(handle);
 	}
 #endif
 
@@ -2677,16 +2573,19 @@ void MemPool::releaseRaw(bool destroying, void* block, size_t size, ExtentsCache
 #else // WIN_NT
 
 #if (defined SOLARIS) && (defined HAVE_CADDR_T)
-	int rc = munmap((caddr_t) block, size);
+	int rc = munmap((caddr_t) unmapBlockPtr, unmapBlockSize);
 #else
-	int rc = munmap(block, size);
+	int rc = munmap(unmapBlockPtr, unmapBlockSize);
 #endif
 	if (rc)
 	{
 		if (errno == ENOMEM)
 		{
-			FailedBlock* failed = (FailedBlock*) block;
-			failed->blockSize = size;
+			FailedBlock* failed = (FailedBlock*) unmapBlockPtr;
+#ifdef USE_VALGRIND
+			VALGRIND_MAKE_MEM_UNDEFINED(failed, sizeof(FailedBlock));
+#endif
+			failed->blockSize = unmapBlockSize;
 
 			MutexLockGuard guard(cache_mutex, "MemPool::releaseRaw");
 			SemiDoubleLink::push(&failedList, failed);

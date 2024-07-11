@@ -75,6 +75,9 @@ PluginLogWriter::PluginLogWriter(const char* fileName, size_t maxSize) :
 	{
 		m_sharedMemory.reset(FB_NEW_POOL(getPool())
 			SharedMemory<PluginLogWriterHeader>(mapFile.c_str(), sizeof(PluginLogWriterHeader), this));
+
+		auto header = m_sharedMemory->getHeader();
+		checkHeader(header);
 	}
 	catch (const Exception& ex)
 	{
@@ -96,6 +99,9 @@ PluginLogWriter::~PluginLogWriter()
 
 	if (m_fileHandle != -1)
 		::close(m_fileHandle);
+
+	if (m_sharedMemory && m_sharedMemory->getHeader())
+		m_sharedMemory->removeMapFile();
 }
 
 SINT64 PluginLogWriter::seekToEnd()
@@ -268,6 +274,11 @@ void PluginLogWriter::mutexBug(int state, const TEXT* string)
 
 bool PluginLogWriter::initialize(SharedMemoryBase* sm, bool init)
 {
+	auto header = reinterpret_cast<PluginLogWriterHeader*>(sm->sh_mem_header);
+
+	if (init)
+		initHeader(header);
+
 	return true;
 }
 

@@ -40,7 +40,7 @@ public:
 
 	jrd_tra* getTransaction() const;
 	Attachment* getAttachment() const;
-	void setInterfacePtr(JResultSet* interfacePtr) throw();
+	void setInterfacePtr(JResultSet* interfacePtr) noexcept;
 
 	static void close(thread_db* tdbb, DsqlCursor* cursor);
 
@@ -60,6 +60,10 @@ public:
 	{
 		return (m_state == EOS);
 	}
+
+	void getInfo(thread_db* tdbb,
+				 unsigned int itemsLength, const unsigned char* items,
+				 unsigned int bufferLength, unsigned char* buffer);
 
 private:
 	int fetchFromCache(thread_db* tdbb, UCHAR* buffer, FB_UINT64 position);

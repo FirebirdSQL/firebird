@@ -34,7 +34,7 @@ class BurpGlobals;
 int		BURP_main(Firebird::UtilSvc*);
 int		gbak(Firebird::UtilSvc*);
 
-void	BURP_abort();
+void	BURP_abort(Firebird::IStatus* status = nullptr);
 void	BURP_error(USHORT, bool, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
 void	BURP_error(USHORT, bool, const char* str);
 void	BURP_error_redirect(Firebird::IStatus*, USHORT, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
@@ -46,7 +46,7 @@ void	BURP_msg_get(USHORT, TEXT*, const MsgFormat::SafeArg& arg = MsgFormat::Safe
 void	BURP_output_version(void*, const TEXT*);
 void	BURP_print(bool err, USHORT, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
 void	BURP_print(bool err, USHORT, const char* str);
-void	BURP_print_status(bool err, Firebird::IStatus* status);
+void	BURP_print_status(bool err, Firebird::IStatus* status, USHORT secondNumber = 0);
 void	BURP_print_warning(Firebird::IStatus* status);
 void	BURP_verbose(USHORT, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
 void	BURP_verbose(USHORT, const char* str);

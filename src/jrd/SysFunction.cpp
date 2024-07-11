@@ -33,6 +33,7 @@
 #include "../common/TimeZoneUtil.h"
 #include "../common/classes/VaryStr.h"
 #include "../common/classes/Hash.h"
+#include "../common/classes/Uuid.h"
 #include "../jrd/SysFunction.h"
 #include "../jrd/DataTypeUtil.h"
 #include "../include/fb_blk.h"
@@ -81,9 +82,6 @@ namespace {
 #if defined(_MSC_VER) && _MSC_VER < 1900
 #pragma message("Ensure the 'hh' size modifier is supported")
 #endif
-
-const char* const BYTE_GUID_FORMAT =
-	"%02hhX%02hhX%02hhX%02hhX-%02hhX%02hhX-%02hhX%02hhX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX";
 
 // function types handled in generic functions
 enum Function
@@ -163,6 +161,10 @@ static const HashAlgorithmDescriptor* cryptHashAlgorithmDescriptors[] = {
 	HashAlgorithmDescriptorFactory<Sha1HashContext>::getInstance("SHA1", 20),
 	HashAlgorithmDescriptorFactory<Sha256HashContext>::getInstance("SHA256", 32),
 	HashAlgorithmDescriptorFactory<Sha512HashContext>::getInstance("SHA512", 64),
+	HashAlgorithmDescriptorFactory<Sha3_512_HashContext>::getInstance("SHA3_512", 64),
+	HashAlgorithmDescriptorFactory<Sha3_384_HashContext>::getInstance("SHA3_384", 48),
+	HashAlgorithmDescriptorFactory<Sha3_256_HashContext>::getInstance("SHA3_256", 32),
+	HashAlgorithmDescriptorFactory<Sha3_224_HashContext>::getInstance("SHA3_224", 28),
 	nullptr
 };
 
@@ -205,7 +207,7 @@ const int ONE_DAY = 86400;
 const unsigned MAX_CTX_VAR_SIZE = 255;
 
 // auxiliary functions
-double fbcot(double value) throw();
+double fbcot(double value) noexcept;
 
 // generic setParams functions
 void setParamsDouble(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
@@ -223,6 +225,7 @@ bool dscHasData(const dsc* param);
 // specific setParams functions
 void setParamsAsciiVal(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsBin(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
+void setParamsBlobAppend(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsCharToUuid(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsDateAdd(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsDateDiff(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
@@ -258,6 +261,7 @@ void makeAbs(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* r
 void makeAsciiChar(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeBin(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeBinShift(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
+void makeBlobAppend(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeCeilFloor(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeDateAdd(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
 void makeDateDiff(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result, int argsCount, const dsc** args);
@@ -297,6 +301,7 @@ dsc* evlAsciiVal(thread_db* tdbb, const SysFunction* function, const NestValueAr
 dsc* evlAtan2(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlBin(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlBinShift(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
+dsc* evlBlobAppend(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlCeil(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlCharToUuid(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
@@ -381,14 +386,19 @@ const char
 	WIRE_CRYPT_PLUGIN_NAME[] = "WIRE_CRYPT_PLUGIN",
 	CLIENT_ADDRESS_NAME[] = "CLIENT_ADDRESS",
 	CLIENT_HOST_NAME[] = "CLIENT_HOST",
+	CLIENT_OS_USER_NAME[] = "CLIENT_OS_USER",
 	CLIENT_PID_NAME[] = "CLIENT_PID",
 	CLIENT_PROCESS_NAME[] = "CLIENT_PROCESS",
+	CLIENT_VERSION_NAME[] = "CLIENT_VERSION",
 	CURRENT_USER_NAME[] = "CURRENT_USER",
 	CURRENT_ROLE_NAME[] = "CURRENT_ROLE",
 	SESSION_IDLE_TIMEOUT[] = "SESSION_IDLE_TIMEOUT",
 	STATEMENT_TIMEOUT[] = "STATEMENT_TIMEOUT",
 	EFFECTIVE_USER_NAME[] = "EFFECTIVE_USER",
 	SESSION_TIMEZONE[] = "SESSION_TIMEZONE",
+	PARALLEL_WORKERS[] = "PARALLEL_WORKERS",
+	DECFLOAT_ROUND[] = "DECFLOAT_ROUND",
+	DECFLOAT_TRAPS[] = "DECFLOAT_TRAPS",
 	// SYSTEM namespace: transaction wise items
 	TRANSACTION_ID_NAME[] = "TRANSACTION_ID",
 	ISOLATION_LEVEL_NAME[] = "ISOLATION_LEVEL",
@@ -420,8 +430,14 @@ static const char
 	FALSE_VALUE[] = "FALSE",
 	TRUE_VALUE[] = "TRUE";
 
+// Get pages
+const char
+    PAGES_ALLOCATED[] = "PAGES_ALLOCATED",
+    PAGES_USED[] = "PAGES_USED",
+    PAGES_FREE[] = "PAGES_FREE";
 
-double fbcot(double value) throw()
+
+double fbcot(double value) noexcept
 {
 	return 1.0 / tan(value);
 }
@@ -609,10 +625,23 @@ void setParamsAsciiVal(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc
 }
 
 
+void setParamsBlobAppend(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
+{
+	if (argsCount >= 1 && args[0]->isUnknown())
+		args[0]->makeBlob(isc_blob_text, CS_dynamic);
+
+	for (int i = 1; i < argsCount; ++i)
+	{
+		if (args[i]->isUnknown())
+			args[i]->makeVarying(80, args[0]->getTextType());
+	}
+}
+
+
 void setParamsCharToUuid(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
 {
 	if (argsCount >= 1 && args[0]->isUnknown())
-		args[0]->makeText(GUID_BODY_SIZE, ttype_ascii);
+		args[0]->makeText(Uuid::STR_LEN, ttype_ascii);
 }
 
 
@@ -1230,6 +1259,69 @@ void makeBinShift(DataTypeUtilBase*, const SysFunction* function, dsc* result,
 }
 
 
+bool makeBlobAppendBlob(dsc* result, const dsc* arg, bid* blob_id = nullptr)
+{
+	if (!arg)
+		return false;
+
+	ISC_QUAD* ptr = reinterpret_cast<ISC_QUAD*>(blob_id);
+
+	if (arg->isBlob())
+	{
+		result->makeBlob(arg->getBlobSubType(), arg->getTextType(), ptr);
+		return true;
+	}
+
+	if (arg->isNull())
+		return false;
+
+	if (arg->isText())
+	{
+		USHORT ttype = arg->getTextType();
+		if (ttype == ttype_binary)
+			result->makeBlob(isc_blob_untyped, ttype_binary, ptr);
+		else
+			result->makeBlob(isc_blob_text, ttype, ptr);
+	}
+	else
+	{
+		result->makeBlob(isc_blob_text, ttype_ascii, ptr);
+	}
+
+	return true;
+}
+
+
+void makeBlobAppend(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* result,
+	int argsCount, const dsc** args)
+{
+	fb_assert(argsCount >= function->minArgCount);
+
+	result->makeBlob(isc_blob_untyped, ttype_binary);
+	result->setNullable(true);
+
+	if (argsCount > 0)
+	{
+		for (int i = 0; i < argsCount; ++i)
+		{
+			if (makeBlobAppendBlob(result, args[i]))
+				break;
+		}
+
+		result->setNullable(true);
+
+		for (int i = 0; i < argsCount; ++i)
+		{
+			if (!args[i]->isNullable())
+			{
+				result->setNullable(false);
+				break;
+			}
+		}
+	}
+}
+
+
 void makeCeilFloor(DataTypeUtilBase*, const SysFunction* function, dsc* result,
 	int argsCount, const dsc** args)
 {
@@ -1826,7 +1918,7 @@ void makeUnicodeChar(DataTypeUtilBase*, const SysFunction* function, dsc* result
 void makeUuid(DataTypeUtilBase*, const SysFunction* function, dsc* result,
 	int argsCount, const dsc** args)
 {
-	fb_assert(argsCount == function->minArgCount);
+	fb_assert(argsCount >= function->minArgCount);
 
 	if (argsCount > 0 && args[0]->isNull())
 		result->makeNullString();
@@ -1851,7 +1943,7 @@ void makeUuidToChar(DataTypeUtilBase*, const SysFunction* function, dsc* result,
 		return;
 	}
 
-	result->makeText(GUID_BODY_SIZE, ttype_ascii);
+	result->makeText(Uuid::STR_LEN, ttype_ascii);
 	result->setNullable(value->isNullable());
 }
 
@@ -2258,6 +2350,148 @@ HUGEINT getScale(impure_value* impure)
 }
 
 
+static void appendFromBlob(thread_db* tdbb, jrd_tra* transaction, blb* blob,
+	const dsc* blobDsc, const dsc* srcDsc)
+{
+	if (!srcDsc->dsc_address)
+		return;
+
+	bid* srcBlobID = (bid*)srcDsc->dsc_address;
+	if (srcBlobID->isEmpty())
+		return;
+
+	if (memcmp(blobDsc->dsc_address, srcDsc->dsc_address, sizeof(bid)) == 0)
+		status_exception::raise(Arg::Gds(isc_random) << Arg::Str("Can not append blob to itself"));
+
+	UCharBuffer bpb;
+	BLB_gen_bpb_from_descs(srcDsc, blobDsc, bpb);
+
+	AutoBlb srcBlob(tdbb, blb::open2(tdbb, transaction, srcBlobID, bpb.getCount(), bpb.begin()));
+
+	Database* dbb = tdbb->getDatabase();
+
+	HalfStaticArray<UCHAR, BUFFER_LARGE> buffer;
+	const SLONG buffSize = (srcBlob->getLevel() == 0) ?
+		MAX(BUFFER_LARGE, srcBlob->blb_length) : dbb->dbb_page_size - BLP_SIZE;
+
+	UCHAR* buff = buffer.getBuffer(buffSize);
+	while (!(srcBlob->blb_flags & BLB_eof))
+	{
+		const SLONG len = srcBlob->BLB_get_data(tdbb, buff, buffSize, false);
+		if (len)
+			blob->BLB_put_data(tdbb, buff, len);
+	}
+}
+
+
+dsc* evlBlobAppend(thread_db* tdbb, const SysFunction* function, const NestValueArray& args,
+	impure_value* impure)
+{
+	Request* request = tdbb->getRequest();
+	jrd_tra* transaction = request ? request->req_transaction : tdbb->getTransaction();
+	transaction = transaction->getOuter();
+
+	blb* blob = NULL;
+	bid blob_id;
+	blob_id.clear();
+
+	dsc blobDsc;
+
+	const dsc* argDsc = EVL_expr(tdbb, request, args[0]);
+	const bool arg0_null = (request->req_flags & req_null) || (argDsc == NULL);
+
+	if (!arg0_null && argDsc->isBlob())
+	{
+		blob_id = *reinterpret_cast<bid*>(argDsc->dsc_address);
+		makeBlobAppendBlob(&blobDsc, argDsc, &blob_id);
+	}
+
+	// Try to get blob type from declared var\param
+	if (!argDsc && (nodeIs<VariableNode>(args[0]) ||
+					nodeIs<ParameterNode>(args[0]) ))
+	{
+		argDsc = EVL_assign_to(tdbb, args[0]);
+		if (argDsc && argDsc->isBlob())
+			makeBlobAppendBlob(&blobDsc, argDsc, &blob_id);
+	}
+
+	bool copyBlob = !blob_id.isEmpty();
+	if (copyBlob)
+	{
+		if (!blob_id.bid_internal.bid_relation_id)
+		{
+			if (!transaction->tra_blobs->locate(blob_id.bid_temp_id()))
+				status_exception::raise(Arg::Gds(isc_bad_segstr_id));
+
+			BlobIndex blobIdx = transaction->tra_blobs->current();
+			if (!blobIdx.bli_materialized && (blobIdx.bli_blob_object->blb_flags & BLB_close_on_read))
+			{
+				blob = blobIdx.bli_blob_object;
+				copyBlob = false;
+			}
+		}
+	}
+
+	for (FB_SIZE_T i = 0; i < args.getCount(); i++)
+	{
+		if (i == 0)
+		{
+			if (arg0_null || argDsc->isBlob() && !copyBlob)
+				continue;
+		}
+		else
+		{
+			argDsc = EVL_expr(tdbb, request, args[i]);
+			if ((request->req_flags & req_null) || !argDsc)
+				continue;
+		}
+
+		fb_assert(argDsc != nullptr);
+
+		if (!blobDsc.isBlob())
+		{
+			if (!makeBlobAppendBlob(&blobDsc, argDsc, &blob_id))
+				continue;
+		}
+
+		fb_assert(blobDsc.isBlob());
+
+		if (!blob)
+		{
+			UCharBuffer bpb;
+			BLB_gen_bpb_from_descs(&blobDsc, &blobDsc, bpb);
+			bpb.push(isc_bpb_storage);
+			bpb.push(1);
+			bpb.push(isc_bpb_storage_temp);
+
+			blob = blb::create2(tdbb, transaction, &blob_id, bpb.getCount(), bpb.begin());
+			blob->blb_flags |= BLB_stream | BLB_close_on_read;
+			blob->blb_charset = blobDsc.getCharSet();
+		}
+
+		if (!argDsc->isBlob())
+		{
+			MoveBuffer temp;
+			UCHAR* addr = NULL;
+			SLONG len = MOV_make_string2(tdbb, argDsc, blob->blb_charset, &addr, temp);
+
+			if (addr)
+				blob->BLB_put_data(tdbb, addr, len);
+		}
+		else
+		{
+			appendFromBlob(tdbb, transaction, blob, &blobDsc, argDsc);
+		}
+	}
+
+	if (!blob)
+		return nullptr;
+
+	EVL_make_value(tdbb, &blobDsc, impure);
+	return &impure->vlu_desc;
+}
+
+
 dsc* evlCeil(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	impure_value* impure)
 {
@@ -2364,12 +2598,12 @@ dsc* evlCharToUuid(thread_db* tdbb, const SysFunction* function, const NestValue
 	USHORT len = MOV_get_string(tdbb, value, &data_temp, NULL, 0);
 	const UCHAR* data;
 
-	if (len > GUID_BODY_SIZE)
+	if (len > Uuid::STR_LEN)
 	{
 		// Verify if only spaces exists after the expected length. See CORE-5062.
-		data = data_temp + GUID_BODY_SIZE;
+		data = data_temp + Uuid::STR_LEN;
 
-		while (len > GUID_BODY_SIZE)
+		while (len > Uuid::STR_LEN)
 		{
 			if (*data++ != ASCII_SPACE)
 				break;
@@ -2381,15 +2615,15 @@ dsc* evlCharToUuid(thread_db* tdbb, const SysFunction* function, const NestValue
 	data = data_temp;
 
 	// validate the UUID
-	if (len != GUID_BODY_SIZE) // 36
+	if (len != Uuid::STR_LEN)
 	{
 		status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
 									Arg::Gds(isc_sysf_argviolates_uuidlen) <<
-										Arg::Num(GUID_BODY_SIZE) <<
+										Arg::Num(Uuid::STR_LEN) <<
 										Arg::Str(function->name));
 	}
 
-	for (int i = 0; i < GUID_BODY_SIZE; ++i)
+	for (int i = 0; i < Uuid::STR_LEN; ++i)
 	{
 		if (i == 8 || i == 13 || i == 18 || i == 23)
 		{
@@ -2418,16 +2652,18 @@ dsc* evlCharToUuid(thread_db* tdbb, const SysFunction* function, const NestValue
 		}
 	}
 
-	UCHAR bytes[16];
-	sscanf(reinterpret_cast<const char*>(data),
-		BYTE_GUID_FORMAT,
+	UCHAR bytes[Uuid::BYTE_LEN];
+
+	const auto count = sscanf(reinterpret_cast<const char*>(data),
+		Uuid::STR_FORMAT,
 		&bytes[0], &bytes[1], &bytes[2], &bytes[3],
 		&bytes[4], &bytes[5], &bytes[6], &bytes[7],
 		&bytes[8], &bytes[9], &bytes[10], &bytes[11],
 		&bytes[12], &bytes[13], &bytes[14], &bytes[15]);
+	fb_assert(count == 16);
 
 	dsc result;
-	result.makeText(16, ttype_binary, bytes);
+	result.makeText(Uuid::BYTE_LEN, ttype_binary, bytes);
 	EVL_make_value(tdbb, &result, impure);
 
 	return &impure->vlu_desc;
@@ -2445,16 +2681,33 @@ dsc* evlCharToUuid(thread_db* tdbb, const SysFunction* function, const NestValue
 #define blr_extract_yearday		(unsigned char)7
 #define blr_extract_millisecond	(unsigned char)8
 #define blr_extract_week		(unsigned char)9
+#define blr_extract_timezone_hour	(unsigned char)10
+#define blr_extract_timezone_minute	(unsigned char)11
+#define blr_extract_timezone_name	(unsigned char)12
+#define blr_extract_quarter		(unsigned char)13
 */
 
-const char* extractParts[10] =
+const char* extractParts[] =
 {
-	"YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND", "WEEKDAY", "YEARDAY", "MILLISECOND", "WEEK"
+	"YEAR",
+	"MONTH",
+	"DAY",
+	"HOUR",
+	"MINUTE",
+	"SECOND",
+	"WEEKDAY",
+	"YEARDAY",
+	"MILLISECOND",
+	"WEEK",
+	nullptr,
+	nullptr,
+	nullptr,
+	"QUARTER"
 };
 
 const char* getPartName(int n)
 {
-	if (n < 0 || n >= FB_NELEM(extractParts))
+	if (n < 0 || n >= FB_NELEM(extractParts) || !extractParts[n])
 		return "Unknown";
 
 	return extractParts[n];
@@ -2722,6 +2975,10 @@ public:
 
 		registerHash(md5_desc);
 		registerHash(sha1_desc);
+		registerHash(sha3_512_desc);
+		registerHash(sha3_384_desc);
+		registerHash(sha3_256_desc);
+		registerHash(sha3_224_desc);
 		registerHash(sha256_desc);
 		registerHash(sha512_desc);
 	}
@@ -3894,6 +4151,7 @@ dsc* evlDateDiff(thread_db* tdbb, const SysFunction* function, const NestValueAr
 	switch (part)
 	{
 		case blr_extract_year:
+		case blr_extract_quarter:
 		case blr_extract_month:
 		case blr_extract_day:
 		case blr_extract_week:
@@ -4099,6 +4357,11 @@ dsc* evlFirstLastDay(thread_db* tdbb, const SysFunction* function, const NestVal
 			times.tm_mday = 1;
 			break;
 
+		case blr_extract_quarter:
+			times.tm_mon = times.tm_mon / 3 * 3;
+			times.tm_mday = 1;
+			break;
+
 		case blr_extract_week:
 			break;
 
@@ -4121,6 +4384,10 @@ dsc* evlFirstLastDay(thread_db* tdbb, const SysFunction* function, const NestVal
 				++times.tm_year;
 				adjust = -1;
 				break;
+
+			case blr_extract_quarter:
+				times.tm_mon += 2;
+				// fall through
 
 			case blr_extract_month:
 				if (++times.tm_mon == 12)
@@ -4249,35 +4516,38 @@ dsc* evlFloor(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 dsc* evlGenUuid(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	impure_value* impure)
 {
-	fb_assert(args.getCount() == 0);
+	const auto request = tdbb->getRequest();
 
-	Guid guid;
-	static_assert(sizeof(guid) == 16, "Guid size mismatch");
+	fb_assert(args.getCount() <= 1);
 
-	GenerateGuid(&guid);
+	// Generate UUID and convert it into platform-independent format
+	UCHAR data[Uuid::BYTE_LEN];
+	SLONG version = 4;
 
-	// Convert platform-dependent UUID into platform-independent form according to RFC 4122
+	if (args.getCount() > 0)
+	{
+		const auto* const versionDsc = EVL_expr(tdbb, request, args[0]);
 
-	UCHAR data[16];
-	data[0] = (guid.Data1 >> 24) & 0xFF;
-	data[1] = (guid.Data1 >> 16) & 0xFF;
-	data[2] = (guid.Data1 >> 8) & 0xFF;
-	data[3] = guid.Data1 & 0xFF;
-	data[4] = (guid.Data2 >> 8) & 0xFF;
-	data[5] = guid.Data2 & 0xFF;
-	data[6] = (guid.Data3 >> 8) & 0xFF;
-	data[7] = guid.Data3 & 0xFF;
-	data[8] = guid.Data4[0];
-	data[9] = guid.Data4[1];
-	data[10] = guid.Data4[2];
-	data[11] = guid.Data4[3];
-	data[12] = guid.Data4[4];
-	data[13] = guid.Data4[5];
-	data[14] = guid.Data4[6];
-	data[15] = guid.Data4[7];
+		if (request->req_flags & req_null)
+			return nullptr;
+
+		version = MOV_get_long(tdbb, versionDsc, 0);
+	}
+
+	switch (version)
+	{
+		case 4:
+		case 7:
+			Uuid::generate((unsigned) version).extractBytes(data, sizeof(data));
+			break;
+
+		default:
+			status_exception::raise(Arg::Gds(isc_sysf_invalid_gen_uuid_version) << Arg::Num(version));
+			break;
+	}
 
 	dsc result;
-	result.makeText(16, ttype_binary, data);
+	result.makeText(Uuid::BYTE_LEN, ttype_binary, data);
 	EVL_make_value(tdbb, &result, impure);
 
 	return &impure->vlu_desc;
@@ -4317,11 +4587,19 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 		else if (nameStr == DATABASE_NAME)
 			resultStr = dbb->dbb_database_name.ToString();
 		else if (nameStr == DATABASE_GUID)
-		{
-			char guidBuffer[GUID_BUFF_SIZE];
-			GuidToString(guidBuffer, &dbb->dbb_guid);
-			resultStr = string(guidBuffer);
-		}
+			resultStr = dbb->dbb_guid.value().toString();
+        else if (nameStr == PAGES_ALLOCATED)
+        {
+            resultStr.printf("%" ULONGFORMAT, PageSpace::actAlloc(dbb));
+        }
+        else if (nameStr == PAGES_USED)
+        {
+            resultStr.printf("%" ULONGFORMAT, PageSpace::usedPages(dbb));
+        }
+        else if (nameStr == PAGES_FREE)
+        {
+            resultStr.printf("%" ULONGFORMAT, PageSpace::maxAlloc(dbb) - PageSpace::usedPages(dbb));
+        }
 		else if (nameStr == DATABASE_FILE_ID)
 		{
 			resultStr = dbb->getUniqueFileId();
@@ -4382,6 +4660,13 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 
 			resultStr = attachment->att_remote_host;
 		}
+		else if (nameStr == CLIENT_OS_USER_NAME)
+		{
+			if (attachment->att_remote_os_user.isEmpty())
+				return NULL;
+
+			resultStr = attachment->att_remote_os_user;
+		}
 		else if (nameStr == CLIENT_PID_NAME)
 		{
 			if (!attachment->att_remote_pid)
@@ -4395,6 +4680,13 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 				return NULL;
 
 			resultStr = attachment->att_remote_process.ToString();
+		}
+		else if (nameStr == CLIENT_VERSION_NAME)
+		{
+			if (attachment->att_client_version.isEmpty())
+				return NULL;
+
+			resultStr = attachment->att_client_version;
 		}
 		else if (nameStr == CURRENT_USER_NAME)
 		{
@@ -4479,6 +4771,12 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 			TimeZoneUtil::format(timeZoneBuffer, sizeof(timeZoneBuffer), attachment->att_current_timezone);
 			resultStr = timeZoneBuffer;
 		}
+		else if (nameStr == PARALLEL_WORKERS)
+			resultStr.printf("%d", attachment->att_parallel_workers);
+		else if (nameStr == DECFLOAT_ROUND)
+			resultStr = attachment->att_dec_status.getTxtRound();
+		else if (nameStr == DECFLOAT_TRAPS)
+			resultStr = attachment->att_dec_status.getTxtTraps();
 		else
 		{
 			// "Context variable %s is not found in namespace %s"
@@ -4623,7 +4921,7 @@ dsc* evlSetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 	{
 		// "Invalid namespace name %s passed to %s"
 		ERR_post(Arg::Gds(isc_ctx_namespace_invalid) <<
-			Arg::Str(nameStr) << Arg::Str(RDB_SET_CONTEXT));
+			Arg::Str(nameSpaceStr) << Arg::Str(RDB_SET_CONTEXT));
 	}
 
 	string valueStr;
@@ -6418,26 +6716,24 @@ dsc* evlUuidToChar(thread_db* tdbb, const SysFunction* function, const NestValue
 	}
 
 	UCHAR* data;
-	const USHORT len = MOV_get_string(tdbb, value, &data, NULL, 0);
-
-	if (len != sizeof(Guid))
+	if (MOV_get_string(tdbb, value, &data, NULL, 0) != Uuid::BYTE_LEN)
 	{
 		status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
 									Arg::Gds(isc_sysf_binuuid_wrongsize) <<
-										Arg::Num(sizeof(Guid)) <<
+										Arg::Num(Uuid::BYTE_LEN) <<
 										Arg::Str(function->name));
 	}
 
 	UCHAR buffer[GUID_BUFF_SIZE];
 	sprintf(reinterpret_cast<char*>(buffer),
-		BYTE_GUID_FORMAT,
+		Uuid::STR_FORMAT,
 		data[0], data[1], data[2], data[3], data[4],
 		data[5], data[6], data[7], data[8], data[9],
 		data[10], data[11], data[12], data[13], data[14],
 		data[15]);
 
 	dsc result;
-	result.makeText(GUID_BODY_SIZE, ttype_ascii, buffer);
+	result.makeText(Uuid::STR_LEN, ttype_ascii, buffer);
 	EVL_make_value(tdbb, &result, impure);
 
 	return &impure->vlu_desc;
@@ -6593,6 +6889,7 @@ const SysFunction SysFunction::functions[] =
 		{"BIN_SHL_ROT", 2, 2, setParamsInteger, makeBinShift, evlBinShift, (void*) funBinShlRot},
 		{"BIN_SHR_ROT", 2, 2, setParamsInteger, makeBinShift, evlBinShift, (void*) funBinShrRot},
 		{"BIN_XOR", 2, -1, setParamsBin, makeBin, evlBin, (void*) funBinXor},
+		{"BLOB_APPEND", 2, -1, setParamsBlobAppend, makeBlobAppend, evlBlobAppend, NULL},
 		{"CEIL", 1, 1, setParamsDblDec, makeCeilFloor, evlCeil, NULL},
 		{"CEILING", 1, 1, setParamsDblDec, makeCeilFloor, evlCeil, NULL},
 		{"CHAR_TO_UUID", 1, 1, setParamsCharToUuid, makeUuid, evlCharToUuid, NULL},
@@ -6608,7 +6905,7 @@ const SysFunction SysFunction::functions[] =
 		{"EXP", 1, 1, setParamsDblDec, makeDblDecResult, evlExp, NULL},
 		{"FIRST_DAY", 2, 2, setParamsFirstLastDay, makeFirstLastDayResult, evlFirstLastDay, (void*) funFirstDay},
 		{"FLOOR", 1, 1, setParamsDblDec, makeCeilFloor, evlFloor, NULL},
-		{"GEN_UUID", 0, 0, NULL, makeUuid, evlGenUuid, NULL},
+		{"GEN_UUID", 0, 1, NULL, makeUuid, evlGenUuid, NULL},
 		{"HASH", 1, 2, setParamsHash, makeHash, evlHash, NULL},
 		{"HEX_DECODE", 1, 1, NULL, makeDecodeHex, evlDecodeHex, NULL},
 		{"HEX_ENCODE", 1, 1, NULL, makeEncodeHex, evlEncodeHex, NULL},

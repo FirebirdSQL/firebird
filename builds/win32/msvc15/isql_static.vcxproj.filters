@@ -1,0 +1,95 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="ISQL files">
+      <UniqueIdentifier>{1a597f92-6f3f-4d63-8dd8-dde1426edf41}</UniqueIdentifier>
+      <Extensions>cpp;c;cxx;rc;def;r;odl;idl;hpj;bat</Extensions>
+    </Filter>
+    <Filter Include="Header files">
+      <UniqueIdentifier>{b6967076-ecd8-4f75-a128-3da2b3c4112d}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl</Extensions>
+    </Filter>
+    <Filter Include="ISQL files\GPRE epp">
+      <UniqueIdentifier>{2962ff05-3209-48ca-b313-4b8f443bb726}</UniqueIdentifier>
+      <Extensions>epp</Extensions>
+    </Filter>
+    <Filter Include="ISQL files\GPRE cpp">
+      <UniqueIdentifier>{1366807a-243b-4a32-a208-d8bc3a11dacc}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\..\src\isql\ColList.cpp">
+      <Filter>ISQL files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\isql\Extender.cpp">
+      <Filter>ISQL files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\common\fb_exception.cpp">
+      <Filter>ISQL files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\isql\FrontendLexer.cpp">
+      <Filter>ISQL files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\isql\InputDevices.cpp">
+      <Filter>ISQL files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\isql\iutils.cpp">
+      <Filter>ISQL files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\isql\OptionsBase.cpp">
+      <Filter>ISQL files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\gen\isql\extract.cpp">
+      <Filter>ISQL files\GPRE cpp</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\gen\isql\isql.cpp">
+      <Filter>ISQL files\GPRE cpp</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\gen\isql\show.cpp">
+      <Filter>ISQL files\GPRE cpp</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\..\src\isql\extract.epp">
+      <Filter>ISQL files\GPRE epp</Filter>
+    </None>
+    <None Include="..\..\..\src\isql\isql.epp">
+      <Filter>ISQL files\GPRE epp</Filter>
+    </None>
+    <None Include="..\..\..\src\isql\show.epp">
+      <Filter>ISQL files\GPRE epp</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\..\src\isql\ColList.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\isql\Extender.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\isql\extra_proto.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\isql\FrontendLexer.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\isql\InputDevices.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\isql\isql.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\isql\isql_proto.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\isql\iutils_proto.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\isql\OptionsBase.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\isql\show_proto.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

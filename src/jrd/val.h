@@ -56,7 +56,59 @@ namespace Jrd {
 class ArrayField;
 class blb;
 class Request;
+class jrd_req;
 class jrd_tra;
+class thread_db;
+class ValueExprNode;
+class ValueListNode;
+
+struct SortValueItem
+{
+	SortValueItem(const ValueExprNode* val, const dsc* d)
+		: value(val), desc(d)
+	{}
+
+	static int compare(const dsc* desc1, const dsc* desc2);
+
+	bool operator==(const SortValueItem& other) const
+	{
+		return (compare(desc, other.desc) == 0);
+	}
+
+	bool operator!=(const SortValueItem& other) const
+	{
+		return (compare(desc, other.desc) != 0);
+	}
+
+	bool operator>(const SortValueItem& other) const
+	{
+		return (compare(desc, other.desc) > 0);
+	}
+
+	const ValueExprNode* value;
+	const dsc* desc;
+};
+
+typedef Firebird::SortedArray<SortValueItem> SortedValueList;
+
+class LookupValueList
+{
+public:
+	LookupValueList(MemoryPool& pool, ValueListNode* values, ULONG impure);
+
+	ULONG getCount() const { return m_values.getCount(); }
+	ValueExprNode** begin() { return m_values.begin(); }
+	ValueExprNode** end() { return m_values.end(); }
+
+	const SortedValueList* init(thread_db* tdbb, Request* request) const;
+
+	bool find(thread_db* tdbb, Request* request,
+			  const ValueExprNode* value, const dsc* desc) const;
+
+private:
+	Firebird::HalfStaticArray<ValueExprNode*, 4> m_values;
+	const ULONG m_impureOffset;
+};
 
 // Various structures in the impure area
 
@@ -109,6 +161,7 @@ struct impure_value
 		// Pre-compiled invariant object for pattern matcher functions
 		Jrd::PatternMatcher* vlu_invariant;
 		PatternMatcherCache* vlu_patternMatcherCache;
+		SortedValueList* vlu_sortedList;
 	} vlu_misc;
 
 	void make_long(const SLONG val, const signed char scale = 0);
@@ -175,9 +228,10 @@ struct impure_value_ex : public impure_value
 	blb* vlu_blob;
 };
 
-const int VLU_computed	= 1;	// An invariant sub-query has been computed
-const int VLU_null		= 2;	// An invariant sub-query computed to null
-const int VLU_checked	= 4;	// Constraint already checked in first read or assignment to argument/variable
+const int VLU_computed		= 1;	// An invariant sub-query has been computed
+const int VLU_null			= 2;	// An invariant sub-query computed to null
+const int VLU_checked		= 4;	// Constraint already checked in first read or assignment to argument/variable
+const int VLU_initialized	= 8;	// Variable initialized
 
 
 class Format : public pool_alloc<type_fmt>

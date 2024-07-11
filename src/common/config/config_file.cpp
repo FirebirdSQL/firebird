@@ -305,6 +305,7 @@ ConfigFile::LineType ConfigFile::parseLine(const char* fileName, const String& i
 				if (par.name.isEmpty())		// not good - no key
 					return LINE_BAD;
 				valStart = n + 1;
+				par.hasValue = true;
 			}
 			else if (inString >= 2)		// Something after the end of line
 				return LINE_BAD;
@@ -415,46 +416,49 @@ ConfigFile::LineType ConfigFile::parseLine(const char* fileName, const String& i
 
 bool ConfigFile::macroParse(String& value, const char* fileName) const
 {
-	if (flags & CUSTOM_MACROS)
-		return true;
-
+	String::size_type pos = 0;
 	String::size_type subFrom;
 
-	while ((subFrom = value.find("$(")) != String::npos)
+	while ((subFrom = value.find("$(", pos)) != String::npos)
 	{
 		String::size_type subTo = value.find(")", subFrom);
-		if (subTo != String::npos)
+		if (subTo == String::npos)
+			return false;
+
+		String macro;
+		String m = value.substr(subFrom + 2, subTo - (subFrom + 2));
+
+		++subTo;
+
+		if (!translate(fileName, m, macro))
 		{
-			String macro;
-			String m = value.substr(subFrom + 2, subTo - (subFrom + 2));
-			if (! translate(fileName, m, macro))
+			if (flags & CUSTOM_MACROS)
 			{
-				return false;
-			}
-			++subTo;
-
-			// Avoid incorrect slashes in pathnames
-			PathUtils::fixupSeparators(value.begin());
-			PathUtils::fixupSeparators(macro.begin());
-
-			if (subFrom > 0 && value[subFrom - 1] == PathUtils::dir_sep &&
-				macro.length() > 0 && macro[0] == PathUtils::dir_sep)
-			{
-				--subFrom;
-			}
-			if (subTo < value.length() && value[subTo] == PathUtils::dir_sep &&
-				macro.length() > 0 && macro[macro.length() - 1] == PathUtils::dir_sep)
-			{
-				++subTo;
+				pos = subTo;
+				continue;
 			}
 
-			// Now perform operation
-			value.replace(subFrom, subTo - subFrom, macro);
-		}
-		else
-		{
 			return false;
 		}
+
+		// Avoid incorrect slashes in pathnames
+		PathUtils::fixupSeparators(value.begin());
+		PathUtils::fixupSeparators(macro.begin());
+
+		if (subFrom > 0 && value[subFrom - 1] == PathUtils::dir_sep &&
+			macro.length() > 0 && macro[0] == PathUtils::dir_sep)
+		{
+			--subFrom;
+		}
+		if (subTo < value.length() && value[subTo] == PathUtils::dir_sep &&
+			macro.length() > 0 && macro[macro.length() - 1] == PathUtils::dir_sep)
+		{
+			++subTo;
+		}
+
+		// Now perform operation
+		value.replace(subFrom, subTo - subFrom, macro);
+		pos = subFrom + macro.length();
 	}
 
 	return true;

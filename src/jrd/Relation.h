@@ -22,12 +22,14 @@
 #ifndef JRD_RELATION_H
 #define JRD_RELATION_H
 
+#include <optional>
 #include "../jrd/jrd.h"
 #include "../jrd/btr.h"
 #include "../jrd/lck.h"
 #include "../jrd/pag.h"
 #include "../jrd/val.h"
 #include "../jrd/Attachment.h"
+#include "../common/classes/TriState.h"
 
 namespace Jrd
 {
@@ -84,13 +86,14 @@ public:
 	ULONG rel_pri_data_space;	// lowest pointer page with primary data page space
 	ULONG rel_sec_data_space;	// lowest pointer page with secondary data page space
 	ULONG rel_last_free_pri_dp;	// last primary data page found with space
+	ULONG rel_last_free_blb_dp;	// last blob data page found with space
 	USHORT rel_pg_space_id;
 
 	RelationPages(Firebird::MemoryPool& pool)
 		: rel_pages(NULL), rel_instance_id(0),
 		  rel_index_root(0), rel_data_pages(0), rel_slot_space(0),
 		  rel_pri_data_space(0), rel_sec_data_space(0),
-		  rel_last_free_pri_dp(0),
+		  rel_last_free_pri_dp(0), rel_last_free_blb_dp(0),
 		  rel_pg_space_id(DB_PAGE_SPACE), rel_next_free(NULL),
 		  useCount(0),
 		  dpMap(pool),
@@ -261,9 +264,9 @@ public:
 	TrigVector*	rel_post_store;			// Post-operation store trigger
 	prim		rel_primary_dpnds;		// foreign dependencies on this relation's primary key
 	frgn		rel_foreign_refs;		// foreign references to other relations' primary keys
-	Nullable<bool>	rel_ss_definer;
 
-	TriState	rel_repl_state;			// replication state
+	Firebird::TriState	rel_ss_definer;
+	Firebird::TriState	rel_repl_state;			// replication state
 
 	Firebird::Mutex rel_drop_mutex;
 
@@ -271,6 +274,11 @@ public:
 	bool isTemporary() const;
 	bool isVirtual() const;
 	bool isView() const;
+
+	ObjectType getObjectType() const
+	{
+		return isView() ? obj_view : obj_relation;
+	}
 
 	bool isReplicating(thread_db* tdbb);
 
@@ -396,22 +404,21 @@ const ULONG REL_scanned					= 0x0001;	// Field expressions scanned (or being sca
 const ULONG REL_system					= 0x0002;
 const ULONG REL_deleted					= 0x0004;	// Relation known gonzo
 const ULONG REL_get_dependencies		= 0x0008;	// New relation needs dependencies during scan
-const ULONG REL_force_scan				= 0x0010;	// system relation has been updated since ODS change, force a scan
-const ULONG REL_check_existence			= 0x0020;	// Existence lock released pending drop of relation
-const ULONG REL_blocking				= 0x0040;	// Blocking someone from dropping relation
-const ULONG REL_sys_triggers			= 0x0080;	// The relation has system triggers to compile
-const ULONG REL_sql_relation			= 0x0100;	// Relation defined as sql table
-const ULONG REL_check_partners			= 0x0200;	// Rescan primary dependencies and foreign references
-const ULONG REL_being_scanned			= 0x0400;	// relation scan in progress
-const ULONG REL_sys_trigs_being_loaded	= 0x0800;	// System triggers being loaded
-const ULONG REL_deleting				= 0x1000;	// relation delete in progress
-const ULONG REL_temp_tran				= 0x2000;	// relation is a GTT delete rows
-const ULONG REL_temp_conn				= 0x4000;	// relation is a GTT preserve rows
-const ULONG REL_virtual					= 0x8000;	// relation is virtual
-const ULONG REL_jrd_view				= 0x10000;	// relation is VIEW
-const ULONG REL_gc_blocking				= 0x20000;	// request to downgrade\release gc lock
-const ULONG REL_gc_disabled				= 0x40000;	// gc is disabled temporarily
-const ULONG REL_gc_lockneed				= 0x80000;	// gc lock should be acquired
+const ULONG REL_check_existence			= 0x0010;	// Existence lock released pending drop of relation
+const ULONG REL_blocking				= 0x0020;	// Blocking someone from dropping relation
+const ULONG REL_sys_triggers			= 0x0040;	// The relation has system triggers to compile
+const ULONG REL_sql_relation			= 0x0080;	// Relation defined as sql table
+const ULONG REL_check_partners			= 0x0100;	// Rescan primary dependencies and foreign references
+const ULONG REL_being_scanned			= 0x0200;	// relation scan in progress
+const ULONG REL_sys_trigs_being_loaded	= 0x0400;	// System triggers being loaded
+const ULONG REL_deleting				= 0x0800;	// relation delete in progress
+const ULONG REL_temp_tran				= 0x1000;	// relation is a GTT delete rows
+const ULONG REL_temp_conn				= 0x2000;	// relation is a GTT preserve rows
+const ULONG REL_virtual					= 0x4000;	// relation is virtual
+const ULONG REL_jrd_view				= 0x8000;	// relation is VIEW
+const ULONG REL_gc_blocking				= 0x10000;	// request to downgrade\release gc lock
+const ULONG REL_gc_disabled				= 0x20000;	// gc is disabled temporarily
+const ULONG REL_gc_lockneed				= 0x40000;	// gc lock should be acquired
 
 
 /// class jrd_rel
@@ -503,7 +510,7 @@ public:
 	MetaName	fld_security_name;	// security class name for field
 	MetaName	fld_generator_name;	// identity generator name
 	MetaNamePair	fld_source_rel_field;	// Relation/field source name
-	Nullable<IdentityType> fld_identity_type;
+	std::optional<IdentityType> fld_identity_type;
 	USHORT fld_flags;
 
 public:

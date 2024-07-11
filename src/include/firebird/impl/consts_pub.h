@@ -129,6 +129,10 @@
 #define isc_dpb_decfloat_round            94
 #define isc_dpb_decfloat_traps            95
 #define isc_dpb_clear_map				  96
+#define isc_dpb_upgrade_db				  97
+#define isc_dpb_parallel_workers		 100
+#define isc_dpb_worker_attach			 101
+#define isc_dpb_owner					 102
 
 
 /**************************************************/
@@ -380,7 +384,6 @@
 #define isc_info_svc_limbo_trans		66	/* Retrieve the limbo transactions */
 #define isc_info_svc_running			67	/* Checks to see if a service is running on an attachment */
 #define isc_info_svc_get_users			68	/* Returns the user information from isc_action_svc_display_users */
-#define isc_info_svc_auth_block			69	/* Sets authentication block for service query() call */
 #define isc_info_svc_stdin				78	/* Returns maximum size of data, needed as stdin for service */
 
 
@@ -421,6 +424,7 @@
 #define isc_spb_bkp_keyname				 17
 #define isc_spb_bkp_crypt				 18
 #define isc_spb_bkp_include_data         19
+#define isc_spb_bkp_parallel_workers	 21
 #define isc_spb_bkp_ignore_checksums     0x01
 #define isc_spb_bkp_ignore_limbo         0x02
 #define isc_spb_bkp_metadata_only        0x04
@@ -431,6 +435,7 @@
 #define isc_spb_bkp_expand				 0x80
 #define isc_spb_bkp_no_triggers			 0x8000
 #define isc_spb_bkp_zip					 0x010000
+#define isc_spb_bkp_direct_io			 0x020000
 
 /********************************************
  * Parameters for isc_action_svc_properties *
@@ -521,6 +526,7 @@
 #define isc_spb_rpr_commit_trans_64		49
 #define isc_spb_rpr_rollback_trans_64	50
 #define isc_spb_rpr_recover_two_phase_64	51
+#define isc_spb_rpr_par_workers			52
 
 #define isc_spb_rpr_validate_db			0x01
 #define isc_spb_rpr_sweep_db			0x02
@@ -531,6 +537,7 @@
 #define isc_spb_rpr_kill_shadows		0x40
 #define isc_spb_rpr_full				0x80
 #define isc_spb_rpr_icu				  0x0800
+#define isc_spb_rpr_upgrade_db		  0x1000
 
 /*****************************************
  * Parameters for isc_action_svc_restore *
@@ -548,6 +555,7 @@
 #define isc_spb_res_keyname				isc_spb_bkp_keyname
 #define isc_spb_res_crypt				isc_spb_bkp_crypt
 #define isc_spb_res_stat				isc_spb_bkp_stat
+#define isc_spb_res_parallel_workers	isc_spb_bkp_parallel_workers
 #define isc_spb_res_metadata_only		isc_spb_bkp_metadata_only
 #define isc_spb_res_deactivate_idx		0x0100
 #define isc_spb_res_no_shadow			0x0200
@@ -556,6 +564,7 @@
 #define isc_spb_res_replace				0x1000
 #define isc_spb_res_create				0x2000
 #define isc_spb_res_use_all_space		0x4000
+#define isc_spb_res_direct_io			isc_spb_bkp_direct_io
 #define isc_spb_res_replica_mode		20
 
 /*****************************************
@@ -620,6 +629,9 @@
 #define isc_spb_nbk_file			6
 #define isc_spb_nbk_direct			7
 #define isc_spb_nbk_guid			8
+#define isc_spb_nbk_clean_history	9
+#define isc_spb_nbk_keep_days		10
+#define isc_spb_nbk_keep_rows		11
 #define isc_spb_nbk_no_triggers		0x01
 #define isc_spb_nbk_inplace			0x02
 #define isc_spb_nbk_sequence		0x04
@@ -768,7 +780,8 @@
 #define fb_dbg_map_argument			4
 #define fb_dbg_subproc				5
 #define fb_dbg_subfunc				6
-#define fb_dbg_map_curname			7
+#define fb_dbg_map_curname			7 /* declared cursor */
+#define fb_dbg_map_for_curname		8 /* FOR cursor */
 //// TODO: LocalTable name.
 
 // sub code for fb_dbg_map_argument

@@ -24,6 +24,10 @@
 #define JRD_EXT_ENGINE_MANAGER_H
 
 #include "firebird/Interface.h"
+
+#include <memory>
+#include <optional>
+
 #include "../common/classes/array.h"
 #include "../common/classes/fb_string.h"
 #include "../common/classes/GenericMap.h"
@@ -33,6 +37,7 @@
 #include "../common/classes/rwlock.h"
 #include "../common/classes/ImplementHelper.h"
 #include "../common/StatementMetadata.h"
+#include "../common/classes/GetPlugins.h"
 
 struct dsc;
 
@@ -209,50 +214,77 @@ private:
 	};
 
 public:
-	class Function
+	class ExtRoutine
 	{
 	public:
-		Function(thread_db* tdbb, ExtEngineManager* aExtManager,
+		ExtRoutine(thread_db* tdbb, ExtEngineManager* aExtManager,
+			Firebird::IExternalEngine* aEngine, RoutineMetadata* aMetadata);
+		virtual ~ExtRoutine() = default;
+
+	private:
+		class PluginDeleter
+		{
+		public:
+			void operator()(Firebird::IPluginBase* ptr);
+		};
+
+	protected:
+		ExtEngineManager* extManager;
+		std::unique_ptr<Firebird::IExternalEngine, PluginDeleter> engine;
+		Firebird::AutoPtr<RoutineMetadata> metadata;
+		Database* database;
+	};
+
+	class Function final : public ExtRoutine
+	{
+	private:
+		struct Impl;	// hack to avoid circular inclusion of headers
+
+	public:
+		Function(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, ExtEngineManager* aExtManager,
 			Firebird::IExternalEngine* aEngine,
 			RoutineMetadata* aMetadata,
 			Firebird::IExternalFunction* aFunction,
+			Firebird::RefPtr<Firebird::IMessageMetadata> extInputParameters,
+			Firebird::RefPtr<Firebird::IMessageMetadata> extOutputParameters,
 			const Jrd::Function* aUdf);
-		~Function();
+		~Function() override;
 
-		void execute(thread_db* tdbb, UCHAR* inMsg, UCHAR* outMsg) const;
+		void execute(thread_db* tdbb, Request* request, jrd_tra* transaction,
+			unsigned inMsgLength, UCHAR* inMsg, unsigned outMsgLength, UCHAR* outMsg) const;
 
 	private:
-		ExtEngineManager* extManager;
-		Firebird::IExternalEngine* engine;
-		Firebird::AutoPtr<RoutineMetadata> metadata;
+		void validateParameters(thread_db* tdbb, UCHAR* msg, bool input) const;
+
+	private:
 		Firebird::IExternalFunction* function;
 		const Jrd::Function* udf;
-		Database* database;
+		Firebird::AutoPtr<Format> extInputFormat;
+		Firebird::AutoPtr<Format> extOutputFormat;
+		Firebird::AutoPtr<Impl> impl;
+		std::optional<ULONG> extInputImpureOffset;
+		std::optional<ULONG> extOutputImpureOffset;
 	};
 
 	class ResultSet;
 
-	class Procedure
+	class Procedure final : public ExtRoutine
 	{
+	friend class ResultSet;
+
 	public:
 		Procedure(thread_db* tdbb, ExtEngineManager* aExtManager,
 			Firebird::IExternalEngine* aEngine,
 			RoutineMetadata* aMetadata,
 			Firebird::IExternalProcedure* aProcedure,
 			const jrd_prc* aPrc);
-		~Procedure();
+		~Procedure() override;
 
 		ResultSet* open(thread_db* tdbb, UCHAR* inMsg, UCHAR* outMsg) const;
 
 	private:
-		ExtEngineManager* extManager;
-		Firebird::IExternalEngine* engine;
-		Firebird::AutoPtr<RoutineMetadata> metadata;
 		Firebird::IExternalProcedure* procedure;
 		const jrd_prc* prc;
-		Database* database;
-
-	friend class ResultSet;
 	};
 
 	class ResultSet
@@ -272,13 +304,13 @@ public:
 		USHORT charSet;
 	};
 
-	class Trigger
+	class Trigger final : public ExtRoutine
 	{
 	public:
 		Trigger(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, ExtEngineManager* aExtManager,
 			Firebird::IExternalEngine* aEngine, RoutineMetadata* aMetadata,
 			Firebird::IExternalTrigger* aTrigger, const Jrd::Trigger* aTrg);
-		~Trigger();
+		~Trigger() override;
 
 		void execute(thread_db* tdbb, Request* request, unsigned action,
 			record_param* oldRpb, record_param* newRpb) const;
@@ -291,15 +323,11 @@ public:
 		Firebird::Array<NestConst<StmtNode>> computedStatements;
 
 	private:
-		ExtEngineManager* extManager;
-		Firebird::IExternalEngine* engine;
-		Firebird::AutoPtr<RoutineMetadata> metadata;
 		Firebird::AutoPtr<Format> format;
 		Firebird::IExternalTrigger* trigger;
 		const Jrd::Trigger* trg;
 		Firebird::Array<USHORT> fieldsPos;
 		Firebird::Array<const DeclareVariableNode*> varDecls;
-		Database* database;
 		USHORT computedCount;
 	};
 

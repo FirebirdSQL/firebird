@@ -107,16 +107,8 @@ using namespace Firebird;
 
 static bool	maybeCloseFile(HANDLE&);
 static jrd_file* seek_file(jrd_file*, BufferDesc*, OVERLAPPED*);
-static jrd_file* setup_file(Database*, const Firebird::PathName&, HANDLE, bool, bool);
+static jrd_file* setup_file(Database*, const Firebird::PathName&, HANDLE, USHORT);
 static bool nt_error(const TEXT*, const jrd_file*, ISC_STATUS, FbStatusVector* const);
-static void adjustFileSystemCacheSize();
-
-struct AdjustFsCache
-{
-	static void init() { adjustFileSystemCacheSize(); }
-};
-
-static InitMutex<AdjustFsCache> adjustFsCacheOnce("AdjustFsCacheOnce");
 
 inline static DWORD getShareFlags(const bool shared_access, bool temporary = false)
 {
@@ -192,18 +184,25 @@ jrd_file* PIO_create(thread_db* tdbb, const Firebird::PathName& string,
  *	Create a new database file.
  *
  **************************************/
-	adjustFsCacheOnce.init();
-
-	Database* const dbb = tdbb->getDatabase();
-
-	const TEXT* file_name = string.c_str();
+	const auto dbb = tdbb->getDatabase();
+	const bool forceWrite = !temporary && (dbb->dbb_flags & DBB_force_write) != 0;
+	const bool notUseFSCache = !dbb->dbb_config->getUseFileSystemCache();
 	const bool shareMode = dbb->dbb_config->getServerMode() != MODE_SUPER;
 
-	DWORD dwShareMode = getShareFlags(shareMode, temporary);
+	const TEXT* file_name = string.c_str();
+
+	const DWORD dwShareMode = getShareFlags(shareMode, temporary);
 
 	DWORD dwFlagsAndAttributes = FILE_ATTRIBUTE_NORMAL | g_dwExtraFlags;
+
 	if (temporary)
 		dwFlagsAndAttributes |= g_dwExtraTempFlags;
+
+	if (forceWrite)
+		dwFlagsAndAttributes |= FILE_FLAG_WRITE_THROUGH;
+
+	if (notUseFSCache)
+		dwFlagsAndAttributes |= FILE_FLAG_NO_BUFFERING;
 
 	const HANDLE desc = CreateFile(file_name,
 					  GENERIC_READ | GENERIC_WRITE,
@@ -225,7 +224,12 @@ jrd_file* PIO_create(thread_db* tdbb, const Firebird::PathName& string,
 	Firebird::PathName workspace(string);
 	ISC_expand_filename(workspace, false);
 
-	return setup_file(dbb, workspace, desc, false, shareMode);
+	const USHORT flags =
+		(shareMode ? FIL_sh_write : 0) |
+		(forceWrite ? FIL_force_write : 0) |
+		(notUseFSCache ? FIL_no_fs_cache : 0);
+
+	return setup_file(dbb, workspace, desc, flags);
 }
 
 
@@ -270,7 +274,7 @@ void PIO_extend(thread_db* tdbb, jrd_file* main_file, const ULONG extPages, cons
 	if (!main_file->fil_ext_lock)
 		return;
 
-	EngineCheckout cout(tdbb, FB_FUNCTION, true);
+	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 	FileExtendLockGuard extLock(main_file->fil_ext_lock, true);
 
 	ULONG leftPages = extPages;
@@ -314,14 +318,14 @@ void PIO_flush(thread_db* tdbb, jrd_file* main_file)
  *	Flush the operating system cache back to good, solid oxide.
  *
  **************************************/
-	EngineCheckout cout(tdbb, FB_FUNCTION, true);
+	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 
 	for (jrd_file* file = main_file; file; file = file->fil_next)
 		FlushFileBuffers(file->fil_desc);
 }
 
 
-void PIO_force_write(jrd_file* file, const bool forceWrite, const bool notUseFSCache)
+void PIO_force_write(jrd_file* file, const bool forceWrite)
 {
 /**************************************
  *
@@ -335,12 +339,11 @@ void PIO_force_write(jrd_file* file, const bool forceWrite, const bool notUseFSC
  **************************************/
 
 	const bool oldForce = (file->fil_flags & FIL_force_write) != 0;
-	const bool oldNotUseCache = (file->fil_flags & FIL_no_fs_cache) != 0;
 
-	if (forceWrite != oldForce || notUseFSCache != oldNotUseCache)
+	if (forceWrite != oldForce)
 	{
 		const int force = forceWrite ? FILE_FLAG_WRITE_THROUGH : 0;
-		const int fsCache = notUseFSCache ? FILE_FLAG_NO_BUFFERING : 0;
+		const int fsCache = (file->fil_flags & FIL_no_fs_cache) ? FILE_FLAG_NO_BUFFERING : 0;
 		const int writeMode = (file->fil_flags & FIL_readonly) ? 0 : GENERIC_WRITE;
 		const bool sharedMode = (file->fil_flags & FIL_sh_write);
 
@@ -361,18 +364,10 @@ void PIO_force_write(jrd_file* file, const bool forceWrite, const bool notUseFSC
 					 Arg::Gds(isc_io_access_err) << Arg::Windows(GetLastError()));
 		}
 
-		if (forceWrite) {
+		if (forceWrite)
 			file->fil_flags |= FIL_force_write;
-		}
-		else {
+		else
 			file->fil_flags &= ~FIL_force_write;
-		}
-		if (notUseFSCache) {
-			file->fil_flags |= FIL_no_fs_cache;
-		}
-		else {
-			file->fil_flags &= ~FIL_no_fs_cache;
-		}
 
 		SetFileCompletionNotificationModes(hFile, FILE_SKIP_SET_EVENT_ON_HANDLE);
 	}
@@ -440,7 +435,7 @@ USHORT PIO_init_data(thread_db* tdbb, jrd_file* main_file, FbStatusVector* statu
 
 	Database* const dbb = tdbb->getDatabase();
 
-	EngineCheckout cout(tdbb, FB_FUNCTION, true);
+	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 	FileExtendLockGuard extLock(main_file->fil_ext_lock, false);
 
 	// Fake buffer, used in seek_file. Page space ID doesn't matter there
@@ -509,21 +504,28 @@ jrd_file* PIO_open(thread_db* tdbb,
  *	Open a database file.
  *
  **************************************/
-	Database* const dbb = tdbb->getDatabase();
+	const auto dbb = tdbb->getDatabase();
+	const bool forceWrite = (dbb->dbb_flags & DBB_force_write) != 0;
+	const bool notUseFSCache = !dbb->dbb_config->getUseFileSystemCache();
+	const bool shareMode = dbb->dbb_config->getServerMode() != MODE_SUPER;
 
 	const TEXT* const ptr = (string.hasData() ? string : file_name).c_str();
 	bool readOnly = false;
-	const bool shareMode = dbb->dbb_config->getServerMode() != MODE_SUPER;
 
-	adjustFsCacheOnce.init();
+	DWORD dwFlagsAndAttributes = FILE_ATTRIBUTE_NORMAL | g_dwExtraFlags;
+
+	if (forceWrite)
+		dwFlagsAndAttributes |= FILE_FLAG_WRITE_THROUGH;
+
+	if (notUseFSCache)
+		dwFlagsAndAttributes |= FILE_FLAG_NO_BUFFERING;
 
 	HANDLE desc = CreateFile(ptr,
 					  GENERIC_READ | GENERIC_WRITE,
 					  getShareFlags(shareMode),
 					  NULL,
 					  OPEN_EXISTING,
-					  FILE_ATTRIBUTE_NORMAL |
-					  g_dwExtraFlags,
+					  dwFlagsAndAttributes,
 					  0);
 
 	if (desc == INVALID_HANDLE_VALUE)
@@ -536,8 +538,8 @@ jrd_file* PIO_open(thread_db* tdbb,
 						  FILE_SHARE_READ,
 						  NULL,
 						  OPEN_EXISTING,
-						  FILE_ATTRIBUTE_NORMAL |
-						  g_dwExtraFlags, 0);
+						  dwFlagsAndAttributes,
+						  0);
 
 		if (desc == INVALID_HANDLE_VALUE)
 		{
@@ -558,7 +560,13 @@ jrd_file* PIO_open(thread_db* tdbb,
 
 	SetFileCompletionNotificationModes(desc, FILE_SKIP_SET_EVENT_ON_HANDLE);
 
-	return setup_file(dbb, string, desc, readOnly, shareMode);
+	const USHORT flags =
+		(readOnly ? FIL_readonly : 0) |
+		(shareMode ? FIL_sh_write : 0) |
+		(forceWrite ? FIL_force_write : 0) |
+		(notUseFSCache ? FIL_no_fs_cache : 0);
+
+	return setup_file(dbb, string, desc, flags);
 }
 
 
@@ -578,7 +586,7 @@ bool PIO_read(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page, 
 
 	const DWORD size = dbb->dbb_page_size;
 
-	EngineCheckout cout(tdbb, FB_FUNCTION, true);
+	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 	FileExtendLockGuard extLock(file->fil_ext_lock, false);
 
 	OVERLAPPED overlapped;
@@ -626,7 +634,7 @@ bool PIO_read_ahead(thread_db*	tdbb,
 
 	Database* const dbb = tdbb->getDatabase();
 
-	EngineCheckout cout(tdbb, FB_FUNCTION, true);
+	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 
 	// If an I/O status block was passed the caller wants to queue an asynchronous I/O.
 
@@ -712,7 +720,7 @@ bool PIO_status(thread_db* tdbb, phys_io_blk* piob, FbStatusVector* status_vecto
  *	Check the status of an asynchronous I/O.
  *
  **************************************/
-	EngineCheckout cout(tdbb, FB_FUNCTION, true);
+	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 
 	if (!(piob->piob_flags & PIOB_success))
 	{
@@ -755,7 +763,7 @@ bool PIO_write(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page,
 
 	const DWORD size = dbb->dbb_page_size;
 
-	EngineCheckout cout(tdbb, FB_FUNCTION, true);
+	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 	FileExtendLockGuard extLock(file->fil_ext_lock, false);
 
 	OVERLAPPED overlapped;
@@ -862,11 +870,7 @@ static jrd_file* seek_file(jrd_file*	file,
 }
 
 
-static jrd_file* setup_file(Database* dbb,
-							const Firebird::PathName& file_name,
-							HANDLE desc,
-							bool read_only,
-							bool shareMode)
+static jrd_file* setup_file(Database* dbb, const Firebird::PathName& file_name, HANDLE desc, USHORT flags)
 {
 /**************************************
  *
@@ -885,16 +889,12 @@ static jrd_file* setup_file(Database* dbb,
 		file = FB_NEW_RPT(*dbb->dbb_permanent, file_name.length() + 1) jrd_file();
 		file->fil_desc = desc;
 		file->fil_max_page = MAX_ULONG;
+		file->fil_flags = flags;
 		strcpy(file->fil_string, file_name.c_str());
-
-		if (read_only)
-			file->fil_flags |= FIL_readonly;
-		if (shareMode)
-			file->fil_flags |= FIL_sh_write;
 
 		// If this isn't the primary file, we're done
 
-		const PageSpace* const pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+		const auto pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 		if (pageSpace && pageSpace->file)
 			return file;
 
@@ -965,160 +965,4 @@ static bool nt_error(const TEXT* string,
 	iscLogStatus(NULL, status_vector);
 
 	return false;
-}
-
-// These are defined in Windows Server 2008 SDK
-#ifndef FILE_CACHE_FLAGS_DEFINED
-#define FILE_CACHE_MAX_HARD_ENABLE      0x00000001
-#define FILE_CACHE_MAX_HARD_DISABLE     0x00000002
-#define FILE_CACHE_MIN_HARD_ENABLE      0x00000004
-#define FILE_CACHE_MIN_HARD_DISABLE     0x00000008
-#endif // FILE_CACHE_FLAGS_DEFINED
-
-BOOL SetPrivilege(
-	HANDLE hToken,			// access token handle
-	LPCTSTR lpszPrivilege,	// name of privilege to enable/disable
-	BOOL bEnablePrivilege)	// to enable or disable privilege
-{
-	TOKEN_PRIVILEGES tp;
-	LUID luid;
-
-	if (!LookupPrivilegeValue(
-			NULL,			// lookup privilege on local system
-			lpszPrivilege,	// privilege to lookup
-			&luid))			// receives LUID of privilege
-	{
-		// gds__log("LookupPrivilegeValue error: %u", GetLastError() );
-		return FALSE;
-	}
-
-	tp.PrivilegeCount = 1;
-	tp.Privileges[0].Luid = luid;
-	if (bEnablePrivilege)
-		tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
-	else
-		tp.Privileges[0].Attributes = 0;
-
-	// Enable or disable the privilege
-
-	if (!AdjustTokenPrivileges(hToken, FALSE, &tp, sizeof(TOKEN_PRIVILEGES),
-			(PTOKEN_PRIVILEGES) NULL, (PDWORD) NULL))
-	{
-		//gds__log("AdjustTokenPrivileges error: %u", GetLastError() );
-		return FALSE;
-	}
-
-	if (GetLastError() == ERROR_NOT_ALL_ASSIGNED)
-	{
-		//gds__log("The token does not have the specified privilege");
-		return FALSE;
-	}
-
-	return TRUE;
-}
-
-static void adjustFileSystemCacheSize()
-{
-	int percent = Config::getFileSystemCacheSize();
-
-	// firebird.conf asks to do nothing
-	if (percent == 0)
-		return;
-
-	// Ensure that the setting has a sensible value
-	if (percent > 95 || percent < 10)
-	{
-		gds__log("Incorrect FileSystemCacheSize setting %d. Using default (30 percent).", percent);
-		percent = 30;
-	}
-
-	HMODULE hmodKernel32 = GetModuleHandle("kernel32.dll");
-
-	// This one requires 64-bit XP or Windows Server 2003 SP1
-	typedef BOOL (WINAPI *PFnSetSystemFileCacheSize)(SIZE_T, SIZE_T, DWORD);
-
-	typedef BOOL (WINAPI *PFnGetSystemFileCacheSize)(PSIZE_T, PSIZE_T, PDWORD);
-
-	// This one needs any NT, but load it dynamically anyways just in case
-	typedef BOOL (WINAPI *PFnGlobalMemoryStatusEx)(LPMEMORYSTATUSEX);
-
-	PFnSetSystemFileCacheSize pfnSetSystemFileCacheSize =
-		(PFnSetSystemFileCacheSize) GetProcAddress(hmodKernel32, "SetSystemFileCacheSize");
-	PFnGetSystemFileCacheSize pfnGetSystemFileCacheSize =
-		(PFnGetSystemFileCacheSize) GetProcAddress(hmodKernel32, "GetSystemFileCacheSize");
-	PFnGlobalMemoryStatusEx pfnGlobalMemoryStatusEx =
-		(PFnGlobalMemoryStatusEx) GetProcAddress(hmodKernel32, "GlobalMemoryStatusEx");
-
-	// If we got too old OS and functions are not there - do not bother
-	if (!pfnGetSystemFileCacheSize || !pfnSetSystemFileCacheSize || !pfnGlobalMemoryStatusEx)
-		return;
-
-	MEMORYSTATUSEX msex;
-	msex.dwLength = sizeof(msex);
-
-	// This should work
-	if (!pfnGlobalMemoryStatusEx(&msex))
-		system_call_failed::raise("GlobalMemoryStatusEx", GetLastError());
-
-	SIZE_T origMinimumFileCacheSize, origMaximumFileCacheSize;
-	DWORD origFlags;
-
-	BOOL result = pfnGetSystemFileCacheSize(&origMinimumFileCacheSize,
-		&origMaximumFileCacheSize, &origFlags);
-
-	if (!result)
-	{
-		const DWORD error = GetLastError();
-#ifndef _WIN64
-		// This error is returned on 64-bit Windows when the file cache size
-		// overflows the ULONG limit restricted by the 32-bit Windows API.
-		// Let's avoid writing it into the log as it's not a critical failure.
-		if (error != ERROR_ARITHMETIC_OVERFLOW)
-#endif
-		gds__log("GetSystemFileCacheSize error %d", error);
-		return;
-	}
-
-	// Somebody has already configured maximum cache size limit
-	// Hope it is a sensible one - do not bother to adjust it
-	if ((origFlags & FILE_CACHE_MAX_HARD_ENABLE) != 0)
-		return;
-
-	DWORDLONG maxMem = (msex.ullTotalPhys / 100) * percent;
-
-#ifndef _WIN64
-	// If we are trying to set the limit so high that it doesn't fit
-	// in 32-bit API - leave settings alone and write a message to log file
-	if (maxMem > (SIZE_T)(-2))
-	{
-		gds__log("Could not use 32-bit SetSystemFileCacheSize API to set cache size limit to %I64d."
-				" Please use 64-bit engine or configure cache size limit externally", maxMem);
-		return;
-	}
-#endif
-
-	HANDLE hToken;
-	if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES, &hToken))
-	{
-		gds__log("OpenProcessToken error %d", GetLastError());
-		return;
-	}
-
-	if (SetPrivilege(hToken, "SeIncreaseQuotaPrivilege", TRUE))
-	{
-		result = pfnSetSystemFileCacheSize(0, maxMem, FILE_CACHE_MAX_HARD_ENABLE);
-		const DWORD error = GetLastError();
-		SetPrivilege(hToken, "SeIncreaseQuotaPrivilege", FALSE);
-
-		if (!result)
-		{
-			// If we do not have enough permissions - silently ignore the error
-			gds__log("SetSystemFileCacheSize error %d. "
-				"The engine will continue to operate, but the system "
-				"performance may degrade significantly when working with "
-				"large databases", error);
-		}
-	}
-
-	CloseHandle(hToken);
 }

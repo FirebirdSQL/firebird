@@ -1,5 +1,5 @@
 
-call setenvvar.bat
+call setenvvar.bat %*
 
 @echo.
 @echo cleaning udf

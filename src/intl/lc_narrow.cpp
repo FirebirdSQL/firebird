@@ -831,11 +831,11 @@ bool LC_NARROW_family2(
 	impl->texttype_bytes_per_key	= 0;
 
 	IntlUtil::SpecificAttributesMap map;
-	Jrd::CharSet* charSet = NULL;
+	Firebird::CharSet* charSet = NULL;
 
 	try
 	{
-		charSet = Jrd::CharSet::createInstance(*getDefaultMemoryPool(), 0, cs);
+		charSet = Firebird::CharSet::createInstance(*getDefaultMemoryPool(), 0, cs);
 
 		if (!IntlUtil::parseSpecificAttributes(charSet, specificAttributesLength, specificAttributes, &map))
 		{
@@ -953,12 +953,12 @@ bool LC_NARROW_family3(
 	bool multiLevel = false;
 
 	IntlUtil::SpecificAttributesMap map;
-	Jrd::CharSet* charSet = NULL;
+	Firebird::CharSet* charSet = NULL;
 	string newSpecificAttributes;
 
 	try
 	{
-		charSet = Jrd::CharSet::createInstance(*getDefaultMemoryPool(), 0, cs);
+		charSet = Firebird::CharSet::createInstance(*getDefaultMemoryPool(), 0, cs);
 
 		if (!IntlUtil::parseSpecificAttributes(charSet, specificAttributesLength, specificAttributes, &map))
 		{

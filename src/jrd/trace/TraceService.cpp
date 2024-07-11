@@ -121,20 +121,11 @@ void TraceSvcJrd::startSession(TraceSession& session, bool interactive)
 		session.ses_role = role.c_str();
 
 		session.ses_flags = trs_active;
-		if (m_admin) {
+		if (m_admin)
 			session.ses_flags |= trs_admin;
-		}
 
 		if (interactive)
-		{
-			Guid guid;
-			GenerateGuid(&guid);
-
-			char* buff = session.ses_logfile.getBuffer(GUID_BUFF_SIZE);
-			GuidToString(buff, &guid);
-
-			session.ses_logfile.insert(0, "fb_trace.");
-		}
+			session.ses_logfile = FB_TRACE_FILE + Guid::generate().toPathName();
 
 		storage->addSession(session);
 		m_chg_number = storage->getChangeNumber();
@@ -210,7 +201,7 @@ bool TraceSvcJrd::changeFlags(ULONG id, int setFlags, int clearFlags)
 			session.ses_flags |= setFlags;
 			session.ses_flags &= ~clearFlags;
 
-			if (saveFlags != session.ses_flags) 
+			if (saveFlags != session.ses_flags)
 				storage->updateFlags(session);
 
 			return true;
@@ -228,13 +219,15 @@ void TraceSvcJrd::listSessions()
 {
 	m_svc.started();
 
-	ConfigStorage* storage = TraceManager::getStorage();
-	StorageGuard guard(storage);
+	// Writing into service when storage is locked could lead to deadlock,
+	// therefore don't use StorageGuard here.
 
-	storage->restart();
+	ConfigStorage* storage = TraceManager::getStorage();
+	ConfigStorage::Accessor acc(storage);
 
 	TraceSession session(*getDefaultMemoryPool());
-	while (storage->getNextSession(session, ConfigStorage::ALL))
+
+	while (acc.getNext(session, ConfigStorage::ALL))
 	{
 		if (checkPrivileges(session))
 		{
@@ -401,8 +394,10 @@ int TRACE_main(UtilSvc* arg)
 	{
 		StaticStatusVector status;
 		e.stuffException(status);
-		svc->initStatus();
-		svc->setServiceStatus(status.begin());
+
+		UtilSvc::StatusAccessor sa = svc->getStatusAccessor();
+		sa.init();
+		sa.setServiceStatus(status.begin());
 		exit_code = FB_FAILURE;
 	}
 

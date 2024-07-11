@@ -1,11 +1,12 @@
 # Modern C++ features
 
-We define here as "modern C++" features the ones introduced since C++17. These features should be used in a "controlled" form in Firebird code, as not all compilers fully support them.
+It's allowed to use in Firebird internal code C++ features up to and including C++17.
 
-Only ones mentioned in this document could be used, but as necessities appears, discussion should be started in the devel list or pull requests.
+Public files (as API headers) is limited to C++11.
+
+Exceptions to these rules should be listed below and must be agreed by the team,
+discussing in the devel list or by pull request.
 
 ## Allowed features
 
-### C++17
-
-- [if with init-statement](https://en.cppreference.com/w/cpp/language/if)
+### C++20

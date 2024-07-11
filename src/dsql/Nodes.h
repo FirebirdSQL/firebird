@@ -510,6 +510,7 @@ public:
 		TYPE_MISSING_BOOL,
 		TYPE_NOT_BOOL,
 		TYPE_RSE_BOOL,
+		TYPE_IN_LIST_BOOL,
 
 		// RecordSource types
 		TYPE_AGGREGATE_SOURCE,
@@ -660,18 +661,37 @@ public:
 	// Check if expression could return NULL or expression can turn NULL into a true/false.
 	virtual bool possiblyUnknown() const;
 
+	// Check if expression is known to ignore NULLs
+	virtual bool ignoreNulls(const StreamList& streams) const;
+
 	// Verify if this node is allowed in an unmapped boolean.
 	virtual bool unmappable(const MapNode* mapNode, StreamType shellStream) const;
 
 	// Return all streams referenced by the expression.
 	virtual void collectStreams(SortedStreamList& streamList) const;
 
-	virtual bool containsStream(StreamType stream) const
+	bool containsStream(StreamType stream, bool only = false) const
 	{
-		SortedStreamList streams;
-		collectStreams(streams);
+		SortedStreamList nodeStreams;
+		collectStreams(nodeStreams);
 
-		return streams.exist(stream);
+		return only ?
+			nodeStreams.getCount() == 1 && nodeStreams[0] == stream :
+			nodeStreams.exist(stream);
+	}
+
+	bool containsAnyStream(const StreamList& streams) const
+	{
+		SortedStreamList nodeStreams;
+		collectStreams(nodeStreams);
+
+		for (const auto stream : streams)
+		{
+			if (nodeStreams.exist(stream))
+				return true;
+		}
+
+		return false;
 	}
 
 	virtual bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const;
@@ -712,40 +732,37 @@ public:
 	{
 	}
 
-	virtual Kind getKind()
+	Kind getKind() override
 	{
 		return KIND_BOOLEAN;
 	}
 
-	virtual BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
+	BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
 	{
 		ExprNode::dsqlPass(dsqlScratch);
 		return this;
 	}
 
-	virtual BoolExprNode* dsqlFieldRemapper(FieldRemapper& visitor)
+	BoolExprNode* dsqlFieldRemapper(FieldRemapper& visitor) override
 	{
 		ExprNode::dsqlFieldRemapper(visitor);
 		return this;
 	}
 
-	virtual BoolExprNode* pass1(thread_db* tdbb, CompilerScratch* csb)
+	BoolExprNode* pass1(thread_db* tdbb, CompilerScratch* csb) override
 	{
 		ExprNode::pass1(tdbb, csb);
 		return this;
 	}
 
-	virtual BoolExprNode* pass2(thread_db* tdbb, CompilerScratch* csb);
+	BoolExprNode* pass2(thread_db* tdbb, CompilerScratch* csb) override final;
 
-	virtual void pass2Boolean1(thread_db* /*tdbb*/, CompilerScratch* /*csb*/)
+	virtual void pass2Boolean(thread_db* /*tdbb*/, CompilerScratch* /*csb*/, std::function<void ()> process)
 	{
+		process();
 	}
 
-	virtual void pass2Boolean2(thread_db* /*tdbb*/, CompilerScratch* /*csb*/)
-	{
-	}
-
-	virtual BoolExprNode* copy(thread_db* tdbb, NodeCopier& copier) const = 0;
+	BoolExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override = 0;
 	virtual bool execute(thread_db* tdbb, Request* request) const = 0;
 };
 
@@ -753,10 +770,8 @@ class ValueExprNode : public ExprNode
 {
 public:
 	ValueExprNode(Type aType, MemoryPool& pool)
-		: ExprNode(aType, pool),
-		  nodScale(0)
+		: ExprNode(aType, pool)
 	{
-		dsqlDesc.clear();
 	}
 
 public:
@@ -831,7 +846,7 @@ public:
 	virtual dsc* execute(thread_db* tdbb, Request* request) const = 0;
 
 public:
-	SCHAR nodScale;
+	SCHAR nodScale = 0;
 
 protected:
 	dsc dsqlDesc;
@@ -1031,6 +1046,11 @@ public:
 		return true;
 	}
 
+	virtual bool ignoreNulls(const StreamList& /*streams*/) const
+	{
+		return false;
+	}
+
 	virtual void collectStreams(SortedStreamList& /*streamList*/) const
 	{
 		// ASF: Although in v2.5 the visitor happens normally for the node childs, nod_count has
@@ -1109,6 +1129,8 @@ public:
 	static const USHORT DFLAG_DT_CTE_USED				= 0x20;
 	static const USHORT DFLAG_CURSOR					= 0x40;
 	static const USHORT DFLAG_LATERAL					= 0x80;
+	static const USHORT DFLAG_PLAN_ITEM					= 0x100;
+	static const USHORT DFLAG_BODY_WRAPPER				= 0x200;
 
 	RecordSourceNode(Type aType, MemoryPool& pool)
 		: ExprNode(aType, pool),
@@ -1154,6 +1176,7 @@ public:
 	virtual RecordSourceNode* pass2(thread_db* tdbb, CompilerScratch* csb) = 0;
 	virtual void pass2Rse(thread_db* tdbb, CompilerScratch* csb) = 0;
 	virtual bool containsStream(StreamType checkStream) const = 0;
+
 	virtual void genBlr(DsqlCompilerScratch* /*dsqlScratch*/)
 	{
 		fb_assert(false);
@@ -1162,6 +1185,11 @@ public:
 	virtual bool possiblyUnknown() const
 	{
 		return true;
+	}
+
+	virtual bool ignoreNulls(const StreamList& /*streams*/) const
+	{
+		return false;
 	}
 
 	virtual bool unmappable(const MapNode* /*mapNode*/, StreamType /*shellStream*/) const
@@ -1242,6 +1270,12 @@ public:
 		items.push(arg1);
 	}
 
+	ValueListNode(MemoryPool& pool)
+		: TypedNode<ListExprNode, ExprNode::TYPE_VALUE_LIST>(pool),
+		  items(pool, INITIAL_CAPACITY)
+	{
+	}
+
 	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
 	{
 		ListExprNode::getChildren(holder, dsql);
@@ -1262,12 +1296,18 @@ public:
 		return this;
 	}
 
+	void ensureCapacity(unsigned count)
+	{
+		items.ensureCapacity(count);
+	}
+
 	void clear()
 	{
 		items.clear();
 	}
 
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 
 	virtual ValueListNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	{
@@ -1403,6 +1443,7 @@ public:
 		TYPE_HANDLER,
 		TYPE_LABEL,
 		TYPE_LINE_COLUMN,
+		TYPE_LOCAL_DECLARATIONS,
 		TYPE_LOOP,
 		TYPE_MERGE,
 		TYPE_MERGE_SEND,
@@ -1414,6 +1455,7 @@ public:
 		TYPE_RETURN,
 		TYPE_SAVEPOINT,
 		TYPE_SELECT,
+		TYPE_SELECT_MESSAGE,
 		TYPE_SESSION_MANAGEMENT_WRAPPER,
 		TYPE_SET_GENERATOR,
 		TYPE_STALL,
@@ -1422,7 +1464,7 @@ public:
 		TYPE_TRUNCATE_LOCAL_TABLE,
 		TYPE_UPDATE_OR_INSERT,
 
-		TYPE_EXT_INIT_PARAMETER,
+		TYPE_EXT_INIT_PARAMETERS,
 		TYPE_EXT_TRIGGER
 	};
 
@@ -1438,6 +1480,7 @@ public:
 	static const unsigned MARK_MERGE			= 0x02;	// node is part of MERGE statement
 	static const unsigned MARK_FOR_UPDATE		= 0x04;	// implicit cursor used in UPDATE\DELETE\MERGE statement
 	static const unsigned MARK_AVOID_COUNTERS	= 0x08;	// do not touch record counters
+	static const unsigned MARK_BULK_INSERT		= 0x10; // StoreNode is used for bulk operation
 
 	struct ExeState
 	{
@@ -1527,6 +1570,11 @@ public:
 			Firebird::Arg::Num(int(getType())));
 
 		return NULL;
+	}
+
+	virtual bool isProfileAware() const
+	{
+		return true;
 	}
 
 	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const = 0;

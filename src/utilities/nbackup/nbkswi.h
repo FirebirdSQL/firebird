@@ -49,6 +49,8 @@ const int IN_SW_NBK_DECOMPRESS		= 14;
 const int IN_SW_NBK_ROLE			= 15;
 const int IN_SW_NBK_INPLACE			= 16;
 const int IN_SW_NBK_SEQUENCE		= 17;
+const int IN_SW_NBK_CLEAN_HISTORY	= 18;
+const int IN_SW_NBK_KEEP			= 19;
 
 
 static const struct Switches::in_sw_tab_t nbackup_in_sw_table [] =
@@ -75,6 +77,8 @@ static const struct Switches::in_sw_tab_t nbackup_action_in_sw_table [] =
 	{IN_SW_NBK_SIZE,		0,						"SIZE",				0, 0, 0, false, false,	17,	1,	NULL, nboSpecial},
 	{IN_SW_NBK_DECOMPRESS,	0,						"DECOMPRESS",		0, 0, 0, false, false,	74,	2,	NULL, nboSpecial},
 	{IN_SW_NBK_SEQUENCE,	0,						"SEQUENCE",			0, 0, 0, false, false,	80, 3,	NULL, nboSpecial},
+	{IN_SW_NBK_CLEAN_HISTORY, isc_spb_nbk_clean_history, "CLEAN_HISTORY",	0, 0, 0, false, false,	82, 10,	NULL, nboSpecial},
+	{IN_SW_NBK_KEEP,		0,						"KEEP",				0, 0, 0, false, false,	83, 1,	NULL, nboSpecial},
 	{IN_SW_NBK_NODBTRIG,	0,						"T",				0, 0, 0, false, false,	0,	1,	NULL, nboGeneral},
 	{IN_SW_NBK_NODBTRIG,	0,						"NODBTRIGGERS",		0, 0, 0, false, false,	16,	3,	NULL, nboGeneral},
 	{IN_SW_NBK_USER_NAME,	0,						"USER",				0, 0, 0, false, false,	13,	1,	NULL, nboGeneral},

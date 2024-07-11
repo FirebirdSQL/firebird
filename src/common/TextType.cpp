@@ -98,7 +98,7 @@
 #include "../common/classes/Aligner.h"
 
 
-namespace Jrd {
+namespace Firebird {
 
 
 TextType::TextType(TTYPE_ID _type, texttype *_tt, USHORT _attributes, CharSet* _cs)

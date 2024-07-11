@@ -37,14 +37,17 @@ using namespace Jrd;
 // -------------------------------
 
 SkipRowsStream::SkipRowsStream(CompilerScratch* csb, RecordSource* next, ValueExprNode* value)
-	: m_next(next), m_value(value)
+	: RecordSource(csb),
+	  m_next(next),
+	  m_value(value)
 {
 	fb_assert(m_next && m_value);
 
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = next->getCardinality();
 }
 
-void SkipRowsStream::open(thread_db* tdbb) const
+void SkipRowsStream::internalOpen(thread_db* tdbb) const
 {
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -80,7 +83,7 @@ void SkipRowsStream::close(thread_db* tdbb) const
 	}
 }
 
-bool SkipRowsStream::getRecord(thread_db* tdbb) const
+bool SkipRowsStream::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -108,17 +111,28 @@ bool SkipRowsStream::refetchRecord(thread_db* tdbb) const
 	return m_next->refetchRecord(tdbb);
 }
 
-bool SkipRowsStream::lockRecord(thread_db* tdbb) const
+WriteLockResult SkipRowsStream::lockRecord(thread_db* tdbb) const
 {
 	return m_next->lockRecord(tdbb);
 }
 
-void SkipRowsStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void SkipRowsStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	if (detailed)
-		plan += printIndent(++level) + "Skip N Records";
+	m_next->getLegacyPlan(tdbb, plan, level);
+}
 
-	m_next->print(tdbb, plan, detailed, level);
+void SkipRowsStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
+{
+	planEntry.className = "SkipRowsStream";
+
+	planEntry.lines.add().text = "Skip N Records";
+	printOptInfo(planEntry.lines);
+
+	if (recurse)
+	{
+		++level;
+		m_next->getPlan(tdbb, planEntry.children.add(), level, recurse);
+	}
 }
 
 void SkipRowsStream::markRecursive()

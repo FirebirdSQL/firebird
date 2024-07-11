@@ -14,15 +14,16 @@ jobs:
       matrix:
         branch:
           - master
+          - v5.0-release
           - v4.0-release
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           ref: ${{ matrix.branch }}
 
       - name: Checkout ICU
-        run: git clone --depth 1 https://github.com/unicode-org/icu-data.git -b main /tmp/icu-checkout
+        run: GIT_CLONE_PROTECTION_ACTIVE=false git clone --depth 1 https://github.com/unicode-org/icu-data.git -b main /tmp/icu-checkout
 
       - name: Check and update
         run: |

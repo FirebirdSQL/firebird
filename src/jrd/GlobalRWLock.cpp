@@ -38,6 +38,7 @@
 #include "Attachment.h"
 #include "../common/classes/rwlock.h"
 #include "../common/classes/condition.h"
+#include "../common/classes/auto.h"
 
 #ifdef COS_DEBUG
 #include <stdarg.h>
@@ -111,7 +112,7 @@ bool GlobalRWLock::lockWrite(thread_db* tdbb, SSHORT wait)
 
 		while (readers > 0 )
 		{
-			EngineCheckout cout(tdbb, FB_FUNCTION, true);
+			EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 			noReaders.wait(counterMutex);
 		}
 
@@ -120,7 +121,7 @@ bool GlobalRWLock::lockWrite(thread_db* tdbb, SSHORT wait)
 
 		while (currentWriter || pendingLock)
 		{
-			EngineCheckout cout(tdbb, FB_FUNCTION, true);
+			EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 			writerFinished.wait(counterMutex);
 		}
 
@@ -179,12 +180,20 @@ bool GlobalRWLock::lockWrite(thread_db* tdbb, SSHORT wait)
 
 		fb_assert(!currentWriter);
 
-		currentWriter = true;
+		Cleanup writerFini([this]()
+		{
+			if (!currentWriter)
+				writerFinished.notifyAll();
+		});
+
+		const bool ret = fetch(tdbb);
+		if (ret)
+			currentWriter = true;
 
 		COS_TRACE(("(%p)->lockWrite end readers(%d), blocking(%d), pendingWriters(%d), currentWriter(%d), lck_physical(%d)",
 			this, readers, blocking, pendingWriters, currentWriter, cachedLock->lck_physical));
 
-		return fetch(tdbb);
+		return ret;
 	}
 }
 
@@ -237,7 +246,7 @@ bool GlobalRWLock::lockRead(thread_db* tdbb, SSHORT wait, const bool queueJump)
 
 			while (pendingWriters > 0 || currentWriter)
 			{
-				EngineCheckout cout(tdbb, FB_FUNCTION, true);
+				EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 				writerFinished.wait(counterMutex);
 			}
 
@@ -248,7 +257,7 @@ bool GlobalRWLock::lockRead(thread_db* tdbb, SSHORT wait, const bool queueJump)
 				break;
 
 			MutexUnlockGuard cout(counterMutex, FB_FUNCTION);
-			EngineCheckout cout2(tdbb, FB_FUNCTION, true);
+			EngineCheckout cout2(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 			Thread::yield();
 		}
 
@@ -279,12 +288,14 @@ bool GlobalRWLock::lockRead(thread_db* tdbb, SSHORT wait, const bool queueJump)
 	{	// scope 2
 		CheckoutLockGuard counterGuard(tdbb, counterMutex, FB_FUNCTION, true);
 		--pendingLock;
-		++readers;
+		const bool ret = fetch(tdbb);
+		if (ret)
+			++readers;
 
 		COS_TRACE(("(%p)->lockRead end readers(%d), blocking(%d), pendingWriters(%d), currentWriter(%d), lck_physical(%d)",
 			this, readers, blocking, pendingWriters, currentWriter, cachedLock->lck_physical));
 
-		return fetch(tdbb);
+		return ret;
 	}
 }
 

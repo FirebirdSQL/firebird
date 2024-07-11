@@ -1,0 +1,40 @@
+name: trim-trailing-spaces
+
+on:
+  schedule:
+    - cron: '0 10 * * *'
+
+jobs:
+  trim-trailing-spaces:
+    if: github.repository == 'FirebirdSQL/firebird'
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        branch:
+          - master
+          - v4.0-release
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ matrix.branch }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Trim trailing spaces
+        run: |
+          find src/ -type f \( -iname \*.h -o -iname \*.cpp -o -iname \*.c -o -iname \*.epp -o -iname \*.y \) | xargs sed -i 's/[ \t]*$//'
+
+      - name: Commit files
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git commit -a -m Misc. || exit 0
+
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ matrix.branch }}

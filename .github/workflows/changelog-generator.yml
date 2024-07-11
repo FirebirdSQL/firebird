@@ -1,0 +1,20 @@
+name: ChangeLog generator
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version'
+        required: true
+
+jobs:
+
+  changelog-generator:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Generate ChangeLog
+      uses: asfernandes/changelog-generator@v2
+      with:
+        fix-version-label: "fix-version: ${{ github.event.inputs.version }}"
+        token: ${{ secrets.GITHUB_TOKEN }}

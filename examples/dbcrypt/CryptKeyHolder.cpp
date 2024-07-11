@@ -25,6 +25,7 @@
  */
 
 #include "../interfaces/ifaceExamples.h"
+#include <atomic>
 
 namespace
 {
@@ -67,7 +68,7 @@ private:
 class CryptKeyHolder : public IKeyHolderPluginImpl<CryptKeyHolder, CheckStatusWrapper>
 {
 public:
-	explicit CryptKeyHolder(IPluginConfig* cnf) throw()
+	explicit CryptKeyHolder(IPluginConfig* cnf) noexcept
 		: callbackInterface(this), named(NULL), tempStatus(master->getStatus()),
 		  config(cnf), key(0), owner(NULL)
 	{
@@ -137,7 +138,7 @@ private:
 			: holder(p)
 		{ }
 
-		unsigned int callback(unsigned int, const void*, unsigned int length, void* buffer)
+		unsigned int callback(unsigned int, const void*, unsigned int length, void* buffer) override
 		{
 			ISC_UCHAR k = holder->getKey();
 			if (!k)
@@ -189,7 +190,7 @@ private:
 	IPluginConfig* config;
 	ISC_UCHAR key;
 
-	FbSampleAtomic refCounter;
+	std::atomic_int refCounter;
 	IReferenceCounted* owner;
 
 	IConfigEntry* getEntry(CheckStatusWrapper* status, const char* entryName);

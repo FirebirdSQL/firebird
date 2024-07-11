@@ -39,10 +39,18 @@ struct CsConvertImpl
 extern USHORT version;
 
 FB_DLL_EXPORT INTL_BOOL LD_lookup_charset(charset* cs, const ASCII* name, const ASCII* config_info);
+
+FB_DLL_EXPORT INTL_BOOL LD_lookup_texttype_with_status(char* status_buffer, ULONG status_buffer_length,
+	texttype* tt, const ASCII* texttype_name, const ASCII* charset_name,
+	USHORT attributes, const UCHAR* specific_attributes,
+	ULONG specific_attributes_length, INTL_BOOL ignore_attributes,
+	const ASCII* config_info);
+
 FB_DLL_EXPORT INTL_BOOL LD_lookup_texttype(texttype* tt, const ASCII* texttype_name, const ASCII* charset_name,
-										   USHORT attributes, const UCHAR* specific_attributes,
-										   ULONG specific_attributes_length, INTL_BOOL ignore_attributes,
-										   const ASCII* config_info);
+	USHORT attributes, const UCHAR* specific_attributes,
+	ULONG specific_attributes_length, INTL_BOOL ignore_attributes,
+	const ASCII* config_info);
+
 FB_DLL_EXPORT void LD_version(USHORT* version);
 FB_DLL_EXPORT ULONG LD_setup_attributes(
 	const ASCII* textTypeName, const ASCII* charSetName, const ASCII* configInfo,

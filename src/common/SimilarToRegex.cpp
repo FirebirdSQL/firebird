@@ -74,7 +74,7 @@ namespace
 		{
 			if (!(flags & COMP_FLAG_LATIN) && !(flags & COMP_FLAG_WELLFORMED))
 			{
-				if (!Jrd::UnicodeUtil::utf8WellFormed(patternLen, reinterpret_cast<const UCHAR*>(patternStr), nullptr))
+				if (!UnicodeUtil::utf8WellFormed(patternLen, reinterpret_cast<const UCHAR*>(patternStr), nullptr))
 					status_exception::raise(Arg::Gds(isc_malformed_string));
 			}
 
@@ -82,7 +82,7 @@ namespace
 			{
 				if (!(flags & COMP_FLAG_LATIN) && !(flags & COMP_FLAG_WELLFORMED))
 				{
-					if (!Jrd::UnicodeUtil::utf8WellFormed(escapeLen, reinterpret_cast<const UCHAR*>(escapeStr), nullptr))
+					if (!UnicodeUtil::utf8WellFormed(escapeLen, reinterpret_cast<const UCHAR*>(escapeStr), nullptr))
 						status_exception::raise(Arg::Gds(isc_malformed_string));
 				}
 

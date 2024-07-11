@@ -125,7 +125,6 @@ enum ConfigKey
 	KEY_CPU_AFFINITY_MASK,
 	KEY_TCP_REMOTE_BUFFER_SIZE,
 	KEY_TCP_NO_NAGLE,
-	KEY_TCP_LOOPBACK_FAST_PATH,
 	KEY_DEFAULT_DB_CACHE_PAGES,
 	KEY_CONNECTION_TIMEOUT,
 	KEY_DUMMY_PACKET_INTERVAL,
@@ -153,15 +152,13 @@ enum ConfigKey
 	KEY_GC_POLICY,
 	KEY_REDIRECTION,
 	KEY_DATABASE_GROWTH_INCREMENT,
-	KEY_FILESYSTEM_CACHE_THRESHOLD,
-	KEY_RELAXED_ALIAS_CHECKING,
 	KEY_TRACE_CONFIG,
 	KEY_MAX_TRACELOG_SIZE,
-	KEY_FILESYSTEM_CACHE_SIZE,
 	KEY_PLUG_PROVIDERS,
 	KEY_PLUG_AUTH_SERVER,
 	KEY_PLUG_AUTH_CLIENT,
 	KEY_PLUG_AUTH_MANAGE,
+	KEY_PLUG_PROFILER,
 	KEY_PLUG_TRACE,
 	KEY_SECURITY_DATABASE,
 	KEY_SERVER_MODE,
@@ -171,11 +168,10 @@ enum ConfigKey
 	KEY_REMOTE_ACCESS,
 	KEY_IPV6_V6ONLY,
 	KEY_WIRE_COMPRESSION,
-	KEY_MAX_IDENTIFIER_BYTE_LENGTH,
-	KEY_MAX_IDENTIFIER_CHAR_LENGTH,
 	KEY_ENCRYPT_SECURITY_DATABASE,
 	KEY_STMT_TIMEOUT,
 	KEY_CONN_IDLE_TIMEOUT,
+	KEY_ON_DISCONNECT_TRIG_TIMEOUT,
 	KEY_CLIENT_BATCH_BUFFER,
 	KEY_OUTPUT_REDIRECTION_FILE,
 	KEY_EXT_CONN_POOL_SIZE,
@@ -183,11 +179,14 @@ enum ConfigKey
 	KEY_SNAPSHOTS_MEM_SIZE,
 	KEY_TIP_CACHE_BLOCK_SIZE,
 	KEY_READ_CONSISTENCY,
-	KEY_CLEAR_GTT_RETAINING,
 	KEY_DATA_TYPE_COMPATIBILITY,
 	KEY_USE_FILESYSTEM_CACHE,
 	KEY_INLINE_SORT_THRESHOLD,
 	KEY_TEMP_PAGESPACE_DIR,
+	KEY_MAX_STATEMENT_CACHE_SIZE,
+	KEY_PARALLEL_WORKERS,
+	KEY_MAX_PARALLEL_WORKERS,
+	KEY_OPTIMIZE_FOR_FIRST_ROWS,
 	MAX_CONFIG_KEY		// keep it last
 };
 
@@ -219,7 +218,6 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_INTEGER,	"CpuAffinityMask",			true,	0},
 	{TYPE_INTEGER,	"TcpRemoteBufferSize",		true,	8192},		// bytes
 	{TYPE_BOOLEAN,	"TcpNoNagle",				false,	true},
-	{TYPE_BOOLEAN,	"TcpLoopbackFastPath",		false,	true},
 	{TYPE_INTEGER,	"DefaultDbCachePages",		false,	-1},		// pages
 	{TYPE_INTEGER,	"ConnectionTimeout",		false,	180},		// seconds
 	{TYPE_INTEGER,	"DummyPacketInterval",		false,	0},			// seconds
@@ -256,11 +254,8 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_STRING,	"GCPolicy",					false,	nullptr},	// garbage collection policy
 	{TYPE_BOOLEAN,	"Redirection",				true,	false},
 	{TYPE_INTEGER,	"DatabaseGrowthIncrement",	false,	128 * 1048576},	// bytes
-	{TYPE_INTEGER,	"FileSystemCacheThreshold",	false,	65536},		// page buffers
-	{TYPE_BOOLEAN,	"RelaxedAliasChecking",		true,	false},		// if true relax strict alias checking rules in DSQL a bit
 	{TYPE_STRING,	"AuditTraceConfigFile",		true,	""},		// location of audit trace configuration file
 	{TYPE_INTEGER,	"MaxUserTraceLogSize",		true,	10},		// maximum size of user session trace log
-	{TYPE_INTEGER,	"FileSystemCacheSize",		true,	0},			// percent
 	{TYPE_STRING,	"Providers",				false,	"Remote, " CURRENT_ENGINE ", Loopback"},
 	{TYPE_STRING,	"AuthServer",				false,	"Srp256"},
 #ifdef WIN_NT
@@ -269,6 +264,7 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_STRING,	"AuthClient",				false,	"Srp256, Srp, Legacy_Auth"},
 #endif
 	{TYPE_STRING,	"UserManager",				false,	"Srp"},
+	{TYPE_STRING,	"DefaultProfilerPlugin",	false,	"Default_Profiler"},
 	{TYPE_STRING,	"TracePlugin",				false,	"fbtrace"},
 	{TYPE_STRING,	"SecurityDatabase",			false,	nullptr},	// sec/db alias - rely on ConfigManager::getDefaultSecurityDb(
 	{TYPE_STRING,	"ServerMode",				true,	nullptr},	// actual value differs in boot/regular cases and set at setupDefaultConfig(
@@ -278,11 +274,10 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_BOOLEAN,	"RemoteAccess",				false,	true},
 	{TYPE_BOOLEAN,	"IPv6V6Only",				false,	false},
 	{TYPE_BOOLEAN,	"WireCompression",			false,	false},
-	{TYPE_INTEGER,	"MaxIdentifierByteLength",	false,	(int)MAX_SQL_IDENTIFIER_LEN},
-	{TYPE_INTEGER,	"MaxIdentifierCharLength",	false,	(int)METADATA_IDENTIFIER_CHAR_LEN},
 	{TYPE_BOOLEAN,	"AllowEncryptedSecurityDatabase",	false,	false},
 	{TYPE_INTEGER,	"StatementTimeout",			false,	0},
 	{TYPE_INTEGER,	"ConnectionIdleTimeout",	false,	0},
+	{TYPE_INTEGER,	"OnDisconnectTriggerTimeout",	false,	180},
 	{TYPE_INTEGER,	"ClientBatchBuffer",		false,	128 * 1024},
 #ifdef DEV_BUILD
 	{TYPE_STRING,	"OutputRedirectionFile", 	true,	"-"},
@@ -298,11 +293,14 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_INTEGER,	"SnapshotsMemSize",			false,	65536},		// bytes
 	{TYPE_INTEGER,	"TipCacheBlockSize",		false,	4194304},	// bytes
 	{TYPE_BOOLEAN,	"ReadConsistency",			false,	true},
-	{TYPE_BOOLEAN,	"ClearGTTAtRetaining",		false,	false},
 	{TYPE_STRING,	"DataTypeCompatibility",	false,	nullptr},
 	{TYPE_BOOLEAN,	"UseFileSystemCache",		false,	true},
 	{TYPE_INTEGER,	"InlineSortThreshold",		false,	1000},		// bytes
-	{TYPE_STRING,	"TempTableDirectory",		false,	""}
+	{TYPE_STRING,	"TempTableDirectory",		false,	""},
+	{TYPE_INTEGER,	"MaxStatementCacheSize",	false,	2 * 1048576},	// bytes
+	{TYPE_INTEGER,	"ParallelWorkers",			true,	1},
+	{TYPE_INTEGER,	"MaxParallelWorkers",		true,	1},
+	{TYPE_BOOLEAN,	"OptimizeForFirstRows",		false,	false}
 };
 
 
@@ -314,8 +312,14 @@ private:
 	static ConfigValue specialProcessing(ConfigKey key, ConfigValue val);
 
 	void loadValues(const ConfigFile& file, const char* srcName);
-	void setupDefaultConfig();
 	void checkValues();
+
+	// set default ServerMode and default values that didn't depends on ServerMode
+	void setupDefaultConfig();
+
+	// set default values that depends on ServerMode and actual values that was
+	// not set in config file
+	void fixDefaults();
 
 	// helper check-value functions
 	void checkIntForLoBound(ConfigKey key, SINT64 loBound, bool setDefault);
@@ -482,9 +486,6 @@ public:
 	// Disable Nagle algorithm
 	CONFIG_GET_PER_DB_BOOL(getTcpNoNagle, KEY_TCP_NO_NAGLE);
 
-	// Enable or disable the TCP Loopback Fast Path option
-	CONFIG_GET_PER_DB_BOOL(getTcpLoopbackFastPath, KEY_TCP_LOOPBACK_FAST_PATH);
-
 	// Let IPv6 socket accept only IPv6 packets
 	CONFIG_GET_PER_DB_BOOL(getIPv6V6Only, KEY_IPV6_V6ONLY);
 
@@ -567,12 +568,6 @@ public:
 
 	CONFIG_GET_PER_DB_INT(getDatabaseGrowthIncrement, KEY_DATABASE_GROWTH_INCREMENT);
 
-	CONFIG_GET_PER_DB_INT(getFileSystemCacheThreshold, KEY_FILESYSTEM_CACHE_THRESHOLD);
-
-	CONFIG_GET_GLOBAL_KEY(FB_UINT64, getFileSystemCacheSize, KEY_FILESYSTEM_CACHE_SIZE, getInt);
-
-	CONFIG_GET_GLOBAL_BOOL(getRelaxedAliasChecking, KEY_RELAXED_ALIAS_CHECKING);
-
 	CONFIG_GET_GLOBAL_STR(getAuditTraceConfigFile, KEY_TRACE_CONFIG);
 
 	CONFIG_GET_GLOBAL_KEY(FB_UINT64, getMaxUserTraceLogSize, KEY_MAX_TRACELOG_SIZE, getInt);
@@ -589,10 +584,6 @@ public:
 
 	CONFIG_GET_PER_DB_BOOL(getWireCompression, KEY_WIRE_COMPRESSION);
 
-	CONFIG_GET_PER_DB_INT(getMaxIdentifierByteLength, KEY_MAX_IDENTIFIER_BYTE_LENGTH);
-
-	CONFIG_GET_PER_DB_INT(getMaxIdentifierCharLength, KEY_MAX_IDENTIFIER_CHAR_LENGTH);
-
 	CONFIG_GET_PER_DB_BOOL(getCryptSecurityDatabase, KEY_ENCRYPT_SECURITY_DATABASE);
 
 	// set in seconds
@@ -600,6 +591,9 @@ public:
 
 	// set in minutes
 	CONFIG_GET_PER_DB_KEY(unsigned int, getConnIdleTimeout, KEY_CONN_IDLE_TIMEOUT, getInt);
+
+	// set in seconds
+	CONFIG_GET_PER_DB_KEY(unsigned int, getOnDisconnectTrigTimeout, KEY_ON_DISCONNECT_TRIG_TIMEOUT, getInt);
 
 	CONFIG_GET_PER_DB_KEY(unsigned int, getClientBatchBuffer, KEY_CLIENT_BATCH_BUFFER, getInt);
 
@@ -615,15 +609,21 @@ public:
 
 	CONFIG_GET_PER_DB_BOOL(getReadConsistency, KEY_READ_CONSISTENCY);
 
-	CONFIG_GET_PER_DB_BOOL(getClearGTTAtRetaining, KEY_CLEAR_GTT_RETAINING);
-
 	CONFIG_GET_PER_DB_STR(getDataTypeCompatibility, KEY_DATA_TYPE_COMPATIBILITY);
 
-	bool getUseFileSystemCache(bool* pPresent = nullptr) const;
+	CONFIG_GET_PER_DB_BOOL(getUseFileSystemCache, KEY_USE_FILESYSTEM_CACHE);
 
 	CONFIG_GET_PER_DB_KEY(ULONG, getInlineSortThreshold, KEY_INLINE_SORT_THRESHOLD, getInt);
 
 	CONFIG_GET_PER_DB_STR(getTempPageSpaceDirectory, KEY_TEMP_PAGESPACE_DIR);
+
+	CONFIG_GET_PER_DB_INT(getMaxStatementCacheSize, KEY_MAX_STATEMENT_CACHE_SIZE);
+
+	CONFIG_GET_GLOBAL_INT(getParallelWorkers, KEY_PARALLEL_WORKERS);
+
+	CONFIG_GET_GLOBAL_INT(getMaxParallelWorkers, KEY_MAX_PARALLEL_WORKERS);
+
+	CONFIG_GET_PER_DB_BOOL(getOptimizeForFirstRows, KEY_OPTIMIZE_FOR_FIRST_ROWS);
 };
 
 // Implementation of interface to access master configuration file

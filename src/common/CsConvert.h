@@ -27,15 +27,15 @@
  *
  */
 
-#ifndef JRD_CSCONVERT_H
-#define JRD_CSCONVERT_H
+#ifndef COMMON_CSCONVERT_H
+#define COMMON_CSCONVERT_H
 
 #include "iberror.h"
 #include "../common/classes/array.h"
 #include "../common/StatusArg.h"
 
 
-namespace Jrd {
+namespace Firebird {
 
 class CsConvert
 {
@@ -286,7 +286,7 @@ private:
 
 };
 
-}	// namespace Jrd
+}	// namespace Firebird
 
 
-#endif	// JRD_CSCONVERT_H
+#endif	// COMMON_CSCONVERT_H

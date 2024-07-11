@@ -2,16 +2,20 @@
 
 <Include xmlns="http://schemas.microsoft.com/wix/2006/wi">
 
-	<!-- This is  bad - we really should not be hard coding this
-		 version string, but for now it will have to do. .-->
-    <?define MS_CRT_VER = "14.16.27012.6" ?>
+    <?define PRODUCT_ID = * ?>
 
-    <?define DESCRIPTION = "MSI to redistribute VS2017 CRT libraries" ?>
+    <?define PACKAGE_ID = * ?>
+
+    <?define MANUFACTURER = "The Firebird Project" ?>
+
+    <?define DESCRIPTION = "MSI to redistribute Visual Studio Runtime libraries" ?>
 
     <?define COMMENTS = "This MSI specially created for Firebird." ?>
 
-	<?define MSMDIR = "$(env.VCToolsRedistDir)\MergeModules" ?>
+    <?define MS_CRT_VER = "$(env.VCToolsVersion)" ?>
 
-    <?define MANUFACTURER = "The Firebird Project" ?>
+    <?define MSMDIR = "$(env.VCToolsRedistDir)\MergeModules" ?>
+
+    <?define MSM = "microsoft_vc$(env.MSVC_RUNTIME_MAJOR_VERSION)$(env.MSVC_RUNTIME_MINOR_VERSION)_crt_$(var.CPUArch).msm" ?>
 
 </Include>

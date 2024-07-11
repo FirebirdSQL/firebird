@@ -62,6 +62,8 @@
 #include "../common/classes/fb_tls.h"
 #include "../common/status.h"
 #include "../common/classes/InternalMessageBuffer.h"
+#include "../yvalve/array_proto.h"
+#include "../yvalve/blob_proto.h"
 #include "../yvalve/utl_proto.h"
 #include "../yvalve/why_proto.h"
 #include "../yvalve/MasterImplementation.h"
@@ -85,7 +87,6 @@ using namespace Why;
 static void badHandle(ISC_STATUS code);
 static bool isNetworkError(const IStatus* status);
 static void nullCheck(const FB_API_HANDLE* ptr, ISC_STATUS code);
-//static void saveErrorString(ISC_STATUS* status);
 static void badSqldaVersion(const short version);
 static int sqldaTruncateString(char* buffer, FB_SIZE_T size, const char* s);
 static void sqldaDescribeParameters(XSQLDA* sqlda, IMessageMetadata* parameters);
@@ -875,7 +876,7 @@ namespace Why
 	class StatusVector : public AutoIface<BaseStatus<StatusVector> >
 	{
 	public:
-		explicit StatusVector(ISC_STATUS* v = NULL) throw()
+		explicit StatusVector(ISC_STATUS* v = NULL) noexcept
 			: localVector(v ? v : localStatus)
 		{ }
 
@@ -1584,6 +1585,50 @@ Firebird::ITransaction* handleToITransaction(CheckStatusWrapper* status, isc_tr_
 //-------------------------------------
 
 
+ISC_STATUS API_ROUTINE isc_array_lookup_bounds(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle, FB_API_HANDLE* traHandle,
+	const SCHAR* relationName, const SCHAR* fieldName, ISC_ARRAY_DESC* desc)
+{
+	StatusVector status(userStatus);
+	CheckStatusWrapper statusWrapper(&status);
+
+	try
+	{
+		RefPtr<YAttachment> attachment(translateHandle(attachments, dbHandle));
+		RefPtr<YTransaction> transaction(translateHandle(transactions, traHandle));
+
+		iscArrayLookupBoundsImpl(attachment, transaction, relationName, fieldName, desc);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(&statusWrapper);
+	}
+
+	return status[1];
+}
+
+
+ISC_STATUS API_ROUTINE isc_array_lookup_desc(ISC_STATUS* userStatus, FB_API_HANDLE* dbHandle, FB_API_HANDLE* traHandle,
+	const SCHAR* relationName, const SCHAR* fieldName, ISC_ARRAY_DESC* desc)
+{
+	StatusVector status(userStatus);
+	CheckStatusWrapper statusWrapper(&status);
+
+	try
+	{
+		RefPtr<YAttachment> attachment(translateHandle(attachments, dbHandle));
+		RefPtr<YTransaction> transaction(translateHandle(transactions, traHandle));
+
+		iscArrayLookupDescImpl(attachment, transaction, relationName, fieldName, desc, nullptr);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(&statusWrapper);
+	}
+
+	return status[1];
+}
+
+
 // Attach a database through the first subsystem that recognizes it.
 ISC_STATUS API_ROUTINE isc_attach_database(ISC_STATUS* userStatus, SSHORT fileLength,
 	const TEXT* filename, isc_db_handle* publicHandle, SSHORT dpbLength, const SCHAR* dpb)
@@ -1607,7 +1652,7 @@ ISC_STATUS API_ROUTINE isc_attach_database(ISC_STATUS* userStatus, SSHORT fileLe
 			return status[1];
 
 		YAttachment* attachment = dispatcher->attachDatabase(&statusWrapper, pathName.c_str(),
-			dpbLength, reinterpret_cast<const UCHAR*>(dpb));
+			static_cast<USHORT>(dpbLength), reinterpret_cast<const UCHAR*>(dpb));
 		if (status.getState() & IStatus::STATE_ERRORS)
 			return status[1];
 
@@ -1635,6 +1680,31 @@ ISC_STATUS API_ROUTINE isc_blob_info(ISC_STATUS* userStatus, isc_blob_handle* bl
 
 		blob->getInfo(&statusWrapper, itemLength, reinterpret_cast<const UCHAR*>(items),
 			bufferLength, reinterpret_cast<UCHAR*>(buffer));
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(&statusWrapper);
+	}
+
+	return status[1];
+}
+
+
+// Lookup the blob subtype, character set and segment size information from the metadata,
+// given a relation/procedure name and column/parameter name.
+// It will fill in the information in the BLOB_DESC.
+ISC_STATUS API_ROUTINE isc_blob_lookup_desc(ISC_STATUS* userStatus, isc_db_handle* dbHandle, isc_tr_handle* traHandle,
+	const UCHAR* relationName, const UCHAR* fieldName, ISC_BLOB_DESC* desc, UCHAR* global)
+{
+	StatusVector status(userStatus);
+	CheckStatusWrapper statusWrapper(&status);
+
+	try
+	{
+		RefPtr<YAttachment> attachment(translateHandle(attachments, dbHandle));
+		RefPtr<YTransaction> transaction(translateHandle(transactions, traHandle));
+
+		iscBlobLookupDescImpl(attachment, transaction, relationName, fieldName, desc, global);
 	}
 	catch (const Exception& e)
 	{
@@ -4884,6 +4954,21 @@ IMessageMetadata* YResultSet::getMetadata(CheckStatusWrapper* status)
 	return NULL;
 }
 
+void YResultSet::getInfo(CheckStatusWrapper* status,
+						 unsigned int itemsLength, const unsigned char* items,
+						 unsigned int bufferLength, unsigned char* buffer)
+{
+	try
+	{
+		YEntry<YResultSet> entry(status, this);
+
+		entry.next()->getInfo(status, itemsLength, items, bufferLength, buffer);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+}
 
 void YResultSet::close(CheckStatusWrapper* status)
 {
@@ -5417,8 +5502,6 @@ YTransaction* YTransaction::enterDtc(CheckStatusWrapper* status)
 		YEntry<YTransaction> entry(status, this);
 
 		YTransaction* copy = FB_NEW YTransaction(this);
-		// copy is created with zero handle
-		copy->addRef();
 		copy->addRef();
 		next->addRef();		// We use NoIncr in YTransaction ctor
 
@@ -6140,12 +6223,13 @@ YReplicator* YAttachment::createReplicator(CheckStatusWrapper* status)
 //-------------------------------------
 
 
-YService::YService(IProvider* aProvider, IService* aNext, bool utf8)
+YService::YService(IProvider* aProvider, IService* aNext, bool utf8, Dispatcher* yProvider)
 	: YHelper(aNext),
 	  provider(aProvider),
-	  utf8Connection(utf8)
+	  utf8Connection(utf8),
+	  attachSpb(getPool(), ClumpletReader::spbList, MAX_DPB_SIZE, nullptr, 0),
+	  ownProvider(yProvider)
 {
-	provider->addRef();
 	makeHandle(&services, this, handle);
 }
 
@@ -6203,8 +6287,21 @@ void YService::query(CheckStatusWrapper* status, unsigned int sendLength, const 
 	try
 	{
 		YEntry<YService> entry(status, this);
-		entry.next()->query(status, sendLength, sendItems,
-			receiveLength, receiveItems, bufferLength, buffer);
+		(alternativeHandle ? alternativeHandle.getPtr() : entry.next())->
+			query(status, sendLength, sendItems, receiveLength, receiveItems, bufferLength, buffer);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+}
+
+void YService::cancel(CheckStatusWrapper* status)
+{
+	try
+	{
+		YEntry<YService> entry(status, this);
+		entry.next()->cancel(status);
 	}
 	catch (const Exception& e)
 	{
@@ -6224,6 +6321,43 @@ void YService::start(CheckStatusWrapper* status, unsigned int spbLength, const u
 
 		YEntry<YService> entry(status, this);
 		entry.next()->start(status, spb.getBufferLength(), spb.getBuffer());
+
+		const ISC_STATUS retryList[] = {isc_wrong_ods, isc_badodsver, isc_gstat_wrong_ods, 0};
+
+		for (const ISC_STATUS* code = retryList; *code; ++code)
+		{
+			if (fb_utils::containsErrorCode(status->getErrors(), *code))
+			{
+				FbLocalStatus st;
+				if (alternativeHandle)		// first of all try already found provider
+				{
+					alternativeHandle->start(&st, spb.getBufferLength(), spb.getBuffer());
+					if (st.isSuccess())
+					{
+						status->init();
+						return;
+					}
+					st->clearException();
+				}
+
+				// we are not going to attach network providers, therefore const svcName is OK
+				alternativeHandle = ownProvider->internalServiceAttach(&st, "service_mgr", attachSpb,
+					[&spb](CheckStatusWrapper* st, IService* service)
+					{
+						service->start(st, spb.getBufferLength(), spb.getBuffer());
+					}, nullptr);
+				if (st.isSuccess())
+				{
+					status->init();
+					return;
+				}
+
+				// can't help any more...
+				break;
+			}
+		}
+
+		alternativeHandle = nullptr;
 	}
 	catch (const Exception& e)
 	{
@@ -6364,6 +6498,7 @@ YAttachment* Dispatcher::attachOrCreateDatabase(CheckStatusWrapper* status, bool
 			case isc_lock_dir_access:
 			case isc_no_priv:
 			case isc_wrong_ods:
+			case isc_wrong_shmem_ver:
 				currentStatus = &tempCheckStatusWrapper;
 				// fall down...
 			case isc_unavailable:
@@ -6418,66 +6553,16 @@ YService* Dispatcher::attachServiceManager(CheckStatusWrapper* status, const cha
 			IntlSpb().toUtf8(spbWriter);
 		}
 
-		// Build correct config
-		RefPtr<const Config> config(Config::getDefaultConfig());
-		if (spbWriter.find(isc_spb_config))
-		{
-			string spb_config;
-			spbWriter.getString(spb_config);
-			Config::merge(config, &spb_config);
-		}
-
-		StatusVector temp(NULL);
-		CheckStatusWrapper tempCheckStatusWrapper(&temp);
-		CheckStatusWrapper* currentStatus = status;
-
-		for (GetPlugins<IProvider> providerIterator(IPluginManager::TYPE_PROVIDER, config);
-			 providerIterator.hasData();
-			 providerIterator.next())
-		{
-			IProvider* p = providerIterator.plugin();
-
-			if (cryptCallback)
-			{
-				p->setDbCryptCallback(currentStatus, cryptCallback);
-				if (currentStatus->getState() & IStatus::STATE_ERRORS)
-					continue;
-			}
-
-			service = p->attachServiceManager(currentStatus, svcName.c_str(),
-				spbWriter.getBufferLength(), spbWriter.getBuffer());
-
-			if (!(currentStatus->getState() & IStatus::STATE_ERRORS))
-			{
-				if (status != currentStatus)
-				{
-					status->setErrors(currentStatus->getErrors());
-					status->setWarnings(currentStatus->getWarnings());
-				}
-				YService* r = FB_NEW YService(p, service, utfData);
-				r->addRef();
-				return r;
-			}
-
-			switch (currentStatus->getErrors()[1])
-			{
-				case isc_service_att_err:
-					currentStatus = &tempCheckStatusWrapper;
-					// fall down...
-				case isc_unavailable:
-					break;
-
-				default:
-					return NULL;
-			}
-
-			currentStatus->init();
-		}
+		IProvider* p;
+		service = internalServiceAttach(status, svcName, spbWriter,
+			[](CheckStatusWrapper*, IService*){ }, &p);
 
 		if (!(status->getState() & IStatus::STATE_ERRORS))
 		{
-			(Arg::Gds(isc_service_att_err) <<
-			 Arg::Gds(isc_no_providers)).copyTo(status);
+			YService* r = FB_NEW YService(p, service, utfData, this);
+			r->addRef();
+			r->attachSpb.reset(spbWriter);
+			return r;
 		}
 	}
 	catch (const Exception& e)
@@ -6495,6 +6580,92 @@ YService* Dispatcher::attachServiceManager(CheckStatusWrapper* status, const cha
 	return NULL;
 }
 
+
+// Attach and probably start a service through the first available subsystem.
+IService* Dispatcher::internalServiceAttach(CheckStatusWrapper* status, const PathName& svcName,
+	ClumpletReader& spb, std::function<void(CheckStatusWrapper*, IService*)> start,
+	IProvider** retProvider)
+{
+	IService* service = NULL;
+
+	// Build correct config
+	RefPtr<const Config> config(Config::getDefaultConfig());
+	if (spb.find(isc_spb_config))
+	{
+		string spb_config;
+		spb.getString(spb_config);
+		Config::merge(config, &spb_config);
+	}
+
+	FbLocalStatus temp1, temp2;
+	CheckStatusWrapper* currentStatus = &temp1;
+
+	for (GetPlugins<IProvider> providerIterator(IPluginManager::TYPE_PROVIDER, config);
+		 providerIterator.hasData();
+		 providerIterator.next())
+	{
+		IProvider* p = providerIterator.plugin();
+
+		if (cryptCallback)
+		{
+			p->setDbCryptCallback(currentStatus, cryptCallback);
+			if (currentStatus->getState() & IStatus::STATE_ERRORS)
+				continue;
+		}
+
+		service = p->attachServiceManager(currentStatus, svcName.c_str(),
+			spb.getBufferLength(), spb.getBuffer());
+
+		if (!(currentStatus->getState() & IStatus::STATE_ERRORS))
+		{
+			start(currentStatus, service);
+
+			if (!(currentStatus->getState() & IStatus::STATE_ERRORS))
+			{
+				fb_utils::copyStatus(status, currentStatus);
+				if (retProvider)
+				{
+					p->addRef();
+					*retProvider = p;
+				}
+
+				return service;
+			}
+		}
+
+		switch (currentStatus->getErrors()[1])
+		{
+			case isc_service_att_err:
+				currentStatus = &temp2;
+				// fall down...
+			case isc_unavailable:
+			case isc_wrong_ods:
+			case isc_badodsver:
+			case isc_gstat_wrong_ods:
+				break;
+
+			default:
+				fb_utils::copyStatus(status, &temp1);
+				return NULL;
+		}
+
+		currentStatus->init();
+	}
+
+	fb_utils::copyStatus(status, &temp1);
+	if (!(status->getState() & IStatus::STATE_ERRORS))
+	{
+		(Arg::Gds(isc_service_att_err) <<
+		 Arg::Gds(isc_no_providers)).copyTo(status);
+	}
+
+	return NULL;
+}
+
+static std::atomic<SLONG> shutdownWaiters = 0;
+static const SLONG SHUTDOWN_COMPLETE = 1;
+static const SLONG SHUTDOWN_STEP = 2;
+
 void Dispatcher::shutdown(CheckStatusWrapper* userStatus, unsigned int timeout, const int reason)
 {
 	// set "process exiting" state
@@ -6503,6 +6674,19 @@ void Dispatcher::shutdown(CheckStatusWrapper* userStatus, unsigned int timeout, 
 
 	// can't syncronize with already killed threads, just exit
 	if (MasterInterfacePtr()->getProcessExiting())
+		return;
+
+	// wait for other threads that were waiting for shutdown
+	// that should not take too long due to shutdown started bit
+	Cleanup cleanShutCnt([&] {
+		shutdownWaiters -= SHUTDOWN_STEP;
+		while (shutdownWaiters > SHUTDOWN_STEP - 1)
+			Thread::yield();
+	});
+
+	// atomically increase shutdownWaiters & check for SHUTDOWN_STARTED
+	SLONG state = (shutdownWaiters += SHUTDOWN_STEP);
+	if (state & SHUTDOWN_COMPLETE)
 		return;
 
 	try
@@ -6658,6 +6842,9 @@ void Dispatcher::shutdown(CheckStatusWrapper* userStatus, unsigned int timeout, 
 		e.stuffException(userStatus);
 		iscLogStatus(NULL, userStatus);
 	}
+
+	// no more attempts to run shutdown code even in case of error
+	shutdownWaiters |= SHUTDOWN_COMPLETE;
 }
 
 void Dispatcher::setDbCryptCallback(CheckStatusWrapper* status, ICryptKeyCallback* callback)

@@ -214,6 +214,12 @@ namespace Firebird
 			return inherited::add(dataL);
 		}
 
+		size_type add(T&& item)
+		{
+			T* dataL = FB_NEW_POOL(this->getPool()) T(this->getPool(), std::move(item));
+			return inherited::add(dataL);
+		}
+
 		T& add()
 		{
 			T* dataL = FB_NEW_POOL(this->getPool()) T(this->getPool());
@@ -300,10 +306,16 @@ namespace Firebird
 			return iterator(this, getCount());
 		}
 
-		iterator back()
+		T& front()
 		{
   			fb_assert(getCount() > 0);
-			return iterator(this, getCount() - 1);
+			return *begin();
+		}
+
+		T& back()
+		{
+			fb_assert(getCount() > 0);
+			return *iterator(this, getCount() - 1);
 		}
 
 		const_iterator begin() const
@@ -371,7 +383,7 @@ namespace Firebird
 				delete getPointer(i);
 		}
 
-		size_type getCount() const throw()
+		size_type getCount() const noexcept
 		{
 			return inherited::getCount();
 		}
@@ -482,6 +494,13 @@ namespace Firebird
 				ObjectStorage, const ObjectKey*, ObjectKeyOfValue,
 				ObjectCmp> >()
 		{ }
+
+		explicit SortedObjectsArray(MemoryPool& p, const SortedObjectsArray& o) :
+			ObjectsArray <ObjectValue, SortedArray<ObjectValue*,
+				ObjectStorage, const ObjectKey*, ObjectKeyOfValue,
+				ObjectCmp> >(p, o)
+		{
+		}
 
 		bool find(const ObjectKey& item, size_type& pos) const
 		{
@@ -755,7 +774,7 @@ namespace Firebird
 		PointersArray() : values(), pointers() { }
 		~PointersArray() { }
 
-		size_type getCount() const throw()
+		size_type getCount() const noexcept
 		{
 			fb_assert(values.getCount() == pointers.getCount());
 			return values.getCount();

@@ -37,16 +37,17 @@ using namespace Jrd;
 
 BitmapTableScan::BitmapTableScan(CompilerScratch* csb, const string& alias,
 								 StreamType stream, jrd_rel* relation,
-								 InversionNode* inversion)
+								 InversionNode* inversion, double selectivity)
 	: RecordStream(csb, stream),
 	  m_alias(csb->csb_pool, alias), m_relation(relation), m_inversion(inversion)
 {
 	fb_assert(m_inversion);
 
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = csb->csb_rpt[stream].csb_cardinality * selectivity;
 }
 
-void BitmapTableScan::open(thread_db* tdbb) const
+void BitmapTableScan::internalOpen(thread_db* tdbb) const
 {
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -80,7 +81,7 @@ void BitmapTableScan::close(thread_db* tdbb) const
 	}
 }
 
-bool BitmapTableScan::getRecord(thread_db* tdbb) const
+bool BitmapTableScan::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -121,27 +122,32 @@ bool BitmapTableScan::getRecord(thread_db* tdbb) const
 	return false;
 }
 
-void BitmapTableScan::print(thread_db* tdbb, string& plan,
-							bool detailed, unsigned level) const
+void BitmapTableScan::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	if (detailed)
-	{
-		plan += printIndent(++level) + "Table " +
-			printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Access By ID";
+	if (!level)
+		plan += "(";
 
-		printInversion(tdbb, m_inversion, plan, true, level);
-	}
-	else
-	{
-		if (!level)
-			plan += "(";
+	plan += printName(tdbb, m_alias, false) + " INDEX (";
+	string indices;
+	printLegacyInversion(tdbb, m_inversion, indices);
+	plan += indices + ")";
 
-		plan += printName(tdbb, m_alias, false) + " INDEX (";
-		string indices;
-		printInversion(tdbb, m_inversion, indices, false, level);
-		plan += indices + ")";
+	if (!level)
+		plan += ")";
+}
 
-		if (!level)
-			plan += ")";
-	}
+void BitmapTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
+{
+	planEntry.className = "BitmapTableScan";
+
+	planEntry.lines.add().text = "Table " + printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Access By ID";
+	printOptInfo(planEntry.lines);
+
+	printInversion(tdbb, m_inversion, planEntry.lines, true, 1, false);
+
+	planEntry.objectType = m_relation->getObjectType();
+	planEntry.objectName = m_relation->rel_name;
+
+	if (m_alias.hasData() && m_relation->rel_name != m_alias)
+		planEntry.alias = m_alias;
 }

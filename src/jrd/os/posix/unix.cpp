@@ -94,7 +94,7 @@ using namespace Firebird;
 #define SYNC		O_SYNC
 #endif
 
-// Changed to not redfine SYNC if O_SYNC already exists
+// Changed to not redefine SYNC if O_SYNC already exists
 // they seem to be the same values anyway. MOD 13-07-2001
 #if (!(defined SYNC) && (defined O_FSYNC))
 #define SYNC		O_FSYNC
@@ -117,14 +117,23 @@ using namespace Firebird;
 #define O_DIRECT 00040000
 #endif
 
-// please undefine FCNTL_BROKEN for operating systems,
-// that can successfully change BOTH O_DIRECT and O_SYNC using fcntl()
+#ifdef SOLARIS
+#define O_DIRECT 0
+#endif
+
+// Some platforms are able to change O_SYNC using fcntl() syscall
+//
+// Linux is still documented as being buggy in this regard, sigh.
+// MacOS is documented to not support it at all.
+// FreeBSD, Tru64, Solaris and HP-UX seem being OK, see:
+//   https://bugzilla.kernel.org/show_bug.cgi?id=5994
+// but let's delay enabling fsync for them until it's proven to work.
+#define FCNTL_SYNC_BROKEN
 
 static const mode_t MASK = 0660;
 
-#define FCNTL_BROKEN
 static jrd_file* seek_file(jrd_file*, BufferDesc*, FB_UINT64*, FbStatusVector*);
-static jrd_file* setup_file(Database*, const PathName&, const int, const bool, const bool, const bool);
+static jrd_file* setup_file(Database*, const PathName&, int, USHORT);
 static void lockDatabaseFile(int& desc, const bool shareMode, const bool temporary,
 							 const char* fileName, ISC_STATUS operation);
 static bool unix_error(const TEXT*, const jrd_file*, ISC_STATUS, FbStatusVector* = NULL);
@@ -217,20 +226,30 @@ jrd_file* PIO_create(thread_db* tdbb, const PathName& file_name,
  *	have been locked before entry.
  *
  **************************************/
+	const auto dbb = tdbb->getDatabase();
+	const bool forceWrite = !temporary && (dbb->dbb_flags & DBB_force_write) != 0;
+	const bool notUseFSCache = !dbb->dbb_config->getUseFileSystemCache();
+	bool onRawDevice = false;
+
 #ifdef SUPERSERVER_V2
 	const int flag = SYNC | O_RDWR | O_CREAT | (overwrite ? O_TRUNC : O_EXCL) | O_BINARY;
 #else
+	int flag = O_RDWR | O_BINARY;
+
 #ifdef SUPPORT_RAW_DEVICES
-	const int flag = O_RDWR |
-			(PIO_on_raw_device(file_name) ? 0 : O_CREAT) |
-			(overwrite ? O_TRUNC : O_EXCL) |
-			O_BINARY;
-#else
-	const int flag = O_RDWR | O_CREAT | (overwrite ? O_TRUNC : O_EXCL) | O_BINARY;
-#endif
+	if (PIO_on_raw_device(file_name))
+		onRawDevice = true;
 #endif
 
-	Database* const dbb = tdbb->getDatabase();
+	flag |= overwrite ? O_TRUNC : O_EXCL;
+
+	if (forceWrite)
+		flag |= SYNC;
+	if (notUseFSCache)
+		flag |= O_DIRECT;
+	if (!onRawDevice)
+		flag |= O_CREAT;
+#endif
 
 	int desc = os_utils::open(file_name.c_str(), flag, 0666);
 	if (desc == -1)
@@ -274,6 +293,14 @@ jrd_file* PIO_create(thread_db* tdbb, const PathName& file_name,
 #endif
 	}
 
+#ifdef SOLARIS
+	if (directio(desc, notUseFSCache ? DIRECTIO_ON : DIRECTIO_OFF) != 0)
+	{
+		ERR_post(Arg::Gds(isc_io_error) << Arg::Str("directio") << Arg::Str(file_name) <<
+				 Arg::Gds(isc_io_access_err) << Arg::Unix(errno));
+	}
+#endif
+
 	// os_utils::posix_fadvise(desc, 0, 0, POSIX_FADV_RANDOM);
 
 	// File open succeeded.  Now expand the file name.
@@ -281,7 +308,13 @@ jrd_file* PIO_create(thread_db* tdbb, const PathName& file_name,
 	PathName expanded_name(file_name);
 	ISC_expand_filename(expanded_name, false);
 
-	return setup_file(dbb, expanded_name, desc, false, shareMode, !(flag & O_CREAT));
+	const USHORT flags =
+		(shareMode ? FIL_sh_write : 0) |
+		(forceWrite ? FIL_force_write : 0) |
+		(notUseFSCache ? FIL_no_fs_cache : 0) |
+		(onRawDevice ? FIL_raw_device : 0);
+
+	return setup_file(dbb, expanded_name, desc, flags);
 }
 
 
@@ -318,7 +351,7 @@ void PIO_extend(thread_db* tdbb, jrd_file* main_file, const ULONG extPages, cons
 
 #if defined(HAVE_LINUX_FALLOC_H) && defined(HAVE_FALLOCATE)
 
-	EngineCheckout cout(tdbb, FB_FUNCTION, true);
+	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 
 	ULONG leftPages = extPages;
 	for (jrd_file* file = main_file; file && leftPages; file = file->fil_next)
@@ -388,7 +421,7 @@ void PIO_flush(thread_db* tdbb, jrd_file* main_file)
 	// Since all SUPERSERVER_V2 database and shadow I/O is synchronous, this is a no-op.
 #ifndef SUPERSERVER_V2
 
-	EngineCheckout cout(tdbb, FB_FUNCTION, true);
+	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 	MutexLockGuard guard(main_file->fil_mutex, FB_FUNCTION);
 
 	for (jrd_file* file = main_file; file; file = file->fil_next)
@@ -403,12 +436,7 @@ void PIO_flush(thread_db* tdbb, jrd_file* main_file)
 }
 
 
-#ifdef SOLARIS
-// minimize #ifdefs inside PIO_force_write()
-#define O_DIRECT 0
-#endif
-
-void PIO_force_write(jrd_file* file, const bool forcedWrites, const bool notUseFSCache)
+void PIO_force_write(jrd_file* file, const bool forceWrite)
 {
 /**************************************
  *
@@ -425,42 +453,46 @@ void PIO_force_write(jrd_file* file, const bool forcedWrites, const bool notUseF
 
 #ifndef SUPERSERVER_V2
 	const bool oldForce = (file->fil_flags & FIL_force_write) != 0;
-	const bool oldNotUseCache = (file->fil_flags & FIL_no_fs_cache) != 0;
 
-	if (forcedWrites != oldForce || notUseFSCache != oldNotUseCache)
+	if (forceWrite != oldForce)
 	{
+		const int control = forceWrite ? SYNC : 0;
 
-		const int control = (forcedWrites ? SYNC : 0) | (notUseFSCache ? O_DIRECT : 0);
+#ifdef FCNTL_SYNC_BROKEN
 
-#ifndef FCNTL_BROKEN
-		if (fcntl(file->fil_desc, F_SETFL, control) == -1)
-		{
-			unix_error("fcntl() SYNC/DIRECT", file, isc_io_access_err);
-		}
-#else //FCNTL_BROKEN
 		maybeCloseFile(file->fil_desc);
-		file->fil_desc = openFile(file->fil_string, forcedWrites,
-								  notUseFSCache, file->fil_flags & FIL_readonly);
-		if (file->fil_desc == -1)
-		{
-			unix_error("re open() for SYNC/DIRECT", file, isc_io_open_err);
-		}
 
-		lockDatabaseFile(file->fil_desc, file->fil_flags & FIL_sh_write, false,
-			file->fil_string, isc_io_open_err);
-#endif //FCNTL_BROKEN
+		const bool readOnly = (file->fil_flags & FIL_readonly) != 0;
+		const bool notUseFSCache = (file->fil_flags & FIL_no_fs_cache) != 0;
+
+		file->fil_desc = openFile(file->fil_string, forceWrite, notUseFSCache, readOnly);
+		if (file->fil_desc == -1)
+			unix_error("re-open() for SYNC", file, isc_io_open_err);
+
+		const bool shareMode = (file->fil_flags & FIL_sh_write) != 0;
+		lockDatabaseFile(file->fil_desc, shareMode, false, file->fil_string, isc_io_open_err);
 
 #ifdef SOLARIS
-		if (notUseFSCache != oldNotUseCache &&
-			directio(file->fil_desc, notUseFSCache ? DIRECTIO_ON : DIRECTIO_OFF) != 0)
-		{
+		if (directio(file->fil_desc, notUseFSCache ? DIRECTIO_ON : DIRECTIO_OFF) != 0)
 			unix_error("directio()", file, isc_io_access_err);
-		}
 #endif
 
-		file->fil_flags &= ~(FIL_force_write | FIL_no_fs_cache);
-		file->fil_flags |= (forcedWrites ? FIL_force_write : 0) |
-						   (notUseFSCache ? FIL_no_fs_cache : 0);
+		// os_utils::posix_fadvise(file->fil_desc, 0, 0, POSIX_FADV_RANDOM);
+
+#else // FCNTL_SYNC_BROKEN
+
+		// dimitr: If we're switching FW OFF->ON, flush it before changing the SYNC mode
+		if (forceWrite)
+			fsync(file->fil_desc);
+
+		if (fcntl(file->fil_desc, F_SETFL, control) == -1)
+			unix_error("fcntl() SYNC/DIRECT", file, isc_io_access_err);
+
+#endif
+		if (forceWrite)
+			file->fil_flags |= FIL_force_write;
+		else
+			file->fil_flags &= ~FIL_force_write;
 	}
 #endif
 }
@@ -608,7 +640,7 @@ USHORT PIO_init_data(thread_db* tdbb, jrd_file* main_file, FbStatusVector* statu
 
 	FB_UINT64 offset;
 
-	EngineCheckout cout(tdbb, FB_FUNCTION, true);
+	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 
 	jrd_file* file = seek_file(main_file, &bdb, &offset, status_vector);
 
@@ -666,19 +698,22 @@ jrd_file* PIO_open(thread_db* tdbb,
  *	Open a database file.
  *
  **************************************/
-	Database* const dbb = tdbb->getDatabase();
+	const auto dbb = tdbb->getDatabase();
 
 	bool readOnly = false;
+	const bool forceWrite = (dbb->dbb_flags & DBB_force_write) != 0;
+	const bool notUseFSCache = !dbb->dbb_config->getUseFileSystemCache();
+
 	const PathName& expandedName(string.hasData() ? string : file_name);
 	const PathName& originalName(file_name.hasData() ? file_name : string);
-	int desc = openFile(expandedName, false, false, false);
+	int desc = openFile(expandedName, forceWrite, notUseFSCache, false);
 
 	if (desc == -1)
 	{
 		// Try opening the database file in ReadOnly mode. The database file could
 		// be on a RO medium (CD-ROM etc.). If this fileopen fails, return error.
 
-		desc = openFile(expandedName, false, false, true);
+		desc = openFile(expandedName, forceWrite, notUseFSCache, true);
 		if (desc == -1)
 		{
 			ERR_post(Arg::Gds(isc_io_error) << Arg::Str("open") << Arg::Str(originalName) <<
@@ -703,7 +738,7 @@ jrd_file* PIO_open(thread_db* tdbb,
 		// being opened ReadOnly. This flag will be used later to compare with
 		// the Header Page flag setting to make sure that the database is set ReadOnly.
 
-		PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+		const auto pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 		if (!pageSpace->file)
 			dbb->dbb_flags |= DBB_being_opened_read_only;
 	}
@@ -711,9 +746,17 @@ jrd_file* PIO_open(thread_db* tdbb,
 	const bool shareMode = dbb->dbb_config->getServerMode() != MODE_SUPER;
 	lockDatabaseFile(desc, shareMode, false, expandedName.c_str(), isc_io_open_err);
 
+#ifdef SOLARIS
+	if (directio(desc, notUseFSCache ? DIRECTIO_ON : DIRECTIO_OFF) != 0)
+	{
+		ERR_post(Arg::Gds(isc_io_error) << Arg::Str("directio") << Arg::Str(originalName) <<
+				 Arg::Gds(isc_io_access_err) << Arg::Unix(errno));
+	}
+#endif
+
 	// os_utils::posix_fadvise(desc, 0, 0, POSIX_FADV_RANDOM);
 
-	bool raw = false;
+	bool onRawDevice = false;
 #ifdef SUPPORT_RAW_DEVICES
 	// At this point the file has successfully been opened in either RW or RO
 	// mode. Check if it is a special file (i.e. raw block device) and if a
@@ -721,7 +764,7 @@ jrd_file* PIO_open(thread_db* tdbb,
 
 	if (PIO_on_raw_device(expandedName))
 	{
-		raw = true;
+		onRawDevice = true;
 		if (!raw_devices_validate_database(desc, expandedName))
 		{
 			maybeCloseFile(desc);
@@ -731,7 +774,14 @@ jrd_file* PIO_open(thread_db* tdbb,
 	}
 #endif // SUPPORT_RAW_DEVICES
 
-	return setup_file(dbb, expandedName, desc, readOnly, shareMode, raw);
+	const USHORT flags =
+		(readOnly ? FIL_readonly : 0) |
+		(shareMode ? FIL_sh_write : 0) |
+		(forceWrite ? FIL_force_write : 0) |
+		(notUseFSCache ? FIL_no_fs_cache : 0) |
+		(onRawDevice ? FIL_raw_device : 0);
+
+	return setup_file(dbb, expandedName, desc, flags);
 }
 
 
@@ -756,7 +806,7 @@ bool PIO_read(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page, 
 
 	Database* const dbb = tdbb->getDatabase();
 
-	EngineCheckout cout(tdbb, FB_FUNCTION, true);
+	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 
 	const SLONG size = dbb->dbb_page_size;
 
@@ -808,7 +858,7 @@ bool PIO_write(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page,
 
 	Database* const dbb = tdbb->getDatabase();
 
-	EngineCheckout cout(tdbb, FB_FUNCTION, true);
+	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 
 	const SLONG size = dbb->dbb_page_size;
 
@@ -881,7 +931,7 @@ static jrd_file* seek_file(jrd_file* file, BufferDesc* bdb, FB_UINT64* offset,
 }
 
 
-static int openFile(const PathName& name, const bool forcedWrites,
+static int openFile(const PathName& name, const bool forceWrite,
 	const bool notUseFSCache, const bool readOnly)
 {
 /**************************************
@@ -900,7 +950,7 @@ static int openFile(const PathName& name, const bool forcedWrites,
 	flag |= SYNC;
 	// what to do with O_DIRECT here ?
 #else
-	if (forcedWrites)
+	if (forceWrite)
 		flag |= SYNC;
 	if (notUseFSCache)
 		flag |= O_DIRECT;
@@ -931,12 +981,7 @@ static void maybeCloseFile(int& desc)
 }
 
 
-static jrd_file* setup_file(Database* dbb,
-							const PathName& file_name,
-							const int desc,
-							const bool readOnly,
-							const bool shareMode,
-							const bool onRawDev)
+static jrd_file* setup_file(Database* dbb, const PathName& file_name, int desc, USHORT flags)
 {
 /**************************************
  *
@@ -955,14 +1000,8 @@ static jrd_file* setup_file(Database* dbb,
 		file = FB_NEW_RPT(*dbb->dbb_permanent, file_name.length() + 1) jrd_file();
 		file->fil_desc = desc;
 		file->fil_max_page = MAX_ULONG;
+		file->fil_flags = flags;
 		strcpy(file->fil_string, file_name.c_str());
-
-		if (readOnly)
-			file->fil_flags |= FIL_readonly;
-		if (shareMode)
-			file->fil_flags |= FIL_sh_write;
-		if (onRawDev)
-			file->fil_flags |= FIL_raw_device;
 	}
 	catch (const Exception&)
 	{

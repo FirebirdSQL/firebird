@@ -70,9 +70,13 @@ Usage:
    CLIENT_HOST                  | The wire protocol host name of remote client. Value is
                                 | returned for all supported protocols.
                                 |
+   CLIENT_OS_USER               | Remote OS user name
+                                |
    CLIENT_PID                   | Process ID of remote client application
                                 |
    CLIENT_PROCESS               | Process name of remote client application
+                                |
+   CLIENT_VERSION               | Version of the client library used by client application
                                 |
    DB_NAME                      | Canonical name of current database. It is either alias
                                 | name if connectivity via file names is not allowed or
@@ -133,6 +137,17 @@ Usage:
    EXT_CONN_POOL_LIFETIME       | Idle connection lifetime, in seconds
                                 |
    SESSION_TIMEZONE             | Current session time zone.
+                                |
+   DECFLOAT_ROUND               | Rounding mode used in operations with DECFLOAT values.
+                                |
+   DECFLOAT_TRAPS               | Exceptional conditions in operations with DECFLOAT
+                                | values that cause a trap.
+                                |
+   PAGES_ALLOCATED              | Current value of allocated pages in the database.
+                                |
+   PAGES_USED                   | Current value of allocated pages in the database.
+                                |
+   PAGES_FREE                   | Current value of free pages in the database.
 
 Notes:
    To prevent DoS attacks against Firebird Server you are not allowed to have

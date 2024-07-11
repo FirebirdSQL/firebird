@@ -126,7 +126,7 @@ namespace Firebird
 		memset(stringBuffer, c, sizeL);
 	}
 
-	void AbstractString::adjustRange(const size_type length, size_type& pos, size_type& n) throw()
+	void AbstractString::adjustRange(const size_type length, size_type& pos, size_type& n) noexcept
 	{
 		if (pos == npos) {
 			pos = length > n ? length - n : 0;
@@ -171,7 +171,7 @@ namespace Firebird
 		return stringBuffer + p0;
 	}
 
-	void AbstractString::baseErase(size_type p0, size_type n) throw()
+	void AbstractString::baseErase(size_type p0, size_type n) noexcept
 	{
 		adjustRange(length(), p0, n);
 		memmove(stringBuffer + p0, stringBuffer + p0 + n, stringLength - (p0 + n) + 1);
@@ -394,6 +394,20 @@ extern "C" {
 		stringLength = NewLength;
 		stringBuffer[NewLength] = 0;
 		shrinkBuffer();
+	}
+
+	bool AbstractString::baseMove(AbstractString&& rhs)
+	{
+		if (getPool() == rhs.getPool() && rhs.inlineBuffer != rhs.stringBuffer)
+		{
+			stringBuffer = std::exchange(rhs.stringBuffer, rhs.inlineBuffer);
+			stringLength = std::exchange(rhs.stringLength, 0);
+			bufferSize = std::exchange(rhs.bufferSize, INLINE_BUFFER_SIZE);
+			rhs.inlineBuffer[0] = '\0';
+			return true;
+		}
+
+		return false;
 	}
 
 	void AbstractString::printf(const char* format,...)

@@ -57,6 +57,8 @@
 #include "../common/dsc_proto.h"
 #include "../common/utils_proto.h"
 #include "../common/StatusArg.h"
+#include "../common/status.h"
+#include "../common/TimeZones.h"
 
 
 #ifdef HAVE_SYS_TYPES_H
@@ -104,7 +106,8 @@ using namespace Firebird;
 #define FLOAT_MAX 3.402823466E+38F // max float (32 bit) value
 #endif
 
-#define LETTER7(c)      ((c) >= 'A' && (c) <= 'Z')
+#define LETTER7_UPPER(c)      ((c) >= 'A' && (c) <= 'Z')
+#define LETTER(c) (((c) >= 'a' && (c) <= 'z') || ((c) >= 'A' && (c) <= 'Z'))
 #define DIGIT(c)        ((c) >= '0' && (c) <= '9')
 #define ABSOLUT(x)      ((x) < 0 ? -(x) : (x))
 
@@ -140,9 +143,14 @@ static void integer_to_text(const dsc*, dsc*, Callbacks*);
 static void int128_to_text(const dsc*, dsc*, Callbacks* cb);
 static void localError(const Firebird::Arg::StatusVector&);
 static SSHORT cvt_get_short(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunction err);
+static void make_null_string(const dsc*, USHORT, const char**, vary*, USHORT, Firebird::DecimalStatus, ErrorFunction);
+
+namespace {
+	class RetPtr;
+}
+static SSHORT cvt_decompose(const char*, USHORT, RetPtr* return_value, ErrorFunction err);
 
 class DummyException {};
-
 
 //#ifndef WORDS_BIGENDIAN
 //static const SQUAD quad_min_int = { 0, SLONG_MIN };
@@ -153,8 +161,136 @@ class DummyException {};
 //#endif
 
 
+namespace {
+
+class RetPtr
+{
+public:
+	virtual ~RetPtr() { }
+
+	enum lb10 {RETVAL_OVERFLOW, RETVAL_POSSIBLE_OVERFLOW, RETVAL_NO_OVERFLOW};
+
+	virtual USHORT maxSize() = 0;
+	virtual void truncate8() = 0;
+	virtual void truncate16() = 0;
+	virtual lb10 compareLimitBy10() = 0;
+	virtual void nextDigit(unsigned digit, unsigned base) = 0;
+	virtual bool isLowerLimit() = 0;
+	virtual void neg() = 0;
+};
+
+template <class Traits>
+class RetValue : public RetPtr
+{
+public:
+	RetValue(typename Traits::ValueType* ptr)
+		: return_value(ptr)
+	{
+		value = 0;
+	}
+
+	~RetValue()
+	{
+		*return_value = value;
+	}
+
+	USHORT maxSize() override
+	{
+		return sizeof(typename Traits::ValueType);
+	}
+
+	void truncate8() override
+	{
+		ULONG mask = 0xFFFFFFFF;
+		value &= mask;
+	}
+
+	void truncate16() override
+	{
+		FB_UINT64 mask = 0xFFFFFFFFFFFFFFFF;
+		value &= mask;
+	}
+
+	lb10 compareLimitBy10() override
+	{
+		if (static_cast<typename Traits::UnsignedType>(value) > Traits::UPPER_LIMIT_BY_10)
+			return RETVAL_OVERFLOW;
+		if (static_cast<typename Traits::UnsignedType>(value) == Traits::UPPER_LIMIT_BY_10)
+			return RETVAL_POSSIBLE_OVERFLOW;
+		return RETVAL_NO_OVERFLOW;
+	}
+
+	void nextDigit(unsigned digit, unsigned base) override
+	{
+		value *= base;
+		value += digit;
+	}
+
+	bool isLowerLimit() override
+	{
+		return value == Traits::LOWER_LIMIT;
+	}
+
+	void neg() override
+	{
+		value = -value;
+	}
+
+protected:
+	typename Traits::ValueType value;
+	typename Traits::ValueType* return_value;
+};
+
+} // anonymous namespace
+
 static const double eps_double = 1e-14;
 static const double eps_float  = 1e-5;
+
+
+static void validateTimeStamp(const ISC_TIMESTAMP timestamp, const EXPECT_DATETIME expectedType, const dsc* desc,
+	Callbacks* cb)
+{
+	if (!NoThrowTimeStamp::isValidTimeStamp(timestamp))
+	{
+		switch (expectedType)
+		{
+			case expect_sql_date:
+				cb->err(Arg::Gds(isc_date_range_exceeded));
+				break;
+			case expect_sql_time:
+			case expect_sql_time_tz:
+				cb->err(Arg::Gds(isc_time_range_exceeded));
+				break;
+			case expect_timestamp:
+			case expect_timestamp_tz:
+				cb->err(Arg::Gds(isc_datetime_range_exceeded));
+				break;
+			default: // this should never happen!
+				CVT_conversion_error(desc, cb->err);
+				break;
+		}
+	}
+}
+
+static void timeStampToUtc(ISC_TIMESTAMP_TZ& timestampTZ, USHORT sessionTimeZone, const EXPECT_DATETIME expectedType,
+	Callbacks* cb)
+{
+	if (expectedType == expect_sql_time_tz || expectedType == expect_timestamp_tz || timestampTZ.time_zone != sessionTimeZone)
+		TimeZoneUtil::localTimeStampToUtc(timestampTZ);
+
+	if (timestampTZ.time_zone != sessionTimeZone)
+	{
+		if (expectedType == expect_sql_time)
+		{
+			ISC_TIME_TZ timeTz;
+			timeTz.utc_time = timestampTZ.utc_timestamp.timestamp_time;
+			timeTz.time_zone = timestampTZ.time_zone;
+			timestampTZ.utc_timestamp.timestamp_time = TimeZoneUtil::timeTzToTime(timeTz, cb);
+		}
+		else if (expectedType == expect_timestamp)
+			*(ISC_TIMESTAMP*) &timestampTZ = TimeZoneUtil::timeStampTzToTimeStamp(timestampTZ, sessionTimeZone);
+	}
+}
 
 
 static void float_to_text(const dsc* from, dsc* to, Callbacks* cb)
@@ -628,7 +764,7 @@ void CVT_string_to_datetime(const dsc* desc,
 			}
 			description[i] = precision;
 		}
-		else if (LETTER7(c) && !have_english_month && i - start_component < 2)
+		else if (LETTER7_UPPER(c) && !have_english_month && i - start_component < 2)
 		{
 			TEXT temp[sizeof(YESTERDAY) + 1];
 
@@ -636,7 +772,7 @@ void CVT_string_to_datetime(const dsc* desc,
 			while ((p < end) && (t < &temp[sizeof(temp) - 1]))
 			{
 				c = UPPER7(*p);
-				if (!LETTER7(c))
+				if (!LETTER7_UPPER(c))
 					break;
 				*t++ = c;
 				p++;
@@ -966,27 +1102,7 @@ void CVT_string_to_datetime(const dsc* desc,
 	// This catches things like 29-Feb-1995 (not a leap year)
 
 	Firebird::TimeStamp ts(times);
-
-	if (!ts.isValid())
-	{
-		switch (expect_type)
-		{
-			case expect_sql_date:
-				cb->err(Arg::Gds(isc_date_range_exceeded));
-				break;
-			case expect_sql_time:
-			case expect_sql_time_tz:
-				cb->err(Arg::Gds(isc_time_range_exceeded));
-				break;
-			case expect_timestamp:
-			case expect_timestamp_tz:
-				cb->err(Arg::Gds(isc_datetime_range_exceeded));
-				break;
-			default: // this should never happen!
-				CVT_conversion_error(desc, cb->err);
-				break;
-		}
-	}
+	validateTimeStamp(ts.value(), expect_type, desc, cb);
 
 	if (expect_type != expect_sql_time && expect_type != expect_sql_time_tz)
 	{
@@ -1013,21 +1129,7 @@ void CVT_string_to_datetime(const dsc* desc,
 	date->utc_timestamp.timestamp_time += components[6];
 	date->time_zone = zone;
 
-	if (expect_type == expect_sql_time_tz || expect_type == expect_timestamp_tz || zone != sessionTimeZone)
-		TimeZoneUtil::localTimeStampToUtc(*date);
-
-	if (zone != sessionTimeZone)
-	{
-		if (expect_type == expect_sql_time)
-		{
-			ISC_TIME_TZ timeTz;
-			timeTz.utc_time = date->utc_timestamp.timestamp_time;
-			timeTz.time_zone = zone;
-			date->utc_timestamp.timestamp_time = TimeZoneUtil::timeTzToTime(timeTz, cb);
-		}
-		else if (expect_type == expect_timestamp)
-			*(ISC_TIMESTAMP*) date = TimeZoneUtil::timeStampTzToTimeStamp(*date, sessionTimeZone);
-	}
+	timeStampToUtc(*date, sessionTimeZone, expect_type, cb);
 }
 
 
@@ -1063,6 +1165,15 @@ void adjustForScale(V& val, SSHORT scale, const V limit, ErrorFunction err)
 }
 
 
+class SSHORTTraits
+{
+public:
+	typedef SSHORT ValueType;
+	typedef USHORT UnsignedType;
+	static const USHORT UPPER_LIMIT_BY_10 = MAX_SSHORT / 10;
+	static const SSHORT LOWER_LIMIT = MIN_SSHORT;
+};
+
 static SSHORT cvt_get_short(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunction err)
 {
 /**************************************
@@ -1083,8 +1194,11 @@ static SSHORT cvt_get_short(const dsc* desc, SSHORT scale, DecimalStatus decSt, 
 		VaryStr<20> buffer;			// long enough to represent largest short in ASCII
 		const char* p;
 		USHORT length = CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), decSt, err);
-		scale -= CVT_decompose(p, length, &value, err);
 
+		{
+			RetValue<SSHORTTraits> rv(&value);
+			scale -= cvt_decompose(p, length, &rv, err);
+		}
 		adjustForScale(value, scale, SHORT_LIMIT, err);
 	}
 	else {
@@ -1096,6 +1210,16 @@ static SSHORT cvt_get_short(const dsc* desc, SSHORT scale, DecimalStatus decSt, 
 
 	return value;
 }
+
+
+class SLONGTraits
+{
+public:
+	typedef SLONG ValueType;
+	typedef ULONG UnsignedType;
+	static const ULONG UPPER_LIMIT_BY_10 = MAX_SLONG / 10;
+	static const SLONG LOWER_LIMIT = MIN_SLONG;
+};
 
 SLONG CVT_get_long(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunction err)
 {
@@ -1210,7 +1334,9 @@ SLONG CVT_get_long(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunc
 		{
 			USHORT length =
 				CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), decSt, err);
-			scale -= CVT_decompose(p, length, &value, err);
+
+			RetValue<SLONGTraits> rv(&value);
+			scale -= cvt_decompose(p, length, &rv, err);
 		}
 		break;
 
@@ -1244,13 +1370,13 @@ bool CVT_get_boolean(const dsc* desc, ErrorFunction err)
 
 			// Remove heading and trailing spaces.
 
-			while (len > 0 && isspace((UCHAR) *p))
+			while (len > 0 && fb_utils::isspace(*p))
 			{
 				++p;
 				--len;
 			}
 
-			while (len > 0 && isspace((UCHAR) p[len - 1]))
+			while (len > 0 && fb_utils::isspace(p[len - 1]))
 				--len;
 
 			if (len == 4 && fb_utils::strnicmp(p, "TRUE", len) == 0)
@@ -1788,12 +1914,13 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 				if (to->dsc_dtype == dtype_varying)
 					ptr += sizeof(USHORT);
 
-				Jrd::CharSet* charSet = cb->getToCharset(to->getCharSet());
+				CharSet* charSet = cb->getToCharset(to->getCharSet());
+				UCHAR maxBytesPerChar = charSet ? charSet->maxBytesPerChar() : 1;
 
-				if (len / charSet->maxBytesPerChar() < from->dsc_length)
+				if (len / maxBytesPerChar < from->dsc_length)
 				{
 					cb->err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
-						Arg::Gds(isc_trunc_limits) << Arg::Num(len / charSet->maxBytesPerChar()) <<
+						Arg::Gds(isc_trunc_limits) << Arg::Num(len / maxBytesPerChar) <<
 						Arg::Num(from->dsc_length));
 				}
 
@@ -1864,7 +1991,7 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 				} // end scope
 
 				const USHORT to_size = TEXT_LEN(to);
-				Jrd::CharSet* toCharset = cb->getToCharset(charset2);
+				CharSet* toCharset = cb->getToCharset(charset2);
 
 				cb->validateData(toCharset, length, q);
 				ULONG toLength = cb->validateLength(toCharset, charset2, length, q, to_size);
@@ -2081,7 +2208,7 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 }
 
 
-void CVT_conversion_error(const dsc* desc, ErrorFunction err)
+void CVT_conversion_error(const dsc* desc, ErrorFunction err, const Exception* original)
 {
 /**************************************
  *
@@ -2107,6 +2234,8 @@ void CVT_conversion_error(const dsc* desc, ErrorFunction err)
 		message = "ARRAY";
 	else if (desc->dsc_dtype == dtype_boolean)
 		message = "BOOLEAN";
+	else if (desc->dsc_dtype == dtype_dbkey)
+		message = "DBKEY";
 	else
 	{
 		// CVC: I don't have access here to JRD_get_thread_data())->tdbb_status_vector
@@ -2126,6 +2255,18 @@ void CVT_conversion_error(const dsc* desc, ErrorFunction err)
 			const USHORT length =
 				CVT_make_string(desc, ttype_ascii, &p, &s, sizeof(s), 0, localError);
 			message.assign(p, length);
+
+			// Convert to \xDD surely non-printable characters
+			for (FB_SIZE_T n = 0; n < message.getCount(); ++n)
+			{
+				if (message[n] < ' ')
+				{
+					string hex;
+					hex.printf("#x%02x", UCHAR(message[n]));
+					message.replace(n, 1, hex);
+					n += (hex.length() - 1);
+				}
+			}
 		}
 		/*
 		catch (status_exception& e)
@@ -2148,7 +2289,11 @@ void CVT_conversion_error(const dsc* desc, ErrorFunction err)
 	}
 
 	//// TODO: Need access to transliterate here to convert message to metadata charset.
-	err(Arg::Gds(isc_convert_error) << message);
+	Arg::StatusVector vector;
+	if (original)
+		vector.assign(*original);
+	vector << Arg::Gds(isc_convert_error) << message;
+	err(vector);
 }
 
 
@@ -2297,13 +2442,13 @@ static void datetime_to_text(const dsc* from, dsc* to, Callbacks* cb)
 }
 
 
-void CVT_make_null_string(const dsc*    desc,
-						  USHORT        to_interp,
-						  const char**  address,
-						  vary*         temp,
-						  USHORT        length,
-						  DecimalStatus decSt,
-						  ErrorFunction err)
+void make_null_string(const dsc*    desc,
+					  USHORT        to_interp,
+					  const char**  address,
+					  vary*         temp,
+					  USHORT        length,
+					  DecimalStatus decSt,
+					  ErrorFunction err)
 {
 /**************************************
  *
@@ -2336,6 +2481,12 @@ void CVT_make_null_string(const dsc*    desc,
 
 	fb_assert(temp->vary_length == len);
 	temp->vary_string[len] = 0;
+
+	for (USHORT n = 0; n < len; ++n)
+	{
+		if (!temp->vary_string[n])		// \0 in the middle of a string
+			CVT_conversion_error(desc, err);
+	}
 }
 
 
@@ -2453,22 +2604,6 @@ double CVT_power_of_ten(const int scale)
 	return upper_part[scale >> 5] * lower_part[scale & 0x1f];
 }
 
-
-class RetPtr
-{
-public:
-	virtual ~RetPtr() { }
-
-	enum lb10 {RETVAL_OVERFLOW, RETVAL_POSSIBLE_OVERFLOW, RETVAL_NO_OVERFLOW};
-
-	virtual USHORT maxSize() = 0;
-	virtual void truncate8() = 0;
-	virtual void truncate16() = 0;
-	virtual lb10 compareLimitBy10() = 0;
-	virtual void nextDigit(unsigned digit, unsigned base) = 0;
-	virtual bool isLowerLimit() = 0;
-	virtual void neg() = 0;
-};
 
 static void hex_to_value(const char*& string, const char* end, RetPtr* retValue);
 
@@ -2697,160 +2832,36 @@ static SSHORT cvt_decompose(const char*	string,
 }
 
 
-template <class Traits>
-class RetValue : public RetPtr
-{
-public:
-	RetValue(typename Traits::ValueType* ptr)
-		: return_value(ptr)
-	{
-		value = 0;
-	}
-
-	~RetValue()
-	{
-		*return_value = value;
-	}
-
-	USHORT maxSize()
-	{
-		return sizeof(typename Traits::ValueType);
-	}
-
-	void truncate8()
-	{
-		ULONG mask = 0xFFFFFFFF;
-		value &= mask;
-	}
-
-	void truncate16()
-	{
-		FB_UINT64 mask = 0xFFFFFFFFFFFFFFFF;
-		value &= mask;
-	}
-
-	lb10 compareLimitBy10()
-	{
-		if (value > Traits::UPPER_LIMIT_BY_10)
-			return RETVAL_OVERFLOW;
-		if (value == Traits::UPPER_LIMIT_BY_10)
-			return RETVAL_POSSIBLE_OVERFLOW;
-		return RETVAL_NO_OVERFLOW;
-	}
-
-	void nextDigit(unsigned digit, unsigned base)
-	{
-		value *= base;
-		value += digit;
-	}
-
-	bool isLowerLimit()
-	{
-		return value == Traits::LOWER_LIMIT;
-	}
-
-	void neg()
-	{
-		value = -value;
-	}
-
-private:
-	typename Traits::ValueType value;
-	typename Traits::ValueType* return_value;
-};
-
-
-class SSHORTTraits
-{
-public:
-	typedef SSHORT ValueType;
-	static const SSHORT UPPER_LIMIT_BY_10 = MAX_SSHORT / 10;
-	static const SSHORT LOWER_LIMIT = MIN_SSHORT;
-};
-
-SSHORT CVT_decompose(const char* str, USHORT len, SSHORT* val, ErrorFunction err)
-{
-/**************************************
- *
- *      d e c o m p o s e
- *
- **************************************
- *
- * Functional description
- *      Decompose a numeric string in mantissa and exponent,
- *      or if it is in hexadecimal notation.
- *
- **************************************/
-
-	RetValue<SSHORTTraits> value(val);
-	return cvt_decompose(str, len, &value, err);
-}
-
-
-class SLONGTraits
-{
-public:
-	typedef SLONG ValueType;
-	static const SLONG UPPER_LIMIT_BY_10 = MAX_SLONG / 10;
-	static const SLONG LOWER_LIMIT = MIN_SLONG;
-};
-
-SSHORT CVT_decompose(const char* str, USHORT len, SLONG* val, ErrorFunction err)
-{
-/**************************************
- *
- *      d e c o m p o s e
- *
- **************************************
- *
- * Functional description
- *      Decompose a numeric string in mantissa and exponent,
- *      or if it is in hexadecimal notation.
- *
- **************************************/
-
-	RetValue<SLONGTraits> value(val);
-	return cvt_decompose(str, len, &value, err);
-}
-
-
-class SINT64Traits
-{
-public:
-	typedef SINT64 ValueType;
-	static const SINT64 UPPER_LIMIT_BY_10 = MAX_SINT64 / 10;
-	static const SINT64 LOWER_LIMIT = MIN_SINT64;
-};
-
-SSHORT CVT_decompose(const char* str, USHORT len, SINT64* val, ErrorFunction err)
-{
-/**************************************
- *
- *      d e c o m p o s e
- *
- **************************************
- *
- * Functional description
- *      Decompose a numeric string in mantissa and exponent,
- *      or if it is in hexadecimal notation.
- *
- **************************************/
-
-	RetValue<SINT64Traits> value(val);
-	return cvt_decompose(str, len, &value, err);
-}
-
-
 class I128Traits
 {
 public:
 	typedef Int128 ValueType;
+	typedef Int128 UnsignedType;			// To be fixed when adding int256
 	static const CInt128 UPPER_LIMIT_BY_10;
 	static const CInt128 LOWER_LIMIT;
 };
 
 const CInt128 I128Traits::UPPER_LIMIT_BY_10(CInt128(CInt128::MkMax) / 10);
 const CInt128 I128Traits::LOWER_LIMIT(CInt128::MkMin);
+
+class RetI128 : public RetValue<I128Traits>
+{
+public:
+	RetI128(Int128* v)
+		: RetValue<I128Traits>(v)
+	{ }
+
+	lb10 compareLimitBy10() override
+	{
+		lb10 rc = RetValue<I128Traits>::compareLimitBy10();
+		if (rc != RETVAL_NO_OVERFLOW)
+			return rc;
+
+		if (value.sign() < 0)
+			return RETVAL_OVERFLOW;
+		return RETVAL_NO_OVERFLOW;
+	}
+};
 
 SSHORT CVT_decompose(const char* str, USHORT len, Int128* val, ErrorFunction err)
 {
@@ -2867,7 +2878,7 @@ SSHORT CVT_decompose(const char* str, USHORT len, Int128* val, ErrorFunction err
  **************************************/
 
 
-	RetValue<I128Traits> value(val);
+	RetI128 value(val);
 	return cvt_decompose(str, len, &value, err);
 }
 
@@ -2957,6 +2968,15 @@ USHORT CVT_get_string_ptr_common(const dsc* desc, USHORT* ttype, UCHAR** address
 }
 
 
+static void checkForIndeterminant(const Exception& e, const dsc* desc, ErrorFunction err)
+{
+	StaticStatusVector st;
+	e.stuffException(st);
+	if (fb_utils::containsErrorCode(st.begin(), isc_decfloat_invalid_operation))
+		CVT_conversion_error(desc, err, &e);
+}
+
+
 static inline void SINT64_to_SQUAD(const SINT64 input, const SQUAD& value)
 {
 	((SLONG*) &value)[LOW_WORD] = (SLONG) (input & 0xffffffff);
@@ -3005,8 +3025,16 @@ Decimal64 CVT_get_dec64(const dsc* desc, DecimalStatus decSt, ErrorFunction err)
 		case dtype_varying:
 		case dtype_cstring:
 		case dtype_text:
-			CVT_make_null_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer) - 1, decSt, err);
-			return d64.set(buffer.vary_string, decSt);
+			make_null_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer) - 1, decSt, err);
+			try
+			{
+				return d64.set(buffer.vary_string, decSt);
+			}
+			catch (const Exception& e)
+			{
+				checkForIndeterminant(e, desc, err);
+				throw;
+			}
 
 		case dtype_real:
 			return d64.set(*((float*) p), decSt);
@@ -3081,8 +3109,16 @@ Decimal128 CVT_get_dec128(const dsc* desc, DecimalStatus decSt, ErrorFunction er
 		case dtype_varying:
 		case dtype_cstring:
 		case dtype_text:
-			CVT_make_null_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer) - 1, decSt, err);
-			return d128.set(buffer.vary_string, decSt);
+			make_null_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer) - 1, decSt, err);
+			try
+			{
+				return d128.set(buffer.vary_string, decSt);
+			}
+			catch (const Exception& e)
+			{
+				checkForIndeterminant(e, desc, err);
+				throw;
+			}
 
 		case dtype_real:
 			return d128.set(*((float*) p), decSt);
@@ -3125,7 +3161,7 @@ Int128 CVT_get_int128(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorF
  **************************************
  *
  * Functional description
- *      Convert something arbitrary to a DecFloat(34) / (128 bit).
+ *      Convert something arbitrary to 128 bit integer.
  *
  **************************************/
 	VaryStr<1024> buffer;			// represents unreasonably long decfloat literal in ASCII
@@ -3310,6 +3346,15 @@ const UCHAR* CVT_get_bytes(const dsc* desc, unsigned& size)
 }
 
 
+class SINT64Traits
+{
+public:
+	typedef SINT64 ValueType;
+	typedef FB_UINT64 UnsignedType;
+	static const FB_UINT64 UPPER_LIMIT_BY_10 = MAX_SINT64 / 10;
+	static const SINT64 LOWER_LIMIT = MIN_SINT64;
+};
+
 SQUAD CVT_get_quad(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunction err)
 {
 /**************************************
@@ -3365,8 +3410,12 @@ SQUAD CVT_get_quad(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunc
 		{
 			USHORT length =
 				CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), decSt, err);
+
 			SINT64 i64;
-			scale -= CVT_decompose(p, length, &i64, err);
+			{
+				RetValue<SINT64Traits> rv(&i64);
+				scale -= cvt_decompose(p, length, &rv, err);
+			}
 			SINT64_to_SQUAD(i64, value);
 		}
 		break;
@@ -3507,7 +3556,9 @@ SINT64 CVT_get_int64(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFu
 		{
 			USHORT length =
 				CVT_make_string(desc, ttype_ascii, &p, &buffer, sizeof(buffer), decSt, err);
-			scale -= CVT_decompose(p, length, &value, err);
+
+			RetValue<SINT64Traits> rv(&value);
+			scale -= cvt_decompose(p, length, &rv, err);
 		}
 		break;
 
@@ -3607,9 +3658,9 @@ namespace
 	public:
 		virtual bool transliterate(const dsc* from, dsc* to, CHARSET_ID&);
 		virtual CHARSET_ID getChid(const dsc* d);
-		virtual Jrd::CharSet* getToCharset(CHARSET_ID charset2);
-		virtual void validateData(Jrd::CharSet* toCharset, SLONG length, const UCHAR* q);
-		virtual ULONG validateLength(Jrd::CharSet* charSet, CHARSET_ID charSetId, ULONG length, const UCHAR* start,
+		virtual CharSet* getToCharset(CHARSET_ID charset2);
+		virtual void validateData(CharSet* toCharset, SLONG length, const UCHAR* q);
+		virtual ULONG validateLength(CharSet* charSet, CHARSET_ID charSetId, ULONG length, const UCHAR* start,
 			const USHORT size);
 		virtual SLONG getLocalDate();
 		virtual ISC_TIMESTAMP getCurrentGmtTimeStamp();
@@ -3623,16 +3674,16 @@ namespace
 		return false;
 	}
 
-	Jrd::CharSet* CommonCallbacks::getToCharset(CHARSET_ID)
+	CharSet* CommonCallbacks::getToCharset(CHARSET_ID)
 	{
 		return NULL;
 	}
 
-	void CommonCallbacks::validateData(Jrd::CharSet*, SLONG, const UCHAR*)
+	void CommonCallbacks::validateData(CharSet*, SLONG, const UCHAR*)
 	{
 	}
 
-	ULONG CommonCallbacks::validateLength(Jrd::CharSet* charSet, CHARSET_ID charSetId, ULONG length, const UCHAR* start,
+	ULONG CommonCallbacks::validateLength(CharSet* charSet, CHARSET_ID charSetId, ULONG length, const UCHAR* start,
 		const USHORT size)
 	{
 		if (length > size)

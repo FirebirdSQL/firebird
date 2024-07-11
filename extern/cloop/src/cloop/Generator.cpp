@@ -21,12 +21,14 @@
 
 #include "Generator.h"
 #include "Expr.h"
+#include <algorithm>
 #include <deque>
 #include <set>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
+using std::transform;
 using std::deque;
 using std::runtime_error;
 using std::set;
@@ -50,6 +52,26 @@ void identify(FILE* out, unsigned ident)
 	fprintf(out, "%.*s", ident, tabs);
 }
 
+string snakeUpperCase(const string& name)
+{
+	string result;
+	const size_t len = name.length();
+	bool wasUpper = true;
+
+	for (size_t i = 0; i < len; ++i)
+	{
+		const char c = name[i];
+		const bool isUpper = isupper(c);
+
+		if (isUpper && !wasUpper)
+			result += '_';
+
+		result += toupper(c);
+		wasUpper = isUpper;
+	}
+
+	return result;
+}
 
 //--------------------------------------
 
@@ -147,6 +169,9 @@ CppGenerator::CppGenerator(const string& filename, const string& prefix, Parser*
 
 void CppGenerator::generate()
 {
+	string nameSpaceUpper = nameSpace;
+	transform(nameSpaceUpper.begin(), nameSpaceUpper.end(), nameSpaceUpper.begin(), toupper);
+
 	fprintf(out, "// %s\n\n", AUTOGEN_MSG);
 
 	fprintf(out, "#ifndef %s\n", headerGuard.c_str());
@@ -155,6 +180,22 @@ void CppGenerator::generate()
 
 	fprintf(out, "#ifndef CLOOP_CARG\n");
 	fprintf(out, "#define CLOOP_CARG\n");
+	fprintf(out, "#endif\n\n");
+
+	fprintf(out, "#ifndef CLOOP_NOEXCEPT\n");
+	fprintf(out, "#if __cplusplus >= 201103L\n");
+	fprintf(out, "#define CLOOP_NOEXCEPT noexcept\n");
+	fprintf(out, "#else\n");
+	fprintf(out, "#define CLOOP_NOEXCEPT throw()\n");
+	fprintf(out, "#endif\n");
+	fprintf(out, "#endif\n\n\n");
+
+	fprintf(out, "#ifndef CLOOP_CONSTEXPR\n");
+	fprintf(out, "#if __cplusplus >= 201103L\n");
+	fprintf(out, "#define CLOOP_CONSTEXPR constexpr\n");
+	fprintf(out, "#else\n");
+	fprintf(out, "#define CLOOP_CONSTEXPR const\n");
+	fprintf(out, "#endif\n");
 	fprintf(out, "#endif\n\n\n");
 
 	fprintf(out, "namespace %s\n", nameSpace.c_str());
@@ -193,6 +234,14 @@ void CppGenerator::generate()
 		 ++i)
 	{
 		Interface* interface = *i;
+
+		const string snakeInterfaceName = snakeUpperCase(interface->name);
+
+		fprintf(out, "#define %s_%s%s_VERSION %uu\n\n",
+			nameSpaceUpper.c_str(),
+			prefix.c_str(),
+			snakeInterfaceName.c_str(),
+			interface->version);
 
 		deque<Method*> methods;
 
@@ -248,7 +297,7 @@ void CppGenerator::generate()
 					convertType(parameter->typeRef).c_str(), parameter->name.c_str());
 			}
 
-			fprintf(out, ") throw();\n");
+			fprintf(out, ") CLOOP_NOEXCEPT;\n");
 		}
 
 		fprintf(out, "\t\t};\n");
@@ -279,7 +328,11 @@ void CppGenerator::generate()
 		fprintf(out, "\n");
 
 		fprintf(out, "\tpublic:\n");
-		fprintf(out, "\t\tstatic const unsigned VERSION = %u;\n", interface->version);
+
+		fprintf(out, "\t\tstatic CLOOP_CONSTEXPR unsigned VERSION = %s_%s%s_VERSION;\n",
+			nameSpaceUpper.c_str(),
+			prefix.c_str(),
+			snakeInterfaceName.c_str());
 
 		if (!interface->constants.empty())
 			fprintf(out, "\n");
@@ -290,7 +343,7 @@ void CppGenerator::generate()
 		{
 			Constant* constant = *j;
 
-			fprintf(out, "\t\tstatic const %s %s = %s;\n",
+			fprintf(out, "\t\tstatic CLOOP_CONSTEXPR %s %s = %s;\n",
 				convertType(constant->typeRef).c_str(),
 				constant->name.c_str(),
 				constant->expr->generate(LANGUAGE_CPP, prefix).c_str());
@@ -304,15 +357,8 @@ void CppGenerator::generate()
 
 			fprintf(out, "\n\t\t");
 
-			string statusName;
-
-			if (!method->parameters.empty() &&
-				parser->exceptionInterface &&
-				method->parameters.front()->typeRef.token.text == parser->exceptionInterface->name)
-			{
-				statusName = method->parameters.front()->name;
+			if (!method->statusName.empty())
 				fprintf(out, "template <typename StatusType> ");
-			}
 
 			fprintf(out, "%s %s(",
 				convertType(method->returnTypeRef).c_str(), method->name.c_str());
@@ -326,7 +372,7 @@ void CppGenerator::generate()
 				if (k != method->parameters.begin())
 					fprintf(out, ", ");
 
-				if (k == method->parameters.begin() && !statusName.empty())
+				if (k == method->parameters.begin() && !method->statusName.empty())
 					fprintf(out, "StatusType* %s", parameter->name.c_str());
 				else
 				{
@@ -344,7 +390,7 @@ void CppGenerator::generate()
 				fprintf(out, "\t\t\t{\n");
 
 				const string exceptionClass("StatusType");
-				ActionParametersBlock apb = {out, LANGUAGE_CPP, prefix, exceptionClass, statusName, interface, method};
+				ActionParametersBlock apb = {out, LANGUAGE_CPP, prefix, exceptionClass, interface, method};
 
 				if (method->notImplementedAction)
 					method->notImplementedAction->generate(apb, 4);
@@ -366,11 +412,11 @@ void CppGenerator::generate()
 				fprintf(out, "\t\t\t}\n");
 			}
 
-			if (!statusName.empty())
+			if (!method->statusName.empty())
 			{
 				fprintf(out, "\t\t\t");
 
-				fprintf(out, "StatusType::clearException(%s)", statusName.c_str());
+				fprintf(out, "StatusType::clearException(%s)", method->statusName.c_str());
 
 				fprintf(out, ";\n");
 			}
@@ -496,7 +542,7 @@ void CppGenerator::generate()
 					 method->parameters.front()->typeRef.token.text == parser->exceptionInterface->name
 					) ? method->parameters.front() : NULL;
 
-				fprintf(out, ") throw()\n");
+				fprintf(out, ") CLOOP_NOEXCEPT\n");
 				fprintf(out, "\t\t{\n");
 
 				if (exceptionParameter)
@@ -641,7 +687,19 @@ void CppGenerator::generate()
 				}
 			}
 
-			fprintf(out, ")%s = 0;\n", (method->isConst ? " const" : ""));
+			fprintf(out, ")%s", (method->isConst ? " const" : ""));
+
+			if (method->stubAction)
+			{
+				const string exceptionClass("StatusType");
+				ActionParametersBlock apb = {out, LANGUAGE_CPP, prefix, exceptionClass, interface, method};
+
+				fprintf(out, "\n\t\t{\n");
+				method->stubAction->generate(apb, 3);
+				fprintf(out, "\t\t}\n");
+			}
+			else
+				fprintf(out, " = 0;\n");
 		}
 
 		fprintf(out, "\t};\n");
@@ -1083,6 +1141,12 @@ void PascalGenerator::generate()
 			if (!isProcedure)
 				fprintf(out, ": %s", convertType(method->returnTypeRef).c_str());
 
+			// Methods that present in TObject should be "reintroduce"d.
+			// So far there is just one case. For more cases better solution required.
+
+			if (method->name == "toString")
+				fprintf(out, "; reintroduce");
+
 			fprintf(out, ";\n");
 		}
 
@@ -1125,7 +1189,10 @@ void PascalGenerator::generate()
 			if (!isProcedure)
 				fprintf(out, ": %s", convertType(method->returnTypeRef).c_str());
 
-			fprintf(out, "; virtual; abstract;\n");
+			fprintf(out, "; virtual;");
+			if (!method->stubAction)
+				fprintf(out, " abstract;");
+			fprintf(out, "\n");
 		}
 
 		fprintf(out, "\tend;\n\n");
@@ -1149,15 +1216,6 @@ void PascalGenerator::generate()
 
 			bool isProcedure = method->returnTypeRef.token.type == Token::TYPE_VOID &&
 				 !method->returnTypeRef.isPointer;
-
-			string statusName;
-
-			if (!method->parameters.empty() &&
-				parser->exceptionInterface &&
-				method->parameters.front()->typeRef.token.text == parser->exceptionInterface->name)
-			{
-				statusName = method->parameters.front()->name;
-			}
 
 			fprintf(out, "%s %s.%s(",
 				(isProcedure ? "procedure" : "function"),
@@ -1189,8 +1247,7 @@ void PascalGenerator::generate()
 			{
 				fprintf(out, "\tif (vTable.version < %d) then begin\n", method->version);
 
-				ActionParametersBlock apb = {out, LANGUAGE_PASCAL, prefix, exceptionClass,
-					statusName, interface, method};
+				ActionParametersBlock apb = {out, LANGUAGE_PASCAL, prefix, exceptionClass, interface, method};
 
 				if (method->notImplementedAction)
 					method->notImplementedAction->generate(apb, 2);
@@ -1231,8 +1288,8 @@ void PascalGenerator::generate()
 			if (ident > 1)
 				fprintf(out, "\tend;\n");
 
-			if (!statusName.empty() && !exceptionClass.empty())
-				fprintf(out, "\t%s.checkException(%s);\n", exceptionClass.c_str(), escapeName(statusName).c_str());
+			if (!method->statusName.empty() && !exceptionClass.empty())
+				fprintf(out, "\t%s.checkException(%s);\n", exceptionClass.c_str(), escapeName(method->statusName).c_str());
 
 			fprintf(out, "end;\n\n");
 		}
@@ -1256,6 +1313,8 @@ void PascalGenerator::generate()
 			bool isProcedure = method->returnTypeRef.token.type == Token::TYPE_VOID &&
 				 !method->returnTypeRef.isPointer;
 
+			ActionParametersBlock apb = {out, LANGUAGE_PASCAL, prefix, exceptionClass, interface, method};
+
 			fprintf(out, "%s %sImpl_%sDispatcher(this: %s",
 				(isProcedure ? "procedure" : "function"),
 				escapeName(interface->name, true).c_str(),
@@ -1278,6 +1337,7 @@ void PascalGenerator::generate()
 
 			fprintf(out, "; cdecl;\n");
 			fprintf(out, "begin\n");
+			DefAction(DefAction::DEF_IGNORE).generate(apb, 1);
 
 			if (!exceptionClass.empty())
 				fprintf(out, "\ttry\n\t");
@@ -1319,8 +1379,35 @@ void PascalGenerator::generate()
 
 				fprintf(out, "\tend\n");
 			}
-
 			fprintf(out, "end;\n\n");
+
+			if (method->stubAction)
+			{
+				fprintf(out, "%s %sImpl.%s(",
+					(isProcedure ? "procedure" : "function"),
+					escapeName(interface->name, true).c_str(),
+					escapeName(method->name).c_str());
+
+				for (vector<Parameter*>::iterator k = method->parameters.begin();
+					 k != method->parameters.end();
+					 ++k)
+				{
+					Parameter* parameter = *k;
+
+					fprintf(out, "%s%s",
+						k == method->parameters.begin() ? "" : "; ",
+						convertParameter(*parameter).c_str());
+				}
+
+				fprintf(out, ")");
+				if (!isProcedure)
+					fprintf(out, ": %s", convertType(method->returnTypeRef).c_str());
+				fprintf(out, ";\n");
+
+				fprintf(out, "begin\n");
+				method->stubAction->generate(apb, 1);
+				fprintf(out, "end;\n\n");
+			}
 		}
 
 		fprintf(out, "var\n");

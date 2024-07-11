@@ -45,6 +45,9 @@ void GenerateRandomBytes(void* buffer, FB_SIZE_T size)
 {
 	// do not use /dev/random because it may return lesser data than we need.
 	int fd = os_utils::open("/dev/urandom", O_RDONLY);
+	if (fd < 0)
+		Firebird::system_call_failed::raise("open");
+
 	for (FB_SIZE_T offset = 0; offset < size; )
 	{
 		int rc = read(fd, static_cast<char*>(buffer) + offset, size - offset);
@@ -67,9 +70,9 @@ void GenerateRandomBytes(void* buffer, FB_SIZE_T size)
 	}
 }
 
-void GenerateGuid(Guid* guid)
+void GenerateGuid(UUID* guid)
 {
-	GenerateRandomBytes(guid, sizeof(Guid));
+	GenerateRandomBytes(guid, sizeof(UUID));
 
 	guid->Data3 = (4 << 12) | (guid->Data3 & 0xFFF);	// version 4
 	guid->Data4[0] = 0x80 | (guid->Data4[0] & 0x3F);	// variant

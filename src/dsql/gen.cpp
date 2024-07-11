@@ -65,6 +65,17 @@ using namespace Firebird;
 static void gen_plan(DsqlCompilerScratch*, const PlanNode*);
 
 
+// Generate blr for an argument.
+// When it is nullptr, generate blr_default_arg.
+void GEN_arg(DsqlCompilerScratch* dsqlScratch, ExprNode* node)
+{
+	if (node)
+		GEN_expr(dsqlScratch, node);
+	else
+		dsqlScratch->appendUChar(blr_default_arg);
+}
+
+
 void GEN_hidden_variables(DsqlCompilerScratch* dsqlScratch)
 {
 /**************************************
@@ -159,9 +170,24 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 	DSqlDataTypeUtil dataTypeUtil(dsqlScratch);
 	ULONG offset = 0;
 
+	class ParamCmp
+	{
+	public:
+		static int greaterThan(const Jrd::dsql_par* p1, const Jrd::dsql_par* p2)
+		{
+			return p1->par_index > p2->par_index;
+		}
+	};
+
+	SortedArray<dsql_par*, InlineStorage<dsql_par*, 16>, dsql_par*,
+		DefaultKeyValue<dsql_par*>, ParamCmp> dsqlParams;
+
 	for (FB_SIZE_T i = 0; i < message->msg_parameters.getCount(); ++i)
 	{
-		dsql_par* parameter = message->msg_parameters[i];
+		const auto parameter = message->msg_parameters[i];
+
+		if (parameter->par_index)
+			dsqlParams.add(parameter);
 
 		parameter->par_parameter = (USHORT) i;
 
@@ -221,6 +247,13 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 	message->msg_length = offset;
 
 	dsqlScratch->getDsqlStatement()->getPorts().add(message);
+
+	// Remove gaps in par_index due to output parameters using question-marks (CALL syntax).
+
+	USHORT parIndex = 0;
+
+	for (auto dsqlParam : dsqlParams)
+		dsqlParam->par_index = ++parIndex;
 }
 
 
@@ -465,10 +498,10 @@ static void gen_plan(DsqlCompilerScratch* dsqlScratch, const PlanNode* planNode)
 		// stuff the relation -- the relation id itself is redundant except
 		// when there is a need to differentiate the base tables of views
 
-		// ASF: node->dsqlRecordSourceNode may be NULL, and then a BLR error will happen.
+		// ASF: node->recordSourceNode may be NULL, and then a BLR error will happen.
 		// Example command: select * from (select * from t1) a plan (a natural);
-		if (node->dsqlRecordSourceNode)
-			node->dsqlRecordSourceNode->genBlr(dsqlScratch);
+		if (node->recordSourceNode)
+			node->recordSourceNode->genBlr(dsqlScratch);
 
 		// now stuff the access method for this stream
 
@@ -525,6 +558,12 @@ static void gen_plan(DsqlCompilerScratch* dsqlScratch, const PlanNode* planNode)
  **/
 void GEN_rse(DsqlCompilerScratch* dsqlScratch, RseNode* rse)
 {
+	if ((rse->dsqlFlags & RecordSourceNode::DFLAG_BODY_WRAPPER))
+	{
+		GEN_expr(dsqlScratch, rse->dsqlStreams->items[0]);
+		return;
+	}
+
 	if (rse->dsqlFlags & RecordSourceNode::DFLAG_SINGLETON)
 		dsqlScratch->appendUChar(blr_singular);
 
@@ -547,8 +586,11 @@ void GEN_rse(DsqlCompilerScratch* dsqlScratch, RseNode* rse)
 	for (const NestConst<RecordSourceNode>* const end = rse->dsqlStreams->items.end(); ptr != end; ++ptr)
 		GEN_expr(dsqlScratch, *ptr);
 
-	if (rse->flags & RseNode::FLAG_WRITELOCK)
+	if (rse->hasWriteLock())
 		dsqlScratch->appendUChar(blr_writelock);
+
+	if (rse->hasSkipLocked())
+		dsqlScratch->appendUChar(blr_skip_locked);
 
 	if (rse->dsqlFirst)
 	{
@@ -594,6 +636,12 @@ void GEN_rse(DsqlCompilerScratch* dsqlScratch, RseNode* rse)
 	{
 		dsqlScratch->appendUChar(blr_plan);
 		gen_plan(dsqlScratch, rse->rse_plan);
+	}
+
+	if (rse->firstRows.isAssigned())
+	{
+		dsqlScratch->appendUChar(blr_optimize);
+		dsqlScratch->appendUChar(static_cast<UCHAR>(rse->firstRows.asBool()));
 	}
 
 	dsqlScratch->appendUChar(blr_end);

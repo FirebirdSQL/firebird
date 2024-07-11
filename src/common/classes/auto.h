@@ -32,6 +32,7 @@
 #define CLASSES_AUTO_PTR_H
 
 #include <stdio.h>
+#include <functional>
 
 namespace Firebird {
 
@@ -102,11 +103,11 @@ class AutoPtr
 private:
 	Where* ptr;
 public:
-	AutoPtr(Where* v = NULL)
+	AutoPtr(Where* v = nullptr) noexcept
 		: ptr(v)
 	{}
 
-	AutoPtr(AutoPtr&& v)
+	AutoPtr(AutoPtr&& v) noexcept
 		: ptr(v.ptr)
 	{
 		v.ptr = nullptr;
@@ -135,12 +136,7 @@ public:
 		return *this;
 	}
 
-	operator Where*()
-	{
-		return ptr;
-	}
-
-	Where* get()
+	const Where* get() const
 	{
 		return ptr;
 	}
@@ -150,7 +146,12 @@ public:
 		return ptr;
 	}
 
-	const Where* get() const
+	Where* get()
+	{
+		return ptr;
+	}
+
+	operator Where*()
 	{
 		return ptr;
 	}
@@ -165,12 +166,7 @@ public:
 		return ptr != NULL;
 	}
 
-	Where* operator->()
-	{
-		return ptr;
-	}
-
-	const Where* operator->() const
+	Where* operator->() const
 	{
 		return ptr;
 	}
@@ -273,6 +269,12 @@ public:
 		*value |= oldValue;
 	}
 
+	void release(T cleanBit)
+	{
+		bit &= ~cleanBit;
+		oldValue &= ~cleanBit;
+	}
+
 private:
 	// copying is prohibited
 	AutoSetRestoreFlag(const AutoSetRestoreFlag&);
@@ -316,6 +318,22 @@ private:
 	T oldValue;
 };
 
+
+class Cleanup
+{
+public:
+	Cleanup(std::function<void()> clFunc)
+		: clean(clFunc)
+	{ }
+
+	~Cleanup()
+	{
+		clean();
+	}
+
+private:
+	std::function<void()> clean;
+};
 
 } //namespace Firebird
 

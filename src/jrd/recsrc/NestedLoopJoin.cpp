@@ -24,6 +24,7 @@
 #include "../jrd/evl_proto.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/vio_proto.h"
+#include "../jrd/optimizer/Optimizer.h"
 
 #include "RecordSource.h"
 
@@ -35,19 +36,29 @@ using namespace Jrd;
 // ------------------------------
 
 NestedLoopJoin::NestedLoopJoin(CompilerScratch* csb, FB_SIZE_T count, RecordSource* const* args)
-	: m_joinType(INNER_JOIN), m_args(csb->csb_pool), m_boolean(NULL)
+	: RecordSource(csb),
+	  m_joinType(INNER_JOIN),
+	  m_args(csb->csb_pool),
+	  m_boolean(NULL)
 {
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = MINIMUM_CARDINALITY;
 
 	m_args.resize(count);
 
 	for (FB_SIZE_T i = 0; i < count; i++)
+	{
 		m_args[i] = args[i];
+		m_cardinality *= args[i]->getCardinality();
+	}
 }
 
 NestedLoopJoin::NestedLoopJoin(CompilerScratch* csb, RecordSource* outer, RecordSource* inner,
 							   BoolExprNode* boolean, JoinType joinType)
-	: m_joinType(joinType), m_args(csb->csb_pool), m_boolean(boolean)
+	: RecordSource(csb),
+	  m_joinType(joinType),
+	  m_args(csb->csb_pool),
+	  m_boolean(boolean)
 {
 	fb_assert(outer && inner);
 
@@ -55,9 +66,11 @@ NestedLoopJoin::NestedLoopJoin(CompilerScratch* csb, RecordSource* outer, Record
 
 	m_args.add(outer);
 	m_args.add(inner);
+
+	m_cardinality = outer->getCardinality() * inner->getCardinality();
 }
 
-void NestedLoopJoin::open(thread_db* tdbb) const
+void NestedLoopJoin::internalOpen(thread_db* tdbb) const
 {
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
@@ -82,7 +95,7 @@ void NestedLoopJoin::close(thread_db* tdbb) const
 	}
 }
 
-bool NestedLoopJoin::getRecord(thread_db* tdbb) const
+bool NestedLoopJoin::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
@@ -190,58 +203,64 @@ bool NestedLoopJoin::refetchRecord(thread_db* /*tdbb*/) const
 	return true;
 }
 
-bool NestedLoopJoin::lockRecord(thread_db* /*tdbb*/) const
+WriteLockResult NestedLoopJoin::lockRecord(thread_db* /*tdbb*/) const
 {
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
-	return false; // compiler silencer
 }
 
-void NestedLoopJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned level) const
+void NestedLoopJoin::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
 	if (m_args.hasData())
 	{
-		if (detailed)
+		level++;
+		plan += "JOIN (";
+		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
 		{
-			plan += printIndent(++level) + "Nested Loop Join ";
+			if (i)
+				plan += ", ";
 
-			switch (m_joinType)
-			{
-				case INNER_JOIN:
-					plan += "(inner)";
-					break;
-
-				case OUTER_JOIN:
-					plan += "(outer)";
-					break;
-
-				case SEMI_JOIN:
-					plan += "(semi)";
-					break;
-
-				case ANTI_JOIN:
-					plan += "(anti)";
-					break;
-
-				default:
-					fb_assert(false);
-			}
-
-			for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-				m_args[i]->print(tdbb, plan, true, level);
+			m_args[i]->getLegacyPlan(tdbb, plan, level);
 		}
-		else
-		{
-			level++;
-			plan += "JOIN (";
-			for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-			{
-				if (i)
-					plan += ", ";
+		plan += ")";
+	}
+}
 
-				m_args[i]->print(tdbb, plan, false, level);
-			}
-			plan += ")";
-		}
+void NestedLoopJoin::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
+{
+	planEntry.className = "NestedLoopJoin";
+
+	planEntry.lines.add().text = "Nested Loop Join ";
+
+	switch (m_joinType)
+	{
+		case INNER_JOIN:
+			planEntry.lines.back().text += "(inner)";
+			break;
+
+		case OUTER_JOIN:
+			planEntry.lines.back().text += "(outer)";
+			break;
+
+		case SEMI_JOIN:
+			planEntry.lines.back().text += "(semi)";
+			break;
+
+		case ANTI_JOIN:
+			planEntry.lines.back().text += "(anti)";
+			break;
+
+		default:
+			fb_assert(false);
+	}
+
+	printOptInfo(planEntry.lines);
+
+	if (recurse)
+	{
+		++level;
+
+		for (const auto arg : m_args)
+			arg->getPlan(tdbb, planEntry.children.add(), level, recurse);
 	}
 }
 

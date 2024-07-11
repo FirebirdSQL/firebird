@@ -49,7 +49,7 @@ bool jrd_rel::isReplicating(thread_db* tdbb)
 	if (rel_repl_state.isUnknown())
 		rel_repl_state = MET_get_repl_state(tdbb, rel_name);
 
-	return rel_repl_state.value;
+	return rel_repl_state.asBool();
 }
 
 RelationPages* jrd_rel::getPagesInternal(thread_db* tdbb, TraNumber tran, bool allocPages)
@@ -598,7 +598,7 @@ void RelationPages::free(RelationPages*& nextFree)
 
 	rel_index_root = rel_data_pages = 0;
 	rel_slot_space = rel_pri_data_space = rel_sec_data_space = 0;
-	rel_last_free_pri_dp = 0;
+	rel_last_free_pri_dp = rel_last_free_blb_dp = 0;
 	rel_instance_id = 0;
 
 	dpMap.clear();

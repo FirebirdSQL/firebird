@@ -363,7 +363,7 @@ void setCloseOnExec(int fd)
 {
 	if (fd >= 0)
 	{
-		while (fcntl(fd, F_SETFD, O_CLOEXEC) < 0 && SYSCALL_INTERRUPTED(errno))
+		while (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0 && SYSCALL_INTERRUPTED(errno))
 			;
 	}
 }

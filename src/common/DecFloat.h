@@ -112,6 +112,9 @@ struct DecimalStatus
 	static const DecimalStatus DEFAULT;
 
 	USHORT decExtFlag, roundingMode;
+
+	string getTxtRound();
+	string getTxtTraps();
 };
 
 struct NumericBinding
@@ -276,6 +279,8 @@ public:
 	};
 
 	void getBcd(BCD* bcd) const;
+
+	static ULONG makeBcdKey(vary* buf, unsigned char *coeff, int sign, int exp, const int bias, const unsigned pMax);
 
 private:
 	decQuad dec;

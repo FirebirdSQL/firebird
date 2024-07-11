@@ -14,14 +14,15 @@ General notes on preparing a scripted install
 ---------------------------------------------
 
 These notes only document the firebird specific options for a scripted
-installation. Developers should refer to the full InnoSetup documentation 
-for a description of the other options available for a scripted install. 
+installation. Developers should refer to the full InnoSetup documentation
+for a description of the other options available for a scripted install.
 This can be found here:
+
   http://www.jrsoftware.org/ishelp/
 
-It is highly recommended that a scripted install is tested thoroughly 
-before deployment. The easiest way to test is to run the script without 
-the /SILENT parameter. This will present a standard installer with the 
+It is highly recommended that a scripted install is tested thoroughly
+before deployment. The easiest way to test is to run the script without
+the /SILENT parameter. This will present a standard installer with the
 scripted options preselected.
 
 NOTE that the /TASKS parameter clears all the default task settings. If
@@ -44,7 +45,7 @@ HELP
 Setup parameters specific to the Firebird Uninstaller
 /CLEAN
 
-For general parameters available to all InnoSetup based installers see the 
+For general parameters available to all InnoSetup based installers see the
 documentation for innosetup. A summary is available via /? or /HELP
 
 
@@ -53,10 +54,10 @@ Parameters specific to Firebird installs
 
 HELP
   Invoke this file as a help screen at installation time.
-  Note no / is prefixed !! Because /? and /HELP are now 
-  used by innosetup itself to dispaly innosetup specific help.
+  Note no / is prefixed !! Because /? and /HELP are now
+  used by innosetup itself to display innosetup specific help.
 
-  
+
 /COMPONENTS="comma separated list of component names"
 
   Choose from - ServerComponent,
@@ -67,31 +68,31 @@ HELP
   parameter causes Setup to automatically select a custom type. A full
   install requires combining components. For example:
 
-  /COMPONENTS="ClientComponent"
+    /COMPONENTS="ClientComponent"
 
   would be required for a client only install.
-  
-  NOTE - If a full server instal is required there is no need to 
+
+  NOTE - If a full server install is required there is no need to 
   specify /COMPONENTS. All three are chosen by default.
-  
+
 
 /TASKS="comma separated list of task names"
 
   Specifies a list of tasks that should be initially selected or
   deselected. To deselect a task, prefix its name with a "!" character.
 
-  Choose from - UseSuperServerTask                      
+  Choose from - UseSuperServerTask
                 UseSuperServerTask\UseGuardianTask        (optional)
-              or 
-                UseSuperClassicTask                     
+              or
+                UseSuperClassicTask
                 UseSuperClassicTask\UseGuardianTask       (optional)
               or
                 UseClassicServerTask
-                
-                UseApplicationTask                        
-              or 
+
+                UseApplicationTask
+              or
                 UseServiceTask
-                
+
                 AutoStartTask
                 CopyFbClientToSysTask
                 CopyFbClientAsGds32Task
@@ -103,7 +104,8 @@ HELP
 
   By default the following tasks are run:
 
-    UseSuperServerTask,UseServiceTask,AutoStartTask,CopyFbClientToSysTask 
+    UseSuperServerTask,UseServiceTask,AutoStartTask,CopyFbClientToSysTask
+
 
 /MERGETASKS="comma separated list of task names"
 
@@ -118,8 +120,8 @@ HELP
 /SYSDBAPASSWORD="mypassword"
 
   If supplied this will override the default SYSDBA password "masterkey".
-  
-  NOTE: If an existing Security database is found this parameter will be 
+
+  NOTE: If an existing Security database is found this parameter will be
   ignored.
 
 
@@ -134,8 +136,8 @@ HELP
   users by breaking a perfectly good working install of Firebird or InterBase.
   Its your choice.
 
-  
-  
+
+
 Parameters specific to Firebird uninstalls
 ------------------------------------------
 
@@ -147,7 +149,7 @@ Parameters specific to Firebird uninstalls
     firebird.conf
     databases.conf
     firebird.log
-    security5.fdb
+    security$MAJOR.fdb
     fbtrace.conf
     replication.conf
 
@@ -159,26 +161,26 @@ Parameters specific to Firebird uninstalls
 
 Examples
 --------
-These examples are just for firebird related options. In practice you 
-they will probably be combined with options such as /SILENT, /LOG, 
+These examples are just for firebird related options. In practice you
+they will probably be combined with options such as /SILENT, /LOG,
 /RESTARTEXITCODE etc.
 
 1/ Full server install of super server architecture
-  o Change SYSDBA password from default masterkey, 
+  o Change SYSDBA password from default masterkey,
   o deploy gds32 to <SYS>
 
     /MERGETASKS="CopyFbClientAsGds32Task" /SYSDBAPASSWORD="mypassword"
-    
+
 2/ Deploy Classic Server and keep other default tasks
 
-    /MERGETASKS="UseClassicServerTask" 
+    /MERGETASKS="UseClassicServerTask"
 
-3/ Really mess things up by accidentally deselecting the defaults and 
+3/ Really mess things up by accidentally deselecting the defaults and
 letting InnoSetup guess:
 
-    /TASKS="CopyFbClientAsGds32Task" 
+    /TASKS="CopyFbClientAsGds32Task"
 
 Be careful when using the /TASKS parameter !
 
- 
+
 

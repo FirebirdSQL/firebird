@@ -21,6 +21,7 @@
  */
 
 #include "firebird.h"
+#include "../jrd/ini.h"
 #include "../jrd/jrd.h"
 #include "../jrd/ods.h"
 #include "../jrd/req.h"
@@ -44,10 +45,6 @@ using namespace Replication;
 
 namespace
 {
-	// Generator RDB$BACKUP_HISTORY, although defined as system,
-	// should be replicated similar to user-defined ones
-	const int BACKUP_HISTORY_GENERATOR = 9;
-
 	const char* NO_PLUGIN_ERROR = "Replication plugin %s is not found";
 	const char* STOP_ERROR = "Replication is stopped due to critical error(s)";
 
@@ -132,7 +129,7 @@ namespace
 			{
 				auto& pool = *attachment->att_pool;
 				const auto manager = dbb->replManager(true);
-				const auto& guid = dbb->dbb_guid;
+				const auto& guid = dbb->dbb_guid.value();
 				const auto& userName = attachment->getUserName();
 
 				attachment->att_replicator = FB_NEW Replicator(pool, manager, guid, userName);
@@ -243,12 +240,27 @@ namespace
 		return transaction->tra_replicator;
 	}
 
-	bool matchTable(thread_db* tdbb, const MetaName& tableName)
+	bool checkTable(thread_db* tdbb, jrd_rel* relation)
 	{
-		const auto attachment = tdbb->getAttachment();
-		const auto matcher = attachment->att_repl_matcher.get();
+		if (relation->isTemporary())
+			return false;
 
-		return (!matcher || matcher->matchTable(tableName));
+		if (!relation->isSystem())
+		{
+			if (!relation->isReplicating(tdbb))
+				return false;
+
+			const auto attachment = tdbb->getAttachment();
+			const auto matcher = attachment->att_repl_matcher.get();
+
+			if (matcher && !matcher->matchTable(relation->rel_name))
+				return false;
+		}
+		// Do not replicate RDB$BACKUP_HISTORY as it describes physical-level things
+		else if (relation->rel_id == rel_backup_history)
+			return false;
+
+		return true;
 	}
 
 	Record* upgradeRecord(thread_db* tdbb, jrd_rel* relation, Record* record)
@@ -497,17 +509,8 @@ void REPL_store(thread_db* tdbb, const record_param* rpb, jrd_tra* transaction)
 	const auto relation = rpb->rpb_relation;
 	fb_assert(relation);
 
-	if (relation->isTemporary())
+	if (!checkTable(tdbb, relation))
 		return;
-
-	if (!relation->isSystem())
-	{
-		if (!relation->isReplicating(tdbb))
-			return;
-
-		if (!matchTable(tdbb, relation->rel_name))
-			return;
-	}
 
 	FbLocalStatus status;
 	const auto replicator = getReplicator(tdbb, status, transaction);
@@ -520,6 +523,7 @@ void REPL_store(thread_db* tdbb, const record_param* rpb, jrd_tra* transaction)
 	// This temporary auto-pointer is just to delete a temporary record
 	AutoPtr<Record> cleanupRecord(record != rpb->rpb_record ? record : nullptr);
 	AutoSetRestoreFlag<ULONG> noRecursion(&tdbb->tdbb_flags, TDBB_repl_in_progress, true);
+	AutoSetRestoreFlag<ULONG> noBlobCheck(&transaction->tra_flags, TRA_no_blob_check, true);
 
 	ReplicatedRecordImpl replRecord(tdbb, relation, record);
 
@@ -539,17 +543,8 @@ void REPL_modify(thread_db* tdbb, const record_param* orgRpb,
 	const auto relation = newRpb->rpb_relation;
 	fb_assert(relation);
 
-	if (relation->isTemporary())
+	if (!checkTable(tdbb, relation))
 		return;
-
-	if (!relation->isSystem())
-	{
-		if (!relation->isReplicating(tdbb))
-			return;
-
-		if (!matchTable(tdbb, relation->rel_name))
-			return;
-	}
 
 	FbLocalStatus status;
 	const auto replicator = getReplicator(tdbb, status, transaction);
@@ -577,6 +572,7 @@ void REPL_modify(thread_db* tdbb, const record_param* orgRpb,
 	}
 
 	AutoSetRestoreFlag<ULONG> noRecursion(&tdbb->tdbb_flags, TDBB_repl_in_progress, true);
+	AutoSetRestoreFlag<ULONG> noBlobCheck(&transaction->tra_flags, TRA_no_blob_check, true);
 
 	ReplicatedRecordImpl replOrgRecord(tdbb, relation, orgRecord);
 	ReplicatedRecordImpl replNewRecord(tdbb, relation, newRecord);
@@ -597,17 +593,8 @@ void REPL_erase(thread_db* tdbb, const record_param* rpb, jrd_tra* transaction)
 	const auto relation = rpb->rpb_relation;
 	fb_assert(relation);
 
-	if (relation->isTemporary())
+	if (!checkTable(tdbb, relation))
 		return;
-
-	if (!relation->isSystem())
-	{
-		if (!relation->isReplicating(tdbb))
-			return;
-
-		if (!matchTable(tdbb, relation->rel_name))
-			return;
-	}
 
 	FbLocalStatus status;
 	const auto replicator = getReplicator(tdbb, status, transaction);
@@ -620,6 +607,7 @@ void REPL_erase(thread_db* tdbb, const record_param* rpb, jrd_tra* transaction)
 	// This temporary auto-pointer is just to delete a temporary record
 	AutoPtr<Record> cleanupRecord(record != rpb->rpb_record ? record : nullptr);
 	AutoSetRestoreFlag<ULONG> noRecursion(&tdbb->tdbb_flags, TDBB_repl_in_progress, true);
+	AutoSetRestoreFlag<ULONG> noBlobCheck(&transaction->tra_flags, TRA_no_blob_check, true);
 
 	ReplicatedRecordImpl replRecord(tdbb, relation, record);
 
@@ -638,14 +626,11 @@ void REPL_gen_id(thread_db* tdbb, SLONG genId, SINT64 value)
 	if (genId == 0) // special case: ignore RDB$GENERATORS
 		return;
 
-	// Ignore other system generators, except RDB$BACKUP_HISTORY
-	if (genId != BACKUP_HISTORY_GENERATOR)
+	// Ignore other system generators
+	for (auto generator = generators; generator->gen_name; generator++)
 	{
-		for (auto generator = generators; generator->gen_name; generator++)
-		{
-			if (generator->gen_id == genId)
-				return;
-		}
+		if (generator->gen_id == genId)
+			return;
 	}
 
 	const auto replicator = getReplicator(tdbb);

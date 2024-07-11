@@ -3,10 +3,10 @@
 <head>
 	<meta http-equiv="content-type" content="text/html; charset=utf-8"/>
 	<title></title>
-	<meta name="generator" content="LibreOffice 6.4.7.2 (Linux)"/>
+	<meta name="generator" content="LibreOffice 7.1.5.2 (Linux)"/>
 	<meta name="author" content="alex "/>
 	<meta name="created" content="2013-05-31T00:00:00.010003100"/>
-	<meta name="changed" content="2021-09-10T16:41:58.007600045"/>
+	<meta name="changed" content="2022-06-24T17:47:03.455745039"/>
 	<meta name="created" content="00:00:00">
 	<meta name="created" content="00:00:00">
 	<meta name="created" content="00:00:00">
@@ -1333,6 +1333,16 @@ finishing with services tasks do not forget to close an interface:</font></p>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
+<p style="margin-bottom: 0cm; font-variant: normal; font-style: normal">
+<font size="4" style="font-size: 14pt">IService interface also
+contains method cancel(). It’s needed to cancel wait in a query()
+and is used internally by network server. Current implementation is
+restricted – IService::cancel() is not supported by remote
+redirector, only engine provider supports it. That means one can use
+it only in embedded connections.</font></p>
+<p style="margin-bottom: 0cm"><br/>
+
+</p>
 <p style="margin-top: 0.43cm; margin-bottom: 0.51cm; page-break-after: avoid">
 <font face="Albany, sans-serif"><font size="5" style="font-size: 18pt">Writing
 plugins.</font></font></p>
@@ -1502,7 +1512,7 @@ MyPlugin : public ISomePluginImpl&lt;MyPlugin, CheckStatusWrapper&gt;</i></font>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>{</i></font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>public:</i></font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>explicit
-MyPlugin(<a href="#PluginConfig">IPluginConfig</a>* cnf) throw()</i></font></p>
+MyPlugin(<a href="#PluginConfig">IPluginConfig</a>* cnf) noexcept</i></font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>:
 config(cnf), refCounter(0), owner(NULL)</i></font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>{</i></font></p>
@@ -1594,7 +1604,7 @@ ISomePlugin implementation</i></font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>private:</i></font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>IPluginConfig*
 config;</i></font></p>
-<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>FbSampleAtomic
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>std::atomic_int
 refCounter;</i></font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt"><i>IReferenceCounted*
 owner;</i></font></p>
@@ -1796,15 +1806,15 @@ interface – replaces isc_db_handle:</font></p>
 	cursor (analogue of isc_dsql_set_cursor_name()). Parameter
 	cursorFlags is needed to open bidirectional cursor setting it's
 	value to Istatement::CURSOR_TYPE_SCROLLABLE.</font></p>
-	<li><p><font size="4" style="font-size: 14pt">I</font><font face="Liberation Serif, serif"><font size="4" style="font-size: 14pt">Batch*
+	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">IBatch*
 	createBatch(StatusType* status, ITransaction* transaction, unsigned
 	stmtLength, const char* sqlStmt, unsigned dialect, IMessageMetadata*
-	inMetadata, unsigned</font></font> <font face="Liberation Serif, serif"><font size="4" style="font-size: 14pt">parLength,
-	const unsigned char* par) – prepares sqlStmt and creates <a href="#Batch">Batch</a>
-	interface ready to accept multiple sets of input parameters in
-	inMetadata format. Leaving inMetadata</font></font> <font face="Liberation Serif, serif"><font size="4" style="font-size: 14pt">NULL
-	makes batch use default format for sqlStmt. Parameters block may be
-	passed to createBatch() making it possible to adjust batch behavior.</font></font></p>
+	inMetadata, unsigned parLength, const unsigned char* par) –
+	prepares sqlStmt and creates <a href="#Batch">Batch</a> interface
+	ready to accept multiple sets of input parameters in inMetadata
+	format. Leaving inMetadata NULL makes batch use default format for
+	sqlStmt. Parameters block may be passed to createBatch() making it
+	possible to adjust batch behavior.</font></p>
 	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">IEvents*
 	queEvents(StatusType* status, IEventCallback* callback, unsigned
 	length, const unsigned char* events) – replaces isc_que_events()
@@ -1951,7 +1961,6 @@ possible buffer size (one set by TAG_BUFFER_BYTES_SIZE)</font></p>
 <a href="#Batch">Batch</a> interface. It contains more or less
 (depending upon parameters passed when <a href="#Batch">Batch</a> was
 created) detailed information about the results of batch execution.</font></p>
-<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">{</font></p>
 <ol>
 	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">uint
 	getSize(StatusType* status) – returns the total number of
@@ -2299,7 +2308,7 @@ interface – main interface from which start all operations with
 firebird API.</font></p>
 <ol>
 	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">IStatus*
-	getStatus() - get instance if <a href="#Status">Status</a>
+	getStatus() - get instance of <a href="#Status">Status</a>
 	interface.</font></p>
 	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">IProvider*
 	getDispatcher() - get instance of <a href="#Provider">Provider</a>
@@ -2377,14 +2386,14 @@ with execution of SQL statements.</font></p>
 	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">unsigned
 	getMessageLength(StatusType* status) - returns length of message
 	buffer (use it to allocate memory for the buffer).</font></p>
-	<li><p><font face="Liberation Serif, serif"><font size="4" style="font-size: 14pt">unsigned
+	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">unsigned
 	getAlignment(StatusType* status) – returns alignment required for
-	message buffer.</font></font></p>
-	<li><p><font face="Liberation Serif, serif"><font size="4" style="font-size: 14pt">unsigned</font></font>
-	<font face="Liberation Serif, serif"><font size="4" style="font-size: 14pt">getAlignedLength(StatusType*
-	status) – returns length of message buffer taking into an account
-	alignment requirements (use it to allocate memory for an array of
-	buffers and navigate through that array).</font></font></p>
+	message buffer.</font></p>
+	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">unsigned
+	getAlignedLength(StatusType* status) – returns length of message
+	buffer taking into an account alignment requirements (use it to
+	allocate memory for an array of buffers and navigate through that
+	array).</font></p>
 </ol>
 <p style="margin-bottom: 0cm"><br/>
 
@@ -2426,18 +2435,18 @@ message or construct metadata from the beginning.</font></p>
 	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">IMessageMetadata*
 	getMetadata(StatusType* status) – get <a href="#10. MessageMetadata">MessageMetadata</a>
 	interface built by this builder.</font></p>
-	<li><p style="margin-bottom: 0cm"><font face="Liberation Serif, serif"><font size="4" style="font-size: 14pt">void
+	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
 	setField(StatusType* status, uint index, const string field) – set
-	name of a field / column.</font></font></p>
-	<li><p style="margin-bottom: 0cm"><font face="Liberation Serif, serif"><font size="4" style="font-size: 14pt">void
+	name of a field / column.</font></p>
+	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
 	setRelation(StatusType* status, uint index, const string relation) –
-	set name of the relation from which the field was selected.</font></font></p>
-	<li><p style="margin-bottom: 0cm"><font face="Liberation Serif, serif"><font size="4" style="font-size: 14pt">void
+	set name of the relation from which the field was selected.</font></p>
+	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
 	setOwner(StatusType* status, uint index, const string owner) – set
-	name of that relation owner.</font></font></p>
-	<li><p style="margin-bottom: 0cm"><font face="Liberation Serif, serif"><font size="4" style="font-size: 14pt">void
+	name of that relation owner.</font></p>
+	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
 	setAlias(StatusType* status, uint index, const string alias) – set
-	alias name of the field in related statement.</font></font></p>
+	alias name of the field in related statement.</font></p>
 </ol>
 <p style="margin-bottom: 0cm"><br/>
 
@@ -2639,6 +2648,14 @@ of isc_stmt_handle. This interface is returned by openCursor() call
 in <a href="#Attachment">IAttachment</a> or <a href="#Statement">IStatement</a>.
 All fetch calls except fetchNext() work only for bidirectional
 (opened with CURSOR_TYPE_SCROLLABLE flag) result set.</font></p>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">Items
+accepted in getInfo() call:</font></p>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">INF_RECORD_COUNT
+– number of records stored inside a scrollable cursor, or -1 for a
+uni-directional cursor.</font></p>
+<p style="margin-bottom: 0cm"><br/>
+
+</p>
 <ol>
 	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">int
 	fetchNext(StatusType* status, void* message) – fetch next record,
@@ -2673,6 +2690,10 @@ All fetch calls except fetchNext() work only for bidirectional
 	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
 	close(StatusType* status) – close result set, releases interface
 	on success.</font></p>
+	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
+	getInfo(StatusType* status, unsigned itemsLength, const unsigned
+	char* items, unsigned bufferLength, unsigned char* buffer) –
+	retrieve information about result set.</font></p>
 </ol>
 <p style="margin-bottom: 0cm"><br/>
 
@@ -2697,6 +2718,9 @@ interface – replaces isc_svc_handle.</font></p>
 	start(StatusType* status, unsigned spbLength, const unsigned char*
 	spb) – start utility in services manager. Replaces
 	isc_service_start().</font></p>
+	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
+	cancel(StatusType* status) – cancel wait of current query() call.
+	Supported only for embedded connections.</font></p>
 </ol>
 <p style="margin-bottom: 0cm"><br/>
 
@@ -2733,7 +2757,7 @@ interface – replaces (partially) isc_stmt_handle.</font></p>
 	returning multiple rows of data. Partial analogue of
 	isc_dsql_execute2() - in and out XSLQDAs replaced with input and
 	output messages with appropriate buffers.</font></p>
-	<li><p style="margin-bottom: 0cm"><font face="Liberation Serif, serif"><font size="4" style="font-size: 14pt">IResultSet*
+	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">IResultSet*
 	openCursor(StatusType* status, ITransaction* transaction,
 	IMessageMetadata* inMetadata, void* inBuffer, IMessageMetadata*
 	outMetadata, unsigned flags) – executes SQL statement potentially
@@ -2741,8 +2765,8 @@ interface – replaces (partially) isc_stmt_handle.</font></p>
 	interface which should be used to fetch that data. Format of output
 	data is defined by outMetadata parameter, leaving it NULL default
 	format may be used. Parameter flags is needed to open bidirectional
-	cursor setting it's value to Istatement::CURSOR_TYPE_SCROLLABLE.</font></font></p>
-	<li><p style="margin-bottom: 0cm"><font face="Liberation Serif, serif"><font size="4" style="font-size: 14pt">IBatch*
+	cursor setting it's value to Istatement::CURSOR_TYPE_SCROLLABLE.</font></p>
+	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">IBatch*
 	createBatch(StatusType* status, IMessageMetadata* inMetadata, uint
 	parLength, const uchar* par) – creates <a href="#Batch">Batch</a>
 	interface to SQL statement with input parameters making it possible
@@ -2750,10 +2774,10 @@ interface – replaces (partially) isc_stmt_handle.</font></p>
 	of input data is defined by inMetadata parameter, leaving it NULL
 	makes batch use default format from this interface. Parameters block
 	may be passed to createBatch() making it possible to adjust batch
-	behavior.</font></font></p>
-	<li><p style="margin-bottom: 0cm"><font face="Liberation Serif, serif"><font size="4" style="font-size: 14pt">void
+	behavior.</font></p>
+	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
 	setCursorName(StatusType* status, const char* name) – replaces
-	isc_dsql_set_cursor_name(). </font></font>
+	isc_dsql_set_cursor_name().</font>
 	</p>
 	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">void
 	free(StatusType* status) – free statement, releases interface on
@@ -3591,6 +3615,20 @@ plugin or key holder plugin.</font></p>
 	is passed in both directions. The source of a key receives
 	dataLength bytes of data and may send up to bufferLength bytes into
 	buffer returning actual number of bytes placed into buffer.</font></p>
+	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">
+	void dispose() - invoked when interface is not needed any more. Helps
+	to avoid memory leaks in statefull inrefaces.
+	</font></p>
+	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">
+	unsigned afterAttach(StatusType* status, const char* dbName, const IStatus* attStatus) -
+	invoked after attach on client system. NULL in attStatus means attach was successful
+	but afterAttach() is anyway invoked in order to let plugin perform required cleanup.
+	The following values may be returned by this function:
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">NO_RETRY -
+	do not repeat attempts to attach to database.</font></p>
+<p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">DO_RETRY -
+	retry attach (ignored when function was called without attStatus).</font></p>
+	</font></p>
 </ol>
 <p style="margin-bottom: 0cm"><br/>
 

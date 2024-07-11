@@ -39,11 +39,18 @@
 #include "../../jrd/trace/TraceConfigStorage.h"
 #include "../../jrd/trace/TraceSession.h"
 
+namespace Firebird {
+
+class ICryptKeyCallback;
+
+}
+
 namespace Jrd {
 
 class Database;
 class Attachment;
 class jrd_tra;
+class DsqlRequest;
 class Service;
 
 class TraceManager
@@ -52,7 +59,7 @@ public:
     /* Initializes plugins. */
 	explicit TraceManager(Attachment* in_att);
 	explicit TraceManager(Service* in_svc);
-	explicit TraceManager(const char* in_filename);
+	TraceManager(const char* in_filename, Firebird::ICryptKeyCallback* callback, bool failedAttach);
 
 	/* Finalize plugins. Called when database is closed by the engine */
 	~TraceManager();
@@ -78,11 +85,20 @@ public:
 	void event_set_context(Firebird::ITraceDatabaseConnection* connection,
 		Firebird::ITraceTransaction* transaction, Firebird::ITraceContextVariable* variable);
 
+	void event_proc_compile(Firebird::ITraceDatabaseConnection* connection,
+		Firebird::ITraceProcedure* procedure, ntrace_counter_t time_millis, ntrace_result_t proc_result);
+
 	void event_proc_execute(Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction,
 		Firebird::ITraceProcedure* procedure, bool started, ntrace_result_t proc_result);
 
+	void event_func_compile(Firebird::ITraceDatabaseConnection* connection,
+		Firebird::ITraceFunction* function, ntrace_counter_t time_millis, ntrace_result_t func_result);
+
 	void event_func_execute(Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction,
 		Firebird::ITraceFunction* function, bool started, ntrace_result_t func_result);
+
+	void event_trigger_compile(Firebird::ITraceDatabaseConnection* connection,
+		Firebird::ITraceTrigger* trigger, ntrace_counter_t time_millis, ntrace_result_t trig_result);
 
 	void event_trigger_execute(Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction,
 		Firebird::ITraceTrigger* trigger, bool started, ntrace_result_t trig_result);
@@ -142,6 +158,12 @@ public:
 		return active;
 	}
 
+	// external access to stored attachment
+	Attachment* getAttachment()
+	{
+		return attachment;
+	}
+
 	/* DSQL-friendly routines to call Trace API hooks.
        Needed because DSQL cannot include JRD for the current engine */
 	static bool need_dsql_prepare(Attachment* att);
@@ -157,12 +179,16 @@ public:
 	static void event_dsql_execute(Attachment* att, jrd_tra* transaction, Firebird::ITraceSQLStatement* statement,
 		bool started, ntrace_result_t req_result);
 
+	static void event_dsql_restart(Attachment* att, jrd_tra* transaction, DsqlRequest* statement,
+		int number);
+
 	static void shutdown();
 
 private:
 	Attachment*	attachment;
 	Service* service;
 	const char* filename;
+	Firebird::ICryptKeyCallback* callback;
 	NotificationNeeds trace_needs, new_needs;
 
 	// This structure should be POD-like to be stored in Array
@@ -242,10 +268,13 @@ private:
 		Firebird::ITraceSQLStatement* statement,
 		bool started, ntrace_result_t req_result);
 
+	void event_dsql_restart(Firebird::ITraceDatabaseConnection* connection, Firebird::ITraceTransaction* transaction, Firebird::ITraceSQLStatement* statement,
+		unsigned number);
+
 	static Firebird::GlobalPtr<StorageInstance, Firebird::InstanceControl::PRIORITY_DELETE_FIRST> storageInstance;
 
 	ULONG changeNumber;
-	bool active;
+	bool active, failedAttach;
 };
 
 }

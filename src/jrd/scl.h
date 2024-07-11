@@ -366,6 +366,13 @@ public:
 		return usr_granted_roles.exist(role);
 	}
 
+	const auto& getGrantedRoles(thread_db* tdbb) const
+	{
+		if (testFlag(USR_newrole))
+			findGrantedRoles(tdbb);
+		return usr_granted_roles;
+	}
+
 	void makeRoleName(const int dialect)
 	{
 		makeRoleName(usr_sql_role_name, dialect);

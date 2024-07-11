@@ -131,6 +131,11 @@
 	builder->setLength(status, index, sizeof(ISC_INT64));	\
 	builder->setScale(status, index, scale);
 
+#define FB__META_FB_SCALED_INT128(scale)	\
+	builder->setType(status, index, SQL_INT128);	\
+	builder->setLength(status, index, sizeof(FB_I128));	\
+	builder->setScale(status, index, scale);
+
 #define FB__META_FB_FLOAT	\
 	builder->setType(status, index, SQL_FLOAT);	\
 	builder->setLength(status, index, sizeof(float));
@@ -204,15 +209,18 @@
 #define FB__META_FB_SMALLINT			FB__META_FB_SCALED_SMALLINT(0)
 #define FB__META_FB_INTEGER				FB__META_FB_SCALED_INTEGER(0)
 #define FB__META_FB_BIGINT				FB__META_FB_SCALED_BIGINT(0)
+#define FB__META_FB_INT128				FB__META_FB_SCALED_INT128(0)
 
 // Types - struct
 
 #define FB__TYPE_FB_SCALED_SMALLINT(x)			ISC_SHORT
 #define FB__TYPE_FB_SCALED_INTEGER(x)			ISC_LONG
 #define FB__TYPE_FB_SCALED_BIGINT(x)			FB__INT64_ALIGNAS ISC_INT64
+#define FB__TYPE_FB_SCALED_INT128(x)			FB__INT64_ALIGNAS FB_I128
 #define FB__TYPE_FB_SMALLINT					ISC_SHORT
 #define FB__TYPE_FB_INTEGER						ISC_LONG
 #define FB__TYPE_FB_BIGINT						FB__INT64_ALIGNAS ISC_INT64
+#define FB__TYPE_FB_INT128						FB__INT64_ALIGNAS FB_I128
 #define FB__TYPE_FB_FLOAT						float
 #define FB__TYPE_FB_DOUBLE						double
 #define FB__TYPE_FB_DECFLOAT16					FB__INT64_ALIGNAS FB_DEC16
@@ -267,8 +275,15 @@ struct FbVarChar
 	{
 		size_t len = strlen(s);
 		assert(len <= N);
-		length = (ISC_USHORT) len;
-		memcpy(str, s, (length <= N ? length : N));
+		length = (ISC_USHORT) (len <= N ? len : N);
+		memcpy(str, s, length);
+	}
+
+	void set(const char* s, unsigned len)
+	{
+		assert(len <= N);
+		length = (ISC_USHORT) (len <= N ? len : N);
+		memcpy(str, s, length);
 	}
 };
 

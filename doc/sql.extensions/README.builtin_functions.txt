@@ -371,7 +371,7 @@ Function:
 Format:
     CRYPT_HASH( <any value> USING <algorithm> )
 
-    algorithm ::= { MD5 | SHA1 | SHA256 | SHA512 }
+    algorithm ::= { MD5 | SHA1 | SHA256 | SHA512 | SHA3_224 | SHA3_256 | SHA3_384 | SHA3_512 }
 
 Important:
     - This function returns VARCHAR strings with OCTETS charset with length depended on algorithm.
@@ -433,6 +433,8 @@ Notes:
     3) WEEKDAY and YEARDAY cannot be used. It doesn't make sense.
     4) YEAR, MONTH and DAY could not be used with time values.
     5) All timestamp_part values could be used with timestamp values.
+    6) In Firebird 3.0.8 and 4.0.1 the return type for unit MILLISECOND was changed
+       from BIGINT to NUMERIC(18, 1).
 
 Example:
     select datediff(week from cast('yesterday' as timestamp) - 7 to current_timestamp)
@@ -512,7 +514,7 @@ Function:
     date/timestamp value.
 
 Format:
-    FIRST_DAY( OF { YEAR | MONTH | WEEK } FROM <date_or_timestamp> )
+    FIRST_DAY( OF { YEAR | QUARTER | MONTH | WEEK } FROM <date_or_timestamp> )
 
 Notes:
     1) The first day of the week is considered as Sunday, per the same rules of EXTRACT with WEEKDAY.
@@ -548,17 +550,20 @@ Function:
     Returns an universal unique number in CHAR(16) OCTETS type.
 
 Format:
-    GEN_UUID()
+    GEN_UUID([<version>])
 
 Important:
     Before Firebird 2.5.2, GEN_UUID was returning completely random strings. This is not compliant
     with the RFC-4122 (UUID specification).
-    This was fixed in Firebird 2.5.2 and 3.0. Now GEN_UUID returns a compliant UUID version 4
-    string, where some bits are reserved and the others are random. The string format of a compliant
-    UUID is XXXXXXXX-XXXX-4XXX-YXXX-XXXXXXXXXXXX, where 4 is fixed (version) and Y is 8, 9, A or B.
+    This was fixed in Firebird 2.5.2 and 3.0. Now GEN_UUID returns a compliant UUID accordingly to the specified
+    version (4 or 7, with default being 4) string, where some bits are reserved and the others are random.
+    The string format of a compliant UUID v4/v7 is XXXXXXXX-XXXX-YXXX-ZXXX-XXXXXXXXXXXX, where Y is the version (4 or 7)
+    and Z is 8, 9, A or B.
+    Before Firebird 6, this function does not accept the version argument.
 
 Example:
     insert into records (id) value (gen_uuid());
+    insert into records (id) value (gen_uuid(7));
 
 See also: CHAR_TO_UUID and UUID_TO_CHAR
 
@@ -613,7 +618,7 @@ Function:
     date/timestamp value.
 
 Format:
-    LAST_DAY( OF { YEAR | MONTH | WEEK } FROM <date_or_timestamp> )
+    LAST_DAY( OF { YEAR | QUARTER | MONTH | WEEK } FROM <date_or_timestamp> )
 
 Notes:
     1) The last day of the week is considered as Saturday, per the same rules of EXTRACT with WEEKDAY.
@@ -724,6 +729,9 @@ Notes:
        In the case of string literal, relation ID is evaluated at prepare time.
        In the case of expression, relation ID is evaluated at execution time.
        If the relation couldn't be found, then isc_relnotdef error is raised.
+	   Relation ID's could be changed after database restore thus beware of using
+	   integer literals in the first argument (relation) in stored PSQL code 
+	   (procedures, functions, triggers).
     2) If the first argument (relation) is a numeric expression or literal, then
        it's treated as a relation ID and used "as is", without verification
        against existing relations.

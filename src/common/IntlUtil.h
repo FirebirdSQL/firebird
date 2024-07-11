@@ -24,8 +24,8 @@
  *  Contributor(s): ______________________________________.
  */
 
-#ifndef JRD_INTLUTIL_H
-#define JRD_INTLUTIL_H
+#ifndef COMMON_INTLUTIL_H
+#define COMMON_INTLUTIL_H
 
 #include "../common/classes/array.h"
 #include "../common/classes/auto.h"
@@ -34,12 +34,12 @@
 #include "../common/classes/init.h"
 #include "../common/intlobj_new.h"
 
-namespace Jrd
+namespace Firebird
 {
-	class CharSet;
-}
+class CharSet;
 
-namespace Firebird {
+inline constexpr const char* ATTR_ICU_VERSION = "ICU-VERSION";
+inline constexpr const char* ATTR_COLL_VERSION = "COLL-VERSION";
 
 class IntlUtil
 {
@@ -48,13 +48,13 @@ public:
 	typedef GenericMap<SpecificAttribute> SpecificAttributesMap;
 
 public:
-	static Jrd::CharSet* getUtf8CharSet()
+	static CharSet* getUtf8CharSet()
 	{
 		return utf8CharSet->charSet;
 	}
 
-	static string generateSpecificAttributes(Jrd::CharSet* cs, SpecificAttributesMap& map);
-	static bool parseSpecificAttributes(Jrd::CharSet* cs, ULONG len, const UCHAR* s,
+	static string generateSpecificAttributes(CharSet* cs, SpecificAttributesMap& map);
+	static bool parseSpecificAttributes(CharSet* cs, ULONG len, const UCHAR* s,
 										SpecificAttributesMap* map);
 
 	static string convertAsciiToUtf16(const string& ascii);
@@ -85,24 +85,23 @@ public:
 
 	static void finiCharset(charset* cs);
 
-	static ULONG toLower(Jrd::CharSet* cs, ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR* dst,
+	static ULONG toLower(CharSet* cs, ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR* dst,
 		const ULONG* exceptions);
-	static ULONG toUpper(Jrd::CharSet* cs, ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR* dst,
+	static ULONG toUpper(CharSet* cs, ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR* dst,
 		const ULONG* exceptions);
 
-	static bool readOneChar(Jrd::CharSet* cs, const UCHAR** s, const UCHAR* end, ULONG* size);
+	static bool readOneChar(CharSet* cs, const UCHAR** s, const UCHAR* end, ULONG* size);
 
 	static bool setupIcuAttributes(charset* cs, const string& specificAttributes,
 		const string& configInfo, string& newSpecificAttributes);
-	static void getDefaultCollationAttributes(UCharBuffer& collAttributes, charset& cs);
 
 private:
-	static string escapeAttribute(Jrd::CharSet* cs, const string& s);
-	static string unescapeAttribute(Jrd::CharSet* cs, const string& s);
+	static string escapeAttribute(CharSet* cs, const string& s);
+	static string unescapeAttribute(CharSet* cs, const string& s);
 
-	static bool isAttributeEscape(Jrd::CharSet* cs, const UCHAR* s, ULONG size);
+	static bool isAttributeEscape(CharSet* cs, const UCHAR* s, ULONG size);
 
-	static bool readAttributeChar(Jrd::CharSet* cs, const UCHAR** s, const UCHAR* end, ULONG* size,
+	static bool readAttributeChar(CharSet* cs, const UCHAR** s, const UCHAR* end, ULONG* size,
 		bool returnEscape);
 
 private:
@@ -113,7 +112,7 @@ private:
 
 	public:
 		charset obj;
-		AutoPtr<Jrd::CharSet> charSet;
+		AutoPtr<CharSet> charSet;
 	};
 
 	static GlobalPtr<Utf8CharSet> utf8CharSet;
@@ -121,4 +120,4 @@ private:
 
 }	// namespace Firebird
 
-#endif	// JRD_INTLUTIL_H
+#endif	// COMMON_INTLUTIL_H

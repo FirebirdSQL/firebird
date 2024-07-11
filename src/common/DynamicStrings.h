@@ -35,7 +35,7 @@
 namespace Firebird {
 
 unsigned makeDynamicStrings(unsigned len, ISC_STATUS* const dst, const ISC_STATUS* const src);
-char* findDynamicStrings(unsigned len, ISC_STATUS* ptr) throw();
+char* findDynamicStrings(unsigned len, ISC_STATUS* ptr) noexcept;
 
 } // namespace Firebird
 

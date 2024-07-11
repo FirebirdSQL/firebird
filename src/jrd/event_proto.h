@@ -55,8 +55,13 @@ public:
 	void postEvent(USHORT, const TEXT*, USHORT);
 	void deliverEvents();
 
-	bool initialize(Firebird::SharedMemoryBase*, bool);
-	void mutexBug(int osErrorCode, const char* text);
+	bool initialize(Firebird::SharedMemoryBase*, bool) override;
+	void mutexBug(int osErrorCode, const char* text) override;
+
+	USHORT getType() const override { return Firebird::SharedMemoryBase::SRAM_EVENT_MANAGER; }
+	USHORT getVersion() const override { return EVENT_VERSION; }
+	const char* getName() const override { return "EventManager";}
+
 	void exceptionHandler(const Firebird::Exception& ex, ThreadFinishSync<EventManager*>::ThreadRoutine* routine);
 
 private:

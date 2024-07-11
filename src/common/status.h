@@ -30,8 +30,10 @@
 #define COMMON_STATUS_H
 
 #include "fb_exception.h"
+#include "../common/isc_proto.h"
 #include "../common/StatusHolder.h"
 #include "../common/utils_proto.h"
+#include <utility>
 
 const int MAX_ERRMSG_LEN	= 128;
 const int MAX_ERRSTR_LEN	= 1024;
@@ -42,12 +44,14 @@ namespace Firebird
 	class LocalStatusWrapper
 	{
 	public:
-		LocalStatusWrapper()
-			: localStatusVector(&localStatus)
+		template <typename... Args>
+		LocalStatusWrapper(Args&&... args)
+			: localStatusVector(&localStatus, std::forward<Args>(args)...)
 		{ }
 
-		explicit LocalStatusWrapper(Firebird::MemoryPool& p)
-			: localStatus(p), localStatusVector(&localStatus)
+		template <typename... Args>
+		explicit LocalStatusWrapper(Firebird::MemoryPool& p, Args&&... args)
+			: localStatus(p), localStatusVector(&localStatus, std::forward<Args>(args)...)
 		{ }
 
 		SW* operator->()
@@ -90,6 +94,11 @@ namespace Firebird
 			fb_utils::copyStatus(to, &localStatusVector);
 		}
 
+		void loadFrom(const SW* to)
+		{
+			fb_utils::copyStatus(&localStatusVector, to);
+		}
+
 		void raise() const
 		{
 			Firebird::status_exception::raise(&localStatus);
@@ -111,6 +120,28 @@ namespace Firebird
 	};
 
 	typedef LocalStatusWrapper<CheckStatusWrapper> FbLocalStatus;
+
+	class LogWrapper : public BaseStatusWrapper<LogWrapper>
+	{
+	public:
+		LogWrapper(IStatus* aStatus, const char* aText = nullptr)
+			: BaseStatusWrapper(aStatus),
+			  text(aText)
+		{
+		}
+
+	public:
+		static void checkException(LogWrapper* status)
+		{
+			if (status->dirty && (status->getState() & IStatus::STATE_ERRORS))
+				iscLogStatus(status->text, status->status);
+		}
+
+	private:
+		const char* text;
+	};
+
+	typedef LocalStatusWrapper<LogWrapper> LogLocalStatus;
 
 	class ThrowWrapper : public BaseStatusWrapper<ThrowWrapper>
 	{

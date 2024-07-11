@@ -56,6 +56,7 @@ namespace {
 	void outputFile(FILE* std, const char* text)
 	{
 		outputFile(std, text, strlen(text));
+		fflush(std);
 	}
 }
 
@@ -70,23 +71,23 @@ public:
 		}
 	}
 
-	void outputVerbose(const char* text)
+	void outputVerbose(const char* text) override
 	{
 		outputFile(usvcDataMode ? stderr : stdout, text);
   	}
 
-	void outputError(const char* text)
+	void outputError(const char* text) override
 	{
 		outputFile(stderr, text);
 	}
 
-	void outputData(const void* data, FB_SIZE_T size)
+	void outputData(const void* data, FB_SIZE_T size) override
 	{
 		fb_assert(usvcDataMode);
 		outputFile(stdout, data, size);
 	}
 
-	virtual void printf(bool err, const SCHAR* format, ...)
+	void printf(bool err, const SCHAR* format, ...) override
 	{
 		va_list arglist;
 		va_start(arglist, format);
@@ -99,7 +100,7 @@ public:
 		}
 	}
 
-	virtual void hidePasswd(ArgvType& argv, int pos)
+	void hidePasswd(ArgvType& argv, int pos) override
 	{
 		const size_t l = strlen(argv[pos]);
 		char* data = FB_NEW_POOL(getPool()) char[l + 1];
@@ -113,17 +114,17 @@ public:
 		memset(hide, '*', l);
 	}
 
-    virtual bool isService()
+    bool isService() override
 	{
 		return false;
 	}
 
-	virtual void checkService()
+	void checkService() override
 	{
 		status_exception::raise(Arg::Gds(isc_utl_trusted_switch));
 	}
 
-	virtual unsigned int getAuthBlock(const unsigned char** bytes)
+	unsigned int getAuthBlock(const unsigned char** bytes) override
 	{
 		// Utility has no auth block
 		*bytes = NULL;
@@ -131,21 +132,21 @@ public:
 	}
 
 	// do nothing for non-service
-	virtual void started() { }
-	virtual void putLine(char, const char*) { }
-	virtual void putSLong(char, SLONG) { }
-	virtual void putSInt64(char, SINT64) { }
-	virtual void putChar(char, char) { }
-	virtual void putBytes(const UCHAR*, FB_SIZE_T) { }
-	virtual ULONG getBytes(UCHAR*, ULONG) { return 0; }
-	virtual void setServiceStatus(const ISC_STATUS*) { }
-	virtual void setServiceStatus(const USHORT, const USHORT, const MsgFormat::SafeArg&) { }
-    virtual const Firebird::CheckStatusWrapper* getStatus() { return NULL; }
-	virtual void fillDpb(ClumpletWriter&) { }
-	virtual bool finished() { return false; }
-	virtual void initStatus() { }
-	virtual bool utf8FileNames() { return false; }
-	virtual Firebird::ICryptKeyCallback* getCryptCallback() { return NULL; }
+	void started() override { }
+	void putLine(char, const char*) override { }
+	void putSLong(char, SLONG) override { }
+	void putSInt64(char, SINT64) override { }
+	void putChar(char, char) override { }
+	void putBytes(const UCHAR*, FB_SIZE_T) override { }
+	ULONG getBytes(UCHAR*, ULONG) override { return 0; }
+	void setServiceStatus(const ISC_STATUS*) override { }
+	void setServiceStatus(const USHORT, const USHORT, const MsgFormat::SafeArg&) override { }
+    StatusAccessor getStatusAccessor() override { return StatusAccessor(); }
+	void fillDpb(ClumpletWriter&) override { }
+	bool finished() override { return false; }
+	bool utf8FileNames() override { return false; }
+	Firebird::ICryptKeyCallback* getCryptCallback() override { return NULL; }
+	int getParallelWorkers() override { return 0; };
 };
 
 

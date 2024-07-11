@@ -32,6 +32,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#include <utility>
 
 #include "firebird.h"
 #include "fb_types.h"
@@ -153,7 +154,7 @@ namespace Firebird
 			stringBuffer[stringLength] = 0;
 		}
 
-		void shrinkBuffer() throw()
+		void shrinkBuffer() noexcept
 		{
 			// Shrink buffer if we decide it is beneficial
 		}
@@ -203,13 +204,34 @@ namespace Firebird
 			memcpy(stringBuffer, s, l);
 		}
 
+		AbstractString(const size_type limit, AbstractString&& rhs) :
+			max_length(static_cast<internal_size_type>(limit))
+		{
+			 // We can move only string with default pool
+			if (!baseMove(std::forward<AbstractString>(rhs)))
+			{
+				initialize(rhs.length());
+				memcpy(stringBuffer, rhs.c_str(), stringLength);
+			}
+		}
+
+		AbstractString(const size_type limit, MemoryPool& p, AbstractString&& rhs)
+			: AutoStorage(p), max_length(static_cast<internal_size_type>(limit))
+		{
+			if (!baseMove(std::forward<AbstractString>(rhs)))
+			{
+				initialize(rhs.length());
+				memcpy(stringBuffer, rhs.c_str(), stringLength);
+			}
+		}
+
 		pointer modify()
 		{
 			return stringBuffer;
 		}
 
 		// Trim the range making sure that it fits inside specified length
-		static void adjustRange(const size_type length, size_type& pos, size_type& n) throw();
+		static void adjustRange(const size_type length, size_type& pos, size_type& n) noexcept;
 
 		pointer baseAssign(const size_type n);
 
@@ -217,11 +239,13 @@ namespace Firebird
 
 		pointer baseInsert(const size_type p0, const size_type n);
 
-		void baseErase(size_type p0, size_type n) throw();
+		void baseErase(size_type p0, size_type n) noexcept;
 
 		enum TrimType {TrimLeft, TrimRight, TrimBoth};
 
 		void baseTrim(const TrimType whereTrim, const_pointer toTrim);
+
+		bool baseMove(AbstractString&& rhs);
 
 		size_type getMaxLength() const
 		{
@@ -237,7 +261,7 @@ namespace Firebird
 		{
 			return stringLength;
 		}
-		size_type getCount() const throw()
+		size_type getCount() const noexcept
 		{
 			return stringLength;
 		}
@@ -523,22 +547,22 @@ namespace Firebird
 			insert(it - c_str(), first, last - first);
 		}
 
-		AbstractString& erase(size_type p0 = 0, size_type n = npos) throw()
+		AbstractString& erase(size_type p0 = 0, size_type n = npos) noexcept
 		{
 			baseErase(p0, n);
 			return *this;
 		}
-		AbstractString& clear() throw()
+		AbstractString& clear() noexcept
 		{
 			erase();
 			return *this;
 		}
-		iterator erase(iterator it) throw()
+		iterator erase(iterator it) noexcept
 		{
 			erase(it - c_str(), 1);
 			return it;
 		}
-		iterator erase(iterator first, iterator last) throw()
+		iterator erase(iterator first, iterator last) noexcept
 		{
 			erase(first - c_str(), last - first);
 			return first;
@@ -662,7 +686,8 @@ namespace Firebird
 		StringBase() : AbstractString(Comparator::getMaxLength()) {}
 		StringBase(const StringType& v) : AbstractString(Comparator::getMaxLength(), v) {}
 		StringBase(const void* s, size_type n) : AbstractString(Comparator::getMaxLength(), n, s) {}
-		StringBase(const_pointer s) : AbstractString(Comparator::getMaxLength(), static_cast<size_type>(strlen(s)), s) {}
+		StringBase(const_pointer s) :
+			AbstractString(Comparator::getMaxLength(), static_cast<size_type>(s ? strlen(s) : 0), s) {}
 		explicit StringBase(const unsigned char* s) :
 			AbstractString(Comparator::getMaxLength(), static_cast<size_type>(strlen((char*)s)), (char*)s) {}
 		StringBase(const MetaString& v) : AbstractString(Comparator::getMaxLength(), v) {}
@@ -671,8 +696,14 @@ namespace Firebird
 			AbstractString(Comparator::getMaxLength(), last - first, first) {}
 		explicit StringBase(MemoryPool& p) : AbstractString(Comparator::getMaxLength(), p) {}
 		StringBase(MemoryPool& p, const AbstractString& v) : AbstractString(Comparator::getMaxLength(), p, v) {}
+		StringBase(MemoryPool& p, const_pointer s) :
+			AbstractString(Comparator::getMaxLength(), p, s, static_cast<size_type>(s ? strlen(s) : 0)) {}
 		StringBase(MemoryPool& p, const char_type* s, size_type l) :
 			AbstractString(Comparator::getMaxLength(), p, s, l) {}
+		StringBase(StringType&& rhs) :
+			AbstractString(Comparator::getMaxLength(), std::forward<AbstractString>(rhs)) {}
+		StringBase(MemoryPool& p, StringType&& rhs) :
+			AbstractString(Comparator::getMaxLength(), p, std::forward<AbstractString>(rhs)) {}
 
 		static size_type max_length()
 		{
@@ -750,6 +781,25 @@ namespace Firebird
 		StringType operator+(char_type c) const
 		{
 			return add(&c, 1);
+		}
+		StringType& operator=(StringType&& rhs)
+		{
+			// baseMove do not clear the buffer so do it in this method
+			char_type* backup = nullptr;
+			if (stringBuffer != inlineBuffer)
+				backup = stringBuffer;
+
+			if (baseMove(std::forward<AbstractString>(rhs)))
+			{
+				// The dynamic buffer has been replaced, so clear the old one
+				delete[] backup;
+			}
+			else
+			{
+				// Cannot move, do the base assignment
+				assign(rhs.c_str(), rhs.length());
+			}
+			return *this;
 		}
 
 		StringBase<StringComparator> ToString() const

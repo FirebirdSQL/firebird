@@ -110,8 +110,7 @@ Manager::Manager(const string& dbId,
 	const auto tdbb = JRD_get_thread_data();
 	const auto dbb = tdbb->getDatabase();
 
-	dbb->ensureGuid(tdbb);
-	const Guid& guid = dbb->dbb_guid;
+	const auto& guid = dbb->dbb_guid.value();
 	m_sequence = dbb->dbb_repl_sequence;
 
 	if (config->journalDirectory.hasData())
@@ -187,10 +186,8 @@ Manager::Manager(const string& dbId,
 Manager::~Manager()
 {
 	fb_assert(m_shutdown);
+	fb_assert(m_queue.isEmpty());
 	fb_assert(m_replicas.isEmpty());
-
-	for (auto buffer : m_queue)
-		delete buffer;
 
 	for (auto buffer : m_buffers)
 		delete buffer;
@@ -207,6 +204,16 @@ void Manager::shutdown()
 	m_cleanupSemaphore.enter();
 
 	MutexLockGuard guard(m_queueMutex, FB_FUNCTION);
+
+	// Clear the processing queue
+
+	for (auto buffer : m_queue)
+	{
+		if (buffer)
+			releaseBuffer(buffer);
+	}
+
+	m_queue.clear();
 
 	// Detach from synchronous replicas
 

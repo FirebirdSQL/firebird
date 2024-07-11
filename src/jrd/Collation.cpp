@@ -603,7 +603,7 @@ private:
 	 //
 	 // Matches is not a case-sensitive operation, thus it has no
 	 // 8-bit international impact.
-	static bool matches(MemoryPool& pool, Jrd::TextType* obj, const CharType* p1,
+	static bool matches(MemoryPool& pool, TextType* obj, const CharType* p1,
 		SLONG l1_bytes, const CharType* p2, SLONG l2_bytes)
 	{
 		fb_assert(p1 != NULL);
@@ -687,7 +687,7 @@ public:
 
 private:
 	// Evaluate the "sleuth" search operator.
-	static bool aux(Jrd::TextType* obj, USHORT flags,
+	static bool aux(TextType* obj, USHORT flags,
 		const CharType* search, const CharType* end_search,
 		const CharType* match, const CharType* end_match)
 	{
@@ -817,7 +817,7 @@ private:
 	// See if a character is a member of a class.
 	// Japanese version operates on short-based buffer,
 	// instead of SCHAR-based.
-	static bool className(Jrd::TextType* obj, // USHORT flags,
+	static bool className(TextType* obj, // USHORT flags,
 		const CharType* char_class, const CharType* const end_class, CharType character)
 	{
 		fb_assert(char_class != NULL);
@@ -867,7 +867,7 @@ private:
 	// The silly loop setting *v++ to zero initializes the array up to the
 	// highest character defined (also max_op).  Believe it or not, that part
 	// is not a bug.
-	static ULONG actualMerge(/*MemoryPool& pool,*/ Jrd::TextType* obj,
+	static ULONG actualMerge(/*MemoryPool& pool,*/ TextType* obj,
 		const CharType* match, SLONG match_bytes,
 		const CharType* control, SLONG control_bytes,
 		CharType* combined) //, SLONG combined_bytes)

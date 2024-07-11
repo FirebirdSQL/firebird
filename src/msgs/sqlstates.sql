@@ -94,12 +94,13 @@ set bulk_insert INSERT INTO SQLSTATES (SQL_CLASS, SQL_SUBCLASS, SQL_STATE_TEXT) 
 -- 23 Integrity Constraint Violation
 ('23', '000', 'Integrity constraint violation')
 -- 24 Invalid Cursor State
-('24', '000', 'Invalid cursor state') 
+('24', '000', 'Invalid cursor state')
 ('24', '504', 'The cursor identified in the UPDATE, DELETE, SET, or GET statement is not positioned on a row')
 -- 25 Invalid Transaction State
 ('25', '000', 'Invalid transaction state')
+('25', '006', 'Read-only SQL-transaction')
 ('25', 'S01', 'Transaction state')
-('25', 'S02', 'Transaction is still active') 
+('25', 'S02', 'Transaction is still active')
 ('25', 'S03', 'Transaction is rolled back')
 -- 26 Invalid SQL Statement Name
 ('26', '000', 'Invalid SQL statement name')

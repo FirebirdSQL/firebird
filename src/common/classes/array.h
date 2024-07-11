@@ -83,41 +83,63 @@ public:
 	typedef const_pointer const_iterator;
 
 	explicit Array(MemoryPool& p)
-		: Storage(p), count(0), capacity(this->getStorageSize()), data(this->getStorage())
+		: Storage(p),
+		  count(0),
+		  capacity(this->getStorageSize()),
+		  data(this->getStorage())
 	{
 		// Ensure we can carry byte copy operations.
 		fb_assert(capacity < FB_MAX_SIZEOF / sizeof(T));
 	}
 
 	Array(MemoryPool& p, const size_type InitialCapacity)
-		: Storage(p), count(0), capacity(this->getStorageSize()), data(this->getStorage())
+		: Array(p)
 	{
 		ensureCapacity(InitialCapacity);
 	}
 
 	Array(MemoryPool& p, const Array<T, Storage>& source)
-		: Storage(p), count(0), capacity(this->getStorageSize()), data(this->getStorage())
+		: Array(p)
 	{
 		copyFrom(source);
 	}
 
-	Array() : count(0),
-		capacity(this->getStorageSize()), data(this->getStorage()) { }
+	Array()
+		: count(0),
+		  capacity(this->getStorageSize()),
+		  data(this->getStorage())
+	{
+	}
 
 	explicit Array(const size_type InitialCapacity)
-		: Storage(), count(0), capacity(this->getStorageSize()), data(this->getStorage())
+		: Storage(),
+		  count(0),
+		  capacity(this->getStorageSize()),
+		  data(this->getStorage())
 	{
 		ensureCapacity(InitialCapacity);
 	}
 
+	Array(const T* items, const size_type itemsCount)
+		: Storage(),
+		  count(0),
+		  capacity(this->getStorageSize()),
+		  data(this->getStorage())
+	{
+		add(items, itemsCount);
+	}
+
 	Array(const Array<T, Storage>& source)
-		: Storage(), count(0), capacity(this->getStorageSize()), data(this->getStorage())
+		: Storage(),
+		  count(0),
+		  capacity(this->getStorageSize()),
+		  data(this->getStorage())
 	{
 		copyFrom(source);
 	}
 
 	Array(MemoryPool& p, std::initializer_list<T> items)
-		: Storage(p), count(0), capacity(this->getStorageSize()), data(this->getStorage())
+		: Array(p)
 	{
 		for (auto& item : items)
 			add(item);
@@ -128,19 +150,19 @@ public:
 		freeData();
 	}
 
-	void clear() throw()
+	void clear() noexcept
 	{
 		count = 0;
 	}
 
 protected:
-	const T& getElement(size_type index) const throw()
+	const T& getElement(size_type index) const noexcept
 	{
   		fb_assert(index < count);
   		return data[index];
 	}
 
-	T& getElement(size_type index) throw()
+	T& getElement(size_type index) noexcept
 	{
   		fb_assert(index < count);
   		return data[index];
@@ -168,12 +190,12 @@ public:
 		return *this;
 	}
 
-	const T& operator[](size_type index) const throw()
+	const T& operator[](size_type index) const noexcept
 	{
   		return getElement(index);
 	}
 
-	T& operator[](size_type index) throw()
+	T& operator[](size_type index) noexcept
 	{
   		return getElement(index);
 	}
@@ -260,14 +282,14 @@ public:
 		count += itemsCount;
 	}
 
-	T* remove(const size_type index) throw()
+	T* remove(const size_type index) noexcept
 	{
   		fb_assert(index < count);
   		memmove(data + index, data + index + 1, sizeof(T) * (--count - index));
 		return &data[index];
 	}
 
-	T* removeRange(const size_type from, const size_type to) throw()
+	T* removeRange(const size_type from, const size_type to) noexcept
 	{
   		fb_assert(from <= to);
   		fb_assert(to <= count);
@@ -276,7 +298,7 @@ public:
 		return &data[from];
 	}
 
-	T* removeCount(const size_type index, const size_type n) throw()
+	T* removeCount(const size_type index, const size_type n) noexcept
 	{
   		fb_assert(index + n <= count);
   		memmove(data + index, data + index + n, sizeof(T) * (count - index - n));
@@ -284,7 +306,7 @@ public:
 		return &data[index];
 	}
 
-	T* remove(T* itr) throw()
+	T* remove(T* itr) noexcept
 	{
 		const size_type index = itr - begin();
   		fb_assert(index < count);
@@ -292,12 +314,12 @@ public:
 		return &data[index];
 	}
 
-	T* remove(T* itrFrom, T* itrTo) throw()
+	T* remove(T* itrFrom, T* itrTo) noexcept
 	{
 		return removeRange(itrFrom - begin(), itrTo - begin());
 	}
 
-	void shrink(size_type newCount) throw()
+	void shrink(size_type newCount) noexcept
 	{
 		fb_assert(newCount <= count);
 		count = newCount;
@@ -357,7 +379,7 @@ public:
 		memcpy(data, items, sizeof(T) * count);
 	}
 
-	size_type getCount() const throw() { return count; }
+	size_type getCount() const noexcept { return count; }
 
 	bool isEmpty() const { return count == 0; }
 
@@ -401,6 +423,16 @@ public:
 		ensureCapacity(capacityL, preserve);
 		count = capacityL;
 		return data;
+	}
+
+	// prepare array to be used as a buffer of capacity bytes aligned on given alignment
+	T* getAlignedBuffer(const size_type capacityL, const size_type alignL)
+	{
+		static_assert(sizeof(T) == 1, "sizeof(T) != 1");
+
+		ensureCapacity(capacityL + alignL, false);
+		count = capacityL + alignL;
+		return FB_ALIGN(data, alignL);
 	}
 
 	// clear array and release dinamically allocated memory
@@ -464,11 +496,16 @@ public:
 		}
 	}
 
+	void ensureCapacity(size_type newcapacity)
+	{
+		ensureCapacity(newcapacity, true);
+	}
+
 protected:
 	size_type count, capacity;
 	T* data;
 
-	void ensureCapacity(size_type newcapacity, bool preserve = true)
+	void ensureCapacity(size_type newcapacity, bool preserve)
 	{
 		if (newcapacity > capacity)
 		{
@@ -545,6 +582,18 @@ public:
 		pos = lowBound;
 		return highBound != this->count &&
 			!Cmp::greaterThan(KeyOfValue::generate(this->data[lowBound]), item);
+	}
+
+	bool findAndRemove(const Key& item)
+	{
+		size_type pos;
+		if (find(item, pos))
+		{
+			this->remove(pos);
+			return true;
+		}
+
+		return false;
 	}
 
 	bool exist(const Key& item) const

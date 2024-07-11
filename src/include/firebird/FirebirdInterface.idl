@@ -250,8 +250,9 @@ interface PluginManager : Versioned
 	const uint TYPE_DB_CRYPT = 9;
 	const uint TYPE_KEY_HOLDER = 10;
 	const uint TYPE_REPLICATOR = 11;
-	const uint TYPE_COUNT = 12;	// keep in sync
-	//// TODO: TYPE_COUNT is not count. And these constants starts from 1, different than DIR_* ones.
+	const uint TYPE_PROFILER = 12;
+	const uint TYPE_COUNT = 13;	// keep in sync
+	//// TYPE_COUNT is not count. And these constants starts from 1, different than DIR_* ones.
 
 	// Main function called by plugin modules in firebird_plugin()
 	void registerPluginFactory(uint pluginType, const string defaultName, PluginFactory factory);
@@ -433,6 +434,9 @@ version:	// 3.0 => 4.0
 
 interface ResultSet : ReferenceCounted
 {
+	// Info items
+	const uchar INF_RECORD_COUNT = 10;		// Number of records in the result set
+
 	[notImplemented(Status::RESULT_ERROR)] int fetchNext(Status status, void* message);
 	[notImplemented(Status::RESULT_ERROR)] int fetchPrior(Status status, void* message);
 	[notImplemented(Status::RESULT_ERROR)] int fetchFirst(Status status, void* message);
@@ -452,6 +456,11 @@ interface ResultSet : ReferenceCounted
 version:	// 3.0.7 => 3.0.8, 4.0.0 => 4.0.1
 	[notImplementedAction if ::FB_UsedInYValve then defaultAction else call deprecatedClose(status) endif]
 	void close(Status status);
+
+version:	// 4.0.1 => 5.0
+	void getInfo(Status status,
+				 uint itemsLength, const uchar* items,
+				 uint bufferLength, uchar* buffer);
 }
 
 interface Statement : ReferenceCounted
@@ -465,6 +474,7 @@ interface Statement : ReferenceCounted
 	const uint PREPARE_PREFETCH_DETAILED_PLAN		= 0x10;
 	const uint PREPARE_PREFETCH_AFFECTED_RECORDS	= 0x20;	// not used yet
 	const uint PREPARE_PREFETCH_FLAGS				= 0x40;
+	const uint PREPARE_REQUIRE_SEMICOLON			= 0x80;
 	const uint PREPARE_PREFETCH_METADATA =
 		PREPARE_PREFETCH_TYPE | PREPARE_PREFETCH_FLAGS |
 		PREPARE_PREFETCH_INPUT_PARAMETERS | PREPARE_PREFETCH_OUTPUT_PARAMETERS;
@@ -718,6 +728,9 @@ interface Service : ReferenceCounted
 version:	// 3.0.7 => 3.0.8, 4.0.0 => 4.0.1
 	[notImplementedAction if ::FB_UsedInYValve then defaultAction else call deprecatedDetach(status) endif]
 	void detach(Status status);
+
+version:	// 3.0.9 => 3.0.10, 4.0.1 => 4.0.2
+	void cancel(Status status);
 }
 
 interface Provider : PluginBase
@@ -928,6 +941,21 @@ interface CryptKeyCallback : Versioned
 	// any further details.
 	uint callback(uint dataLength, const void* data,
 		uint bufferLength, void* buffer);
+
+version:		// 6.0
+	// Result returned by afterAttach()
+	const uint NO_RETRY		= 0;	// Returned by old plugins & stub
+	const uint DO_RETRY		= 1;
+
+	// NULL in attStatus means attach was successful.
+	// DO_RETRY return will be ignored in this case, but plugin has a chance
+	// to reflect internally success.
+	[stub defaultAction]
+	uint afterAttach(Status status, const string dbName, const Status attStatus);
+
+	// interface not needed any more
+	[stub defaultAction]
+	void dispose();
 }
 
 
@@ -1348,6 +1376,11 @@ interface TraceProcedure : Versioned
 	const string getProcName();
 	TraceParams getInputs();
 	PerformanceInfo* getPerf();
+
+version: // 4.0 -> 5.0
+	int64 getStmtID();
+	const string getPlan();
+	const string getExplainedPlan();
 }
 
 interface TraceFunction : Versioned
@@ -1356,6 +1389,11 @@ interface TraceFunction : Versioned
 	TraceParams getInputs();
 	TraceParams getResult();
 	PerformanceInfo* getPerf();
+
+version: // 4.0 -> 5.0
+	int64 getStmtID();
+	const string getPlan();
+	const string getExplainedPlan();
 }
 
 interface TraceTrigger : Versioned
@@ -1373,6 +1411,11 @@ interface TraceTrigger : Versioned
 	int getAction();
 	int getWhich();
 	PerformanceInfo* getPerf();
+
+version: // 4.0 -> 5.0
+	int64 getStmtID();
+	const string getPlan();
+	const string getExplainedPlan();
 }
 
 interface TraceServiceConnection : TraceConnection
@@ -1527,8 +1570,29 @@ interface TracePlugin : ReferenceCounted
 	// Stored functions execution
 
 	[notImplemented(true)]
-	boolean trace_func_execute (TraceDatabaseConnection connection, TraceTransaction transaction, TraceFunction function,
-			boolean started, uint func_result);
+	boolean trace_func_execute(TraceDatabaseConnection connection, TraceTransaction transaction,
+		TraceFunction function,	boolean started, uint func_result);
+
+version:	// 4.0.1 -> 4.0.2
+	[notImplemented(true)]
+	boolean trace_dsql_restart(TraceDatabaseConnection connection, TraceTransaction transaction,
+		TraceSQLStatement statement, uint number);
+
+version:	// 4.0 -> 5.0
+
+	// Compilation of stored procedures, functions, triggers
+
+	[notImplemented(true)]
+	boolean trace_proc_compile(TraceDatabaseConnection connection, TraceProcedure procedure,
+		int64 time_millis, uint proc_result);
+
+	[notImplemented(true)]
+	boolean trace_func_compile(TraceDatabaseConnection connection, TraceFunction function,
+		int64 time_millis, uint func_result);
+
+	[notImplemented(true)]
+	boolean trace_trigger_compile(TraceDatabaseConnection connection, TraceTrigger trigger,
+		int64 time_millis, uint trig_result);
 }
 
 // Trace plugin second level factory (this is what is known to PluginManager as "trace plugin")
@@ -1555,7 +1619,10 @@ interface TraceFactory : PluginBase
 	const uint TRACE_EVENT_ERROR = 17;
 	const uint TRACE_EVENT_SWEEP = 18;
 	const uint TRACE_EVENT_FUNC_EXECUTE = 19;
-	const uint TRACE_EVENT_MAX = 20;	// keep it last
+	const uint TRACE_EVENT_PROC_COMPILE = 20;
+	const uint TRACE_EVENT_FUNC_COMPILE = 21;
+	const uint TRACE_EVENT_TRIGGER_COMPILE = 22;
+	const uint TRACE_EVENT_MAX = 23;	// keep it last
 
 	// What notifications does plugin need
 	uint64 trace_needs();
@@ -1696,3 +1763,58 @@ interface ReplicatedSession : PluginBase
 	void setSequence(Status status, const string name, int64 value);
 }
 
+// Profiler interfaces
+
+interface ProfilerPlugin : PluginBase
+{
+	void init(Status status, Attachment attachment, uint64 ticksFrequency);
+
+	ProfilerSession startSession(Status status, const string description,
+		const string options, ISC_TIMESTAMP_TZ timestamp);
+
+	void flush(Status status);
+}
+
+interface ProfilerSession : Disposable
+{
+	const uint FLAG_BEFORE_EVENTS = 0x1;
+	const uint FLAG_AFTER_EVENTS = 0x2;
+
+	int64 getId();
+	uint getFlags();
+
+	// When closing an attachment, the engine is free to dispose the ProfilerPlugin without call this method in advance.
+	void cancel(Status status);
+
+	void finish(Status status, ISC_TIMESTAMP_TZ timestamp);
+
+	void defineStatement(Status status, int64 statementId, int64 parentStatementId,
+		const string type, const string packageName, const string routineName, const string sqlText);
+
+	void defineCursor(int64 statementId, uint cursorId, const string name, uint line, uint column);
+
+	void defineRecordSource(int64 statementId, uint cursorId, uint recSourceId,
+		uint level, const string accessPath, uint parentRecSourceId);
+
+	void onRequestStart(Status status, int64 statementId, int64 requestId,
+		int64 callerStatementId, int64 callerRequestId, ISC_TIMESTAMP_TZ timestamp);
+
+	void onRequestFinish(Status status, int64 statementId, int64 requestId,
+		ISC_TIMESTAMP_TZ timestamp, ProfilerStats stats);
+
+	void beforePsqlLineColumn(int64 statementId, int64 requestId, uint line, uint column);
+	void afterPsqlLineColumn(int64 statementId, int64 requestId, uint line, uint column, ProfilerStats stats);
+
+	void beforeRecordSourceOpen(int64 statementId, int64 requestId, uint cursorId, uint recSourceId);
+	void afterRecordSourceOpen(int64 statementId, int64 requestId, uint cursorId, uint recSourceId,
+		ProfilerStats stats);
+
+	void beforeRecordSourceGetRecord(int64 statementId, int64 requestId, uint cursorId, uint recSourceId);
+	void afterRecordSourceGetRecord(int64 statementId, int64 requestId, uint cursorId, uint recSourceId,
+		ProfilerStats stats);
+}
+
+interface ProfilerStats : Versioned
+{
+	uint64 getElapsedTicks();
+}

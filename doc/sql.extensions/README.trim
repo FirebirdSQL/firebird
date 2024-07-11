@@ -18,11 +18,16 @@ Format:
 	<trim character> ::=
 		<value expression>
 
+	<multi-character trim function> ::=
+		{ BTRIM | LTRIM | RTRIM } <left paren> <value expression> [ <comma> <trim character> ] <right paren>
+
 Syntax Rules:
 	1) If <trim specification> is not specified, BOTH is assumed.
 	2) If <trim character> is not specified, ' ' is assumed.
 	3) If <trim specification> and/or <trim character> is specified, FROM should be specified.
 	4) If <trim specification> and <trim character> is not specified, FROM should not be specified.
+	5) multi-character trim function accepts a sequence of characters as the second argument and will remove all
+		leading, trailing, or both occurrences of any of these characters, regardless of their ordering.
 
 Examples:
 A)
@@ -36,3 +41,8 @@ B)
 		trim(rdb$relation_name) || ' is a system table'
 		from rdb$relations
 		where rdb$system_flag = 1;
+
+C)
+	select
+		ltrim('baobab is a tree', 'aboe')
+		from rdb$database;

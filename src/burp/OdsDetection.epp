@@ -55,6 +55,7 @@ namespace
 		{"RDB$ROLES",					"RDB$DESCRIPTION",		DB_VERSION_DDL11},		// FB2
 		{"RDB$RELATIONS",				"RDB$RELATION_TYPE",	DB_VERSION_DDL11_1},	// FB2.1
 		{"RDB$PROCEDURE_PARAMETERS",	"RDB$FIELD_NAME",		DB_VERSION_DDL11_2},	// FB2.5
+		{"RDB$INDICES",					"RDB$CONDITION_BLR",	DB_VERSION_DDL13_1},	// FB5
 		{0, 0, 0}
 	};
 
@@ -62,14 +63,18 @@ namespace
 }
 
 
-DATABASE DB = STATIC FILENAME "yachts.lnk";
-
 #define DB			tdgbl->db_handle
 #define fbTrans		tdgbl->tr_handle
 #define gds_trans	tdgbl->tr_handle
 #define fbStatus	(&tdgbl->status_vector)
 #define isc_status	(&tdgbl->status_vector)
 #define gds_status	(&tdgbl->status_vector)
+
+// unused
+#define fbProvider
+#define fbStatus2
+
+DATABASE DB = STATIC FILENAME "yachts.lnk";
 
 
 void detectRuntimeODS()
@@ -164,7 +169,6 @@ namespace
 	 **************************************/
 		BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
-		BURP_print_status(true, isc_status);
-		BURP_abort();
+		BURP_abort(isc_status);
 	}
 }

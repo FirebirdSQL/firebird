@@ -94,37 +94,82 @@ void DefAction::generate(const ActionParametersBlock& apb, unsigned ident)
 		switch(apb.language)
 		{
 		case LANGUAGE_C:
-			if (!apb.statusName.empty())
+			if (!apb.method->statusName.empty())
 			{
 				identify(apb, ident);
 				fprintf(apb.out, "CLOOP_setVersionError(%s, \"%s%s\", cloopVTable->version, %d);\n",
-					apb.statusName.c_str(), apb.prefix.c_str(),
+					apb.method->statusName.c_str(), apb.prefix.c_str(),
 					apb.interface->name.c_str(), apb.method->version);
 			}
 			break;
 
 		case LANGUAGE_CPP:
-			if (!apb.statusName.empty())
+			if (!apb.method->statusName.empty())
 			{
 				identify(apb, ident);
 				fprintf(apb.out, "%s::setVersionError(%s, \"%s%s\", cloopVTable->version, %d);\n",
-					apb.exceptionClass.c_str(), apb.statusName.c_str(), apb.prefix.c_str(),
+					apb.exceptionClass.c_str(), apb.method->statusName.c_str(), apb.prefix.c_str(),
 					apb.interface->name.c_str(), apb.method->version);
 				identify(apb, ident);
 				fprintf(apb.out, "%s::checkException(%s);\n",
-					apb.exceptionClass.c_str(), apb.statusName.c_str());
+					apb.exceptionClass.c_str(), apb.method->statusName.c_str());
 			}
 			break;
 
 		case LANGUAGE_PASCAL:
-			if (!apb.statusName.empty() && !apb.exceptionClass.empty())
+			if (!apb.method->statusName.empty() && !apb.exceptionClass.empty())
 			{
 				identify(apb, ident);
 				fprintf(apb.out, "%s.setVersionError(%s, \'%s%s\', vTable.version, %d);\n",
-					apb.exceptionClass.c_str(), apb.statusName.c_str(), apb.prefix.c_str(),
+					apb.exceptionClass.c_str(), apb.method->statusName.c_str(), apb.prefix.c_str(),
 					apb.interface->name.c_str(), apb.method->version);
 			}
 			break;
+		}
+		break;
+
+	case DEF_IGNORE:
+		if (apb.method->returnTypeRef.token.type != Token::TYPE_VOID ||
+			apb.method->returnTypeRef.isPointer)
+		{
+			identify(apb, ident);
+
+			switch(apb.language)
+			{
+			case LANGUAGE_C:
+			case LANGUAGE_CPP:
+				fprintf(apb.out, "return 0;\n");
+				break;
+
+			case LANGUAGE_PASCAL:
+				{
+					const char* sResult = "nil";
+					if (!apb.method->returnTypeRef.isPointer)
+					{
+						switch (apb.method->returnTypeRef.token.type)
+						{
+						case Token::TYPE_STRING:
+							break;
+
+						case Token::TYPE_BOOLEAN:
+							sResult = "false";
+							break;
+
+						case Token::TYPE_IDENTIFIER:
+							if (apb.method->returnTypeRef.type == BaseType::TYPE_INTERFACE)
+								break;
+
+							// fallthru
+						default:
+							sResult = "0";
+							break;
+						}
+					}
+
+					fprintf(apb.out, "Result := %s;\n", sResult);
+				}
+				break;
+			}
 		}
 		break;
 	}

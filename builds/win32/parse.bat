@@ -2,10 +2,8 @@
 
 @echo.
 
-@call setenvvar.bat
+@call setenvvar.bat %*
 @if errorlevel 1 (goto :END)
-
-@call set_build_target.bat %*
 
 @echo Generating parse.cpp and dsql.tab.h
 
