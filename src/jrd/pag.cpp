@@ -2417,9 +2417,6 @@ void PageManager::allocTableSpace(thread_db* tdbb, USHORT tableSpaceID, bool cre
 				newPageSpace->pipFirst = FIRST_PIP_PAGE;
 				newPageSpace->scnFirst = FIRST_SCN_PAGE;
 			}
-
-			if (dbb->dbb_flags & (DBB_force_write | DBB_no_fs_cache))
-				PIO_force_write(newPageSpace->file, dbb->dbb_flags & DBB_force_write, dbb->dbb_flags & DBB_no_fs_cache);
 		}
 		catch (...)
 		{

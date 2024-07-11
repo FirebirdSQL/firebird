@@ -98,12 +98,12 @@ const int IN_SW_BURP_CRYPT				= 51;	// name of crypt plugin
 
 const int IN_SW_BURP_INCLUDE_DATA		= 52;	// backup data from tables
 const int IN_SW_BURP_REPLICA			= 53;	// replica mode
-const int IN_SW_BURP_TS_MAPPING_FILE	= 54;	// mapping file for tablespaces
-const int IN_SW_BURP_TS_ORIGINAL_PATHS	= 55;	// restore tablespaces to their original paths
-const int IN_SW_BURP_TS_PATH			= 56;	// set a path for a tablespace
-
 const int IN_SW_BURP_PARALLEL_WORKERS	= 54;	// parallel workers
 const int IN_SW_BURP_DIRECT_IO			= 55;	// direct IO for backup files
+
+const int IN_SW_BURP_TS_MAPPING_FILE	= 56;	// mapping file for tablespaces
+const int IN_SW_BURP_TS_ORIGINAL_PATHS	= 57;	// restore tablespaces to their original paths
+const int IN_SW_BURP_TS_PATH			= 58;	// set a path for a tablespace
 
 /**************************************************************************/
 

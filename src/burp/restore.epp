@@ -64,11 +64,8 @@
 #include "../common/os/path_utils.h"
 #include "../common/dsc_proto.h"
 #include "../common/ThreadStart.h"
-<<<<<<< HEAD
 #include "../common/db_alias.h"
-=======
 #include "../common/msg_encode.h"
->>>>>>> firebird_master
 
 using MsgFormat::SafeArg;
 using namespace Firebird;

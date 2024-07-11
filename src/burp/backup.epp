@@ -403,7 +403,7 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 		write_packages();
 	}
 
-	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL13)
 	{
 		// Write tablespaces
 		BURP_verbose(411);	// msg 411 writing tablespaces

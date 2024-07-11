@@ -2657,7 +2657,7 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 
 			if (releasePP)
 			{
-				fetch_page(false, (*vector)[sequence], pag_pointer, &window, &page);
+				fetch_page(false, PageNumber(pageSpaceId, (*vector)[sequence]), pag_pointer, &window, &page);
 				bits = (UCHAR*) (page->ppg_page + dbb->dbb_dp_per_pp);
 				pages = &page->ppg_page[slot];
 			}

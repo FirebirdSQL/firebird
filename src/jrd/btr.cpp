@@ -893,7 +893,7 @@ void BTR_create(thread_db* tdbb,
 		idx->idx_pg_space_id = relPages->rel_pg_space_id;
 
 	// Now that the index id has been checked out, create the index.
-	idx->idx_root = fast_load<Sort>(tdbb, creation, selectivity, creation.sort);
+	idx->idx_root = fast_load<PartitionedSort>(tdbb, creation, selectivity, creation.sort);
 
 	// Index is created.  Go back to the index root page and update it to
 	// point to the index.

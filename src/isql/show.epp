@@ -5076,7 +5076,7 @@ static processing_state show_tablespaces(const SCHAR* tablespace_name)
 * Functional description
 *	Show all tablespaces or the named tablespace
 ************************************/
-	if (isqlGlob.major_ods < ODS_VERSION14)
+	if (isqlGlob.major_ods < ODS_VERSION13)
 		return OBJECT_NOT_FOUND;
 
 	bool first = true;
