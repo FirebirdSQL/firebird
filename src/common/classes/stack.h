@@ -406,7 +406,7 @@ namespace Firebird {
 				return !(*this == s);
 			}
 
-			iterator& operator= (iterator& i)
+			iterator& operator= (const iterator& i)
 			{
 				stk = i.stk;
 				elem = i.elem;
