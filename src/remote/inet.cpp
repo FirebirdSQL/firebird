@@ -1074,7 +1074,7 @@ static rem_port* listener_socket(rem_port* port, USHORT flag, const addrinfo* pa
  *	binds the socket and calls listen().
  *  For multi-client server (SuperServer or SuperClassic) return listener
  *  port.
- *  For classic server - accept incoming connections and fork worker
+ *  For Classic server - accept incoming connections and fork worker
  *  processes, return NULL at exit;
  *  On error throw exception.
  *
@@ -1088,26 +1088,27 @@ static rem_port* listener_socket(rem_port* port, USHORT flag, const addrinfo* pa
 	if (n == -1)
 		gds__log("setsockopt: error setting IPV6_V6ONLY to %d", ipv6_v6only);
 
+#ifndef WIN_NT
+	// dimitr:	on Windows, lack of SO_REUSEADDR works the same way as it was specified on POSIX,
+	//			i.e. it allows binding to a port in a TIME_WAIT/FIN_WAIT state. If this option
+	//			is turned on explicitly, then a port can be re-bound regardless of its state,
+	//			e.g. while it's listening. This is surely not what we want.
+	//			We set this options for any kind of listener, including standalone Classic.
+
+	int optval = TRUE;
+	n = setsockopt(port->port_handle, SOL_SOCKET, SO_REUSEADDR,
+					(SCHAR*) &optval, sizeof(optval));
+	if (n == -1)
+	{
+		inet_error(true, port, "setsockopt REUSE", isc_net_connect_listen_err, INET_ERRNO);
+	}
+#endif
+
 	if (flag & SRVR_multi_client)
 	{
 		struct linger lingerInfo;
 		lingerInfo.l_onoff = 0;
 		lingerInfo.l_linger = 0;
-
-#ifndef WIN_NT
-		// dimitr:	on Windows, lack of SO_REUSEADDR works the same way as it was specified on POSIX,
-		//			i.e. it allows binding to a port in a TIME_WAIT/FIN_WAIT state. If this option
-		//			is turned on explicitly, then a port can be re-bound regardless of its state,
-		//			e.g. while it's listening. This is surely not what we want.
-
-		int optval = TRUE;
-		n = setsockopt(port->port_handle, SOL_SOCKET, SO_REUSEADDR,
-					   (SCHAR*) &optval, sizeof(optval));
-		if (n == -1)
-		{
-			inet_error(true, port, "setsockopt REUSE", isc_net_connect_listen_err, INET_ERRNO);
-		}
-#endif
 
 		// Get any values for SO_LINGER so that they can be reset during
 		// disconnect.  SO_LINGER should be set by default on the socket
