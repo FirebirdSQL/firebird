@@ -4055,7 +4055,7 @@ static ULONG fast_load(thread_db* tdbb,
 			// Get the next record in sorted order.
 
 			UCHAR* record;
-			creation.sort->get(tdbb, reinterpret_cast<ULONG**>(&record));
+			scb->get(tdbb, reinterpret_cast<ULONG**>(&record));
 
 			if (!record || creation.duplicates.value())
 				break;

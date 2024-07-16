@@ -319,9 +319,9 @@ Config* Config::get(const PathName& lookupName)
 				PathUtils::splitLastComponent(db_directory, db_filename, config->dbName);
 				config->filePrefix = db_filename;
 			}
-
-			return config.release();
 		}
+
+		return config.release();
 	}
 	catch (const Exception& ex)
 	{
