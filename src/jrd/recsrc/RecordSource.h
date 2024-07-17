@@ -1010,7 +1010,7 @@ namespace Jrd
 			}
 
 		private:
-			const void getFrameValue(thread_db* tdbb, Request* request,
+			void getFrameValue(thread_db* tdbb, Request* request,
 				const Frame* frame, impure_value_ex* impureValue) const;
 
 			SINT64 locateFrameRange(thread_db* tdbb, Request* request, Impure* impure,
