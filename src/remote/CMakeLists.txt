@@ -14,17 +14,17 @@ set(remote_src
     ../auth/SecureRemotePassword/srp.cpp
     ../auth/SecureRemotePassword/srp.h
     ../auth/SecureRemotePassword/Message.h
-    ../auth/trusted/AuthSspi.cpp
 )
 add_src_win32(remote_src
+    ../auth/trusted/AuthSspi.cpp
     os/win32/xnet.cpp
     os/win32/xnet.h
     os/win32/xnet_proto.h
 )
 file(GLOB remote_include "*.h")
 
-add_library             (remote ${remote_src} ${remote_include})
-add_dependencies_cc     (remote UpdateCloopInterfaces)
+add_library                 (remote ${remote_src} ${remote_include})
+add_dependencies_cc         (remote UpdateCloopInterfaces)
 
 
 ###############################################################################
@@ -36,6 +36,7 @@ set(fbserver_src
     ../auth/SecureRemotePassword/server/SrpServer.h
 )
 add_src_win32(fbserver_src
+    ../auth/SecDbCache.cpp
     server/os/win32/chop.cpp
     server/os/win32/cntl.cpp
     server/os/win32/property.cpp
@@ -62,3 +63,5 @@ add_src_unix(fbserver_src
 add_executable              (fbserver WIN32 ${fbserver_src})
 target_link_libraries       (fbserver remote common yvalve engine_common ${LIB_comctl32})
 set_target_properties       (fbserver PROPERTIES OUTPUT_NAME firebird)
+set_target_properties       (fbserver PROPERTIES LINK_FLAGS -mwindows)
+set_target_properties       (fbserver PROPERTIES RC_FLAGS -DRC_TARGET_firebird)

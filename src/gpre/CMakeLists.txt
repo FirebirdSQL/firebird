@@ -19,13 +19,3 @@ add_src_win32(gpre_common_src
 add_library                 (gpre_common ${gpre_common_src})
 add_dependencies_cc         (gpre_common UpdateCloopInterfaces)
 
-
-###############################################################################
-# SHARED LIBRARY fbrmclib
-###############################################################################
-
-if (WIN32)
-    add_library             (fbrmclib SHARED languages/fbrmclib.cpp ${VERSION_RC})
-    target_link_libraries   (fbrmclib common yvalve)
-    set_exported_symbols    (fbrmclib fbrmclib)
-endif(WIN32)
