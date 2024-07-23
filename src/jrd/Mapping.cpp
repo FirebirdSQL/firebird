@@ -1091,7 +1091,12 @@ private:
 				return false;
 
 			MAP_DEBUG(fprintf(stderr, "granted=%d\n", granted));
-			return roles.getPrivileges((granted ? *sqlRole : trusted_role), system_privileges);
+
+			// Note, roles have no special entry with empty string as a key.
+			// Thus, don't consider it as not populated if role to check is not set (empty).
+
+			const string& roleInUse = granted ? *sqlRole : trusted_role;
+			return roleInUse.hasData() ? roles.getPrivileges(roleInUse, system_privileges) : true;
 		}
 
 		void populate(Mapping::DbHandle& iDb, const string& name, const string* sqlRole,
