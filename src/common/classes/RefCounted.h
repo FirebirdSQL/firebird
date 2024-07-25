@@ -175,7 +175,7 @@ namespace Firebird
 			return assign(r.ptr);
 		}
 
-		T* operator=(RefPtr&& r) noexcept
+		T* operator=(RefPtr&& r)
 		{
 			moveFrom(r);
 			return ptr;
