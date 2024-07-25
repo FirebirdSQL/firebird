@@ -125,7 +125,7 @@ public:
 		return *this;
 	}
 
-	AutoPtr& operator=(AutoPtr&& r)
+	AutoPtr& operator=(AutoPtr&& r) noexcept
 	{
 		if (this != &r)
 		{
