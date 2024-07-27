@@ -65,10 +65,8 @@ int DsqlStatement::release()
 	{
 		if (cacheKey)
 		{
-			refCnt = ++refCounter;
-			auto key = cacheKey;
-			cacheKey = nullptr;
-			dsqlAttachment->dbb_statement_cache->statementGoingInactive(key);
+			dsqlAttachment->dbb_statement_cache->statementGoingInactive(cacheKey);
+			refCnt = refCounter;
 		}
 		else
 		{

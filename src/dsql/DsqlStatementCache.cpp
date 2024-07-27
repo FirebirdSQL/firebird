@@ -156,20 +156,44 @@ void DsqlStatementCache::putStatement(thread_db* tdbb, const string& text, USHOR
 #endif
 }
 
+void DsqlStatementCache::removeStatement(thread_db* tdbb, DsqlStatement* statement)
+{
+	if (const auto cacheKey = statement->getCacheKey())
+	{
+		if (const auto entryPtr = map.get(cacheKey))
+		{
+			const auto entry = *entryPtr;
+
+			entry->dsqlStatement->resetCacheKey();
+
+			if (entry->active)
+			{
+				entry->dsqlStatement->addRef();
+				activeStatementList.erase(entry);
+			}
+			else
+			{
+				inactiveStatementList.erase(entry);
+				cacheSize -= entry->size;
+			}
+
+			map.remove(entry->key);
+		}
+	}
+}
+
 void DsqlStatementCache::statementGoingInactive(Firebird::RefStrPtr& key)
 {
 	const auto entryPtr = map.get(key);
 
 	if (!entryPtr)
-	{
-		fb_assert(false);
 		return;
-	}
 
 	const auto entry = *entryPtr;
 
 	fb_assert(entry->active);
 	entry->active = false;
+	entry->dsqlStatement->addRef();
 	entry->size = entry->dsqlStatement->getSize();	// update size
 
 	inactiveStatementList.splice(inactiveStatementList.end(), activeStatementList, entry);
@@ -191,6 +215,9 @@ void DsqlStatementCache::purge(thread_db* tdbb, bool releaseLock)
 			entry.dsqlStatement->addRef();
 			entry.dsqlStatement->resetCacheKey();
 		}
+
+		for (auto& entry : inactiveStatementList)
+			entry.dsqlStatement->resetCacheKey();
 
 		map.clear();
 		activeStatementList.clear();
@@ -273,6 +300,7 @@ void DsqlStatementCache::shrink()
 	while (cacheSize > maxCacheSize && !inactiveStatementList.isEmpty())
 	{
 		const auto& front = inactiveStatementList.front();
+		front.dsqlStatement->resetCacheKey();
 		map.remove(front.key);
 		cacheSize -= front.size;
 		inactiveStatementList.erase(inactiveStatementList.begin());

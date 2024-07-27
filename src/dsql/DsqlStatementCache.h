@@ -106,6 +106,7 @@ public:
 	void putStatement(thread_db* tdbb, const Firebird::string& text, USHORT clientDialect, bool isInternalRequest,
 		Firebird::RefPtr<DsqlStatement> dsqlStatement);
 
+	void removeStatement(thread_db* tdbb, DsqlStatement* statement);
 	void statementGoingInactive(Firebird::RefStrPtr& key);
 
 	void purge(thread_db* tdbb, bool releaseLock);
