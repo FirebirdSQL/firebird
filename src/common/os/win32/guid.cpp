@@ -40,8 +40,6 @@
 #include "../common/os/guid.h"
 #include "fb_exception.h"
 
-#pragma comment(lib, "bcrypt.lib")
-
 namespace Firebird {
 
 
