@@ -1004,7 +1004,7 @@ static void prt_lock_activity(OUTFILE outfile,
 
 		FPRINTF(outfile, "%02d:%02d:%02d ", d.tm_hour, d.tm_min, d.tm_sec);
 
-		if (flag & SW_I_ACQUIRE)
+		if (flag & SW_I_ACQUIRE && seconds!=0 )
 		{
 			FPRINTF(outfile, "%9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
 					" %9" UQUADFORMAT" %9" UQUADFORMAT" ",
@@ -1024,7 +1024,7 @@ static void prt_lock_activity(OUTFILE outfile,
 			prior.lhb_retry_success = LOCK_header->lhb_retry_success;
 		}
 
-		if (flag & SW_I_OPERATION)
+		if (flag & SW_I_OPERATION && seconds!=0)
 		{
 			FPRINTF(outfile, "%9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
 					" %9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
@@ -1046,7 +1046,7 @@ static void prt_lock_activity(OUTFILE outfile,
 			prior.lhb_query_data = LOCK_header->lhb_query_data;
 		}
 
-		if (flag & SW_I_TYPE)
+		if ( flag & SW_I_TYPE && seconds!=0 )
 		{
 			FPRINTF(outfile, "%9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
 					" %9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
@@ -1074,7 +1074,7 @@ static void prt_lock_activity(OUTFILE outfile,
 			prior.lhb_operations[0] = LOCK_header->lhb_operations[0];
 		}
 
-		if (flag & SW_I_WAIT)
+		if ( flag & SW_I_WAIT && seconds!=0 )
 		{
 			FPRINTF(outfile, "%9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
 					" %9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
