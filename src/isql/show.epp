@@ -3586,6 +3586,22 @@ static processing_state show_comments(const commentMode showextract, const char*
 			return ps_ERR;
 		END_ERROR
 	}
+
+	if (isqlGlob.major_ods >= ODS_VERSION13)
+	{
+		FOR TS IN RDB$TABLESPACES
+			WITH TS.RDB$DESCRIPTION NOT MISSING
+			SORTED BY TS.RDB$TABLESPACE_NAME
+
+			show_comment("TABLESPACE", NULL, TS.RDB$TABLESPACE_NAME, NULL, &TS.RDB$DESCRIPTION,
+				showextract, first ? banner : 0);
+			first = false;
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return ps_ERR;
+		END_ERROR
+	}
 	return first ? OBJECT_NOT_FOUND : SKIP;
 }
 

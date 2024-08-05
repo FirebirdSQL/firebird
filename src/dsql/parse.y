@@ -6149,6 +6149,7 @@ ddl_type1
 	| CHARACTER SET			{ $$ = obj_charset; }
 	| COLLATION				{ $$ = obj_collation; }
 	| PACKAGE				{ $$ = obj_package_header; }
+	| TABLESPACE			{ $$ = obj_tablespace; }
 	/***
 	| SECURITY CLASS		{ $$ = ddl_sec_class; }
 	***/

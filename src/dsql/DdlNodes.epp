@@ -1457,6 +1457,11 @@ void CommentOnNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 			SCL_check_package(tdbb, &dscName, SCL_alter);
 			break;
 
+		case obj_tablespace:
+			dscName.makeText(objNameStr.length(), CS_METADATA, (UCHAR*) objName.identifier.c_str());
+			SCL_check_tablespace(tdbb, &dscName, SCL_alter);
+			break;
+
 		default:
 			fb_assert(false);
 	}
@@ -1602,6 +1607,12 @@ void CommentOnNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 			tableClause = "rdb$packages";
 			columnClause = "rdb$package_name";
 			status << Arg::Gds(isc_dyn_package_not_found) << Arg::Str(objNameStr);
+			break;
+
+		case obj_tablespace:
+			tableClause = "rdb$tablespaces";
+			columnClause = "rdb$tablespace_name";
+			status << Arg::Gds(isc_dyn_ts_not_found) << Arg::Str(objNameStr);
 			break;
 
 		default:
