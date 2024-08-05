@@ -1790,6 +1790,7 @@ public:
 	MetaName name;
 	bool unique;
 	bool descending;
+	bool active;
 	NestConst<RelationSourceNode> relation;
 	NestConst<ValueListNode> columns;
 	NestConst<ValueSourceClause> computed;
