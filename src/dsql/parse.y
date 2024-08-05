@@ -1677,7 +1677,12 @@ create_clause
 			node->createIfNotExistsOnly = $3;
 			$$ = node;
 		}
-	| TABLESPACE tablespace_clause				{ $$ = $2; }
+	| TABLESPACE if_not_exists_opt tablespace_clause
+		{
+			const auto node = $3;
+			node->createIfNotExistsOnly = $2;
+			$$ = node;
+		}
 	;
 
 

@@ -220,6 +220,19 @@ bool DYN_UTIL_check_unique_name_nothrow(thread_db* tdbb, jrd_tra* transaction,
 
 			break;
 
+		case obj_tablespace:
+			request.reset(tdbb, drq_l_ts_name, DYN_REQUESTS);
+
+			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+				TS IN RDB$TABLESPACES
+				WITH TS.RDB$TABLESPACE_NAME EQ object_name.c_str()
+			{
+				*errorCode = 317;
+			}
+			END_FOR
+
+			break;
+
 		default:
 			fb_assert(false);
 	}

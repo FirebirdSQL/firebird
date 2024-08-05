@@ -126,8 +126,13 @@ void CreateAlterTablespaceNode::executeCreate(thread_db* tdbb, DsqlCompilerScrat
 
 	const MetaName& userName = attachment->att_user->getUserName();
 
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_tablespace))
+		return;
+
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 		DDL_TRIGGER_CREATE_TABLESPACE, name, NULL);
+
+	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_tablespace);
 
 	AutoCacheRequest requestHandle(tdbb, drq_s_tablespace, DYN_REQUESTS);
 

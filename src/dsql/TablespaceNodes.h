@@ -69,6 +69,7 @@ public:
 	bool alter;
 	bool offline;
 	bool readonly;
+	bool createIfNotExistsOnly = false;
 };
 
 

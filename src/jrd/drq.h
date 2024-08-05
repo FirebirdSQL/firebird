@@ -260,6 +260,7 @@ enum drq_type_t
 	drq_l_pkg_name,			// lookup package name
 	drq_l_rel_con,			// lookup relation constraint
 	drq_l_rel_fld_name,		// lookup relation field name
+	drq_l_ts_name,			// lookup tablespace name
 	drq_ts_drop_idx_dfw,	// find index of tablespace in dfw for drop
 	drq_ts_drop_rel_dfw,	// find relation of tablespace in dfw for drop
 
