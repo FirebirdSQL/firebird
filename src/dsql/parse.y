@@ -5078,8 +5078,12 @@ drop_clause
 			node->silentDrop = $3;
 			$$ = node;
 		}
-	| TABLESPACE drop_tablespace_clause
-		{ $$ = $2; }
+	| TABLESPACE if_exists_opt drop_tablespace_clause
+		{
+			const auto node = $3;
+			node->silent = $2;
+			$$ = node;
+		}
 	;
 
 %type <boolVal> if_exists_opt
