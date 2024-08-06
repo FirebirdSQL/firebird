@@ -3792,6 +3792,7 @@ jrd_tra::~jrd_tra()
 	delete tra_user_management;
 	delete tra_timezone_snapshot;
 	delete tra_mapping_list;
+	delete tra_dbcreators_list;
 	delete tra_gen_ids;
 
 	if (!tra_outer)
