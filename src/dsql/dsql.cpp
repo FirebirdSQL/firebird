@@ -143,12 +143,6 @@ void DSQL_execute(thread_db* tdbb,
 
 	const auto statement = dsqlRequest->getDsqlStatement();
 
-	if (statement->getFlags() & DsqlStatement::FLAG_ORPHAN)
-	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-		          Arg::Gds(isc_bad_req_handle));
-	}
-
 	// Only allow NULL trans_handle if we're starting a transaction or set session properties
 
 	if (!*tra_handle &&
