@@ -392,26 +392,42 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 				sizeof(index_name));
 			BURP_verbose(285, index_name);
 			// activating and creating deferred index %s
-			MODIFY IDS USING
-				IDS.RDB$INDEX_INACTIVE = FALSE;
-			END_MODIFY;
-			ON_ERROR
-				general_on_error();
-			END_ERROR;
 
-			SAVE
-			// existing ON_ERROR continues past error, beck
-			ON_ERROR
-				BURP_print (false, 173, index_name);
-				BURP_print_status(false, isc_status);
-				MODIFY IDS USING
-					IDS.RDB$INDEX_INACTIVE = TRUE;
+			bool fError = false;
+			Firebird::ITransaction* activateIndexTran = nullptr;
+			FbLocalStatus local_status_vector;
+
+			START_TRANSACTION activateIndexTran;
+			FOR (TRANSACTION_HANDLE activateIndexTran REQUEST_HANDLE req_handle5)
+				IND1 IN RDB$INDICES WITH IND1.RDB$INDEX_NAME EQ IDS.RDB$INDEX_NAME
+				MODIFY IND1 USING
+						IND1.RDB$INDEX_INACTIVE = FALSE;
 				END_MODIFY;
+			END_FOR;
+			ON_ERROR
+				fError = true;
+				fb_utils::copyStatus(&local_status_vector, isc_status);
+			END_ERROR;
+			MISC_release_request_silent(req_handle5);
+
+			if (!fError)
+			{
+				COMMIT activateIndexTran;
+				ON_ERROR
+					fError = true;
+					fb_utils::copyStatus(&local_status_vector, isc_status);
+				END_ERROR;
+			}
+			if (fError)
+			{
+				ROLLBACK activateIndexTran;
 				ON_ERROR
 					general_on_error ();
 				END_ERROR;
+				BURP_print (false, 173, index_name);
+				BURP_print_status(false, &local_status_vector);
 				tdgbl->flag_on_line = false;
-			END_ERROR;
+			}
 		END_FOR;
 		ON_ERROR
 			general_on_error ();
