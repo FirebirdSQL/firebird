@@ -42,6 +42,7 @@ SQUAD	MOV_get_quad(Jrd::thread_db*, const dsc*, SSHORT);
 SINT64	MOV_get_int64(Jrd::thread_db*, const dsc*, SSHORT);
 int		MOV_get_string_ptr(Jrd::thread_db*, const dsc*, USHORT*, UCHAR**, vary*, USHORT);
 int		MOV_get_string(Jrd::thread_db*, const dsc*, UCHAR**, vary*, USHORT);
+void	MOV_get_string(Jrd::thread_db* tdbb, const dsc* desc, Firebird::string& str);
 GDS_DATE	MOV_get_sql_date(const dsc*);
 GDS_TIME	MOV_get_sql_time(const dsc*);
 ISC_TIME_TZ	MOV_get_sql_time_tz(const dsc*);

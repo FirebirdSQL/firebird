@@ -666,6 +666,7 @@ public:
 
 	Firebird::Array<Statement*>	att_internal;			// internal statements
 	Firebird::Array<Statement*>	att_dyn_req;			// internal dyn statements
+	Firebird::Array<Statement*>	att_internal_cached_statements;		// internal cached statements
 	Firebird::ICryptKeyCallback*	att_crypt_callback;		// callback for DB crypt
 	Firebird::DecimalStatus			att_dec_status;			// error handling and rounding
 

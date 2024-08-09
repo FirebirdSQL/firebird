@@ -914,6 +914,28 @@ int CVT2_blob_compare(const dsc* arg1, const dsc* arg2, DecimalStatus decSt)
 }
 
 
+void CVT2_make_metaname(const dsc* desc, MetaName& name, DecimalStatus decSt)
+/**************************************
+ *
+ *	C V T 2 _ m a k e _ m e t a n a m e
+ *
+ **************************************
+ *
+ * Functional description
+ *
+ *     Convert the data from the desc to a string in the metadata charset.
+ *     Then return the string as MetaName object.
+ *
+ **************************************/
+{
+	MoveBuffer buff;
+	UCHAR* ptr = nullptr;
+
+	const auto len = CVT2_make_string2(desc, CS_METADATA, &ptr, buff, decSt);
+	name.assign(reinterpret_cast<const char*>(ptr), len);
+}
+
+
 USHORT CVT2_make_string2(const dsc* desc, USHORT to_interp, UCHAR** address, MoveBuffer& temp, DecimalStatus decSt)
 {
 /**************************************

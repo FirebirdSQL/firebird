@@ -32,7 +32,7 @@
 #endif
 
 #include <windows.h>
-#include <wincrypt.h>
+#include <bcrypt.h>
 #include <objbase.h>
 #include <stdio.h>
 
@@ -45,33 +45,8 @@ namespace Firebird {
 
 void GenerateRandomBytes(void* buffer, FB_SIZE_T size)
 {
-	HCRYPTPROV hProv;
-
-	// Acquire crypto-provider context handle.
-	if (! CryptAcquireContext(&hProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT))
-	{
-		if (GetLastError() == NTE_BAD_KEYSET)
-		{
-			// A common cause of this error is that the key container does not exist.
-			// To create a key container, call CryptAcquireContext
-			// using the CRYPT_NEWKEYSET flag.
-			if (! CryptAcquireContext(&hProv, NULL, NULL, PROV_RSA_FULL,
-					CRYPT_VERIFYCONTEXT | CRYPT_NEWKEYSET))
-			{
-				Firebird::system_call_failed::raise("CryptAcquireContext");
-			}
-		}
-		else
-		{
-			Firebird::system_call_failed::raise("CryptAcquireContext");
-		}
-	}
-
-	if (! CryptGenRandom(hProv, size, static_cast<UCHAR*>(buffer)))
-	{
-		Firebird::system_call_failed::raise("CryptGenRandom");
-	}
-	CryptReleaseContext(hProv, 0);
+	if (BCryptGenRandom(nullptr, static_cast<UCHAR*>(buffer), size, BCRYPT_USE_SYSTEM_PREFERRED_RNG) != S_OK)
+		Firebird::system_call_failed::raise("BCryptGenRandom");
 }
 
 void GenerateGuid(UUID* guid)

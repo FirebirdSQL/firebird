@@ -4034,7 +4034,7 @@ static void check_autoterm()
 	}
 
 	if (!(protocolVersion == 0 || protocolVersion >= 19) &&	// PROTOCOL_VERSION19
-		  ENCODE_ODS(isqlGlob.major_ods, isqlGlob.minor_ods) >= ODS_13_2)
+		  isqlGlob.major_ods >= ODS_VERSION14)
 	{
 		setValues.AutoTerm = false;
 

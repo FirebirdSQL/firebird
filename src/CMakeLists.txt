@@ -494,7 +494,7 @@ add_library                 (boot_engine SHARED ${engine_generated_src_boot} ${V
 target_link_libraries       (boot_engine engine_common boot_alice boot_burp common boot_yvalve)
 set_output_directory        (boot_engine plugins CURRENT_DIR)
 set_exported_symbols        (boot_engine fbplugin)
-copy_and_rename_lib         (boot_engine Engine13)
+copy_and_rename_lib         (boot_engine Engine14)
 project_group               (boot_engine Boot)
 
 endif() # if (NOT CMAKE_CROSSCOMPILING)
@@ -506,7 +506,7 @@ endif() # if (NOT CMAKE_CROSSCOMPILING)
 
 add_library                 (engine SHARED ${engine_generated_src_master} ${VERSION_RC})
 target_link_libraries       (engine engine_common alice burp common yvalve)
-set_target_properties       (engine PROPERTIES OUTPUT_NAME Engine13)
+set_target_properties       (engine PROPERTIES OUTPUT_NAME Engine14)
 set_output_directory        (engine plugins)
 set_exported_symbols        (engine fbplugin)
 

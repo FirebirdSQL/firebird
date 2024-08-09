@@ -54,8 +54,10 @@
 **   ODS 10 was shipped with IB version 6.0
 **   Here the Firebird history begins:
 **   ODS 10.0 is for FB1.0 and ODS 10.1 is for FB1.5.
-**   ODS 11.0 is for FB2.0, ODS11.1 is for FB2.1 and ODS11.2 is for FB2.5.
-**   ODS 12.0 is for FB3, ODS 13.0 is for FB4.
+**   ODS 11.0 is for FB2.0, ODS 11.1 is for FB2.1 and ODS 11.2 is for FB2.5.
+**   ODS 12.0 is for FB3.
+**   ODS 13.0 is for FB4, ODS 13.1 is for FB5.
+**   ODS 14.0 is for FB6.
 **
 ***********************************************************************/
 
@@ -70,6 +72,7 @@ inline constexpr USHORT ODS_VERSION10	= 10;		// V6.0 features. SQL delimited ide
 inline constexpr USHORT ODS_VERSION11	= 11;		// Firebird 2.x features
 inline constexpr USHORT ODS_VERSION12	= 12;		// Firebird 3.x features
 inline constexpr USHORT ODS_VERSION13	= 13;		// Firebird 4.x features
+inline constexpr USHORT ODS_VERSION14	= 14;		// Firebird 6.x features
 
 // ODS minor version -- minor versions ARE compatible, but may be
 // increasingly functional.  Add new minor versions, but leave previous
@@ -124,8 +127,12 @@ inline constexpr USHORT ODS_CURRENT12	= 0;
 
 inline constexpr USHORT ODS_CURRENT13_0	= 0;	// Firebird 4.0 features
 inline constexpr USHORT ODS_CURRENT13_1	= 1;	// Firebird 5.0 features
-inline constexpr USHORT ODS_CURRENT13_2	= 2;	// Firebird 6.0 features
-inline constexpr USHORT ODS_CURRENT13	= 2;
+inline constexpr USHORT ODS_CURRENT13	= 1;
+
+// Minor versions for ODS 14
+
+inline constexpr USHORT ODS_CURRENT14_0	= 0;	// Firebird 6.0 features
+inline constexpr USHORT ODS_CURRENT14	= 0;
 
 // useful ODS macros. These are currently used to flag the version of the
 // system triggers and system indices in ini.e
@@ -135,19 +142,19 @@ inline constexpr USHORT ENCODE_ODS(USHORT major, USHORT minor)
 	return ((major << 4) | minor);
 }
 
-inline constexpr USHORT ODS_8_0			= ENCODE_ODS(ODS_VERSION8, 0);
-inline constexpr USHORT ODS_8_1			= ENCODE_ODS(ODS_VERSION8, 1);
-inline constexpr USHORT ODS_9_0			= ENCODE_ODS(ODS_VERSION9, 0);
-inline constexpr USHORT ODS_9_1			= ENCODE_ODS(ODS_VERSION9, 1);
-inline constexpr USHORT ODS_10_0		= ENCODE_ODS(ODS_VERSION10, 0);
-inline constexpr USHORT ODS_10_1		= ENCODE_ODS(ODS_VERSION10, 1);
-inline constexpr USHORT ODS_11_0		= ENCODE_ODS(ODS_VERSION11, 0);
-inline constexpr USHORT ODS_11_1		= ENCODE_ODS(ODS_VERSION11, 1);
-inline constexpr USHORT ODS_11_2		= ENCODE_ODS(ODS_VERSION11, 2);
-inline constexpr USHORT ODS_12_0		= ENCODE_ODS(ODS_VERSION12, 0);
-inline constexpr USHORT ODS_13_0		= ENCODE_ODS(ODS_VERSION13, 0);
-inline constexpr USHORT ODS_13_1		= ENCODE_ODS(ODS_VERSION13, 1);
-inline constexpr USHORT ODS_13_2		= ENCODE_ODS(ODS_VERSION13, 2);
+inline constexpr USHORT ODS_8_0		= ENCODE_ODS(ODS_VERSION8, 0);
+inline constexpr USHORT ODS_8_1		= ENCODE_ODS(ODS_VERSION8, 1);
+inline constexpr USHORT ODS_9_0		= ENCODE_ODS(ODS_VERSION9, 0);
+inline constexpr USHORT ODS_9_1		= ENCODE_ODS(ODS_VERSION9, 1);
+inline constexpr USHORT ODS_10_0	= ENCODE_ODS(ODS_VERSION10, 0);
+inline constexpr USHORT ODS_10_1	= ENCODE_ODS(ODS_VERSION10, 1);
+inline constexpr USHORT ODS_11_0	= ENCODE_ODS(ODS_VERSION11, 0);
+inline constexpr USHORT ODS_11_1	= ENCODE_ODS(ODS_VERSION11, 1);
+inline constexpr USHORT ODS_11_2	= ENCODE_ODS(ODS_VERSION11, 2);
+inline constexpr USHORT ODS_12_0	= ENCODE_ODS(ODS_VERSION12, 0);
+inline constexpr USHORT ODS_13_0	= ENCODE_ODS(ODS_VERSION13, 0);
+inline constexpr USHORT ODS_13_1	= ENCODE_ODS(ODS_VERSION13, 1);
+inline constexpr USHORT ODS_14_0	= ENCODE_ODS(ODS_VERSION14, 0);
 
 inline constexpr USHORT ODS_FIREBIRD_FLAG = 0x8000;
 
@@ -166,17 +173,17 @@ inline constexpr USHORT DECODE_ODS_MINOR(USHORT ods_version)
 
 // Set current ODS major and minor version
 
-inline constexpr USHORT ODS_VERSION = ODS_VERSION13;	// Current ODS major version -- always
-														// the highest.
+inline constexpr USHORT ODS_VERSION = ODS_VERSION14;		// Current ODS major version -- always
+															// the highest.
 
-inline constexpr USHORT ODS_RELEASED = ODS_CURRENT13_0;	// The lowest stable minor version
-														// number for this ODS_VERSION!
+inline constexpr USHORT ODS_RELEASED = ODS_CURRENT14_0;		// The lowest stable minor version
+															// number for this ODS_VERSION!
 
-inline constexpr USHORT ODS_CURRENT = ODS_CURRENT13;	// The highest defined minor version
-														// number for this ODS_VERSION!
+inline constexpr USHORT ODS_CURRENT = ODS_CURRENT14;		// The highest defined minor version
+															// number for this ODS_VERSION!
 
-inline constexpr USHORT ODS_CURRENT_VERSION = ODS_13_2;	// Current ODS version in use which includes
-														// both major and minor ODS versions!
+inline constexpr USHORT ODS_CURRENT_VERSION = ODS_14_0;		// Current ODS version in use which includes
+															// both major and minor ODS versions!
 
 
 //const USHORT USER_REL_INIT_ID_ODS8	= 31;	// ODS < 9 ( <= 8.2)

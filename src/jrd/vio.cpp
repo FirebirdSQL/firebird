@@ -3363,6 +3363,7 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 		case rel_roles:
 		case rel_ccon:
 		case rel_pub_tables:
+		case rel_priv:
 			protect_system_table_delupd(tdbb, relation, "UPDATE");
 			break;
 

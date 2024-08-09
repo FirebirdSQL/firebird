@@ -31,6 +31,7 @@ extern const BYTE CVT2_compare_priority[];
 bool    CVT2_get_binary_comparable_desc(dsc*, const dsc*, const dsc*);
 int		CVT2_compare(const dsc*, const dsc*, Firebird::DecimalStatus);
 int		CVT2_blob_compare(const dsc*, const dsc*, Firebird::DecimalStatus);
+void	CVT2_make_metaname(const dsc* desc, Jrd::MetaName& name, Firebird::DecimalStatus);
 USHORT	CVT2_make_string2(const dsc*, USHORT, UCHAR**, Jrd::MoveBuffer&, Firebird::DecimalStatus);
 
 #endif // JRD_CVT2_PROTO_H

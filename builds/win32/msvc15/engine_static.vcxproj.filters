@@ -423,6 +423,9 @@
     <ClCompile Include="..\..\..\gen\jrd\scl.cpp">
       <Filter>JRD files\GPRE cpp</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\gen\jrd\SystemTriggers.cpp">
+      <Filter>JRD files\GPRE cpp</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\gen\jrd\dfw.cpp">
       <Filter>JRD files\GPRE cpp</Filter>
     </ClCompile>
@@ -1085,6 +1088,9 @@
     <ClInclude Include="..\..\..\src\jrd\SystemPackages.h">
       <Filter>Header files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\SystemTriggers.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\Coercion.h">
       <Filter>Header files</Filter>
     </ClInclude>
@@ -1137,6 +1143,9 @@
       <Filter>JRD files\GPRE files</Filter>
     </None>
     <None Include="..\..\..\src\jrd\scl.epp">
+      <Filter>JRD files\GPRE files</Filter>
+    </None>
+    <None Include="..\..\..\src\jrd\SystemTriggers.epp">
       <Filter>JRD files\GPRE files</Filter>
     </None>
     <None Include="..\..\..\src\utilities\gstat\dba.epp">

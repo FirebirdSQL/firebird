@@ -57,7 +57,6 @@ bool SyncObject::lock(Sync* sync, SyncType type, const char* from, int timeOut)
 			const AtomicCounter::counter_type newState = oldState + 1;
 			if (lockState.compareExchange(oldState, newState))
 			{
-				WaitForFlushCache();
 #ifdef DEV_BUILD
 				MutexLockGuard g(mutex, FB_FUNCTION);
 				reason(from);
@@ -113,7 +112,6 @@ bool SyncObject::lock(Sync* sync, SyncType type, const char* from, int timeOut)
 			if (lockState.compareExchange(oldState, -1))
 			{
 				exclusiveThread = thread;
-				WaitForFlushCache();
 #ifdef DEV_BUILD
 				MutexLockGuard g(mutex, FB_FUNCTION);
 #endif
@@ -168,7 +166,6 @@ bool SyncObject::lockConditional(SyncType type, const char* from)
 			const AtomicCounter::counter_type newState = oldState + 1;
 			if (lockState.compareExchange(oldState, newState))
 			{
-				WaitForFlushCache();
 #ifdef DEV_BUILD
 				MutexLockGuard g(mutex, FB_FUNCTION);
 #endif
@@ -197,7 +194,6 @@ bool SyncObject::lockConditional(SyncType type, const char* from)
 
 			if (lockState.compareExchange(oldState, -1))
 			{
-				WaitForFlushCache();
 				exclusiveThread = thread;
 				reason(from);
 				return true;
@@ -227,8 +223,6 @@ void SyncObject::unlock(Sync* /*sync*/, SyncType type)
 		const AtomicCounter::counter_type oldState = lockState;
 		const AtomicCounter::counter_type newState = (type == SYNC_SHARED) ? oldState - 1 : 0;
 
-		FlushCache();
-
 		if (lockState.compareExchange(oldState, newState))
 		{
 			if (newState == 0 && waiters)
@@ -248,7 +242,6 @@ void SyncObject::downgrade(SyncType type)
 	fb_assert(exclusiveThread == ThreadSync::findThread());
 
 	exclusiveThread = NULL;
-	FlushCache();
 
 	while (true)
 	{

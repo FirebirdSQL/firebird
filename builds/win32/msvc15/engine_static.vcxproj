@@ -31,6 +31,7 @@
     <ClCompile Include="..\..\..\gen\jrd\ini.cpp" />
     <ClCompile Include="..\..\..\gen\jrd\met.cpp" />
     <ClCompile Include="..\..\..\gen\jrd\scl.cpp" />
+    <ClCompile Include="..\..\..\gen\jrd\SystemTriggers.cpp" />
     <ClCompile Include="..\..\..\gen\utilities\gstat\dba.cpp" />
     <ClCompile Include="..\..\..\src\dsql\AggNodes.cpp" />
     <ClCompile Include="..\..\..\src\dsql\BlrDebugWriter.cpp" />
@@ -350,6 +351,7 @@
     <ClInclude Include="..\..\..\src\jrd\sys-packages\SqlPackage.h" />
     <ClInclude Include="..\..\..\src\jrd\SysFunction.h" />
     <ClInclude Include="..\..\..\src\jrd\SystemPackages.h" />
+    <ClInclude Include="..\..\..\src\jrd\SystemTriggers.h" />
     <ClInclude Include="..\..\..\src\jrd\TempSpace.h" />
     <ClInclude Include="..\..\..\src\jrd\TimeZone.h" />
     <ClInclude Include="..\..\..\src\jrd\tpc_proto.h" />
@@ -390,6 +392,7 @@
     <None Include="..\..\..\src\jrd\ini.epp" />
     <None Include="..\..\..\src\jrd\met.epp" />
     <None Include="..\..\..\src\jrd\scl.epp" />
+    <None Include="..\..\..\src\jrd\SystemTriggers.epp" />
     <None Include="..\..\..\src\utilities\gstat\dba.epp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

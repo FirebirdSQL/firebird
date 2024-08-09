@@ -44,6 +44,7 @@
 #include "../jrd/blb_proto.h"
 #include "../jrd/cch_proto.h"
 #include "../jrd/cvt_proto.h"
+#include "../jrd/cvt2_proto.h"
 #include "../common/cvt.h"
 #include "../jrd/evl_proto.h"
 #include "../jrd/intl_proto.h"
@@ -5381,7 +5382,7 @@ dsc* evlMakeDbkey(Jrd::thread_db* tdbb, const SysFunction* function, const NestV
 	if (argDsc->isText())
 	{
 		MetaName relName;
-		MOV_get_metaname(tdbb, argDsc, relName);
+		CVT2_make_metaname(argDsc, relName, tdbb->getAttachment()->att_dec_status);
 
 		const jrd_rel* const relation = MET_lookup_relation(tdbb, relName);
 		if (!relation)

@@ -12330,7 +12330,9 @@ DmlNode* SysFuncCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScrat
 
 		if (literal && literal->litDesc.isText())
 		{
-			const MetaName relName = literal->getText();
+			MetaName relName;
+			CVT2_make_metaname(&literal->litDesc, relName, tdbb->getAttachment()->att_dec_status);
+
 			const jrd_rel* const relation = MET_lookup_relation(tdbb, relName);
 
 			if (relation)

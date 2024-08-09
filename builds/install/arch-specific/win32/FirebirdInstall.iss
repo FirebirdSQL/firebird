@@ -8,7 +8,7 @@
 ;  for the specific language governing rights and limitations under the
 ;  License.
 ;
-;  The Original Code is copyright 2001-2021 Paul Reeves for IBPhoenix.
+;  The Original Code is copyright 2001-2024 Paul Reeves for IBPhoenix.
 ;
 ;  The Initial Developer of the Original Code is Paul Reeves for IBPhoenix.
 ;
@@ -586,7 +586,6 @@ Source: {#FilesDir}\misc\*.*; DestDir: {app}\misc; Components: ServerComponent; 
 
 Source: {#FilesDir}\tzdata\*.*; DestDir: {app}\tzdata; Components: ClientComponent; Flags: ignoreversion;
 
-;Source: {#FilesDir}\system32\Firebird2Control.cpl; DestDir: {sys}; Components: ServerComponent; MinVersion: {#MinVer}; Flags: sharedfile ignoreversion promptifolder restartreplace uninsrestartdelete; Check: InstallCPLApplet
 #endif /* files */
 
 #ifdef examples
@@ -883,19 +882,36 @@ var
   TempDir: String;
   ResultCode: Integer;
   CmdStr: string;
+  InputStr: string;
+  OutputStr: string;
 begin
   TempDir := ExpandConstant( '{tmp}' );
   CmdStr := ExpandConstant( '{app}\isql.exe' );
+  InputStr := TempDir + '\' + 'temp.sql';
+  OutputStr := InputStr + '.txt';
+
+  // Ensure these files do not already exist.
+  if FileExists( InputStr ) then DeleteFile( InputStr );
+  if FileExists( OutputStr ) then DeleteFile( OutputStr );
+
   AStringList := TStringList.create;
   with AStringList do begin
-    Add( 'create user ' + GetAdminUserName + ' password ''' + GetAdminUserPassword + ''' using plugin Srp;' );
-    Add( 'commit;' );  //Technically exit implies a commit so this not necessary. OTOH, explicitly committing makes for more readable code.
+    Add( 'create or alter user ' + GetAdminUserName + ' password ''' + GetAdminUserPassword + ''' using plugin Srp;' );
     Add( 'exit;' );
-    SaveToFile( Tempdir +'\temp.sql' );
+    SaveToFile( InputStr );
   end;
-  Result := Exec( CmdStr , ' -m -m2 -user SYSDBA -i ' + TempDir + '\temp.sql -o ' + TempDir + '\temp.sql.txt employee ' , TempDir, SW_HIDE, ewWaitUntilTerminated, ResultCode );
-  DeleteFile( TempDir + '\temp.sql');
-  DeleteFile( TempDir + '\temp.sql.txt');
+  Result := Exec( CmdStr , ' -m -m2 -user SYSDBA -i ' + InputStr + ' -o ' + OutputStr + ' employee ' , TempDir, SW_HIDE, ewWaitUntilTerminated, ResultCode );
+  if ResultCode <> 0 then begin
+    Result := False;
+    Log( 'In function InitSecurityDB Exec isql returned ' + IntToStr(ResultCode) + ' executing ' + InputStr  );
+  end;
+  if FindInFile( OutputStr, 'error' ) then begin
+    Result := False;
+    Log( 'In function InitSecurityDB FindInFile found an error in ' + OutputStr );
+  end;
+
+  DeleteFile( InputStr );
+  DeleteFile( OutputStr );
 end;
 
 
@@ -1248,4 +1264,3 @@ end;
 begin
 end.
 
-; kate: replace-tabs on; indent-width 2; tab-width 2; replace-tabs-save on; syntax Pascal;

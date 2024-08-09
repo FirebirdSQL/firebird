@@ -30,7 +30,7 @@
   o EnumerateObjectList;
      - Simple demonstration of object enumeration.
 
-  o Show Help   
+  o Show Help
     - CreateHelpDlg;
     - ShowHelpDlg: Integer;
     - CloseHelpDlg;

@@ -442,4 +442,3 @@ FIREBIRD_MSG    = $(FIREBIRD)/firebird.msg
 # For want of a better suggestion we may as well default to posix
 PLATFORM_PATH	=	os/posix
 TRACE_OS_Sources	=
-

@@ -135,6 +135,7 @@ public:
 	const dsql_par* getEof() const { return eof; }
 	void setEof(dsql_par* value) { eof = value; }
 
+	Firebird::RefStrPtr getCacheKey() { return cacheKey; }
 	void setCacheKey(Firebird::RefStrPtr& value) { cacheKey = value; }
 	void resetCacheKey() { cacheKey = nullptr; }
 

@@ -464,7 +464,7 @@ const TraNumber MAX_TRA_NUMBER = 0x0000FFFFFFFFFFFF;	// ~2.8 * 10^14
 const unsigned OPT_STATIC_ITEMS = 16;
 const unsigned OPT_STATIC_STREAMS = 64;
 
-#define CURRENT_ENGINE "Engine13"
+#define CURRENT_ENGINE "Engine14"
 #define EMBEDDED_PROVIDERS "Providers=" CURRENT_ENGINE
 
 // Features set for current version of engine provider

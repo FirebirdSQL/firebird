@@ -25,6 +25,7 @@
 #define JRD_EXE_PROTO_H
 
 #include "../jrd/cmp_proto.h"
+#include <atomic>
 
 namespace Jrd {
 	class Request;
@@ -58,6 +59,29 @@ void EXE_unwind(Jrd::thread_db*, Jrd::Request*);
 
 namespace Jrd
 {
+	class CachedRequestId
+	{
+	public:
+		CachedRequestId()
+			: id(generator++)
+		{
+			fb_assert(id <= MAX_USHORT);
+		}
+
+		CachedRequestId(const CachedRequestId&) = delete;
+		CachedRequestId& operator=(const CachedRequestId&) = delete;
+
+	public:
+		USHORT getId() const
+		{
+			return id;
+		}
+
+	private:
+		unsigned id;
+		static inline std::atomic_uint generator;
+	};
+
 	// ASF: To make this class MT-safe in SS for v3, it should be AutoCacheRequest::release job to
 	// inform CMP that the request is available for subsequent usage.
 	class AutoCacheRequest
@@ -66,6 +90,13 @@ namespace Jrd
 		AutoCacheRequest(thread_db* tdbb, USHORT aId, USHORT aWhich)
 			: id(aId),
 			  which(aWhich),
+			  request(tdbb->getAttachment()->findSystemRequest(tdbb, id, which))
+		{
+		}
+
+		AutoCacheRequest(thread_db* tdbb, const CachedRequestId& cachedRequestId)
+			: id(cachedRequestId.getId()),
+			  which(CACHED_REQUESTS),
 			  request(tdbb->getAttachment()->findSystemRequest(tdbb, id, which))
 		{
 		}
@@ -89,6 +120,15 @@ namespace Jrd
 
 			id = aId;
 			which = aWhich;
+			request = tdbb->getAttachment()->findSystemRequest(tdbb, id, which);
+		}
+
+		void reset(thread_db* tdbb, const CachedRequestId& cachedRequestId)
+		{
+			release();
+
+			id = cachedRequestId.getId();
+			which = CACHED_REQUESTS;
 			request = tdbb->getAttachment()->findSystemRequest(tdbb, id, which);
 		}
 

@@ -986,6 +986,7 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 							case segmentScanStarting:
 							case segmentScanEqual:
 							case segmentScanEquivalent:
+							case segmentScanList:
 								scratch.lowerCount++;
 								scratch.upperCount++;
 								factor = REDUCE_SELECTIVITY_FACTOR_STARTING;

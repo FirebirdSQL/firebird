@@ -6304,9 +6304,7 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 
 		// We have just loaded the triggers onto the local vector triggers.
 		// It's now time to place them at their rightful place inside the relation block.
-
-		if (!(relation->rel_flags & REL_sys_trigs_being_loaded))
-			relation->replaceTriggers(tdbb, triggers);
+		relation->replaceTriggers(tdbb, triggers);
 
 		// in case somebody changed the view definition or a computed
 		// field, reset the dependencies by deleting the current ones

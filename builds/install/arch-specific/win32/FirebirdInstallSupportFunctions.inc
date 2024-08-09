@@ -356,6 +356,20 @@ begin
 end;
 
 
+function FindInFile( Filename, StringToFind: String): Boolean;
+var
+  i: Integer;
+  AString: AnsiString;
+begin
+  Result := False;
+  LoadStringFromFile( Filename, Astring );
+  i := Length( Astring );
+  if i <> 0 then
+    i := Pos ( StringToFind, Astring );
+  if i <> 0 then Result := True;
+end;
+
+
 procedure DecodeVersion( VerStr: String; var VerInt: array of Integer );
 var
   i,p: Integer; s: string;

@@ -28,7 +28,7 @@ Contenu
 o Avant l'installation
 o Déployement de gds32.dll
 o Installation du Guardian
-o Réinstallation de Firebird
+o Réinstallation de Firebird $MAJOR
 o Problèmes connus d'installation
 o Desinstallation
 o Installation depuis un fichier batch
@@ -44,7 +44,7 @@ Il est particulièrement important de vérifier que
 fbclient.dll et gds32.dll ont été retirés de <system32>.
 
 Si vous avez installé une version beta ou alpha de Firebird $MAJOR.$MINOR,
-l'installeur va renommer firebird.conf et security6.fdb, car ces
+l'installeur va renommer firebird.conf et security$MAJOR.fdb, car ces
 fichiers ne sont plus compatibles avec la version actuelle.
 
 
@@ -132,7 +132,7 @@ o La désinstallation laisse six fichiers dans le
   - fbtrace.conf
   - replication.conf
   - firebird.log
-  - security6.fdb
+  - security$MAJOR.fdb
 
   Ceci est intentionnel. Ces fichiers sont tous
   potentiellement modifiables par les utilisateurs et peuvent

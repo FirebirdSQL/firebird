@@ -265,6 +265,7 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider
 	  att_generators(*pool),
 	  att_internal(*pool),
 	  att_dyn_req(*pool),
+	  att_internal_cached_statements(*pool),
 	  att_dec_status(DecimalStatus::DEFAULT),
 	  att_charsets(*pool),
 	  att_charset_ids(*pool),
@@ -681,9 +682,15 @@ Request* Jrd::Attachment::findSystemRequest(thread_db* tdbb, USHORT id, USHORT w
 
 	//Database::CheckoutLockGuard guard(this, dbb_cmp_clone_mutex);
 
-	fb_assert(which == IRQ_REQUESTS || which == DYN_REQUESTS);
+	fb_assert(which == IRQ_REQUESTS || which == DYN_REQUESTS || which == CACHED_REQUESTS);
 
-	Statement* statement = (which == IRQ_REQUESTS ? att_internal[id] : att_dyn_req[id]);
+	if (which == CACHED_REQUESTS && id >= att_internal_cached_statements.getCount())
+		att_internal_cached_statements.grow(id + 1);
+
+	Statement* statement =
+		which == IRQ_REQUESTS ? att_internal[id] :
+		which == DYN_REQUESTS ? att_dyn_req[id] :
+		att_internal_cached_statements[id];
 
 	if (!statement)
 		return NULL;
