@@ -78,7 +78,13 @@ void DsqlCursor::setInterfacePtr(JResultSet* interfacePtr) noexcept
 
 bool DsqlCursor::getCurrentRecordKey(USHORT context, RecordKey& key) const
 {
-	if (context * sizeof(RecordKey) >= m_keyBufferLength)
+	if (m_keyBuffer == nullptr || context * sizeof(RecordKey) >= m_keyBufferLength)
+	{
+		fb_assert(false);
+		return false;
+	}
+
+	if (m_state != POSITIONED)
 	{
 		return false;
 	}

@@ -880,11 +880,16 @@ void DsqlDmlRequest::mapCursorKey(thread_db* tdbb)
 
 	RecordKey dbKey = {};
 
-	if (!parentRequest || !parentRequest->req_cursor || !parentRequest->req_cursor->getCurrentRecordKey(parentContext, dbKey)) // It has been already closed
+	if (!parentRequest || !parentRequest->req_cursor) // It has been already closed
 	{
 		// Here may be code to re-establish link to parent cursor.
 		ERRD_post(Arg::Gds(isc_dsql_cursor_err) <<
 				  Arg::Gds(isc_dsql_cursor_not_found) << dsqlStatement->parentCursorName);
+	}
+
+	if (!parentRequest->req_cursor->getCurrentRecordKey(parentContext, dbKey))
+	{
+		ERRD_post(Arg::Gds(isc_cursor_not_positioned) << dsqlStatement->parentCursorName);
 	}
 
 	fb_assert(request);
