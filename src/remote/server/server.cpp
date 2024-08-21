@@ -2014,13 +2014,15 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 		{
 			ConnectAuth* cnctAuth = FB_NEW ConnectAuth(port, id);
 			port->port_srv_auth = cnctAuth;
-			if (port->port_srv_auth->authenticate(send, ServerAuth::AUTH_COND_ACCEPT))
+
+			if (cnctAuth->authenticate(send, ServerAuth::AUTH_COND_ACCEPT))
 			{
-				delete port->port_srv_auth;
+				delete cnctAuth;
 				port->port_srv_auth = NULL;
 			}
+			else
+				cnctAuth->useResponse = true;
 
-			cnctAuth->useResponse = true;
 			return true;
 		}
 
