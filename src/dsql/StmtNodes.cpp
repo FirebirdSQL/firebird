@@ -6734,6 +6734,9 @@ StmtNode* MergeNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		auto relNode = FB_NEW_POOL(dsqlScratch->getPool()) RelationSourceNode(dsqlScratch->getPool());
 		relNode->dsqlContext = source->dsqlContext;
 
+		// Collect contexts that will be used for blr_derived_expr generation.
+		PASS1_expand_contexts(source->dsqlContext->ctx_main_derived_contexts, source->dsqlContext);
+
 		return FB_NEW_POOL(dsqlScratch->getPool()) DerivedFieldNode(dsqlScratch->getPool(), source->dsqlContext,
 			MAKE_constant("1", CONSTANT_BOOLEAN));
 	};

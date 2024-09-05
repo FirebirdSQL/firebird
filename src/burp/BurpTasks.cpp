@@ -867,6 +867,7 @@ void RestoreRelationTask::initItem(BurpGlobals* tdgbl, Item& item)
 	tdgbl->sw_redirect = m_masterGbl->sw_redirect;
 	tdgbl->gbl_stat_flags = m_masterGbl->gbl_stat_flags;
 	tdgbl->verboseInterval = m_masterGbl->verboseInterval;
+	tdgbl->RESTORE_format = m_masterGbl->RESTORE_format;
 
 	if (item.m_ownAttach)
 	{

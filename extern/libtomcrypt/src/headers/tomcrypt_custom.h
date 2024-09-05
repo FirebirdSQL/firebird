@@ -50,6 +50,7 @@
 #define LTC_YARROW
 #define LTC_RNG_MAKE_PRNG
 #define LTC_RNG_GET_BYTES
+#define LTC_DEVRANDOM
 
 #define LTC_NO_PK
 #define LTC_MRSA

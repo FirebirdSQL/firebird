@@ -861,11 +861,14 @@ void setParamsMakeDbkey(DataTypeUtilBase*, const SysFunction*, int argsCount, ds
 {
 	// MAKE_DBKEY ( REL_NAME | REL_ID, RECNUM [, DPNUM [, PPNUM] ] )
 
-	if (args[0]->isUnknown())
-		args[0]->makeLong(0);
+	if (argsCount > 1)
+	{
+		if (args[0]->isUnknown())
+			args[0]->makeLong(0);
 
-	if (args[1]->isUnknown())
-		args[1]->makeInt64(0);
+		if (args[1]->isUnknown())
+			args[1]->makeInt64(0);
+	}
 
 	if (argsCount > 2 && args[2]->isUnknown())
 		args[2]->makeInt64(0);

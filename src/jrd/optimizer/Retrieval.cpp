@@ -858,6 +858,8 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 			{
 				const auto& segment = scratch.segments[j];
 
+				auto scanType = segment.scanType;
+
 				if (segment.scope == scope)
 					scratch.scopeCandidate = true;
 
@@ -867,7 +869,7 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 				{
 					auto textType = INTL_texttype_lookup(tdbb, INTL_INDEX_TO_TEXT(iType));
 
-					if (segment.scanType != segmentScanMissing && !(idx->idx_flags & idx_unique))
+					if (scanType != segmentScanMissing && !(idx->idx_flags & idx_unique))
 					{
 						if (textType->getFlags() & TEXTTYPE_SEPARATE_UNIQUE)
 						{
@@ -875,10 +877,14 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 							// We can't use the next segments, and we'll need to use
 							// INTL_KEY_PARTIAL to construct the last segment's key.
 							scratch.usePartialKey = true;
+
+							// It's currently impossible to use a list scan with INTL_KEY_PARTIAL
+							if (scanType == segmentScanList)
+								scanType = segmentScanNone;
 						}
 					}
 
-					if (segment.scanType == segmentScanStarting)
+					if (scanType == segmentScanStarting)
 					{
 						if (textType->getFlags() & TEXTTYPE_MULTI_STARTING_KEY)
 							scratch.useMultiStartingKeys = true;	// use INTL_KEY_MULTI_STARTING
@@ -896,7 +902,7 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 				if (useDefaultSelectivity)
 					selectivity = MAX(scratch.selectivity * DEFAULT_SELECTIVITY, minSelectivity);
 
-				if (segment.scanType == segmentScanList)
+				if (scanType == segmentScanList)
 				{
 					if (listCount) // we cannot have more than one list matched to an index
 						break;
@@ -910,10 +916,10 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 
 				// Check if this is the last usable segment
 				if (!scratch.usePartialKey &&
-					(segment.scanType == segmentScanEqual ||
-					 segment.scanType == segmentScanEquivalent ||
-					 segment.scanType == segmentScanMissing ||
-					 segment.scanType == segmentScanList))
+					(scanType == segmentScanEqual ||
+					 scanType == segmentScanEquivalent ||
+					 scanType == segmentScanMissing ||
+					 scanType == segmentScanList))
 				{
 					// This is a perfect usable segment thus update root selectivity
 					scratch.lowerCount++;
@@ -927,10 +933,8 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 					// than one row. The same is true for an equivalence scan for
 					// any primary index.
 					const bool single_match =
-						(segment.scanType == segmentScanEqual &&
-							(idx->idx_flags & idx_unique)) ||
-						(segment.scanType == segmentScanEquivalent &&
-							(idx->idx_flags & idx_primary));
+						(scanType == segmentScanEqual && (idx->idx_flags & idx_unique)) ||
+						(scanType == segmentScanEquivalent && (idx->idx_flags & idx_primary));
 
 					// dimitr: IS NULL scan against primary key is guaranteed
 					//		   to return zero rows. Do we need yet another
@@ -959,13 +963,13 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 				}
 				else
 				{
-					if (segment.scanType != segmentScanNone)
+					if (scanType != segmentScanNone)
 					{
 						// This is our last segment that we can use,
 						// estimate the selectivity
 						double factor = 1;
 
-						switch (segment.scanType)
+						switch (scanType)
 						{
 							case segmentScanBetween:
 								scratch.lowerCount++;
