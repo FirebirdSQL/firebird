@@ -73,7 +73,7 @@ void TraceCfgReader::readTraceConfiguration(const char* text,
 void TraceCfgReader::readConfig()
 {
 	ConfigFile cfgFile(ConfigFile::USE_TEXT, m_text, ConfigFile::HAS_SUB_CONF | ConfigFile::NATIVE_ORDER
-		| ConfigFile::FORCE_SLASHES_INSTEAD_OF_BACKSLASHES);
+		| ConfigFile::REGEXP_SUPPORT);
 
 	m_subpatterns[0].start = 0;
 	m_subpatterns[0].end = m_databaseName.length();

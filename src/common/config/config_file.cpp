@@ -441,18 +441,20 @@ bool ConfigFile::macroParse(String& value, const char* fileName) const
 			return false;
 		}
 
-		if (flags & FORCE_SLASHES_INSTEAD_OF_BACKSLASHES)
+		// Avoid incorrect slashes in pathnames
+		PathUtils::fixupSeparators(macro.begin());
+
+		if (flags & REGEXP_SUPPORT)
 		{
 			size_t pos = 0;
 			while ((pos = macro.find('\\', pos)) != String::npos)
-				macro[pos] = '/';
+			{
+				macro.insert(pos, "\\");
+				pos += 2;
+			}
 		}
 		else
-		{
-			// Avoid incorrect slashes in pathnames
 			PathUtils::fixupSeparators(value.begin());
-			PathUtils::fixupSeparators(macro.begin());
-		}
 
 		if (subFrom > 0 && value[subFrom - 1] == PathUtils::dir_sep &&
 			macro.length() > 0 && macro[0] == PathUtils::dir_sep)
