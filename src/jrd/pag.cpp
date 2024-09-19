@@ -2434,6 +2434,16 @@ void PageManager::allocTableSpace(thread_db* tdbb, ULONG tableSpaceID, bool crea
 			if (create)
 			{
 				newPageSpace->file = PIO_create(tdbb, fileName, false, false);
+				// When opening an existing TS, a pointer to this PageSpace can be added to pageSpaces at the end of the method.
+				// When creating a new TS, there is a need to add a new PageSpace to pageSpaces earlier.
+				// Because of the need to update the SCN (if the database SCN is greater than zero) during the creation of new TS pages.
+				// This early addition of a pointer to PageSpace will not create a race anywhere
+				// (due to the fact that there is a pointer to an incompletely constructed object for some time),
+				// because the TS metadata is not yet in the system table and no one can access this TS.
+				{
+					WriteLockGuard writeGuard(pageSpacesLock, FB_FUNCTION);
+					pageSpaces.add(newPageSpace);
+				}
 				PAG_format_pip(tdbb, *newPageSpace);
 			}
 			else
@@ -2445,12 +2455,20 @@ void PageManager::allocTableSpace(thread_db* tdbb, ULONG tableSpaceID, bool crea
 		}
 		catch (...)
 		{
+			if (create)
+			{
+				WriteLockGuard writeGuard(pageSpacesLock, FB_FUNCTION);
+				pageSpaces.findAndRemove(tableSpaceID);
+			}
 			delete newPageSpace;
 			throw;
 		}
 
-		WriteLockGuard writeGuard(pageSpacesLock, FB_FUNCTION);
-		pageSpaces.add(newPageSpace);
+		if (!create)
+		{
+			WriteLockGuard writeGuard(pageSpacesLock, FB_FUNCTION);
+			pageSpaces.add(newPageSpace);
+		}
 	}
 }
 
