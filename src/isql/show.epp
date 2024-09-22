@@ -3030,6 +3030,10 @@ static processing_state show_check(const SCHAR* object)
 
 		if (!TRG.RDB$TRIGGER_SOURCE.NULL)
 			SHOW_print_metadata_text_blob (isqlGlob.Out, &TRG.RDB$TRIGGER_SOURCE);
+
+		if (TRG.RDB$TRIGGER_INACTIVE == 1)
+			isqlGlob.printf(" Not enforced");
+
 		isqlGlob.printf(NEWLINE);
 
 	END_FOR
@@ -6193,6 +6197,7 @@ static processing_state show_table(const SCHAR* relation_name, bool isView)
 		ISQL_get_index_segments (collist, sizeof(collist), RELC1.RDB$INDEX_NAME, false);
 		bool isPK = false;
 		bool isUK = false;
+		bool isFK = false;
 
 		if (!strncmp (RELC1.RDB$CONSTRAINT_TYPE, "PRIMARY", 7))
 		{
@@ -6208,6 +6213,7 @@ static processing_state show_table(const SCHAR* relation_name, bool isView)
 		}
 		else if (!strncmp (RELC1.RDB$CONSTRAINT_TYPE, "FOREIGN", 7))
 		{
+			isFK = true;
 			isqlGlob.printf("CONSTRAINT %s:%s", RELC1.RDB$CONSTRAINT_NAME, NEWLINE);
 			isqlGlob.printf("  Foreign key (%s)", collist);
 
@@ -6232,9 +6238,6 @@ static processing_state show_table(const SCHAR* relation_name, bool isView)
 					IUTILS_truncate_term (REFC.RDB$DELETE_RULE, static_cast<USHORT>(strlen(REFC.RDB$DELETE_RULE)));
 					ISQL_ri_action_print (REFC.RDB$DELETE_RULE, " On Delete", false);
 				}
-
-				isqlGlob.printf(NEWLINE);
-
 			END_FOR
 			ON_ERROR
 				ISQL_errmsg (fbStatus);
@@ -6242,7 +6245,7 @@ static processing_state show_table(const SCHAR* relation_name, bool isView)
 			END_ERROR;
 		}
 
-		if (isPK || isUK) // Special handling for PRIMARY KEY and UNIQUE constraints.
+		if (isPK || isUK || isFK) // Special handling for RI constraints.
 		{
 			FOR IDX IN RDB$INDICES
 			WITH IDX.RDB$INDEX_NAME = RELC1.RDB$INDEX_NAME
@@ -6260,6 +6263,9 @@ static processing_state show_table(const SCHAR* relation_name, bool isView)
 				if (explicit_index)
 					isqlGlob.printf(" %s", RELC1.RDB$INDEX_NAME);
 
+				if (IDX.RDB$INDEX_INACTIVE == 1)
+					isqlGlob.printf(" Not enforced");
+
 				isqlGlob.prints(NEWLINE);
 			END_FOR
 			ON_ERROR
@@ -6275,17 +6281,26 @@ static processing_state show_table(const SCHAR* relation_name, bool isView)
 	END_ERROR
 
 	FOR R_C IN RDB$RELATION_CONSTRAINTS CROSS
-		C_C IN RDB$CHECK_CONSTRAINTS
+		C_C IN RDB$CHECK_CONSTRAINTS CROSS
+		R_F IN RDB$RELATION_FIELDS
 		WITH R_C.RDB$RELATION_NAME   EQ relation_name
 		AND R_C.RDB$CONSTRAINT_TYPE EQ 'NOT NULL'
 		AND R_C.RDB$CONSTRAINT_NAME EQ C_C.RDB$CONSTRAINT_NAME
+		AND R_F.RDB$FIELD_NAME EQ C_C.RDB$TRIGGER_NAME
+		AND R_F.RDB$RELATION_NAME EQ R_C.RDB$RELATION_NAME
 
 		if (!fb_utils::implicit_integrity(R_C.RDB$CONSTRAINT_NAME))
 		{
 			fb_utils::exact_name(C_C.RDB$TRIGGER_NAME);
 			fb_utils::exact_name(R_C.RDB$CONSTRAINT_NAME);
 			isqlGlob.printf("CONSTRAINT %s:%s", R_C.RDB$CONSTRAINT_NAME, NEWLINE);
-			isqlGlob.printf("  Not Null Column (%s)%s", C_C.RDB$TRIGGER_NAME, NEWLINE);
+			isqlGlob.printf("  Not Null Column (%s)", C_C.RDB$TRIGGER_NAME);
+			if (R_F.RDB$NULL_FLAG.NULL == TRUE || R_F.RDB$NULL_FLAG == FALSE)
+			{
+				// Despite of constraint existence this field allows NULLs
+				isqlGlob.printf(" Not enforced");
+			}
+			isqlGlob.printf("%s", NEWLINE);
 		}
 	END_FOR
 	ON_ERROR
