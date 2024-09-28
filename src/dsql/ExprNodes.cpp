@@ -3559,7 +3559,7 @@ ValueExprNode* CastNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	node->dsqlField = dsqlField;
 	node->format = format;
 
-	DDL_resolve_intl_type(dsqlScratch, node->dsqlField, NULL);
+	DDL_resolve_intl_type(dsqlScratch, node->dsqlField, node->dsqlField->collate);
 	node->setParameterType(dsqlScratch, NULL, false);
 
 	DsqlDescMaker::fromField(&node->castDesc, node->dsqlField);
