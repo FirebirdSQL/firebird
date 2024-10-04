@@ -1110,7 +1110,7 @@ static void readNextInputLine(const char* prompt)
 #endif
 		{
 			if (fgets(buffer, sizeof(buffer), Filelist->Ifp().indev_fpointer) != NULL)
-				lineSize = static_cast<int>(strlen(buffer));
+				lineSize = strlen(buffer);
 			else
 				lineSize = -1;
 		}
@@ -6677,7 +6677,7 @@ static bool printUser(const char* dbName)
 	if (wasOut)
 		isqlGlob.printf("Database: %s", dbName);
 
-	for (int i = 0; i < FB_NELEM(fieldInfo); ++i)
+	for (unsigned i = 0; i < FB_NELEM(fieldInfo); ++i)
 	{
 		IsqlVar v;
 		if (ISQL_fill_var(&v, m, i, buf) == ps_ERR)
@@ -9597,24 +9597,33 @@ static const char* charset_to_string(unsigned charset)
  **************************************/
 	static Firebird::GlobalPtr<Firebird::GenericMap<Firebird::Pair<Firebird::Right<unsigned, string> > > > csMap;
 
+	charset = TTYPE_TO_CHARSET(charset);
+
 	string* text = csMap->get(charset);
 	if (text)
 		return text->c_str();
 
+	csMap->clear();
+	bool err = false;
+
 	if (!frontendTransaction())
 		return UNKNOWN;
 
-	// There is no way to change charset or collation name so let's assume that this mapping is stable during isql instantiation
 	FOR CS IN RDB$CHARACTER_SETS
-		CROSS COLL IN RDB$COLLATIONS OVER RDB$CHARACTER_SET_ID
-		WITH CS.RDB$CHARACTER_SET_ID EQ TTYPE_TO_CHARSET(charset)
-			AND COLL.RDB$COLLATION_ID EQ TTYPE_TO_COLLATION(charset)
-	{
-		fb_utils::exact_name(CS.RDB$CHARACTER_SET_NAME);
-		fb_utils::exact_name(COLL.RDB$COLLATION_NAME);
-
-		csMap->put(charset, string(CS.RDB$CHARACTER_SET_NAME) + ',' + COLL.RDB$COLLATION_NAME);
-	}
+		if (!err)
+		{
+			try
+			{
+				fb_utils::exact_name(CS.RDB$CHARACTER_SET_NAME);
+				csMap->put(CS.RDB$CHARACTER_SET_ID, CS.RDB$CHARACTER_SET_NAME);
+			}
+			catch (const Firebird::Exception& ex)
+			{
+				err = true;
+				ex.stuffException(fbStatus);
+				ISQL_errmsg(fbStatus);
+			}
+		}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
@@ -9781,7 +9790,7 @@ void PerTableStats::printStats(Firebird::IAttachment* att)
 			}
 		}
 
-		for (int i = 0; i < FB_NELEM(m_items) - 1; i++)
+		for (unsigned i = 0; i < FB_NELEM(m_items) - 1; i++)
 		{
 			if (m_items[i] == item.statId)
 			{
