@@ -70,7 +70,7 @@ bool		CCH_prefetch_pages(Jrd::thread_db*);
 void		CCH_release(Jrd::thread_db*, Jrd::win*, const bool);
 void		CCH_release_exclusive(Jrd::thread_db*);
 bool		CCH_rollover_to_shadow(Jrd::thread_db* tdbb, Jrd::Database* dbb, Jrd::jrd_file*, const bool);
-void		CCH_shutdown(Jrd::thread_db*);
+void		CCH_shutdown(Jrd::thread_db*, bool bugcheck = false);
 void		CCH_unwind(Jrd::thread_db*, const bool);
 bool		CCH_validate(Jrd::win*);
 void		CCH_flush_ast(Jrd::thread_db*);
