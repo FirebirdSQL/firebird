@@ -94,6 +94,8 @@ static void list_package_headers();
 static void list_procedure_bodies(SSHORT default_char_set_id);
 static void list_procedure_headers(SSHORT default_char_set_id);
 static void list_views();
+static void list_external_procedures(SSHORT default_char_set_id);
+static void list_external_functions(SSHORT default_char_set_id);
 
 static const char* const Procterm = "^";	// TXNN: script use only
 
@@ -179,6 +181,8 @@ int EXTRACT_ddl(LegacyTables flag, const SCHAR* tabname)
 		list_domains(default_char_set_id);
 		list_all_tables(flag, default_char_set_id);
 		list_functions_legacy();
+		list_external_functions(default_char_set_id);
+		list_external_procedures(default_char_set_id);
 		list_functions_ods12_headers(default_char_set_id);
 		list_procedure_headers(default_char_set_id);
 		list_package_headers();
@@ -1509,6 +1513,8 @@ static void list_procedure_headers(SSHORT default_char_set_id)
 	FOR PRC IN RDB$PROCEDURES
 		WITH (PRC.RDB$SYSTEM_FLAG NE 1 OR PRC.RDB$SYSTEM_FLAG MISSING)
 		AND PRC.RDB$PACKAGE_NAME MISSING
+		AND PRC.RDB$ENGINE_NAME MISSING
+		AND PRC.RDB$ENTRYPOINT MISSING
 		SORTED BY PRC.RDB$PROCEDURE_NAME
 		if (header)
 		{
@@ -1573,6 +1579,8 @@ static void list_procedure_bodies(SSHORT default_char_set_id)
 	FOR PRC IN RDB$PROCEDURES
 		WITH (PRC.RDB$SYSTEM_FLAG NE 1 OR PRC.RDB$SYSTEM_FLAG MISSING)
 		AND PRC.RDB$PACKAGE_NAME MISSING
+		AND PRC.RDB$ENGINE_NAME MISSING
+		AND PRC.RDB$ENTRYPOINT MISSING
 		SORTED BY PRC.RDB$PROCEDURE_NAME
 		if (header)
 		{
@@ -1593,32 +1601,13 @@ static void list_procedure_bodies(SSHORT default_char_set_id)
 
 		// Print the procedure body
 
-		if (!PRC.RDB$ENTRYPOINT.NULL)
-		{
-			fb_utils::exact_name(PRC.RDB$ENTRYPOINT);
-			IUTILS_copy_SQL_id(PRC.RDB$ENTRYPOINT, SQL_identifier2, SINGLE_QUOTE);
-			isqlGlob.printf("EXTERNAL NAME %s%s", SQL_identifier2, NEWLINE);
-		}
-
 		if (!PRC.RDB$SQL_SECURITY.NULL)
 		{
 			const char* ss = PRC.RDB$SQL_SECURITY ? "SQL SECURITY DEFINER" : "SQL SECURITY INVOKER";
 			isqlGlob.printf("%s%s", ss, NEWLINE);
 		}
 
-		if (!PRC.RDB$ENGINE_NAME.NULL)
-		{
-			fb_utils::exact_name(PRC.RDB$ENGINE_NAME);
-			isqlGlob.printf("ENGINE %s", PRC.RDB$ENGINE_NAME);
-
-			if (!PRC.RDB$PROCEDURE_SOURCE.NULL)
-			{
-				isqlGlob.printf("%sAS '", NEWLINE);
-				SHOW_print_metadata_text_blob(isqlGlob.Out, &PRC.RDB$PROCEDURE_SOURCE, true);
-				isqlGlob.printf("'%s", NEWLINE);
-			}
-		}
-		else if (!PRC.RDB$PROCEDURE_SOURCE.NULL)
+		if (!PRC.RDB$PROCEDURE_SOURCE.NULL)
 		{
 			isqlGlob.printf("AS %s", NEWLINE);
 			SHOW_print_metadata_text_blob(isqlGlob.Out, &PRC.RDB$PROCEDURE_SOURCE);
@@ -3109,6 +3098,8 @@ static void list_functions_ods12_headers(SSHORT default_char_set_id)
 		WITH (FUN.RDB$SYSTEM_FLAG NE 1 OR FUN.RDB$SYSTEM_FLAG MISSING)
 		AND FUN.RDB$PACKAGE_NAME MISSING
 		AND FUN.RDB$MODULE_NAME MISSING
+		AND FUN.RDB$ENGINE_NAME MISSING
+		AND FUN.RDB$ENTRYPOINT MISSING
 		SORTED BY FUN.RDB$FUNCTION_NAME
 
 		if (header)
@@ -3161,6 +3152,8 @@ static void list_functions_ods12_bodies(SSHORT default_char_set_id)
 		WITH (FUN.RDB$SYSTEM_FLAG NE 1 OR FUN.RDB$SYSTEM_FLAG MISSING)
 		AND FUN.RDB$PACKAGE_NAME MISSING
 		AND FUN.RDB$MODULE_NAME MISSING
+		AND FUN.RDB$ENGINE_NAME MISSING
+		AND FUN.RDB$ENTRYPOINT MISSING
 		SORTED BY FUN.RDB$FUNCTION_NAME
 		if (header)
 		{
@@ -3184,32 +3177,13 @@ static void list_functions_ods12_bodies(SSHORT default_char_set_id)
 
 		// Print the function body
 
-		if (!FUN.RDB$ENTRYPOINT.NULL)
-		{
-			fb_utils::exact_name(FUN.RDB$ENTRYPOINT);
-			IUTILS_copy_SQL_id(FUN.RDB$ENTRYPOINT, SQL_identifier2, SINGLE_QUOTE);
-			isqlGlob.printf("EXTERNAL NAME %s%s", SQL_identifier2, NEWLINE);
-		}
-
 		if (!FUN.RDB$SQL_SECURITY.NULL)
 		{
 			const char* ss = FUN.RDB$SQL_SECURITY ? "SQL SECURITY DEFINER" : "SQL SECURITY INVOKER";
 			isqlGlob.printf("%s%s", ss, NEWLINE);
 		}
 
-		if (!FUN.RDB$ENGINE_NAME.NULL)
-		{
-			fb_utils::exact_name(FUN.RDB$ENGINE_NAME);
-			isqlGlob.printf("ENGINE %s", FUN.RDB$ENGINE_NAME);
-
-			if (!FUN.RDB$FUNCTION_SOURCE.NULL)
-			{
-				isqlGlob.printf("%sAS '", NEWLINE);
-				SHOW_print_metadata_text_blob(isqlGlob.Out, &FUN.RDB$FUNCTION_SOURCE, true);
-				isqlGlob.printf("'%s", NEWLINE);
-			}
-		}
-		else if (!FUN.RDB$FUNCTION_SOURCE.NULL)
+		if (!FUN.RDB$FUNCTION_SOURCE.NULL)
 		{
 			isqlGlob.printf("AS %s", NEWLINE);
 			SHOW_print_metadata_text_blob(isqlGlob.Out, &FUN.RDB$FUNCTION_SOURCE);
@@ -3593,4 +3567,173 @@ static void list_views()
 		ISQL_errmsg(fbStatus);
 		return;
 	END_ERROR;
+}
+
+static void list_external_procedures(SSHORT default_char_set_id)
+{
+/**************************************
+ *
+ *	l i s t _ e x t e r n a l _ p r o c e d u r e s
+ *
+ **************************************
+ *
+ * Functional description
+ * Create all external procedures declarations.
+ *
+ **************************************/
+
+	fb_assert(isqlGlob.major_ods >= ODS_VERSION12);
+
+	bool header = true;
+	static const char* const create_procedure	= "CREATE OR ALTER PROCEDURE %s ";
+
+	//  Create the external procedures with their parameters
+	TEXT msg[MSG_LENGTH];
+
+	FOR PRC IN RDB$PROCEDURES
+		WITH (PRC.RDB$SYSTEM_FLAG NE 1 OR PRC.RDB$SYSTEM_FLAG MISSING)
+		AND PRC.RDB$PACKAGE_NAME MISSING
+		AND PRC.RDB$ENGINE_NAME NOT MISSING
+		AND PRC.RDB$ENTRYPOINT NOT MISSING
+		SORTED BY PRC.RDB$PROCEDURE_NAME
+		if (header)
+		{
+			isqlGlob.printf("%sCOMMIT WORK%s%s", NEWLINE, isqlGlob.global_Term, NEWLINE);
+			isqlGlob.printf("SET AUTODDL OFF%s%s", isqlGlob.global_Term, NEWLINE);
+			isqlGlob.printf("SET TERM %s %s%s", Procterm, isqlGlob.global_Term, NEWLINE);
+			isqlGlob.printf("%s/* %s */%s", NEWLINE, "External procedures", NEWLINE);
+			header = false;
+		}
+		fb_utils::exact_name(PRC.RDB$PROCEDURE_NAME);
+		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
+		{
+			IUTILS_copy_SQL_id (PRC.RDB$PROCEDURE_NAME, SQL_identifier, DBL_QUOTE);
+			isqlGlob.printf(create_procedure, SQL_identifier);
+		}
+		else
+		{
+			isqlGlob.printf(create_procedure, PRC.RDB$PROCEDURE_NAME);
+		}
+
+		get_procedure_args(PRC.RDB$PROCEDURE_NAME, default_char_set_id);
+
+		fb_utils::exact_name(PRC.RDB$ENTRYPOINT);
+		IUTILS_copy_SQL_id(PRC.RDB$ENTRYPOINT, SQL_identifier2, SINGLE_QUOTE);
+		isqlGlob.printf("EXTERNAL NAME %s%s", SQL_identifier2, NEWLINE);
+
+		if (!PRC.RDB$SQL_SECURITY.NULL)
+		{
+			const char* ss = PRC.RDB$SQL_SECURITY ? "SQL SECURITY DEFINER" : "SQL SECURITY INVOKER";
+			isqlGlob.printf("%s%s", ss, NEWLINE);
+		}
+
+		fb_utils::exact_name(PRC.RDB$ENGINE_NAME);
+		isqlGlob.printf("ENGINE %s", PRC.RDB$ENGINE_NAME);
+
+		if (!PRC.RDB$PROCEDURE_SOURCE.NULL)
+		{
+			isqlGlob.printf("%sAS '", NEWLINE);
+			SHOW_print_metadata_text_blob(isqlGlob.Out, &PRC.RDB$PROCEDURE_SOURCE, true);
+			isqlGlob.printf("'%s", NEWLINE);
+		}
+
+		isqlGlob.printf(" %s%s", Procterm, NEWLINE);
+
+	END_FOR
+	ON_ERROR
+		IUTILS_msg_get(GEN_ERR, msg, SafeArg() << isc_sqlcode(fbStatus->getErrors()));
+		STDERROUT(msg);			// Statement failed, SQLCODE = %d\n\n
+		ISQL_errmsg(fbStatus);
+		return;
+	END_ERROR;
+
+	// Only reset the terminators if there were procedures to print
+	if (!header)
+		print_proc_suffix(obj_procedure);
+}
+
+static void list_external_functions(SSHORT default_char_set_id)
+{
+/**************************************
+ *
+ *	l i s t _ e x t e r n a l _ f u n c t i o n s
+ *
+ **************************************
+ *
+ * Functional description
+ * Create all external functions declarations.
+ *
+ **************************************/
+
+	fb_assert(isqlGlob.major_ods >= ODS_VERSION12);
+
+	bool header = true;
+	static const char* const create_function	= "CREATE OR ALTER FUNCTION %s ";
+
+	//  Create the external functions with their parameters
+	TEXT msg[MSG_LENGTH];
+
+	FOR FUN IN RDB$FUNCTIONS
+		WITH (FUN.RDB$SYSTEM_FLAG NE 1 OR FUN.RDB$SYSTEM_FLAG MISSING)
+		AND FUN.RDB$PACKAGE_NAME MISSING
+		AND FUN.RDB$MODULE_NAME MISSING
+		AND FUN.RDB$ENGINE_NAME NOT MISSING
+		AND FUN.RDB$ENTRYPOINT NOT MISSING
+		SORTED BY FUN.RDB$FUNCTION_NAME
+
+		if (header)
+		{
+			isqlGlob.printf("%sCOMMIT WORK%s%s", NEWLINE, isqlGlob.global_Term, NEWLINE);
+			isqlGlob.printf("SET AUTODDL OFF%s%s", isqlGlob.global_Term, NEWLINE);
+			isqlGlob.printf("SET TERM %s %s%s", Procterm, isqlGlob.global_Term, NEWLINE);
+			isqlGlob.printf("%s/* %s */%s", NEWLINE, "External functions", NEWLINE);
+			header = false;
+		}
+
+		fb_utils::exact_name(FUN.RDB$FUNCTION_NAME);
+		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
+		{
+			IUTILS_copy_SQL_id(FUN.RDB$FUNCTION_NAME, SQL_identifier, DBL_QUOTE);
+			isqlGlob.printf(create_function, SQL_identifier);
+		}
+		else
+		{
+			isqlGlob.printf(create_function, FUN.RDB$FUNCTION_NAME);
+		}
+
+		get_function_args_ods12(FUN.RDB$FUNCTION_NAME, FUN.RDB$RETURN_ARGUMENT, default_char_set_id);
+
+		fb_utils::exact_name(FUN.RDB$ENTRYPOINT);
+		IUTILS_copy_SQL_id(FUN.RDB$ENTRYPOINT, SQL_identifier2, SINGLE_QUOTE);
+		isqlGlob.printf("EXTERNAL NAME %s%s", SQL_identifier2, NEWLINE);
+
+		if (!FUN.RDB$SQL_SECURITY.NULL)
+		{
+			const char* ss = FUN.RDB$SQL_SECURITY ? "SQL SECURITY DEFINER" : "SQL SECURITY INVOKER";
+			isqlGlob.printf("%s%s", ss, NEWLINE);
+		}
+
+		fb_utils::exact_name(FUN.RDB$ENGINE_NAME);
+		isqlGlob.printf("ENGINE %s", FUN.RDB$ENGINE_NAME);
+
+		if (!FUN.RDB$FUNCTION_SOURCE.NULL)
+		{
+			isqlGlob.printf("%sAS '", NEWLINE);
+			SHOW_print_metadata_text_blob(isqlGlob.Out, &FUN.RDB$FUNCTION_SOURCE, true);
+			isqlGlob.printf("'%s", NEWLINE);
+		}
+
+		isqlGlob.printf(" %s%s", Procterm, NEWLINE);
+
+	END_FOR
+	ON_ERROR
+		IUTILS_msg_get(GEN_ERR, msg, SafeArg() << isc_sqlcode(fbStatus->getErrors()));
+		STDERROUT(msg);			// Statement failed, SQLCODE = %d\n\n
+		ISQL_errmsg(fbStatus);
+		return;
+	END_ERROR;
+
+	// Only reset the terminators if there were functions to print
+	if (!header)
+		print_proc_suffix(obj_udf);
 }
