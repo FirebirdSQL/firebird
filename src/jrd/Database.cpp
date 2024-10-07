@@ -130,7 +130,11 @@ namespace Jrd
 			const PageSpace* const pageSpace = dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 
 			UCharBuffer buffer;
-			os_utils::getUniqueFileId(pageSpace->file->fil_desc, buffer);
+			{
+				jrd_file* file = pageSpace->file;
+				ReadLockGuard readGuard(file->fil_desc_lock, FB_FUNCTION);
+				os_utils::getUniqueFileId(file->fil_desc, buffer);
+			}
 
 			auto ptr = dbb_file_id.getBuffer(2 * buffer.getCount());
 			for (const auto val : buffer)
