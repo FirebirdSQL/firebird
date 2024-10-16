@@ -4827,7 +4827,7 @@ void JAttachment::transactRequest(CheckStatusWrapper* user_status, ITransaction*
 
 			if (in_msg_length)
 			{
-				const ULONG len = inMessage ? inMessage->format->fmt_length : 0;
+				const ULONG len = inMessage ? inMessage->getFormat(request)->fmt_length : 0;
 
 				if (in_msg_length != len)
 				{
@@ -4835,12 +4835,12 @@ void JAttachment::transactRequest(CheckStatusWrapper* user_status, ITransaction*
 													   Arg::Num(len));
 				}
 
-				memcpy(request->getImpure<UCHAR>(inMessage->impureOffset), in_msg, in_msg_length);
+				memcpy(inMessage->getBuffer(request), in_msg, in_msg_length);
 			}
 
 			EXE_start(tdbb, request, transaction);
 
-			const ULONG len = outMessage ? outMessage->format->fmt_length : 0;
+			const ULONG len = outMessage ? outMessage->getFormat(request)->fmt_length : 0;
 
 			if (out_msg_length != len)
 			{
@@ -4850,8 +4850,7 @@ void JAttachment::transactRequest(CheckStatusWrapper* user_status, ITransaction*
 
 			if (out_msg_length)
 			{
-				memcpy(out_msg, request->getImpure<UCHAR>(outMessage->impureOffset),
-					out_msg_length);
+				memcpy(out_msg, outMessage->getBuffer(request), out_msg_length);
 			}
 
 			check_autocommit(tdbb, request);

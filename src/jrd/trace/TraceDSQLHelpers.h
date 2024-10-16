@@ -85,7 +85,7 @@ public:
 
 		if ((result == ITracePlugin::RESULT_SUCCESS) && m_request)
 		{
-			TraceSQLStatementImpl stmt(m_request, NULL);
+			TraceSQLStatementImpl stmt(m_request, nullptr, nullptr);
 			TraceManager::event_dsql_prepare(m_attachment, m_transaction, &stmt, millis, result);
 		}
 		else
@@ -111,16 +111,17 @@ private:
 class TraceDSQLExecute
 {
 public:
-	TraceDSQLExecute(Attachment* attachment, DsqlRequest* dsqlRequest) :
+	TraceDSQLExecute(Attachment* attachment, DsqlRequest* dsqlRequest, const UCHAR* data) :
 		m_attachment(attachment),
-		m_dsqlRequest(dsqlRequest)
+		m_dsqlRequest(dsqlRequest),
+		m_data(data)
 	{
 		m_need_trace = m_dsqlRequest->req_traced && TraceManager::need_dsql_execute(m_attachment);
 		if (!m_need_trace)
 			return;
 
 		{	// scope
-			TraceSQLStatementImpl stmt(dsqlRequest, NULL);
+			TraceSQLStatementImpl stmt(dsqlRequest, nullptr, m_data);
 			TraceManager::event_dsql_execute(m_attachment, dsqlRequest->req_transaction, &stmt, true,
 				ITracePlugin::RESULT_SUCCESS);
 		}
@@ -156,7 +157,7 @@ public:
 			fb_utils::query_performance_counter() - m_start_clock,
 			m_dsqlRequest->req_fetch_rowcount);
 
-		TraceSQLStatementImpl stmt(m_dsqlRequest, stats.getPerf());
+		TraceSQLStatementImpl stmt(m_dsqlRequest, stats.getPerf(), m_data);
 		TraceManager::event_dsql_execute(m_attachment, m_dsqlRequest->req_transaction, &stmt, false, result);
 
 		m_dsqlRequest->req_fetch_baseline = NULL;
@@ -172,6 +173,7 @@ private:
 	Attachment* const m_attachment;
 	DsqlRequest* const m_dsqlRequest;
 	SINT64 m_start_clock;
+	const UCHAR* m_data;
 };
 
 class TraceDSQLFetch
@@ -215,7 +217,7 @@ public:
 			&m_dsqlRequest->getRequest()->req_stats, m_dsqlRequest->req_fetch_elapsed,
 			m_dsqlRequest->req_fetch_rowcount);
 
-		TraceSQLStatementImpl stmt(m_dsqlRequest, stats.getPerf());
+		TraceSQLStatementImpl stmt(m_dsqlRequest, stats.getPerf(), nullptr);
 
 		TraceManager::event_dsql_execute(m_attachment, m_dsqlRequest->req_transaction,
 			&stmt, false, result);
