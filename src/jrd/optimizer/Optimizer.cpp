@@ -1149,6 +1149,38 @@ void Optimizer::compileRelation(StreamType stream)
 			}
 		}
 
+		{ // scope
+			ThreadStatusGuard tempStatus(tdbb);
+
+			// Check if some indices are being deleted and don't use them in this case
+			for (auto idx = idxList.begin(); idx < idxList.end();)
+			{
+				IndexLock* idx_lock = CMP_get_index_lock(tdbb, relation, idx->idx_id);
+
+				if (idx_lock)
+				{
+					if (idx_lock->idl_count == 1 && idx_lock->idl_lock->lck_logical == LCK_EX)
+					{
+						idxList.remove(idx);
+						continue;
+					}
+					else
+					{
+						if (idx_lock->idl_count == 0 && !LCK_lock(tdbb, idx_lock->idl_lock, LCK_SR, LCK_NO_WAIT))
+						{
+							idxList.remove(idx);
+							continue;
+						}
+
+						fb_assert(idx_lock->idl_lock->lck_logical == LCK_SR);
+						idx_lock->idl_count++;
+					}
+				}
+
+				idx++;
+			}
+		}
+
 		if (idxList.hasData())
 			tail->csb_idx = FB_NEW_POOL(getPool()) IndexDescList(getPool(), idxList);
 
@@ -1656,6 +1688,27 @@ void Optimizer::checkIndices()
 	for (const auto compileStream : compileStreams)
 	{
 		const auto tail = &csb->csb_rpt[compileStream];
+		const auto relation = tail->csb_relation;
+
+		if (tail->csb_idx && relation)
+		{
+			// Release locks of unused indices
+			for (const auto& idx : *tail->csb_idx)
+			{
+				if (!(idx.idx_runtime_flags & idx_used))
+				{
+					IndexLock* index = CMP_get_index_lock(tdbb, relation, idx.idx_id);
+
+					if (index && index->idl_count)
+					{
+						--index->idl_count;
+
+						if (!index->idl_count)
+							LCK_release(tdbb, index->idl_lock);
+					}
+				}
+			}
+		}
 
 		const auto plan = tail->csb_plan;
 		if (!plan)
@@ -1664,7 +1717,6 @@ void Optimizer::checkIndices()
 		if (plan->type != PlanNode::TYPE_RETRIEVE)
 			continue;
 
-		const auto relation = tail->csb_relation;
 		if (!relation)
 			return;
 
