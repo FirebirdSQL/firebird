@@ -2207,7 +2207,7 @@ bool CCH_rollover_to_shadow(thread_db* tdbb, Database* dbb, jrd_file* file, cons
 }
 
 
-void CCH_shutdown(thread_db* tdbb)
+void CCH_shutdown(thread_db* tdbb, bool bugcheck)
 {
 /**************************************
  *
@@ -2254,7 +2254,7 @@ void CCH_shutdown(thread_db* tdbb)
 
 	// Flush and release page buffers
 
-	if (bcb->bcb_count)
+	if (bcb->bcb_count && !bugcheck)
 	{
 		try
 		{
