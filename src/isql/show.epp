@@ -2150,7 +2150,7 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 		{ShowOptions::schema, "SCHEMAS", 4},
 		{ShowOptions::map, "MAPPING", 3},
 		{ShowOptions::publication, "PUBLICATIONS", 3},
-		{ShowOptions::tablespace, "TABLESPACES", 0}
+		{ShowOptions::tablespace, "TABLESPACES", 10}
 	};
 
 	const ShowOptions showoptions(options, FB_NELEM(options), ShowOptions::wrong);
