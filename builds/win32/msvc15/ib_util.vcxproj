@@ -193,9 +193,6 @@
     <ClCompile Include="..\..\..\src\extlib\ib_util.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\..\src\extlib\ib_util.h" />
-  </ItemGroup>
-  <ItemGroup>
     <ResourceCompile Include="..\..\..\src\jrd\version.rc">
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">..\..\..\src\jrd</AdditionalIncludeDirectories>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">..\..\..\src\jrd</AdditionalIncludeDirectories>

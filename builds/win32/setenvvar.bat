@@ -110,9 +110,25 @@ for %%v in ( %* )  do (
 :: Note that VCToolsVersion is only defined after vcvarsall.bat been run.
 @if defined VCToolsVersion (
   set MSVC_RUNTIME_MAJOR_VERSION=%VCToolsVersion:~0,2%
-  set MSVC_RUNTIME_MINOR_VERSION=%VCToolsVersion:~3,1%
-  set MSVC_RUNTIME_LIBRARY_VERSION=%MSVC_RUNTIME_MAJOR_VERSION%%MSVC_RUNTIME_MINOR_VERSION%
   set MSVC_RUNTIME_FILE_VERSION=%MSVC_RUNTIME_MAJOR_VERSION%0
+rem NOTE 1 Since the upgrade to VS 17.10.5 this attempt to set the runtime minor
+rem version is broken as it now returns '4'. Note also that vcvars.bat has v143
+rem hard-coded. It does not seem to be possible to dynamically derived the minor
+rem version using the available env vars so we test to see if the runtime dir
+rem exists and if not we fall back to 3.
+rem NOTE 2 This code is likely to break again in the future !!!!
+  set MSVC_RUNTIME_MINOR_VERSION=%VCToolsVersion:~3,1%
+
+  @setlocal EnableDelayedExpansion
+
+  if not exist "!VCToolsRedistDir!!VSCMD_ARG_TGT_ARCH!\Microsoft.VC!MSVC_RUNTIME_MAJOR_VERSION!!MSVC_RUNTIME_MINOR_VERSION!.CRT" (
+    @endlocal  
+    set MSVC_RUNTIME_MINOR_VERSION=3
+  ) else (
+    @endlocal  
+  )
+  set MSVC_RUNTIME_LIBRARY_VERSION=%MSVC_RUNTIME_MAJOR_VERSION%%MSVC_RUNTIME_MINOR_VERSION%
+
 )
 @echo.
 

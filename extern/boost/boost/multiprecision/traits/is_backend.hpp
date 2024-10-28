@@ -72,12 +72,12 @@ struct is_first_backend : is_first_backend_imp<is_backend<T>::value, T, U>
 template <bool b, class T, class U>
 struct is_second_backend_imp
 {
-   static constexpr const bool value = false;
+   static constexpr bool value = false;
 };
 template <class T, class U>
 struct is_second_backend_imp<true, T, U>
 {
-   static constexpr const bool value = (std::is_convertible<T, number<U, et_on> >::value || std::is_convertible<T, number<U, et_off> >::value) && !is_first_backend<T, U>::value;
+   static constexpr bool value = (std::is_convertible<T, number<U, et_on> >::value || std::is_convertible<T, number<U, et_off> >::value) && !is_first_backend<T, U>::value;
 };
 
 template <class T, class U>

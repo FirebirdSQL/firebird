@@ -2781,7 +2781,7 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 	spPreTriggers.release();
 
 	// Handle post operation trigger.
-	if (relation->rel_post_erase && whichTrig != PRE_TRIG)
+	if ((relation->rel_post_erase || relation->isSystem()) && whichTrig != PRE_TRIG)
 	{
 		EXE_execute_triggers(tdbb, &relation->rel_post_erase, rpb, NULL, TRIGGER_DELETE, POST_TRIG);
 	}
@@ -6734,6 +6734,9 @@ StmtNode* MergeNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		auto relNode = FB_NEW_POOL(dsqlScratch->getPool()) RelationSourceNode(dsqlScratch->getPool());
 		relNode->dsqlContext = source->dsqlContext;
 
+		// Collect contexts that will be used for blr_derived_expr generation.
+		PASS1_expand_contexts(source->dsqlContext->ctx_main_derived_contexts, source->dsqlContext);
+
 		return FB_NEW_POOL(dsqlScratch->getPool()) DerivedFieldNode(dsqlScratch->getPool(), source->dsqlContext,
 			MAKE_constant("1", CONSTANT_BOOLEAN));
 	};
@@ -7848,7 +7851,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 				newRpb->rpb_number = orgRpb->rpb_number;
 				newRpb->rpb_number.setValid(true);
 
-				if (relation->rel_post_modify && whichTrig != PRE_TRIG)
+				if ((relation->rel_post_modify || relation->isSystem()) && whichTrig != PRE_TRIG)
 				{
 					EXE_execute_triggers(tdbb, &relation->rel_post_modify, orgRpb, newRpb,
 						TRIGGER_UPDATE, POST_TRIG);
@@ -8871,7 +8874,7 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 			{
 				SavepointChangeMarker scMarker(transaction);
 
-				if (relation && relation->rel_pre_store && whichTrig != POST_TRIG)
+				if (relation && (relation->rel_pre_store || relation->isSystem()) && whichTrig != POST_TRIG)
 				{
 					EXE_execute_triggers(tdbb, &relation->rel_pre_store, NULL, rpb,
 						TRIGGER_INSERT, PRE_TRIG);
@@ -8904,7 +8907,8 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 
 				rpb->rpb_number.setValid(true);
 
-				if (relation && relation->rel_post_store && whichTrig != PRE_TRIG)
+				if (relation && (relation->rel_post_store || relation->isSystem()) &&
+					relation->rel_post_store && whichTrig != PRE_TRIG)
 				{
 					EXE_execute_triggers(tdbb, &relation->rel_post_store, NULL, rpb,
 						TRIGGER_INSERT, POST_TRIG);
@@ -11660,9 +11664,10 @@ static void preModifyEraseTriggers(thread_db* tdbb, TrigVector** trigs,
 			FB_NEW_POOL(*tdbb->getTransaction()->tra_pool) traRpbList(*tdbb->getTransaction()->tra_pool);
 	}
 
+	const auto relation = rpb->rpb_relation;
 	const int rpblevel = tdbb->getTransaction()->tra_rpblist->PushRpb(rpb);
 
-	if (*trigs && whichTrig != StmtNode::POST_TRIG)
+	if ((*trigs || relation->isSystem()) && whichTrig != StmtNode::POST_TRIG)
 	{
 		try
 		{

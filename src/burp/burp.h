@@ -1173,6 +1173,7 @@ public:
 	Firebird::IRequest*	handles_get_view_req_handle1;
 	Firebird::IRequest*	handles_get_ts_req_handle1;
 	Firebird::IRequest* handles_get_ts_req_handle2;
+	Firebird::IRequest* handles_activateIndex_req_handle1;
 
 	// The handles_put.. are for backup.
 	Firebird::IRequest*	handles_put_index_req_handle1;

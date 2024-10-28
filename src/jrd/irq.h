@@ -54,7 +54,6 @@ enum irq_type_t
 	irq_l_funct_blr,		// lookup function BLR and debug info
 	irq_l_args,				// lookup function arguments
 	irq_s_triggers,			// scan triggers
-	irq_s_triggers2,		// scan triggers
 	irq_s_msgs,				// search for message
 	irq_grant1,				// process grant option
 	irq_grant2,				// process grant option

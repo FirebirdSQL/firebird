@@ -635,20 +635,22 @@ namespace boost {
       BOOST_MP_FORCEINLINE BOOST_MP_CXX14_CONSTEXPR typename std::enable_if<boost::multiprecision::detail::is_integral<I>::value && (number_category<B>::value == number_kind_integer), number<B, et_off> >::type
          operator<<(number<B, et_off>&& a, const I& b)
       {
+         using ui_type = typename boost::multiprecision::detail::make_unsigned<I>::type;
+
          using default_ops::eval_left_shift;
-         eval_left_shift(a.backend(), b);
+         eval_left_shift(a.backend(), static_cast<ui_type>(b));
          return std::move(a);
       }
       template <class B, class I>
       BOOST_MP_FORCEINLINE BOOST_MP_CXX14_CONSTEXPR typename std::enable_if<boost::multiprecision::detail::is_integral<I>::value && (number_category<B>::value == number_kind_integer), number<B, et_off> >::type
          operator>>(number<B, et_off>&& a, const I& b)
       {
+         using ui_type = typename boost::multiprecision::detail::make_unsigned<I>::type;
+
          using default_ops::eval_right_shift;
-         eval_right_shift(a.backend(), b);
+         eval_right_shift(a.backend(), static_cast<ui_type>(b));
          return std::move(a);
       }
-
-
    }
 } // namespace boost::multiprecision
 

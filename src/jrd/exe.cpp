@@ -71,6 +71,7 @@
 #include "../jrd/intl.h"
 #include "../jrd/sbm.h"
 #include "../jrd/blb.h"
+#include "../jrd/SystemTriggers.h"
 #include "firebird/impl/blr.h"
 #include "../dsql/ExprNodes.h"
 #include "../dsql/StmtNodes.h"
@@ -1294,18 +1295,57 @@ void EXE_execute_triggers(thread_db* tdbb,
  *	if any blow up.
  *
  **************************************/
+	SET_TDBB(tdbb);
+
+	const auto dbb = tdbb->getDatabase();
+	const auto old_rec = old_rpb ? old_rpb->rpb_record : nullptr;
+	const auto new_rec = new_rpb ? new_rpb->rpb_record : nullptr;
+
+	if (!(dbb->dbb_flags & DBB_creating) && (old_rpb || new_rpb))
+	{
+		if (const auto relation = old_rpb ? old_rpb->rpb_relation : new_rpb->rpb_relation;
+			relation->rel_flags & REL_system)
+		{
+			switch (which_trig)
+			{
+				case StmtNode::PRE_TRIG:
+				{
+					switch (trigger_action)
+					{
+						case TriggerAction::TRIGGER_DELETE:
+							SystemTriggers::executeBeforeDeleteTriggers(tdbb, relation, old_rec);
+							break;
+
+						case TriggerAction::TRIGGER_UPDATE:
+							SystemTriggers::executeBeforeUpdateTriggers(tdbb, relation, old_rec, new_rec);
+							break;
+
+						case TriggerAction::TRIGGER_INSERT:
+							SystemTriggers::executeBeforeInsertTriggers(tdbb, relation, new_rec);
+							break;
+					}
+					break;
+				}
+
+				case StmtNode::POST_TRIG:
+					switch (trigger_action)
+					{
+						case TriggerAction::TRIGGER_DELETE:
+							SystemTriggers::executeAfterDeleteTriggers(tdbb, relation, old_rec);
+							break;
+					}
+					break;
+			}
+		}
+	}
+
 	if (!*triggers || (*triggers)->isEmpty())
 		return;
-
-	SET_TDBB(tdbb);
 
 	Request* const request = tdbb->getRequest();
 	jrd_tra* const transaction = request ? request->req_transaction : tdbb->getTransaction();
 
 	RefPtr<TrigVector> vector(*triggers);
-	Record* const old_rec = old_rpb ? old_rpb->rpb_record : NULL;
-	Record* const new_rec = new_rpb ? new_rpb->rpb_record : NULL;
-
 	AutoPtr<Record> null_rec;
 
 	const bool is_db_trigger = (!old_rec && !new_rec);
@@ -1868,15 +1908,6 @@ static void trigger_failure(thread_db* tdbb, Request* trigger)
 		MET_trigger_msg(tdbb, msg, trigger->getStatement()->triggerName, trigger->req_label);
 		if (msg.hasData())
 		{
-			if (trigger->getStatement()->flags & Statement::FLAG_SYS_TRIGGER)
-			{
-				ISC_STATUS code = PAR_symbol_to_gdscode(msg);
-				if (code)
-				{
-					ERR_post(Arg::Gds(isc_integ_fail) << Arg::Num(trigger->req_label) <<
-							 Arg::Gds(code));
-				}
-			}
 			ERR_post(Arg::Gds(isc_integ_fail) << Arg::Num(trigger->req_label) <<
 					 Arg::Gds(isc_random) << Arg::Str(msg));
 		}
@@ -1897,8 +1928,15 @@ void AutoCacheRequest::cacheRequest()
 	thread_db* tdbb = JRD_get_thread_data();
 	Attachment* att = tdbb->getAttachment();
 
-	Statement** stmt = which == IRQ_REQUESTS ? &att->att_internal[id] :
-		which == DYN_REQUESTS ? &att->att_dyn_req[id] : nullptr;
+	if (which == CACHED_REQUESTS && id >= att->att_internal_cached_statements.getCount())
+		att->att_internal_cached_statements.grow(id + 1);
+
+	Statement** stmt =
+		which == IRQ_REQUESTS ? &att->att_internal[id] :
+		which == DYN_REQUESTS ? &att->att_dyn_req[id] :
+		which == CACHED_REQUESTS ? &att->att_internal_cached_statements[id] :
+		nullptr;
+
 	if (!stmt)
 	{
 		fb_assert(false);

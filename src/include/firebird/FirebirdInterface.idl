@@ -769,6 +769,7 @@ interface Auth : PluginBase
 	const int AUTH_SUCCESS = 0;
 	const int AUTH_MORE_DATA = 1;
 	const int AUTH_CONTINUE = 2;
+	const int AUTH_SUCCESS_WITH_DATA = 3;
 }
 
 interface Writer : Versioned

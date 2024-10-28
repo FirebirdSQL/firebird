@@ -112,27 +112,37 @@ Debug:
 #
 
 .PHONY: updateCloopInterfaces updateBuildNum
-
-IDL_ROOT=$(SRC_ROOT)/include/firebird
+INCLD_ROOT=$(SRC_ROOT)/include
+IDL_ROOT=$(INCLD_ROOT)/firebird
 IDL_FILE=$(IDL_ROOT)/FirebirdInterface.idl
 API_H_FILE=$(IDL_ROOT)/IdlFbInterfaces.h
-API_PAS_FILE=$(SRC_ROOT)/include/gen/Firebird.pas
+API_PAS_FILE=$(INCLD_ROOT)/gen/Firebird.pas
+API_C_HEADER=fb_c_api.h
+API_C_H_FILE=$(FIREBIRD)/include/firebird/$(API_C_HEADER)
+API_C_TMP_FILE=$(TMP_ROOT)/fb_c_api.tmp
+API_C_TEMPLATE=$(IDL_ROOT)/fb_c_api.hdr
 MISC=$(SRC_ROOT)/misc
 PAS_ROOT=$(MISC)/pascal
 PASCAL_SOURCES=$(wildcard $(PAS_ROOT)/*)
 TMP_FUNCS_PAS=$(TMP_ROOT)/func.pas
-XPB_CONSTS=$(SRC_ROOT)/include/firebird/impl/consts_pub.h
-INF_CONSTS=$(SRC_ROOT)/include/firebird/impl/inf_pub.h
+XPB_CONSTS=$(INCLD_ROOT)/firebird/impl/consts_pub.h
+INF_CONSTS=$(INCLD_ROOT)/firebird/impl/inf_pub.h
 ERR_CONSTS_PAS=$(SRC_ROOT)/misc/pascal/gds_codes.pas
 RPL_AWK=$(GEN_ROOT)/def_awk
 RPL_AWK_SRC=$(MISC)/def_awk.c
 RPL_GREP=$(GEN_ROOT)/isc_grep
 RPL_GREP_SRC=$(MISC)/isc_grep.c
 
-updateCloopInterfaces : $(API_H_FILE) $(API_PAS_FILE)
+updateCloopInterfaces : $(API_H_FILE) $(API_PAS_FILE) $(API_C_H_FILE)
 
 $(API_H_FILE): $(IDL_FILE)
 	$(CLOOP) $< c++ $@ IDL_FB_INTERFACES_H Firebird I
+
+$(API_C_TMP_FILE): $(IDL_FILE)
+	$(CLOOP) $< c-header $@ FB_C_API_H I macro
+
+$(API_C_H_FILE): $(API_C_TEMPLATE) $(API_C_TMP_FILE)
+	cat $(API_C_TEMPLATE) $(API_C_TMP_FILE) >$(API_C_H_FILE)
 
 #
 # This way firebird.pas can be created not using own mini-utilities.
@@ -150,7 +160,7 @@ $(RPL_AWK):	$(RPL_AWK_SRC)
 $(RPL_GREP): $(RPL_GREP_SRC)
 	$(CC) -o $@ $^
 
-$(TMP_ROOT)/iberror.pas: $(BUILD_FILE) $(ERR_CONSTS_PAS) $(SRC_ROOT)/include/firebird/impl/msg/*.h
+$(TMP_ROOT)/iberror.pas: $(BUILD_FILE) $(ERR_CONSTS_PAS) $(INCLD_ROOT)/firebird/impl/msg/*.h
 	$(BUILD_FILE) -p $(TMP_ROOT)/iberror_codes.pas
 	cp $(ERR_CONSTS_PAS) $(TMP_ROOT)/iberror.pas
 	cat $(TMP_ROOT)/iberror_codes.pas >> $(TMP_ROOT)/iberror.pas
@@ -723,6 +733,7 @@ $(BUILD_FILE):	$(BUILD_Objects)
 
 gbak_files: $(GBAK_FILES)
 
+
 #---------------------------------------------------------------------------
 
 # This target builds the include files for distribution with the release
@@ -732,20 +743,13 @@ gbak_files: $(GBAK_FILES)
 
 INCLUDE_DEST=   $(FB_BUILD)/include
 
-NEW_INCLUDES_SRC = $(shell find $(SRC_ROOT)/include/firebird -type f)
-NEW_INCLUDES_DEST = $(patsubst $(SRC_ROOT)/include/firebird/%, $(INCLUDE_DEST)/firebird/%, $(NEW_INCLUDES_SRC))
-
-include_generic: $(INCLUDE_DEST)/ib_util.h  \
-                 $(NEW_INCLUDES_DEST)
-
 # ib_util.h actually is a marker for a number of headers
 
 # Copy all the other headers to the distribution directory. We use
 # ib_util.h as the marker for all the files.
 
-OtherDistribHeaders = extlib/ib_util.h \
-                      yvalve/perf.h  \
-                      include/iberror.h \
+OtherDistribHeaders = include/ib_util.h \
+					  include/iberror.h \
 					  include/ibase.h
 
 SRC_OtherDistribHeaders = $(addprefix $(SRC_ROOT)/, $(OtherDistribHeaders))
@@ -753,6 +757,11 @@ SRC_OtherDistribHeaders = $(addprefix $(SRC_ROOT)/, $(OtherDistribHeaders))
 $(INCLUDE_DEST)/ib_util.h : $(SRC_OtherDistribHeaders)
 	mkdir -p $(INCLUDE_DEST)
 	$(CP) $^ $(INCLUDE_DEST)/
+
+NEW_INCLUDES_SRC = $(shell find $(SRC_ROOT)/include/firebird -type f)
+NEW_INCLUDES_DEST = $(patsubst $(SRC_ROOT)/include/firebird/%, $(INCLUDE_DEST)/firebird/%, $(NEW_INCLUDES_SRC))
+
+include_generic: $(NEW_INCLUDES_DEST) $(INCLUDE_DEST)/ib_util.h
 
 ifeq ($(SYSTEM_BOOST_FLG),Y)
 $(INCLUDE_DEST)/firebird/Message.h : $(SRC_ROOT)/include/firebird/Message.h

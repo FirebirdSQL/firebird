@@ -32,7 +32,6 @@
 #define CLASSES_AUTO_PTR_H
 
 #include <stdio.h>
-#include <functional>
 
 namespace Firebird {
 
@@ -125,7 +124,7 @@ public:
 		return *this;
 	}
 
-	AutoPtr& operator=(AutoPtr&& r)
+	AutoPtr& operator=(AutoPtr&& r) noexcept
 	{
 		if (this != &r)
 		{
@@ -318,11 +317,11 @@ private:
 	T oldValue;
 };
 
-
+template <typename F>
 class Cleanup
 {
 public:
-	Cleanup(std::function<void()> clFunc)
+	Cleanup(F&& clFunc)
 		: clean(clFunc)
 	{ }
 
@@ -332,7 +331,25 @@ public:
 	}
 
 private:
-	std::function<void()> clean;
+	F clean;
+};
+
+class CleanupFunction
+{
+	typedef void Func();
+
+public:
+	CleanupFunction(Func* clFunc)
+		: clean(clFunc)
+	{ }
+
+	~CleanupFunction()
+	{
+		clean();
+	}
+
+private:
+	Func* clean;
 };
 
 } //namespace Firebird

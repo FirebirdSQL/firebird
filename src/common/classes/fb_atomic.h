@@ -162,14 +162,6 @@ private:
 	std::atomic<counter_type> counter;
 };
 
-
-
-// NS 2014-08-01: FIXME. Atomic counters use barriers on all platforms, so
-// these operations are no-ops and will always be no-ops. They were used
-// to work around (incorrectly) bugs in Sparc and PPC atomics code.
-inline void FlushCache() { }
-inline void WaitForFlushCache() { }
-
 } // namespace Firebird
 
 #endif // CLASSES_FB_ATOMIC_H

@@ -938,7 +938,7 @@ void WindowedStream::WindowStream::nullRecords(thread_db* tdbb) const
 	m_next->nullRecords(tdbb);
 }
 
-const void WindowedStream::WindowStream::getFrameValue(thread_db* tdbb, Request* request,
+void WindowedStream::WindowStream::getFrameValue(thread_db* tdbb, Request* request,
 	const Frame* frame, impure_value_ex* impureValue) const
 {
 	dsc* desc = EVL_expr(tdbb, request, frame->value);

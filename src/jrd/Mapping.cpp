@@ -1123,7 +1123,7 @@ private:
 			bool getPrivileges(const string& key, UserId::Privileges& system_privileges)
 			{
 				if (!key.hasData())
-					return false;
+					return true;
 
 				UserId::Privileges p;
         		if (!get(key, p))

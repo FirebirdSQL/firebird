@@ -844,7 +844,7 @@ class InnerJoin : private Firebird::PermanentStorage
 
 	struct JoinedStreamInfo
 	{
-		static const unsigned MAX_EQUI_MATCHES = 4;
+		static const unsigned MAX_EQUI_MATCHES = 8;
 
 		void reset (StreamType num)
 		{

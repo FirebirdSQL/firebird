@@ -205,8 +205,10 @@ private:
 //
 // Flags to indicate normal internal requests vs. dyn internal requests
 //
+// IRQ_REQUESTS and DYN_REQUESTS are deprecated
 const int IRQ_REQUESTS				= 1;
 const int DYN_REQUESTS				= 2;
+const int CACHED_REQUESTS			= 3;
 
 
 // Procedure block

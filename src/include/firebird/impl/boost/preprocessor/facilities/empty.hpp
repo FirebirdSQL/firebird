@@ -14,6 +14,8 @@
 # ifndef FB_BOOST_PREPROCESSOR_FACILITIES_EMPTY_HPP
 # define FB_BOOST_PREPROCESSOR_FACILITIES_EMPTY_HPP
 #
+# include <firebird/impl/boost/preprocessor/config/config.hpp>
+#
 # /* FB_BOOST_PP_EMPTY */
 #
 # define FB_BOOST_PP_EMPTY()

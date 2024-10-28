@@ -669,6 +669,7 @@ public:
 
 	Firebird::Array<Statement*>	att_internal;			// internal statements
 	Firebird::Array<Statement*>	att_dyn_req;			// internal dyn statements
+	Firebird::Array<Statement*>	att_internal_cached_statements;		// internal cached statements
 	Firebird::ICryptKeyCallback*	att_crypt_callback;		// callback for DB crypt
 	Firebird::DecimalStatus			att_dec_status;			// error handling and rounding
 
@@ -894,7 +895,7 @@ public:
 	ProfilerManager* getProfilerManager(thread_db* tdbb);
 	ProfilerManager* getActiveProfilerManagerForNonInternalStatement(thread_db* tdbb);
 	bool isProfilerActive();
-	void releaseProfilerManager();
+	void releaseProfilerManager(thread_db* tdbb);
 
 	JProvider* getProvider()
 	{

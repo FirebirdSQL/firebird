@@ -611,7 +611,7 @@ int SharedMemoryBase::eventInit(event_t* event)
 #else // pthread-based event
 
 	event->event_count = 0;
-	event->pid = getpid();
+	event->event_pid = getpid();
 
 	// Prepare an Inter-Process event block
 	pthread_mutexattr_t mattr;
@@ -662,7 +662,7 @@ void SharedMemoryBase::eventFini(event_t* event)
 
 #else // pthread-based event
 
-	if (event->pid == getpid())
+	if (event->event_pid == getpid())
 	{
 		LOG_PTHREAD_ERROR(pthread_mutex_destroy(event->event_mutex));
 		LOG_PTHREAD_ERROR(pthread_cond_destroy(event->event_cond));
@@ -690,6 +690,8 @@ SLONG SharedMemoryBase::eventClear(event_t* event)
  *	    3.  Wait on event.
  *
  **************************************/
+
+	fb_assert(event->event_pid == getpid());
 
 #if defined(WIN_NT)
 
@@ -721,6 +723,8 @@ int SharedMemoryBase::eventWait(event_t* event, const SLONG value, const SLONG m
  *	Wait on an event.
  *
  **************************************/
+
+	fb_assert(event->event_pid == getpid());
 
 	// If we're not blocked, the rest is a gross waste of time
 
@@ -831,7 +835,7 @@ int SharedMemoryBase::eventPost(event_t* event)
 	++event->event_count;
 
 	if (event->event_pid != process_id)
-		return ISC_kill(event->event_pid, event->event_id, event->event_handle);
+		return ISC_kill(event->event_pid, event->event_id, event->event_handle) == 0 ? FB_SUCCESS : FB_FAILURE;
 
 	return SetEvent(event->event_handle) ? FB_SUCCESS : FB_FAILURE;
 

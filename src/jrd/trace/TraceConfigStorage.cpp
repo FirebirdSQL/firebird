@@ -163,6 +163,7 @@ void ConfigStorage::shutdown()
 
 	{
 		StorageGuard guard(this);
+		fb_assert(m_sharedMemory->getHeader()->cnt_uses != 0);
 		--(m_sharedMemory->getHeader()->cnt_uses);
 		if (m_sharedMemory->getHeader()->cnt_uses == 0)
 		{
@@ -469,13 +470,20 @@ void ConfigStorage::compact()
 	ULONG check_used, check_size;
 	check_used = check_size = sizeof(TraceCSHeader);
 
+	// Track undeleted slots from dead processes
+	Firebird::SortedArray<ULONG, InlineStorage<ULONG, 16>> deadProcesses;
+
 	// collect used slots, sort them by offset
 	for (TraceCSHeader::Slot* slot = header->slots; slot < header->slots + header->slots_cnt; slot++)
 	{
 		if (slot->used && slot->ses_pid != pid &&
+			((slot->ses_flags & trs_system) == 0) && // System sessions are shared for multiple connections so they may live without the original process
 			!ISC_check_process_existence(slot->ses_pid))
 		{
-			header->cnt_uses--; // Process that created trace session disappeared, count it out
+			// A SUPER server may shut down, but its Storage shared memory continues to live due to an embedded user session.
+			// The process might allocate multiple slots, so count them carefully.
+			deadProcesses.add(slot->ses_pid);
+
 			markDeleted(slot);
 		}
 
@@ -487,6 +495,11 @@ void ConfigStorage::compact()
 		check_size += slot->size;
 		data.add(item);
 	}
+
+	// Process that created storages disappeared, count it out
+	fb_assert(header->cnt_uses > deadProcesses.getCount());
+	header->cnt_uses -= deadProcesses.getCount();
+	deadProcesses.clear();
 
 	fb_assert(check_used == header->mem_used);
 	fb_assert(check_size == header->mem_offset);

@@ -54,7 +54,7 @@ if not defined FB2_SNAPSHOT (set FB2_SNAPSHOT=0)
 
 :: Are we doing a snapshot build? If so we always do less work.
 if "%FB2_SNAPSHOT%"=="1" (
-  (set FBBUILD_ISX_PACK=0)
+  ( set FBBUILD_ISX_PACK=0 )
 )
 
 
@@ -69,14 +69,14 @@ if "%FB2_SNAPSHOT%"=="1" (
 :: let's bail out now.
 
 @echo     o Checking for sed...
-(cmd /c "sed.exe --version 2>&1 > nul ") || ( call :ERROR Could not locate sed && @goto :EOF )
+@(cmd /c "sed.exe --version 2>&1 > nul ") || ( call :ERROR Could not locate sed & goto :EOF )
 
 @echo     o Checking for unix2dos...
-(cmd /c "unix2dos.exe --quiet --version 2>&1 > nul" ) || ( call :ERROR Could not locate unix2dos && @goto :EOF )
+@(cmd /c "unix2dos.exe --quiet --version 2>&1 > nul" ) || ( call :ERROR Could not locate unix2dos & goto :EOF )
 
-@for /f "usebackq tokens=*" %%c in (`where /f md5sum 2^>nul`) do set MD5_COMMAND=%%c
-if defined MD5_COMMAND (
-  @echo     o POSIX md5sum utility found at %MD5_COMMAND%
+@for /f "usebackq tokens=*" %%c in ( `where /f md5sum 2^>nul` ) do set MD5_COMMAND=%%c
+@if defined MD5_COMMAND (
+  echo     o POSIX md5sum utility found at %MD5_COMMAND%
 )
 
 @if %FBBUILD_ZIP_PACK% EQU 1 (
@@ -101,8 +101,8 @@ if defined MD5_COMMAND (
   for /f "usebackq tokens=*" %%c in ( `where /f iscc 2^>nul` ) do set ISCC_COMMAND=%%c
 )
 @if not defined ISCC_COMMAND (
-  @echo  Required Inno Setup compiler not found
-  @exit /b 1
+  echo  Required Inno Setup compiler not found
+  exit /b 1
 )
 @echo     o Inno Setup found as %ISCC_COMMAND%.
 
@@ -114,17 +114,17 @@ if defined MD5_COMMAND (
   echo WiX is needed to build the MSI kits of the CRT runtimes.
   echo.
 ) else (
- echo     o WiX found at "%WIX%".
+  echo     o WiX found at "%WIX%".
 )
 
 @if not defined FB_EXTERNAL_DOCS (
- echo.
- echo The FB_EXTERNAL_DOCS environment var is not defined
- echo It should point to the directory containing the relevant release notes
- echo in adobe pdf format.
- echo.
+  echo.
+  echo The FB_EXTERNAL_DOCS environment var is not defined
+  echo It should point to the directory containing the relevant release notes
+  echo in adobe pdf format.
+  echo.
 ) else (
- echo     o Package will include documentation from "%FB_EXTERNAL_DOCS%".
+  echo     o Package will include documentation from "%FB_EXTERNAL_DOCS%".
 )
 
 
@@ -137,7 +137,7 @@ if defined MD5_COMMAND (
 ::==========
 
 :: Cut off everything that is not #define to let Inno Setup use it
-@findstr /B /L "#define" "%FB_ROOT_PATH%\src\jrd\build_no.h" >"%FB_ROOT_PATH%\gen\jrd\build_no.h"
+@findstr /B /L "#define" "%FB_ROOT_PATH%\src\jrd\build_no.h" > "%FB_ROOT_PATH%\gen\jrd\build_no.h"
 :: Read version parameters from build_no.h
 @for /F "tokens=2*" %%a in ( %FB_ROOT_PATH%\gen\jrd\build_no.h ) do (
   echo   Setting %%a to %%~b
@@ -192,7 +192,7 @@ set FBBUILD_INSTALL_IMAGES=%FB_ROOT_PATH%\builds\install_images
   %SED_COMMAND% %%f > %FB_GEN_DIR%\readmes\%%f
 )
 @for %%d in (ba cz de es fr hu it pl pt ru si ) do (
-  if not exist %FB_GEN_DIR%\readmes\%%d ( @mkdir %FB_GEN_DIR%\readmes\%%d )
+  if not exist %FB_GEN_DIR%\readmes\%%d ( mkdir %FB_GEN_DIR%\readmes\%%d )
   for %%f in ( %%d\*.txt  ) do (
     echo   Processing version strings in %%f
     %SED_COMMAND% %%f > %FB_GEN_DIR%\readmes\%%f
@@ -200,6 +200,9 @@ set FBBUILD_INSTALL_IMAGES=%FB_ROOT_PATH%\builds\install_images
 )
 
 @endlocal
+
+:: Dump env vars to file for later testing.
+@set > %FB_ROOT_PATH%\builds\install\arch-specific\win32\test_installer\fb_build_vars_%PROCESSOR_ARCHITECTURE%.txt
 
 ::End of SET_VERSION
 ::----------------
@@ -232,11 +235,13 @@ set FBBUILD_INSTALL_IMAGES=%FB_ROOT_PATH%\builds\install_images
     )
 )
 
-@where /Q implib.exe
-@if not ERRORLEVEL 1 (
-  if "%VSCMD_ARG_TGT_ARCH%"=="x86" (
-    echo   Generating fbclient_bor.lib
+@if "%VSCMD_ARG_TGT_ARCH%"=="x86" (
+  echo     Generating fbclient_bor.lib
+  where /Q implib.exe
+  if not ERRORLEVEL 1 (
     implib %FB_OUTPUT_DIR%\lib\fbclient_bor.lib %FB_OUTPUT_DIR%\fbclient.dll > nul
+  ) else (
+    call :WARNING implib not found
   )
 )
 
@@ -289,7 +294,7 @@ set FBBUILD_INSTALL_IMAGES=%FB_ROOT_PATH%\builds\install_images
 @mkdir %FB_OUTPUT_DIR%\doc\sql.extensions 2>nul
 @if ERRORLEVEL 2 ( ( call :ERROR MKDIR for doc\sql.extensions dir failed) & ( goto :EOF ) )
 @copy %FB_ROOT_PATH%\doc\sql.extensions\*.* %FB_OUTPUT_DIR%\doc\sql.extensions\ > nul
-@if ERRORLEVEL 1 ( ( call :ERROR Copying doc\sql.extensions failed  ) & ( goto :EOF ) )
+@if ERRORLEVEL 1 ( ( call :ERROR Copying doc\sql.extensions failed ) & ( goto :EOF ) )
 
 :: External docs aren't necessary for a snapshot build, so we don't throw
 :: an error if FB_EXTERNAL_DOCS is not defined. On the other hand,
@@ -300,7 +305,7 @@ set FBBUILD_INSTALL_IMAGES=%FB_ROOT_PATH%\builds\install_images
         echo     ... %FB_EXTERNAL_DOCS%\%%v to %FB_OUTPUT_DIR%\doc\%%v
         copy /Y %FB_EXTERNAL_DOCS%\%%v %FB_OUTPUT_DIR%\doc\%%v > nul
         if ERRORLEVEL 1 (
-            call :ERROR Copying %FB_EXTERNAL_DOCS%\%%v to %FB_OUTPUT_DIR%\doc\%%v FAILED. &  @goto :EOF
+          call :ERROR Copying %FB_EXTERNAL_DOCS%\%%v to %FB_OUTPUT_DIR%\doc\%%v FAILED. & goto :EOF
         )
     )
 
@@ -308,7 +313,9 @@ set FBBUILD_INSTALL_IMAGES=%FB_ROOT_PATH%\builds\install_images
     for %%v in ( firebird-%FB_MAJOR_VER%-quickstartguide.pdf  ) do (
         echo     ... %%v
         copy /Y %FB_EXTERNAL_DOCS%\%%v %FB_OUTPUT_DIR%\doc\%%v > nul
-        if ERRORLEVEL 1 ( call :WARNING Copying %FB_EXTERNAL_DOCS%\%%v to %FB_OUTPUT_DIR%\doc\%%v FAILED. & @goto :EOF )
+        if ERRORLEVEL 1 (
+            call :WARNING Copying %FB_EXTERNAL_DOCS%\%%v to %FB_OUTPUT_DIR%\doc\%%v FAILED.
+        )
     )
 
   echo   Finished copying pdf docs...
@@ -333,7 +340,7 @@ for %%v in (IPLicense.txt IDPLicense.txt ) do (
 
 ::  Walk through all docs and transform any that are not .txt, .pdf or .html to .txt
 @echo   Setting .txt filetype to ascii docs.
-for /R %FB_OUTPUT_DIR%\doc %%v in ( * ) do (
+@for /R %FB_OUTPUT_DIR%\doc %%v in ( * ) do (
   if /I not "%%~xv" == ".md" (
     if /I not "%%~xv" == ".txt" (
       if /I not "%%~xv" == ".pdf" (
@@ -390,12 +397,10 @@ for /R %FB_OUTPUT_DIR%\doc %%v in ( * ) do (
 :: grab some missing bits'n'pieces from different parts of the source tree
 ::=========================================================================
 @echo   Copying ib_util etc
-@copy %FB_ROOT_PATH%\src\extlib\ib_util.h %FB_OUTPUT_DIR%\include > nul || (call :WARNING Copying ib_util.h failed. && @goto :EOF )
-@copy %FB_ROOT_PATH%\src\misc\pascal\ib_util.pas %FB_OUTPUT_DIR%\include > nul || (call :WARNING Copying ib_util.pas failed. && @goto :EOF )
+@copy %FB_ROOT_PATH%\src\misc\pascal\ib_util.pas %FB_OUTPUT_DIR%\include > nul || (call :ERROR Copying ib_util.pas failed. & goto :EOF )
 
 @echo   Copying other include files required for development...
-set OUTPATH=%FB_OUTPUT_DIR%\include
-@copy %FB_ROOT_PATH%\src\yvalve\perf.h %OUTPATH%\ > nul
+@set OUTPATH=%FB_OUTPUT_DIR%\include
 @copy %FB_ROOT_PATH%\src\include\gen\firebird.pas %OUTPATH%\firebird\ > nul || (@call :ERROR Failure executing copy %FB_ROOT_PATH%\src\include\gen\firebird.pas %OUTPATH%\firebird\  )
 @if ERRORLEVEL 1 goto :END
 
@@ -424,7 +429,7 @@ set OUTPATH=%FB_OUTPUT_DIR%\include
 ::=================================================================
 @if not exist %FB_OUTPUT_DIR%\firebird.msg (
     copy %FB_GEN_DIR%\firebird.msg %FB_OUTPUT_DIR%\firebird.msg > nul
-    if ERRORLEVEL 1 ( call :ERROR Could not copy firebird.msg  &  goto :EOF )
+    if ERRORLEVEL 1 ( call :ERROR Could not copy firebird.msg  & goto :EOF )
 )
 
 ::End of FB_MSG
@@ -437,7 +442,7 @@ set OUTPATH=%FB_OUTPUT_DIR%\include
 :: that and they all have windows EOL
 ::===============================================
 @for /R %FB_OUTPUT_DIR% %%W in ( *.txt *.conf *.sql *.c *.cpp *.hpp *.h *.bat *.pas *.e *.def *.rc *.md *.html ) do (
-  unix2dos --quiet --safe %%W || exit /b 1
+  unix2dos --safe %%W > nul 2>&1 || exit /b 1
 )
 
 ::End of SET_CRLF
@@ -627,20 +632,20 @@ popd
 
 @echo.
 @echo   Reading command-line parameters...
-@(@call :SET_PARAMS %* )
-@if ERRORLEVEL 1 (@call :ERROR Calling SET_PARAMS & goto :END)
+@(call :SET_PARAMS %* )
+@if ERRORLEVEL 1 (call :ERROR Calling SET_PARAMS & goto :END)
 
 @echo.
 @echo   Checking that all required components are available...
-@(@call :CHECK_ENVIRONMENT ) || ( @echo Error calling CHECK_ENVIRONMENT && @goto :END )
+@( call :CHECK_ENVIRONMENT ) || ( echo Error calling CHECK_ENVIRONMENT & goto :END )
 @echo.
 
 @echo   Setting version number...
-@(@call :SET_VERSION ) || (@echo Error calling SET_VERSION && @goto :END )
+@( call :SET_VERSION ) || ( echo Error calling SET_VERSION & goto :END )
 @echo.
 
 @echo   Copying additional files needed for installation, documentation etc.
-@( @call :COPY_XTRA )  || ( @echo Error calling COPY_XTRA && @goto :END )
+@( call :COPY_XTRA ) || ( echo Error calling COPY_XTRA & goto :END )
 @echo.
 
 :: WIX is not necessary for a snapshot build, so we don't throw
@@ -648,19 +653,19 @@ popd
 :: if it is there anyway, use it.
 @if defined WIX (
   echo   Building MSI runtimes
-  ( call :BUILD_CRT_MSI ) || ( echo Error calling BUILD_CRT_MSI & @goto :END )
+  ( call :BUILD_CRT_MSI ) || ( echo Error calling BUILD_CRT_MSI & goto :END )
   echo.
 )
 
 @echo   Prepare include directory
-@( call :INCLUDE_DIR ) || ( @echo Error calling INCLUDE_DIR & @goto :END )
+@( call :INCLUDE_DIR ) || ( echo Error calling INCLUDE_DIR & goto :END )
 @echo.
 
 @echo   Writing databases conf
-@(call :DB_CONF ) || ( echo Error calling DB_CONF & goto :END )
+@( call :DB_CONF ) || ( echo Error calling DB_CONF & goto :END )
 @echo.
 @echo   Copying firebird.msg
-@(call :FB_MSG ) || ( echo Error calling FB_MSG & goto :END )
+@( call :FB_MSG ) || ( echo Error calling FB_MSG & goto :END )
 @echo.
 
 @echo   Fix up line endings...
@@ -675,7 +680,7 @@ popd
 
 @if %FBBUILD_ISX_PACK% EQU 1 (
   echo   Now let's compile the InnoSetup scripts
-  ( call :ISX_PACK ) || ( echo Error calling ISX_PACK &  goto :END )
+  ( call :ISX_PACK ) || ( echo Error calling ISX_PACK & goto :END )
   echo.
 )
 
@@ -697,5 +702,4 @@ popd
 :END
 
 exit /b %ERRLEV%
-
 

@@ -581,9 +581,6 @@
 /* Define to 1 if the system has the type `caddr_t'. */
 #cmakedefine HAVE_CADDR_T 1
 
-/* Define to 1 if the system has the type `semun'. */
-#cmakedefine HAVE_SEMUN 1
-
 /* Define to 1 if the system has the type `socklen_t'. */
 #cmakedefine HAVE_SOCKLEN_T 1
 

@@ -90,7 +90,7 @@ class CHeaderGenerator : public CBasedGenerator
 {
 public:
 	CHeaderGenerator(const std::string& filename, const std::string& prefix, Parser* parser,
-		const std::string& headerGuard);
+		const std::string& headerGuard, const std::string& macro);
 
 public:
 	virtual void generate();
@@ -98,6 +98,7 @@ public:
 private:
 	Parser* parser;
 	std::string headerGuard;
+	bool macro;
 };
 
 

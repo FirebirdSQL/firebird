@@ -15,28 +15,28 @@
 #include <boost/math/tools/assert.hpp>
 
 #if BOOST_MATH_POLY_METHOD == 1
-#  define BOOST_HEADER() <BOOST_JOIN(boost/math/tools/detail/polynomial_horner1_, BOOST_MATH_MAX_POLY_ORDER).hpp>
+#  define BOOST_HEADER() <BOOST_MATH_JOIN(boost/math/tools/detail/polynomial_horner1_, BOOST_MATH_MAX_POLY_ORDER).hpp>
 #  include BOOST_HEADER()
 #  undef BOOST_HEADER
 #elif BOOST_MATH_POLY_METHOD == 2
-#  define BOOST_HEADER() <BOOST_JOIN(boost/math/tools/detail/polynomial_horner2_, BOOST_MATH_MAX_POLY_ORDER).hpp>
+#  define BOOST_HEADER() <BOOST_MATH_JOIN(boost/math/tools/detail/polynomial_horner2_, BOOST_MATH_MAX_POLY_ORDER).hpp>
 #  include BOOST_HEADER()
 #  undef BOOST_HEADER
 #elif BOOST_MATH_POLY_METHOD == 3
-#  define BOOST_HEADER() <BOOST_JOIN(boost/math/tools/detail/polynomial_horner3_, BOOST_MATH_MAX_POLY_ORDER).hpp>
+#  define BOOST_HEADER() <BOOST_MATH_JOIN(boost/math/tools/detail/polynomial_horner3_, BOOST_MATH_MAX_POLY_ORDER).hpp>
 #  include BOOST_HEADER()
 #  undef BOOST_HEADER
 #endif
 #if BOOST_MATH_RATIONAL_METHOD == 1
-#  define BOOST_HEADER() <BOOST_JOIN(boost/math/tools/detail/rational_horner1_, BOOST_MATH_MAX_POLY_ORDER).hpp>
+#  define BOOST_HEADER() <BOOST_MATH_JOIN(boost/math/tools/detail/rational_horner1_, BOOST_MATH_MAX_POLY_ORDER).hpp>
 #  include BOOST_HEADER()
 #  undef BOOST_HEADER
 #elif BOOST_MATH_RATIONAL_METHOD == 2
-#  define BOOST_HEADER() <BOOST_JOIN(boost/math/tools/detail/rational_horner2_, BOOST_MATH_MAX_POLY_ORDER).hpp>
+#  define BOOST_HEADER() <BOOST_MATH_JOIN(boost/math/tools/detail/rational_horner2_, BOOST_MATH_MAX_POLY_ORDER).hpp>
 #  include BOOST_HEADER()
 #  undef BOOST_HEADER
 #elif BOOST_MATH_RATIONAL_METHOD == 3
-#  define BOOST_HEADER() <BOOST_JOIN(boost/math/tools/detail/rational_horner3_, BOOST_MATH_MAX_POLY_ORDER).hpp>
+#  define BOOST_HEADER() <BOOST_MATH_JOIN(boost/math/tools/detail/rational_horner3_, BOOST_MATH_MAX_POLY_ORDER).hpp>
 #  include BOOST_HEADER()
 #  undef BOOST_HEADER
 #endif
@@ -205,14 +205,14 @@ template <std::size_t N, class T, class V>
 inline V evaluate_polynomial(const T(&a)[N], const V& val) BOOST_MATH_NOEXCEPT(V)
 {
    typedef std::integral_constant<int, N> tag_type;
-   return detail::evaluate_polynomial_c_imp(static_cast<const T*>(a), val, static_cast<tag_type const*>(0));
+   return detail::evaluate_polynomial_c_imp(static_cast<const T*>(a), val, static_cast<tag_type const*>(nullptr));
 }
 
 template <std::size_t N, class T, class V>
 inline V evaluate_polynomial(const std::array<T,N>& a, const V& val) BOOST_MATH_NOEXCEPT(V)
 {
    typedef std::integral_constant<int, N> tag_type;
-   return detail::evaluate_polynomial_c_imp(static_cast<const T*>(a.data()), val, static_cast<tag_type const*>(0));
+   return detail::evaluate_polynomial_c_imp(static_cast<const T*>(a.data()), val, static_cast<tag_type const*>(nullptr));
 }
 //
 // Even polynomials are trivial: just square the argument!
@@ -247,14 +247,14 @@ template <std::size_t N, class T, class V>
 inline V evaluate_odd_polynomial(const T(&a)[N], const V& z) BOOST_MATH_NOEXCEPT(V)
 {
    typedef std::integral_constant<int, N-1> tag_type;
-   return a[0] + z * detail::evaluate_polynomial_c_imp(static_cast<const T*>(a) + 1, V(z*z), static_cast<tag_type const*>(0));
+   return a[0] + z * detail::evaluate_polynomial_c_imp(static_cast<const T*>(a) + 1, V(z*z), static_cast<tag_type const*>(nullptr));
 }
 
 template <std::size_t N, class T, class V>
 inline V evaluate_odd_polynomial(const std::array<T,N>& a, const V& z) BOOST_MATH_NOEXCEPT(V)
 {
    typedef std::integral_constant<int, N-1> tag_type;
-   return a[0] + z * detail::evaluate_polynomial_c_imp(static_cast<const T*>(a.data()) + 1, V(z*z), static_cast<tag_type const*>(0));
+   return a[0] + z * detail::evaluate_polynomial_c_imp(static_cast<const T*>(a.data()) + 1, V(z*z), static_cast<tag_type const*>(nullptr));
 }
 
 template <class T, class U, class V>
@@ -313,13 +313,13 @@ V evaluate_rational(const T* num, const U* denom, const V& z_, std::size_t count
 template <std::size_t N, class T, class U, class V>
 inline V evaluate_rational(const T(&a)[N], const U(&b)[N], const V& z) BOOST_MATH_NOEXCEPT(V)
 {
-   return detail::evaluate_rational_c_imp(a, b, z, static_cast<const std::integral_constant<int, N>*>(0));
+   return detail::evaluate_rational_c_imp(a, b, z, static_cast<const std::integral_constant<int, N>*>(nullptr));
 }
 
 template <std::size_t N, class T, class U, class V>
 inline V evaluate_rational(const std::array<T,N>& a, const std::array<U,N>& b, const V& z) BOOST_MATH_NOEXCEPT(V)
 {
-   return detail::evaluate_rational_c_imp(a.data(), b.data(), z, static_cast<std::integral_constant<int, N>*>(0));
+   return detail::evaluate_rational_c_imp(a.data(), b.data(), z, static_cast<std::integral_constant<int, N>*>(nullptr));
 }
 
 } // namespace tools

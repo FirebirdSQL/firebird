@@ -248,9 +248,8 @@ copyFiles() {
 
 	#include (.h .pas files)
 	cp $BuiltFBDir/include/*.h ${TargetDir}@FB_INCDIR@
-	cp $BuiltFBDir/include/firebird/impl/iberror_c.h ${TargetDir}@FB_INCDIR@/firebird/impl
-	cp $BuildRootDir/src/include/firebird/*.h ${TargetDir}@FB_INCDIR@/firebird
-	tar -C $BuildRootDir/src/include/firebird -cf - impl | tar -C ${TargetDir}@FB_INCDIR@/firebird -x
+	cp $BuiltFBDir/include/firebird/*.h ${TargetDir}@FB_INCDIR@/firebird
+	tar -C $BuiltFBDir/include/firebird -cf - impl | tar -C ${TargetDir}@FB_INCDIR@/firebird -x
 	if [ "$CLIENT_ONLY_FLG" = "N" ]; then
 		cp $BuildRootDir/src/include/gen/Firebird.pas ${TargetDir}@FB_INCDIR@/firebird
 	fi
