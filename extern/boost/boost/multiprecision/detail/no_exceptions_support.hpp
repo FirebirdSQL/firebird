@@ -36,7 +36,7 @@
 #   endif
 #   define BOOST_MP_RETHROW
 #   define BOOST_MP_CATCH_END }
-#   define BOOST_MP_THROW_EXCEPTION(x) {(void)(x);}
+#   define BOOST_MP_THROW_EXCEPTION(x) {static_cast<void>(x);}
 #endif
 
 #else // Not standalone mode

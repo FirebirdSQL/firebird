@@ -479,9 +479,9 @@ BOOST_AUTO_TEST_CASE(SubstrTest)
 BOOST_AUTO_TEST_CASE(LoadFromFileTest)
 {
 	namespace fs = std::filesystem;
-	auto tempFilePath = fs::temp_directory_path() / "test.txt";
-	const char* filename = tempFilePath.string().data();
-	FILE *x = fopen(tempFilePath.string().data(), "w+");
+	auto tempFilePath = (fs::temp_directory_path() / "test.txt").string();
+	const char* filename = tempFilePath.data();
+	FILE *x = fopen(tempFilePath.data(), "w+");
 
 	std::string_view line1 = "char lbl[] = \"0123456789\";";
 	std::string_view line2 = ""; // LoadFormFile read from '\n'

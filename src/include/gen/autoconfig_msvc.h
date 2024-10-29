@@ -252,12 +252,6 @@
 /* alignment of double */
 #define FB_DOUBLE_ALIGN 8
 
-/* Is union semun defined? */
-#undef HAVE_SEMUN
-
-/* Is struct xdr_ops defined? */
-#undef HAVE_STRUCT_XDR_OPS
-
 /* Functions */
 #if defined(_MSC_VER) && (_MSC_VER < 1900)
 #define snprintf _snprintf

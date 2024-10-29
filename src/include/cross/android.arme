@@ -332,9 +332,6 @@
 /* Define to 1 if you have the `semtimedop' function. */
 #define HAVE_SEMTIMEDOP 1
 
-/* Define to 1 if the system has the type `semun'. */
-/* #undef HAVE_SEMUN */
-
 /* Define to 1 if you have the `sem_init' function. */
 #define HAVE_SEM_INIT 1
 
@@ -409,12 +406,6 @@
 
 /* Define this if struct dirent has d_type */
 #define HAVE_STRUCT_DIRENT_D_TYPE 1
-
-/* Define to 1 if the system has the type `struct xdr_ops'. */
-#define HAVE_STRUCT_XDR_OPS 1
-
-/* Define to 1 if the system has the type `struct XDR::xdr_ops'. */
-/* #undef HAVE_STRUCT_XDR__XDR_OPS */
 
 /* Define to 1 if you have the `swab' function. */
 #define HAVE_SWAB 1

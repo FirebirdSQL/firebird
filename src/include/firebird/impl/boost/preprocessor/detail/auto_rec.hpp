@@ -7,9 +7,13 @@
 #  *                                                                          *
 #  ************************************************************************** */
 #
+# /* Revised by Edward Diener (2020) */
+#
 # /* See http://www.boost.org for most recent version. */
 #
 # include <firebird/impl/boost/preprocessor/config/config.hpp>
+#
+# if ~FB_BOOST_PP_CONFIG_FLAGS() & FB_BOOST_PP_CONFIG_STRICT()
 #
 # if FB_BOOST_PP_CONFIG_FLAGS() & FB_BOOST_PP_CONFIG_DMC()
 #     include <firebird/impl/boost/preprocessor/detail/dmc/auto_rec.hpp>
@@ -290,4 +294,41 @@
 #                            define FB_BOOST_PP_NODE_255(p) FB_BOOST_PP_IIF(p(255), 255, 256)
 #
 # endif
+#
+# endif
+#
+# else
+#
+# if FB_BOOST_PP_CONFIG_FLAGS() & FB_BOOST_PP_CONFIG_DMC()
+#     include <firebird/impl/boost/preprocessor/detail/dmc/auto_rec.hpp>
+# else
+#
+# ifndef FB_BOOST_PREPROCESSOR_DETAIL_AUTO_REC_HPP
+# define FB_BOOST_PREPROCESSOR_DETAIL_AUTO_REC_HPP
+#
+# /* FB_BOOST_PP_AUTO_REC */
+#
+# include <firebird/impl/boost/preprocessor/control/iif.hpp>
+#
+# define FB_BOOST_PP_AUTO_REC(pred, n) FB_BOOST_PP_NODE_ENTRY_ ## n(pred)
+#
+# include <firebird/impl/boost/preprocessor/config/limits.hpp>
+#
+# if FB_BOOST_PP_LIMIT_MAG == 256
+# include <firebird/impl/boost/preprocessor/detail/limits/auto_rec_256.hpp>
+# elif FB_BOOST_PP_LIMIT_MAG == 512
+# include <firebird/impl/boost/preprocessor/detail/limits/auto_rec_256.hpp>
+# include <firebird/impl/boost/preprocessor/detail/limits/auto_rec_512.hpp>
+# elif FB_BOOST_PP_LIMIT_MAG == 1024
+# include <firebird/impl/boost/preprocessor/detail/limits/auto_rec_256.hpp>
+# include <firebird/impl/boost/preprocessor/detail/limits/auto_rec_512.hpp>
+# include <firebird/impl/boost/preprocessor/detail/limits/auto_rec_1024.hpp>
+# else
+# error Incorrect value for the FB_BOOST_PP_LIMIT_MAG limit
+# endif
+#
+# endif
+#
+# endif
+#
 # endif

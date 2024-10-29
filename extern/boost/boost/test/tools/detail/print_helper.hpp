@@ -97,7 +97,7 @@ struct print_log_value {
     std::streamsize set_precision( std::ostream& ostr, mpl::false_ )
     {
         if( std::numeric_limits<T>::is_specialized && std::numeric_limits<T>::radix == 2 )
-            return ostr.precision( 2 + std::numeric_limits<T>::digits * 301/1000 );
+            return ostr.precision( 2 + std::streamsize(std::numeric_limits<T>::digits) * 301/1000 );
         else if ( std::numeric_limits<T>::is_specialized && std::numeric_limits<T>::radix == 10 ) {
 #ifdef BOOST_NO_CXX11_NUMERIC_LIMITS
             // (was BOOST_NO_NUMERIC_LIMITS_LOWEST but now deprecated).

@@ -135,7 +135,7 @@ Win_Sspi, Legacy_Auth</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>UserManager = Srp</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>TracePlugin = fbtrace</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>Providers =
-Remote,Engine13,Loopback</I></FONT></P>
+Remote,Engine14,Loopback</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4><I>WireCryptPlugin = Arc4</I></FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>This provides normal
 operation in server, client and embedded cases. If you want to add
@@ -158,10 +158,10 @@ default equals to plugin implementation's name (and it's factory name
 which is actually used in firebird.conf). Certainly in typical case,
 module contains one plugin, and that plugin works with only one
 configuration, and all 3 names are equal, and no more configuration
-is needed – for example libEngine13.so or Engine13.dll contains
-implementation of provider Engine13, and nothing else except record </FONT>
+is needed – for example libEngine14.so or Engine14.dll contains
+implementation of provider Engine14, and nothing else except record </FONT>
 </P>
-<P STYLE="margin-bottom: 0in"><FONT SIZE=4>Providers = Engine13</FONT></P>
+<P STYLE="margin-bottom: 0in"><FONT SIZE=4>Providers = Engine14</FONT></P>
 <P STYLE="margin-bottom: 0in"><FONT SIZE=4>in firebird.conf is needed
 to load it. But if you have something complex – configuration file
 plugins.conf will help you to have such plugin factories which you

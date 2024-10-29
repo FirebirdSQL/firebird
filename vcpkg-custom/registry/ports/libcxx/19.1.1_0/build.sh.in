@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+set -e
+
+SOURCE_PATH=@SOURCE_PATH@
+INSTALL_PREFIX=@INSTALL_PREFIX@
+
+export MACOSX_DEPLOYMENT_TARGET=12.7
+
+cmake -G Ninja -S $SOURCE_PATH/llvm \
+	-DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX \
+	-DLLVM_ENABLE_PROJECTS="clang" \
+	-DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi;libunwind" \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DLIBCXX_ENABLE_SHARED=false \
+	-DLIBCXX_ENABLE_STATIC_ABI_LIBRARY=true
+
+ninja runtimes
+
+ninja install-cxx install-cxxabi

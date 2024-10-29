@@ -3,7 +3,10 @@
         {
             "name": "Linux",
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/src/include/gen",
+                "${workspaceFolder}/src/include",
+                "${workspaceFolder}/extern/boost",
+                "${workspaceFolder}/extern/libcds"
             ],
             "defines": [
                 "DEV_BUILD"

@@ -108,7 +108,6 @@ f none @prefix@/include/blr.h=$SRCDIR/include/blr.h  0644 root root
 f none @prefix@/include/ib_util.h=$SRCDIR/include/ib_util.h  0644 root root
 f none @prefix@/include/ibase.h=$SRCDIR/include/ibase.h  0644 root root
 f none @prefix@/include/iberror.h=$SRCDIR/include/iberror.h  0644 root root
-f none @prefix@/include/perf.h=$SRCDIR/include/perf.h  0644 root root
 
 d none @prefix@/intl  0755 root root
 f none @prefix@/intl/libfbintl.so=$SRCDIR/intl/libfbintl.so  0755 root root

@@ -1,0 +1,163 @@
+# /* Copyright (C) 2001
+#  * Housemarque Oy
+#  * http://www.housemarque.com
+#  *
+#  * Distributed under the Boost Software License, Version 1.0. (See
+#  * accompanying file LICENSE_1_0.txt or copy at
+#  * http://www.boost.org/LICENSE_1_0.txt)
+#  */
+#
+# /* Revised by Paul Mensonides (2002) */
+# /* Revised by Edward Diener (2011,2020) */
+#
+# /* See http://www.boost.org for most recent version. */
+#
+# ifndef FB_BOOST_PREPROCESSOR_CONFIG_LIMITS_HPP
+# define FB_BOOST_PREPROCESSOR_CONFIG_LIMITS_HPP
+#
+# include <firebird/impl/boost/preprocessor/config/config.hpp>
+#
+# if defined(FB_BOOST_PP_LIMIT_DIM)
+# undef FB_BOOST_PP_LIMIT_DIM
+# endif
+# if defined(FB_BOOST_PP_LIMIT_ITERATION_DIM)
+# undef FB_BOOST_PP_LIMIT_ITERATION_DIM
+# endif
+# if defined(FB_BOOST_PP_LIMIT_SLOT_SIG)
+# undef FB_BOOST_PP_LIMIT_SLOT_SIG
+# endif
+# if defined(FB_BOOST_PP_LIMIT_SLOT_COUNT)
+# undef FB_BOOST_PP_LIMIT_SLOT_COUNT
+# endif
+# if defined(FB_BOOST_PP_LIMIT_WHILE)
+# undef FB_BOOST_PP_LIMIT_WHILE
+# endif
+#
+# if ~FB_BOOST_PP_CONFIG_FLAGS() & FB_BOOST_PP_CONFIG_STRICT()
+#
+# if defined(FB_BOOST_PP_LIMIT_MAG)
+# undef FB_BOOST_PP_LIMIT_MAG
+# endif
+# if defined(FB_BOOST_PP_LIMIT_VARIADIC)
+# undef FB_BOOST_PP_LIMIT_VARIADIC
+# endif
+# if defined(FB_BOOST_PP_LIMIT_TUPLE)
+# undef FB_BOOST_PP_LIMIT_TUPLE
+# endif
+# if defined(FB_BOOST_PP_LIMIT_FOR)
+# undef FB_BOOST_PP_LIMIT_FOR
+# endif
+# if defined(FB_BOOST_PP_LIMIT_REPEAT)
+# undef FB_BOOST_PP_LIMIT_REPEAT
+# endif
+# if defined(FB_BOOST_PP_LIMIT_SEQ)
+# undef FB_BOOST_PP_LIMIT_SEQ
+# endif
+# if defined(FB_BOOST_PP_LIMIT_ITERATION)
+# undef FB_BOOST_PP_LIMIT_ITERATION
+# endif
+#
+# define FB_BOOST_PP_LIMIT_MAG 256
+# define FB_BOOST_PP_LIMIT_WHILE 256
+# define FB_BOOST_PP_LIMIT_VARIADIC 64
+# define FB_BOOST_PP_LIMIT_TUPLE 64
+# define FB_BOOST_PP_LIMIT_FOR 256
+# define FB_BOOST_PP_LIMIT_SEQ 256
+# define FB_BOOST_PP_LIMIT_REPEAT 256
+# define FB_BOOST_PP_LIMIT_ITERATION 256
+#
+#else
+#
+# if defined(FB_BOOST_PP_LIMIT_MAG)
+# if !(FB_BOOST_PP_LIMIT_MAG == 256 || FB_BOOST_PP_LIMIT_MAG == 512 || FB_BOOST_PP_LIMIT_MAG == 1024)
+# undef FB_BOOST_PP_LIMIT_MAG
+# define FB_BOOST_PP_LIMIT_MAG 256
+# define FB_BOOST_PP_LIMIT_WHILE 256
+# else
+# define FB_BOOST_PP_LIMIT_WHILE FB_BOOST_PP_LIMIT_MAG
+# if !defined(FB_BOOST_PP_LIMIT_SEQ)
+# define FB_BOOST_PP_LIMIT_SEQ FB_BOOST_PP_LIMIT_MAG
+# endif
+# endif
+# else
+# define FB_BOOST_PP_LIMIT_MAG 256
+# define FB_BOOST_PP_LIMIT_WHILE 256
+# endif
+#
+# if defined(FB_BOOST_PP_LIMIT_VARIADIC)
+# if !(FB_BOOST_PP_LIMIT_VARIADIC == 64 || FB_BOOST_PP_LIMIT_VARIADIC == 128 || FB_BOOST_PP_LIMIT_VARIADIC == 256)
+# undef FB_BOOST_PP_LIMIT_VARIADIC
+# define FB_BOOST_PP_LIMIT_VARIADIC 64
+# endif
+# else
+# define FB_BOOST_PP_LIMIT_VARIADIC 64
+# endif
+#
+# if defined(FB_BOOST_PP_LIMIT_TUPLE)
+# if !(FB_BOOST_PP_LIMIT_TUPLE == 64 || FB_BOOST_PP_LIMIT_TUPLE == 128 || FB_BOOST_PP_LIMIT_TUPLE == 256)
+# undef FB_BOOST_PP_LIMIT_TUPLE
+# define FB_BOOST_PP_LIMIT_TUPLE 64
+# elif FB_BOOST_PP_LIMIT_TUPLE > FB_BOOST_PP_LIMIT_VARIADIC
+# undef FB_BOOST_PP_LIMIT_VARIADIC
+# define FB_BOOST_PP_LIMIT_VARIADIC FB_BOOST_PP_LIMIT_TUPLE
+# endif
+# else
+# define FB_BOOST_PP_LIMIT_TUPLE 64
+# endif
+#
+# if defined(FB_BOOST_PP_LIMIT_FOR)
+# if !(FB_BOOST_PP_LIMIT_FOR == 256 || FB_BOOST_PP_LIMIT_FOR == 512 || FB_BOOST_PP_LIMIT_FOR == 1024)
+# undef FB_BOOST_PP_LIMIT_FOR
+# define FB_BOOST_PP_LIMIT_FOR 256
+# elif FB_BOOST_PP_LIMIT_FOR > FB_BOOST_PP_LIMIT_MAG
+# undef FB_BOOST_PP_LIMIT_FOR
+# define FB_BOOST_PP_LIMIT_FOR FB_BOOST_PP_LIMIT_MAG
+# endif
+# else
+# define FB_BOOST_PP_LIMIT_FOR 256
+# endif
+#
+# if defined(FB_BOOST_PP_LIMIT_REPEAT)
+# if !(FB_BOOST_PP_LIMIT_REPEAT == 256 || FB_BOOST_PP_LIMIT_REPEAT == 512 || FB_BOOST_PP_LIMIT_REPEAT == 1024)
+# undef FB_BOOST_PP_LIMIT_REPEAT
+# define FB_BOOST_PP_LIMIT_REPEAT 256
+# elif FB_BOOST_PP_LIMIT_REPEAT > FB_BOOST_PP_LIMIT_MAG
+# undef FB_BOOST_PP_LIMIT_REPEAT
+# define FB_BOOST_PP_LIMIT_REPEAT FB_BOOST_PP_LIMIT_MAG
+# endif
+# else
+# define FB_BOOST_PP_LIMIT_REPEAT 256
+# endif
+#
+# if defined(FB_BOOST_PP_LIMIT_SEQ)
+# if !(FB_BOOST_PP_LIMIT_SEQ == 256 || FB_BOOST_PP_LIMIT_SEQ == 512 || FB_BOOST_PP_LIMIT_SEQ == 1024)
+# undef FB_BOOST_PP_LIMIT_SEQ
+# define FB_BOOST_PP_LIMIT_SEQ 256
+# elif FB_BOOST_PP_LIMIT_SEQ > FB_BOOST_PP_LIMIT_MAG
+# undef FB_BOOST_PP_LIMIT_SEQ
+# define FB_BOOST_PP_LIMIT_SEQ FB_BOOST_PP_LIMIT_MAG
+# endif
+# else
+# define FB_BOOST_PP_LIMIT_SEQ 256
+# endif
+#
+# if defined(FB_BOOST_PP_LIMIT_ITERATION)
+# if !(FB_BOOST_PP_LIMIT_ITERATION == 256 || FB_BOOST_PP_LIMIT_ITERATION == 512 || FB_BOOST_PP_LIMIT_ITERATION == 1024)
+# undef FB_BOOST_PP_LIMIT_ITERATION
+# define FB_BOOST_PP_LIMIT_ITERATION 256
+# elif FB_BOOST_PP_LIMIT_ITERATION > FB_BOOST_PP_LIMIT_MAG
+# undef FB_BOOST_PP_LIMIT_ITERATION
+# define FB_BOOST_PP_LIMIT_ITERATION FB_BOOST_PP_LIMIT_MAG
+# endif
+# else
+# define FB_BOOST_PP_LIMIT_ITERATION 256
+# endif
+#
+# endif
+#
+# define FB_BOOST_PP_LIMIT_DIM 3
+# define FB_BOOST_PP_LIMIT_ITERATION_DIM 3
+# define FB_BOOST_PP_LIMIT_SLOT_SIG 10
+# define FB_BOOST_PP_LIMIT_SLOT_COUNT 5
+#
+# endif

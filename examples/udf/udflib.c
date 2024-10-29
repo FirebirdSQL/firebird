@@ -35,9 +35,9 @@
 #endif
 #include <string.h>
 #include <math.h>
-#include <ibase.h>
+#include "firebird/ibase.h"
 #include "example.h"
-#include "ib_util.h"
+#include "firebird/ib_util.h"
 
 #define BADVAL -9999L
 #define MYBUF_LEN 15		/* number of chars to get for */

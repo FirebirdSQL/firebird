@@ -822,14 +822,16 @@ void BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescList& idxList, Relatio
 	if (!root)
 		return;
 
+	Cleanup release_root([&] {
+		CCH_RELEASE(tdbb, &window);
+	});
+
 	for (USHORT i = 0; i < root->irt_count; i++)
 	{
 		index_desc idx;
 		if (BTR_description(tdbb, relation, root, &idx, i))
 			idxList.add(idx);
 	}
-
-	CCH_RELEASE(tdbb, &window);
 }
 
 

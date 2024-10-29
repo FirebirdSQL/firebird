@@ -7400,96 +7400,162 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
  *
  **************************************/
 
-	rem_port* port = NULL;
-	int inet_af = AF_UNSPEC;
-
 	cBlock.loadClnt(pb, &parSet);
 	pb.deleteWithTag(parSet.auth_block);
-	authenticateStep0(cBlock);
 
 	bool needFile = !(flags & ANALYZE_EMP_NAME);
+	const PathName save_attach_name(attach_name);
 
-#ifdef WIN_NT
-	if (ISC_analyze_protocol(PROTOCOL_XNET, attach_name, node_name, NULL, needFile))
-		port = XNET_analyze(&cBlock, attach_name, flags & ANALYZE_USER_VFY, cBlock.getConfig(), ref_db_name);
-	else
+#ifdef TRUSTED_AUTH
+	bool legacySSP = false;
+	Auth::setLegacySSP(legacySSP);
 #endif
 
-	if (ISC_analyze_protocol(PROTOCOL_INET4, attach_name, node_name, INET_SEPARATOR, needFile))
-		inet_af = AF_INET;
-	else if (ISC_analyze_protocol(PROTOCOL_INET6, attach_name, node_name, INET_SEPARATOR, needFile))
-		inet_af = AF_INET6;
-
-	if (inet_af != AF_UNSPEC ||
-		ISC_analyze_protocol(PROTOCOL_INET, attach_name, node_name, INET_SEPARATOR, needFile) ||
-		ISC_analyze_tcp(attach_name, node_name, needFile))
+	rem_port* port;
+	while (true)
 	{
-		if (node_name.isEmpty())
-			node_name = INET_LOCALHOST;
-		else
+		port = NULL;
+		int inet_af = AF_UNSPEC;
+
+		authenticateStep0(cBlock);
+		const NoCaseString savePluginName(cBlock.plugins.name());
+
+		try
 		{
-			ISC_unescape(node_name);
-			ISC_utf8ToSystem(node_name);
-		}
-
-		port = INET_analyze(&cBlock, attach_name, node_name.c_str(), flags & ANALYZE_USER_VFY, pb,
-			cBlock.getConfig(), ref_db_name, cryptCb, inet_af);
-	}
-
-	// We have a local connection string. If it's a file on a network share,
-	// try to connect to the corresponding host remotely.
-	if (flags & ANALYZE_MOUNTS)
-	{
 #ifdef WIN_NT
-		if (!port)
-		{
-			PathName expanded_name = attach_name;
-			if (ISC_analyze_pclan(expanded_name, node_name))
-			{
-				ISC_unescape(node_name);
-				ISC_utf8ToSystem(node_name);
+			if (ISC_analyze_protocol(PROTOCOL_XNET, attach_name, node_name, NULL, needFile))
+				port = XNET_analyze(&cBlock, attach_name, flags & ANALYZE_USER_VFY, cBlock.getConfig(), ref_db_name);
+			else
+#endif
 
-				port = INET_analyze(&cBlock, expanded_name, node_name.c_str(), flags & ANALYZE_USER_VFY, pb,
-					cBlock.getConfig(), ref_db_name, cryptCb);
+			if (ISC_analyze_protocol(PROTOCOL_INET4, attach_name, node_name, INET_SEPARATOR, needFile))
+				inet_af = AF_INET;
+			else if (ISC_analyze_protocol(PROTOCOL_INET6, attach_name, node_name, INET_SEPARATOR, needFile))
+				inet_af = AF_INET6;
+
+			if (inet_af != AF_UNSPEC ||
+				ISC_analyze_protocol(PROTOCOL_INET, attach_name, node_name, INET_SEPARATOR, needFile) ||
+				ISC_analyze_tcp(attach_name, node_name, needFile))
+			{
+				if (node_name.isEmpty())
+					node_name = INET_LOCALHOST;
+				else
+				{
+					ISC_unescape(node_name);
+					ISC_utf8ToSystem(node_name);
+				}
+
+				port = INET_analyze(&cBlock, attach_name, node_name.c_str(), flags & ANALYZE_USER_VFY, pb,
+					cBlock.getConfig(), ref_db_name, cryptCb, inet_af);
 			}
-		}
+
+			// We have a local connection string. If it's a file on a network share,
+			// try to connect to the corresponding host remotely.
+			if (flags & ANALYZE_MOUNTS)
+			{
+#ifdef WIN_NT
+				if (!port)
+				{
+					PathName expanded_name = attach_name;
+					if (ISC_analyze_pclan(expanded_name, node_name))
+					{
+						ISC_unescape(node_name);
+						ISC_utf8ToSystem(node_name);
+
+						port = INET_analyze(&cBlock, expanded_name, node_name.c_str(), flags & ANALYZE_USER_VFY, pb,
+							cBlock.getConfig(), ref_db_name, cryptCb);
+					}
+				}
 #endif
 
 #ifndef NO_NFS
-		if (!port)
-		{
-			PathName expanded_name = attach_name;
-			if (ISC_analyze_nfs(expanded_name, node_name))
-			{
-				ISC_unescape(node_name);
-				ISC_utf8ToSystem(node_name);
+				if (!port)
+				{
+					PathName expanded_name = attach_name;
+					if (ISC_analyze_nfs(expanded_name, node_name))
+					{
+						ISC_unescape(node_name);
+						ISC_utf8ToSystem(node_name);
 
-				port = INET_analyze(&cBlock, expanded_name, node_name.c_str(), flags & ANALYZE_USER_VFY, pb,
-					cBlock.getConfig(), ref_db_name, cryptCb);
-			}
-		}
+						port = INET_analyze(&cBlock, expanded_name, node_name.c_str(), flags & ANALYZE_USER_VFY, pb,
+							cBlock.getConfig(), ref_db_name, cryptCb);
+					}
+				}
 #endif
-	}
+			}
 
-	if ((flags & ANALYZE_LOOPBACK) && !port)
-	{
-		// We have a local connection string.
-		// If we are in loopback mode attempt connect to a localhost.
+			if ((flags & ANALYZE_LOOPBACK) && !port)
+			{
+				// We have a local connection string.
+				// If we are in loopback mode attempt connect to a localhost.
 
-		if (node_name.isEmpty())
-		{
+				if (node_name.isEmpty())
+				{
 #ifdef WIN_NT
-			if (!port)
+					if (!port)
+					{
+						port = XNET_analyze(&cBlock, attach_name, flags & ANALYZE_USER_VFY,
+							cBlock.getConfig(), ref_db_name);
+					}
+#endif
+					if (!port)
+					{
+						port = INET_analyze(&cBlock, attach_name, INET_LOCALHOST, flags & ANALYZE_USER_VFY, pb,
+							cBlock.getConfig(), ref_db_name, cryptCb);
+					}
+				}
+			}
+
+#ifdef TRUSTED_AUTH
+			if (port && !legacySSP)
 			{
-				port = XNET_analyze(&cBlock, attach_name, flags & ANALYZE_USER_VFY,
-					cBlock.getConfig(), ref_db_name);
+				const PACKET& packet = port->port_context->rdb_packet;
+				if (port->port_protocol < PROTOCOL_VERSION13 && packet.p_operation == op_accept)
+				{
+					// old server supports legacy SSP only
+					legacySSP = true;
+				}
+				else if (port->port_protocol >= PROTOCOL_VERSION13 && packet.p_operation == op_accept_data)
+				{
+					// more recent server reports if it supports non-legacy SSP
+					legacySSP = !(packet.p_acpd.p_acpt_type & pflag_win_sspi_nego);
+				}
+				else
+					break;
+
+				Auth::setLegacySSP(legacySSP);
+
+				if (legacySSP && savePluginName == "WIN_SSPI")
+				{
+					// reinitialize Win_SSPI plugin and send new data
+					attach_name = save_attach_name;
+
+					cBlock.plugins.set(savePluginName.c_str());
+
+					disconnect(port, false);
+					continue;
+				}
 			}
 #endif
-			if (!port)
-			{
-				port = INET_analyze(&cBlock, attach_name, INET_LOCALHOST, flags & ANALYZE_USER_VFY, pb,
-					cBlock.getConfig(), ref_db_name, cryptCb);
-			}
+
+			break;
+		}
+		catch (const Exception&)
+		{
+#ifdef TRUSTED_AUTH
+			const char* const pluginName = cBlock.plugins.name();
+			if (legacySSP || fb_utils::stricmp(pluginName, "WIN_SSPI") != 0)
+				throw;
+
+			// Retry connect with failed plugin only and using legacy security package
+			legacySSP = true;
+			Auth::setLegacySSP(legacySSP);
+			attach_name = save_attach_name;
+
+			cBlock.plugins.set(pluginName);
+#else
+			throw;
+#endif
 		}
 	}
 

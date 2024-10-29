@@ -165,7 +165,7 @@ SqlPackage::SqlPackage(MemoryPool& pool)
 	: SystemPackage(
 		pool,
 		"RDB$SQL",
-		ODS_13_2,
+		ODS_14_0,
 		// procedures
 		{
 			SystemProcedure(

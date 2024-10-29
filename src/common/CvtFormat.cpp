@@ -228,11 +228,6 @@ namespace
 		return std::isalpha(static_cast<unsigned char>(symbol));
 	}
 
-	constexpr size_t fb_strlen_constexpr(const char* str)
-	{
-		return std::char_traits<char>::length(str);
-	}
-
 	constexpr bool isSeparator(char symbol)
 	{
 		switch (symbol)
@@ -1512,7 +1507,7 @@ namespace
 				{
 					// This is deferred pattern
 					std::string_view period = getSubstringFromString(str, strLength, strOffset,
-						fb_strlen_constexpr(FormatStr::AM), false);
+						fb_strlen(FormatStr::AM), false);
 					deferredTokens.push_back({*it, period});
 					break;
 				}

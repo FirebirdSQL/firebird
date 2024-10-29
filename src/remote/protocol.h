@@ -141,7 +141,8 @@ const USHORT ptype_lazy_send	= 5;	// Deferred packets delivery
 const USHORT ptype_MASK			= 0xFF;	// Mask - up to 255 types of protocol
 //
 // upper byte is used for protocol flags
-const USHORT pflag_compress		= 0x100;	// Turn on compression if possible
+const USHORT pflag_compress			= 0x100;	// Turn on compression if possible
+const USHORT pflag_win_sspi_nego	= 0x200;	// Win_SSPI supports Negotiate security package
 
 // Generic object id
 
@@ -329,7 +330,7 @@ enum P_OP
 
 // Count String Structure
 
-class RemoteXdr;
+struct RemoteXdr;
 
 typedef struct cstring
 {

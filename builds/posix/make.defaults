@@ -110,8 +110,8 @@ GLOB_OPTIONS:=
 
 #____________________________________________________________________________
 
-# Global c++ flags: firebird needs no RTTI, choose build standard
-PLUSPLUS_FLAGS:= -fno-rtti -std=c++17
+# Global c++ flags: firebird needs no RTTI, choose build standard and c++ specific warnings level
+PLUSPLUS_FLAGS:= -fno-rtti -std=c++17 -Werror=delete-incomplete
 
 # If this is defined then we use special rules useful for developers only
 IsDeveloper = @DEVEL_FLG@
@@ -442,4 +442,3 @@ FIREBIRD_MSG    = $(FIREBIRD)/firebird.msg
 # For want of a better suggestion we may as well default to posix
 PLATFORM_PATH	=	os/posix
 TRACE_OS_Sources	=
-

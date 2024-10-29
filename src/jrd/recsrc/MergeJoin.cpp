@@ -363,7 +363,11 @@ void MergeJoin::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned 
 {
 	planEntry.className = "MergeJoin";
 
-	planEntry.lines.add().text = "Merge Join (inner)";
+	string extras;
+	extras.printf(" (keys: %" ULONGFORMAT", total key length: %" ULONGFORMAT")",
+				  m_keys[0]->getCount(), m_args[0]->getKeyLength());
+
+	planEntry.lines.add().text = "Merge Join (inner)" + extras;
 	printOptInfo(planEntry.lines);
 
 	if (recurse)

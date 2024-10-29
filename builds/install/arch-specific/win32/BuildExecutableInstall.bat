@@ -397,12 +397,10 @@ for %%v in (IPLicense.txt IDPLicense.txt ) do (
 :: grab some missing bits'n'pieces from different parts of the source tree
 ::=========================================================================
 @echo   Copying ib_util etc
-@copy %FB_ROOT_PATH%\src\extlib\ib_util.h %FB_OUTPUT_DIR%\include > nul || (call :ERROR Copying ib_util.h failed. & goto :EOF )
 @copy %FB_ROOT_PATH%\src\misc\pascal\ib_util.pas %FB_OUTPUT_DIR%\include > nul || (call :ERROR Copying ib_util.pas failed. & goto :EOF )
 
 @echo   Copying other include files required for development...
 @set OUTPATH=%FB_OUTPUT_DIR%\include
-@copy %FB_ROOT_PATH%\src\yvalve\perf.h %OUTPATH%\ > nul
 @copy %FB_ROOT_PATH%\src\include\gen\firebird.pas %OUTPATH%\firebird\ > nul || (@call :ERROR Failure executing copy %FB_ROOT_PATH%\src\include\gen\firebird.pas %OUTPATH%\firebird\  )
 @if ERRORLEVEL 1 goto :END
 

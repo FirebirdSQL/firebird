@@ -710,7 +710,16 @@ CREATE [GLOBAL] MAPPING [IF NOT EXISTS] ...
 ALTER TABLE <table> ADD [IF NOT EXISTS] <column name> ...
 ALTER TABLE <table> ADD CONSTRAINT [IF NOT EXISTS] <constraint name> ...
 
-3) Non-enforced constraints.
+3) Creation of an inactive index
+
+CREATE [UNIQUE] [ASC[ENDING] | DESC[ENDING]]
+  INDEX indexname [{ACTIVE | INACTIVE}]
+  ON tablename {(col [, col ...]) | COMPUTED BY (<expression>)}
+  [WHERE <search_condition>] 
+
+'isql -x' generates script accordingly.
+
+4) Non-enforced constraints.
 
 CREATE/ALTER TABLE supports creation of non-enforced constraints.
 

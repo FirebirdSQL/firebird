@@ -3,8 +3,8 @@
 //  Software License, Version 1.0. (See accompanying file
 //  LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-#ifndef BOOST_MP_TRANS_RED_TYPE_HPP
-#define BOOST_MP_TRANS_RED_TYPE_HPP
+#ifndef BOOST_MP_TRANSCENDENTAL_REDUCTION_TYPE_HPP
+#define BOOST_MP_TRANSCENDENTAL_REDUCTION_TYPE_HPP
 
 namespace boost { namespace multiprecision { namespace detail {
 
@@ -18,4 +18,4 @@ struct transcendental_reduction_type
 }
 } // namespace boost::multiprecision::detail
 
-#endif // BOOST_MP_TRANS_RED_TYPE_HPP
+#endif // BOOST_MP_TRANSCENDENTAL_REDUCTION_TYPE_HPP

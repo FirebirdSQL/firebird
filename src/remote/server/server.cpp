@@ -657,7 +657,10 @@ public:
 			}
 
 			// if we asked for more data but received nothing switch to next plugin
-			const bool forceNext = (flags & AUTH_CONTINUE) && (!authPort->port_srv_auth_block->hasDataForPlugin());
+			const bool forceNext = (flags & AUTH_CONTINUE) &&
+				(!authPort->port_srv_auth_block->hasDataForPlugin()) &&
+				(!authPort->port_srv_auth_block->authCompleted());
+
 			HANDSHAKE_DEBUG(fprintf(stderr, "Srv: authenticate: ServerAuth calls plug %s\n",
 				forceNext ? "forced-NEXT" : authItr->name()));
 			int authResult = forceNext ? IAuth::AUTH_CONTINUE :
@@ -685,6 +688,11 @@ public:
 				authItr->next();
 				authServer = NULL;
 				continue;
+
+			case IAuth::AUTH_SUCCESS_WITH_DATA:
+				HANDSHAKE_DEBUG(fprintf(stderr, "Srv: authenticate: success with data\n"));
+				fb_assert(!authPort->port_srv_auth_block->authCompleted());
+				// fall thru
 
 			case IAuth::AUTH_MORE_DATA:
 				HANDSHAKE_DEBUG(fprintf(stderr, "Srv: authenticate: plugin wants more data\n"));
@@ -739,6 +747,13 @@ public:
 				if (send->p_acpt.p_acpt_type & pflag_compress)
 					authPort->port_flags |= PORT_compressed;
 				memset(&send->p_auth_cont, 0, sizeof send->p_auth_cont);
+
+				if (authResult == IAuth::AUTH_SUCCESS_WITH_DATA)
+				{
+					authPort->port_srv_auth_block->authCompleted(true);
+					HANDSHAKE_DEBUG(fprintf(stderr, "Srv: authenticate: success with data, completed\n"));
+				}
+
 				return false;
 
 			case IAuth::AUTH_FAILED:
@@ -1970,6 +1985,9 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 	send->p_acpd.p_acpt_version = port->port_protocol = version;
 	send->p_acpd.p_acpt_architecture = architecture;
 	send->p_acpd.p_acpt_type = type | (compress ? pflag_compress : 0);
+#ifdef TRUSTED_AUTH
+	send->p_acpd.p_acpt_type |= pflag_win_sspi_nego;
+#endif
 	send->p_acpd.p_acpt_authenticated = 0;
 
 	send->p_acpt.p_acpt_version = port->port_protocol = version;
@@ -2014,13 +2032,15 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 		{
 			ConnectAuth* cnctAuth = FB_NEW ConnectAuth(port, id);
 			port->port_srv_auth = cnctAuth;
-			if (port->port_srv_auth->authenticate(send, ServerAuth::AUTH_COND_ACCEPT))
+
+			if (cnctAuth->authenticate(send, ServerAuth::AUTH_COND_ACCEPT))
 			{
-				delete port->port_srv_auth;
+				delete cnctAuth;
 				port->port_srv_auth = NULL;
 			}
+			else
+				cnctAuth->useResponse = true;
 
-			cnctAuth->useResponse = true;
 			return true;
 		}
 

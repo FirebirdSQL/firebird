@@ -235,6 +235,10 @@ public:
 		if (att->att_parallel_workers > 0)
 			workers = att->att_parallel_workers;
 
+		// Classic in single-user shutdown mode can't create additional worker attachments
+		if ((m_dbb->dbb_ast_flags & DBB_shutdown_single) && !(m_dbb->dbb_flags & DBB_shared))
+			workers = 1;
+
 		for (int i = 0; i < workers; i++)
 			m_items.add(FB_NEW_POOL(*m_pool) Item(this));
 
@@ -329,7 +333,9 @@ public:
 
 			if (!att)
 			{
-				Arg::Gds(isc_bad_db_handle).copyTo(status);
+				if (!status->hasData())
+					Arg::Gds(isc_bad_db_handle).copyTo(status);
+
 				return false;
 			}
 

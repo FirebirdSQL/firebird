@@ -897,6 +897,8 @@ BackupManager::BackupManager(thread_db* tdbb, Database* _database, int ini_state
 	UCHAR* temp_buffers = reinterpret_cast<UCHAR*>
 		(temp_buffers_space.getAlignedBuffer(database->dbb_page_size * 3, database->getIOBlockSize()));
 
+	memset(temp_buffers, 0, database->dbb_page_size * 3);
+
 	backup_state = ini_state;
 
 	empty_buffer = reinterpret_cast<ULONG*>(temp_buffers);

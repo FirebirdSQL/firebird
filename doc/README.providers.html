@@ -47,7 +47,7 @@ attach stage.</FONT></P>
 </P>
 <P STYLE="text-indent: 0.39in; margin-bottom: 0in"><FONT SIZE=4>Next
 samples are with default configuration, which contains 3 providers:
-<B>Remote</B> (establish network connection), <B>Engine13</B> (main
+<B>Remote</B> (establish network connection), <B>Engine14</B> (main
 database engine) and <B>Loopback</B> (force network connection to
 local server for database name without explicitly given network
 protocol).</FONT></P>
@@ -59,7 +59,7 @@ provider in the list) at once redirects such call to <I>RemoteHost</I>.
 That's how typical client configuration works.</FONT></P>
 <P STYLE="text-indent: 0.39in; margin-bottom: 0in"><FONT SIZE=4>When
 database name does not contain network protocol (just <I>dbname</I>)
-<B>Remote</B> provider rejects it and <B>Engine13</B> provider comes
+<B>Remote</B> provider rejects it and <B>Engine14</B> provider comes
 to stage. It tries to open <I>dbname</I> &ndash; and in case of
 success we get embedded connection to the database. Pay attention &ndash;
 we do not need special embedded library to have embedded connection,
@@ -74,7 +74,7 @@ to open database file. This is normal case if database was not
 created by that user in embedded mode or if he was not explicitly
 given OS rights for embedded access to databases on given box.
 Moreover, setting access rights in such a manner is a requirement for
-correct superserver operation. So after failure of <B>Engine13</B> to
+correct superserver operation. So after failure of <B>Engine14</B> to
 access database <B>Loopback</B> provider is attempted for an attach.
 It does not differ much from <B>Remote</B>, but tries to access
 database <I>dbname</I> on a server running on local host. On windows

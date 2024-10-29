@@ -143,6 +143,7 @@ void SortedStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsign
 	{
 		planDescription->text = "Refetch";
 		planDescription = &planEntry.lines.add();
+		++planDescription->level;
 		++level;
 	}
 

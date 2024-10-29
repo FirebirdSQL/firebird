@@ -7,8 +7,8 @@
 //
 // boost-no-inspect
 
-#ifndef BOOST_MP_TOOLS_ASSERT_HPP
-#define BOOST_MP_TOOLS_ASSERT_HPP
+#ifndef BOOST_MP_DETAIL_ASSERT_HPP
+#define BOOST_MP_DETAIL_ASSERT_HPP
 
 #include <boost/multiprecision/detail/standalone_config.hpp>
 
@@ -26,4 +26,4 @@
 
 #endif
 
-#endif // BOOST_MATH_TOOLS_ASSERT_HPP
+#endif // BOOST_MP_DETAIL_ASSERT_HPP

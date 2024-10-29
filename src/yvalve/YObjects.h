@@ -36,6 +36,8 @@
 #include "../common/MsgMetadata.h"
 #include "../common/classes/ClumpletWriter.h"
 
+#include <functional>
+
 namespace Why
 {
 

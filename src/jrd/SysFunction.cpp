@@ -379,6 +379,9 @@ const char
 	DATABASE_GUID[] = "DB_GUID",
 	DATABASE_FILE_ID[] = "DB_FILE_ID",
 	REPLICA_MODE[] = "REPLICA_MODE",
+	PAGES_ALLOCATED[] = "PAGES_ALLOCATED",
+	PAGES_USED[] = "PAGES_USED",
+	PAGES_FREE[] = "PAGES_FREE",
 	// SYSTEM namespace: connection wise items
 	SESSION_ID_NAME[] = "SESSION_ID",
 	NETWORK_PROTOCOL_NAME[] = "NETWORK_PROTOCOL",
@@ -430,12 +433,6 @@ const char
 static const char
 	FALSE_VALUE[] = "FALSE",
 	TRUE_VALUE[] = "TRUE";
-
-// Get pages
-const char
-    PAGES_ALLOCATED[] = "PAGES_ALLOCATED",
-    PAGES_USED[] = "PAGES_USED",
-    PAGES_FREE[] = "PAGES_FREE";
 
 
 double fbcot(double value) noexcept
@@ -861,11 +858,14 @@ void setParamsMakeDbkey(DataTypeUtilBase*, const SysFunction*, int argsCount, ds
 {
 	// MAKE_DBKEY ( REL_NAME | REL_ID, RECNUM [, DPNUM [, PPNUM] ] )
 
-	if (args[0]->isUnknown())
-		args[0]->makeLong(0);
+	if (argsCount > 1)
+	{
+		if (args[0]->isUnknown())
+			args[0]->makeLong(0);
 
-	if (args[1]->isUnknown())
-		args[1]->makeInt64(0);
+		if (args[1]->isUnknown())
+			args[1]->makeInt64(0);
+	}
 
 	if (argsCount > 2 && args[2]->isUnknown())
 		args[2]->makeInt64(0);
@@ -2802,9 +2802,10 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 					ERR_post(Arg::Gds(rangeExceededStatus));
 
 				tm times;
-				timestamp.decode(&times);
+				int fractions;
+				timestamp.decode(&times, &fractions);
 				times.tm_year += quantity;
-				timestamp.encode(&times);
+				timestamp.encode(&times, fractions);
 
 				int day = times.tm_mday;
 				timestamp.decode(&times);
@@ -2820,7 +2821,8 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 					ERR_post(Arg::Gds(rangeExceededStatus));
 
 				tm times;
-				timestamp.decode(&times);
+				int fractions;
+				timestamp.decode(&times, &fractions);
 
 				int md[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
@@ -2855,7 +2857,7 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 				else if (times.tm_mday < 1)
 					times.tm_mday = 1;
 
-				timestamp.encode(&times);
+				timestamp.encode(&times, fractions);
 			}
 			break;
 

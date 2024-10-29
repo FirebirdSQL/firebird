@@ -87,6 +87,7 @@ Monitoring tables
       - MON$FILE_ID (unique filesystem-level ID)
       - MON$NEXT_ATTACHMENT (next attachment number)
       - MON$NEXT_STATEMENT (next statement number)
+	  - MON$REPLICA_MODE (Replica mode of the database)
 
     MON$ATTACHMENTS (connected attachments)
       - MON$ATTACHMENT_ID (attachment ID)
@@ -119,6 +120,8 @@ Monitoring tables
       - MON$WIRE_COMPRESSED (wire compression enabled/disabled)
       - MON$WIRE_ENCRYPTED (wire encryption enabled/disabled)
       - MON$WIRE_CRYPT_PLUGIN (name of wire encryption plugin)
+      - MON$SESSION_TIMEZONE (time zone of attachment)
+      - MON$PARALLEL_WORKERS (number of parallel workes that could be used by attachment)
 
     MON$TRANSACTIONS (started transactions)
       - MON$TRANSACTION_ID (transaction ID)
@@ -158,6 +161,7 @@ Monitoring tables
       - MON$EXPLAINED_PLAN (explained query plan)
       - MON$STATEMENT_TIMEOUT (statement timeout)
       - MON$STATEMENT_TIMER (statement timer expiration time)
+	  - MON$COMPILED_STATEMENT_ID  (compiled statement ID)
 
     MON$CALL_STACK (call stack of active PSQL requests)
       - MON$CALL_ID (call ID)
@@ -170,6 +174,7 @@ Monitoring tables
       - MON$SOURCE_COLUMN (SQL source column number)
       - MON$STAT_ID (statistics ID)
       - MON$PACKAGE_NAME (PSQL object package name)
+	  - MON$COMPILED_STATEMENT_ID  (compiled statement ID)
 
     MON$IO_STATS (I/O statistics)
       - MON$STAT_ID (statistics ID)

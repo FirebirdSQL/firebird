@@ -3,8 +3,8 @@
 //  Software License, Version 1.0. (See accompanying file
 //  LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-#ifndef BOOST_MULTIPRECISION_DETAIL_HASH_HPP
-#define BOOST_MULTIPRECISION_DETAIL_HASH_HPP
+#ifndef BOOST_MP_DETAIL_HASH_HPP
+#define BOOST_MP_DETAIL_HASH_HPP
 
 #include <cstddef>
 #include <functional>
@@ -53,4 +53,4 @@ inline std::size_t hash_value(const uint128_type& val)
 
 }}} // Namespaces
 
-#endif // BOOST_MULTIPRECISION_DETAIL_HASH_HPP
+#endif // BOOST_MP_DETAIL_HASH_HPP

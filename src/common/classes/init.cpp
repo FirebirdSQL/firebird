@@ -145,7 +145,7 @@ namespace
 #ifndef DEBUG_INIT
 
 	// This instance ensures dtors run when program exits
-	Firebird::Cleanup global(allClean);
+	Firebird::CleanupFunction global(allClean);
 
 #endif //DEBUG_INIT
 

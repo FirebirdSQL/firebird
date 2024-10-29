@@ -29,7 +29,7 @@
 # make sure that make.defaults uses -lncurses instead of -lcurses for
 # LINK_LIBS and SO_LINK_LIBS e.g. -lncurses -leditline
 
-WARNINGS=-Werror=delete-incomplete -Wall -Wno-switch -Wno-parentheses -Wno-unused-variable -Wno-non-virtual-dtor
+WARNINGS=-Wall -Wno-switch -Wno-parentheses -Wno-unused-variable -Wno-non-virtual-dtor
 COMM_SOLX_FLAGS:=-DSOLARIS -DBSD_COMP -DAMD64 -pipe -fmessage-length=0 -MMD -fPIC
 
 SFIO=@SFIO_DIR@

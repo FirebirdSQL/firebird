@@ -8,6 +8,7 @@
 #  */
 #
 # /* Revised by Paul Mensonides (2002) */
+# /* Revised by Edward Diener (2020) */
 #
 # /* See http://www.boost.org for most recent version. */
 #
@@ -15,6 +16,8 @@
 # define FB_BOOST_PREPROCESSOR_ARITHMETIC_INC_HPP
 #
 # include <firebird/impl/boost/preprocessor/config/config.hpp>
+#
+# if ~FB_BOOST_PP_CONFIG_FLAGS() & FB_BOOST_PP_CONFIG_STRICT()
 #
 # /* FB_BOOST_PP_INC */
 #
@@ -284,5 +287,35 @@
 # define FB_BOOST_PP_INC_254 255
 # define FB_BOOST_PP_INC_255 256
 # define FB_BOOST_PP_INC_256 256
+#
+# else
+#
+# /* FB_BOOST_PP_INC */
+#
+# if ~FB_BOOST_PP_CONFIG_FLAGS() & FB_BOOST_PP_CONFIG_MWCC()
+#    define FB_BOOST_PP_INC(x) FB_BOOST_PP_INC_I(x)
+# else
+#    define FB_BOOST_PP_INC(x) FB_BOOST_PP_INC_OO((x))
+#    define FB_BOOST_PP_INC_OO(par) FB_BOOST_PP_INC_I ## par
+# endif
+#
+# define FB_BOOST_PP_INC_I(x) FB_BOOST_PP_INC_ ## x
+#
+# include <firebird/impl/boost/preprocessor/config/limits.hpp>
+#
+# if FB_BOOST_PP_LIMIT_MAG == 256
+# include <firebird/impl/boost/preprocessor/arithmetic/limits/inc_256.hpp>
+# elif FB_BOOST_PP_LIMIT_MAG == 512
+# include <firebird/impl/boost/preprocessor/arithmetic/limits/inc_256.hpp>
+# include <firebird/impl/boost/preprocessor/arithmetic/limits/inc_512.hpp>
+# elif FB_BOOST_PP_LIMIT_MAG == 1024
+# include <firebird/impl/boost/preprocessor/arithmetic/limits/inc_256.hpp>
+# include <firebird/impl/boost/preprocessor/arithmetic/limits/inc_512.hpp>
+# include <firebird/impl/boost/preprocessor/arithmetic/limits/inc_1024.hpp>
+# else
+# error Incorrect value for the FB_BOOST_PP_LIMIT_MAG limit
+# endif
+#
+# endif
 #
 # endif

@@ -54,8 +54,10 @@
 **   ODS 10 was shipped with IB version 6.0
 **   Here the Firebird history begins:
 **   ODS 10.0 is for FB1.0 and ODS 10.1 is for FB1.5.
-**   ODS 11.0 is for FB2.0, ODS11.1 is for FB2.1 and ODS11.2 is for FB2.5.
-**   ODS 12.0 is for FB3, ODS 13.0 is for FB4.
+**   ODS 11.0 is for FB2.0, ODS 11.1 is for FB2.1 and ODS 11.2 is for FB2.5.
+**   ODS 12.0 is for FB3.
+**   ODS 13.0 is for FB4, ODS 13.1 is for FB5.
+**   ODS 14.0 is for FB6.
 **
 ***********************************************************************/
 
@@ -63,13 +65,14 @@
 
 //const USHORT ODS_VERSION6	= 6;		// on-disk structure as of v3.0
 //const USHORT ODS_VERSION7	= 7;		// new on disk structure for fixing index bug
-const USHORT ODS_VERSION8	= 8;		// new btree structure to support pc semantics
-const USHORT ODS_VERSION9	= 9;		// btree leaf pages are always propagated up
-const USHORT ODS_VERSION10	= 10;		// V6.0 features. SQL delimited idetifier,
-										// SQLDATE, and 64-bit exact numeric type
-const USHORT ODS_VERSION11	= 11;		// Firebird 2.x features
-const USHORT ODS_VERSION12	= 12;		// Firebird 3.x features
-const USHORT ODS_VERSION13	= 13;		// Firebird 4.x features
+inline constexpr USHORT ODS_VERSION8	= 8;		// new btree structure to support pc semantics
+inline constexpr USHORT ODS_VERSION9	= 9;		// btree leaf pages are always propagated up
+inline constexpr USHORT ODS_VERSION10	= 10;		// V6.0 features. SQL delimited idetifier,
+													// SQLDATE, and 64-bit exact numeric type
+inline constexpr USHORT ODS_VERSION11	= 11;		// Firebird 2.x features
+inline constexpr USHORT ODS_VERSION12	= 12;		// Firebird 3.x features
+inline constexpr USHORT ODS_VERSION13	= 13;		// Firebird 4.x features
+inline constexpr USHORT ODS_VERSION14	= 14;		// Firebird 6.x features
 
 // ODS minor version -- minor versions ARE compatible, but may be
 // increasingly functional.  Add new minor versions, but leave previous
@@ -117,112 +120,116 @@ const USHORT ODS_VERSION13	= 13;		// Firebird 4.x features
 
 // Minor versions for ODS 12
 
-const USHORT ODS_CURRENT12_0	= 0;	// Firebird 3.0 features
-const USHORT ODS_CURRENT12		= 0;
+inline constexpr USHORT ODS_CURRENT12_0	= 0;	// Firebird 3.0 features
+inline constexpr USHORT ODS_CURRENT12	= 0;
 
 // Minor versions for ODS 13
 
-const USHORT ODS_CURRENT13_0	= 0;	// Firebird 4.0 features
-const USHORT ODS_CURRENT13_1	= 1;	// Firebird 5.0 features
-const USHORT ODS_CURRENT13_2	= 2;	// Firebird 6.0 features
-const USHORT ODS_CURRENT13		= 2;
+inline constexpr USHORT ODS_CURRENT13_0	= 0;	// Firebird 4.0 features
+inline constexpr USHORT ODS_CURRENT13_1	= 1;	// Firebird 5.0 features
+inline constexpr USHORT ODS_CURRENT13	= 1;
+
+// Minor versions for ODS 14
+
+inline constexpr USHORT ODS_CURRENT14_0	= 0;	// Firebird 6.0 features
+inline constexpr USHORT ODS_CURRENT14	= 0;
 
 // useful ODS macros. These are currently used to flag the version of the
 // system triggers and system indices in ini.e
 
-inline USHORT ENCODE_ODS(USHORT major, USHORT minor)
+inline constexpr USHORT ENCODE_ODS(USHORT major, USHORT minor)
 {
 	return ((major << 4) | minor);
 }
 
-const USHORT ODS_8_0		= ENCODE_ODS(ODS_VERSION8, 0);
-const USHORT ODS_8_1		= ENCODE_ODS(ODS_VERSION8, 1);
-const USHORT ODS_9_0		= ENCODE_ODS(ODS_VERSION9, 0);
-const USHORT ODS_9_1		= ENCODE_ODS(ODS_VERSION9, 1);
-const USHORT ODS_10_0		= ENCODE_ODS(ODS_VERSION10, 0);
-const USHORT ODS_10_1		= ENCODE_ODS(ODS_VERSION10, 1);
-const USHORT ODS_11_0		= ENCODE_ODS(ODS_VERSION11, 0);
-const USHORT ODS_11_1		= ENCODE_ODS(ODS_VERSION11, 1);
-const USHORT ODS_11_2		= ENCODE_ODS(ODS_VERSION11, 2);
-const USHORT ODS_12_0		= ENCODE_ODS(ODS_VERSION12, 0);
-const USHORT ODS_13_0		= ENCODE_ODS(ODS_VERSION13, 0);
-const USHORT ODS_13_1		= ENCODE_ODS(ODS_VERSION13, 1);
-const USHORT ODS_13_2		= ENCODE_ODS(ODS_VERSION13, 2);
+inline constexpr USHORT ODS_8_0		= ENCODE_ODS(ODS_VERSION8, 0);
+inline constexpr USHORT ODS_8_1		= ENCODE_ODS(ODS_VERSION8, 1);
+inline constexpr USHORT ODS_9_0		= ENCODE_ODS(ODS_VERSION9, 0);
+inline constexpr USHORT ODS_9_1		= ENCODE_ODS(ODS_VERSION9, 1);
+inline constexpr USHORT ODS_10_0	= ENCODE_ODS(ODS_VERSION10, 0);
+inline constexpr USHORT ODS_10_1	= ENCODE_ODS(ODS_VERSION10, 1);
+inline constexpr USHORT ODS_11_0	= ENCODE_ODS(ODS_VERSION11, 0);
+inline constexpr USHORT ODS_11_1	= ENCODE_ODS(ODS_VERSION11, 1);
+inline constexpr USHORT ODS_11_2	= ENCODE_ODS(ODS_VERSION11, 2);
+inline constexpr USHORT ODS_12_0	= ENCODE_ODS(ODS_VERSION12, 0);
+inline constexpr USHORT ODS_13_0	= ENCODE_ODS(ODS_VERSION13, 0);
+inline constexpr USHORT ODS_13_1	= ENCODE_ODS(ODS_VERSION13, 1);
+inline constexpr USHORT ODS_14_0	= ENCODE_ODS(ODS_VERSION14, 0);
 
-const USHORT ODS_FIREBIRD_FLAG = 0x8000;
+inline constexpr USHORT ODS_FIREBIRD_FLAG = 0x8000;
 
 // Decode ODS version to Major and Minor parts. The 4 LSB's are minor and
 // the next 11 bits are major version number. The highest significant bit
 // is the Firebird database flag.
-inline USHORT DECODE_ODS_MAJOR(USHORT ods_version)
+inline constexpr USHORT DECODE_ODS_MAJOR(USHORT ods_version)
 {
 	return ((ods_version & 0x7FF0) >> 4);
 }
 
-inline USHORT DECODE_ODS_MINOR(USHORT ods_version)
+inline constexpr USHORT DECODE_ODS_MINOR(USHORT ods_version)
 {
 	return (ods_version & 0x000F);
 }
 
 // Set current ODS major and minor version
 
-const USHORT ODS_VERSION = ODS_VERSION13;		// Current ODS major version -- always
-												// the highest.
+inline constexpr USHORT ODS_VERSION = ODS_VERSION14;		// Current ODS major version -- always
+															// the highest.
 
-const USHORT ODS_RELEASED = ODS_CURRENT13_0;	// The lowest stable minor version
-												// number for this ODS_VERSION!
+inline constexpr USHORT ODS_RELEASED = ODS_CURRENT14_0;		// The lowest stable minor version
+															// number for this ODS_VERSION!
 
-const USHORT ODS_CURRENT = ODS_CURRENT13;		// The highest defined minor version
-												// number for this ODS_VERSION!
+inline constexpr USHORT ODS_CURRENT = ODS_CURRENT14;		// The highest defined minor version
+															// number for this ODS_VERSION!
 
-const USHORT ODS_CURRENT_VERSION = ODS_13_2;	// Current ODS version in use which includes
-												// both major and minor ODS versions!
+inline constexpr USHORT ODS_CURRENT_VERSION = ODS_14_0;		// Current ODS version in use which includes
+															// both major and minor ODS versions!
 
 
 //const USHORT USER_REL_INIT_ID_ODS8	= 31;	// ODS < 9 ( <= 8.2)
-const USHORT USER_DEF_REL_INIT_ID		= 128;	// ODS >= 9
+inline constexpr USHORT USER_DEF_REL_INIT_ID = 128;	// ODS >= 9
 
 
 // Page types
 
-const SCHAR pag_undefined		= 0;
-const SCHAR pag_header			= 1;		// Database header page
-const SCHAR pag_pages			= 2;		// Page inventory page
-const SCHAR pag_transactions	= 3;		// Transaction inventory page
-const SCHAR pag_pointer			= 4;		// Pointer page
-const SCHAR pag_data			= 5;		// Data page
-const SCHAR pag_root			= 6;		// Index root page
-const SCHAR pag_index			= 7;		// Index (B-tree) page
-const SCHAR pag_blob			= 8;		// Blob data page
-const SCHAR pag_ids				= 9;		// Gen-ids
-const SCHAR pag_scns			= 10;		// SCN's inventory page
-const SCHAR pag_max				= 10;		// Max page type
+inline constexpr SCHAR pag_undefined		= 0;
+inline constexpr SCHAR pag_header			= 1;		// Database header page
+inline constexpr SCHAR pag_pages			= 2;		// Page inventory page
+inline constexpr SCHAR pag_transactions		= 3;		// Transaction inventory page
+inline constexpr SCHAR pag_pointer			= 4;		// Pointer page
+inline constexpr SCHAR pag_data				= 5;		// Data page
+inline constexpr SCHAR pag_root				= 6;		// Index root page
+inline constexpr SCHAR pag_index			= 7;		// Index (B-tree) page
+inline constexpr SCHAR pag_blob				= 8;		// Blob data page
+inline constexpr SCHAR pag_ids				= 9;		// Gen-ids
+inline constexpr SCHAR pag_scns				= 10;		// SCN's inventory page
+inline constexpr SCHAR pag_max				= 10;		// Max page type
 
 // Pre-defined page numbers
 
-const ULONG HEADER_PAGE		= 0;
-const ULONG FIRST_PIP_PAGE	= 1;
-const ULONG FIRST_SCN_PAGE	= 2;
+inline constexpr ULONG HEADER_PAGE		= 0;
+inline constexpr ULONG FIRST_PIP_PAGE	= 1;
+inline constexpr ULONG FIRST_SCN_PAGE	= 2;
 
 // Page size limits
 
-const USHORT MIN_PAGE_SIZE		= 4096;
-const USHORT MAX_PAGE_SIZE		= 32768;
+inline constexpr USHORT MIN_PAGE_SIZE		= 4096;
+inline constexpr USHORT MAX_PAGE_SIZE		= 32768;
 
-const USHORT DEFAULT_PAGE_SIZE	= 8192;
+inline constexpr USHORT DEFAULT_PAGE_SIZE	= 8192;
 
 namespace Ods {
 
 // Crypt page by type
 
-const bool pag_crypt_page[pag_max + 1] = {false, false, false,
-										  false, false, true,	// data
-										  false, true, true,	// index, blob
-										  true, false};			// generators
+inline constexpr bool pag_crypt_page[pag_max + 1] = {false, false, false,
+													 false, false, true,	// data
+													 false, true, true,		// index, blob
+													 true, false};			// generators
 
 // pag_flags for any page type
 
-const UCHAR crypted_page	= 0x80;		// Page on disk is encrypted (in memory cache it always isn't)
+inline constexpr UCHAR crypted_page	= 0x80;		// Page on disk is encrypted (in memory cache it always isn't)
 
 // Basic page header
 
@@ -270,7 +277,7 @@ static_assert(offsetof(struct blob_page, blp_page) == 28, "blp_page offset misma
 #define BLP_SIZE static_cast<FB_SIZE_T>(offsetof(Ods::blob_page, blp_page[0]))
 
 // pag_flags
-const UCHAR blp_pointers	= 0x01;		// Blob pointer page, not data page
+inline constexpr UCHAR blp_pointers	= 0x01;		// Blob pointer page, not data page
 
 
 // B-tree page ("bucket")
@@ -313,7 +320,7 @@ static_assert(offsetof(struct btree_page, btr_nodes) == 39, "btr_nodes offset mi
 //const UCHAR btr_dont_gc			= 1;	// Don't garbage-collect this page
 //const UCHAR btr_descending		= 2;	// Page/bucket is part of a descending index
 //const UCHAR btr_jump_info			= 16;	// AB: 2003-index-structure enhancement
-const UCHAR btr_released			= 32;	// Page was released from b-tree
+inline constexpr UCHAR btr_released			= 32;	// Page was released from b-tree
 
 // Data Page
 
@@ -344,12 +351,12 @@ static_assert(offsetof(struct data_page::dpg_repeat, dpg_length) == 2, "dpg_leng
 #define DPG_SIZE	(sizeof (Ods::data_page) - sizeof (Ods::data_page::dpg_repeat))
 
 // pag_flags
-const UCHAR dpg_orphan		= 0x01;		// Data page is NOT in pointer page
-const UCHAR dpg_full		= 0x02;		// Pointer page is marked FULL
-const UCHAR dpg_large		= 0x04;		// Large object is on page
-const UCHAR dpg_swept		= 0x08;		// Sweep has nothing to do on this page
-const UCHAR dpg_secondary	= 0x10;	// Primary record versions not stored on this page
-									// Set in dpm.epp's extend_relation() but never tested.
+inline constexpr UCHAR dpg_orphan		= 0x01;		// Data page is NOT in pointer page
+inline constexpr UCHAR dpg_full			= 0x02;		// Pointer page is marked FULL
+inline constexpr UCHAR dpg_large		= 0x04;		// Large object is on page
+inline constexpr UCHAR dpg_swept		= 0x08;		// Sweep has nothing to do on this page
+inline constexpr UCHAR dpg_secondary	= 0x10;		// Primary record versions not stored on this page
+													// Set in dpm.epp's extend_relation() but never tested.
 
 
 // Index root page
@@ -410,13 +417,13 @@ static_assert(offsetof(struct irtd, irtd_itype) == 2, "irtd_itype offset mismatc
 static_assert(offsetof(struct irtd, irtd_selectivity) == 4, "irtd_selectivity offset mismatch");
 
 // irt_flags, must match the idx_flags (see btr.h)
-const USHORT irt_unique			= 1;
-const USHORT irt_descending		= 2;
-const USHORT irt_in_progress	= 4;
-const USHORT irt_foreign		= 8;
-const USHORT irt_primary		= 16;
-const USHORT irt_expression		= 32;
-const USHORT irt_condition		= 64;
+inline constexpr USHORT irt_unique			= 1;
+inline constexpr USHORT irt_descending		= 2;
+inline constexpr USHORT irt_in_progress		= 4;
+inline constexpr USHORT irt_foreign			= 8;
+inline constexpr USHORT irt_primary			= 16;
+inline constexpr USHORT irt_expression		= 32;
+inline constexpr USHORT irt_condition		= 64;
 
 inline ULONG index_root_page::irt_repeat::getRoot() const
 {
@@ -447,10 +454,10 @@ inline bool index_root_page::irt_repeat::isUsed() const
 }
 
 
-const int STUFF_COUNT		= 4;
+inline constexpr int STUFF_COUNT		= 4;
 
-const ULONG END_LEVEL		= ~0;
-const ULONG END_BUCKET		= (~0u) << 1;
+inline constexpr ULONG END_LEVEL		= ~0;
+inline constexpr ULONG END_BUCKET		= (~0u) << 1;
 
 // Header page
 
@@ -522,50 +529,50 @@ static_assert(offsetof(struct header_page, hdr_data) == 128, "hdr_data offset mi
 //
 //	<type_byte> <length_byte> <data...>
 
-const UCHAR HDR_end					= 0;
-const UCHAR HDR_root_file_name		= 1;	// Original name of root file
-const UCHAR HDR_file				= 2;	// Secondary file
-const UCHAR HDR_last_page			= 3;	// Last logical page number of file
-const UCHAR HDR_sweep_interval		= 4;	// Transactions between sweeps
-const UCHAR HDR_crypt_checksum		= 5;	// Checksum of critical crypt parameters
-const UCHAR HDR_difference_file		= 6;	// Delta file that is used during backup lock
-const UCHAR HDR_backup_guid			= 7;	// GUID generated on each switch into backup mode
-const UCHAR HDR_crypt_key			= 8;	// Name of a key used to crypt database
-const UCHAR HDR_crypt_hash			= 9;	// Validator of key correctness
-const UCHAR HDR_db_guid				= 10;	// Database GUID
-const UCHAR HDR_repl_seq			= 11;	// Replication changelog sequence
-const UCHAR HDR_max					= 11;	// Maximum HDR_clump value
+inline constexpr UCHAR HDR_end					= 0;
+inline constexpr UCHAR HDR_root_file_name		= 1;	// Original name of root file
+inline constexpr UCHAR HDR_file					= 2;	// Secondary file
+inline constexpr UCHAR HDR_last_page			= 3;	// Last logical page number of file
+inline constexpr UCHAR HDR_sweep_interval		= 4;	// Transactions between sweeps
+inline constexpr UCHAR HDR_crypt_checksum		= 5;	// Checksum of critical crypt parameters
+inline constexpr UCHAR HDR_difference_file		= 6;	// Delta file that is used during backup lock
+inline constexpr UCHAR HDR_backup_guid			= 7;	// GUID generated on each switch into backup mode
+inline constexpr UCHAR HDR_crypt_key			= 8;	// Name of a key used to crypt database
+inline constexpr UCHAR HDR_crypt_hash			= 9;	// Validator of key correctness
+inline constexpr UCHAR HDR_db_guid				= 10;	// Database GUID
+inline constexpr UCHAR HDR_repl_seq				= 11;	// Replication changelog sequence
+inline constexpr UCHAR HDR_max					= 11;	// Maximum HDR_clump value
 
 // Header page flags
 
-const USHORT hdr_active_shadow		= 0x1;		// 1	file is an active shadow file
-const USHORT hdr_force_write		= 0x2;		// 2	database is forced write
-const USHORT hdr_crypt_process		= 0x4;		// 4	Encryption status is changing now
-const USHORT hdr_no_reserve			= 0x8;		// 8	don't reserve space for versions
-const USHORT hdr_SQL_dialect_3		= 0x10;		// 16	database SQL dialect 3
-const USHORT hdr_read_only			= 0x20;		// 32	Database is ReadOnly. If not set, DB is RW
-const USHORT hdr_encrypted			= 0x40;		// 64	Database is encrypted
+inline constexpr USHORT hdr_active_shadow		= 0x1;		// 1	file is an active shadow file
+inline constexpr USHORT hdr_force_write			= 0x2;		// 2	database is forced write
+inline constexpr USHORT hdr_crypt_process		= 0x4;		// 4	Encryption status is changing now
+inline constexpr USHORT hdr_no_reserve			= 0x8;		// 8	don't reserve space for versions
+inline constexpr USHORT hdr_SQL_dialect_3		= 0x10;		// 16	database SQL dialect 3
+inline constexpr USHORT hdr_read_only			= 0x20;		// 32	Database is ReadOnly. If not set, DB is RW
+inline constexpr USHORT hdr_encrypted			= 0x40;		// 64	Database is encrypted
 
-const USHORT hdr_backup_mask		= 0xC00;
-const USHORT hdr_shutdown_mask		= 0x1080;
-const USHORT hdr_replica_mask		= 0x6000;
+inline constexpr USHORT hdr_backup_mask			= 0xC00;
+inline constexpr USHORT hdr_shutdown_mask		= 0x1080;
+inline constexpr USHORT hdr_replica_mask		= 0x6000;
 
 // Values for backup mask
-const USHORT hdr_nbak_normal		= 0x000;	// Normal mode. Changes are simply written to main files
-const USHORT hdr_nbak_stalled		= 0x400;	// 1024 Main files are locked. Changes are written to diff file
-const USHORT hdr_nbak_merge			= 0x800;	// 2048 Merging changes from diff file into main files
-const USHORT hdr_nbak_unknown		= USHORT(~0);	// State is unknown. Needs to be read from disk
+inline constexpr USHORT hdr_nbak_normal			= 0x000;	// Normal mode. Changes are simply written to main files
+inline constexpr USHORT hdr_nbak_stalled		= 0x400;	// 1024 Main files are locked. Changes are written to diff file
+inline constexpr USHORT hdr_nbak_merge			= 0x800;	// 2048 Merging changes from diff file into main files
+inline constexpr USHORT hdr_nbak_unknown		= USHORT(~0);	// State is unknown. Needs to be read from disk
 
 // Values for shutdown mask
-const USHORT hdr_shutdown_none		= 0x0;
-const USHORT hdr_shutdown_multi		= 0x80;
-const USHORT hdr_shutdown_full		= 0x1000;
-const USHORT hdr_shutdown_single	= 0x1080;
+inline constexpr USHORT hdr_shutdown_none		= 0x0;
+inline constexpr USHORT hdr_shutdown_multi		= 0x80;
+inline constexpr USHORT hdr_shutdown_full		= 0x1000;
+inline constexpr USHORT hdr_shutdown_single		= 0x1080;
 
 // Values for replica mask
-const USHORT hdr_replica_none		= 0x0000;
-const USHORT hdr_replica_read_only	= 0x2000;
-const USHORT hdr_replica_read_write	= 0x4000;
+inline constexpr USHORT hdr_replica_none		= 0x0000;
+inline constexpr USHORT hdr_replica_read_only	= 0x2000;
+inline constexpr USHORT hdr_replica_read_write	= 0x4000;
 
 
 // Page Inventory Page
@@ -655,20 +662,20 @@ static_assert(offsetof(struct pointer_page, ppg_page) == 32, "ppg_page offset mi
 
 
 // pag_flags
-const UCHAR ppg_eof		= 1;	// Last pointer page in relation
+inline constexpr UCHAR ppg_eof		= 1;	// Last pointer page in relation
 
 // After array of physical page numbers (ppg_page) there is also array of bit
 // flags per every data page. These flags describes state of corresponding data
 // page. Definitions below used to deal with these bits.
-const int PPG_DP_BITS_NUM		= 8;		// Number of additional flag bits per data page
+inline constexpr int PPG_DP_BITS_NUM		= 8;		// Number of additional flag bits per data page
 
-const UCHAR ppg_dp_full			= 0x01;		// Data page is FULL
-const UCHAR ppg_dp_large		= 0x02;		// Large object is on data page
-const UCHAR ppg_dp_swept		= 0x04;		// Sweep has nothing to do on data page
-const UCHAR ppg_dp_secondary	= 0x08;		// Primary record versions not stored on data page
-const UCHAR ppg_dp_empty		= 0x10;		// Data page is empty
+inline constexpr UCHAR ppg_dp_full			= 0x01;		// Data page is FULL
+inline constexpr UCHAR ppg_dp_large			= 0x02;		// Large object is on data page
+inline constexpr UCHAR ppg_dp_swept			= 0x04;		// Sweep has nothing to do on data page
+inline constexpr UCHAR ppg_dp_secondary		= 0x08;		// Primary record versions not stored on data page
+inline constexpr UCHAR ppg_dp_empty			= 0x10;		// Data page is empty
 
-const UCHAR PPG_DP_ALL_BITS	= (1 << PPG_DP_BITS_NUM) - 1;
+inline constexpr UCHAR PPG_DP_ALL_BITS	= (1 << PPG_DP_BITS_NUM) - 1;
 
 #define PPG_DP_BIT_MASK(slot, bit)		(bit)
 #define PPG_DP_BITS_BYTE(bits, slot)	((bits)[(slot)])
@@ -826,19 +833,19 @@ static_assert(offsetof(struct blh, blh_page) == 28, "blh_page offset mismatch");
 
 // record_param flags in req.h must be an exact replica of ODS record header flags
 
-const USHORT rhd_deleted		= 1;		// record is logically deleted
-const USHORT rhd_chain			= 2;		// record is an old version
-const USHORT rhd_fragment		= 4;		// record is a fragment
-const USHORT rhd_incomplete		= 8;		// record is incomplete
-const USHORT rhd_blob			= 16;		// isn't a record but a blob
-const USHORT rhd_stream_blob	= 32;		// blob is a stream mode blob
-const USHORT rhd_delta			= 32;		// prior version is differences only
-const USHORT rhd_large			= 64;		// object is large
-const USHORT rhd_damaged		= 128;		// object is known to be damaged
-const USHORT rhd_gc_active		= 256;		// garbage collecting dead record version
-const USHORT rhd_uk_modified	= 512;		// record key field values are changed
-const USHORT rhd_long_tranum	= 1024;		// transaction number is 64-bit
-const USHORT rhd_not_packed		= 2048;		// record (or delta) is stored "as is"
+inline constexpr USHORT rhd_deleted			= 1;		// record is logically deleted
+inline constexpr USHORT rhd_chain			= 2;		// record is an old version
+inline constexpr USHORT rhd_fragment		= 4;		// record is a fragment
+inline constexpr USHORT rhd_incomplete		= 8;		// record is incomplete
+inline constexpr USHORT rhd_blob			= 16;		// isn't a record but a blob
+inline constexpr USHORT rhd_stream_blob		= 32;		// blob is a stream mode blob
+inline constexpr USHORT rhd_delta			= 32;		// prior version is differences only
+inline constexpr USHORT rhd_large			= 64;		// object is large
+inline constexpr USHORT rhd_damaged			= 128;		// object is known to be damaged
+inline constexpr USHORT rhd_gc_active		= 256;		// garbage collecting dead record version
+inline constexpr USHORT rhd_uk_modified		= 512;		// record key field values are changed
+inline constexpr USHORT rhd_long_tranum		= 1024;		// transaction number is 64-bit
+inline constexpr USHORT rhd_not_packed		= 2048;		// record (or delta) is stored "as is"
 
 
 // This (not exact) copy of class DSC is used to store descriptors on disk.
@@ -899,7 +906,7 @@ static_assert(offsetof(struct InternalArrayDesc, iad_count) == 8, "iad_count off
 static_assert(offsetof(struct InternalArrayDesc, iad_total_length) == 12, "iad_total_length offset mismatch");
 static_assert(offsetof(struct InternalArrayDesc, iad_rpt) == 16, "iad_rpt offset mismatch");
 
-const UCHAR IAD_VERSION_1		= 1;
+inline constexpr UCHAR IAD_VERSION_1		= 1;
 
 /*
 inline int IAD_LEN(int count)
@@ -918,21 +925,21 @@ Firebird::string pagtype(UCHAR type);
 } //namespace Ods
 
 // alignment for raw page access
-const USHORT PAGE_ALIGNMENT = 1024;
+inline constexpr USHORT PAGE_ALIGNMENT = 1024;
 
 // alignment and IO block size/offset multiplier for non-buffered file access
-const ULONG DIRECT_IO_BLOCK_SIZE = 4096;
+inline constexpr ULONG DIRECT_IO_BLOCK_SIZE = 4096;
 
 static_assert(MIN_PAGE_SIZE >= DIRECT_IO_BLOCK_SIZE, "check DIRECT_IO_BLOCK_SIZE");
 
 // size of raw I/O operation for header page
-const USHORT RAW_HEADER_SIZE = 1024;	// ROUNDUP(HDR_SIZE, PAGE_ALIGNMENT);
+inline constexpr USHORT RAW_HEADER_SIZE = 1024;	// ROUNDUP(HDR_SIZE, PAGE_ALIGNMENT);
 //static_assert(RAW_HEADER_SIZE >= HDR_SIZE, "RAW_HEADER_SIZE is less than HDR_SIZE");
 
 // max number of table formats (aka versions), limited by "UCHAR rhd_format"
-const int MAX_TABLE_VERSIONS = 255;
+inline constexpr int MAX_TABLE_VERSIONS = 255;
 
 // max number of view formats (aka versions), limited by "SSHORT RDB$FORMAT"
-const int MAX_VIEW_VERSIONS = MAX_SSHORT;
+inline constexpr int MAX_VIEW_VERSIONS = MAX_SSHORT;
 
 #endif // JRD_ODS_H

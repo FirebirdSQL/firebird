@@ -30,7 +30,7 @@
 #ifdef RC_TARGET_chacha
 #define VER_FILEDESC "Wire Encryption plugin using ChaCha cypher"
 
-#elif RC_TARGET_engine13
+#elif RC_TARGET_engine14
 #define VER_FILEDESC "Engine plugin"
 
 #elif defined RC_TARGET_fb_lock_print

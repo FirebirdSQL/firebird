@@ -127,7 +127,7 @@ or TCP localhost loopback.
 
 On the server side, default provider configuration is:
 
-  Providers = Remote, Engine13, Loopback
+  Providers = Remote, Engine14, Loopback
 
 It means that if the remote provider fails to match the connection string (because of missing
 protocol / host parts), then the embedded engine handles the hostless connection. If you need

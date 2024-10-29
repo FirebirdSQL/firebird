@@ -36,7 +36,7 @@ namespace Firebird {
 		class Stack : public AutoStorage
 	{
 	private:
-		Stack<Object, Capacity>(Stack<Object, Capacity>&);	// not implemented
+		Stack(Stack<Object, Capacity>&);	// not implemented
 
 		class Entry : public Vector<Object, Capacity>
 		{
@@ -117,11 +117,11 @@ namespace Firebird {
 		Entry* stk_cache;
 
 	public:
-		explicit Stack<Object, Capacity>(MemoryPool& p)
+		explicit Stack(MemoryPool& p)
 			: AutoStorage(p), stk(0), stk_cache(0)
 		{ }
 
-		Stack<Object, Capacity>() : AutoStorage(), stk(0), stk_cache(0) { }
+		Stack() : AutoStorage(), stk(0), stk_cache(0) { }
 
 		~Stack()
 		{

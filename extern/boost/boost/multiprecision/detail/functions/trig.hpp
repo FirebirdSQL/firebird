@@ -318,8 +318,8 @@ void eval_sin(T& result, const T& x)
       // divide by three identity a certain number of times.
       // Here we use division by 3^9 --> (19683 = 3^9).
 
-      constexpr const si_type n_scale           = 9;
-      constexpr const si_type n_three_pow_scale = static_cast<si_type>(19683L);
+      constexpr si_type n_scale           = 9;
+      constexpr si_type n_three_pow_scale = static_cast<si_type>(19683L);
 
       eval_divide(xx, n_three_pow_scale);
 

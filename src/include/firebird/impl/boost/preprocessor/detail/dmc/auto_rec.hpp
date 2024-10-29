@@ -9,8 +9,8 @@
 #
 # /* See http://www.boost.org for most recent version. */
 #
-# ifndef FB_BOOST_PREPROCESSOR_DETAIL_AUTO_REC_HPP
-# define FB_BOOST_PREPROCESSOR_DETAIL_AUTO_REC_HPP
+# ifndef FB_BOOST_PREPROCESSOR_DETAIL_DMC_AUTO_REC_HPP
+# define FB_BOOST_PREPROCESSOR_DETAIL_DMC_AUTO_REC_HPP
 #
 # include <firebird/impl/boost/preprocessor/control/iif.hpp>
 #

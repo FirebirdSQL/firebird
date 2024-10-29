@@ -59,7 +59,7 @@ SHRLIB_FOREIGN_EXT=a
 PROD_FLAGS=-ggdb -O3 -fsigned-char -fmessage-length=0 -fno-omit-frame-pointer -pipe -MMD -fPIC
 
 # -Wno-unused-variable
-DEV_FLAGS=-ggdb -O0 -fsigned-char -fmessage-length=0 -pipe -MMD -fPIC -Werror=delete-incomplete -Wall -Wextra -Wno-unused-parameter -Wno-switch -Wno-parentheses -Wno-unknown-pragmas -Wno-non-virtual-dtor
+DEV_FLAGS=-ggdb -O0 -fsigned-char -fmessage-length=0 -pipe -MMD -fPIC -Wall -Wextra -Wno-unused-parameter -Wno-switch -Wno-parentheses -Wno-unknown-pragmas -Wno-non-virtual-dtor
 
 # link options when using IBM /usr/bin/ld fronted by g++
 EXE_LINK_OPTIONS= $(LDFLAGS) $(THR_FLAGS) $(UNDEF_FLAGS) $(LIB_PATH_OPTS) -Wl,-bbigtoc,-brtl

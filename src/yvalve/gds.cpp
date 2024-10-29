@@ -420,7 +420,7 @@ static const UCHAR
 	in_list[] = { op_line, op_verb, op_indent, op_word, op_line, op_args, 0},
 	invoke_function[] = { op_invoke_function, 0 },
 	invsel_procedure[] = { op_invsel_procedure, 0 },
-	cast_format[] = { op_byte, op_literal, op_dtype, op_line, op_verb, 0 };
+	cast_format[] = { op_line, op_indent, op_byte, op_literal, op_line, op_indent, op_dtype, op_line, op_verb, 0 };
 
 
 #include "../jrd/blp.h"
@@ -2971,7 +2971,7 @@ static SCHAR blr_print_char(gds_ctl* control)
 	else if (control->ctl_language)
 		blr_format(control, "chr(%d),", (int) v);
 	else
-		blr_format(control, "%d,", (int) c);
+		blr_format(control, "%d,", (int) v);
 
 	return c;
 }

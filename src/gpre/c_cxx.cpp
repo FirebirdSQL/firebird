@@ -2016,7 +2016,7 @@ static SSHORT gen_event_block(act* action)
 	int ident = CMP_next_ident();
 	init->nod_arg[2] = (gpre_nod*)(IPTR)ident;
 
-	printa(0, "static %schar\n   *isc_%da, *isc_%db;", CONST_STR, ident, ident);
+	printa(0, "static unsigned char\n   *isc_%da, *isc_%db;", ident, ident);
 	printa(0, "static short\n   isc_%dl;", ident);
 
 	const gpre_nod* list = init->nod_arg[1];

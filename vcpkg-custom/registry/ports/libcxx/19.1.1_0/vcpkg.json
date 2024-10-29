@@ -1,0 +1,5 @@
+{
+  "name": "libcxx",
+  "version-string": "19.1.1",
+  "description": "LLVM libc++"
+}

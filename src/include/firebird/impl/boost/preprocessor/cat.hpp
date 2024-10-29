@@ -25,11 +25,11 @@
 #    define FB_BOOST_PP_CAT_OO(par) FB_BOOST_PP_CAT_I ## par
 # endif
 #
-# if ~FB_BOOST_PP_CONFIG_FLAGS() & FB_BOOST_PP_CONFIG_MSVC()
+# if (~FB_BOOST_PP_CONFIG_FLAGS() & FB_BOOST_PP_CONFIG_MSVC()) || (defined(__INTEL_COMPILER) && __INTEL_COMPILER >= 1700)
 #    define FB_BOOST_PP_CAT_I(a, b) a ## b
 # else
-#    define FB_BOOST_PP_CAT_I(a, b) FB_BOOST_PP_CAT_II(a ## b)
-#    define FB_BOOST_PP_CAT_II(res) res
+#    define FB_BOOST_PP_CAT_I(a, b) FB_BOOST_PP_CAT_II(~, a ## b)
+#    define FB_BOOST_PP_CAT_II(p, res) res
 # endif
 #
 # endif

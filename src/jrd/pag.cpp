@@ -1055,7 +1055,8 @@ void PAG_header(thread_db* tdbb, bool info, const TriState newForceWrite)
 	fb_assert(attachment);
 
 	WIN window(HEADER_PAGE_NUMBER);
-	header_page* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
+	pag* page = CCH_FETCH(tdbb, &window, LCK_read, pag_header);
+	header_page* header = (header_page*) page;
 
 	try {
 
@@ -1163,6 +1164,30 @@ void PAG_header(thread_db* tdbb, bool info, const TriState newForceWrite)
 			dbb->dbb_replica_mode = REPLICA_READ_WRITE;
 		else
 			fb_assert(false);
+	}
+
+	// If database in backup lock state...
+	if (!info && dbb->dbb_backup_manager->getState() != Ods::hdr_nbak_normal)
+	{
+		// refetch some data from the header, because it could be changed in the delta file
+		// (as initially PAG_init2 reads the header from the main file and these values
+		// may be outdated there)
+		for (const UCHAR* p = header->hdr_data; *p != HDR_end; p += 2u + p[1])
+		{
+			switch (*p)
+			{
+			case HDR_sweep_interval:
+				fb_assert(p[1] == sizeof(SLONG));
+				memcpy(&dbb->dbb_sweep_interval, p + 2, sizeof(SLONG));
+				break;
+
+			case HDR_repl_seq:
+				fb_assert(p[1] == sizeof(FB_UINT64));
+				memcpy(&dbb->dbb_repl_sequence, p + 2, sizeof(FB_UINT64));
+				break;
+
+			}
+		}
 	}
 
 	}	// try

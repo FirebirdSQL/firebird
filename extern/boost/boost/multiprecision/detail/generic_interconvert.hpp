@@ -185,7 +185,7 @@ void generic_interconvert(To& to, const From& from, const std::integral_constant
 
       eval_frexp(f, from, &e);
 
-      constexpr const int shift = std::numeric_limits<std::intmax_t>::digits - 1;
+      constexpr int shift = std::numeric_limits<std::intmax_t>::digits - 1;
 
       while (!eval_is_zero(f))
       {
@@ -255,11 +255,12 @@ inline typename std::enable_if<!is_signed_number<LargeInteger>::value>::type mak
 template <class R, class LargeInteger>
 R safe_convert_to_float(const LargeInteger& i)
 {
-   using std::ldexp;
    if (!i)
       return R(0);
    BOOST_IF_CONSTEXPR(std::numeric_limits<R>::is_specialized && std::numeric_limits<R>::max_exponent)
    {
+      using std::ldexp;
+
       LargeInteger val(i);
       make_positive(val);
       std::size_t mb = msb(val);
@@ -415,7 +416,7 @@ void generic_interconvert_float2rational(To& to, const From& from, const std::in
    using std::ldexp;
    using std::frexp;
    using ui_type = typename std::tuple_element<0, typename To::unsigned_types>::type;
-   constexpr const int shift = std::numeric_limits<long long>::digits;
+   constexpr int shift = std::numeric_limits<long long>::digits;
    typename From::exponent_type e;
    typename component_type<number<To>>::type num, denom;
    number<From> val(from);
@@ -503,7 +504,7 @@ void generic_interconvert_float2int(To& to, const From& from, const std::integra
    using std::ldexp;
    
    using exponent_type = typename From::exponent_type;
-   constexpr const exponent_type        shift = std::numeric_limits<long long>::digits;
+   constexpr exponent_type              shift = std::numeric_limits<long long>::digits;
    exponent_type                        e;
    number<To>                           num(0u);
    number<From>                         val(from);

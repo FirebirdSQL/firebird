@@ -4159,7 +4159,9 @@ static bool create_collation(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 	case 1:
 		setupSpecificCollationAttributes(tdbb, transaction, TTYPE_TO_CHARSET(work->dfw_id),
 			work->dfw_name.c_str(), false);
-		if (!INTL_defined_type(tdbb, work->dfw_id))
+
+		if (!(transaction->tra_flags & TRA_system) &&	// avoid run during database creation
+			!INTL_defined_type(tdbb, work->dfw_id))
 		{
 			setupSpecificCollationAttributes(tdbb, transaction, TTYPE_TO_CHARSET(work->dfw_id),
 				work->dfw_name.c_str(), true);

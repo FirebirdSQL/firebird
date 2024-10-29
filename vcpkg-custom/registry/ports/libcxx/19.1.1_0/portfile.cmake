@@ -1,0 +1,21 @@
+vcpkg_from_github(
+    OUT_SOURCE_PATH SOURCE_PATH
+    REPO llvm/llvm-project
+    REF d401987fe349a87c53fe25829215b080b70c0c1a
+    HEAD_REF llvmorg-19.1.1
+    SHA512 adbcd783b35c635d6a2e3a97a9a183645645f539bb1771062b69e3b5a8f92250882124c71d3b57b0c206e2efb54415c67fed3e46fb023adff4a2fe17d190b250
+)
+
+file(REMOVE_RECURSE "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-dbg" "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
+
+set(BUILD_DIR "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel")
+
+set(INSTALL_PREFIX "${CURRENT_PACKAGES_DIR}")
+
+configure_file("${CMAKE_CURRENT_LIST_DIR}/build.sh.in" "${BUILD_DIR}/build.sh" @ONLY)
+
+vcpkg_execute_required_process(
+    COMMAND "${SHELL}" ./build.sh
+    WORKING_DIRECTORY "${BUILD_DIR}"
+    LOGNAME "build-${TARGET_TRIPLET}-rel"
+)

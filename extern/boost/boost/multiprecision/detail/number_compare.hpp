@@ -3,8 +3,8 @@
 //  Software License, Version 1.0. (See accompanying file
 //  LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-#ifndef BOOST_MP_COMPARE_HPP
-#define BOOST_MP_COMPARE_HPP
+#ifndef BOOST_MP_NUMBER_COMPARE_HPP
+#define BOOST_MP_NUMBER_COMPARE_HPP
 
 #include <boost/multiprecision/traits/is_backend.hpp>
 #include <boost/multiprecision/detail/fpclassify.hpp>
@@ -845,4 +845,4 @@ inline BOOST_MP_CXX14_CONSTEXPR typename std::enable_if<is_equivalent_number_typ
 
 }} // namespace boost::multiprecision
 
-#endif // BOOST_MP_COMPARE_HPP
+#endif // BOOST_MP_NUMBER_COMPARE_HPP

@@ -108,7 +108,7 @@ T trigamma_prec(T x, const std::integral_constant<int, 53>*, const Policy&)
    T y = 1 / x;
    return (1 + tools::evaluate_polynomial(P_4_inf, y) / tools::evaluate_polynomial(Q_4_inf, y)) / x;
 }
-   
+
 template <class T, class Policy>
 T trigamma_prec(T x, const std::integral_constant<int, 64>*, const Policy&)
 {
@@ -376,7 +376,7 @@ T trigamma_imp(T x, const Tag* t, const Policy& pol)
       // Argument reduction for tan:
       if(floor(x) == x)
       {
-         return policies::raise_pole_error<T>("boost::math::trigamma<%1%>(%1%)", 0, (1-x), pol);
+         return policies::raise_pole_error<T>("boost::math::trigamma<%1%>(%1%)", nullptr, (1-x), pol);
       }
       T s = fabs(x) < fabs(z) ? boost::math::sin_pi(x, pol) : boost::math::sin_pi(z, pol);
       return -trigamma_imp(z, t, pol) + boost::math::pow<2>(constants::pi<T>()) / (s * s);
@@ -427,7 +427,7 @@ const typename trigamma_initializer<T, Policy>::init trigamma_initializer<T, Pol
 } // namespace detail
 
 template <class T, class Policy>
-inline typename tools::promote_args<T>::type 
+inline typename tools::promote_args<T>::type
    trigamma(T x, const Policy&)
 {
    typedef typename tools::promote_args<T>::type result_type;
@@ -451,11 +451,11 @@ inline typename tools::promote_args<T>::type
 
    return policies::checked_narrowing_cast<result_type, Policy>(detail::trigamma_imp(
       static_cast<value_type>(x),
-      static_cast<const tag_type*>(0), forwarding_policy()), "boost::math::trigamma<%1%>(%1%)");
+      static_cast<const tag_type*>(nullptr), forwarding_policy()), "boost::math::trigamma<%1%>(%1%)");
 }
 
 template <class T>
-inline typename tools::promote_args<T>::type 
+inline typename tools::promote_args<T>::type
    trigamma(T x)
 {
    return trigamma(x, policies::policy<>());

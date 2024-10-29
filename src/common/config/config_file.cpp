@@ -414,6 +414,41 @@ ConfigFile::LineType ConfigFile::parseLine(const char* fileName, const String& i
  *	Substitute macro values in a string
  */
 
+unsigned ConfigFile::getDirSeparatorLength(const String& value, size_t separatorPosition) const
+{
+	if (separatorPosition >= value.length())
+		return 0;
+
+	const char symbol = value[separatorPosition];
+	if (symbol == '/')
+		return 1;
+
+	if (flags & REGEXP_SUPPORT && symbol == '\\')
+	{
+		// Check forward and backward for second backslash
+		if (separatorPosition + 1 < value.length() && value[separatorPosition + 1] == '\\')
+			return 2;
+		if (separatorPosition > 0 && value[separatorPosition - 1] == '\\')
+			return 2;
+	}
+	else if (symbol == '\\')
+		return 1;
+
+	return 0;
+}
+
+void ConfigFile::adjustMacroReplacePositions(const String& value, const String& macro, String::size_type& from, String::size_type& to) const
+{
+	if (macro.empty())
+		return;
+
+	// Remove dir separators from value string if macro already contains them at start or end
+	if (macro[0] == PathUtils::dir_sep && from > 0)
+		from -= getDirSeparatorLength(value, from - 1);
+	if (macro[macro.length() - 1] == PathUtils::dir_sep)
+		to += getDirSeparatorLength(value, to);
+}
+
 bool ConfigFile::macroParse(String& value, const char* fileName) const
 {
 	String::size_type pos = 0;
@@ -442,19 +477,21 @@ bool ConfigFile::macroParse(String& value, const char* fileName) const
 		}
 
 		// Avoid incorrect slashes in pathnames
-		PathUtils::fixupSeparators(value.begin());
 		PathUtils::fixupSeparators(macro.begin());
 
-		if (subFrom > 0 && value[subFrom - 1] == PathUtils::dir_sep &&
-			macro.length() > 0 && macro[0] == PathUtils::dir_sep)
+		if (flags & REGEXP_SUPPORT)
 		{
-			--subFrom;
+			size_t pos = 0;
+			while ((pos = macro.find('\\', pos)) != String::npos)
+			{
+				macro.insert(pos, "\\");
+				pos += 2;
+			}
 		}
-		if (subTo < value.length() && value[subTo] == PathUtils::dir_sep &&
-			macro.length() > 0 && macro[macro.length() - 1] == PathUtils::dir_sep)
-		{
-			++subTo;
-		}
+		else
+			PathUtils::fixupSeparators(value.begin());
+
+		adjustMacroReplacePositions(value, macro, subFrom, subTo);
 
 		// Now perform operation
 		value.replace(subFrom, subTo - subFrom, macro);
