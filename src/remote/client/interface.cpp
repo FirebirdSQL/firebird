@@ -1303,6 +1303,10 @@ void Blob::getInfo(CheckStatusWrapper* status,
 
 		Rdb* rdb = blob->rbl_rdb;
 		CHECK_HANDLE(rdb, isc_bad_db_handle);
+
+		if (blob->rbl_info.getLocalInfo(itemsLength, items, bufferLength, buffer))
+			return;
+
 		rem_port* port = rdb->rdb_port;
 		RefMutexGuard portGuard(*port->port_sync, FB_FUNCTION);
 
@@ -5610,7 +5614,79 @@ IBlob* Attachment::openBlob(CheckStatusWrapper* status, ITransaction* apiTra, IS
 		// would try to write to the application's provided R/O buffer.
 		p_blob->p_blob_bpb.cstr_address = bpb;
 
-		send_and_receive(status, rdb, packet);
+		UCHAR infoBuffer[128];
+
+		if (port->port_flags & PORT_lazy)
+		{
+			send_partial_packet(port, packet);
+
+			// prefetch blob info
+			const UCHAR items[] = {
+				isc_info_blob_num_segments,
+				isc_info_blob_max_segment,
+				isc_info_blob_total_length,
+				isc_info_blob_type,
+				isc_info_end
+			};
+
+			packet->p_operation = op_info_blob;
+			P_INFO* information = &packet->p_info;
+			information->p_info_object = INVALID_OBJECT;
+			information->p_info_incarnation = 0;
+			information->p_info_items.cstr_length = sizeof(items);
+			information->p_info_items.cstr_address = items;
+			information->p_info_buffer_length = sizeof(infoBuffer);
+
+			send_partial_packet(port, packet);
+
+			// prefetch some data
+			packet->p_operation = op_get_segment;
+			P_SGMT* segment = &packet->p_sgmt;
+			segment->p_sgmt_length = BLOB_LENGTH - 2;
+			segment->p_sgmt_blob = INVALID_OBJECT;
+			segment->p_sgmt_segment.cstr_length = 0;
+
+			send_packet(port, packet);
+
+			try
+			{
+				receive_response(status, rdb, packet);
+			}
+			catch (const Exception& ex)
+			{
+				// re-throw network error immediately, for other errors receive two more packets first
+				if (port->port_state != rem_port::PENDING)
+					throw;
+
+				FbLocalStatus local;
+				ex.stuffException(&local);
+
+				auto errs = local->getErrors();
+
+				if (fb_utils::containsErrorCode(errs, isc_network_error) ||
+					fb_utils::containsErrorCode(errs, isc_net_read_err) ||
+					port->port_state != rem_port::PENDING)
+				{
+					throw;
+				}
+
+				for (int i = 0; i < 2; i++)
+				{
+					try
+					{
+						UseStandardBuffer temp(packet->p_resp.p_resp_data);
+						receive_response(status, rdb, packet);
+					}
+					catch (const Exception&) {}
+				}
+
+				throw;
+			}
+		}
+		else
+		{
+			send_and_receive(status, rdb, packet);
+		}
 
 		// CVC: It's not evident to me why these two lines that I've copied
 		// here as comments are only found in create_blob calls.
@@ -5626,9 +5702,46 @@ IBlob* Attachment::openBlob(CheckStatusWrapper* status, ITransaction* apiTra, IS
 		blob->rbl_next = transaction->rtr_blobs;
 		transaction->rtr_blobs = blob;
 
-		Firebird::IBlob* b = FB_NEW Blob(blob);
-		b->addRef();
-		return b;
+		Blob* iBlob = FB_NEW Blob(blob);
+		iBlob->addRef();
+
+		if (port->port_flags & PORT_lazy)
+		{
+			// Receive two more responses. Ignore errors here, let client to receive
+			// and handle it later, when/if it runs corresponding action by itself.
+
+			P_RESP* response = &packet->p_resp;
+			// receive blob info
+			try
+			{
+				UsePreallocatedBuffer temp(response->p_resp_data, sizeof(infoBuffer), infoBuffer);
+
+				receive_response(status, rdb, packet);
+				blob->rbl_info.parseInfo(sizeof(infoBuffer), infoBuffer);
+			}
+			catch (const Exception&)
+			{ }
+
+			// receive blob data
+			try
+			{
+				UsePreallocatedBuffer temp(response->p_resp_data, blob->rbl_buffer_length, blob->rbl_buffer);
+
+				receive_response(status, rdb, packet);
+
+				blob->rbl_length = (USHORT) response->p_resp_data.cstr_length;
+				blob->rbl_ptr = blob->rbl_buffer;
+
+				if (response->p_resp_object == 1)
+					blob->rbl_flags |= Rbl::SEGMENT;
+				else if (response->p_resp_object == 2)
+					blob->rbl_flags |= Rbl::EOF_PENDING;
+			}
+			catch (const Exception&)
+			{ }
+		}
+
+		return iBlob;
 	}
 	catch (const Exception& ex)
 	{

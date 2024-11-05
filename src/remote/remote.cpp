@@ -38,6 +38,7 @@
 #include "../common/os/mod_loader.h"
 #include "../jrd/license.h"
 #include "../common/classes/ImplementHelper.h"
+#include "../common/utils_proto.h"
 
 #ifdef DEV_BUILD
 Firebird::AtomicCounter rem_port::portCounter;
@@ -854,6 +855,87 @@ ISC_STATUS* Rdb::get_status_vector() throw()
 	return rdb_async_thread_id == getThreadId() ? rdb_async_status_vector : rdb_status_vector;
 }
 */
+
+
+bool RBlobInfo::getLocalInfo(unsigned int itemsLength, const unsigned char* items,
+	unsigned int bufferLength, unsigned char* buffer)
+{
+	if (!valid)
+		return false;
+
+	unsigned char* p = buffer;
+	const unsigned char* const end = buffer + bufferLength;
+
+	for (auto item = items; p && (item < items + itemsLength); item++)
+	{
+		switch (*item)
+		{
+		case isc_info_blob_num_segments:
+			p = fb_utils::putInfoItemInt(*item, num_segments, p, end);
+			break;
+
+		case isc_info_blob_max_segment:
+			p = fb_utils::putInfoItemInt(*item, max_segment, p, end);
+			break;
+
+		case isc_info_blob_total_length:
+			p = fb_utils::putInfoItemInt(*item, total_length, p, end);
+			break;
+
+		case isc_info_blob_type:
+			p = fb_utils::putInfoItemInt(*item, blob_type, p, end);
+			break;
+
+		case isc_info_end:
+			if (p < end)
+				*p++ = isc_info_end;
+			break;
+
+		default:
+			// unknown info item, let remote server handle it
+			return false;
+		}
+	}
+
+	return true;
+}
+
+
+void RBlobInfo::parseInfo(unsigned int bufferLength, unsigned char* buffer)
+{
+	int c = 0;
+	valid = false;
+
+	Firebird::ClumpletReader p(Firebird::ClumpletReader::InfoResponse, buffer, bufferLength);
+	for (; !p.isEof(); p.moveNext())
+	{
+		switch (p.getClumpTag())
+		{
+		case isc_info_blob_num_segments:
+			num_segments = p.getInt();
+			c++;
+			break;
+		case isc_info_blob_max_segment:
+			max_segment = p.getInt();
+			c++;
+			break;
+		case isc_info_blob_total_length:
+			total_length = p.getInt();
+			c++;
+			break;
+		case isc_info_blob_type:
+			blob_type = p.getInt();
+			c++;
+			break;
+		case isc_info_end:
+			break;
+		default:
+			fb_assert(false);
+			break;
+		}
+	}
+	valid = (c == 4);
+}
 
 void Rrq::saveStatus(const Firebird::Exception& ex) throw()
 {
