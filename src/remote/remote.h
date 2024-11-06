@@ -235,7 +235,7 @@ struct RBlobInfo
 	}
 
 	// parse into response into m_info, assume buffer contains all known info items
-	void parseInfo(unsigned int bufferLength, unsigned char* buffer);
+	void parseInfo(unsigned int bufferLength, const unsigned char* buffer);
 
 	// returns false if there is no valid local info or if unknown item encountered
 	bool getLocalInfo(unsigned int itemsLength, const unsigned char* items,

@@ -901,7 +901,7 @@ bool RBlobInfo::getLocalInfo(unsigned int itemsLength, const unsigned char* item
 }
 
 
-void RBlobInfo::parseInfo(unsigned int bufferLength, unsigned char* buffer)
+void RBlobInfo::parseInfo(unsigned int bufferLength, const unsigned char* buffer)
 {
 	int c = 0;
 	valid = false;
