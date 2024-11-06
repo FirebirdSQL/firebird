@@ -272,7 +272,7 @@ namespace fb_utils
 	inline unsigned char* putInfoItemInt(const unsigned char item, T value,
 		unsigned char* ptr, const unsigned char* end)
 	{
-		static_assert(std::is_integral_v<T>, "Intergal type expected");
+		static_assert(std::is_integral_v<T>, "Integral type expected");
 
 		constexpr auto len = sizeof(T);
 		static_assert(len == 1 || len == 2 || len == 4 || len == 8, "unknown data type");

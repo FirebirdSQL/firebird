@@ -5642,7 +5642,7 @@ IBlob* Attachment::openBlob(CheckStatusWrapper* status, ITransaction* apiTra, IS
 			// prefetch some data
 			packet->p_operation = op_get_segment;
 			P_SGMT* segment = &packet->p_sgmt;
-			segment->p_sgmt_length = BLOB_LENGTH - 2;
+			segment->p_sgmt_length = BLOB_LENGTH;
 			segment->p_sgmt_blob = INVALID_OBJECT;
 			segment->p_sgmt_segment.cstr_length = 0;
 
