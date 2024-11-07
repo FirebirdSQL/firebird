@@ -311,4 +311,26 @@ struct IsqlVar
 	TypeMix value;
 };
 
+class IsqlWireStats
+{
+public:
+	IsqlWireStats(Firebird::IAttachment* att);
+
+	bool print(bool initial);
+	bool get(bool initial);
+
+private:
+
+	Firebird::IAttachment* m_att;
+	FB_UINT64 m_snd_packets;
+	FB_UINT64 m_rcv_packets;
+	FB_UINT64 m_out_packets;
+	FB_UINT64 m_in_packets;
+	FB_UINT64 m_snd_bytes;
+	FB_UINT64 m_rcv_bytes;
+	FB_UINT64 m_out_bytes;
+	FB_UINT64 m_in_bytes;
+	FB_UINT64 m_roundtrips;
+};
+
 #endif // ISQL_ISQL_H
