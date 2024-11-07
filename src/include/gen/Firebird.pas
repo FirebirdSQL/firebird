@@ -4496,6 +4496,15 @@ const
 	fb_info_username = byte(147);
 	fb_info_sqlrole = byte(148);
 	fb_info_parallel_workers = byte(149);
+	fb_info_wire_out_packets = byte(150);
+	fb_info_wire_in_packets = byte(151);
+	fb_info_wire_out_bytes = byte(152);
+	fb_info_wire_in_bytes = byte(153);
+	fb_info_wire_snd_packets = byte(154);
+	fb_info_wire_rcv_packets = byte(155);
+	fb_info_wire_snd_bytes = byte(156);
+	fb_info_wire_rcv_bytes = byte(157);
+	fb_info_wire_roundtrips = byte(158);
 	fb_info_crypt_encrypted = $01;
 	fb_info_crypt_process = $02;
 	fb_feature_multi_statements = byte(1);

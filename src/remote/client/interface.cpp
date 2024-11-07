@@ -936,6 +936,8 @@ private:
 	void internalDetach(CheckStatusWrapper* status);
 	void internalDropDatabase(CheckStatusWrapper* status);
 	SLONG getSingleInfo(CheckStatusWrapper* status, UCHAR infoItem);
+	bool getWireStatsInfo(unsigned int item_length, const unsigned char* items,
+						  unsigned int buffer_length, unsigned char* buffer) const;
 
 	Rdb* rdb;
 	const PathName dbPath;
@@ -1966,6 +1968,55 @@ IAttachment* Loopback::createDatabase(CheckStatusWrapper* status, const char* fi
 }
 
 
+bool Attachment::getWireStatsInfo(unsigned int item_length, const unsigned char* items,
+								  unsigned int buffer_length, unsigned char* buffer) const
+{
+	const rem_port* const port = rdb->rdb_port;
+
+	UCHAR* ptr = buffer;
+	const UCHAR* const end = buffer + buffer_length;
+
+	for (auto item = items; item < items + item_length; item++)
+	{
+		switch (*item)
+		{
+		case fb_info_wire_snd_packets:
+		case fb_info_wire_rcv_packets:
+		case fb_info_wire_out_packets:
+		case fb_info_wire_in_packets:
+		case fb_info_wire_snd_bytes:
+		case fb_info_wire_rcv_bytes:
+		case fb_info_wire_out_bytes:
+		case fb_info_wire_in_bytes:
+		case fb_info_wire_roundtrips:
+		{
+			const FB_UINT64 value = port->getStatItem(*item);
+
+			if (value <= MAX_SLONG)
+				ptr = fb_utils::putInfoItemInt(*item, (SLONG) value, ptr, end);
+			else
+				ptr = fb_utils::putInfoItemInt(*item, value, ptr, end);
+
+			fb_assert(ptr);
+			break;
+		}
+
+		case isc_info_end:
+			if (ptr < end)
+				*ptr++ = *item;
+
+			return true;
+
+		default:
+			// Let someone else handle unknown item
+			return false;
+		}
+	}
+
+	return true;
+}
+
+
 void Attachment::getInfo(CheckStatusWrapper* status,
 						 unsigned int item_length, const unsigned char* items,
 						 unsigned int buffer_length, unsigned char* buffer)
@@ -1993,6 +2044,9 @@ void Attachment::getInfo(CheckStatusWrapper* status,
 		protocol &= FB_PROTOCOL_MASK;
 
 		RefMutexGuard portGuard(*port->port_sync, FB_FUNCTION);
+
+		if (getWireStatsInfo(item_length, items, buffer_length, buffer))
+			return;
 
 		UCHAR* temp_buffer = temp.getBuffer(buffer_length);
 
