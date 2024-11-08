@@ -9957,20 +9957,6 @@ unsigned PerTableStats::loadRelNames(Firebird::IAttachment* att)
 
 /// class IsqlWireStats
 
-IsqlWireStats::IsqlWireStats(Firebird::IAttachment* att) :
-	m_att(att),
-	m_snd_packets(0),
-	m_rcv_packets(0),
-	m_out_packets(0),
-	m_in_packets(0),
-	m_snd_bytes(0),
-	m_rcv_bytes(0),
-	m_out_bytes(0),
-	m_in_bytes(0),
-	m_roundtrips(0)
-{
-}
-
 bool IsqlWireStats::get(bool initial)
 {
 	if (!m_att)

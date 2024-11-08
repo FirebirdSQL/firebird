@@ -314,7 +314,9 @@ struct IsqlVar
 class IsqlWireStats
 {
 public:
-	IsqlWireStats(Firebird::IAttachment* att);
+	IsqlWireStats(Firebird::IAttachment* att) :
+		m_att(att)
+	{}
 
 	bool print(bool initial);
 	bool get(bool initial);
@@ -322,15 +324,15 @@ public:
 private:
 
 	Firebird::IAttachment* m_att;
-	FB_UINT64 m_snd_packets;
-	FB_UINT64 m_rcv_packets;
-	FB_UINT64 m_out_packets;
-	FB_UINT64 m_in_packets;
-	FB_UINT64 m_snd_bytes;
-	FB_UINT64 m_rcv_bytes;
-	FB_UINT64 m_out_bytes;
-	FB_UINT64 m_in_bytes;
-	FB_UINT64 m_roundtrips;
+	FB_UINT64 m_snd_packets = 0;
+	FB_UINT64 m_rcv_packets = 0;
+	FB_UINT64 m_out_packets = 0;
+	FB_UINT64 m_in_packets = 0;
+	FB_UINT64 m_snd_bytes = 0;
+	FB_UINT64 m_rcv_bytes = 0;
+	FB_UINT64 m_out_bytes = 0;
+	FB_UINT64 m_in_bytes = 0;
+	FB_UINT64 m_roundtrips = 0;
 };
 
 #endif // ISQL_ISQL_H
