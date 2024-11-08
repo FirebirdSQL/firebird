@@ -314,7 +314,7 @@ struct IsqlVar
 class IsqlWireStats
 {
 public:
-	IsqlWireStats(Firebird::IAttachment* att) :
+	explicit IsqlWireStats(Firebird::IAttachment* att) :
 		m_att(att)
 	{}
 
