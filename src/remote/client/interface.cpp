@@ -1984,6 +1984,13 @@ unsigned char* Attachment::getWireStatsInfo(UCharBuffer& info, unsigned int buff
 		if (ptr >= end)
 			return nullptr;
 
+		if (*item == isc_info_end)
+		{
+			if (info.getCount() == 1)
+				info.remove(item);
+			break;
+		}
+
 		switch (*item)
 		{
 		case fb_info_wire_snd_packets:
@@ -2010,21 +2017,16 @@ unsigned char* Attachment::getWireStatsInfo(UCharBuffer& info, unsigned int buff
 			break;
 		}
 
-		case isc_info_end:
-			if (info.getCount() > 1)
-				return ptr;
-
-			*ptr++ = *item;
-			info.remove(item);
-			return nullptr;
-
 		default:
 			item++;
 			break;
 		}
 	}
 
-	return info.isEmpty() ? nullptr : ptr;
+	if (info.isEmpty() && ptr < end)
+		*ptr++ = isc_info_end;
+
+	return (info.isEmpty() || (ptr >= end)) ? nullptr : ptr;
 }
 
 

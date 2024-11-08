@@ -870,6 +870,9 @@ bool RBlobInfo::getLocalInfo(unsigned int itemsLength, const unsigned char* item
 
 	for (auto item = items; p && (item < items + itemsLength); item++)
 	{
+		if (*item == isc_info_end)
+			break;
+
 		switch (*item)
 		{
 		case isc_info_blob_num_segments:
@@ -888,16 +891,14 @@ bool RBlobInfo::getLocalInfo(unsigned int itemsLength, const unsigned char* item
 			p = fb_utils::putInfoItemInt(*item, blob_type, p, end);
 			break;
 
-		case isc_info_end:
-			if (p < end)
-				*p++ = isc_info_end;
-			break;
-
 		default:
 			// unknown info item, let remote server handle it
 			return false;
 		}
 	}
+
+	if (p < end)
+		*p++ = isc_info_end;
 
 	return true;
 }
