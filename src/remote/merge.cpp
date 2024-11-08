@@ -29,6 +29,8 @@
 #include "../yvalve/gds_proto.h"
 #include "../common/classes/DbImplementation.h"
 
+using namespace Firebird;
+
 inline void PUT_WORD(UCHAR*& ptr, USHORT value)
 {
 	*ptr++ = static_cast<UCHAR>(value);
@@ -37,7 +39,7 @@ inline void PUT_WORD(UCHAR*& ptr, USHORT value)
 
 #define PUT(ptr, value)		*(ptr)++ = value;
 
-static ISC_STATUS merge_setup(const Firebird::ClumpletReader&, UCHAR**, const UCHAR* const, FB_SIZE_T);
+static ISC_STATUS merge_setup(const ClumpletReader&, UCHAR**, const UCHAR* const, FB_SIZE_T);
 
 
 USHORT MERGE_database_info(const UCHAR* const in,
@@ -69,7 +71,7 @@ USHORT MERGE_database_info(const UCHAR* const in,
 	const UCHAR* const end = out + buf_length;
 
 	UCHAR mergeLevel = 0;
-	Firebird::ClumpletReader input(Firebird::ClumpletReader::InfoResponse, in, buf_length);
+	ClumpletReader input(ClumpletReader::InfoResponse, in, buf_length);
 	while (!input.isEof())
 	{
 		bool flStop = true;
@@ -149,7 +151,7 @@ USHORT MERGE_database_info(const UCHAR* const in,
 		case fb_info_implementation:
 			if (merge_setup(input, &out, end, 6))
 				return 0;
-			Firebird::DbImplementation::current.stuff(&out);
+			DbImplementation::current.stuff(&out);
 			PUT(out, (UCHAR) class_);
 			PUT(out, mergeLevel);
 			break;
@@ -183,7 +185,7 @@ USHORT MERGE_database_info(const UCHAR* const in,
 	return 0;	// error - missing isc_info_end item
 }
 
-static ISC_STATUS merge_setup(const Firebird::ClumpletReader& input, UCHAR** out, const UCHAR* const end,
+static ISC_STATUS merge_setup(const ClumpletReader& input, UCHAR** out, const UCHAR* const end,
 							  FB_SIZE_T delta_length)
 {
 /**************************************

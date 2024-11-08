@@ -122,7 +122,7 @@ public:
 		return m_mockGetLocalDateFunc();
 	}
 
-	ISC_TIMESTAMP getCurrentGmtTimeStamp() override { ISC_TIMESTAMP ts; return ts; }
+	ISC_TIMESTAMP getCurrentGmtTimeStamp() override { return {0, 0}; }
 	USHORT getSessionTimeZone() override { return 1439; } // 1439 is ONE_DAY, so we have no offset
 	void isVersion4(bool& v4) override { }
 

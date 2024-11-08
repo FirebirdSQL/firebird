@@ -237,7 +237,7 @@ rem_port* XNET_analyze(ClntAuthBlock* cBlock,
 					   const PathName& file_name,
 					   bool uv_flag,
 					   RefPtr<const Config>* config,
-					   const Firebird::PathName* ref_db_name)
+					   const PathName* ref_db_name)
 {
 /**************************************
  *
@@ -362,10 +362,10 @@ rem_port* XNET_analyze(ClntAuthBlock* cBlock,
 	case op_response:
 		try
 		{
-			Firebird::LocalStatus warning;		// Ignore connect warnings for a while
+			LocalStatus warning;		// Ignore connect warnings for a while
 			REMOTE_check_response(&warning, rdb, packet);
 		}
-		catch (const Firebird::Exception&)
+		catch (const Exception&)
 		{
 			disconnect(port);
 			delete rdb;
@@ -406,7 +406,7 @@ rem_port* XNET_analyze(ClntAuthBlock* cBlock,
 
 rem_port* XNET_connect(PACKET* packet,
 					   USHORT flag,
-					   Firebird::RefPtr<const Config>* config)
+					   RefPtr<const Config>* config)
 {
 /**************************************
  *
@@ -1109,7 +1109,7 @@ rem_port* XnetClientEndPoint::connect_client(PACKET* packet, const RefPtr<const 
  *
  **************************************/
 
-	const Firebird::RefPtr<const Config>& conf(config ? *config : Config::getDefaultConfig());
+	const RefPtr<const Config>& conf(config ? *config : Config::getDefaultConfig());
 
 	if (!xnet_initialized)
 	{

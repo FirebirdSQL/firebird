@@ -1971,14 +1971,15 @@ void Optimizer::checkSorts()
 
 unsigned Optimizer::distributeEqualities(BoolExprNodeStack& orgStack, unsigned baseCount)
 {
-	// dimitr:	Dumb protection against too many injected conjuncts (see CORE-5381).
-	//			Don't produce more additional conjuncts than we originally had
-	//			(i.e. this routine should never more than double the number of conjuncts).
-	//			Ideally, we need two separate limits here:
-	//				1) number of injected conjuncts (affects required impure size)
-	//				2) number of input conjuncts (affects search time inside this routine)
+	// dimitr:	Simplified protection against too many injected conjuncts (see CORE-5381).
+	//			Two separate limits are applied here:
+	//				1) number of input conjuncts (affects search time inside this routine)
+	//				2) number of injected conjuncts (affects required impure size)
 
-	if (baseCount * 2 > MAX_CONJUNCTS)
+	constexpr unsigned MAX_CONJUNCTS_TO_PROCESS = 1024;
+	const unsigned MAX_CONJUNCTS_TO_INJECT = MAX(baseCount, 256);
+
+	if (baseCount > MAX_CONJUNCTS_TO_PROCESS)
 		return 0;
 
 	ObjectsArray<ValueExprNodeStack> classes;

@@ -237,6 +237,7 @@ const int irb_exclude_lower	= 32;			// exclude lower bound keys while scanning i
 const int irb_exclude_upper	= 64;			// exclude upper bound keys while scanning index
 const int irb_multi_starting	= 128;		// Use INTL_KEY_MULTI_STARTING
 const int irb_root_list_scan	= 256;		// Locate list items from the root
+const int irb_unique	= 512;				// Unique match (currently used only for plan output)
 
 // Force include flags - always include appropriate key while scanning index
 const int irb_force_lower	= irb_exclude_lower;
