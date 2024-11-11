@@ -36,6 +36,8 @@
 
 #include <windows.h>
 
+using namespace Firebird;
+
 const unsigned int SHUTDOWN_TIMEOUT = 10 * 1000;	// 10 seconds
 
 static void WINAPI control_thread(DWORD);
@@ -44,8 +46,8 @@ static USHORT report_status(DWORD, DWORD, DWORD, DWORD);
 
 static ThreadEntryPoint* main_handler;
 static SERVICE_STATUS_HANDLE service_handle;
-static Firebird::GlobalPtr<Firebird::string> service_name;
-static Firebird::GlobalPtr<Firebird::string> mutex_name;
+static GlobalPtr<string> service_name;
+static GlobalPtr<string> mutex_name;
 static HANDLE stop_event_handle;
 static HANDLE hMutex = NULL;
 
@@ -99,7 +101,7 @@ void WINAPI CNTL_main_thread( DWORD /*argc*/, char* /*argv*/[])
 				temp = WaitForSingleObject(stop_event_handle, INFINITE);
 			}
 		}
-		catch (const Firebird::Exception& ex)
+		catch (const Exception& ex)
 		{
 			iscLogException("CNTL: cannot start service handler thread", ex);
 		}

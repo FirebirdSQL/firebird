@@ -1732,6 +1732,7 @@ replace_clause
 	| FUNCTION replace_function_clause			{ $$ = $2; }
 	| TRIGGER replace_trigger_clause			{ $$ = $2; }
 	| PACKAGE replace_package_clause			{ $$ = $2; }
+	| PACKAGE BODY replace_package_body_clause	{ $$ = $3; }
 	| VIEW replace_view_clause					{ $$ = $2; }
 	| EXCEPTION replace_exception_clause		{ $$ = $2; }
 	| GENERATOR replace_sequence_clause			{ $$ = $2; }
@@ -3264,6 +3265,12 @@ package_body_item
 	;
 
 
+%type <ddlNode> replace_package_body_clause
+replace_package_body_clause
+	: package_body_clause
+		{ $$ = newNode<RecreatePackageBodyNode>($1); }
+	;
+
 %type <localDeclarationsNode> local_declarations_opt
 local_declarations_opt
 	: local_forward_declarations_opt local_nonforward_declarations_opt
@@ -4333,6 +4340,7 @@ alter_clause
 	| TRIGGER alter_trigger_clause			{ $$ = $2; }
 	| PROCEDURE alter_procedure_clause		{ $$ = $2; }
 	| PACKAGE alter_package_clause			{ $$ = $2; }
+	| PACKAGE BODY replace_package_body_clause	{ $$ = $3; }
 	| DATABASE
 			{ $<alterDatabaseNode>$ = newNode<AlterDatabaseNode>(); }
 		alter_db($<alterDatabaseNode>2)

@@ -221,6 +221,27 @@ public:
 };
 
 
+struct RBlobInfo
+{
+	bool	valid;
+	UCHAR	blob_type;
+	ULONG	num_segments;
+	ULONG	max_segment;
+	ULONG	total_length;
+
+	RBlobInfo()
+	{
+		memset(this, 0, sizeof(*this));
+	}
+
+	// parse into response into m_info, assume buffer contains all known info items
+	void parseInfo(unsigned int bufferLength, const unsigned char* buffer);
+
+	// returns false if there is no valid local info or if unknown item encountered
+	bool getLocalInfo(unsigned int itemsLength, const unsigned char* items,
+		unsigned int bufferLength, unsigned char* buffer);
+};
+
 struct Rbl : public Firebird::GlobalStorage, public TypedHandle<rem_type_rbl>
 {
 	Firebird::HalfStaticArray<UCHAR, BLOB_LENGTH> rbl_data;
@@ -239,6 +260,7 @@ struct Rbl : public Firebird::GlobalStorage, public TypedHandle<rem_type_rbl>
 	USHORT		rbl_source_interp;	// source interp (for writing)
 	USHORT		rbl_target_interp;	// destination interp (for reading)
 	Rbl**		rbl_self;
+	RBlobInfo	rbl_info;
 
 public:
 	// Values for rbl_flags

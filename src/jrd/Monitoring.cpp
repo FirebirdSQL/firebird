@@ -507,7 +507,10 @@ MonitoringSnapshot::MonitoringSnapshot(thread_db* tdbb, MemoryPool& pool)
 		if (LCK_lock(tdbb, lock, LCK_EX, LCK_NO_WAIT))
 		{
 			LCK_release(tdbb, lock);
+
+			MonitoringData::Guard guard(dbb->dbb_monitoring_data);
 			dbb->dbb_monitoring_data->cleanup(attId);
+
 			continue;
 		}
 
@@ -541,7 +544,6 @@ MonitoringSnapshot::MonitoringSnapshot(thread_db* tdbb, MemoryPool& pool)
 	{ // scope for the guard
 
 		MonitoringData::Guard guard(dbb->dbb_monitoring_data);
-
 		dbb->dbb_monitoring_data->read(userNamePtr, temp_space);
 	}
 
