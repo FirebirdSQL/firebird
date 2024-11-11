@@ -3631,7 +3631,7 @@ static void list_tablespaces()
  *
  **************************************/
 
-	if (isqlGlob.major_ods < ODS_VERSION13)
+	if (isqlGlob.major_ods < ODS_VERSION14)
 		return;
 
 	bool first = true;

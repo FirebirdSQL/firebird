@@ -403,7 +403,7 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 		write_packages();
 	}
 
-	if (tdgbl->runtimeODS >= DB_VERSION_DDL13)
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
 	{
 		// Write tablespaces
 		BURP_verbose(411);	// msg 411 writing tablespaces
@@ -1695,6 +1695,7 @@ void put_index( burp_rel* relation)
 			if (!X.RDB$FOREIGN_KEY.NULL)
 				PUT_TEXT (att_index_foreign_key, X.RDB$FOREIGN_KEY);
 
+			// ODS 14
 			if (!X.RDB$TABLESPACE_NAME.NULL)
 				PUT_TEXT (att_index_tablespace_name, X.RDB$TABLESPACE_NAME);
 
@@ -1775,7 +1776,8 @@ void put_index( burp_rel* relation)
 			if (!X.RDB$FOREIGN_KEY.NULL)
 				PUT_TEXT (att_index_foreign_key, X.RDB$FOREIGN_KEY);
 
-			if (!X.RDB$TABLESPACE_NAME.NULL)	// For old versions I expect it will be NULL here. Right?
+			// ODS 14
+			if (!X.RDB$TABLESPACE_NAME.NULL)	// For old versions I expect it will be NULL here.
 				PUT_TEXT (att_index_tablespace_name, X.RDB$TABLESPACE_NAME);
 
 			put(tdgbl, att_end);

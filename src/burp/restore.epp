@@ -6927,7 +6927,7 @@ bool get_tablespace(BurpGlobals* tdgbl)
 	SSHORT len;
 	scan_attr_t scan_next_attr;
 
-	if (tdgbl->RESTORE_format < 12) // Probably this check is not needed
+	if (tdgbl->RESTORE_format < 13) // Probably this check is not needed
 		return false;
 
 //	Firebird::ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;

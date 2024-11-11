@@ -3587,7 +3587,7 @@ static processing_state show_comments(const commentMode showextract, const char*
 		END_ERROR
 	}
 
-	if (isqlGlob.major_ods >= ODS_VERSION13)
+	if (isqlGlob.major_ods >= ODS_VERSION14)
 	{
 		FOR TS IN RDB$TABLESPACES
 			WITH TS.RDB$DESCRIPTION NOT MISSING
@@ -5092,7 +5092,7 @@ static processing_state show_tablespaces(const SCHAR* tablespace_name)
 * Functional description
 *	Show all tablespaces or the named tablespace
 ************************************/
-	if (isqlGlob.major_ods < ODS_VERSION13)
+	if (isqlGlob.major_ods < ODS_VERSION14)
 		return OBJECT_NOT_FOUND;
 
 	bool first = true;

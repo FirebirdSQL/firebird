@@ -209,7 +209,7 @@ Version 11: FB4.0.
 			SQL SECURITY feature, tables RDB$PUBLICATIONS/RDB$PUBLICATION_TABLES.
 */
 
-const int ATT_BACKUP_FORMAT		= 12;
+const int ATT_BACKUP_FORMAT		= 13;
 
 // max array dimension
 
