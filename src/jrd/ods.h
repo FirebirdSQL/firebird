@@ -213,7 +213,7 @@ inline constexpr ULONG FIRST_SCN_PAGE	= 2;
 
 // Page size limits
 
-inline constexpr USHORT MIN_PAGE_SIZE		= 4096;
+inline constexpr USHORT MIN_PAGE_SIZE		= 8192;	// FIXME: 4096
 inline constexpr USHORT MAX_PAGE_SIZE		= 32768;
 
 inline constexpr USHORT DEFAULT_PAGE_SIZE	= 8192;
