@@ -44,7 +44,7 @@ class ViewContext
 {
 public:
 	explicit ViewContext(MemoryPool& p, const TEXT* context_name,
-						 const TEXT* relation_name, USHORT context,
+						 const QualifiedName& relation_name, USHORT context,
 						 ViewContextType type)
 	: vcx_context_name(p, context_name, fb_strlen(context_name)),
 	  vcx_relation_name(relation_name),
@@ -59,7 +59,7 @@ public:
 	}
 
 	const Firebird::string vcx_context_name;
-	const MetaName vcx_relation_name;
+	const QualifiedName vcx_relation_name;
 	const USHORT vcx_context;
 	const ViewContextType vcx_type;
 };
@@ -232,9 +232,9 @@ public:
 	ULONG			rel_flags;
 	Format*			rel_current_format;	// Current record format
 
-	MetaName	rel_name;		// ascii relation name
+	QualifiedName	rel_name;		// ascii relation name
 	MetaName	rel_owner_name;	// ascii owner
-	MetaName	rel_security_name;	// security class name for relation
+	QualifiedName	rel_security_name;	// security class name for relation
 
 	vec<Format*>*	rel_formats;		// Known record formats
 	vec<jrd_fld*>*	rel_fields;			// vector of field blocks
@@ -493,8 +493,8 @@ public:
 	ArrayField*	fld_array;			// array description, if array
 	MetaName	fld_name;	// Field name
 	MetaName	fld_security_name;	// security class name for field
-	MetaName	fld_generator_name;	// identity generator name
-	MetaNamePair	fld_source_rel_field;	// Relation/field source name
+	QualifiedName	fld_generator_name;	// identity generator name
+	QualifiedNameMetaNamePair	fld_source_rel_field;	// Relation/field source name
 	std::optional<IdentityType> fld_identity_type;
 	USHORT fld_flags;
 

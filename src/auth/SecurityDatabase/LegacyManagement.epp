@@ -129,6 +129,7 @@ void SecurityDatabaseManagement::start(Firebird::CheckStatusWrapper* st, Firebir
 		Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
 		dpb.insertByte(isc_dpb_sec_attach, TRUE);
 		dpb.insertString(isc_dpb_config, Firebird::ParsedList::getNonLoopbackProviders(secDbName));
+		dpb.insertString(isc_dpb_schema_path, SYSTEM_SCHEMA, fb_strlen(SYSTEM_SCHEMA));
 
 		unsigned int authBlockSize;
 		const unsigned char* authBlock = logonInfo->authBlock(&authBlockSize);
@@ -343,6 +344,7 @@ int SecurityDatabaseManagement::execute(Firebird::CheckStatusWrapper* st, Firebi
 			// this checks the "entered" flags for each parameter (except the name)
 			// and makes all non-entered parameters null valued
 
+			// FIXME: epp queries outside engine has not exclusive schema search path set to SYSTEM
 			STORE (TRANSACTION_HANDLE transaction REQUEST_HANDLE request) U IN PLG$VIEW_USERS USING
 				STR_STORE(U.PLG$USER_NAME, user->userName()->get());
 

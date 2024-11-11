@@ -328,8 +328,8 @@ void CMP_post_access(thread_db* tdbb,
 					 SLONG ssRelationId,			// SQL SECURITY relation in which context permissions should be check
 					 SecurityClass::flags_t mask,
 					 ObjectType obj_type,
-					 const MetaName& name,
-					 const MetaName& r_name)
+					 const QualifiedName& name,
+					 const MetaName& columnName)
 {
 /**************************************
  *
@@ -353,7 +353,7 @@ void CMP_post_access(thread_db* tdbb,
 
 	SET_TDBB(tdbb);
 
-	AccessItem access(security_name, ssRelationId, name, obj_type, mask, r_name);
+	AccessItem access(security_name, ssRelationId, name, obj_type, mask, columnName);
 
 	FB_SIZE_T i;
 
@@ -572,15 +572,15 @@ bool CMP_procedure_arguments(
 						FieldInfo fieldInfo;
 
 						if (parameter->prm_mechanism != prm_mech_type_of &&
-							!fb_utils::implicit_domain(parameter->prm_field_source.c_str()))
+							!fb_utils::implicit_domain(parameter->prm_field_source.object.c_str()))
 						{
-							const MetaNamePair namePair(parameter->prm_field_source, "");
+							const QualifiedNameMetaNamePair entry(parameter->prm_field_source, {});
 
-							if (!csb->csb_map_field_info.get(namePair, fieldInfo))
+							if (!csb->csb_map_field_info.get(entry, fieldInfo))
 							{
 								dsc dummyDesc;
 								MET_get_domain(tdbb, csb->csb_pool, parameter->prm_field_source, &dummyDesc, &fieldInfo);
-								csb->csb_map_field_info.put(namePair, fieldInfo);
+								csb->csb_map_field_info.put(entry, fieldInfo);
 							}
 						}
 
@@ -664,18 +664,21 @@ void CMP_post_procedure_access(thread_db* tdbb, CompilerScratch* csb, jrd_prc* p
 	if (csb->csb_g_flags & (csb_internal | csb_ignore_perm))
 		return;
 
+	const SLONG ssRelationId = csb->csb_view ? csb->csb_view->rel_id : 0;
+
+	CMP_post_access(tdbb, csb, procedure->getSecurityName().schema, ssRelationId,
+		SCL_usage, obj_schemas, QualifiedName(procedure->getName().schema));
+
 	// this request must have EXECUTE permission on the stored procedure
 	if (procedure->getName().package.isEmpty())
 	{
-		CMP_post_access(tdbb, csb, procedure->getSecurityName(),
-			(csb->csb_view ? csb->csb_view->rel_id : 0),
-			SCL_execute, obj_procedures, procedure->getName().identifier);
+		CMP_post_access(tdbb, csb, procedure->getSecurityName().object, ssRelationId,
+			SCL_execute, obj_procedures, procedure->getName());
 	}
 	else
 	{
-		CMP_post_access(tdbb, csb, procedure->getSecurityName(),
-			(csb->csb_view ? csb->csb_view->rel_id : 0),
-			SCL_execute, obj_packages, procedure->getName().package);
+		CMP_post_access(tdbb, csb, procedure->getSecurityName().object, ssRelationId,
+			SCL_execute, obj_packages, procedure->getName().getSchemaAndPackage());
 	}
 
 	// Add the procedure to list of external objects accessed

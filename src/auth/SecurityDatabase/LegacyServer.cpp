@@ -64,7 +64,11 @@ const UCHAR PWD_REQUEST[] =
 	blr_begin,
 	blr_for,
 	blr_rse, 1,
-	blr_relation, 9, 'P', 'L', 'G', '$', 'U', 'S', 'E', 'R', 'S', 0,
+	blr_relation3,
+		6, 'P', 'U', 'B', 'L', 'I', 'C',	// PUBLIC_SCHEMA	// FIXME:
+		9, 'P', 'L', 'G', '$', 'U', 'S', 'E', 'R', 'S',
+		0,
+		0,
 	blr_first,
 	blr_literal, blr_short, 0, 1, 0,
 	blr_boolean,

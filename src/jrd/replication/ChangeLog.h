@@ -57,6 +57,7 @@ namespace Replication
 
 	const char CHANGELOG_SIGNATURE[] = "FBCHANGELOG";
 
+	// FIXME: increase version
 	const USHORT CHANGELOG_VERSION_1 = 1;
 	const USHORT CHANGELOG_CURRENT_VERSION = CHANGELOG_VERSION_1;
 

@@ -189,20 +189,20 @@ namespace Replication
 			void insertRecord(Firebird::CheckStatusWrapper* status, const char* name,
 							  Firebird::IReplicatedRecord* record) override
 			{
-				m_replicator->insertRecord(status, this, name, record);
+				insertRecord2(status, nullptr, name, record);
 			}
 
 			void updateRecord(Firebird::CheckStatusWrapper* status, const char* name,
 							  Firebird::IReplicatedRecord* orgRecord,
 							  Firebird::IReplicatedRecord* newRecord) override
 			{
-				m_replicator->updateRecord(status, this, name, orgRecord, newRecord);
+				updateRecord2(status, nullptr, name, orgRecord, newRecord);
 			}
 
 			void deleteRecord(Firebird::CheckStatusWrapper* status, const char* name,
 							  Firebird::IReplicatedRecord* record) override
 			{
-				m_replicator->deleteRecord(status, this, name, record);
+				deleteRecord2(status, nullptr, name, record);
 			}
 
 			void executeSql(Firebird::CheckStatusWrapper* status, const char* sql) override
@@ -213,6 +213,27 @@ namespace Replication
 			void executeSqlIntl(Firebird::CheckStatusWrapper* status, unsigned charset, const char* sql) override
 			{
 				m_replicator->executeSqlIntl(status, this, charset, sql);
+			}
+
+			// FIXME: make caller call *2 methods
+
+			void insertRecord2(Firebird::CheckStatusWrapper* status, const char* schemaName, const char* tableName,
+				Firebird::IReplicatedRecord* record) override
+			{
+				m_replicator->insertRecord(status, this, schemaName, tableName, record);
+			}
+
+			void updateRecord2(Firebird::CheckStatusWrapper* status, const char* schemaName, const char* tableName,
+				Firebird::IReplicatedRecord* orgRecord,
+							  Firebird::IReplicatedRecord* newRecord) override
+			{
+				m_replicator->updateRecord(status, this, schemaName, tableName, orgRecord, newRecord);
+			}
+
+			void deleteRecord2(Firebird::CheckStatusWrapper* status, const char* schemaName, const char* tableName,
+				Firebird::IReplicatedRecord* record) override
+			{
+				m_replicator->deleteRecord(status, this, schemaName, tableName, record);
 			}
 
 		private:
@@ -278,14 +299,14 @@ namespace Replication
 		void rollbackSavepoint(Firebird::CheckStatusWrapper* status, Transaction* transaction);
 
 		void insertRecord(Firebird::CheckStatusWrapper* status, Transaction* transaction,
-						  const char* name,
+						  const char* schemaName, const char* tableName,
 						  Firebird::IReplicatedRecord* record);
 		void updateRecord(Firebird::CheckStatusWrapper* status, Transaction* transaction,
-						  const char* name,
+						  const char* schemaName, const char* tableName,
 						  Firebird::IReplicatedRecord* orgRecord,
 						  Firebird::IReplicatedRecord* newRecord);
 		void deleteRecord(Firebird::CheckStatusWrapper* status, Transaction* transaction,
-						  const char* name,
+						  const char* schemaName, const char* tableName,
 						  Firebird::IReplicatedRecord* record);
 
 		void executeSql(Firebird::CheckStatusWrapper* status, Transaction* transaction,

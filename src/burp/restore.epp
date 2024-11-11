@@ -116,7 +116,7 @@ void	decompress(BurpGlobals* tdgbl, UCHAR*, ULONG);
 void	eat_blob(BurpGlobals* tdgbl);
 void	eat_text(BurpGlobals* tdgbl);
 void	eat_text2(BurpGlobals* tdgbl);
-burp_rel*	find_relation(BurpGlobals* tdgbl, const TEXT*);
+burp_rel*	find_relation(BurpGlobals* tdgbl, const QualifiedMetaString&);
 void	fix_security_class_name(BurpGlobals* tdgbl, TEXT* sec_class, bool is_field);
 // CVC: when do these functions return false indeed???
 // get_acl and get_index are the only exceptions but ironically their
@@ -145,13 +145,14 @@ SLONG	get_int32(BurpGlobals* tdgbl);
 SINT64  get_int64(BurpGlobals* tdgbl);
 bool	get_package(BurpGlobals* tdgbl);
 bool	get_procedure(BurpGlobals* tdgbl);
-bool	get_procedure_prm(BurpGlobals* tdgbl, GDS_NAME, GDS_NAME);
+bool	get_procedure_prm(BurpGlobals* tdgbl, const QualifiedMetaString&);
 bool	get_publication(BurpGlobals* tdgbl);
 bool	get_pub_table(BurpGlobals* tdgbl);
 bool	get_ref_constraint(BurpGlobals* tdgbl);
 bool	get_rel_constraint(BurpGlobals* tdgbl);
 bool	get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* task);
 bool	get_relation_data(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* task);
+bool	get_schema(BurpGlobals* tdgbl);
 bool	get_sql_roles(BurpGlobals* tdgbl);
 bool	get_mapping(BurpGlobals* tdgbl);
 bool	get_db_creator(BurpGlobals* tdgbl);
@@ -174,8 +175,8 @@ USHORT	recompute_length(BurpGlobals* tdgbl, burp_rel*);
 #endif
 bool	restore(BurpGlobals* tdgbl, Firebird::IProvider*, const TEXT*, const TEXT*);
 void	restore_security_class(BurpGlobals* tdgbl, const TEXT*, const TEXT*);
-USHORT	get_view_base_relation_count(BurpGlobals* tdgbl, const TEXT*, USHORT, bool* error);
-void	store_blr_gen_id(BurpGlobals* tdgbl, const TEXT* gen_name, SINT64 value, SINT64 initial_value,
+USHORT	get_view_base_relation_count(BurpGlobals* tdgbl, const QualifiedMetaString&, USHORT, bool* error);
+void	store_blr_gen_id(BurpGlobals* tdgbl, const QualifiedMetaString& gen_name, SINT64 value, SINT64 initial_value,
 	const ISC_QUAD* gen_desc, const char* secclass, const char* ownername, fb_sysflag sysFlag,
 	SLONG increment);
 void	update_global_field(BurpGlobals* tdgbl);
@@ -263,21 +264,22 @@ const int USER_PRIV_FIELD_NAME		= 32;
 const int USER_PRIV_USER_TYPE		= 64;
 const int USER_PRIV_OBJECT_TYPE		= 128;
 
-static inline void collect_missing_privs(BurpGlobals* tdgbl, USHORT type, const GDS_NAME name, bool hasSecClass)
+static inline void collect_missing_privs(BurpGlobals* tdgbl, USHORT type, const QualifiedMetaString& name,
+	bool hasSecClass)
 {
 	burp_meta_obj* object = (burp_meta_obj*) BURP_alloc_zero(sizeof(burp_meta_obj));
 	object->obj_next = tdgbl->miss_privs;
 	object->obj_type = type;
-	strcpy(object->obj_name, name);
+	object->obj_name = name;
 	object->obj_class = hasSecClass;
 	tdgbl->miss_privs = object;
 }
 
 } // namespace
 
-void activateIndex(BurpGlobals* tdgbl, const char* index_name)
+void activateIndex(BurpGlobals* tdgbl, const QualifiedMetaString& indexName)
 {
-	BURP_verbose(285, index_name);
+	BURP_verbose(285, indexName.toString().c_str());
 	// activating and creating deferred index %s
 
 	bool fError = false;
@@ -287,16 +289,19 @@ void activateIndex(BurpGlobals* tdgbl, const char* index_name)
 	START_TRANSACTION activateIndexTran;
 
 	FOR (TRANSACTION_HANDLE activateIndexTran REQUEST_HANDLE tdgbl->handles_activateIndex_req_handle1)
-		IND1 IN RDB$INDICES WITH IND1.RDB$INDEX_NAME EQ index_name
+		IND1 IN RDB$INDICES
+		WITH IND1.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
+			 IND1.RDB$INDEX_NAME EQ indexName.object.c_str()
+	{
 		MODIFY IND1 USING
 			IND1.RDB$INDEX_INACTIVE = FALSE;
-		END_MODIFY;
-	END_FOR;
-
+		END_MODIFY
+	}
+	END_FOR
 	ON_ERROR
 		fError = true;
 		fb_utils::copyStatus(&local_status_vector, isc_status);
-	END_ERROR;
+	END_ERROR
 
 	if (!fError)
 	{
@@ -304,19 +309,19 @@ void activateIndex(BurpGlobals* tdgbl, const char* index_name)
 		ON_ERROR
 			fError = true;
 			fb_utils::copyStatus(&local_status_vector, isc_status);
-		END_ERROR;
+		END_ERROR
 	}
 
 	if (fError)
 	{
-		BURP_print(false, 173, index_name);
+		BURP_print(false, 173, indexName.toString().c_str());
 		BURP_print_status(false, &local_status_vector);
 		tdgbl->flag_on_line = false;
 
 		ROLLBACK activateIndexTran;
 		ON_ERROR
 			general_on_error();
-		END_ERROR;
+		END_ERROR
 	}
 }
 
@@ -334,7 +339,7 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
  **************************************/
 	Firebird::IRequest* req_handle1 = nullptr;
 	Firebird::IRequest* req_handle3 = nullptr;
-	BASED_ON RDB$INDICES.RDB$INDEX_NAME index_name;
+	QualifiedMetaString indexName;
 
 	Firebird::DispatcherPtr provider;
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -348,6 +353,7 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 
 	COMMIT;
 	ON_ERROR
+	{
 		// Fix for bug_no 8055:
 		// don't throw away the database just because an index
 		// could not be made
@@ -358,18 +364,21 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 			{
 				case isc_sort_mem_err:
 				case isc_no_dup:
-					strcpy(index_name, (TEXT *)tdgbl->status_vector[3]);
+					indexName = QualifiedMetaString::parseSchemaObject((TEXT*) tdgbl->status_vector[3]);
 					BURP_print_status(false, &tdgbl->status_vector);
 					FOR (REQUEST_HANDLE req_handle3)
-						IDX IN RDB$INDICES WITH IDX.RDB$INDEX_NAME EQ index_name
-
-						BURP_verbose(243, index_name);
+						IDX IN RDB$INDICES
+						WITH IDX.RDB$SCHEMA_NAME EQUIV NULLIF(indexName.schema.c_str(), '') AND
+							 IDX.RDB$INDEX_NAME EQ indexName.object.c_str()
+					{
+						BURP_verbose(243, indexName.toString().c_str());
 						MODIFY IDX USING
 							IDX.RDB$INDEX_INACTIVE = TRUE;
 						END_MODIFY;
-						BURP_print(false, 240, index_name);
+						BURP_print(false, 240, indexName.toString().c_str());
 						// msg 240 Index \"%s\" failed to activate because:
-						if ( error_code == isc_no_dup )
+
+						if (error_code == isc_no_dup)
 						{
 							BURP_print(false, 241);
 							// msg 241 The unique index has duplicate values or NULLs
@@ -383,12 +392,16 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 							BURP_print(false, 245);
 							// msg 245 Set the TMP environment variable to a directory on a filesystem that does have enough space, and activate index with
 						}
-						BURP_print(false, 243, index_name);
+
+						BURP_print(false, 243, indexName.toString().c_str());
 						// msg 243 ALTER INDEX \"%s\" ACTIVE;
-					END_FOR;
+					}
+					END_FOR
+
 					// don't bring the database on-line
 					tdgbl->flag_on_line = false;
 					break;
+
 				default:
 					general_on_error ();
 				break;
@@ -398,7 +411,8 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 				continue;
 			END_ERROR
 		}
-	END_ERROR;
+	}
+	END_ERROR
 
 	if (tdgbl->global_trans)
 	{
@@ -429,21 +443,25 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 		FOR (REQUEST_HANDLE req_handle1) IDS IN RDB$INDICES WITH
 			IDS.RDB$INDEX_INACTIVE EQ DEFERRED_ACTIVE AND
 			IDS.RDB$FOREIGN_KEY MISSING
+		{
+			if (!IDS.RDB$SCHEMA_NAME.NULL)
+				indexName.schema = IDS.RDB$SCHEMA_NAME;
 
-			MISC_terminate(IDS.RDB$INDEX_NAME, index_name,
-				(ULONG)MISC_symbol_length(IDS.RDB$INDEX_NAME, sizeof(IDS.RDB$INDEX_NAME)),
-				sizeof(index_name));
+			indexName.object = IDS.RDB$INDEX_NAME;
 
-			activateIndex(tdgbl, index_name);
-		END_FOR;
+			activateIndex(tdgbl, indexName);
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
+		END_ERROR
+
 		MISC_release_request_silent(req_handle1);
+
 		COMMIT;
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
+		END_ERROR
 
 		EXEC SQL SET TRANSACTION ISOLATION LEVEL READ COMMITTED NO_AUTO_UNDO;
 		if (gds_status->hasData())
@@ -462,23 +480,27 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 			CNST IN RDB$RELATION_CONSTRAINTS
 			CROSS IDS IN RDB$INDICES WITH
 			CNST.RDB$CONSTRAINT_TYPE EQ FOREIGN_KEY AND
+			CNST.RDB$SCHEMA_NAME EQUIV IDS.RDB$SCHEMA_NAME AND
 			CNST.RDB$INDEX_NAME EQ IDS.RDB$INDEX_NAME AND
 			IDS.RDB$INDEX_INACTIVE EQ DEFERRED_ACTIVE
+		{
+			if (!IDS.RDB$SCHEMA_NAME.NULL)
+				indexName.schema = IDS.RDB$SCHEMA_NAME;
 
-			MISC_terminate(IDS.RDB$INDEX_NAME, index_name,
-				(ULONG) MISC_symbol_length(IDS.RDB$INDEX_NAME, sizeof(IDS.RDB$INDEX_NAME)),
-				sizeof(index_name));
+			indexName.object = IDS.RDB$INDEX_NAME;
 
-			activateIndex(tdgbl, index_name);
-		END_FOR;
+			activateIndex(tdgbl, indexName);
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
+		END_ERROR
 		MISC_release_request_silent(req_handle1);
+
 		COMMIT;
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
+		END_ERROR
 	}
 
 	EXEC SQL SET TRANSACTION ISOLATION LEVEL READ COMMITTED NO_AUTO_UNDO;
@@ -990,6 +1012,9 @@ void create_database(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TE
 	dpb.insertInt(isc_dpb_page_size, page_size & 0xff00);
 	dpb.insertString(isc_dpb_gbak_attach, FB_VERSION, fb_strlen(FB_VERSION));
 
+	if (tdgbl->RESTORE_format >= 12)
+		dpb.insertTag(isc_dpb_gbak_restore_has_schema);
+
 	if (sweep_interval != MAX_ULONG)
 	{
 		dpb.insertInt(isc_dpb_sweep_interval, sweep_interval);
@@ -1045,10 +1070,11 @@ void create_database(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TE
 			dpb.insertInt(isc_dpb_parallel_workers, tdgbl->gbl_sw_par_workers);
 		dpb.insertByte(isc_dpb_shutdown, isc_dpb_shut_multi);
 	}
+
 	dpb.insertInt(isc_dpb_shutdown_delay, 0);
 	dpb.insertInt(isc_dpb_overwrite, tdgbl->gbl_sw_overwrite);
-
 	dpb.insertByte(isc_dpb_no_db_triggers, 1);
+	dpb.insertString(isc_dpb_schema_path, SYSTEM_SCHEMA, fb_strlen(SYSTEM_SCHEMA));
 
 	FbLocalStatus status_vector;
 
@@ -1357,7 +1383,7 @@ void eat_text2(BurpGlobals* tdgbl)
 		MVOL_skip_block(tdgbl, len);
 }
 
-burp_rel* find_relation(BurpGlobals* tdgbl, const TEXT* name)
+burp_rel* find_relation(BurpGlobals* tdgbl, const QualifiedMetaString& name)
 {
 /**************************************
  *
@@ -1374,14 +1400,11 @@ burp_rel* find_relation(BurpGlobals* tdgbl, const TEXT* name)
 	// Why isn't strcmp used here?
 	for (burp_rel* relation = tdgbl->relations; relation; relation = relation->rel_next)
 	{
-		for (const TEXT* p = relation->rel_name, *q = name; *p == *q; p++, q++)
-		{
-			if (!*p)
-				return relation;
-		}
+		if (relation->rel_name == name)
+			return relation;
 	}
 
-	BURP_error_redirect(NULL, 35, SafeArg() << name);
+	BURP_error_redirect(NULL, 35, SafeArg() << name.toString().c_str());
 	// msg 35 can't find relation %s
 
 	return NULL;
@@ -1435,8 +1458,18 @@ void fix_security_class_name(BurpGlobals* tdgbl, TEXT* sec_class, bool is_field)
 		add_byte(blr, blr_begin);
 		add_byte(blr, blr_assignment);
 
-		add_byte(blr, blr_gen_id);
-		add_string(blr, SQL_SECCLASS_GENERATOR);
+		if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
+		{
+			add_byte(blr, blr_gen_id3);
+			add_string(blr, SYSTEM_SCHEMA);
+			add_string(blr, SQL_SECCLASS_GENERATOR);
+			add_byte(blr, 1);
+		}
+		else
+		{
+			add_byte(blr, blr_gen_id);
+			add_string(blr, SQL_SECCLASS_GENERATOR);
+		}
 
 		add_byte(blr, blr_literal);
 		add_byte(blr, blr_int64);
@@ -1885,8 +1918,15 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 				add_byte(blr, field->fld_type);
 			}
 
+			if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
+			{
+				add_byte(blr, isc_sdl_schema);
+				add_string(blr,
+					(relation->rel_name.schema.hasData() ? relation->rel_name.schema.c_str() : PUBLIC_SCHEMA));
+			}
+
 			add_byte(blr, isc_sdl_relation);
-			add_string(blr, relation->rel_name);
+			add_string(blr, relation->rel_name.object.c_str());
 			add_byte(blr, isc_sdl_field);
 			add_string(blr, field->fld_name);
 
@@ -2120,8 +2160,14 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 			add_byte(blr, field->fld_type);
 		}
 
+		if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
+		{
+			add_byte(blr, isc_sdl_schema);
+			add_string(blr, (relation->rel_name.schema.hasData() ? relation->rel_name.schema.c_str() : PUBLIC_SCHEMA));
+		}
+
 		add_byte(blr, isc_sdl_relation);
-		add_string(blr, relation->rel_name);
+		add_string(blr, relation->rel_name.object.c_str());
 		add_byte(blr, isc_sdl_field);
 		add_string(blr, field->fld_name);
 
@@ -2433,6 +2479,7 @@ bool get_character_set(BurpGlobals* tdgbl)
 	{
 	};
 
+	QualifiedMetaString name;
 	att_type		attribute;
 	scan_attr_t		scan_next_attr;
 
@@ -2440,14 +2487,19 @@ bool get_character_set(BurpGlobals* tdgbl)
 	{
 		if (tdgbl->runtimeODS >= DB_VERSION_DDL12)
 		{
-			GDS_NAME charset_name;
+			if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
+				name.schema = PUBLIC_SCHEMA;
+
 			bool securityClass = false;
 
 			STORE (REQUEST_HANDLE tdgbl->handles_get_character_sets_req_handle1)
 				X IN RDB$CHARACTER_SETS
+			{
+				X.RDB$SCHEMA_NAME.NULL = TRUE;
 				X.RDB$CHARACTER_SET_NAME.NULL = TRUE;
 				X.RDB$FORM_OF_USE.NULL = TRUE;
 				X.RDB$NUMBER_OF_CHARACTERS.NULL = TRUE;
+				X.RDB$DEFAULT_COLLATE_SCHEMA_NAME.NULL = TRUE;
 				X.RDB$DEFAULT_COLLATE_NAME.NULL = TRUE;
 				X.RDB$CHARACTER_SET_ID.NULL = TRUE;
 				X.RDB$SYSTEM_FLAG = 0;
@@ -2463,10 +2515,17 @@ bool get_character_set(BurpGlobals* tdgbl)
 				{
 					switch (attribute)
 					{
+					case att_charset_schema_name:
+						X.RDB$SCHEMA_NAME.NULL = FALSE;
+						GET_TEXT(X.RDB$SCHEMA_NAME);
+						name.schema = X.RDB$SCHEMA_NAME;
+						break;
+
 					case att_charset_name:
 						X.RDB$CHARACTER_SET_NAME.NULL = FALSE;
 						GET_TEXT(X.RDB$CHARACTER_SET_NAME);
-						BURP_verbose (msgVerbose_restore_charset, X.RDB$CHARACTER_SET_NAME);
+						name.object = X.RDB$CHARACTER_SET_NAME;
+						BURP_verbose(msgVerbose_restore_charset, name.toString().c_str());
 						break;
 
 					case att_charset_form:
@@ -2477,6 +2536,11 @@ bool get_character_set(BurpGlobals* tdgbl)
 					case att_charset_numchar:
 						X.RDB$NUMBER_OF_CHARACTERS.NULL = FALSE;
 						X.RDB$NUMBER_OF_CHARACTERS = (USHORT) get_int32(tdgbl);
+						break;
+
+					case att_charset_coll_schema_name:
+						X.RDB$DEFAULT_COLLATE_SCHEMA_NAME.NULL = FALSE;
+						GET_TEXT(X.RDB$DEFAULT_COLLATE_SCHEMA_NAME);
 						break;
 
 					case att_charset_coll:
@@ -2541,20 +2605,19 @@ bool get_character_set(BurpGlobals* tdgbl)
 				if (X.RDB$CHARACTER_SET_ID.NULL && !X.RDB$DEFAULT_COLLATE_NAME.NULL &&
 					!X.RDB$CHARACTER_SET_NAME.NULL)
 				{
-					tdgbl->defaultCollations.add(
-						Firebird::Pair<Firebird::NonPooled<Firebird::MetaString, Firebird::MetaString> >(
-							X.RDB$CHARACTER_SET_NAME, X.RDB$DEFAULT_COLLATE_NAME));
+					tdgbl->defaultCollations.put(
+						QualifiedMetaString(X.RDB$CHARACTER_SET_NAME, X.RDB$SCHEMA_NAME),
+						QualifiedMetaString(X.RDB$DEFAULT_COLLATE_NAME, X.RDB$DEFAULT_COLLATE_SCHEMA_NAME));
+
 					throw AbortException();	// prevent the STORE
 				}
-
-				strcpy(charset_name, X.RDB$CHARACTER_SET_NAME);
-
-			END_STORE;
+			}
+			END_STORE
 			ON_ERROR
 				general_on_error ();
-			END_ERROR;
+			END_ERROR
 
-			collect_missing_privs(tdgbl, obj_charset, charset_name, securityClass);
+			collect_missing_privs(tdgbl, obj_charset, name, securityClass);
 		}
 		else
 		{
@@ -2579,7 +2642,8 @@ bool get_character_set(BurpGlobals* tdgbl)
 					case att_charset_name:
 						X.RDB$CHARACTER_SET_NAME.NULL = FALSE;
 						GET_TEXT(X.RDB$CHARACTER_SET_NAME);
-						BURP_verbose (msgVerbose_restore_charset, X.RDB$CHARACTER_SET_NAME);
+						name.object = X.RDB$CHARACTER_SET_NAME;
+						BURP_verbose(msgVerbose_restore_charset, name.toString().c_str());
 						break;
 
 					case att_charset_form:
@@ -2640,9 +2704,10 @@ bool get_character_set(BurpGlobals* tdgbl)
 				if (X.RDB$CHARACTER_SET_ID.NULL && !X.RDB$DEFAULT_COLLATE_NAME.NULL &&
 					!X.RDB$CHARACTER_SET_NAME.NULL)
 				{
-					tdgbl->defaultCollations.add(
-						Firebird::Pair<Firebird::NonPooled<Firebird::MetaString, Firebird::MetaString> >(
-							X.RDB$CHARACTER_SET_NAME, X.RDB$DEFAULT_COLLATE_NAME));
+					tdgbl->defaultCollations.put(
+						QualifiedMetaString(X.RDB$CHARACTER_SET_NAME),
+						QualifiedMetaString(X.RDB$DEFAULT_COLLATE_NAME));
+
 					throw AbortException();	// prevent the STORE
 				}
 
@@ -2676,6 +2741,8 @@ bool get_chk_constraint(BurpGlobals* tdgbl)
 
 	STORE (REQUEST_HANDLE tdgbl->handles_get_chk_constraint_req_handle1)
 		X IN RDB$CHECK_CONSTRAINTS
+	{
+		X.RDB$SCHEMA_NAME.NULL = TRUE;
 		X.RDB$CONSTRAINT_NAME.NULL = TRUE;
 		X.RDB$TRIGGER_NAME.NULL = TRUE;
 
@@ -2684,6 +2751,11 @@ bool get_chk_constraint(BurpGlobals* tdgbl)
 		{
 			switch (attribute)
 			{
+			case att_chk_schema_name:
+				X.RDB$SCHEMA_NAME.NULL = FALSE;
+				GET_TEXT(X.RDB$SCHEMA_NAME);
+				break;
+
 			case att_chk_constraint_name:
 				X.RDB$CONSTRAINT_NAME.NULL = FALSE;
 				GET_TEXT(X.RDB$CONSTRAINT_NAME);
@@ -2700,10 +2772,11 @@ bool get_chk_constraint(BurpGlobals* tdgbl)
 				break;
 			}
 		}
-	END_STORE;
+	}
+	END_STORE
 	ON_ERROR
 		general_on_error ();
-	END_ERROR;
+	END_ERROR
 
 	return true;
 }
@@ -2720,16 +2793,18 @@ bool get_collation(BurpGlobals* tdgbl)
  *	Restore data for user defined collations
  *
  **************************************/
+	QualifiedMetaString name;
 	att_type		attribute;
 	scan_attr_t		scan_next_attr;
 
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL12)
 	{
-		GDS_NAME coll_name;
 		bool securityClass = false;
 
 		STORE (REQUEST_HANDLE tdgbl->handles_get_collation_req_handle1)
 			X IN RDB$COLLATIONS
+		{
+			X.RDB$SCHEMA_NAME.NULL = TRUE;
 			X.RDB$COLLATION_NAME.NULL = TRUE;
 			X.RDB$COLLATION_ID.NULL = TRUE;
 			X.RDB$CHARACTER_SET_ID.NULL = TRUE;
@@ -2748,11 +2823,17 @@ bool get_collation(BurpGlobals* tdgbl)
 			{
 				switch (attribute)
 				{
+				case att_coll_schema_name:
+					X.RDB$SCHEMA_NAME.NULL = FALSE;
+					GET_TEXT(X.RDB$SCHEMA_NAME);
+					name.schema = X.RDB$SCHEMA_NAME;
+					break;
 
 				case att_coll_name:
 					X.RDB$COLLATION_NAME.NULL = FALSE;
 					GET_TEXT(X.RDB$COLLATION_NAME);
-					BURP_verbose(msgVerbose_restore_collation, X.RDB$COLLATION_NAME);
+					name.object = X.RDB$COLLATION_NAME;
+					BURP_verbose(msgVerbose_restore_collation, name.toString().c_str());
 					break;
 
 				case att_coll_id:
@@ -2838,21 +2919,20 @@ bool get_collation(BurpGlobals* tdgbl)
 					break;
 				}
 			}
-
-			strcpy(coll_name, X.RDB$COLLATION_NAME);
-
-		END_STORE;
+		}
+		END_STORE
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
+		END_ERROR
 
-		collect_missing_privs(tdgbl, obj_collation, coll_name, securityClass);
+		collect_missing_privs(tdgbl, obj_collation, name, securityClass);
 	}
 	else if (tdgbl->runtimeODS >= DB_VERSION_DDL11)
 	{
 		// This includes DDL11_0 that doesn't know to ignore unknown system fields.
 		STORE (REQUEST_HANDLE tdgbl->handles_get_collation_req_handle1)
 			X IN RDB$COLLATIONS
+		{
 			X.RDB$COLLATION_NAME.NULL = TRUE;
 			X.RDB$COLLATION_ID.NULL = TRUE;
 			X.RDB$CHARACTER_SET_ID.NULL = TRUE;
@@ -2873,7 +2953,8 @@ bool get_collation(BurpGlobals* tdgbl)
 				case att_coll_name:
 					X.RDB$COLLATION_NAME.NULL = FALSE;
 					GET_TEXT(X.RDB$COLLATION_NAME);
-					BURP_verbose(msgVerbose_restore_collation, X.RDB$COLLATION_NAME);
+					name.object = X.RDB$COLLATION_NAME;
+					BURP_verbose(msgVerbose_restore_collation, name.toString().c_str());
 					break;
 
 				case att_coll_id:
@@ -2945,15 +3026,17 @@ bool get_collation(BurpGlobals* tdgbl)
 					break;
 				}
 			}
-		END_STORE;
+		}
+		END_STORE
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
+		END_ERROR
 	}
 	else
 	{
 		STORE (REQUEST_HANDLE tdgbl->handles_get_collation_req_handle1)
 			X IN RDB$COLLATIONS
+		{
 			X.RDB$COLLATION_NAME.NULL = TRUE;
 			X.RDB$COLLATION_ID.NULL = TRUE;
 			X.RDB$CHARACTER_SET_ID.NULL = TRUE;
@@ -2974,7 +3057,8 @@ bool get_collation(BurpGlobals* tdgbl)
 				case att_coll_name:
 					X.RDB$COLLATION_NAME.NULL = FALSE;
 					GET_TEXT(X.RDB$COLLATION_NAME);
-					BURP_verbose(msgVerbose_restore_collation, X.RDB$COLLATION_NAME);
+					name.object = X.RDB$COLLATION_NAME;
+					BURP_verbose(msgVerbose_restore_collation, name.toString().c_str());
 					break;
 
 				case att_coll_id:
@@ -3040,10 +3124,11 @@ bool get_collation(BurpGlobals* tdgbl)
 					break;
 				}
 			}
-		END_STORE;
+		}
+		END_STORE
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
+		END_ERROR
 	}
 
 	return true;
@@ -3053,11 +3138,12 @@ bool get_collation(BurpGlobals* tdgbl)
 static void check_data_error(BurpGlobals* tdgbl, IStatus* status_vector, const burp_rel* relation)
 {
 	ISC_STATUS code = status_vector->getErrors()[1];
+
 	if (code == isc_not_valid)
 	{
 		if (tdgbl->gbl_sw_incremental)
 		{
-			BURP_print(false, 138, relation->rel_name);
+			BURP_print(false, 138, relation->rel_name.toString().c_str());
 			// msg 138 validation error on field in relation %s
 			BURP_print_status (false, status_vector);
 		}
@@ -3070,7 +3156,7 @@ static void check_data_error(BurpGlobals* tdgbl, IStatus* status_vector, const b
 		if (tdgbl->gbl_sw_incremental)
 		{
 			// msg 114 restore failed for record in relation %s
-			BURP_print(false, 114, relation->rel_name);
+			BURP_print(false, 114, relation->rel_name.toString().c_str());
 
 			BURP_print_status(false, status_vector, 342);	// isc_gbak_invalid_data
 		}
@@ -3081,7 +3167,7 @@ static void check_data_error(BurpGlobals* tdgbl, IStatus* status_vector, const b
 	{
 		if (tdgbl->gbl_sw_incremental && isc_sqlcode(status_vector->getErrors()) != -902)
 		{
-			BURP_print (false, 114, relation->rel_name);
+			BURP_print (false, 114, relation->rel_name.toString().c_str());
 			// msg 114 restore failed for record in relation %s
 			BURP_print_status(false, status_vector);
 		}
@@ -3093,12 +3179,12 @@ static void check_data_error(BurpGlobals* tdgbl, IStatus* status_vector, const b
 
 static void commit_relation_data(BurpGlobals* tdgbl, burp_rel* relation)
 {
-	BURP_verbose(72, relation->rel_name);
+	BURP_verbose(72, relation->rel_name.toString().c_str());
 	// msg 72  committing data for relation %s
 	COMMIT
 	// existing ON_ERROR continues past error, beck
 	ON_ERROR
-
+	{
 		// Fix for bug_no 8055:
 		// don't throw away the database just because an index
 		// could not be made
@@ -3110,51 +3196,58 @@ static void commit_relation_data(BurpGlobals* tdgbl, burp_rel* relation)
 		while (error_code = tdgbl->status_vector[1])
 		{
 			Firebird::IRequest* req_handle = 0;
-			BASED_ON RDB$INDICES.RDB$INDEX_NAME index_name;
+			QualifiedMetaString indexName;
 
 			switch (error_code)
 			{
 			case isc_sort_mem_err:
 			case isc_no_dup:
-				strcpy(index_name, (TEXT *)tdgbl->status_vector[3]);
+				indexName = QualifiedMetaString::parseSchemaObject((TEXT*) tdgbl->status_vector[3]);
+				indexName.object = (TEXT*) tdgbl->status_vector[3];
 				BURP_print_status(false, &tdgbl->status_vector);
 
 				FOR(REQUEST_HANDLE req_handle)
 					IDX IN RDB$INDICES
-					WITH IDX.RDB$INDEX_NAME EQ index_name
+					WITH IDX.RDB$SCHEMA_NAME EQUIV NULLIF(indexName.schema.c_str(), '') AND
+						 IDX.RDB$INDEX_NAME EQ indexName.object.c_str()
 				{
 					MODIFY IDX USING
+					{
 						IDX.RDB$INDEX_INACTIVE = TRUE;
 
-					BURP_print(false, 240, index_name);
-					// msg 240 Index \"%s\" failed to activate because:
-					if (error_code == isc_no_dup)
-					{
-						BURP_print(false, 241);
-						// msg 241 The unique index has duplicate values or NULLs
-						BURP_print(false, 242);
-						// msg 242 Delete or Update duplicate values or NULLs, and activate index with
+						BURP_print(false, 240, indexName.toString().c_str());
+						// msg 240 Index \"%s\" failed to activate because:
+
+						if (error_code == isc_no_dup)
+						{
+							BURP_print(false, 241);
+							// msg 241 The unique index has duplicate values or NULLs
+							BURP_print(false, 242);
+							// msg 242 Delete or Update duplicate values or NULLs, and activate index with
+						}
+						else
+						{
+							BURP_print(false, 244);
+							// msg 244 Not enough disk space to create the sort file for an index
+							BURP_print(false, 245);
+							// msg 245 Set the TMP environment variable to a directory on a filesystem that does have enough space, and activate index with
+						}
+
+						BURP_print(false, 243, indexName.toString().c_str());
+						// msg 243 ALTER INDEX \"%s\" ACTIVE
 					}
-					else
-					{
-						BURP_print(false, 244);
-						// msg 244 Not enough disk space to create the sort file for an index
-						BURP_print(false, 245);
-						// msg 245 Set the TMP environment variable to a directory on a filesystem that does have enough space, and activate index with
-					}
-					BURP_print(false, 243, index_name);
-					// msg 243 ALTER INDEX \"%s\" ACTIVE
-					END_MODIFY;
+					END_MODIFY
 				}
-				END_FOR;
+				END_FOR
 				// commit one more time
 				COMMIT
-					ON_ERROR
+				ON_ERROR
 					continue;
 				END_ERROR
-					break;
+				break;
+
 			default:
-				BURP_print(false, 69, relation->rel_name);
+				BURP_print(false, 69, relation->rel_name.toString().c_str());
 				// msg 69 commit failed on relation %s
 				BURP_print_status(false, &tdgbl->status_vector);
 				ROLLBACK;
@@ -3164,7 +3257,8 @@ static void commit_relation_data(BurpGlobals* tdgbl, burp_rel* relation)
 				break;
 			} // end of switch
 		} // end of while
-	END_ERROR;
+	}
+	END_ERROR
 
 	EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
 	if (gds_status->hasData())
@@ -3172,7 +3266,7 @@ static void commit_relation_data(BurpGlobals* tdgbl, burp_rel* relation)
 }
 
 // We have a corrupt backup, save the restore process from becoming useless.
-void fix_exception(BurpGlobals* tdgbl, const char* exc_name, scan_attr_t& scan_next_attr,
+void fix_exception(BurpGlobals* tdgbl, const QualifiedMetaString& name, scan_attr_t& scan_next_attr,
 	const att_type attribute, att_type& failed_attrib, UCHAR*& msg_ptr, ULONG& l2, bool& msg_seen)
 {
 	if (msg_seen && (tdgbl->RESTORE_format == 7 || tdgbl->RESTORE_format == 8))
@@ -3180,7 +3274,7 @@ void fix_exception(BurpGlobals* tdgbl, const char* exc_name, scan_attr_t& scan_n
 		if (!failed_attrib)
 		{
 			failed_attrib = attribute;
-			BURP_print(false, 313, SafeArg() << failed_attrib << exc_name);
+			BURP_print(false, 313, SafeArg() << failed_attrib << name.toString().c_str());
 		}
 
 		// Notice we use 1021 instead of 1023 because this is the maximum length
@@ -3233,7 +3327,7 @@ void get_data(BurpGlobals* tdgbl, burp_rel* relation, WriteRelationReq* req)
 	RCRD_LENGTH length = req->getDataLength();
 	UCHAR* buffer = req->getData();
 
-	//	BURP_verbose (124, relation->rel_name); // msg 124  restoring data for relation %s
+	//	BURP_verbose (124, relation->rel_name.toString().c_str()); // msg 124  restoring data for relation %s
 
 	lstring data;
 	data.lstr_allocated = 0;
@@ -3398,18 +3492,22 @@ bool get_exception(BurpGlobals* tdgbl)
  *	Reconstruct a exception.
  *
  **************************************/
+	QualifiedMetaString name;
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
+		name.schema = PUBLIC_SCHEMA;
+
 	att_type	attribute;
-	TEXT		temp[GDS_NAME_LEN];
 	ULONG		l2 = 0;
 	scan_attr_t		scan_next_attr;
 
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL12)
 	{
-		GDS_NAME exception_name;
 		bool securityClass = false;
 
 		STORE (REQUEST_HANDLE tdgbl->handles_get_exception_req_handle1)
 			X IN RDB$EXCEPTIONS
+		{
+			X.RDB$SCHEMA_NAME.NULL = TRUE;
 			X.RDB$EXCEPTION_NAME.NULL = TRUE;
 			X.RDB$DESCRIPTION.NULL = TRUE;
 			X.RDB$MESSAGE.NULL = TRUE;
@@ -3427,22 +3525,28 @@ bool get_exception(BurpGlobals* tdgbl)
 			{
 				switch (attribute)
 				{
+				case att_exception_schema_name:
+					GET_TEXT(X.RDB$SCHEMA_NAME);
+					X.RDB$SCHEMA_NAME.NULL = FALSE;
+					name.schema = X.RDB$SCHEMA_NAME;
+					break;
+
 				case att_exception_name:
 					if (!X.RDB$EXCEPTION_NAME.NULL)
-						BURP_error(311, true, SafeArg() << attribute << X.RDB$EXCEPTION_NAME);
+						BURP_error(311, true, SafeArg() << attribute << name.toString().c_str());
 					else
 					{
-						const ULONG l = GET_TEXT(X.RDB$EXCEPTION_NAME);
+						GET_TEXT(X.RDB$EXCEPTION_NAME);
 						X.RDB$EXCEPTION_NAME.NULL = FALSE;
-						MISC_terminate (X.RDB$EXCEPTION_NAME, temp, l, sizeof(temp));
-						BURP_verbose (199, temp);
+						name.object = X.RDB$EXCEPTION_NAME;
+						BURP_verbose(199, name.toString().c_str());
 						// msg 199 restoring exception %s
 					}
 					break;
 
 				case att_exception_description:
 					if (!X.RDB$DESCRIPTION.NULL)
-						BURP_error(311, true, SafeArg() << attribute << X.RDB$EXCEPTION_NAME);
+						BURP_error(311, true, SafeArg() << attribute << name.toString().c_str());
 					else
 					{
 						msg_seen = false;
@@ -3453,7 +3557,7 @@ bool get_exception(BurpGlobals* tdgbl)
 
 				case att_exception_description2:
 					if (!X.RDB$DESCRIPTION.NULL)
-						BURP_error(311, true, SafeArg() << attribute << X.RDB$EXCEPTION_NAME);
+						BURP_error(311, true, SafeArg() << attribute << name.toString().c_str());
 					else
 					{
 						msg_seen = false;
@@ -3464,11 +3568,11 @@ bool get_exception(BurpGlobals* tdgbl)
 
 				case att_exception_msg:
 					if (msg_seen)
-						BURP_error(311, true, SafeArg() << attribute << X.RDB$EXCEPTION_NAME);
+						BURP_error(311, true, SafeArg() << attribute << name.toString().c_str());
 					else if (!X.RDB$MESSAGE.NULL)
 					{
 						msg_seen = true;
-						BURP_print(false, 312, SafeArg() << attribute << X.RDB$EXCEPTION_NAME);
+						BURP_print(false, 312, SafeArg() << attribute << name.toString().c_str());
 						eat_text(tdgbl);
 					}
 					else
@@ -3482,10 +3586,10 @@ bool get_exception(BurpGlobals* tdgbl)
 
 				case att_exception_msg2:
 					if (msg_seen)
-						BURP_error(311, true, SafeArg() << attribute << X.RDB$EXCEPTION_NAME);
+						BURP_error(311, true, SafeArg() << attribute << name.toString().c_str());
 					else if (!X.RDB$MESSAGE.NULL)
 					{
-						BURP_print(false, 312, SafeArg() << attribute << X.RDB$EXCEPTION_NAME);
+						BURP_print(false, 312, SafeArg() << attribute << name.toString().c_str());
 						eat_text2(tdgbl);
 					}
 					else
@@ -3498,7 +3602,7 @@ bool get_exception(BurpGlobals* tdgbl)
 				case att_exception_security_class:
 					if (!X.RDB$SECURITY_CLASS.NULL)
 					{
-						BURP_error(311, true, SafeArg() << attribute << X.RDB$EXCEPTION_NAME);
+						BURP_error(311, true, SafeArg() << attribute << name.toString().c_str());
 					}
 					else
 					{
@@ -3512,7 +3616,7 @@ bool get_exception(BurpGlobals* tdgbl)
 						}
 						else
 						{
-							fix_exception(tdgbl, X.RDB$EXCEPTION_NAME, scan_next_attr, attribute,
+							fix_exception(tdgbl, name, scan_next_attr, attribute,
 								failed_attrib, msg_ptr, l2, msg_seen);
 						}
 					}
@@ -3521,7 +3625,7 @@ bool get_exception(BurpGlobals* tdgbl)
 				case att_exception_owner_name:
 					if (!X.RDB$OWNER_NAME.NULL)
 					{
-						BURP_error(311, true, SafeArg() << attribute << X.RDB$EXCEPTION_NAME);
+						BURP_error(311, true, SafeArg() << attribute << name.toString().c_str());
 					}
 					else
 					{
@@ -3533,7 +3637,7 @@ bool get_exception(BurpGlobals* tdgbl)
 						}
 						else
 						{
-							fix_exception(tdgbl, X.RDB$EXCEPTION_NAME, scan_next_attr, attribute,
+							fix_exception(tdgbl, name, scan_next_attr, attribute,
 								failed_attrib, msg_ptr, l2, msg_seen);
 						}
 					}
@@ -3541,20 +3645,18 @@ bool get_exception(BurpGlobals* tdgbl)
 
 				default:
 					// do we have a corrupt backup?
-					fix_exception(tdgbl, X.RDB$EXCEPTION_NAME, scan_next_attr, attribute,
+					fix_exception(tdgbl, name, scan_next_attr, attribute,
 						failed_attrib, msg_ptr, l2, msg_seen);
 					break;
 				}
 			}
-
-			strcpy(exception_name, X.RDB$EXCEPTION_NAME);
-
-		END_STORE;
+		}
+		END_STORE
 		ON_ERROR
 			general_on_error ();
 		END_ERROR;
 
-		collect_missing_privs(tdgbl, obj_exception, exception_name, securityClass);
+		collect_missing_privs(tdgbl, obj_exception, name, securityClass);
 	}
 	else
 	{
@@ -3580,20 +3682,20 @@ bool get_exception(BurpGlobals* tdgbl)
 				{
 				case att_exception_name:
 					if (!X.RDB$EXCEPTION_NAME.NULL)
-						BURP_error(311, true, SafeArg() << attribute << X.RDB$EXCEPTION_NAME);
+						BURP_error(311, true, SafeArg() << attribute << name.toString().c_str());
 					else
 					{
-						const ULONG l = GET_TEXT(X.RDB$EXCEPTION_NAME);
+						GET_TEXT(X.RDB$EXCEPTION_NAME);
 						X.RDB$EXCEPTION_NAME.NULL = FALSE;
-						MISC_terminate (X.RDB$EXCEPTION_NAME, temp, l, sizeof(temp));
-						BURP_verbose (199, temp);
+						name.object = X.RDB$EXCEPTION_NAME;
+						BURP_verbose(199, name.toString().c_str());
 						// msg 199 restoring exception %s
 					}
 					break;
 
 				case att_exception_description:
 					if (!X.RDB$DESCRIPTION.NULL)
-						BURP_error(311, true, SafeArg() << attribute << X.RDB$EXCEPTION_NAME);
+						BURP_error(311, true, SafeArg() << attribute << name.toString().c_str());
 					else
 					{
 						msg_seen = false;
@@ -3604,7 +3706,7 @@ bool get_exception(BurpGlobals* tdgbl)
 
 				case att_exception_description2:
 					if (!X.RDB$DESCRIPTION.NULL)
-						BURP_error(311, true, SafeArg() << attribute << X.RDB$EXCEPTION_NAME);
+						BURP_error(311, true, SafeArg() << attribute << name.toString().c_str());
 					else
 					{
 						msg_seen = false;
@@ -3615,11 +3717,11 @@ bool get_exception(BurpGlobals* tdgbl)
 
 				case att_exception_msg:
 					if (msg_seen)
-						BURP_error(311, true, SafeArg() << attribute << X.RDB$EXCEPTION_NAME);
+						BURP_error(311, true, SafeArg() << attribute << name.toString().c_str());
 					else if (!X.RDB$MESSAGE.NULL)
 					{
 						msg_seen = true;
-						BURP_print(false, 312, SafeArg() << attribute << X.RDB$EXCEPTION_NAME);
+						BURP_print(false, 312, SafeArg() << attribute << name.toString().c_str());
 						eat_text(tdgbl);
 					}
 					else
@@ -3633,10 +3735,10 @@ bool get_exception(BurpGlobals* tdgbl)
 
 				case att_exception_msg2:
 					if (msg_seen)
-						BURP_error(311, true, SafeArg() << attribute << X.RDB$EXCEPTION_NAME);
+						BURP_error(311, true, SafeArg() << attribute << name.toString().c_str());
 					else if (!X.RDB$MESSAGE.NULL)
 					{
-						BURP_print(false, 312, SafeArg() << attribute << X.RDB$EXCEPTION_NAME);
+						BURP_print(false, 312, SafeArg() << attribute << name.toString().c_str());
 						eat_text2(tdgbl);
 					}
 					else
@@ -3648,7 +3750,7 @@ bool get_exception(BurpGlobals* tdgbl)
 
 				case att_exception_security_class:
 					if (secclass_seen)
-						BURP_error(311, true, SafeArg() << attribute << X.RDB$EXCEPTION_NAME);
+						BURP_error(311, true, SafeArg() << attribute << name.toString().c_str());
 					else
 					{
 						msg_seen = false;
@@ -3659,7 +3761,7 @@ bool get_exception(BurpGlobals* tdgbl)
 						}
 						else
 						{
-							fix_exception(tdgbl, X.RDB$EXCEPTION_NAME, scan_next_attr, attribute,
+							fix_exception(tdgbl, name, scan_next_attr, attribute,
 								failed_attrib, msg_ptr, l2, msg_seen);
 						}
 					}
@@ -3667,7 +3769,7 @@ bool get_exception(BurpGlobals* tdgbl)
 
 				case att_exception_owner_name:
 					if (ownername_seen)
-						BURP_error(311, true, SafeArg() << attribute << X.RDB$EXCEPTION_NAME);
+						BURP_error(311, true, SafeArg() << attribute << name.toString().c_str());
 					else
 					{
 						msg_seen = false;
@@ -3678,7 +3780,7 @@ bool get_exception(BurpGlobals* tdgbl)
 						}
 						else
 						{
-							fix_exception(tdgbl, X.RDB$EXCEPTION_NAME, scan_next_attr, attribute,
+							fix_exception(tdgbl, name, scan_next_attr, attribute,
 								failed_attrib, msg_ptr, l2, msg_seen);
 						}
 					}
@@ -3686,7 +3788,7 @@ bool get_exception(BurpGlobals* tdgbl)
 
 				default:
 					// do we have a corrupt backup?
-					fix_exception(tdgbl, X.RDB$EXCEPTION_NAME, scan_next_attr, attribute,
+					fix_exception(tdgbl, name, scan_next_attr, attribute,
 						failed_attrib, msg_ptr, l2, msg_seen);
 					break;
 				}
@@ -3741,7 +3843,8 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation)
 		STORE (TRANSACTION_HANDLE local_trans REQUEST_HANDLE tdgbl->handles_get_field_req_handle1)
 			X IN RDB$RELATION_FIELDS
 		{
-			strcpy (X.RDB$RELATION_NAME, relation->rel_name);
+			strcpy(X.RDB$RELATION_NAME, relation->rel_name.object.c_str());
+			X.RDB$SCHEMA_NAME.NULL = TRUE;
 			X.RDB$FIELD_POSITION = 0;
 			X.RDB$VIEW_CONTEXT.NULL = TRUE;
 			X.RDB$BASE_FIELD.NULL = TRUE;
@@ -3762,6 +3865,14 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation)
 			// ODS 12
 			X.RDB$GENERATOR_NAME.NULL = TRUE;
 			X.RDB$IDENTITY_TYPE.NULL = TRUE;
+			// ODS 14
+			X.RDB$FIELD_SOURCE_SCHEMA_NAME.NULL = TRUE;
+
+			if (relation->rel_name.schema.hasData())
+			{
+				strcpy(X.RDB$SCHEMA_NAME, relation->rel_name.schema.c_str());
+				X.RDB$SCHEMA_NAME.NULL = FALSE;
+			}
 
 			skip_init(&scan_next_attr);
 			while (get_attribute(&attribute, tdgbl) != att_end)
@@ -3770,14 +3881,23 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation)
 				{
 				case att_field_name:
 					field->fld_name_length = GET_TEXT(field->fld_name);
-					BURP_verbose (115, field->fld_name);
+					BURP_verbose(115, MetaString(field->fld_name).toQuotedString().c_str());
 					// msg 115 restoring field %s
 					strcpy (X.RDB$FIELD_NAME, field->fld_name);
 					break;
 
+				case att_field_schema_name:
+					GET_TEXT(X.RDB$FIELD_SOURCE_SCHEMA_NAME);
+					X.RDB$FIELD_SOURCE_SCHEMA_NAME.NULL = FALSE;
+					field->fld_source.schema = X.RDB$FIELD_SOURCE_SCHEMA_NAME;
+
+					if (field->fld_source.schema.isEmpty() && tdgbl->runtimeODS >= DB_VERSION_DDL14)
+						field->fld_source.schema = PUBLIC_SCHEMA;
+					break;
+
 				case att_field_source:
 					GET_TEXT(X.RDB$FIELD_SOURCE);
-					strcpy(field->fld_source, X.RDB$FIELD_SOURCE);
+					field->fld_source.object = X.RDB$FIELD_SOURCE;
 					break;
 
 				case att_field_security_class:
@@ -3948,7 +4068,7 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation)
 		STORE (TRANSACTION_HANDLE local_trans REQUEST_HANDLE tdgbl->handles_get_field_req_handle1)
 			X IN RDB$RELATION_FIELDS
 		{
-			strcpy (X.RDB$RELATION_NAME, relation->rel_name);
+			strcpy (X.RDB$RELATION_NAME, relation->rel_name.object.c_str());
 			X.RDB$FIELD_POSITION = 0;
 			X.RDB$VIEW_CONTEXT.NULL = TRUE;
 			X.RDB$BASE_FIELD.NULL = TRUE;
@@ -3974,14 +4094,14 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation)
 				{
 				case att_field_name:
 					field->fld_name_length = GET_TEXT(field->fld_name);
-					BURP_verbose (115, field->fld_name);
+					BURP_verbose(115, MetaString(field->fld_name).toQuotedString().c_str());
 					// msg 115 restoring field %s
 					strcpy (X.RDB$FIELD_NAME, field->fld_name);
 					break;
 
 				case att_field_source:
 					GET_TEXT(X.RDB$FIELD_SOURCE);
-					strcpy(field->fld_source, X.RDB$FIELD_SOURCE);
+					field->fld_source.object = X.RDB$FIELD_SOURCE;
 					break;
 
 				case att_field_security_class:
@@ -4155,12 +4275,19 @@ bool get_field_dimensions(BurpGlobals* tdgbl)
 
 	STORE (REQUEST_HANDLE tdgbl->handles_get_field_dimensions_req_handle1)
 		X IN RDB$FIELD_DIMENSIONS
+	{
+		X.RDB$SCHEMA_NAME.NULL = TRUE;
 
 		skip_init(&scan_next_attr);
 		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
 		{
 			switch (attribute)
 			{
+			case att_field_schema_name:
+				GET_TEXT(X.RDB$SCHEMA_NAME);
+				X.RDB$SCHEMA_NAME.NULL = FALSE;
+				break;
+
 			case att_field_name:
 				GET_TEXT(X.RDB$FIELD_NAME);
 				break;
@@ -4183,10 +4310,11 @@ bool get_field_dimensions(BurpGlobals* tdgbl)
 				break;
 			}
 		}
-	END_STORE;
+	}
+	END_STORE
 	ON_ERROR
 		general_on_error ();
-	END_ERROR;
+	END_ERROR
 
 	return true;
 }
@@ -4286,7 +4414,7 @@ bool get_filter(BurpGlobals* tdgbl)
 			{
 			case att_filter_name:
 				GET_TEXT(X.RDB$FUNCTION_NAME);
-				BURP_verbose (117, X.RDB$FUNCTION_NAME);
+				BURP_verbose(117, MetaString(X.RDB$FUNCTION_NAME).toQuotedString().c_str());
 				// msg 117 restoring filter %s
 				break;
 
@@ -4342,9 +4470,11 @@ bool get_function(BurpGlobals* tdgbl)
  *	Reconstruct a function.
  *
  **************************************/
+	QualifiedMetaString name;
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
+		name.schema = PUBLIC_SCHEMA;
+
 	att_type	attribute;
-	TEXT		temp[GDS_NAME_LEN * 2];
-	SSHORT		l;
 	scan_attr_t	scan_next_attr;
 
 	bool existFlag = false;
@@ -4353,14 +4483,15 @@ bool get_function(BurpGlobals* tdgbl)
 
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL12)
 	{
-		GDS_NAME function_name;
 		bool securityClass = false;
 
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_function_req_handle1)
 			X IN RDB$FUNCTIONS
+		{
 			X.RDB$DESCRIPTION.NULL = TRUE;
 			X.RDB$ENGINE_NAME.NULL = TRUE;
+			X.RDB$SCHEMA_NAME.NULL = TRUE;
 			X.RDB$PACKAGE_NAME.NULL = TRUE;
 			X.RDB$PRIVATE_FLAG.NULL = TRUE;
 			X.RDB$FUNCTION_BLR.NULL = TRUE;
@@ -4390,22 +4521,11 @@ bool get_function(BurpGlobals* tdgbl)
 				switch (attribute)
 				{
 				case att_function_name:
-				{
-					SSHORT prefixLen = 0;
-					if (!X.RDB$PACKAGE_NAME.NULL)
-					{
-						prefixLen = static_cast<SSHORT>(strlen(X.RDB$PACKAGE_NAME));
-						memcpy(temp, X.RDB$PACKAGE_NAME, prefixLen);
-						temp[prefixLen++] = '.';
-					}
-
-					l = GET_TEXT(X.RDB$FUNCTION_NAME);
-					MISC_terminate (X.RDB$FUNCTION_NAME, temp + prefixLen, l,
-						sizeof(temp) - prefixLen);
-					BURP_verbose (118, temp);
+					GET_TEXT(X.RDB$FUNCTION_NAME);
+					name.object = X.RDB$FUNCTION_NAME;
+					BURP_verbose(118, name.toString().c_str());
 					// msg 118 restoring function %s
 					break;
-				}
 
 				case att_function_description:
 					X.RDB$DESCRIPTION.NULL = FALSE;
@@ -4450,12 +4570,18 @@ bool get_function(BurpGlobals* tdgbl)
 						bad_attribute(scan_next_attr, attribute, 89);
 					break;
 
+				case att_function_schema_name:
+					GET_TEXT(X.RDB$SCHEMA_NAME);
+					X.RDB$SCHEMA_NAME.NULL = FALSE;
+					name.schema = X.RDB$SCHEMA_NAME;
+					break;
+
 				case att_function_package_name:
 					if (tdgbl->RESTORE_format >= 10)
 					{
 						GET_TEXT(X.RDB$PACKAGE_NAME);
-						fb_utils::exact_name(X.RDB$PACKAGE_NAME);
 						X.RDB$PACKAGE_NAME.NULL = FALSE;
+						name.package = X.RDB$PACKAGE_NAME;
 						securityClass = true;	// prevent creation of security class for packaged function
 					}
 					else
@@ -4571,23 +4697,23 @@ bool get_function(BurpGlobals* tdgbl)
 					break;
 				}
 			}
-
-			strcpy(function_name, X.RDB$FUNCTION_NAME);
-		END_STORE;
+		}
+		END_STORE
 		ON_ERROR
 			if (gds_status->getErrors()[1] != isc_no_dup)
 				general_on_error ();
 			else
 				existFlag = true;
-		END_ERROR;
+		END_ERROR
 
-		collect_missing_privs(tdgbl, obj_udf, function_name, securityClass);
+		collect_missing_privs(tdgbl, obj_udf, name, securityClass);
 	}
 	else
 	{
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_function_req_handle1)
 			X IN RDB$FUNCTIONS
+		{
 			X.RDB$RETURN_ARGUMENT.NULL = TRUE;
 			X.RDB$SYSTEM_FLAG = 0;
 			X.RDB$SYSTEM_FLAG.NULL = FALSE;
@@ -4599,9 +4725,9 @@ bool get_function(BurpGlobals* tdgbl)
 				switch (attribute)
 				{
 				case att_function_name:
-					l = GET_TEXT(X.RDB$FUNCTION_NAME);
-					MISC_terminate (X.RDB$FUNCTION_NAME, temp, l, sizeof(temp));
-					BURP_verbose (118, temp);
+					GET_TEXT(X.RDB$FUNCTION_NAME);
+					name.object = X.RDB$FUNCTION_NAME;
+					BURP_verbose(118, name.toString().c_str());
 					// msg 118 restoring function %s
 					break;
 
@@ -4703,14 +4829,14 @@ bool get_function(BurpGlobals* tdgbl)
 					break;
 				}
 			}
-
-		END_STORE;
+		}
+		END_STORE
 		ON_ERROR
 			if (gds_status->getErrors()[1] != isc_no_dup)
 				general_on_error ();
 			else
 				existFlag = true;
-		END_ERROR;
+		END_ERROR
 	}
 
 	// at the end of args for a function is the rec_function_end marker
@@ -4732,6 +4858,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
  *	Reconstruct function argument.
  *
  **************************************/
+	QualifiedMetaString name;
 	att_type	attribute;
 	scan_attr_t		scan_next_attr;
 
@@ -4744,6 +4871,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 		{
 			switch (attribute)
 			{
+			case att_functionarg_schema_name:
 			case att_functionarg_name:
 				eat_text(tdgbl);
 				break;
@@ -4785,6 +4913,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 
 			case att_functionarg_package_name:
 			case att_functionarg_arg_name:
+			case att_functionarg_field_source_schema_name:
 			case att_functionarg_field_source:
 				if (tdgbl->RESTORE_format >= 10)
 					eat_text(tdgbl);
@@ -4810,6 +4939,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 				break;
 
 			case att_functionarg_field_name:
+			case att_functionarg_relation_schema_name:
 			case att_functionarg_relation_name:
 				if (tdgbl->RESTORE_format >= 10)
 					eat_text(tdgbl);
@@ -4833,21 +4963,21 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 		return;
 	}
 
-	SSHORT		l;
-	TEXT		temp[GDS_NAME_LEN * 2];
-
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL12)
 	{
 		// with RDB$FIELD_PRECISION
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_function_arg_req_handle1)
 			X IN RDB$FUNCTION_ARGUMENTS
+		{
 			X.RDB$ARGUMENT_POSITION.NULL = TRUE;
 			X.RDB$FIELD_SUB_TYPE.NULL = TRUE;
 			X.RDB$CHARACTER_SET_ID.NULL = TRUE;
 			X.RDB$FIELD_PRECISION.NULL = TRUE;
+			X.RDB$SCHEMA_NAME.NULL = TRUE;
 			X.RDB$PACKAGE_NAME.NULL = TRUE;
 			X.RDB$ARGUMENT_NAME.NULL = TRUE;
+			X.RDB$FIELD_SOURCE_SCHEMA_NAME.NULL = TRUE;
 			X.RDB$FIELD_SOURCE.NULL = TRUE;
 			X.RDB$DEFAULT_VALUE.NULL = TRUE;
 			X.RDB$DEFAULT_SOURCE.NULL = TRUE;
@@ -4855,6 +4985,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 			X.RDB$NULL_FLAG.NULL = TRUE;
 			X.RDB$ARGUMENT_MECHANISM.NULL = TRUE;
 			X.RDB$FIELD_NAME.NULL = TRUE;
+			X.RDB$RELATION_SCHEMA_NAME.NULL = TRUE;
 			X.RDB$RELATION_NAME.NULL = TRUE;
 			X.RDB$DESCRIPTION.NULL = TRUE;
 
@@ -4867,22 +4998,10 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 				switch (attribute)
 				{
 				case att_functionarg_name:
-					{
-						SSHORT prefixLen = 0;
-						if (!X.RDB$PACKAGE_NAME.NULL)
-						{
-							prefixLen = static_cast<SSHORT>(strlen(X.RDB$PACKAGE_NAME));
-							memcpy(temp, X.RDB$PACKAGE_NAME, prefixLen);
-							temp[prefixLen++] = '.';
-						}
-
-						l = GET_TEXT(X.RDB$FUNCTION_NAME);
-						MISC_terminate(X.RDB$FUNCTION_NAME, temp + prefixLen, l,
-							sizeof(temp) - prefixLen);
-
-						// msg 119 restoring argument for function %s
-						BURP_verbose(119, temp);
-					}
+					GET_TEXT(X.RDB$FUNCTION_NAME);
+					name.object = X.RDB$FUNCTION_NAME;
+					BURP_verbose(119, name.toString().c_str());
+					// msg 119 restoring argument for function %s
 					break;
 
 				case att_functionarg_position:
@@ -4926,12 +5045,18 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 						bad_attribute(scan_next_attr, attribute, 90);
 					break;
 
+				case att_functionarg_schema_name:
+					GET_TEXT(X.RDB$SCHEMA_NAME);
+					X.RDB$SCHEMA_NAME.NULL = FALSE;
+					name.schema = X.RDB$SCHEMA_NAME;
+					break;
+
 				case att_functionarg_package_name:
 					if (tdgbl->RESTORE_format >= 10)
 					{
 						GET_TEXT(X.RDB$PACKAGE_NAME);
 						X.RDB$PACKAGE_NAME.NULL = FALSE;
-						fb_utils::exact_name(X.RDB$PACKAGE_NAME);
+						name.package = X.RDB$PACKAGE_NAME;
 					}
 					else
 						bad_attribute(scan_next_attr, attribute, 90);
@@ -4942,6 +5067,16 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 					{
 						GET_TEXT(X.RDB$ARGUMENT_NAME);
 						X.RDB$ARGUMENT_NAME.NULL = FALSE;
+					}
+					else
+						bad_attribute(scan_next_attr, attribute, 90);
+					break;
+
+				case att_functionarg_field_source_schema_name:
+					if (tdgbl->RESTORE_format >= 10)
+					{
+						GET_TEXT(X.RDB$FIELD_SOURCE_SCHEMA_NAME);
+						X.RDB$FIELD_SOURCE_SCHEMA_NAME.NULL = FALSE;
 					}
 					else
 						bad_attribute(scan_next_attr, attribute, 90);
@@ -5017,6 +5152,16 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 						bad_attribute(scan_next_attr, attribute, 90);
 					break;
 
+				case att_functionarg_relation_schema_name:
+					if (tdgbl->RESTORE_format >= 10)
+					{
+						GET_TEXT(X.RDB$RELATION_SCHEMA_NAME);
+						X.RDB$RELATION_SCHEMA_NAME.NULL = FALSE;
+					}
+					else
+						bad_attribute(scan_next_attr, attribute, 90);
+					break;
+
 				case att_functionarg_relation_name:
 					if (tdgbl->RESTORE_format >= 10)
 					{
@@ -5043,7 +5188,8 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 					break;
 				}
 			}
-		END_STORE;
+		}
+		END_STORE
 		ON_ERROR
 			general_on_error ();
 		END_ERROR;
@@ -5065,9 +5211,9 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 				switch (attribute)
 				{
 				case att_functionarg_name:
-					l = GET_TEXT(X.RDB$FUNCTION_NAME);
-					MISC_terminate (X.RDB$FUNCTION_NAME, temp, l, sizeof(temp));
-					BURP_verbose (119, temp);
+					GET_TEXT(X.RDB$FUNCTION_NAME);
+					name.object = X.RDB$FUNCTION_NAME;
+					BURP_verbose(119, name.toString().c_str());
 					// msg 119 restoring argument for function %s
 					break;
 
@@ -5114,6 +5260,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 
 				case att_functionarg_package_name:
 				case att_functionarg_arg_name:
+				case att_functionarg_field_source_schema_name:
 				case att_functionarg_field_source:
 					if (tdgbl->RESTORE_format >= 10)
 						eat_text(tdgbl);
@@ -5139,6 +5286,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 					break;
 
 				case att_functionarg_field_name:
+				case att_functionarg_relation_schema_name:
 				case att_functionarg_relation_name:
 					if (tdgbl->RESTORE_format >= 10)
 						eat_text(tdgbl);
@@ -5180,9 +5328,9 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 				switch (attribute)
 				{
 				case att_functionarg_name:
-					l = GET_TEXT(X.RDB$FUNCTION_NAME);
-					MISC_terminate (X.RDB$FUNCTION_NAME, temp, l, sizeof(temp));
-					BURP_verbose (119, temp);
+					GET_TEXT(X.RDB$FUNCTION_NAME);
+					name.object = X.RDB$FUNCTION_NAME;
+					BURP_verbose(119, name.toString().c_str());
 					// msg 119 restoring argument for function %s
 					break;
 
@@ -5226,6 +5374,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 
 				case att_functionarg_package_name:
 				case att_functionarg_arg_name:
+				case att_functionarg_field_source_schema_name:
 				case att_functionarg_field_source:
 					if (tdgbl->RESTORE_format >= 10)
 						eat_text(tdgbl);
@@ -5251,6 +5400,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 					break;
 
 				case att_functionarg_field_name:
+				case att_functionarg_relation_schema_name:
 				case att_functionarg_relation_name:
 					if (tdgbl->RESTORE_format >= 10)
 						eat_text(tdgbl);
@@ -5295,7 +5445,11 @@ bool get_generator(BurpGlobals* tdgbl)
  **************************************/
 	SINT64 value = 0, initial_value = 0;
 
-	BASED_ON RDB$GENERATORS.RDB$GENERATOR_NAME name = "";
+	QualifiedMetaString name;
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
+		name.schema = PUBLIC_SCHEMA;
+
+	BASED_ON RDB$GENERATORS.RDB$GENERATOR_NAME temp = "";
 	BASED_ON RDB$GENERATORS.RDB$SECURITY_CLASS secclass = "";
 	BASED_ON RDB$GENERATORS.RDB$OWNER_NAME ownername = "";
 	BASED_ON RDB$GENERATORS.RDB$GENERATOR_INCREMENT increment = 1;
@@ -5314,8 +5468,14 @@ bool get_generator(BurpGlobals* tdgbl)
 	{
 		switch (attribute)
 		{
+		case att_gen_schema_name:
+			GET_TEXT(temp);
+			name.schema = temp;
+			break;
+
 		case att_gen_generator:
-			GET_TEXT(name);
+			GET_TEXT(temp);
+			name.object = temp;
 			break;
 
 		case att_gen_value:
@@ -5406,22 +5566,24 @@ bool get_global_field(BurpGlobals* tdgbl)
  *	Reconstruct a global field.
  *
  **************************************/
+	QualifiedMetaString name;
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
+		name.schema = PUBLIC_SCHEMA;
+
 	att_type	attribute;
-	TEXT		temp[GDS_NAME_LEN];
-	SSHORT		l;
 	scan_attr_t		scan_next_attr;
 
 	gfld* gfield = NULL;
 
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL12)
 	{
-		GDS_NAME field_name;
 		bool securityClass = false;
 
 		// with rdb$field_precision, rdb$security_class and rdb$owner_name.
 		STORE (REQUEST_HANDLE tdgbl->handles_get_global_field_req_handle1)
 			X IN RDB$FIELDS
-
+		{
+			X.RDB$SCHEMA_NAME.NULL = TRUE;
 			X.RDB$FIELD_SCALE = X.RDB$SEGMENT_LENGTH = 0;
 			X.RDB$CHARACTER_SET_ID = X.RDB$COLLATION_ID = 0;
 			X.RDB$FIELD_SUB_TYPE = 0;
@@ -5459,10 +5621,16 @@ bool get_global_field(BurpGlobals* tdgbl)
 			{
 				switch (attribute)
 				{
+				case att_field_schema_name:
+					GET_TEXT(X.RDB$SCHEMA_NAME);
+					X.RDB$SCHEMA_NAME.NULL = FALSE;
+					name.schema = X.RDB$SCHEMA_NAME;
+					break;
+
 				case att_field_name:
-					l = GET_TEXT(X.RDB$FIELD_NAME);
-					MISC_terminate (X.RDB$FIELD_NAME, temp, l, sizeof(temp));
-					BURP_verbose (121, temp);
+					GET_TEXT(X.RDB$FIELD_NAME);
+					name.object = X.RDB$FIELD_NAME;
+					BURP_verbose(121, name.toString().c_str());
 					// msg 121  restoring global field %s
 					break;
 
@@ -5756,15 +5924,13 @@ bool get_global_field(BurpGlobals* tdgbl)
 
 			if (X.RDB$FIELD_TYPE <= DTYPE_BLR_MAX)
 			{
-				l = gds_cvt_blr_dtype[X.RDB$FIELD_TYPE];
+				SSHORT l = gds_cvt_blr_dtype[X.RDB$FIELD_TYPE];
 				if (l = type_lengths[l])
 					X.RDB$FIELD_LENGTH = l;
 			}
 
-			strcpy(field_name, X.RDB$FIELD_NAME);
-
 			if (gfield)
-				strcpy(gfield->gfld_name, field_name);
+				gfield->gfld_name = name;
 
 			if (tdgbl->gbl_sw_fix_fss_data && tdgbl->gbl_sw_fix_fss_data_id == 0 &&
 				!X.RDB$CHARACTER_SET_ID.NULL && X.RDB$CHARACTER_SET_ID == CS_UNICODE_FSS &&
@@ -5778,20 +5944,20 @@ bool get_global_field(BurpGlobals* tdgbl)
 				X.RDB$CHARACTER_SET_ID = CS_NONE;
 				X.RDB$COLLATION_ID = 0;
 			}
-
-		END_STORE;
+		}
+		END_STORE
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
+		END_ERROR
 
-		collect_missing_privs(tdgbl, obj_field, field_name, securityClass);
+		collect_missing_privs(tdgbl, obj_field, name, securityClass);
 	}
 	else if (tdgbl->runtimeODS >= DB_VERSION_DDL10)
 	{
 		// with rdb$field_precision
 		STORE (REQUEST_HANDLE tdgbl->handles_get_global_field_req_handle1)
 			X IN RDB$FIELDS
-
+		{
 			X.RDB$FIELD_SCALE = X.RDB$SEGMENT_LENGTH = 0;
 			X.RDB$CHARACTER_SET_ID = X.RDB$COLLATION_ID = 0;
 			X.RDB$FIELD_SUB_TYPE = 0;
@@ -5827,9 +5993,9 @@ bool get_global_field(BurpGlobals* tdgbl)
 				switch (attribute)
 				{
 				case att_field_name:
-					l = GET_TEXT(X.RDB$FIELD_NAME);
-					MISC_terminate (X.RDB$FIELD_NAME, temp, l, sizeof(temp));
-					BURP_verbose (121, temp);
+					GET_TEXT(X.RDB$FIELD_NAME);
+					name.object = X.RDB$FIELD_NAME;
+					BURP_verbose(121, name.toString().c_str());
 					// msg 121  restoring global field %s
 					break;
 
@@ -6109,13 +6275,13 @@ bool get_global_field(BurpGlobals* tdgbl)
 
 			if (X.RDB$FIELD_TYPE <= DTYPE_BLR_MAX)
 			{
-				l = gds_cvt_blr_dtype[X.RDB$FIELD_TYPE];
+				SSHORT l = gds_cvt_blr_dtype[X.RDB$FIELD_TYPE];
 				if (l = type_lengths[l])
 					X.RDB$FIELD_LENGTH = l;
 			}
 
 			if (gfield)
-				strcpy (gfield->gfld_name, X.RDB$FIELD_NAME);
+				gfield->gfld_name = name;
 
 			if (tdgbl->gbl_sw_fix_fss_data && tdgbl->gbl_sw_fix_fss_data_id == 0 &&
 				!X.RDB$CHARACTER_SET_ID.NULL && X.RDB$CHARACTER_SET_ID == CS_UNICODE_FSS &&
@@ -6129,12 +6295,11 @@ bool get_global_field(BurpGlobals* tdgbl)
 				X.RDB$CHARACTER_SET_ID = CS_NONE;
 				X.RDB$COLLATION_ID = 0;
 			}
-
-		END_STORE;
+		}
+		END_STORE
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
-
+		END_ERROR
 	}
 	else // runtimeODS < DB_VERSION_DDL10
 	{
@@ -6142,7 +6307,7 @@ bool get_global_field(BurpGlobals* tdgbl)
 
 		STORE (REQUEST_HANDLE tdgbl->handles_get_global_field_req_handle1)
 			X IN RDB$FIELDS
-
+		{
 			X.RDB$FIELD_SCALE = X.RDB$SEGMENT_LENGTH = 0;
 			X.RDB$CHARACTER_SET_ID = X.RDB$COLLATION_ID = 0;
 			X.RDB$FIELD_SUB_TYPE = 0;
@@ -6177,9 +6342,9 @@ bool get_global_field(BurpGlobals* tdgbl)
 				switch (attribute)
 				{
 				case att_field_name:
-					l = GET_TEXT(X.RDB$FIELD_NAME);
-					MISC_terminate (X.RDB$FIELD_NAME, temp, l, sizeof(temp));
-					BURP_verbose (121, temp);
+					GET_TEXT(X.RDB$FIELD_NAME);
+					name.object = X.RDB$FIELD_NAME;
+					BURP_verbose(121, name.toString().c_str());
 					// msg 121  restoring global field %s
 					break;
 
@@ -6456,13 +6621,13 @@ bool get_global_field(BurpGlobals* tdgbl)
 
 			if (X.RDB$FIELD_TYPE <= DTYPE_BLR_MAX)
 			{
-				l = gds_cvt_blr_dtype[X.RDB$FIELD_TYPE];
+				SSHORT l = gds_cvt_blr_dtype[X.RDB$FIELD_TYPE];
 				if (l = type_lengths[l])
 					X.RDB$FIELD_LENGTH = l;
 			}
 
 			if (gfield)
-				strcpy (gfield->gfld_name, X.RDB$FIELD_NAME);
+				gfield->gfld_name = name;
 
 			if (tdgbl->gbl_sw_fix_fss_data && tdgbl->gbl_sw_fix_fss_data_id == 0 &&
 				!X.RDB$CHARACTER_SET_ID.NULL && X.RDB$CHARACTER_SET_ID == CS_UNICODE_FSS &&
@@ -6476,12 +6641,11 @@ bool get_global_field(BurpGlobals* tdgbl)
 				X.RDB$CHARACTER_SET_ID = CS_NONE;
 				X.RDB$COLLATION_ID = 0;
 			}
-
-		END_STORE;
+		}
+		END_STORE
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
-
+		END_ERROR
 	}
 
 	if (gfield)
@@ -6518,14 +6682,18 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 
 	STORE (REQUEST_HANDLE tdgbl->handles_get_index_req_handle1)
 		X IN RDB$INDICES
-		strcpy (X.RDB$RELATION_NAME, relation->rel_name);
+	{
+		strcpy (X.RDB$RELATION_NAME, relation->rel_name.object.c_str());
 		X.RDB$UNIQUE_FLAG = 0;
 		if (!tdgbl->gbl_sw_deactivate_indexes)
 			X.RDB$INDEX_INACTIVE = FALSE;
 		else
 			X.RDB$INDEX_INACTIVE = TRUE;
+
+		X.RDB$SCHEMA_NAME.NULL = TRUE;
 		X.RDB$INDEX_TYPE.NULL = TRUE;
 		X.RDB$DESCRIPTION.NULL = TRUE;
+		X.RDB$FOREIGN_KEY_SCHEMA_NAME.NULL = TRUE;
 		X.RDB$FOREIGN_KEY.NULL = TRUE;
 		X.RDB$EXPRESSION_SOURCE.NULL = TRUE;
 		X.RDB$EXPRESSION_BLR.NULL = TRUE;
@@ -6534,6 +6702,12 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 		X.RDB$SYSTEM_FLAG = 0;
 		X.RDB$SYSTEM_FLAG.NULL = FALSE;
 
+		if (relation->rel_name.schema.hasData())
+		{
+			strcpy(X.RDB$SCHEMA_NAME, relation->rel_name.schema.c_str());
+			X.RDB$SCHEMA_NAME.NULL = FALSE;
+		}
+
 		skip_init(&scan_next_attr);
 		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
 		{
@@ -6541,8 +6715,8 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 			{
 			case att_index_name:
 				GET_TEXT(X.RDB$INDEX_NAME);
-				strcpy (index_name, X.RDB$INDEX_NAME);
-				BURP_verbose (122, X.RDB$INDEX_NAME);
+				strcpy(index_name, X.RDB$INDEX_NAME);
+				BURP_verbose(122, QualifiedMetaString(X.RDB$INDEX_NAME, relation->rel_name.schema).toString().c_str());
 				break;
 
 			case att_segment_count:
@@ -6579,13 +6753,19 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 			case att_index_field_name:
 				STORE (REQUEST_HANDLE tdgbl->handles_get_index_req_handle2)
 					Y IN RDB$INDEX_SEGMENTS
+				{
 					GET_TEXT(Y.RDB$FIELD_NAME);
-					strcpy (Y.RDB$INDEX_NAME, X.RDB$INDEX_NAME);
+					strcpy(Y.RDB$INDEX_NAME, X.RDB$INDEX_NAME);
 					Y.RDB$FIELD_POSITION = count++;
-				END_STORE;
+
+					Y.RDB$SCHEMA_NAME.NULL = X.RDB$SCHEMA_NAME.NULL;
+					if (!X.RDB$SCHEMA_NAME.NULL)
+						strcpy(Y.RDB$SCHEMA_NAME, X.RDB$SCHEMA_NAME);
+				}
+				END_STORE
 				ON_ERROR
 					general_on_error ();
-				END_ERROR;
+				END_ERROR
 				break;
 
 			case att_index_description:
@@ -6634,6 +6814,11 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 					bad_attribute(scan_next_attr, attribute, 93);
 				break;
 
+			case att_index_foreign_key_schema_name:
+				X.RDB$FOREIGN_KEY_SCHEMA_NAME.NULL = FALSE;
+				GET_TEXT(X.RDB$FOREIGN_KEY_SCHEMA_NAME);
+				break;
+
 			case att_index_foreign_key:
 				foreign_index = true;
 				// Defer foreign key index activation
@@ -6654,33 +6839,45 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 
 		count = 0;
 		FOR (REQUEST_HANDLE tdgbl->handles_get_index_req_handle3)
-			RFR IN RDB$RELATION_FIELDS CROSS I_S IN RDB$INDEX_SEGMENTS
-			OVER RDB$FIELD_NAME WITH I_S.RDB$INDEX_NAME = index_name AND
-			RFR.RDB$RELATION_NAME = relation->rel_name
+			RFR IN RDB$RELATION_FIELDS
+			CROSS IDS IN RDB$INDEX_SEGMENTS
+			WITH RFR.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
+				 RFR.RDB$RELATION_NAME = relation->rel_name.object.c_str() AND
+				 IDS.RDB$SCHEMA_NAME EQUIV RFR.RDB$SCHEMA_NAME AND
+				 IDS.RDB$FIELD_NAME = RFR.RDB$FIELD_NAME AND
+				 IDS.RDB$INDEX_NAME = index_name
+		{
 			count++;
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
+		END_ERROR
 
 		if (count != segments)
 		{
 			FOR (REQUEST_HANDLE tdgbl->handles_get_index_req_handle4)
-				I_S IN RDB$INDEX_SEGMENTS WITH I_S.RDB$INDEX_NAME = index_name
-				ERASE I_S;
+				IDS IN RDB$INDEX_SEGMENTS
+				WITH IDS.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
+					 IDS.RDB$INDEX_NAME = index_name
+			{
+				ERASE IDS;
 				ON_ERROR
 					general_on_error ();
-				END_ERROR;
-			END_FOR;
+				END_ERROR
+			}
+			END_FOR
 			ON_ERROR
 				general_on_error ();
-			END_ERROR;
+
+			END_ERROR
 			return false;
 		}
-	END_STORE;
+	}
+	END_STORE
 	ON_ERROR
 		general_on_error ();
-	END_ERROR;
+	END_ERROR
 
 	return true;
 }
@@ -6796,8 +6993,6 @@ bool get_package(BurpGlobals* tdgbl)
  *
  **************************************/
 	att_type attribute;
-	TEXT temp[GDS_NAME_LEN];
-	SSHORT len;
 	scan_attr_t scan_next_attr;
 
 	if (tdgbl->RESTORE_format < 10)
@@ -6806,12 +7001,16 @@ bool get_package(BurpGlobals* tdgbl)
 	Firebird::ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
 
 	burp_pkg* package = (burp_pkg*) BURP_alloc_zero(sizeof(burp_pkg));
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
+		package->pkg_name.schema = PUBLIC_SCHEMA;
+
 	package->pkg_next = tdgbl->packages;
 	tdgbl->packages = package;
 
 	STORE (TRANSACTION_HANDLE local_trans REQUEST_HANDLE tdgbl->handles_get_package_req_handle1)
 		X IN RDB$PACKAGES
 	{
+		X.RDB$SCHEMA_NAME.NULL = TRUE;
 		X.RDB$PACKAGE_HEADER_SOURCE.NULL = TRUE;
 		X.RDB$PACKAGE_BODY_SOURCE.NULL = TRUE;
 		X.RDB$VALID_BODY_FLAG.NULL = TRUE;
@@ -6827,11 +7026,16 @@ bool get_package(BurpGlobals* tdgbl)
 		{
 			switch (attribute)
 			{
+			case att_package_schema_name:
+				GET_TEXT(X.RDB$SCHEMA_NAME);
+				X.RDB$SCHEMA_NAME.NULL = FALSE;
+				package->pkg_name.schema = X.RDB$SCHEMA_NAME;
+				break;
+
 			case att_package_name:
-				len = GET_TEXT(X.RDB$PACKAGE_NAME);
-				strcpy(package->pkg_name, X.RDB$PACKAGE_NAME);
-				MISC_terminate(X.RDB$PACKAGE_NAME, temp, len, sizeof(temp));
-				BURP_verbose(337, temp);	// msg 337 restoring package %s
+				GET_TEXT(X.RDB$PACKAGE_NAME);
+				package->pkg_name.object = X.RDB$PACKAGE_NAME;
+				BURP_verbose(337, package->pkg_name.toString().c_str());	// msg 337 restoring package %s
 				break;
 
 			case att_package_header_source:
@@ -6905,15 +7109,14 @@ bool get_procedure(BurpGlobals* tdgbl)
  *
  **************************************/
 	att_type	attribute;
-	GDS_NAME	package_name = "";
-	GDS_NAME	procedure_name = "";
-	TEXT		temp[GDS_NAME_LEN * 2];
-	SSHORT		l;
 	scan_attr_t		scan_next_attr;
 
 	Firebird::ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
 
 	burp_prc* procedure = (burp_prc*) BURP_alloc_zero (sizeof(burp_prc));
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
+		procedure->prc_name.schema = PUBLIC_SCHEMA;
+
 	procedure->prc_next = tdgbl->procedures;
 	tdgbl->procedures = procedure;
 
@@ -6922,6 +7125,7 @@ bool get_procedure(BurpGlobals* tdgbl)
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_procedure_req_handle1)
 			X IN RDB$PROCEDURES
+		{
 			X.RDB$PROCEDURE_SOURCE.NULL = TRUE;
 			X.RDB$DESCRIPTION.NULL = TRUE;
 			X.RDB$SECURITY_CLASS.NULL = TRUE;
@@ -6935,6 +7139,7 @@ bool get_procedure(BurpGlobals* tdgbl)
 			X.RDB$PROCEDURE_BLR.NULL = TRUE;
 			X.RDB$ENGINE_NAME.NULL = TRUE;
 			X.RDB$ENTRYPOINT.NULL = TRUE;
+			X.RDB$SCHEMA_NAME.NULL = TRUE;
 			X.RDB$PACKAGE_NAME.NULL = TRUE;
 			X.RDB$PRIVATE_FLAG.NULL = TRUE;
 			X.RDB$SQL_SECURITY.NULL = TRUE;
@@ -6944,25 +7149,28 @@ bool get_procedure(BurpGlobals* tdgbl)
 			{
 				switch (attribute)
 				{
-				case att_procedure_name:
+				case att_procedure_schema_name:
+					GET_TEXT(X.RDB$SCHEMA_NAME);
+					X.RDB$SCHEMA_NAME.NULL = FALSE;
+					procedure->prc_name.schema = X.RDB$SCHEMA_NAME;
+					break;
+
+				case att_procedure_package_name:
+					if (tdgbl->RESTORE_format >= 10)
 					{
-						SSHORT prefixLen = 0;
-						if (package_name[0])
-						{
-							prefixLen = static_cast<SSHORT>(strlen(package_name));
-							memcpy(temp, package_name, prefixLen);
-							temp[prefixLen++] = '.';
-						}
-
-						l = GET_TEXT(X.RDB$PROCEDURE_NAME);
-						//procedure->prc_name_length = l;
-						strcpy (procedure->prc_name, X.RDB$PROCEDURE_NAME);
-
-						MISC_terminate (X.RDB$PROCEDURE_NAME, temp + prefixLen, l,
-							sizeof(temp) - prefixLen);
-						BURP_verbose (195, temp);
-						// msg 195 restoring stored procedure %s
+						GET_TEXT(X.RDB$PACKAGE_NAME);
+						X.RDB$PACKAGE_NAME.NULL = FALSE;
+						procedure->prc_name.package = X.RDB$PACKAGE_NAME;
 					}
+					else
+						bad_attribute(scan_next_attr, attribute, 290);
+					break;
+
+				case att_procedure_name:
+					GET_TEXT(X.RDB$PROCEDURE_NAME);
+					procedure->prc_name.object = X.RDB$PROCEDURE_NAME;
+					BURP_verbose(195, procedure->prc_name.toString().c_str());
+					// msg 195 restoring stored procedure %s
 					break;
 
 				case att_procedure_description:
@@ -7059,19 +7267,6 @@ bool get_procedure(BurpGlobals* tdgbl)
 						bad_attribute(scan_next_attr, attribute, 290);
 					break;
 
-				case att_procedure_package_name:
-					if (tdgbl->RESTORE_format >= 10)
-					{
-						GET_TEXT(X.RDB$PACKAGE_NAME);
-						X.RDB$PACKAGE_NAME.NULL = FALSE;
-						strcpy(procedure->prc_package, X.RDB$PACKAGE_NAME);
-						strcpy(package_name, X.RDB$PACKAGE_NAME);
-						fb_utils::exact_name(package_name);
-					}
-					else
-						bad_attribute(scan_next_attr, attribute, 290);
-					break;
-
 				case att_procedure_private_flag:
 					if (tdgbl->RESTORE_format >= 10)
 					{
@@ -7099,8 +7294,8 @@ bool get_procedure(BurpGlobals* tdgbl)
 					break;
 				}
 			}
-			strcpy (procedure_name, X.RDB$PROCEDURE_NAME);
-		END_STORE;
+		}
+		END_STORE
 		ON_ERROR
 			general_on_error ();
 		END_ERROR;
@@ -7110,6 +7305,7 @@ bool get_procedure(BurpGlobals* tdgbl)
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_procedure_req_handle1)
 			X IN RDB$PROCEDURES
+		{
 			X.RDB$PROCEDURE_SOURCE.NULL = TRUE;
 			X.RDB$DESCRIPTION.NULL = TRUE;
 			X.RDB$SECURITY_CLASS.NULL = TRUE;
@@ -7123,11 +7319,9 @@ bool get_procedure(BurpGlobals* tdgbl)
 				switch (attribute)
 				{
 				case att_procedure_name:
-					l = GET_TEXT(X.RDB$PROCEDURE_NAME);
-					//procedure->prc_name_length = l;
-					strcpy (procedure->prc_name, X.RDB$PROCEDURE_NAME);
-					MISC_terminate (X.RDB$PROCEDURE_NAME, temp, l, sizeof(temp));
-					BURP_verbose (195, temp);
+					GET_TEXT(X.RDB$PROCEDURE_NAME);
+					procedure->prc_name.object = X.RDB$PROCEDURE_NAME;
+					BURP_verbose(195, procedure->prc_name.toString().c_str());
 					// msg 195 restoring stored procedure %s
 					break;
 
@@ -7222,22 +7416,22 @@ bool get_procedure(BurpGlobals* tdgbl)
 					break;
 				}
 			}
-			strcpy (procedure_name, X.RDB$PROCEDURE_NAME);
-		END_STORE;
+		}
+		END_STORE
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
+		END_ERROR
 	}
 
 	// at the end of prms for a procedure is the rec_procedure_end marker
 
 	while (get(tdgbl) == rec_procedure_prm)
-		get_procedure_prm (tdgbl, package_name, procedure_name);
+		get_procedure_prm(tdgbl, procedure->prc_name);
 
 	return true;
 }
 
-bool get_procedure_prm (BurpGlobals* tdgbl, GDS_NAME package_name, GDS_NAME procptr)
+bool get_procedure_prm(BurpGlobals* tdgbl, const QualifiedMetaString& name)
 {
 /**************************************
  *
@@ -7253,8 +7447,6 @@ bool get_procedure_prm (BurpGlobals* tdgbl, GDS_NAME package_name, GDS_NAME proc
  *
  **************************************/
 	att_type	attribute;
-	SSHORT		l;
-	TEXT		temp[GDS_NAME_LEN];
 	scan_attr_t		scan_next_attr;
 
 	Firebird::ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
@@ -7264,17 +7456,26 @@ bool get_procedure_prm (BurpGlobals* tdgbl, GDS_NAME package_name, GDS_NAME proc
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_procedure_prm_req_handle1)
 			X IN RDB$PROCEDURE_PARAMETERS
+		{
+			strcpy(X.RDB$PROCEDURE_NAME, name.object.c_str());
 
-			strcpy(X.RDB$PROCEDURE_NAME, procptr);
-
-			if (package_name[0])
+			if (name.schema.hasData())
 			{
-				strcpy(X.RDB$PACKAGE_NAME, package_name);
+				strcpy(X.RDB$SCHEMA_NAME, name.schema.c_str());
+				X.RDB$SCHEMA_NAME.NULL = FALSE;
+			}
+			else
+				X.RDB$SCHEMA_NAME.NULL = TRUE;
+
+			if (name.package.hasData())
+			{
+				strcpy(X.RDB$PACKAGE_NAME, name.package.c_str());
 				X.RDB$PACKAGE_NAME.NULL = FALSE;
 			}
 			else
 				X.RDB$PACKAGE_NAME.NULL = TRUE;
 
+			X.RDB$FIELD_SOURCE_SCHEMA_NAME.NULL = TRUE;
 			X.RDB$DESCRIPTION.NULL = TRUE;
 			X.RDB$DEFAULT_VALUE.NULL = TRUE;
 			X.RDB$DEFAULT_SOURCE.NULL = TRUE;
@@ -7289,8 +7490,8 @@ bool get_procedure_prm (BurpGlobals* tdgbl, GDS_NAME package_name, GDS_NAME proc
 			X.RDB$PARAMETER_MECHANISM = prm_mech_normal;
 			X.RDB$PARAMETER_MECHANISM.NULL = FALSE;
 
-			// DB_VERSION_DDL11_2
 			X.RDB$FIELD_NAME.NULL = TRUE;
+			X.RDB$RELATION_SCHEMA_NAME.NULL = TRUE;
 			X.RDB$RELATION_NAME.NULL = TRUE;
 
 			skip_init(&scan_next_attr);
@@ -7299,9 +7500,8 @@ bool get_procedure_prm (BurpGlobals* tdgbl, GDS_NAME package_name, GDS_NAME proc
 				switch (attribute)
 				{
 				case att_procedureprm_name:
-					l = GET_TEXT(X.RDB$PARAMETER_NAME);
-					MISC_terminate (X.RDB$PARAMETER_NAME, temp, l, sizeof(temp));
-					BURP_verbose (196, temp);
+					GET_TEXT(X.RDB$PARAMETER_NAME);
+					BURP_verbose(196, MetaString(X.RDB$PARAMETER_NAME).toQuotedString().c_str());
 					// msg 196 restoring parameter %s for stored procedure
 					break;
 
@@ -7311,6 +7511,11 @@ bool get_procedure_prm (BurpGlobals* tdgbl, GDS_NAME package_name, GDS_NAME proc
 
 				case att_procedureprm_number:
 					X.RDB$PARAMETER_NUMBER= (USHORT) get_int32(tdgbl);
+					break;
+
+				case att_procedureprm_field_source_schema_name:
+					GET_TEXT(X.RDB$FIELD_SOURCE_SCHEMA_NAME);
+					X.RDB$FIELD_SOURCE_SCHEMA_NAME.NULL = FALSE;
 					break;
 
 				case att_procedureprm_field_source:
@@ -7382,6 +7587,11 @@ bool get_procedure_prm (BurpGlobals* tdgbl, GDS_NAME package_name, GDS_NAME proc
 						bad_attribute(scan_next_attr, attribute, 291);
 					break;
 
+				case att_procedureprm_relation_schema_name:
+					X.RDB$RELATION_SCHEMA_NAME.NULL = FALSE;
+					GET_TEXT(X.RDB$RELATION_SCHEMA_NAME);
+					break;
+
 				// DB_VERSION_DDL11_2
 				case att_procedureprm_relation_name:
 					if (tdgbl->RESTORE_format >= 9)
@@ -7399,18 +7609,20 @@ bool get_procedure_prm (BurpGlobals* tdgbl, GDS_NAME package_name, GDS_NAME proc
 					break;
 				}
 			}
-		END_STORE;
+		}
+		END_STORE
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
+		END_ERROR
 	}
 	else
 	{
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_procedure_prm_req_handle1)
 			X IN RDB$PROCEDURE_PARAMETERS
+		{
 			X.RDB$DESCRIPTION.NULL = TRUE;
-			strcpy (X.RDB$PROCEDURE_NAME, procptr);
+			strcpy(X.RDB$PROCEDURE_NAME, name.object.c_str());
 			X.RDB$SYSTEM_FLAG = 0;
 			X.RDB$SYSTEM_FLAG.NULL = FALSE;
 
@@ -7420,9 +7632,8 @@ bool get_procedure_prm (BurpGlobals* tdgbl, GDS_NAME package_name, GDS_NAME proc
 				switch (attribute)
 				{
 				case att_procedureprm_name:
-					l = GET_TEXT(X.RDB$PARAMETER_NAME);
-					MISC_terminate (X.RDB$PARAMETER_NAME, temp, l, sizeof(temp));
-					BURP_verbose (196, temp);
+					GET_TEXT(X.RDB$PARAMETER_NAME);
+					BURP_verbose(196, MetaString(X.RDB$PARAMETER_NAME).toQuotedString().c_str());
 					// msg 196 restoring parameter %s for stored procedure
 					break;
 
@@ -7480,10 +7691,11 @@ bool get_procedure_prm (BurpGlobals* tdgbl, GDS_NAME package_name, GDS_NAME proc
 					break;
 				}
 			}
-		END_STORE;
+		}
+		END_STORE
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
+		END_ERROR
 	}
 
 	return true;
@@ -7529,7 +7741,7 @@ bool get_publication(BurpGlobals* tdgbl)
 				case att_pub_name:
 					GET_TEXT(X.RDB$PUBLICATION_NAME);
 					X.RDB$PUBLICATION_NAME.NULL = FALSE;
-					BURP_verbose(399, X.RDB$PUBLICATION_NAME);
+					BURP_verbose(399, MetaString(X.RDB$PUBLICATION_NAME).toQuotedString().c_str());
 					// msg 399 restoring publication %s
 					break;
 
@@ -7598,6 +7810,10 @@ bool get_pub_table(BurpGlobals* tdgbl)
  *	Reconstruct a publication table.
  *
  **************************************/
+	QualifiedMetaString name;
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
+		name.schema = PUBLIC_SCHEMA;
+
 	att_type attribute;
 	scan_attr_t scan_next_attr;
 
@@ -7605,8 +7821,9 @@ bool get_pub_table(BurpGlobals* tdgbl)
 	{
 		STORE (REQUEST_HANDLE tdgbl->handles_get_pub_tab_req_handle1)
 			X IN RDB$PUBLICATION_TABLES
-
+		{
 			X.RDB$PUBLICATION_NAME.NULL = TRUE;
+			X.RDB$TABLE_SCHEMA_NAME.NULL = TRUE;
 			X.RDB$TABLE_NAME.NULL = TRUE;
 
 			skip_init(&scan_next_attr);
@@ -7619,10 +7836,17 @@ bool get_pub_table(BurpGlobals* tdgbl)
 					X.RDB$PUBLICATION_NAME.NULL = FALSE;
 					break;
 
+				case att_ptab_table_schema_name:
+					GET_TEXT(X.RDB$TABLE_SCHEMA_NAME);
+					name.schema = X.RDB$TABLE_SCHEMA_NAME;
+					X.RDB$TABLE_SCHEMA_NAME.NULL = FALSE;
+					break;
+
 				case att_ptab_table_name:
 					GET_TEXT(X.RDB$TABLE_NAME);
+					name.object = X.RDB$TABLE_NAME;
 					X.RDB$TABLE_NAME.NULL = FALSE;
-					BURP_verbose(401, X.RDB$TABLE_NAME);
+					BURP_verbose(401, name.toString().c_str());
 					// msg 401 restoring publication for table %s
 					break;
 
@@ -7632,10 +7856,11 @@ bool get_pub_table(BurpGlobals* tdgbl)
 					break;
 				}
 			}
-		END_STORE;
+		}
+		END_STORE
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
+		END_ERROR
 	}
 	else
 	{
@@ -7646,6 +7871,7 @@ bool get_pub_table(BurpGlobals* tdgbl)
 			switch (attribute)
 			{
 			case att_ptab_pub_name:
+			case att_ptab_table_schema_name:
 			case att_ptab_table_name:
 				eat_text(tdgbl);
 				break;
@@ -7678,7 +7904,10 @@ bool get_ref_constraint(BurpGlobals* tdgbl)
 
 	STORE (REQUEST_HANDLE tdgbl->handles_get_ref_constraint_req_handle1)
 		X IN RDB$REF_CONSTRAINTS
+	{
+		X.RDB$SCHEMA_NAME.NULL = TRUE;
 		X.RDB$CONSTRAINT_NAME.NULL = TRUE;
+		X.RDB$CONST_SCHEMA_NAME_UQ.NULL = TRUE;
 		X.RDB$CONST_NAME_UQ.NULL = TRUE;
 		X.RDB$MATCH_OPTION.NULL = TRUE;
 		X.RDB$UPDATE_RULE.NULL = TRUE;
@@ -7689,9 +7918,19 @@ bool get_ref_constraint(BurpGlobals* tdgbl)
 		{
 			switch (attribute)
 			{
+				case att_ref_schema_name:
+					X.RDB$SCHEMA_NAME.NULL = FALSE;
+					GET_TEXT(X.RDB$SCHEMA_NAME);
+					break;
+
 				case att_ref_constraint_name:
 					X.RDB$CONSTRAINT_NAME.NULL = FALSE;
 					GET_TEXT(X.RDB$CONSTRAINT_NAME);
+					break;
+
+				case att_ref_unique_const_schema_name:
+					X.RDB$CONST_SCHEMA_NAME_UQ.NULL = FALSE;
+					GET_TEXT(X.RDB$CONST_SCHEMA_NAME_UQ);
 					break;
 
 				case att_ref_unique_const_name:
@@ -7720,10 +7959,11 @@ bool get_ref_constraint(BurpGlobals* tdgbl)
 					break;
 			}
 		}
-	END_STORE;
+	}
+	END_STORE
 	ON_ERROR
 		general_on_error ();
-	END_ERROR;
+	END_ERROR
 
 	return true;
 }
@@ -7785,24 +8025,13 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 	// Pick up relation attributes
 
 	burp_rel* relation = (burp_rel*) BURP_alloc_zero (sizeof(burp_rel));
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
+		relation->rel_name.schema = PUBLIC_SCHEMA;
+
 	relation->rel_next = tdgbl->relations;
 	tdgbl->relations = relation;
 
-	/*
-	STORE (REQUEST_HANDLE tdgbl->handles_get_relation_req_handle1)
-		X IN RDB$RELATIONS
-		X.RDB$SYSTEM_FLAG = 0;
-		X.RDB$SYSTEM_FLAG.NULL = FALSE;
-		X.RDB$FLAGS.NULL = TRUE;
-		X.RDB$SECURITY_CLASS.NULL = TRUE;
-		X.RDB$VIEW_BLR.NULL = TRUE;
-		X.RDB$VIEW_SOURCE.NULL = TRUE;
-		X.RDB$DESCRIPTION.NULL = TRUE;
-		X.RDB$RUNTIME.NULL = TRUE;
-		X.RDB$EXTERNAL_DESCRIPTION.NULL = TRUE;
-	*/
-
-	TEXT rel_name[GDS_NAME_LEN] = "";
+	TEXT temp[GDS_NAME_LEN];
 	att_type attribute;
 	scan_attr_t scan_next_attr;
 	skip_init(&scan_next_attr);
@@ -7811,12 +8040,16 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 	{
 		switch (attribute)
 		{
+		case att_relation_schema_name:
+			GET_TEXT(temp);
+			relation->rel_name.schema = temp;
+			break;
+
 		case att_relation_name:
 			{
-				const SSHORT l = GET_TEXT(relation->rel_name);
-				relation->rel_name_length = l;
-				MISC_terminate (relation->rel_name, rel_name, l, sizeof(rel_name));
-				BURP_verbose(167, rel_name); // msg 167 restoring table @1
+				GET_TEXT(temp);
+				relation->rel_name.object = temp;
+				BURP_verbose(167, relation->rel_name.toString().c_str()); // msg 167 restoring table @1
 			}
 			break;
 
@@ -7830,8 +8063,8 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 			view_blr_null = false;
 			get_blr_blob(tdgbl, view_blr, true);
 			relation->rel_flags |= REL_view;
-			fb_assert(rel_name[0] != 0);
-			BURP_verbose(346, rel_name); // msg 346 '    table @1 is a view'
+			fb_assert(relation->rel_name.object.hasData());
+			BURP_verbose(346, relation->rel_name.toString().c_str()); // msg 346 '    table @1 is a view'
 			break;
 
 		case att_relation_view_source:
@@ -7914,7 +8147,8 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_relation_req_handle1)
 			X IN RDB$RELATIONS
-
+		{
+			X.RDB$SCHEMA_NAME.NULL = TRUE;
 			X.RDB$SYSTEM_FLAG.NULL = FALSE;
 			X.RDB$FLAGS.NULL = rel_flags_null;
 			X.RDB$SECURITY_CLASS.NULL = sec_class_null;
@@ -7934,24 +8168,30 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 			X.RDB$DESCRIPTION = rel_desc;
 			X.RDB$EXTERNAL_DESCRIPTION = ext_desc;
 
+			if (relation->rel_name.schema.hasData())
+			{
+				strcpy(X.RDB$SCHEMA_NAME, relation->rel_name.schema.c_str());
+				X.RDB$SCHEMA_NAME.NULL = FALSE;
+			}
+
 			strcpy(X.RDB$SECURITY_CLASS, sec_class);
-			strcpy(X.RDB$RELATION_NAME, relation->rel_name);
+			strcpy(X.RDB$RELATION_NAME, relation->rel_name.object.c_str());
 			strcpy(X.RDB$EXTERNAL_FILE, ext_file_name);
 
 			X.RDB$RELATION_TYPE = (USHORT) type;
 			X.RDB$SQL_SECURITY = (FB_BOOLEAN) sql_security;
-
-		END_STORE;
+		}
+		END_STORE
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
+		END_ERROR
 	}
 	else
 	{
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_relation_req_handle1)
 			X IN RDB$RELATIONS
-
+		{
 			X.RDB$SYSTEM_FLAG.NULL = FALSE;
 			X.RDB$FLAGS.NULL = rel_flags_null;
 			X.RDB$SECURITY_CLASS.NULL = sec_class_null;
@@ -7970,13 +8210,13 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 			X.RDB$EXTERNAL_DESCRIPTION = ext_desc;
 
 			strcpy(X.RDB$SECURITY_CLASS, sec_class);
-			strcpy(X.RDB$RELATION_NAME, relation->rel_name);
+			strcpy(X.RDB$RELATION_NAME, relation->rel_name.object.c_str());
 			strcpy(X.RDB$EXTERNAL_FILE, ext_file_name);
-
-		END_STORE;
+		}
+		END_STORE
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
+		END_ERROR
 	}
 
 	// Eat up misc. records
@@ -7991,12 +8231,12 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 		case rec_relation_end:
 			if (tdgbl->gbl_sw_incremental)
 			{
-				BURP_verbose (170, relation->rel_name);
+				BURP_verbose(170, relation->rel_name.toString().c_str());
 				// msg 170: committing metadata for relation %s
 				COMMIT
 				// existing ON_ERROR continues past error, beck
 				ON_ERROR
-					BURP_print (false, 171, relation->rel_name);
+					BURP_print(false, 171, relation->rel_name.toString().c_str());
 					// msg 171: error committing metadata for relation %s
 					BURP_print_status (false, &tdgbl->status_vector);
 					ROLLBACK;
@@ -8047,7 +8287,7 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 
 	// If we're only doing meta-data, ignore data records
 
-	if (tdgbl->gbl_sw_meta || tdgbl->skipRelation(rel_name))
+	if (tdgbl->gbl_sw_meta || tdgbl->skipRelation(relation->rel_name))
 		ignore_data(tdgbl, relation);
 	else
 	{
@@ -8078,6 +8318,8 @@ bool get_rel_constraint(BurpGlobals* tdgbl)
 
 	STORE (REQUEST_HANDLE tdgbl->handles_get_rel_constraint_req_handle1)
 		X IN RDB$RELATION_CONSTRAINTS
+	{
+		X.RDB$SCHEMA_NAME.NULL = TRUE;
 		X.RDB$CONSTRAINT_NAME.NULL = TRUE;
 		X.RDB$CONSTRAINT_TYPE.NULL = TRUE;
 		X.RDB$RELATION_NAME.NULL = TRUE;
@@ -8090,6 +8332,11 @@ bool get_rel_constraint(BurpGlobals* tdgbl)
 		{
 			switch (attribute)
 			{
+				case att_rel_constraint_schema_name:
+					X.RDB$SCHEMA_NAME.NULL = FALSE;
+					GET_TEXT(X.RDB$SCHEMA_NAME);
+					break;
+
 				case att_rel_constraint_name:
 					X.RDB$CONSTRAINT_NAME.NULL = FALSE;
 					GET_TEXT(X.RDB$CONSTRAINT_NAME);
@@ -8126,10 +8373,11 @@ bool get_rel_constraint(BurpGlobals* tdgbl)
 					break;
 			}
 		}
-	END_STORE;
+	}
+	END_STORE
 	ON_ERROR
 		general_on_error ();
-	END_ERROR;
+	END_ERROR
 
 	return true;
 }
@@ -8148,7 +8396,11 @@ bool get_relation_data(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTa
  *	find the relation named.  If we can't find it, give up.
  *
  **************************************/
-	BASED_ON RDB$RELATIONS.RDB$RELATION_NAME name;
+	QualifiedMetaString name;
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
+		name.schema = PUBLIC_SCHEMA;
+
+	TEXT temp[GDS_NAME_LEN];
 	att_type	attribute;
 	scan_attr_t		scan_next_attr;
 
@@ -8159,9 +8411,15 @@ bool get_relation_data(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTa
 	{
 		switch (attribute)
 		{
+		case att_relation_schema_name:
+			GET_TEXT(temp);
+			name.schema = temp;
+			break;
+
 		case att_relation_name:
-			GET_TEXT(name);
-			relation = find_relation (tdgbl, name);
+			GET_TEXT(temp);
+			name.object = temp;
+			relation = find_relation(tdgbl, name);
 			break;
 
 		default:
@@ -8233,6 +8491,118 @@ bool get_relation_data(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTa
 	return true;
 }
 
+// Reconstruct a schema.
+bool get_schema(BurpGlobals* tdgbl)
+{
+	att_type attribute;
+	scan_attr_t scan_next_attr;
+
+	if (tdgbl->runtimeODS < DB_VERSION_DDL14)
+	{
+		skip_init(&scan_next_attr);
+
+		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
+		{
+			switch (attribute)
+			{
+				case att_schema_name:
+					eat_text(tdgbl);
+					break;
+
+				case att_schema_charset_schema_name:
+					eat_text(tdgbl);
+					break;
+
+				case att_schema_charset_name:
+					eat_text(tdgbl);
+					break;
+
+				case att_schema_security_class:
+					eat_text(tdgbl);
+					break;
+
+				case att_schema_owner_name:
+					eat_text(tdgbl);
+					break;
+
+				case att_schema_description:
+					eat_blob(tdgbl);
+					break;
+
+				default:
+					bad_attribute(scan_next_attr, attribute, 414);	// msg 414 schema
+					break;
+			}
+		}
+
+		return true;
+	}
+
+	ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
+
+	STORE (TRANSACTION_HANDLE local_trans REQUEST_HANDLE tdgbl->handles_get_schema_req_handle1)
+		X IN RDB$SCHEMAS
+	{
+		X.RDB$SCHEMA_NAME.NULL = TRUE;
+		X.RDB$CHARACTER_SET_SCHEMA_NAME.NULL = TRUE;
+		X.RDB$CHARACTER_SET_NAME.NULL = TRUE;
+		X.RDB$SECURITY_CLASS.NULL = TRUE;
+		X.RDB$OWNER_NAME.NULL = TRUE;
+		X.RDB$DESCRIPTION.NULL = TRUE;
+		X.RDB$SYSTEM_FLAG = 0;
+
+		skip_init(&scan_next_attr);
+
+		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
+		{
+			switch (attribute)
+			{
+				case att_schema_name:
+					GET_TEXT(X.RDB$SCHEMA_NAME);
+					X.RDB$SCHEMA_NAME.NULL = FALSE;
+					BURP_verbose(413, MetaString(X.RDB$SCHEMA_NAME).toQuotedString().c_str());	// msg 413 restoring schema @1
+					break;
+
+				case att_schema_charset_schema_name:
+					GET_TEXT(X.RDB$CHARACTER_SET_SCHEMA_NAME);
+					X.RDB$CHARACTER_SET_SCHEMA_NAME.NULL = FALSE;
+					break;
+
+				case att_schema_charset_name:
+					GET_TEXT(X.RDB$CHARACTER_SET_NAME);
+					X.RDB$CHARACTER_SET_NAME.NULL = FALSE;
+					break;
+
+				case att_schema_security_class:
+					GET_TEXT(X.RDB$SECURITY_CLASS);
+					fix_security_class_name(tdgbl, X.RDB$SECURITY_CLASS, false);
+					X.RDB$SECURITY_CLASS.NULL = FALSE;
+					break;
+
+				case att_schema_owner_name:
+					GET_TEXT(X.RDB$OWNER_NAME);
+					X.RDB$OWNER_NAME.NULL = FALSE;
+					break;
+
+				case att_schema_description:
+					get_source_blob(tdgbl, X.RDB$DESCRIPTION, true);
+					X.RDB$DESCRIPTION.NULL = FALSE;
+					break;
+
+				default:
+					bad_attribute(scan_next_attr, attribute, 414);	// msg 414 schema
+					break;
+			}
+		}
+	}
+	END_STORE
+	ON_ERROR
+		general_on_error();
+	END_ERROR
+
+	return true;
+}
+
 bool get_sql_roles(BurpGlobals* tdgbl)
 {
 /**************************************
@@ -8247,7 +8617,6 @@ bool get_sql_roles(BurpGlobals* tdgbl)
  **************************************/
 	att_type		attribute;
 	scan_attr_t		scan_next_attr;
-	TEXT			temp[GDS_NAME_LEN];
 	SSHORT			l;
 
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL11)
@@ -8268,10 +8637,9 @@ bool get_sql_roles(BurpGlobals* tdgbl)
 				{
 				case att_role_name:
 					X.RDB$ROLE_NAME.NULL = FALSE;
-					l = GET_TEXT(X.RDB$ROLE_NAME);
-					MISC_terminate (X.RDB$ROLE_NAME, temp, l, sizeof(temp));
+					GET_TEXT(X.RDB$ROLE_NAME);
 					// msg 251, restoring SQL role: %s
-					BURP_verbose (251, temp);
+					BURP_verbose(251, MetaString(X.RDB$ROLE_NAME).toQuotedString().c_str());
 					break;
 
 				case att_role_owner_name:
@@ -8329,10 +8697,9 @@ bool get_sql_roles(BurpGlobals* tdgbl)
 				{
 				case att_role_name:
 					X.RDB$ROLE_NAME.NULL = FALSE;
-					l = GET_TEXT(X.RDB$ROLE_NAME);
-					MISC_terminate (X.RDB$ROLE_NAME, temp, l, sizeof(temp));
+					GET_TEXT(X.RDB$ROLE_NAME);
 					// msg 251, restoring SQL role: %s
-					BURP_verbose (251, temp);
+					BURP_verbose(251, MetaString(X.RDB$ROLE_NAME).toQuotedString().c_str());
 					break;
 
 				case att_role_owner_name:
@@ -8450,7 +8817,7 @@ bool get_mapping(BurpGlobals* tdgbl)
 
 					BURP_verbose(301);
 					// msg 301, restoring names mapping
-					BURP_verbose (298, M.RDB$MAP_NAME);
+					BURP_verbose(298, MetaString(M.RDB$MAP_NAME).toQuotedString().c_str());
 					break;
 
 				case att_map_name:
@@ -8462,7 +8829,7 @@ bool get_mapping(BurpGlobals* tdgbl)
 						BURP_verbose(301);
 						// msg 301, restoring names mapping
 					}
-					BURP_verbose (298, M.RDB$MAP_NAME);
+					BURP_verbose(298, MetaString(M.RDB$MAP_NAME).toQuotedString().c_str());
 					break;
 
 				case att_map_using:
@@ -8622,7 +8989,7 @@ bool get_mapping(BurpGlobals* tdgbl)
 			return true;
 		}
 
-		BURP_verbose(298, ADMIN_ROLE);
+		BURP_verbose(298, MetaString(ADMIN_ROLE).toQuotedString().c_str());
 		// msg 298, restoring map @1
 		Firebird::string sql;
 		sql.printf("%s ('%s', %d) %s",
@@ -8697,7 +9064,7 @@ bool get_db_creator(BurpGlobals* tdgbl)
 		STORE (REQUEST_HANDLE tdgbl->handles_get_db_creators_req_handle1)
 			C IN RDB$DB_CREATORS
 
-			BURP_verbose (393, usr);
+			BURP_verbose(393, MetaString(usr).toQuotedString().c_str());
 			if (strlen(usr) > sizeof(C.RDB$USER))
 				BURP_error_redirect(NULL, 46);
 
@@ -8754,9 +9121,8 @@ bool get_security_class(BurpGlobals* tdgbl)
  *	Restore a security class record including access control list.
  *
  **************************************/
+	MetaString name;
 	att_type	attribute;
-	TEXT		temp[GDS_NAME_LEN];
-	SSHORT		l = 0;
 	scan_attr_t		scan_next_attr;
 	bool		is_valid_sec_class = false;
 
@@ -8771,7 +9137,8 @@ bool get_security_class(BurpGlobals* tdgbl)
 			switch (attribute)
 			{
 			case att_class_security_class:
-				l = GET_TEXT(X.RDB$SECURITY_CLASS);
+				GET_TEXT(X.RDB$SECURITY_CLASS);
+				name = X.RDB$SECURITY_CLASS;
 
 				// Bug fix for bug_no 7299: There was a V3 bug that inserted
 				// garbage security class entry when doing GBAK. In order to
@@ -8780,17 +9147,15 @@ bool get_security_class(BurpGlobals* tdgbl)
 				// valid ASCII name. If not, skip this entry by setting
 				// 'is_valid_sec_class' to false.
 
-				is_valid_sec_class = is_ascii_name(X.RDB$SECURITY_CLASS, l);
+				is_valid_sec_class = is_ascii_name(X.RDB$SECURITY_CLASS, name.length());
 				if (!is_valid_sec_class)
 				{
-					MISC_terminate (X.RDB$SECURITY_CLASS, temp, l, sizeof(temp));
-					BURP_print (false, 234, temp);
+					BURP_print(false, 234, name.toQuotedString().c_str());
 					// msg 234   Skipped bad security class entry: %s
 					break;
 				}
 
-				MISC_terminate (X.RDB$SECURITY_CLASS, temp, l, sizeof(temp));
-				BURP_verbose (125, temp);
+				BURP_verbose(125, name.toQuotedString().c_str());
 				// msg 125   restoring security class %s
 				break;
 
@@ -9032,7 +9397,7 @@ bool get_trigger_old (BurpGlobals* tdgbl, burp_rel* relation)
 
 		TEXT* p = X.RDB$TRIGGER_NAME;
 		const TEXT* const end = p + 31;
-		const TEXT* q = relation->rel_name;
+		const TEXT* q = relation->rel_name.object.c_str();
 		while (*q) {
 			*p++ = *q++;
 		}
@@ -9061,9 +9426,9 @@ bool get_trigger_old (BurpGlobals* tdgbl, burp_rel* relation)
 			*p++ = *q++;
 		}
 		*p = 0;
-		BURP_verbose (126, X.RDB$TRIGGER_NAME);
+		BURP_verbose(126, MetaString(X.RDB$TRIGGER_NAME).toQuotedString().c_str());
 		// msg 126 restoring trigger %s
-		strncpy (X.RDB$RELATION_NAME, relation->rel_name, GDS_NAME_LEN);
+		strncpy (X.RDB$RELATION_NAME, relation->rel_name.object.c_str(), GDS_NAME_LEN);
 		strcpy (name, X.RDB$TRIGGER_NAME);
 		X.RDB$TRIGGER_SEQUENCE = TRIGGER_SEQUENCE_DEFAULT;
 
@@ -9105,8 +9470,11 @@ bool get_trigger(BurpGlobals* tdgbl)
  *	Get a trigger definition in rdb$triggers.
  *
  **************************************/
+	QualifiedMetaString name;
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
+		name.schema = PUBLIC_SCHEMA;
+
 	att_type attribute;
-	BASED_ON RDB$TRIGGERS.RDB$TRIGGER_NAME name;
 	BASED_ON RDB$TRIGGERS.RDB$RELATION_NAME relName;
 	scan_attr_t scan_next_attr;
 	bool skipTrig = false;
@@ -9118,7 +9486,8 @@ bool get_trigger(BurpGlobals* tdgbl)
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_trigger_req_handle1)
 			X IN RDB$TRIGGERS
-
+		{
+			X.RDB$SCHEMA_NAME.NULL = TRUE;
 			X.RDB$RELATION_NAME.NULL = TRUE;
 			X.RDB$DESCRIPTION.NULL = TRUE;
 			X.RDB$TRIGGER_BLR.NULL = TRUE;
@@ -9168,10 +9537,16 @@ bool get_trigger(BurpGlobals* tdgbl)
 					get_source_blob (tdgbl, X.RDB$TRIGGER_SOURCE, true);
 					break;
 
+				case att_trig_schema_name:
+					GET_TEXT(X.RDB$SCHEMA_NAME);
+					X.RDB$SCHEMA_NAME.NULL = FALSE;
+					name.schema = X.RDB$SCHEMA_NAME;
+					break;
+
 				case att_trig_name:
 					GET_TEXT(X.RDB$TRIGGER_NAME);
-					strcpy (name, X.RDB$TRIGGER_NAME);
-					BURP_verbose (126, X.RDB$TRIGGER_NAME);
+					name.object = X.RDB$TRIGGER_NAME;
+					BURP_verbose(126, name.toString().c_str());
 					// msg 126 restoring trigger %s
 					break;
 
@@ -9183,8 +9558,9 @@ bool get_trigger(BurpGlobals* tdgbl)
 					// Check for trigger on system relation
 					FOR (TRANSACTION_HANDLE local_trans REQUEST_HANDLE tdgbl->handles_get_trigger_req_handle2)
 						Y IN RDB$RELATIONS
-						WITH Y.RDB$RELATION_NAME EQ relName
-						 AND Y.RDB$SYSTEM_FLAG EQ 1
+						WITH Y.RDB$SCHEMA_NAME EQUIV NULLIF(name.schema.c_str(), '') AND
+							 Y.RDB$RELATION_NAME EQ relName AND
+							 Y.RDB$SYSTEM_FLAG EQ 1
 
 						skipTrig = true;
 					END_FOR;
@@ -9274,14 +9650,14 @@ bool get_trigger(BurpGlobals* tdgbl)
 			// Skip trigger on system relation
 			if (skipTrig)
 			{
-				BURP_message(387, SafeArg() << name << relName);
+				BURP_message(387, SafeArg() << name.toString().c_str() << relName);
 				return true;
 			}
-
-		END_STORE;
+		}
+		END_STORE
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
+		END_ERROR
 	}
 	else
 	{
@@ -9328,8 +9704,8 @@ bool get_trigger(BurpGlobals* tdgbl)
 
 				case att_trig_name:
 					GET_TEXT(X.RDB$TRIGGER_NAME);
-					strcpy (name, X.RDB$TRIGGER_NAME);
-					BURP_verbose (126, X.RDB$TRIGGER_NAME);
+					name.object = X.RDB$TRIGGER_NAME;
+					BURP_verbose(126, name.toString().c_str());
 					// msg 126 restoring trigger %s
 					break;
 
@@ -9418,7 +9794,7 @@ bool get_trigger(BurpGlobals* tdgbl)
 			// Skip trigger on system relation
 			if (skipTrig)
 			{
-				BURP_message(387, SafeArg() << name << relName);
+				BURP_message(387, SafeArg() << name.toString().c_str() << relName);
 				return true;
 			}
 
@@ -9433,7 +9809,7 @@ bool get_trigger(BurpGlobals* tdgbl)
 		COMMIT
 		// existing ON_ERROR continues past error, beck
 		ON_ERROR
-			BURP_print (false, 94, name);
+			BURP_print(false, 94, name.toString().c_str());
 			// msg 94 trigger %s is invalid
 			BURP_print_status(false, &tdgbl->status_vector);
 			ROLLBACK;
@@ -9461,10 +9837,13 @@ bool get_trigger_message(BurpGlobals* tdgbl)
  *	Get a trigger message text.
  *
  **************************************/
+	QualifiedMetaString name;
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
+		name.schema = PUBLIC_SCHEMA;
+
 	att_type	attribute;
 	scan_attr_t		scan_next_attr;
-
-	BASED_ON RDB$TRIGGER_MESSAGES.RDB$TRIGGER_NAME name;
+	TEXT temp[GDS_NAME_LEN];
 	BASED_ON RDB$TRIGGER_MESSAGES.RDB$MESSAGE_NUMBER number = -1;
 	BASED_ON RDB$TRIGGER_MESSAGES.RDB$MESSAGE message;
 
@@ -9474,18 +9853,28 @@ bool get_trigger_message(BurpGlobals* tdgbl)
 	{
 		switch (attribute)
 		{
+		case att_trigmsg_schema_name:
+			GET_TEXT(temp);
+			name.schema = temp;
+			break;
+
 		case att_trigmsg_name:
-			GET_TEXT(name);
+			GET_TEXT(temp);
+			name.object = temp;
 			sysflag = false;
 			FOR (REQUEST_HANDLE tdgbl->handles_get_trigger_message_req_handle1)
 				FIRST 1 X IN RDB$TRIGGERS WITH
-				X.RDB$SYSTEM_FLAG EQ 1 AND X.RDB$TRIGGER_NAME EQ name
+				X.RDB$SYSTEM_FLAG = 1 AND
+				X.RDB$SCHEMA_NAME EQUIV NULLIF(name.schema.c_str(), '') AND
+				X.RDB$TRIGGER_NAME = name.object.c_str()
+			{
 				sysflag = true;
-			END_FOR;
+			}
+			END_FOR
 			ON_ERROR
 				general_on_error ();
-			END_ERROR;
-			BURP_verbose (127, name);
+			END_ERROR
+			BURP_verbose(127, name.toString().c_str());
 			// msg 127 restoring trigger message for %s
 			break;
 
@@ -9516,20 +9905,30 @@ bool get_trigger_message(BurpGlobals* tdgbl)
 	STORE (TRANSACTION_HANDLE local_trans
 			REQUEST_HANDLE tdgbl->handles_get_trigger_message_req_handle2)
 		X IN RDB$TRIGGER_MESSAGES
-		strcpy (X.RDB$TRIGGER_NAME, name);
+	{
+		X.RDB$SCHEMA_NAME.NULL = TRUE;
+
+		if (name.schema.hasData())
+		{
+			strcpy(X.RDB$SCHEMA_NAME, name.schema.c_str());
+			X.RDB$SCHEMA_NAME.NULL = FALSE;
+		}
+
+		strcpy(X.RDB$TRIGGER_NAME, name.object.c_str());
 		X.RDB$MESSAGE_NUMBER = number;
-		strcpy (X.RDB$MESSAGE, message);
-	END_STORE;
+		strcpy(X.RDB$MESSAGE, message);
+	}
+	END_STORE
 	ON_ERROR
 		general_on_error ();
-	END_ERROR;
+	END_ERROR
 
 	if (tdgbl->gbl_sw_incremental)
 	{
 		COMMIT
 		// existing ON_ERROR continues past error, beck
 		ON_ERROR
-			BURP_print (false, 94, name);
+			BURP_print(false, 94, name.toString().c_str());
 			// msg 94 trigger %s is invalid
 			BURP_print_status(false, &tdgbl->status_vector);
 			ROLLBACK;
@@ -9609,7 +10008,7 @@ bool get_type(BurpGlobals* tdgbl)
 		}
 
 		MISC_terminate (X.RDB$TYPE_NAME, temp, len, sizeof(temp));
-		BURP_verbose (128, SafeArg() << temp << X.RDB$FIELD_NAME);
+		BURP_verbose (128, SafeArg() << temp << MetaString(X.RDB$FIELD_NAME).toQuotedString().c_str());
 		// msg 128  restoring type %s for field %s
 
 	END_STORE;
@@ -9637,11 +10036,11 @@ bool get_user_privilege(BurpGlobals* tdgbl)
 	scan_attr_t		scan_next_attr;
 	USHORT		flags = 0;
 
-	BASED_ON RDB$USER_PRIVILEGES.RDB$USER user;
+	QualifiedMetaString user, relation;
+	TEXT temp[GDS_NAME_LEN];
 	BASED_ON RDB$USER_PRIVILEGES.RDB$GRANTOR grantor;
 	BASED_ON RDB$USER_PRIVILEGES.RDB$PRIVILEGE privilege;
 	BASED_ON RDB$USER_PRIVILEGES.RDB$GRANT_OPTION grant_option = 0;
-	BASED_ON RDB$USER_PRIVILEGES.RDB$RELATION_NAME relation_name;
 	BASED_ON RDB$USER_PRIVILEGES.RDB$FIELD_NAME field_name;
 	BASED_ON RDB$USER_PRIVILEGES.RDB$USER_TYPE user_type;
 	BASED_ON RDB$USER_PRIVILEGES.RDB$OBJECT_TYPE object_type;
@@ -9655,11 +10054,17 @@ bool get_user_privilege(BurpGlobals* tdgbl)
 	{
 		switch (attribute)
 		{
+		case att_priv_user_schema_name:
+			GET_TEXT(temp);
+			user.schema = temp;
+			break;
+
 		case att_priv_user:
 			// default USER_TYPE to USER
 			flags |= USER_PRIV_USER;
-			GET_TEXT(user);
-			BURP_verbose (123, user);
+			GET_TEXT(temp);
+			user.object = temp;
+			BURP_verbose(123, user.toString().c_str());
 			// msg 123 restoring privilege for user %s
 			break;
 
@@ -9678,10 +10083,16 @@ bool get_user_privilege(BurpGlobals* tdgbl)
 			grant_option = (USHORT) get_int32(tdgbl);
 			break;
 
+		case att_priv_object_schema_name:
+			GET_TEXT(temp);
+			relation.schema = temp;
+			break;
+
 		case att_priv_object_name:
 			flags |= USER_PRIV_OBJECT_NAME;
 			// default OBJECT_TYPE to RELATION
-			GET_TEXT(relation_name);
+			GET_TEXT(temp);
+			relation.object = temp;
 			break;
 
 		case att_priv_field_name:
@@ -9717,9 +10128,9 @@ bool get_user_privilege(BurpGlobals* tdgbl)
 		switch (object_type)
 		{
 		case obj_package_header:
-			{
 			for (const burp_pkg* pkg = tdgbl->packages; pkg; pkg = pkg->pkg_next)
-				if (strcmp(pkg->pkg_name, relation_name) == 0)
+			{
+				if (pkg->pkg_name == relation)
 				{
 					exists = true;
 					local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
@@ -9729,9 +10140,9 @@ bool get_user_privilege(BurpGlobals* tdgbl)
 			break;
 
 		case obj_procedure:
-			{
 			for (const burp_prc* proc = tdgbl->procedures; proc; proc = proc->prc_next)
-				if (!proc->prc_package[0] && strcmp(proc->prc_name, relation_name) == 0)
+			{
+				if (proc->prc_name.package.isEmpty() && proc->prc_name == relation)
 				{
 					exists = true;
 					local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
@@ -9741,9 +10152,9 @@ bool get_user_privilege(BurpGlobals* tdgbl)
 			break;
 
 		case obj_relation:
-			{
 			for (const burp_rel* rel = tdgbl->relations; rel; rel = rel->rel_next)
-				if (strcmp(rel->rel_name, relation_name) == 0)
+			{
+				if (rel->rel_name == relation)
 				{
 					exists = true;
 					if (rel->rel_flags & REL_view)
@@ -9759,9 +10170,9 @@ bool get_user_privilege(BurpGlobals* tdgbl)
 		case obj_udf:
 		case obj_field:
 		case obj_generator:
-			{
 			for (burp_meta_obj* object = tdgbl->miss_privs; object; object = object->obj_next)
-				if (object->obj_type == object_type && strcmp(object->obj_name, relation_name) == 0)
+			{
+				if (object->obj_type == object_type && object->obj_name == relation)
 				{
 					if (object->obj_class)
 						exists = true;
@@ -9801,13 +10212,21 @@ bool get_user_privilege(BurpGlobals* tdgbl)
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_user_privilege_req_handle1)
 			X IN RDB$USER_PRIVILEGES
-
+		{
+			X.RDB$USER_SCHEMA_NAME.NULL = TRUE;
+			X.RDB$RELATION_SCHEMA_NAME.NULL = TRUE;
 			X.RDB$FIELD_NAME.NULL = TRUE;
 			X.RDB$OBJECT_TYPE.NULL = TRUE;
 			X.RDB$GRANT_OPTION.NULL = TRUE;
 
+			if (user.schema.hasData())
+			{
+				strcpy(X.RDB$USER_SCHEMA_NAME, user.schema.c_str());
+				X.RDB$USER_SCHEMA_NAME.NULL = FALSE;
+			}
+
 			if (flags & USER_PRIV_USER)
-				strcpy (X.RDB$USER, user);
+				strcpy(X.RDB$USER, user.object.c_str());
 
 			if (flags & USER_PRIV_GRANTOR)
 				strcpy (X.RDB$GRANTOR, grantor);
@@ -9821,8 +10240,14 @@ bool get_user_privilege(BurpGlobals* tdgbl)
 				X.RDB$GRANT_OPTION = grant_option;
 			}
 
+			if (relation.schema.hasData())
+			{
+				strcpy(X.RDB$RELATION_SCHEMA_NAME, relation.schema.c_str());
+				X.RDB$RELATION_SCHEMA_NAME.NULL = FALSE;
+			}
+
 			if (flags & USER_PRIV_OBJECT_NAME)
-				strcpy (X.RDB$RELATION_NAME, relation_name);
+				strcpy(X.RDB$RELATION_NAME, relation.object.c_str());
 
 			if (flags & USER_PRIV_FIELD_NAME)
 			{
@@ -9850,7 +10275,7 @@ bool get_user_privilege(BurpGlobals* tdgbl)
 			// used at all. The following code should be uncommented
 			// in case we ever introduce obj_field to the picture.
 
-/***********************************************************
+			/***********************************************************
 			if ( !(flags & USER_PRIV_OBJECT_TYPE) )
 			{
 				if ( flags & USER_PRIV_FIELD_NAME )
@@ -9858,9 +10283,9 @@ bool get_user_privilege(BurpGlobals* tdgbl)
 					X.RDB$OBJECT_TYPE = obj_field;
 				}
 			}
-***********************************************************/
-
-		END_STORE;
+			***********************************************************/
+		}
+		END_STORE
 		ON_ERROR
 			if (tdgbl->status_vector->getErrors()[1] == isc_integ_fail)
 			{
@@ -9869,7 +10294,7 @@ bool get_user_privilege(BurpGlobals* tdgbl)
 				return true;
 			}
 			general_on_error ();
-		END_ERROR;
+		END_ERROR
 	}
 
 	return true;
@@ -9899,8 +10324,17 @@ bool get_view(BurpGlobals* tdgbl, burp_rel* relation)
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_view_req_handle1)
 			X IN RDB$VIEW_RELATIONS
+		{
+			if (relation->rel_name.schema.hasData())
+			{
+				strcpy(X.RDB$SCHEMA_NAME, relation->rel_name.schema.c_str());
+				X.RDB$SCHEMA_NAME.NULL = FALSE;
+			}
+			else
+				X.RDB$SCHEMA_NAME.NULL = TRUE;
 
-			strcpy (X.RDB$VIEW_NAME, relation->rel_name);
+			strcpy(X.RDB$VIEW_NAME, relation->rel_name.object.c_str());
+			X.RDB$RELATION_SCHEMA_NAME.NULL = TRUE;
 			X.RDB$CONTEXT_TYPE.NULL = TRUE;
 			X.RDB$PACKAGE_NAME.NULL = TRUE;
 
@@ -9909,6 +10343,11 @@ bool get_view(BurpGlobals* tdgbl, burp_rel* relation)
 			{
 				switch (attribute)
 				{
+				case att_view_relation_schema_name:
+					GET_TEXT(X.RDB$RELATION_SCHEMA_NAME);
+					X.RDB$RELATION_SCHEMA_NAME.NULL = FALSE;
+					break;
+
 				case att_view_relation_name:
 					GET_TEXT(X.RDB$RELATION_NAME);
 					break;
@@ -9952,18 +10391,19 @@ bool get_view(BurpGlobals* tdgbl, burp_rel* relation)
 					break;
 				}
 			}
-		END_STORE;
+		}
+		END_STORE
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
+		END_ERROR
 	}
 	else
 	{
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_view_req_handle1)
 			X IN RDB$VIEW_RELATIONS
-
-			strcpy (X.RDB$VIEW_NAME, relation->rel_name);
+		{
+			strcpy(X.RDB$VIEW_NAME, relation->rel_name.object.c_str());
 
 			skip_init(&scan_next_attr);
 			while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
@@ -10007,7 +10447,8 @@ bool get_view(BurpGlobals* tdgbl, burp_rel* relation)
 					break;
 				}
 			}
-		END_STORE;
+		}
+		END_STORE
 		ON_ERROR
 			general_on_error ();
 		END_ERROR;
@@ -10416,6 +10857,7 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 	Firebird::IRequest* req_handle3 = nullptr;
 	Firebird::IRequest* req_handle4 = nullptr;
 	Firebird::IRequest* req_handle5 = nullptr;
+	Firebird::IRequest* reqHandleDflCharSetSchema = nullptr;
 
 	// Collect system fields
 	{
@@ -10425,15 +10867,14 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 		FOR(REQUEST_HANDLE req_handle)
 			X IN RDB$FIELDS WITH
 			X.RDB$SYSTEM_FLAG EQ 1
-
-			const auto len = MISC_symbol_length(X.RDB$FIELD_NAME, sizeof(X.RDB$FIELD_NAME));
-			MetaString name(X.RDB$FIELD_NAME, len);
+		{
+			const QualifiedMetaString name(X.RDB$FIELD_NAME, (X.RDB$SCHEMA_NAME.NULL ? "" : X.RDB$SCHEMA_NAME));
 			tdgbl->systemFields.add(name);
-
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
-		END_ERROR;
+		END_ERROR
 
 		MISC_release_request_silent(req_handle);
 		tdgbl->systemFields.sort();
@@ -10455,6 +10896,7 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 		case att_database_description2:
 			FOR (REQUEST_HANDLE req_handle2)
 				X IN RDB$DATABASE
+			{
 				MODIFY X USING
 					if (attribute == att_database_description2)
 						get_source_blob (tdgbl, X.RDB$DESCRIPTION, false);
@@ -10464,25 +10906,45 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 				ON_ERROR
 					general_on_error ();
 				END_ERROR;
-			END_FOR;
+			}
+			END_FOR
 			ON_ERROR
 				general_on_error ();
-			END_ERROR;
+			END_ERROR
+			break;
+
+		case att_database_dfl_charset_schema_name:
+			FOR (REQUEST_HANDLE reqHandleDflCharSetSchema)
+				X IN RDB$DATABASE
+			{
+				MODIFY X USING
+					GET_TEXT(X.RDB$CHARACTER_SET_SCHEMA_NAME);
+				END_MODIFY
+				ON_ERROR
+					general_on_error ();
+				END_ERROR
+			}
+			END_FOR
+			ON_ERROR
+				general_on_error ();
+			END_ERROR
 			break;
 
 		case att_database_dfl_charset:
 			FOR (REQUEST_HANDLE req_handle3)
 				X IN RDB$DATABASE
+			{
 				MODIFY X USING
 					GET_TEXT(X.RDB$CHARACTER_SET_NAME);
-				END_MODIFY;
+				END_MODIFY
 				ON_ERROR
 					general_on_error ();
-				END_ERROR;
-			END_FOR;
+				END_ERROR
+			}
+			END_FOR
 			ON_ERROR
 				general_on_error ();
-			END_ERROR;
+			END_ERROR
 			break;
 
 		case att_database_linger:
@@ -10492,16 +10954,18 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 				{
 					FOR (REQUEST_HANDLE req_handle4)
 						X IN RDB$DATABASE
+					{
 						MODIFY X USING
 							X.RDB$LINGER = get_int32(tdgbl);
 						END_MODIFY;
 						ON_ERROR
 							general_on_error();
-						END_ERROR;
-					END_FOR;
+						END_ERROR
+					}
+					END_FOR
 					ON_ERROR
 						general_on_error();
-					END_ERROR;
+					END_ERROR
 				}
 				else
 					get_int32(tdgbl);
@@ -10522,16 +10986,18 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 				{
 					FOR (REQUEST_HANDLE req_handle5)
 						X IN RDB$DATABASE
+					{
 						MODIFY X USING
 							X.RDB$SQL_SECURITY = get_boolean(tdgbl, attribute == att_database_sql_security_deprecated);
 						END_MODIFY;
 						ON_ERROR
 							general_on_error();
-						END_ERROR;
-					END_FOR;
+						END_ERROR
+					}
+					END_FOR
 					ON_ERROR
 						general_on_error();
-					END_ERROR;
+					END_ERROR
 				}
 				else
 					get_boolean(tdgbl, attribute == att_database_sql_security_deprecated);
@@ -10591,15 +11057,16 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 
 		FOR (REQUEST_HANDLE req_handle3)
 			X IN RDB$CHARACTER_SETS
-			WITH X.RDB$CHARACTER_SET_NAME EQ name.c_str()
-
+			WITH (X.RDB$SCHEMA_NAME MISSING OR X.RDB$SCHEMA_NAME = SYSTEM_SCHEMA) AND
+				 X.RDB$CHARACTER_SET_NAME EQ name.c_str()
+		{
 			tdgbl->gbl_sw_fix_fss_data_id = X.RDB$CHARACTER_SET_ID;
 			found = true;
-
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
+		END_ERROR
 
 		MISC_release_request_silent(req_handle3);
 
@@ -10617,15 +11084,16 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 
 		FOR (REQUEST_HANDLE req_handle3)
 			X IN RDB$CHARACTER_SETS
-			WITH X.RDB$CHARACTER_SET_NAME EQ name.c_str()
-
+			WITH (X.RDB$SCHEMA_NAME MISSING OR X.RDB$SCHEMA_NAME = SYSTEM_SCHEMA) AND
+				 X.RDB$CHARACTER_SET_NAME EQ name.c_str()
+		{
 			tdgbl->gbl_sw_fix_fss_metadata_id = X.RDB$CHARACTER_SET_ID;
 			found = true;
-
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
+		END_ERROR
 
 		MISC_release_request_silent(req_handle3);
 
@@ -10760,6 +11228,12 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 				return false;
 			break;
 
+		case rec_schema:
+			if (!get_schema(tdgbl))
+				return false;
+			flag = true;
+			break;
+
 		case rec_trigger:  // new trigger type
 			if (!get_trigger(tdgbl))
 				return false;
@@ -10830,31 +11304,37 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 	if (!task.finish())
 		return false;
 
-	if (tdgbl->defaultCollations.getCount() > 0)
+	if (tdgbl->defaultCollations.hasData())
 	{
 		Firebird::IRequest* req_handle5 = nullptr;
 
 		FOR (REQUEST_HANDLE req_handle5)
 			CS IN RDB$CHARACTER_SETS
-
-			for (FB_SIZE_T i = 0; i < tdgbl->defaultCollations.getCount(); ++i)
+		{
+			if (const auto collationName = tdgbl->defaultCollations.get(
+					QualifiedMetaString(CS.RDB$CHARACTER_SET_NAME, CS.RDB$SCHEMA_NAME)))
 			{
-				if (tdgbl->defaultCollations[i].first == CS.RDB$CHARACTER_SET_NAME)
+				MODIFY CS
 				{
-					MODIFY CS;
-						CS.RDB$DEFAULT_COLLATE_NAME.NULL = FALSE;
-						strcpy(CS.RDB$DEFAULT_COLLATE_NAME,
-							tdgbl->defaultCollations[i].second.c_str());
-					END_MODIFY;
-					ON_ERROR
-						general_on_error ();
-					END_ERROR;
+					if (collationName->schema.hasData())
+					{
+						CS.RDB$DEFAULT_COLLATE_SCHEMA_NAME.NULL = FALSE;
+						strcpy(CS.RDB$DEFAULT_COLLATE_SCHEMA_NAME, collationName->schema.c_str());
+					}
+
+					CS.RDB$DEFAULT_COLLATE_NAME.NULL = FALSE;
+					strcpy(CS.RDB$DEFAULT_COLLATE_NAME, collationName->object.c_str());
 				}
+				END_MODIFY
+				ON_ERROR
+					general_on_error ();
+				END_ERROR
 			}
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
+		END_ERROR
 
 		MISC_release_request_silent(req_handle5);
 	}
@@ -10910,6 +11390,7 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 
 	FOR (REQUEST_HANDLE req_handle6)
 		IND IN RDB$INDICES WITH IND.RDB$SYSTEM_FLAG EQ 1
+	{
 		MODIFY IND
 			IND.RDB$STATISTICS.NULL = FALSE;
 			IND.RDB$STATISTICS = -1;
@@ -10917,10 +11398,11 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 		ON_ERROR
 			general_on_error ();
 		END_ERROR;
-	END_FOR;
+	}
+	END_FOR
 	ON_ERROR
 		general_on_error ();
-	END_ERROR;
+	END_ERROR
 
 	MISC_release_request_silent(req_handle6);
 
@@ -10971,7 +11453,7 @@ void restore_security_class(BurpGlobals* tdgbl, const TEXT* owner_nm, const TEXT
 
 
 USHORT get_view_base_relation_count(BurpGlobals* tdgbl,
-									const TEXT* current_view_name,
+									const QualifiedMetaString& current_view_name,
 									USHORT depth,
 									bool* error)
 {
@@ -11004,9 +11486,11 @@ USHORT get_view_base_relation_count(BurpGlobals* tdgbl,
 		V IN RDB$VIEW_RELATIONS
 		CROSS R IN RDB$RELATIONS
 		WITH
-		  V.RDB$VIEW_NAME EQ current_view_name AND
+		  V.RDB$SCHEMA_NAME EQUIV NULLIF(current_view_name.schema.c_str(), '') AND
+		  V.RDB$VIEW_NAME EQ current_view_name.object.c_str() AND
+		  R.RDB$SCHEMA_NAME EQUIV V.RDB$RELATION_SCHEMA_NAME AND
 		  R.RDB$RELATION_NAME EQ V.RDB$RELATION_NAME
-
+	{
 		if (R.RDB$VIEW_BLR.NULL)
 		{
 			// This relation is a table, so increment count
@@ -11015,16 +11499,22 @@ USHORT get_view_base_relation_count(BurpGlobals* tdgbl,
 		else
 		{
 			// Call recursive for VIEWS that are referenced in VIEWS
-			result += get_view_base_relation_count(tdgbl, V.RDB$RELATION_NAME, depth, error);
+			result += get_view_base_relation_count(tdgbl,
+				QualifiedMetaString(
+					V.RDB$RELATION_NAME,
+					(V.RDB$RELATION_SCHEMA_NAME.NULL ? "" : V.RDB$RELATION_SCHEMA_NAME)
+				),
+				depth, error);
+
 			if (*error)
 				break;
 		}
-	END_FOR;
-
+	}
+	END_FOR
 	ON_ERROR
 		MISC_release_request_silent(req_handle1);
 		general_on_error();
-	END_ERROR;
+	END_ERROR
 
 	MISC_release_request_silent(req_handle1);
 
@@ -11032,7 +11522,7 @@ USHORT get_view_base_relation_count(BurpGlobals* tdgbl,
 }
 
 
-void store_blr_gen_id(BurpGlobals* tdgbl, const TEXT* gen_name, SINT64 value, SINT64 initial_value,
+void store_blr_gen_id(BurpGlobals* tdgbl, const QualifiedMetaString& gen_name, SINT64 value, SINT64 initial_value,
 	const ISC_QUAD* gen_desc, const char* secclass, const char* ownername, fb_sysflag sysFlag,
 	SLONG increment)
 {
@@ -11050,8 +11540,16 @@ void store_blr_gen_id(BurpGlobals* tdgbl, const TEXT* gen_name, SINT64 value, SI
 	{
 		STORE (REQUEST_HANDLE tdgbl->handles_store_blr_gen_id_req_handle1)
 			X IN RDB$GENERATORS
+		{
+			X.RDB$SCHEMA_NAME.NULL = TRUE;
 
-			strcpy (X.RDB$GENERATOR_NAME, gen_name);
+			if (gen_name.schema.hasData())
+			{
+				strcpy(X.RDB$SCHEMA_NAME, gen_name.schema.c_str());
+				X.RDB$SCHEMA_NAME.NULL = FALSE;
+			}
+
+			strcpy(X.RDB$GENERATOR_NAME, gen_name.object.c_str());
 			X.RDB$DESCRIPTION.NULL = TRUE;
 			X.RDB$SYSTEM_FLAG = (SSHORT) sysFlag;
 			X.RDB$SECURITY_CLASS.NULL = TRUE;
@@ -11075,10 +11573,11 @@ void store_blr_gen_id(BurpGlobals* tdgbl, const TEXT* gen_name, SINT64 value, SI
 			X.RDB$INITIAL_VALUE.NULL = FALSE;
 			X.RDB$INITIAL_VALUE = initial_value;
 			X.RDB$GENERATOR_INCREMENT = increment;
-		END_STORE;
+		}
+		END_STORE
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
+		END_ERROR
 
 		collect_missing_privs(tdgbl, obj_generator, gen_name, secclass);
 	}
@@ -11086,8 +11585,8 @@ void store_blr_gen_id(BurpGlobals* tdgbl, const TEXT* gen_name, SINT64 value, SI
 	{
 		STORE (REQUEST_HANDLE tdgbl->handles_store_blr_gen_id_req_handle1)
 			X IN RDB$GENERATORS
-
-			strcpy (X.RDB$GENERATOR_NAME, gen_name);
+		{
+			strcpy(X.RDB$GENERATOR_NAME, gen_name.object.c_str());
 			X.RDB$DESCRIPTION.NULL = TRUE;
 			X.RDB$SYSTEM_FLAG = 0;
 			X.RDB$SYSTEM_FLAG.NULL = FALSE;
@@ -11096,28 +11595,30 @@ void store_blr_gen_id(BurpGlobals* tdgbl, const TEXT* gen_name, SINT64 value, SI
 				X.RDB$DESCRIPTION = *gen_desc;
 				X.RDB$DESCRIPTION.NULL = FALSE;
 			}
-		END_STORE;
+		}
+		END_STORE
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
+		END_ERROR
 	}
 	else
 	{
 		STORE (REQUEST_HANDLE tdgbl->handles_store_blr_gen_id_req_handle1)
 			X IN RDB$GENERATORS
-
-			strcpy (X.RDB$GENERATOR_NAME, gen_name);
+		{
+			strcpy(X.RDB$GENERATOR_NAME, gen_name.object.c_str());
 			X.RDB$SYSTEM_FLAG = 0;
 			X.RDB$SYSTEM_FLAG.NULL = FALSE;
-		END_STORE;
+		}
+		END_STORE
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
+		END_ERROR
 	}
 
 	if (!value)
 	{
-		BURP_verbose (185, SafeArg() << gen_name << 0);
+		BURP_verbose (185, SafeArg() << gen_name.toString().c_str() << 0);
 		// msg 185 restoring generator %s value: %ld
 		return;
 	}
@@ -11153,8 +11654,20 @@ void store_blr_gen_id(BurpGlobals* tdgbl, const TEXT* gen_name, SINT64 value, SI
 	}
 	add_byte(blr, blr_begin);
 	add_byte(blr, blr_assignment);
-	add_byte(blr, blr_gen_id);
-	add_string(blr, gen_name);
+
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
+	{
+		add_byte(blr, blr_gen_id3);
+		add_string(blr, gen_name.schema.c_str());
+		add_string(blr, gen_name.object.c_str());
+		add_byte(blr, 1);
+	}
+	else
+	{
+		add_byte(blr, blr_gen_id);
+		add_string(blr, gen_name.object.c_str());
+	}
+
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL10)
 	{
 		add_byte(blr, blr_literal);
@@ -11167,8 +11680,9 @@ void store_blr_gen_id(BurpGlobals* tdgbl, const TEXT* gen_name, SINT64 value, SI
 		add_byte(blr, blr_literal);
 		add_byte(blr, blr_long);
 		add_byte(blr, 0);
-		add_long(blr, (SLONG)value);
+		add_long(blr, (SLONG) value);
 	}
+
 	add_byte(blr, blr_variable);
 	add_word(blr, 0);
 	add_byte(blr, blr_end);
@@ -11194,7 +11708,7 @@ void store_blr_gen_id(BurpGlobals* tdgbl, const TEXT* gen_name, SINT64 value, SI
 		BURP_error_redirect(&status_vector, 42); // msg 42 Failed in store_blr_gen_id
 	}
 
-	BURP_verbose (185, SafeArg() << gen_name << value);
+	BURP_verbose (185, SafeArg() << gen_name.toString().c_str() << value);
 	// msg 185 restoring generator %s value: %ld
 }
 
@@ -11217,9 +11731,12 @@ void update_global_field(BurpGlobals* tdgbl)
 	for (gfld* gfield = tdgbl->gbl_global_fields; gfield; )
 	{
 		FOR (TRANSACTION_HANDLE tdgbl->global_trans REQUEST_HANDLE req_handle1)
-			X IN RDB$FIELDS WITH X.RDB$FIELD_NAME EQ gfield->gfld_name
+			X IN RDB$FIELDS
+			WITH X.RDB$SCHEMA_NAME EQUIV NULLIF(gfield->gfld_name.schema.c_str(), '') AND
+				 X.RDB$FIELD_NAME EQ gfield->gfld_name.object.c_str()
+		{
 			MODIFY X
-
+			{
 				if (gfield->gfld_flags & GFLD_validation_blr)
 				{
 					X.RDB$VALIDATION_BLR.NULL = FALSE;
@@ -11255,16 +11772,16 @@ void update_global_field(BurpGlobals* tdgbl)
 					X.RDB$COMPUTED_SOURCE.NULL = FALSE;
 					memcpy(&X.RDB$COMPUTED_SOURCE, &gfield->gfld_computed_source2, sizeof(ISC_QUAD));
 				}
-
-			END_MODIFY;
+			}
+			END_MODIFY
 			ON_ERROR
 				general_on_error ();
-			END_ERROR;
-
-		END_FOR;
+			END_ERROR
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error ();
-		END_ERROR;
+		END_ERROR
 
 		gfld* n_gfield = gfield->gfld_next;
 		BURP_free (gfield);
@@ -11292,15 +11809,16 @@ void update_ownership(BurpGlobals* tdgbl)
 		{
 			FOR (REQUEST_HANDLE req_handle6)
 				X IN RDB$PACKAGES
-				WITH X.RDB$PACKAGE_NAME EQ package->pkg_name
+				WITH X.RDB$SCHEMA_NAME EQUIV NULLIF(package->pkg_name.schema.c_str(), '') AND
+					 X.RDB$PACKAGE_NAME = package->pkg_name.object.c_str()
 			{
 				MODIFY X
 					strcpy(X.RDB$OWNER_NAME, package->pkg_owner);
-				END_MODIFY;
+				END_MODIFY
 				ON_ERROR
 					MISC_release_request_silent(req_handle6);
 					general_on_error();
-				END_ERROR;
+				END_ERROR
 
 				if (!X.RDB$SECURITY_CLASS.NULL)
 					restore_security_class(tdgbl, package->pkg_owner, X.RDB$SECURITY_CLASS);
@@ -11324,8 +11842,9 @@ void update_ownership(BurpGlobals* tdgbl)
 			{
 				FOR (REQUEST_HANDLE req_handle4)
 					X IN RDB$PROCEDURES
-					WITH X.RDB$PROCEDURE_NAME EQ procedure->prc_name AND
-						 X.RDB$PACKAGE_NAME EQUIV NULLIF(procedure->prc_package, '')
+					WITH X.RDB$SCHEMA_NAME EQUIV NULLIF(procedure->prc_name.schema.c_str(), '') AND
+						 X.RDB$PROCEDURE_NAME EQ procedure->prc_name.object.c_str() AND
+						 X.RDB$PACKAGE_NAME EQUIV NULLIF(procedure->prc_name.package.c_str(), '')
 				{
 					MODIFY X
 						strcpy (X.RDB$OWNER_NAME, procedure->prc_owner);
@@ -11347,7 +11866,7 @@ void update_ownership(BurpGlobals* tdgbl)
 			else
 			{
 				FOR (REQUEST_HANDLE req_handle4)
-					X IN RDB$PROCEDURES WITH X.RDB$PROCEDURE_NAME EQ procedure->prc_name
+					X IN RDB$PROCEDURES WITH X.RDB$PROCEDURE_NAME EQ procedure->prc_name.object.c_str()
 				{
 					MODIFY X
 						strcpy (X.RDB$OWNER_NAME, procedure->prc_owner);
@@ -11377,23 +11896,26 @@ void update_ownership(BurpGlobals* tdgbl)
 		if (relation->rel_owner[0])
 		{
 			FOR (REQUEST_HANDLE req_handle2)
-				X IN RDB$RELATIONS WITH X.RDB$RELATION_NAME EQ relation->rel_name
+				X IN RDB$RELATIONS
+				WITH X.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
+					 X.RDB$RELATION_NAME EQ relation->rel_name.object.c_str()
+			{
 				MODIFY X
 					strcpy (X.RDB$OWNER_NAME, relation->rel_owner);
-				END_MODIFY;
+				END_MODIFY
 				ON_ERROR
 					MISC_release_request_silent(req_handle2);
 					general_on_error ();
-				END_ERROR;
+				END_ERROR
 
 				restore_security_class(tdgbl, relation->rel_owner, X.RDB$SECURITY_CLASS);
 				restore_security_class(tdgbl, relation->rel_owner, X.RDB$DEFAULT_CLASS);
-
-			END_FOR;
+			}
+			END_FOR
 			ON_ERROR
 				MISC_release_request_silent(req_handle2);
 				general_on_error ();
-			END_ERROR;
+			END_ERROR
 		}
 	}
 
@@ -11429,9 +11951,15 @@ void update_view_dbkey_lengths(BurpGlobals* tdgbl)
 		WITH
 		  R.RDB$VIEW_BLR NOT MISSING AND
 		  (R.RDB$SYSTEM_FLAG NE 1 OR R.RDB$SYSTEM_FLAG MISSING)
-
+	{
 		bool error = false;
-		const USHORT result = get_view_base_relation_count(tdgbl, R.RDB$RELATION_NAME, 0, &error);
+		const USHORT result = get_view_base_relation_count(tdgbl,
+			QualifiedMetaString(
+				R.RDB$RELATION_NAME,
+				(R.RDB$SCHEMA_NAME.NULL ? "" : R.RDB$SCHEMA_NAME)
+			),
+			0, &error);
+
 		fb_utils::exact_name(R.RDB$RELATION_NAME);
 		if (error)
 			BURP_error(339, false, SafeArg() << MAX_UPDATE_DBKEY_RECURSION_DEPTH << R.RDB$RELATION_NAME);
@@ -11447,13 +11975,12 @@ void update_view_dbkey_lengths(BurpGlobals* tdgbl)
 			MISC_release_request_silent(req_handle2);
 			general_on_error();
 		END_ERROR;
-
-	END_FOR;
-
+	}
+	END_FOR
 	ON_ERROR
 		MISC_release_request_silent(req_handle2);
 		general_on_error();
-	END_ERROR;
+	END_ERROR
 
 	MISC_release_request_silent(req_handle2);
 }
@@ -11470,14 +11997,14 @@ void fix_missing_privileges(BurpGlobals* tdgbl)
 	FOR (REQUEST_HANDLE req_handle1)
 		REL IN RDB$RELATIONS
 		WITH REL.RDB$RELATION_ID = 1
-
+	{
 		strcpy(owner_name, REL.RDB$OWNER_NAME);
-
-	END_FOR;
+	}
+	END_FOR
 	ON_ERROR
 		MISC_release_request_silent(req_handle1);
 		general_on_error();
-	END_ERROR;
+	END_ERROR
 
 	MISC_release_request_silent(req_handle1);
 
@@ -11492,7 +12019,7 @@ void fix_missing_privileges(BurpGlobals* tdgbl)
 		{
 			STORE (REQUEST_HANDLE req_handle2)
 				X IN RDB$USER_PRIVILEGES
-
+			{
 				X.RDB$FIELD_NAME.NULL = TRUE;
 				X.RDB$GRANTOR.NULL = TRUE;
 
@@ -11502,8 +12029,16 @@ void fix_missing_privileges(BurpGlobals* tdgbl)
 				X.RDB$USER.NULL = FALSE;
 				strcpy(X.RDB$USER, (i == 0) ? "PUBLIC" : owner_name);
 
+				if (object->obj_name.schema.hasData())
+				{
+					X.RDB$RELATION_SCHEMA_NAME.NULL = FALSE;
+					strcpy(X.RDB$RELATION_SCHEMA_NAME, object->obj_name.schema.c_str());
+				}
+				else
+					X.RDB$RELATION_SCHEMA_NAME.NULL = TRUE;
+
 				X.RDB$RELATION_NAME.NULL = FALSE;
-				strcpy(X.RDB$RELATION_NAME, object->obj_name);
+				strcpy(X.RDB$RELATION_NAME, object->obj_name.object.c_str());
 
 				X.RDB$USER_TYPE.NULL = FALSE;
 				X.RDB$USER_TYPE = obj_user;
@@ -11513,12 +12048,12 @@ void fix_missing_privileges(BurpGlobals* tdgbl)
 
 				X.RDB$GRANT_OPTION.NULL = FALSE;
 				X.RDB$GRANT_OPTION = i;
-
-			END_STORE;
+			}
+			END_STORE
 			ON_ERROR
 				MISC_release_request_silent(req_handle2);
 				general_on_error();
-			END_ERROR;
+			END_ERROR
 		}
 	}
 
@@ -11561,7 +12096,7 @@ void fix_generator(BurpGlobals* tdgbl, const FixGenerator* g)
 			   " "
 			   " currentGen = gen_id(%s, 0); "
 			   " IF (currentGen < maxInTable) THEN "
-			   "  EXECUTE STATEMENT 'SET GENERATOR %s TO ' || maxInTable; "
+			   "  EXECUTE STATEMENT 'SET GENERATOR SYSTEM.%s TO ' || maxInTable; "
 			   "END",
 			   /* SELECT 1 */ g->field, start, g->table, g->field, start, g->field, g->prefix,
 			   /* SELECT 2 */ g->name,
@@ -11778,7 +12313,7 @@ IBatch* WriteRelationMeta::createBatch(BurpGlobals* tdgbl, IAttachment* att)
 	if (m_batchOk)
 		return batch;
 
-	BURP_verbose(371, m_relation->rel_name);
+	BURP_verbose(371, m_relation->rel_name.toString().c_str());
 	// msg 371 could not start batch when restoring table @1, trying old way
 
 	//BURP_print_status(false, fbStatus);
@@ -11807,10 +12342,7 @@ bool WriteRelationMeta::prepareBatch(BurpGlobals* tdgbl)
 
 	try
 	{
-		string name(m_relation->rel_name);
-		BURP_makeSymbol(tdgbl, name);
-
-		m_sqlStatement.printf("insert into %s(", name.c_str());
+		m_sqlStatement.printf("insert into %s(", m_relation->rel_name.toString().c_str());
 
 		RefPtr<IMetadataBuilder> builder(REF_NO_INCR,
 			MasterInterfacePtr()->getMetadataBuilder(fbStatus, count));
@@ -11870,9 +12402,7 @@ bool WriteRelationMeta::prepareBatch(BurpGlobals* tdgbl)
 			builder->setScale(&tdgbl->throwStatus, count, sqlScale);
 			builder->setCharSet(&tdgbl->throwStatus, count, characterSetId);
 
-			name = field->fld_name;
-			BURP_makeSymbol(tdgbl, name);
-			m_sqlStatement += name;
+			m_sqlStatement += MetaString(field->fld_name).toQuotedString();
 			m_sqlStatement += ", ";
 
 			field->fld_parameter = count++;
@@ -11952,7 +12482,8 @@ void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 
 	// Time to generate blr to store data.  Whoppee.
 
-	UCHAR* blr = m_blr.getBuffer(200 + length + count * 18);
+	UCHAR* blr = m_blr.getBuffer(200 + m_relation->rel_name.schema.length() + m_relation->rel_name.object.length() +
+		length + count * 18);
 
 	add_byte(blr, blr_version4);
 	add_byte(blr, blr_begin);
@@ -12099,8 +12630,19 @@ void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 	add_byte(blr, 1);
 	add_byte(blr, 0x10);	// must be Jrd::StatementNode::MARK_BULK_INSERT
 
-	add_byte(blr, blr_relation);
-	add_string(blr, m_relation->rel_name);
+	if (m_relation->rel_name.schema.hasData())
+	{
+		add_byte(blr, blr_relation3);
+		add_string(blr, m_relation->rel_name.schema.c_str());
+		add_string(blr, m_relation->rel_name.object.c_str());
+		add_string(blr, "");
+	}
+	else
+	{
+		add_byte(blr, blr_relation);
+		add_string(blr, m_relation->rel_name.object.c_str());
+	}
+
 	add_byte(blr, 0);			// context variable
 	add_byte(blr, blr_begin);
 
@@ -12133,6 +12675,7 @@ void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 	add_byte(blr, blr_end);
 	add_byte(blr, blr_eoc);
 
+	fb_assert(blr < m_blr.end());
 	const FB_SIZE_T blr_length = blr - m_blr.begin();
 	m_blr.shrink(blr_length);
 }
@@ -12287,7 +12830,7 @@ bool RestoreRelationTask::fileReader(Item& item)
 	BurpGlobals* tdgbl = item.m_gbl;
 	fb_assert(tdgbl == m_masterGbl);
 
-	BURP_verbose(124, m_relation->rel_name); // msg 124  restoring data for relation %s
+	BURP_verbose(124, m_relation->rel_name.toString().c_str()); // msg 124  restoring data for relation %s
 
 	const RCRD_LENGTH length = m_metadata.m_inMsgLen;	// full record length
 

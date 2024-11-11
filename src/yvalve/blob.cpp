@@ -142,6 +142,7 @@ void iscBlobLookupDescImpl(Why::YAttachment* attachment, Why::YTransaction* tran
 	) outputMessage(&statusWrapper, MasterInterfacePtr());
 
 	{	// scope
+		// FIXME: schema
 		constexpr auto sql = R"""(
 			select f.rdb$field_sub_type,
 			       f.rdb$segment_length,
@@ -184,6 +185,7 @@ void iscBlobLookupDescImpl(Why::YAttachment* attachment, Why::YTransaction* tran
 
 	if (!flag)
 	{
+		// FIXME: schema
 		constexpr auto sql = R"""(
 			select f.rdb$field_sub_type,
 			       f.rdb$segment_length,

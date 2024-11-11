@@ -178,7 +178,7 @@ ISC_STATUS filter_acl(USHORT action, BlobControl* control)
 	USHORT length;
 	const ISC_STATUS status = caller(isc_blob_filter_get_segment, control, (USHORT) l, temp, &length);
 
-	TEXT line[BUFFER_SMALL];
+	TEXT line[BUFFER_LARGE];
 
 	if (!status)
 	{
@@ -198,10 +198,27 @@ ISC_STATUS filter_acl(USHORT action, BlobControl* control)
 				while ((c = *p++) != 0)
 				{
 					all_wild = false;
-					sprintf(out, "%s%.*s, ", acl_ids[c], *p, p + 1);
+					sprintf(out, "%s%.*s", acl_ids[c], *p, p + 1);
 					p += *p + 1;
 					while (*out)
 						++out;
+
+					switch (c)
+					{
+						case id_view:
+						case id_package:
+						case id_procedure:
+						case id_trigger:
+						case id_function:
+							sprintf(out, ".%.*s", *p, p + 1);
+							p += *p + 1;
+							while (*out)
+								++out;
+							break;
+					}
+
+					*out++ = ',';
+					*out++ = ' ';
 				}
 				if (all_wild)
 				{

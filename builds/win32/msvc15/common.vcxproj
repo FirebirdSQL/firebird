@@ -144,7 +144,7 @@
     <ClInclude Include="..\..\..\src\common\classes\NoThrowTimeStamp.h" />
     <ClInclude Include="..\..\..\src\common\classes\objects_array.h" />
     <ClInclude Include="..\..\..\src\common\classes\ParsedList.h" />
-    <ClInclude Include="..\..\..\src\common\classes\QualifiedName.h" />
+    <ClInclude Include="..\..\..\src\common\classes\QualifiedMetaString.h" />
     <ClInclude Include="..\..\..\src\common\classes\RefCounted.h" />
     <ClInclude Include="..\..\..\src\common\classes\RefMutex.h" />
     <ClInclude Include="..\..\..\src\common\classes\rwlock.h" />

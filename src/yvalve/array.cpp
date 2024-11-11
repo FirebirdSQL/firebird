@@ -153,6 +153,7 @@ void iscArrayLookupBoundsImpl(Why::YAttachment* attachment,
 
 	ISC_ARRAY_BOUND* tail = desc->array_desc_bounds;
 
+	// FIXME: schema
 	constexpr auto sql = R"""(
 		select fd.rdb$lower_bound,
 		       fd.rdb$upper_bound
@@ -202,6 +203,7 @@ void iscArrayLookupDescImpl(Why::YAttachment* attachment,
 
 	desc->array_desc_flags = 0;
 
+	// FIXME: schema
 	constexpr auto sql = R"""(
 		select f.rdb$field_name,
 		       f.rdb$field_type,

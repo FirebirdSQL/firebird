@@ -105,13 +105,23 @@ SqlPackage::ExplainResultSet::ExplainResultSet(ThrowStatusExceptionWrapper* stat
 		if (planEntry->objectType.has_value())
 			resultEntry.objectType = planEntry->objectType.value();
 
-		resultEntry.packageNameNull = planEntry->packageName.hasData() ? FB_FALSE : FB_TRUE;
-		if (planEntry->packageName.hasData())
-			resultEntry.packageName.set(planEntry->packageName.c_str(), planEntry->packageName.length());
+		resultEntry.schemaNameNull = planEntry->objectName.schema.hasData() ? FB_FALSE : FB_TRUE;
+		if (planEntry->objectName.schema.hasData())
+		{
+			resultEntry.schemaName.set(planEntry->objectName.schema.c_str(),
+				planEntry->objectName.schema.length());
+		}
 
-		resultEntry.objectNameNull = planEntry->objectName.hasData() ? FB_FALSE : FB_TRUE;
-		if (planEntry->objectName.hasData())
-			resultEntry.objectName.set(planEntry->objectName.c_str(), planEntry->objectName.length());
+		resultEntry.packageNameNull = planEntry->objectName.package.hasData() ? FB_FALSE : FB_TRUE;
+		if (planEntry->objectName.package.hasData())
+		{
+			resultEntry.packageName.set(planEntry->objectName.package.c_str(),
+				planEntry->objectName.package.length());
+		}
+
+		resultEntry.objectNameNull = planEntry->objectName.object.hasData() ? FB_FALSE : FB_TRUE;
+		if (planEntry->objectName.object.hasData())
+			resultEntry.objectName.set(planEntry->objectName.object.c_str(), planEntry->objectName.object.length());
 
 		resultEntry.aliasNull = planEntry->alias.hasData() ? FB_FALSE : FB_TRUE;
 		if (planEntry->alias.hasData())

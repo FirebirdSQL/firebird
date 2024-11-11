@@ -816,7 +816,7 @@ void SQL_par_field_dtype(gpre_req* request, gpre_fld* field, bool is_udf)
 
 	if (field->fld_flags & FLD_national)
 	{
-        gpre_sym* symbol = MSC_find_symbol(HSH_lookup(DEFAULT_CHARACTER_SET_NAME), SYM_charset);
+        gpre_sym* symbol = MSC_find_symbol(HSH_lookup(NATIONAL_CHARACTER_SET), SYM_charset);
 		if (!symbol)
 		{
 			PAR_error("NATIONAL character set missing");

@@ -125,8 +125,7 @@ namespace Jrd
 		Firebird::ObjectsArray<Line> lines{getPool()};
 		Firebird::ObjectsArray<PlanEntry> children{getPool()};
 		std::optional<ObjectType> objectType;
-		MetaName packageName;
-		MetaName objectName;
+		QualifiedName objectName;
 		MetaName alias;
 		const AccessPath* accessPath = nullptr;
 		ULONG recordLength = 0;
@@ -179,7 +178,7 @@ namespace Jrd
 		RecordSource(CompilerScratch* csb);
 
 		static Firebird::string printName(thread_db* tdbb, const Firebird::string& name, bool quote = true);
-		static Firebird::string printName(thread_db* tdbb, const Firebird::string& name,
+		static Firebird::string printName(thread_db* tdbb, const Jrd::QualifiedName& name,
 										  const Firebird::string& alias);
 
 		static void printInversion(thread_db* tdbb, const InversionNode* inversion,

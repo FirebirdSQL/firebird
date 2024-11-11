@@ -123,7 +123,7 @@ Lock* RLCK_reserve_relation(thread_db* tdbb, jrd_tra* transaction, jrd_rel* rela
 	if (!result)
 	{
 		string err;
-		err.printf("Acquire lock for relation (%s) failed", relation->rel_name.c_str());
+		err.printf("Acquire lock for relation (%s) failed", relation->rel_name.toString().c_str());
 
 		ERR_append_status(tdbb->tdbb_status_vector, Arg::Gds(isc_random) << Arg::Str(err));
 		ERR_punt();

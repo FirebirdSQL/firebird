@@ -1132,6 +1132,9 @@ interface RoutineMetadata : Versioned
 	MessageMetadata getTriggerMetadata(Status status) const;
 	const string getTriggerTable(Status status) const;
 	uint getTriggerType(Status status) const;
+
+version:	// 5.0 => 6.0 Alpha1
+	const string getSchema(Status status) const;
 }
 
 
@@ -1752,6 +1755,15 @@ interface ReplicatedTransaction : Disposable
 
 	void executeSql(Status status, const string sql);
 	void executeSqlIntl(Status status, uint charset, const string sql);
+
+version:	// 5.0 => 6.0 Alpha1
+	// ReplicatedRecords parameters point to local objects, do not ever store the pointer.
+	void insertRecord2(Status status, const string schemaName, const string tableName,
+		ReplicatedRecord record);
+	void updateRecord2(Status status, const string schemaName, const string tableName,
+		ReplicatedRecord orgRecord, ReplicatedRecord newRecord);
+	void deleteRecord2(Status status, const string schemaName, const string tableName,
+		ReplicatedRecord record);
 }
 
 interface ReplicatedSession : PluginBase
@@ -1789,7 +1801,7 @@ interface ProfilerSession : Disposable
 
 	void finish(Status status, ISC_TIMESTAMP_TZ timestamp);
 
-	void defineStatement(Status status, int64 statementId, int64 parentStatementId,
+	void deprecatedDefineStatement(Status status, int64 statementId, int64 parentStatementId,
 		const string type, const string packageName, const string routineName, const string sqlText);
 
 	void defineCursor(int64 statementId, uint cursorId, const string name, uint line, uint column);
@@ -1813,6 +1825,13 @@ interface ProfilerSession : Disposable
 	void beforeRecordSourceGetRecord(int64 statementId, int64 requestId, uint cursorId, uint recSourceId);
 	void afterRecordSourceGetRecord(int64 statementId, int64 requestId, uint cursorId, uint recSourceId,
 		ProfilerStats stats);
+
+version:	// 5.0 => 6.0 Alpha1
+	[notImplementedAction call deprecatedDefineStatement(status, statementId, parentStatementId,
+		type, packageName, routineName, sqlText)]
+	void defineStatement2(Status status, int64 statementId, int64 parentStatementId,
+		const string type, const string schemaName, const string packageName, const string routineName,
+		const string sqlText);
 }
 
 interface ProfilerStats : Versioned

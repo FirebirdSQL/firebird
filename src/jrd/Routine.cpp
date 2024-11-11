@@ -172,7 +172,7 @@ void Routine::parseBlr(thread_db* tdbb, CompilerScratch* csb, bid* blob_id, bid*
 	flags &= ~Routine::FLAG_RELOAD;
 
 	Statement* statement = getStatement();
-	PAR_blr(tdbb, NULL, tmp.begin(), (ULONG) tmp.getCount(), NULL, &csb, &statement, false, 0);
+	PAR_blr(tdbb, &name.schema, NULL, tmp.begin(), (ULONG) tmp.getCount(), NULL, &csb, &statement, false, 0);
 	setStatement(statement);
 
 	if (csb->csb_g_flags & csb_reload)
@@ -188,23 +188,10 @@ void Routine::parseMessages(thread_db* tdbb, CompilerScratch* csb, BlrReader blr
 	if (blrReader.getLength() < 2)
 		status_exception::raise(Arg::Gds(isc_metadata_corrupt));
 
+	csb->csb_schema = name.schema;
 	csb->csb_blr_reader = blrReader;
 
-	const SSHORT version = csb->csb_blr_reader.getByte();
-
-	switch (version)
-	{
-		case blr_version4:
-		case blr_version5:
-		//case blr_version6:
-			break;
-
-		default:
-			status_exception::raise(
-				Arg::Gds(isc_metadata_corrupt) <<
-				Arg::Gds(isc_wroblrver2) << Arg::Num(blr_version4) << Arg::Num(blr_version5/*6*/) <<
-					Arg::Num(version));
-	}
+	csb->csb_blr_reader.parseHeader();
 
 	if (csb->csb_blr_reader.getByte() != blr_begin)
 		status_exception::raise(Arg::Gds(isc_metadata_corrupt));
@@ -364,8 +351,8 @@ void Routine::remove(thread_db* tdbb)
 	{
 		// Fully clear routine block. Some pieces of code check for empty
 		// routine name, this is why we do it.
-		setName(QualifiedName());
-		setSecurityName("");
+		setName({});
+		setSecurityName({});
 		setDefaultCount(0);
 		releaseExternal();
 		flags |= FLAG_CLEARED;

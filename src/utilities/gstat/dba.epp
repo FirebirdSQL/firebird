@@ -811,6 +811,8 @@ int gstat(Firebird::UtilSvc* uSvc)
 	if (*role)
 		dpb.insertString(isc_dpb_sql_role_name, role, fb_strlen(role));
 
+	dpb.insertString(isc_dpb_schema_path, SYSTEM_SCHEMA, fb_strlen(SYSTEM_SCHEMA));
+
 	isc_attach_database(status_vector, 0, connName.c_str(), &DB, dpb.getBufferLength(),
 						reinterpret_cast<const char*>(dpb.getBuffer()));
 	if (status_vector[1])

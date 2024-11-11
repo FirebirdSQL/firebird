@@ -45,29 +45,30 @@ namespace Jrd {
 	class FieldNode;
 };
 
-void METD_drop_charset(Jrd::jrd_tra*, const Jrd::MetaName&);
-void METD_drop_collation(Jrd::jrd_tra*, const Jrd::MetaName&);
+void METD_drop_charset(Jrd::jrd_tra*, const Jrd::QualifiedName&);
+void METD_drop_collation(Jrd::jrd_tra*, const Jrd::QualifiedName&);
 void METD_drop_function(Jrd::jrd_tra*, const Jrd::QualifiedName&);
 void METD_drop_procedure(Jrd::jrd_tra*, const Jrd::QualifiedName&);
-void METD_drop_relation(Jrd::jrd_tra*, const Jrd::MetaName&);
+void METD_drop_relation(Jrd::jrd_tra*, const Jrd::QualifiedName&);
 
-Jrd::dsql_intlsym* METD_get_charset(Jrd::jrd_tra*, USHORT, const char* name);
+Jrd::dsql_intlsym* METD_get_charset(Jrd::jrd_tra*, const Jrd::QualifiedName& name);
 USHORT METD_get_charset_bpc(Jrd::jrd_tra*, SSHORT);
-Jrd::MetaName METD_get_charset_name(Jrd::jrd_tra*, SSHORT);
-Jrd::dsql_intlsym* METD_get_collation(Jrd::jrd_tra*, const Jrd::MetaName&, USHORT charset_id);
-Jrd::MetaName METD_get_default_charset(Jrd::jrd_tra*);
-bool METD_get_domain(Jrd::jrd_tra*, class Jrd::TypeClause*, const Jrd::MetaName& name);
+Jrd::QualifiedName METD_get_charset_name(Jrd::jrd_tra*, SSHORT);
+Jrd::dsql_intlsym* METD_get_collation(Jrd::jrd_tra*, const Jrd::QualifiedName&, USHORT charset_id);
+Jrd::QualifiedName METD_get_database_charset(Jrd::jrd_tra*);
+Jrd::QualifiedName METD_get_schema_charset(Jrd::jrd_tra*, const Jrd::MetaName&);
+bool METD_get_domain(Jrd::jrd_tra*, class Jrd::TypeClause*, const Jrd::QualifiedName& name);
 Jrd::dsql_udf* METD_get_function(Jrd::jrd_tra*, Jrd::DsqlCompilerScratch*,
 	const Jrd::QualifiedName&);
-void METD_get_primary_key(Jrd::jrd_tra*, const Jrd::MetaName&,
-	Firebird::Array<NestConst<Jrd::FieldNode> >&);
+void METD_get_primary_key(Jrd::jrd_tra*, const Jrd::QualifiedName&,
+	Firebird::Array<NestConst<Jrd::FieldNode>>&);
 Jrd::dsql_prc* METD_get_procedure(Jrd::jrd_tra*, Jrd::DsqlCompilerScratch*,
 	const Jrd::QualifiedName&);
-Jrd::dsql_rel* METD_get_relation(Jrd::jrd_tra*, Jrd::DsqlCompilerScratch*, const Jrd::MetaName&);
+Jrd::dsql_rel* METD_get_relation(Jrd::jrd_tra*, Jrd::DsqlCompilerScratch*, const Jrd::QualifiedName&);
 bool METD_get_type(Jrd::jrd_tra*, const Jrd::MetaName&, const char*, SSHORT*);
-Jrd::dsql_rel* METD_get_view_base(Jrd::jrd_tra*, Jrd::DsqlCompilerScratch*, const char* view_name,
+Jrd::dsql_rel* METD_get_view_base(Jrd::jrd_tra*, Jrd::DsqlCompilerScratch*, const Jrd::QualifiedName& viewName,
 	Jrd::MetaNamePairMap& fields);
-bool METD_get_view_relation(Jrd::jrd_tra*, Jrd::DsqlCompilerScratch*, const Jrd::MetaName& view_name,
-	const Jrd::MetaName& relation_or_alias, Jrd::dsql_rel*& relation, Jrd::dsql_prc*& procedure);
+bool METD_get_view_relation(Jrd::jrd_tra*, Jrd::DsqlCompilerScratch*, const Jrd::QualifiedName& view_name,
+	const Jrd::QualifiedName& relation_or_alias, Jrd::dsql_rel*& relation, Jrd::dsql_prc*& procedure);
 
 #endif // DSQL_METD_PROTO_H

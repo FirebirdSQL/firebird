@@ -139,15 +139,15 @@ bool RecordSource::getRecord(thread_db* tdbb) const
 string RecordSource::printName(thread_db* tdbb, const string& name, bool quote)
 {
 	const string result(name.c_str(), name.length());
-	return quote ? "\"" + result + "\"" : result;
+	return quote ? "\"" + result + "\"" : result;	// FIXME:
 }
 
-string RecordSource::printName(thread_db* tdbb, const string& name, const string& alias)
+string RecordSource::printName(thread_db* tdbb, const QualifiedName& name, const string& alias)
 {
-	if (name == alias || alias.isEmpty())
-		return printName(tdbb, name, true);
+	if (name.object == alias || alias.isEmpty())
+		return printName(tdbb, name.toString(), true);	// FIXME:
 
-	const string arg1 = printName(tdbb, name, true);
+	const string arg1 = printName(tdbb, name.toString(), true);
 	const string arg2 = printName(tdbb, alias, true);
 
 	string result;
@@ -187,11 +187,11 @@ void RecordSource::printInversion(thread_db* tdbb, const InversionNode* inversio
 		{
 			const IndexRetrieval* const retrieval = inversion->retrieval;
 
-			MetaName indexName;
-			if (retrieval->irb_name && retrieval->irb_name->hasData())
+			QualifiedName indexName;
+			if (retrieval->irb_name && retrieval->irb_name->object.hasData())
 				indexName = *retrieval->irb_name;
 			else
-				indexName.printf("<index id %d>", retrieval->irb_index + 1);
+				indexName.object.printf("<index id %d>", retrieval->irb_index + 1);
 
 			if (detailed)
 			{
@@ -246,11 +246,11 @@ void RecordSource::printInversion(thread_db* tdbb, const InversionNode* inversio
 					}
 				}
 
-				plan->text = "Index " + printName(tdbb, indexName.c_str()) +
+				plan->text = "Index " + printName(tdbb, indexName.toString()) +
 					(fullscan ? " Full" : unique ? " Unique" : list ? " List" : " Range") + " Scan" + bounds;
 			}
 			else
-				plan->text = printName(tdbb, indexName.c_str(), false);
+				plan->text = printName(tdbb, indexName.toString(), false);
 		}
 		break;
 

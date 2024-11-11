@@ -96,6 +96,7 @@ public:
 		  mainScratch(aMainScratch),
 		  outerMessagesMap(p),
 		  outerVarsMap(p),
+		  ddlSchema(p),
 		  ctes(p),
 		  cteAliases(p),
 		  subFunctions(p),
@@ -151,16 +152,44 @@ public:
 		dsqlStatement = aDsqlStatement;
 	}
 
+	void qualifyNewName(QualifiedName& name) const
+	{
+		using namespace Firebird;
+
+		thread_db* tdbb = JRD_get_thread_data();
+
+		if (!dbb->dbb_attachment->qualifyNewName(tdbb, name))
+			status_exception::raise(Arg::Gds(isc_dyn_schema_not_found) << name.schema.toQuotedString());
+	}
+
+	void qualifyExistingName(QualifiedName& name, ObjectType objectType) const
+	{
+		if (!(name.schema.isEmpty() && name.object.hasData()))
+			return;
+
+		const auto tdbb = JRD_get_thread_data();
+		const auto attachment = tdbb->getAttachment();
+
+		if (ddlSchema.hasData())
+		{
+			Firebird::ObjectsArray<Firebird::MetaString> schemaSearchPath({ddlSchema, SYSTEM_SCHEMA});
+			attachment->qualifyExistingName(tdbb, name, objectType, &schemaSearchPath);
+		}
+		else
+			attachment->qualifyExistingName(tdbb, name, objectType);
+	}
+
 	void putBlrMarkers(ULONG marks);
 	void putDtype(const TypeClause* field, bool useSubType);
 	void putType(const TypeClause* type, bool useSubType);
-	void putLocalVariableDecl(dsql_var* variable, DeclareVariableNode* hostParam, const MetaName& collationName);
+	void putLocalVariableDecl(dsql_var* variable, DeclareVariableNode* hostParam, QualifiedName& collationName);
 	void putLocalVariableInit(dsql_var* variable, const DeclareVariableNode* hostParam);
 
-	void putLocalVariable(dsql_var* variable, DeclareVariableNode* hostParam, const MetaName& collationName)
+	void putLocalVariable(dsql_var* variable)
 	{
-		putLocalVariableDecl(variable, hostParam, collationName);
-		putLocalVariableInit(variable, hostParam);
+		QualifiedName dummyCollationName;
+		putLocalVariableDecl(variable, nullptr, dummyCollationName);
+		putLocalVariableInit(variable, nullptr);
 	}
 
 	void putOuterMaps();
@@ -301,8 +330,8 @@ public:
 	USHORT errorHandlers = 0;				// count of active error handlers
 	USHORT clientDialect = 0;				// dialect passed into the API call
 	USHORT inOuterJoin = 0;					// processing inside outer-join part
-	Firebird::string aliasRelationPrefix;	// prefix for every relation-alias.
-	MetaName package;						// package being defined
+	Firebird::ObjectsArray<QualifiedName> aliasRelationPrefix;	// prefix for every relation-alias.
+	QualifiedName package;				// package being defined
 	Firebird::Stack<SelectExprNode*> currCtes;	// current processing CTE's
 	dsql_ctx* recursiveCtx = nullptr;		// context of recursive CTE
 	USHORT recursiveCtxId = 0;				// id of recursive union stream context
@@ -317,6 +346,7 @@ public:
 	DsqlCompilerScratch* mainScratch = nullptr;
 	Firebird::NonPooledMap<USHORT, USHORT> outerMessagesMap;	// <outer, inner>
 	Firebird::NonPooledMap<USHORT, USHORT> outerVarsMap;		// <outer, inner>
+	MetaName ddlSchema;
 
 private:
 	Firebird::HalfStaticArray<SelectExprNode*, 4> ctes; // common table expressions

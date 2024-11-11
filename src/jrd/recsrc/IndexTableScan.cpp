@@ -380,7 +380,8 @@ void IndexTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsi
 {
 	planEntry.className = "IndexTableScan";
 
-	planEntry.lines.add().text = "Table " + printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Access By ID";
+	planEntry.lines.add().text = "Table " + printName(tdbb, m_relation->rel_name, m_alias) +
+		" Access By ID";
 	printOptInfo(planEntry.lines);
 
 	printInversion(tdbb, m_index, planEntry.lines, true, 1, true);
@@ -388,7 +389,7 @@ void IndexTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsi
 	planEntry.objectType = m_relation->getObjectType();
 	planEntry.objectName = m_relation->rel_name;
 
-	if (m_alias.hasData() && m_relation->rel_name != m_alias)
+	if (m_alias.hasData() && m_relation->rel_name.object != m_alias)
 		planEntry.alias = m_alias;
 
 	if (m_inversion)

@@ -2194,8 +2194,6 @@ static void expand_view_lock(thread_db* tdbb, jrd_tra* transaction, jrd_rel* rel
 				 Arg::Gds(isc_tpb_reserv_max_recursion) << Arg::Num(30));
 	}
 
-	const char* const relation_name = relation->rel_name.c_str();
-
 	// LCK_none < LCK_SR < LCK_PR < LCK_SW < LCK_EX
 	UCHAR oldlock;
 	const bool found = lockmap.get(relation->rel_id, oldlock);
@@ -2208,14 +2206,14 @@ static void expand_view_lock(thread_db* tdbb, jrd_tra* transaction, jrd_rel* rel
 		if (level)
 		{
 			lock_type = oldlock; // Preserve the old, more powerful lock.
-			ERR_post_warning(Arg::Warning(isc_tpb_reserv_stronger_wng) << Arg::Str(relation_name) <<
+			ERR_post_warning(Arg::Warning(isc_tpb_reserv_stronger_wng) << relation->rel_name.toString() <<
 																		  Arg::Str(oldname) <<
 																		  Arg::Str(newname));
 		}
 		else
 		{
 			ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-					 Arg::Gds(isc_tpb_reserv_stronger) << Arg::Str(relation_name) <<
+					 Arg::Gds(isc_tpb_reserv_stronger) << relation->rel_name.toString() <<
 														  Arg::Str(oldname) <<
 														  Arg::Str(newname));
 		}
@@ -2228,14 +2226,14 @@ static void expand_view_lock(thread_db* tdbb, jrd_tra* transaction, jrd_rel* rel
 		if (relation->isVirtual())
 		{
 			ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-					 Arg::Gds(isc_tpb_reserv_virtualtbl) << Arg::Str(relation_name));
+					 Arg::Gds(isc_tpb_reserv_virtualtbl) << relation->rel_name.toString());
 		}
 
 		// Reject explicit attempts to take locks on system tables.
 		if (relation->isSystem())
 		{
 			ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-		    		 Arg::Gds(isc_tpb_reserv_systbl) << Arg::Str(relation_name));
+		    		 Arg::Gds(isc_tpb_reserv_systbl) << relation->rel_name.toString());
 		}
 
 		if (relation->isTemporary() && (lock_type == LCK_PR || lock_type == LCK_EX))
@@ -2243,7 +2241,7 @@ static void expand_view_lock(thread_db* tdbb, jrd_tra* transaction, jrd_rel* rel
 			ERR_post(Arg::Gds(isc_bad_tpb_content) <<
 					 Arg::Gds(isc_tpb_reserv_temptbl) << Arg::Str(get_lockname_v3(LCK_PR)) <<
 					 									 Arg::Str(get_lockname_v3(LCK_EX)) <<
-														 Arg::Str(relation_name));
+														 relation->rel_name.toString());
 		}
 	}
 	else
@@ -2287,8 +2285,8 @@ static void expand_view_lock(thread_db* tdbb, jrd_tra* transaction, jrd_rel* rel
 		{
 			// should be a BUGCHECK
 			ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-					 Arg::Gds(isc_tpb_reserv_baserelnotfound) << Arg::Str(ctx[i]->vcx_relation_name) <<
-																 Arg::Str(relation_name) <<
+					 Arg::Gds(isc_tpb_reserv_baserelnotfound) << ctx[i]->vcx_relation_name.toString() <<
+																 relation->rel_name.toString() <<
 																 Arg::Str(option_name));
 		}
 
@@ -3213,14 +3211,14 @@ static void transaction_options(thread_db* tdbb,
 				}
 
 				const MetaName orgName(reinterpret_cast<const char*>(tpb), len);
-				const MetaName metaName = attachment->nameToMetaCharSet(tdbb, orgName);
+				const QualifiedName relationName(attachment->nameToMetaCharSet(tdbb, orgName));
 
 				tpb += len;
-				jrd_rel* relation = MET_lookup_relation(tdbb, metaName);
+				jrd_rel* relation = MET_lookup_relation(tdbb, relationName);
 				if (!relation)
 				{
 					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-							 Arg::Gds(isc_tpb_reserv_relnotfound) << Arg::Str(metaName) <<
+							 Arg::Gds(isc_tpb_reserv_relnotfound) << relationName.toString() <<
 																	 Arg::Str(option_name));
 				}
 
@@ -4088,16 +4086,16 @@ void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id, jrd_fld* fld, bool 
 		if ((rel_id < vector->count() && (blb_relation = (*vector)[rel_id])) ||
 			(blb_relation = MET_relation(tdbb, rel_id)))
 		{
-			MetaName security_name = (fld && fld->fld_security_name.hasData()) ?
-				fld->fld_security_name : blb_relation->rel_security_name;
+			auto security_name = (fld && fld->fld_security_name.hasData()) ?
+				fld->fld_security_name : blb_relation->rel_security_name.object;
 
 			if (security_name.isEmpty())
 			{
 				MET_scan_relation(tdbb, blb_relation);
-				security_name = blb_relation->rel_security_name;
+				security_name = blb_relation->rel_security_name.object;
 			}
 
-			SecurityClass* s_class = SCL_get_class(tdbb, security_name.c_str());
+			SecurityClass* s_class = SCL_get_class(tdbb, security_name);
 
 			if (!s_class)
 				return;
@@ -4110,14 +4108,16 @@ void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id, jrd_fld* fld, bool 
 				{
 					ThreadStatusGuard status_vector(tdbb);
 
+					SCL_check_schema(tdbb, blb_relation->rel_name.schema, SCL_usage);
+
 					if (fld)
 					{
-						SCL_check_access(tdbb, s_class, 0, 0, SCL_select, obj_column,
-							false, fld->fld_name, blb_relation->rel_name);
+						SCL_check_access(tdbb, s_class, 0, {}, SCL_select, obj_column,
+							false, blb_relation->rel_name, fld->fld_name);
 					}
 					else
 					{
-						SCL_check_access(tdbb, s_class, 0, 0, SCL_select, obj_relations,
+						SCL_check_access(tdbb, s_class, 0, {}, SCL_select, obj_relations,
 							false, blb_relation->rel_name);
 					}
 
@@ -4148,7 +4148,7 @@ void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id, jrd_fld* fld, bool 
 				{
 					ERR_post(Arg::Gds(isc_no_priv) << Arg::Str("SELECT") <<
 						(fld ? Arg::Str("COLUMN") : Arg::Str("TABLE")) <<
-						(fld ? Arg::Str(fld->fld_name) : Arg::Str(blb_relation->rel_name)));
+						(Arg::Str(fld ? fld->fld_name.c_str() : blb_relation->rel_name.toString().c_str())));
 				}
 				else
 					tra_fetched_blobs.add(*blob_id);
@@ -4214,7 +4214,7 @@ void TraceSweepEvent::beginSweepRelation(jrd_rel* relation)
 	if (!m_need_trace)
 		return;
 
-	if (relation && relation->rel_name.isEmpty())
+	if (relation && relation->rel_name.object.isEmpty())
 	{
 		// don't accumulate per-relation stats for metadata query below
 		MET_lookup_relation_id(m_tdbb, relation->rel_id, false);

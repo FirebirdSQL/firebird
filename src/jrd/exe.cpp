@@ -121,7 +121,7 @@ using namespace Firebird;
 string Item::getDescription(Request* request, const ItemInfo* itemInfo) const
 {
 	if (itemInfo && itemInfo->name.hasData())
-		return itemInfo->name.c_str();
+		return itemInfo->name.toQuotedString();
 
 	int oneBasedIndex = index + 1;
 	string s;
@@ -1502,10 +1502,10 @@ bool EXE_get_stack_trace(const Request* request, string& sTrace)
 
 		string context, name;
 
-		if (statement->triggerName.length())
+		if (statement->triggerName.object.length())
 		{
 			context = "At trigger";
-			name = statement->triggerName.c_str();
+			name = statement->triggerName.toString();
 		}
 		else if (statement->procedure)
 		{
@@ -1527,7 +1527,7 @@ bool EXE_get_stack_trace(const Request* request, string& sTrace)
 			name.trim();
 
 			if (name.hasData())
-				context += string(" '") + name + string("'");
+				context += string(" ") + name;
 
 			if (sTrace.length() + context.length() > MAX_STACK_TRACE)
 				break;

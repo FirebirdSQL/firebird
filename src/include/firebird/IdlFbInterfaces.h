@@ -4376,7 +4376,7 @@ namespace Firebird
 		}
 	};
 
-#define FIREBIRD_IROUTINE_METADATA_VERSION 2u
+#define FIREBIRD_IROUTINE_METADATA_VERSION 3u
 
 	class IRoutineMetadata : public IVersioned
 	{
@@ -4392,6 +4392,7 @@ namespace Firebird
 			IMessageMetadata* (CLOOP_CARG *getTriggerMetadata)(const IRoutineMetadata* self, IStatus* status) CLOOP_NOEXCEPT;
 			const char* (CLOOP_CARG *getTriggerTable)(const IRoutineMetadata* self, IStatus* status) CLOOP_NOEXCEPT;
 			unsigned (CLOOP_CARG *getTriggerType)(const IRoutineMetadata* self, IStatus* status) CLOOP_NOEXCEPT;
+			const char* (CLOOP_CARG *getSchema)(const IRoutineMetadata* self, IStatus* status) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -4475,6 +4476,20 @@ namespace Firebird
 		{
 			StatusType::clearException(status);
 			unsigned ret = static_cast<VTable*>(this->cloopVTable)->getTriggerType(this, status);
+			StatusType::checkException(status);
+			return ret;
+		}
+
+		template <typename StatusType> const char* getSchema(StatusType* status) const
+		{
+			if (cloopVTable->version < 3)
+			{
+				StatusType::setVersionError(status, "IRoutineMetadata", cloopVTable->version, 3);
+				StatusType::checkException(status);
+				return 0;
+			}
+			StatusType::clearException(status);
+			const char* ret = static_cast<VTable*>(this->cloopVTable)->getSchema(this, status);
 			StatusType::checkException(status);
 			return ret;
 		}
@@ -6890,7 +6905,7 @@ namespace Firebird
 		}
 	};
 
-#define FIREBIRD_IREPLICATED_TRANSACTION_VERSION 3u
+#define FIREBIRD_IREPLICATED_TRANSACTION_VERSION 4u
 
 	class IReplicatedTransaction : public IDisposable
 	{
@@ -6908,6 +6923,9 @@ namespace Firebird
 			void (CLOOP_CARG *deleteRecord)(IReplicatedTransaction* self, IStatus* status, const char* name, IReplicatedRecord* record) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *executeSql)(IReplicatedTransaction* self, IStatus* status, const char* sql) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *executeSqlIntl)(IReplicatedTransaction* self, IStatus* status, unsigned charset, const char* sql) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *insertRecord2)(IReplicatedTransaction* self, IStatus* status, const char* schemaName, const char* tableName, IReplicatedRecord* record) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *updateRecord2)(IReplicatedTransaction* self, IStatus* status, const char* schemaName, const char* tableName, IReplicatedRecord* orgRecord, IReplicatedRecord* newRecord) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *deleteRecord2)(IReplicatedTransaction* self, IStatus* status, const char* schemaName, const char* tableName, IReplicatedRecord* record) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -6997,6 +7015,45 @@ namespace Firebird
 		{
 			StatusType::clearException(status);
 			static_cast<VTable*>(this->cloopVTable)->executeSqlIntl(this, status, charset, sql);
+			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> void insertRecord2(StatusType* status, const char* schemaName, const char* tableName, IReplicatedRecord* record)
+		{
+			if (cloopVTable->version < 4)
+			{
+				StatusType::setVersionError(status, "IReplicatedTransaction", cloopVTable->version, 4);
+				StatusType::checkException(status);
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->insertRecord2(this, status, schemaName, tableName, record);
+			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> void updateRecord2(StatusType* status, const char* schemaName, const char* tableName, IReplicatedRecord* orgRecord, IReplicatedRecord* newRecord)
+		{
+			if (cloopVTable->version < 4)
+			{
+				StatusType::setVersionError(status, "IReplicatedTransaction", cloopVTable->version, 4);
+				StatusType::checkException(status);
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->updateRecord2(this, status, schemaName, tableName, orgRecord, newRecord);
+			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> void deleteRecord2(StatusType* status, const char* schemaName, const char* tableName, IReplicatedRecord* record)
+		{
+			if (cloopVTable->version < 4)
+			{
+				StatusType::setVersionError(status, "IReplicatedTransaction", cloopVTable->version, 4);
+				StatusType::checkException(status);
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->deleteRecord2(this, status, schemaName, tableName, record);
 			StatusType::checkException(status);
 		}
 	};
@@ -7106,7 +7163,7 @@ namespace Firebird
 		}
 	};
 
-#define FIREBIRD_IPROFILER_SESSION_VERSION 3u
+#define FIREBIRD_IPROFILER_SESSION_VERSION 4u
 
 	class IProfilerSession : public IDisposable
 	{
@@ -7117,7 +7174,7 @@ namespace Firebird
 			unsigned (CLOOP_CARG *getFlags)(IProfilerSession* self) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *cancel)(IProfilerSession* self, IStatus* status) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *finish)(IProfilerSession* self, IStatus* status, ISC_TIMESTAMP_TZ timestamp) CLOOP_NOEXCEPT;
-			void (CLOOP_CARG *defineStatement)(IProfilerSession* self, IStatus* status, ISC_INT64 statementId, ISC_INT64 parentStatementId, const char* type, const char* packageName, const char* routineName, const char* sqlText) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *deprecatedDefineStatement)(IProfilerSession* self, IStatus* status, ISC_INT64 statementId, ISC_INT64 parentStatementId, const char* type, const char* packageName, const char* routineName, const char* sqlText) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *defineCursor)(IProfilerSession* self, ISC_INT64 statementId, unsigned cursorId, const char* name, unsigned line, unsigned column) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *defineRecordSource)(IProfilerSession* self, ISC_INT64 statementId, unsigned cursorId, unsigned recSourceId, unsigned level, const char* accessPath, unsigned parentRecSourceId) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *onRequestStart)(IProfilerSession* self, IStatus* status, ISC_INT64 statementId, ISC_INT64 requestId, ISC_INT64 callerStatementId, ISC_INT64 callerRequestId, ISC_TIMESTAMP_TZ timestamp) CLOOP_NOEXCEPT;
@@ -7128,6 +7185,7 @@ namespace Firebird
 			void (CLOOP_CARG *afterRecordSourceOpen)(IProfilerSession* self, ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, IProfilerStats* stats) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *beforeRecordSourceGetRecord)(IProfilerSession* self, ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *afterRecordSourceGetRecord)(IProfilerSession* self, ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, IProfilerStats* stats) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *defineStatement2)(IProfilerSession* self, IStatus* status, ISC_INT64 statementId, ISC_INT64 parentStatementId, const char* type, const char* schemaName, const char* packageName, const char* routineName, const char* sqlText) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -7172,10 +7230,10 @@ namespace Firebird
 			StatusType::checkException(status);
 		}
 
-		template <typename StatusType> void defineStatement(StatusType* status, ISC_INT64 statementId, ISC_INT64 parentStatementId, const char* type, const char* packageName, const char* routineName, const char* sqlText)
+		template <typename StatusType> void deprecatedDefineStatement(StatusType* status, ISC_INT64 statementId, ISC_INT64 parentStatementId, const char* type, const char* packageName, const char* routineName, const char* sqlText)
 		{
 			StatusType::clearException(status);
-			static_cast<VTable*>(this->cloopVTable)->defineStatement(this, status, statementId, parentStatementId, type, packageName, routineName, sqlText);
+			static_cast<VTable*>(this->cloopVTable)->deprecatedDefineStatement(this, status, statementId, parentStatementId, type, packageName, routineName, sqlText);
 			StatusType::checkException(status);
 		}
 
@@ -7231,6 +7289,18 @@ namespace Firebird
 		void afterRecordSourceGetRecord(ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, IProfilerStats* stats)
 		{
 			static_cast<VTable*>(this->cloopVTable)->afterRecordSourceGetRecord(this, statementId, requestId, cursorId, recSourceId, stats);
+		}
+
+		template <typename StatusType> void defineStatement2(StatusType* status, ISC_INT64 statementId, ISC_INT64 parentStatementId, const char* type, const char* schemaName, const char* packageName, const char* routineName, const char* sqlText)
+		{
+			if (cloopVTable->version < 4)
+			{
+				deprecatedDefineStatement(status, statementId, parentStatementId, type, packageName, routineName, sqlText);
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->defineStatement2(this, status, statementId, parentStatementId, type, schemaName, packageName, routineName, sqlText);
+			StatusType::checkException(status);
 		}
 	};
 
@@ -15404,6 +15474,7 @@ namespace Firebird
 					this->getTriggerMetadata = &Name::cloopgetTriggerMetadataDispatcher;
 					this->getTriggerTable = &Name::cloopgetTriggerTableDispatcher;
 					this->getTriggerType = &Name::cloopgetTriggerTypeDispatcher;
+					this->getSchema = &Name::cloopgetSchemaDispatcher;
 				}
 			} vTable;
 
@@ -15544,6 +15615,21 @@ namespace Firebird
 				return static_cast<unsigned>(0);
 			}
 		}
+
+		static const char* CLOOP_CARG cloopgetSchemaDispatcher(const IRoutineMetadata* self, IStatus* status) CLOOP_NOEXCEPT
+		{
+			StatusType status2(status);
+
+			try
+			{
+				return static_cast<const Name*>(self)->Name::getSchema(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+				return static_cast<const char*>(0);
+			}
+		}
 	};
 
 	template <typename Name, typename StatusType, typename Base = IVersionedImpl<Name, StatusType, Inherit<IRoutineMetadata> > >
@@ -15568,6 +15654,7 @@ namespace Firebird
 		virtual IMessageMetadata* getTriggerMetadata(StatusType* status) const = 0;
 		virtual const char* getTriggerTable(StatusType* status) const = 0;
 		virtual unsigned getTriggerType(StatusType* status) const = 0;
+		virtual const char* getSchema(StatusType* status) const = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -20302,6 +20389,9 @@ namespace Firebird
 					this->deleteRecord = &Name::cloopdeleteRecordDispatcher;
 					this->executeSql = &Name::cloopexecuteSqlDispatcher;
 					this->executeSqlIntl = &Name::cloopexecuteSqlIntlDispatcher;
+					this->insertRecord2 = &Name::cloopinsertRecord2Dispatcher;
+					this->updateRecord2 = &Name::cloopupdateRecord2Dispatcher;
+					this->deleteRecord2 = &Name::cloopdeleteRecord2Dispatcher;
 				}
 			} vTable;
 
@@ -20462,6 +20552,48 @@ namespace Firebird
 			}
 		}
 
+		static void CLOOP_CARG cloopinsertRecord2Dispatcher(IReplicatedTransaction* self, IStatus* status, const char* schemaName, const char* tableName, IReplicatedRecord* record) CLOOP_NOEXCEPT
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::insertRecord2(&status2, schemaName, tableName, record);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
+		static void CLOOP_CARG cloopupdateRecord2Dispatcher(IReplicatedTransaction* self, IStatus* status, const char* schemaName, const char* tableName, IReplicatedRecord* orgRecord, IReplicatedRecord* newRecord) CLOOP_NOEXCEPT
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::updateRecord2(&status2, schemaName, tableName, orgRecord, newRecord);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
+		static void CLOOP_CARG cloopdeleteRecord2Dispatcher(IReplicatedTransaction* self, IStatus* status, const char* schemaName, const char* tableName, IReplicatedRecord* record) CLOOP_NOEXCEPT
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::deleteRecord2(&status2, schemaName, tableName, record);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
 		static void CLOOP_CARG cloopdisposeDispatcher(IDisposable* self) CLOOP_NOEXCEPT
 		{
 			try
@@ -20499,6 +20631,9 @@ namespace Firebird
 		virtual void deleteRecord(StatusType* status, const char* name, IReplicatedRecord* record) = 0;
 		virtual void executeSql(StatusType* status, const char* sql) = 0;
 		virtual void executeSqlIntl(StatusType* status, unsigned charset, const char* sql) = 0;
+		virtual void insertRecord2(StatusType* status, const char* schemaName, const char* tableName, IReplicatedRecord* record) = 0;
+		virtual void updateRecord2(StatusType* status, const char* schemaName, const char* tableName, IReplicatedRecord* orgRecord, IReplicatedRecord* newRecord) = 0;
+		virtual void deleteRecord2(StatusType* status, const char* schemaName, const char* tableName, IReplicatedRecord* record) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -20812,7 +20947,7 @@ namespace Firebird
 					this->getFlags = &Name::cloopgetFlagsDispatcher;
 					this->cancel = &Name::cloopcancelDispatcher;
 					this->finish = &Name::cloopfinishDispatcher;
-					this->defineStatement = &Name::cloopdefineStatementDispatcher;
+					this->deprecatedDefineStatement = &Name::cloopdeprecatedDefineStatementDispatcher;
 					this->defineCursor = &Name::cloopdefineCursorDispatcher;
 					this->defineRecordSource = &Name::cloopdefineRecordSourceDispatcher;
 					this->onRequestStart = &Name::clooponRequestStartDispatcher;
@@ -20823,6 +20958,7 @@ namespace Firebird
 					this->afterRecordSourceOpen = &Name::cloopafterRecordSourceOpenDispatcher;
 					this->beforeRecordSourceGetRecord = &Name::cloopbeforeRecordSourceGetRecordDispatcher;
 					this->afterRecordSourceGetRecord = &Name::cloopafterRecordSourceGetRecordDispatcher;
+					this->defineStatement2 = &Name::cloopdefineStatement2Dispatcher;
 				}
 			} vTable;
 
@@ -20883,13 +21019,13 @@ namespace Firebird
 			}
 		}
 
-		static void CLOOP_CARG cloopdefineStatementDispatcher(IProfilerSession* self, IStatus* status, ISC_INT64 statementId, ISC_INT64 parentStatementId, const char* type, const char* packageName, const char* routineName, const char* sqlText) CLOOP_NOEXCEPT
+		static void CLOOP_CARG cloopdeprecatedDefineStatementDispatcher(IProfilerSession* self, IStatus* status, ISC_INT64 statementId, ISC_INT64 parentStatementId, const char* type, const char* packageName, const char* routineName, const char* sqlText) CLOOP_NOEXCEPT
 		{
 			StatusType status2(status);
 
 			try
 			{
-				static_cast<Name*>(self)->Name::defineStatement(&status2, statementId, parentStatementId, type, packageName, routineName, sqlText);
+				static_cast<Name*>(self)->Name::deprecatedDefineStatement(&status2, statementId, parentStatementId, type, packageName, routineName, sqlText);
 			}
 			catch (...)
 			{
@@ -21021,6 +21157,20 @@ namespace Firebird
 			}
 		}
 
+		static void CLOOP_CARG cloopdefineStatement2Dispatcher(IProfilerSession* self, IStatus* status, ISC_INT64 statementId, ISC_INT64 parentStatementId, const char* type, const char* schemaName, const char* packageName, const char* routineName, const char* sqlText) CLOOP_NOEXCEPT
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::defineStatement2(&status2, statementId, parentStatementId, type, schemaName, packageName, routineName, sqlText);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
 		static void CLOOP_CARG cloopdisposeDispatcher(IDisposable* self) CLOOP_NOEXCEPT
 		{
 			try
@@ -21051,7 +21201,7 @@ namespace Firebird
 		virtual unsigned getFlags() = 0;
 		virtual void cancel(StatusType* status) = 0;
 		virtual void finish(StatusType* status, ISC_TIMESTAMP_TZ timestamp) = 0;
-		virtual void defineStatement(StatusType* status, ISC_INT64 statementId, ISC_INT64 parentStatementId, const char* type, const char* packageName, const char* routineName, const char* sqlText) = 0;
+		virtual void deprecatedDefineStatement(StatusType* status, ISC_INT64 statementId, ISC_INT64 parentStatementId, const char* type, const char* packageName, const char* routineName, const char* sqlText) = 0;
 		virtual void defineCursor(ISC_INT64 statementId, unsigned cursorId, const char* name, unsigned line, unsigned column) = 0;
 		virtual void defineRecordSource(ISC_INT64 statementId, unsigned cursorId, unsigned recSourceId, unsigned level, const char* accessPath, unsigned parentRecSourceId) = 0;
 		virtual void onRequestStart(StatusType* status, ISC_INT64 statementId, ISC_INT64 requestId, ISC_INT64 callerStatementId, ISC_INT64 callerRequestId, ISC_TIMESTAMP_TZ timestamp) = 0;
@@ -21062,6 +21212,7 @@ namespace Firebird
 		virtual void afterRecordSourceOpen(ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, IProfilerStats* stats) = 0;
 		virtual void beforeRecordSourceGetRecord(ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId) = 0;
 		virtual void afterRecordSourceGetRecord(ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, IProfilerStats* stats) = 0;
+		virtual void defineStatement2(StatusType* status, ISC_INT64 statementId, ISC_INT64 parentStatementId, const char* type, const char* schemaName, const char* packageName, const char* routineName, const char* sqlText) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>

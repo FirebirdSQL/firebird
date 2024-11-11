@@ -1153,6 +1153,8 @@ int gbak(Firebird::UtilSvc* uSvc)
 		dpb.insertBytes(isc_dpb_auth_block, authBlock, authSize);
 	}
 
+	dpb.insertString(isc_dpb_schema_path, SYSTEM_SCHEMA, fb_strlen(SYSTEM_SCHEMA));
+
 	// We call getTableMod() because we are interested in the items that were activated previously,
 	// not in the original, unchanged table that "switches" took as parameter in the constructor.
 	for (const Switches::in_sw_tab_t* in_sw_tab = switches.getTableMod();
@@ -2750,7 +2752,7 @@ namespace // for local symbols
 	}
 }
 
-bool BurpGlobals::skipRelation(const char* name)
+bool BurpGlobals::skipRelation(const QualifiedMetaString& name)
 {
 	if (gbl_sw_meta)
 		return true;
@@ -2764,8 +2766,9 @@ bool BurpGlobals::skipRelation(const char* name)
 		{ false, false, true}  // NM  p
 	};
 
-	const enum Pattern res1 = checkPattern(skipDataMatcher, name);
-	const enum Pattern res2 = checkPattern(includeDataMatcher, name);
+	// FIXME: schema
+	const enum Pattern res1 = checkPattern(skipDataMatcher, name.object.c_str());
+	const enum Pattern res2 = checkPattern(includeDataMatcher, name.object.c_str());
 
 	return result[res1][res2];
 }
@@ -2886,24 +2889,6 @@ void BurpGlobals::print_stats_header()
 	}
 
 	burp_output(false, "\n");
-}
-
-void BURP_makeSymbol(BurpGlobals* tdgbl, Firebird::string& name)		// add double quotes to string
-{
-	if (tdgbl->gbl_dialect < SQL_DIALECT_V6)
-		return;
-
-	const char dq = '"';
-	for (unsigned p = 0; p < name.length(); ++p)
-	{
-		if (name[p] == dq)
-		{
-			name.insert(p, 1, dq);
-			++p;
-		}
-	}
-	name.insert(0u, 1, dq);
-	name += dq;
 }
 
 static void processFetchPass(const SCHAR*& password, int& itr, const int argc, Firebird::UtilSvc::ArgvType& argv)

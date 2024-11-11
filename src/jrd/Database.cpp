@@ -412,7 +412,7 @@ namespace Jrd
 						Lock(tdbb, 0, LCK_repl_state, this, replStateAst);
 				}
 
-				dbb_repl_state = MET_get_repl_state(tdbb, "");
+				dbb_repl_state = MET_get_repl_state(tdbb, {});
 
 				fb_assert(dbb_repl_lock->lck_logical == LCK_none);
 				LCK_lock(tdbb, dbb_repl_lock, LCK_SR, LCK_WAIT);

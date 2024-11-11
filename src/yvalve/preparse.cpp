@@ -36,19 +36,18 @@
 
 enum pp_vals {
 	PP_CREATE = 0,
-	PP_DATABASE = 1,
-	PP_SCHEMA = 2,
-	PP_PAGE_SIZE = 3,
-	PP_USER = 4,
-	PP_PASSWORD = 5,
-	PP_PAGESIZE = 6,
-	PP_LENGTH = 7,
-	PP_PAGES = 8,
-	PP_PAGE = 9,
-	PP_SET = 10,
-	PP_NAMES = 11,
-	PP_ROLE = 12,
-	PP_OWNER = 13
+	PP_DATABASE,
+	PP_PAGE_SIZE,
+	PP_USER,
+	PP_PASSWORD,
+	PP_PAGESIZE,
+	PP_LENGTH,
+	PP_PAGES,
+	PP_PAGE,
+	PP_SET,
+	PP_NAMES,
+	PP_ROLE,
+	PP_OWNER
 };
 
 
@@ -61,12 +60,10 @@ struct pp_table
 };
 
 // This should be kept in sync with the rule db_initial_desc of parse.y for CREATE DATABASE.
-// Should delete SCHEMA in the future.
 static const pp_table pp_symbols[] =
 {
 	{"CREATE",  PP_CREATE},
 	{"DATABASE",  PP_DATABASE},
-	{"SCHEMA", PP_SCHEMA},
 	{"PAGE_SIZE", PP_PAGE_SIZE},
 	{"USER", PP_USER},
 	{"PASSWORD", PP_PASSWORD},
@@ -219,10 +216,8 @@ bool PREPARSE_execute(CheckStatusWrapper* status, Why::YAttachment** ptrAtt,
 			}
 
 			NoCaseString token(getToken(pos, tks));
-			if (token != pp_symbols[PP_DATABASE].symbol && token != pp_symbols[PP_SCHEMA].symbol)
-			{
+			if (token != pp_symbols[PP_DATABASE].symbol)
 				return false;
-			}
 
 			PathName file_name(getToken(pos, tks, STRING).ToPathName());
 			*stmt_eaten = false;

@@ -394,7 +394,7 @@ namespace
 			localStatus.check();
 
 			const char* sql =
-				"select rdb$get_context('SYSTEM', 'REPLICATION_SEQUENCE') from rdb$database";
+				"select rdb$get_context('SYSTEM', 'REPLICATION_SEQUENCE') from system.rdb$database";
 
 			FB_MESSAGE(Result, CheckStatusWrapper,
 				(FB_BIGINT, sequence)

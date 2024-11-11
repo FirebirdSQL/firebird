@@ -299,9 +299,12 @@ void Replicator::rollbackSavepoint(CheckStatusWrapper* status, Transaction* tran
 
 void Replicator::insertRecord(CheckStatusWrapper* status,
 							  Transaction* transaction,
-							  const char* relName,
+							  const char* schemaName,
+							  const char* tableName,
 							  IReplicatedRecord* record)
 {
+	// FIXME: Use schemaName
+
 	try
 	{
 		for (unsigned id = 0; id < record->getCount(); id++)
@@ -325,7 +328,7 @@ void Replicator::insertRecord(CheckStatusWrapper* status,
 
 		auto& txnData = transaction->getData();
 
-		const auto atom = txnData.defineAtom(relName);
+		const auto atom = txnData.defineAtom(tableName);
 
 		txnData.putTag(opInsertRecord);
 		txnData.putInt32(atom);
@@ -343,10 +346,13 @@ void Replicator::insertRecord(CheckStatusWrapper* status,
 
 void Replicator::updateRecord(CheckStatusWrapper* status,
 							  Transaction* transaction,
-							  const char* relName,
+							  const char* schemaName,
+							  const char* tableName,
 							  IReplicatedRecord* orgRecord,
 							  IReplicatedRecord* newRecord)
 {
+	// FIXME: Use schemaName
+
 	try
 	{
 		for (unsigned id = 0; id < newRecord->getCount(); id++)
@@ -373,7 +379,7 @@ void Replicator::updateRecord(CheckStatusWrapper* status,
 
 		auto& txnData = transaction->getData();
 
-		const auto atom = txnData.defineAtom(relName);
+		const auto atom = txnData.defineAtom(tableName);
 
 		txnData.putTag(opUpdateRecord);
 		txnData.putInt32(atom);
@@ -393,9 +399,12 @@ void Replicator::updateRecord(CheckStatusWrapper* status,
 
 void Replicator::deleteRecord(CheckStatusWrapper* status,
 							  Transaction* transaction,
-							  const char* relName,
+							  const char* schemaName,
+							  const char* tableName,
 							  IReplicatedRecord* record)
 {
+	// FIXME: Use schemaName
+
 	try
 	{
 		const auto length = record->getRawLength();
@@ -403,7 +412,7 @@ void Replicator::deleteRecord(CheckStatusWrapper* status,
 
 		auto& txnData = transaction->getData();
 
-		const auto atom = txnData.defineAtom(relName);
+		const auto atom = txnData.defineAtom(tableName);
 
 		txnData.putTag(opDeleteRecord);
 		txnData.putInt32(atom);

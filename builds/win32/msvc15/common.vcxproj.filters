@@ -449,7 +449,7 @@
     <ClInclude Include="..\..\..\src\common\classes\objects_array.h">
       <Filter>headers</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\common\classes\QualifiedName.h">
+    <ClInclude Include="..\..\..\src\common\classes\MetaString.h">
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\RefCounted.h">

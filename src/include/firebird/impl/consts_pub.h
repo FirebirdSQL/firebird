@@ -133,6 +133,8 @@
 #define isc_dpb_parallel_workers		 100
 #define isc_dpb_worker_attach			 101
 #define isc_dpb_owner					 102
+#define isc_dpb_schema_path				 103
+#define isc_dpb_gbak_restore_has_schema  104
 
 
 /**************************************************/
@@ -685,6 +687,7 @@
 #define isc_sdl_do2                       34
 #define isc_sdl_do1                       35
 #define isc_sdl_element                   36
+#define isc_sdl_schema                    37
 
 /********************************************/
 /* International text interpretation values */

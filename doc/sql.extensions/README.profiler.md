@@ -109,6 +109,8 @@ execute procedure rdb$profiler.finish_session(true);
 
 -- Data analysis
 
+set search_path to plg$profiler, public, system;
+
 set transaction read committed;
 
 select * from plg$prof_sessions;
@@ -243,7 +245,9 @@ Input parameters:
 
 # Snapshot tables
 
-Snapshot tables (as well views and sequence) are automatically created in the first usage of the profiler. They are owned by the database owner, with read/write permissions for `PUBLIC`.
+The profiler schema, snapshot tables, views and sequence are automatically created in the first usage of the profiler.
+
+They are owned by the database owner, with usage/read/write permissions for the RDB$PROFILER role, granted by default to `PUBLIC`.
 
 When a session is deleted, the related data in other profiler snapshot tables are automatically deleted too through foreign keys with `DELETE CASCADE` option.
 

@@ -31,6 +31,7 @@
 
 #include "../common/classes/fb_string.h"
 #include "../common/classes/fb_pair.h"
+#include "../common/classes/MetaString.h"
 #include "../jrd/constants.h"
 
 #include <atomic>
@@ -49,12 +50,6 @@
 #define DIC_STAT_SEGMENT_CALL
 #define DIC_STAT_SEGMENT_PAR
 #endif
-
-namespace Firebird {
-
-class MetaString;
-
-}
 
 
 namespace Jrd {
@@ -297,6 +292,11 @@ public:
 			return 0;
 
 		return compare(m.begin(), m.length());
+	}
+
+	Firebird::string toQuotedString() const
+	{
+		return Firebird::MetaString(c_str(), length()).toQuotedString();
 	}
 
 	bool operator==(const char* s) const

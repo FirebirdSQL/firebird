@@ -52,7 +52,7 @@
 	FIELD(fld_v_blr			, nam_v_blr			, dtype_blob	, BLOB_SIZE					, isc_blob_blr				, NULL		, true		, ODS_13_0)
 	FIELD(fld_validation	, nam_vl_blr		, dtype_blob	, BLOB_SIZE					, isc_blob_blr				, NULL		, true		, ODS_13_0)
 	FIELD(fld_value			, nam_value			, dtype_blob	, BLOB_SIZE					, isc_blob_blr				, NULL		, true		, ODS_13_0)
-	FIELD(fld_class			, nam_class			, dtype_text	, MAX_SQL_IDENTIFIER_LEN	, dsc_text_type_metadata	, NULL		, true		, ODS_13_0)
+	FIELD(fld_class			, nam_class			, dtype_text	, MAX_SQL_IDENTIFIER_LEN	, dsc_text_type_metadata	, NULL		, true		, ODS_13_0)	// FIXME: increase, must be MAX_SQL_IDENTIFIER_LEN + max length of DDL security class name + 1
 	FIELD(fld_acl			, nam_acl			, dtype_blob	, BLOB_SIZE					, isc_blob_acl				, NULL		, true		, ODS_13_0)
 	FIELD(fld_file_name		, nam_file_name		, dtype_varying	, 255						, 0							, NULL		, true		, ODS_13_0)
 	FIELD(fld_file_name2	, nam_file_name2	, dtype_varying	, 255 * METADATA_BYTES_PER_CHAR, dsc_text_type_metadata	, NULL		, true		, ODS_13_0)
@@ -234,3 +234,6 @@
 	FIELD(fld_integer		, nam_integer		, dtype_long	, sizeof(SLONG)				, 0							, NULL		, true		, ODS_13_1)
 
 	FIELD(fld_par_workers	, nam_par_workers	, dtype_long	, sizeof(SLONG)				, 0							, NULL		, true		, ODS_13_1)
+
+	FIELD(fld_sch_name		, nam_sch_name		, dtype_text	, MAX_SQL_IDENTIFIER_LEN	, dsc_text_type_metadata	, NULL		, true		, ODS_14_0)
+	FIELD(fld_search_path	, nam_mon_search_path	, dtype_varying	, MAX_VARY_COLUMN_SIZE		, 0							, NULL		, true		, ODS_14_0)

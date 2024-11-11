@@ -121,6 +121,7 @@ dsql_dbb::dsql_dbb(MemoryPool& p, Attachment* attachment)
 	  dbb_charsets_by_id(p),
 	  dbb_cursors(p),
 	  dbb_pool(p),
+	  dbb_schemas_dfl_charset(p),
 	  dbb_dfl_charset(p)
 {
 	dbb_attachment = attachment;
@@ -129,6 +130,13 @@ dsql_dbb::dsql_dbb(MemoryPool& p, Attachment* attachment)
 
 dsql_dbb::~dsql_dbb()
 {
+}
+
+
+void dsql_fld::resolve(DsqlCompilerScratch* dsqlScratch, bool modifying)
+{
+	dsqlScratch->qualifyExistingName(collate, obj_collation);
+	DDL_resolve_intl_type(dsqlScratch, this, collate, modifying);
 }
 
 
@@ -711,15 +719,15 @@ string IntlString::toUtf8(jrd_tra* transaction) const
 {
 	CHARSET_ID id = CS_dynamic;
 
-	if (charset.hasData())
+	if (charset.object.hasData())
 	{
-		const dsql_intlsym* resolved = METD_get_charset(transaction, charset.length(), charset.c_str());
+		const dsql_intlsym* resolved = METD_get_charset(transaction, charset);
 
 		if (!resolved)
 		{
 			// character set name is not defined
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
-					  Arg::Gds(isc_charset_not_found) << charset);
+					  Arg::Gds(isc_charset_not_found) << charset.toString());
 		}
 
 		id = resolved->intlsym_charset_id;
@@ -1190,6 +1198,7 @@ static UCHAR* var_info(const dsql_msg* message,
 			for (const UCHAR* describe = items; describe < end_describe;)
 			{
 				USHORT length;
+				string str;
 				MetaName name;
 				const UCHAR* buffer = buf;
 				UCHAR item = *describe++;
@@ -1236,11 +1245,11 @@ static UCHAR* var_info(const dsql_msg* message,
 					break;
 
 				case isc_info_sql_relation:
-					if (param->par_rel_name.hasData())
+					if (param->par_rel_name.object.hasData())
 					{
-						name = attachment->nameToUserCharSet(tdbb, param->par_rel_name);
-						length = name.length();
-						buffer = reinterpret_cast<const UCHAR*>(name.c_str());
+						str = attachment->stringToUserCharSet(tdbb, param->par_rel_name.toString());
+						length = str.length();
+						buffer = reinterpret_cast<const UCHAR*>(str.c_str());
 					}
 					else
 						length = 0;
@@ -1260,9 +1269,9 @@ static UCHAR* var_info(const dsql_msg* message,
 				case isc_info_sql_relation_alias:
 					if (param->par_rel_alias.hasData())
 					{
-						name = attachment->nameToUserCharSet(tdbb, param->par_rel_alias);
-						length = name.length();
-						buffer = reinterpret_cast<const UCHAR*>(name.c_str());
+						str = attachment->stringToUserCharSet(tdbb, param->par_rel_alias);
+						length = str.length();
+						buffer = reinterpret_cast<const UCHAR*>(str.c_str());
 					}
 					else
 						length = 0;

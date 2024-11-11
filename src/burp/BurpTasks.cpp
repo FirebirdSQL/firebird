@@ -561,7 +561,7 @@ bool BackupRelationTask::fileWriter(Item& item)
 	BurpGlobals* tdgbl = item.m_gbl;
 	fb_assert(tdgbl == m_masterGbl);
 
-	BURP_verbose(142, m_relation->rel_name);
+	BURP_verbose(142, m_relation->rel_name.toString().c_str());
 	// msg 142  writing data for relation %s
 
 	IOBuffer*& buf = item.m_buffer = NULL;

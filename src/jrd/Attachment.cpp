@@ -257,6 +257,7 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider
 	  att_dest_bind(&att_bindings),
 	  att_original_timezone(TimeZoneUtil::getSystemTimeZone()),
 	  att_current_timezone(att_original_timezone),
+	  att_schema_search_path(*pool),
 	  att_parallel_workers(0),
 	  att_repl_appliers(*pool),
 	  att_utility(UTIL_NONE),
@@ -367,31 +368,6 @@ MetaName Jrd::Attachment::nameToUserCharSet(thread_db* tdbb, const MetaName& nam
 	buffer[len] = '\0';
 
 	return MetaName((const char*) buffer);
-}
-
-
-string Jrd::Attachment::stringToMetaCharSet(thread_db* tdbb, const string& str,
-	const char* charSet)
-{
-	USHORT charSetId = att_charset;
-
-	if (charSet)
-	{
-		if (!MET_get_char_coll_subtype(tdbb, &charSetId, (const UCHAR*) charSet,
-				static_cast<USHORT>(strlen(charSet))))
-		{
-			(Arg::Gds(isc_charset_not_found) << Arg::Str(charSet)).raise();
-		}
-	}
-
-	if (charSetId == CS_METADATA || charSetId == CS_NONE)
-		return str;
-
-	HalfStaticArray<UCHAR, BUFFER_MEDIUM> buffer(str.length() * sizeof(ULONG));
-	ULONG len = INTL_convert_bytes(tdbb, CS_METADATA, buffer.begin(), buffer.getCapacity(),
-		charSetId, (const BYTE*) str.c_str(), str.length(), ERR_post);
-
-	return string((char*) buffer.begin(), len);
 }
 
 
@@ -1226,4 +1202,37 @@ void Attachment::releaseProfilerManager(thread_db* tdbb)
 	}
 	else
 		att_profiler_manager.reset();
+}
+
+bool Attachment::qualifyNewName(thread_db* tdbb, QualifiedName& name, ObjectsArray<MetaString>* schemaSearchPath)
+{
+	if (!schemaSearchPath)
+		schemaSearchPath = &att_schema_search_path;
+
+	if (name.schema.isEmpty() && schemaSearchPath->hasData())
+	{
+		for (const auto& searchSchema : *schemaSearchPath)
+		{
+			if (MET_check_schema_exists(tdbb, searchSchema))
+			{
+				name.schema = searchSchema;
+				return true;
+			}
+		}
+	}
+
+	return MET_check_schema_exists(tdbb, name.schema);
+}
+
+void Attachment::qualifyExistingName(thread_db* tdbb, QualifiedName& name, ObjectType objType,
+	ObjectsArray<MetaString>* schemaSearchPath)
+{
+	if (name.object.hasData())
+	{
+		if (name.schema.isEmpty())
+		{
+			if (!MET_qualify_existing_name(tdbb, name, objType, schemaSearchPath))
+				qualifyNewName(tdbb, name, schemaSearchPath);
+		}
+	}
 }
