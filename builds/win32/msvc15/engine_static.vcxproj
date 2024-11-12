@@ -167,6 +167,7 @@
     <ClCompile Include="..\..\..\src\jrd\sys-packages\SqlPackage.cpp" />
     <ClCompile Include="..\..\..\src\jrd\SysFunction.cpp" />
     <ClCompile Include="..\..\..\src\jrd\SystemPackages.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\Tablespace.cpp" />
     <ClCompile Include="..\..\..\src\jrd\TempSpace.cpp" />
     <ClCompile Include="..\..\..\src\jrd\TimeZone.cpp" />
     <ClCompile Include="..\..\..\src\jrd\tpc.cpp" />
@@ -354,6 +355,7 @@
     <ClInclude Include="..\..\..\src\jrd\SysFunction.h" />
     <ClInclude Include="..\..\..\src\jrd\SystemPackages.h" />
     <ClInclude Include="..\..\..\src\jrd\SystemTriggers.h" />
+    <ClInclude Include="..\..\..\src\jrd\Tablespace.h" />
     <ClInclude Include="..\..\..\src\jrd\TempSpace.h" />
     <ClInclude Include="..\..\..\src\jrd\TimeZone.h" />
     <ClInclude Include="..\..\..\src\jrd\tpc_proto.h" />

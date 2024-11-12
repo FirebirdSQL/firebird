@@ -480,6 +480,9 @@
     <ClCompile Include="..\..\..\src\jrd\Routine.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\Tablespace.cpp">
+      <Filter>JRD files</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\Mapping.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
@@ -1104,6 +1107,9 @@
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\dsql\TablespaceNodes.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\Tablespace.h">
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\InitCDSLib.h">
