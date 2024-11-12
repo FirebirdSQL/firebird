@@ -1494,7 +1494,12 @@ bool REMOTE_inflate(rem_port* port, PacketReceive* packet_receive, UCHAR* buffer
 {
 #ifdef WIRE_COMPRESS_SUPPORT
 	if (!port->port_compressed)
-		return packet_receive(port, buffer, buffer_length, length);
+	{
+		const bool ret = packet_receive(port, buffer, buffer_length, length);
+		if (ret)
+			port->bumpLogBytes(rem_port::RECEIVE, *length);
+		return ret;
+	}
 
 	z_stream& strm = port->port_recv_stream;
 	strm.avail_out = buffer_length;
@@ -1566,16 +1571,22 @@ bool REMOTE_inflate(rem_port* port, PacketReceive* packet_receive, UCHAR* buffer
 	fprintf(stderr, "ZLib buffer %s\n", port->port_z_data ? "has data" : "is empty");
 #endif
 
+	port->bumpLogBytes(rem_port::RECEIVE, *length);
 	return true;
 #else
-	return packet_receive(port, buffer, buffer_length, length);
+	const bool ret = packet_receive(port, buffer, buffer_length, length);
+	if (ret)
+		port->bumpLogBytes(rem_port::RECEIVE, *length);
+	return ret;
 #endif
 }
 
 bool REMOTE_deflate(RemoteXdr* xdrs, ProtoWrite* proto_write, PacketSend* packet_send, bool flush)
 {
-#ifdef WIRE_COMPRESS_SUPPORT
 	rem_port* port = xdrs->x_public;
+	port->bumpLogBytes(rem_port::SEND, xdrs->x_private - xdrs->x_base);
+
+#ifdef WIRE_COMPRESS_SUPPORT
 	if (!(port->port_compressed && (port->port_flags & PORT_compressed)))
 		return proto_write(xdrs);
 

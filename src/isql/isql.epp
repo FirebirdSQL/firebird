@@ -577,6 +577,7 @@ public:
 		KeepTranParams = true;
 		TranParams->assign(DEFAULT_DML_TRANS_SQL);
 		PerTableStats = false;
+		WireStats = false;
 		ExplainCommand = false;
 	}
 
@@ -603,6 +604,7 @@ public:
 	SCHAR ISQL_charset[MAXCHARSET_SIZE];
 	bool KeepTranParams;
 	bool PerTableStats;
+	bool WireStats;
 	bool ExplainCommand;
 };
 
@@ -5453,7 +5455,7 @@ static processing_state frontend_set(const char* cmd, const char* const* parms,
 			exec_path_display,
 			sql, warning, sqlCont, heading, bail,
 			bulk_insert, maxrows, stmtTimeout,
-			keepTranParams,	perTableStats,
+			keepTranParams,	perTableStats, wireStats,
 			wrong
 		};
 		SetOptions(const optionsMap* inmap, size_t insize, int wrongval)
@@ -5495,7 +5497,8 @@ static processing_state frontend_set(const char* cmd, const char* const* parms,
 		{SetOptions::stmtTimeout, "LOCAL_TIMEOUT", 0},
 		{SetOptions::sqlCont, "DECFLOAT", 0},
 		{SetOptions::keepTranParams, "KEEP_TRAN_PARAMS", 9},
-		{SetOptions::perTableStats, "PER_TABLE_STATS", 7}
+		{SetOptions::perTableStats, "PER_TABLE_STATS", 7},
+		{SetOptions::wireStats, "WIRE_STATS", 4}
 	};
 
 	// Display current set options
@@ -5744,6 +5747,10 @@ static processing_state frontend_set(const char* cmd, const char* const* parms,
 
 	case SetOptions::perTableStats:
 		ret = do_set_command(parms[2], &setValues.PerTableStats);
+		break;
+
+	case SetOptions::wireStats:
+		ret = do_set_command(parms[2], &setValues.WireStats);
 		break;
 
 	default:
@@ -6372,6 +6379,7 @@ static processing_state print_sets()
 
 	print_set("Print statistics:", setValues.Stats);
 	print_set("Print per-table stats:", setValues.PerTableStats);
+	print_set("Print wire stats:", setValues.WireStats);
 	print_set("Echo commands:", setValues.Echo);
 	print_set("List format:", setValues.List);
 	print_set("Show Row Count:", setValues.Docount);
@@ -8950,6 +8958,10 @@ static processing_state process_statement(const std::string& str)
 	if (setValues.PerTableStats)
 		perTableStats->getStats(DB, true);
 
+	IsqlWireStats wireStats(DB);
+	if (setValues.WireStats)
+		wireStats.get(true);
+
 	// Prepare the dynamic query stored in string.
 	// But put this on the DDL transaction to get maximum visibility of
 	// metadata.
@@ -9137,6 +9149,9 @@ static processing_state process_statement(const std::string& str)
 			if (setValues.PerTableStats)
 				perTableStats->getStats(DB, false);
 
+			if (setValues.WireStats)
+				wireStats.print(false);
+
 			return ret;
 		}
 
@@ -9155,6 +9170,9 @@ static processing_state process_statement(const std::string& str)
 
 			if (setValues.PerTableStats)
 				perTableStats->getStats(DB, false);
+
+			if (setValues.WireStats)
+				wireStats.print(false);
 
 			return ret;
 		}
@@ -9202,6 +9220,9 @@ static processing_state process_statement(const std::string& str)
 
 		if (setValues.PerTableStats)
 			perTableStats->getStats(DB, false);
+
+		if (setValues.WireStats)
+			wireStats.print(false);
 
 		return ret;
 	}
@@ -9397,6 +9418,9 @@ static processing_state process_statement(const std::string& str)
 
 	if (setValues.PerTableStats)
 		perTableStats->getStats(DB, false);
+
+	if (setValues.WireStats)
+		wireStats.print(false);
 
 	if (pad)
 		ISQL_FREE(pad);
@@ -9894,4 +9918,113 @@ unsigned PerTableStats::loadRelNames(Firebird::IAttachment* att)
 	rs->release();
 
 	return maxLen;
+}
+
+/// class IsqlWireStats
+
+bool IsqlWireStats::get(bool initial)
+{
+	if (!m_att)
+		return false;
+
+	const UCHAR info[] = {
+		fb_info_wire_snd_packets,	fb_info_wire_rcv_packets,
+		fb_info_wire_out_packets,	fb_info_wire_in_packets,
+		fb_info_wire_snd_bytes,		fb_info_wire_rcv_bytes,
+		fb_info_wire_out_bytes,		fb_info_wire_in_bytes,
+		fb_info_wire_roundtrips,
+		isc_info_end
+	};
+
+	UCHAR buffer[128];
+
+	m_att->getInfo(fbStatus, sizeof(info), info, sizeof(buffer), buffer);
+
+	if (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS)
+		return false;
+
+	Firebird::ClumpletReader p(Firebird::ClumpletReader::InfoResponse, buffer, sizeof(buffer));
+	for (; !p.isEof(); p.moveNext())
+	{
+		FB_UINT64* pField = nullptr;
+		switch (p.getClumpTag())
+		{
+		case fb_info_wire_snd_packets:
+			pField = &m_snd_packets;
+			break;
+		case fb_info_wire_rcv_packets:
+			pField = &m_rcv_packets;
+			break;
+		case fb_info_wire_out_packets:
+			pField = &m_out_packets;
+			break;
+		case fb_info_wire_in_packets:
+			pField = &m_in_packets;
+			break;
+		case fb_info_wire_snd_bytes:
+			pField = &m_snd_bytes;
+			break;
+		case fb_info_wire_rcv_bytes:
+			pField = &m_rcv_bytes;
+			break;
+		case fb_info_wire_out_bytes:
+			pField = &m_out_bytes;
+			break;
+		case fb_info_wire_in_bytes:
+			pField = &m_in_bytes;
+			break;
+		case fb_info_wire_roundtrips:
+			pField = &m_roundtrips;
+			break;
+		case isc_info_end:
+			break;
+		case isc_info_error:
+			// don't return false here, as we not put error into status
+			return true;
+			/* uncomment to show error (isc_infunk) instead
+			{
+				ISC_STATUS errs[3] = { isc_arg_gds, 0, isc_arg_end };
+				auto b = p.getBytes();
+				errs[1] = isc_portable_integer(b + 1, p.getClumpLength() - 1);
+				fbStatus->setErrors(errs);
+				return false;
+			}*/
+
+		default:
+			fb_assert(false);
+			break;
+		}
+
+		if (pField)
+		{
+			const FB_UINT64 val = p.getBigInt();
+			*pField = initial ? val : val - *pField;
+		}
+	}
+
+	return true;
+}
+
+bool IsqlWireStats::print(bool initial)
+{
+	if (!get(initial))
+	{
+		ISQL_errmsg(fbStatus);
+		return false;
+	}
+
+	IUTILS_printf2(Diag, "Wire logical statistics:%s", NEWLINE);
+	IUTILS_printf2(Diag, "  send packets = %8" SQUADFORMAT "%s", m_out_packets, NEWLINE);
+	IUTILS_printf2(Diag, "  recv packets = %8" SQUADFORMAT "%s", m_in_packets, NEWLINE);
+	IUTILS_printf2(Diag, "  send bytes   = %8" SQUADFORMAT "%s", m_out_bytes, NEWLINE);
+	IUTILS_printf2(Diag, "  recv bytes   = %8" SQUADFORMAT "%s", m_in_bytes, NEWLINE);
+
+	IUTILS_printf2(Diag, "Wire physical statistics:%s", NEWLINE);
+	IUTILS_printf2(Diag, "  send packets = %8" SQUADFORMAT "%s", m_snd_packets, NEWLINE);
+	IUTILS_printf2(Diag, "  recv packets = %8" SQUADFORMAT "%s", m_rcv_packets, NEWLINE);
+	IUTILS_printf2(Diag, "  send bytes   = %8" SQUADFORMAT "%s", m_snd_bytes, NEWLINE);
+	IUTILS_printf2(Diag, "  recv bytes   = %8" SQUADFORMAT "%s", m_rcv_bytes, NEWLINE);
+	IUTILS_printf2(Diag, "  roundtrips   = %8" SQUADFORMAT "%s", m_roundtrips, NEWLINE);
+
+	return true;
 }

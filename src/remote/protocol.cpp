@@ -303,6 +303,9 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 
 	const auto port = xdrs->x_public;
 
+	if (xdrs->x_op != XDR_FREE)
+		port->bumpLogPackets(xdrs->x_op == XDR_ENCODE ? rem_port::SEND : rem_port::RECEIVE);
+
 	switch (p->p_operation)
 	{
 	case op_reject:

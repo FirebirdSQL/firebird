@@ -1992,8 +1992,8 @@ static bool_t xnet_read(RemoteXdr* xdrs)
 		{
 			// Client has written some data for us (server) to read
 
-			port->port_rcv_packets++;
-			port->port_rcv_bytes += xch->xch_length;
+			port->bumpPhysStats(rem_port::RECEIVE, xch->xch_length);
+			port->bumpLogBytes(rem_port::RECEIVE, xch->xch_length);	// XNET not calls REMOTE_inflate
 
 			xdrs->x_handy = xch->xch_length;
 			xdrs->x_private = xdrs->x_base;
@@ -2049,8 +2049,8 @@ static bool_t xnet_write(RemoteXdr* xdrs)
 	xch->xch_length = xdrs->x_private - xdrs->x_base;
 	if (SetEvent(xcc->xcc_event_send_channel_filled))
 	{
-		port->port_snd_packets++;
-		port->port_snd_bytes += xch->xch_length;
+		port->bumpPhysStats(rem_port::SEND, xch->xch_length);
+		port->bumpLogBytes(rem_port::SEND, xch->xch_length);	// XNET not calls REMOTE_deflate
 
 		xdrs->x_private = xdrs->x_base;
 		xdrs->x_handy = xch->xch_size;

@@ -937,6 +937,11 @@ private:
 	void internalDropDatabase(CheckStatusWrapper* status);
 	SLONG getSingleInfo(CheckStatusWrapper* status, UCHAR infoItem);
 
+	// Returns nullptr if all items was handled or if user buffer is full, else
+	// returns pointer into unused buffer space. Handled info items are removed.
+	unsigned char* getWireStatsInfo(UCharBuffer& info, unsigned int buffer_length,
+								unsigned char* buffer);
+
 	Rdb* rdb;
 	const PathName dbPath;
 };
@@ -1966,6 +1971,65 @@ IAttachment* Loopback::createDatabase(CheckStatusWrapper* status, const char* fi
 }
 
 
+unsigned char* Attachment::getWireStatsInfo(UCharBuffer& info, unsigned int buffer_length,
+	unsigned char* buffer)
+{
+	const rem_port* const port = rdb->rdb_port;
+
+	UCHAR* ptr = buffer;
+	const UCHAR* const end = buffer + buffer_length;
+
+	for (auto item = info.begin(); item < info.end(); )
+	{
+		if (ptr >= end)
+			return nullptr;
+
+		if (*item == isc_info_end)
+		{
+			if (info.getCount() == 1)
+				info.remove(item);
+			break;
+		}
+
+		switch (*item)
+		{
+		case fb_info_wire_snd_packets:
+		case fb_info_wire_rcv_packets:
+		case fb_info_wire_out_packets:
+		case fb_info_wire_in_packets:
+		case fb_info_wire_snd_bytes:
+		case fb_info_wire_rcv_bytes:
+		case fb_info_wire_out_bytes:
+		case fb_info_wire_in_bytes:
+		case fb_info_wire_roundtrips:
+		{
+			const FB_UINT64 value = port->getStatItem(*item);
+
+			if (value <= MAX_SLONG)
+				ptr = fb_utils::putInfoItemInt(*item, (SLONG) value, ptr, end);
+			else
+				ptr = fb_utils::putInfoItemInt(*item, value, ptr, end);
+
+			if (!ptr)
+				return nullptr;
+
+			info.remove(item);
+			break;
+		}
+
+		default:
+			item++;
+			break;
+		}
+	}
+
+	if (info.isEmpty() && ptr < end)
+		*ptr++ = isc_info_end;
+
+	return (info.isEmpty() || (ptr >= end)) ? nullptr : ptr;
+}
+
+
 void Attachment::getInfo(CheckStatusWrapper* status,
 						 unsigned int item_length, const unsigned char* items,
 						 unsigned int buffer_length, unsigned char* buffer)
@@ -1994,15 +2058,22 @@ void Attachment::getInfo(CheckStatusWrapper* status,
 
 		RefMutexGuard portGuard(*port->port_sync, FB_FUNCTION);
 
+		UCharBuffer tempInfo(items, item_length);
+		UCHAR* ptr = getWireStatsInfo(tempInfo, buffer_length, buffer);
+		if (!ptr)
+			return;
+
+		buffer_length -= ptr - buffer;
+
 		UCHAR* temp_buffer = temp.getBuffer(buffer_length);
 
 		info(status, rdb, op_info_database, rdb->rdb_id, 0,
-			 item_length, items, 0, 0, buffer_length, temp_buffer);
+			tempInfo.getCount(), tempInfo.begin(), 0, 0, buffer_length, temp_buffer);
 
 		string version;
 		port->versionInfo(version);
 
-		MERGE_database_info(temp_buffer, buffer, buffer_length,
+		MERGE_database_info(temp_buffer, ptr, buffer_length,
 							DbImplementation::current.backwardCompatibleImplementation(), 3, 1,
 							reinterpret_cast<const UCHAR*>(version.c_str()),
 							reinterpret_cast<const UCHAR*>(port->port_host->str_data),

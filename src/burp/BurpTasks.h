@@ -545,7 +545,13 @@ public:
 			if (!m_mutex.tryEnter(FB_FUNCTION))
 				return;
 
+			fb_assert(m_locked >= 0);
+			const bool lockedByMe = (m_locked != 0);
+
 			m_mutex.leave();
+
+			if (!lockedByMe)
+				return;
 		}
 
 		fb_assert(m_locked > 0);

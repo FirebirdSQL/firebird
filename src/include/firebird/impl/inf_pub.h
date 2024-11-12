@@ -178,6 +178,17 @@ enum db_info_types
 
 	fb_info_parallel_workers = 149,
 
+	// Wire stats items, implemented by Remote provider only
+	fb_info_wire_out_packets = 150,
+	fb_info_wire_in_packets = 151,
+	fb_info_wire_out_bytes = 152,
+	fb_info_wire_in_bytes = 153,
+	fb_info_wire_snd_packets = 154,
+	fb_info_wire_rcv_packets = 155,
+	fb_info_wire_snd_bytes = 156,
+	fb_info_wire_rcv_bytes = 157,
+	fb_info_wire_roundtrips = 158,
+
 	isc_info_db_last_value   /* Leave this LAST! */
 };
 
