@@ -76,6 +76,7 @@
 #include "../jrd/Mapping.h"
 #include "../jrd/DbCreators.h"
 #include "../common/os/fbsyslog.h"
+#include "../jrd/Tablespace.h"
 
 
 const int DYN_MSG_FAC	= 8;
@@ -543,7 +544,7 @@ void TRA_commit(thread_db* tdbb, jrd_tra* transaction, const bool retaining_flag
 
 	// Perform any post commit work
 
-	DFW_perform_post_commit_work(transaction);
+	DFW_perform_post_commit_work(tdbb, transaction);
 
 	// notify any waiting locks that this transaction is committing;
 	// there could be no lock if this transaction is being reconnected
@@ -966,6 +967,8 @@ void TRA_post_resources(thread_db* tdbb, jrd_tra* transaction, ResourceList& res
 
 	Jrd::ContextPoolHolder context(tdbb, transaction->tra_pool);
 
+	USHORT usedTablespaces[TRANS_PAGE_SPACE] = {0};
+
 	for (Resource* rsc = resources.begin(); rsc < resources.end(); rsc++)
 	{
 		if (rsc->rsc_type == Resource::rsc_relation ||
@@ -984,6 +987,7 @@ void TRA_post_resources(thread_db* tdbb, jrd_tra* transaction, ResourceList& res
 					if (rsc->rsc_rel->rel_file) {
 						EXT_tra_attach(rsc->rsc_rel->rel_file, transaction);
 					}
+					usedTablespaces[rsc->rsc_rel->getBasePages()->rel_pg_space_id]++;
 					break;
 				case Resource::rsc_procedure:
 				case Resource::rsc_function:
@@ -1007,6 +1011,15 @@ void TRA_post_resources(thread_db* tdbb, jrd_tra* transaction, ResourceList& res
 			}
 		}
 	}
+
+	// Now let's lock all used tablespaces
+	for (ULONG i = DB_PAGE_SPACE + 1; i < TRANS_PAGE_SPACE; i++)
+		if (usedTablespaces[i] > 0)
+		{
+			// Tablespace is locking after the use in relation and indices.
+			// Should we check it here again?
+			MET_tablespace_id(tdbb, i)->addRef(tdbb);
+		}
 }
 
 
@@ -1263,6 +1276,7 @@ void TRA_release_transaction(thread_db* tdbb, jrd_tra* transaction, Jrd::TraceTr
 	}
 
 	// Release interest in relation/procedure existence for transaction
+	USHORT usedTablespaces[TRANS_PAGE_SPACE] = {0};
 
 	for (Resource* rsc = transaction->tra_resources.begin();
 		rsc < transaction->tra_resources.end(); rsc++)
@@ -1274,6 +1288,7 @@ void TRA_release_transaction(thread_db* tdbb, jrd_tra* transaction, Jrd::TraceTr
 			if (rsc->rsc_rel->rel_file) {
 				EXT_tra_detach(rsc->rsc_rel->rel_file, transaction);
 			}
+			usedTablespaces[rsc->rsc_rel->getBasePages()->rel_pg_space_id]++;
 			break;
 		case Resource::rsc_procedure:
 		case Resource::rsc_function:
@@ -1288,6 +1303,19 @@ void TRA_release_transaction(thread_db* tdbb, jrd_tra* transaction, Jrd::TraceTr
 	}
 
 	release_temp_tables(tdbb, transaction);
+
+	// Now let's release all used tablespaces
+	for (ULONG i = DB_PAGE_SPACE + 1; i < TRANS_PAGE_SPACE; i++)
+		if (usedTablespaces[i] > 0)
+		{
+			// Tablespace is locking after the use in relation and indices.
+			// Should we check it here again?
+			Tablespace* ts = tdbb->getAttachment()->getTablespace(i);
+			fb_assert(ts);
+
+			if (ts)
+				ts->release(tdbb);
+		}
 
 	// Release the locks associated with the transaction
 
@@ -2383,7 +2411,7 @@ static ULONG inventory_page(thread_db* tdbb, ULONG sequence)
 
 	while (sequence >= dbb->getKnownPagesCount(pag_transactions))
 	{
-		DPM_scan_pages(tdbb);
+		DPM_scan_pages(tdbb, pag_transactions);
 
 		const ULONG tipCount = dbb->getKnownPagesCount(pag_transactions);
 		if (sequence < tipCount)
@@ -2690,7 +2718,7 @@ static void retain_context(thread_db* tdbb, jrd_tra* transaction, bool commit, i
 	// Perform any post commit work OR delete entries from deferred list
 
 	if (commit)
-		DFW_perform_post_commit_work(transaction);
+		DFW_perform_post_commit_work(tdbb, transaction);
 	else
 		DFW_delete_deferred(transaction, -1);
 

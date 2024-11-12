@@ -47,6 +47,7 @@
 #include "../common/status.h"
 #include "../common/sha.h"
 #include "../common/classes/ImplementHelper.h"
+#include "../common/classes/GenericMap.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -120,7 +121,8 @@ enum rec_type {
 	rec_package,			// Package
 	rec_db_creator,			// Database creator
 	rec_publication,		// Publication
-	rec_pub_table			// Publication table
+	rec_pub_table,			// Publication table
+	rec_tablespace			// Tablespace
 };
 
 
@@ -207,7 +209,7 @@ Version 11: FB4.0.
 			SQL SECURITY feature, tables RDB$PUBLICATIONS/RDB$PUBLICATION_TABLES.
 */
 
-const int ATT_BACKUP_FORMAT		= 11;
+const int ATT_BACKUP_FORMAT		= 13;
 
 // max array dimension
 
@@ -282,6 +284,7 @@ enum att_type {
 	att_relation_type,
 	att_relation_sql_security_deprecated,	// can be removed later
 	att_relation_sql_security,
+	att_relation_tablespace_name,
 
 	// Field attributes (used for both global and local fields)
 
@@ -341,6 +344,7 @@ enum att_type {
 	att_field_owner_name, // FB3.0, ODS12_0,
 	att_field_generator_name,
 	att_field_identity_type,
+	att_field_tablespace_name,
 
 	// Index attributes
 
@@ -357,6 +361,7 @@ enum att_type {
 	att_index_expression_blr,
 	att_index_condition_source,
 	att_index_condition_blr,
+	att_index_tablespace_name,
 
 	// Data record
 
@@ -656,7 +661,16 @@ enum att_type {
 
 	// Publication tables
 	att_ptab_pub_name = SERIES,
-	att_ptab_table_name
+	att_ptab_table_name,
+
+	// Tablespace attributes
+	att_ts_name = SERIES,
+	att_ts_security_class,
+	att_ts_description,
+	att_ts_owner_name,
+	att_ts_file,
+	att_ts_offline,
+	att_ts_readonly
 };
 
 
@@ -728,6 +742,7 @@ struct burp_fld
 	SSHORT		fld_collation_id;
 	RCRD_OFFSET	fld_sql;
 	RCRD_OFFSET	fld_null;
+	TEXT		fld_tablespace[GDS_NAME_LEN];
 };
 
 enum fld_flags_vals {
@@ -971,7 +986,8 @@ public:
 		  flag_on_line(true),
 		  firstMap(true),
 		  firstDbc(true),
-		  stdIoMode(false)
+		  stdIoMode(false),
+		  tablespace_mapping(*getDefaultMemoryPool())
 	{
 		// this is VERY dirty hack to keep current (pre-FB2) behaviour
 		memset (&gbl_database_file_name, 0,
@@ -1036,6 +1052,7 @@ public:
 	redirect_vals	sw_redirect;
 	bool		burp_throw;
 	std::optional<ReplicaMode>	gbl_sw_replica;
+	bool		gbl_sw_ts_orig_paths;
 
 	UCHAR*		blk_io_ptr;
 	int			blk_io_cnt;
@@ -1154,6 +1171,8 @@ public:
 	Firebird::IRequest*	handles_get_type_req_handle1;
 	Firebird::IRequest*	handles_get_user_privilege_req_handle1;
 	Firebird::IRequest*	handles_get_view_req_handle1;
+	Firebird::IRequest*	handles_get_ts_req_handle1;
+	Firebird::IRequest* handles_get_ts_req_handle2;
 	Firebird::IRequest* handles_activateIndex_req_handle1;
 
 	// The handles_put.. are for backup.
@@ -1177,6 +1196,9 @@ public:
 	TEXT			database_security_class[GDS_NAME_LEN]; // To save database security class for deferred update
 	unsigned		batchInlineBlobLimit;
 
+	typedef Firebird::GenericMap<Firebird::Pair<
+		Firebird::Full<Firebird::string, Firebird::string> > > StringMap;
+
 	static inline BurpGlobals* getSpecific()
 	{
 		return (BurpGlobals*) ThreadData::getSpecific();
@@ -1192,6 +1214,7 @@ public:
 	void setupSkipData(const Firebird::string& regexp);
 	void setupIncludeData(const Firebird::string& regexp);
 	bool skipRelation(const char* name);
+	void loadMapping(const char* mapping_file, StringMap& map, bool clearMap = true, bool caseSensitive = true);
 
 	char veryEnd;
 	//starting after this members must be initialized in constructor explicitly
@@ -1213,6 +1236,7 @@ public:
 	bool stdIoMode;			// stdin or stdout is used as backup file
 	Firebird::AutoPtr<Firebird::SimilarToRegex> skipDataMatcher;
 	Firebird::AutoPtr<Firebird::SimilarToRegex> includeDataMatcher;
+	StringMap tablespace_mapping;	// Will be used to overwrite filename of tablespace with given name
 
 public:
 	Firebird::string toSystem(const Firebird::PathName& from);

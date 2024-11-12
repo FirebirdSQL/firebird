@@ -87,7 +87,7 @@ public:
 	ULONG rel_sec_data_space;	// lowest pointer page with secondary data page space
 	ULONG rel_last_free_pri_dp;	// last primary data page found with space
 	ULONG rel_last_free_blb_dp;	// last blob data page found with space
-	USHORT rel_pg_space_id;
+	ULONG rel_pg_space_id;
 
 	RelationPages(Firebird::MemoryPool& pool)
 		: rel_pages(NULL), rel_instance_id(0),
@@ -290,6 +290,16 @@ public:
 		return &rel_pages_base;
 	}
 
+	RelationPages* getReplacedPages()
+	{
+		return rel_replaced_pages;
+	}
+
+	void setReplacedPages(RelationPages* pages)
+	{
+		rel_replaced_pages = pages;
+	}
+
 	bool	delPages(thread_db* tdbb, TraNumber tran = MAX_TRA_NUMBER, RelationPages* aPages = NULL);
 	void	retainPages(thread_db* tdbb, TraNumber oldNumber, TraNumber newNumber);
 
@@ -332,6 +342,7 @@ private:
 	RelationPagesInstances* rel_pages_inst;
 	RelationPages			rel_pages_base;
 	RelationPages*			rel_pages_free;
+	RelationPages*			rel_replaced_pages;
 
 	RelationPages* getPagesInternal(thread_db* tdbb, TraNumber tran, bool allocPages);
 
@@ -347,6 +358,8 @@ public:
 
 	void downgradeGCLock(thread_db* tdbb);
 	bool acquireGCLock(thread_db* tdbb, int wait);
+
+	void setPageSpace(ULONG pageSpaceId);
 
 	// This guard is used by regular code to prevent online validation while
 	// dead- or back- versions is removed from disk.

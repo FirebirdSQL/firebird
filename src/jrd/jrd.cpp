@@ -1302,6 +1302,7 @@ private:
 static void			check_database(thread_db* tdbb, bool async = false);
 static void			commit(thread_db*, jrd_tra*, const bool);
 static bool			drop_files(const jrd_file*);
+static bool			drop_files(ObjectsArray<PathName> &tsFiles);
 static void			find_intl_charset(thread_db*, Jrd::Attachment*, const DatabaseOptions*);
 static void			init_database_lock(thread_db*);
 static void			run_commit_triggers(thread_db* tdbb, jrd_tra* transaction);
@@ -3452,6 +3453,11 @@ void JAttachment::internalDropDatabase(CheckStatusWrapper* user_status)
 			Ods::header_page* header = NULL;
 			XThreadEnsureUnlock threadGuard(dbb->dbb_thread_mutex, FB_FUNCTION);
 
+			// Use the default memory pool instead of the dbb permanent memory pool
+			// because the last one will be destroyed below in this function
+			// before ~ObjectsArray call.
+			ObjectsArray<PathName> tsFiles(*getDefaultMemoryPool());
+
 			try
 			{
 				Sync sync(&dbb->dbb_sync, "JAttachment::dropDatabase()");
@@ -3506,6 +3512,9 @@ void JAttachment::internalDropDatabase(CheckStatusWrapper* user_status)
 				// dbb->dbb_extManager->closeAttachment(tdbb, attachment);
 				// To be reviewed by Adriano - it will be anyway called in release_attachment
 
+				// Now under exclusive lock we can get a list of tablespace files to delete them later
+				MET_ts_files(tdbb, tsFiles);
+
 				// Forced release of all transactions
 				purge_transactions(tdbb, attachment, true);
 
@@ -3557,6 +3566,7 @@ void JAttachment::internalDropDatabase(CheckStatusWrapper* user_status)
 				{
 					err = drop_files(shadow->sdw_file) || err;
 				}
+				err = drop_files(tsFiles) || err;
 
 				tdbb->setDatabase(NULL);
 				Database::destroy(dbb);
@@ -6831,6 +6841,36 @@ static bool drop_files(const jrd_file* file)
 	return status->getState() & IStatus::STATE_ERRORS ? true : false;
 }
 
+static bool drop_files(ObjectsArray<PathName>& tsFiles)
+{
+/**************************************
+ *
+ *	d r o p _ f i l e s
+ *
+ **************************************
+ *
+ * Functional description
+ *	drop files in list
+ *
+ **************************************/
+	FbLocalStatus status;
+
+	while (tsFiles.getCount())
+	{
+		const PathName file(tsFiles.pop());
+		if (unlink(file.c_str()))
+		{
+			ERR_build_status(&status, Arg::Gds(isc_io_error) << Arg::Str("unlink") <<
+									  Arg::Str(file) <<
+									  Arg::Gds(isc_io_delete_err) << SYS_ERR(errno));
+			Database* dbb = GET_DBB();
+			PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+			iscDbLogStatus(pageSpace->file->fil_string, &status);
+		}
+	}
+
+	return status->getState() & IStatus::STATE_ERRORS ? true : false;
+}
 
 static void find_intl_charset(thread_db* tdbb, Jrd::Attachment* attachment, const DatabaseOptions* options)
 {

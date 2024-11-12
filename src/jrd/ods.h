@@ -370,6 +370,7 @@ struct index_root_page
 	{
 	private:
 		friend struct index_root_page; // to allow offset check for private members
+		ULONG irt_page_space_id;	// page space of index root
 		ULONG irt_root;				// page number of index root if irt_in_progress is NOT set, or
 									// highest 32 bit of transaction if irt_in_progress is set
 		ULONG irt_transaction;		// transaction in progress (lowest 32 bits)
@@ -378,8 +379,9 @@ struct index_root_page
 		UCHAR irt_keys;				// number of keys in index
 		UCHAR irt_flags;
 
-		ULONG getRoot() const;
-		void setRoot(ULONG root_page);
+		ULONG getRootPageSpaceId() const;
+		ULONG getRootPage() const;
+		void setRoot(ULONG pageSpaceId, ULONG page);
 
 		TraNumber getTransaction() const;
 		void setTransaction(TraNumber traNumber);
@@ -388,15 +390,16 @@ struct index_root_page
 
 	} irt_rpt[1];
 
-	static_assert(sizeof(struct irt_repeat) == 12, "struct irt_repeat size mismatch");
-	static_assert(offsetof(struct irt_repeat, irt_root) == 0, "irt_root offset mismatch");
-	static_assert(offsetof(struct irt_repeat, irt_transaction) == 4, "irt_transaction offset mismatch");
-	static_assert(offsetof(struct irt_repeat, irt_desc) == 8, "irt_desc offset mismatch");
-	static_assert(offsetof(struct irt_repeat, irt_keys) == 10, "irt_keys offset mismatch");
-	static_assert(offsetof(struct irt_repeat, irt_flags) == 11, "irt_flags offset mismatch");
+	static_assert(sizeof(struct irt_repeat) == 16, "struct irt_repeat size mismatch");
+	static_assert(offsetof(struct irt_repeat, irt_page_space_id) == 0, "irt_page_space_id offset mismatch");
+	static_assert(offsetof(struct irt_repeat, irt_root) == 4, "irt_root offset mismatch");
+	static_assert(offsetof(struct irt_repeat, irt_transaction) == 8, "irt_transaction offset mismatch");
+	static_assert(offsetof(struct irt_repeat, irt_desc) == 12, "irt_desc offset mismatch");
+	static_assert(offsetof(struct irt_repeat, irt_keys) == 14, "irt_keys offset mismatch");
+	static_assert(offsetof(struct irt_repeat, irt_flags) == 15, "irt_flags offset mismatch");
 };
 
-static_assert(sizeof(struct index_root_page) == 32, "struct index_root_page size mismatch");
+static_assert(sizeof(struct index_root_page) == 36, "struct index_root_page size mismatch");
 static_assert(offsetof(struct index_root_page, irt_header) == 0, "irt_header offset mismatch");
 static_assert(offsetof(struct index_root_page, irt_relation) == 16, "irt_relation offset mismatch");
 static_assert(offsetof(struct index_root_page, irt_count) == 18, "irt_count offset mismatch");
@@ -425,14 +428,20 @@ inline constexpr USHORT irt_primary			= 16;
 inline constexpr USHORT irt_expression		= 32;
 inline constexpr USHORT irt_condition		= 64;
 
-inline ULONG index_root_page::irt_repeat::getRoot() const
+inline ULONG index_root_page::irt_repeat::getRootPageSpaceId() const
+{
+	return irt_page_space_id;
+}
+
+inline ULONG index_root_page::irt_repeat::getRootPage() const
 {
 	return (irt_flags & irt_in_progress) ? 0 : irt_root;
 }
 
-inline void index_root_page::irt_repeat::setRoot(ULONG root_page)
+inline void index_root_page::irt_repeat::setRoot(ULONG pageSpaceId, ULONG page)
 {
-	irt_root = root_page;
+	irt_page_space_id = pageSpaceId;
+	irt_root = page;
 	irt_flags &= ~irt_in_progress;
 }
 

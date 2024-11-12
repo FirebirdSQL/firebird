@@ -98,9 +98,12 @@ const int IN_SW_BURP_CRYPT				= 51;	// name of crypt plugin
 
 const int IN_SW_BURP_INCLUDE_DATA		= 52;	// backup data from tables
 const int IN_SW_BURP_REPLICA			= 53;	// replica mode
-
 const int IN_SW_BURP_PARALLEL_WORKERS	= 54;	// parallel workers
 const int IN_SW_BURP_DIRECT_IO			= 55;	// direct IO for backup files
+
+const int IN_SW_BURP_TS_MAPPING_FILE	= 56;	// mapping file for tablespaces
+const int IN_SW_BURP_TS_ORIGINAL_PATHS	= 57;	// restore tablespaces to their original paths
+const int IN_SW_BURP_TS_PATH			= 58;	// set a path for a tablespace
 
 /**************************************************************************/
 
@@ -231,6 +234,9 @@ static const Switches::in_sw_tab_t reference_burp_in_sw_table[] =
 	{IN_SW_BURP_HIDDEN_RDONLY,	isc_spb_res_am_readonly,	"MODE READ_ONLY",	0, 0, 0, false, false,	0, 14, NULL, boRestore},
 	{IN_SW_BURP_HIDDEN_RDWRITE, isc_spb_res_am_readwrite,	"MODE READ_WRITE",	0, 0, 0, false, false,	0, 15, NULL, boRestore},
 /**************************************************************************/
+	{IN_SW_BURP_TS_MAPPING_FILE,	0,	"TS_MAPPING_FILE",	0, 0, 0, false, false,	415, 6, NULL, boRestore},
+	{IN_SW_BURP_TS_PATH,	0,	"TS",	0, 0, 0, false, false,	418, 2, NULL, boRestore},
+	{IN_SW_BURP_TS_ORIGINAL_PATHS,	0,	"TS_ORIGINAL_PATHS",	0, 0, 0, false, false,	417, 7, NULL, boRestore},
 	{IN_SW_BURP_0,		 0, NULL,			0, 0, 0, false, false,	0, 0, NULL, boGeneral}
 };
 

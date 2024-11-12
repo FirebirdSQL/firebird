@@ -283,3 +283,8 @@ FB_IMPL_MSG(SQLERR, 1043, dsql_string_byte_length, -901, "42", "000", "String li
 FB_IMPL_MSG(SQLERR, 1044, dsql_string_char_length, -901, "42", "000", "String literal with @1 characters exceeds the maximum length of @2 characters for the @3 character set")
 FB_IMPL_MSG(SQLERR, 1045, dsql_max_nesting, -901, "07", "002", "Too many BEGIN...END nesting. Maximum level is @1")
 FB_IMPL_MSG(SQLERR, 1046, dsql_recreate_user_failed, -901, "42", "000", "RECREATE USER @1 failed")
+FB_IMPL_MSG(SQLERR, 1047, dsql_create_ts_failed, -901, "42", "000", "CREATE TABLESPACE @1 failed")
+FB_IMPL_MSG(SQLERR, 1048, dsql_alter_ts_failed, -901, "42", "000", "ALTER TABLESPACE @1 failed")
+FB_IMPL_MSG(SQLERR, 1049, dsql_create_alter_ts_failed, -901, "42", "000", "CREATE OR ALTER TABLESPACE @1 failed")
+FB_IMPL_MSG(SQLERR, 1050, dsql_drop_ts_failed, -901, "42", "000", "DROP TABLESPACE @1 failed")
+FB_IMPL_MSG(SQLERR, 1051, dsql_recreate_ts_failed, -901, "42", "000", "RECREATE TABLESPACE @1 failed")

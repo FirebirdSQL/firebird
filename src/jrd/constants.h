@@ -391,7 +391,10 @@ static const char* const DDL_TRIGGER_ACTION_NAMES[][2] =
 	{"DROP", "PACKAGE BODY"},
 	{"CREATE", "MAPPING"},
 	{"ALTER", "MAPPING"},
-	{"DROP", "MAPPING"}
+	{"DROP", "MAPPING"},
+	{"CREATE", "TABLESPACE"},
+	{"ALTER", "TABLESPACE"},
+	{"DROP", "TABLESPACE"}
 };
 
 const int DDL_TRIGGER_BEFORE	= 0;
@@ -444,6 +447,9 @@ const int DDL_TRIGGER_DROP_PACKAGE_BODY			= 44;
 const int DDL_TRIGGER_CREATE_MAPPING			= 45;
 const int DDL_TRIGGER_ALTER_MAPPING				= 46;
 const int DDL_TRIGGER_DROP_MAPPING				= 47;
+const int DDL_TRIGGER_CREATE_TABLESPACE			= 48;
+const int DDL_TRIGGER_ALTER_TABLESPACE			= 49;
+const int DDL_TRIGGER_DROP_TABLESPACE			= 50;
 
 // that's how database trigger action types are encoded
 //    (TRIGGER_TYPE_DB | type)
@@ -480,5 +486,8 @@ const int WITH_ADMIN_OPTION = 2;
 
 // Max length of the string returned by ERROR_TEXT context variable
 const USHORT MAX_ERROR_MSG_LENGTH = 1024 * METADATA_BYTES_PER_CHAR; // 1024 UTF-8 characters
+
+// Tablespaces
+const char* const PRIMARY_TABLESPACE_NAME = "PRIMARY";
 
 #endif // JRD_CONSTANTS_H

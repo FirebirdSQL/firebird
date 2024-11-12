@@ -75,7 +75,7 @@ void	DPM_pages(Jrd::thread_db*, SSHORT, int, ULONG, ULONG);
 SLONG	DPM_prefetch_bitmap(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::PageBitmap*, SLONG);
 #endif
 ULONG	DPM_pointer_pages(Jrd::thread_db*, Jrd::jrd_rel*);
-void	DPM_scan_pages(Jrd::thread_db*);
+void	DPM_scan_pages(Jrd::thread_db*, SCHAR pagType = 0, int relId = 0);
 void	DPM_store(Jrd::thread_db*, Jrd::record_param*, Jrd::PageStack&, const Jrd::RecordStorageType type);
 RecordNumber DPM_store_blob(Jrd::thread_db*, Jrd::blb*, Jrd::Record*);
 void	DPM_rewrite_header(Jrd::thread_db*, Jrd::record_param*);
@@ -83,5 +83,7 @@ void	DPM_update(Jrd::thread_db*, Jrd::record_param*, Jrd::PageStack*, const Jrd:
 
 void DPM_create_relation_pages(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::RelationPages*);
 void DPM_delete_relation_pages(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::RelationPages*);
+
+void DPM_move_data_pages(Jrd::thread_db* tdbb, Jrd::jrd_rel *relation, Jrd::RelationPages *newRelationPages);
 
 #endif // JRD_DPM_PROTO_H

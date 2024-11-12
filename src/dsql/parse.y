@@ -707,6 +707,13 @@ using namespace Firebird;
 %token <metaNamePtr> NAMED_ARG_ASSIGN
 %token <metaNamePtr> RTRIM
 
+// tablespaces
+%token <metaNamePtr> INCLUDING
+%token <metaNamePtr> CONTENTS
+%token <metaNamePtr> TABLESPACE
+%token <metaNamePtr> OFFLINE
+%token <metaNamePtr> ONLINE
+
 // precedence declarations for expression evaluation
 
 %left	OR
@@ -863,6 +870,8 @@ using namespace Firebird;
 	Jrd::SetDecFloatTrapsNode* setDecFloatTrapsNode;
 	Jrd::SetBindNode* setBindNode;
 	Jrd::SessionResetNode* sessionResetNode;
+	Jrd::CreateAlterTablespaceNode* createAlterTablespaceNode;
+	Jrd::DropTablespaceNode* dropTablespaceNode;
 }
 
 %include types.y
@@ -1083,6 +1092,8 @@ object
 		{ $$ = newNode<GranteeClause>(obj_collations, getSecurityClassName(obj_collations)); }
 	| FILTER
 		{ $$ = newNode<GranteeClause>(obj_filters, getSecurityClassName(obj_filters)); }
+	| TABLESPACE
+		{ $$ = newNode<GranteeClause>(obj_tablespaces, getSecurityClassName(obj_tablespaces)); }
 	;
 
 table_noise
@@ -1556,8 +1567,11 @@ create_clause
 				node->relation = $8;
 				$$ = node;
 			}
-		index_definition(static_cast<CreateIndexNode*>($9))
+		index_definition(static_cast<CreateIndexNode*>($9)) tablespace_name_clause_opt
 			{
+				if ($11)
+					static_cast<CreateIndexNode*>($9)->tableSpace = *$11;
+
 				$$ = $9;
 			}
 	| FUNCTION if_not_exists_opt function_clause
@@ -1664,6 +1678,12 @@ create_clause
 			node->createIfNotExistsOnly = $3;
 			$$ = node;
 		}
+	| TABLESPACE if_not_exists_opt tablespace_clause
+		{
+			const auto node = $3;
+			node->createIfNotExistsOnly = $2;
+			$$ = node;
+		}
 	;
 
 
@@ -1696,6 +1716,8 @@ recreate_clause
 		{ $$ = newNode<RecreateSequenceNode>($2); }
 	| SEQUENCE generator_clause
 		{ $$ = newNode<RecreateSequenceNode>($2); }
+	| TABLESPACE tablespace_clause
+		{ $$ = newNode<RecreateTablespaceNode>($2); }
 	| USER create_user_clause
 		{ $$ = newNode<RecreateUserNode>($2); }
 	;
@@ -1719,6 +1741,7 @@ replace_clause
 	| USER replace_user_clause					{ $$ = $2; }
 	| MAPPING replace_map_clause(false)			{ $$ = $2; }
 	| GLOBAL MAPPING replace_map_clause(true)	{ $$ = $3; }
+	| TABLESPACE replace_tablespace_clause		{ $$ = $2; }
 	;
 
 
@@ -2378,6 +2401,8 @@ table_attribute($relationNode)
 		{ setClause($relationNode->ssDefiner, "SQL SECURITY", $1); }
 	| publication_state
 		{ setClause($relationNode->replicationState, "PUBLICATION", $1); }
+	| tablespace_name_clause
+		{ setClause($relationNode->tableSpace, "TABLESPACE", *$1); }
 	;
 
 %type <boolVal> sql_security_clause
@@ -2650,7 +2675,7 @@ column_constraint($addColumnClause)
 			constraint.check = $1;
 		}
 	| REFERENCES symbol_table_name column_parens_opt
-			referential_trigger_action constraint_index_opt
+			referential_trigger_action constraint_index_opt tablespace_name_clause_opt
 		{
 			RelationNode::AddConstraintClause& constraint = $addColumnClause->constraints.add();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_FK;
@@ -2669,18 +2694,27 @@ column_constraint($addColumnClause)
 			}
 
 			constraint.index = $5;
+
+			if ($6)
+				constraint.tableSpace = *$6;
 		}
-	| UNIQUE constraint_index_opt
+	| UNIQUE constraint_index_opt tablespace_name_clause_opt
 		{
 			RelationNode::AddConstraintClause& constraint = $addColumnClause->constraints.add();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_UNIQUE;
 			constraint.index = $2;
+
+			if ($3)
+				constraint.tableSpace = *$3;
 		}
-	| PRIMARY KEY constraint_index_opt
+	| PRIMARY KEY constraint_index_opt tablespace_name_clause_opt
 		{
 			RelationNode::AddConstraintClause& constraint = $addColumnClause->constraints.add();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_PK;
 			constraint.index = $3;
+
+			if ($4)
+				constraint.tableSpace = *$4;
 		}
 	;
 
@@ -2705,7 +2739,7 @@ constraint_name_opt
 
 %type <addConstraintClause> table_constraint(<relationNode>)
 table_constraint($relationNode)
-	: UNIQUE column_parens constraint_index_opt
+	: UNIQUE column_parens constraint_index_opt tablespace_name_clause_opt
 		{
 			RelationNode::AddConstraintClause& constraint = *newNode<RelationNode::AddConstraintClause>();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_UNIQUE;
@@ -2718,10 +2752,13 @@ table_constraint($relationNode)
 
 			constraint.index = $3;
 
+			if ($4)
+				constraint.tableSpace = *$4;
+
 			$relationNode->clauses.add(&constraint);
 			$$ = &constraint;
 		}
-	| PRIMARY KEY column_parens constraint_index_opt
+	| PRIMARY KEY column_parens constraint_index_opt tablespace_name_clause_opt
 		{
 			RelationNode::AddConstraintClause& constraint = *newNode<RelationNode::AddConstraintClause>();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_PK;
@@ -2734,11 +2771,14 @@ table_constraint($relationNode)
 
 			constraint.index = $4;
 
+			if ($5)
+				constraint.tableSpace = *$5;
+
 			$relationNode->clauses.add(&constraint);
 			$$ = &constraint;
 		}
 	| FOREIGN KEY column_parens REFERENCES symbol_table_name column_parens_opt
-		referential_trigger_action constraint_index_opt
+		referential_trigger_action constraint_index_opt tablespace_name_clause_opt
 		{
 			RelationNode::AddConstraintClause& constraint = *newNode<RelationNode::AddConstraintClause>();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_FK;
@@ -2762,6 +2802,9 @@ table_constraint($relationNode)
 			}
 
 			constraint.index = $8;
+
+			if ($9)
+				constraint.tableSpace = *$9;
 
 			$relationNode->clauses.add(&constraint);
 			$$ = &constraint;
@@ -4247,6 +4290,9 @@ trigger_ddl_type_items
 	| CREATE MAPPING		{ $$ = TRIGGER_TYPE_DDL | (1LL << DDL_TRIGGER_CREATE_MAPPING); }
 	| ALTER MAPPING			{ $$ = TRIGGER_TYPE_DDL | (1LL << DDL_TRIGGER_ALTER_MAPPING); }
 	| DROP MAPPING			{ $$ = TRIGGER_TYPE_DDL | (1LL << DDL_TRIGGER_DROP_MAPPING); }
+	| CREATE TABLESPACE		{ $$ = TRIGGER_TYPE_DDL | (1LL << DDL_TRIGGER_CREATE_TABLESPACE); }
+	| ALTER TABLESPACE		{ $$ = TRIGGER_TYPE_DDL | (1LL << DDL_TRIGGER_ALTER_TABLESPACE); }
+	| DROP TABLESPACE		{ $$ = TRIGGER_TYPE_DDL | (1LL << DDL_TRIGGER_DROP_TABLESPACE); }
 	| trigger_ddl_type OR
 		trigger_ddl_type	{ $$ = $1 | $3; }
 	;
@@ -4319,6 +4365,7 @@ alter_clause
 	| MAPPING alter_map_clause(false)		{ $$ = $2; }
 	| GLOBAL MAPPING alter_map_clause(true)	{ $$ = $3; }
 	| EXTERNAL CONNECTIONS POOL alter_eds_conn_pool_clause	{ $$ = $4; }
+	| TABLESPACE alter_tablespace_clause	{ $$ = $2; }
 	;
 
 %type <alterDomainNode> alter_domain
@@ -4520,6 +4567,13 @@ alter_op($relationNode)
 				newNode<RelationNode::Clause>(RelationNode::Clause::TYPE_ALTER_PUBLICATION);
 			$relationNode->clauses.add(clause);
 		}
+	| SET TABLESPACE to_opt symbol_tablespace_name
+		{
+			setClause($relationNode->tableSpace, "TABLESPACE", *$4);
+			RelationNode::Clause* clause =
+				newNode<RelationNode::Clause>(RelationNode::Clause::TYPE_SET_TABLESPACE);
+			$relationNode->clauses.add(clause);
+		}
 	;
 
 %type <metaNamePtr> alter_column_name
@@ -4691,9 +4745,13 @@ drop_behaviour
 
 %type <ddlNode>	alter_index_clause
 alter_index_clause
-	: symbol_index_name index_active
+	: symbol_index_name ACTIVE		{ $$ = newNode<AlterIndexNode>(*$1, AlterIndexNode::OP_ACTIVE); }
+	| symbol_index_name INACTIVE	{ $$ = newNode<AlterIndexNode>(*$1, AlterIndexNode::OP_INACTIVE); }
+	| symbol_index_name SET TABLESPACE to_opt symbol_tablespace_name
 		{
-			$$ = newNode<AlterIndexNode>(*$1, $2);
+			AlterIndexNode* node = newNode<AlterIndexNode>(*$1, AlterIndexNode::OP_SET_TABLESPACE);
+			node->tableSpace = *$5;
+			$$ = node;
 		}
 	;
 
@@ -5046,6 +5104,12 @@ drop_clause
 			node->silentDrop = $3;
 			$$ = node;
 		}
+	| TABLESPACE if_exists_opt drop_tablespace_clause
+		{
+			const auto node = $3;
+			node->silent = $2;
+			$$ = node;
+		}
 	;
 
 %type <boolVal> if_exists_opt
@@ -5252,7 +5316,7 @@ without_time_zone_opt
 
 %type <legacyField> blob_type
 blob_type
-	: BLOB { $$ = newNode<dsql_fld>(); } blob_subtype(NOTRIAL($2)) blob_segsize charset_clause
+	: BLOB { $$ = newNode<dsql_fld>(); } blob_subtype(NOTRIAL($2)) blob_segsize charset_clause /*tablespace_name_clause_opt*/
 		{
 			$$ = $2;
 			$$->dtype = dtype_blob;
@@ -5263,16 +5327,22 @@ blob_type
 				$$->charSet = *$5;
 				$$->flags |= FLD_has_chset;
 			}
+
+			//if ($6)
+			//	$$->fld_ts_name = *$6;
 		}
-	| BLOB '(' unsigned_short_integer ')'
+	| BLOB '(' unsigned_short_integer ')' /*tablespace_name_clause_opt*/
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_blob;
 			$$->length = sizeof(ISC_QUAD);
 			$$->segLength = (USHORT) $3;
 			$$->subType = 0;
+
+			//if ($5)
+			//	$$->fld_ts_name = *$5;
 		}
-	| BLOB '(' unsigned_short_integer ',' signed_short_integer ')'
+	| BLOB '(' unsigned_short_integer ',' signed_short_integer ')' /*tablespace_name_clause_opt*/
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_blob;
@@ -5280,8 +5350,11 @@ blob_type
 			$$->segLength = (USHORT) $3;
 			$$->subType = (USHORT) $5;
 			$$->flags |= FLD_has_sub;
+
+			//if ($7)
+			//	$$->fld_ts_name = *$7;
 		}
-	| BLOB '(' ',' signed_short_integer ')'
+	| BLOB '(' ',' signed_short_integer ')' /*tablespace_name_clause_opt*/
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_blob;
@@ -5289,6 +5362,9 @@ blob_type
 			$$->segLength = 80;
 			$$->subType = (USHORT) $4;
 			$$->flags |= FLD_has_sub;
+
+			//if ($6)
+			//	$$->fld_ts_name = *$6;
 		}
 	;
 
@@ -6103,6 +6179,7 @@ ddl_type1
 	| CHARACTER SET			{ $$ = obj_charset; }
 	| COLLATION				{ $$ = obj_collation; }
 	| PACKAGE				{ $$ = obj_package_header; }
+	| TABLESPACE			{ $$ = obj_tablespace; }
 	/***
 	| SECURITY CLASS		{ $$ = ddl_sec_class; }
 	***/
@@ -7884,6 +7961,102 @@ map_role
 	| USER		{ $$ = false; }
 	;
 
+// TABLESPACE
+%type <createAlterTablespaceNode> tablespace_clause
+tablespace_clause
+	: symbol_tablespace_name FILE utf_string /*tablespace_offline_clause tablespace_readonly_clause*/
+		{
+			$$ = newNode<CreateAlterTablespaceNode>(*$1);
+			$$->fileName = $3->c_str();
+			//$$->offline = $4;
+			//$$->readonly = $5;
+		}
+	;
+
+to_opt
+	: // nothing
+	| TO
+	;
+
+in_opt
+	: // nothing
+	| IN
+	;
+
+%type <metaNamePtr> symbol_tablespace_name
+symbol_tablespace_name
+	: valid_symbol_name
+	;
+
+//%type <boolVal> tablespace_offline_clause
+//tablespace_offline_clause
+//	: { $$ = false; }
+//	| OFFLINE	{ $$ = true; }
+//	| ONLINE	{ $$ = false; }
+//	;
+
+//%type <boolVal> tablespace_readonly_clause
+//tablespace_readonly_clause
+//	:				{ $$ = false; }
+//	| READ ONLY		{ $$ = true; }
+//	| READ WRITE	{ $$ = false; }
+//	;
+
+%type <createAlterTablespaceNode> alter_tablespace_clause
+alter_tablespace_clause
+	: symbol_tablespace_name SET FILE to_opt utf_string /*tablespace_offline_clause tablespace_readonly_clause*/
+		{
+			$$ = newNode<CreateAlterTablespaceNode>(*$1);
+			$$->create = false;
+			$$->alter = true;
+			$$->fileName = $5->c_str();
+			//$$->offline = $6;
+			//$$->readonly = $7;
+		}
+	| symbol_tablespace_name /*tablespace_offline_clause tablespace_readonly_clause*/
+		{
+			$$ = newNode<CreateAlterTablespaceNode>(*$1);
+			$$->create = false;
+			$$->alter = true;
+			//$$->offline = $2;
+			//$$->readonly = $3;
+		}
+	;
+
+%type <createAlterTablespaceNode> replace_tablespace_clause
+replace_tablespace_clause
+	: tablespace_clause
+		{
+			$$ = $1;
+			$$->alter = true;
+		}
+	;
+
+%type <metaNamePtr> tablespace_name_clause
+tablespace_name_clause
+	: in_opt TABLESPACE symbol_tablespace_name { $$ = $3; }
+	;
+
+%type <metaNamePtr> tablespace_name_clause_opt
+tablespace_name_clause_opt
+	: /* nothing */ { $$ = NULL; }
+	| tablespace_name_clause { $$ = $1; }
+	;
+
+%type <dropTablespaceNode> drop_tablespace_clause
+drop_tablespace_clause
+	: symbol_tablespace_name
+		{
+			DropTablespaceNode* node = newNode<DropTablespaceNode>(*$1);
+			$$ = node;
+		}
+//	| symbol_tablespace_name INCLUDING CONTENTS
+//		{
+//			DropTablespaceNode* node = newNode<DropTablespaceNode>(*$1);
+//			node->dropDependencies = true;
+//			$$ = node;
+//		}
+	;
 
 // value types
 
@@ -9760,6 +9933,12 @@ non_reserved_word
 	| ANY_VALUE
 	| FORMAT
 	| OWNER
+	| TABLESPACE
+	| ONLINE
+	| OFFLINE
+	| INCLUDING
+	| CONTENTS
+	| PRIMARY
 	;
 
 %%

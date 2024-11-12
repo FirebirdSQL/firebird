@@ -205,3 +205,6 @@ FB_IMPL_MSG_SYMBOL(ISQL, 205, HLP_EXPLAIN, "EXPLAIN                    -- explai
 FB_IMPL_MSG_SYMBOL(ISQL, 206, USAGE_AUTOTERM, "	-autot(erm)             use auto statement terminator (set autoterm on)")
 FB_IMPL_MSG_SYMBOL(ISQL, 207, AUTOTERM_NOT_SUPPORTED, "SET AUTOTERM ON is not supported in engine/server and has been disabled")
 FB_IMPL_MSG_SYMBOL(ISQL, 208, HLP_SETAUTOTERM, "    SET AUTOTERM           -- toggle auto statement terminator")
+FB_IMPL_MSG_SYMBOL(ISQL, 209, NO_TABLESPACE, "There is no tablespace @1 in this database")
+FB_IMPL_MSG_SYMBOL(ISQL, 210, NO_TABLESPACES, "There are no tablespaces in this database")
+FB_IMPL_MSG_SYMBOL(ISQL, 211, MSG_TABLESPACES, "Tablespaces:")

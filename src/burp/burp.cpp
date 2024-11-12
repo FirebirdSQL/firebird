@@ -596,6 +596,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 	tdgbl->gbl_sw_mode = false;
 	tdgbl->gbl_sw_skip_count = 0;
 	tdgbl->gbl_sw_par_workers = uSvc->getParallelWorkers();
+	tdgbl->gbl_sw_ts_orig_paths = false;
 	tdgbl->action = NULL;
 
 	burp_fil* file = NULL;
@@ -1090,6 +1091,35 @@ int gbak(Firebird::UtilSvc* uSvc)
 				// msg 404: "none", "read_only" or "read_write" required
 			}
 			replicaMode = str;
+			break;
+		case IN_SW_BURP_TS_MAPPING_FILE:
+			if (++itr >= argc)
+			{
+				BURP_error(419, true, SafeArg() << in_sw_tab->in_sw_name);
+				// parameter for option -@1 is missing
+			}
+			tdgbl->loadMapping(argv[itr], tdgbl->tablespace_mapping, false);
+			break;
+		case IN_SW_BURP_TS_ORIGINAL_PATHS:
+			if (tdgbl->gbl_sw_ts_orig_paths)
+				BURP_error(334, true, SafeArg() << in_sw_tab->in_sw_name);
+			tdgbl->gbl_sw_ts_orig_paths = true;
+			break;
+		case IN_SW_BURP_TS_PATH:
+			if (itr + 2 >= argc)
+			{
+				BURP_error(419, true, SafeArg() << in_sw_tab->in_sw_name);
+				// parameter for option -@1 is missing
+			}
+
+			{
+				Firebird::string ts_name = argv[++itr];
+				Firebird::string ts_path = argv[++itr];
+
+				if (ts_name.length() && ts_path.length())
+					tdgbl->tablespace_mapping.put(ts_name, ts_path);
+			}
+
 			break;
 		}
 	}						// for
@@ -2886,6 +2916,52 @@ void BurpGlobals::print_stats_header()
 	}
 
 	burp_output(false, "\n");
+}
+
+void BurpGlobals::loadMapping(const char* mapping_file, StringMap& map, bool clearMap, bool caseSensitive)
+{
+	FILE* f = os_utils::fopen(mapping_file, fopen_read_type);
+	if (!f)
+	{
+		BURP_error(420, true, SafeArg() << mapping_file);	// msg 420 cannot open mapping file @1
+	}
+
+	//Read lines from file, split by space and add to mapping
+	if (clearMap)
+		map.clear();
+
+	bool end = false;
+	do
+	{
+		Firebird::string line;
+		char buffer[MAX_USHORT];
+
+		if (fgets(buffer, sizeof(buffer), f) != NULL)
+		{
+			size_t lineSize = strlen(buffer);
+			if (buffer[lineSize - 1] == '\n')
+				buffer[--lineSize] = '\0';
+			const char* ch = strchr(buffer, ' ');
+			if (!ch)
+				continue;
+			Firebird::string func(buffer, ch - buffer);
+			Firebird::string args(ch + 1, lineSize - func.size() - 1);
+			func.trim();
+			args.trim();
+			if (!func.empty() && !args.empty())
+			{
+				if (!caseSensitive)
+					func.upper();
+				map.put(func, args);
+			}
+		}
+		else
+		{
+			end = true;
+		}
+	} while (!end);
+
+	fclose(f);
 }
 
 void BURP_makeSymbol(BurpGlobals* tdgbl, Firebird::string& name)		// add double quotes to string

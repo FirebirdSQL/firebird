@@ -987,3 +987,6 @@ FB_IMPL_MSG(JRD, 984, incompatible_format_patterns, -901, "HY", "000", "@1 incom
 FB_IMPL_MSG(JRD, 985, only_one_pattern_can_be_used, -901, "HY", "000", "Can use only one of these patterns @1")
 FB_IMPL_MSG(JRD, 986, can_not_use_same_pattern_twice, -901, "HY", "000", "Cannot use the same pattern twice: @1")
 FB_IMPL_MSG(JRD, 987, sysf_invalid_gen_uuid_version, -833, "42", "000", "Invalid GEN_UUID version (@1). Must be 4 or 7")
+FB_IMPL_MSG(JRD, 988, ts_file_exists, -902, "08", "001", "Tablespace \"@1\" creation error. File \"@2\" exists.")
+FB_IMPL_MSG(JRD, 989, tablespace_name, -901, "42", "000", "TABLESPACE @1")
+FB_IMPL_MSG(JRD, 990, ts_file_not_exists, -902, "08", "001", "Tablespace \"@1\" alteration error. File \"@2\" does not exist.")

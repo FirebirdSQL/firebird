@@ -76,6 +76,9 @@ $(OBJ)/dsql/DdlNodes.cpp: $(SRC_ROOT)/dsql/DdlNodes.epp
 $(OBJ)/dsql/PackageNodes.cpp: $(SRC_ROOT)/dsql/PackageNodes.epp
 	$(GPRE_CURRENT) $(JRD_GPRE_FLAGS) $< $@
 
+$(OBJ)/dsql/TablespaceNodes.cpp: $(SRC_ROOT)/dsql/TablespaceNodes.epp
+	$(GPRE_CURRENT) $(JRD_GPRE_FLAGS) $< $@
+
 # Adding resources as prerequisite for some files
 
 $(FilesToAddVersionInfo): $(GEN_ROOT)/jrd/version.res
