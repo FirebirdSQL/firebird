@@ -2646,7 +2646,7 @@ RecordSource* Optimizer::generateRetrieval(StreamType stream,
 			}
 		}
 
-		const auto navigation = retrieval.getNavigation();
+		const auto navigation = retrieval.getNavigation(candidate);
 
 		if (navigation)
 		{
