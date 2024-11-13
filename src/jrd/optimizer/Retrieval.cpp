@@ -449,7 +449,7 @@ IndexTableScan* Retrieval::getNavigation(const InversionCandidate* candidate)
 			}
 
 			if (sortCost < navigationCost)
-				return NULL;
+				return nullptr;
 		}
 	}
 
@@ -458,13 +458,13 @@ IndexTableScan* Retrieval::getNavigation(const InversionCandidate* candidate)
 	// a navigational rsb for it.
 	scratch->index->idx_runtime_flags |= idx_navigate;
 
-	const USHORT key_length =
+	const auto indexNode = makeIndexScanNode(scratch);
+
+	const USHORT keyLength =
 		ROUNDUP(BTR_key_length(tdbb, relation, scratch->index), sizeof(SLONG));
 
-	InversionNode* const index_node = makeIndexScanNode(scratch);
-
 	return FB_NEW_POOL(getPool())
-		IndexTableScan(csb, getAlias(), stream, relation, index_node, key_length,
+		IndexTableScan(csb, getAlias(), stream, relation, indexNode, keyLength,
 					   navigationCandidate->selectivity);
 }
 
