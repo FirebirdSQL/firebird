@@ -315,7 +315,7 @@ $(RE2_LIB):	$(RE2_Objs)
 libcds:
 	mkdir -p $(LIBCDS)/lib/$(TARGET)
 	cd $(LIBCDS)/lib/$(TARGET); \
-	cmake -DCMAKE_BUILD_TYPE=$(FB_CMAKE_BUILD_TYPE) -DCMAKE_CXX_COMPILER="$(CXX)" -DCMAKE_CXX_FLAGS=-fPIC $(LIBCDS)
+	cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=$(FB_CMAKE_BUILD_TYPE) -DCMAKE_CXX_COMPILER="$(CXX)" -DCMAKE_CXX_FLAGS=-fPIC $(LIBCDS)
 	AR="$(AR)" $(MAKE) -C $(LIBCDS)/lib/$(TARGET)
 
 ifeq ($(TARGET),Debug)
@@ -551,10 +551,15 @@ $(LIBIBUTIL_SO): $(UTIL_Objects)
 
 utilities: firebird_server fb_lock_print fbguard fbsvcmgr fbtracemgr gbak gfix gsec gsplit gstat isql nbackup udfsupport
 
+ifeq ($(PLATFORM),win32)
+.PHONY:	instreg instsvc instclient
+utilities +: instreg instsvc instclient
+endif
+
 firebird_server:	$(FB_DAEMON)
 
 $(FB_DAEMON):	$(Remote_Server_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LIB_GUI) $(LINK_LIBS)
 
 fb_lock_print:	$(LOCKPRINT)
 
@@ -564,7 +569,7 @@ $(LOCKPRINT):	$(LOCKPRINT_Objects) $(COMMON_LIB)
 fbguard:		$(FBGUARD)
 
 $(FBGUARD):		$(FBGUARD_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LIB_GUI) $(LINK_LIBS)
 
 fbsvcmgr:		$(FBSVCMGR)
 
@@ -614,6 +619,21 @@ nbackup:		$(NBACKUP)
 $(NBACKUP):		$(NBACKUP_Objects) $(COMMON_LIB)
 	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
 
+instreg:		$(INSTREG)
+
+$(INSTREG):		$(INSTREG_Objects) $(COMMON_LIB)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
+
+instsvc:		$(INSTSVC)
+
+$(INSTSVC):		$(INSTSVC_Objects) $(COMMON_LIB)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
+
+instclient:		$(INSTCLIENT)
+
+$(INSTCLIENT):		$(INSTCLIENT_Objects) $(COMMON_LIB)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
+
 
 #___________________________________________________________________________
 # plugins - some of them are required to build examples, use separate entry for them
@@ -636,6 +656,8 @@ ifeq ($(TARGET),Debug)
 	BUILD_DEBUG:=auth_debug
 endif
 
+PLUGIN_SONAME=$(notdir $@).0
+
 plugins: udr legacy_user_management legacy_auth_server srp_user_management trace $(BUILD_DEBUG) udf_compat chacha profiler
 
 udr:	$(UDR_PLUGIN) $(PLUGINS)/udr_engine.conf
@@ -644,31 +666,31 @@ $(PLUGINS)/udr_engine.conf: $(ROOT)/src/plugins/udr_engine/udr_engine.conf
 	cp $^ $@
 
 $(UDR_PLUGIN):	$(UDRENG_Objects) $(COMMON_LIB)
-	$(LINK_UDRENG) $(call LIB_LINK_SONAME,$(notdir $@).0) -o $@ $^ $(LINK_UDRENG_LIBS) $(FIREBIRD_LIBRARY_LINK)\
+	$(LINK_UDRENG) $(call LIB_LINK_SONAME,$(PLUGIN_SONAME)) -o $@ $^ $(LINK_UDRENG_LIBS) $(FIREBIRD_LIBRARY_LINK)\
  $(call LIB_LINK_DARWIN_INSTALL_NAME,plugins/libudr_engine.$(SHRLIB_EXT))
 
 legacy_user_management:	$(LEGACY_USER_MANAGER)
 
 $(LEGACY_USER_MANAGER):	$(LEGACY_USERS_MANAGE_Objects) $(COMMON_LIB)
-	$(LINK_PLUGIN) $(call LIB_LINK_SONAME,$(notdir $@).0) -o $@ $^ $(LINK_PLUG_LIBS) $(RE2LIB) $(FIREBIRD_LIBRARY_LINK)\
+	$(LINK_PLUGIN) $(call LIB_LINK_SONAME,$(PLUGIN_SONAME)) -o $@ $^ $(LINK_PLUG_LIBS) $(RE2LIB) $(FIREBIRD_LIBRARY_LINK)\
  $(call LIB_LINK_DARWIN_INSTALL_NAME,plugins/libLegacy_UserManager.$(SHRLIB_EXT))
 
 chacha:	$(CHACHA)
 
 $(CHACHA):	$(Chacha_Objects) $(COMMON_LIB)
-	$(LINK_PLUGIN) $(call LIB_LINK_SONAME,$(notdir $@).0) -o $@ $^ $(LINK_PLUG_LIBS) $(FIREBIRD_LIBRARY_LINK)\
+	$(LINK_PLUGIN) $(call LIB_LINK_SONAME,$(PLUGIN_SONAME)) -o $@ $^ $(LINK_PLUG_LIBS) $(FIREBIRD_LIBRARY_LINK)\
  $(call LIB_LINK_DARWIN_INSTALL_NAME,plugins/libChaCha.$(SHRLIB_EXT))
 
 legacy_auth_server:	$(LEGACY_AUTH_SERVER)
 
 $(LEGACY_AUTH_SERVER):	$(LEGACY_AUTH_SERVER_Objects) $(COMMON_LIB)
-	$(LINK_PLUGIN) $(call LIB_LINK_SONAME,$(notdir $@).0) -o $@ $^ $(LINK_PLUG_LIBS) $(FIREBIRD_LIBRARY_LINK)\
+	$(LINK_PLUGIN) $(call LIB_LINK_SONAME,$(PLUGIN_SONAME)) -o $@ $^ $(LINK_PLUG_LIBS) $(FIREBIRD_LIBRARY_LINK)\
  $(call LIB_LINK_DARWIN_INSTALL_NAME,plugins/libLegacy_Auth.$(SHRLIB_EXT))
 
 profiler:	$(PROFILER)
 
 $(PROFILER):	$(Profiler_Objects) $(COMMON_LIB)
-	$(LINK_PLUGIN) $(call LIB_LINK_SONAME,$(notdir $@).0) -o $@ $^ $(LINK_PLUG_LIBS) $(FIREBIRD_LIBRARY_LINK)\
+	$(LINK_PLUGIN) $(call LIB_LINK_SONAME,$(PLUGIN_SONAME)) -o $@ $^ $(LINK_PLUG_LIBS) $(FIREBIRD_LIBRARY_LINK)\
  $(call LIB_LINK_DARWIN_INSTALL_NAME,plugins/libDefault_Profiler.$(SHRLIB_EXT))
 
 trace:	$(FBTRACE)
@@ -679,13 +701,13 @@ $(FBTRACE):	$(FBTRACE_UTIL_Objects) $(COMMON_LIB)
 auth_debug:	$(AUTH_DEBUGGER)
 
 $(AUTH_DEBUGGER):	$(AUTH_DEBUGGER_Objects) $(COMMON_LIB)
-	$(LINK_PLUGIN) $(call LIB_LINK_SONAME,$(notdir $@).0) -o $@ $^ $(LINK_PLUG_LIBS) $(FIREBIRD_LIBRARY_LINK)\
+	$(LINK_PLUGIN) $(call LIB_LINK_SONAME,$(PLUGIN_SONAME)) -o $@ $^ $(LINK_PLUG_LIBS) $(FIREBIRD_LIBRARY_LINK)\
  $(call LIB_LINK_DARWIN_INSTALL_NAME,plugins/libAuth_Debug.$(SHRLIB_EXT))
 
 srp_user_management: $(SRP_USER_MANAGER)
 
 $(SRP_USER_MANAGER):	$(SRP_USERS_MANAGE_Objects) $(COMMON_LIB)
-	$(LINK_PLUGIN) $(call LIB_LINK_SONAME,$(notdir $@).0) -o $@ $^ $(LINK_PLUG_LIBS) $(FIREBIRD_LIBRARY_LINK)\
+	$(LINK_PLUGIN) $(call LIB_LINK_SONAME,$(PLUGIN_SONAME)) -o $@ $^ $(LINK_PLUG_LIBS) $(FIREBIRD_LIBRARY_LINK)\
  $(call LIB_LINK_DARWIN_INSTALL_NAME,plugins/libSrp.$(SHRLIB_EXT))
 
 udf_compat:	$(UDF_BACKWARD_COMPATIBILITY) $(COMPAT_SQL)
