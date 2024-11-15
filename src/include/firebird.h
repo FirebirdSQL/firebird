@@ -63,11 +63,13 @@
 #include "../common/common.h"
 #endif
 
+#if !defined(MINGW)
 #ifdef NULL
 #undef NULL
 #endif
 
 #define NULL nullptr
+#endif
 
 #if defined(WIN_NT)
 #define TRUSTED_AUTH
