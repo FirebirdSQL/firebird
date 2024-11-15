@@ -316,7 +316,7 @@ namespace Jrd
 			if (old & DBB_sweep_in_progress)
 			{
 				clearSweepStarting();
-				return false;
+				ERR_post(Arg::Gds(isc_sweep_concurrent_instance));
 			}
 
 			if (dbb_flags.compareExchange(old, old | DBB_sweep_in_progress))
@@ -336,7 +336,7 @@ namespace Jrd
 				fb_utils::init_status(tdbb->tdbb_status_vector);
 
 				dbb_flags &= ~DBB_sweep_in_progress;
-				return false;
+				ERR_post(Arg::Gds(isc_sweep_concurrent_instance));
 			}
 		}
 		else

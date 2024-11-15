@@ -657,7 +657,8 @@ public:
 
 	// returns true if sweeper thread could start
 	bool allowSweepThread(thread_db* tdbb);
-	// returns true if sweep could run
+	// Returns true if sweep could run.
+	// Exception can be thrown if another sweep instance is already running.
 	bool allowSweepRun(thread_db* tdbb);
 	// reset sweep flag and release sweep lock
 	void clearSweepFlags(thread_db* tdbb);
