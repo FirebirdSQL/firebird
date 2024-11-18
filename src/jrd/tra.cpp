@@ -2756,6 +2756,9 @@ namespace {
 			status.check();
 
 			AutoRelease<IAttachment> att(prov->attachDatabase(&status, dbName.c_str(), dpbLen, dpbBytes));
+			if (fb_utils::containsErrorCode(status->getErrors(), isc_sweep_concurrent_instance))
+				return;
+
 			status.check();
 		}
 
