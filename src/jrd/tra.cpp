@@ -3162,6 +3162,10 @@ static void transaction_options(thread_db* tdbb,
 			transaction->tra_flags |= TRA_no_auto_undo;
 			break;
 
+		case isc_tpb_auto_release_temp_blobid:
+			transaction->tra_flags |= TRA_auto_release_temp_blobid;
+			break;
+
 		case isc_tpb_lock_write:
 			// Cannot set a R/W table reservation if the whole txn is R/O.
 			if (read_only.asBool())

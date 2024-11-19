@@ -163,6 +163,7 @@ using namespace Firebird;
 %token <metaNamePtr> BEGIN
 %token <metaNamePtr> BETWEEN
 %token <metaNamePtr> BLOB
+%token <metaNamePtr> BLOBID
 %token <metaNamePtr> BY
 %token <metaNamePtr> CAST
 %token <metaNamePtr> CHARACTER
@@ -308,6 +309,7 @@ using namespace Firebird;
 %token <metaNamePtr> SUSPEND
 %token <metaNamePtr> SUM
 %token <metaNamePtr> TABLE
+%token <metaNamePtr> TEMP
 %token <metaNamePtr> THEN
 %token <metaNamePtr> TO
 %token <metaNamePtr> TRANSACTION
@@ -5938,6 +5940,8 @@ tran_option($setTransactionNode)
 		{ setClause($setTransactionNode->restartRequests, "RESTART REQUESTS", true); }
 	| AUTO COMMIT
 		{ setClause($setTransactionNode->autoCommit, "AUTO COMMIT", true); }
+	| AUTO RELEASE TEMP BLOBID
+		{ setClause($setTransactionNode->autoReleaseTempBlobID, "AUTO RELEASE TEMP BLOBID", true); }
 	// timeout
 	| LOCK TIMEOUT nonneg_short_integer
 		{ setClause($setTransactionNode->lockTimeout, "LOCK TIMEOUT", (USHORT) $3); }
@@ -9749,10 +9753,12 @@ non_reserved_word
 	// added in FB 4.0.2
 	| BLOB_APPEND
 	// added in FB 5.0
+	| BLOBID
 	| LOCKED
 	| OPTIMIZE
 	| QUARTER
 	| TARGET
+	| TEMP
 	| TIMEZONE_NAME
 	| UNICODE_CHAR
 	| UNICODE_VAL

@@ -550,6 +550,7 @@ RELATION(nam_mon_transactions, rel_mon_transactions, ODS_11_1, rel_virtual)
 	FIELD(f_mon_tra_auto_commit, nam_mon_auto_commit, fld_flag_nullable, 0, ODS_11_1)
 	FIELD(f_mon_tra_auto_undo, nam_mon_auto_undo, fld_flag_nullable, 0, ODS_11_1)
 	FIELD(f_mon_tra_stat_id, nam_mon_stat_id, fld_stat_id, 0, ODS_11_1)
+	FIELD(f_mon_tra_auto_release_temp_blobid, nam_mon_auto_release_temp_blobid, fld_flag_nullable, 0, ODS_14_0)
 END_RELATION
 
 // Relation 36 (MON$STATEMENTS)

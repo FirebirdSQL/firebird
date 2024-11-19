@@ -4111,6 +4111,7 @@ const
 	isc_tpb_lock_timeout = byte(21);
 	isc_tpb_read_consistency = byte(22);
 	isc_tpb_at_snapshot_number = byte(23);
+	isc_tpb_auto_release_temp_blobid = byte(24);
 	isc_bpb_version1 = byte(1);
 	isc_bpb_source_type = byte(1);
 	isc_bpb_target_type = byte(2);

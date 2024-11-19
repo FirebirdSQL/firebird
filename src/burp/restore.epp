@@ -421,7 +421,7 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 		// Block added to verbose index creation by Toni Martir
 		// Always try to activate deferred indices - it helps for some broken backups,
 		// and in normal cases doesn't take much time to look for such indices. AP-2008.
-		EXEC SQL SET TRANSACTION ISOLATION LEVEL READ COMMITTED NO_AUTO_UNDO;
+		EXEC SQL SET TRANSACTION ISOLATION LEVEL READ COMMITTED NO_AUTO_UNDO AUTO_RELEASE_TEMP_BLOBID;
 		if (gds_status->hasData())
 			EXEC SQL SET TRANSACTION;
 
@@ -445,7 +445,7 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 			general_on_error ();
 		END_ERROR;
 
-		EXEC SQL SET TRANSACTION ISOLATION LEVEL READ COMMITTED NO_AUTO_UNDO;
+		EXEC SQL SET TRANSACTION ISOLATION LEVEL READ COMMITTED NO_AUTO_UNDO AUTO_RELEASE_TEMP_BLOBID;
 		if (gds_status->hasData())
 			EXEC SQL SET TRANSACTION;
 
@@ -481,7 +481,7 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 		END_ERROR;
 	}
 
-	EXEC SQL SET TRANSACTION ISOLATION LEVEL READ COMMITTED NO_AUTO_UNDO;
+	EXEC SQL SET TRANSACTION ISOLATION LEVEL READ COMMITTED NO_AUTO_UNDO AUTO_RELEASE_TEMP_BLOBID;
 	if (gds_status->hasData())
 		EXEC SQL SET TRANSACTION;
 
@@ -745,7 +745,7 @@ void add_files(BurpGlobals* tdgbl, const char* file_name)
 			END_ERROR;
 		END_ERROR;
 
-		EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
+		EXEC SQL SET TRANSACTION NO_AUTO_UNDO AUTO_RELEASE_TEMP_BLOBID;
 		if (gds_status->hasData())
 			EXEC SQL SET TRANSACTION;
 	}
@@ -3166,7 +3166,7 @@ static void commit_relation_data(BurpGlobals* tdgbl, burp_rel* relation)
 		} // end of while
 	END_ERROR;
 
-	EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
+	EXEC SQL SET TRANSACTION NO_AUTO_UNDO AUTO_RELEASE_TEMP_BLOBID;
 	if (gds_status->hasData())
 		EXEC SQL SET TRANSACTION;
 }
@@ -7777,7 +7777,7 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 			general_on_error ();
 		END_ERROR;
 
-		EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
+		EXEC SQL SET TRANSACTION NO_AUTO_UNDO AUTO_RELEASE_TEMP_BLOBID;
 		if (gds_status->hasData())
 			EXEC SQL SET TRANSACTION;
 	}
@@ -8004,7 +8004,7 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 						general_on_error ();
 					END_ERROR;
 				END_ERROR;
-				EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
+				EXEC SQL SET TRANSACTION NO_AUTO_UNDO AUTO_RELEASE_TEMP_BLOBID;
 				if (gds_status->hasData())
 					EXEC SQL SET TRANSACTION;
 			}
@@ -8041,7 +8041,7 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 		general_on_error ();
 	END_ERROR;
 
-	EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
+	EXEC SQL SET TRANSACTION NO_AUTO_UNDO AUTO_RELEASE_TEMP_BLOBID;
 	if (gds_status->hasData())
 		EXEC SQL SET TRANSACTION;
 
@@ -9085,7 +9085,7 @@ bool get_trigger_old (BurpGlobals* tdgbl, burp_rel* relation)
 				general_on_error ();
 			END_ERROR;
 		END_ERROR;
-		EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
+		EXEC SQL SET TRANSACTION NO_AUTO_UNDO AUTO_RELEASE_TEMP_BLOBID;
 		if (gds_status->hasData())
 			EXEC SQL SET TRANSACTION;
 	}
@@ -9441,7 +9441,7 @@ bool get_trigger(BurpGlobals* tdgbl)
 				general_on_error ();
 			END_ERROR;
 		END_ERROR;
-		EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
+		EXEC SQL SET TRANSACTION NO_AUTO_UNDO AUTO_RELEASE_TEMP_BLOBID;
 		if (gds_status->hasData())
 			EXEC SQL SET TRANSACTION;
 	}
@@ -9537,7 +9537,7 @@ bool get_trigger_message(BurpGlobals* tdgbl)
 				general_on_error ();
 			END_ERROR;
 		END_ERROR;
-		EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
+		EXEC SQL SET TRANSACTION NO_AUTO_UNDO AUTO_RELEASE_TEMP_BLOBID;
 		if (gds_status->hasData())
 			EXEC SQL SET TRANSACTION;
 	}
@@ -10391,7 +10391,7 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 
 	create_database(tdgbl, provider, database_name);
 
-	EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
+	EXEC SQL SET TRANSACTION NO_AUTO_UNDO AUTO_RELEASE_TEMP_BLOBID;
 	if (gds_status->hasData())
 		EXEC SQL SET TRANSACTION;
 
@@ -10751,7 +10751,7 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 				ON_ERROR
 					general_on_error ();
 				END_ERROR;
-				EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
+				EXEC SQL SET TRANSACTION NO_AUTO_UNDO AUTO_RELEASE_TEMP_BLOBID;
 				if (gds_status->hasData())
 					EXEC SQL SET TRANSACTION;
 				flag = false;
@@ -10875,7 +10875,7 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 		ON_ERROR
 			general_on_error ();
 		END_ERROR;
-		EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
+		EXEC SQL SET TRANSACTION NO_AUTO_UNDO AUTO_RELEASE_TEMP_BLOBID;
 		if (gds_status->hasData())
 			EXEC SQL SET TRANSACTION;
 	}

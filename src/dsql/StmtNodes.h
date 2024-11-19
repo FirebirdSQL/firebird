@@ -1607,6 +1607,7 @@ public:
 		NODE_PRINT(printer, ignoreLimbo);
 		NODE_PRINT(printer, restartRequests);
 		NODE_PRINT(printer, autoCommit);
+		NODE_PRINT(printer, autoReleaseTempBlobID);
 		NODE_PRINT(printer, lockTimeout);
 		//// FIXME-PRINT: NODE_PRINT(printer, reserveList);
 		NODE_PRINT(printer, tpb);
@@ -1633,6 +1634,7 @@ public:
 	Firebird::TriState ignoreLimbo;
 	Firebird::TriState restartRequests;
 	Firebird::TriState autoCommit;
+	Firebird::TriState autoReleaseTempBlobID;
 };
 
 

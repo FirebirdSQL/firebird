@@ -268,6 +268,7 @@
 #define isc_tpb_lock_timeout              21
 #define isc_tpb_read_consistency          22
 #define isc_tpb_at_snapshot_number        23
+#define isc_tpb_auto_release_temp_blobid  24
 
 
 /************************/
