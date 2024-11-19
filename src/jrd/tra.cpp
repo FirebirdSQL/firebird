@@ -1846,11 +1846,7 @@ void TRA_sweep(thread_db* tdbb)
 	Database* const dbb = tdbb->getDatabase();
 	CHECK_DBB(dbb);
 
-	if (!dbb->allowSweepRun(tdbb))
-	{
-		dbb->clearSweepFlags(tdbb);
-		return;
-	}
+	dbb->initiateSweepRun(tdbb);
 
 	fb_assert(dbb->dbb_flags & DBB_sweep_in_progress);
 
@@ -2756,7 +2752,7 @@ namespace {
 			status.check();
 
 			AutoRelease<IAttachment> att(prov->attachDatabase(&status, dbName.c_str(), dpbLen, dpbBytes));
-			if (fb_utils::containsErrorCode(status->getErrors(), isc_sweep_concurrent_instance))
+			if (fb_utils::containsErrorCode(status->getErrors(), isc_sweep_unable_to_run))
 				return;
 
 			status.check();
