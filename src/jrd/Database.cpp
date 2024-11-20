@@ -49,9 +49,9 @@ using namespace Firebird;
 
 namespace
 {
-	void unableToRunSweepException(const Arg::Gds& reason)
+	void unableToRunSweepException(ISC_STATUS reason)
 	{
-		ERR_post(Arg::Gds(isc_sweep_unable_to_run) << reason);
+		ERR_post(Arg::Gds(isc_sweep_unable_to_run) << Arg::Gds(reason));
 	}
 }
 
@@ -312,11 +312,11 @@ namespace Jrd
 		SPTHR_DEBUG(fprintf(stderr, FB_FUNCTION " %p\n", this));
 
 		if (readOnly())
-			unableToRunSweepException(Arg::Gds(isc_sweep_read_only));
+			unableToRunSweepException(isc_sweep_read_only);
 
 		Jrd::Attachment* const attachment = tdbb->getAttachment();
 		if (attachment->att_flags & ATT_no_cleanup)
-			unableToRunSweepException(Arg::Gds(isc_sweep_attach_no_cleanup));
+			unableToRunSweepException(isc_sweep_attach_no_cleanup);
 
 		while (true)
 		{
@@ -324,7 +324,7 @@ namespace Jrd
 			if (old & DBB_sweep_in_progress)
 			{
 				clearSweepStarting();
-				unableToRunSweepException(Arg::Gds(isc_sweep_concurrent_instance));
+				unableToRunSweepException(isc_sweep_concurrent_instance);
 			}
 
 			if (dbb_flags.compareExchange(old, old | DBB_sweep_in_progress))
@@ -344,7 +344,7 @@ namespace Jrd
 				fb_utils::init_status(tdbb->tdbb_status_vector);
 
 				dbb_flags &= ~DBB_sweep_in_progress;
-				unableToRunSweepException(Arg::Gds(isc_sweep_concurrent_instance));
+				unableToRunSweepException(isc_sweep_concurrent_instance);
 			}
 		}
 		else
