@@ -53,7 +53,7 @@ using namespace Firebird;
 //#define JRD_FAILURE_UNKNOWN	"<UNKNOWN>"	// Used when buffer fails
 
 
-static void internal_error(ISC_STATUS status, int number, const TEXT* file = NULL, int line = 0);
+static void get_internal_error_msg(TEXT* errmsg_buf, size_t errmsg_buf_size, int number, const TEXT* file = NULL, int line = 0);
 static void post_nothrow(const unsigned lenToAdd, const ISC_STATUS* toAdd, FbStatusVector* statusVector);
 
 
@@ -69,13 +69,10 @@ void ERR_bugcheck(int number, const TEXT* file, int line)
  *	Things seem to be going poorly today.
  *
  **************************************/
-	thread_db* const tdbb = JRD_get_thread_data();
-	Database* const dbb = tdbb->getDatabase();
+	TEXT errmsg[MAX_ERRMSG_LEN + 1];
+	get_internal_error_msg(errmsg, sizeof(errmsg), number, file, line);
 
-	dbb->dbb_flags |= DBB_bugcheck;
-	CCH_shutdown(tdbb);
-
-	internal_error(isc_bug_check, number, file, line);
+	ERR_bugcheck_msg(errmsg);
 }
 
 
@@ -94,10 +91,23 @@ void ERR_bugcheck_msg(const TEXT* msg)
 	thread_db* const tdbb = JRD_get_thread_data();
 	Database* const dbb = tdbb->getDatabase();
 
-	dbb->dbb_flags |= DBB_bugcheck;
-	CCH_shutdown(tdbb);
+	Arg::StatusVector status_vector;
+	status_vector << Arg::Gds(isc_bug_check) << Arg::Str(msg);
+	FbLocalStatus status;
+	status_vector.copyTo(&status);
 
-	ERR_post(Arg::Gds(isc_bug_check) << Arg::Str(msg));
+	// It's important to put the message into the log before any
+	// further actions because there is always a risk of crashing.
+	iscDbLogStatus(dbb->dbb_filename.nullStr(), &status);
+
+	dbb->dbb_flags |= DBB_bugcheck;
+	CCH_shutdown(tdbb, true);
+
+	if (Config::getBugcheckAbort())
+		abort();
+
+	ERR_post_nothrow(status_vector);
+	status_exception::raise(tdbb->tdbb_status_vector);
 }
 
 
@@ -117,7 +127,10 @@ void ERR_soft_bugcheck(int number, const TEXT* file, int line)
  **************************************/
 
 	fb_assert(false);
-	internal_error(isc_bug_check, number, file, line);
+	TEXT errmsg[MAX_ERRMSG_LEN + 1];
+	get_internal_error_msg(errmsg, sizeof(errmsg), number, file, line);
+
+	ERR_post(Arg::Gds(isc_bug_check) << Arg::Str(errmsg));
 }
 
 
@@ -133,8 +146,10 @@ void ERR_corrupt(int number)
  *	Things seem to be going poorly today.
  *
  **************************************/
+	TEXT errmsg[MAX_ERRMSG_LEN + 1];
+	get_internal_error_msg(errmsg, sizeof(errmsg), number);
 
-	internal_error(isc_db_corrupt, number);
+	ERR_post(Arg::Gds(isc_db_corrupt) << Arg::Str(errmsg));
 }
 
 
@@ -414,7 +429,7 @@ void ERR_build_status(FbStatusVector* status_vector, const Arg::StatusVector& v)
 }
 
 
-static void internal_error(ISC_STATUS status, int number, const TEXT* file, int line)
+static void get_internal_error_msg(TEXT* errmsg_buf, size_t errmsg_buf_size, int number, const TEXT* file, int line)
 {
 /**************************************
  *
@@ -426,12 +441,10 @@ static void internal_error(ISC_STATUS status, int number, const TEXT* file, int 
  *	Things seem to be going poorly today.
  *
  **************************************/
-	TEXT errmsg[MAX_ERRMSG_LEN + 1];
+	if (gds__msg_lookup(0, FB_IMPL_MSG_FACILITY_JRD_BUGCHK, number, errmsg_buf_size, errmsg_buf, NULL) < 1)
+		strcpy(errmsg_buf, "Internal error code");
 
-	if (gds__msg_lookup(0, FB_IMPL_MSG_FACILITY_JRD_BUGCHK, number, sizeof(errmsg), errmsg, NULL) < 1)
-		strcpy(errmsg, "Internal error code");
-
-	const size_t len = strlen(errmsg);
+	const size_t len = strlen(errmsg_buf);
 
 	if (file)
 	{
@@ -445,12 +458,10 @@ static void internal_error(ISC_STATUS status, int number, const TEXT* file, int 
 				break;
 			}
 		}
-		fb_utils::snprintf(errmsg + len, sizeof(errmsg) - len,
+		fb_utils::snprintf(errmsg_buf + len, errmsg_buf_size - len,
 			" (%d), file: %s line: %d", number, ptr, line);
 	}
 	else {
-		fb_utils::snprintf(errmsg + len, sizeof(errmsg) - len, " (%d)", number);
+		fb_utils::snprintf(errmsg_buf + len, errmsg_buf_size - len, " (%d)", number);
 	}
-
-	ERR_post(Arg::Gds(status) << Arg::Str(errmsg));
 }
