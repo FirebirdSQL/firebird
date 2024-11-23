@@ -899,8 +899,12 @@ void RestoreRelationTask::initItem(BurpGlobals* tdgbl, Item& item)
 
 			ClumpletWriter tpb(ClumpletReader::Tpb, 128, isc_tpb_version3);
 			tpb.insertTag(isc_tpb_concurrency);
-			tpb.insertTag(isc_tpb_no_auto_undo);
-			tpb.insertTag(isc_tpb_auto_release_temp_blobid);
+
+			if (tdgbl->gbl_use_no_auto_undo)
+				tpb.insertTag(isc_tpb_no_auto_undo);
+
+			if (tdgbl->gbl_use_auto_release_temp_blobid)
+				tpb.insertTag(isc_tpb_auto_release_temp_blobid);
 
 			item.m_tra = item.m_att->startTransaction(&status, tpb.getBufferLength(), tpb.getBuffer());
 
