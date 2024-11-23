@@ -11629,7 +11629,7 @@ void set_transaction(BurpGlobals* tdgbl)
 		if (tdgbl->gbl_use_auto_release_temp_blobid && tdgbl->gbl_use_no_auto_undo)
 		{
 			EXEC SQL SET TRANSACTION NO_AUTO_UNDO AUTO_RELEASE_TEMP_BLOBID;
-			if (gds_status->hasData())
+			if (gds_status->hasData() && fb_utils::containsErrorCode(gds_status->getErrors(), isc_bad_tpb_form))
 			{
 				// First try to disable AUTO_RELEASE_TEMP_BLOBID transaction
 				// option because it was implemented later than NO_AUTO_UNDO
@@ -11640,7 +11640,7 @@ void set_transaction(BurpGlobals* tdgbl)
 		else if (tdgbl->gbl_use_no_auto_undo)
 		{
 			EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
-			if (gds_status->hasData())
+			if (gds_status->hasData() && fb_utils::containsErrorCode(gds_status->getErrors(), isc_bad_tpb_form))
 			{
 				tdgbl->gbl_use_no_auto_undo = false;
 				continue;
