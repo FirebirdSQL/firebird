@@ -163,7 +163,6 @@ using namespace Firebird;
 %token <metaNamePtr> BEGIN
 %token <metaNamePtr> BETWEEN
 %token <metaNamePtr> BLOB
-%token <metaNamePtr> BLOBID
 %token <metaNamePtr> BY
 %token <metaNamePtr> CAST
 %token <metaNamePtr> CHARACTER
@@ -309,7 +308,6 @@ using namespace Firebird;
 %token <metaNamePtr> SUSPEND
 %token <metaNamePtr> SUM
 %token <metaNamePtr> TABLE
-%token <metaNamePtr> TEMP
 %token <metaNamePtr> THEN
 %token <metaNamePtr> TO
 %token <metaNamePtr> TRANSACTION
@@ -345,10 +343,12 @@ using namespace Firebird;
 
 %token <metaNamePtr> ACTION
 %token <metaNamePtr> ADMIN
+%token <metaNamePtr> BLOBID
 %token <metaNamePtr> CASCADE
 %token <metaNamePtr> FREE_IT			// ISC SQL extension
 %token <metaNamePtr> RESTRICT
 %token <metaNamePtr> ROLE
+%token <metaNamePtr> TEMP
 
 // New tokens added v6.0
 
