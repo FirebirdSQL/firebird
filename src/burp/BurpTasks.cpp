@@ -869,6 +869,8 @@ void RestoreRelationTask::initItem(BurpGlobals* tdgbl, Item& item)
 	tdgbl->verboseInterval = m_masterGbl->verboseInterval;
 	tdgbl->RESTORE_format = m_masterGbl->RESTORE_format;
 	tdgbl->runtimeODS = m_masterGbl->runtimeODS;
+	tdgbl->gbl_use_no_auto_undo = m_masterGbl->gbl_use_no_auto_undo;
+	tdgbl->gbl_use_auto_release_temp_blobid = m_masterGbl->gbl_use_auto_release_temp_blobid;
 
 	if (item.m_ownAttach)
 	{
@@ -893,7 +895,7 @@ void RestoreRelationTask::initItem(BurpGlobals* tdgbl, Item& item)
 			if (status->getState() & IStatus::STATE_ERRORS)
 				BURP_abort(&status);
 
-			// SET TRANSACTION NO_AUTO_UNDO, see at the end of get_data()
+			// SET TRANSACTION NO_AUTO_UNDO AUTO_RELEASE_TEMP_BLOBID, see at the end of get_data()
 
 			ClumpletWriter tpb(ClumpletReader::Tpb, 128, isc_tpb_version3);
 			tpb.insertTag(isc_tpb_concurrency);

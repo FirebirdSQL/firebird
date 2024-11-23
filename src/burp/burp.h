@@ -1227,6 +1227,9 @@ public:
 	bool gbl_stat_header;				// true, if stats header was printed
 	bool gbl_stat_done;					// true, if main process is done, stop to collect db-level stats
 	SINT64 gbl_stats[LAST_COUNTER];
+
+	bool gbl_use_no_auto_undo = true;
+	bool gbl_use_auto_release_temp_blobid = true;
 };
 
 // CVC: This aux routine declared here to not force inclusion of burp.h with burp_proto.h
