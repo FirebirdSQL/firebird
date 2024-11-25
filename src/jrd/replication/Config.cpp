@@ -26,6 +26,8 @@
 #include "../common/isc_f_proto.h"
 #include "../common/status.h"
 #include "../common/StatusArg.h"
+#include "../common/utils_proto.h"
+#include "../common/os/os_utils.h"
 #include "../jrd/constants.h"
 
 #include "Utils.h"
@@ -50,6 +52,8 @@ using namespace Replication;
 namespace
 {
 	const char* REPLICATION_CFGFILE = "replication.conf";
+	constexpr const char* KEY_ENV = "env";
+	constexpr const char* KEY_FILE = "file";
 
 	const ULONG DEFAULT_BUFFER_SIZE = 1024 * 1024; 				// 1 MB
 	const ULONG DEFAULT_SEGMENT_SIZE = 16 * 1024 * 1024;	// 16 MB
@@ -216,7 +220,69 @@ Config* Config::get(const PathName& lookupName)
 
 				if (key == "sync_replica")
 				{
-					config->syncReplicas.add(value);
+					SyncReplica syncReplica(config->getPool());
+					if (el.sub)
+					{
+						syncReplica.database = value;
+						for (const auto& sub_el : el.sub->getParameters())
+						{
+							string sub_key(sub_el.name.c_str());
+							string sub_value(sub_el.value);
+
+							if (sub_value.isEmpty())
+								continue;
+
+							auto pos = sub_key.rfind('_');
+							if (pos != string::npos)
+							{
+								const string key_source = sub_key.substr(pos + 1);
+								sub_key = sub_key.substr(0, pos);
+
+								if (key_source.equals(KEY_ENV))
+								{
+									fb_utils::readenv(sub_value.c_str(), sub_value);
+									if (sub_value.isEmpty())
+										configError("missing environment variable", value, sub_value);
+								}
+								else if (key_source.equals(KEY_FILE))
+								{
+									const PathName sub_filename =
+										fb_utils::getPrefix(IConfigManager::DIR_CONF, sub_value.c_str());
+
+									AutoPtr<FILE> file(os_utils::fopen(sub_filename.c_str(), "rt"));
+									if (!file)
+										configError("missing file", value, sub_filename.c_str());
+
+									// skip first empty lines
+									sub_value = "";
+									do
+									{
+										if (feof(file))
+											break;
+
+										if (!sub_value.LoadFromFile(file))
+											break;
+
+										sub_value.alltrim(" \t\r");
+									} while (sub_value.isEmpty());
+
+									if (sub_value.isEmpty())
+										configError("empty file", value, sub_filename.c_str());
+								}
+							}
+
+							if (sub_key == "username")
+								syncReplica.username = sub_value.c_str();
+							else if (sub_key == "password")
+								syncReplica.password = sub_value.c_str();
+							else
+								configError("unknown parameter", value, sub_key);
+						}
+					}
+					else
+						splitConnectionString(value, syncReplica.database, syncReplica.username, syncReplica.password);
+
+					config->syncReplicas.add(syncReplica);
 				}
 				else if (key == "buffer_size")
 				{
@@ -425,5 +491,37 @@ void Config::enumerate(ReplicaList& replicas)
 		composeError(&localStatus, ex);
 
 		logReplicaStatus(dbName, &localStatus);
+	}
+}
+
+// This routine is used for split input connection string to parts
+//   input => [<username>[:<password>]@]<database>
+//
+// Examples:
+// server2:/my/replica/database.fdb
+// john:smith@server2:/my/replica/database.fdb
+
+void Config::splitConnectionString(const string& input, string& database, string& username, string& password)
+{
+	database = input;
+
+	auto pos = database.rfind('@');
+	if (pos != string::npos)
+	{
+		//john:smith
+		const string temp = database.substr(0, pos);
+		//server2:/my/replica/database.fdb
+		database = database.substr(pos + 1);
+
+		pos = temp.find(':');
+		if (pos != string::npos)
+		{
+			username = temp.substr(0, pos);
+			password = temp.substr(pos + 1);
+		}
+		else
+		{
+			username = temp;
+		}
 	}
 }
