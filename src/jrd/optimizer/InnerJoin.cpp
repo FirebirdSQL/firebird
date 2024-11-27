@@ -108,6 +108,7 @@ void InnerJoin::calculateStreamInfo()
 		innerStream->baseIndexes = candidate->indexes;
 		innerStream->baseUnique = candidate->unique;
 		innerStream->baseNavigated = candidate->navigated;
+		innerStream->baseConjuncts = candidate->conjuncts;
 
 		csb->csb_rpt[innerStream->number].deactivate();
 	}
@@ -579,13 +580,39 @@ River* InnerJoin::formRiver()
 
 			// Create a hash join
 			rsb = FB_NEW_POOL(getPool())
-				HashJoin(tdbb, csb, 2, hashJoinRsbs, keys.begin(), stream.selectivity);
+				HashJoin(tdbb, csb, INNER_JOIN, 2, hashJoinRsbs, keys.begin(), stream.selectivity);
 
 			// Clear priorly processed rsb's, as they're already incorporated into a hash join
 			rsbs.clear();
 		}
 		else
+		{
+			StreamList depStreams;
+
+			if (optimizer->isSemiJoined() && rsbs.isEmpty())
+			{
+				const auto baseStream = getStreamInfo(stream.number);
+				for (const auto boolean : baseStream->baseConjuncts)
+				{
+					if (optimizer->checkEquiJoin(boolean))
+					{
+						SortedStreamList nodeStreams;
+						boolean->collectStreams(nodeStreams);
+
+						for (const auto stream : nodeStreams)
+						{
+							if (stream != baseStream->number && !depStreams.exist(stream))
+								depStreams.add(stream);
+						}
+					}
+				}
+			}
+
+			StreamStateHolder stateHolder(csb, depStreams);
+			stateHolder.deactivate();
+
 			rsb = optimizer->generateRetrieval(stream.number, sortPtr, false, false);
+		}
 
 		rsbs.add(rsb);
 		streams.add(stream.number);
