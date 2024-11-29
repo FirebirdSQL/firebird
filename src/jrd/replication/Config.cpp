@@ -246,12 +246,10 @@ Config* Config::get(const PathName& lookupName)
 								}
 								else if (key_source.equals(KEY_FILE))
 								{
-									const PathName sub_filename =
-										fb_utils::getPrefix(IConfigManager::DIR_CONF, sub_value.c_str());
-
+									const PathName sub_filename = sub_value.c_str();
 									AutoPtr<FILE> file(os_utils::fopen(sub_filename.c_str(), "rt"));
 									if (!file)
-										configError("missing file", value, sub_filename.c_str());
+										configError("missing or inaccessible file", value, sub_filename.c_str());
 
 									// skip first empty lines
 									sub_value = "";
