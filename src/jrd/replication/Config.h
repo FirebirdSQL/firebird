@@ -35,7 +35,7 @@ namespace Replication
 {
 	struct SyncReplica
 	{
-		SyncReplica(MemoryPool& p)
+		explicit SyncReplica(MemoryPool& p)
 			: database(p), username(p), password(p)
 		{}
 
