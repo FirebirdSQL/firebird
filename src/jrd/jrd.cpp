@@ -8886,7 +8886,7 @@ namespace
 	THREAD_ENTRY_DECLARE attachmentShutdownThread(THREAD_ENTRY_PARAM arg)
 	{
 #ifdef WIN_NT
-		ThreadModuleRef thdRef(attachmentShutdownThread, &engineShutdown);
+		ThreadModuleRef thdRef((void*)attachmentShutdownThread, &engineShutdown);
 #endif
 
 		AttShutParams* params = static_cast<AttShutParams*>(arg);
