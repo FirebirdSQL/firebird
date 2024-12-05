@@ -185,6 +185,8 @@ namespace Replication
 				return m_filename;
 			}
 
+			void closeFile();
+
 		private:
 			void mapHeader();
 			void unmapHeader();
@@ -192,6 +194,7 @@ namespace Replication
 			Firebird::PathName m_filename;
 			int m_handle;
 			SegmentHeader* m_header;
+			SegmentHeader m_builtinHeader;		// used by free segments when there is no mapping
 
 	#ifdef WIN_NT
 			HANDLE m_mapping;

@@ -565,9 +565,9 @@ bool BackupRelationTask::fileWriter(Item& item)
 	// msg 142  writing data for relation %s
 
 	IOBuffer*& buf = item.m_buffer = NULL;
-	FB_SIZE_T records = 0;
-	FB_SIZE_T verbRecs = -1;
-	FB_SIZE_T verb = 0;
+	FB_UINT64 records = 0;
+	FB_UINT64 verbRecs = -1;
+	FB_UINT64 verb = 0;
 	while (!m_stop)
 	{
 		if (!buf)
@@ -867,6 +867,10 @@ void RestoreRelationTask::initItem(BurpGlobals* tdgbl, Item& item)
 	tdgbl->sw_redirect = m_masterGbl->sw_redirect;
 	tdgbl->gbl_stat_flags = m_masterGbl->gbl_stat_flags;
 	tdgbl->verboseInterval = m_masterGbl->verboseInterval;
+	tdgbl->RESTORE_format = m_masterGbl->RESTORE_format;
+	tdgbl->runtimeODS = m_masterGbl->runtimeODS;
+	tdgbl->gbl_use_no_auto_undo = m_masterGbl->gbl_use_no_auto_undo;
+	tdgbl->gbl_use_auto_release_temp_blobid = m_masterGbl->gbl_use_auto_release_temp_blobid;
 
 	if (item.m_ownAttach)
 	{
@@ -891,11 +895,16 @@ void RestoreRelationTask::initItem(BurpGlobals* tdgbl, Item& item)
 			if (status->getState() & IStatus::STATE_ERRORS)
 				BURP_abort(&status);
 
-			// SET TRANSACTION NO_AUTO_UNDO, see at the end of get_data()
+			// SET TRANSACTION NO_AUTO_UNDO AUTO_RELEASE_TEMP_BLOBID, see at the end of get_data()
 
 			ClumpletWriter tpb(ClumpletReader::Tpb, 128, isc_tpb_version3);
 			tpb.insertTag(isc_tpb_concurrency);
-			tpb.insertTag(isc_tpb_no_auto_undo);
+
+			if (tdgbl->gbl_use_no_auto_undo)
+				tpb.insertTag(isc_tpb_no_auto_undo);
+
+			if (tdgbl->gbl_use_auto_release_temp_blobid)
+				tpb.insertTag(isc_tpb_auto_release_temp_blobid);
 
 			item.m_tra = item.m_att->startTransaction(&status, tpb.getBufferLength(), tpb.getBuffer());
 

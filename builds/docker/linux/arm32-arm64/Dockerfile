@@ -1,21 +1,21 @@
-ARG ARG_BASE=arm64v8/ubuntu:22.04
+ARG ARG_BASE=arm64v8/debian:bookworm
 ARG ARG_TARGET_ARCH=aarch64-pc-linux-gnu
 ARG ARG_CTNF_CONFIG=crosstool-ng-config-arm64
 
-ARG ARG_CTNG_VERSION=1.25.0
+ARG ARG_CTNG_VERSION=1.26.0
 ARG ARG_LIBTOOL_VERSION=2.4.6
 ARG ARG_NCURSES_VERSION=6.3
 ARG ARG_LTM_VERSION=1.2.0
-ARG ARG_ZLIB_VERSION=1.2.13
+ARG ARG_ZLIB_VERSION=1.3.1
 ARG ARG_ICU_VERSION=70-1
 
-ARG ARG_CPUCOUNT=6
+ARG ARG_CPUCOUNT=24
 
 ARG ARG_CTNG_UID=1000
 ARG ARG_CTNG_GID=1000
 
 
-FROM ubuntu:22.04 as builder
+FROM debian:bookworm as builder
 
 ARG ARG_TARGET_ARCH
 ARG ARG_CTNF_CONFIG
@@ -42,6 +42,7 @@ RUN groupadd -g $ARG_CTNG_GID ctng && \
 		sudo \
 		automake \
 		bison \
+		bzip2 \
 		chrpath \
 		flex \
 		gcc \
@@ -56,13 +57,13 @@ RUN groupadd -g $ARG_CTNG_GID ctng && \
 		libtool \
 		libtool-bin \
 		libtool-doc \
-		python2.7-dev \
 		python3-dev \
 		texinfo \
 		make \
 		curl \
 		wget \
 		unzip \
+		xz-utils \
 		nano && \
 	\
 	adduser ctng sudo && \
@@ -70,7 +71,7 @@ RUN groupadd -g $ARG_CTNG_GID ctng && \
 
 USER ctng
 
-COPY --from=asfernandes/firebird-builder:fb5-x64-ng-v1 --chown=ctng:ctng /home/ctng/x-tools /home/ctng/x-tools
+COPY --from=asfernandes/firebird-builder:fb6-x64-ng-v1 --chown=ctng:ctng /home/ctng/x-tools /home/ctng/x-tools
 
 RUN mkdir ~/build && \
 	curl -SL --output ~/build/icu4c-${ARG_ICU_VERSION}-src.tgz https://github.com/unicode-org/icu/releases/download/release-${ARG_ICU_VERSION}/icu4c-`echo ${ARG_ICU_VERSION} | tr - _`-src.tgz && \
@@ -109,7 +110,7 @@ RUN sudo apt-get -y remove \
 		libtomcrypt-dev && \
 	sudo rm -rf /var/lib/apt/lists/*
 
-ENV PATH "/home/ctng/x-tools/x86_64-pc-linux-gnu/bin:${PATH}"
+ENV PATH "/home/ctng/x-tools/x86_64-pc-linux-gnu/bin:/home/ctng/x-tools/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sysroot/usr/local/bin:${PATH}"
 ENV PATH "/home/ctng/x-tools/${ARG_TARGET_ARCH}/bin:/home/ctng/x-tools/${ARG_TARGET_ARCH}/${ARG_TARGET_ARCH}/sysroot/usr/local/bin:${PATH}"
 
 RUN cd ~/build && \
@@ -184,22 +185,20 @@ RUN cd ~/build && \
 	tar xvf icu4c-${ARG_ICU_VERSION}-src.tgz --strip 1 -C icu4c-${ARG_ICU_VERSION}-src && \
 	mkdir icu4c-${ARG_ICU_VERSION}-build-x86_64 && \
 	cd icu4c-${ARG_ICU_VERSION}-build-x86_64 && \
-	../icu4c-${ARG_ICU_VERSION}-src/source/runConfigureICU \
+	CXXFLAGS='-std=c++17 -static-libstdc++' ../icu4c-${ARG_ICU_VERSION}-src/source/runConfigureICU \
 		Linux \
-		--host=x86_64-pc-linux-gnu \
-		CXXFLAGS=-std=c++17 && \
+		--host=x86_64-pc-linux-gnu && \
 	make -j${ARG_CPUCOUNT}
 
 RUN cd ~/build && \
 	mkdir icu4c-${ARG_ICU_VERSION}-build && \
 	cd icu4c-${ARG_ICU_VERSION}-build && \
-	../icu4c-${ARG_ICU_VERSION}-src/source/runConfigureICU \
+	CXXFLAGS='-std=c++17 -static-libstdc++' ../icu4c-${ARG_ICU_VERSION}-src/source/runConfigureICU \
 		Linux \
 		--host=${ARG_TARGET_ARCH} \
 		--with-cross-build=/home/ctng/build/icu4c-${ARG_ICU_VERSION}-build-x86_64 \
 		--prefix=/home/ctng/x-tools/${ARG_TARGET_ARCH}/${ARG_TARGET_ARCH}/sysroot/usr/local \
-		--includedir=/home/ctng/x-tools/${ARG_TARGET_ARCH}/${ARG_TARGET_ARCH}/sysroot/usr/include \
-		CXXFLAGS=-std=c++17 && \
+		--includedir=/home/ctng/x-tools/${ARG_TARGET_ARCH}/${ARG_TARGET_ARCH}/sysroot/usr/include && \
 	make -j${ARG_CPUCOUNT} && \
 	make install
 
@@ -207,7 +206,6 @@ RUN cd ~/build && \
 FROM $ARG_BASE
 
 ARG ARG_TARGET_ARCH
-ARG ARG_CPUCOUNT
 ARG ARG_CTNG_UID
 ARG ARG_CTNG_GID
 
@@ -238,7 +236,6 @@ ENV LIBRARY_PATH "/home/ctng/x-tools/${ARG_TARGET_ARCH}/${ARG_TARGET_ARCH}/sysro
 ENV LD_LIBRARY_PATH "/usr/x86_64-linux-gnu/lib:/home/ctng/x-tools/${ARG_TARGET_ARCH}/${ARG_TARGET_ARCH}/sysroot/usr/local/lib"
 
 ENV BUILD_ARCH=$ARG_TARGET_ARCH
-ENV CPUCOUNT=$ARG_CPUCOUNT
 
 WORKDIR /firebird
 

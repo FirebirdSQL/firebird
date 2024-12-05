@@ -31,14 +31,14 @@ T hypot_imp(T x, T y, const Policy& pol)
    y = fabs(y);
 
 #ifdef _MSC_VER
-#pragma warning(push) 
+#pragma warning(push)
 #pragma warning(disable: 4127)
 #endif
    // special case, see C99 Annex F:
    if(std::numeric_limits<T>::has_infinity
       && ((x == std::numeric_limits<T>::infinity())
       || (y == std::numeric_limits<T>::infinity())))
-      return policies::raise_overflow_error<T>("boost::math::hypot<%1%>(%1%,%1%)", 0, pol);
+      return policies::raise_overflow_error<T>("boost::math::hypot<%1%>(%1%,%1%)", nullptr, pol);
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
@@ -56,7 +56,7 @@ T hypot_imp(T x, T y, const Policy& pol)
 }
 
 template <class T1, class T2>
-inline typename tools::promote_args<T1, T2>::type 
+inline typename tools::promote_args<T1, T2>::type
    hypot(T1 x, T2 y)
 {
    typedef typename tools::promote_args<T1, T2>::type result_type;
@@ -65,7 +65,7 @@ inline typename tools::promote_args<T1, T2>::type
 }
 
 template <class T1, class T2, class Policy>
-inline typename tools::promote_args<T1, T2>::type 
+inline typename tools::promote_args<T1, T2>::type
    hypot(T1 x, T2 y, const Policy& pol)
 {
    typedef typename tools::promote_args<T1, T2>::type result_type;

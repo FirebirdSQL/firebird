@@ -225,7 +225,29 @@ namespace Jrd {
 			if (bak_state != Ods::hdr_nbak_normal)
 				diff_page = bm->getPageIndex(tdbb, bdb.bdb_page.getPageNum());
 
+			bool readPageAsNormal = false;
 			if (bak_state == Ods::hdr_nbak_normal || !diff_page)
+				readPageAsNormal = true;
+			else
+			{
+				if (!bm->readDifference(tdbb, diff_page, page))
+				{
+					if (page->pag_type == 0 && page->pag_generation == 0 && page->pag_scn == 0)
+					{
+						// We encountered a page which was allocated, but never written to the
+						// difference file. In this case we try to read the page from database. With
+						// this approach if the page was old we get it from DISK, and if the page
+						// was new IO error (EOF) or BUGCHECK (checksum error) will be the result.
+						// Engine is not supposed to read a page which was never written unless
+						// this is a merge process.
+						readPageAsNormal = true;
+					}
+					else
+						ERR_punt();
+				}
+			}
+
+			if (readPageAsNormal)
 			{
 				// Read page from disk as normal
 				int retryCount = 0;
@@ -246,11 +268,6 @@ namespace Jrd {
 						}
 					}
 				}
-			}
-			else
-			{
-				if (!bm->readDifference(tdbb, diff_page, page))
-					ERR_punt();
 			}
 
 			setHeader(h);

@@ -24,6 +24,8 @@
 #ifndef DSQL_ARRAY_PROTO_H
 #define DSQL_ARRAY_PROTO_H
 
+#include "../common/classes/MetaString.h"
+
 namespace Why {
 	class YAttachment;
 	class YTransaction;
@@ -58,6 +60,6 @@ void iscArrayLookupBoundsImpl(Why::YAttachment* attachment, Why::YTransaction* t
 	const SCHAR* relationName, const SCHAR* fieldName, ISC_ARRAY_DESC* desc);
 
 void iscArrayLookupDescImpl(Why::YAttachment* attachment, Why::YTransaction* transaction,
-	const SCHAR* relationName, const SCHAR* fieldName, ISC_ARRAY_DESC* desc);
+	const SCHAR* relationName, const SCHAR* fieldName, ISC_ARRAY_DESC* desc, Firebird::MetaString* globalField);
 
 #endif // DSQL_ARRAY_PROTO_H

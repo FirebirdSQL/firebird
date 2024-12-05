@@ -148,7 +148,8 @@ void iscArrayLookupBoundsImpl(Why::YAttachment* attachment,
 	LocalStatus status;
 	CheckStatusWrapper statusWrapper(&status);
 
-	iscArrayLookupDescImpl(attachment, transaction, relationName, fieldName, desc);
+	MetaString globalField;
+	iscArrayLookupDescImpl(attachment, transaction, relationName, fieldName, desc, &globalField);
 
 	ISC_ARRAY_BOUND* tail = desc->array_desc_bounds;
 
@@ -161,7 +162,7 @@ void iscArrayLookupBoundsImpl(Why::YAttachment* attachment,
 	)""";
 
 	FB_MESSAGE(InputMessage, CheckStatusWrapper,
-		(FB_VARCHAR(MAX_SQL_IDENTIFIER_LEN * 4), fieldName)
+		(FB_VARCHAR(MAX_SQL_IDENTIFIER_LEN), fieldName)
 	) inputMessage(&statusWrapper, MasterInterfacePtr());
 	inputMessage.clear();
 
@@ -171,7 +172,7 @@ void iscArrayLookupBoundsImpl(Why::YAttachment* attachment,
 	) outputMessage(&statusWrapper, MasterInterfacePtr());
 
 	inputMessage->fieldNameNull = FB_FALSE;
-	inputMessage->fieldName.set((const char*) fieldName);
+	inputMessage->fieldName.set(globalField.c_str());
 
 	auto resultSet = makeNoIncRef(attachment->openCursor(&statusWrapper, transaction, 0, sql,
 		SQL_DIALECT_CURRENT, inputMessage.getMetadata(), inputMessage.getData(),
@@ -190,7 +191,8 @@ void iscArrayLookupBoundsImpl(Why::YAttachment* attachment,
 
 
 void iscArrayLookupDescImpl(Why::YAttachment* attachment,
-	Why::YTransaction* transaction, const SCHAR* relationName, const SCHAR* fieldName, ISC_ARRAY_DESC* desc)
+	Why::YTransaction* transaction, const SCHAR* relationName, const SCHAR* fieldName, ISC_ARRAY_DESC* desc,
+	MetaString* globalField)
 {
 	LocalStatus status;
 	CheckStatusWrapper statusWrapper(&status);
@@ -201,7 +203,8 @@ void iscArrayLookupDescImpl(Why::YAttachment* attachment,
 	desc->array_desc_flags = 0;
 
 	constexpr auto sql = R"""(
-		select f.rdb$field_type,
+		select f.rdb$field_name,
+		       f.rdb$field_type,
 		       f.rdb$field_scale,
 		       f.rdb$field_length,
 		       f.rdb$dimensions
@@ -213,12 +216,13 @@ void iscArrayLookupDescImpl(Why::YAttachment* attachment,
 	)""";
 
 	FB_MESSAGE(InputMessage, CheckStatusWrapper,
-		(FB_VARCHAR(MAX_SQL_IDENTIFIER_LEN * 4), relationName)
-		(FB_VARCHAR(MAX_SQL_IDENTIFIER_LEN * 4), fieldName)
+		(FB_VARCHAR(MAX_SQL_IDENTIFIER_LEN), relationName)
+		(FB_VARCHAR(MAX_SQL_IDENTIFIER_LEN), fieldName)
 	) inputMessage(&statusWrapper, MasterInterfacePtr());
 	inputMessage.clear();
 
 	FB_MESSAGE(OutputMessage, CheckStatusWrapper,
+		(FB_VARCHAR(MAX_SQL_IDENTIFIER_LEN), fieldName)
 		(FB_INTEGER, fieldType)
 		(FB_INTEGER, fieldScale)
 		(FB_INTEGER, fieldLength)
@@ -238,6 +242,9 @@ void iscArrayLookupDescImpl(Why::YAttachment* attachment,
 
 	if (resultSet->fetchNext(&statusWrapper, outputMessage.getData()) == IStatus::RESULT_OK)
 	{
+		if (globalField)
+			globalField->assign(outputMessage->fieldName.str, outputMessage->fieldName.length);
+
 		desc->array_desc_dtype = outputMessage->fieldTypeNull ? 0 : outputMessage->fieldType;
 		desc->array_desc_scale = outputMessage->fieldScaleNull ? 0 : outputMessage->fieldScale;
 		desc->array_desc_length = outputMessage->fieldLengthNull ? 0 : outputMessage->fieldLength;

@@ -1,0 +1,20 @@
+name: Adjust snapshot build number
+description: Adjust snapshot build number
+
+runs:
+  using: composite
+  steps:
+    - id: adjust-snapshot-buildno
+      if:
+        github.repository == 'FirebirdSQL/firebird' &&
+        (github.ref_type == 'branch' &&
+          (github.ref_name == 'master' ||
+            (startsWith(github.ref_name, 'v') && endsWith(github.ref_name, '-release'))
+          )
+        ) ||
+        false
+      shell: bash
+      run: |
+        sed -i'' -e "s/SuffixKind=\(.*\)/SuffixKind=\"$(echo ${{ github.sha }} | cut -c 1-7)\"/" src/misc/writeBuildNum.sh
+        mkdir gen
+        src/misc/writeBuildNum.sh rebuildHeader

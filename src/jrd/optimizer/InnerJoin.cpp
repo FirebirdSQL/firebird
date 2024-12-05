@@ -191,6 +191,12 @@ void InnerJoin::estimateCost(unsigned position,
 	// Get the stream cardinality
 	const auto streamCardinality = csb->csb_rpt[stream->number].csb_cardinality;
 
+	// If the table looks like empty during preparation time, we cannot be sure about
+	// its real cardinality during execution. So, unless we have some index-based
+	// filtering applied, let's better be pessimistic and avoid hash joining due to
+	// likely cardinality under-estimation.
+	const bool avoidHashJoin = (streamCardinality <= MINIMUM_CARDINALITY && !stream->baseIndexes);
+
 	auto currentCardinality = candidate->unique ?
 		MINIMUM_CARDINALITY : streamCardinality * candidate->selectivity;
 	auto currentCost = candidate->cost;
@@ -210,7 +216,7 @@ void InnerJoin::estimateCost(unsigned position,
 	// Consider whether the current stream can be hash-joined to the prior ones.
 	// Beware conditional retrievals, this is impossible for them.
 
-	if (position && !candidate->condition)
+	if (position && !candidate->condition && !avoidHashJoin)
 	{
 		// Calculate the hashing cost. It consists of the following parts:
 		//  - hashed stream retrieval

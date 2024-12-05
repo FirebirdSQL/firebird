@@ -343,10 +343,12 @@ using namespace Firebird;
 
 %token <metaNamePtr> ACTION
 %token <metaNamePtr> ADMIN
+%token <metaNamePtr> BLOBID
 %token <metaNamePtr> CASCADE
 %token <metaNamePtr> FREE_IT			// ISC SQL extension
 %token <metaNamePtr> RESTRICT
 %token <metaNamePtr> ROLE
+%token <metaNamePtr> TEMP
 
 // New tokens added v6.0
 
@@ -700,9 +702,12 @@ using namespace Firebird;
 // tokens added for Firebird 6.0
 
 %token <metaNamePtr> ANY_VALUE
+%token <metaNamePtr> BTRIM
 %token <metaNamePtr> CALL
 %token <metaNamePtr> FORMAT
+%token <metaNamePtr> LTRIM
 %token <metaNamePtr> NAMED_ARG_ASSIGN
+%token <metaNamePtr> RTRIM
 
 // precedence declarations for expression evaluation
 
@@ -817,6 +822,7 @@ using namespace Firebird;
 	Jrd::ValueSourceClause* valueSourceClause;
 	Jrd::RelationNode* relationNode;
 	Jrd::RelationNode::AddColumnClause* addColumnClause;
+	Jrd::RelationNode::AddConstraintClause* addConstraintClause;
 	Jrd::RelationNode::RefActionClause* refActionClause;
 	Jrd::RelationNode::IndexConstraintClause* indexConstraintClause;
 	Jrd::RelationNode::IdentityOptions* identityOptions;
@@ -1401,7 +1407,12 @@ declare
 %type <ddlNode> declare_clause
 declare_clause
 	: FILTER filter_decl_clause				{ $$ = $2; }
-	| EXTERNAL FUNCTION udf_decl_clause		{ $$ = $3; }
+	| EXTERNAL FUNCTION if_not_exists_opt udf_decl_clause
+		{
+			const auto node = $4;
+			node->createIfNotExistsOnly = $3;
+			$$ = node;
+		}
 	;
 
 %type <createAlterFunctionNode> udf_decl_clause
@@ -1529,37 +1540,130 @@ create
 
 %type <ddlNode> create_clause
 create_clause
-	: EXCEPTION exception_clause				{ $$ = $2; }
-	| unique_opt order_direction INDEX symbol_index_name ON simple_table_name
+	: EXCEPTION if_not_exists_opt exception_clause
+		{
+			const auto node = $3;
+			node->createIfNotExistsOnly = $2;
+			$$ = node;
+		}
+	| unique_opt order_direction INDEX if_not_exists_opt symbol_index_name index_active_opt ON simple_table_name
 			{
-				CreateIndexNode* node = newNode<CreateIndexNode>(*$4);
+				const auto node = newNode<CreateIndexNode>(*$5);
+				node->active = $6;
 				node->unique = $1;
 				node->descending = $2;
-				node->relation = $6;
+				node->createIfNotExistsOnly = $4;
+				node->relation = $8;
 				$$ = node;
 			}
-		index_definition(static_cast<CreateIndexNode*>($7))
+		index_definition(static_cast<CreateIndexNode*>($9))
 			{
-				$$ = $7;
+				$$ = $9;
 			}
-	| FUNCTION function_clause					{ $$ = $2; }
-	| PROCEDURE procedure_clause				{ $$ = $2; }
-	| TABLE table_clause						{ $$ = $2; }
-	| GLOBAL TEMPORARY TABLE gtt_table_clause	{ $$ = $4; }
-	| TRIGGER trigger_clause					{ $$ = $2; }
-	| VIEW view_clause							{ $$ = $2; }
-	| GENERATOR generator_clause				{ $$ = $2; }
-	| SEQUENCE generator_clause					{ $$ = $2; }
+	| FUNCTION if_not_exists_opt function_clause
+		{
+			const auto node = $3;
+			node->createIfNotExistsOnly = $2;
+			$$ = node;
+		}
+	| PROCEDURE if_not_exists_opt procedure_clause
+		{
+			const auto node = $3;
+			node->createIfNotExistsOnly = $2;
+			$$ = node;
+		}
+	| TABLE if_not_exists_opt table_clause
+		{
+			const auto node = $3;
+			node->createIfNotExistsOnly = $2;
+			$$ = node;
+		}
+	| GLOBAL TEMPORARY TABLE if_not_exists_opt gtt_table_clause
+		{
+			const auto node = $5;
+			node->createIfNotExistsOnly = $4;
+			$$ = node;
+		}
+	| TRIGGER if_not_exists_opt trigger_clause
+		{
+			const auto node = $3;
+			node->createIfNotExistsOnly = $2;
+			$$ = node;
+		}
+	| VIEW if_not_exists_opt view_clause
+		{
+			const auto node = $3;
+			node->createIfNotExistsOnly = $2;
+			$$ = node;
+		}
+	| GENERATOR if_not_exists_opt generator_clause
+		{
+			const auto node = $3;
+			node->createIfNotExistsOnly = $2;
+			$$ = node;
+		}
+	| SEQUENCE if_not_exists_opt generator_clause
+		{
+			const auto node = $3;
+			node->createIfNotExistsOnly = $2;
+			$$ = node;
+		}
 	| DATABASE db_clause						{ $$ = $2; }
-	| DOMAIN domain_clause						{ $$ = $2; }
-	| SHADOW shadow_clause						{ $$ = $2; }
-	| ROLE role_clause							{ $2->createFlag = true; $$ = $2; }
-	| COLLATION collation_clause				{ $$ = $2; }
-	| USER create_user_clause					{ $$ = $2; }
-	| PACKAGE package_clause					{ $$ = $2; }
-	| PACKAGE BODY package_body_clause			{ $$ = $3; }
-	| MAPPING create_map_clause(false)			{ $$ = $2; }
-	| GLOBAL MAPPING create_map_clause(true)	{ $$ = $3; }
+	| DOMAIN if_not_exists_opt domain_clause
+		{
+			const auto node = $3;
+			node->createIfNotExistsOnly = $2;
+			$$ = node;
+		}
+	| SHADOW if_not_exists_opt shadow_clause
+		{
+			const auto node = $3;
+			node->createIfNotExistsOnly = $2;
+			$$ = node;
+		}
+	| ROLE if_not_exists_opt role_clause
+		{
+			const auto node = $3;
+			node->createIfNotExistsOnly = $2;
+			node->createFlag = true;
+			$$ = node;
+		}
+	| COLLATION if_not_exists_opt collation_clause
+		{
+			const auto node = $3;
+			node->createIfNotExistsOnly = $2;
+			$$ = node;
+		}
+	| USER if_not_exists_opt create_user_clause
+		{
+			const auto node = $3;
+			node->createIfNotExistsOnly = $2;
+			$$ = node;
+		}
+	| PACKAGE if_not_exists_opt package_clause
+		{
+			const auto node = $3;
+			node->createIfNotExistsOnly = $2;
+			$$ = node;
+		}
+	| PACKAGE BODY if_not_exists_opt package_body_clause
+		{
+			const auto node = $4;
+			node->createIfNotExistsOnly = $3;
+			$$ = node;
+		}
+	| MAPPING if_not_exists_opt create_map_clause(false)
+		{
+			const auto node = $3;
+			node->createIfNotExistsOnly = $2;
+			$$ = node;
+		}
+	| GLOBAL MAPPING if_not_exists_opt create_map_clause(true)
+		{
+			const auto node = $4;
+			node->createIfNotExistsOnly = $3;
+			$$ = node;
+		}
 	;
 
 
@@ -1607,6 +1711,7 @@ replace_clause
 	| FUNCTION replace_function_clause			{ $$ = $2; }
 	| TRIGGER replace_trigger_clause			{ $$ = $2; }
 	| PACKAGE replace_package_clause			{ $$ = $2; }
+	| PACKAGE BODY replace_package_body_clause	{ $$ = $3; }
 	| VIEW replace_view_clause					{ $$ = $2; }
 	| EXCEPTION replace_exception_clause		{ $$ = $2; }
 	| GENERATOR replace_sequence_clause			{ $$ = $2; }
@@ -1649,6 +1754,12 @@ alter_exception_clause
 
 
 // CREATE INDEX
+
+%type <boolVal> index_active_opt
+index_active_opt
+	: /* nothing */		{ $$ = true; }
+	| index_active		{ $$ = $1; }
+	;
 
 %type <boolVal> unique_opt
 unique_opt
@@ -2267,7 +2378,7 @@ table_element($createRelationNode)
 
 // column definition
 
-%type column_def(<relationNode>)
+%type <addColumnClause> column_def(<relationNode>)
 column_def($relationNode)
 	: symbol_column_name data_type_or_domain domain_default_opt
 			{
@@ -2281,6 +2392,7 @@ column_def($relationNode)
 		column_constraint_clause(NOTRIAL($<addColumnClause>4)) collate_clause
 			{
 				setCollate($2, $6);
+				$$ = $<addColumnClause>4;
 			}
 	| symbol_column_name data_type_or_domain identity_clause
 			{
@@ -2294,6 +2406,7 @@ column_def($relationNode)
 		column_constraint_clause(NOTRIAL($<addColumnClause>4)) collate_clause
 			{
 				setCollate($2, $6);
+				$$ = $<addColumnClause>4;
 			}
 	| symbol_column_name non_array_type def_computed
 		{
@@ -2303,6 +2416,7 @@ column_def($relationNode)
 			clause->computed = $3;
 			$relationNode->clauses.add(clause);
 			clause->field->flags |= FLD_computed;
+			$$ = clause;
 		}
 	| symbol_column_name def_computed
 		{
@@ -2312,6 +2426,7 @@ column_def($relationNode)
 			clause->computed = $2;
 			$relationNode->clauses.add(clause);
 			clause->field->flags |= FLD_computed;
+			$$ = clause;
 		}
 	;
 
@@ -2499,15 +2614,13 @@ column_constraint($addColumnClause)
 
 // table constraints
 
-%type table_constraint_definition(<relationNode>)
+%type <addConstraintClause> table_constraint_definition(<relationNode>)
 table_constraint_definition($relationNode)
 	: constraint_name_opt table_constraint($relationNode)
 		{
 			if ($1)
-			{
-				static_cast<RelationNode::AddConstraintClause*>(
-					$relationNode->clauses.back().getObject())->name = *$1;
-			}
+				$2->name = *$1;
+			$$ = $2;
 		}
 	;
 
@@ -2517,7 +2630,7 @@ constraint_name_opt
 	| CONSTRAINT symbol_constraint_name		{ $$ = $2; }
 	;
 
-%type table_constraint(<relationNode>)
+%type <addConstraintClause> table_constraint(<relationNode>)
 table_constraint($relationNode)
 	: UNIQUE column_parens constraint_index_opt
 		{
@@ -2533,6 +2646,7 @@ table_constraint($relationNode)
 			constraint.index = $3;
 
 			$relationNode->clauses.add(&constraint);
+			$$ = &constraint;
 		}
 	| PRIMARY KEY column_parens constraint_index_opt
 		{
@@ -2548,6 +2662,7 @@ table_constraint($relationNode)
 			constraint.index = $4;
 
 			$relationNode->clauses.add(&constraint);
+			$$ = &constraint;
 		}
 	| FOREIGN KEY column_parens REFERENCES symbol_table_name column_parens_opt
 		referential_trigger_action constraint_index_opt
@@ -2576,6 +2691,7 @@ table_constraint($relationNode)
 			constraint.index = $8;
 
 			$relationNode->clauses.add(&constraint);
+			$$ = &constraint;
 		}
 	| check_constraint
 		{
@@ -2583,6 +2699,7 @@ table_constraint($relationNode)
 			constraint->constraintType = RelationNode::AddConstraintClause::CTYPE_CHECK;
 			constraint->check = $1;
 			$relationNode->clauses.add(constraint);
+			$$ = constraint;
 		}
 	;
 
@@ -3038,6 +3155,12 @@ package_body_item
 		{ $$ = CreateAlterPackageNode::Item::create($2); }
 	;
 
+
+%type <ddlNode> replace_package_body_clause
+replace_package_body_clause
+	: package_body_clause
+		{ $$ = newNode<RecreatePackageBodyNode>($1); }
+	;
 
 %type <localDeclarationsNode> local_declarations_opt
 local_declarations_opt
@@ -4105,6 +4228,7 @@ alter_clause
 	| TRIGGER alter_trigger_clause			{ $$ = $2; }
 	| PROCEDURE alter_procedure_clause		{ $$ = $2; }
 	| PACKAGE alter_package_clause			{ $$ = $2; }
+	| PACKAGE BODY replace_package_body_clause	{ $$ = $3; }
 	| DATABASE
 			{ $<alterDatabaseNode>$ = newNode<AlterDatabaseNode>(); }
 		alter_db($<alterDatabaseNode>2)
@@ -4189,8 +4313,18 @@ alter_op($relationNode)
 			clause->name = *$4;
 			$relationNode->clauses.add(clause);
 		}
-	| ADD column_def($relationNode)
-	| ADD table_constraint_definition($relationNode)
+	| ADD if_not_exists_opt column_def($relationNode)
+		{
+			const auto node = $3;
+			node->createIfNotExistsOnly = $2;
+		}
+	| ADD table_constraint($relationNode)
+	| ADD CONSTRAINT if_not_exists_opt symbol_constraint_name table_constraint($relationNode)
+		{
+			const auto node = $5;
+			node->name = *$4;
+			node->createIfNotExistsOnly = $3;
+		}
 	| col_opt alter_column_name POSITION pos_short_integer
 		{
 			RelationNode::AlterColPosClause* clause = newNode<RelationNode::AlterColPosClause>();
@@ -4419,7 +4553,10 @@ keyword_or_column
 	| VARBINARY
 	| WINDOW
 	| WITHOUT
-	| CALL					// added in FB 6.0
+	| BTRIM					// added in FB 6.0
+	| CALL
+	| LTRIM
+	| RTRIM
 	;
 
 col_opt
@@ -4481,8 +4618,16 @@ drop_behaviour
 
 %type <ddlNode>	alter_index_clause
 alter_index_clause
-	: symbol_index_name ACTIVE		{ $$ = newNode<AlterIndexNode>(*$1, true); }
-	| symbol_index_name INACTIVE	{ $$ = newNode<AlterIndexNode>(*$1, false); }
+	: symbol_index_name index_active
+		{
+			$$ = newNode<AlterIndexNode>(*$1, $2);
+		}
+	;
+
+%type <boolVal> index_active
+index_active
+	: ACTIVE	{ $$ = true; }
+	| INACTIVE	{ $$ = false; }
 	;
 
 %type <ddlNode>	alter_udf_clause
@@ -4833,6 +4978,12 @@ drop_clause
 if_exists_opt
 	: /* nothing */		{ $$ = false; }
 	| IF EXISTS			{ $$ = true; }
+	;
+
+%type <boolVal> if_not_exists_opt
+if_not_exists_opt
+	: /* nothing */		{ $$ = false; }
+	| IF NOT EXISTS		{ $$ = true; }
 	;
 
 %type <boolVal> opt_no_file_delete
@@ -5713,6 +5864,8 @@ tran_option($setTransactionNode)
 		{ setClause($setTransactionNode->restartRequests, "RESTART REQUESTS", true); }
 	| AUTO COMMIT
 		{ setClause($setTransactionNode->autoCommit, "AUTO COMMIT", true); }
+	| AUTO RELEASE TEMP BLOBID
+		{ setClause($setTransactionNode->autoReleaseTempBlobID, "AUTO RELEASE TEMP BLOBID", true); }
 	// timeout
 	| LOCK TIMEOUT nonneg_short_integer
 		{ setClause($setTransactionNode->lockTimeout, "LOCK TIMEOUT", (USHORT) $3); }
@@ -7602,7 +7755,7 @@ map_from_symbol_name
 %type <intlStringPtr> map_logoninfo
 map_logoninfo
 	: sql_string
-	| valid_symbol_name		{ $$ = newNode<IntlString>($1->c_str()); }
+	| valid_symbol_name		{ $$ = newIntlString($1->c_str(), metadataCharSet->getName()); }
 	;
 
 %type map_using(<mappingNode>)
@@ -8659,6 +8812,9 @@ of_first_last_day_part
 string_value_function
 	: substring_function
 	| trim_function
+	| btrim_function
+	| ltrim_function
+	| rtrim_function
 	| UPPER '(' value ')'
 		{ $$ = newNode<StrCaseNode>(blr_upcase, $3); }
 	| LOWER '(' value ')'
@@ -8690,13 +8846,13 @@ string_length_opt
 %type <valueExprNode> trim_function
 trim_function
 	: TRIM '(' trim_specification value FROM value ')'
-		{ $$ = newNode<TrimNode>($3, $6, $4); }
+		{ $$ = newNode<TrimNode>($3, blr_trim_characters, $6, $4); }
 	| TRIM '(' value FROM value ')'
-		{ $$ = newNode<TrimNode>(blr_trim_both, $5, $3); }
+		{ $$ = newNode<TrimNode>(blr_trim_both, blr_trim_characters, $5, $3); }
 	| TRIM '(' trim_specification FROM value ')'
-		{ $$ = newNode<TrimNode>($3, $5); }
+		{ $$ = newNode<TrimNode>($3, blr_trim_spaces, $5); }
 	| TRIM '(' value ')'
-		{ $$ = newNode<TrimNode>(blr_trim_both, $3); }
+		{ $$ = newNode<TrimNode>(blr_trim_both, blr_trim_spaces, $3); }
 	;
 
 %type <blrOp> trim_specification
@@ -8704,6 +8860,30 @@ trim_specification
 	: BOTH		{ $$ = blr_trim_both; }
 	| TRAILING	{ $$ = blr_trim_trailing; }
 	| LEADING	{ $$ = blr_trim_leading; }
+	;
+
+%type <valueExprNode> btrim_function
+btrim_function
+	: BTRIM '(' value ',' value ')'
+		{ $$ = newNode<TrimNode>(blr_trim_both, blr_trim_multi_characters, $3, $5); }
+	| BTRIM '(' value ')'
+		{ $$ = newNode<TrimNode>(blr_trim_both, blr_trim_spaces, $3); }
+	;
+
+%type <valueExprNode> ltrim_function
+ltrim_function
+	: LTRIM '(' value ',' value ')'
+		{ $$ = newNode<TrimNode>(blr_trim_leading, blr_trim_multi_characters, $3, $5); }
+	| LTRIM '(' value ')'
+		{ $$ = newNode<TrimNode>(blr_trim_leading, blr_trim_spaces, $3); }
+	;
+
+%type <valueExprNode> rtrim_function
+rtrim_function
+	: RTRIM '(' value ',' value ')'
+		{ $$ = newNode<TrimNode>(blr_trim_trailing, blr_trim_multi_characters, $3, $5); }
+	| RTRIM '(' value ')'
+		{ $$ = newNode<TrimNode>(blr_trim_trailing, blr_trim_spaces, $3); }
 	;
 
 %type <valueExprNode> udf
@@ -9497,10 +9677,12 @@ non_reserved_word
 	// added in FB 4.0.2
 	| BLOB_APPEND
 	// added in FB 5.0
+	| BLOBID
 	| LOCKED
 	| OPTIMIZE
 	| QUARTER
 	| TARGET
+	| TEMP
 	| TIMEZONE_NAME
 	| UNICODE_CHAR
 	| UNICODE_VAL

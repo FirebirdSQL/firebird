@@ -259,8 +259,8 @@ public:
 		return rc;
 	}
 
-	unsigned afterAttach(Firebird::CheckStatusWrapper* st, const char* dbName,
-		const Firebird::IStatus* attStatus) override
+	unsigned afterAttach(CheckStatusWrapper* st, const char* dbName,
+		const IStatus* attStatus) override
 	{
 		return NO_RETRY;
 	}
@@ -456,7 +456,7 @@ void loginSuccess(const string& login, const string& remId)
 
 
 template <typename T>
-static void getMultiPartConnectParameter(T& putTo, Firebird::ClumpletReader& id, UCHAR param)
+static void getMultiPartConnectParameter(T& putTo, ClumpletReader& id, UCHAR param)
 {
 	// This array is needed only to make sure that all parts of specific data are present
 	UCHAR checkBytes[256];
@@ -657,7 +657,10 @@ public:
 			}
 
 			// if we asked for more data but received nothing switch to next plugin
-			const bool forceNext = (flags & AUTH_CONTINUE) && (!authPort->port_srv_auth_block->hasDataForPlugin());
+			const bool forceNext = (flags & AUTH_CONTINUE) &&
+				(!authPort->port_srv_auth_block->hasDataForPlugin()) &&
+				(!authPort->port_srv_auth_block->authCompleted());
+
 			HANDSHAKE_DEBUG(fprintf(stderr, "Srv: authenticate: ServerAuth calls plug %s\n",
 				forceNext ? "forced-NEXT" : authItr->name()));
 			int authResult = forceNext ? IAuth::AUTH_CONTINUE :
@@ -685,6 +688,11 @@ public:
 				authItr->next();
 				authServer = NULL;
 				continue;
+
+			case IAuth::AUTH_SUCCESS_WITH_DATA:
+				HANDSHAKE_DEBUG(fprintf(stderr, "Srv: authenticate: success with data\n"));
+				fb_assert(!authPort->port_srv_auth_block->authCompleted());
+				// fall thru
 
 			case IAuth::AUTH_MORE_DATA:
 				HANDSHAKE_DEBUG(fprintf(stderr, "Srv: authenticate: plugin wants more data\n"));
@@ -739,6 +747,13 @@ public:
 				if (send->p_acpt.p_acpt_type & pflag_compress)
 					authPort->port_flags |= PORT_compressed;
 				memset(&send->p_auth_cont, 0, sizeof send->p_auth_cont);
+
+				if (authResult == IAuth::AUTH_SUCCESS_WITH_DATA)
+				{
+					authPort->port_srv_auth_block->authCompleted(true);
+					HANDSHAKE_DEBUG(fprintf(stderr, "Srv: authenticate: success with data, completed\n"));
+				}
+
 				return false;
 
 			case IAuth::AUTH_FAILED:
@@ -1221,7 +1236,7 @@ static void		release_sql_request(Rsr*);
 static void		release_transaction(Rtr*);
 
 static void		send_error(rem_port* port, PACKET* apacket, ISC_STATUS errcode);
-static void		send_error(rem_port* port, PACKET* apacket, const Firebird::Arg::StatusVector&);
+static void		send_error(rem_port* port, PACKET* apacket, const Arg::StatusVector&);
 static void		set_server(rem_port*, USHORT);
 static int		shut_server(const int, const int, void*);
 static int		pre_shutdown(const int, const int, void*);
@@ -1377,7 +1392,7 @@ void SRVR_enum_attachments(ULONG& att_cnt, ULONG& dbs_cnt, ULONG& svc_cnt)
 		iface->query(&status, 0, NULL, sizeof(spb_query), spb_query, sizeof(buffer), buffer);
 		const UCHAR* p = buffer;
 
-		if ((!(status.getState() & Firebird::IStatus::STATE_ERRORS)) && *p++ == isc_info_svc_svr_db_info)
+		if ((!(status.getState() & IStatus::STATE_ERRORS)) && *p++ == isc_info_svc_svr_db_info)
 		{
 			while (*p != isc_info_flag_end)
 			{
@@ -1970,6 +1985,9 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 	send->p_acpd.p_acpt_version = port->port_protocol = version;
 	send->p_acpd.p_acpt_architecture = architecture;
 	send->p_acpd.p_acpt_type = type | (compress ? pflag_compress : 0);
+#ifdef TRUSTED_AUTH
+	send->p_acpd.p_acpt_type |= pflag_win_sspi_nego;
+#endif
 	send->p_acpd.p_acpt_authenticated = 0;
 
 	send->p_acpt.p_acpt_version = port->port_protocol = version;
@@ -1991,7 +2009,7 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 
 	port->port_client_arch = connect->p_cnct_client;
 
-	Firebird::ClumpletReader id(Firebird::ClumpletReader::UnTagged,
+	ClumpletReader id(ClumpletReader::UnTagged,
 								connect->p_cnct_user_id.cstr_address,
 								connect->p_cnct_user_id.cstr_length);
 
@@ -2014,13 +2032,15 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 		{
 			ConnectAuth* cnctAuth = FB_NEW ConnectAuth(port, id);
 			port->port_srv_auth = cnctAuth;
-			if (port->port_srv_auth->authenticate(send, ServerAuth::AUTH_COND_ACCEPT))
+
+			if (cnctAuth->authenticate(send, ServerAuth::AUTH_COND_ACCEPT))
 			{
-				delete port->port_srv_auth;
+				delete cnctAuth;
 				port->port_srv_auth = NULL;
 			}
+			else
+				cnctAuth->useResponse = true;
 
-			cnctAuth->useResponse = true;
 			return true;
 		}
 
@@ -2128,7 +2148,7 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 	if (!accepted)
 	{
 		HANDSHAKE_DEBUG(fprintf(stderr, "!accepted, sending reject\n"));
-		if (status.getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status.getState() & IStatus::STATE_ERRORS)
 		{
 			switch (status.getErrors()[1])
 			{
@@ -2522,13 +2542,13 @@ void DatabaseAuth::accept(PACKET* send, Auth::WriterImplementation* authBlock)
 	authPort->port_server_crypt_callback->destroy();
 	provider->setDbCryptCallback(&status_vector, authPort->port_server_crypt_callback->getInterface());
 
-	if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
+	if (!(status_vector.getState() & IStatus::STATE_ERRORS))
 	{
 		ServAttachment iface(operation == op_attach ?
 			provider->attachDatabase(&status_vector, dbName.c_str(), dl, dpb) :
 			provider->createDatabase(&status_vector, dbName.c_str(), dl, dpb));
 
-		if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status_vector.getState() & IStatus::STATE_ERRORS))
 		{
 			Rdb* rdb = FB_NEW Rdb;
 
@@ -2590,7 +2610,7 @@ static void aux_request( rem_port* port, /*P_REQ* request,*/ PACKET* send)
 		port->send_response(send, rdb->rdb_id, send->p_resp.p_resp_data.cstr_length,
 							&status_vector, false);
 
-		if (status_vector.getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status_vector.getState() & IStatus::STATE_ERRORS)
 		{
 			return;
 		}
@@ -2790,7 +2810,7 @@ static USHORT check_statement_type( Rsr* statement)
 
 	statement->rsr_iface->getInfo(&local_status, sizeof(sql_info), sql_info, sizeof(buffer), buffer);
 
-	if (!(local_status.getState() & Firebird::IStatus::STATE_ERRORS))
+	if (!(local_status.getState() & IStatus::STATE_ERRORS))
 	{
 		for (ClumpletReader p(ClumpletReader::InfoResponse, buffer, sizeof(buffer)); !p.isEof(); p.moveNext())
 		{
@@ -2850,7 +2870,7 @@ ISC_STATUS rem_port::compile(P_CMPL* compileL, PACKET* sendL)
 
 	ServRequest iface(rdb->rdb_iface->compileRequest(&status_vector, blr_length, blr));
 
-	if (status_vector.getState() & Firebird::IStatus::STATE_ERRORS)
+	if (status_vector.getState() & IStatus::STATE_ERRORS)
 		return this->send_response(sendL, 0, 0, &status_vector, false);
 
 	// Parse the request to find the messages
@@ -3110,7 +3130,7 @@ void rem_port::drop_database(P_RLSE* /*release*/, PACKET* sendL)
 
 	rdb->rdb_iface->dropDatabase(&status_vector);
 
-	if ((status_vector.getState() & Firebird::IStatus::STATE_ERRORS) &&
+	if ((status_vector.getState() & IStatus::STATE_ERRORS) &&
 		(status_vector.getErrors()[1] != isc_drdb_completed_with_errs))
 	{
 		this->send_response(sendL, 0, 0, &status_vector, false);
@@ -3169,7 +3189,7 @@ ISC_STATUS rem_port::end_blob(P_OP operation, P_RLSE * release, PACKET* sendL)
 	else
 		blob->rbl_iface->cancel(&status_vector);
 
-	if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
+	if (!(status_vector.getState() & IStatus::STATE_ERRORS))
 	{
 		blob->rbl_iface = NULL;
 		release_blob(blob);
@@ -3200,7 +3220,7 @@ ISC_STATUS rem_port::end_database(P_RLSE* /*release*/, PACKET* sendL)
 
 	rdb->rdb_iface->detach(&status_vector);
 
-	if (status_vector.getState() & Firebird::IStatus::STATE_ERRORS)
+	if (status_vector.getState() & IStatus::STATE_ERRORS)
 		return this->send_response(sendL, 0, 0, &status_vector, false);
 
 	port_flags |= PORT_detached;
@@ -3254,7 +3274,7 @@ ISC_STATUS rem_port::end_request(P_RLSE * release, PACKET* sendL)
 
 	requestL->rrq_iface->free(&status_vector);
 
-	if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
+	if (!(status_vector.getState() & IStatus::STATE_ERRORS))
 	{
 		requestL->rrq_iface = NULL;
 		release_request(requestL);
@@ -3292,7 +3312,7 @@ ISC_STATUS rem_port::end_statement(P_SQLFREE* free_stmt, PACKET* sendL)
 		else if (statement->rsr_cursor)
 		{
 			statement->rsr_cursor->close(&status_vector);
-			if (status_vector.getState() & Firebird::IStatus::STATE_ERRORS)
+			if (status_vector.getState() & IStatus::STATE_ERRORS)
 			{
 				return this->send_response(sendL, 0, 0, &status_vector, true);
 			}
@@ -3315,7 +3335,7 @@ ISC_STATUS rem_port::end_statement(P_SQLFREE* free_stmt, PACKET* sendL)
 		if (statement->rsr_iface)
 		{
 			statement->rsr_iface->free(&status_vector);
-			if (status_vector.getState() & Firebird::IStatus::STATE_ERRORS)
+			if (status_vector.getState() & IStatus::STATE_ERRORS)
 			{
 				return this->send_response(sendL, 0, 0, &status_vector, true);
 			}
@@ -3379,12 +3399,12 @@ ISC_STATUS rem_port::end_transaction(P_OP operation, P_RLSE * release, PACKET* s
 
 	case op_prepare:
 		transaction->rtr_iface->prepare(&status_vector, 0, NULL);
-		if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status_vector.getState() & IStatus::STATE_ERRORS))
 			transaction->rtr_limbo = true;
 		break;
 	}
 
-	if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
+	if (!(status_vector.getState() & IStatus::STATE_ERRORS))
 	{
 		if (operation == op_commit || operation == op_rollback)
 		{
@@ -3493,11 +3513,11 @@ ISC_STATUS rem_port::execute_immediate(P_OP op, P_SQLST * exnow, PACKET* sendL)
 
 		sendL->p_operation = op_sql_response;
 		sendL->p_sqldata.p_sqldata_messages =
-			((status_vector.getState() & Firebird::IStatus::STATE_ERRORS) || !out_msg) ? 0 : 1;
+			((status_vector.getState() & IStatus::STATE_ERRORS) || !out_msg) ? 0 : 1;
 		this->send_partial(sendL);
 	}
 
-	if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
+	if (!(status_vector.getState() & IStatus::STATE_ERRORS))
 	{
 		if (transaction && !newTra)
 		{
@@ -3587,7 +3607,7 @@ void rem_port::batch_create(P_BATCH_CREATE* batch, PACKET* sendL)
 
 	statement->rsr_batch_size = 0;
 	statement->rsr_batch_stream.blobRemaining = 0;
-	if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
+	if (!(status_vector.getState() & IStatus::STATE_ERRORS))
 	{
 		if (msgBuffer.metadata)
 		{
@@ -3914,7 +3934,7 @@ ISC_STATUS rem_port::execute_statement(P_OP op, P_SQLDATA* sqldata, PACKET* send
 											 (out_blr_length ? oMsgBuffer.metadata : DELAYED_OUT_FORMAT),
 											 cursorFlags);
 
-		if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status_vector.getState() & IStatus::STATE_ERRORS))
 		{
 			transaction->rtr_cursors.add(statement);
 			statement->rsr_delayed_format = !out_blr_length;
@@ -3932,12 +3952,12 @@ ISC_STATUS rem_port::execute_statement(P_OP op, P_SQLDATA* sqldata, PACKET* send
 
 		sendL->p_operation = op_sql_response;
 		sendL->p_sqldata.p_sqldata_messages =
-			((status_vector.getState() & Firebird::IStatus::STATE_ERRORS) || !out_msg) ? 0 : 1;
+			((status_vector.getState() & IStatus::STATE_ERRORS) || !out_msg) ? 0 : 1;
 
 		this->send_partial(sendL);
 	}
 
-	if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
+	if (!(status_vector.getState() & IStatus::STATE_ERRORS))
 	{
 		if (transaction && !newTra)
 		{
@@ -4090,7 +4110,7 @@ ISC_STATUS rem_port::fetch(P_SQLDATA * sqldata, PACKET* sendL, bool scroll)
 			const auto message = statement->rsr_buffer;
 			const int rc = cursor->fetchRelative(&status_vector, adjustment, message->msg_buffer);
 
-			if (status_vector.getState() & Firebird::IStatus::STATE_ERRORS)
+			if (status_vector.getState() & IStatus::STATE_ERRORS)
 				return this->send_response(sendL, 0, 0, &status_vector, false);
 
 			// Re-positioning should never fail
@@ -4211,7 +4231,7 @@ ISC_STATUS rem_port::fetch(P_SQLDATA * sqldata, PACKET* sendL, bool scroll)
 
 			statement->rsr_flags.set(Rsr::FETCHED);
 
-			if (status_vector.getState() & Firebird::IStatus::STATE_ERRORS)
+			if (status_vector.getState() & IStatus::STATE_ERRORS)
 				return this->send_response(sendL, 0, 0, &status_vector, false);
 
 			success = (rc == IStatus::RESULT_OK);
@@ -4303,7 +4323,7 @@ ISC_STATUS rem_port::fetch(P_SQLDATA * sqldata, PACKET* sendL, bool scroll)
 				fb_assert(false);
 		}
 
-		if (status_vector.getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status_vector.getState() & IStatus::STATE_ERRORS)
 		{
 			// If already have an error queued, don't overwrite it
 			if (!statement->rsr_flags.test(Rsr::STREAM_ERR))
@@ -4355,7 +4375,7 @@ static bool get_next_msg_no(Rrq* request, USHORT incarnation, USHORT * msg_numbe
 	request->rrq_iface->getInfo(&status_vector, incarnation,
 		sizeof(request_info), request_info, sizeof(info_buffer), info_buffer);
 
-	if (status_vector.getState() & Firebird::IStatus::STATE_ERRORS)
+	if (status_vector.getState() & IStatus::STATE_ERRORS)
 		return false;
 
 	bool result = false;
@@ -4507,7 +4527,7 @@ ISC_STATUS rem_port::get_slice(P_SLC * stuff, PACKET* sendL)
 		stuff->p_slc_parameters.cstr_address, stuff->p_slc_length, slice);
 
 	ISC_STATUS status;
-	if (status_vector.getState() & Firebird::IStatus::STATE_ERRORS)
+	if (status_vector.getState() & IStatus::STATE_ERRORS)
 		status = this->send_response(sendL, 0, 0, &status_vector, false);
 	else
 	{
@@ -4600,7 +4620,7 @@ void rem_port::info(P_OP op, P_INFO* stuff, PACKET* sendL)
 			buffer_length, //sizeof(temp)
 			temp_buffer); //temp
 
-		if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status_vector.getState() & IStatus::STATE_ERRORS))
 		{
 			string version;
 			versionInfo(version);
@@ -4781,7 +4801,7 @@ ISC_STATUS rem_port::open_blob(P_OP op, P_BLOB* stuff, PACKET* sendL)
 			&sendL->p_resp.p_resp_blob_id, bpb_length, bpb));
 
 	USHORT object = 0;
-	if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
+	if (!(status_vector.getState() & IStatus::STATE_ERRORS))
 	{
 		Rbl* blob = FB_NEW Rbl;
 #ifdef DEBUG_REMOTE_MEMORY
@@ -4828,7 +4848,7 @@ ISC_STATUS rem_port::prepare(P_PREP * stuff, PACKET* sendL)
 
 	transaction->rtr_iface->prepare(&status_vector,
 		stuff->p_prep_data.cstr_length, stuff->p_prep_data.cstr_address);
-	if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
+	if (!(status_vector.getState() & IStatus::STATE_ERRORS))
 	{
 		transaction->rtr_limbo = true;
 	}
@@ -4880,7 +4900,7 @@ ISC_STATUS rem_port::prepare_statement(P_SQLST * prepareL, PACKET* sendL)
 	if (statement->rsr_iface)
 	{
 		statement->rsr_iface->free(&status_vector);
-		if (status_vector.getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status_vector.getState() & IStatus::STATE_ERRORS)
 			return this->send_response(sendL, 0, 0, &status_vector, false);
 	}
 
@@ -4896,13 +4916,13 @@ ISC_STATUS rem_port::prepare_statement(P_SQLST * prepareL, PACKET* sendL)
 		iface, prepareL->p_sqlst_SQL_str.cstr_length,
 		reinterpret_cast<const char*>(prepareL->p_sqlst_SQL_str.cstr_address),
 		prepareL->p_sqlst_SQL_dialect, flags);
-	if (status_vector.getState() & Firebird::IStatus::STATE_ERRORS)
+	if (status_vector.getState() & IStatus::STATE_ERRORS)
 		return this->send_response(sendL, 0, 0, &status_vector, false);
 
 	LocalStatus ls2;
 	CheckStatusWrapper s2(&ls2);
 	statement->rsr_iface->getInfo(&s2, infoLength, info, prepareL->p_sqlst_buffer_length, buffer);
-	if (s2.getState() & Firebird::IStatus::STATE_ERRORS)
+	if (s2.getState() & IStatus::STATE_ERRORS)
 		return this->send_response(sendL, 0, 0, &s2, false);
 
 	REMOTE_reset_statement(statement);
@@ -5419,7 +5439,7 @@ ISC_STATUS rem_port::put_segment(P_OP op, P_SGMT * segment, PACKET* sendL)
 		length += *p++ << 8;
 		blob->rbl_iface->putSegment(&status_vector, length, p);
 
-		if (status_vector.getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status_vector.getState() & IStatus::STATE_ERRORS)
 			return this->send_response(sendL, 0, 0, &status_vector, false);
 		p += length;
 	}
@@ -5551,7 +5571,7 @@ ISC_STATUS rem_port::receive_after_start(P_DATA* data, PACKET* sendL, IStatus* s
 	response->p_resp_data.cstr_length = 0;
 
 	if (!sendL->p_resp.p_resp_status_vector)
-		sendL->p_resp.p_resp_status_vector = FB_NEW_POOL(*getDefaultMemoryPool()) Firebird::DynamicStatusVector();
+		sendL->p_resp.p_resp_status_vector = FB_NEW_POOL(*getDefaultMemoryPool()) DynamicStatusVector();
 
 	sendL->p_resp.p_resp_status_vector->load(status_vector);
 
@@ -5641,7 +5661,7 @@ ISC_STATUS rem_port::receive_msg(P_DATA * data, PACKET* sendL)
 			requestL->rrq_iface->receive(&status_vector, level,
 				msg_number, format->fmt_length, message->msg_buffer);
 
-			if (status_vector.getState() & Firebird::IStatus::STATE_ERRORS)
+			if (status_vector.getState() & IStatus::STATE_ERRORS)
 				return this->send_response(sendL, 0, 0, &status_vector, false);
 
 			message->msg_address = message->msg_buffer;
@@ -5722,7 +5742,7 @@ ISC_STATUS rem_port::receive_msg(P_DATA * data, PACKET* sendL)
 
 		// Did we have an error?  If so, save it for later delivery
 
-		if (status_vector.getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status_vector.getState() & IStatus::STATE_ERRORS)
 		{
 			// If already have an error queued, don't overwrite it
 
@@ -6003,7 +6023,7 @@ ISC_STATUS rem_port::send_msg(P_DATA * data, PACKET* sendL)
 }
 
 
-ISC_STATUS rem_port::send_response(PACKET* p, OBJCT obj, ULONG length, const Firebird::IStatus* status, bool defer_flag)
+ISC_STATUS rem_port::send_response(PACKET* p, OBJCT obj, ULONG length, const IStatus* status, bool defer_flag)
 {
 	StaticStatusVector tmp;
 	tmp.mergeStatus(status);
@@ -6032,7 +6052,7 @@ ISC_STATUS rem_port::send_response(	PACKET*	sendL,
 
 	// Start by translating the status vector into "generic" form
 
-	Firebird::StaticStatusVector new_vector;
+	StaticStatusVector new_vector;
 	const ISC_STATUS* old_vector = status_vector;
 	const ISC_STATUS exit_code = old_vector[1];
 
@@ -6111,7 +6131,7 @@ ISC_STATUS rem_port::send_response(	PACKET*	sendL,
 	// of the response packet may contain valid data.  Don't trash them.
 
 	if (!response->p_resp_status_vector)
-		response->p_resp_status_vector = FB_NEW_POOL(*getDefaultMemoryPool()) Firebird::DynamicStatusVector();
+		response->p_resp_status_vector = FB_NEW_POOL(*getDefaultMemoryPool()) DynamicStatusVector();
 
 	response->p_resp_status_vector->save(new_vector.begin());
 
@@ -6150,7 +6170,7 @@ static void send_error(rem_port* port, PACKET* apacket, ISC_STATUS errcode)
 }
 
 // Maybe this can be a member of rem_port?
-static void send_error(rem_port* port, PACKET* apacket, const Firebird::Arg::StatusVector& err)
+static void send_error(rem_port* port, PACKET* apacket, const Arg::StatusVector& err)
 {
 	LocalStatus ls;
 	CheckStatusWrapper status_vector(&ls);
@@ -6244,13 +6264,13 @@ ISC_STATUS rem_port::service_attach(const char* service_name,
 	port_server_crypt_callback->destroy();
 	provider->setDbCryptCallback(&status_vector, port_server_crypt_callback->getInterface());
 
-	if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
+	if (!(status_vector.getState() & IStatus::STATE_ERRORS))
 	{
 		dumpAuthBlock("rem_port::service_attach()", spb, isc_spb_auth_block);
 		ServService iface(provider->attachServiceManager(&status_vector, service_name,
 			(ULONG) spb->getBufferLength(), spb->getBuffer()));
 
-		if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status_vector.getState() & IStatus::STATE_ERRORS))
 		{
 			Rdb* rdb = FB_NEW Rdb;
 
@@ -6294,7 +6314,7 @@ ISC_STATUS rem_port::service_end(P_RLSE* /*release*/, PACKET* sendL)
 		RefMutexGuard portGuard(*port_cancel_sync, FB_FUNCTION);
 		rdb->rdb_svc->svc_iface->detach(&status_vector);
 
-		if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status_vector.getState() & IStatus::STATE_ERRORS))
 		{
 			port_flags |= PORT_detached;
 			rdb->rdb_svc->svc_iface = NULL;
@@ -6562,7 +6582,7 @@ ISC_STATUS rem_port::start(P_OP operation, P_DATA * data, PACKET* sendL)
 
 	requestL->rrq_iface->start(&status_vector, transaction->rtr_iface, data->p_data_incarnation);
 
-	if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
+	if (!(status_vector.getState() & IStatus::STATE_ERRORS))
 	{
 		requestL->rrq_rtr = transaction;
 		if (operation == op_start_and_receive)
@@ -6609,7 +6629,7 @@ ISC_STATUS rem_port::start_and_send(P_OP operation, P_DATA* data, PACKET* sendL)
 		transaction->rtr_iface, data->p_data_incarnation,
 		number, format->fmt_length, message->msg_address);
 
-	if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
+	if (!(status_vector.getState() & IStatus::STATE_ERRORS))
 	{
 		requestL->rrq_rtr = transaction;
 		if (operation == op_start_send_and_receive)
@@ -6646,7 +6666,7 @@ ISC_STATUS rem_port::start_transaction(P_OP operation, P_STTR * stuff, PACKET* s
 			stuff->p_sttr_tpb.cstr_length, stuff->p_sttr_tpb.cstr_address));
 
 	OBJCT object = 0;
-	if (!(status_vector.getState() & Firebird::IStatus::STATE_ERRORS))
+	if (!(status_vector.getState() & IStatus::STATE_ERRORS))
 	{
 		Rtr* transaction = make_transaction(rdb, iface);
 		if (transaction)
@@ -7004,7 +7024,7 @@ ISC_STATUS rem_port::transact_request(P_TRRQ* trrq, PACKET* sendL)
 	rdb->rdb_iface->transactRequest(&status_vector, transaction->rtr_iface,
 		blr_length, blr, in_msg_length, in_msg, out_msg_length, out_msg);
 
-	if (status_vector.getState() & Firebird::IStatus::STATE_ERRORS)
+	if (status_vector.getState() & IStatus::STATE_ERRORS)
 		return this->send_response(sendL, 0, 0, &status_vector, false);
 
 	P_DATA* data = &sendL->p_data;
@@ -7260,12 +7280,12 @@ bool SrvAuthBlock::authCompleted(bool flag)
 	return flComplete;
 }
 
-void SrvAuthBlock::setLogin(const Firebird::string& user)
+void SrvAuthBlock::setLogin(const string& user)
 {
 	userName = user;
 }
 
-void SrvAuthBlock::load(Firebird::ClumpletReader& id)
+void SrvAuthBlock::load(ClumpletReader& id)
 {
 	if (id.find(CNCT_login))
 	{
@@ -7300,12 +7320,12 @@ const char* SrvAuthBlock::getPluginName()
 	return pluginName.nullStr();
 }
 
-void SrvAuthBlock::setPluginName(const Firebird::string& name)
+void SrvAuthBlock::setPluginName(const string& name)
 {
 	pluginName = name.ToPathName();
 }
 
-void SrvAuthBlock::setPluginList(const Firebird::string& list)
+void SrvAuthBlock::setPluginList(const string& list)
 {
 	if (firstTime)
 	{
@@ -7317,7 +7337,7 @@ void SrvAuthBlock::setPluginList(const Firebird::string& list)
 	}
 }
 
-void SrvAuthBlock::setDataForPlugin(const Firebird::UCharBuffer& data)
+void SrvAuthBlock::setDataForPlugin(const UCharBuffer& data)
 {
 	dataForPlugin.assign(data.begin(), data.getCount());
 }

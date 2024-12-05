@@ -154,8 +154,8 @@ void iscBlobLookupDescImpl(Why::YAttachment* attachment, Why::YTransaction* tran
 		)""";
 
 		FB_MESSAGE(InputMessage, CheckStatusWrapper,
-			(FB_VARCHAR(MAX_SQL_IDENTIFIER_LEN * 4), relationName)
-			(FB_VARCHAR(MAX_SQL_IDENTIFIER_LEN * 4), fieldName)
+			(FB_VARCHAR(MAX_SQL_IDENTIFIER_LEN), relationName)
+			(FB_VARCHAR(MAX_SQL_IDENTIFIER_LEN), fieldName)
 		) inputMessage(&statusWrapper, MasterInterfacePtr());
 		inputMessage.clear();
 
@@ -197,8 +197,8 @@ void iscBlobLookupDescImpl(Why::YAttachment* attachment, Why::YTransaction* tran
 		)""";
 
 		FB_MESSAGE(InputMessage, CheckStatusWrapper,
-			(FB_VARCHAR(MAX_SQL_IDENTIFIER_LEN * 4), procedureName)
-			(FB_VARCHAR(MAX_SQL_IDENTIFIER_LEN * 4), fieldName)
+			(FB_VARCHAR(MAX_SQL_IDENTIFIER_LEN), procedureName)
+			(FB_VARCHAR(MAX_SQL_IDENTIFIER_LEN), fieldName)
 		) inputMessage(&statusWrapper, MasterInterfacePtr());
 		inputMessage.clear();
 

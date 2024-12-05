@@ -51,6 +51,7 @@
 #define COMMON_COMMON_H
 
 #include <string.h>
+#include <string>
 
 #ifdef HAVE_STDLIB_H
 #include <stdlib.h>
@@ -1026,9 +1027,9 @@ inline const TEXT* const FB_LONG_DAYS_UPPER[] =
 
 const FB_SIZE_T FB_MAX_SIZEOF = ~FB_SIZE_T(0); // Assume FB_SIZE_T is unsigned
 
-inline FB_SIZE_T fb_strlen(const char* str)
+inline constexpr FB_SIZE_T fb_strlen(const char* str)
 {
-	return static_cast<FB_SIZE_T>(strlen(str));
+	return static_cast<FB_SIZE_T>(std::char_traits<char>::length(str));
 }
 
 namespace Firebird {

@@ -769,6 +769,7 @@ interface Auth : PluginBase
 	const int AUTH_SUCCESS = 0;
 	const int AUTH_MORE_DATA = 1;
 	const int AUTH_CONTINUE = 2;
+	const int AUTH_SUCCESS_WITH_DATA = 3;
 }
 
 interface Writer : Versioned
@@ -1574,6 +1575,7 @@ interface TracePlugin : ReferenceCounted
 		TraceFunction function,	boolean started, uint func_result);
 
 version:	// 4.0.1 -> 4.0.2
+	[notImplemented(true)]
 	boolean trace_dsql_restart(TraceDatabaseConnection connection, TraceTransaction transaction,
 		TraceSQLStatement statement, uint number);
 
@@ -1581,12 +1583,15 @@ version:	// 4.0 -> 5.0
 
 	// Compilation of stored procedures, functions, triggers
 
+	[notImplemented(true)]
 	boolean trace_proc_compile(TraceDatabaseConnection connection, TraceProcedure procedure,
 		int64 time_millis, uint proc_result);
 
+	[notImplemented(true)]
 	boolean trace_func_compile(TraceDatabaseConnection connection, TraceFunction function,
 		int64 time_millis, uint func_result);
 
+	[notImplemented(true)]
 	boolean trace_trigger_compile(TraceDatabaseConnection connection, TraceTrigger trigger,
 		int64 time_millis, uint trig_result);
 }

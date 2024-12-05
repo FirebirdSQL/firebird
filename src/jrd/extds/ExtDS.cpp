@@ -115,6 +115,9 @@ Manager::~Manager()
 
 void Manager::addProvider(Provider* provider)
 {
+	// TODO: if\when usage of user providers will be implemented,
+	// need to check provider name for allowed chars (file system rules ?)
+
 	for (const Provider* prv = m_providers; prv; prv = prv->m_next)
 	{
 		if (prv->m_name == provider->m_name) {
@@ -155,6 +158,15 @@ static void splitDataSourceName(thread_db* tdbb, const string& dataSource,
 	else
 	{
 		FB_SIZE_T pos = dataSource.find("::");
+
+		// Check if it is part of IPv6 address, assume provider name can't contain square brackets
+		if (pos != string::npos &&
+			dataSource.rfind("[", pos) != string::npos &&
+			dataSource.find("]", pos) != string::npos)
+		{
+			pos = string::npos;
+		}
+
 		if (pos != string::npos)
 		{
 			prvName = dataSource.substr(0, pos);
@@ -441,9 +453,9 @@ void Provider::jrdAttachmentEnd(thread_db* tdbb, Jrd::Attachment* att, bool forc
 void Provider::releaseConnection(thread_db* tdbb, Connection& conn, bool inPool)
 {
 	ConnectionsPool* connPool = conn.getConnPool();
+	Attachment* att = conn.getBoundAtt();
 
 	{ // m_mutex scope
-		Attachment* att = conn.getBoundAtt();
 		MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
 		bool found = false;
@@ -464,7 +476,42 @@ void Provider::releaseConnection(thread_db* tdbb, Connection& conn, bool inPool)
 			m_connections.add(AttToConn(NULL, &conn));
 	}
 
-	if (!inPool || !connPool || !conn.isConnected() || !conn.resetSession(tdbb))
+	FbLocalStatus resetError;
+	inPool = inPool && connPool && connPool->getMaxCount() && conn.isConnected();
+
+	if (inPool)
+	{
+		inPool = conn.resetSession(tdbb);
+
+		// Check if reset of external session failed when parent (local) attachment
+		// is resetting or run ON DISCONNECT trigger.
+
+		const auto status = tdbb->tdbb_status_vector;
+		if (!inPool && status->hasData())
+		{
+			if (att->att_flags & ATT_resetting)
+				resetError.loadFrom(status);
+			else
+			{
+				auto req = tdbb->getRequest();
+				while (req)
+				{
+					if (req->req_trigger_action == TRIGGER_DISCONNECT)
+					{
+						resetError.loadFrom(status);
+						break;
+					}
+					req = req->req_caller;
+				}
+			}
+		}
+	}
+
+	if (inPool)
+	{
+		connPool->putConnection(tdbb, &conn);
+	}
+	else
 	{
 		{	// scope
 			MutexLockGuard guard(m_mutex, FB_FUNCTION);
@@ -477,9 +524,8 @@ void Provider::releaseConnection(thread_db* tdbb, Connection& conn, bool inPool)
 			connPool->delConnection(tdbb, &conn, false);
 
 		Connection::deleteConnection(tdbb, &conn);
+		resetError.check();
 	}
-	else
-		connPool->putConnection(tdbb, &conn);
 }
 
 void Provider::clearConnections(thread_db* tdbb)
@@ -905,7 +951,8 @@ void ConnectionsPool::putConnection(thread_db* tdbb, Connection* conn)
 	fb_assert(conn->getConnPool() == this);
 
 	Connection* oldConn = NULL;
-	bool startIdleTimer = false;
+	Firebird::RefPtr<IdleTimer>	timer;
+
 	if (m_maxCount > 0)
 	{
 		MutexLockGuard guard(m_mutex, FB_FUNCTION);
@@ -977,7 +1024,7 @@ void ConnectionsPool::putConnection(thread_db* tdbb, Connection* conn)
 			if (!m_timer)
 				m_timer = FB_NEW IdleTimer(*this);
 
-			startIdleTimer = true;
+			timer = m_timer;
 		}
 
 #ifdef EDS_DEBUG
@@ -996,8 +1043,10 @@ void ConnectionsPool::putConnection(thread_db* tdbb, Connection* conn)
 	if (oldConn)
 		oldConn->getProvider()->releaseConnection(tdbb, *oldConn, false);
 
-	if (startIdleTimer)
-		m_timer->start();
+	// Note, m_timer could be cleared at this point - due to shutdown.
+	// Then m_idleList will be empty and start() will do nothing.
+	if (timer)
+		timer->start();
 }
 
 void ConnectionsPool::addConnection(thread_db* tdbb, Connection* conn, ULONG hash)

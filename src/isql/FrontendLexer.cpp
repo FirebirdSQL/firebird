@@ -22,6 +22,7 @@
  */
 
 #include "firebird.h"
+#include "../common/utils_proto.h"
 #include "../isql/FrontendLexer.h"
 #include <algorithm>
 #include <cctype>
@@ -29,13 +30,12 @@
 
 static std::string trim(std::string_view str);
 
-
 static std::string trim(std::string_view str)
 {
 	auto finish = str.end();
 	auto start = str.begin();
 
-	while (start != finish && isspace(*start))
+	while (start != finish && fb_utils::isspace(*start))
 		++start;
 
 	if (start == finish)
@@ -43,7 +43,7 @@ static std::string trim(std::string_view str)
 
 	--finish;
 
-	while (finish > start && isspace(*finish))
+	while (finish > start && fb_utils::isspace(*finish))
 		--finish;
 
 	return std::string(start, finish + 1);
@@ -210,7 +210,7 @@ FrontendLexer::Token FrontendLexer::getToken()
 			break;
 
 		default:
-			while (pos != end && !isspace(*pos))
+			while (pos != end && !fb_utils::isspace(*pos))
 				++pos;
 
 			token.processedText = std::string(start, pos);
@@ -333,9 +333,9 @@ std::optional<FrontendLexer::Token> FrontendLexer::getStringToken()
 
 void FrontendLexer::skipSpacesAndComments()
 {
-	while (pos != end && (isspace(*pos) || *pos == '-' || *pos == '/'))
+	while (pos != end && (fb_utils::isspace(*pos) || *pos == '-' || *pos == '/'))
 	{
-		while (pos != end && isspace(*pos))
+		while (pos != end && fb_utils::isspace(*pos))
 			++pos;
 
 		if (pos == end)

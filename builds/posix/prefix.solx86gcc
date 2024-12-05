@@ -21,7 +21,7 @@
 #
 # Start of file prefix.solaris X 86 :	$(VERSION)	$(PLATFORM)
 
-WARNINGS=-Werror=delete-incomplete -Wall -W -Wno-unused -Wno-parentheses -Wno-switch -Wwrite-strings -Wno-non-virtual-dtor
+WARNINGS=-Wall -W -Wno-unused -Wno-parentheses -Wno-switch -Wwrite-strings -Wno-non-virtual-dtor
 COMM_SOLX_FLAGS:=-DSOLARIS -DSOLX86 -DBSD_COMP -fno-omit-frame-pointer -fmessage-length=0 -MMD -fPIC
 
 SFIO=@SFIO_DIR@

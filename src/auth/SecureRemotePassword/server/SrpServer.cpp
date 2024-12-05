@@ -247,7 +247,7 @@ private:
 template <class SHA> class SrpServerImpl final : public SrpServer
 {
 public:
-	explicit SrpServerImpl<SHA>(IPluginConfig* ipc)
+	explicit SrpServerImpl(IPluginConfig* ipc)
 		: SrpServer(ipc)
 	{}
 

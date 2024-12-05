@@ -405,7 +405,11 @@ bool ISC_analyze_protocol(const char* protocol, tstring& expanded_name, tstring&
 	node_name.erase();
 
 	const PathName prefix = PathName(protocol) + "://";
-	if (expanded_name.find(prefix) != 0)
+
+	if (prefix.length() > expanded_name.length())
+		return false;
+
+	if (IgnoreCaseComparator::compare(prefix.c_str(), expanded_name.c_str(), prefix.length()) != 0)
 		return false;
 
 	PathName savedName = expanded_name;

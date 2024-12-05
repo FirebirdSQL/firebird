@@ -320,6 +320,11 @@ format_report( OutStream& os, assertion_result const& pr, unit_test::lazy_ostrea
 
 //____________________________________________________________________________//
 
+#ifdef BOOST_MSVC
+#pragma warning(push)
+#pragma warning(disable : 4702) // There is intentionally unreachable code
+#endif
+
 bool
 report_assertion( assertion_result const&   ar,
                   lazy_ostream const&       assertion_descr,
@@ -410,6 +415,10 @@ report_assertion( assertion_result const&   ar,
 
     return true;
 }
+
+#ifdef BOOST_MSVC
+#pragma warning(pop)
+#endif
 
 //____________________________________________________________________________//
 

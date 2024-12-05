@@ -66,7 +66,7 @@ public:
 			: mutex(nullptr), status(nullptr), uSvc(nullptr)
 		{ }
 
-		StatusAccessor(StatusAccessor&& sa)
+		StatusAccessor(StatusAccessor&& sa) noexcept
 			: mutex(sa.mutex), status(sa.status), uSvc(sa.uSvc)
 		{
 			sa.mutex = nullptr;

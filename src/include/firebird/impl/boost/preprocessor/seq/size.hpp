@@ -7,6 +7,8 @@
 #  *                                                                          *
 #  ************************************************************************** */
 #
+# /* Revised by Edward Diener (2020) */
+#
 # /* See http://www.boost.org for most recent version. */
 #
 # ifndef FB_BOOST_PREPROCESSOR_SEQ_SIZE_HPP
@@ -14,7 +16,6 @@
 #
 # include <firebird/impl/boost/preprocessor/cat.hpp>
 # include <firebird/impl/boost/preprocessor/config/config.hpp>
-# include <firebird/impl/boost/preprocessor/tuple/eat.hpp>
 #
 # if FB_BOOST_PP_CONFIG_FLAGS() & FB_BOOST_PP_CONFIG_MWCC()
 #    define FB_BOOST_PP_SEQ_SIZE(seq) FB_BOOST_PP_SEQ_SIZE_I((seq))
@@ -28,6 +29,8 @@
 # else
 #    define FB_BOOST_PP_SEQ_SIZE(seq) FB_BOOST_PP_CAT(FB_BOOST_PP_SEQ_SIZE_, FB_BOOST_PP_SEQ_SIZE_0 seq)
 # endif
+#
+# if ~FB_BOOST_PP_CONFIG_FLAGS() & FB_BOOST_PP_CONFIG_STRICT()
 #
 # define FB_BOOST_PP_SEQ_SIZE_0(_) FB_BOOST_PP_SEQ_SIZE_1
 # define FB_BOOST_PP_SEQ_SIZE_1(_) FB_BOOST_PP_SEQ_SIZE_2
@@ -544,5 +547,25 @@
 # define FB_BOOST_PP_SEQ_SIZE_FB_BOOST_PP_SEQ_SIZE_254 254
 # define FB_BOOST_PP_SEQ_SIZE_FB_BOOST_PP_SEQ_SIZE_255 255
 # define FB_BOOST_PP_SEQ_SIZE_FB_BOOST_PP_SEQ_SIZE_256 256
+# define FB_BOOST_PP_SEQ_SIZE_FB_BOOST_PP_SEQ_SIZE_257 257
+#
+# else
+#
+# include <firebird/impl/boost/preprocessor/config/limits.hpp>
+#
+# if FB_BOOST_PP_LIMIT_SEQ == 256
+# include <firebird/impl/boost/preprocessor/seq/limits/size_256.hpp>
+# elif FB_BOOST_PP_LIMIT_SEQ == 512
+# include <firebird/impl/boost/preprocessor/seq/limits/size_256.hpp>
+# include <firebird/impl/boost/preprocessor/seq/limits/size_512.hpp>
+# elif FB_BOOST_PP_LIMIT_SEQ == 1024
+# include <firebird/impl/boost/preprocessor/seq/limits/size_256.hpp>
+# include <firebird/impl/boost/preprocessor/seq/limits/size_512.hpp>
+# include <firebird/impl/boost/preprocessor/seq/limits/size_1024.hpp>
+# else
+# error Incorrect value for the FB_BOOST_PP_LIMIT_SEQ limit
+# endif
+#
+# endif
 #
 # endif

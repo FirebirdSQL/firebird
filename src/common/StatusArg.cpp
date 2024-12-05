@@ -212,6 +212,14 @@ void StatusVector::ImplStatusVector::append(const StatusVector& v) noexcept
 
 void StatusVector::ImplStatusVector::prepend(const StatusVector& v) noexcept
 {
+	auto errFrom = v.implementation->value();
+	auto lenFrom = v.implementation->firstWarning() ? v.implementation->firstWarning() : v.implementation->length();
+	auto errTo = value();
+	auto lenTo = firstWarning() ? firstWarning() : length();
+
+	if (lenFrom < lenTo && fb_utils::cmpStatus(lenFrom, errFrom, errTo))
+		return;			// already here - ToDo: check warnings
+
 	ImplStatusVector newVector(getKind(), getCode());
 
 	if (newVector.appendErrors(v.implementation))

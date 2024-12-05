@@ -70,6 +70,10 @@ WCFLAGS = $(WFLAGS) $(CFLAGS) $(AC_CFLAGS) $(GLOB_OPTIONS)
 WCXXFLAGS = $(WFLAGS) $(PLUSPLUS_FLAGS) $(PLATFORM_PLUSPLUS_FLAGS) $(CXXFLAGS) $(AC_CXXFLAGS) $(GLOB_OPTIONS)
 WLDFLAGS = $(LDFLAGS) $(AC_LDFLAGS)
 
+ifneq ($(PLATFORM),DARWIN)
+WLDFLAGS += -static-libstdc++
+endif
+
 # Here we have definitions for using the preprocessor.
 
 # The GPRE_FLAGS is overwritten in Makefile.in.jrd Makefile.in.gpre and

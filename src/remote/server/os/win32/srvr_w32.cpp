@@ -249,7 +249,7 @@ int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs,
 	}
 
 	{
-		Firebird::MasterInterfacePtr master;
+		MasterInterfacePtr master;
 		master->serverMode(server_flag & SRVR_multi_client ? 1 : 0);
 	}
 

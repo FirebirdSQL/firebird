@@ -49,6 +49,8 @@ namespace Jrd {
   Slot is reused with best-fit algorithm.
 */
 
+class StorageGuard;
+
 struct TraceCSHeader : public Firebird::MemoryHeader
 {
 	static const USHORT TRACE_STORAGE_VERSION = 2;
@@ -97,9 +99,6 @@ public:
 	// get session by sesion id
 	bool getSession(Firebird::TraceSession& session, GET_FLAGS getFlag);
 
-	void restart();
-	bool getNextSession(Firebird::TraceSession& session, GET_FLAGS getFlag);
-
 	ULONG getChangeNumber() const
 	{ return m_sharedMemory && m_sharedMemory->getHeader() ? m_sharedMemory->getHeader()->change_number : 0; }
 
@@ -109,6 +108,35 @@ public:
 	void shutdown();
 
 	Firebird::Mutex m_localMutex;
+
+	class Accessor
+	{
+	public:
+		// Use when storage is not locked by caller
+		explicit Accessor(ConfigStorage* storage) :
+			m_storage(storage),
+			m_guard(nullptr)
+		{}
+
+		// Use when storage is locked by caller
+		explicit Accessor(StorageGuard* guard);
+
+		void restart()
+		{
+			m_change_number = 0;
+			m_sesId = 0;
+			m_nextIdx = 0;
+		}
+
+		bool getNext(Firebird::TraceSession& session, GET_FLAGS getFlag);
+
+	private:
+		ConfigStorage* const m_storage;
+		StorageGuard* const m_guard;
+		ULONG m_change_number = 0;
+		ULONG m_sesId = 0;					// last seen session ID
+		ULONG m_nextIdx = 0;				// slot index next after last seen one
+	};
 
 private:
 	void mutexBug(int osErrorCode, const char* text) override;
@@ -181,6 +209,10 @@ private:
 	bool findSession(ULONG sesId, ULONG& idx);
 	bool readSession(TraceCSHeader::Slot* slot, Firebird::TraceSession& session, GET_FLAGS getFlag);
 
+	// Search for used slot starting from nextIdx and increments nextIdx to point to the next slot
+	// returns false, if used slot was not found
+	bool getNextSession(Firebird::TraceSession& session, GET_FLAGS getFlag, ULONG& nextIdx);
+
 	class Reader
 	{
 	public:
@@ -217,7 +249,6 @@ private:
 	int m_recursive;
 	ThreadId m_mutexTID;
 	bool m_dirty;
-	ULONG m_nextIdx;	// getNextSession() iterator index
 };
 
 
@@ -265,9 +296,21 @@ public:
 	{
 		m_storage->release();
 	}
+
+	ConfigStorage* getStorage()
+	{
+		return m_storage;
+	}
+
 private:
 	ConfigStorage* m_storage;
 };
+
+
+inline ConfigStorage::Accessor::Accessor(StorageGuard* guard) :
+	m_storage(guard->getStorage()),
+	m_guard(guard)
+{}
 
 }
 

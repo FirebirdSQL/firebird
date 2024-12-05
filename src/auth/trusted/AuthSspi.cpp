@@ -67,6 +67,15 @@ namespace
 
 namespace Auth {
 
+
+static thread_local bool legacySSP = false;
+
+void setLegacySSP(bool value)
+{
+	legacySSP = value;
+}
+
+
 HINSTANCE AuthSspi::library = 0;
 
 bool AuthSspi::initEntries()
@@ -109,7 +118,8 @@ AuthSspi::AuthSspi()
 	  groupNames(*getDefaultMemoryPool()), sessionKey(*getDefaultMemoryPool())
 {
 	TimeStamp timeOut;
-	hasCredentials = initEntries() && (fAcquireCredentialsHandle(0, "NTLM",
+	hasCredentials = initEntries() && (fAcquireCredentialsHandle(0,
+					legacySSP ? NTLMSP_NAME_A : NEGOSSP_NAME_A,
 					SECPKG_CRED_BOTH, 0, 0, 0, 0,
 					&secHndl, &timeOut) == SEC_E_OK);
 }
@@ -367,7 +377,8 @@ bool AuthSspi::getLogin(string& login, bool& wh, GroupsList& grNames)
 
 
 WinSspiServer::WinSspiServer(Firebird::IPluginConfig*)
-	: sspiData(getPool())
+	: sspiData(getPool()),
+	  done(false)
 { }
 
 int WinSspiServer::authenticate(Firebird::CheckStatusWrapper* status,
@@ -376,17 +387,18 @@ int WinSspiServer::authenticate(Firebird::CheckStatusWrapper* status,
 {
 	try
 	{
-		const bool wasActive = sspi.isActive();
-
 		sspiData.clear();
 		unsigned int length;
 		const unsigned char* bytes = sBlock->getData(&length);
 		sspiData.add(bytes, length);
 
+		if (done && !length && !sspi.isActive())
+			return AUTH_SUCCESS;
+
 		if (!sspi.accept(sspiData))
 			return AUTH_CONTINUE;
 
-		if (wasActive && !sspi.isActive())
+		if (!sspi.isActive())
 		{
 			bool wheel = false;
 			string login;
@@ -445,7 +457,9 @@ int WinSspiServer::authenticate(Firebird::CheckStatusWrapper* status,
 					return AUTH_FAILED;
 			}
 
-			return AUTH_SUCCESS;
+			done = true;
+			if (sspiData.isEmpty())
+				return AUTH_SUCCESS;
 		}
 
 		sBlock->putData(status, sspiData.getCount(), sspiData.begin());
@@ -456,7 +470,7 @@ int WinSspiServer::authenticate(Firebird::CheckStatusWrapper* status,
 		return AUTH_FAILED;
 	}
 
-	return AUTH_MORE_DATA;
+	return done ? AUTH_SUCCESS_WITH_DATA : AUTH_MORE_DATA;
 }
 
 

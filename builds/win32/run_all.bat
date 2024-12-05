@@ -30,6 +30,7 @@ for %%v in ( %* )  do (
 ( if /I "%%v"=="JUSTBUILD" (set FBBUILD_BUILD_ONLY=1) )
 ( if /I "%%v"=="TESTENV" (set FBBUILD_TEST_ONLY=1) )
 ( if /I "%%v"=="SNAPSHOT" (set FB2_SNAPSHOT=1) )
+( if /I "%%v"=="NO_RN" set FB_EXTERNAL_DOCS=)
 )
 
 @call setenvvar.bat %FBBUILD_BUILDTYPE% %*
@@ -98,6 +99,9 @@ goto :END
 @echo    SNAPSHOT  - Build and create a zip kit.
 @echo                This is intended to produce a x64 test kit
 @echo                with no dependency on Win32
+@echo.
+@echo    NO_RN     - Do not fail the packaging if release notes unavailable.
+@echo                Default is to fail if FB_EXTERNAL_DOCS is set and release notes not found.
 @echo.
 @goto :EOF
 ::---------

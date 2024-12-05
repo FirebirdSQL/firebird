@@ -203,18 +203,17 @@ void RecordSource::printInversion(thread_db* tdbb, const InversionNode* inversio
 				}
 
 				const index_desc& idx = retrieval->irb_desc;
-				const bool uniqueIdx = (idx.idx_flags & idx_unique);
 				const USHORT segCount = idx.idx_count;
 
 				const USHORT minSegs = MIN(retrieval->irb_lower_count, retrieval->irb_upper_count);
 				const USHORT maxSegs = MAX(retrieval->irb_lower_count, retrieval->irb_upper_count);
 
 				const bool equality = (retrieval->irb_generic & irb_equality);
+				const bool unique = (retrieval->irb_generic & irb_unique);
 				const bool partial = (retrieval->irb_generic & irb_partial);
 
 				const bool fullscan = (maxSegs == 0);
 				const bool list = (retrieval->irb_list != nullptr);
-				const bool unique = !list && uniqueIdx && equality && (minSegs == segCount);
 
 				string bounds;
 				if (!unique && !fullscan)

@@ -345,6 +345,7 @@
 /* second sub parameter for blr_trim */
 #define blr_trim_spaces		(unsigned char)0
 #define blr_trim_characters	(unsigned char)1
+#define blr_trim_multi_characters (unsigned char)2
 
 /* These codes are actions for cursors */
 

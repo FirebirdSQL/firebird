@@ -303,6 +303,9 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 
 	const auto port = xdrs->x_public;
 
+	if (xdrs->x_op != XDR_FREE)
+		port->bumpLogPackets(xdrs->x_op == XDR_ENCODE ? rem_port::SEND : rem_port::RECEIVE);
+
 	switch (p->p_operation)
 	{
 	case op_reject:
@@ -1031,7 +1034,7 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 
 				if (xdrs->x_op == XDR_DECODE)
 				{
-					Firebird::Arg::StatusVector sv(ptr->value());
+					Arg::StatusVector sv(ptr->value());
 					LocalStatus to;
 					sv.copyTo(&to);
 					delete ptr;
@@ -1812,8 +1815,8 @@ static bool_t xdr_slice(RemoteXdr* xdrs, lstring* slice, /*USHORT sdl_length,*/ 
 
 	struct sdl_info info;
 	{
-		Firebird::LocalStatus ls;
-		Firebird::CheckStatusWrapper s(&ls);
+		LocalStatus ls;
+		CheckStatusWrapper s(&ls);
 		if (SDL_info(&s, sdl, &info, 0))
 			return FALSE;
 	}

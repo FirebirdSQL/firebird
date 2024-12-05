@@ -425,7 +425,7 @@ private:
 		return external && external->udfModule.hasData();
 	}
 
-	void executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	bool executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 	bool executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		bool secondPass, bool runTriggers);
 	bool executeAlterIndividualParameters(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
@@ -441,6 +441,7 @@ public:
 	MetaName name;
 	bool create;
 	bool alter;
+	bool createIfNotExistsOnly = false;
 	NestConst<ExternalClause> external;
 	Firebird::TriState deterministic;
 	Firebird::Array<NestConst<ParameterClause> > parameters;
@@ -564,7 +565,7 @@ protected:
 	}
 
 private:
-	void executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	bool executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 	bool executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		bool secondPass, bool runTriggers);
 	bool executeAlterIndividualParameters(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
@@ -580,6 +581,7 @@ public:
 	MetaName name;
 	bool create;
 	bool alter;
+	bool createIfNotExistsOnly = false;
 	NestConst<ExternalClause> external;
 	Firebird::Array<NestConst<ParameterClause> > parameters;
 	Firebird::Array<NestConst<ParameterClause> > returns;
@@ -755,6 +757,7 @@ private:
 public:
 	bool create;
 	bool alter;
+	bool createIfNotExistsOnly = false;
 	NestConst<LocalDeclarationsNode> localDeclList;
 	NestConst<StmtNode> body;
 	bool compiled;
@@ -854,6 +857,7 @@ public:
 	MetaName fromName;
 	Firebird::string fromExternal;
 	Firebird::UCharBuffer specificAttributes;
+	bool createIfNotExistsOnly = false;
 
 private:
 	USHORT attributesOn;
@@ -915,6 +919,7 @@ public:
 	NestConst<ParameterClause> nameType;
 	bool notNull;
 	NestConst<BoolSourceClause> check;
+	bool createIfNotExistsOnly = false;
 };
 
 
@@ -1034,6 +1039,7 @@ public:
 	Firebird::string message;
 	bool create;
 	bool alter;
+	bool createIfNotExistsOnly = false;
 };
 
 
@@ -1118,6 +1124,7 @@ private:
 public:
 	bool create;
 	bool alter;
+	bool createIfNotExistsOnly = false;
 	bool legacy;
 	bool restartSpecified;
 	const MetaName name;
@@ -1346,6 +1353,7 @@ public:
 		Firebird::ObjectsArray<MetaName> refColumns;
 		NestConst<RefActionClause> refAction;
 		NestConst<BoolSourceClause> check;
+		bool createIfNotExistsOnly = false;
 	};
 
 	struct IdentityOptions
@@ -1388,6 +1396,7 @@ public:
 		NestConst<ValueSourceClause> computed;
 		NestConst<IdentityOptions> identityOptions;
 		bool notNullSpecified;
+		bool createIfNotExistsOnly = false;
 	};
 
 	struct AlterColNameClause : public Clause
@@ -1562,6 +1571,7 @@ public:
 	std::optional<rel_t> relationType = rel_persistent;
 	bool preserveRowsOpt;
 	bool deleteRowsOpt;
+	bool createIfNotExistsOnly = false;
 };
 
 
@@ -1665,6 +1675,7 @@ private:
 public:
 	bool create;
 	bool alter;
+	bool createIfNotExistsOnly = false;
 	NestConst<ValueListNode> viewFields;
 	NestConst<SelectExprNode> selectExpr;
 	Firebird::string source;
@@ -1716,13 +1727,7 @@ public:
 public:
 	CreateIndexNode(MemoryPool& p, const MetaName& aName)
 		: DdlNode(p),
-		  name(p, aName),
-		  unique(false),
-		  descending(false),
-		  relation(nullptr),
-		  columns(nullptr),
-		  computed(nullptr),
-		  partial(nullptr)
+		  name(p, aName)
 	{
 	}
 
@@ -1743,12 +1748,14 @@ protected:
 
 public:
 	MetaName name;
-	bool unique;
-	bool descending;
+	bool unique = false;
+	bool descending = false;
+	bool active = true;
 	NestConst<RelationSourceNode> relation;
 	NestConst<ValueListNode> columns;
 	NestConst<ValueSourceClause> computed;
 	NestConst<BoolSourceClause> partial;
+	bool createIfNotExistsOnly = false;
 };
 
 
@@ -1957,6 +1964,7 @@ public:
 	bool manual;
 	bool conditional;
 	Firebird::string fileName;
+	bool createIfNotExistsOnly = false;
 };
 
 
@@ -2034,7 +2042,9 @@ private:
 
 public:
 	MetaName name;
-	bool createFlag, sysPrivDrop;
+	bool createFlag;
+	bool sysPrivDrop;
+	bool createIfNotExistsOnly = false;
 
 	void addPrivilege(const MetaName* privName)
 	{
@@ -2094,6 +2104,7 @@ public:
 	bool global = false;
 	bool role = false;
 	bool silentDrop = false;
+	bool createIfNotExistsOnly = false;
 };
 
 
@@ -2193,6 +2204,7 @@ public:
 	Firebird::TriState adminRole;
 	Firebird::TriState active;
 	Mode mode;
+	bool createIfNotExistsOnly = false;
 
 	void addProperty(MetaName* pr, Firebird::string* val = NULL)
 	{

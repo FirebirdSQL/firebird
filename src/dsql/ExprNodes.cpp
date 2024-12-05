@@ -25,6 +25,7 @@
 #include "../common/TimeZoneUtil.h"
 #include "../common/classes/FpeControl.h"
 #include "../common/classes/VaryStr.h"
+#include "../common/CvtFormat.h"
 #include "../dsql/ExprNodes.h"
 #include "../dsql/BoolNodes.h"
 #include "../dsql/StmtNodes.h"
@@ -390,6 +391,20 @@ bool ExprNode::sameAs(const ExprNode* other, bool ignoreStreams) const
 			return false;
 
 		++j;
+	}
+
+	return true;
+}
+
+bool ExprNode::deterministic() const
+{
+	NodeRefsHolder holder;
+	getChildren(holder, false);
+
+	for (auto i : holder.refs)
+	{
+		if (*i && !(*i)->deterministic())
+			return false;
 	}
 
 	return true;
@@ -3558,7 +3573,7 @@ ValueExprNode* CastNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	node->dsqlField = dsqlField;
 	node->format = format;
 
-	DDL_resolve_intl_type(dsqlScratch, node->dsqlField, NULL);
+	DDL_resolve_intl_type(dsqlScratch, node->dsqlField, node->dsqlField->collate);
 	node->setParameterType(dsqlScratch, NULL, false);
 
 	DsqlDescMaker::fromField(&node->castDesc, node->dsqlField);
@@ -3789,7 +3804,7 @@ dsc* CastNode::perform(thread_db* tdbb, impure_value* impure, dsc* value,
 	{
 		if (DTYPE_IS_TEXT(impure->vlu_desc.dsc_dtype))
 		{
-			string result = CVT_datetime_to_format_string(value, format, &EngineCallbacks::instance);
+			string result = CVT_format_datetime_to_string(value, format, &EngineCallbacks::instance);
 			USHORT dscLength = DSC_string_length(&impure->vlu_desc);
 			string::size_type resultLength = result.length();
 			if (resultLength > dscLength)
@@ -3815,21 +3830,21 @@ dsc* CastNode::perform(thread_db* tdbb, impure_value* impure, dsc* value,
 			{
 				case dtype_sql_time:
 				{
-					ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format, expect_sql_time,
+					ISC_TIMESTAMP_TZ timestampTZ = CVT_format_string_to_datetime(value, format, expect_sql_time,
 						&EngineCallbacks::instance);
 					*(ISC_TIME*) impure->vlu_desc.dsc_address = timestampTZ.utc_timestamp.timestamp_time;
 					break;
 				}
 				case dtype_sql_date:
 				{
-					ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format, expect_sql_date,
+					ISC_TIMESTAMP_TZ timestampTZ = CVT_format_string_to_datetime(value, format, expect_sql_date,
 						&EngineCallbacks::instance);
 					*(ISC_DATE*) impure->vlu_desc.dsc_address = timestampTZ.utc_timestamp.timestamp_date;
 					break;
 				}
 				case dtype_timestamp:
 				{
-					ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format, expect_timestamp,
+					ISC_TIMESTAMP_TZ timestampTZ = CVT_format_string_to_datetime(value, format, expect_timestamp,
 						&EngineCallbacks::instance);
 					*(ISC_TIMESTAMP*) impure->vlu_desc.dsc_address = timestampTZ.utc_timestamp;
 					break;
@@ -3837,7 +3852,7 @@ dsc* CastNode::perform(thread_db* tdbb, impure_value* impure, dsc* value,
 				case dtype_sql_time_tz:
 				case dtype_ex_time_tz:
 				{
-					ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format, expect_sql_time_tz,
+					ISC_TIMESTAMP_TZ timestampTZ = CVT_format_string_to_datetime(value, format, expect_sql_time_tz,
 						&EngineCallbacks::instance);
 					*(ISC_TIME_TZ*) impure->vlu_desc.dsc_address = TimeZoneUtil::timeStampTzToTimeTz(timestampTZ);
 					break;
@@ -3845,7 +3860,7 @@ dsc* CastNode::perform(thread_db* tdbb, impure_value* impure, dsc* value,
 				case dtype_timestamp_tz:
 				case dtype_ex_timestamp_tz:
 				{
-					ISC_TIMESTAMP_TZ timestampTZ = CVT_string_to_format_datetime(value, format, expect_timestamp_tz,
+					ISC_TIMESTAMP_TZ timestampTZ = CVT_format_string_to_datetime(value, format, expect_timestamp_tz,
 						&EngineCallbacks::instance);
 					*(ISC_TIMESTAMP_TZ*) impure->vlu_desc.dsc_address = timestampTZ;
 					break;
@@ -12320,6 +12335,25 @@ DmlNode* SysFuncCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScrat
 
 	node->args = PAR_args(tdbb, csb);
 
+	if (name == "MAKE_DBKEY")
+	{
+		// Special handling for system function MAKE_DBKEY:
+		// convert constant relation name into ID at the parsing time
+
+		auto literal = nodeAs<LiteralNode>(node->args->items[0]);
+
+		if (literal && literal->litDesc.isText())
+		{
+			MetaName relName;
+			CVT2_make_metaname(&literal->litDesc, relName, tdbb->getAttachment()->att_dec_status);
+
+			const jrd_rel* const relation = MET_lookup_relation(tdbb, relName);
+
+			if (relation)
+				node->args->items[0] = MAKE_const_slong(relation->rel_id);
+		}
+	}
+
 	return node;
 }
 
@@ -12368,6 +12402,11 @@ void SysFuncCallNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 	DSqlDataTypeUtil dataTypeUtil(dsqlScratch);
 	function->checkArgsMismatch(argsArray.getCount());
 	function->makeFunc(&dataTypeUtil, function, desc, argsArray.getCount(), argsArray.begin());
+}
+
+bool SysFuncCallNode::deterministic() const
+{
+	return ExprNode::deterministic() && function->deterministic;
 }
 
 void SysFuncCallNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
@@ -12461,32 +12500,6 @@ ValueExprNode* SysFuncCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	if (node->function)
 	{
-		if (name == "MAKE_DBKEY")
-		{
-			// Special handling for system function MAKE_DBKEY:
-			// convert constant relation name into ID at the parsing time
-
-			auto literal = nodeAs<LiteralNode>(node->args->items[0]);
-
-			if (literal && literal->litDesc.isText())
-			{
-				const MetaName relName = literal->getText();
-
-				const dsql_rel* const relation =
-					METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, relName);
-
-				if (!relation)
-				{
-					status_exception::raise(
-						Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-						Arg::Gds(isc_dsql_command_err) <<
-						Arg::Gds(isc_dsql_table_not_found) << relName);
-				}
-
-				node->args->items[0] = MAKE_const_slong(relation->rel_id);
-			}
-		}
-
 		if (node->function->setParamsFunc)
 		{
 			Array<dsc> tempDescs(node->args->items.getCount());
@@ -12531,9 +12544,10 @@ ValueExprNode* SysFuncCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 static RegisterNode<TrimNode> regTrimNode({blr_trim});
 
-TrimNode::TrimNode(MemoryPool& pool, UCHAR aWhere, ValueExprNode* aValue, ValueExprNode* aTrimChars)
+TrimNode::TrimNode(MemoryPool& pool, UCHAR aWhere, UCHAR aWhat, ValueExprNode* aValue, ValueExprNode* aTrimChars)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_TRIM>(pool),
 	  where(aWhere),
+	  what(aWhat),
 	  value(aValue),
 	  trimChars(aTrimChars)
 {
@@ -12544,9 +12558,9 @@ DmlNode* TrimNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb
 	UCHAR where = csb->csb_blr_reader.getByte();
 	UCHAR what = csb->csb_blr_reader.getByte();
 
-	TrimNode* node = FB_NEW_POOL(pool) TrimNode(pool, where);
+	TrimNode* node = FB_NEW_POOL(pool) TrimNode(pool, where, what);
 
-	if (what == blr_trim_characters)
+	if (what == blr_trim_characters || what == blr_trim_multi_characters)
 		node->trimChars = PAR_parse_value(tdbb, csb);
 
 	node->value = PAR_parse_value(tdbb, csb);
@@ -12567,7 +12581,7 @@ string TrimNode::internalPrint(NodePrinter& printer) const
 
 ValueExprNode* TrimNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	TrimNode* node = FB_NEW_POOL(dsqlScratch->getPool()) TrimNode(dsqlScratch->getPool(), where,
+	TrimNode* node = FB_NEW_POOL(dsqlScratch->getPool()) TrimNode(dsqlScratch->getPool(), where, what,
 		doDsqlPass(dsqlScratch, value), doDsqlPass(dsqlScratch, trimChars));
 
 	// Try to force trimChars to be same type as value: TRIM(? FROM FIELD)
@@ -12595,7 +12609,7 @@ void TrimNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	if (trimChars)
 	{
-		dsqlScratch->appendUChar(blr_trim_characters);
+		dsqlScratch->appendUChar(what);
 		GEN_expr(dsqlScratch, trimChars);
 	}
 	else
@@ -12665,7 +12679,7 @@ void TrimNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 
 ValueExprNode* TrimNode::copy(thread_db* tdbb, NodeCopier& copier) const
 {
-	TrimNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) TrimNode(*tdbb->getDefaultPool(), where);
+	TrimNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) TrimNode(*tdbb->getDefaultPool(), where, what);
 	node->value = copier.copy(tdbb, value);
 	if (trimChars)
 		node->trimChars = copier.copy(tdbb, trimChars);
@@ -12800,34 +12814,87 @@ dsc* TrimNode::execute(thread_db* tdbb, Request* request) const
 
 	SLONG offsetLead = 0;
 	SLONG offsetTrail = valueCanonicalLen;
+	const bool multi = what == blr_trim_multi_characters;
 
 	// CVC: Avoid endless loop with zero length trim chars.
 	if (charactersCanonicalLen)
 	{
-		if (where == blr_trim_both || where == blr_trim_leading)
+		int charSize = charactersCanonical.getCount() / charactersLength;
+		if (!multi)
 		{
-			// CVC: Prevent surprises with offsetLead < valueCanonicalLen; it may fail.
-			for (; offsetLead + charactersCanonicalLen <= valueCanonicalLen;
-				 offsetLead += charactersCanonicalLen)
+			if (where == blr_trim_both || where == blr_trim_leading)
 			{
-				if (memcmp(charactersCanonical.begin(), &valueCanonical[offsetLead],
-						charactersCanonicalLen) != 0)
+				// CVC: Prevent surprises with offsetLead < valueCanonicalLen; it may fail.
+				for (; offsetLead + charactersCanonicalLen <= valueCanonicalLen;
+					 offsetLead += charactersCanonicalLen)
 				{
-					break;
+					if (memcmp(charactersCanonical.begin(), &valueCanonical[offsetLead],
+							   charactersCanonicalLen) != 0)
+					{
+						break;
+					}
+				}
+			}
+
+			if (where == blr_trim_both || where == blr_trim_trailing)
+			{
+				for (; offsetTrail - charactersCanonicalLen >= offsetLead;
+					 offsetTrail -= charactersCanonicalLen)
+				{
+					if (memcmp(charactersCanonical.begin(),
+							   &valueCanonical[offsetTrail - charactersCanonicalLen],
+							   charactersCanonicalLen) != 0)
+					{
+						break;
+					}
 				}
 			}
 		}
-
-		if (where == blr_trim_both || where == blr_trim_trailing)
+		else
 		{
-			for (; offsetTrail - charactersCanonicalLen >= offsetLead;
-				 offsetTrail -= charactersCanonicalLen)
+			if (where == blr_trim_both || where == blr_trim_leading)
 			{
-				if (memcmp(charactersCanonical.begin(),
-						&valueCanonical[offsetTrail - charactersCanonicalLen],
-						charactersCanonicalLen) != 0)
+				while (offsetLead < valueCanonicalLen)
 				{
-					break;
+					bool found = false;
+					for (int i = 0; i < charactersCanonicalLen; i += charSize)
+					{
+						if (memcmp(&charactersCanonical[i],
+								   &valueCanonical[offsetLead],
+								   charSize) == 0)
+						{
+							found = true;
+							break;
+						}
+					}
+					if (!found)
+					{
+						break;
+					}
+					offsetLead += charSize;
+				}
+			}
+
+			if (where == blr_trim_both || where == blr_trim_trailing)
+			{
+				while (offsetTrail - charSize >= offsetLead)
+				{
+					bool found = false;
+					for (int i = 0; i < charactersCanonicalLen; i += charSize)
+					{
+						if (memcmp(&charactersCanonical[i],
+								   &valueCanonical[offsetTrail - charSize],
+								   charSize) == 0)
+						{
+							found = true;
+							break;
+						}
+					}
+					if (!found)
+					{
+						break;
+					}
+					offsetTrail -= charSize;
 				}
 			}
 		}
@@ -13258,6 +13325,11 @@ void UdfCallNode::make(DsqlCompilerScratch* /*dsqlScratch*/, dsc* desc)
 		desc->setTextType(dsqlFunction->udf_character_set_id);
 }
 
+bool UdfCallNode::deterministic() const
+{
+	return ExprNode::deterministic() && function->fun_deterministic;
+}
+
 void UdfCallNode::getDesc(thread_db* /*tdbb*/, CompilerScratch* /*csb*/, dsc* desc)
 {
 	// Null value for the function indicates that the function was not
@@ -13513,20 +13585,7 @@ dsc* UdfCallNode::execute(thread_db* tdbb, Request* request) const
 
 			funcRequest->setGmtTimeStamp(request->getGmtTimeStamp());
 
-			if (function->fun_external)
-			{
-				function->fun_external->execute(
-					tdbb, funcRequest, transaction, inMsgLength, inMsg, outMsgLength, outMsg);
-			}
-			else
-			{
-				EXE_start(tdbb, funcRequest, transaction);
-
-				if (inMsgLength != 0)
-					EXE_send(tdbb, funcRequest, 0, inMsgLength, inMsg);
-
-				EXE_receive(tdbb, funcRequest, 1, outMsgLength, outMsg);
-			}
+			EXE_execute_function(tdbb, funcRequest, transaction, inMsgLength, inMsg, outMsgLength, outMsg);
 
 			// Clean up all savepoints started during execution of the function
 
@@ -14166,10 +14225,12 @@ dsc* VariableNode::execute(thread_db* tdbb, Request* request) const
 			request->req_flags |= req_null;
 		else
 		{
-			EVL_make_value(tdbb, &varImpure->vlu_desc, impure);
+			auto varDesc = varImpure->vlu_desc;
 
-			if (impure->vlu_desc.dsc_dtype == dtype_text)
-				INTL_adjust_text_descriptor(tdbb, &impure->vlu_desc);
+			if (varDesc.dsc_dtype == dtype_text)
+				INTL_adjust_text_descriptor(tdbb, &varDesc);
+
+			EVL_make_value(tdbb, &varDesc, impure);
 		}
 
 		if (!(varImpure->vlu_flags & VLU_checked))

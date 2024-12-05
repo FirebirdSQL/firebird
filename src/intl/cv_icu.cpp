@@ -31,6 +31,34 @@
 #include <unicode/ucnv.h>
 #include "../common/unicode_util.h"
 
+namespace {
+
+static void U_EXPORT2 FB_UCNV_FROM_U_CALLBACK_STOP(
+                const void* /*context*/,
+                UConverterFromUnicodeArgs* /*fromUArgs*/,
+                const UChar* /*codeUnits*/,
+                int32_t /*length*/,
+                UChar32 /*codePoint*/,
+                UConverterCallbackReason /*reason*/,
+                UErrorCode* /*err*/)
+{
+	/*
+	 * A stable implementation of callback function UCNV_FROM_U_CALLBACK_STOP.
+	 *
+	 * It is equal to a behaviour of old ICU (from FB2.1 and FB3).
+	 *
+	 * ICU from FB4 (v63.1) translates "ignorable" symbols (..., 0x115F, ...) into an empty string
+	 * and this is incompatible with conversion of built-in charsets where
+	 * a such case leads to a translation error.
+	 *
+	 */
+
+	/* the caller must have set the error code accordingly */
+	return;
+}
+
+} // namespace
+
 
 static UConverter* create_converter(csconvert* cv, UErrorCode* status)
 {
@@ -41,7 +69,7 @@ static UConverter* create_converter(csconvert* cv, UErrorCode* status)
 	UConverterFromUCallback oldFromAction;
 	cIcu.ucnv_setFromUCallBack(
 		conv,
-		cIcu.UCNV_FROM_U_CALLBACK_STOP,
+		FB_UCNV_FROM_U_CALLBACK_STOP,
 		NULL,
 		&oldFromAction,
 		&oldContext,

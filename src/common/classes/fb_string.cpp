@@ -396,6 +396,20 @@ extern "C" {
 		shrinkBuffer();
 	}
 
+	bool AbstractString::baseMove(AbstractString&& rhs)
+	{
+		if (getPool() == rhs.getPool() && rhs.inlineBuffer != rhs.stringBuffer)
+		{
+			stringBuffer = std::exchange(rhs.stringBuffer, rhs.inlineBuffer);
+			stringLength = std::exchange(rhs.stringLength, 0);
+			bufferSize = std::exchange(rhs.bufferSize, INLINE_BUFFER_SIZE);
+			rhs.inlineBuffer[0] = '\0';
+			return true;
+		}
+
+		return false;
+	}
+
 	void AbstractString::printf(const char* format,...)
 	{
 		va_list params;

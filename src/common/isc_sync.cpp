@@ -611,7 +611,7 @@ int SharedMemoryBase::eventInit(event_t* event)
 #else // pthread-based event
 
 	event->event_count = 0;
-	event->pid = getpid();
+	event->event_pid = getpid();
 
 	// Prepare an Inter-Process event block
 	pthread_mutexattr_t mattr;
@@ -662,7 +662,7 @@ void SharedMemoryBase::eventFini(event_t* event)
 
 #else // pthread-based event
 
-	if (event->pid == getpid())
+	if (event->event_pid == getpid())
 	{
 		LOG_PTHREAD_ERROR(pthread_mutex_destroy(event->event_mutex));
 		LOG_PTHREAD_ERROR(pthread_cond_destroy(event->event_cond));
@@ -690,6 +690,8 @@ SLONG SharedMemoryBase::eventClear(event_t* event)
  *	    3.  Wait on event.
  *
  **************************************/
+
+	fb_assert(event->event_pid == getpid());
 
 #if defined(WIN_NT)
 
@@ -721,6 +723,8 @@ int SharedMemoryBase::eventWait(event_t* event, const SLONG value, const SLONG m
  *	Wait on an event.
  *
  **************************************/
+
+	fb_assert(event->event_pid == getpid());
 
 	// If we're not blocked, the rest is a gross waste of time
 
@@ -831,7 +835,7 @@ int SharedMemoryBase::eventPost(event_t* event)
 	++event->event_count;
 
 	if (event->event_pid != process_id)
-		return ISC_kill(event->event_pid, event->event_id, event->event_handle);
+		return ISC_kill(event->event_pid, event->event_id, event->event_handle) == 0 ? FB_SUCCESS : FB_FAILURE;
 
 	return SetEvent(event->event_handle) ? FB_SUCCESS : FB_FAILURE;
 
@@ -1127,13 +1131,17 @@ void SharedMemoryBase::removeMapFile()
 	if (!sh_mem_header->isDeleted())
 	{
 #ifndef WIN_NT
-		unlinkFile();
+		FileLockHolder initLock(initFile);
+		if (!sh_mem_header->isDeleted())
+		{
+			unlinkFile();
+			sh_mem_header->markAsDeleted();
+		}
 #else
 		fb_assert(!sh_mem_unlink);
 		sh_mem_unlink = true;
-#endif // WIN_NT
-
 		sh_mem_header->markAsDeleted();
+#endif // WIN_NT
 	}
 }
 
@@ -1177,6 +1185,56 @@ void SharedMemoryBase::unlinkFile(const TEXT* expanded_filename) noexcept
 
 
 #ifdef UNIX
+
+static inline void reportError(const char* func, CheckStatusWrapper* statusVector)
+{
+	if (!statusVector)
+		system_call_failed::raise(func);
+	else
+		error(statusVector, func, errno);
+}
+
+bool allocFileSpace(int fd, off_t offset, FB_SIZE_T length, CheckStatusWrapper* statusVector)
+{
+#if defined(HAVE_LINUX_FALLOC_H) && defined(HAVE_FALLOCATE)
+	if (fallocate(fd, 0, offset, length) == 0)
+		return true;
+
+	if (errno != EOPNOTSUPP && errno != ENOSYS)
+	{
+		reportError("fallocate", statusVector);
+		return false;
+	}
+	// fallocate is not supported by this kernel or file system
+	// take the long way around
+#endif
+	static const FB_SIZE_T buf128KSize = 131072;
+	HalfStaticArray<UCHAR, BUFFER_LARGE> buf;
+	const FB_SIZE_T bufSize = length < buf128KSize ? length : buf128KSize;
+
+	memset(buf.getBuffer(bufSize), 0, bufSize);
+	os_utils::lseek(fd, LSEEK_OFFSET_CAST offset, SEEK_SET);
+
+	while (length)
+	{
+		const FB_SIZE_T cnt = length < bufSize ? length : bufSize;
+		if (write(fd, buf.begin(), cnt) != (ssize_t) cnt)
+		{
+			reportError("write", statusVector);
+			return false;
+		}
+		length -= cnt;
+	}
+
+	if (fsync(fd))
+	{
+		reportError("fsync", statusVector);
+		return false;
+	}
+
+	return true;
+}
+
 
 void SharedMemoryBase::internalUnmap()
 {
@@ -1313,7 +1371,10 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	if (mainLock->setlock(&statusVector, FileLock::FLM_TRY_EXCLUSIVE))
 	{
 		if (trunc_flag)
+		{
 			FB_UNUSED(os_utils::ftruncate(mainLock->getFd(), length));
+			allocFileSpace(mainLock->getFd(), 0, length, NULL);
+		}
 
 		if (callback->initialize(this, true))
 		{
@@ -2446,7 +2507,18 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector, ULONG new_len
 	}
 
 	if (flag)
+	{
 		FB_UNUSED(os_utils::ftruncate(mainLock->getFd(), new_length));
+
+		if (new_length > sh_mem_length_mapped)
+		{
+			if (!allocFileSpace(mainLock->getFd(), sh_mem_length_mapped,
+				new_length - sh_mem_length_mapped, statusVector))
+			{
+				return false;
+			}
+		}
+	}
 
 	MemoryHeader* const address = (MemoryHeader*) os_utils::mmap(0, new_length,
 		PROT_READ | PROT_WRITE, MAP_SHARED, mainLock->getFd(), 0);

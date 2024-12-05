@@ -494,7 +494,7 @@ add_library                 (boot_engine SHARED ${engine_generated_src_boot} ${V
 target_link_libraries       (boot_engine engine_common boot_alice boot_burp common boot_yvalve)
 set_output_directory        (boot_engine plugins CURRENT_DIR)
 set_exported_symbols        (boot_engine fbplugin)
-copy_and_rename_lib         (boot_engine Engine13)
+copy_and_rename_lib         (boot_engine Engine14)
 project_group               (boot_engine Boot)
 
 endif() # if (NOT CMAKE_CROSSCOMPILING)
@@ -506,7 +506,7 @@ endif() # if (NOT CMAKE_CROSSCOMPILING)
 
 add_library                 (engine SHARED ${engine_generated_src_master} ${VERSION_RC})
 target_link_libraries       (engine engine_common alice burp common yvalve)
-set_target_properties       (engine PROPERTIES OUTPUT_NAME Engine13)
+set_target_properties       (engine PROPERTIES OUTPUT_NAME Engine14)
 set_output_directory        (engine plugins)
 set_exported_symbols        (engine fbplugin)
 
@@ -527,7 +527,7 @@ set_output_directory        (intl intl)
 # SHARED LIBRARY ib_util
 ########################################
 
-add_library                 (ib_util SHARED extlib/ib_util.cpp extlib/ib_util.h ${VERSION_RC})
+add_library                 (ib_util SHARED extlib/ib_util.cpp ${VERSION_RC})
 set_exported_symbols        (ib_util ib_util)
 set_output_directory_unix   (ib_util lib)
 
@@ -904,9 +904,7 @@ add_custom_target(copy_files
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/examples/stat ${output_dir}/examples/stat
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/examples/functions.c ${output_dir}/examples/functions.c
     # headers
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/src/extlib/ib_util.h ${output_dir}/include/ib_util.h
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/src/include/gen/iberror.h ${output_dir}/include/iberror.h
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/src/yvalve/perf.h ${output_dir}/include/perf.h
 )
 add_dependencies_cc     (copy_files databases)
 add_dependencies_unix_cc(copy_files makeHeader)

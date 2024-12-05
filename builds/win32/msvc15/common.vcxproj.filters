@@ -30,6 +30,9 @@
     <ClCompile Include="..\..\..\src\common\cvt.cpp">
       <Filter>common</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\common\CvtFormat.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\common\db_alias.cpp">
       <Filter>common</Filter>
     </ClCompile>
@@ -275,6 +278,12 @@
     <ClInclude Include="..\..\..\src\common\cvt.h">
       <Filter>headers</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\common\CvtFormat.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\common\CvtFormatImpl.h">
+      <Filter>headers</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\src\common\db_alias.h">
       <Filter>headers</Filter>
     </ClInclude>
@@ -480,6 +489,9 @@
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\UserBlob.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\common\classes\Uuid.h">
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\VaryStr.h">

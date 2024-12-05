@@ -116,6 +116,7 @@ static processing_state show_trigger(const SCHAR*, bool, bool);
 static processing_state show_users();
 static processing_state show_users12();
 static void parse_package(const char* procname, MetaString& package, MetaString& procedure);
+static processing_state show_wireStats();
 
 const char* const spaces = "                                ";
 static TEXT Print_buffer[512];
@@ -2090,7 +2091,8 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 			role, table, view, system, index, domain, exception,
 			filter, function, generator, grant, procedure, trigger,
 			check, database, comment, dependency, collation, security_class,
-			users, package, publication, schema, map, wrong
+			users, package, publication, schema, map, wireStats,
+			wrong
 		};
 		ShowOptions(const optionsMap* inmap, size_t insize, int wrongval)
 			: OptionsBase(inmap, insize, wrongval)
@@ -2148,7 +2150,9 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 		{ShowOptions::package, "PACKAGES", 4},
 		{ShowOptions::schema, "SCHEMAS", 4},
 		{ShowOptions::map, "MAPPING", 3},
-		{ShowOptions::publication, "PUBLICATIONS", 3}
+		{ShowOptions::publication, "PUBLICATIONS", 3},
+		{ShowOptions::wireStats, "WIRE_STATISTICS", 9},
+		{ShowOptions::wireStats, "WIRE_STATS", 10}
 	};
 
 	const ShowOptions showoptions(options, FB_NELEM(options), ShowOptions::wrong);
@@ -2803,6 +2807,10 @@ processing_state SHOW_metadata(const SCHAR* const* cmd, SCHAR** lcmd)
 
 	case ShowOptions::schema:
 		return ps_ERR;
+		break;
+
+	case ShowOptions::wireStats:
+		ret = show_wireStats();
 		break;
 
 	default:
@@ -5091,7 +5099,7 @@ static void printMap(bool extract, bool global, char* name, char* usng, char* pl
 	isqlGlob.printf("FROM %s", anyObj ? "ANY " : "");
 	printIdent(extract, fromType, "%s ");
 	if (!anyObj)
-		printIdent(extract, from, "%s ");
+		isqlGlob.printf("\'%s\' ", from);
 
 	isqlGlob.printf("TO %s ", toType ? "ROLE" : "USER");
 	if (to)
@@ -6686,4 +6694,19 @@ static processing_state show_users()
 	}
 
 	return rc;
+}
+
+static processing_state show_wireStats()
+{
+	if (!DB)
+	{
+		isqlGlob.printf("No database connection.\n");
+		return SKIP;
+	}
+
+	IsqlWireStats stats(DB);
+	if (!stats.print(true))
+		return ps_ERR;
+
+	return SKIP;
 }

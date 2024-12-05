@@ -274,6 +274,7 @@ bool IscConnection::resetSession(thread_db* tdbb)
 		return true;
 	}
 
+	ERR_post_nothrow(&status);
 	return false;
 }
 

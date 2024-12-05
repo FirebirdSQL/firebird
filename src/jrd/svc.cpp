@@ -2150,7 +2150,7 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 		throw;
 	}
 
-	if (this->svc_trace_manager->needs(ITraceFactory::TRACE_EVENT_SERVICE_START))
+	if (svc_trace_manager->needs(ITraceFactory::TRACE_EVENT_SERVICE_START))
 	{
 		TraceServiceImpl service(this);
 		this->svc_trace_manager->event_service_start(&service,

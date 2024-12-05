@@ -29,6 +29,7 @@
 #include "../../common/SimilarToRegex.h"
 #include "../../common/isc_f_proto.h"
 #include "../../common/db_alias.h"
+#include "../../common/os/path_utils.h"
 
 using namespace Firebird;
 
@@ -46,6 +47,7 @@ void TraceCfgReader::readTraceConfiguration(const char* text,
 	if (!found && el->name == #NAME) { \
 		Firebird::PathName temp; \
 		expandPattern(el, temp); \
+		PathUtils::fixupSeparators(temp.begin()); \
 		m_config.NAME = temp.c_str(); \
 		found = true; \
 	}
@@ -70,7 +72,8 @@ void TraceCfgReader::readTraceConfiguration(const char* text,
 
 void TraceCfgReader::readConfig()
 {
-	ConfigFile cfgFile(ConfigFile::USE_TEXT, m_text, ConfigFile::HAS_SUB_CONF | ConfigFile::NATIVE_ORDER);
+	ConfigFile cfgFile(ConfigFile::USE_TEXT, m_text, ConfigFile::HAS_SUB_CONF | ConfigFile::NATIVE_ORDER
+		| ConfigFile::REGEXP_SUPPORT);
 
 	m_subpatterns[0].start = 0;
 	m_subpatterns[0].end = m_databaseName.length();

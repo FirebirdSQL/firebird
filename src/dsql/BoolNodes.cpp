@@ -30,6 +30,7 @@
 #include "../jrd/recsrc/Cursor.h"
 #include "../jrd/optimizer/Optimizer.h"
 #include "../jrd/blb_proto.h"
+#include "../jrd/btr_proto.h"
 #include "../jrd/cmp_proto.h"
 #include "../jrd/evl_proto.h"
 #include "../jrd/intl_proto.h"
@@ -1367,7 +1368,7 @@ BoolExprNode* InListBoolNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 			const auto castNode = FB_NEW_POOL(dsqlScratch->getPool())
 				CastNode(dsqlScratch->getPool(), item, field);
-			item = castNode->dsqlPass(dsqlScratch);
+			item = castNode;
 		}
 	}
 
@@ -1469,16 +1470,30 @@ void InListBoolNode::pass2Boolean(thread_db* tdbb, CompilerScratch* csb, std::fu
 			ERR_post(Arg::Gds(isc_bad_dbkey));
 	}
 
-	dsc descriptor_a, descriptor_b;
-	arg->getDesc(tdbb, csb, &descriptor_a);
-	list->getDesc(tdbb, csb, &descriptor_b);
+	dsc argDesc, listDesc;
+	arg->getDesc(tdbb, csb, &argDesc);
+	list->getDesc(tdbb, csb, &listDesc);
 
-	if (DTYPE_IS_DATE(descriptor_a.dsc_dtype))
+	if (argDesc.isDateTime())
 		arg->nodFlags |= FLAG_DATE;
-	else if (DTYPE_IS_DATE(descriptor_b.dsc_dtype))
+	else if (listDesc.isDateTime())
 	{
 		for (auto item : list->items)
 			item->nodFlags |= FLAG_DATE;
+	}
+
+	// If lookup in the list is to be performed against the generic comparison rules,
+	// add an extra cast to make things working properly
+	if (!BTR_types_comparable(listDesc, argDesc))
+	{
+		for (auto& item : list->items)
+		{
+			const auto castNode = FB_NEW_POOL(csb->csb_pool) CastNode(csb->csb_pool);
+			castNode->castDesc = argDesc;
+			castNode->source = item;
+			castNode->impureOffset = csb->allocImpure<impure_value>();
+			item = castNode;
+		}
 	}
 
 	if (nodFlags & FLAG_INVARIANT)

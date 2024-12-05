@@ -766,7 +766,10 @@ void IndexScanListIterator::makeKeys(thread_db* tdbb, temporary_key* lower, temp
 	m_upperValues[m_segno] = *m_iterator;
 
 	const auto keyType =
-		(m_retrieval->irb_desc.idx_flags & idx_unique) ? INTL_KEY_UNIQUE : INTL_KEY_SORT;
+		(m_retrieval->irb_generic & irb_multi_starting) ? INTL_KEY_MULTI_STARTING :
+		(m_retrieval->irb_generic & irb_starting) ? INTL_KEY_PARTIAL :
+		(m_retrieval->irb_desc.idx_flags & idx_unique) ? INTL_KEY_UNIQUE :
+		INTL_KEY_SORT;
 
 	// Make the lower bound key
 
@@ -822,14 +825,16 @@ void BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescList& idxList, Relatio
 	if (!root)
 		return;
 
+	Cleanup release_root([&] {
+		CCH_RELEASE(tdbb, &window);
+	});
+
 	for (USHORT i = 0; i < root->irt_count; i++)
 	{
 		index_desc idx;
 		if (BTR_description(tdbb, relation, root, &idx, i))
 			idxList.add(idx);
 	}
-
-	CCH_RELEASE(tdbb, &window);
 }
 
 
@@ -6764,7 +6769,7 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 	const bool partUpper = (retrieval->irb_upper_count < idx->idx_count);
 
 	// Reset flags this routine does not check in the loop below
-	flag &= ~(irb_equality | irb_ignore_null_value_key | irb_root_list_scan);
+	flag &= ~(irb_equality | irb_unique | irb_ignore_null_value_key | irb_root_list_scan);
 	flag &= ~(irb_exclude_lower | irb_exclude_upper);
 
 	IndexNode node;

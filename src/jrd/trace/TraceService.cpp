@@ -219,13 +219,15 @@ void TraceSvcJrd::listSessions()
 {
 	m_svc.started();
 
-	ConfigStorage* storage = TraceManager::getStorage();
-	StorageGuard guard(storage);
+	// Writing into service when storage is locked could lead to deadlock,
+	// therefore don't use StorageGuard here.
 
-	storage->restart();
+	ConfigStorage* storage = TraceManager::getStorage();
+	ConfigStorage::Accessor acc(storage);
 
 	TraceSession session(*getDefaultMemoryPool());
-	while (storage->getNextSession(session, ConfigStorage::ALL))
+
+	while (acc.getNext(session, ConfigStorage::ALL))
 	{
 		if (checkPrivileges(session))
 		{

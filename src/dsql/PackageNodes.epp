@@ -27,6 +27,7 @@
 #include "../jrd/jrd.h"
 #include "../jrd/tra.h"
 #include "../jrd/dfw_proto.h"
+#include "../jrd/dyn_ut_proto.h"
 #include "../jrd/exe_proto.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/vio_proto.h"
@@ -363,8 +364,13 @@ void CreateAlterPackageNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch*
 	Attachment* const attachment = transaction->getAttachment();
 	const MetaString& ownerName = attachment->getEffectiveUserName();
 
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_package_header))
+		return;
+
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 		DDL_TRIGGER_CREATE_PACKAGE, name, NULL);
+
+	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_package_header);
 
 	AutoCacheRequest requestHandle(tdbb, drq_s_pkg, DYN_REQUESTS);
 
@@ -789,6 +795,9 @@ void CreatePackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 	{
 		if (!PKG.RDB$VALID_BODY_FLAG.NULL && PKG.RDB$VALID_BODY_FLAG != 0)
 		{
+			if (createIfNotExistsOnly)
+				return;
+
 			status_exception::raise(
 				Arg::Gds(isc_no_meta_update) <<
 				Arg::Gds(isc_dyn_package_body_exists) << Arg::Str(name));

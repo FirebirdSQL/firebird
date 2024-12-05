@@ -256,7 +256,7 @@ public:
 		  slct_ready(*getDefaultMemoryPool())
 	{ }
 
-	explicit Select(Firebird::MemoryPool& pool)
+	explicit Select(MemoryPool& pool)
 		: slct_time(0), slct_count(0), slct_poll(pool), slct_ready(pool)
 	{ }
 #else
@@ -266,7 +266,7 @@ public:
 		memset(&slct_fdset, 0, sizeof slct_fdset);
 	}
 
-	explicit Select(Firebird::MemoryPool& /*pool*/)
+	explicit Select(MemoryPool& /*pool*/)
 		: slct_time(0), slct_count(0), slct_width(0)
 	{
 		memset(&slct_fdset, 0, sizeof slct_fdset);
@@ -616,7 +616,7 @@ ULONG INET_remote_buffer;
 static GlobalPtr<Mutex> init_mutex;
 static volatile bool INET_initialized = false;
 static volatile bool INET_shutting_down = false;
-static Firebird::GlobalPtr<Select> INET_select;
+static GlobalPtr<Select> INET_select;
 static rem_port* inet_async_receive = NULL;
 
 
@@ -632,7 +632,7 @@ rem_port* INET_analyze(ClntAuthBlock* cBlock,
 					   ClumpletReader &dpb,
 					   RefPtr<const Config>* config,
 					   const PathName* ref_db_name,
-					   Firebird::ICryptKeyCallback* cryptCb,
+					   ICryptKeyCallback* cryptCb,
 					   int af)
 {
 /**************************************
@@ -1074,7 +1074,7 @@ static rem_port* listener_socket(rem_port* port, USHORT flag, const addrinfo* pa
  *	binds the socket and calls listen().
  *  For multi-client server (SuperServer or SuperClassic) return listener
  *  port.
- *  For classic server - accept incoming connections and fork worker
+ *  For Classic server - accept incoming connections and fork worker
  *  processes, return NULL at exit;
  *  On error throw exception.
  *
@@ -1088,26 +1088,27 @@ static rem_port* listener_socket(rem_port* port, USHORT flag, const addrinfo* pa
 	if (n == -1)
 		gds__log("setsockopt: error setting IPV6_V6ONLY to %d", ipv6_v6only);
 
+#ifndef WIN_NT
+	// dimitr:	on Windows, lack of SO_REUSEADDR works the same way as it was specified on POSIX,
+	//			i.e. it allows binding to a port in a TIME_WAIT/FIN_WAIT state. If this option
+	//			is turned on explicitly, then a port can be re-bound regardless of its state,
+	//			e.g. while it's listening. This is surely not what we want.
+	//			We set this options for any kind of listener, including standalone Classic.
+
+	int optval = TRUE;
+	n = setsockopt(port->port_handle, SOL_SOCKET, SO_REUSEADDR,
+					(SCHAR*) &optval, sizeof(optval));
+	if (n == -1)
+	{
+		inet_error(true, port, "setsockopt REUSE", isc_net_connect_listen_err, INET_ERRNO);
+	}
+#endif
+
 	if (flag & SRVR_multi_client)
 	{
 		struct linger lingerInfo;
 		lingerInfo.l_onoff = 0;
 		lingerInfo.l_linger = 0;
-
-#ifndef WIN_NT
-		// dimitr:	on Windows, lack of SO_REUSEADDR works the same way as it was specified on POSIX,
-		//			i.e. it allows binding to a port in a TIME_WAIT/FIN_WAIT state. If this option
-		//			is turned on explicitly, then a port can be re-bound regardless of its state,
-		//			e.g. while it's listening. This is surely not what we want.
-
-		int optval = TRUE;
-		n = setsockopt(port->port_handle, SOL_SOCKET, SO_REUSEADDR,
-					   (SCHAR*) &optval, sizeof(optval));
-		if (n == -1)
-		{
-			inet_error(true, port, "setsockopt REUSE", isc_net_connect_listen_err, INET_ERRNO);
-		}
-#endif
 
 		// Get any values for SO_LINGER so that they can be reset during
 		// disconnect.  SO_LINGER should be set by default on the socket
@@ -3079,7 +3080,7 @@ static bool packet_receive(rem_port* port, UCHAR* buffer, SSHORT buffer_length, 
 		if (n > 0 && port->port_crypt_plugin)
 		{
 			port->port_crypt_plugin->decrypt(&st, n, buffer, buffer);
-			if (st.getState() & Firebird::IStatus::STATE_ERRORS)
+			if (st.getState() & IStatus::STATE_ERRORS)
 			{
 				status_exception::raise(&st);
 			}
@@ -3129,8 +3130,7 @@ static bool packet_receive(rem_port* port, UCHAR* buffer, SSHORT buffer_length, 
 	} // end scope
 #endif
 
-	port->port_rcv_packets++;
-	port->port_rcv_bytes += n;
+	port->bumpPhysStats(rem_port::RECEIVE, n);
 
 	*length = n;
 
@@ -3163,7 +3163,7 @@ static bool packet_send( rem_port* port, const SCHAR* buffer, SSHORT buffer_leng
 
 		char* d = b.getBuffer(buffer_length);
 		port->port_crypt_plugin->encrypt(&st, buffer_length, data, d);
-		if (st.getState() & Firebird::IStatus::STATE_ERRORS)
+		if (st.getState() & IStatus::STATE_ERRORS)
 		{
 			status_exception::raise(&st);
 		}
@@ -3305,9 +3305,7 @@ static bool packet_send( rem_port* port, const SCHAR* buffer, SSHORT buffer_leng
 	} // end scope
 #endif
 
-	port->port_snd_packets++;
-	port->port_snd_bytes += buffer_length;
-
+	port->bumpPhysStats(rem_port::SEND, buffer_length);
 	return true;
 }
 

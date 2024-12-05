@@ -385,6 +385,10 @@ TipCache::StatusBlockData::StatusBlockData(thread_db* tdbb, TipCache* tipCache, 
 
 	try
 	{
+		// Here SharedMemory constructor is called with skipLock parameter set to true.
+		// Appropriate locking is performed by existenceLock using LM.
+		// This should be in sync with SharedMemoryBase::unlinkFile() call
+		// in TipCache::StatusBlockData::clear().
 		memory = FB_NEW_POOL(*dbb->dbb_permanent) SharedMemory<TransactionStatusBlock>(
 			fileName.c_str(), blockSize,
 			&cache->memBlockInitializer, true);
@@ -462,6 +466,11 @@ void TipCache::StatusBlockData::clear(thread_db* tdbb)
 
 	if (fName.hasData())
 	{
+		// Here file is removed from SharedMemory created with skipLock parameter
+		// set to true. That means internal file lock is turned off.
+		// Appropriate locking is performed by existenceLock using LM.
+		// This should be in sync with SharedMemory constructor called
+		// in TipCache::StatusBlockData constructor.
 		if (LCK_lock(tdbb, &existenceLock, LCK_EX, LCK_NO_WAIT))
 			SharedMemoryBase::unlinkFile(fName.c_str());
 		else

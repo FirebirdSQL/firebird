@@ -146,14 +146,10 @@ bool FullTableScan::internalGetRecord(thread_db* tdbb) const
 		return false;
 	}
 
-	if (VIO_next_record(tdbb, rpb, request->req_transaction, request->req_pool, DPM_next_all))
-	{
-		if (impure->irsb_upper.isValid() && rpb->rpb_number > impure->irsb_upper)
-		{
-			rpb->rpb_number.setValid(false);
-			return false;
-		}
+	const RecordNumber* upper = impure->irsb_upper.isValid() ? &impure->irsb_upper : nullptr;
 
+	if (VIO_next_record(tdbb, rpb, request->req_transaction, request->req_pool, DPM_next_all, upper))
+	{
 		rpb->rpb_number.setValid(true);
 		return true;
 	}

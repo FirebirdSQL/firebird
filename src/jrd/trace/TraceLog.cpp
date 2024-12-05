@@ -238,10 +238,24 @@ void TraceLog::extend(FB_SIZE_T size)
 		const FB_SIZE_T toMoveR = oldSize - header->readPos;
 
 		char* data = reinterpret_cast<char*> (header);
+		const FB_SIZE_T deltaSize = newSize - oldSize;
+
 		if (toMoveW < toMoveR)
 		{
-			memcpy(data + oldSize, data + sizeof(TraceLogHeader), toMoveW);
-			header->writePos = oldSize + toMoveW;
+			if (toMoveW <= deltaSize)
+			{
+				memcpy(data + oldSize, data + sizeof(TraceLogHeader), toMoveW);
+				header->writePos = oldSize + toMoveW;
+
+				if (header->writePos == header->allocated)
+					header->writePos = sizeof(TraceLogHeader);
+			}
+			else
+			{
+				memcpy(data + oldSize, data + sizeof(TraceLogHeader), deltaSize);
+				memcpy(data + sizeof(TraceLogHeader), data + sizeof(TraceLogHeader) + deltaSize, toMoveW - deltaSize);
+				header->writePos -= deltaSize;
+			}
 		}
 		else
 		{

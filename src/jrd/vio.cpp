@@ -2221,8 +2221,13 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 				// procedure name to track parameter dependencies
 				DFW_post_work_arg(transaction, work, &desc, procedure->getId(), dfw_arg_proc_name);
 			}
-			EVL_field(0, rpb->rpb_record, f_prm_sname, &desc2);
-			DFW_post_work(transaction, dfw_delete_global, &desc2, 0);
+
+			if (!EVL_field(0, rpb->rpb_record, f_prm_fname, &desc2))
+			{
+				EVL_field(0, rpb->rpb_record, f_prm_sname, &desc2);
+				DFW_post_work(transaction, dfw_delete_global, &desc2, 0);
+			}
+
 			break;
 
 		case rel_fields:
@@ -3363,6 +3368,7 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 		case rel_roles:
 		case rel_ccon:
 		case rel_pub_tables:
+		case rel_priv:
 			protect_system_table_delupd(tdbb, relation, "UPDATE");
 			break;
 
@@ -3770,7 +3776,8 @@ bool VIO_next_record(thread_db* tdbb,
 					 record_param* rpb,
 					 jrd_tra* transaction,
 					 MemoryPool* pool,
-					 FindNextRecordScope scope)
+					 FindNextRecordScope scope,
+					 const RecordNumber* upper)
 {
 /**************************************
  *
@@ -3805,9 +3812,14 @@ bool VIO_next_record(thread_db* tdbb,
 		rpb->rpb_f_page, rpb->rpb_f_line);
 #endif
 
-	do {
+	do
+	{
 		if (!DPM_next(tdbb, rpb, lock_type, scope))
+			return false;
+
+		if (upper && rpb->rpb_number > *upper)
 		{
+			CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 			return false;
 		}
 	} while (!VIO_chase_record_version(tdbb, rpb, transaction, pool, false, false));

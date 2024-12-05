@@ -32,6 +32,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#include <utility>
 
 #include "firebird.h"
 #include "fb_types.h"
@@ -203,6 +204,27 @@ namespace Firebird
 			memcpy(stringBuffer, s, l);
 		}
 
+		AbstractString(const size_type limit, AbstractString&& rhs) :
+			max_length(static_cast<internal_size_type>(limit))
+		{
+			 // We can move only string with default pool
+			if (!baseMove(std::forward<AbstractString>(rhs)))
+			{
+				initialize(rhs.length());
+				memcpy(stringBuffer, rhs.c_str(), stringLength);
+			}
+		}
+
+		AbstractString(const size_type limit, MemoryPool& p, AbstractString&& rhs)
+			: AutoStorage(p), max_length(static_cast<internal_size_type>(limit))
+		{
+			if (!baseMove(std::forward<AbstractString>(rhs)))
+			{
+				initialize(rhs.length());
+				memcpy(stringBuffer, rhs.c_str(), stringLength);
+			}
+		}
+
 		pointer modify()
 		{
 			return stringBuffer;
@@ -222,6 +244,8 @@ namespace Firebird
 		enum TrimType {TrimLeft, TrimRight, TrimBoth};
 
 		void baseTrim(const TrimType whereTrim, const_pointer toTrim);
+
+		bool baseMove(AbstractString&& rhs);
 
 		size_type getMaxLength() const
 		{
@@ -676,6 +700,10 @@ namespace Firebird
 			AbstractString(Comparator::getMaxLength(), p, s, static_cast<size_type>(s ? strlen(s) : 0)) {}
 		StringBase(MemoryPool& p, const char_type* s, size_type l) :
 			AbstractString(Comparator::getMaxLength(), p, s, l) {}
+		StringBase(StringType&& rhs) :
+			AbstractString(Comparator::getMaxLength(), std::forward<AbstractString>(rhs)) {}
+		StringBase(MemoryPool& p, StringType&& rhs) :
+			AbstractString(Comparator::getMaxLength(), p, std::forward<AbstractString>(rhs)) {}
 
 		static size_type max_length()
 		{
@@ -753,6 +781,25 @@ namespace Firebird
 		StringType operator+(char_type c) const
 		{
 			return add(&c, 1);
+		}
+		StringType& operator=(StringType&& rhs)
+		{
+			// baseMove do not clear the buffer so do it in this method
+			char_type* backup = nullptr;
+			if (stringBuffer != inlineBuffer)
+				backup = stringBuffer;
+
+			if (baseMove(std::forward<AbstractString>(rhs)))
+			{
+				// The dynamic buffer has been replaced, so clear the old one
+				delete[] backup;
+			}
+			else
+			{
+				// Cannot move, do the base assignment
+				assign(rhs.c_str(), rhs.length());
+			}
+			return *this;
 		}
 
 		StringBase<StringComparator> ToString() const

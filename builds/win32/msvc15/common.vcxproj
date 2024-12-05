@@ -62,6 +62,7 @@
       <EnableEnhancedInstructionSet Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
     </ClCompile>
     <ClCompile Include="..\..\..\src\common\cvt.cpp" />
+    <ClCompile Include="..\..\..\src\common\CvtFormat.cpp" />
     <ClCompile Include="..\..\..\src\common\db_alias.cpp" />
     <ClCompile Include="..\..\..\src\common\DecFloat.cpp" />
     <ClCompile Include="..\..\..\src\common\dllinst.cpp" />
@@ -160,6 +161,7 @@
     <ClInclude Include="..\..\..\src\common\classes\tree.h" />
     <ClInclude Include="..\..\..\src\common\classes\TriState.h" />
     <ClInclude Include="..\..\..\src\common\classes\UserBlob.h" />
+    <ClInclude Include="..\..\..\src\common\classes\Uuid.h" />
     <ClInclude Include="..\..\..\src\common\classes\VaryStr.h" />
     <ClInclude Include="..\..\..\src\common\classes\vector.h" />
     <ClInclude Include="..\..\..\src\common\classes\zip.h" />
@@ -170,6 +172,8 @@
     <ClInclude Include="..\..\..\src\common\config\dir_list.h" />
     <ClInclude Include="..\..\..\src\common\CsConvert.h" />
     <ClInclude Include="..\..\..\src\common\cvt.h" />
+    <ClInclude Include="..\..\..\src\common\CvtFormat.h" />
+    <ClInclude Include="..\..\..\src\common\CvtFormatImpl.h" />
     <ClInclude Include="..\..\..\src\common\db_alias.h" />
     <ClInclude Include="..\..\..\src\common\DecFloat.h" />
     <ClInclude Include="..\..\..\src\common\dllinst.h" />

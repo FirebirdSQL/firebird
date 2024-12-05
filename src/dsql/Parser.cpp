@@ -162,7 +162,7 @@ void Parser::transformString(const char* start, unsigned length, string& dest)
 		const char* s = lex.start + mark.pos;
 		buffer.add(pos, s - pos);
 
-		if (!isspace(UCHAR(pos[s - pos - 1])))
+		if (!fb_utils::isspace(pos[s - pos - 1]))
 			buffer.add(' ');	// fix _charset'' becoming invalid syntax _charsetX''
 
 		const FB_SIZE_T count = buffer.getCount();
@@ -1255,7 +1255,7 @@ int Parser::yylexAux()
 
 	// Must be punctuation -- test for double character punctuation
 
-	if (lex.last_token + 1 < lex.end && !isspace(UCHAR(lex.last_token[1])))
+	if (lex.last_token + 1 < lex.end && !fb_utils::isspace(lex.last_token[1]))
 	{
 		const MetaName str(lex.last_token, 2);
 

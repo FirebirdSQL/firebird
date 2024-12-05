@@ -3,8 +3,8 @@
 //  Software License, Version 1.0. (See accompanying file
 //  LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-#ifndef BOOST_MATH_EXTENDED_REAL_HPP
-#define BOOST_MATH_EXTENDED_REAL_HPP
+#ifndef BOOST_MP_NUMBER_HPP
+#define BOOST_MP_NUMBER_HPP
 
 #include <cstdint>
 #include <boost/multiprecision/detail/standalone_config.hpp>
@@ -71,17 +71,20 @@ class number
 #endif
        : m_backend(canonical_value(v))
    {}
-   template <class V>
-   BOOST_MP_FORCEINLINE constexpr number(const V& v, unsigned digits10, 
+   template <class V, class U>
+   BOOST_MP_FORCEINLINE constexpr number(const V& v, U digits10, 
       typename std::enable_if<
       (boost::multiprecision::detail::is_convertible_arithmetic<V, Backend>::value 
          || std::is_same<std::string, V>::value 
          || std::is_convertible<V, const char*>::value) 
       && !detail::is_restricted_conversion<typename detail::canonical<V, Backend>::type, Backend>::value 
       && (boost::multiprecision::number_category<Backend>::value != boost::multiprecision::number_kind_complex) 
-      && (boost::multiprecision::number_category<Backend>::value != boost::multiprecision::number_kind_rational 
-         && std::is_same<self_type, value_type>::value)>::type* = nullptr)
-       : m_backend(canonical_value(v), digits10)
+      && (boost::multiprecision::number_category<Backend>::value != boost::multiprecision::number_kind_rational)
+      && std::is_same<self_type, value_type>::value
+      && std::is_integral<U>::value
+      && (std::numeric_limits<U>::digits <= std::numeric_limits<unsigned>::digits)
+      && std::is_constructible<Backend, typename detail::canonical<V, Backend>::type const&, unsigned>::value>::type* = nullptr)
+       : m_backend(canonical_value(v), static_cast<unsigned>(digits10))
    {}
    //
    // Conversions from unscoped enum's are implicit:
@@ -108,9 +111,10 @@ class number
       : number(static_cast<typename std::underlying_type<V>::type>(v))
    {}
 
-   BOOST_MP_FORCEINLINE constexpr number(const number& e, unsigned digits10)
+   template <class U>
+   BOOST_MP_FORCEINLINE constexpr number(const number& e, U digits10, typename std::enable_if<std::is_constructible<Backend, const Backend&, unsigned>::value && std::is_integral<U>::value && (std::numeric_limits<U>::digits <= std::numeric_limits<unsigned>::digits)>::type* = nullptr)
        noexcept(noexcept(Backend(std::declval<Backend const&>(), std::declval<unsigned>())))
-       : m_backend(e.m_backend, digits10) {}
+       : m_backend(e.m_backend, static_cast<unsigned>(digits10)) {}
    template <class V>
    explicit BOOST_MP_FORCEINLINE BOOST_MP_CXX14_CONSTEXPR number(const V& v, typename std::enable_if<
                                                                                  (boost::multiprecision::detail::is_arithmetic<V>::value || std::is_same<std::string, V>::value || std::is_convertible<V, const char*>::value) && !detail::is_explicitly_convertible<typename detail::canonical<V, Backend>::type, Backend>::value && detail::is_restricted_conversion<typename detail::canonical<V, Backend>::type, Backend>::value>::type* = nullptr)
@@ -319,7 +323,7 @@ class number
    BOOST_MP_CXX14_CONSTEXPR number& assign(const detail::expression<tag, Arg1, Arg2, Arg3, Arg4>& e)
    {
       using tag_type = std::integral_constant<bool, is_equivalent_number_type<number, typename detail::expression<tag, Arg1, Arg2, Arg3, Arg4>::result_type>::value>;
-      detail::scoped_default_precision<number<Backend, ExpressionTemplates> >                                       precision_guard(e);
+
       //
       // If the current precision of *this differs from that of expression e, then we
       // create a temporary (which will have the correct precision thanks to precision_guard)
@@ -332,12 +336,16 @@ class number
       BOOST_IF_CONSTEXPR(std::is_same<self_type, typename detail::expression<tag, Arg1, Arg2, Arg3, Arg4>::result_type>::value)
       {
          BOOST_MP_CONSTEXPR_IF_VARIABLE_PRECISION(number)
-         if (precision_guard.precision() != boost::multiprecision::detail::current_precision_of<self_type>(*this))
+         {
+            const detail::scoped_default_precision<number<Backend, ExpressionTemplates>> precision_guard(e);
+
+            if (precision_guard.precision() != boost::multiprecision::detail::current_precision_of<self_type>(*this))
             {
                number t;
                t.assign(e);
                return *this = std::move(t);
             }
+         }
       }
       do_assign(e, tag_type());
       return *this;
@@ -391,6 +399,7 @@ class number
    {
       number t(v, digits10_or_component);
       boost::multiprecision::detail::scoped_source_precision<self_type> scope;
+      static_cast<void>(scope);
       return *this = t;
    }
    template <class Other, expression_template_option ET>
@@ -712,7 +721,7 @@ class number
       BOOST_MP_CONSTEXPR_IF_VARIABLE_PRECISION(number)
       if (precision_guard.precision() != boost::multiprecision::detail::current_precision_of<self_type>(*this))
          {
-            number t(*this + v);
+            number t(*this * v);
             return *this = std::move(t);
          }
 
@@ -882,7 +891,7 @@ class number
       BOOST_MP_CONSTEXPR_IF_VARIABLE_PRECISION(number)
       if (precision_guard.precision() != boost::multiprecision::detail::current_precision_of<self_type>(*this))
          {
-            number t(*this + v);
+            number t(*this / v);
             return *this = std::move(t);
          }
 
@@ -1112,6 +1121,7 @@ class number
    static BOOST_MP_CXX14_CONSTEXPR void default_variable_precision_options(variable_precision_options opts)
    {
       Backend::default_variable_precision_options(opts);
+      Backend::thread_default_variable_precision_options(opts);
    }
    static BOOST_MP_CXX14_CONSTEXPR void thread_default_variable_precision_options(variable_precision_options opts)
    {
@@ -2165,6 +2175,15 @@ class number
       using child2_type = typename Exp::right_type ;
       return contains_self(e.left(), typename child0_type::arity()) || contains_self(e.middle(), typename child1_type::arity()) || contains_self(e.right(), typename child2_type::arity());
    }
+   template <class Exp>
+   BOOST_MP_FORCEINLINE BOOST_MP_CXX14_CONSTEXPR bool contains_self(const Exp& e, std::integral_constant<int, 4> const&) const noexcept
+   {
+      using child0_type = typename Exp::left_type;
+      using child1_type = typename Exp::left_middle_type;
+      using child2_type = typename Exp::right_middle_type;
+      using child3_type = typename Exp::right_type;
+      return contains_self(e.left(), typename child0_type::arity()) || contains_self(e.left_middle(), typename child1_type::arity()) || contains_self(e.right_middle(), typename child2_type::arity()) || contains_self(e.right(), typename child3_type::arity());
+   }
 
    // Test if the expression is a reference to *this:
    template <class Exp>
@@ -2227,9 +2246,9 @@ inline std::ostream& operator<<(std::ostream& os, const number<Backend, Expressi
    {
       char fill = os.fill();
       if ((os.flags() & std::ios_base::left) == std::ios_base::left)
-         s.append(static_cast<std::string::size_type>(ss - s.size()), fill);
+         s.append(static_cast<std::string::size_type>(ss - static_cast<std::streamsize>(s.size())), fill);
       else
-         s.insert(static_cast<std::string::size_type>(0), static_cast<std::string::size_type>(ss - s.size()), fill);
+         s.insert(static_cast<std::string::size_type>(0), static_cast<std::string::size_type>(ss - static_cast<std::streamsize>(s.size())), fill);
    }
    return os << s;
 }
@@ -2310,8 +2329,23 @@ inline std::istream& operator>>(std::istream& is, number<Backend, ExpressionTemp
       else
          s = detail::read_string_while(is, "+-0123456789");
       break;
+   case boost::multiprecision::number_kind_rational:
+      if (oct_format)
+         s = detail::read_string_while(is, "+-01234567/");
+      else if (hex_format)
+         s = detail::read_string_while(is, "+-xXabcdefABCDEF0123456789/");
+      else
+         s = detail::read_string_while(is, "+-0123456789/");
+      break;
    case boost::multiprecision::number_kind_floating_point:
-      s = detail::read_string_while(is, "+-eE.0123456789infINFnanNANinfinityINFINITY");
+      BOOST_IF_CONSTEXPR(std::is_same<number<Backend, ExpressionTemplates>, typename number<Backend, ExpressionTemplates>::value_type>::value)
+         s = detail::read_string_while(is, "+-eE.0123456789infINFnanNANinfinityINFINITY");
+      else
+         // Interval:
+         s = detail::read_string_while(is, "+-eE.0123456789infINFnanNANinfinityINFINITY{,}");
+      break;
+   case boost::multiprecision::number_kind_complex:
+      s = detail::read_string_while(is, "+-eE.0123456789infINFnanNANinfinityINFINITY,()");
       break;
    default:
       is >> s;

@@ -427,7 +427,7 @@ int alice(Firebird::UtilSvc* uSvc)
 			}
 		}
 
-		if (table->in_sw_value & (sw_attach | sw_force | sw_tran | sw_cache))
+		if (table->in_sw_value & (sw_attach | sw_force | sw_tran))
 		{
 			if (--argc <= 0) {
 				ALICE_error(17);	// msg 17: number of seconds required
@@ -481,7 +481,7 @@ int alice(Firebird::UtilSvc* uSvc)
 
 	// put this here since to put it above overly complicates the parsing.
 	// can't use tbl_requires since it only looks backwards on command line.
-	if ((flags & sw_shut) && !(flags & ((sw_attach | sw_force | sw_tran | sw_cache))))
+	if ((flags & sw_shut) && !(flags & ((sw_attach | sw_force | sw_tran))))
 	{
 		ALICE_error(19);	// msg 19: must specify type of shutdown
 	}

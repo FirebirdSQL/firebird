@@ -256,8 +256,6 @@ static void buildDpb(Firebird::ClumpletWriter& dpb, const SINT64 switches)
 		UCHAR b = 0;
 		if (switches & sw_attach)
 			b |= isc_dpb_shut_attachment;
-		else if (switches & sw_cache)
-			b |= isc_dpb_shut_cache;
 		else if (switches & sw_force)
 			b |= isc_dpb_shut_force;
 		else if (switches & sw_tran)

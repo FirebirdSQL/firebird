@@ -368,7 +368,6 @@ public:
 
 	void resetExtent()
 	{
-		fb_assert(isExtent());
 		hdrLength &= ~MEM_EXTENT;
 	}
 
@@ -393,6 +392,11 @@ public:
 	bool isActive() const
 	{
 		return hdrLength & MEM_ACTIVE;
+	}
+#else
+	bool isActive() const
+	{
+		return true;
 	}
 #endif
 
@@ -2048,6 +2052,8 @@ MemPool::~MemPool(void)
 			}
 			else
 				block->resetActive();
+
+			block->resetExtent();
 #endif
 			parent->releaseBlock(block, false);
 		}
@@ -2269,8 +2275,7 @@ void MemPool::releaseMemory(void* object, bool flagExtent) noexcept
 #ifdef VALIDATE_POOL
 		MutexLockGuard guard(pool->mutex, "MemPool::releaseMemory");
 #endif
-		if (flagExtent)
-			block->resetExtent();
+		fb_assert(block->isExtent() == flagExtent);
 
 #ifdef DELAYED_FREE
 		// Synchronize delayed free queue using pool mutex
@@ -2299,6 +2304,7 @@ void MemPool::releaseMemory(void* object, bool flagExtent) noexcept
 
 		block = pool->delayedFree[pool->delayedFreePos];
 		object = &block->body;
+		flagExtent = block->isExtent();
 
 		// Replace element in circular buffer
 		pool->delayedFree[pool->delayedFreePos] = requested_block;
@@ -2316,6 +2322,7 @@ void MemPool::releaseMemory(void* object, bool flagExtent) noexcept
 #endif
 
 		// Finally delete it
+		block->resetExtent();
 		pool->releaseBlock(block, !flagExtent);
 	}
 }

@@ -66,14 +66,6 @@ public:
 
 		UChar32 (U_EXPORT2* utf8_nextCharSafeBody) (const uint8_t* s, int32_t* pi, int32_t length, UChar32 c, UBool strict);
 
-		void (U_EXPORT2* UCNV_FROM_U_CALLBACK_STOP) (
-                const void *context,
-                UConverterFromUnicodeArgs *fromUArgs,
-                const UChar* codeUnits,
-                int32_t length,
-                UChar32 codePoint,
-                UConverterCallbackReason reason,
-                UErrorCode * err);
 		void (U_EXPORT2* UCNV_TO_U_CALLBACK_STOP) (
                 const void *context,
                 UConverterToUnicodeArgs *toUArgs,

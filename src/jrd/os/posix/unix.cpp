@@ -94,7 +94,7 @@ using namespace Firebird;
 #define SYNC		O_SYNC
 #endif
 
-// Changed to not redfine SYNC if O_SYNC already exists
+// Changed to not redefine SYNC if O_SYNC already exists
 // they seem to be the same values anyway. MOD 13-07-2001
 #if (!(defined SYNC) && (defined O_FSYNC))
 #define SYNC		O_FSYNC

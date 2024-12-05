@@ -1971,6 +1971,7 @@ type
 		const AUTH_SUCCESS = Integer(0);
 		const AUTH_MORE_DATA = Integer(1);
 		const AUTH_CONTINUE = Integer(2);
+		const AUTH_SUCCESS_WITH_DATA = Integer(3);
 
 	end;
 
@@ -4110,6 +4111,7 @@ const
 	isc_tpb_lock_timeout = byte(21);
 	isc_tpb_read_consistency = byte(22);
 	isc_tpb_at_snapshot_number = byte(23);
+	isc_tpb_auto_release_temp_blobid = byte(24);
 	isc_bpb_version1 = byte(1);
 	isc_bpb_source_type = byte(1);
 	isc_bpb_target_type = byte(2);
@@ -4506,6 +4508,15 @@ const
 	fb_info_username = byte(147);
 	fb_info_sqlrole = byte(148);
 	fb_info_parallel_workers = byte(149);
+	fb_info_wire_out_packets = byte(150);
+	fb_info_wire_in_packets = byte(151);
+	fb_info_wire_out_bytes = byte(152);
+	fb_info_wire_in_bytes = byte(153);
+	fb_info_wire_snd_packets = byte(154);
+	fb_info_wire_rcv_packets = byte(155);
+	fb_info_wire_snd_bytes = byte(156);
+	fb_info_wire_rcv_bytes = byte(157);
+	fb_info_wire_roundtrips = byte(158);
 	fb_info_crypt_encrypted = $01;
 	fb_info_crypt_process = $02;
 	fb_feature_multi_statements = byte(1);
@@ -5727,6 +5738,9 @@ const
 	 isc_pattern_cant_be_used_without_other_pattern = 335545302;
 	 isc_pattern_cant_be_used_without_other_pattern_and_vice_versa = 335545303;
 	 isc_incompatible_format_patterns = 335545304;
+	 isc_only_one_pattern_can_be_used = 335545305;
+	 isc_can_not_use_same_pattern_twice = 335545306;
+	 isc_sysf_invalid_gen_uuid_version = 335545307;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;
@@ -9288,7 +9302,7 @@ end;
 function ITracePlugin.trace_dsql_restart(connection: ITraceDatabaseConnection; transaction: ITraceTransaction; statement: ITraceSQLStatement; number: Cardinal): Boolean;
 begin
 	if (vTable.version < 4) then begin
-		Result := false;
+		Result := true;
 	end
 	else begin
 		Result := TracePluginVTable(vTable).trace_dsql_restart(Self, connection, transaction, statement, number);
@@ -9298,7 +9312,7 @@ end;
 function ITracePlugin.trace_proc_compile(connection: ITraceDatabaseConnection; procedure_: ITraceProcedure; time_millis: Int64; proc_result: Cardinal): Boolean;
 begin
 	if (vTable.version < 5) then begin
-		Result := false;
+		Result := true;
 	end
 	else begin
 		Result := TracePluginVTable(vTable).trace_proc_compile(Self, connection, procedure_, time_millis, proc_result);
@@ -9308,7 +9322,7 @@ end;
 function ITracePlugin.trace_func_compile(connection: ITraceDatabaseConnection; function_: ITraceFunction; time_millis: Int64; func_result: Cardinal): Boolean;
 begin
 	if (vTable.version < 5) then begin
-		Result := false;
+		Result := true;
 	end
 	else begin
 		Result := TracePluginVTable(vTable).trace_func_compile(Self, connection, function_, time_millis, func_result);
@@ -9318,7 +9332,7 @@ end;
 function ITracePlugin.trace_trigger_compile(connection: ITraceDatabaseConnection; trigger: ITraceTrigger; time_millis: Int64; trig_result: Cardinal): Boolean;
 begin
 	if (vTable.version < 5) then begin
-		Result := false;
+		Result := true;
 	end
 	else begin
 		Result := TracePluginVTable(vTable).trace_trigger_compile(Self, connection, trigger, time_millis, trig_result);

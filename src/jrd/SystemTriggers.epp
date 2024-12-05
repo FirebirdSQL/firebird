@@ -1,0 +1,1382 @@
+/*
+ *  The contents of this file are subject to the Initial
+ *  Developer's Public License Version 1.0 (the "License");
+ *  you may not use this file except in compliance with the
+ *  License. You may obtain a copy of the License at
+ *  http://www.ibphoenix.com/main.nfs?a=ibphoenix&page=ibp_idpl.
+ *
+ *  Software distributed under the License is distributed AS IS,
+ *  WITHOUT WARRANTY OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing rights
+ *  and limitations under the License.
+ *
+ *  The Original Code was created by Adriano dos Santos Fernandes
+ *  for the Firebird Open Source RDBMS project.
+ *
+ *  Copyright (c) 2024 Adriano dos Santos Fernandes <adrianosf@gmail.com>
+ *  and all contributors signed below.
+ *
+ *  All Rights Reserved.
+ *  Contributor(s): ______________________________________.
+ */
+
+#include "firebird.h"
+#include <optional>
+#include "firebird/Interface.h"
+#include "../jrd/SystemTriggers.h"
+#include "../jrd/constants.h"
+#include "../jrd/ids.h"
+#include "../jrd/ini.h"
+#include "../jrd/req.h"
+#include "../jrd/dpm_proto.h"
+#include "../jrd/err_proto.h"
+#include "../jrd/exe_proto.h"
+#include "../jrd/evl_proto.h"
+#include "../jrd/met_proto.h"
+#include "../jrd/mov_proto.h"
+
+
+DATABASE DB = FILENAME "ODS.RDB";
+
+using namespace Firebird;
+using namespace Jrd;
+
+
+namespace
+{
+
+void beforeDeleteCheckConstraint(thread_db* tdbb, Record* record)
+{
+	const auto transaction = tdbb->getTransaction();
+
+	dsc descConstraintName;
+	MetaName constraintName;
+	if (EVL_field(nullptr, record, f_ccon_cname, &descConstraintName))
+		MOV_get_metaname(tdbb, &descConstraintName, constraintName);
+
+	static const CachedRequestId requestCacheId;
+	AutoCacheRequest request(tdbb, requestCacheId);
+
+	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		RLC IN RDB$RELATION_CONSTRAINTS
+		WITH RLC.RDB$CONSTRAINT_NAME EQ constraintName.c_str()
+	{
+		ERR_post(Arg::Gds(isc_check_cnstrnt_del));
+	}
+	END_FOR
+}
+
+void afterDeleteCheckConstraint(thread_db* tdbb, Record* record)
+{
+	const auto transaction = tdbb->getTransaction();
+	dsc desc;
+
+	MetaName constraintName;
+	if (EVL_field(nullptr, record, f_ccon_cname, &desc))
+		MOV_get_metaname(tdbb, &desc, constraintName);
+
+	MetaName triggerName;
+	if (EVL_field(nullptr, record, f_ccon_tname, &desc))
+		MOV_get_metaname(tdbb, &desc, triggerName);
+
+	static const CachedRequestId request1CacheId;
+	AutoCacheRequest request1(tdbb, request1CacheId);
+
+	FOR (REQUEST_HANDLE request1 TRANSACTION_HANDLE transaction)
+		TRG IN RDB$TRIGGERS
+		CROSS RLC IN RDB$RELATION_CONSTRAINTS
+		WITH RLC.RDB$CONSTRAINT_NAME = constraintName.c_str() AND
+			 RLC.RDB$CONSTRAINT_TYPE = FOREIGN_KEY AND
+			 TRG.RDB$TRIGGER_NAME = triggerName.c_str()
+	{
+		ERASE TRG;
+	}
+	END_FOR
+
+	static const CachedRequestId request2CacheId;
+	AutoCacheRequest request2(tdbb, request2CacheId);
+
+	FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
+		RFR IN RDB$RELATION_FIELDS
+		CROSS RLC IN RDB$RELATION_CONSTRAINTS
+		WITH RFR.RDB$FIELD_NAME = triggerName.c_str() AND
+			 RLC.RDB$CONSTRAINT_NAME = constraintName.c_str() AND
+			 RLC.RDB$RELATION_NAME = RFR.RDB$RELATION_NAME AND
+			 RLC.RDB$CONSTRAINT_TYPE = NOT_NULL_CNSTRT
+	{
+		MODIFY RFR
+			RFR.RDB$NULL_FLAG = 0;
+		END_MODIFY
+	}
+	END_FOR
+
+	static const CachedRequestId request3CacheId;
+	AutoCacheRequest request3(tdbb, request3CacheId);
+
+	FOR (REQUEST_HANDLE request3 TRANSACTION_HANDLE transaction)
+		TRG IN RDB$TRIGGERS
+		CROSS RLC IN RDB$RELATION_CONSTRAINTS
+		WITH RLC.RDB$CONSTRAINT_NAME = constraintName.c_str() AND
+			 RLC.RDB$CONSTRAINT_TYPE = CHECK_CNSTRT AND
+			 TRG.RDB$RELATION_NAME = RLC.RDB$RELATION_NAME AND
+			 TRG.RDB$TRIGGER_NAME = triggerName.c_str()
+	{
+		ERASE TRG;
+	}
+	END_FOR
+}
+
+void beforeUpdateCheckConstraint(thread_db* tdbb, Record* orgRecord, Record* newRecord)
+{
+	const auto transaction = tdbb->getTransaction();
+
+	dsc descConstraintName;
+	MetaName constraintName;
+	if (EVL_field(nullptr, orgRecord, f_ccon_cname, &descConstraintName))
+		MOV_get_metaname(tdbb, &descConstraintName, constraintName);
+
+	static const CachedRequestId requestCacheId;
+	AutoCacheRequest request(tdbb, requestCacheId);
+
+	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		RLC IN RDB$RELATION_CONSTRAINTS
+		WITH RLC.RDB$CONSTRAINT_TYPE != NOT_NULL_CNSTRT AND
+			 RLC.RDB$CONSTRAINT_NAME EQ constraintName.c_str()
+	{
+		ERR_post(Arg::Gds(isc_check_cnstrnt_update));
+	}
+	END_FOR
+}
+
+void beforeDeleteIndex(thread_db* tdbb, Record* record)
+{
+	const auto transaction = tdbb->getTransaction();
+
+	dsc descIndexName;
+	MetaName indexName;
+	if (EVL_field(nullptr, record, f_idx_name, &descIndexName))
+		MOV_get_metaname(tdbb, &descIndexName, indexName);
+
+	static const CachedRequestId requestCacheId;
+	AutoCacheRequest request(tdbb, requestCacheId);
+
+	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		RLC IN RDB$RELATION_CONSTRAINTS
+		WITH RLC.RDB$INDEX_NAME EQ indexName.c_str()
+	{
+		ERR_post(Arg::Gds(isc_integ_index_del));
+	}
+	END_FOR
+}
+
+void beforeUpdateIndex(thread_db* tdbb, Record* orgRecord, Record* newRecord)
+{
+	const auto transaction = tdbb->getTransaction();
+
+	dsc descOldIndexName;
+	MetaName oldIndexName;
+	if (EVL_field(nullptr, orgRecord, f_idx_name, &descOldIndexName))
+		MOV_get_metaname(tdbb, &descOldIndexName, oldIndexName);
+
+	static const CachedRequestId request1CacheId;
+	AutoCacheRequest request1(tdbb, request1CacheId);
+
+	FOR (REQUEST_HANDLE request1 TRANSACTION_HANDLE transaction)
+		RLC IN RDB$RELATION_CONSTRAINTS
+		WITH RLC.RDB$INDEX_NAME EQ oldIndexName.c_str()
+	{
+		dsc descNewIndexName;
+		MetaName newIndexName;
+		dsc descOldRelationName, descNewRelationName;
+		MetaName oldRelationName, newRelationName;
+		dsc descOldIndexId, descNewIndexId;
+		SLONG oldIndexId, newIndexId;
+		dsc descOldSegmentCount, descNewSegmentCount;
+		SLONG oldSegmentCount, newSegmentCount;
+		dsc descOldForeignKey, descNewForeignKey;
+		MetaName oldForeignKey, newForeignKey;
+
+		if (EVL_field(nullptr, newRecord, f_idx_name, &descNewIndexName) &&
+			EVL_field(nullptr, orgRecord, f_idx_relation, &descOldRelationName) &&
+			EVL_field(nullptr, newRecord, f_idx_relation, &descNewRelationName) &&
+			EVL_field(nullptr, orgRecord, f_idx_id, &descOldIndexId) &&
+			EVL_field(nullptr, newRecord, f_idx_id, &descNewIndexId) &&
+			EVL_field(nullptr, orgRecord, f_idx_count, &descOldSegmentCount) &&
+			EVL_field(nullptr, newRecord, f_idx_count, &descNewSegmentCount) &&
+			EVL_field(nullptr, orgRecord, f_idx_foreign, &descOldForeignKey) &&
+			EVL_field(nullptr, newRecord, f_idx_foreign, &descNewForeignKey))
+		{
+			MOV_get_metaname(tdbb, &descNewIndexName, newIndexName);
+			MOV_get_metaname(tdbb, &descOldRelationName, oldRelationName);
+			MOV_get_metaname(tdbb, &descNewRelationName, newRelationName);
+			oldIndexId = MOV_get_long(tdbb, &descOldIndexId, 0);
+			newIndexId = MOV_get_long(tdbb, &descNewIndexId, 0);
+			oldSegmentCount = MOV_get_long(tdbb, &descOldSegmentCount, 0);
+			newSegmentCount = MOV_get_long(tdbb, &descNewSegmentCount, 0);
+			MOV_get_metaname(tdbb, &descOldForeignKey, oldForeignKey);
+			MOV_get_metaname(tdbb, &descNewForeignKey, newForeignKey);
+
+			if (oldIndexName != newIndexName ||
+				oldRelationName != newRelationName ||
+				oldIndexId != newIndexId ||
+				oldSegmentCount != newSegmentCount ||
+				oldForeignKey != newForeignKey)
+			{
+				ERR_post(Arg::Gds(isc_integ_index_mod));
+			}
+		}
+	}
+	END_FOR
+
+	dsc descOldIndexInactive, descNewIndexInactive;
+
+	if (EVL_field(nullptr, newRecord, f_idx_inactive, &descNewIndexInactive) &&
+		MOV_get_long(tdbb, &descNewIndexInactive, 0) == 1 &&
+		(!EVL_field(nullptr, orgRecord, f_idx_inactive, &descOldIndexInactive) ||
+			MOV_get_long(tdbb, &descOldIndexInactive, 0) == 0))
+	{
+		static const CachedRequestId request2CacheId;
+		AutoCacheRequest request2(tdbb, request2CacheId);
+
+		FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
+			RCL IN RDB$RELATION_CONSTRAINTS
+			CROSS IND1 IN RDB$INDICES
+			CROSS IND2 IN RDB$INDICES
+			WITH RCL.RDB$INDEX_NAME = oldIndexName.c_str() AND
+				 IND1.RDB$INDEX_NAME = RCL.RDB$INDEX_NAME AND
+				 IND2.RDB$FOREIGN_KEY = RCL.RDB$INDEX_NAME
+		{
+			ERR_post(Arg::Gds(isc_integ_index_deactivate));
+		}
+		END_FOR
+
+		static const CachedRequestId request3CacheId;
+		AutoCacheRequest request3(tdbb, request3CacheId);
+
+		FOR (REQUEST_HANDLE request3 TRANSACTION_HANDLE transaction)
+			RCL IN RDB$RELATION_CONSTRAINTS
+			WITH RCL.RDB$INDEX_NAME = oldIndexName.c_str() AND
+				 (RCL.RDB$CONSTRAINT_TYPE = PRIMARY_KEY OR
+				  RCL.RDB$CONSTRAINT_TYPE = UNIQUE_CNSTRT OR
+				  RCL.RDB$CONSTRAINT_TYPE = FOREIGN_KEY)
+		{
+			fb_utils::exact_name_limit(RCL.RDB$CONSTRAINT_TYPE, sizeof(RCL.RDB$CONSTRAINT_TYPE));
+
+			if (strcmp(RCL.RDB$CONSTRAINT_TYPE, FOREIGN_KEY) == 0)
+				ERR_post(Arg::Gds(isc_integ_index_deactivate));
+			else
+				ERR_post(Arg::Gds(isc_integ_deactivate_primary));
+		}
+		END_FOR
+	}
+}
+
+void beforeDeleteIndexSegment(thread_db* tdbb, Record* record)
+{
+	const auto transaction = tdbb->getTransaction();
+
+	dsc descIndexName;
+	MetaName indexName;
+	if (EVL_field(nullptr, record, f_seg_name, &descIndexName))
+		MOV_get_metaname(tdbb, &descIndexName, indexName);
+
+	static const CachedRequestId requestCacheId;
+	AutoCacheRequest request(tdbb, requestCacheId);
+
+	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		RLC IN RDB$RELATION_CONSTRAINTS
+		WITH RLC.RDB$INDEX_NAME EQ indexName.c_str()
+	{
+		ERR_post(Arg::Gds(isc_integ_index_seg_del));
+	}
+	END_FOR
+}
+
+void beforeUpdateIndexSegment(thread_db* tdbb, Record* orgRecord, Record* newRecord)
+{
+	const auto transaction = tdbb->getTransaction();
+
+	dsc descOldIndexName;
+	MetaName oldIndexName;
+	if (EVL_field(nullptr, orgRecord, f_seg_name, &descOldIndexName))
+		MOV_get_metaname(tdbb, &descOldIndexName, oldIndexName);
+
+	static const CachedRequestId requestCacheId;
+	AutoCacheRequest request(tdbb, requestCacheId);
+
+	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		RLC IN RDB$RELATION_CONSTRAINTS
+		WITH RLC.RDB$INDEX_NAME EQ oldIndexName.c_str()
+	{
+		dsc descNewIndexName;
+		MetaName newIndexName;
+		dsc descOldFieldName, descNewFieldName;
+		MetaName oldFieldName, newFieldName;
+		dsc descOldFieldPosition, descNewFieldPosition;
+		SLONG oldFieldPosition, newFieldPosition;
+
+		if (EVL_field(nullptr, newRecord, f_seg_name, &descNewIndexName) &&
+			EVL_field(nullptr, orgRecord, f_seg_field, &descOldFieldName) &&
+			EVL_field(nullptr, newRecord, f_seg_field, &descNewFieldName) &&
+			EVL_field(nullptr, orgRecord, f_seg_position, &descOldFieldPosition) &&
+			EVL_field(nullptr, newRecord, f_seg_position, &descNewFieldPosition))
+		{
+			MOV_get_metaname(tdbb, &descNewIndexName, newIndexName);
+			MOV_get_metaname(tdbb, &descOldFieldName, oldFieldName);
+			MOV_get_metaname(tdbb, &descNewFieldName, newFieldName);
+			oldFieldPosition = MOV_get_long(tdbb, &descOldFieldPosition, 0);
+			newFieldPosition = MOV_get_long(tdbb, &descNewFieldPosition, 0);
+
+			if (oldIndexName != newIndexName ||
+				oldFieldName != newFieldName ||
+				oldFieldPosition != newFieldPosition)
+			{
+				ERR_post(Arg::Gds(isc_integ_index_seg_mod));
+			}
+		}
+	}
+	END_FOR
+}
+
+void beforeUpdateField(thread_db* tdbb, Record* orgRecord, Record* newRecord)
+{
+	const auto transaction = tdbb->getTransaction();
+
+	dsc descFieldName;
+	MetaName fieldName;
+	if (!EVL_field(nullptr, orgRecord, f_fld_name, &descFieldName))
+		return;
+	MOV_get_metaname(tdbb, &descFieldName, fieldName);
+
+	dsc descOldFieldLength, descNewFieldLength;
+	SLONG oldFieldLength, newFieldLength;
+	dsc descOldFieldType, descNewFieldType;
+	SLONG oldFieldType, newFieldType;
+	dsc descOldCollationId, descNewCollationId;
+	SLONG oldCollationId, newCollationId;
+	dsc descOldCharSetId, descNewCharSetId;
+	SLONG oldCharSetId, newCharSetId;
+
+	if (EVL_field(nullptr, orgRecord, f_fld_length, &descOldFieldLength) &&
+		EVL_field(nullptr, newRecord, f_fld_length, &descNewFieldLength) &&
+		EVL_field(nullptr, orgRecord, f_fld_type, &descOldFieldType) &&
+		EVL_field(nullptr, newRecord, f_fld_type, &descNewFieldType) &&
+		EVL_field(nullptr, orgRecord, f_fld_coll_id, &descOldCollationId) &&
+		EVL_field(nullptr, newRecord, f_fld_coll_id, &descNewCollationId) &&
+		EVL_field(nullptr, orgRecord, f_fld_charset_id, &descOldCharSetId) &&
+		EVL_field(nullptr, newRecord, f_fld_charset_id, &descNewCharSetId))
+	{
+		oldFieldLength = MOV_get_long(tdbb, &descOldFieldLength, 0);
+		newFieldLength = MOV_get_long(tdbb, &descNewFieldLength, 0);
+		oldFieldType = MOV_get_long(tdbb, &descOldFieldType, 0);
+		newFieldType = MOV_get_long(tdbb, &descNewFieldType, 0);
+		oldCollationId = MOV_get_long(tdbb, &descOldCollationId, 0);
+		newCollationId = MOV_get_long(tdbb, &descNewCollationId, 0);
+		oldCharSetId = MOV_get_long(tdbb, &descOldCharSetId, 0);
+		newCharSetId = MOV_get_long(tdbb, &descNewCharSetId, 0);
+
+		if (oldFieldLength != newFieldLength ||
+			oldFieldType != newFieldType ||
+			oldCollationId != newCollationId ||
+			oldCharSetId != newCharSetId)
+		{
+			static const CachedRequestId requestCacheId;
+			AutoCacheRequest request(tdbb, requestCacheId);
+
+			FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+				RFL IN RDB$RELATION_FIELDS
+				CROSS IND IN RDB$INDICES
+				CROSS RLC IN RDB$RELATION_CONSTRAINTS
+				CROSS IDS IN RDB$INDEX_SEGMENTS
+				WITH RFL.RDB$FIELD_SOURCE = fieldName.c_str() AND
+					 IND.RDB$RELATION_NAME = RFL.RDB$RELATION_NAME AND
+					 IDS.RDB$INDEX_NAME = IND.RDB$INDEX_NAME AND
+					 IDS.RDB$FIELD_NAME = RFL.RDB$FIELD_NAME AND
+					 RLC.RDB$INDEX_NAME = IND.RDB$INDEX_NAME
+			{
+				ERR_post(Arg::Gds(isc_integ_index_seg_mod));
+			}
+			END_FOR
+		}
+	}
+}
+
+void beforeInsertRefConstraint(thread_db* tdbb, Record* record)
+{
+	const auto transaction = tdbb->getTransaction();
+
+	dsc descConstraintName;
+	MetaName constraintName;
+	if (EVL_field(nullptr, record, f_refc_cname, &descConstraintName))
+		MOV_get_metaname(tdbb, &descConstraintName, constraintName);
+
+	static const CachedRequestId request1CacheId;
+	AutoCacheRequest request1(tdbb, request1CacheId);
+	bool fkFound = false;
+
+	FOR (REQUEST_HANDLE request1 TRANSACTION_HANDLE transaction)
+		RLC IN RDB$RELATION_CONSTRAINTS
+		WITH RLC.RDB$CONSTRAINT_TYPE = FOREIGN_KEY AND
+			 RLC.RDB$CONSTRAINT_NAME EQ constraintName.c_str()
+	{
+		fkFound = true;
+	}
+	END_FOR
+
+	if (!fkFound)
+		ERR_post(Arg::Gds(isc_ref_cnstrnt_notfound));
+
+	dsc descConstraintNameUq;
+	MetaName constraintNameUq;
+	if (EVL_field(nullptr, record, f_refc_uq, &descConstraintNameUq))
+		MOV_get_metaname(tdbb, &descConstraintNameUq, constraintNameUq);
+
+	static const CachedRequestId request2CacheId;
+	AutoCacheRequest request2(tdbb, request2CacheId);
+	bool pkUniqueFound = false;
+
+	FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
+		RLC IN RDB$RELATION_CONSTRAINTS
+		WITH (RLC.RDB$CONSTRAINT_TYPE = PRIMARY_KEY OR RLC.RDB$CONSTRAINT_TYPE = UNIQUE_CNSTRT) AND
+			 RLC.RDB$CONSTRAINT_NAME EQ constraintNameUq.c_str()
+	{
+		pkUniqueFound = true;
+	}
+	END_FOR
+
+	if (!pkUniqueFound)
+		ERR_post(Arg::Gds(isc_foreign_key_notfound));
+}
+
+void beforeDeleteRelationConstraint(thread_db* tdbb, Record* record)
+{
+	const auto transaction = tdbb->getTransaction();
+	dsc desc;
+
+	MetaName constraintName;
+	if (EVL_field(nullptr, record, f_rcon_cname, &desc))
+		MOV_get_metaname(tdbb, &desc, constraintName);
+
+	string constraintType;
+	if (EVL_field(nullptr, record, f_rcon_ctype, &desc))
+	{
+		MOV_get_string(tdbb, &desc, constraintType);
+		constraintType.rtrim();
+	}
+
+	if (constraintType == PRIMARY_KEY || constraintType == UNIQUE_CNSTRT)
+	{
+		static const CachedRequestId requestCacheId;
+		AutoCacheRequest request(tdbb, requestCacheId);
+
+		FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			REF IN RDB$REF_CONSTRAINTS
+			WITH REF.RDB$CONST_NAME_UQ = constraintName.c_str()
+		{
+			ERR_post(Arg::Gds(isc_primary_key_ref));
+		}
+		END_FOR
+	}
+	else if (constraintType == FOREIGN_KEY)
+	{
+		static const CachedRequestId requestCacheId;
+		AutoCacheRequest request(tdbb, requestCacheId);
+
+		FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			REF IN RDB$REF_CONSTRAINTS
+			WITH REF.RDB$CONSTRAINT_NAME = constraintName.c_str()
+		{
+			ERASE REF;
+		}
+		END_FOR
+	}
+	else if (constraintType == NOT_NULL_CNSTRT)
+	{
+		MetaName relationName;
+		if (EVL_field(nullptr, record, f_rcon_rname, &desc))
+			MOV_get_metaname(tdbb, &desc, relationName);
+
+		static const CachedRequestId request1CacheId;
+		AutoCacheRequest request1(tdbb, request1CacheId);
+
+		FOR (REQUEST_HANDLE request1 TRANSACTION_HANDLE transaction)
+			CHK IN RDB$CHECK_CONSTRAINTS
+			CROSS RFL IN RDB$RELATION_FIELDS
+			CROSS FLD IN RDB$FIELDS
+			CROSS IND IN RDB$INDICES
+			CROSS IDS IN RDB$INDEX_SEGMENTS
+			WITH CHK.RDB$CONSTRAINT_NAME = constraintName.c_str() AND
+				 RFL.RDB$RELATION_NAME = relationName.c_str() AND
+				 RFL.RDB$FIELD_NAME = CHK.RDB$TRIGGER_NAME AND
+				 IND.RDB$RELATION_NAME = relationName.c_str() AND
+				 IDS.RDB$INDEX_NAME = IND.RDB$INDEX_NAME AND
+				 IDS.RDB$FIELD_NAME = RFL.RDB$FIELD_NAME AND
+				 FLD.RDB$FIELD_NAME = RFL.RDB$FIELD_SOURCE AND
+				 (FLD.RDB$NULL_FLAG MISSING OR FLD.RDB$NULL_FLAG = 0)
+		{
+			static const CachedRequestId request2CacheId;
+			AutoCacheRequest request2(tdbb, request2CacheId);
+
+			FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
+				RCL IN RDB$RELATION_CONSTRAINTS
+				WITH RCL.RDB$INDEX_NAME = IND.RDB$INDEX_NAME AND
+					 RCL.RDB$CONSTRAINT_TYPE = PRIMARY_KEY
+			{
+				ERR_post(Arg::Gds(isc_primary_key_notnull));
+			}
+			END_FOR
+		}
+		END_FOR
+	}
+}
+
+void afterDeleteRelationConstraint(thread_db* tdbb, Record* record)
+{
+	const auto transaction = tdbb->getTransaction();
+	dsc desc;
+
+	string constraintType;
+	if (EVL_field(nullptr, record, f_rcon_ctype, &desc))
+	{
+		MOV_get_string(tdbb, &desc, constraintType);
+		constraintType.rtrim();
+	}
+
+	MetaName constraintName;
+	if (EVL_field(nullptr, record, f_rcon_cname, &desc))
+		MOV_get_metaname(tdbb, &desc, constraintName);
+
+	MetaName relationName;
+	if (EVL_field(nullptr, record, f_rcon_rname, &desc))
+		MOV_get_metaname(tdbb, &desc, relationName);
+
+	MetaName indexName;
+	if (EVL_field(nullptr, record, f_rcon_iname, &desc))
+		MOV_get_metaname(tdbb, &desc, indexName);
+
+	if (constraintType == FOREIGN_KEY)
+	{
+		static const CachedRequestId request1CacheId;
+		AutoCacheRequest request1(tdbb, request1CacheId);
+
+		FOR (REQUEST_HANDLE request1 TRANSACTION_HANDLE transaction)
+			CHK IN RDB$CHECK_CONSTRAINTS
+			WITH CHK.RDB$CONSTRAINT_NAME = constraintName.c_str()
+		{
+			ERASE CHK;
+
+			static const CachedRequestId request2CacheId;
+			AutoCacheRequest request2(tdbb, request2CacheId);
+
+			FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
+				TRG IN RDB$TRIGGERS
+				WITH TRG.RDB$TRIGGER_NAME = CHK.RDB$TRIGGER_NAME
+			{
+				ERASE TRG;
+			}
+			END_FOR
+		}
+		END_FOR
+	}
+
+	if (constraintType == FOREIGN_KEY || constraintType == PRIMARY_KEY || constraintType == UNIQUE_CNSTRT)
+	{
+		static const CachedRequestId request3CacheId;
+		AutoCacheRequest request3(tdbb, request3CacheId);
+
+		FOR (REQUEST_HANDLE request3 TRANSACTION_HANDLE transaction)
+			IND IN RDB$INDICES
+			WITH IND.RDB$INDEX_NAME = indexName.c_str()
+		{
+			ERASE IND;
+
+			static const CachedRequestId request4CacheId;
+			AutoCacheRequest request4(tdbb, request4CacheId);
+
+			FOR (REQUEST_HANDLE request4 TRANSACTION_HANDLE transaction)
+				IDS IN RDB$INDEX_SEGMENTS
+				WITH IDS.RDB$INDEX_NAME = IND.RDB$INDEX_NAME
+			{
+				ERASE IDS;
+			}
+			END_FOR
+		}
+		END_FOR
+	}
+
+	if (constraintType == NOT_NULL_CNSTRT)
+	{
+		static const CachedRequestId request5CacheId;
+		AutoCacheRequest request5(tdbb, request5CacheId);
+
+		FOR (REQUEST_HANDLE request5 TRANSACTION_HANDLE transaction)
+			CHK IN RDB$CHECK_CONSTRAINTS
+			CROSS RFL IN RDB$RELATION_FIELDS
+			WITH CHK.RDB$CONSTRAINT_NAME = constraintName.c_str() AND
+				 RFL.RDB$RELATION_NAME = relationName.c_str() AND
+				 RFL.RDB$FIELD_NAME = CHK.RDB$TRIGGER_NAME
+		{
+			ERASE CHK;
+
+			MODIFY RFL
+			{
+				RFL.RDB$NULL_FLAG = 0;
+			}
+			END_MODIFY
+		}
+		END_FOR
+	}
+
+	if (constraintType == CHECK_CNSTRT)
+	{
+		static const CachedRequestId request6CacheId;
+		AutoCacheRequest request6(tdbb, request6CacheId);
+
+		FOR (REQUEST_HANDLE request6 TRANSACTION_HANDLE transaction)
+			CHK IN RDB$CHECK_CONSTRAINTS
+			WITH CHK.RDB$CONSTRAINT_NAME = constraintName.c_str()
+		{
+			ERASE CHK;
+
+			static const CachedRequestId request7CacheId;
+			AutoCacheRequest request7(tdbb, request7CacheId);
+
+			FOR (REQUEST_HANDLE request7 TRANSACTION_HANDLE transaction)
+				TRG IN RDB$TRIGGERS
+				WITH TRG.RDB$TRIGGER_NAME = CHK.RDB$TRIGGER_NAME AND
+					 TRG.RDB$RELATION_NAME = relationName.c_str()
+			{
+				ERASE TRG;
+			}
+			END_FOR
+		}
+		END_FOR
+	}
+}
+
+void beforeInsertRelationConstraint(thread_db* tdbb, Record* record)
+{
+	const auto transaction = tdbb->getTransaction();
+	dsc desc;
+
+	MetaName relationName;
+	if (EVL_field(nullptr, record, f_rcon_rname, &desc))
+		MOV_get_metaname(tdbb, &desc, relationName);
+
+	string constraintType;
+	if (EVL_field(nullptr, record, f_rcon_ctype, &desc))
+	{
+		MOV_get_string(tdbb, &desc, constraintType);
+		constraintType.rtrim();
+	}
+
+	static const CachedRequestId request1CacheId;
+	AutoCacheRequest request1(tdbb, request1CacheId);
+
+	FOR (REQUEST_HANDLE request1 TRANSACTION_HANDLE transaction)
+		REL IN RDB$RELATIONS
+		WITH REL.RDB$RELATION_NAME EQ relationName.c_str() AND
+			 REL.RDB$VIEW_SOURCE NOT MISSING
+	{
+		ERR_post(Arg::Gds(isc_constaint_on_view));
+	}
+	END_FOR
+
+	if (constraintType == PRIMARY_KEY)
+	{
+		static const CachedRequestId request2CacheId;
+		AutoCacheRequest request2(tdbb, request2CacheId);
+
+		FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
+			RLC IN RDB$RELATION_CONSTRAINTS
+			WITH RLC.RDB$RELATION_NAME EQ relationName.c_str() AND
+				 RLC.RDB$CONSTRAINT_TYPE = PRIMARY_KEY
+		{
+			ERR_post(Arg::Gds(isc_primary_key_exists));
+		}
+		END_FOR
+	}
+}
+
+void beforeDeleteRelationField(thread_db* tdbb, Record* record)
+{
+	const auto transaction = tdbb->getTransaction();
+	dsc desc;
+
+	MetaName relationName;
+	if (!EVL_field(nullptr, record, f_rfr_rname, &desc))
+		return;
+	MOV_get_metaname(tdbb, &desc, relationName);
+
+	MetaName fieldName;
+	if (!EVL_field(nullptr, record, f_rfr_fname, &desc))
+		return;
+	MOV_get_metaname(tdbb, &desc, fieldName);
+
+	static const CachedRequestId request1CacheId;
+	AutoCacheRequest request1(tdbb, request1CacheId);
+
+	FOR (REQUEST_HANDLE request1 TRANSACTION_HANDLE transaction)
+		IND IN RDB$INDICES
+		CROSS RCL IN RDB$RELATION_CONSTRAINTS
+		CROSS IDS IN RDB$INDEX_SEGMENTS
+		WITH IND.RDB$RELATION_NAME = relationName.c_str() AND
+			 IDS.RDB$INDEX_NAME = IND.RDB$INDEX_NAME AND
+			 RCL.RDB$INDEX_NAME = IND.RDB$INDEX_NAME AND
+			 IDS.RDB$FIELD_NAME = fieldName.c_str()
+	{
+		static const CachedRequestId request2CacheId;
+		AutoCacheRequest request2(tdbb, request2CacheId);
+
+		FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
+			IDS2 IN RDB$INDEX_SEGMENTS
+			WITH IDS2.RDB$INDEX_NAME = IND.RDB$INDEX_NAME AND
+				 IDS2.RDB$FIELD_NAME != fieldName.c_str()
+		{
+			ERR_post(Arg::Gds(isc_cnstrnt_fld_del));
+		}
+		END_FOR
+
+		ERASE RCL;
+	}
+	END_FOR
+
+	static const CachedRequestId request3CacheId;
+	AutoCacheRequest request3(tdbb, request3CacheId);
+
+	FOR (REQUEST_HANDLE request3 TRANSACTION_HANDLE transaction)
+		RCL IN RDB$RELATION_CONSTRAINTS
+		CROSS CHK IN RDB$CHECK_CONSTRAINTS
+		CROSS DEP IN RDB$DEPENDENCIES
+		WITH RCL.RDB$RELATION_NAME = relationName.c_str() AND
+			 RCL.RDB$CONSTRAINT_TYPE = CHECK_CNSTRT AND
+			 DEP.RDB$DEPENDED_ON_NAME = relationName.c_str() AND
+			 DEP.RDB$FIELD_NAME = fieldName.c_str() AND
+			 DEP.RDB$DEPENDENT_TYPE = obj_trigger AND
+			 DEP.RDB$DEPENDED_ON_TYPE = obj_relation AND
+			 CHK.RDB$TRIGGER_NAME = DEP.RDB$DEPENDENT_NAME
+	{
+		static const CachedRequestId request4CacheId;
+		AutoCacheRequest request4(tdbb, request4CacheId);
+
+		FOR (REQUEST_HANDLE request4 TRANSACTION_HANDLE transaction)
+			DEP4 IN RDB$DEPENDENCIES
+			WITH DEP4.RDB$DEPENDENT_NAME = CHK.RDB$TRIGGER_NAME AND
+				 DEP4.RDB$DEPENDENT_TYPE = obj_trigger AND
+				 DEP4.RDB$DEPENDED_ON_TYPE = obj_relation AND
+				 DEP4.RDB$DEPENDED_ON_NAME = relationName.c_str() AND
+				 DEP4.RDB$FIELD_NAME != fieldName.c_str()
+		{
+			ERR_post(Arg::Gds(isc_cnstrnt_fld_del));
+		}
+		END_FOR
+
+		ERASE RCL;
+	}
+	END_FOR
+}
+
+void afterDeleteRelationField(thread_db* tdbb, Record* record)
+{
+	const auto transaction = tdbb->getTransaction();
+	dsc desc;
+
+	MetaName relationName;
+	if (!EVL_field(nullptr, record, f_rfr_rname, &desc))
+		return;
+	MOV_get_metaname(tdbb, &desc, relationName);
+
+	MetaName fieldName;
+	if (!EVL_field(nullptr, record, f_rfr_fname, &desc))
+		return;
+	MOV_get_metaname(tdbb, &desc, fieldName);
+
+	static const CachedRequestId requestCacheId;
+	AutoCacheRequest request(tdbb, requestCacheId);
+
+	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		CHK IN RDB$CHECK_CONSTRAINTS
+		CROSS RCL IN RDB$RELATION_CONSTRAINTS
+		WITH CHK.RDB$TRIGGER_NAME EQ fieldName.c_str() AND
+			 RCL.RDB$CONSTRAINT_NAME EQ CHK.RDB$CONSTRAINT_NAME AND
+			 RCL.RDB$RELATION_NAME = relationName.c_str() AND
+			 RCL.RDB$CONSTRAINT_TYPE = NOT_NULL_CNSTRT
+	{
+		ERASE RCL;
+		ERASE CHK;
+	}
+	END_FOR
+}
+
+void beforeUpdateRelationField(thread_db* tdbb, Record* orgRecord, Record* newRecord)
+{
+	const auto transaction = tdbb->getTransaction();
+
+	dsc desc;
+	MetaName oldRelationName;
+	MetaName oldFieldName, newFieldName;
+	MetaName oldFieldSource, newFieldSource;
+	std::optional<SLONG> oldCollationId, newCollationId;
+
+	if (EVL_field(nullptr, orgRecord, f_rfr_rname, &desc))
+		MOV_get_metaname(tdbb, &desc, oldRelationName);
+
+	if (EVL_field(nullptr, orgRecord, f_rfr_fname, &desc))
+		MOV_get_metaname(tdbb, &desc, oldFieldName);
+
+	if (EVL_field(nullptr, newRecord, f_rfr_fname, &desc))
+		MOV_get_metaname(tdbb, &desc, newFieldName);
+
+	if (EVL_field(nullptr, orgRecord, f_rfr_sname, &desc))
+		MOV_get_metaname(tdbb, &desc, oldFieldSource);
+
+	if (EVL_field(nullptr, newRecord, f_rfr_sname, &desc))
+		MOV_get_metaname(tdbb, &desc, newFieldSource);
+
+	if (EVL_field(nullptr, orgRecord, f_rfr_coll_id, &desc))
+		oldCollationId = MOV_get_long(tdbb, &desc, 0);
+
+	if (EVL_field(nullptr, newRecord, f_rfr_coll_id, &desc))
+		newCollationId = MOV_get_long(tdbb, &desc, 0);
+
+	if (oldFieldName != newFieldName ||
+		!(oldFieldSource == newFieldSource && oldCollationId == newCollationId))
+	{
+		static const CachedRequestId requestCacheId;
+		AutoCacheRequest request(tdbb, requestCacheId);
+
+		FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			IND IN RDB$INDICES
+			CROSS IDS IN RDB$INDEX_SEGMENTS
+			CROSS RLC IN RDB$RELATION_CONSTRAINTS
+			WITH IND.RDB$RELATION_NAME = oldRelationName.c_str() AND
+				 IDS.RDB$INDEX_NAME = IND.RDB$INDEX_NAME AND
+				 IDS.RDB$FIELD_NAME = oldFieldName.c_str() AND
+				 RLC.RDB$INDEX_NAME = IND.RDB$INDEX_NAME
+		{
+			if (oldFieldName != newFieldName)
+				ERR_post(Arg::Gds(isc_cnstrnt_fld_rename));
+
+			if (!(oldFieldSource == newFieldSource && oldCollationId == newCollationId))
+				ERR_post(Arg::Gds(isc_integ_index_seg_mod));
+		}
+		END_FOR
+	}
+}
+
+void beforeDeleteTrigger(thread_db* tdbb, Record* record)
+{
+	const auto transaction = tdbb->getTransaction();
+	dsc desc;
+
+	if (EVL_field(nullptr, record, f_trg_sys_flag, &desc) && MOV_get_long(tdbb, &desc, 0) == 1)
+		ERR_post(Arg::Gds(isc_systrig_update));
+
+	MetaName oldTriggerName;
+	if (EVL_field(nullptr, record, f_trg_name, &desc))
+		MOV_get_metaname(tdbb, &desc, oldTriggerName);
+
+	static const CachedRequestId requestCacheId;
+	AutoCacheRequest request(tdbb, requestCacheId);
+
+	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		CHK IN RDB$CHECK_CONSTRAINTS
+		CROSS RCL IN RDB$RELATION_CONSTRAINTS
+		WITH CHK.RDB$TRIGGER_NAME EQ oldTriggerName.c_str() AND
+			 RCL.RDB$CONSTRAINT_NAME EQ CHK.RDB$CONSTRAINT_NAME AND
+			 RCL.RDB$CONSTRAINT_TYPE = CHECK_CNSTRT
+	{
+		ERR_post(Arg::Gds(isc_check_trig_del));
+	}
+	END_FOR
+}
+
+void beforeUpdateTrigger(thread_db* tdbb, Record* orgRecord, Record* newRecord)
+{
+	const auto transaction = tdbb->getTransaction();
+	dsc desc;
+
+	if (EVL_field(nullptr, orgRecord, f_trg_sys_flag, &desc) && MOV_get_long(tdbb, &desc, 0) == 1)
+		ERR_post(Arg::Gds(isc_systrig_update));
+
+	MetaName oldTriggerName, newTriggerName;
+	if (EVL_field(nullptr, orgRecord, f_trg_name, &desc))
+		MOV_get_metaname(tdbb, &desc, oldTriggerName);
+	if (EVL_field(nullptr, newRecord, f_trg_name, &desc))
+		MOV_get_metaname(tdbb, &desc, newTriggerName);
+
+	MetaName oldRelationName, newRelationName;
+	if (EVL_field(nullptr, orgRecord, f_trg_rname, &desc))
+		MOV_get_metaname(tdbb, &desc, oldRelationName);
+	if (EVL_field(nullptr, newRecord, f_trg_rname, &desc))
+		MOV_get_metaname(tdbb, &desc, newRelationName);
+
+	std::optional<SLONG> oldTriggerSequence, newTriggerSequence;
+	if (EVL_field(nullptr, orgRecord, f_trg_seq, &desc))
+		oldTriggerSequence = MOV_get_long(tdbb, &desc, 0);
+	if (EVL_field(nullptr, newRecord, f_trg_seq, &desc))
+		newTriggerSequence = MOV_get_long(tdbb, &desc, 0);
+
+	std::optional<bid> oldTriggerBlr, newTriggerBlr;
+	if (EVL_field(nullptr, orgRecord, f_trg_blr, &desc))
+		oldTriggerBlr = *(bid*) desc.dsc_address;
+	if (EVL_field(nullptr, newRecord, f_trg_blr, &desc))
+		newTriggerBlr = *(bid*) desc.dsc_address;
+
+	std::optional<SLONG> oldTriggerInactive, newTriggerInactive;
+	if (EVL_field(nullptr, orgRecord, f_trg_inactive, &desc))
+		oldTriggerInactive = MOV_get_long(tdbb, &desc, 0);
+	if (EVL_field(nullptr, newRecord, f_trg_inactive, &desc))
+		newTriggerInactive = MOV_get_long(tdbb, &desc, 0);
+
+	std::optional<SLONG> oldFlags, newFlags;
+	if (EVL_field(nullptr, orgRecord, f_trg_flags, &desc))
+		oldFlags = MOV_get_long(tdbb, &desc, 0);
+	if (EVL_field(nullptr, newRecord, f_trg_flags, &desc))
+		newFlags = MOV_get_long(tdbb, &desc, 0);
+
+	std::optional<bid> oldDebugInfo, newDebugInfo;
+	if (EVL_field(nullptr, orgRecord, f_trg_debug_info, &desc))
+		oldDebugInfo = *(bid*) desc.dsc_address;
+	if (EVL_field(nullptr, newRecord, f_trg_debug_info, &desc))
+		newDebugInfo = *(bid*) desc.dsc_address;
+
+	static const CachedRequestId requestCacheId;
+	AutoCacheRequest request(tdbb, requestCacheId);
+
+	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		CHK IN RDB$CHECK_CONSTRAINTS
+		CROSS RCL IN RDB$RELATION_CONSTRAINTS
+		WITH CHK.RDB$TRIGGER_NAME = oldTriggerName.c_str() AND
+			 RCL.RDB$CONSTRAINT_NAME = CHK.RDB$CONSTRAINT_NAME AND
+			 RCL.RDB$CONSTRAINT_TYPE = CHECK_CNSTRT
+	{
+		if (!(oldTriggerName == newTriggerName &&
+			  oldRelationName == newRelationName &&
+			  oldTriggerSequence == newTriggerSequence &&
+			  oldTriggerBlr == newTriggerBlr &&
+			  oldTriggerInactive == newTriggerInactive &&
+			  oldFlags == newFlags &&
+			  oldDebugInfo == newDebugInfo))
+		{
+			ERR_post(Arg::Gds(isc_check_trig_update));
+		}
+	}
+	END_FOR
+}
+
+void beforeDeleteUserPrivilege(thread_db* tdbb, Record* record)
+{
+	const auto transaction = tdbb->getTransaction();
+	dsc desc;
+
+	MetaName relationName;
+	if (!EVL_field(nullptr, record, f_prv_rname, &desc))
+		return;
+	MOV_get_metaname(tdbb, &desc, relationName);
+
+	MetaName fieldName;
+	if (!EVL_field(nullptr, record, f_prv_fname, &desc))
+		return;
+	MOV_get_metaname(tdbb, &desc, fieldName);
+
+	static const CachedRequestId requestCacheId;
+	AutoCacheRequest request(tdbb, requestCacheId);
+
+	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		RFL IN RDB$RELATION_FIELDS
+		CROSS SEC IN RDB$SECURITY_CLASSES
+		WITH RFL.RDB$RELATION_NAME = relationName.c_str() AND
+			 RFL.RDB$FIELD_NAME = fieldName.c_str() AND
+			 RFL.RDB$SECURITY_CLASS STARTING SQL_FLD_SECCLASS_PREFIX AND
+			 SEC.RDB$SECURITY_CLASS = RFL.RDB$SECURITY_CLASS
+	{
+		ERASE SEC;
+
+		MODIFY RFL
+		{
+			RFL.RDB$SECURITY_CLASS.NULL = TRUE;
+		}
+		END_MODIFY
+	}
+	END_FOR
+}
+
+void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
+{
+	const auto attachment = tdbb->getAttachment();
+	const auto transaction = tdbb->getTransaction();
+	const MetaName currentUserName(attachment->getUserName());
+	const bool hasGrantRevokeOnAnyObject =
+		attachment->att_user && attachment->att_user->locksmith(tdbb, GRANT_REVOKE_ON_ANY_OBJECT);
+	dsc desc;
+
+	MetaName grantor;
+	if (EVL_field(nullptr, record, f_prv_grantor, &desc))
+		MOV_get_metaname(tdbb, &desc, grantor);
+
+	if (grantor.isEmpty())
+	{
+		grantor = currentUserName;
+
+		dsc desc2;
+		desc2.makeText((USHORT) grantor.length(), CS_METADATA, (UCHAR*) grantor.c_str());
+		MOV_move(tdbb, &desc2, &desc);
+		record->clearNull(f_prv_grantor);
+	}
+
+	MetaName user;
+	if (EVL_field(nullptr, record, f_prv_user, &desc))
+		MOV_get_metaname(tdbb, &desc, user);
+
+	EVL_field(nullptr, record, f_prv_o_type, &desc);
+	const SLONG objectType = MOV_get_long(tdbb, &desc, 0);
+
+	string privilege;
+	if (EVL_field(nullptr, record, f_prv_priv, &desc))
+		MOV_get_string(tdbb, &desc, privilege);
+
+	MetaName relationName;
+	if (EVL_field(nullptr, record, f_prv_rname, &desc))
+		MOV_get_metaname(tdbb, &desc, relationName);
+
+	switch (objectType)
+	{
+		case obj_relation:
+		{
+			MetaName fieldName;
+			if (EVL_field(nullptr, record, f_prv_fname, &desc))
+				MOV_get_metaname(tdbb, &desc, fieldName);
+
+			static const CachedRequestId request1CacheId;
+			AutoCacheRequest request1(tdbb, request1CacheId);
+
+			FOR (REQUEST_HANDLE request1 TRANSACTION_HANDLE transaction)
+				REL IN RDB$RELATIONS
+				WITH REL.RDB$RELATION_NAME EQ relationName.c_str()
+			{
+				const MetaName relationOwner(REL.RDB$OWNER_NAME);
+
+				if (!((relationOwner == currentUserName && relationOwner == grantor && relationOwner == user) ||
+					  hasGrantRevokeOnAnyObject))
+				{
+					if (relationOwner == currentUserName)
+					{
+						if (fieldName.hasData())
+						{
+							static const CachedRequestId request2CacheId;
+							AutoCacheRequest request2(tdbb, request2CacheId);
+
+							FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
+								RFL2 IN RDB$RELATION_FIELDS
+								CROSS VRL2 IN RDB$VIEW_RELATIONS
+								CROSS REL2 IN RDB$RELATIONS
+								WITH RFL2.RDB$RELATION_NAME = relationName.c_str() AND
+									 RFL2.RDB$FIELD_NAME = fieldName.c_str() AND
+									 RFL2.RDB$BASE_FIELD NOT MISSING AND
+									 VRL2.RDB$VIEW_NAME = RFL2.RDB$RELATION_NAME AND
+									 VRL2.RDB$VIEW_CONTEXT = RFL2.RDB$VIEW_CONTEXT AND
+									 REL2.RDB$RELATION_NAME = VRL2.RDB$RELATION_NAME
+							{
+								const MetaName relation2Owner(REL2.RDB$OWNER_NAME);
+
+								if (relation2Owner != relationOwner && !hasGrantRevokeOnAnyObject)
+								{
+									static const CachedRequestId request3CacheId;
+									AutoCacheRequest request3(tdbb, request3CacheId);
+									bool privilegeFound = false;
+
+									FOR (REQUEST_HANDLE request3 TRANSACTION_HANDLE transaction)
+										PRIV3 IN RDB$USER_PRIVILEGES
+										WITH PRIV3.RDB$RELATION_NAME = REL2.RDB$RELATION_NAME AND
+											 PRIV3.RDB$OBJECT_TYPE = obj_relation AND
+											 PRIV3.RDB$PRIVILEGE = privilege.c_str() AND
+											 PRIV3.RDB$USER = relationOwner.c_str() AND
+											 PRIV3.RDB$USER_TYPE = obj_user AND
+											 PRIV3.RDB$GRANT_OPTION != 0 AND
+											 (PRIV3.RDB$FIELD_NAME MISSING OR
+											  PRIV3.RDB$FIELD_NAME = RFL2.RDB$BASE_FIELD)
+									{
+										privilegeFound = true;
+									}
+									END_FOR
+
+									if (!privilegeFound)
+										ERR_post(Arg::Gds(isc_grant_nopriv_on_base));
+								}
+							}
+							END_FOR
+						}
+						else
+						{
+							static const CachedRequestId request4CacheId;
+							AutoCacheRequest request4(tdbb, request4CacheId);
+
+							FOR (REQUEST_HANDLE request4 TRANSACTION_HANDLE transaction)
+								VRL4 IN RDB$VIEW_RELATIONS
+								CROSS REL4 IN RDB$RELATIONS
+								WITH VRL4.RDB$VIEW_NAME = relationName.c_str() AND
+									 REL4.RDB$RELATION_NAME = VRL4.RDB$RELATION_NAME
+							{
+								const MetaName relation4Owner(REL4.RDB$OWNER_NAME);
+
+								if (relation4Owner != relationOwner && !hasGrantRevokeOnAnyObject)
+								{
+									static const CachedRequestId request5CacheId;
+									AutoCacheRequest request5(tdbb, request5CacheId);
+									bool privilegeFound = false;
+
+									FOR (REQUEST_HANDLE request5 TRANSACTION_HANDLE transaction)
+										PRIV5 IN RDB$USER_PRIVILEGES
+										WITH PRIV5.RDB$RELATION_NAME = REL4.RDB$RELATION_NAME AND
+											 PRIV5.RDB$OBJECT_TYPE = obj_relation AND
+											 PRIV5.RDB$PRIVILEGE = privilege.c_str() AND
+											 PRIV5.RDB$USER = relationOwner.c_str() AND
+											 PRIV5.RDB$USER_TYPE = obj_user AND
+											 PRIV5.RDB$GRANT_OPTION != 0 AND
+											 PRIV5.RDB$FIELD_NAME MISSING
+									{
+										privilegeFound = true;
+									}
+									END_FOR
+
+									if (!privilegeFound)
+										ERR_post(Arg::Gds(isc_grant_nopriv_on_base));
+								}
+							}
+							END_FOR
+						}
+					}
+				}
+
+				if (REL.RDB$SECURITY_CLASS.NULL)
+				{
+					MODIFY REL
+					{
+						sprintf(REL.RDB$SECURITY_CLASS, "%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
+							DPM_gen_id(tdbb, MET_lookup_generator(tdbb, SQL_SECCLASS_GENERATOR), false, 1));
+						REL.RDB$SECURITY_CLASS.NULL = FALSE;
+					}
+					END_MODIFY
+				}
+				else if (strncmp(REL.RDB$SECURITY_CLASS, SQL_SECCLASS_PREFIX, SQL_SECCLASS_PREFIX_LEN) != 0)
+					ERR_post(Arg::Gds(isc_nonsql_security_rel));
+			}
+			END_FOR
+
+			if (fieldName.hasData())
+			{
+				static const CachedRequestId request6CacheId;
+				AutoCacheRequest request6(tdbb, request6CacheId);
+
+				FOR (REQUEST_HANDLE request6 TRANSACTION_HANDLE transaction)
+					RFL6 IN RDB$RELATION_FIELDS
+					WITH RFL6.RDB$RELATION_NAME = relationName.c_str() AND
+						 RFL6.RDB$FIELD_NAME = fieldName.c_str()
+				{
+					if (RFL6.RDB$SECURITY_CLASS.NULL)
+					{
+						MODIFY RFL6
+						{
+							sprintf(RFL6.RDB$SECURITY_CLASS, "%s%" SQUADFORMAT, SQL_FLD_SECCLASS_PREFIX,
+								DPM_gen_id(tdbb, MET_lookup_generator(tdbb, SQL_SECCLASS_GENERATOR), false, 1));
+							RFL6.RDB$SECURITY_CLASS.NULL = TRUE;
+						}
+						END_MODIFY
+					}
+					else if (strncmp(RFL6.RDB$SECURITY_CLASS, SQL_FLD_SECCLASS_PREFIX, SQL_FLD_SECCLASS_PREFIX_LEN) != 0)
+						ERR_post(Arg::Gds(isc_nonsql_security_fld));
+				}
+				END_FOR
+			}
+
+			break;
+		}
+
+		case obj_procedure:
+		{
+			static const CachedRequestId request1CacheId;
+			AutoCacheRequest request1(tdbb, request1CacheId);
+
+			FOR (REQUEST_HANDLE request1 TRANSACTION_HANDLE transaction)
+				PRC IN RDB$PROCEDURES
+				WITH PRC.RDB$PROCEDURE_NAME EQ relationName.c_str() AND
+					 PRC.RDB$PACKAGE_NAME MISSING
+			{
+				if (PRC.RDB$SECURITY_CLASS.NULL)
+				{
+					MODIFY PRC
+					{
+						sprintf(PRC.RDB$SECURITY_CLASS, "%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
+							DPM_gen_id(tdbb, MET_lookup_generator(tdbb, SQL_SECCLASS_GENERATOR), false, 1));
+						PRC.RDB$SECURITY_CLASS.NULL = FALSE;
+					}
+					END_MODIFY
+				}
+				else if (strncmp(PRC.RDB$SECURITY_CLASS, SQL_SECCLASS_PREFIX, SQL_SECCLASS_PREFIX_LEN) != 0)
+					ERR_post(Arg::Gds(isc_nonsql_security_rel));
+			}
+			END_FOR
+
+			break;
+		}
+
+		case obj_udf:
+		{
+			static const CachedRequestId request1CacheId;
+			AutoCacheRequest request1(tdbb, request1CacheId);
+
+			FOR (REQUEST_HANDLE request1 TRANSACTION_HANDLE transaction)
+				FUN IN RDB$FUNCTIONS
+				WITH FUN.RDB$FUNCTION_NAME EQ relationName.c_str() AND
+					 FUN.RDB$PACKAGE_NAME MISSING
+			{
+				if (FUN.RDB$SECURITY_CLASS.NULL)
+				{
+					MODIFY FUN
+					{
+						sprintf(FUN.RDB$SECURITY_CLASS, "%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
+							DPM_gen_id(tdbb, MET_lookup_generator(tdbb, SQL_SECCLASS_GENERATOR), false, 1));
+						FUN.RDB$SECURITY_CLASS.NULL = FALSE;
+					}
+					END_MODIFY
+				}
+				else if (strncmp(FUN.RDB$SECURITY_CLASS, SQL_SECCLASS_PREFIX, SQL_SECCLASS_PREFIX_LEN) != 0)
+					ERR_post(Arg::Gds(isc_nonsql_security_rel));
+			}
+			END_FOR
+
+			break;
+		}
+
+		case obj_package_header:
+		{
+			static const CachedRequestId request1CacheId;
+			AutoCacheRequest request1(tdbb, request1CacheId);
+
+			FOR (REQUEST_HANDLE request1 TRANSACTION_HANDLE transaction)
+				PKG IN RDB$PACKAGES
+				WITH PKG.RDB$PACKAGE_NAME EQ relationName.c_str()
+			{
+				if (PKG.RDB$SECURITY_CLASS.NULL)
+				{
+					MODIFY PKG
+					{
+						sprintf(PKG.RDB$SECURITY_CLASS, "%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
+							DPM_gen_id(tdbb, MET_lookup_generator(tdbb, SQL_SECCLASS_GENERATOR), false, 1));
+						PKG.RDB$SECURITY_CLASS.NULL = FALSE;
+					}
+					END_MODIFY
+				}
+				else if (strncmp(PKG.RDB$SECURITY_CLASS, SQL_SECCLASS_PREFIX, SQL_SECCLASS_PREFIX_LEN) != 0)
+					ERR_post(Arg::Gds(isc_nonsql_security_rel));
+			}
+			END_FOR
+
+			break;
+		}
+	}
+}
+
+}	// anonymous
+
+
+void SystemTriggers::executeBeforeDeleteTriggers(thread_db* tdbb, jrd_rel* relation, Record* record)
+{
+	switch ((RIDS) relation->rel_id)
+	{
+		case rel_ccon:
+			beforeDeleteCheckConstraint(tdbb, record);
+			break;
+
+		case rel_indices:
+			beforeDeleteIndex(tdbb, record);
+			break;
+
+		case rel_priv:
+			beforeDeleteUserPrivilege(tdbb, record);
+			break;
+
+		case rel_rcon:
+			beforeDeleteRelationConstraint(tdbb, record);
+			break;
+
+		case rel_rfr:
+			beforeDeleteRelationField(tdbb, record);
+			break;
+
+		case rel_segments:
+			beforeDeleteIndexSegment(tdbb, record);
+			break;
+
+		case rel_triggers:
+			beforeDeleteTrigger(tdbb, record);
+			break;
+	}
+}
+
+void SystemTriggers::executeAfterDeleteTriggers(thread_db* tdbb, jrd_rel* relation, Record* record)
+{
+	switch ((RIDS) relation->rel_id)
+	{
+		case rel_ccon:
+			afterDeleteCheckConstraint(tdbb, record);
+			break;
+
+		case rel_rcon:
+			afterDeleteRelationConstraint(tdbb, record);
+			break;
+
+		case rel_rfr:
+			afterDeleteRelationField(tdbb, record);
+			break;
+	}
+}
+
+void SystemTriggers::executeBeforeInsertTriggers(thread_db* tdbb, jrd_rel* relation, Record* record)
+{
+	switch ((RIDS) relation->rel_id)
+	{
+		case rel_priv:
+			beforeInsertUserPrivilege(tdbb, record);
+			break;
+
+		case rel_rcon:
+			beforeInsertRelationConstraint(tdbb, record);
+			break;
+
+		case rel_refc:
+			beforeInsertRefConstraint(tdbb, record);
+			break;
+	}
+}
+
+void SystemTriggers::executeBeforeUpdateTriggers(thread_db* tdbb, jrd_rel* relation, Record* orgRecord, Record* newRecord)
+{
+	switch ((RIDS) relation->rel_id)
+	{
+		case rel_ccon:
+			beforeUpdateCheckConstraint(tdbb, orgRecord, newRecord);
+			break;
+
+		case rel_fields:
+			beforeUpdateField(tdbb, orgRecord, newRecord);
+			break;
+
+		case rel_indices:
+			beforeUpdateIndex(tdbb, orgRecord, newRecord);
+			break;
+
+		case rel_rfr:
+			beforeUpdateRelationField(tdbb, orgRecord, newRecord);
+			break;
+
+		case rel_segments:
+			beforeUpdateIndexSegment(tdbb, orgRecord, newRecord);
+			break;
+
+		case rel_triggers:
+			beforeUpdateTrigger(tdbb, orgRecord, newRecord);
+			break;
+	}
+}

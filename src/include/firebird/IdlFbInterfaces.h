@@ -3063,6 +3063,7 @@ namespace Firebird
 		static CLOOP_CONSTEXPR int AUTH_SUCCESS = 0;
 		static CLOOP_CONSTEXPR int AUTH_MORE_DATA = 1;
 		static CLOOP_CONSTEXPR int AUTH_CONTINUE = 2;
+		static CLOOP_CONSTEXPR int AUTH_SUCCESS_WITH_DATA = 3;
 	};
 
 #define FIREBIRD_IWRITER_VERSION 2u
@@ -6342,7 +6343,7 @@ namespace Firebird
 		{
 			if (cloopVTable->version < 4)
 			{
-				return 0;
+				return true;
 			}
 			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->trace_dsql_restart(this, connection, transaction, statement, number);
 			return ret;
@@ -6352,7 +6353,7 @@ namespace Firebird
 		{
 			if (cloopVTable->version < 5)
 			{
-				return 0;
+				return true;
 			}
 			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->trace_proc_compile(this, connection, procedure, time_millis, proc_result);
 			return ret;
@@ -6362,7 +6363,7 @@ namespace Firebird
 		{
 			if (cloopVTable->version < 5)
 			{
-				return 0;
+				return true;
 			}
 			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->trace_func_compile(this, connection, function, time_millis, func_result);
 			return ret;
@@ -6372,7 +6373,7 @@ namespace Firebird
 		{
 			if (cloopVTable->version < 5)
 			{
-				return 0;
+				return true;
 			}
 			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->trace_trigger_compile(this, connection, trigger, time_millis, trig_result);
 			return ret;

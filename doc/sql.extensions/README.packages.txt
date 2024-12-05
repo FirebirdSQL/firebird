@@ -28,7 +28,7 @@ Syntax:
         PROCEDURE <name> [( <parameters> ) [RETURNS ( <parameters> )]]
 
     <package_body> ::=
-        { CREATE | RECREATE } PACKAGE BODY <name>
+        { CREATE [OR ALTER] | ALTER | RECREATE } PACKAGE BODY <name>
         AS
         BEGIN
             [ <package_item> ... ]

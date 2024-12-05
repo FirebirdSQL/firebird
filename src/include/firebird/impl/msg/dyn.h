@@ -299,3 +299,7 @@ FB_IMPL_MSG(DYN, 306, dyn_rel_not_exist, -901, "42", "000", "Table @1 does not e
 FB_IMPL_MSG(DYN, 307, dyn_exc_not_exist, -901, "42", "000", "Exception @1 does not exist")
 FB_IMPL_MSG(DYN, 308, dyn_gen_not_exist, -901, "42", "000", "Generator/Sequence @1 does not exist")
 FB_IMPL_MSG(DYN, 309, dyn_fld_not_exist, -901, "42", "000", "Field @1 of table @2 does not exist")
+FB_IMPL_MSG_SYMBOL(DYN, 310, dyn_dup_trigger, "Trigger @1 already exists")
+FB_IMPL_MSG_SYMBOL(DYN, 311, dyn_dup_domain, "Domain @1 already exists")
+FB_IMPL_MSG_SYMBOL(DYN, 312, dyn_dup_collation, "Collation @1 already exists")
+FB_IMPL_MSG_SYMBOL(DYN, 313, dyn_dup_package, "Package @1 already exists")

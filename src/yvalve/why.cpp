@@ -1618,7 +1618,7 @@ ISC_STATUS API_ROUTINE isc_array_lookup_desc(ISC_STATUS* userStatus, FB_API_HAND
 		RefPtr<YAttachment> attachment(translateHandle(attachments, dbHandle));
 		RefPtr<YTransaction> transaction(translateHandle(transactions, traHandle));
 
-		iscArrayLookupDescImpl(attachment, transaction, relationName, fieldName, desc);
+		iscArrayLookupDescImpl(attachment, transaction, relationName, fieldName, desc, nullptr);
 	}
 	catch (const Exception& e)
 	{

@@ -242,6 +242,15 @@ int MOV_get_string(Jrd::thread_db* tdbb, const dsc* desc, UCHAR** address, vary*
 }
 
 
+void MOV_get_string(Jrd::thread_db* tdbb, const dsc* desc, string& str)
+{
+	VaryStr<MAX_SQL_IDENTIFIER_SIZE> temp;
+	const char* strPtr = NULL;
+	const auto len = MOV_make_string(tdbb, desc, ttype_metadata, &strPtr, &temp, MAX_SQL_IDENTIFIER_SIZE);
+	str.assign(strPtr, len);
+}
+
+
 GDS_DATE MOV_get_sql_date(const dsc* desc)
 {
 /**************************************

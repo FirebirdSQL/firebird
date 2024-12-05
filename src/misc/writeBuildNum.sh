@@ -9,7 +9,7 @@ BuildType=T
 MajorVer=6
 MinorVer=0
 RevNo=0
-BuildNum=281
+BuildNum=543
 
 NowAt=`pwd`
 cd `dirname $0`
@@ -112,7 +112,7 @@ eof
 
 [ -z "$CXX" ] && CXX=g++
 
-$CXX $TestCpp -o $AOut
+$CXX -std=c++17 $TestCpp -o $AOut
 if [ -x $AOut ]
 then
 	$AOut

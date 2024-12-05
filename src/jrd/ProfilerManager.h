@@ -273,6 +273,11 @@ public:
 		return currentSession && !paused;
 	}
 
+	bool haveListener() const
+	{
+		return listener.hasData();
+	}
+
 	static void checkFlushInterval(SLONG interval)
 	{
 		if (interval < 0)

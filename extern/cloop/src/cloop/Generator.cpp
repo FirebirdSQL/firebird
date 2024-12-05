@@ -716,11 +716,16 @@ void CppGenerator::generate()
 
 
 CHeaderGenerator::CHeaderGenerator(const string& filename, const string& prefix, Parser* parser,
-		const string& headerGuard)
+		const string& headerGuard, const std::string& parMacro)
 	: CBasedGenerator(filename, prefix, false),
 	  parser(parser),
-	  headerGuard(headerGuard)
+	  headerGuard(headerGuard),
+	  macro(false)
 {
+	if (parMacro.length() > 0 && parMacro != "macro")
+			throw runtime_error("Last (#6) param should be exactly 'macro' or missing");
+
+	macro = parMacro.length() > 0;
 }
 
 void CHeaderGenerator::generate()
@@ -824,14 +829,24 @@ void CHeaderGenerator::generate()
 		{
 			Method* method = *j;
 
-			fprintf(out, "CLOOP_EXTERN_C %s %s%s_%s(%sstruct %s%s* self",
-				convertType(method->returnTypeRef).c_str(),
-				prefix.c_str(),
-				interface->name.c_str(),
-				method->name.c_str(),
-				(method->isConst ? "const " : ""),
-				prefix.c_str(),
-				interface->name.c_str());
+			if (macro)
+			{
+				fprintf(out, "#define %s%s_%s(self",
+					prefix.c_str(),
+					interface->name.c_str(),
+					method->name.c_str());
+			}
+			else
+			{
+				fprintf(out, "CLOOP_EXTERN_C %s %s%s_%s(%sstruct %s%s* self",
+					convertType(method->returnTypeRef).c_str(),
+					prefix.c_str(),
+					interface->name.c_str(),
+					method->name.c_str(),
+					(method->isConst ? "const " : ""),
+					prefix.c_str(),
+					interface->name.c_str());
+			}
 
 			for (vector<Parameter*>::iterator k = method->parameters.begin();
 				 k != method->parameters.end();
@@ -839,11 +854,39 @@ void CHeaderGenerator::generate()
 			{
 				Parameter* parameter = *k;
 
-				fprintf(out, ", %s %s",
-					convertType(parameter->typeRef).c_str(), parameter->name.c_str());
+				if (macro)
+				{
+					fprintf(out, ", %s",
+						parameter->name.c_str());
+				}
+				else
+				{
+					fprintf(out, ", %s %s",
+						convertType(parameter->typeRef).c_str(), parameter->name.c_str());
+				}
 			}
 
-			fprintf(out, ");\n");
+			if (macro)
+			{
+				fprintf(out, ") %s(self)->vtable->%s(self",
+					method->returnTypeRef.token.type != Token::TYPE_VOID ? "(" : "",
+					method->name.c_str());
+
+				for (vector<Parameter*>::iterator k = method->parameters.begin();
+					 k != method->parameters.end();
+					 ++k)
+				{
+					Parameter* parameter = *k;
+
+					fprintf(out, ", (%s)",
+						parameter->name.c_str());
+				}
+
+				fprintf(out, ")%s\n",
+					method->returnTypeRef.token.type != Token::TYPE_VOID ? ")" : "");
+			}
+			else
+				fprintf(out, ");\n");
 		}
 
 		fprintf(out, "\n");

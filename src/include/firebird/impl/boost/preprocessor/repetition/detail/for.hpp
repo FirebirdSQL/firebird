@@ -8,11 +8,16 @@
 #  */
 #
 # /* Revised by Paul Mensonides (2002) */
+# /* Revised by Edward Diener (2020) */
 #
 # /* See http://www.boost.org for most recent version. */
 #
 # ifndef FB_BOOST_PREPROCESSOR_REPETITION_DETAIL_FOR_HPP
 # define FB_BOOST_PREPROCESSOR_REPETITION_DETAIL_FOR_HPP
+#
+# include <firebird/impl/boost/preprocessor/config/config.hpp>
+#
+# if ~FB_BOOST_PP_CONFIG_FLAGS() & FB_BOOST_PP_CONFIG_STRICT()
 #
 # include <firebird/impl/boost/preprocessor/control/expr_iif.hpp>
 # include <firebird/impl/boost/preprocessor/control/iif.hpp>
@@ -532,5 +537,28 @@
 # define FB_BOOST_PP_FOR_254_C(c, s, p, o, m) FB_BOOST_PP_IIF(c, m, FB_BOOST_PP_TUPLE_EAT_2)(255, s) FB_BOOST_PP_IIF(c, FB_BOOST_PP_FOR_255, FB_BOOST_PP_TUPLE_EAT_4)(FB_BOOST_PP_EXPR_IIF(c, o)(255, s), p, o, m)
 # define FB_BOOST_PP_FOR_255_C(c, s, p, o, m) FB_BOOST_PP_IIF(c, m, FB_BOOST_PP_TUPLE_EAT_2)(256, s) FB_BOOST_PP_IIF(c, FB_BOOST_PP_FOR_256, FB_BOOST_PP_TUPLE_EAT_4)(FB_BOOST_PP_EXPR_IIF(c, o)(256, s), p, o, m)
 # define FB_BOOST_PP_FOR_256_C(c, s, p, o, m) FB_BOOST_PP_IIF(c, m, FB_BOOST_PP_TUPLE_EAT_2)(257, s) FB_BOOST_PP_IIF(c, FB_BOOST_PP_FOR_257, FB_BOOST_PP_TUPLE_EAT_4)(FB_BOOST_PP_EXPR_IIF(c, o)(257, s), p, o, m)
+#
+# else
+#
+# include <firebird/impl/boost/preprocessor/control/expr_iif.hpp>
+# include <firebird/impl/boost/preprocessor/control/iif.hpp>
+# include <firebird/impl/boost/preprocessor/logical/bool.hpp>
+# include <firebird/impl/boost/preprocessor/tuple/eat.hpp>
+# include <firebird/impl/boost/preprocessor/config/limits.hpp>
+#
+# if FB_BOOST_PP_LIMIT_FOR == 256
+# include <firebird/impl/boost/preprocessor/repetition/detail/limits/for_256.hpp>
+# elif FB_BOOST_PP_LIMIT_FOR == 512
+# include <firebird/impl/boost/preprocessor/repetition/detail/limits/for_256.hpp>
+# include <firebird/impl/boost/preprocessor/repetition/detail/limits/for_512.hpp>
+# elif FB_BOOST_PP_LIMIT_FOR == 1024
+# include <firebird/impl/boost/preprocessor/repetition/detail/limits/for_256.hpp>
+# include <firebird/impl/boost/preprocessor/repetition/detail/limits/for_512.hpp>
+# include <firebird/impl/boost/preprocessor/repetition/detail/limits/for_1024.hpp>
+# else
+# error Incorrect value for the FB_BOOST_PP_LIMIT_FOR limit
+# endif
+#
+# endif
 #
 # endif

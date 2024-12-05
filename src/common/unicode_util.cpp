@@ -427,7 +427,6 @@ private:
 		getEntryPoint("u_countChar32", module, u_countChar32);
 		getEntryPoint("utf8_nextCharSafeBody", module, utf8_nextCharSafeBody);
 
-		getEntryPoint("UCNV_FROM_U_CALLBACK_STOP", module, UCNV_FROM_U_CALLBACK_STOP);
 		getEntryPoint("UCNV_TO_U_CALLBACK_STOP", module, UCNV_TO_U_CALLBACK_STOP);
 		getEntryPoint("ucnv_fromUnicode", module, ucnv_fromUnicode);
 		getEntryPoint("ucnv_toUnicode", module, ucnv_toUnicode);

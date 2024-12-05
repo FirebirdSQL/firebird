@@ -128,7 +128,7 @@ public:
 	SLONG		bcb_dirty_count;	// count of pages in dirty page btree
 
 	Precedence*	bcb_free;			// Free precedence blocks
-	SSHORT		bcb_flags;			// see below
+	Firebird::AtomicCounter	bcb_flags;	// see below
 	SSHORT		bcb_free_minimum;	// Threshold to activate cache writer
 	ULONG		bcb_count;			// Number of buffers allocated
 	ULONG		bcb_inuse;			// Number of buffers in use

@@ -33,6 +33,7 @@
 #include "../common/TimeZoneUtil.h"
 #include "../common/classes/VaryStr.h"
 #include "../common/classes/Hash.h"
+#include "../common/classes/Uuid.h"
 #include "../jrd/SysFunction.h"
 #include "../jrd/DataTypeUtil.h"
 #include "../include/fb_blk.h"
@@ -43,6 +44,7 @@
 #include "../jrd/blb_proto.h"
 #include "../jrd/cch_proto.h"
 #include "../jrd/cvt_proto.h"
+#include "../jrd/cvt2_proto.h"
 #include "../common/cvt.h"
 #include "../jrd/evl_proto.h"
 #include "../jrd/intl_proto.h"
@@ -81,9 +83,6 @@ namespace {
 #if defined(_MSC_VER) && _MSC_VER < 1900
 #pragma message("Ensure the 'hh' size modifier is supported")
 #endif
-
-const char* const BYTE_GUID_FORMAT =
-	"%02hhX%02hhX%02hhX%02hhX-%02hhX%02hhX-%02hhX%02hhX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX";
 
 // function types handled in generic functions
 enum Function
@@ -380,6 +379,9 @@ const char
 	DATABASE_GUID[] = "DB_GUID",
 	DATABASE_FILE_ID[] = "DB_FILE_ID",
 	REPLICA_MODE[] = "REPLICA_MODE",
+	PAGES_ALLOCATED[] = "PAGES_ALLOCATED",
+	PAGES_USED[] = "PAGES_USED",
+	PAGES_FREE[] = "PAGES_FREE",
 	// SYSTEM namespace: connection wise items
 	SESSION_ID_NAME[] = "SESSION_ID",
 	NETWORK_PROTOCOL_NAME[] = "NETWORK_PROTOCOL",
@@ -394,6 +396,7 @@ const char
 	CLIENT_VERSION_NAME[] = "CLIENT_VERSION",
 	CURRENT_USER_NAME[] = "CURRENT_USER",
 	CURRENT_ROLE_NAME[] = "CURRENT_ROLE",
+	SERVER_PID_NAME[] = "SERVER_PID",
 	SESSION_IDLE_TIMEOUT[] = "SESSION_IDLE_TIMEOUT",
 	STATEMENT_TIMEOUT[] = "STATEMENT_TIMEOUT",
 	EFFECTIVE_USER_NAME[] = "EFFECTIVE_USER",
@@ -431,12 +434,6 @@ const char
 static const char
 	FALSE_VALUE[] = "FALSE",
 	TRUE_VALUE[] = "TRUE";
-
-// Get pages
-const char
-    PAGES_ALLOCATED[] = "PAGES_ALLOCATED",
-    PAGES_USED[] = "PAGES_USED",
-    PAGES_FREE[] = "PAGES_FREE";
 
 
 double fbcot(double value) noexcept
@@ -643,7 +640,7 @@ void setParamsBlobAppend(DataTypeUtilBase*, const SysFunction*, int argsCount, d
 void setParamsCharToUuid(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
 {
 	if (argsCount >= 1 && args[0]->isUnknown())
-		args[0]->makeText(GUID_BODY_SIZE, ttype_ascii);
+		args[0]->makeText(Uuid::STR_LEN, ttype_ascii);
 }
 
 
@@ -862,11 +859,14 @@ void setParamsMakeDbkey(DataTypeUtilBase*, const SysFunction*, int argsCount, ds
 {
 	// MAKE_DBKEY ( REL_NAME | REL_ID, RECNUM [, DPNUM [, PPNUM] ] )
 
-	if (args[0]->isUnknown())
-		args[0]->makeLong(0);
+	if (argsCount > 1)
+	{
+		if (args[0]->isUnknown())
+			args[0]->makeLong(0);
 
-	if (args[1]->isUnknown())
-		args[1]->makeInt64(0);
+		if (args[1]->isUnknown())
+			args[1]->makeInt64(0);
+	}
 
 	if (argsCount > 2 && args[2]->isUnknown())
 		args[2]->makeInt64(0);
@@ -1920,7 +1920,7 @@ void makeUnicodeChar(DataTypeUtilBase*, const SysFunction* function, dsc* result
 void makeUuid(DataTypeUtilBase*, const SysFunction* function, dsc* result,
 	int argsCount, const dsc** args)
 {
-	fb_assert(argsCount == function->minArgCount);
+	fb_assert(argsCount >= function->minArgCount);
 
 	if (argsCount > 0 && args[0]->isNull())
 		result->makeNullString();
@@ -1945,7 +1945,7 @@ void makeUuidToChar(DataTypeUtilBase*, const SysFunction* function, dsc* result,
 		return;
 	}
 
-	result->makeText(GUID_BODY_SIZE, ttype_ascii);
+	result->makeText(Uuid::STR_LEN, ttype_ascii);
 	result->setNullable(value->isNullable());
 }
 
@@ -2600,12 +2600,12 @@ dsc* evlCharToUuid(thread_db* tdbb, const SysFunction* function, const NestValue
 	USHORT len = MOV_get_string(tdbb, value, &data_temp, NULL, 0);
 	const UCHAR* data;
 
-	if (len > GUID_BODY_SIZE)
+	if (len > Uuid::STR_LEN)
 	{
 		// Verify if only spaces exists after the expected length. See CORE-5062.
-		data = data_temp + GUID_BODY_SIZE;
+		data = data_temp + Uuid::STR_LEN;
 
-		while (len > GUID_BODY_SIZE)
+		while (len > Uuid::STR_LEN)
 		{
 			if (*data++ != ASCII_SPACE)
 				break;
@@ -2617,15 +2617,15 @@ dsc* evlCharToUuid(thread_db* tdbb, const SysFunction* function, const NestValue
 	data = data_temp;
 
 	// validate the UUID
-	if (len != GUID_BODY_SIZE) // 36
+	if (len != Uuid::STR_LEN)
 	{
 		status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
 									Arg::Gds(isc_sysf_argviolates_uuidlen) <<
-										Arg::Num(GUID_BODY_SIZE) <<
+										Arg::Num(Uuid::STR_LEN) <<
 										Arg::Str(function->name));
 	}
 
-	for (int i = 0; i < GUID_BODY_SIZE; ++i)
+	for (int i = 0; i < Uuid::STR_LEN; ++i)
 	{
 		if (i == 8 || i == 13 || i == 18 || i == 23)
 		{
@@ -2654,11 +2654,10 @@ dsc* evlCharToUuid(thread_db* tdbb, const SysFunction* function, const NestValue
 		}
 	}
 
-	UCHAR bytes[Guid::SIZE];
-	fb_assert(sizeof(bytes) == 16);
+	UCHAR bytes[Uuid::BYTE_LEN];
 
 	const auto count = sscanf(reinterpret_cast<const char*>(data),
-		BYTE_GUID_FORMAT,
+		Uuid::STR_FORMAT,
 		&bytes[0], &bytes[1], &bytes[2], &bytes[3],
 		&bytes[4], &bytes[5], &bytes[6], &bytes[7],
 		&bytes[8], &bytes[9], &bytes[10], &bytes[11],
@@ -2666,7 +2665,7 @@ dsc* evlCharToUuid(thread_db* tdbb, const SysFunction* function, const NestValue
 	fb_assert(count == 16);
 
 	dsc result;
-	result.makeText(Guid::SIZE, ttype_binary, bytes);
+	result.makeText(Uuid::BYTE_LEN, ttype_binary, bytes);
 	EVL_make_value(tdbb, &result, impure);
 
 	return &impure->vlu_desc;
@@ -2804,9 +2803,10 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 					ERR_post(Arg::Gds(rangeExceededStatus));
 
 				tm times;
-				timestamp.decode(&times);
+				int fractions;
+				timestamp.decode(&times, &fractions);
 				times.tm_year += quantity;
-				timestamp.encode(&times);
+				timestamp.encode(&times, fractions);
 
 				int day = times.tm_mday;
 				timestamp.decode(&times);
@@ -2822,7 +2822,8 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 					ERR_post(Arg::Gds(rangeExceededStatus));
 
 				tm times;
-				timestamp.decode(&times);
+				int fractions;
+				timestamp.decode(&times, &fractions);
 
 				int md[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
@@ -2857,7 +2858,7 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 				else if (times.tm_mday < 1)
 					times.tm_mday = 1;
 
-				timestamp.encode(&times);
+				timestamp.encode(&times, fractions);
 			}
 			break;
 
@@ -4519,15 +4520,38 @@ dsc* evlFloor(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 dsc* evlGenUuid(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	impure_value* impure)
 {
-	fb_assert(args.isEmpty());
+	const auto request = tdbb->getRequest();
+
+	fb_assert(args.getCount() <= 1);
 
 	// Generate UUID and convert it into platform-independent format
-	UCHAR data[Guid::SIZE];
+	UCHAR data[Uuid::BYTE_LEN];
+	SLONG version = 4;
 
-	Guid::generate().convert(data);
+	if (args.getCount() > 0)
+	{
+		const auto* const versionDsc = EVL_expr(tdbb, request, args[0]);
+
+		if (request->req_flags & req_null)
+			return nullptr;
+
+		version = MOV_get_long(tdbb, versionDsc, 0);
+	}
+
+	switch (version)
+	{
+		case 4:
+		case 7:
+			Uuid::generate((unsigned) version).extractBytes(data, sizeof(data));
+			break;
+
+		default:
+			status_exception::raise(Arg::Gds(isc_sysf_invalid_gen_uuid_version) << Arg::Num(version));
+			break;
+	}
 
 	dsc result;
-	result.makeText(Guid::SIZE, ttype_binary, data);
+	result.makeText(Uuid::BYTE_LEN, ttype_binary, data);
 	EVL_make_value(tdbb, &result, impure);
 
 	return &impure->vlu_desc;
@@ -4686,6 +4710,8 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 
 			resultStr = role.c_str();
 		}
+		else if (nameStr == SERVER_PID_NAME)
+			resultStr.printf("%d", getpid());
 		else if (nameStr == SESSION_IDLE_TIMEOUT)
 			resultStr.printf("%" ULONGFORMAT, attachment->getIdleTimeout());
 		else if (nameStr == STATEMENT_TIMEOUT)
@@ -5361,7 +5387,7 @@ dsc* evlMakeDbkey(Jrd::thread_db* tdbb, const SysFunction* function, const NestV
 	if (argDsc->isText())
 	{
 		MetaName relName;
-		MOV_get_metaname(tdbb, argDsc, relName);
+		CVT2_make_metaname(argDsc, relName, tdbb->getAttachment()->att_dec_status);
 
 		const jrd_rel* const relation = MET_lookup_relation(tdbb, relName);
 		if (!relation)
@@ -5444,19 +5470,22 @@ dsc* evlMakeDbkey(Jrd::thread_db* tdbb, const SysFunction* function, const NestV
 
 
 dsc* evlMaxMinValue(thread_db* tdbb, const SysFunction* function, const NestValueArray& args,
-	impure_value*)
+	impure_value* impure)
 {
 	fb_assert(args.getCount() >= 1);
 	fb_assert(function->misc != NULL);
 
-	Request* request = tdbb->getRequest();
-	dsc* result = NULL;
+	const auto request = tdbb->getRequest();
+	HalfStaticArray<const dsc*, 2> argTypes(args.getCount());
+	dsc* result = nullptr;
 
 	for (FB_SIZE_T i = 0; i < args.getCount(); ++i)
 	{
-		dsc* value = EVL_expr(tdbb, request, args[i]);
+		const auto value = EVL_expr(tdbb, request, args[i]);
 		if (request->req_flags & req_null)	// return NULL if value is NULL
-			return NULL;
+			return nullptr;
+
+		argTypes.add(value);
 
 		if (i == 0)
 			result = value;
@@ -5480,7 +5509,12 @@ dsc* evlMaxMinValue(thread_db* tdbb, const SysFunction* function, const NestValu
 		}
 	}
 
-	return result;
+	DataTypeUtil(tdbb).makeFromList(&impure->vlu_desc, function->name, argTypes.getCount(), argTypes.begin());
+	impure->vlu_desc.dsc_address = (UCHAR*) &impure->vlu_misc;
+
+	MOV_move(tdbb, result, &impure->vlu_desc);
+
+	return &impure->vlu_desc;
 }
 
 
@@ -6696,24 +6730,24 @@ dsc* evlUuidToChar(thread_db* tdbb, const SysFunction* function, const NestValue
 	}
 
 	UCHAR* data;
-	if (MOV_get_string(tdbb, value, &data, NULL, 0) != Guid::SIZE)
+	if (MOV_get_string(tdbb, value, &data, NULL, 0) != Uuid::BYTE_LEN)
 	{
 		status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
 									Arg::Gds(isc_sysf_binuuid_wrongsize) <<
-										Arg::Num(Guid::SIZE) <<
+										Arg::Num(Uuid::BYTE_LEN) <<
 										Arg::Str(function->name));
 	}
 
 	UCHAR buffer[GUID_BUFF_SIZE];
 	sprintf(reinterpret_cast<char*>(buffer),
-		BYTE_GUID_FORMAT,
+		Uuid::STR_FORMAT,
 		data[0], data[1], data[2], data[3], data[4],
 		data[5], data[6], data[7], data[8], data[9],
 		data[10], data[11], data[12], data[13], data[14],
 		data[15]);
 
 	dsc result;
-	result.makeText(GUID_BODY_SIZE, ttype_ascii, buffer);
+	result.makeText(Uuid::STR_LEN, ttype_ascii, buffer);
 	EVL_make_value(tdbb, &result, impure);
 
 	return &impure->vlu_desc;
@@ -6849,91 +6883,93 @@ dsc* evlUnicodeVal(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 
 const SysFunction SysFunction::functions[] =
 	{
-		{"ABS", 1, 1, setParamsDblDec, makeAbs, evlAbs, NULL},
-		{"ACOS", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfAcos},
-		{"ACOSH", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfAcosh},
-		{"ASCII_CHAR", 1, 1, setParamsInteger, makeAsciiChar, evlAsciiChar, NULL},
-		{"ASCII_VAL", 1, 1, setParamsAsciiVal, makeShortResult, evlAsciiVal, NULL},
-		{"ASIN", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfAsin},
-		{"ASINH", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfAsinh},
-		{"ATAN", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfAtan},
-		{"ATANH", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfAtanh},
-		{"ATAN2", 2, 2, setParamsDouble, makeDoubleResult, evlAtan2, NULL},
-		{"BASE64_DECODE", 1, 1, NULL, makeDecode64, evlDecode64, NULL},
-		{"BASE64_ENCODE", 1, 1, NULL, makeEncode64, evlEncode64, NULL},
-		{"BIN_AND", 2, -1, setParamsBin, makeBin, evlBin, (void*) funBinAnd},
-		{"BIN_NOT", 1, 1, setParamsBin, makeBin, evlBin, (void*) funBinNot},
-		{"BIN_OR", 2, -1, setParamsBin, makeBin, evlBin, (void*) funBinOr},
-		{"BIN_SHL", 2, 2, setParamsInteger, makeBinShift, evlBinShift, (void*) funBinShl},
-		{"BIN_SHR", 2, 2, setParamsInteger, makeBinShift, evlBinShift, (void*) funBinShr},
-		{"BIN_SHL_ROT", 2, 2, setParamsInteger, makeBinShift, evlBinShift, (void*) funBinShlRot},
-		{"BIN_SHR_ROT", 2, 2, setParamsInteger, makeBinShift, evlBinShift, (void*) funBinShrRot},
-		{"BIN_XOR", 2, -1, setParamsBin, makeBin, evlBin, (void*) funBinXor},
-		{"BLOB_APPEND", 2, -1, setParamsBlobAppend, makeBlobAppend, evlBlobAppend, NULL},
-		{"CEIL", 1, 1, setParamsDblDec, makeCeilFloor, evlCeil, NULL},
-		{"CEILING", 1, 1, setParamsDblDec, makeCeilFloor, evlCeil, NULL},
-		{"CHAR_TO_UUID", 1, 1, setParamsCharToUuid, makeUuid, evlCharToUuid, NULL},
-		{"COMPARE_DECFLOAT", 2, 2, setParamsDecFloat, makeShortResult, evlCompare, (void*) funCmpDec},
-		{"COS", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfCos},
-		{"COSH", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfCosh},
-		{"COT", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfCot},
-		{"CRYPT_HASH", 2, 2, setParamsHash, makeHash, evlHash, NULL},
-		{"DATEADD", 3, 3, setParamsDateAdd, makeDateAdd, evlDateAdd, NULL},
-		{"DATEDIFF", 3, 3, setParamsDateDiff, makeDateDiff, evlDateDiff, NULL},
-		{"DECRYPT", CRYPT_ARG_MAX, CRYPT_ARG_MAX, setParamsEncrypt, makeCrypt, evlDecrypt, NULL},
-		{"ENCRYPT", CRYPT_ARG_MAX, CRYPT_ARG_MAX, setParamsEncrypt, makeCrypt, evlEncrypt, NULL},
-		{"EXP", 1, 1, setParamsDblDec, makeDblDecResult, evlExp, NULL},
-		{"FIRST_DAY", 2, 2, setParamsFirstLastDay, makeFirstLastDayResult, evlFirstLastDay, (void*) funFirstDay},
-		{"FLOOR", 1, 1, setParamsDblDec, makeCeilFloor, evlFloor, NULL},
-		{"GEN_UUID", 0, 0, NULL, makeUuid, evlGenUuid, NULL},
-		{"HASH", 1, 2, setParamsHash, makeHash, evlHash, NULL},
-		{"HEX_DECODE", 1, 1, NULL, makeDecodeHex, evlDecodeHex, NULL},
-		{"HEX_ENCODE", 1, 1, NULL, makeEncodeHex, evlEncodeHex, NULL},
-		{"LAST_DAY", 2, 2, setParamsFirstLastDay, makeFirstLastDayResult, evlFirstLastDay, (void*) funLastDay},
-		{"LEFT", 2, 2, setParamsSecondInteger, makeLeftRight, evlLeft, NULL},
-		{"LN", 1, 1, setParamsDblDec, makeDblDecResult, evlLnLog10, (void*) funLnat},
-		{"LOG", 2, 2, setParamsDblDec, makeDblDecResult, evlLog, NULL},
-		{"LOG10", 1, 1, setParamsDblDec, makeDblDecResult, evlLnLog10, (void*) funLog10},
-		{"LPAD", 2, 3, setParamsSecondInteger, makePad, evlPad, (void*) funLPad},
-		{"MAKE_DBKEY", 2, 4, setParamsMakeDbkey, makeDbkeyResult, evlMakeDbkey, NULL},
-		{"MAXVALUE", 1, -1, setParamsFromList, makeFromListResult, evlMaxMinValue, (void*) funMaxValue},
-		{"MINVALUE", 1, -1, setParamsFromList, makeFromListResult, evlMaxMinValue, (void*) funMinValue},
-		{"MOD", 2, 2, setParamsFromList, makeMod, evlMod, NULL},
-		{"NORMALIZE_DECFLOAT", 1, 1, setParamsDecFloat, makeDecFloatResult, evlNormDec, NULL},
-		{"OVERLAY", 3, 4, setParamsOverlay, makeOverlay, evlOverlay, NULL},
-		{"PI", 0, 0, NULL, makePi, evlPi, NULL},
-		{"POSITION", 2, 3, setParamsPosition, makeLongResult, evlPosition, NULL},
-		{"POWER", 2, 2, setParamsDblDec, makeDblDecResult, evlPower, NULL},
-		{"QUANTIZE", 2, 2, setParamsDecFloat, makeDecFloatResult, evlQuantize, NULL},
-		{"RAND", 0, 0, NULL, makeDoubleResult, evlRand, NULL},
-		{RDB_GET_CONTEXT, 2, 2, setParamsGetSetContext, makeGetSetContext, evlGetContext, NULL},
-		{"RDB$GET_TRANSACTION_CN", 1, 1, setParamsInt64, makeGetTranCN, evlGetTranCN, NULL},
-		{"RDB$ROLE_IN_USE", 1, 1, setParamsAsciiVal, makeBooleanResult, evlRoleInUse, NULL},
-		{RDB_SET_CONTEXT, 3, 3, setParamsGetSetContext, makeGetSetContext, evlSetContext, NULL},
-		{"RDB$SYSTEM_PRIVILEGE", 1, 1, NULL, makeBooleanResult, evlSystemPrivilege, NULL},
-		{"REPLACE", 3, 3, setParamsFromList, makeReplace, evlReplace, NULL},
-		{"REVERSE", 1, 1, NULL, makeReverse, evlReverse, NULL},
-		{"RIGHT", 2, 2, setParamsSecondInteger, makeLeftRight, evlRight, NULL},
-		{"ROUND", 1, 2, setParamsRoundTrunc, makeRound, evlRound, NULL},
-		{"RPAD", 2, 3, setParamsSecondInteger, makePad, evlPad, (void*) funRPad},
-		{"RSA_DECRYPT", RSA_CRYPT_ARG_MAX, RSA_CRYPT_ARG_MAX, setParamsRsaEncrypt, makeRsaCrypt, evlRsaDecrypt, NULL},
-		{"RSA_ENCRYPT", RSA_CRYPT_ARG_MAX, RSA_CRYPT_ARG_MAX, setParamsRsaEncrypt, makeRsaCrypt, evlRsaEncrypt, NULL},
-		{"RSA_PRIVATE", 1, 1, setParamsInteger, makeRsaPrivate, evlRsaPrivate, NULL},
-		{"RSA_PUBLIC", 1, 1, setParamsRsaPublic, makeRsaPublic, evlRsaPublic, NULL},
-		{"RSA_SIGN_HASH", RSA_SIGN_ARG_MAX, RSA_SIGN_ARG_MAX, setParamsRsaSign, makeRsaSign, evlRsaSign, NULL},
-		{"RSA_VERIFY_HASH", RSA_VERIFY_ARG_MAX, RSA_VERIFY_ARG_MAX, setParamsRsaVerify, makeBoolResult, evlRsaVerify, NULL},
-		{"SIGN", 1, 1, setParamsDblDec, makeShortResult, evlSign, NULL},
-		{"SIN", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfSin},
-		{"SINH", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfSinh},
-		{"SQRT", 1, 1, setParamsDblDec, makeDblDecResult, evlSqrt, NULL},
-		{"TAN", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfTan},
-		{"TANH", 1, 1, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfTanh},
-		{"TOTALORDER", 2, 2, setParamsDecFloat, makeShortResult, evlCompare, (void*) funTotalOrd},
-		{"TRUNC", 1, 2, setParamsRoundTrunc, makeTrunc, evlTrunc, NULL},
-		{"UNICODE_CHAR", 1, 1, setParamsInteger, makeUnicodeChar, evlUnicodeChar, NULL},
-		{"UNICODE_VAL", 1, 1, setParamsUnicodeVal, makeLongResult, evlUnicodeVal, NULL},
-		{"UUID_TO_CHAR", 1, 1, setParamsUuidToChar, makeUuidToChar, evlUuidToChar, NULL},
-		{"", 0, 0, NULL, NULL, NULL, NULL}
+		// name, minArgCount, maxArgCount, deterministic, setParamsFunc, makeFunc, evlFunc, misc
+
+		{"ABS", 1, 1, true, setParamsDblDec, makeAbs, evlAbs, NULL},
+		{"ACOS", 1, 1, true, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfAcos},
+		{"ACOSH", 1, 1, true, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfAcosh},
+		{"ASCII_CHAR", 1, 1, true, setParamsInteger, makeAsciiChar, evlAsciiChar, NULL},
+		{"ASCII_VAL", 1, 1, true, setParamsAsciiVal, makeShortResult, evlAsciiVal, NULL},
+		{"ASIN", 1, 1, true, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfAsin},
+		{"ASINH", 1, 1, true, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfAsinh},
+		{"ATAN", 1, 1, true, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfAtan},
+		{"ATANH", 1, 1, true, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfAtanh},
+		{"ATAN2", 2, 2, true, setParamsDouble, makeDoubleResult, evlAtan2, NULL},
+		{"BASE64_DECODE", 1, 1, true, NULL, makeDecode64, evlDecode64, NULL},
+		{"BASE64_ENCODE", 1, 1, true, NULL, makeEncode64, evlEncode64, NULL},
+		{"BIN_AND", 2, -1, true, setParamsBin, makeBin, evlBin, (void*) funBinAnd},
+		{"BIN_NOT", 1, 1, true, setParamsBin, makeBin, evlBin, (void*) funBinNot},
+		{"BIN_OR", 2, -1, true, setParamsBin, makeBin, evlBin, (void*) funBinOr},
+		{"BIN_SHL", 2, 2, true, setParamsInteger, makeBinShift, evlBinShift, (void*) funBinShl},
+		{"BIN_SHR", 2, 2, true, setParamsInteger, makeBinShift, evlBinShift, (void*) funBinShr},
+		{"BIN_SHL_ROT", 2, 2, true, setParamsInteger, makeBinShift, evlBinShift, (void*) funBinShlRot},
+		{"BIN_SHR_ROT", 2, 2, true, setParamsInteger, makeBinShift, evlBinShift, (void*) funBinShrRot},
+		{"BIN_XOR", 2, -1, true, setParamsBin, makeBin, evlBin, (void*) funBinXor},
+		{"BLOB_APPEND", 2, -1, true, setParamsBlobAppend, makeBlobAppend, evlBlobAppend, NULL},
+		{"CEIL", 1, 1, true, setParamsDblDec, makeCeilFloor, evlCeil, NULL},
+		{"CEILING", 1, 1, true, setParamsDblDec, makeCeilFloor, evlCeil, NULL},
+		{"CHAR_TO_UUID", 1, 1, true, setParamsCharToUuid, makeUuid, evlCharToUuid, NULL},
+		{"COMPARE_DECFLOAT", 2, 2, true, setParamsDecFloat, makeShortResult, evlCompare, (void*) funCmpDec},
+		{"COS", 1, 1, true, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfCos},
+		{"COSH", 1, 1, true, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfCosh},
+		{"COT", 1, 1, true, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfCot},
+		{"CRYPT_HASH", 2, 2, true, setParamsHash, makeHash, evlHash, NULL},
+		{"DATEADD", 3, 3, true, setParamsDateAdd, makeDateAdd, evlDateAdd, NULL},
+		{"DATEDIFF", 3, 3, true, setParamsDateDiff, makeDateDiff, evlDateDiff, NULL},
+		{"DECRYPT", CRYPT_ARG_MAX, CRYPT_ARG_MAX, true, setParamsEncrypt, makeCrypt, evlDecrypt, NULL},
+		{"ENCRYPT", CRYPT_ARG_MAX, CRYPT_ARG_MAX, true, setParamsEncrypt, makeCrypt, evlEncrypt, NULL},
+		{"EXP", 1, 1, true, setParamsDblDec, makeDblDecResult, evlExp, NULL},
+		{"FIRST_DAY", 2, 2, true, setParamsFirstLastDay, makeFirstLastDayResult, evlFirstLastDay, (void*) funFirstDay},
+		{"FLOOR", 1, 1, true, setParamsDblDec, makeCeilFloor, evlFloor, NULL},
+		{"GEN_UUID", 0, 1, false, NULL, makeUuid, evlGenUuid, NULL},
+		{"HASH", 1, 2, true, setParamsHash, makeHash, evlHash, NULL},
+		{"HEX_DECODE", 1, 1, true, NULL, makeDecodeHex, evlDecodeHex, NULL},
+		{"HEX_ENCODE", 1, 1, true, NULL, makeEncodeHex, evlEncodeHex, NULL},
+		{"LAST_DAY", 2, 2, true, setParamsFirstLastDay, makeFirstLastDayResult, evlFirstLastDay, (void*) funLastDay},
+		{"LEFT", 2, 2, true, setParamsSecondInteger, makeLeftRight, evlLeft, NULL},
+		{"LN", 1, 1, true, setParamsDblDec, makeDblDecResult, evlLnLog10, (void*) funLnat},
+		{"LOG", 2, 2, true, setParamsDblDec, makeDblDecResult, evlLog, NULL},
+		{"LOG10", 1, 1, true, setParamsDblDec, makeDblDecResult, evlLnLog10, (void*) funLog10},
+		{"LPAD", 2, 3, true, setParamsSecondInteger, makePad, evlPad, (void*) funLPad},
+		{"MAKE_DBKEY", 2, 4, true, setParamsMakeDbkey, makeDbkeyResult, evlMakeDbkey, NULL},
+		{"MAXVALUE", 1, -1, true, setParamsFromList, makeFromListResult, evlMaxMinValue, (void*) funMaxValue},
+		{"MINVALUE", 1, -1, true, setParamsFromList, makeFromListResult, evlMaxMinValue, (void*) funMinValue},
+		{"MOD", 2, 2, true, setParamsFromList, makeMod, evlMod, NULL},
+		{"NORMALIZE_DECFLOAT", 1, 1, true, setParamsDecFloat, makeDecFloatResult, evlNormDec, NULL},
+		{"OVERLAY", 3, 4, true, setParamsOverlay, makeOverlay, evlOverlay, NULL},
+		{"PI", 0, 0, true, NULL, makePi, evlPi, NULL},
+		{"POSITION", 2, 3, true, setParamsPosition, makeLongResult, evlPosition, NULL},
+		{"POWER", 2, 2, true, setParamsDblDec, makeDblDecResult, evlPower, NULL},
+		{"QUANTIZE", 2, 2, true, setParamsDecFloat, makeDecFloatResult, evlQuantize, NULL},
+		{"RAND", 0, 0, false, NULL, makeDoubleResult, evlRand, NULL},
+		{RDB_GET_CONTEXT, 2, 2, true, setParamsGetSetContext, makeGetSetContext, evlGetContext, NULL},
+		{"RDB$GET_TRANSACTION_CN", 1, 1, false, setParamsInt64, makeGetTranCN, evlGetTranCN, NULL},
+		{"RDB$ROLE_IN_USE", 1, 1, true, setParamsAsciiVal, makeBooleanResult, evlRoleInUse, NULL},
+		{RDB_SET_CONTEXT, 3, 3, false, setParamsGetSetContext, makeGetSetContext, evlSetContext, NULL},
+		{"RDB$SYSTEM_PRIVILEGE", 1, 1, true, NULL, makeBooleanResult, evlSystemPrivilege, NULL},
+		{"REPLACE", 3, 3, true, setParamsFromList, makeReplace, evlReplace, NULL},
+		{"REVERSE", 1, 1, true, NULL, makeReverse, evlReverse, NULL},
+		{"RIGHT", 2, 2, true, setParamsSecondInteger, makeLeftRight, evlRight, NULL},
+		{"ROUND", 1, 2, true, setParamsRoundTrunc, makeRound, evlRound, NULL},
+		{"RPAD", 2, 3, true, setParamsSecondInteger, makePad, evlPad, (void*) funRPad},
+		{"RSA_DECRYPT", RSA_CRYPT_ARG_MAX, RSA_CRYPT_ARG_MAX, true, setParamsRsaEncrypt, makeRsaCrypt, evlRsaDecrypt, NULL},
+		{"RSA_ENCRYPT", RSA_CRYPT_ARG_MAX, RSA_CRYPT_ARG_MAX, true, setParamsRsaEncrypt, makeRsaCrypt, evlRsaEncrypt, NULL},
+		{"RSA_PRIVATE", 1, 1, false, setParamsInteger, makeRsaPrivate, evlRsaPrivate, NULL},
+		{"RSA_PUBLIC", 1, 1, false, setParamsRsaPublic, makeRsaPublic, evlRsaPublic, NULL},
+		{"RSA_SIGN_HASH", RSA_SIGN_ARG_MAX, RSA_SIGN_ARG_MAX, true, setParamsRsaSign, makeRsaSign, evlRsaSign, NULL},
+		{"RSA_VERIFY_HASH", RSA_VERIFY_ARG_MAX, RSA_VERIFY_ARG_MAX, true, setParamsRsaVerify, makeBoolResult, evlRsaVerify, NULL},
+		{"SIGN", 1, 1, true, setParamsDblDec, makeShortResult, evlSign, NULL},
+		{"SIN", 1, 1, true, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfSin},
+		{"SINH", 1, 1, true, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfSinh},
+		{"SQRT", 1, 1, true, setParamsDblDec, makeDblDecResult, evlSqrt, NULL},
+		{"TAN", 1, 1, true, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfTan},
+		{"TANH", 1, 1, true, setParamsDouble, makeDoubleResult, evlStdMath, (void*) trfTanh},
+		{"TOTALORDER", 2, 2, true, setParamsDecFloat, makeShortResult, evlCompare, (void*) funTotalOrd},
+		{"TRUNC", 1, 2, true, setParamsRoundTrunc, makeTrunc, evlTrunc, NULL},
+		{"UNICODE_CHAR", 1, 1, true, setParamsInteger, makeUnicodeChar, evlUnicodeChar, NULL},
+		{"UNICODE_VAL", 1, 1, true, setParamsUnicodeVal, makeLongResult, evlUnicodeVal, NULL},
+		{"UUID_TO_CHAR", 1, 1, true, setParamsUuidToChar, makeUuidToChar, evlUuidToChar, NULL},
+		{"", 0, 0, false, NULL, NULL, NULL, NULL}
 	};
 
 

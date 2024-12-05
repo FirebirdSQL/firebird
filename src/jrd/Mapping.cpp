@@ -1123,7 +1123,7 @@ private:
 			bool getPrivileges(const string& key, UserId::Privileges& system_privileges)
 			{
 				if (!key.hasData())
-					return false;
+					return true;
 
 				UserId::Privileges p;
         		if (!get(key, p))
@@ -1162,7 +1162,11 @@ private:
 					g |= l;
 				}
 
-				ULONG gg = 0; g.store(&gg);
+				FB_UINT64 gg = 0;
+				static_assert(sizeof(gg) >= g.BYTES_COUNT,
+					"The value for storing system privileges is too small");
+
+				g.store(&gg);
 				MAP_DEBUG(fprintf(stderr, "poprole %s 0x%x\n", key.c_str(), gg));
 				put(key, g);
 			}

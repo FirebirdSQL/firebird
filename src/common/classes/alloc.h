@@ -232,6 +232,16 @@ public:
 	// The same routine, but more easily callable from the debugger
 	void print_contents(const char* filename, unsigned flags = 0, const char* filter_path = 0) noexcept;
 
+	inline bool operator==(const MemoryPool& rhs) const
+	{
+		return pool == rhs.pool;
+	}
+
+	inline bool operator!=(const MemoryPool& rhs) const
+	{
+		return !operator==(rhs);
+	}
+
 public:
 	struct Finalizer
 	{
@@ -329,7 +339,7 @@ template <typename SubsystemThreadData, typename SubsystemPool>
 class SubsystemContextPoolHolder : public ContextPoolHolder
 {
 public:
-	SubsystemContextPoolHolder <SubsystemThreadData, SubsystemPool>
+	SubsystemContextPoolHolder
 	(
 		SubsystemThreadData* subThreadData,
 		SubsystemPool* newPool
@@ -340,10 +350,12 @@ public:
 	{
 		savedThreadData->setDefaultPool(newPool);
 	}
+
 	~SubsystemContextPoolHolder()
 	{
 		savedThreadData->setDefaultPool(savedPool);
 	}
+
 private:
 	SubsystemThreadData* savedThreadData;
 	SubsystemPool* savedPool;

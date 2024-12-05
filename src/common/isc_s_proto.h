@@ -73,7 +73,7 @@ struct mtx
 struct event_t
 {
 	SLONG event_count;
-	int pid;
+	int event_pid;
 	pthread_mutex_t event_mutex[1];
 	pthread_cond_t event_cond[1];
 };
