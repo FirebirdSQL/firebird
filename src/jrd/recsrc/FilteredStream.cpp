@@ -50,9 +50,13 @@ FilteredStream::FilteredStream(CompilerScratch* csb, RecordSource* next,
 
 	m_impure = csb->allocImpure<Impure>();
 
-	const auto cardinality = next->getCardinality();
-	Optimizer::adjustSelectivity(selectivity, MAXIMUM_SELECTIVITY, cardinality);
-	m_cardinality = cardinality * selectivity;
+	auto cardinality = next->getCardinality();
+	if (selectivity)
+	{
+		Optimizer::adjustSelectivity(selectivity, MAXIMUM_SELECTIVITY, cardinality);
+		cardinality *= selectivity;
+	}
+	m_cardinality = cardinality;
 }
 
 void FilteredStream::internalOpen(thread_db* tdbb) const

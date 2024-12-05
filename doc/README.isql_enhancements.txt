@@ -327,10 +327,129 @@ SQL> SET PER_TAB OFF;
 
 
 
+12) SET WIRE_STATS option.
+
+Author: Vladyslav Khorsun <hvlad at users sourceforge net>
+
+  When set to ON shows wire (network) statistics after query execution.
+It is set to OFF by default. The name WIRE_STATS could be shortened up to WIRE.
+
+The statistics counters shown in two groups: 'logical' and 'physical':
+  - logical counters show numbers of packets in terms of Firebird wire protocol
+	and number of bytes send before compression and received after decompression;
+  - physical counters show number of physical packets and bytes send and 
+	received over the wire, number of bytes could be affected by wire compression, 
+	if present. Also, number of network roundtrips is shown: it is number of
+	changes of IO direction from 'send' to 'receive'.
+
+  Note, wire statistics is gathered by Remote provider only, i.e. it is always
+zero for embedded connections. Also, it is collected by client and IO direction
+(send, receive) is shown from client point of view.
+
+Examples:
+
+1. INET protocol with wire compression.
+Set WireCompression = true in firebird.conf
+
+>isql inet://employee
+
+SQL> SET;
+Print statistics:        OFF
+Print per-table stats:   OFF
+Print wire stats:        OFF
+...
+
+SQL> SET WIRE;
+SQL>
+SQL> SELECT COUNT(*) FROM RDB$RELATIONS;
+
+                COUNT
+=====================
+                   67
+
+Wire logical statistics:
+  send packets =        6
+  recv packets =        5
+  send bytes   =      184
+  recv bytes   =      224
+Wire physical statistics:
+  send packets =        3
+  recv packets =        2
+  send bytes   =      123
+  recv bytes   =       88
+  roundtrips   =        2
+
+  Note difference due to wire compression in send/recv bytes for logical and
+physical stats.
+
+
+2. XNET protocol (wire compression is not used).
+
+>isql xnet://employee
+
+SQL> SET WIRE;
+SQL>
+SQL> SELECT COUNT(*) FROM RDB$RELATIONS;
+
+                COUNT
+=====================
+                   67
+
+Wire logical statistics:
+  send packets =        5
+  recv packets =        6
+  send bytes   =      176
+  recv bytes   =      256
+Wire physical statistics:
+  send packets =        5
+  recv packets =        5
+  send bytes   =      176
+  recv bytes   =      256
+  roundtrips   =        5
+
+  Note, send/recv bytes for logical and physical stats are equal.
+
+
+3. Embedded connection (wire statistics is absent).
+
+SQL> SET WIRE;
+SQL>
+SQL> select count(*) from rdb$relations;
+
+                COUNT
+=====================
+                   67
+
+Wire logical statistics:
+  send packets =        0
+  recv packets =        0
+  send bytes   =        0
+  recv bytes   =        0
+Wire physical statistics:
+  send packets =        0
+  recv packets =        0
+  send bytes   =        0
+  recv bytes   =        0
+  roundtrips   =        0
+
+
+
+13) SHOW WIRE_STATISTICS command.
+
+Author: Vladyslav Khorsun <hvlad at users sourceforge net>
+
+  New ISQL command that shows accumulated wire statistics. There is also
+shortened alias WIRE_STATS.
+
+  The command show values of wire statistics counters, accumulated since the
+connection start time. Format is the same as of SET STATS above.
+
+
+
 Isql enhancements in Firebird v6.
 ---------------------------------
 
-12) EXPLAIN statement.
+14) EXPLAIN statement.
 
 Author: Adriano dos Santos Fernandes
 
@@ -355,7 +474,7 @@ SQL>
 SQL> set term ;!
 
 
-13) SET AUTOTERM ON/OFF
+15) SET AUTOTERM ON/OFF
 
 Author: Adriano dos Santos Fernandes
 

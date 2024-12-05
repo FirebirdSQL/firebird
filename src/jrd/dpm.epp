@@ -245,47 +245,51 @@ double DPM_cardinality(thread_db* tdbb, jrd_rel* relation, const Format* format)
 
 	ULONG recordCount = 0, recordLength = 0;
 
-	const RelationPages* const relPages = relation->getPages(tdbb);
-	const vcl* const vector = relPages->rel_pages;
-	if (vector)
+	RelationPages* const relPages = relation->getPages(tdbb);
+	if (relPages->rel_pages)
 	{
-		WIN window(relPages->rel_pg_space_id, (*vector)[0]);
-
-		Ods::pointer_page* ppage =
-			(Ods::pointer_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_pointer);
-		if (!ppage)
+		bool done = false;
+		for (ULONG sequence = 0; !done; sequence++)
 		{
-			 BUGCHECK(243);
-			 // msg 243 missing pointer page in DPM_data_pages
-		}
+			WIN window(relPages->rel_pg_space_id, -1);
 
-		const ULONG* page = ppage->ppg_page;
-		const ULONG* const end_page = page + ppage->ppg_count;
-		while (page < end_page)
-		{
-			if (*page)
+			const pointer_page* ppage =
+				get_pointer_page(tdbb, relation, relPages, &window, sequence, LCK_read);
+			if (!ppage)
 			{
-				Ods::data_page* dpage =
-					(Ods::data_page*) CCH_HANDOFF(tdbb, &window, *page, LCK_read, pag_data);
-
-				const data_page::dpg_repeat* index = dpage->dpg_rpt;
-				const data_page::dpg_repeat* const end = index + dpage->dpg_count;
-				for (; index < end; index++)
-				{
-					if (index->dpg_offset)
-					{
-						recordCount++;
-						recordLength += index->dpg_length - RHD_SIZE;
-					}
-				}
-
-				break;
+				BUGCHECK(243);
+				// msg 243 missing pointer page in DPM_data_pages
 			}
 
-			page++;
-		}
+			const UCHAR* bits = (UCHAR*)(ppage->ppg_page + dbb->dbb_dp_per_pp);
+			for (USHORT slot = 0; slot < ppage->ppg_count; slot++)
+			{
+				if (ppage->ppg_page[slot] &&
+					!PPG_DP_BIT_TEST(bits, slot, ppg_dp_secondary) &&
+					!PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty))
+				{
+					Ods::data_page* dpage =
+						(Ods::data_page*) CCH_HANDOFF(tdbb, &window, ppage->ppg_page[slot], LCK_read, pag_data);
 
-		CCH_RELEASE(tdbb, &window);
+					const data_page::dpg_repeat* index = dpage->dpg_rpt;
+					const data_page::dpg_repeat* const end = index + dpage->dpg_count;
+					for (; index < end; index++)
+					{
+						if (index->dpg_offset)
+						{
+							recordCount++;
+							recordLength += index->dpg_length - RHD_SIZE;
+						}
+					}
+
+					if (recordCount)
+						break;
+				}
+			}
+
+			done = (recordCount != 0) || (ppage->ppg_header.pag_flags & ppg_eof);
+			CCH_RELEASE(tdbb, &window);
+		}
 	}
 
 	// AB: If we have only 1 data-page then the cardinality calculation

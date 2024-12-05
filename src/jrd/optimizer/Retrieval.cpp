@@ -49,6 +49,8 @@
 
 #include "../jrd/optimizer/Optimizer.h"
 
+#include <cmath>
+
 using namespace Firebird;
 using namespace Jrd;
 
@@ -366,25 +368,103 @@ InversionCandidate* Retrieval::getInversion()
 	return invCandidate;
 }
 
-IndexTableScan* Retrieval::getNavigation()
+IndexTableScan* Retrieval::getNavigation(const InversionCandidate* candidate)
 {
 	if (!navigationCandidate)
 		return nullptr;
 
-	IndexScratch* const scratch = navigationCandidate->scratch;
+	const auto scratch = navigationCandidate->scratch;
+
+	const auto streamCardinality = csb->csb_rpt[stream].csb_cardinality;
+
+	// If the table looks like empty during preparation time, we cannot be sure about
+	// its real cardinality during execution. So, unless we have some index-based
+	// filtering applied, let's better be pessimistic and avoid external sorting
+	// due to likely cardinality under-estimation.
+	const bool avoidSorting = (streamCardinality <= MINIMUM_CARDINALITY && !candidate->inversion);
+
+	if (!(scratch->index->idx_runtime_flags & idx_plan_navigate) && !avoidSorting)
+	{
+		// Check whether the navigational index scan is cheaper than the external sort
+		// and give up if it's not worth the efforts.
+		//
+		// We ignore candidate->cost in the calculations below as it belongs
+		// to both parts being compared.
+
+		fb_assert(candidate);
+
+		// Restore the original selectivity of the inversion,
+		// i.e. before the navigation candidate was accounted
+		auto selectivity = candidate->selectivity / navigationCandidate->selectivity;
+
+		// Non-indexed booleans are checked before sorting, so they improve the selectivity
+
+		double factor = MAXIMUM_SELECTIVITY;
+		for (auto iter = optimizer->getConjuncts(outerFlag, innerFlag); iter.hasData(); ++iter)
+		{
+			if (!(iter & Optimizer::CONJUNCT_USED) &&
+				!candidate->matches.exist(iter) &&
+				iter->computable(csb, stream, true) &&
+				iter->containsStream(stream))
+			{
+				factor *= Optimizer::getSelectivity(*iter);
+			}
+		}
+
+		Optimizer::adjustSelectivity(selectivity, factor, streamCardinality);
+
+		// Don't consider external sorting if optimization for first rows is requested
+		// and we have no local filtering applied
+
+		if (!optimizer->favorFirstRows() || selectivity < MAXIMUM_SELECTIVITY)
+		{
+			// Estimate amount of records to be sorted
+			const auto cardinality = streamCardinality * selectivity;
+
+			// We optimistically assume that records will be cached during sorting
+			const auto sortCost =
+				// record copying (to the sort buffer and back)
+				cardinality * COST_FACTOR_MEMCOPY * 2 +
+				// quicksort algorithm is O(n*log(n)) in average
+				cardinality * log2(cardinality) * COST_FACTOR_QUICKSORT;
+
+			// During navigation we fetch an index leaf page per every record being returned,
+			// thus add the estimated cardinality to the cost
+			auto navigationCost = navigationCandidate->cost +
+				streamCardinality * candidate->selectivity;
+
+			if (optimizer->favorFirstRows())
+			{
+				// Reset the cost to represent a single record retrieval
+				navigationCost = DEFAULT_INDEX_COST;
+
+				// We know that some local filtering is applied, so we need
+				// to adjust the cost as we need to walk the index
+				// until the first matching record is found
+				const auto fullIndexCost = navigationCandidate->scratch->cardinality;
+				const auto ratio = MAXIMUM_SELECTIVITY / selectivity;
+				const auto fraction = ratio / streamCardinality;
+				const auto walkCost = fullIndexCost * fraction * navigationCandidate->selectivity;
+				navigationCost += walkCost;
+			}
+
+			if (sortCost < navigationCost)
+				return nullptr;
+		}
+	}
 
 	// Looks like we can do a navigational walk.  Flag that
 	// we have used this index for navigation, and allocate
 	// a navigational rsb for it.
 	scratch->index->idx_runtime_flags |= idx_navigate;
 
-	const USHORT key_length =
+	const auto indexNode = makeIndexScanNode(scratch);
+
+	const USHORT keyLength =
 		ROUNDUP(BTR_key_length(tdbb, relation, scratch->index), sizeof(SLONG));
 
-	InversionNode* const index_node = makeIndexScanNode(scratch);
-
 	return FB_NEW_POOL(getPool())
-		IndexTableScan(csb, getAlias(), stream, relation, index_node, key_length,
+		IndexTableScan(csb, getAlias(), stream, relation, indexNode, keyLength,
 					   navigationCandidate->selectivity);
 }
 
@@ -858,6 +938,8 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 			{
 				const auto& segment = scratch.segments[j];
 
+				auto scanType = segment.scanType;
+
 				if (segment.scope == scope)
 					scratch.scopeCandidate = true;
 
@@ -867,7 +949,7 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 				{
 					auto textType = INTL_texttype_lookup(tdbb, INTL_INDEX_TO_TEXT(iType));
 
-					if (segment.scanType != segmentScanMissing && !(idx->idx_flags & idx_unique))
+					if (scanType != segmentScanMissing && !(idx->idx_flags & idx_unique))
 					{
 						if (textType->getFlags() & TEXTTYPE_SEPARATE_UNIQUE)
 						{
@@ -878,7 +960,7 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 						}
 					}
 
-					if (segment.scanType == segmentScanStarting)
+					if (scanType == segmentScanStarting)
 					{
 						if (textType->getFlags() & TEXTTYPE_MULTI_STARTING_KEY)
 							scratch.useMultiStartingKeys = true;	// use INTL_KEY_MULTI_STARTING
@@ -896,7 +978,7 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 				if (useDefaultSelectivity)
 					selectivity = MAX(scratch.selectivity * DEFAULT_SELECTIVITY, minSelectivity);
 
-				if (segment.scanType == segmentScanList)
+				if (scanType == segmentScanList)
 				{
 					if (listCount) // we cannot have more than one list matched to an index
 						break;
@@ -910,10 +992,10 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 
 				// Check if this is the last usable segment
 				if (!scratch.usePartialKey &&
-					(segment.scanType == segmentScanEqual ||
-					 segment.scanType == segmentScanEquivalent ||
-					 segment.scanType == segmentScanMissing ||
-					 segment.scanType == segmentScanList))
+					(scanType == segmentScanEqual ||
+					 scanType == segmentScanEquivalent ||
+					 scanType == segmentScanMissing ||
+					 scanType == segmentScanList))
 				{
 					// This is a perfect usable segment thus update root selectivity
 					scratch.lowerCount++;
@@ -925,18 +1007,14 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 
 					// An equality scan for any unique index cannot retrieve more
 					// than one row. The same is true for an equivalence scan for
-					// any primary index.
-					const bool single_match =
-						(segment.scanType == segmentScanEqual &&
-							(idx->idx_flags & idx_unique)) ||
-						(segment.scanType == segmentScanEquivalent &&
-							(idx->idx_flags & idx_primary));
+					// any primary index. A missing scan for any primary index is
+					// known to return no rows, but let's treat it the same way.
+					const bool uniqueMatch =
+						(scanType == segmentScanEqual && (idx->idx_flags & idx_unique)) ||
+						(scanType == segmentScanEquivalent && (idx->idx_flags & idx_primary)) ||
+						(scanType == segmentScanMissing && (idx->idx_flags & idx_primary));
 
-					// dimitr: IS NULL scan against primary key is guaranteed
-					//		   to return zero rows. Do we need yet another
-					//		   special case here?
-
-					if (single_match && ((j + 1) == idx->idx_count))
+					if (uniqueMatch && ((j + 1) == idx->idx_count))
 					{
 						// We have found a full equal matching index and it's unique,
 						// so we can stop looking further, because this is the best
@@ -959,13 +1037,13 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 				}
 				else
 				{
-					if (segment.scanType != segmentScanNone)
+					if (scanType != segmentScanNone)
 					{
 						// This is our last segment that we can use,
 						// estimate the selectivity
 						double factor = 1;
 
-						switch (segment.scanType)
+						switch (scanType)
 						{
 							case segmentScanBetween:
 								scratch.lowerCount++;
@@ -1207,9 +1285,15 @@ InversionNode* Retrieval::makeIndexScanNode(IndexScratch* indexScratch) const
 		// This index is never used for IS NULL, thus we can ignore NULLs
 		// already at index scan. But this rule doesn't apply to nod_equiv
 		// which requires NULLs to be found in the index.
-		// A second exception is when this index is used for navigation.
-		if (ignoreNullsOnScan && !(idx->idx_runtime_flags & idx_navigate))
+		//
+		// dimitr:	make sure the check below is never moved outside the IF scope,
+		// 			as this flag must not be set for a full index scan,
+		//			see also the assertion below
+		if (ignoreNullsOnScan)
+		{
+			fb_assert(indexScratch->lowerCount || indexScratch->upperCount);
 			retrieval->irb_generic |= irb_ignore_null_value_key;
+		}
 
 		const auto& lastSegment = segments[count - 1];
 
@@ -1241,6 +1325,9 @@ InversionNode* Retrieval::makeIndexScanNode(IndexScratch* indexScratch) const
 	// Check to see if this is really an equality retrieval
 	if (retrieval->irb_lower_count == retrieval->irb_upper_count)
 	{
+		const bool fullMatch = (retrieval->irb_lower_count == idx->idx_count);
+		bool uniqueMatch = false;
+
 		retrieval->irb_generic |= irb_equality;
 
 		for (unsigned i = 0; i < retrieval->irb_lower_count; i++)
@@ -1250,7 +1337,22 @@ InversionNode* Retrieval::makeIndexScanNode(IndexScratch* indexScratch) const
 				retrieval->irb_generic &= ~irb_equality;
 				break;
 			}
+
+			if (segments[i].scanType == segmentScanMissing ||
+				segments[i].scanType == segmentScanEquivalent)
+			{
+				if (fullMatch && (idx->idx_flags & idx_primary))
+					uniqueMatch = true;
+			}
+			else if (segments[i].scanType == segmentScanEqual)
+			{
+				if (fullMatch && (idx->idx_flags & idx_unique))
+					uniqueMatch = true;
+			}
 		}
+
+		if ((retrieval->irb_generic & irb_equality) && uniqueMatch)
+			retrieval->irb_generic |= irb_unique;
 	}
 
 	// If we are matching less than the full index, this is a partial match

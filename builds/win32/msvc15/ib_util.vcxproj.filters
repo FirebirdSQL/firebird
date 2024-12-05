@@ -19,11 +19,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\..\src\extlib\ib_util.h">
-      <Filter>Header files</Filter>
-    </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
     <ResourceCompile Include="..\..\..\src\jrd\version.rc">
       <Filter>Resource files</Filter>
     </ResourceCompile>

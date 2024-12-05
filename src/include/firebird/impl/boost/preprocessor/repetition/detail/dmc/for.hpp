@@ -8,11 +8,12 @@
 #  */
 #
 # /* Revised by Paul Mensonides (2002) */
+# /* Revised by Edward Diener (2020) */
 #
 # /* See http://www.boost.org for most recent version. */
 #
-# ifndef FB_BOOST_PREPROCESSOR_REPETITION_DETAIL_FOR_HPP
-# define FB_BOOST_PREPROCESSOR_REPETITION_DETAIL_FOR_HPP
+# ifndef FB_BOOST_PREPROCESSOR_REPETITION_DETAIL_DMC_FOR_HPP
+# define FB_BOOST_PREPROCESSOR_REPETITION_DETAIL_DMC_FOR_HPP
 #
 # include <firebird/impl/boost/preprocessor/control/expr_iif.hpp>
 # include <firebird/impl/boost/preprocessor/control/iif.hpp>

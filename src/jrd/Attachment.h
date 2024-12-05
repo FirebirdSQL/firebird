@@ -734,6 +734,7 @@ public:
 	void storeBinaryBlob(thread_db* tdbb, jrd_tra* transaction, bid* blobId,
 		const Firebird::ByteChunk& chunk);
 
+	void releaseBatches();
 	void releaseGTTs(thread_db* tdbb);
 	void resetSession(thread_db* tdbb, jrd_tra** traHandle);
 
@@ -796,12 +797,12 @@ public:
 	}
 
 	// batches control
-	void registerBatch(JBatch* b)
+	void registerBatch(DsqlBatch* b)
 	{
 		att_batches.add(b);
 	}
 
-	void deregisterBatch(JBatch* b)
+	void deregisterBatch(DsqlBatch* b)
 	{
 		att_batches.findAndRemove(b);
 	}
@@ -864,7 +865,7 @@ private:
 	unsigned int att_stmt_timeout;		// milliseconds
 	Firebird::RefPtr<Firebird::TimerImpl> att_idle_timer;
 
-	Firebird::Array<JBatch*> att_batches;
+	Firebird::Array<DsqlBatch*> att_batches;
 	InitialOptions att_initial_options;	// Initial session options
 	DebugOptions att_debug_options;
 	Firebird::AutoPtr<ProfilerManager> att_profiler_manager;	// ProfilerManager

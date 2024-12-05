@@ -98,7 +98,7 @@ FB_IMPL_MSG_SYMBOL(ISQL, 96, NO_OBJECT, "There is no metadata object @1 in this 
 FB_IMPL_MSG_SYMBOL(ISQL, 97, NO_GRANT_ON_ROL, "There is no membership privilege granted on @1 in this database")
 FB_IMPL_MSG_SYMBOL(ISQL, 98, UNEXPECTED_EOF, "Expected end of statement, encountered EOF")
 FB_IMPL_MSG_SYMBOL(ISQL, 101, TIME_ERR, "Bad TIME: @1")
-FB_IMPL_MSG_SYMBOL(ISQL, 102, HLP_OBJTYPE3, "               SYSTEM, TABLE, TRIGGER, VERSION, USERS, VIEW")
+FB_IMPL_MSG_SYMBOL(ISQL, 102, HLP_OBJTYPE3, "               SYSTEM, TABLE, TRIGGER, VERSION, USERS, VIEW, WIRE_STATISTICS")
 FB_IMPL_MSG_SYMBOL(ISQL, 103, NO_ROLE, "There is no role @1 in this database")
 FB_IMPL_MSG_SYMBOL(ISQL, 104, USAGE_BAIL, "	-b(ail)                 bail on errors (set bail on)")
 FB_IMPL_MSG_NO_SYMBOL(ISQL, 105, "Incomplete string in @1")
@@ -205,3 +205,4 @@ FB_IMPL_MSG_SYMBOL(ISQL, 205, HLP_EXPLAIN, "EXPLAIN                    -- explai
 FB_IMPL_MSG_SYMBOL(ISQL, 206, USAGE_AUTOTERM, "	-autot(erm)             use auto statement terminator (set autoterm on)")
 FB_IMPL_MSG_SYMBOL(ISQL, 207, AUTOTERM_NOT_SUPPORTED, "SET AUTOTERM ON is not supported in engine/server and has been disabled")
 FB_IMPL_MSG_SYMBOL(ISQL, 208, HLP_SETAUTOTERM, "    SET AUTOTERM           -- toggle auto statement terminator")
+FB_IMPL_MSG_SYMBOL(ISQL, 209, HLP_SETWIRESTATS, "    SET WIRE_stats         -- toggle display of wire (network) statistics")

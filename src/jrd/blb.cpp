@@ -326,6 +326,9 @@ blb* blb::create2(thread_db* tdbb,
 
 	blb* blob = allocate_blob(tdbb, transaction);
 
+	if (userBlob)
+		blob->blb_flags |= BLB_user;
+
 	if (type & isc_bpb_type_stream)
 		blob->blb_flags |= BLB_stream;
 
@@ -1296,7 +1299,9 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 			array->arr_request = own_request;
 	}
 
-	blob->destroy(!materialized_blob);
+	const bool purgeBlob = !materialized_blob ||
+		((transaction->tra_flags & TRA_auto_release_temp_blobid) && (blob->blb_flags & BLB_user));
+	blob->destroy(purgeBlob);
 }
 
 

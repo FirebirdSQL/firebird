@@ -79,7 +79,7 @@ namespace
 	class AutoImpl
 	{
 	public:
-		AutoImpl<T, Clear>(T* aPtr = NULL)
+		AutoImpl(T* aPtr = NULL)
 			: ptr(aPtr)
 		{
 		}
@@ -139,7 +139,7 @@ namespace
 
 	private:
 		// not implemented
-		AutoImpl<T, Clear>(AutoImpl<T, Clear>&);
+		AutoImpl(AutoImpl<T, Clear>&);
 		void operator =(AutoImpl<T, Clear>&);
 
 	private:

@@ -1113,7 +1113,7 @@ namespace Jrd
 			memset(this, 0, reinterpret_cast<char*>(&this->dpb_user_name) - reinterpret_cast<char*>(this));
 		}
 
-		void get(const UCHAR*, USHORT, bool&);
+		void get(const UCHAR*, FB_SIZE_T, bool&);
 
 		void setBuffers(RefPtr<const Config> config)
 		{
@@ -6069,7 +6069,6 @@ JBatch* JStatement::createBatch(Firebird::CheckStatusWrapper* status, Firebird::
 			batch = FB_NEW JBatch(dsqlBatch, this, inMetadata);
 			batch->addRef();
 			dsqlBatch->setInterfacePtr(batch);
-			tdbb->getAttachment()->registerBatch(batch);
 		}
 		catch (const Exception& ex)
 		{
@@ -6145,9 +6144,6 @@ void JBatch::freeEngineData(Firebird::CheckStatusWrapper* user_status)
 
 		try
 		{
-			Attachment* att = getAttachment()->getHandle();
-			if (att)
-				att->deregisterBatch(this);
 			delete batch;
 			batch = nullptr;
 		}
@@ -6885,7 +6881,7 @@ namespace
 	}
 } // anonymous
 
-void DatabaseOptions::get(const UCHAR* dpb, USHORT dpb_length, bool& invalid_client_SQL_dialect)
+void DatabaseOptions::get(const UCHAR* dpb, FB_SIZE_T dpb_length, bool& invalid_client_SQL_dialect)
 {
 /**************************************
  *
@@ -7724,6 +7720,8 @@ void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment, XThreadEns
 
 	if (attachment->att_event_session)
 		dbb->eventManager()->deleteSession(attachment->att_event_session);
+
+	attachment->releaseBatches();
 
     // CMP_release() changes att_requests.
 	while (attachment->att_requests.hasData())

@@ -19,7 +19,7 @@
 # Use SOLX86 to identify x86 version of Solaris.  Neil McCalden
 # 2 Oct 2002, Nickolay Samofatov - Major Cleanup
 
-WARNINGS=-Werror=delete-incomplete -Wall -W -Wno-unused -Wno-parentheses -Wno-switch -Wwrite-strings -Wno-non-virtual-dtor
+WARNINGS=-Wall -W -Wno-unused -Wno-parentheses -Wno-switch -Wwrite-strings -Wno-non-virtual-dtor
 COMM_SOLX_FLAGS:=-DSOLARIS -DBSD_COMP -fno-omit-frame-pointer -fmessage-length=0 -MMD -fPIC
 
 SFIO=@SFIO_DIR@

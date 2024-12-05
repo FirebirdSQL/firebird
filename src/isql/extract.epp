@@ -3337,17 +3337,19 @@ static void list_indexes()
 		{
 			IUTILS_copy_SQL_id (IDX.RDB$INDEX_NAME,    SQL_identifier,  DBL_QUOTE);
 			IUTILS_copy_SQL_id (IDX.RDB$RELATION_NAME, SQL_identifier2, DBL_QUOTE);
-			isqlGlob.printf("CREATE%s%s INDEX %s ON %s",
+			isqlGlob.printf("CREATE%s%s INDEX %s%s ON %s",
 					(IDX.RDB$UNIQUE_FLAG ? " UNIQUE" : ""),
 					(IDX.RDB$INDEX_TYPE ? " DESCENDING" : ""),
 					SQL_identifier,
+					(IDX.RDB$INDEX_INACTIVE ? " INACTIVE" : ""),
 					SQL_identifier2);
 		}
 		else
-			isqlGlob.printf("CREATE%s%s INDEX %s ON %s",
+			isqlGlob.printf("CREATE%s%s INDEX %s%s ON %s",
 					(IDX.RDB$UNIQUE_FLAG ? " UNIQUE" : ""),
 					(IDX.RDB$INDEX_TYPE ? " DESCENDING" : ""),
 					IDX.RDB$INDEX_NAME,
+					(IDX.RDB$INDEX_INACTIVE ? " INACTIVE" : ""),
 					IDX.RDB$RELATION_NAME);
 
 		// Get index expression or column names

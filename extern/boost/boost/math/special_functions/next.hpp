@@ -61,8 +61,8 @@ template <class T>
 struct has_hidden_guard_digits_10<T, true> : public std::integral_constant<bool, (std::numeric_limits<T>::digits10 != std::numeric_limits<T>::max_digits10)> {};
 
 template <class T>
-struct has_hidden_guard_digits 
-   : public has_hidden_guard_digits_10<T, 
+struct has_hidden_guard_digits
+   : public has_hidden_guard_digits_10<T,
    std::numeric_limits<T>::is_specialized
    && (std::numeric_limits<T>::radix == 10) >
 {};
@@ -70,7 +70,7 @@ struct has_hidden_guard_digits
 template <class T>
 inline const T& normalize_value(const T& val, const std::false_type&) { return val; }
 template <class T>
-inline T normalize_value(const T& val, const std::true_type&) 
+inline T normalize_value(const T& val, const std::true_type&)
 {
    static_assert(std::numeric_limits<T>::is_specialized, "Type T must be specialized.");
    static_assert(std::numeric_limits<T>::radix != 2, "Type T must be specialized.");
@@ -78,12 +78,12 @@ inline T normalize_value(const T& val, const std::true_type&)
    std::intmax_t shift = (std::intmax_t)std::numeric_limits<T>::digits - (std::intmax_t)ilogb(val) - 1;
    T result = scalbn(val, shift);
    result = round(result);
-   return scalbn(result, -shift); 
+   return scalbn(result, -shift);
 }
 
 template <class T>
-inline T get_smallest_value(std::true_type const&)
-{
+inline T get_smallest_value(std::true_type const&) {
+   static_assert(std::numeric_limits<T>::is_specialized, "Type T must be specialized.");
    //
    // numeric_limits lies about denorms being present - particularly
    // when this can be turned on or off at runtime, as is the case
@@ -106,11 +106,12 @@ inline T get_smallest_value(std::false_type const&)
 template <class T>
 inline T get_smallest_value()
 {
-#if defined(BOOST_MSVC) && (BOOST_MSVC <= 1310)
-   return get_smallest_value<T>(std::integral_constant<bool, std::numeric_limits<T>::is_specialized && (std::numeric_limits<T>::has_denorm == 1)>());
-#else
-   return get_smallest_value<T>(std::integral_constant<bool, std::numeric_limits<T>::is_specialized && (std::numeric_limits<T>::has_denorm == std::denorm_present)>());
-#endif
+   return get_smallest_value<T>(std::integral_constant<bool, std::numeric_limits<T>::is_specialized>());
+}
+
+template <class T>
+inline bool has_denorm_now() {
+   return get_smallest_value<T>() < tools::min_value<T>();
 }
 
 //
@@ -186,24 +187,28 @@ template <class T, class Policy>
 T float_next_imp(const T& val, const std::true_type&, const Policy& pol)
 {
    typedef typename exponent_type<T>::type exponent_type;
-   
+
    BOOST_MATH_STD_USING
    exponent_type expon;
    static const char* function = "float_next<%1%>(%1%)";
 
    int fpclass = (boost::math::fpclassify)(val);
 
-   if((fpclass == (int)FP_NAN) || (fpclass == (int)FP_INFINITE))
+   if (fpclass == (int)FP_INFINITE)
    {
-      if(val < 0)
+      if (val < 0)
          return -tools::max_value<T>();
+      return val;  // +INF
+   }
+   else if (fpclass == (int)FP_NAN)
+   {
       return policies::raise_domain_error<T>(
          function,
          "Argument must be finite, but got %1%", val, pol);
    }
 
    if(val >= tools::max_value<T>())
-      return policies::raise_overflow_error<T>(function, 0, pol);
+      return policies::raise_overflow_error<T>(function, nullptr, pol);
 
    if(val == 0)
       return detail::get_smallest_value<T>();
@@ -242,17 +247,21 @@ T float_next_imp(const T& val, const std::false_type&, const Policy& pol)
 
    int fpclass = (boost::math::fpclassify)(val);
 
-   if((fpclass == (int)FP_NAN) || (fpclass == (int)FP_INFINITE))
+   if (fpclass == (int)FP_INFINITE)
    {
-      if(val < 0)
+      if (val < 0)
          return -tools::max_value<T>();
+      return val;  // +INF
+   }
+   else if (fpclass == (int)FP_NAN)
+   {
       return policies::raise_domain_error<T>(
          function,
          "Argument must be finite, but got %1%", val, pol);
    }
 
    if(val >= tools::max_value<T>())
-      return policies::raise_overflow_error<T>(function, 0, pol);
+      return policies::raise_overflow_error<T>(function, nullptr, pol);
 
    if(val == 0)
       return detail::get_smallest_value<T>();
@@ -302,7 +311,7 @@ inline double float_next(const double& val, const Policy& pol)
          "Argument must be finite, but got %1%", val, pol);
 
    if(val >= tools::max_value<double>())
-      return policies::raise_overflow_error<double>(function, 0, pol);
+      return policies::raise_overflow_error<double>(function, nullptr, pol);
 
    return ::_nextafter(val, tools::max_value<double>());
 }
@@ -327,17 +336,21 @@ T float_prior_imp(const T& val, const std::true_type&, const Policy& pol)
 
    int fpclass = (boost::math::fpclassify)(val);
 
-   if((fpclass == (int)FP_NAN) || (fpclass == (int)FP_INFINITE))
+   if (fpclass == (int)FP_INFINITE)
    {
-      if(val > 0)
+      if (val > 0)
          return tools::max_value<T>();
+      return val; // -INF
+   }
+   else if (fpclass == (int)FP_NAN)
+   {
       return policies::raise_domain_error<T>(
          function,
          "Argument must be finite, but got %1%", val, pol);
    }
 
    if(val <= -tools::max_value<T>())
-      return -policies::raise_overflow_error<T>(function, 0, pol);
+      return -policies::raise_overflow_error<T>(function, nullptr, pol);
 
    if(val == 0)
       return -detail::get_smallest_value<T>();
@@ -377,17 +390,21 @@ T float_prior_imp(const T& val, const std::false_type&, const Policy& pol)
 
    int fpclass = (boost::math::fpclassify)(val);
 
-   if((fpclass == (int)FP_NAN) || (fpclass == (int)FP_INFINITE))
+   if (fpclass == (int)FP_INFINITE)
    {
-      if(val > 0)
+      if (val > 0)
          return tools::max_value<T>();
+      return val; // -INF
+   }
+   else if (fpclass == (int)FP_NAN)
+   {
       return policies::raise_domain_error<T>(
          function,
          "Argument must be finite, but got %1%", val, pol);
    }
 
    if(val <= -tools::max_value<T>())
-      return -policies::raise_overflow_error<T>(function, 0, pol);
+      return -policies::raise_overflow_error<T>(function, nullptr, pol);
 
    if(val == 0)
       return -detail::get_smallest_value<T>();
@@ -438,7 +455,7 @@ inline double float_prior(const double& val, const Policy& pol)
          "Argument must be finite, but got %1%", val, pol);
 
    if(val <= -tools::max_value<double>())
-      return -policies::raise_overflow_error<double>(function, 0, pol);
+      return -policies::raise_overflow_error<double>(function, nullptr, pol);
 
    return ::_nextafter(val, -tools::max_value<double>());
 }
@@ -684,8 +701,8 @@ inline typename tools::promote_args<T, U>::type float_distance(const T& a, const
    // We allow ONE of a and b to be an integer type, otherwise both must be the SAME type.
    //
    static_assert(
-      (std::is_same<T, U>::value 
-      || (std::is_integral<T>::value && !std::is_integral<U>::value) 
+      (std::is_same<T, U>::value
+      || (std::is_integral<T>::value && !std::is_integral<U>::value)
       || (!std::is_integral<T>::value && std::is_integral<U>::value)
       || (std::numeric_limits<T>::is_specialized && std::numeric_limits<U>::is_specialized
          && (std::numeric_limits<T>::digits == std::numeric_limits<U>::digits)
@@ -693,9 +710,9 @@ inline typename tools::promote_args<T, U>::type float_distance(const T& a, const
          && !std::numeric_limits<T>::is_integer && !std::numeric_limits<U>::is_integer)),
       "Float distance between two different floating point types is undefined.");
 
-   BOOST_IF_CONSTEXPR (!std::is_same<T, U>::value)
+   BOOST_MATH_IF_CONSTEXPR (!std::is_same<T, U>::value)
    {
-      BOOST_IF_CONSTEXPR(std::is_integral<T>::value)
+      BOOST_MATH_IF_CONSTEXPR(std::is_integral<T>::value)
       {
          return float_distance(static_cast<U>(a), b, pol);
       }

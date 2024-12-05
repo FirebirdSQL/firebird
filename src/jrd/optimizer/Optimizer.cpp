@@ -788,19 +788,21 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 	for (const auto rseStream : rseStreams)
 		csb->csb_rpt[rseStream].deactivate();
 
-	// Find and collect booleans that are invariant in this context
-	// (i.e. independent from streams in the RseNode). We can do that
-	// easily because these streams are inactive at this point and
-	// any node that references them will be not computable.
+	// Find and collect booleans that are both deterministic and invariant
+	// in this context (i.e. independent from streams in the current RseNode).
+	// We can check that easily because these streams are inactive at this point
+	// and any node that references them will be not computable.
 	// Note that we cannot do that for outer joins, as in this case boolean
 	// represents a join condition which does not filter out the rows.
 
 	BoolExprNode* invariantBoolean = nullptr;
+
 	if (isInnerJoin())
 	{
-		for (auto iter = getBaseConjuncts(); iter.hasData(); ++iter)
+		for (auto iter = getConjuncts(); iter.hasData(); ++iter)
 		{
 			if (!(iter & CONJUNCT_USED) &&
+				iter->deterministic() &&
 				iter->computable(csb, INVALID_STREAM, false))
 			{
 				compose(getPool(), &invariantBoolean, iter);
@@ -1971,14 +1973,15 @@ void Optimizer::checkSorts()
 
 unsigned Optimizer::distributeEqualities(BoolExprNodeStack& orgStack, unsigned baseCount)
 {
-	// dimitr:	Dumb protection against too many injected conjuncts (see CORE-5381).
-	//			Don't produce more additional conjuncts than we originally had
-	//			(i.e. this routine should never more than double the number of conjuncts).
-	//			Ideally, we need two separate limits here:
-	//				1) number of injected conjuncts (affects required impure size)
-	//				2) number of input conjuncts (affects search time inside this routine)
+	// dimitr:	Simplified protection against too many injected conjuncts (see CORE-5381).
+	//			Two separate limits are applied here:
+	//				1) number of input conjuncts (affects search time inside this routine)
+	//				2) number of injected conjuncts (affects required impure size)
 
-	if (baseCount * 2 > MAX_CONJUNCTS)
+	constexpr unsigned MAX_CONJUNCTS_TO_PROCESS = 1024;
+	const unsigned MAX_CONJUNCTS_TO_INJECT = MAX(baseCount, 256);
+
+	if (baseCount > MAX_CONJUNCTS_TO_PROCESS)
 		return 0;
 
 	ObjectsArray<ValueExprNodeStack> classes;
@@ -2063,7 +2066,7 @@ unsigned Optimizer::distributeEqualities(BoolExprNodeStack& orgStack, unsigned b
 			{
 				for (ValueExprNodeStack::iterator inner(outer); (++inner).hasData(); )
 				{
-					if (count < baseCount)
+					if (count < MAX_CONJUNCTS_TO_INJECT)
 					{
 						AutoPtr<ComparativeBoolNode> cmpNode(FB_NEW_POOL(getPool())
 							ComparativeBoolNode(getPool(), blr_eql));
@@ -2125,7 +2128,7 @@ unsigned Optimizer::distributeEqualities(BoolExprNodeStack& orgStack, unsigned b
 			{
 				for (ValueExprNodeStack::iterator temp(*eq_class); temp.hasData(); ++temp)
 				{
-					if (!fieldEqual(node1, temp.object()) && count < baseCount)
+					if (!fieldEqual(node1, temp.object()) && count < MAX_CONJUNCTS_TO_INJECT)
 					{
 						ValueExprNode* arg1;
 						ValueExprNode* arg2;
@@ -2645,7 +2648,7 @@ RecordSource* Optimizer::generateRetrieval(StreamType stream,
 			}
 		}
 
-		const auto navigation = retrieval.getNavigation();
+		const auto navigation = retrieval.getNavigation(candidate);
 
 		if (navigation)
 		{

@@ -7,6 +7,8 @@
 #  *                                                                          *
 #  ************************************************************************** */
 #
+# /* Revised by Edward Diener (2020) */
+#
 # /* See http://www.boost.org for most recent version. */
 #
 # ifndef FB_BOOST_PREPROCESSOR_SEQ_ELEM_HPP
@@ -43,6 +45,8 @@
 #    define FB_BOOST_PP_SEQ_ELEM_II(im) FB_BOOST_PP_SEQ_ELEM_III(im)
 #    define FB_BOOST_PP_SEQ_ELEM_III(x, _) x
 # endif
+#
+# if ~FB_BOOST_PP_CONFIG_FLAGS() & FB_BOOST_PP_CONFIG_STRICT()
 #
 # define FB_BOOST_PP_SEQ_ELEM_0(x) x, FB_BOOST_PP_NIL
 # define FB_BOOST_PP_SEQ_ELEM_1(_) FB_BOOST_PP_SEQ_ELEM_0
@@ -300,5 +304,24 @@
 # define FB_BOOST_PP_SEQ_ELEM_253(_) FB_BOOST_PP_SEQ_ELEM_252
 # define FB_BOOST_PP_SEQ_ELEM_254(_) FB_BOOST_PP_SEQ_ELEM_253
 # define FB_BOOST_PP_SEQ_ELEM_255(_) FB_BOOST_PP_SEQ_ELEM_254
+#
+# else
+#
+# include <firebird/impl/boost/preprocessor/config/limits.hpp>
+#
+# if FB_BOOST_PP_LIMIT_SEQ == 256
+# include <firebird/impl/boost/preprocessor/seq/limits/elem_256.hpp>
+# elif FB_BOOST_PP_LIMIT_SEQ == 512
+# include <firebird/impl/boost/preprocessor/seq/limits/elem_256.hpp>
+# include <firebird/impl/boost/preprocessor/seq/limits/elem_512.hpp>
+# elif FB_BOOST_PP_LIMIT_SEQ == 1024
+# include <firebird/impl/boost/preprocessor/seq/limits/elem_256.hpp>
+# include <firebird/impl/boost/preprocessor/seq/limits/elem_512.hpp>
+# include <firebird/impl/boost/preprocessor/seq/limits/elem_1024.hpp>
+# else
+# error Incorrect value for the FB_BOOST_PP_LIMIT_SEQ limit
+# endif
+#
+# endif
 #
 # endif

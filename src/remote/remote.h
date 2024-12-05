@@ -221,6 +221,27 @@ public:
 };
 
 
+struct RBlobInfo
+{
+	bool	valid;
+	UCHAR	blob_type;
+	ULONG	num_segments;
+	ULONG	max_segment;
+	ULONG	total_length;
+
+	RBlobInfo()
+	{
+		memset(this, 0, sizeof(*this));
+	}
+
+	// parse into response into m_info, assume buffer contains all known info items
+	void parseInfo(unsigned int bufferLength, const unsigned char* buffer);
+
+	// returns false if there is no valid local info or if unknown item encountered
+	bool getLocalInfo(unsigned int itemsLength, const unsigned char* items,
+		unsigned int bufferLength, unsigned char* buffer);
+};
+
 struct Rbl : public Firebird::GlobalStorage, public TypedHandle<rem_type_rbl>
 {
 	Firebird::HalfStaticArray<UCHAR, BLOB_LENGTH> rbl_data;
@@ -239,6 +260,7 @@ struct Rbl : public Firebird::GlobalStorage, public TypedHandle<rem_type_rbl>
 	USHORT		rbl_source_interp;	// source interp (for writing)
 	USHORT		rbl_target_interp;	// destination interp (for reading)
 	Rbl**		rbl_self;
+	RBlobInfo	rbl_info;
 
 public:
 	// Values for rbl_flags
@@ -1178,10 +1200,100 @@ struct rem_port : public Firebird::GlobalStorage, public Firebird::RefCounted
 
 	UCharArrayAutoPtr	port_buffer;
 
+
+	enum io_direction_t {
+		NONE,
+		SEND,
+		RECEIVE
+	};
+
+private:
+	// packets over physical connection
 	FB_UINT64 port_snd_packets;
 	FB_UINT64 port_rcv_packets;
+	// protocol packets
+	FB_UINT64 port_out_packets;
+	FB_UINT64 port_in_packets;
+	// bytes over physical connection
 	FB_UINT64 port_snd_bytes;
 	FB_UINT64 port_rcv_bytes;
+	// bytes before/after compression
+	FB_UINT64 port_out_bytes;
+	FB_UINT64 port_in_bytes;
+	FB_UINT64 port_roundtrips;				// number of changes of IO direction from SEND to RECEIVE
+	io_direction_t port_io_direction;		// last direction of IO
+
+public:
+	void bumpPhysStats(io_direction_t direction, ULONG count)
+	{
+		fb_assert(direction != NONE);
+
+		if (direction == SEND)
+		{
+			port_snd_packets++;
+			port_snd_bytes += count;
+		}
+		else
+		{
+			port_rcv_packets++;
+			port_rcv_bytes += count;
+		}
+
+		if (direction != port_io_direction)
+		{
+			if (port_io_direction != NONE && direction == RECEIVE)
+				port_roundtrips++;
+			port_io_direction = direction;
+		}
+	}
+
+	void bumpLogBytes(io_direction_t direction, ULONG count)
+	{
+		fb_assert(direction != NONE);
+
+		if (direction == SEND)
+			port_out_bytes += count;
+		else
+			port_in_bytes += count;
+	}
+
+	void bumpLogPackets(io_direction_t direction)
+	{
+		fb_assert(direction != NONE);
+
+		if (direction == SEND)
+			port_out_packets++;
+		else
+			port_in_packets++;
+	}
+
+	FB_UINT64 getStatItem(UCHAR infoItem) const
+	{
+		switch (infoItem)
+		{
+		case fb_info_wire_snd_packets:
+			return port_snd_packets;
+		case fb_info_wire_rcv_packets:
+			return port_rcv_packets;
+		case fb_info_wire_out_packets:
+			return port_out_packets;
+		case fb_info_wire_in_packets:
+			return port_in_packets;
+		case fb_info_wire_snd_bytes:
+			return port_snd_bytes;
+		case fb_info_wire_rcv_bytes:
+			return port_rcv_bytes;
+		case fb_info_wire_out_bytes:
+			return port_out_bytes;
+		case fb_info_wire_in_bytes:
+			return port_in_bytes;
+		case fb_info_wire_roundtrips:
+			return port_roundtrips;
+		default:
+			return 0;
+		}
+	}
+
 
 #ifdef WIRE_COMPRESS_SUPPORT
 	z_stream port_send_stream, port_recv_stream;
@@ -1221,7 +1333,9 @@ public:
 		port_known_server_keys(getPool()), port_crypt_plugin(NULL),
 		port_client_crypt_callback(NULL), port_server_crypt_callback(NULL), port_crypt_name(getPool()),
 		port_replicator(NULL), port_buffer(FB_NEW_POOL(getPool()) UCHAR[rpt]),
-		port_snd_packets(0), port_rcv_packets(0), port_snd_bytes(0), port_rcv_bytes(0)
+		port_snd_packets(0), port_rcv_packets(0), port_out_packets(0), port_in_packets(0),
+		port_snd_bytes(0), port_rcv_bytes(0), port_out_bytes(0), port_in_bytes(0),
+		port_roundtrips(0), port_io_direction(NONE)
 	{
 		addRef();
 		memset(&port_linger, 0, sizeof port_linger);

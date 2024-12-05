@@ -527,7 +527,7 @@ set_output_directory        (intl intl)
 # SHARED LIBRARY ib_util
 ########################################
 
-add_library                 (ib_util SHARED extlib/ib_util.cpp extlib/ib_util.h ${VERSION_RC})
+add_library                 (ib_util SHARED extlib/ib_util.cpp ${VERSION_RC})
 set_exported_symbols        (ib_util ib_util)
 set_output_directory_unix   (ib_util lib)
 
@@ -904,9 +904,7 @@ add_custom_target(copy_files
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/examples/stat ${output_dir}/examples/stat
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/examples/functions.c ${output_dir}/examples/functions.c
     # headers
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/src/extlib/ib_util.h ${output_dir}/include/ib_util.h
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/src/include/gen/iberror.h ${output_dir}/include/iberror.h
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/src/yvalve/perf.h ${output_dir}/include/perf.h
 )
 add_dependencies_cc     (copy_files databases)
 add_dependencies_unix_cc(copy_files makeHeader)

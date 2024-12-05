@@ -256,7 +256,7 @@ public:
 		  slct_ready(*getDefaultMemoryPool())
 	{ }
 
-	explicit Select(Firebird::MemoryPool& pool)
+	explicit Select(MemoryPool& pool)
 		: slct_time(0), slct_count(0), slct_poll(pool), slct_ready(pool)
 	{ }
 #else
@@ -266,7 +266,7 @@ public:
 		memset(&slct_fdset, 0, sizeof slct_fdset);
 	}
 
-	explicit Select(Firebird::MemoryPool& /*pool*/)
+	explicit Select(MemoryPool& /*pool*/)
 		: slct_time(0), slct_count(0), slct_width(0)
 	{
 		memset(&slct_fdset, 0, sizeof slct_fdset);
@@ -616,7 +616,7 @@ ULONG INET_remote_buffer;
 static GlobalPtr<Mutex> init_mutex;
 static volatile bool INET_initialized = false;
 static volatile bool INET_shutting_down = false;
-static Firebird::GlobalPtr<Select> INET_select;
+static GlobalPtr<Select> INET_select;
 static rem_port* inet_async_receive = NULL;
 
 
@@ -632,7 +632,7 @@ rem_port* INET_analyze(ClntAuthBlock* cBlock,
 					   ClumpletReader &dpb,
 					   RefPtr<const Config>* config,
 					   const PathName* ref_db_name,
-					   Firebird::ICryptKeyCallback* cryptCb,
+					   ICryptKeyCallback* cryptCb,
 					   int af)
 {
 /**************************************
@@ -3080,7 +3080,7 @@ static bool packet_receive(rem_port* port, UCHAR* buffer, SSHORT buffer_length, 
 		if (n > 0 && port->port_crypt_plugin)
 		{
 			port->port_crypt_plugin->decrypt(&st, n, buffer, buffer);
-			if (st.getState() & Firebird::IStatus::STATE_ERRORS)
+			if (st.getState() & IStatus::STATE_ERRORS)
 			{
 				status_exception::raise(&st);
 			}
@@ -3130,8 +3130,7 @@ static bool packet_receive(rem_port* port, UCHAR* buffer, SSHORT buffer_length, 
 	} // end scope
 #endif
 
-	port->port_rcv_packets++;
-	port->port_rcv_bytes += n;
+	port->bumpPhysStats(rem_port::RECEIVE, n);
 
 	*length = n;
 
@@ -3164,7 +3163,7 @@ static bool packet_send( rem_port* port, const SCHAR* buffer, SSHORT buffer_leng
 
 		char* d = b.getBuffer(buffer_length);
 		port->port_crypt_plugin->encrypt(&st, buffer_length, data, d);
-		if (st.getState() & Firebird::IStatus::STATE_ERRORS)
+		if (st.getState() & IStatus::STATE_ERRORS)
 		{
 			status_exception::raise(&st);
 		}
@@ -3306,9 +3305,7 @@ static bool packet_send( rem_port* port, const SCHAR* buffer, SSHORT buffer_leng
 	} // end scope
 #endif
 
-	port->port_snd_packets++;
-	port->port_snd_bytes += buffer_length;
-
+	port->bumpPhysStats(rem_port::SEND, buffer_length);
 	return true;
 }
 

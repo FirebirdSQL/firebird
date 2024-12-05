@@ -143,6 +143,8 @@ Usage:
    DECFLOAT_TRAPS               | Exceptional conditions in operations with DECFLOAT
                                 | values that cause a trap.
                                 |
+   PARALLEL_WORKERS             | Number of parallel workes that could be used by attachment.
+                                |
    PAGES_ALLOCATED              | Current value of allocated pages in the database.
                                 |
    PAGES_USED                   | Current value of allocated pages in the database.

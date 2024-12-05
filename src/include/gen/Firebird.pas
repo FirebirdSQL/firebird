@@ -1971,6 +1971,7 @@ type
 		const AUTH_SUCCESS = Integer(0);
 		const AUTH_MORE_DATA = Integer(1);
 		const AUTH_CONTINUE = Integer(2);
+		const AUTH_SUCCESS_WITH_DATA = Integer(3);
 
 	end;
 
@@ -4110,6 +4111,7 @@ const
 	isc_tpb_lock_timeout = byte(21);
 	isc_tpb_read_consistency = byte(22);
 	isc_tpb_at_snapshot_number = byte(23);
+	isc_tpb_auto_release_temp_blobid = byte(24);
 	isc_bpb_version1 = byte(1);
 	isc_bpb_source_type = byte(1);
 	isc_bpb_target_type = byte(2);
@@ -4506,6 +4508,15 @@ const
 	fb_info_username = byte(147);
 	fb_info_sqlrole = byte(148);
 	fb_info_parallel_workers = byte(149);
+	fb_info_wire_out_packets = byte(150);
+	fb_info_wire_in_packets = byte(151);
+	fb_info_wire_out_bytes = byte(152);
+	fb_info_wire_in_bytes = byte(153);
+	fb_info_wire_snd_packets = byte(154);
+	fb_info_wire_rcv_packets = byte(155);
+	fb_info_wire_snd_bytes = byte(156);
+	fb_info_wire_rcv_bytes = byte(157);
+	fb_info_wire_roundtrips = byte(158);
 	fb_info_crypt_encrypted = $01;
 	fb_info_crypt_process = $02;
 	fb_feature_multi_statements = byte(1);

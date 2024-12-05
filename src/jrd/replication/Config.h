@@ -33,6 +33,21 @@
 
 namespace Replication
 {
+	struct SyncReplica
+	{
+		explicit SyncReplica(MemoryPool& p)
+			: database(p), username(p), password(p)
+		{}
+
+		SyncReplica(MemoryPool& p, const SyncReplica& other)
+			: database(p, other.database), username(p, other.username), password(p, other.password)
+		{}
+
+		Firebird::string database;
+		Firebird::string username;
+		Firebird::string password;
+	};
+
 	struct Config : public Firebird::GlobalStorage
 	{
 		typedef Firebird::HalfStaticArray<Config*, 4> ReplicaList;
@@ -42,6 +57,8 @@ namespace Replication
 
 		static Config* get(const Firebird::PathName& dbName);
 		static void enumerate(ReplicaList& replicas);
+		static void splitConnectionString(const Firebird::string& input, Firebird::string& database,
+										  Firebird::string& username, Firebird::string& password);
 
 		Firebird::PathName dbName;
 		ULONG bufferSize;
@@ -55,7 +72,7 @@ namespace Replication
 		Firebird::PathName archiveDirectory;
 		Firebird::string archiveCommand;
 		ULONG archiveTimeout;
-		Firebird::ObjectsArray<Firebird::string> syncReplicas;
+		Firebird::ObjectsArray<SyncReplica> syncReplicas;
 		Firebird::PathName sourceDirectory;
 		std::optional<Firebird::Guid> sourceGuid;
 		bool verboseLogging;

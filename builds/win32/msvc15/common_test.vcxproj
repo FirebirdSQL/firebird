@@ -177,6 +177,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\common\tests\CommonTest.cpp" />
+    <ClCompile Include="..\..\..\src\common\tests\CvtTest.cpp" />
+    <ClCompile Include="..\..\..\src\common\tests\StringTest.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\tests\AlignerTest.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\tests\ArrayTest.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\tests\DoublyLinkedListTest.cpp" />

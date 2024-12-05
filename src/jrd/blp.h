@@ -259,7 +259,7 @@ static const struct
 	{"invoke_function", invoke_function},
 	{"invoke_procedure", invsel_procedure},
 	{"select_procedure", invsel_procedure},
-	{"blr_default_arg", zero},
+	{"default_arg", zero},
 	{"cast_format", cast_format},
 	{0, 0}
 };
