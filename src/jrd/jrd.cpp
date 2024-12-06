@@ -1301,7 +1301,7 @@ private:
 
 static void			check_database(thread_db* tdbb, bool async = false);
 static void			commit(thread_db*, jrd_tra*, const bool);
-static bool			drop_files(const jrd_file*);
+static bool			drop_file(Database*, const jrd_file*);
 static void			find_intl_charset(thread_db*, Jrd::Attachment*, const DatabaseOptions*);
 static void			init_database_lock(thread_db*);
 static void			run_commit_triggers(thread_db* tdbb, jrd_tra* transaction);
@@ -1831,7 +1831,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				dbb->dbb_crypto_manager = FB_NEW_POOL(*dbb->dbb_permanent) CryptoManager(tdbb);
 				dbb->dbb_monitoring_data = FB_NEW_POOL(*dbb->dbb_permanent) MonitoringData(dbb);
 
-				PAG_init2(tdbb, 0);
+				PAG_init2(tdbb);
 				PAG_header(tdbb, false, newForceWrite);
 				dbb->dbb_page_manager.initTempPageSpace(tdbb);
 				dbb->dbb_crypto_manager->attach(tdbb, attachment);
@@ -3552,11 +3552,9 @@ void JAttachment::internalDropDatabase(CheckStatusWrapper* user_status)
 				// This point on database is useless
 
 				// drop the files here
-				bool err = drop_files(file);
+				bool err = drop_file(dbb, file);
 				for (; shadow; shadow = shadow->sdw_next)
-				{
-					err = drop_files(shadow->sdw_file) || err;
-				}
+					err = drop_file(dbb, shadow->sdw_file) || err;
 
 				tdbb->setDatabase(NULL);
 				Database::destroy(dbb);
@@ -6797,31 +6795,28 @@ static void commit(thread_db* tdbb, jrd_tra* transaction, const bool retaining_f
 }
 
 
-static bool drop_files(const jrd_file* file)
+static bool drop_file(Database* dbb, const jrd_file* file)
 {
 /**************************************
  *
- *	d r o p _ f i l e s
+ *	d r o p _ f i l e
  *
  **************************************
  *
  * Functional description
- *	drop a linked list of files
+ *	Drop a file.
  *
  **************************************/
 	FbLocalStatus status;
 
-	for (; file; file = file->fil_next)
+	if (unlink(file->fil_string))
 	{
-		if (unlink(file->fil_string))
-		{
-			ERR_build_status(&status, Arg::Gds(isc_io_error) << Arg::Str("unlink") <<
-							   								   Arg::Str(file->fil_string) <<
-									 Arg::Gds(isc_io_delete_err) << SYS_ERR(errno));
-			Database* dbb = GET_DBB();
-			PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
-			iscDbLogStatus(pageSpace->file->fil_string, &status);
-		}
+		ERR_build_status(&status, Arg::Gds(isc_io_error) << Arg::Str("unlink") <<
+														   Arg::Str(file->fil_string) <<
+								 Arg::Gds(isc_io_delete_err) << SYS_ERR(errno));
+
+		PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+		iscDbLogStatus(pageSpace->file->fil_string, &status);
 	}
 
 	return status->getState() & IStatus::STATE_ERRORS ? true : false;

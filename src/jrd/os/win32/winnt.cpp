@@ -121,39 +121,7 @@ static const DWORD g_dwExtraTempFlags = FILE_ATTRIBUTE_TEMPORARY |
 										FILE_FLAG_DELETE_ON_CLOSE;
 
 
-int PIO_add_file(thread_db* tdbb, jrd_file* main_file, const Firebird::PathName& file_name, SLONG start)
-{
-/**************************************
- *
- *	P I O _ a d d _ f i l e
- *
- **************************************
- *
- * Functional description
- *	Add a file to an existing database.  Return the sequence
- *	number of the new file.  If anything goes wrong, return a
- *	sequence of 0.
- *
- **************************************/
-	jrd_file* const new_file = PIO_create(tdbb, file_name, false, false);
-	if (!new_file)
-		return 0;
-
-	new_file->fil_min_page = start;
-	USHORT sequence = 1;
-
-	jrd_file* file;
-	for (file = main_file; file->fil_next; file = file->fil_next)
-		++sequence;
-
-	file->fil_max_page = start - 1;
-	file->fil_next = new_file;
-
-	return sequence;
-}
-
-
-void PIO_close(jrd_file* main_file)
+void PIO_close(jrd_file* file)
 {
 /**************************************
  *
@@ -164,10 +132,7 @@ void PIO_close(jrd_file* main_file)
  * Functional description
  *
  **************************************/
-	for (jrd_file* file = main_file; file; file = file->fil_next)
-	{
-		maybeCloseFile(file->fil_desc);
-	}
+	maybeCloseFile(file->fil_desc);
 }
 
 
@@ -263,6 +228,8 @@ void PIO_extend(thread_db* tdbb, jrd_file* main_file, const ULONG extPages, cons
  *	Extend file by extPages pages of pageSize size.
  *
  **************************************/
+	fb_assert(extPages);
+
 	// hvlad: prevent other reading\writing threads from changing file pointer.
 	// As we open file without FILE_FLAG_OVERLAPPED, ReadFile\WriteFile calls
 	// will change file pointer we set here and file truncation instead of file
@@ -277,36 +244,24 @@ void PIO_extend(thread_db* tdbb, jrd_file* main_file, const ULONG extPages, cons
 	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 	FileExtendLockGuard extLock(main_file->fil_ext_lock, true);
 
-	ULONG leftPages = extPages;
-	for (jrd_file* file = main_file; file && leftPages; file = file->fil_next)
-	{
-		const ULONG filePages = PIO_get_number_of_pages(file, pageSize);
-		const ULONG fileMaxPages = (file->fil_max_page == MAX_ULONG) ?
-									MAX_ULONG : file->fil_max_page - file->fil_min_page + 1;
-		if (filePages < fileMaxPages)
-		{
-			const ULONG extendBy = MIN(fileMaxPages - filePages + file->fil_fudge, leftPages);
+	const ULONG filePages = PIO_get_number_of_pages(file, pageSize);
+	const ULONG extendBy = MIN(MAX_ULONG - filePages, extPages);
 
-			HANDLE hFile = file->fil_desc;
+	const HANDLE hFile = file->fil_desc;
 
-			LARGE_INTEGER newSize;
-			newSize.QuadPart = ((ULONGLONG) filePages + extendBy) * pageSize;
+	LARGE_INTEGER newSize;
+	newSize.QuadPart = ((ULONGLONG) filePages + extendBy) * pageSize;
 
-			const DWORD ret = SetFilePointer(hFile, newSize.LowPart, &newSize.HighPart, FILE_BEGIN);
-			if (ret == INVALID_SET_FILE_POINTER && GetLastError() != NO_ERROR) {
-				nt_error("SetFilePointer", file, isc_io_write_err, NULL);
-			}
-			if (!SetEndOfFile(hFile)) {
-				nt_error("SetEndOfFile", file, isc_io_write_err, NULL);
-			}
+	const DWORD ret = SetFilePointer(hFile, newSize.LowPart, &newSize.HighPart, FILE_BEGIN);
+	if (ret == INVALID_SET_FILE_POINTER && GetLastError() != NO_ERROR)
+		nt_error("SetFilePointer", file, isc_io_write_err, NULL);
 
-			leftPages -= extendBy;
-		}
-	}
+	if (!SetEndOfFile(hFile))
+		nt_error("SetEndOfFile", file, isc_io_write_err, NULL);
 }
 
 
-void PIO_flush(thread_db* tdbb, jrd_file* main_file)
+void PIO_flush(thread_db* tdbb, jrd_file* file)
 {
 /**************************************
  *
@@ -320,7 +275,7 @@ void PIO_flush(thread_db* tdbb, jrd_file* main_file)
  **************************************/
 	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 
-	for (jrd_file* file = main_file; file; file = file->fil_next)
+	if (file->fil_desc != INVALID_HANDLE_VALUE)
 		FlushFileBuffers(file->fil_desc);
 }
 
@@ -449,11 +404,11 @@ USHORT PIO_init_data(thread_db* tdbb, jrd_file* main_file, FbStatusVector* statu
 	if (!file)
 		return 0;
 
-	if (file->fil_min_page + 8 > startPage)
+	if (startPage < 8)
 		return 0;
 
 	USHORT leftPages = initPages;
-	const ULONG initBy = MIN(file->fil_max_page - startPage, leftPages);
+	const ULONG initBy = MIN(MAX_ULONG - startPage, leftPages);
 	if (initBy < leftPages)
 		leftPages = initBy;
 
@@ -828,20 +783,8 @@ static jrd_file* seek_file(jrd_file*	file,
  *	file block and seek to the proper page in that file.
  *
  **************************************/
-	BufferControl *bcb = bdb->bdb_bcb;
-	ULONG page = bdb->bdb_page.getPageNum();
-
-	for (;; file = file->fil_next)
-	{
-		if (!file) {
-			CORRUPT(158);		// msg 158 database file not available
-		}
-		else if (page >= file->fil_min_page && page <= file->fil_max_page) {
-			break;
-		}
-	}
-
-	page -= file->fil_min_page - file->fil_fudge;
+	BufferControl* const bcb = bdb->bdb_bcb;
+	const ULONG page = bdb->bdb_page.getPageNum();
 
     LARGE_INTEGER liOffset;
 	liOffset.QuadPart = UInt32x32To64((DWORD) page, (DWORD) bcb->bcb_page_size);

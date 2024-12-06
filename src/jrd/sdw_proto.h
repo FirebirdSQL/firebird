@@ -29,7 +29,6 @@ namespace Jrd {
 }
 
 void	SDW_add(Jrd::thread_db* tdbb, const TEXT*, USHORT, USHORT);
-int		SDW_add_file(Jrd::thread_db* tdbb, const TEXT*, SLONG, USHORT);
 void	SDW_check(Jrd::thread_db* tdbb);
 bool	SDW_check_conditional(Jrd::thread_db* tdbb);
 void	SDW_close();

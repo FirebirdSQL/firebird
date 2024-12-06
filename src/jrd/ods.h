@@ -531,8 +531,8 @@ static_assert(offsetof(struct header_page, hdr_data) == 128, "hdr_data offset mi
 
 inline constexpr UCHAR HDR_end					= 0;
 inline constexpr UCHAR HDR_root_file_name		= 1;	// Original name of root file
-inline constexpr UCHAR HDR_file					= 2;	// Secondary file
-inline constexpr UCHAR HDR_last_page			= 3;	// Last logical page number of file
+//inline constexpr UCHAR HDR_file				= 2;	// Secondary file
+//inline constexpr UCHAR HDR_last_page			= 3;	// Last logical page number of file
 inline constexpr UCHAR HDR_sweep_interval		= 4;	// Transactions between sweeps
 inline constexpr UCHAR HDR_crypt_checksum		= 5;	// Checksum of critical crypt parameters
 inline constexpr UCHAR HDR_difference_file		= 6;	// Delta file that is used during backup lock
