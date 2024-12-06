@@ -239,7 +239,7 @@ BlobFilter* BLF_lookup_internal_filter(thread_db* tdbb, SSHORT from, SSHORT to)
 
 	// Check for system defined filter
 
-	if (to == isc_blob_text && from >= 0 && from < FB_NELEM(filters))
+	if (to == isc_blob_text && from >= 0 && static_cast<FB_SIZE_T>(from) < FB_NELEM(filters))
 	{
 		BlobFilter* result = FB_NEW_POOL(*dbb->dbb_permanent) BlobFilter(*dbb->dbb_permanent);
 		result->blf_next = NULL;

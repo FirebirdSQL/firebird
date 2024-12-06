@@ -62,6 +62,7 @@
 #include "../common/classes/FpeControl.h"
 #include "../jrd/extds/ExtDS.h"
 #include "../jrd/align.h"
+#include "firebird/impl/types_pub.h"
 
 #include <functional>
 #include <cmath>
@@ -2709,7 +2710,7 @@ const char* extractParts[] =
 
 const char* getPartName(int n)
 {
-	if (n < 0 || n >= FB_NELEM(extractParts) || !extractParts[n])
+	if (n < 0 || static_cast<FB_SIZE_T>(n) >= FB_NELEM(extractParts) || !extractParts[n])
 		return "Unknown";
 
 	return extractParts[n];

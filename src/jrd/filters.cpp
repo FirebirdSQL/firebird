@@ -811,7 +811,7 @@ ISC_STATUS filter_transliterate_text(USHORT action, BlobControl* control)
 	{
 	case isc_blob_filter_open:
 	case isc_blob_filter_create:
-		for (SSHORT i = 0; i < FB_NELEM(control->ctl_data); i++)
+		for (FB_SIZE_T i = 0; i < FB_NELEM(control->ctl_data); i++)
 			control->ctl_data[i] = 0;
 		aux = NULL;
 
