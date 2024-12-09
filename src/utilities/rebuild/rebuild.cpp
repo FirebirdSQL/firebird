@@ -63,7 +63,6 @@ static void format_index_root(index_root_page*, int, SSHORT, SSHORT);
 static void format_pointer(pointer_page*, int, SSHORT, SSHORT, bool, SSHORT, const SLONG*);
 static void format_pip(page_inv_page*, int, int);
 static void format_tip(tx_inv_page*, int, SLONG);
-static void get_next_file(rbdb*, header_page*);
 static void get_range(TEXT***, const TEXT* const* const, ULONG*, ULONG*);
 static void get_switch(TEXT**, swc*);
 static header_page* open_database(rbdb*, ULONG);
@@ -197,8 +196,7 @@ int main( int argc, char *argv[])
 		rbdb = (rbdb*) RBDB_alloc((SLONG) (sizeof(struct rbdb) + strlen(db_in)));
 		strcpy(rbdb->rbdb_file.fil_name, db_in);
 		rbdb->rbdb_file.fil_length = strlen(db_in);
-		if (header = open_database(rbdb, pg_size))
-			get_next_file(rbdb, header);
+		header = open_database(rbdb, pg_size);
 
 		// some systems don't care for this write sharing stuff...
 		if (rbdb && (sw_dump_tips || sw_dump_pages))
@@ -209,7 +207,6 @@ int main( int argc, char *argv[])
 			RBDB_open(rbdb);
 		}
 	}
-
 
 	gdbb = &tdbb_struct;
 	gdbb->tdbb_database = &dbb_struct;
@@ -252,17 +249,15 @@ int main( int argc, char *argv[])
 		fclose(dbg_file);
 
 	if (rbdb)
+	{
 		RBDB_close(rbdb);
 
-	while (rbdb)
-	{
-		rbdb* const next_db = rbdb->rbdb_next;
 		if (rbdb->rbdb_buffer1)
 			gds__free(rbdb->rbdb_buffer1);
 		if (rbdb->rbdb_buffer2)
 			gds__free(rbdb->rbdb_buffer2);
+
 		gds__free(rbdb);
-		rbdb = next_db;
 	}
 
     return 0;
@@ -332,8 +327,7 @@ void RBDB_close( rbdb* rbdb)
  * Functional description
  *
  **************************************/
-	for (; rbdb; rbdb = rbdb->rbdb_next)
-		close(rbdb->rbdb_file.fil_file);
+	close(rbdb->rbdb_file.fil_file);
 }
 
 
@@ -729,36 +723,6 @@ static void format_tip( tx_inv_page* page, int page_size, SLONG next_page)
 
 	const SSHORT bytes = page_size - offsetof(tx_inv_page, tip_transactions[0]);
 	memset(page->tip_transactions, -1, bytes);
-}
-
-
-static void get_next_file( rbdb* rbdb, header_page* header)
-{
-/**************************************
- *
- *	g e t _ n e x t _ f i l e
- *
- **************************************
- *
- * Functional description
- *	If there's another file as part of
- *	this database, get it now.
- *
- **************************************/
-	rbdb** next = &rbdb->rbdb_next;
-	const UCHAR* p = header->hdr_data;
-	for (const UCHAR* const end = p + header->hdr_page_size; p < end && *p != HDR_end; p += 2 + p[1])
-	{
-		if (*p == HDR_file)
-		{
-			rbdb* next_rbdb = (rbdb*) RBDB_alloc(sizeof(struct rbdb) + (SSHORT) p[1]);
-			next_rbdb->rbdb_file.fil_length = (SSHORT) p[1];
-			strncpy(next_rbdb->rbdb_file.fil_name, p + 2, (SSHORT) p[1]);
-			*next = next_rbdb;
-			next = &next_rbdb->rbdb_next;
-			break;
-		}
-	}
 }
 
 

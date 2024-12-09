@@ -767,8 +767,6 @@ using namespace Firebird;
 	Firebird::string* stringPtr;
 	Jrd::IntlString* intlStringPtr;
 	Jrd::Lim64String* lim64ptr;
-	Jrd::DbFileClause* dbFileClause;
-	Firebird::Array<NestConst<Jrd::DbFileClause> >* dbFilesClause;
 	Jrd::ExternalClause* externalClause;
 	Firebird::NonPooledPair<Jrd::MetaName*, Jrd::ValueExprNode*>* namedArgument;
 	Firebird::NonPooledPair<Firebird::ObjectsArray<Jrd::MetaName>*, Jrd::ValueListNode*>* namedArguments;
@@ -1807,16 +1805,8 @@ index_condition_opt
 // CREATE SHADOW
 %type <createShadowNode> shadow_clause
 shadow_clause
-	: pos_short_integer manual_auto conditional utf_string first_file_length
-	 		{
-	 			$$ = newNode<CreateShadowNode>($1);
-		 		$$->manual = $2;
-		 		$$->conditional = $3;
-		 		$$->files.add(newNode<DbFileClause>(*$4));
-		 		$$->files.front()->length = $5;
-	 		}
-		sec_shadow_files(NOTRIAL(&$6->files))
-		 	{ $$ = $6; }
+	: pos_short_integer manual_auto conditional utf_string
+		{ $$ = newNode<CreateShadowNode>($1, $2, $3, *$4); }
 	;
 
 %type <boolVal>	manual_auto
@@ -1830,24 +1820,6 @@ manual_auto
 conditional
 	: /* nothing */		{ $$ = false; }
 	| CONDITIONAL		{ $$ = true; }
-	;
-
-%type <int32Val> first_file_length
-first_file_length
-	: /* nothing */								{ $$ = 0; }
-	| LENGTH equals long_integer page_noise		{ $$ = $3; }
-	;
-
-%type sec_shadow_files(<dbFilesClause>)
-sec_shadow_files($dbFilesClause)
-	: // nothing
-	| db_file_list($dbFilesClause)
-	;
-
-%type db_file_list(<dbFilesClause>)
-db_file_list($dbFilesClause)
-	: db_file				{ $dbFilesClause->add($1); }
-	| db_file_list db_file	{ $dbFilesClause->add($2); }
 	;
 
 
@@ -2279,8 +2251,6 @@ db_initial_option($alterDatabaseNode)
 	| ROLE utf_string
 	| PASSWORD utf_string
 	| SET NAMES utf_string
-	| LENGTH equals long_integer page_noise
-		{ $alterDatabaseNode->createLength = $3; }
 	;
 
 %type db_rem_desc1(<alterDatabaseNode>)
@@ -2297,9 +2267,7 @@ db_rem_desc($alterDatabaseNode)
 
 %type db_rem_option(<alterDatabaseNode>)
 db_rem_option($alterDatabaseNode)
-	: db_file
-		{ $alterDatabaseNode->files.add($1); }
-	| DEFAULT CHARACTER SET symbol_character_set_name
+	: DEFAULT CHARACTER SET symbol_character_set_name
 		{ $alterDatabaseNode->setDefaultCharSet = *$4; }
 	| DEFAULT CHARACTER SET symbol_character_set_name COLLATION symbol_collation_name
 		{
@@ -2308,49 +2276,6 @@ db_rem_option($alterDatabaseNode)
 		}
 	| DIFFERENCE FILE utf_string
 		{ $alterDatabaseNode->differenceFile = *$3; }
-	;
-
-%type <dbFileClause> db_file
-db_file
-	: FILE utf_string
-			{
-				DbFileClause* clause = newNode<DbFileClause>(*$2);
-				$$ = clause;
-			}
-		file_desc1($3)
-			{ $$ = $3; }
-	;
-
-%type file_desc1(<dbFileClause>)
-file_desc1($dbFileClause)
-	: // nothing
-	| file_desc($dbFileClause)
-	;
-
-%type file_desc(<dbFileClause>)
-file_desc($dbFileClause)
-	: file_clause($dbFileClause)
-	| file_desc file_clause($dbFileClause)
-	;
-
-%type file_clause(<dbFileClause>)
-file_clause($dbFileClause)
-	: STARTING file_clause_noise long_integer
-		{ $dbFileClause->start = $3; }
-	| LENGTH equals long_integer page_noise
-		{ $dbFileClause->length = $3; }
-	;
-
-file_clause_noise
-	: // nothing
-	| AT
-	| AT PAGE
-	;
-
-page_noise
-	: // nothing
-	| PAGE
-	| PAGES
 	;
 
 
@@ -4770,8 +4695,7 @@ alter_db($alterDatabaseNode)
 
 %type db_alter_clause(<alterDatabaseNode>)
 db_alter_clause($alterDatabaseNode)
-	: ADD db_file_list(NOTRIAL(&$alterDatabaseNode->files))
-	| ADD DIFFERENCE FILE utf_string
+	: ADD DIFFERENCE FILE utf_string
 		{ $alterDatabaseNode->differenceFile = *$4; }
 	| DROP DIFFERENCE FILE
 		{ $alterDatabaseNode->clauses |= AlterDatabaseNode::CLAUSE_DROP_DIFFERENCE; }
