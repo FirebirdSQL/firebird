@@ -1331,7 +1331,7 @@ namespace
 					bool isFound = false;
 
 					std::string_view monthShortName = getSubstringFromString(str, strLength, strOffset, 3);
-					for (int i = 0; i < FB_NELEM(FB_SHORT_MONTHS) - 1; i++)
+					for (FB_SIZE_T i = 0; i < FB_NELEM(FB_SHORT_MONTHS) - 1; i++)
 					{
 						if (std::equal(monthShortName.begin(), monthShortName.end(),
 								FB_SHORT_MONTHS[i], FB_SHORT_MONTHS[i] + strlen(FB_SHORT_MONTHS[i]),
@@ -1352,7 +1352,7 @@ namespace
 					bool isFound = false;
 
 					std::string_view monthFullName = getSubstringFromString(str, strLength, strOffset);
-					for (int i = 0; i < FB_NELEM(FB_LONG_MONTHS_UPPER) - 1; i++)
+					for (FB_SIZE_T i = 0; i < FB_NELEM(FB_LONG_MONTHS_UPPER) - 1; i++)
 					{
 						if (std::equal(monthFullName.begin(), monthFullName.end(),
 								FB_LONG_MONTHS_UPPER[i], FB_LONG_MONTHS_UPPER[i] + strlen(FB_LONG_MONTHS_UPPER[i]),

@@ -3752,7 +3752,7 @@ static processing_state show_dependencies(const char* object)
 
 	bool missing = true;
 
-	for (int i = 0; i < FB_NELEM(Object_types); ++i)
+	for (FB_SIZE_T i = 0; i < FB_NELEM(Object_types); ++i)
 	{
 		if (show_dependencies(object, i) == SKIP)
 		{

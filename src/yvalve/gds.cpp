@@ -4025,7 +4025,7 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 					case blr_invoke_function_type:
 						n = control->ctl_blr_reader.getByte();
 
-						if (n == 0 || n >= FB_NELEM(typeSubCodes))
+						if (n == 0 || n >= static_cast<FB_SSIZE_T>(FB_NELEM(typeSubCodes)))
 							blr_error(control, "*** invalid blr_invoke_function_type sub code ***");
 
 						blr_format(control, "blr_invoke_function_type_%s,", typeSubCodes[n]);
@@ -4123,7 +4123,7 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 					case blr_invsel_procedure_type:
 						n = control->ctl_blr_reader.getByte();
 
-						if (n == 0 || n >= FB_NELEM(typeSubCodes))
+						if (n == 0 || n >= static_cast<FB_SSIZE_T>(FB_NELEM(typeSubCodes)))
 							blr_error(control, "*** invalid blr_invsel_procedure_type sub code ***");
 
 						blr_format(control, "blr_invsel_procedure_type_%s,", typeSubCodes[n]);

@@ -904,7 +904,7 @@ int ISQL_main(int argc, char* argv[])
 			TEXT helpstring[158];
 			IUTILS_msg_get(USAGE, sizeof(helpstring), helpstring);
 			STDERROUT(helpstring);
-			for (int i = 0; i < FB_NELEM(isql_in_sw_table); i++)
+			for (FB_SIZE_T i = 0; i < FB_NELEM(isql_in_sw_table); i++)
 			{
 				if (isql_in_sw_table[i].in_sw_msg > 0)
 				{
@@ -5128,7 +5128,7 @@ static processing_state frontend(const TEXT* statement)
 	// Shift parms to upper case, leaving original case in lparms
 	typedef TEXT* isql_params_t[MAX_TERMS];
 	isql_params_t parms, lparms;
-	for (int iter = 0; iter < FB_NELEM(lparms); ++iter)
+	for (FB_SIZE_T iter = 0; iter < FB_NELEM(lparms); ++iter)
 	{
 		lparms[iter] = NULL;
 		parms[iter] = NULL;

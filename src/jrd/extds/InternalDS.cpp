@@ -171,7 +171,7 @@ void InternalConnection::attach(thread_db* tdbb)
 
 	memset(m_features, false, sizeof(m_features));
 	static const info_features features[] = ENGINE_FEATURES;
-	for (int i = 0; i < FB_NELEM(features); i++)
+	for (FB_SIZE_T i = 0; i < FB_NELEM(features); i++)
 		setFeature(features[i]);
 }
 

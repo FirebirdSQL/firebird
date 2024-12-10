@@ -898,7 +898,7 @@ private:
 			if (*control == *(CharType*) obj->getCanonicalChar(CHAR_GDML_SUBSTITUTE))
 			{
 				// Note: don't allow substitution characters larger than vector
-				CharType** const end_vector = vector + (((int) c < FB_NELEM(vector)) ? c : 0);
+				CharType** const end_vector = vector + ((static_cast<FB_SSIZE_T>(c) < static_cast<FB_SSIZE_T>(FB_NELEM(vector))) ? c : 0);
 				while (v <= end_vector)
 					*v++ = 0;
 				*end_vector = t;
