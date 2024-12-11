@@ -1956,7 +1956,7 @@ void Validation::walk_generators()
 	}
 }
 
-Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_page, USHORT id)
+Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page* root_page, USHORT id)
 {
 /**************************************
  *
@@ -1976,25 +1976,24 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
  **************************************/
 	Database* dbb = vdr_tdbb->getDatabase();
 
-	const ULONG page_number = root_page.irt_rpt[id].getRoot();
-	if (!page_number) {
+	const ULONG page_number = root_page->irt_rpt[id].getRoot();
+	if (!page_number)
 		return rtn_ok;
-	}
 
-	const bool unique = (root_page.irt_rpt[id].irt_flags & (irt_unique | idx_primary));
-	const bool descending = (root_page.irt_rpt[id].irt_flags & irt_descending);
-	const bool condition = (root_page.irt_rpt[id].irt_flags & irt_condition);
+	const bool unique = (root_page->irt_rpt[id].irt_flags & (irt_unique | idx_primary));
+	const bool descending = (root_page->irt_rpt[id].irt_flags & irt_descending);
+	const bool condition = (root_page->irt_rpt[id].irt_flags & irt_condition);
 
-	temporary_key nullKey, *null_key = 0;
+	temporary_key nullKey, *null_key = nullptr;
 	if (unique)
 	{
 		index_desc idx;
 		{
 			// No need to evaluate index expression and/or condition
-			AutoSetRestoreFlag<UCHAR> flags(&root_page.irt_rpt[id].irt_flags,
+			AutoSetRestoreFlag<USHORT> flags(&root_page->irt_rpt[id].irt_flags,
 				irt_expression | irt_condition, false);
 
-			BTR_description(vdr_tdbb, relation, &root_page, &idx, id);
+			BTR_description(vdr_tdbb, relation, root_page, &idx, id);
 		}
 
 		null_key = &nullKey;
@@ -3210,13 +3209,13 @@ Validation::RTN Validation::walk_root(jrd_rel* relation, bool getInfo)
 	if (!relPages->rel_index_root)
 		return corrupt(VAL_INDEX_ROOT_MISSING, relation);
 
-	index_root_page* page = 0;
+	index_root_page* page = nullptr;
 	WIN window(DB_PAGE_SPACE, -1);
 	fetch_page(!getInfo, relPages->rel_index_root, pag_root, &window, &page);
 
 	for (USHORT i = 0; i < page->irt_count; i++)
 	{
-		if (page->irt_rpt[i].getRoot() == 0)
+		if (!page->irt_rpt[i].getRoot())
 			continue;
 
 		MetaName index;
@@ -3242,7 +3241,7 @@ Validation::RTN Validation::walk_root(jrd_rel* relation, bool getInfo)
 			if (page->irt_rpt[i].irt_flags & irt_condition)
 			{
 				// No need to evaluate index expression
-				AutoSetRestoreFlag<UCHAR> flag(&page->irt_rpt[i].irt_flags, irt_expression, false);
+				AutoSetRestoreFlag<USHORT> flag(&page->irt_rpt[i].irt_flags, irt_expression, false);
 
 				IdxInfo info;
 				if (BTR_description(vdr_tdbb, relation, page, &info.m_desc, i))
@@ -3252,7 +3251,7 @@ Validation::RTN Validation::walk_root(jrd_rel* relation, bool getInfo)
 		}
 
 		output("Index %d (%s)\n", i + 1, index.c_str());
-		walk_index(relation, *page, i);
+		walk_index(relation, page, i);
 	}
 
 	release_page(&window);
