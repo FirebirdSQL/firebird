@@ -149,42 +149,8 @@ static int  raw_devices_unlink_database (const PathName&);
 static int	openFile(const Firebird::PathName&, const bool, const bool, const bool);
 static void	maybeCloseFile(int&);
 
-int PIO_add_file(thread_db* tdbb, jrd_file* main_file, const PathName& file_name, SLONG start)
-{
-/**************************************
- *
- *	P I O _ a d d _ f i l e
- *
- **************************************
- *
- * Functional description
- *	Add a file to an existing database.  Return the sequence
- *	number of the new file.  If anything goes wrong, return a
- *	sequence of 0.
- *	NOTE:  This routine does not lock any mutexes on
- *	its own behalf.  It is assumed that mutexes will
- *	have been locked before entry.
- *
- **************************************/
-	jrd_file* new_file = PIO_create(tdbb, file_name, false, false);
-	if (!new_file)
-		return 0;
 
-	new_file->fil_min_page = start;
-	USHORT sequence = 1;
-
-	jrd_file* file;
-	for (file = main_file; file->fil_next; file = file->fil_next)
-		++sequence;
-
-	file->fil_max_page = start - 1;
-	file->fil_next = new_file;
-
-	return sequence;
-}
-
-
-void PIO_close(jrd_file* main_file)
+void PIO_close(jrd_file* file)
 {
 /**************************************
  *
@@ -199,13 +165,10 @@ void PIO_close(jrd_file* main_file)
  *
  **************************************/
 
-	for (jrd_file* file = main_file; file; file = file->fil_next)
+	if (file->fil_desc && file->fil_desc != -1)
 	{
-		if (file->fil_desc && file->fil_desc != -1)
-		{
-			close(file->fil_desc);
-			file->fil_desc = -1;
-		}
+		close(file->fil_desc);
+		file->fil_desc = -1;
 	}
 }
 
@@ -336,7 +299,7 @@ bool PIO_expand(const TEXT* file_name, USHORT file_length, TEXT* expanded_name, 
 }
 
 
-void PIO_extend(thread_db* tdbb, jrd_file* main_file, const ULONG extPages, const USHORT pageSize)
+void PIO_extend(thread_db* tdbb, jrd_file* file, const ULONG extPages, const USHORT pageSize)
 {
 /**************************************
  *
@@ -348,53 +311,43 @@ void PIO_extend(thread_db* tdbb, jrd_file* main_file, const ULONG extPages, cons
  *	Extend file by extPages pages of pageSize size.
  *
  **************************************/
+	fb_assert(extPages);
 
 #if defined(HAVE_LINUX_FALLOC_H) && defined(HAVE_FALLOCATE)
 
 	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 
-	ULONG leftPages = extPages;
-	for (jrd_file* file = main_file; file && leftPages; file = file->fil_next)
+	if (file->fil_flags & FIL_no_fast_extend)
+		return;
+
+	const ULONG filePages = PIO_get_number_of_pages(file, pageSize);
+	const ULONG extendBy = MIN(MAX_ULONG - filePages, extPages);
+
+	int r;
+	for (r = 0; r < IO_RETRY; r++)
 	{
-		const ULONG filePages = PIO_get_number_of_pages(file, pageSize);
-		const ULONG fileMaxPages = (file->fil_max_page == MAX_ULONG) ?
-									MAX_ULONG : file->fil_max_page - file->fil_min_page + 1;
-		if (filePages < fileMaxPages)
-		{
-			if (file->fil_flags & FIL_no_fast_extend)
-				return;
+		int err = fallocate(file->fil_desc, 0, filePages * pageSize, extendBy * pageSize);
+		if (err == 0)
+			break;
 
-			const ULONG extendBy = MIN(fileMaxPages - filePages + file->fil_fudge, leftPages);
+		err = errno;
+		if (SYSCALL_INTERRUPTED(err))
+			continue;
 
-			int r;
-			for (r = 0; r < IO_RETRY; r++)
-			{
-				int err = fallocate(file->fil_desc, 0, filePages * pageSize, extendBy * pageSize);
-				if (err == 0)
-					break;
+		if (err != EOPNOTSUPP && err != ENOSYS)
+			unix_error("fallocate", file, isc_io_write_err);
 
-				err = errno;
-				if (SYSCALL_INTERRUPTED(err))
-					continue;
+		file->fil_flags |= FIL_no_fast_extend;
+		return;
+	}
 
-				if (err != EOPNOTSUPP && err != ENOSYS)
-					unix_error("fallocate", file, isc_io_write_err);
-
-				file->fil_flags |= FIL_no_fast_extend;
-				return;
-			}
-
-			if (r == IO_RETRY)
-			{
+	if (r == IO_RETRY)
+	{
 #ifdef DEV_BUILD
-				fprintf(stderr, "PIO_extend: retry count exceeded\n");
-				fflush(stderr);
+		fprintf(stderr, "PIO_extend: retry count exceeded\n");
+		fflush(stderr);
 #endif
-				unix_error("fallocate_retry", file, isc_io_write_err);
-			}
-
-			leftPages -= extendBy;
-		}
+		unix_error("fallocate_retry", file, isc_io_write_err);
 	}
 #else
 	main_file->fil_flags |= FIL_no_fast_extend;
@@ -405,7 +358,7 @@ void PIO_extend(thread_db* tdbb, jrd_file* main_file, const ULONG extPages, cons
 }
 
 
-void PIO_flush(thread_db* tdbb, jrd_file* main_file)
+void PIO_flush(thread_db* tdbb, jrd_file* file)
 {
 /**************************************
  *
@@ -422,15 +375,12 @@ void PIO_flush(thread_db* tdbb, jrd_file* main_file)
 #ifndef SUPERSERVER_V2
 
 	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
-	MutexLockGuard guard(main_file->fil_mutex, FB_FUNCTION);
+	MutexLockGuard guard(file->fil_mutex, FB_FUNCTION);
 
-	for (jrd_file* file = main_file; file; file = file->fil_next)
+	if (file->fil_desc != -1)
 	{
-		if (file->fil_desc != -1)
-		{
-			// This really should be an error
-			fsync(file->fil_desc);
-		}
+		// This really should be an error
+		fsync(file->fil_desc);
 	}
 #endif
 }
@@ -647,11 +597,11 @@ USHORT PIO_init_data(thread_db* tdbb, jrd_file* main_file, FbStatusVector* statu
 	if (!file)
 		return 0;
 
-	if (file->fil_min_page + 8 > startPage)
+	if (startPage < 8)
 		return 0;
 
 	USHORT leftPages = initPages;
-	const ULONG initBy = MIN(file->fil_max_page - startPage, leftPages);
+	const ULONG initBy = MIN(MAX_ULONG - startPage, leftPages);
 	if (initBy < leftPages)
 		leftPages = initBy;
 
@@ -895,18 +845,8 @@ static jrd_file* seek_file(jrd_file* file, BufferDesc* bdb, FB_UINT64* offset,
  *	file block and seek to the proper page in that file.
  *
  **************************************/
-	BufferControl* bcb = bdb->bdb_bcb;
-	Database* dbb = bcb->bcb_database;
-	ULONG page = bdb->bdb_page.getPageNum();
-
-	for (;; file = file->fil_next)
-	{
-		if (!file) {
-			CORRUPT(158);		// msg 158 database file not available
-		}
-		else if (page >= file->fil_min_page && page <= file->fil_max_page)
-			break;
-	}
+	BufferControl* const bcb = bdb->bdb_bcb;
+	const ULONG page = bdb->bdb_page.getPageNum();
 
 	if (file->fil_desc == -1)
 	{
@@ -914,10 +854,8 @@ static jrd_file* seek_file(jrd_file* file, BufferDesc* bdb, FB_UINT64* offset,
 		return 0;
 	}
 
-	page -= file->fil_min_page - file->fil_fudge;
-
     FB_UINT64 lseek_offset = page;
-    lseek_offset *= dbb->dbb_page_size;
+    lseek_offset *= bcb->bcb_page_size;
 
     if (lseek_offset != (FB_UINT64) LSEEK_OFFSET_CAST lseek_offset)
 	{
@@ -999,7 +937,6 @@ static jrd_file* setup_file(Database* dbb, const PathName& file_name, int desc, 
 	{
 		file = FB_NEW_RPT(*dbb->dbb_permanent, file_name.length() + 1) jrd_file();
 		file->fil_desc = desc;
-		file->fil_max_page = MAX_ULONG;
 		file->fil_flags = flags;
 		strcpy(file->fil_string, file_name.c_str());
 	}
