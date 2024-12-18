@@ -147,8 +147,8 @@ $(OBJ)/%.o: $(ROOT)/%.cpp
 
 # Rules for making resource files
 
-$(GEN_ROOT)/%.res: $(SRC_ROOT)/%.rc
-	windres --output-format=coff --include-dir=$(<D) $< $@
+$(OBJ)/%.res: $(SRC_ROOT)/%.rc
+	$(WINDRES) $(RCFLAGS) --output-format=coff --include-dir=$(<D) $< $@
 
 # Rule for making gbak files when cross-compiling
 
