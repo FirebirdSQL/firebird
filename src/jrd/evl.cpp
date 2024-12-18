@@ -140,14 +140,14 @@ dsc* EVL_assign_to(thread_db* tdbb, const ValueExprNode* node)
 
 	if (auto paramNode = nodeAs<ParameterNode>(node))
 	{
+		auto paramRequest = paramNode->getParamRequest(request);
 		auto message = paramNode->message;
 		auto arg_number = paramNode->argNumber;
-		auto desc = &message->format->fmt_desc[arg_number];
+		auto desc = &message->getFormat(paramRequest)->fmt_desc[arg_number];
 
 		auto impure = request->getImpure<impure_value>(node->impureOffset);
 
-		impure->vlu_desc.dsc_address = paramNode->getParamRequest(request)->getImpure<UCHAR>(
-			message->impureOffset + (IPTR) desc->dsc_address);
+		impure->vlu_desc.dsc_address = message->getBuffer(paramRequest) + (IPTR) desc->dsc_address;
 		impure->vlu_desc.dsc_dtype = desc->dsc_dtype;
 		impure->vlu_desc.dsc_length = desc->dsc_length;
 		impure->vlu_desc.dsc_scale = desc->dsc_scale;
