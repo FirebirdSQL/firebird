@@ -41,11 +41,6 @@ namespace Jrd {
 class jrd_file : public pool_alloc_rpt<SCHAR, type_fil>
 {
 public:
-	jrd_file*	fil_next;		// Next file in database
-	ULONG fil_min_page;			// Minimum page number in file
-	ULONG fil_max_page;			// Maximum page number in file
-	USHORT fil_sequence;		// Sequence number of file
-	USHORT fil_fudge;			// Fudge factor for page relocation
 	int fil_desc;
 	Firebird::Mutex fil_mutex;
 	USHORT fil_flags;
@@ -69,11 +64,6 @@ public:
 		delete fil_ext_lock;
 	}
 
-	jrd_file*	fil_next;				// Next file in database
-	ULONG fil_min_page;					// Minimum page number in file
-	ULONG fil_max_page;					// Maximum page number in file
-	USHORT fil_sequence;				// Sequence number of file
-	USHORT fil_fudge;					// Fudge factor for page relocation
 	HANDLE fil_desc;					// File descriptor
 	Firebird::RWLock* fil_ext_lock;		// file extend lock
 	USHORT fil_flags;

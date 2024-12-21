@@ -231,17 +231,6 @@ void PPG_print_header(const header_page* header, bool nocreation, Firebird::Util
 			uSvc->printf(false, "\tRoot file name:\t\t%s\n", temp);
 			break;
 
-		case HDR_file:
-			memcpy(temp, p + 2, p[1]);
-			temp[p[1]] = '\0';
-			uSvc->printf(false, "\tContinuation file:\t\t%s\n", temp);
-			break;
-
-		case HDR_last_page:
-			memcpy(&number, p + 2, sizeof(number));
-			uSvc->printf(false, "\tLast logical page:\t\t%ld\n", number);
-			break;
-
 		case HDR_sweep_interval:
 			memcpy(&number, p + 2, sizeof(number));
 			uSvc->printf(false, "\tSweep interval:\t\t%ld\n", number);
