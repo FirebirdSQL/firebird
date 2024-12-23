@@ -24,6 +24,7 @@
     <ClCompile Include="..\..\..\gen\isql\extract.cpp" />
     <ClCompile Include="..\..\..\src\common\fb_exception.cpp" />
     <ClCompile Include="..\..\..\src\isql\FrontendLexer.cpp" />
+    <ClCompile Include="..\..\..\src\isql\FrontendParser.cpp" />
     <ClCompile Include="..\..\..\src\isql\InputDevices.cpp" />
     <ClCompile Include="..\..\..\gen\isql\isql.cpp" />
     <ClCompile Include="..\..\..\src\isql\iutils.cpp" />
@@ -40,6 +41,7 @@
     <ClInclude Include="..\..\..\src\isql\Extender.h" />
     <ClInclude Include="..\..\..\src\isql\extra_proto.h" />
     <ClInclude Include="..\..\..\src\isql\FrontendLexer.h" />
+    <ClInclude Include="..\..\..\src\isql\FrontendParser.h" />
     <ClInclude Include="..\..\..\src\isql\InputDevices.h" />
     <ClInclude Include="..\..\..\src\isql\isql.h" />
     <ClInclude Include="..\..\..\src\isql\isql_proto.h" />

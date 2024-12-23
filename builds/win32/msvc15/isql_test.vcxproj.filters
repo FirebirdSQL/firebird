@@ -10,6 +10,9 @@
     <ClCompile Include="..\..\..\src\isql\tests\FrontendLexerTest.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\isql\tests\FrontendParserTest.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\isql\tests\ISqlTest.cpp">
       <Filter>source</Filter>
     </ClCompile>
