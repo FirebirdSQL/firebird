@@ -699,6 +699,26 @@ public:
 	Batch* createBatch(CheckStatusWrapper* status, IMessageMetadata* inMetadata,
 		unsigned parLength, const unsigned char* par) override;
 
+	unsigned getMaxInlineBlobSize(CheckStatusWrapper* status) override
+	{
+		if (statement->rsr_rdb->rdb_port->port_protocol < PROTOCOL_INLINE_BLOB)
+		{
+			status->setErrors(Arg::Gds(isc_wish_list).value());
+			return 0;
+		}
+		return statement->rsr_inline_blob_size;
+	}
+
+	void setMaxInlineBlobSize(CheckStatusWrapper* status, unsigned size) override
+	{
+		if (statement->rsr_rdb->rdb_port->port_protocol < PROTOCOL_INLINE_BLOB)
+		{
+			status->setErrors(Arg::Gds(isc_wish_list).value());
+			return;
+		}
+		statement->rsr_inline_blob_size = size;
+	}
+
 public:
 	Statement(Rsr* handle, Attachment* a, unsigned aDialect)
 		: metadata(getPool(), this, NULL),
@@ -908,6 +928,12 @@ public:
 		IMessageMetadata* inMetadata, unsigned parLength, const unsigned char* par) override;
 
 	Replicator* createReplicator(CheckStatusWrapper* status) override;
+
+	unsigned getMaxBlobCacheSize(CheckStatusWrapper* status) override;
+	void setMaxBlobCacheSize(CheckStatusWrapper* status, unsigned size) override;
+
+	unsigned getMaxInlineBlobSize(CheckStatusWrapper* status) override;
+	void setMaxInlineBlobSize(CheckStatusWrapper* status, unsigned size) override;
 
 public:
 	Attachment(Rdb* handle, const PathName& path)
@@ -1312,6 +1338,8 @@ void Blob::getInfo(CheckStatusWrapper* status,
 		if (blob->rbl_info.getLocalInfo(itemsLength, items, bufferLength, buffer))
 			return;
 
+		fb_assert(!blob->isCached());
+
 		rem_port* port = rdb->rdb_port;
 		RefMutexGuard portGuard(*port->port_sync, FB_FUNCTION);
 
@@ -1353,7 +1381,8 @@ void Blob::freeClientData(CheckStatusWrapper* status, bool force)
 
 		try
 		{
-			release_object(status, rdb, op_cancel_blob, blob->rbl_id);
+			if (!blob->isCached())
+				release_object(status, rdb, op_cancel_blob, blob->rbl_id);
 		}
 		catch (const Exception&)
 		{
@@ -1426,10 +1455,13 @@ void Blob::internalClose(CheckStatusWrapper* status)
 
 		if ((blob->rbl_flags & Rbl::CREATE) && blob->rbl_ptr != blob->rbl_buffer)
 		{
+			fb_assert(!blob->isCached());
+
 			send_blob(status, blob, 0, NULL);
 		}
 
-		release_object(status, rdb, op_close_blob, blob->rbl_id);
+		if (!blob->isCached())
+			release_object(status, rdb, op_close_blob, blob->rbl_id);
 		release_blob(blob);
 		blob = NULL;
 	}
@@ -1847,14 +1879,13 @@ IBlob* Attachment::createBlob(CheckStatusWrapper* status, ITransaction* apiTra, 
 		p_blob->p_blob_bpb.cstr_address = NULL;
 
 		Rbl* blob = FB_NEW Rbl();
-		*blob_id = packet->p_resp.p_resp_blob_id;
+		blob->rbl_blob_id = *blob_id = packet->p_resp.p_resp_blob_id;
 		blob->rbl_rdb = rdb;
 		blob->rbl_rtr = transaction;
 		blob->rbl_id = packet->p_resp.p_resp_object;
 		blob->rbl_flags |= Rbl::CREATE;
 		SET_OBJECT(rdb, blob, blob->rbl_id);
-		blob->rbl_next = transaction->rtr_blobs;
-		transaction->rtr_blobs = blob;
+		transaction->rtr_blobs.add(blob);
 
 		IBlob* b = FB_NEW Blob(blob);
 		b->addRef();
@@ -2437,6 +2468,50 @@ Batch* Attachment::createBatch(CheckStatusWrapper* status, ITransaction* transac
 
 	rc->tmpStatement = true;
 	return rc;
+}
+
+
+unsigned Attachment::getMaxBlobCacheSize(CheckStatusWrapper* status)
+{
+	if (rdb->rdb_port->port_protocol < PROTOCOL_INLINE_BLOB)
+	{
+		status->setErrors(Arg::Gds(isc_wish_list).value());
+		return 0;
+	}
+	return rdb->rdb_blob_cache_size;
+}
+
+
+void Attachment::setMaxBlobCacheSize(CheckStatusWrapper* status, unsigned size)
+{
+	if (rdb->rdb_port->port_protocol < PROTOCOL_INLINE_BLOB)
+	{
+		status->setErrors(Arg::Gds(isc_wish_list).value());
+		return;
+	}
+	rdb->rdb_blob_cache_size = size;
+}
+
+
+unsigned Attachment::getMaxInlineBlobSize(CheckStatusWrapper* status)
+{
+	if (rdb->rdb_port->port_protocol < PROTOCOL_INLINE_BLOB)
+	{
+		status->setErrors(Arg::Gds(isc_wish_list).value());
+		return 0;
+	}
+	return rdb->rdb_inline_blob_size;
+}
+
+
+void Attachment::setMaxInlineBlobSize(CheckStatusWrapper* status, unsigned size)
+{
+	if (rdb->rdb_port->port_protocol < PROTOCOL_INLINE_BLOB)
+	{
+		status->setErrors(Arg::Gds(isc_wish_list).value());
+		return;
+	}
+	rdb->rdb_inline_blob_size = size;
 }
 
 
@@ -3568,6 +3643,7 @@ ITransaction* Statement::execute(CheckStatusWrapper* status, ITransaction* apiTr
 		sqldata->p_sqldata_out_message_number = 0;	// out_msg_type
 		sqldata->p_sqldata_timeout = statement->rsr_timeout;
 		sqldata->p_sqldata_cursor_flags = 0;
+		sqldata->p_sqldata_inline_blob_size = statement->rsr_inline_blob_size;
 
 		send_packet(port, packet);
 
@@ -3578,7 +3654,20 @@ ITransaction* Statement::execute(CheckStatusWrapper* status, ITransaction* apiTr
 		if (out_msg_length)
 			port->port_statement->rsr_message->msg_address = out_msg;
 
+		// Prepare to receive inline blobs
+		P_INLINE_BLOB* p_blob = &packet->p_inline_blob;
+		UCHAR blobInfo[64];
+
+		UsePreallocatedBuffer guardBlobInfo(p_blob->p_blob_info, sizeof(blobInfo), blobInfo);
+
 		receive_packet(port, packet);
+
+		while (packet->p_operation == op_inline_blob)
+		{
+			fb_assert(transaction);
+			transaction->setupInlineBlob(p_blob);
+			receive_packet(port, packet);
+		}
 
 		if (packet->p_operation != op_sql_response)
 			REMOTE_check_response(status, rdb, packet);
@@ -3734,6 +3823,7 @@ ResultSet* Statement::openCursor(CheckStatusWrapper* status, ITransaction* apiTr
 		sqldata->p_sqldata_out_message_number = 0;	// out_msg_type
 		sqldata->p_sqldata_timeout = statement->rsr_timeout;
 		sqldata->p_sqldata_cursor_flags = flags;
+		sqldata->p_sqldata_inline_blob_size = statement->rsr_inline_blob_size;
 
 		{
 			Cleanup msgClean([&message] {
@@ -3927,6 +4017,8 @@ ITransaction* Attachment::execute(CheckStatusWrapper* status, ITransaction* apiT
 		ex_now->p_sqlst_out_blr.cstr_length = out_blr_length;
 		ex_now->p_sqlst_out_blr.cstr_address = const_cast<unsigned char*>(out_blr);
 		ex_now->p_sqlst_out_message_number = 0;	// out_msg_type
+		ex_now->p_sqlst_inline_blob_size = (packet->p_operation == op_exec_immediate2) ?
+			rdb->rdb_inline_blob_size : 0;
 
 		send_packet(port, packet);
 
@@ -3940,7 +4032,20 @@ ITransaction* Attachment::execute(CheckStatusWrapper* status, ITransaction* apiT
 		if (in_msg_length || out_msg_length)
 			port->port_statement->rsr_message->msg_address = out_msg;
 
+		// Prepare to receive inline blobs
+		P_INLINE_BLOB* p_blob = &packet->p_inline_blob;
+		UCHAR blobInfo[64];
+
+		UsePreallocatedBuffer guardBlobInfo(p_blob->p_blob_info, sizeof(blobInfo), blobInfo);
+
 		receive_packet(rdb->rdb_port, packet);
+
+		while (packet->p_operation == op_inline_blob)
+		{
+			fb_assert(transaction);
+			transaction->setupInlineBlob(p_blob);
+			receive_packet(port, packet);
+		}
 
 		if (packet->p_operation != op_sql_response)
 			REMOTE_check_response(status, rdb, packet);
@@ -4125,6 +4230,7 @@ Statement* Attachment::createStatement(CheckStatusWrapper* status, unsigned dial
 
 	statement->rsr_next = rdb->rdb_sql_requests;
 	rdb->rdb_sql_requests = statement;
+	statement->rsr_inline_blob_size = rdb->rdb_inline_blob_size;
 
 	Statement* s = FB_NEW Statement(statement, this, dialect);
 	s->addRef();
@@ -5507,6 +5613,8 @@ int Blob::getSegment(CheckStatusWrapper* status, unsigned int bufferLength, void
 				break;
 			}
 
+			fb_assert(!blob->isCached());
+
 			// Preparatory to asking for more data, use input buffer length
 			// to cue more efficient blob buffering.
 
@@ -5668,6 +5776,20 @@ IBlob* Attachment::openBlob(CheckStatusWrapper* status, ITransaction* apiTra, IS
 		Rtr* transaction = remoteTransaction(apiTra);
 		CHECK_HANDLE(transaction, isc_bad_trans_handle);
 
+		if (transaction->rtr_blobs.locate(*id))
+		{
+			Rbl* blob = transaction->rtr_blobs.current();
+
+			if (!bpb_length)
+			{
+				Blob* iBlob = FB_NEW Blob(blob);
+				iBlob->addRef();
+				return iBlob;
+			}
+
+			release_blob(blob);
+		}
+
 		// Validate data length
 
 		CHECK_LENGTH(port, bpb_length);
@@ -5769,10 +5891,10 @@ IBlob* Attachment::openBlob(CheckStatusWrapper* status, ITransaction* apiTra, IS
 		Rbl* blob = FB_NEW Rbl;
 		blob->rbl_rdb = rdb;
 		blob->rbl_rtr = transaction;
+		blob->rbl_blob_id = *id;
 		blob->rbl_id = packet->p_resp.p_resp_object;
 		SET_OBJECT(rdb, blob, blob->rbl_id);
-		blob->rbl_next = transaction->rtr_blobs;
-		transaction->rtr_blobs = blob;
+		transaction->rtr_blobs.add(blob);
 
 		Blob* iBlob = FB_NEW Blob(blob);
 		iBlob->addRef();
@@ -6618,6 +6740,11 @@ int Blob::seek(CheckStatusWrapper* status, int mode, int offset)
 		reset(status);
 
 		CHECK_HANDLE(blob, isc_bad_segstr_handle);
+
+		if (blob->isCached())
+		{
+			Arg::Gds(isc_wish_list).raise();
+		}
 
 		Rdb* rdb = blob->rbl_rdb;
 		CHECK_HANDLE(rdb, isc_bad_db_handle);
@@ -7843,6 +7970,12 @@ static void batch_dsql_fetch(rem_port*	port,
 	// Avoid damaging preallocated buffer for response data
 	UseStandardBuffer guard(packet->p_resp.p_resp_data);
 
+	// Prepare to receive inline blobs
+	P_INLINE_BLOB* p_blob = &packet->p_inline_blob;
+	UCHAR blobInfo[64];
+
+	UsePreallocatedBuffer guardBlobInfo(p_blob->p_blob_info, sizeof(blobInfo), blobInfo);
+
 	statement->rsr_flags.set(Rsr::FETCHED);
 	while (true)
 	{
@@ -7876,6 +8009,17 @@ static void batch_dsql_fetch(rem_port*	port,
 			dequeue_receive(port);
 
 			throw;
+		}
+
+		if (packet->p_operation == op_inline_blob)
+		{
+			fb_assert(!statement->rsr_rtr || statement->rsr_rtr->rtr_id == p_blob->p_tran_id);
+
+			Rtr* transaction = statement->rsr_rtr ?
+				statement->rsr_rtr : port->port_objects[p_blob->p_tran_id];
+
+			transaction->setupInlineBlob(p_blob);
+			continue;
 		}
 
 		if (packet->p_operation != op_fetch_response)
@@ -9217,16 +9361,17 @@ static void release_blob( Rbl* blob)
  **************************************/
 	Rtr* transaction = blob->rbl_rtr;
 	Rdb* rdb = blob->rbl_rdb;
-	rdb->rdb_port->releaseObject(blob->rbl_id);
 
-	for (Rbl** p = &transaction->rtr_blobs; *p; p = &(*p)->rbl_next)
+	if (blob->isCached())
 	{
-		if (*p == blob)
-		{
-			*p = blob->rbl_next;
-			break;
-		}
+		// Assume buffer was not resized while blob was cached
+		rdb->decBlobCache(blob->rbl_buffer_length);
 	}
+	else
+		rdb->rdb_port->releaseObject(blob->rbl_id);
+
+	if (transaction->rtr_blobs.locate(blob->rbl_blob_id))
+		transaction->rtr_blobs.fastRemove();
 
 	delete blob;
 }
@@ -9384,8 +9529,8 @@ static void release_transaction( Rtr* transaction)
 	Rdb* rdb = transaction->rtr_rdb;
 	rdb->rdb_port->releaseObject(transaction->rtr_id);
 
-	while (transaction->rtr_blobs)
-		release_blob(transaction->rtr_blobs);
+	while (transaction->rtr_blobs.getFirst())
+		release_blob(transaction->rtr_blobs.current());
 
 	for (Rtr** p = &rdb->rdb_transactions; *p; p = &(*p)->rtr_next)
 	{
@@ -9433,6 +9578,8 @@ static void send_blob(CheckStatusWrapper*		status,
  *	Actually send blob data (which might be buffered)
  *
  **************************************/
+	fb_assert(!blob->isCached());
+
 	Rdb* rdb = blob->rbl_rdb;
 	PACKET* packet = &rdb->rdb_packet;
 	packet->p_operation = op_put_segment;
