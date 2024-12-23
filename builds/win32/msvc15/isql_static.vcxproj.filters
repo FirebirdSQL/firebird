@@ -30,6 +30,9 @@
     <ClCompile Include="..\..\..\src\isql\FrontendLexer.cpp">
       <Filter>ISQL files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\isql\FrontendParser.cpp">
+      <Filter>ISQL files</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\isql\InputDevices.cpp">
       <Filter>ISQL files</Filter>
     </ClCompile>
@@ -71,6 +74,9 @@
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\isql\FrontendLexer.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\isql\FrontendParser.h">
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\isql\InputDevices.h">

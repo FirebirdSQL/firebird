@@ -26,6 +26,7 @@
 
 #include "../common/classes/fb_string.h"
 #include <firebird/Interface.h>
+#include "../isql/FrontendParser.h"
 #include "../jrd/obj.h"
 
 void	SHOW_comments(bool force);
@@ -36,7 +37,7 @@ void	SHOW_grant_roles (const SCHAR*, bool*);
 void	SHOW_grant_roles2 (const SCHAR*, bool*, const TEXT*, bool);
 void	SHOW_print_metadata_text_blob(FILE*, ISC_QUAD*, bool escape_squote = false,
 	bool avoid_end_in_single_line_comment = false);
-processing_state	SHOW_metadata(const SCHAR* const*, SCHAR**);
+processing_state	SHOW_metadata(const FrontendParser::AnyShowNode& node);
 void	SHOW_read_owner();
 const Firebird::string SHOW_trigger_action(SINT64);
 processing_state	SHOW_maps(bool extract, const SCHAR* map_name);
