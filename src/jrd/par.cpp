@@ -1519,7 +1519,7 @@ DmlNode* PAR_parse_node(thread_db* tdbb, CompilerScratch* csb)
 	const ULONG blrOffset = csb->csb_blr_reader.getOffset();
 	const SSHORT blrOperator = csb->csb_blr_reader.getByte();
 
-	if (blrOperator < 0 || blrOperator >= FB_NELEM(blr_parsers))
+	if (blrOperator < 0 || static_cast<FB_SIZE_T>(blrOperator) >= FB_NELEM(blr_parsers))
 	{
         // NS: This error string is correct, please do not mangle it again and again.
 		// The whole error message is "BLR syntax error: expected %s at offset %d, encountered %d"

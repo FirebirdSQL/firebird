@@ -1525,7 +1525,7 @@ void Sort::mergeRuns(USHORT n)
 	// and there n < RUN_GROUP * MAX_MERGE_LEVEL
 	merge_control blks[RUN_GROUP * MAX_MERGE_LEVEL];
 
-	fb_assert((n - 1) <= FB_NELEM(blks));	// stack var big enough?
+	fb_assert(static_cast<FB_SIZE_T>(n - 1) <= FB_NELEM(blks));	// stack var big enough?
 
 	m_longs -= SIZEOF_SR_BCKPTR_IN_LONGS;
 

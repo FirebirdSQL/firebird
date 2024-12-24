@@ -250,7 +250,7 @@ ISC_STATUS API_ROUTINE_VARARG gds__start_transaction(ISC_STATUS* status_vector,
 	teb_t tebs[16];
 	teb_t* teb = tebs;
 
-	if (count > FB_NELEM(tebs))
+	if (static_cast<FB_SIZE_T>(count) > FB_NELEM(tebs))
 		teb = (teb_t*) gds__alloc(((SLONG) sizeof(teb_t) * count));
 	// FREE: later in this module
 

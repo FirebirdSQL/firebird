@@ -1619,7 +1619,7 @@ static void store_indices(thread_db* tdbb, USHORT odsVersion)
 
 	AutoRequest handle1, handle2, handle3;
 
-	for (int n = 0; n < SYSTEM_INDEX_COUNT; n++)
+	for (FB_SIZE_T n = 0; n < SYSTEM_INDEX_COUNT; n++)
 	{
 		const ini_idx_t* index = &indices[n];
 		const auto relation = MET_relation(tdbb, index->ini_idx_relid);
