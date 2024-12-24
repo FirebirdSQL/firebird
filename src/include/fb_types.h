@@ -41,11 +41,13 @@
 	typedef unsigned int ULONG;
 	const SLONG SLONG_MIN = INT_MIN;
 	const SLONG SLONG_MAX = INT_MAX;
+	#define SLONG_STR_FORMAT "%d"
 #elif SIZEOF_LONG == 4
 	typedef long SLONG;
 	typedef unsigned long ULONG;
 	const SLONG SLONG_MIN = LONG_MIN;
 	const SLONG SLONG_MAX = LONG_MAX;
+	#define SLONG_STR_FORMAT "%ld"
 #else
 #error compile_time_failure: SIZEOF_LONG not specified
 #endif

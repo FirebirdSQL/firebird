@@ -975,7 +975,7 @@ static SLONG safe_interpret(char* const s, const FB_SIZE_T bufsize,
 				}
 
 				if (!found) {
-					sprintf(s, "unknown ISC error %ld", (SLONG) code);	// TXNN
+					sprintf(s, "unknown ISC error " SLONG_STR_FORMAT, (SLONG) code);	// TXNN
 				}
 			}
 		}
@@ -1000,11 +1000,11 @@ static SLONG safe_interpret(char* const s, const FB_SIZE_T bufsize,
 		break;
 
 	case isc_arg_dos:
-		sprintf(s, "unknown dos error %ld", (SLONG) code);	// TXNN
+		sprintf(s, "unknown dos error " SLONG_STR_FORMAT, (SLONG) code);	// TXNN
 		break;
 
 	case isc_arg_next_mach:
-		sprintf(s, "next/mach error %ld", (SLONG) code);	// AP
+		sprintf(s, "next/mach error " SLONG_STR_FORMAT, (SLONG) code);	// AP
 		break;
 
 	case isc_arg_win32:
@@ -1016,7 +1016,7 @@ static SLONG safe_interpret(char* const s, const FB_SIZE_T bufsize,
 						   s, bufsize, NULL))
 #endif
 		{
-			sprintf(s, "unknown Win32 error %ld", (SLONG) code);	// TXNN
+			sprintf(s, "unknown Win32 error " SLONG_STR_FORMAT, (SLONG) code);	// TXNN
 		}
 		break;
 
