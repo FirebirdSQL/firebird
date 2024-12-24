@@ -12182,11 +12182,11 @@ dsc* SubstringSimilarNode::execute(thread_db* tdbb, Request* request) const
 
 	MoveBuffer patternBuffer;
 	UCHAR* patternStr;
-	int patternLen = MOV_make_string2(tdbb, patternDesc, textType, &patternStr, patternBuffer);
+	ULONG patternLen = MOV_make_string2(tdbb, patternDesc, textType, &patternStr, patternBuffer);
 
 	MoveBuffer escapeBuffer;
 	UCHAR* escapeStr;
-	int escapeLen = MOV_make_string2(tdbb, escapeDesc, textType, &escapeStr, escapeBuffer);
+	ULONG escapeLen = MOV_make_string2(tdbb, escapeDesc, textType, &escapeStr, escapeBuffer);
 
 	// Verify the correctness of the escape character.
 	if (escapeLen == 0 || charSet->length(escapeLen, escapeStr, true) != 1)

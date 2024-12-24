@@ -822,7 +822,7 @@ void RestoreRelationTask::verbRecs(FB_UINT64& records, bool total)
 
 void RestoreRelationTask::verbRecsFinal()
 {
-	if (m_verbRecs < m_records)
+	if (m_verbRecs < static_cast<FB_UINT64>(m_records))
 	{
 		m_verbRecs = m_records;
 		BURP_verbose(107, SafeArg() << m_verbRecs);

@@ -76,7 +76,7 @@ unsigned Compressor::nonCompressableRun(unsigned length)
 
 	if (m_runs.hasData() && m_runs.back() > 0 && m_runs.back() < MAX_NONCOMP_RUN)
 	{
-		const auto max = MIN(MAX_NONCOMP_RUN - m_runs.back(), length);
+		const auto max = MIN(static_cast<unsigned>(MAX_NONCOMP_RUN - m_runs.back()), length);
 		length -= max;
 		m_runs.back() += max;
 	}

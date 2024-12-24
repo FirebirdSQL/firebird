@@ -75,7 +75,7 @@ namespace
 			const TrieNode* currentNode = m_root;
 			FB_SIZE_T valueLength = fb_strlen(value);
 
-			for (outParsedTimezoneLength = 0; outParsedTimezoneLength < valueLength; outParsedTimezoneLength++)
+			for (outParsedTimezoneLength = 0; static_cast<FB_SIZE_T>(outParsedTimezoneLength) < valueLength; outParsedTimezoneLength++)
 			{
 				int index = calculateIndex(value[outParsedTimezoneLength]);
 
@@ -97,7 +97,7 @@ namespace
 			TrieNode* currentNode = m_root;
 			FB_SIZE_T valueLength = fb_strlen(value);
 
-			for (int i = 0; i < valueLength; i++)
+			for (FB_SIZE_T i = 0; i < valueLength; i++)
 			{
 				int index = calculateIndex(value[i]);
 
@@ -141,9 +141,9 @@ namespace
 	InitInstance<TimeZoneTrie> timeZoneTrie;
 
 
-	#define CVT_FORMAT(id, format) constexpr Patterns format = 1llu << id - 1;
-	#define CVT_FORMAT2(id, format1, format2) constexpr Patterns format2 = 1llu << id - 1;
-	#define CVT_FORMAT_FLAG(id, format) constexpr Patterns format = 1llu << id - 1;
+	#define CVT_FORMAT(id, format) constexpr Patterns format = 1llu << (id - 1);
+	#define CVT_FORMAT2(id, format1, format2) constexpr Patterns format2 = 1llu << (id - 1);
+	#define CVT_FORMAT_FLAG(id, format) constexpr Patterns format = 1llu << (id - 1);
 	namespace Format
 	{
 		typedef FB_UINT64 Patterns;
@@ -343,7 +343,7 @@ namespace
 					if (number < 1 || number > 9)
 						return Format::NONE;
 
-					return Format::FF1 << number - 1;
+					return Format::FF1 << (number - 1);
 				}
 				break;
 
@@ -1668,7 +1668,7 @@ ISC_TIMESTAMP_TZ CVT_format_string_to_datetime(const dsc* desc, const Firebird::
 		stringUpper[i] = toupper(sourceString[i]);
 
 	string formatUpper(format.length(), '\0');
-	for (int i = 0; i < format.length(); i++)
+	for (auto i = 0; i < format.length(); i++)
 		formatUpper[i] = toupper(format[i]);
 
 	StringToDateTimeData cvtData;
