@@ -1124,6 +1124,7 @@ namespace
 			return twelveHours == 12 ? twelveHours : 12 + twelveHours;
 
 		cb->err(Arg::Gds(isc_incorrect_hours_period) << string(period.data(), period.length()));
+		return 0; // suppress compiler warning/error
 	}
 
 	constexpr int roundYearPatternImplementation(int parsedRRValue, int currentYear)
