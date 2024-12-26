@@ -862,7 +862,7 @@ ISC_STATUS API_ROUTINE isc_add_user(ISC_STATUS* status, const USER_SEC_DATA* inp
  *	    Return > 0 if any error occurs.
  *
  **************************************/
-	Auth::StackUserData userInfo;
+	Auth::UserData userInfo;
 	userInfo.op = Auth::ADD_OPER;
 	Firebird::LocalStatus s;
 	Firebird::CheckStatusWrapper statusWrapper(&s);
@@ -925,7 +925,7 @@ ISC_STATUS API_ROUTINE isc_delete_user(ISC_STATUS* status, const USER_SEC_DATA* 
  *	    Return > 0 if any error occurs.
  *
  **************************************/
-	Auth::StackUserData userInfo;
+	Auth::UserData userInfo;
 	userInfo.op = Auth::DEL_OPER;
 	Firebird::LocalStatus s;
 	Firebird::CheckStatusWrapper statusWrapper(&s);
@@ -970,7 +970,7 @@ ISC_STATUS API_ROUTINE isc_modify_user(ISC_STATUS* status, const USER_SEC_DATA* 
  *	    Return > 0 if any error occurs.
  *
  **************************************/
-	Auth::StackUserData userInfo;
+	Auth::UserData userInfo;
 	userInfo.op = Auth::MOD_OPER;
 	Firebird::LocalStatus s;
 	Firebird::CheckStatusWrapper statusWrapper(&s);

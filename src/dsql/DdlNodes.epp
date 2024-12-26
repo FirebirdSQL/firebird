@@ -11352,7 +11352,7 @@ void CreateAlterUserNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 
-	Auth::DynamicUserData* userData = FB_NEW_POOL(*transaction->tra_pool) Auth::DynamicUserData;
+	Auth::UserData* userData = FB_NEW_POOL(*transaction->tra_pool) Auth::UserData;
 
 	MetaName text(name);
 	if (text.isEmpty() && mode == USER_MOD)
@@ -11469,7 +11469,7 @@ void DropUserNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jr
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 
-	Auth::DynamicUserData* userData = FB_NEW_POOL(*transaction->tra_pool) Auth::DynamicUserData;
+	Auth::UserData* userData = FB_NEW_POOL(*transaction->tra_pool) Auth::UserData;
 
 	string text = name.c_str();
 
