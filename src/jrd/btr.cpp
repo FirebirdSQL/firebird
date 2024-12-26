@@ -924,12 +924,12 @@ bool BTR_delete_index(thread_db* tdbb, WIN* window, USHORT id)
 	{
 		index_root_page::irt_repeat* irt_desc = root->irt_rpt + id;
 		CCH_MARK(tdbb, window);
-		const PageNumber next(window->win_page.getPageSpaceID(), irt_desc->getRoot());
-		tree_exists = (irt_desc->getRoot() != 0);
+		const ULONG rootPage = irt_desc->getRoot();
+		const PageNumber next(window->win_page.getPageSpaceID(), rootPage);
+		tree_exists = (rootPage != 0);
 
 		// remove the pointer to the top-level index page before we delete it
-		irt_desc->setRoot(0);
-		irt_desc->irt_flags = 0;
+		irt_desc->setEmpty();
 		const PageNumber prior = window->win_page;
 		const USHORT relation_id = root->irt_relation;
 
@@ -962,11 +962,12 @@ bool BTR_description(thread_db* tdbb, jrd_rel* relation, index_root_page* root, 
 
 	const index_root_page::irt_repeat* irt_desc = &root->irt_rpt[id];
 
-	if (irt_desc->getRoot() == 0)
+	const ULONG rootPage = irt_desc->getRoot();
+	if (!rootPage)
 		return false;
 
 	idx->idx_id = id;
-	idx->idx_root = irt_desc->getRoot();
+	idx->idx_root = rootPage;
 	idx->idx_count = irt_desc->irt_keys;
 	idx->idx_flags = irt_desc->irt_flags;
 	idx->idx_runtime_flags = 0;
@@ -2124,18 +2125,18 @@ bool BTR_next_index(thread_db* tdbb, jrd_rel* relation, jrd_tra* transaction, in
 	for (; id < root->irt_count; ++id)
 	{
 		const index_root_page::irt_repeat* irt_desc = root->irt_rpt + id;
-		if (irt_desc->getTransaction() && transaction)
+		const TraNumber inProgressTrans = irt_desc->inProgress();
+		if (inProgressTrans && transaction)
 		{
-			const TraNumber trans = irt_desc->getTransaction();
 			CCH_RELEASE(tdbb, window);
-			const int trans_state = TRA_wait(tdbb, transaction, trans, jrd_tra::tra_wait);
+			const int trans_state = TRA_wait(tdbb, transaction, inProgressTrans, jrd_tra::tra_wait);
 			if ((trans_state == tra_dead) || (trans_state == tra_committed))
 			{
 				// clean up this left-over index
 				root = (index_root_page*) CCH_FETCH(tdbb, window, LCK_write, pag_root);
 				irt_desc = root->irt_rpt + id;
 
-				if (irt_desc->getTransaction() == trans)
+				if (irt_desc->inProgress() == inProgressTrans)
 					BTR_delete_index(tdbb, window, id);
 				else
 					CCH_RELEASE(tdbb, window);
@@ -2359,7 +2360,7 @@ void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation)
 	fb_assert(idx->idx_count <= MAX_UCHAR);
 	slot->irt_keys = (UCHAR) idx->idx_count;
 	slot->irt_flags = idx->idx_flags;
-	slot->setTransaction(transaction->tra_number);
+	slot->setInProgress(transaction->tra_number);
 
 	// Exploit the fact idx_repeat structure matches ODS IRTD one
 	memcpy(desc, idx->idx_rpt, len);
@@ -2393,13 +2394,13 @@ void BTR_selectivity(thread_db* tdbb, jrd_rel* relation, USHORT id, SelectivityL
 	if (!root)
 		return;
 
-	ULONG page;
-	if (id >= root->irt_count || !(page = root->irt_rpt[id].getRoot()))
+	if (id >= root->irt_count || !root->irt_rpt[id].getRoot())
 	{
 		CCH_RELEASE(tdbb, &window);
 		return;
 	}
 
+	ULONG page = root->irt_rpt[id].getRoot();
 	const bool descending = (root->irt_rpt[id].irt_flags & irt_descending);
 	const ULONG segments = root->irt_rpt[id].irt_keys;
 
