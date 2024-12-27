@@ -1797,10 +1797,10 @@ static dba_fil* db_open(const char* file_name, USHORT file_length)
 
 	const auto file = (dba_fil*) alloc(sizeof(dba_fil) + file_length + 1);
 
-	strcpy(fil->fil_string, file_name);
-	fil->fil_length = file_length;
+	strcpy(file->fil_string, file_name);
+	file->fil_length = file_length;
 
-	fil->fil_desc = CreateFile(	file_name,
+	file->fil_desc = CreateFile(file_name,
 								GENERIC_READ,
 								FILE_SHARE_READ | FILE_SHARE_WRITE,
 								NULL,
@@ -1808,7 +1808,7 @@ static dba_fil* db_open(const char* file_name, USHORT file_length)
 								FILE_ATTRIBUTE_NORMAL,
 								0);
 
-	if (fil->fil_desc == INVALID_HANDLE_VALUE)
+	if (file->fil_desc == INVALID_HANDLE_VALUE)
 	{
 		tddba->uSvc->getStatusAccessor().setServiceStatus(GSTAT_MSG_FAC, 29, SafeArg() << file_name);
 		// msg 29: Can't open database file %s

@@ -350,7 +350,7 @@ void PIO_extend(thread_db* tdbb, jrd_file* file, const ULONG extPages, const USH
 		unix_error("fallocate_retry", file, isc_io_write_err);
 	}
 #else
-	main_file->fil_flags |= FIL_no_fast_extend;
+	file->fil_flags |= FIL_no_fast_extend;
 #endif // fallocate present
 
 	// not implemented
