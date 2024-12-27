@@ -114,7 +114,6 @@ function(epp_process type files)
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${dir}
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different metadata.fdb ${dir}/yachts.lnk
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different security.fdb ${dir}/security.fdb
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different msg.fdb ${dir}/msg.fdb
                 COMMAND ${ARGN} -b ${dir}/ ${in} ${out}
             )
         endif()
@@ -263,8 +262,12 @@ function(create_command command type out)
         set(dir ${boot_dir})
     endif()
 
-    set_win32(env "PATH=${dir}\;%PATH%")
-    set_unix (env "PATH=${dir}/bin:$PATH")
+    if (MSVC)
+        set_win32(env "PATH=${dir}\;%PATH%")
+    elseif (MINGW)
+        set_win32(env "PATH=${dir}/bin\;%PATH%")
+    endif()
+    set_unix(env "PATH=${dir}/bin:$PATH")
     set(env "${env}"
         FIREBIRD=${dir}
     )
@@ -316,7 +319,6 @@ function(create_boot_commands)
         boot_gbak
         boot_gfix
         build_msg
-        codes
         gpre_boot
     )
     foreach(cmd ${cmd_list})
