@@ -105,12 +105,16 @@ grep ODS_VERSION $OdsH | grep -v ENCODE_ODS >$Mini
 cat >$TestCpp <<eof
 #include <stdlib.h>
 typedef unsigned short USHORT;
+#ifdef __MINGW32__
+#include "miniods.h"
+#else
 #include "$Mini"
+#endif
 int main()
 { return ODS_VERSION; }
 eof
 
-[ -z "$CXX" ] && CXX=g++
+[ -z "$CXX" ] && CXX=g++ && CXX=c++
 
 $CXX -std=c++17 $TestCpp -o $AOut
 if [ -x $AOut ]

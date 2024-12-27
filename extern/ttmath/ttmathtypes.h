@@ -158,7 +158,7 @@ namespace ttmath
 	/*!
 		on 32 bit platform ulint and slint will be equal 64 bits
 	*/
-	#ifdef _MSC_VER
+	#ifdef _WIN32
 		// long long on MS Windows (Visual and GCC mingw compilers) have 64 bits
 		// stdint.h is not available on Visual Studio prior to VS 2010 version
 		typedef unsigned long long int ulint;
@@ -205,7 +205,7 @@ namespace ttmath
 	/*!
 		on 64bit platforms one word (uint, sint) will be equal 64bits
 	*/
-	#ifdef _MSC_VER
+	#ifdef _WIN32
 		/* in VC 'long' type has 32 bits, __int64 is VC extension */
 		typedef unsigned __int64 uint;
 		typedef signed   __int64 sint;
