@@ -132,7 +132,7 @@ using namespace Firebird;
 
 static const mode_t MASK = 0660;
 
-static jrd_file* seek_file(jrd_file*, BufferDesc*, FB_UINT64*, FbStatusVector*);
+static bool seek_file(jrd_file*, BufferDesc*, FB_UINT64*, FbStatusVector*);
 static jrd_file* setup_file(Database*, const PathName&, int, USHORT);
 static void lockDatabaseFile(int& desc, const bool shareMode, const bool temporary,
 							 const char* fileName, ISC_STATUS operation);
@@ -565,7 +565,7 @@ void PIO_header(thread_db* tdbb, UCHAR* address, int length)
 static Firebird::InitInstance<ZeroBuffer> zeros;
 
 
-USHORT PIO_init_data(thread_db* tdbb, jrd_file* main_file, FbStatusVector* status_vector,
+USHORT PIO_init_data(thread_db* tdbb, jrd_file* file, FbStatusVector* status_vector,
 					 ULONG startPage, USHORT initPages)
 {
 /**************************************
@@ -592,9 +592,7 @@ USHORT PIO_init_data(thread_db* tdbb, jrd_file* main_file, FbStatusVector* statu
 
 	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 
-	jrd_file* file = seek_file(main_file, &bdb, &offset, status_vector);
-
-	if (!file)
+	if (!seek_file(file, &bdb, &offset, status_vector))
 		return 0;
 
 	if (startPage < 8)
@@ -617,14 +615,15 @@ USHORT PIO_init_data(thread_db* tdbb, jrd_file* main_file, FbStatusVector* statu
 
 		for (int r = 0; r < IO_RETRY; r++)
 		{
-			if (!(file = seek_file(file, &bdb, &offset, status_vector)))
-				return false;
+			if (!seek_file(file, &bdb, &offset, status_vector))
+				return 0;
+
 			if ((written = os_utils::pwrite(file->fil_desc, zero_buff, to_write, LSEEK_OFFSET_CAST offset)) == to_write)
 				break;
+
 			if (written < 0 && !SYSCALL_INTERRUPTED(errno))
 				return unix_error("write", file, isc_io_write_err, status_vector);
 		}
-
 
 		leftPages -= write_pages;
 		i += write_pages;
@@ -762,7 +761,7 @@ bool PIO_read(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page, 
 
 	for (i = 0; i < IO_RETRY; i++)
 	{
-		if (!(file = seek_file(file, bdb, &offset, status_vector)))
+		if (!seek_file(file, bdb, &offset, status_vector))
 			return false;
 
 		if ((bytes = os_utils::pread(file->fil_desc, page, size, LSEEK_OFFSET_CAST offset)) == size)
@@ -814,7 +813,7 @@ bool PIO_write(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page,
 
 	for (i = 0; i < IO_RETRY; i++)
 	{
-		if (!(file = seek_file(file, bdb, &offset, status_vector)))
+		if (!seek_file(file, bdb, &offset, status_vector))
 			return false;
 
 		if ((bytes = os_utils::pwrite(file->fil_desc, page, size, LSEEK_OFFSET_CAST offset)) == size)
@@ -831,8 +830,8 @@ bool PIO_write(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page,
 }
 
 
-static jrd_file* seek_file(jrd_file* file, BufferDesc* bdb, FB_UINT64* offset,
-	FbStatusVector* status_vector)
+static bool seek_file(jrd_file* file, BufferDesc* bdb, FB_UINT64* offset,
+					  FbStatusVector* status_vector)
 {
 /**************************************
  *
@@ -841,8 +840,7 @@ static jrd_file* seek_file(jrd_file* file, BufferDesc* bdb, FB_UINT64* offset,
  **************************************
  *
  * Functional description
- *	Given a buffer descriptor block, find the appropriate
- *	file block and seek to the proper page in that file.
+ *	Given a buffer descriptor block, seek to the proper page in that file.
  *
  **************************************/
 	BufferControl* const bcb = bdb->bdb_bcb;
@@ -851,7 +849,7 @@ static jrd_file* seek_file(jrd_file* file, BufferDesc* bdb, FB_UINT64* offset,
 	if (file->fil_desc == -1)
 	{
 		unix_error("lseek", file, isc_io_access_err, status_vector);
-		return 0;
+		return false;
 	}
 
     FB_UINT64 lseek_offset = page;
@@ -860,12 +858,11 @@ static jrd_file* seek_file(jrd_file* file, BufferDesc* bdb, FB_UINT64* offset,
     if (lseek_offset != (FB_UINT64) LSEEK_OFFSET_CAST lseek_offset)
 	{
 		unix_error("lseek", file, isc_io_32bit_exceeded_err, status_vector);
-		return 0;
+		return false;
     }
 
 	*offset = lseek_offset;
-
-	return file;
+	return true;
 }
 
 
