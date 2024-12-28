@@ -318,7 +318,7 @@ namespace
 			  checkMessageEof(aCheckMessageEof)
 		{
 			// Iterate over the format items, except the EOF item.
-			for (unsigned i = 0; i < (fromMessage->format->fmt_count / 2) * 2; i += 2)
+			for (unsigned i = 0; i < (fromMessage->format->fmt_count / 2u) * 2u; i += 2)
 			{
 				auto flag = FB_NEW_POOL(pool) ParameterNode(pool);
 				flag->messageNumber = fromMessage->messageNumber;

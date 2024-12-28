@@ -142,7 +142,7 @@ std::variant<FrontendLexer::SingleStatement, FrontendLexer::IncompleteTokenError
 
 		while (pos < end)
 		{
-			if (end - pos >= term.length() && std::equal(term.begin(), term.end(), pos))
+			if (static_cast<FB_SIZE_T>(end - pos) >= term.length() && std::equal(term.begin(), term.end(), pos))
 			{
 				const auto initialStatement = std::string(buffer.cbegin(), pos);
 				pos += term.length();

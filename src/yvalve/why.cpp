@@ -1424,7 +1424,7 @@ static void setTextType(XSQLVAR* var, unsigned charSet)
 static int sqldaTruncateString(char* buffer, FB_SIZE_T size, const char* s)
 {
 	int ret = fb_utils::snprintf(buffer, size, "%s", s);
-	return MIN(ret, size - 1);
+	return MIN(ret, static_cast<int>(size - 1));
 }
 
 // Describe parameters metadata in an sqlda.

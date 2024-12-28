@@ -785,7 +785,7 @@ void INF_database_info(thread_db* tdbb,
 					length = gds__vax_integer(items, 2);
 					items += 2;
 
-					if (end_items - items >= length)
+					if (static_cast<ULONG>(end_items - items) >= length)
 					{
 						pageNum = gds__vax_integer(items, length);
 						items += length;
