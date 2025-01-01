@@ -358,6 +358,8 @@ type
 	IStatement_setTimeoutPtr = procedure(this: IStatement; status: IStatus; timeOut: Cardinal); cdecl;
 	IStatement_createBatchPtr = function(this: IStatement; status: IStatus; inMetadata: IMessageMetadata; parLength: Cardinal; par: BytePtr): IBatch; cdecl;
 	IStatement_freePtr = procedure(this: IStatement; status: IStatus); cdecl;
+	IStatement_getMaxInlineBlobSizePtr = function(this: IStatement; status: IStatus): Cardinal; cdecl;
+	IStatement_setMaxInlineBlobSizePtr = procedure(this: IStatement; status: IStatus; size: Cardinal); cdecl;
 	IBatch_addPtr = procedure(this: IBatch; status: IStatus; count: Cardinal; inBuffer: Pointer); cdecl;
 	IBatch_addBlobPtr = procedure(this: IBatch; status: IStatus; length: Cardinal; inBuffer: Pointer; blobId: ISC_QUADPtr; parLength: Cardinal; par: BytePtr); cdecl;
 	IBatch_appendBlobDataPtr = procedure(this: IBatch; status: IStatus; length: Cardinal; inBuffer: Pointer); cdecl;
@@ -414,6 +416,10 @@ type
 	IAttachment_createReplicatorPtr = function(this: IAttachment; status: IStatus): IReplicator; cdecl;
 	IAttachment_detachPtr = procedure(this: IAttachment; status: IStatus); cdecl;
 	IAttachment_dropDatabasePtr = procedure(this: IAttachment; status: IStatus); cdecl;
+	IAttachment_getMaxBlobCacheSizePtr = function(this: IAttachment; status: IStatus): Cardinal; cdecl;
+	IAttachment_setMaxBlobCacheSizePtr = procedure(this: IAttachment; status: IStatus; size: Cardinal); cdecl;
+	IAttachment_getMaxInlineBlobSizePtr = function(this: IAttachment; status: IStatus): Cardinal; cdecl;
+	IAttachment_setMaxInlineBlobSizePtr = procedure(this: IAttachment; status: IStatus; size: Cardinal); cdecl;
 	IService_deprecatedDetachPtr = procedure(this: IService; status: IStatus); cdecl;
 	IService_queryPtr = procedure(this: IService; status: IStatus; sendLength: Cardinal; sendItems: BytePtr; receiveLength: Cardinal; receiveItems: BytePtr; bufferLength: Cardinal; buffer: BytePtr); cdecl;
 	IService_startPtr = procedure(this: IService; status: IStatus; spbLength: Cardinal; spb: BytePtr); cdecl;
@@ -1523,10 +1529,12 @@ type
 		setTimeout: IStatement_setTimeoutPtr;
 		createBatch: IStatement_createBatchPtr;
 		free: IStatement_freePtr;
+		getMaxInlineBlobSize: IStatement_getMaxInlineBlobSizePtr;
+		setMaxInlineBlobSize: IStatement_setMaxInlineBlobSizePtr;
 	end;
 
 	IStatement = class(IReferenceCounted)
-		const VERSION = 5;
+		const VERSION = 6;
 		const PREPARE_PREFETCH_NONE = Cardinal($0);
 		const PREPARE_PREFETCH_TYPE = Cardinal($1);
 		const PREPARE_PREFETCH_INPUT_PARAMETERS = Cardinal($2);
@@ -1557,6 +1565,8 @@ type
 		procedure setTimeout(status: IStatus; timeOut: Cardinal);
 		function createBatch(status: IStatus; inMetadata: IMessageMetadata; parLength: Cardinal; par: BytePtr): IBatch;
 		procedure free(status: IStatus);
+		function getMaxInlineBlobSize(status: IStatus): Cardinal;
+		procedure setMaxInlineBlobSize(status: IStatus; size: Cardinal);
 	end;
 
 	IStatementImpl = class(IStatement)
@@ -1579,6 +1589,8 @@ type
 		procedure setTimeout(status: IStatus; timeOut: Cardinal); virtual; abstract;
 		function createBatch(status: IStatus; inMetadata: IMessageMetadata; parLength: Cardinal; par: BytePtr): IBatch; virtual; abstract;
 		procedure free(status: IStatus); virtual; abstract;
+		function getMaxInlineBlobSize(status: IStatus): Cardinal; virtual; abstract;
+		procedure setMaxInlineBlobSize(status: IStatus; size: Cardinal); virtual; abstract;
 	end;
 
 	BatchVTable = class(ReferenceCountedVTable)
@@ -1792,10 +1804,14 @@ type
 		createReplicator: IAttachment_createReplicatorPtr;
 		detach: IAttachment_detachPtr;
 		dropDatabase: IAttachment_dropDatabasePtr;
+		getMaxBlobCacheSize: IAttachment_getMaxBlobCacheSizePtr;
+		setMaxBlobCacheSize: IAttachment_setMaxBlobCacheSizePtr;
+		getMaxInlineBlobSize: IAttachment_getMaxInlineBlobSizePtr;
+		setMaxInlineBlobSize: IAttachment_setMaxInlineBlobSizePtr;
 	end;
 
 	IAttachment = class(IReferenceCounted)
-		const VERSION = 5;
+		const VERSION = 6;
 
 		procedure getInfo(status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr);
 		function startTransaction(status: IStatus; tpbLength: Cardinal; tpb: BytePtr): ITransaction;
@@ -1823,6 +1839,10 @@ type
 		function createReplicator(status: IStatus): IReplicator;
 		procedure detach(status: IStatus);
 		procedure dropDatabase(status: IStatus);
+		function getMaxBlobCacheSize(status: IStatus): Cardinal;
+		procedure setMaxBlobCacheSize(status: IStatus; size: Cardinal);
+		function getMaxInlineBlobSize(status: IStatus): Cardinal;
+		procedure setMaxInlineBlobSize(status: IStatus; size: Cardinal);
 	end;
 
 	IAttachmentImpl = class(IAttachment)
@@ -1856,6 +1876,10 @@ type
 		function createReplicator(status: IStatus): IReplicator; virtual; abstract;
 		procedure detach(status: IStatus); virtual; abstract;
 		procedure dropDatabase(status: IStatus); virtual; abstract;
+		function getMaxBlobCacheSize(status: IStatus): Cardinal; virtual; abstract;
+		procedure setMaxBlobCacheSize(status: IStatus; size: Cardinal); virtual; abstract;
+		function getMaxInlineBlobSize(status: IStatus): Cardinal; virtual; abstract;
+		procedure setMaxInlineBlobSize(status: IStatus; size: Cardinal); virtual; abstract;
 	end;
 
 	ServiceVTable = class(ReferenceCountedVTable)
@@ -7221,6 +7245,29 @@ begin
 	FbException.checkException(status);
 end;
 
+function IStatement.getMaxInlineBlobSize(status: IStatus): Cardinal;
+begin
+	if (vTable.version < 6) then begin
+		FbException.setVersionError(status, 'IStatement', vTable.version, 6);
+		Result := 0;
+	end
+	else begin
+		Result := StatementVTable(vTable).getMaxInlineBlobSize(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure IStatement.setMaxInlineBlobSize(status: IStatus; size: Cardinal);
+begin
+	if (vTable.version < 6) then begin
+		FbException.setVersionError(status, 'IStatement', vTable.version, 6);
+	end
+	else begin
+		StatementVTable(vTable).setMaxInlineBlobSize(Self, status, size);
+	end;
+	FbException.checkException(status);
+end;
+
 procedure IBatch.add(status: IStatus; count: Cardinal; inBuffer: Pointer);
 begin
 	BatchVTable(vTable).add(Self, status, count, inBuffer);
@@ -7652,6 +7699,52 @@ begin
 	end
 	else begin
 		AttachmentVTable(vTable).dropDatabase(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
+function IAttachment.getMaxBlobCacheSize(status: IStatus): Cardinal;
+begin
+	if (vTable.version < 6) then begin
+		FbException.setVersionError(status, 'IAttachment', vTable.version, 6);
+		Result := 0;
+	end
+	else begin
+		Result := AttachmentVTable(vTable).getMaxBlobCacheSize(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure IAttachment.setMaxBlobCacheSize(status: IStatus; size: Cardinal);
+begin
+	if (vTable.version < 6) then begin
+		FbException.setVersionError(status, 'IAttachment', vTable.version, 6);
+	end
+	else begin
+		AttachmentVTable(vTable).setMaxBlobCacheSize(Self, status, size);
+	end;
+	FbException.checkException(status);
+end;
+
+function IAttachment.getMaxInlineBlobSize(status: IStatus): Cardinal;
+begin
+	if (vTable.version < 6) then begin
+		FbException.setVersionError(status, 'IAttachment', vTable.version, 6);
+		Result := 0;
+	end
+	else begin
+		Result := AttachmentVTable(vTable).getMaxInlineBlobSize(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure IAttachment.setMaxInlineBlobSize(status: IStatus; size: Cardinal);
+begin
+	if (vTable.version < 6) then begin
+		FbException.setVersionError(status, 'IAttachment', vTable.version, 6);
+	end
+	else begin
+		AttachmentVTable(vTable).setMaxInlineBlobSize(Self, status, size);
 	end;
 	FbException.checkException(status);
 end;
@@ -11578,6 +11671,25 @@ begin
 	end
 end;
 
+function IStatementImpl_getMaxInlineBlobSizeDispatcher(this: IStatement; status: IStatus): Cardinal; cdecl;
+begin
+	Result := 0;
+	try
+		Result := IStatementImpl(this).getMaxInlineBlobSize(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IStatementImpl_setMaxInlineBlobSizeDispatcher(this: IStatement; status: IStatus; size: Cardinal); cdecl;
+begin
+	try
+		IStatementImpl(this).setMaxInlineBlobSize(status, size);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
 var
 	IStatementImpl_vTable: StatementVTable;
 
@@ -12249,6 +12361,44 @@ procedure IAttachmentImpl_dropDatabaseDispatcher(this: IAttachment; status: ISta
 begin
 	try
 		IAttachmentImpl(this).dropDatabase(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+function IAttachmentImpl_getMaxBlobCacheSizeDispatcher(this: IAttachment; status: IStatus): Cardinal; cdecl;
+begin
+	Result := 0;
+	try
+		Result := IAttachmentImpl(this).getMaxBlobCacheSize(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IAttachmentImpl_setMaxBlobCacheSizeDispatcher(this: IAttachment; status: IStatus; size: Cardinal); cdecl;
+begin
+	try
+		IAttachmentImpl(this).setMaxBlobCacheSize(status, size);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+function IAttachmentImpl_getMaxInlineBlobSizeDispatcher(this: IAttachment; status: IStatus): Cardinal; cdecl;
+begin
+	Result := 0;
+	try
+		Result := IAttachmentImpl(this).getMaxInlineBlobSize(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IAttachmentImpl_setMaxInlineBlobSizeDispatcher(this: IAttachment; status: IStatus; size: Cardinal); cdecl;
+begin
+	try
+		IAttachmentImpl(this).setMaxInlineBlobSize(status, size);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -17320,7 +17470,7 @@ initialization
 	IResultSetImpl_vTable.getInfo := @IResultSetImpl_getInfoDispatcher;
 
 	IStatementImpl_vTable := StatementVTable.create;
-	IStatementImpl_vTable.version := 5;
+	IStatementImpl_vTable.version := 6;
 	IStatementImpl_vTable.addRef := @IStatementImpl_addRefDispatcher;
 	IStatementImpl_vTable.release := @IStatementImpl_releaseDispatcher;
 	IStatementImpl_vTable.getInfo := @IStatementImpl_getInfoDispatcher;
@@ -17338,6 +17488,8 @@ initialization
 	IStatementImpl_vTable.setTimeout := @IStatementImpl_setTimeoutDispatcher;
 	IStatementImpl_vTable.createBatch := @IStatementImpl_createBatchDispatcher;
 	IStatementImpl_vTable.free := @IStatementImpl_freeDispatcher;
+	IStatementImpl_vTable.getMaxInlineBlobSize := @IStatementImpl_getMaxInlineBlobSizeDispatcher;
+	IStatementImpl_vTable.setMaxInlineBlobSize := @IStatementImpl_setMaxInlineBlobSizeDispatcher;
 
 	IBatchImpl_vTable := BatchVTable.create;
 	IBatchImpl_vTable.version := 4;
@@ -17394,7 +17546,7 @@ initialization
 	IEventsImpl_vTable.cancel := @IEventsImpl_cancelDispatcher;
 
 	IAttachmentImpl_vTable := AttachmentVTable.create;
-	IAttachmentImpl_vTable.version := 5;
+	IAttachmentImpl_vTable.version := 6;
 	IAttachmentImpl_vTable.addRef := @IAttachmentImpl_addRefDispatcher;
 	IAttachmentImpl_vTable.release := @IAttachmentImpl_releaseDispatcher;
 	IAttachmentImpl_vTable.getInfo := @IAttachmentImpl_getInfoDispatcher;
@@ -17423,6 +17575,10 @@ initialization
 	IAttachmentImpl_vTable.createReplicator := @IAttachmentImpl_createReplicatorDispatcher;
 	IAttachmentImpl_vTable.detach := @IAttachmentImpl_detachDispatcher;
 	IAttachmentImpl_vTable.dropDatabase := @IAttachmentImpl_dropDatabaseDispatcher;
+	IAttachmentImpl_vTable.getMaxBlobCacheSize := @IAttachmentImpl_getMaxBlobCacheSizeDispatcher;
+	IAttachmentImpl_vTable.setMaxBlobCacheSize := @IAttachmentImpl_setMaxBlobCacheSizeDispatcher;
+	IAttachmentImpl_vTable.getMaxInlineBlobSize := @IAttachmentImpl_getMaxInlineBlobSizeDispatcher;
+	IAttachmentImpl_vTable.setMaxInlineBlobSize := @IAttachmentImpl_setMaxInlineBlobSizeDispatcher;
 
 	IServiceImpl_vTable := ServiceVTable.create;
 	IServiceImpl_vTable.version := 5;
