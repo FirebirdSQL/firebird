@@ -94,7 +94,7 @@ OuterJoin::OuterJoin(thread_db* aTdbb, Optimizer* opt,
 
 RecordSource* OuterJoin::generate()
 {
-	const auto outerJoinRsb = process(OUTER_JOIN);
+	const auto outerJoinRsb = process();
 
 	if (!optimizer->isFullJoin())
 		return outerJoinRsb;
@@ -106,6 +106,11 @@ RecordSource* OuterJoin::generate()
 
 	auto& outerStream = joinStreams[0];
 	auto& innerStream = joinStreams[1];
+
+	// Collect the outer streams to be used in the full outer join algorithm
+
+	StreamList checkStreams;
+	outerStream.rsb->findUsedStreams(checkStreams);
 
 	std::swap(outerStream, innerStream);
 
@@ -131,15 +136,13 @@ RecordSource* OuterJoin::generate()
 			iter.reset(CMP_clone_node_opt(tdbb, csb, iter));
 	}
 
-	const auto antiJoinRsb = process(ANTI_JOIN);
-
 	// Allocate and return the final join record source
 
-	return FB_NEW_POOL(getPool()) FullOuterJoin(csb, outerJoinRsb, antiJoinRsb);
+	return FB_NEW_POOL(getPool()) FullOuterJoin(csb, outerJoinRsb, process(), checkStreams);
 }
 
 
-RecordSource* OuterJoin::process(const JoinType joinType)
+RecordSource* OuterJoin::process()
 {
 	BoolExprNode* boolean = nullptr;
 
@@ -178,8 +181,7 @@ RecordSource* OuterJoin::process(const JoinType joinType)
 		fb_assert(!innerStream.rsb);
 		// AB: the sort clause for the inner stream of an OUTER JOIN
 		//	   should never be used for the index retrieval
-		innerStream.rsb = optimizer->generateRetrieval(innerStream.number, nullptr,
-			false, (joinType == OUTER_JOIN) ? true : false);
+		innerStream.rsb = optimizer->generateRetrieval(innerStream.number, nullptr, false, true);
 	}
 
 	// Generate a parent filter record source for any remaining booleans that
@@ -189,8 +191,7 @@ RecordSource* OuterJoin::process(const JoinType joinType)
 
 	// Allocate and return the join record source
 
-	return FB_NEW_POOL(getPool())
-		NestedLoopJoin(csb, outerStream.rsb, innerRsb, boolean, joinType);
+	return FB_NEW_POOL(getPool()) NestedLoopJoin(csb, outerStream.rsb, innerRsb, boolean);
 };
 
 
