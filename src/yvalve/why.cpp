@@ -831,11 +831,11 @@ private:
 		explicit CtrlCHandler(MemoryPool& p)
 			: ShutdownInit(p)
 		{
+			shutdownSemaphore = &semaphore;
 			Thread::start(shutdownThread, 0, 0, &handle);
 
 			procInt = ISC_signal(SIGINT, handlerInt, 0);
 			procTerm = ISC_signal(SIGTERM, handlerTerm, 0);
-			shutdownSemaphore = &semaphore;
 		}
 
 		~CtrlCHandler()
