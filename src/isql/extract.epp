@@ -548,33 +548,42 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 		**  rdb$check_constraints.  We hope we get at most one row back.
 		*/
 
-		if (RFR.RDB$NULL_FLAG == 1)
-		{
-			FOR RCO IN RDB$RELATION_CONSTRAINTS CROSS
-				CON IN RDB$CHECK_CONSTRAINTS WITH
-				CON.RDB$TRIGGER_NAME = RFR.RDB$FIELD_NAME AND
-				CON.RDB$CONSTRAINT_NAME = RCO.RDB$CONSTRAINT_NAME AND
-				RCO.RDB$CONSTRAINT_TYPE EQ "NOT NULL" AND
-				RCO.RDB$RELATION_NAME = RFR.RDB$RELATION_NAME
+		bool found = false;
 
-				if (!fb_utils::implicit_integrity(CON.RDB$CONSTRAINT_NAME))
+		FOR RCO IN RDB$RELATION_CONSTRAINTS CROSS
+			CON IN RDB$CHECK_CONSTRAINTS WITH
+			CON.RDB$TRIGGER_NAME = RFR.RDB$FIELD_NAME AND
+			CON.RDB$CONSTRAINT_NAME = RCO.RDB$CONSTRAINT_NAME AND
+			RCO.RDB$CONSTRAINT_TYPE EQ "NOT NULL" AND
+			RCO.RDB$RELATION_NAME = RFR.RDB$RELATION_NAME
+
+			if (!fb_utils::implicit_integrity(CON.RDB$CONSTRAINT_NAME))
+			{
+				fb_utils::exact_name(CON.RDB$CONSTRAINT_NAME);
+				if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
 				{
-					fb_utils::exact_name(CON.RDB$CONSTRAINT_NAME);
-					if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-					{
-						IUTILS_copy_SQL_id (CON.RDB$CONSTRAINT_NAME, SQL_identifier, DBL_QUOTE);
-						isqlGlob.printf(" CONSTRAINT %s", SQL_identifier);
-					}
-					else
-						isqlGlob.printf(" CONSTRAINT %s", CON.RDB$CONSTRAINT_NAME);
+					IUTILS_copy_SQL_id (CON.RDB$CONSTRAINT_NAME, SQL_identifier, DBL_QUOTE);
+					isqlGlob.printf(" CONSTRAINT %s", SQL_identifier);
 				}
-			END_FOR
-			ON_ERROR
-				ISQL_errmsg (fbStatus);
-				return FINI_ERROR;
-			END_ERROR;
+				else
+					isqlGlob.printf(" CONSTRAINT %s", CON.RDB$CONSTRAINT_NAME);
+			}
+			found = true;
 
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg (fbStatus);
+			return FINI_ERROR;
+		END_ERROR;
+
+		if (found)
+		{
 			isqlGlob.printf(" NOT NULL");
+
+			if (RFR.RDB$NULL_FLAG == 0)
+			{
+				isqlGlob.printf(" NOT ENFORCED");
+			}
 		}
 
 		// Handle collations after defaults
@@ -679,6 +688,11 @@ static bool extract_rel_constraints(const char* relation_name)
 			}
 			else
 				isqlGlob.printf(" %s", IDX.RDB$INDEX_NAME);
+		}
+
+		if (IDX.RDB$INDEX_INACTIVE == 1)
+		{
+			isqlGlob.printf(" NOT ENFORCED");
 		}
 
 	END_FOR
@@ -1926,6 +1940,11 @@ static void list_check()
 		if (!TRG.RDB$TRIGGER_SOURCE.NULL)
 			SHOW_print_metadata_text_blob (isqlGlob.Out, &TRG.RDB$TRIGGER_SOURCE);
 
+		if (TRG.RDB$TRIGGER_INACTIVE == 1)
+		{
+			isqlGlob.printf(" NOT ENFORCED");
+		}
+
 		isqlGlob.printf("%s%s", isqlGlob.global_Term, NEWLINE);
 
 	END_FOR
@@ -2828,12 +2847,14 @@ static void list_foreign()
 
 	FOR RELC1 IN RDB$RELATION_CONSTRAINTS CROSS
 		RELC2 IN RDB$RELATION_CONSTRAINTS CROSS
-		REFC IN RDB$REF_CONSTRAINTS WITH
+		REFC IN RDB$REF_CONSTRAINTS CROSS
+		IDX IN RDB$INDICES WITH
 		RELC1.RDB$CONSTRAINT_TYPE EQ "FOREIGN KEY" AND
 		REFC.RDB$CONST_NAME_UQ EQ RELC2.RDB$CONSTRAINT_NAME AND
 		REFC.RDB$CONSTRAINT_NAME EQ RELC1.RDB$CONSTRAINT_NAME AND
 		(RELC2.RDB$CONSTRAINT_TYPE EQ "UNIQUE" OR
-		RELC2.RDB$CONSTRAINT_TYPE EQ "PRIMARY KEY")
+		RELC2.RDB$CONSTRAINT_TYPE EQ "PRIMARY KEY") AND
+		IDX.RDB$INDEX_NAME = RELC1.RDB$INDEX_NAME
 		SORTED BY RELC1.RDB$RELATION_NAME, RELC1.RDB$CONSTRAINT_NAME
 
 		fb_utils::exact_name(RELC1.RDB$RELATION_NAME);
@@ -2892,6 +2913,9 @@ static void list_foreign()
 			IUTILS_truncate_term (REFC.RDB$DELETE_RULE, static_cast<USHORT>(strlen(REFC.RDB$DELETE_RULE)));
 			ISQL_ri_action_print (REFC.RDB$DELETE_RULE, " ON DELETE", true);
 		}
+
+		if (IDX.RDB$INDEX_INACTIVE == 1)
+			isqlGlob.printf(" NOT ENFORCED");
 
 		isqlGlob.printf("%s%s", isqlGlob.global_Term, NEWLINE);
 
