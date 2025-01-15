@@ -59,7 +59,6 @@ public:
 	};
 
 	// Statement flags.
-	static const unsigned FLAG_ORPHAN		= 0x01;
 	static const unsigned FLAG_NO_BATCH		= 0x02;
 	//static const unsigned FLAG_BLR_VERSION4	= 0x04;
 	//static const unsigned FLAG_BLR_VERSION5	= 0x08;
@@ -73,8 +72,7 @@ public:
 		  dsqlAttachment(aDsqlAttachment),
 		  type(TYPE_SELECT),
 		  flags(0),
-		  blrVersion(5),
-		  ports(pool)
+		  blrVersion(5)
 	{
 		pool.setStatsGroup(memoryStats);
 	}
@@ -121,8 +119,6 @@ public:
 	void setOrgText(const char* ptr, ULONG len);
 	const Firebird::string& getOrgText() const { return *orgText; }
 
-	Firebird::Array<dsql_msg*>& getPorts() { return ports; }
-
 	dsql_msg* getSendMsg() { return sendMsg; }
 	const dsql_msg* getSendMsg() const { return sendMsg; }
 	void setSendMsg(dsql_msg* value) { sendMsg = value; }
@@ -130,10 +126,6 @@ public:
 	dsql_msg* getReceiveMsg() { return receiveMsg; }
 	const dsql_msg* getReceiveMsg() const { return receiveMsg; }
 	void setReceiveMsg(dsql_msg* value) { receiveMsg = value; }
-
-	dsql_par* getEof() { return eof; }
-	const dsql_par* getEof() const { return eof; }
-	void setEof(dsql_par* value) { eof = value; }
 
 	Firebird::RefStrPtr getCacheKey() { return cacheKey; }
 	void setCacheKey(Firebird::RefStrPtr& value) { cacheKey = value; }
@@ -180,10 +172,8 @@ protected:
 	Firebird::RefStrPtr sqlText;
 	Firebird::RefStrPtr orgText;
 	Firebird::RefStrPtr cacheKey;
-	Firebird::Array<dsql_msg*> ports;			// Port messages
 	dsql_msg* sendMsg = nullptr;				// Message to be sent to start request
 	dsql_msg* receiveMsg = nullptr;				// Per record message to be received
-	dsql_par* eof = nullptr;					// End of file parameter
 	DsqlCompilerScratch* scratch = nullptr;
 
 private:
@@ -194,8 +184,11 @@ private:
 class DsqlDmlStatement final : public DsqlStatement
 {
 public:
+	MetaName parentCursorName;
+
 	DsqlDmlStatement(MemoryPool& p, dsql_dbb* aDsqlAttachment, StmtNode* aNode)
 		: DsqlStatement(p, aDsqlAttachment),
+		  parentCursorName(p),
 		  node(aNode)
 	{
 	}
@@ -221,36 +214,12 @@ public:
 	void dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, ntrace_result_t* traceResult) override;
 	DsqlDmlRequest* createRequest(thread_db* tdbb, dsql_dbb* dbb) override;
 
-	dsql_par* getDbKey() { return dbKey; }
-	const dsql_par* getDbKey() const { return dbKey; }
-	void setDbKey(dsql_par* value) { dbKey = value; }
-
-	dsql_par* getRecVersion() { return recVersion; }
-	const dsql_par* getRecVersion() const { return recVersion; }
-	void setRecVersion(dsql_par* value) { recVersion = value; }
-
-	dsql_par* getParentRecVersion() { return parentRecVersion; }
-	const dsql_par* getParentRecVersion() const { return parentRecVersion; }
-	void setParentRecVersion(dsql_par* value) { parentRecVersion = value; }
-
-	dsql_par* getParentDbKey() { return parentDbKey; }
-	const dsql_par* getParentDbKey() const { return parentDbKey; }
-	void setParentDbKey(dsql_par* value) { parentDbKey = value; }
-
-	DsqlDmlRequest* getParentRequest() const { return parentRequest; }
-	void setParentRequest(DsqlDmlRequest* value) { parentRequest = value; }
-
 protected:
 	void doRelease() override;
 
 private:
 	NestConst<StmtNode> node;
 	Statement* statement = nullptr;
-	dsql_par* dbKey = nullptr;					// Database key for current of
-	dsql_par* recVersion = nullptr;				// Record Version for current of
-	dsql_par* parentRecVersion = nullptr;		// parent record version
-	dsql_par* parentDbKey = nullptr;			// Parent database key for current of
-	DsqlDmlRequest* parentRequest = nullptr;	// Source request, if cursor update
 };
 
 

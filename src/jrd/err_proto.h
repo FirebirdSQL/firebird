@@ -53,7 +53,7 @@ void	ERR_bugcheck_msg(const TEXT*);
 void	ERR_soft_bugcheck(int, const TEXT*, int);
 void	ERR_corrupt(int);
 void	ERR_error(int);
-void	ERR_post(const Firebird::Arg::StatusVector& v);
+[[noreturn]] void	ERR_post(const Firebird::Arg::StatusVector& v);
 void	ERR_post_nothrow(const Firebird::Arg::StatusVector& v, Jrd::FbStatusVector* statusVector = NULL);
 void	ERR_post_nothrow(const Firebird::IStatus* v, Jrd::FbStatusVector* statusVector = NULL);
 void	ERR_punt();
