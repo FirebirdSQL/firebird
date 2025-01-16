@@ -367,7 +367,7 @@ namespace Jrd {
 			return;
 
 		fb_assert(tdbb);
-		lockAndReadHeader(tdbb, CRYPT_HDR_NOWAIT);
+		lockAndReadHeader(tdbb, CRYPT_HDR_NOWAIT | CRYPT_RELOAD_PLUGIN);
 	}
 
 	void CryptoManager::lockAndReadHeader(thread_db* tdbb, unsigned flags)
@@ -407,9 +407,15 @@ namespace Jrd {
 		crypt = hdr->hdr_flags & Ods::hdr_encrypted;
 		process = hdr->hdr_flags & Ods::hdr_crypt_process;
 
+		if (flags & CRYPT_RELOAD_PLUGIN && cryptPlugin)
+		{
+			PluginManagerInterfacePtr()->releasePlugin(cryptPlugin);
+			cryptPlugin = NULL;
+		}
+
 		// tdbb w/o attachment comes when database is shutting down in the end of detachDatabase()
 		// the only needed here page is header, i.e. we can live w/o cryptPlugin
-		if ((crypt || process) && tdbb->getAttachment())
+		if ((crypt || process) && !cryptPlugin && tdbb->getAttachment())
 		{
 			ClumpletWriter hc(ClumpletWriter::UnTagged, hdr->hdr_page_size);
 			hdr.getClumplets(hc);
@@ -418,56 +424,18 @@ namespace Jrd {
 			else
 				keyName = "";
 
-			if (!cryptPlugin)
+			loadPlugin(tdbb, hdr->hdr_crypt_plugin);
+			pluginName = hdr->hdr_crypt_plugin;
+			string valid;
+			calcValidation(valid, cryptPlugin);
+			if (hc.find(Ods::HDR_crypt_hash))
 			{
-				loadPlugin(tdbb, hdr->hdr_crypt_plugin);
-				pluginName = hdr->hdr_crypt_plugin;
-				string valid;
-				calcValidation(valid, cryptPlugin);
-				if (hc.find(Ods::HDR_crypt_hash))
-				{
-					hc.getString(hash);
-					if (hash != valid)
-						(Arg::Gds(isc_bad_crypt_key) << keyName).raise();
-				}
-				else
-					hash = valid;
+				hc.getString(hash);
+				if (hash != valid)
+					(Arg::Gds(isc_bad_crypt_key) << keyName).raise();
 			}
 			else
-			{
-				for (GetPlugins<IKeyHolderPlugin> keyControl(IPluginManager::TYPE_KEY_HOLDER, dbb.dbb_config);
-						keyControl.hasData(); keyControl.next())
-				{
-					// check does keyHolder want to provide a key for us
-					IKeyHolderPlugin* keyHolder = keyControl.plugin();
-
-					FbLocalStatus st;
-					int keyCallbackRc = keyHolder->keyCallback(&st, tdbb->getAttachment()->att_crypt_callback);
-					st.check();
-					if (!keyCallbackRc)
-						continue;
-
-					// validate a key
-					AutoPlugin<IDbCryptPlugin> crypt(checkFactory->makeInstance());
-					setDbInfo(crypt);
-					crypt->setKey(&st, 1, &keyHolder, keyName.c_str());
-
-
-					string valid;
-					calcValidation(valid, crypt);
-					if (hc.find(Ods::HDR_crypt_hash))
-					{
-						hc.getString(hash);
-						if (hash == valid)
-						{
-							// unload old plugin and set new one
-							PluginManagerInterfacePtr()->releasePlugin(cryptPlugin);
-							cryptPlugin = NULL;
-							cryptPlugin = crypt.release();
-						}
-					}
-				}
-			}
+				hash = valid;
 		}
 
 		if (cryptPlugin && (flags & CRYPT_HDR_INIT))
