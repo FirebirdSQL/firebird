@@ -87,6 +87,7 @@ public:
 	static void sleep(unsigned milliseconds);
 	static void yield();
 
+	static bool isCurrent(InternalId iid);
 	bool isCurrent();
 
 	Thread()
