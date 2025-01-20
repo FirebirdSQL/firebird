@@ -182,19 +182,50 @@ private:
 	class Segment
 	{
 	public:
-		Segment() : position(0), size(0)
-		{}
-
 		Segment(offset_t aPosition, offset_t aSize) :
-			position(aPosition), size(aSize)
+			position(aPosition), size(aSize), prev(NULL), next(NULL)
 		{}
 
 		offset_t position;
 		offset_t size;
+		Segment* prev;
+		Segment* next;
 
-		static const offset_t& generate(const void* /*sender*/, const Segment& segment)
+		static const offset_t& generate(const void* /*sender*/, const Segment* segment)
 		{
-			return segment.position;
+			return segment->position;
+		}
+	};
+
+	class SegmentLastPointer
+	{
+	public:
+		SegmentLastPointer() : size(0), last(NULL)
+		{}
+
+		SegmentLastPointer(offset_t aSize, Segment* aSegment) :
+			size(aSize), last(aSegment)
+		{}
+
+		offset_t pop()
+		{
+			fb_assert(last);
+			offset_t last_position = last->position;
+			last = last->prev;
+			return last_position;
+		}
+
+		bool isEmpty()
+		{
+			return !last;
+		}
+
+		offset_t size;
+		Segment* last;
+
+		static const offset_t& generate(const void* /*sender*/, const SegmentLastPointer& segment)
+		{
+			return segment.size;
 		}
 	};
 
@@ -209,8 +240,54 @@ private:
 	Firebird::Array<UCHAR> initialBuffer;
 	bool initiallyDynamic;
 
-	typedef Firebird::BePlusTree<Segment, offset_t, MemoryPool, Segment> FreeSegmentTree;
+	typedef Firebird::BePlusTree<Segment*, offset_t, MemoryPool, Segment> FreeSegmentTree;
 	FreeSegmentTree freeSegments;
+
+	typedef Firebird::BePlusTree<SegmentLastPointer, offset_t, MemoryPool, SegmentLastPointer> FreeSegmentLastPointerTree;
+	FreeSegmentLastPointerTree freeSegmentLastPointers;
+
+	inline void lastPointerAdd(Segment* const segment)
+	{
+		if (freeSegmentLastPointers.locate(segment->size))
+		{
+			SegmentLastPointer* const pointer = &freeSegmentLastPointers.current();
+			segment->next = NULL;
+			segment->prev = pointer->last;
+			pointer->last->next = segment;
+			pointer->last = segment;
+		}
+		else
+		{
+			segment->prev = NULL;
+			segment->next = NULL;
+			freeSegmentLastPointers.add(SegmentLastPointer(segment->size, segment));
+		}
+	}
+
+	inline void lastPointerRemove(Segment* const segment)
+	{
+		if (segment->next == NULL)
+		{
+			if (!freeSegmentLastPointers.locate(segment->size))
+				fb_assert(false);
+
+			SegmentLastPointer* pointer = &freeSegmentLastPointers.current();
+			if (segment->prev)
+			{
+				segment->prev->next = NULL;
+				pointer->last = segment->prev;
+			}
+			else
+				freeSegmentLastPointers.fastRemove();
+		}
+		else
+		{
+			if (segment->prev)
+				segment->prev->next = segment->next;
+
+			segment->next->prev = segment->prev;
+		}
+	}
 
 	static Firebird::GlobalPtr<Firebird::Mutex> initMutex;
 	static Firebird::TempDirectoryList* tempDirs;

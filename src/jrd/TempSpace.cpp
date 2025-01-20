@@ -140,7 +140,7 @@ TempSpace::TempSpace(MemoryPool& p, const PathName& prefix, bool dynamic)
 		  logicalSize(0), physicalSize(0), localCacheUsage(0),
 		  head(NULL), tail(NULL), tempFiles(p),
 		  initialBuffer(p), initiallyDynamic(dynamic),
-		  freeSegments(p)
+		  freeSegments(p), freeSegmentLastPointers(p)
 {
 	if (!tempDirs)
 	{
@@ -179,6 +179,9 @@ TempSpace::~TempSpace()
 		Database* const dbb = GET_DBB();
 		dbb->decTempCacheUsage(localCacheUsage);
 	}
+
+	for (bool found = freeSegments.getFirst(); found; found = freeSegments.getNext())
+		delete freeSegments.current();
 
 	while (tempFiles.getCount())
 		delete tempFiles.pop();
@@ -476,13 +479,17 @@ offset_t TempSpace::allocateSpace(FB_SIZE_T size)
 	Segment* best = NULL;
 
 	// Search through the available space in the not used segments list
-	for (bool found = freeSegments.getFirst(); found; found = freeSegments.getNext())
+	if (freeSegmentLastPointers.locate(locGreatEqual, size))
 	{
-		Segment* const space = &freeSegments.current();
-		// If this is smaller than our previous best, use it
-		if (space->size >= size && (!best || (space->size < best->size))) {
-			best = space;
-		}
+		SegmentLastPointer* const cur = &freeSegmentLastPointers.current();
+		const offset_t position = cur->pop();
+		if (cur->isEmpty())
+			freeSegmentLastPointers.fastRemove();
+
+		if (!freeSegments.locate(position))
+			fb_assert(false);
+
+		best = freeSegments.current();
 	}
 
 	// If we didn't find any space, allocate it at the end of the file
@@ -503,8 +510,11 @@ offset_t TempSpace::allocateSpace(FB_SIZE_T size)
 		if (!freeSegments.locate(best->position))
 			fb_assert(false);
 
+		delete freeSegments.current();
 		freeSegments.fastRemove();
 	}
+	else
+		lastPointerAdd(best);
 
 	return position;
 }
@@ -526,37 +536,48 @@ void TempSpace::releaseSpace(offset_t position, FB_SIZE_T size)
 	if (freeSegments.locate(locEqual, end))
 	{
 		// The next segment is found to be adjacent
-		Segment* const next_seg = &freeSegments.current();
+		Segment* const next_seg = freeSegments.current();
+		lastPointerRemove(next_seg);
+
 		next_seg->position -= size;
 		next_seg->size += size;
 
 		if (freeSegments.getPrev())
 		{
 			// Check the prior segment for being adjacent
-			Segment* const prior_seg = &freeSegments.current();
+			Segment* const prior_seg = freeSegments.current();
 			if (position == prior_seg->position + prior_seg->size)
 			{
+				lastPointerRemove(prior_seg);
+
 				next_seg->position -= prior_seg->size;
 				next_seg->size += prior_seg->size;
+
+				delete prior_seg;
 				freeSegments.fastRemove();
 			}
 		}
 
+		lastPointerAdd(next_seg);
 		return;
 	}
 
 	if (freeSegments.locate(locLess, position))
 	{
 		// Check the prior segment for being adjacent
-		Segment* const prior_seg = &freeSegments.current();
+		Segment* const prior_seg = freeSegments.current();
 		if (position == prior_seg->position + prior_seg->size)
 		{
+			lastPointerRemove(prior_seg);
 			prior_seg->size += size;
+			lastPointerAdd(prior_seg);
 			return;
 		}
 	}
 
-	freeSegments.add(Segment(position, size));
+	Segment* new_seg = FB_NEW_POOL(pool) Segment(position, size);
+	freeSegments.add(new_seg);
+	lastPointerAdd(new_seg);
 }
 
 //
@@ -614,7 +635,7 @@ bool TempSpace::validate(offset_t& free) const
 	FreeSegmentTree::ConstAccessor accessor(&freeSegments);
 	for (bool found = accessor.getFirst(); found; found = accessor.getNext())
 	{
-		const offset_t size = accessor.current().size;
+		const offset_t size = accessor.current()->size;
 		fb_assert(size != 0);
 		free += size;
 	}
@@ -643,7 +664,7 @@ ULONG TempSpace::allocateBatch(ULONG count, FB_SIZE_T minSize, FB_SIZE_T maxSize
 	offset_t freeMem = 0;
 
 	for (bool found = freeSegments.getFirst(); found; found = freeSegments.getNext())
-		freeMem += freeSegments.current().size;
+		freeMem += freeSegments.current()->size;
 
 	freeMem = MIN(freeMem / count, maxSize);
 	freeMem = MAX(freeMem, minSize);
@@ -653,7 +674,7 @@ ULONG TempSpace::allocateBatch(ULONG count, FB_SIZE_T minSize, FB_SIZE_T maxSize
 	bool is_positioned = freeSegments.getFirst();
 	while (segments.getCount() < count && is_positioned)
 	{
-		Segment* freeSpace = &freeSegments.current();
+		Segment* freeSpace = freeSegments.current();
 		offset_t freeSeek = freeSpace->position;
 		const offset_t freeEnd = freeSpace->position + freeSpace->size;
 
@@ -668,10 +689,12 @@ ULONG TempSpace::allocateBatch(ULONG count, FB_SIZE_T minSize, FB_SIZE_T maxSize
 			fb_assert(p == mem);
 			fb_assert(seek1 == freeSeek);
 #endif
+			lastPointerRemove(freeSpace);
+
 			if (freeSeek != freeSpace->position)
 			{
 				const offset_t skip_size = freeSeek - freeSpace->position;
-				const Segment skip_space(freeSpace->position, skip_size);
+				Segment* const skip_space = FB_NEW_POOL(pool) Segment(freeSpace->position, skip_size);
 
 				freeSpace->position += skip_size;
 				freeSpace->size -= skip_size;
@@ -679,11 +702,12 @@ ULONG TempSpace::allocateBatch(ULONG count, FB_SIZE_T minSize, FB_SIZE_T maxSize
 
 				if (!freeSegments.add(skip_space))
 					fb_assert(false);
+				lastPointerAdd(skip_space);
 
-				if (!freeSegments.locate(skip_space.position + skip_size))
+				if (!freeSegments.locate(freeSpace->position))
 					fb_assert(false);
 
-				freeSpace = &freeSegments.current();
+				freeSpace = freeSegments.current();
 			}
 
 			SegmentInMemory seg;
@@ -697,8 +721,11 @@ ULONG TempSpace::allocateBatch(ULONG count, FB_SIZE_T minSize, FB_SIZE_T maxSize
 
 			if (!freeSpace->size)
 			{
+				delete freeSegments.current();
 				is_positioned = freeSegments.fastRemove();
 			}
+			else
+				lastPointerAdd(freeSpace);
 		}
 		else
 		{
