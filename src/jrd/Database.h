@@ -237,12 +237,9 @@ const ULONG DBB_shared					= 0x100000L;	// Database object is shared among conne
 const ULONG DBB_blocking			= 0x1L;		// Exclusive mode is blocking
 const ULONG DBB_get_shadows			= 0x2L;		// Signal received to check for new shadows
 const ULONG DBB_assert_locks		= 0x4L;		// Locks are to be asserted
-const ULONG DBB_shutdown			= 0x8L;		// Database is shutdown
-const ULONG DBB_shut_attach			= 0x10L;	// no new attachments accepted
-const ULONG DBB_shut_tran			= 0x20L;	// no new transactions accepted
-const ULONG DBB_shut_force			= 0x40L;	// forced shutdown in progress
-const ULONG DBB_shutdown_full		= 0x80L;	// Database fully shut down
-const ULONG DBB_shutdown_single		= 0x100L;	// Database is in single-user maintenance mode
+const ULONG DBB_shut_attach			= 0x8L;		// No new attachments accepted
+const ULONG DBB_shut_tran			= 0x10L;	// No new transactions accepted
+const ULONG DBB_shut_force			= 0x20L;	// Forced shutdown in progress
 
 class Database : public pool_alloc<type_dbb>
 {
@@ -472,6 +469,7 @@ public:
 	Firebird::RWLock		dbb_ast_lock;		// avoids delivering AST to going away database
 	Firebird::AtomicCounter dbb_ast_flags;		// flags modified at AST level
 	Firebird::AtomicCounter dbb_flags;
+	std::atomic<shut_mode_t> dbb_shutdown_mode;		// shutdown mode
 	USHORT dbb_ods_version;				// major ODS version number
 	USHORT dbb_minor_version;			// minor ODS version number
 	USHORT dbb_page_size;				// page size
@@ -540,7 +538,7 @@ public:
 	Lock* dbb_repl_lock;				// replication state lock
 	Firebird::SyncObject dbb_repl_sync;
 	FB_UINT64 dbb_repl_sequence;		// replication sequence
-	ReplicaMode dbb_replica_mode;		// replica access mode
+	std::atomic<ReplicaMode> dbb_replica_mode;		// replica access mode
 
 	unsigned dbb_compatibility_index;	// datatype backward compatibility level
 	Dictionary dbb_dic;					// metanames dictionary
@@ -576,14 +574,24 @@ public:
 
 	void registerModule(Module&);
 
+	bool isShutdown() const
+	{
+		return (dbb_shutdown_mode.load(std::memory_order_relaxed) != shut_mode_online);
+	}
+
+	bool isShutdown(shut_mode_t mode) const
+	{
+		return (dbb_shutdown_mode.load(std::memory_order_relaxed) == mode);
+	}
+
 	bool isReplica() const
 	{
-		return (dbb_replica_mode != REPLICA_NONE);
+		return (dbb_replica_mode.load(std::memory_order_relaxed) != REPLICA_NONE);
 	}
 
 	bool isReplica(ReplicaMode mode) const
 	{
-		return (dbb_replica_mode == mode);
+		return (dbb_replica_mode.load(std::memory_order_relaxed) == mode);
 	}
 
 	USHORT getEncodedOdsVersion() const
@@ -605,6 +613,7 @@ private:
 		dbb_modules(*p),
 		dbb_extManager(nullptr),
 		dbb_flags(shared ? DBB_shared : 0),
+		dbb_shutdown_mode(shut_mode_online),
 		dbb_filename(*p),
 		dbb_database_name(*p),
 #ifdef HAVE_ID_BY_NAME

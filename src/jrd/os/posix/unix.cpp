@@ -1225,7 +1225,7 @@ static bool raw_devices_validate_database(int desc, const PathName& file_name)
 	}
 
 	// Validate database header. Code lifted from PAG_header.
-	if (hp->hdr_header.pag_type != pag_header /*|| hp->hdr_sequence*/)
+	if (hp->hdr_header.pag_type != pag_header)
 		goto quit;
 
 	if (!Ods::isSupported(hp))
@@ -1240,10 +1240,8 @@ static bool raw_devices_validate_database(int desc, const PathName& file_name)
 
   quit:
 #ifdef DEV_BUILD
-	gds__log ("raw_devices_validate_database: %s -> %s%s\n",
-		 file_name.c_str(),
-		 retval ? "true" : "false",
-		 retval && hp->hdr_sequence != 0 ? " (continuation file)" : "");
+	gds__log ("raw_devices_validate_database: %s -> %s\n",
+			  file_name.c_str(), retval ? "true" : "false");
 #endif
 	return retval;
 }

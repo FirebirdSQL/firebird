@@ -54,10 +54,11 @@
 
 using namespace Firebird;
 
-namespace {
+namespace
+{
 	THREAD_ENTRY_DECLARE cryptThreadStatic(THREAD_ENTRY_PARAM p)
 	{
-		Jrd::CryptoManager* cryptoManager = (Jrd::CryptoManager*) p;
+		const auto cryptoManager = (Jrd::CryptoManager*) p;
 		cryptoManager->cryptThread();
 
 		return 0;
@@ -68,12 +69,12 @@ namespace {
 	const UCHAR CRYPT_CHANGE = LCK_PW;
 	const UCHAR CRYPT_INIT = LCK_EX;
 
-	const int MAX_PLUGIN_NAME_LEN = 31;
+	constexpr int MAX_PLUGIN_NAME_LEN = sizeof(Ods::header_page::hdr_crypt_plugin) - 1;
 }
 
 
-namespace Jrd {
-
+namespace Jrd
+{
 	class Header
 	{
 	protected:
@@ -553,10 +554,10 @@ namespace Jrd {
 
 		const bool newCryptState = plugName.hasData();
 
-		int bak_state = Ods::hdr_nbak_unknown;
+		auto backupState = Ods::hdr_nbak_unknown;
 		{	// scope
 			BackupManager::StateReadGuard stateGuard(tdbb);
-			bak_state = dbb.dbb_backup_manager->getState();
+			backupState = dbb.dbb_backup_manager->getState();
 		}
 
 		{	// window scope
@@ -574,7 +575,7 @@ namespace Jrd {
 				(Arg::Gds(isc_cp_already_crypted)).raise();
 			}
 
-			if (bak_state != Ods::hdr_nbak_normal)
+			if (backupState != Ods::hdr_nbak_normal)
 			{
 				(Arg::Gds(isc_wish_list) << Arg::Gds(isc_random) <<
 					"Cannot crypt: please wait for nbackup completion").raise();
@@ -625,9 +626,9 @@ namespace Jrd {
 
 	void CryptoManager::changeCryptState(thread_db* tdbb, const string& plugName)
 	{
-		if (plugName.length() > 31)
+		if (plugName.length() > MAX_PLUGIN_NAME_LEN)
 		{
-			(Arg::Gds(isc_cp_name_too_long) << Arg::Num(31)).raise();
+			(Arg::Gds(isc_cp_name_too_long) << Arg::Num(MAX_PLUGIN_NAME_LEN)).raise();
 		}
 
 		const bool newCryptState = plugName.hasData();
@@ -656,8 +657,8 @@ namespace Jrd {
 
 			// Nbak's lock was taken in prepareChangeCryptState()
 			// If it was invalidated it's enough reason not to continue now
-			int bak_state = dbb.dbb_backup_manager->getState();
-			if (bak_state != Ods::hdr_nbak_normal)
+			auto backupState = dbb.dbb_backup_manager->getState();
+			if (backupState != Ods::hdr_nbak_normal)
 			{
 				(Arg::Gds(isc_wish_list) << Arg::Gds(isc_random) <<
 					"Cannot crypt: please wait for nbackup completion").raise();
@@ -669,7 +670,7 @@ namespace Jrd {
 				(Arg::Gds(isc_cp_process_active)).raise();
 			}
 
-			bool headerCryptState = hdr->hdr_flags & Ods::hdr_encrypted;
+			const bool headerCryptState = hdr->hdr_flags & Ods::hdr_encrypted;
 			if (headerCryptState == newCryptState)
 			{
 				(Arg::Gds(isc_cp_already_crypted)).raise();
@@ -1085,13 +1086,13 @@ namespace Jrd {
 							JRD_reschedule(tdbb);
 
 							// nbackup state check
-							int bak_state = Ods::hdr_nbak_unknown;
+							auto backupState = Ods::hdr_nbak_unknown;
 							{	// scope
 								BackupManager::StateReadGuard stateGuard(tdbb);
-								bak_state = dbb.dbb_backup_manager->getState();
+								backupState = dbb.dbb_backup_manager->getState();
 							}
 
-							if (bak_state != Ods::hdr_nbak_normal)
+							if (backupState != Ods::hdr_nbak_normal)
 							{
 								EngineCheckout checkout(tdbb, FB_FUNCTION);
 								Thread::sleep(10);
