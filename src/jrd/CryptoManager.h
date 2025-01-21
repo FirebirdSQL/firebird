@@ -301,6 +301,10 @@ public:
 	UCHAR getCurrentState(thread_db* tdbb) const;
 	const char* getKeyName() const;
 	const char* getPluginName() const;
+	Thread::Handle getCryptThreadHandle() const
+	{
+		return cryptThreadId;
+	}
 
 private:
 	enum IoResult {SUCCESS_ALL, FAILED_CRYPT, FAILED_IO};

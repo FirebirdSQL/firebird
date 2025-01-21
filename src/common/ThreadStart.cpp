@@ -219,9 +219,14 @@ ThreadId Thread::getId()
 #endif
 }
 
+bool Thread::isCurrent(InternalId iid)
+{
+	return pthread_equal(iid, pthread_self());
+}
+
 bool Thread::isCurrent()
 {
-	return pthread_equal(internalId, pthread_self());
+	return isCurrent(internalId);
 }
 
 void Thread::sleep(unsigned milliseconds)
@@ -363,9 +368,14 @@ ThreadId Thread::getId()
 	return GetCurrentThreadId();
 }
 
+bool Thread::isCurrent(InternalId iid)
+{
+	return GetCurrentThreadId() == iid;
+}
+
 bool Thread::isCurrent()
 {
-	return GetCurrentThreadId() == internalId;
+	return isCurrent(internalId);
 }
 
 void Thread::sleep(unsigned milliseconds)
