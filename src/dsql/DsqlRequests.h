@@ -40,12 +40,14 @@ class DsqlStatement;
 class DsqlCompilerScratch;
 class DsqlCursor;
 class DsqlDmlStatement;
+class DsqlDmlRequest;
 class dsql_par;
 class Request;
 class jrd_tra;
 class Statement;
 class SessionManagementNode;
 class TransactionNode;
+struct RecordKey;
 
 
 class DsqlRequest : public Firebird::PermanentStorage
@@ -53,6 +55,7 @@ class DsqlRequest : public Firebird::PermanentStorage
 public:
 	DsqlRequest(MemoryPool& pool, dsql_dbb* dbb, DsqlStatement* aStatement);
 	virtual ~DsqlRequest();
+	virtual void releaseRequest(thread_db* tdbb);
 
 public:
 	jrd_tra* getTransaction()
@@ -115,14 +118,12 @@ public:
 	// setup and start timer
 	TimeoutTimer* setupTimer(thread_db* tdbb);
 
-	USHORT parseMetadata(Firebird::IMessageMetadata* meta, const Firebird::Array<dsql_par*>& parameters_list);
-
 	static void destroy(thread_db* tdbb, DsqlRequest* request);
 
 public:
 	dsql_dbb* req_dbb;					// DSQL attachment
 	Firebird::RefPtr<DsqlStatement> dsqlStatement;
-	Firebird::Array<DsqlDmlStatement*> cursors{getPool()};	// Cursor update statements
+	Firebird::Array<DsqlDmlRequest*> cursors{getPool()};	// Cursor update statements
 
 	jrd_tra* req_transaction = nullptr;	// JRD transaction
 
@@ -145,7 +146,8 @@ protected:
 class DsqlDmlRequest final : public DsqlRequest
 {
 public:
-	DsqlDmlRequest(thread_db* tdbb, MemoryPool& pool, dsql_dbb* dbb, DsqlStatement* aDsqlStatement);
+	DsqlDmlRequest(thread_db* tdbb, MemoryPool& pool, dsql_dbb* dbb, DsqlDmlStatement* aDsqlStatement);
+	void releaseRequest(thread_db* tdbb) override;
 
 	// Reintroduce method to fake covariant return type with RefPtr.
 	auto getDsqlStatement()
@@ -158,6 +160,11 @@ public:
 	Request* getRequest() const override
 	{
 		return request;
+	}
+
+	void onReferencedCursorClose()
+	{
+		parentRequest = nullptr;
 	}
 
 	DsqlCursor* openCursor(thread_db* tdbb, jrd_tra** traHandle,
@@ -178,30 +185,33 @@ public:
 
 	void setDelayedFormat(thread_db* tdbb, Firebird::IMessageMetadata* metadata) override;
 
-	void mapInOut(Jrd::thread_db* tdbb, bool toExternal, const dsql_msg* message, Firebird::IMessageMetadata* meta,
-		UCHAR* dsql_msg_buf, const UCHAR* in_dsql_msg_buf = nullptr);
+	// Convert IMessageMetadata to Format and force it to corresponding MessageNode for current request.
+	// After that this MessageNode and their ParameterNodes can work with client message buffer directly
+	void metadataToFormat(Firebird::IMessageMetadata* metadata, const dsql_msg* message);
+	void mapCursorKey(thread_db* tdbb);
+	void gatherRecordKey(RecordKey* buffer) const;
 
 private:
 	// True, if request could be restarted
 	bool needRestarts();
 
 	void doExecute(thread_db* tdbb, jrd_tra** traHandle,
+		const UCHAR* inMsg, // Only data buffer, metadata must be synchronized before call
 		Firebird::IMessageMetadata* outMetadata, UCHAR* outMsg,
 		bool singleton);
 
 	// [Re]start part of "request restarts" algorithm
 	void executeReceiveWithRestarts(thread_db* tdbb, jrd_tra** traHandle,
+		const UCHAR* inMsg,
 		Firebird::IMessageMetadata* outMetadata, UCHAR* outMsg,
 		bool singleton, bool exec, bool fetch);
 
-public:
-	Firebird::Array<UCHAR*>	req_msg_buffers;
-
 private:
-	Firebird::RefPtr<Firebird::IMessageMetadata> delayedFormat;
 	Request* request = nullptr;
 	bool needDelayedFormat = false;
 	bool firstRowFetched = false;
+	DsqlRequest* parentRequest = nullptr;
+	USHORT parentContext;
 };
 
 
