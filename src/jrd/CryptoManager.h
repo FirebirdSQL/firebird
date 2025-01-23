@@ -303,7 +303,7 @@ public:
 	const char* getPluginName() const;
 	Thread::Handle getCryptThreadHandle() const
 	{
-		return cryptThreadId;
+		return cryptThreadHandle;
 	}
 
 private:
@@ -382,7 +382,7 @@ private:
 	AttachmentsRefHolder keyProviders, keyConsumers;
 	Firebird::string hash;
 	Firebird::RefPtr<DbInfo> dbInfo;
-	Thread::Handle cryptThreadId;
+	Thread::Handle cryptThreadHandle;
 	Firebird::IDbCryptPlugin* cryptPlugin;
 	Factory* checkFactory;
 	Database& dbb;
