@@ -1847,7 +1847,11 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	}
 
 	PathName mappedName;
+#ifdef MINGW
+	if (!getMappedFileName(address, mappedName))
+#else
 	if (!getMappedFileName(address, mappedName) || mappedName != expanded_filename)
+#endif
 	{
 		UnmapViewOfFile(address);
 		CloseHandle(file_obj);
@@ -2096,7 +2100,7 @@ static const int DEFAULT_INTERLOCKED_SPIN_COUNT_SMP	= 200;
 
 static SLONG pid = 0;
 
-typedef WINBASEAPI BOOL (WINAPI *pfnSwitchToThread) ();
+typedef BOOL (WINAPI *pfnSwitchToThread) ();
 static inline BOOL switchToThread()
 {
 	static pfnSwitchToThread fnSwitchToThread = NULL;
