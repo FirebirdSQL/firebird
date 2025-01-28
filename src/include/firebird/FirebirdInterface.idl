@@ -521,6 +521,11 @@ version:	// 3.0 => 4.0
 version:	// 3.0.7 => 3.0.8, 4.0.0 => 4.0.1
 	[notImplementedAction if ::FB_UsedInYValve then defaultAction else call deprecatedFree(status) endif]
 	void free(Status status);
+
+version:	// 6.0
+	// Inline blob transfer
+	uint getMaxInlineBlobSize(Status status);
+	void setMaxInlineBlobSize(Status status, uint size);
 }
 
 interface Batch : ReferenceCounted
@@ -713,6 +718,15 @@ version:	// 3.0.7 => 3.0.8, 4.0.0 => 4.0.1
 	void detach(Status status);
 	[notImplementedAction if ::FB_UsedInYValve then defaultAction else call deprecatedDropDatabase(status) endif]
 	void dropDatabase(Status status);
+
+version:	// 6.0
+	// Blob caching by client
+	uint getMaxBlobCacheSize(Status status);
+	void setMaxBlobCacheSize(Status status, uint size);
+
+	// Inline blob transfer
+	uint getMaxInlineBlobSize(Status status);
+	void setMaxInlineBlobSize(Status status, uint size);
 }
 
 interface Service : ReferenceCounted
