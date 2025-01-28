@@ -92,7 +92,6 @@
 
 #include "firebird/Interface.h"
 #include "../common/classes/ImplementHelper.h"
-#include "../auth/SecurityDatabase/LegacyServer.h"
 #include "../auth/trusted/AuthSspi.h"
 #include "../auth/SecureRemotePassword/server/SrpServer.h"
 
