@@ -1457,6 +1457,52 @@ namespace Jrd
 		NestConst<BoolExprNode> const m_boolean;
 	};
 
+	class TableValueFunctionScan : public RecordStream
+	{
+	protected:
+		struct Impure : public RecordSource::Impure
+		{
+			RecordBuffer* m_recordBuffer;
+		};
+
+	public:
+		TableValueFunctionScan(CompilerScratch* csb, StreamType stream,
+							   const Firebird::string& alias);
+		void close(thread_db* tdbb) const override;
+		bool refetchRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb) const override;
+		void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override;
+
+	protected:
+		bool internalGetRecord(thread_db* tdbb) const override;
+		void assignParameter(thread_db* tdbb, dsc* fromDesc, const dsc* toDesc, SSHORT toId,
+							 Record* record) const;
+
+		const Firebird::string m_alias;
+	};
+
+	class UnlistFunctionScan final : public TableValueFunctionScan
+	{
+		enum UnlistTypeItemIndex : unsigned
+		{
+			UNLIST_INDEX_STRING = 0,
+			UNLIST_INDEX_SEPARATOR = 1,
+			UNLIST_INDEX_LAST = 2
+		};
+
+	public:
+		UnlistFunctionScan(CompilerScratch* csb, StreamType stream, const Firebird::string& alias,
+						   ValueListNode* list);
+
+	protected:
+		void internalOpen(thread_db* tdbb) const final;
+		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level,
+							 bool recurse) const final;
+
+	private:
+		NestConst<ValueListNode> m_inputList;
+	};
+
 } // namespace
 
 #endif // JRD_RECORD_SOURCE_H

@@ -6125,6 +6125,7 @@ const
 	 isc_dsql_string_char_length = 336397332;
 	 isc_dsql_max_nesting = 336397333;
 	 isc_dsql_recreate_user_failed = 336397334;
+	 isc_dsql_table_value_many_columns = 336397335;
 	 isc_gsec_cant_open_db = 336723983;
 	 isc_gsec_switches_error = 336723984;
 	 isc_gsec_no_op_spec = 336723985;

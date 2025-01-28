@@ -6027,6 +6027,11 @@ DmlNode* FieldNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* cs
 					Arg::Str(name) << Arg::Str(procedure->getName().toString()));
 			}
 		}
+		else if (tail->csb_table_value_fun)
+		{
+			csb->csb_blr_reader.getMetaName(name);
+			id = tail->csb_table_value_fun->getId(name);
+		}
 		else
 		{
 			jrd_rel* relation = tail->csb_relation;
@@ -6250,6 +6255,13 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 							procNode->dsqlContext = stackContext;
 							*list = procNode;
 						}
+						else if (context->ctx_table_value_fun)
+						{
+							auto tableValueFunctionNode = FB_NEW_POOL(*tdbb->getDefaultPool())
+								TableValueFunctionSourceNode(*tdbb->getDefaultPool());
+							tableValueFunctionNode->dsqlContext = stackContext;
+							*list = tableValueFunctionNode;
+						}
 						//// TODO: LocalTableSourceNode
 
 						fb_assert(*list);
@@ -6446,9 +6458,28 @@ dsql_fld* FieldNode::resolveContext(DsqlCompilerScratch* dsqlScratch, const Meta
 		return nullptr;
 	}
 
+	const TEXT* dsqlName = NULL;
+	dsql_fld* outputField = NULL;
 	dsql_rel* relation = context->ctx_relation;
 	dsql_prc* procedure = context->ctx_procedure;
-	if (!relation && !procedure)
+	dsql_tab_func* tableValueFunctionContext = context->ctx_table_value_fun;
+
+	if (relation)
+	{
+		dsqlName = relation->rel_name.c_str();
+		outputField = relation->rel_fields;
+	}
+	else if (procedure)
+	{
+		dsqlName = procedure->prc_name.identifier.c_str();
+		outputField = procedure->prc_outputs;
+	}
+	else if	(tableValueFunctionContext)
+	{
+		dsqlName = tableValueFunctionContext->funName.c_str();
+		outputField = tableValueFunctionContext->outputField;
+	}
+	else
 		return nullptr;
 
 	// if there is no qualifier, then we cannot match against
@@ -6491,7 +6522,9 @@ dsql_fld* FieldNode::resolveContext(DsqlCompilerScratch* dsqlScratch, const Meta
 	}
 
 	if (aliasName.isEmpty())
-		aliasName = relation ? relation->rel_name : procedure->prc_name.identifier;
+	{
+		aliasName = dsqlName;
+	}
 
 	fb_assert(aliasName.hasData());
 
@@ -6501,7 +6534,7 @@ dsql_fld* FieldNode::resolveContext(DsqlCompilerScratch* dsqlScratch, const Meta
 
 	// Lookup field in relation or procedure
 
-	return relation ? relation->rel_fields : procedure->prc_outputs;
+	return outputField;
 }
 
 bool FieldNode::dsqlAggregateFinder(AggregateFinder& visitor)

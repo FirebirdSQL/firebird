@@ -963,6 +963,68 @@ public:
 	Firebird::ObjectsArray<MetaName>* columns;
 };
 
+class TableValueFunctionSourceNode
+	: public TypedNode<RecordSourceNode, RecordSourceNode::TYPE_TABLE_VALUE_FUNCTION>
+{
+public:
+	explicit TableValueFunctionSourceNode(MemoryPool& pool)
+		: TypedNode<RecordSourceNode, RecordSourceNode::TYPE_TABLE_VALUE_FUNCTION>(pool),
+		  dsqlName(pool), alias(pool), dsqlField(nullptr), dsqlNameColumns(pool),
+		  m_csbTableValueFun(nullptr)
+	{
+	}
+	static TableValueFunctionSourceNode* parse(thread_db* tdbb, CompilerScratch* csb,
+											   const SSHORT blrOp);
+	static TableValueFunctionSourceNode* parse2(thread_db* tdbb, const SSHORT blrOp);
+
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	RecordSourceNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other,
+				   bool ignoreMapCast) const override;
+	RecordSourceNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	RecordSourceNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	TableValueFunctionSourceNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	void pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse, BoolExprNode** boolean,
+					 RecordSourceNodeStack& stack) override;
+	void pass2Rse(thread_db* tdbb, CompilerScratch* csb) override;
+	bool containsStream(StreamType checkStream) const override;
+	void computeDbKeyStreams(StreamList& streamList) const override;
+	RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream) override;
+
+	bool computable(CompilerScratch* csb, StreamType stream, bool allowOnlyCurrentStream,
+					ValueExprNode* value) override;
+	void findDependentFromStreams(const CompilerScratch* csb, StreamType currentStream,
+								  SortedStreamList* streamList) override;
+
+	void collectStreams(SortedStreamList& streamList) const override;
+
+	virtual dsql_fld* makeField(DsqlCompilerScratch* dsqlScratch);
+	void setDefaultNameField(DsqlCompilerScratch* dsqlScratch);
+
+public:
+	MetaName dsqlName;
+	MetaName alias;
+	NestConst<ValueListNode> inputList;
+	dsql_fld* dsqlField;
+	Firebird::ObjectsArray<Jrd::MetaName> dsqlNameColumns;
+
+private:
+	jrd_tab_func* m_csbTableValueFun;
+};
+
+class UnlistFunctionSourceNode : public TableValueFunctionSourceNode
+{
+public:
+	explicit UnlistFunctionSourceNode(MemoryPool& pool) : TableValueFunctionSourceNode(pool)
+	{
+	}
+
+	RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream) final;
+	dsql_fld* makeField(DsqlCompilerScratch* dsqlScratch) final;
+
+	static constexpr char const* FUNC_NAME = "UNLIST";
+};
 
 } // namespace Jrd
 

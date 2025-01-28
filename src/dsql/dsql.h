@@ -410,6 +410,21 @@ public:
 	USHORT intlsym_bytes_per_char = 0;
 };
 
+
+// Table value function
+class dsql_tab_func : public pool_alloc<dsql_type_tab_func>
+{
+public:
+	explicit dsql_tab_func(MemoryPool& p)
+		: funName(p),
+		  outputField(nullptr)
+	{
+	}
+
+	MetaName	funName;			// Name of function
+	dsql_fld*	outputField;		// Output parameters
+};
+
 // values used in intlsym_flags
 
 enum intlsym_flags_vals {
@@ -454,6 +469,7 @@ public:
 
 	dsql_rel* ctx_relation = nullptr;			// Relation for context
 	dsql_prc* ctx_procedure = nullptr;			// Procedure for context
+	dsql_tab_func* ctx_table_value_fun = nullptr;	// Table value function context
 	NestConst<ValueListNode> ctx_proc_inputs;	// Procedure input parameters
 	dsql_map* ctx_map = nullptr;				// Maps for aggregates and unions
 	RseNode* ctx_rse = nullptr;					// Sub-rse for aggregates
@@ -475,6 +491,7 @@ public:
 	{
 		ctx_relation = v.ctx_relation;
 		ctx_procedure = v.ctx_procedure;
+		ctx_table_value_fun = v.ctx_table_value_fun;
 		ctx_proc_inputs = v.ctx_proc_inputs;
 		ctx_map = v.ctx_map;
 		ctx_rse = v.ctx_rse;
@@ -518,6 +535,7 @@ const USHORT CTX_view_with_check_store	= 0x20;		// Context of WITH CHECK OPTION 
 const USHORT CTX_view_with_check_modify	= 0x40;		// Context of WITH CHECK OPTION view's modify trigger
 const USHORT CTX_cursor					= 0x80;		// Context is a cursor
 const USHORT CTX_lateral				= 0x100;	// Context is a lateral derived table
+const USHORT CTX_blr_fields				= 0x200;	// Fields of the context are defined inside BLR
 
 //! Aggregate/union map block to map virtual fields to their base
 //! TMN: NOTE! This datatype should definitely be renamed!

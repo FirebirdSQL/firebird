@@ -136,6 +136,7 @@ namespace
 					CompilerScratch::csb_repeat* t2 = CMP_csb_element(m_csb, stream);
 					t2->csb_relation = ptr->csb_relation;
 					t2->csb_procedure = ptr->csb_procedure;
+					t2->csb_table_value_fun = ptr->csb_table_value_fun;
 					t2->csb_stream = ptr->csb_stream;
 					t2->csb_flags = ptr->csb_flags & csb_used;
 				}
@@ -616,10 +617,12 @@ ValueExprNode* PAR_make_field(thread_db* tdbb, CompilerScratch* csb, USHORT cont
 
 	jrd_rel* const relation = csb->csb_rpt[stream].csb_relation;
 	jrd_prc* const procedure = csb->csb_rpt[stream].csb_procedure;
+	jrd_tab_func* const table_value_function = csb->csb_rpt[stream].csb_table_value_fun;
 
 	const SSHORT id =
 		relation ? MET_lookup_field(tdbb, relation, base_field) :
-		procedure ? PAR_find_proc_field(procedure, base_field) : -1;
+		procedure ? PAR_find_proc_field(procedure, base_field) :
+		table_value_function ? table_value_function->getId(base_field) : -1;
 
 	if (id < 0)
 		return NULL;
@@ -1221,6 +1224,9 @@ RecordSourceNode* PAR_parseRecordSource(thread_db* tdbb, CompilerScratch* csb)
 		case blr_aggregate:
 			return AggregateSourceNode::parse(tdbb, csb);
 
+		case blr_table_value_fun:
+			return TableValueFunctionSourceNode::parse(tdbb, csb, blrOp);
+
 		default:
 			PAR_syntax_error(csb, "record source");
 	}
@@ -1555,6 +1561,7 @@ DmlNode* PAR_parse_node(thread_db* tdbb, CompilerScratch* csb)
 		case blr_recurse:
 		case blr_window:
 		case blr_aggregate:
+		case blr_table_value_fun:
 			csb->csb_blr_reader.seekBackward(1);
 			return PAR_parseRecordSource(tdbb, csb);
 	}

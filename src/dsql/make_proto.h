@@ -84,6 +84,7 @@ Jrd::LiteralNode* MAKE_const_sint64(SINT64 value, SCHAR scale);
 Jrd::ValueExprNode* MAKE_constant(const char*, Jrd::dsql_constant_type, SSHORT = 0);
 Jrd::LiteralNode* MAKE_str_constant(const Jrd::IntlString*, SSHORT);
 Jrd::FieldNode* MAKE_field(Jrd::dsql_ctx*, Jrd::dsql_fld*, Jrd::ValueListNode*);
+void MAKE_field(Jrd::dsql_fld*, const dsc*);
 Jrd::FieldNode* MAKE_field_name(const char*);
 Jrd::dsql_par* MAKE_parameter(Jrd::dsql_msg*, bool, bool, USHORT, const Jrd::ValueExprNode*);
 void MAKE_parameter_names(Jrd::dsql_par*, const Jrd::ValueExprNode*);

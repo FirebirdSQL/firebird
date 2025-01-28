@@ -708,6 +708,7 @@ using namespace Firebird;
 %token <metaNamePtr> LTRIM
 %token <metaNamePtr> NAMED_ARG_ASSIGN
 %token <metaNamePtr> RTRIM
+%token <metaNamePtr> UNLIST
 
 // precedence declarations for expression evaluation
 
@@ -6397,6 +6398,7 @@ table_primary
 	| derived_table					{ $$ = $1; }
 	| lateral_derived_table			{ $$ = $1; }
 	| parenthesized_joined_table	{ $$ = $1; }
+	| table_value_function			{ $$ = $1; }
 	;
 
 %type <recSourceNode> parenthesized_joined_table
@@ -6595,6 +6597,84 @@ outer_noise
 	| OUTER
 	;
 
+%type <recSourceNode> table_value_function
+table_value_function
+	: table_value_function_clause table_value_function_correlation_name table_value_function_columns_name
+		{
+			auto *node = nodeAs<TableValueFunctionSourceNode>($1);
+			node->alias = *$2;
+			node->dsqlNameColumns = *$3;
+			$$ = node;
+		}
+	;
+
+%type <recSourceNode> table_value_function_clause
+table_value_function_clause
+	: table_value_function_unlist
+		{ $$ = $1; }
+	;
+
+%type <recSourceNode> table_value_function_unlist
+table_value_function_unlist
+	: UNLIST '(' table_value_function_unlist_arg_list table_value_function_returning ')'
+		{
+			auto node = newNode<UnlistFunctionSourceNode>();
+			node->dsqlFlags |= RecordSourceNode::DFLAG_VALUE;
+			node->dsqlName = *$1;
+			node->inputList = $3;
+			node->dsqlField = $4;
+			$$ = node;
+		}
+	;
+
+%type <valueListNode> table_value_function_unlist_arg_list
+table_value_function_unlist_arg_list
+	: value delimiter_opt
+		{
+			$$ = newNode<ValueListNode>($1);
+			$$->add($2);
+		}
+	;
+
+%type <legacyField> table_value_function_returning
+table_value_function_returning
+	: /*nothing*/							{ $$ = NULL; }
+	| RETURNING data_type_descriptor		{ $$ = $2; }
+	;
+
+
+%type <metaNamePtr> table_value_function_correlation_name
+table_value_function_correlation_name
+	: as_noise symbol_table_alias_name	{ $$ = $2; }
+	;
+
+
+%type <metaNameArray> table_value_function_columns_name
+table_value_function_columns_name
+	: /* nothing */							{ $$ = newNode<ObjectsArray<MetaName>>(); }
+	| '(' table_value_function_columns ')'	{ $$ = $2; }
+	;
+
+%type <metaNameArray> table_value_function_columns
+table_value_function_columns
+	: table_value_function_column
+		{
+			ObjectsArray<MetaName>* node = newNode<ObjectsArray<MetaName>>();
+			node->add(*$1);
+			$$ = node;
+		}
+	| table_value_function_columns ',' table_value_function_column
+		{
+			ObjectsArray<MetaName>* node = $1;
+			node->add(*$3);
+			$$ = node;
+		}
+	;
+
+%type <metaNamePtr> table_value_function_column
+table_value_function_column
+	: symbol_column_name	{ $$ = $1; }
+	;
 
 // other clauses in the select expression
 
@@ -9690,6 +9770,7 @@ non_reserved_word
 	| ANY_VALUE
 	| FORMAT
 	| OWNER
+	| UNLIST
 	;
 
 %%

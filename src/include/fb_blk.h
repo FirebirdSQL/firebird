@@ -68,6 +68,7 @@ enum BlockType
 	dsql_type_prc,
 	dsql_type_intlsym,
 	dsql_type_imp_join,
+	dsql_type_tab_func,
 
 	alice_type_tdr,
 	alice_type_str,

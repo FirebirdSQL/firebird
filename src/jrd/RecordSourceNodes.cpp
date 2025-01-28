@@ -210,6 +210,12 @@ PlanNode* PlanNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			procNode->dsqlContext = context;
 			node->recordSourceNode = procNode;
 		}
+		else if (context->ctx_table_value_fun)
+		{
+			auto tableValueFunctionNode = FB_NEW_POOL(pool) TableValueFunctionSourceNode(pool);
+			tableValueFunctionNode->dsqlContext = context;
+			node->recordSourceNode = tableValueFunctionNode;
+		}
 		//// TODO: LocalTableSourceNode
 
 		// ASF: I think it's a error to let node->recordSourceNode be NULL here, but it happens
@@ -3651,6 +3657,331 @@ RseNode* SelectExprNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	return PASS1_derived_table(dsqlScratch, this, NULL);
 }
 
+TableValueFunctionSourceNode*
+TableValueFunctionSourceNode::parse(thread_db* tdbb, CompilerScratch* csb, const SSHORT blrOp)
+{
+	fb_assert(blrOp == blr_table_value_fun);
+
+	MemoryPool& pool = *tdbb->getDefaultPool();
+
+	const auto funcId = csb->csb_blr_reader.getByte();
+	auto node = TableValueFunctionSourceNode::parse2(tdbb, funcId);
+
+	node->stream = PAR_context(csb, nullptr);
+
+	CompilerScratch::csb_repeat& element = csb->csb_rpt[node->stream];
+	auto tableValueFunctionCsb = node->m_csbTableValueFun = FB_NEW_POOL(pool) jrd_tab_func(pool);
+
+	tableValueFunctionCsb->funcId = funcId;
+
+	string aliasString;
+	csb->csb_blr_reader.getString(aliasString);
+	if (aliasString.hasData())
+		node->alias = aliasString;
+	else
+		fb_assert(false);
+
+	tableValueFunctionCsb->name = aliasString;
+
+	auto count = csb->csb_blr_reader.getWord();
+	node->inputList = FB_NEW_POOL(pool) ValueListNode(pool, 0U);
+	while (count--)
+		node->inputList->add(PAR_parse_value(tdbb, csb));
+
+	count = csb->csb_blr_reader.getWord();
+
+	auto recordFormat = Format::newFormat(pool, count);
+	ULONG& offset = recordFormat->fmt_length = FLAG_BYTES(recordFormat->fmt_count);
+	Format::fmt_desc_iterator descIt = recordFormat->fmt_desc.begin();
+	SSHORT fieldId = 0;
+	while (count--)
+	{
+		PAR_desc(tdbb, csb, descIt, nullptr);
+
+		const USHORT align = type_alignments[descIt->dsc_dtype];
+		if (align)
+			offset = FB_ALIGN(offset, align);
+		descIt->dsc_address = (UCHAR*)(IPTR)offset;
+		offset += descIt->dsc_length;
+		descIt++;
+
+		string columnString;
+		csb->csb_blr_reader.getString(columnString);
+		fb_assert(columnString.hasData());
+
+		tableValueFunctionCsb->fields.put(columnString, fieldId++);
+	}
+
+	element.csb_format = tableValueFunctionCsb->recordFormat = recordFormat;
+	element.csb_table_value_fun = tableValueFunctionCsb;
+
+	return node;
+}
+
+TableValueFunctionSourceNode* TableValueFunctionSourceNode::parse2(thread_db* tdbb,
+																   const SSHORT blrOp)
+{
+	MemoryPool& pool = *tdbb->getDefaultPool();
+	if (blrOp == blr_table_value_fun_unlist)
+		return FB_NEW_POOL(pool) UnlistFunctionSourceNode(pool);
+
+	fb_assert(false);
+	return nullptr;
+}
+
+Firebird::string TableValueFunctionSourceNode::internalPrint(NodePrinter& printer) const
+{
+	RecordSourceNode::internalPrint(printer);
+
+	NODE_PRINT(printer, dsqlName);
+	NODE_PRINT(printer, inputList);
+	NODE_PRINT(printer, dsqlField);
+	NODE_PRINT(printer, alias);
+	NODE_PRINT(printer, dsqlNameColumns);
+
+	return "TableValueFunctionsSourceNode";
+}
+
+RecordSourceNode* TableValueFunctionSourceNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
+{
+	return dsqlPassRelProc(dsqlScratch, this);
+}
+
+bool TableValueFunctionSourceNode::dsqlMatch(DsqlCompilerScratch* /*dsqlScratch*/,
+											 const ExprNode* other, bool /*ignoreMapCast*/) const
+{
+	const auto o = nodeAs<TableValueFunctionSourceNode>(other);
+	return o && dsqlContext == o->dsqlContext;
+}
+
+RecordSourceNode* TableValueFunctionSourceNode::pass1(thread_db* tdbb, CompilerScratch* csb)
+{
+	doPass1(tdbb, csb, inputList.getAddress());
+	return this;
+}
+
+RecordSourceNode* TableValueFunctionSourceNode::pass2(thread_db* tdbb, CompilerScratch* csb)
+{
+	ExprNode::doPass2(tdbb, csb, inputList.getAddress());
+	return this;
+}
+
+void TableValueFunctionSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
+{
+	dsqlScratch->appendUChar(blr_table_value_fun);
+
+	auto tableValueFunctionContext = dsqlContext->ctx_table_value_fun;
+
+	if (tableValueFunctionContext->funName == UnlistFunctionSourceNode::FUNC_NAME)
+		dsqlScratch->appendUChar(blr_table_value_fun_unlist);
+	else
+		fb_assert(false);
+
+	GEN_stuff_context(dsqlScratch, dsqlContext);
+
+	dsqlScratch->appendMetaString(dsqlContext->ctx_alias.c_str());
+
+	dsqlScratch->appendUShort(dsqlContext->ctx_proc_inputs->items.getCount());
+	for (auto& arg : dsqlContext->ctx_proc_inputs->items)
+		GEN_expr(dsqlScratch, arg);
+
+	Array<const dsql_fld*> arrayFld;
+	for (const auto* field = tableValueFunctionContext->outputField; field;
+		 field = field->fld_next)
+		arrayFld.add(field);
+
+	dsqlScratch->appendUShort(arrayFld.getCount());
+
+	for (const auto& fld : arrayFld)
+	{
+		dsqlScratch->putDtype(fld, true);
+		dsqlScratch->appendMetaString(fld->fld_name.c_str());
+	}
+}
+
+TableValueFunctionSourceNode* TableValueFunctionSourceNode::copy(thread_db* tdbb,
+																 NodeCopier& copier) const
+{
+	if (!copier.remap)
+		BUGCHECK(221); // msg 221 (CMP) copy: cannot remap
+
+	MemoryPool& pool = *tdbb->getDefaultPool();
+
+	auto newStream = copier.csb->nextStream();
+	copier.remap[stream] = newStream;
+
+	auto element = CMP_csb_element(copier.csb, newStream);
+	element->csb_view_stream = copier.remap[0];
+	element->csb_format = m_csbTableValueFun->recordFormat;
+	element->csb_table_value_fun = m_csbTableValueFun;
+	if (alias.hasData())
+		element->csb_alias = FB_NEW_POOL(pool) string(pool, alias.c_str());
+
+	auto newSource = TableValueFunctionSourceNode::parse2(tdbb, m_csbTableValueFun->funcId);
+
+	newSource->inputList = copier.copy(tdbb, inputList);
+	newSource->m_csbTableValueFun = m_csbTableValueFun;
+	newSource->stream = newStream;
+
+	return newSource;
+}
+
+void TableValueFunctionSourceNode::pass1Source(thread_db* tdbb, CompilerScratch* csb,
+											   RseNode* /*rse*/, BoolExprNode** /*boolean*/,
+											   RecordSourceNodeStack& stack)
+{
+	stack.push(this); // Assume that the source will be used. Push it on the final stream stack.
+
+	pass1(tdbb, csb);
+
+	jrd_rel* const parentView = csb->csb_view;
+	const StreamType viewStream = csb->csb_view_stream;
+
+	auto element = CMP_csb_element(csb, stream);
+	element->csb_view = parentView;
+	element->csb_view_stream = viewStream;
+
+	// in the case where there is a parent view, find the context name
+
+	if (parentView)
+	{
+		const ViewContexts& ctx = parentView->rel_view_contexts;
+		const USHORT key = stream;
+		FB_SIZE_T pos;
+
+		if (ctx.find(key, pos))
+		{
+			element->csb_alias =
+				FB_NEW_POOL(csb->csb_pool) string(csb->csb_pool, ctx[pos]->vcx_context_name);
+		}
+	}
+}
+
+void TableValueFunctionSourceNode::pass2Rse(thread_db* tdbb, CompilerScratch* csb)
+{
+	csb->csb_rpt[stream].activate();
+
+	pass2(tdbb, csb);
+}
+
+bool TableValueFunctionSourceNode::containsStream(StreamType checkStream) const
+{
+	return checkStream == stream;
+}
+
+void TableValueFunctionSourceNode::computeDbKeyStreams(StreamList& /*streamList*/) const
+{
+}
+
+RecordSource* TableValueFunctionSourceNode::compile(thread_db* /*tdbb*/, Optimizer* /*opt*/,
+													bool /*innerSubStream*/)
+{
+	fb_assert(false); //
+	return nullptr;
+}
+
+bool TableValueFunctionSourceNode::computable(CompilerScratch* csb, StreamType stream,
+											  bool allowOnlyCurrentStream, ValueExprNode* /*value*/)
+{
+	if (inputList && !inputList->computable(csb, stream, allowOnlyCurrentStream))
+		return false;
+
+	return true;
+}
+
+void TableValueFunctionSourceNode::findDependentFromStreams(const CompilerScratch* csb,
+															StreamType currentStream,
+															SortedStreamList* streamList)
+{
+	if (inputList)
+		inputList->findDependentFromStreams(csb, currentStream, streamList);
+}
+
+void TableValueFunctionSourceNode::collectStreams(SortedStreamList& streamList) const
+{
+	RecordSourceNode::collectStreams(streamList);
+
+	if (inputList)
+		inputList->collectStreams(streamList);
+}
+
+dsql_fld* TableValueFunctionSourceNode::makeField(DsqlCompilerScratch* /*dsqlScratch*/)
+{
+	fb_assert(false);
+	return nullptr;
+}
+
+void TableValueFunctionSourceNode::setDefaultNameField(DsqlCompilerScratch* /*dsqlScratch*/)
+{
+	if (const auto tableValueFunctionContext = dsqlContext->ctx_table_value_fun)
+	{
+		MetaName nameFunc = tableValueFunctionContext->funName;
+
+		auto i = 0U;
+
+		if (nameFunc == UnlistFunctionSourceNode::FUNC_NAME)
+		{
+			dsql_fld* field = tableValueFunctionContext->outputField;
+			if (field->fld_name.isEmpty())
+				field->fld_name = nameFunc;
+		}
+		else
+			fb_assert(false);
+	}
+	else
+		fb_assert(false);
+}
+
+RecordSource* UnlistFunctionSourceNode::compile(thread_db* tdbb, Optimizer* opt,
+												bool /*innerSubStream*/)
+{
+	MemoryPool& pool = *tdbb->getDefaultPool();
+	const auto csb = opt->getCompilerScratch();
+	auto aliasOpt = opt->makeAlias(stream);
+
+	return FB_NEW_POOL(pool) UnlistFunctionScan(csb, stream, aliasOpt, inputList);
+}
+
+dsql_fld* UnlistFunctionSourceNode::makeField(DsqlCompilerScratch* dsqlScratch)
+{
+	if (inputList)
+		inputList = Node::doDsqlPass(dsqlScratch, inputList, false);
+
+	dsql_fld* field = dsqlField;
+
+	if (!field)
+	{
+		auto newField = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
+		field = newField;
+
+		auto inputItem = inputList->items.begin()->getObject();
+		dsc desc;
+		DsqlDescMaker::fromNode(dsqlScratch, &desc, inputItem);
+
+		USHORT ttype = desc.getCharSet();
+
+		if (ttype == CS_NONE)
+			ttype = CS_ASCII;
+
+		desc.makeText(32, ttype);
+		MAKE_field(newField, &desc);
+		newField->fld_id = 0;
+	}
+
+	if (dsqlNameColumns.hasData())
+	{
+		if (dsqlNameColumns.getCount() > 1)
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) << Arg::Gds(isc_dsql_command_err)
+										   << Arg::Gds(isc_dsql_table_value_many_columns)
+										   << Arg::Str(UnlistFunctionSourceNode::FUNC_NAME)
+										   << Arg::Num(1) << Arg::Num(dsqlNameColumns.getCount()));
+
+		field->fld_name = dsqlNameColumns[0];
+	}
+
+	field->resolve(dsqlScratch);
+	return field;
+}
 
 //--------------------
 
@@ -3671,6 +4002,11 @@ static RecordSourceNode* dsqlPassRelProc(DsqlCompilerScratch* dsqlScratch, Recor
 	{
 		relName = relNode->dsqlName;
 		relAlias = relNode->alias;
+	}
+	else if (const auto tblBasedFunNode = nodeAs<TableValueFunctionSourceNode>(source))
+	{
+		relName = tblBasedFunNode->dsqlName;
+		relAlias = tblBasedFunNode->alias.c_str();
 	}
 	//// TODO: LocalTableSourceNode
 	else
