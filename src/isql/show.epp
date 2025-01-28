@@ -523,22 +523,22 @@ void SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 
 		case isc_info_oldest_transaction :
 			value_out = p.getBigInt();
-			isqlGlob.printf("Transaction - oldest = %" SQUADFORMAT"%s", value_out, separator);
+			isqlGlob.printf("Transaction - oldest = %" UQUADFORMAT"%s", static_cast<TraNumber>(value_out), separator);
 			break;
 
 		case isc_info_oldest_active :
 			value_out = p.getBigInt();
-			isqlGlob.printf("Transaction - oldest active = %" SQUADFORMAT"%s", value_out, separator);
+			isqlGlob.printf("Transaction - oldest active = %" UQUADFORMAT"%s", static_cast<TraNumber>(value_out), separator);
 			break;
 
 		case isc_info_oldest_snapshot :
 			value_out = p.getBigInt();
-			isqlGlob.printf("Transaction - oldest snapshot = %" SQUADFORMAT"%s", value_out, separator);
+			isqlGlob.printf("Transaction - oldest snapshot = %" UQUADFORMAT"%s", static_cast<TraNumber>(value_out), separator);
 			break;
 
 		case isc_info_next_transaction :
 			value_out = p.getBigInt();
-			isqlGlob.printf("Transaction - Next = %" SQUADFORMAT"%s", value_out, separator);
+			isqlGlob.printf("Transaction - Next = %" UQUADFORMAT"%s", static_cast<TraNumber>(value_out), separator);
 			break;
 
 		case isc_info_base_level:
@@ -560,7 +560,7 @@ void SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 				isqlGlob.printf("%s%s", msg, separator);
 			}
 			else
-				isqlGlob.printf("Transaction in limbo = %" SQUADFORMAT"%s", value_out, separator);
+				isqlGlob.printf("Transaction in limbo = %" UQUADFORMAT"%s", static_cast<TraNumber>(value_out), separator);
 			break;
 
 		case isc_info_ods_version:
