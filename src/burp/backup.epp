@@ -692,7 +692,7 @@ burp_fld* get_fields( burp_rel* relation)
 	// requests--this requires more code but it is well worth it
 	// for the performance benefits, especially remotely--deej
 
-	if (tdgbl->runtimeODS >= DB_VERSION_DDL13_2)
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
 	{
 		FOR (REQUEST_HANDLE tdgbl->handles_get_fields_req_handle1)
 			X IN RDB$RELATION_FIELDS CROSS
@@ -804,10 +804,7 @@ burp_fld* get_fields( burp_rel* relation)
 				field->fld_identity_type = X.RDB$IDENTITY_TYPE;
 			}
 
-			if (!X.RDB$TABLESPACE_NAME.NULL)
-				COPY(X.RDB$TABLESPACE_NAME, field->fld_tablespace);
-
-			// ODS 13.2
+			// ODS 14
 			if (!X.RDB$RELATION_NAME.NULL)
 				COPY(X.RDB$RELATION_NAME, field->fld_relation_name);
 
@@ -3239,7 +3236,7 @@ void write_function_args(const QualifiedMetaString& name)
 	// requests--this requires more code but it is well worth it
 	// for the performance benefits, especially remotely--deej
 
-	if (tdgbl->runtimeODS >= DB_VERSION_DDL13_2)
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
 	{
 		FOR (REQUEST_HANDLE tdgbl->handles_write_function_args_req_handle1)
 			X IN RDB$FUNCTION_ARGUMENTS
@@ -3595,7 +3592,7 @@ void write_global_fields()
 	// requests--this requires more code but it is well worth it
 	// for the performance benefits, especially remotely--deej
 
-	if (tdgbl->runtimeODS >= DB_VERSION_DDL13_2)
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
 	{
 		FOR (REQUEST_HANDLE req_handle1)
 			X IN RDB$FIELDS WITH
@@ -4672,7 +4669,7 @@ void write_packaged_type_fields()
 	// requests--this requires more code but it is well worth it
 	// for the performance benefits, especially remotely--deej
 
-	if (tdgbl->runtimeODS >= DB_VERSION_DDL13_2)
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
 	{
 		FOR (REQUEST_HANDLE req_handle2)
 			Y IN RDB$PACKAGED_TYPES CROSS Z IN RDB$FIELDS

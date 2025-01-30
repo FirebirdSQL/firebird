@@ -6451,7 +6451,8 @@ ExecBlockNode* ExecBlockNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			node->returns[index - 1]->type->fld_next = newRet->type;
 	}
 
-	dsqlScratch->genLocalTypes(localDeclList);
+	// TODO ROWTYPE FBPORT: uncomment and fix this after merge
+	// dsqlScratch->genLocalTypes(localDeclList);
 	node->localDeclList = localDeclList;
 	node->body = body;
 

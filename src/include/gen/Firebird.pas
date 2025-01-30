@@ -6083,6 +6083,12 @@ const
 	 isc_invalid_parameter_decl = 335545319;
 	 isc_composite_type_notdef = 335545320;
 	 isc_packaged_type_notdef = 335545321;
+	 isc_invalid_parameter_decl = 335546365;
+	 isc_composite_type_notdef = 335546366;
+	 isc_packaged_type_notdef = 335546367;
+	 isc_invalid_parameter_decl = 335545308;
+	 isc_composite_type_notdef = 335545309;
+	 isc_packaged_type_notdef = 335545310;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;
@@ -6254,6 +6260,14 @@ const
 	 isc_dyn_wrong_default_param_number = 336068931;
 	 isc_dyn_composite_not_fount = 336068932;
 	 isc_dyn_packaged_type_is_used = 336068933;
+	 isc_dyn_wrong_default_syntax = 336069620;
+	 isc_dyn_wrong_default_param_number = 336069621;
+	 isc_dyn_composite_not_fount = 336069622;
+	 isc_dyn_packaged_type_is_used = 336069623;
+	 isc_dyn_wrong_default_syntax = 336068922;
+	 isc_dyn_wrong_default_param_number = 336068923;
+	 isc_dyn_composite_not_fount = 336068924;
+	 isc_dyn_packaged_type_is_used = 336068925;
 	 isc_gbak_unknown_switch = 336330753;
 	 isc_gbak_page_size_missing = 336330754;
 	 isc_gbak_page_size_toobig = 336330755;

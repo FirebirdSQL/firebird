@@ -418,46 +418,47 @@ void DsqlCompilerScratch::putTypeName(const TypeClause& type, const bool useExpl
 	}
 }
 
-void DsqlCompilerScratch::genLocalTypes(CompoundStmtNode* declarations)
-{
-	if (!declarations)
-		return;
+// TODO ROWTYPE FBPORT: uncomment and fix this after merge
+// void DsqlCompilerScratch::genLocalTypes(CompoundStmtNode* declarations)
+// {
+// 	if (!declarations)
+// 		return;
 
-	NestConst<StmtNode>* ptr = declarations->statements.begin();
+// 	NestConst<StmtNode>* ptr = declarations->statements.begin();
 
-	for (const NestConst<StmtNode>* end = declarations->statements.end(); ptr != end;)
-	{
-		StmtNode* declaration = *ptr;
+// 	for (const NestConst<StmtNode>* end = declarations->statements.end(); ptr != end;)
+// 	{
+// 		StmtNode* declaration = *ptr;
 
-		putDebugSrcInfo(declaration->line, declaration->column);
+// 		putDebugSrcInfo(declaration->line, declaration->column);
 
-		DeclareLocalTypeNode* declarationNode;
+// 		DeclareLocalTypeNode* declarationNode;
 
-		if ((declarationNode = nodeAs<DeclareLocalTypeNode>(declaration)))
-		{
-			auto fieldIdCounter = 0;
-			auto curclause = declarationNode->clauses.begin();
+// 		if ((declarationNode = nodeAs<DeclareLocalTypeNode>(declaration)))
+// 		{
+// 			auto fieldIdCounter = 0;
+// 			auto curclause = declarationNode->clauses.begin();
 
-			dsql_fld** tail = nullptr;
-			while (curclause != declarationNode->clauses.end())
-			{
-				auto clause = (static_cast<RelationNode::AddColumnClause*>(curclause->getObject()));
-				if (tail)
-					*tail = clause->field;
-				tail = &clause->field->fld_next;
-				curclause++;
-				clause->field->fld_id = fieldIdCounter++;
-			}
+// 			dsql_fld** tail = nullptr;
+// 			while (curclause != declarationNode->clauses.end())
+// 			{
+// 				auto clause = (static_cast<RelationNode::AddColumnClause*>(curclause->getObject()));
+// 				if (tail)
+// 					*tail = clause->field;
+// 				tail = &clause->field->fld_next;
+// 				curclause++;
+// 				clause->field->fld_id = fieldIdCounter++;
+// 			}
 
-			declarationNode = declarationNode->dsqlPass(this);
-			ptr = declarations->statements.remove(ptr);
-			localCompositeTypeDeclarations.put(declarationNode->name, declarationNode);
-			end = declarations->statements.end();
-			continue;
-		}
-		++ptr;
-	}
-}
+// 			declarationNode = declarationNode->dsqlPass(this);
+// 			ptr = declarations->statements.remove(ptr);
+// 			localCompositeTypeDeclarations.put(declarationNode->name, declarationNode);
+// 			end = declarations->statements.end();
+// 			continue;
+// 		}
+// 		++ptr;
+// 	}
+// }
 
 void DsqlCompilerScratch::putLocalTypes()
 {

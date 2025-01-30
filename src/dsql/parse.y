@@ -3152,7 +3152,8 @@ package_type_subfield_definition($parameters)
 			if ($3 && nodeAs<RowValueExpressionNode>($3->value))
 				nodeAs<RowValueExpressionNode>($3->value)->setDefaultSource($1);
 
-			$$ = newNode<ParameterClause>($1, optName($2), $3);
+			setCollate($1, $2);
+			$$ = newNode<ParameterClause>($1, $3);
 			$parameters->add($$);
 		}
 		package_type_fields_constraint($4)
@@ -3173,7 +3174,7 @@ package_type_clause_start
 		{
 			$2->fld_name = *$1;
 			$$ = newNode<DeclarePackageTypeNode>(
-				newNode<ParameterClause>($2, MetaName(), $3));
+				newNode<ParameterClause>($2, $3));
 		}
 	| symbol_package_type_name
 		{
@@ -7730,7 +7731,6 @@ insert
 			returning_clause
 		{
 			StoreNode* node = $$ = $1;
-			node->recordForm = true;
 			node->overrideClause = $3;
 			node->dsqlValues = $5;
 			node->dsqlReturning = $6;

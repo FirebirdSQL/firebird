@@ -1488,8 +1488,7 @@ public:
 		: TypedNode<StmtNode, StmtNode::TYPE_STORE>(pool),
 		  dsqlFields(pool),
 		  validations(pool),
-		  marks(0),
-		  recordForm(false)
+		  marks(0)
 	{
 	}
 

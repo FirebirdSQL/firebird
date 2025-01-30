@@ -3871,7 +3871,7 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation, USHORT id)
 	burp_fld* field = (burp_fld*) BURP_alloc_zero (sizeof(burp_fld));
 	field->fld_identity_type = -1;
 
-	if (tdgbl->runtimeODS >= DB_VERSION_DDL13_2)
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
 	{
 		STORE (TRANSACTION_HANDLE local_trans REQUEST_HANDLE tdgbl->handles_get_field_req_handle1)
 			X IN RDB$RELATION_FIELDS
@@ -3897,7 +3897,6 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation, USHORT id)
 			// ODS 12
 			X.RDB$GENERATOR_NAME.NULL = TRUE;
 			X.RDB$IDENTITY_TYPE.NULL = TRUE;
-			X.RDB$TABLESPACE_NAME.NULL = TRUE;
 
 			skip_init(&scan_next_attr);
 			while (get_attribute(&attribute, tdgbl) != att_end)
@@ -4067,10 +4066,11 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation, USHORT id)
 					X.RDB$IDENTITY_TYPE = field->fld_identity_type;
 					break;
 
-				case att_field_relation_name:
-					GET_TEXT(X.RDB$RELATION_NAME);
-					X.RDB$RELATION_NAME.NULL = FALSE;
-					break;
+				// TODO ROWTYPE: does it needed?
+				// case att_field_relation_name:
+				// 	GET_TEXT(X.RDB$RELATION_NAME);
+				// 	X.RDB$RELATION_NAME.NULL = FALSE;
+				// 	break;
 
 				default:
 					bad_attribute(scan_next_attr, attribute, 84);
@@ -5893,7 +5893,7 @@ bool get_global_field(BurpGlobals* tdgbl)
 
 	gfld* gfield = NULL;
 
-	if (tdgbl->runtimeODS >= DB_VERSION_DDL13_2)
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
 	{
 		GDS_NAME field_name;
 		bool securityClass = false;
@@ -6224,7 +6224,7 @@ bool get_global_field(BurpGlobals* tdgbl)
 					break;
 
 				case att_field_owner_name:
-					if (tdgbl->RESTORE_format >= 9)
+					if (tdgbl->RESTORE_format >= 10)
 					{
 						GET_TEXT(X.RDB$OWNER_NAME);
 						X.RDB$OWNER_NAME.NULL = FALSE;
@@ -8164,152 +8164,7 @@ bool get_procedure_prm(BurpGlobals* tdgbl, const QualifiedMetaString& name)
 
 	Firebird::ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
 
-	if (tdgbl->runtimeODS >= DB_VERSION_DDL13_2)
-	{
-		STORE (TRANSACTION_HANDLE local_trans
-				REQUEST_HANDLE tdgbl->handles_get_procedure_prm_req_handle1)
-			X IN RDB$PROCEDURE_PARAMETERS
-
-			strcpy(X.RDB$PROCEDURE_NAME, procptr);
-
-			if (package_name[0])
-			{
-				strcpy(X.RDB$PACKAGE_NAME, package_name);
-				X.RDB$PACKAGE_NAME.NULL = FALSE;
-			}
-			else
-				X.RDB$PACKAGE_NAME.NULL = TRUE;
-
-			X.RDB$DESCRIPTION.NULL = TRUE;
-			X.RDB$DEFAULT_VALUE.NULL = TRUE;
-			X.RDB$DEFAULT_SOURCE.NULL = TRUE;
-			X.RDB$COLLATION_ID.NULL = TRUE;
-
-			X.RDB$SYSTEM_FLAG = 0;
-			X.RDB$SYSTEM_FLAG.NULL = FALSE;
-
-			X.RDB$NULL_FLAG = FALSE;
-			X.RDB$NULL_FLAG.NULL = FALSE;
-
-			X.RDB$PARAMETER_MECHANISM = prm_mech_normal;
-			X.RDB$PARAMETER_MECHANISM.NULL = FALSE;
-
-			// DB_VERSION_DDL11_2
-			X.RDB$FIELD_NAME.NULL = TRUE;
-			X.RDB$RELATION_NAME.NULL = TRUE;
-
-			skip_init(&scan_next_attr);
-			while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
-			{
-				switch (attribute)
-				{
-				case att_procedureprm_name:
-					l = GET_TEXT(X.RDB$PARAMETER_NAME);
-					MISC_terminate (X.RDB$PARAMETER_NAME, temp, l, sizeof(temp));
-					BURP_verbose (196, temp);
-					// msg 196 restoring parameter %s for stored procedure
-					break;
-
-				case att_procedureprm_type:
-					X.RDB$PARAMETER_TYPE= (USHORT) get_int32(tdgbl);
-					break;
-
-				case att_procedureprm_number:
-					X.RDB$PARAMETER_NUMBER= (USHORT) get_int32(tdgbl);
-					break;
-
-				case att_procedureprm_field_source:
-					GET_TEXT(X.RDB$FIELD_SOURCE);
-					break;
-
-				case att_procedureprm_description:
-					get_misc_blob (tdgbl, X.RDB$DESCRIPTION, true);
-					X.RDB$DESCRIPTION.NULL = FALSE;
-					break;
-
-				case att_procedureprm_description2:
-					get_source_blob (tdgbl, X.RDB$DESCRIPTION, true);
-					X.RDB$DESCRIPTION.NULL = FALSE;
-					break;
-
-				case att_procedureprm_default_value:
-					if (tdgbl->RESTORE_format >= 8)
-					{
-						X.RDB$DEFAULT_VALUE.NULL = FALSE;
-						get_blr_blob (tdgbl, X.RDB$DEFAULT_VALUE, true);
-					}
-					else
-						bad_attribute(scan_next_attr, attribute, 291);
-					break;
-
-				case att_procedureprm_default_source:
-					if (tdgbl->RESTORE_format >= 8)
-					{
-						X.RDB$DEFAULT_SOURCE.NULL = FALSE;
-						get_source_blob (tdgbl, X.RDB$DEFAULT_SOURCE, true);
-					}
-					else
-						bad_attribute(scan_next_attr, attribute, 291);
-					break;
-
-				case att_procedureprm_collation_id:
-					if (tdgbl->RESTORE_format >= 8)
-					{
-						X.RDB$COLLATION_ID.NULL = FALSE;
-						X.RDB$COLLATION_ID = (USHORT) get_int32(tdgbl);
-					}
-					else
-						bad_attribute(scan_next_attr, attribute, 291);
-					break;
-
-				case att_procedureprm_null_flag:
-					if (tdgbl->RESTORE_format >= 8)
-						X.RDB$NULL_FLAG = (USHORT) get_int32(tdgbl);
-					else
-						bad_attribute(scan_next_attr, attribute, 291);
-					break;
-
-				case att_procedureprm_mechanism:
-					if (tdgbl->RESTORE_format >= 8)
-						X.RDB$PARAMETER_MECHANISM = (USHORT) get_int32(tdgbl);
-					else
-						bad_attribute(scan_next_attr, attribute, 291);
-					break;
-
-				// DB_VERSION_DDL11_2
-				case att_procedureprm_field_name:
-					if (tdgbl->RESTORE_format >= 9)
-					{
-						X.RDB$FIELD_NAME.NULL = FALSE;
-						GET_TEXT(X.RDB$FIELD_NAME);
-					}
-					else
-						bad_attribute(scan_next_attr, attribute, 291);
-					break;
-
-				// DB_VERSION_DDL11_2
-				case att_procedureprm_relation_name:
-					if (tdgbl->RESTORE_format >= 9)
-					{
-						X.RDB$RELATION_NAME.NULL = FALSE;
-						GET_TEXT(X.RDB$RELATION_NAME);
-					}
-					else
-						bad_attribute(scan_next_attr, attribute, 291);
-					break;
-
-				default:
-					bad_attribute(scan_next_attr, attribute, 291);
-					// msg 291 procedure parameter
-					break;
-				}
-			}
-		END_STORE;
-		ON_ERROR
-			general_on_error ();
-		END_ERROR;
-	}
-	else if (tdgbl->runtimeODS >= DB_VERSION_DDL11_1)
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL11_1)
 	{
 		STORE (TRANSACTION_HANDLE local_trans
 				REQUEST_HANDLE tdgbl->handles_get_procedure_prm_req_handle1)
@@ -8760,7 +8615,7 @@ bool get_packaged_types(BurpGlobals* tdgbl)
 	att_type attribute;
 	scan_attr_t scan_next_attr;
 
-	if (tdgbl->runtimeODS >= DB_VERSION_DDL13_2)
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
 	{
 		STORE (REQUEST_HANDLE tdgbl->handles_get_packaged_types_handle1)
 			X IN RDB$PACKAGED_TYPES
@@ -9286,22 +9141,6 @@ bool get_packaged_type_composite_fields(BurpGlobals* tdgbl, Coordinator* coord, 
 	FB_BOOLEAN	sql_security = FB_FALSE;
 	bool		sql_security_null = true;
 
-	BASED_ON RDB$RELATIONS.RDB$SECURITY_CLASS sec_class;
-	sec_class[0] = '\0';
-	bool		sec_class_null = true;
-
-	BASED_ON RDB$RELATIONS.RDB$EXTERNAL_FILE ext_file_name;
-	ext_file_name[0] = '\0';
-	bool		ext_file_name_null = true;
-
-	BASED_ON RDB$RELATIONS.RDB$ADAPTER adapter;
-	adapter[0] = '\0';
-	bool adapter_null = true;
-
-	BASED_ON RDB$RELATIONS.RDB$TABLESPACE_NAME tableSpace;
-	tableSpace[0] = '\0';
-	bool tableSpaceNull = true;
-
 	// Before starting to restore relations, commit everything that was restored
 	// prior to this point. This ensures that no pending error can later affect
 	// other metadata being restored.
@@ -9374,6 +9213,8 @@ bool get_packaged_type_composite_fields(BurpGlobals* tdgbl, Coordinator* coord, 
 			break;
 		}
 	}
+
+	return false;
 }
 
 bool get_rel_constraint(BurpGlobals* tdgbl)

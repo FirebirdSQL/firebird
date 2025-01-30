@@ -1566,7 +1566,7 @@ static void parseParameterFieldForDscData(USHORT& id, dsql_fld& parameterField, 
 	ULONG length = parameterField.length;
 	SSHORT subType = parameterField.subType;
 	SSHORT scale = parameterField.scale;
-	SSHORT charset = parameterField.charSetId.isAssigned() ? parameterField.charSetId.value : 0;
+	SSHORT charset = parameterField.charSetId.has_value() ? parameterField.charSetId.value() : 0;
 	const char endByte = 0x00;
 
 	outstringbuff.append(reinterpret_cast<const char*>(&id), sizeof(id));

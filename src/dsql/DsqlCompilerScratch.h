@@ -193,8 +193,6 @@ public:
 	void putType(const TypeClause* type, bool useSubType);
 	void putLocalVariableDecl(dsql_var* variable, DeclareVariableNode* hostParam, QualifiedName& collationName);
 	void putLocalVariableInit(dsql_var* variable, const DeclareVariableNode* hostParam);
-	void genLocalTypes(CompoundStmtNode* declarations);
-	void putLocalTypes();
 
 	void putLocalVariable(dsql_var* variable)
 	{

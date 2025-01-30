@@ -472,13 +472,13 @@ bool CMP_procedure_arguments(
 
 		for (auto& parameter : fields)
 		{
-			const auto argValue = argsByName.get(parameter->prm_is_composite ? parameter->prm_composite_name : parameter->prm_name);
+			const auto argValue = argsByName.get(parameter->prm_name);
 			const bool argExists = argsByName.exist(parameter->prm_name);
 
 			if (argValue)
 			{
 				*sourceArgIt = *argValue;
-				argsByName.remove(parameter->prm_is_composite ? parameter->prm_composite_name : parameter->prm_name);
+				argsByName.remove(parameter->prm_name);
 			}
 
 			if (!argValue || !*argValue)

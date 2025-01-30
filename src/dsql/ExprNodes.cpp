@@ -13425,7 +13425,7 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 				else
 					*argIt = NullNode::instance();
 			}
-			else if (!parameter->prm_is_composite)
+			else
 				mismatchStatus << Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
 		}
 

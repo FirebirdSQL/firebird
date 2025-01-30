@@ -5303,7 +5303,7 @@ void DeclarePackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 
 			type->fieldSource = generatedFieldName;
 
-			FieldDefinition fieldDefinition(*tdbb->getDefaultPool());
+			RelationNode::FieldDefinition fieldDefinition(*tdbb->getDefaultPool());
 			fieldDefinition.fieldSource = generatedFieldName;
 			fieldDefinition.relationName = relationGeneratedName;
 			fieldDefinition.name = type->fld_name;
@@ -5422,10 +5422,8 @@ void DropPackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 	}
 	END_FOR
 
-	PrivilegeLogger logger(tdbb);
-	deletePrivilegesByRelName(tdbb, transaction, name, obj_field, &logger);
+	deletePrivilegesByRelName(tdbb, transaction, name, obj_field);
 
-	logger.finish(ITracePlugin::RESULT_SUCCESS);
 	savePoint.release();	// everything is ok
 }
 
@@ -7564,7 +7562,7 @@ void RelationNode::FieldDefinition::modify(thread_db* tdbb, jrd_tra* transaction
 	END_FOR
 }
 
-void FieldDefinition::store(thread_db* tdbb, jrd_tra* transaction)
+void RelationNode::FieldDefinition::store(thread_db* tdbb, jrd_tra* transaction)
 {
 	Attachment* const attachment = transaction->tra_attachment;
 

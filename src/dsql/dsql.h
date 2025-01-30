@@ -185,7 +185,7 @@ public:
 		  typeOfName(pool),
 		  collate(pool, aCollate),
 		  charSet(pool),
-		  subTypeName(pool, nullptr)
+		  subTypeName(pool, nullptr),
 		  packageName(pool),
 		  relationName(pool)
 	{
