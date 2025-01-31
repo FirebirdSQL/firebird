@@ -476,7 +476,7 @@ offset_t TempSpace::allocateSpace(FB_SIZE_T size)
 {
 	// Find the best available space. This is defined as the smallest free space
 	// that is big enough. This preserves large blocks.
-	Segment* best = NULL;
+	Segment* best = nullptr;
 
 	// Search through the available space in the not used segments list
 	if (freeSegmentLastPointers.locate(locGreatEqual, size))

@@ -183,7 +183,7 @@ private:
 	{
 	public:
 		Segment(offset_t aPosition, offset_t aSize) :
-			position(aPosition), size(aSize), prev(NULL), next(NULL)
+			position(aPosition), size(aSize), prev(nullptr), next(nullptr)
 		{}
 
 		offset_t position;
@@ -200,7 +200,7 @@ private:
 	class SegmentLastPointer
 	{
 	public:
-		SegmentLastPointer() : size(0), last(NULL)
+		SegmentLastPointer() : size(0), last(nullptr)
 		{}
 
 		SegmentLastPointer(offset_t aSize, Segment* aSegment) :
@@ -251,22 +251,22 @@ private:
 		if (freeSegmentLastPointers.locate(segment->size))
 		{
 			SegmentLastPointer* const pointer = &freeSegmentLastPointers.current();
-			segment->next = NULL;
+			segment->next = nullptr;
 			segment->prev = pointer->last;
 			pointer->last->next = segment;
 			pointer->last = segment;
 		}
 		else
 		{
-			segment->prev = NULL;
-			segment->next = NULL;
+			segment->prev = nullptr;
+			segment->next = nullptr;
 			freeSegmentLastPointers.add(SegmentLastPointer(segment->size, segment));
 		}
 	}
 
 	inline void lastPointerRemove(Segment* const segment)
 	{
-		if (segment->next == NULL)
+		if (segment->next == nullptr)
 		{
 			if (!freeSegmentLastPointers.locate(segment->size))
 				fb_assert(false);
@@ -274,7 +274,7 @@ private:
 			SegmentLastPointer* pointer = &freeSegmentLastPointers.current();
 			if (segment->prev)
 			{
-				segment->prev->next = NULL;
+				segment->prev->next = nullptr;
 				pointer->last = segment->prev;
 			}
 			else
