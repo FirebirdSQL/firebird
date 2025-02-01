@@ -1339,8 +1339,72 @@ BoolExprNode* InListBoolNode::copy(thread_db* tdbb, NodeCopier& copier) const
 	return node;
 }
 
+BoolExprNode* InListBoolNode::decompose(CompilerScratch* csb)
+{
+	// Collect list items depending on record streams
+
+	HalfStaticArray<ValueExprNode*, OPT_STATIC_ITEMS> splitItems;
+
+	for (auto item : list->items)
+	{
+		SortedStreamList streams;
+		item->collectStreams(streams);
+
+		if (streams.hasData())
+			splitItems.add(item);
+	}
+
+	if (splitItems.isEmpty())
+		return nullptr;
+
+	// Decompose expression: <arg> IN (<item1>, <item2>, <item3>, <item4> ...)
+	// into: <arg> IN (<item1>, <item2>, ...) OR <arg> = <item3> OR <arg> = <item4> ...
+	// where the ORed booleans are known to be stream-based (i.e. contain fields inside)
+	// and thus could use an index, if possible.
+	//
+	// See #8109 in the tracker, example:
+	//
+	// SELECT e.*
+	// FROM Employees e
+	// WHERE :SomeID IN (e.LeaderID, e.DispEmpID)
+
+	auto& pool = csb->csb_pool;
+	BoolExprNode* boolNode = nullptr;
+
+	for (const auto item : splitItems)
+	{
+		list->items.findAndRemove(item);
+
+		const auto cmpNode =
+			FB_NEW_POOL(pool) ComparativeBoolNode(pool, blr_eql, arg, item);
+
+		if (boolNode)
+			boolNode = FB_NEW_POOL(pool) BinaryBoolNode(pool, blr_or, boolNode, cmpNode);
+		else
+			boolNode = cmpNode;
+	}
+
+	if (const auto count = list->items.getCount())
+	{
+		BoolExprNode* priorNode = this;
+
+		if (count == 1)
+		{
+			// Convert A IN (B) into A = B
+			priorNode = FB_NEW_POOL(pool) ComparativeBoolNode(pool, blr_eql, arg, list->items.front());
+		}
+
+		boolNode = FB_NEW_POOL(pool) BinaryBoolNode(pool, blr_or, boolNode, priorNode);
+	}
+
+	return boolNode;
+}
+
 BoolExprNode* InListBoolNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 {
+	if (const auto node = decompose(csb))
+		return node->pass1(tdbb, csb);
+
 	doPass1(tdbb, csb, arg.getAddress());
 
 	nodFlags |= FLAG_INVARIANT;
