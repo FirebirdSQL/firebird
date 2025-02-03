@@ -1341,24 +1341,11 @@ BoolExprNode* InListBoolNode::copy(thread_db* tdbb, NodeCopier& copier) const
 
 BoolExprNode* InListBoolNode::decompose(CompilerScratch* csb)
 {
-	// Collect list items depending on record streams
-
-	HalfStaticArray<ValueExprNode*, OPT_STATIC_ITEMS> splitItems;
-
-	for (auto item : list->items)
-	{
-		SortedStreamList streams;
-		item->collectStreams(streams);
-
-		if (streams.hasData())
-			splitItems.add(item);
-	}
-
-	if (splitItems.isEmpty())
-		return nullptr;
-
-	// Decompose expression: <arg> IN (<item1>, <item2>, <item3>, <item4> ...)
-	// into: <arg> IN (<item1>, <item2>, ...) OR <arg> = <item3> OR <arg> = <item4> ...
+	// Search for list items depending on record streams.
+	// If found, decompose expression:
+	//   <arg> IN (<item1>, <item2>, <item3>, <item4> ...)
+	// into:
+	//   <arg> IN (<item1>, <item2>, ...) OR <arg> = <item3> OR <arg> = <item4> ...
 	// where the ORed booleans are known to be stream-based (i.e. contain fields inside)
 	// and thus could use an index, if possible.
 	//
@@ -1371,12 +1358,22 @@ BoolExprNode* InListBoolNode::decompose(CompilerScratch* csb)
 	auto& pool = csb->csb_pool;
 	BoolExprNode* boolNode = nullptr;
 
-	for (const auto item : splitItems)
+	for (auto iter = list->items.begin(); iter != list->items.end();)
 	{
-		list->items.findAndRemove(item);
+		ValueExprNode* const item = *iter;
 
-		const auto cmpNode =
-			FB_NEW_POOL(pool) ComparativeBoolNode(pool, blr_eql, arg, item);
+		SortedStreamList streams;
+		item->collectStreams(streams);
+
+		if (streams.isEmpty())
+		{
+			iter++;
+			continue;
+		}
+
+		list->items.remove(iter);
+
+		const auto cmpNode = FB_NEW_POOL(pool) ComparativeBoolNode(pool, blr_eql, arg, item);
 
 		if (boolNode)
 			boolNode = FB_NEW_POOL(pool) BinaryBoolNode(pool, blr_or, boolNode, cmpNode);
@@ -1384,11 +1381,11 @@ BoolExprNode* InListBoolNode::decompose(CompilerScratch* csb)
 			boolNode = cmpNode;
 	}
 
-	if (const auto count = list->items.getCount())
+	if (boolNode && list->items.hasData())
 	{
 		BoolExprNode* priorNode = this;
 
-		if (count == 1)
+		if (list->items.getCount() == 1)
 		{
 			// Convert A IN (B) into A = B
 			priorNode = FB_NEW_POOL(pool) ComparativeBoolNode(pool, blr_eql, arg, list->items.front());
