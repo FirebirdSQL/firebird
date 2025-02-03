@@ -433,10 +433,10 @@ typedef Firebird::RightPooledMap<Item, ItemInfo> MapItemInfo;
 
 // Table value function block
 
-class jrd_tab_func
+class jrd_table_value_fun
 {
 public:
-	explicit jrd_tab_func(MemoryPool& p) : recordFormat(nullptr), fields(p), name(p), funcId(0)
+	explicit jrd_table_value_fun(MemoryPool& p) : recordFormat(nullptr), fields(p), name(p), funcId(0)
 	{
 	}
 
@@ -653,7 +653,7 @@ public:
 		PlanNode* csb_plan;				// user-specified plan for this relation
 		StreamType* csb_map;			// Stream map for views
 		RecordSource** csb_rsb_ptr;		// point to rsb for nod_stream
-		jrd_tab_func* csb_table_value_fun;  // Table value function
+		jrd_table_value_fun* csb_table_value_fun;  // Table value function
 	};
 
 	typedef csb_repeat* rpt_itr;

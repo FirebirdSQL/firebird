@@ -3657,8 +3657,9 @@ RseNode* SelectExprNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	return PASS1_derived_table(dsqlScratch, this, NULL);
 }
 
-TableValueFunctionSourceNode*
-TableValueFunctionSourceNode::parse(thread_db* tdbb, CompilerScratch* csb, const SSHORT blrOp)
+TableValueFunctionSourceNode* TableValueFunctionSourceNode::parse(thread_db* tdbb,
+																  CompilerScratch* csb,
+																  const SSHORT blrOp)
 {
 	fb_assert(blrOp == blr_table_value_fun);
 
@@ -3670,7 +3671,7 @@ TableValueFunctionSourceNode::parse(thread_db* tdbb, CompilerScratch* csb, const
 	node->stream = PAR_context(csb, nullptr);
 
 	CompilerScratch::csb_repeat& element = csb->csb_rpt[node->stream];
-	auto tableValueFunctionCsb = node->m_csbTableValueFun = FB_NEW_POOL(pool) jrd_tab_func(pool);
+	auto tableValueFunctionCsb = node->m_csbTableValueFun = FB_NEW_POOL(pool) jrd_table_value_fun(pool);
 
 	tableValueFunctionCsb->funcId = funcId;
 
@@ -3786,8 +3787,7 @@ void TableValueFunctionSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		GEN_expr(dsqlScratch, arg);
 
 	Array<const dsql_fld*> arrayFld;
-	for (const auto* field = tableValueFunctionContext->outputField; field;
-		 field = field->fld_next)
+	for (const auto* field = tableValueFunctionContext->outputField; field; field = field->fld_next)
 		arrayFld.add(field);
 
 	dsqlScratch->appendUShort(arrayFld.getCount());
@@ -3947,6 +3947,11 @@ dsql_fld* UnlistFunctionSourceNode::makeField(DsqlCompilerScratch* dsqlScratch)
 	if (inputList)
 		inputList = Node::doDsqlPass(dsqlScratch, inputList, false);
 
+	dsc desc;
+
+	auto inputItem = inputList->items.begin()->getObject();
+	inputItem->setParameterType(dsqlScratch, [] (dsc* desc) { desc->makeVarying(1024, CS_dynamic); }, false);
+
 	dsql_fld* field = dsqlField;
 
 	if (!field)
@@ -3954,8 +3959,6 @@ dsql_fld* UnlistFunctionSourceNode::makeField(DsqlCompilerScratch* dsqlScratch)
 		auto newField = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
 		field = newField;
 
-		auto inputItem = inputList->items.begin()->getObject();
-		dsc desc;
 		DsqlDescMaker::fromNode(dsqlScratch, &desc, inputItem);
 
 		USHORT ttype = desc.getCharSet();
@@ -3971,10 +3974,12 @@ dsql_fld* UnlistFunctionSourceNode::makeField(DsqlCompilerScratch* dsqlScratch)
 	if (dsqlNameColumns.hasData())
 	{
 		if (dsqlNameColumns.getCount() > 1)
+		{
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) << Arg::Gds(isc_dsql_command_err)
 										   << Arg::Gds(isc_dsql_table_value_many_columns)
 										   << Arg::Str(UnlistFunctionSourceNode::FUNC_NAME)
 										   << Arg::Num(1) << Arg::Num(dsqlNameColumns.getCount()));
+		}
 
 		field->fld_name = dsqlNameColumns[0];
 	}

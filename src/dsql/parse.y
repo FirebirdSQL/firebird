@@ -6599,11 +6599,12 @@ outer_noise
 
 %type <recSourceNode> table_value_function
 table_value_function
-	: table_value_function_clause table_value_function_correlation_name table_value_function_columns_name
+	: table_value_function_clause table_value_function_correlation_name derived_column_list
 		{
-			auto *node = nodeAs<TableValueFunctionSourceNode>($1);
+			auto node = nodeAs<TableValueFunctionSourceNode>($1);
 			node->alias = *$2;
-			node->dsqlNameColumns = *$3;
+			if ($3)
+				node->dsqlNameColumns = *$3;
 			$$ = node;
 		}
 	;
@@ -6642,17 +6643,9 @@ table_value_function_returning
 	| RETURNING data_type_descriptor		{ $$ = $2; }
 	;
 
-
 %type <metaNamePtr> table_value_function_correlation_name
 table_value_function_correlation_name
 	: as_noise symbol_table_alias_name	{ $$ = $2; }
-	;
-
-
-%type <metaNameArray> table_value_function_columns_name
-table_value_function_columns_name
-	: /* nothing */							{ $$ = newNode<ObjectsArray<MetaName>>(); }
-	| '(' table_value_function_columns ')'	{ $$ = $2; }
 	;
 
 %type <metaNameArray> table_value_function_columns

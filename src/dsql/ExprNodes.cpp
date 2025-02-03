@@ -6458,8 +6458,8 @@ dsql_fld* FieldNode::resolveContext(DsqlCompilerScratch* dsqlScratch, const Meta
 		return nullptr;
 	}
 
-	const TEXT* dsqlName = NULL;
-	dsql_fld* outputField = NULL;
+	const TEXT* dsqlName = nullptr;
+	dsql_fld* outputField = nullptr;
 	dsql_rel* relation = context->ctx_relation;
 	dsql_prc* procedure = context->ctx_procedure;
 	dsql_tab_func* tableValueFunctionContext = context->ctx_table_value_fun;

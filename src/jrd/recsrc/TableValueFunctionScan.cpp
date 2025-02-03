@@ -159,7 +159,7 @@ void UnlistFunctionScan::internalOpen(thread_db* tdbb) const
 	const auto valueDesc = EVL_expr(tdbb, request, valueItem);
 	if (valueDesc == nullptr)
 	{
-		rpb->rpb_number.setValid(true);
+		rpb->rpb_number.setValid(false);
 		return;
 	}
 
@@ -176,7 +176,7 @@ void UnlistFunctionScan::internalOpen(thread_db* tdbb) const
 
 	const auto textType = toDesc->getTextType();
 
-	auto setStringToRecord = [&] (string str, USHORT length = 0)
+	auto setStringToRecord = [&] (string& str, USHORT length = 0)
 	{
 		if (length == 0)
 			length = str.length();

@@ -1010,7 +1010,7 @@ public:
 	Firebird::ObjectsArray<Jrd::MetaName> dsqlNameColumns;
 
 private:
-	jrd_tab_func* m_csbTableValueFun;
+	jrd_table_value_fun* m_csbTableValueFun;
 };
 
 class UnlistFunctionSourceNode : public TableValueFunctionSourceNode

@@ -617,7 +617,7 @@ ValueExprNode* PAR_make_field(thread_db* tdbb, CompilerScratch* csb, USHORT cont
 
 	jrd_rel* const relation = csb->csb_rpt[stream].csb_relation;
 	jrd_prc* const procedure = csb->csb_rpt[stream].csb_procedure;
-	jrd_tab_func* const table_value_function = csb->csb_rpt[stream].csb_table_value_fun;
+	jrd_table_value_fun* const table_value_function = csb->csb_rpt[stream].csb_table_value_fun;
 
 	const SSHORT id =
 		relation ? MET_lookup_field(tdbb, relation, base_field) :
