@@ -6660,10 +6660,9 @@ dsql_fld* FieldNode::resolveContext(DsqlCompilerScratch* dsqlScratch, const Qual
 		}
 	}
 
-	if (aliasName.object.isEmpty())
-		aliasName = dsqlName;
-
-	fb_assert(aliasName.object.hasData());
+	// there could be rowtype variable contexts without name, like function return rowtyped value
+	if (aliasName.object.isEmpty() && !(context->ctx_flags & CTX_rowtype_var))
+		aliasName = relation ? relation->rel_name : procedure->prc_name.identifier;
 
 	// If a context qualifier is present, make sure this is the proper context
 	if (qualifier.object.hasData() && !PASS1_compare_alias(aliasName, qualifier))

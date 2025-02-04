@@ -3365,7 +3365,54 @@ Firebird::string DeclareLocalTypeNode::internalPrint(NodePrinter& printer) const
 
 void DeclareLocalTypeNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
+	auto declarationNode = this;
+	dsqlScratch->appendUChar(blr_dcl_composite_type);
+	dsqlScratch->appendMetaString(declarationNode->name.c_str());
 
+	dsqlScratch->appendUChar(declarationNode->dsqlField->fld_sub_count);
+
+	auto defaultsExist = declarationNode->defaultList->items.hasData();
+	auto defaultNode = defaultsExist ? declarationNode->defaultList->items.begin() : nullptr;
+	auto curClause = declarationNode->clauses.begin();
+	auto fld = declarationNode->dsqlField->fld_sub_first;
+	while (fld)
+	{
+		dsqlScratch->appendMetaString(fld->fld_name.c_str());
+		dsqlScratch->putDtype(fld, false);
+		auto clause = (static_cast<RelationNode::AddColumnClause*>(curClause->getObject()));
+		UCHAR hasCheckConstraint = false;
+		for (auto& constraint : clause->constraints)
+		{
+			if (constraint.constraintType == RelationNode::AddConstraintClause::CTYPE_CHECK)
+			{
+				dsqlScratch->appendUChar(DeclareLocalTypeNode::HAS_CHECK_CONSTRAINT);
+				hasCheckConstraint = true;
+				GEN_expr(dsqlScratch, constraint.check->value);
+			}
+		}
+
+		if (hasCheckConstraint == false)
+			dsqlScratch->appendUChar(DeclareLocalTypeNode::NO_CHECK_CONSTRAINT);
+
+		curClause++;
+
+		fld = fld->fld_next;
+
+		if (defaultsExist)
+		{
+			// set NULL as default if default value is nullptr
+			if (!*defaultNode)
+				*defaultNode = NullNode::instance();
+
+			dsqlScratch->appendUChar(DeclareLocalTypeNode::HAS_DEFAULT_VALUE);
+			GEN_expr(dsqlScratch, *defaultNode);
+			++defaultNode;
+		}
+		else
+		{
+			dsqlScratch->appendUChar(DeclareLocalTypeNode::NO_DEFAULT_VALUE);
+		}
+	}
 }
 
 DeclareLocalTypeNode* DeclareLocalTypeNode::copy(thread_db* tdbb, NodeCopier& copier) const
@@ -6622,7 +6669,52 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		}
 	}
 
-	const auto& variables = subRoutine ? dsqlScratch->outputVariables : dsqlScratch->variables;
+	// const auto& variables = subRoutine ? dsqlScratch->outputVariables : dsqlScratch->variables;
+
+	// TODO ROWTYPE FBPORT: uncomment and fix this after merge
+	dsqlScratch->putLocalTypes();
+
+	auto inputCompositeVarIdOffset = 0;
+	for (const auto variable : dsqlScratch->variables)
+	{
+		auto field = variable->field;
+		auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.hasData() && field->typeOfTable.hasData());
+
+		if (subRoutine && !isRowtype && variable->type == dsql_var::TYPE_INPUT)
+			continue;
+
+		if (subRoutine && isRowtype)
+		{
+			if (variable->type == dsql_var::TYPE_INPUT)
+				inputCompositeVarIdOffset++;
+		}
+		else if (isRowtype)
+		{
+			if (auto relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, field->typeOfTable.c_str()))
+			{
+				field->fld_sub_first = relation->rel_fields;
+				field->fld_sub_count = relation->rel_fields_number;
+			}
+			else if (field->packageName.hasData())
+			{
+				METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, field->relationName, field->fld_sub_first);
+				field->fieldSource = field->typeOfName;
+			}
+
+			if (!field->fld_sub_first)
+			{
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+				Arg::Gds(isc_invalid_parameter_decl) << Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable));
+			}
+
+			dsql_ctx* new_context = FB_NEW_POOL(*tdbb->getDefaultPool()) dsql_ctx(*tdbb->getDefaultPool());
+			variable->contextNum = new_context->ctx_context = dsqlScratch->contextNumber++;
+			new_context->ctx_scope_level = dsqlScratch->scopeLevel;
+			new_context->ctx_alias = new_context->ctx_internal_alias = field->fld_name.c_str();
+			new_context->ctx_flags = CTX_rowtype_var;
+			new_context->ctx_rowtype_var = variable;
+			dsqlScratch->context->push(new_context);
+		}
 
 	for (const auto variable : variables)
 	{
@@ -6634,59 +6726,6 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	if (localDeclList)
 		localDeclList->genBlr(dsqlScratch);
-
-	// TODO ROWTYPE FBPORT: uncomment and fix this after merge
-	// dsqlScratch->putLocalTypes();
-
-	// auto inputCompositeVarIdOffset = 0;
-	// for (const auto variable : dsqlScratch->variables)
-	// {
-	// 	auto field = variable->field;
-	// 	auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.hasData() && field->typeOfTable.hasData());
-
-	// 	if (subRoutine && !isRowtype && variable->type == dsql_var::TYPE_INPUT)
-	// 		continue;
-
-	// 	if (subRoutine && isRowtype)
-	// 	{
-	// 		if (variable->type == dsql_var::TYPE_INPUT)
-	// 			inputCompositeVarIdOffset++;
-	// 	}
-	// 	else if (isRowtype)
-	// 	{
-	// 		if (auto relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, field->typeOfTable.c_str()))
-	// 		{
-	// 			field->fld_sub_first = relation->rel_fields;
-	// 			field->fld_sub_count = relation->rel_fields_number;
-	// 		}
-	// 		else if (field->packageName.hasData())
-	// 		{
-	// 			METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, field->relationName, field->fld_sub_first);
-	// 			field->fieldSource = field->typeOfName;
-	// 		}
-
-	// 		if (!field->fld_sub_first)
-	// 		{
-	// 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-	// 			Arg::Gds(isc_invalid_parameter_decl) << Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable));
-	// 		}
-
-	// 		dsql_ctx* new_context = FB_NEW_POOL(*tdbb->getDefaultPool()) dsql_ctx(*tdbb->getDefaultPool());
-	// 		variable->contextNum = new_context->ctx_context = dsqlScratch->contextNumber++;
-	// 		new_context->ctx_scope_level = dsqlScratch->scopeLevel;
-	// 		new_context->ctx_alias = new_context->ctx_internal_alias = field->fld_name.c_str();
-	// 		new_context->ctx_flags = CTX_rowtype_var;
-	// 		new_context->ctx_rowtype_var = variable;
-	// 		dsqlScratch->context->push(new_context);
-	// 	}
-
-	// 	dsqlScratch->putLocalVariable(variable, nullptr, {});
-	// }
-
-	// dsqlScratch->setPsql(true);
-
-	// dsqlScratch->putLocalVariables(localDeclList,
-	// 	USHORT( (subRoutine ? inputCompositeVarIdOffset : parameters.getCount() ) + returns.getCount()));
 
 	dsqlScratch->loopLevel = 0;
 
@@ -8062,7 +8101,9 @@ void LocalDeclarationsNode::checkUniqueFieldsNames(const LocalDeclarationsNode* 
 				name = cursorNode->dsqlName.c_str();
 			else if (auto tableNode = nodeAs<DeclareLocalTableNode>(statement))
 				name = tableNode->dsqlName.c_str();
-			else if (nodeAs<DeclareSubProcNode>(statement) || nodeAs<DeclareSubFuncNode>(statement))
+			else if (nodeAs<DeclareSubProcNode>(statement)
+				|| nodeAs<DeclareSubFuncNode>(statement)
+				|| nodeAs<DeclareLocalTypeNode>(statement))
 				continue;
 
 			fb_assert(name);
@@ -8130,6 +8171,124 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			dsql_var* variable = varNode->dsqlVar;
 			fb_assert(variable);
 
+					auto isRowtype = dsqlScratch->localCompositeTypeDeclarations.exist(field->typeOfName);
+					if (!isRowtype)
+					{
+						DDL_resolve_intl_type(dsqlScratch, field, varNode->dsqlDef->type->collate);
+						isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.hasData() && field->typeOfTable.hasData());
+					}
+
+					if (isRowtype)
+					{
+						dsql_rel* relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, field->typeOfTable.c_str());
+						dsql_fld* fld = nullptr;
+
+						if (!relation && field->packageName.hasData())
+						{
+							if (!METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, field->relationName, fld))
+								dsqlScratch->genCompositeTypeFromCache(field, fld);
+
+							field->fieldSource = field->typeOfName;
+							field->fld_sub_first = fld;
+						}
+						else if (auto compositeTypeDeclPtr = dsqlScratch->localCompositeTypeDeclarations.get(field->typeOfName))
+						{
+							auto localTypeNode = nodeAs<DeclareLocalTypeNode>(*compositeTypeDeclPtr);
+							fld = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
+							*fld = *localTypeNode->dsqlField;
+							fld->fld_name = field->fld_name;
+							field = fld;
+
+							if (!varNode->dsqlDef->defaultClause && localTypeNode->defaultList->items.getCount() > 0)
+							{
+								RowValueExpressionNode* rowValue = FB_NEW_POOL(dsqlScratch->getPool()) RowValueExpressionNode(dsqlScratch->getPool());
+								rowValue->rowValueExpressionList = localTypeNode->defaultList;
+								varNode->dsqlDef->defaultClause = FB_NEW_POOL(dsqlScratch->getPool()) ValueSourceClause(dsqlScratch->getPool());
+								varNode->dsqlDef->defaultClause->value = rowValue;
+							}
+						}
+
+						for (auto cursor : dsqlScratch->cursors)
+						{
+							if (cursor->dsqlName != field->typeOfTable)
+								continue;
+
+							field->dtype = dtype_rowtype;
+							auto next = &field->fld_sub_first;
+							auto list = cursor->rse->dsqlSelectList;
+							auto fieldIdCounter = 0;
+
+							for (auto item : list->items)
+							{
+								auto cursorDerivedField = nodeAs<DerivedFieldNode>(item);
+								if (!cursorDerivedField)
+									continue;
+
+								*next = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
+
+								MAKE_field(*next, &cursorDerivedField->value->getDsqlDesc());
+								(*next)->fld_name = cursorDerivedField->name;
+
+								(*next)->fld_id = fieldIdCounter++;
+								(*next)->resolve(dsqlScratch);
+
+								field->length += (*next)->length;
+								field->fld_sub_count++;
+
+								next = &(*next)->fld_next;
+								*next = nullptr;
+							}
+
+							field->typeOfTable = "";
+							field->typeOfName = "";
+							break;
+						}
+
+						if (relation)
+						{
+							field->fld_sub_first = relation->rel_fields;
+							field->fld_sub_count = relation->rel_fields_number;
+						}
+						else if (!field->fld_sub_first)
+						{
+							ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+							Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable) <<
+							Arg::Gds(isc_dsql_line_col_error) << Arg::Num(parameter->line) << Arg::Num(parameter->column));
+						}
+
+						calculateCompositeFieldLength(*field);
+
+						variable->field = field;
+
+						dsql_ctx* new_context = FB_NEW_POOL(dsqlScratch->getPool()) dsql_ctx(dsqlScratch->getPool());
+
+						new_context->ctx_context = dsqlScratch->contextNumber++;
+						new_context->ctx_scope_level = dsqlScratch->scopeLevel;
+						new_context->ctx_alias = new_context->ctx_internal_alias = field->fld_name.c_str();
+						new_context->ctx_flags = CTX_rowtype_var;
+						// new_context->ctx_relation = relation;
+						new_context->ctx_rowtype_var = variable;
+						dsqlScratch->context->push(new_context);
+						variable->contextNum = new_context->ctx_context;
+
+						DsqlDescMaker::fromField(&variable->desc, field);
+						// If the field is a rowtype, we need to create a descriptor for each field in the rowtype
+						// it's not recursive (so we can store only one level of rowtype), it should be improved later
+						if (field->fld_sub_first)
+						{
+							auto nextField = &field->fld_sub_first;
+							auto nextDsc = &variable->desc.dsc_sub_first;
+							while (*nextField)
+							{
+								*nextDsc = FB_NEW_POOL(dsqlScratch->getPool()) dsc;
+								DsqlDescMaker::fromField(*nextDsc, *nextField);
+								nextDsc = &(*nextDsc)->dsc_next;
+								nextField = &(*nextField)->fld_next;
+								variable->desc.dsc_sub_count++;
+							}
+						}
+					}
+
 			dsqlScratch->putLocalVariableDecl(variable, varNode, varNode->dsqlDef->type->collate);
 
 			// Some field attributes are calculated inside putLocalVariable(), so we reinitialize
@@ -8143,6 +8302,27 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		{
 			dsqlScratch->putDebugSrcInfo(parameter->line, parameter->column);
 			parameter->genBlr(dsqlScratch);
+		}
+		else if (nodeIs<DeclareLocalTypeNode>(parameter))
+		{
+			auto declarationNode = nodeAs<DeclareLocalTypeNode>(parameter);
+			auto fieldIdCounter = 0;
+			auto curclause = declarationNode->clauses.begin();
+
+			dsql_fld** tail = nullptr;
+			while (curclause != declarationNode->clauses.end())
+			{
+				auto clause = (static_cast<RelationNode::AddColumnClause*>(curclause->getObject()));
+				if (tail)
+					*tail = clause->field;
+				tail = &clause->field->fld_next;
+				curclause++;
+				clause->field->fld_id = fieldIdCounter++;
+			}
+
+			declarationNode = declarationNode->dsqlPass(dsqlScratch);
+			dsqlScratch->localCompositeTypeDeclarations.put(declarationNode->name, declarationNode);
+			declarationNode->genBlr(dsqlScratch);	// TODO ROWTYPE: should work
 		}
 		else
 			fb_assert(false);
