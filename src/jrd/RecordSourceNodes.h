@@ -975,7 +975,9 @@ public:
 	}
 	static TableValueFunctionSourceNode* parse(thread_db* tdbb, CompilerScratch* csb,
 											   const SSHORT blrOp);
-	static TableValueFunctionSourceNode* parse2(thread_db* tdbb, const SSHORT blrOp);
+	static TableValueFunctionSourceNode* parseTableValueFunctions(thread_db* tdbb,
+																  CompilerScratch* csb,
+																  const SSHORT blrOp);
 
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 	RecordSourceNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;

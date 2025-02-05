@@ -3666,7 +3666,7 @@ TableValueFunctionSourceNode* TableValueFunctionSourceNode::parse(thread_db* tdb
 	MemoryPool& pool = *tdbb->getDefaultPool();
 
 	const auto funcId = csb->csb_blr_reader.getByte();
-	auto node = TableValueFunctionSourceNode::parse2(tdbb, funcId);
+	auto node = TableValueFunctionSourceNode::parseTableValueFunctions(tdbb, csb, funcId);
 
 	node->stream = PAR_context(csb, nullptr);
 
@@ -3719,15 +3719,23 @@ TableValueFunctionSourceNode* TableValueFunctionSourceNode::parse(thread_db* tdb
 	return node;
 }
 
-TableValueFunctionSourceNode* TableValueFunctionSourceNode::parse2(thread_db* tdbb,
-																   const SSHORT blrOp)
+TableValueFunctionSourceNode* TableValueFunctionSourceNode::parseTableValueFunctions(thread_db* tdbb,
+																					 CompilerScratch* csb,
+																					 const SSHORT blrOp)
 {
 	MemoryPool& pool = *tdbb->getDefaultPool();
-	if (blrOp == blr_table_value_fun_unlist)
-		return FB_NEW_POOL(pool) UnlistFunctionSourceNode(pool);
+	TableValueFunctionSourceNode* node = nullptr;
+	switch (blrOp)
+	{
+		case blr_table_value_fun_unlist:
+			node = FB_NEW_POOL(pool) UnlistFunctionSourceNode(pool);
+			break;
 
-	fb_assert(false);
-	return nullptr;
+		default:
+			PAR_syntax_error(csb, "blr_table_value_fun");
+	}
+
+	return node;
 }
 
 Firebird::string TableValueFunctionSourceNode::internalPrint(NodePrinter& printer) const
@@ -3817,7 +3825,8 @@ TableValueFunctionSourceNode* TableValueFunctionSourceNode::copy(thread_db* tdbb
 	if (alias.hasData())
 		element->csb_alias = FB_NEW_POOL(pool) string(pool, alias.c_str());
 
-	auto newSource = TableValueFunctionSourceNode::parse2(tdbb, m_csbTableValueFun->funcId);
+	auto newSource = TableValueFunctionSourceNode::parseTableValueFunctions(
+		tdbb, copier.csb, m_csbTableValueFun->funcId);
 
 	newSource->inputList = copier.copy(tdbb, inputList);
 	newSource->m_csbTableValueFun = m_csbTableValueFun;
@@ -3950,7 +3959,8 @@ dsql_fld* UnlistFunctionSourceNode::makeField(DsqlCompilerScratch* dsqlScratch)
 	dsc desc;
 
 	auto inputItem = inputList->items.begin()->getObject();
-	inputItem->setParameterType(dsqlScratch, [] (dsc* desc) { desc->makeVarying(1024, CS_dynamic); }, false);
+	inputItem->setParameterType(
+		dsqlScratch, [](dsc* desc) { desc->makeVarying(1024, CS_dynamic); }, false);
 
 	dsql_fld* field = dsqlField;
 
