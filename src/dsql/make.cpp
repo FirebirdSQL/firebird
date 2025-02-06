@@ -80,6 +80,30 @@ void DsqlDescMaker::fromField(dsc* desc, const TypeClause* field)
 		field->charSetId.value_or(CS_NONE), field->collationId, field->flags & FLD_nullable);
 }
 
+void DsqlDescMaker::fromField(dsc* desc, const dsql_fld* field)
+{
+	composeDesc(desc,
+		field->dtype, field->scale, field->subType, field->length,
+		field->charSetId.value_or(CS_NONE), field->collationId, field->flags & FLD_nullable);
+
+	if (field->fld_sub_first)
+	{
+		auto pool = desc->pool;
+		auto nextField = &field->fld_sub_first;
+		auto nextDsc = &desc->dsc_sub_first;
+		while (*nextField)
+		{
+			*nextDsc = pool ? FB_NEW_POOL(*pool) dsc(pool) : FB_NEW dsc;
+			composeDesc(*nextDsc,
+				(*nextField)->dtype, (*nextField)->scale, (*nextField)->subType, (*nextField)->length,
+				(*nextField)->charSetId.value_or(CS_NONE), (*nextField)->collationId, (*nextField)->flags & FLD_nullable);
+			nextDsc = &(*nextDsc)->dsc_next;
+			nextField = &(*nextField)->fld_next;
+			desc->dsc_sub_count++;
+		}
+	}
+}
+
 void DsqlDescMaker::fromList(DsqlCompilerScratch* scratch, dsc* desc,
 							 ValueListNode* node, const char* expressionName,
 							 bool nullable)

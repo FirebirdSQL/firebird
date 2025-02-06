@@ -90,6 +90,10 @@ typedef struct dsc
 {
 	dsc() = default;
 
+	dsc(MemoryPool* p)
+		: pool(p)
+	{}
+
 	// These Ods::Descriptor constructor and operator were added to have
 	// interoperability between Ods::Descriptor and struct dsc
 	dsc(const Ods::Descriptor& od) noexcept
@@ -107,6 +111,7 @@ typedef struct dsc
 	}
 
 	dsc(MemoryPool* p, const dsc& r)
+		: pool(p)
 	{
 		makeDeepCopy(*this, r, p);
 	}
@@ -138,7 +143,7 @@ typedef struct dsc
 				if (!p)
 					l.dsc_next = FB_NEW dsc;
 				else
-					l.dsc_next = FB_NEW_POOL(*p) dsc;
+					l.dsc_next = FB_NEW_POOL(*p) dsc(p);
 				makeDeepCopy(*l.dsc_next, *r.dsc_next, p);
 			}
 
@@ -147,7 +152,7 @@ typedef struct dsc
 				if (!p)
 					l.dsc_sub_first = FB_NEW dsc;
 				else
-					l.dsc_sub_first = FB_NEW_POOL(*p) dsc;
+					l.dsc_sub_first = FB_NEW_POOL(*p) dsc(p);
 				makeDeepCopy(*l.dsc_sub_first, *r.dsc_sub_first, p);
 			}
 		}
@@ -157,11 +162,8 @@ typedef struct dsc
 
 	~dsc()
 	{
-		if (dsc_sub_first)
-			delete dsc_sub_first;
-
-		if (dsc_next)
-			delete dsc_next;
+		delete dsc_sub_first;
+		delete dsc_next;
 	}
 
 	void setAddressRecursively(UCHAR* newAddress)
@@ -206,6 +208,7 @@ typedef struct dsc
 	dsc*	dsc_sub_first = nullptr;
 	dsc*	dsc_next = nullptr;
 	USHORT	dsc_sub_count = 0;
+	MemoryPool* pool = nullptr;
 
 #ifdef __cplusplus
 	TTypeId dsc_blob_ttype() const noexcept

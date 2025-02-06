@@ -2831,6 +2831,29 @@ void CreateAlterFunctionNode::compile(thread_db* tdbb, DsqlCompilerScratch* dsql
 			}
 		}
 
+		auto rowtypeOffset = 0;
+		for (Array<dsql_var*>::const_iterator i = dsqlScratch->variables.begin();
+			i != dsqlScratch->variables.end();
+			++i)
+		{
+			if ((*i)->type == dsql_var::TYPE_INPUT)
+			{
+				(*i)->msgItem = rowtypeOffset * 2;
+				auto isRowtype = (*i)->field->dtype == dtype_rowtype;
+
+				// AAM: we have to put the rowtype variable which will be used instead of rowtype parameter
+				if (isRowtype)
+				{
+					rowtypeOffset++;
+					dsqlScratch->putLocalVariable(*i, nullptr, {});
+				}
+				else
+				{
+					rowtypeOffset++;
+				}
+			}
+		}
+
 		for (const auto variable : dsqlScratch->outputVariables)
 			dsqlScratch->putLocalVariable(variable);
 
@@ -2843,9 +2866,6 @@ void CreateAlterFunctionNode::compile(thread_db* tdbb, DsqlCompilerScratch* dsql
 			localDeclList = localDeclList->dsqlPass(dsqlScratch);
 			localDeclList->genBlr(dsqlScratch);
 		}
-
-		// TODO ROWTYPE FBPORT: uncomment and fix this after merge
-		// dsqlScratch->putLocalVariables(localDeclList, 1 + parameters.getCount());
 
 		dsqlScratch->loopLevel = 0;
 		dsqlScratch->cursorNumber = 0;

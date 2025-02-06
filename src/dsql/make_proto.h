@@ -61,6 +61,7 @@ namespace Jrd {
 	public:
 		static void fromElement(dsc*, const TypeClause*);
 		static void fromField(dsc*, const TypeClause*);
+		static void fromField(dsc*, const dsql_fld*);
 		static void fromList(DsqlCompilerScratch*, dsc*,
 			ValueListNode*, const char*, bool = false);
 		static void fromNode(DsqlCompilerScratch*, dsc*,

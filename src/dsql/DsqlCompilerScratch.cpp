@@ -888,7 +888,7 @@ void DsqlCompilerScratch::genParameters(Array<NestConst<ParameterClause> >& para
 				calculateCompositeFieldLength(*field);
 
 				dsql_var* variable = makeVariable(nullptr, field->fld_name.c_str(),
-					dsql_var::TYPE_INPUT, 0, (USHORT) (2 * i), parameterCounter++);
+					dsql_var::TYPE_INPUT, 0, (USHORT) (2 * i));
 
 				dsql_ctx* new_context = FB_NEW_POOL(getPool()) dsql_ctx(getPool());
 				new_context->ctx_context = contextNumber++;
@@ -994,7 +994,7 @@ void DsqlCompilerScratch::genParameters(Array<NestConst<ParameterClause> >& para
 				calculateCompositeFieldLength(*field);
 
 				dsql_var* variable = makeVariable(nullptr, field->fld_name.c_str(),
-					dsql_var::TYPE_OUTPUT, 1, (USHORT) (2 * i), i + parameterCounter);
+					dsql_var::TYPE_OUTPUT, 1, (USHORT) (2 * i));
 
 				dsql_ctx* new_context = FB_NEW_POOL(this->getPool()) dsql_ctx(this->getPool());
 				new_context->ctx_context = this->contextNumber++;
@@ -1050,7 +1050,7 @@ void DsqlCompilerScratch::genParameters(Array<NestConst<ParameterClause> >& para
 				appendUChar(0);
 
 				dsql_var* variable = makeVariable(parameter->type, parameter->name.c_str(),
-					dsql_var::TYPE_OUTPUT, 1, (USHORT) (2 * i), i + parameterCounter);
+					dsql_var::TYPE_OUTPUT, 1, (USHORT) (2 * i));
 
 				functionOutputVariableNumber = variable->number;
 			}
