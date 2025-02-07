@@ -4066,11 +4066,12 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation, USHORT id)
 					X.RDB$IDENTITY_TYPE = field->fld_identity_type;
 					break;
 
-				// TODO ROWTYPE: does it needed?
-				// case att_field_relation_name:
-				// 	GET_TEXT(X.RDB$RELATION_NAME);
-				// 	X.RDB$RELATION_NAME.NULL = FALSE;
-				// 	break;
+				// ODS 14
+
+				case att_field_relation_name:
+					GET_TEXT(X.RDB$RELATION_NAME);
+					X.RDB$RELATION_NAME.NULL = FALSE;
+					break;
 
 				default:
 					bad_attribute(scan_next_attr, attribute, 84);

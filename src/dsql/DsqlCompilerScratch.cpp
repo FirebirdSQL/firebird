@@ -840,7 +840,6 @@ void DsqlCompilerScratch::genReturn(bool eosFlag)
 void DsqlCompilerScratch::genParameters(Array<NestConst<ParameterClause> >& parameters,
 	Array<NestConst<ParameterClause> >& returns)
 {
-	auto parameterCounter = 0;
 	if (parameters.hasData())
 	{
 		fb_assert(parameters.getCount() < MAX_USHORT / 2);

@@ -9554,7 +9554,7 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 		}
 
 		dsql_var* variable = dsqlScratch->makeVariable(nullptr, nullptr, dsql_var::TYPE_HIDDEN,
-			0, 0, dsqlScratch->variables.getCount() + dsqlScratch->hiddenVariables.getCount());
+			0, 0);
 
 		dsql_fld* field = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
 		field->fld_name = relation->dsqlName.c_str();
@@ -9574,21 +9574,6 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 		variable->contextNum = new_context->ctx_context;
 
 		DsqlDescMaker::fromField(&variable->desc, variable->field);
-		// If the field is a rowtype, we need to create a descriptor for each field in the rowtype
-		// it's not recursive (so we can store only one level of rowtype), it should be improved later
-		if (field->fld_sub_first)
-		{
-			auto* nextField = &field->fld_sub_first;
-			auto* nextDsc = &variable->desc.dsc_sub_first;
-			while (*nextField)
-			{
-				*nextDsc = FB_NEW_POOL(dsqlScratch->getPool()) dsc;
-				DsqlDescMaker::fromField(*nextDsc, *nextField);
-				nextDsc = &(*nextDsc)->dsc_next;
-				nextField = &(*nextField)->fld_next;
-				variable->desc.dsc_sub_count++;
-			}
-		}
 
 		VariableNode* variableNode = FB_NEW_POOL(dsqlScratch->getPool()) VariableNode(dsqlScratch->getPool());
 		variableNode->line = line;
