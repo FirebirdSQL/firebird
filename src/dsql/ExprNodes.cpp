@@ -11079,7 +11079,7 @@ dsc* StrLenNode::execute(thread_db* tdbb, Request* request) const
 		switch (blrSubOp)
 		{
 			case blr_strlen_bit:
-				length = (FB_UINT64) blob->blb_length * 8;
+				length = blob->blb_length * 8;
 				break;
 
 			case blr_strlen_octet:

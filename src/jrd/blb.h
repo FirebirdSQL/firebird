@@ -76,7 +76,7 @@ public:
 	jrd_rel* blb_relation;			// Relation, if known
 	JBlob* blb_interface;
 
-	ULONG blb_length;				// Total length of data sans segments
+	FB_UINT64 blb_length;			// Blob's total length (in bytes)
 	USHORT blb_flags;				// Interesting stuff (see below)
 
 	SSHORT blb_sub_type;			// Blob's declared sub-type
