@@ -90,8 +90,8 @@ void ProcedureScan::internalOpen(thread_db* tdbb) const
 
 	if (m_sourceList)
 	{
-		iml = m_message->format->fmt_length;
-		im = request->getImpure<UCHAR>(m_message->impureOffset);
+		iml = m_message->getFormat(request)->fmt_length;
+		im = m_message->getBuffer(request);
 
 		const NestConst<ValueExprNode>* const sourceEnd = m_sourceList->items.end();
 		const NestConst<ValueExprNode>* sourcePtr = m_sourceList->items.begin();

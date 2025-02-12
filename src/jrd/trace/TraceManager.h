@@ -179,7 +179,7 @@ public:
 	static void event_dsql_execute(Attachment* att, jrd_tra* transaction, Firebird::ITraceSQLStatement* statement,
 		bool started, ntrace_result_t req_result);
 
-	static void event_dsql_restart(Attachment* att, jrd_tra* transaction, DsqlRequest* statement,
+	static void event_dsql_restart(Attachment* att, jrd_tra* transaction, DsqlRequest* statement, const UCHAR* data,
 		int number);
 
 	static void shutdown();
