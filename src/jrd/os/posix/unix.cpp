@@ -192,6 +192,8 @@ void PIO_close(jrd_file* main_file)
 
 	for (jrd_file* file = main_file; file; file = file->fil_next)
 	{
+		WriteLockGuard writeGuard(file->fil_desc_lock, FB_FUNCTION);
+
 		if (file->fil_desc && file->fil_desc != -1)
 		{
 			close(file->fil_desc);
@@ -336,6 +338,8 @@ void PIO_extend(thread_db* tdbb, jrd_file* main_file, const ULONG extPages, cons
 			int r;
 			for (r = 0; r < IO_RETRY; r++)
 			{
+				ReadLockGuard readGuard(file->fil_desc_lock, FB_FUNCTION);
+
 				int err = fallocate(file->fil_desc, 0, filePages * pageSize, extendBy * pageSize);
 				if (err == 0)
 					break;
@@ -393,6 +397,8 @@ void PIO_flush(thread_db* tdbb, jrd_file* main_file)
 
 	for (jrd_file* file = main_file; file; file = file->fil_next)
 	{
+		ReadLockGuard readGuard(file->fil_desc_lock, FB_FUNCTION);
+
 		if (file->fil_desc != -1)
 		{
 			// This really should be an error
@@ -432,6 +438,7 @@ void PIO_force_write(jrd_file* file, const bool forcedWrites, const bool notUseF
 
 		const int control = (forcedWrites ? SYNC : 0) | (notUseFSCache ? O_DIRECT : 0);
 
+		WriteLockGuard writeGuard(file->fil_desc_lock, FB_FUNCTION);
 #ifndef FCNTL_BROKEN
 		if (fcntl(file->fil_desc, F_SETFL, control) == -1)
 		{
@@ -478,6 +485,8 @@ ULONG PIO_get_number_of_pages(const jrd_file* file, const USHORT pagesize)
  *	Compute number of pages in file, based only on file size.
  *
  **************************************/
+
+	ReadLockGuard readGuard(file->fil_desc_lock, FB_FUNCTION);
 
 	if (file->fil_desc == -1)
 		unix_error("fstat", file, isc_io_access_err);
@@ -544,6 +553,8 @@ void PIO_header(thread_db* tdbb, UCHAR* address, int length)
 
 	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 	jrd_file* file = pageSpace->file;
+
+	ReadLockGuard readGuard(file->fil_desc_lock, FB_FUNCTION);
 
 	if (file->fil_desc == -1)
 		unix_error("PIO_header", file, isc_io_read_err);
@@ -637,6 +648,8 @@ USHORT PIO_init_data(thread_db* tdbb, jrd_file* main_file, FbStatusVector* statu
 		{
 			if (!(file = seek_file(file, &bdb, &offset, status_vector)))
 				return false;
+
+			ReadLockGuard readGuard(file->fil_desc_lock, FB_FUNCTION);
 			if ((written = os_utils::pwrite(file->fil_desc, zero_buff, to_write, LSEEK_OFFSET_CAST offset)) == to_write)
 				break;
 			if (written < 0 && !SYSCALL_INTERRUPTED(errno))
@@ -751,13 +764,13 @@ bool PIO_read(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page, 
 	SINT64 bytes;
 	FB_UINT64 offset;
 
+	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
+	ReadLockGuard readGuard(file->fil_desc_lock, FB_FUNCTION);
+
 	if (file->fil_desc == -1)
 		return unix_error("read", file, isc_io_read_err, status_vector);
 
 	Database* const dbb = tdbb->getDatabase();
-
-	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
-
 	const SLONG size = dbb->dbb_page_size;
 
 	for (i = 0; i < IO_RETRY; i++)
@@ -803,13 +816,13 @@ bool PIO_write(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page,
 	SINT64 bytes;
 	FB_UINT64 offset;
 
+	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
+	ReadLockGuard readGuard(file->fil_desc_lock, FB_FUNCTION);
+
 	if (file->fil_desc == -1)
 		return unix_error("write", file, isc_io_write_err, status_vector);
 
 	Database* const dbb = tdbb->getDatabase();
-
-	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
-
 	const SLONG size = dbb->dbb_page_size;
 
 	for (i = 0; i < IO_RETRY; i++)
@@ -857,6 +870,8 @@ static jrd_file* seek_file(jrd_file* file, BufferDesc* bdb, FB_UINT64* offset,
 		else if (page >= file->fil_min_page && page <= file->fil_max_page)
 			break;
 	}
+
+	ReadLockGuard readGuard(file->fil_desc_lock, FB_FUNCTION);
 
 	if (file->fil_desc == -1)
 	{
