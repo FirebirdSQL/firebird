@@ -131,8 +131,9 @@ private:
 		VAL_DATA_PAGE_SLOT_BAD_VAL  = 37,
 		VAL_DATA_PAGE_HASNO_PP      = 38,
 		VAL_DATA_PAGE_SEC_PRI		= 39,
+		VAL_TIP_NON_ACTIVE_AFTER_NT = 40,
 
-		VAL_MAX_ERROR				= 40
+		VAL_MAX_ERROR
 	};
 
 	struct MSG_ENTRY
@@ -220,7 +221,7 @@ private:
 	RTN walk_relation(jrd_rel*);
 	RTN walk_root(jrd_rel*, bool);
 	RTN walk_scns();
-	RTN walk_tip(TraNumber);
+	RTN walk_tip();
 };
 
 } // namespace Jrd
