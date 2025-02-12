@@ -6,6 +6,7 @@ include(SourceGroups)
 
 add_executable          (fbsvcmgr fbsvcmgr/fbsvcmgr.cpp ${VERSION_RC})
 target_link_libraries   (fbsvcmgr common yvalve)
+set_target_properties   (fbsvcmgr PROPERTIES RC_FLAGS -DRC_TARGET_fbsvcmgr)
 
 ###############################################################################
 # EXECUTABLE nbackup
@@ -20,6 +21,7 @@ file(GLOB nbackup_include "nbackup/*.h")
 
 add_executable          (nbackup ${nbackup_src} ${nbackup_include} ${VERSION_RC})
 target_link_libraries   (nbackup common yvalve)
+set_target_properties   (nbackup PROPERTIES RC_FLAGS -DRC_TARGET_nbackup)
 
 
 ###############################################################################
@@ -35,6 +37,7 @@ set(gsec_src
 
 add_executable          (gsec ${gsec_src} ${VERSION_RC})
 target_link_libraries   (gsec common yvalve)
+set_target_properties   (gsec PROPERTIES RC_FLAGS -DRC_TARGET_gsec)
 
 
 ###############################################################################
@@ -58,6 +61,7 @@ add_library             (fbtrace SHARED ${fbtrace_src} ${fbtrace_os_src} ${fbtra
 target_link_libraries   (fbtrace common yvalve)
 set_output_directory    (fbtrace plugins)
 set_exported_symbols    (fbtrace fbplugin)
+set_target_properties   (fbtrace PROPERTIES RC_FLAGS -DRC_TARGET_fbtrace)
 
 
 ###############################################################################
@@ -74,6 +78,7 @@ if (WIN32)
         install/regis_proto.h
     )
     add_executable              (instreg ${instreg_src} ${VERSION_RC})
+    set_target_properties       (instreg PROPERTIES RC_FLAGS -DRC_TARGET_instreg)
 
     ###########################################################################
     # EXECUTABLE instsvc
@@ -86,6 +91,7 @@ if (WIN32)
     )
     add_executable              (instsvc ${instsvc_src} ${VERSION_RC})
     target_link_libraries       (instsvc common yvalve)
+    set_target_properties       (instsvc PROPERTIES RC_FLAGS -DRC_TARGET_instsvc)
 
     ###########################################################################
     # EXECUTABLE instclient
@@ -98,4 +104,5 @@ if (WIN32)
     )
     add_executable              (instclient ${instclient_src} ${VERSION_RC})
     target_link_libraries       (instclient version)
+    set_target_properties       (instclient PROPERTIES RC_FLAGS -DRC_TARGET_instclient)
 endif(WIN32)
