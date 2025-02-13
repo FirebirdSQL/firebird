@@ -30,6 +30,7 @@
 #include "../jrd/vio_proto.h"
 
 #include "RecordSource.h"
+#include <string_view>
 
 using namespace Firebird;
 using namespace Jrd;
@@ -209,33 +210,33 @@ void UnlistFunctionScan::internalOpen(thread_db* tdbb) const
 			if (length == 0)
 				continue;
 
-			string valueStr(buffer, length);
+			std::string_view separatorView(separatorStr.begin(), separatorStr.length());
+			std::string_view valueView(reinterpret_cast<char*>(buffer), length);
 
-			auto end = AbstractString::npos;
+			auto end = std::string_view::npos;
 			do
 			{
-				auto size = end = valueStr.find(separatorStr);
-				if(end == AbstractString::npos)
+				auto size = end = valueView.find(separatorView);
+				if (end == std::string_view::npos)
 				{
-					if (valueStr.hasData())
-						resultStr.append(valueStr);
+					if (!valueView.empty())
+						resultStr.append(valueView.data(), valueView.length());
 
 					break;
 				}
 
 				if (size > 0)
-					resultStr.append(valueStr.substr(0, size));
+					resultStr.append(valueView.begin(), size);
 
-				valueStr.erase(valueStr.begin(), valueStr.begin() + end + separatorStr.length());
+				valueView.remove_prefix(size + separatorView.length());
 
 				if (resultStr.hasData())
 				{
 					setStringToRecord(resultStr);
 					resultStr.erase();
 				}
-			} while (end != AbstractString::npos);
+			} while (end != std::string_view::npos);
 		}
-
 		// Tail
 		if (resultStr.hasData())
 			setStringToRecord(resultStr);
@@ -275,3 +276,4 @@ void UnlistFunctionScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, 
 	if (m_alias.hasData())
 		planEntry.alias = m_alias;
 }
+
