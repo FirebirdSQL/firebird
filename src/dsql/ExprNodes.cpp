@@ -14556,7 +14556,7 @@ ValueExprNode* VariableNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	ValueExprNode::pass2(tdbb, csb);
 
-	if (varDecl && varDecl->usedInSubRoutines)
+	if (varDecl->usedInSubRoutines)
 		impureOffset = csb->allocImpure<impure_value>();
 	else
 		impureOffset = csb->allocImpure<dsc>();
@@ -14608,19 +14608,7 @@ static void syncDescriptorsWithRecord(Record& record, dsc& desc)
 dsc* VariableNode::execute(thread_db* tdbb, Request* request) const
 {
 	const auto varRequest = getVarRequest(request);
-	Jrd::impure_value *varImpure = nullptr;
-	if (varDecl)
-		varImpure = varRequest->getImpure<impure_value>(varDecl->impureOffset);
-
-	// TODO: Adriano ignored the posibility of varImpure absence due to nullptr initialization and assignment under condition
-	if (varDecl && !(varImpure->vlu_flags & VLU_initialized))
-	{
-		const Item item(Item::TYPE_VARIABLE, varId);
-
-		//// FIXME: Variable with simple type has no varInfo.
-		const auto s = item.getDescription(request, varInfo);
-		ERR_post(Arg::Gds(isc_uninitialized_var) << s);
-	}
+	const auto varImpure = varRequest->getImpure<impure_value>(varDecl->impureOffset);
 
 	if (!(varImpure->vlu_flags & VLU_initialized))
 	{
@@ -14635,7 +14623,7 @@ dsc* VariableNode::execute(thread_db* tdbb, Request* request) const
 
 	dsc* desc;
 
-	if (varDecl && varDecl->usedInSubRoutines)
+	if (varDecl->usedInSubRoutines)
 	{
 		const auto impure = request->getImpure<impure_value>(impureOffset);
 
@@ -14671,10 +14659,10 @@ dsc* VariableNode::execute(thread_db* tdbb, Request* request) const
 	{
 		desc = request->getImpure<dsc>(impureOffset);
 
-		if (varImpure && varImpure->vlu_desc.dsc_flags & DSC_null)	// IMPORTANT here is setting up of a null flag for result
+		if (varImpure->vlu_desc.dsc_flags & DSC_null)
 			isNull = true;
 
-		if (varImpure && varImpure->vlu_desc.dsc_dtype == dtype_rowtype)
+		if (varImpure->vlu_desc.dsc_dtype == dtype_rowtype)
 		{
 			auto record = varDecl->compositeRecord;
 			syncDescriptorsWithRecord(*record, *varImpure->vlu_desc.dsc_sub_first);
