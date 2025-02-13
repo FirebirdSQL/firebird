@@ -75,6 +75,15 @@ public:
 		virtual const char* getFileName() const = 0;
 	};
 
+	// Possible section types
+	enum class SectionType
+	{
+		DATABASE,
+		DATABASE_NAME,
+		DATABASE_REGEX,
+		SERVICE
+	};
+
 	struct Parameter : public AutoStorage
 	{
 		Parameter(MemoryPool& p, const Parameter& par)
@@ -87,6 +96,7 @@ public:
 
 		SINT64 asInteger() const;
 		bool asBoolean() const;
+		SectionType parseSectionKey() const;
 
 		KeyType name;
 		String value;
