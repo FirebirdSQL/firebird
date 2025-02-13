@@ -182,9 +182,7 @@ dsc* EVL_assign_to(thread_db* tdbb, const ValueExprNode* node)
 		return NULL;
 	else if (auto varNode = nodeAs<VariableNode>(node))
 	{
-		auto impure = varNode->getVarRequest(request)->getImpure<impure_value>(varNode->varDecl->impureOffset);
-		if (varNode->varDecl->varDesc.dsc_dtype == dtype_rowtype)
-			impure->vlu_desc = varNode->varDecl->varDesc;
+		auto impure = request->getImpure<impure_value>(varNode->varDecl->impureOffset);
 		return &impure->vlu_desc;
 	}
 	else if (auto fieldNode = nodeAs<FieldNode>(node))

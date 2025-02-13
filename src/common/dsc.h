@@ -118,7 +118,9 @@ typedef struct dsc
 
 	dsc& operator=(const dsc& r)
 	{
-		makeDeepCopy(*this, r);
+		if (this != &r)
+			makeDeepCopy(*this, r);
+
 		return *this;
 	}
 
@@ -159,6 +161,24 @@ typedef struct dsc
 
 		return l;
 	}
+
+	dsc& shallowCopy(const dsc& r)
+    {
+        if (this != &r)
+        {
+            dsc_dtype = r.dsc_dtype;
+            dsc_scale = r.dsc_scale;
+            dsc_length = r.dsc_length;
+            dsc_sub_type = r.dsc_sub_type;
+            dsc_flags = r.dsc_flags;
+            dsc_address = r.dsc_address;
+            dsc_sub_count = r.dsc_sub_count;
+            dsc_sub_first = r.dsc_sub_first;
+            dsc_next = r.dsc_next;
+            pool = r.pool;
+        }
+        return *this;
+    }
 
 	~dsc()
 	{
@@ -728,7 +748,7 @@ inline bool DSC_EQUIV(const dsc* d1, const dsc* d2, bool check_collate) noexcept
 		return true;
 	}
 
-	if (d1->dsc_dtype >= dtype_rowtype && d2->dsc_dtype <= dtype_rowtype)
+	if (d1->dsc_dtype >= dtype_rowtype && d2->dsc_dtype <= dtype_rowtype)	// TODO ROWTYPE: does this make sense?
 	{
 		if (d1->dsc_sub_count == d2->dsc_sub_count)
 			return true;

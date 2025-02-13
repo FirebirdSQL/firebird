@@ -14681,9 +14681,11 @@ dsc* VariableNode::execute(thread_db* tdbb, Request* request) const
 
 			if (!isDescNull(*varImpure->vlu_desc.dsc_sub_first))
 				request->req_flags &= ~req_null;
-		}
 
-		*desc = varImpure->vlu_desc;
+			desc = &varImpure->vlu_desc;
+		}
+		else
+			*desc = varImpure->vlu_desc;
 
 		if (desc->dsc_dtype == dtype_text)
 			INTL_adjust_text_descriptor(tdbb, desc);
@@ -14958,7 +14960,7 @@ ValueExprNode* RowValueExpressionNode::pass2(thread_db* tdbb, CompilerScratch* c
 	auto subFieldsLengthSum = 0;
 	for (auto& valueExprNode : rowValueExpressionList->items)
 	{
-		*curDesc = FB_NEW_POOL(pool) dsc();
+		*curDesc = FB_NEW_POOL(pool) dsc(&pool);
 		valueExprNode->getDesc(tdbb, csb, *curDesc);
 
 		if ((*curDesc)->dsc_dtype >= dtype_aligned)
@@ -15003,16 +15005,17 @@ dsc* RowValueExpressionNode::execute(thread_db* tdbb, Request* request) const
 {
 	const auto impure = request->getImpure<impure_value>(impureOffset);
 
+	impure->vlu_desc.shallowCopy(rowDesc);
 	// set null flags to composite record's null bytes
-	memset(rowDesc.dsc_address, 0xFF, FLAG_BYTES(rowDesc.dsc_sub_count));
+	memset(impure->vlu_desc.dsc_address, 0xFF, FLAG_BYTES(impure->vlu_desc.dsc_sub_count));
 
-	auto nextDesc = &rowDesc.dsc_sub_first;
+	auto nextDesc = &impure->vlu_desc.dsc_sub_first;
 
 	auto fieldSequencialId = 0;
 	for (auto& valueExprNode : rowValueExpressionList->items)
 	{
 		auto to_desc = *nextDesc;
-		auto from_desc = valueExprNode->execute(tdbb, request);	// AAM: TODO??? just replace descriptor from internal executed node in rowtype descriptor?
+		auto from_desc = valueExprNode->execute(tdbb, request);
 
 		if (from_desc)
 		{
@@ -15035,8 +15038,6 @@ dsc* RowValueExpressionNode::execute(thread_db* tdbb, Request* request) const
 		nextDesc = &to_desc->dsc_next;
 		fieldSequencialId++;
 	}
-
-	impure->vlu_desc = rowDesc;
 
 	if (isDescNull(*impure->vlu_desc.dsc_sub_first))
 	{
