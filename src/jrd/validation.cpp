@@ -1615,11 +1615,10 @@ void Validation::walk_database()
 	WIN window(DB_PAGE_SPACE, -1);
 	header_page* page = 0;
 	fetch_page(true, HEADER_PAGE, pag_header, &window, &page);
- 	TraNumber next = vdr_max_transaction = Ods::getNT(page);
+	const TraNumber next = vdr_max_transaction = page->hdr_next_transaction;
 
-	if (vdr_flags & VDR_online) {
+	if (vdr_flags & VDR_online)
 		release_page(&window);
-	}
 
 	if (!(vdr_flags & VDR_partial))
 	{
@@ -3071,7 +3070,7 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 		WIN window(DB_PAGE_SPACE, -1);
 		header_page* page = NULL;
 		fetch_page(false, HEADER_PAGE, pag_header, &window, &page);
-		vdr_max_transaction = Ods::getNT(page);
+		vdr_max_transaction = page->hdr_next_transaction;
 		release_page(&window);
 	}
 

@@ -260,7 +260,7 @@ namespace Jrd
 		while (true)
 		{
 			AtomicCounter::counter_type old = dbb_flags;
-			if ((old & (DBB_sweep_in_progress | DBB_sweep_starting)) || (dbb_ast_flags & DBB_shutdown))
+			if ((old & (DBB_sweep_in_progress | DBB_sweep_starting)) || isShutdown())
 			{
 				dbb_thread_mutex.leave();
 				return false;

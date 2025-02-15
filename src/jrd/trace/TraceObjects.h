@@ -771,10 +771,10 @@ public:
 
 	void update(const Ods::header_page* header)
 	{
-		m_oit = Ods::getOIT(header);
-		m_ost = Ods::getOST(header);
-		m_oat = Ods::getOAT(header);
-		m_next = Ods::getNT(header);
+		m_oit = header->hdr_oldest_transaction;
+		m_ost = header->hdr_oldest_snapshot;
+		m_oat = header->hdr_oldest_active;
+		m_next = header->hdr_next_transaction;
 	}
 
 	void setPerf(Firebird::PerformanceInfo* perf)

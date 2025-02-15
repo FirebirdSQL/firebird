@@ -924,7 +924,6 @@ static void print_db_header( FILE* file, const header_page* header)
 	fprintf(file, "    Data pages per pointer page\t%ld\n", gdbb->tdbb_database->dbb_dp_per_pp);
 	fprintf(file, "    Max records per page\t%ld\n", gdbb->tdbb_database->dbb_max_records);
 
-	//fprintf ("    Sequence number    %d\n", header->hdr_sequence);
 	//fprintf ("    Creation date    \n", header->hdr_creation_date);
 
 	fprintf(file, "    Next attachment ID\t\t%ld\n", header->hdr_attachment_id);
@@ -953,50 +952,12 @@ static void print_db_header( FILE* file, const header_page* header)
 		case HDR_root_file_name:
 			fprintf(file, "\tRoot file name: %*s\n", p[1], p + 2);
 			break;
-/*
-		case HDR_journal_server:
-			fprintf(file, "\tJournal server: %*s\n", p[1], p + 2);
-			break;
-*/
-		case HDR_file:
-			fprintf(file, "\tContinuation file: %*s\n", p[1], p + 2);
-			break;
 
-		case HDR_last_page:
-			memcpy(&number, p + 2, sizeof(number));
-			fprintf(file, "\tLast logical page: %ld\n", number);
-			break;
-/*
-		case HDR_unlicensed:
-			memcpy(&number, p + 2, sizeof(number));
-			fprintf(file, "\tUnlicensed accesses: %ld\n", number);
-			break;
-*/
 		case HDR_sweep_interval:
 			memcpy(&number, p + 2, sizeof(number));
 			fprintf(file, "\tSweep interval: %ld\n", number);
 			break;
-/*
-		case HDR_log_name:
-			fprintf(file, "\tReplay logging file: %*s\n", p[1], p + 2);
-			break;
 
-		case HDR_journal_file:
-			fprintf(file, "\tJournal file: %*s\n", p[1], p + 2);
-			break;
-*/
-		case HDR_password_file_key:
-			fprintf(file, "\tPassword file key: (can't print)\n");
-			break;
-/*
-		case HDR_backup_info:
-			fprintf(file, "\tBackup info: (can't print)\n");
-			break;
-
-		case HDR_cache_file:
-			fprintf(file, "\tShared cache file: %*s\n", p[1], p + 2);
-			break;
-*/
 		default:
 			fprintf(file, "\tUnrecognized option %d, length %d\n", p[0], p[1]);
 		}

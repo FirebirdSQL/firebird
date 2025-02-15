@@ -303,16 +303,16 @@ void TipCache::loadInventoryPages(thread_db* tdbb, GlobalTpcHeader* header)
 	const TraNumber hdr_oldest = dbb->dbb_oldest_transaction;
 #else
 	WIN window(HEADER_PAGE_NUMBER);
-	const Ods::header_page* header_page = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
-	const TraNumber hdr_oldest_transaction = Ods::getOIT(header_page);
-	const TraNumber hdr_next_transaction = Ods::getNT(header_page);
-	const AttNumber hdr_attachment_id = Ods::getAttID(header_page);
+	const auto header_page = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
+	const TraNumber hdr_next_transaction = header_page->hdr_next_transaction;
+	const TraNumber hdr_oldest_transaction = header_page->hdr_oldest_transaction;
+	const AttNumber hdr_attachment_id = header_page->hdr_attachment_id;
 	CCH_RELEASE(tdbb, &window);
 #endif
 
+	header->latest_transaction_id.store(hdr_next_transaction, std::memory_order_relaxed);
 	header->oldest_transaction.store(hdr_oldest_transaction, std::memory_order_relaxed);
 	header->latest_attachment_id.store(hdr_attachment_id, std::memory_order_relaxed);
-	header->latest_transaction_id.store(hdr_next_transaction, std::memory_order_relaxed);
 
 	// Check if TIP has any interesting transactions.
 	// At database creation time, it doesn't and the code below breaks
@@ -447,8 +447,8 @@ void TipCache::StatusBlockData::clear(thread_db* tdbb)
 			else
 			{
 				WIN window(HEADER_PAGE_NUMBER);
-				const Ods::header_page* header_page = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
-				oldest = Ods::getOIT(header_page);
+				const auto header_page = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
+				oldest = header_page->hdr_oldest_transaction;
 				CCH_RELEASE(tdbb, &window);
 			}
 		}
