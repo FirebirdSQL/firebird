@@ -1636,7 +1636,7 @@ static void store_indices(thread_db* tdbb, USHORT odsVersion)
 			PAD(relation->rel_name, X.RDB$RELATION_NAME);
 			PAD(indexName, X.RDB$INDEX_NAME);
 
-			X.RDB$UNIQUE_FLAG = index->ini_idx_flags & idx_unique;
+			X.RDB$UNIQUE_FLAG = (index->ini_idx_flags & idx_unique) ? 1 : 0;
 			X.RDB$SEGMENT_COUNT = index->ini_idx_segment_count;
 
 			if (index->ini_idx_flags & idx_descending)

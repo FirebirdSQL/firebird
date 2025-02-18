@@ -204,7 +204,7 @@ static void db_error(int);
 static USHORT get_format_length(ISC_STATUS*, isc_db_handle, isc_tr_handle, ISC_QUAD&);
 
 static dba_fil* db_open(const char*, USHORT);
-static const pag* db_read(SLONG page_number, bool ok_enc = false);
+static const pag* db_read(ULONG page_number, bool ok_enc = false);
 #ifdef WIN_NT
 static void db_close(void* file_desc);
 #else
@@ -262,7 +262,7 @@ public:
 	USHORT page_size;
 	USHORT dp_per_pp;
 	USHORT max_records;
-	SLONG page_number;
+	ULONG page_number;
 	pag* buffer1;
 	pag* buffer2;
 	pag* global_buffer;
@@ -616,7 +616,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 	tddba->page_size = MAX(RAW_HEADER_SIZE, DIRECT_IO_BLOCK_SIZE);
 	tddba->global_buffer = (pag*) temp;
 	tddba->page_number = -1;
-	const header_page* header = (const header_page*) db_read((SLONG) 0);
+	const header_page* header = (const header_page*) db_read(HEADER_PAGE);
 
 	if (!Ods::isSupported(header))
 	{
@@ -1315,7 +1315,7 @@ static void analyze_data( dba_rel* relation, bool sw_record)
 
 	pointer_page* ptr_page = (pointer_page*) tddba->buffer1;
 
-	for (SLONG next_pp = relation->rel_pointer_page; next_pp; next_pp = ptr_page->ppg_next)
+	for (ULONG next_pp = relation->rel_pointer_page; next_pp; next_pp = ptr_page->ppg_next)
 	{
 		++relation->rel_pointer_pages;
 		memcpy(ptr_page, (const SCHAR*) db_read(next_pp), tddba->page_size);
@@ -1452,18 +1452,18 @@ static void analyze_blob(dba_rel* relation, const blh* blob, int length)
 
 	if (blob->blh_level != 0)
 	{
-		const int slots = (length - BLH_SIZE) / static_cast<int>(sizeof(SLONG));
+		const unsigned slots = (length - BLH_SIZE) / static_cast<int>(sizeof(ULONG));
 		ULONG blobPages = slots;
 
 		if (blob->blh_level == 2)
 		{
-			SLONG pages[MAX_PAGE_SIZE / sizeof(SLONG)];
-			memcpy(pages, blob->blh_page, slots * sizeof(SLONG));
+			ULONG pages[MAX_PAGE_SIZE / sizeof(ULONG)];
+			memcpy(pages, blob->blh_page, slots * sizeof(ULONG));
 
-			for (int i = 0; i < slots; i++)
+			for (unsigned i = 0; i < slots; i++)
 			{
-				const blob_page* bpage = (const blob_page*) db_read(pages[i]);
-				blobPages += bpage->blp_length / sizeof(SLONG);
+				const auto bpage = (const blob_page*) db_read(pages[i]);
+				blobPages += bpage->blp_length / sizeof(ULONG);
 			}
 		}
 
@@ -1490,7 +1490,7 @@ static ULONG analyze_fragments(dba_rel* relation, const rhdf* header)
 
 	while (header->rhdf_flags & rhd_incomplete)
 	{
-		const SLONG f_page = header->rhdf_f_page;
+		const ULONG f_page = header->rhdf_f_page;
 		const USHORT f_line = header->rhdf_f_line;
 		const data_page* page = (const data_page*) db_read(f_page);
 		if (page->dpg_header.pag_type != pag_data || page->dpg_relation != relation->rel_id ||
@@ -1538,12 +1538,12 @@ static void analyze_index( const dba_rel* relation, dba_idx* index)
 
 	const index_root_page* index_root = (const index_root_page*) db_read(relation->rel_index_root);
 
-	SLONG page;
-	if (index_root->irt_count <= index->idx_id ||
-		!(page = index_root->irt_rpt[index->idx_id].getRoot()))
-	{
+	if (index_root->irt_count <= index->idx_id)
 		return;
-	}
+
+	ULONG page = index_root->irt_rpt[index->idx_id].getRoot();
+	if (!page)
+		return;
 
 	// CVC: The two const_cast's for bucket can go away if BTreeNode's functions
 	// are overloaded for constness. They don't modify bucket and pointer's contents.
@@ -1561,7 +1561,7 @@ static void analyze_index( const dba_rel* relation, dba_idx* index)
 	}
 
 	bool firstLeafNode = true;
-	SLONG number;
+	ULONG number;
 	FB_UINT64 duplicates = 0;
 
 	// Maximum key length is 1/4 of the used page-size
@@ -1684,7 +1684,7 @@ static ULONG analyze_versions( dba_rel* relation, const rhdf* header)
  **************************************/
 	//tdba* tddba = tdba::getSpecific();
 	ULONG space = 0, versions = 0;
-	SLONG b_page = header->rhdf_b_page;
+	ULONG b_page = header->rhdf_b_page;
 	USHORT b_line = header->rhdf_b_line;
 
 	while (b_page)
@@ -1862,7 +1862,7 @@ static dba_fil* db_open(const char* file_name, USHORT file_length)
 }
 
 
-static const pag* db_read( SLONG page_number, bool ok_enc)
+static const pag* db_read( ULONG page_number, bool ok_enc)
 {
 /**************************************
  *
@@ -2005,7 +2005,7 @@ static dba_fil* db_open(const char* file_name, USHORT file_length)
 }
 
 
-static const pag* db_read( SLONG page_number, bool ok_enc)
+static const pag* db_read( ULONG page_number, bool ok_enc)
 {
 /**************************************
  *
