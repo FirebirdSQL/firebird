@@ -105,7 +105,7 @@ inline void CVT_move(const dsc* from, dsc* to, Firebird::DecimalStatus decSt)
 			next_from = next_from->dsc_next;
 		}
 
-		memcpy(to->dsc_address, from->dsc_address, FLAG_BYTES(to->dsc_sub_count));
+		memcpy(to->dsc_address, from->dsc_address, NULL_BYTES(to->dsc_sub_count));
 	}
 	else
 		CVT_move_common(from, to, decSt, &Jrd::EngineCallbacks::instance);

@@ -389,7 +389,7 @@ int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt
 		case dtype_rowtype:
 			// checking null bytes of the composite type
 			{
-				auto cmpResult = memcmp(p1, p2, FLAG_BYTES(arg1->dsc_sub_count));
+				auto cmpResult = memcmp(p1, p2, NULL_BYTES(arg1->dsc_sub_count));
 				if (cmpResult != 0)
 					return cmpResult;
 			}

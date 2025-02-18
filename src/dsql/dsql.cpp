@@ -149,10 +149,20 @@ void dsql_fld::resolve(DsqlCompilerScratch* dsqlScratch, bool modifying)
 }
 
 
+// TODO ROWTYPE: add composite subfields length calculation
 int Jrd::calculateCompositeFieldLength(dsql_fld& fld)
 {
-	auto curFld = &fld;
-	fld.length = FLAG_BYTES(fld.fld_sub_count);
+	auto curFld = fld.fld_sub_first;
+
+	// recollect subfields number
+	fld.fld_sub_count = 0;
+	while (curFld)
+	{
+		fld.fld_sub_count++;
+		curFld = curFld->fld_next;
+	}
+
+	fld.length = NULL_BYTES(fld.fld_sub_count);
 
 	curFld = fld.fld_sub_first;
 	do

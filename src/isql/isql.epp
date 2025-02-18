@@ -1591,7 +1591,7 @@ int getNumberOfSubFields(const char* serializedDescriptor)
 }
 
 
-#define FLAG_BYTES(n)	(((n + BITS_PER_LONG) & ~((ULONG)BITS_PER_LONG - 1)) >> 3)
+#define NULL_BYTES(n)	(n*2)
 
 processing_state ISQL_fill_var(IsqlVar* var,
 							   Firebird::IMessageMetadata* msg,
@@ -7776,7 +7776,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 			else
 			{
 				subVar.value.setPtr = (char*)valueAddress;
-				dataOffset = FLAG_BYTES(var->subfieldsNum);
+				dataOffset = NULL_BYTES(var->subfieldsNum);
 			}
 		}
 

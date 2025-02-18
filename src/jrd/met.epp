@@ -286,7 +286,7 @@ bool MET_get_composite_type(thread_db* tdbb, MemoryPool& csbPool, const MetaName
 	*desc = tempDesc;
 	desc->dsc_sub_count = subFieldCount;
 
-	desc->dsc_length = FLAG_BYTES(desc->dsc_sub_count);
+	desc->dsc_length = NULL_BYTES(desc->dsc_sub_count);
 
 	next = &desc->dsc_sub_first;
 	while(*next)

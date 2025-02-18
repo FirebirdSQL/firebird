@@ -3247,7 +3247,7 @@ DmlNode* DeclareLocalTypeNode::parse(thread_db* tdbb, MemoryPool& pool, Compiler
 	nextSubfieldInfo = &fieldInfo->subFirst;
 
 	auto fieldId = 0;
-	ULONG offset = FLAG_BYTES(node->desc->dsc_sub_count);
+	ULONG offset = NULL_BYTES(node->desc->dsc_sub_count);
 	while (count--)
 	{
 		*next = FB_NEW_POOL(pool) dsc;
@@ -3353,7 +3353,7 @@ DeclareLocalTypeNode* DeclareLocalTypeNode::dsqlPass(DsqlCompilerScratch* dsqlSc
 		node->defaultList->clear();
 
 	node->clauses = clauses;
-	dsqlField->length += FLAG_BYTES(dsqlField->fld_sub_count);
+	dsqlField->length += NULL_BYTES(dsqlField->fld_sub_count);
 
 	return node;
 }
@@ -3464,7 +3464,7 @@ DmlNode* DeclareVariableNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerS
 
 		auto count = node->varDesc.dsc_sub_count;
 		auto format = Format::newFormat(csb->csb_pool, count);
-		format->fmt_length = FLAG_BYTES(count);
+		format->fmt_length = NULL_BYTES(count);
 		auto nextDesc = &node->varDesc.dsc_sub_first;
 
 		for (FB_SIZE_T i = 0; i < count; i++)
@@ -6387,7 +6387,7 @@ const StmtNode* InitVariableNode::execute(thread_db* tdbb, Request* request, Exe
 			if (varDecl->varDesc.dsc_dtype == dtype_rowtype)
 			{
 				*toDesc = varDecl->varDesc;
-				memset(toDesc->dsc_address, 0xFF, FLAG_BYTES(toDesc->dsc_sub_count));
+				memset(toDesc->dsc_address, 0xFF, NULL_BYTES(toDesc->dsc_sub_count));
 			}
 
 			toDesc->dsc_flags |= DSC_null;

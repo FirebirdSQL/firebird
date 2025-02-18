@@ -499,7 +499,7 @@ bool METD_get_composite_type_descriptors(jrd_tra* transaction, TypeClause* fld, 
 	END_FOR
 
 	desc->dsc_sub_count = subDescriptorsNumber;
-	desc->dsc_length = FLAG_BYTES(desc->dsc_sub_count);
+	desc->dsc_length = NULL_BYTES(desc->dsc_sub_count);
 
 	auto next = &desc->dsc_sub_first;
 	while(*next)

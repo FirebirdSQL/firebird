@@ -39,6 +39,8 @@
 #include "../jrd/align.h"
 #include "../common/sha2/sha2.h"
 
+#define FLAG_BYTES(n)	(((n + BITS_PER_LONG) & ~((ULONG)BITS_PER_LONG - 1)) >> 3)
+
 // Random string block -- as long as impure areas don't have
 // constructors and destructors, the need this varying string
 

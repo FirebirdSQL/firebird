@@ -1895,7 +1895,7 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 		{
 			fb_assert(desc->dsc_dtype < FB_NELEM(sort_dtypes));
 			sort_key[sort_key_index].setSkdLength(sort_dtypes[desc->dsc_dtype],
-													desc->isRowType() ? FLAG_BYTES(desc->dsc_sub_count) : desc->dsc_length);
+													desc->isRowType() ? NULL_BYTES(desc->dsc_sub_count) : desc->dsc_length);
 			sort_key[sort_key_index].setSkdOffset(&(sort_key + sort_key_index)[-1], desc);
 			sort_key[sort_key_index].skd_flags = SKD_ascending;
 			if (*direction == ORDER_DESC)

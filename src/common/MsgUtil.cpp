@@ -168,7 +168,7 @@ Array<MsgUtil::SubfieldData> MsgUtil::getSubfieldsData(CheckStatusWrapper* statu
 					}
 				}
 
-				ULONG offset = FLAG_BYTES(subfields.getCount());
+				ULONG offset = NULL_BYTES(subfields.getCount());
 				for (auto& it : subfields)
 				{
 					it.value.setPtr = (char*)it.value.setPtr + offset;

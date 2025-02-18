@@ -538,7 +538,7 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 			else if (from_desc->dsc_dtype == dtype_rowtype)
 			{
 				// assign null mask bytes, the actual data will be assigned in the following iterations
-				memcpy(to_desc->dsc_address, from_desc->dsc_address, FLAG_BYTES(from_desc->dsc_sub_count));
+				memcpy(to_desc->dsc_address, from_desc->dsc_address, NULL_BYTES(from_desc->dsc_sub_count));
 			}
 			else
 			{
@@ -598,7 +598,7 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 
 		// For rowtype, we need to set all fields (via flag bytes) to 0xff what means NULL
 		if (to_desc->dsc_dtype == dtype_rowtype)
-			memset(to_desc->dsc_address, 0xFF, FLAG_BYTES(to_desc->dsc_sub_count));
+			memset(to_desc->dsc_address, 0xFF, NULL_BYTES(to_desc->dsc_sub_count));
 	}
 
 	// Handle the null flag as appropriate for fields and message arguments.

@@ -14741,12 +14741,12 @@ ValueExprNode* RowValueExpressionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch
 	node->rowField->scale = 0;
 	node->rowField->fld_name = "ROW";
 	node->rowField->fld_sub_count = node->rowValueExpressionList->items.getCount();
-	node->rowField->length = FLAG_BYTES(rowDesc.dsc_sub_count);
+	node->rowField->length = NULL_BYTES(rowDesc.dsc_sub_count);
 
 	// TODO: implement dsc generating via fromField() for rowtype fields
 	rowDesc.dsc_dtype = dtype_rowtype;
 	rowDesc.dsc_sub_count = node->rowValueExpressionList->items.getCount();
-	rowDesc.dsc_length += FLAG_BYTES(rowDesc.dsc_sub_count);
+	rowDesc.dsc_length += NULL_BYTES(rowDesc.dsc_sub_count);
 	rowDesc.dsc_sub_first = FB_NEW_POOL(pool) dsc;
 	rowDesc.setNullable(true);
 	auto nextDsc = &rowDesc.dsc_sub_first;
@@ -14896,7 +14896,7 @@ ValueExprNode* RowValueExpressionNode::copy(thread_db* tdbb, NodeCopier& copier)
 
 	auto count = dsqlDesc.dsc_sub_count;
 	auto format = Format::newFormat(pool, count);
-	format->fmt_length = FLAG_BYTES(count);
+	format->fmt_length = NULL_BYTES(count);
 	auto nextDesc = &dsqlDesc.dsc_sub_first;
 
 	for (FB_SIZE_T i = 0; i < count; i++)
@@ -14944,7 +14944,7 @@ ValueExprNode* RowValueExpressionNode::pass2(thread_db* tdbb, CompilerScratch* c
 
 	auto curDesc = &rowDesc.dsc_sub_first;
 
-	rowDesc.dsc_length = FLAG_BYTES(subFieldsNumber);
+	rowDesc.dsc_length = NULL_BYTES(subFieldsNumber);
 	auto subFieldsLengthSum = 0;
 	for (auto& valueExprNode : rowValueExpressionList->items)
 	{
@@ -14960,7 +14960,7 @@ ValueExprNode* RowValueExpressionNode::pass2(thread_db* tdbb, CompilerScratch* c
 
 	auto count = rowDesc.dsc_sub_count;
 	auto format = Format::newFormat(csb->csb_pool, count);
-	format->fmt_length = FLAG_BYTES(count);
+	format->fmt_length = NULL_BYTES(count);
 	auto nextDesc = &rowDesc.dsc_sub_first;
 
 	for (FB_SIZE_T i = 0; i < count; i++)
@@ -14995,7 +14995,7 @@ dsc* RowValueExpressionNode::execute(thread_db* tdbb, Request* request) const
 
 	impure->vlu_desc.shallowCopy(rowDesc);
 	// set null flags to composite record's null bytes
-	memset(impure->vlu_desc.dsc_address, 0xFF, FLAG_BYTES(impure->vlu_desc.dsc_sub_count));
+	memset(impure->vlu_desc.dsc_address, 0xFF, NULL_BYTES(impure->vlu_desc.dsc_sub_count));
 
 	auto nextDesc = &impure->vlu_desc.dsc_sub_first;
 
@@ -15020,7 +15020,7 @@ dsc* RowValueExpressionNode::execute(thread_db* tdbb, Request* request) const
 
 			// For rowtype, we need to set all fields (via flag bytes) to 0xff what means NULL
 			if (to_desc->dsc_dtype == dtype_rowtype)
-				memset(to_desc->dsc_address, 0xFF, FLAG_BYTES(to_desc->dsc_sub_count));
+				memset(to_desc->dsc_address, 0xFF, NULL_BYTES(to_desc->dsc_sub_count));
 		}
 
 		nextDesc = &to_desc->dsc_next;

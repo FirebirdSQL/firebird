@@ -583,7 +583,7 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 		{
 			desc->dsc_dtype = dtype_rowtype;
 			USHORT subDescriptorsNumber = desc->dsc_sub_count = csb->csb_blr_reader.getWord();
-			desc->dsc_length += FLAG_BYTES(desc->dsc_sub_count);
+			desc->dsc_length += NULL_BYTES(desc->dsc_sub_count);
 			auto context_num = csb->csb_blr_reader.getWord();
 			if (itemInfo)
 				itemInfo->compositeContextNum = context_num;

@@ -36,7 +36,7 @@
 #include "../common/DecFloat.h"
 #include "../common/Int128.h"
 
-#define FLAG_BYTES(n)	(((n + BITS_PER_LONG) & ~((ULONG)BITS_PER_LONG - 1)) >> 3)
+#define NULL_BYTES(n)	(n*2)
 
 // Data type information
 
@@ -197,7 +197,7 @@ typedef struct dsc
 		if (dsc_sub_first)
 		{
 			dsc_address = baseAddress + recordLength;
-			recordLength = recordLength + FLAG_BYTES(dsc_sub_count);
+			recordLength = recordLength + NULL_BYTES(dsc_sub_count);
 			dsc_sub_first->setAddressRecursively(baseAddress, recordLength);
 		}
 
