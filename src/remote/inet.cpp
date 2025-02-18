@@ -1839,7 +1839,11 @@ static void force_close(rem_port* port)
  **************************************/
 
 	if (port->port_async)
-		abort_aux_connection(port->port_async);
+	{
+		rem_port* port_async = port->port_async;
+		abort_aux_connection(port_async);
+		port_async->force_close();
+	}
 
 	if (port->port_state != rem_port::PENDING)
 		return;
