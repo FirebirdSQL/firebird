@@ -3484,6 +3484,7 @@ DmlNode* DeclareVariableNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerS
 		t1->csb_row_var_format = format;
 
 		node->compositeRecord = FB_NEW_POOL(pool) Record(pool, csb->csb_rpt[itemInfo.compositeContextNum].csb_row_var_format);
+		node->compositeRecord->setRowType();
 	}
 
 	csb->csb_variables = vec<DeclareVariableNode*>::newVector(

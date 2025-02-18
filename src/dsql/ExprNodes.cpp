@@ -14978,6 +14978,7 @@ ValueExprNode* RowValueExpressionNode::pass2(thread_db* tdbb, CompilerScratch* c
 	}
 
 	compositeRecord = FB_NEW_POOL(pool) Record(pool, format);
+	compositeRecord->setRowType();
 
 	rowDesc.setNullable(true);
 	dsqlDesc = rowDesc;

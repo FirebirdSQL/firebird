@@ -33,7 +33,7 @@ namespace Jrd
 	{
 	public:
 		Record(MemoryPool& p, const Format* format, const bool temp_active = false)
-			: m_precedence(p), m_data(p), m_fake_nulls(false), m_temp_active(temp_active)
+			: m_precedence(p), m_data(p), m_fake_nulls(false), m_temp_active(temp_active), m_rowtype(false)
 		{
 			m_data.resize(format->fmt_length);
 			m_format = format;
@@ -41,7 +41,7 @@ namespace Jrd
 
 		Record(MemoryPool& p, const Record* other)
 			: m_precedence(p), m_data(p, other->m_data),
-			  m_format(other->m_format), m_fake_nulls(other->m_fake_nulls), m_temp_active(false)
+			  m_format(other->m_format), m_fake_nulls(other->m_fake_nulls), m_temp_active(false), m_rowtype(false)
 		{}
 
 		void reset(const Format* format = NULL)
@@ -58,13 +58,19 @@ namespace Jrd
 		void setNull(USHORT id)
 		{
 			fb_assert(!m_fake_nulls);
-			getData()[id >> 3] |= (1 << (id & 7));
+			if (!m_rowtype)
+				getData()[id >> 3] |= (1 << (id & 7));
+			else
+				getData()[id] |= -1;
 		}
 
 		void clearNull(USHORT id)
 		{
 			fb_assert(!m_fake_nulls);
-			getData()[id >> 3] &= ~(1 << (id & 7));
+			if (!m_rowtype)
+				getData()[id >> 3] &= ~(1 << (id & 7));
+			else
+				getData()[id] &= 0;
 		}
 
 		bool isNull(USHORT id) const
@@ -72,7 +78,10 @@ namespace Jrd
 			if (m_fake_nulls)
 				return true;
 
-			return ((getData()[id >> 3] & (1 << (id & 7))) != 0);
+			if (!m_rowtype)
+				return ((getData()[id >> 3] & (1 << (id & 7))) != 0);
+
+			return (getData()[id] != 0);
 		}
 
 		void nullify()
@@ -132,6 +141,11 @@ namespace Jrd
 			m_fake_nulls = true;
 		}
 
+		void setRowType()
+		{
+			m_rowtype = true;
+		}
+
 		bool isNull() const
 		{
 			return m_fake_nulls;
@@ -184,6 +198,7 @@ namespace Jrd
 		TraNumber m_transaction_nr;		// transaction number for a record
 		bool m_fake_nulls;				// all fields simulate being NULLs
 		bool m_temp_active;				// record block in use for garbage collection or undo purposes
+		bool m_rowtype;					// marks that this record is rowtype memory
 	};
 
 	// Wrapper for reusable temporary records

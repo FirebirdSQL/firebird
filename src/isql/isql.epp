@@ -7756,7 +7756,8 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 			if (serFieldId > 1)	// we have to omit the first field (top composite)
 				// we have to substract 1 from the field id because the first field is the composite type
 				// and another 1 because ids start from 1 in serialized descriptor
-				*subVar.nullInd = ((var->value.asChar[(serFieldId - 2) >> 3] & (1 << ((serFieldId - 2) & 7))) != 0) ? -1 : 0;
+				// *subVar.nullInd = ((var->value.asChar[(serFieldId - 2) >> 3] & (1 << ((serFieldId - 2) & 7))) != 0) ? -1 : 0;
+				*subVar.nullInd = (var->value.asChar[serFieldId - 2] != 0) ? -1 : 0;
 
 			if (subVar.type != SQL_ROWTYPE)
 			{
