@@ -61,7 +61,7 @@ namespace Jrd
 			if (!m_rowtype)
 				getData()[id >> 3] |= (1 << (id & 7));
 			else
-				getData()[id] |= -1;
+				reinterpret_cast<USHORT*>(getData())[id] |= -1;
 		}
 
 		void clearNull(USHORT id)
@@ -70,7 +70,7 @@ namespace Jrd
 			if (!m_rowtype)
 				getData()[id >> 3] &= ~(1 << (id & 7));
 			else
-				getData()[id] &= 0;
+				reinterpret_cast<USHORT*>(getData())[id] &= 0;
 		}
 
 		bool isNull(USHORT id) const
@@ -81,7 +81,7 @@ namespace Jrd
 			if (!m_rowtype)
 				return ((getData()[id >> 3] & (1 << (id & 7))) != 0);
 
-			return (getData()[id] != 0);
+			return (reinterpret_cast<const USHORT*>(getData())[id] != 0);
 		}
 
 		void nullify()
