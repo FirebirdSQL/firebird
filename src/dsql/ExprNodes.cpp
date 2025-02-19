@@ -15016,6 +15016,7 @@ dsc* RowValueExpressionNode::execute(thread_db* tdbb, Request* request) const
 		}
 		else
 		{
+			request->req_flags |= req_row_subnulls;
 			memset(to_desc->dsc_address, 0, to_desc->dsc_length);
 			to_desc->setNull();
 

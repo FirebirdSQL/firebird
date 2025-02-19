@@ -8434,9 +8434,9 @@ null_predicate
 	| value IS UNKNOWN
 		{ $$ = newNode<MissingBoolNode>($1, true); }
 	| value IS NOT NULL
-		{ $$ = newNode<NotBoolNode>(newNode<MissingBoolNode>($1)); }
+		{ $$ = newNode<MissingBoolNode>($1, false, true); }
 	| value IS NOT UNKNOWN
-		{ $$ = newNode<NotBoolNode>(newNode<MissingBoolNode>($1, true)); }
+		{ $$ = newNode<MissingBoolNode>($1, true, true); }
 	;
 
 

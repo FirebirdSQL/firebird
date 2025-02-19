@@ -580,6 +580,7 @@ inline constexpr ULONG req_same_tx_upd		= 0x200L;		// record was updated by same
 inline constexpr ULONG req_reserved			= 0x400L;		// Request reserved for client
 inline constexpr ULONG req_update_conflict	= 0x800L;		// We need to restart request due to update conflict
 inline constexpr ULONG req_restart_ready	= 0x1000L;		// Request is ready to restart in case of update conflict
+inline constexpr ULONG req_row_subnulls		= 0x2000L;		// Row value in expression contains NULLs in subfields
 
 } //namespace Jrd
 

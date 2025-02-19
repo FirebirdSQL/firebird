@@ -1586,18 +1586,20 @@ TriState InListBoolNode::execute(thread_db* tdbb, Request* request) const
 //--------------------
 
 
-static RegisterBoolNode<MissingBoolNode> regMissingBoolNode({blr_missing});
+static RegisterBoolNode<MissingBoolNode> regMissingBoolNode({blr_missing, blr_not_missing});
 
-MissingBoolNode::MissingBoolNode(MemoryPool& pool, ValueExprNode* aArg, bool aDsqlUnknown)
+MissingBoolNode::MissingBoolNode(MemoryPool& pool, ValueExprNode* aArg, bool aDsqlUnknown, bool aNotFlag)
 	: TypedNode<BoolExprNode, ExprNode::TYPE_MISSING_BOOL>(pool),
 	  dsqlUnknown(aDsqlUnknown),
+	  notFlag(aNotFlag),
 	  arg(aArg)
 {
 }
 
-DmlNode* MissingBoolNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR /*blrOp*/)
+DmlNode* MissingBoolNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp)
 {
 	MissingBoolNode* node = FB_NEW_POOL(pool) MissingBoolNode(pool);
+	node->notFlag = blrOp == blr_not_missing;
 	node->arg = PAR_parse_value(tdbb, csb);
 	return node;
 }
@@ -1617,6 +1619,8 @@ BoolExprNode* MissingBoolNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	MissingBoolNode* node = FB_NEW_POOL(dsqlScratch->getPool()) MissingBoolNode(dsqlScratch->getPool(),
 		doDsqlPass(dsqlScratch, arg));
 
+	node->notFlag = notFlag;
+
 	// dimitr:	MSVC12 has a known bug with default function constructor. MSVC13 seems to have it fixed,
 	//			but I keep the explicit empty-object initializer here.
 	PASS1_set_parameter_type(dsqlScratch, node->arg, std::function<void (dsc*)>(nullptr), false);
@@ -1635,7 +1639,7 @@ BoolExprNode* MissingBoolNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 void MissingBoolNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
-	dsqlScratch->appendUChar(blr_missing);
+	dsqlScratch->appendUChar(notFlag ? blr_not_missing : blr_missing);
 	GEN_expr(dsqlScratch, arg);
 }
 
@@ -1669,7 +1673,17 @@ void MissingBoolNode::pass2Boolean(thread_db* tdbb, CompilerScratch* csb, std::f
 
 TriState MissingBoolNode::execute(thread_db* tdbb, Request* request) const
 {
-	return TriState(!EVL_expr(tdbb, request, arg));
+	if (!EVL_expr(tdbb, request, arg))
+	{
+		return TriState(!notFlag);
+	}
+
+	if (notFlag && request->req_flags & req_row_subnulls)
+	{
+		return TriState(false);
+	}
+
+	return TriState(notFlag);
 }
 
 
