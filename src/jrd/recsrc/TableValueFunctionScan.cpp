@@ -226,7 +226,7 @@ void UnlistFunctionScan::internalOpen(thread_db* tdbb) const
 				}
 
 				if (size > 0)
-					resultStr.append(valueView.begin(), size);
+					resultStr.append(valueView.data(), size);
 
 				valueView.remove_prefix(size + separatorView.length());
 
