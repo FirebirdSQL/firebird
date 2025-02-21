@@ -200,15 +200,15 @@ private:
 	class SegmentsStack
 	{
 	public:
-		SegmentsStack() : size(0), head(nullptr)
+		SegmentsStack() : size(0), tail(nullptr)
 		{}
 
 		SegmentsStack(offset_t aSize, Segment* aSegment) :
-			size(aSize), head(aSegment)
+			size(aSize), tail(aSegment)
 		{}
 
 		offset_t size;
-		Segment* head;
+		Segment* tail;
 
 		static const offset_t& generate(const void* /*sender*/, const SegmentsStack& segment)
 		{
@@ -232,6 +232,8 @@ private:
 
 	class FreeSegmentBySize
 	{
+		friend bool TempSpace::validate(offset_t& freeSize) const;
+
 	public:
 		FreeSegmentBySize(MemoryPool& pool)
 				: m_items(pool)

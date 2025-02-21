@@ -139,9 +139,9 @@ void TempSpace::FreeSegmentBySize::addSegment(Segment* const segment)
 	{
 		SegmentsStack* const cur = &m_items.current();
 		segment->next = nullptr;
-		segment->prev = cur->head;
-		cur->head->next = segment;
-		cur->head = segment;
+		segment->prev = cur->tail;
+		cur->tail->next = segment;
+		cur->tail = segment;
 	}
 	else
 	{
@@ -162,7 +162,7 @@ void TempSpace::FreeSegmentBySize::removeSegment(Segment* const segment)
 		if (segment->prev)
 		{
 			segment->prev->next = nullptr;
-			cur->head = segment->prev;
+			cur->tail = segment->prev;
 			segment->prev = nullptr;
 		}
 		else
@@ -186,8 +186,8 @@ TempSpace::Segment* TempSpace::FreeSegmentBySize::getSegment(FB_SIZE_T size)
 	if (m_items.locate(locGreatEqual, size))
 	{
 		SegmentsStack* const cur = &m_items.current();
-		fb_assert(cur->head);
-		return cur->head;
+		fb_assert(cur->tail);
+		return cur->tail;
 	}
 	return nullptr;
 }
@@ -681,6 +681,7 @@ UCHAR* TempSpace::findMemory(offset_t& begin, offset_t end, size_t size) const
 
 bool TempSpace::validate(offset_t& free) const
 {
+	FB_SIZE_T cnt = 0;
 	free = 0;
 	FreeSegmentTree::ConstAccessor accessor(&freeSegments);
 	for (bool found = accessor.getFirst(); found; found = accessor.getNext())
@@ -688,7 +689,23 @@ bool TempSpace::validate(offset_t& free) const
 		const offset_t size = accessor.current()->size;
 		fb_assert(size != 0);
 		free += size;
+		cnt++;
 	}
+
+	FreeSegmentsStackTree::ConstAccessor stackAccessor(&freeSegmentsBySize.m_items);
+	for (bool found = stackAccessor.getFirst(); found; found = stackAccessor.getNext())
+	{
+		const SegmentsStack* const stack = &stackAccessor.current();
+		const Segment* cur = stack->tail;
+		fb_assert(cur->next == NULL);
+		while (cur)
+		{
+			cnt--;
+			fb_assert(cur->size == stack->size);
+			cur = cur->prev;
+		}
+	}
+	fb_assert(cnt == 0);
 
 	offset_t disk = 0;
 	for (FB_SIZE_T i = 0; i < tempFiles.getCount(); i++)
