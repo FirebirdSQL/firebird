@@ -6480,11 +6480,10 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 			storeGlobalField(tdbb, transaction, fieldDefinition.fieldSource, field,
 				computedSource, computedValue);
 		}
-		else
+		else if (field->collate.hasData())
 		{
 			// Resolve possible additional collation for domains. For plain types it is already resolved above.
-			if (field->collate.hasData())
-				DDL_resolve_intl_type(dsqlScratch, field, field->collate);
+			DDL_resolve_intl_type(dsqlScratch, field, field->collate);
 		}
 
 		if ((relation->rel_flags & REL_external) &&
@@ -6541,7 +6540,8 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		}
 
 		fieldDefinition.defaultValue = defaultValue;
-		fieldDefinition.collationId = field->collationId;
+		if (field->typeOfName.isEmpty() || field->collate.hasData())
+			fieldDefinition.collationId = field->collationId;
 		fieldDefinition.store(tdbb, transaction);
 
 		// Define the field constraints.

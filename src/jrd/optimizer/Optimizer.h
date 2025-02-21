@@ -120,10 +120,10 @@ public:
 		}
 	}
 
-	void activate(bool subStream = false)
+	void activate()
 	{
 		for (const auto stream : m_streams)
-			m_csb->csb_rpt[stream].activate(subStream);
+			m_csb->csb_rpt[stream].activate();
 	}
 
 	void deactivate()

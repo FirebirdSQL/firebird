@@ -521,6 +521,11 @@ version:	// 3.0 => 4.0
 version:	// 3.0.7 => 3.0.8, 4.0.0 => 4.0.1
 	[notImplementedAction if ::FB_UsedInYValve then defaultAction else call deprecatedFree(status) endif]
 	void free(Status status);
+
+version:	// 6.0
+	// Inline blob transfer
+	uint getMaxInlineBlobSize(Status status);
+	void setMaxInlineBlobSize(Status status, uint size);
 }
 
 interface Batch : ReferenceCounted
@@ -713,6 +718,15 @@ version:	// 3.0.7 => 3.0.8, 4.0.0 => 4.0.1
 	void detach(Status status);
 	[notImplementedAction if ::FB_UsedInYValve then defaultAction else call deprecatedDropDatabase(status) endif]
 	void dropDatabase(Status status);
+
+version:	// 6.0
+	// Blob caching by client
+	uint getMaxBlobCacheSize(Status status);
+	void setMaxBlobCacheSize(Status status, uint size);
+
+	// Inline blob transfer
+	uint getMaxInlineBlobSize(Status status);
+	void setMaxInlineBlobSize(Status status, uint size);
 }
 
 interface Service : ReferenceCounted
@@ -943,7 +957,7 @@ interface CryptKeyCallback : Versioned
 	uint callback(uint dataLength, const void* data,
 		uint bufferLength, void* buffer);
 
-version:		// 6.0
+version:		// 6.0, 5.0.2, 4.0.6
 	// Result returned by afterAttach()
 	const uint NO_RETRY		= 0;	// Returned by old plugins & stub
 	const uint DO_RETRY		= 1;
@@ -957,6 +971,12 @@ version:		// 6.0
 	// interface not needed any more
 	[stub defaultAction]
 	void dispose();
+
+version:		// 6.0, 5.0.2, 4.0.6
+	// Produce something to be compared with other interface instance
+	[notImplemented(-1)]
+	int getHashLength(Status status);
+	void getHashData(Status status, void* hash);
 }
 
 

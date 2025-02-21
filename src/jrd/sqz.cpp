@@ -581,7 +581,7 @@ ULONG Difference::makeNoDiff(ULONG length)
 		if (output >= end)
 			return 0;
 
-		const auto max = MIN(length, 127);
+		const int max = MIN(length, 127);
 		*output++ = -max;
 		length -= max;
 	}
@@ -644,7 +644,7 @@ ULONG Difference::make(ULONG length1, const UCHAR* rec1,
 			if (output >= end)
 				return 0;
 
-			const auto max = MIN(count, 127);
+			const int max = MIN(count, 127);
 			*output++ = -max;
 			count -= max;
 		}

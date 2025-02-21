@@ -35,13 +35,13 @@
 #include "../common/ThreadStart.h"
 #include "../common/Auth.h"
 #include "../common/classes/objects_array.h"
+#include "../common/classes/tree.h"
 #include "../common/classes/fb_string.h"
 #include "../common/classes/ClumpletWriter.h"
 #include "../common/classes/RefMutex.h"
 #include "../common/StatusHolder.h"
 #include "../common/classes/RefCounted.h"
 #include "../common/classes/GetPlugins.h"
-#include "../common/classes/RefMutex.h"
 
 #include "firebird/Interface.h"
 
@@ -92,7 +92,6 @@ const int BLOB_LENGTH		= 16384;
 
 #include "../remote/protocol.h"
 #include "fb_blk.h"
-#include "firebird/Interface.h"
 
 // Prefetch constants
 
@@ -102,6 +101,11 @@ const ULONG MIN_ROWS_PER_BATCH = 10;
 const ULONG MAX_ROWS_PER_BATCH = 1000;
 
 const ULONG MAX_BATCH_CACHE_SIZE = 1024 * 1024; // 1 MB
+
+const ULONG	DEFAULT_BLOBS_CACHE_SIZE = 10 * 1024 * 1024;	// 10 MB
+
+const ULONG	MAX_INLINE_BLOB_SIZE = MAX_USHORT;
+const ULONG	DEFAULT_INLINE_BLOB_SIZE = MAX_USHORT;
 
 // fwd. decl.
 namespace Firebird {
@@ -180,35 +184,68 @@ private:
 public:
 	std::atomic<int> rdb_async_lock;		// Atomic to avoid >1 async calls at once
 
+	ULONG			rdb_inline_blob_size;		// default max size of blob that can be transfered inline
+	ULONG			rdb_blob_cache_size;		// limit on cached blobs size
+	ULONG			rdb_cached_blobs_size;		// actual size of cached blobs
+	ULONG			rdb_cached_blobs_count;		// actual count of cached blobs
+
 public:
 	Rdb() :
 		rdb_iface(NULL), rdb_port(0),
 		rdb_transactions(0), rdb_requests(0), rdb_events(0), rdb_sql_requests(0),
-		rdb_id(0), rdb_async_thread_id(0), rdb_async_lock(0)
+		rdb_id(0), rdb_async_thread_id(0), rdb_async_lock(0),
+		rdb_inline_blob_size(DEFAULT_INLINE_BLOB_SIZE), rdb_blob_cache_size(DEFAULT_BLOBS_CACHE_SIZE),
+		rdb_cached_blobs_size(0), rdb_cached_blobs_count(0)
 	{
 	}
 
 	static ISC_STATUS badHandle() { return isc_bad_db_handle; }
+
+	// Increment blob cache usage.
+	// Return false if blob cache have not enough space for a blob of given size.
+	bool incBlobCache(ULONG size)
+	{
+		if (rdb_cached_blobs_size + size > rdb_blob_cache_size)
+			return false;
+
+		rdb_cached_blobs_size += size;
+		rdb_cached_blobs_count++;
+		return true;
+	}
+
+	// Decrement blob cache usage.
+	void decBlobCache(ULONG size)
+	{
+		fb_assert(rdb_cached_blobs_size >= size);
+		fb_assert(rdb_cached_blobs_count > 0);
+
+		rdb_cached_blobs_size -= size;
+		rdb_cached_blobs_count--;
+	}
 };
 
 
 struct Rtr : public Firebird::GlobalStorage, public TypedHandle<rem_type_rtr>
 {
+	using BlobsTree = Firebird::BePlusTree<struct Rbl*, SQUAD, struct Rbl>;
+
 	Rdb*			rtr_rdb;
 	Rtr*			rtr_next;
-	struct Rbl*		rtr_blobs;
+	BlobsTree		rtr_blobs;
 	ServTransaction	rtr_iface;
 	USHORT			rtr_id;
 	bool			rtr_limbo;
 
 	Firebird::Array<Rsr*> rtr_cursors;
 	Rtr**			rtr_self;
+	Rbl*			rtr_inline_blob;
 
 public:
 	Rtr() :
-		rtr_rdb(0), rtr_next(0), rtr_blobs(0),
+		rtr_rdb(0), rtr_next(0), rtr_blobs(getPool()),
 		rtr_iface(NULL), rtr_id(0), rtr_limbo(0),
-		rtr_cursors(getPool()), rtr_self(NULL)
+		rtr_cursors(getPool()), rtr_self(NULL),
+		rtr_inline_blob(NULL)
 	{ }
 
 	~Rtr()
@@ -218,6 +255,9 @@ public:
 	}
 
 	static ISC_STATUS badHandle() { return isc_bad_trans_handle; }
+
+	Rbl* createInlineBlob();
+	void setupInlineBlob(P_INLINE_BLOB* p_blob);
 };
 
 
@@ -242,15 +282,21 @@ struct RBlobInfo
 		unsigned int bufferLength, unsigned char* buffer);
 };
 
+// Used in XDR
+class RemBlobBuffer : public Firebird::Array<UCHAR>
+{
+	using Firebird::Array<UCHAR>::Array;
+};
+
 struct Rbl : public Firebird::GlobalStorage, public TypedHandle<rem_type_rbl>
 {
-	Firebird::HalfStaticArray<UCHAR, BLOB_LENGTH> rbl_data;
+	RemBlobBuffer	rbl_data;
 	Rdb*		rbl_rdb;
 	Rtr*		rbl_rtr;
-	Rbl*		rbl_next;
 	UCHAR*		rbl_buffer;
 	UCHAR*		rbl_ptr;
 	ServBlob	rbl_iface;
+	SQUAD		rbl_blob_id;
 	SLONG		rbl_offset;			// Apparent (to user) offset in blob
 	USHORT		rbl_id;
 	USHORT		rbl_flags;
@@ -265,18 +311,19 @@ struct Rbl : public Firebird::GlobalStorage, public TypedHandle<rem_type_rbl>
 public:
 	// Values for rbl_flags
 	enum {
-		EOF_SET = 1,
-		SEGMENT = 2,
-		EOF_PENDING = 4,
-		CREATE = 8
+		EOF_SET = 0x01,
+		SEGMENT = 0x02,
+		EOF_PENDING = 0x04,
+		CREATE = 0x08,
+		CACHED = 0x10
 	};
 
 public:
-	Rbl() :
-		rbl_data(getPool()), rbl_rdb(0), rbl_rtr(0), rbl_next(0),
-		rbl_buffer(rbl_data.getBuffer(BLOB_LENGTH)), rbl_ptr(rbl_buffer), rbl_iface(NULL),
-		rbl_offset(0), rbl_id(0), rbl_flags(0),
-		rbl_buffer_length(BLOB_LENGTH), rbl_length(0), rbl_fragment_length(0),
+	Rbl(unsigned int initialSize) :
+		rbl_data(getPool()), rbl_rdb(0), rbl_rtr(0),
+		rbl_buffer(rbl_data.getBuffer(initialSize)), rbl_ptr(rbl_buffer), rbl_iface(NULL),
+		rbl_blob_id(NULL_BLOB), rbl_offset(0), rbl_id(0), rbl_flags(0),
+		rbl_buffer_length(initialSize), rbl_length(0), rbl_fragment_length(0),
 		rbl_source_interp(0), rbl_target_interp(0), rbl_self(NULL)
 	{ }
 
@@ -290,6 +337,11 @@ public:
 	}
 
 	static ISC_STATUS badHandle() { return isc_bad_segstr_handle; }
+
+	bool isCached() const { return rbl_flags & CACHED; }
+	unsigned getCachedSize() const { return sizeof(Rbl) + rbl_data.getCapacity(); }
+
+	static const SQUAD& generate(const void*, const Rbl* item) { return item->rbl_blob_id; }
 };
 
 
@@ -330,19 +382,28 @@ struct rem_str : public pool_alloc_rpt<SCHAR>
 
 #include "../common/dsc.h"
 
+// Note, currently the only routine that created and changed rem_fmt is
+// parse_format() in parse.cpp
 
 struct rem_fmt : public Firebird::GlobalStorage
 {
 	ULONG		fmt_length;
 	ULONG		fmt_net_length;
 	Firebird::Array<dsc> fmt_desc;
+	Firebird::HalfStaticArray<unsigned short, 4> fmt_blob_idx;		// indices of blob's in fmt_desc
 
 public:
 	explicit rem_fmt(FB_SIZE_T rpt) :
 		fmt_length(0), fmt_net_length(0),
-		fmt_desc(getPool(), rpt)
+		fmt_desc(getPool(), rpt),
+		fmt_blob_idx(getPool())
 	{
 		fmt_desc.grow(rpt);
+	}
+
+	bool haveBlobs() const
+	{
+		return fmt_blob_idx.hasData();
 	}
 };
 
@@ -522,6 +583,7 @@ struct Rsr : public Firebird::GlobalStorage, public TypedHandle<rem_type_rsr>
 
 	P_FETCH			rsr_fetch_operation;	// Last performed fetch operation
 	SLONG			rsr_fetch_position;		// and position
+	unsigned int	rsr_inline_blob_size;	// max size of blob that can be transfered inline
 
 	struct BatchStream
 	{
@@ -575,7 +637,8 @@ public:
 		rsr_id(0), rsr_fmt_length(0),
 		rsr_rows_pending(0), rsr_msgs_waiting(0), rsr_reorder_level(0), rsr_batch_count(0),
 		rsr_cursor_name(getPool()), rsr_delayed_format(false), rsr_timeout(0), rsr_self(NULL),
-		rsr_fetch_operation(fetch_next), rsr_fetch_position(0)
+		rsr_batch_size(0), rsr_batch_flags(0), rsr_batch_ics(NULL),
+		rsr_fetch_operation(fetch_next), rsr_fetch_position(0), rsr_inline_blob_size(0)
 	{ }
 
 	~Rsr()
@@ -606,6 +669,12 @@ public:
 	void checkIface(ISC_STATUS code = isc_unprepared_stmt);
 	void checkCursor();
 	void checkBatch();
+
+	// return true if select format have blobs
+	bool haveBlobs() const
+	{
+		return rsr_select_format && rsr_select_format->haveBlobs();
+	}
 
 	SLONG getCursorAdjustment() const
 	{
@@ -894,15 +963,17 @@ private:
 
 		~ClientCrypt()
 		{
-			destroy();
+			dispose();
 		}
 
 		Firebird::ICryptKeyCallback* create(const Firebird::Config* conf);
 
 		// Firebird::ICryptKeyCallback implementation
-		unsigned callback(unsigned dataLength, const void* data, unsigned bufferLength, void* buffer);
-		unsigned afterAttach(Firebird::CheckStatusWrapper* st, const char* dbName, const Firebird::IStatus* attStatus);
-		void destroy();
+		unsigned callback(unsigned dataLength, const void* data, unsigned bufferLength, void* buffer) override;
+		unsigned afterAttach(Firebird::CheckStatusWrapper* st, const char* dbName, const Firebird::IStatus* attStatus) override;
+		void dispose() override;
+		int getHashLength(Firebird::CheckStatusWrapper* status) override;
+		void getHashData(Firebird::CheckStatusWrapper* status, void* hash) override;
 
  	private:
 		typedef Firebird::GetPlugins<Firebird::IKeyHolderPlugin> KeyHolderItr;
@@ -1310,7 +1381,7 @@ public:
 		port_send_partial(0), port_connect(0), port_request(0), port_select_multi(0),
 		port_type(t), port_state(PENDING), port_clients(0), port_next(0),
 		port_parent(0), port_async(0), port_async_receive(0),
-		port_server(0), port_server_flags(0), port_protocol(0), port_buff_size(rpt / 2),
+		port_server(0), port_server_flags(0), port_protocol(0), port_buff_size((USHORT)(rpt / 2)),
 		port_flags(0), port_partial_data(false), port_z_data(false),
 		port_connect_timeout(0), port_dummy_packet_interval(0),
 		port_dummy_timeout(0), port_handle(INVALID_SOCKET), port_channel(INVALID_SOCKET), port_context(0),
@@ -1576,6 +1647,11 @@ public:
 
 private:
 	bool tryKeyType(const KnownServerKey& srvKey, InternalCryptKey* cryptKey);
+
+	void sendInlineBlobs(PACKET*, Rtr* rtr, UCHAR* message, const rem_fmt* format, ULONG maxSize);
+
+	// return false if any error retrieving blob happens
+	bool sendInlineBlob(PACKET*, Rtr* rtr, SQUAD blobId, ULONG maxSize);
 };
 
 

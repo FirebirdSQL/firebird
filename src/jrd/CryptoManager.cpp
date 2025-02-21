@@ -319,7 +319,7 @@ namespace Jrd {
 		  keyConsumers(getPool()),
 		  hash(getPool()),
 		  dbInfo(FB_NEW DbInfo(this)),
-		  cryptThreadId(0),
+		  cryptThreadHandle(0),
 		  cryptPlugin(NULL),
 		  checkFactory(NULL),
 		  dbb(*tdbb->getDatabase()),
@@ -337,8 +337,8 @@ namespace Jrd {
 
 	CryptoManager::~CryptoManager()
 	{
-		if (cryptThreadId)
-			Thread::waitForCompletion(cryptThreadId);
+		if (cryptThreadHandle)
+			Thread::waitForCompletion(cryptThreadHandle);
 
 		delete stateLock;
 		delete threadLock;
@@ -925,10 +925,10 @@ namespace Jrd {
 	void CryptoManager::terminateCryptThread(thread_db*, bool wait)
 	{
 		flDown = true;
-		if (wait && cryptThreadId)
+		if (wait && cryptThreadHandle)
 		{
-			Thread::waitForCompletion(cryptThreadId);
-			cryptThreadId = 0;
+			Thread::waitForCompletion(cryptThreadHandle);
+			cryptThreadHandle = 0;
 		}
 	}
 
@@ -987,7 +987,7 @@ namespace Jrd {
 
 			// ready to go
 			guard.leave();		// release in advance to avoid races with cryptThread()
-			Thread::start(cryptThreadStatic, (THREAD_ENTRY_PARAM) this, THREAD_medium, &cryptThreadId);
+			Thread::start(cryptThreadStatic, (THREAD_ENTRY_PARAM) this, THREAD_medium, &cryptThreadHandle);
 		}
 		catch (const Firebird::Exception&)
 		{

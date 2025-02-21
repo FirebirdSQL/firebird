@@ -638,7 +638,7 @@ bool BackupManager::actualizeAlloc(thread_db* tdbb, bool haveGlobalLock)
 		// For SuperServer this routine is really executed only at database startup when
 		// it has exlock or when exclusive access to database is enabled
 		if (!alloc_table)
-			alloc_table = FB_NEW_POOL(*database->dbb_permanent) AllocItemTree(database->dbb_permanent);
+			alloc_table = FB_NEW_POOL(*database->dbb_permanent) AllocItemTree(*database->dbb_permanent);
 
 		while (true)
 		{

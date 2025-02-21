@@ -608,7 +608,7 @@ public:
 		// We must zero-initialize this one
 		csb_repeat();
 
-		void activate(bool subStream = false);
+		void activate();
 		void deactivate();
 
 		std::optional<USHORT> csb_cursor_number;	// Cursor number for this stream
@@ -658,12 +658,9 @@ inline CompilerScratch::csb_repeat::csb_repeat()
 {
 }
 
-inline void CompilerScratch::csb_repeat::activate(bool subStream)
+inline void CompilerScratch::csb_repeat::activate()
 {
 	csb_flags |= csb_active;
-
-	if (subStream)
-		csb_flags |= csb_sub_stream;
 }
 
 inline void CompilerScratch::csb_repeat::deactivate()

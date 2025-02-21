@@ -311,7 +311,6 @@ const int op_parameters	= 15;
 const int op_error_handler	= 16;
 const int op_set_error	= 17;
 const int op_literals	= 18;
-const int op_relation	= 20;
 const int op_exec_into	= 21;
 const int op_cursor_stmt	= 22;
 const int op_byte_opt_verb	= 23;
@@ -3528,27 +3527,6 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 				blr_print_verb(control, level);
 				blr_print_verb(control, level);
 			}
-			break;
-
-		case op_relation:
-			blr_operator = control->ctl_blr_reader.getByte();
-			blr_print_blr(control, blr_operator);
-			// Strange message. Notice that blr_lock_relation was part of PC_ENGINE.
-			if (blr_operator != blr_relation && blr_operator != blr_rid)
-			{
-				blr_error(control,
-						  "*** blr_relation or blr_rid must be object of blr_lock_relation, %d found ***",
-						  (int) blr_operator);
-			}
-
-			if (blr_operator == blr_relation)
-			{
-				n = blr_print_byte(control);
-				while (--n >= 0)
-					blr_print_char(control);
-			}
-			else
-				blr_print_word(control);
 			break;
 
 		case op_exec_into:

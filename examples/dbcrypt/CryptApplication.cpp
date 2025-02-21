@@ -36,13 +36,27 @@ public:
 	{
 		if (length > 0 && buffer)
 		{
-			char k = 0x5a;
 			memcpy(buffer, &k, 1);
 			fprintf(stderr, "\nTransfered key to server\n");
 		}
 		return 1;
 	}
+
+	int getHashLength(Firebird::CheckStatusWrapper* status) override
+	{
+		return 1;
+	}
+
+	void getHashData(Firebird::CheckStatusWrapper* status, void* h) override
+	{
+		memcpy(h, &k, 1);
+	}
+
+private:
+	static const char k;
 };
+
+const char CryptKey::k = 0x5a;
 
 class App
 {

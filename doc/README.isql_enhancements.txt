@@ -337,8 +337,8 @@ It is set to OFF by default. The name WIRE_STATS could be shortened up to WIRE.
 The statistics counters shown in two groups: 'logical' and 'physical':
   - logical counters show numbers of packets in terms of Firebird wire protocol
 	and number of bytes send before compression and received after decompression;
-  - physical counters show number of physical packets and bytes send and 
-	received over the wire, number of bytes could be affected by wire compression, 
+  - physical counters show number of physical packets and bytes send and
+	received over the wire, number of bytes could be affected by wire compression,
 	if present. Also, number of network roundtrips is shown: it is number of
 	changes of IO direction from 'send' to 'receive'.
 
@@ -489,7 +489,9 @@ If engine prepares the statement correctly, it's run and ISQL is put in new stat
 mode.
 
 If engine returns error isc_command_end_err2, then ISQL is put in statement
-continuation mode and asks for another line, repeating the process.
+continuation mode and asks for another line, repeating the process. When this error
+happens together with IStatement::PREPARE_REQUIRE_SEMICOLON, trace does not log the
+error.
 
 If engine returns a different error, the error is shown and ISQL is put in new statement
 mode.

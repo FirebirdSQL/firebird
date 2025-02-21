@@ -267,7 +267,7 @@ private:
 		DsqlRequest* const m_stmt;
 		const Firebird::Array<dsql_par*>* m_params = nullptr;
 		Firebird::HalfStaticArray<dsc, 16> m_descs;
-		Firebird::string temp_utf8_text;
+		Firebird::string m_tempUTF8;
 	};
 
 	DsqlRequest* const m_stmt;
@@ -340,7 +340,7 @@ public:
 
 private:
 	TraceDescriptors* m_descs;
-	Firebird::string temp_utf8_text;
+	Firebird::string m_tempUTF8;
 };
 
 

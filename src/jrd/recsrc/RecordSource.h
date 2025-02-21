@@ -798,6 +798,11 @@ namespace Jrd
 			return savedPosition;
 		}
 
+		SINT64 getInFrameOffset() const
+		{
+			return savedPosition - frameStart;
+		}
+
 		void restore()
 		{
 			if (!moved)

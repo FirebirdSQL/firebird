@@ -753,9 +753,19 @@ namespace
 	class DefaultCallback : public AutoIface<ICryptKeyCallbackImpl<DefaultCallback, CheckStatusWrapper> >
 	{
 	public:
-		unsigned int callback(unsigned int, const void*, unsigned int, void*)
+		unsigned int callback(unsigned int, const void*, unsigned int, void*) override
 		{
 			return 0;
+		}
+
+		int getHashLength(Firebird::CheckStatusWrapper* status) override
+		{
+			return 0;
+		}
+
+		void getHashData(Firebird::CheckStatusWrapper* status, void* h) override
+		{
+			fb_assert(false);
 		}
 	};
 
@@ -1406,12 +1416,14 @@ static void successful_completion(CheckStatusWrapper* s, ISC_STATUS acceptCode =
 
 // Stuff exception transliterated to the client charset.
 static ISC_STATUS transliterateException(thread_db* tdbb, const Exception& ex, FbStatusVector* vector,
-	const char* func) noexcept
+	const char* func, std::function<bool (const FbStatusVector* vector)> avoidTrace = {}) noexcept
 {
 	ex.stuffException(vector);
 
 	Jrd::Attachment* attachment = tdbb->getAttachment();
-	if (func && attachment && attachment->att_trace_manager->needs(ITraceFactory::TRACE_EVENT_ERROR))
+
+	if ((!avoidTrace || !avoidTrace(vector)) && func &&
+		attachment && attachment->att_trace_manager->needs(ITraceFactory::TRACE_EVENT_ERROR))
 	{
 		TraceConnectionImpl conn(attachment);
 		TraceStatusVectorImpl traceStatus(vector, TraceStatusVectorImpl::TS_ERRORS);
@@ -5306,6 +5318,28 @@ IReplicator* JAttachment::createReplicator(CheckStatusWrapper* user_status)
 	return jr;
 }
 
+unsigned JAttachment::getMaxBlobCacheSize(CheckStatusWrapper* status)
+{
+	status->setErrors(Arg::Gds(isc_wish_list).value());
+	return 0;
+}
+
+void JAttachment::setMaxBlobCacheSize(CheckStatusWrapper* status, unsigned size)
+{
+	status->setErrors(Arg::Gds(isc_wish_list).value());
+}
+
+unsigned JAttachment::getMaxInlineBlobSize(CheckStatusWrapper* status)
+{
+	status->setErrors(Arg::Gds(isc_wish_list).value());
+	return 0;
+}
+
+void JAttachment::setMaxInlineBlobSize(CheckStatusWrapper* status, unsigned size)
+{
+	status->setErrors(Arg::Gds(isc_wish_list).value());
+}
+
 
 int JResultSet::fetchNext(CheckStatusWrapper* user_status, void* buffer)
 {
@@ -5683,7 +5717,13 @@ JStatement* JAttachment::prepare(CheckStatusWrapper* user_status, ITransaction* 
 		}
 		catch (const Exception& ex)
 		{
-			transliterateException(tdbb, ex, user_status, "JStatement::prepare");
+			transliterateException(tdbb, ex, user_status, "JStatement::prepare",
+				[&](const FbStatusVector* vector)
+				{
+					return (flags & IStatement::PREPARE_REQUIRE_SEMICOLON) &&
+						fb_utils::containsErrorCode(vector->getErrors(), isc_command_end_err2);
+				});
+
 			if (statement)
 			{
 				try
@@ -6085,6 +6125,17 @@ JBatch* JStatement::createBatch(Firebird::CheckStatusWrapper* status, Firebird::
 
 	successful_completion(status);
 	return batch;
+}
+
+unsigned JStatement::getMaxInlineBlobSize(CheckStatusWrapper* status)
+{
+	status->setErrors(Arg::Gds(isc_wish_list).value());
+	return 0;
+}
+
+void JStatement::setMaxInlineBlobSize(CheckStatusWrapper* status, unsigned size)
+{
+	status->setErrors(Arg::Gds(isc_wish_list).value());
 }
 
 
@@ -7755,14 +7806,26 @@ void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment, XThreadEns
 
 	Sync sync(&dbb->dbb_sync, "jrd.cpp: release_attachment");
 
+	// dummy mutex is used to avoid races with crypto thread
+	XThreadMutex dummy_mutex;
+	XThreadEnsureUnlock dummyGuard(dummy_mutex, FB_FUNCTION);
+
 	// avoid races with special threads
 	// take into an account lock earlier taken in DROP DATABASE
 	XThreadEnsureUnlock threadGuard(dbb->dbb_thread_mutex, FB_FUNCTION);
 	XThreadEnsureUnlock* activeThreadGuard = dropGuard;
 	if (!activeThreadGuard)
 	{
-		threadGuard.enter();
-		activeThreadGuard = &threadGuard;
+		if (dbb->dbb_crypto_manager
+			&& Thread::isCurrent(Thread::getIdFromHandle(dbb->dbb_crypto_manager->getCryptThreadHandle())))
+		{
+			activeThreadGuard = &dummyGuard;
+		}
+		else
+		{
+			activeThreadGuard = &threadGuard;
+		}
+		activeThreadGuard->enter();
 	}
 
 	sync.lock(SYNC_EXCLUSIVE);
@@ -9110,7 +9173,7 @@ bool TimeoutTimer::expired() const
 		return false;
 
 	const SINT64 t = currTime();
-	return t >= m_start + m_value;
+	return t >= m_start + m_value - 1;
 }
 
 unsigned int TimeoutTimer::timeToExpire() const

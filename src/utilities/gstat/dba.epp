@@ -1060,7 +1060,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 
 						if (blob_level.blob_count > 0)
 						{
-							dba_print(false, 49, SafeArg()
+							dba_print(false, 64, SafeArg()
 								<< i
 								<< blob_level.blob_count
 								<< blob_level.blob_space

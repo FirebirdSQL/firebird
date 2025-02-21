@@ -8658,9 +8658,9 @@ bool get_mapping(BurpGlobals* tdgbl)
 			BurpSql mapRole(tdgbl, sql.c_str());
 			mapRole.execute(tdgbl->tr_handle);
 		}
-		catch (const Firebird::FbException& ex)
+		catch (const status_exception& ex)
 		{
-			fb_utils::copyStatus(&tdgbl->status_vector, ex.getStatus());
+			ex.stuffException(&tdgbl->status_vector);
 			general_on_error ();
 		}
 	}
@@ -11589,9 +11589,9 @@ void fix_generator(BurpGlobals* tdgbl, const FixGenerator* g)
 		BurpSql fixGen(tdgbl, sql.c_str());
 		fixGen.execute(gds_trans);
 	}
-	catch (const Firebird::FbException& ex)
+	catch (const status_exception& ex)
 	{
-		fb_utils::copyStatus(&tdgbl->status_vector, ex.getStatus());
+		ex.stuffException(&tdgbl->status_vector);
 
 		if (tdgbl->status_vector->getErrors()[1] == isc_dsql_error)
 		{

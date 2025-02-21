@@ -133,20 +133,11 @@ namespace
 			if (!file)
 				configError("missing or inaccessible file", key, filename.c_str());
 
-			// skip first empty lines
-			do
-			{
-				if (feof(file))
-					break;
-
-				if (!temp.LoadFromFile(file))
-					break;
-
-				temp.alltrim(" \t\r");
-			} while (temp.isEmpty());
+			if (temp.LoadFromFile(file))
+				temp.alltrim("\r");
 
 			if (temp.isEmpty())
-				configError("empty file", key, filename.c_str());
+				configError("first empty line of file", key, filename.c_str());
 		}
 
 		output = temp.c_str();
@@ -167,6 +158,7 @@ namespace
 				if (output.username.hasData())
 					configError("multiple values", output.database, "username");
 				parseExternalValue(key, value, output.username);
+				output.username.rtrim(" ");
 			}
 			else if (key.find("password") == 0)
 			{

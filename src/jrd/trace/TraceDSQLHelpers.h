@@ -97,6 +97,11 @@ public:
 		}
 	}
 
+	void avoidTrace()
+	{
+		m_need_trace = false;
+	}
+
 private:
 	bool m_need_trace;
 	Attachment* m_attachment;

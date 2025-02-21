@@ -301,6 +301,10 @@ public:
 	UCHAR getCurrentState(thread_db* tdbb) const;
 	const char* getKeyName() const;
 	const char* getPluginName() const;
+	Thread::Handle getCryptThreadHandle() const
+	{
+		return cryptThreadHandle;
+	}
 
 private:
 	enum IoResult {SUCCESS_ALL, FAILED_CRYPT, FAILED_IO};
@@ -378,7 +382,7 @@ private:
 	AttachmentsRefHolder keyProviders, keyConsumers;
 	Firebird::string hash;
 	Firebird::RefPtr<DbInfo> dbInfo;
-	Thread::Handle cryptThreadId;
+	Thread::Handle cryptThreadHandle;
 	Firebird::IDbCryptPlugin* cryptPlugin;
 	Factory* checkFactory;
 	Database& dbb;

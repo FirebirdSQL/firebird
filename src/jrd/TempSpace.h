@@ -240,10 +240,10 @@ private:
 	Firebird::Array<UCHAR> initialBuffer;
 	bool initiallyDynamic;
 
-	typedef Firebird::BePlusTree<Segment*, offset_t, MemoryPool, Segment> FreeSegmentTree;
+	typedef Firebird::BePlusTree<Segment*, offset_t, Segment> FreeSegmentTree;
 	FreeSegmentTree freeSegments;
 
-	typedef Firebird::BePlusTree<SegmentLastPointer, offset_t, MemoryPool, SegmentLastPointer> FreeSegmentLastPointerTree;
+	typedef Firebird::BePlusTree<SegmentLastPointer, offset_t, SegmentLastPointer> FreeSegmentLastPointerTree;
 	FreeSegmentLastPointerTree freeSegmentLastPointers;
 
 	inline void lastPointerAdd(Segment* const segment)

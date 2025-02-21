@@ -959,6 +959,63 @@ void Rrq::saveStatus(IStatus* v) noexcept
 	}
 }
 
+Rbl* Rtr::createInlineBlob()
+{
+	fb_assert(!rtr_inline_blob);
+
+	Rbl* blb = FB_NEW Rbl(0);
+
+	blb->rbl_rdb = rtr_rdb;
+	blb->rbl_rtr = this;
+
+	blb->rbl_id = INVALID_OBJECT;
+	//SET_OBJECT(rdb, blb, blb->rbl_id);
+
+	blb->rbl_flags |= Rbl::CACHED;
+
+	rtr_inline_blob = blb;
+	return blb;
+};
+
+void Rtr::setupInlineBlob(P_INLINE_BLOB* p_blob)
+{
+	fb_assert(p_blob->p_tran_id == this->rtr_id);
+	fb_assert(rtr_inline_blob);
+
+	Rbl* blb = rtr_inline_blob;
+	rtr_inline_blob = nullptr;
+
+	fb_assert(blb->rbl_data.getCount() <= MAX_INLINE_BLOB_SIZE);
+	fb_assert(blb->rbl_data.getCount() <= MAX_USHORT);
+
+	blb->rbl_buffer_length = MIN(MAX_USHORT, blb->rbl_data.getCapacity());
+	if (!rtr_rdb->incBlobCache(blb->getCachedSize()))
+	{
+		delete blb;
+		return;
+	}
+
+	blb->rbl_blob_id = p_blob->p_blob_id;
+	if (!rtr_blobs.add(blb))
+	{
+		// Blob with the same blob id already exists. It could be in use, or it
+		// could be opened by user explicitly with custom BPB - thus delete new one.
+		Rbl* old = rtr_blobs.current();
+
+		fb_assert(blb != old);
+		delete blb;
+
+		rtr_rdb->decBlobCache(blb->getCachedSize());
+		return;
+	}
+
+	blb->rbl_info.parseInfo(p_blob->p_blob_info.cstr_length, p_blob->p_blob_info.cstr_address);
+
+	blb->rbl_length = blb->rbl_data.getCount();
+	blb->rbl_ptr = blb->rbl_buffer = blb->rbl_data.begin();
+	blb->rbl_flags |= Rbl::EOF_PENDING;
+}
+
 void Rsr::saveException(const Exception& ex, bool overwrite)
 {
 	if (!rsr_status) {

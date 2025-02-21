@@ -99,6 +99,7 @@ const int SVC_finished		= 0x10;
 //const int SVC_thd_running	= 0x20;
 const int SVC_evnt_fired	= 0x40;
 const int SVC_cmd_line		= 0x80;
+const int SVC_failed_start	= 0x100;
 
 // forward decl.
 class thread_db;
@@ -245,6 +246,8 @@ private:
 	void	finish(USHORT flag);
 	// Throws shutdown exception if global flag is set for it
 	bool	checkForShutdown();
+	// Check for the existence of errors in the service that has not started
+	bool	checkForFailedStart();
 	// Transfer data from svc_stdout into buffer
 	void	get(UCHAR* buffer, USHORT length, USHORT flags, USHORT timeout, USHORT* return_length);
 	// Sends stdin for a service
