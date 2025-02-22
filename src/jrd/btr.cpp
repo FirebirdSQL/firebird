@@ -1797,16 +1797,15 @@ bool BTR_make_bounds(thread_db* tdbb, const IndexRetrieval* retrieval,
 			(retrieval->irb_desc.idx_flags & idx_unique) ? INTL_KEY_UNIQUE :
 			INTL_KEY_SORT;
 
+		bool forceIncludeUpper = false, forceIncludeLower = false;
+
 		if (const auto count = retrieval->irb_upper_count)
 		{
 			const auto values = iterator ? iterator->getUpperValues() :
 				retrieval->irb_value + retrieval->irb_desc.idx_count;
 
-			bool forceInclude = false;
 			errorCode = BTR_make_key(tdbb, count, values, retrieval->irb_scale,
-				idx, upper, keyType, &forceInclude);
-			if (forceInclude)
-				forceInclFlag |= irb_force_upper;
+				idx, upper, keyType, &forceIncludeUpper);
 		}
 
 		if (errorCode == idx_e_ok)
@@ -1816,11 +1815,8 @@ bool BTR_make_bounds(thread_db* tdbb, const IndexRetrieval* retrieval,
 				const auto values = iterator ? iterator->getLowerValues() :
 					retrieval->irb_value;
 
-				bool forceInclude = false;
 				errorCode = BTR_make_key(tdbb, count, values, retrieval->irb_scale,
-					idx, lower, keyType, &forceInclude);
-				if (forceInclude)
-					forceInclFlag |= irb_force_lower;
+					idx, lower, keyType, &forceIncludeLower);
 			}
 		}
 
@@ -1830,6 +1826,22 @@ bool BTR_make_bounds(thread_db* tdbb, const IndexRetrieval* retrieval,
 			IndexErrorContext context(retrieval->irb_relation, &temp_idx);
 			context.raise(tdbb, errorCode);
 		}
+
+		// If retrieval is flagged to ignore NULLs and any segment of the key
+		// to be matched contains NULL, don't bother with a scan
+
+		if ((retrieval->irb_generic & irb_ignore_null_value_key) &&
+			((retrieval->irb_upper_count && upper->key_nulls) ||
+			(retrieval->irb_lower_count && lower->key_nulls)))
+		{
+			return false;
+		}
+
+		if (forceIncludeUpper)
+			forceInclFlag |= irb_force_upper;
+
+		if (forceIncludeLower)
+			forceInclFlag |= irb_force_lower;
 	}
 
 	return true;
