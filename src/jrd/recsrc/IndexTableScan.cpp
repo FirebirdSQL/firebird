@@ -257,8 +257,8 @@ bool IndexTableScan::internalGetRecord(thread_db* tdbb) const
 
 			// If we're walking in a descending index and we need to ignore NULLs
 			// then stop at the first NULL we see (only for single segment!)
-			if (descending && ignoreNulls && node.prefix == 0 &&
-				node.length >= 1 && node.data[0] == 255)
+			if (descending && ignoreNulls &&
+				node.prefix == 0 && node.length >= 1 && node.data[0] == 255)
 			{
 				break;
 			}

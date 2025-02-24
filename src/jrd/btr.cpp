@@ -1241,8 +1241,8 @@ void BTR_evaluate(thread_db* tdbb, const IndexRetrieval* retrieval, RecordBitmap
 				{
 					// If we're walking in a descending index and we need to ignore NULLs
 					// then stop at the first NULL we see (only for single segment!)
-					if (descending && ignoreNulls && node.prefix == 0 &&
-						node.length >= 1 && node.data[0] == 255)
+					if (descending && ignoreNulls &&
+						node.prefix == 0 && node.length >= 1 && node.data[0] == 255)
 					{
 						break;
 					}
@@ -6906,18 +6906,13 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 			return true;
 		}
 
-		// Ignore NULL-values, this is currently only available for single segment indexes.
+		// Ignore NULL-values, this is currently only available for single segment indexes
 		if (ignoreNulls)
 		{
-			ignore = false;
-			if (descending)
-			{
-				if ((node.prefix == 0) && (node.length >= 1) && (node.data[0] == 255))
-					return false;
-			}
-			else {
-				ignore = (node.prefix + node.length == 0); // Ascending (prefix + length == 0)
-			}
+			if (descending && node.prefix == 0 && node.length >= 1 && node.data[0] == 255)
+				return false;
+
+			ignore = descending ? false : (node.prefix + node.length == 0);
 		}
 
 		if (skipLowerKey)
