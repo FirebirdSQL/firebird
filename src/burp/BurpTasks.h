@@ -149,6 +149,7 @@ public:
 	bool m_batchMode;
 	bool m_batchOk;
 	ULONG m_inMsgLen;
+	ULONG m_blobCount;
 
 	// batch mode
 	Firebird::string m_sqlStatement;
