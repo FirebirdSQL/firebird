@@ -140,6 +140,7 @@
     <ClCompile Include="..\..\..\src\jrd\recsrc\SingularStream.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\SkipRowsStream.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\SortedStream.cpp" />
+	<ClCompile Include="..\..\..\src\jrd\recsrc\TableValueFunctionScan.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\Union.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\VirtualTableScan.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\WindowedStream.cpp" />
