@@ -190,8 +190,13 @@ bool BackupRelationTask::handler(WorkItem& _item)
 		m_error = true;
 		stopItems();
 	}
-	catch (const Exception&)	// could be different handlers for LongJump and Exception
+	catch (const Exception& ex)	// could be different handlers for LongJump and Exception
 	{
+		FbLocalStatus st;
+		ex.stuffException(&st);
+		BurpGlobals::putSpecific(m_masterGbl);	// enough for StatusAccessor
+		BURP_print_status(true, &st);
+
 		m_stop = true;
 		m_error = true;
 		stopItems();
@@ -717,8 +722,13 @@ bool RestoreRelationTask::handler(WorkItem& _item)
 		m_dirtyCond.notifyAll();
 		m_cleanCond.notifyAll();
 	}
-	catch (const Exception&)	// could be different handlers for LongJump and Exception
+	catch (const Exception& ex)	// could be different handlers for LongJump and Exception
 	{
+		FbLocalStatus st;
+		ex.stuffException(&st);
+		BurpGlobals::putSpecific(m_masterGbl);	// enough for StatusAccessor
+		BURP_print_status(true, &st);
+
 		m_stop = true;
 		m_error = true;
 		m_dirtyCond.notifyAll();

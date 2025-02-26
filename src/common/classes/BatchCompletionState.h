@@ -26,6 +26,8 @@
 #include "../common/classes/array.h"
 #include "../common/utils_proto.h"
 
+#define DEB_BATCH(x)
+
 namespace Firebird {
 
 	class Transliterate

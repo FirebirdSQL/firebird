@@ -64,6 +64,7 @@
 #include "../common/dsc_proto.h"
 #include "../common/ThreadStart.h"
 #include "../common/msg_encode.h"
+#include "../common/classes/BatchCompletionState.h"
 
 using MsgFormat::SafeArg;
 using namespace Firebird;
@@ -2312,7 +2313,6 @@ void get_blob(BurpGlobals* tdgbl, IBatch* batch, const burp_fld* fields, UCHAR* 
 	}
 
 	// Eat up blob segments
-
 	for (; segments > 0; --segments)
 	{
 		USHORT length = get(tdgbl);
@@ -11705,6 +11705,7 @@ void WriteRelationMeta::clear()
 	m_blr.clear();
 	m_inMgsNum = 0;
 	m_inMsgLen = 0;
+	m_blobCount = 0;
 }
 
 void WriteRelationMeta::setRelation(BurpGlobals* tdgbl, const burp_rel* relation)
@@ -11826,11 +11827,17 @@ IBatch* WriteRelationMeta::createBatch(BurpGlobals* tdgbl, IAttachment* att)
 			// correct batchStep if necessary
 			unsigned msgSize = m_batchMeta->getAlignedLength(&tdgbl->throwStatus);
 			if (msgSize * m_batchStep > bufSize)
+			{
 				m_batchStep = bufSize / msgSize;
+				m_blobCount++;		// looks like we are under low ram conditions on server...
+									// make batch step even smaller if we have some blobs
+			}
+			if (m_blobCount)
+				m_batchStep /= m_blobCount;
 
 			// determine maximum blob size for inline transfer
 			m_batchInlineBlobLimit = bufSize / m_batchStep;
-			// take into an account:	   blob alignment	header size
+			// take into an account:  blob alignment   header size
 			m_batchInlineBlobLimit -= ((blAlign - 1) + blHdr);
 		}
 		fb_assert(m_batchInlineBlobLimit);
@@ -11910,6 +11917,8 @@ bool WriteRelationMeta::prepareBatch(BurpGlobals* tdgbl)
 				offset = FB_ALIGN(offset, alignment);
 			field->fld_offset = offset;
 			offset += field->fld_total_len = desc.dsc_length;
+			if (desc.isBlob())
+				++m_blobCount;
 
 			SLONG sqlLength, sqlSubType, sqlScale, sqlType;
 			desc.getSqlInfo(&sqlLength, &sqlSubType, &sqlScale, &sqlType);
@@ -12506,6 +12515,8 @@ inline void RestoreRelationTask::checkSpace(IOBuffer** pBuf, const FB_SIZE_T len
 	(*pBuf)->setUsed((*pBuf)->getSize() - *pSpace);
 
 	IOBuffer* newBuf = getCleanBuffer();
+	if (!newBuf)	// error ?
+		throw LongJump();
 	(*pBuf)->linkNext(newBuf);
 
 	if ((*pBuf)->getRecs())
