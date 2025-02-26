@@ -749,6 +749,33 @@ namespace
 		}
 	}
 
+	USHORT validatePageSize(SLONG pageSize)
+	{
+		USHORT actualPageSize = DEFAULT_PAGE_SIZE;
+
+		if (pageSize > 0)
+		{
+			for (SLONG size = MIN_PAGE_SIZE; size <= MAX_PAGE_SIZE; size <<= 1)
+			{
+				if (pageSize <= size)
+				{
+					pageSize = size;
+					break;
+				}
+			}
+
+			if (pageSize > MAX_PAGE_SIZE)
+				pageSize = MAX_PAGE_SIZE;
+
+			fb_assert(pageSize <= MAX_USHORT);
+			actualPageSize = (USHORT) pageSize;
+		}
+
+		fb_assert(actualPageSize % PAGE_SIZE_BASE == 0);
+		fb_assert(actualPageSize >= MIN_PAGE_SIZE && actualPageSize <= MAX_PAGE_SIZE);
+
+		return actualPageSize;
+	}
 
 	class DefaultCallback : public AutoIface<ICryptKeyCallbackImpl<DefaultCallback, CheckStatusWrapper> >
 	{
@@ -3005,18 +3032,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 
 			attachment->att_client_charset = attachment->att_charset = options.dpb_interp;
 
-			if (options.dpb_page_size <= 0) {
-				options.dpb_page_size = DEFAULT_PAGE_SIZE;
-			}
-
-			SLONG page_size = MIN_PAGE_SIZE;
-			for (; page_size < MAX_PAGE_SIZE; page_size <<= 1)
-			{
-				if (options.dpb_page_size < page_size << 1)
-					break;
-			}
-
-			dbb->dbb_page_size = (page_size > MAX_PAGE_SIZE) ? MAX_PAGE_SIZE : page_size;
+			dbb->dbb_page_size = validatePageSize(options.dpb_page_size);
 
 			TRA_init(attachment);
 
@@ -7634,20 +7650,22 @@ static JAttachment* create_attachment(const PathName& alias_name,
 
 static void check_single_maintenance(thread_db* tdbb)
 {
-	Database* const dbb = tdbb->getDatabase();
+	const auto dbb = tdbb->getDatabase();
+	const auto attachment = tdbb->getAttachment();
 
 	const ULONG ioBlockSize = dbb->getIOBlockSize();
 	const ULONG headerSize = MAX(RAW_HEADER_SIZE, ioBlockSize);
 
 	HalfStaticArray<UCHAR, RAW_HEADER_SIZE + PAGE_ALIGNMENT> temp;
-	UCHAR* header_page_buffer = temp.getAlignedBuffer(headerSize, ioBlockSize);
+	UCHAR* const header_page_buffer = temp.getAlignedBuffer(headerSize, ioBlockSize);
 
-	Ods::header_page* const header_page = reinterpret_cast<Ods::header_page*>(header_page_buffer);
+	if (!PIO_header(tdbb, header_page_buffer, headerSize))
+		ERR_post(Arg::Gds(isc_bad_db_format) << Arg::Str(attachment->att_filename));
 
-	PIO_header(tdbb, header_page_buffer, headerSize);
+	const auto header_page = reinterpret_cast<Ods::header_page*>(header_page_buffer);
 
 	if (header_page->hdr_shutdown_mode == Ods::hdr_shutdown_single)
-		ERR_post(Arg::Gds(isc_shutdown) << Arg::Str(tdbb->getAttachment()->att_filename));
+		ERR_post(Arg::Gds(isc_shutdown) << Arg::Str(attachment->att_filename));
 }
 
 
