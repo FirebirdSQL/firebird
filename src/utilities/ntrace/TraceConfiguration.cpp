@@ -89,12 +89,8 @@ void TraceCfgReader::readConfig()
 	{
 		const ConfigFile::Parameter* section = &params[n];
 
-		const bool isDatabase = (section->name == "database");
-		if (!isDatabase && section->name != "services")
-			//continue;
-			fatal_exception::raiseFmt(ERROR_PREFIX
-				"line %d: wrong section header, \"database\" or \"service\" is expected",
-				section->line);
+		const ConfigFile::SectionType sectionType = section->parseSectionKey();
+		const bool isDatabase = (sectionType != ConfigFile::SectionType::SERVICE);
 
 		const ConfigFile::String pattern = section->value;
 		bool match = false;
@@ -131,14 +127,16 @@ void TraceCfgReader::readConfig()
 			noQuotePattern.alltrim(" '\'");
 			PathName expandedName;
 
-			if (m_databaseName == noQuotePattern ||
+			if (sectionType != ConfigFile::SectionType::DATABASE_REGEX && (m_databaseName == noQuotePattern ||
 				(expandDatabaseName(noQuotePattern, expandedName, nullptr),
-				m_databaseName == expandedName) )
+				m_databaseName == expandedName) ))
 			{
+				// Compare by name
 				match = exactMatch = true;
 			}
-			else
+			else if (sectionType != ConfigFile::SectionType::DATABASE_NAME)
 			{
+				// Compare by regex
 				bool regExpOk = false;
 				try
 				{
