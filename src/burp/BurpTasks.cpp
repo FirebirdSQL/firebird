@@ -93,6 +93,33 @@ protected:
 };
 
 
+class SimpleGblHolder
+{
+public:
+	SimpleGblHolder(BurpGlobals* gbl)
+	{
+		m_prev = BurpGlobals::getSpecific();
+
+		// Avoid threadDataPriorContext == this, it makes a loop in linked list of contexts
+		if (m_prev != gbl)
+			BurpGlobals::putSpecific(gbl);
+	}
+
+	~SimpleGblHolder()
+	{
+		BurpGlobals* gbl = BurpGlobals::getSpecific();
+
+		if (m_prev != gbl)
+			BurpGlobals::restoreSpecific();
+
+		fb_assert(m_prev == BurpGlobals::getSpecific());
+	}
+
+private:
+	BurpGlobals* m_prev;
+};
+
+
 /// class BackupRelationTask
 
 BackupRelationTask::BackupRelationTask(BurpGlobals* tdgbl) : Task(),
@@ -196,7 +223,7 @@ bool BackupRelationTask::handler(WorkItem& _item)
 		ex.stuffException(&st);
 
 		{ // scope
-			BurpGblHolder gbl(m_masterGbl, m_masterGbl->taskItem);  // enough for StatusAccessor
+			SimpleGblHolder gbl(m_masterGbl);
 			BURP_print_status(true, &st);
 		}
 
@@ -731,7 +758,7 @@ bool RestoreRelationTask::handler(WorkItem& _item)
 		ex.stuffException(&st);
 
 		{ // scope
-			BurpGblHolder gbl(m_masterGbl, m_masterGbl->taskItem);  // enough for StatusAccessor
+			SimpleGblHolder gbl(m_masterGbl);
 			BURP_print_status(true, &st);
 		}
 
