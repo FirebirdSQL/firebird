@@ -9343,6 +9343,16 @@ static void receive_packet_noqueue(rem_port* port, PACKET* packet)
 				stmt_id = p->packet.p_sqlfree.p_sqlfree_statement;
 				bFreeStmt = (p->packet.p_sqlfree.p_sqlfree_option == DSQL_drop);
 				break;
+
+			case op_batch_blob_stream:
+				stmt_id = p->packet.p_batch_blob.p_batch_statement;
+				bCheckResponse = true;
+				break;
+
+			case op_batch_regblob:
+				stmt_id = p->packet.p_batch_regblob.p_batch_statement;
+				bCheckResponse = true;
+				break;
 			}
 
 			receive_packet_with_callback(port, &p->packet);

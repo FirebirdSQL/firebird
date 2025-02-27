@@ -92,6 +92,33 @@ protected:
 };
 
 
+class SimpleGblHolder
+{
+public:
+	SimpleGblHolder(BurpGlobals* gbl)
+	{
+		m_prev = BurpGlobals::getSpecific();
+
+		// Avoid threadDataPriorContext == this, it makes a loop in linked list of contexts
+		if (m_prev != gbl)
+			BurpGlobals::putSpecific(gbl);
+	}
+
+	~SimpleGblHolder()
+	{
+		BurpGlobals* gbl = BurpGlobals::getSpecific();
+
+		if (m_prev != gbl)
+			BurpGlobals::restoreSpecific();
+
+		fb_assert(m_prev == BurpGlobals::getSpecific());
+	}
+
+private:
+	BurpGlobals* m_prev;
+};
+
+
 /// class BackupRelationTask
 
 BackupRelationTask::BackupRelationTask(BurpGlobals* tdgbl) : BurpTask(tdgbl),
@@ -186,8 +213,16 @@ bool BackupRelationTask::handler(WorkItem& _item)
 		m_error = true;
 		stopItems();
 	}
-	catch (const Exception&)	// could be different handlers for LongJump and Exception
+	catch (const Exception& ex)	// could be different handlers for LongJump and Exception
 	{
+		FbLocalStatus st;
+		ex.stuffException(&st);
+
+		{ // scope
+			SimpleGblHolder gbl(m_masterGbl);
+			BURP_print_status(true, &st);
+		}
+
 		m_stop = true;
 		m_error = true;
 		stopItems();
@@ -701,8 +736,16 @@ bool RestoreRelationTask::handler(WorkItem& _item)
 		m_dirtyCond.notifyAll();
 		m_cleanCond.notifyAll();
 	}
-	catch (const Exception&)	// could be different handlers for LongJump and Exception
+	catch (const Exception& ex)	// could be different handlers for LongJump and Exception
 	{
+		FbLocalStatus st;
+		ex.stuffException(&st);
+
+		{ // scope
+			SimpleGblHolder gbl(m_masterGbl);
+			BURP_print_status(true, &st);
+		}
+
 		m_stop = true;
 		m_error = true;
 		m_dirtyCond.notifyAll();
