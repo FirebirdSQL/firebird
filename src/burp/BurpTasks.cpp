@@ -194,8 +194,11 @@ bool BackupRelationTask::handler(WorkItem& _item)
 	{
 		FbLocalStatus st;
 		ex.stuffException(&st);
-		BurpGlobals::putSpecific(m_masterGbl);	// enough for StatusAccessor
-		BURP_print_status(true, &st);
+
+		{ // scope
+			BurpGblHolder gbl(m_masterGbl, m_masterGbl->taskItem);  // enough for StatusAccessor
+			BURP_print_status(true, &st);
+		}
 
 		m_stop = true;
 		m_error = true;
@@ -726,8 +729,11 @@ bool RestoreRelationTask::handler(WorkItem& _item)
 	{
 		FbLocalStatus st;
 		ex.stuffException(&st);
-		BurpGlobals::putSpecific(m_masterGbl);	// enough for StatusAccessor
-		BURP_print_status(true, &st);
+
+		{ // scope
+			BurpGblHolder gbl(m_masterGbl, m_masterGbl->taskItem);  // enough for StatusAccessor
+			BURP_print_status(true, &st);
+		}
 
 		m_stop = true;
 		m_error = true;
