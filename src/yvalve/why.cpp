@@ -831,11 +831,11 @@ private:
 		explicit CtrlCHandler(MemoryPool& p)
 			: ShutdownInit(p)
 		{
+			shutdownSemaphore = &semaphore;
 			Thread::start(shutdownThread, 0, 0, &handle);
 
 			procInt = ISC_signal(SIGINT, handlerInt, 0);
 			procTerm = ISC_signal(SIGTERM, handlerTerm, 0);
-			shutdownSemaphore = &semaphore;
 		}
 
 		~CtrlCHandler()
@@ -4582,6 +4582,36 @@ YBatch* YStatement::createBatch(CheckStatusWrapper* status, IMessageMetadata* in
 	return NULL;
 }
 
+
+unsigned YStatement::getMaxInlineBlobSize(CheckStatusWrapper* status)
+{
+	try
+	{
+		YEntry<YStatement> entry(status, this);
+		return entry.next()->getMaxInlineBlobSize(status);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+
+	return 0;
+}
+
+
+void YStatement::setMaxInlineBlobSize(CheckStatusWrapper* status, unsigned size)
+{
+	try
+	{
+		YEntry<YStatement> entry(status, this);
+		entry.next()->setMaxInlineBlobSize(status, size);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+}
+
 //-------------------------------------
 
 IscStatement::~IscStatement()
@@ -6220,6 +6250,66 @@ YReplicator* YAttachment::createReplicator(CheckStatusWrapper* status)
 }
 
 
+unsigned YAttachment::getMaxBlobCacheSize(CheckStatusWrapper* status)
+{
+	try
+	{
+		YEntry<YAttachment> entry(status, this);
+		return entry.next()->getMaxBlobCacheSize(status);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+
+	return 0;
+}
+
+
+void YAttachment::setMaxBlobCacheSize(CheckStatusWrapper* status, unsigned size)
+{
+	try
+	{
+		YEntry<YAttachment> entry(status, this);
+		entry.next()->setMaxBlobCacheSize(status, size);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+}
+
+
+unsigned YAttachment::getMaxInlineBlobSize(CheckStatusWrapper* status)
+{
+	try
+	{
+		YEntry<YAttachment> entry(status, this);
+		return entry.next()->getMaxInlineBlobSize(status);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+
+	return 0;
+}
+
+
+void YAttachment::setMaxInlineBlobSize(CheckStatusWrapper* status, unsigned size)
+{
+	try
+	{
+		YEntry<YAttachment> entry(status, this);
+		entry.next()->setMaxInlineBlobSize(status, size);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+}
+
+
 //-------------------------------------
 
 
@@ -6790,7 +6880,10 @@ void Dispatcher::shutdown(CheckStatusWrapper* userStatus, unsigned int timeout, 
 			}
 
 			if (hasThreads)
+			{
+				PluginManager::deleteDelayed();
 				continue;
+			}
 
 			Stack<YAttachment*, 64> attStack;
 			{
@@ -6820,6 +6913,7 @@ void Dispatcher::shutdown(CheckStatusWrapper* userStatus, unsigned int timeout, 
 				attachment->release();
 			}
 
+			PluginManager::deleteDelayed();
 		}
 
 		// ... and wait for all providers to go away

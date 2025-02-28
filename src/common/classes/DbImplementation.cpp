@@ -146,7 +146,8 @@ const UCHAR backEndianess[FB_NELEM(hardware)] =
 namespace Firebird {
 
 DbImplementation::DbImplementation(const Ods::header_page* h)
-	: di_cpu(h->hdr_cpu), di_os(h->hdr_os), di_cc(h->hdr_cc), di_flags(h->hdr_compatibility_flags)
+	: di_cpu(h->hdr_db_impl.hdr_cpu), di_os(h->hdr_db_impl.hdr_os),
+	  di_cc(h->hdr_db_impl.hdr_cc), di_flags(h->hdr_db_impl.hdr_compat)
 {
 }
 
@@ -196,10 +197,10 @@ bool DbImplementation::compatible(const DbImplementation& v) const
 
 void DbImplementation::store(Ods::header_page* h) const
 {
-	h->hdr_cpu = di_cpu;
-	h->hdr_os = di_os;
-	h->hdr_cc = di_cc;
-	h->hdr_compatibility_flags = di_flags;
+	h->hdr_db_impl.hdr_cpu = di_cpu;
+	h->hdr_db_impl.hdr_os = di_os;
+	h->hdr_db_impl.hdr_cc = di_cc;
+	h->hdr_db_impl.hdr_compat = di_flags;
 }
 
 void DbImplementation::stuff(UCHAR** info) const
@@ -224,7 +225,7 @@ DbImplementation DbImplementation::fromBackwardCompatibleByte(UCHAR bcImpl)
 	{
 		for (UCHAR hw = 0; hw < FB_NELEM(hardware); ++hw)
 		{
-			USHORT ind = USHORT(os) * FB_NELEM(hardware) + USHORT(hw);
+			const USHORT ind = USHORT(os) * FB_NELEM(hardware) + USHORT(hw);
 			if (backwardTable[ind] == bcImpl)
 			{
 				return DbImplementation(hw, os, 0xFF, backEndianess[hw] ? EndianBig : EndianLittle);

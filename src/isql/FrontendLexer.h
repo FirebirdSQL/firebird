@@ -46,7 +46,7 @@ public:
 		std::string rawText;
 		std::string processedText;
 
-		std::string getProcessedString() const
+		const std::string& getProcessedString() const
 		{
 			return type == FrontendLexer::Token::TYPE_STRING || type == FrontendLexer::Token::TYPE_META_STRING ?
 				processedText : rawText;

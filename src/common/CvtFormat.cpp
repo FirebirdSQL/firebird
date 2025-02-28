@@ -141,9 +141,9 @@ namespace
 	InitInstance<TimeZoneTrie> timeZoneTrie;
 
 
-	#define CVT_FORMAT(id, format) constexpr Patterns format = 1llu << id - 1;
-	#define CVT_FORMAT2(id, format1, format2) constexpr Patterns format2 = 1llu << id - 1;
-	#define CVT_FORMAT_FLAG(id, format) constexpr Patterns format = 1llu << id - 1;
+	#define CVT_FORMAT(id, format) constexpr Patterns format = 1llu << (id - 1);
+	#define CVT_FORMAT2(id, format1, format2) constexpr Patterns format2 = 1llu << (id - 1);
+	#define CVT_FORMAT_FLAG(id, format) constexpr Patterns format = 1llu << (id - 1);
 	namespace Format
 	{
 		typedef FB_UINT64 Patterns;
@@ -343,7 +343,7 @@ namespace
 					if (number < 1 || number > 9)
 						return Format::NONE;
 
-					return Format::FF1 << number - 1;
+					return Format::FF1 << (number - 1);
 				}
 				break;
 

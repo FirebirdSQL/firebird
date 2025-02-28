@@ -86,7 +86,7 @@ public:
 private:
 	void generateV4()
 	{
-		GenerateRandomBytes(bytes.data(), bytes.size());
+		GenerateRandomBytes(bytes.data(), static_cast<FB_SIZE_T>(bytes.size()));
 
 		// version and variant
 		bytes[6] = (bytes[6] & 0x0F) | 0x40;
@@ -95,7 +95,7 @@ private:
 
 	void generateV7()
 	{
-		GenerateRandomBytes(bytes.data() + 6, bytes.size() - 6);
+		GenerateRandomBytes(bytes.data() + 6, static_cast<FB_SIZE_T>(bytes.size()) - 6);
 
 		// current timestamp in ms
 		const auto now = std::chrono::system_clock::now();

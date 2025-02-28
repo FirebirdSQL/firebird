@@ -36,7 +36,7 @@ struct ini_idx_t
 {
 	UCHAR ini_idx_index_id;
 	UCHAR ini_idx_relid;
-	UCHAR ini_idx_flags;
+	USHORT ini_idx_flags;
 	UCHAR ini_idx_segment_count;
 	USHORT ini_idx_ods;
 	struct ini_idx_segment_t

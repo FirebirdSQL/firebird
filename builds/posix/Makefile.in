@@ -799,7 +799,7 @@ install install-embedded silent_install package packages dist:
 
 .PHONY:	tests tests_process run_tests run_tests_process
 
-log_level ?= all
+log_level ?= error
 
 tests:
 	$(MAKE) TARGET?=$(DefaultTarget) tests_process

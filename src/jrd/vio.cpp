@@ -5497,6 +5497,8 @@ void Database::garbage_collector(Database* dbb)
 
 						CCH_flush(tdbb, FLUSH_SWEEP, 0);
 						flush = false;
+
+						attachment->mergeStats();
 					}
 
 					dbb->dbb_flags &= ~DBB_gc_active;

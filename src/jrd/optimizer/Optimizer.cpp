@@ -2748,7 +2748,7 @@ RecordSource* Optimizer::applyLocalBoolean(RecordSource* rsb,
 	globalHolder.deactivate();
 
 	StreamStateHolder localHolder(csb, streams);
-	localHolder.activate(csb);
+	localHolder.activate();
 
 	double selectivity = MAXIMUM_SELECTIVITY;
 	if (const auto boolean = composeBoolean(iter, &selectivity))

@@ -1405,7 +1405,7 @@ void copyStatus(Firebird::CheckStatusWrapper* to, const Firebird::IStatus* from)
 		to->setWarnings(from->getWarnings());
 }
 
-void setIStatus(Firebird::CheckStatusWrapper* to, const ISC_STATUS* from) noexcept
+void setIStatus(Firebird::IStatus* to, const ISC_STATUS* from) noexcept
 {
 	try
 	{

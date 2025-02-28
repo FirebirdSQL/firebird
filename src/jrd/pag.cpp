@@ -727,9 +727,7 @@ AttNumber PAG_attachment_id(thread_db* tdbb)
 
 		CCH_MARK(tdbb, &window);
 
-		const AttNumber att_id = Ods::getAttID(header) + 1;
-		attachment->att_attachment_id = att_id;
-		Ods::writeAttID(header, att_id);
+		attachment->att_attachment_id = ++header->hdr_attachment_id;
 		dbb->assignLatestAttachmentId(attachment->att_attachment_id);
 
 		CCH_RELEASE(tdbb, &window);
@@ -796,11 +794,12 @@ void PAG_format_header(thread_db* tdbb)
 
 	WIN window(HEADER_PAGE_NUMBER);
 	header_page* header = (header_page*) CCH_fake(tdbb, &window, 1);
+	header->hdr_header.pag_type = pag_header;
 	header->hdr_header.pag_scn = 0;
+	Guid::generate().copyTo(header->hdr_guid);
 	*(ISC_TIMESTAMP*) header->hdr_creation_date = TimeZoneUtil::getCurrentGmtTimeStamp().utc_timestamp;
 	// should we include milliseconds or not?
 	//TimeStamp::round_time(header->hdr_creation_date->timestamp_time, 0);
-	header->hdr_header.pag_type = pag_header;
 	header->hdr_page_size = dbb->dbb_page_size;
 	header->hdr_ods_version = ODS_VERSION | ODS_FIREBIRD_FLAG;
 	DbImplementation::current.store(header);
@@ -817,6 +816,8 @@ void PAG_format_header(thread_db* tdbb)
 
 	dbb->dbb_ods_version = header->hdr_ods_version & ~ODS_FIREBIRD_FLAG;
 	dbb->dbb_minor_version = header->hdr_ods_minor;
+
+	dbb->dbb_guid.assign(header->hdr_guid);
 
 	CCH_RELEASE(tdbb, &window);
 }
@@ -951,10 +952,10 @@ void PAG_header(thread_db* tdbb, bool info, const TriState newForceWrite)
 
 	try {
 
-	const TraNumber next_transaction = Ods::getNT(header);
-	const TraNumber oldest_transaction = Ods::getOIT(header);
-	const TraNumber oldest_active = Ods::getOAT(header);
-	const TraNumber oldest_snapshot = Ods::getOST(header);
+	const TraNumber next_transaction = header->hdr_next_transaction;
+	const TraNumber oldest_transaction = header->hdr_oldest_transaction;
+	const TraNumber oldest_active = header->hdr_oldest_active;
+	const TraNumber oldest_snapshot = header->hdr_oldest_snapshot;
 
 	if (next_transaction)
 	{
@@ -1035,26 +1036,13 @@ void PAG_header(thread_db* tdbb, bool info, const TriState newForceWrite)
 	if (header->hdr_flags & hdr_no_reserve)
 		dbb->dbb_flags |= DBB_no_reserve;
 
-	const USHORT sd_flags = header->hdr_flags & hdr_shutdown_mask;
-	if (sd_flags)
-	{
-		dbb->dbb_ast_flags |= DBB_shutdown;
-		if (sd_flags == hdr_shutdown_full)
-			dbb->dbb_ast_flags |= DBB_shutdown_full;
-		else if (sd_flags == hdr_shutdown_single)
-			dbb->dbb_ast_flags |= DBB_shutdown_single;
-	}
+	const auto shutMode = (shut_mode_t) header->hdr_shutdown_mode;
+	dbb->dbb_shutdown_mode.store(shutMode, std::memory_order_relaxed);
 
-	const USHORT replica_mode = header->hdr_flags & hdr_replica_mask;
-	if (replica_mode)
-	{
-		if (replica_mode == hdr_replica_read_only)
-			dbb->dbb_replica_mode = REPLICA_READ_ONLY;
-		else if (replica_mode == hdr_replica_read_write)
-			dbb->dbb_replica_mode = REPLICA_READ_WRITE;
-		else
-			fb_assert(false);
-	}
+	const auto replicaMode = (ReplicaMode) header->hdr_replica_mode;
+	dbb->dbb_replica_mode.store(replicaMode, std::memory_order_relaxed);
+
+	dbb->dbb_guid.assign(header->hdr_guid);
 
 	// If database in backup lock state...
 	if (!info && dbb->dbb_backup_manager->getState() != Ods::hdr_nbak_normal)
@@ -1130,7 +1118,7 @@ void PAG_header_init(thread_db* tdbb)
 	PIO_header(tdbb, temp_page, headerSize);
 	const header_page* header = (header_page*) temp_page;
 
-	if (header->hdr_header.pag_type != pag_header || header->hdr_sequence)
+	if (header->hdr_header.pag_type != pag_header)
 		ERR_post(Arg::Gds(isc_bad_db_format) << Arg::Str(attachment->att_filename));
 
 	const USHORT ods_version = header->hdr_ods_version & ~ODS_FIREBIRD_FLAG;
@@ -1242,11 +1230,6 @@ void PAG_init2(thread_db* tdbb)
 		case HDR_sweep_interval:
 			fb_assert(p[1] == sizeof(SLONG));
 			memcpy(&dbb->dbb_sweep_interval, p + 2, sizeof(SLONG));
-			break;
-
-		case HDR_db_guid:
-			fb_assert(p[1] == Guid::SIZE);
-			dbb->dbb_guid = Guid(p + 2);
 			break;
 
 		case HDR_repl_seq:
@@ -1407,7 +1390,18 @@ void PAG_set_db_guid(thread_db* tdbb, const Guid& guid)
  *
  **************************************/
  	SET_TDBB(tdbb);
-	storeClump(tdbb, HDR_db_guid, Guid::SIZE, guid.getData());
+	ensureDbWritable(tdbb);
+
+	WIN window(HEADER_PAGE_NUMBER);
+	header_page* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+	CCH_MARK_MUST_WRITE(tdbb, &window);
+
+	const auto dbb = tdbb->getDatabase();
+
+	guid.copyTo(header->hdr_guid);
+	dbb->dbb_guid = guid;
+
+	CCH_RELEASE(tdbb, &window);
 }
 
 
@@ -1524,15 +1518,15 @@ void PAG_set_db_readonly(thread_db* tdbb, bool flag)
 		// for att lock indefinitely.
 		Attachment* att = tdbb->getAttachment();
 		if (att->att_attachment_id)
-			Ods::writeAttID(header, att->att_attachment_id);
+			header->hdr_attachment_id = att->att_attachment_id;
 
 		// This is necessary as dbb's Next could be less than OAT.
 		// And this is safe as we currently in exclusive attachment and
 		// all executed transactions was read-only.
-		dbb->dbb_next_transaction = Ods::getNT(header);
-		dbb->dbb_oldest_transaction = Ods::getOIT(header);
-		dbb->dbb_oldest_active = Ods::getOAT(header);
-		dbb->dbb_oldest_snapshot = Ods::getOST(header);
+		dbb->dbb_next_transaction = header->hdr_next_transaction;
+		dbb->dbb_oldest_transaction = header->hdr_oldest_transaction;
+		dbb->dbb_oldest_active = header->hdr_oldest_active;
+		dbb->dbb_oldest_snapshot = header->hdr_oldest_snapshot;
 	}
 
 	CCH_MARK_MUST_WRITE(tdbb, &window);
@@ -1569,20 +1563,18 @@ void PAG_set_db_replica(thread_db* tdbb, ReplicaMode mode)
 
 	const auto dbb = tdbb->getDatabase();
 
-	header->hdr_flags &= ~(hdr_replica_read_only | hdr_replica_read_write);
-	fb_assert((header->hdr_flags & hdr_replica_mask) == hdr_replica_none);
-
 	switch (mode)
 	{
 	case REPLICA_NONE:
+		header->hdr_replica_mode = hdr_replica_none;
 		break;
 
 	case REPLICA_READ_ONLY:
-		header->hdr_flags |= hdr_replica_read_only;
+		header->hdr_replica_mode = hdr_replica_read_only;
 		break;
 
 	case REPLICA_READ_WRITE:
-		header->hdr_flags |= hdr_replica_read_write;
+		header->hdr_replica_mode = hdr_replica_read_write;
 		break;
 
 	default:
@@ -1591,7 +1583,7 @@ void PAG_set_db_replica(thread_db* tdbb, ReplicaMode mode)
 
 	CCH_RELEASE(tdbb, &window);
 
-	dbb->dbb_replica_mode = mode;
+	dbb->dbb_replica_mode.store(mode, std::memory_order_relaxed);
 }
 
 

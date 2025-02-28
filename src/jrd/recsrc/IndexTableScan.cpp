@@ -198,6 +198,7 @@ bool IndexTableScan::internalGetRecord(thread_db* tdbb) const
 	}
 
 	index_desc* const idx = (index_desc*) ((SCHAR*) impure + m_offset);
+	const bool descending = (idx->idx_flags & idx_descending);
 
 	// find the last fetched position from the index
 	const USHORT pageSpaceID = m_relation->getPages(tdbb)->rel_pg_space_id;
@@ -205,6 +206,8 @@ bool IndexTableScan::internalGetRecord(thread_db* tdbb) const
 
 	const IndexRetrieval* const retrieval = m_index->retrieval;
 	const USHORT flags = retrieval->irb_generic & (irb_descending | irb_partial | irb_starting);
+	const bool ignoreNulls =
+		(retrieval->irb_generic & irb_ignore_null_value_key) && (idx->idx_count == 1);
 
 	do
 	{
@@ -252,6 +255,14 @@ bool IndexTableScan::internalGetRecord(thread_db* tdbb) const
 				continue;
 			}
 
+			// If we're walking in a descending index and we need to ignore NULLs
+			// then stop at the first NULL we see (only for single segment!)
+			if (descending && ignoreNulls &&
+				node.prefix == 0 && node.length >= 1 && node.data[0] == 255)
+			{
+				break;
+			}
+
 			// Build the current key value from the prefix and current node data.
 			memcpy(key.key_data + node.prefix, node.data, node.length);
 			key.key_length = node.length + node.prefix;
@@ -297,12 +308,16 @@ bool IndexTableScan::internalGetRecord(thread_db* tdbb) const
 				break;
 			}
 
-			// skip this record if:
-			// 1) there is an inversion tree for this index and this record
-			//    is not in the bitmap for the inversion, or
-			// 2) the record has already been visited
+			const bool skipNullKey = (ignoreNulls && !descending && !key.key_length);
 
-			if ((!(impure->irsb_flags & irsb_mustread) &&
+			// Skip this record if:
+			// 1) NULL key is found and we were asked to ignore them, or
+			// 2) there is an inversion tree for this index and this record
+			//    is not in the bitmap for the inversion, or
+			// 3) the record has already been visited
+
+			if (skipNullKey ||
+				(!(impure->irsb_flags & irsb_mustread) &&
 				(!impure->irsb_nav_bitmap ||
 					!RecordBitmap::test(*impure->irsb_nav_bitmap, number.getValue()))) ||
 				RecordBitmap::test(impure->irsb_nav_records_visited, number.getValue()))

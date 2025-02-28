@@ -120,7 +120,9 @@ static bool_t xdr_trrq_blr(RemoteXdr*, CSTRING*);
 static bool_t xdr_trrq_message(RemoteXdr*, USHORT);
 static bool_t xdr_bytes(RemoteXdr*, void*, ULONG);
 static bool_t xdr_blob_stream(RemoteXdr*, SSHORT, CSTRING*);
+static bool_t xdr_blobBuffer(RemoteXdr* xdrs, RemBlobBuffer* buff);
 static Rsr* getStatement(RemoteXdr*, USHORT);
+static Rtr* getTransaction(RemoteXdr*, USHORT);
 
 
 inline void fixupLength(const RemoteXdr* xdrs, ULONG& length)
@@ -326,13 +328,12 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 
 			MAP(xdr_cstring_const, connect->p_cnct_user_id);
 
-			const size_t CNCT_VERSIONS = FB_NELEM(connect->p_cnct_versions);
 			tail = connect->p_cnct_versions;
 			for (USHORT i = 0; i < connect->p_cnct_count; i++, tail++)
 			{
 				// ignore the rest of protocols in case of too many suggested versions
 				p_cnct::p_cnct_repeat dummy;
-				if (i >= CNCT_VERSIONS)
+				if (i >= MAX_CNCT_VERSIONS)
 				{
 					tail = &dummy;
 				}
@@ -345,9 +346,9 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 			}
 
 			// ignore the rest of protocols in case of too many suggested versions
-			if (connect->p_cnct_count > CNCT_VERSIONS)
+			if (connect->p_cnct_count > MAX_CNCT_VERSIONS)
 			{
-				connect->p_cnct_count = CNCT_VERSIONS;
+				connect->p_cnct_count = MAX_CNCT_VERSIONS;
 			}
 
 			DEBUG_PRINTSIZE(xdrs, p->p_operation);
@@ -668,6 +669,8 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 			MAP(xdr_u_long, sqldata->p_sqldata_timeout);
 		if (port->port_protocol >= PROTOCOL_FETCH_SCROLL)
 			MAP(xdr_u_long, sqldata->p_sqldata_cursor_flags);
+		if (port->port_protocol >= PROTOCOL_INLINE_BLOB)
+			MAP(xdr_u_long, sqldata->p_sqldata_inline_blob_size);
 		DEBUG_PRINTSIZE(xdrs, p->p_operation);
 		return P_TRUE(xdrs, p);
 
@@ -689,6 +692,10 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 			return P_FALSE(xdrs, p);
 		}
 		MAP(xdr_short, reinterpret_cast<SSHORT&>(prep_stmt->p_sqlst_out_message_number));
+
+		if (port->port_protocol >= PROTOCOL_INLINE_BLOB)
+			MAP(xdr_u_long, prep_stmt->p_sqlst_inline_blob_size);
+
 		// Fall into ...
 
 	case op_exec_immediate:
@@ -703,7 +710,7 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 		// p_sqlst_buffer_length was USHORT in older versions
 		fixupLength(xdrs, prep_stmt->p_sqlst_buffer_length);
 
-		if (port->port_protocol >= PROTOCOL_VERSION19)
+		if (port->port_protocol >= PROTOCOL_PREPARE_FLAG)
 			MAP(xdr_short, reinterpret_cast<SSHORT&>(prep_stmt->p_sqlst_flags));
 
 		DEBUG_PRINTSIZE(xdrs, p->p_operation);
@@ -1134,6 +1141,41 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 			MAP(xdr_short, reinterpret_cast<SSHORT&>(repl->p_repl_database));
 			MAP(xdr_cstring_const, repl->p_repl_data);
 			DEBUG_PRINTSIZE(xdrs, p->p_operation);
+
+			return P_TRUE(xdrs, p);
+		}
+
+	case op_inline_blob:
+		{
+			P_INLINE_BLOB* p_blob = &p->p_inline_blob;
+			MAP(xdr_short, reinterpret_cast<SSHORT&>(p_blob->p_tran_id));
+			MAP(xdr_quad, p_blob->p_blob_id);
+
+			if (xdrs->x_op == XDR_ENCODE)
+			{
+				MAP(xdr_response, p_blob->p_blob_info);
+				if (!xdr_blobBuffer(xdrs, p_blob->p_blob_data))
+					return P_FALSE(xdrs, p);
+			}
+			else if (xdrs->x_op == XDR_DECODE)
+			{
+				Rtr* tran = getTransaction(xdrs, p_blob->p_tran_id);
+
+				if (!tran)
+					return P_FALSE(xdrs, p);
+
+				MAP(xdr_response, p_blob->p_blob_info);
+
+				AutoPtr<Rbl> blb = tran->createInlineBlob();
+				p_blob->p_blob_data = &blb->rbl_data;
+
+				if (!xdr_blobBuffer(xdrs, p_blob->p_blob_data))
+				{
+					tran->rtr_inline_blob = nullptr;
+					return P_FALSE(xdrs, p);
+				}
+				blb.release();
+			}
 
 			return P_TRUE(xdrs, p);
 		}
@@ -2274,6 +2316,23 @@ static Rsr* getStatement(RemoteXdr* xdrs, USHORT statement_id)
 	return port->port_statement;
 }
 
+static Rtr* getTransaction(RemoteXdr* xdrs, USHORT tran_id)
+{
+	rem_port* port = xdrs->x_public;
+
+	if (tran_id >= port->port_objects.getCount())
+		return nullptr;
+
+	try
+	{
+		return port->port_objects[tran_id];
+	}
+	catch (const status_exception&)
+	{
+		return nullptr;
+	}
+}
+
 static bool_t xdr_blob_stream(RemoteXdr* xdrs, SSHORT statement_id, CSTRING* strmPortion)
 {
 	if (xdrs->x_op == XDR_FREE)
@@ -2491,4 +2550,54 @@ private:
 	statement->rsr_batch_stream = localStrm;
 
 	return TRUE;
+}
+
+static bool_t xdr_blobBuffer(RemoteXdr* xdrs, RemBlobBuffer* buff)
+{
+	SLONG len;
+	UCHAR* data;
+	static const SCHAR filler[4] = { 0, 0, 0, 0 };
+
+	switch (xdrs->x_op)
+	{
+	case XDR_ENCODE:
+		len = buff->getCount();
+		if (!xdr_long(xdrs, &len))
+			return FALSE;
+
+		data = buff->begin();
+		if (len && !xdrs->x_putbytes(reinterpret_cast<const SCHAR*>(data), len))
+			return FALSE;
+
+		len = (4 - len) & 3;
+		if (len)
+			return xdrs->x_putbytes(filler, len);
+
+		return TRUE;
+
+	case XDR_DECODE:
+		if (!xdr_long(xdrs, &len))
+			return FALSE;
+
+		if (len)
+		{
+			data = buff->getBuffer(len);
+			if (!xdrs->x_getbytes(reinterpret_cast<SCHAR*>(data), len))
+				return FALSE;
+		}
+
+		len = (4 - len) & 3;
+		if (len)
+		{
+			SCHAR trash[4];
+			return xdrs->x_getbytes(trash, len);
+		}
+
+		return TRUE;
+
+	case XDR_FREE:
+		return TRUE;
+	}
+
+	return FALSE;
 }

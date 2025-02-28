@@ -34,7 +34,7 @@ void Exception::stuffException(DynamicStatusVector& status_vector) const noexcep
 	}
 }
 
-void Exception::stuffException(CheckStatusWrapper* status_vector) const noexcept
+void Exception::stuffException(IStatus* status_vector) const noexcept
 {
 	StaticStatusVector status;
 	stuffException(status);

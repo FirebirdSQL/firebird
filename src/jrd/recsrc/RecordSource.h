@@ -798,6 +798,11 @@ namespace Jrd
 			return savedPosition;
 		}
 
+		SINT64 getInFrameOffset() const
+		{
+			return savedPosition - frameStart;
+		}
+
 		void restore()
 		{
 			if (!moved)
@@ -1137,7 +1142,7 @@ namespace Jrd
 	public:
 		NestedLoopJoin(CompilerScratch* csb, FB_SIZE_T count, RecordSource* const* args);
 		NestedLoopJoin(CompilerScratch* csb, RecordSource* outer, RecordSource* inner,
-					   BoolExprNode* boolean, JoinType joinType);
+					   BoolExprNode* boolean);
 
 		void close(thread_db* tdbb) const override;
 
@@ -1168,7 +1173,8 @@ namespace Jrd
 	class FullOuterJoin : public RecordSource
 	{
 	public:
-		FullOuterJoin(CompilerScratch* csb, RecordSource* arg1, RecordSource* arg2);
+		FullOuterJoin(CompilerScratch* csb, RecordSource* arg1, RecordSource* arg2,
+					  const StreamList& checkStreams);
 
 		void close(thread_db* tdbb) const override;
 
@@ -1191,6 +1197,7 @@ namespace Jrd
 	private:
 		NestConst<RecordSource> m_arg1;
 		NestConst<RecordSource> m_arg2;
+		const StreamList m_checkStreams;
 	};
 
 	class HashJoin : public RecordSource

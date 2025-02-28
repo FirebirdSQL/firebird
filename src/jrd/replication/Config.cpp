@@ -154,21 +154,12 @@ namespace
 				return false;
 			}
 
-			// skip first empty lines
-			do
-			{
-				if (feof(file))
-					break;
-
-				if (!temp.LoadFromFile(file))
-					break;
-
-				temp.alltrim(" \t\r");
-			} while (temp.isEmpty());
+			if (temp.LoadFromFile(file))
+				temp.alltrim("\r");
 
 			if (temp.isEmpty())
 			{
-				configError(status, "empty file", key, filename.c_str());
+				configError(status, "first empty line of file", key, filename.c_str());
 				return false;
 			}
 		}
@@ -199,6 +190,7 @@ namespace
 					result = false;
 				}
 				result &= parseExternalValue(status, key, value, output.username);
+				output.username.rtrim(" ");
 			}
 			else if (key.find("password") == 0)
 			{

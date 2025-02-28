@@ -48,58 +48,111 @@ FrontendParser::AnyNode FrontendParser::internalParse()
 
 	const auto commandToken = lexer.getToken();
 
-	if (commandToken.type == Token::TYPE_OTHER)
+	if (commandToken.type != Token::TYPE_OTHER)
+		return InvalidNode();
+
+	const auto& command = commandToken.processedText;
+
+	if (command == TOKEN_ADD)
 	{
-		const auto& command = commandToken.processedText;
-
-		if (command == TOKEN_ADD)
+		if (auto tableName = parseName())
 		{
-			if (const auto tableName = parseName())
-			{
-				AddNode node;
-				node.tableName = std::move(tableName.value());
+			AddNode node;
+			node.tableName = std::move(tableName.value());
 
-				if (parseEof())
-					return node;
-			}
+			if (parseEof())
+				return node;
 		}
-		else if (command == TOKEN_BLOBDUMP || command == TOKEN_BLOBVIEW)
+	}
+	else if (command == TOKEN_BLOBDUMP || command == TOKEN_BLOBVIEW)
+	{
+		if (const auto blobId = lexer.getToken(); blobId.type != Token::TYPE_EOF)
 		{
-			if (const auto blobId = lexer.getToken(); blobId.type != Token::TYPE_EOF)
+			BlobDumpViewNode node;
+
+			// Find the high and low values of the blob id
+			if (blobId.processedText.empty())
+				return InvalidNode();
+
+			sscanf(blobId.processedText.c_str(), "%" xLONGFORMAT":%" xLONGFORMAT,
+				&node.blobId.gds_quad_high, &node.blobId.gds_quad_low);
+
+			if (command == TOKEN_BLOBDUMP)
 			{
-				BlobDumpViewNode node;
-
-				// Find the high and low values of the blob id
-				if (blobId.processedText.empty())
-					return InvalidNode();
-
-				sscanf(blobId.processedText.c_str(), "%" xLONGFORMAT":%" xLONGFORMAT,
-					&node.blobId.gds_quad_high, &node.blobId.gds_quad_low);
-
-				if (command == TOKEN_BLOBDUMP)
+				if (auto file = parseFileName())
 				{
-					if (const auto file = parseFileName())
-					{
-						node.file = std::move(file.value());
+					node.file = std::move(file.value());
 
-						if (parseEof())
-							return node;
-					}
-				}
-				else
-				{
 					if (parseEof())
 						return node;
 				}
 			}
+			else
+			{
+				if (parseEof())
+					return node;
+			}
 		}
-		else if (command == TOKEN_CONNECT)
+	}
+	else if (command == TOKEN_CONNECT)
+	{
+		ConnectNode node;
+
+		do
 		{
-			ConnectNode node;
+			auto token = lexer.getToken();
+
+			if (token.type == Token::TYPE_EOF)
+			{
+				if (node.args.empty())
+					break;
+				else
+					return node;
+			}
+			else if (token.type != Token::TYPE_OTHER &&
+				token.type != Token::TYPE_STRING &&
+				token.type != Token::TYPE_META_STRING)
+			{
+				return InvalidNode();
+			}
+
+			node.args.push_back(std::move(token));
+		} while(true);
+	}
+	else if (command == TOKEN_COPY)
+	{
+		CopyNode node;
+
+		if (auto source = parseName())
+			node.source = std::move(source.value());
+		else
+			return InvalidNode();
+
+		if (auto destination = parseName())
+			node.destination = std::move(destination.value());
+		else
+			return InvalidNode();
+
+		if (auto database = parseFileName())
+			node.database = std::move(database.value());
+		else
+			return InvalidNode();
+
+		if (parseEof())
+			return node;
+	}
+	else if (command == TOKEN_CREATE)
+	{
+		if (const auto createWhat = lexer.getToken();
+			createWhat.type == Token::TYPE_OTHER &&
+			(createWhat.processedText == "DATABASE" ||
+				(options.schemaAsDatabase && createWhat.processedText == "SCHEMA")))
+		{
+			CreateDatabaseNode node;
 
 			do
 			{
-				const auto token = lexer.getToken();
+				auto token = lexer.getToken();
 
 				if (token.type == Token::TYPE_EOF)
 				{
@@ -118,147 +171,94 @@ FrontendParser::AnyNode FrontendParser::internalParse()
 				node.args.push_back(std::move(token));
 			} while(true);
 		}
-		else if (command == TOKEN_COPY)
-		{
-			CopyNode node;
-
-			if (const auto source = parseName())
-				node.source = std::move(source.value());
-			else
-				return InvalidNode();
-
-			if (const auto destination = parseName())
-				node.destination = std::move(destination.value());
-			else
-				return InvalidNode();
-
-			if (const auto database = parseFileName())
-				node.database = std::move(database.value());
-			else
-				return InvalidNode();
-
-			if (parseEof())
-				return node;
-		}
-		else if (command == TOKEN_CREATE)
-		{
-			if (const auto createWhat = lexer.getToken();
-				createWhat.type == Token::TYPE_OTHER &&
-				(createWhat.processedText == "DATABASE" ||
-					(options.schemaAsDatabase && createWhat.processedText == "SCHEMA")))
-			{
-				CreateDatabaseNode node;
-
-				do
-				{
-					const auto token = lexer.getToken();
-
-					if (token.type == Token::TYPE_EOF)
-					{
-						if (node.args.empty())
-							break;
-						else
-							return node;
-					}
-					else if (token.type != Token::TYPE_OTHER &&
-						token.type != Token::TYPE_STRING &&
-						token.type != Token::TYPE_META_STRING)
-					{
-						return InvalidNode();
-					}
-
-					node.args.push_back(std::move(token));
-				} while(true);
-			}
-		}
-		else if (command == TOKEN_DROP)
-		{
-			if (const auto dropWhat = lexer.getToken();
-				dropWhat.type == Token::TYPE_OTHER &&
-				(dropWhat.processedText == "DATABASE" ||
-					(options.schemaAsDatabase && dropWhat.processedText == "SCHEMA")))
-			{
-				if (parseEof())
-					return DropDatabaseNode();
-			}
-		}
-		else if (command == TOKEN_EDIT)
-		{
-			EditNode node;
-			node.file = parseFileName();
-
-			if (parseEof())
-				return node;
-		}
-		else if (command == TOKEN_EXIT)
+	}
+	else if (command == TOKEN_DROP)
+	{
+		if (const auto dropWhat = lexer.getToken();
+			dropWhat.type == Token::TYPE_OTHER &&
+			(dropWhat.processedText == "DATABASE" ||
+				(options.schemaAsDatabase && dropWhat.processedText == "SCHEMA")))
 		{
 			if (parseEof())
-				return ExitNode();
+				return DropDatabaseNode();
 		}
-		else if (command == TOKEN_EXPLAIN)
-		{
-			ExplainNode node;
+	}
+	else if (command == TOKEN_EDIT)
+	{
+		EditNode node;
+		node.file = parseFileName();
 
-			if (const auto query = parseUtilEof())
-			{
-				node.query = std::move(query.value());
-				return node;
-			}
-		}
-		else if (command == TOKEN_HELP || command == "?")
-		{
-			HelpNode node;
+		if (parseEof())
+			return node;
+	}
+	else if (command == TOKEN_EXIT)
+	{
+		if (parseEof())
+			return ExitNode();
+	}
+	else if (command == TOKEN_EXPLAIN)
+	{
+		ExplainNode node;
 
-			if (const auto token = lexer.getToken(); token.type == Token::TYPE_EOF)
-				return node;
-			else if (token.type == Token::TYPE_OTHER)
-			{
-				node.command = token.processedText;
-
-				if (parseEof())
-					return node;
-			}
-		}
-		else if (command.length() >= 2 && TOKEN_INPUT.find(command) == 0)
+		if (auto query = parseUtilEof())
 		{
-			if (const auto file = parseFileName())
-			{
-				InputNode node;
-				node.file = std::move(file.value());
-
-				if (parseEof())
-					return node;
-			}
-		}
-		else if (command.length() >= 3 && TOKEN_OUTPUT.find(command) == 0)
-		{
-			OutputNode node;
-			node.file = parseFileName();
-
-			if (parseEof())
-				return node;
-		}
-		else if (command == TOKEN_QUIT)
-		{
-			if (parseEof())
-				return QuitNode();
-		}
-		else if (command == TOKEN_SET)
-		{
-			if (const auto setNode = parseSet(); !std::holds_alternative<InvalidNode>(setNode))
-				return setNode;
-		}
-		else if (command == TOKEN_SHELL)
-		{
-			ShellNode node;
-			node.command = parseUtilEof();
+			node.query = std::move(query.value());
 			return node;
 		}
-		else if (command == TOKEN_SHOW)
+	}
+	else if (command == TOKEN_HELP || command == "?")
+	{
+		HelpNode node;
+
+		if (const auto token = lexer.getToken(); token.type == Token::TYPE_EOF)
+			return node;
+		else if (token.type == Token::TYPE_OTHER)
 		{
-			if (const auto showNode = parseShow(); !std::holds_alternative<InvalidNode>(showNode))
-				return showNode;
+			node.command = token.processedText;
+
+			if (parseEof())
+				return node;
 		}
+	}
+	else if (command.length() >= 2 && TOKEN_INPUT.find(command) == 0)
+	{
+		if (auto file = parseFileName())
+		{
+			InputNode node;
+			node.file = std::move(file.value());
+
+			if (parseEof())
+				return node;
+		}
+	}
+	else if (command.length() >= 3 && TOKEN_OUTPUT.find(command) == 0)
+	{
+		OutputNode node;
+		node.file = parseFileName();
+
+		if (parseEof())
+			return node;
+	}
+	else if (command == TOKEN_QUIT)
+	{
+		if (parseEof())
+			return QuitNode();
+	}
+	else if (command == TOKEN_SET)
+	{
+		if (const auto setNode = parseSet(); !std::holds_alternative<InvalidNode>(setNode))
+			return setNode;
+	}
+	else if (command == TOKEN_SHELL)
+	{
+		ShellNode node;
+		node.command = parseUtilEof();
+		return node;
+	}
+	else if (command == TOKEN_SHOW)
+	{
+		if (const auto showNode = parseShow(); !std::holds_alternative<InvalidNode>(showNode))
+			return showNode;
 	}
 
 	return InvalidNode();
@@ -389,7 +389,7 @@ FrontendParser::AnySetNode FrontendParser::parseSet()
 
 				return parsed.value();
 			}
-			else if (text.length() >= 5 && std::string(TOKEN_TRANSACTION).find(text) == 0)
+			else if (text.length() >= 5 && TOKEN_TRANSACTION.find(text) == 0)
 			{
 				SetTransactionNode node;
 				node.statement = lexer.getBuffer();
@@ -434,7 +434,7 @@ std::optional<FrontendParser::AnySetNode> FrontendParser::parseSet(std::string_v
 {
 	if (setCommand == testCommand ||
 		(testCommandMinLen && setCommand.length() >= testCommandMinLen &&
-			std::string(testCommand).find(setCommand) == 0))
+			testCommand.find(setCommand) == 0))
 	{
 		Node node;
 
@@ -502,7 +502,7 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 				return parsed.value();
 			else if (const auto parsed = parseShowOptName<ShowCollationsNode>(text, TOKEN_COLLATIONS, 9))
 				return parsed.value();
-			else if (text.length() >= 7 && std::string(TOKEN_COMMENTS).find(text) == 0)
+			else if (text.length() >= 7 && TOKEN_COMMENTS.find(text) == 0)
 			{
 				if (parseEof())
 					return ShowCommentsNode();
@@ -522,7 +522,7 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 				return parsed.value();
 			else if (const auto parsed = parseShowOptName<ShowFiltersNode>(text, TOKEN_FILTERS, 6))
 				return parsed.value();
-			else if (text.length() >= 4 && std::string(TOKEN_FUNCTIONS).find(text) == 0)
+			else if (text.length() >= 4 && TOKEN_FUNCTIONS.find(text) == 0)
 			{
 				ShowFunctionsNode node;
 				node.name = parseName();
@@ -558,7 +558,7 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 				return parsed.value();
 			else if (const auto parsed = parseShowOptName<ShowPackagesNode>(text, TOKEN_PACKAGES, 4))
 				return parsed.value();
-			else if (text.length() >= 4 && std::string(TOKEN_PROCEDURES).find(text) == 0)
+			else if (text.length() >= 4 && TOKEN_PROCEDURES.find(text) == 0)
 			{
 				ShowProceduresNode node;
 				node.name = parseName();
@@ -586,7 +586,7 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 				return parsed.value();
 			else if (const auto parsed = parseShowOptName<ShowRolesNode>(text, TOKEN_ROLES, 4))
 				return parsed.value();
-			else if (text.length() >= 6 && std::string(TOKEN_SECCLASSES).find(text) == 0)
+			else if (text.length() >= 6 && TOKEN_SECCLASSES.find(text) == 0)
 			{
 				const auto lexerPos = lexer.getPos();
 				const auto token = lexer.getNameToken();
@@ -622,7 +622,7 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 						return ShowSqlDialectNode();
 				}
 			}
-			else if (text.length() >= 3 && std::string(TOKEN_SYSTEM).find(text) == 0)
+			else if (text.length() >= 3 && TOKEN_SYSTEM.find(text) == 0)
 			{
 				ShowSystemNode node;
 
@@ -630,22 +630,22 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 				{
 					const auto objectTypeText = std::string(objectType->c_str());
 
-					if ((objectTypeText.length() >= 7 && std::string(TOKEN_COLLATES).find(objectTypeText) == 0) ||
-						(objectTypeText.length() >= 9 && std::string(TOKEN_COLLATIONS).find(objectTypeText) == 0))
+					if ((objectTypeText.length() >= 7 && TOKEN_COLLATES.find(objectTypeText) == 0) ||
+						(objectTypeText.length() >= 9 && TOKEN_COLLATIONS.find(objectTypeText) == 0))
 					{
 						node.objType = obj_collation;
 					}
-					else if (objectTypeText.length() >= 4 && std::string(TOKEN_FUNCTIONS).find(objectTypeText) == 0)
+					else if (objectTypeText.length() >= 4 && TOKEN_FUNCTIONS.find(objectTypeText) == 0)
 						node.objType = obj_udf;
-					else if (objectTypeText.length() >= 5 && std::string(TOKEN_TABLES).find(objectTypeText) == 0)
+					else if (objectTypeText.length() >= 5 && TOKEN_TABLES.find(objectTypeText) == 0)
 						node.objType = obj_relation;
-					else if (objectTypeText.length() >= 4 && std::string(TOKEN_ROLES).find(objectTypeText) == 0)
+					else if (objectTypeText.length() >= 4 && TOKEN_ROLES.find(objectTypeText) == 0)
 						node.objType = obj_sql_role;
-					else if (objectTypeText.length() >= 4 && std::string(TOKEN_PROCEDURES).find(objectTypeText) == 0)
+					else if (objectTypeText.length() >= 4 && TOKEN_PROCEDURES.find(objectTypeText) == 0)
 						node.objType = obj_procedure;
-					else if (objectTypeText.length() >= 4 && std::string(TOKEN_PACKAGES).find(objectTypeText) == 0)
+					else if (objectTypeText.length() >= 4 && TOKEN_PACKAGES.find(objectTypeText) == 0)
 						node.objType = obj_package_header;
-					else if (objectTypeText.length() >= 3 && std::string(TOKEN_PUBLICATIONS).find(objectTypeText) == 0)
+					else if (objectTypeText.length() >= 3 && TOKEN_PUBLICATIONS.find(objectTypeText) == 0)
 						node.objType = obj_publication;
 					else
 						return InvalidNode();
@@ -672,7 +672,7 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 			}
 			else if (const auto parsed = parseShowOptName<ShowViewsNode>(text, TOKEN_VIEWS, 4))
 				return parsed.value();
-			else if (text.length() >= 9 && std::string(TOKEN_WIRE_STATISTICS).find(text) == 0 ||
+			else if (text.length() >= 9 && TOKEN_WIRE_STATISTICS.find(text) == 0 ||
 				text == TOKEN_WIRE_STATS)
 			{
 				if (parseEof())
@@ -692,7 +692,7 @@ std::optional<FrontendParser::AnyShowNode> FrontendParser::parseShowOptName(std:
 {
 	if (showCommand == testCommand ||
 		(testCommandMinLen && showCommand.length() >= testCommandMinLen &&
-			std::string(testCommand).find(showCommand) == 0))
+			testCommand.find(showCommand) == 0))
 	{
 		Node node;
 		node.name = parseName();
@@ -708,8 +708,8 @@ std::optional<FrontendParser::AnyShowNode> FrontendParser::parseShowOptName(std:
 
 std::optional<std::string> FrontendParser::parseUtilEof()
 {
-	const auto startPos = lexer.getPos();
-	auto lastPos = startPos;
+	const auto startIt = lexer.getPos();
+	auto lastPosIt = startIt;
 	bool first = true;
 
 	do
@@ -721,10 +721,10 @@ std::optional<std::string> FrontendParser::parseUtilEof()
 			if (first)
 				return std::nullopt;
 
-			return FrontendLexer::trim(std::string(startPos, lastPos));
+			return FrontendLexer::trim(std::string(startIt, lastPosIt));
 		}
 
-		lastPos = lexer.getPos();
+		lastPosIt = lexer.getPos();
 		first = false;
 	} while (true);
 

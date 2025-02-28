@@ -39,21 +39,8 @@ namespace Ods {
 	ULONG maxRecsPerDP(ULONG page_size);
 	ULONG maxIndices(ULONG page_size);
 
-	TraNumber getNT(const header_page* page);
-	TraNumber getOIT(const header_page* page);
-	TraNumber getOAT(const header_page* page);
-	TraNumber getOST(const header_page* page);
-
-	void writeNT(header_page* page, TraNumber number);
-	void writeOIT(header_page* page, TraNumber number);
-	void writeOAT(header_page* page, TraNumber number);
-	void writeOST(header_page* page, TraNumber number);
-
 	TraNumber getTraNum(const void* ptr);
 	void writeTraNum(void* ptr, TraNumber number, FB_SIZE_T header_size);
-
-	AttNumber getAttID(const header_page* page);
-	void writeAttID(header_page* page, AttNumber number);
 
 } // namespace
 

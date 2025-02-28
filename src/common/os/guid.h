@@ -69,10 +69,18 @@ class Guid
 		"{%08X-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX}";
 	static constexpr int GUID_FORMAT_ARGS = 11;
 
+	Guid()
+	{
+		memset(&m_data, 0, SIZE);
+	}
+
 public:
 	static constexpr ULONG SIZE = sizeof(UUID);
 
-	Guid() = delete;
+	static Guid empty()
+	{
+		return Guid();
+	}
 
 	Guid(const Guid& other)
 		: m_data(other.m_data)
@@ -84,7 +92,7 @@ public:
 
 	explicit Guid(const UCHAR* data)
 	{
-		memcpy(&m_data, data, sizeof(UUID));
+		memcpy(&m_data, data, SIZE);
 	}
 
 	Guid& operator=(const Guid& other)
@@ -95,7 +103,7 @@ public:
 
 	bool operator==(const Guid& other) const
 	{
-		return memcmp(&m_data, &other.m_data, sizeof(UUID)) == 0;
+		return memcmp(&m_data, &other.m_data, SIZE) == 0;
 	}
 
 	bool operator!=(const Guid& other) const
@@ -110,7 +118,7 @@ public:
 
 	void assign(const UCHAR* buffer)
 	{
-		memcpy(&m_data, buffer, sizeof(UUID));
+		memcpy(&m_data, buffer, SIZE);
 	}
 
 	void toString(char* buffer) const
@@ -160,7 +168,7 @@ public:
 
 	void copyTo(UCHAR* ptr) const
 	{
-		memcpy(ptr, &m_data, sizeof(UUID));
+		memcpy(ptr, &m_data, SIZE);
 	}
 
 	// Convert platform-dependent GUID into platform-independent form according to RFC 4122

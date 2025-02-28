@@ -4959,7 +4959,7 @@ static processing_state frontend(const std::string& statement)
 				}
 				else if (clause == "USER")
 				{
-					usr = node.args[i + 1].processedText.c_str();
+					usr = node.args[i + 1].rawText.c_str();
 					i += 2;
 				}
 				else if (clause == "PASSWORD")
@@ -4993,7 +4993,7 @@ static processing_state frontend(const std::string& statement)
 					true);
 			}
 
-			return SKIP;
+			return ret;
 		},
 
 		[](const FrontendParser::CopyNode& node)

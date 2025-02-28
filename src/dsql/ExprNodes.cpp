@@ -11079,7 +11079,7 @@ dsc* StrLenNode::execute(thread_db* tdbb, Request* request) const
 		switch (blrSubOp)
 		{
 			case blr_strlen_bit:
-				length = (FB_UINT64) blob->blb_length * 8;
+				length = blob->blb_length * 8;
 				break;
 
 			case blr_strlen_octet:
@@ -11163,10 +11163,10 @@ static RegisterNode<SubQueryNode> regSubQueryNode({
 	blr_via, blr_from, blr_average, blr_count, blr_maximum, blr_minimum, blr_total
 });
 
-SubQueryNode::SubQueryNode(MemoryPool& pool, UCHAR aBlrOp, RecordSourceNode* aDsqlRse,
+SubQueryNode::SubQueryNode(MemoryPool& pool, UCHAR aBlrOp, SelectExprNode* aDsqlSelectExpr,
 			ValueExprNode* aValue1, ValueExprNode* aValue2)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_SUBQUERY>(pool),
-	  dsqlRse(aDsqlRse),
+	  dsqlSelectExpr(aDsqlSelectExpr),
 	  value1(aValue1),
 	  value2(aValue2),
 	  subQuery(NULL),
@@ -11210,11 +11210,7 @@ void SubQueryNode::getChildren(NodeRefsHolder& holder, bool dsql) const
 {
 	ValueExprNode::getChildren(holder, dsql);
 
-	if (dsql)
-		holder.add(dsqlRse);
-	else
-		holder.add(rse);
-
+	holder.add(rse);
 	holder.add(value1);
 	holder.add(value2);
 }
@@ -11225,7 +11221,7 @@ string SubQueryNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, blrOp);
 	NODE_PRINT(printer, ownSavepoint);
-	NODE_PRINT(printer, dsqlRse);
+	NODE_PRINT(printer, dsqlSelectExpr);
 	NODE_PRINT(printer, rse);
 	NODE_PRINT(printer, value1);
 	NODE_PRINT(printer, value2);
@@ -11244,10 +11240,11 @@ ValueExprNode* SubQueryNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	const DsqlContextStack::iterator base(*dsqlScratch->context);
 
-	RseNode* rse = PASS1_rse(dsqlScratch, nodeAs<SelectExprNode>(dsqlRse));
+	RseNode* rse = PASS1_rse(dsqlScratch, dsqlSelectExpr);
 
-	SubQueryNode* node = FB_NEW_POOL(dsqlScratch->getPool()) SubQueryNode(dsqlScratch->getPool(), blrOp, rse,
+	SubQueryNode* node = FB_NEW_POOL(dsqlScratch->getPool()) SubQueryNode(dsqlScratch->getPool(), blrOp, dsqlSelectExpr,
 		rse->dsqlSelectList->items[0], NullNode::instance());
+	node->rse = rse;
 
 	node->line = line;
 	node->column = column;
@@ -11268,7 +11265,7 @@ void SubQueryNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	dsqlScratch->appendUChar(blrOp);
 
 	dsqlScratch->putDebugSrcInfo(line, column);
-	GEN_expr(dsqlScratch, dsqlRse);
+	GEN_expr(dsqlScratch, rse);
 
 	GEN_expr(dsqlScratch, value1);
 	GEN_expr(dsqlScratch, value2);
@@ -11285,12 +11282,12 @@ void SubQueryNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 
 bool SubQueryNode::dsqlAggregateFinder(AggregateFinder& visitor)
 {
-	return !visitor.ignoreSubSelects && visitor.visit(dsqlRse);
+	return !visitor.ignoreSubSelects && visitor.visit(rse);
 }
 
 bool SubQueryNode::dsqlAggregate2Finder(Aggregate2Finder& visitor)
 {
-	return visitor.visit(dsqlRse);	// Pass only the rse.
+	return visitor.visit(rse);	// Pass only the rse.
 }
 
 bool SubQueryNode::dsqlSubSelectFinder(SubSelectFinder& /*visitor*/)
@@ -11300,13 +11297,13 @@ bool SubQueryNode::dsqlSubSelectFinder(SubSelectFinder& /*visitor*/)
 
 bool SubQueryNode::dsqlFieldFinder(FieldFinder& visitor)
 {
-	return visitor.visit(dsqlRse);	// Pass only the rse.
+	return visitor.visit(rse);	// Pass only the rse.
 }
 
 ValueExprNode* SubQueryNode::dsqlFieldRemapper(FieldRemapper& visitor)
 {
-	doDsqlFieldRemapper(visitor, dsqlRse);
-	value1 = nodeAs<RseNode>(dsqlRse)->dsqlSelectList->items[0];
+	doDsqlFieldRemapper(visitor, rse);
+	value1 = rse->dsqlSelectList->items[0];
 	return this;
 }
 

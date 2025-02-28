@@ -53,10 +53,11 @@ NestedLoopJoin::NestedLoopJoin(CompilerScratch* csb, FB_SIZE_T count, RecordSour
 	}
 }
 
-NestedLoopJoin::NestedLoopJoin(CompilerScratch* csb, RecordSource* outer, RecordSource* inner,
-							   BoolExprNode* boolean, JoinType joinType)
+NestedLoopJoin::NestedLoopJoin(CompilerScratch* csb,
+							   RecordSource* outer, RecordSource* inner,
+							   BoolExprNode* boolean)
 	: RecordSource(csb),
-	  m_joinType(joinType),
+	  m_joinType(OUTER_JOIN),
 	  m_args(csb->csb_pool),
 	  m_boolean(boolean)
 {

@@ -1945,7 +1945,7 @@ public:
 class SubQueryNode final : public TypedNode<ValueExprNode, ExprNode::TYPE_SUBQUERY>
 {
 public:
-	explicit SubQueryNode(MemoryPool& pool, UCHAR aBlrOp, RecordSourceNode* aDsqlRse = NULL,
+	explicit SubQueryNode(MemoryPool& pool, UCHAR aBlrOp, SelectExprNode* aDsqlSelectExpr = NULL,
 		ValueExprNode* aValue1 = NULL, ValueExprNode* aValue2 = NULL);
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
@@ -1995,7 +1995,7 @@ public:
 	virtual dsc* execute(thread_db* tdbb, Request* request) const;
 
 public:
-	NestConst<RecordSourceNode> dsqlRse;
+	NestConst<SelectExprNode> dsqlSelectExpr;
 	NestConst<RseNode> rse;
 	NestConst<ValueExprNode> value1;
 	NestConst<ValueExprNode> value2;

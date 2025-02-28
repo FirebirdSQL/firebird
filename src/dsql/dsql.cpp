@@ -480,9 +480,19 @@ static DsqlRequest* prepareRequest(thread_db* tdbb, dsql_dbb* database, jrd_tra*
 
 		return dsqlRequest;
 	}
-	catch (const Exception&)
+	catch (const Exception& ex)
 	{
-		trace.prepare(ITracePlugin::RESULT_FAILED);
+		StaticStatusVector st;
+		ex.stuffException(st);
+
+		if (!((prepareFlags & IStatement::PREPARE_REQUIRE_SEMICOLON) &&
+				fb_utils::containsErrorCode(st.begin(), isc_command_end_err2)))
+		{
+			trace.prepare(ITracePlugin::RESULT_FAILED);
+		}
+		else
+			trace.avoidTrace();
+
 		throw;
 	}
 }

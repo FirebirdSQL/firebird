@@ -81,6 +81,22 @@ typedef FB_UINT64 ISC_UINT64;
 
 typedef ISC_QUAD SQUAD;
 
+const SQUAD NULL_BLOB = { 0, 0 };
+
+inline bool operator==(const SQUAD& s1, const SQUAD& s2)
+{
+	return s1.gds_quad_high == s2.gds_quad_high &&
+		   s2.gds_quad_low == s1.gds_quad_low;
+}
+
+inline bool operator>(const SQUAD& s1, const SQUAD& s2)
+{
+	return (s1.gds_quad_high > s2.gds_quad_high) ||
+		(s1.gds_quad_high == s2.gds_quad_high &&
+		 s1.gds_quad_low > s2.gds_quad_low);
+}
+
+
 /*
  * TMN: some misc data types from all over the place
  */

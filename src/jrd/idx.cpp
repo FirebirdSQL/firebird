@@ -236,7 +236,7 @@ public:
 			workers = att->att_parallel_workers;
 
 		// Classic in single-user shutdown mode can't create additional worker attachments
-		if ((m_dbb->dbb_ast_flags & DBB_shutdown_single) && !(m_dbb->dbb_flags & DBB_shared))
+		if (m_dbb->isShutdown(shut_mode_single) && !(m_dbb->dbb_flags & DBB_shared))
 			workers = 1;
 
 		for (int i = 0; i < workers; i++)

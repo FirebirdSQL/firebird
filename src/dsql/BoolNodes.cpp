@@ -1419,8 +1419,69 @@ BoolExprNode* InListBoolNode::copy(thread_db* tdbb, NodeCopier& copier) const
 	return node;
 }
 
+BoolExprNode* InListBoolNode::decompose(CompilerScratch* csb)
+{
+	// Search for list items depending on record streams.
+	// If found, decompose expression:
+	//   <arg> IN (<item1>, <item2>, <item3>, <item4> ...)
+	// into:
+	//   <arg> IN (<item1>, <item2>, ...) OR <arg> = <item3> OR <arg> = <item4> ...
+	// where the ORed booleans are known to be stream-based (i.e. contain fields inside)
+	// and thus could use an index, if possible.
+	//
+	// See #8109 in the tracker, example:
+	//
+	// SELECT e.*
+	// FROM Employees e
+	// WHERE :SomeID IN (e.LeaderID, e.DispEmpID)
+
+	auto& pool = csb->csb_pool;
+	BoolExprNode* boolNode = nullptr;
+
+	for (auto iter = list->items.begin(); iter != list->items.end();)
+	{
+		ValueExprNode* const item = *iter;
+
+		SortedStreamList streams;
+		item->collectStreams(streams);
+
+		if (streams.isEmpty())
+		{
+			iter++;
+			continue;
+		}
+
+		list->items.remove(iter);
+
+		const auto cmpNode = FB_NEW_POOL(pool) ComparativeBoolNode(pool, blr_eql, arg, item);
+
+		if (boolNode)
+			boolNode = FB_NEW_POOL(pool) BinaryBoolNode(pool, blr_or, boolNode, cmpNode);
+		else
+			boolNode = cmpNode;
+	}
+
+	if (boolNode && list->items.hasData())
+	{
+		BoolExprNode* priorNode = this;
+
+		if (list->items.getCount() == 1)
+		{
+			// Convert A IN (B) into A = B
+			priorNode = FB_NEW_POOL(pool) ComparativeBoolNode(pool, blr_eql, arg, list->items.front());
+		}
+
+		boolNode = FB_NEW_POOL(pool) BinaryBoolNode(pool, blr_or, boolNode, priorNode);
+	}
+
+	return boolNode;
+}
+
 BoolExprNode* InListBoolNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 {
+	if (const auto node = decompose(csb))
+		return node->pass1(tdbb, csb);
+
 	doPass1(tdbb, csb, arg.getAddress());
 
 	nodFlags |= FLAG_INVARIANT;
@@ -2176,16 +2237,20 @@ BoolExprNode* RseBoolNode::convertNeqAllToNotAny(thread_db* tdbb, CompilerScratc
 
 	andNode->arg1 = missNode;
 
+	RseNode* newInnerRse1 = innerRse->clone(csb->csb_pool);
+	newInnerRse1->flags |= RseNode::FLAG_SUB_QUERY;
+
 	RseBoolNode* rseBoolNode = FB_NEW_POOL(csb->csb_pool) RseBoolNode(csb->csb_pool, blr_any);
-	rseBoolNode->rse = innerRse;
+	rseBoolNode->rse = newInnerRse1;
 	rseBoolNode->ownSavepoint = this->ownSavepoint;
 
 	andNode->arg2 = rseBoolNode;
 
-	RseNode* newInnerRse = innerRse->clone(csb->csb_pool);
+	RseNode* newInnerRse2 = innerRse->clone(csb->csb_pool);
+	newInnerRse2->flags |= RseNode::FLAG_SUB_QUERY;
 
 	rseBoolNode = FB_NEW_POOL(csb->csb_pool) RseBoolNode(csb->csb_pool, blr_any);
-	rseBoolNode->rse = newInnerRse;
+	rseBoolNode->rse = newInnerRse2;
 	rseBoolNode->ownSavepoint = this->ownSavepoint;
 
 	orNode->arg2 = rseBoolNode;
@@ -2201,16 +2266,16 @@ BoolExprNode* RseBoolNode::convertNeqAllToNotAny(thread_db* tdbb, CompilerScratc
 	outerRseNeq->blrOp = blr_eql;
 
 	// If there was a boolean on the stream, append (AND) the new one
-	if (newInnerRse->rse_boolean)
+	if (newInnerRse2->rse_boolean)
 	{
 		andNode = FB_NEW_POOL(csb->csb_pool) BinaryBoolNode(csb->csb_pool, blr_and);
 
-		andNode->arg1 = newInnerRse->rse_boolean;
+		andNode->arg1 = newInnerRse2->rse_boolean;
 		andNode->arg2 = boolean;
 		boolean = andNode;
 	}
 
-	newInnerRse->rse_boolean = boolean;
+	newInnerRse2->rse_boolean = boolean;
 
 	SubExprNodeCopier copier(csb->csb_pool, csb);
 	return copier.copy(tdbb, static_cast<BoolExprNode*>(newNode));

@@ -162,58 +162,6 @@ Firebird::string pagtype(UCHAR type)
 	return rc;
 }
 
-TraNumber getNT(const header_page* page)
-{
-	return (TraNumber) page->hdr_tra_high[NEXT_INDEX] << BITS_PER_LONG | page->hdr_next_transaction;
-}
-
-TraNumber getOIT(const header_page* page)
-{
-	return (TraNumber) page->hdr_tra_high[OIT_INDEX] << BITS_PER_LONG | page->hdr_oldest_transaction;
-}
-
-TraNumber getOAT(const header_page* page)
-{
-	return (TraNumber) page->hdr_tra_high[OAT_INDEX] << BITS_PER_LONG | page->hdr_oldest_active;
-}
-
-TraNumber getOST(const header_page* page)
-{
-	return (TraNumber) page->hdr_tra_high[OST_INDEX] << BITS_PER_LONG | page->hdr_oldest_snapshot;
-}
-
-void writeNT(header_page* page, TraNumber number)
-{
-	page->hdr_next_transaction = (ULONG) (number & MAX_ULONG);
-	const SLONG high_word = number >> BITS_PER_LONG;
-	fb_assert(high_word <= MAX_USHORT);
-	page->hdr_tra_high[NEXT_INDEX] = (USHORT) high_word;
-}
-
-void writeOIT(header_page* page, TraNumber number)
-{
-	page->hdr_oldest_transaction = (ULONG) (number & MAX_ULONG);
-	const SLONG high_word = number >> BITS_PER_LONG;
-	fb_assert(high_word <= MAX_USHORT);
-	page->hdr_tra_high[OIT_INDEX] = (USHORT) high_word;
-}
-
-void writeOAT(header_page* page, TraNumber number)
-{
-	page->hdr_oldest_active = (ULONG) (number & MAX_ULONG);
-	const SLONG high_word = number >> BITS_PER_LONG;
-	fb_assert(high_word <= MAX_USHORT);
-	page->hdr_tra_high[OAT_INDEX] = (USHORT) high_word;
-}
-
-void writeOST(header_page* page, TraNumber number)
-{
-	page->hdr_oldest_snapshot = (ULONG) (number & MAX_ULONG);
-	const SLONG high_word = number >> BITS_PER_LONG;
-	fb_assert(high_word <= MAX_USHORT);
-	page->hdr_tra_high[OST_INDEX] = (USHORT) high_word;
-}
-
 TraNumber getTraNum(const void* ptr)
 {
 	rhd* const record = (rhd*) ptr;
@@ -253,17 +201,6 @@ void writeTraNum(void* ptr, TraNumber number, FB_SIZE_T header_size)
 			((rhde*) ptr)->rhde_tra_high = (USHORT) high_word;
 		}
 	}
-}
-
-AttNumber getAttID(const header_page* page)
-{
-	return ((AttNumber)page->hdr_att_high << BITS_PER_LONG | page->hdr_attachment_id);
-}
-
-void writeAttID(header_page* page, AttNumber number)
-{
-	page->hdr_att_high = number >> BITS_PER_LONG;
-	page->hdr_attachment_id = (ULONG) (number & MAX_ULONG);
 }
 
 } // namespace

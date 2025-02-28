@@ -37,10 +37,13 @@ using namespace Jrd;
 // Data access: full outer join
 // ----------------------------
 
-FullOuterJoin::FullOuterJoin(CompilerScratch* csb, RecordSource* arg1, RecordSource* arg2)
+FullOuterJoin::FullOuterJoin(CompilerScratch* csb,
+							 RecordSource* arg1, RecordSource* arg2,
+							 const StreamList& checkStreams)
 	: RecordSource(csb),
 	  m_arg1(arg1),
-	  m_arg2(arg2)
+	  m_arg2(arg2),
+	  m_checkStreams(csb->csb_pool, checkStreams)
 {
 	fb_assert(m_arg1 && m_arg2);
 
@@ -97,7 +100,27 @@ bool FullOuterJoin::internalGetRecord(thread_db* tdbb) const
 		m_arg2->open(tdbb);
 	}
 
-	return m_arg2->getRecord(tdbb);
+	// We should exclude matching records from the right-joined (second) record source,
+	// as they're already returned from the left-joined (first) record source
+
+	while (m_arg2->getRecord(tdbb))
+	{
+		bool matched = false;
+
+		for (const auto stream : m_checkStreams)
+		{
+			if (request->req_rpb[stream].rpb_number.isValid())
+			{
+				matched = true;
+				break;
+			}
+		}
+
+		if (!matched)
+			return true;
+	}
+
+	return false;
 }
 
 bool FullOuterJoin::refetchRecord(thread_db* /*tdbb*/) const

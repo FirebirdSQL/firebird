@@ -210,13 +210,14 @@ public:
 	template <typename>
 	static inline constexpr bool AlwaysFalseV = false;
 
-public:
+private:
 	FrontendParser(std::string_view statement, const Options& aOptions)
 		: lexer(statement),
 		  options(aOptions)
 	{
 	}
 
+public:
 	FrontendParser(const FrontendParser&) = delete;
 	FrontendParser& operator=(const FrontendParser&) = delete;
 
