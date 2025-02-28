@@ -9119,6 +9119,14 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		else
 			updatable = false;
 
+
+		if (field && context && (context->ctx_flags & CTX_blr_fields))
+		{
+			field = nullptr;
+			context = nullptr;
+			updatable = false;
+		}
+
 		// If this is an expression, check to make sure there is a name specified.
 
 		if (!ptr && !fieldStr)
