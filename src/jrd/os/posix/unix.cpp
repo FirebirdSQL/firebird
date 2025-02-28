@@ -507,7 +507,7 @@ error: Raw device support for your OS is missing. Fix it or turn off raw device 
 }
 
 
-void PIO_header(thread_db* tdbb, UCHAR* address, int length)
+bool PIO_header(thread_db* tdbb, UCHAR* address, unsigned length)
 {
 /**************************************
  *
@@ -519,13 +519,13 @@ void PIO_header(thread_db* tdbb, UCHAR* address, int length)
  *	Read the page header.
  *
  **************************************/
-	Database* const dbb = tdbb->getDatabase();
+	const auto dbb = tdbb->getDatabase();
 
-	int i;
+	unsigned i;
 	SINT64 bytes;
 
-	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
-	jrd_file* file = pageSpace->file;
+	PageSpace* const pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+	jrd_file* const file = pageSpace->file;
 
 	if (file->fil_desc == -1)
 		unix_error("PIO_header", file, isc_io_read_err);
@@ -537,7 +537,11 @@ void PIO_header(thread_db* tdbb, UCHAR* address, int length)
 		if (bytes < 0 && !SYSCALL_INTERRUPTED(errno))
 			unix_error("read", file, isc_io_read_err);
 		if (bytes >= 0)
-			block_size_error(file, bytes);
+		{
+			FbLocalStatus tempStatus;
+			if (!block_size_error(file, bytes, &tempStatus))
+				return false;
+		}
 	}
 
 	if (i == IO_RETRY)
@@ -558,6 +562,8 @@ void PIO_header(thread_db* tdbb, UCHAR* address, int length)
 			unix_error("read_retry", file, isc_io_read_err);
 		}
 	}
+
+	return true;
 }
 
 // we need a class here only to return memory on shutdown and avoid

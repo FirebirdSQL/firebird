@@ -1115,10 +1115,15 @@ void PAG_header_init(thread_db* tdbb)
 	HalfStaticArray<UCHAR, RAW_HEADER_SIZE + PAGE_ALIGNMENT> temp;
 	UCHAR* const temp_page = temp.getAlignedBuffer(headerSize, ioBlockSize);
 
-	PIO_header(tdbb, temp_page, headerSize);
-	const header_page* header = (header_page*) temp_page;
+	if (!PIO_header(tdbb, temp_page, headerSize))
+		ERR_post(Arg::Gds(isc_bad_db_format) << Arg::Str(attachment->att_filename));
 
-	if (header->hdr_header.pag_type != pag_header)
+	const auto header = (header_page*) temp_page;
+
+	if (header->hdr_header.pag_type != pag_header || header->hdr_header.pag_pageno != HEADER_PAGE)
+		ERR_post(Arg::Gds(isc_bad_db_format) << Arg::Str(attachment->att_filename));
+
+	if (header->hdr_page_size < PAGE_SIZE_BASE || header->hdr_page_size % PAGE_SIZE_BASE != 0)
 		ERR_post(Arg::Gds(isc_bad_db_format) << Arg::Str(attachment->att_filename));
 
 	const USHORT ods_version = header->hdr_ods_version & ~ODS_FIREBIRD_FLAG;
