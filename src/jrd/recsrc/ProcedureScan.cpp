@@ -249,6 +249,12 @@ WriteLockResult ProcedureScan::lockRecord(thread_db* /*tdbb*/) const
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
 }
 
+bool ProcedureScan::isDependent(const StreamList& streams) const
+{
+	return m_sourceList->containsAnyStream(streams) ||
+		m_targetList->containsAnyStream(streams);
+}
+
 void ProcedureScan::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
 	if (!level)

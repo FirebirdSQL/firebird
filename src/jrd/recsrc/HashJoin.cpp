@@ -37,13 +37,15 @@
 using namespace Firebird;
 using namespace Jrd;
 
+//#define PRINT_HASH_TABLE
+
 // ----------------------
 // Data access: hash join
 // ----------------------
 
 // NS: FIXME - Why use static hash table here??? Hash table shall support dynamic resizing
 static const ULONG HASH_SIZE = 1009;
-static const ULONG BUCKET_PREALLOCATE_SIZE = 32;	// 256 bytes per slot
+static const ULONG BUCKET_PREALLOCATE_SIZE = 32;	// 256 bytes per bucket
 
 unsigned HashJoin::maxCapacity()
 {
@@ -90,6 +92,11 @@ class HashJoin::HashTable : public PermanentStorage
 		void sort()
 		{
 			m_collisions.sort();
+		}
+
+		ULONG getCount() const
+		{
+			return (ULONG) m_collisions.getCount();
 		}
 
 		void add(ULONG hash, ULONG position)
@@ -202,11 +209,36 @@ public:
 	{
 		for (ULONG i = 0; i < m_streamCount * m_tableSize; i++)
 		{
-			CollisionList* const collisions = m_collisions[i];
-
-			if (collisions)
+			if (const auto collisions = m_collisions[i])
 				collisions->sort();
 		}
+
+#ifdef PRINT_HASH_TABLE
+		FB_UINT64 total = 0;
+		ULONG min = MAX_ULONG, max = 0, count = 0;
+
+		for (ULONG i = 0; i < m_streamCount * m_tableSize; i++)
+		{
+			CollisionList* const collisions = m_collisions[i];
+			if (!collisions)
+				continue;
+
+			const auto cnt = collisions->getCount();
+
+			if (cnt < min)
+				min = cnt;
+			if (cnt > max)
+				max = cnt;
+			total += cnt;
+			count++;
+		}
+
+		if (count)
+		{
+			printf("Hash table size %u, count %u, buckets %u, min %u, max %u, avg %u\n",
+				   m_tableSize, (ULONG) total, count, min, max, (ULONG) (total / count));
+		}
+#endif
 	}
 
 private:
@@ -217,14 +249,35 @@ private:
 };
 
 
-HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
-				   RecordSource* const* args, NestValueArray* const* keys,
+HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, JoinType joinType,
+				   FB_SIZE_T count, RecordSource* const* args, NestValueArray* const* keys,
 				   double selectivity)
 	: RecordSource(csb),
+	  m_joinType(joinType),
+	  m_boolean(nullptr),
 	  m_args(csb->csb_pool, count - 1)
 {
 	fb_assert(count >= 2);
 
+	init(tdbb, csb, count, args, keys, selectivity);
+}
+
+HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb,
+				   BoolExprNode* boolean,
+				   RecordSource* const* args, NestValueArray* const* keys,
+				   double selectivity)
+	: RecordSource(csb),
+	  m_joinType(OUTER_JOIN),
+	  m_boolean(boolean),
+	  m_args(csb->csb_pool, 1)
+{
+	init(tdbb, csb, 2, args, keys, selectivity);
+}
+
+void HashJoin::init(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
+					RecordSource* const* args, NestValueArray* const* keys,
+					double selectivity)
+{
 	m_impure = csb->allocImpure<Impure>();
 
 	m_leader.source = args[0];
@@ -360,6 +413,8 @@ bool HashJoin::internalGetRecord(thread_db* tdbb) const
 	if (!(impure->irsb_flags & irsb_open))
 		return false;
 
+	const auto inner = m_args.front().source;
+
 	while (true)
 	{
 		if (impure->irsb_flags & irsb_mustread)
@@ -368,6 +423,14 @@ bool HashJoin::internalGetRecord(thread_db* tdbb) const
 
 			if (!m_leader.source->getRecord(tdbb))
 				return false;
+
+			if (m_boolean && !m_boolean->execute(tdbb, request))
+			{
+				// The boolean pertaining to the left sub-stream is false
+				// so just join sub-stream to a null valued right sub-stream
+				inner->nullRecords(tdbb);
+				return true;
+			}
 
 			// We have something to join with, so ensure the hash table is initialized
 
@@ -410,7 +473,15 @@ bool HashJoin::internalGetRecord(thread_db* tdbb) const
 			// Setup the hash table for the iteration through collisions.
 
 			if (!impure->irsb_hash_table->setup(impure->irsb_leader_hash))
-				continue;
+			{
+				if (m_joinType == INNER_JOIN || m_joinType == SEMI_JOIN)
+					continue;
+
+				if (m_joinType == OUTER_JOIN)
+					inner->nullRecords(tdbb);
+
+				return true;
+			}
 
 			impure->irsb_flags &= ~irsb_mustread;
 			impure->irsb_flags |= irsb_first;
@@ -434,13 +505,29 @@ bool HashJoin::internalGetRecord(thread_db* tdbb) const
 			if (!found)
 			{
 				impure->irsb_flags |= irsb_mustread;
-				continue;
+
+				if (m_joinType == INNER_JOIN || m_joinType == SEMI_JOIN)
+					continue;
+
+				if (m_joinType == OUTER_JOIN)
+					inner->nullRecords(tdbb);
+
+				break;
+			}
+
+			if (m_joinType == SEMI_JOIN || m_joinType == ANTI_JOIN)
+			{
+				impure->irsb_flags |= irsb_mustread;
+
+				if (m_joinType == ANTI_JOIN)
+					continue;
 			}
 
 			impure->irsb_flags &= ~irsb_first;
 		}
 		else if (!fetchRecord(tdbb, impure, m_args.getCount() - 1))
 		{
+			fb_assert(m_joinType == INNER_JOIN);
 			impure->irsb_flags |= irsb_mustread;
 			continue;
 		}
@@ -481,11 +568,36 @@ void HashJoin::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned l
 {
 	planEntry.className = "HashJoin";
 
+	planEntry.lines.add().text = "Hash Join ";
+
+	switch (m_joinType)
+	{
+		case INNER_JOIN:
+			planEntry.lines.back().text += "(inner)";
+			break;
+
+		case OUTER_JOIN:
+			planEntry.lines.back().text += "(outer)";
+			break;
+
+		case SEMI_JOIN:
+			planEntry.lines.back().text += "(semi)";
+			break;
+
+		case ANTI_JOIN:
+			planEntry.lines.back().text += "(anti)";
+			break;
+
+		default:
+			fb_assert(false);
+	}
+
 	string extras;
 	extras.printf(" (keys: %" ULONGFORMAT", total key length: %" ULONGFORMAT")",
 				  m_leader.keys->getCount(), m_leader.totalKeyLength);
 
-	planEntry.lines.add().text = "Hash Join (inner)" + extras;
+	planEntry.lines.back().text += extras;
+
 	printOptInfo(planEntry.lines);
 
 	if (recurse)
@@ -503,32 +615,46 @@ void HashJoin::markRecursive()
 {
 	m_leader.source->markRecursive();
 
-	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		m_args[i].source->markRecursive();
+	for (const auto& arg : m_args)
+		arg.source->markRecursive();
 }
 
 void HashJoin::findUsedStreams(StreamList& streams, bool expandAll) const
 {
 	m_leader.source->findUsedStreams(streams, expandAll);
 
-	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		m_args[i].source->findUsedStreams(streams, expandAll);
+	for (const auto& arg : m_args)
+		arg.source->findUsedStreams(streams, expandAll);
+}
+
+bool HashJoin::isDependent(const StreamList& streams) const
+{
+	if (m_leader.source->isDependent(streams))
+		return true;
+
+	for (const auto& arg : m_args)
+	{
+		if (arg.source->isDependent(streams))
+			return true;
+	}
+
+	return (m_boolean && m_boolean->containsAnyStream(streams));
 }
 
 void HashJoin::invalidateRecords(Request* request) const
 {
 	m_leader.source->invalidateRecords(request);
 
-	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		m_args[i].source->invalidateRecords(request);
+	for (const auto& arg : m_args)
+		arg.source->invalidateRecords(request);
 }
 
 void HashJoin::nullRecords(thread_db* tdbb) const
 {
 	m_leader.source->nullRecords(tdbb);
 
-	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		m_args[i].source->nullRecords(tdbb);
+	for (const auto& arg : m_args)
+		arg.source->nullRecords(tdbb);
 }
 
 ULONG HashJoin::computeHash(thread_db* tdbb,
@@ -624,6 +750,9 @@ bool HashJoin::fetchRecord(thread_db* tdbb, Impure* impure, FB_SIZE_T stream) co
 		if (arg->getRecord(tdbb))
 			return true;
 	}
+
+	if (m_joinType == SEMI_JOIN || m_joinType == ANTI_JOIN)
+		return false;
 
 	while (true)
 	{

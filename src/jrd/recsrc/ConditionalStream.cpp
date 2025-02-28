@@ -157,6 +157,13 @@ void ConditionalStream::findUsedStreams(StreamList& streams, bool expandAll) con
 	m_second->findUsedStreams(streams, expandAll);
 }
 
+bool ConditionalStream::isDependent(const StreamList& streams) const
+{
+	return m_boolean->containsAnyStream(streams) ||
+		m_first->isDependent(streams) ||
+		m_second->isDependent(streams);
+}
+
 void ConditionalStream::invalidateRecords(Request* request) const
 {
 	m_first->invalidateRecords(request);
