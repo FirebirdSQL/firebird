@@ -961,3 +961,37 @@ bool ConfigFile::Parameter::asBoolean() const
 		value.equalsNoCase("yes") ||
 		value.equalsNoCase("y");
 }
+
+/******************************************************************************
+ *
+ *	Parse name as a section key
+ */
+
+ConfigFile::SectionType ConfigFile::Parameter::parseSectionKey() const
+{
+	if (name == "database")
+	{
+		return SectionType::DATABASE;
+	}
+	else if (name == "databaseName")
+	{
+		return SectionType::DATABASE_NAME;
+	}
+	else if (name == "databaseRegex")
+	{
+		return SectionType::DATABASE_REGEX;
+	}
+	else if (name == "service")
+	{
+		return SectionType::SERVICE;
+	}
+	else
+	{
+		fatal_exception::raiseFmt("error while parsing trace configuration\n\t"
+			"line %d: wrong section header, \"database\", \"databaseName\", \"databaseRegex\" or \"service\" is expected",
+			line);
+
+		// Return something to calm down the compiler
+		return SectionType::DATABASE;
+	}
+}
