@@ -345,6 +345,11 @@ void BufferedStream::findUsedStreams(StreamList& streams, bool expandAll) const
 	m_next->findUsedStreams(streams, expandAll);
 }
 
+bool BufferedStream::isDependent(const StreamList& streams) const
+{
+	return m_next->isDependent(streams);
+}
+
 void BufferedStream::invalidateRecords(Request* request) const
 {
 	m_next->invalidateRecords(request);
