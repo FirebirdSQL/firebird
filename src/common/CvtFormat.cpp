@@ -1194,6 +1194,31 @@ namespace
 		return std::string_view(str + startPoint, wordLen);
 	}
 
+	constexpr unsigned getFractionsFromString(const char* str, FB_SIZE_T length, FB_SIZE_T& offset, FB_SIZE_T parseLength)
+	{
+		constexpr unsigned pow10[] = {1, 10, 100, 1'000, 10'000};
+		static_assert(std::size(pow10) > -ISC_TIME_SECONDS_PRECISION_SCALE);
+
+		if (parseLength > -ISC_TIME_SECONDS_PRECISION_SCALE)
+			parseLength = -ISC_TIME_SECONDS_PRECISION_SCALE;
+		int currentPrecisionScale = -ISC_TIME_SECONDS_PRECISION_SCALE;
+		unsigned fractions = 0;
+
+		const FB_SIZE_T parseLengthWithOffset = offset + parseLength;
+		for (; offset < parseLengthWithOffset && offset < length; offset++)
+		{
+			const char symbol = str[offset];
+
+			if (!isDigit(symbol))
+				break;
+
+			fractions = fractions * 10 + (symbol - '0');
+			--currentPrecisionScale;
+		}
+
+		return fractions * pow10[currentPrecisionScale];
+	}
+
 	template <typename TIterator>
 	constexpr TIterator getPreviousOrCurrentIterator(TIterator it, TIterator begin)
 	{
@@ -1501,8 +1526,7 @@ namespace
 				{
 					const int number = patternStr.back() - '0';
 
-					const int fractions = getIntFromString(str, strLength, strOffset, number);
-					outFractions = fractions * pow(10, -ISC_TIME_SECONDS_PRECISION_SCALE - number);
+					outFractions = getFractionsFromString(str, strLength, strOffset, number);
 					break;
 				}
 
