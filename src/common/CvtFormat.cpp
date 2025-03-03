@@ -1524,9 +1524,9 @@ namespace
 				case Format::FF3:
 				case Format::FF4:
 				{
-					const int number = patternStr.back() - '0';
+					const int precision = patternStr.back() - '0';
 
-					outFractions = getFractionsFromString(str, strLength, strOffset, number);
+					outFractions = getFractionsFromString(str, strLength, strOffset, precision);
 					break;
 				}
 
