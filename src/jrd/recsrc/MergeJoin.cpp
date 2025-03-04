@@ -381,26 +381,37 @@ void MergeJoin::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned 
 
 void MergeJoin::markRecursive()
 {
-	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		m_args[i]->markRecursive();
+	for (auto arg : m_args)
+		arg->markRecursive();
 }
 
 void MergeJoin::findUsedStreams(StreamList& streams, bool expandAll) const
 {
-	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		m_args[i]->findUsedStreams(streams, expandAll);
+	for (const auto arg : m_args)
+		arg->findUsedStreams(streams, expandAll);
+}
+
+bool MergeJoin::isDependent(const StreamList& streams) const
+{
+	for (const auto arg : m_args)
+	{
+		if (arg->isDependent(streams))
+			return true;
+	}
+
+	return false;
 }
 
 void MergeJoin::invalidateRecords(Request* request) const
 {
-	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		m_args[i]->invalidateRecords(request);
+	for (const auto arg : m_args)
+		arg->invalidateRecords(request);
 }
 
 void MergeJoin::nullRecords(thread_db* tdbb) const
 {
-	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		m_args[i]->nullRecords(tdbb);
+	for (const auto arg : m_args)
+		arg->nullRecords(tdbb);
 }
 
 int MergeJoin::compare(thread_db* tdbb, const NestValueArray* node1,
