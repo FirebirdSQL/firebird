@@ -621,6 +621,8 @@ public:
 	Firebird::ICryptKeyCallback*	att_crypt_callback;		// callback for DB crypt
 	Firebird::DecimalStatus			att_dec_status;			// error handling and rounding
 
+	bool att_flatten_row_types;							// does row types should be flattened
+
 	void initLocks(thread_db* tdbb);
 	void releaseLocks(thread_db* tdbb);
 	void detachLocks();

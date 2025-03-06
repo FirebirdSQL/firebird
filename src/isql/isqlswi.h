@@ -63,7 +63,8 @@ enum isql_switches
 #ifdef DEV_BUILD
 	IN_SW_ISQL_EXTRACTTBL	= 28,
 #endif
-	IN_SW_ISQL_HELP 		= 29
+	IN_SW_ISQL_HELP 		= 29,
+	IN_SW_ISQL_FLATTEN_ROWS = 30
 };
 
 
@@ -80,6 +81,7 @@ static const Switches::in_sw_tab_t isql_in_sw_table[] =
 	{IN_SW_ISQL_ECHO 		, 0, "ECHO"				, 0, 0, 0, false, false, 124	, 1, NULL, iqoArgNone},
 	{IN_SW_ISQL_EXTRACT		, 0, "EXTRACT"			, 0, 0, 0, false, false, 125	, 2, NULL, iqoArgNone},
 	{IN_SW_ISQL_FETCHPASS	, 0, "FETCH_PASSWORD"	, 0, 0, 0, false, false, 161	, 1, NULL, iqoArgString},
+	{IN_SW_ISQL_FLATTEN_ROWS, 0, "FLATTEN_ROW_TYPE"	, 0, 0, 0, false, false, 210	, 2, NULL, iqoArgNone},
 	{IN_SW_ISQL_INPUT		, 0, "INPUT"			, 0, 0, 0, false, false, 126	, 1, NULL, iqoArgString},
 	{IN_SW_ISQL_MERGE		, 0, "MERGE"			, 0, 0, 0, false, false, 127	, 1, NULL, iqoArgNone},
 	{IN_SW_ISQL_MERGE2		, 0, "M2"				, 0, 0, 0, false, false, 128	, 2, NULL, iqoArgNone},

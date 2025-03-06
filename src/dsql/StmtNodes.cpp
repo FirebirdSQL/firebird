@@ -6606,14 +6606,6 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	if (returns.hasData())
 	{
-		// Set up parameter to handle EOF
-		dsql_par* param = MAKE_parameter(statement->getReceiveMsg(), false, false, 0, NULL);
-		statement->setEof(param);
-		param->par_desc.dsc_dtype = dtype_short;
-		param->par_desc.dsc_scale = 0;
-		param->par_desc.dsc_length = sizeof(SSHORT);
-
-		// revertParametersOrder(statement->getReceiveMsg()->msg_parameters);
 		if (!subRoutine)
 			GEN_port(dsqlScratch, statement->getReceiveMsg());
 	}

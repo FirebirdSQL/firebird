@@ -138,7 +138,7 @@
 #define isc_dpb_search_path				 105
 #define isc_dpb_blr_request_search_path	 106
 #define isc_dpb_gbak_restore_has_schema	 107
-
+#define isc_dpb_flatten_row_type		 108
 
 /**************************************************/
 /* clumplet tags used inside isc_dpb_address_path */

@@ -530,6 +530,7 @@ public:
 		PerTableStats = false;
 		WireStats = false;
 		ExplainCommand = false;
+		FlattenRowTypes = false;
 	}
 
 	ColList global_Cols;
@@ -557,6 +558,7 @@ public:
 	bool PerTableStats;
 	bool WireStats;
 	bool ExplainCommand;
+	bool FlattenRowTypes;
 };
 
 static SetValues setValues;
@@ -6377,6 +6379,9 @@ static processing_state newdb(const TEXT* dbname,
 	}
 #endif
 
+	if (setValues.FlattenRowTypes == true)
+		dpb.insertTag(isc_dpb_flatten_row_type);
+
 	{ // scope
 		const TEXT* local_name = isqlGlob.global_Db_name;
 
@@ -7078,6 +7083,10 @@ static processing_state parse_arg(int argc, SCHAR** argv, QualifiedMetaString& t
 
 				case IN_SW_ISQL_HELP:
 					ret = ps_ERR;
+					break;
+
+				case IN_SW_ISQL_FLATTEN_ROWS:
+					setValues.FlattenRowTypes = true;
 					break;
 
 				default: // unknown switch

@@ -210,3 +210,4 @@ FB_IMPL_MSG_SYMBOL(ISQL, 210, USAGE_SEARCH_PATH, "	-(se)arch_path <path>   set s
 FB_IMPL_MSG_SYMBOL(ISQL, 211, MSG_SCHEMAS, "Schemas:")
 FB_IMPL_MSG_SYMBOL(ISQL, 212, NO_CONSTANTS, "There are no constants in this database")
 FB_IMPL_MSG_SYMBOL(ISQL, 213, NO_CONSTANT, "There are no constant @1 in this database")
+FB_IMPL_MSG_SYMBOL(ISQL, 214, FLATTEN_ROW_TYPE, "	-fl(atten_row_type)     return row type subfields as simple values")

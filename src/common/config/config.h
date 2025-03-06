@@ -188,6 +188,7 @@ enum ConfigKey
 	KEY_MAX_PARALLEL_WORKERS,
 	KEY_OPTIMIZE_FOR_FIRST_ROWS,
 	KEY_ALLOW_UPDATE_OVERWRITE,
+	KEY_FLATTEN_ROW_TYPE,
 	MAX_CONFIG_KEY		// keep it last
 };
 
@@ -302,7 +303,8 @@ inline constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_INTEGER,	"ParallelWorkers",			true,	1},
 	{TYPE_INTEGER,	"MaxParallelWorkers",		true,	1},
 	{TYPE_BOOLEAN,	"OptimizeForFirstRows",		false,	false},
-	{TYPE_BOOLEAN,	"AllowUpdateOverwrite",		false,	true}
+	{TYPE_BOOLEAN,	"AllowUpdateOverwrite",		false,	true},
+	{TYPE_BOOLEAN,	"FlattenRowType",			false,	false}
 };
 
 
@@ -628,6 +630,8 @@ public:
 	CONFIG_GET_PER_DB_BOOL(getOptimizeForFirstRows, KEY_OPTIMIZE_FOR_FIRST_ROWS);
 
 	CONFIG_GET_PER_DB_BOOL(getAllowUpdateOverwrite, KEY_ALLOW_UPDATE_OVERWRITE);
+
+	CONFIG_GET_PER_DB_BOOL(getFlattenRowType, KEY_FLATTEN_ROW_TYPE);
 };
 
 // Implementation of interface to access master configuration file

@@ -1134,8 +1134,8 @@ static void sql_info(thread_db* tdbb,
 					end_describe++;
 				}
 
-				// if (tdbb->getAttachment().att_flatten_row_type && message && message == dsqlStatement->getReceiveMsg())
-				if (1 && message && message == dsqlStatement->getReceiveMsg()) // introduce att_flatten_row_type flag later
+				if ((tdbb->getAttachment()->att_flatten_row_types || tdbb->getDatabase()->dbb_config->getFlattenRowType())
+					&& message && message == dsqlStatement->getReceiveMsg())
 				{
 					FB_SIZE_T flattenedParamIndexOffset = 1;
 					auto internalParamValueOffset = 0;

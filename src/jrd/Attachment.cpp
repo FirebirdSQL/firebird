@@ -239,7 +239,8 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider
 	  att_stmt_timeout(0),
 	  att_batches(*pool),
 	  att_initial_options(*pool),
-	  att_provider(provider)
+	  att_provider(provider),
+	  att_flatten_row_types(false)
 {
 	att_system_schema_search_path->push(SYSTEM_SCHEMA);
 }

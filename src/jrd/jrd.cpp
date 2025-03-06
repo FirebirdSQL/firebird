@@ -1042,6 +1042,7 @@ namespace Jrd
 		bool	dpb_set_db_replica;
 		bool	dpb_clear_map;
 		bool	dpb_upgrade_db;
+		bool	dpb_flatten_row_type;
 
 		// here begin compound objects
 		// for constructor to work properly dpb_user_name
@@ -6979,6 +6980,7 @@ void DatabaseOptions::get(const UCHAR* dpb, FB_SIZE_T dpb_length, bool& invalid_
 	dpb_sql_dialect = 99;
 	invalid_client_SQL_dialect = false;
 	dpb_parallel_workers = Config::getParallelWorkers();
+	dpb_flatten_row_type = false;
 
 	if (dpb_length == 0)
 		return;
@@ -7423,6 +7425,10 @@ void DatabaseOptions::get(const UCHAR* dpb, FB_SIZE_T dpb_length, bool& invalid_
 			MetaString::parseList(tempStr, dpb_blr_request_schema_search_path);
 			break;
 
+		case isc_dpb_flatten_row_type:
+			dpb_flatten_row_type = true;
+			break;
+
 		default:
 			break;
 		}
@@ -7681,6 +7687,7 @@ static JAttachment* create_attachment(const PathName& alias_name,
 	attachment->att_client_version = options.dpb_client_version;
 	attachment->att_remote_protocol = options.dpb_remote_protocol;
 	attachment->att_ext_call_depth = options.dpb_ext_call_depth;
+	attachment->att_flatten_row_types = options.dpb_flatten_row_type;
 
 	StableAttachmentPart* sAtt = FB_NEW StableAttachmentPart(attachment);
 	attachment->setStable(sAtt);
