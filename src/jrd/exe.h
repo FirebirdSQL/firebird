@@ -431,6 +431,28 @@ public:
 typedef Firebird::LeftPooledMap<MetaNamePair, FieldInfo> MapFieldInfo;
 typedef Firebird::RightPooledMap<Item, ItemInfo> MapItemInfo;
 
+// Table value function block
+
+class jrd_table_value_fun
+{
+public:
+	explicit jrd_table_value_fun(MemoryPool& p) : recordFormat(nullptr), fields(p), name(p), funcId(0)
+	{
+	}
+
+	SSHORT getId(const MetaName& fieldName) const
+	{
+		SSHORT* id = fields.get(fieldName);
+		fb_assert(id);
+		return *id;
+	}
+
+	const Format* recordFormat;
+	Firebird::LeftPooledMap<MetaName, SSHORT> fields;
+	Firebird::string name;
+	USHORT funcId;
+};
+
 // Compile scratch block
 
 class CompilerScratch : public pool_alloc<type_csb>
@@ -610,6 +632,7 @@ public:
 
 		void activate();
 		void deactivate();
+		Firebird::string getName(bool allowEmpty = true) const;
 
 		std::optional<USHORT> csb_cursor_number;	// Cursor number for this stream
 		StreamType csb_stream;			// Map user context to internal stream
@@ -630,6 +653,7 @@ public:
 		PlanNode* csb_plan;				// user-specified plan for this relation
 		StreamType* csb_map;			// Stream map for views
 		RecordSource** csb_rsb_ptr;		// point to rsb for nod_stream
+		jrd_table_value_fun* csb_table_value_fun;  // Table value function
 	};
 
 	typedef csb_repeat* rpt_itr;
@@ -654,7 +678,8 @@ inline CompilerScratch::csb_repeat::csb_repeat()
 	  csb_cardinality(0.0),	// TMN: Non-natural cardinality?!
 	  csb_plan(0),
 	  csb_map(0),
-	  csb_rsb_ptr(0)
+	  csb_rsb_ptr(0),
+	  csb_table_value_fun(0)
 {
 }
 
@@ -666,6 +691,22 @@ inline void CompilerScratch::csb_repeat::activate()
 inline void CompilerScratch::csb_repeat::deactivate()
 {
 	csb_flags &= ~csb_active;
+}
+
+inline Firebird::string CompilerScratch::csb_repeat::getName(bool allowEmpty) const
+{
+	if (csb_relation)
+		return csb_relation->rel_name.c_str();
+	else if (csb_procedure)
+		return csb_procedure->getName().toString();
+	else if (csb_table_value_fun)
+		return csb_table_value_fun->name.c_str();
+	//// TODO: LocalTableSourceNode
+	else
+	{
+		fb_assert(allowEmpty);
+		return "";
+	}
 }
 
 

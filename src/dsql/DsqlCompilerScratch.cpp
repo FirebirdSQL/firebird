@@ -945,6 +945,11 @@ bool DsqlCompilerScratch::pass1RelProcIsRecursive(RecordSourceNode* input)
 		relName = relNode->dsqlName;
 		relAlias = relNode->alias;
 	}
+	else if (auto tableValueFunctionNode = nodeAs<TableValueFunctionSourceNode>(input))
+	{
+		relName = tableValueFunctionNode->dsqlName;
+		relAlias = tableValueFunctionNode->alias.c_str();
+	}
 	//// TODO: LocalTableSourceNode
 	else
 		return false;
