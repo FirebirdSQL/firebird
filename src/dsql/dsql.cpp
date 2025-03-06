@@ -836,7 +836,7 @@ static void sql_info(thread_db* tdbb,
 
 	// CVC: Is it the idea that this pointer remains with its previous value
 	// in the loop or should it be made NULL in each iteration?
-	const dsql_msg* message = NULL;
+	dsql_msg* message = NULL;
 	bool messageFound = false;
 	USHORT first_index = 0;
 
@@ -1132,6 +1132,51 @@ static void sql_info(thread_db* tdbb,
 					*end_describe != isc_info_end && *end_describe != isc_info_sql_describe_end)
 				{
 					end_describe++;
+				}
+
+				// if (tdbb->getAttachment().att_flatten_row_type && message && message == dsqlStatement->getReceiveMsg())
+				if (1 && message && message == dsqlStatement->getReceiveMsg()) // introduce att_flatten_row_type flag later
+				{
+					FB_SIZE_T flattenedParamIndexOffset = 1;
+					auto internalParamValueOffset = 0;
+
+					for (FB_SIZE_T i = 0; i < message->msg_parameters.getCount(); ++i)
+					{
+						dsql_par* param = message->msg_parameters[i];
+
+						if (param->par_index)
+						{
+							if (param->par_next)
+							{
+								auto internalParamNullOffset = param->par_desc.dsc_address;
+								// replace with subparameters
+								auto chainParam = param->par_next;
+								while (chainParam)
+								{
+									chainParam->par_index = flattenedParamIndexOffset++;
+									message->msg_parameters.insert(i++, chainParam);
+									chainParam->par_message = message;
+									chainParam->par_desc.dsc_address += internalParamValueOffset;
+									chainParam->par_null->par_desc.dsc_address = internalParamNullOffset;
+									internalParamNullOffset += 2;
+									chainParam = chainParam->par_next;
+								}
+								internalParamValueOffset += param->par_desc.dsc_length;
+								message->msg_parameters.remove(i--);
+							}
+							else
+							{
+								internalParamValueOffset = FB_ALIGN(internalParamValueOffset, type_alignments[param->par_desc.dsc_dtype]);
+								internalParamValueOffset += param->par_desc.dsc_length;
+								param->par_index = flattenedParamIndexOffset++;
+							}
+						}
+						else
+						{
+							internalParamValueOffset = FB_ALIGN(internalParamValueOffset, type_alignments[dtype_short]);
+							internalParamValueOffset += 2;
+						}
+					}
 				}
 
 				info = var_info(message, items, end_describe, info, end_info, first_index,
@@ -1619,7 +1664,6 @@ USHORT Jrd::serialize_composite_parameter_descriptor(dsql_fld& parameterField, s
 		return 0;
 
 	thread_db* tdbb = JRD_get_thread_data();
-	Jrd::Attachment* attachment = tdbb->getAttachment();
 
 	string outstringbuff;
 
@@ -1631,4 +1675,91 @@ USHORT Jrd::serialize_composite_parameter_descriptor(dsql_fld& parameterField, s
 	serializedDescriptor = outstringbuff;
 
 	return serializedDescriptorLength;
+}
+
+static USHORT flattenParameterFields(thread_db* tdbb, dsql_fld* parameterField, dsc* parameterDsc, dsql_par** lastParameterPtr, UCHAR*& nulloffset)
+{
+	if (!parameterField)
+		return 0;
+
+	auto pool = tdbb->getDefaultPool();
+	USHORT count = 0;
+
+	// If the field is a composite type, add only its internal elements
+	if (parameterField->dtype == dtype_rowtype)
+	{
+		// We skip creating a parameter for the composite type itself
+		if (parameterField->fld_sub_first)
+		{
+			UCHAR* nextoffset = parameterDsc->dsc_address;
+			count += flattenParameterFields(tdbb,
+										  parameterField->fld_sub_first,
+										  parameterDsc->dsc_sub_first,
+										  lastParameterPtr,
+										  nextoffset);
+		}
+	}
+	else
+	{
+		// For simple type subfields, create a parameter and add it to the list
+		dsql_par* currentParameter = FB_NEW_POOL(*pool) dsql_par(*pool);
+		*lastParameterPtr = currentParameter;
+		lastParameterPtr = &currentParameter->par_next;
+
+		currentParameter->par_name = parameterField->fld_name;
+		currentParameter->par_alias = parameterField->fld_name;
+
+		currentParameter->par_desc = *parameterDsc;
+		currentParameter->par_desc.dsc_flags |= DSC_nullable;
+
+		// Create null subparameter
+		dsql_par* null = FB_NEW_POOL(*pool) dsql_par(*pool);
+		currentParameter->par_null = null;
+		null->par_desc.dsc_dtype = dtype_short;
+		null->par_desc.dsc_scale = 0;
+		null->par_desc.dsc_length = sizeof(SSHORT);
+		null->par_desc.dsc_address = nulloffset;
+		nulloffset += 2;
+
+		count++;
+	}
+
+	// Process the following fields at the same level
+	if (parameterField->fld_next)
+	{
+		count += flattenParameterFields(tdbb,
+									  parameterField->fld_next,
+									  parameterDsc->dsc_next,
+									  lastParameterPtr,
+									nulloffset);
+	}
+
+	return count;
+}
+
+USHORT Jrd::generate_sub_parameters(dsql_fld& parameterField, dsql_par& hostParameter)
+{
+	if (parameterField.dtype != dtype_rowtype)
+		return 0;
+
+	thread_db* tdbb = JRD_get_thread_data();
+
+	DsqlDescMaker::fromField(&hostParameter.par_desc, &parameterField);
+	hostParameter.par_desc.setAddressRecursively(0);
+
+	if (parameterField.fld_sub_first)
+	{
+		// We start the flat chain with the par_next of the main parameter
+		dsql_par** nextPtr = &hostParameter.par_next;
+
+		UCHAR* nextoffset = hostParameter.par_desc.dsc_address;
+		// Convert the hierarchical field structure into a flat list of parameters
+		flattenParameterFields(tdbb,
+								parameterField.fld_sub_first,
+								hostParameter.par_desc.dsc_sub_first,
+								nextPtr,
+								nextoffset);
+	}
+
+	return 0;
 }

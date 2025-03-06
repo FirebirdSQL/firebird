@@ -6757,7 +6757,10 @@ void FieldNode::setParameterName(dsql_par* parameter) const
 void FieldNode::setParameterCompositeDescriptor(dsql_par* parameter) const
 {
 	if (dsqlField->dtype == dtype_rowtype)
+	{
 		Jrd::serialize_composite_parameter_descriptor(*dsqlField, parameter->par_composite_descriptor);
+		Jrd::generate_sub_parameters(*dsqlField, *parameter);
+	}
 }
 
 // Generate blr for a field - field id's are preferred but not for trigger or view blr.
@@ -13483,7 +13486,10 @@ void UdfCallNode::setParameterName(dsql_par* parameter) const
 void UdfCallNode::setParameterCompositeDescriptor(dsql_par* parameter) const
 {
 	if (dsqlFunction->udf_outfield.dtype == dtype_rowtype)
+	{
 		Jrd::serialize_composite_parameter_descriptor(dsqlFunction->udf_outfield, parameter->par_composite_descriptor);
+		Jrd::generate_sub_parameters(dsqlFunction->udf_outfield, *parameter);
+	}
 }
 
 void UdfCallNode::genBlr(DsqlCompilerScratch* dsqlScratch)
@@ -14439,7 +14445,10 @@ void VariableNode::setParameterName(dsql_par* parameter) const
 void VariableNode::setParameterCompositeDescriptor(dsql_par* parameter) const
 {
 	if (dsqlVar->desc.dsc_dtype == dtype_rowtype)
+	{
 		Jrd::serialize_composite_parameter_descriptor(*dsqlVar->field, parameter->par_composite_descriptor);
+		Jrd::generate_sub_parameters(*dsqlVar->field, *parameter);
+	}
 }
 
 void VariableNode::genBlr(DsqlCompilerScratch* dsqlScratch)
@@ -14851,7 +14860,10 @@ void RowValueExpressionNode::setParameterName(dsql_par* parameter) const
 void RowValueExpressionNode::setParameterCompositeDescriptor(dsql_par* parameter) const
 {
 	if (rowDesc.dsc_dtype == dtype_rowtype)
+	{
 		Jrd::serialize_composite_parameter_descriptor(*rowField, parameter->par_composite_descriptor);
+		Jrd::generate_sub_parameters(*rowField, *parameter);
+	}
 }
 
 void RowValueExpressionNode::genBlr(DsqlCompilerScratch* dsqlScratch)
