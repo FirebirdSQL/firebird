@@ -1146,11 +1146,11 @@ static void sql_info(thread_db* tdbb,
 
 						if (param->par_index)
 						{
-							if (param->par_next)
+							if (param->par_sub_first)
 							{
 								auto internalParamNullOffset = param->par_desc.dsc_address;
 								// replace with subparameters
-								auto chainParam = param->par_next;
+								auto chainParam = param->par_sub_first;
 								while (chainParam)
 								{
 									chainParam->par_index = flattenedParamIndexOffset++;
@@ -1214,6 +1214,228 @@ static void sql_info(thread_db* tdbb,
 }
 
 
+
+static UCHAR* describe_parameter(thread_db* tdbb,
+								Attachment* attachment,
+								const dsql_par* param,
+								const UCHAR* items,
+								const UCHAR* end_describe,
+								UCHAR* info,
+								const UCHAR* end,
+								bool input_message)
+{
+	UCHAR buf[128];
+
+
+	dsc desc = param->par_desc;
+
+	// Scan sources of coercion rules in reverse order to observe
+	// 'last entered in use' rule. Start with dynamic binding rules ...
+	if (!attachment->att_bindings.coerce(tdbb, &desc))
+	{
+		// next - given in DPB ...
+		if (!attachment->getInitialBindings()->coerce(tdbb, &desc))
+		{
+			Database* dbb = tdbb->getDatabase();
+			// and finally - rules from .conf files.
+			dbb->getBindings()->coerce(tdbb, &desc, dbb->dbb_compatibility_index);
+		}
+	}
+
+	SLONG sql_len, sql_sub_type, sql_scale, sql_type;
+	desc.getSqlInfo(&sql_len, &sql_sub_type, &sql_scale, &sql_type);
+
+	if (input_message &&
+		(desc.dsc_dtype == dtype_text || param->par_is_text) &&
+		(desc.dsc_flags & DSC_null))
+	{
+		sql_type = SQL_NULL;
+		sql_len = 0;
+		sql_sub_type = 0;
+	}
+	else if (desc.dsc_dtype == dtype_varying && param->par_is_text)
+		sql_type = SQL_TEXT;
+
+	if (sql_type && (desc.dsc_flags & DSC_nullable))
+		sql_type |= 0x1;
+
+	for (const UCHAR* describe = items; describe < end_describe;)
+	{
+		USHORT length = 0;
+		MetaName name;
+		const UCHAR* buffer = buf;
+		UCHAR item = *describe++;
+
+		switch (item)
+		{
+			case isc_info_sql_sqlda_seq:
+				length = put_vax_long(buf, (SLONG) param->par_index);
+				break;
+
+			case isc_info_sql_message_seq:
+				length = 0;
+				break;
+
+			case isc_info_sql_type:
+				length = put_vax_long(buf, (SLONG) sql_type);
+				break;
+
+			case isc_info_sql_sub_type:
+				length = put_vax_long(buf, (SLONG) sql_sub_type);
+				break;
+
+			case isc_info_sql_scale:
+				length = put_vax_long(buf, (SLONG) sql_scale);
+				break;
+
+			case isc_info_sql_length:
+				length = put_vax_long(buf, (SLONG) sql_len);
+				break;
+
+			case isc_info_sql_null_ind:
+				length = put_vax_long(buf, (SLONG) (sql_type & 1));
+				break;
+
+			case isc_info_sql_field:
+				if (param->par_name.hasData())
+				{
+					name = attachment->nameToUserCharSet(tdbb, param->par_name);
+					length = name.length();
+					buffer = reinterpret_cast<const UCHAR*>(name.c_str());
+				}
+				else
+					length = 0;
+				break;
+
+			case isc_info_sql_relation_schema:
+				if (param->par_rel_name.schema.hasData())
+				{
+					name = attachment->nameToUserCharSet(tdbb, param->par_rel_name.schema);
+					length = name.length();
+					buffer = reinterpret_cast<const UCHAR*>(name.c_str());
+				}
+				else
+					length = 0;
+				break;
+
+			case isc_info_sql_relation:
+				if (param->par_rel_name.object.hasData())
+				{
+					name = attachment->nameToUserCharSet(tdbb, param->par_rel_name);
+					length = name.length();
+					buffer = reinterpret_cast<const UCHAR*>(name.c_str());
+				}
+				else
+					length = 0;
+				break;
+
+			case isc_info_sql_owner:
+				if (param->par_owner_name.hasData())
+				{
+					name = attachment->nameToUserCharSet(tdbb, param->par_owner_name);
+					length = name.length();
+					buffer = reinterpret_cast<const UCHAR*>(name.c_str());
+				}
+				else
+					length = 0;
+				break;
+
+			case isc_info_sql_relation_alias:
+				if (param->par_rel_alias.hasData())
+				{
+					name = attachment->nameToUserCharSet(tdbb, param->par_rel_alias);
+					length = name.length();
+					buffer = reinterpret_cast<const UCHAR*>(name.c_str());
+				}
+				else
+					length = 0;
+				break;
+
+			case isc_info_sql_alias:
+				if (param->par_alias.hasData())
+				{
+					name = attachment->nameToUserCharSet(tdbb, param->par_alias);
+					length = name.length();
+					buffer = reinterpret_cast<const UCHAR*>(name.c_str());
+				}
+				else
+					length = 0;
+				break;
+
+			case isc_info_sql_composite_descriptor:
+				if (tdbb->getAttachment()->att_flatten_row_types || tdbb->getDatabase()->dbb_config->getFlattenRowType())
+					length = 0;
+				else if (param->par_sub_first)
+				{
+					// Create temp buffer for subfield tags
+					UCharBuffer subFieldsBuffer;
+					ULONG bufferSize = 1024;  // we should start from something
+					bool needRetry;
+					UCHAR* subInfo = nullptr;
+					UCHAR* currentPos = nullptr;
+
+					do {
+						needRetry = false;
+						subInfo = subFieldsBuffer.getBuffer(bufferSize);
+						const UCHAR* const subEnd = subInfo + bufferSize;
+						currentPos = subInfo;
+
+						// traverse all subfields recursively
+						for (const dsql_par* subParam = param->par_sub_first;
+							 subParam;
+							 subParam = subParam->par_next)
+						{
+							currentPos = describe_parameter(tdbb, attachment, subParam,
+															items, end_describe,
+															currentPos, subEnd,
+															input_message);
+
+							// Try to encrease buffer if it isn't big enough
+							if (!currentPos || (currentPos + 1 >= subEnd))
+							{
+								const ULONG newSize = bufferSize * 2;
+								if (newSize > 16384)  // 16KB limit
+								{
+									info = nullptr;
+									return nullptr;
+								}
+
+								bufferSize = newSize;
+								needRetry = true;
+								break;
+							}
+
+							// End with separator after every described subfield
+							*currentPos++ = isc_info_sql_describe_end;
+						}
+					} while (needRetry);
+
+					length = currentPos - subInfo;
+					buffer = subInfo;
+				}
+				// else
+				// {
+				// 	stringBuffer = param->par_composite_descriptor;
+				// 	length = stringBuffer.length();
+				// 	buffer = reinterpret_cast<const UCHAR*>(stringBuffer.c_str());
+				// }
+				break;
+
+			default:
+				buf[0] = item;
+				item = isc_info_error;
+				length = 1 + put_vax_long(buf + 1, (SLONG) isc_infunk);
+				break;
+		}
+
+		if (!(info = put_item(item, length, buffer, info, end)))
+			return nullptr;
+	}
+
+	return info;
+}
+
+
 /**
 
  	var_info
@@ -1258,177 +1480,22 @@ static UCHAR* var_info(const dsql_msg* message,
 		}
 	}
 
-	UCHAR buf[128];
-
 	for (FB_SIZE_T i = 0; i < parameters.getCount(); i++)
 	{
 		const dsql_par* param = parameters[i];
 
 		if (param && param->par_index >= first_index)
 		{
-			dsc desc = param->par_desc;
 
-			// Scan sources of coercion rules in reverse order to observe
-			// 'last entered in use' rule. Start with dynamic binding rules ...
-			if (!attachment->att_bindings.coerce(tdbb, &desc))
-			{
-				// next - given in DPB ...
-				if (!attachment->getInitialBindings()->coerce(tdbb, &desc))
-				{
-					Database* dbb = tdbb->getDatabase();
-					// and finally - rules from .conf files.
-					dbb->getBindings()->coerce(tdbb, &desc, dbb->dbb_compatibility_index);
-				}
-			}
-
-			SLONG sql_len, sql_sub_type, sql_scale, sql_type;
-			desc.getSqlInfo(&sql_len, &sql_sub_type, &sql_scale, &sql_type);
-
-			if (input_message &&
-				(desc.dsc_dtype == dtype_text || param->par_is_text) &&
-				(desc.dsc_flags & DSC_null))
-			{
-				sql_type = SQL_NULL;
-				sql_len = 0;
-				sql_sub_type = 0;
-			}
-			else if (desc.dsc_dtype == dtype_varying && param->par_is_text)
-				sql_type = SQL_TEXT;
-
-			if (sql_type && (desc.dsc_flags & DSC_nullable))
-				sql_type |= 0x1;
-
-			for (const UCHAR* describe = items; describe < end_describe;)
-			{
-				USHORT length;
-				string str;
-				MetaName name;
-				string stringBuffer;
-				const UCHAR* buffer = buf;
-				UCHAR item = *describe++;
-
-				switch (item)
-				{
-				case isc_info_sql_sqlda_seq:
-					length = put_vax_long(buf, (SLONG) param->par_index);
-					break;
-
-				case isc_info_sql_message_seq:
-					length = 0;
-					break;
-
-				case isc_info_sql_type:
-					length = put_vax_long(buf, (SLONG) sql_type);
-					break;
-
-				case isc_info_sql_sub_type:
-					length = put_vax_long(buf, (SLONG) sql_sub_type);
-					break;
-
-				case isc_info_sql_scale:
-					length = put_vax_long(buf, (SLONG) sql_scale);
-					break;
-
-				case isc_info_sql_length:
-					length = put_vax_long(buf, (SLONG) sql_len);
-					break;
-
-				case isc_info_sql_null_ind:
-					length = put_vax_long(buf, (SLONG) (sql_type & 1));
-					break;
-
-				case isc_info_sql_field:
-					if (param->par_name.hasData())
-					{
-						name = attachment->nameToUserCharSet(tdbb, param->par_name);
-						length = name.length();
-						buffer = reinterpret_cast<const UCHAR*>(name.c_str());
-					}
-					else
-						length = 0;
-					break;
-
-				case isc_info_sql_relation_schema:
-					if (param->par_rel_name.schema.hasData())
-					{
-						name = attachment->nameToUserCharSet(tdbb, param->par_rel_name.schema);
-						length = name.length();
-						buffer = reinterpret_cast<const UCHAR*>(name.c_str());
-					}
-					else
-						length = 0;
-					break;
-
-				case isc_info_sql_relation:
-					if (param->par_rel_name.object.hasData())
-					{
-						name = attachment->nameToUserCharSet(tdbb, param->par_rel_name.object);
-						length = name.length();
-						buffer = reinterpret_cast<const UCHAR*>(name.c_str());
-					}
-					else
-						length = 0;
-					break;
-
-				case isc_info_sql_owner:
-					if (param->par_owner_name.hasData())
-					{
-						name = attachment->nameToUserCharSet(tdbb, param->par_owner_name);
-						length = name.length();
-						buffer = reinterpret_cast<const UCHAR*>(name.c_str());
-					}
-					else
-						length = 0;
-					break;
-
-				case isc_info_sql_relation_alias:
-					if (param->par_rel_alias.hasData())
-					{
-						name = attachment->nameToUserCharSet(tdbb, param->par_rel_alias);
-						length = name.length();
-						buffer = reinterpret_cast<const UCHAR*>(name.c_str());
-					}
-					else
-						length = 0;
-					break;
-
-				case isc_info_sql_alias:
-					if (param->par_alias.hasData())
-					{
-						name = attachment->nameToUserCharSet(tdbb, param->par_alias);
-						length = name.length();
-						buffer = reinterpret_cast<const UCHAR*>(name.c_str());
-					}
-					else
-						length = 0;
-					break;
-
-				case isc_info_sql_composite_descriptor:
-					if (param->par_composite_descriptor.hasData())
-					{
-						stringBuffer = param->par_composite_descriptor;
-						length = stringBuffer.length();
-						buffer = reinterpret_cast<const UCHAR*>(stringBuffer.c_str());
-					}
-					else
-						length = 0;
-					break;
-
-				default:
-					buf[0] = item;
-					item = isc_info_error;
-					length = 1 + put_vax_long(buf + 1, (SLONG) isc_infunk);
-					break;
-				}
-
-				if (!(info = put_item(item, length, buffer, info, end)))
-					return info;
-			}
+			info = describe_parameter(tdbb, attachment, param,
+									items, end_describe,
+									info, end,
+									input_message);
 
 			if (info + 1 >= end)
 			{
 				*info = isc_info_truncated;
-				return NULL;
+				return nullptr;
 			}
 			*info++ = isc_info_sql_describe_end;
 		} // if()
@@ -1728,10 +1795,10 @@ static USHORT flattenParameterFields(thread_db* tdbb, dsql_fld* parameterField, 
 	if (parameterField->fld_next)
 	{
 		count += flattenParameterFields(tdbb,
-									  parameterField->fld_next,
-									  parameterDsc->dsc_next,
-									  lastParameterPtr,
-									nulloffset);
+										parameterField->fld_next,
+										parameterDsc->dsc_next,
+										lastParameterPtr,
+										nulloffset);
 	}
 
 	return count;
@@ -1750,15 +1817,15 @@ USHORT Jrd::generate_sub_parameters(dsql_fld& parameterField, dsql_par& hostPara
 	if (parameterField.fld_sub_first)
 	{
 		// We start the flat chain with the par_next of the main parameter
-		dsql_par** nextPtr = &hostParameter.par_next;
+		dsql_par** nextPtr = &hostParameter.par_sub_first;
 
 		UCHAR* nextoffset = hostParameter.par_desc.dsc_address;
 		// Convert the hierarchical field structure into a flat list of parameters
-		flattenParameterFields(tdbb,
-								parameterField.fld_sub_first,
-								hostParameter.par_desc.dsc_sub_first,
-								nextPtr,
-								nextoffset);
+		return flattenParameterFields(tdbb,
+										parameterField.fld_sub_first,
+										hostParameter.par_desc.dsc_sub_first,
+										nextPtr,
+										nextoffset);
 	}
 
 	return 0;

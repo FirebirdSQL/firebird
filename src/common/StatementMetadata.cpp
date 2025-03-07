@@ -362,7 +362,7 @@ void StatementMetadata::parse(unsigned bufferLength, const UCHAR* buffer)
 							break;
 
 						case isc_info_sql_composite_descriptor:
-							getStringInfo(&buffer, bufferEnd, &param->compositeDescriptor);
+							getStringInfo(&buffer, bufferEnd, &param->compositeDescriptor); // TODO ROWTYPE: here we should parse new format of the composite descriptor (nested tags as for simple values)
 							break;
 
 						case isc_info_error:
