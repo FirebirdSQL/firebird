@@ -12223,11 +12223,11 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 
 					MetaName owner;
 					if ((grantorRevoker == PRIV.RDB$GRANTOR) ||
+						(attachment->locksmith(tdbb, GRANT_REVOKE_ON_ANY_OBJECT) ||	// God-like check
 						((objType == obj_sql_role) && (PRIV.RDB$PRIVILEGE[0] == 'M') &&		// This is ROLE to USER grant
 						 (currentUser != user) &&						// And current user does not revoke his own grant
-						 ((isItSqlRole(tdbb, transaction, objName, owner) &&		// Pick up role owner name
-						   (attachment->locksmith(tdbb, GRANT_REVOKE_ON_ANY_OBJECT) ||	// God-like check
-						    (owner == currentUser))) ||					// Current user is role owner
+						 (isItSqlRole(tdbb, transaction, objName, owner) &&		// Pick up role owner name
+						    (owner == currentUser)) ||							// Current user is role owner
 						  (getGrantorOption(tdbb, transaction, currentUser, obj_user, objName) == 2))))	// or has ADMIN option
 					{
 						MetaName newField = NULL;
