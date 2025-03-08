@@ -550,25 +550,31 @@ BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_TIME)
 	testCVTStringToFormatDateTimeExpectTime("5", "FF1", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 5000), cb);
 	testCVTStringToFormatDateTimeExpectTime("9", "FF1", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 9000), cb);
 
-	testCVTStringToFormatDateTimeExpectTime("1", "FF2", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 100), cb);
+	testCVTStringToFormatDateTimeExpectTime("01", "FF2", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 100), cb);
+	testCVTStringToFormatDateTimeExpectTime("1",  "FF2", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 1000), cb);
 	testCVTStringToFormatDateTimeExpectTime("10", "FF2", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 1000), cb);
 	testCVTStringToFormatDateTimeExpectTime("50", "FF2", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 5000), cb);
 	testCVTStringToFormatDateTimeExpectTime("99", "FF2", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 9900), cb);
 
-	testCVTStringToFormatDateTimeExpectTime("1", "FF3", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 10), cb);
-	testCVTStringToFormatDateTimeExpectTime("10", "FF3", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 100), cb);
+	testCVTStringToFormatDateTimeExpectTime("01",  "FF3", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 100), cb);
+	testCVTStringToFormatDateTimeExpectTime("001", "FF3", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 10), cb);
+	testCVTStringToFormatDateTimeExpectTime("1",   "FF3", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 1000), cb);
+	testCVTStringToFormatDateTimeExpectTime("10",  "FF3", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 1000), cb);
 	testCVTStringToFormatDateTimeExpectTime("100", "FF3", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 1000), cb);
 	testCVTStringToFormatDateTimeExpectTime("500", "FF3", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 5000), cb);
 	testCVTStringToFormatDateTimeExpectTime("999", "FF3", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 9990), cb);
 
-	testCVTStringToFormatDateTimeExpectTime("1", "FF4", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 1), cb);
-	testCVTStringToFormatDateTimeExpectTime("10", "FF4", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 10), cb);
-	testCVTStringToFormatDateTimeExpectTime("100", "FF4", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 100), cb);
+	testCVTStringToFormatDateTimeExpectTime("01",   "FF4", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 100), cb);
+	testCVTStringToFormatDateTimeExpectTime("001",  "FF4", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 10), cb);
+	testCVTStringToFormatDateTimeExpectTime("0001", "FF4", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 1), cb);
+	testCVTStringToFormatDateTimeExpectTime("1",    "FF4", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 1000), cb);
+	testCVTStringToFormatDateTimeExpectTime("10",   "FF4", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 1000), cb);
+	testCVTStringToFormatDateTimeExpectTime("100",  "FF4", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 1000), cb);
 	testCVTStringToFormatDateTimeExpectTime("1000", "FF4", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 1000), cb);
 	testCVTStringToFormatDateTimeExpectTime("5000", "FF4", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 5000), cb);
 	testCVTStringToFormatDateTimeExpectTime("9999", "FF4", createTimeStampTZ(0, 0, 0, 0, 0, 0, 0, 9999), cb);
 
-	testCVTStringToFormatDateTimeExpectTime("1 P.M. - 25 - 45 - 200", "HH P.M. MI.SS.FF4", createTimeStampTZ(0, 0, 0, 13, 25, 45, 0, 200), cb);
+	testCVTStringToFormatDateTimeExpectTime("1 P.M. - 25 - 45 - 2", "HH P.M. MI.SS.FF4", createTimeStampTZ(0, 0, 0, 13, 25, 45, 0, 2000), cb);
 	testCVTStringToFormatDateTimeExpectTime("15:0:15:2", "HH24.MI.SS.FF1", createTimeStampTZ(0, 0, 0, 15, 0, 15, 0, 2000), cb);
 }
 
@@ -583,7 +589,7 @@ BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_TZ)
 
 BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_SOLID_PATTERNS)
 {
-	testCVTStringToFormatDateTimeExpectTime("1 P.M. - 25 - 45 - 200", "HHA.M.MISSFF4", createTimeStampTZ(0, 0, 0, 13, 25, 45, 0, 200), cb);
+	testCVTStringToFormatDateTimeExpectTime("1 P.M. - 25 - 45 - 2", "HHA.M.MISSFF4", createTimeStampTZ(0, 0, 0, 13, 25, 45, 0, 2000), cb);
 	testCVTStringToFormatDateTimeExpectDate("1981-8/13", "YEARMMDD", createTimeStampTZ(1981, 8, 13, 0, 0, 0, 0), cb);
 }
 
