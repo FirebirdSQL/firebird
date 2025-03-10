@@ -724,7 +724,7 @@ bool Retrieval::betterInversion(const InversionCandidate* inv1,
 	{
 		if (inv1->dependencies > inv2->dependencies)
 		{
-			// Index used for a relationship must be always prefered to
+			// Index used for a relationship must be always preferred to
 			// the filtering ones, otherwise the nested loop join has
 			// no chances to be better than a sort merge.
 			// An alternative (simplified) condition might be:

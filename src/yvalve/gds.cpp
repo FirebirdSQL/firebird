@@ -511,7 +511,7 @@ void API_ROUTINE isc_decode_date(const ISC_QUAD* date, void* times_arg)
  * Functional description
  *	Convert from internal timestamp format to UNIX time structure.
  *
- *	Note: this API is historical - the prefered entrypoint is
+ *	Note: this API is historical - the preferred entrypoint is
  *	isc_decode_timestamp
  *
  **************************************/
@@ -602,7 +602,7 @@ void API_ROUTINE isc_encode_date(const void* times_arg, ISC_QUAD* date)
  * Functional description
  *	Convert from UNIX time structure to internal timestamp format.
  *
- *	Note: This API is historical -- the prefered entrypoint is
+ *	Note: This API is historical -- the preferred entrypoint is
  *	isc_encode_timestamp
  *
  **************************************/

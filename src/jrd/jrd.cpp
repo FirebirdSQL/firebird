@@ -6897,7 +6897,7 @@ static void find_intl_charset(thread_db* tdbb, Jrd::Attachment* attachment, cons
  **************************************
  *
  * Functional description
- *	Attachment has declared it's prefered character set
+ *	Attachment has declared its preferred character set
  *	as part of LC_CTYPE, passed over with the attachment
  *	block.  Now let's resolve that to an internal subtype id.
  *
