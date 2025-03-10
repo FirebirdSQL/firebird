@@ -498,4 +498,8 @@
 
 #define blr_cast_format				(unsigned char) 228
 
+// Table value function
+#define blr_table_value_fun				(unsigned char) 229
+#define blr_table_value_fun_unlist		(unsigned char) 1
+
 #endif // FIREBIRD_IMPL_BLR_H
