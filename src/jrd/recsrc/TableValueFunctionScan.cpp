@@ -22,7 +22,6 @@
 #include "firebird.h"
 #include "../dsql/ExprNodes.h"
 #include "../dsql/StmtNodes.h"
-#include "../jrd/align.h"
 #include "../jrd/jrd.h"
 #include "../jrd/mov_proto.h"
 #include "../jrd/optimizer/Optimizer.h"
@@ -36,7 +35,7 @@ using namespace Firebird;
 using namespace Jrd;
 
 TableValueFunctionScan::TableValueFunctionScan(CompilerScratch* csb, StreamType stream,
-											   const Firebird::string& alias)
+											   const string& alias)
 	: RecordStream(csb, stream), m_alias(csb->csb_pool, alias)
 {
 	m_impure = csb->allocImpure<Impure>();
@@ -60,6 +59,24 @@ void TableValueFunctionScan::close(thread_db* tdbb) const
 			delete impure->m_recordBuffer;
 			impure->m_recordBuffer = nullptr;
 		}
+
+		if (impure->m_blob)
+		{
+			impure->m_blob->BLB_close(tdbb);
+			impure->m_blob = nullptr;
+		}
+
+		if (impure->m_separatorStr)
+		{
+			delete impure->m_separatorStr;
+			impure->m_separatorStr = nullptr;
+		}
+
+		if (impure->m_resultStr)
+		{
+			delete impure->m_resultStr;
+			impure->m_resultStr = nullptr;
+		}
 	}
 }
 
@@ -78,13 +95,19 @@ bool TableValueFunctionScan::internalGetRecord(thread_db* tdbb) const
 	}
 
 	rpb->rpb_number.increment();
-
-	if (!impure->m_recordBuffer->fetch(rpb->rpb_number.getValue(), rpb->rpb_record))
+	do
 	{
-		rpb->rpb_number.setValid(false);
-		return false;
-	}
-	return true;
+		if (!impure->m_recordBuffer->fetch(rpb->rpb_number.getValue(), rpb->rpb_record))
+		{
+			if (!nextBuffer(tdbb))
+			{
+				rpb->rpb_number.setValid(false);
+				return false;
+			}
+			continue;
+		}
+		return true;
+	} while (1);
 }
 
 bool TableValueFunctionScan::refetchRecord(thread_db* /*tdbb*/) const
@@ -97,8 +120,7 @@ WriteLockResult TableValueFunctionScan::lockRecord(thread_db* /*tdbb*/) const
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
 }
 
-void TableValueFunctionScan::getLegacyPlan(thread_db* tdbb, Firebird::string& plan,
-										   unsigned level) const
+void TableValueFunctionScan::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
 	if (!level)
 		plan += "(";
@@ -132,6 +154,11 @@ void TableValueFunctionScan::assignParameter(thread_db* tdbb, dsc* fromDesc, con
 	memcpy(toDescValue.dsc_address, fromDesc->dsc_address, fromDesc->dsc_length);
 }
 
+bool TableValueFunctionScan::nextBuffer(thread_db* /*tdbb*/) const
+{
+	return false;
+}
+
 UnlistFunctionScan::UnlistFunctionScan(CompilerScratch* csb, StreamType stream, const string& alias,
 									   ValueListNode* list)
 	: TableValueFunctionScan(csb, stream, alias), m_inputList(list)
@@ -141,16 +168,8 @@ UnlistFunctionScan::UnlistFunctionScan(CompilerScratch* csb, StreamType stream, 
 void UnlistFunctionScan::internalOpen(thread_db* tdbb) const
 {
 	const auto request = tdbb->getRequest();
-	const auto impure = request->getImpure<Impure>(m_impure);
-
-	impure->irsb_flags = irsb_open;
-
 	const auto rpb = &request->req_rpb[m_stream];
-
 	MemoryPool& pool = *tdbb->getDefaultPool();
-	impure->m_recordBuffer = FB_NEW_POOL(pool) RecordBuffer(pool, m_format);
-
-	Record* const record = VIO_record(tdbb, rpb, m_format, &pool);
 
 	rpb->rpb_number.setValue(BOF_NUMBER);
 
@@ -172,79 +191,39 @@ void UnlistFunctionScan::internalOpen(thread_db* tdbb) const
 		return;
 	}
 
+	const auto impure = request->getImpure<Impure>(m_impure);
+	impure->irsb_flags |= irsb_open;
+	impure->m_recordBuffer = FB_NEW_POOL(pool) RecordBuffer(pool, m_format);
+
+	Record* const record = VIO_record(tdbb, rpb, m_format, &pool);
+
 	auto toDesc = m_format->fmt_desc.begin();
 	fb_assert(toDesc);
-
 	const auto textType = toDesc->getTextType();
 
-	auto setStringToRecord = [&] (string& str, USHORT length = 0)
+	impure->m_separatorStr = FB_NEW_POOL(pool)
+							 string(pool, MOV_make_string2(tdbb, separatorDesc, textType, true));
+
+	if (impure->m_separatorStr->isEmpty())
 	{
-		if (length == 0)
-			length = str.length();
+		const string valueStr(MOV_make_string2(tdbb, valueDesc, textType, false));
 		dsc fromDesc;
-		fromDesc.makeText(length, textType, (UCHAR*)str.c_str());
+		fromDesc.makeText(valueStr.size(), textType, (UCHAR*)(IPTR)(valueStr.c_str()));
 		assignParameter(tdbb, &fromDesc, toDesc, 0, record);
 		impure->m_recordBuffer->store(record);
-	};
-
-	string separatorStr(MOV_make_string2(tdbb, separatorDesc, textType, true));
-
-	if (separatorStr.isEmpty())
-	{
-		string valueStr(MOV_make_string2(tdbb, valueDesc, textType, false));
-		setStringToRecord(valueStr);
 		return;
 	}
 
 	if (valueDesc->isBlob())
 	{
-		blb* blob = blb::open(tdbb, request->req_transaction,
-						reinterpret_cast<bid*>(valueDesc->dsc_address));
-
-		string resultStr;
-
-		while (!(blob->blb_flags & BLB_eof))
-		{
-			UCHAR buffer[BUFFER_LARGE];
-			const auto length = blob->BLB_get_data(tdbb, buffer, sizeof(buffer), false);
-			if (length == 0)
-				continue;
-
-			std::string_view separatorView(separatorStr.begin(), separatorStr.length());
-			std::string_view valueView(reinterpret_cast<char*>(buffer), length);
-
-			auto end = std::string_view::npos;
-			do
-			{
-				auto size = end = valueView.find(separatorView);
-				if (end == std::string_view::npos)
-				{
-					if (!valueView.empty())
-						resultStr.append(valueView.data(), valueView.length());
-
-					break;
-				}
-
-				if (size > 0)
-					resultStr.append(valueView.data(), size);
-
-				valueView.remove_prefix(size + separatorView.length());
-
-				if (resultStr.hasData())
-				{
-					setStringToRecord(resultStr);
-					resultStr.erase();
-				}
-			} while (end != std::string_view::npos);
-		}
-		// Tail
-		if (resultStr.hasData())
-			setStringToRecord(resultStr);
+		impure->m_blob = blb::open(tdbb, request->req_transaction,
+								   reinterpret_cast<bid*>(valueDesc->dsc_address));
+		impure->m_resultStr = FB_NEW_POOL(pool) string(pool);
 	}
 	else
 	{
+		const string& separatorStr = *impure->m_separatorStr;
 		string valueStr(MOV_make_string2(tdbb, valueDesc, textType, true));
-
 		auto end = AbstractString::npos;
 		do
 		{
@@ -258,7 +237,12 @@ void UnlistFunctionScan::internalOpen(thread_db* tdbb) const
 			}
 
 			if (size > 0)
-				setStringToRecord(valueStr, size);
+			{
+				dsc fromDesc;
+				fromDesc.makeText(size, textType, (UCHAR*)(IPTR)(valueStr.c_str()));
+				assignParameter(tdbb, &fromDesc, toDesc, 0, record);
+				impure->m_recordBuffer->store(record);
+			}
 
 			valueStr.erase(valueStr.begin(), valueStr.begin() + end + separatorStr.length());
 		} while (end != AbstractString::npos);
@@ -277,3 +261,71 @@ void UnlistFunctionScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, 
 		planEntry.alias = m_alias;
 }
 
+bool UnlistFunctionScan::nextBuffer(thread_db* tdbb) const
+{
+	const auto request = tdbb->getRequest();
+	const auto impure = request->getImpure<Impure>(m_impure);
+
+	if (impure->m_blob)
+	{
+		auto setStringToRecord = [&](const string& str)
+		{
+			Record* const record = request->req_rpb[m_stream].rpb_record;
+
+			auto toDesc = m_format->fmt_desc.begin();
+			const auto textType = toDesc->getTextType();
+
+			dsc fromDesc;
+			fromDesc.makeText(str.length(), textType, (UCHAR*)(IPTR)(str.c_str()));
+			assignParameter(tdbb, &fromDesc, toDesc, 0, record);
+			impure->m_recordBuffer->store(record);
+		};
+
+		MoveBuffer buffer;
+		const auto address = buffer.getBuffer(MAX_COLUMN_SIZE);
+		const auto length = impure->m_blob->BLB_get_data(tdbb, address, MAX_COLUMN_SIZE, false);
+		if (length > 0)
+		{
+			const std::string_view separatorView(impure->m_separatorStr->data(),
+												 impure->m_separatorStr->length());
+			std::string_view valueView(reinterpret_cast<char*>(address), length);
+			auto end = std::string_view::npos;
+			do
+			{
+				auto size = end = valueView.find(separatorView);
+				if (end == std::string_view::npos)
+				{
+					if (!valueView.empty())
+						impure->m_resultStr->append(valueView.data(), valueView.length());
+
+					break;
+				}
+
+				if (size > 0)
+					impure->m_resultStr->append(valueView.data(), size);
+
+				valueView.remove_prefix(size + separatorView.length());
+
+				if (impure->m_resultStr->hasData())
+				{
+					setStringToRecord(*impure->m_resultStr);
+					impure->m_resultStr->erase();
+				}
+			} while (end != std::string_view::npos);
+
+			return true;
+		}
+
+		if (impure->m_blob->blb_flags & BLB_eof)
+		{
+			if (impure->m_resultStr->hasData())
+			{
+				setStringToRecord(*impure->m_resultStr);
+				impure->m_resultStr->erase();
+				return true;
+			}
+		}
+	}
+
+	return false;
+}

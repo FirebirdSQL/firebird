@@ -1463,6 +1463,9 @@ namespace Jrd
 		struct Impure : public RecordSource::Impure
 		{
 			RecordBuffer* m_recordBuffer;
+			blb* m_blob;
+			Firebird::string* m_separatorStr;
+			Firebird::string* m_resultStr;
 		};
 
 	public:
@@ -1477,6 +1480,8 @@ namespace Jrd
 		bool internalGetRecord(thread_db* tdbb) const override;
 		void assignParameter(thread_db* tdbb, dsc* fromDesc, const dsc* toDesc, SSHORT toId,
 							 Record* record) const;
+
+		virtual bool nextBuffer(thread_db* tdbb) const;
 
 		const Firebird::string m_alias;
 	};
@@ -1498,6 +1503,8 @@ namespace Jrd
 		void internalOpen(thread_db* tdbb) const final;
 		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level,
 							 bool recurse) const final;
+
+		bool nextBuffer(thread_db* tdbb) const final;
 
 	private:
 		NestConst<ValueListNode> m_inputList;
