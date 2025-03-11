@@ -4282,13 +4282,7 @@ alter_domain_op($alterDomainNode)
 	| TO symbol_column_name
 		{ setClause($alterDomainNode->renameTo, "DOMAIN NAME", *$2); }
 	| TYPE non_array_type
-		{
-			//// FIXME: ALTER DOMAIN doesn't support collations, and altered domain's
-			//// collation is always lost.
-			dsql_fld* type = $2;
-			type->collate = "";
-			setClause($alterDomainNode->type, "DOMAIN TYPE", type);
-		}
+		{ setClause($alterDomainNode->type, "DOMAIN TYPE", $2);}
 	;
 
 %type alter_ops(<relationNode>)

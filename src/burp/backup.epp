@@ -547,7 +547,7 @@ void compress(const UCHAR* data, ULONG length)
 	{
 		for (q = p + 2; q < end && (q[-2] != q[-1] || q[-1] != q[0]); q++)
 			;
-		ULONG run = (q < end) ? q - p - 2 : end - p;
+		SLONG run = (q < end) ? q - p - 2 : end - p;
 		if (run)
 		{
 			for (; run > 127; run -= 127)
@@ -924,15 +924,16 @@ SINT64 get_gen_id( const TEXT* name, SSHORT name_len)
 		getGenerator.singleSelect(tdgbl->tr_handle, &getGen);
 		return getGen->id;
 	}
-	catch (const Firebird::FbException& ex)
+	catch (const status_exception& ex)
 	{
-		Firebird::IStatus* st = ex.getStatus();
+		LocalStatus ls;
+		ex.stuffException(&ls);
 
 		// if there's no gen_id, never mind ...
-		if (st->getErrors()[1] == isc_dsql_error)
+		if (ls.getErrors()[1] == isc_dsql_error)
 			return 0;
 
-		BURP_error_redirect(st, 25);
+		BURP_error_redirect(&ls, 25);
 		// msg 25 Failed in put_blr_gen_id
 	}
 	return 0;	// warning silencer

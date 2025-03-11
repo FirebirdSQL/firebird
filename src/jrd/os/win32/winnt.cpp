@@ -329,7 +329,7 @@ void PIO_force_write(jrd_file* file, const bool forceWrite)
 }
 
 
-void PIO_header(thread_db* tdbb, UCHAR* address, int length)
+bool PIO_header(thread_db* tdbb, UCHAR* address, unsigned length)
 {
 /**************************************
  *
@@ -345,11 +345,11 @@ void PIO_header(thread_db* tdbb, UCHAR* address, int length)
  *  callers should not rely on this behavior
  *
  **************************************/
-	Database* const dbb = tdbb->getDatabase();
+	const auto dbb = tdbb->getDatabase();
 
-	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
-	jrd_file* file = pageSpace->file;
-	HANDLE desc = file->fil_desc;
+	PageSpace* const pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+	jrd_file* const file = pageSpace->file;
+	const HANDLE desc = file->fil_desc;
 
 	OVERLAPPED overlapped;
 	memset(&overlapped, 0, sizeof(OVERLAPPED));
@@ -361,10 +361,12 @@ void PIO_header(thread_db* tdbb, UCHAR* address, int length)
 	{
 		if (GetLastError() == ERROR_IO_PENDING)
 			ret = GetOverlappedResult(desc, &overlapped, &actual_length, TRUE);
+
+		if (!ret)
+			nt_error("ReadFile", file, isc_io_read_err, NULL);
 	}
 
-	if (!ret || (length != actual_length))
-		nt_error("ReadFile", file, isc_io_read_err, NULL);
+	return (length == actual_length);
 }
 
 // we need a class here only to return memory on shutdown and avoid

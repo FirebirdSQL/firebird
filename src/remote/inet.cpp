@@ -717,9 +717,11 @@ rem_port* INET_analyze(ClntAuthBlock* cBlock,
 		REMOTE_PROTOCOL(PROTOCOL_VERSION16, ptype_lazy_send, 7),
 		REMOTE_PROTOCOL(PROTOCOL_VERSION17, ptype_lazy_send, 8),
 		REMOTE_PROTOCOL(PROTOCOL_VERSION18, ptype_lazy_send, 9),
-		REMOTE_PROTOCOL(PROTOCOL_VERSION19, ptype_lazy_send, 10)
+		REMOTE_PROTOCOL(PROTOCOL_VERSION19, ptype_lazy_send, 10),
+		REMOTE_PROTOCOL(PROTOCOL_VERSION20, ptype_lazy_send, 11)
 	};
-	fb_assert(FB_NELEM(protocols_to_try) <= FB_NELEM(cnct->p_cnct_versions));
+	static_assert(FB_NELEM(protocols_to_try) <= MAX_CNCT_VERSIONS);
+
 	cnct->p_cnct_count = FB_NELEM(protocols_to_try);
 
 	for (size_t i = 0; i < cnct->p_cnct_count; i++) {
@@ -1839,7 +1841,11 @@ static void force_close(rem_port* port)
  **************************************/
 
 	if (port->port_async)
-		abort_aux_connection(port->port_async);
+	{
+		rem_port* port_async = port->port_async;
+		abort_aux_connection(port_async);
+		port_async->force_close();
+	}
 
 	if (port->port_state != rem_port::PENDING)
 		return;

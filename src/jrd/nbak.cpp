@@ -332,8 +332,8 @@ void BackupManager::beginBackup(thread_db* tdbb)
 
 		// Set state in database header page. All changes are written to main database file yet.
 		CCH_MARK_MUST_WRITE(tdbb, &window);
-		const int newState = Ods::hdr_nbak_stalled; // Should be USHORT?
-		header->hdr_flags = (header->hdr_flags & ~Ods::hdr_backup_mask) | newState;
+		const auto newState = Ods::hdr_nbak_stalled;
+		header->hdr_backup_mode = newState;
 		const ULONG adjusted_scn = ++header->hdr_header.pag_scn; // Generate new SCN
 		PAG_replace_entry_first(tdbb, header, Ods::HDR_backup_guid,
 			Guid::SIZE, Guid::generate().getData());
@@ -354,14 +354,9 @@ void BackupManager::beginBackup(thread_db* tdbb)
 // Determine actual DB size (raw devices support)
 ULONG BackupManager::getPageCount(thread_db* tdbb)
 {
-	if (backup_state != Ods::hdr_nbak_stalled)
-	{
-		// calculate pages only when database is locked for backup:
-		// other case such service is just dangerous
-		return 0;
-	}
-
-	return PAG_page_count(tdbb);
+	// Calculate pages only when database is locked for backup,
+	// otherwise it's just dangerous
+	return (backup_state == Ods::hdr_nbak_stalled) ? PAG_page_count(tdbb) : 0;
 }
 
 
@@ -493,7 +488,7 @@ void BackupManager::endBackup(thread_db* tdbb, bool recover)
 		header->hdr_header.pag_scn = current_scn;
 		NBAK_TRACE(("new SCN=%d is getting written to header", header->hdr_header.pag_scn));
 		// Adjust state
-		header->hdr_flags = (header->hdr_flags & ~Ods::hdr_backup_mask) | backup_state;
+		header->hdr_backup_mode = backup_state;
 		NBAK_TRACE(("Setting state %d in header page is over", backup_state));
 		stateGuard.setSuccess();
 	}
@@ -579,7 +574,7 @@ void BackupManager::endBackup(thread_db* tdbb, bool recover)
 		backup_state = Ods::hdr_nbak_normal;
 		CCH_MARK_MUST_WRITE(tdbb, &window);
 		// Adjust state
-		header->hdr_flags = (header->hdr_flags & ~Ods::hdr_backup_mask) | backup_state;
+		header->hdr_backup_mode = backup_state;
 		NBAK_TRACE(("Set state %d in header page", backup_state));
 		// Generate new SCN
 		header->hdr_header.pag_scn = ++current_scn;
@@ -638,7 +633,7 @@ bool BackupManager::actualizeAlloc(thread_db* tdbb, bool haveGlobalLock)
 		// For SuperServer this routine is really executed only at database startup when
 		// it has exlock or when exclusive access to database is enabled
 		if (!alloc_table)
-			alloc_table = FB_NEW_POOL(*database->dbb_permanent) AllocItemTree(database->dbb_permanent);
+			alloc_table = FB_NEW_POOL(*database->dbb_permanent) AllocItemTree(*database->dbb_permanent);
 
 		while (true)
 		{
@@ -984,7 +979,7 @@ bool BackupManager::actualizeState(thread_db* tdbb)
 		}
 	}
 
-	const int new_backup_state = header->hdr_flags & Ods::hdr_backup_mask;
+	const auto new_backup_state = header->hdr_backup_mode;
 	NBAK_TRACE(("backup state read from header is %d", new_backup_state));
 	// Check is we missed lock/unlock cycle and need to invalidate
 	// our allocation table and file handle

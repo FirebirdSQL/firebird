@@ -58,7 +58,7 @@ public:
 	}
 
 	void stuffException(DynamicStatusVector& status_vector) const noexcept;
-	void stuffException(CheckStatusWrapper* status_vector) const noexcept;
+	void stuffException(Firebird::IStatus* status_vector) const noexcept;
 	virtual ~Exception() noexcept;
 
 private:

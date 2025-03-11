@@ -308,9 +308,11 @@ rem_port* XNET_analyze(ClntAuthBlock* cBlock,
 		REMOTE_PROTOCOL(PROTOCOL_VERSION16, ptype_batch_send, 7),
 		REMOTE_PROTOCOL(PROTOCOL_VERSION17, ptype_batch_send, 8),
 		REMOTE_PROTOCOL(PROTOCOL_VERSION18, ptype_batch_send, 9),
-		REMOTE_PROTOCOL(PROTOCOL_VERSION19, ptype_batch_send, 10)
+		REMOTE_PROTOCOL(PROTOCOL_VERSION19, ptype_batch_send, 10),
+		REMOTE_PROTOCOL(PROTOCOL_VERSION20, ptype_batch_send, 11)
 	};
-	fb_assert(FB_NELEM(protocols_to_try) <= FB_NELEM(cnct->p_cnct_versions));
+	static_assert(FB_NELEM(protocols_to_try) <= MAX_CNCT_VERSIONS);
+
 	cnct->p_cnct_count = FB_NELEM(protocols_to_try);
 
 	for (size_t i = 0; i < cnct->p_cnct_count; i++) {

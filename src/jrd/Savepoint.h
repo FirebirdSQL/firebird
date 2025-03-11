@@ -73,7 +73,7 @@ namespace Jrd
 		const Format* m_format;
 	};
 
-	typedef Firebird::BePlusTree<UndoItem, SINT64, MemoryPool, UndoItem> UndoItemTree;
+	typedef Firebird::BePlusTree<UndoItem, SINT64, UndoItem> UndoItemTree;
 
 	class VerbAction
 	{

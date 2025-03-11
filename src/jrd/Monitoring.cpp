@@ -837,9 +837,9 @@ void Monitoring::putDatabase(thread_db* tdbb, SnapshotData::DumpRecord& record)
 	record.reset(rel_mon_database);
 
 	// Determine the backup state
-	int backup_state = backup_state_unknown;
+	int backupState = backup_state_unknown;
 
-	BackupManager* const bm = dbb->dbb_backup_manager;
+	const auto bm = dbb->dbb_backup_manager;
 
 	if (bm && !bm->isShutDown())
 	{
@@ -848,14 +848,16 @@ void Monitoring::putDatabase(thread_db* tdbb, SnapshotData::DumpRecord& record)
 		switch (bm->getState())
 		{
 		case Ods::hdr_nbak_normal:
-			backup_state = backup_state_normal;
+			backupState = backup_state_normal;
 			break;
 		case Ods::hdr_nbak_stalled:
-			backup_state = backup_state_stalled;
+			backupState = backup_state_stalled;
 			break;
 		case Ods::hdr_nbak_merge:
-			backup_state = backup_state_merge;
+			backupState = backup_state_merge;
 			break;
+		default:
+			fb_assert(false);
 		}
 	}
 
@@ -886,18 +888,8 @@ void Monitoring::putDatabase(thread_db* tdbb, SnapshotData::DumpRecord& record)
 	// SQL dialect
 	temp = (dbb->dbb_flags & DBB_DB_SQL_dialect_3) ? 3 : 1;
 	record.storeInteger(f_mon_db_dialect, temp);
-
 	// shutdown mode
-	if (dbb->dbb_ast_flags & DBB_shutdown_full)
-		temp = shut_mode_full;
-	else if (dbb->dbb_ast_flags & DBB_shutdown_single)
-		temp = shut_mode_single;
-	else if (dbb->dbb_ast_flags & DBB_shutdown)
-		temp = shut_mode_multi;
-	else
-		temp = shut_mode_online;
-	record.storeInteger(f_mon_db_shut_mode, temp);
-
+	record.storeInteger(f_mon_db_shut_mode, dbb->dbb_shutdown_mode);
 	// sweep interval
 	record.storeInteger(f_mon_db_sweep_int, dbb->dbb_sweep_interval);
 	// read only flag
@@ -914,7 +906,7 @@ void Monitoring::putDatabase(thread_db* tdbb, SnapshotData::DumpRecord& record)
 	// database size
 	record.storeInteger(f_mon_db_pages, PageSpace::actAlloc(dbb));
 	// database backup state
-	record.storeInteger(f_mon_db_backup_state, backup_state);
+	record.storeInteger(f_mon_db_backup_state, backupState);
 
 	// crypt thread status
 	if (dbb->dbb_crypto_manager)
@@ -944,7 +936,7 @@ void Monitoring::putDatabase(thread_db* tdbb, SnapshotData::DumpRecord& record)
 	record.storeInteger(f_mon_db_na, dbb->getLatestAttachmentId());
 	record.storeInteger(f_mon_db_ns, dbb->getLatestStatementId());
 
-	record.storeString(f_mon_db_guid, dbb->dbb_guid.value().toString());
+	record.storeString(f_mon_db_guid, dbb->dbb_guid.toString());
 	record.storeString(f_mon_db_file_id, dbb->getUniqueFileId());
 
 	record.storeInteger(f_mon_db_repl_mode, dbb->dbb_replica_mode);
