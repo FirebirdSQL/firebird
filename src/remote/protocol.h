@@ -259,7 +259,7 @@ enum P_OP
 
 	// DSQL operations
 
-	op_allocate_statement 	= 62,	// allocate a statment handle
+	op_allocate_statement 	= 62,	// allocate a statement handle
 	op_execute				= 63,	// execute a prepared statement
 	op_exec_immediate		= 64,	// execute a statement
 	op_fetch				= 65,	// fetch a record
@@ -617,8 +617,8 @@ typedef struct p_slr
 {
     lstring	p_slr_slice;		// Slice proper
     ULONG	p_slr_length;		// Total length of slice
-    UCHAR* p_slr_sdl;			// *** not transfered ***
-    USHORT	p_slr_sdl_length;	// *** not transfered ***
+    UCHAR* p_slr_sdl;			// *** not transferred ***
+    USHORT	p_slr_sdl_length;	// *** not transferred ***
 } P_SLR;
 
 // DSQL structure definitions

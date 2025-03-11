@@ -70,10 +70,10 @@ copyIfExists() {
 #------------------------------------------------------------------------
 #  copyFiles
 # This function copies all the files for a classic distribution into a
-# directory heirachy mirroring the installation.
+# directory hierarchy mirroring the installation.
 
 copyFiles() {
-# The guts of the tranfer of files and other directories
+# The guts of the transfer of files and other directories
 
     if [ -d $TargetDir ]
       then

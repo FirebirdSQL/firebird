@@ -867,8 +867,8 @@ struct Signature
     \brief Debug level
 
     0       No output
-    1       Display output tree in PASS1_statment
-    2       Display input tree in PASS1_statment
+    1       Display output tree in PASS1_statement
+    2       Display input tree in PASS1_statement
     4       Display ddl BLR
     8       Display BLR
     16      Display PASS1_rse input tree

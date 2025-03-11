@@ -184,7 +184,7 @@ private:
 public:
 	std::atomic<int> rdb_async_lock;		// Atomic to avoid >1 async calls at once
 
-	ULONG			rdb_inline_blob_size;		// default max size of blob that can be transfered inline
+	ULONG			rdb_inline_blob_size;		// default max size of blob that can be transferred inline
 	ULONG			rdb_blob_cache_size;		// limit on cached blobs size
 	ULONG			rdb_cached_blobs_size;		// actual size of cached blobs
 	ULONG			rdb_cached_blobs_count;		// actual count of cached blobs
@@ -583,7 +583,7 @@ struct Rsr : public Firebird::GlobalStorage, public TypedHandle<rem_type_rsr>
 
 	P_FETCH			rsr_fetch_operation;	// Last performed fetch operation
 	SLONG			rsr_fetch_position;		// and position
-	unsigned int	rsr_inline_blob_size;	// max size of blob that can be transfered inline
+	unsigned int	rsr_inline_blob_size;	// max size of blob that can be transferred inline
 
 	struct BatchStream
 	{
@@ -908,7 +908,7 @@ const UCHAR TAG_PLUGIN_SPECIFIC	= 3;
 typedef Firebird::GetPlugins<Firebird::IClient> AuthClientPlugins;
 
 // Representation of authentication data, visible for plugin
-// Transfered in format, depending upon type of the packet (phase of handshake)
+// Transferred in format, depending upon type of the packet (phase of handshake)
 class RmtAuthBlock final :
 	public Firebird::VersionedIface<Firebird::IAuthBlockImpl<RmtAuthBlock, Firebird::CheckStatusWrapper> >
 {
@@ -1068,7 +1068,7 @@ public:
 };
 
 // Representation of authentication data, visible for plugin
-// Transfered from client data in format, suitable for plugins access
+// Transferred from client data in format, suitable for plugins access
 typedef Firebird::GetPlugins<Firebird::IServer> AuthServerPlugins;
 
 class SrvAuthBlock final :

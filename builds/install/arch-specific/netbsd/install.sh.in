@@ -130,7 +130,7 @@ BuildRootDir=..
 BuiltFBDir=./firebird  # Location of the just-built fb.
 DestDir=@prefix@
 
-# The guts of the tranfer of files and other directories
+# The guts of the transfer of files and other directories
 # (mkdir -p <dirname> does not elicit an error message if the <dirname> exists.)
 echo Installing binaries
 for D in "bin examples include intl doc/sql.extensions UDF"

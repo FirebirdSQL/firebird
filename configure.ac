@@ -879,7 +879,7 @@ AC_SUBST(GPRE_LANGUAGE_MODULES)
 dnl Compression switch
 COMPRESSION=Y
 AC_ARG_WITH(wire-compress,
-  [  --with-wire-compress    support compression of data, transfered over the wire (default=yes)],
+  [  --with-wire-compress    support compression of data, transferred over the wire (default=yes)],
   [case "$withval" in
      yes) ;;
      no)  COMPRESSION=N;;

@@ -2045,7 +2045,7 @@ bool CreateAlterFunctionNode::executeAlterIndividualParameters(thread_db* tdbb, 
 {
 	Attachment* const attachment = transaction->getAttachment();
 
-	bool modifed = false;
+	bool modified = false;
 
 	AutoCacheRequest requestHandle(tdbb, drq_m_prm_funcs2, DYN_REQUESTS);
 
@@ -2083,12 +2083,12 @@ bool CreateAlterFunctionNode::executeAlterIndividualParameters(thread_db* tdbb, 
 					FUN.RDB$SQL_SECURITY.NULL = TRUE;
 			}
 
-			modifed = true;
+			modified = true;
 		END_MODIFY
 	}
 	END_FOR
 
-	return modifed;
+	return modified;
 }
 
 void CreateAlterFunctionNode::storeArgument(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
@@ -3013,7 +3013,7 @@ bool CreateAlterProcedureNode::executeAlterIndividualParameters(thread_db* tdbb,
 {
 	Attachment* const attachment = transaction->getAttachment();
 
-	bool modifed = false;
+	bool modified = false;
 
 	AutoCacheRequest requestHandle(tdbb, drq_m_prm_prcs2, DYN_REQUESTS);
 
@@ -3047,12 +3047,12 @@ bool CreateAlterProcedureNode::executeAlterIndividualParameters(thread_db* tdbb,
 					P.RDB$SQL_SECURITY.NULL = TRUE;
 			}
 
-			modifed = true;
+			modified = true;
 		END_MODIFY
 	}
 	END_FOR
 
-	return modifed;
+	return modified;
 }
 
 void CreateAlterProcedureNode::storeParameter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
@@ -5198,7 +5198,7 @@ void AlterDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 				newDom.dyn_null_flag = type->notNull;
 
 				// Now that we have all of the information needed, let's check to see if the field
-				// type can be modifed.
+				// type can be modified.
 
 				checkUpdate(origDom, newDom);
 

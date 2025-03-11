@@ -632,7 +632,7 @@ void COB_name_init(bool ansi)
 
 //____________________________________________________________
 //
-//		Print a statment, breaking it into
+//		Print a statement, breaking it into
 //		reasonable 80 character hunks.  This
 //		function now works for COBOL statements
 //		which are function calls and non-function

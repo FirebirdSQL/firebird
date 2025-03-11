@@ -37,7 +37,7 @@ public:
 		if (length > 0 && buffer)
 		{
 			memcpy(buffer, &k, 1);
-			fprintf(stderr, "\nTransfered key to server\n");
+			fprintf(stderr, "\nTransferred key to server\n");
 		}
 		return 1;
 	}
