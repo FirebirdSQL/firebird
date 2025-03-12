@@ -38,46 +38,7 @@ TableValueFunctionScan::TableValueFunctionScan(CompilerScratch* csb, StreamType 
 											   const string& alias)
 	: RecordStream(csb, stream), m_alias(csb->csb_pool, alias)
 {
-	m_impure = csb->allocImpure<Impure>();
 	m_cardinality = DEFAULT_CARDINALITY;
-}
-
-void TableValueFunctionScan::close(thread_db* tdbb) const
-{
-	const auto request = tdbb->getRequest();
-
-	invalidateRecords(request);
-
-	const auto impure = request->getImpure<Impure>(m_impure);
-
-	if (impure->irsb_flags & irsb_open)
-	{
-		impure->irsb_flags &= ~irsb_open;
-
-		if (impure->m_recordBuffer)
-		{
-			delete impure->m_recordBuffer;
-			impure->m_recordBuffer = nullptr;
-		}
-
-		if (impure->m_blob)
-		{
-			impure->m_blob->BLB_close(tdbb);
-			impure->m_blob = nullptr;
-		}
-
-		if (impure->m_separatorStr)
-		{
-			delete impure->m_separatorStr;
-			impure->m_separatorStr = nullptr;
-		}
-
-		if (impure->m_resultStr)
-		{
-			delete impure->m_resultStr;
-			impure->m_resultStr = nullptr;
-		}
-	}
 }
 
 bool TableValueFunctionScan::internalGetRecord(thread_db* tdbb) const
@@ -107,7 +68,7 @@ bool TableValueFunctionScan::internalGetRecord(thread_db* tdbb) const
 			continue;
 		}
 		return true;
-	} while (1);
+	} while (true);
 }
 
 bool TableValueFunctionScan::refetchRecord(thread_db* /*tdbb*/) const
@@ -154,15 +115,49 @@ void TableValueFunctionScan::assignParameter(thread_db* tdbb, dsc* fromDesc, con
 	memcpy(toDescValue.dsc_address, fromDesc->dsc_address, fromDesc->dsc_length);
 }
 
-bool TableValueFunctionScan::nextBuffer(thread_db* /*tdbb*/) const
-{
-	return false;
-}
-
 UnlistFunctionScan::UnlistFunctionScan(CompilerScratch* csb, StreamType stream, const string& alias,
 									   ValueListNode* list)
 	: TableValueFunctionScan(csb, stream, alias), m_inputList(list)
 {
+	m_impure = csb->allocImpure<Impure>();
+}
+
+void UnlistFunctionScan::close(thread_db* tdbb) const
+{
+	const auto request = tdbb->getRequest();
+
+	invalidateRecords(request);
+
+	const auto impure = request->getImpure<Impure>(m_impure);
+
+	if (impure->irsb_flags & irsb_open)
+	{
+		impure->irsb_flags &= ~irsb_open;
+
+		if (impure->m_recordBuffer)
+		{
+			delete impure->m_recordBuffer;
+			impure->m_recordBuffer = nullptr;
+		}
+
+		if (impure->m_blob)
+		{
+			impure->m_blob->BLB_close(tdbb);
+			impure->m_blob = nullptr;
+		}
+
+		if (impure->m_separatorStr)
+		{
+			delete impure->m_separatorStr;
+			impure->m_separatorStr = nullptr;
+		}
+
+		if (impure->m_resultStr)
+		{
+			delete impure->m_resultStr;
+			impure->m_resultStr = nullptr;
+		}
+	}
 }
 
 void UnlistFunctionScan::internalOpen(thread_db* tdbb) const
@@ -194,6 +189,8 @@ void UnlistFunctionScan::internalOpen(thread_db* tdbb) const
 	const auto impure = request->getImpure<Impure>(m_impure);
 	impure->irsb_flags |= irsb_open;
 	impure->m_recordBuffer = FB_NEW_POOL(pool) RecordBuffer(pool, m_format);
+	impure->m_blob = nullptr;
+	impure->m_resultStr = nullptr;
 
 	Record* const record = VIO_record(tdbb, rpb, m_format, &pool);
 

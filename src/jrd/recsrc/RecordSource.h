@@ -1468,15 +1468,12 @@ namespace Jrd
 		struct Impure : public RecordSource::Impure
 		{
 			RecordBuffer* m_recordBuffer;
-			blb* m_blob;
-			Firebird::string* m_separatorStr;
-			Firebird::string* m_resultStr;
 		};
 
 	public:
 		TableValueFunctionScan(CompilerScratch* csb, StreamType stream,
 							   const Firebird::string& alias);
-		void close(thread_db* tdbb) const override;
+
 		bool refetchRecord(thread_db* tdbb) const override;
 		WriteLockResult lockRecord(thread_db* tdbb) const override;
 		void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override;
@@ -1486,7 +1483,7 @@ namespace Jrd
 		void assignParameter(thread_db* tdbb, dsc* fromDesc, const dsc* toDesc, SSHORT toId,
 							 Record* record) const;
 
-		virtual bool nextBuffer(thread_db* tdbb) const;
+		virtual bool nextBuffer(thread_db* tdbb) const = 0;
 
 		const Firebird::string m_alias;
 	};
@@ -1500,11 +1497,19 @@ namespace Jrd
 			UNLIST_INDEX_LAST = 2
 		};
 
+		struct Impure : public TableValueFunctionScan::Impure
+		{
+			blb* m_blob;
+			Firebird::string* m_separatorStr;
+			Firebird::string* m_resultStr;
+		};
+
 	public:
 		UnlistFunctionScan(CompilerScratch* csb, StreamType stream, const Firebird::string& alias,
 						   ValueListNode* list);
 
 	protected:
+		void close(thread_db* tdbb) const final;
 		void internalOpen(thread_db* tdbb) const final;
 		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level,
 							 bool recurse) const final;
