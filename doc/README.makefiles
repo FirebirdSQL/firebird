@@ -11,7 +11,7 @@ COPYRIGHT: All rights retained by authors.
 OVERVIEW
 
 The new makefiles were created to fit in with autoconf, to place the object
-files in seperate directories to the source files and to simplify the build
+files in separate directories to the source files and to simplify the build
 process.
 
 It really does rely on using gnu make so that is the best version to use.

@@ -1671,7 +1671,7 @@ static ValueExprNode* pass1_make_derived_field(thread_db* tdbb, DsqlCompilerScra
 		// Aggregate's have map on top.
 		ValueExprNode* derived_field = pass1_make_derived_field(tdbb, dsqlScratch, mapNode->map->map_node);
 
-		// If we had succesfully made a derived field node change it with orginal map.
+		// If we had successfully made a derived field node change it with original map.
 		if ((derivedField = nodeAs<DerivedFieldNode>(derived_field)))
 		{
 			derivedField->value = select_item;

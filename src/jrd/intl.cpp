@@ -603,7 +603,7 @@ int INTL_compare(thread_db* tdbb, const dsc* pText1, const dsc* pText2, ErrorFun
 	fb_assert(err);
 
 	// normal compare routine from CVT_compare
-	// trailing spaces in strings are ignored for comparision
+	// trailing spaces in strings are ignored for comparison
 
 	UCHAR* p1;
 	USHORT t1;

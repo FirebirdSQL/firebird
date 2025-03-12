@@ -146,7 +146,7 @@ int CLIB_ROUTINE main( int argc, char **argv)
 		exit(-3);
 	}
 
-	// the umask back to orignal donot want to carry this to child process
+	// the umask back to original do not want to carry this to child process
 	umask(old_mask);
 
 	// move the server name into the argument to be passed

@@ -23,7 +23,7 @@
 
 typedef struct {
 	unsigned int codepoint;
-	unsigned int equivilant;
+	unsigned int equivalent;
 	unsigned int exists;		/* Count of times in input table */
 	unsigned int not_defined;	/* Defined as NOT DEFINED */
 	char name[80];				/* Name of the character */
@@ -227,11 +227,11 @@ void declare(unsigned short codepoint, unsigned short unicode, char *name)
 
 	if (codepoint_conversion.table[codepoint].exists++)
 	{
-		if (unicode != codepoint_conversion.table[codepoint].equivilant)
+		if (unicode != codepoint_conversion.table[codepoint].equivalent)
 			fprintf(stderr,
 					   "Error: duplicate unequal mappings for 0x%04x : 0x%04x and 0x%04x\n",
 					   codepoint, unicode,
-					   codepoint_conversion.table[codepoint].equivilant);
+					   codepoint_conversion.table[codepoint].equivalent);
 		else
 			fprintf(stderr,
 					   "Warning: duplicate entries for codepoint 0x%04x to 0x%04x\n",
@@ -245,7 +245,7 @@ void declare(unsigned short codepoint, unsigned short unicode, char *name)
 
 	if (!codepoint_conversion.table[codepoint].not_defined)
 	{
-		codepoint_conversion.table[codepoint].equivilant = unicode;
+		codepoint_conversion.table[codepoint].equivalent = unicode;
 
 		if (unicode < unicode_conversion.low_point)
 			unicode_conversion.low_point = unicode;
@@ -256,7 +256,7 @@ void declare(unsigned short codepoint, unsigned short unicode, char *name)
 			unicode_conversion.table[unicode].codepoint = unicode;
 			if (unicode != UNICODE_REPLACEMENT_CHARACTER)
 			{
-				unicode_conversion.table[unicode].equivilant = codepoint;
+				unicode_conversion.table[unicode].equivalent = codepoint;
 				strcpy(unicode_conversion.table[unicode].name, name);
 			}
 		}
@@ -266,7 +266,7 @@ void declare(unsigned short codepoint, unsigned short unicode, char *name)
 				fprintf(stderr,
 						   "Warning: Multiple mappings to Unicode 0x%04x : 0x%04x and 0x%04x\n",
 						   unicode, codepoint,
-						   unicode_conversion.table[unicode].equivilant);
+						   unicode_conversion.table[unicode].equivalent);
 		}
 	}
 }
@@ -283,7 +283,7 @@ void print_direct_table(char *name, TABLE* table)
 			printf("/* %02X */     UNICODE_REPLACEMENT_CHARACTER,\n", i);
 		else
 			printf("/* %02X */  0x%04X /* %45s */,\n",
-					  i, table->table[i].equivilant, table->table[i].name);
+					  i, table->table[i].equivalent, table->table[i].name);
 	}
 	printf("};\n");
 }
@@ -341,7 +341,7 @@ void print_indexed_table(char *name, TABLE* table,
 			}
 			else
 				printf("/* U+%04X */\t0x%04X\t/* %45s */,/* %d */\n",
-						  codepoint, table->table[codepoint].equivilant,
+						  codepoint, table->table[codepoint].equivalent,
 						  table->table[codepoint].name, index);
 			index++;
 			codepoint++;
@@ -418,7 +418,7 @@ void print_condensed_indexed_table(char *name,
 					printf("0,     ");
 			}
 			else
-				printf("0x%04X,", table->table[codepoint].equivilant);
+				printf("0x%04X,", table->table[codepoint].equivalent);
 			if (index % 8 == 7)
 				printf("\n");
 			else
