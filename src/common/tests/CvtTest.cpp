@@ -626,6 +626,8 @@ BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_EXCEPTION_CHECK)
 	testExceptionCvtStringToFormatDateTime("30", "TZM", cb);
 
 	testExceptionCvtStringToFormatDateTime("12 12", "HH24 HH24", cb);
+
+	testExceptionCvtStringToFormatDateTime("2025-02-30", "YYYY-MM-DD", cb);
 }
 
 BOOST_AUTO_TEST_SUITE_END()	// FunctionalTest
