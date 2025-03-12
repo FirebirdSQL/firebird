@@ -412,6 +412,9 @@ version:	// 3.0 => 4.0
 version:	// 5.0 => 6.0 Alpha1
 	const string getSchema(Status status, uint index);
 	const string getCompositeDescriptor(Status status, uint index);
+
+version:	// 5.0 => 6.0
+	MessageMetadata getSubMetadata(Status status, uint index);
 }
 
 interface MetadataBuilder : ReferenceCounted

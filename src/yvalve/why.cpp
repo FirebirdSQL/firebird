@@ -162,6 +162,7 @@ public:
 	unsigned getOffset(CheckStatusWrapper* status, unsigned index) override;
 	unsigned getNullOffset(CheckStatusWrapper* status, unsigned index) override;
 	const char* getCompositeDescriptor(CheckStatusWrapper* status, unsigned index) override;
+	IMessageMetadata* getSubMetadata(CheckStatusWrapper* status, unsigned index) override;
 
 	IMetadataBuilder* getBuilder(CheckStatusWrapper* status) override;
 	unsigned getMessageLength(CheckStatusWrapper* status) override;
@@ -188,6 +189,7 @@ private:
 		unsigned offset;
 		unsigned indOffset;
 		unsigned composite;
+		IMessageMetadata* submeta;
 	} *offsets;
 
 	unsigned length, alignment;
@@ -454,6 +456,15 @@ const char* SQLDAMetadata::getCompositeDescriptor(CheckStatusWrapper* status, un
 	// }
 
 	return "";
+}
+
+IMessageMetadata* SQLDAMetadata::getSubMetadata(CheckStatusWrapper* status, unsigned index)
+{
+	if (!offsets)
+		assign();
+
+	fb_assert(count > index);
+	return offsets[index].submeta;
 }
 
 // ATTENTION!!! Keep this method in sync with MsgMetadata::MakeOffsets()

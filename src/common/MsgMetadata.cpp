@@ -391,6 +391,39 @@ unsigned MsgMetadata::makeOffsets()
 	return ~0u;
 }
 
+// returns ~0 on success or index of not finished item
+unsigned MsgMetadata::makeSubfieldsOffsets()
+{
+	length = alignedLength = 0;
+	alignment = type_alignments[dtype_short];	// NULL indicator
+
+	for (unsigned n = 0; n < items.getCount(); ++n)
+	{
+		Item* param = &items[n];
+		if (!param->finished)
+		{
+			length = alignment = 0;
+			return n;
+		}
+
+		unsigned dtype;
+		length = fb_utils::sqlTypeToDsc(length, param->type, param->length,
+			&dtype, NULL /*length*/, &param->offset, &param->nullInd);
+
+		if (dtype >= DTYPE_TYPE_MAX)
+		{
+			length = alignment = 0;
+			return n;
+		}
+
+		alignment = MAX(alignment, type_alignments[dtype]);
+	}
+
+	alignedLength = FB_ALIGN(length, alignment);
+
+	return ~0u;
+}
+
 
 IMetadataBuilder* MsgMetadata::getBuilder(CheckStatusWrapper* status)
 {
@@ -460,6 +493,8 @@ void MsgMetadata::assign(IMessageMetadata* from)
 				*reinterpret_cast<const USHORT*>(buff));
 			check(&status);
 		}
+
+		items[index].subMetadata = from->getSubMetadata(&status, index);
 
 		items[index].finished = true;
 		check(&status);

@@ -323,6 +323,7 @@ type
 	IMessageMetadata_getAlignedLengthPtr = function(this: IMessageMetadata; status: IStatus): Cardinal; cdecl;
 	IMessageMetadata_getSchemaPtr = function(this: IMessageMetadata; status: IStatus; index: Cardinal): PAnsiChar; cdecl;
 	IMessageMetadata_getCompositeDescriptorPtr = function(this: IMessageMetadata; status: IStatus; index: Cardinal): PAnsiChar; cdecl;
+	IMessageMetadata_getSubMetadataPtr = function(this: IMessageMetadata; status: IStatus; index: Cardinal): IMessageMetadata; cdecl;
 	IMetadataBuilder_setTypePtr = procedure(this: IMetadataBuilder; status: IStatus; index: Cardinal; type_: Cardinal); cdecl;
 	IMetadataBuilder_setSubTypePtr = procedure(this: IMetadataBuilder; status: IStatus; index: Cardinal; subType: Integer); cdecl;
 	IMetadataBuilder_setLengthPtr = procedure(this: IMetadataBuilder; status: IStatus; index: Cardinal; length: Cardinal); cdecl;
@@ -1400,10 +1401,11 @@ type
 		getAlignedLength: IMessageMetadata_getAlignedLengthPtr;
 		getSchema: IMessageMetadata_getSchemaPtr;
 		getCompositeDescriptor: IMessageMetadata_getCompositeDescriptorPtr;
+		getSubMetadata: IMessageMetadata_getSubMetadataPtr;
 	end;
 
 	IMessageMetadata = class(IReferenceCounted)
-		const VERSION = 5;
+		const VERSION = 6;
 
 		function getCount(status: IStatus): Cardinal;
 		function getField(status: IStatus; index: Cardinal): PAnsiChar;
@@ -1424,6 +1426,7 @@ type
 		function getAlignedLength(status: IStatus): Cardinal;
 		function getSchema(status: IStatus; index: Cardinal): PAnsiChar;
 		function getCompositeDescriptor(status: IStatus; index: Cardinal): PAnsiChar;
+		function getSubMetadata(status: IStatus; index: Cardinal): IMessageMetadata;
 	end;
 
 	IMessageMetadataImpl = class(IMessageMetadata)
@@ -1450,6 +1453,7 @@ type
 		function getAlignedLength(status: IStatus): Cardinal; virtual; abstract;
 		function getSchema(status: IStatus; index: Cardinal): PAnsiChar; virtual; abstract;
 		function getCompositeDescriptor(status: IStatus; index: Cardinal): PAnsiChar; virtual; abstract;
+		function getSubMetadata(status: IStatus; index: Cardinal): IMessageMetadata; virtual; abstract;
 	end;
 
 	MetadataBuilderVTable = class(ReferenceCountedVTable)
@@ -7316,6 +7320,18 @@ begin
 	FbException.checkException(status);
 end;
 
+function IMessageMetadata.getSubMetadata(status: IStatus; index: Cardinal): IMessageMetadata;
+begin
+	if (vTable.version < 6) then begin
+		FbException.setVersionError(status, 'IMessageMetadata', vTable.version, 6);
+		Result := nil;
+	end
+	else begin
+		Result := MessageMetadataVTable(vTable).getSubMetadata(Self, status, index);
+	end;
+	FbException.checkException(status);
+end;
+
 procedure IMetadataBuilder.setType(status: IStatus; index: Cardinal; type_: Cardinal);
 begin
 	MetadataBuilderVTable(vTable).setType(Self, status, index, type_);
@@ -11912,6 +11928,16 @@ begin
 	Result := nil;
 	try
 		Result := IMessageMetadataImpl(this).getCompositeDescriptor(status, index);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+function IMessageMetadataImpl_getSubMetadataDispatcher(this: IMessageMetadata; status: IStatus; index: Cardinal): IMessageMetadata; cdecl;
+begin
+	Result := nil;
+	try
+		Result := IMessageMetadataImpl(this).getSubMetadata(status, index);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -18568,7 +18594,7 @@ initialization
 	ITransactionImpl_vTable.disconnect := @ITransactionImpl_disconnectDispatcher;
 
 	IMessageMetadataImpl_vTable := MessageMetadataVTable.create;
-	IMessageMetadataImpl_vTable.version := 5;
+	IMessageMetadataImpl_vTable.version := 6;
 	IMessageMetadataImpl_vTable.addRef := @IMessageMetadataImpl_addRefDispatcher;
 	IMessageMetadataImpl_vTable.release := @IMessageMetadataImpl_releaseDispatcher;
 	IMessageMetadataImpl_vTable.getCount := @IMessageMetadataImpl_getCountDispatcher;
@@ -18590,6 +18616,7 @@ initialization
 	IMessageMetadataImpl_vTable.getAlignedLength := @IMessageMetadataImpl_getAlignedLengthDispatcher;
 	IMessageMetadataImpl_vTable.getSchema := @IMessageMetadataImpl_getSchemaDispatcher;
 	IMessageMetadataImpl_vTable.getCompositeDescriptor := @IMessageMetadataImpl_getCompositeDescriptorDispatcher;
+	IMessageMetadataImpl_vTable.getSubMetadata := @IMessageMetadataImpl_getSubMetadataDispatcher;
 
 	IMetadataBuilderImpl_vTable := MetadataBuilderVTable.create;
 	IMetadataBuilderImpl_vTable.version := 5;

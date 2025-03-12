@@ -289,6 +289,7 @@ struct IsqlVar
 	bool nullable;
 	short* nullInd;
 	const char* compositeDescriptor = nullptr;
+	Firebird::IMessageMetadata* subfieldsMetadata = nullptr;
 	unsigned subfieldsNum = 0;
 
 	union TypeMix
@@ -317,6 +318,7 @@ struct IsqlVar
 	TypeMix value;
 
 	Firebird::Array<Firebird::MsgUtil::SubfieldData> subfields;
+	Firebird::Array<IsqlVar> subvars;
 };
 
 class IsqlWireStats

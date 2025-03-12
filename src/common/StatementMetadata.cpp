@@ -238,6 +238,137 @@ void StatementMetadata::clear()
 	inputParameters->fetched = outputParameters->fetched = false;
 }
 
+void StatementMetadata::parseSubfields(const UCHAR*& buffer, const UCHAR* bufferEnd, MsgMetadata* parameters)
+{
+	UCHAR c;
+	Parameters::Item temp(*getDefaultMemoryPool());
+	Parameters::Item* param = &temp;
+	bool finishDescribe = false;
+
+    // Loop over the variables being described.
+	while (!finishDescribe)
+	{
+		fb_assert(buffer < bufferEnd);
+
+		if (buffer >= bufferEnd)
+			break;
+
+		switch ((c = *buffer++))
+		{
+			case isc_info_sql_describe_end:
+				param->finished = true;
+				break;
+
+			case isc_info_sql_sqlda_seq:
+				{
+					unsigned num = getNumericInfo(&buffer, bufferEnd);
+
+					while (parameters->items.getCount() < num)
+						parameters->items.add();
+
+					param = &parameters->items[num - 1];
+				}
+				break;
+
+			case isc_info_sql_type:
+				param->type = getNumericInfo(&buffer, bufferEnd);
+				param->nullable = (param->type & 1) != 0;
+				param->type &= ~1;
+				break;
+
+			case isc_info_sql_sub_type:
+				param->subType = getNumericInfo(&buffer, bufferEnd);
+				break;
+
+			case isc_info_sql_length:
+				param->length = getNumericInfo(&buffer, bufferEnd);
+				break;
+
+			case isc_info_sql_scale:
+				param->scale = getNumericInfo(&buffer, bufferEnd);
+				break;
+
+			case isc_info_sql_field:
+				getStringInfo(&buffer, bufferEnd, &param->field);
+				break;
+
+			case isc_info_sql_relation:
+				getStringInfo(&buffer, bufferEnd, &param->relation);
+				break;
+
+			case isc_info_sql_owner:
+				getStringInfo(&buffer, bufferEnd, &param->owner);
+				break;
+
+			case isc_info_sql_alias:
+				getStringInfo(&buffer, bufferEnd, &param->alias);
+				break;
+
+			case isc_info_truncated:
+				--buffer;
+				finishDescribe = true;
+				break;
+
+			case isc_info_sql_composite_descriptor:
+				{
+					string compositeBuffer;
+					getStringInfo(&buffer, bufferEnd, &compositeBuffer);
+
+					if (!compositeBuffer.isEmpty())
+					{
+						const UCHAR* subBuffer = reinterpret_cast<const UCHAR*>(compositeBuffer.c_str());
+						const UCHAR* subBufferEnd = subBuffer + compositeBuffer.length();
+
+						auto submeta = FB_NEW MsgMetadata;
+						parseSubfields(subBuffer, subBufferEnd, submeta);
+						param->subMetadata = submeta;
+					}
+					else
+					{
+						param->subMetadata = nullptr;
+					}
+				}
+				break;
+
+			default:
+				--buffer;
+				finishDescribe = true;
+
+				for (unsigned n = 0; n < parameters->items.getCount(); ++n)
+				{
+					Parameters::Item* param = &parameters->items[n];
+
+					if (!param->finished)
+					{
+						// parameters->fetched = false; // TODO ROWTYPE: should we throw here?
+						break;
+					}
+				}
+
+				parameters->makeSubfieldsOffsets();
+
+				for (unsigned n = 0; n < parameters->items.getCount(); ++n)
+				{
+					Parameters::Item* param = &parameters->items[n];
+					switch (param->type)
+					{
+						case SQL_VARYING:
+						case SQL_TEXT:
+							param->charSet = param->subType;
+							param->subType = 0;
+							break;
+						case SQL_BLOB:
+							param->charSet = param->scale;
+							param->scale = 0;
+							break;
+					}
+				}
+
+				break;
+		}
+	}
+}
+
 // Parse an info response buffer.
 void StatementMetadata::parse(unsigned bufferLength, const UCHAR* buffer)
 {
@@ -362,7 +493,24 @@ void StatementMetadata::parse(unsigned bufferLength, const UCHAR* buffer)
 							break;
 
 						case isc_info_sql_composite_descriptor:
-							getStringInfo(&buffer, bufferEnd, &param->compositeDescriptor); // TODO ROWTYPE: here we should parse new format of the composite descriptor (nested tags as for simple values)
+							{
+								string compositeBuffer;
+								getStringInfo(&buffer, bufferEnd, &compositeBuffer);
+
+								if (!compositeBuffer.isEmpty())
+								{
+									const UCHAR* subBuffer = reinterpret_cast<const UCHAR*>(compositeBuffer.c_str());
+									const UCHAR* subBufferEnd = subBuffer + compositeBuffer.length();
+
+									auto submeta = FB_NEW MsgMetadata;
+									parseSubfields(subBuffer, subBufferEnd, submeta);
+									param->subMetadata = submeta;
+								}
+								else
+								{
+									param->subMetadata = nullptr;
+								}
+							}
 							break;
 
 						case isc_info_error:

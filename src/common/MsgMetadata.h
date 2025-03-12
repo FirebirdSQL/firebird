@@ -101,6 +101,7 @@ public:
 		bool nullable;
 		bool finished;
 		string compositeDescriptor;
+		IMessageMetadata* subMetadata;
 	};
 
 public:
@@ -305,9 +306,19 @@ public:
 		return NULL;
 	}
 
+	IMessageMetadata* getSubMetadata(CheckStatusWrapper* status, unsigned index)
+	{
+		if (index < items.getCount())
+			return items[index].subMetadata;
+
+		raiseIndexError(status, index, "getSubMetadata");
+		return NULL;
+	}
+
 public:
 	void addItem(const MetaString& name, bool nullable, const dsc& desc);
 	unsigned makeOffsets();
+	unsigned makeSubfieldsOffsets();
 
 private:
 	void raiseIndexError(CheckStatusWrapper* status, unsigned index, const char* method) const

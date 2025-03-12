@@ -1215,6 +1215,23 @@ static void sql_info(thread_db* tdbb,
 
 
 
+/**
+
+ 	describe_parameter
+
+    @brief	Provide information on exactly one parameter in message
+
+
+	@param tdbb
+	@param attachment
+    @param param
+    @param items
+    @param end_describe
+    @param info
+    @param end
+	@param input_message
+
+ **/
 static UCHAR* describe_parameter(thread_db* tdbb,
 								Attachment* attachment,
 								const dsql_par* param,
@@ -1225,7 +1242,6 @@ static UCHAR* describe_parameter(thread_db* tdbb,
 								bool input_message)
 {
 	UCHAR buf[128];
-
 
 	dsc desc = param->par_desc;
 
@@ -1396,7 +1412,7 @@ static UCHAR* describe_parameter(thread_db* tdbb,
 								const ULONG newSize = bufferSize * 2;
 								if (newSize > 16384)  // 16KB limit
 								{
-									info = nullptr;
+									*info = isc_info_truncated;
 									return nullptr;
 								}
 
@@ -1404,12 +1420,15 @@ static UCHAR* describe_parameter(thread_db* tdbb,
 								needRetry = true;
 								break;
 							}
-
-							// End with separator after every described subfield
-							*currentPos++ = isc_info_sql_describe_end;
 						}
 					} while (needRetry);
 
+					if (currentPos + 1 >= subInfo + bufferSize)
+					{
+						*info = isc_info_truncated;
+						return nullptr;
+					}
+					*currentPos++ = isc_info_end;
 					length = currentPos - subInfo;
 					buffer = subInfo;
 				}
@@ -1432,6 +1451,13 @@ static UCHAR* describe_parameter(thread_db* tdbb,
 			return nullptr;
 	}
 
+	if (info + 1 >= end)
+	{
+		*info = isc_info_truncated;
+		return nullptr;
+	}
+	*info++ = isc_info_sql_describe_end;
+
 	return info;
 }
 
@@ -1449,6 +1475,7 @@ static UCHAR* describe_parameter(thread_db* tdbb,
     @param info
     @param end
     @param first_index
+	@param input_message
 
  **/
 static UCHAR* var_info(const dsql_msg* message,
@@ -1492,12 +1519,6 @@ static UCHAR* var_info(const dsql_msg* message,
 									info, end,
 									input_message);
 
-			if (info + 1 >= end)
-			{
-				*info = isc_info_truncated;
-				return nullptr;
-			}
-			*info++ = isc_info_sql_describe_end;
 		} // if()
 	} // for()
 
@@ -1744,7 +1765,7 @@ USHORT Jrd::serialize_composite_parameter_descriptor(dsql_fld& parameterField, s
 	return serializedDescriptorLength;
 }
 
-static USHORT flattenParameterFields(thread_db* tdbb, dsql_fld* parameterField, dsc* parameterDsc, dsql_par** lastParameterPtr, UCHAR*& nulloffset)
+static USHORT generateSubparameterFields(thread_db* tdbb, dsql_fld* parameterField, dsc* parameterDsc, dsql_par** lastParameterPtr, UCHAR*& nulloffset, USHORT previousParameterIndex)
 {
 	if (!parameterField)
 		return 0;
@@ -1759,11 +1780,12 @@ static USHORT flattenParameterFields(thread_db* tdbb, dsql_fld* parameterField, 
 		if (parameterField->fld_sub_first)
 		{
 			UCHAR* nextoffset = parameterDsc->dsc_address;
-			count += flattenParameterFields(tdbb,
+			count += generateSubparameterFields(tdbb,
 										  parameterField->fld_sub_first,
 										  parameterDsc->dsc_sub_first,
 										  lastParameterPtr,
-										  nextoffset);
+										  nextoffset,
+										  0);
 		}
 	}
 	else
@@ -1778,6 +1800,7 @@ static USHORT flattenParameterFields(thread_db* tdbb, dsql_fld* parameterField, 
 
 		currentParameter->par_desc = *parameterDsc;
 		currentParameter->par_desc.dsc_flags |= DSC_nullable;
+		currentParameter->par_index = ++previousParameterIndex;
 
 		// Create null subparameter
 		dsql_par* null = FB_NEW_POOL(*pool) dsql_par(*pool);
@@ -1794,11 +1817,12 @@ static USHORT flattenParameterFields(thread_db* tdbb, dsql_fld* parameterField, 
 	// Process the following fields at the same level
 	if (parameterField->fld_next)
 	{
-		count += flattenParameterFields(tdbb,
+		count += generateSubparameterFields(tdbb,
 										parameterField->fld_next,
 										parameterDsc->dsc_next,
 										lastParameterPtr,
-										nulloffset);
+										nulloffset,
+										previousParameterIndex);
 	}
 
 	return count;
@@ -1821,11 +1845,12 @@ USHORT Jrd::generate_sub_parameters(dsql_fld& parameterField, dsql_par& hostPara
 
 		UCHAR* nextoffset = hostParameter.par_desc.dsc_address;
 		// Convert the hierarchical field structure into a flat list of parameters
-		return flattenParameterFields(tdbb,
+		return generateSubparameterFields(tdbb,
 										parameterField.fld_sub_first,
 										hostParameter.par_desc.dsc_sub_first,
 										nextPtr,
-										nextoffset);
+										nextoffset,
+										0);
 	}
 
 	return 0;
