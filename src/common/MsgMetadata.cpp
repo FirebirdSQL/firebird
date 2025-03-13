@@ -391,35 +391,19 @@ unsigned MsgMetadata::makeOffsets()
 	return ~0u;
 }
 
-// returns ~0 on success or index of not finished item
-unsigned MsgMetadata::makeSubfieldsOffsets()
+// returns ~0 on success
+unsigned MsgMetadata::makeSubfieldsOffsets(ULONG parentFieldValueOffset)
 {
-	length = alignedLength = 0;
-	alignment = type_alignments[dtype_short];	// NULL indicator
+	auto subFieldsNullsLength = items.getCount() * 2;
+	auto previousFieldsLength = 0;
 
 	for (unsigned n = 0; n < items.getCount(); ++n)
 	{
 		Item* param = &items[n];
-		if (!param->finished)
-		{
-			length = alignment = 0;
-			return n;
-		}
-
-		unsigned dtype;
-		length = fb_utils::sqlTypeToDsc(length, param->type, param->length,
-			&dtype, NULL /*length*/, &param->offset, &param->nullInd);
-
-		if (dtype >= DTYPE_TYPE_MAX)
-		{
-			length = alignment = 0;
-			return n;
-		}
-
-		alignment = MAX(alignment, type_alignments[dtype]);
+		param->nullInd = (n * 2) + parentFieldValueOffset;
+		param->offset += subFieldsNullsLength + previousFieldsLength + parentFieldValueOffset;
+		previousFieldsLength += param->length;
 	}
-
-	alignedLength = FB_ALIGN(length, alignment);
 
 	return ~0u;
 }
@@ -495,12 +479,26 @@ void MsgMetadata::assign(IMessageMetadata* from)
 		}
 
 		items[index].subMetadata = from->getSubMetadata(&status, index);
+		check(&status);
+
+		items[index].offset = from->getOffset(&status, index);
+		check(&status);
+
+		items[index].nullInd = from->getNullOffset(&status, index);
+		check(&status);
 
 		items[index].finished = true;
 		check(&status);
 	}
 
-	makeOffsets();
+	length = from->getMessageLength(&status);
+	check(&status);
+
+	alignment = from->getAlignment(&status);
+	check(&status);
+
+	alignedLength = from->getAlignedLength(&status);
+	check(&status);
 }
 
 }	// namespace Firebird

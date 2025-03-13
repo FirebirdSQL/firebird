@@ -79,7 +79,7 @@ public:
 
 private:
 	void fetchParameters(UCHAR code, Parameters* parameters);
-	void parseSubfields(const UCHAR*& buffer, const UCHAR* bufferEnd, MsgMetadata* subMetadata);
+	void parseSubfields(const UCHAR*& buffer, const UCHAR* bufferEnd, MsgMetadata* subMetadata, ULONG bufferOffset);
 
 private:
 	IStatement* statement;

@@ -318,7 +318,7 @@ public:
 public:
 	void addItem(const MetaString& name, bool nullable, const dsc& desc);
 	unsigned makeOffsets();
-	unsigned makeSubfieldsOffsets();
+	unsigned makeSubfieldsOffsets(ULONG parentFieldValueOffset);
 
 private:
 	void raiseIndexError(CheckStatusWrapper* status, unsigned index, const char* method) const

@@ -238,12 +238,19 @@ void StatementMetadata::clear()
 	inputParameters->fetched = outputParameters->fetched = false;
 }
 
-void StatementMetadata::parseSubfields(const UCHAR*& buffer, const UCHAR* bufferEnd, MsgMetadata* parameters)
+void StatementMetadata::parseSubfields(const UCHAR*& buffer, const UCHAR* bufferEnd, MsgMetadata* parameters, ULONG bufferOffset)
 {
 	UCHAR c;
 	Parameters::Item temp(*getDefaultMemoryPool());
 	Parameters::Item* param = &temp;
 	bool finishDescribe = false;
+
+	auto& alignedLength = parameters->alignedLength;
+	alignedLength = 0;
+	auto& length = parameters->length;
+	length = 0;
+	auto& alignment = parameters->alignment;
+	alignment = type_alignments[dtype_short];	// NULL indicator
 
     // Loop over the variables being described.
 	while (!finishDescribe)
@@ -257,6 +264,7 @@ void StatementMetadata::parseSubfields(const UCHAR*& buffer, const UCHAR* buffer
 		{
 			case isc_info_sql_describe_end:
 				param->finished = true;
+
 				break;
 
 			case isc_info_sql_sqlda_seq:
@@ -310,24 +318,7 @@ void StatementMetadata::parseSubfields(const UCHAR*& buffer, const UCHAR* buffer
 				break;
 
 			case isc_info_sql_composite_descriptor:
-				{
-					string compositeBuffer;
-					getStringInfo(&buffer, bufferEnd, &compositeBuffer);
-
-					if (!compositeBuffer.isEmpty())
-					{
-						const UCHAR* subBuffer = reinterpret_cast<const UCHAR*>(compositeBuffer.c_str());
-						const UCHAR* subBufferEnd = subBuffer + compositeBuffer.length();
-
-						auto submeta = FB_NEW MsgMetadata;
-						parseSubfields(subBuffer, subBufferEnd, submeta);
-						param->subMetadata = submeta;
-					}
-					else
-					{
-						param->subMetadata = nullptr;
-					}
-				}
+				getStringInfo(&buffer, bufferEnd, &param->compositeDescriptor);
 				break;
 
 			default:
@@ -345,7 +336,25 @@ void StatementMetadata::parseSubfields(const UCHAR*& buffer, const UCHAR* buffer
 					}
 				}
 
-				parameters->makeSubfieldsOffsets();
+				parameters->makeSubfieldsOffsets(bufferOffset);
+
+				for (unsigned n = 0; n < parameters->items.getCount(); ++n)
+				{
+					Parameters::Item* param = &parameters->items[n];
+					if (!param->compositeDescriptor.isEmpty())
+					{
+						const UCHAR* subBuffer = reinterpret_cast<const UCHAR*>(param->compositeDescriptor.c_str());
+						const UCHAR* subBufferEnd = subBuffer + param->compositeDescriptor.length();
+
+						auto submeta = FB_NEW MsgMetadata;
+						parseSubfields(subBuffer, subBufferEnd, submeta, alignedLength);
+						param->subMetadata = submeta;
+					}
+					else
+					{
+						param->subMetadata = nullptr;
+					}
+				}
 
 				for (unsigned n = 0; n < parameters->items.getCount(); ++n)
 				{
@@ -423,6 +432,13 @@ void StatementMetadata::parse(unsigned bufferLength, const UCHAR* buffer)
 				Parameters::Item* param = &temp;
 				bool finishDescribe = false;
 
+				auto& alignedLength = parameters->alignedLength;
+				alignedLength = 0;
+				auto& length = parameters->length;
+				length = 0;
+				auto& alignment = parameters->alignment;
+				alignment = type_alignments[dtype_short];	// NULL indicator
+
 				// Loop over the variables being described.
 				while (!finishDescribe)
 				{
@@ -493,24 +509,7 @@ void StatementMetadata::parse(unsigned bufferLength, const UCHAR* buffer)
 							break;
 
 						case isc_info_sql_composite_descriptor:
-							{
-								string compositeBuffer;
-								getStringInfo(&buffer, bufferEnd, &compositeBuffer);
-
-								if (!compositeBuffer.isEmpty())
-								{
-									const UCHAR* subBuffer = reinterpret_cast<const UCHAR*>(compositeBuffer.c_str());
-									const UCHAR* subBufferEnd = subBuffer + compositeBuffer.length();
-
-									auto submeta = FB_NEW MsgMetadata;
-									parseSubfields(subBuffer, subBufferEnd, submeta);
-									param->subMetadata = submeta;
-								}
-								else
-								{
-									param->subMetadata = nullptr;
-								}
-							}
+							getStringInfo(&buffer, bufferEnd, &param->compositeDescriptor);
 							break;
 
 						case isc_info_error:
@@ -543,6 +542,24 @@ void StatementMetadata::parse(unsigned bufferLength, const UCHAR* buffer)
 
 							if (parameters->fetched && parameters->makeOffsets() != ~0u)
 								parameters->fetched = false;
+
+							for (unsigned n = 0; n < parameters->items.getCount(); ++n)
+							{
+								Parameters::Item* param = &parameters->items[n];
+								if (!param->compositeDescriptor.isEmpty())
+								{
+									const UCHAR* subBuffer = reinterpret_cast<const UCHAR*>(param->compositeDescriptor.c_str());
+									const UCHAR* subBufferEnd = subBuffer + param->compositeDescriptor.length();
+
+									auto submeta = FB_NEW MsgMetadata;
+									parseSubfields(subBuffer, subBufferEnd, submeta, param->offset);
+									param->subMetadata = submeta;
+								}
+								else
+								{
+									param->subMetadata = nullptr;
+								}
+							}
 
 							if (parameters->fetched)
 							{
