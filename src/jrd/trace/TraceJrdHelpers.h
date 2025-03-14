@@ -437,8 +437,8 @@ public:
 		if (!m_need_trace)
 			return;
 
-		m_name = trigger->name.c_str();
-		m_relationName = trigger->relation ? trigger->relation->rel_name.c_str() : "";
+		m_name = trigger->name.toQuotedString();
+		m_relationName = trigger->relation ? trigger->relation->rel_name.toQuotedString() : "";
 
 		const auto type = (trigger->type & ~TRIGGER_TYPE_MASK);
 

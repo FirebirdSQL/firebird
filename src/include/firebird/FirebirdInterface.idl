@@ -408,6 +408,9 @@ interface MessageMetadata : ReferenceCounted
 version:	// 3.0 => 4.0
 	uint getAlignment(Status status);
 	uint getAlignedLength(Status status);
+
+version:	// 5.0 => 6.0 Alpha1
+	const string getSchema(Status status, uint index);
 }
 
 interface MetadataBuilder : ReferenceCounted
@@ -430,6 +433,9 @@ version:	// 3.0 => 4.0
 	void setRelation(Status status, uint index, const string relation);
 	void setOwner(Status status, uint index, const string owner);
 	void setAlias(Status status, uint index, const string alias);
+
+version:	// 5.0 => 6.0 Alpha1
+	void setSchema(Status status, uint index, const string schema);
 }
 
 interface ResultSet : ReferenceCounted
@@ -1152,6 +1158,9 @@ interface RoutineMetadata : Versioned
 	MessageMetadata getTriggerMetadata(Status status) const;
 	const string getTriggerTable(Status status) const;
 	uint getTriggerType(Status status) const;
+
+version:	// 5.0 => 6.0 Alpha1
+	const string getSchema(Status status) const;
 }
 
 
@@ -1248,6 +1257,12 @@ version:	// 4.0 Beta1 => 4.0 Beta2
 		uint* fractions, uint timeZoneBufferLength, string timeZoneBuffer);
 	void decodeTimeStampTzEx(Status status, const ISC_TIMESTAMP_TZ_EX* timeStampTz, uint* year, uint* month, uint* day,
 		uint* hours, uint* minutes, uint* seconds, uint* fractions, uint timeZoneBufferLength, string timeZoneBuffer);
+
+version:	// 5.0 => 6.0 Alpha1
+	Attachment executeCreateDatabase2(Status status,
+		uint stmtLength, const string creatDBstatement, uint dialect,
+		uint dpbLength, const uchar* dpb,
+		boolean* stmtIsCreateDb);
 }
 
 interface OffsetsCallback : Versioned
@@ -1762,16 +1777,24 @@ interface ReplicatedTransaction : Disposable
 	void rollbackSavepoint(Status status);
 
 	// ReplicatedRecords parameters point to local objects, do not ever store the pointer.
-	void insertRecord(Status status, const string name,
-					  ReplicatedRecord record);
-	void updateRecord(Status status, const string name,
-					  ReplicatedRecord orgRecord,
-					  ReplicatedRecord newRecord);
-	void deleteRecord(Status status, const string name,
-					  ReplicatedRecord record);
+	void deprecatedInsertRecord(Status status, const string name, ReplicatedRecord record);
+	void deprecatedUpdateRecord(Status status, const string name,
+		ReplicatedRecord orgRecord, ReplicatedRecord newRecord);
+	void deprecatedDeleteRecord(Status status, const string name, ReplicatedRecord record);
 
-	void executeSql(Status status, const string sql);
-	void executeSqlIntl(Status status, uint charset, const string sql);
+	void deprecatedExecuteSql(Status status, const string sql);
+	void deprecatedExecuteSqlIntl(Status status, uint charset, const string sql);
+
+version:	// 5.0 => 6.0 Alpha1
+	// ReplicatedRecords parameters point to local objects, do not ever store the pointer.
+	void insertRecord2(Status status, const string schemaName, const string tableName,
+		ReplicatedRecord record);
+	void updateRecord2(Status status, const string schemaName, const string tableName,
+		ReplicatedRecord orgRecord, ReplicatedRecord newRecord);
+	void deleteRecord2(Status status, const string schemaName, const string tableName,
+		ReplicatedRecord record);
+
+	void executeSqlIntl2(Status status, uint charset, const string schemaSearchPath, const string sql);
 }
 
 interface ReplicatedSession : PluginBase
@@ -1781,7 +1804,10 @@ interface ReplicatedSession : PluginBase
 
 	ReplicatedTransaction startTransaction(Status status, Transaction transaction, int64 number);
 	void cleanupTransaction(Status status, int64 number);
-	void setSequence(Status status, const string name, int64 value);
+	void deprecatedSetSequence(Status status, const string name, int64 value);
+
+version:	// 5.0 => 6.0 Alpha1
+	void setSequence2(Status status, const string schemaName, const string genName, int64 value);
 }
 
 // Profiler interfaces
@@ -1809,7 +1835,7 @@ interface ProfilerSession : Disposable
 
 	void finish(Status status, ISC_TIMESTAMP_TZ timestamp);
 
-	void defineStatement(Status status, int64 statementId, int64 parentStatementId,
+	void deprecatedDefineStatement(Status status, int64 statementId, int64 parentStatementId,
 		const string type, const string packageName, const string routineName, const string sqlText);
 
 	void defineCursor(int64 statementId, uint cursorId, const string name, uint line, uint column);
@@ -1833,6 +1859,13 @@ interface ProfilerSession : Disposable
 	void beforeRecordSourceGetRecord(int64 statementId, int64 requestId, uint cursorId, uint recSourceId);
 	void afterRecordSourceGetRecord(int64 statementId, int64 requestId, uint cursorId, uint recSourceId,
 		ProfilerStats stats);
+
+version:	// 5.0 => 6.0 Alpha1
+	[notImplementedAction call deprecatedDefineStatement(status, statementId, parentStatementId,
+		type, packageName, routineName, sqlText)]
+	void defineStatement2(Status status, int64 statementId, int64 parentStatementId,
+		const string type, const string schemaName, const string packageName, const string routineName,
+		const string sqlText);
 }
 
 interface ProfilerStats : Versioned

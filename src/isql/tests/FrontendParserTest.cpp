@@ -40,9 +40,9 @@ BOOST_AUTO_TEST_CASE(ParseCommandTest)
 	BOOST_TEST(std::holds_alternative<FrontendParser::InvalidNode>(FrontendParser::parse(
 		"add", parserOptions)));
 	BOOST_TEST((std::get<FrontendParser::AddNode>(FrontendParser::parse(
-		"add table1", parserOptions)).tableName == "TABLE1"));
+		"add table1", parserOptions)).tableName == QualifiedMetaString("TABLE1")));
 	BOOST_TEST((std::get<FrontendParser::AddNode>(FrontendParser::parse(
-		"add \"table2\"", parserOptions)).tableName == "table2"));
+		"add \"table2\"", parserOptions)).tableName == QualifiedMetaString("table2")));
 
 	BOOST_TEST(std::holds_alternative<FrontendParser::InvalidNode>(FrontendParser::parse(
 		"blobdump", parserOptions)));
@@ -91,8 +91,8 @@ BOOST_AUTO_TEST_CASE(ParseCommandTest)
 	{
 		const auto copy1 = std::get<FrontendParser::CopyNode>(FrontendParser::parse(
 			"copy source \"destination\" localhost:/tmp/database.fdb", parserOptions));
-		BOOST_TEST((copy1.source == "SOURCE"));
-		BOOST_TEST((copy1.destination == "destination"));
+		BOOST_TEST((copy1.source == QualifiedMetaString("SOURCE")));
+		BOOST_TEST((copy1.destination == QualifiedMetaString("destination")));
 		BOOST_TEST(copy1.database == "localhost:/tmp/database.fdb");
 	}
 
@@ -300,7 +300,7 @@ BOOST_AUTO_TEST_CASE(ParseSetTest)
 	BOOST_TEST(!std::get<FrontendParser::SetNamesNode>(parseSet(
 		"set names")).name.has_value());
 	BOOST_TEST((std::get<FrontendParser::SetNamesNode>(parseSet(
-		"set names utf8")).name == "UTF8"));
+		"set names utf8")).name == QualifiedMetaString("UTF8")));
 	BOOST_TEST(std::holds_alternative<FrontendParser::InvalidNode>(FrontendParser::parse(
 		"set names utf8 x", parserOptions)));
 
@@ -489,17 +489,17 @@ BOOST_AUTO_TEST_CASE(ParseShowTest)
 	BOOST_TEST(!std::get<FrontendParser::ShowChecksNode>(parseShow(
 		"show check")).name);
 	BOOST_TEST((std::get<FrontendParser::ShowChecksNode>(parseShow(
-		"show check name")).name == "NAME"));
+		"show check name")).name == QualifiedMetaString("NAME")));
 
 	BOOST_TEST(!std::get<FrontendParser::ShowCollationsNode>(parseShow(
 		"show collate")).name);
 	BOOST_TEST((std::get<FrontendParser::ShowCollationsNode>(parseShow(
-		"show collate name")).name == "NAME"));
+		"show collate name")).name == QualifiedMetaString("NAME")));
 
 	BOOST_TEST(!std::get<FrontendParser::ShowCollationsNode>(parseShow(
 		"show collation")).name);
 	BOOST_TEST((std::get<FrontendParser::ShowCollationsNode>(parseShow(
-		"show collation name")).name == "NAME"));
+		"show collation name")).name == QualifiedMetaString("NAME")));
 
 	BOOST_TEST(std::holds_alternative<FrontendParser::ShowCommentsNode>(parseShow(
 		"show comments")));
@@ -507,17 +507,17 @@ BOOST_AUTO_TEST_CASE(ParseShowTest)
 	BOOST_TEST(!std::get<FrontendParser::ShowDependenciesNode>(parseShow(
 		"show depen")).name);
 	BOOST_TEST((std::get<FrontendParser::ShowDependenciesNode>(parseShow(
-		"show depen name")).name == "NAME"));
+		"show depen name")).name == QualifiedMetaString("NAME")));
 
 	BOOST_TEST(!std::get<FrontendParser::ShowDomainsNode>(parseShow(
 		"show domain")).name);
 	BOOST_TEST((std::get<FrontendParser::ShowDomainsNode>(parseShow(
-		"show domain name")).name == "NAME"));
+		"show domain name")).name == QualifiedMetaString("NAME")));
 
 	BOOST_TEST(!std::get<FrontendParser::ShowExceptionsNode>(parseShow(
 		"show excep")).name);
 	BOOST_TEST((std::get<FrontendParser::ShowExceptionsNode>(parseShow(
-		"show excep name")).name == "NAME"));
+		"show excep name")).name == QualifiedMetaString("NAME")));
 
 	BOOST_TEST(!std::get<FrontendParser::ShowFiltersNode>(parseShow(
 		"show filter")).name);
@@ -527,23 +527,21 @@ BOOST_AUTO_TEST_CASE(ParseShowTest)
 	BOOST_TEST(!std::get<FrontendParser::ShowFunctionsNode>(parseShow(
 		"show func")).name);
 	BOOST_TEST((std::get<FrontendParser::ShowFunctionsNode>(parseShow(
-		"show func name")).name == "NAME"));
+		"show func name")).name == QualifiedMetaString("NAME")));
 	BOOST_TEST((std::get<FrontendParser::ShowFunctionsNode>(parseShow(
-		"show func package.name")).package == "PACKAGE"));
-	BOOST_TEST((std::get<FrontendParser::ShowFunctionsNode>(parseShow(
-		"show func package.name")).name == "NAME"));
+		"show func schema.package.name")).name == QualifiedMetaString("NAME", "SCHEMA", "PACKAGE")));
 
 	BOOST_TEST(!std::get<FrontendParser::ShowIndexesNode>(parseShow(
 		"show ind")).name);
 	BOOST_TEST((std::get<FrontendParser::ShowIndexesNode>(parseShow(
-		"show index name")).name == "NAME"));
+		"show index name")).name == QualifiedMetaString("NAME")));
 	BOOST_TEST((std::get<FrontendParser::ShowIndexesNode>(parseShow(
-		"show indices name")).name == "NAME"));
+		"show indices name")).name == QualifiedMetaString("NAME")));
 
 	BOOST_TEST(!std::get<FrontendParser::ShowGeneratorsNode>(parseShow(
 		"show gen")).name);
 	BOOST_TEST((std::get<FrontendParser::ShowGeneratorsNode>(parseShow(
-		"show generator name")).name == "NAME"));
+		"show generator name")).name == QualifiedMetaString("NAME")));
 
 	BOOST_TEST(!std::get<FrontendParser::ShowMappingsNode>(parseShow(
 		"show map")).name);
@@ -553,16 +551,14 @@ BOOST_AUTO_TEST_CASE(ParseShowTest)
 	BOOST_TEST(!std::get<FrontendParser::ShowPackagesNode>(parseShow(
 		"show pack")).name);
 	BOOST_TEST((std::get<FrontendParser::ShowPackagesNode>(parseShow(
-		"show package name")).name == "NAME"));
+		"show package name")).name == QualifiedMetaString("NAME")));
 
 	BOOST_TEST(!std::get<FrontendParser::ShowProceduresNode>(parseShow(
 		"show proc")).name);
 	BOOST_TEST((std::get<FrontendParser::ShowProceduresNode>(parseShow(
-		"show proc name")).name == "NAME"));
+		"show proc name")).name == QualifiedMetaString("NAME")));
 	BOOST_TEST((std::get<FrontendParser::ShowProceduresNode>(parseShow(
-		"show proc package.name")).package == "PACKAGE"));
-	BOOST_TEST((std::get<FrontendParser::ShowProceduresNode>(parseShow(
-		"show proc package.name")).name == "NAME"));
+		"show proc schema.package.name")).name == QualifiedMetaString("NAME", "SCHEMA", "PACKAGE")));
 
 	BOOST_TEST(!std::get<FrontendParser::ShowPublicationsNode>(parseShow(
 		"show pub")).name);
@@ -583,31 +579,31 @@ BOOST_AUTO_TEST_CASE(ParseShowTest)
 	BOOST_TEST(!std::get<FrontendParser::ShowSecClassesNode>(parseShow(
 		"show seccla * detail")).name);
 	BOOST_TEST((std::get<FrontendParser::ShowSecClassesNode>(parseShow(
-		"show secclasses name")).name == "NAME"));
+		"show secclasses name")).name == QualifiedMetaString("NAME")));
 
 	BOOST_TEST((!std::get<FrontendParser::ShowSystemNode>(parseShow(
 		"show system")).objType.has_value()));
 	BOOST_TEST((!std::get<FrontendParser::ShowSystemNode>(parseShow(
 		"show system table")).objType == obj_relation));
 	BOOST_TEST((std::get<FrontendParser::ShowTablesNode>(parseShow(
-		"show table \"test\"")).name == "test"));
+		"show table \"test\"")).name == QualifiedMetaString("test")));
 	BOOST_TEST((std::get<FrontendParser::ShowTablesNode>(parseShow(
-		"show table \"te\"\"st\"")).name == "te\"st"));
+		"show table \"te\"\"st\"")).name == QualifiedMetaString("te\"st")));
 
 	BOOST_TEST(!std::get<FrontendParser::ShowTablesNode>(parseShow(
 		"show table")).name);
 	BOOST_TEST((std::get<FrontendParser::ShowTablesNode>(parseShow(
-		"show tables name")).name == "NAME"));
+		"show tables name")).name == QualifiedMetaString("NAME")));
 
 	BOOST_TEST(!std::get<FrontendParser::ShowTriggersNode>(parseShow(
 		"show trig")).name);
 	BOOST_TEST((std::get<FrontendParser::ShowTriggersNode>(parseShow(
-		"show triggers name")).name == "NAME"));
+		"show triggers name")).name == QualifiedMetaString("NAME")));
 
 	BOOST_TEST(!std::get<FrontendParser::ShowViewsNode>(parseShow(
 		"show view")).name);
 	BOOST_TEST((std::get<FrontendParser::ShowViewsNode>(parseShow(
-		"show views name")).name == "NAME"));
+		"show views name")).name == QualifiedMetaString("NAME")));
 
 	BOOST_TEST(std::holds_alternative<FrontendParser::ShowWireStatsNode>(parseShow(
 		"show wire_stat")));

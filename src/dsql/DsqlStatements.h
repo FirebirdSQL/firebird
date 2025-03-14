@@ -68,16 +68,7 @@ public:
 	static void rethrowDdlException(Firebird::status_exception& ex, bool metadataUpdate, DdlNode* node);
 
 public:
-	DsqlStatement(MemoryPool& pool, dsql_dbb* aDsqlAttachment)
-		: PermanentStorage(pool),
-		  dsqlAttachment(aDsqlAttachment),
-		  type(TYPE_SELECT),
-		  flags(0),
-		  blrVersion(5),
-		  ports(pool)
-	{
-		pool.setStatsGroup(memoryStats);
-	}
+	DsqlStatement(MemoryPool& pool, dsql_dbb* aDsqlAttachment);
 
 protected:
 	virtual ~DsqlStatement() = default;
@@ -139,6 +130,8 @@ public:
 	void setCacheKey(Firebird::RefStrPtr& value) { cacheKey = value; }
 	void resetCacheKey() { cacheKey = nullptr; }
 
+	const auto getSchemaSearchPath() const { return schemaSearchPath; }
+
 public:
 	virtual bool isDml() const
 	{
@@ -174,9 +167,9 @@ protected:
 protected:
 	dsql_dbb* dsqlAttachment;
 	Firebird::MemoryStats memoryStats;
-	Type type;					// Type of statement
-	ULONG flags;				// generic flag
-	unsigned blrVersion;
+	Type type = TYPE_SELECT;	// Type of statement
+	ULONG flags = 0;			// generic flag
+	unsigned blrVersion = 5;
 	Firebird::RefStrPtr sqlText;
 	Firebird::RefStrPtr orgText;
 	Firebird::RefStrPtr cacheKey;
@@ -185,6 +178,7 @@ protected:
 	dsql_msg* receiveMsg = nullptr;				// Per record message to be received
 	dsql_par* eof = nullptr;					// End of file parameter
 	DsqlCompilerScratch* scratch = nullptr;
+	Firebird::RefPtr<Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>> schemaSearchPath;
 
 private:
 	Firebird::AtomicCounter refCounter;

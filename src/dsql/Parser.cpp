@@ -408,28 +408,13 @@ int Parser::yylexAux()
 
 	if (tok_class & CHR_INTRODUCER)
 	{
-		// The Introducer (_) is skipped, all other idents are copied
-		// to become the name of the character set.
-		char* p = string;
-		for (; lex.ptr < lex.end && (classes(*lex.ptr) & CHR_IDENT); lex.ptr++)
-		{
-			if (lex.ptr >= lex.end)
-				return -1;
+		if (lex.ptr >= lex.end)
+			return -1;
 
-			check_copy_incr(p, UPPER7(*lex.ptr), string);
-		}
+		if (classes(*lex.ptr) & (CHR_IDENT | CHR_QUOTE))
+			return TOK_INTRODUCER;
 
-		check_bound(p, string);
-
-		if (p > string + MAX_SQL_IDENTIFIER_LEN || p > string + METADATA_IDENTIFIER_CHAR_LEN)
-			yyabandon(yyposn, -104, isc_dyn_name_longer);
-
-		*p = 0;
-
-		// make a string value to hold the name, the name is resolved in pass1_constant.
-		yylval.metaNamePtr = FB_NEW_POOL(pool) MetaName(pool, string, p - string);
-
-		return TOK_INTRODUCER;
+		return (UCHAR) c;
 	}
 
 	// parse a quoted string, being sure to look for double quotes
@@ -711,15 +696,14 @@ int Parser::yylexAux()
 
 		if (introducerCharSetName)
 		{
-			const auto symbol = METD_get_charset(scratch->getTransaction(),
-				introducerCharSetName->length(), introducerCharSetName->c_str());
+			const auto symbol = METD_get_charset(scratch->getTransaction(), *introducerCharSetName);
 
 			if (!symbol)
 			{
 				// character set name is not defined
 				ERRD_post(
 					Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
-					Arg::Gds(isc_charset_not_found) << *introducerCharSetName);
+					Arg::Gds(isc_charset_not_found) << introducerCharSetName->toQuotedString());
 			}
 
 			currentCharSet = INTL_charset_lookup(tdbb, symbol->intlsym_ttype);

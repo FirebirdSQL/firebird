@@ -28,7 +28,8 @@ namespace Replication
 {
 	// Supported protocol versions
 	const USHORT PROTOCOL_VERSION_1 = 1;
-	const USHORT PROTOCOL_CURRENT_VERSION = PROTOCOL_VERSION_1;
+	const USHORT PROTOCOL_VERSION_2 = 2;	// support for schemas
+	const USHORT PROTOCOL_CURRENT_VERSION = PROTOCOL_VERSION_2;
 
 	// Global (protocol neutral) flags
 	const USHORT BLOCK_BEGIN_TRANS	= 0x0001;

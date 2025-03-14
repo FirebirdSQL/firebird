@@ -2101,7 +2101,9 @@ static tok* get_token()
 			}
 			else
 #endif
-			if (next == EOF || (next == '\n' && (p[-1] != '\\' || gpreGlob.sw_sql)))
+			// ASF: Allow multi-line C++ strings
+			if (next == EOF ||
+				(!isLangCpp(gpreGlob.sw_language) && next == '\n' && (p[-1] != '\\' || gpreGlob.sw_sql)))
 			{
 				return_char(*p);
 

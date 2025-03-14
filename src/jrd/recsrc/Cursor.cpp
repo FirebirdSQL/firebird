@@ -461,6 +461,6 @@ void Cursor::checkState(Request* request) const
 	{
 		status_exception::raise(
 			Arg::Gds(isc_cursor_not_positioned) <<
-			getName());
+			getName().toQuotedString());
 	}
 }

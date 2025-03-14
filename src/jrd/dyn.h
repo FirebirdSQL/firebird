@@ -26,6 +26,7 @@
 
 #include "../common/classes/MsgPrint.h"
 #include "../jrd/MetaName.h"
+#include "../jrd/QualifiedName.h"
 #include "../common/classes/array.h"
 #include "../common/classes/fb_string.h"
 #include "../common/dsc.h"
@@ -33,6 +34,7 @@
 const char* const ALL_PRIVILEGES = "SIUDR";	// all applicable grant/revoke privileges
 const char* const EXEC_PRIVILEGES = "X";	// execute privilege
 const char* const USAGE_PRIVILEGES = "G";	// usage privilege
+const char* const ALL_DDL_PRIVILEGES = "CLO";
 
 const int DYN_MSG_FAC		= 8;
 
@@ -53,9 +55,9 @@ public:
 	SSHORT dyn_collation;
 	SSHORT dyn_charset;
 	SSHORT dyn_sub_type;
-	MetaName dyn_fld_source;
-	MetaName dyn_rel_name;
-	MetaName dyn_fld_name;
+	QualifiedName dyn_fld_source;
+	QualifiedName dyn_rel_name;
+	QualifiedName dyn_fld_name;
     USHORT dyn_charbytelen; // Used to check modify operations on string types.
     const UCHAR* dyn_default_src;
     const UCHAR* dyn_default_val;

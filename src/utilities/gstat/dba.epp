@@ -139,6 +139,12 @@ struct dba_blob_statistics
 	}
 };
 
+struct dba_schema
+{
+	dba_schema* next;
+	SCHAR name[MAX_SQL_IDENTIFIER_SIZE];
+};
+
 struct dba_rel
 {
 	dba_rel* rel_next;
@@ -240,17 +246,18 @@ public:
 		: ThreadData(tddDBA), uSvc(us)
 	{
 		//dba_throw = false;
-		file = 0;
-		relations = 0;
+		file = nullptr;
+		relations = nullptr;
+		schemas = nullptr;
 		page_size = 0;
 		dp_per_pp = 0;
 		max_records = 0;
 		page_number = 0;
-		buffer1 = 0;
-		buffer2 = 0;
-		global_buffer = 0;
+		buffer1 = nullptr;
+		buffer2 = nullptr;
+		global_buffer = nullptr;
 		exit_code = 0;
-		head_of_mem_list = 0;
+		head_of_mem_list = nullptr;
 		memset(dba_status_vector, 0, sizeof (dba_status_vector));
 		dba_status = dba_status_vector;
 	}
@@ -259,6 +266,7 @@ public:
 	Firebird::UtilSvc* uSvc;
 	dba_fil* file;
 	dba_rel* relations;
+	dba_schema* schemas;
 	USHORT page_size;
 	USHORT dp_per_pp;
 	USHORT max_records;
@@ -428,6 +436,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 	//bool sw_log = false;
 	bool sw_record = false;
 	bool sw_relation = false;
+	bool sw_schema = false;
 	bool sw_nocreation = false;
 
 	const Switches switches(dba_in_sw_table, FB_NELEM(dba_in_sw_table), false, true);
@@ -527,6 +536,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 		case IN_SW_DBA_RECORD:
 			sw_record = true;
 			break;
+
 		case IN_SW_DBA_RELATION:
 			sw_relation = true;
 			while (argv < end && **argv != '-')
@@ -556,6 +566,36 @@ int gstat(Firebird::UtilSvc* uSvc)
 					break;
 			}
 			break;
+
+		case IN_SW_DBA_SCHEMA:
+			sw_schema = true;
+			while (argv < end && **argv != '-')
+			{
+				if (strlen(*argv) > MAX_SQL_IDENTIFIER_LEN)
+				{
+					char schname[MAX_SQL_IDENTIFIER_LEN + 5];
+					fb_utils::copy_terminate(schname, *argv, MAX_SQL_IDENTIFIER_SIZE);
+					memcpy(schname + MAX_SQL_IDENTIFIER_LEN, "...\0", 4);
+					dba_error(67, SafeArg() << schname);	// option -sch got a too long schema name @1
+					break;
+				}
+
+				dba_schema* schema = (dba_schema*) alloc(sizeof(struct dba_schema));
+				strcpy(schema->name, *argv++);
+				fb_utils::exact_name(schema->name);
+				dba_schema** next = &tddba->schemas;
+				while (*next) {
+					next = &(*next)->next;
+				}
+				*next = schema;
+
+				// If the db name wasn't given yet, only one schema name can be specified
+				// after -s to avoid ambiguity.
+				if (!name)
+					break;
+			}
+			break;
+
 		case IN_SW_DBA_NOCREATION:
 			sw_nocreation = true;
 			break;
@@ -565,14 +605,14 @@ int gstat(Firebird::UtilSvc* uSvc)
 	if (sw_version)
 		dba_print(false, 5, SafeArg() << FB_VERSION);	// msg 5: gstat version %s
 
-	if (sw_header && (sw_system || sw_data || sw_index || sw_record || sw_relation))
+	if (sw_header && (sw_system || sw_data || sw_index || sw_record || sw_relation || sw_schema))
 	{
-		dba_error(38);	//option -h is incompatible with options -a, -d, -i, -r, -s and -t
+		dba_error(38);	//option -h is incompatible with options -a, -d, -i, -r, -schema, -s and -t
 	}
 
-	if (sw_enc && (sw_header || sw_system || sw_data || sw_index || sw_record || sw_relation))
+	if (sw_enc && (sw_header || sw_system || sw_data || sw_index || sw_record || sw_relation || sw_schema))
 	{
-		dba_error(50);	//option -e is incompatible with options -a, -d, -h, -i, -r, -s and -t
+		dba_error(50);	//option -e is incompatible with options -a, -d, -h, -i, -r, -schema, -s and -t
 	}
 
 	if (!name)
@@ -581,9 +621,10 @@ int gstat(Firebird::UtilSvc* uSvc)
 	}
 
 	if (sw_relation && !tddba->relations)
-	{
 		dba_error(41);	// option -t needs a table name.
-	}
+
+	if (sw_schema && !tddba->schemas)
+		dba_error(66);	// option -sch needs a schema name.
 
 	if (!sw_data && !sw_index)
 		sw_data = sw_index = true;
@@ -765,6 +806,8 @@ int gstat(Firebird::UtilSvc* uSvc)
 	if (*role)
 		dpb.insertString(isc_dpb_sql_role_name, role, fb_strlen(role));
 
+	dpb.insertString(isc_dpb_search_path, SYSTEM_SCHEMA, fb_strlen(SYSTEM_SCHEMA));
+
 	isc_attach_database(status_vector, 0, connName.c_str(), &DB, dpb.getBufferLength(),
 						reinterpret_cast<const char*>(dpb.getBuffer()));
 	if (status_vector[1])
@@ -798,6 +841,22 @@ int gstat(Firebird::UtilSvc* uSvc)
 			X.RDB$RELATION_TYPE >= rel_virtual && X.RDB$RELATION_TYPE <= rel_global_temp_delete)
 		{
 			continue;
+		}
+
+		if (sw_schema)
+		{
+			fb_utils::exact_name(X.RDB$SCHEMA_NAME);
+
+			dba_schema* schema = nullptr;
+
+			for (schema = tddba->schemas; schema; schema = schema->next)
+			{
+				if (!(strcmp(schema->name, X.RDB$SCHEMA_NAME)))
+					break;
+			}
+
+			if (!schema)
+				continue;
 		}
 
 		dba_rel* relation;

@@ -76,15 +76,16 @@ namespace
 		}
 	}
 
-	bool isSystemRelation(thread_db* tdbb, jrd_tra* transaction, const char* relName)
+	bool isSystemRelation(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& relName)
 	{
 		bool rc = false;
 
 		AutoCacheRequest handle(tdbb, irq_system_relation, IRQ_REQUESTS);
 		FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
-			R IN RDB$RELATIONS WITH
-			R.RDB$RELATION_NAME EQ relName AND
-			R.RDB$SYSTEM_FLAG EQ 1
+			R IN RDB$RELATIONS
+			WITH R.RDB$SCHEMA_NAME EQ relName.schema.c_str() AND
+				 R.RDB$RELATION_NAME EQ relName.object.c_str() AND
+				 R.RDB$SYSTEM_FLAG EQ 1
 		{
 			rc = true;
 		}
@@ -93,15 +94,16 @@ namespace
 		return rc;
 	}
 
-	bool isSystemDomain(thread_db* tdbb, jrd_tra* transaction, const char* fldName)
+	bool isSystemDomain(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& fldName)
 	{
 		bool rc = false;
 
 		AutoCacheRequest handle(tdbb, irq_system_domain, IRQ_REQUESTS);
 		FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
-			R IN RDB$FIELDS WITH
-			R.RDB$FIELD_NAME EQ fldName AND
-			R.RDB$SYSTEM_FLAG EQ 1
+			R IN RDB$FIELDS
+			WITH R.RDB$SCHEMA_NAME EQ fldName.schema.c_str() AND
+				 R.RDB$FIELD_NAME EQ fldName.object.c_str() AND
+				 R.RDB$SYSTEM_FLAG EQ 1
 		{
 			rc = true;
 		}
@@ -112,7 +114,7 @@ namespace
 }
 
 
-void METD_drop_charset(jrd_tra* transaction, const MetaName& metaName)
+void METD_drop_charset(jrd_tra* transaction, const QualifiedName& metaName)
 {
 /**************************************
  *
@@ -142,7 +144,7 @@ void METD_drop_charset(jrd_tra* transaction, const MetaName& metaName)
 }
 
 
-void METD_drop_collation(jrd_tra* transaction, const MetaName& name)
+void METD_drop_collation(jrd_tra* transaction, const QualifiedName& name)
 {
 /**************************************
  *
@@ -199,7 +201,7 @@ void METD_drop_function(jrd_tra* transaction, const QualifiedName& name)
 
 	if (dbb->dbb_functions.get(name, function))
 	{
-		MET_dsql_cache_use(tdbb, SYM_udf, name.identifier, name.package);
+		MET_dsql_cache_use(tdbb, SYM_udf, name);
 		function->udf_flags |= UDF_dropped;
 		dbb->dbb_functions.remove(name);
 	}
@@ -232,14 +234,14 @@ void METD_drop_procedure(jrd_tra* transaction, const QualifiedName& name)
 
 	if (dbb->dbb_procedures.get(name, procedure))
 	{
-		MET_dsql_cache_use(tdbb, SYM_procedure, name.identifier, name.package);
+		MET_dsql_cache_use(tdbb, SYM_procedure, name);
 		procedure->prc_flags |= PRC_dropped;
 		dbb->dbb_procedures.remove(name);
 	}
 }
 
 
-void METD_drop_relation(jrd_tra* transaction, const MetaName& name)
+void METD_drop_relation(jrd_tra* transaction, const QualifiedName& name)
 {
 /**************************************
  *
@@ -271,7 +273,7 @@ void METD_drop_relation(jrd_tra* transaction, const MetaName& name)
 }
 
 
-dsql_intlsym* METD_get_collation(jrd_tra* transaction, const MetaName& name, USHORT charset_id)
+dsql_intlsym* METD_get_collation(jrd_tra* transaction, const QualifiedName& name, USHORT charset_id)
 {
 /**************************************
  *
@@ -311,7 +313,8 @@ dsql_intlsym* METD_get_collation(jrd_tra* transaction, const MetaName& name, USH
 	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
 	X IN RDB$COLLATIONS
 		CROSS Y IN RDB$CHARACTER_SETS OVER RDB$CHARACTER_SET_ID
-		WITH X.RDB$COLLATION_NAME EQ name.c_str() AND
+		WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 X.RDB$COLLATION_NAME EQ name.object.c_str() AND
 			 X.RDB$CHARACTER_SET_ID EQ charset_id;
 	{
 		symbol = FB_NEW_POOL(dbb->dbb_pool) dsql_intlsym(dbb->dbb_pool);
@@ -336,7 +339,7 @@ dsql_intlsym* METD_get_collation(jrd_tra* transaction, const MetaName& name, USH
 }
 
 
-dsql_intlsym* METD_get_charset(jrd_tra* transaction, USHORT length, const char* name) // UTF-8
+dsql_intlsym* METD_get_charset(jrd_tra* transaction, const QualifiedName& name)
 {
 /**************************************
  *
@@ -354,14 +357,13 @@ dsql_intlsym* METD_get_charset(jrd_tra* transaction, USHORT length, const char* 
 	validateTransaction(transaction);
 
 	dsql_dbb* dbb = transaction->getDsqlAttachment();
-	MetaName metaName(name, length);
 
 	// Start by seeing if symbol is already defined
 
 	dsql_intlsym* symbol;
-	if (dbb->dbb_charsets.get(metaName, symbol) && !(symbol->intlsym_flags & INTLSYM_dropped))
+	if (dbb->dbb_charsets.get(name, symbol) && !(symbol->intlsym_flags & INTLSYM_dropped))
 	{
-		if (MET_dsql_cache_use(tdbb, SYM_intlsym_charset, metaName))
+		if (MET_dsql_cache_use(tdbb, SYM_intlsym_charset, name))
 			symbol->intlsym_flags |= INTLSYM_dropped;
 		else
 			return symbol;
@@ -374,32 +376,34 @@ dsql_intlsym* METD_get_charset(jrd_tra* transaction, USHORT length, const char* 
 	AutoCacheRequest handle(tdbb, irq_charset, IRQ_REQUESTS);
 
 	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
-	X IN RDB$COLLATIONS
-		CROSS Y IN RDB$CHARACTER_SETS OVER RDB$CHARACTER_SET_ID
-		CROSS Z IN RDB$TYPES
-		WITH Z.RDB$TYPE EQ Y.RDB$CHARACTER_SET_ID
-		AND Z.RDB$TYPE_NAME EQ name
-		AND Z.RDB$FIELD_NAME EQ "RDB$CHARACTER_SET_NAME"
-		AND Y.RDB$DEFAULT_COLLATE_NAME EQ X.RDB$COLLATION_NAME;
+		CS IN RDB$CHARACTER_SETS
+		CROSS COLL IN RDB$COLLATIONS OVER RDB$CHARACTER_SET_ID
+		CROSS T IN RDB$TYPES
+		WITH CS.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 T.RDB$TYPE_NAME EQ name.object.c_str() AND
+			 COLL.RDB$SCHEMA_NAME EQ CS.RDB$DEFAULT_COLLATE_SCHEMA_NAME AND
+			 COLL.RDB$COLLATION_NAME EQ CS.RDB$DEFAULT_COLLATE_NAME AND
+			 T.RDB$FIELD_NAME EQ "RDB$CHARACTER_SET_NAME" AND
+			 T.RDB$TYPE EQ CS.RDB$CHARACTER_SET_ID
 	{
 		symbol = FB_NEW_POOL(dbb->dbb_pool) dsql_intlsym(dbb->dbb_pool);
-		symbol->intlsym_name = metaName;
+		symbol->intlsym_name = name;
 		symbol->intlsym_flags = 0;
-		symbol->intlsym_charset_id = X.RDB$CHARACTER_SET_ID;
-		symbol->intlsym_collate_id = X.RDB$COLLATION_ID;
+		symbol->intlsym_charset_id = COLL.RDB$CHARACTER_SET_ID;
+		symbol->intlsym_collate_id = COLL.RDB$COLLATION_ID;
 		symbol->intlsym_ttype =
 			INTL_CS_COLL_TO_TTYPE(symbol->intlsym_charset_id, symbol->intlsym_collate_id);
 		symbol->intlsym_bytes_per_char =
-			(Y.RDB$BYTES_PER_CHARACTER.NULL) ? 1 : (Y.RDB$BYTES_PER_CHARACTER);
+			(CS.RDB$BYTES_PER_CHARACTER.NULL) ? 1 : (CS.RDB$BYTES_PER_CHARACTER);
 	}
 	END_FOR
 
 	if (!symbol)
 		return NULL;
 
-	dbb->dbb_charsets.put(metaName, symbol);
+	dbb->dbb_charsets.put(name, symbol);
 	dbb->dbb_charsets_by_id.put(symbol->intlsym_charset_id, symbol);
-	MET_dsql_cache_use(tdbb, SYM_intlsym_charset, metaName);
+	MET_dsql_cache_use(tdbb, SYM_intlsym_charset, name);
 
 	return symbol;
 }
@@ -431,8 +435,8 @@ USHORT METD_get_charset_bpc(jrd_tra* transaction, SSHORT charset_id)
 	dsql_intlsym* symbol = NULL;
 	if (!dbb->dbb_charsets_by_id.get(charset_id, symbol))
 	{
-		const MetaName cs_name = METD_get_charset_name(transaction, charset_id);
-		symbol = METD_get_charset(transaction, cs_name.length(), cs_name.c_str());
+		const auto cs_name = METD_get_charset_name(transaction, charset_id);
+		symbol = METD_get_charset(transaction, cs_name);
 	}
 
 	fb_assert(symbol);
@@ -441,7 +445,7 @@ USHORT METD_get_charset_bpc(jrd_tra* transaction, SSHORT charset_id)
 }
 
 
-MetaName METD_get_charset_name(jrd_tra* transaction, SSHORT charset_id)
+QualifiedName METD_get_charset_name(jrd_tra* transaction, SSHORT charset_id)
 {
 /**************************************
  *
@@ -462,14 +466,14 @@ MetaName METD_get_charset_name(jrd_tra* transaction, SSHORT charset_id)
 
 	dsql_dbb* dbb = transaction->getDsqlAttachment();
 
-    if (charset_id == CS_dynamic)
+	if (charset_id == CS_dynamic)
 		charset_id = tdbb->getCharSet();
 
 	dsql_intlsym* sym = NULL;
 	if (dbb->dbb_charsets_by_id.get(charset_id, sym))
 		return sym->intlsym_name;
 
-	MetaName name;
+	QualifiedName name;
 
 	AutoCacheRequest handle(tdbb, irq_cs_name, IRQ_REQUESTS);
 
@@ -477,62 +481,96 @@ MetaName METD_get_charset_name(jrd_tra* transaction, SSHORT charset_id)
 		Y IN RDB$CHARACTER_SETS
 		WITH Y.RDB$CHARACTER_SET_ID EQ charset_id
 	{
-		name = Y.RDB$CHARACTER_SET_NAME;
+		name = QualifiedName(Y.RDB$CHARACTER_SET_NAME, Y.RDB$SCHEMA_NAME);
 	}
 	END_FOR
 
 	// put new charset into hash table if needed
-	METD_get_charset(transaction, name.length(), name.c_str());
+	METD_get_charset(transaction, name);
 
 	return name;
 }
 
 
-MetaName METD_get_default_charset(jrd_tra* transaction)
+// Find the default character set for a database
+QualifiedName METD_get_database_charset(jrd_tra* transaction)
 {
-/**************************************
- *
- *  M E T D _ g e t _ d e f a u l t _ c h a r s e t
- *
- **************************************
- *
- * Functional description
- *  Find the default character set for a database
- *
- **************************************/
 	thread_db* tdbb = JRD_get_thread_data();
 
 	validateTransaction(transaction);
 
 	dsql_dbb* dbb = transaction->getDsqlAttachment();
 	if (dbb->dbb_no_charset)
-		return NULL;
+		return {};
 
-	if (dbb->dbb_dfl_charset.hasData())
+	if (dbb->dbb_dfl_charset.object.hasData())
 		return dbb->dbb_dfl_charset;
 
 	// Now see if it is in the database
 
-	AutoCacheRequest handle(tdbb, irq_default_cs, IRQ_REQUESTS);
+	static const CachedRequestId requestHandleId;
+	AutoCacheRequest requestHandle(tdbb, requestHandleId);
 
-	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
 		FIRST 1 DBB IN RDB$DATABASE
-		WITH DBB.RDB$CHARACTER_SET_NAME NOT MISSING;
+		WITH DBB.RDB$CHARACTER_SET_NAME NOT MISSING
 	{
-		// Terminate ASCIIZ string on first trailing blank
-		fb_utils::exact_name(DBB.RDB$CHARACTER_SET_NAME);
-		dbb->dbb_dfl_charset = DBB.RDB$CHARACTER_SET_NAME;
+		dbb->dbb_dfl_charset = QualifiedName(DBB.RDB$CHARACTER_SET_NAME, DBB.RDB$CHARACTER_SET_SCHEMA_NAME);
 	}
 	END_FOR
 
-	if (dbb->dbb_dfl_charset.isEmpty())
+	if (dbb->dbb_dfl_charset.object.isEmpty())
+	{
+		fb_assert(false);
 		dbb->dbb_no_charset = true;
+	}
 
 	return dbb->dbb_dfl_charset;
 }
 
 
-bool METD_get_domain(jrd_tra* transaction, TypeClause* field, const MetaName& name) // UTF-8
+// Find the default character set for a schema
+QualifiedName METD_get_schema_charset(jrd_tra* transaction, const MetaName& schema)
+{
+	thread_db* tdbb = JRD_get_thread_data();
+
+	validateTransaction(transaction);
+
+	dsql_dbb* dbb = transaction->getDsqlAttachment();
+
+	if (const auto charSet = dbb->dbb_schemas_dfl_charset.get(schema))
+		return *charSet;
+
+	// Now see if it is in the database
+
+	static const CachedRequestId requestHandleId;
+	AutoCacheRequest requestHandle(tdbb, requestHandleId);
+
+	FOR(REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FIRST 1 SCH IN RDB$SCHEMAS
+		CROSS DBB IN RDB$DATABASE
+		WITH SCH.RDB$SCHEMA_NAME = schema.c_str()
+	{
+		if (!SCH.RDB$CHARACTER_SET_NAME.NULL)
+		{
+			QualifiedName charSet(SCH.RDB$CHARACTER_SET_NAME, SCH.RDB$CHARACTER_SET_SCHEMA_NAME);
+			dbb->dbb_schemas_dfl_charset.put(schema, charSet);
+			return charSet;
+		}
+		else if (!DBB.RDB$CHARACTER_SET_NAME.NULL)
+		{
+			QualifiedName charSet(DBB.RDB$CHARACTER_SET_NAME, DBB.RDB$CHARACTER_SET_SCHEMA_NAME);
+			return charSet;
+		}
+	}
+	END_FOR
+
+	fb_assert(false);
+	return {};
+}
+
+
+bool METD_get_domain(jrd_tra* transaction, TypeClause* field, const QualifiedName& name) // UTF-8
 {
 /**************************************
  *
@@ -553,7 +591,9 @@ bool METD_get_domain(jrd_tra* transaction, TypeClause* field, const MetaName& na
 	AutoCacheRequest handle(tdbb, irq_domain, IRQ_REQUESTS);
 
 	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
-		FLX IN RDB$FIELDS WITH FLX.RDB$FIELD_NAME EQ name.c_str()
+		FLX IN RDB$FIELDS
+		WITH FLX.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 FLX.RDB$FIELD_NAME EQ name.object.c_str()
 	{
 		found = true;
 		field->length = FLX.RDB$FIELD_LENGTH;
@@ -592,8 +632,7 @@ bool METD_get_domain(jrd_tra* transaction, TypeClause* field, const MetaName& na
 }
 
 
-dsql_udf* METD_get_function(jrd_tra* transaction, DsqlCompilerScratch* dsqlScratch,
-	const QualifiedName& name)
+dsql_udf* METD_get_function(jrd_tra* transaction, DsqlCompilerScratch* dsqlScratch, const QualifiedName& name)
 {
 /**************************************
  *
@@ -611,24 +650,13 @@ dsql_udf* METD_get_function(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 	validateTransaction(transaction);
 
 	dsql_dbb* dbb = transaction->getDsqlAttachment();
-	QualifiedName metaName(name);
-
-	bool maybeUnqualified = dsqlScratch->package.hasData() && metaName.package.isEmpty();
-	if (maybeUnqualified)
-		metaName.package = dsqlScratch->package;
 
 	// Start by seeing if symbol is already defined
 
 	dsql_udf* userFunc = NULL;
-	if (dbb->dbb_functions.get(metaName, userFunc))
+	if (dbb->dbb_functions.get(name, userFunc))
 	{
-		if (userFunc->udf_private && metaName.package != dsqlScratch->package)
-		{
-			status_exception::raise(Arg::Gds(isc_private_function) <<
-				Arg::Str(metaName.identifier) << Arg::Str(metaName.package));
-		}
-
-		if (MET_dsql_cache_use(tdbb, SYM_udf, metaName.identifier, metaName.package))
+		if (MET_dsql_cache_use(tdbb, SYM_udf, name))
 			userFunc->udf_flags |= UDF_dropped;
 	}
 
@@ -642,43 +670,34 @@ dsql_udf* METD_get_function(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 
 	USHORT return_arg = 0;
 
-	while (!userFunc)
+	AutoCacheRequest handle1(tdbb, irq_function, IRQ_REQUESTS);
+
+	FOR(REQUEST_HANDLE handle1 TRANSACTION_HANDLE transaction)
+		X IN RDB$FUNCTIONS
+		WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+				X.RDB$FUNCTION_NAME EQ name.object.c_str() AND
+				X.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '')
 	{
-		AutoCacheRequest handle1(tdbb, irq_function, IRQ_REQUESTS);
+		userFunc = FB_NEW_POOL(dbb->dbb_pool) dsql_udf(dbb->dbb_pool);
+		userFunc->udf_name = name;
+		userFunc->udf_private = !X.RDB$PRIVATE_FLAG.NULL && X.RDB$PRIVATE_FLAG != 0;
 
-		FOR(REQUEST_HANDLE handle1 TRANSACTION_HANDLE transaction)
-			X IN RDB$FUNCTIONS WITH
-			X.RDB$FUNCTION_NAME EQ metaName.identifier.c_str() AND
-			X.RDB$PACKAGE_NAME EQUIV NULLIF(metaName.package.c_str(), '')
-		{
-			userFunc = FB_NEW_POOL(dbb->dbb_pool) dsql_udf(dbb->dbb_pool);
-			userFunc->udf_name = metaName;
-			userFunc->udf_private = !X.RDB$PRIVATE_FLAG.NULL && X.RDB$PRIVATE_FLAG != 0;
-
-			return_arg = X.RDB$RETURN_ARGUMENT;
-		}
-		END_FOR
-
-		if (!userFunc)
-		{
-			if (maybeUnqualified)
-			{
-				maybeUnqualified = false;
-				metaName.package = "";
-			}
-			else
-				return NULL;
-		}
+		return_arg = X.RDB$RETURN_ARGUMENT;
 	}
+	END_FOR
+
+	if (!userFunc)
+		return nullptr;
 
 	SSHORT defaults = 0;
 
 	AutoCacheRequest handle2(tdbb, irq_func_return, IRQ_REQUESTS);
 
 	FOR(REQUEST_HANDLE handle2 TRANSACTION_HANDLE transaction)
-		X IN RDB$FUNCTION_ARGUMENTS WITH
-		X.RDB$FUNCTION_NAME EQ metaName.identifier.c_str() AND
-		X.RDB$PACKAGE_NAME EQUIV NULLIF(metaName.package.c_str(), '')
+		X IN RDB$FUNCTION_ARGUMENTS
+		WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 X.RDB$FUNCTION_NAME EQ name.object.c_str() AND
+			 X.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '')
 		SORTED BY X.RDB$ARGUMENT_POSITION
 	{
 		if (!X.RDB$FIELD_SOURCE.NULL)
@@ -687,6 +706,7 @@ dsql_udf* METD_get_function(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 
 			FOR(REQUEST_HANDLE handle3 TRANSACTION_HANDLE transaction)
 				F IN RDB$FIELDS WITH
+				F.RDB$SCHEMA_NAME EQ X.RDB$FIELD_SOURCE_SCHEMA_NAME AND
 				F.RDB$FIELD_NAME EQ X.RDB$FIELD_SOURCE
 			{
 				if (X.RDB$ARGUMENT_POSITION == return_arg)
@@ -717,14 +737,20 @@ dsql_udf* METD_get_function(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 						!X.RDB$RELATION_NAME.NULL && X.RDB$RELATION_NAME[0])
 					{
 						// type of column used in declaration
-						if (isSystemRelation(tdbb, transaction, X.RDB$RELATION_NAME))
+						if (isSystemRelation(tdbb, transaction,
+								QualifiedName(X.RDB$RELATION_NAME, X.RDB$RELATION_SCHEMA_NAME)))
+						{
 							userFunc->udf_flags |= UDF_sys_based;
+						}
 					}
 					else if (!X.RDB$FIELD_SOURCE.NULL && X.RDB$FIELD_SOURCE[0])
 					{
 						// domain used in declaration
-						if (isSystemDomain(tdbb, transaction, X.RDB$FIELD_SOURCE))
+						if (isSystemDomain(tdbb, transaction,
+								QualifiedName(X.RDB$FIELD_SOURCE, X.RDB$FIELD_SOURCE_SCHEMA_NAME)))
+						{
 							userFunc->udf_flags |= UDF_sys_based;
+						}
 					}
 				}
 				else
@@ -896,19 +922,13 @@ dsql_udf* METD_get_function(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 
 	dbb->dbb_functions.put(userFunc->udf_name, userFunc);
 
-	if (userFunc->udf_private && metaName.package != dsqlScratch->package)
-	{
-		status_exception::raise(Arg::Gds(isc_private_function) <<
-			Arg::Str(metaName.identifier) << Arg::Str(metaName.package));
-	}
-
-	MET_dsql_cache_use(tdbb, SYM_udf, userFunc->udf_name.identifier, userFunc->udf_name.package);
+	MET_dsql_cache_use(tdbb, SYM_udf, userFunc->udf_name);
 
 	return userFunc;
 }
 
 
-void METD_get_primary_key(jrd_tra* transaction, const MetaName& relationName,
+void METD_get_primary_key(jrd_tra* transaction, const QualifiedName& relationName,
 	Array<NestConst<FieldNode> >& fields)
 {
 /**************************************
@@ -931,13 +951,12 @@ void METD_get_primary_key(jrd_tra* transaction, const MetaName& relationName,
 	AutoCacheRequest handle(tdbb, irq_primary_key, IRQ_REQUESTS);
 
 	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
-		X IN RDB$INDICES CROSS
-		Y IN RDB$INDEX_SEGMENTS
-		OVER RDB$INDEX_NAME CROSS
-		Z IN RDB$RELATION_CONSTRAINTS
-		OVER RDB$INDEX_NAME
-		WITH Z.RDB$RELATION_NAME EQ relationName.c_str()
-		AND Z.RDB$CONSTRAINT_TYPE EQ "PRIMARY KEY"
+		X IN RDB$INDICES
+		CROSS Y IN RDB$INDEX_SEGMENTS OVER RDB$SCHEMA_NAME, RDB$INDEX_NAME
+		CROSS Z IN RDB$RELATION_CONSTRAINTS OVER RDB$SCHEMA_NAME, RDB$INDEX_NAME
+		WITH Z.RDB$SCHEMA_NAME EQ relationName.schema.c_str() AND
+			 Z.RDB$RELATION_NAME EQ relationName.object.c_str() AND
+			 Z.RDB$CONSTRAINT_TYPE EQ "PRIMARY KEY"
 		SORTED BY Y.RDB$FIELD_POSITION
 	{
 		FieldNode* fieldNode = FB_NEW_POOL(pool) FieldNode(pool);
@@ -948,8 +967,7 @@ void METD_get_primary_key(jrd_tra* transaction, const MetaName& relationName,
 }
 
 
-dsql_prc* METD_get_procedure(jrd_tra* transaction, DsqlCompilerScratch* dsqlScratch,
-	const QualifiedName& name)
+dsql_prc* METD_get_procedure(jrd_tra* transaction, DsqlCompilerScratch* dsqlScratch, const QualifiedName& name)
 {
 /**************************************
  *
@@ -1003,24 +1021,14 @@ dsql_prc* METD_get_procedure(jrd_tra* transaction, DsqlCompilerScratch* dsqlScra
 	//
 	// I hope for a solution, involving savepoint logic.
 
-	QualifiedName metaName(name);
-
-	bool maybeUnqualified = dsqlScratch->package.hasData() && metaName.package.isEmpty();
-	if (maybeUnqualified)
-		metaName.package = dsqlScratch->package;
+	QualifiedName qualifiedName(name);
 
 	// Start by seeing if symbol is already defined
 
 	dsql_prc* procedure = NULL;
-	if (dbb->dbb_procedures.get(metaName, procedure))
+	if (dbb->dbb_procedures.get(qualifiedName, procedure))
 	{
-		if (procedure->prc_private && metaName.package != dsqlScratch->package)
-		{
-			status_exception::raise(Arg::Gds(isc_private_procedure) <<
-				Arg::Str(metaName.identifier) << Arg::Str(metaName.package));
-		}
-
-		if (MET_dsql_cache_use(tdbb, SYM_procedure, metaName.identifier, metaName.package))
+		if (MET_dsql_cache_use(tdbb, SYM_procedure, qualifiedName))
 			procedure->prc_flags |= PRC_dropped;
 	}
 
@@ -1032,36 +1040,24 @@ dsql_prc* METD_get_procedure(jrd_tra* transaction, DsqlCompilerScratch* dsqlScra
 
 	// now see if it is in the database
 
-	while (!procedure)
+	AutoCacheRequest handle1(tdbb, irq_procedure, IRQ_REQUESTS);
+
+	FOR(REQUEST_HANDLE handle1 TRANSACTION_HANDLE transaction)
+		X IN RDB$PROCEDURES
+		WITH X.RDB$SCHEMA_NAME EQ qualifiedName.schema.c_str() AND
+			 X.RDB$PROCEDURE_NAME EQ qualifiedName.object.c_str() AND
+			 X.RDB$PACKAGE_NAME EQUIV NULLIF(qualifiedName.package.c_str(), '')
 	{
-		AutoCacheRequest handle1(tdbb, irq_procedure, IRQ_REQUESTS);
-
-		FOR(REQUEST_HANDLE handle1 TRANSACTION_HANDLE transaction)
-			X IN RDB$PROCEDURES
-			WITH X.RDB$PROCEDURE_NAME EQ metaName.identifier.c_str() AND
-				 X.RDB$PACKAGE_NAME EQUIV NULLIF(metaName.package.c_str(), '')
-		{
-			fb_utils::exact_name(X.RDB$OWNER_NAME);
-
-			procedure = FB_NEW_POOL(dbb->dbb_pool) dsql_prc(dbb->dbb_pool);
-			procedure->prc_id = X.RDB$PROCEDURE_ID;
-			procedure->prc_name = metaName;
-			procedure->prc_owner = X.RDB$OWNER_NAME;
-			procedure->prc_private = !X.RDB$PRIVATE_FLAG.NULL && X.RDB$PRIVATE_FLAG != 0;
-		}
-		END_FOR
-
-		if (!procedure)
-		{
-			if (maybeUnqualified)
-			{
-				maybeUnqualified = false;
-				metaName.package = "";
-			}
-			else
-				return NULL;
-		}
+		procedure = FB_NEW_POOL(dbb->dbb_pool) dsql_prc(dbb->dbb_pool);
+		procedure->prc_id = X.RDB$PROCEDURE_ID;
+		procedure->prc_name = qualifiedName;
+		procedure->prc_owner = X.RDB$OWNER_NAME;
+		procedure->prc_private = !X.RDB$PRIVATE_FLAG.NULL && X.RDB$PRIVATE_FLAG != 0;
 	}
+	END_FOR
+
+	if (!procedure)
+		return nullptr;
 
 	// Lookup parameter stuff
 
@@ -1076,10 +1072,12 @@ dsql_prc* METD_get_procedure(jrd_tra* transaction, DsqlCompilerScratch* dsqlScra
 		FOR (REQUEST_HANDLE handle2 TRANSACTION_HANDLE transaction)
 			PR IN RDB$PROCEDURE_PARAMETERS
 			CROSS FLD IN RDB$FIELDS
-			WITH FLD.RDB$FIELD_NAME EQ PR.RDB$FIELD_SOURCE AND
-				 PR.RDB$PROCEDURE_NAME EQ metaName.identifier.c_str() AND
+			WITH PR.RDB$SCHEMA_NAME EQ qualifiedName.schema.c_str() AND
+				 PR.RDB$PROCEDURE_NAME EQ qualifiedName.object.c_str() AND
 				 PR.RDB$PARAMETER_TYPE = type AND
-				 PR.RDB$PACKAGE_NAME EQUIV NULLIF(metaName.package.c_str(), '')
+				 PR.RDB$PACKAGE_NAME EQUIV NULLIF(qualifiedName.package.c_str(), '') AND
+				 FLD.RDB$SCHEMA_NAME EQ PR.RDB$FIELD_SOURCE_SCHEMA_NAME AND
+				 FLD.RDB$FIELD_NAME EQ PR.RDB$FIELD_SOURCE
 			SORTED BY DESCENDING PR.RDB$PARAMETER_NUMBER
 		{
 			const SSHORT pr_collation_id_null = PR.RDB$COLLATION_ID.NULL;
@@ -1106,7 +1104,7 @@ dsql_prc* METD_get_procedure(jrd_tra* transaction, DsqlCompilerScratch* dsqlScra
 			// get parameter information
 
 			parameter->fld_name = PR.RDB$PARAMETER_NAME;
-			parameter->fieldSource = PR.RDB$FIELD_SOURCE;
+			parameter->fieldSource = QualifiedName(PR.RDB$FIELD_SOURCE, PR.RDB$FIELD_SOURCE_SCHEMA_NAME);
 
 			parameter->fld_id = PR.RDB$PARAMETER_NUMBER;
 			parameter->length = FLD.RDB$FIELD_LENGTH;
@@ -1136,30 +1134,24 @@ dsql_prc* METD_get_procedure(jrd_tra* transaction, DsqlCompilerScratch* dsqlScra
 				parameter->segLength = FLD.RDB$SEGMENT_LENGTH;
 
 			if (!PR.RDB$FIELD_NAME.NULL)
-			{
-				fb_utils::exact_name(PR.RDB$FIELD_NAME);
-				parameter->typeOfName = PR.RDB$FIELD_NAME;
-			}
+				parameter->typeOfName = QualifiedName(PR.RDB$FIELD_NAME);
 
 			if (!PR.RDB$RELATION_NAME.NULL)
-			{
-				fb_utils::exact_name(PR.RDB$RELATION_NAME);
-				parameter->typeOfTable = PR.RDB$RELATION_NAME;
-			}
+				parameter->typeOfTable = QualifiedName(PR.RDB$RELATION_NAME, PR.RDB$RELATION_SCHEMA_NAME);
 
-			if (parameter->typeOfTable.hasData())
+			if (parameter->typeOfTable.object.hasData())
 			{
-				if (isSystemRelation(tdbb, transaction, parameter->typeOfTable.c_str()))
+				if (isSystemRelation(tdbb, transaction, parameter->typeOfTable))
 					parameter->flags |= FLD_system;
 			}
-			else if (parameter->typeOfName.hasData())
+			else if (parameter->typeOfName.object.hasData())
 			{
-				if (isSystemDomain(tdbb, transaction, parameter->typeOfName.c_str()))
+				if (isSystemDomain(tdbb, transaction, parameter->typeOfName))
 					parameter->flags |= FLD_system;
 			}
-			else if (parameter->fieldSource.hasData())
+			else if (parameter->fieldSource.object.hasData())
 			{
-				if (isSystemDomain(tdbb, transaction, parameter->fieldSource.c_str()))
+				if (isSystemDomain(tdbb, transaction, parameter->fieldSource))
 					parameter->flags |= FLD_system;
 			}
 
@@ -1183,21 +1175,14 @@ dsql_prc* METD_get_procedure(jrd_tra* transaction, DsqlCompilerScratch* dsqlScra
 
 	dbb->dbb_procedures.put(procedure->prc_name, procedure);
 
-	if (procedure->prc_private && metaName.package != dsqlScratch->package)
-	{
-		status_exception::raise(Arg::Gds(isc_private_procedure) <<
-			Arg::Str(metaName.identifier) << Arg::Str(metaName.package));
-	}
-
-	MET_dsql_cache_use(tdbb, SYM_procedure, procedure->prc_name.identifier,
-		procedure->prc_name.package);
+	MET_dsql_cache_use(tdbb, SYM_procedure, procedure->prc_name);
 
 	return procedure;
 }
 
 
 dsql_rel* METD_get_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScratch,
-	const MetaName& name)
+	const QualifiedName& name)
 {
 /**************************************
  *
@@ -1242,9 +1227,10 @@ dsql_rel* METD_get_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 
 	FOR(REQUEST_HANDLE handle1 TRANSACTION_HANDLE transaction)
 		REL IN RDB$RELATIONS
-		CROSS RFR IN RDB$RELATION_FIELDS OVER RDB$RELATION_NAME
-		WITH REL.RDB$RELATION_NAME EQ name.c_str()
-		AND (REL.RDB$RELATION_ID MISSING OR RFR.RDB$FIELD_ID MISSING)
+		CROSS RFR IN RDB$RELATION_FIELDS OVER RDB$SCHEMA_NAME, RDB$RELATION_NAME
+		WITH REL.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 REL.RDB$RELATION_NAME EQ name.object.c_str() AND
+			 (REL.RDB$RELATION_ID MISSING OR RFR.RDB$FIELD_ID MISSING)
 	{
 		permanent = false;
 	}
@@ -1259,10 +1245,10 @@ dsql_rel* METD_get_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 	AutoCacheRequest handle2(tdbb, irq_relation, IRQ_REQUESTS);
 
 	FOR(REQUEST_HANDLE handle2 TRANSACTION_HANDLE transaction)
-		X IN RDB$RELATIONS WITH X.RDB$RELATION_NAME EQ name.c_str()
+		X IN RDB$RELATIONS
+		WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 X.RDB$RELATION_NAME EQ name.object.c_str()
 	{
-		fb_utils::exact_name(X.RDB$OWNER_NAME);
-
 		// Allocate from default or permanent pool as appropriate
 
 		if (!X.RDB$RELATION_ID.NULL)
@@ -1300,17 +1286,15 @@ dsql_rel* METD_get_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 	AutoCacheRequest handle3(tdbb, irq_fields, IRQ_REQUESTS);
 
 	FOR(REQUEST_HANDLE handle3 TRANSACTION_HANDLE transaction)
-		FLX IN RDB$FIELDS CROSS
-		RFR IN RDB$RELATION_FIELDS
-		WITH FLX.RDB$FIELD_NAME EQ RFR.RDB$FIELD_SOURCE
-		AND RFR.RDB$RELATION_NAME EQ name.c_str()
+		FLX IN RDB$FIELDS
+		CROSS RFR IN RDB$RELATION_FIELDS
+		WITH RFR.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 RFR.RDB$RELATION_NAME EQ name.object.c_str() AND
+			 FLX.RDB$SCHEMA_NAME EQUIV RFR.RDB$FIELD_SOURCE_SCHEMA_NAME AND
+			 FLX.RDB$FIELD_NAME EQ RFR.RDB$FIELD_SOURCE
 		SORTED BY RFR.RDB$FIELD_POSITION
 	{
-		// allocate the field block
-
-		fb_utils::exact_name(RFR.RDB$FIELD_NAME);
-		fb_utils::exact_name(RFR.RDB$FIELD_SOURCE);
-
+		// Allocate the field block
 		// Allocate from default or permanent pool as appropriate
 
 		dsql_fld* field = NULL;
@@ -1331,7 +1315,7 @@ dsql_rel* METD_get_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 			// get field information
 
 			field->fld_name = RFR.RDB$FIELD_NAME;
-			field->fieldSource = RFR.RDB$FIELD_SOURCE;
+			field->fieldSource = QualifiedName(RFR.RDB$FIELD_SOURCE, RFR.RDB$FIELD_SOURCE_SCHEMA_NAME);
 			field->length = FLX.RDB$FIELD_LENGTH;
 			field->scale = FLX.RDB$FIELD_SCALE;
 			field->subType = FLX.RDB$FIELD_SUB_TYPE;
@@ -1415,8 +1399,9 @@ bool METD_get_type(jrd_tra* transaction, const MetaName& name, const char* field
 	AutoCacheRequest handle(tdbb, irq_type, IRQ_REQUESTS);
 
 	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
-		X IN RDB$TYPES WITH
-		X.RDB$FIELD_NAME EQ field AND X.RDB$TYPE_NAME EQ name.c_str();
+		X IN RDB$TYPES
+		WITH X.RDB$FIELD_NAME EQ field AND
+			 X.RDB$TYPE_NAME EQ name.c_str()
 	{
 		found = true;
 		*value = X.RDB$TYPE;
@@ -1428,7 +1413,7 @@ bool METD_get_type(jrd_tra* transaction, const MetaName& name, const char* field
 
 
 dsql_rel* METD_get_view_base(jrd_tra* transaction, DsqlCompilerScratch* dsqlScratch,
-	const char* view_name, MetaNamePairMap& fields)
+	const QualifiedName& viewName, MetaNamePairMap& fields)
 {
 /**************************************
  *
@@ -1449,8 +1434,8 @@ dsql_rel* METD_get_view_base(jrd_tra* transaction, DsqlCompilerScratch* dsqlScra
 
 	validateTransaction(transaction);
 
-	dsql_rel* relation = NULL;
-
+	auto nextViewName = viewName;
+	dsql_rel* relation = nullptr;
 	bool first = true;
 	bool cont = true;
 	MetaNamePairMap previousAux;
@@ -1463,7 +1448,8 @@ dsql_rel* METD_get_view_base(jrd_tra* transaction, DsqlCompilerScratch* dsqlScra
 
 		FOR(REQUEST_HANDLE handle1 TRANSACTION_HANDLE transaction)
 			X IN RDB$VIEW_RELATIONS
-			WITH X.RDB$VIEW_NAME EQ view_name
+			WITH X.RDB$SCHEMA_NAME EQ nextViewName.schema.c_str() AND
+				 X.RDB$VIEW_NAME EQ nextViewName.object.c_str()
 		{
 			// return NULL if there is more than one context
 			if (X.RDB$VIEW_CONTEXT != 1 || X.RDB$CONTEXT_TYPE == VCT_PROCEDURE)
@@ -1473,10 +1459,8 @@ dsql_rel* METD_get_view_base(jrd_tra* transaction, DsqlCompilerScratch* dsqlScra
 				break;
 			}
 
-			fb_utils::exact_name(X.RDB$CONTEXT_NAME);
-			fb_utils::exact_name(X.RDB$RELATION_NAME);
-
-			relation = METD_get_relation(transaction, dsqlScratch, X.RDB$RELATION_NAME);
+			nextViewName = QualifiedName(X.RDB$RELATION_NAME, X.RDB$RELATION_SCHEMA_NAME);
+			relation = METD_get_relation(transaction, dsqlScratch, nextViewName);
 
 			Array<MetaName> ambiguities;
 			MetaNamePairMap currentAux;
@@ -1491,7 +1475,8 @@ dsql_rel* METD_get_view_base(jrd_tra* transaction, DsqlCompilerScratch* dsqlScra
 
 			FOR(REQUEST_HANDLE handle2 TRANSACTION_HANDLE transaction)
 				RFL IN RDB$RELATION_FIELDS
-				WITH RFL.RDB$RELATION_NAME EQ X.RDB$VIEW_NAME
+				WITH RFL.RDB$SCHEMA_NAME EQ X.RDB$SCHEMA_NAME AND
+					 RFL.RDB$RELATION_NAME EQ X.RDB$VIEW_NAME
 			{
 				if (RFL.RDB$BASE_FIELD.NULL || RFL.RDB$FIELD_NAME.NULL)
 					continue;
@@ -1534,9 +1519,7 @@ dsql_rel* METD_get_view_base(jrd_tra* transaction, DsqlCompilerScratch* dsqlScra
 
 			previousAux.takeOwnership(currentAux);
 
-			if (relation->rel_flags & REL_view)
-				view_name = X.RDB$RELATION_NAME;
-			else
+			if (!(relation->rel_flags & REL_view))
 			{
 				cont = false;
 				break;
@@ -1555,7 +1538,7 @@ dsql_rel* METD_get_view_base(jrd_tra* transaction, DsqlCompilerScratch* dsqlScra
 
 
 bool METD_get_view_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScratch,
-	const Jrd::MetaName& view_name, const Jrd::MetaName& relation_or_alias,
+	const Jrd::QualifiedName& view_name, const Jrd::QualifiedName& relation_or_alias,
 	dsql_rel*& relation, dsql_prc*& procedure)
 {
 /**************************************
@@ -1577,29 +1560,26 @@ bool METD_get_view_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 	AutoCacheRequest handle(tdbb, irq_view, IRQ_REQUESTS);
 
 	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
-		X IN RDB$VIEW_RELATIONS WITH X.RDB$VIEW_NAME EQ view_name.c_str()
+		X IN RDB$VIEW_RELATIONS
+		WITH X.RDB$SCHEMA_NAME EQ view_name.schema.c_str() AND
+			 X.RDB$VIEW_NAME EQ view_name.object.c_str()
 	{
-		fb_utils::exact_name(X.RDB$CONTEXT_NAME);
-		fb_utils::exact_name(X.RDB$RELATION_NAME);
+		QualifiedName relationName(X.RDB$RELATION_NAME, X.RDB$RELATION_SCHEMA_NAME);
 
-		if (relation_or_alias == X.RDB$RELATION_NAME ||
-			relation_or_alias == X.RDB$CONTEXT_NAME)
+		if (PASS1_compare_alias(relationName, relation_or_alias) ||
+			(relation_or_alias.schema.isEmpty() && relation_or_alias.object == X.RDB$CONTEXT_NAME))
 		{
-			if ( (relation = METD_get_relation(transaction, dsqlScratch, X.RDB$RELATION_NAME)) )
+			if ((relation = METD_get_relation(transaction, dsqlScratch, relationName)))
 				return true;
 
-			const QualifiedName procName(X.RDB$RELATION_NAME,
-				X.RDB$PACKAGE_NAME.NULL ? nullptr : X.RDB$PACKAGE_NAME);
+			const QualifiedName procName(X.RDB$RELATION_NAME, X.RDB$RELATION_SCHEMA_NAME, X.RDB$PACKAGE_NAME);
 
 			if ( (procedure = METD_get_procedure(transaction, dsqlScratch, procName)) )
 				return true;
 		}
 
-		if (METD_get_view_relation(transaction, dsqlScratch, X.RDB$RELATION_NAME,
-			relation_or_alias, relation, procedure))
-		{
+		if (METD_get_view_relation(transaction, dsqlScratch, relationName, relation_or_alias, relation, procedure))
 			return true;
-		}
 	}
 	END_FOR
 

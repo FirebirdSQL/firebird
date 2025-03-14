@@ -149,6 +149,21 @@ void MetadataBuilder::setField(CheckStatusWrapper* status, unsigned index, const
 	}
 }
 
+void MetadataBuilder::setSchema(CheckStatusWrapper* status, unsigned index, const char* schema)
+{
+	try
+	{
+		MutexLockGuard g(mtx, FB_FUNCTION);
+
+		indexError(index, "setSchema");
+		msgMetadata->items[index].schema = schema;
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+	}
+}
+
 void MetadataBuilder::setRelation(CheckStatusWrapper* status, unsigned index, const char* relation)
 {
 	try
@@ -405,6 +420,9 @@ void MsgMetadata::assign(IMessageMetadata* from)
 	for (unsigned index = 0; index < count; ++index)
 	{
 		items[index].field = from->getField(&status, index);
+		check(&status);
+
+		items[index].schema = from->getSchema(&status, index);
 		check(&status);
 
 		items[index].relation = from->getRelation(&status, index);

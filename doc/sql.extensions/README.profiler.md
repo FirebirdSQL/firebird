@@ -109,6 +109,8 @@ execute procedure rdb$profiler.finish_session(true);
 
 -- Data analysis
 
+set search_path to plg$profiler, public, system;
+
 set transaction read committed;
 
 select * from plg$prof_sessions;
@@ -243,7 +245,9 @@ Input parameters:
 
 # Snapshot tables
 
-Snapshot tables (as well views and sequence) are automatically created in the first usage of the profiler. They are owned by the database owner, with read/write permissions for `PUBLIC`.
+The profiler schema, snapshot tables, views and sequence are automatically created in the first usage of the profiler.
+
+They are owned by the database owner, with usage/read/write permissions for the RDB$PROFILER role, granted by default to `PUBLIC`.
 
 When a session is deleted, the related data in other profiler snapshot tables are automatically deleted too through foreign keys with `DELETE CASCADE` option.
 
@@ -265,6 +269,7 @@ Below is the list of tables that stores profile data.
  - `STATEMENT_ID` type `BIGINT` - Statement ID
  - `PARENT_STATEMENT_ID` type `BIGINT` - Parent statement ID - related to sub routines
  - `STATEMENT_TYPE` type `VARCHAR(20) CHARACTER SET UTF8` - BLOCK, FUNCTION, PROCEDURE or TRIGGER
+ - `SCHEMA_NAME` type `CHAR(63) CHARACTER SET UTF8` - Schema name of FUNCTION, PROCEDURE or TRIGGER
  - `PACKAGE_NAME` type `CHAR(63) CHARACTER SET UTF8` - Package of FUNCTION or PROCEDURE
  - `ROUTINE_NAME` type `CHAR(63) CHARACTER SET UTF8` - Routine name of FUNCTION, PROCEDURE or TRIGGER
  - `SQL_TEXT` type `BLOB subtype TEXT CHARACTER SET UTF8` - SQL text for BLOCK
@@ -346,6 +351,7 @@ After hotspots are found, one can drill down in the data at the request level th
 select req.profile_id,
        req.statement_id,
        sta.statement_type,
+       sta.schema_name,
        sta.package_name,
        sta.routine_name,
        sta.parent_statement_id,
@@ -371,6 +377,7 @@ select req.profile_id,
   group by req.profile_id,
            req.statement_id,
            sta.statement_type,
+           sta.schema_name,
            sta.package_name,
            sta.routine_name,
            sta.parent_statement_id,
@@ -384,6 +391,7 @@ select req.profile_id,
 select pstat.profile_id,
        pstat.statement_id,
        sta.statement_type,
+       sta.schema_name,
        sta.package_name,
        sta.routine_name,
        sta.parent_statement_id,
@@ -411,6 +419,7 @@ select pstat.profile_id,
   group by pstat.profile_id,
            pstat.statement_id,
            sta.statement_type,
+           sta.schema_name,
            sta.package_name,
            sta.routine_name,
            sta.parent_statement_id,
@@ -426,6 +435,7 @@ select pstat.profile_id,
 select rstat.profile_id,
        rstat.statement_id,
        sta.statement_type,
+       sta.schema_name,
        sta.package_name,
        sta.routine_name,
        sta.parent_statement_id,
@@ -474,6 +484,7 @@ select rstat.profile_id,
   group by rstat.profile_id,
            rstat.statement_id,
            sta.statement_type,
+           sta.schema_name,
            sta.package_name,
            sta.routine_name,
            sta.parent_statement_id,

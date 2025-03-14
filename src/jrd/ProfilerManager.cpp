@@ -666,8 +666,7 @@ ProfilerManager::Statement* ProfilerManager::getStatement(Request* request)
 		 statement && !currentSession->statements.exist(statement->getStatementId());
 		 statement = statement->parentStatement)
 	{
-		MetaName packageName;
-		MetaName routineName;
+		QualifiedName name;
 		const char* type;
 
 		if (const auto routine = statement->getRoutine())
@@ -677,13 +676,12 @@ ProfilerManager::Statement* ProfilerManager::getStatement(Request* request)
 			else if (statement->function)
 				type = "FUNCTION";
 
-			packageName = routine->getName().package;
-			routineName = routine->getName().identifier;
+			name = routine->getName();
 		}
-		else if (statement->triggerName.hasData())
+		else if (statement->triggerName.object.hasData())
 		{
 			type = "TRIGGER";
-			routineName = statement->triggerName;
+			name = statement->triggerName;
 		}
 		else
 			type = "BLOCK";
@@ -691,10 +689,10 @@ ProfilerManager::Statement* ProfilerManager::getStatement(Request* request)
 		const StmtNumber parentStatementId = statement->parentStatement ?
 			statement->parentStatement->getStatementId() : 0;
 
-		LogLocalStatus status("Profiler defineStatement");
-		currentSession->pluginSession->defineStatement(&status,
+		LogLocalStatus status("Profiler defineStatement2");
+		currentSession->pluginSession->defineStatement2(&status,
 			(SINT64) statement->getStatementId(), (SINT64) parentStatementId,
-			type, packageName.nullStr(), routineName.nullStr(),
+			type, name.schema.nullStr(), name.package.nullStr(), name.object.nullStr(),
 			(statement->sqlText.hasData() ? statement->sqlText->c_str() : ""));
 
 		auto profileStatement = currentSession->statements.put(statement->getStatementId());

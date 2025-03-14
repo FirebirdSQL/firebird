@@ -27,6 +27,7 @@
 #include "../isql/FrontendLexer.h"
 #include "../jrd/obj.h"
 #include "../common/classes/MetaString.h"
+#include "../common/classes/QualifiedMetaString.h"
 #include <optional>
 #include <string>
 #include <string_view>
@@ -46,10 +47,10 @@ public:
 
 	struct InvalidNode {};
 
-	struct AddNode { Firebird::MetaString tableName; };
+	struct AddNode { Firebird::QualifiedMetaString tableName; };
 	struct BlobDumpViewNode { ISC_QUAD blobId; std::optional<std::string> file; };
 	struct ConnectNode { std::vector<Token> args; };
-	struct CopyNode { Firebird::MetaString source; Firebird::MetaString destination; std::string database; };
+	struct CopyNode { Firebird::QualifiedMetaString source; Firebird::QualifiedMetaString destination; std::string database; };
 	struct CreateDatabaseNode { std::vector<Token> args; };
 	struct DropDatabaseNode {};
 	struct EditNode { std::optional<std::string> file; };
@@ -76,7 +77,7 @@ public:
 	struct SetListNode { std::string arg; };
 	struct SetLocalTimeoutNode { std::string arg; };
 	struct SetMaxRowsNode { std::string arg; };
-	struct SetNamesNode { std::optional<Firebird::MetaString> name; };
+	struct SetNamesNode { std::optional<Firebird::QualifiedMetaString> name; };
 	struct SetPerTableStatsNode { std::string arg; };
 	struct SetPlanNode { std::string arg; };
 	struct SetPlanOnlyNode { std::string arg; };
@@ -91,31 +92,32 @@ public:
 	struct SetWireStatsNode { std::string arg; };
 
 	struct ShowNode {};
-	struct ShowChecksNode { std::optional<Firebird::MetaString> name; };
-	struct ShowCollationsNode { std::optional<Firebird::MetaString> name; };
+	struct ShowChecksNode { std::optional<Firebird::QualifiedMetaString> name; };
+	struct ShowCollationsNode { std::optional<Firebird::QualifiedMetaString> name; };
 	struct ShowCommentsNode {};
 	struct ShowDatabaseNode {};
-	struct ShowDomainsNode { std::optional<Firebird::MetaString> name; };
-	struct ShowDependenciesNode { std::optional<Firebird::MetaString> name; };
-	struct ShowExceptionsNode { std::optional<Firebird::MetaString> name; };
+	struct ShowDomainsNode { std::optional<Firebird::QualifiedMetaString> name; };
+	struct ShowDependenciesNode { std::optional<Firebird::QualifiedMetaString> name; };
+	struct ShowExceptionsNode { std::optional<Firebird::QualifiedMetaString> name; };
 	struct ShowFiltersNode { std::optional<Firebird::MetaString> name; };
-	struct ShowFunctionsNode { std::optional<Firebird::MetaString> name; std::optional<Firebird::MetaString> package; };
-	struct ShowGeneratorsNode { std::optional<Firebird::MetaString> name; };
-	struct ShowGrantsNode { std::optional<Firebird::MetaString> name; };
-	struct ShowIndexesNode { std::optional<Firebird::MetaString> name; };
+	struct ShowFunctionsNode { std::optional<Firebird::QualifiedMetaString> name; };
+	struct ShowGeneratorsNode { std::optional<Firebird::QualifiedMetaString> name; };
+	struct ShowGrantsNode { std::optional<Firebird::QualifiedMetaString> name; };
+	struct ShowIndexesNode { std::optional<Firebird::QualifiedMetaString> name; };
 	struct ShowMappingsNode { std::optional<Firebird::MetaString> name; };
-	struct ShowPackagesNode { std::optional<Firebird::MetaString> name; };
-	struct ShowProceduresNode { std::optional<Firebird::MetaString> name; std::optional<Firebird::MetaString> package; };
+	struct ShowPackagesNode { std::optional<Firebird::QualifiedMetaString> name; };
+	struct ShowProceduresNode { std::optional<Firebird::QualifiedMetaString> name; };
 	struct ShowPublicationsNode { std::optional<Firebird::MetaString> name; };
 	struct ShowRolesNode { std::optional<Firebird::MetaString> name; };
-	struct ShowSecClassesNode { std::optional<Firebird::MetaString> name; bool detail = false; };
+	struct ShowSchemasNode { std::optional<Firebird::MetaString> name; };
+	struct ShowSecClassesNode { std::optional<Firebird::QualifiedMetaString> name; bool detail = false; };
 	struct ShowSqlDialectNode {};
 	struct ShowSystemNode { std::optional<ObjectType> objType; };
-	struct ShowTablesNode { std::optional<Firebird::MetaString> name; };
-	struct ShowTriggersNode { std::optional<Firebird::MetaString> name; };
+	struct ShowTablesNode { std::optional<Firebird::QualifiedMetaString> name; };
+	struct ShowTriggersNode { std::optional<Firebird::QualifiedMetaString> name; };
 	struct ShowUsersNode {};
 	struct ShowVersionNode {};
-	struct ShowViewsNode { std::optional<Firebird::MetaString> name; };
+	struct ShowViewsNode { std::optional<Firebird::QualifiedMetaString> name; };
 	struct ShowWireStatsNode {};
 
 	using AnySetNode = std::variant<
@@ -172,6 +174,7 @@ public:
 		ShowProceduresNode,
 		ShowPublicationsNode,
 		ShowRolesNode,
+		ShowSchemasNode,
 		ShowSecClassesNode,
 		ShowSqlDialectNode,
 		ShowSystemNode,
@@ -249,6 +252,10 @@ private:
 	std::optional<AnyShowNode> parseShowOptName(std::string_view showCommand,
 		std::string_view testCommand, unsigned testCommandMinLen = 0);
 
+	template <typename Node>
+	std::optional<AnyShowNode> parseShowOptQualifiedName(std::string_view showCommand,
+		std::string_view testCommand, unsigned testCommandMinLen = 0);
+
 	bool parseEof()
 	{
 		return lexer.getToken().type == Token::TYPE_EOF;
@@ -260,6 +267,50 @@ private:
 
 		if (token.type != Token::TYPE_EOF)
 			return Firebird::MetaString(token.processedText.c_str());
+
+		return std::nullopt;
+	}
+
+	std::optional<Firebird::QualifiedMetaString> parseQualifiedName(bool allowPackage = false)
+	{
+		if (const auto optName1 = parseName())
+		{
+			Firebird::QualifiedMetaString name(optName1.value());
+
+			auto lexerPos = lexer.getPos();
+			auto token = lexer.getToken();
+
+			if (token.type == Token::TYPE_OTHER && token.rawText == ".")
+			{
+				if (const auto optName2 = parseName())
+				{
+					name.schema = name.object;
+					name.object = optName2.value();
+
+					lexerPos = lexer.getPos();
+
+					if (allowPackage)
+					{
+						token = lexer.getToken();
+
+						if (token.type == Token::TYPE_OTHER && token.rawText == ".")
+						{
+							if (const auto optName3 = parseName())
+							{
+								name.package = name.object;
+								name.object = optName3.value();
+
+								lexerPos = lexer.getPos();
+							}
+						}
+					}
+				}
+			}
+
+			lexer.setPos(lexerPos);
+
+			return name;
+		}
 
 		return std::nullopt;
 	}

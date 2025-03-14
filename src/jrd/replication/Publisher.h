@@ -44,7 +44,8 @@ void REPL_modify(Jrd::thread_db* tdbb, const Jrd::record_param* orgRpb,
 				 const Jrd::record_param* newRpb, Jrd::jrd_tra* transaction);
 void REPL_erase(Jrd::thread_db* tdbb, const Jrd::record_param* rpb, Jrd::jrd_tra* transaction);
 void REPL_gen_id(Jrd::thread_db* tdbb, SLONG genId, SINT64 value);
-void REPL_exec_sql(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction, const Firebird::string& sql);
+void REPL_exec_sql(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction, const Firebird::string& sql,
+	const Firebird::ObjectsArray<Firebird::MetaString>& schemaSearchPath);
 void REPL_journal_switch(Jrd::thread_db* tdbb);
 
 #endif // JRD_REPLICATION_PUBLISHER_H

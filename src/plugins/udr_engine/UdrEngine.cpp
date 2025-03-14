@@ -642,7 +642,7 @@ template <typename T> T* Engine::findNode(ThrowStatusWrapper* status,
 
 void Engine::open(ThrowStatusWrapper* /*status*/, IExternalContext* /*context*/, char* name, unsigned nameSize)
 {
-	strncpy(name, "UTF-8", nameSize);
+	strncpy(name, "SYSTEM.UTF8", nameSize);
 }
 
 

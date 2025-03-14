@@ -149,7 +149,6 @@ enum irq_type_t
 	irq_domain,				// DSQL/METD: lookup a domain
 	irq_type,				// DSQL/METD: lookup a symbolic name in RDB$TYPES
 	irq_cs_name,			// DSQL/METD: lookup a charset name
-	irq_default_cs,			// DSQL/METD: lookup the default charset
 	irq_rel_ids,			// DSQL/METD: check relation/field ids
 	irq_comp_circ_dpd,		// check computed circular dependencies
 	irq_grant10,			// process grant option (packages)

@@ -24,13 +24,13 @@
 #include "../common/classes/array.h"
 #include "../common/dsc.h"
 #include "../common/classes/NestConst.h"
+#include "../jrd/QualifiedName.h"
 #include "../jrd/val.h"
 #include "../dsql/Nodes.h"
 
 namespace Jrd
 {
 	class ValueListNode;
-	class QualifiedName;
 
 	class Function final : public Routine
 	{

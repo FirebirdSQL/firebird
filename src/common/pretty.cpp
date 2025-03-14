@@ -815,6 +815,7 @@ static int print_sdl_verb( ctl* control, SSHORT level)
 		return 0;
 
 	case isc_sdl_field:
+	case isc_sdl_schema:
 	case isc_sdl_relation:
 		print_string(control, offset);
 		break;

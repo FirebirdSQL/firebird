@@ -181,7 +181,11 @@
     <ClCompile Include="..\..\..\src\common\tests\StringTest.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\tests\AlignerTest.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\tests\ArrayTest.cpp" />
+    <ClCompile Include="..\..\..\src\common\classes\tests\ClumpletTest.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\tests\DoublyLinkedListTest.cpp" />
+    <ClCompile Include="..\..\..\src\common\classes\tests\MetaStringTest.cpp" />
+    <ClCompile Include="..\..\..\src\common\classes\tests\QualifiedMetaStringTest.cpp" />
+    <ClCompile Include="..\..\..\src\common\classes\tests\VectorTest.cpp" />
     <ClCompile Include="..\..\..\src\yvalve\gds.cpp" />
   </ItemGroup>
   <ItemGroup>

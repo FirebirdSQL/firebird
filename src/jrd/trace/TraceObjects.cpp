@@ -642,7 +642,7 @@ TraceRuntimeStats::TraceRuntimeStats(Attachment* att, RuntimeStatistics* baselin
 	m_info.pin_records_fetched = records_fetched;
 
 	if (baseline && stats)
-		baseline->computeDifference(att, *stats, m_info, m_counts);
+		baseline->computeDifference(att, *stats, m_info, m_counts, m_tempNames);
 	else
 	{
 		// Report all zero counts for the moment.

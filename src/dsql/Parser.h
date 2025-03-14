@@ -225,6 +225,11 @@ private:
 		return (name ? *name : MetaName());
 	}
 
+	QualifiedName optName(QualifiedName* name)
+	{
+		return (name ? *name : QualifiedName());
+	}
+
 	void transformString(const char* start, unsigned length, Firebird::string& dest);
 	Firebird::string makeParseStr(const Position& p1, const Position& p2);
 	ParameterNode* make_parameter();
@@ -323,6 +328,11 @@ private:
 		return clause.hasData();
 	}
 
+	bool isDuplicateClause(const QualifiedName& clause)
+	{
+		return clause.object.hasData();
+	}
+
 	bool isDuplicateClause(const Firebird::TriState& clause)
 	{
 		return clause.isAssigned();
@@ -340,7 +350,7 @@ private:
 		return clause.hasData();
 	}
 
-	void setCollate(TypeClause* fld, MetaName* name)
+	void setCollate(TypeClause* fld, QualifiedName* name)
 	{
 		if (name)
 			setClause(fld->collate, "COLLATE", *name);
@@ -380,7 +390,7 @@ private:
 	DsqlStatement* parsedStatement;
 
 	// Parser feedback for lexer
-	MetaName* introducerCharSetName = nullptr;
+	QualifiedName* introducerCharSetName = nullptr;
 
 	// These value/posn are taken from the lexer
 	YYSTYPE yylval;

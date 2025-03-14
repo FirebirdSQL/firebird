@@ -72,6 +72,12 @@ const FB_SIZE_T MAX_SQL_IDENTIFIER_LEN = METADATA_IDENTIFIER_CHAR_LEN * METADATA
 const FB_SIZE_T MAX_SQL_IDENTIFIER_SIZE = MAX_SQL_IDENTIFIER_LEN + 1;
 const FB_SIZE_T MAX_CONFIG_NAME_LEN = 63;
 
+// Every character of the name may be a double-quote needed to be escaped (with another double-quote).
+// The name would also need to be enclosed in double-quotes.
+// There is two names, separated by a dot.
+const FB_SIZE_T MAX_QUALIFIED_NAME_TO_STRING_LEN =
+	((METADATA_IDENTIFIER_CHAR_LEN * 2 + 2) * 2 + 1) * METADATA_BYTES_PER_CHAR;
+
 const ULONG MAX_SQL_LENGTH = 10 * 1024 * 1024; // 10 MB - just a safety check
 
 const char* const DB_KEY_NAME = "DB_KEY";
@@ -98,12 +104,12 @@ const char* const UNIQUE_CNSTRT		= "UNIQUE";
 const char* const CHECK_CNSTRT		= "CHECK";
 const char* const NOT_NULL_CNSTRT	= "NOT NULL";
 
-const char* const REL_SCOPE_PERSISTENT		= "persistent table \"%s\"";
-const char* const REL_SCOPE_GTT_PRESERVE	= "global temporary table \"%s\" of type ON COMMIT PRESERVE ROWS";
-const char* const REL_SCOPE_GTT_DELETE		= "global temporary table \"%s\" of type ON COMMIT DELETE ROWS";
-const char* const REL_SCOPE_EXTERNAL		= "external table \"%s\"";
-const char* const REL_SCOPE_VIEW			= "view \"%s\"";
-const char* const REL_SCOPE_VIRTUAL			= "virtual table \"%s\"";
+const char* const REL_SCOPE_PERSISTENT		= "persistent table %s";
+const char* const REL_SCOPE_GTT_PRESERVE	= "global temporary table %s of type ON COMMIT PRESERVE ROWS";
+const char* const REL_SCOPE_GTT_DELETE		= "global temporary table %s of type ON COMMIT DELETE ROWS";
+const char* const REL_SCOPE_EXTERNAL		= "external table %s";
+const char* const REL_SCOPE_VIEW			= "view %s";
+const char* const REL_SCOPE_VIRTUAL			= "virtual table %s";
 
 // literal strings in rdb$ref_constraints to be used to identify
 // the cascade actions for referential constraints. Used
@@ -127,6 +133,9 @@ const int IMPLICIT_PK_PREFIX_LEN = 11;
 // The invisible "id zero" generator.
 const char* const MASTER_GENERATOR = ""; //Was "RDB$GENERATORS";
 
+constexpr const char* SYSTEM_SCHEMA = "SYSTEM";
+constexpr const char* PUBLIC_SCHEMA = "PUBLIC";
+constexpr const char* PLG_LEGACY_SEC_SCHEMA = "PLG$LEGACY_SEC";
 
 // Automatically created security classes for SQL objects.
 // Keep in sync with trig.h
@@ -136,6 +145,10 @@ const char* const SQL_SECCLASS_PREFIX		= "SQL$";
 const int SQL_SECCLASS_PREFIX_LEN			= 4;
 const char* const SQL_FLD_SECCLASS_PREFIX	= "SQL$GRANT";
 const int SQL_FLD_SECCLASS_PREFIX_LEN		= 9;
+
+const char* const SQL_DDL_SECCLASS_FORMAT	= "SQL$D%02d%s";
+const int SQL_DDL_SECCLASS_PREFIX_LEN		= 7;
+
 const char* const GEN_SECCLASS_PREFIX		= "GEN$";
 const int GEN_SECCLASS_PREFIX_LEN			= 4;
 
@@ -396,7 +409,10 @@ static const char* const DDL_TRIGGER_ACTION_NAMES[][2] =
 	{"DROP", "PACKAGE BODY"},
 	{"CREATE", "MAPPING"},
 	{"ALTER", "MAPPING"},
-	{"DROP", "MAPPING"}
+	{"DROP", "MAPPING"},
+	{"CREATE", "SCHEMA"},
+	{"ALTER", "SCHEMA"},
+	{"DROP", "SCHEMA"}
 };
 
 const int DDL_TRIGGER_BEFORE	= 0;
@@ -449,6 +465,9 @@ const int DDL_TRIGGER_DROP_PACKAGE_BODY			= 44;
 const int DDL_TRIGGER_CREATE_MAPPING			= 45;
 const int DDL_TRIGGER_ALTER_MAPPING				= 46;
 const int DDL_TRIGGER_DROP_MAPPING				= 47;
+const int DDL_TRIGGER_CREATE_SCHEMA				= 48;
+const int DDL_TRIGGER_ALTER_SCHEMA				= 49;
+const int DDL_TRIGGER_DROP_SCHEMA				= 50;
 
 // that's how database trigger action types are encoded
 //    (TRIGGER_TYPE_DB | type)

@@ -147,7 +147,8 @@ Function* Function::lookup(thread_db* tdbb, const QualifiedName& name, bool nosc
 
 	FOR(REQUEST_HANDLE request)
 		X IN RDB$FUNCTIONS
-		WITH X.RDB$FUNCTION_NAME EQ name.identifier.c_str() AND
+		WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 X.RDB$FUNCTION_NAME EQ name.object.c_str() AND
 			 X.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '')
 	{
 		function = loadMetadata(tdbb, X.RDB$FUNCTION_ID, noscan, 0);
@@ -218,35 +219,34 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 
 		FOR(REQUEST_HANDLE request_fun)
 			X IN RDB$FUNCTIONS
-			WITH X.RDB$FUNCTION_ID EQ id
+			CROSS SCH IN RDB$SCHEMAS
+			WITH X.RDB$FUNCTION_ID EQ id AND
+				 SCH.RDB$SCHEMA_NAME EQ X.RDB$SCHEMA_NAME
 		{
-			function->setName(QualifiedName(X.RDB$FUNCTION_NAME,
+			function->setName(QualifiedName(X.RDB$FUNCTION_NAME, X.RDB$SCHEMA_NAME,
 				(X.RDB$PACKAGE_NAME.NULL ? NULL : X.RDB$PACKAGE_NAME)));
 
 			function->owner = X.RDB$OWNER_NAME;
 			TriState ssDefiner;
 
 			if (!X.RDB$SECURITY_CLASS.NULL)
-			{
-				function->setSecurityName(X.RDB$SECURITY_CLASS);
-			}
+				function->setSecurityName(QualifiedName(X.RDB$SECURITY_CLASS, SCH.RDB$SECURITY_CLASS));
 			else if (!X.RDB$PACKAGE_NAME.NULL)
 			{
 				AutoCacheRequest requestHandle(tdbb, irq_l_procedure_pkg_class, IRQ_REQUESTS);
 
 				FOR (REQUEST_HANDLE requestHandle)
 					PKG IN RDB$PACKAGES
-					WITH PKG.RDB$PACKAGE_NAME EQ X.RDB$PACKAGE_NAME
-
+					WITH PKG.RDB$SCHEMA_NAME EQ SCH.RDB$SCHEMA_NAME AND
+						 PKG.RDB$PACKAGE_NAME EQ X.RDB$PACKAGE_NAME
+				{
 					if (!PKG.RDB$SECURITY_CLASS.NULL)
-					{
-						function->setSecurityName(PKG.RDB$SECURITY_CLASS);
-					}
+						function->setSecurityName(QualifiedName(PKG.RDB$SECURITY_CLASS, SCH.RDB$SECURITY_CLASS));
 
 					// SQL SECURITY of function must be the same if it's defined in package
 					if (!PKG.RDB$SQL_SECURITY.NULL)
 						ssDefiner = (bool) PKG.RDB$SQL_SECURITY;
-
+				}
 				END_FOR
 			}
 
@@ -255,7 +255,7 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 				if (!X.RDB$SQL_SECURITY.NULL)
 					ssDefiner = (bool) X.RDB$SQL_SECURITY;
 				else
-					ssDefiner = MET_get_ss_definer(tdbb);
+					ssDefiner = MET_get_ss_definer(tdbb, X.RDB$SCHEMA_NAME);
 			}
 
 			if (ssDefiner.asBool())
@@ -274,7 +274,8 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 
 			FOR(REQUEST_HANDLE request_arg)
 				Y IN RDB$FUNCTION_ARGUMENTS
-				WITH Y.RDB$FUNCTION_NAME EQ function->getName().identifier.c_str() AND
+				WITH Y.RDB$SCHEMA_NAME EQ function->getName().schema.c_str() AND
+					 Y.RDB$FUNCTION_NAME EQ function->getName().object.c_str() AND
 					 Y.RDB$PACKAGE_NAME EQUIV NULLIF(function->getName().package.c_str(), '')
 				SORTED BY Y.RDB$ARGUMENT_POSITION
 			{
@@ -310,13 +311,14 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 
 				if (!Y.RDB$FIELD_SOURCE.NULL)
 				{
-					parameter->prm_field_source = Y.RDB$FIELD_SOURCE;
+					parameter->prm_field_source = QualifiedName(Y.RDB$FIELD_SOURCE, Y.RDB$FIELD_SOURCE_SCHEMA_NAME);
 
 					AutoCacheRequest request_arg_fld(tdbb, irq_l_arg_fld, IRQ_REQUESTS);
 
 					FOR(REQUEST_HANDLE request_arg_fld)
 						F IN RDB$FIELDS
-						WITH F.RDB$FIELD_NAME = Y.RDB$FIELD_SOURCE
+						WITH F.RDB$SCHEMA_NAME = Y.RDB$FIELD_SOURCE_SCHEMA_NAME AND
+							 F.RDB$FIELD_NAME = Y.RDB$FIELD_SOURCE
 					{
 						DSC_make_descriptor(&parameter->prm_desc, F.RDB$FIELD_TYPE,
 											F.RDB$FIELD_SCALE, F.RDB$FIELD_LENGTH,
@@ -349,7 +351,7 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 				}
 
 				if (!Y.RDB$RELATION_NAME.NULL)
-					parameter->prm_type_of_table = Y.RDB$RELATION_NAME;
+					parameter->prm_type_of_table = QualifiedName(Y.RDB$RELATION_NAME, Y.RDB$RELATION_SCHEMA_NAME);
 
 				if (!Y.RDB$FIELD_NAME.NULL)
 					parameter->prm_type_of_column = Y.RDB$FIELD_NAME;
@@ -364,7 +366,7 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 					try
 					{
 						parameter->prm_default_value = static_cast<ValueExprNode*>(MET_parse_blob(
-							tdbb, NULL, &default_value, NULL, NULL, false, false));
+							tdbb, &function->getName().schema, NULL, &default_value, NULL, NULL, false, false));
 					}
 					catch (const Exception&)
 					{
@@ -396,7 +398,7 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 			// causes an exception.  This is done at this time to save us from preparing
 			// (thus allocating) this message every time the function is called.
 			function->fun_exception_message.printf(EXCEPTION_MESSAGE,
-				function->getName().toString().c_str(), X.RDB$ENTRYPOINT, X.RDB$MODULE_NAME);
+				function->getName().toQuotedString().c_str(), X.RDB$ENTRYPOINT, X.RDB$MODULE_NAME);
 
 			if (!X.RDB$DETERMINISTIC_FLAG.NULL)
 				function->fun_deterministic = (X.RDB$DETERMINISTIC_FLAG != 0);
@@ -455,7 +457,7 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 					}
 					else if (!X.RDB$FUNCTION_BLR.NULL)
 					{
-						const string name = function->getName().toString();
+						const string name = function->getName().toQuotedString();
 
 						try
 						{
@@ -608,7 +610,7 @@ bool Function::reload(thread_db* tdbb)
 				StaticStatusVector temp_status;
 				ex.stuffException(temp_status);
 
-				const string name = this->getName().toString();
+				const string name = this->getName().toQuotedString();
 				(Arg::Gds(isc_bad_fun_BLR) << Arg::Str(name)
 					<< Arg::StatusVector(temp_status.begin())).raise();
 			}

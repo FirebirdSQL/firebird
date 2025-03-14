@@ -24,8 +24,15 @@
 #ifndef ISQL_EXTRA_PROTO_H
 #define ISQL_EXTRA_PROTO_H
 
-int	EXTRACT_ddl(LegacyTables, const SCHAR*);
-int	EXTRACT_list_table(const SCHAR*, const SCHAR*, bool, SSHORT);
+#include <functional>
+#include "../common/classes/MetaString.h"
+#include "../common/classes/QualifiedMetaString.h"
+
+using GetDefaultCharSetForSchemaFunc = std::function<SSHORT (const Firebird::MetaString& schemaName)>;
+
+int	EXTRACT_ddl(LegacyTables, const Firebird::QualifiedMetaString&);
+int	EXTRACT_list_table(const Firebird::QualifiedMetaString&, const Firebird::QualifiedMetaString&, bool,
+	GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc);
 processing_state	EXTRACT_list_grants (const SCHAR*);
 
 #endif // ISQL_EXTRA_PROTO_H

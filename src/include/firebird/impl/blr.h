@@ -74,8 +74,10 @@
 #define blr_timestamp_tz	(unsigned char)29
 #define blr_ex_time_tz		(unsigned char)30
 #define blr_ex_timestamp_tz	(unsigned char)31
+#define blr_domain_name3	(unsigned char)32
+#define blr_column_name3	(unsigned char)33
 
-// first sub parameter for blr_domain_name[2]
+// first sub parameter for blr_column_name* and blr_domain_name*
 #define blr_domain_type_of	(unsigned char)0
 #define blr_domain_full		(unsigned char)1
 
@@ -96,6 +98,8 @@
 #define blr_exception_msg		(unsigned char)6
 #define blr_exception_params	(unsigned char)7
 #define blr_sql_state			(unsigned char)8
+#define blr_exception2			(unsigned char)9
+#define blr_exception3			(unsigned char)10
 
 #define blr_version4		(unsigned char)4
 #define blr_version5		(unsigned char)5
@@ -257,6 +261,7 @@
 
 #define blr_relation2		(unsigned char)146
 #define blr_rid2		(unsigned char)147
+#define blr_relation3		(unsigned char)148
 
 // unused codes: 148..149
 
@@ -470,10 +475,11 @@
 // FB 6.0 specific BLR
 
 #define blr_invoke_function							(unsigned char) 224
-#define blr_invoke_function_type					(unsigned char) 1
-#define blr_invoke_function_type_standalone			(unsigned char) 1
-#define blr_invoke_function_type_packaged			(unsigned char) 2
-#define blr_invoke_function_type_sub				(unsigned char) 3
+#define blr_invoke_function_id						(unsigned char) 1
+#define blr_invoke_function_id_schema				(unsigned char) 1
+#define blr_invoke_function_id_package				(unsigned char) 2
+#define blr_invoke_function_id_name					(unsigned char) 3
+#define blr_invoke_function_id_sub					(unsigned char) 4
 #define blr_invoke_function_arg_names				(unsigned char) 2
 #define blr_invoke_function_args					(unsigned char) 3
 
@@ -481,10 +487,11 @@
 #define blr_select_procedure						(unsigned char) 226
 
 // subcodes of blr_invoke_procedure and blr_select_procedure
-#define blr_invsel_procedure_type					(unsigned char) 1
-#define blr_invsel_procedure_type_standalone		(unsigned char) 1
-#define blr_invsel_procedure_type_packaged			(unsigned char) 2
-#define blr_invsel_procedure_type_sub				(unsigned char) 3
+#define blr_invsel_procedure_id						(unsigned char) 1
+#define blr_invsel_procedure_id_schema				(unsigned char) 1
+#define blr_invsel_procedure_id_package				(unsigned char) 2
+#define blr_invsel_procedure_id_name				(unsigned char) 3
+#define blr_invsel_procedure_id_sub					(unsigned char) 4
 #define blr_invsel_procedure_in_arg_names			(unsigned char) 2
 #define blr_invsel_procedure_in_args				(unsigned char) 3
 #define blr_invsel_procedure_out_arg_names			(unsigned char) 4
@@ -497,5 +504,13 @@
 #define blr_default_arg								(unsigned char) 227
 
 #define blr_cast_format				(unsigned char) 228
+
+#define blr_gen_id3					(unsigned char) 229
+#define blr_default2				(unsigned char) 230
+#define blr_current_schema			(unsigned char) 231
+#define blr_flags					(unsigned char) 232
+
+// subcodes of blr_flags
+#define blr_flags_search_system_schema	(unsigned char) 1
 
 #endif // FIREBIRD_IMPL_BLR_H

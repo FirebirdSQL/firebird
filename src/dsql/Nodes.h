@@ -173,8 +173,6 @@ public:
 };
 
 
-class DdlNode;
-
 class DdlNode : public Node
 {
 public:
@@ -183,14 +181,24 @@ public:
 	{
 	}
 
+	static void protectSystemSchema(const MetaName& name, ObjectType objType)
+	{
+		if (name == SYSTEM_SCHEMA)
+		{
+			Firebird::status_exception::raise(
+				Firebird::Arg::Gds(isc_dyn_cannot_mod_obj_sys_schema) <<
+				getObjectName(objType));
+		}
+	}
+
 	static bool deleteSecurityClass(thread_db* tdbb, jrd_tra* transaction,
 		const MetaName& secClass);
 
 	static void storePrivileges(thread_db* tdbb, jrd_tra* transaction,
-		const MetaName& name, int type, const char* privileges);
+		const QualifiedName& name, int type, const char* privileges);
 
 	static void deletePrivilegesByRelName(thread_db* tdbb, jrd_tra* transaction,
-		const MetaName& name, int type);
+		const QualifiedName& name, int type);
 
 public:
 	// Check permission on DDL operation. Return true if everything is OK.
@@ -221,8 +229,8 @@ public:
 	enum DdlTriggerWhen { DTW_BEFORE, DTW_AFTER };
 
 	static void executeDdlTrigger(thread_db* tdbb, jrd_tra* transaction,
-		DdlTriggerWhen when, int action, const MetaName& objectName,
-		const MetaName& oldNewObjectName, const Firebird::string& sqlText);
+		DdlTriggerWhen when, int action, const QualifiedName& objectName,
+		const QualifiedName& oldNewObjectName, const Firebird::string& sqlText);
 
 protected:
 	typedef Firebird::Pair<Firebird::Left<MetaName, bid> > MetaNameBidPair;
@@ -246,9 +254,9 @@ protected:
 	}
 
 	void executeDdlTrigger(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
-		DdlTriggerWhen when, int action, const MetaName& objectName,
-		const MetaName& oldNewObjectName);
-	void storeGlobalField(thread_db* tdbb, jrd_tra* transaction, MetaName& name,
+		DdlTriggerWhen when, int action, const QualifiedName& objectName,
+		const QualifiedName& oldNewObjectName);
+	void storeGlobalField(thread_db* tdbb, jrd_tra* transaction, QualifiedName& name,
 		const TypeClause* field,
 		const Firebird::string& computedSource = "",
 		const BlrDebugWriter::BlrData& computedValue = BlrDebugWriter::BlrData());
@@ -468,6 +476,7 @@ public:
 		TYPE_CURRENT_TIME,
 		TYPE_CURRENT_TIMESTAMP,
 		TYPE_CURRENT_ROLE,
+		TYPE_CURRENT_SCHEMA,
 		TYPE_CURRENT_USER,
 		TYPE_DERIVED_EXPR,
 		TYPE_DECODE,
@@ -1655,7 +1664,7 @@ public:
 class GeneratorItem : public Printable
 {
 public:
-	GeneratorItem(Firebird::MemoryPool& pool, const MetaName& name)
+	GeneratorItem(Firebird::MemoryPool& pool, const QualifiedName& name)
 		: id(0), name(pool, name), secName(pool)
 	{}
 
@@ -1672,8 +1681,8 @@ public:
 
 public:
 	SLONG id;
-	MetaName name;
-	MetaName secName;
+	QualifiedName name;
+	QualifiedName secName;
 };
 
 typedef Firebird::Array<StreamType> StreamMap;

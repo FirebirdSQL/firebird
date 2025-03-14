@@ -47,6 +47,7 @@
 #include "../jrd/Monitoring.h"
 #include "../jrd/Function.h"
 #include "../jrd/optimizer/Optimizer.h"
+#include <numeric>
 
 #ifdef WIN_NT
 #include <process.h>
@@ -706,7 +707,7 @@ void SnapshotData::putField(thread_db* tdbb, Record* record, const DumpField& fi
 		from_desc.makeLong(0, &local_id);
 		MOV_move(tdbb, &from_desc, &to_desc);
 	}
-	else if (field.type == VALUE_TABLE_ID)
+	else if (field.type == VALUE_TABLE_ID_OBJECT_NAME || field.type == VALUE_TABLE_ID_SCHEMA_NAME)
 	{
 		// special case: translate relation ID into name
 		fb_assert(field.length == sizeof(SLONG));
@@ -714,10 +715,12 @@ void SnapshotData::putField(thread_db* tdbb, Record* record, const DumpField& fi
 		memcpy(&rel_id, field.data, field.length);
 
 		const jrd_rel* const relation = MET_lookup_relation_id(tdbb, rel_id, false);
-		if (!relation || relation->rel_name.isEmpty())
+		if (!relation || relation->rel_name.object.isEmpty())
 			return;
 
-		const MetaName& name = relation->rel_name;
+		const auto& name = field.type == VALUE_TABLE_ID_OBJECT_NAME ?
+			relation->rel_name.object : relation->rel_name.schema;
+
 		dsc from_desc;
 		from_desc.makeText(name.length(), CS_METADATA, (UCHAR*) name.c_str());
 		MOV_move(tdbb, &from_desc, &to_desc);
@@ -1053,6 +1056,19 @@ void Monitoring::putAttachment(SnapshotData::DumpRecord& record, const Jrd::Atta
 
 	record.storeInteger(f_mon_att_par_workers, attachment->att_parallel_workers);
 
+	if (const auto& searchPath = *attachment->att_schema_search_path; searchPath.hasData())
+	{
+		record.storeString(f_mon_att_search_path,
+			std::accumulate(
+				std::next(searchPath.begin()),
+				searchPath.end(),
+				searchPath.front().toQuotedString(),
+				[](const auto& str, const auto& name) {
+					return str + ", " + name.toQuotedString();
+				}
+			));
+	}
+
 	record.write();
 
 	if (attachment->att_database->dbb_flags & DBB_shared)
@@ -1167,12 +1183,16 @@ void Monitoring::putStatement(SnapshotData::DumpRecord& record, const Statement*
 		if (routine->getName().package.hasData())
 			record.storeString(f_mon_cmp_stmt_pkg_name, routine->getName().package);
 
-		record.storeString(f_mon_cmp_stmt_name, routine->getName().identifier);
+		if (routine->getName().schema.hasData())
+			record.storeString(f_mon_cmp_sch_name, routine->getName().schema);
+
+		record.storeString(f_mon_cmp_stmt_name, routine->getName().object);
 		record.storeInteger(f_mon_cmp_stmt_type, routine->getObjectType());
 	}
-	else if (!statement->triggerName.isEmpty())
+	else if (statement->triggerName.object.hasData())
 	{
-		record.storeString(f_mon_cmp_stmt_name, statement->triggerName);
+		record.storeString(f_mon_cmp_sch_name, statement->triggerName.schema);
+		record.storeString(f_mon_cmp_stmt_name, statement->triggerName.object);
 		record.storeInteger(f_mon_cmp_stmt_type, obj_trigger);
 	}
 
@@ -1277,12 +1297,16 @@ void Monitoring::putCall(SnapshotData::DumpRecord& record, const Request* reques
 		if (routine->getName().package.hasData())
 			record.storeString(f_mon_call_pkg_name, routine->getName().package);
 
-		record.storeString(f_mon_call_name, routine->getName().identifier);
+		if (routine->getName().schema.hasData())
+			record.storeString(f_mon_call_sch_name, routine->getName().schema);
+
+		record.storeString(f_mon_call_name, routine->getName().object);
 		record.storeInteger(f_mon_call_type, routine->getObjectType());
 	}
-	else if (!statement->triggerName.isEmpty())
+	else if (statement->triggerName.object.hasData())
 	{
-		record.storeString(f_mon_call_name, statement->triggerName);
+		record.storeString(f_mon_call_sch_name, statement->triggerName.schema);
+		record.storeString(f_mon_call_name, statement->triggerName.object);
 		record.storeInteger(f_mon_call_type, obj_trigger);
 	}
 	else
@@ -1360,7 +1384,8 @@ void Monitoring::putStatistics(SnapshotData::DumpRecord& record, const RuntimeSt
 		record.reset(rel_mon_tab_stats);
 		record.storeGlobalId(f_mon_tab_stat_id, id);
 		record.storeInteger(f_mon_tab_stat_group, stat_group);
-		record.storeTableId(f_mon_tab_name, (*iter).getRelationId());
+		record.storeTableIdSchemaName(f_mon_tab_sch_name, (*iter).getRelationId());
+		record.storeTableIdObjectName(f_mon_tab_name, (*iter).getRelationId());
 		record.storeGlobalId(f_mon_tab_rec_stat_id, rec_stat_id);
 		record.write();
 

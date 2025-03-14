@@ -30,7 +30,19 @@
     <ClCompile Include="..\..\..\src\common\classes\tests\ArrayTest.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\common\classes\tests\ClumpletTest.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\common\classes\tests\DoublyLinkedListTest.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\common\classes\tests\MetaStringTest.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\common\classes\tests\QualifiedMetaStringTest.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\common\classes\tests\VectorTest.cpp">
       <Filter>source</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\yvalve\gds.cpp">

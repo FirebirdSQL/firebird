@@ -40,6 +40,7 @@ RELATION(nam_database, rel_database, ODS_8_0, rel_persistent)
 	FIELD(f_dat_charset, nam_charset_name, fld_charset_name, 1, ODS_8_0)
 	FIELD(f_dat_linger, nam_linger, fld_linger, 1, ODS_12_0)
 	FIELD(f_dat_sql_security, nam_sql_security, fld_b_sql_security, 1, ODS_13_0)
+	FIELD(f_dat_charset_schema, nam_charset_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 2 (RDB$FIELDS)
@@ -74,6 +75,7 @@ RELATION(nam_fields, rel_fields, ODS_8_0, rel_persistent)
 	FIELD(f_fld_precision, nam_f_precision, fld_f_precision, 1, ODS_10_0)
 	FIELD(f_fld_class, nam_class, fld_class, 1, ODS_12_0)
 	FIELD(f_fld_owner, nam_owner, fld_user, 1, ODS_12_0)
+	FIELD(f_fld_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 3 (RDB$INDEX_SEGMENTS)
@@ -82,6 +84,7 @@ RELATION(nam_i_segments, rel_segments, ODS_8_0, rel_persistent)
 	FIELD(f_seg_field, nam_f_name, fld_f_name, 1, ODS_8_0)
 	FIELD(f_seg_position, nam_f_position, fld_f_position, 1, ODS_8_0)
 	FIELD(f_seg_statistics, nam_statistics, fld_statistics, 1, ODS_11_0)
+	FIELD(f_seg_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 4 (RDB$INDICES)
@@ -101,6 +104,8 @@ RELATION(nam_indices, rel_indices, ODS_8_0, rel_persistent)
 	FIELD(f_idx_statistics, nam_statistics, fld_statistics, 1, ODS_8_0)
 	FIELD(f_idx_cond_blr, nam_cond_blr, fld_value, 1, ODS_13_1)
 	FIELD(f_idx_cond_source, nam_cond_source, fld_source, 1, ODS_13_1)
+	FIELD(f_idx_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
+	FIELD(f_idx_foreign_schema, nam_foreign_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 5 (RDB$RELATION_FIELDS)
@@ -126,6 +131,8 @@ RELATION(nam_r_fields, rel_rfr, ODS_8_0, rel_persistent)
 	FIELD(f_rfr_coll_id, nam_collate_id, fld_collate_id, 1, ODS_8_0)
 	FIELD(f_rfr_gen_name, nam_gen_name, fld_gen_name, 1, ODS_12_0)
 	FIELD(f_rfr_identity_type, nam_identity_type, fld_identity_type, 1, ODS_12_0)
+	FIELD(f_rfr_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
+	FIELD(f_rfr_field_source_schema, nam_field_source_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 6 (RDB$RELATIONS)
@@ -148,6 +155,7 @@ RELATION(nam_relations, rel_relations, ODS_8_0, rel_persistent)
 	FIELD(f_rel_flags, nam_flags, fld_flag_nullable, 0, ODS_8_0)
 	FIELD(f_rel_type, nam_r_type, fld_r_type, 0, ODS_11_1)
 	FIELD(f_rel_sql_security, nam_sql_security, fld_b_sql_security, 1, ODS_13_0)
+	FIELD(f_rel_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 7 (RDB$VIEW_RELATIONS)
@@ -158,6 +166,8 @@ RELATION(nam_v_relations, rel_vrel, ODS_8_0, rel_persistent)
 	FIELD(f_vrl_cname, nam_context, fld_ctx_name, 1, ODS_8_0)
 	FIELD(f_vrl_context_type, nam_ctx_type, fld_context, 1, ODS_12_0)
 	FIELD(f_vrl_pkg_name, nam_pkg_name, fld_pkg_name, 1, ODS_12_0)
+	FIELD(f_vrl_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
+	FIELD(f_vrl_rname_schema, nam_rel_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 8 (RDB$FORMATS)
@@ -210,6 +220,7 @@ RELATION(nam_trgs, rel_triggers, ODS_8_0, rel_persistent)
 	FIELD(f_trg_engine_name, nam_engine_name, fld_engine_name, 1, ODS_12_0)
 	FIELD(f_trg_entry, nam_entry, fld_ext_name, 1, ODS_12_0)
 	FIELD(f_trg_sql_security, nam_sql_security, fld_b_sql_security, 1, ODS_13_0)
+	FIELD(f_trg_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 13 (RDB$DEPENDENCIES)
@@ -220,6 +231,8 @@ RELATION(nam_dpds, rel_dpds, ODS_8_0, rel_persistent)
 	FIELD(f_dpd_type, nam_dpd_type, fld_obj_type, 1, ODS_8_0)
 	FIELD(f_dpd_o_type, nam_dpd_o_type, fld_obj_type, 1, ODS_8_0)
 	FIELD(f_dpd_pkg_name, nam_pkg_name, fld_pkg_name, 1, ODS_12_0)
+	FIELD(f_dpd_schema, nam_dpd_sch_name, fld_sch_name, 1, ODS_14_0)
+	FIELD(f_dpd_o_schema, nam_dpd_o_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 14 (RDB$FUNCTIONS)
@@ -245,6 +258,7 @@ RELATION(nam_funs, rel_funs, ODS_8_0, rel_persistent)
 	FIELD(f_fun_legacy_flag, nam_legacy_flag, fld_flag_nullable, 0, ODS_12_0)
 	FIELD(f_fun_deterministic_flag, nam_deterministic_flag, fld_flag_nullable, 0, ODS_12_0)
 	FIELD(f_fun_sql_security, nam_sql_security, fld_b_sql_security, 1, ODS_13_0)
+	FIELD(f_fun_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 15 (RDB$FUNCTION_ARGUMENTS)
@@ -271,6 +285,9 @@ RELATION(nam_args, rel_args, ODS_8_0, rel_persistent)
 	FIELD(f_arg_rname, nam_r_name, fld_r_name, 1, ODS_12_0)
 	FIELD(f_arg_sys_flag, nam_sys_flag, fld_flag, 0, ODS_12_0)
 	FIELD(f_arg_desc, nam_description, fld_description, 1, ODS_12_0)
+	FIELD(f_arg_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
+	FIELD(f_arg_rel_schema, nam_rel_sch_name, fld_sch_name, 1, ODS_14_0)
+	FIELD(f_arg_field_source_schema, nam_field_source_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 16 (RDB$FILTERS)
@@ -291,6 +308,7 @@ RELATION(nam_trg_msgs, rel_msgs, ODS_8_0, rel_persistent)
 	FIELD(f_msg_trigger, nam_trg_name, fld_trg_name, 1, ODS_8_0)
 	FIELD(f_msg_number, nam_msg_num, fld_msg_num, 1, ODS_8_0)
 	FIELD(f_msg_msg, nam_msg, fld_msg, 1, ODS_8_0)
+	FIELD(f_msg_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 18 (RDB$USER_PRIVILEGES)
@@ -303,6 +321,8 @@ RELATION(nam_user_privileges, rel_priv, ODS_8_0, rel_persistent)
 	FIELD(f_prv_fname, nam_f_name, fld_f_name, 1, ODS_8_0)
 	FIELD(f_prv_u_type, nam_user_type, fld_obj_type, 1, ODS_8_0)
 	FIELD(f_prv_o_type, nam_obj_type, fld_obj_type, 1, ODS_8_0)
+	FIELD(f_prv_rel_schema, nam_rel_sch_name, fld_sch_name, 1, ODS_14_0)
+	FIELD(f_prv_user_schema, nam_user_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 19 (RDB$TRANSACTIONS)
@@ -323,6 +343,7 @@ RELATION(nam_gens, rel_gens, ODS_8_0, rel_persistent)
 	FIELD(f_gen_owner, nam_owner, fld_user, 1, ODS_12_0)
 	FIELD(f_gen_init_val, nam_init_val, fld_gen_val, 1, ODS_12_0)
 	FIELD(f_gen_increment, nam_gen_increment, fld_gen_increment, 1, ODS_12_0)
+	FIELD(f_gen_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 21 (RDB$FIELD_DIMENSIONS)
@@ -331,6 +352,7 @@ RELATION(nam_fld_dims, rel_dims, ODS_8_0, rel_persistent)
 	FIELD(f_dims_dim, nam_dim, fld_dim, 1, ODS_8_0)
 	FIELD(f_dims_lower, nam_lower, fld_bound, 1, ODS_8_0)
 	FIELD(f_dims_upper, nam_upper, fld_bound, 1, ODS_8_0)
+	FIELD(f_dims_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 22 (RDB$RELATION_CONSTRAINTS)
@@ -341,6 +363,7 @@ RELATION(nam_rel_constr, rel_rcon, ODS_8_0, rel_persistent)
 	FIELD(f_rcon_dfr, nam_defer, fld_defer, 1, ODS_8_0)
 	FIELD(f_rcon_idfr, nam_init_defer, fld_defer, 1, ODS_8_0)
 	FIELD(f_rcon_iname, nam_i_name, fld_i_name, 1, ODS_8_0)
+	FIELD(f_rcon_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 23 (RDB$REF_CONSTRAINTS)
@@ -350,12 +373,15 @@ RELATION(nam_ref_constr, rel_refc, ODS_8_0, rel_persistent)
 	FIELD(f_refc_match, nam_match, fld_match, 1, ODS_8_0)
 	FIELD(f_refc_upd_rul, nam_upd_rule, fld_rule, 1, ODS_8_0)
 	FIELD(f_refc_del_rul, nam_del_rule, fld_rule, 1, ODS_8_0)
+	FIELD(f_refc_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
+	FIELD(f_refc_uq_schema, nam_con_sch_name_uq, fld_sch_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 24 (RDB$CHECK_CONSTRAINTS)
 RELATION(nam_chk_constr, rel_ccon, ODS_8_0, rel_persistent)
 	FIELD(f_ccon_cname, nam_con_name, fld_con_name, 1, ODS_8_0)
 	FIELD(f_ccon_tname, nam_trg_name, fld_trg_name, 1, ODS_8_0)
+	FIELD(f_ccon_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 25 (RDB$LOG_FILES)
@@ -389,6 +415,7 @@ RELATION(nam_procedures, rel_procedures, ODS_8_0, rel_persistent)
 	FIELD(f_prc_pkg_name, nam_pkg_name, fld_pkg_name, 1, ODS_12_0)
 	FIELD(f_prc_private_flag, nam_private_flag, fld_flag_nullable, 1, ODS_12_0)
 	FIELD(f_prc_sql_security, nam_sql_security, fld_b_sql_security, 1, ODS_13_0)
+	FIELD(f_prc_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 27 (RDB$PROCEDURE_PARAMETERS)
@@ -408,6 +435,9 @@ RELATION(nam_proc_parameters, rel_prc_prms, ODS_8_0, rel_persistent)
 	FIELD(f_prm_fname, nam_f_name, fld_f_name, 1, ODS_11_2)
 	FIELD(f_prm_rname, nam_r_name, fld_r_name, 1, ODS_11_2)
 	FIELD(f_prm_pkg_name, nam_pkg_name, fld_pkg_name, 1, ODS_12_0)
+	FIELD(f_prm_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
+	FIELD(f_prm_rel_schema, nam_rel_sch_name, fld_sch_name, 1, ODS_14_0)
+	FIELD(f_prm_field_source_schema, nam_field_source_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 28 (RDB$CHARACTER_SETS)
@@ -423,6 +453,8 @@ RELATION(nam_charsets, rel_charsets, ODS_8_0, rel_persistent)
 	FIELD(f_cs_bytes_char, nam_bytes_per_char, fld_f_length, 1, ODS_8_0)
 	FIELD(f_cs_class, nam_class, fld_class, 1, ODS_12_0)
 	FIELD(f_cs_owner, nam_owner, fld_user, 1, ODS_12_0)
+	FIELD(f_cs_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
+	FIELD(f_cs_def_coll_schema, nam_def_coll_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 29 (RDB$COLLATIONS)
@@ -438,6 +470,7 @@ RELATION(nam_collations, rel_collations, ODS_8_0, rel_persistent)
 	FIELD(f_coll_specific_attr, nam_specific_attr, fld_specific_attr, 1, ODS_11_0)
 	FIELD(f_coll_class, nam_class, fld_class, 1, ODS_12_0)
 	FIELD(f_coll_owner, nam_owner, fld_user, 1, ODS_12_0)
+	FIELD(f_coll_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 30 (RDB$EXCEPTIONS)
@@ -449,6 +482,7 @@ RELATION(nam_exceptions, rel_exceptions, ODS_8_0, rel_persistent)
 	FIELD(f_xcp_sys_flag, nam_sys_flag, fld_flag, 1, ODS_8_0)
 	FIELD(f_xcp_class, nam_class, fld_class, 1, ODS_12_0)
 	FIELD(f_xcp_owner, nam_owner, fld_user, 1, ODS_12_0)
+	FIELD(f_xcp_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 31 (RDB$ROLES)
@@ -533,6 +567,7 @@ RELATION(nam_mon_attachments, rel_mon_attachments, ODS_11_1, rel_virtual)
 	FIELD(f_mon_att_remote_crypt, nam_wire_crypt_plugin, fld_remote_crypt, 0, ODS_13_0)
 	FIELD(f_mon_att_session_tz, nam_mon_session_tz, fld_tz_name, 0, ODS_13_1)
 	FIELD(f_mon_att_par_workers, nam_par_workers, fld_par_workers, 0, ODS_13_1)
+	FIELD(f_mon_att_search_path, nam_mon_search_path, fld_text_max, 0, ODS_14_0)
 END_RELATION
 
 // Relation 35 (MON$TRANSACTIONS)
@@ -581,6 +616,7 @@ RELATION(nam_mon_calls, rel_mon_calls, ODS_11_1, rel_virtual)
 	FIELD(f_mon_call_stat_id, nam_mon_stat_id, fld_stat_id, 0, ODS_11_1)
 	FIELD(f_mon_call_pkg_name, nam_mon_pkg_name, fld_pkg_name, 0, ODS_12_0)
 	FIELD(f_mon_call_cmp_stmt_id, nam_mon_cmp_stmt_id, fld_stmt_id, 0, ODS_13_1)
+	FIELD(f_mon_call_sch_name, nam_mon_sch_name, fld_sch_name, 0, ODS_14_0)
 END_RELATION
 
 // Relation 38 (MON$IO_STATS)
@@ -643,6 +679,7 @@ RELATION(nam_packages, rel_packages, ODS_12_0, rel_persistent)
 	FIELD(f_pkg_sys_flag, nam_sys_flag, fld_flag, 1, ODS_12_0)
 	FIELD(f_pkg_desc, nam_description, fld_description, 1, ODS_12_0)
 	FIELD(f_pkg_sql_security, nam_sql_security, fld_b_sql_security, 1, ODS_13_0)
+	FIELD(f_pkg_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 43 (SEC$USERS)
@@ -710,6 +747,7 @@ RELATION(nam_mon_tab_stats, rel_mon_tab_stats, ODS_12_0, rel_virtual)
 	FIELD(f_mon_tab_stat_group, nam_mon_stat_group, fld_stat_group, 0, ODS_12_0)
 	FIELD(f_mon_tab_name, nam_mon_tab_name, fld_r_name, 0, ODS_12_0)
 	FIELD(f_mon_tab_rec_stat_id, nam_mon_rec_stat_id, fld_stat_id, 0, ODS_12_0)
+	FIELD(f_mon_tab_sch_name, nam_mon_sch_name, fld_sch_name, 0, ODS_14_0)
 END_RELATION
 
 // Relation 50 (RDB$TIME_ZONES)
@@ -731,6 +769,7 @@ END_RELATION
 RELATION(nam_pub_tables, rel_pub_tables, ODS_13_0, rel_persistent)
 	FIELD(f_pubtab_pub_name, nam_pub_name, fld_pub_name, 1, ODS_13_0)
 	FIELD(f_pubtab_tab_name, nam_tab_name, fld_r_name, 1, ODS_13_0)
+	FIELD(f_pubtab_tab_schema, nam_tab_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 53 (RDB$CONFIG)
@@ -758,4 +797,17 @@ RELATION(nam_mon_compiled_statements, rel_mon_compiled_statements, ODS_13_1, rel
 	FIELD(f_mon_cmp_stmt_type, nam_mon_obj_type, fld_obj_type, 0, ODS_13_1)
 	FIELD(f_mon_cmp_stmt_pkg_name, nam_mon_pkg_name, fld_pkg_name, 0, ODS_13_1)
 	FIELD(f_mon_cmp_stmt_stat_id, nam_mon_stat_id, fld_stat_id, 0, ODS_13_1)
+	FIELD(f_mon_cmp_sch_name, nam_mon_sch_name, fld_sch_name, 0, ODS_14_0)
+END_RELATION
+
+// Relation 56 (RDB$SCHEMAS)
+RELATION(nam_schemas, rel_schemas, ODS_14_0, rel_persistent)
+	FIELD(f_sch_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
+	FIELD(f_sch_owner, nam_owner, fld_user, 1, ODS_14_0)
+	FIELD(f_sch_charset, nam_charset_name, fld_charset_name, 1, ODS_14_0)
+	FIELD(f_sch_charset_schema, nam_charset_sch_name, fld_sch_name, 1, ODS_14_0)
+	FIELD(f_sch_sql_security, nam_sql_security, fld_b_sql_security, 1, ODS_14_0)
+	FIELD(f_sch_class, nam_class, fld_class, 1, ODS_14_0)
+	FIELD(f_sch_sys_flag, nam_sys_flag, fld_flag, 1, ODS_14_0)
+	FIELD(f_sch_desc, nam_description, fld_description, 1, ODS_14_0)
 END_RELATION
