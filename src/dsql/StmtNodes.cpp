@@ -6557,6 +6557,13 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.hasData() && field->typeOfTable.hasData());
 		if (isRowtype)
 		{
+			if (field->fromCursor)
+			{
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+				Arg::Gds(isc_invalid_parameter_decl) <<
+				Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable));
+			}
+
 			dsql_rel* relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, field->typeOfTable.c_str());
 			dsql_fld* fld = NULL;
 
@@ -6673,6 +6680,13 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		}
 		else if (isRowtype)
 		{
+			if (field->fromCursor)
+			{
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+				Arg::Gds(isc_invalid_parameter_decl) <<
+				Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable));
+			}
+
 			if (auto relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, field->typeOfTable.c_str()))
 			{
 				field->fld_sub_first = relation->rel_fields;
@@ -6687,7 +6701,8 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			if (!field->fld_sub_first)
 			{
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-				Arg::Gds(isc_invalid_parameter_decl) << Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable));
+				Arg::Gds(isc_invalid_parameter_decl) <<
+				Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable));
 			}
 
 			dsql_ctx* new_context = FB_NEW_POOL(*tdbb->getDefaultPool()) dsql_ctx(*tdbb->getDefaultPool());
@@ -8191,10 +8206,17 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 					}
 				}
 
+				auto cursorFound = false;
 				for (auto cursor : dsqlScratch->cursors)
 				{
 					if (cursor->dsqlName != field->typeOfTable)
 						continue;
+					else if (!field->fromCursor)
+					{
+						ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+						Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable) <<
+						Arg::Gds(isc_dsql_line_col_error) << Arg::Num(parameter->line) << Arg::Num(parameter->column));
+					}
 
 					field->dtype = dtype_rowtype;
 					auto next = &field->fld_sub_first;
@@ -8224,7 +8246,15 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 					field->typeOfTable = "";
 					field->typeOfName = "";
+					cursorFound = true;
 					break;
+				}
+
+				if (field->fromCursor && !cursorFound)
+				{
+					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+					Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable) <<
+					Arg::Gds(isc_dsql_line_col_error) << Arg::Num(parameter->line) << Arg::Num(parameter->column));
 				}
 
 				if (relation)

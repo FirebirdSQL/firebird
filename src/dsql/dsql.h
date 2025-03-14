@@ -252,6 +252,7 @@ public:
 	MetaName packageName;
 	MetaName relationName;
 	bool privateFlag = false;
+	bool fromCursor = false;
 };
 
 class dsql_fld : public TypeClause

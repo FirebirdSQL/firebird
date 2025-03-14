@@ -855,6 +855,13 @@ void DsqlCompilerScratch::genParameters(Array<NestConst<ParameterClause> >& para
 			auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.hasData() && field->typeOfTable.hasData());
 			if (isRowtype)
 			{
+				if (field->fromCursor)
+				{
+					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+					Arg::Gds(isc_invalid_parameter_decl) <<
+					Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable));
+				}
+
 				dsql_rel* relation = METD_get_relation(getTransaction(), this, field->typeOfTable.c_str());
 				dsql_fld* fld = NULL;
 
@@ -961,6 +968,13 @@ void DsqlCompilerScratch::genParameters(Array<NestConst<ParameterClause> >& para
 			auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.hasData() && field->typeOfTable.hasData());
 			if (isRowtype)
 			{
+				if (field->fromCursor)
+				{
+					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+					Arg::Gds(isc_invalid_parameter_decl) <<
+					Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable));
+				}
+
 				dsql_rel* relation = METD_get_relation(getTransaction(), this, field->typeOfTable.c_str());
 				dsql_fld* fld = nullptr;
 

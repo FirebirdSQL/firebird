@@ -1025,3 +1025,4 @@ FB_IMPL_MSG(JRD, 1022, old_format, -804, "07", "000", "Statement format outdated
 FB_IMPL_MSG(JRD, 1023, invalid_parameter_decl, -901, "HY", "000", "Invalid parameter declaration")
 FB_IMPL_MSG(JRD, 1024, composite_type_notdef, -104, "HY", "000", "composite type @1 not defined (BLR error)")
 FB_IMPL_MSG(JRD, 1025, packaged_type_notdef, -104, "HY", "000", "packaged type @1 of @2 is not defined or private")
+FB_IMPL_MSG(JRD, 1026, cursor_notdef, -219, "42", "S02", "cursor @1 is not defined")

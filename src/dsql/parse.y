@@ -5763,6 +5763,13 @@ domain_type
 		{
 			$$ = newNode<dsql_fld>();
 			$$->typeOfTable = *$4;
+			$$->fromCursor = false;
+		}
+	| TYPE OF CURSOR symbol_column_name
+		{
+			$$ = newNode<dsql_fld>();
+			$$->typeOfTable = *$4;
+			$$->fromCursor = true;
 		}
 	| TYPE OF symbol_package_name '.' symbol_package_type_name	// packaged type without constraints
 		{
