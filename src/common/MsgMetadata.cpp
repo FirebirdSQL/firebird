@@ -391,18 +391,31 @@ unsigned MsgMetadata::makeOffsets()
 	return ~0u;
 }
 
-// returns ~0 on success
+// Calculate the value and null indicator offsets according to composite type value memory format
 unsigned MsgMetadata::makeSubfieldsOffsets(ULONG parentFieldValueOffset)
 {
-	auto subFieldsNullsLength = items.getCount() * 2;
-	auto previousFieldsLength = 0;
+	auto subFieldsNullsLength = NULL_BYTES(items.getCount());
+	auto previousFieldLength = 0;
+
+	auto offset = subFieldsNullsLength;
 
 	for (unsigned n = 0; n < items.getCount(); ++n)
 	{
 		Item* param = &items[n];
+
+		// AAM: just get dtype from parameter's sqlType, param->offset and param->nullInd will be overridden
+		unsigned dtype = 0;
+		fb_utils::sqlTypeToDsc(offset, param->type, param->length,
+			&dtype, NULL /*length*/, &param->offset, &param->nullInd);
+
 		param->nullInd = (n * 2) + parentFieldValueOffset;
-		param->offset += subFieldsNullsLength + previousFieldsLength + parentFieldValueOffset;
-		previousFieldsLength += param->length;
+
+		offset += previousFieldLength;
+		if (dtype >= dtype_aligned)
+			offset = FB_ALIGN(offset, type_alignments[dtype]);
+
+		param->offset = offset + parentFieldValueOffset;
+		previousFieldLength = param->length;
 	}
 
 	return ~0u;

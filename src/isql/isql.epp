@@ -7203,6 +7203,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 	auto printWrapper = [&](const IsqlVar* var, const unsigned length, bool firstInList = true)
 	{
+		auto dtype = var->type;
 		const int dscale = var->scale;
 
 		if (setValues.List) {
@@ -7720,30 +7721,58 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 	if (var->type == SQL_ROWTYPE && *var->nullInd >= 0)
 	{
-		{ // scope
-			unsigned* pad = NULL;
-			auto n_cols = var->subvars.getCount();
-			if (n_cols) {
-				pad = (unsigned*) ISQL_ALLOC ((SLONG) (n_cols * sizeof(int)));
-			}
+		IsqlVar subVar = *var;
+		bool firstInList = true;
+		unsigned* pad = NULL;
+		auto n_cols = var->subvars.getCount();
+		if (n_cols) {
+			pad = (unsigned*) ISQL_ALLOC ((SLONG) (n_cols * sizeof(int)));
+		}
 
-			const unsigned maxblob = 20;
-			IsqlVar varlist[maxblob]; // No more than 20 blobs per line
-			unsigned varnum = 0;
+		const unsigned maxblob = 20;
+		IsqlVar varlist[maxblob]; // No more than 20 blobs per line
+		unsigned varnum = 0;
+		ULONG dataOffset = 0;
 
-			for (unsigned i = 0; i < n_cols; ++i)
+		for (unsigned i = 0; i < n_cols; ++i)
+		{
+			if (subVar.subvars[i].type != SQL_ROWTYPE)
 			{
-				if (!Interrupt_flag && !Abort_flag)
-				{
-					// Save all the blob vars and print them at the end
-					// CVC: If varnum reaches 20, we must print an error instead of crashing.
-					const int rc = print_item(&p, &var->subvars[i], 5);
-					if (rc == SQL_BLOB && varnum < maxblob)
-						varlist[varnum++] = var->subvars[i];
-				}
+				auto dtype = fb_utils::sqlTypeToDscType(subVar.subvars[i].type);
+				if (dtype >= dtype_aligned)
+					dataOffset = FB_ALIGN(dataOffset, type_alignments[dtype]);
+
+				printWrapper(&subVar.subvars[i], length, firstInList);
+				firstInList = false;
+				string subVarValue(p, length);
+				subVarValue.trim();
+				subfieldsValues.add(subVarValue);
+
+				dataOffset += subVar.subvars[i].length;
 			}
-			*p = 0;
-		} // scope
+			else
+			{
+				dataOffset = NULL_BYTES(subVar.subfieldsNum);
+			}
+
+		}
+
+		if (subfieldsValues.hasData())
+		{
+			p = *s;
+			auto isFirstSubfield = true;
+			string compositeString("(");
+			for (auto& it : subfieldsValues)
+			{
+				compositeString.append(isFirstSubfield ? "" : ", ");
+				isFirstSubfield = false;
+				compositeString.append(it);
+			}
+
+			compositeString.append(")");
+
+			sprintf(p, "%*.*s ", length, length, compositeString.c_str());
+		}
 	}
 	else
 		printWrapper(var, length, true);
