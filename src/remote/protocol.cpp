@@ -1136,6 +1136,7 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 		}
 
 	case op_repl_data:
+	case op_repl_init:
 		{
 			P_REPLICATE* repl = &p->p_replicate;
 			MAP(xdr_short, reinterpret_cast<SSHORT&>(repl->p_repl_database));

@@ -421,6 +421,7 @@ public:
 	void process(Firebird::CheckStatusWrapper* status, unsigned length, const unsigned char* data);
 	void close(Firebird::CheckStatusWrapper* status);
 	void deprecatedClose(Firebird::CheckStatusWrapper* status);
+	void init(Firebird::CheckStatusWrapper* status, const char* guid);
 
 public:
 	AtomicAttPtr attachment;

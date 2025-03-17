@@ -151,7 +151,16 @@ Manager::Manager(const string& dbId,
 		if (localStatus->getState() & IStatus::STATE_ERRORS)
 		{
 			logPrimaryStatus(m_config->dbName, &localStatus);
-			attachment->detach(&localStatus);
+			attachment->release();
+			continue;
+		}
+
+		replicator->init(&localStatus, guid.toString().c_str());
+		if (localStatus->getState() & IStatus::STATE_ERRORS)
+		{
+			logPrimaryStatus(m_config->dbName, &localStatus);
+			replicator->release();
+			attachment->release();
 			continue;
 		}
 
