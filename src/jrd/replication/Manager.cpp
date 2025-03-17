@@ -158,10 +158,17 @@ Manager::Manager(const string& dbId,
 		replicator->init(&localStatus, guid.toString().c_str());
 		if (localStatus->getState() & IStatus::STATE_ERRORS)
 		{
-			logPrimaryStatus(m_config->dbName, &localStatus);
-			replicator->release();
-			attachment->release();
-			continue;
+			const auto errorCode = localStatus->getErrors()[1];
+
+			if (errorCode != isc_interface_version_too_old && errorCode != isc_wish_list)
+			{
+				logPrimaryStatus(m_config->dbName, &localStatus);
+				replicator->release();
+				attachment->release();
+				continue;
+			}
+
+			localStatus->init();
 		}
 
 		m_replicas.add(FB_NEW_POOL(getPool()) SyncReplica(getPool(), attachment, replicator));
