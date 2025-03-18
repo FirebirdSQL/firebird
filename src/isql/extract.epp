@@ -254,7 +254,7 @@ int EXTRACT_list_table(const SCHAR* relation_name,
  *	relation_name -- Name of table to investigate
  *	new_name -- Name of a new name for a replacement table
  *	domain_flag -- extract needed domains before the table
- *	default_char_set_id -- character set def to supress
+ *	default_char_set_id -- character set def to suppress
  *
  **************************************/
 /**************************************
@@ -2261,7 +2261,7 @@ static void list_domain_table(const SCHAR* table_name, SSHORT default_char_set_i
  *	for the named table
  *
  *	Parameters:  table_name == only extract domains for this table
- *	default_char_set_id -- character set def to supress
+ *	default_char_set_id -- character set def to suppress
  *
  **************************************/
 	bool first = true;
@@ -2384,7 +2384,7 @@ static void list_domains(SSHORT default_char_set_id)
  *	List domains
  *
  *	Parameters:
- *	default_char_set_id -- character set def to supress
+ *	default_char_set_id -- character set def to suppress
  *
  **************************************/
 	bool first = true;

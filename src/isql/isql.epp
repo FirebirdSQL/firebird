@@ -1515,7 +1515,7 @@ void ISQL_get_character_sets(SSHORT char_set_id, SSHORT collation,
 			break;
 
 		case Get::BOTH:
-			// If they both are default - supress output completely
+			// If they both are default - suppress output completely
 			if (!charsetIsDefault || !collationIsDefault)
 			{
 				if (collationIsDefault) // Suppress collation only

@@ -33,7 +33,7 @@
 //
 //  TMN (Mike Nordell) 11.APR.2001 - Reduce compiler warnings
 //  TMN (Mike Nordell) APR-MAY.2001 - Conversion to C++
-//  SWB (Stepen Boyd) 2007/03/21 - Supressed parsing of QLI keywords if -noqli
+//  SWB (Stepen Boyd) 2007/03/21 - Suppressed parsing of QLI keywords if -noqli
 //                                 switch given on the command line.
 //
 //
