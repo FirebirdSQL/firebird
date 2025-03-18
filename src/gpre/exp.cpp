@@ -1125,7 +1125,7 @@ static gpre_nod* par_array(gpre_req* request, gpre_fld* field, bool subscript_fl
 			gpre_nod* index_node = MSC_unary(nod_index, node);
 
 			// Languages which can't handle negative or non-positive bounds need to
-			// be accomodated with normalization of the indices.
+			// be accommodated with normalization of the indices.
 
 			switch (gpreGlob.sw_language)
 			{
@@ -1142,7 +1142,7 @@ static gpre_nod* par_array(gpre_req* request, gpre_fld* field, bool subscript_fl
 
 			// Error checking of constants being out of range will be here in the future.
 
-			// Good ole Fortran's column major order needs to be accomodated.
+			// Good ole Fortran's column major order needs to be accommodated.
 
 			if (gpreGlob.sw_language == lang_fortran)
 				array_node->nod_arg[fortran_adjustment - i] = index_node;

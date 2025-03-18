@@ -98,7 +98,7 @@ if test "x$VCPKG_TRIPLET" != "x" ; then
   AC_SUBST(VCPKG_INSTALLED)
 fi
 
-dnl EKU: set appropiate defaults for each platform
+dnl EKU: set appropriate defaults for each platform
 dnl      EDITLINE_FLG     : support fancy command line editing in isql
 dnl      SHRLIB_EXT       : suffix of shared library files
 

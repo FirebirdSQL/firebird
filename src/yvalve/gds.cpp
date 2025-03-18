@@ -4325,7 +4325,7 @@ public:
 		prefix.copyTo(fb_prefix_val, sizeof(fb_prefix_val));
 		fb_prefix = fb_prefix_val;
 
-		// Find appropiate temp directory
+		// Find appropriate temp directory
 		Firebird::PathName tempDir;
 		if (!fb_utils::readenv(FB_TMP_ENV, tempDir))
 		{

@@ -4241,7 +4241,7 @@ static ULONG memory_init(thread_db* tdbb, BufferControl* bcb, ULONG number)
 	{
 		if (!memory)
 		{
-			// Allocate memory block big enough to accomodate BufferDesc's, Lock's and page buffers.
+			// Allocate memory block big enough to accommodate BufferDesc's, Lock's and page buffers.
 
 			ULONG to_alloc = number;
 
