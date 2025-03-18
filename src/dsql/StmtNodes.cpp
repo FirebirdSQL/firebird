@@ -9571,8 +9571,25 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 	doDsqlPass(dsqlScratch, node->dsqlRelation, relation, false);
 	dsql_ctx* mod_context = dsqlGetContext(node->dsqlRelation);
 
-	if (fullRowUpdate)
+	if (multipleColumnUpdate)
 	{
+		if (targetList.hasData())
+		{
+			for (auto &field : targetList)
+			{
+				newValues.add(nullptr);
+				newValues.back() = field;
+			}
+		}
+		else
+		{
+			NestValueArray explodedFields;
+			dsqlExplodeFields(mod_context->ctx_relation, explodedFields, false);
+
+			for (auto& field : explodedFields)
+				newValues.add(field);
+		}
+
 		dsql_rel* rel = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, relation->dsqlName.c_str());
 
 		if (!rel)
@@ -9590,8 +9607,37 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 		field->fld_relation = rel;
 		field->typeOfTable = relation->dsqlName.c_str();
 		field->dtype = dtype_rowtype;
-		field->fld_sub_first = rel->rel_fields;
-		field->fld_sub_count = rel->rel_fields_number;
+
+		if (targetList.hasData())
+		{
+			auto idCounter = 0;
+			dsql_fld** currentTargetSubfield = &field->fld_sub_first;
+			for (auto &targetField : targetList)
+			{
+				dsql_fld** nextRelationField = &rel->rel_fields;
+				while (*nextRelationField)
+				{
+					if (!targetField->dsqlName.compare((*nextRelationField)->fld_name))
+					{
+						dsql_fld* subField = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
+						*subField = *(*nextRelationField);
+						subField->fld_id = idCounter++;
+						subField->fld_next = nullptr;
+						*currentTargetSubfield = subField;
+						currentTargetSubfield = &(*currentTargetSubfield)->fld_next;
+						field->fld_sub_count++;
+						break;
+					}
+					nextRelationField = &(*nextRelationField)->fld_next;
+				}
+			}
+		}
+		else
+		{
+			field->fld_sub_first = rel->rel_fields;
+			field->fld_sub_count = rel->rel_fields_number;
+		}
+
 		variable->field = field;
 
 		dsql_ctx* new_context = FB_NEW_POOL(dsqlScratch->getPool()) dsql_ctx(dsqlScratch->getPool());
@@ -9629,7 +9675,6 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 			nextField = nextField->fld_next;
 		};
 
-
 		if (rowExpression)
 		{
 			auto row = nodeAs<RowValueExpressionNode>(rowExpression);
@@ -9647,15 +9692,9 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 			{
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
 						Arg::Gds(isc_dsql_var_count_err) <<
-						Arg::Gds(isc_dsql_line_col_error) << Arg::Num(line) << Arg::Num(column));
+						Arg::Gds(isc_dsql_line_col_error) << Arg::Num(rowExpression->line) << Arg::Num(rowExpression->column));
 			}
 		}
-
-		NestValueArray fields;
-		dsqlExplodeFields(mod_context->ctx_relation, fields, false);
-
-		for (auto& field : fields)
-			newValues.add(field);
 	}
 
 	// Process new context values.

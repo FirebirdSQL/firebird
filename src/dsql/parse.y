@@ -906,6 +906,7 @@ using namespace Firebird;
 	Jrd::DeclareLocalTypeNode* localTypeNode;
 	Jrd::DeclarePackageTypeNode* declarePackageTypeNode;
 	Jrd::ParameterClause* parameterClause;
+	Jrd::ModifyNode* mdfyNode;
 }
 
 %include types.y
@@ -7926,7 +7927,7 @@ update
 	| update_positioned
 	;
 
-%type <stmtNode> update_searched
+%type <mdfyNode> update_searched
 update_searched
 	: UPDATE table_name
 			SET update_assignments(NOTRIAL(&$2->dsqlName))
@@ -7966,8 +7967,32 @@ update_searched
 			node->dsqlRows = $10;
 			node->dsqlSkipLocked = $11;
 			node->dsqlReturning = $12;
-			node->fullRowUpdate = true;
+			node->multipleColumnUpdate = true;
 			$$ = node;
+		}
+	| UPDATE table_name
+		{
+			ModifyNode* node = $$ = newNode<ModifyNode>();
+			node->dsqlRelation = $2;
+		}
+			SET ins_column_parens_opt(NOTRIAL(&$3->targetList))
+			'=' value_or_default
+			where_clause
+			plan_clause
+			order_clause_opt
+			rows_clause_optional
+			skip_locked_clause_opt
+			returning_clause
+		{
+			ModifyNode* node = $$ = $3;
+			node->rowExpression = $7;
+			node->dsqlBoolean = $8;
+			node->dsqlPlan = $9;
+			node->dsqlOrder = $10;
+			node->dsqlRows = $11;
+			node->dsqlSkipLocked = $12;
+			node->dsqlReturning = $13;
+			node->multipleColumnUpdate = true;
 		}
 	;
 

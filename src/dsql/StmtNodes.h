@@ -1347,7 +1347,8 @@ public:
 		  dsqlCursorName(pool),
 		  validations(pool),
 		  rowExpression(nullptr),
-		  rowAssignmentNode(nullptr)
+		  rowAssignmentNode(nullptr),
+		  targetList(pool)
 	{
 	}
 
@@ -1392,7 +1393,8 @@ public:
 	bool localTableOuterDecl = false;
 	ValueExprNode* rowExpression;
 	StmtNode* rowAssignmentNode;
-	bool fullRowUpdate = false;
+	bool multipleColumnUpdate = false;
+	Firebird::Array<NestConst<FieldNode>> targetList;
 };
 
 
