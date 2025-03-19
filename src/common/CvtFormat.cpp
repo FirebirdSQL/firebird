@@ -1536,11 +1536,26 @@ namespace
 					auto prevIt = getPreviousOrCurrentIterator(it, begin);
 					if (prevIt->pattern == Format::TZH)
 					{
-						outTimezoneInMinutes += sign(outTimezoneInMinutes) *
-							getIntFromString(str, strLength, strOffset, strLength - strOffset);
+						const int minutes = getIntFromString(str, strLength, strOffset, strLength - strOffset);
+						if (minutes > 59)
+						{
+							cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+								string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(59));
+						}
+
+						outTimezoneInMinutes += sign(outTimezoneInMinutes) * minutes;
 					}
 					else
-						outTimezoneInMinutes = getIntFromString(str, strLength, strOffset, strLength - strOffset, true);
+					{
+						const int minutes = getIntFromString(str, strLength, strOffset, strLength - strOffset, true);
+						if (abs(minutes) > 59)
+						{
+							cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+								string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(59));
+						}
+
+						outTimezoneInMinutes = minutes;
+					}
 					break;
 				}
 				case Format::TZR:
