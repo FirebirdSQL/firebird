@@ -44,11 +44,13 @@ namespace
 	class TimeZoneTrie
 	{
 	public:
-		static constexpr int EnglishAlphabet = 26;
-		static constexpr int Digits = 10;
-		static constexpr int OtherSymbols = sizeof("/-+_") - 1;
+		static constexpr const char* OtherSymbolsInName = "/-+_";
 
-		static constexpr int MaxPatternDiversity = EnglishAlphabet + Digits + OtherSymbols;
+		static constexpr unsigned EnglishAlphabetCount = 26;
+		static constexpr unsigned DigitsCount = 10;
+		static constexpr unsigned OtherSymbolsCount = fb_strlen(OtherSymbolsInName);
+
+		static constexpr unsigned MaxPatternDiversity = EnglishAlphabetCount + DigitsCount + OtherSymbolsCount;
 
 		static constexpr USHORT UninitializedTimezoneId = 0;
 
@@ -100,6 +102,7 @@ namespace
 			for (unsigned int i = 0; i < valueLength; i++)
 			{
 				int index = calculateIndex(value[i]);
+				fb_assert(index >= 0);
 
 				if (currentNode->childrens[index] == nullptr)
 					currentNode->childrens[index] = FB_NEW_POOL(m_pool) TrieNode();
@@ -117,15 +120,15 @@ namespace
 			if (symbol >= '0' && symbol <= '9')
 				index = symbol - '0';
 			else if (symbol >= 'A' && symbol <= 'Z')
-				index = symbol - 'A' + Digits;
+				index = symbol - 'A' + DigitsCount;
 			else
 			{
 				switch (symbol)
 				{
-					case '/': index = Digits + EnglishAlphabet; break;
-					case '-': index = Digits + EnglishAlphabet + 1; break;
-					case '+': index = Digits + EnglishAlphabet + 2; break;
-					case '_': index = Digits + EnglishAlphabet + 3; break;
+					case '/': index = DigitsCount + EnglishAlphabetCount; break;
+					case '-': index = DigitsCount + EnglishAlphabetCount + 1; break;
+					case '+': index = DigitsCount + EnglishAlphabetCount + 2; break;
+					case '_': index = DigitsCount + EnglishAlphabetCount + 3; break;
 				}
 			}
 
