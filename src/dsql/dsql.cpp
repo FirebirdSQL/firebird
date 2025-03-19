@@ -1378,6 +1378,17 @@ static UCHAR* describe_parameter(thread_db* tdbb,
 					length = 0;
 				break;
 
+			case isc_info_sql_parent_field_name:
+				if (param->par_parent_field_name.hasData())
+				{
+					name = attachment->nameToUserCharSet(tdbb, param->par_parent_field_name);
+					length = name.length();
+					buffer = reinterpret_cast<const UCHAR*>(name.c_str());
+				}
+				else
+					length = 0;
+				break;
+
 			case isc_info_sql_composite_descriptor:
 				if (tdbb->getAttachment()->att_flatten_row_types || tdbb->getDatabase()->dbb_config->getFlattenRowType())
 					length = 0;
@@ -1696,8 +1707,13 @@ dsql_udf::dsql_udf(MemoryPool& p, const class Function* jfun)
 	}
 }
 
-
-static USHORT generateSubparameterFields(thread_db* tdbb, dsql_fld* parameterField, dsc* parameterDsc, dsql_par** lastParameterPtr, UCHAR*& nulloffset, USHORT previousParameterIndex)
+static USHORT generateSubparameterFields(thread_db* tdbb,
+										dsql_fld* parameterField,
+										dsc* parameterDsc,
+										dsql_par** lastParameterPtr,
+										UCHAR*& nulloffset,
+										USHORT previousParameterIndex,
+										MetaName& parentName)
 {
 	if (!parameterField)
 		return 0;
@@ -1717,7 +1733,8 @@ static USHORT generateSubparameterFields(thread_db* tdbb, dsql_fld* parameterFie
 										  parameterDsc->dsc_sub_first,
 										  lastParameterPtr,
 										  nextoffset,
-										  0);
+										  0,
+										  parameterField->fld_name);
 		}
 	}
 	else
@@ -1733,6 +1750,7 @@ static USHORT generateSubparameterFields(thread_db* tdbb, dsql_fld* parameterFie
 		currentParameter->par_desc = *parameterDsc;
 		currentParameter->par_desc.dsc_flags |= DSC_nullable;
 		currentParameter->par_index = ++previousParameterIndex;
+		currentParameter->par_parent_field_name = parentName.c_str();
 
 		// Create null subparameter
 		dsql_par* null = FB_NEW_POOL(*pool) dsql_par(*pool);
@@ -1754,7 +1772,8 @@ static USHORT generateSubparameterFields(thread_db* tdbb, dsql_fld* parameterFie
 										parameterDsc->dsc_next,
 										lastParameterPtr,
 										nulloffset,
-										previousParameterIndex);
+										previousParameterIndex,
+										parentName);
 	}
 
 	return count;
@@ -1793,7 +1812,8 @@ USHORT Jrd::generate_sub_parameters(dsql_fld& parameterField, dsql_par& hostPara
 										hostParameter.par_desc.dsc_sub_first,
 										nextPtr,
 										nextoffset,
-										0);
+										0,
+										hostParameter.par_alias.hasData() ? hostParameter.par_alias : hostParameter.par_name);
 	}
 
 	return 0;

@@ -63,6 +63,7 @@ public:
 			  nullInd(0),
 			  nullable(false),
 			  finished(false),
+			  parentFieldName(pool),
 			  compositeDescriptor(pool)
 		{
 		}
@@ -82,6 +83,7 @@ public:
 			  nullInd(v.nullInd),
 			  nullable(v.nullable),
 			  finished(v.finished),
+			  parentFieldName(pool, v.parentFieldName),
 			  compositeDescriptor(pool, v.compositeDescriptor)
 		{
 		}
@@ -100,6 +102,7 @@ public:
 		unsigned nullInd;
 		bool nullable;
 		bool finished;
+		string parentFieldName;
 		string compositeDescriptor;
 		IMessageMetadata* subMetadata;
 	};
@@ -295,6 +298,15 @@ public:
 	unsigned getAlignedLength(CheckStatusWrapper* /*status*/) override
 	{
 		return alignedLength;
+	}
+
+	const char* getParentFieldName(CheckStatusWrapper* status, unsigned index)
+	{
+		if (index < items.getCount())
+			return items[index].parentFieldName.c_str();
+
+		raiseIndexError(status, index, "getParentFieldName");
+		return NULL;
 	}
 
 	IMessageMetadata* getSubMetadata(CheckStatusWrapper* status, unsigned index)

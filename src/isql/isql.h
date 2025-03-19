@@ -288,6 +288,7 @@ struct IsqlVar
 	CSetId charSet;
 	bool nullable;
 	short* nullInd;
+	const char* parentFieldName = nullptr;
 	const char* compositeDescriptor = nullptr;
 	Firebird::IMessageMetadata* subfieldsMetadata = nullptr;
 	unsigned subfieldsNum = 0;

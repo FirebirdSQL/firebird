@@ -482,6 +482,9 @@ void MsgMetadata::assign(IMessageMetadata* from)
 		items[index].charSet = from->getCharSet(&status, index);
 		check(&status);
 
+		items[index].parentFieldName = from->getParentFieldName(&status, index);
+		check(&status);
+
 		items[index].subMetadata = from->getSubMetadata(&status, index);
 		check(&status);
 

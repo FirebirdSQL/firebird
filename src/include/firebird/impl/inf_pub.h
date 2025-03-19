@@ -507,8 +507,7 @@ enum info_db_provider
 #define isc_info_sql_exec_path_blr_bytes	31
 #define isc_info_sql_exec_path_blr_text		32
 #define isc_info_sql_relation_schema		33
-#define isc_info_sql_composite		33
-#define isc_info_sql_composite_name		34
+#define isc_info_sql_parent_field_name		34
 #define isc_info_sql_composite_descriptor	35
 
 /*********************************/

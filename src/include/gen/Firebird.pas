@@ -322,6 +322,7 @@ type
 	IMessageMetadata_getAlignmentPtr = function(this: IMessageMetadata; status: IStatus): Cardinal; cdecl;
 	IMessageMetadata_getAlignedLengthPtr = function(this: IMessageMetadata; status: IStatus): Cardinal; cdecl;
 	IMessageMetadata_getSchemaPtr = function(this: IMessageMetadata; status: IStatus; index: Cardinal): PAnsiChar; cdecl;
+	IMessageMetadata_getParentFieldNamePtr = function(this: IMessageMetadata; status: IStatus; index: Cardinal): PAnsiChar; cdecl;
 	IMessageMetadata_getSubMetadataPtr = function(this: IMessageMetadata; status: IStatus; index: Cardinal): IMessageMetadata; cdecl;
 	IMetadataBuilder_setTypePtr = procedure(this: IMetadataBuilder; status: IStatus; index: Cardinal; type_: Cardinal); cdecl;
 	IMetadataBuilder_setSubTypePtr = procedure(this: IMetadataBuilder; status: IStatus; index: Cardinal; subType: Integer); cdecl;
@@ -1399,6 +1400,7 @@ type
 		getAlignment: IMessageMetadata_getAlignmentPtr;
 		getAlignedLength: IMessageMetadata_getAlignedLengthPtr;
 		getSchema: IMessageMetadata_getSchemaPtr;
+		getParentFieldName: IMessageMetadata_getParentFieldNamePtr;
 		getSubMetadata: IMessageMetadata_getSubMetadataPtr;
 	end;
 
@@ -1423,6 +1425,7 @@ type
 		function getAlignment(status: IStatus): Cardinal;
 		function getAlignedLength(status: IStatus): Cardinal;
 		function getSchema(status: IStatus; index: Cardinal): PAnsiChar;
+		function getParentFieldName(status: IStatus; index: Cardinal): PAnsiChar;
 		function getSubMetadata(status: IStatus; index: Cardinal): IMessageMetadata;
 	end;
 
@@ -1449,6 +1452,7 @@ type
 		function getAlignment(status: IStatus): Cardinal; virtual; abstract;
 		function getAlignedLength(status: IStatus): Cardinal; virtual; abstract;
 		function getSchema(status: IStatus; index: Cardinal): PAnsiChar; virtual; abstract;
+		function getParentFieldName(status: IStatus; index: Cardinal): PAnsiChar; virtual; abstract;
 		function getSubMetadata(status: IStatus; index: Cardinal): IMessageMetadata; virtual; abstract;
 	end;
 
@@ -5029,10 +5033,8 @@ const
 	isc_info_sql_exec_path_blr_bytes = byte(31);
 	isc_info_sql_exec_path_blr_text = byte(32);
 	isc_info_sql_relation_schema = byte(33);
-	isc_info_sql_composite = byte(33);
-	isc_info_sql_composite_name = byte(34);
-	isc_info_sql_parent_name = byte(34);
-	isc_info_sql_composite_descriptor = byte(35);
+	isc_info_sql_parent_field_name = byte(33);
+	isc_info_sql_composite_descriptor = byte(34);
 	isc_info_sql_stmt_select = byte(1);
 	isc_info_sql_stmt_insert = byte(2);
 	isc_info_sql_stmt_update = byte(3);
@@ -7302,6 +7304,18 @@ begin
 	end
 	else begin
 		Result := MessageMetadataVTable(vTable).getSchema(Self, status, index);
+	end;
+	FbException.checkException(status);
+end;
+
+function IMessageMetadata.getParentFieldName(status: IStatus; index: Cardinal): PAnsiChar;
+begin
+	if (vTable.version < 5) then begin
+		FbException.setVersionError(status, 'IMessageMetadata', vTable.version, 5);
+		Result := nil;
+	end
+	else begin
+		Result := MessageMetadataVTable(vTable).getParentFieldName(Self, status, index);
 	end;
 	FbException.checkException(status);
 end;
@@ -11909,11 +11923,11 @@ begin
 	end
 end;
 
-function IMessageMetadataImpl_getCompositeDescriptorDispatcher(this: IMessageMetadata; status: IStatus; index: Cardinal): PAnsiChar; cdecl;
+function IMessageMetadataImpl_getParentFieldNameDispatcher(this: IMessageMetadata; status: IStatus; index: Cardinal): PAnsiChar; cdecl;
 begin
 	Result := nil;
 	try
-		Result := IMessageMetadataImpl(this).getCompositeDescriptor(status, index);
+		Result := IMessageMetadataImpl(this).getParentFieldName(status, index);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -18601,6 +18615,7 @@ initialization
 	IMessageMetadataImpl_vTable.getAlignment := @IMessageMetadataImpl_getAlignmentDispatcher;
 	IMessageMetadataImpl_vTable.getAlignedLength := @IMessageMetadataImpl_getAlignedLengthDispatcher;
 	IMessageMetadataImpl_vTable.getSchema := @IMessageMetadataImpl_getSchemaDispatcher;
+	IMessageMetadataImpl_vTable.getParentFieldName := @IMessageMetadataImpl_getParentFieldNameDispatcher;
 	IMessageMetadataImpl_vTable.getSubMetadata := @IMessageMetadataImpl_getSubMetadataDispatcher;
 
 	IMetadataBuilderImpl_vTable := MetadataBuilderVTable.create;

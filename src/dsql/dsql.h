@@ -636,6 +636,7 @@ public:
 		  par_owner_name(p),
 		  par_rel_alias(p),
 		  par_alias(p),
+		  par_parent_field_name(p),
 		  par_composite_descriptor(p)
 	{
 	}
@@ -652,7 +653,8 @@ public:
 	USHORT par_parameter = 0;			// BLR parameter number
 	USHORT par_index = 0;				// Index into SQLDA, if appropriate
 	bool par_is_text = false;			// Parameter should be dtype_text (SQL_TEXT) externaly
-	Firebird::string par_composite_descriptor; // composite descriptor
+	Firebird::string par_parent_field_name;	// composite parameter parent name, if any
+	Firebird::string par_composite_descriptor; // composite descriptor, if any
 	dsql_par* par_sub_first = nullptr;	// First subparameter of a composite parameter
 	dsql_par* par_next = nullptr;		// Next subparameter for a composite parameter subparameter
 };

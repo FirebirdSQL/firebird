@@ -161,6 +161,7 @@ public:
 	unsigned getCharSet(CheckStatusWrapper* status, unsigned index) override;
 	unsigned getOffset(CheckStatusWrapper* status, unsigned index) override;
 	unsigned getNullOffset(CheckStatusWrapper* status, unsigned index) override;
+	const char* getParentFieldName(CheckStatusWrapper* status, unsigned index) override;
 	IMessageMetadata* getSubMetadata(CheckStatusWrapper* status, unsigned index) override;
 
 	IMetadataBuilder* getBuilder(CheckStatusWrapper* status) override;
@@ -442,6 +443,12 @@ unsigned SQLDAMetadata::getNullOffset(CheckStatusWrapper* status, unsigned index
 
 	fb_assert(count > index);
 	return offsets[index].indOffset;
+}
+
+// AAM: nothing to return in old API
+const char* SQLDAMetadata::getParentFieldName(CheckStatusWrapper* status, unsigned index)
+{
+	return "";
 }
 
 IMessageMetadata* SQLDAMetadata::getSubMetadata(CheckStatusWrapper* status, unsigned index)

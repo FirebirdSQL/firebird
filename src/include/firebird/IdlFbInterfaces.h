@@ -1397,6 +1397,7 @@ namespace Firebird
 			unsigned (CLOOP_CARG *getAlignment)(IMessageMetadata* self, IStatus* status) CLOOP_NOEXCEPT;
 			unsigned (CLOOP_CARG *getAlignedLength)(IMessageMetadata* self, IStatus* status) CLOOP_NOEXCEPT;
 			const char* (CLOOP_CARG *getSchema)(IMessageMetadata* self, IStatus* status, unsigned index) CLOOP_NOEXCEPT;
+			const char* (CLOOP_CARG *getParentFieldName)(IMessageMetadata* self, IStatus* status, unsigned index) CLOOP_NOEXCEPT;
 			IMessageMetadata* (CLOOP_CARG *getSubMetadata)(IMessageMetadata* self, IStatus* status, unsigned index) CLOOP_NOEXCEPT;
 		};
 
@@ -1571,6 +1572,20 @@ namespace Firebird
 			}
 			StatusType::clearException(status);
 			const char* ret = static_cast<VTable*>(this->cloopVTable)->getSchema(this, status, index);
+			StatusType::checkException(status);
+			return ret;
+		}
+
+		template <typename StatusType> const char* getParentFieldName(StatusType* status, unsigned index)
+		{
+			if (cloopVTable->version < 5)
+			{
+				StatusType::setVersionError(status, "IMessageMetadata", cloopVTable->version, 5);
+				StatusType::checkException(status);
+				return 0;
+			}
+			StatusType::clearException(status);
+			const char* ret = static_cast<VTable*>(this->cloopVTable)->getParentFieldName(this, status, index);
 			StatusType::checkException(status);
 			return ret;
 		}
@@ -10283,6 +10298,7 @@ namespace Firebird
 					this->getAlignment = &Name::cloopgetAlignmentDispatcher;
 					this->getAlignedLength = &Name::cloopgetAlignedLengthDispatcher;
 					this->getSchema = &Name::cloopgetSchemaDispatcher;
+					this->getParentFieldName = &Name::cloopgetParentFieldNameDispatcher;
 					this->getSubMetadata = &Name::cloopgetSubMetadataDispatcher;
 				}
 			} vTable;
@@ -10560,6 +10576,21 @@ namespace Firebird
 			}
 		}
 
+		static const char* CLOOP_CARG cloopgetParentFieldNameDispatcher(IMessageMetadata* self, IStatus* status, unsigned index) CLOOP_NOEXCEPT
+		{
+			StatusType status2(status);
+
+			try
+			{
+				return static_cast<Name*>(self)->Name::getParentFieldName(&status2, index);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+				return static_cast<const char*>(0);
+			}
+		}
+
 		static IMessageMetadata* CLOOP_CARG cloopgetSubMetadataDispatcher(IMessageMetadata* self, IStatus* status, unsigned index) CLOOP_NOEXCEPT
 		{
 			StatusType status2(status);
@@ -10632,6 +10663,7 @@ namespace Firebird
 		virtual unsigned getAlignment(StatusType* status) = 0;
 		virtual unsigned getAlignedLength(StatusType* status) = 0;
 		virtual const char* getSchema(StatusType* status, unsigned index) = 0;
+		virtual const char* getParentFieldName(StatusType* status, unsigned index) = 0;
 		virtual IMessageMetadata* getSubMetadata(StatusType* status, unsigned index) = 0;
 	};
 
