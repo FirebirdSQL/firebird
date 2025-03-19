@@ -297,15 +297,6 @@ public:
 		return alignedLength;
 	}
 
-	const char* getCompositeDescriptor(CheckStatusWrapper* status, unsigned index)
-	{
-		if (index < items.getCount())
-			return items[index].compositeDescriptor.c_str();
-
-		raiseIndexError(status, index, "getCompositeDescriptor");
-		return NULL;
-	}
-
 	IMessageMetadata* getSubMetadata(CheckStatusWrapper* status, unsigned index)
 	{
 		if (index < items.getCount())

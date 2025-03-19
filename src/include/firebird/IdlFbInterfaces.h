@@ -1372,7 +1372,7 @@ namespace Firebird
 		}
 	};
 
-#define FIREBIRD_IMESSAGE_METADATA_VERSION 6u
+#define FIREBIRD_IMESSAGE_METADATA_VERSION 5u
 
 	class IMessageMetadata : public IReferenceCounted
 	{
@@ -1397,7 +1397,6 @@ namespace Firebird
 			unsigned (CLOOP_CARG *getAlignment)(IMessageMetadata* self, IStatus* status) CLOOP_NOEXCEPT;
 			unsigned (CLOOP_CARG *getAlignedLength)(IMessageMetadata* self, IStatus* status) CLOOP_NOEXCEPT;
 			const char* (CLOOP_CARG *getSchema)(IMessageMetadata* self, IStatus* status, unsigned index) CLOOP_NOEXCEPT;
-			const char* (CLOOP_CARG *getCompositeDescriptor)(IMessageMetadata* self, IStatus* status, unsigned index) CLOOP_NOEXCEPT;
 			IMessageMetadata* (CLOOP_CARG *getSubMetadata)(IMessageMetadata* self, IStatus* status, unsigned index) CLOOP_NOEXCEPT;
 		};
 
@@ -1576,25 +1575,11 @@ namespace Firebird
 			return ret;
 		}
 
-		template <typename StatusType> const char* getCompositeDescriptor(StatusType* status, unsigned index)
+		template <typename StatusType> IMessageMetadata* getSubMetadata(StatusType* status, unsigned index)
 		{
 			if (cloopVTable->version < 5)
 			{
 				StatusType::setVersionError(status, "IMessageMetadata", cloopVTable->version, 5);
-				StatusType::checkException(status);
-				return 0;
-			}
-			StatusType::clearException(status);
-			const char* ret = static_cast<VTable*>(this->cloopVTable)->getCompositeDescriptor(this, status, index);
-			StatusType::checkException(status);
-			return ret;
-		}
-
-		template <typename StatusType> IMessageMetadata* getSubMetadata(StatusType* status, unsigned index)
-		{
-			if (cloopVTable->version < 6)
-			{
-				StatusType::setVersionError(status, "IMessageMetadata", cloopVTable->version, 6);
 				StatusType::checkException(status);
 				return 0;
 			}
@@ -10298,7 +10283,6 @@ namespace Firebird
 					this->getAlignment = &Name::cloopgetAlignmentDispatcher;
 					this->getAlignedLength = &Name::cloopgetAlignedLengthDispatcher;
 					this->getSchema = &Name::cloopgetSchemaDispatcher;
-					this->getCompositeDescriptor = &Name::cloopgetCompositeDescriptorDispatcher;
 					this->getSubMetadata = &Name::cloopgetSubMetadataDispatcher;
 				}
 			} vTable;
@@ -10576,21 +10560,6 @@ namespace Firebird
 			}
 		}
 
-		static const char* CLOOP_CARG cloopgetCompositeDescriptorDispatcher(IMessageMetadata* self, IStatus* status, unsigned index) CLOOP_NOEXCEPT
-		{
-			StatusType status2(status);
-
-			try
-			{
-				return static_cast<Name*>(self)->Name::getCompositeDescriptor(&status2, index);
-			}
-			catch (...)
-			{
-				StatusType::catchException(&status2);
-				return static_cast<const char*>(0);
-			}
-		}
-
 		static IMessageMetadata* CLOOP_CARG cloopgetSubMetadataDispatcher(IMessageMetadata* self, IStatus* status, unsigned index) CLOOP_NOEXCEPT
 		{
 			StatusType status2(status);
@@ -10663,7 +10632,6 @@ namespace Firebird
 		virtual unsigned getAlignment(StatusType* status) = 0;
 		virtual unsigned getAlignedLength(StatusType* status) = 0;
 		virtual const char* getSchema(StatusType* status, unsigned index) = 0;
-		virtual const char* getCompositeDescriptor(StatusType* status, unsigned index) = 0;
 		virtual IMessageMetadata* getSubMetadata(StatusType* status, unsigned index) = 0;
 	};
 

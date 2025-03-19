@@ -317,7 +317,6 @@ struct IsqlVar
 	};
 	TypeMix value;
 
-	Firebird::Array<Firebird::MsgUtil::SubfieldData> subfields;
 	Firebird::Array<IsqlVar> subvars;
 };
 

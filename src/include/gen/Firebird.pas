@@ -322,7 +322,6 @@ type
 	IMessageMetadata_getAlignmentPtr = function(this: IMessageMetadata; status: IStatus): Cardinal; cdecl;
 	IMessageMetadata_getAlignedLengthPtr = function(this: IMessageMetadata; status: IStatus): Cardinal; cdecl;
 	IMessageMetadata_getSchemaPtr = function(this: IMessageMetadata; status: IStatus; index: Cardinal): PAnsiChar; cdecl;
-	IMessageMetadata_getCompositeDescriptorPtr = function(this: IMessageMetadata; status: IStatus; index: Cardinal): PAnsiChar; cdecl;
 	IMessageMetadata_getSubMetadataPtr = function(this: IMessageMetadata; status: IStatus; index: Cardinal): IMessageMetadata; cdecl;
 	IMetadataBuilder_setTypePtr = procedure(this: IMetadataBuilder; status: IStatus; index: Cardinal; type_: Cardinal); cdecl;
 	IMetadataBuilder_setSubTypePtr = procedure(this: IMetadataBuilder; status: IStatus; index: Cardinal; subType: Integer); cdecl;
@@ -1400,12 +1399,11 @@ type
 		getAlignment: IMessageMetadata_getAlignmentPtr;
 		getAlignedLength: IMessageMetadata_getAlignedLengthPtr;
 		getSchema: IMessageMetadata_getSchemaPtr;
-		getCompositeDescriptor: IMessageMetadata_getCompositeDescriptorPtr;
 		getSubMetadata: IMessageMetadata_getSubMetadataPtr;
 	end;
 
 	IMessageMetadata = class(IReferenceCounted)
-		const VERSION = 6;
+		const VERSION = 5;
 
 		function getCount(status: IStatus): Cardinal;
 		function getField(status: IStatus; index: Cardinal): PAnsiChar;
@@ -1425,7 +1423,6 @@ type
 		function getAlignment(status: IStatus): Cardinal;
 		function getAlignedLength(status: IStatus): Cardinal;
 		function getSchema(status: IStatus; index: Cardinal): PAnsiChar;
-		function getCompositeDescriptor(status: IStatus; index: Cardinal): PAnsiChar;
 		function getSubMetadata(status: IStatus; index: Cardinal): IMessageMetadata;
 	end;
 
@@ -1452,7 +1449,6 @@ type
 		function getAlignment(status: IStatus): Cardinal; virtual; abstract;
 		function getAlignedLength(status: IStatus): Cardinal; virtual; abstract;
 		function getSchema(status: IStatus; index: Cardinal): PAnsiChar; virtual; abstract;
-		function getCompositeDescriptor(status: IStatus; index: Cardinal): PAnsiChar; virtual; abstract;
 		function getSubMetadata(status: IStatus; index: Cardinal): IMessageMetadata; virtual; abstract;
 	end;
 
@@ -7310,22 +7306,10 @@ begin
 	FbException.checkException(status);
 end;
 
-function IMessageMetadata.getCompositeDescriptor(status: IStatus; index: Cardinal): PAnsiChar;
+function IMessageMetadata.getSubMetadata(status: IStatus; index: Cardinal): IMessageMetadata;
 begin
 	if (vTable.version < 5) then begin
 		FbException.setVersionError(status, 'IMessageMetadata', vTable.version, 5);
-		Result := nil;
-	end
-	else begin
-		Result := MessageMetadataVTable(vTable).getCompositeDescriptor(Self, status, index);
-	end;
-	FbException.checkException(status);
-end;
-
-function IMessageMetadata.getSubMetadata(status: IStatus; index: Cardinal): IMessageMetadata;
-begin
-	if (vTable.version < 6) then begin
-		FbException.setVersionError(status, 'IMessageMetadata', vTable.version, 6);
 		Result := nil;
 	end
 	else begin
@@ -18596,7 +18580,7 @@ initialization
 	ITransactionImpl_vTable.disconnect := @ITransactionImpl_disconnectDispatcher;
 
 	IMessageMetadataImpl_vTable := MessageMetadataVTable.create;
-	IMessageMetadataImpl_vTable.version := 6;
+	IMessageMetadataImpl_vTable.version := 5;
 	IMessageMetadataImpl_vTable.addRef := @IMessageMetadataImpl_addRefDispatcher;
 	IMessageMetadataImpl_vTable.release := @IMessageMetadataImpl_releaseDispatcher;
 	IMessageMetadataImpl_vTable.getCount := @IMessageMetadataImpl_getCountDispatcher;
@@ -18617,7 +18601,6 @@ initialization
 	IMessageMetadataImpl_vTable.getAlignment := @IMessageMetadataImpl_getAlignmentDispatcher;
 	IMessageMetadataImpl_vTable.getAlignedLength := @IMessageMetadataImpl_getAlignedLengthDispatcher;
 	IMessageMetadataImpl_vTable.getSchema := @IMessageMetadataImpl_getSchemaDispatcher;
-	IMessageMetadataImpl_vTable.getCompositeDescriptor := @IMessageMetadataImpl_getCompositeDescriptorDispatcher;
 	IMessageMetadataImpl_vTable.getSubMetadata := @IMessageMetadataImpl_getSubMetadataDispatcher;
 
 	IMetadataBuilderImpl_vTable := MetadataBuilderVTable.create;

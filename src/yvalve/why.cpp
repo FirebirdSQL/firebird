@@ -161,7 +161,6 @@ public:
 	unsigned getCharSet(CheckStatusWrapper* status, unsigned index) override;
 	unsigned getOffset(CheckStatusWrapper* status, unsigned index) override;
 	unsigned getNullOffset(CheckStatusWrapper* status, unsigned index) override;
-	const char* getCompositeDescriptor(CheckStatusWrapper* status, unsigned index) override;
 	IMessageMetadata* getSubMetadata(CheckStatusWrapper* status, unsigned index) override;
 
 	IMetadataBuilder* getBuilder(CheckStatusWrapper* status) override;
@@ -443,19 +442,6 @@ unsigned SQLDAMetadata::getNullOffset(CheckStatusWrapper* status, unsigned index
 
 	fb_assert(count > index);
 	return offsets[index].indOffset;
-}
-
-const char* SQLDAMetadata::getCompositeDescriptor(CheckStatusWrapper* status, unsigned index)
-{
-	// // This method is not implemented in SQLDA interface because XSQLDA::XSQLVAR does not have such field
-	// // it removed because some drivers based on old API duplicates it (see FDB)
-	// if (sqlda)
-	// {
-	// 	fb_assert(sqlda->sqld > (int) index);
-	// 	return sqlda->sqlvar[index].compositeDescriptor;
-	// }
-
-	return "";
 }
 
 IMessageMetadata* SQLDAMetadata::getSubMetadata(CheckStatusWrapper* status, unsigned index)

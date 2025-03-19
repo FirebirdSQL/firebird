@@ -1559,7 +1559,6 @@ processing_state ISQL_fill_var(IsqlVar* var,
 	var->length = msg->getLength(fbStatus, index);				if (failed()) return ps_ERR;
 	var->charSet = CSetId(msg->getCharSet(fbStatus, index));	if (failed()) return ps_ERR;
 	var->nullable = msg->isNullable(fbStatus, index);			if (failed()) return ps_ERR;
-	var->compositeDescriptor = msg->getCompositeDescriptor(fbStatus, index);	if (failed()) return ps_ERR;
 
 	auto subfieldsMetadata = msg->getSubMetadata(fbStatus, index);	if (failed()) return ps_ERR;
 	if (subfieldsMetadata)
