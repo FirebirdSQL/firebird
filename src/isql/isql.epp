@@ -1541,57 +1541,6 @@ inline static bool succeeded()
 	return !failed();
 }
 
-// primitive composite type descriptor deserializer
-// TODO: rewrite
-int getNumberOfSubFields(const char* serializedDescriptor)
-{
-	auto curchar = serializedDescriptor;
-
-	if (!serializedDescriptor)
-		return 0;
-
-	UCHAR curStringLength = 0;
-	USHORT serFieldType = 0;
-	ULONG serFieldLength = 0;
-	USHORT numOfFlagBits = 0;
-	USHORT stackCounter = 0;
-	SSHORT subType = 0;
-	SSHORT scale = 0;
-	SSHORT charset = 0;
-
-	while (1)
-	{
-		if (*curchar == 0)
-		{
-			curchar += 1;
-			stackCounter--;
-			if (stackCounter == 0)
-				break;
-			continue;
-		}
-
-		stackCounter++;
-		numOfFlagBits++;
-		curStringLength = 0;
-		curchar += 2;
-		curStringLength = *curchar;
-		curchar += 1;
-		curchar += curStringLength;
-		serFieldType = *(USHORT*)curchar;
-		curchar += 2;
-		serFieldLength = *(ULONG*)curchar;
-		curchar += 4;
-		subType = *(SSHORT*)curchar;
-		curchar += 2;
-		scale = *(SSHORT*)curchar;
-		curchar += 2;
-		charset = *(SSHORT*)curchar;
-		curchar += 2;
-	}
-
-	return numOfFlagBits - 1;	// top composite field has it's own null indicator outside of nullmask
-}
-
 
 #define NULL_BYTES(n)	(n*2)
 
@@ -1622,9 +1571,6 @@ processing_state ISQL_fill_var(IsqlVar* var,
 		}
 	}
 
-	if (var->compositeDescriptor && *var->compositeDescriptor)
-		var->subfieldsNum = getNumberOfSubFields(var->compositeDescriptor);
-
 	if (buf)
 	{
 		var->nullInd = (short*) &buf[msg->getNullOffset(fbStatus, index)];	if (failed()) return ps_ERR;
@@ -1634,11 +1580,6 @@ processing_state ISQL_fill_var(IsqlVar* var,
 	{
 		var->nullInd = 0;
 		var->value.setPtr = 0;
-	}
-
-	if (var->type == SQL_ROWTYPE)
-	{
-		var->subfields = Firebird::MsgUtil::getSubfieldsData(fbStatus, msg, buf, index);
 	}
 
 	return CONT;

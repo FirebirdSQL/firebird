@@ -5035,6 +5035,7 @@ const
 	isc_info_sql_relation_schema = byte(33);
 	isc_info_sql_composite = byte(33);
 	isc_info_sql_composite_name = byte(34);
+	isc_info_sql_parent_name = byte(34);
 	isc_info_sql_composite_descriptor = byte(35);
 	isc_info_sql_stmt_select = byte(1);
 	isc_info_sql_stmt_insert = byte(2);

@@ -1936,30 +1936,6 @@ DdlNode* CreateAlterFunctionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	LocalDeclarationsNode::checkUniqueFieldsNames(localDeclList, &parameters, nullptr);
 
-	// TODO ROWTYPE FBPORT: uncomment and fix this after merge
-	// dsqlScratch->genLocalTypes(localDeclList);
-
-	// // check for duplicated parameters and declaration names
-
-	// StrArray names;
-
-	// for (FB_SIZE_T i = 0; i < parameters.getCount(); ++i)
-	// {
-	// 	const ParameterClause* const parameter = parameters[i];
-
-	// 	if (names.exist(parameter->name.c_str()))
-	// 	{
-	// 		status_exception::raise(
-	// 			Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-	// 			Arg::Gds(isc_dsql_duplicate_spec) << Arg::Str(parameter->name));
-	// 	}
-
-	// 	if (parameter->name.hasData())	// legacy UDFs has unnamed parameters
-	// 		names.add(parameter->name.c_str());
-	// }
-
-	// PASS1_check_unique_fields_names(names, localDeclList);
-
 	source.ltrim("\n\r\t ");
 
 	if (aggregate)
@@ -3217,43 +3193,6 @@ DdlNode* CreateAlterProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	LocalDeclarationsNode::checkUniqueFieldsNames(localDeclList, &parameters, &returns);
 
-	// TODO ROWTYPE FBPORT: uncomment and fix this after merge
-	// dsqlScratch->genLocalTypes(localDeclList);
-
-	// // check for duplicated parameters and declaration names
-
-	// StrArray names;
-
-	// for (FB_SIZE_T i = 0; i < parameters.getCount(); ++i)
-	// {
-	// 	const ParameterClause* const parameter = parameters[i];
-
-	// 	if (names.exist(parameter->name.c_str()))
-	// 	{
-	// 		status_exception::raise(
-	// 			Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-	// 			Arg::Gds(isc_dsql_duplicate_spec) << Arg::Str(parameter->name));
-	// 	}
-
-	// 	names.add(parameter->name.c_str());
-	// }
-
-	// for (FB_SIZE_T i = 0; i < returns.getCount(); ++i)
-	// {
-	// 	const ParameterClause* const parameter = returns[i];
-
-	// 	if (names.exist(parameter->name.c_str()))
-	// 	{
-	// 		status_exception::raise(
-	// 			Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-	// 			Arg::Gds(isc_dsql_duplicate_spec) << Arg::Str(parameter->name));
-	// 	}
-
-	// 	names.add(parameter->name.c_str());
-	// }
-
-	// PASS1_check_unique_fields_names(names, localDeclList);
-
 	source.ltrim("\n\r\t ");
 
 	bool hasDefaultParams = false;
@@ -3967,7 +3906,7 @@ void CreateAlterProcedureNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch*
 		}
 	}
 
-	dsqlScratch->putLocalTypes();
+	// dsqlScratch->putLocalTypes();
 
 	auto rowtypeOffset = 0;
 	for (Array<dsql_var*>::const_iterator i = dsqlScratch->variables.begin();
@@ -4011,9 +3950,6 @@ void CreateAlterProcedureNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch*
 		localDeclList = localDeclList->dsqlPass(dsqlScratch);
 		localDeclList->genBlr(dsqlScratch);
 	}
-
-	// TODO ROWTYPE FBPORT: uncomment and fix this after merge
-	// dsqlScratch->putLocalVariables(localDeclList, parameters.getCount() + returns.getCount());
 
 	dsqlScratch->loopLevel = 0;
 	dsqlScratch->cursorNumber = 0;

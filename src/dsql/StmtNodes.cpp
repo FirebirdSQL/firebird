@@ -6499,8 +6499,6 @@ ExecBlockNode* ExecBlockNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			node->returns[index - 1]->type->fld_next = newRet->type;
 	}
 
-	// TODO ROWTYPE FBPORT: uncomment and fix this after merge
-	// dsqlScratch->genLocalTypes(localDeclList);
 	node->localDeclList = localDeclList;
 	node->body = body;
 
@@ -6657,12 +6655,10 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 				dsqlScratch->appendUChar(blr_null);
 			}
 		}
+		// AAM: we have to put parent routine local types declaration duplicates
+		// to be able to use it inside subroutine declarations
+		dsqlScratch->putLocalTypes();
 	}
-
-	// const auto& variables = subRoutine ? dsqlScratch->outputVariables : dsqlScratch->variables;
-
-	// TODO ROWTYPE FBPORT: uncomment and fix this after merge
-	dsqlScratch->putLocalTypes();
 
 	auto inputCompositeVarIdOffset = 0;
 	for (const auto variable : dsqlScratch->variables)
@@ -8318,7 +8314,7 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 			declarationNode = declarationNode->dsqlPass(dsqlScratch);
 			dsqlScratch->localCompositeTypeDeclarations.put(declarationNode->name, declarationNode);
-			declarationNode->genBlr(dsqlScratch);	// TODO ROWTYPE: should work
+			declarationNode->genBlr(dsqlScratch);
 		}
 		else
 			fb_assert(false);

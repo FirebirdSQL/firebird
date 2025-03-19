@@ -1390,7 +1390,8 @@ static UCHAR* describe_parameter(thread_db* tdbb,
 					UCHAR* subInfo = nullptr;
 					UCHAR* currentPos = nullptr;
 
-					do {
+					do
+					{
 						needRetry = false;
 						subInfo = subFieldsBuffer.getBuffer(bufferSize);
 						const UCHAR* const subEnd = subInfo + bufferSize;
@@ -1421,7 +1422,8 @@ static UCHAR* describe_parameter(thread_db* tdbb,
 								break;
 							}
 						}
-					} while (needRetry);
+					}
+					while (needRetry);
 
 					if (currentPos + 1 >= subInfo + bufferSize)
 					{
@@ -1432,12 +1434,6 @@ static UCHAR* describe_parameter(thread_db* tdbb,
 					length = currentPos - subInfo;
 					buffer = subInfo;
 				}
-				// else
-				// {
-				// 	stringBuffer = param->par_composite_descriptor;
-				// 	length = stringBuffer.length();
-				// 	buffer = reinterpret_cast<const UCHAR*>(stringBuffer.c_str());
-				// }
 				break;
 
 			default:
@@ -1701,70 +1697,6 @@ dsql_udf::dsql_udf(MemoryPool& p, const class Function* jfun)
 }
 
 
-static void parseParameterFieldForDscData(USHORT& id, dsql_fld& parameterField, string& outstringbuff)
-{
-	id++;
-	auto name = parameterField.fld_name;
-	USHORT type = fb_utils::dscTypeToSqlType(parameterField.dtype);
-	ULONG length = parameterField.length;
-	SSHORT subType = parameterField.subType;
-	SSHORT scale = parameterField.scale;
-	SSHORT charset = parameterField.charSetId.has_value() ? parameterField.charSetId.value() : 0;
-	const char endByte = 0x00;
-
-	outstringbuff.append(reinterpret_cast<const char*>(&id), sizeof(id));
-	UCHAR nameLength = name.length();	// name of a field can't be longer than 255 bytes
-	outstringbuff.append(reinterpret_cast<const char*>(&nameLength), sizeof(nameLength));
-	outstringbuff.append(reinterpret_cast<const char*>(name.c_str()), name.length());
-	outstringbuff.append(reinterpret_cast<const char*>(&type), sizeof(type));
-	outstringbuff.append(reinterpret_cast<const char*>(&length), sizeof(length));
-	outstringbuff.append(reinterpret_cast<const char*>(&subType), sizeof(subType));
-	outstringbuff.append(reinterpret_cast<const char*>(&scale), sizeof(scale));
-	outstringbuff.append(reinterpret_cast<const char*>(&charset), sizeof(charset));
-
-	if (parameterField.fld_sub_first)
-	{
-		parseParameterFieldForDscData(id, *parameterField.fld_sub_first, outstringbuff);
-		outstringbuff.append(&endByte, sizeof(endByte));
-	}
-	else
-		outstringbuff.append(&endByte, sizeof(endByte));
-
-	if (parameterField.fld_next)
-		parseParameterFieldForDscData(id, *parameterField.fld_next, outstringbuff);
-}
-
-
-/**
-
- 	Jrd::serialize_composite_parameter_descriptor
-
-    @brief	Serializes the composite field descriptor for subsequent sending to the client
-
-
-    @param parameterField
-    @param serializedDescriptor
-
- **/
-USHORT Jrd::serialize_composite_parameter_descriptor(dsql_fld& parameterField, string& serializedDescriptor)
-{
-	if (parameterField.dtype != dtype_rowtype)
-		return 0;
-
-	thread_db* tdbb = JRD_get_thread_data();
-
-	string outstringbuff;
-
-	USHORT id = 0;
-	parseParameterFieldForDscData(id, parameterField, outstringbuff);
-	USHORT serializedDescriptorLength = outstringbuff.length();
-	outstringbuff.insert(0, reinterpret_cast<const char*>(&serializedDescriptorLength), sizeof(serializedDescriptorLength));
-
-	serializedDescriptor = outstringbuff;
-
-	return serializedDescriptorLength;
-}
-
 static USHORT generateSubparameterFields(thread_db* tdbb, dsql_fld* parameterField, dsc* parameterDsc, dsql_par** lastParameterPtr, UCHAR*& nulloffset, USHORT previousParameterIndex)
 {
 	if (!parameterField)
@@ -1828,6 +1760,17 @@ static USHORT generateSubparameterFields(thread_db* tdbb, dsql_fld* parameterFie
 	return count;
 }
 
+/**
+
+ 	Jrd::generate_sub_parameters
+
+    @brief	Generates describe tags for composite object subfields
+
+
+    @param parameterField
+    @param hostParameter
+
+ **/
 USHORT Jrd::generate_sub_parameters(dsql_fld& parameterField, dsql_par& hostParameter)
 {
 	if (parameterField.dtype != dtype_rowtype)

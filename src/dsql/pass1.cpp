@@ -762,48 +762,6 @@ void PASS1_ambiguity_check(DsqlCompilerScratch* dsqlScratch,
 					  Arg::Warning(isc_random) << name);
 }
 
-// TODO ROWTYPE FBPORT: uncomment and remove this after merge
-// /**
-// 	PASS1_check_unique_fields_names
-
-// 	check fields (params, variables, cursors etc) names against
-// 	sorted array
-// 	if success, add them into array
-//  **/
-// void PASS1_check_unique_fields_names(StrArray& names, const CompoundStmtNode* fields)
-// {
-// 	if (!fields)
-// 		return;
-
-// 	const NestConst<StmtNode>* ptr = fields->statements.begin();
-// 	const NestConst<StmtNode>* const end = fields->statements.end();
-
-// 	for (; ptr != end; ++ptr)
-// 	{
-// 		const char* name = NULL;
-
-// 		if (auto varNode = nodeAs<DeclareVariableNode>(*ptr))
-// 			name = varNode->dsqlDef->name.c_str();
-// 		// if (auto typeNode = nodeAs<DeclareLocalTypeNode>(*ptr)) // TODO: analyse
-// 		// 	name = typeNode->name.c_str();
-// 		else if (auto cursorNode = nodeAs<DeclareCursorNode>(*ptr))
-// 			name = cursorNode->dsqlName.c_str();
-// 		else if (nodeAs<DeclareSubProcNode>(*ptr) || nodeAs<DeclareSubFuncNode>(*ptr))
-// 			continue;
-
-// 		fb_assert(name);
-
-// 		FB_SIZE_T pos;
-// 		if (!names.find(name, pos))
-// 			names.insert(pos, name);
-// 		else
-// 		{
-// 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-637) <<
-// 					  Arg::Gds(isc_dsql_duplicate_spec) << Arg::Str(name));
-// 		}
-// 	}
-// }
-
 
 bool PASS1_compare_alias(const QualifiedName& contextAlias, const QualifiedName& lookupAlias)
 {

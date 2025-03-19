@@ -245,13 +245,6 @@ void StatementMetadata::parseSubfields(const UCHAR*& buffer, const UCHAR* buffer
 	Parameters::Item* param = &temp;
 	bool finishDescribe = false;
 
-	auto& alignedLength = parameters->alignedLength;
-	alignedLength = 0;
-	auto& length = parameters->length;
-	length = 0;
-	auto& alignment = parameters->alignment;
-	alignment = type_alignments[dtype_short];	// NULL indicator
-
     // Loop over the variables being described.
 	while (!finishDescribe)
 	{
@@ -324,18 +317,6 @@ void StatementMetadata::parseSubfields(const UCHAR*& buffer, const UCHAR* buffer
 			default:
 				--buffer;
 				finishDescribe = true;
-
-				for (unsigned n = 0; n < parameters->items.getCount(); ++n)
-				{
-					Parameters::Item* param = &parameters->items[n];
-
-					if (!param->finished)
-					{
-						// parameters->fetched = false; // TODO ROWTYPE: should we throw here?
-						break;
-					}
-				}
-
 				parameters->makeSubfieldsOffsets(bufferOffset);
 
 				for (unsigned n = 0; n < parameters->items.getCount(); ++n)
@@ -347,7 +328,7 @@ void StatementMetadata::parseSubfields(const UCHAR*& buffer, const UCHAR* buffer
 						const UCHAR* subBufferEnd = subBuffer + param->compositeDescriptor.length();
 
 						auto submeta = FB_NEW MsgMetadata;
-						parseSubfields(subBuffer, subBufferEnd, submeta, alignedLength);
+						parseSubfields(subBuffer, subBufferEnd, submeta, parameters->alignedLength);
 						param->subMetadata = submeta;
 					}
 					else

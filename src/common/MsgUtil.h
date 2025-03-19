@@ -69,7 +69,6 @@ namespace Firebird {
 		};
 
 		ISC_STATUS getCodeByName(const char* name);
-		Array<SubfieldData> getSubfieldsData(CheckStatusWrapper* status, IMessageMetadata* msgMetadata, const UCHAR* msgDataBuffer, unsigned fieldIndex);
 	}
 } // namespace Firebird
 

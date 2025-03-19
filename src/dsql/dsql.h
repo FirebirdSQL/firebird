@@ -948,7 +948,6 @@ enum class AggregateFunctionPhase : UCHAR
 	FINISH = 3
 };
 
-USHORT serialize_composite_parameter_descriptor(dsql_fld& parameterField, Firebird::string& serializedDescriptor);
 USHORT generate_sub_parameters(dsql_fld& parameterField, dsql_par& hostParameter);
 
 } // namespace
