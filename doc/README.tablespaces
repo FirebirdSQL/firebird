@@ -112,6 +112,9 @@ UTILITIES
     -ts <tablespace> <path>
     allows you to specify the path for the tablespace. You can specify either an absolute path or a relative path.
     The option can be used as many times as required. It can also be used together with -ts_map.
+    
+    If you specify “PRIMARY” instead of the path for the new tablespace, the contents of the tablespace will be moved to the PRIMARY tablespace. 
+    The tablespace will not be created.
 
     -ts_orig[inal_paths]
     To restore tablespaces to the original paths they were on when the backup was created.
@@ -176,12 +179,11 @@ PLANS
 
     1. Add the main database file to the RDB$TABLESPACES table. Designate it as PRIMARY.
     The RDB$TABLESPACE_NAME field contained in the system tables of tables, indexes will have the value “PRIMARY” instead of NULL.
-    2. Add an option to transfer tablespace to the main DB file when restoring.
-    3. TEMPORARY predefined tablespaces.
-    4. Grouping page counters by tablespace (For output in trace and monitoring).
-    5. New header page for tablespaces
-    6. NBACKUP support for tablespaces
-    7. Moving blobs to separate tablespaces  (The RDB$TABLESPACE_NAME column in RDB$RELATION_FIELDS is reserved for this purpose).
-    8. Possibility to introduce UNDO tablespace in future versions
-    9. The ability to set default tablespaces for tables, indexes and BLOBs at the database or schema level.
+    2. TEMPORARY predefined tablespaces.
+    3. Grouping page counters by tablespace (For output in trace and monitoring).
+    4. New header page for tablespaces
+    5. NBACKUP support for tablespaces
+    6. Moving blobs to separate tablespaces  (The RDB$TABLESPACE_NAME column in RDB$RELATION_FIELDS is reserved for this purpose).
+    7. Possibility to introduce UNDO tablespace in future versions
+    8. The ability to set default tablespaces for tables, indexes and BLOBs at the database or schema level.
 

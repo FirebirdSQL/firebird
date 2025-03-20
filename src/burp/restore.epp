@@ -3939,9 +3939,12 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation)
 				// ODS 14
 
 				case att_field_tablespace_name:
+				{
 					GET_TEXT(X.RDB$TABLESPACE_NAME);
-					X.RDB$TABLESPACE_NAME.NULL = FALSE;
+					const auto str = tdgbl->tablespace_mapping.get(X.RDB$TABLESPACE_NAME);
+					X.RDB$TABLESPACE_NAME.NULL = str ? str->equals(PRIMARY_TABLESPACE_NAME) : FALSE;
 					break;
+				}
 
 				default:
 					bad_attribute(scan_next_attr, attribute, 84);
@@ -6662,9 +6665,12 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 			// ODS 14
 
 			case att_index_tablespace_name:
+			{
 				GET_TEXT(X.RDB$TABLESPACE_NAME);
-				X.RDB$TABLESPACE_NAME.NULL = FALSE;
+				const auto str = tdgbl->tablespace_mapping.get(X.RDB$TABLESPACE_NAME);
+				X.RDB$TABLESPACE_NAME.NULL = str ? str->equals(PRIMARY_TABLESPACE_NAME) : FALSE;
 				break;
+			}
 
 			default:
 				bad_attribute(scan_next_attr, attribute, 93);
@@ -6922,77 +6928,129 @@ bool get_tablespace(BurpGlobals* tdgbl)
  *	Reconstruct a tablespace.
  *
  **************************************/
-	att_type attribute;
-	TEXT temp[GDS_NAME_LEN];
-	SSHORT len;
-	scan_attr_t scan_next_attr;
-
 	if (tdgbl->RESTORE_format < 13) // Probably this check is not needed
 		return false;
+
+	ISC_QUAD tablespace_desc = fbBlobNull;
+	bool tablespace_desc_null = true;
+	GDS_NAME owner_name;
+	SLONG sys_flag = fb_sysflag_user;
+	FB_BOOLEAN offline = FB_FALSE;
+	FB_BOOLEAN read_only = FB_FALSE;
+
+	BASED_ON RDB$TABLESPACES.RDB$TABLESPACE_NAME tablespace_name;
+	tablespace_name[0] = '\0';
+
+	BASED_ON RDB$TABLESPACES.RDB$SECURITY_CLASS security_class;
+	security_class[0] = '\0';
+	bool security_class_null = true;
+
+	BASED ON RDB$TABLESPACES.RDB$FILE_NAME tablespace_file;
+	tablespace_file[0] = '\0';
+
+	att_type attribute;
+	scan_attr_t scan_next_attr;
+
+	bool moveToPrimary = false;
+
+	skip_init(&scan_next_attr);
+	while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
+	{
+		switch (attribute)
+		{
+		case att_ts_name:
+		{
+			TEXT temp[GDS_NAME_LEN];
+			SSHORT len = GET_TEXT(tablespace_name);
+			MISC_terminate(tablespace_name, temp, len, sizeof(temp));
+
+			const auto str = tdgbl->tablespace_mapping.get(tablespace_name);
+			if (str && str->equals(PRIMARY_TABLESPACE_NAME))
+				moveToPrimary = true;		// Move the contents of this TS to PRIMARY
+			else
+				BURP_verbose(1019, temp);	// msg 1019 restoring tablespace %s
+			break;
+		}
+		case att_ts_security_class:
+			if (moveToPrimary)
+				eat_text(tdgbl);
+			else
+			{
+				GET_TEXT(security_class);
+				fix_security_class_name(tdgbl, security_class, false);
+			}
+			break;
+
+		case att_ts_description:
+			if (moveToPrimary)
+				eat_blob(tdgbl);
+			else
+			{
+				tablespace_desc_null = false;
+				get_source_blob(tdgbl, tablespace_desc, true);
+			}
+			break;
+
+		case att_ts_owner_name:
+			if (moveToPrimary)
+				eat_text(tdgbl);
+			else
+				GET_TEXT(owner_name);
+			break;
+
+		case att_ts_file:
+			if (moveToPrimary)
+				eat_text(tdgbl);
+			else
+				GET_TEXT(tablespace_file);
+			break;
+
+		case att_ts_offline:
+			offline = get_boolean(tdgbl, false);
+			break;
+
+		case att_ts_readonly:
+			read_only = get_boolean(tdgbl, false);
+			break;
+
+		default:
+			bad_attribute(scan_next_attr, attribute, 1020);	// msg 1020 tablespace
+			break;
+		}
+	}
+
+	// Do not add a tablespace if its contents are moved to the PRIMARY when restoring it
+	if (moveToPrimary)
+		return true;
 
 //	Firebird::ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
 
 	STORE (REQUEST_HANDLE tdgbl->handles_get_ts_req_handle1)
 		X IN RDB$TABLESPACES
 	{
-		X.RDB$TABLESPACE_NAME.NULL = TRUE;
-		X.RDB$SECURITY_CLASS.NULL = TRUE;
-		X.RDB$SYSTEM_FLAG = 0;
+		X.RDB$TABLESPACE_NAME.NULL = FALSE;
+		strcpy(X.RDB$TABLESPACE_NAME, tablespace_name);
+
+		X.RDB$SECURITY_CLASS.NULL = security_class_null;
+		strcpy(X.RDB$SECURITY_CLASS, security_class);
+
 		X.RDB$SYSTEM_FLAG.NULL = FALSE;
-		X.RDB$DESCRIPTION.NULL = TRUE;
-		X.RDB$OWNER_NAME.NULL = TRUE;
-		X.RDB$FILE_NAME.NULL = TRUE;
-		X.RDB$OFFLINE.NULL = TRUE;
-		X.RDB$READ_ONLY.NULL = TRUE;
+		X.RDB$SYSTEM_FLAG = sys_flag;
 
-		skip_init(&scan_next_attr);
-		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
-		{
-			switch (attribute)
-			{
-			case att_ts_name:
-				len = GET_TEXT(X.RDB$TABLESPACE_NAME);
-				X.RDB$TABLESPACE_NAME.NULL = FALSE;
-				MISC_terminate(X.RDB$TABLESPACE_NAME, temp, len, sizeof(temp));
-				BURP_verbose(413, temp);	// msg 413 restoring tablespace %s
-				break;
+		X.RDB$DESCRIPTION.NULL = tablespace_desc_null;
+		X.RDB$DESCRIPTION = tablespace_desc;
 
-			case att_ts_security_class:
-				GET_TEXT(X.RDB$SECURITY_CLASS);
-				fix_security_class_name(tdgbl, X.RDB$SECURITY_CLASS, false);
-				X.RDB$SECURITY_CLASS.NULL = FALSE;
-				break;
+		X.RDB$OWNER_NAME.NULL = FALSE;
+		strcpy(X.RDB$OWNER_NAME, owner_name);
 
-			case att_ts_description:
-				get_source_blob(tdgbl, X.RDB$DESCRIPTION, true);
-				X.RDB$DESCRIPTION.NULL = FALSE;
-				break;
+		X.RDB$FILE_NAME.NULL = FALSE;
+		strcpy(X.RDB$FILE_NAME, tablespace_file);
 
-			case att_ts_owner_name:
-				GET_TEXT(X.RDB$OWNER_NAME);
-				X.RDB$OWNER_NAME.NULL = FALSE;
-				break;
+		X.RDB$OFFLINE.NULL = FALSE;
+		X.RDB$OFFLINE = (USHORT) offline;
 
-			case att_ts_file:
-				GET_TEXT(X.RDB$FILE_NAME);
-				X.RDB$FILE_NAME.NULL = FALSE;
-				break;
-
-			case att_ts_offline:
-				X.RDB$OFFLINE = (USHORT) get_boolean(tdgbl, false);
-				X.RDB$OFFLINE.NULL = FALSE;
-				break;
-
-			case att_ts_readonly:
-				X.RDB$READ_ONLY = (USHORT) get_boolean(tdgbl, false);
-				X.RDB$READ_ONLY.NULL = FALSE;
-				break;
-
-			default:
-				bad_attribute(scan_next_attr, attribute, 414);	// msg 414 tablespace
-				break;
-			}
-		}
+		X.RDB$READ_ONLY.NULL = FALSE;
+		X.RDB$READ_ONLY = (USHORT) read_only;
 
 		Firebird::string newFile;
 		if (tdgbl->tablespace_mapping.get(X.RDB$TABLESPACE_NAME, newFile))
@@ -8048,9 +8106,12 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 			break;
 
 		case att_relation_tablespace_name:
-			tableSpaceNull = false;
+		{
 			GET_TEXT(tableSpace);
+			const auto str = tdgbl->tablespace_mapping.get(tableSpace);
+			tableSpaceNull = str ? str->equals(PRIMARY_TABLESPACE_NAME) : FALSE;
 			break;
+		}
 
 		default:
 			bad_attribute(scan_next_attr, attribute, 111);
