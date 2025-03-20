@@ -449,9 +449,6 @@
     <ClInclude Include="..\..\..\src\common\classes\objects_array.h">
       <Filter>headers</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\common\classes\QualifiedName.h">
-      <Filter>headers</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\RefCounted.h">
       <Filter>headers</Filter>
     </ClInclude>
@@ -609,6 +606,9 @@
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\ParsedList.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\common\classes\QualifiedMetaString.h">
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\Int128.h">

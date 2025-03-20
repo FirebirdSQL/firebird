@@ -162,6 +162,8 @@ private:
 	ULONG vdr_err_counts[VAL_MAX_ERROR];
 
 	Firebird::UtilSvc* vdr_service;
+	Firebird::AutoPtr<Firebird::SimilarToRegex> vdr_sch_incl;
+	Firebird::AutoPtr<Firebird::SimilarToRegex> vdr_sch_excl;
 	Firebird::AutoPtr<Firebird::SimilarToRegex> vdr_tab_incl;
 	Firebird::AutoPtr<Firebird::SimilarToRegex> vdr_tab_excl;
 	Firebird::AutoPtr<Firebird::SimilarToRegex> vdr_idx_incl;

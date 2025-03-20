@@ -202,6 +202,7 @@ static void buildDpb(Firebird::ClumpletWriter& dpb, const SINT64 switches)
 	dpb.reset(isc_dpb_version1);
 	dpb.insertTag(isc_dpb_gfix_attach);
 	tdgbl->uSvc->fillDpb(dpb);
+	dpb.insertString(isc_dpb_search_path, SYSTEM_SCHEMA, fb_strlen(SYSTEM_SCHEMA));
 
 	if (switches & sw_sweep) {
 		dpb.insertByte(isc_dpb_sweep, isc_dpb_records);

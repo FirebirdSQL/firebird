@@ -33,17 +33,19 @@ const int IN_SW_VAL_IDX_INCL		= 3;
 const int IN_SW_VAL_IDX_EXCL		= 4;
 const int IN_SW_VAL_LOCK_TIMEOUT	= 5;
 const int IN_SW_VAL_DATABASE		= 6;
+const int IN_SW_VAL_SCH_INCL		= 7;
+const int IN_SW_VAL_SCH_EXCL		= 8;
 
 static const Switches::in_sw_tab_t val_option_in_sw_table[] =
 {
+	{IN_SW_VAL_SCH_INCL,		isc_spb_val_sch_incl,		"SCH_INCLUDE",	0, 0, 0, false,	false,	0,	5, NULL},
+	{IN_SW_VAL_SCH_EXCL,		isc_spb_val_sch_excl,		"SCH_EXCLUDE",	0, 0, 0, false,	false,	0,	5, NULL},
 	{IN_SW_VAL_TAB_INCL,		isc_spb_val_tab_incl,		"TAB_INCLUDE",	0, 0, 0, false,	false,	0,	5, NULL},
 	{IN_SW_VAL_TAB_EXCL,		isc_spb_val_tab_excl,		"TAB_EXCLUDE",	0, 0, 0, false,	false,	0,	5, NULL},
 	{IN_SW_VAL_IDX_INCL,		isc_spb_val_idx_incl,		"IDX_INCLUDE",	0, 0, 0, false,	false,	0,	5, NULL},
 	{IN_SW_VAL_IDX_EXCL,		isc_spb_val_idx_excl,		"IDX_EXCLUDE",	0, 0, 0, false,	false,	0,	5, NULL},
 	{IN_SW_VAL_LOCK_TIMEOUT,	isc_spb_val_lock_timeout,	"WAIT", 		0, 0, 0, false,	false,	0,	1, NULL},
-
 	{IN_SW_VAL_DATABASE,		isc_spb_dbname,				"DATABASE",		0, 0, 0, false,	false,	0,	1, NULL},
-
 	{0, 0, NULL, 0, 0, 0, false, false,	0, 0, NULL}		// End of List
 };
 

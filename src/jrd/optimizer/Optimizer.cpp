@@ -431,7 +431,7 @@ namespace
 				if (relationId != arg.relationId)
 				{
 					// index %s cannot be used in the specified plan
-					ERR_post(Arg::Gds(isc_index_unused) << arg.indexName);
+					ERR_post(Arg::Gds(isc_index_unused) << arg.indexName.toQuotedString());
 				}
 
 				if (idx.idx_id == arg.indexId)
@@ -1068,8 +1068,12 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 
 			fb_assert(tail->csb_relation);
 
-			CMP_post_access(tdbb, csb, tail->csb_relation->rel_security_name,
-				tail->csb_view ? tail->csb_view->rel_id : 0,
+			const SLONG ssRelationId = tail->csb_view ? tail->csb_view->rel_id : 0;
+
+			CMP_post_access(tdbb, csb, tail->csb_relation->rel_security_name.schema, ssRelationId,
+				SCL_usage, obj_schemas, QualifiedName(tail->csb_relation->rel_name.schema));
+
+			CMP_post_access(tdbb, csb, tail->csb_relation->rel_security_name.object, ssRelationId,
 				SCL_update, obj_relations, tail->csb_relation->rel_name);
 		}
 
@@ -1679,9 +1683,9 @@ void Optimizer::checkIndices()
 		{
 			// index %s cannot be used in the specified plan
 			if (isGbak)
-				ERR_post_warning(Arg::Warning(isc_index_unused) << plan->accessType->items[0].indexName);
+				ERR_post_warning(Arg::Warning(isc_index_unused) << plan->accessType->items[0].indexName.toQuotedString());
 			else
-				ERR_post(Arg::Gds(isc_index_unused) << plan->accessType->items[0].indexName);
+				ERR_post(Arg::Gds(isc_index_unused) << plan->accessType->items[0].indexName.toQuotedString());
 		}
 
 		if (!tail->csb_idx)
@@ -1689,7 +1693,7 @@ void Optimizer::checkIndices()
 
 		// Check to make sure that all indices are either used or marked not to be used,
 		// and that there are no unused navigational indices
-		MetaName index_name;
+		QualifiedName index_name;
 
 		for (const auto& idx : *tail->csb_idx)
 		{
@@ -1699,13 +1703,13 @@ void Optimizer::checkIndices()
 				if (relation)
 					MET_lookup_index(tdbb, index_name, relation->rel_name, (USHORT) (idx.idx_id + 1));
 				else
-					index_name = "";
+					index_name.clear();
 
 				// index %s cannot be used in the specified plan
 				if (isGbak)
-					ERR_post_warning(Arg::Warning(isc_index_unused) << Arg::Str(index_name));
+					ERR_post_warning(Arg::Warning(isc_index_unused) << index_name.toQuotedString());
 				else
-					ERR_post(Arg::Gds(isc_index_unused) << Arg::Str(index_name));
+					ERR_post(Arg::Gds(isc_index_unused) << index_name.toQuotedString());
 			}
 		}
 	}
@@ -2890,9 +2894,9 @@ string Optimizer::getStreamName(StreamType stream)
 	string name;
 
 	if (relation)
-		name = relation->rel_name.c_str();
+		name = relation->rel_name.toQuotedString();
 	else if (procedure)
-		name = procedure->getName().toString();
+		name = procedure->getName().toQuotedString();
 
 	if (alias && alias->hasData())
 	{
@@ -2925,7 +2929,7 @@ string Optimizer::makeAlias(StreamType stream)
 			if (csb_tail->csb_alias)
 				alias_list.push(*csb_tail->csb_alias);
 			else if (csb_tail->csb_relation)
-				alias_list.push(csb_tail->csb_relation->rel_name.c_str());
+				alias_list.push(csb_tail->csb_relation->rel_name.toQuotedString());
 
 			if (!csb_tail->csb_view)
 				break;
@@ -2942,9 +2946,9 @@ string Optimizer::makeAlias(StreamType stream)
 		}
 	}
 	else if (csb_tail->csb_relation)
-		alias = csb_tail->csb_relation->rel_name.c_str();
+		alias = csb_tail->csb_relation->rel_name.toQuotedString();
 	else if (csb_tail->csb_procedure)
-		alias = csb_tail->csb_procedure->getName().toString();
+		alias = csb_tail->csb_procedure->getName().toQuotedString();
 	//// TODO: LocalTableSourceNode
 	else
 		fb_assert(false);

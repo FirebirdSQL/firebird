@@ -196,7 +196,7 @@ public:
 			HANDSHAKE_DEBUG(fprintf(stderr, "Srv: SRP1: started transaction\n"));
 
 			const char* sql =
-				"SELECT PLG$VERIFIER, PLG$SALT FROM PLG$SRP WHERE PLG$USER_NAME = ? AND PLG$ACTIVE";
+				"SELECT PLG$VERIFIER, PLG$SALT FROM PLG$SRP%SCHEMA.PLG$SRP WHERE PLG$USER_NAME = ? AND PLG$ACTIVE";
 			stmt = att->prepare(&status, tra, 0, sql, 3, IStatement::PREPARE_PREFETCH_METADATA);
 			if (status->getState() & IStatus::STATE_ERRORS)
 			{

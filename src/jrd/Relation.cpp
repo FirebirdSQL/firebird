@@ -133,12 +133,12 @@ RelationPages* jrd_rel::getPagesInternal(thread_db* tdbb, TraNumber tran, bool a
 
 		for (auto& idx : indices)
 		{
-			MetaName idx_name;
+			QualifiedName idx_name;
 			MET_lookup_index(tdbb, idx_name, this->rel_name, idx.idx_id + 1);
 
 			idx.idx_root = 0;
 			SelectivityList selectivity(*pool);
-			IDX_create_index(tdbb, this, &idx, idx_name.c_str(), NULL, idxTran, selectivity);
+			IDX_create_index(tdbb, this, &idx, idx_name, NULL, idxTran, selectivity);
 
 #ifdef VIO_DEBUG
 			VIO_trace(DEBUG_WRITES,

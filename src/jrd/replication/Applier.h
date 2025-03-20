@@ -26,6 +26,7 @@
 
 #include "../common/classes/array.h"
 #include "../common/classes/GenericMap.h"
+#include "../jrd/QualifiedName.h"
 #include "../jrd/jrd.h"
 #include "../jrd/tra.h"
 
@@ -165,23 +166,24 @@ namespace Jrd
 		void cleanupSavepoint(thread_db* tdbb, TraNumber traNum, bool undo);
 
 		void insertRecord(thread_db* tdbb, TraNumber traNum,
-						  const MetaName& relName,
+						  const QualifiedName& relName,
 						  ULONG length, const UCHAR* data);
 		void updateRecord(thread_db* tdbb, TraNumber traNum,
-						  const MetaName& relName,
+						  const QualifiedName& relName,
 						  ULONG orgLength, const UCHAR* orgData,
 						  ULONG newLength, const UCHAR* newData);
 		void deleteRecord(thread_db* tdbb, TraNumber traNum,
-						  const MetaName& relName,
+						  const QualifiedName& relName,
 						  ULONG length, const UCHAR* data);
 
-		void setSequence(thread_db* tdbb, const MetaName& genName, SINT64 value);
+		void setSequence(thread_db* tdbb, const QualifiedName& genName, SINT64 value);
 
 		void storeBlob(thread_db* tdbb, TraNumber traNum, bid* blob_id,
 					   ULONG length, const UCHAR* data);
 
 		void executeSql(thread_db* tdbb, TraNumber traNum,
 						unsigned charset,
+						const Firebird::string& schemaSearchPath,
 						const Firebird::string& sql,
 						const MetaName& owner);
 
@@ -190,7 +192,7 @@ namespace Jrd
 						const index_desc& idx,
 						Record* record1, Record* record2);
 		bool lookupRecord(thread_db* tdbb, jrd_rel* relation,
-						  Record* record, index_desc& idx, const char* idxName = nullptr);
+						  Record* record, index_desc& idx, const QualifiedName& idxName = {});
 
 		const Format* findFormat(thread_db* tdbb, jrd_rel* relation, ULONG length);
 

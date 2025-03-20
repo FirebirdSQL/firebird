@@ -173,6 +173,8 @@ bool MET_database(gpre_dbb* database, bool print_version)
 	}
 #endif
 
+	dpb.insertString(isc_dpb_search_path, SYSTEM_SCHEMA, fb_strlen(SYSTEM_SCHEMA));
+
 	if (isc_attach_database(gds_status, 0, database->dbb_filename, &DB,
 							dpb.getBufferLength(),
 							reinterpret_cast<const char*>(dpb.getBuffer())))

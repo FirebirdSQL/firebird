@@ -97,11 +97,8 @@ public:
 public:
 	Type type;
 	SLONG code;
-	// ASF: There are some inconsistencies in the type of 'name'. Metanames have maximum of 31 chars,
-	// while there are system exceptions with 32 chars. The parser always expects metanames, but
-	// I'm following the legacy code and making this a string.
-	Firebird::string name;
-	MetaName secName;
+	QualifiedName name;
+	QualifiedName secName;
 };
 
 typedef Firebird::ObjectsArray<ExceptionItem> ExceptionArray;
@@ -589,7 +586,7 @@ class ExecProcedureNode final : public TypedNode<StmtNode, StmtNode::TYPE_EXEC_P
 {
 public:
 	explicit ExecProcedureNode(MemoryPool& pool,
-				const QualifiedName& aDsqlName = QualifiedName(),
+				const QualifiedName& aDsqlName = {},
 				ValueListNode* aInputs = nullptr, ValueListNode* aOutputs = nullptr,
 				Firebird::ObjectsArray<MetaName>* aDsqlInputArgNames = nullptr)
 		: TypedNode<StmtNode, StmtNode::TYPE_EXEC_PROCEDURE>(pool),
@@ -802,7 +799,7 @@ public:
 class ExceptionNode final : public TypedNode<StmtNode, StmtNode::TYPE_EXCEPTION>
 {
 public:
-	ExceptionNode(MemoryPool& pool, const MetaName& name,
+	ExceptionNode(MemoryPool& pool, const QualifiedName& name,
 				ValueExprNode* aMessageExpr = NULL, ValueListNode* aParameters = NULL)
 		: TypedNode<StmtNode, StmtNode::TYPE_EXCEPTION>(pool),
 		  messageExpr(aMessageExpr),
@@ -810,7 +807,7 @@ public:
 	{
 		exception = FB_NEW_POOL(pool) ExceptionItem(pool);
 		exception->type = ExceptionItem::XCP_CODE;
-		exception->name = name.c_str();
+		exception->name = name;
 	}
 
 	explicit ExceptionNode(MemoryPool& pool)
@@ -1386,7 +1383,7 @@ public:
 class SetGeneratorNode final : public TypedNode<StmtNode, StmtNode::TYPE_SET_GENERATOR>
 {
 public:
-	SetGeneratorNode(MemoryPool& pool, const MetaName& name, ValueExprNode* aValue = NULL)
+	SetGeneratorNode(MemoryPool& pool, const QualifiedName& name, ValueExprNode* aValue = NULL)
 		: TypedNode<StmtNode, StmtNode::TYPE_SET_GENERATOR>(pool),
 		  generator(pool, name), value(aValue)
 	{
@@ -1561,7 +1558,7 @@ class SetTransactionNode : public TransactionNode
 public:
 	struct RestrictionOption : Firebird::PermanentStorage
 	{
-		RestrictionOption(MemoryPool& p, Firebird::ObjectsArray<MetaName>* aTables,
+		RestrictionOption(MemoryPool& p, Firebird::ObjectsArray<QualifiedName>* aTables,
 					unsigned aLockMode)
 			: PermanentStorage(p),
 			  tables(aTables),
@@ -1569,7 +1566,7 @@ public:
 		{
 		}
 
-		Firebird::ObjectsArray<MetaName>* tables;
+		Firebird::ObjectsArray<QualifiedName>* tables;
 		unsigned lockMode;
 	};
 
@@ -1905,6 +1902,32 @@ public:
 
 public:
 	Firebird::TriState optimizeMode;
+};
+
+
+class SetSearchPathNode : public SessionManagementNode
+{
+public:
+	SetSearchPathNode(MemoryPool& pool, Firebird::ObjectsArray<MetaName>* aSchemas)
+		: SessionManagementNode(pool),
+		  schemas(aSchemas)
+	{
+	}
+
+public:
+	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	{
+		SessionManagementNode::internalPrint(printer);
+
+		NODE_PRINT(printer, schemas);
+
+		return "SetSearchPathNode";
+	}
+
+	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const;
+
+public:
+	NestConst<Firebird::ObjectsArray<MetaName>> schemas;
 };
 
 

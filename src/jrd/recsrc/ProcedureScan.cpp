@@ -61,12 +61,13 @@ void ProcedureScan::internalOpen(thread_db* tdbb) const
 	{
 		status_exception::raise(
 			Arg::Gds(isc_proc_pack_not_implemented) <<
-				Arg::Str(m_procedure->getName().identifier) << Arg::Str(m_procedure->getName().package));
+				m_procedure->getName().object.toQuotedString() <<
+				m_procedure->getName().getSchemaAndPackage().toQuotedString());
 	}
 	else if (!m_procedure->isDefined())
 	{
 		status_exception::raise(
-			Arg::Gds(isc_prcnotdef) << Arg::Str(m_procedure->getName().toString()) <<
+			Arg::Gds(isc_prcnotdef) << Arg::Str(m_procedure->getName().toQuotedString()) <<
 			Arg::Gds(isc_modnotfound));
 	}
 
@@ -254,7 +255,7 @@ void ProcedureScan::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level)
 	if (!level)
 		plan += "(";
 
-	plan += printName(tdbb, m_alias, false) + " NATURAL";
+	plan += printName(tdbb, m_alias) + " NATURAL";
 
 	if (!level)
 		plan += ")";
@@ -264,14 +265,14 @@ void ProcedureScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsig
 {
 	planEntry.className = "ProcedureScan";
 
-	planEntry.lines.add().text = "Procedure " + printName(tdbb, m_procedure->getName().toString(), m_alias) + " Scan";
+	planEntry.lines.add().text = "Procedure " +
+		printName(tdbb, m_procedure->getName().toQuotedString(), m_alias) + " Scan";
 	printOptInfo(planEntry.lines);
 
 	planEntry.objectType = obj_procedure;
-	planEntry.packageName = m_procedure->getName().package;
-	planEntry.objectName = m_procedure->getName().identifier;
+	planEntry.objectName = m_procedure->getName();
 
-	if (m_alias.hasData() && m_procedure->getName().toString() != m_alias)
+	if (m_alias.hasData() && m_procedure->getName().toQuotedString() != m_alias)
 		planEntry.alias = m_alias;
 }
 

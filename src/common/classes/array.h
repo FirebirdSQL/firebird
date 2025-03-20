@@ -145,6 +145,13 @@ public:
 			add(item);
 	}
 
+	Array(std::initializer_list<T> items)
+		: Array()
+	{
+		for (auto& item : items)
+			add(item);
+	}
+
 	~Array()
 	{
 		freeData();

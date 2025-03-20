@@ -1219,7 +1219,7 @@ InversionNode* Retrieval::makeIndexScanNode(IndexScratch* indexScratch) const
 	}
 
 	// For external requests, determine index name (to be reported in plans)
-	MetaName indexName;
+	QualifiedName indexName;
 	if (!(csb->csb_g_flags & csb_internal))
 		MET_lookup_index(tdbb, indexName, relation->rel_name, idx->idx_id + 1);
 

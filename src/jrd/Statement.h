@@ -103,7 +103,7 @@ public:
 	ResourceList resources;				// Resources (relations and indices)
 	const jrd_prc* procedure;			// procedure, if any
 	const Function* function;			// function, if any
-	MetaName triggerName;		// name of request (trigger), if any
+	QualifiedName triggerName;		// name of request (trigger), if any
 	Jrd::UserId* triggerInvoker;		// user name if trigger run with SQL SECURITY DEFINER
 	Statement* parentStatement;		// Sub routine's parent statement
 	Firebird::Array<Statement*> subStatements;	// Array of subroutines' statements

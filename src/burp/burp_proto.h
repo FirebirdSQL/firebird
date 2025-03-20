@@ -38,7 +38,6 @@ void	BURP_abort(Firebird::IStatus* status = nullptr);
 void	BURP_error(USHORT, bool, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
 void	BURP_error(USHORT, bool, const char* str);
 void	BURP_error_redirect(Firebird::IStatus*, USHORT, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
-void	BURP_makeSymbol(BurpGlobals*, Firebird::string&);
 void	BURP_msg_partial(bool, USHORT, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
 void	BURP_msg_put(bool, USHORT, const MsgFormat::SafeArg& arg);
 const int BURP_MSG_GET_SIZE = 128; // Use it for buffers passed to this function.
@@ -47,7 +46,7 @@ void	BURP_output_version(void*, const TEXT*);
 void	BURP_print(bool err, USHORT, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
 void	BURP_print(bool err, USHORT, const char* str);
 void	BURP_print_status(bool err, Firebird::IStatus* status, USHORT secondNumber = 0);
-void	BURP_print_warning(Firebird::IStatus* status);
+void	BURP_print_warning(Firebird::IStatus* status, bool printErrorAsWarning = false);
 void	BURP_verbose(USHORT, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
 void	BURP_verbose(USHORT, const char* str);
 void	BURP_message(USHORT, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg(), bool totals = false);

@@ -28,7 +28,7 @@
 // of int, based on usage, but they aren't coherent either with scl.epp's
 // P_NAMES.p_names_acl that's USHORT.
 
-const int ACL_version	= 1;
+const int ACL_version	= 2;
 
 const int ACL_end		= 0;
 const int ACL_id_list	= 1;

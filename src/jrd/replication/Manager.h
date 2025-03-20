@@ -28,6 +28,7 @@
 #include "../common/classes/semaphore.h"
 #include "../common/SimilarToRegex.h"
 #include "../common/os/guid.h"
+#include "../../jrd/QualifiedName.h"
 #include "../common/isc_s_proto.h"
 #include "../../jrd/intl_classes.h"
 
@@ -38,16 +39,20 @@ namespace Replication
 {
 	class TableMatcher
 	{
-		typedef Firebird::GenericMap<Firebird::Pair<Firebird::Left<Jrd::MetaName, bool> > > TablePermissionMap;
+		typedef Firebird::GenericMap<Firebird::Pair<Firebird::Left<Jrd::QualifiedName, bool> > > TablePermissionMap;
 
 	public:
 		TableMatcher(MemoryPool& pool,
+					 const Firebird::string& includeSchemaFilter,
+					 const Firebird::string& excludeSchemaFilter,
 					 const Firebird::string& includeFilter,
 					 const Firebird::string& excludeFilter);
 
-		bool matchTable(const Jrd::MetaName& tableName);
+		bool matchTable(const Jrd::QualifiedName& tableName);
 
 	private:
+		Firebird::AutoPtr<Firebird::SimilarToRegex> m_includeSchemaMatcher;
+		Firebird::AutoPtr<Firebird::SimilarToRegex> m_excludeSchemaMatcher;
 		Firebird::AutoPtr<Firebird::SimilarToRegex> m_includeMatcher;
 		Firebird::AutoPtr<Firebird::SimilarToRegex> m_excludeMatcher;
 		TablePermissionMap m_tables;

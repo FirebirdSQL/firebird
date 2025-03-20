@@ -175,7 +175,8 @@ ISC_STATUS SDL_info(CheckStatusWrapper* status_vector,
 
 	const UCHAR* p = sdl;
 	info->sdl_info_fid = info->sdl_info_rid = 0;
-	info->sdl_info_relation = info->sdl_info_field = "";
+	info->sdl_info_relation.clear();
+	info->sdl_info_field.clear();
 
 	if (*p++ != isc_sdl_version1)
 		return error(status_vector, Arg::Gds(isc_invalid_sdl) << Arg::Num(0));
@@ -207,9 +208,15 @@ ISC_STATUS SDL_info(CheckStatusWrapper* status_vector,
 			p += n;
 			break;
 
+		case isc_sdl_schema:
+			n = *p++;
+			info->sdl_info_relation.schema.assign(reinterpret_cast<const char*>(p), n);
+			p += n;
+			break;
+
 		case isc_sdl_relation:
 			n = *p++;
-			info->sdl_info_relation.assign(reinterpret_cast<const char*>(p), n);
+			info->sdl_info_relation.object.assign(reinterpret_cast<const char*>(p), n);
 			p += n;
 			break;
 
@@ -281,6 +288,7 @@ int	SDL_walk(CheckStatusWrapper* status_vector,
 			break;
 
 		case isc_sdl_field:
+		case isc_sdl_schema:
 		case isc_sdl_relation:
 			n = *p++;
 			p += n;

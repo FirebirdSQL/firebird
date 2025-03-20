@@ -27,86 +27,17 @@
 #ifndef JRD_QUALIFIEDNAME_H
 #define JRD_QUALIFIEDNAME_H
 
-#include "MetaName.h"
+#include "../jrd/MetaName.h"
 #include "../common/classes/array.h"
+#include "../common/classes/fb_pair.h"
+#include "../common/classes/MetaString.h"
+#include "../common/classes/QualifiedMetaString.h"
+#include "../common/StatusArg.h"
 
 namespace Jrd {
 
-class QualifiedName
-{
-public:
-	QualifiedName(MemoryPool& p, const MetaName& aIdentifier, const MetaName& aPackage)
-		: identifier(p, aIdentifier),
-		  package(p, aPackage)
-	{
-	}
-
-	QualifiedName(const MetaName& aIdentifier, const MetaName& aPackage)
-		: identifier(aIdentifier),
-		  package(aPackage)
-	{
-	}
-
-	QualifiedName(MemoryPool& p, const MetaName& aIdentifier)
-		: identifier(p, aIdentifier),
-		  package(p)
-	{
-	}
-
-	explicit QualifiedName(const MetaName& aIdentifier)
-		: identifier(aIdentifier)
-	{
-	}
-
-	explicit QualifiedName(MemoryPool& p)
-		: identifier(p),
-		  package(p)
-	{
-	}
-
-	QualifiedName()
-	{
-	}
-
-	QualifiedName(MemoryPool& p, const QualifiedName& src)
-		: identifier(p, src.identifier),
-		  package(p, src.package)
-	{
-	}
-
-public:
-	bool operator >(const QualifiedName& m) const
-	{
-		return package > m.package || (package == m.package && identifier > m.identifier);
-	}
-
-	bool operator ==(const QualifiedName& m) const
-	{
-		return identifier == m.identifier && package == m.package;
-	}
-
-	bool operator !=(const QualifiedName& m) const
-	{
-		return !(identifier == m.identifier && package == m.package);
-	}
-
-public:
-	Firebird::string toString() const
-	{
-		Firebird::string s;
-		if (package.hasData())
-		{
-			s = package.c_str();
-			s.append(".");
-		}
-		s.append(identifier.c_str());
-		return s;
-	}
-
-public:
-	MetaName identifier;
-	MetaName package;
-};
+using QualifiedName = Firebird::BaseQualifiedName<MetaName>;
+using QualifiedNameMetaNamePair = Firebird::FullPooledPair<QualifiedName, MetaName>;
 
 } // namespace Jrd
 

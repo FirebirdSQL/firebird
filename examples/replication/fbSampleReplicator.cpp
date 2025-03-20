@@ -35,7 +35,8 @@ public:
 	void setAttachment(IAttachment* attachment) override;
 	IReplicatedTransaction* startTransaction(ITransaction* transaction, ISC_INT64 number) override;
 	FB_BOOLEAN cleanupTransaction(ISC_INT64 number) override;
-	FB_BOOLEAN setSequence(const char* name, ISC_INT64 value) override;
+	FB_BOOLEAN deprecatedSetSequence(const char* name, ISC_INT64 value) override;
+	FB_BOOLEAN setSequence2(const char* schemaName, const char* genName, ISC_INT64 value) override;
 
 private:
 	friend class ReplTransaction;
@@ -64,11 +65,17 @@ public:
 	FB_BOOLEAN startSavepoint() override;
 	FB_BOOLEAN releaseSavepoint() override;
 	FB_BOOLEAN rollbackSavepoint() override;
-	FB_BOOLEAN insertRecord(const char* name, IReplicatedRecord* record) override;
-	FB_BOOLEAN updateRecord(const char* name, IReplicatedRecord* orgRecord, IReplicatedRecord* newRecord) override;
-	FB_BOOLEAN deleteRecord(const char* name, IReplicatedRecord* record) override;
-	FB_BOOLEAN executeSql(const char* sql) override;
-	FB_BOOLEAN executeSqlIntl(unsigned charset, const char* sql) override;
+	FB_BOOLEAN deprecatedInsertRecord(const char* name, IReplicatedRecord* record) override;
+	FB_BOOLEAN insertRecord2(const char* schemaName, const char* tableName, IReplicatedRecord* record) override;
+	FB_BOOLEAN deprecatedUpdateRecord(const char* name,
+		IReplicatedRecord* orgRecord, IReplicatedRecord* newRecord) override;
+	FB_BOOLEAN updateRecord2(const char* schemaName, const char* tableName,
+		IReplicatedRecord* orgRecord, IReplicatedRecord* newRecord) override;
+	FB_BOOLEAN deprecatedDeleteRecord(const char* name, IReplicatedRecord* record) override;
+	FB_BOOLEAN deleteRecord2(const char* schemaName, const char* tableName, IReplicatedRecord* record) override;
+	FB_BOOLEAN deprecatedExecuteSql(const char* sql) override;
+	FB_BOOLEAN deprecatedExecuteSqlIntl(unsigned charset, const char* sql) override;
+	FB_BOOLEAN executeSqlIntl2(unsigned charset, const char* schemaSearchPath, const char* sql) override;
 
 private:
 	ReplPlugin* parent;
@@ -245,9 +252,15 @@ FB_BOOLEAN ReplPlugin::cleanupTransaction(ISC_INT64 number)
 	return FB_TRUE;
 }
 
-FB_BOOLEAN ReplPlugin::setSequence(const char* name, ISC_INT64 value)
+FB_BOOLEAN ReplPlugin::deprecatedSetSequence(const char* name, ISC_INT64 value)
 {
-	WriteLog(log, "%p\tsetSequence(%s, %lld)\n", this, name, value);
+	WriteLog(log, "%p\tdeprecatedSetSequence(%s, %lld)\n", this, name, value);
+	return FB_TRUE;
+}
+
+FB_BOOLEAN ReplPlugin::setSequence2(const char* schemaName, const char* genName, ISC_INT64 value)
+{
+	WriteLog(log, "%p\tsetSequence2(%s.%s, %lld)\n", this, schemaName, genName, value);
 	return FB_TRUE;
 }
 
@@ -506,9 +519,9 @@ bool ReplTransaction::dumpData(IReplicatedRecord* record)
 	return true;
 }
 
-FB_BOOLEAN ReplTransaction::insertRecord(const char* name, IReplicatedRecord* record)
+FB_BOOLEAN ReplTransaction::deprecatedInsertRecord(const char* name, IReplicatedRecord* record)
 {
-	WriteLog(parent->log, "%p\tInsert record into %s\n", this, name);
+	WriteLog(parent->log, "%p\tdeprecated Insert record into %s\n", this, name);
 	try
 	{
 		return dumpData(record) ? FB_TRUE : FB_FALSE;
@@ -520,9 +533,24 @@ FB_BOOLEAN ReplTransaction::insertRecord(const char* name, IReplicatedRecord* re
 	}
 }
 
-FB_BOOLEAN ReplTransaction::updateRecord(const char* name, IReplicatedRecord* orgRecord, IReplicatedRecord* newRecord)
+FB_BOOLEAN ReplTransaction::insertRecord2(const char* schemaName, const char* tableName, IReplicatedRecord* record)
 {
-	WriteLog(parent->log, "%p\tUpdate %s\nOldData:\n", this, name);
+	WriteLog(parent->log, "%p\tInsert record into %s.%s\n", this, schemaName, tableName);
+	try
+	{
+		return dumpData(record) ? FB_TRUE : FB_FALSE;
+	}
+	catch (const int)
+	{
+		parent->status->setErrors(err);
+		return FB_FALSE;
+	}
+}
+
+FB_BOOLEAN ReplTransaction::deprecatedUpdateRecord(const char* name,
+	IReplicatedRecord* orgRecord, IReplicatedRecord* newRecord)
+{
+	WriteLog(parent->log, "%p\tdeprecated Update %s\nOldData:\n", this, name);
 	try
 	{
 		if (!dumpData(orgRecord))
@@ -538,9 +566,28 @@ FB_BOOLEAN ReplTransaction::updateRecord(const char* name, IReplicatedRecord* or
 	}
 }
 
-FB_BOOLEAN ReplTransaction::deleteRecord(const char* name, IReplicatedRecord* record)
+FB_BOOLEAN ReplTransaction::updateRecord2(const char* schemaName, const char* tableName,
+	IReplicatedRecord* orgRecord, IReplicatedRecord* newRecord)
 {
-	WriteLog(parent->log, "%p\tDelete from %s\n", this, name);
+	WriteLog(parent->log, "%p\tUpdate %s.%s\nOldData:\n", this, schemaName, tableName);
+	try
+	{
+		if (!dumpData(orgRecord))
+			return FB_FALSE;
+
+		WriteLog(parent->log, "NewData:\n");
+		return dumpData(newRecord) ? FB_TRUE : FB_FALSE;
+	}
+	catch (const int)
+	{
+		parent->status->setErrors(err);
+		return FB_FALSE;
+	}
+}
+
+FB_BOOLEAN ReplTransaction::deprecatedDeleteRecord(const char* name, IReplicatedRecord* record)
+{
+	WriteLog(parent->log, "%p\tdeprecated Delete from %s\n", this, name);
 	try
 	{
 		return dumpData(record) ? FB_TRUE : FB_FALSE;
@@ -552,14 +599,34 @@ FB_BOOLEAN ReplTransaction::deleteRecord(const char* name, IReplicatedRecord* re
 	}
 }
 
-FB_BOOLEAN ReplTransaction::executeSql(const char* sql)
+FB_BOOLEAN ReplTransaction::deleteRecord2(const char* schemaName, const char* tableName, IReplicatedRecord* record)
 {
-	WriteLog(parent->log, "%p\tExecuteSql(%s)\n", this, sql);
+	WriteLog(parent->log, "%p\tDelete from %s.%s\n", this, schemaName, tableName);
+	try
+	{
+		return dumpData(record) ? FB_TRUE : FB_FALSE;
+	}
+	catch (const int)
+	{
+		parent->status->setErrors(err);
+		return FB_FALSE;
+	}
+}
+
+FB_BOOLEAN ReplTransaction::deprecatedExecuteSql(const char* sql)
+{
+	WriteLog(parent->log, "%p\tdeprecatedExecuteSql(%s)\n", this, sql);
 	return FB_TRUE;
 }
 
-FB_BOOLEAN ReplTransaction::executeSqlIntl(unsigned charset, const char* sql)
+FB_BOOLEAN ReplTransaction::deprecatedExecuteSqlIntl(unsigned charset, const char* sql)
 {
-	WriteLog(parent->log, "%p\tExecuteSqlIntl(%u, %s)\n", this, charset, sql);
+	WriteLog(parent->log, "%p\tdeprecatedExecuteSqlIntl(%u, %s)\n", this, charset, sql);
+	return FB_TRUE;
+}
+
+FB_BOOLEAN ReplTransaction::executeSqlIntl2(unsigned charset, const char* schemaSearchPath, const char* sql)
+{
+	WriteLog(parent->log, "%p\tExecuteSqlIntl2(%u, %s, %s)\n", this, charset, schemaSearchPath, sql);
 	return FB_TRUE;
 }

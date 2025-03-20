@@ -82,7 +82,7 @@ namespace Jrd {
 Jrd::LiteralNode* MAKE_const_slong(SLONG);
 Jrd::LiteralNode* MAKE_const_sint64(SINT64 value, SCHAR scale);
 Jrd::ValueExprNode* MAKE_constant(const char*, Jrd::dsql_constant_type, SSHORT = 0);
-Jrd::LiteralNode* MAKE_str_constant(const Jrd::IntlString*, SSHORT);
+Jrd::LiteralNode* MAKE_str_constant(Jrd::IntlString*, SSHORT);
 Jrd::FieldNode* MAKE_field(Jrd::dsql_ctx*, Jrd::dsql_fld*, Jrd::ValueListNode*);
 Jrd::FieldNode* MAKE_field_name(const char*);
 Jrd::dsql_par* MAKE_parameter(Jrd::dsql_msg*, bool, bool, USHORT, const Jrd::ValueExprNode*);

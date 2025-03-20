@@ -765,13 +765,35 @@ int gbak(Firebird::UtilSvc* uSvc)
 			}
 			tdgbl->gbl_sw_user = argv[itr];
 			break;
+		case IN_SW_BURP_SKIP_SCHEMA_DATA:
+			if (++itr >= argc)
+			{
+				BURP_error(417, true);
+				// missing regular expression to skip tables
+			}
+
+			tdgbl->setupSkipIncludePattern(argv[itr], 419, tdgbl->skipSchemaDataMatcher);
+			// msg 419 regular expression to skip schemas was already set
+			break;
 		case IN_SW_BURP_SKIP_DATA:
 			if (++itr >= argc)
 			{
 				BURP_error(354, true);
 				// missing regular expression to skip tables
 			}
-			tdgbl->setupSkipData(argv[itr]);
+
+			tdgbl->setupSkipIncludePattern(argv[itr], 356, tdgbl->skipDataMatcher);
+			// msg 356 regular expression to skip tables was already set
+			break;
+		case IN_SW_BURP_INCLUDE_SCHEMA_DATA:
+			if (++itr >= argc)
+			{
+				BURP_error(418, true);
+				// missing regular expression to include tables
+			}
+
+			tdgbl->setupSkipIncludePattern(argv[itr], 420, tdgbl->includeSchemaDataMatcher);
+			// msg 420 regular expression to include schemas was already set
 			break;
 		case IN_SW_BURP_INCLUDE_DATA:
 			if (++itr >= argc)
@@ -779,7 +801,9 @@ int gbak(Firebird::UtilSvc* uSvc)
 				BURP_error(389, true);
 				// missing regular expression to include tables
 			}
-			tdgbl->setupIncludeData(argv[itr]);
+
+			tdgbl->setupSkipIncludePattern(argv[itr], 390, tdgbl->includeDataMatcher);
+			// msg 390 regular expression to include tables was already set
 			break;
 		case IN_SW_BURP_ROLE:
 			if (++itr >= argc)
@@ -1152,6 +1176,8 @@ int gbak(Firebird::UtilSvc* uSvc)
 	{
 		dpb.insertBytes(isc_dpb_auth_block, authBlock, authSize);
 	}
+
+	dpb.insertString(isc_dpb_search_path, SYSTEM_SCHEMA, fb_strlen(SYSTEM_SCHEMA));
 
 	// We call getTableMod() because we are interested in the items that were activated previously,
 	// not in the original, unchanged table that "switches" took as parameter in the constructor.
@@ -1789,7 +1815,7 @@ void BURP_print_status(bool err, Firebird::IStatus* status_vector, USHORT second
 }
 
 
-void BURP_print_warning(Firebird::IStatus* status)
+void BURP_print_warning(Firebird::IStatus* status, bool printErrorAsWarning)
 {
 /**************************************
  *
@@ -1802,25 +1828,36 @@ void BURP_print_warning(Firebird::IStatus* status)
  *	to allow redirecting output.
  *
  **************************************/
-	if (status && (status->getState() & Firebird::IStatus::STATE_WARNINGS))
+	if (!status || !(status->getState() & (IStatus::STATE_WARNINGS | IStatus::STATE_ERRORS)))
+		return;
+
+	const ISC_STATUS* vector;
+
+	if (const auto state = status->getState();
+		printErrorAsWarning && (state & IStatus::STATE_ERRORS))
 	{
-		BurpMaster master;
-		BurpGlobals* tdgbl = master.get();
+		vector = status->getErrors();
+	}
+	else if (state & IStatus::STATE_WARNINGS)
+		vector = status->getWarnings();
+	else
+		return;
 
-		// print the warning message
-		const ISC_STATUS* vector = status->getWarnings();
-		SCHAR s[1024];
+	BurpMaster master;
+	BurpGlobals* tdgbl = master.get();
 
-		if (fb_interpret(s, sizeof(s), &vector))
+	// print the warning message
+	SCHAR s[1024];
+
+	if (fb_interpret(s, sizeof(s), &vector))
+	{
+		BURP_msg_partial(false, 255); // msg 255: gbak: WARNING:
+		burp_output(false, "%s\n", s);
+
+		while (fb_interpret(s, sizeof(s), &vector))
 		{
 			BURP_msg_partial(false, 255); // msg 255: gbak: WARNING:
-			burp_output(false, "%s\n", s);
-
-			while (fb_interpret(s, sizeof(s), &vector))
-			{
-				BURP_msg_partial(false, 255); // msg 255: gbak: WARNING:
-				burp_output(false, "    %s\n", s);
-			}
+			burp_output(false, "    %s\n", s);
 		}
 	}
 }
@@ -2664,59 +2701,25 @@ void close_platf(DESC file)
 #endif // WIN_NT
 
 
-void BurpGlobals::setupSkipData(const Firebird::string& regexp)
+void BurpGlobals::setupSkipIncludePattern(const string& regexp, USHORT alreadySetErrorCode,
+	AutoPtr<SimilarToRegex>& matcher)
 {
-	if (skipDataMatcher)
-	{
-		BURP_error(356, true);
-		// msg 356 regular expression to skip tables was already set
-	}
+	if (matcher)
+		BURP_error(alreadySetErrorCode, true);
 
-	// Compile skip relation expressions
+	// Compile expressions
 	try
 	{
 		if (regexp.hasData())
 		{
-			Firebird::string filter(regexp);
+			string filter(regexp);
 			if (!uSvc->utf8FileNames())
 				ISC_systemToUtf8(filter);
 
 			BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
-			skipDataMatcher.reset(FB_NEW_POOL(tdgbl->getPool()) Firebird::SimilarToRegex(
-				tdgbl->getPool(), Firebird::SimilarToFlag::CASE_INSENSITIVE,
-				filter.c_str(), filter.length(),
-				"\\", 1));
-		}
-	}
-	catch (const Firebird::Exception&)
-	{
-		Firebird::fatal_exception::raiseFmt(
-			"error while compiling regular expression \"%s\"", regexp.c_str());
-	}
-}
-
-void BurpGlobals::setupIncludeData(const Firebird::string& regexp)
-{
-	if (includeDataMatcher)
-	{
-		BURP_error(390, true);
-		// msg 390 regular expression to include tables was already set
-	}
-
-	// Compile include relation expressions
-	try
-	{
-		if (regexp.hasData())
-		{
-			Firebird::string filter(regexp);
-			if (!uSvc->utf8FileNames())
-				ISC_systemToUtf8(filter);
-
-			BurpGlobals* tdgbl = BurpGlobals::getSpecific();
-
-			includeDataMatcher.reset(FB_NEW_POOL(tdgbl->getPool()) Firebird::SimilarToRegex(
-				tdgbl->getPool(), Firebird::SimilarToFlag::CASE_INSENSITIVE,
+			matcher.reset(FB_NEW_POOL(tdgbl->getPool()) SimilarToRegex(
+				tdgbl->getPool(), SimilarToFlag::CASE_INSENSITIVE,
 				filter.c_str(), filter.length(),
 				"\\", 1));
 		}
@@ -2750,7 +2753,7 @@ namespace // for local symbols
 	}
 }
 
-bool BurpGlobals::skipRelation(const char* name)
+bool BurpGlobals::skipRelation(const QualifiedMetaString& name)
 {
 	if (gbl_sw_meta)
 		return true;
@@ -2764,10 +2767,12 @@ bool BurpGlobals::skipRelation(const char* name)
 		{ false, false, true}  // NM  p
 	};
 
-	const enum Pattern res1 = checkPattern(skipDataMatcher, name);
-	const enum Pattern res2 = checkPattern(includeDataMatcher, name);
+	const enum Pattern res1sch = checkPattern(skipSchemaDataMatcher, name.schema.c_str());
+	const enum Pattern res1obj = checkPattern(skipDataMatcher, name.object.c_str());
+	const enum Pattern res2sch = checkPattern(includeSchemaDataMatcher, name.schema.c_str());
+	const enum Pattern res2obj = checkPattern(includeDataMatcher, name.object.c_str());
 
-	return result[res1][res2];
+	return result[res1sch][res2sch] || result[res1obj][res2obj];
 }
 
 void BurpGlobals::read_stats(SINT64* stats)
@@ -2886,24 +2891,6 @@ void BurpGlobals::print_stats_header()
 	}
 
 	burp_output(false, "\n");
-}
-
-void BURP_makeSymbol(BurpGlobals* tdgbl, Firebird::string& name)		// add double quotes to string
-{
-	if (tdgbl->gbl_dialect < SQL_DIALECT_V6)
-		return;
-
-	const char dq = '"';
-	for (unsigned p = 0; p < name.length(); ++p)
-	{
-		if (name[p] == dq)
-		{
-			name.insert(p, 1, dq);
-			++p;
-		}
-	}
-	name.insert(0u, 1, dq);
-	name += dq;
 }
 
 static void processFetchPass(const SCHAR*& password, int& itr, const int argc, Firebird::UtilSvc::ArgvType& argv)

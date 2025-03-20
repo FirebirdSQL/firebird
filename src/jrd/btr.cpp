@@ -281,18 +281,19 @@ void IndexErrorContext::raise(thread_db* tdbb, idx_e result, Record* record)
 	if (result == idx_e_conversion || result == idx_e_interrupt)
 		ERR_punt();
 
-	const MetaName& relationName = isLocationDefined ? m_location.relation->rel_name : m_relation->rel_name;
+	const auto& relationName = isLocationDefined ? m_location.relation->rel_name : m_relation->rel_name;
 	const USHORT indexId = isLocationDefined ? m_location.indexId : m_index->idx_id;
 
-	MetaName indexName(m_indexName), constraintName;
+	QualifiedName indexName(m_indexName);
+	MetaName constraintName;
 
-	if (indexName.isEmpty())
+	if (indexName.object.isEmpty())
 		MET_lookup_index(tdbb, indexName, relationName, indexId + 1);
 
-	if (indexName.hasData())
+	if (indexName.object.hasData())
 		MET_lookup_cnstrt_for_index(tdbb, constraintName, indexName);
 	else
-		indexName = "***unknown***";
+		indexName.object = "***unknown***";
 
 	const bool haveConstraint = constraintName.hasData();
 
@@ -303,18 +304,18 @@ void IndexErrorContext::raise(thread_db* tdbb, idx_e result, Record* record)
 	{
 	case idx_e_keytoobig:
 		ERR_post_nothrow(Arg::Gds(isc_imp_exc) <<
-						 Arg::Gds(isc_keytoobig) << Arg::Str(indexName));
+						 Arg::Gds(isc_keytoobig) << indexName.toQuotedString());
 		break;
 
 	case idx_e_foreign_target_doesnt_exist:
 		ERR_post_nothrow(Arg::Gds(isc_foreign_key) <<
-						 Arg::Str(constraintName) << Arg::Str(relationName) <<
+						 constraintName.toQuotedString() << relationName.toQuotedString() <<
 						 Arg::Gds(isc_foreign_key_target_doesnt_exist));
 		break;
 
 	case idx_e_foreign_references_present:
 		ERR_post_nothrow(Arg::Gds(isc_foreign_key) <<
-						 Arg::Str(constraintName) << Arg::Str(relationName) <<
+						 constraintName.toQuotedString() << relationName.toQuotedString() <<
 						 Arg::Gds(isc_foreign_key_references_present));
 		break;
 
@@ -322,10 +323,10 @@ void IndexErrorContext::raise(thread_db* tdbb, idx_e result, Record* record)
 		if (haveConstraint)
 		{
 			ERR_post_nothrow(Arg::Gds(isc_unique_key_violation) <<
-							 Arg::Str(constraintName) << Arg::Str(relationName));
+							 constraintName.toQuotedString() << relationName.toQuotedString());
 		}
 		else
-			ERR_post_nothrow(Arg::Gds(isc_no_dup) << Arg::Str(indexName));
+			ERR_post_nothrow(Arg::Gds(isc_no_dup) << indexName.toQuotedString());
 		break;
 
 	default:
@@ -677,15 +678,15 @@ idx_e IndexKey::compose(Record* record)
 				  error.value()[0] == isc_arg_gds &&
 				  error.value()[1] == isc_expression_eval_index))
 			{
-				MetaName indexName;
+				QualifiedName indexName;
 				MET_lookup_index(m_tdbb, indexName, m_relation->rel_name, m_index->idx_id + 1);
 
-				if (indexName.isEmpty())
-					indexName = "***unknown***";
+				if (indexName.object.isEmpty())
+					indexName.object = "***unknown***";
 
 				error.prepend(Arg::Gds(isc_expression_eval_index) <<
-					Arg::Str(indexName) <<
-					Arg::Str(m_relation->rel_name));
+					indexName.toQuotedString() <<
+					m_relation->rel_name.toQuotedString());
 			}
 
 			error.copyTo(m_tdbb->tdbb_status_vector);
@@ -1026,16 +1027,16 @@ bool BTR_description(thread_db* tdbb, jrd_rel* relation, index_root_page* root, 
 
 	if (error)
 	{
-		MetaName indexName;
+		QualifiedName indexName;
 		MET_lookup_index(tdbb, indexName, relation->rel_name, idx->idx_id + 1);
 
 		Arg::StatusVector status;
 
-		if (indexName.hasData())
-			status.assign(Arg::Gds(error) << indexName);
+		if (indexName.object.hasData())
+			status.assign(Arg::Gds(error) << indexName.toQuotedString());
 		else
 			// there is no index in table @1 with id @2
-			status.assign(Arg::Gds(isc_indexnotdefined) << relation->rel_name << Arg::Num(idx->idx_id));
+			status.assign(Arg::Gds(isc_indexnotdefined) << relation->rel_name.toQuotedString() << Arg::Num(idx->idx_id));
 
 		ERR_post_nothrow(status);
 		CCH_unwind(tdbb, true);

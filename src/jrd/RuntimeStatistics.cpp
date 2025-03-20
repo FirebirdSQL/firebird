@@ -80,7 +80,8 @@ void RuntimeStatistics::addRelCounts(const RelCounters& other, bool add)
 PerformanceInfo* RuntimeStatistics::computeDifference(Attachment* att,
 													  const RuntimeStatistics& new_stat,
 													  PerformanceInfo& dest,
-													  TraceCountsArray& temp)
+													  TraceCountsArray& temp,
+													  ObjectsArray<string>& tempNames)
 {
 	// NOTE: we do not initialize dest.pin_time. This must be done by the caller
 
@@ -92,6 +93,7 @@ PerformanceInfo* RuntimeStatistics::computeDifference(Attachment* att,
 
 	// Calculate relation-level statistics
 	temp.clear();
+	tempNames.clear();
 
 	// This loop assumes that base array is smaller than new one
 	RelCounters::iterator base_cnts = rel_counts.begin();
@@ -115,7 +117,16 @@ PerformanceInfo* RuntimeStatistics::computeDifference(Attachment* att,
 				TraceCounts traceCounts;
 				traceCounts.trc_relation_id = rel_id;
 				traceCounts.trc_counters = base_cnts->getCounterVector();
-				traceCounts.trc_relation_name = relation ? relation->rel_name.c_str() : NULL;
+
+				if (relation)
+				{
+					auto& tempName = tempNames.add();
+					tempName = relation->rel_name.toQuotedString();
+					traceCounts.trc_relation_name = tempName.c_str();
+				}
+				else
+					traceCounts.trc_relation_name = nullptr;
+
 				temp.add(traceCounts);
 			}
 
@@ -132,7 +143,16 @@ PerformanceInfo* RuntimeStatistics::computeDifference(Attachment* att,
 			TraceCounts traceCounts;
 			traceCounts.trc_relation_id = rel_id;
 			traceCounts.trc_counters = new_cnts->getCounterVector();
-			traceCounts.trc_relation_name = relation ? relation->rel_name.c_str() : NULL;
+
+			if (relation)
+			{
+				auto& tempName = tempNames.add();
+				tempName = relation->rel_name.toQuotedString();
+				traceCounts.trc_relation_name = tempName.c_str();
+			}
+			else
+				traceCounts.trc_relation_name = nullptr;
+
 			temp.add(traceCounts);
 		}
 	};

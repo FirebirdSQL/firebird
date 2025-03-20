@@ -69,18 +69,21 @@ static const UCHAR gen_id_blr1[] =
 	blr_send, 0,
 	blr_begin,
 	blr_assignment,
-	blr_gen_id
+	blr_gen_id3,
+	6, 'S', 'Y', 'S', 'T', 'E', 'M'	// SYSTEM_SCHEMA
 };
 
 static const UCHAR gen_id_blr2[] =
 {
+	1,
 	blr_literal, blr_long, 0, 1, 0, 0, 0,
-		blr_parameter, 0, 0, 0, blr_end, blr_end, blr_end, blr_eoc
+	blr_parameter, 0, 0, 0,
+	blr_end, blr_end, blr_end, blr_eoc
 };
 
 // Check if an object already exists. If yes, return false.
 bool DYN_UTIL_check_unique_name_nothrow(thread_db* tdbb, jrd_tra* transaction,
-	const MetaName& object_name, int object_type, USHORT* errorCode)
+	const QualifiedName& object_name, int object_type, USHORT* errorCode)
 {
 	SET_TDBB(tdbb);
 
@@ -88,137 +91,197 @@ bool DYN_UTIL_check_unique_name_nothrow(thread_db* tdbb, jrd_tra* transaction,
 	errorCode = errorCode ? errorCode : &tempErrorCode;
 	*errorCode = 0;
 
-	AutoCacheRequest request;
+	AutoCacheRequest requestHandle;
 
 	switch (object_type)
 	{
 		case obj_relation:
 		case obj_procedure:
-			request.reset(tdbb, drq_l_rel_name, DYN_REQUESTS);
+		{
+			static const CachedRequestId relationHandleId;
+			requestHandle.reset(tdbb, relationHandleId);
 
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-				EREL IN RDB$RELATIONS WITH EREL.RDB$RELATION_NAME EQ object_name.c_str()
+			FOR(REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+				EREL IN RDB$RELATIONS
+				WITH EREL.RDB$SCHEMA_NAME EQ object_name.schema.c_str() AND
+					 EREL.RDB$RELATION_NAME EQ object_name.object.c_str()
 			{
-				*errorCode = 132;
+				*errorCode = 132;	// isc_dyn_dup_table
 			}
 			END_FOR
 
 			if (!*errorCode)
 			{
-				request.reset(tdbb, drq_l_prc_name, DYN_REQUESTS);
+				static const CachedRequestId procedureHandleId;
+				requestHandle.reset(tdbb, procedureHandleId);
 
-				FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+				FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
 					EPRC IN RDB$PROCEDURES
-					WITH EPRC.RDB$PROCEDURE_NAME EQ object_name.c_str() AND
+					WITH EPRC.RDB$SCHEMA_NAME EQ object_name.schema.c_str() AND
+						 EPRC.RDB$PROCEDURE_NAME EQ object_name.object.c_str() AND
 						 EPRC.RDB$PACKAGE_NAME MISSING
 				{
-					*errorCode = 135;
+					*errorCode = 135;	// isc_dyn_dup_procedure
 				}
 				END_FOR
 			}
 			break;
+		}
 
 		case obj_index:
-			request.reset(tdbb, drq_l_idx_name, DYN_REQUESTS);
+		{
+			static const CachedRequestId indexHandleId;
+			requestHandle.reset(tdbb, indexHandleId);
 
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-				EIDX IN RDB$INDICES WITH EIDX.RDB$INDEX_NAME EQ object_name.c_str()
+			FOR(REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+				EIDX IN RDB$INDICES
+				WITH EIDX.RDB$SCHEMA_NAME EQ object_name.schema.c_str() AND
+					 EIDX.RDB$INDEX_NAME EQ object_name.object.c_str()
 			{
-				*errorCode = 251;
+				*errorCode = 251;	// isc_dyn_dup_index
 			}
 			END_FOR
 
 			break;
+		}
 
 		case obj_exception:
-			request.reset(tdbb, drq_l_xcp_name, DYN_REQUESTS);
+		{
+			static const CachedRequestId exceptionHandleId;
+			requestHandle.reset(tdbb, exceptionHandleId);
 
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-				EXCP IN RDB$EXCEPTIONS WITH EXCP.RDB$EXCEPTION_NAME EQ object_name.c_str()
+			FOR(REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+				EXCP IN RDB$EXCEPTIONS
+				WITH EXCP.RDB$SCHEMA_NAME EQ object_name.schema.c_str() AND
+					 EXCP.RDB$EXCEPTION_NAME EQ object_name.object.c_str()
 			{
-				*errorCode = 253;
+				*errorCode = 253;	// isc_dyn_dup_exception
 			}
 			END_FOR
 
 			break;
+		}
 
 		case obj_generator:
-			request.reset(tdbb, drq_l_gen_name, DYN_REQUESTS);
+		{
+			static const CachedRequestId generatorHandleId;
+			requestHandle.reset(tdbb, generatorHandleId);
 
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-				EGEN IN RDB$GENERATORS WITH EGEN.RDB$GENERATOR_NAME EQ object_name.c_str()
+			FOR(REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+				EGEN IN RDB$GENERATORS
+				WITH EGEN.RDB$SCHEMA_NAME EQ object_name.schema.c_str() AND
+					 EGEN.RDB$GENERATOR_NAME EQ object_name.object.c_str()
 			{
-				*errorCode = 254;
+				*errorCode = 254;	// isc_dyn_dup_generator
 			}
 			END_FOR
 
 			break;
+		}
 
 		case obj_udf:
-			request.reset(tdbb, drq_l_fun_name, DYN_REQUESTS);
+		{
+			static const CachedRequestId udfHandleId;
+			requestHandle.reset(tdbb, udfHandleId);
 
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			FOR(REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
 				EFUN IN RDB$FUNCTIONS
-				WITH EFUN.RDB$FUNCTION_NAME EQ object_name.c_str() AND
+				WITH EFUN.RDB$SCHEMA_NAME EQ object_name.schema.c_str() AND
+					 EFUN.RDB$FUNCTION_NAME EQ object_name.object.c_str() AND
 					 EFUN.RDB$PACKAGE_NAME MISSING
 			{
-				*errorCode = 268;
+				*errorCode = 268;	// isc_dyn_dup_function
 			}
 			END_FOR
 
 			break;
+		}
 
 		case obj_trigger:
-			request.reset(tdbb, drq_l_trg_name, DYN_REQUESTS);
+		{
+			static const CachedRequestId triggerHandleId;
+			requestHandle.reset(tdbb, triggerHandleId);
 
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			FOR(REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
 				TRG IN RDB$TRIGGERS
-				WITH TRG.RDB$TRIGGER_NAME EQ object_name.c_str()
+				WITH TRG.RDB$SCHEMA_NAME EQ object_name.schema.c_str() AND
+					 TRG.RDB$TRIGGER_NAME EQ object_name.object.c_str()
 			{
-				*errorCode = 310;
+				*errorCode = 310;	// isc_dyn_dup_trigger
 			}
 			END_FOR
 
 			break;
+		}
 
 		case obj_field:
-			request.reset(tdbb, drq_l_fld_name, DYN_REQUESTS);
+		{
+			static const CachedRequestId fieldHandleId;
+			requestHandle.reset(tdbb, fieldHandleId);
 
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			FOR(REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
 				FLD IN RDB$FIELDS
-				WITH FLD.RDB$FIELD_NAME EQ object_name.c_str()
+				WITH FLD.RDB$SCHEMA_NAME EQ object_name.schema.c_str() AND
+					 FLD.RDB$FIELD_NAME EQ object_name.object.c_str()
 			{
-				*errorCode = 311;
+				*errorCode = 311;	// isc_dyn_dup_domain
 			}
 			END_FOR
 
 			break;
+		}
 
 		case obj_collation:
-			request.reset(tdbb, drq_l_coll_name, DYN_REQUESTS);
+		{
+			static const CachedRequestId collationHandleId;
+			requestHandle.reset(tdbb, collationHandleId);
 
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			FOR(REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
 				COLL IN RDB$COLLATIONS
-				WITH COLL.RDB$COLLATION_NAME EQ object_name.c_str()
+				WITH COLL.RDB$SCHEMA_NAME EQ object_name.schema.c_str() AND
+					 COLL.RDB$COLLATION_NAME EQ object_name.object.c_str()
 			{
-				*errorCode = 312;
+				*errorCode = 312;	// isc_dyn_dup_collation
 			}
 			END_FOR
 
 			break;
+		}
 
 		case obj_package_header:
-			request.reset(tdbb, drq_l_pkg_name, DYN_REQUESTS);
+		{
+			static const CachedRequestId packageHandleId;
+			requestHandle.reset(tdbb, packageHandleId);
 
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			FOR(REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
 				PKG IN RDB$PACKAGES
-				WITH PKG.RDB$PACKAGE_NAME EQ object_name.c_str()
+				WITH PKG.RDB$SCHEMA_NAME EQ object_name.schema.c_str() AND
+					 PKG.RDB$PACKAGE_NAME EQ object_name.object.c_str()
 			{
-				*errorCode = 313;
+				*errorCode = 313;	// isc_dyn_dup_package
 			}
 			END_FOR
 
 			break;
+		}
+
+		case obj_schema:
+		{
+			fb_assert(object_name.schema.isEmpty());
+
+			static const CachedRequestId schemaHandleId;
+			requestHandle.reset(tdbb, schemaHandleId);
+
+			FOR(REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+				SCH IN RDB$SCHEMAS
+				WITH SCH.RDB$SCHEMA_NAME EQ object_name.object.c_str()
+			{
+				*errorCode = 316;	// isc_dyn_dup_schema
+			}
+			END_FOR
+
+			break;
+		}
 
 		default:
 			fb_assert(false);
@@ -228,12 +291,13 @@ bool DYN_UTIL_check_unique_name_nothrow(thread_db* tdbb, jrd_tra* transaction,
 }
 
 // Check if an object already exists. If yes, throw error.
-void DYN_UTIL_check_unique_name(thread_db* tdbb, jrd_tra* transaction, const MetaName& object_name, int object_type)
+void DYN_UTIL_check_unique_name(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& object_name,
+	int object_type)
 {
 	USHORT errorCode;
 
 	if (!DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, object_name, object_type, &errorCode))
-		status_exception::raise(Arg::PrivateDyn(errorCode) << object_name.c_str());
+		status_exception::raise(Arg::PrivateDyn(errorCode) << object_name.toQuotedString());
 }
 
 
@@ -284,7 +348,7 @@ SINT64 DYN_UTIL_gen_unique_id(thread_db* tdbb, SSHORT id, const char* generator_
 }
 
 
-void DYN_UTIL_generate_constraint_name(thread_db* tdbb, MetaName& buffer)
+void DYN_UTIL_generate_constraint_name(thread_db* tdbb, QualifiedName& buffer)
 {
 /**************************************
  *
@@ -297,13 +361,15 @@ void DYN_UTIL_generate_constraint_name(thread_db* tdbb, MetaName& buffer)
  *
  **************************************/
 	SET_TDBB(tdbb);
-	Jrd::Attachment* attachment = tdbb->getAttachment();
 
+	fb_assert(buffer.schema.hasData());
+
+	Jrd::Attachment* attachment = tdbb->getAttachment();
 	bool found = false;
 
 	do
 	{
-		buffer.printf("INTEG_%" SQUADFORMAT,
+		buffer.object.printf("INTEG_%" SQUADFORMAT,
 				DYN_UTIL_gen_unique_id(tdbb, drq_g_nxt_con, "RDB$CONSTRAINT_NAME"));
 
 		AutoCacheRequest request(tdbb, drq_f_nxt_con, DYN_REQUESTS);
@@ -311,7 +377,8 @@ void DYN_UTIL_generate_constraint_name(thread_db* tdbb, MetaName& buffer)
 		found = false;
 		FOR(REQUEST_HANDLE request)
 			FIRST 1 X IN RDB$RELATION_CONSTRAINTS
-			WITH X.RDB$CONSTRAINT_NAME EQ buffer.c_str()
+			WITH X.RDB$SCHEMA_NAME EQ buffer.schema.c_str() AND
+				 X.RDB$CONSTRAINT_NAME EQ buffer.object.c_str()
 		{
 			found = true;
 		}
@@ -320,25 +387,7 @@ void DYN_UTIL_generate_constraint_name(thread_db* tdbb, MetaName& buffer)
 }
 
 
-void DYN_UTIL_generate_field_name(thread_db* tdbb, TEXT* buffer)
-{
-/**************************************
- *
- *	D Y N _ U T I L _ g e n e r a t e _ f i e l d _ n a m e
- *
- **************************************
- *
- * Functional description
- *	Stub to make it work with char* too.
- *
- **************************************/
-	MetaName temp;
-	DYN_UTIL_generate_field_name(tdbb, temp);
-	strcpy(buffer, temp.c_str());
-}
-
-
-void DYN_UTIL_generate_field_name(thread_db* tdbb, MetaName& buffer)
+void DYN_UTIL_generate_field_name(thread_db* tdbb, QualifiedName& buffer)
 {
 /**************************************
  *
@@ -351,12 +400,15 @@ void DYN_UTIL_generate_field_name(thread_db* tdbb, MetaName& buffer)
  *
  **************************************/
 	SET_TDBB(tdbb);
+
+	fb_assert(buffer.schema.hasData());
+
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 	bool found = false;
 
 	do
 	{
-		buffer.printf("RDB$%" SQUADFORMAT,
+		buffer.object.printf("RDB$%" SQUADFORMAT,
 				DYN_UTIL_gen_unique_id(tdbb, drq_g_nxt_fld, "RDB$FIELD_NAME"));
 
 		AutoCacheRequest request(tdbb, drq_f_nxt_fld, DYN_REQUESTS);
@@ -364,7 +416,8 @@ void DYN_UTIL_generate_field_name(thread_db* tdbb, MetaName& buffer)
 		found = false;
 		FOR(REQUEST_HANDLE request)
 			FIRST 1 X IN RDB$FIELDS
-			WITH X.RDB$FIELD_NAME EQ buffer.c_str()
+			WITH X.RDB$SCHEMA_NAME EQ buffer.schema.c_str() AND
+				 X.RDB$FIELD_NAME EQ buffer.object.c_str()
 		{
 			found = true;
 		}
@@ -373,7 +426,7 @@ void DYN_UTIL_generate_field_name(thread_db* tdbb, MetaName& buffer)
 }
 
 
-void DYN_UTIL_generate_field_position(thread_db* tdbb, const MetaName& relation_name,
+void DYN_UTIL_generate_field_position(thread_db* tdbb, const QualifiedName& relation_name,
 	SLONG* field_pos)
 {
 /**************************************
@@ -395,7 +448,8 @@ void DYN_UTIL_generate_field_position(thread_db* tdbb, const MetaName& relation_
 
 	FOR(REQUEST_HANDLE request)
 		X IN RDB$RELATION_FIELDS
-		WITH X.RDB$RELATION_NAME EQ relation_name.c_str()
+		WITH X.RDB$SCHEMA_NAME EQ relation_name.schema.c_str() AND
+			 X.RDB$RELATION_NAME EQ relation_name.object.c_str()
 	{
 		if (X.RDB$FIELD_POSITION.NULL)
 			continue;
@@ -409,7 +463,7 @@ void DYN_UTIL_generate_field_position(thread_db* tdbb, const MetaName& relation_
 
 
 void DYN_UTIL_generate_index_name(thread_db* tdbb, jrd_tra* /*transaction*/,
-								  MetaName& buffer, UCHAR verb)
+								  QualifiedName& buffer, UCHAR verb)
 {
 /**************************************
  *
@@ -422,6 +476,9 @@ void DYN_UTIL_generate_index_name(thread_db* tdbb, jrd_tra* /*transaction*/,
  *
  **************************************/
 	SET_TDBB(tdbb);
+
+	fb_assert(buffer.schema.hasData());
+
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 	bool found = false;
 
@@ -440,7 +497,7 @@ void DYN_UTIL_generate_index_name(thread_db* tdbb, jrd_tra* /*transaction*/,
 				format = "RDB$%" SQUADFORMAT;
 		}
 
-		buffer.printf(format,
+		buffer.object.printf(format,
 			DYN_UTIL_gen_unique_id(tdbb, drq_g_nxt_idx, "RDB$INDEX_NAME"));
 
 		AutoCacheRequest request(tdbb, drq_f_nxt_idx, DYN_REQUESTS);
@@ -448,7 +505,8 @@ void DYN_UTIL_generate_index_name(thread_db* tdbb, jrd_tra* /*transaction*/,
 		found = false;
 		FOR(REQUEST_HANDLE request)
 			FIRST 1 X IN RDB$INDICES
-			WITH X.RDB$INDEX_NAME EQ buffer.c_str()
+			WITH X.RDB$SCHEMA_NAME EQ buffer.schema.c_str() AND
+				 X.RDB$INDEX_NAME EQ buffer.object.c_str()
 		{
 			found = true;
 		}
@@ -458,9 +516,12 @@ void DYN_UTIL_generate_index_name(thread_db* tdbb, jrd_tra* /*transaction*/,
 
 
 // Generate a name unique to RDB$GENERATORS.
-void DYN_UTIL_generate_generator_name(thread_db* tdbb, MetaName& buffer)
+void DYN_UTIL_generate_generator_name(thread_db* tdbb, QualifiedName& buffer)
 {
 	SET_TDBB(tdbb);
+
+	fb_assert(buffer.schema.hasData());
+
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 
 	AutoCacheRequest request(tdbb, drq_f_nxt_gen, DYN_REQUESTS);
@@ -468,13 +529,15 @@ void DYN_UTIL_generate_generator_name(thread_db* tdbb, MetaName& buffer)
 
 	do
 	{
-		buffer.printf("RDB$%" SQUADFORMAT,
+		buffer.object.printf("RDB$%" SQUADFORMAT,
 			DYN_UTIL_gen_unique_id(tdbb, drq_g_nxt_gen, "RDB$GENERATOR_NAME"));
 
 		found = false;
 
 		FOR (REQUEST_HANDLE request)
-			FIRST 1 X IN RDB$GENERATORS WITH X.RDB$GENERATOR_NAME EQ buffer.c_str()
+			FIRST 1 X IN RDB$GENERATORS
+			WITH X.RDB$SCHEMA_NAME EQ buffer.schema.c_str() AND
+				 X.RDB$GENERATOR_NAME EQ buffer.object.c_str()
 		{
 			found = true;
 		}
@@ -483,7 +546,7 @@ void DYN_UTIL_generate_generator_name(thread_db* tdbb, MetaName& buffer)
 }
 
 
-void DYN_UTIL_generate_trigger_name(thread_db* tdbb, jrd_tra* /*transaction*/, MetaName& buffer)
+void DYN_UTIL_generate_trigger_name(thread_db* tdbb, jrd_tra* /*transaction*/, QualifiedName& buffer)
 {
 /**************************************
  *
@@ -496,12 +559,15 @@ void DYN_UTIL_generate_trigger_name(thread_db* tdbb, jrd_tra* /*transaction*/, M
  *
  **************************************/
 	SET_TDBB(tdbb);
+
+	fb_assert(buffer.schema.hasData());
+
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 	bool found = false;
 
 	do
 	{
-		buffer.printf("CHECK_%" SQUADFORMAT,
+		buffer.object.printf("CHECK_%" SQUADFORMAT,
 			DYN_UTIL_gen_unique_id(tdbb, drq_g_nxt_trg, "RDB$TRIGGER_NAME"));
 
 		AutoCacheRequest request(tdbb, drq_f_nxt_trg, DYN_REQUESTS);
@@ -509,7 +575,8 @@ void DYN_UTIL_generate_trigger_name(thread_db* tdbb, jrd_tra* /*transaction*/, M
 		found = false;
 		FOR(REQUEST_HANDLE request)
 			FIRST 1 X IN RDB$TRIGGERS
-			WITH X.RDB$TRIGGER_NAME EQ buffer.c_str()
+			WITH X.RDB$SCHEMA_NAME EQ buffer.schema.c_str() AND
+				 X.RDB$TRIGGER_NAME EQ buffer.object.c_str()
 		{
 			found = true;
 		}
@@ -520,9 +587,10 @@ void DYN_UTIL_generate_trigger_name(thread_db* tdbb, jrd_tra* /*transaction*/, M
 
 bool DYN_UTIL_find_field_source(thread_db* tdbb,
 								jrd_tra* transaction,
-								const MetaName& view_name,
+								const QualifiedName& view_name,
 								USHORT context,
 								const TEXT* local_name,
+								TEXT* output_field_schema_name,
 								TEXT* output_field_name)
 {
 /**************************************
@@ -541,15 +609,22 @@ bool DYN_UTIL_find_field_source(thread_db* tdbb,
 	bool found = false;
 
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		VRL IN RDB$VIEW_RELATIONS CROSS
-			RFR IN RDB$RELATION_FIELDS OVER RDB$RELATION_NAME
-			WITH VRL.RDB$VIEW_NAME EQ view_name.c_str() AND
-			VRL.RDB$VIEW_CONTEXT EQ context AND
-			VRL.RDB$CONTEXT_TYPE BETWEEN VCT_TABLE AND VCT_VIEW AND
-			VRL.RDB$PACKAGE_NAME MISSING AND
-			RFR.RDB$FIELD_NAME EQ local_name
+		VRL IN RDB$VIEW_RELATIONS
+		CROSS RFR IN RDB$RELATION_FIELDS
+		WITH VRL.RDB$SCHEMA_NAME EQ view_name.schema.c_str() AND
+			 VRL.RDB$VIEW_NAME EQ view_name.object.c_str() AND
+			 VRL.RDB$VIEW_CONTEXT EQ context AND
+			 VRL.RDB$CONTEXT_TYPE BETWEEN VCT_TABLE AND VCT_VIEW AND
+			 VRL.RDB$PACKAGE_NAME MISSING AND
+			 RFR.RDB$SCHEMA_NAME EQ VRL.RDB$RELATION_SCHEMA_NAME AND
+			 RFR.RDB$RELATION_NAME EQ VRL.RDB$RELATION_NAME AND
+			 RFR.RDB$FIELD_NAME EQ local_name
 	{
 		found = true;
+
+		fb_utils::exact_name_limit(RFR.RDB$FIELD_SOURCE_SCHEMA_NAME, sizeof(RFR.RDB$FIELD_SOURCE_SCHEMA_NAME));
+		strcpy(output_field_schema_name, RFR.RDB$FIELD_SOURCE_SCHEMA_NAME);
+
 		fb_utils::exact_name_limit(RFR.RDB$FIELD_SOURCE, sizeof(RFR.RDB$FIELD_SOURCE));
 		strcpy(output_field_name, RFR.RDB$FIELD_SOURCE);
 	}
@@ -560,15 +635,17 @@ bool DYN_UTIL_find_field_source(thread_db* tdbb,
 		request.reset(tdbb, drq_l_fld_src3, DYN_REQUESTS);
 
 		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-			VRL IN RDB$VIEW_RELATIONS CROSS
-				PPR IN RDB$PROCEDURE_PARAMETERS
-				WITH VRL.RDB$RELATION_NAME EQ PPR.RDB$PROCEDURE_NAME AND
-				VRL.RDB$VIEW_NAME EQ view_name.c_str() AND
-				VRL.RDB$VIEW_CONTEXT EQ context AND
-				VRL.RDB$CONTEXT_TYPE EQ VCT_PROCEDURE AND
-				PPR.RDB$PACKAGE_NAME EQUIV VRL.RDB$PACKAGE_NAME AND
-				PPR.RDB$PARAMETER_TYPE = 1 AND // output
-				PPR.RDB$PARAMETER_NAME EQ local_name
+			VRL IN RDB$VIEW_RELATIONS
+			CROSS PPR IN RDB$PROCEDURE_PARAMETERS
+			WITH VRL.RDB$RELATION_SCHEMA_NAME EQ PPR.RDB$SCHEMA_NAME AND
+				 VRL.RDB$RELATION_NAME EQ PPR.RDB$PROCEDURE_NAME AND
+				 VRL.RDB$SCHEMA_NAME EQ view_name.schema.c_str() AND
+				 VRL.RDB$VIEW_NAME EQ view_name.object.c_str() AND
+				 VRL.RDB$VIEW_CONTEXT EQ context AND
+				 VRL.RDB$CONTEXT_TYPE EQ VCT_PROCEDURE AND
+				 PPR.RDB$PACKAGE_NAME EQUIV VRL.RDB$PACKAGE_NAME AND
+				 PPR.RDB$PARAMETER_TYPE = 1 AND // output
+				 PPR.RDB$PARAMETER_NAME EQ local_name
 		{
 			found = true;
 			fb_utils::exact_name_limit(PPR.RDB$FIELD_SOURCE, sizeof(PPR.RDB$FIELD_SOURCE));
@@ -582,7 +659,7 @@ bool DYN_UTIL_find_field_source(thread_db* tdbb,
 
 
 void DYN_UTIL_store_check_constraints(thread_db* tdbb, jrd_tra* transaction,
-	const MetaName& constraint_name, const MetaName& trigger_name)
+	const QualifiedName& constraint_name, const MetaName& trigger_name)
 {
 /**************************************
  *
@@ -602,7 +679,8 @@ void DYN_UTIL_store_check_constraints(thread_db* tdbb, jrd_tra* transaction,
 	STORE(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		CHK IN RDB$CHECK_CONSTRAINTS
 	{
-        strcpy(CHK.RDB$CONSTRAINT_NAME, constraint_name.c_str());
+		strcpy(CHK.RDB$SCHEMA_NAME, constraint_name.schema.c_str());
+		strcpy(CHK.RDB$CONSTRAINT_NAME, constraint_name.object.c_str());
 		strcpy(CHK.RDB$TRIGGER_NAME, trigger_name.c_str());
 	}
 	END_STORE

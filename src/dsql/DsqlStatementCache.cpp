@@ -259,16 +259,37 @@ void DsqlStatementCache::buildStatementKey(thread_db* tdbb, RefStrPtr& key, cons
 {
 	const auto attachment = tdbb->getAttachment();
 
+	const auto searchPathLen = std::accumulate(
+		attachment->att_schema_search_path->begin(),
+		attachment->att_schema_search_path->end(),
+		0u,
+		[](const auto& len, const auto& pathItem) {
+			return len + pathItem.length() + 1u;
+		}
+	);
+
 	const SSHORT charSetId = isInternalRequest ? CS_METADATA : attachment->att_charset;
 	const int debugOptions = (int) attachment->getDebugOptions().getDsqlKeepBlr();
 
 	key = FB_NEW_POOL(getPool()) RefString(getPool());
+	key->resize(1 + sizeof(charSetId) + text.length() + 1 + searchPathLen + 1);
 
-	key->resize(1 + sizeof(charSetId) + text.length());
 	char* p = key->begin();
-	*p = (clientDialect << 2) | (int(isInternalRequest) << 1) | debugOptions;
-	memcpy(p + 1, &charSetId, sizeof(charSetId));
-	memcpy(p + 1 + sizeof(charSetId), text.c_str(), text.length());
+	*p++ = (clientDialect << 2) | (int(isInternalRequest) << 1) | debugOptions;
+	memcpy(p, &charSetId, sizeof(charSetId));
+	p += sizeof(charSetId);
+	memcpy(p, text.c_str(), text.length() + 1);
+	p += text.length() + 1;
+
+	for (const auto& pathItem : *attachment->att_schema_search_path)
+	{
+		memcpy(p, pathItem.c_str(), pathItem.length() + 1);
+		p += pathItem.length() + 1;
+	}
+
+	*p = '\0';
+
+	fb_assert(p + 1 == key->end());
 }
 
 void DsqlStatementCache::buildVerifyKey(thread_db* tdbb, string& key, bool isInternalRequest)

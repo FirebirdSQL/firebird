@@ -52,17 +52,18 @@ enum isql_switches
 	IN_SW_ISQL_QUIET		= 19,
 	IN_SW_ISQL_ROLE 		= 20,
 	IN_SW_ISQL_ROLE2		= 21,
-	IN_SW_ISQL_SQLDIALECT	= 22,
-	IN_SW_ISQL_TERM 		= 23,
+	IN_SW_ISQL_SEARCH_PATH	= 22,
+	IN_SW_ISQL_SQLDIALECT	= 23,
+	IN_SW_ISQL_TERM 		= 24,
 #ifdef TRUSTED_AUTH
-	IN_SW_ISQL_TRUSTED		= 24,
+	IN_SW_ISQL_TRUSTED		= 25,
 #endif
-	IN_SW_ISQL_USER 		= 25,
-	IN_SW_ISQL_VERSION		= 26,
+	IN_SW_ISQL_USER 		= 26,
+	IN_SW_ISQL_VERSION		= 27,
 #ifdef DEV_BUILD
-	IN_SW_ISQL_EXTRACTTBL	= 27,
+	IN_SW_ISQL_EXTRACTTBL	= 28,
 #endif
-	IN_SW_ISQL_HELP 		= 28
+	IN_SW_ISQL_HELP 		= 29
 };
 
 
@@ -91,6 +92,7 @@ static const Switches::in_sw_tab_t isql_in_sw_table[] =
 	{IN_SW_ISQL_QUIET		, 0, "QUIET"			, 0, 0, 0, false, false, 134	, 1, NULL, iqoArgNone},
 	{IN_SW_ISQL_ROLE 		, 0, "ROLE"				, 0, 0, 0, false, false, 135	, 1, NULL, iqoArgString},
 	{IN_SW_ISQL_ROLE2		, 0, "R2"				, 0, 0, 0, false, false, 136	, 2, NULL, iqoArgString},
+	{IN_SW_ISQL_SEARCH_PATH	, 0, "SEARCH_PATH"		, 0, 0, 0, false, false, 210	, 2, NULL, iqoArgString},
 	{IN_SW_ISQL_SQLDIALECT	, 0, "SQLDIALECT"		, 0, 0, 0, false, false, 137	, 1, NULL, iqoArgInteger},
 	{IN_SW_ISQL_SQLDIALECT	, 0, "SQL_DIALECT"		, 0, 0, 0, false, false, 0		, 1, NULL, iqoArgInteger},
 	{IN_SW_ISQL_TERM 		, 0, "TERMINATOR"		, 0, 0, 0, false, false, 138	, 1, NULL, iqoArgString},

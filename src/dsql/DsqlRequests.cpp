@@ -1055,7 +1055,10 @@ void DsqlDdlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 				(internalScratch->flags & DsqlCompilerScratch::FLAG_INTERNAL_REQUEST);
 
 			if (!isInternalRequest && node->mustBeReplicated())
-				REPL_exec_sql(tdbb, req_transaction, getDsqlStatement()->getOrgText());
+			{
+				REPL_exec_sql(tdbb, req_transaction, getDsqlStatement()->getOrgText(),
+					*getDsqlStatement()->getSchemaSearchPath());
+			}
 		}
 		catch (status_exception& ex)
 		{

@@ -75,13 +75,13 @@ public:
 		if (m_statement)
 		{
 			if (m_statement->procedure)
-				return m_statement->procedure->getName().toString();
+				return m_statement->procedure->getName().toQuotedString();
 
 			if (m_statement->function)
-				return m_statement->function->getName().toString();
+				return m_statement->function->getName().toQuotedString();
 
-			if (m_statement->triggerName.hasData())
-				return m_statement->triggerName.c_str();
+			if (m_statement->triggerName.object.hasData())
+				return m_statement->triggerName.toQuotedString();
 		}
 
 		return "";
@@ -580,7 +580,7 @@ public:
 		StatementHolder(request),
 		m_name(getName()),
 		m_relationName((request->req_rpb.hasData() && request->req_rpb[0].rpb_relation) ?
-			request->req_rpb[0].rpb_relation->rel_name : ""),
+			request->req_rpb[0].rpb_relation->rel_name.toQuotedString() : ""),
 		m_which(which),
 		m_action(request->req_trigger_action),
 		m_perf(perf)
@@ -675,6 +675,7 @@ public:
 private:
 	Firebird::PerformanceInfo m_info;
 	TraceCountsArray m_counts;
+	Firebird::ObjectsArray<Firebird::string> m_tempNames;
 	static SINT64 m_dummy_counts[RuntimeStatistics::TOTAL_ITEMS];	// Zero-initialized array with zero counts
 };
 

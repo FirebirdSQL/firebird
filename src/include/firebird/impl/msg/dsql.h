@@ -20,7 +20,7 @@ FB_IMPL_MSG(DSQL, 20, dsql_cursor_exists, -502, "24", "000", "Cursor @1 already 
 FB_IMPL_MSG(DSQL, 21, dsql_cursor_rel_ambiguous, -502, "34", "000", "Relation @1 is ambiguous in cursor @2")
 FB_IMPL_MSG(DSQL, 22, dsql_cursor_rel_not_found, -502, "34", "000", "Relation @1 is not found in cursor @2")
 FB_IMPL_MSG(DSQL, 23, dsql_cursor_not_open, -504, "24", "000", "Cursor is not open")
-FB_IMPL_MSG(DSQL, 24, dsql_type_not_supp_ext_tab, -607, "HY", "004", "Data type @1 is not supported for EXTERNAL TABLES. Relation '@2', field '@3'")
+FB_IMPL_MSG(DSQL, 24, dsql_type_not_supp_ext_tab, -607, "HY", "004", "Data type @1 is not supported for EXTERNAL TABLES. Relation @2, field @3")
 FB_IMPL_MSG(DSQL, 25, dsql_feature_not_supported_ods, -804, "0A", "000", "Feature not supported on ODS version older than @1.@2")
 FB_IMPL_MSG(DSQL, 26, primary_key_required, -660, "22", "000", "Primary key required on table @1")
 FB_IMPL_MSG(DSQL, 27, upd_ins_doesnt_match_pk, -313, "42", "000", "UPDATE OR INSERT field list does not match primary key of table @1")
