@@ -1,0 +1,187 @@
+-----------------
+TABLESPACES
+-----------------
+
+  Goals:
+    Tablespaces allow you to organize the logic of placing database object files in the file system. It allows:
+    1) Extend the current limits on database size
+    2) Keep non active parts of a database on slow disks (having big volume)
+    3) Split indices from the database
+
+-----------------
+SYNTAX
+-----------------
+
+    1. TABLESPACE
+    CREATE TABLESPACE [IF NOT EXISTS] <TS NAME> FILE '/path/to/file'
+    ALTER TABLESPACE <TS NAME> SET FILE [TO] '/path/to/file'
+    You can specify either an absolute path or a relative path (relative to the database file)
+
+    DROP TABLESPACE [IF EXISTS] <TS NAME>
+    The development of the INCLUDING CONTENTS option has been postponed.
+
+    For an existing tablespace, it is possible to add a comment using the COMMENT ON statement.
+    COMMENT ON TABLESPACE <TS NAME> IS {'text' | NULL}
+
+    2. TABLE
+    "PRIMARY" keyword
+    The PRIMARY keyword can be used as a tablespace name if you want to reference the main database file.
+
+    CREATE TABLE ...
+    [[IN] TABLESPACE {<TS NAME> | PRIMARY}]
+
+    It is also possible to specify a tablespace when creating a column or table constraint (unique, primary key, references):
+
+    <column/table constraint> ::= ... UNIQUE ... [[IN] TABLESPACE {<TS NAME> | PRIMARY}] | PRIMARY ... [[IN] TABLESPACE {<TS NAME> | PRIMARY}] | REFERENCES ... [[IN] TABLESPACE {<TS NAME> | PRIMARY}] ...  
+  
+    ALTER TABLE <TABLE NAME> SET TABLESPACE [TO] {<TS NAME> | PRIMARY}
+
+    The table data will be moved to the specified tablespace or to the main database.
+
+    3. INDEX
+    CREATE INDEX ...
+    [[IN] TABLESPACE {<TS NAME> | PRIMARY}]
+
+    By default, table indexes are created in the same tablespace as the table itself.
+
+    ALTER INDEX ...
+    [SET TABLESPACE [TO] {<TS NAME> | PRIMARY}]
+
+    The index data will be moved to the specified tablespace or to the main database.
+
+-----------------
+SECURITY
+-----------------
+
+    Only administrators and users with the “CREATE TABLESPACE” privilege can create tablespaces (CREATE TABLESPACE).
+    Only administrators and users with the “ALTER ANY TABLESPACE” privilege can change tablespaces file paths (ALTER TABLESPACE <name> SET FILE [TO] <file_name>).
+    Only administrators, domain owners, or users with the ALTER ANY TABLESPACE privilege can comment (COMMENT ON) tablespaces.
+    Only administrators and users with the “DROP ANY TABLESPACE” privilege can delete tablespaces (DROP TABLESPACE).
+
+-----------------
+ODS CHANGES
+-----------------
+
+    A new table RDB$TABLESPACES:
+    RDB$TABLESPACE_ID - INTEGER # internally it will be pagespaceid.
+    RDB$TABLESPACE_NAME - CHAR (63) # name of a tablespace
+    RDB$SECURITY_CLASS - CHAR (63) # security class for tablespace
+    RDB$SYSTEM_FLAG - SMALLINT # reserved for future
+    RDB$DESCRIPTION - BLOB TEXT # description of a tablespace
+    RDB$OWNER_NAME - CHAR (63) # owner of a tablespace
+    RDB$FILE_NAME - VARCHAR (255) # file where a tablespace data are located
+    RDB$OFFLINE - BOOLEAN # reserved for future
+    RDB$READ_ONLY - BOOLEAN # reserved for future
+
+    New field in RDB$INDICES:
+    RDB$TABLESPACE_NAME - CHAR (63)
+
+    New field in RDB$RELATION_FIELDS:
+    RDB$TABLESPACE_NAME - CHAR (63)
+
+    New fields in RDB$RELATIONS:
+    RDB$TABLESPACE_NAME - CHAR (63)
+    RDB$POINTER_PAGE - INTEGER # a number of the first pointer page of a relation
+    RDB$ROOT_PAGE - INTEGER # a number of the root page of a relation
+
+    These fields are necessary for reliable implementation of moving data pages to another tablespace.
+    It's a dfw operation with EX database lock. So there are no concurrent changes.
+    1) copy all data pages
+    2) switch RDB$POINTER_PAGE and RDB$ROOT_PAGE transactionally
+    3) Rebuild RDB$PAGES
+    4) clear old data pages (as post-dfw operation)
+    It can be interrupted but not resumed.
+
+-----------------
+UTILITIES
+-----------------
+
+    1. Logical backup
+    gbak -b works as usual for now. It gets data from a database transparently working with tablespaces.
+
+    2. Logical restore
+    gbak -c
+
+    -ts_map[ping] <path to file>
+    option is required for correct database restore if its backup contains tables or indexes saved in tablespaces.
+    To do this, specify the path to file, which consists of lines with two values: the first column is the name of the tablespace,
+    the second column is the new location of the tablespace. You can specify either an absolute path or a relative path.
+    TS1 /path/to/tablespace1.dat
+    TS2 /path/to/tablespace2.dat
+
+    -ts <tablespace> <path>
+    allows you to specify the path for the tablespace. You can specify either an absolute path or a relative path.
+    The option can be used as many times as required. It can also be used together with -ts_map.
+
+    -ts_orig[inal_paths]
+    To restore tablespaces to the original paths they were on when the backup was created.
+    It is still possible to override paths for some tablespaces using the -ts and -ts_map options.
+    This is an explicit option, not a default action.
+    The option does not overwrite existing files.
+
+    If you do not specify the above options, when restoring a database that has tablespaces,
+    an error about the inability to determine the path to restore tablespaces will occur.
+
+    3. Show
+    SHOW {TABLESPACES | TABLESPACE <TS NAME>}
+    Displays a list of all tablespaces names in alphabetical order or information about the specified tablespace.
+
+    4. Replication
+    There is an apply_tablespaces_ddl parameter for replication.
+    If this parameter is disabled, tablespaces-related DDL statements and CREATE/ALTER TABLE/INDEX clauses will not be applied to the replica.
+    This is used if the replica has its own set of tablespaces or none at all.
+
+-----------------
+DETAILS
+-----------------
+
+  pag_header in every tablespace is reserved and may be replaced by a
+  new page type.
+  pag_scns and pag_pip are located in every tablespace.
+  pag_root is located in the tablespace where a table is located.
+
+  An algorithm for moving data to another tablespace:
+  First, you have to move all the pages to another tablespace:
+  The main steps are:
+   - allocate necessary number of pointer pages by extents.
+   - allocate the rest of pointer pages by pages.
+   - walking through PPs allocate DPs by pages or extents.
+   - fix every PP by correcting DP numbers and ppg_next pointer and build a map
+   - walking through the map and copy every DP to the new one by fixing
+     b_page and f_page numbers.
+  At the end of work replace records in RDB$PAGES.
+
+  Then you need to update first pointer page and root page in RDB$RELATIONS transactionally.
+
+  RDB$POINTER_PAGE and RDB$ROOT_PAGE are updated in a transaction because:
+  Moving table pages to another tablespace occurs in DFW. In case of failure, we can get the old values of RDB$POINTER_PAGE and RDB$ROOT_PAGE fields.
+
+  Then we delete all from RDB$PAGES about the relation to have an ability to understand that we need to restore pages
+  if transaction won't be able to finish successfully.
+
+  Then post commit work will clean up old pages. It must be done exactly after commit.
+  If crash is happend the metadata will point to the old page space and new ones will be garbage. Right after commit old pages will be garbage.
+
+
+-----------------
+CONSTRAINTS
+-----------------
+
+    It's possible to create up to 253 tablespaces.
+    Operators to move an index or table to a tablespace require an exclusive database lock.
+
+-----------------
+PLANS
+-----------------
+
+    1. Add the main database file to the RDB$TABLESPACES table. Designate it as PRIMARY.
+    The RDB$TABLESPACE_NAME field contained in the system tables of tables, indexes will have the value “PRIMARY” instead of NULL.
+    2. Add an option to transfer tablespace to the main DB file when restoring.
+    3. TEMPORARY predefined tablespaces.
+    4. Grouping page counters by tablespace (For output in trace and monitoring).
+    5. New header page for tablespaces
+    6. NBACKUP support for tablespaces
+    7. Moving blobs to separate tablespaces  (The RDB$TABLESPACE_NAME column in RDB$RELATION_FIELDS is reserved for this purpose).
+    8. Possibility to introduce UNDO tablespace in future versions
+    9. The ability to set default tablespaces for tables, indexes and BLOBs at the database or schema level.
+
