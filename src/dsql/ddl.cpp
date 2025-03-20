@@ -199,9 +199,9 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 
 			auto typeNameBackup = field->typeOfName;
 			if (!dsqlScratch->getTypeFromCache(field, field->typeOfName)
-				&& !METD_get_domain(dsqlScratch->getTransaction(), field, field->typeOfName)
 				&& !METD_get_packaged_type(dsqlScratch->getTransaction(), field, field->typeOfName,
-											field->packageName.hasData() ? field->packageName : dsqlScratch->package))
+										field->packageName.hasData() ? field->packageName : dsqlScratch->package)
+				&& !METD_get_domain(dsqlScratch->getTransaction(), field, field->typeOfName))
 			{
 				// Specified domain or source field does not exist
 				post_607(Arg::Gds(isc_dsql_domain_not_found) << field->typeOfName.toQuotedString());
