@@ -132,7 +132,7 @@ namespace
 				}
 			}
 
-			fb_assert(index < MaxPatternDiversity);
+			fb_assert(index < static_cast<int>(MaxPatternDiversity));
 			return index;
 		}
 
