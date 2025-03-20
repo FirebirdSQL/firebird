@@ -1153,20 +1153,26 @@ namespace
 		return result;
 	}
 
+	// Return 1 if sign symbol has not been encountered
+	constexpr int getIntSignFromString(const char* str, FB_SIZE_T& offset)
+	{
+		// To check '-' sign we need to move back, cuz '-' is also used as separator,
+		// so it will be skipped when we trying to remove "empty" space between values
+		if (str[offset] == '+')
+			offset++;
+		else if (offset != 0 && str[offset - 1] == '-')
+			return -1;
+
+		return 1;
+	}
+
 	constexpr int getIntFromString(const char* str, FB_SIZE_T length, FB_SIZE_T& offset, FB_SIZE_T parseLength, bool withSign = false)
 	{
 		int result = 0;
 		int sign = 1;
 
 		if (withSign)
-		{
-			// To check '-' sign we need to move back, cuz '-' is also used as separator,
-			// so it will be skipped when we trying to remove "empty" space between values
-			if (str[offset] == '+')
-				offset++;
-			else if (offset != 0 && str[offset - 1] == '-')
-				sign = -1;
-		}
+			sign = getIntSignFromString(str, offset);
 
 		const FB_SIZE_T parseLengthWithOffset = offset + parseLength;
 		for (; offset < parseLengthWithOffset && offset < length; offset++)
@@ -1195,6 +1201,73 @@ namespace
 		}
 
 		return std::string_view(str + startPoint, wordLen);
+	}
+
+	std::string_view getTimezoneNameFromString(const char* str, FB_SIZE_T length, FB_SIZE_T& offset)
+	{
+		auto isOther = [](const char symbol) -> bool
+		{
+			return std::find(TimeZoneTrie::OtherSymbolsInName, TimeZoneTrie::OtherSymbolsInName + TimeZoneTrie::OtherSymbolsCount, symbol)
+				!= TimeZoneTrie::OtherSymbolsInName + TimeZoneTrie::OtherSymbolsCount;
+		};
+
+		FB_SIZE_T startOffset = offset;
+
+		for (; offset < length; offset++)
+		{
+			const char symbol = str[offset];
+			if (!isAlpha(symbol) && !isDigit(symbol) && !isOther(symbol))
+				break;
+		}
+
+		return std::string_view(str + startOffset, offset - startOffset);
+	}
+
+	std::optional<int> getDisplacementFromString(const char* str, FB_SIZE_T length, FB_SIZE_T& offset,
+		std::string_view patternStr, Firebird::Callbacks* cb)
+	{
+		auto parseNumber = [](const char* str, FB_SIZE_T length, FB_SIZE_T& offset) -> std::optional<unsigned>
+		{
+			const char symbol = str[offset];
+			if (!isDigit(symbol))
+				return std::nullopt;
+
+			unsigned result = symbol - '0';
+			++offset;
+			for (; offset < length; offset++)
+			{
+				if (!isDigit(str[offset]))
+					break;
+
+				result = result * 10 + (str[offset] - '0');
+			}
+
+			return result;
+		};
+
+		int sign = getIntSignFromString(str, offset);
+
+		std::optional<unsigned> hours = parseNumber(str, length, offset);
+		if (!hours.has_value())
+			return std::nullopt;
+
+		for (; offset < length; offset++)
+		{
+			if (!isSeparator(str[offset]))
+				break;
+		}
+
+		std::optional<unsigned> minutes = parseNumber(str, length, offset);
+		if (!minutes.has_value())
+			return std::nullopt;
+
+		if (minutes.value() > 59)
+		{
+			cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+				string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(59));
+		}
+
+		return sign * (hours.value() * 60 + minutes.value());
 	}
 
 	template <typename TIterator>
@@ -1563,7 +1636,22 @@ namespace
 					unsigned int parsedTimezoneNameLength = 0;
 					const bool timezoneNameIsCorrect = timeZoneTrie().contains(str + strOffset, outTimezoneId, parsedTimezoneNameLength);
 					if (!timezoneNameIsCorrect)
-						status_exception::raise(Arg::Gds(isc_invalid_timezone_region) << string(str + strOffset, parsedTimezoneNameLength));
+					{
+						FB_SIZE_T oldOffset = strOffset;
+
+						// Okey, this is not a timezone name, try to parse it as a displacement (Oracle behavior)
+						const std::optional<int> displacement = getDisplacementFromString(str, strLength, strOffset,
+							patternStr, cb);
+						if (displacement.has_value())
+						{
+							outTimezoneInMinutes = displacement.value();
+							break;
+						}
+
+						std::string_view timezoneName = getTimezoneNameFromString(str, strLength, oldOffset);
+						status_exception::raise(Arg::Gds(isc_invalid_timezone_region_or_displacement)
+							<< string(timezoneName.data(), timezoneName.length()));
+					}
 
 					strOffset += parsedTimezoneNameLength;
 					break;

@@ -579,6 +579,13 @@ BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_TZ)
 	testCVTStringToFormatDateTimeExpectTimeTZ("12:00 -2:30", "HH24:MI TZH:TZM", createTimeStampTZ(0, 0, 0, 12, 0, 0, -150, 0), cb);
 	testCVTStringToFormatDateTimeExpectTimeTZ("12:00 +0:30", "HH24:MI TZH:TZM", createTimeStampTZ(0, 0, 0, 12, 0, 0, 30, 0), cb);
 	testCVTStringToFormatDateTimeExpectTimeTZ("12:00 +0:00", "HH24:MI TZH:TZM", createTimeStampTZ(0, 0, 0, 12, 0, 0, 0, 0), cb);
+
+	testCVTStringToFormatDateTimeExpectTimeTZ("12:00  2:30", "HH24:MI TZR", createTimeStampTZ(0, 0, 0, 12, 0, 0, 150, 0), cb);
+	testCVTStringToFormatDateTimeExpectTimeTZ("12:00 -2:30", "HH24:MI TZR", createTimeStampTZ(0, 0, 0, 12, 0, 0, -150, 0), cb);
+	testCVTStringToFormatDateTimeExpectTimeTZ("12:00 +2:30", "HH24:MI TZR", createTimeStampTZ(0, 0, 0, 12, 0, 0, 150, 0), cb);
+	testCVTStringToFormatDateTimeExpectTimeTZ("12:00  0:00", "HH24:MI TZR", createTimeStampTZ(0, 0, 0, 12, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTimeTZ("12:00 +0:00", "HH24:MI TZR", createTimeStampTZ(0, 0, 0, 12, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectTimeTZ("12:00 -0:00", "HH24:MI TZR", createTimeStampTZ(0, 0, 0, 12, 0, 0, 0, 0), cb);
 }
 
 BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_SOLID_PATTERNS)
