@@ -6606,6 +6606,35 @@ void JReplicator::freeEngineData(Firebird::CheckStatusWrapper* user_status)
 }
 
 
+void JReplicator::init(CheckStatusWrapper* status, const char* guid)
+{
+	try
+	{
+		EngineContextHolder tdbb(status, this, FB_FUNCTION);
+		check_database(tdbb);
+
+		try
+		{
+			applier->init(tdbb, guid);
+		}
+		catch (const Exception& ex)
+		{
+			transliterateException(tdbb, ex, status, "JReplicator::init");
+			return;
+		}
+
+		trace_warning(tdbb, status, "JReplicator::init");
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+		return;
+	}
+
+	successful_completion(status);
+}
+
+
 void JReplicator::process(CheckStatusWrapper* status, unsigned length, const UCHAR* data)
 {
 	try

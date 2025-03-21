@@ -623,6 +623,7 @@ public:
 	void process(CheckStatusWrapper* status, unsigned length, const unsigned char* data) override;
 	void close(CheckStatusWrapper* status) override;
 	void deprecatedClose(CheckStatusWrapper* status) override;
+	void init(CheckStatusWrapper* status, const char* guid) override;
 
 	explicit Replicator(Attachment* att) : attachment(att)
 	{}
@@ -3534,6 +3535,37 @@ Replicator* Attachment::createReplicator(CheckStatusWrapper* status)
 	}
 
 	return NULL;
+}
+
+
+void Replicator::init(CheckStatusWrapper* status, const char* guid)
+{
+	try
+	{
+		reset(status);
+
+		Rdb* rdb = attachment->getRdb();
+		CHECK_HANDLE(rdb, isc_bad_db_handle);
+		rem_port* port = rdb->rdb_port;
+
+		if (port->port_protocol < PROTOCOL_VERSION20)
+			unsupported();
+
+		PACKET* packet = &rdb->rdb_packet;
+		packet->p_operation = op_repl_init;
+		P_REPLICATE* repl = &packet->p_replicate;
+		repl->p_repl_database = rdb->rdb_id;
+		repl->p_repl_data.cstr_length = strlen(guid);
+		repl->p_repl_data.cstr_address = reinterpret_cast<const UCHAR*>(guid);
+
+		RefMutexGuard portGuard(*port->port_sync, FB_FUNCTION);
+
+		send_and_receive(status, rdb, packet);
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+	}
 }
 
 
