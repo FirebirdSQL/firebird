@@ -86,7 +86,7 @@ The following patterns are currently implemented for string to datetime conversi
 | A.M. / P.M. | Period for 12 hours time (it doesn't matter which one is used, period will be taken from input string) |
 | TZH | Time zone in Hours  (-14 - 14) |
 | TZM | Time zone in Minutes (0 - 59) |
-| TZR | Time zone Name |
+| TZR | Time zone Name or Time zone Displacement (same as TZH:TZM) |
 
 Dividers are the same as for datetime to string conversion and can also be omitted.
 

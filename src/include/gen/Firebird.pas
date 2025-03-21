@@ -5781,6 +5781,7 @@ const
 	 isc_sweep_concurrent_instance = 335545309;
 	 isc_sweep_read_only = 335545310;
 	 isc_sweep_attach_no_cleanup = 335545311;
+	 isc_invalid_timezone_region_or_displacement = 335545312;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;
