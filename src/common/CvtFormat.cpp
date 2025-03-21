@@ -1586,7 +1586,7 @@ namespace
 		}
 	}
 
-	void validateTimeStamp(const ISC_TIMESTAMP timestamp, const EXPECT_DATETIME expectedType, const dsc* desc,
+	void validateTimeStamp(const ISC_TIMESTAMP timestamp, const tm& times, const EXPECT_DATETIME expectedType, const dsc* desc,
 		Callbacks* cb)
 	{
 		if (!NoThrowTimeStamp::isValidTimeStamp(timestamp))
@@ -1607,6 +1607,21 @@ namespace
 				default: // this should never happen!
 					CVT_conversion_error(desc, cb->err);
 					break;
+			}
+		}
+
+		if (expectedType != expect_sql_time && expectedType != expect_sql_time_tz)
+		{
+			tm times2;
+			memset(&times2, 0, sizeof(decltype(times2)));
+
+			NoThrowTimeStamp::decode_date(timestamp.timestamp_date, &times2);
+
+			if (times.tm_year != times2.tm_year
+			 || times.tm_mon  != times2.tm_mon
+			 ||	times.tm_mday != times2.tm_mday)
+			{
+				CVT_conversion_error(desc, cb->err);
 			}
 		}
 	}
@@ -1685,8 +1700,8 @@ ISC_TIMESTAMP_TZ CVT_format_string_to_datetime(const dsc* desc, const Firebird::
 	processStringToDateTimeTokens(tokens, stringUpper, cvtData, cb);
 
 	ISC_TIMESTAMP_TZ timestampTZ = constructTimeStampTz(cvtData, cb);
+	validateTimeStamp(timestampTZ.utc_timestamp, cvtData.times, expectedType, desc, cb);
 	timeStampToUtc(timestampTZ, cb->getSessionTimeZone(), expectedType, cb);
-	validateTimeStamp(timestampTZ.utc_timestamp, expectedType, desc, cb);
 
 	return timestampTZ;
 }
