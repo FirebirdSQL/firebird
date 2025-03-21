@@ -251,8 +251,8 @@ WriteLockResult ProcedureScan::lockRecord(thread_db* /*tdbb*/) const
 
 bool ProcedureScan::isDependent(const StreamList& streams) const
 {
-	return m_sourceList->containsAnyStream(streams) ||
-		m_targetList->containsAnyStream(streams);
+	return (m_sourceList && m_sourceList->containsAnyStream(streams)) ||
+		(m_targetList && m_targetList->containsAnyStream(streams));
 }
 
 void ProcedureScan::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
