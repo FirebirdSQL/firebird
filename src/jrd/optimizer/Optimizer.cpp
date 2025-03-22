@@ -3029,12 +3029,7 @@ string Optimizer::getStreamName(StreamType stream)
 	const auto procedure = tail->csb_procedure;
 	const auto alias = tail->csb_alias;
 
-	string name;
-
-	if (relation)
-		name = relation->rel_name.c_str();
-	else if (procedure)
-		name = procedure->getName().toString();
+	string name = tail->getName();
 
 	if (alias && alias->hasData())
 	{
@@ -3083,13 +3078,8 @@ string Optimizer::makeAlias(StreamType stream)
 				alias += ' ';
 		}
 	}
-	else if (csb_tail->csb_relation)
-		alias = csb_tail->csb_relation->rel_name.c_str();
-	else if (csb_tail->csb_procedure)
-		alias = csb_tail->csb_procedure->getName().toString();
-	//// TODO: LocalTableSourceNode
 	else
-		fb_assert(false);
+		alias = csb_tail->getName(false);
 
 	return alias;
 }

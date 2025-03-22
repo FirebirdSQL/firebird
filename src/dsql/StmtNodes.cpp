@@ -10682,6 +10682,8 @@ static dsql_ctx* dsqlGetContext(const RecordSourceNode* node)
 		return procNode->dsqlContext;
 	else if (auto relNode = nodeAs<RelationSourceNode>(node))
 		return relNode->dsqlContext;
+	else if (auto tableValueFunctionNode = nodeAs<TableValueFunctionSourceNode>(node))
+		return tableValueFunctionNode->dsqlContext;
 	//// TODO: LocalTableSourceNode
 	else if (auto rseNode = nodeAs<RseNode>(node))
 		return rseNode->dsqlContext;
@@ -10699,6 +10701,8 @@ static void dsqlGetContexts(DsqlContextStack& contexts, const RecordSourceNode* 
 		contexts.push(procNode->dsqlContext);
 	else if (auto relNode = nodeAs<RelationSourceNode>(node))
 		contexts.push(relNode->dsqlContext);
+	else if (auto tableValueFunctionNode = nodeAs<TableValueFunctionSourceNode>(node))
+		contexts.push(tableValueFunctionNode->dsqlContext);
 	//// TODO: LocalTableSourceNode
 	else if (auto rseNode = nodeAs<RseNode>(node))
 	{
