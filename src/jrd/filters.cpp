@@ -1101,7 +1101,7 @@ ISC_STATUS filter_transliterate_text(USHORT action, BlobControl* control)
 		return isc_transliteration_failed;
 	}
 
-	if (err_position == 0 && bytes_read_from_source != 0 && length != 0 && length < 4)
+	if (err_position == 0 && length != 0 && control->ctl_buffer_length < 8)
 	{
 		// We don't have sufficient bytes to always transliterate a character.
 		// A bad input on the first character is unrecoverable, so we cache
