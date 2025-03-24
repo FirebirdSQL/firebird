@@ -102,6 +102,7 @@ void GEN_hidden_variables(DsqlCompilerScratch* dsqlScratch)
 			dsqlScratch->appendUChar(blr_dcl_variable);
 			dsqlScratch->appendUShort(var->number);
 			dsqlScratch->appendUChar(blr_rowtype);
+			dsqlScratch->appendUChar(blr_rt_full);
 			dsqlScratch->appendUShort(var->desc.dsc_sub_count);
 			dsqlScratch->appendUShort(var->contextNum);
 			auto subDescriptor = var->desc.dsc_sub_first;
@@ -263,6 +264,7 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 		if (parameter->par_desc.dsc_dtype == dtype_rowtype)
 		{
 			dsqlScratch->appendUChar(blr_rowtype);
+			dsqlScratch->appendUChar(blr_rt_full);
 			dsqlScratch->appendUShort(parameter->par_desc.dsc_sub_count);
 			dsqlScratch->appendUShort(0);
 			auto subDescriptor = parameter->par_desc.dsc_sub_first;
@@ -483,6 +485,7 @@ void GEN_descriptor( DsqlCompilerScratch* dsqlScratch, const dsc* desc, bool tex
 	case dtype_rowtype:
 		{
 			dsqlScratch->appendUChar(blr_rowtype);
+			dsqlScratch->appendUChar(1);
 			dsqlScratch->appendUShort(desc->dsc_sub_count);
 			auto subDescriptor = desc->dsc_sub_first;
 			while (subDescriptor)

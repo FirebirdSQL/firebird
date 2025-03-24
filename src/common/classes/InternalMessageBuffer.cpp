@@ -209,9 +209,8 @@ MetadataFromBlr::MetadataFromBlr(unsigned aBlrLength, const unsigned char* aBlr,
 			break;
 
 		case blr_rowtype:
-		case blr_rowtype2:
-		case blr_rowtype3:
 			item->type = SQL_ROWTYPE;
+			rdr.getByte();
 			item->length = rdr.getWord();
 			break;
 

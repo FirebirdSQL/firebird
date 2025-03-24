@@ -243,6 +243,7 @@ void BlrFromMessage::buildBlr(IMessageMetadata* metadata)
 
 			case SQL_ROWTYPE:
 				appendUChar(blr_rowtype);
+				appendUChar(blr_rt_full);
 				appendUShort(len);
 				dtype = dtype_rowtype;
 				break;

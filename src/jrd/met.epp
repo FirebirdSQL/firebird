@@ -202,7 +202,7 @@ bool MET_get_composite_type(thread_db* tdbb, MemoryPool& csbPool, const MetaName
 		if (!MET_lookup_relation(tdbb, name))
 			ERR_post(Arg::Gds(isc_dyn_composite_not_fount) << name.c_str());
 
-		if (DSC_make_descriptor(&tempDesc, blr_rowtype3, 0, 0, 0, 0, 0))
+		if (DSC_make_descriptor(&tempDesc, blr_rowtype, 0, 0, 0, 0, 0))
 								// FLD.RDB$FIELD_TYPE,
 								// FLD.RDB$FIELD_SCALE,
 								// FLD.RDB$FIELD_LENGTH,		// calc from subfields

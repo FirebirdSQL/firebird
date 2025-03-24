@@ -576,115 +576,120 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 			break;
 		}
 
-		// there are four blr_rowtype's
-		// first one is for recursive parsing all of internal descriptors (for local composite type declarations (and message descriptors???))
-		// second one is for complex descriptor construction via name of a field source (for type of table or packaged type declarations)
 		case blr_rowtype:
 		{
 			desc->dsc_dtype = dtype_rowtype;
-			USHORT subDescriptorsNumber = desc->dsc_sub_count = csb->csb_blr_reader.getWord();
-			desc->dsc_length += NULL_BYTES(desc->dsc_sub_count);
-			auto context_num = csb->csb_blr_reader.getWord();
-			if (itemInfo)
-				itemInfo->compositeContextNum = context_num;
-
-			auto nextDsc = &desc->dsc_sub_first;
-			while (subDescriptorsNumber--)
+			const USHORT subrowtype = csb->csb_blr_reader.getByte();
+			switch (subrowtype)
 			{
-				*nextDsc = FB_NEW_POOL(*tdbb->getDefaultPool()) dsc;
-				PAR_desc(tdbb, csb, *nextDsc, nullptr);
-				if ((*nextDsc)->dsc_dtype >= dtype_aligned)
-					desc->dsc_length = FB_ALIGN(desc->dsc_length, type_alignments[(*nextDsc)->dsc_dtype]);
-				desc->dsc_length += (*nextDsc)->dsc_length;
-				nextDsc = &(*nextDsc)->dsc_next;
-			}
-			break;
-		}
-		// package type
-		case blr_rowtype2:
-		{
-			if (itemInfo)
-				itemInfo->fullDomain = true;
-		}
-		// type of table
-		case blr_rowtype3:
-		{
-			desc->dsc_dtype = dtype_rowtype;
-
-			auto fields_num = csb->csb_blr_reader.getWord() + 1;	// number of internal fields + parent field
-			auto context_num = csb->csb_blr_reader.getWord();
-
-			MetaName fieldSourceName;
-			csb->csb_blr_reader.getMetaName(fieldSourceName);
-
-			FieldInfo fieldInfo;
-			MET_get_composite_type(tdbb, csb->csb_pool, fieldSourceName, desc, itemInfo ? &csb->csb_map_field_info : nullptr);
-
-			if (itemInfo)
-			{
-				itemInfo->compositeContextNum = context_num;
-				csb->csb_map_context_type.put(context_num, fieldSourceName);
-
-				MetaNamePair namePair(fieldSourceName, "");
-
-				FieldInfo fieldInfo;
-				bool exist = csb->csb_map_field_info.get(namePair, fieldInfo);
-				if (exist)
-					itemInfo->nullable = fieldInfo.nullable;
-
-				itemInfo->field = namePair;
-			}
-
-			if (csb->collectingDependencies())
-			{
-				auto relation = MET_lookup_relation(tdbb, fieldSourceName);
-				if (relation)
+				case blr_rt_full:
 				{
-					CompilerScratch::Dependency dependency(obj_relation);
-					dependency.relation = relation;
-					csb->addDependency(dependency);
+					USHORT subDescriptorsNumber = desc->dsc_sub_count = csb->csb_blr_reader.getWord();
+					desc->dsc_length += NULL_BYTES(desc->dsc_sub_count);
+					auto context_num = csb->csb_blr_reader.getWord();
+					if (itemInfo)
+						itemInfo->compositeContextNum = context_num;
+
+					auto nextDsc = &desc->dsc_sub_first;
+					while (subDescriptorsNumber--)
+					{
+						*nextDsc = FB_NEW_POOL(*tdbb->getDefaultPool()) dsc;
+						PAR_desc(tdbb, csb, *nextDsc, nullptr);
+						if ((*nextDsc)->dsc_dtype >= dtype_aligned)
+							desc->dsc_length = FB_ALIGN(desc->dsc_length, type_alignments[(*nextDsc)->dsc_dtype]);
+						desc->dsc_length += (*nextDsc)->dsc_length;
+						nextDsc = &(*nextDsc)->dsc_next;
+					}
+					break;
 				}
-				else
+				case blr_rt_pagacked_type:
+				// package type
 				{
-					CompilerScratch::Dependency dependency(obj_packaged_type);
-					dependency.name = FB_NEW_POOL(csb->csb_pool) MetaName(csb->csb_pool, fieldSourceName);
-					csb->addDependency(dependency);
+					if (itemInfo)
+						itemInfo->fullDomain = true;
+				}
+				case blr_rt_type_of_table:
+				// type of table
+				{
+					desc->dsc_dtype = dtype_rowtype;
+
+					auto fields_num = csb->csb_blr_reader.getWord() + 1;	// number of internal fields + parent field
+					auto context_num = csb->csb_blr_reader.getWord();
+
+					MetaName fieldSourceName;
+					csb->csb_blr_reader.getMetaName(fieldSourceName);
+
+					FieldInfo fieldInfo;
+					MET_get_composite_type(tdbb, csb->csb_pool, fieldSourceName, desc, itemInfo ? &csb->csb_map_field_info : nullptr);
+
+					if (itemInfo)
+					{
+						itemInfo->compositeContextNum = context_num;
+						csb->csb_map_context_type.put(context_num, fieldSourceName);
+
+						MetaNamePair namePair(fieldSourceName, "");
+
+						FieldInfo fieldInfo;
+						bool exist = csb->csb_map_field_info.get(namePair, fieldInfo);
+						if (exist)
+							itemInfo->nullable = fieldInfo.nullable;
+
+						itemInfo->field = namePair;
+					}
+
+					if (csb->collectingDependencies())
+					{
+						auto relation = MET_lookup_relation(tdbb, fieldSourceName);
+						if (relation)
+						{
+							CompilerScratch::Dependency dependency(obj_relation);
+							dependency.relation = relation;
+							csb->addDependency(dependency);
+						}
+						else
+						{
+							CompilerScratch::Dependency dependency(obj_packaged_type);
+							dependency.name = FB_NEW_POOL(csb->csb_pool) MetaName(csb->csb_pool, fieldSourceName);
+							csb->addDependency(dependency);
+						}
+					}
+
+					break;
+				}
+				case blr_rt_local_type:
+				// local composite type
+				{
+					auto fields_num = csb->csb_blr_reader.getWord() + 1;	// number of internal fields + parent field
+					auto context_num = csb->csb_blr_reader.getWord();
+
+					MetaName* localTypeName = FB_NEW_POOL(csb->csb_pool) MetaName(csb->csb_pool);
+					csb->csb_blr_reader.getMetaName(*localTypeName);
+
+					if (itemInfo)
+					{
+						itemInfo->fullDomain = true;
+						itemInfo->compositeContextNum = context_num;
+						csb->csb_map_context_type.put(context_num, *localTypeName);
+
+						MetaNamePair namePair(*localTypeName, "");
+
+						FieldInfo fieldInfo;
+						bool exist = csb->csb_map_field_info.get(namePair, fieldInfo);
+						if (exist)
+							itemInfo->nullable = fieldInfo.nullable;
+
+						itemInfo->field = namePair;
+					}
+
+					auto localTypeNode = csb->csb_local_type_declarations.get(*localTypeName);
+					if (!localTypeNode)
+						PAR_error(csb, Arg::Gds(isc_dsql_datatype_err));
+
+					*desc = *(*localTypeNode)->desc;
+
+					break;
 				}
 			}
-
-			break;
-		}
-		// local composite type
-		case blr_rowtype4:
-		{
-			auto fields_num = csb->csb_blr_reader.getWord() + 1;	// number of internal fields + parent field
-			auto context_num = csb->csb_blr_reader.getWord();
-
-			MetaName* localTypeName = FB_NEW_POOL(csb->csb_pool) MetaName(csb->csb_pool);
-			csb->csb_blr_reader.getMetaName(*localTypeName);
-
-			if (itemInfo)
-			{
-				itemInfo->fullDomain = true;
-				itemInfo->compositeContextNum = context_num;
-				csb->csb_map_context_type.put(context_num, *localTypeName);
-
-				MetaNamePair namePair(*localTypeName, "");
-
-				FieldInfo fieldInfo;
-				bool exist = csb->csb_map_field_info.get(namePair, fieldInfo);
-				if (exist)
-					itemInfo->nullable = fieldInfo.nullable;
-
-				itemInfo->field = namePair;
-			}
-
-			auto localTypeNode = csb->csb_local_type_declarations.get(*localTypeName);
-			if (!localTypeNode)
-				PAR_error(csb, Arg::Gds(isc_dsql_datatype_err));
-
-			*desc = *(*localTypeNode)->desc;
-
 			break;
 		}
 

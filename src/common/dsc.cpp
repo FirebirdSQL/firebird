@@ -1524,8 +1524,6 @@ bool DSC_make_descriptor(DSC* desc,
 		break;
 
 	case blr_rowtype:
-	case blr_rowtype2:
-	case blr_rowtype3:
 		desc->dsc_dtype = dtype_rowtype;
 		break;
 

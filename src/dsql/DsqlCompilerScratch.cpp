@@ -530,30 +530,35 @@ void DsqlCompilerScratch::putLocalVariableDecl(dsql_var* variable, DeclareVariab
 		if (field->notNull)
 			appendUChar(blr_not_nullable);
 
+		appendUChar(blr_rowtype);
 		if (field->typeOfTable.hasData())
 		{
-			appendUChar(blr_rowtype3);
+			// appendUChar(blr_rowtype);
+			appendUChar(blr_rt_type_of_table);
 			appendUShort(field->fld_sub_count);
 			appendUShort(variable->contextNum);
 			appendMetaString(field->typeOfTable.c_str());
 		}
 		else if (field->fieldSource.hasData())
 		{
-			appendUChar(blr_rowtype2);
+			// appendUChar(blr_rowtype);
+			appendUChar(blr_rt_pagacked_type);
 			appendUShort(field->fld_sub_count);
 			appendUShort(variable->contextNum);
 			appendMetaString(field->fieldSource.c_str());
 		}
 		else if (field->typeOfName.hasData())
 		{
-			appendUChar(blr_rowtype4);
+			// appendUChar(blr_rowtype);
+			appendUChar(blr_rt_local_type);
 			appendUShort(field->fld_sub_count);
 			appendUShort(variable->contextNum);
 			appendMetaString(field->typeOfName.c_str());
 		}
 		else
 		{
-			appendUChar(blr_rowtype);
+			// appendUChar(blr_rowtype);
+			appendUChar(blr_rt_full);
 			appendUShort(field->fld_sub_count);
 			appendUShort(variable->contextNum);
 			auto next = field->fld_sub_first;
@@ -907,23 +912,28 @@ void DsqlCompilerScratch::genParameters(Array<NestConst<ParameterClause> >& para
 
 				putDebugArgument(fb_dbg_arg_output, i, parameter->name.c_str());
 				variable->field = field;
+
+				appendUChar(blr_rowtype);
 				if (field->fieldSource.hasData())
 				{
-					appendUChar(blr_rowtype2);
+					// appendUChar(blr_rowtype);
+					appendUChar(blr_rt_pagacked_type);
 					appendUShort(field->fld_sub_count);
 					appendUShort(variable->contextNum);
 					appendMetaString(field->fieldSource.c_str());
 				}
 				else if (field->typeOfTable.hasData())
 				{
-					appendUChar(blr_rowtype3);
+					// appendUChar(blr_rowtype);
+					appendUChar(blr_rt_type_of_table);
 					appendUShort(field->fld_sub_count);
 					appendUShort(variable->contextNum);
 					appendMetaString(field->typeOfTable.c_str());
 				}
 				else
 				{
-					appendUChar(blr_rowtype);
+					// appendUChar(blr_rowtype);
+					appendUChar(blr_rt_full);
 					appendUShort(field->fld_sub_count);
 					appendUShort(variable->contextNum);
 					auto next = field->fld_sub_first;
@@ -1020,23 +1030,28 @@ void DsqlCompilerScratch::genParameters(Array<NestConst<ParameterClause> >& para
 
 				putDebugArgument(fb_dbg_arg_output, i, parameter->name.c_str());
 				variable->field = field;
+
+				appendUChar(blr_rowtype);
 				if (field->fieldSource.hasData())
 				{
-					appendUChar(blr_rowtype2);
+					// appendUChar(blr_rowtype);
+					appendUChar(blr_rt_pagacked_type);
 					appendUShort(field->fld_sub_count);
 					appendUShort(variable->contextNum);
 					appendMetaString(field->fieldSource.c_str());
 				}
 				else if (field->typeOfTable.hasData())
 				{
-					appendUChar(blr_rowtype3);
+					// appendUChar(blr_rowtype);
+					appendUChar(blr_rt_type_of_table);
 					appendUShort(field->fld_sub_count);
 					appendUShort(variable->contextNum);
 					appendMetaString(field->typeOfTable.c_str());
 				}
 				else
 				{
-					appendUChar(blr_rowtype);
+					// appendUChar(blr_rowtype);
+					appendUChar(blr_rt_full);
 					appendUShort(field->fld_sub_count);
 					appendUShort(variable->contextNum);
 					auto next = field->fld_sub_first;
