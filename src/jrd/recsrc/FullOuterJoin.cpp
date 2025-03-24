@@ -172,6 +172,11 @@ void FullOuterJoin::findUsedStreams(StreamList& streams, bool expandAll) const
 	m_arg2->findUsedStreams(streams, expandAll);
 }
 
+bool FullOuterJoin::isDependent(const StreamList& streams) const
+{
+	return m_arg1->isDependent(streams) || m_arg2->isDependent(streams);
+}
+
 void FullOuterJoin::invalidateRecords(Request* request) const
 {
 	m_arg1->invalidateRecords(request);

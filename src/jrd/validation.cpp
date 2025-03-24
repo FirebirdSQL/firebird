@@ -1779,7 +1779,7 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 				PBM_SET(pool, &vdr_backversion_pages, page_number);
 			}
 
-			// Record the existance of a primary version of a record
+			// Record the existence of a primary version of a record
 
 			if ((vdr_flags & VDR_records) &&
 				!(header->rhd_flags & (rhd_chain | rhd_fragment | rhd_blob)))
@@ -2246,7 +2246,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page* root_
 			if (node.isEndBucket || node.isEndLevel)
 				break;
 
-			// Record the existance of a primary version of a record
+			// Record the existence of a primary version of a record
 			if (leafPage && (vdr_flags & VDR_records))
 				RBM_SET(vdr_tdbb->getDefaultPool(), &vdr_idx_records, node.recordNumber.getValue());
 

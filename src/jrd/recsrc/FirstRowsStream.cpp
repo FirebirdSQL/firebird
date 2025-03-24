@@ -149,6 +149,11 @@ void FirstRowsStream::findUsedStreams(StreamList& streams, bool expandAll) const
 	m_next->findUsedStreams(streams, expandAll);
 }
 
+bool FirstRowsStream::isDependent(const StreamList& streams) const
+{
+	return m_value->containsAnyStream(streams) || m_next->isDependent(streams);
+}
+
 void FirstRowsStream::invalidateRecords(Request* request) const
 {
 	m_next->invalidateRecords(request);

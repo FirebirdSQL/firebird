@@ -385,8 +385,8 @@ struct index_root_page
 		USHORT irt_flags;				// index flags
 		UCHAR irt_state;				// index state
 		UCHAR irt_keys;					// number of keys in index
-	private:
-		[[maybe_unused]] USHORT irt_dummy;	// alignment to 8-byte boundary
+	public:
+		USHORT irt_dummy;				// alignment to 8-byte boundary
 
 	public:
 		TraNumber inProgress() const;

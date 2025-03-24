@@ -108,6 +108,7 @@ void InnerJoin::calculateStreamInfo()
 		innerStream->baseIndexes = candidate->indexes;
 		innerStream->baseUnique = candidate->unique;
 		innerStream->baseNavigated = candidate->navigated;
+		innerStream->baseConjuncts = candidate->conjuncts;
 
 		csb->csb_rpt[innerStream->number].deactivate();
 	}
@@ -579,13 +580,15 @@ River* InnerJoin::formRiver()
 
 			// Create a hash join
 			rsb = FB_NEW_POOL(getPool())
-				HashJoin(tdbb, csb, 2, hashJoinRsbs, keys.begin(), stream.selectivity);
+				HashJoin(tdbb, csb, INNER_JOIN, 2, hashJoinRsbs, keys.begin(), stream.selectivity);
 
 			// Clear priorly processed rsb's, as they're already incorporated into a hash join
 			rsbs.clear();
 		}
 		else
+		{
 			rsb = optimizer->generateRetrieval(stream.number, sortPtr, false, false);
+		}
 
 		rsbs.add(rsb);
 		streams.add(stream.number);

@@ -117,6 +117,11 @@ RecordSource* OuterJoin::generate()
 	auto& outerStream = joinStreams[0];
 	auto& innerStream = joinStreams[1];
 
+	// Collect the outer streams to be used in the full outer join algorithm
+
+	StreamList checkStreams;
+	outerStream.rsb->findUsedStreams(checkStreams);
+
 	std::swap(outerStream, innerStream);
 
 	// Reset both streams to their original states

@@ -36,7 +36,7 @@ using namespace Jrd;
 Union::Union(CompilerScratch* csb, StreamType stream,
 			 FB_SIZE_T argCount, RecordSource* const* args, NestConst<MapNode>* maps,
 			 const StreamList& streams)
-	: RecordStream(csb, stream), m_args(csb->csb_pool), m_maps(csb->csb_pool),
+	: RecordStream(csb, stream), m_args(csb->csb_pool, argCount), m_maps(csb->csb_pool, argCount),
 	  m_streams(csb->csb_pool, streams)
 {
 	fb_assert(argCount);
@@ -44,17 +44,14 @@ Union::Union(CompilerScratch* csb, StreamType stream,
 	m_impure = csb->allocImpure<Impure>();
 
 	m_args.resize(argCount);
+	m_maps.resize(argCount);
 
 	for (FB_SIZE_T i = 0; i < argCount; i++)
 	{
 		m_args[i] = args[i];
 		m_cardinality += args[i]->getCardinality();
-	}
-
-	m_maps.resize(argCount);
-
-	for (FB_SIZE_T i = 0; i < argCount; i++)
 		m_maps[i] = maps[i];
+	}
 }
 
 void Union::internalOpen(thread_db* tdbb) const
@@ -69,11 +66,8 @@ void Union::internalOpen(thread_db* tdbb) const
 
 	// Initialize the record number of each stream in the union
 
-	for (FB_SIZE_T i = 0; i < m_streams.getCount(); i++)
-	{
-		const StreamType stream = m_streams[i];
+	for (const auto stream : m_streams)
 		request->req_rpb[stream].rpb_number.setValue(BOF_NUMBER);
-	}
 
 	m_args[impure->irsb_count]->open(tdbb);
 }
@@ -197,14 +191,14 @@ void Union::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned leve
 
 void Union::markRecursive()
 {
-	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		m_args[i]->markRecursive();
+	for (auto arg : m_args)
+		arg->markRecursive();
 }
 
 void Union::invalidateRecords(Request* request) const
 {
-	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		m_args[i]->invalidateRecords(request);
+	for (const auto arg : m_args)
+		arg->invalidateRecords(request);
 }
 
 void Union::findUsedStreams(StreamList& streams, bool expandAll) const
@@ -213,7 +207,18 @@ void Union::findUsedStreams(StreamList& streams, bool expandAll) const
 
 	if (expandAll)
 	{
-		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-			m_args[i]->findUsedStreams(streams, true);
+		for (const auto arg : m_args)
+			arg->findUsedStreams(streams, true);
 	}
+}
+
+bool Union::isDependent(const StreamList& streams) const
+{
+	for (const auto arg : m_args)
+	{
+		if (arg->isDependent(streams))
+			return true;
+	}
+
+	return false;
 }

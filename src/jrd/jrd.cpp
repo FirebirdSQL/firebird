@@ -1709,7 +1709,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 #ifdef WIN_NT
 			guardDbInit.enter();		// Required to correctly expand name of just created database
 
-			// Need to re-expand under lock to take into an account file existance (or not)
+			// Need to re-expand under lock to take into an account file existence (or not)
 			is_alias = expandDatabaseName(org_filename, expanded_name, &config);
 			if (!is_alias)
 			{
@@ -2931,7 +2931,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 #ifdef WIN_NT
 			guardDbInit.enter();		// Required to correctly expand name of just created database
 
-			// Need to re-expand under lock to take into an account file existance (or not)
+			// Need to re-expand under lock to take into an account file existence (or not)
 			is_alias = expandDatabaseName(org_filename, expanded_name, &config);
 			if (!is_alias)
 			{

@@ -162,7 +162,7 @@ Retrieval::Retrieval(thread_db* aTdbb, Optimizer* opt, StreamType streamNumber,
 	if (!tail->csb_idx)
 		return;
 
-	MatchedBooleanList matches;
+	BooleanList matches;
 
 	for (auto& index : *tail->csb_idx)
 	{
@@ -345,6 +345,12 @@ InversionCandidate* Retrieval::getInversion()
 				iter->containsStream(stream))
 			{
 				selectivity *= Optimizer::getSelectivity(*iter);
+			}
+
+			if (iter->computable(csb, INVALID_STREAM, false) &&
+				iter->containsStream(stream))
+			{
+				invCandidate->conjuncts.add(*iter);
 			}
 		}
 	}
@@ -800,7 +806,7 @@ bool Retrieval::betterInversion(const InversionCandidate* inv1,
 	return false;
 }
 
-bool Retrieval::checkIndexCondition(index_desc& idx, MatchedBooleanList& matches) const
+bool Retrieval::checkIndexCondition(index_desc& idx, BooleanList& matches) const
 {
 	fb_assert(idx.idx_condition);
 
@@ -911,7 +917,7 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 	const double minSelectivity = MIN(MAXIMUM_SELECTIVITY / cardinality, DEFAULT_SELECTIVITY);
 
 	// Walk through indexes to calculate selectivity / candidate
-	MatchedBooleanList matches;
+	BooleanList matches;
 
 	for (auto& scratch : fromIndexScratches)
 	{
@@ -1448,7 +1454,7 @@ InversionCandidate* Retrieval::makeInversion(InversionCandidateList& inversions)
 		}
 	}
 
-	MatchedBooleanList matches;
+	BooleanList matches;
 
 	if (navigationCandidate)
 	{

@@ -111,7 +111,10 @@
     <ClCompile Include="..\..\..\src\jrd\recsrc\SortedStream.cpp">
       <Filter>JRD files\Data Access</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\src\jrd\recsrc\Union.cpp">
+	<ClCompile Include="..\..\..\src\jrd\recsrc\Union.cpp">
+      <Filter>JRD files\Data Access</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\recsrc\TableValueFunctionScan.cpp">
       <Filter>JRD files\Data Access</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\recsrc\VirtualTableScan.cpp">
