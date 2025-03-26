@@ -649,7 +649,7 @@ ULONG blb::BLB_get_data(thread_db* tdbb, UCHAR* buffer, SLONG length, bool close
 		n = BLB_get_segment(tdbb, p, n);
 		p += n;
 		length -= n;
-		if (blb_flags & BLB_eof)
+		if ((blb_flags & BLB_eof) || (n == 0))
 			break;
 	}
 
