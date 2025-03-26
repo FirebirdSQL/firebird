@@ -704,6 +704,7 @@ using namespace Firebird;
 %token <metaNamePtr> ANY_VALUE
 %token <metaNamePtr> BTRIM
 %token <metaNamePtr> CALL
+%token <metaNamePtr> ENFORCED
 %token <metaNamePtr> FORMAT
 %token <metaNamePtr> LTRIM
 %token <metaNamePtr> NAMED_ARG_ASSIGN
@@ -2559,23 +2560,26 @@ column_constraint_def($addColumnClause)
 	: constraint_name_opt column_constraint($addColumnClause)
 		{
 			if ($1)
-				$addColumnClause->constraints.back().name = *$1;
+				$2->name = *$1;
 		}
+		constraint_characteristics_opt($2)
 	;
 
-%type column_constraint(<addColumnClause>)
+%type <addConstraintClause> column_constraint(<addColumnClause>)
 column_constraint($addColumnClause)
 	: null_constraint
 		{
 			setClause($addColumnClause->notNullSpecified, "NOT NULL");
 			RelationNode::AddConstraintClause& constraint = $addColumnClause->constraints.add();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_NOT_NULL;
+			$$ = &constraint;
 		}
 	| check_constraint
 		{
 			RelationNode::AddConstraintClause& constraint = $addColumnClause->constraints.add();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_CHECK;
 			constraint.check = $1;
+			$$ = &constraint;
 		}
 	| REFERENCES symbol_table_name column_parens_opt
 			referential_trigger_action constraint_index_opt
@@ -2597,18 +2601,21 @@ column_constraint($addColumnClause)
 			}
 
 			constraint.index = $5;
+			$$ = &constraint;
 		}
 	| UNIQUE constraint_index_opt
 		{
 			RelationNode::AddConstraintClause& constraint = $addColumnClause->constraints.add();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_UNIQUE;
 			constraint.index = $2;
+			$$ = &constraint;
 		}
 	| PRIMARY KEY constraint_index_opt
 		{
 			RelationNode::AddConstraintClause& constraint = $addColumnClause->constraints.add();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_PK;
 			constraint.index = $3;
+			$$ = &constraint;
 		}
 	;
 
@@ -2622,6 +2629,10 @@ table_constraint_definition($relationNode)
 			if ($1)
 				$2->name = *$1;
 			$$ = $2;
+		}
+		constraint_characteristics_opt($3)
+		{
+			$$ = $3;
 		}
 	;
 
@@ -2719,6 +2730,15 @@ constraint_index_opt
 	| NO INDEX
 		{ $$ = NULL; }
 	***/
+	;
+
+%type constraint_characteristics_opt(<addConstraintClause>)
+constraint_characteristics_opt($addConstraintClause)
+	: // nothing
+	| constraint_enforcement
+		{
+			$addConstraintClause->enforced = $1;
+		}
 	;
 
 %type <refActionClause> referential_trigger_action
@@ -4313,12 +4333,20 @@ alter_op($relationNode)
 			const auto node = $3;
 			node->createIfNotExistsOnly = $2;
 		}
-	| ADD table_constraint($relationNode)
+	| ADD table_constraint($relationNode) constraint_characteristics_opt($2)
 	| ADD CONSTRAINT if_not_exists_opt symbol_constraint_name table_constraint($relationNode)
 		{
 			const auto node = $5;
 			node->name = *$4;
 			node->createIfNotExistsOnly = $3;
+		}
+		constraint_characteristics_opt($5)
+	| ALTER CONSTRAINT symbol_constraint_name constraint_enforcement
+		{
+			RelationNode::AlterConstraintClause* clause = newNode<RelationNode::AlterConstraintClause>();
+			clause->name = *$3;
+			clause->enforced = $4;
+			$relationNode->clauses.add(clause);
 		}
 	| col_opt alter_column_name POSITION pos_short_integer
 		{
@@ -4447,6 +4475,12 @@ alter_op($relationNode)
 %type <metaNamePtr> alter_column_name
 alter_column_name
 	: keyword_or_column
+	;
+
+%type <boolVal> constraint_enforcement
+constraint_enforcement
+	: NOT ENFORCED	{ $$ = false; }
+	| ENFORCED		{ $$ = true; }
 	;
 
 // below are reserved words that could be used as column identifiers
@@ -9755,6 +9789,7 @@ non_reserved_word
 	| UNICODE_VAL
 	// added in FB 6.0
 	| ANY_VALUE
+	| ENFORCED
 	| FORMAT
 	| OWNER
 	| UNLIST
