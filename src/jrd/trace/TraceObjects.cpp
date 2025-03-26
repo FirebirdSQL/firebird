@@ -282,48 +282,49 @@ ITraceParams* TraceSQLStatementImpl::getInputs()
 
 void TraceSQLStatementImpl::DSQLParamsImpl::fillParams()
 {
-	if (m_descs.getCount() || !m_params || m_params->getCount() == 0)
+	if (m_descs.getCount() || !m_buffer)
 		return;
 
-	if (!m_stmt->getDsqlStatement()->isDml())
+	auto stmt = m_stmt->getDsqlStatement();
+	if (!stmt->isDml())
 	{
-		fb_assert(false);
 		return;
 	}
 
-	const auto dmlRequest = (DsqlDmlRequest*) m_stmt;
+	dsql_msg* msg = stmt->getSendMsg();
+	if (!msg)
+		return;
 
-	USHORT first_index = 0;
-	for (FB_SIZE_T i = 0 ; i < m_params->getCount(); ++i)
+	const auto params = msg->msg_parameters;
+	if (params.getCount() == 0)
+		return;
+
+	const Request* req = m_stmt->getRequest();
+	const Format* fmt = stmt->getStatement()->getMessage(msg->msg_number)->getFormat(req);
+
+	for (FB_SIZE_T i = 0 ; i < params.getCount(); ++i)
 	{
-		const dsql_par* parameter = (*m_params)[i];
+		const dsql_par* parameter = params[i];
 
 		if (parameter->par_index)
 		{
-			// Use descriptor for nulls signaling
-			USHORT null_flag = 0;
-			if (parameter->par_null)
-			{
-				const UCHAR* msgBuffer =
-					dmlRequest->req_msg_buffers[parameter->par_null->par_message->msg_buffer_number];
-
-				if (*(SSHORT*) (msgBuffer + (IPTR) parameter->par_null->par_desc.dsc_address))
-					null_flag = DSC_null;
-			}
-
-			dsc* desc = NULL;
-
 			const FB_SIZE_T idx = parameter->par_index - 1;
 			if (idx >= m_descs.getCount())
 				m_descs.getBuffer(idx + 1);
 
-			desc = &m_descs[idx];
+			dsc& desc = m_descs[idx];
 
-			*desc = parameter->par_desc;
-			desc->dsc_flags |= null_flag;
-
-			UCHAR* msgBuffer = dmlRequest->req_msg_buffers[parameter->par_message->msg_buffer_number];
-			desc->dsc_address = msgBuffer + (IPTR) desc->dsc_address;
+			desc = fmt->fmt_desc[parameter->par_parameter];
+			// Use descriptor for nulls signaling
+			if (parameter->par_null)
+			{
+				if (*(SSHORT*) (m_buffer + (IPTR) fmt->fmt_desc[parameter->par_null->par_parameter].dsc_address))
+					desc.dsc_flags |= DSC_null;
+			}
+			// Even if plugin try to change data in buffer (which is pointless)
+			// most likely it is safe because client buffer is writeble though
+			// in EXE_send() it is declared as const.
+			desc.dsc_address = const_cast<UCHAR*>(m_buffer) + (IPTR) desc.dsc_address;
 		}
 	}
 }
@@ -419,13 +420,12 @@ void TraceDscFromValues::fillParams()
 		{
 			//const impure_value* impure = m_request->getImpure<impure_value>(param->impureOffset)
 			const MessageNode* message = param->message;
-			const Format* format = message->format;
+			const Format* format = message->getFormat(m_request);
 			const int arg_number = param->argNumber;
 
 			desc = format->fmt_desc[arg_number];
 			from_desc = &desc;
-			desc.dsc_address = m_request->getImpure<UCHAR>(
-				message->impureOffset + (IPTR) desc.dsc_address);
+			desc.dsc_address = message->getBuffer(m_request) + (IPTR) desc.dsc_address;
 
 			// handle null flag if present
 			if (param->argFlag)
