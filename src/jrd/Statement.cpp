@@ -119,15 +119,8 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 
 				case Resource::rsc_index:
 				{
-					jrd_rel* relation = resource->rsc_rel;
-					IndexLock* index = CMP_get_index_lock(tdbb, relation, resource->rsc_id);
-					if (index)
-					{
-						++index->idl_count;
-						if (index->idl_count == 1) {
-							LCK_lock(tdbb, index->idl_lock, LCK_SR, LCK_WAIT);
-						}
-					}
+					// No need to lock the index here because it is already
+					// locked by Optimizer::compileRelation.
 					break;
 				}
 
