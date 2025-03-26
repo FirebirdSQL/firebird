@@ -3040,6 +3040,10 @@ jrd_rel* MET_lookup_relation(thread_db* tdbb, const MetaName& name)
 	FOR(REQUEST_HANDLE request)
 		X IN RDB$RELATIONS WITH X.RDB$RELATION_NAME EQ name.c_str()
 	{
+		// RDB$RELATION_ID can be NULL here if the relation is not committed yet
+		if (X.RDB$RELATION_ID.NULL)
+			return NULL;
+
 		relation = MET_relation(tdbb, X.RDB$RELATION_ID);
 		if (relation->rel_name.length() == 0) {
 			relation->rel_name = name;
