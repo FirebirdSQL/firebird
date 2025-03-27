@@ -4716,6 +4716,7 @@ void JProvider::shutdown(CheckStatusWrapper* status, unsigned int timeout, const
 			// PluginManager wants to lock a mutex, which is sometimes already locked in current thread
 			TraceManager::shutdown();
 			Mapping::shutdownIpc();
+			IbUtil::finalize();
 		}
 
 		// Wait for completion of all attacment shutdown threads
