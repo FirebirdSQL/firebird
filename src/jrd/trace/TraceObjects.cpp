@@ -61,7 +61,7 @@ namespace
 
 // Convert text descriptor into UTF8 string.
 // Binary data converted into HEX representation.
-bool descToUTF8(const dsc* param, string& result)
+bool descToUTF8(const paramdsc* param, string& result)
 {
 	UCHAR* address;
 	USHORT length;
@@ -83,7 +83,7 @@ bool descToUTF8(const dsc* param, string& result)
 		return false;
 	}
 
-	if (param->getCharSet() == CS_BINARY)
+	if (param->dsc_sub_type == CS_BINARY)
 	{
 		// Convert OCTETS and [VAR]BINARY to HEX string
 
@@ -311,14 +311,11 @@ void TraceSQLStatementImpl::DSQLParamsImpl::fillParams()
 					null_flag = DSC_null;
 			}
 
-			dsc* desc = NULL;
-
 			const FB_SIZE_T idx = parameter->par_index - 1;
 			if (idx >= m_descs.getCount())
 				m_descs.getBuffer(idx + 1);
 
-			desc = &m_descs[idx];
-
+			paramdsc* const desc = &m_descs[idx];
 			*desc = parameter->par_desc;
 			desc->dsc_flags |= null_flag;
 
@@ -335,11 +332,11 @@ FB_SIZE_T TraceSQLStatementImpl::DSQLParamsImpl::getCount()
 	return m_descs.getCount();
 }
 
-const dsc* TraceSQLStatementImpl::DSQLParamsImpl::getParam(FB_SIZE_T idx)
+const paramdsc* TraceSQLStatementImpl::DSQLParamsImpl::getParam(FB_SIZE_T idx)
 {
 	fillParams();
 
-	if (idx >= 0 && idx < m_descs.getCount())
+	if (idx < m_descs.getCount())
 		return &m_descs[idx];
 
 	return NULL;
@@ -347,7 +344,7 @@ const dsc* TraceSQLStatementImpl::DSQLParamsImpl::getParam(FB_SIZE_T idx)
 
 const char* TraceSQLStatementImpl::DSQLParamsImpl::getTextUTF8(CheckStatusWrapper* status, FB_SIZE_T idx)
 {
-	const dsc* param = getParam(idx);
+	const paramdsc* const param = getParam(idx);
 
 	if (descToUTF8(param, m_tempUTF8))
 		return m_tempUTF8.c_str();
@@ -377,14 +374,14 @@ FB_SIZE_T TraceParamsImpl::getCount()
 	return m_descs->getCount();
 }
 
-const dsc* TraceParamsImpl::getParam(FB_SIZE_T idx)
+const paramdsc* TraceParamsImpl::getParam(FB_SIZE_T idx)
 {
 	return m_descs->getParam(idx);
 }
 
 const char* TraceParamsImpl::getTextUTF8(CheckStatusWrapper* status, FB_SIZE_T idx)
 {
-	const dsc* param = getParam(idx);
+	const paramdsc* const param = getParam(idx);
 
 	if (descToUTF8(param, m_tempUTF8))
 		return m_tempUTF8.c_str();
@@ -465,7 +462,7 @@ void TraceDscFromMsg::fillParams()
 	const dsc* fmtDesc = m_format->fmt_desc.begin();
 	const dsc* const fmtEnd = m_format->fmt_desc.end();
 
-	dsc* desc = m_descs.getBuffer(m_format->fmt_count / 2);
+	paramdsc* desc = m_descs.getBuffer(m_format->fmt_count / 2);
 
 	for (; fmtDesc < fmtEnd; fmtDesc += 2, desc++)
 	{
@@ -477,7 +474,7 @@ void TraceDscFromMsg::fillParams()
 		const ULONG nullOffset = (IPTR) fmtDesc[1].dsc_address;
 		const SSHORT* const nullPtr = (const SSHORT*) (m_inMsg + nullOffset);
 		if (*nullPtr == -1)
-			desc->setNull();
+			desc->dsc_flags |= DSC_null;
 	}
 }
 
