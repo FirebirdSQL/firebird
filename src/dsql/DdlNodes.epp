@@ -1631,23 +1631,102 @@ DdlNode* CreateAlterFunctionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	dsqlScratch->flags |= (DsqlCompilerScratch::FLAG_BLOCK | DsqlCompilerScratch::FLAG_FUNCTION);
 
+	if (this->isUdf())
+	{
+		// check udfReturnPos
+		const dsql_fld* const field = this->returnType ? this->returnType->type : NULL;
+
+		if (field)
+		{
+			// CVC: This is case of "returns <type> [by value|reference]".
+			fb_assert(udfReturnPos == 0);
+		}
+		else
+		{
+			// CVC: This is case of "returns parameter <N>"
+
+			// see return_value in parser
+			fb_assert(udfReturnPos > 0);
+
+			if (udfReturnPos < 1 || ULONG(udfReturnPos) > parameters.getCount())
+			{
+				// CVC: We should devise new msg "position should be between 1 and #params";
+				// here it is: dsql_udf_return_pos_err
+
+				// External functions can not have more than 10 parameters
+				// Not strictly correct -- return position error
+				status_exception::raise(
+					Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+					Arg::Gds(isc_dsql_command_err) <<	// gds__extern_func_err
+					Arg::Gds(isc_dsql_udf_return_pos_err) << Arg::Num(parameters.getCount()));
+			}
+		}
+
+		fb_assert(udfReturnPos >= 0 && ULONG(udfReturnPos) <= parameters.getCount());
+	}
+
 	// check for duplicated parameters and declaration names
 
 	StrArray names;
 
-	for (FB_SIZE_T i = 0; i < parameters.getCount(); ++i)
+	if (this->isUdf())
 	{
-		const ParameterClause* const parameter = parameters[i];
+		// Generation of UDF input argument names.
+		// They will be used for work with SCALAR_ARRAY-arguments.
 
-		if (names.exist(parameter->name.c_str()))
+		unsigned argNum = 0;
+
+		for (FB_SIZE_T i = 0; i < parameters.getCount(); ++i)
 		{
-			status_exception::raise(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-				Arg::Gds(isc_dsql_duplicate_spec) << Arg::Str(parameter->name));
-		}
+			ParameterClause* const parameter = parameters[i];
 
-		if (parameter->name.hasData())	// legacy UDFs has unnamed parameters
+			fb_assert(!parameter->name.hasData());
+
+			if (this->udfReturnPos == (i + 1))
+			{
+				// It is a parameter that is marked as RETURN
+
+				fb_assert(this->returnType == nullptr); // research. it is assumed.
+				fb_assert(this->udfReturnPos > 0); // paranoia
+
+				fb_assert(!names.exist(parameter->name.c_str()));
+				continue;
+			}
+
+			// It is an input argument
+			++argNum;
+			parameter->name.printf("ARG%d", argNum);
+			fb_assert(parameter->name.hasData());
+
+			if (names.exist(parameter->name.c_str()))
+			{
+				status_exception::raise(
+					Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
+					Arg::Gds(isc_dsql_duplicate_spec) << Arg::Str(parameter->name));
+			}
+
 			names.add(parameter->name.c_str());
+		}
+	}
+	else
+	{
+		fb_assert(!this->isUdf());
+
+		for (FB_SIZE_T i = 0; i < parameters.getCount(); ++i)
+		{
+			const ParameterClause* const parameter = parameters[i];
+
+			fb_assert(parameter->name.hasData());
+
+			if (names.exist(parameter->name.c_str()))
+			{
+				status_exception::raise(
+					Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
+					Arg::Gds(isc_dsql_duplicate_spec) << Arg::Str(parameter->name));
+			}
+
+			names.add(parameter->name.c_str());
+		}
 	}
 
 	PASS1_check_unique_fields_names(names, localDeclList);
@@ -1938,19 +2017,8 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 					else	// CVC: This is case of "returns parameter <N>"
 					{
 						// Function modifies an argument whose value is the function return value.
-
-						if (udfReturnPos < 1 || ULONG(udfReturnPos) > parameters.getCount())
-						{
-							// CVC: We should devise new msg "position should be between 1 and #params";
-							// here it is: dsql_udf_return_pos_err
-
-							// External functions can not have more than 10 parameters
-							// Not strictly correct -- return position error
-							status_exception::raise(
-								Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-								Arg::Gds(isc_dsql_command_err) <<	// gds__extern_func_err
-								Arg::Gds(isc_dsql_udf_return_pos_err) << Arg::Num(parameters.getCount()));
-						}
+						// It was checked in CreateAlterFunctionNode::dsqlPass
+						fb_assert(!(udfReturnPos < 1 || ULONG(udfReturnPos) > parameters.getCount()));
 
 						// We'll verify that SCALAR_ARRAY can't be used as a return type.
 						// The support for SCALAR_ARRAY is only for input parameters.
