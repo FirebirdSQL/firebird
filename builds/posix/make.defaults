@@ -172,7 +172,7 @@ INLINE_EDIT_SED:= -i
 
 SH=			sh -c
 RM=			rm -f
-RM_R=		rm -rf
+RM_R=			rm -rf
 CHMOD=			chmod
 CHMOD_6=		chmod 666
 CHMOD_7=		chmod 777
@@ -196,6 +196,7 @@ CXX =	@CXX@
 LD =	@CXX@
 OBJCOPY = @OBJCOPY@
 READELF = @READELF@
+WINDRES = @WINDRES@
 
 AC_CFLAGS = @CFLAGS@
 AC_CXXFLAGS = @CXXFLAGS@
@@ -215,7 +216,7 @@ SO_LINK_LIBS = @LIBS@ $(DECLIB) $(I128LIB)
 
 ARCH_EXT=		.a
 EXEC_EXT=		@EXEEXT@
-SHRLIB_EXT=@SHRLIB_EXT@
+SHRLIB_EXT=		@SHRLIB_EXT@
 LIB_PREFIX=		lib
 SHRLIB_FOREIGN_EXT=	$(SHRLIB_EXT)
 
@@ -233,7 +234,7 @@ include $(ROOT)/gen/Make.Version
 
 vpath %.so $(LIB)
 vpath %.a $(LIB)
-vpath %.dll $(LIB)
+vpath %.dll $(BIN)
 
 #_____________________________________________________________________________
 
@@ -357,7 +358,7 @@ endif
 LIB_PATH_OPTS = $(call LIB_LINK_RPATH,lib) $(call LIB_LINK_RPATH,intl)
 LIB_LINK_SONAME= -Wl,-soname,$(1)
 LIB_LINK_MAPFILE= -Wl,--version-script,$(1)
-FIREBIRD_LIBRARY_LINK= -L$(LIB) -L$(STATIC_LIB) -lfbclient $(MATHLIB) $(CRYPTLIB)
+FIREBIRD_LIBRARY_LINK= -L$(LIB) -L$(STATIC_LIB) -lfbclient $(CRYPTLIB) $(MATHLIB)
 
 EXE_LINK_OPTIONS= $(LDFLAGS) $(THR_FLAGS) $(UNDEF_FLAGS) $(LIB_PATH_OPTS) $(call LINK_DARWIN_RPATH,..) $(LINK_EMPTY_SYMBOLS)
 LIB_LINK_OPTIONS= $(LDFLAGS) $(THR_FLAGS) -shared
@@ -383,7 +384,7 @@ LINK_TRACE_LIBS = -L$(LIB) -L$(STATIC_LIB) $(SO_LINK_LIBS)
 
 LINK_FIREBIRD = $(LIB_LINK) $(LINK_FIREBIRD_SYMBOLS) $(LIB_LINK_OPTIONS) $(LIB_FIREBIRD_OPTIONS) $(UNDEF_FLAGS)\
  $(call LIB_LINK_SONAME,$(LibrarySoName)) $(call LIB_LINK_RPATH,lib) $(call LINK_DARWIN_RPATH,..)
-LINK_FIREBIRD_LIBS = -L$(LIB) -L$(STATIC_LIB) $(LIB_GUI) $(SO_LINK_LIBS) $(MATHLIB)
+LINK_FIREBIRD_LIBS = -L$(LIB) -L$(STATIC_LIB) $(LIB_GUI) $(SO_LINK_LIBS) $(CRYPTLIB) $(MATHLIB)
 
 LINK_ENGINE = $(LIB_LINK) $(LINK_PLUGIN_SYMBOLS) $(LIB_LINK_OPTIONS) $(LIB_FIREBIRD_OPTIONS) $(UNDEF_FLAGS)\
  $(call LIB_LINK_SONAME,$(EngineSoName)) $(call LIB_LINK_RPATH,lib) $(call LINK_DARWIN_RPATH,..)
@@ -414,6 +415,7 @@ RUN_GFIX	= $(RBIN)/gfix$(EXEC_EXT)
 FBGUARD		= $(BIN)/fbguard$(EXEC_EXT)
 INSTREG		= $(BIN)/instreg$(EXEC_EXT)
 INSTSVC		= $(BIN)/instsvc$(EXEC_EXT)
+INSTCLIENT	= $(BIN)/instclient$(EXEC_EXT)
 
 SECURITY_FDB	= $(FIREBIRD)/security6.fdb
 
