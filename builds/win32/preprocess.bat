@@ -73,7 +73,6 @@ goto :EOF
 :MASTER_PROCESS
 @set GPRE=%FB_BIN_DIR%\gpre
 @for %%i in (alice_meta) do @call :PREPROCESS alice %%i
-@for %%i in (LegacyManagement) do @call :PREPROCESS auth/SecurityDatabase %%i
 @for %%i in (backup, restore, OdsDetection) do @call :PREPROCESS burp %%i -ocxx -m
 @for %%i in (metd) do @call :PREPROCESS dsql %%i -gds_cxx
 @for %%i in (DdlNodes, PackageNodes) do @call :PREPROCESS dsql %%i -gds_cxx
