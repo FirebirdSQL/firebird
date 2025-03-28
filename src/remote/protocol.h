@@ -325,7 +325,7 @@ enum P_OP
 	op_batch_set_bpb		= 106,
 
 	op_repl_data			= 107,
-	op_repl_req				= 108,
+	op_repl_init			= 108,
 
 	op_batch_cancel			= 109,
 	op_batch_sync			= 110,
