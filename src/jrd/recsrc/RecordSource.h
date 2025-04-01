@@ -127,7 +127,7 @@ namespace Jrd
 		std::optional<ObjectType> objectType;
 		MetaName packageName;
 		MetaName objectName;
-		MetaName alias;
+		Firebird::string alias{getPool()};
 		const AccessPath* accessPath = nullptr;
 		ULONG recordLength = 0;
 		ULONG keyLength = 0;
