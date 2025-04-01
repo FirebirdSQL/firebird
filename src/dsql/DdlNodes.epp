@@ -12309,7 +12309,7 @@ void GrantRevokeNode::checkGrantorCanGrantRelation(thread_db* tdbb, jrd_tra* tra
 		status_exception::raise(Arg::PrivateDyn(175) << relationName.c_str());
 	}
 
-	// Verify the the input field exists.
+	// Verify the input field exists.
 
 	if (fieldName.hasData())
 	{

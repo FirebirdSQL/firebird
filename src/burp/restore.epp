@@ -1898,7 +1898,7 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 			int elements_written = 1;
 			end_ranges = field->fld_ranges + 2 * field->fld_dimensions;
 			//
-			// Here is the important work. Calculate the the bounds to be written
+			// Here is the important work. Calculate the bounds to be written
 			// so that the resulting slice is a rectangular/square slice.
 			// For a 2 dimensional array of size 1..N, 1..M, which is partially
 			// filled, we have already calculated the dims of last element. Say
