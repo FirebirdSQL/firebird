@@ -74,7 +74,7 @@ Format* Routine::createFormat(MemoryPool& pool, IMessageMetadata* params, bool a
 	Format* format = Format::newFormat(pool, count * 2 + (addEof ? 1 : 0));
 	unsigned runOffset = 0;
 
-	dsc* desc = format->fmt_desc.begin();
+	auto desc = format->fmt_desc.begin();
 
 	for (unsigned i = 0; i < count; ++i)
 	{

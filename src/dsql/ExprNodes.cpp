@@ -13799,7 +13799,7 @@ dsc* UdfCallNode::execute(thread_db* tdbb, Request* request) const
 
 		if (func->fun_inputs != 0)
 		{
-			const dsc* fmtDesc = func->getInputFormat()->fmt_desc.begin();
+			auto fmtDesc = func->getInputFormat()->fmt_desc.begin();
 
 			auto skip = 0;
 			for (auto source = args->items.begin(); source < (args->items.end() - skip); source++)
@@ -13897,7 +13897,7 @@ dsc* UdfCallNode::execute(thread_db* tdbb, Request* request) const
 		auto outfieldsNum = function->getOutputFields().getCount();
 		if (outfieldsNum > 1) // does it still needed?
 		{
-			const dsc* fmtDesc = function->getOutputFormat()->fmt_desc.begin();
+			auto fmtDesc = function->getOutputFormat()->fmt_desc.begin();
 			auto curdesc = &value->vlu_desc;
 			while(outfieldsNum > 0)
 			{
@@ -13924,7 +13924,7 @@ dsc* UdfCallNode::execute(thread_db* tdbb, Request* request) const
 		}
 		else
 		{
-			const dsc* fmtDesc = function->getOutputFormat()->fmt_desc.begin();
+			auto fmtDesc = function->getOutputFormat()->fmt_desc.begin();
 			const ULONG nullOffset = (IPTR) fmtDesc[1].dsc_address;
 			SSHORT* const nullPtr = reinterpret_cast<SSHORT*>(outMsg + nullOffset);
 
@@ -14708,7 +14708,8 @@ RowValueExpressionNode::RowValueExpressionNode(MemoryPool& pool)
 	  rowValueExpressionList(nullptr),
 	  compositeRecord(nullptr),
 	  subFieldsNumber(0),
-	  defaultSource(nullptr)
+	  defaultSource(nullptr),
+	  rowDesc(pool)
 {
 }
 
@@ -14956,7 +14957,7 @@ ValueExprNode* RowValueExpressionNode::pass2(thread_db* tdbb, CompilerScratch* c
 	auto subFieldsLengthSum = 0;
 	for (auto& valueExprNode : rowValueExpressionList->items)
 	{
-		*curDesc = FB_NEW_POOL(pool) dsc(&pool);
+		*curDesc = FB_NEW_POOL(pool) dsc(pool);
 		valueExprNode->getDesc(tdbb, csb, *curDesc);
 
 		if ((*curDesc)->dsc_dtype >= dtype_aligned)

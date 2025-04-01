@@ -9264,10 +9264,9 @@ void MessageNode::setup(thread_db* tdbb, CompilerScratch* csb, USHORT message, U
 	USHORT maxAlignment = 0;
 	ULONG offset = 0;
 
-	Format::fmt_desc_iterator desc, end;
 	USHORT index = 0;
 
-	for (desc = format->fmt_desc.begin(), end = desc + count; desc < end; ++desc, ++index)
+	for (auto desc = format->fmt_desc.begin(); desc < format->fmt_desc.end(); ++desc, ++index)
 	{
 		ItemInfo itemInfo;
 		const USHORT alignment = setupDesc(tdbb, csb, index, &*desc, &itemInfo);

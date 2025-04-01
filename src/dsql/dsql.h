@@ -381,7 +381,7 @@ public:
 	bool udf_private = false;	// Packaged private function
 	bool udf_aggregate = false;
 	SSHORT udf_def_count = 0;	// number of inputs with default values
-	Firebird::Array<dsc> udf_outputs;
+	Firebird::ObjectsArray<dsc> udf_outputs;
 	dsql_fld	udf_outfield;
 };
 
@@ -407,7 +407,8 @@ public:
 
 public:
 	explicit dsql_var(MemoryPool& p)
-		: PermanentStorage(p)
+		: PermanentStorage(p),
+		  desc(p)
 	{
 	}
 
@@ -636,6 +637,7 @@ public:
 		  par_owner_name(p),
 		  par_rel_alias(p),
 		  par_alias(p),
+		  par_desc(p),
 		  par_parent_field_name(p),
 		  par_composite_descriptor(p)
 	{

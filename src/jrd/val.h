@@ -281,7 +281,7 @@ class Format : public pool_alloc<type_fmt>
 public:
 	Format(MemoryPool& p, int len)
 		: fmt_length(0), fmt_count(len), fmt_version(0),
-		  fmt_desc(p, fmt_count), fmt_defaults(p, fmt_count)
+		  fmt_desc(p), fmt_defaults(p, fmt_count)
 	{
 		fmt_desc.resize(fmt_count);
 		fmt_defaults.resize(fmt_count);
@@ -320,11 +320,11 @@ public:
 	ULONG fmt_length;
 	USHORT fmt_count;
 	USHORT fmt_version;
-	Firebird::Array<dsc> fmt_desc;
+	Firebird::ObjectsArray<dsc> fmt_desc;
 	Firebird::Array<impure_value> fmt_defaults;
 
-	typedef Firebird::Array<dsc>::iterator fmt_desc_iterator;
-	typedef Firebird::Array<dsc>::const_iterator fmt_desc_const_iterator;
+	typedef Firebird::ObjectsArray<dsc>::iterator fmt_desc_iterator;
+	typedef Firebird::ObjectsArray<dsc>::const_iterator fmt_desc_const_iterator;
 
 	typedef Firebird::Array<impure_value>::iterator fmt_defaults_iterator;
 };

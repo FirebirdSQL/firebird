@@ -471,12 +471,9 @@ void TraceDscFromMsg::fillParams()
 	if (m_descs.getCount() || !m_format || !m_inMsg || !m_inMsgLength)
 		return;
 
-	const dsc* fmtDesc = m_format->fmt_desc.begin();
-	const dsc* const fmtEnd = m_format->fmt_desc.end();
-
 	paramdsc* desc = m_descs.getBuffer(m_format->fmt_count / 2);
 
-	for (; fmtDesc < fmtEnd; fmtDesc += 2, desc++)
+	for (auto fmtDesc = m_format->fmt_desc.begin(); fmtDesc < m_format->fmt_desc.end(); fmtDesc += 2, desc++)
 	{
 		const ULONG valOffset = (IPTR) fmtDesc[0].dsc_address;
 

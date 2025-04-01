@@ -90,8 +90,8 @@ typedef struct dsc
 {
 	dsc() = default;
 
-	dsc(MemoryPool* p)
-		: pool(p)
+	dsc(MemoryPool& p)
+		: pool(&p)
 	{}
 
 	// These Ods::Descriptor constructor and operator were added to have
@@ -110,16 +110,18 @@ typedef struct dsc
 		makeDeepCopy(*this, r);
 	}
 
-	dsc(MemoryPool* p, const dsc& r)
-		: pool(p)
+	dsc(MemoryPool& p, const dsc& r)
+		: pool(&p)
 	{
-		makeDeepCopy(*this, r, p);
+		makeDeepCopy(*this, r, &p);
 	}
 
 	dsc& operator=(const dsc& r)
 	{
 		if (this != &r)
-			makeDeepCopy(*this, r);
+		{
+			makeDeepCopy(*this, r, pool);
+		}
 
 		return *this;
 	}
@@ -145,7 +147,7 @@ typedef struct dsc
 				if (!p)
 					l.dsc_next = FB_NEW dsc;
 				else
-					l.dsc_next = FB_NEW_POOL(*p) dsc(p);
+					l.dsc_next = FB_NEW_POOL(*p) dsc(*p);
 				makeDeepCopy(*l.dsc_next, *r.dsc_next, p);
 			}
 
@@ -154,7 +156,7 @@ typedef struct dsc
 				if (!p)
 					l.dsc_sub_first = FB_NEW dsc;
 				else
-					l.dsc_sub_first = FB_NEW_POOL(*p) dsc(p);
+					l.dsc_sub_first = FB_NEW_POOL(*p) dsc(*p);
 				makeDeepCopy(*l.dsc_sub_first, *r.dsc_sub_first, p);
 			}
 		}
@@ -726,6 +728,37 @@ struct alt_dsc
 	SSHORT dsc_sub_type;
 	USHORT dsc_flags;			// Not currently used
 };
+
+inline bool DSC_SAME(const dsc* d1, const dsc* d2) noexcept
+{
+	auto is_same =
+		d1->dsc_dtype == d2->dsc_dtype &&
+		d1->dsc_scale == d2->dsc_scale &&
+		d1->dsc_length == d2->dsc_length &&
+		d1->dsc_sub_type == d2->dsc_sub_type &&
+		d1->dsc_flags == d2->dsc_flags &&
+		d1->dsc_address == d2->dsc_address &&
+		d1->dsc_sub_count == d2->dsc_sub_count
+		;
+
+	if (d1->dsc_sub_first && d2->dsc_sub_first)
+		is_same &= DSC_SAME(d1->dsc_sub_first, d2->dsc_sub_first);
+
+	if (d1->dsc_next && d2->dsc_next)
+		is_same &= DSC_SAME(d1->dsc_next, d2->dsc_next);
+
+		// UCHAR	dsc_dtype = 0;
+		// SCHAR	dsc_scale = 0;
+		// USHORT	dsc_length = 0;
+		// SSHORT	dsc_sub_type = 0;
+		// USHORT	dsc_flags = 0;
+		// UCHAR*	dsc_address = nullptr; // Used either as offset in a message or as a pointer
+		// dsc*	dsc_sub_first = nullptr;
+		// dsc*	dsc_next = nullptr;
+		// USHORT	dsc_sub_count = 0;
+		// MemoryPool* pool = nullptr;
+	return is_same;
+}
 
 inline bool DSC_EQUIV(const dsc* d1, const dsc* d2, bool check_collate) noexcept
 {

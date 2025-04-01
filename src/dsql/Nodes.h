@@ -858,7 +858,8 @@ class ValueExprNode : public ExprNode
 {
 public:
 	ValueExprNode(Type aType, MemoryPool& pool)
-		: ExprNode(aType, pool)
+		: ExprNode(aType, pool),
+		  dsqlDesc(pool)
 	{
 	}
 

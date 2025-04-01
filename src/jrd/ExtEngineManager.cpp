@@ -72,10 +72,17 @@ namespace
 	// Compare two formats for equivalence, excluding fmt_defaults field.
 	bool sameFormats(const Format* fmt1, const Format* fmt2)
 	{
+		auto fmt_desc_is_same = fmt1->fmt_count == fmt2->fmt_count;	// check count of descriptorst firstly
+		auto fmt_desc1 = fmt1->fmt_desc.begin();
+		auto fmt_desc2 = fmt2->fmt_desc.begin();
+		for (; fmt_desc_is_same && fmt_desc1 != fmt1->fmt_desc.end() && fmt_desc2 != fmt2->fmt_desc.end(); ++fmt_desc1, ++fmt_desc2)
+		{
+			fmt_desc_is_same = DSC_SAME(&(*fmt_desc1), &(*fmt_desc2));
+		}
+
 		return fmt1->fmt_length == fmt2->fmt_length &&
-			fmt1->fmt_count == fmt2->fmt_count &&
 			fmt1->fmt_version == fmt2->fmt_version &&
-			fmt1->fmt_desc == fmt2->fmt_desc;
+			fmt_desc_is_same;
 	}
 
 	// Copy message between different formats.
@@ -85,11 +92,11 @@ namespace
 	{
 		fb_assert(srcFormat->fmt_desc.getCount() == dstFormat->fmt_desc.getCount());
 
-		const auto srcDescEnd = srcFormat->fmt_desc.begin() + (srcFormat->fmt_desc.getCount() / 2 * 2);
+		const auto srcDescEnd = srcFormat->fmt_desc.end();
 		auto srcDescIt = srcFormat->fmt_desc.begin();
 		auto dstDescIt = dstFormat->fmt_desc.begin();
 
-		while (srcDescIt < srcDescEnd)
+		while (srcDescIt != srcDescEnd)
 		{
 			fb_assert(srcDescIt[1].dsc_dtype == dtype_short);
 			fb_assert(dstDescIt[1].dsc_dtype == dtype_short);
@@ -115,8 +122,12 @@ namespace
 
 			*dstNullPtr = *srcNullPtr;
 
-			srcDescIt += 2;
-			dstDescIt += 2;
+			// srcDescIt += 2;
+			// dstDescIt += 2;
+			++srcDescIt;
+			++dstDescIt;
+			++srcDescIt;
+			++dstDescIt;
 		}
 	}
 

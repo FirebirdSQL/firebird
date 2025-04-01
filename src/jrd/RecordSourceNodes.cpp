@@ -4788,9 +4788,7 @@ static void processMap(thread_db* tdbb, CompilerScratch* csb, MapNode* map, Form
 
 	ULONG offset = FLAG_BYTES(format->fmt_count);
 
-	Format::fmt_desc_iterator desc3 = format->fmt_desc.begin();
-	for (const Format::fmt_desc_const_iterator end_desc = format->fmt_desc.end();
-		 desc3 < end_desc; ++desc3)
+	for (auto desc3 = format->fmt_desc.begin(); desc3 < format->fmt_desc.end(); ++desc3)
 	{
 		const USHORT align = type_alignments[desc3->dsc_dtype];
 

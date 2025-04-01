@@ -109,6 +109,30 @@ namespace Firebird
 				fb_assert(lst == v.lst);
 				return lst ? pos == v.pos : false;
 			}
+			iterator operator+=(size_type count)
+			{
+				iterator tmp = *this;
+				while(count--)
+					++pos;
+				return tmp;
+			}
+			T& operator[](size_type apos)
+			{
+				fb_assert(lst);
+				fb_assert((pos + apos) < lst->getCount());
+				T* pointer = lst->getPointer(pos + apos);
+				return *pointer;
+			}
+			bool operator<(const iterator& v) const
+			{
+				fb_assert(lst == v.lst);
+				return lst ? pos < v.pos : false;
+			}
+			bool operator>(const iterator& v) const
+			{
+				fb_assert(lst == v.lst);
+				return lst ? pos > v.pos : false;
+			}
 		};
 
 		class const_iterator
@@ -185,6 +209,30 @@ namespace Firebird
 			{
 				fb_assert(lst == v.lst);
 				return lst ? pos == v.pos : false;
+			}
+			const_iterator operator+=(size_type count)
+			{
+				const_iterator tmp = *this;
+				while(count--)
+					++pos;
+				return tmp;
+			}
+			const T& operator[](size_type apos)
+			{
+				fb_assert(lst);
+				fb_assert((pos + apos) < lst->getCount());
+				const T* pointer = lst->getPointer(pos + apos);
+				return *pointer;
+			}
+			bool operator<(const const_iterator& v) const
+			{
+				fb_assert(lst == v.lst);
+				return lst ? pos < v.pos : false;
+			}
+			bool operator>(const const_iterator& v) const
+			{
+				fb_assert(lst == v.lst);
+				return lst ? pos > v.pos : false;
 			}
 
 		};

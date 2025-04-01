@@ -147,7 +147,6 @@ bool MET_get_composite_type(thread_db* tdbb, MemoryPool& csbPool, const MetaName
 	AutoCacheRequest handle(tdbb, irq_l_composite, IRQ_REQUESTS);
 
 	MetaName relationName;
-	dsc tempDesc;
 	FieldInfo* fieldInfo = nullptr;
 	FieldInfo** nextSubfieldInfo = nullptr;
 
@@ -155,7 +154,7 @@ bool MET_get_composite_type(thread_db* tdbb, MemoryPool& csbPool, const MetaName
 		FLD IN RDB$FIELDS
 		WITH FLD.RDB$FIELD_NAME EQ name.c_str()
 	{
-		if (DSC_make_descriptor(&tempDesc,
+		if (DSC_make_descriptor(desc,
 								FLD.RDB$FIELD_TYPE,
 								FLD.RDB$FIELD_SCALE,
 								FLD.RDB$FIELD_LENGTH,
@@ -167,7 +166,7 @@ bool MET_get_composite_type(thread_db* tdbb, MemoryPool& csbPool, const MetaName
 			relationName = FLD.RDB$RELATION_NAME;
 
 			if (FLD.RDB$NULL_FLAG.NULL && FLD.RDB$NULL_FLAG == 0)
-				tempDesc.dsc_flags |= DSC_nullable;
+				desc->dsc_flags |= DSC_nullable;
 
 			if (fieldInfoMap)
 			{
@@ -202,7 +201,7 @@ bool MET_get_composite_type(thread_db* tdbb, MemoryPool& csbPool, const MetaName
 		if (!MET_lookup_relation(tdbb, name))
 			ERR_post(Arg::Gds(isc_dyn_composite_not_fount) << name.c_str());
 
-		if (DSC_make_descriptor(&tempDesc, blr_rowtype, 0, 0, 0, 0, 0))
+		if (DSC_make_descriptor(desc, blr_rowtype, 0, 0, 0, 0, 0))
 								// FLD.RDB$FIELD_TYPE,
 								// FLD.RDB$FIELD_SCALE,
 								// FLD.RDB$FIELD_LENGTH,		// calc from subfields
@@ -217,7 +216,7 @@ bool MET_get_composite_type(thread_db* tdbb, MemoryPool& csbPool, const MetaName
 	}
 
 	auto subFieldCount = 0;
-	auto next = &tempDesc.dsc_sub_first;
+	auto next = &desc->dsc_sub_first;
 	AutoCacheRequest handle1(tdbb, irq_l_composite_subfields, IRQ_REQUESTS);
 
 	FOR(REQUEST_HANDLE handle1)
@@ -283,7 +282,6 @@ bool MET_get_composite_type(thread_db* tdbb, MemoryPool& csbPool, const MetaName
 		ERR_post(Arg::Gds(isc_dyn_composite_not_fount) << name.c_str());
 	}
 
-	*desc = tempDesc;
 	desc->dsc_sub_count = subFieldCount;
 
 	desc->dsc_length = NULL_BYTES(desc->dsc_sub_count);

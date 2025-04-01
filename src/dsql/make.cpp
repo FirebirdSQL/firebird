@@ -93,7 +93,7 @@ void DsqlDescMaker::fromField(dsc* desc, const dsql_fld* field)
 		auto nextDsc = &desc->dsc_sub_first;
 		while (*nextField)
 		{
-			*nextDsc = pool ? FB_NEW_POOL(*pool) dsc(pool) : FB_NEW dsc;
+			*nextDsc = pool ? FB_NEW_POOL(*pool) dsc(*pool) : FB_NEW dsc;
 			composeDesc(*nextDsc,
 				(*nextField)->dtype, (*nextField)->scale, (*nextField)->subType, (*nextField)->length,
 				(*nextField)->charSetId.value_or(CS_NONE), (*nextField)->collationId, (*nextField)->flags & FLD_nullable);
@@ -157,7 +157,9 @@ void DsqlDescMaker::composeDesc(dsc* desc,
 								CollId collationId,
 								bool nullable)
 {
+	auto pool = desc->pool;
 	desc->clear();
+	desc->pool = pool;
 	desc->dsc_dtype = static_cast<UCHAR>(dtype);
 	desc->dsc_scale = static_cast<SCHAR>(scale);
 	desc->dsc_sub_type = subType;
@@ -474,7 +476,8 @@ FieldNode* MAKE_field(dsql_ctx* context, dsql_fld* field, ValueListNode* indices
 	FieldNode* const node = FB_NEW_POOL(*tdbb->getDefaultPool()) FieldNode(
 		*tdbb->getDefaultPool(), context, field, indices);
 
-	dsc desc;
+	// dsc desc(tdbb->getDefaultPool()); // use same memory pool as for field node
+	dsc desc; // use same memory pool as for field node
 
 	if (field->dimensions)
 	{
@@ -503,11 +506,8 @@ FieldNode* MAKE_field(dsql_ctx* context, dsql_fld* field, ValueListNode* indices
 		node->setDsqlDesc(desc);
 	}
 
-	// TODO: MAYBE WE SHOULD GENERATE CHAINED DESCRIPTOR FOR ROWTYPES HERE?
 	if (desc.dsc_dtype == dtype_rowtype)
 	{
-		// METD_get_domain(jrd_tra* transaction, TypeClause* field, dsc* desc);
-		// METD_get_composite_type(jrd_tra* transaction, TypeClause* field, Dsc* desc);
 		METD_get_composite_type_descriptors(tdbb->getTransaction(), field, &desc);
 		node->setDsqlDesc(desc);
 	}
