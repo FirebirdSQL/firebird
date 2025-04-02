@@ -2149,7 +2149,7 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 			ExprNode::doDsqlFieldRemapper(remapper, parentRse->dsqlOrder, rse->dsqlOrder);
 			rse->dsqlOrder = NULL;
 
-			// AB: Check for invalid contructions inside the ORDER BY clause
+			// AB: Check for invalid constructions inside the ORDER BY clause
 			ValueListNode* valueList = targetRse->dsqlOrder;
 			NestConst<ValueExprNode>* ptr = valueList->items.begin();
 			for (const NestConst<ValueExprNode>* const end = valueList->items.end(); ptr != end; ++ptr)
@@ -2178,7 +2178,7 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 
 			ExprNode::doDsqlFieldRemapper(remapper, parentRse->dsqlWhere);
 
-			// AB: Check for invalid contructions inside the HAVING clause
+			// AB: Check for invalid constructions inside the HAVING clause
 
 			if (InvalidReferenceFinder::find(dsqlScratch, parent_context, aggregate->dsqlGroup,
 					parentRse->dsqlWhere))
@@ -2258,7 +2258,7 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 
 		if (aggregate)
 		{
-			// Check for invalid contructions inside selected-items list
+			// Check for invalid constructions inside selected-items list
 			ValueListNode* valueList = rse->dsqlSelectList;
 			NestConst<ValueExprNode>* ptr = valueList->items.begin();
 			for (const NestConst<ValueExprNode>* const end = valueList->items.end(); ptr != end; ++ptr)
@@ -2282,7 +2282,7 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 		{
 			if (aggregate)
 			{
-				// Check for invalid contructions inside the order-by list
+				// Check for invalid constructions inside the order-by list
 				ValueListNode* valueList = rse->dsqlOrder;
 				NestConst<ValueExprNode>* ptr = valueList->items.begin();
 				for (const NestConst<ValueExprNode>* const end = valueList->items.end(); ptr != end; ++ptr)

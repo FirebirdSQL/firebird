@@ -9741,7 +9741,7 @@ bool ParameterNode::setParameterType(DsqlCompilerScratch* dsqlScratch,
 
 	// However, there are situations this leads to problems - so
 	// we use the forceVarChar parameter to prevent this
-	// datatype assumption from occuring.
+	// datatype assumption from occurring.
 
 	if (forceVarChar)
 	{
