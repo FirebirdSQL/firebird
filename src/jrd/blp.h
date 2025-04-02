@@ -261,5 +261,7 @@ static const struct
 	{"select_procedure", invsel_procedure},
 	{"default_arg", zero},
 	{"cast_format", cast_format},
+	{nullptr, nullptr},	// FIXME: blr_table_value_fun
+	{"for_range", for_range},
 	{0, 0}
 };
