@@ -704,6 +704,7 @@ using namespace Firebird;
 %token <metaNamePtr> ANY_VALUE
 %token <metaNamePtr> BTRIM
 %token <metaNamePtr> CALL
+%token <metaNamePtr> DOWNTO
 %token <metaNamePtr> FORMAT
 %token <metaNamePtr> LTRIM
 %token <metaNamePtr> NAMED_ARG_ASSIGN
@@ -864,6 +865,7 @@ using namespace Firebird;
 	Jrd::SetDecFloatTrapsNode* setDecFloatTrapsNode;
 	Jrd::SetBindNode* setBindNode;
 	Jrd::SessionResetNode* sessionResetNode;
+	Jrd::ForRangeNode::Direction forRangeDirection;
 }
 
 %include types.y
@@ -3441,6 +3443,7 @@ complex_proc_statement
 	: in_autonomous_transaction
 	| if_then_else
 	| while
+	| for_range
 	| for_select					{ $$ = $1; }
 	| for_exec_into					{ $$ = $1; }
 	;
@@ -3468,6 +3471,46 @@ excp_statement
 %type <stmtNode> raise_statement
 raise_statement
 	: EXCEPTION		{ $$ = newNode<ExceptionNode>(); }
+	;
+
+%type <stmtNode> for_range
+for_range
+	: label_def_opt FOR for_range_variable '=' value for_range_direction value for_range_by_opt DO proc_block
+		{
+			const auto node = newNode<ForRangeNode>();
+			node->dsqlLabelName = $1;
+			node->variable = $3;
+			node->initialExpr = $5;
+			node->direction = $6;
+			node->finalExpr = $7;
+			node->byExpr = $8;
+			node->statement = $10;
+			node->direction = $6;
+			$$ = node;
+		}
+	;
+
+%type <valueExprNode> for_range_variable
+for_range_variable
+	: symbol_variable_name
+		{
+			const auto node = newNode<VariableNode>();
+			node->dsqlName = *$1;
+			$$ = node;
+		}
+	| variable
+	;
+
+%type <forRangeDirection> for_range_direction
+for_range_direction
+	: TO		{ $$ = ForRangeNode::Direction::TO; }
+	| DOWNTO	{ $$ = ForRangeNode::Direction::DOWNTO; }
+	;
+
+%type <valueExprNode> for_range_by_opt
+for_range_by_opt
+	: /* nothing */	{ $$ = nullptr; }
+	| BY value		{ $$ = $2; }
 	;
 
 %type <forNode> for_select
@@ -9735,6 +9778,7 @@ non_reserved_word
 	| UNICODE_VAL
 	// added in FB 6.0
 	| ANY_VALUE
+	| DOWNTO
 	| FORMAT
 	| OWNER
 	| UNLIST

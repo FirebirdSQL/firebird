@@ -326,6 +326,7 @@ const int op_outer_map		= 32;
 const int op_invoke_function	= 33;
 const int op_invsel_procedure	= 34;
 const int op_table_value_fun	= 35;
+const int op_for_range		= 36;
 
 static const UCHAR
 	// generic print formats
@@ -421,7 +422,8 @@ static const UCHAR
 	invoke_function[] = { op_invoke_function, 0 },
 	invsel_procedure[] = { op_invsel_procedure, 0 },
 	cast_format[] = { op_line, op_indent, op_byte, op_literal, op_line, op_indent, op_dtype, op_line, op_verb, 0 },
-	table_value_fun[] = { op_table_value_fun, 0 };
+	table_value_fun[] = { op_table_value_fun, 0 },
+	for_range[] = { op_for_range, 0 };
 
 
 #include "../jrd/blp.h"
@@ -4228,6 +4230,69 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 					fb_assert(false);
 			}
 
+			break;
+		}
+
+		case op_for_range:
+		{
+			offset = blr_print_line(control, offset);
+
+			static const char* subCodes[] =
+			{
+				nullptr,
+				"variable",
+				"initial_value",
+				"final_value",
+				"by_value",
+				"statement",
+				"direction"
+			};
+
+			static const char* directionSubCodes[] =
+			{
+				nullptr,
+				"to",
+				"downto"
+			};
+
+			while ((blr_operator = control->ctl_blr_reader.getByte()) != blr_end)
+			{
+				blr_indent(control, level);
+
+				if (blr_operator == 0 || blr_operator >= FB_NELEM(subCodes))
+					blr_error(control, "*** invalid blr_for_range sub code ***");
+
+				blr_format(control, "blr_for_range_%s, ", subCodes[blr_operator]);
+
+				switch (blr_operator)
+				{
+					case blr_for_range_variable:
+					case blr_for_range_initial_value:
+					case blr_for_range_final_value:
+					case blr_for_range_by_value:
+					case blr_for_range_statement:
+						offset = blr_print_line(control, offset);
+						blr_print_verb(control, level + 1);
+						break;
+
+					case blr_for_range_direction:
+						n = control->ctl_blr_reader.getByte();
+
+						if (n == 0 || n >= static_cast<FB_SSIZE_T>(FB_NELEM(directionSubCodes)))
+							blr_error(control, "*** invalid blr_for_range_direction sub code ***");
+
+						blr_format(control, "blr_for_range_direction_%s,", directionSubCodes[n]);
+						offset = blr_print_line(control, (SSHORT) offset);
+						break;
+
+					default:
+						fb_assert(false);
+				}
+			}
+
+			// print blr_end
+			control->ctl_blr_reader.seekBackward(1);
+			blr_print_verb(control, level);
 			break;
 		}
 
