@@ -297,7 +297,7 @@ extern Yshort nunused;
 extern Yshort final_state;
 
 /* system variable */
-#ifndef _MSC_VER
+#ifndef _WIN32
 extern int errno;
 #endif
 
