@@ -971,7 +971,8 @@ namespace Jrd
 
 				void operator ()(thread_db* tdbb, impure_value* target)
 				{
-					ArithmeticNode::add2(tdbb, offsetDesc, target, arithNode, arithNode->blrOp);
+					ArithmeticNode::add(tdbb, offsetDesc, &target->vlu_desc, target, arithNode->blrOp, false,
+						arithNode->nodScale, arithNode->nodFlags);
 				}
 
 				const ArithmeticNode* arithNode;
