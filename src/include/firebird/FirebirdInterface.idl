@@ -1303,7 +1303,7 @@ interface XpbBuilder : Disposable
 // Database trace objects
 
 struct PerformanceInfo;
-struct dsc;
+struct paramdsc;
 
 interface TraceConnection : Versioned
 {
@@ -1350,7 +1350,7 @@ version: // 3.0.4 -> 3.0.5
 interface TraceParams : Versioned
 {
 	uint getCount();
-	const dsc* getParam(uint idx);
+	const paramdsc* getParam(uint idx);
 
 version:
 	const string getTextUTF8(Status status, uint idx);
