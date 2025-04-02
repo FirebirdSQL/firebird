@@ -353,7 +353,7 @@ int main( int argc, char* argv[])
 		ret_cd = gen_multy_bakup_files(file_list, input_file_desc, file_num);
 		if (ret_cd == FB_FAILURE)
 		{
-			fprintf(stderr, "%s: progam fails to generate multi-volumn back-up files\n", prog_name);
+			fprintf(stderr, "%s: program fails to generate multi-volume back-up files\n", prog_name);
 			free_file_list(file_list);
 			return FB_FAILURE;
 		}
@@ -363,7 +363,7 @@ int main( int argc, char* argv[])
 		ret_cd = join_multy_bakup_files(file_list);
 		if (ret_cd == FB_FAILURE)
 		{
-			fprintf(stderr, "%s: progam fails to join multi-volumn back-up files\n", prog_name);
+			fprintf(stderr, "%s: program fails to join multi-volume back-up files\n", prog_name);
 			free_file_list(file_list);
 			return FB_FAILURE;
 		}
@@ -549,10 +549,10 @@ static int gen_multy_bakup_files(b_fil* file_list, FILE_DESC input_file_desc, SL
 **		multiple back-up files.
 **
 **		allocates an 16K bytes I/O buffer
-**		intilializes header record common fields
+**		initializes header record common fields
 **		do forever
 **			walk through the backup file chain
-**			intilializes header record unique fields
+**			initializes header record unique fields
 **			open backup file
 **			writes out header record to backup file
 **			points to the next backup file in the chain
@@ -566,7 +566,7 @@ static int gen_multy_bakup_files(b_fil* file_list, FILE_DESC input_file_desc, SL
 **					and writes it out to the last backup file until no EOF.
 **				issues error message when disk space full condition is detected
 **			otherwise reads and writes to backup files util EOF
-**				if disk full cobdition is detected
+**				if disk full condition is detected
 **					flush the remaining data in the I/O buffer to subsequence
 **							backup files
 **				go back to normal read and write process util EOF
@@ -1045,7 +1045,7 @@ static int read_and_write_for_join(FILE_DESC output_fl_desc,
 	if (read_cnt != static_cast<int>(header_rec_len))
 	{
 		close_platf(input_fl_desc);
-		fprintf(stderr, "progam fails to read gsplit header record in back-up file%s\n", file_name);
+		fprintf(stderr, "program fails to read gsplit header record in back-up file%s\n", file_name);
 		return FB_FAILURE;
 	}
 
@@ -1358,7 +1358,7 @@ static int set_hdr_str(TEXT header_str[], const TEXT* in_str, SLONG pos, SLONG l
 **
 **	Functional description:
 **
-**		initialyze header string
+**		initialize header string
 **
 *********************************************************************
 */

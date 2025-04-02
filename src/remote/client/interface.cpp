@@ -10096,7 +10096,7 @@ Transaction* Attachment::remoteTransactionInterface(ITransaction* apiTra)
 	if (!valid)
 		return NULL;
 
-	// If validation is successfull, this means that this attachment and valid transaction
+	// If validation is successful, this means that this attachment and valid transaction
 	// use same provider. I.e. the following cast is safe.
 	return static_cast<Transaction*>(valid);
 }

@@ -275,7 +275,7 @@ public:
 
 	enum HandleState {SEL_BAD, SEL_DISCONNECTED, SEL_NO_DATA, SEL_READY};
 
-	// set first port to check for readyness
+	// set first port to check for readiness
 	void checkStart(RemPortPtr& port)
 	{
 		slct_main = port;
@@ -285,7 +285,7 @@ public:
 #endif
 	}
 
-	// get port to check for readyness
+	// get port to check for readiness
 	// assume port_mutex is locked
 	HandleState checkNext(RemPortPtr& port)
 	{
@@ -494,8 +494,8 @@ private:
 	int		slct_width;
 	fd_set	slct_fdset;
 #endif
-	RemPortPtr slct_main;	// first port to check for readyness
-	RemPortPtr slct_port;	// next port to check for readyness
+	RemPortPtr slct_main;	// first port to check for readiness
+	RemPortPtr slct_port;	// next port to check for readiness
 #ifdef WIRE_COMPRESS_SUPPORT
 	RemPortPtr slct_zport;	// port with some compressed data remaining in the buffer
 #endif
@@ -1485,7 +1485,7 @@ static rem_port* aux_connect(rem_port* port, PACKET* packet)
  *
  * Functional description
  *	Try to establish an alternative connection.  Somebody has already
- *	done a successfull connect request ("packet" contains the response).
+ *	done a successful connect request ("packet" contains the response).
  *
  **************************************/
 

@@ -6110,7 +6110,7 @@ YTransaction* YAttachment::getTransaction(ITransaction* tra)
 	if (!tra)
 		Arg::Gds(isc_bad_trans_handle).raise();
 
-	// If validation is successfull, this means that this attachment and valid transaction
+	// If validation is successful, this means that this attachment and valid transaction
 	// use same provider. I.e. the following cast is safe.
 	FbLocalStatus status;
 	YTransaction* yt = static_cast<YTransaction*>(tra->validate(&status, this));

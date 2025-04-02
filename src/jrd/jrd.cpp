@@ -1615,7 +1615,7 @@ JTransaction* JAttachment::getTransactionInterface(CheckStatusWrapper* status, I
 
 	status->init();
 
-	// If validation is successfull, this means that this attachment and valid transaction
+	// If validation is successful, this means that this attachment and valid transaction
 	// use same provider. I.e. the following cast is safe.
 	JTransaction* jt = static_cast<JTransaction*>(tra->validate(status, this));
 	if (status->getState() & IStatus::STATE_ERRORS)

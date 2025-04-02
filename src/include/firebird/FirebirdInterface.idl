@@ -764,7 +764,7 @@ interface DtcStart : Disposable
 {
 	void addAttachment(Status status, Attachment att);
 	void addWithTpb(Status status, Attachment att, uint length, const uchar* tpb);
-	Transaction start(Status status);	// successfull call disposes interfaces
+	Transaction start(Status status);	// successful call disposes interfaces
 }
 
 // Distributed transactions coordinator
