@@ -992,4 +992,5 @@ FB_IMPL_MSG(JRD, 989, sweep_concurrent_instance, -901, "42", "000", "Another ins
 FB_IMPL_MSG(JRD, 990, sweep_read_only, -901, "42", "000", "Database in read only state")
 FB_IMPL_MSG(JRD, 991, sweep_attach_no_cleanup, -901, "42", "000", "Attachment has no cleanup flag set")
 FB_IMPL_MSG(JRD, 992, invalid_timezone_region_or_displacement, -901, "HY", "000", "Invalid time zone region or displacement: @1")
+FB_IMPL_MSG(JRD, 993, missing_value_for_format_pattern, -901, "HY", "000", "Cannot find value in input string for \"@1\" pattern")
 

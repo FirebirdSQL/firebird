@@ -36,6 +36,8 @@
 
 #include <cmath>
 #include <string_view>
+#include <charconv>
+#include <algorithm>
 
 using namespace Firebird;
 
@@ -944,6 +946,13 @@ namespace
 	//                                               STRING_TO_DATETIME
 	//-----------------------------------------------------------------------------------------------------------------
 
+	template <typename T>
+	void throwExceptionOnEmptyValue(std::optional<T> value, std::string_view pattern, Callbacks* cb)
+	{
+		if (!value.has_value())
+			cb->err(Arg::Gds(isc_missing_value_for_format_pattern) << string(pattern.data(), pattern.length()));
+	}
+
 	std::vector<Token> parseStringToDateTimeFormat(const dsc* desc, const string& formatUpper, Format::Patterns& outFormatPatterns, Callbacks* cb)
 	{
 		outFormatPatterns = Format::NONE;
@@ -1166,24 +1175,27 @@ namespace
 		return 1;
 	}
 
-	constexpr int getIntFromString(const char* str, FB_SIZE_T length, FB_SIZE_T& offset, FB_SIZE_T parseLength, bool withSign = false)
+	// Return MAX_INT if number from parsed string does not fit into int variable
+	std::optional<int> getIntFromString(const char* str, FB_SIZE_T length, FB_SIZE_T& offset, FB_SIZE_T parseLength,
+		bool withSign = false)
 	{
-		int result = 0;
+		int number = 0;
 		int sign = 1;
 
 		if (withSign)
 			sign = getIntSignFromString(str, offset);
 
-		const FB_SIZE_T parseLengthWithOffset = offset + parseLength;
-		for (; offset < parseLengthWithOffset && offset < length; offset++)
+		const char* begin = str + offset;
+		std::from_chars_result conversionResult = std::from_chars(begin, str + offset + parseLength, number);
+		if (conversionResult.ec == std::error_code{})
 		{
-			if (!isDigit(str[offset]))
-				return result * sign;
-
-			result = result * 10 + (str[offset] - '0');
+			offset += conversionResult.ptr - begin;
+			return number * sign;
 		}
 
-		return result * sign;
+		if (conversionResult.ec == std::errc::result_out_of_range)
+			return std::numeric_limits<decltype(number)>::max();
+		return std::nullopt;
 	}
 
 	constexpr std::string_view getSubstringFromString(const char* str, FB_SIZE_T length, FB_SIZE_T& offset, FB_SIZE_T parseLength = 0,
@@ -1203,29 +1215,22 @@ namespace
 		return std::string_view(str + startPoint, wordLen);
 	}
 
-	constexpr unsigned getFractionsFromString(const char* str, FB_SIZE_T length, FB_SIZE_T& offset, FB_SIZE_T parseLength)
+	std::optional<unsigned> getFractionsFromString(const char* str, FB_SIZE_T length, FB_SIZE_T& offset, FB_SIZE_T parseLength)
 	{
 		constexpr unsigned pow10[] = {1, 10, 100, 1'000, 10'000};
 		static_assert(std::size(pow10) > -ISC_TIME_SECONDS_PRECISION_SCALE);
 
 		if (parseLength > -ISC_TIME_SECONDS_PRECISION_SCALE)
 			parseLength = -ISC_TIME_SECONDS_PRECISION_SCALE;
-		int currentPrecisionScale = -ISC_TIME_SECONDS_PRECISION_SCALE;
-		unsigned fractions = 0;
 
-		const FB_SIZE_T parseLengthWithOffset = offset + parseLength;
-		for (; offset < parseLengthWithOffset && offset < length; offset++)
-		{
-			const char symbol = str[offset];
+		const FB_SIZE_T startOffset = offset;
+		const std::optional<int> fractions = getIntFromString(str, length, offset, parseLength, false);
+		if (!fractions.has_value())
+			return std::nullopt;
 
-			if (!isDigit(symbol))
-				break;
-
-			fractions = fractions * 10 + (symbol - '0');
-			--currentPrecisionScale;
-		}
-
-		return fractions * pow10[currentPrecisionScale];
+		// Precision scale is using to convert ".1" to 1000 and not to just 1
+		const int precisionScale = -ISC_TIME_SECONDS_PRECISION_SCALE - (offset - startOffset);
+		return static_cast<unsigned>(fractions.value()) * pow10[precisionScale];
 	}
 
 	std::string_view getTimezoneNameFromString(const char* str, FB_SIZE_T length, FB_SIZE_T& offset)
@@ -1251,28 +1256,9 @@ namespace
 	std::optional<int> getDisplacementFromString(const char* str, FB_SIZE_T length, FB_SIZE_T& offset,
 		std::string_view patternStr, Firebird::Callbacks* cb)
 	{
-		auto parseNumber = [](const char* str, FB_SIZE_T length, FB_SIZE_T& offset) -> std::optional<unsigned>
-		{
-			const char symbol = str[offset];
-			if (!isDigit(symbol))
-				return std::nullopt;
-
-			unsigned result = symbol - '0';
-			++offset;
-			for (; offset < length; offset++)
-			{
-				if (!isDigit(str[offset]))
-					break;
-
-				result = result * 10 + (str[offset] - '0');
-			}
-
-			return result;
-		};
-
 		int sign = getIntSignFromString(str, offset);
 
-		std::optional<unsigned> hours = parseNumber(str, length, offset);
+		std::optional<unsigned> hours = getIntFromString(str, length, offset, length - offset, false);
 		if (!hours.has_value())
 			return std::nullopt;
 
@@ -1282,7 +1268,7 @@ namespace
 				break;
 		}
 
-		std::optional<unsigned> minutes = parseNumber(str, length, offset);
+		std::optional<unsigned> minutes = getIntFromString(str, length, offset, length - offset, false);
 		if (!minutes.has_value())
 			return std::nullopt;
 
@@ -1290,6 +1276,13 @@ namespace
 		{
 			cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
 				string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(59));
+		}
+
+		if (!TimeZoneUtil::isValidOffset(sign, hours.value(), minutes.value()))
+		{
+			string timezoneOffset;
+			timezoneOffset.printf("%c%u:%u", sign == -1 ? '-' : '+', hours.value(), minutes.value());
+			cb->err(Arg::Gds(isc_invalid_timezone_offset) << timezoneOffset);
 		}
 
 		return sign * (hours.value() * 60 + minutes.value());
@@ -1363,69 +1356,79 @@ namespace
 				{
 					// Set last digit to zero
 					const int currentYear = (outTimes.tm_year + 1900) / 10 * 10;
-					const int year = getIntFromString(str, strLength, strOffset, 1);
+					const std::optional<int> year = getIntFromString(str, strLength, strOffset, 1);
+					throwExceptionOnEmptyValue(year, patternStr, cb);
 
-					outTimes.tm_year = currentYear + year - 1900;
+					outTimes.tm_year = currentYear + year.value() - 1900;
 					break;
 				}
 				case Format::YY:
 				{
 					// Set 2 last digits to zero
 					const int currentAge = (outTimes.tm_year + 1900) / 100 * 100;
-					const int parsedYear = getIntFromString(str, strLength, strOffset, 2);
+					const std::optional<int> year = getIntFromString(str, strLength, strOffset, 2);
+					throwExceptionOnEmptyValue(year, patternStr, cb);
 
-					outTimes.tm_year = currentAge + parsedYear - 1900;
+					outTimes.tm_year = currentAge + year.value() - 1900;
 					break;
 				}
 				case Format::YYY:
 				{
 					// Set 3 last digits to zero
 					const int currentThousand = (outTimes.tm_year + 1900) / 1000 * 1000;
-					const int parsedYear = getIntFromString(str, strLength, strOffset, 3);
+					const std::optional<int> year = getIntFromString(str, strLength, strOffset, 3);
+					throwExceptionOnEmptyValue(year, patternStr, cb);
 
-					outTimes.tm_year = currentThousand + parsedYear - 1900;
+					outTimes.tm_year = currentThousand + year.value() - 1900;
 					break;
 				}
 				case Format::YYYY:
 				{
-					const int year = getIntFromString(str, strLength, strOffset, 4);
+					const std::optional<int> year = getIntFromString(str, strLength, strOffset, 4);
+					throwExceptionOnEmptyValue(year, patternStr, cb);
 
-					outTimes.tm_year = year - 1900;
+					outTimes.tm_year = year.value() - 1900;
 					break;
 				}
 				case Format::YEAR:
 				{
-					const int year = getIntFromString(str, strLength, strOffset, strLength - strOffset);
+					const std::optional<int> year = getIntFromString(str, strLength, strOffset, strLength - strOffset);
+					throwExceptionOnEmptyValue(year, patternStr, cb);
+
 					if (year > 9999)
 					{
 						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
 							string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(9999));
 					}
-					outTimes.tm_year = year - 1900;
+					outTimes.tm_year = year.value() - 1900;
 					break;
 				}
 				case Format::MI:
 				{
-					const int minutes = getIntFromString(str, strLength, strOffset, 2);
+					const std::optional<int> minutes = getIntFromString(str, strLength, strOffset, 2);
+					throwExceptionOnEmptyValue(minutes, patternStr, cb);
+
 					if (minutes > 59)
 					{
 						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
 							string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(59));
 					}
 
-					outTimes.tm_min = minutes;
+					outTimes.tm_min = minutes.value();
 					break;
 				}
 				case Format::MM:
 				{
-					int month = getIntFromString(str, strLength, strOffset, 2);
+					const std::optional<int> month = getIntFromString(str, strLength, strOffset, 2);
+					throwExceptionOnEmptyValue(month, patternStr, cb);
+
 					if (month < 1 || month > 12)
 					{
 						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
 							string(patternStr.data(), patternStr.length()) << Arg::Num(1) << Arg::Num(12));
 					}
 
-					outTimes.tm_mon = month - 1;
+					outTimes.tm_mon = month.value() - 1;
 					break;
 				}
 				case Format::MON:
@@ -1474,19 +1477,23 @@ namespace
 				case Format::RR:
 				{
 					// tm_year already contains current date
-					const int parsedYear = getIntFromString(str, strLength, strOffset, 2);
-					outTimes.tm_year = roundYearPatternImplementation(parsedYear, outTimes.tm_year + 1900) - 1900;
+					const std::optional<int> year = getIntFromString(str, strLength, strOffset, 2);
+					throwExceptionOnEmptyValue(year, patternStr, cb);
+
+					outTimes.tm_year = roundYearPatternImplementation(year.value(), outTimes.tm_year + 1900) - 1900;
 					break;
 				}
 				case Format::RRRR:
 				{
 					const int startOffset = strOffset;
-					const int parsedYear = getIntFromString(str, strLength, strOffset, 4);
+					const std::optional<int> year = getIntFromString(str, strLength, strOffset, 4);
+					throwExceptionOnEmptyValue(year, patternStr, cb);
+
 					const int numberOfSymbols = strOffset - startOffset;
 
 					outTimes.tm_year = numberOfSymbols <= 2
-						? roundYearPatternImplementation(parsedYear, outTimes.tm_year + 1900)
-						: parsedYear;
+						? roundYearPatternImplementation(year.value(), outTimes.tm_year + 1900)
+						: year.value();
 					outTimes.tm_year -= 1900;
 					break;
 				}
@@ -1505,20 +1512,23 @@ namespace
 
 				case Format::DD:
 				{
-					const int day = getIntFromString(str, strLength, strOffset, 2);
+					const std::optional<int> day = getIntFromString(str, strLength, strOffset, 2);
+					throwExceptionOnEmptyValue(day, patternStr, cb);
+
 					if (day == 0 || day > 31)
 					{
 						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
 							string(patternStr.data(), patternStr.length()) << Arg::Num(1) << Arg::Num(31));
 					}
 
-					outTimes.tm_mday = day;
+					outTimes.tm_mday = day.value();
 					break;
 				}
 
 				case Format::J:
 				{
-					const int JDN = getIntFromString(str, strLength, strOffset, strLength - strOffset);
+					const std::optional<int> JDN = getIntFromString(str, strLength, strOffset, strLength - strOffset);
+					throwExceptionOnEmptyValue(JDN, patternStr, cb);
 
 					constexpr int minJDN = 1721426; // 0.0.0
 					constexpr int maxJDN = 5373484; // 31.12.9999
@@ -1529,7 +1539,7 @@ namespace
 					}
 
 					int year = 0, month = 0, day = 0;
-					NoThrowTimeStamp::convertJulianDateToGregorianDate(JDN, year, month, day);
+					NoThrowTimeStamp::convertJulianDateToGregorianDate(JDN.value(), year, month, day);
 					outTimes.tm_year = year - 1900;
 					outTimes.tm_mon = month - 1;
 					outTimes.tm_mday = day;
@@ -1539,55 +1549,64 @@ namespace
 				case Format::HH:
 				case Format::HH12:
 				{
-					const int hours = getIntFromString(str, strLength, strOffset, 2);
+					const std::optional<int> hours = getIntFromString(str, strLength, strOffset, 2);
+					throwExceptionOnEmptyValue(hours, patternStr, cb);
+
 					if (hours < 1 || hours > 12)
 					{
 						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
 							string(patternStr.data(), patternStr.length()) << Arg::Num(1) << Arg::Num(12));
 					}
 
-					outTimes.tm_hour = hours;
+					outTimes.tm_hour = hours.value();
 					break;
 				}
 				case Format::HH24:
 				{
-					const int hours = getIntFromString(str, strLength, strOffset, 2);
+					const std::optional<int> hours = getIntFromString(str, strLength, strOffset, 2);
+					throwExceptionOnEmptyValue(hours, patternStr, cb);
+
 					if (hours > 23)
 					{
 						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
 							string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(23));
 					}
 
-					outTimes.tm_hour = hours;
+					outTimes.tm_hour = hours.value();
 					break;
 				}
 
 				case Format::SS:
 				{
-					const int seconds = getIntFromString(str, strLength, strOffset, 2);
+					const std::optional<int> seconds = getIntFromString(str, strLength, strOffset, 2);
+					throwExceptionOnEmptyValue(seconds, patternStr, cb);
+
 					if (seconds > 59)
 					{
 						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
 							string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(59));
 					}
 
-					outTimes.tm_sec = seconds;
+					outTimes.tm_sec = seconds.value();
 					break;
 				}
 				case Format::SSSSS:
 				{
 					constexpr int maximumSecondsInDay = NoThrowTimeStamp::SECONDS_PER_DAY - 1;
 
-					const int secondsInDay = getIntFromString(str, strLength, strOffset, 5);
-					if (secondsInDay > maximumSecondsInDay)
+					const std::optional<int> secondsInDay = getIntFromString(str, strLength, strOffset, 5);
+					throwExceptionOnEmptyValue(secondsInDay, patternStr, cb);
+
+					const int secondsInDayValue = secondsInDay.value();
+					if (secondsInDayValue > maximumSecondsInDay)
 					{
 						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
 							string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(maximumSecondsInDay));
 					}
 
-					const int hours = secondsInDay / 24;
-					const int minutes = secondsInDay / 60 - hours * 60;
-					const int seconds = secondsInDay - minutes * 60 - hours * 60 * 60;
+					const int hours = secondsInDayValue / 24;
+					const int minutes = secondsInDayValue / 60 - hours * 60;
+					const int seconds = secondsInDayValue - minutes * 60 - hours * 60 * 60;
 
 					outTimes.tm_hour = hours;
 					outTimes.tm_min = minutes;
@@ -1602,7 +1621,10 @@ namespace
 				{
 					const int precision = patternStr.back() - '0';
 
-					outFractions = getFractionsFromString(str, strLength, strOffset, precision);
+					const std::optional<unsigned> fractions = getFractionsFromString(str, strLength, strOffset, precision);
+					throwExceptionOnEmptyValue(fractions, patternStr, cb);
+
+					outFractions = fractions.value();
 					break;
 				}
 
@@ -1621,11 +1643,27 @@ namespace
 					auto prevIt = getPreviousOrCurrentIterator(it, begin);
 					if (prevIt->pattern == Format::TZM)
 					{
-						outTimezoneInMinutes += sign(outTimezoneInMinutes) *
-							getIntFromString(str, strLength, strOffset, strLength - strOffset) * 60;
+						const std::optional<int> hours = getIntFromString(str, strLength, strOffset, strLength - strOffset);
+						throwExceptionOnEmptyValue(hours, patternStr, cb);
+
+						const int hoursValue = hours.value();
+						const int signValue = sign(outTimezoneInMinutes);
+						if (!TimeZoneUtil::isValidOffset(signValue, abs(hoursValue), 0))
+							cb->err(Arg::Gds(isc_invalid_timezone_offset) << Arg::Num(hoursValue));
+
+						outTimezoneInMinutes += signValue * hoursValue * 60;
 					}
 					else
-						outTimezoneInMinutes = getIntFromString(str, strLength, strOffset, strLength - strOffset, true) * 60;
+					{
+						const std::optional<int> hours = getIntFromString(str, strLength, strOffset, strLength - strOffset, true);
+						throwExceptionOnEmptyValue(hours, patternStr, cb);
+
+						const int hoursValue = hours.value();
+						if (!TimeZoneUtil::isValidOffset(sign(hours), abs(hoursValue), 0))
+							cb->err(Arg::Gds(isc_invalid_timezone_offset) << Arg::Num(hoursValue));
+
+						outTimezoneInMinutes = hoursValue * 60;
+					}
 					break;
 				}
 				case Format::TZM:
@@ -1633,25 +1671,30 @@ namespace
 					auto prevIt = getPreviousOrCurrentIterator(it, begin);
 					if (prevIt->pattern == Format::TZH)
 					{
-						const int minutes = getIntFromString(str, strLength, strOffset, strLength - strOffset);
+						const std::optional<int> minutes = getIntFromString(str, strLength, strOffset, strLength - strOffset);
+						throwExceptionOnEmptyValue(minutes, patternStr, cb);
+
 						if (minutes > 59)
 						{
 							cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
 								string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(59));
 						}
 
-						outTimezoneInMinutes += sign(outTimezoneInMinutes) * minutes;
+						outTimezoneInMinutes += sign(outTimezoneInMinutes) * minutes.value();
 					}
 					else
 					{
-						const int minutes = getIntFromString(str, strLength, strOffset, strLength - strOffset, true);
-						if (abs(minutes) > 59)
+						const std::optional<int> minutes = getIntFromString(str, strLength, strOffset, strLength - strOffset, true);
+						throwExceptionOnEmptyValue(minutes, patternStr, cb);
+
+						const int minutesValue = minutes.value();
+						if (abs(minutesValue) > 59)
 						{
 							cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
 								string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(59));
 						}
 
-						outTimezoneInMinutes = minutes;
+						outTimezoneInMinutes = minutesValue;
 					}
 					break;
 				}
