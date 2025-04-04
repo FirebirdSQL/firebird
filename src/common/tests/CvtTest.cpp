@@ -635,10 +635,50 @@ BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_EXCEPTION_CHECK)
 	testExceptionCvtStringToFormatDateTime("1 1",      "SSSSS MI", cb);
 	testExceptionCvtStringToFormatDateTime("1 1",      "SSSSS SS", cb);
 
+	// Test exception for missing value in input string for pattern
+	testExceptionCvtStringToFormatDateTime("Apr", "Y     MON", cb);
+	testExceptionCvtStringToFormatDateTime("Apr", "YY    MON", cb);
+	testExceptionCvtStringToFormatDateTime("Apr", "YYY   MON", cb);
+	testExceptionCvtStringToFormatDateTime("Apr", "YYYY  MON", cb);
+	testExceptionCvtStringToFormatDateTime("Apr", "YEAR  MON", cb);
+	testExceptionCvtStringToFormatDateTime("Apr", "RR    MON", cb);
+	testExceptionCvtStringToFormatDateTime("Apr", "RRRR  MON", cb);
+	testExceptionCvtStringToFormatDateTime("Apr", "MM    MON", cb);
+	testExceptionCvtStringToFormatDateTime("Apr", "DD    MON", cb);
+	testExceptionCvtStringToFormatDateTime("Apr", "J     MON", cb);
+	testExceptionCvtStringToFormatDateTime("Apr", "HH    MON", cb);
+	testExceptionCvtStringToFormatDateTime("Apr", "HH12  MON", cb);
+	testExceptionCvtStringToFormatDateTime("Apr", "HH24  MON", cb);
+	testExceptionCvtStringToFormatDateTime("Apr", "MI    MON", cb);
+	testExceptionCvtStringToFormatDateTime("Apr", "SS    MON", cb);
+	testExceptionCvtStringToFormatDateTime("Apr", "SSSSS MON", cb);
+	testExceptionCvtStringToFormatDateTime("Apr", "FF1   MON", cb);
+	testExceptionCvtStringToFormatDateTime("Apr", "FF2   MON", cb);
+	testExceptionCvtStringToFormatDateTime("Apr", "FF3   MON", cb);
+	testExceptionCvtStringToFormatDateTime("Apr", "FF4   MON", cb);
+	testExceptionCvtStringToFormatDateTime("Apr", "TZH   MON", cb);
+	testExceptionCvtStringToFormatDateTime("Apr", "TZM   MON", cb);
+	testExceptionCvtStringToFormatDateTime("Apr", "TZR   MON", cb);
+
 	testExceptionCvtStringToFormatDateTime("30 1", "TZM SS", cb);
 	testExceptionCvtStringToFormatDateTime("30", "TZM", cb);
 
 	testExceptionCvtStringToFormatDateTime("00:60", "TZH:TZM", cb);
+	testExceptionCvtStringToFormatDateTime("00:60", "TZR", cb);
+
+	testExceptionCvtStringToFormatDateTime("15:00", "TZH:TZM", cb);
+	testExceptionCvtStringToFormatDateTime("15:00", "TZR", cb);
+	testExceptionCvtStringToFormatDateTime("-15:00", "TZH:TZM", cb);
+	testExceptionCvtStringToFormatDateTime("-15:00", "TZR", cb);
+
+	testExceptionCvtStringToFormatDateTime("9999999999999999999999999999999999999:00", "TZH:TZM", cb);
+	testExceptionCvtStringToFormatDateTime("9999999999999999999999999999999999999:00", "TZR", cb);
+	testExceptionCvtStringToFormatDateTime("-9999999999999999999999999999999999999:00", "TZH:TZM", cb);
+	testExceptionCvtStringToFormatDateTime("-9999999999999999999999999999999999999:00", "TZR", cb);
+	testExceptionCvtStringToFormatDateTime("00:9999999999999999999999999999999999999", "TZH:TZM", cb);
+	testExceptionCvtStringToFormatDateTime("00:9999999999999999999999999999999999999", "TZR", cb);
+	testExceptionCvtStringToFormatDateTime("00:-9999999999999999999999999999999999999", "TZH:TZM", cb);
+	testExceptionCvtStringToFormatDateTime("00:-9999999999999999999999999999999999999", "TZR", cb);
 
 	testExceptionCvtStringToFormatDateTime("12 12", "HH24 HH24", cb);
 
