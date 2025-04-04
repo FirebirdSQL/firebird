@@ -12406,7 +12406,7 @@ bool RestoreRelationTask::fileReader(Item& item)
 		const FB_SSIZE_T attLen = 1 + (tdgbl->gbl_sw_transportable ? 12 : 6);
 		const FB_SSIZE_T overhead = tdgbl->gbl_sw_compress ? (len / 127 + 1) : 0;
 
-		if (len + attLen + overhead > space)
+		if (static_cast<FB_SSIZE_T>(len) + attLen + overhead > space)
 		{
 			if (ioBuf)
 			{

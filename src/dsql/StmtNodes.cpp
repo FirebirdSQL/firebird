@@ -3428,7 +3428,7 @@ ExecProcedureNode* ExecProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		const auto positionalArgCount = inputSources->items.getCount() -
 			(dsqlInputArgNames ? dsqlInputArgNames->getCount() : 0);
 
-		if (positionalArgCount > procedure->prc_in_count || dsqlInputArgNames)
+		if (static_cast<SSHORT>(positionalArgCount) > procedure->prc_in_count || dsqlInputArgNames)
 		{
 			const auto newInputs = FB_NEW_POOL(pool) ValueListNode(pool);
 			const auto newOutputs = FB_NEW_POOL(pool) ValueListNode(pool);
@@ -3443,7 +3443,7 @@ ExecProcedureNode* ExecProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 			for (auto source : inputSources->items)
 			{
-				const bool isInput = (pos < positionalArgCount && pos < procedure->prc_in_count) ||
+				const bool isInput = (pos < positionalArgCount && pos < static_cast<unsigned>(procedure->prc_in_count)) ||
 					(pos >= positionalArgCount &&
 						!outFields.exist((*dsqlInputArgNames)[pos - positionalArgCount]));
 
