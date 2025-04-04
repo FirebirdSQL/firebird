@@ -55,6 +55,20 @@ static ValueExprNode* resolveUsingField(DsqlCompilerScratch* dsqlScratch, const 
 
 namespace
 {
+	void appendContextAlias(DsqlCompilerScratch* dsqlScratch, const string& alias)
+	{
+		const auto len = alias.length();
+		if (len <= MAX_UCHAR)
+			dsqlScratch->appendMetaString(alias.c_str());
+		else
+		{
+			string truncatedAlias(alias);
+			truncatedAlias.resize(MAX_UCHAR - 3);
+			truncatedAlias += "...";
+			dsqlScratch->appendMetaString(truncatedAlias.c_str());
+		}
+	}
+
 	// Search through the list of ANDed booleans to find comparisons
 	// referring streams of parent select expressions.
 	// Extract those booleans and return them to the caller.
@@ -688,7 +702,7 @@ void LocalTableSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	dsqlScratch->appendUChar(blr_local_table_id);
 	dsqlScratch->appendUShort(tableNumber);
-	dsqlScratch->appendMetaString(alias.c_str());	// dsqlContext->ctx_alias?
+	appendContextAlias(dsqlScratch, alias); // dsqlContext->ctx_alias?
 
 	GEN_stuff_context(dsqlScratch, dsqlContext);
 }
@@ -886,7 +900,7 @@ void RelationSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	}
 
 	if (dsqlContext->ctx_alias.hasData())
-		dsqlScratch->appendMetaString(dsqlContext->ctx_alias.c_str());
+		appendContextAlias(dsqlScratch, dsqlContext->ctx_alias);
 
 	GEN_stuff_context(dsqlScratch, dsqlContext);
 }
@@ -1508,7 +1522,7 @@ void ProcedureSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		if (dsqlContext->ctx_alias.hasData())
 		{
 			dsqlScratch->appendUChar(blr_invsel_procedure_alias);
-			dsqlScratch->appendMetaString(dsqlContext->ctx_alias.c_str());
+			appendContextAlias(dsqlScratch, dsqlContext->ctx_alias);
 		}
 
 		dsqlScratch->appendUChar(blr_end);
@@ -1520,7 +1534,7 @@ void ProcedureSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	{
 		dsqlScratch->appendUChar(blr_subproc);
 		dsqlScratch->appendMetaString(dsqlProcedure->prc_name.identifier.c_str());
-		dsqlScratch->appendMetaString(dsqlContext->ctx_alias.c_str());
+		appendContextAlias(dsqlScratch, dsqlContext->ctx_alias);
 	}
 	else
 	{
@@ -1547,7 +1561,7 @@ void ProcedureSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		}
 
 		if (dsqlContext->ctx_alias.hasData())
-			dsqlScratch->appendMetaString(dsqlContext->ctx_alias.c_str());
+			appendContextAlias(dsqlScratch, dsqlContext->ctx_alias);
 	}
 
 	GEN_stuff_context(dsqlScratch, dsqlContext);
@@ -4080,7 +4094,7 @@ void TableValueFunctionSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	GEN_stuff_context(dsqlScratch, dsqlContext);
 
-	dsqlScratch->appendMetaString(dsqlContext->ctx_alias.c_str());
+	appendContextAlias(dsqlScratch, dsqlContext->ctx_alias);
 
 	dsqlScratch->appendUShort(dsqlContext->ctx_proc_inputs->items.getCount());
 	for (auto& arg : dsqlContext->ctx_proc_inputs->items)
