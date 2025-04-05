@@ -58,7 +58,6 @@ set(epp_boot_gds_files
     jrd/Function.epp
 )
 set(epp_master_files
-    auth/SecurityDatabase/LegacyManagement.epp
     msgs/build_file.epp
     misc/codes.epp
 )
@@ -533,22 +532,6 @@ set_output_directory_unix   (ib_util lib)
 
 
 ########################################
-# SHARED LIBRARY legacy_usermanager
-########################################
-
-set(legacy_usermanager_generated_src
-    auth/SecurityDatabase/LegacyManagement.epp
-)
-add_epp_suffix(legacy_usermanager_generated_src master)
-
-add_library                 (legacy_usermanager SHARED ${legacy_usermanager_generated_src_master} auth/SecurityDatabase/LegacyManagement.h ${VERSION_RC})
-target_link_libraries       (legacy_usermanager common yvalve)
-set_target_properties       (legacy_usermanager PROPERTIES OUTPUT_NAME Legacy_UserManager)
-set_output_directory        (legacy_usermanager plugins)
-set_exported_symbols        (legacy_usermanager fbplugin)
-
-
-########################################
 # SHARED LIBRARY udr_engine
 ########################################
 
@@ -570,17 +553,6 @@ target_link_libraries       (srp remote common yvalve)
 set_target_properties       (srp PROPERTIES OUTPUT_NAME Srp)
 set_output_directory        (srp plugins)
 set_exported_symbols        (srp fbplugin)
-
-
-########################################
-# SHARED LIBRARY legacy_auth
-########################################
-
-add_library                 (legacy_auth SHARED auth/SecurityDatabase/LegacyServer.cpp ${VERSION_RC})
-target_link_libraries       (legacy_auth common yvalve)
-set_target_properties       (legacy_auth PROPERTIES OUTPUT_NAME Legacy_Auth)
-set_output_directory        (legacy_auth plugins)
-set_exported_symbols        (legacy_auth fbplugin)
 
 
 ################################################################################
