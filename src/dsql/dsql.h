@@ -560,7 +560,6 @@ public:
 
 	Firebird::Array<dsql_par*> msg_parameters;	// Parameter list
 	USHORT msg_number = 0;			// Message number
-	USHORT msg_buffer_number = 0;	// Message buffer number (used instead of msg_number for blob msgs)
 	ULONG msg_length = 0;			// Message length
 	USHORT msg_parameter = 0;		// Next parameter number
 	USHORT msg_index = 0;			// Next index into SQLDA
@@ -572,8 +571,6 @@ class dsql_par : public Firebird::PermanentStorage
 public:
 	explicit dsql_par(MemoryPool& p)
 		: PermanentStorage(p),
-		  par_dbkey_relname(p),
-		  par_rec_version_relname(p),
 		  par_name(p),
 		  par_rel_name(p),
 		  par_owner_name(p),
@@ -585,9 +582,6 @@ public:
 	dsql_msg* par_message = nullptr;	// Parent message
 	dsql_par* par_null = nullptr;		// Null parameter, if used
 	ValueExprNode* par_node = nullptr;	// Associated value node, if any
-	dsql_ctx* par_context = nullptr;	// Context for SELECT FOR UPDATE
-	MetaName par_dbkey_relname;			// Context of internally requested dbkey
-	MetaName par_rec_version_relname;	// Context of internally requested rec. version
 	MetaName par_name;					// Parameter name, if any
 	MetaName par_rel_name;				// Relation name, if any
 	MetaName par_owner_name;			// Owner name, if any
