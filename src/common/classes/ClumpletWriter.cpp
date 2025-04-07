@@ -214,13 +214,13 @@ void ClumpletWriter::reset(UCHAR tag)
 
 void ClumpletWriter::reset(const UCHAR* buffer, const FB_SIZE_T buffLen)
 {
+	const UCHAR tag = isTagged() ? getBufferTag() : 0;
 	dynamic_buffer.clear();
 	if (buffer && buffLen) {
 		dynamic_buffer.push(buffer, buffLen);
 	}
 	else
-	{
-		UCHAR tag = (kind == SpbStart || kind == UnTagged || kind == WideUnTagged) ? 0 : getBufferTag();
+	{	
 		initNewBuffer(tag);
 	}
 	rewind();
