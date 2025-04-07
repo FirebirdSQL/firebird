@@ -38,7 +38,7 @@ static const char* const SCRATCH = "fb_merge_";
 
 MergeJoin::MergeJoin(CompilerScratch* csb, FB_SIZE_T count,
 					 SortedStream* const* args, const NestValueArray* const* keys)
-	: RecordSource(csb),
+	: Join(csb, JoinType::INNER),
 	  m_args(csb->csb_pool),
 	  m_keys(csb->csb_pool)
 {

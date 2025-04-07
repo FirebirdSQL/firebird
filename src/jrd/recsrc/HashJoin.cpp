@@ -252,8 +252,7 @@ private:
 HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, JoinType joinType,
 				   FB_SIZE_T count, RecordSource* const* args, NestValueArray* const* keys,
 				   double selectivity)
-	: RecordSource(csb),
-	  m_joinType(joinType),
+	: Join(csb, joinType),
 	  m_boolean(nullptr),
 	  m_args(csb->csb_pool, count - 1)
 {
@@ -266,8 +265,7 @@ HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb,
 				   BoolExprNode* boolean,
 				   RecordSource* const* args, NestValueArray* const* keys,
 				   double selectivity)
-	: RecordSource(csb),
-	  m_joinType(OUTER_JOIN),
+	: Join(csb, JoinType::OUTER),
 	  m_boolean(boolean),
 	  m_args(csb->csb_pool, 1)
 {
@@ -474,10 +472,10 @@ bool HashJoin::internalGetRecord(thread_db* tdbb) const
 
 			if (!impure->irsb_hash_table->setup(impure->irsb_leader_hash))
 			{
-				if (m_joinType == INNER_JOIN || m_joinType == SEMI_JOIN)
+				if (m_joinType == JoinType::INNER || m_joinType == JoinType::SEMI)
 					continue;
 
-				if (m_joinType == OUTER_JOIN)
+				if (m_joinType == JoinType::OUTER)
 					inner->nullRecords(tdbb);
 
 				return true;
@@ -506,20 +504,20 @@ bool HashJoin::internalGetRecord(thread_db* tdbb) const
 			{
 				impure->irsb_flags |= irsb_mustread;
 
-				if (m_joinType == INNER_JOIN || m_joinType == SEMI_JOIN)
+				if (m_joinType == JoinType::INNER || m_joinType == JoinType::SEMI)
 					continue;
 
-				if (m_joinType == OUTER_JOIN)
+				if (m_joinType == JoinType::OUTER)
 					inner->nullRecords(tdbb);
 
 				break;
 			}
 
-			if (m_joinType == SEMI_JOIN || m_joinType == ANTI_JOIN)
+			if (m_joinType == JoinType::SEMI || m_joinType == JoinType::ANTI)
 			{
 				impure->irsb_flags |= irsb_mustread;
 
-				if (m_joinType == ANTI_JOIN)
+				if (m_joinType == JoinType::ANTI)
 					continue;
 			}
 
@@ -527,7 +525,7 @@ bool HashJoin::internalGetRecord(thread_db* tdbb) const
 		}
 		else if (!fetchRecord(tdbb, impure, m_args.getCount() - 1))
 		{
-			fb_assert(m_joinType == INNER_JOIN);
+			fb_assert(m_joinType == JoinType::INNER);
 			impure->irsb_flags |= irsb_mustread;
 			continue;
 		}
@@ -568,29 +566,7 @@ void HashJoin::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned l
 {
 	planEntry.className = "HashJoin";
 
-	planEntry.lines.add().text = "Hash Join ";
-
-	switch (m_joinType)
-	{
-		case INNER_JOIN:
-			planEntry.lines.back().text += "(inner)";
-			break;
-
-		case OUTER_JOIN:
-			planEntry.lines.back().text += "(outer)";
-			break;
-
-		case SEMI_JOIN:
-			planEntry.lines.back().text += "(semi)";
-			break;
-
-		case ANTI_JOIN:
-			planEntry.lines.back().text += "(anti)";
-			break;
-
-		default:
-			fb_assert(false);
-	}
+	planEntry.lines.add().text = "Hash Join " + printType();
 
 	string extras;
 	extras.printf(" (keys: %" ULONGFORMAT", total key length: %" ULONGFORMAT")",
@@ -751,7 +727,7 @@ bool HashJoin::fetchRecord(thread_db* tdbb, Impure* impure, FB_SIZE_T stream) co
 			return true;
 	}
 
-	if (m_joinType == SEMI_JOIN || m_joinType == ANTI_JOIN)
+	if (m_joinType == JoinType::SEMI || m_joinType == JoinType::ANTI)
 		return false;
 
 	while (true)

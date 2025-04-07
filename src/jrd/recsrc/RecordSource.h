@@ -53,7 +53,7 @@ namespace Jrd
 	class BufferedStream;
 	class PlanEntry;
 
-	enum JoinType { INNER_JOIN, OUTER_JOIN, SEMI_JOIN, ANTI_JOIN };
+	enum class JoinType { INNER, OUTER, SEMI, ANTI };
 
 	// Common base for record sources, sub-queries and cursors.
 	class AccessPath
@@ -1154,11 +1154,45 @@ namespace Jrd
 
 	// Multiplexing (many -> one) access methods
 
-	class NestedLoopJoin : public RecordSource
+	class Join : public RecordSource
 	{
 	public:
-		NestedLoopJoin(CompilerScratch* csb, FB_SIZE_T count, RecordSource* const* args,
-					   JoinType joinType = INNER_JOIN);
+		Join(CompilerScratch* csb, JoinType joinType)
+			: RecordSource(csb), m_joinType(joinType)
+		{}
+
+		const Firebird::string printType() const
+		{
+			switch (m_joinType)
+			{
+				case JoinType::INNER:
+					return "(inner)";
+
+				case JoinType::OUTER:
+					return "(outer)";
+
+				case JoinType::SEMI:
+					return "(semi)";
+
+				case JoinType::ANTI:
+					return "(anti)";
+
+				default:
+					fb_assert(false);
+			}
+
+			return "";
+		}
+
+	protected:
+		const JoinType m_joinType;
+	};
+
+	class NestedLoopJoin : public Join
+	{
+	public:
+		NestedLoopJoin(CompilerScratch* csb, JoinType joinType,
+					   FB_SIZE_T count, RecordSource* const* args);
 		NestedLoopJoin(CompilerScratch* csb, RecordSource* outer, RecordSource* inner,
 					   BoolExprNode* boolean);
 
@@ -1184,13 +1218,11 @@ namespace Jrd
 	private:
 		bool fetchRecord(thread_db*, FB_SIZE_T) const;
 
-		const JoinType m_joinType;
 		const NestConst<BoolExprNode> m_boolean;
-
 		Firebird::Array<NestConst<RecordSource> > m_args;
 	};
 
-	class FullOuterJoin : public RecordSource
+	class FullOuterJoin : public Join
 	{
 	public:
 		FullOuterJoin(CompilerScratch* csb, RecordSource* arg1, RecordSource* arg2,
@@ -1221,7 +1253,7 @@ namespace Jrd
 		const StreamList m_checkStreams;
 	};
 
-	class HashJoin : public RecordSource
+	class HashJoin : public Join
 	{
 		class HashTable;
 
@@ -1283,14 +1315,13 @@ namespace Jrd
 						  const SubStream& sub, UCHAR* buffer) const;
 		bool fetchRecord(thread_db* tdbb, Impure* impure, FB_SIZE_T stream) const;
 
-		const JoinType m_joinType;
 		const NestConst<BoolExprNode> m_boolean;
 
 		SubStream m_leader;
 		Firebird::Array<SubStream> m_args;
 	};
 
-	class MergeJoin : public RecordSource
+	class MergeJoin : public Join
 	{
 		struct MergeFile
 		{

@@ -715,6 +715,21 @@ private:
 
 class RseNode final : public TypedNode<RecordSourceNode, RecordSourceNode::TYPE_RSE>
 {
+	enum : UCHAR							// storage is BLR-compatible
+	{
+		INNER_JOIN = 0,
+		LEFT_JOIN = 1,
+		RIGHT_JOIN = 2,
+		FULL_JOIN = 3,
+		SEMI_JOIN = 4,
+		ANTI_JOIN = 5
+	};
+
+	static_assert(INNER_JOIN == blr_inner, "join type mismatch");
+	static_assert(LEFT_JOIN == blr_left, "join type mismatch");
+	static_assert(RIGHT_JOIN == blr_right, "join type mismatch");
+	static_assert(FULL_JOIN == blr_full, "join type mismatch");
+
 public:
 	enum : USHORT
 	{
@@ -725,9 +740,39 @@ public:
 		FLAG_DSQL_COMPARATIVE	= 0x10,		// transformed from DSQL ComparativeBoolNode
 		FLAG_LATERAL			= 0x20,		// lateral derived table
 		FLAG_SKIP_LOCKED		= 0x40,		// skip locked
-		FLAG_SUB_QUERY			= 0x80,		// sub-query
-		FLAG_SEMI_JOINED		= 0x100		// participates in semi-join
+		FLAG_SUB_QUERY			= 0x80		// sub-query
 	};
+
+	bool isInnerJoin() const
+	{
+		return (rse_jointype == INNER_JOIN);
+	}
+
+	bool isLeftJoin() const
+	{
+		return (rse_jointype == LEFT_JOIN);
+	}
+
+	bool isOuterJoin() const
+	{
+		return (rse_jointype == LEFT_JOIN || rse_jointype == RIGHT_JOIN || rse_jointype == FULL_JOIN);
+	}
+
+	bool isFullJoin() const
+	{
+		return (rse_jointype == FULL_JOIN);
+	}
+
+	bool isSpecialJoin() const
+	{
+		return (rse_jointype == SEMI_JOIN || rse_jointype == ANTI_JOIN);
+	}
+
+	bool isSemiJoin() const
+	{
+		fb_assert(isSpecialJoin());
+		return (rse_jointype == SEMI_JOIN);
+	}
 
 	bool isInvariant() const
 	{
@@ -752,11 +797,6 @@ public:
 	bool isSubQuery() const
 	{
 		return (flags & FLAG_SUB_QUERY) != 0;
-	}
-
-	bool isSemiJoined() const
-	{
-		return (flags & FLAG_SEMI_JOINED) != 0;
 	}
 
 	bool hasWriteLock() const
@@ -889,8 +929,8 @@ public:
 	NestConst<VarInvariantArray> rse_invariants; // Invariant nodes bound to top-level RSE
 	Firebird::Array<NestConst<RecordSourceNode> > rse_relations;
 	USHORT flags = 0;
-	USHORT rse_jointype = blr_inner;	// inner, left, full
-	Firebird::TriState firstRows;					// optimize for first rows
+	UCHAR rse_jointype = INNER_JOIN;
+	Firebird::TriState firstRows;		// optimize for first rows
 };
 
 class SelectExprNode final : public TypedNode<RecordSourceNode, RecordSourceNode::TYPE_SELECT_EXPR>

@@ -535,7 +535,7 @@ River* InnerJoin::formRiver()
 
 			// Create a nested loop join from the priorly processed streams
 			const auto priorRsb = (rsbs.getCount() == 1) ? rsbs[0] :
-				FB_NEW_POOL(getPool()) NestedLoopJoin(csb, rsbs.getCount(), rsbs.begin());
+				FB_NEW_POOL(getPool()) NestedLoopJoin(csb, JoinType::INNER, rsbs.getCount(), rsbs.begin());
 
 			// Prepare record sources and corresponding equivalence keys for hash-joining
 			RecordSource* hashJoinRsbs[] = {priorRsb, rsb};
@@ -580,7 +580,7 @@ River* InnerJoin::formRiver()
 
 			// Create a hash join
 			rsb = FB_NEW_POOL(getPool())
-				HashJoin(tdbb, csb, INNER_JOIN, 2, hashJoinRsbs, keys.begin(), stream.selectivity);
+				HashJoin(tdbb, csb, JoinType::INNER, 2, hashJoinRsbs, keys.begin(), stream.selectivity);
 
 			// Clear priorly processed rsb's, as they're already incorporated into a hash join
 			rsbs.clear();
@@ -597,7 +597,7 @@ River* InnerJoin::formRiver()
 
 	// Create a nested loop join from the processed streams
 	rsb = (rsbs.getCount() == 1) ? rsbs[0] :
-		FB_NEW_POOL(getPool()) NestedLoopJoin(csb, rsbs.getCount(), rsbs.begin());
+		FB_NEW_POOL(getPool()) NestedLoopJoin(csb, JoinType::INNER, rsbs.getCount(), rsbs.begin());
 
 	// Ensure matching booleans are rechecked early
 	if (equiMatches.hasData())

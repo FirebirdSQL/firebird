@@ -316,7 +316,8 @@ public:
 			iter->flags = 0;
 		}
 
-		// Assignment is not currently used in the code and I doubt it should be
+		ConjunctIterator() = delete;
+		ConjunctIterator(const ConjunctIterator& other) = delete;
 		ConjunctIterator& operator=(const ConjunctIterator& other) = delete;
 
 	private:
@@ -329,10 +330,6 @@ public:
 		{
 			rewind();
 		}
-
-		ConjunctIterator(const ConjunctIterator& other)
-			: begin(other.begin), end(other.end), iter(other.iter)
-		{}
 	};
 
 	ConjunctIterator getBaseConjuncts()
@@ -481,17 +478,27 @@ public:
 
 	bool isInnerJoin() const
 	{
-		return (rse->rse_jointype == blr_inner);
+		return rse->isInnerJoin();
+	}
+
+	bool isOuterJoin() const
+	{
+		return rse->isOuterJoin();
 	}
 
 	bool isLeftJoin() const
 	{
-		return (rse->rse_jointype == blr_left);
+		return rse->isLeftJoin();
 	}
 
 	bool isFullJoin() const
 	{
-		return (rse->rse_jointype == blr_full);
+		return rse->isFullJoin();
+	}
+
+	bool isSpecialJoin() const
+	{
+		return rse->isSpecialJoin();
 	}
 
 	const StreamList& getOuterStreams() const
@@ -519,11 +526,6 @@ public:
 		return composeBoolean(iter, selectivity);
 	}
 
-	bool isSemiJoined() const
-	{
-		return (rse->flags & RseNode::FLAG_SEMI_JOINED) != 0;
-	}
-
 	bool checkEquiJoin(BoolExprNode* boolean);
 	bool getEquiJoinKeys(BoolExprNode* boolean,
 						 NestConst<ValueExprNode>* node1,
@@ -549,7 +551,7 @@ private:
 					RiverList& rivers,
 					SortNode** sortClause,
 					const PlanNode* planClause);
-	bool generateEquiJoin(RiverList& rivers, JoinType joinType = INNER_JOIN);
+	bool generateEquiJoin(RiverList& rivers, JoinType joinType);
 	void generateInnerJoin(StreamList& streams,
 						   RiverList& rivers,
 						   SortNode** sortClause,

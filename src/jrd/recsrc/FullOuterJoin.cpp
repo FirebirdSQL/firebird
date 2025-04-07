@@ -40,7 +40,7 @@ using namespace Jrd;
 FullOuterJoin::FullOuterJoin(CompilerScratch* csb,
 							 RecordSource* arg1, RecordSource* arg2,
 							 const StreamList& checkStreams)
-	: RecordSource(csb),
+	: Join(csb, JoinType::OUTER),
 	  m_arg1(arg1),
 	  m_arg2(arg2),
 	  m_checkStreams(csb->csb_pool, checkStreams)

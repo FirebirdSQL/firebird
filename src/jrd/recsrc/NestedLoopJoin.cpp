@@ -35,12 +35,9 @@ using namespace Jrd;
 // Data access: nested loops join
 // ------------------------------
 
-NestedLoopJoin::NestedLoopJoin(CompilerScratch* csb,
-							   FB_SIZE_T count,
-							   RecordSource* const* args,
-							   JoinType joinType)
-	: RecordSource(csb),
-	  m_joinType(joinType),
+NestedLoopJoin::NestedLoopJoin(CompilerScratch* csb, JoinType joinType,
+							   FB_SIZE_T count, RecordSource* const* args)
+	: Join(csb, joinType),
 	  m_boolean(nullptr),
 	  m_args(csb->csb_pool, count)
 {
@@ -57,8 +54,7 @@ NestedLoopJoin::NestedLoopJoin(CompilerScratch* csb,
 NestedLoopJoin::NestedLoopJoin(CompilerScratch* csb,
 							   RecordSource* outer, RecordSource* inner,
 							   BoolExprNode* boolean)
-	: RecordSource(csb),
-	  m_joinType(OUTER_JOIN),
+	: Join(csb, JoinType::OUTER),
 	  m_boolean(boolean),
 	  m_args(csb->csb_pool, 2)
 {
@@ -107,7 +103,7 @@ bool NestedLoopJoin::internalGetRecord(thread_db* tdbb) const
 	if (!(impure->irsb_flags & irsb_open))
 		return false;
 
-	if (m_joinType == INNER_JOIN)
+	if (m_joinType == JoinType::INNER)
 	{
 		if (impure->irsb_flags & irsb_first)
 		{
@@ -129,7 +125,7 @@ bool NestedLoopJoin::internalGetRecord(thread_db* tdbb) const
 		else if (!fetchRecord(tdbb, m_args.getCount() - 1))
 			return false;
 	}
-	else if (m_joinType == SEMI_JOIN || m_joinType == ANTI_JOIN)
+	else if (m_joinType == JoinType::SEMI || m_joinType == JoinType::ANTI)
 	{
 		const auto outer = m_args[0];
 
@@ -161,7 +157,7 @@ bool NestedLoopJoin::internalGetRecord(thread_db* tdbb) const
 
 				if (m_args[i]->getRecord(tdbb))
 				{
-					if (m_joinType == ANTI_JOIN)
+					if (m_joinType == JoinType::ANTI)
 					{
 						stopArg = i;
 						break;
@@ -169,7 +165,7 @@ bool NestedLoopJoin::internalGetRecord(thread_db* tdbb) const
 				}
 				else
 				{
-					if (m_joinType == SEMI_JOIN)
+					if (m_joinType == JoinType::SEMI)
 					{
 						stopArg = i;
 						break;
@@ -188,7 +184,7 @@ bool NestedLoopJoin::internalGetRecord(thread_db* tdbb) const
 	}
 	else
 	{
-		fb_assert(m_joinType == OUTER_JOIN);
+		fb_assert(m_joinType == JoinType::OUTER);
 		fb_assert(m_args.getCount() == 2);
 
 		const auto outer = m_args[0];
@@ -272,30 +268,7 @@ void NestedLoopJoin::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsi
 {
 	planEntry.className = "NestedLoopJoin";
 
-	planEntry.lines.add().text = "Nested Loop Join ";
-
-	switch (m_joinType)
-	{
-		case INNER_JOIN:
-			planEntry.lines.back().text += "(inner)";
-			break;
-
-		case OUTER_JOIN:
-			planEntry.lines.back().text += "(outer)";
-			break;
-
-		case SEMI_JOIN:
-			planEntry.lines.back().text += "(semi)";
-			break;
-
-		case ANTI_JOIN:
-			planEntry.lines.back().text += "(anti)";
-			break;
-
-		default:
-			fb_assert(false);
-	}
-
+	planEntry.lines.add().text = "Nested Loop Join " + printType();
 	printOptInfo(planEntry.lines);
 
 	if (recurse)
@@ -344,7 +317,7 @@ void NestedLoopJoin::nullRecords(thread_db* tdbb) const
 
 bool NestedLoopJoin::fetchRecord(thread_db* tdbb, FB_SIZE_T n) const
 {
-	fb_assert(m_joinType == INNER_JOIN);
+	fb_assert(m_joinType == JoinType::INNER);
 
 	const RecordSource* const arg = m_args[n];
 
