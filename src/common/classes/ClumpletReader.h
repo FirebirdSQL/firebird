@@ -126,21 +126,18 @@ public:
 	// Return the tag for buffer (usually structure version)
 	UCHAR getBufferTag() const;
 	// true if buffer has tag
-	bool isTagged() const;
+	bool isTagged() const noexcept;
 	FB_SIZE_T getBufferLength() const
 	{
 		FB_SIZE_T rc = getBufferEnd() - getBuffer();
-		if (rc == 1 && kind != UnTagged     && kind != SpbStart &&
-					   kind != WideUnTagged && kind != SpbSendItems &&
-					   kind != SpbReceiveItems && kind != SpbResponse &&
-					   kind != InfoResponse && kind != InfoItems)
+		if (rc == 1 && isTagged())
 		{
 			rc = 0;
 		}
 		return rc;
 	}
-	FB_SIZE_T getCurOffset() const { return cur_offset; }
-	void setCurOffset(FB_SIZE_T newOffset) { cur_offset = newOffset; }
+	FB_SIZE_T getCurOffset() const noexcept { return cur_offset; }
+	void setCurOffset(FB_SIZE_T newOffset) noexcept { cur_offset = newOffset; }
 
 #ifdef DEBUG_CLUMPLETS
 	// Sometimes it's really useful to have it in case of errors
@@ -181,10 +178,10 @@ protected:
 	// sensible, certainly not overwrite memory or read past the end of buffer
 
 	// This appears to be a programming error in buffer access pattern
-	virtual void usage_mistake(const char* what) const;
+	[[noreturn]] virtual void usage_mistake(const char* what) const;
 
 	// This is called when passed buffer appears invalid
-	virtual void invalid_structure(const char* what, const int data = 0) const;
+	[[noreturn]] virtual void invalid_structure(const char* what, const int data = 0) const;
 
 private:
 	// Assignment not implemented.
@@ -205,13 +202,13 @@ public:
 class AuthReader : public ClumpletReader
 {
 public:
-	static const unsigned char AUTH_NAME = 1;		// name described by it's type
-	static const unsigned char AUTH_PLUGIN = 2;		// plugin which added a record
-	static const unsigned char AUTH_TYPE = 3;		// it can be user/group/role/etc. - what plugin sets
-	static const unsigned char AUTH_SECURE_DB = 4;	// sec. db in which context record was added
-													// missing when plugin is server-wide
-	static const unsigned char AUTH_ORIG_PLUG = 5;	// original plugin that added a mapped record
-													// (human information reasons only)
+	static constexpr unsigned char AUTH_NAME = 1;		// name described by it's type
+	static constexpr unsigned char AUTH_PLUGIN = 2;		// plugin which added a record
+	static constexpr unsigned char AUTH_TYPE = 3;		// it can be user/group/role/etc. - what plugin sets
+	static constexpr unsigned char AUTH_SECURE_DB = 4;	// sec. db in which context record was added
+														// missing when plugin is server-wide
+	static constexpr unsigned char AUTH_ORIG_PLUG = 5;	// original plugin that added a mapped record
+														// (human information reasons only)
 	typedef Array<UCHAR> AuthBlock;
 
 	struct Info
@@ -219,7 +216,7 @@ public:
 		NoCaseString type, name, plugin, secDb, origPlug;
 		unsigned found, current;
 
-		Info()
+		Info() noexcept
 			: found(0), current(0)
 		{ }
 
@@ -241,7 +238,7 @@ public:
 #ifdef AUTH_BLOCK_DEBUG
 void dumpAuthBlock(const char* text, ClumpletReader* pb, unsigned char param);
 #else
-static inline void dumpAuthBlock(const char*, ClumpletReader*, unsigned char) { }
+static inline void dumpAuthBlock(const char*, ClumpletReader*, unsigned char) noexcept { }
 #endif
 
 } // namespace Firebird

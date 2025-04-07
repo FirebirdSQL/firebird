@@ -77,7 +77,7 @@ void ClumpletWriter::initNewBuffer(UCHAR tag)
 			{
 				dynamic_buffer.push(isc_spb_version);
 			}
-			// fall down ....
+			[[fallthrough]];
 		case Tagged:
 		case Tpb:
 		case WideTagged:
@@ -175,6 +175,7 @@ ClumpletWriter::ClumpletWriter(MemoryPool& given_pool, Kind k, FB_SIZE_T limit,
 							   const UCHAR* buffer, FB_SIZE_T buffLen, UCHAR tag)
 	: ClumpletReader(given_pool, k, NULL, 0),
 	  sizeLimit(limit),
+	  kindList(NULL),
 	  dynamic_buffer(getPool()),
 	  flag_overflow(false)
 {
@@ -220,7 +221,7 @@ void ClumpletWriter::reset(const UCHAR* buffer, const FB_SIZE_T buffLen)
 	}
 	else
 	{
-		UCHAR tag = (kind == SpbStart || kind == UnTagged || kind == WideUnTagged) ? 0 : getBufferTag();
+		const UCHAR tag = isTagged() ? getBufferTag() : 0;
 		initNewBuffer(tag);
 	}
 	rewind();
@@ -231,7 +232,7 @@ void ClumpletWriter::reset(const ClumpletWriter& from)
 	reset(from.getBuffer(), from.getBufferEnd() - from.getBuffer());
 }
 
-void ClumpletWriter::size_overflow()
+[[noreturn]] void ClumpletWriter::size_overflow()
 {
 	fatal_exception::raise("Clumplet buffer size limit reached");
 }
@@ -437,6 +438,9 @@ void ClumpletWriter::insertBytesLengthCheck(UCHAR tag, const void* bytes, const 
 			cur_offset += 4;
 		}
 		break;
+	default:
+		invalid_structure("unsupported length size", lenSize);
+		return;
 	}
 	dynamic_buffer.insert(cur_offset, static_cast<const UCHAR*>(bytes), length);
 	const FB_SIZE_T new_offset = cur_offset + length;
