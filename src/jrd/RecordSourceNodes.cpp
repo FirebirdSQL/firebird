@@ -37,6 +37,7 @@
 #include "../dsql/metd_proto.h"
 #include "../dsql/pass1_proto.h"
 #include "../jrd/optimizer/Optimizer.h"
+#include "../dsql/DSqlDataTypeUtil.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -4247,9 +4248,7 @@ dsql_fld* UnlistFunctionSourceNode::makeField(DsqlCompilerScratch* dsqlScratch)
 	if (inputList)
 		inputList = Node::doDsqlPass(dsqlScratch, inputList, false);
 
-	dsc desc;
-
-	auto inputItem = inputList->items.begin()->getObject();
+	const auto inputItem = inputList->items.begin()->getObject();
 	inputItem->setParameterType(
 		dsqlScratch, [](dsc* desc) { desc->makeVarying(1024, CS_dynamic); }, false);
 
@@ -4257,17 +4256,18 @@ dsql_fld* UnlistFunctionSourceNode::makeField(DsqlCompilerScratch* dsqlScratch)
 
 	if (!field)
 	{
-		auto newField = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
+		const auto newField = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
 		field = newField;
 
+		dsc desc;
 		DsqlDescMaker::fromNode(dsqlScratch, &desc, inputItem);
-
 		USHORT ttype = desc.getCharSet();
 
-		if (ttype == CS_NONE)
+		if (ttype == CS_NONE && !desc.isText() && !desc.isBlob())
 			ttype = CS_ASCII;
 
-		desc.makeText(32, ttype);
+		const auto bytesPerChar = DSqlDataTypeUtil(dsqlScratch).maxBytesPerChar(ttype);
+		desc.makeText(bytesPerChar * DEFAULT_UNLIST_TEXT_LENGTH, ttype);
 		MAKE_field(newField, &desc);
 		newField->fld_id = 0;
 	}

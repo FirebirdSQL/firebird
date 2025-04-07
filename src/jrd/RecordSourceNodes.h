@@ -1033,6 +1033,7 @@ public:
 	dsql_fld* makeField(DsqlCompilerScratch* dsqlScratch) final;
 
 	static constexpr char const* FUNC_NAME = "UNLIST";
+	static constexpr USHORT DEFAULT_UNLIST_TEXT_LENGTH = 32;
 };
 
 } // namespace Jrd
