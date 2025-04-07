@@ -73,11 +73,11 @@ void ClumpletWriter::initNewBuffer(UCHAR tag)
 	switch (kind)
 	{
 		case SpbAttach:
-			if (tag != isc_spb_version1)
+			if (tag == isc_spb_version)
 			{
 				dynamic_buffer.push(isc_spb_version);
 			}
-			// fall down ....
+			[[fallthrough]];
 		case Tagged:
 		case Tpb:
 		case WideTagged:
@@ -418,6 +418,8 @@ void ClumpletWriter::insertBytesLengthCheck(UCHAR tag, const void* bytes, const 
 	dynamic_buffer.insert(cur_offset++, tag);
 	switch (lenSize)
 	{
+	case 0:
+		break;
 	case 1:
 		dynamic_buffer.insert(cur_offset++, static_cast<UCHAR>(length));
 		break;
@@ -437,6 +439,9 @@ void ClumpletWriter::insertBytesLengthCheck(UCHAR tag, const void* bytes, const 
 			cur_offset += 4;
 		}
 		break;
+	default:
+		invalid_structure("invalid length size", lenSize);
+		return;
 	}
 	dynamic_buffer.insert(cur_offset, static_cast<const UCHAR*>(bytes), length);
 	const FB_SIZE_T new_offset = cur_offset + length;
