@@ -36,5 +36,11 @@
     <ClCompile Include="..\..\..\src\yvalve\gds.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\common\classes\tests\ClumpletTest.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\common\classes\tests\VectorTest.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
