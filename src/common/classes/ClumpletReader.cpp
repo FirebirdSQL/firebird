@@ -62,11 +62,11 @@ public:
 		return t2;
 	}
 protected:
-	virtual void usage_mistake(const char* what) const
+	[[noreturn]] virtual void usage_mistake(const char* what) const
 	{
 		fatal_exception::raiseFmt("Internal error when using clumplet API: %s", what);
 	}
-	virtual void invalid_structure(const char* what, const int data) const
+	[[noreturn]] virtual void invalid_structure(const char* what, const int data) const
 	{
 		fatal_exception::raiseFmt("Invalid clumplet buffer structure: %s (%d)", what, data);
 	}
@@ -86,8 +86,7 @@ void ClumpletReader::dump() const
 
 	try {
 		ClumpletDump d(kind, getBuffer(), getBufferLength());
-		int t = (kind == SpbStart || kind == UnTagged || kind == WideUnTagged || kind == SpbResponse || kind == InfoResponse) ?
-			-1 : d.getBufferTag();
+		const int t = isTagged() ? d.getBufferTag() : -1;
 		gds__log("Tag=%d Offset=%d Length=%d Eof=%d\n", t, getCurOffset(), getBufferLength(), isEof());
 		for (d.rewind(); !(d.isEof()); d.moveNext())
 		{
@@ -98,7 +97,7 @@ void ClumpletReader::dump() const
 	catch (const fatal_exception& x)
 	{
 		gds__log("Fatal exception during clumplet dump: %s", x.what());
-		FB_SIZE_T l = getBufferLength() - getCurOffset();
+		const FB_SIZE_T l = getBufferLength() - getCurOffset();
 		const UCHAR *p = getBuffer() + getCurOffset();
 		gds__log("Plain dump starting with offset %d: %s", getCurOffset(),
 			ClumpletDump::hexString(p, l).c_str());
@@ -189,7 +188,7 @@ const UCHAR* ClumpletReader::getBufferEnd() const
 	return static_buffer_end;
 }
 
-void ClumpletReader::usage_mistake(const char* what) const
+[[noreturn]] void ClumpletReader::usage_mistake(const char* what) const
 {
 #ifdef DEBUG_CLUMPLETS
 	dump();
@@ -197,7 +196,7 @@ void ClumpletReader::usage_mistake(const char* what) const
 	fatal_exception::raiseFmt("Internal error when using clumplet API: %s", what);
 }
 
-void ClumpletReader::invalid_structure(const char* what, const int data) const
+[[noreturn]] void ClumpletReader::invalid_structure(const char* what, const int data) const
 {
 #ifdef DEBUG_CLUMPLETS
 	dump();
@@ -205,7 +204,7 @@ void ClumpletReader::invalid_structure(const char* what, const int data) const
 	fatal_exception::raiseFmt("Invalid clumplet buffer structure: %s (%d)", what, data);
 }
 
-bool ClumpletReader::isTagged() const
+bool ClumpletReader::isTagged() const noexcept
 {
 	switch (kind)
 	{
@@ -214,13 +213,17 @@ bool ClumpletReader::isTagged() const
 	case WideTagged:
 	case SpbAttach:
 		return true;
+	default:
+		return false;
 	}
-
-	return false;
 }
 
 UCHAR ClumpletReader::getBufferTag() const
 {
+	if (!isTagged()) {
+		usage_mistake("buffer is not tagged");
+		return 0;
+	}
 	const UCHAR* const buffer_end = getBufferEnd();
 	const UCHAR* buffer_start = getBuffer();
 
@@ -235,16 +238,6 @@ UCHAR ClumpletReader::getBufferTag() const
 			return 0;
 		}
 		return buffer_start[0];
-	case SpbStart:
-	case UnTagged:
-	case WideUnTagged:
-	case SpbSendItems:
-	case SpbReceiveItems:
-	case SpbResponse:
-	case InfoResponse:
-	case InfoItems:
-		usage_mistake("buffer is not tagged");
-		return 0;
 	case SpbAttach:
 		if (buffer_end - buffer_start == 0)
 		{
@@ -552,17 +545,11 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 
 void ClumpletReader::adjustSpbState()
 {
-	switch (kind)
+	if (kind == SpbStart && 
+		spbState == 0 &&							// Just started with service start block ...
+		getClumpletSize(true, true, true) == 1)		// and this is action_XXX clumplet
 	{
-	case SpbStart:
-		if (spbState == 0 &&							// Just started with service start block ...
-			getClumpletSize(true, true, true) == 1)		// and this is action_XXX clumplet
-		{
-			spbState = getClumpTag();
-		}
-		break;
-	default:
-		break;
+		spbState = getClumpTag();
 	}
 }
 
@@ -582,7 +569,7 @@ FB_SIZE_T ClumpletReader::getClumpletSize(bool wTag, bool wLength, bool wData) c
 	FB_SIZE_T lengthSize = 0;
 	FB_SIZE_T dataSize = 0;
 
-	ClumpletType t = getClumpletType(clumplet[0]);
+	const ClumpletType t = getClumpletType(clumplet[0]);
 	switch (t)
 	{
 
@@ -657,7 +644,7 @@ FB_SIZE_T ClumpletReader::getClumpletSize(bool wTag, bool wLength, bool wData) c
 	if (clumplet + total > buffer_end)
 	{
 		invalid_structure("buffer end before end of clumplet - clumplet too long", total);
-		FB_SIZE_T delta = total - (buffer_end - clumplet);
+		const FB_SIZE_T delta = total - (buffer_end - clumplet);
 		if (delta > dataSize)
 			dataSize = 0;
 		else
@@ -678,9 +665,8 @@ void ClumpletReader::moveNext()
 	if (isEof())
 		return;		// no need to raise useless exceptions
 
-	switch (kind)
+	if (kind == InfoResponse)
 	{
-	case InfoResponse:
 		switch (getClumpTag())
 		{
 		case isc_info_end:
@@ -688,40 +674,24 @@ void ClumpletReader::moveNext()
 			// terminating clumplet
 			cur_offset = getBufferLength();
 			return;
+		default:
+			break;
 		}
 	}
 
-	FB_SIZE_T cs = getClumpletSize(true, true, true);
+	const FB_SIZE_T cs = getClumpletSize(true, true, true);
 	adjustSpbState();
 	cur_offset += cs;
 }
 
 void ClumpletReader::rewind()
 {
-	if (! getBuffer())
-	{
+	if (!getBuffer() || !isTagged())
 		cur_offset = 0;
-		spbState = 0;
-		return;
-	}
-	switch (kind)
-	{
-	case UnTagged:
-	case WideUnTagged:
-	case SpbStart:
-	case SpbSendItems:
-	case SpbReceiveItems:
-	case SpbResponse:
-	case InfoResponse:
-	case InfoItems:
-		cur_offset = 0;
-		break;
-	default:
-		if (kind == SpbAttach && getBufferLength() > 0 && getBuffer()[0] != isc_spb_version1)
-			cur_offset = 2;
-		else
-			cur_offset = 1;
-	}
+	else if (kind == SpbAttach && getBufferLength() > 0 && getBuffer()[0] == isc_spb_version)
+		cur_offset = 2;
+	else
+		cur_offset = 1;
 	spbState = 0;
 }
 
@@ -956,7 +926,7 @@ AuthReader::AuthReader(MemoryPool& pool, const AuthBlock& authBlock)
 	rewind();
 }
 
-static inline void erase(NoCaseString& s)
+static inline void erase(NoCaseString& s) noexcept
 {
 	s.erase();
 }
