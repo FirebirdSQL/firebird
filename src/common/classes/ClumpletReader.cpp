@@ -279,8 +279,10 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 		case isc_tpb_lock_timeout:
 		case isc_tpb_at_snapshot_number:
 			return TraditionalDpb;
+		default:
+			return SingleTpb;
 		}
-		return SingleTpb;
+		break;
 	case SpbSendItems:
 		switch (tag)
 		{
@@ -291,8 +293,10 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 		case isc_info_length:
 		case isc_info_flag_end:
 			return SingleTpb;
+		default:
+			return StringSpb;
 		}
-		return StringSpb;
+		break;
 	case SpbReceiveItems:
 	case InfoItems:
 		return SingleTpb;
@@ -304,6 +308,9 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 		case isc_spb_auth_plugin_name:
 		case isc_spb_auth_plugin_list:
 			return Wide;
+		default:
+			// continues with spbState below
+			break;
 		}
 		switch (spbState)
 		{
@@ -338,8 +345,10 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 			case isc_spb_res_access_mode:
 			case isc_spb_res_replica_mode:
 				return ByteSpb;
+			default:
+				invalid_structure("unknown parameter for backup/restore", tag);
+				break;
 			}
-			invalid_structure("unknown parameter for backup/restore", tag);
 			break;
 		case isc_action_svc_repair:
 			switch (tag)
@@ -356,8 +365,10 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 			case isc_spb_rpr_rollback_trans_64:
 			case isc_spb_rpr_recover_two_phase_64:
 				return BigIntSpb;
+			default:
+				invalid_structure("unknown parameter for repair", tag);
+				break;
 			}
-			invalid_structure("unknown parameter for repair", tag);
 			break;
 		case isc_action_svc_add_user:
 		case isc_action_svc_delete_user:
@@ -381,8 +392,10 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 			case isc_spb_sec_groupid:
 			case isc_spb_sec_admin:
 				return IntSpb;
+			default:
+				invalid_structure("unknown parameter for security database operation", tag);
+				break;
 			}
-			invalid_structure("unknown parameter for security database operation", tag);
 			break;
 		case isc_action_svc_properties:
 			switch (tag)
@@ -407,8 +420,10 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 			case isc_spb_prp_online_mode:
 			case isc_spb_prp_replica_mode:
 				return ByteSpb;
+			default:
+				invalid_structure("unknown parameter for setting database properties", tag);
+				break;
 			}
-			invalid_structure("unknown parameter for setting database properties", tag);
 			break;
 //		case isc_action_svc_add_license:
 //		case isc_action_svc_remove_license:
@@ -421,8 +436,10 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 				return StringSpb;
 			case isc_spb_options:
 				return IntSpb;
+			default:
+				invalid_structure("unknown parameter for getting statistics", tag);
+				break;
 			}
-			invalid_structure("unknown parameter for getting statistics", tag);
 			break;
 		case isc_action_svc_get_ib_log:
 			invalid_structure("unknown parameter for getting log", tag);
@@ -443,8 +460,10 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 				return IntSpb;
 			case isc_spb_nbk_clean_history:
 				return SingleTpb;
+			default:
+				invalid_structure("unknown parameter for nbackup", tag);
+				break;
 			}
-			invalid_structure("unknown parameter for nbackup", tag);
 			break;
 		case isc_action_svc_nfix:
 			switch (tag)
@@ -453,8 +472,10 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 				return StringSpb;
 			case isc_spb_options:
 				return IntSpb;
+			default:
+				invalid_structure("unknown parameter for nbackup", tag);
+				break;
 			}
-			invalid_structure("unknown parameter for nbackup", tag);
 			break;
 		case isc_action_svc_trace_start:
 		case isc_action_svc_trace_stop:
@@ -467,6 +488,9 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 				return StringSpb;
 			case isc_spb_trc_id:
 				return IntSpb;
+			default:
+				invalid_structure("unknown parameter for trace", tag);
+				break;
 			}
 			break;
 		case isc_action_svc_validate:
@@ -480,10 +504,15 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 				return StringSpb;
 			case isc_spb_val_lock_timeout:
 				return IntSpb;
+			default:
+				invalid_structure("unknown parameter for validate", tag);
+				break;
 			}
 			break;
+		default:
+			invalid_structure("wrong spb state", spbState);
+			break;
 		}
-		invalid_structure("wrong spb state", spbState);
 		break;
 	case SpbResponse:
 		switch(tag)
@@ -526,8 +555,10 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 		case isc_spb_tra_state:
 		case isc_spb_tra_advise:
 			return ByteSpb;
+		default:
+			invalid_structure("unrecognized service response tag", tag);
+			break;
 		}
-		invalid_structure("unrecognized service response tag", tag);
 		break;
 	case InfoResponse:
 		switch (tag)
@@ -536,10 +567,14 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 		case isc_info_truncated:
 		case isc_info_flag_end:
 			return SingleTpb;
+		default:
+			return StringSpb;
 		}
-		return StringSpb;
+		break;
+	default:
+		invalid_structure("unknown clumplet kind", kind);
+		break;
 	}
-	invalid_structure("unknown clumplet kind", kind);
 	return SingleTpb;
 }
 
