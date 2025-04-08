@@ -232,7 +232,7 @@ void ClumpletWriter::reset(const ClumpletWriter& from)
 	reset(from.getBuffer(), from.getBufferEnd() - from.getBuffer());
 }
 
-void ClumpletWriter::size_overflow()
+[[noreturn]] void ClumpletWriter::size_overflow()
 {
 	fatal_exception::raise("Clumplet buffer size limit reached");
 }

@@ -107,7 +107,7 @@ public:
 
 protected:
 	const UCHAR* getBufferEnd() const override;
-	virtual void size_overflow();
+	[[noreturn]] virtual void size_overflow();
 	void insertBytesLengthCheck(UCHAR tag, const void* bytes, const FB_SIZE_T length);
 	bool upgradeVersion();	// upgrade clumplet version - obtain newest from kindList
 
