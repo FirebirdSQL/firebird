@@ -199,11 +199,11 @@ public:
 	{
 	}
 
-	static ISC_STATUS badHandle() { return isc_bad_db_handle; }
+	static constexpr ISC_STATUS badHandle() noexcept { return isc_bad_db_handle; }
 
 	// Increment blob cache usage.
 	// Return false if blob cache have not enough space for a blob of given size.
-	bool incBlobCache(ULONG size)
+	bool incBlobCache(ULONG size) noexcept
 	{
 		if (rdb_cached_blobs_size + size > rdb_blob_cache_size)
 			return false;
@@ -283,17 +283,17 @@ private:
 
 	struct Item
 	{
-		Item()
+		Item() noexcept
 		  : m_id(NULL_BLOB), m_blob(nullptr)
 		{
 		}
 
-		explicit Item(SQUAD blob_id)
+		explicit Item(SQUAD blob_id) noexcept
 			: m_id(blob_id), m_blob(nullptr)
 		{
 		}
 
-		explicit Item(Rbl* blob);
+		explicit Item(Rbl* blob) noexcept;
 
 		bool operator==(const Item& other) const
 		{
@@ -339,7 +339,7 @@ public:
 			*rtr_self = NULL;
 	}
 
-	static ISC_STATUS badHandle() { return isc_bad_trans_handle; }
+	static constexpr ISC_STATUS badHandle() noexcept { return isc_bad_trans_handle; }
 
 	Rbl* createInlineBlob();
 	void setupInlineBlob(P_INLINE_BLOB* p_blob);
@@ -348,16 +348,11 @@ public:
 
 struct RBlobInfo
 {
-	bool	valid;
-	UCHAR	blob_type;
-	ULONG	num_segments;
-	ULONG	max_segment;
-	FB_UINT64	total_length;
-
-	RBlobInfo()
-	{
-		memset(this, 0, sizeof(*this));
-	}
+	bool	valid{};
+	UCHAR	blob_type{};
+	ULONG	num_segments{};
+	ULONG	max_segment{};
+	FB_UINT64	total_length{};
 
 	// parse into response into m_info, assume buffer contains all known info items
 	void parseInfo(unsigned int bufferLength, const unsigned char* buffer);
@@ -422,9 +417,9 @@ public:
 			rbl_iface->release();
 	}
 
-	static ISC_STATUS badHandle() { return isc_bad_segstr_handle; }
+	static constexpr ISC_STATUS badHandle() noexcept { return isc_bad_segstr_handle; }
 
-	bool isCached() const { return rbl_flags & CACHED; }
+	bool isCached() const noexcept { return rbl_flags & CACHED; }
 	unsigned getCachedSize() const { return sizeof(Rbl) + rbl_data.getCapacity(); }
 };
 
@@ -442,7 +437,7 @@ inline Rbl* BlobsContainer::locate(SQUAD blob_id)
 	return nullptr;
 }
 
-inline BlobsContainer::Item::Item(Rbl* blob)
+inline BlobsContainer::Item::Item(Rbl* blob) noexcept
 	: m_id(blob->rbl_blob_id), m_blob(blob)
 {
 }
@@ -599,7 +594,7 @@ public:
 		return rc;
 	}
 
-	static ISC_STATUS badHandle() { return isc_bad_req_handle; }
+	static constexpr ISC_STATUS badHandle() noexcept { return isc_bad_req_handle; }
 
 	void saveStatus(const Firebird::Exception& ex) noexcept;
 	void saveStatus(Firebird::IStatus* ex) noexcept;
@@ -620,7 +615,7 @@ public:
 		m_flags(flags)
 	{}
 	// At least one bit in the parameter is 1 in the object.
-	bool test(const T flags) const
+	bool test(const T flags) const noexcept
 	{
 		return m_flags & flags;
 	}
@@ -633,7 +628,7 @@ public:
 	{
 		m_flags |= flags;
 	}
-	void clear(const T flags)
+	void clear(const T flags) noexcept
 	{
 		m_flags &= ~flags;
 	}
@@ -766,9 +761,9 @@ public:
 	void clearException();
 	ISC_STATUS haveException();
 	void raiseException();
-	void releaseException();
+	void releaseException() noexcept;
 
-	static ISC_STATUS badHandle() { return isc_bad_req_handle; }
+	static constexpr ISC_STATUS badHandle() noexcept { return isc_bad_req_handle; }
 	void checkIface(ISC_STATUS code = isc_unprepared_stmt);
 	void checkCursor();
 	void checkBatch();
@@ -805,7 +800,7 @@ private:
 	} ptr;
 
 public:
-	RemoteObject() { ptr.rdb = 0; }
+	RemoteObject() noexcept { ptr.rdb = 0; }
 
 	template <typename R>
 	R* get(R* r)
@@ -817,11 +812,11 @@ public:
 		return r;
 	}
 
-	void operator=(Rdb* v) { ptr.rdb = v; }
-	void operator=(Rtr* v) { ptr.rtr = v; }
-	void operator=(Rbl* v) { ptr.rbl = v; }
-	void operator=(Rrq* v) { ptr.rrq = v; }
-	void operator=(Rsr* v) { ptr.rsr = v; }
+	void operator=(Rdb* v) noexcept { ptr.rdb = v; }
+	void operator=(Rtr* v) noexcept { ptr.rtr = v; }
+	void operator=(Rbl* v) noexcept { ptr.rbl = v; }
+	void operator=(Rrq* v) noexcept { ptr.rrq = v; }
+	void operator=(Rsr* v) noexcept { ptr.rsr = v; }
 
 	operator Rdb*() { return get(ptr.rdb); }
 	operator Rtr*() { return get(ptr.rtr); }
@@ -829,8 +824,8 @@ public:
 	operator Rrq*() { return get(ptr.rrq); }
 	operator Rsr*() { return get(ptr.rsr); }
 
-	bool isMissing() const { return ptr.rdb == NULL; }
-	void release() { ptr.rdb = 0; }
+	bool isMissing() const noexcept { return ptr.rdb == NULL; }
+	void release() noexcept { ptr.rdb = 0; }
 };
 
 
@@ -862,7 +857,7 @@ inline void Rsr::raiseException()
 		rsr_status->raise();
 }
 
-inline void Rsr::releaseException()
+inline void Rsr::releaseException() noexcept
 {
 	delete rsr_status;
 	rsr_status = NULL;
@@ -1441,7 +1436,7 @@ public:
 			port_in_packets++;
 	}
 
-	FB_UINT64 getStatItem(UCHAR infoItem) const
+	FB_UINT64 getStatItem(UCHAR infoItem) const noexcept
 	{
 		switch (infoItem)
 		{
@@ -1599,7 +1594,7 @@ public:
 		return port_last_object_id;
 	}
 
-	void releaseObject(OBJCT id)
+	void releaseObject(OBJCT id) noexcept
 	{
 		if (id != INVALID_OBJECT && id <= MAX_OBJCT_HANDLES)
 		{
