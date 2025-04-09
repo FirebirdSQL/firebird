@@ -359,7 +359,7 @@ namespace
 
 		bool checkGuid(const Guid& guid)
 		{
-			return (!m_config->sourceGuid.has_value() || m_config->sourceGuid.value() == guid);
+			return (!m_config->sourceGuid || m_config->sourceGuid.value() == guid);
 		}
 
 		FB_UINT64 initReplica()
@@ -411,12 +411,25 @@ namespace
 			return m_sequence;
 		}
 
+		void initGuid(const Guid& guid)
+		{
+			if (m_guid != guid)
+			{
+				FbLocalStatus localStatus;
+				m_replicator->init(&localStatus, guid.toString().c_str());
+				localStatus.check();
+
+				m_guid = guid;
+			}
+		}
+
 		void shutdown()
 		{
 			m_replicator = nullptr;
 			m_attachment = nullptr;
 			m_sequence = 0;
 			m_connected = false;
+			m_guid.reset();
 		}
 
 		void replicate(FB_UINT64 sequence, ULONG offset, ULONG length, const UCHAR* data)
@@ -499,6 +512,7 @@ namespace
 		string m_lastError;
 		FB_UINT64 m_errorSequence;
 		ULONG m_errorOffset;
+		std::optional<Guid> m_guid;
 	};
 
 	typedef Array<Target*> TargetList;
@@ -846,6 +860,8 @@ namespace
 
 					raiseError("Journal file %s open failed (error: %d)", segment->filename.c_str(), ERRNO);
 				}
+
+				target->initGuid(guid);
 
 				const TimeStamp startTime(TimeStamp::getCurrentTimeStamp());
 

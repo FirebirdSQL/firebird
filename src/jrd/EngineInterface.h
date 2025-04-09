@@ -251,6 +251,7 @@ public:
 	void process(Firebird::CheckStatusWrapper* status, unsigned length, const unsigned char* data) override;
 	void close(Firebird::CheckStatusWrapper* status) override;
 	void deprecatedClose(Firebird::CheckStatusWrapper* status) override;
+	void init(Firebird::CheckStatusWrapper* status, const char* guid) override;
 
 public:
 	JReplicator(Applier* appl, StableAttachmentPart* sa);
