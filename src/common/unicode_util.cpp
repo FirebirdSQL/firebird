@@ -56,9 +56,12 @@
 using namespace Firebird;
 
 namespace {
-#if defined(WIN_NT)
+#if defined(_MSC_VER)
 const char* const inTemplate = "icuin%s.dll";
 const char* const ucTemplate = "icuuc%s.dll";
+#elif defined(MINGW)
+const char* const inTemplate = "libicuin%s.dll";
+const char* const ucTemplate = "libicuuc%s.dll";
 #elif defined(DARWIN)
 const char* const inTemplate = "lib/libicui18n.%s.dylib";
 const char* const ucTemplate = "lib/libicuuc.%s.dylib";
@@ -1328,7 +1331,7 @@ UnicodeUtil::ConversionICU& UnicodeUtil::getConversionICU()
 
 	for (int major = 79; major >= 3;)
 	{
-#ifdef WIN_NT
+#ifdef _MSC_VER
 		int minor = 0;
 #else
 		int minor = 9;
