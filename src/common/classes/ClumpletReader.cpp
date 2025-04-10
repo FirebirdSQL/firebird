@@ -188,7 +188,7 @@ const UCHAR* ClumpletReader::getBufferEnd() const
 	return static_buffer_end;
 }
 
-[[noreturn]] void ClumpletReader::usage_mistake(const char* what) const
+void ClumpletReader::usage_mistake(const char* what) const
 {
 #ifdef DEBUG_CLUMPLETS
 	dump();
@@ -196,7 +196,7 @@ const UCHAR* ClumpletReader::getBufferEnd() const
 	fatal_exception::raiseFmt("Internal error when using clumplet API: %s", what);
 }
 
-[[noreturn]] void ClumpletReader::invalid_structure(const char* what, const int data) const
+void ClumpletReader::invalid_structure(const char* what, const int data) const
 {
 #ifdef DEBUG_CLUMPLETS
 	dump();

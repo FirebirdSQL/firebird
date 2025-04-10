@@ -178,10 +178,10 @@ protected:
 	// sensible, certainly not overwrite memory or read past the end of buffer
 
 	// This appears to be a programming error in buffer access pattern
-	[[noreturn]] virtual void usage_mistake(const char* what) const;
+	virtual void usage_mistake(const char* what) const;
 
 	// This is called when passed buffer appears invalid
-	[[noreturn]] virtual void invalid_structure(const char* what, const int data = 0) const;
+	virtual void invalid_structure(const char* what, const int data = 0) const;
 
 private:
 	// Assignment not implemented.
