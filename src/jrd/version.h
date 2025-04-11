@@ -90,12 +90,6 @@
 #elif defined RC_TARGET_isql
 #define VER_FILEDESC "Interactive Query tool"
 
-#elif defined RC_TARGET_legacy_auth
-#define VER_FILEDESC "Legacy Auth plugin"
-
-#elif defined RC_TARGET_legacy_usermanager
-#define VER_FILEDESC "Legacy User Manager plugin"
-
 #elif defined RC_TARGET_nbackup
 #define VER_FILEDESC "Physical Backup Management tool"
 
