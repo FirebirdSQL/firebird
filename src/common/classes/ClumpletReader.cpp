@@ -301,17 +301,6 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 	case InfoItems:
 		return SingleTpb;
 	case SpbStart:
-		switch(tag)
-		{
-		case isc_spb_auth_block:
-		case isc_spb_trusted_auth:
-		case isc_spb_auth_plugin_name:
-		case isc_spb_auth_plugin_list:
-			return Wide;
-		default:
-			// continues with spbState below
-			break;
-		}
 		switch (spbState)
 		{
 		case 0:
