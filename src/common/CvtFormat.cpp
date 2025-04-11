@@ -38,6 +38,7 @@
 #include <string_view>
 #include <charconv>
 #include <algorithm>
+#include <optional>
 
 using namespace Firebird;
 
@@ -1187,7 +1188,7 @@ namespace
 
 		const char* begin = str + offset;
 		std::from_chars_result conversionResult = std::from_chars(begin, str + offset + parseLength, number);
-		if (conversionResult.ec == std::error_code{})
+		if (conversionResult.ec == std::errc())
 		{
 			offset += conversionResult.ptr - begin;
 			return number * sign;
