@@ -62,11 +62,11 @@ public:
 		return t2;
 	}
 protected:
-	[[noreturn]] virtual void usage_mistake(const char* what) const
+	virtual void usage_mistake(const char* what) const
 	{
 		fatal_exception::raiseFmt("Internal error when using clumplet API: %s", what);
 	}
-	[[noreturn]] virtual void invalid_structure(const char* what, const int data) const
+	virtual void invalid_structure(const char* what, const int data) const
 	{
 		fatal_exception::raiseFmt("Invalid clumplet buffer structure: %s (%d)", what, data);
 	}
