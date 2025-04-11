@@ -425,21 +425,21 @@ void ClumpletWriter::insertBytesLengthCheck(UCHAR tag, const void* bytes, const 
 		dynamic_buffer.insert(cur_offset++, static_cast<UCHAR>(length));
 		break;
 	case 2:
-	{
-		UCHAR b[2];
-		toVaxInteger(b, sizeof(b), length);
-		dynamic_buffer.insert(cur_offset, b, sizeof(b));
-		cur_offset += 2;
-	}
-	break;
+		{
+			UCHAR b[2];
+			toVaxInteger(b, sizeof(b), length);
+			dynamic_buffer.insert(cur_offset, b, sizeof(b));
+			cur_offset += 2;
+		}
+		break;
 	case 4:
-	{
-		UCHAR b[4];
-		toVaxInteger(b, sizeof(b), length);
-		dynamic_buffer.insert(cur_offset, b, sizeof(b));
-		cur_offset += 4;
-	}
-	break;
+		{
+			UCHAR b[4];
+			toVaxInteger(b, sizeof(b), length);
+			dynamic_buffer.insert(cur_offset, b, sizeof(b));
+			cur_offset += 4;
+		}
+		break;
 	default:
 		fb_assert(lenSize >= 0 && lenSize <= 2 || lenSize == 4);
 		return;
