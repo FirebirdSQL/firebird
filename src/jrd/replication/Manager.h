@@ -103,6 +103,7 @@ namespace Replication
 		Firebird::Semaphore m_workingSemaphore;
 
 		const Replication::Config* const m_config;
+		std::optional<Firebird::Guid> m_guid;
 		Firebird::Array<SyncReplica*> m_replicas;
 		Firebird::Array<Firebird::UCharBuffer*> m_buffers;
 		Firebird::Mutex m_buffersMutex;
