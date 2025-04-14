@@ -348,11 +348,11 @@ public:
 
 struct RBlobInfo
 {
-	bool	valid{};
-	UCHAR	blob_type{ isc_blob_untyped };
-	ULONG	num_segments{};
-	ULONG	max_segment{};
-	FB_UINT64	total_length{};
+	bool	valid = false;
+	UCHAR	blob_type = isc_blob_untyped;
+	ULONG	num_segments = 0;
+	ULONG	max_segment = 0;
+	FB_UINT64	total_length = 0;
 
 	// parse into response into m_info, assume buffer contains all known info items
 	void parseInfo(unsigned int bufferLength, const unsigned char* buffer);
