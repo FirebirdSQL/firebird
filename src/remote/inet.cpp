@@ -79,7 +79,7 @@
 
 
 #ifdef	WIN_NT
-constexpr int FD_SETSIZE = 2048;
+#define FD_SETSIZE 2048
 #endif
 
 #ifndef WIN_NT
