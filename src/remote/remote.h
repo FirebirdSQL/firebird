@@ -349,7 +349,7 @@ public:
 struct RBlobInfo
 {
 	bool	valid{};
-	UCHAR	blob_type{};
+	UCHAR	blob_type{ isc_blob_untyped };
 	ULONG	num_segments{};
 	ULONG	max_segment{};
 	FB_UINT64	total_length{};
