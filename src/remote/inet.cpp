@@ -1519,7 +1519,7 @@ static rem_port* aux_connect(rem_port* port, PACKET* packet)
 		if (port->port_channel == INVALID_SOCKET)
 			return NULL;
 
-		SOCKET n = os_utils::accept(port->port_channel, NULL, NULL);
+		const SOCKET n = os_utils::accept(port->port_channel, NULL, NULL);
 		inetErrNo = INET_ERRNO;
 
 		if (n == INVALID_SOCKET)
