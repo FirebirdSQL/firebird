@@ -955,7 +955,7 @@ rem_port* INET_connect(const TEXT* name,
 	// Prepare hints
 	const bool ipv6 = os_utils::isIPv6supported();
 
-	struct addrinfo gai_hints {};
+	addrinfo gai_hints {};
 	if (packet)
 		gai_hints.ai_family = af;
 	else
@@ -1107,7 +1107,7 @@ static rem_port* listener_socket(rem_port* port, USHORT flag, const addrinfo* pa
 
 	if (flag & SRVR_multi_client)
 	{
-		const struct linger lingerInfo {};
+		const linger lingerInfo {};
 
 		// Get any values for SO_LINGER so that they can be reset during
 		// disconnect.  SO_LINGER should be set by default on the socket
@@ -1490,7 +1490,8 @@ static rem_port* aux_connect(rem_port* port, PACKET* packet)
 
 	if (port->port_server_flags)
 	{
-		struct timeval timeout { port->port_connect_timeout, 0 };
+		timeval timeout {};
+		timeout.tv_sec = port->port_connect_timeout;
 
 		Select slct;
 		slct.set(port->port_channel);
@@ -2300,7 +2301,7 @@ static bool select_wait( rem_port* main_port, Select* selct)
 						// in current fdset. Search and return it to caller to close
 						// broken connection correctly
 
-						struct linger lngr {};
+						linger lngr {};
 						socklen_t optlen = sizeof(lngr);
 #ifdef WIN_NT
 						constexpr bool badSocket = false;
@@ -2359,7 +2360,8 @@ static bool select_wait( rem_port* main_port, Select* selct)
 
 			// Some platforms change the timeout in the select call.
 			// Reset timeout for each iteration to avoid problems.
-			struct timeval timeout { SELECT_TIMEOUT, 0 };
+			timeval timeout {};
+			timeout.tv_sec = SELECT_TIMEOUT;
 			selct->select(&timeout);
 			const int inetErrNo = INET_ERRNO;
 
