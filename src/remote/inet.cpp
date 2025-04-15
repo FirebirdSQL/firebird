@@ -1543,7 +1543,7 @@ static rem_port* aux_connect(rem_port* port, PACKET* packet)
 	port->port_async = new_port;
 	new_port->port_dummy_packet_interval = port->port_dummy_packet_interval;
 	new_port->port_dummy_timeout = new_port->port_dummy_packet_interval;
-	const P_RESP* response = &packet->p_resp;
+	P_RESP* response = &packet->p_resp;
 
 	// NJK - Determine address and port to use.
 	//
