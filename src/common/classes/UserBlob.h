@@ -109,9 +109,9 @@ inline bool UserBlob::getData(FB_SIZE_T len, void* buffer, FB_SIZE_T& real_len)
 }
 
 bool getBlobSize(	const UserBlob& b,
-					SLONG* size,
-					SLONG* seg_count,
-					SLONG* max_seg);
+					FB_UINT64* size,
+					ULONG* seg_count,
+					USHORT* max_seg);
 
 #endif // FB_USER_BLOB_H
 

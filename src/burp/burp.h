@@ -954,6 +954,12 @@ public:
 	}
 };
 
+// forward declarations
+namespace Burp
+{
+	class BurpTaskItem;
+};
+
 class BurpGlobals : public Firebird::ThreadData, public GblPool
 {
 public:
@@ -1205,7 +1211,7 @@ public:
 	Firebird::Array<UCHAR> gbl_dpb_data;
 	Firebird::UtilSvc* uSvc;
 	bool master;			// set for master thread only
-	void* taskItem;			// current task item, if any
+	Burp::BurpTaskItem* taskItem;			// current task item, if any.
 	ULONG verboseInterval;	// How many records should be backed up or restored before we show this message
 	bool flag_on_line;		// indicates whether we will bring the database on-line
 	bool firstMap;			// this is the first time we entered get_mapping()
@@ -1227,6 +1233,9 @@ public:
 	bool gbl_stat_header;				// true, if stats header was printed
 	bool gbl_stat_done;					// true, if main process is done, stop to collect db-level stats
 	SINT64 gbl_stats[LAST_COUNTER];
+
+	bool gbl_use_no_auto_undo = true;
+	bool gbl_use_auto_release_temp_blobid = true;
 };
 
 // CVC: This aux routine declared here to not force inclusion of burp.h with burp_proto.h
@@ -1285,6 +1294,15 @@ public:
 		  tdgbl(g), stmt(nullptr)
 	{
 		stmt = tdgbl->db_handle->prepare(&tdgbl->throwStatus, tdgbl->tr_handle, 0, sql, 3, 0);
+	}
+
+	~BurpSql()
+	{
+		if (stmt)
+		{
+			stmt->free(&tdgbl->status_vector);
+			stmt->release();
+		}
 	}
 
 	template <typename M>

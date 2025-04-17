@@ -129,7 +129,7 @@ int main(int argc, char** argv)
 
 /*
  *	Print the status, the SQLCODE, and exit.
- *	Also, indicate which operation the error occured on.
+ *	Also, indicate which operation the error occurred on.
  */
 void pr_error(char* operation)
 {

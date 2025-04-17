@@ -121,7 +121,7 @@ Monitoring tables
       - MON$WIRE_ENCRYPTED (wire encryption enabled/disabled)
       - MON$WIRE_CRYPT_PLUGIN (name of wire encryption plugin)
       - MON$SESSION_TIMEZONE (time zone of attachment)
-      - MON$PARALLEL_WORKERS (number of parallel workes that could be used by attachment)
+      - MON$PARALLEL_WORKERS (number of parallel workers that could be used by attachment)
 
     MON$TRANSACTIONS (started transactions)
       - MON$TRANSACTION_ID (transaction ID)

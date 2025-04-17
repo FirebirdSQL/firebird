@@ -1869,7 +1869,7 @@ namespace Firebird
 		}
 	};
 
-#define FIREBIRD_ISTATEMENT_VERSION 5u
+#define FIREBIRD_ISTATEMENT_VERSION 6u
 
 	class IStatement : public IReferenceCounted
 	{
@@ -1891,6 +1891,8 @@ namespace Firebird
 			void (CLOOP_CARG *setTimeout)(IStatement* self, IStatus* status, unsigned timeOut) CLOOP_NOEXCEPT;
 			IBatch* (CLOOP_CARG *createBatch)(IStatement* self, IStatus* status, IMessageMetadata* inMetadata, unsigned parLength, const unsigned char* par) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *free)(IStatement* self, IStatus* status) CLOOP_NOEXCEPT;
+			unsigned (CLOOP_CARG *getMaxInlineBlobSize)(IStatement* self, IStatus* status) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *setMaxInlineBlobSize)(IStatement* self, IStatus* status, unsigned size) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -2062,6 +2064,33 @@ namespace Firebird
 			}
 			StatusType::clearException(status);
 			static_cast<VTable*>(this->cloopVTable)->free(this, status);
+			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> unsigned getMaxInlineBlobSize(StatusType* status)
+		{
+			if (cloopVTable->version < 6)
+			{
+				StatusType::setVersionError(status, "IStatement", cloopVTable->version, 6);
+				StatusType::checkException(status);
+				return 0;
+			}
+			StatusType::clearException(status);
+			unsigned ret = static_cast<VTable*>(this->cloopVTable)->getMaxInlineBlobSize(this, status);
+			StatusType::checkException(status);
+			return ret;
+		}
+
+		template <typename StatusType> void setMaxInlineBlobSize(StatusType* status, unsigned size)
+		{
+			if (cloopVTable->version < 6)
+			{
+				StatusType::setVersionError(status, "IStatement", cloopVTable->version, 6);
+				StatusType::checkException(status);
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->setMaxInlineBlobSize(this, status, size);
 			StatusType::checkException(status);
 		}
 	};
@@ -2499,7 +2528,7 @@ namespace Firebird
 		}
 	};
 
-#define FIREBIRD_IATTACHMENT_VERSION 5u
+#define FIREBIRD_IATTACHMENT_VERSION 6u
 
 	class IAttachment : public IReferenceCounted
 	{
@@ -2532,6 +2561,10 @@ namespace Firebird
 			IReplicator* (CLOOP_CARG *createReplicator)(IAttachment* self, IStatus* status) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *detach)(IAttachment* self, IStatus* status) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *dropDatabase)(IAttachment* self, IStatus* status) CLOOP_NOEXCEPT;
+			unsigned (CLOOP_CARG *getMaxBlobCacheSize)(IAttachment* self, IStatus* status) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *setMaxBlobCacheSize)(IAttachment* self, IStatus* status, unsigned size) CLOOP_NOEXCEPT;
+			unsigned (CLOOP_CARG *getMaxInlineBlobSize)(IAttachment* self, IStatus* status) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *setMaxInlineBlobSize)(IAttachment* self, IStatus* status, unsigned size) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -2798,6 +2831,60 @@ namespace Firebird
 			}
 			StatusType::clearException(status);
 			static_cast<VTable*>(this->cloopVTable)->dropDatabase(this, status);
+			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> unsigned getMaxBlobCacheSize(StatusType* status)
+		{
+			if (cloopVTable->version < 6)
+			{
+				StatusType::setVersionError(status, "IAttachment", cloopVTable->version, 6);
+				StatusType::checkException(status);
+				return 0;
+			}
+			StatusType::clearException(status);
+			unsigned ret = static_cast<VTable*>(this->cloopVTable)->getMaxBlobCacheSize(this, status);
+			StatusType::checkException(status);
+			return ret;
+		}
+
+		template <typename StatusType> void setMaxBlobCacheSize(StatusType* status, unsigned size)
+		{
+			if (cloopVTable->version < 6)
+			{
+				StatusType::setVersionError(status, "IAttachment", cloopVTable->version, 6);
+				StatusType::checkException(status);
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->setMaxBlobCacheSize(this, status, size);
+			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> unsigned getMaxInlineBlobSize(StatusType* status)
+		{
+			if (cloopVTable->version < 6)
+			{
+				StatusType::setVersionError(status, "IAttachment", cloopVTable->version, 6);
+				StatusType::checkException(status);
+				return 0;
+			}
+			StatusType::clearException(status);
+			unsigned ret = static_cast<VTable*>(this->cloopVTable)->getMaxInlineBlobSize(this, status);
+			StatusType::checkException(status);
+			return ret;
+		}
+
+		template <typename StatusType> void setMaxInlineBlobSize(StatusType* status, unsigned size)
+		{
+			if (cloopVTable->version < 6)
+			{
+				StatusType::setVersionError(status, "IAttachment", cloopVTable->version, 6);
+				StatusType::checkException(status);
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->setMaxInlineBlobSize(this, status, size);
 			StatusType::checkException(status);
 		}
 	};
@@ -3892,7 +3979,7 @@ namespace Firebird
 		}
 	};
 
-#define FIREBIRD_ICRYPT_KEY_CALLBACK_VERSION 3u
+#define FIREBIRD_ICRYPT_KEY_CALLBACK_VERSION 4u
 
 	class ICryptKeyCallback : public IVersioned
 	{
@@ -3902,6 +3989,8 @@ namespace Firebird
 			unsigned (CLOOP_CARG *callback)(ICryptKeyCallback* self, unsigned dataLength, const void* data, unsigned bufferLength, void* buffer) CLOOP_NOEXCEPT;
 			unsigned (CLOOP_CARG *afterAttach)(ICryptKeyCallback* self, IStatus* status, const char* dbName, const IStatus* attStatus) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *dispose)(ICryptKeyCallback* self) CLOOP_NOEXCEPT;
+			int (CLOOP_CARG *getHashLength)(ICryptKeyCallback* self, IStatus* status) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *getHashData)(ICryptKeyCallback* self, IStatus* status, void* hash) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -3947,6 +4036,33 @@ namespace Firebird
 				return;
 			}
 			static_cast<VTable*>(this->cloopVTable)->dispose(this);
+		}
+
+		template <typename StatusType> int getHashLength(StatusType* status)
+		{
+			if (cloopVTable->version < 4)
+			{
+				StatusType::setVersionError(status, "ICryptKeyCallback", cloopVTable->version, 4);
+				StatusType::checkException(status);
+				return -1;
+			}
+			StatusType::clearException(status);
+			int ret = static_cast<VTable*>(this->cloopVTable)->getHashLength(this, status);
+			StatusType::checkException(status);
+			return ret;
+		}
+
+		template <typename StatusType> void getHashData(StatusType* status, void* hash)
+		{
+			if (cloopVTable->version < 4)
+			{
+				StatusType::setVersionError(status, "ICryptKeyCallback", cloopVTable->version, 4);
+				StatusType::checkException(status);
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->getHashData(this, status, hash);
+			StatusType::checkException(status);
 		}
 	};
 
@@ -10525,6 +10641,8 @@ namespace Firebird
 					this->setTimeout = &Name::cloopsetTimeoutDispatcher;
 					this->createBatch = &Name::cloopcreateBatchDispatcher;
 					this->free = &Name::cloopfreeDispatcher;
+					this->getMaxInlineBlobSize = &Name::cloopgetMaxInlineBlobSizeDispatcher;
+					this->setMaxInlineBlobSize = &Name::cloopsetMaxInlineBlobSizeDispatcher;
 				}
 			} vTable;
 
@@ -10751,6 +10869,35 @@ namespace Firebird
 			}
 		}
 
+		static unsigned CLOOP_CARG cloopgetMaxInlineBlobSizeDispatcher(IStatement* self, IStatus* status) CLOOP_NOEXCEPT
+		{
+			StatusType status2(status);
+
+			try
+			{
+				return static_cast<Name*>(self)->Name::getMaxInlineBlobSize(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+				return static_cast<unsigned>(0);
+			}
+		}
+
+		static void CLOOP_CARG cloopsetMaxInlineBlobSizeDispatcher(IStatement* self, IStatus* status, unsigned size) CLOOP_NOEXCEPT
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::setMaxInlineBlobSize(&status2, size);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
 		static void CLOOP_CARG cloopaddRefDispatcher(IReferenceCounted* self) CLOOP_NOEXCEPT
 		{
 			try
@@ -10805,6 +10952,8 @@ namespace Firebird
 		virtual void setTimeout(StatusType* status, unsigned timeOut) = 0;
 		virtual IBatch* createBatch(StatusType* status, IMessageMetadata* inMetadata, unsigned parLength, const unsigned char* par) = 0;
 		virtual void free(StatusType* status) = 0;
+		virtual unsigned getMaxInlineBlobSize(StatusType* status) = 0;
+		virtual void setMaxInlineBlobSize(StatusType* status, unsigned size) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -11630,6 +11779,10 @@ namespace Firebird
 					this->createReplicator = &Name::cloopcreateReplicatorDispatcher;
 					this->detach = &Name::cloopdetachDispatcher;
 					this->dropDatabase = &Name::cloopdropDatabaseDispatcher;
+					this->getMaxBlobCacheSize = &Name::cloopgetMaxBlobCacheSizeDispatcher;
+					this->setMaxBlobCacheSize = &Name::cloopsetMaxBlobCacheSizeDispatcher;
+					this->getMaxInlineBlobSize = &Name::cloopgetMaxInlineBlobSizeDispatcher;
+					this->setMaxInlineBlobSize = &Name::cloopsetMaxInlineBlobSizeDispatcher;
 				}
 			} vTable;
 
@@ -12014,6 +12167,64 @@ namespace Firebird
 			}
 		}
 
+		static unsigned CLOOP_CARG cloopgetMaxBlobCacheSizeDispatcher(IAttachment* self, IStatus* status) CLOOP_NOEXCEPT
+		{
+			StatusType status2(status);
+
+			try
+			{
+				return static_cast<Name*>(self)->Name::getMaxBlobCacheSize(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+				return static_cast<unsigned>(0);
+			}
+		}
+
+		static void CLOOP_CARG cloopsetMaxBlobCacheSizeDispatcher(IAttachment* self, IStatus* status, unsigned size) CLOOP_NOEXCEPT
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::setMaxBlobCacheSize(&status2, size);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
+		static unsigned CLOOP_CARG cloopgetMaxInlineBlobSizeDispatcher(IAttachment* self, IStatus* status) CLOOP_NOEXCEPT
+		{
+			StatusType status2(status);
+
+			try
+			{
+				return static_cast<Name*>(self)->Name::getMaxInlineBlobSize(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+				return static_cast<unsigned>(0);
+			}
+		}
+
+		static void CLOOP_CARG cloopsetMaxInlineBlobSizeDispatcher(IAttachment* self, IStatus* status, unsigned size) CLOOP_NOEXCEPT
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::setMaxInlineBlobSize(&status2, size);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
 		static void CLOOP_CARG cloopaddRefDispatcher(IReferenceCounted* self) CLOOP_NOEXCEPT
 		{
 			try
@@ -12079,6 +12290,10 @@ namespace Firebird
 		virtual IReplicator* createReplicator(StatusType* status) = 0;
 		virtual void detach(StatusType* status) = 0;
 		virtual void dropDatabase(StatusType* status) = 0;
+		virtual unsigned getMaxBlobCacheSize(StatusType* status) = 0;
+		virtual void setMaxBlobCacheSize(StatusType* status, unsigned size) = 0;
+		virtual unsigned getMaxInlineBlobSize(StatusType* status) = 0;
+		virtual void setMaxInlineBlobSize(StatusType* status, unsigned size) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -14426,6 +14641,8 @@ namespace Firebird
 					this->callback = &Name::cloopcallbackDispatcher;
 					this->afterAttach = &Name::cloopafterAttachDispatcher;
 					this->dispose = &Name::cloopdisposeDispatcher;
+					this->getHashLength = &Name::cloopgetHashLengthDispatcher;
+					this->getHashData = &Name::cloopgetHashDataDispatcher;
 				}
 			} vTable;
 
@@ -14471,6 +14688,35 @@ namespace Firebird
 				StatusType::catchException(0);
 			}
 		}
+
+		static int CLOOP_CARG cloopgetHashLengthDispatcher(ICryptKeyCallback* self, IStatus* status) CLOOP_NOEXCEPT
+		{
+			StatusType status2(status);
+
+			try
+			{
+				return static_cast<Name*>(self)->Name::getHashLength(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+				return static_cast<int>(0);
+			}
+		}
+
+		static void CLOOP_CARG cloopgetHashDataDispatcher(ICryptKeyCallback* self, IStatus* status, void* hash) CLOOP_NOEXCEPT
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::getHashData(&status2, hash);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
 	};
 
 	template <typename Name, typename StatusType, typename Base = IVersionedImpl<Name, StatusType, Inherit<ICryptKeyCallback> > >
@@ -14494,6 +14740,8 @@ namespace Firebird
 		virtual void dispose()
 		{
 		}
+		virtual int getHashLength(StatusType* status) = 0;
+		virtual void getHashData(StatusType* status, void* hash) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>

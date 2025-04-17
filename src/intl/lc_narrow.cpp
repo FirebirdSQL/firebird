@@ -718,7 +718,7 @@ static SSHORT old_fam2_compare(texttype* obj, ULONG l1, const BYTE* s1,
 
 /*
  * Debugging only
- * Routine used for comparing results from comparision algorithm
+ * Routine used for comparing results from comparison algorithm
  * to results from key creation algorithm
  */
 static SSHORT fam2_compare(texttype* obj, ULONG l1, const BYTE* s1,

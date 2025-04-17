@@ -31,6 +31,7 @@
 #include "firebird.h"
 #include "../common/classes/alloc.h"
 #include "../common/classes/array.h"
+#include "../common/classes/condition.h"
 #include "../common/classes/fb_string.h"
 #include "../common/classes/GenericMap.h"
 #include "../common/classes/init.h"
@@ -43,10 +44,13 @@
 namespace Jrd
 {
 
+class WorkerAttachment;
+
 class WorkerStableAttachment : public SysStableAttachment
 {
 public:
-	static WorkerStableAttachment* create(FbStatusVector* status, Jrd::Database* dbb);
+	static WorkerStableAttachment* create(FbStatusVector* status, Database* dbb, JProvider* provider,
+		WorkerAttachment* workers);
 
 	void fini();
 
@@ -54,8 +58,10 @@ protected:
 	virtual void doOnIdleTimer(Firebird::TimerImpl* timer);
 
 private:
-	explicit WorkerStableAttachment(FbStatusVector* status, Jrd::Attachment* att);
+	explicit WorkerStableAttachment(FbStatusVector* status, Jrd::Attachment* att, WorkerAttachment* workers);
 	virtual ~WorkerStableAttachment();
+
+	WorkerAttachment* m_workers;
 };
 
 
@@ -77,6 +83,8 @@ private:
 
 class WorkerAttachment
 {
+	friend class WorkerStableAttachment;
+
 public:
 	explicit WorkerAttachment();
 
@@ -93,9 +101,13 @@ public:
 
 private:
 	static WorkerAttachment* getByName(const Firebird::PathName& dbname);
-	static Jrd::StableAttachmentPart* doAttach(FbStatusVector* status, Jrd::Database* dbb);
+	Jrd::StableAttachmentPart* doAttach(FbStatusVector* status, Jrd::Database* dbb);
 	static void doDetach(FbStatusVector* status, Jrd::StableAttachmentPart* sAtt);
 	void clear(bool checkRefs);
+
+	void incWorkers();
+	void decWorkers();
+	void waitForWorkers();
 
 
 	typedef Firebird::GenericMap<Firebird::Pair<Firebird::Left<Firebird::PathName, WorkerAttachment*> > >
@@ -109,7 +121,15 @@ private:
 	Firebird::HalfStaticArray<Jrd::StableAttachmentPart*, 8> m_idleAtts;
 	Firebird::SortedArray<Jrd::StableAttachmentPart*,
 		Firebird::InlineStorage<Jrd::StableAttachmentPart*, 8> > m_activeAtts;
-	int m_cntUserAtts;
+
+	// count of regular user attachments, used with non-shared Database
+	int m_cntUserAtts = 0;
+
+	// count of internal worker attachments, used with shared Database
+	int m_cntWorkers = 0;
+
+	// used to wait for "no internal workers" condition
+	Firebird::Condition m_noWorkers;
 };
 
 } // namespace Jrd

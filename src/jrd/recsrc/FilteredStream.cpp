@@ -50,9 +50,13 @@ FilteredStream::FilteredStream(CompilerScratch* csb, RecordSource* next,
 
 	m_impure = csb->allocImpure<Impure>();
 
-	const auto cardinality = next->getCardinality();
-	Optimizer::adjustSelectivity(selectivity, MAXIMUM_SELECTIVITY, cardinality);
-	m_cardinality = cardinality * selectivity;
+	auto cardinality = next->getCardinality();
+	if (selectivity)
+	{
+		Optimizer::adjustSelectivity(selectivity, MAXIMUM_SELECTIVITY, cardinality);
+		cardinality *= selectivity;
+	}
+	m_cardinality = cardinality;
 }
 
 void FilteredStream::internalOpen(thread_db* tdbb) const
@@ -144,6 +148,14 @@ void FilteredStream::markRecursive()
 void FilteredStream::findUsedStreams(StreamList& streams, bool expandAll) const
 {
 	m_next->findUsedStreams(streams, expandAll);
+}
+
+bool FilteredStream::isDependent(const StreamList& streams) const
+{
+	if (m_anyBoolean && m_anyBoolean->containsAnyStream(streams))
+		return true;
+
+	return m_boolean->containsAnyStream(streams) || m_next->isDependent(streams);
 }
 
 void FilteredStream::invalidateRecords(Request* request) const

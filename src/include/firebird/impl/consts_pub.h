@@ -133,6 +133,8 @@
 #define isc_dpb_parallel_workers		 100
 #define isc_dpb_worker_attach			 101
 #define isc_dpb_owner					 102
+#define isc_dpb_max_blob_cache_size		 103
+#define isc_dpb_max_inline_blob_size	 104
 
 
 /**************************************************/
@@ -268,6 +270,7 @@
 #define isc_tpb_lock_timeout              21
 #define isc_tpb_read_consistency          22
 #define isc_tpb_at_snapshot_number        23
+#define isc_tpb_auto_release_temp_blobid  24
 
 
 /************************/

@@ -18,6 +18,12 @@
     <ClCompile Include="..\..\..\src\common\tests\CommonTest.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\common\tests\CvtTest.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\common\tests\StringTest.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\common\classes\tests\AlignerTest.cpp">
       <Filter>source</Filter>
     </ClCompile>
@@ -28,6 +34,12 @@
       <Filter>source</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\yvalve\gds.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\common\classes\tests\ClumpletTest.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\common\classes\tests\VectorTest.cpp">
       <Filter>source</Filter>
     </ClCompile>
   </ItemGroup>

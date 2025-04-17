@@ -94,10 +94,10 @@ TracePluginImpl::TracePluginImpl(IPluginBase* plugin,
 	logWriter(initInfo->getLogWriter()),
 	config(configuration),
 	record(*getDefaultMemoryPool()),
-	connections(getDefaultMemoryPool()),
-	transactions(getDefaultMemoryPool()),
-	statements(getDefaultMemoryPool()),
-	services(getDefaultMemoryPool()),
+	connections(*getDefaultMemoryPool()),
+	transactions(*getDefaultMemoryPool()),
+	statements(*getDefaultMemoryPool()),
+	services(*getDefaultMemoryPool()),
 	routines(*getDefaultMemoryPool()),
 	include_codes(*getDefaultMemoryPool()),
 	exclude_codes(*getDefaultMemoryPool())
@@ -829,13 +829,19 @@ void TracePluginImpl::appendParams(ITraceParams* params)
 		switch (parameters->dsc_dtype)
 		{
 			case dtype_text:
-				paramtype.printf("char(%d)", parameters->dsc_length);
+				if (parameters->getTextType() == fb_text_subtype_binary)
+					paramtype.printf("binary(%d)", parameters->dsc_length);
+				else
+					paramtype.printf("char(%d)", parameters->dsc_length);
 				break;
 			case dtype_cstring:
 				paramtype.printf("cstring(%d)", parameters->dsc_length - 1);
 				break;
 			case dtype_varying:
-				paramtype.printf("varchar(%d)", parameters->dsc_length - 2);
+				if (parameters->getTextType() == fb_text_subtype_binary)
+					paramtype.printf("varbinary(%d)", parameters->dsc_length - 2);
+				else
+					paramtype.printf("varchar(%d)", parameters->dsc_length - 2);
 				break;
 			case dtype_blob:
 				paramtype = "blob";
@@ -1818,7 +1824,7 @@ void TracePluginImpl::register_sql_statement(ITraceSQLStatement* statement)
 		stmt_data.description = FB_NEW_POOL(*getDefaultMemoryPool()) string(*getDefaultMemoryPool());
 
 		if (stmt_data.id) {
-			stmt_data.description->printf(NEWLINE "Statement %d:", stmt_data.id);
+			stmt_data.description->printf(NEWLINE "Statement %" SQUADFORMAT":", stmt_data.id);
 		}
 
 		string temp(*getDefaultMemoryPool());

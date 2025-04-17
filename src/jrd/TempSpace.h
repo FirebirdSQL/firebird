@@ -182,19 +182,37 @@ private:
 	class Segment
 	{
 	public:
-		Segment() : position(0), size(0)
-		{}
-
 		Segment(offset_t aPosition, offset_t aSize) :
-			position(aPosition), size(aSize)
+			position(aPosition), size(aSize), prev(nullptr), next(nullptr)
 		{}
 
 		offset_t position;
 		offset_t size;
+		Segment* prev;
+		Segment* next;
 
-		static const offset_t& generate(const void* /*sender*/, const Segment& segment)
+		static const offset_t& generate(const void* /*sender*/, const Segment* segment)
 		{
-			return segment.position;
+			return segment->position;
+		}
+	};
+
+	class SegmentsStack
+	{
+	public:
+		SegmentsStack() : size(0), tail(nullptr)
+		{}
+
+		SegmentsStack(offset_t aSize, Segment* aSegment) :
+			size(aSize), tail(aSegment)
+		{}
+
+		offset_t size;
+		Segment* tail;
+
+		static const offset_t& generate(const void* /*sender*/, const SegmentsStack& segment)
+		{
+			return segment.size;
 		}
 	};
 
@@ -209,8 +227,28 @@ private:
 	Firebird::Array<UCHAR> initialBuffer;
 	bool initiallyDynamic;
 
-	typedef Firebird::BePlusTree<Segment, offset_t, MemoryPool, Segment> FreeSegmentTree;
+	typedef Firebird::BePlusTree<Segment*, offset_t, Segment> FreeSegmentTree;
+	typedef Firebird::BePlusTree<SegmentsStack, offset_t, SegmentsStack> FreeSegmentsStackTree;
+
+	class FreeSegmentBySize
+	{
+		friend bool TempSpace::validate(offset_t& freeSize) const;
+
+	public:
+		FreeSegmentBySize(MemoryPool& pool)
+				: m_items(pool)
+		{}
+
+		void addSegment(Segment* const segment);
+		void removeSegment(Segment* const segment);
+		Segment* getSegment(FB_SIZE_T size);
+
+	private:
+		FreeSegmentsStackTree m_items;
+	};
+
 	FreeSegmentTree freeSegments;
+	FreeSegmentBySize freeSegmentsBySize;
 
 	static Firebird::GlobalPtr<Firebird::Mutex> initMutex;
 	static Firebird::TempDirectoryList* tempDirs;

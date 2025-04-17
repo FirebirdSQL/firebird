@@ -56,6 +56,67 @@
 
 using namespace Firebird;
 
+namespace
+{
+
+// Convert text descriptor into UTF8 string.
+// Binary data converted into HEX representation.
+bool descToUTF8(const dsc* param, string& result)
+{
+	UCHAR* address;
+	USHORT length;
+
+	switch (param->dsc_dtype)
+	{
+	case dtype_text:
+		address = param->dsc_address;
+		length = param->dsc_length;
+		break;
+
+	case dtype_varying:
+		address = param->dsc_address + sizeof(USHORT);
+		length = *(USHORT*) param->dsc_address;
+		fb_assert(length <= param->dsc_length - 2);
+		break;
+
+	default:
+		return false;
+	}
+
+	if (param->getCharSet() == CS_BINARY)
+	{
+		// Convert OCTETS and [VAR]BINARY to HEX string
+
+		char* hex = result.getBuffer(length * 2);
+
+		for (const UCHAR* p = address; p < address + length; p++)
+		{
+			UCHAR c = (*p & 0xF0) >> 4;
+			*hex++ = c + (c < 10 ? '0' : 'A' - 10);
+
+			c = (*p & 0x0F);
+			*hex++ = c + (c < 10 ? '0' : 'A' - 10);
+		}
+		return result.c_str();
+	}
+
+	string src(address, length);
+
+	try
+	{
+		if (!Jrd::DataTypeUtil::convertToUTF8(src, result, param->dsc_sub_type, status_exception::raise))
+			result = src;
+	}
+	catch (const Firebird::Exception&)
+	{
+		result = src;
+	}
+
+	return true;
+}
+
+} // namespace
+
 namespace Jrd {
 
 const char* StatementHolder::ensurePlan(bool explained)
@@ -287,38 +348,11 @@ const dsc* TraceSQLStatementImpl::DSQLParamsImpl::getParam(FB_SIZE_T idx)
 const char* TraceSQLStatementImpl::DSQLParamsImpl::getTextUTF8(CheckStatusWrapper* status, FB_SIZE_T idx)
 {
 	const dsc* param = getParam(idx);
-	UCHAR* address;
-	USHORT length;
 
-	switch (param->dsc_dtype)
-	{
-	case dtype_text:
-		address = param->dsc_address;
-		length = param->dsc_length;
-		break;
+	if (descToUTF8(param, m_tempUTF8))
+		return m_tempUTF8.c_str();
 
-	case dtype_varying:
-		address = param->dsc_address + sizeof(USHORT);
-		length = *(USHORT*) param->dsc_address;
-		break;
-
-	default:
-		return NULL;
-	}
-
-	string src(address, length);
-
-	try
-	{
-		if (!DataTypeUtil::convertToUTF8(src, temp_utf8_text, param->dsc_sub_type, status_exception::raise))
-			temp_utf8_text = src;
-	}
-	catch (const Firebird::Exception&)
-	{
-		temp_utf8_text = src;
-	}
-
-	return temp_utf8_text.c_str();
+	return nullptr;
 }
 
 
@@ -351,38 +385,11 @@ const dsc* TraceParamsImpl::getParam(FB_SIZE_T idx)
 const char* TraceParamsImpl::getTextUTF8(CheckStatusWrapper* status, FB_SIZE_T idx)
 {
 	const dsc* param = getParam(idx);
-	UCHAR* address;
-	USHORT length;
 
-	switch (param->dsc_dtype)
-	{
-	case dtype_text:
-		address = param->dsc_address;
-		length = param->dsc_length;
-		break;
+	if (descToUTF8(param, m_tempUTF8))
+		return m_tempUTF8.c_str();
 
-	case dtype_varying:
-		address = param->dsc_address + sizeof(USHORT);
-		length = *(USHORT*) param->dsc_address;
-		break;
-
-	default:
-		return NULL;
-	}
-
-	string src(address, length);
-
-	try
-	{
-		if (!DataTypeUtil::convertToUTF8(src, temp_utf8_text, param->dsc_sub_type, status_exception::raise))
-			temp_utf8_text = src;
-	}
-	catch (const Firebird::Exception&)
-	{
-		temp_utf8_text = src;
-	}
-
-	return temp_utf8_text.c_str();
+	return nullptr;
 }
 
 

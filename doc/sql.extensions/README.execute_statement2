@@ -104,7 +104,7 @@ Syntax and notes :
 - Exceptions handling
 	a) if ON EXTERNAL DATA SOURCE clause is present then error information is interpreted 
 		by the Firebird itself and wrapped into Firebird own error (isc_eds_connection or 
-		isc_eds_statement). This is necessary as in general user application can't interprete
+		isc_eds_statement). This is necessary as in general user application can't interpret
 		or understand error codes provided by (unknown) external data source. Text of 
 		interpreted remote error contains both error codes and corresponding messages.
 		

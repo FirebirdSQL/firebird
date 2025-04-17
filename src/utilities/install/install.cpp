@@ -187,7 +187,7 @@ USHORT CLIENT_install(const TEXT * rootdir, USHORT client, bool sw_force, err_ha
 			// Success deleting the target, MoveFile should now succeed.
 			if (MoveFile(workfile, target) != 0)
 			{
-				// Successfull !
+				// Successful !
 				IncrementSharedCount(target, err_handler);
 				return FB_SUCCESS;
 			}

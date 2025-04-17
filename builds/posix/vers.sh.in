@@ -21,7 +21,7 @@
 #  Contributor(s): ______________________________________.
 #
 
-# Different echo versions interprete backslash escapes differently.
+# Different echo versions interpret backslash escapes differently.
 # To avoid related problems lets have:
 TAB="	"
 

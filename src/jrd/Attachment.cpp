@@ -47,6 +47,7 @@
 #include "../jrd/replication/Applier.h"
 #include "../jrd/replication/Manager.h"
 
+#include "../dsql/DsqlBatch.h"
 #include "../dsql/DsqlStatementCache.h"
 
 #include "../common/classes/fb_string.h"
@@ -288,9 +289,6 @@ Jrd::Attachment::~Attachment()
 
 	delete att_trace_manager;
 
-	for (unsigned n = 0; n < att_batches.getCount(); ++n)
-		att_batches[n]->resetHandle();
-
 	for (Function** iter = att_functions.begin(); iter < att_functions.end(); ++iter)
 	{
 		Function* const function = *iter;
@@ -447,6 +445,12 @@ void Jrd::Attachment::storeBinaryBlob(thread_db* tdbb, jrd_tra* transaction,
 	}
 
 	blob->BLB_close(tdbb);
+}
+
+void Jrd::Attachment::releaseBatches()
+{
+	while (att_batches.hasData())
+		delete att_batches.pop();
 }
 
 void Jrd::Attachment::releaseGTTs(thread_db* tdbb)

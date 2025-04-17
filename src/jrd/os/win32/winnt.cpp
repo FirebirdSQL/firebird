@@ -106,7 +106,7 @@ using namespace Firebird;
 #define TEXT		SCHAR
 
 static bool	maybeCloseFile(HANDLE&);
-static jrd_file* seek_file(jrd_file*, BufferDesc*, OVERLAPPED*);
+static bool seek_file(jrd_file*, BufferDesc*, OVERLAPPED*);
 static jrd_file* setup_file(Database*, const Firebird::PathName&, HANDLE, USHORT);
 static bool nt_error(const TEXT*, const jrd_file*, ISC_STATUS, FbStatusVector* const);
 
@@ -121,39 +121,7 @@ static const DWORD g_dwExtraTempFlags = FILE_ATTRIBUTE_TEMPORARY |
 										FILE_FLAG_DELETE_ON_CLOSE;
 
 
-int PIO_add_file(thread_db* tdbb, jrd_file* main_file, const Firebird::PathName& file_name, SLONG start)
-{
-/**************************************
- *
- *	P I O _ a d d _ f i l e
- *
- **************************************
- *
- * Functional description
- *	Add a file to an existing database.  Return the sequence
- *	number of the new file.  If anything goes wrong, return a
- *	sequence of 0.
- *
- **************************************/
-	jrd_file* const new_file = PIO_create(tdbb, file_name, false, false);
-	if (!new_file)
-		return 0;
-
-	new_file->fil_min_page = start;
-	USHORT sequence = 1;
-
-	jrd_file* file;
-	for (file = main_file; file->fil_next; file = file->fil_next)
-		++sequence;
-
-	file->fil_max_page = start - 1;
-	file->fil_next = new_file;
-
-	return sequence;
-}
-
-
-void PIO_close(jrd_file* main_file)
+void PIO_close(jrd_file* file)
 {
 /**************************************
  *
@@ -164,10 +132,7 @@ void PIO_close(jrd_file* main_file)
  * Functional description
  *
  **************************************/
-	for (jrd_file* file = main_file; file; file = file->fil_next)
-	{
-		maybeCloseFile(file->fil_desc);
-	}
+	maybeCloseFile(file->fil_desc);
 }
 
 
@@ -251,7 +216,7 @@ bool PIO_expand(const TEXT* file_name, USHORT file_length, TEXT* expanded_name, 
 }
 
 
-void PIO_extend(thread_db* tdbb, jrd_file* main_file, const ULONG extPages, const USHORT pageSize)
+void PIO_extend(thread_db* tdbb, jrd_file* file, const ULONG extPages, const USHORT pageSize)
 {
 /**************************************
  *
@@ -263,6 +228,8 @@ void PIO_extend(thread_db* tdbb, jrd_file* main_file, const ULONG extPages, cons
  *	Extend file by extPages pages of pageSize size.
  *
  **************************************/
+	fb_assert(extPages);
+
 	// hvlad: prevent other reading\writing threads from changing file pointer.
 	// As we open file without FILE_FLAG_OVERLAPPED, ReadFile\WriteFile calls
 	// will change file pointer we set here and file truncation instead of file
@@ -271,42 +238,30 @@ void PIO_extend(thread_db* tdbb, jrd_file* main_file, const ULONG extPages, cons
 	// and read\write activity performed simultaneously)
 
 	// if file have no extend lock it is better to not extend file than corrupt it
-	if (!main_file->fil_ext_lock)
+	if (!file->fil_ext_lock)
 		return;
 
 	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
-	FileExtendLockGuard extLock(main_file->fil_ext_lock, true);
+	FileExtendLockGuard extLock(file->fil_ext_lock, true);
 
-	ULONG leftPages = extPages;
-	for (jrd_file* file = main_file; file && leftPages; file = file->fil_next)
-	{
-		const ULONG filePages = PIO_get_number_of_pages(file, pageSize);
-		const ULONG fileMaxPages = (file->fil_max_page == MAX_ULONG) ?
-									MAX_ULONG : file->fil_max_page - file->fil_min_page + 1;
-		if (filePages < fileMaxPages)
-		{
-			const ULONG extendBy = MIN(fileMaxPages - filePages + file->fil_fudge, leftPages);
+	const ULONG filePages = PIO_get_number_of_pages(file, pageSize);
+	const ULONG extendBy = MIN(MAX_ULONG - filePages, extPages);
 
-			HANDLE hFile = file->fil_desc;
+	const HANDLE hFile = file->fil_desc;
 
-			LARGE_INTEGER newSize;
-			newSize.QuadPart = ((ULONGLONG) filePages + extendBy) * pageSize;
+	LARGE_INTEGER newSize;
+	newSize.QuadPart = ((ULONGLONG) filePages + extendBy) * pageSize;
 
-			const DWORD ret = SetFilePointer(hFile, newSize.LowPart, &newSize.HighPart, FILE_BEGIN);
-			if (ret == INVALID_SET_FILE_POINTER && GetLastError() != NO_ERROR) {
-				nt_error("SetFilePointer", file, isc_io_write_err, NULL);
-			}
-			if (!SetEndOfFile(hFile)) {
-				nt_error("SetEndOfFile", file, isc_io_write_err, NULL);
-			}
+	const DWORD ret = SetFilePointer(hFile, newSize.LowPart, &newSize.HighPart, FILE_BEGIN);
+	if (ret == INVALID_SET_FILE_POINTER && GetLastError() != NO_ERROR)
+		nt_error("SetFilePointer", file, isc_io_write_err, NULL);
 
-			leftPages -= extendBy;
-		}
-	}
+	if (!SetEndOfFile(hFile))
+		nt_error("SetEndOfFile", file, isc_io_write_err, NULL);
 }
 
 
-void PIO_flush(thread_db* tdbb, jrd_file* main_file)
+void PIO_flush(thread_db* tdbb, jrd_file* file)
 {
 /**************************************
  *
@@ -320,7 +275,7 @@ void PIO_flush(thread_db* tdbb, jrd_file* main_file)
  **************************************/
 	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 
-	for (jrd_file* file = main_file; file; file = file->fil_next)
+	if (file->fil_desc != INVALID_HANDLE_VALUE)
 		FlushFileBuffers(file->fil_desc);
 }
 
@@ -374,7 +329,7 @@ void PIO_force_write(jrd_file* file, const bool forceWrite)
 }
 
 
-void PIO_header(thread_db* tdbb, UCHAR* address, int length)
+bool PIO_header(thread_db* tdbb, UCHAR* address, unsigned length)
 {
 /**************************************
  *
@@ -390,11 +345,11 @@ void PIO_header(thread_db* tdbb, UCHAR* address, int length)
  *  callers should not rely on this behavior
  *
  **************************************/
-	Database* const dbb = tdbb->getDatabase();
+	const auto dbb = tdbb->getDatabase();
 
-	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
-	jrd_file* file = pageSpace->file;
-	HANDLE desc = file->fil_desc;
+	PageSpace* const pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+	jrd_file* const file = pageSpace->file;
+	const HANDLE desc = file->fil_desc;
 
 	OVERLAPPED overlapped;
 	memset(&overlapped, 0, sizeof(OVERLAPPED));
@@ -406,10 +361,12 @@ void PIO_header(thread_db* tdbb, UCHAR* address, int length)
 	{
 		if (GetLastError() == ERROR_IO_PENDING)
 			ret = GetOverlappedResult(desc, &overlapped, &actual_length, TRUE);
+
+		if (!ret)
+			nt_error("ReadFile", file, isc_io_read_err, NULL);
 	}
 
-	if (!ret || (length != actual_length))
-		nt_error("ReadFile", file, isc_io_read_err, NULL);
+	return (length == actual_length);
 }
 
 // we need a class here only to return memory on shutdown and avoid
@@ -417,7 +374,7 @@ void PIO_header(thread_db* tdbb, UCHAR* address, int length)
 static Firebird::InitInstance<ZeroBuffer> zeros;
 
 
-USHORT PIO_init_data(thread_db* tdbb, jrd_file* main_file, FbStatusVector* status_vector,
+USHORT PIO_init_data(thread_db* tdbb, jrd_file* file, FbStatusVector* status_vector,
 					 ULONG startPage, USHORT initPages)
 {
 /**************************************
@@ -436,7 +393,7 @@ USHORT PIO_init_data(thread_db* tdbb, jrd_file* main_file, FbStatusVector* statu
 	Database* const dbb = tdbb->getDatabase();
 
 	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
-	FileExtendLockGuard extLock(main_file->fil_ext_lock, false);
+	FileExtendLockGuard extLock(file->fil_ext_lock, false);
 
 	// Fake buffer, used in seek_file. Page space ID doesn't matter there
 	// as we already know file to work with
@@ -444,16 +401,14 @@ USHORT PIO_init_data(thread_db* tdbb, jrd_file* main_file, FbStatusVector* statu
 	bdb.bdb_page = PageNumber(0, startPage);
 
 	OVERLAPPED overlapped;
-	jrd_file* file = seek_file(main_file, &bdb, &overlapped);
-
-	if (!file)
+	if (!seek_file(file, &bdb, &overlapped))
 		return 0;
 
-	if (file->fil_min_page + 8 > startPage)
+	if (startPage < 8)
 		return 0;
 
 	USHORT leftPages = initPages;
-	const ULONG initBy = MIN(file->fil_max_page - startPage, leftPages);
+	const ULONG initBy = MIN(MAX_ULONG - startPage, leftPages);
 	if (initBy < leftPages)
 		leftPages = initBy;
 
@@ -464,8 +419,8 @@ USHORT PIO_init_data(thread_db* tdbb, jrd_file* main_file, FbStatusVector* statu
 		if (write_pages > leftPages)
 			write_pages = leftPages;
 
-		jrd_file* file1 = seek_file(main_file, &bdb, &overlapped);
-		fb_assert(file1 == file);
+		if (!seek_file(file, &bdb, &overlapped))
+			return 0;
 
 		const DWORD to_write = (DWORD) write_pages * dbb->dbb_page_size;
 		DWORD written;
@@ -590,7 +545,7 @@ bool PIO_read(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page, 
 	FileExtendLockGuard extLock(file->fil_ext_lock, false);
 
 	OVERLAPPED overlapped;
-	if (!(file = seek_file(file, bdb, &overlapped)))
+	if (!seek_file(file, bdb, &overlapped))
 		return false;
 
 	HANDLE desc = file->fil_desc;
@@ -625,14 +580,12 @@ bool PIO_read_ahead(thread_db*	tdbb,
  **************************************
  *
  * Functional description
- *	Read a contiguous set of pages. The only
- *	tricky part is to segment the I/O when crossing
- *	file boundaries.
+ *	Read a contiguous set of pages.
  *
  **************************************/
 	OVERLAPPED overlapped, *overlapped_ptr;
 
-	Database* const dbb = tdbb->getDatabase();
+	const auto dbb = tdbb->getDatabase();
 
 	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 
@@ -647,60 +600,45 @@ bool PIO_read_ahead(thread_db*	tdbb,
 		piob->piob_flags = 0;
 	}
 
+	// Setup up a dummy buffer descriptor block for seeking file
 	BufferDesc bdb;
-	while (pages)
+	bdb.bdb_dbb = dbb;
+	bdb.bdb_page = start_page;
+
+	const jrd_file* const file = dbb->dbb_file;
+
+	if (!seek_file(file, &bdb, status_vector, overlapped_ptr, &overlapped_ptr))
+		return false;
+
+	const HANDLE desc = file->fil_desc;
+	const DWORD length = pages * dbb->dbb_page_size;
+
+	DWORD actual_length;
+	if (ReadFile(desc, buffer, length, &actual_length, overlapped_ptr) &&
+		actual_length == length)
 	{
-		// Setup up a dummy buffer descriptor block for seeking file.
-
-		bdb.bdb_dbb = dbb;
-		bdb.bdb_page = start_page;
-
-		jrd_file* file = seek_file(dbb->dbb_file, &bdb, status_vector, overlapped_ptr, &overlapped_ptr);
-		if (!file)
-			return false;
-
-		// Check that every page within the set resides in the same database
-		// file. If not read what you can and loop back for the rest.
-
-		DWORD segmented_length = 0;
-		while (pages && start_page >= file->fil_min_page && start_page <= file->fil_max_page)
-		{
-			segmented_length += dbb->dbb_page_size;
-			++start_page;
-			--pages;
-		}
-
-		HANDLE desc = file->fil_desc;
-
-		DWORD actual_length;
-		if (ReadFile(desc, buffer, segmented_length, &actual_length, overlapped_ptr) &&
-			actual_length == segmented_length)
-		{
-			if (piob && !pages)
-				piob->piob_flags = PIOB_success;
-		}
-		else if (piob && !pages)
-		{
-			piob->piob_flags = PIOB_pending;
-			piob->piob_desc = reinterpret_cast<SLONG>(desc);
-			piob->piob_file = file;
-			piob->piob_io_length = segmented_length;
-		}
-		else if (!GetOverlappedResult(desc, overlapped_ptr, &actual_length, TRUE) ||
-			actual_length != segmented_length)
-		{
-			if (piob)
-				piob->piob_flags = PIOB_error;
-
-			release_io_event(file, overlapped_ptr);
-			return nt_error("GetOverlappedResult", file, isc_io_read_err, status_vector);
-		}
-
-		if (!piob || (piob->piob_flags & (PIOB_success | PIOB_error)))
-			release_io_event(file, overlapped_ptr);
-
-		buffer += segmented_length;
+		if (piob)
+			piob->piob_flags = PIOB_success;
 	}
+	else if (piob)
+	{
+		piob->piob_flags = PIOB_pending;
+		piob->piob_desc = reinterpret_cast<SLONG>(desc);
+		piob->piob_file = file;
+		piob->piob_io_length = segmented_length;
+	}
+	else if (!GetOverlappedResult(desc, overlapped_ptr, &actual_length, TRUE) ||
+		actual_length != length)
+	{
+		if (piob)
+			piob->piob_flags = PIOB_error;
+
+		release_io_event(file, overlapped_ptr);
+		return nt_error("GetOverlappedResult", file, isc_io_read_err, status_vector);
+	}
+
+	if (!piob || (piob->piob_flags & (PIOB_success | PIOB_error)))
+		release_io_event(file, overlapped_ptr);
 
 	return true;
 }
@@ -767,8 +705,7 @@ bool PIO_write(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page,
 	FileExtendLockGuard extLock(file->fil_ext_lock, false);
 
 	OVERLAPPED overlapped;
-	file = seek_file(file, bdb, &overlapped);
-	if (!file)
+	if (!seek_file(file, bdb, &overlapped))
 		return false;
 
 	HANDLE desc = file->fil_desc;
@@ -813,9 +750,7 @@ ULONG PIO_get_number_of_pages(const jrd_file* file, const USHORT pagesize)
 }
 
 
-static jrd_file* seek_file(jrd_file*	file,
-					 	   BufferDesc*	bdb,
-					 	   OVERLAPPED*	overlapped)
+static bool seek_file(jrd_file*	file, BufferDesc* bdb, OVERLAPPED* overlapped)
 {
 /**************************************
  *
@@ -824,24 +759,11 @@ static jrd_file* seek_file(jrd_file*	file,
  **************************************
  *
  * Functional description
- *	Given a buffer descriptor block, find the appropriate
- *	file block and seek to the proper page in that file.
+ *	Given a buffer descriptor block, seek to the proper page in that file.
  *
  **************************************/
-	BufferControl *bcb = bdb->bdb_bcb;
-	ULONG page = bdb->bdb_page.getPageNum();
-
-	for (;; file = file->fil_next)
-	{
-		if (!file) {
-			CORRUPT(158);		// msg 158 database file not available
-		}
-		else if (page >= file->fil_min_page && page <= file->fil_max_page) {
-			break;
-		}
-	}
-
-	page -= file->fil_min_page - file->fil_fudge;
+	BufferControl* const bcb = bdb->bdb_bcb;
+	const ULONG page = bdb->bdb_page.getPageNum();
 
     LARGE_INTEGER liOffset;
 	liOffset.QuadPart = UInt32x32To64((DWORD) page, (DWORD) bcb->bcb_page_size);
@@ -854,7 +776,7 @@ static jrd_file* seek_file(jrd_file*	file,
 	ThreadSync* thd = ThreadSync::getThread(FB_FUNCTION);
 	overlapped->hEvent = thd->getIOEvent();
 
-	return file;
+	return true;
 }
 
 
@@ -876,7 +798,6 @@ static jrd_file* setup_file(Database* dbb, const Firebird::PathName& file_name, 
 	{
 		file = FB_NEW_RPT(*dbb->dbb_permanent, file_name.length() + 1) jrd_file();
 		file->fil_desc = desc;
-		file->fil_max_page = MAX_ULONG;
 		file->fil_flags = flags;
 		strcpy(file->fil_string, file_name.c_str());
 

@@ -408,6 +408,8 @@ void CMP_t_start( gpre_tra* trans)
 		*text++ = isc_tpb_autocommit;
 	if (trans->tra_flags & TRA_no_auto_undo)
 		*text++ = isc_tpb_no_auto_undo;
+	if (trans->tra_flags & TRA_auto_release_temp_blobid)
+		*text++ = isc_tpb_auto_release_temp_blobid;
 	*text = 0;
 	const USHORT tpb_len = text - tpb_buffer;
 

@@ -49,6 +49,15 @@ private:
 		int end;
 	};
 
+	// Possible section types
+	enum class SectionType
+	{
+		DATABASE,
+		DATABASE_NAME,
+		DATABASE_REGEX,
+		SERVICES
+	};
+
 private:
 	TraceCfgReader(const char* text, const Firebird::PathName& databaseName, TracePluginConfig& config) :
 		m_text(text),
@@ -61,6 +70,7 @@ private:
 	void expandPattern(const ConfigFile::Parameter* el, Firebird::PathName& valueToExpand);
 	bool parseBoolean(const ConfigFile::Parameter* el) const;
 	ULONG parseUInteger(const ConfigFile::Parameter* el) const;
+	SectionType parseSectionKey(const ConfigFile::Parameter* el) const;
 
 	const char* const m_text;
 	const Firebird::PathName& m_databaseName;

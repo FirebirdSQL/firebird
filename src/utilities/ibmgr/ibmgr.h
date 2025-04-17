@@ -122,11 +122,11 @@ const USHORT MSG_SSHUTFAIL	= 27;	// can not start server shutdown
 const USHORT MSG_SHUTOK		= 28;	// server shutdown completed
 const USHORT MSG_STARTERR	= 29;	// can not start server
 const USHORT MSG_STARTFAIL	= 30;	// can not start server
-const USHORT MSG_SRVUP		= 31;	// server is alreary running
+const USHORT MSG_SRVUP		= 31;	// server is already running
 const USHORT MSG_SRVUPOK	= 32;	// server has been successfully started
 const USHORT MSG_NOPERM		= 33;	// no permissions to perform operation
 const USHORT MSG_PRPOOLFAIL	= 34;	// Failed to print pool info
-const USHORT MSG_PRPOOLOK	= 35;	// Print pool successfull
+const USHORT MSG_PRPOOLOK	= 35;	// Print pool successful
 const USHORT MSG_FLNMTOOLONG	= 36;	// File name too long
 
 

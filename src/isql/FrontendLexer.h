@@ -39,15 +39,18 @@ public:
 			TYPE_EOF,
 			TYPE_STRING,
 			TYPE_META_STRING,
-			TYPE_OPEN_PAREN,
-			TYPE_CLOSE_PAREN,
-			TYPE_COMMA,
 			TYPE_OTHER
 		};
 
 		Type type = TYPE_OTHER;
 		std::string rawText;
 		std::string processedText;
+
+		const std::string& getProcessedString() const
+		{
+			return type == FrontendLexer::Token::TYPE_STRING || type == FrontendLexer::Token::TYPE_META_STRING ?
+				processedText : rawText;
+		}
 	};
 
 	struct SingleStatement
@@ -74,6 +77,7 @@ public:
 	FrontendLexer& operator=(const FrontendLexer&) = delete;
 
 public:
+	static std::string trim(std::string_view str);
 	static std::string stripComments(std::string_view statement);
 
 public:
@@ -87,6 +91,11 @@ public:
 		return pos;
 	}
 
+	void setPos(std::string::const_iterator newPos)
+	{
+		pos = newPos;
+	}
+
 	void rewind()
 	{
 		deletePos = buffer.begin();
@@ -97,7 +106,9 @@ public:
 	void appendBuffer(std::string_view newBuffer);
 	void reset();
 	std::variant<SingleStatement, FrontendLexer::IncompleteTokenError> getSingleStatement(std::string_view term);
+
 	Token getToken();
+	Token getNameToken();
 
 private:
 	std::optional<Token> getStringToken();

@@ -162,7 +162,9 @@
     <ClInclude Include="..\..\..\src\remote\protocol.h" />
     <ClInclude Include="..\..\..\src\remote\proto_proto.h" />
     <ClInclude Include="..\..\..\src\remote\remote.h" />
+    <ClInclude Include="..\..\..\src\remote\remote_def.h" />
     <ClInclude Include="..\..\..\src\remote\remot_proto.h" />
+    <ClInclude Include="..\..\..\src\remote\SockAddr.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -155,7 +155,7 @@ private:
 
 typedef Firebird::Array<UCHAR> AuthenticationBlock;
 
-class UserData :
+class UserData final :
 	public Firebird::VersionedIface<Firebird::IUserImpl<UserData, Firebird::CheckStatusWrapper> >
 {
 public:
@@ -231,31 +231,6 @@ public:
 	// deprecated
 	CharField group;
 	IntField u, g;
-};
-
-class StackUserData final : public UserData
-{
-public:
-	void* operator new(size_t, void* memory) noexcept
-	{
-		return memory;
-	}
-};
-
-class DynamicUserData final : public UserData
-{
-public:
-#ifdef DEBUG_GDS_ALLOC
-	void* operator new(size_t size, Firebird::MemoryPool& pool, const char* fileName, int line)
-	{
-		return pool.allocate(size, fileName, line);
-	}
-#else	// DEBUG_GDS_ALLOC
-	void* operator new(size_t size, Firebird::MemoryPool& pool)
-	{
-		return pool.allocate(size);
-	}
-#endif	// DEBUG_GDS_ALLOC
 };
 
 class Get : public Firebird::GetPlugins<Firebird::IManagement>

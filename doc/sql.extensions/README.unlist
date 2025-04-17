@@ -1,0 +1,71 @@
+SQL Language Extension: UNLIST
+
+Function:
+	The function parses the input string using the specified delimiter (comma "," is implied by default) and returns the identified substrings as discrete records containing a single field. Additionally, the desired type of the returned field can be specified. If the specified data type conversion is impossible, an error is raised at runtime.
+
+Author:
+	Chudaykin Alex <chudaykinalex@gmail.com>
+
+Format
+	<table value function> ::=
+		UNLIST ( <input> [, <separator>] [, <data type conversion>] ) [AS] <correlation name> [ ( <derived column name> ) ]
+
+		<input> ::= <value>
+
+		<separator> ::= <value>
+
+		<data type conversion> ::= RETURNING <data type>
+
+Syntax Rules:
+
+1) <input>: any value expression that returns a string/blob of characters (or may be converted to a string), including string literals, table columns, constants, variables, expressions, etc. This parameter is mandatory.
+2) <separator>: optional value expression that returns a string which is used as a delimiter (i.e. it separates one value from another inside the input string). It may also be a BLOB TEXT value, limited to 32KB. If an empty string is specified, the output will be just one record containing the input string. If omitted, the comma character is used as a delimiter.
+2) <data type>: target data type to convert the output values into. Alternatively, a domain can be specified as the returned type. If omitted, VARCHAR(32) is implied. Feel free to suggest any better alternative default.
+3) <correlation name>: alias of the record set returned by the UNLIST function. It is a mandatory parameter (per SQL standard).
+4) <derived column name>: optional alias of the column returned by the UNLIST function. If omitted, UNLIST is used as an alias.
+
+Example:
+A)
+	SELECT * FROM UNLIST('1,2,3,4,5') AS U;
+
+B)
+	SELECT * FROM UNLIST('100:200:300:400:500', ':' RETURNING INT) AS U;
+
+C)
+	SELECT U.* FROM UNLIST(‘text1, text2, text3’) AS U;
+
+D)
+	SELECT C0 FROM UNLIST(‘text1, text2, text3’) AS U(C0);
+
+E)
+	SELECT U.C0 FROM UNLIST(‘text1, text2, text3’) AS U(C0);
+
+F)
+	SET TERM ^ ;
+	RECREATE PROCEDURE TEST_PROC RETURNS (PROC_RETURN_INT INT)
+	AS
+	DECLARE VARIABLE text VARCHAR(11);
+	BEGIN
+		text = '123:123:123';
+		FOR SELECT * FROM UNLIST( :text, ':' RETURNING INT) AS A INTO :PROC_RETURN_INT DO
+		SUSPEND;
+	END^
+	SET TERM ; ^
+	SELECT * FROM TEST_PROC;
+
+G)
+	CREATE DOMAIN D1 AS INT;
+	SELECT TEST_DOMAIN FROM UNLIST('1,2,3,4' RETURNING D1) AS A(TEST_DOMAIN);
+
+	CREATE TABLE TABLE_TEST (COL1 INT);
+	SELECT TEST_TYPE_OF FROM UNLIST('1,2,3,4' RETURNING TYPE OF COLUMN TABLE_TEST.COL1) AS A(TEST_TYPE_OF);
+H)
+	CREATE VIEW TEST_VIEW AS SELECT * FROM UNLIST('1,2,3,4') AS A(B);
+	SELECT B FROM TEST_VIEW;
+
+Unacceptable behavior:
+	SELECT UNLIST FROM UNLIST('UNLIST,A,S,A') AS A;
+
+
+
+

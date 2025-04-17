@@ -27,6 +27,13 @@ commit fails. This option is mostly used by gfix.
 LOCK TIMEOUT nonneg_short_integer: it's the time (measured in seconds) that a
 transaction waits for a lock in a record before giving up and reporting an error.
 
+AUTO RELEASE TEMP BLOBID: makes the transaction release a temporary ID of a user
+BLOB just after its materialization. It's useful for massive insertions of records
+with user-defined BLOBs because it eliminates the memory overhead caused by creating
+and keeping temporary IDs until the transaction ends. This option should be used
+with care and only if there is no need to access a materialized BLOB via a temporary
+ID obtained after its creation. It's used during the database restore.
+
 
 Author:
    Claudio Valderrama C.

@@ -499,7 +499,7 @@ typedef struct dsc
 		dsc_address = address;
 	}
 
-	int getStringLength() const;
+	USHORT getStringLength() const;
 
 	operator Ods::Descriptor() const
 	{

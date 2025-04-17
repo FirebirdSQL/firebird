@@ -237,10 +237,7 @@ bool UserBlob::getInfo(FB_SIZE_T items_size, const UCHAR* items,
 }
 
 
-bool getBlobSize(	const UserBlob& b,
-					SLONG* size,
-					SLONG* seg_count,
-					SLONG* max_seg)
+bool getBlobSize(const UserBlob& b, FB_UINT64* size, ULONG* seg_count, USHORT* max_seg)
 {
 /**************************************
  *
@@ -271,25 +268,26 @@ bool getBlobSize(	const UserBlob& b,
 	const UCHAR* const end = buffer + sizeof(buffer);
 	for (UCHAR item = *p++; item != isc_info_end && p < end; item = *p++)
 	{
-		const USHORT l = gds__vax_integer(p, 2);
+		const auto l = gds__vax_integer(p, 2);
 		p += 2;
-		const SLONG n = gds__vax_integer(p, l);
+		const auto n = isc_portable_integer(p, l);
 		p += l;
+
 		switch (item)
 		{
 		case isc_info_blob_max_segment:
 			if (max_seg)
-				*max_seg = n;
+				*max_seg = (USHORT) n;
 			break;
 
 		case isc_info_blob_num_segments:
 			if (seg_count)
-				*seg_count = n;
+				*seg_count = (ULONG) n;
 			break;
 
 		case isc_info_blob_total_length:
 			if (size)
-				*size = n;
+				*size = (FB_UINT64) n;
 			break;
 
 		default:

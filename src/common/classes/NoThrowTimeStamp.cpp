@@ -330,7 +330,7 @@ void NoThrowTimeStamp::round_time(ISC_TIME &ntime, const int precision)
 	if (scale <= 0)
 		return;
 
-	fb_assert(scale < FB_NELEM(POW_10_TABLE));
+	fb_assert(static_cast<FB_SIZE_T>(scale) < FB_NELEM(POW_10_TABLE));
 
 	const ISC_TIME period = POW_10_TABLE[scale];
 

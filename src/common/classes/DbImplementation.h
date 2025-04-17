@@ -38,10 +38,13 @@ class DbImplementation
 {
 public:
 	explicit DbImplementation(const Ods::header_page* h);
-	DbImplementation (UCHAR p_cpu, UCHAR p_os, UCHAR p_cc, UCHAR p_flags)
+
+	DbImplementation(UCHAR p_cpu, UCHAR p_os, UCHAR p_cc, UCHAR p_flags)
 		: di_cpu(p_cpu), di_os(p_os), di_cc(p_cc), di_flags(p_flags)
 	{ }
-	~DbImplementation() { }
+
+	~DbImplementation()
+	{ }
 
 private:
 	UCHAR di_cpu, di_os, di_cc, di_flags;

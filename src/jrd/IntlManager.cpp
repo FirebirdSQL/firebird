@@ -184,27 +184,27 @@ const IntlManager::CharSetAliasDefinition IntlManager::defaultCharSetAliases[] =
 	{"ANSI", CS_ISO8859_1},
 	{"ISO88592", CS_ISO8859_2},
 	{"LATIN2", CS_ISO8859_2},
-	{"ISO-8859-2", CS_ISO8859_2},	// Prefered MIME name
+	{"ISO-8859-2", CS_ISO8859_2},	// Preferred MIME name
 	{"ISO88593", CS_ISO8859_3},
 	{"LATIN3", CS_ISO8859_3},
-	{"ISO-8859-3", CS_ISO8859_3},	// Prefered MIME name
+	{"ISO-8859-3", CS_ISO8859_3},	// Preferred MIME name
 	{"ISO88594", CS_ISO8859_4},
 	{"LATIN4", CS_ISO8859_4},
-	{"ISO-8859-4", CS_ISO8859_4},	// Prefered MIME name
+	{"ISO-8859-4", CS_ISO8859_4},	// Preferred MIME name
 	{"ISO88595", CS_ISO8859_5},
-	{"ISO-8859-5", CS_ISO8859_5},	// Prefered MIME name
+	{"ISO-8859-5", CS_ISO8859_5},	// Preferred MIME name
 	{"ISO88596", CS_ISO8859_6},
-	{"ISO-8859-6", CS_ISO8859_6},	// Prefered MIME name
+	{"ISO-8859-6", CS_ISO8859_6},	// Preferred MIME name
 	{"ISO88597", CS_ISO8859_7},
-	{"ISO-8859-7", CS_ISO8859_7},	// Prefered MIME name
+	{"ISO-8859-7", CS_ISO8859_7},	// Preferred MIME name
 	{"ISO88598", CS_ISO8859_8},
-	{"ISO-8859-8", CS_ISO8859_8},	// Prefered MIME name
+	{"ISO-8859-8", CS_ISO8859_8},	// Preferred MIME name
 	{"ISO88599", CS_ISO8859_9},
 	{"LATIN5", CS_ISO8859_9},
-	{"ISO-8859-9", CS_ISO8859_9},	// Prefered MIME name
+	{"ISO-8859-9", CS_ISO8859_9},	// Preferred MIME name
 	{"ISO885913", CS_ISO8859_13},
 	{"LATIN7", CS_ISO8859_13},
-	{"ISO-8859-13", CS_ISO8859_13},	// Prefered MIME name
+	{"ISO-8859-13", CS_ISO8859_13},	// Preferred MIME name
 	{"DOS_852", CS_DOS_852},
 	{"DOS_857", CS_DOS_857},
 	{"DOS_860", CS_DOS_860},

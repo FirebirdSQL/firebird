@@ -1356,7 +1356,7 @@ static bool validate_dsc_tables();
 
 
 
-int dsc::getStringLength() const
+USHORT dsc::getStringLength() const
 {
 	return DSC_string_length(this);
 }
@@ -1533,7 +1533,7 @@ bool DSC_make_descriptor(DSC* desc,
 }
 
 
-int DSC_string_length(const dsc* desc)
+USHORT DSC_string_length(const dsc* desc)
 {
 /**************************************
  *
@@ -1561,10 +1561,10 @@ int DSC_string_length(const dsc* desc)
 		return desc->dsc_length - sizeof(USHORT);
 	default:
  		if (!DTYPE_IS_EXACT(desc->dsc_dtype) || desc->dsc_scale == 0)
- 			return (int) _DSC_convert_to_text_length[desc->dsc_dtype];
+ 			return _DSC_convert_to_text_length[desc->dsc_dtype];
  		if (desc->dsc_scale < 0)
-			return (int) _DSC_convert_to_text_length[desc->dsc_dtype] + 1;
-		return (int) _DSC_convert_to_text_length[desc->dsc_dtype] + desc->dsc_scale;
+			return _DSC_convert_to_text_length[desc->dsc_dtype] + 1;
+		return _DSC_convert_to_text_length[desc->dsc_dtype] + desc->dsc_scale;
 	}
 }
 

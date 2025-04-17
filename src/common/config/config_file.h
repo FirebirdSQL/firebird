@@ -141,7 +141,7 @@ private:
 	void parse(Stream* stream);
 	LineType parseLine(const char* fileName, const String& input, Parameter& par);
 	bool translate(const char* fileName, const String& from, String& to) const;
-	void badLine(const char* fileName, const String& line);
+	[[noreturn]] void badLine(const char* fileName, const String& line);
 	void include(const char* currentFileName, const Firebird::PathName& path);
 	bool wildCards(const char* currentFileName, const Firebird::PathName& pathPrefix, FilesArray& components);
 	bool substituteStandardDir(const String& from, String& to) const;

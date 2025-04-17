@@ -97,7 +97,7 @@ public:
 	typedef typename KeyValuePair::first_type KeyType;
 	typedef typename KeyValuePair::second_type ValueType;
 
-	typedef BePlusTree<KeyValuePair*, KeyType, MemoryPool, FirstObjectKey<KeyValuePair>, KeyComparator> ValuesTree;
+	typedef BePlusTree<KeyValuePair*, KeyType, FirstObjectKey<KeyValuePair>, KeyComparator> ValuesTree;
 	typedef typename ValuesTree::Accessor TreeAccessor;
 	typedef typename ValuesTree::ConstAccessor ConstTreeAccessor;
 
@@ -139,10 +139,10 @@ public:
 	friend class Accessor;
 	friend class ConstAccessor;
 
-	GenericMap() : tree(&getPool()), mCount(0) { }
+	GenericMap() : tree(getPool()), mCount(0) { }
 
 	explicit GenericMap(MemoryPool& a_pool)
-		: AutoStorage(a_pool), tree(&getPool()), mCount(0)
+		: AutoStorage(a_pool), tree(getPool()), mCount(0)
 	{ }
 
 	~GenericMap()

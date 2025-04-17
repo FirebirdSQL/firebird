@@ -404,6 +404,11 @@ Mutex& pauseTimer()
 	return timerPause;
 }
 
+bool timerThreadStopped()
+{
+	return stopTimerThread.value() != 0;
+}
+
 } // namespace Why
 
 

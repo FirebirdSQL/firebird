@@ -210,7 +210,7 @@ ModuleLoader::Module* ModuleLoader::loadModule(ISC_STATUS* status, const PathNam
 {
 	ContextActivator ctx;
 
-	// supress error message box if it is not done yet
+	// suppress error message box if it is not done yet
 	const UINT oldErrorMode =
 		SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
 

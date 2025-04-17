@@ -1782,7 +1782,6 @@ void MET_get_shadow_files(thread_db* tdbb, bool delete_files)
 	FOR(REQUEST_HANDLE handle) X IN RDB$FILES
 		WITH X.RDB$SHADOW_NUMBER NOT MISSING
 			AND X.RDB$SHADOW_NUMBER NE 0
-			AND X.RDB$FILE_SEQUENCE EQ 0
 	{
 		if ((X.RDB$FILE_FLAGS & FILE_shadow) && !(X.RDB$FILE_FLAGS & FILE_inactive))
 		{

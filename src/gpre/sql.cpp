@@ -4424,6 +4424,12 @@ static act* act_set_transaction()
 			continue;
 		}
 
+		if (MSC_match(KW_AUTO_RELEASE_TEMP_BLOBID))
+		{
+			trans->tra_flags |= TRA_auto_release_temp_blobid;
+			continue;
+		}
+
 		break;
 	}
 

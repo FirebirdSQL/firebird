@@ -36,7 +36,6 @@ namespace Ods {
 	struct pag;
 }
 
-int		PIO_add_file(Jrd::thread_db*, Jrd::jrd_file*, const Firebird::PathName&, SLONG);
 void	PIO_close(Jrd::jrd_file*);
 Jrd::jrd_file*	PIO_create(Jrd::thread_db*, const Firebird::PathName&,
 							const bool, const bool);
@@ -45,7 +44,7 @@ void	PIO_extend(Jrd::thread_db*, Jrd::jrd_file*, const ULONG, const USHORT);
 void	PIO_flush(Jrd::thread_db*, Jrd::jrd_file*);
 void	PIO_force_write(Jrd::jrd_file*, const bool);
 ULONG	PIO_get_number_of_pages(const Jrd::jrd_file*, const USHORT);
-void	PIO_header(Jrd::thread_db*, UCHAR*, int);
+bool	PIO_header(Jrd::thread_db*, UCHAR*, unsigned);
 USHORT	PIO_init_data(Jrd::thread_db*, Jrd::jrd_file*, Jrd::FbStatusVector*, ULONG, USHORT);
 Jrd::jrd_file*	PIO_open(Jrd::thread_db*, const Firebird::PathName&,
 						 const Firebird::PathName&);

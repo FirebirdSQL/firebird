@@ -34,11 +34,11 @@ you need to call fb_shutdown() from your program, you must use positive value fo
 value is passed to callback_function, passed as an argument to fb_shutdown_callback(), and you can
 take appropriate actions when writing callback function.
 
-Zero return value of fb_shutdown() means shutdown is successfull, non-zero means some errors took 
+Zero return value of fb_shutdown() means shutdown is successful, non-zero means some errors took
 place during shutdown. You should consult firebird.log for more information.
 
 fb_shutdown_callback() setups callback function, which will be called during shutdown. It has 4 
-parameters - status vector, pointer to callback function, call mask and argumnet to be passed 
+parameters - status vector, pointer to callback function, call mask and argument to be passed
 to callback function. Call mask can have the following values:
 fb_shut_confirmation - callback function may return non-zero value to abort shutdown
 fb_shut_preproviders - callback function will be called before shutting down engine

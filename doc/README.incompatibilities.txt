@@ -23,7 +23,7 @@ SQL SYNTAX
 --------------------------
 
   * A number of new reserved keywords are introduced. The full list is available
-    here: /doc/sql.extentions/README.keywords. Please ensure your DSQL
+    here: /doc/sql.extensions/README.keywords. Please ensure your DSQL
     statements and procedure/trigger sources don't contain those keywords as
     identifiers. Otherwise, you'll need to either use them quoted (in Dialect 3
     only) or rename them.

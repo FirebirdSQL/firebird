@@ -640,5 +640,6 @@
 #define fb_tzid_pacific_kanton                       64901 /* Pacific/Kanton */
 #define fb_tzid_europe_kyiv                          64900 /* Europe/Kyiv */
 #define fb_tzid_america_ciudad_juarez                64899 /* America/Ciudad_Juarez */
+#define fb_tzid_america_coyhaique                    64898 /* America/Coyhaique */
 
 #endif /* FIREBIRD_TIME_ZONES_H */

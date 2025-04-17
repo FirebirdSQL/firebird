@@ -54,6 +54,7 @@ public:
 	const char* name;
 	int minArgCount;
 	int maxArgCount;	// -1 for no limit
+	bool deterministic;
 	SetParamsFunc setParamsFunc;
 	MakeFunc makeFunc;
 	EvlFunc evlFunc;

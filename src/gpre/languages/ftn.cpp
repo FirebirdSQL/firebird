@@ -604,7 +604,7 @@ void FTN_fini()
 
 //____________________________________________________________
 //
-//		Print a statment, breaking it into
+//		Print a statement, breaking it into
 //       reasonable 72 character hunks.
 //
 

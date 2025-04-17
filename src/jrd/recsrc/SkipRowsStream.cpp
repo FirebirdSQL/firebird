@@ -145,6 +145,11 @@ void SkipRowsStream::findUsedStreams(StreamList& streams, bool expandAll) const
 	m_next->findUsedStreams(streams, expandAll);
 }
 
+bool SkipRowsStream::isDependent(const StreamList& streams) const
+{
+	return m_value->containsAnyStream(streams) || m_next->isDependent(streams);
+}
+
 void SkipRowsStream::invalidateRecords(Request* request) const
 {
 	m_next->invalidateRecords(request);

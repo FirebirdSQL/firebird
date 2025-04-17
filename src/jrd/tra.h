@@ -103,8 +103,8 @@ struct BlobIndex
 	{ }
 };
 
-typedef Firebird::BePlusTree<BlobIndex, ULONG, MemoryPool, BlobIndex> BlobIndexTree;
-typedef Firebird::BePlusTree<bid, bid, MemoryPool> FetchedBlobIdTree;
+typedef Firebird::BePlusTree<BlobIndex, ULONG, BlobIndex> BlobIndexTree;
+typedef Firebird::BePlusTree<bid, bid> FetchedBlobIdTree;
 
 // Transaction block
 
@@ -171,9 +171,9 @@ public:
 	:	tra_attachment(attachment),
 		tra_pool(p),
 		tra_memory_stats(parent_stats),
-		tra_blobs_tree(p),
+		tra_blobs_tree(*p),
 		tra_blobs(outer ? outer->tra_blobs : &tra_blobs_tree),
-		tra_fetched_blobs(p),
+		tra_fetched_blobs(*p),
 		tra_repl_blobs(*p),
 		tra_blob_util_map(*p),
 		tra_arrays(NULL),
@@ -435,10 +435,11 @@ const ULONG TRA_read_consistency	= 0x40000L; 	// ensure read consistency in this
 const ULONG TRA_ex_restart			= 0x80000L; 	// Exception was raised to restart request
 const ULONG TRA_replicating			= 0x100000L;	// transaction is allowed to be replicated
 const ULONG TRA_no_blob_check		= 0x200000L;	// disable blob access checking
+const ULONG TRA_auto_release_temp_blobid	= 0x400000L;	// remove temp ids of materialized user blobs from tra_blobs
 
 // flags derived from TPB, see also transaction_options() at tra.cpp
 const ULONG TRA_OPTIONS_MASK = (TRA_degree3 | TRA_readonly | TRA_ignore_limbo | TRA_read_committed |
-	TRA_autocommit | TRA_rec_version | TRA_read_consistency | TRA_no_auto_undo | TRA_restart_requests);
+	TRA_autocommit | TRA_rec_version | TRA_read_consistency | TRA_no_auto_undo | TRA_restart_requests | TRA_auto_release_temp_blobid);
 
 const int TRA_MASK				= 3;
 //const int TRA_BITS_PER_TRANS	= 2;
@@ -477,7 +478,6 @@ enum dfw_t {
 	dfw_create_index,
 	dfw_delete_index,
 	dfw_compute_security,
-	dfw_add_file,
 	dfw_add_shadow,
 	dfw_delete_shadow,
 	dfw_delete_shadow_nodelete,

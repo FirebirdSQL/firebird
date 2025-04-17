@@ -432,7 +432,7 @@ void FirstValueWinNode::aggInit(thread_db* tdbb, Request* request) const
 
 dsc* FirstValueWinNode::winPass(thread_db* tdbb, Request* request, SlidingWindow* window) const
 {
-	if (!window->moveWithinFrame(-(window->getRecordPosition() - window->getFrameStart())))
+	if (!window->moveWithinFrame(-window->getInFrameOffset()))
 		return NULL;
 
 	dsc* desc = EVL_expr(tdbb, request, arg);
@@ -583,7 +583,7 @@ dsc* NthValueWinNode::winPass(thread_db* tdbb, Request* request, SlidingWindow* 
 	const SLONG fromPos = desc ? MOV_get_long(tdbb, desc, 0) : FROM_FIRST;
 
 	if (fromPos == FROM_FIRST)
-		records += -(window->getRecordPosition() - window->getFrameStart()) - 1;
+		records -= window->getInFrameOffset() + 1;
 	else
 		records = window->getFrameEnd() - window->getRecordPosition() - records + 1;
 

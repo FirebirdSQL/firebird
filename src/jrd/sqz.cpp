@@ -76,7 +76,7 @@ unsigned Compressor::nonCompressableRun(unsigned length)
 
 	if (m_runs.hasData() && m_runs.back() > 0 && m_runs.back() < MAX_NONCOMP_RUN)
 	{
-		const auto max = MIN(MAX_NONCOMP_RUN - m_runs.back(), length);
+		const auto max = MIN(static_cast<unsigned>(MAX_NONCOMP_RUN - m_runs.back()), length);
 		length -= max;
 		m_runs.back() += max;
 	}
@@ -558,7 +558,7 @@ ULONG Difference::apply(ULONG diffLength, ULONG outLength, UCHAR* const output)
 			BUGCHECK(177);	// msg 177 applied differences will not fit in record
 	}
 
-	const auto length = p - output;
+	const ULONG length = p - output;
 
 	if (length > outLength)
 		BUGCHECK(177);	// msg 177 applied differences will not fit in record
@@ -581,7 +581,7 @@ ULONG Difference::makeNoDiff(ULONG length)
 		if (output >= end)
 			return 0;
 
-		const auto max = MIN(length, 127);
+		const int max = MIN(length, 127);
 		*output++ = -max;
 		length -= max;
 	}
@@ -644,7 +644,7 @@ ULONG Difference::make(ULONG length1, const UCHAR* rec1,
 			if (output >= end)
 				return 0;
 
-			const auto max = MIN(count, 127);
+			const int max = MIN(count, 127);
 			*output++ = -max;
 			count -= max;
 		}

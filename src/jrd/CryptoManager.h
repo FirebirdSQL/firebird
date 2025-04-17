@@ -301,6 +301,10 @@ public:
 	UCHAR getCurrentState(thread_db* tdbb) const;
 	const char* getKeyName() const;
 	const char* getPluginName() const;
+	Thread::Handle getCryptThreadHandle() const
+	{
+		return cryptThreadHandle;
+	}
 
 private:
 	enum IoResult {SUCCESS_ALL, FAILED_CRYPT, FAILED_IO};
@@ -364,6 +368,7 @@ private:
 	void lockAndReadHeader(thread_db* tdbb, unsigned flags = 0);
 	static const unsigned CRYPT_HDR_INIT =		0x01;
 	static const unsigned CRYPT_HDR_NOWAIT =	0x02;
+	static const unsigned CRYPT_RELOAD_PLUGIN =	0x04;
 
 	void addClumplet(Firebird::string& value, Firebird::ClumpletReader& block, UCHAR tag);
 	void calcDigitalSignature(thread_db* tdbb, Firebird::string& signature, const class Header& hdr);
@@ -377,7 +382,7 @@ private:
 	AttachmentsRefHolder keyProviders, keyConsumers;
 	Firebird::string hash;
 	Firebird::RefPtr<DbInfo> dbInfo;
-	Thread::Handle cryptThreadId;
+	Thread::Handle cryptThreadHandle;
 	Firebird::IDbCryptPlugin* cryptPlugin;
 	Factory* checkFactory;
 	Database& dbb;

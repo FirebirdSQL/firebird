@@ -247,7 +247,7 @@ enum mon_state_t {
 	mon_state_stalled = 2
 };
 
-// shutdown modes
+// shutdown modes (match hdr_nbak_* in ods.h)
 
 enum shut_mode_t {
 	shut_mode_online = 0,
@@ -256,7 +256,7 @@ enum shut_mode_t {
 	shut_mode_full = 3
 };
 
-// backup states
+// backup states (match hdr_backup_* in ods.h)
 
 enum backup_state_t {
 	backup_state_unknown = -1,
@@ -301,13 +301,17 @@ enum InfoType
 	MAX_INFO_TYPE
 };
 
-enum ReplicaMode {
+// Replica modes (match hdr_replica_* in ods.h)
+
+enum ReplicaMode
+{
 	REPLICA_NONE = 0,
 	REPLICA_READ_ONLY = 1,
 	REPLICA_READ_WRITE = 2
 };
 
-enum TriggerType {
+enum TriggerType
+{
 	PRE_STORE_TRIGGER = 1,
 	POST_STORE_TRIGGER = 2,
 	PRE_MODIFY_TRIGGER = 3,
@@ -316,7 +320,8 @@ enum TriggerType {
 	POST_ERASE_TRIGGER = 6
 };
 
-enum TriggerAction {
+enum TriggerAction
+{
 	// Order should be maintained because the numbers are stored in BLR
 	// and should be in sync with IExternalTrigger::ACTION_* .
 	TRIGGER_INSERT = 1,

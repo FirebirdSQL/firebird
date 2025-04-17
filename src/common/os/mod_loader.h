@@ -35,7 +35,7 @@
 	facilities provided by the host operating system.  The class provides
 	functions to determine if the file at a given path is a loadable module,
 	to load that module, and to modify the filename in a way that is
-	appropiate to the host computer.
+	appropriate to the host computer.
 
 	All implementations of this interface are expected to provide definitions
 	for the 3 static functions in the ModuleLoader class, and provide a
@@ -55,7 +55,7 @@ public:
 	class Module
 	{
 	public:
-		/** findSymbol searchs through the module after it has been loaded into
+		/** findSymbol searches through the module after it has been loaded into
 			memory, and returns a pointer to that symbol's location in memory.
 			If the symbol can't be found or doesn't exist the function returns
 			NULL.
@@ -99,12 +99,12 @@ public:
 	static Module* loadModule(ISC_STATUS* status, const Firebird::PathName&);
 
 	/** doctorModuleExtension modifies the given path name to add the platform
-		specific module extention.  This allows the user to provide the root name
-		of the file, and the code to append the correct extention regardless of the
+		specific module extension.  This allows the user to provide the root name
+		of the file, and the code to append the correct extension regardless of the
 		host operating system. This process can take several iterations before final
 		form of name is reached.
 		This function is typically called after a failed attempt
-		to load the module without the extention.
+		to load the module without the extension.
 		Initialize step to zero before use.
 		Return false if no name modification can be done anymore.
 	**/

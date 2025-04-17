@@ -521,6 +521,7 @@ public:
 		TYPE_SELECT_EXPR,
 		TYPE_UNION,
 		TYPE_WINDOW,
+		TYPE_TABLE_VALUE_FUNCTION,
 
 		// List types
 		TYPE_REC_SOURCE_LIST,
@@ -657,6 +658,9 @@ public:
 	{
 		target = node ? node->dsqlFieldRemapper(visitor) : NULL;
 	}
+
+	// Check if expression returns deterministic result
+	virtual bool deterministic() const;
 
 	// Check if expression could return NULL or expression can turn NULL into a true/false.
 	virtual bool possiblyUnknown() const;
@@ -1440,6 +1444,7 @@ public:
 		TYPE_IN_AUTO_TRANS,
 		TYPE_INIT_VARIABLE,
 		TYPE_FOR,
+		TYPE_FOR_RANGE,
 		TYPE_HANDLER,
 		TYPE_LABEL,
 		TYPE_LINE_COLUMN,

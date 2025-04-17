@@ -428,7 +428,7 @@ Firebird uses the [IANA time zone database](http://www.iana.org/time-zones) thro
 
 When a Firebird version is released it's released with the most up-to-date time zone database but with the time it may become outdated.
 
-An updated database can be found in [this Firebird's github page](https://github.com/FirebirdSQL/firebird/tree/master/extern/icu/tzdata). `le.zip` stands for little-endian and is the necessary file for most computer architectures (Intel/AMD compatible x86 or x64). `be.zip` stands for big-endian architectures.
+An updated database can be found in [this Firebird's GitHub page](https://github.com/FirebirdSQL/firebird/tree/master/extern/icu/tzdata). `le.zip` stands for little-endian and is the necessary file for most computer architectures (Intel/AMD compatible x86 or x64). `be.zip` stands for big-endian architectures.
 
 The content of the zip file must be extracted in the `tzdata` subdirectory of Firebird's root, overwriting the others `*.res` files of the old database.
 

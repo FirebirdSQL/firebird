@@ -252,7 +252,7 @@ changeDBAPassword() {
 
 #------------------------------------------------------------------------
 # installInitdScript
-# Everbody stores this one in a seperate location, so there is a bit of
+# Everybody stores this one in a separate location, so there is a bit of
 # running around to actually get it for each packager.
 # Update rcX.d with Firebird initd entries
 # initd script for SuSE >= 7.2 is a part of RPM package
@@ -365,10 +365,10 @@ createLinksForBackCompatibility() {
 # These two links are required for compatibility with existing ib programs
 # If the program had been linked with libgds.so then this link is required
 # to ensure it loads the fb equivalent.  Eventually these should be 
-# optional and in a seperate rpm install.  MOD 7-Nov-2002.
+# optional and in a separate rpm install.  MOD 7-Nov-2002.
 
 
-# Althhough classic has two options for  libgds.so super server has only 
+# Although classic has two options for  libgds.so super server has only
 # one:
 #  1) The multithreaded client only libfbclient.so 
 #  MOD 23-Dec-2003

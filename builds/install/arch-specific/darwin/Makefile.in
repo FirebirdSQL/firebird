@@ -58,7 +58,7 @@ package_firebird:
 			$(ROOT)/gen/$(TARGET)/resources/Readme.txt
 	cp ../builds/install/arch-specific/darwin/License.txt \
 			$(ROOT)/gen/$(TARGET)/resources/License.txt
-	cp ../builds/install/arch-specific/darwin/Distribution.xml \
+	cp ../builds/install/arch-specific/darwin/Distribution-$(CpuType).xml \
 			$(ROOT)/gen/$(TARGET)/Distribution.xml
 
 	rm -fr $(TARGET)/packages

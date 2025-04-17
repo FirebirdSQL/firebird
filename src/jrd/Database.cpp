@@ -47,6 +47,14 @@
 
 using namespace Firebird;
 
+namespace
+{
+	void unableToRunSweepException(ISC_STATUS reason)
+	{
+		ERR_post(Arg::Gds(isc_sweep_unable_to_run) << Arg::Gds(reason));
+	}
+}
+
 namespace Jrd
 {
 	bool Database::onRawDevice() const
@@ -252,7 +260,7 @@ namespace Jrd
 		while (true)
 		{
 			AtomicCounter::counter_type old = dbb_flags;
-			if ((old & (DBB_sweep_in_progress | DBB_sweep_starting)) || (dbb_ast_flags & DBB_shutdown))
+			if ((old & (DBB_sweep_in_progress | DBB_sweep_starting)) || isShutdown())
 			{
 				dbb_thread_mutex.leave();
 				return false;
@@ -299,16 +307,16 @@ namespace Jrd
 		}
 	}
 
-	bool Database::allowSweepRun(thread_db* tdbb)
+	void Database::initiateSweepRun(thread_db* tdbb)
 	{
-		SPTHR_DEBUG(fprintf(stderr, "allowSweepRun %p\n", this));
+		SPTHR_DEBUG(fprintf(stderr, FB_FUNCTION " %p\n", this));
 
 		if (readOnly())
-			return false;
+			unableToRunSweepException(isc_sweep_read_only);
 
 		Jrd::Attachment* const attachment = tdbb->getAttachment();
 		if (attachment->att_flags & ATT_no_cleanup)
-			return false;
+			unableToRunSweepException(isc_sweep_attach_no_cleanup);
 
 		while (true)
 		{
@@ -316,18 +324,18 @@ namespace Jrd
 			if (old & DBB_sweep_in_progress)
 			{
 				clearSweepStarting();
-				return false;
+				unableToRunSweepException(isc_sweep_concurrent_instance);
 			}
 
 			if (dbb_flags.compareExchange(old, old | DBB_sweep_in_progress))
 				break;
 		}
 
-		SPTHR_DEBUG(fprintf(stderr, "allowSweepRun - set DBB_sweep_in_progress\n"));
+		SPTHR_DEBUG(fprintf(stderr, FB_FUNCTION " - set DBB_sweep_in_progress\n"));
 
 		if (!(dbb_flags & DBB_sweep_starting))
 		{
-			SPTHR_DEBUG(fprintf(stderr, "allowSweepRun - createSweepLock\n"));
+			SPTHR_DEBUG(fprintf(stderr, FB_FUNCTION " - createSweepLock\n"));
 
 			createSweepLock(tdbb);
 			if (!LCK_lock(tdbb, dbb_sweep_lock, LCK_EX, -1))
@@ -336,17 +344,15 @@ namespace Jrd
 				fb_utils::init_status(tdbb->tdbb_status_vector);
 
 				dbb_flags &= ~DBB_sweep_in_progress;
-				return false;
+				unableToRunSweepException(isc_sweep_concurrent_instance);
 			}
 		}
 		else
 		{
-			SPTHR_DEBUG(fprintf(stderr, "allowSweepRun - clearSweepStarting\n"));
+			SPTHR_DEBUG(fprintf(stderr, FB_FUNCTION " - clearSweepStarting\n"));
 			attachment->att_flags |= ATT_from_thread;
 			clearSweepStarting();
 		}
-
-		return true;
 	}
 
 	void Database::clearSweepFlags(thread_db* tdbb)

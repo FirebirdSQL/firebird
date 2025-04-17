@@ -314,7 +314,7 @@ void Replicator::insertRecord(CheckStatusWrapper* status,
 				{
 					const auto blobId = (ISC_QUAD*) field->getData();
 
-					if (blobId)
+					if (blobId && !BlobWrapper::blobIsNull(*blobId))
 						storeBlob(transaction, *blobId);
 				}
 			}
@@ -359,7 +359,7 @@ void Replicator::updateRecord(CheckStatusWrapper* status,
 				{
 					const auto blobId = (ISC_QUAD*) field->getData();
 
-					if (blobId)
+					if (blobId && !BlobWrapper::blobIsNull(*blobId))
 						storeBlob(transaction, *blobId);
 				}
 			}

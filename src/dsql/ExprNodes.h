@@ -95,27 +95,33 @@ public:
 	virtual ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 	virtual dsc* execute(thread_db* tdbb, Request* request) const;
 
-	// add and add2 are used in somewhat obscure way in aggregation.
-	static dsc* add(thread_db* tdbb, const dsc* desc, impure_value* value, const ValueExprNode* node,
-		const UCHAR blrOp);
-	static dsc* add2(thread_db* tdbb, const dsc* desc, impure_value* value, const ValueExprNode* node,
-		const UCHAR blrOp);
+	static dsc* add(thread_db* tdbb, const dsc* desc1, const dsc* desc2, impure_value* value,
+		const UCHAR blrOp, bool dialect1, SCHAR nodScale, USHORT nodFlags);
 
 private:
-	dsc* multiply(const dsc* desc, impure_value* value) const;
-	dsc* multiply2(const dsc* desc, impure_value* value) const;
-	dsc* divide2(const dsc* desc, impure_value* value) const;
-	dsc* addDateTime(thread_db* tdbb, const dsc* desc, impure_value* value) const;
-	dsc* addSqlDate(const dsc* desc, impure_value* value) const;
-	dsc* addSqlTime(thread_db* tdbb, const dsc* desc, impure_value* value) const;
-	dsc* addTimeStamp(thread_db* tdbb, const dsc* desc, impure_value* value) const;
+	static dsc* addDialect1(thread_db* tdbb, const dsc* desc1, const dsc* desc2, impure_value* value,
+		const UCHAR blrOp, SCHAR nodScale, USHORT nodFlags);
+	static dsc* addDialect3(thread_db* tdbb, const dsc* desc1, const dsc* desc2, impure_value* value,
+		const UCHAR blrOp, SCHAR nodScale, USHORT nodFlags);
+
+	dsc* multiplyDialect1(const dsc* desc, impure_value* value) const;
+	dsc* multiplyDialect3(const dsc* desc, impure_value* value) const;
+	dsc* divideDialect3(const dsc* desc, impure_value* value) const;
+
+	static dsc* addDateTime(thread_db* tdbb, const dsc* desc, impure_value* value, UCHAR blrOp, bool dialect1);
+	static dsc* addSqlDate(const dsc* desc, impure_value* value, UCHAR blrOp);
+	static dsc* addSqlTime(thread_db* tdbb, const dsc* desc, impure_value* value, UCHAR blrOp);
+	static dsc* addTimeStamp(thread_db* tdbb, const dsc* desc, impure_value* value, UCHAR blrOp, bool dialect1);
 
 private:
 	void makeDialect1(dsc* desc, dsc& desc1, dsc& desc2);
 	void makeDialect3(dsc* desc, dsc& desc1, dsc& desc2);
 
-	void getDescDialect1(thread_db* tdbb, dsc* desc, dsc& desc1, dsc& desc2);
-	void getDescDialect3(thread_db* tdbb, dsc* desc, dsc& desc1, dsc& desc2);
+public:
+	static void getDescDialect1(thread_db* tdbb, dsc* desc, const dsc& desc1, const dsc& desc2, UCHAR blrOp,
+		SCHAR* nodScale, USHORT* nodFlags);
+	static void getDescDialect3(thread_db* tdbb, dsc* desc, const dsc& desc1, const dsc& desc2, UCHAR blrOp,
+		SCHAR* nodScale, USHORT* nodFlags);
 
 public:
 	Firebird::string label;
@@ -799,6 +805,11 @@ public:
 		dsqlDesc = desc;
 	}
 
+	virtual bool deterministic() const override
+	{
+		return true;
+	}
+
 	virtual bool possiblyUnknown() const
 	{
 		return false;
@@ -874,6 +885,11 @@ public:
 		std::function<void (dsc*)> makeDesc, bool forceVarChar);
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
+
+	virtual bool deterministic() const override
+	{
+		return false;
+	}
 
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
@@ -1634,6 +1650,11 @@ public:
 
 	Request* getParamRequest(Request* request) const;
 
+	virtual bool deterministic() const override
+	{
+		return true;
+	}
+
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ParameterNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 	virtual ParameterNode* pass1(thread_db* tdbb, CompilerScratch* csb);
@@ -1680,6 +1701,11 @@ public:
 	virtual void setParameterName(dsql_par* parameter) const;
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
+
+	virtual bool deterministic() const override
+	{
+		return true;
+	}
 
 	virtual bool possiblyUnknown() const
 	{
@@ -1925,7 +1951,7 @@ public:
 class SubQueryNode final : public TypedNode<ValueExprNode, ExprNode::TYPE_SUBQUERY>
 {
 public:
-	explicit SubQueryNode(MemoryPool& pool, UCHAR aBlrOp, RecordSourceNode* aDsqlRse = NULL,
+	explicit SubQueryNode(MemoryPool& pool, UCHAR aBlrOp, SelectExprNode* aDsqlSelectExpr = NULL,
 		ValueExprNode* aValue1 = NULL, ValueExprNode* aValue2 = NULL);
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
@@ -1975,7 +2001,7 @@ public:
 	virtual dsc* execute(thread_db* tdbb, Request* request) const;
 
 public:
-	NestConst<RecordSourceNode> dsqlRse;
+	NestConst<SelectExprNode> dsqlSelectExpr;
 	NestConst<RseNode> rse;
 	NestConst<ValueExprNode> value1;
 	NestConst<ValueExprNode> value2;
@@ -2083,6 +2109,8 @@ public:
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
+	virtual bool deterministic() const override;
+
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 	virtual bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const;
@@ -2164,6 +2192,8 @@ public:
 	virtual void setParameterName(dsql_par* parameter) const;
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
+
+	virtual bool deterministic() const override;
 
 	virtual bool possiblyUnknown() const
 	{
@@ -2264,6 +2294,11 @@ public:
 	}
 
 	Request* getVarRequest(Request* request) const;
+
+	virtual bool deterministic() const override
+	{
+		return false;
+	}
 
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;

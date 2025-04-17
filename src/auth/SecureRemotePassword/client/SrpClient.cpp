@@ -62,7 +62,7 @@ protected:
 template <class SHA> class SrpClientImpl final : public SrpClient
 {
 public:
-	explicit SrpClientImpl<SHA>(IPluginConfig* ipc)
+	explicit SrpClientImpl(IPluginConfig* ipc)
 		: SrpClient(ipc)
 	{}
 

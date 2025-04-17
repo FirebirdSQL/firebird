@@ -187,6 +187,9 @@ public:
 	void pass2Boolean(thread_db* tdbb, CompilerScratch* csb, std::function<void ()> process) override;
 	bool execute(thread_db* tdbb, Request* request) const override;
 
+private:
+	BoolExprNode* decompose(CompilerScratch* csb);
+
 public:
 	NestConst<ValueExprNode> arg;
 	NestConst<ValueListNode> list;

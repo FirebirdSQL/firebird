@@ -174,7 +174,7 @@ namespace fb_utils
 							const ISC_STATUS* const from, const unsigned int count) noexcept;
 	void copyStatus(Firebird::CheckStatusWrapper* to, const Firebird::IStatus* from) noexcept;
 	unsigned int mergeStatus(ISC_STATUS* const to, unsigned int space, const Firebird::IStatus* from) noexcept;
-	void setIStatus(Firebird::CheckStatusWrapper* to, const ISC_STATUS* from) noexcept;
+	void setIStatus(Firebird::IStatus* to, const ISC_STATUS* from) noexcept;
 	unsigned int statusLength(const ISC_STATUS* const status) noexcept;
 	unsigned int subStatus(const ISC_STATUS* in, unsigned int cin,
 						   const ISC_STATUS* sub, unsigned int csub) noexcept;

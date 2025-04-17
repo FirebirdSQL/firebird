@@ -14,7 +14,7 @@ BOOST_AUTO_TEST_CASE(ConstructionWithStdInitializerTest)
 {
 	Array<int> array(*getDefaultMemoryPool(), {1, 2, 3, 4});
 
-	BOOST_TEST(array.getCount() == 4);
+	BOOST_TEST(array.getCount() == 4u);
 	BOOST_TEST(array[0] == 1);
 	BOOST_TEST(array[3] == 4);
 }
@@ -23,22 +23,22 @@ BOOST_AUTO_TEST_CASE(ClearTest)
 {
 	Array<int> array(*getDefaultMemoryPool(), {1, 2, 3, 4});
 
-	BOOST_TEST(array.getCount() == 4);
+	BOOST_TEST(array.getCount() == 4u);
 
 	array.clear();
-	BOOST_TEST(array.getCount() == 0);
+	BOOST_TEST(array.getCount() == 0u);
 }
 
 BOOST_AUTO_TEST_CASE(IsEmptyAndHasDataTest)
 {
 	Array<int> array(*getDefaultMemoryPool(), {1, 2, 3, 4});
 
-	BOOST_TEST(array.getCount() > 0);
+	BOOST_TEST(array.getCount() > 0u);
 	BOOST_TEST(!array.isEmpty());
 	BOOST_TEST(array.hasData());
 
 	array.clear();
-	BOOST_TEST(array.getCount() == 0);
+	BOOST_TEST(array.getCount() == 0u);
 	BOOST_TEST(array.isEmpty());
 	BOOST_TEST(!array.hasData());
 }
@@ -46,12 +46,12 @@ BOOST_AUTO_TEST_CASE(IsEmptyAndHasDataTest)
 BOOST_AUTO_TEST_CASE(CapacityAndCountTest)
 {
 	Array<int> array1(10);
-	BOOST_TEST(array1.getCapacity() == 10);
-	BOOST_TEST(array1.getCount() == 0);
+	BOOST_TEST(array1.getCapacity() == 10u);
+	BOOST_TEST(array1.getCount() == 0u);
 
 	Array<int> array2(*getDefaultMemoryPool(), 11);
-	BOOST_TEST(array2.getCapacity() == 11);
-	BOOST_TEST(array2.getCount() == 0);
+	BOOST_TEST(array2.getCapacity() == 11u);
+	BOOST_TEST(array2.getCount() == 0u);
 }
 
 BOOST_AUTO_TEST_SUITE_END()	// ArrayTests

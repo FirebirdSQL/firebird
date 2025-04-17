@@ -831,11 +831,11 @@ private:
 		explicit CtrlCHandler(MemoryPool& p)
 			: ShutdownInit(p)
 		{
+			shutdownSemaphore = &semaphore;
 			Thread::start(shutdownThread, 0, 0, &handle);
 
 			procInt = ISC_signal(SIGINT, handlerInt, 0);
 			procTerm = ISC_signal(SIGTERM, handlerTerm, 0);
-			shutdownSemaphore = &semaphore;
 		}
 
 		~CtrlCHandler()
@@ -1424,7 +1424,7 @@ static void setTextType(XSQLVAR* var, unsigned charSet)
 static int sqldaTruncateString(char* buffer, FB_SIZE_T size, const char* s)
 {
 	int ret = fb_utils::snprintf(buffer, size, "%s", s);
-	return MIN(ret, size - 1);
+	return MIN(ret, static_cast<int>(size - 1));
 }
 
 // Describe parameters metadata in an sqlda.
@@ -4582,6 +4582,36 @@ YBatch* YStatement::createBatch(CheckStatusWrapper* status, IMessageMetadata* in
 	return NULL;
 }
 
+
+unsigned YStatement::getMaxInlineBlobSize(CheckStatusWrapper* status)
+{
+	try
+	{
+		YEntry<YStatement> entry(status, this);
+		return entry.next()->getMaxInlineBlobSize(status);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+
+	return 0;
+}
+
+
+void YStatement::setMaxInlineBlobSize(CheckStatusWrapper* status, unsigned size)
+{
+	try
+	{
+		YEntry<YStatement> entry(status, this);
+		entry.next()->setMaxInlineBlobSize(status, size);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+}
+
 //-------------------------------------
 
 IscStatement::~IscStatement()
@@ -5311,7 +5341,8 @@ void YTransaction::getInfo(CheckStatusWrapper* status, unsigned int itemsLength,
 		fb_utils::getDbPathInfo(itemsLength, items, bufferLength, buffer,
 								newItemsBuffer, attachment.get()->dbPath);
 
-		entry.next()->getInfo(status, itemsLength, items, bufferLength, buffer);
+		if (itemsLength)
+			entry.next()->getInfo(status, itemsLength, items, bufferLength, buffer);
 	}
 	catch (const Exception& e)
 	{
@@ -6080,7 +6111,7 @@ YTransaction* YAttachment::getTransaction(ITransaction* tra)
 	if (!tra)
 		Arg::Gds(isc_bad_trans_handle).raise();
 
-	// If validation is successfull, this means that this attachment and valid transaction
+	// If validation is successful, this means that this attachment and valid transaction
 	// use same provider. I.e. the following cast is safe.
 	FbLocalStatus status;
 	YTransaction* yt = static_cast<YTransaction*>(tra->validate(&status, this));
@@ -6217,6 +6248,66 @@ YReplicator* YAttachment::createReplicator(CheckStatusWrapper* status)
 	}
 
 	return NULL;
+}
+
+
+unsigned YAttachment::getMaxBlobCacheSize(CheckStatusWrapper* status)
+{
+	try
+	{
+		YEntry<YAttachment> entry(status, this);
+		return entry.next()->getMaxBlobCacheSize(status);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+
+	return 0;
+}
+
+
+void YAttachment::setMaxBlobCacheSize(CheckStatusWrapper* status, unsigned size)
+{
+	try
+	{
+		YEntry<YAttachment> entry(status, this);
+		entry.next()->setMaxBlobCacheSize(status, size);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+}
+
+
+unsigned YAttachment::getMaxInlineBlobSize(CheckStatusWrapper* status)
+{
+	try
+	{
+		YEntry<YAttachment> entry(status, this);
+		return entry.next()->getMaxInlineBlobSize(status);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+
+	return 0;
+}
+
+
+void YAttachment::setMaxInlineBlobSize(CheckStatusWrapper* status, unsigned size)
+{
+	try
+	{
+		YEntry<YAttachment> entry(status, this);
+		entry.next()->setMaxInlineBlobSize(status, size);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
 }
 
 
@@ -6790,7 +6881,10 @@ void Dispatcher::shutdown(CheckStatusWrapper* userStatus, unsigned int timeout, 
 			}
 
 			if (hasThreads)
+			{
+				PluginManager::deleteDelayed();
 				continue;
+			}
 
 			Stack<YAttachment*, 64> attStack;
 			{
@@ -6820,6 +6914,7 @@ void Dispatcher::shutdown(CheckStatusWrapper* userStatus, unsigned int timeout, 
 				attachment->release();
 			}
 
+			PluginManager::deleteDelayed();
 		}
 
 		// ... and wait for all providers to go away

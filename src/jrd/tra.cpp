@@ -331,8 +331,8 @@ bool TRA_cleanup(thread_db* tdbb)
 
 	WIN window(HEADER_PAGE_NUMBER);
 	const header_page* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
-	const TraNumber ceiling = Ods::getNT(header);
-	const TraNumber active = Ods::getOAT(header);
+	const TraNumber ceiling = header->hdr_next_transaction;
+	const TraNumber active = header->hdr_oldest_active;
 	CCH_RELEASE(tdbb, &window);
 
 	if (ceiling == 0)
@@ -754,12 +754,12 @@ void TRA_header_write(thread_db* tdbb, Database* dbb, TraNumber number)
 	if (!number || dbb->dbb_last_header_write < number)
 	{
 		WIN window(HEADER_PAGE_NUMBER);
-		header_page* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+		const auto header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 
-		const TraNumber next_transaction = Ods::getNT(header);
-		const TraNumber oldest_active = Ods::getOAT(header);
-		const TraNumber oldest_transaction = Ods::getOIT(header);
-		const TraNumber oldest_snapshot = Ods::getOST(header);
+		const TraNumber next_transaction = header->hdr_next_transaction;
+		const TraNumber oldest_transaction = header->hdr_oldest_transaction;
+		const TraNumber oldest_active = header->hdr_oldest_active;
+		const TraNumber oldest_snapshot = header->hdr_oldest_snapshot;
 
 		if (next_transaction)
 		{
@@ -779,16 +779,16 @@ void TRA_header_write(thread_db* tdbb, Database* dbb, TraNumber number)
 			CCH_MARK_MUST_WRITE(tdbb, &window);
 
 			if (dbb->dbb_next_transaction > next_transaction)
-				Ods::writeNT(header, dbb->dbb_next_transaction);
-
-			if (dbb->dbb_oldest_active > oldest_active)
-				Ods::writeOAT(header, dbb->dbb_oldest_active);
+				header->hdr_next_transaction = dbb->dbb_next_transaction;
 
 			if (dbb->dbb_oldest_transaction > oldest_transaction)
-				Ods::writeOIT(header, dbb->dbb_oldest_transaction);
+				header->hdr_oldest_transaction = dbb->dbb_oldest_transaction;
+
+			if (dbb->dbb_oldest_active > oldest_active)
+				header->hdr_oldest_active = dbb->dbb_oldest_active;
 
 			if (dbb->dbb_oldest_snapshot > oldest_snapshot)
-				Ods::writeOST(header, dbb->dbb_oldest_snapshot);
+				header->hdr_oldest_snapshot = dbb->dbb_oldest_snapshot;
 		}
 
 		CCH_RELEASE(tdbb, &window);
@@ -915,12 +915,12 @@ void TRA_update_counters(thread_db* tdbb, Database* dbb)
 	}
 
 	WIN window(HEADER_PAGE_NUMBER);
-	header_page* header = (header_page*)CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+	const auto header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 
-	const TraNumber next_transaction = Ods::getNT(header);
-	const TraNumber oldest_transaction = Ods::getOIT(header);
-	const TraNumber oldest_active = Ods::getOAT(header);
-	const TraNumber oldest_snapshot = Ods::getOST(header);
+	const TraNumber next_transaction = header->hdr_next_transaction;
+	const TraNumber oldest_transaction = header->hdr_oldest_transaction;
+	const TraNumber oldest_active = header->hdr_oldest_active;
+	const TraNumber oldest_snapshot = header->hdr_oldest_snapshot;
 
 	fb_assert(dbb->dbb_next_transaction <= next_transaction);
 
@@ -931,17 +931,17 @@ void TRA_update_counters(thread_db* tdbb, Database* dbb)
 	{
 		CCH_MARK_MUST_WRITE(tdbb, &window);
 
-		if (dbb->dbb_oldest_active > oldest_active)
-			Ods::writeOAT(header, dbb->dbb_oldest_active);
+		if (dbb->dbb_next_transaction > next_transaction)
+			header->hdr_next_transaction = dbb->dbb_next_transaction;
 
 		if (dbb->dbb_oldest_transaction > oldest_transaction)
-			Ods::writeOIT(header, dbb->dbb_oldest_transaction);
+			header->hdr_oldest_transaction = dbb->dbb_oldest_transaction;
+
+		if (dbb->dbb_oldest_active > oldest_active)
+			header->hdr_oldest_active = dbb->dbb_oldest_active;
 
 		if (dbb->dbb_oldest_snapshot > oldest_snapshot)
-			Ods::writeOST(header, dbb->dbb_oldest_snapshot);
-
-		if (dbb->dbb_next_transaction > next_transaction)
-			Ods::writeNT(header, dbb->dbb_next_transaction);
+			header->hdr_oldest_snapshot = dbb->dbb_oldest_snapshot;
 	}
 
 	CCH_RELEASE(tdbb, &window);
@@ -1846,11 +1846,7 @@ void TRA_sweep(thread_db* tdbb)
 	Database* const dbb = tdbb->getDatabase();
 	CHECK_DBB(dbb);
 
-	if (!dbb->allowSweepRun(tdbb))
-	{
-		dbb->clearSweepFlags(tdbb);
-		return;
-	}
+	dbb->initiateSweepRun(tdbb);
 
 	fb_assert(dbb->dbb_flags & DBB_sweep_in_progress);
 
@@ -1920,10 +1916,10 @@ void TRA_sweep(thread_db* tdbb)
 			WIN window(HEADER_PAGE_NUMBER);
 			header_page* const header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 
-			if (Ods::getOIT(header) < --transaction_oldest_active)
+			if (header->hdr_oldest_transaction < --transaction_oldest_active)
 			{
 				CCH_MARK_MUST_WRITE(tdbb, &window);
-				Ods::writeOIT(header, MIN(active, transaction_oldest_active));
+				header->hdr_oldest_transaction = MIN(active, transaction_oldest_active);
 			}
 
 			traceSweep.update(header);
@@ -2102,10 +2098,10 @@ static header_page* bump_transaction_id(thread_db* tdbb, WIN* window, bool dontW
 	window->win_page = HEADER_PAGE_NUMBER;
 	header_page* header = (header_page*) CCH_FETCH(tdbb, window, LCK_write, pag_header);
 
-	const TraNumber next_transaction = Ods::getNT(header);
-	const TraNumber oldest_active = Ods::getOAT(header);
-	const TraNumber oldest_transaction = Ods::getOIT(header);
-	const TraNumber oldest_snapshot = Ods::getOST(header);
+	const TraNumber next_transaction = header->hdr_next_transaction;
+	const TraNumber oldest_transaction = header->hdr_oldest_transaction;
+	const TraNumber oldest_active = header->hdr_oldest_active;
+	const TraNumber oldest_snapshot = header->hdr_oldest_snapshot;
 
 	// Before incrementing the next transaction Id, make sure the current one is valid
 	if (next_transaction)
@@ -2154,17 +2150,16 @@ static header_page* bump_transaction_id(thread_db* tdbb, WIN* window, bool dontW
 
 	//dbb->assignLatestTransactionId(number);
 	dbb->dbb_next_transaction = number;
-
-	Ods::writeNT(header, number);
-
-	if (dbb->dbb_oldest_active > oldest_active)
-		Ods::writeOAT(header, dbb->dbb_oldest_active);
+	header->hdr_next_transaction = number;
 
 	if (dbb->dbb_oldest_transaction > oldest_transaction)
-		Ods::writeOIT(header, dbb->dbb_oldest_transaction);
+		header->hdr_oldest_transaction = dbb->dbb_oldest_transaction;
+
+	if (dbb->dbb_oldest_active > oldest_active)
+		header->hdr_oldest_active = dbb->dbb_oldest_active;
 
 	if (dbb->dbb_oldest_snapshot > oldest_snapshot)
-		Ods::writeOST(header, dbb->dbb_oldest_snapshot);
+		header->hdr_oldest_snapshot = dbb->dbb_oldest_snapshot;
 
 	return header;
 }
@@ -2625,8 +2620,8 @@ static void retain_context(thread_db* tdbb, jrd_tra* transaction, bool commit, i
 		const bool dontWrite = (dbb->dbb_flags & DBB_shared) &&
 			(transaction->tra_flags & TRA_readonly);
 
-		const header_page* const header = bump_transaction_id(tdbb, &window, dontWrite);
-		new_number = Ods::getNT(header);
+		const auto header = bump_transaction_id(tdbb, &window, dontWrite);
+		new_number = header->hdr_next_transaction;
 	}
 #endif
 
@@ -2756,6 +2751,9 @@ namespace {
 			status.check();
 
 			AutoRelease<IAttachment> att(prov->attachDatabase(&status, dbName.c_str(), dpbLen, dpbBytes));
+			if (fb_utils::containsErrorCode(status->getErrors(), isc_sweep_unable_to_run))
+				return;
+
 			status.check();
 		}
 
@@ -3162,6 +3160,10 @@ static void transaction_options(thread_db* tdbb,
 			transaction->tra_flags |= TRA_no_auto_undo;
 			break;
 
+		case isc_tpb_auto_release_temp_blobid:
+			transaction->tra_flags |= TRA_auto_release_temp_blobid;
+			break;
+
 		case isc_tpb_lock_write:
 			// Cannot set a R/W table reservation if the whole txn is R/O.
 			if (read_only.asBool())
@@ -3523,10 +3525,10 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 		const bool dontWrite = (dbb->dbb_flags & DBB_shared) &&
 			(trans->tra_flags & TRA_readonly);
 
-		const header_page* header = bump_transaction_id(tdbb, &window, dontWrite);
-		number = Ods::getNT(header);
-		oldest = Ods::getOIT(header);
-		oldest_active = Ods::getOAT(header);
+		const auto header = bump_transaction_id(tdbb, &window, dontWrite);
+		number = header->hdr_next_transaction;
+		oldest = header->hdr_oldest_transaction;
+		oldest_active = header->hdr_oldest_active;
 	}
 
 	// oldest (OIT) > oldest_active (OAT) if OIT was advanced by sweep

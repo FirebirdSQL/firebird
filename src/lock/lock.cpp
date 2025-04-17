@@ -1145,7 +1145,7 @@ void LockManager::acquire_shmem(SRQ_PTR owner_offset)
 #endif //USE_SHMEM_EXT
 
 	// If we were able to acquire the MUTEX, but there is an prior owner marked
-	// in the the lock table, it means that someone died while owning
+	// in the lock table, it means that someone died while owning
 	// the lock mutex.  In that event, lets see if there is any unfinished work
 	// left around that we need to finish up.
 

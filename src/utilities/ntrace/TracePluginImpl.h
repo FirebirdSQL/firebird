@@ -67,8 +67,7 @@ public:
 		}
 	};
 
-	typedef Firebird::BePlusTree<ConnectionData, AttNumber, Firebird::MemoryPool, ConnectionData>
-		ConnectionsTree;
+	typedef Firebird::BePlusTree<ConnectionData, AttNumber, ConnectionData> ConnectionsTree;
 
 	// Data for tracked (active) transactions
 	struct TransactionData
@@ -89,8 +88,7 @@ public:
 		}
 	};
 
-	typedef Firebird::BePlusTree<TransactionData, TraNumber, Firebird::MemoryPool, TransactionData>
-		TransactionsTree;
+	typedef Firebird::BePlusTree<TransactionData, TraNumber, TransactionData> TransactionsTree;
 
 	// Data for tracked (active) statements
 	struct StatementData
@@ -104,8 +102,7 @@ public:
 		}
 	};
 
-	typedef Firebird::BePlusTree<StatementData, StmtNumber, Firebird::MemoryPool, StatementData>
-		StatementsTree;
+	typedef Firebird::BePlusTree<StatementData, StmtNumber, StatementData> StatementsTree;
 
 	typedef void* ServiceId;
 	struct ServiceData
@@ -127,8 +124,7 @@ public:
 		}
 	};
 
-	typedef Firebird::BePlusTree<ServiceData, ServiceId, Firebird::MemoryPool, ServiceData>
-		ServicesTree;
+	typedef Firebird::BePlusTree<ServiceData, ServiceId, ServiceData> ServicesTree;
 
 	template <class C>
 	struct RoutineHelper

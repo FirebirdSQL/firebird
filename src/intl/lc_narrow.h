@@ -25,8 +25,8 @@
 #define TEXTTYPE_reverse_secondary				0x001	// Reverse order of secondary keys
 #define TEXTTYPE_ignore_specials				0x002	// Do not put special values in keys
 #define TEXTTYPE_expand_before					0x004	// Expansion weights before litagure
-#define TEXTTYPE_secondary_insensitive			0x008	// Don't use secondary level for comparisions
-#define TEXTTYPE_tertiary_insensitive			0x010	// Don't use tertiary level for comparisions
+#define TEXTTYPE_secondary_insensitive			0x008	// Don't use secondary level for comparisons
+#define TEXTTYPE_tertiary_insensitive			0x010	// Don't use tertiary level for comparisons
 #define TEXTTYPE_non_multi_level				0x020	// Sortkey isn't more precise than equivalence class
 #define TEXTTYPE_specials_first					0x040	// Sort special characters in the primary level
 #define TEXTTYPE_disable_compressions			0x080	// Disable compression characters

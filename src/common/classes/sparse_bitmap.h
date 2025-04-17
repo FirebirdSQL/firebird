@@ -60,12 +60,12 @@ class SparseBitmap : public AutoStorage
 public:
 	// Default constructor, stack placement
 	SparseBitmap() :
-		singular(false), singular_value(0), tree(&getPool()), defaultAccessor(this)
+		singular(false), singular_value(0), tree(getPool()), defaultAccessor(this)
 	{ }
 
 	// Pooled constructor
 	explicit SparseBitmap(MemoryPool& p) :
-		AutoStorage(p), singular(false), singular_value(0), tree(&getPool()), defaultAccessor(this)
+		AutoStorage(p), singular(false), singular_value(0), tree(getPool()), defaultAccessor(this)
 	{ }
 
 	// Default accessor methods
@@ -225,7 +225,7 @@ protected:
 		}
 	};
 
-	typedef BePlusTree<Bucket, T, MemoryPool, Bucket> BitmapTree;
+	typedef BePlusTree<Bucket, T, Bucket> BitmapTree;
 	typedef typename BitmapTree::Accessor BitmapTreeAccessor;
 
 	// Set if bitmap contains a single value only

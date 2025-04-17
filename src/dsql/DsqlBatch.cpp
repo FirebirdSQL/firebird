@@ -151,15 +151,20 @@ DsqlBatch::DsqlBatch(DsqlDmlRequest* req, const dsql_msg* /*message*/, IMessageM
 
 	// assign initial default BPB
 	setDefBpb(FB_NELEM(initBlobParameters), initBlobParameters);
-}
 
+	if (const auto att = m_dsqlRequest->req_dbb->dbb_attachment)
+		att->registerBatch(this);
+}
 
 DsqlBatch::~DsqlBatch()
 {
 	if (m_batch)
 		m_batch->resetHandle();
 	if (m_dsqlRequest)
-		m_dsqlRequest->req_batch = NULL;
+		m_dsqlRequest->req_batch = nullptr;
+
+	if (const auto att = m_dsqlRequest->req_dbb->dbb_attachment)
+		att->deregisterBatch(this);
 }
 
 Attachment* DsqlBatch::getAttachment() const

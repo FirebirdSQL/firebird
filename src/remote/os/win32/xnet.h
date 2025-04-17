@@ -38,10 +38,10 @@
 #endif
 
 // Receive wait timeout (ms)
-const DWORD XNET_RECV_WAIT_TIMEOUT	= 500;
+constexpr DWORD XNET_RECV_WAIT_TIMEOUT	= 500;
 
 // Send wait timeout (ms)
-const DWORD XNET_SEND_WAIT_TIMEOUT	= XNET_RECV_WAIT_TIMEOUT;
+constexpr DWORD XNET_SEND_WAIT_TIMEOUT	= XNET_RECV_WAIT_TIMEOUT;
 
 // Mapped file parameters
 
@@ -51,15 +51,15 @@ const DWORD XNET_SEND_WAIT_TIMEOUT	= XNET_RECV_WAIT_TIMEOUT;
 
 #define XPS_USEFUL_SPACE(p)				(XPS_MAPPED_PER_CLI(p) - sizeof(struct xps))
 
-const ULONG XPS_DEF_NUM_CLI			= 10;	// default clients per mapped file
-const ULONG XPS_DEF_PAGES_PER_CLI	= 8;	// default 1K pages space per client
+constexpr ULONG XPS_DEF_NUM_CLI			= 10;	// default clients per mapped file
+constexpr ULONG XPS_DEF_PAGES_PER_CLI	= 8;	// default 1K pages space per client
 
-const ULONG XPS_MAX_NUM_CLI			= 64;	// max clients per mapped file
-const ULONG XPS_MAX_PAGES_PER_CLI	= 16;	// max 1K pages space per client
+constexpr ULONG XPS_MAX_NUM_CLI			= 64;	// max clients per mapped file
+constexpr ULONG XPS_MAX_PAGES_PER_CLI	= 16;	// max 1K pages space per client
 
-const ULONG XNET_INVALID_MAP_NUM	= 0xFFFFFFFF;
+constexpr ULONG XNET_INVALID_MAP_NUM	= 0xFFFFFFFF;
 
-const ULONG XNET_EVENT_SPACE		= 100;	// half of space (bytes) for event handling per connection
+constexpr ULONG XNET_EVENT_SPACE		= 100;	// half of space (bytes) for event handling per connection
 
 // Mapped file structure
 
@@ -77,12 +77,12 @@ typedef struct xpm
 
 // Mapped structure flags
 
-const USHORT XPMF_SERVER_SHUTDOWN	= 1;		// server has shut down
+constexpr USHORT XPMF_SERVER_SHUTDOWN	= 1;	// server has shut down
 
 // Mapped structure ids
 
-const USHORT XPM_FREE				= 0;	// xpm structure is free for use
-const USHORT XPM_BUSY				= 1;	// xpm structure is in use
+constexpr USHORT XPM_FREE				= 0;	// xpm structure is free for use
+constexpr USHORT XPM_BUSY				= 1;	// xpm structure is in use
 
 // Comm channel structure - four per connection (client to server data,
 // server to client data, client to server events, server to client events)
@@ -112,7 +112,7 @@ typedef struct xcc
 	}
 
     struct xcc  *xcc_next;					// pointer to next thread
-	Remote::XnetEndPoint*		xcc_endpoint;				// XnetEndPoint
+	Remote::XnetEndPoint*	xcc_endpoint;	// XnetEndPoint
     XPM         xcc_xpm;					// pointer back to xpm
     ULONG       xcc_map_num;				// this thread's mapped file number
     ULONG       xcc_slot;					// this thread's slot number
@@ -134,8 +134,8 @@ typedef struct xcc
 
 // XCC structure flags
 
-const ULONG XCCF_SERVER_SHUTDOWN	= 1;		// server shutdown has been detected by client
-const ULONG XCCF_ASYNC				= 2;		// secondary XCC for events processing
+constexpr ULONG XCCF_SERVER_SHUTDOWN	= 1;	// server shutdown has been detected by client
+constexpr ULONG XCCF_ASYNC				= 2;	// secondary XCC for events processing
 
 
 // This structure (xps) is mapped to the start of the allocated
@@ -154,17 +154,17 @@ typedef struct xps
 
 // XPS flags
 
-const USHORT XPS_DISCONNECTED = 1;
+constexpr USHORT XPS_DISCONNECTED = 1;
 
 // xps_channel numbers
 
-const int XPS_CHANNEL_C2S_DATA		= 0;	// 0 - client to server data
-const int XPS_CHANNEL_S2C_DATA		= 1;	// 1 - server to client data
-const int XPS_CHANNEL_C2S_EVENTS	= 2;	// 2 - client to server events
-const int XPS_CHANNEL_S2C_EVENTS	= 3;	// 3 - server to client events
+constexpr int XPS_CHANNEL_C2S_DATA		= 0;	// 0 - client to server data
+constexpr int XPS_CHANNEL_S2C_DATA		= 1;	// 1 - server to client data
+constexpr int XPS_CHANNEL_C2S_EVENTS	= 2;	// 2 - client to server events
+constexpr int XPS_CHANNEL_S2C_EVENTS	= 3;	// 3 - server to client events
 
-const ULONG XPI_CLIENT_PROTOCOL_VERSION		= 3;
-const ULONG XPI_SERVER_PROTOCOL_VERSION		= 3;
+constexpr ULONG XPI_CLIENT_PROTOCOL_VERSION		= 3;
+constexpr ULONG XPI_SERVER_PROTOCOL_VERSION		= 3;
 
 // XNET_RESPONSE - server response on client connect request
 
@@ -180,25 +180,25 @@ struct XNET_RESPONSE
 
 // XNET_CONNECT_RESPONZE_SIZE - amount of bytes server writes on connect response
 
-const size_t XNET_CONNECT_RESPONZE_SIZE	= sizeof(XNET_RESPONSE);
+constexpr size_t XNET_CONNECT_RESPONZE_SIZE	= sizeof(XNET_RESPONSE);
 
 // Windows names used to identify various named objects
 
-const char* const XNET_MAPPED_FILE_NAME			= "%s_MAP_%" ULONGFORMAT"_%" ULONGFORMAT;
+constexpr const char* XNET_MAPPED_FILE_NAME			= "%s_MAP_%" ULONGFORMAT"_%" ULONGFORMAT;
 
-const char* const XNET_CONNECT_MAP				= "%s_CONNECT_MAP";
-const char* const XNET_CONNECT_MUTEX			= "%s_CONNECT_MUTEX";
-const char* const XNET_CONNECT_EVENT			= "%s_CONNECT_EVENT";
-const char* const XNET_RESPONSE_EVENT			= "%s_RESPONSE_EVENT";
+constexpr const char* XNET_CONNECT_MAP				= "%s_CONNECT_MAP";
+constexpr const char* XNET_CONNECT_MUTEX			= "%s_CONNECT_MUTEX";
+constexpr const char* XNET_CONNECT_EVENT			= "%s_CONNECT_EVENT";
+constexpr const char* XNET_RESPONSE_EVENT			= "%s_RESPONSE_EVENT";
 
-const char* const XNET_E_C2S_DATA_CHAN_FILLED	= "%s_E_C2S_DATA_FILLED_%" ULONGFORMAT"_%" ULONGFORMAT"_%" ULONGFORMAT;
-const char* const XNET_E_C2S_DATA_CHAN_EMPTED	= "%s_E_C2S_DATA_EMPTED_%" ULONGFORMAT"_%" ULONGFORMAT"_%" ULONGFORMAT;
-const char* const XNET_E_S2C_DATA_CHAN_FILLED	= "%s_E_S2C_DATA_FILLED_%" ULONGFORMAT"_%" ULONGFORMAT"_%" ULONGFORMAT;
-const char* const XNET_E_S2C_DATA_CHAN_EMPTED	= "%s_E_S2C_DATA_EMPTED_%" ULONGFORMAT"_%" ULONGFORMAT"_%" ULONGFORMAT;
+constexpr const char* XNET_E_C2S_DATA_CHAN_FILLED	= "%s_E_C2S_DATA_FILLED_%" ULONGFORMAT"_%" ULONGFORMAT"_%" ULONGFORMAT;
+constexpr const char* XNET_E_C2S_DATA_CHAN_EMPTED	= "%s_E_C2S_DATA_EMPTED_%" ULONGFORMAT"_%" ULONGFORMAT"_%" ULONGFORMAT;
+constexpr const char* XNET_E_S2C_DATA_CHAN_FILLED	= "%s_E_S2C_DATA_FILLED_%" ULONGFORMAT"_%" ULONGFORMAT"_%" ULONGFORMAT;
+constexpr const char* XNET_E_S2C_DATA_CHAN_EMPTED	= "%s_E_S2C_DATA_EMPTED_%" ULONGFORMAT"_%" ULONGFORMAT"_%" ULONGFORMAT;
 
-const char* const XNET_E_C2S_EVNT_CHAN_FILLED	= "%s_E_C2S_EVNT_FILLED_%" ULONGFORMAT"_%" ULONGFORMAT"_%" ULONGFORMAT;
-const char* const XNET_E_C2S_EVNT_CHAN_EMPTED	= "%s_E_C2S_EVNT_EMPTED_%" ULONGFORMAT"_%" ULONGFORMAT"_%" ULONGFORMAT;
-const char* const XNET_E_S2C_EVNT_CHAN_FILLED	= "%s_E_S2C_EVNT_FILLED_%" ULONGFORMAT"_%" ULONGFORMAT"_%" ULONGFORMAT;
-const char* const XNET_E_S2C_EVNT_CHAN_EMPTED	= "%s_E_S2C_EVNT_EMPTED_%" ULONGFORMAT"_%" ULONGFORMAT"_%" ULONGFORMAT;
+constexpr const char* XNET_E_C2S_EVNT_CHAN_FILLED	= "%s_E_C2S_EVNT_FILLED_%" ULONGFORMAT"_%" ULONGFORMAT"_%" ULONGFORMAT;
+constexpr const char* XNET_E_C2S_EVNT_CHAN_EMPTED	= "%s_E_C2S_EVNT_EMPTED_%" ULONGFORMAT"_%" ULONGFORMAT"_%" ULONGFORMAT;
+constexpr const char* XNET_E_S2C_EVNT_CHAN_FILLED	= "%s_E_S2C_EVNT_FILLED_%" ULONGFORMAT"_%" ULONGFORMAT"_%" ULONGFORMAT;
+constexpr const char* XNET_E_S2C_EVNT_CHAN_EMPTED	= "%s_E_S2C_EVNT_EMPTED_%" ULONGFORMAT"_%" ULONGFORMAT"_%" ULONGFORMAT;
 
 #endif // REMOTE_XNET_H

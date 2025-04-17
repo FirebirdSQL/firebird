@@ -279,7 +279,7 @@ private:
 		const char* getName() const override { return "TipCache:TranBlock"; }
 	};
 
-	typedef Firebird::BePlusTree<StatusBlockData*, TpcBlockNumber, Firebird::MemoryPool, StatusBlockData> BlocksMemoryMap;
+	typedef Firebird::BePlusTree<StatusBlockData*, TpcBlockNumber, StatusBlockData> BlocksMemoryMap;
 
 	static const ULONG TPC_VERSION = 2;
 	static const int SAFETY_GAP_BLOCKS = 1;

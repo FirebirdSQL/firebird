@@ -312,7 +312,7 @@ jobs:
 
       - name: Prepare - Install tools
         run: |
-          brew install automake autoconf-archive cmake libtool ninja
+          brew install automake autoconf-archive libtool ninja
 
       - name: Export GitHub Actions cache environment variables
         uses: actions/github-script@v7
