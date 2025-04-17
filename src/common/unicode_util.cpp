@@ -92,6 +92,7 @@ public:
 
 	ModuleLoader::Module* formatAndLoad(const char* templateName);
 	void initialize(ModuleLoader::Module* module);
+	void finalize(ModuleLoader::Module* module);
 
 	template <typename T> string getEntryPoint(const char* name, ModuleLoader::Module* module, T& ptr,
 		bool optional = false)
@@ -280,6 +281,15 @@ void BaseICU::initialize(ModuleLoader::Module* module)
 		UErrorCode status = U_ZERO_ERROR;
 		uSetTimeZoneFilesDirectory(TimeZoneUtil::getTzDataPath().c_str(), &status);
 	}
+}
+
+void BaseICU::finalize(ModuleLoader::Module* module)
+{
+	void (U_EXPORT2 *uCleanup)();
+
+	getEntryPoint("u_cleanup", module, uCleanup, true);
+	if (uCleanup)
+		uCleanup();
 }
 
 }
@@ -476,13 +486,16 @@ public:
 		return o;
 	}
 
+	void fini()
+	{
+		if (module)
+			finalize(module);
+	}
+
 private:
 	AutoPtr<ModuleLoader::Module> module;
 	AutoPtr<ModuleLoader::Module> inModule;
 };
-
-static ImplementConversionICU* convIcu = NULL;
-static GlobalPtr<Mutex> convIcuMutex;
 
 
 // cache ICU module instances to not load and unload many times
@@ -1280,102 +1293,110 @@ void UnicodeUtil::getICUVersion(ICU* icu, int& majorVersion, int& minorVersion)
 }
 
 
-UnicodeUtil::ConversionICU& UnicodeUtil::getConversionICU()
+
+class ConvICUAllocator
 {
-	if (convIcu)
+public:
+	static Jrd::ImplementConversionICU* create()
 	{
-		return *convIcu;
-	}
+		Jrd::ImplementConversionICU* convIcu = nullptr;
 
-	MutexLockGuard g(convIcuMutex, "UnicodeUtil::getConversionICU");
+		// Try "favorite" (distributed on windows) version first
+		const int favMaj = 63;
+		const int favMin = 1;
+		try
+		{
+			if ((convIcu = Jrd::ImplementConversionICU::create(favMaj, favMin)))
+				return convIcu;
+		}
+		catch (const Exception&)
+		{ }
 
-	if (convIcu)
-	{
-		return *convIcu;
-	}
+		// Try system-wide version
+		try
+		{
+			if ((convIcu = Jrd::ImplementConversionICU::create(0, 0)))
+				return convIcu;
+		}
+		catch (const Exception&)
+		{ }
 
-	// Try "favorite" (distributed on windows) version first
-	const int favMaj = 63;
-	const int favMin = 1;
-	try
-	{
-		if ((convIcu = ImplementConversionICU::create(favMaj, favMin)))
-			return *convIcu;
-	}
-	catch (const Exception&)
-	{ }
+		// Do a regular search
+		LocalStatus ls;
+		CheckStatusWrapper lastError(&ls);
+		string version;
 
-	// Try system-wide version
-	try
-	{
-		if ((convIcu = ImplementConversionICU::create(0, 0)))
-			return *convIcu;
-	}
-	catch (const Exception&)
-	{ }
+		// According to http://userguide.icu-project.org/design#TOC-Version-Numbers-in-ICU
+		// we using two ranges of version numbers: 3.0 - 4.8 and 49 - 79.
+		// Note 1: the most current version for now is 64, thus it is seems as enough to
+		// limit upper bound by value of 79. It should be enlarged when necessary in the
+		// future.
+		// Note 2: the required function ucal_getTZDataVersion() is available since 3.8.
 
-	// Do a regular search
-	LocalStatus ls;
-	CheckStatusWrapper lastError(&ls);
-	string version;
-
-	// According to http://userguide.icu-project.org/design#TOC-Version-Numbers-in-ICU
-	// we using two ranges of version numbers: 3.0 - 4.8 and 49 - 79.
-	// Note 1: the most current version for now is 64, thus it is seems as enough to
-	// limit upper bound by value of 79. It should be enlarged when necessary in the
-	// future.
-	// Note 2: the required function ucal_getTZDataVersion() is available since 3.8.
-
-	for (int major = 79; major >= 3;)
-	{
+		for (int major = 79; major >= 3;)
+		{
 #ifdef WIN_NT
-		int minor = 0;
+			int minor = 0;
 #else
-		int minor = 9;
+			int minor = 9;
 #endif
 
-		if (major == 4)
-			minor = 8;
-		else if (major <= 4)
-			minor = 9;
+			if (major == 4)
+				minor = 8;
+			else if (major <= 4)
+				minor = 9;
 
-		for (; minor >= 0; --minor)
-		{
-			if ((major == favMaj) && (minor == favMin))
+			for (; minor >= 0; --minor)
 			{
-				continue;
+				if ((major == favMaj) && (minor == favMin))
+				{
+					continue;
+				}
+
+				try
+				{
+					if ((convIcu = Jrd::ImplementConversionICU::create(major, minor)))
+						return convIcu;
+				}
+				catch (const Exception& ex)
+				{
+					ex.stuffException(&lastError);
+					version.printf("Error loading ICU library version %d.%d", major, minor);
+				}
 			}
 
-			try
-			{
-				if ((convIcu = ImplementConversionICU::create(major, minor)))
-					return *convIcu;
-			}
-			catch (const Exception& ex)
-			{
-				ex.stuffException(&lastError);
-				version.printf("Error loading ICU library version %d.%d", major, minor);
-			}
+			if (major == 49)
+				major = 4;
+			else
+				major--;
 		}
 
-		if (major == 49)
-			major = 4;
-		else
-			major--;
+		Arg::Gds err(isc_icu_library);
+
+		if (lastError.getState() & Firebird::IStatus::STATE_ERRORS)
+		{
+			err << Arg::StatusVector(lastError.getErrors()) <<
+				Arg::Gds(isc_random) << Arg::Str(version);
+		}
+
+		err.raise();
 	}
 
-	Arg::Gds err(isc_icu_library);
-
-	if (lastError.getState() & Firebird::IStatus::STATE_ERRORS)
+	static void destroy(Jrd::ImplementConversionICU* inst)
 	{
-		err << Arg::StatusVector(lastError.getErrors()) <<
-			   Arg::Gds(isc_random) << Arg::Str(version);
+		if (inst)
+		{
+			inst->fini();
+			delete inst;
+		}
 	}
+};
 
-	err.raise();
+static InitInstance<ImplementConversionICU, ConvICUAllocator> convIcuInstance;
 
-	// compiler warning silencer
-	return *convIcu;
+UnicodeUtil::ConversionICU& UnicodeUtil::getConversionICU()
+{
+	return convIcuInstance();
 }
 
 
