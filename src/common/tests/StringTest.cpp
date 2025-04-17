@@ -418,47 +418,47 @@ BOOST_AUTO_TEST_CASE(FindTest)
 					//	 9
 	string b = "345";
 
-	check(a.find(b), 3);
-	check(a.find("45"), 4);
-	check(a.find('5'), 5);
+	check(a.find(b), 3u);
+	check(a.find("45"), 4u);
+	check(a.find('5'), 5u);
 	check(a.find("ZZ"), string::npos);
 
-	check(a.rfind(b), 9);
-	check(a.rfind("45"), 10);
-	check(a.rfind('5'), 11);
+	check(a.rfind(b), 9u);
+	check(a.rfind("45"), 10u);
+	check(a.rfind('5'), 11u);
 	check(a.rfind("ZZ"), string::npos);
 
-	check(a.find("45", 8), 10);
+	check(a.find("45", 8), 10u);
 
-	check(a.find_first_of("aub"), 6);
-	check(a.find_first_of(b), 3);
-	check(a.find_first_of("54"), 4);
-	check(a.find_first_of('5'), 5);
+	check(a.find_first_of("aub"), 6u);
+	check(a.find_first_of(b), 3u);
+	check(a.find_first_of("54"), 4u);
+	check(a.find_first_of('5'), 5u);
 	check(a.find_first_of("ZZ"), string::npos);
 
-	check(a.find_last_of("aub"), 8);
-	check(a.find_last_of(b), 11);
-	check(a.find_last_of("54"), 11);
-	check(a.find_last_of('5'), 11);
+	check(a.find_last_of("aub"), 8u);
+	check(a.find_last_of(b), 11u);
+	check(a.find_last_of("54"), 11u);
+	check(a.find_last_of('5'), 11u);
 	check(a.find_last_of("ZZ"), string::npos);
 
-	check(a.find_first_of("45", 8), 10);
+	check(a.find_first_of("45", 8u), 10u);
 
 	b = "010";
-	check(a.find_first_not_of("aub"), 0);
-	check(a.find_first_not_of(b), 2);
-	check(a.find_first_not_of("0102"), 3);
-	check(a.find_first_not_of('0'), 1);
+	check(a.find_first_not_of("aub"), 0u);
+	check(a.find_first_not_of(b), 2u);
+	check(a.find_first_not_of("0102"), 3u);
+	check(a.find_first_not_of('0'), 1u);
 	check(a.find_first_not_of(a), string::npos);
 
 	b = "878";
-	check(a.find_last_not_of("aub"), 14);
-	check(a.find_last_not_of(b), 12);
-	check(a.find_last_not_of("78"), 12);
-	check(a.find_last_not_of('8'), 13);
+	check(a.find_last_not_of("aub"), 14u);
+	check(a.find_last_not_of(b), 12u);
+	check(a.find_last_not_of("78"), 12u);
+	check(a.find_last_not_of('8'), 13u);
 	check(a.find_last_not_of(a), string::npos);
 
-	check(a.find_first_not_of("u345", 8), 12);
+	check(a.find_first_not_of("u345", 8u), 12u);
 }
 
 BOOST_AUTO_TEST_CASE(SubstrTest)
@@ -466,13 +466,13 @@ BOOST_AUTO_TEST_CASE(SubstrTest)
 	string a = lbl;
 	string b;
 
-	b = a.substr(3, 4);
+	b = a.substr(3u, 4u);
 	validate(b, "3456");
 
-	b = a.substr(5, 20);
+	b = a.substr(5u, 20u);
 	validate(b, "56789");
 
-	b = a.substr(50, 20);
+	b = a.substr(50u, 20u);
 	validate(b, "");
 }
 

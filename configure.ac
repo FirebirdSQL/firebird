@@ -98,7 +98,7 @@ if test "x$VCPKG_TRIPLET" != "x" ; then
   AC_SUBST(VCPKG_INSTALLED)
 fi
 
-dnl EKU: set appropiate defaults for each platform
+dnl EKU: set appropriate defaults for each platform
 dnl      EDITLINE_FLG     : support fancy command line editing in isql
 dnl      SHRLIB_EXT       : suffix of shared library files
 
@@ -879,7 +879,7 @@ AC_SUBST(GPRE_LANGUAGE_MODULES)
 dnl Compression switch
 COMPRESSION=Y
 AC_ARG_WITH(wire-compress,
-  [  --with-wire-compress    support compression of data, transfered over the wire (default=yes)],
+  [  --with-wire-compress    support compression of data, transferred over the wire (default=yes)],
   [case "$withval" in
      yes) ;;
      no)  COMPRESSION=N;;

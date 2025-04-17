@@ -64,6 +64,7 @@
 #include "../common/dsc_proto.h"
 #include "../common/ThreadStart.h"
 #include "../common/msg_encode.h"
+#include "../common/classes/BatchCompletionState.h"
 
 using MsgFormat::SafeArg;
 using namespace Firebird;
@@ -1897,7 +1898,7 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 			int elements_written = 1;
 			end_ranges = field->fld_ranges + 2 * field->fld_dimensions;
 			//
-			// Here is the important work. Calculate the the bounds to be written
+			// Here is the important work. Calculate the bounds to be written
 			// so that the resulting slice is a rectangular/square slice.
 			// For a 2 dimensional array of size 1..N, 1..M, which is partially
 			// filled, we have already calculated the dims of last element. Say
@@ -2312,7 +2313,6 @@ void get_blob(BurpGlobals* tdgbl, IBatch* batch, const burp_fld* fields, UCHAR* 
 	}
 
 	// Eat up blob segments
-
 	for (; segments > 0; --segments)
 	{
 		USHORT length = get(tdgbl);
@@ -4204,53 +4204,85 @@ bool get_files(BurpGlobals* tdgbl)
 	att_type		attribute;
 	scan_attr_t		scan_next_attr;
 
-	STORE (REQUEST_HANDLE tdgbl->handles_get_files_req_handle1)
-		X IN RDB$FILES
-		X.RDB$FILE_FLAGS = 0;
+	BASED_ON RDB$FILES.RDB$FILE_NAME filename = "";
+	SSHORT flags = 0, sequence = 0, number = 0;
+	SLONG start = 0, length = 0;
 
-		skip_init(&scan_next_attr);
-		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
+	skip_init(&scan_next_attr);
+	while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
+	{
+		switch (attribute)
 		{
-			switch (attribute)
-			{
-			case att_file_filename:
-				GET_TEXT(X.RDB$FILE_NAME);
-				BURP_verbose (116, X.RDB$FILE_NAME);
-				// msg 116 restoring file %s
-				break;
+		case att_file_filename:
+			GET_TEXT(filename);
+			break;
 
-			case att_file_sequence:
-				X.RDB$FILE_SEQUENCE = (USHORT) get_int32(tdgbl);
-				break;
+		case att_file_sequence:
+			sequence = (SSHORT) get_int32(tdgbl);
+			break;
 
-			case att_file_start:
-				X.RDB$FILE_START = get_int32(tdgbl);
-				break;
+		case att_file_start:
+			start = get_int32(tdgbl);
+			break;
 
-			case att_file_length:
-				X.RDB$FILE_LENGTH = get_int32(tdgbl);
-				break;
+		case att_file_length:
+			length = get_int32(tdgbl);
+			break;
 
-			case att_file_flags:
-				X.RDB$FILE_FLAGS |= get_int32(tdgbl);
-				break;
+		case att_file_flags:
+			flags |= (SSHORT) get_int32(tdgbl);
+			break;
 
-			case att_shadow_number:
-				X.RDB$SHADOW_NUMBER = (USHORT) get_int32(tdgbl);
-				if (tdgbl->gbl_sw_kill && X.RDB$SHADOW_NUMBER)
-					X.RDB$FILE_FLAGS |= FILE_inactive;
-				break;
+		case att_shadow_number:
+			number = (SSHORT) get_int32(tdgbl);
+			if (tdgbl->gbl_sw_kill && number)
+				flags |= FILE_inactive;
+			break;
 
-			default:
-				bad_attribute(scan_next_attr, attribute, 85);
-				// msg 85 file
-				break;
-			}
+		default:
+			bad_attribute(scan_next_attr, attribute, 85);
+			// msg 85 file
+			break;
 		}
-	END_STORE;
-	ON_ERROR
-		general_on_error ();
-	END_ERROR;
+	}
+
+	const bool multiFileSupport = (tdgbl->runtimeODS <= DB_VERSION_DDL13_1);
+
+	if ((multiFileSupport || !sequence) && filename[0])
+	{
+		BURP_verbose (116, filename);
+		// msg 116 restoring file %s
+
+		STORE (REQUEST_HANDLE tdgbl->handles_get_files_req_handle1)
+			X IN RDB$FILES
+
+			strncpy(X.RDB$FILE_NAME, filename, sizeof(X.RDB$FILE_NAME));
+			X.RDB$FILE_FLAGS = flags;
+			X.RDB$SHADOW_NUMBER = number;
+
+			if (multiFileSupport)
+			{
+				X.RDB$FILE_SEQUENCE.NULL = FALSE;
+				X.RDB$FILE_SEQUENCE = sequence;
+
+				X.RDB$FILE_START.NULL = FALSE;
+				X.RDB$FILE_START = start;
+
+				X.RDB$FILE_LENGTH.NULL = FALSE;
+				X.RDB$FILE_LENGTH = length;
+			}
+			else
+			{
+				X.RDB$FILE_SEQUENCE.NULL = TRUE;
+				X.RDB$FILE_START.NULL = TRUE;
+				X.RDB$FILE_LENGTH.NULL = TRUE;
+			}
+
+		END_STORE;
+		ON_ERROR
+			general_on_error ();
+		END_ERROR;
+	}
 
 	return true;
 }
@@ -8626,9 +8658,9 @@ bool get_mapping(BurpGlobals* tdgbl)
 			BurpSql mapRole(tdgbl, sql.c_str());
 			mapRole.execute(tdgbl->tr_handle);
 		}
-		catch (const Firebird::FbException& ex)
+		catch (const status_exception& ex)
 		{
-			fb_utils::copyStatus(&tdgbl->status_vector, ex.getStatus());
+			ex.stuffException(&tdgbl->status_vector);
 			general_on_error ();
 		}
 	}
@@ -11557,9 +11589,9 @@ void fix_generator(BurpGlobals* tdgbl, const FixGenerator* g)
 		BurpSql fixGen(tdgbl, sql.c_str());
 		fixGen.execute(gds_trans);
 	}
-	catch (const Firebird::FbException& ex)
+	catch (const status_exception& ex)
 	{
-		fb_utils::copyStatus(&tdgbl->status_vector, ex.getStatus());
+		ex.stuffException(&tdgbl->status_vector);
 
 		if (tdgbl->status_vector->getErrors()[1] == isc_dsql_error)
 		{
@@ -11673,6 +11705,7 @@ void WriteRelationMeta::clear()
 	m_blr.clear();
 	m_inMgsNum = 0;
 	m_inMsgLen = 0;
+	m_blobCount = 0;
 }
 
 void WriteRelationMeta::setRelation(BurpGlobals* tdgbl, const burp_rel* relation)
@@ -11794,11 +11827,17 @@ IBatch* WriteRelationMeta::createBatch(BurpGlobals* tdgbl, IAttachment* att)
 			// correct batchStep if necessary
 			unsigned msgSize = m_batchMeta->getAlignedLength(&tdgbl->throwStatus);
 			if (msgSize * m_batchStep > bufSize)
+			{
 				m_batchStep = bufSize / msgSize;
+				m_blobCount++;		// looks like we are under low ram conditions on server...
+									// make batch step even smaller if we have some blobs
+			}
+			if (m_blobCount)
+				m_batchStep /= m_blobCount;
 
 			// determine maximum blob size for inline transfer
 			m_batchInlineBlobLimit = bufSize / m_batchStep;
-			// take into an account:	   blob alignment	header size
+			// take into an account:  blob alignment   header size
 			m_batchInlineBlobLimit -= ((blAlign - 1) + blHdr);
 		}
 		fb_assert(m_batchInlineBlobLimit);
@@ -11878,6 +11917,8 @@ bool WriteRelationMeta::prepareBatch(BurpGlobals* tdgbl)
 				offset = FB_ALIGN(offset, alignment);
 			field->fld_offset = offset;
 			offset += field->fld_total_len = desc.dsc_length;
+			if (desc.isBlob())
+				++m_blobCount;
 
 			SLONG sqlLength, sqlSubType, sqlScale, sqlType;
 			desc.getSqlInfo(&sqlLength, &sqlSubType, &sqlScale, &sqlType);
@@ -12365,7 +12406,7 @@ bool RestoreRelationTask::fileReader(Item& item)
 		const FB_SSIZE_T attLen = 1 + (tdgbl->gbl_sw_transportable ? 12 : 6);
 		const FB_SSIZE_T overhead = tdgbl->gbl_sw_compress ? (len / 127 + 1) : 0;
 
-		if (len + attLen + overhead > space)
+		if (static_cast<FB_SSIZE_T>(len) + attLen + overhead > space)
 		{
 			if (ioBuf)
 			{
@@ -12474,6 +12515,8 @@ inline void RestoreRelationTask::checkSpace(IOBuffer** pBuf, const FB_SIZE_T len
 	(*pBuf)->setUsed((*pBuf)->getSize() - *pSpace);
 
 	IOBuffer* newBuf = getCleanBuffer();
+	if (!newBuf)	// error ?
+		throw LongJump();
 	(*pBuf)->linkNext(newBuf);
 
 	if ((*pBuf)->getRecs())

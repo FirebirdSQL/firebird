@@ -348,6 +348,7 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 
 	dsql_rel* relation = NULL;
 	dsql_prc* procedure = NULL;
+	dsql_tab_func* tableValueFunctionContext = nullptr;
 
 	// figure out whether this is a relation or a procedure
 	// and give an error if it is neither
@@ -356,11 +357,14 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 	ProcedureSourceNode* procNode = NULL;
 	RelationSourceNode* relNode = NULL;
 	SelectExprNode* selNode = NULL;
+	TableValueFunctionSourceNode* tableValueFunctionNode = nullptr;
 
 	if ((procNode = nodeAs<ProcedureSourceNode>(relationNode)))
 		relation_name = procNode->dsqlName.identifier;
 	else if ((relNode = nodeAs<RelationSourceNode>(relationNode)))
 		relation_name = relNode->dsqlName;
+	else if ((tableValueFunctionNode = nodeAs<TableValueFunctionSourceNode>(relationNode)))
+		relation_name = tableValueFunctionNode->alias;
 	//// TODO: LocalTableSourceNode
 	else if ((selNode = nodeAs<SelectExprNode>(relationNode)))
 		relation_name = selNode->alias.c_str();
@@ -370,6 +374,11 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 	if (selNode)
 	{
 		// No processing needed here for derived tables.
+	}
+	else if (tableValueFunctionNode)
+	{
+		tableValueFunctionContext = FB_NEW_POOL(*tdbb->getDefaultPool()) dsql_tab_func(*tdbb->getDefaultPool());
+		tableValueFunctionContext->funName = tableValueFunctionNode->dsqlName;
 	}
 	else if (procNode && (procNode->dsqlName.package.hasData() || procNode->inputSources))
 	{
@@ -430,6 +439,7 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 	const auto context = FB_NEW_POOL(*tdbb->getDefaultPool()) dsql_ctx(*tdbb->getDefaultPool());
 	context->ctx_relation = relation;
 	context->ctx_procedure = procedure;
+	context->ctx_table_value_fun = tableValueFunctionContext;
 
 	if (selNode)
 	{
@@ -467,6 +477,8 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 		// as one, I'll leave this assignment here. It will be set in PASS1_derived_table anyway.
 		///context->ctx_rse = selNode->querySpec;
 	}
+	else if ((tableValueFunctionNode = nodeAs<TableValueFunctionSourceNode>(relationNode)))
+		str = tableValueFunctionNode->alias.c_str();
 
 	if (str.hasData())
 		context->ctx_internal_alias = str;
@@ -598,6 +610,15 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 					status_exception::raise(Arg::Gds(isc_prcmismat) << procNode->dsqlName.toString() << mismatchStatus);
 			}
 		}
+	}
+	else if (tableValueFunctionNode)
+	{
+		context->ctx_flags |= CTX_blr_fields;
+
+		fb_assert(tableValueFunctionContext);
+		tableValueFunctionContext->outputField = tableValueFunctionNode->makeField(dsqlScratch);
+
+		context->ctx_proc_inputs = tableValueFunctionNode->inputList;
 	}
 
 	// push the context onto the dsqlScratch context stack
@@ -959,7 +980,7 @@ void PASS1_expand_contexts(DsqlContextStack& contexts, dsql_ctx* context)
 {
 	//// TODO: LocalTableSourceNode
 	if (context->ctx_relation || context->ctx_procedure ||
-		context->ctx_map || context->ctx_win_maps.hasData())
+		context->ctx_map || context->ctx_win_maps.hasData() || context->ctx_table_value_fun)
 	{
 		if (context->ctx_parent)
 			context = context->ctx_parent;
@@ -1431,6 +1452,27 @@ void PASS1_expand_select_node(DsqlCompilerScratch* dsqlScratch, ExprNode* node, 
 		else
 			list->add(value);
 	}
+	else if (auto tableValueFunctionNode = nodeAs<TableValueFunctionSourceNode>(node))
+	{
+		auto context = tableValueFunctionNode->dsqlContext;
+
+		if (const auto tableValueFunctionContext = context->ctx_table_value_fun)
+		{
+			tableValueFunctionNode->setDefaultNameField(dsqlScratch);
+
+			for (dsql_fld* field = tableValueFunctionContext->outputField; field; field = field->fld_next)
+			{
+				DEV_BLKCHK(field, dsql_type_fld);
+				NestConst<ValueExprNode> select_item = NULL;
+				if (!hide_using || context->getImplicitJoinField(field->fld_name, select_item))
+				{
+					if (!select_item)
+						select_item = MAKE_field(context, field, NULL);
+					list->add(select_item);
+				}
+			}
+		}
+	}
 	else
 	{
 		fb_assert(node->getKind() == DmlNode::KIND_VALUE);
@@ -1671,7 +1713,7 @@ static ValueExprNode* pass1_make_derived_field(thread_db* tdbb, DsqlCompilerScra
 		// Aggregate's have map on top.
 		ValueExprNode* derived_field = pass1_make_derived_field(tdbb, dsqlScratch, mapNode->map->map_node);
 
-		// If we had succesfully made a derived field node change it with orginal map.
+		// If we had successfully made a derived field node change it with original map.
 		if ((derivedField = nodeAs<DerivedFieldNode>(derived_field)))
 		{
 			derivedField->value = select_item;
@@ -1727,6 +1769,13 @@ RecordSourceNode* PASS1_relation(DsqlCompilerScratch* dsqlScratch, RecordSourceN
 		procNode->inputSources = context->ctx_proc_inputs;
 		procNode->dsqlInputArgNames = nodeAs<ProcedureSourceNode>(input)->dsqlInputArgNames;
 		return procNode;
+	}
+	else if (context->ctx_table_value_fun)
+	{
+			const auto tableValueFunctionNode = FB_NEW_POOL(*tdbb->getDefaultPool())
+				TableValueFunctionSourceNode(*tdbb->getDefaultPool());
+			tableValueFunctionNode->dsqlContext = context;
+			return tableValueFunctionNode;
 	}
 	//// TODO: LocalTableSourceNode
 
@@ -2100,7 +2149,7 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 			ExprNode::doDsqlFieldRemapper(remapper, parentRse->dsqlOrder, rse->dsqlOrder);
 			rse->dsqlOrder = NULL;
 
-			// AB: Check for invalid contructions inside the ORDER BY clause
+			// AB: Check for invalid constructions inside the ORDER BY clause
 			ValueListNode* valueList = targetRse->dsqlOrder;
 			NestConst<ValueExprNode>* ptr = valueList->items.begin();
 			for (const NestConst<ValueExprNode>* const end = valueList->items.end(); ptr != end; ++ptr)
@@ -2129,7 +2178,7 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 
 			ExprNode::doDsqlFieldRemapper(remapper, parentRse->dsqlWhere);
 
-			// AB: Check for invalid contructions inside the HAVING clause
+			// AB: Check for invalid constructions inside the HAVING clause
 
 			if (InvalidReferenceFinder::find(dsqlScratch, parent_context, aggregate->dsqlGroup,
 					parentRse->dsqlWhere))
@@ -2209,7 +2258,7 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 
 		if (aggregate)
 		{
-			// Check for invalid contructions inside selected-items list
+			// Check for invalid constructions inside selected-items list
 			ValueListNode* valueList = rse->dsqlSelectList;
 			NestConst<ValueExprNode>* ptr = valueList->items.begin();
 			for (const NestConst<ValueExprNode>* const end = valueList->items.end(); ptr != end; ++ptr)
@@ -2233,7 +2282,7 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 		{
 			if (aggregate)
 			{
-				// Check for invalid contructions inside the order-by list
+				// Check for invalid constructions inside the order-by list
 				ValueListNode* valueList = rse->dsqlOrder;
 				NestConst<ValueExprNode>* ptr = valueList->items.begin();
 				for (const NestConst<ValueExprNode>* const end = valueList->items.end(); ptr != end; ++ptr)
@@ -2952,6 +3001,11 @@ static void remap_streams_to_parent_context(ExprNode* input, dsql_ctx* parent_co
 	{
 		DEV_BLKCHK(relNode->dsqlContext, dsql_type_ctx);
 		relNode->dsqlContext->ctx_parent = parent_context;
+	}
+	else if (auto tableValueFunctionNode = nodeAs<TableValueFunctionSourceNode>(input))
+	{
+		DEV_BLKCHK(tableValueFunctionNode->dsqlContext, dsql_type_ctx);
+		tableValueFunctionNode->dsqlContext->ctx_parent = parent_context;
 	}
 	//// TODO: LocalTableSourceNode
 	else if (auto rseNode = nodeAs<RseNode>(input))

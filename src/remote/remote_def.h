@@ -44,47 +44,47 @@
 
 #if defined(__sun)
 #	ifdef sparc
-const P_ARCH ARCHITECTURE	= arch_sun4;
+constexpr P_ARCH ARCHITECTURE	= arch_sun4;
 #elif (defined i386 || defined AMD64)
-const P_ARCH ARCHITECTURE	= arch_sunx86;
+constexpr P_ARCH ARCHITECTURE	= arch_sunx86;
 #	else
-const P_ARCH ARCHITECTURE	= arch_sun;
+constexpr P_ARCH ARCHITECTURE	= arch_sun;
 #	endif
 #elif defined(HPUX)
-const P_ARCH ARCHITECTURE	= arch_hpux;
+constexpr P_ARCH ARCHITECTURE	= arch_hpux;
 #elif (defined AIX || defined AIX_PPC)
-const P_ARCH ARCHITECTURE	= arch_rt;
+constexpr P_ARCH ARCHITECTURE	= arch_rt;
 #elif defined(LINUX)
-const P_ARCH ARCHITECTURE	= arch_linux;
+constexpr P_ARCH ARCHITECTURE	= arch_linux;
 #elif defined(FREEBSD)
-const P_ARCH ARCHITECTURE	= arch_freebsd;
+constexpr P_ARCH ARCHITECTURE	= arch_freebsd;
 #elif defined(NETBSD)
-const P_ARCH ARCHITECTURE	= arch_netbsd;
+constexpr P_ARCH ARCHITECTURE	= arch_netbsd;
 #elif defined(DARWIN) && defined(__ppc__)
-const P_ARCH ARCHITECTURE	= arch_darwin_ppc;
+constexpr P_ARCH ARCHITECTURE	= arch_darwin_ppc;
 #elif defined(WIN_NT) && defined(AMD64)
-const P_ARCH ARCHITECTURE	= arch_winnt_64;
+constexpr P_ARCH ARCHITECTURE	= arch_winnt_64;
 #elif defined(I386)
-const P_ARCH ARCHITECTURE	= arch_intel_32;
+constexpr P_ARCH ARCHITECTURE	= arch_intel_32;
 #elif defined(DARWIN64)
-const P_ARCH ARCHITECTURE	= arch_darwin_x64;
+constexpr P_ARCH ARCHITECTURE	= arch_darwin_x64;
 #elif defined(DARWINPPC64)
-const P_ARCH ARCHITECTURE	= arch_darwin_ppc64;
+constexpr P_ARCH ARCHITECTURE	= arch_darwin_ppc64;
 #elif defined(ARM)
-const P_ARCH ARCHITECTURE	= arch_arm;
+constexpr P_ARCH ARCHITECTURE	= arch_arm;
 #endif
 
 
 // port_server_flags
 
-const USHORT SRVR_server			= 1;	// server
-const USHORT SRVR_multi_client		= 2;	// multi-client server
-const USHORT SRVR_debug				= 4;	// debug run
-const USHORT SRVR_inet				= 8;	// Inet protocol
-const USHORT SRVR_xnet				= 16;	// Xnet protocol (Win32)
-const USHORT SRVR_non_service		= 32;	// not running as an NT service
-const USHORT SRVR_high_priority		= 64;	// fork off server at high priority
-const USHORT SRVR_thread_per_port	= 128;	// bind thread to a port
-const USHORT SRVR_no_icon			= 256;	// tell the server not to show the icon
+constexpr USHORT SRVR_server			= 1;	// server
+constexpr USHORT SRVR_multi_client		= 2;	// multi-client server
+constexpr USHORT SRVR_debug				= 4;	// debug run
+constexpr USHORT SRVR_inet				= 8;	// Inet protocol
+constexpr USHORT SRVR_xnet				= 16;	// Xnet protocol (Win32)
+constexpr USHORT SRVR_non_service		= 32;	// not running as an NT service
+constexpr USHORT SRVR_high_priority		= 64;	// fork off server at high priority
+constexpr USHORT SRVR_thread_per_port	= 128;	// bind thread to a port
+constexpr USHORT SRVR_no_icon			= 256;	// tell the server not to show the icon
 
 #endif /* REMOTE_REMOTE_DEF_H */

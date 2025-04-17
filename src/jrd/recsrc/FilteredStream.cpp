@@ -150,6 +150,14 @@ void FilteredStream::findUsedStreams(StreamList& streams, bool expandAll) const
 	m_next->findUsedStreams(streams, expandAll);
 }
 
+bool FilteredStream::isDependent(const StreamList& streams) const
+{
+	if (m_anyBoolean && m_anyBoolean->containsAnyStream(streams))
+		return true;
+
+	return m_boolean->containsAnyStream(streams) || m_next->isDependent(streams);
+}
+
 void FilteredStream::invalidateRecords(Request* request) const
 {
 	m_next->invalidateRecords(request);

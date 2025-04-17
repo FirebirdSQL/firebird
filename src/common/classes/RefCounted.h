@@ -263,10 +263,7 @@ namespace Firebird
 	class AnyRef : public T, public RefCounted
 	{
 	public:
-		inline AnyRef() : T() {}
-		inline AnyRef(const T& v) : T(v) {}
-		inline explicit AnyRef(MemoryPool& p) : T(p) {}
-		inline AnyRef(MemoryPool& p, const T& v) : T(p, v) {}
+		using T::T;
 	};
 } // namespace
 

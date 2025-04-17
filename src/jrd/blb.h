@@ -76,7 +76,7 @@ public:
 	jrd_rel* blb_relation;			// Relation, if known
 	JBlob* blb_interface;
 
-	ULONG blb_length;				// Total length of data sans segments
+	FB_UINT64 blb_length;			// Blob's total length (in bytes)
 	USHORT blb_flags;				// Interesting stuff (see below)
 
 	SSHORT blb_sub_type;			// Blob's declared sub-type
@@ -154,7 +154,7 @@ private:
 	ULONG blb_temp_id;				// ID of newly created blob in transaction
 	ULONG blb_sequence;				// Blob page sequence
 	ULONG blb_lead_page;			// First page number
-	ULONG blb_seek;					// Seek location
+	FB_UINT64 blb_seek;				// Seek location
 	ULONG blb_max_sequence;			// Number of data pages
 	ULONG blb_count;				// Number of segments
 

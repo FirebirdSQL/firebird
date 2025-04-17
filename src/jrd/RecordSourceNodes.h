@@ -718,14 +718,15 @@ class RseNode final : public TypedNode<RecordSourceNode, RecordSourceNode::TYPE_
 public:
 	enum : USHORT
 	{
-		FLAG_VARIANT			= 0x01,	// variant (not invariant?)
-		FLAG_SINGULAR			= 0x02,	// singleton select
-		FLAG_WRITELOCK			= 0x04,	// locked for write
-		FLAG_SCROLLABLE			= 0x08,	// scrollable cursor
-		FLAG_DSQL_COMPARATIVE	= 0x10,	// transformed from DSQL ComparativeBoolNode
-		FLAG_LATERAL			= 0x20,	// lateral derived table
-		FLAG_SKIP_LOCKED		= 0x40,	// skip locked
-		FLAG_SUB_QUERY			= 0x80	// sub-query
+		FLAG_VARIANT			= 0x01,		// variant (not invariant?)
+		FLAG_SINGULAR			= 0x02,		// singleton select
+		FLAG_WRITELOCK			= 0x04,		// locked for write
+		FLAG_SCROLLABLE			= 0x08,		// scrollable cursor
+		FLAG_DSQL_COMPARATIVE	= 0x10,		// transformed from DSQL ComparativeBoolNode
+		FLAG_LATERAL			= 0x20,		// lateral derived table
+		FLAG_SKIP_LOCKED		= 0x40,		// skip locked
+		FLAG_SUB_QUERY			= 0x80,		// sub-query
+		FLAG_SEMI_JOINED		= 0x100		// participates in semi-join
 	};
 
 	bool isInvariant() const
@@ -751,6 +752,11 @@ public:
 	bool isSubQuery() const
 	{
 		return (flags & FLAG_SUB_QUERY) != 0;
+	}
+
+	bool isSemiJoined() const
+	{
+		return (flags & FLAG_SEMI_JOINED) != 0;
 	}
 
 	bool hasWriteLock() const
@@ -857,6 +863,7 @@ public:
 private:
 	void planCheck(const CompilerScratch* csb) const;
 	static void planSet(CompilerScratch* csb, PlanNode* plan);
+	RseNode* processPossibleJoins(thread_db* tdbb, CompilerScratch* csb);
 
 public:
 	NestConst<ValueExprNode> dsqlFirst;
@@ -963,6 +970,71 @@ public:
 	Firebird::ObjectsArray<MetaName>* columns;
 };
 
+class TableValueFunctionSourceNode
+	: public TypedNode<RecordSourceNode, RecordSourceNode::TYPE_TABLE_VALUE_FUNCTION>
+{
+public:
+	explicit TableValueFunctionSourceNode(MemoryPool& pool)
+		: TypedNode<RecordSourceNode, RecordSourceNode::TYPE_TABLE_VALUE_FUNCTION>(pool),
+		  dsqlName(pool), alias(pool), dsqlField(nullptr), dsqlNameColumns(pool),
+		  m_csbTableValueFun(nullptr)
+	{
+	}
+	static TableValueFunctionSourceNode* parse(thread_db* tdbb, CompilerScratch* csb,
+											   const SSHORT blrOp);
+	static TableValueFunctionSourceNode* parseTableValueFunctions(thread_db* tdbb,
+																  CompilerScratch* csb,
+																  const SSHORT blrOp);
+
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	RecordSourceNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other,
+				   bool ignoreMapCast) const override;
+	RecordSourceNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	RecordSourceNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	TableValueFunctionSourceNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	void pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse, BoolExprNode** boolean,
+					 RecordSourceNodeStack& stack) override;
+	void pass2Rse(thread_db* tdbb, CompilerScratch* csb) override;
+	bool containsStream(StreamType checkStream) const override;
+	void computeDbKeyStreams(StreamList& streamList) const override;
+	RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream) override;
+
+	bool computable(CompilerScratch* csb, StreamType stream, bool allowOnlyCurrentStream,
+					ValueExprNode* value) override;
+	void findDependentFromStreams(const CompilerScratch* csb, StreamType currentStream,
+								  SortedStreamList* streamList) override;
+
+	void collectStreams(SortedStreamList& streamList) const override;
+
+	virtual dsql_fld* makeField(DsqlCompilerScratch* dsqlScratch);
+	void setDefaultNameField(DsqlCompilerScratch* dsqlScratch);
+
+public:
+	MetaName dsqlName;
+	MetaName alias;
+	NestConst<ValueListNode> inputList;
+	dsql_fld* dsqlField;
+	Firebird::ObjectsArray<Jrd::MetaName> dsqlNameColumns;
+
+private:
+	jrd_table_value_fun* m_csbTableValueFun;
+};
+
+class UnlistFunctionSourceNode : public TableValueFunctionSourceNode
+{
+public:
+	explicit UnlistFunctionSourceNode(MemoryPool& pool) : TableValueFunctionSourceNode(pool)
+	{
+	}
+
+	RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream) final;
+	dsql_fld* makeField(DsqlCompilerScratch* dsqlScratch) final;
+
+	static constexpr char const* FUNC_NAME = "UNLIST";
+	static constexpr USHORT DEFAULT_UNLIST_TEXT_LENGTH = 32;
+};
 
 } // namespace Jrd
 

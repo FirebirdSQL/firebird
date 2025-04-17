@@ -56,7 +56,7 @@
  *	BUGCHECK(291) took place. To avoid that issue, it was decided not to modify data
  *	in system transaction. An exception is RDB$FORMATS relation, which is always modified
  *	by transaction zero. Also an aspect of 'dirty' access from system transaction was
- *	taken into an account in add_file(), make_version() and create_index().
+ *	taken into an account in make_version() and create_index().
  *
  */
 
@@ -449,7 +449,6 @@ private:
  *
  *==================================================================
  */
-static bool add_file(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool add_shadow(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool delete_shadow(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool compute_security(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
@@ -1272,7 +1271,6 @@ namespace
 
 static const deferred_task task_table[] =
 {
-	{ dfw_add_file, add_file },
 	{ dfw_add_shadow, add_shadow },
 	{ dfw_delete_index, modify_index },
 	{ dfw_delete_rfr, delete_rfr },
@@ -1876,133 +1874,6 @@ void DFW_update_index(const TEXT* name, USHORT id, const SelectivityList& select
 }
 
 
-static bool add_file(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
-{
-/**************************************
- *
- *	a d d _ f i l e
- *
- **************************************
- *
- * Functional description
- *	Add a file to a database.
- *	This file could be a regular database
- *	file or a shadow file.  Either way we
- *	require exclusive access to the database.
- *
- **************************************/
-	USHORT section, shadow_number;
-	SLONG start, min_start;
-
-	SET_TDBB(tdbb);
-	Database* const dbb = tdbb->getDatabase();
-
-	switch (phase)
-	{
-	case 0:
-		CCH_release_exclusive(tdbb);
-		return false;
-
-	case 1:
-	case 2:
-		return true;
-
-	case 3:
-		if (!CCH_exclusive(tdbb, LCK_EX, WAIT_PERIOD, NULL))
-			raiseDatabaseInUseError(true);
-		return true;
-
-	case 4:
-		CCH_flush(tdbb, FLUSH_FINI, 0);
-		start = PageSpace::maxAlloc(dbb) + 1;
-		AutoRequest handle;
-		AutoRequest handle2;
-
-		// Check the file name for node name. This has already
-		// been done for shadows in add_shadow()
-
-		if (work->dfw_type != dfw_add_shadow) {
-			check_filename(work->dfw_name, true);
-		}
-
-		// User transaction may be safely used instead of system, cause
-		// we requested and got exclusive database access. AP-2008.
-
-		// get any files to extend into
-
-		FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction) X IN RDB$FILES
-			WITH X.RDB$FILE_NAME EQ work->dfw_name.c_str()
-			// First expand the file name This has already been done
-			// for shadows in add_shadow ())
-			if (work->dfw_type != dfw_add_shadow)
-			{
-				MODIFY X USING
-					ISC_expand_filename(X.RDB$FILE_NAME, 0,
-						X.RDB$FILE_NAME, sizeof(X.RDB$FILE_NAME), false);
-				END_MODIFY
-			}
-
-			// Check the previous file length
-			FOR(REQUEST_HANDLE handle2 TRANSACTION_HANDLE transaction)
-				FIRST 1 Y IN RDB$FILES
-					WITH Y.RDB$SHADOW_NUMBER EQ X.RDB$SHADOW_NUMBER
-					AND Y.RDB$FILE_SEQUENCE NOT MISSING
-					SORTED BY DESCENDING Y.RDB$FILE_SEQUENCE
-			{
-				if (!Y.RDB$FILE_START.NULL && !Y.RDB$FILE_LENGTH.NULL)
-				{
-					min_start = Y.RDB$FILE_START + (Y.RDB$FILE_LENGTH ? Y.RDB$FILE_LENGTH : 1);
-					start = MAX(min_start, start);
-				}
-			}
-			END_FOR
-
-			// If there is no starting position specified, or if it is
-			// too low a value, raise the error.
-			if (X.RDB$FILE_START < start)
-			{
-				ERR_post(Arg::Gds(isc_file_starting_page_err) <<
-					Arg::Str(X.RDB$FILE_NAME) << Arg::Num(start));
-			}
-
-			start = X.RDB$FILE_START;
-
-			shadow_number = X.RDB$SHADOW_NUMBER;
-			if ((shadow_number &&
-				(section = SDW_add_file(tdbb, X.RDB$FILE_NAME, start, shadow_number))) ||
-				(section = PAG_add_file(tdbb, X.RDB$FILE_NAME, start)))
-			{
-				MODIFY X USING
-					X.RDB$FILE_SEQUENCE = section;
-					X.RDB$FILE_START = start;
-				END_MODIFY
-			}
-		END_FOR
-
-		if (section)
-		{
-			handle.reset();
-			section--;
-			FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction) X IN RDB$FILES
-				WITH X.RDB$FILE_SEQUENCE EQ section
-					AND X.RDB$SHADOW_NUMBER EQ shadow_number
-			{
-				MODIFY X USING
-					X.RDB$FILE_LENGTH = start - X.RDB$FILE_START;
-				END_MODIFY
-			}
-			END_FOR
-		}
-
-		CCH_release_exclusive(tdbb);
-		break;
-	}
-
-	return false;
-}
-
-
-
 static bool add_shadow(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
 {
 /**************************************
@@ -2053,11 +1924,11 @@ static bool add_shadow(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tr
 		finished = false;
 		handle.reset();
 		FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
-			F IN RDB$FILES
-				WITH F.RDB$FILE_NAME EQ work->dfw_name.c_str()
-
+			F IN RDB$FILES WITH F.RDB$FILE_NAME EQ work->dfw_name.c_str()
+		{
 			expanded_fname = F.RDB$FILE_NAME;
 			ISC_expand_filename(expanded_fname, false);
+
 			MODIFY F USING
 				expanded_fname.copyTo(F.RDB$FILE_NAME, sizeof(F.RDB$FILE_NAME));
 			END_MODIFY
@@ -2066,94 +1937,34 @@ static bool add_shadow(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tr
 			{
 				if ((F.RDB$SHADOW_NUMBER == shadow->sdw_number) && !(shadow->sdw_flags & SDW_IGNORE))
 				{
-					if (F.RDB$FILE_FLAGS & FILE_shadow)
-					{
-						// This is the case of a bogus duplicate posted
-						// work when we added a multi-file shadow
-						finished = true;
-					}
-					else if (shadow->sdw_flags & (SDW_dumped))
-					{
-						/* Case of adding a file to a currently active
-						 * shadow set.
-						 * Note: as of 1995-January-31 there is
-						 * no SQL syntax that supports this, but there
-						 * may be GDML
-						 */
-						add_file(tdbb, 3, work, transaction);
-						add_file(tdbb, 4, work, transaction);
-						finished = true;
-					}
-					else
+					if (!(F.RDB$FILE_FLAGS & FILE_shadow))
 					{
 						// We cannot add a file to a shadow that is still
 						// in the process of being created.
 						raiseDatabaseInUseError(false);
 					}
+
+					// This is the case of a bogus duplicate posted
+					// work when we added a multi-file shadow
+					finished = true;
 					break;
 				}
 			}
-
+		}
 		END_FOR
 
 		if (finished)
 			return false;
 
-		// this file is part of a new shadow, so get all files for the shadow
-		// in order of the starting page for the file
-
-		// Note that for a multi-file shadow, we have several pieces of
-		// work posted (one dfw_add_shadow for each file).  Rather than
-		// trying to cancel the other pieces of work we ignore them
-		// when they arrive in this routine.
-
-		sequence = 0;
-		min_page = 0;
-		shadow = NULL;
 		handle.reset();
 		FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
-			X IN RDB$FILES CROSS
-				Y IN RDB$FILES
-				OVER RDB$SHADOW_NUMBER
-				WITH X.RDB$FILE_NAME EQ expanded_fname.c_str()
-				SORTED BY Y.RDB$FILE_START
+			F IN RDB$FILES WITH F.RDB$FILE_NAME EQ expanded_fname.c_str()
 		{
-			// for the first file, create a brand new shadow; for secondary
-			// files that have a starting page specified, add a file
-			if (!sequence)
-				SDW_add(tdbb, Y.RDB$FILE_NAME, Y.RDB$SHADOW_NUMBER, Y.RDB$FILE_FLAGS);
-			else if (Y.RDB$FILE_START)
-			{
-				if (!shadow)
-				{
-					for (shadow = dbb->dbb_shadow; shadow; shadow = shadow->sdw_next)
-					{
-						if ((Y.RDB$SHADOW_NUMBER == shadow->sdw_number) &&
-							!(shadow->sdw_flags & SDW_IGNORE))
-						{
-								break;
-						}
-					}
-				}
+			SDW_add(tdbb, F.RDB$FILE_NAME, F.RDB$SHADOW_NUMBER, F.RDB$FILE_FLAGS);
 
-				if (!shadow)
-					BUGCHECK(203);	// msg 203 shadow block not found for extend file
-
-				min_page = MAX((min_page + 1), (ULONG) Y.RDB$FILE_START);
-				add_sequence = SDW_add_file(tdbb, Y.RDB$FILE_NAME, min_page, Y.RDB$SHADOW_NUMBER);
-			}
-
-			// update the sequence number and bless the file entry as being good
-
-			if (!sequence || (Y.RDB$FILE_START && add_sequence))
-			{
-				MODIFY Y
-					Y.RDB$FILE_FLAGS |= FILE_shadow;
-					Y.RDB$FILE_SEQUENCE = sequence;
-					Y.RDB$FILE_START = min_page;
-				END_MODIFY
-				sequence++;
-			}
+			MODIFY F
+				F.RDB$FILE_FLAGS |= FILE_shadow;
+			END_MODIFY
 		}
 		END_FOR
 

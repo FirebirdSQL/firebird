@@ -51,7 +51,7 @@
 
 #include <atomic>
 
-#define DEBUG_LCK_LIST
+//#define DEBUG_LCK_LIST
 
 namespace EDS {
 	class Connection;

@@ -37,7 +37,6 @@ namespace Ods {
 	struct header_page;
 }
 
-USHORT	PAG_add_file(Jrd::thread_db* tdbb, const TEXT*, SLONG);
 void	PAG_add_header_entry(Jrd::thread_db* tdbb, Ods::header_page*, USHORT, USHORT, const UCHAR*);
 bool	PAG_replace_entry_first(Jrd::thread_db* tdbb, Ods::header_page*, USHORT, USHORT, const UCHAR*);
 Ods::pag*	PAG_allocate_pages(Jrd::thread_db* tdbb, Jrd::win* window, unsigned cntAlloc, bool aligned);
@@ -49,7 +48,7 @@ bool	PAG_get_clump(Jrd::thread_db*, USHORT, USHORT*, UCHAR*);
 void	PAG_header(Jrd::thread_db*, bool, const Firebird::TriState newForceWrite = Firebird::TriState());
 void	PAG_header_init(Jrd::thread_db*);
 void	PAG_init(Jrd::thread_db*);
-void	PAG_init2(Jrd::thread_db*, USHORT);
+void	PAG_init2(Jrd::thread_db*);
 SLONG	PAG_last_page(Jrd::thread_db* tdbb);
 void	PAG_release_page(Jrd::thread_db* tdbb, const Jrd::PageNumber&, const Jrd::PageNumber&);
 void	PAG_release_pages(Jrd::thread_db* tdbb, USHORT pageSpaceID, int cntRelease,

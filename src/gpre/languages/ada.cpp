@@ -429,7 +429,7 @@ void ADA_action( const act* action, int column)
 
 //____________________________________________________________
 //
-//		Print a statment, breaking it into
+//		Print a statement, breaking it into
 //       reasonable 120 character hunks.
 //
 

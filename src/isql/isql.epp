@@ -55,6 +55,8 @@
 #include <ctype.h>
 #include <errno.h>
 #include "../isql/FrontendLexer.h"
+#include "../isql/FrontendParser.h"
+#include "../common/StdHelper.h"
 #include "../common/utils_proto.h"
 #include "../common/classes/array.h"
 #include "../common/classes/init.h"
@@ -122,7 +124,7 @@ enum literal_string_type
 #include "../isql/PtrSentry.h"
 #include "../common/classes/UserBlob.h"
 #include "../common/classes/MsgPrint.h"
-#include "../common/classes/array.h"
+#include "../remote/protocol.h"
 
 using namespace Firebird;
 using MsgFormat::SafeArg;
@@ -450,30 +452,24 @@ struct ri_actions
 	const SCHAR* ri_action_print_mixed;
 };
 
-static processing_state add_row(TEXT*);
-static processing_state blobedit(const TEXT*, const TEXT* const*);
+static processing_state add_row(const MetaString&);
+static processing_state blobedit(ISC_QUAD, const char*);
 static processing_state bulk_insert_hack(const char* command);
 static bool bulk_insert_retriever(const char* prompt);
 static void check_autoterm();
 static bool check_date(const tm& times);
 static bool check_time(const tm& times);
 static bool check_timestamp(const tm& times, const int msec);
-static size_t chop_at(char target[], const size_t size);
-static void col_check(const TEXT*, unsigned*);
-static processing_state copy_table(TEXT*, TEXT*, TEXT*);
-static processing_state create_db(const TEXT*, TEXT*);
+static void col_check(const MetaString&, unsigned*);
+static processing_state copy_table(const MetaString&, const MetaString&, const TEXT*);
+static processing_state create_db(const FrontendParser::CreateDatabaseNode& node);
 static void do_isql();
 static processing_state drop_db();
-static processing_state edit(const TEXT* const*);
+static processing_state edit(const TEXT*);
 static processing_state end_trans();
 static processing_state escape(const TEXT*);
 static processing_state execSetDebugCommand();
-static processing_state frontend(const TEXT*);
-static processing_state frontend_set(const char* cmd, const char* const* parms,
-	const char* const* lparms, char* const bad_dialect_buf, bool& bad_dialect);
-static void frontend_free_parms(TEXT*[], TEXT*[], TEXT parm_defaults[][1]);
-static void frontend_load_parms(const TEXT* p, TEXT* parms[], TEXT* lparms[],
-	TEXT parm_defaults[][1]);
+static processing_state frontend(const std::string&);
 static processing_state do_set_command(const TEXT*, bool*);
 static processing_state get_dialect(const char* const dialect_str,
 	char* const bad_dialect_buf, bool& bad_dialect);
@@ -483,16 +479,13 @@ static processing_state print_sets();
 static processing_state explain(const TEXT*);
 static processing_state help(const TEXT*);
 static bool isyesno(const TEXT*);
-static processing_state newdb(TEXT*, const TEXT*, const TEXT*, int, const TEXT*, bool);
+static processing_state newdb(const TEXT*, const TEXT*, const TEXT*, int, const TEXT*, bool);
 static processing_state newinput(const TEXT*);
 static processing_state newoutput(const TEXT*);
 static processing_state newsize(const TEXT*, const TEXT*);
 static processing_state newMaxRows(const TEXT* newMaxRowsStr);
 static processing_state newtrans(const TEXT*);
 static processing_state parse_arg(int, SCHAR**, SCHAR*); //, FILE**);
-#ifdef DEV_BUILD
-static processing_state passthrough(const char* cmd);
-#endif
 static unsigned print_item(TEXT**, const IsqlVar*, const unsigned);
 static void print_item_numeric(SINT64, int, int, TEXT*);
 static processing_state print_line(Firebird::IMessageMetadata*, UCHAR*, const unsigned pad[], TEXT line[]);
@@ -904,7 +897,7 @@ int ISQL_main(int argc, char* argv[])
 			TEXT helpstring[158];
 			IUTILS_msg_get(USAGE, sizeof(helpstring), helpstring);
 			STDERROUT(helpstring);
-			for (int i = 0; i < FB_NELEM(isql_in_sw_table); i++)
+			for (FB_SIZE_T i = 0; i < FB_NELEM(isql_in_sw_table); i++)
 			{
 				if (isql_in_sw_table[i].in_sw_msg > 0)
 				{
@@ -1522,7 +1515,7 @@ void ISQL_get_character_sets(SSHORT char_set_id, SSHORT collation,
 			break;
 
 		case Get::BOTH:
-			// If they both are default - supress output completely
+			// If they both are default - suppress output completely
 			if (!charsetIsDefault || !collationIsDefault)
 			{
 				if (collationIsDefault) // Suppress collation only
@@ -2388,7 +2381,7 @@ static string get_numeric_value(const char* fromStr)
 }
 
 
-static processing_state add_row(TEXT* tabname)
+static processing_state add_row(const MetaString& tabname)
 {
 /**************************************
  *
@@ -2407,7 +2400,7 @@ static processing_state add_row(TEXT* tabname)
  *	tabname -- Name of table to insert into
  *
  **************************************/
-	if (!*tabname)
+	if (tabname.isEmpty())
 		return (ps_ERR);
 
 	if (!Interactive)
@@ -2428,13 +2421,9 @@ static processing_state add_row(TEXT* tabname)
 		return FAIL;
 	}
 
-	chop_at(tabname, QUOTED_NAME_SIZE);
-	if (tabname[0] != DBL_QUOTE)
-		IUTILS_make_upper(tabname);
-
 	// Query to obtain relation information
 	string str2;
-	str2.printf("SELECT * FROM %s", tabname);
+	str2.printf("SELECT * FROM %s", IUTILS_name_to_string(tabname).c_str());
 
 	if (global_Stmt)
 	{
@@ -2472,7 +2461,7 @@ static processing_state add_row(TEXT* tabname)
 
 	// There is a question mark for each column that's known to be updatable.
 
-	insertstring.printf("INSERT INTO %s (", tabname);
+	insertstring.printf("INSERT INTO %s (", IUTILS_name_to_string(tabname).c_str());
 
 	unsigned i_cols = 0;
 	{ // scope
@@ -2999,7 +2988,7 @@ static processing_state add_row(TEXT* tabname)
 }
 
 
-static processing_state blobedit(const TEXT* action, const TEXT* const* cmd)
+static processing_state blobedit(ISC_QUAD blobId, const char* path)
 {
 /**************************************
  *
@@ -3016,20 +3005,14 @@ static processing_state blobedit(const TEXT* action, const TEXT* const* cmd)
 	if (!ISQL_dbcheck())
 		return FAIL;
 
-	if (*cmd[1] == 0)
+	if (blobId.gds_quad_high == 0 && blobId.gds_quad_low == 0)
 		return ps_ERR;
-
-	const TEXT* p = cmd[1];
-
-	// Find the high and low values of the blob id
-	ISC_QUAD blobid;
-	sscanf(p, "%" xLONGFORMAT":%" xLONGFORMAT, &blobid.gds_quad_high, &blobid.gds_quad_low);
 
 	// If it isn't an explicit blobedit, then do a dump. Since this is a
 	// user operation, put it on the M__trans handle.
 
 	processing_state rc = SKIP;
-	if (!strcmp(action, "BLOBVIEW"))
+	if (!path)
 	{
 		Firebird::UtilInterfacePtr utl;
 		PathName tmpf = TempFile::create(fbStatus, "blob");
@@ -3037,7 +3020,7 @@ static processing_state blobedit(const TEXT* action, const TEXT* const* cmd)
 			return ps_ERR;
 		const char* filename = tmpf.c_str();
 
-		utl->dumpBlob(fbStatus, &blobid, DB, M__trans, filename, FB_TRUE);
+		utl->dumpBlob(fbStatus, &blobId, DB, M__trans, filename, FB_TRUE);
 		if (ISQL_errmsg(fbStatus))
 			rc = ps_ERR;
 		else
@@ -3045,14 +3028,12 @@ static processing_state blobedit(const TEXT* action, const TEXT* const* cmd)
 
 		unlink(filename);
 	}
-	else if ((!strcmp(action, "BLOBDUMP")) && (*cmd[2]))
+	else if (*path)
 	{
 		// If this is a blobdump, make sure there is a file name
 		// We can't be sure if the BLOB is TEXT or BINARY data,
 		// as we're not sure, we'll dump it in BINARY mode.
-		TEXT path[MAXPATHLEN];
-		strip_quotes(cmd[2], path);
-		Firebird::UtilInterfacePtr()->dumpBlob(fbStatus, &blobid, DB, M__trans, path, FB_FALSE);
+		Firebird::UtilInterfacePtr()->dumpBlob(fbStatus, &blobId, DB, M__trans, path, FB_FALSE);
 	}
 	else
 		rc = ps_ERR;
@@ -3096,14 +3077,6 @@ static processing_state blobedit(const TEXT* action, const TEXT* const* cmd)
 // If you came here looking for robust parsing code, you're at the wrong place.
 static processing_state bulk_insert_hack(const char* command)
 {
-	// Skip "SET BULK_INSERT" part.
-	for (int j = 0; j < 2; ++j)
-	{
-		while (*command && *command != 0x20)
-			++command;
-		while (*command && *command == 0x20)
-			++command;
-	}
 	if (!*command)
 		return ps_ERR;
 
@@ -4035,8 +4008,8 @@ static void check_autoterm()
 		}
 	}
 
-	if (!(protocolVersion == 0 || protocolVersion >= 19) &&	// PROTOCOL_VERSION19
-		  isqlGlob.major_ods >= ODS_VERSION14)
+	if (!(protocolVersion == 0 || protocolVersion >= (PROTOCOL_PREPARE_FLAG & FB_PROTOCOL_MASK)) &&
+		isqlGlob.major_ods >= ODS_VERSION14)
 	{
 		setValues.AutoTerm = false;
 
@@ -4095,23 +4068,7 @@ static bool check_timestamp(const tm& times, const int msec)
 }
 
 
-// *************
-// c h o p _ a t
-// *************
-// Simply ensure a given string argument fits in a size, terminator included.
-static size_t chop_at(char target[], const size_t size)
-{
-	size_t len = strlen(target);
-	if (len >= size)
-	{
-		len = size - 1;
-		target[len] = 0;
-	}
-	return len;
-}
-
-
-static void col_check(const TEXT* tabname, unsigned* colnumber)
+static void col_check(const MetaString& tabname, unsigned* colnumber)
 {
 /**************************************
  *
@@ -4132,7 +4089,7 @@ static void col_check(const TEXT* tabname, unsigned* colnumber)
 	FOR F IN RDB$FIELDS CROSS
 		R IN RDB$RELATION_FIELDS WITH
 		F.RDB$FIELD_NAME = R.RDB$FIELD_SOURCE AND
-		R.RDB$RELATION_NAME EQ tabname
+		R.RDB$RELATION_NAME EQ tabname.c_str()
 		SORTED BY R.RDB$FIELD_POSITION, R.RDB$FIELD_NAME
 
 		if ((!F.RDB$DIMENSIONS.NULL && F.RDB$DIMENSIONS) || (!F.RDB$COMPUTED_BLR.NULL))
@@ -4147,9 +4104,7 @@ static void col_check(const TEXT* tabname, unsigned* colnumber)
 }
 
 
-static processing_state copy_table(TEXT* source,
-						 TEXT* destination,
-						 TEXT* otherdb)
+static processing_state copy_table(const MetaString& source, const MetaString& destination, const TEXT* otherdb)
 {
 /**************************************
  *
@@ -4164,7 +4119,7 @@ static processing_state copy_table(TEXT* source,
  *			 destination == name of newly created table
  *
  **************************************/
-	if (!source[0] || !destination[0])
+	if (source.isEmpty() || destination.isEmpty())
 	{
 		STDERROUT("Either source or destination tables are missing");
 		return SKIP;
@@ -4193,43 +4148,9 @@ static processing_state copy_table(TEXT* source,
 		return END;
 	}
 
-	chop_at(source, QUOTED_NAME_SIZE);
-	if (source[0] != DBL_QUOTE)
-		IUTILS_make_upper(source);
-	/*
-	chop_at(source_tbl, MAX_SQL_IDENTIFIER_SIZE);
-	TEXT source[QUOTED_NAME_SIZE];
-	bool delimited_yes = source_tbl[0] == DBL_QUOTE;
-	if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION && delimited_yes) {
-		IUTILS_copy_SQL_id(source_tbl, source, DBL_QUOTE);
-	}
-	else
+	if (EXTRACT_list_table(source.c_str(), destination.c_str(), domain_flag, -1))
 	{
-		strcpy(source, source_tbl);
-		IUTILS_make_upper(source);
-	}
-	*/
-
-	chop_at(destination, QUOTED_NAME_SIZE);
-	if (destination[0] != DBL_QUOTE)
-		IUTILS_make_upper(destination);
-	/*
-	chop_at(destination_tbl, MAX_SQL_IDENTIFIER_SIZE);
-	TEXT destination[QUOTED_NAME_SIZE];
-	delimited_yes = destination_tbl[0] == DBL_QUOTE;
-	if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION && delimited_yes) {
-		IUTILS_copy_SQL_id(destination_tbl, destination, DBL_QUOTE);
-	}
-	else
-	{
-		strcpy(destination, destination_tbl);
-		IUTILS_make_upper(destination);
-	}
-	*/
-
-	if (EXTRACT_list_table(source, destination, domain_flag, -1))
-	{
-		IUTILS_msg_get(NOT_FOUND, errbuf, SafeArg() << source);
+		IUTILS_msg_get(NOT_FOUND, errbuf, SafeArg() << source.c_str());
 		STDERROUT(errbuf);
 		fclose(isqlGlob.Out);
 	}
@@ -4245,7 +4166,7 @@ static processing_state copy_table(TEXT* source,
 		sprintf(cmd, "isql -q %s -i %s", altdb, ftmp.c_str());
 		if (system(cmd))
 		{
-			IUTILS_msg_get(COPY_ERR, errbuf, SafeArg() << destination << altdb);
+			IUTILS_msg_get(COPY_ERR, errbuf, SafeArg() << destination.c_str() << altdb);
 			STDERROUT(errbuf);
 		}
 	}
@@ -4257,21 +4178,7 @@ static processing_state copy_table(TEXT* source,
 }
 
 
-static void appendClause(string& to, const char* label, const TEXT* value, char quote = 0)
-{
-	to += ' ';
-	to += label;
-	to += ' ';
-	if (quote)
-		to += quote;
-	to += value;
-	if (quote)
-		to += quote;
-	to += ' ';
-}
-
-
-static processing_state create_db(const TEXT* statement, TEXT* d_name)
+static processing_state create_db(const FrontendParser::CreateDatabaseNode& node)
 {
 /**************************************
  *
@@ -4283,109 +4190,37 @@ static processing_state create_db(const TEXT* statement, TEXT* d_name)
  *	Intercept create database commands to
  *	adjust the DB and transaction handles
  *
- *	Parameters:  statement == the entire statement for processing.
- *
  * Note: SQL ROLE setting must be taken into an account no matter
  *	that the newly created database will not have any user roles defined
  *	in it. Role may affect right to create new database.
  *
  **************************************/
+
 	processing_state ret = SKIP;
 
 	// Disconnect from the database and cleanup
 	ISQL_disconnect_database(false);
 
-	// Parse statement to tokens
-	const char* quotes = "\"'";
-	string nlStatement(statement);
-	nlStatement += '\n';
-	Firebird::Tokens toks;
-	toks.quotes(quotes);
-	toks.parse(0, nlStatement.c_str());
-
-	const unsigned KEY_USER = 0;
-	const unsigned KEY_PASS = 1;
-	const unsigned KEY_ROLE = 2;
-	const unsigned KEY_NAMES = 3;
-	const unsigned KEY_SET = 4;
-
-	struct Key
+	for (const auto createWithRole : {true, false})
 	{
-		const char* text;
-		bool has;
-	};
+		std::string statement = "create database " + node.args[0].rawText;
 
-	Key keys[5] = {
-		{ "USER", false },
-		{ "PASSWORD", false },
-		{ "ROLE", false },
-		{ "NAMES", false },
-		{ "SET", false }
-	};
+		// If there are global parameters, we will set them into the create statement.
 
-	for (unsigned t = 0; t < toks.getCount(); ++t)
-	{
-		Firebird::NoCaseString token(toks[t].text, toks[t].length);
-		unsigned k;
+		if (global_usr)
+			statement += std::string(" USER ") + isqlGlob.User;
 
-		for (k = 0; k < FB_NELEM(keys); ++k)
-		{
-			if (token == keys[k].text)
-			{
-				if (k != KEY_NAMES || keys[KEY_SET].has)
-					keys[k].has = true;
-				break;
-			}
-		}
+		if (global_psw)
+			statement += std::string(" PASSWORD '") + Password + "'";
 
-		if (k != KEY_SET)
-			keys[KEY_SET].has = false;
-	}
+		if (global_role && createWithRole)
+			statement += std::string(" ROLE ") + isqlGlob.Role;
 
-	for (int createWithoutRole = 0; createWithoutRole < 2; ++createWithoutRole)
-	{
-		ret = SKIP;
-		TEXT usr[USER_LENGTH];
-		TEXT psw[PASSWORD_LENGTH];
-		TEXT role[ROLE_LENGTH];
+		if (*setValues.ISQL_charset && strcmp(setValues.ISQL_charset, DEFCHARSET) != 0)
+			statement += std::string(" SET NAMES '") + setValues.ISQL_charset + "'";
 
-		string modifiedCreateStatement(statement);
-
-		TEXT quote = DBL_QUOTE;
-		const TEXT* p = NULL;
-
-		// If there is a global parameter, we will set it into the create stmt.
-		if (global_usr || global_role || global_psw ||
-			(*setValues.ISQL_charset && strcmp(setValues.ISQL_charset, DEFCHARSET)))
-		{
-			strcpy(usr, isqlGlob.User);
-			strip_quotes(Password, psw);
-			strcpy(role, isqlGlob.Role);
-
-			string clauses;
-
-			if (global_usr && !keys[KEY_USER].has)
-				appendClause(clauses, keys[KEY_USER].text, usr);
-
-			if (global_psw && !keys[KEY_PASS].has)
-				appendClause(clauses, keys[KEY_PASS].text, psw, SINGLE_QUOTE);
-
-			if (global_role && (!keys[KEY_ROLE].has) && createWithoutRole == 0)
-				appendClause(clauses, keys[KEY_ROLE].text, role);
-
-			if (*setValues.ISQL_charset && strcmp(setValues.ISQL_charset, DEFCHARSET)&& !keys[KEY_NAMES].has)
-			{
-				string setNames = keys[KEY_SET].text;
-				setNames += ' ';
-				setNames += keys[KEY_NAMES].text;
-				appendClause(clauses, setNames.c_str(), setValues.ISQL_charset, SINGLE_QUOTE);
-			}
-
-			if (toks.getCount() > 3)
-				modifiedCreateStatement.insert(toks[3].origin, clauses);
-			else
-				modifiedCreateStatement += clauses;
-		}
+		for (std::size_t i = 1; i < node.args.size(); ++i)
+			statement += std::string(" ") + node.args[i].rawText;
 
 		// execute the create statement
 		// If the isqlGlob.SQL_dialect is not set or set to 2, create the database
@@ -4394,19 +4229,18 @@ static processing_state create_db(const TEXT* statement, TEXT* d_name)
 			(isqlGlob.SQL_dialect == 0 || isqlGlob.SQL_dialect == SQL_DIALECT_V6_TRANSITION) ?
 				requested_SQL_dialect : isqlGlob.SQL_dialect;
 
-		DB = Firebird::UtilInterfacePtr()->executeCreateDatabase(fbStatus, modifiedCreateStatement.length(),
-			modifiedCreateStatement.c_str(), dialect, NULL);
+		DB = Firebird::UtilInterfacePtr()->executeCreateDatabase(fbStatus, statement.length(),
+			statement.c_str(), dialect, nullptr);
 
-		if ((!DB) && (createWithoutRole == 0) && (fbStatus->getErrors()[1] == isc_dsql_error))
+		if (!DB && createWithRole && fbStatus->getErrors()[1] == isc_dsql_error)
 		{
-			// OLd server failed to parse ROLE clause
+			// Old server failed to parse ROLE clause
 			continue;
 		}
 
 		if (ISQL_errmsg(fbStatus))
-		{
 			ret = FAIL;
-		}
+
 		break;
 	}
 
@@ -4423,12 +4257,7 @@ static processing_state create_db(const TEXT* statement, TEXT* d_name)
 		// CVC: Someone may decide to play strange games with undocumented ability
 		// to write crap between CREATE DATABASE and the db name, as described by
 		// Helen on CORE-932. Let's see if we can discover the real db name.
-		string s;
-		if (toks.getCount() > 2)
-			s.assign(toks[2].text, toks[2].length);
-		else
-			s = d_name;
-		strip_quotes(s.c_str(), isqlGlob.global_Db_name);
+		strcpy(isqlGlob.global_Db_name, node.args[0].getProcessedString().c_str());
 
 		ISQL_get_version(true);
 
@@ -4792,7 +4621,7 @@ static processing_state drop_db()
 }
 
 
-static processing_state edit(const TEXT* const* cmd)
+static processing_state edit(const TEXT* file)
 {
 /**************************************
  *
@@ -4810,9 +4639,6 @@ static processing_state edit(const TEXT* const* cmd)
  **************************************/
 
 	// Set up editing command for shell
-
-	const TEXT* file = cmd[1];
-
 	// If there is a file name specified, try to open it
 
 	processing_state rc = SKIP;
@@ -4998,9 +4824,6 @@ static processing_state escape(const TEXT* cmd)
 
 	const TEXT* shellcmd = cmd;
 
-	// Search past the 'shell' keyword
-	shellcmd += strlen("shell");
-
 	// Eat whitespace at beginning of command
 	while (*shellcmd && fb_utils::isspace(*shellcmd))
 		shellcmd++;
@@ -5058,7 +4881,7 @@ static processing_state execSetDebugCommand()
 }
 
 
-static processing_state frontend(const TEXT* statement)
+static processing_state frontend(const std::string& statement)
 {
 /**************************************
  *
@@ -5075,186 +4898,57 @@ static processing_state frontend(const TEXT* statement)
  *
  **************************************/
 
-	class FrontOptions : public OptionsBase
-	{
-	public:
-		enum front_commands
-		{
-			show, add, copy,
-			blobview, output, shell, set, create, drop, connect,
-			edit, input, quit, exit, explain, help,
-#ifdef DEV_BUILD
-			passthrough,
-#endif
-			wrong
-		};
-		FrontOptions(const optionsMap* inmap, size_t insize, int wrongval)
-			: OptionsBase(inmap, insize, wrongval)
-		{}
-	};
+	FrontendParser::Options parserOptions;
+	parserOptions.schemaAsDatabase = isqlGlob.major_ods > 0 && isqlGlob.major_ods < ODS_VERSION12;
 
-	static const FrontOptions::optionsMap options[] =
-	{
-		{FrontOptions::show, "SHOW", 0},
-		{FrontOptions::add, "ADD", 0},
-		{FrontOptions::copy, "COPY", 0},
-		{FrontOptions::blobview, "BLOBVIEW", 0},
-		{FrontOptions::blobview, "BLOBDUMP", 0},
-		//{FrontOptions::output, "OUT", },
-		{FrontOptions::output, "OUTPUT", 3},
-		{FrontOptions::shell, "SHELL", 0},
-		{FrontOptions::set, "SET", 0},
-		{FrontOptions::create, "CREATE", 0},
-		{FrontOptions::drop, "DROP", 0},
-		{FrontOptions::connect, "CONNECT", 0},
-		{FrontOptions::edit, "EDIT", 0},
-		//{FrontOptions::input, "IN", },
-		{FrontOptions::input, "INPUT", 2},
-		{FrontOptions::quit, "QUIT", 0},
-		{FrontOptions::exit, "EXIT", 0},
-		{FrontOptions::explain, "EXPLAIN", 0},
-		{FrontOptions::help, "?", 0},
-		{FrontOptions::help, "HELP", 0}
-#ifdef DEV_BUILD
-		,
-		{FrontOptions::passthrough, "PASSTHROUGH", 0}
-#endif
-	};
-
-	TEXT errbuf[MSG_LENGTH];
-
-	// Store the first NUM_TERMS words as they appear in parms, using blanks
-	// to delimit.   Each word beyond a real word gets a null char
-	// Shift parms to upper case, leaving original case in lparms
-	typedef TEXT* isql_params_t[MAX_TERMS];
-	isql_params_t parms, lparms;
-	for (int iter = 0; iter < FB_NELEM(lparms); ++iter)
-	{
-		lparms[iter] = NULL;
-		parms[iter] = NULL;
-	}
-	TEXT parm_defaults[MAX_TERMS][1];
-
-	// Any whitespace and comments at the beginning are already swallowed by get_statement()
-
-	// Set beginning of statement past comment
-	const TEXT* const cmd = statement;
-	if (!*cmd)
-	{
-		// In case any default transaction was started - commit it here
-		if (fbTrans)
-			commit_trans(&fbTrans);
-
-		return SKIP;
-	}
-
-	frontend_load_parms(statement, parms, lparms, parm_defaults);
-
-    char bad_dialect_buf[512];
+	const auto node = FrontendParser::parse(statement, parserOptions);
 	bool bad_dialect = false;
+	char bad_dialect_buf[512];
 
-	// Look to see if the words (parms) match any known verbs. If nothing
-	// matches then just hand the statement to process_statement
-	processing_state ret = SKIP;
-	const FrontOptions frontoptions(options, FB_NELEM(options), FrontOptions::wrong);
-	switch (frontoptions.getCommand(parms[0]))
-	{
-	case FrontOptions::show:
-		if (DB && !frontendTransaction())
+	const auto ret = std::visit(StdVisitOverloads{
+		[](const FrontendParser::InvalidNode&)
 		{
-			// Free the frontend command
-			frontend_free_parms(parms, lparms, parm_defaults);
-			return FAIL;
-		}
+			return CONT;
+		},
 
-		ret = SHOW_metadata(parms, lparms);
-		if (fbTrans)
-			commit_trans(&fbTrans);
-		break;
-
-	case FrontOptions::add:
-		if (!frontendTransaction())
+		[](const FrontendParser::AddNode& node)
 		{
-			// Free the frontend command
-			frontend_free_parms(parms, lparms, parm_defaults);
-			return FAIL;
-		}
+			if (!frontendTransaction())
+				return FAIL;
 
-		ret = add_row(lparms[1]);
-		if (fbTrans)
-			commit_trans(&fbTrans);
-		break;
+			const auto ret = add_row(node.tableName);
+			if (fbTrans)
+				commit_trans(&fbTrans);
 
-	case FrontOptions::copy:
-		if (!frontendTransaction())
+			return ret;
+		},
+
+		[](const FrontendParser::BlobDumpViewNode& node)
 		{
-			// Free the frontend command
-			frontend_free_parms(parms, lparms, parm_defaults);
-			return FAIL;
-		}
+			return blobedit(node.blobId, (node.file ? node.file->c_str() : nullptr));
+		},
 
-		ret = copy_table(lparms[1], lparms[2], lparms[3]);
-		if (fbTrans)
-			commit_trans(&fbTrans);
-		break;
-
-	case FrontOptions::blobview:
-		ret = blobedit(parms[0], lparms);
-		break;
-
-	case FrontOptions::output:
-		ret = newoutput(lparms[1]);
-		break;
-
-	case FrontOptions::shell:
-		ret = escape(cmd);
-		break;
-
-	case FrontOptions::set:
-		ret = frontend_set(cmd, parms, lparms, bad_dialect_buf, bad_dialect);
-		break;
-
-	case FrontOptions::create:
-		if (!strcmp(parms[1], "DATABASE") ||
-			(!strcmp(parms[1], "SCHEMA") && isqlGlob.major_ods > 0 && isqlGlob.major_ods < ODS_VERSION12))
+		[](const FrontendParser::ConnectNode& node)
 		{
-			ret = create_db(cmd, lparms[2]);
-		}
-		else
-			ret = CONT;
-		break;
-
-	case FrontOptions::drop:
-		if (!strcmp(parms[1], "DATABASE") ||
-			(!strcmp(parms[1], "SCHEMA") && isqlGlob.major_ods > 0 && isqlGlob.major_ods < ODS_VERSION12))
-		{
-			if (*parms[2])
-				ret = ps_ERR;
-			else
-				ret = drop_db();
-		}
-		else
-			ret = CONT;
-		break;
-
-	case FrontOptions::connect:
-		{
-			const TEXT* psw = NULL;
-			const TEXT* usr = NULL;
-			const TEXT* sql_role_nm = NULL;
+			std::optional<std::string> psw;
+			const char* usr = nullptr;
+			const char* sql_role_nm = nullptr;
 			int numbufs = 0;
 
 			// if a parameter is given in the command more than once, the
 			// last one will be used. The parameters can appear each any
 			// order, but each must provide a value.
 
-			ret = SKIP;
-			for (int i = 2; i < (MAX_TERMS - 1);)
+			auto ret = SKIP;
+
+			for (std::size_t i = 1; i < node.args.size() - 1;)
 			{
-				if (!strcmp(parms[i], "CACHE") && *lparms[i + 1])
+				const auto& clause = node.args[i].processedText;
+
+				if (clause == "CACHE")
 				{
 					char* err;
-					long value = strtol(lparms[i + 1], &err, 10);
+					long value = strtol(node.args[i + 1].processedText.c_str(), &err, 10);
 					if (*err || (value <= 0) || (value >= INT_MAX))
 					{
 						ret = ps_ERR;
@@ -5263,506 +4957,388 @@ static processing_state frontend(const TEXT* statement)
 					numbufs = (int) value;
 					i += 2;
 				}
-				else if (!strcmp(parms[i], "USER") && *lparms[i + 1])
+				else if (clause == "USER")
 				{
-					usr = lparms[i + 1];
+					usr = node.args[i + 1].rawText.c_str();
 					i += 2;
 				}
-				else if (!strcmp(parms[i], "PASSWORD") && *lparms[i + 1])
+				else if (clause == "PASSWORD")
 				{
-					psw = lparms[i + 1];
+					psw = node.args[i + 1].getProcessedString();
 					i += 2;
 				}
-				else if (!strcmp(parms[i], "ROLE") && *lparms[i + 1])
+				else if (clause == "ROLE")
 				{
-					sql_role_nm = lparms[i + 1];
+					sql_role_nm = node.args[i + 1].rawText.c_str();
 					i += 2;
 				}
-				else if (*parms[i])
+				else if (!clause.empty())
 				{
 					// Unrecognized option to CONNECT
 					ret = ps_ERR;
 					break;
 				}
 				else
-					i++;
+					++i;
 			}
+
 			if (ret != ps_ERR)
-				ret = newdb(lparms[1], usr, psw, numbufs, sql_role_nm, true);
+			{
+				ret = newdb(
+					node.args[0].getProcessedString().c_str(),
+					usr,
+					(psw ? psw->c_str() : nullptr),
+					numbufs,
+					sql_role_nm,
+					true);
+			}
+
+			return ret;
+		},
+
+		[](const FrontendParser::CopyNode& node)
+		{
+			if (!frontendTransaction())
+				return FAIL;
+
+			const auto ret = copy_table(node.source, node.destination, node.database.c_str());
+
+			if (fbTrans)
+				commit_trans(&fbTrans);
+
+			return ret;
+		},
+
+		[](const FrontendParser::CreateDatabaseNode& node)
+		{
+			return create_db(node);
+		},
+
+		[](const FrontendParser::DropDatabaseNode&)
+		{
+			return drop_db();
+		},
+
+		[](const FrontendParser::EditNode& node)
+		{
+			return edit(node.file.value_or("").c_str());
+		},
+
+		[](const FrontendParser::ExitNode& node)
+		{
+			return EXIT;
+		},
+
+		[](const FrontendParser::ExplainNode& node)
+		{
+			return explain(node.query.c_str());
+		},
+
+		[](const FrontendParser::HelpNode& node)
+		{
+			return help(node.command.value_or("").c_str());
+		},
+
+		[](const FrontendParser::InputNode& node)
+		{
+			return newinput(node.file.c_str());
+		},
+
+		[](const FrontendParser::OutputNode& node)
+		{
+			return newoutput(node.file.value_or("").c_str());
+		},
+
+		[](const FrontendParser::QuitNode& node)
+		{
+			return BACKOUT;
+		},
+
+		[](const FrontendParser::ShellNode& node)
+		{
+			return escape(node.command.value_or("").c_str());
+		},
+
+		// SET commands
+
+		[&](const FrontendParser::AnySetNode& anySet)
+		{
+			return std::visit(StdVisitOverloads{
+				[](const FrontendParser::InvalidNode&)
+				{
+					return CONT;
+				},
+
+				[](const FrontendParser::SetNode&)
+				{
+					return print_sets();
+				},
+
+				[](const FrontendParser::SetAutoDdlNode& node)
+				{
+					return do_set_command(node.arg.c_str(), &setValues.Autocommit);
+				},
+
+				[](const FrontendParser::SetAutoTermNode& node)
+				{
+					const auto ret = do_set_command(node.arg.c_str(), &setValues.AutoTerm);
+					if (setValues.AutoTerm)
+					{
+						isqlGlob.Termlen = 1;
+						strcpy(isqlGlob.global_Term, ";");
+					}
+					return ret;
+				},
+
+				[](const FrontendParser::SetBailNode& node)
+				{
+					return do_set_command(node.arg.c_str(), &setValues.BailOnError);
+				},
+
+				[](const FrontendParser::SetBlobDisplayNode& node)
+				{
+					// No arg means turn off blob display
+					if (node.arg.empty() || node.arg == "OFF")
+						setValues.Doblob = NO_BLOBS;
+					else if (node.arg == "ALL")
+						setValues.Doblob = ALL_BLOBS;
+					else
+						setValues.Doblob = atoi(node.arg.c_str());
+					return SKIP;
+				},
+
+				[](const FrontendParser::SetBulkInsertNode& node)
+				{
+					return bulk_insert_hack(node.statement.c_str());
+				},
+
+				[](const FrontendParser::SetCountNode& node)
+				{
+					return do_set_command(node.arg.c_str(), &setValues.Docount);
+				},
+
+				[](const FrontendParser::SetEchoNode& node)
+				{
+					const auto ret = do_set_command(node.arg.c_str(), &setValues.Echo);
+					if (!setValues.Echo)
+						ISQL_prompt("");
+					return ret;
+				},
+
+				[](const FrontendParser::SetExecPathDisplayNode& node)
+				{
+					if (node.arg.empty())
+						return ps_ERR;
+					else if (node.arg == "OFF")
+						setValues.ExecPathDisplay[0] = 0;
+					else
+					{
+						static constexpr UCHAR execPath[] = {isc_info_sql_exec_path_blr_text};
+
+						if (node.arg != "BLR")
+							return ps_ERR;
+
+						memcpy(setValues.ExecPathDisplay, execPath, FB_NELEM(execPath));
+						setValues.ExecPathDisplay[FB_NELEM(execPath)] = 0;
+					}
+
+					return execSetDebugCommand();
+				},
+
+				[](const FrontendParser::SetExplainNode& node)
+				{
+					auto ret = do_set_command(node.arg.c_str(), &setValues.ExplainPlan);
+					if (setValues.ExplainPlan)
+						ret = do_set_command("ON", &setValues.Plan);
+					return ret;
+				},
+
+				[](const FrontendParser::SetHeadingNode& node)
+				{
+					return do_set_command(node.arg.c_str(), &setValues.Heading);
+				},
+
+				[](const FrontendParser::SetKeepTranParamsNode& node)
+				{
+					const bool oldValue = setValues.KeepTranParams;
+					const auto ret = do_set_command(node.arg.c_str(), &setValues.KeepTranParams);
+					if ((ret != ps_ERR) && (oldValue != setValues.KeepTranParams))
+						TranParams->assign(setValues.KeepTranParams ? DEFAULT_DML_TRANS_SQL : "");
+					return ret;
+				},
+
+				[](const FrontendParser::SetListNode& node)
+				{
+					return do_set_command(node.arg.c_str(), &setValues.List);
+				},
+
+				[](const FrontendParser::SetLocalTimeoutNode& node)
+				{
+					int val = strtol(node.arg.c_str(), nullptr, 10);
+
+					if (val < 0)
+						return ps_ERR;
+					else
+					{
+						setValues.StmtTimeout = val;
+						return SKIP;
+					}
+				},
+
+				[](const FrontendParser::SetMaxRowsNode& node)
+				{
+					return newMaxRows((node.arg.empty() ? "0" : node.arg.c_str()));
+				},
+
+				[](const FrontendParser::SetNamesNode& node)
+				{
+					const auto setNames = node.name ? node.name->c_str() : DEFCHARSET;
+
+					const size_t lgth = strlen(setNames);
+					if (lgth < MAXCHARSET_SIZE)
+						strcpy(setValues.ISQL_charset, setNames);
+					else
+						fb_utils::copy_terminate(setValues.ISQL_charset, setNames, MAXCHARSET_SIZE);
+
+					return SKIP;
+				},
+
+				[](const FrontendParser::SetPerTableStatsNode& node)
+				{
+					return do_set_command(node.arg.c_str(), &setValues.PerTableStats);
+				},
+
+				[](const FrontendParser::SetPlanNode& node)
+				{
+					auto ret = do_set_command(node.arg.c_str(), &setValues.Plan);
+					if (setValues.Planonly && !setValues.Plan)
+						ret = do_set_command("OFF", &setValues.Planonly);
+					return ret;
+				},
+
+				[](const FrontendParser::SetPlanOnlyNode& node)
+				{
+					auto ret = do_set_command(node.arg.c_str(), &setValues.Planonly);
+					if (setValues.Planonly && !setValues.Plan)
+					{
+						// turn on plan
+						ret = do_set_command("ON", &setValues.Plan);
+					}
+					return ret;
+				},
+
+				[](const FrontendParser::SetSqldaDisplayNode& node)
+				{
+					return do_set_command(node.arg.c_str(), &setValues.Sqlda_display);
+				},
+
+				[&](const FrontendParser::SetSqlDialectNode& node)
+				{
+					return get_dialect(node.arg.c_str(), bad_dialect_buf, bad_dialect);
+				},
+
+				[](const FrontendParser::SetStatsNode& node)
+				{
+					return do_set_command(node.arg.c_str(), &setValues.Stats);
+				},
+
+				[](const FrontendParser::SetTermNode& node)
+				{
+					const TEXT* termStr = node.arg.empty() ? DEFTERM : node.arg.c_str();
+
+					for (size_t iter = 0; iter < sizeof(FORBIDDEN_TERM_CHARS); ++iter)
+					{
+						if (strchr(termStr, FORBIDDEN_TERM_CHARS[iter]))
+						{
+							TEXT msg_string[MSG_LENGTH];
+							IUTILS_msg_get(INVALID_TERM_CHARS, msg_string, SafeArg() << FORBIDDEN_TERM_CHARS_DISPLAY);
+							isqlGlob.printf("%s\n", msg_string);
+							return ps_ERR;
+						}
+					}
+
+					setValues.AutoTerm = false;
+
+					isqlGlob.Termlen = strlen(termStr);
+					if (isqlGlob.Termlen < MAXTERM_SIZE)
+						strcpy(isqlGlob.global_Term, termStr);
+					else
+					{
+						isqlGlob.Termlen = MAXTERM_SIZE - 1;
+						fb_utils::copy_terminate(isqlGlob.global_Term, termStr, isqlGlob.Termlen + 1);
+					}
+
+					return SKIP;
+				},
+
+				[](const FrontendParser::SetTimeNode& node)
+				{
+					return do_set_command(node.arg.c_str(), &setValues.Time_display);
+				},
+
+				[](const FrontendParser::SetTransactionNode& node)
+				{
+					return newtrans(node.statement.c_str());
+				},
+
+				[](const FrontendParser::SetWarningsNode& node)
+				{
+					return do_set_command(node.arg.c_str(), &setValues.Warnings);
+				},
+
+				[](const FrontendParser::SetWidthNode& node)
+				{
+					return newsize(node.column.c_str(), node.width.c_str());
+				},
+
+				[](const FrontendParser::SetWireStatsNode& node)
+				{
+					return do_set_command(node.arg.c_str(), &setValues.WireStats);
+				},
+
+				[](auto& arg)
+				{
+					static_assert(FrontendParser::AlwaysFalseV<decltype(arg)>,
+						"Add visitor method for that set node type");
+				}
+			}, anySet);
+		},
+
+		// SHOW commands
+
+		[](const FrontendParser::AnyShowNode& node)
+		{
+			if (DB && !frontendTransaction())
+				return FAIL;
+
+			const auto ret = SHOW_metadata(node);
+
+			if (fbTrans)
+				commit_trans(&fbTrans);
+
+			return ret;
+		},
+
+		[](auto& arg)
+		{
+			static_assert(FrontendParser::AlwaysFalseV<decltype(arg)>, "Add visitor method for that node type");
 		}
-		break;
-
-	case FrontOptions::edit:
-		ret = edit(lparms);
-		break;
-
-	case FrontOptions::input:
-		// CVC: Set by newinput() below only if successful.
-		//Input_file = true;
-		ret = newinput(lparms[1]);
-		break;
-
-	case FrontOptions::quit:
-		ret = BACKOUT;
-		break;
-
-	case FrontOptions::exit:
-		ret = EXIT;
-		break;
-
-	case FrontOptions::explain:
-		ret = explain(cmd + 7);
-		break;
-
-	case FrontOptions::help:
-		ret = help(parms[1]);
-		break;
-
-#ifdef DEV_BUILD
-	case FrontOptions::passthrough:
-		ret = passthrough(cmd + 11);
-		break;
-#endif
-
-	default:						// Didn't match, it must be SQL
-		ret = CONT;
-		break;
-	}
+	}, node);
 
 	// In case any default transaction was started - commit it here
 	if (fbTrans)
 		commit_trans(&fbTrans);
 
-	// Free the frontend command
-	frontend_free_parms(parms, lparms, parm_defaults);
-
 	if (ret == ps_ERR)
 	{
+		TEXT errbuf[MSG_LENGTH];
+
 		if (bad_dialect)
 			IUTILS_msg_get(CMD_ERR, errbuf, SafeArg() << bad_dialect_buf);
 		else
-			IUTILS_msg_get(CMD_ERR, errbuf, SafeArg() << cmd);
+			IUTILS_msg_get(CMD_ERR, errbuf, SafeArg() << statement.c_str());
+
 		STDERROUT(errbuf);
-	}
-
-	return ret;
-}
-
-
-static void frontend_free_parms(TEXT* parms[], TEXT* lparms[], TEXT parm_defaults[][1])
-{
-	for (int j = 0; j < MAX_TERMS; j++)
-	{
-		if (parms[j] && parms[j] != parm_defaults[j])
-		{
-			ISQL_FREE(parms[j]);
-			ISQL_FREE(lparms[j]);
-		}
-	}
-}
-
-
-static void frontend_load_parms(const TEXT* p, TEXT* parms[], TEXT* lparms[],
-	TEXT parm_defaults[][1])
-{
-	TEXT buffer[BUFFER_LENGTH256];
-
-	for (int i = 0; i < MAX_TERMS; ++i)
-	{
-		if (!*p)
-		{
-			parms[i] = lparms[i] = parm_defaults[i];
-			parm_defaults[i][0] = '\0';
-			continue;
-		}
-
-	    bool role_found = false;
-		TEXT* a = buffer;
-		int j = 0;
-		const bool quoted = *p == DBL_QUOTE || *p == SINGLE_QUOTE;
-		if (quoted)
-		{
-			if (i > 0 && (!strcmp(parms[i - 1], "ROLE")))
-				role_found = true;
-			bool delimited_done = false;
-			const TEXT end_quote = *p;
-			j++;
-			*a++ = *p++;
-			// Allow a quoted string to have embedded spaces
-			//  Prevent overflow
-			while (*p && !delimited_done && j < BUFFER_LENGTH256 - 1)
-			{
-				if (*p == end_quote)
-				{
-					j++;
-					*a++ = *p++;
-					if (*p && *p == end_quote && j < BUFFER_LENGTH256 - 1)
-					{
-						j++;	// do not skip the escape quote here
-						*a++ = *p++;
-					}
-					else
-						delimited_done = true;
-				}
-				else
-				{
-					j++;
-					*a++ = *p++;
-				}
-			}
-			*a = '\0';
-		}
-		else
-		{
-			//  Prevent overflow. Do not copy the string (redundant).
-			while (*p && !fb_utils::isspace(*p) && j < BUFFER_LENGTH256 - 1)
-			{
-				j++;
-				++p;
-			}
-		}
-		fb_assert(!quoted || strlen(buffer) == size_t(j));
-		const size_t length = quoted ? strlen(buffer) : j;
-		parms[i] = (TEXT*) ISQL_ALLOC((SLONG) (length + 1));
-		lparms[i] = (TEXT*) ISQL_ALLOC((SLONG) (length + 1));
-		memcpy(parms[i], quoted ? buffer : p - j, length);
-		parms[i][length] = 0;
-		while (*p && fb_utils::isspace(*p))
-			p++;
-		strcpy(lparms[i], parms[i]);
-		if (!role_found)
-			IUTILS_make_upper(parms[i]);
-	}
-}
-
-
-// ***********************
-// f r o n t e n d _ s e t
-// ***********************
-// Validates and executes the SET {option {params}} command.
-static processing_state frontend_set(const char* cmd, const char* const* parms,
-	const char* const* lparms, char* const bad_dialect_buf, bool& bad_dialect)
-{
-
-	class SetOptions : public OptionsBase
-	{
-	public:
-		enum set_commands
-		{
-			stat, count, list, plan, planonly, explain, blobdisplay, echo, autoddl,
-			autoterm, width, transaction, terminator, names, time,
-			sqlda_display,
-			exec_path_display,
-			sql, warning, sqlCont, heading, bail,
-			bulk_insert, maxrows, stmtTimeout,
-			keepTranParams,	perTableStats, wireStats,
-			wrong
-		};
-		SetOptions(const optionsMap* inmap, size_t insize, int wrongval)
-			: OptionsBase(inmap, insize, wrongval)
-		{}
-	};
-
-	static const SetOptions::optionsMap options[] =
-	{
-		{SetOptions::stat, "STATS", 4},
-		{SetOptions::count, "COUNT", 0},
-		{SetOptions::list, "LIST", 0},
-		{SetOptions::plan, "PLAN", 0},
-		{SetOptions::planonly, "PLANONLY", 0},
-		{SetOptions::explain, "EXPLAIN", 0},
-		{SetOptions::blobdisplay, "BLOBDISPLAY", 4},
-		{SetOptions::echo, "ECHO", 0},
-		{SetOptions::autoddl, "AUTODDL", 4},
-		{SetOptions::autoterm, "AUTOTERM", 5},
-		{SetOptions::width, "WIDTH", 0},
-		{SetOptions::transaction, "TRANSACTION", 5},
-		{SetOptions::terminator, "TERMINATOR", 4},
-		{SetOptions::names, "NAMES", 0},
-		{SetOptions::time, "TIME", 0},
-		{SetOptions::sqlda_display, "SQLDA_DISPLAY", 0},
-		{SetOptions::exec_path_display, "EXEC_PATH_DISPLAY", 0},
-		{SetOptions::sql, "SQL", 0},
-		{SetOptions::warning, "WARNINGS", 7},
-		{SetOptions::warning, "WNG", 0},
-		{SetOptions::sqlCont, "GENERATOR", 0},
-		{SetOptions::sqlCont, "STATISTICS", 0},
-		{SetOptions::heading, "HEADING", 0},
-		{SetOptions::bail, "BAIL", 0},
-		{SetOptions::bulk_insert, "BULK_INSERT", 0},
-		{SetOptions::maxrows, "ROWCOUNT", 0}, // legacy, compatible with FB2.5
-		{SetOptions::maxrows, "MAXROWS", 0},
-		{SetOptions::sqlCont, "ROLE", 0},
-		{SetOptions::sqlCont, "TRUSTED", 0},	// TRUSTED ROLE, will get DSQL error other case
-		{SetOptions::stmtTimeout, "LOCAL_TIMEOUT", 0},
-		{SetOptions::sqlCont, "DECFLOAT", 0},
-		{SetOptions::keepTranParams, "KEEP_TRAN_PARAMS", 9},
-		{SetOptions::perTableStats, "PER_TABLE_STATS", 7},
-		{SetOptions::wireStats, "WIRE_STATS", 4}
-	};
-
-	// Display current set options
-	if (!*parms[1])
-		return print_sets();
-
-	processing_state ret = SKIP;
-	const SetOptions setoptions(options, FB_NELEM(options), SetOptions::wrong);
-	switch (setoptions.getCommand(parms[1]))
-	{
-	case SetOptions::sqlCont:
-		ret = CONT;
-		break;
-
-	case SetOptions::stat:
-		ret = do_set_command(parms[2], &setValues.Stats);
-		break;
-
-	case SetOptions::count:
-		ret = do_set_command(parms[2], &setValues.Docount);
-		break;
-
-	case SetOptions::list:
-		ret = do_set_command(parms[2], &setValues.List);
-		break;
-
-	case SetOptions::plan:
-		ret = do_set_command(parms[2], &setValues.Plan);
-		if (setValues.Planonly && !setValues.Plan)
-			ret = do_set_command("OFF", &setValues.Planonly);
-		break;
-
-	case SetOptions::planonly:
-		ret = do_set_command (parms[2], &setValues.Planonly);
-		if (setValues.Planonly && !setValues.Plan)
-		{
-			// turn on plan
-			ret = do_set_command ("ON", &setValues.Plan);
-		}
-		break;
-
-	case SetOptions::explain:
-		ret = do_set_command(parms[2], &setValues.ExplainPlan);
-		if (setValues.ExplainPlan)
-			ret = do_set_command("ON", &setValues.Plan);
-		break;
-
-	case SetOptions::blobdisplay:
-		// No arg means turn off blob display
-		if (!*parms[2] || !strcmp(parms[2], "OFF"))
-			setValues.Doblob = NO_BLOBS;
-		else if (!strcmp(parms[2], "ALL"))
-			setValues.Doblob = ALL_BLOBS;
-		else
-			setValues.Doblob = atoi(parms[2]);
-		break;
-
-	case SetOptions::echo:
-		ret = do_set_command(parms[2], &setValues.Echo);
-		if (!setValues.Echo)
-			ISQL_prompt("");
-		break;
-
-	case SetOptions::autoddl:
-		ret = do_set_command(parms[2], &setValues.Autocommit);
-		break;
-
-	case SetOptions::autoterm:
-		ret = do_set_command(parms[2], &setValues.AutoTerm);
-		if (setValues.AutoTerm)
-		{
-			isqlGlob.Termlen = 1;
-			strcpy(isqlGlob.global_Term, ";");
-		}
-		break;
-
-	case SetOptions::width:
-		ret = newsize(parms[2][0] == '"' ? lparms[2] : parms[2], parms[3]);
-		break;
-
-	case SetOptions::transaction:
-		ret = newtrans(cmd);
-		break;
-
-	case SetOptions::terminator:
-		{
-			const TEXT* a = (*lparms[2]) ? lparms[2] : DEFTERM;
-			for (size_t iter = 0; iter < sizeof(FORBIDDEN_TERM_CHARS); ++iter)
-			{
-				if (strchr(a, FORBIDDEN_TERM_CHARS[iter]))
-				{
-					TEXT msg_string[MSG_LENGTH];
-					IUTILS_msg_get(INVALID_TERM_CHARS, msg_string, SafeArg() << FORBIDDEN_TERM_CHARS_DISPLAY);
-					isqlGlob.printf("%s\n", msg_string);
-					return ps_ERR;
-				}
-			}
-
-			setValues.AutoTerm = false;
-
-			isqlGlob.Termlen = strlen(a);
-			if (isqlGlob.Termlen < MAXTERM_SIZE)
-			{
-				strcpy(isqlGlob.global_Term, a);
-			}
-			else
-			{
-				isqlGlob.Termlen = MAXTERM_SIZE - 1;
-				fb_utils::copy_terminate(isqlGlob.global_Term, a, isqlGlob.Termlen + 1);
-			}
-		}
-		break;
-
-	case SetOptions::names:
-		if (!*parms[2])
-		{
-			const size_t lgth = strlen(DEFCHARSET);
-			if (lgth < MAXCHARSET_SIZE)
-				strcpy(setValues.ISQL_charset, DEFCHARSET);
-			else
-				fb_utils::copy_terminate(setValues.ISQL_charset, DEFCHARSET, MAXCHARSET_SIZE);
-		}
-		else
-		{
-			const size_t lgth = strlen(parms[2]);
-			if (lgth < MAXCHARSET_SIZE)
-				strcpy(setValues.ISQL_charset, parms[2]);
-			else
-				fb_utils::copy_terminate(setValues.ISQL_charset, parms[2], MAXCHARSET_SIZE);
-		}
-		break;
-
-	case SetOptions::time:
-		if (fb_utils::stricmp(parms[2], "ZONE") == 0)
-			ret = CONT;	// pass SET TIME ZONE command to server
-		else
-			ret = do_set_command(parms[2], &setValues.Time_display);
-		break;
-
-	case SetOptions::sqlda_display:
-		ret = do_set_command(parms[2], &setValues.Sqlda_display);
-		break;
-
-	case SetOptions::exec_path_display:
-		ret = SKIP;
-
-		if (!*parms[2])
-			ret = ps_ERR;
-		else if (strcmp(parms[2], "OFF") == 0)
-			setValues.ExecPathDisplay[0] = 0;
-		else
-		{
-			Firebird::Array<UCHAR> execPath;
-
-			for (int parNum = 2; parNum < MAX_TERMS - 1 && *parms[parNum]; ++parNum)
-			{
-				const char* param = parms[parNum];
-				UCHAR code;
-
-				if (strcmp(param, "BLR") == 0)
-					code = isc_info_sql_exec_path_blr_text;
-				else
-				{
-					ret = ps_ERR;
-					break;
-				}
-
-				if (execPath.exist(code))
-				{
-					ret = ps_ERR;
-					break;
-				}
-
-				execPath.push(code);
-			}
-
-			if (ret != ps_ERR)
-			{
-				if (execPath.getCount() < sizeof(setValues.ExecPathDisplay))
-				{
-					memcpy(setValues.ExecPathDisplay, execPath.begin(), execPath.getCount());
-					setValues.ExecPathDisplay[execPath.getCount()] = 0;
-				}
-				else
-					ret = ps_ERR;
-			}
-		}
-
-		if (ret != ps_ERR)
-			ret = execSetDebugCommand();
-
-		break;
-
-	case SetOptions::sql:
-		if (!strcmp(parms[2], "DIALECT"))
-			ret = get_dialect(parms[3], bad_dialect_buf, bad_dialect);
-		else
-			ret = ps_ERR;
-		break;
-
-	case SetOptions::warning:
-		ret = do_set_command (parms[2], &setValues.Warnings);
-		break;
-
-	case SetOptions::heading:
-		ret = do_set_command(parms[2], &setValues.Heading);
-		break;
-
-	case SetOptions::bail:
-		ret = do_set_command(parms[2], &setValues.BailOnError);
-		break;
-
-	case SetOptions::bulk_insert:
-		if (*parms[2])
-			ret = bulk_insert_hack(cmd);
-		else
-			ret = ps_ERR;
-		break;
-
-	case SetOptions::maxrows:
-		ret = newMaxRows((*lparms[2]) ? lparms[2] : "0");
-		break;
-
-	case SetOptions::stmtTimeout:
-		{
-			int val = strtol(parms[2], NULL, 10);
-			if (val < 0)
-				ret = ps_ERR;
-			else
-			{
-				setValues.StmtTimeout = val;
-				ret = SKIP;
-			}
-		}
-		break;
-
-	case SetOptions::keepTranParams:
-		{
-			const bool oldValue = setValues.KeepTranParams;
-			ret = do_set_command(parms[2], &setValues.KeepTranParams);
-			if ((ret != ps_ERR) && (oldValue != setValues.KeepTranParams))
-				TranParams->assign(setValues.KeepTranParams ? DEFAULT_DML_TRANS_SQL : "");
-		}
-
-		break;
-
-	case SetOptions::perTableStats:
-		ret = do_set_command(parms[2], &setValues.PerTableStats);
-		break;
-
-	case SetOptions::wireStats:
-		ret = do_set_command(parms[2], &setValues.WireStats);
-		break;
-
-	default:
-		//{
-		//	TEXT msg_string[MSG_LENGTH];
-		//	IUTILS_msg_get(VALID_OPTIONS, msg_string);
-		//	isqlGlob.printf("%s\n", msg_string);
-		//}
-		//setoptions.showCommands(isqlGlob.Out);
-		//ret = ps_ERR;
-		ret = CONT;	// pass unknown SET command to server as is
-		break;
 	}
 
 	return ret;
@@ -6721,7 +6297,7 @@ static bool printUser(const char* dbName)
 }
 
 
-static processing_state newdb(TEXT* dbname,
+static processing_state newdb(const TEXT* dbname,
 					const TEXT* usr,
 					const TEXT* psw,
 					int numbufs,
@@ -6755,14 +6331,16 @@ static processing_state newdb(TEXT* dbname,
 	// out.  We will restore it after the disconnect.  The save_database buffer
 	// will also be used to translate dbname to the proper character set.
 
-	const SLONG len = static_cast<SLONG>(chop_at(dbname, MAXPATHLEN));
+	const SLONG len = strnlen(dbname, MAXPATHLEN - 1);
 	SCHAR* save_database = (SCHAR*) ISQL_ALLOC(len + 1);
 	if (!save_database)
 		return ps_ERR;
 
-	strcpy(save_database, dbname);
+	strncpy(save_database, dbname, len);
+	save_database[len] = 0;
 	ISQL_disconnect_database(false);
-	strcpy(dbname, save_database);
+	strcpy(isqlGlob.global_Db_name, save_database);
+	dbname = isqlGlob.global_Db_name;
 	ISQL_FREE(save_database);
 
 	TEXT local_psw[BUFFER_LENGTH256];
@@ -6775,12 +6353,10 @@ static processing_state newdb(TEXT* dbname,
 	local_usr[0] = 0;
 	local_sql_role[0] = 0;
 
-	// Strip quotes if well-intentioned
-
-	strip_quotes(dbname, isqlGlob.global_Db_name);
 	if (usr)
 		strcpy(local_usr, usr);
-	strip_quotes(psw, local_psw);
+	if (psw)
+		strcpy(local_psw, psw);
 
 	// if local user is not specified, see if global options are
 	// specified - don't let a global role setting carry forward if a
@@ -6964,20 +6540,17 @@ static processing_state newinput(const TEXT* infile)
 		return ps_ERR;
 	}
 
-	TEXT path[MAXPATHLEN];
-	strip_quotes(infile, path);
-
 	PathName file;
 
-	if (PathUtils::isRelative(path))
+	if (PathUtils::isRelative(infile))
 	{
 		PathName newPath, temp;
 		PathUtils::splitLastComponent(newPath, temp, Filelist->Ifp().fileName(false));
 
-		PathUtils::concatPath(file, newPath, path);
+		PathUtils::concatPath(file, newPath, infile);
 	}
 	else
-		file = path;
+		file = infile;
 
 	// filelist is a linked list of file pointers.  We must add a node to
 	// the linked list before discarding the current Ifp.
@@ -6987,11 +6560,11 @@ static processing_state newinput(const TEXT* infile)
 	if (fp)
 	{
 		Filelist->insertIfp();
-		Filelist->Ifp().init(fp, file.c_str(), path);
+		Filelist->Ifp().init(fp, file.c_str(), infile);
 	}
 	else
 	{
-		IUTILS_msg_get(FILE_OPEN_ERR, errbuf, SafeArg() << path);
+		IUTILS_msg_get(FILE_OPEN_ERR, errbuf, SafeArg() << infile);
 		STDERROUT(errbuf);
 		return FAIL;
 	}
@@ -7020,9 +6593,6 @@ static processing_state newoutput(const TEXT* outfile)
 
 	if (*outfile)
 	{
-		TEXT path[MAXPATHLEN];
-		strip_quotes(outfile, path);
-		outfile = path;
 		FILE* fp = os_utils::fopen(outfile, "a");
 		if (fp)
 		{
@@ -7071,18 +6641,7 @@ static processing_state newsize(const TEXT* colname, const TEXT* sizestr)
  *	Add a column name and print width to collist
  *
  **************************************/
-	if (!*colname || (strlen(colname) >= QUOTED_NAME_SIZE))
-		return ps_ERR;
-
-	char buf[QUOTED_NAME_SIZE];
-	if (colname[0] == DBL_QUOTE)
-	{
-		strcpy(buf, colname);
-		IUTILS_remove_and_unescape_quotes(buf, DBL_QUOTE);
-		colname = buf;
-	}
-
-	if (strlen(colname) > MAX_SQL_IDENTIFIER_LEN)
+	if (!*colname || strlen(colname) > MAX_SQL_IDENTIFIER_LEN)
 		return ps_ERR;
 
 	// If no size is given, remove the entry
@@ -7600,25 +7159,6 @@ static processing_state parse_arg(int argc, SCHAR** argv, SCHAR* tabname)
 	return ret;
 }
 
-
-// *********************
-// p a s s t h r o u g h
-// *********************
-// Execute a command directly on the server. No interpretation done in isql.
-// Use with care. Only for debug builds.
-#ifdef DEV_BUILD
-static processing_state passthrough(const char* cmd)
-{
-	if (!DB)
-		return FAIL;
-
-	M__trans = DB->execute(fbStatus, M__trans, 0, cmd, isqlGlob.SQL_dialect, NULL, NULL, NULL, NULL);
-	if (ISQL_errmsg(fbStatus))
-		return ps_ERR;
-
-	return SKIP;
-}
-#endif
 
 static bool checkSpecial(TEXT* const p, const int length, const double value)
 {

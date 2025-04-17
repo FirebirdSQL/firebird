@@ -59,6 +59,7 @@
 #include "../common/StatusArg.h"
 #include "../common/TimeZoneUtil.h"
 #include "../common/config/config.h"
+#include "../common/ThreadStart.h"
 
 #ifdef WIN_NT
 #include <direct.h>
@@ -667,28 +668,41 @@ private:
 		if (!AddSIDToBoundaryDescriptor(&hBoundaryDesc, &sid))
 			raiseError("AddSIDToBoundaryDescriptor");
 
-		m_hNamespace = CreatePrivateNamespace(&sa, hBoundaryDesc, sPrivateNameSpace);
-
-		if (m_hNamespace == NULL)
+		int retry = 0;
+		while (true)
 		{
-			DWORD err = GetLastError();
-			if (err != ERROR_ALREADY_EXISTS)
-				raiseError("CreatePrivateNamespace");
+			m_hNamespace = CreatePrivateNamespace(&sa, hBoundaryDesc, sPrivateNameSpace);
 
-			m_hNamespace = OpenPrivateNamespace(hBoundaryDesc, sPrivateNameSpace);
 			if (m_hNamespace == NULL)
 			{
-				err = GetLastError();
-				if (err != ERROR_DUP_NAME)
-					raiseError("OpenPrivateNamespace");
+				DWORD err = GetLastError();
+				if (err != ERROR_ALREADY_EXISTS)
+					raiseError("CreatePrivateNamespace");
 
-				Firebird::string name(sPrivateNameSpace);
-				name.append("\\test");
+				m_hNamespace = OpenPrivateNamespace(hBoundaryDesc, sPrivateNameSpace);
+				if (m_hNamespace == NULL)
+				{
+					err = GetLastError();
+					if ((err == ERROR_PATH_NOT_FOUND) && (retry++ < 100))
+					{
+						// Namespace was closed by its last holder, wait a bit and try again
+						Thread::sleep(10);
+						continue;
+					}
 
-				m_hTestEvent = CreateEvent(ISC_get_security_desc(), TRUE, TRUE, name.c_str());
-				if (m_hTestEvent == NULL)
-					raiseError("CreateEvent");
+					if (err != ERROR_DUP_NAME)
+						raiseError("OpenPrivateNamespace");
+
+					Firebird::string name(sPrivateNameSpace);
+					name.append("\\test");
+
+					m_hTestEvent = CreateEvent(ISC_get_security_desc(), TRUE, TRUE, name.c_str());
+					if (m_hTestEvent == NULL)
+						raiseError("CreateEvent");
+				}
 			}
+
+			break;
 		}
 	}
 
@@ -1405,7 +1419,7 @@ void copyStatus(Firebird::CheckStatusWrapper* to, const Firebird::IStatus* from)
 		to->setWarnings(from->getWarnings());
 }
 
-void setIStatus(Firebird::CheckStatusWrapper* to, const ISC_STATUS* from) noexcept
+void setIStatus(Firebird::IStatus* to, const ISC_STATUS* from) noexcept
 {
 	try
 	{

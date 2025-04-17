@@ -410,7 +410,7 @@ namespace
 						if (!hasPatternChar() || getPatternChar() != ']')
 							status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
 
-						for (item.clazz = 0; item.clazz < FB_NELEM(classes); ++item.clazz)
+						for (item.clazz = 0; static_cast<FB_SIZE_T>(item.clazz) < FB_NELEM(classes); ++item.clazz)
 						{
 							if (fb_utils::strnicmp(patternStr + charSavePos,
 									classes[item.clazz].similarClass, len) == 0)
@@ -419,7 +419,7 @@ namespace
 							}
 						}
 
-						if (item.clazz >= FB_NELEM(classes))
+						if (static_cast<FB_SIZE_T>(item.clazz) >= FB_NELEM(classes))
 							status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
 					}
 					else

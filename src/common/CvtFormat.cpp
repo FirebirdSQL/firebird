@@ -36,6 +36,9 @@
 
 #include <cmath>
 #include <string_view>
+#include <charconv>
+#include <algorithm>
+#include <optional>
 
 using namespace Firebird;
 
@@ -44,11 +47,13 @@ namespace
 	class TimeZoneTrie
 	{
 	public:
-		static constexpr int EnglishAlphabet = 26;
-		static constexpr int Digits = 10;
-		static constexpr int OtherSymbols = sizeof("/-+_") - 1;
+		static constexpr const char* OtherSymbolsInName = "/-+_";
 
-		static constexpr int MaxPatternDiversity = EnglishAlphabet + Digits + OtherSymbols;
+		static constexpr unsigned EnglishAlphabetCount = 26;
+		static constexpr unsigned DigitsCount = 10;
+		static constexpr unsigned OtherSymbolsCount = fb_strlen(OtherSymbolsInName);
+
+		static constexpr unsigned MaxPatternDiversity = EnglishAlphabetCount + DigitsCount + OtherSymbolsCount;
 
 		static constexpr USHORT UninitializedTimezoneId = 0;
 
@@ -70,7 +75,7 @@ namespace
 			}
 		}
 
-		bool contains(const char* value, USHORT& outTimezoneId, int& outParsedTimezoneLength)
+		bool contains(const char* value, USHORT& outTimezoneId, unsigned int& outParsedTimezoneLength)
 		{
 			const TrieNode* currentNode = m_root;
 			FB_SIZE_T valueLength = fb_strlen(value);
@@ -97,9 +102,10 @@ namespace
 			TrieNode* currentNode = m_root;
 			FB_SIZE_T valueLength = fb_strlen(value);
 
-			for (int i = 0; i < valueLength; i++)
+			for (unsigned int i = 0; i < valueLength; i++)
 			{
 				int index = calculateIndex(value[i]);
+				fb_assert(index >= 0);
 
 				if (currentNode->childrens[index] == nullptr)
 					currentNode->childrens[index] = FB_NEW_POOL(m_pool) TrieNode();
@@ -117,19 +123,19 @@ namespace
 			if (symbol >= '0' && symbol <= '9')
 				index = symbol - '0';
 			else if (symbol >= 'A' && symbol <= 'Z')
-				index = symbol - 'A' + Digits;
+				index = symbol - 'A' + DigitsCount;
 			else
 			{
 				switch (symbol)
 				{
-					case '/': index = Digits + EnglishAlphabet; break;
-					case '-': index = Digits + EnglishAlphabet + 1; break;
-					case '+': index = Digits + EnglishAlphabet + 2; break;
-					case '_': index = Digits + EnglishAlphabet + 3; break;
+					case '/': index = DigitsCount + EnglishAlphabetCount; break;
+					case '-': index = DigitsCount + EnglishAlphabetCount + 1; break;
+					case '+': index = DigitsCount + EnglishAlphabetCount + 2; break;
+					case '_': index = DigitsCount + EnglishAlphabetCount + 3; break;
 				}
 			}
 
-			fb_assert(index < MaxPatternDiversity);
+			fb_assert(index < static_cast<int>(MaxPatternDiversity));
 			return index;
 		}
 
@@ -141,9 +147,9 @@ namespace
 	InitInstance<TimeZoneTrie> timeZoneTrie;
 
 
-	#define CVT_FORMAT(id, format) constexpr Patterns format = 1llu << id - 1;
-	#define CVT_FORMAT2(id, format1, format2) constexpr Patterns format2 = 1llu << id - 1;
-	#define CVT_FORMAT_FLAG(id, format) constexpr Patterns format = 1llu << id - 1;
+	#define CVT_FORMAT(id, format) constexpr Patterns format = 1llu << (id - 1);
+	#define CVT_FORMAT2(id, format1, format2) constexpr Patterns format2 = 1llu << (id - 1);
+	#define CVT_FORMAT_FLAG(id, format) constexpr Patterns format = 1llu << (id - 1);
 	namespace Format
 	{
 		typedef FB_UINT64 Patterns;
@@ -343,7 +349,7 @@ namespace
 					if (number < 1 || number > 9)
 						return Format::NONE;
 
-					return Format::FF1 << number - 1;
+					return Format::FF1 << (number - 1);
 				}
 				break;
 
@@ -460,7 +466,7 @@ namespace
 			patternStr = std::string_view(format + formatStart, offset - formatStart + 1);
 			bool isFound = false;
 
-			for (int j = 0; j < PatternsSize; j++)
+			for (unsigned int j = 0; j < PatternsSize; j++)
 			{
 				if (!strncmp(patterns[j], patternStr.data(), patternStr.length()))
 				{
@@ -941,6 +947,13 @@ namespace
 	//                                               STRING_TO_DATETIME
 	//-----------------------------------------------------------------------------------------------------------------
 
+	template <typename T>
+	void throwExceptionOnEmptyValue(std::optional<T> value, std::string_view pattern, Callbacks* cb)
+	{
+		if (!value.has_value())
+			cb->err(Arg::Gds(isc_missing_value_for_format_pattern) << string(pattern.data(), pattern.length()));
+	}
+
 	std::vector<Token> parseStringToDateTimeFormat(const dsc* desc, const string& formatUpper, Format::Patterns& outFormatPatterns, Callbacks* cb)
 	{
 		outFormatPatterns = Format::NONE;
@@ -1124,6 +1137,7 @@ namespace
 			return twelveHours == 12 ? twelveHours : 12 + twelveHours;
 
 		cb->err(Arg::Gds(isc_incorrect_hours_period) << string(period.data(), period.length()));
+		return 0; // suppress compiler warning/error
 	}
 
 	constexpr int roundYearPatternImplementation(int parsedRRValue, int currentYear)
@@ -1149,31 +1163,40 @@ namespace
 		return result;
 	}
 
-	constexpr int getIntFromString(const char* str, FB_SIZE_T length, FB_SIZE_T& offset, FB_SIZE_T parseLength, bool withSign = false)
+	// Return 1 if sign symbol has not been encountered
+	constexpr int getIntSignFromString(const char* str, FB_SIZE_T& offset)
 	{
-		int result = 0;
+		// To check '-' sign we need to move back, cuz '-' is also used as separator,
+		// so it will be skipped when we trying to remove "empty" space between values
+		if (str[offset] == '+')
+			offset++;
+		else if (offset != 0 && str[offset - 1] == '-')
+			return -1;
+
+		return 1;
+	}
+
+	// Return MAX_INT if number from parsed string does not fit into int variable
+	std::optional<int> getIntFromString(const char* str, FB_SIZE_T length, FB_SIZE_T& offset, FB_SIZE_T parseLength,
+		bool withSign = false)
+	{
+		int number = 0;
 		int sign = 1;
 
 		if (withSign)
+			sign = getIntSignFromString(str, offset);
+
+		const char* begin = str + offset;
+		std::from_chars_result conversionResult = std::from_chars(begin, str + offset + parseLength, number);
+		if (conversionResult.ec == std::errc())
 		{
-			// To check '-' sign we need to move back, cuz '-' is also used as separator,
-			// so it will be skipped when we trying to remove "empty" space between values
-			if (str[offset] == '+')
-				offset++;
-			else if (offset != 0 && str[offset - 1] == '-')
-				sign = -1;
+			offset += conversionResult.ptr - begin;
+			return number * sign;
 		}
 
-		const FB_SIZE_T parseLengthWithOffset = offset + parseLength;
-		for (; offset < parseLengthWithOffset && offset < length; offset++)
-		{
-			if (!isDigit(str[offset]))
-				return result * sign;
-
-			result = result * 10 + (str[offset] - '0');
-		}
-
-		return result * sign;
+		if (conversionResult.ec == std::errc::result_out_of_range)
+			return std::numeric_limits<decltype(number)>::max();
+		return std::nullopt;
 	}
 
 	constexpr std::string_view getSubstringFromString(const char* str, FB_SIZE_T length, FB_SIZE_T& offset, FB_SIZE_T parseLength = 0,
@@ -1191,6 +1214,79 @@ namespace
 		}
 
 		return std::string_view(str + startPoint, wordLen);
+	}
+
+	std::optional<unsigned> getFractionsFromString(const char* str, FB_SIZE_T length, FB_SIZE_T& offset, FB_SIZE_T parseLength)
+	{
+		constexpr unsigned pow10[] = {1, 10, 100, 1'000, 10'000};
+		static_assert(std::size(pow10) > -ISC_TIME_SECONDS_PRECISION_SCALE);
+
+		if (parseLength > -ISC_TIME_SECONDS_PRECISION_SCALE)
+			parseLength = -ISC_TIME_SECONDS_PRECISION_SCALE;
+
+		const FB_SIZE_T startOffset = offset;
+		const std::optional<int> fractions = getIntFromString(str, length, offset, parseLength, false);
+		if (!fractions.has_value())
+			return std::nullopt;
+
+		// Precision scale is using to convert ".1" to 1000 and not to just 1
+		const int precisionScale = -ISC_TIME_SECONDS_PRECISION_SCALE - (offset - startOffset);
+		return static_cast<unsigned>(fractions.value()) * pow10[precisionScale];
+	}
+
+	std::string_view getTimezoneNameFromString(const char* str, FB_SIZE_T length, FB_SIZE_T& offset)
+	{
+		auto isOther = [](const char symbol) -> bool
+		{
+			return std::find(TimeZoneTrie::OtherSymbolsInName, TimeZoneTrie::OtherSymbolsInName + TimeZoneTrie::OtherSymbolsCount, symbol)
+				!= TimeZoneTrie::OtherSymbolsInName + TimeZoneTrie::OtherSymbolsCount;
+		};
+
+		FB_SIZE_T startOffset = offset;
+
+		for (; offset < length; offset++)
+		{
+			const char symbol = str[offset];
+			if (!isAlpha(symbol) && !isDigit(symbol) && !isOther(symbol))
+				break;
+		}
+
+		return std::string_view(str + startOffset, offset - startOffset);
+	}
+
+	std::optional<int> getDisplacementFromString(const char* str, FB_SIZE_T length, FB_SIZE_T& offset,
+		std::string_view patternStr, Firebird::Callbacks* cb)
+	{
+		int sign = getIntSignFromString(str, offset);
+
+		std::optional<unsigned> hours = getIntFromString(str, length, offset, length - offset, false);
+		if (!hours.has_value())
+			return std::nullopt;
+
+		for (; offset < length; offset++)
+		{
+			if (!isSeparator(str[offset]))
+				break;
+		}
+
+		std::optional<unsigned> minutes = getIntFromString(str, length, offset, length - offset, false);
+		if (!minutes.has_value())
+			return std::nullopt;
+
+		if (minutes.value() > 59)
+		{
+			cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+				string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(59));
+		}
+
+		if (!TimeZoneUtil::isValidOffset(sign, hours.value(), minutes.value()))
+		{
+			string timezoneOffset;
+			timezoneOffset.printf("%c%u:%u", sign == -1 ? '-' : '+', hours.value(), minutes.value());
+			cb->err(Arg::Gds(isc_invalid_timezone_offset) << timezoneOffset);
+		}
+
+		return sign * (hours.value() * 60 + minutes.value());
 	}
 
 	template <typename TIterator>
@@ -1261,69 +1357,79 @@ namespace
 				{
 					// Set last digit to zero
 					const int currentYear = (outTimes.tm_year + 1900) / 10 * 10;
-					const int year = getIntFromString(str, strLength, strOffset, 1);
+					const std::optional<int> year = getIntFromString(str, strLength, strOffset, 1);
+					throwExceptionOnEmptyValue(year, patternStr, cb);
 
-					outTimes.tm_year = currentYear + year - 1900;
+					outTimes.tm_year = currentYear + year.value() - 1900;
 					break;
 				}
 				case Format::YY:
 				{
 					// Set 2 last digits to zero
 					const int currentAge = (outTimes.tm_year + 1900) / 100 * 100;
-					const int parsedYear = getIntFromString(str, strLength, strOffset, 2);
+					const std::optional<int> year = getIntFromString(str, strLength, strOffset, 2);
+					throwExceptionOnEmptyValue(year, patternStr, cb);
 
-					outTimes.tm_year = currentAge + parsedYear - 1900;
+					outTimes.tm_year = currentAge + year.value() - 1900;
 					break;
 				}
 				case Format::YYY:
 				{
 					// Set 3 last digits to zero
 					const int currentThousand = (outTimes.tm_year + 1900) / 1000 * 1000;
-					const int parsedYear = getIntFromString(str, strLength, strOffset, 3);
+					const std::optional<int> year = getIntFromString(str, strLength, strOffset, 3);
+					throwExceptionOnEmptyValue(year, patternStr, cb);
 
-					outTimes.tm_year = currentThousand + parsedYear - 1900;
+					outTimes.tm_year = currentThousand + year.value() - 1900;
 					break;
 				}
 				case Format::YYYY:
 				{
-					const int year = getIntFromString(str, strLength, strOffset, 4);
+					const std::optional<int> year = getIntFromString(str, strLength, strOffset, 4);
+					throwExceptionOnEmptyValue(year, patternStr, cb);
 
-					outTimes.tm_year = year - 1900;
+					outTimes.tm_year = year.value() - 1900;
 					break;
 				}
 				case Format::YEAR:
 				{
-					const int year = getIntFromString(str, strLength, strOffset, strLength - strOffset);
+					const std::optional<int> year = getIntFromString(str, strLength, strOffset, strLength - strOffset);
+					throwExceptionOnEmptyValue(year, patternStr, cb);
+
 					if (year > 9999)
 					{
 						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
 							string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(9999));
 					}
-					outTimes.tm_year = year - 1900;
+					outTimes.tm_year = year.value() - 1900;
 					break;
 				}
 				case Format::MI:
 				{
-					const int minutes = getIntFromString(str, strLength, strOffset, 2);
+					const std::optional<int> minutes = getIntFromString(str, strLength, strOffset, 2);
+					throwExceptionOnEmptyValue(minutes, patternStr, cb);
+
 					if (minutes > 59)
 					{
 						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
 							string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(59));
 					}
 
-					outTimes.tm_min = minutes;
+					outTimes.tm_min = minutes.value();
 					break;
 				}
 				case Format::MM:
 				{
-					int month = getIntFromString(str, strLength, strOffset, 2);
+					const std::optional<int> month = getIntFromString(str, strLength, strOffset, 2);
+					throwExceptionOnEmptyValue(month, patternStr, cb);
+
 					if (month < 1 || month > 12)
 					{
 						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
 							string(patternStr.data(), patternStr.length()) << Arg::Num(1) << Arg::Num(12));
 					}
 
-					outTimes.tm_mon = month - 1;
+					outTimes.tm_mon = month.value() - 1;
 					break;
 				}
 				case Format::MON:
@@ -1331,7 +1437,7 @@ namespace
 					bool isFound = false;
 
 					std::string_view monthShortName = getSubstringFromString(str, strLength, strOffset, 3);
-					for (int i = 0; i < FB_NELEM(FB_SHORT_MONTHS) - 1; i++)
+					for (FB_SIZE_T i = 0; i < FB_NELEM(FB_SHORT_MONTHS) - 1; i++)
 					{
 						if (std::equal(monthShortName.begin(), monthShortName.end(),
 								FB_SHORT_MONTHS[i], FB_SHORT_MONTHS[i] + strlen(FB_SHORT_MONTHS[i]),
@@ -1352,7 +1458,7 @@ namespace
 					bool isFound = false;
 
 					std::string_view monthFullName = getSubstringFromString(str, strLength, strOffset);
-					for (int i = 0; i < FB_NELEM(FB_LONG_MONTHS_UPPER) - 1; i++)
+					for (FB_SIZE_T i = 0; i < FB_NELEM(FB_LONG_MONTHS_UPPER) - 1; i++)
 					{
 						if (std::equal(monthFullName.begin(), monthFullName.end(),
 								FB_LONG_MONTHS_UPPER[i], FB_LONG_MONTHS_UPPER[i] + strlen(FB_LONG_MONTHS_UPPER[i]),
@@ -1372,19 +1478,23 @@ namespace
 				case Format::RR:
 				{
 					// tm_year already contains current date
-					const int parsedYear = getIntFromString(str, strLength, strOffset, 2);
-					outTimes.tm_year = roundYearPatternImplementation(parsedYear, outTimes.tm_year + 1900) - 1900;
+					const std::optional<int> year = getIntFromString(str, strLength, strOffset, 2);
+					throwExceptionOnEmptyValue(year, patternStr, cb);
+
+					outTimes.tm_year = roundYearPatternImplementation(year.value(), outTimes.tm_year + 1900) - 1900;
 					break;
 				}
 				case Format::RRRR:
 				{
 					const int startOffset = strOffset;
-					const int parsedYear = getIntFromString(str, strLength, strOffset, 4);
+					const std::optional<int> year = getIntFromString(str, strLength, strOffset, 4);
+					throwExceptionOnEmptyValue(year, patternStr, cb);
+
 					const int numberOfSymbols = strOffset - startOffset;
 
 					outTimes.tm_year = numberOfSymbols <= 2
-						? roundYearPatternImplementation(parsedYear, outTimes.tm_year + 1900)
-						: parsedYear;
+						? roundYearPatternImplementation(year.value(), outTimes.tm_year + 1900)
+						: year.value();
 					outTimes.tm_year -= 1900;
 					break;
 				}
@@ -1403,20 +1513,23 @@ namespace
 
 				case Format::DD:
 				{
-					const int day = getIntFromString(str, strLength, strOffset, 2);
+					const std::optional<int> day = getIntFromString(str, strLength, strOffset, 2);
+					throwExceptionOnEmptyValue(day, patternStr, cb);
+
 					if (day == 0 || day > 31)
 					{
 						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
 							string(patternStr.data(), patternStr.length()) << Arg::Num(1) << Arg::Num(31));
 					}
 
-					outTimes.tm_mday = day;
+					outTimes.tm_mday = day.value();
 					break;
 				}
 
 				case Format::J:
 				{
-					const int JDN = getIntFromString(str, strLength, strOffset, strLength - strOffset);
+					const std::optional<int> JDN = getIntFromString(str, strLength, strOffset, strLength - strOffset);
+					throwExceptionOnEmptyValue(JDN, patternStr, cb);
 
 					constexpr int minJDN = 1721426; // 0.0.0
 					constexpr int maxJDN = 5373484; // 31.12.9999
@@ -1427,7 +1540,7 @@ namespace
 					}
 
 					int year = 0, month = 0, day = 0;
-					NoThrowTimeStamp::convertJulianDateToGregorianDate(JDN, year, month, day);
+					NoThrowTimeStamp::convertJulianDateToGregorianDate(JDN.value(), year, month, day);
 					outTimes.tm_year = year - 1900;
 					outTimes.tm_mon = month - 1;
 					outTimes.tm_mday = day;
@@ -1437,55 +1550,64 @@ namespace
 				case Format::HH:
 				case Format::HH12:
 				{
-					const int hours = getIntFromString(str, strLength, strOffset, 2);
+					const std::optional<int> hours = getIntFromString(str, strLength, strOffset, 2);
+					throwExceptionOnEmptyValue(hours, patternStr, cb);
+
 					if (hours < 1 || hours > 12)
 					{
 						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
 							string(patternStr.data(), patternStr.length()) << Arg::Num(1) << Arg::Num(12));
 					}
 
-					outTimes.tm_hour = hours;
+					outTimes.tm_hour = hours.value();
 					break;
 				}
 				case Format::HH24:
 				{
-					const int hours = getIntFromString(str, strLength, strOffset, 2);
+					const std::optional<int> hours = getIntFromString(str, strLength, strOffset, 2);
+					throwExceptionOnEmptyValue(hours, patternStr, cb);
+
 					if (hours > 23)
 					{
 						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
 							string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(23));
 					}
 
-					outTimes.tm_hour = hours;
+					outTimes.tm_hour = hours.value();
 					break;
 				}
 
 				case Format::SS:
 				{
-					const int seconds = getIntFromString(str, strLength, strOffset, 2);
+					const std::optional<int> seconds = getIntFromString(str, strLength, strOffset, 2);
+					throwExceptionOnEmptyValue(seconds, patternStr, cb);
+
 					if (seconds > 59)
 					{
 						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
 							string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(59));
 					}
 
-					outTimes.tm_sec = seconds;
+					outTimes.tm_sec = seconds.value();
 					break;
 				}
 				case Format::SSSSS:
 				{
 					constexpr int maximumSecondsInDay = NoThrowTimeStamp::SECONDS_PER_DAY - 1;
 
-					const int secondsInDay = getIntFromString(str, strLength, strOffset, 5);
-					if (secondsInDay > maximumSecondsInDay)
+					const std::optional<int> secondsInDay = getIntFromString(str, strLength, strOffset, 5);
+					throwExceptionOnEmptyValue(secondsInDay, patternStr, cb);
+
+					const int secondsInDayValue = secondsInDay.value();
+					if (secondsInDayValue > maximumSecondsInDay)
 					{
 						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
 							string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(maximumSecondsInDay));
 					}
 
-					const int hours = secondsInDay / 24;
-					const int minutes = secondsInDay / 60 - hours * 60;
-					const int seconds = secondsInDay - minutes * 60 - hours * 60 * 60;
+					const int hours = secondsInDayValue / 24;
+					const int minutes = secondsInDayValue / 60 - hours * 60;
+					const int seconds = secondsInDayValue - minutes * 60 - hours * 60 * 60;
 
 					outTimes.tm_hour = hours;
 					outTimes.tm_min = minutes;
@@ -1498,10 +1620,12 @@ namespace
 				case Format::FF3:
 				case Format::FF4:
 				{
-					const int number = patternStr.back() - '0';
+					const int precision = patternStr.back() - '0';
 
-					const int fractions = getIntFromString(str, strLength, strOffset, number);
-					outFractions = fractions * pow(10, -ISC_TIME_SECONDS_PRECISION_SCALE - number);
+					const std::optional<unsigned> fractions = getFractionsFromString(str, strLength, strOffset, precision);
+					throwExceptionOnEmptyValue(fractions, patternStr, cb);
+
+					outFractions = fractions.value();
 					break;
 				}
 
@@ -1520,11 +1644,27 @@ namespace
 					auto prevIt = getPreviousOrCurrentIterator(it, begin);
 					if (prevIt->pattern == Format::TZM)
 					{
-						outTimezoneInMinutes += sign(outTimezoneInMinutes) *
-							getIntFromString(str, strLength, strOffset, strLength - strOffset) * 60;
+						const std::optional<int> hours = getIntFromString(str, strLength, strOffset, strLength - strOffset);
+						throwExceptionOnEmptyValue(hours, patternStr, cb);
+
+						const int hoursValue = hours.value();
+						const int signValue = sign(outTimezoneInMinutes);
+						if (!TimeZoneUtil::isValidOffset(signValue, abs(hoursValue), 0))
+							cb->err(Arg::Gds(isc_invalid_timezone_offset) << Arg::Num(hoursValue));
+
+						outTimezoneInMinutes += signValue * hoursValue * 60;
 					}
 					else
-						outTimezoneInMinutes = getIntFromString(str, strLength, strOffset, strLength - strOffset, true) * 60;
+					{
+						const std::optional<int> hours = getIntFromString(str, strLength, strOffset, strLength - strOffset, true);
+						throwExceptionOnEmptyValue(hours, patternStr, cb);
+
+						const int hoursValue = hours.value();
+						if (!TimeZoneUtil::isValidOffset(sign(hours), abs(hoursValue), 0))
+							cb->err(Arg::Gds(isc_invalid_timezone_offset) << Arg::Num(hoursValue));
+
+						outTimezoneInMinutes = hoursValue * 60;
+					}
 					break;
 				}
 				case Format::TZM:
@@ -1532,19 +1672,54 @@ namespace
 					auto prevIt = getPreviousOrCurrentIterator(it, begin);
 					if (prevIt->pattern == Format::TZH)
 					{
-						outTimezoneInMinutes += sign(outTimezoneInMinutes) *
-							getIntFromString(str, strLength, strOffset, strLength - strOffset);
+						const std::optional<int> minutes = getIntFromString(str, strLength, strOffset, strLength - strOffset);
+						throwExceptionOnEmptyValue(minutes, patternStr, cb);
+
+						if (minutes > 59)
+						{
+							cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+								string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(59));
+						}
+
+						outTimezoneInMinutes += sign(outTimezoneInMinutes) * minutes.value();
 					}
 					else
-						outTimezoneInMinutes = getIntFromString(str, strLength, strOffset, strLength - strOffset, true);
+					{
+						const std::optional<int> minutes = getIntFromString(str, strLength, strOffset, strLength - strOffset, true);
+						throwExceptionOnEmptyValue(minutes, patternStr, cb);
+
+						const int minutesValue = minutes.value();
+						if (abs(minutesValue) > 59)
+						{
+							cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
+								string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(59));
+						}
+
+						outTimezoneInMinutes = minutesValue;
+					}
 					break;
 				}
 				case Format::TZR:
 				{
-					int parsedTimezoneNameLength = 0;
+					unsigned int parsedTimezoneNameLength = 0;
 					const bool timezoneNameIsCorrect = timeZoneTrie().contains(str + strOffset, outTimezoneId, parsedTimezoneNameLength);
 					if (!timezoneNameIsCorrect)
-						status_exception::raise(Arg::Gds(isc_invalid_timezone_region) << string(str + strOffset, parsedTimezoneNameLength));
+					{
+						FB_SIZE_T oldOffset = strOffset;
+
+						// Okey, this is not a timezone name, try to parse it as a displacement (Oracle behavior)
+						const std::optional<int> displacement = getDisplacementFromString(str, strLength, strOffset,
+							patternStr, cb);
+						if (displacement.has_value())
+						{
+							outTimezoneInMinutes = displacement.value();
+							break;
+						}
+
+						std::string_view timezoneName = getTimezoneNameFromString(str, strLength, oldOffset);
+						status_exception::raise(Arg::Gds(isc_invalid_timezone_region_or_displacement)
+							<< string(timezoneName.data(), timezoneName.length()));
+					}
 
 					strOffset += parsedTimezoneNameLength;
 					break;
@@ -1585,7 +1760,7 @@ namespace
 		}
 	}
 
-	void validateTimeStamp(const ISC_TIMESTAMP timestamp, const EXPECT_DATETIME expectedType, const dsc* desc,
+	void validateTimeStamp(const ISC_TIMESTAMP timestamp, const tm& times, const EXPECT_DATETIME expectedType, const dsc* desc,
 		Callbacks* cb)
 	{
 		if (!NoThrowTimeStamp::isValidTimeStamp(timestamp))
@@ -1606,6 +1781,21 @@ namespace
 				default: // this should never happen!
 					CVT_conversion_error(desc, cb->err);
 					break;
+			}
+		}
+
+		if (expectedType != expect_sql_time && expectedType != expect_sql_time_tz)
+		{
+			tm times2;
+			memset(&times2, 0, sizeof(decltype(times2)));
+
+			NoThrowTimeStamp::decode_date(timestamp.timestamp_date, &times2);
+
+			if (times.tm_year != times2.tm_year
+			 || times.tm_mon  != times2.tm_mon
+			 ||	times.tm_mday != times2.tm_mday)
+			{
+				CVT_conversion_error(desc, cb->err);
 			}
 		}
 	}
@@ -1668,7 +1858,7 @@ ISC_TIMESTAMP_TZ CVT_format_string_to_datetime(const dsc* desc, const Firebird::
 		stringUpper[i] = toupper(sourceString[i]);
 
 	string formatUpper(format.length(), '\0');
-	for (int i = 0; i < format.length(); i++)
+	for (unsigned int i = 0; i < format.length(); i++)
 		formatUpper[i] = toupper(format[i]);
 
 	StringToDateTimeData cvtData;
@@ -1684,8 +1874,8 @@ ISC_TIMESTAMP_TZ CVT_format_string_to_datetime(const dsc* desc, const Firebird::
 	processStringToDateTimeTokens(tokens, stringUpper, cvtData, cb);
 
 	ISC_TIMESTAMP_TZ timestampTZ = constructTimeStampTz(cvtData, cb);
+	validateTimeStamp(timestampTZ.utc_timestamp, cvtData.times, expectedType, desc, cb);
 	timeStampToUtc(timestampTZ, cb->getSessionTimeZone(), expectedType, cb);
-	validateTimeStamp(timestampTZ.utc_timestamp, expectedType, desc, cb);
 
 	return timestampTZ;
 }

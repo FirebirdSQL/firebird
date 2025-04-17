@@ -1804,7 +1804,7 @@ static void get_array(gpre_dbb* database, const TEXT* field_name, gpre_fld* fiel
 			field->fld_dtype = dtype_blob;
 			field->fld_flags |= FLD_blob;
 			field->fld_length = 8;
-			// CVC: Someone allocated the the max size inside the ary structure,
+			// CVC: Someone allocated the max size inside the ary structure,
 			// so the dynamic length is irrelevant to create the array_block.
 			field_dimensions = F.RDB$DIMENSIONS;
 			fb_assert(field_dimensions <= MAX_ARRAY_DIMENSIONS);

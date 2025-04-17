@@ -111,7 +111,7 @@ GLOB_OPTIONS:=
 #____________________________________________________________________________
 
 # Global c++ flags: firebird needs no RTTI, choose build standard and c++ specific warnings level
-PLUSPLUS_FLAGS:= -fno-rtti -std=c++17 -Werror=delete-incomplete
+PLUSPLUS_FLAGS:= -fno-rtti -std=c++17 -Werror=delete-incomplete -Werror=return-type
 
 # If this is defined then we use special rules useful for developers only
 IsDeveloper = @DEVEL_FLG@

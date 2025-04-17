@@ -633,6 +633,8 @@ void INF_database_info(thread_db* tdbb,
 			}
 
 			{
+				StrArray names;
+
 				SyncLockGuard sync(&dbb->dbb_sync, SYNC_SHARED, "INF_database_info");
 
 				for (const Jrd::Attachment* att = dbb->dbb_attachments; att; att = att->att_next)
@@ -643,6 +645,13 @@ void INF_database_info(thread_db* tdbb,
 					{
 						const char* userName = user->getUserName().hasData() ?
 							user->getUserName().c_str() : "(Firebird Worker Thread)";
+
+						FB_SIZE_T pos;
+						if (names.find(userName, pos))
+							continue;
+
+						names.insert(pos, userName);
+
 						p = buffer;
 						const ULONG len = MIN(strlen(userName), MAX_UCHAR);
 						*p++ = static_cast<UCHAR>(len);
@@ -776,7 +785,7 @@ void INF_database_info(thread_db* tdbb,
 					length = gds__vax_integer(items, 2);
 					items += 2;
 
-					if (end_items - items >= length)
+					if (static_cast<ULONG>(end_items - items) >= length)
 					{
 						pageNum = gds__vax_integer(items, length);
 						items += length;
@@ -910,7 +919,7 @@ void INF_database_info(thread_db* tdbb,
 
 		case fb_info_db_guid:
 			{
-				const auto guidStr = dbb->dbb_guid.value().toString();
+				const auto guidStr = dbb->dbb_guid.toString();
 				if (!(info = INF_put_item(item, guidStr.length(), guidStr.c_str(), info, end)))
 					return;
 			}

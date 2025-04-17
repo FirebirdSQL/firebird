@@ -52,8 +52,8 @@ using namespace Replication;
 namespace
 {
 	const char* REPLICATION_CFGFILE = "replication.conf";
-	constexpr const char* KEY_ENV = "env";
-	constexpr const char* KEY_FILE = "file";
+	constexpr const char* KEY_SUFFIX_ENV = "env";
+	constexpr const char* KEY_SUFFIX_FILE = "file";
 
 	const ULONG DEFAULT_BUFFER_SIZE = 1024 * 1024; 				// 1 MB
 	const ULONG DEFAULT_SEGMENT_SIZE = 16 * 1024 * 1024;	// 16 MB
@@ -104,64 +104,68 @@ namespace
 		status->setErrors(sv.value());
 	}
 
+	void parseExternalValue(const string& key, const string& value, string& output)
+	{
+		const auto pos = key.rfind('_');
+		if (pos == string::npos)
+		{
+			output = value.c_str();
+			return;
+		}
+
+		string temp;
+		const string key_source = key.substr(pos + 1);
+
+		if (key_source.equals(KEY_SUFFIX_ENV))
+		{
+			fb_utils::readenv(value.c_str(), temp);
+			if (temp.isEmpty())
+				configError("missing environment variable", key, value);
+		}
+		else if (key_source.equals(KEY_SUFFIX_FILE))
+		{
+			PathName filename = value.c_str();
+			PathUtils::fixupSeparators(filename);
+			if (PathUtils::isRelative(filename))
+				filename = fb_utils::getPrefix(IConfigManager::DIR_CONF, filename.c_str());
+
+			AutoPtr<FILE> file(os_utils::fopen(filename.c_str(), "rt"));
+			if (!file)
+				configError("missing or inaccessible file", key, filename.c_str());
+
+			if (temp.LoadFromFile(file))
+				temp.alltrim("\r");
+
+			if (temp.isEmpty())
+				configError("first empty line of file", key, filename.c_str());
+		}
+
+		output = temp.c_str();
+	}
+
 	void parseSyncReplica(const ConfigFile::Parameters& params, SyncReplica& output)
 	{
 		for (const auto& el : params)
 		{
-			string key(el.name.c_str());
-			string value(el.value);
+			const string key(el.name.c_str());
+			const string value(el.value);
 
 			if (value.isEmpty())
 				continue;
 
-			auto pos = key.rfind('_');
-			if (pos != string::npos)
+			if (key.find("username") == 0)
 			{
-				const string key_source = key.substr(pos + 1);
-
-				if (key_source.equals(KEY_ENV))
-				{
-					fb_utils::readenv(value.c_str(), value);
-					if (value.isEmpty())
-						configError("missing environment variable", output.database, value);
-
-					key = key.substr(0, pos);
-				}
-				else if (key_source.equals(KEY_FILE))
-				{
-					PathName filename = value.c_str();
-					PathUtils::fixupSeparators(filename);
-					if (PathUtils::isRelative(filename))
-						filename = fb_utils::getPrefix(IConfigManager::DIR_CONF, filename.c_str());
-
-					AutoPtr<FILE> file(os_utils::fopen(filename.c_str(), "rt"));
-					if (!file)
-						configError("missing or inaccessible file", output.database, filename.c_str());
-
-					// skip first empty lines
-					value = "";
-					do
-					{
-						if (feof(file))
-							break;
-
-						if (!value.LoadFromFile(file))
-							break;
-
-						value.alltrim(" \t\r");
-					} while (value.isEmpty());
-
-					if (value.isEmpty())
-						configError("empty file", output.database, filename.c_str());
-
-					key = key.substr(0, pos);
-				}
+				if (output.username.hasData())
+					configError("multiple values", output.database, "username");
+				parseExternalValue(key, value, output.username);
+				output.username.rtrim(" ");
 			}
-
-			if (key == "username")
-				output.username = value.c_str();
-			else if (key == "password")
-				output.password = value.c_str();
+			else if (key.find("password") == 0)
+			{
+				if (output.password.hasData())
+					configError("multiple values", output.database, "password");
+				parseExternalValue(key, value, output.password);
+			}
 			else
 				configError("unknown parameter", output.database, key);
 		}

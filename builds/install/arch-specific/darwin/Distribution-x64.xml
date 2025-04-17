@@ -5,6 +5,7 @@
     <license file="License.txt" mime-type="text/plain"/>
     <readme file="Readme.txt" mime-type="text/plain"/>
     <pkg-ref id="com.firebirdsql.Firebird"/>
+	<options hostArchitectures="x86_64"/>
     <options customize="never" require-scripts="false"/>
     <choices-outline>
         <line choice="default">

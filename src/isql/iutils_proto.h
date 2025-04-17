@@ -24,6 +24,7 @@
 #ifndef ISQL_IUTILS_PROTO_H
 #define ISQL_IUTILS_PROTO_H
 
+#include "../common/classes/MetaString.h"
 #include "../common/classes/SafeArg.h"
 #include <stdio.h>
 
@@ -33,6 +34,7 @@ void	IUTILS_msg_get(USHORT number, TEXT* msg,
 					 const MsgFormat::SafeArg& args = MsgFormat::SafeArg());
 void	IUTILS_msg_get(USHORT number, USHORT size, TEXT* msg,
 					 const MsgFormat::SafeArg& args = MsgFormat::SafeArg());
+Firebird::string IUTILS_name_to_string(const Firebird::MetaString& name);
 void	IUTILS_printf(FILE*, const char*);
 void	IUTILS_printf2(FILE*, const char*, ...);
 void	IUTILS_put_errmsg(USHORT number, const MsgFormat::SafeArg& args);

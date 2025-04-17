@@ -26,7 +26,7 @@
 
 #include "../common/dsc.h"
 
-int			DSC_string_length(const struct dsc*);
+USHORT		DSC_string_length(const struct dsc*);
 const TEXT*	DSC_dtype_tostring(UCHAR);
 void		DSC_get_dtype_name(const dsc*, TEXT*, USHORT);
 bool		DSC_make_descriptor(dsc*, USHORT, SSHORT,

@@ -425,6 +425,42 @@ FieldNode* MAKE_field(dsql_ctx* context, dsql_fld* field, ValueListNode* indices
 
 /**
 
+	MAKE_field
+
+	@brief	Make up a dsql_fld from descriptor.
+
+
+	@param field
+	@param desc
+
+ **/
+void MAKE_field(dsql_fld* field, const dsc* desc)
+{
+	DEV_BLKCHK(field, dsql_type_fld);
+
+	field->dtype = desc->dsc_dtype;
+	field->scale = desc->dsc_scale;
+	field->subType = desc->dsc_sub_type;
+	field->length = desc->dsc_length;
+
+	if (desc->dsc_dtype <= dtype_any_text)
+	{
+		field->collationId = DSC_GET_COLLATE(desc);
+		field->charSetId = DSC_GET_CHARSET(desc);
+	}
+	else if (desc->dsc_dtype == dtype_blob)
+	{
+		field->charSetId = desc->dsc_scale;
+		field->collationId = desc->dsc_flags >> 8;
+	}
+
+	if (desc->dsc_flags & DSC_nullable)
+		field->flags |= FLD_nullable;
+}
+
+
+/**
+
  	MAKE_field_name
 
     @brief	Make up a field name node.

@@ -2240,26 +2240,31 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		case rel_files:
 			protect_system_table_delupd(tdbb, relation, "DELETE");
 			{
-				const bool name_defined = EVL_field(0, rpb->rpb_record, f_file_name, &desc);
-				const USHORT file_flags = EVL_field(0, rpb->rpb_record, f_file_flags, &desc2) ?
+				const bool nameDefined = EVL_field(0, rpb->rpb_record, f_file_name, &desc);
+
+				const auto shadowNumber = EVL_field(0, rpb->rpb_record, f_file_shad_num, &desc2) ?
 					MOV_get_long(tdbb, &desc2, 0) : 0;
-				if (file_flags & FILE_difference)
+
+				const auto fileFlags = EVL_field(0, rpb->rpb_record, f_file_flags, &desc2) ?
+					MOV_get_long(tdbb, &desc2, 0) : 0;
+
+				if (shadowNumber)
 				{
-					if (file_flags & FILE_backing_up)
-						DFW_post_work(transaction, dfw_end_backup, &desc, 0);
-					if (name_defined)
-						DFW_post_work(transaction, dfw_delete_difference, &desc, 0);
-				}
-				else if (EVL_field(0, rpb->rpb_record, f_file_shad_num, &desc2) &&
-					(id = MOV_get_long(tdbb, &desc2, 0)))
-				{
-					if (!(file_flags & FILE_inactive))
+					if (!(fileFlags & FILE_inactive))
 					{
-						if (file_flags & FILE_nodelete)
-							DFW_post_work(transaction, dfw_delete_shadow_nodelete, &desc, id);
-						else
-							DFW_post_work(transaction, dfw_delete_shadow, &desc, id);
+						const auto work = (fileFlags & FILE_nodelete) ?
+							dfw_delete_shadow_nodelete : dfw_delete_shadow;
+
+						DFW_post_work(transaction, work, &desc, shadowNumber);
 					}
+				}
+				else if (fileFlags & FILE_difference)
+				{
+					if (fileFlags & FILE_backing_up)
+						DFW_post_work(transaction, dfw_end_backup, &desc, 0);
+
+					if (nameDefined)
+						DFW_post_work(transaction, dfw_delete_difference, &desc, 0);
 				}
 			}
 			break;
@@ -3617,18 +3622,24 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 		case rel_files:
 			protect_system_table_delupd(tdbb, relation, "UPDATE");
 			{
-				SSHORT new_rel_flags, old_rel_flags;
 				EVL_field(0, new_rpb->rpb_record, f_file_name, &desc1);
-				if (EVL_field(0, new_rpb->rpb_record, f_file_flags, &desc2) &&
-					((new_rel_flags = MOV_get_long(tdbb, &desc2, 0)) & FILE_difference) &&
-					EVL_field(0, org_rpb->rpb_record, f_file_flags, &desc2) &&
-					((old_rel_flags = MOV_get_long(tdbb, &desc2, 0)) != new_rel_flags))
+
+				const auto orgFileFlags = EVL_field(0, org_rpb->rpb_record, f_file_flags, &desc2) ?
+					MOV_get_long(tdbb, &desc2, 0) : 0;
+				const auto newFileFlags = EVL_field(0, new_rpb->rpb_record, f_file_flags, &desc2) ?
+					MOV_get_long(tdbb, &desc2, 0) : 0;
+
+				if ((newFileFlags & FILE_difference) && orgFileFlags != newFileFlags)
 				{
 					DFW_post_work(transaction,
-								  (new_rel_flags & FILE_backing_up ? dfw_begin_backup : dfw_end_backup),
+								  (newFileFlags & FILE_backing_up) ? dfw_begin_backup : dfw_end_backup,
 								  &desc1, 0);
 				}
 			}
+			// Nullify the unsupported fields
+			new_rpb->rpb_record->setNull(f_file_seq);
+			new_rpb->rpb_record->setNull(f_file_start);
+			new_rpb->rpb_record->setNull(f_file_length);
 			break;
 
 		case rel_charsets:
@@ -4175,34 +4186,32 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		case rel_files:
 			protect_system_table_insert(tdbb, request, relation);
 			{
-				const bool name_defined = EVL_field(0, rpb->rpb_record, f_file_name, &desc);
-				if (EVL_field(0, rpb->rpb_record, f_file_shad_num, &desc2) &&
-					MOV_get_long(tdbb, &desc2, 0))
+				const bool nameDefined = EVL_field(0, rpb->rpb_record, f_file_name, &desc);
+
+				const auto shadowNumber = EVL_field(0, rpb->rpb_record, f_file_shad_num, &desc2) ?
+					MOV_get_long(tdbb, &desc2, 0) : 0;
+
+				const auto fileFlags = EVL_field(0, rpb->rpb_record, f_file_flags, &desc2) ?
+					MOV_get_long(tdbb, &desc2, 0) : 0;
+
+				if (shadowNumber)
 				{
-					EVL_field(0, rpb->rpb_record, f_file_flags, &desc2);
-					if (!(MOV_get_long(tdbb, &desc2, 0) & FILE_inactive)) {
+					if (!(fileFlags & FILE_inactive))
 						DFW_post_work(transaction, dfw_add_shadow, &desc, 0);
-					}
 				}
-				else
+				else if (fileFlags & FILE_difference)
 				{
-					USHORT rel_flags;
-					if (EVL_field(0, rpb->rpb_record, f_file_flags, &desc2) &&
-						((rel_flags = MOV_get_long(tdbb, &desc2, 0)) & FILE_difference))
-					{
-						if (name_defined) {
-							DFW_post_work(transaction, dfw_add_difference, &desc, 0);
-						}
-						if (rel_flags & FILE_backing_up)
-						{
-							DFW_post_work(transaction, dfw_begin_backup, &desc, 0);
-						}
-					}
-					else {
-						DFW_post_work(transaction, dfw_add_file, &desc, 0);
-					}
+					if (nameDefined)
+						DFW_post_work(transaction, dfw_add_difference, &desc, 0);
+
+					if (fileFlags & FILE_backing_up)
+						DFW_post_work(transaction, dfw_begin_backup, &desc, 0);
 				}
 			}
+			// Nullify the unsupported fields
+			rpb->rpb_record->setNull(f_file_seq);
+			rpb->rpb_record->setNull(f_file_start);
+			rpb->rpb_record->setNull(f_file_length);
 			break;
 
 		case rel_triggers:
@@ -5488,6 +5497,8 @@ void Database::garbage_collector(Database* dbb)
 
 						CCH_flush(tdbb, FLUSH_SWEEP, 0);
 						flush = false;
+
+						attachment->mergeStats();
 					}
 
 					dbb->dbb_flags &= ~DBB_gc_active;

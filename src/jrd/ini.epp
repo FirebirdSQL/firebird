@@ -1619,7 +1619,7 @@ static void store_indices(thread_db* tdbb, USHORT odsVersion)
 
 	AutoRequest handle1, handle2, handle3;
 
-	for (int n = 0; n < SYSTEM_INDEX_COUNT; n++)
+	for (FB_SIZE_T n = 0; n < SYSTEM_INDEX_COUNT; n++)
 	{
 		const ini_idx_t* index = &indices[n];
 		const auto relation = MET_relation(tdbb, index->ini_idx_relid);
@@ -1636,7 +1636,7 @@ static void store_indices(thread_db* tdbb, USHORT odsVersion)
 			PAD(relation->rel_name, X.RDB$RELATION_NAME);
 			PAD(indexName, X.RDB$INDEX_NAME);
 
-			X.RDB$UNIQUE_FLAG = index->ini_idx_flags & idx_unique;
+			X.RDB$UNIQUE_FLAG = (index->ini_idx_flags & idx_unique) ? 1 : 0;
 			X.RDB$SEGMENT_COUNT = index->ini_idx_segment_count;
 
 			if (index->ini_idx_flags & idx_descending)

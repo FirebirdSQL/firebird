@@ -101,40 +101,6 @@ public:
 };
 
 
-class DbFileClause : public Printable
-{
-public:
-	DbFileClause(MemoryPool& p, const DbFileClause& o)
-		: name(p, o.name),
-		  start(o.start),
-		  length(o.length)
-	{
-	}
-
-	explicit DbFileClause(MemoryPool& p, const Firebird::string& aName)
-		: name(p, aName),
-		  start(0),
-		  length(0)
-	{
-	}
-
-public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const
-	{
-		NODE_PRINT(printer, name);
-		NODE_PRINT(printer, start);
-		NODE_PRINT(printer, length);
-
-		return "DbFileClause";
-	}
-
-public:
-	Firebird::string name;	// File name
-	SLONG start;			// Starting page
-	SLONG length;			// File length in pages
-};
-
-
 class ExternalClause : public Printable
 {
 public:
@@ -1967,12 +1933,13 @@ public:
 class CreateShadowNode : public DdlNode
 {
 public:
-	CreateShadowNode(MemoryPool& p, const SSHORT aNumber)
+	CreateShadowNode(MemoryPool& p, SSHORT aNumber, bool aManual, bool aConditional,
+					 const Firebird::string& aFileName)
 		: DdlNode(p),
 		  number(aNumber),
-		  manual(false),
-		  conditional(false),
-		  files(p)
+		  manual(aManual),
+		  conditional(aConditional),
+		  fileName(p, aFileName)
 	{
 	}
 
@@ -1996,7 +1963,7 @@ public:
 	SSHORT number;
 	bool manual;
 	bool conditional;
-	Firebird::Array<NestConst<DbFileClause> > files;
+	Firebird::string fileName;
 	bool createIfNotExistsOnly = false;
 };
 
@@ -2425,14 +2392,9 @@ public:
 public:
 	AlterDatabaseNode(MemoryPool& p)
 		: DdlNode(p),
-		  create(false),
-		  createLength(0),
-		  linger(-1),
-		  clauses(0),
 		  differenceFile(p),
 		  setDefaultCharSet(p),
 		  setDefaultCollation(p),
-		  files(p),
 		  cryptPlugin(p),
 		  keyName(p),
 		  pubTables(p)
@@ -2468,13 +2430,12 @@ private:
 	void checkClauses(thread_db* tdbb);
 
 public:
-	bool create;	// Is the node created with a CREATE DATABASE command?
-	SLONG createLength, linger;
-	unsigned clauses;
+	bool create = false;	// Is the node created with a CREATE DATABASE command?
+	SLONG linger = -1;
+	unsigned clauses = 0;
 	Firebird::string differenceFile;
 	MetaName setDefaultCharSet;
 	MetaName setDefaultCollation;
-	Firebird::Array<NestConst<DbFileClause> > files;
 	MetaName cryptPlugin;
 	MetaName keyName;
 	Firebird::TriState ssDefiner;

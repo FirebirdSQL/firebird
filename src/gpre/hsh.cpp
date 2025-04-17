@@ -38,7 +38,7 @@ static int hash(const SCHAR*);
 static bool scompare(const SCHAR*, const SCHAR*);
 static bool scompare2(const SCHAR*, const SCHAR*);
 
-const int HASH_SIZE = 211;
+const FB_SIZE_T HASH_SIZE = 211;
 
 static gpre_sym* hash_table[HASH_SIZE];
 static gpre_sym* key_symbols;
@@ -80,7 +80,7 @@ void HSH_init()
 {
 	//const char *string;
 
-	int i = 0;
+	FB_SIZE_T i = 0;
 	for (gpre_sym** ptr = hash_table; i < HASH_SIZE; i++)
 		*ptr++ = NULL;
 

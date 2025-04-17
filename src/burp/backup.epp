@@ -547,7 +547,7 @@ void compress(const UCHAR* data, ULONG length)
 	{
 		for (q = p + 2; q < end && (q[-2] != q[-1] || q[-1] != q[0]); q++)
 			;
-		ULONG run = (q < end) ? q - p - 2 : end - p;
+		SLONG run = (q < end) ? q - p - 2 : end - p;
 		if (run)
 		{
 			for (; run > 127; run -= 127)
@@ -924,15 +924,16 @@ SINT64 get_gen_id( const TEXT* name, SSHORT name_len)
 		getGenerator.singleSelect(tdgbl->tr_handle, &getGen);
 		return getGen->id;
 	}
-	catch (const Firebird::FbException& ex)
+	catch (const status_exception& ex)
 	{
-		Firebird::IStatus* st = ex.getStatus();
+		LocalStatus ls;
+		ex.stuffException(&ls);
 
 		// if there's no gen_id, never mind ...
-		if (st->getErrors()[1] == isc_dsql_error)
+		if (ls.getErrors()[1] == isc_dsql_error)
 			return 0;
 
-		BURP_error_redirect(st, 25);
+		BURP_error_redirect(&ls, 25);
 		// msg 25 Failed in put_blr_gen_id
 	}
 	return 0;	// warning silencer
@@ -1258,7 +1259,7 @@ void put_blob( burp_fld* field, ISC_QUAD& blob_id)
 		return;
 	}
 
-	UCHAR blob_info[32];
+	UCHAR blob_info[BUFFER_TINY];
 	if (!blob.getInfo(sizeof(blob_items), blob_items, sizeof(blob_info), blob_info))
 	{
 		BURP_error_redirect(&status_vector, 20);
@@ -1268,7 +1269,8 @@ void put_blob( burp_fld* field, ISC_QUAD& blob_id)
 	put(tdgbl, (UCHAR) rec_blob);
 	put_int32(att_blob_field_number, field->fld_number);
 
-	ULONG segments = 0, total_length = 0;
+	ULONG segments = 0;
+	FB_UINT64 total_length = 0;
 	USHORT max_segment = 0;
 	int blob_type = 0; // 0 - segmented, 1 - stream
 	const UCHAR* p = blob_info;
@@ -1276,26 +1278,27 @@ void put_blob( burp_fld* field, ISC_QUAD& blob_id)
 	UCHAR item;
 	while ((item = *p++) != isc_info_end)
 	{
-		const USHORT l = gds__vax_integer(p, 2);
+		const auto l = gds__vax_integer(p, 2);
 		p += 2;
-		const ULONG n = gds__vax_integer(p, l);
+		const auto n = isc_portable_integer(p, l);
 		p += l;
+
 		switch (item)
 		{
 		case isc_info_blob_max_segment:
-			max_segment = n;
+			max_segment = (USHORT) n;
 			break;
 
 		case isc_info_blob_type:
-			blob_type = n;
+			blob_type = (int) n;
 			break;
 
 		case isc_info_blob_num_segments:
-			segments = n;
+			segments = (ULONG) n;
 			break;
 
 		case isc_info_blob_total_length:
-			total_length = n;
+			total_length = (FB_UINT64) n;
 			break;
 
 		default:
@@ -1311,12 +1314,7 @@ void put_blob( burp_fld* field, ISC_QUAD& blob_id)
 	// our own chunk size. Note, the number of segments returned by information
 	// call for stream blob is always unreliable, even for zero-length blobs
 	if (blob_type == 1)
-	{
-		if (total_length != 0)
-			segments = (total_length + max_segment - 1) / max_segment;
-		else
-			segments = 0;
-	}
+		segments = total_length ? (total_length + max_segment - 1) / max_segment : 0;
 
 	put_int32(att_blob_max_segment, max_segment);
 	put_int32(att_blob_number_segments, segments);
@@ -1390,32 +1388,33 @@ bool put_blr_blob( att_type attribute, ISC_QUAD& blob_id)
 		// msg 24 isc_open_blob failed
 	}
 
-	UCHAR blob_info[32];
+	UCHAR blob_info[BUFFER_TINY];
 	if (!blob.getInfo(sizeof(blr_items), blr_items, sizeof(blob_info), blob_info))
 	{
 		BURP_error_redirect(&status_vector, 20);
 		// msg 20 isc_blob_info failed
 	}
 
-	ULONG length = 0;
+	FB_UINT64 length = 0;
 	USHORT max_segment = 0;
 	const UCHAR* p = blob_info;
 	UCHAR item;
 
 	while ((item = *p++) != isc_info_end)
 	{
-		const USHORT l = isc_vax_integer((const char*) p, 2);
+		const auto l = gds__vax_integer(p, 2);
 		p += 2;
-		const ULONG n = isc_vax_integer((const char*) p, l);
+		const auto n = isc_portable_integer(p, l);
 		p += l;
+
 		switch (item)
 		{
 		case isc_info_blob_max_segment:
-			max_segment = n;
+			max_segment = (USHORT) n;
 			break;
 
 		case isc_info_blob_total_length:
-			length = n;
+			length = (FB_UINT64) n;
 			break;
 
 		default:
@@ -1428,7 +1427,7 @@ bool put_blr_blob( att_type attribute, ISC_QUAD& blob_id)
 		}
 	}
 
-	if (!length)
+	if (!length || length > MAX_ULONG)
 	{
 		if (!blob.close())
 			BURP_error_redirect(&status_vector, 23);
@@ -2138,14 +2137,14 @@ bool put_source_blob(att_type attribute, att_type old_attribute, ISC_QUAD& blob_
 		// msg 24 isc_open_blob failed
 	}
 
-	UCHAR blob_info[48];
+	UCHAR blob_info[BUFFER_TINY];
 	if (!blob.getInfo(sizeof(source_items), source_items, sizeof(blob_info), blob_info))
 	{
 		BURP_error_redirect(&status_vector, 20);
 		// msg 20 isc_blob_info failed
 	}
 
-	ULONG length = 0;
+	FB_UINT64 length = 0;
 	ULONG num_seg = 0;
 	USHORT max_segment = 0;
 	const UCHAR* p = blob_info;
@@ -2153,22 +2152,23 @@ bool put_source_blob(att_type attribute, att_type old_attribute, ISC_QUAD& blob_
 
 	while ((item = *p++) != isc_info_end)
 	{
-		const USHORT l = gds__vax_integer(p, 2);
+		const auto l = gds__vax_integer(p, 2);
 		p += 2;
-		const ULONG n = gds__vax_integer(p, l);
+		const auto n = isc_portable_integer(p, l);
 		p += l;
+
 		switch (item)
 		{
 		case isc_info_blob_max_segment:
-			max_segment = n;
+			max_segment = (USHORT) n;
 			break;
 
 		case isc_info_blob_total_length:
-			length = n;
+			length = (FB_UINT64) n;
 			break;
 
 		case isc_info_blob_num_segments:
-			num_seg = n;
+			num_seg = (ULONG) n;
 			break;
 
 		default:
@@ -2183,7 +2183,7 @@ bool put_source_blob(att_type attribute, att_type old_attribute, ISC_QUAD& blob_
 		}
 	}
 
-	if (!length)
+	if (!length || length > MAX_ULONG)
 	{
 		if (!blob.close())
 		{
@@ -3883,8 +3883,11 @@ void write_relations()
 			// RDB$VIEW_BLR must be the first blob field in the backup file.
 			// RESTORE.EPP makes this assumption in get_relation().
 
-			if (put_blr_blob (att_relation_view_blr, X.RDB$VIEW_BLR))
+			if (!X.RDB$VIEW_BLR.NULL && !BlobWrapper::blobIsNull(X.RDB$VIEW_BLR))
 				flags |= REL_view;
+
+			put_blr_blob (att_relation_view_blr, X.RDB$VIEW_BLR);
+
 			if (X.RDB$SYSTEM_FLAG)
 				put_int32 (att_relation_system_flag, X.RDB$SYSTEM_FLAG);
 			if (!X.RDB$FLAGS.NULL)
@@ -3943,8 +3946,10 @@ void write_relations()
 			// RDB$VIEW_BLR must be the first blob field in the backup file.
 			// RESTORE.EPP makes this assumption in get_relation().
 
-			if (put_blr_blob (att_relation_view_blr, X.RDB$VIEW_BLR))
+			if (!X.RDB$VIEW_BLR.NULL && !BlobWrapper::blobIsNull(X.RDB$VIEW_BLR))
 				flags |= REL_view;
+
+			put_blr_blob (att_relation_view_blr, X.RDB$VIEW_BLR);
 			if (X.RDB$SYSTEM_FLAG)
 				put_int32 (att_relation_system_flag, X.RDB$SYSTEM_FLAG);
 			if (!X.RDB$FLAGS.NULL)

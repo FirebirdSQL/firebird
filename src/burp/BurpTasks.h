@@ -149,6 +149,7 @@ public:
 	bool m_batchMode;
 	bool m_batchOk;
 	ULONG m_inMsgLen;
+	ULONG m_blobCount;
 
 	// batch mode
 	Firebird::string m_sqlStatement;
@@ -232,10 +233,88 @@ private:
 	bool m_resync;
 };
 
-// forward declaration
+// forward declarations
 class IOBuffer;
+class BurpMaster;
+class BurpTask;
 
-class BackupRelationTask : public Firebird::Task
+
+
+// Common base class for backup and restore task items
+class BurpTaskItem : public Firebird::Task::WorkItem
+{
+public:
+	BurpTaskItem(BurpTask* task);
+
+	BurpTask* getBurpTask() const;
+};
+
+// Common base class for backup and restore tasks
+class BurpTask : public Firebird::Task
+{
+public:
+	BurpTask(BurpGlobals* tdgbl) : Firebird::Task(),
+		m_masterGbl(tdgbl)
+	{ }
+
+	static BurpTask* getBurpTask(BurpGlobals* tdgbl)
+	{
+		if (tdgbl->taskItem)
+			return tdgbl->taskItem->getBurpTask();
+
+		return nullptr;
+	}
+
+	BurpGlobals* getMasterGbl() const
+	{
+		return m_masterGbl;
+	}
+
+	bool isBackup() const
+	{
+		switch (m_masterGbl->action->act_action)
+		{
+		case ACT_backup:
+		case ACT_backup_split:
+		case ACT_backup_fini:
+			return true;
+		}
+		return false;
+	}
+
+	bool isRestore() const
+	{
+		switch (m_masterGbl->action->act_action)
+		{
+		case ACT_restore:
+		case ACT_restore_join:
+			return true;
+		}
+		return false;
+	}
+
+protected:
+	BurpGlobals* const m_masterGbl;
+
+private:
+	friend class BurpMaster;
+
+	Firebird::Mutex burpOutMutex;
+};
+
+
+inline BurpTaskItem::BurpTaskItem(BurpTask* task) :
+	Firebird::Task::WorkItem(task)
+{
+}
+
+inline BurpTask* BurpTaskItem::getBurpTask() const
+{
+	return static_cast<BurpTask*>(m_task);
+}
+
+
+class BackupRelationTask : public BurpTask
 {
 public:
 	BackupRelationTask(BurpGlobals* tdgbl);
@@ -248,10 +327,10 @@ public:
 	bool getResult(Firebird::IStatus* status);
 	int getMaxWorkers();
 
-	class Item : public Firebird::Task::WorkItem
+	class Item : public BurpTaskItem
 	{
 	public:
-		Item(BackupRelationTask* task, bool writer) : WorkItem(task),
+		Item(BackupRelationTask* task, bool writer) : BurpTaskItem(task),
 			m_inuse(false),
 			m_writer(writer),
 			m_ownAttach(!writer),
@@ -266,7 +345,7 @@ public:
 
 		BackupRelationTask* getBackupTask() const
 		{
-			return reinterpret_cast<BackupRelationTask*> (m_task);
+			return static_cast<BackupRelationTask*>(m_task);
 		}
 
 		class EnsureUnlockBuffer
@@ -295,11 +374,14 @@ public:
 		Firebird::Condition m_cleanCond;
 	};
 
-	static BackupRelationTask* getBackupTask(BurpGlobals* tdgbl);
-	BurpGlobals* getMasterGbl() const
+	static BackupRelationTask* getBackupTask(BurpGlobals* tdgbl)
 	{
-		return m_masterGbl;
+		auto task = BurpTask::getBurpTask(tdgbl);
+		fb_assert(!task || task->isBackup());
+
+		return static_cast<BackupRelationTask*>(task);
 	}
+
 	static void recordAdded(BurpGlobals* tdgbl);			// reader
 	static IOBuffer* renewBuffer(BurpGlobals* tdgbl);		// reader
 
@@ -308,7 +390,6 @@ public:
 		return m_stop;
 	}
 
-	Firebird::Mutex burpOutMutex;
 private:
 	void initItem(BurpGlobals* tdgbl, Item& item);
 	void freeItem(Item& item);
@@ -323,7 +404,6 @@ private:
 	IOBuffer* getDirtyBuffer();				// writer
 	void putCleanBuffer(IOBuffer* buf);		// writer
 
-	BurpGlobals* m_masterGbl;
 	burp_rel*	m_relation;
 	ReadRelationMeta m_metadata;
 	int m_readers;			// number of active readers, could be less than items allocated
@@ -332,7 +412,6 @@ private:
 
 	Firebird::Mutex m_mutex;
 	Firebird::HalfStaticArray<Item*, 8> m_items;
-	ISC_STATUS_ARRAY m_status;
 	volatile bool m_stop;
 	bool m_error;
 
@@ -342,7 +421,7 @@ private:
 };
 
 
-class RestoreRelationTask : public Firebird::Task
+class RestoreRelationTask : public BurpTask
 {
 public:
 	RestoreRelationTask(BurpGlobals* tdgbl);
@@ -355,10 +434,10 @@ public:
 	bool getResult(Firebird::IStatus* status);
 	int getMaxWorkers();
 
-	class Item : public Firebird::Task::WorkItem
+	class Item : public BurpTaskItem
 	{
 	public:
-		Item(RestoreRelationTask* task, bool reader) : WorkItem(task),
+		Item(RestoreRelationTask* task, bool reader) : BurpTaskItem(task),
 			m_inuse(false),
 			m_reader(reader),
 			m_ownAttach(!reader),
@@ -371,7 +450,7 @@ public:
 
 		RestoreRelationTask* getRestoreTask() const
 		{
-			return reinterpret_cast<RestoreRelationTask*> (m_task);
+			return static_cast<RestoreRelationTask*>(m_task);
 		}
 
 		class EnsureUnlockBuffer
@@ -406,10 +485,12 @@ public:
 		static void raise();
 	};
 
-	static RestoreRelationTask* getRestoreTask(BurpGlobals* tdgbl);
-	BurpGlobals* getMasterGbl() const
+	static RestoreRelationTask* getRestoreTask(BurpGlobals* tdgbl)
 	{
-		return m_masterGbl;
+		auto task = BurpTask::getBurpTask(tdgbl);
+		fb_assert(!task || task->isRestore());
+
+		return static_cast<RestoreRelationTask*>(BurpTask::getBurpTask(tdgbl));
 	}
 
 	static IOBuffer* renewBuffer(BurpGlobals* tdgbl);		// writer
@@ -430,7 +511,6 @@ public:
 	// commit and detach all worker connections
 	bool finish();
 
-	Firebird::Mutex burpOutMutex;
 private:
 	void initItem(BurpGlobals* tdgbl, Item& item);
 	bool freeItem(Item& item, bool commit);
@@ -450,7 +530,6 @@ private:
 	IOBuffer* read_blob(BurpGlobals* tdgbl, IOBuffer* ioBuf);
 	IOBuffer* read_array(BurpGlobals* tdgbl, IOBuffer* ioBuf);
 
-	BurpGlobals* m_masterGbl;
 	burp_rel*	m_relation;
 	rec_type	m_lastRecord;				// last backup record read for relation, usually rec_relation_end
 	WriteRelationMeta m_metadata;
@@ -459,7 +538,6 @@ private:
 
 	Firebird::Mutex m_mutex;
 	Firebird::HalfStaticArray<Item*, 8> m_items;
-	ISC_STATUS_ARRAY m_status;
 	volatile bool m_stop;
 	bool m_error;
 	Firebird::AtomicCounter m_records;		// records restored for the current relation
@@ -476,7 +554,7 @@ private:
 class IOBuffer
 {
 public:
-	IOBuffer(void*, FB_SIZE_T size);
+	IOBuffer(BurpTaskItem*, FB_SIZE_T size);
 
 	UCHAR* getBuffer() const
 	{
@@ -564,13 +642,13 @@ public:
 		return m_next;
 	}
 
-	void* getItem() const
+	BurpTaskItem* getItem() const
 	{
 		return m_item;
 	}
 
 private:
-	void* const m_item;
+	BurpTaskItem* const m_item;
 	Firebird::Array<UCHAR> m_memory;
 	UCHAR* m_aligned;
 	const FB_SIZE_T m_size;
@@ -590,7 +668,7 @@ public:
 	BurpMaster()
 	{
 		m_tdgbl = BurpGlobals::getSpecific();
-		m_task = BackupRelationTask::getBackupTask(m_tdgbl);
+		m_task = BurpTask::getBurpTask(m_tdgbl);
 
 		if (!m_tdgbl->master)
 			m_tdgbl = m_task->getMasterGbl();
@@ -611,7 +689,7 @@ public:
 	}
 
 private:
-	BackupRelationTask* m_task;
+	BurpTask* m_task;
 	BurpGlobals* m_tdgbl;
 };
 

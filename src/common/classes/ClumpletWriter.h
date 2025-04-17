@@ -35,7 +35,7 @@
 // This setting of maximum dpb size doesn't mean, that we
 // can't process larger DBPs! This is just recommended limit
 // cause it's hard to imagine sensefull DPB of even this size.
-const FB_SIZE_T MAX_DPB_SIZE = 1024 * 1024;
+constexpr FB_SIZE_T MAX_DPB_SIZE = 1024 * 1024;
 
 namespace Firebird {
 
@@ -100,7 +100,7 @@ public:
 	bool deleteWithTag(UCHAR tag);
 
 	const UCHAR* getBuffer() const override;
-	bool hasOverflow() const
+	bool hasOverflow() const noexcept
 	{
 		return flag_overflow;
 	}

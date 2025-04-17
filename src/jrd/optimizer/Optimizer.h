@@ -120,10 +120,10 @@ public:
 		}
 	}
 
-	void activate(bool subStream = false)
+	void activate()
 	{
 		for (const auto stream : m_streams)
-			m_csb->csb_rpt[stream].activate(subStream);
+			m_csb->csb_rpt[stream].activate();
 	}
 
 	void deactivate()
@@ -226,6 +226,11 @@ public:
 		}
 
 		return true;
+	}
+
+	bool isDependent(const River& river) const
+	{
+		return m_rsb->isDependent(river.getStreams());
 	}
 
 protected:
@@ -450,7 +455,7 @@ public:
 			firstRows = attachment->att_opt_first_rows.valueOr(defaultFirstRows);
 		}
 
-		return Optimizer(tdbb, csb, rse, firstRows).compile(nullptr);
+		return Optimizer(tdbb, csb, rse, firstRows, 0).compile(nullptr);
 	}
 
 	~Optimizer();
@@ -499,6 +504,7 @@ public:
 		return firstRows;
 	}
 
+	RecordSource* applyBoolean(RecordSource* rsb, ConjunctIterator& iter);
 	RecordSource* applyLocalBoolean(RecordSource* rsb,
 									const StreamList& streams,
 									ConjunctIterator& iter);
@@ -513,6 +519,11 @@ public:
 		return composeBoolean(iter, selectivity);
 	}
 
+	bool isSemiJoined() const
+	{
+		return (rse->flags & RseNode::FLAG_SEMI_JOINED) != 0;
+	}
+
 	bool checkEquiJoin(BoolExprNode* boolean);
 	bool getEquiJoinKeys(BoolExprNode* boolean,
 						 NestConst<ValueExprNode>* node1,
@@ -523,7 +534,8 @@ public:
 	void printf(const char* format, ...);
 
 private:
-	Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse, bool parentFirstRows);
+	Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse,
+			  bool parentFirstRows, double parentCardinality);
 
 	RecordSource* compile(BoolExprNodeStack* parentStack);
 
@@ -537,7 +549,7 @@ private:
 					RiverList& rivers,
 					SortNode** sortClause,
 					const PlanNode* planClause);
-	bool generateEquiJoin(RiverList& org_rivers);
+	bool generateEquiJoin(RiverList& rivers, JoinType joinType = INNER_JOIN);
 	void generateInnerJoin(StreamList& streams,
 						   RiverList& rivers,
 						   SortNode** sortClause,
@@ -555,6 +567,7 @@ private:
 	RseNode* const rse;
 
 	bool firstRows = false;					// optimize for first rows
+	double cardinality = 0;					// self or parent cardinality
 
 	FILE* debugFile = nullptr;
 	unsigned baseConjuncts = 0;				// number of conjuncts in our rse, next conjuncts are distributed parent
@@ -582,7 +595,7 @@ enum segmentScanType {
 	segmentScanList
 };
 
-typedef Firebird::HalfStaticArray<BoolExprNode*, OPT_STATIC_ITEMS> MatchedBooleanList;
+typedef Firebird::HalfStaticArray<BoolExprNode*, OPT_STATIC_ITEMS> BooleanList;
 
 struct IndexScratchSegment
 {
@@ -610,7 +623,7 @@ struct IndexScratchSegment
 	segmentScanType scanType = segmentScanNone;	// scan type
 	SSHORT scale = 0;							// scale for SINT64/Int128-based segment of index
 
-	MatchedBooleanList matches;					// matched booleans
+	BooleanList matches;						// matched booleans
 };
 
 struct IndexScratch
@@ -631,7 +644,7 @@ struct IndexScratch
 	bool useRootListScan = false;
 
 	Firebird::ObjectsArray<IndexScratchSegment> segments;
-	MatchedBooleanList matches;					// matched booleans (partial indices only)
+	BooleanList matches;					// matched booleans (partial indices only)
 };
 
 typedef Firebird::ObjectsArray<IndexScratch> IndexScratchList;
@@ -643,7 +656,7 @@ typedef Firebird::ObjectsArray<IndexScratch> IndexScratchList;
 struct InversionCandidate
 {
 	explicit InversionCandidate(MemoryPool& p)
-		: matches(p), dbkeyRanges(p), dependentFromStreams(p)
+		: conjuncts(p), matches(p), dbkeyRanges(p), dependentFromStreams(p)
 	{}
 
 	double selectivity = MAXIMUM_SELECTIVITY;
@@ -660,7 +673,8 @@ struct InversionCandidate
 	bool unique = false;
 	bool navigated = false;
 
-	MatchedBooleanList matches;
+	BooleanList conjuncts;							// booleans referring our stream
+	BooleanList matches;							// booleans matched to any index
 	Firebird::Array<DbKeyRangeNode*> dbkeyRanges;
 	SortedStreamList dependentFromStreams;
 };
@@ -691,7 +705,7 @@ protected:
 	void analyzeNavigation(const InversionCandidateList& inversions);
 	bool betterInversion(const InversionCandidate* inv1, const InversionCandidate* inv2,
 						 bool navigation) const;
-	bool checkIndexCondition(index_desc& idx, MatchedBooleanList& matches) const;
+	bool checkIndexCondition(index_desc& idx, BooleanList& matches) const;
 	bool checkIndexExpression(const index_desc* idx, ValueExprNode* node) const;
 	InversionNode* composeInversion(InversionNode* node1, InversionNode* node2,
 		InversionNode::Type node_type) const;
@@ -791,7 +805,7 @@ class InnerJoin : private Firebird::PermanentStorage
 	{
 	public:
 		StreamInfo(MemoryPool& p, StreamType num)
-			: number(num), indexedRelationships(p)
+			: number(num), baseConjuncts(p), indexedRelationships(p)
 		{}
 
 		bool isIndependent() const
@@ -838,6 +852,7 @@ class InnerJoin : private Firebird::PermanentStorage
 		bool used = false;
 		unsigned previousExpectedStreams = 0;
 
+		BooleanList baseConjuncts;
 		IndexedRelationships indexedRelationships;
 	};
 
@@ -922,7 +937,7 @@ public:
 	RecordSource* generate();
 
 private:
-	RecordSource* process(const JoinType joinType);
+	RecordSource* process(StreamList* outerStreams = nullptr);
 
 	thread_db* const tdbb;
 	Optimizer* const optimizer;

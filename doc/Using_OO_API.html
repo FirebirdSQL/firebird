@@ -3629,13 +3629,24 @@ plugin or key holder plugin.</font></p>
 <p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">DO_RETRY -
 	retry attach (ignored when function was called without attStatus).</font></p>
 	</font></p>
+	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">
+	int getHashLength(StatusType* status) - returns length of hash of the keys provided by interface.
+	Hash is needed to let caller compare interfaces for equality. Empty (no keys)
+	interface should return hash length equal to zero.
+	</font></p>
+	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">
+	void getHashData(StatusType* status, void* hash) - places hash of the keys provided by interface
+	into memory location defined by parameter <i>hash</i>. Should copy exact number of bytes
+	returned by getHashLength() call. Hash algorithm is chosen by plugin author
+	(in year 2024 SHA256 appears reasonable choice).
+	</font></p>
 </ol>
 <p style="margin-bottom: 0cm"><br/>
 
 </p>
 <p style="margin-bottom: 0cm"><a name="DbCryptInfo"></a><font size="4" style="font-size: 14pt">DbCryptInfo
 interface is passed to DbCryptPlugin by engine. Plugin may save this
-interface and use when needed to obtain additional informatio about
+interface and use when needed to obtain additional information about
 database.</font></p>
 <ol>
 	<li><p style="margin-bottom: 0cm"><font size="4" style="font-size: 14pt">const

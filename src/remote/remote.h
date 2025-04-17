@@ -35,13 +35,13 @@
 #include "../common/ThreadStart.h"
 #include "../common/Auth.h"
 #include "../common/classes/objects_array.h"
+#include "../common/classes/tree.h"
 #include "../common/classes/fb_string.h"
 #include "../common/classes/ClumpletWriter.h"
 #include "../common/classes/RefMutex.h"
 #include "../common/StatusHolder.h"
 #include "../common/classes/RefCounted.h"
 #include "../common/classes/GetPlugins.h"
-#include "../common/classes/RefMutex.h"
 
 #include "firebird/Interface.h"
 
@@ -88,20 +88,24 @@ DEFINE_TRACE_ROUTINE(remote_trace);
 
 #endif
 
-const int BLOB_LENGTH		= 16384;
+constexpr int BLOB_LENGTH = 16384;
 
 #include "../remote/protocol.h"
 #include "fb_blk.h"
-#include "firebird/Interface.h"
 
 // Prefetch constants
 
-const ULONG MAX_PACKETS_PER_BATCH = 16;
+constexpr ULONG MAX_PACKETS_PER_BATCH = 16;
 
-const ULONG MIN_ROWS_PER_BATCH = 10;
-const ULONG MAX_ROWS_PER_BATCH = 1000;
+constexpr ULONG MIN_ROWS_PER_BATCH = 10;
+constexpr ULONG MAX_ROWS_PER_BATCH = 1000;
 
-const ULONG MAX_BATCH_CACHE_SIZE = 1024 * 1024; // 1 MB
+constexpr ULONG MAX_BATCH_CACHE_SIZE = 1024 * 1024; // 1 MB
+
+constexpr ULONG	DEFAULT_BLOBS_CACHE_SIZE = 10 * 1024 * 1024;	// 10 MB
+
+constexpr ULONG	MAX_INLINE_BLOB_SIZE = MAX_USHORT;
+constexpr ULONG	DEFAULT_INLINE_BLOB_SIZE = MAX_USHORT;
 
 // fwd. decl.
 namespace Firebird {
@@ -180,35 +184,153 @@ private:
 public:
 	std::atomic<int> rdb_async_lock;		// Atomic to avoid >1 async calls at once
 
+	ULONG			rdb_inline_blob_size;		// default max size of blob that can be transferred inline
+	ULONG			rdb_blob_cache_size;		// limit on cached blobs size
+	ULONG			rdb_cached_blobs_size;		// actual size of cached blobs
+	ULONG			rdb_cached_blobs_count;		// actual count of cached blobs
+
 public:
 	Rdb() :
 		rdb_iface(NULL), rdb_port(0),
 		rdb_transactions(0), rdb_requests(0), rdb_events(0), rdb_sql_requests(0),
-		rdb_id(0), rdb_async_thread_id(0), rdb_async_lock(0)
+		rdb_id(0), rdb_async_thread_id(0), rdb_async_lock(0),
+		rdb_inline_blob_size(DEFAULT_INLINE_BLOB_SIZE), rdb_blob_cache_size(DEFAULT_BLOBS_CACHE_SIZE),
+		rdb_cached_blobs_size(0), rdb_cached_blobs_count(0)
 	{
 	}
 
-	static ISC_STATUS badHandle() { return isc_bad_db_handle; }
+	static constexpr ISC_STATUS badHandle() noexcept { return isc_bad_db_handle; }
+
+	// Increment blob cache usage.
+	// Return false if blob cache have not enough space for a blob of given size.
+	bool incBlobCache(ULONG size) noexcept
+	{
+		if (rdb_cached_blobs_size + size > rdb_blob_cache_size)
+			return false;
+
+		rdb_cached_blobs_size += size;
+		rdb_cached_blobs_count++;
+		return true;
+	}
+
+	// Decrement blob cache usage.
+	void decBlobCache(ULONG size)
+	{
+		fb_assert(rdb_cached_blobs_size >= size);
+		fb_assert(rdb_cached_blobs_count > 0);
+
+		rdb_cached_blobs_size -= size;
+		rdb_cached_blobs_count--;
+	}
 };
 
+
+// forward decl
+struct Rbl;
+
+// BePlusTree based container, allow to add few blobs with same blob_id.
+class BlobsContainer
+{
+public:
+	BlobsContainer(Firebird::MemoryPool& pool) :
+		m_tree(pool)
+	{
+	}
+
+	bool add(Rbl* blob)
+	{
+		return m_tree.add(Item(blob));
+	}
+
+	bool remove(Rbl* blob)
+	{
+		const Item item(blob);
+
+		if (m_tree.isPositioned(item) || m_tree.locate(item))
+		{
+			m_tree.fastRemove();
+			return true;
+		}
+
+		return false;
+	}
+
+	void clear()
+	{
+		m_tree.clear();
+	}
+
+
+	Rbl* locate(SQUAD blob_id);
+
+	Rbl* getFirst()
+	{
+		if (m_tree.getFirst())
+			return m_tree.current().m_blob;
+
+		return nullptr;
+	}
+
+	Rbl* getNext()
+	{
+		if (m_tree.getNext())
+			return m_tree.current().m_blob;
+
+		return nullptr;
+	}
+
+private:
+
+	struct Item
+	{
+		Item() noexcept
+		  : m_id(NULL_BLOB), m_blob(nullptr)
+		{
+		}
+
+		explicit Item(SQUAD blob_id) noexcept
+			: m_id(blob_id), m_blob(nullptr)
+		{
+		}
+
+		explicit Item(Rbl* blob) noexcept;
+
+		bool operator==(const Item& other) const
+		{
+			return m_id == other.m_id && m_blob == other.m_blob;
+		}
+
+		bool operator>(const Item& other) const
+		{
+			return (m_id > other.m_id) || (m_id == other.m_id && m_blob > other.m_blob);
+		}
+
+		SQUAD m_id;
+		Rbl* m_blob;
+	};
+
+	Firebird::BePlusTree<Item> m_tree;
+};
 
 struct Rtr : public Firebird::GlobalStorage, public TypedHandle<rem_type_rtr>
 {
 	Rdb*			rtr_rdb;
 	Rtr*			rtr_next;
-	struct Rbl*		rtr_blobs;
+	BlobsContainer	rtr_blobs;
 	ServTransaction	rtr_iface;
 	USHORT			rtr_id;
 	bool			rtr_limbo;
 
 	Firebird::Array<Rsr*> rtr_cursors;
 	Rtr**			rtr_self;
+	Rbl*			rtr_inline_blob;
 
 public:
 	Rtr() :
-		rtr_rdb(0), rtr_next(0), rtr_blobs(0),
+		rtr_rdb(0), rtr_next(0), rtr_blobs(getPool()),
 		rtr_iface(NULL), rtr_id(0), rtr_limbo(0),
-		rtr_cursors(getPool()), rtr_self(NULL)
+		rtr_cursors(getPool()), rtr_self(NULL),
+		rtr_inline_blob(NULL)
 	{ }
 
 	~Rtr()
@@ -217,22 +339,20 @@ public:
 			*rtr_self = NULL;
 	}
 
-	static ISC_STATUS badHandle() { return isc_bad_trans_handle; }
+	static constexpr ISC_STATUS badHandle() noexcept { return isc_bad_trans_handle; }
+
+	Rbl* createInlineBlob();
+	void setupInlineBlob(P_INLINE_BLOB* p_blob);
 };
 
 
 struct RBlobInfo
 {
-	bool	valid;
-	UCHAR	blob_type;
-	ULONG	num_segments;
-	ULONG	max_segment;
-	ULONG	total_length;
-
-	RBlobInfo()
-	{
-		memset(this, 0, sizeof(*this));
-	}
+	bool	valid = false;
+	UCHAR	blob_type = isc_blob_untyped;
+	ULONG	num_segments = 0;
+	ULONG	max_segment = 0;
+	FB_UINT64	total_length = 0;
 
 	// parse into response into m_info, assume buffer contains all known info items
 	void parseInfo(unsigned int bufferLength, const unsigned char* buffer);
@@ -242,15 +362,21 @@ struct RBlobInfo
 		unsigned int bufferLength, unsigned char* buffer);
 };
 
+// Used in XDR
+class RemBlobBuffer : public Firebird::Array<UCHAR>
+{
+	using Firebird::Array<UCHAR>::Array;
+};
+
 struct Rbl : public Firebird::GlobalStorage, public TypedHandle<rem_type_rbl>
 {
-	Firebird::HalfStaticArray<UCHAR, BLOB_LENGTH> rbl_data;
+	RemBlobBuffer	rbl_data;
 	Rdb*		rbl_rdb;
 	Rtr*		rbl_rtr;
-	Rbl*		rbl_next;
 	UCHAR*		rbl_buffer;
 	UCHAR*		rbl_ptr;
 	ServBlob	rbl_iface;
+	SQUAD		rbl_blob_id;
 	SLONG		rbl_offset;			// Apparent (to user) offset in blob
 	USHORT		rbl_id;
 	USHORT		rbl_flags;
@@ -265,18 +391,20 @@ struct Rbl : public Firebird::GlobalStorage, public TypedHandle<rem_type_rbl>
 public:
 	// Values for rbl_flags
 	enum {
-		EOF_SET = 1,
-		SEGMENT = 2,
-		EOF_PENDING = 4,
-		CREATE = 8
+		EOF_SET = 0x01,
+		SEGMENT = 0x02,
+		EOF_PENDING = 0x04,
+		CREATE = 0x08,
+		CACHED = 0x10,			// Blob is fully cached
+		USED = 0x20,			// Cached blob is in use by application
 	};
 
 public:
-	Rbl() :
-		rbl_data(getPool()), rbl_rdb(0), rbl_rtr(0), rbl_next(0),
-		rbl_buffer(rbl_data.getBuffer(BLOB_LENGTH)), rbl_ptr(rbl_buffer), rbl_iface(NULL),
-		rbl_offset(0), rbl_id(0), rbl_flags(0),
-		rbl_buffer_length(BLOB_LENGTH), rbl_length(0), rbl_fragment_length(0),
+	Rbl(unsigned int initialSize) :
+		rbl_data(getPool()), rbl_rdb(0), rbl_rtr(0),
+		rbl_buffer(rbl_data.getBuffer(initialSize)), rbl_ptr(rbl_buffer), rbl_iface(NULL),
+		rbl_blob_id(NULL_BLOB), rbl_offset(0), rbl_id(0), rbl_flags(0),
+		rbl_buffer_length(initialSize), rbl_length(0), rbl_fragment_length(0),
 		rbl_source_interp(0), rbl_target_interp(0), rbl_self(NULL)
 	{ }
 
@@ -289,8 +417,30 @@ public:
 			rbl_iface->release();
 	}
 
-	static ISC_STATUS badHandle() { return isc_bad_segstr_handle; }
+	static constexpr ISC_STATUS badHandle() noexcept { return isc_bad_segstr_handle; }
+
+	bool isCached() const noexcept { return rbl_flags & CACHED; }
+	unsigned getCachedSize() const { return sizeof(Rbl) + rbl_data.getCapacity(); }
 };
+
+
+inline Rbl* BlobsContainer::locate(SQUAD blob_id)
+{
+	Rbl* blob = nullptr;
+	if (m_tree.locate(Firebird::LocType::locGreat, Item(blob_id)))
+	{
+		blob = m_tree.current().m_blob;
+		if (blob->rbl_blob_id == blob_id)
+			return blob;
+	}
+
+	return nullptr;
+}
+
+inline BlobsContainer::Item::Item(Rbl* blob) noexcept
+	: m_id(blob->rbl_blob_id), m_blob(blob)
+{
+}
 
 
 struct Rvnt : public Firebird::GlobalStorage, public TypedHandle<rem_type_rev>
@@ -330,19 +480,28 @@ struct rem_str : public pool_alloc_rpt<SCHAR>
 
 #include "../common/dsc.h"
 
+// Note, currently the only routine that created and changed rem_fmt is
+// parse_format() in parse.cpp
 
 struct rem_fmt : public Firebird::GlobalStorage
 {
 	ULONG		fmt_length;
 	ULONG		fmt_net_length;
 	Firebird::Array<dsc> fmt_desc;
+	Firebird::HalfStaticArray<unsigned short, 4> fmt_blob_idx;		// indices of blob's in fmt_desc
 
 public:
 	explicit rem_fmt(FB_SIZE_T rpt) :
 		fmt_length(0), fmt_net_length(0),
-		fmt_desc(getPool(), rpt)
+		fmt_desc(getPool(), rpt),
+		fmt_blob_idx(getPool())
 	{
 		fmt_desc.grow(rpt);
+	}
+
+	bool haveBlobs() const
+	{
+		return fmt_blob_idx.hasData();
 	}
 };
 
@@ -435,7 +594,7 @@ public:
 		return rc;
 	}
 
-	static ISC_STATUS badHandle() { return isc_bad_req_handle; }
+	static constexpr ISC_STATUS badHandle() noexcept { return isc_bad_req_handle; }
 
 	void saveStatus(const Firebird::Exception& ex) noexcept;
 	void saveStatus(Firebird::IStatus* ex) noexcept;
@@ -456,7 +615,7 @@ public:
 		m_flags(flags)
 	{}
 	// At least one bit in the parameter is 1 in the object.
-	bool test(const T flags) const
+	bool test(const T flags) const noexcept
 	{
 		return m_flags & flags;
 	}
@@ -469,7 +628,7 @@ public:
 	{
 		m_flags |= flags;
 	}
-	void clear(const T flags)
+	void clear(const T flags) noexcept
 	{
 		m_flags &= ~flags;
 	}
@@ -522,6 +681,7 @@ struct Rsr : public Firebird::GlobalStorage, public TypedHandle<rem_type_rsr>
 
 	P_FETCH			rsr_fetch_operation;	// Last performed fetch operation
 	SLONG			rsr_fetch_position;		// and position
+	unsigned int	rsr_inline_blob_size;	// max size of blob that can be transferred inline
 
 	struct BatchStream
 	{
@@ -529,7 +689,7 @@ struct Rsr : public Firebird::GlobalStorage, public TypedHandle<rem_type_rsr>
 			: curBpb(*getDefaultMemoryPool()), hdrPrevious(0), segmented(false)
 		{ }
 
-		static const ULONG SIZEOF_BLOB_HEAD = sizeof(ISC_QUAD) + 2 * sizeof(ULONG);
+		static constexpr ULONG SIZEOF_BLOB_HEAD = sizeof(ISC_QUAD) + 2 * sizeof(ULONG);
 
 		typedef Firebird::HalfStaticArray<UCHAR, 64> Bpb;
 		Bpb curBpb;
@@ -564,8 +724,8 @@ public:
 		PAST_BOF = 256		// BOF was returned by fetch from this statement
 	};
 
-	static const auto STREAM_END = (BOF_SET | EOF_SET);
-	static const auto PAST_END = (PAST_BOF | PAST_EOF);
+	static constexpr auto STREAM_END = (BOF_SET | EOF_SET);
+	static constexpr auto PAST_END = (PAST_BOF | PAST_EOF);
 
 public:
 	Rsr() :
@@ -575,7 +735,8 @@ public:
 		rsr_id(0), rsr_fmt_length(0),
 		rsr_rows_pending(0), rsr_msgs_waiting(0), rsr_reorder_level(0), rsr_batch_count(0),
 		rsr_cursor_name(getPool()), rsr_delayed_format(false), rsr_timeout(0), rsr_self(NULL),
-		rsr_fetch_operation(fetch_next), rsr_fetch_position(0)
+		rsr_batch_size(0), rsr_batch_flags(0), rsr_batch_ics(NULL),
+		rsr_fetch_operation(fetch_next), rsr_fetch_position(0), rsr_inline_blob_size(0)
 	{ }
 
 	~Rsr()
@@ -600,12 +761,18 @@ public:
 	void clearException();
 	ISC_STATUS haveException();
 	void raiseException();
-	void releaseException();
+	void releaseException() noexcept;
 
-	static ISC_STATUS badHandle() { return isc_bad_req_handle; }
+	static constexpr ISC_STATUS badHandle() noexcept { return isc_bad_req_handle; }
 	void checkIface(ISC_STATUS code = isc_unprepared_stmt);
 	void checkCursor();
 	void checkBatch();
+
+	// return true if select format have blobs
+	bool haveBlobs() const
+	{
+		return rsr_select_format && rsr_select_format->haveBlobs();
+	}
 
 	SLONG getCursorAdjustment() const
 	{
@@ -633,7 +800,7 @@ private:
 	} ptr;
 
 public:
-	RemoteObject() { ptr.rdb = 0; }
+	RemoteObject() noexcept { ptr.rdb = 0; }
 
 	template <typename R>
 	R* get(R* r)
@@ -645,11 +812,11 @@ public:
 		return r;
 	}
 
-	void operator=(Rdb* v) { ptr.rdb = v; }
-	void operator=(Rtr* v) { ptr.rtr = v; }
-	void operator=(Rbl* v) { ptr.rbl = v; }
-	void operator=(Rrq* v) { ptr.rrq = v; }
-	void operator=(Rsr* v) { ptr.rsr = v; }
+	void operator=(Rdb* v) noexcept { ptr.rdb = v; }
+	void operator=(Rtr* v) noexcept { ptr.rtr = v; }
+	void operator=(Rbl* v) noexcept { ptr.rbl = v; }
+	void operator=(Rrq* v) noexcept { ptr.rrq = v; }
+	void operator=(Rsr* v) noexcept { ptr.rsr = v; }
 
 	operator Rdb*() { return get(ptr.rdb); }
 	operator Rtr*() { return get(ptr.rtr); }
@@ -657,8 +824,8 @@ public:
 	operator Rrq*() { return get(ptr.rrq); }
 	operator Rsr*() { return get(ptr.rsr); }
 
-	bool isMissing() const { return ptr.rdb == NULL; }
-	void release() { ptr.rdb = 0; }
+	bool isMissing() const noexcept { return ptr.rdb == NULL; }
+	void release() noexcept { ptr.rdb = 0; }
 };
 
 
@@ -690,7 +857,7 @@ inline void Rsr::raiseException()
 		rsr_status->raise();
 }
 
-inline void Rsr::releaseException()
+inline void Rsr::releaseException() noexcept
 {
 	delete rsr_status;
 	rsr_status = NULL;
@@ -720,8 +887,8 @@ typedef Firebird::Array<rem_que_packet> PacketQueue;
 class ServerAuthBase
 {
 public:
-	static const unsigned AUTH_CONTINUE		= 0x01;
-	static const unsigned AUTH_COND_ACCEPT	= 0x02;
+	static constexpr unsigned AUTH_CONTINUE		= 0x01;
+	static constexpr unsigned AUTH_COND_ACCEPT	= 0x02;
 
 	virtual ~ServerAuthBase();
 	virtual bool authenticate(PACKET* send, unsigned flags = 0) = 0;
@@ -830,16 +997,16 @@ private:
 };
 
 // Tags for clumplets, passed from server to client
-const UCHAR TAG_KEY_TYPE		= 0;
-const UCHAR TAG_KEY_PLUGINS		= 1;
-const UCHAR TAG_KNOWN_PLUGINS	= 2;
-const UCHAR TAG_PLUGIN_SPECIFIC	= 3;
+constexpr UCHAR TAG_KEY_TYPE		= 0;
+constexpr UCHAR TAG_KEY_PLUGINS		= 1;
+constexpr UCHAR TAG_KNOWN_PLUGINS	= 2;
+constexpr UCHAR TAG_PLUGIN_SPECIFIC	= 3;
 
 
 typedef Firebird::GetPlugins<Firebird::IClient> AuthClientPlugins;
 
 // Representation of authentication data, visible for plugin
-// Transfered in format, depending upon type of the packet (phase of handshake)
+// Transferred in format, depending upon type of the packet (phase of handshake)
 class RmtAuthBlock final :
 	public Firebird::VersionedIface<Firebird::IAuthBlockImpl<RmtAuthBlock, Firebird::CheckStatusWrapper> >
 {
@@ -894,15 +1061,17 @@ private:
 
 		~ClientCrypt()
 		{
-			destroy();
+			dispose();
 		}
 
 		Firebird::ICryptKeyCallback* create(const Firebird::Config* conf);
 
 		// Firebird::ICryptKeyCallback implementation
-		unsigned callback(unsigned dataLength, const void* data, unsigned bufferLength, void* buffer);
-		unsigned afterAttach(Firebird::CheckStatusWrapper* st, const char* dbName, const Firebird::IStatus* attStatus);
-		void destroy();
+		unsigned callback(unsigned dataLength, const void* data, unsigned bufferLength, void* buffer) override;
+		unsigned afterAttach(Firebird::CheckStatusWrapper* st, const char* dbName, const Firebird::IStatus* attStatus) override;
+		void dispose() override;
+		int getHashLength(Firebird::CheckStatusWrapper* status) override;
+		void getHashData(Firebird::CheckStatusWrapper* status, void* hash) override;
 
  	private:
 		typedef Firebird::GetPlugins<Firebird::IKeyHolderPlugin> KeyHolderItr;
@@ -997,7 +1166,7 @@ public:
 };
 
 // Representation of authentication data, visible for plugin
-// Transfered from client data in format, suitable for plugins access
+// Transferred from client data in format, suitable for plugins access
 typedef Firebird::GetPlugins<Firebird::IServer> AuthServerPlugins;
 
 class SrvAuthBlock final :
@@ -1019,8 +1188,8 @@ public:
 	Auth::WriterImplementation authBlockWriter;
 
 	// extractNewKeys flags
-	static const ULONG EXTRACT_PLUGINS_LIST = 0x1;
-	static const ULONG ONLY_CLEANUP = 0x2;
+	static constexpr ULONG EXTRACT_PLUGINS_LIST = 0x1;
+	static constexpr ULONG ONLY_CLEANUP = 0x2;
 
 	explicit SrvAuthBlock(rem_port* p_port)
 		: port(p_port),
@@ -1065,26 +1234,26 @@ public:
 };
 
 
-const signed char WIRECRYPT_BROKEN		= -1;
-const signed char WIRECRYPT_DISABLED	= 0;
-const signed char WIRECRYPT_ENABLED		= 1;
-const signed char WIRECRYPT_REQUIRED	= 2;
+constexpr signed char WIRECRYPT_BROKEN		= -1;
+constexpr signed char WIRECRYPT_DISABLED	= 0;
+constexpr signed char WIRECRYPT_ENABLED		= 1;
+constexpr signed char WIRECRYPT_REQUIRED	= 2;
 
 // port_flags
-const USHORT PORT_symmetric		= 0x0001;	// Server/client architectures are symmetic
-const USHORT PORT_async			= 0x0002;	// Port is asynchronous channel for events
-const USHORT PORT_no_oob		= 0x0004;	// Don't send out of band data
-const USHORT PORT_disconnect	= 0x0008;	// Disconnect is in progress
-const USHORT PORT_dummy_pckt_set= 0x0010;	// A dummy packet interval is set
-//const USHORT PORT_partial_data	= 0x0020;	// Physical packet doesn't contain all API packet
-const USHORT PORT_lazy			= 0x0040;	// Deferred operations are allowed
-const USHORT PORT_server		= 0x0080;	// Server (not client) port
-const USHORT PORT_detached		= 0x0100;	// op_detach, op_drop_database or op_service_detach was processed
-const USHORT PORT_rdb_shutdown	= 0x0200;	// Database is shut down
-const USHORT PORT_connecting	= 0x0400;	// Aux connection waits for a channel to be activated by client
-//const USHORT PORT_z_data		= 0x0800;	// Zlib incoming buffer has data left after decompression
-const USHORT PORT_compressed	= 0x1000;	// Compress outgoing stream (does not affect incoming)
-const USHORT PORT_released		= 0x2000;	// release(), complementary to the first addRef() in constructor, was called
+constexpr USHORT PORT_symmetric		= 0x0001;	// Server/client architectures are symmetic
+constexpr USHORT PORT_async			= 0x0002;	// Port is asynchronous channel for events
+constexpr USHORT PORT_no_oob		= 0x0004;	// Don't send out of band data
+constexpr USHORT PORT_disconnect	= 0x0008;	// Disconnect is in progress
+constexpr USHORT PORT_dummy_pckt_set= 0x0010;	// A dummy packet interval is set
+//constexpr USHORT PORT_partial_data	= 0x0020;	// Physical packet doesn't contain all API packet
+constexpr USHORT PORT_lazy			= 0x0040;	// Deferred operations are allowed
+constexpr USHORT PORT_server		= 0x0080;	// Server (not client) port
+constexpr USHORT PORT_detached		= 0x0100;	// op_detach, op_drop_database or op_service_detach was processed
+constexpr USHORT PORT_rdb_shutdown	= 0x0200;	// Database is shut down
+constexpr USHORT PORT_connecting	= 0x0400;	// Aux connection waits for a channel to be activated by client
+//constexpr USHORT PORT_z_data		= 0x0800;	// Zlib incoming buffer has data left after decompression
+constexpr USHORT PORT_compressed	= 0x1000;	// Compress outgoing stream (does not affect incoming)
+constexpr USHORT PORT_released		= 0x2000;	// release(), complementary to the first addRef() in constructor, was called
 
 // forward decl
 class RemotePortGuard;
@@ -1267,7 +1436,7 @@ public:
 			port_in_packets++;
 	}
 
-	FB_UINT64 getStatItem(UCHAR infoItem) const
+	FB_UINT64 getStatItem(UCHAR infoItem) const noexcept
 	{
 		switch (infoItem)
 		{
@@ -1310,7 +1479,7 @@ public:
 		port_send_partial(0), port_connect(0), port_request(0), port_select_multi(0),
 		port_type(t), port_state(PENDING), port_clients(0), port_next(0),
 		port_parent(0), port_async(0), port_async_receive(0),
-		port_server(0), port_server_flags(0), port_protocol(0), port_buff_size(rpt / 2),
+		port_server(0), port_server_flags(0), port_protocol(0), port_buff_size((USHORT)(rpt / 2)),
 		port_flags(0), port_partial_data(false), port_z_data(false),
 		port_connect_timeout(0), port_dummy_packet_interval(0),
 		port_dummy_timeout(0), port_handle(INVALID_SOCKET), port_channel(INVALID_SOCKET), port_context(0),
@@ -1425,7 +1594,7 @@ public:
 		return port_last_object_id;
 	}
 
-	void releaseObject(OBJCT id)
+	void releaseObject(OBJCT id) noexcept
 	{
 		if (id != INVALID_OBJECT && id <= MAX_OBJCT_HANDLES)
 		{
@@ -1576,6 +1745,11 @@ public:
 
 private:
 	bool tryKeyType(const KnownServerKey& srvKey, InternalCryptKey* cryptKey);
+
+	void sendInlineBlobs(PACKET*, Rtr* rtr, UCHAR* message, const rem_fmt* format, ULONG maxSize);
+
+	// return false if any error retrieving blob happens
+	bool sendInlineBlob(PACKET*, Rtr* rtr, SQUAD blobId, ULONG maxSize);
 };
 
 

@@ -28,9 +28,7 @@
 #include <cctype>
 
 
-static std::string trim(std::string_view str);
-
-static std::string trim(std::string_view str)
+std::string FrontendLexer::trim(std::string_view str)
 {
 	auto finish = str.end();
 	auto start = str.begin();
@@ -142,7 +140,7 @@ std::variant<FrontendLexer::SingleStatement, FrontendLexer::IncompleteTokenError
 
 		while (pos < end)
 		{
-			if (end - pos >= term.length() && std::equal(term.begin(), term.end(), pos))
+			if (std::size_t(end - pos) >= term.length() && std::equal(term.begin(), term.end(), pos))
 			{
 				const auto initialStatement = std::string(buffer.cbegin(), pos);
 				pos += term.length();
@@ -189,22 +187,8 @@ FrontendLexer::Token FrontendLexer::getToken()
 
 	switch (toupper(*pos))
 	{
-		case '(':
-			token.type = Token::TYPE_OPEN_PAREN;
-			token.processedText = *pos++;
-			break;
-
-		case ')':
-			token.type = Token::TYPE_CLOSE_PAREN;
-			token.processedText = *pos++;
-			break;
-
-		case ',':
-			token.type = Token::TYPE_COMMA;
-			token.processedText = *pos++;
-			break;
-
 		case ';':
+		case '.':
 			token.type = Token::TYPE_OTHER;
 			token.processedText = *pos++;
 			break;
@@ -224,13 +208,83 @@ FrontendLexer::Token FrontendLexer::getToken()
 	return token;
 }
 
-std::optional<FrontendLexer::Token> FrontendLexer::getStringToken()
+FrontendLexer::Token FrontendLexer::getNameToken()
 {
+	skipSpacesAndComments();
+
 	Token token;
 
 	if (pos >= end)
+	{
+		token.type = Token::TYPE_EOF;
+		return token;
+	}
+
+	if (const auto optStringToken = getStringToken(); optStringToken.has_value())
+		return optStringToken.value();
+
+	/*** Revert to strict parsing with schemas support branch.
+	const auto start = pos;
+	bool first = true;
+
+	while (pos < end)
+	{
+		const auto c = *pos++;
+
+		if (!((c >= 'A' && c <= 'Z') ||
+			  (c >= 'a' && c <= 'z') ||
+			  c == '{' ||
+			  c == '}' ||
+			  (!first && c >= '0' && c <= '9') ||
+			  (!first && c == '$') ||
+			  (!first && c == '_')))
+		{
+			if (!first)
+				--pos;
+
+			break;
+		}
+
+		first = false;
+	}
+
+	token.processedText = token.rawText = std::string(start, pos);
+	std::transform(token.processedText.begin(), token.processedText.end(),
+		token.processedText.begin(), toupper);
+
+	return token;
+	***/
+
+	const auto start = pos;
+
+	switch (toupper(*pos))
+	{
+		case ';':
+			token.type = Token::TYPE_OTHER;
+			token.processedText = *pos++;
+			break;
+
+		default:
+			while (pos != end && !fb_utils::isspace(*pos) && *pos != '.')
+				++pos;
+
+			token.processedText = std::string(start, pos);
+			std::transform(token.processedText.begin(), token.processedText.end(),
+				token.processedText.begin(), toupper);
+			break;
+	}
+
+	token.rawText = std::string(start, pos);
+
+	return token;
+}
+
+std::optional<FrontendLexer::Token> FrontendLexer::getStringToken()
+{
+	if (pos >= end)
 		return std::nullopt;
 
+	Token token;
 	const auto start = pos;
 
 	switch (toupper(*pos))

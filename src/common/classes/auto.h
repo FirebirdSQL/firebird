@@ -191,25 +191,11 @@ private:
 	void operator=(AutoPtr&);
 };
 
+template <typename T>
+using AutoDispose = AutoPtr<T, SimpleDispose>;
 
-template <typename Where>
-class AutoDispose : public AutoPtr<Where, SimpleDispose>
-{
-public:
-	AutoDispose(Where* v = nullptr)
-		: AutoPtr<Where, SimpleDispose>(v)
-	{ }
-};
-
-
-template <typename Where>
-class AutoRelease : public AutoPtr<Where, SimpleRelease>
-{
-public:
-	AutoRelease(Where* v = nullptr)
-		: AutoPtr<Where, SimpleRelease>(v)
-	{ }
-};
+template <typename T>
+using AutoRelease = AutoPtr<T, SimpleRelease>;
 
 
 template <typename T>

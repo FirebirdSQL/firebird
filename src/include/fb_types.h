@@ -81,6 +81,27 @@ typedef FB_UINT64 ISC_UINT64;
 
 typedef ISC_QUAD SQUAD;
 
+const SQUAD NULL_BLOB = { 0, 0 };
+
+inline bool operator==(const SQUAD& s1, const SQUAD& s2)
+{
+	return s1.gds_quad_high == s2.gds_quad_high &&
+		   s2.gds_quad_low == s1.gds_quad_low;
+}
+
+inline bool operator!=(const SQUAD& s1, const SQUAD& s2)
+{
+	return !(s1 == s2);
+}
+
+inline bool operator>(const SQUAD& s1, const SQUAD& s2)
+{
+	return (s1.gds_quad_high > s2.gds_quad_high) ||
+		(s1.gds_quad_high == s2.gds_quad_high &&
+		 s1.gds_quad_low > s2.gds_quad_low);
+}
+
+
 /*
  * TMN: some misc data types from all over the place
  */
@@ -135,9 +156,9 @@ typedef int (*lock_ast_t)(void*);
 
 // Number of elements in an array
 template <typename T, std::size_t N>
-constexpr int FB_NELEM(const T (&)[N])
+constexpr FB_SIZE_T FB_NELEM(const T (&)[N])
 {
-	return N;
+	return static_cast<FB_SIZE_T>(N);
 }
 
 // Intl types
@@ -150,7 +171,7 @@ typedef ULONG StreamType;
 
 // Alignment rule
 template <typename T>
-inline T FB_ALIGN(T n, uintptr_t b)
+constexpr T FB_ALIGN(T n, uintptr_t b)
 {
 	return (T) ((((uintptr_t) n) + b - 1) & ~(b - 1));
 }

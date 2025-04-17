@@ -159,7 +159,7 @@ int PRETTY_print_cdb(const UCHAR* blr, FPTR_PRINT_CALLBACK routine, void* user_a
 	while (parameter = BLR_BYTE)
 	{
 		const char* p;
-		if (parameter > FB_NELEM(cdb_table) || !(p = cdb_table[parameter]))
+		if (parameter > static_cast<FB_SSIZE_T>(FB_NELEM(cdb_table)) || !(p = cdb_table[parameter]))
 		{
 			return error(control, 0, "*** cdb parameter %d is undefined ***\n", parameter);
 		}

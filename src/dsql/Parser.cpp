@@ -545,7 +545,10 @@ int Parser::yylexAux()
 				Attachment* const attachment = tdbb->getAttachment();
 				const MetaName name(attachment->nameToMetaCharSet(tdbb, MetaName(buffer, p - buffer)));
 				const unsigned charLength = metadataCharSet->length(
-					name.length(), (const UCHAR*) name.c_str(), true);
+					name.length(), (const UCHAR*) name.c_str(), false);
+
+				if (charLength == 0)
+					yyabandon(yyposn, -104, isc_dyn_zero_len_id);
 
 				if (name.length() > MAX_SQL_IDENTIFIER_LEN || charLength > METADATA_IDENTIFIER_CHAR_LEN)
 					yyabandon(yyposn, -104, isc_dyn_name_longer);

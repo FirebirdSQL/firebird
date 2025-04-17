@@ -81,12 +81,12 @@ protected:
 	virtual ~DsqlStatement() = default;
 
 public:
-	int addRef()
+	void addRef()
 	{
-		return ++refCounter;
+		++refCounter;
 	}
 
-	int release();
+	void release();
 
 	bool isCursorBased() const
 	{

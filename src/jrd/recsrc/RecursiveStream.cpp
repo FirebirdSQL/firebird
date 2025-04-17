@@ -81,11 +81,8 @@ void RecursiveStream::internalOpen(thread_db* tdbb) const
 
 	// Initialize the record number of each stream in the union
 
-	for (FB_SIZE_T i = 0; i < m_innerStreams.getCount(); i++)
-	{
-		const StreamType stream = m_innerStreams[i];
+	for (const auto stream : m_innerStreams)
 		request->req_rpb[stream].rpb_number.setValue(BOF_NUMBER);
-	}
 
 	m_root->open(tdbb);
 }
@@ -294,6 +291,11 @@ void RecursiveStream::findUsedStreams(StreamList& streams, bool expandAll) const
 	}
 }
 
+bool RecursiveStream::isDependent(const StreamList& streams) const
+{
+	return m_root->isDependent(streams) || m_inner->isDependent(streams);
+}
+
 void RecursiveStream::cleanupLevel(Request* request, Impure* impure) const
 {
 	Impure* const saveImpure = request->getImpure<Impure>(m_saveOffset);
@@ -305,9 +307,8 @@ void RecursiveStream::cleanupLevel(Request* request, Impure* impure) const
 
 	const UCHAR* p = tmp + m_saveSize;
 
-	for (FB_SIZE_T i = 0; i < m_innerStreams.getCount(); i++)
+	for (const auto stream : m_innerStreams)
 	{
-		const StreamType stream = m_innerStreams[i];
 		record_param* const rpb = &request->req_rpb[stream];
 		Record* const tempRecord = rpb->rpb_record;
 		memmove(rpb, p, sizeof(record_param));

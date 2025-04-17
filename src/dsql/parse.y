@@ -704,10 +704,12 @@ using namespace Firebird;
 %token <metaNamePtr> ANY_VALUE
 %token <metaNamePtr> BTRIM
 %token <metaNamePtr> CALL
+%token <metaNamePtr> DOWNTO
 %token <metaNamePtr> FORMAT
 %token <metaNamePtr> LTRIM
 %token <metaNamePtr> NAMED_ARG_ASSIGN
 %token <metaNamePtr> RTRIM
+%token <metaNamePtr> UNLIST
 
 // precedence declarations for expression evaluation
 
@@ -767,8 +769,6 @@ using namespace Firebird;
 	Firebird::string* stringPtr;
 	Jrd::IntlString* intlStringPtr;
 	Jrd::Lim64String* lim64ptr;
-	Jrd::DbFileClause* dbFileClause;
-	Firebird::Array<NestConst<Jrd::DbFileClause> >* dbFilesClause;
 	Jrd::ExternalClause* externalClause;
 	Firebird::NonPooledPair<Jrd::MetaName*, Jrd::ValueExprNode*>* namedArgument;
 	Firebird::NonPooledPair<Firebird::ObjectsArray<Jrd::MetaName>*, Jrd::ValueListNode*>* namedArguments;
@@ -865,6 +865,7 @@ using namespace Firebird;
 	Jrd::SetDecFloatTrapsNode* setDecFloatTrapsNode;
 	Jrd::SetBindNode* setBindNode;
 	Jrd::SessionResetNode* sessionResetNode;
+	Jrd::ForRangeNode::Direction forRangeDirection;
 }
 
 %include types.y
@@ -1807,16 +1808,8 @@ index_condition_opt
 // CREATE SHADOW
 %type <createShadowNode> shadow_clause
 shadow_clause
-	: pos_short_integer manual_auto conditional utf_string first_file_length
-	 		{
-	 			$$ = newNode<CreateShadowNode>($1);
-		 		$$->manual = $2;
-		 		$$->conditional = $3;
-		 		$$->files.add(newNode<DbFileClause>(*$4));
-		 		$$->files.front()->length = $5;
-	 		}
-		sec_shadow_files(NOTRIAL(&$6->files))
-		 	{ $$ = $6; }
+	: pos_short_integer manual_auto conditional utf_string
+		{ $$ = newNode<CreateShadowNode>($1, $2, $3, *$4); }
 	;
 
 %type <boolVal>	manual_auto
@@ -1830,24 +1823,6 @@ manual_auto
 conditional
 	: /* nothing */		{ $$ = false; }
 	| CONDITIONAL		{ $$ = true; }
-	;
-
-%type <int32Val> first_file_length
-first_file_length
-	: /* nothing */								{ $$ = 0; }
-	| LENGTH equals long_integer page_noise		{ $$ = $3; }
-	;
-
-%type sec_shadow_files(<dbFilesClause>)
-sec_shadow_files($dbFilesClause)
-	: // nothing
-	| db_file_list($dbFilesClause)
-	;
-
-%type db_file_list(<dbFilesClause>)
-db_file_list($dbFilesClause)
-	: db_file				{ $dbFilesClause->add($1); }
-	| db_file_list db_file	{ $dbFilesClause->add($2); }
 	;
 
 
@@ -2270,7 +2245,7 @@ db_initial_desc($alterDatabaseNode)
 // With the exception of LENGTH, all clauses here are handled only at the client.
 %type db_initial_option(<alterDatabaseNode>)
 db_initial_option($alterDatabaseNode)
-	: PAGE_SIZE equals NUMBER32BIT
+	: PAGE_SIZE equals u_numeric_constant
 	| USER symbol_user_name
 	| USER utf_string
 	| OWNER symbol_user_name
@@ -2279,8 +2254,6 @@ db_initial_option($alterDatabaseNode)
 	| ROLE utf_string
 	| PASSWORD utf_string
 	| SET NAMES utf_string
-	| LENGTH equals long_integer page_noise
-		{ $alterDatabaseNode->createLength = $3; }
 	;
 
 %type db_rem_desc1(<alterDatabaseNode>)
@@ -2297,9 +2270,7 @@ db_rem_desc($alterDatabaseNode)
 
 %type db_rem_option(<alterDatabaseNode>)
 db_rem_option($alterDatabaseNode)
-	: db_file
-		{ $alterDatabaseNode->files.add($1); }
-	| DEFAULT CHARACTER SET symbol_character_set_name
+	: DEFAULT CHARACTER SET symbol_character_set_name
 		{ $alterDatabaseNode->setDefaultCharSet = *$4; }
 	| DEFAULT CHARACTER SET symbol_character_set_name COLLATION symbol_collation_name
 		{
@@ -2308,49 +2279,6 @@ db_rem_option($alterDatabaseNode)
 		}
 	| DIFFERENCE FILE utf_string
 		{ $alterDatabaseNode->differenceFile = *$3; }
-	;
-
-%type <dbFileClause> db_file
-db_file
-	: FILE utf_string
-			{
-				DbFileClause* clause = newNode<DbFileClause>(*$2);
-				$$ = clause;
-			}
-		file_desc1($3)
-			{ $$ = $3; }
-	;
-
-%type file_desc1(<dbFileClause>)
-file_desc1($dbFileClause)
-	: // nothing
-	| file_desc($dbFileClause)
-	;
-
-%type file_desc(<dbFileClause>)
-file_desc($dbFileClause)
-	: file_clause($dbFileClause)
-	| file_desc file_clause($dbFileClause)
-	;
-
-%type file_clause(<dbFileClause>)
-file_clause($dbFileClause)
-	: STARTING file_clause_noise long_integer
-		{ $dbFileClause->start = $3; }
-	| LENGTH equals long_integer page_noise
-		{ $dbFileClause->length = $3; }
-	;
-
-file_clause_noise
-	: // nothing
-	| AT
-	| AT PAGE
-	;
-
-page_noise
-	: // nothing
-	| PAGE
-	| PAGES
 	;
 
 
@@ -3515,6 +3443,7 @@ complex_proc_statement
 	: in_autonomous_transaction
 	| if_then_else
 	| while
+	| for_range
 	| for_select					{ $$ = $1; }
 	| for_exec_into					{ $$ = $1; }
 	;
@@ -3542,6 +3471,46 @@ excp_statement
 %type <stmtNode> raise_statement
 raise_statement
 	: EXCEPTION		{ $$ = newNode<ExceptionNode>(); }
+	;
+
+%type <stmtNode> for_range
+for_range
+	: label_def_opt FOR for_range_variable '=' value for_range_direction value for_range_by_opt DO proc_block
+		{
+			const auto node = newNode<ForRangeNode>();
+			node->dsqlLabelName = $1;
+			node->variable = $3;
+			node->initialExpr = $5;
+			node->direction = $6;
+			node->finalExpr = $7;
+			node->byExpr = $8;
+			node->statement = $10;
+			node->direction = $6;
+			$$ = node;
+		}
+	;
+
+%type <valueExprNode> for_range_variable
+for_range_variable
+	: symbol_variable_name
+		{
+			const auto node = newNode<VariableNode>();
+			node->dsqlName = *$1;
+			$$ = node;
+		}
+	| variable
+	;
+
+%type <forRangeDirection> for_range_direction
+for_range_direction
+	: TO		{ $$ = ForRangeNode::Direction::TO; }
+	| DOWNTO	{ $$ = ForRangeNode::Direction::DOWNTO; }
+	;
+
+%type <valueExprNode> for_range_by_opt
+for_range_by_opt
+	: /* nothing */	{ $$ = nullptr; }
+	| BY value		{ $$ = $2; }
 	;
 
 %type <forNode> for_select
@@ -4356,13 +4325,7 @@ alter_domain_op($alterDomainNode)
 	| TO symbol_column_name
 		{ setClause($alterDomainNode->renameTo, "DOMAIN NAME", *$2); }
 	| TYPE non_array_type
-		{
-			//// FIXME: ALTER DOMAIN doesn't support collations, and altered domain's
-			//// collation is always lost.
-			dsql_fld* type = $2;
-			type->collate = "";
-			setClause($alterDomainNode->type, "DOMAIN TYPE", type);
-		}
+		{ setClause($alterDomainNode->type, "DOMAIN TYPE", $2);}
 	;
 
 %type alter_ops(<relationNode>)
@@ -4770,8 +4733,7 @@ alter_db($alterDatabaseNode)
 
 %type db_alter_clause(<alterDatabaseNode>)
 db_alter_clause($alterDatabaseNode)
-	: ADD db_file_list(NOTRIAL(&$alterDatabaseNode->files))
-	| ADD DIFFERENCE FILE utf_string
+	: ADD DIFFERENCE FILE utf_string
 		{ $alterDatabaseNode->differenceFile = *$4; }
 	| DROP DIFFERENCE FILE
 		{ $alterDatabaseNode->clauses |= AlterDatabaseNode::CLAUSE_DROP_DIFFERENCE; }
@@ -6473,6 +6435,7 @@ table_primary
 	| derived_table					{ $$ = $1; }
 	| lateral_derived_table			{ $$ = $1; }
 	| parenthesized_joined_table	{ $$ = $1; }
+	| table_value_function			{ $$ = $1; }
 	;
 
 %type <recSourceNode> parenthesized_joined_table
@@ -6669,6 +6632,57 @@ join_type
 outer_noise
 	:
 	| OUTER
+	;
+
+%type <recSourceNode> table_value_function
+table_value_function
+	: table_value_function_clause table_value_function_correlation_name derived_column_list
+		{
+			auto node = nodeAs<TableValueFunctionSourceNode>($1);
+			node->alias = *$2;
+			if ($3)
+				node->dsqlNameColumns = *$3;
+			$$ = node;
+		}
+	;
+
+%type <recSourceNode> table_value_function_clause
+table_value_function_clause
+	: table_value_function_unlist
+		{ $$ = $1; }
+	;
+
+%type <recSourceNode> table_value_function_unlist
+table_value_function_unlist
+	: UNLIST '(' table_value_function_unlist_arg_list table_value_function_returning ')'
+		{
+			auto node = newNode<UnlistFunctionSourceNode>();
+			node->dsqlFlags |= RecordSourceNode::DFLAG_VALUE;
+			node->dsqlName = *$1;
+			node->inputList = $3;
+			node->dsqlField = $4;
+			$$ = node;
+		}
+	;
+
+%type <valueListNode> table_value_function_unlist_arg_list
+table_value_function_unlist_arg_list
+	: value delimiter_opt
+		{
+			$$ = newNode<ValueListNode>($1);
+			$$->add($2);
+		}
+	;
+
+%type <legacyField> table_value_function_returning
+table_value_function_returning
+	: /*nothing*/							{ $$ = NULL; }
+	| RETURNING data_type_descriptor		{ $$ = $2; }
+	;
+
+%type <metaNamePtr> table_value_function_correlation_name
+table_value_function_correlation_name
+	: as_noise symbol_table_alias_name	{ $$ = $2; }
 	;
 
 
@@ -9764,8 +9778,10 @@ non_reserved_word
 	| UNICODE_VAL
 	// added in FB 6.0
 	| ANY_VALUE
+	| DOWNTO
 	| FORMAT
 	| OWNER
+	| UNLIST
 	;
 
 %%

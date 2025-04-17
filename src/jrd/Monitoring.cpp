@@ -549,6 +549,12 @@ MonitoringSnapshot::MonitoringSnapshot(thread_db* tdbb, MemoryPool& pool)
 
 	// Parse the dump
 
+	// BlobID's of statement text and plan
+	struct StmtBlobs { bid text; bid plan; };
+
+	// Map compiled statement id to blobs ids
+	NonPooledMap<FB_UINT64, StmtBlobs> blobsMap(pool);
+
 	MonitoringData::Reader reader(pool, temp_space);
 
 	SnapshotData::DumpRecord dumpRecord(pool);
@@ -617,7 +623,71 @@ MonitoringSnapshot::MonitoringSnapshot(thread_db* tdbb, MemoryPool& pool)
 		}
 
 		if (store_record)
+		{
+			if (dbb->getEncodedOdsVersion() >= ODS_13_1)
+			{
+				// The code below requires that rel_mon_compiled_statements put
+				// into dump before	rel_mon_statements, see also dumpAttachment()
+
+				FB_UINT64 stmtId;
+				StmtBlobs stmtBlobs;
+				dsc desc;
+
+				if ((rid == rel_mon_compiled_statements) && EVL_field(nullptr, record, f_mon_cmp_stmt_id, &desc))
+				{
+					fb_assert(desc.dsc_dtype == dtype_int64);
+					stmtId = *(FB_UINT64*) desc.dsc_address;
+
+					if (EVL_field(nullptr, record, f_mon_cmp_stmt_sql_text, &desc))
+					{
+						fb_assert(desc.isBlob());
+						stmtBlobs.text = *reinterpret_cast<bid*>(desc.dsc_address);
+					}
+					else
+						stmtBlobs.text.clear();
+
+					if (EVL_field(nullptr, record, f_mon_cmp_stmt_expl_plan, &desc))
+					{
+						fb_assert(desc.isBlob());
+						stmtBlobs.plan = *reinterpret_cast<bid*>(desc.dsc_address);
+					}
+					else
+						stmtBlobs.plan.clear();
+
+					if (!stmtBlobs.text.isEmpty() || !stmtBlobs.plan.isEmpty())
+						blobsMap.put(stmtId, stmtBlobs);
+				}
+				else if ((rid == rel_mon_statements) && EVL_field(nullptr, record, f_mon_stmt_cmp_stmt_id, &desc))
+				{
+					fb_assert(desc.dsc_dtype == dtype_int64);
+					stmtId = *(FB_UINT64*) desc.dsc_address;
+
+					if (blobsMap.get(stmtId, stmtBlobs))
+					{
+						if (!stmtBlobs.text.isEmpty())
+						{
+							record->clearNull(f_mon_stmt_sql_text);
+							if (EVL_field(nullptr, record, f_mon_stmt_sql_text, &desc))
+							{
+								fb_assert(desc.isBlob());
+								*reinterpret_cast<bid*>(desc.dsc_address) = stmtBlobs.text;
+							}
+						}
+						if (!stmtBlobs.plan.isEmpty())
+						{
+							record->clearNull(f_mon_stmt_expl_plan);
+							if (EVL_field(nullptr, record, f_mon_stmt_expl_plan, &desc))
+							{
+								fb_assert(desc.isBlob());
+								*reinterpret_cast<bid*>(desc.dsc_address) = stmtBlobs.plan;
+							}
+						}
+					}
+				}
+			}
+
 			buffer->store(record);
+		}
 	}
 }
 
@@ -837,9 +907,9 @@ void Monitoring::putDatabase(thread_db* tdbb, SnapshotData::DumpRecord& record)
 	record.reset(rel_mon_database);
 
 	// Determine the backup state
-	int backup_state = backup_state_unknown;
+	int backupState = backup_state_unknown;
 
-	BackupManager* const bm = dbb->dbb_backup_manager;
+	const auto bm = dbb->dbb_backup_manager;
 
 	if (bm && !bm->isShutDown())
 	{
@@ -848,14 +918,16 @@ void Monitoring::putDatabase(thread_db* tdbb, SnapshotData::DumpRecord& record)
 		switch (bm->getState())
 		{
 		case Ods::hdr_nbak_normal:
-			backup_state = backup_state_normal;
+			backupState = backup_state_normal;
 			break;
 		case Ods::hdr_nbak_stalled:
-			backup_state = backup_state_stalled;
+			backupState = backup_state_stalled;
 			break;
 		case Ods::hdr_nbak_merge:
-			backup_state = backup_state_merge;
+			backupState = backup_state_merge;
 			break;
+		default:
+			fb_assert(false);
 		}
 	}
 
@@ -886,18 +958,8 @@ void Monitoring::putDatabase(thread_db* tdbb, SnapshotData::DumpRecord& record)
 	// SQL dialect
 	temp = (dbb->dbb_flags & DBB_DB_SQL_dialect_3) ? 3 : 1;
 	record.storeInteger(f_mon_db_dialect, temp);
-
 	// shutdown mode
-	if (dbb->dbb_ast_flags & DBB_shutdown_full)
-		temp = shut_mode_full;
-	else if (dbb->dbb_ast_flags & DBB_shutdown_single)
-		temp = shut_mode_single;
-	else if (dbb->dbb_ast_flags & DBB_shutdown)
-		temp = shut_mode_multi;
-	else
-		temp = shut_mode_online;
-	record.storeInteger(f_mon_db_shut_mode, temp);
-
+	record.storeInteger(f_mon_db_shut_mode, dbb->dbb_shutdown_mode);
 	// sweep interval
 	record.storeInteger(f_mon_db_sweep_int, dbb->dbb_sweep_interval);
 	// read only flag
@@ -914,7 +976,7 @@ void Monitoring::putDatabase(thread_db* tdbb, SnapshotData::DumpRecord& record)
 	// database size
 	record.storeInteger(f_mon_db_pages, PageSpace::actAlloc(dbb));
 	// database backup state
-	record.storeInteger(f_mon_db_backup_state, backup_state);
+	record.storeInteger(f_mon_db_backup_state, backupState);
 
 	// crypt thread status
 	if (dbb->dbb_crypto_manager)
@@ -944,7 +1006,7 @@ void Monitoring::putDatabase(thread_db* tdbb, SnapshotData::DumpRecord& record)
 	record.storeInteger(f_mon_db_na, dbb->getLatestAttachmentId());
 	record.storeInteger(f_mon_db_ns, dbb->getLatestStatementId());
 
-	record.storeString(f_mon_db_guid, dbb->dbb_guid.value().toString());
+	record.storeString(f_mon_db_guid, dbb->dbb_guid.toString());
 	record.storeString(f_mon_db_file_id, dbb->getUniqueFileId());
 
 	record.storeInteger(f_mon_db_repl_mode, dbb->dbb_replica_mode);
@@ -1229,13 +1291,17 @@ void Monitoring::putRequest(SnapshotData::DumpRecord& record, const Request* req
 
 	const Statement* const statement = request->getStatement();
 
-	// sql text
-	if (statement->sqlText)
-		record.storeString(f_mon_stmt_sql_text, *statement->sqlText);
+	// Since ODS 13.1 statement text and plan is put into mon$compiled_statements
+	if (dbb->getEncodedOdsVersion() < ODS_13_1)
+	{
+		// sql text
+		if (statement->sqlText)
+			record.storeString(f_mon_stmt_sql_text, *statement->sqlText);
 
-	// explained plan
-	if (plan.hasData())
-		record.storeString(f_mon_stmt_expl_plan, plan);
+		// explained plan
+		if (plan.hasData())
+			record.storeString(f_mon_stmt_expl_plan, plan);
+	}
 
 	// statistics
 	const int stat_id = fb_utils::genUniqueId();
@@ -1514,7 +1580,7 @@ void Monitoring::dumpAttachment(thread_db* tdbb, Attachment* attachment, ULONG g
 
 	if (dbb->getEncodedOdsVersion() >= ODS_13_1)
 	{
-		// Statement information
+		// Statement information, must be put into dump before requests
 
 		for (const auto statement : attachment->att_statements)
 		{
@@ -1534,7 +1600,8 @@ void Monitoring::dumpAttachment(thread_db* tdbb, Attachment* attachment, ULONG g
 
 		if (!(statement->flags & (Statement::FLAG_INTERNAL | Statement::FLAG_SYS_TRIGGER)))
 		{
-			const string plan = Optimizer::getPlan(tdbb, statement, true);
+			const string plan = (dbb->getEncodedOdsVersion() >= ODS_13_1) ?
+				"" : Optimizer::getPlan(tdbb, statement, true);
 			putRequest(record, request, plan);
 		}
 	}

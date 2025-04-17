@@ -94,36 +94,31 @@ bool SHUT_blocking_ast(thread_db* tdbb, bool ast)
 	const SSHORT flag = data.data_items.flag;
 	const SSHORT delay = data.data_items.delay;
 
-	const int shut_mode = flag & isc_dpb_shut_mode_mask;
-
 	// Delay of -1 means we're going online
 
 	if (delay == -1)
 	{
 		dbb->dbb_ast_flags &= ~(DBB_shut_attach | DBB_shut_tran | DBB_shut_force);
+		auto shutMode = shut_mode_online;
 
-		if (shut_mode)
+		switch (flag & isc_dpb_shut_mode_mask)
 		{
-			dbb->dbb_ast_flags &= ~(DBB_shutdown | DBB_shutdown_single | DBB_shutdown_full);
-
-			switch (shut_mode)
-			{
-			case isc_dpb_shut_normal:
-				break;
-			case isc_dpb_shut_multi:
-				dbb->dbb_ast_flags |= DBB_shutdown;
-				break;
-			case isc_dpb_shut_single:
-				dbb->dbb_ast_flags |= DBB_shutdown | DBB_shutdown_single;
-				break;
-			case isc_dpb_shut_full:
-				dbb->dbb_ast_flags |= DBB_shutdown | DBB_shutdown_full;
-				break;
-			default:
-				fb_assert(false);
-			}
+		case isc_dpb_shut_normal:
+			break;
+		case isc_dpb_shut_multi:
+			shutMode = shut_mode_multi;
+			break;
+		case isc_dpb_shut_single:
+			shutMode = shut_mode_single;
+			break;
+		case isc_dpb_shut_full:
+			shutMode = shut_mode_full;
+			break;
+		default:
+			fb_assert(false);
 		}
 
+		dbb->dbb_shutdown_mode.store(shutMode, std::memory_order_relaxed);
 		return false;
 	}
 
@@ -167,7 +162,7 @@ void SHUT_database(thread_db* tdbb, SSHORT flag, SSHORT delay, Sync* guard)
 		ERR_punt();
 	}
 
-	const int shut_mode = flag & isc_dpb_shut_mode_mask;
+	const int shut_mode = (flag & isc_dpb_shut_mode_mask);
 
 	// Check if requested shutdown mode is valid
 	// Note that if we are already in requested mode we just return true.
@@ -176,36 +171,36 @@ void SHUT_database(thread_db* tdbb, SSHORT flag, SSHORT delay, Sync* guard)
 	switch (shut_mode)
 	{
 	case isc_dpb_shut_full:
-		if (dbb->dbb_ast_flags & DBB_shutdown_full)
-		{
-			same_mode(dbb);
-			return;
-		}
-		break;
-	case isc_dpb_shut_multi:
-		if (dbb->dbb_ast_flags & (DBB_shutdown_full | DBB_shutdown_single))
-		{
-			bad_mode(dbb);
-		}
-		if (dbb->dbb_ast_flags & DBB_shutdown)
+		if (dbb->isShutdown(shut_mode_full))
 		{
 			same_mode(dbb);
 			return;
 		}
 		break;
 	case isc_dpb_shut_single:
-		if (dbb->dbb_ast_flags & DBB_shutdown_full)
+		if (dbb->isShutdown(shut_mode_full))
 		{
 			bad_mode(dbb);
 		}
-		if (dbb->dbb_ast_flags & DBB_shutdown_single)
+		if (dbb->isShutdown(shut_mode_single))
+		{
+			same_mode(dbb);
+			return;
+		}
+		break;
+	case isc_dpb_shut_multi:
+		if (dbb->isShutdown(shut_mode_full) || dbb->isShutdown(shut_mode_single))
+		{
+			bad_mode(dbb);
+		}
+		if (dbb->isShutdown(shut_mode_multi))
 		{
 			same_mode(dbb);
 			return;
 		}
 		break;
 	case isc_dpb_shut_normal:
-		if (!(dbb->dbb_ast_flags & DBB_shutdown))
+		if (!dbb->isShutdown())
 		{
 			same_mode(dbb);
 			return;
@@ -237,7 +232,6 @@ void SHUT_database(thread_db* tdbb, SSHORT flag, SSHORT delay, Sync* guard)
 
 	if (exclusive)
 	{
-		// Ensure we have the proper DBB_shutdown_* flags in place
 		shutdown(tdbb, flag, false);
 	}
 	else
@@ -286,22 +280,22 @@ void SHUT_database(thread_db* tdbb, SSHORT flag, SSHORT delay, Sync* guard)
 	dbb->dbb_ast_flags &= ~(DBB_shut_force | DBB_shut_attach | DBB_shut_tran);
 
 	WIN window(HEADER_PAGE_NUMBER);
-	Ods::header_page* const header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+	const auto header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 	CCH_MARK_MUST_WRITE(tdbb, &window);
 	// Set appropriate shutdown mode in database header
-	header->hdr_flags &= ~Ods::hdr_shutdown_mask;
 	switch (shut_mode)
 	{
 	case isc_dpb_shut_normal:
+		header->hdr_shutdown_mode = Ods::hdr_shutdown_none;
 		break;
 	case isc_dpb_shut_multi:
-		header->hdr_flags |= Ods::hdr_shutdown_multi;
+		header->hdr_shutdown_mode = Ods::hdr_shutdown_multi;
 		break;
 	case isc_dpb_shut_single:
-		header->hdr_flags |= Ods::hdr_shutdown_single;
+		header->hdr_shutdown_mode = Ods::hdr_shutdown_single;
 		break;
 	case isc_dpb_shut_full:
-		header->hdr_flags |= Ods::hdr_shutdown_full;
+		header->hdr_shutdown_mode = Ods::hdr_shutdown_full;
 		break;
 	default:
 		fb_assert(false);
@@ -362,42 +356,42 @@ void SHUT_online(thread_db* tdbb, SSHORT flag, Sync* guard)
 	switch (shut_mode)
 	{
 	case isc_dpb_shut_normal:
-		if (!(dbb->dbb_ast_flags & DBB_shutdown))
+		if (!dbb->isShutdown())
 		{
 			same_mode(dbb); // normal -> normal
 			return;
 		}
 		break;
 	case isc_dpb_shut_multi:
-		if (!(dbb->dbb_ast_flags & DBB_shutdown))
+		if (!dbb->isShutdown())
 		{
 			bad_mode(dbb); // normal -> multi
 		}
-		if (!(dbb->dbb_ast_flags & DBB_shutdown_full) && !(dbb->dbb_ast_flags & DBB_shutdown_single))
+		if (dbb->isShutdown(shut_mode_multi))
 		{
 			same_mode(dbb); // multi -> multi
 			return;
 		}
 		break;
 	case isc_dpb_shut_single:
-		if (dbb->dbb_ast_flags & DBB_shutdown_single)
+		if (dbb->isShutdown(shut_mode_single))
 		{
-			same_mode(dbb); //single -> single
+			same_mode(dbb); // single -> single
 			return;
 		}
-		if (!(dbb->dbb_ast_flags & DBB_shutdown_full))
+		if (!dbb->isShutdown(shut_mode_full))
 		{
 			bad_mode(dbb); // !full -> single
 		}
 		break;
 	case isc_dpb_shut_full:
-		if (dbb->dbb_ast_flags & DBB_shutdown_full)
+		if (dbb->isShutdown(shut_mode_full))
 		{
 			same_mode(dbb); // full -> full
 			return;
 		}
 		bad_mode(dbb);
-	default: // isc_dpb_shut_full
+	default:
 		bad_mode(dbb); // unexpected mode
 	}
 
@@ -415,22 +409,22 @@ void SHUT_online(thread_db* tdbb, SSHORT flag, Sync* guard)
 	// Reset shutdown flag on database header page
 
 	WIN window(HEADER_PAGE_NUMBER);
-	Ods::header_page* const header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+	const auto header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 	CCH_MARK_MUST_WRITE(tdbb, &window);
 	// Set appropriate shutdown mode in database header
-	header->hdr_flags &= ~Ods::hdr_shutdown_mask;
 	switch (shut_mode)
 	{
 	case isc_dpb_shut_normal:
+		header->hdr_shutdown_mode = Ods::hdr_shutdown_none;
 		break;
 	case isc_dpb_shut_multi:
-		header->hdr_flags |= Ods::hdr_shutdown_multi;
+		header->hdr_shutdown_mode = Ods::hdr_shutdown_multi;
 		break;
 	case isc_dpb_shut_single:
-		header->hdr_flags |= Ods::hdr_shutdown_single;
+		header->hdr_shutdown_mode = Ods::hdr_shutdown_single;
 		break;
 	case isc_dpb_shut_full:
-		header->hdr_flags |= Ods::hdr_shutdown_full;
+		header->hdr_shutdown_mode = Ods::hdr_shutdown_full;
 		break;
 	default:
 		fb_assert(false);
@@ -446,7 +440,7 @@ void SHUT_online(thread_db* tdbb, SSHORT flag, Sync* guard)
 
 static void check_backup_state(thread_db* tdbb)
 {
-	Database* const dbb = tdbb->getDatabase();
+	const auto dbb = tdbb->getDatabase();
 
 	BackupManager::StateReadGuard stateGuard(tdbb);
 
@@ -472,7 +466,7 @@ static bool notify_shutdown(thread_db* tdbb, SSHORT flag, SSHORT delay, Sync* gu
  *	flags and delay via lock data.
  *
  **************************************/
-	Database* const dbb = tdbb->getDatabase();
+	const auto dbb = tdbb->getDatabase();
 
 	shutdown_data data;
 	data.data_items.flag = flag;
@@ -506,28 +500,30 @@ static bool shutdown(thread_db* tdbb, SSHORT flag, bool force)
  *	Initiate database shutdown.
  *
  **************************************/
-	Database* const dbb = tdbb->getDatabase();
+	const auto dbb = tdbb->getDatabase();
 
 	// Mark database and all active attachments as shutdown
 
-	dbb->dbb_ast_flags &= ~(DBB_shutdown | DBB_shutdown_single | DBB_shutdown_full);
+	auto shutMode = shut_mode_online;
 
 	switch (flag & isc_dpb_shut_mode_mask)
 	{
 	case isc_dpb_shut_normal:
 		break;
 	case isc_dpb_shut_multi:
-		dbb->dbb_ast_flags |= DBB_shutdown;
+		shutMode = shut_mode_multi;
 		break;
 	case isc_dpb_shut_single:
-		dbb->dbb_ast_flags |= DBB_shutdown | DBB_shutdown_single;
+		shutMode = shut_mode_single;
 		break;
 	case isc_dpb_shut_full:
-		dbb->dbb_ast_flags |= DBB_shutdown | DBB_shutdown_full;
+		shutMode = shut_mode_full;
 		break;
 	default:
 		fb_assert(false);
 	}
+
+	dbb->dbb_shutdown_mode.store(shutMode, std::memory_order_relaxed);
 
 	if (force)
 	{

@@ -3425,7 +3425,7 @@ ExecProcedureNode* ExecProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		const auto positionalArgCount = inputSources->items.getCount() -
 			(dsqlInputArgNames ? dsqlInputArgNames->getCount() : 0);
 
-		if (positionalArgCount > procedure->prc_in_count || dsqlInputArgNames)
+		if (static_cast<SSHORT>(positionalArgCount) > procedure->prc_in_count || dsqlInputArgNames)
 		{
 			const auto newInputs = FB_NEW_POOL(pool) ValueListNode(pool);
 			const auto newOutputs = FB_NEW_POOL(pool) ValueListNode(pool);
@@ -3440,7 +3440,7 @@ ExecProcedureNode* ExecProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 			for (auto source : inputSources->items)
 			{
-				const bool isInput = (pos < positionalArgCount && pos < procedure->prc_in_count) ||
+				const bool isInput = (pos < positionalArgCount && pos < static_cast<unsigned>(procedure->prc_in_count)) ||
 					(pos >= positionalArgCount &&
 						!outFields.exist((*dsqlInputArgNames)[pos - positionalArgCount]));
 
@@ -5901,6 +5901,294 @@ void ForNode::setRecordUpdated(thread_db* tdbb, Request* request, record_param* 
 	RBM_SET(tdbb->getDefaultPool(), &impure->recUpdated, rpb->rpb_number.getValue());
 }
 
+
+//--------------------
+
+
+static RegisterNode<ForRangeNode> regForRangeNode({blr_for_range});
+
+DmlNode* ForRangeNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR /*blrOp*/)
+{
+	auto& blrReader = csb->csb_blr_reader;
+
+	const auto node = FB_NEW_POOL(pool) ForRangeNode(pool);
+
+	for (UCHAR verb; (verb = blrReader.getByte()) != blr_end;)
+	{
+		switch (verb)
+		{
+			case blr_for_range_variable:
+				node->variable = PAR_parse_value(tdbb, csb);
+				break;
+
+			case blr_for_range_initial_value:
+				node->initialExpr = PAR_parse_value(tdbb, csb);
+				break;
+
+			case blr_for_range_final_value:
+				node->finalExpr = PAR_parse_value(tdbb, csb);
+				break;
+
+			case blr_for_range_by_value:
+				node->byExpr = PAR_parse_value(tdbb, csb);
+				break;
+
+			case blr_for_range_statement:
+				node->statement = PAR_parse_stmt(tdbb, csb);
+				break;
+
+			case blr_for_range_direction:
+				node->direction = static_cast<Direction>(blrReader.getByte());
+				if (node->direction != Direction::TO && node->direction != Direction::DOWNTO)
+					PAR_syntax_error(csb, "blr_for_range_direction");
+				break;
+
+			default:
+				PAR_syntax_error(csb, "blr_for_range clause");
+				break;
+		}
+	}
+
+	if (!(nodeIs<VariableNode>(node->variable) && node->initialExpr && node->finalExpr && node->statement))
+		PAR_syntax_error(csb, "blr_for_range incomplete");
+
+	if (!node->byExpr)
+		node->byExpr = MAKE_const_slong(1);
+
+	return node;
+}
+
+StmtNode* ForRangeNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
+{
+	const auto node = FB_NEW_POOL(dsqlScratch->getPool()) ForRangeNode(dsqlScratch->getPool());
+
+	node->variable = doDsqlPass(dsqlScratch, variable);
+	node->initialExpr = doDsqlPass(dsqlScratch, initialExpr);
+	node->direction = direction;
+	node->finalExpr = doDsqlPass(dsqlScratch, finalExpr);
+	node->byExpr = doDsqlPass(dsqlScratch, byExpr);
+
+	++dsqlScratch->loopLevel;
+	node->dsqlLabelNumber = dsqlPassLabel(dsqlScratch, false, dsqlLabelName);
+	node->statement = statement->dsqlPass(dsqlScratch);
+	--dsqlScratch->loopLevel;
+	dsqlScratch->labels.pop();
+
+	return node;
+}
+
+string ForRangeNode::internalPrint(NodePrinter& printer) const
+{
+	StmtNode::internalPrint(printer);
+
+	NODE_PRINT(printer, dsqlLabelName);
+	NODE_PRINT(printer, dsqlLabelNumber);
+	NODE_PRINT(printer, variable);
+	NODE_PRINT(printer, (int) direction);
+	NODE_PRINT(printer, initialExpr);
+	NODE_PRINT(printer, finalExpr);
+	NODE_PRINT(printer, byExpr);
+	NODE_PRINT(printer, statement);
+
+	return "ForRangeNode";
+}
+
+void ForRangeNode::genBlr(DsqlCompilerScratch* dsqlScratch)
+{
+	dsqlScratch->appendUChar(blr_label);
+	fb_assert(dsqlLabelNumber < MAX_UCHAR);
+	dsqlScratch->appendUChar((UCHAR) dsqlLabelNumber);
+	dsqlScratch->appendUChar(blr_for_range);
+
+	dsqlScratch->appendUChar(blr_for_range_variable);
+	GEN_expr(dsqlScratch, variable);
+
+	dsqlScratch->appendUChar(blr_for_range_initial_value);
+	GEN_expr(dsqlScratch, initialExpr);
+
+	dsqlScratch->appendUChar(blr_for_range_final_value);
+	GEN_expr(dsqlScratch, finalExpr);
+
+	if (byExpr)
+	{
+		dsqlScratch->appendUChar(blr_for_range_by_value);
+		GEN_expr(dsqlScratch, byExpr);
+	}
+
+	if (direction != Direction::TO)
+	{
+		dsqlScratch->appendUChar(blr_for_range_direction);
+		dsqlScratch->appendUChar((UCHAR) direction);
+	}
+
+	dsqlScratch->appendUChar(blr_for_range_statement);
+	statement->genBlr(dsqlScratch);
+
+	dsqlScratch->appendUChar(blr_end);
+}
+
+ForRangeNode* ForRangeNode::pass1(thread_db* tdbb, CompilerScratch* csb)
+{
+	doPass1(tdbb, csb, variable.getAddress());
+	doPass1(tdbb, csb, initialExpr.getAddress());
+	doPass1(tdbb, csb, finalExpr.getAddress());
+	doPass1(tdbb, csb, byExpr.getAddress());
+	doPass1(tdbb, csb, statement.getAddress());
+
+	return this;
+}
+
+ForRangeNode* ForRangeNode::pass2(thread_db* tdbb, CompilerScratch* csb)
+{
+	ExprNode::doPass2(tdbb, csb, variable.getAddress());
+	ExprNode::doPass2(tdbb, csb, initialExpr.getAddress());
+	ExprNode::doPass2(tdbb, csb, finalExpr.getAddress());
+	ExprNode::doPass2(tdbb, csb, byExpr.getAddress());
+	doPass2(tdbb, csb, statement.getAddress(), this);
+
+	dsc variableDesc;
+	variable->getDesc(tdbb, csb, &variableDesc);
+
+	dsc initialDesc;
+	initialExpr->getDesc(tdbb, csb, &initialDesc);
+
+	dsc finalDesc;
+	finalExpr->getDesc(tdbb, csb, &finalDesc);
+
+	dsc byDesc;
+	byExpr->getDesc(tdbb, csb, &byDesc);
+
+	if (!variableDesc.isExact() || !initialDesc.isExact() || !finalDesc.isExact() || !byDesc.isExact())
+		ERRD_post(Arg::Gds(isc_argmustbe_exact_range_for));
+
+	dsc incDecDesc;
+	ArithmeticNode::getDescDialect3(tdbb, &incDecDesc, variableDesc, byDesc, blr_add, &incDecScale, &incDecFlags);
+
+	if (!incDecDesc.isExact())
+		ERRD_post(Arg::Gds(isc_argmustbe_exact_range_for));
+
+	impureOffset = csb->allocImpure<Impure>();
+
+	return this;
+}
+
+const StmtNode* ForRangeNode::execute(thread_db* tdbb, Request* request, ExeState* /*exeState*/) const
+{
+	const auto impure = request->getImpure<Impure>(impureOffset);
+
+	switch (request->req_operation)
+	{
+		case Request::req_evaluate:
+		{
+			const auto initialDesc = EVL_expr(tdbb, request, initialExpr);
+			EXE_assignment(tdbb, variable, initialDesc, !initialDesc, nullptr, nullptr);
+
+			if (!initialDesc)
+			{
+				request->req_operation = Request::req_return;
+				return parentStmt;
+			}
+
+			if (const auto finalDesc = EVL_expr(tdbb, request, finalExpr))
+			{
+				if (!finalDesc->isExact())
+					ERR_post(Arg::Gds(isc_argmustbe_exact_range_for));
+
+				EVL_make_value(tdbb, finalDesc, &impure->finalValue);
+			}
+			else
+			{
+				request->req_operation = Request::req_return;
+				return parentStmt;
+			}
+
+			if (const auto byDesc = EVL_expr(tdbb, request, byExpr))
+			{
+				if (!byDesc->isExact())
+					ERR_post(Arg::Gds(isc_argmustbe_exact_range_for));
+
+				SLONG zero = 0;
+				dsc zeroDesc;
+				zeroDesc.makeLong(0, &zero);
+				if (const auto comparison = MOV_compare(tdbb, byDesc, &zeroDesc);
+					comparison <= 0)
+				{
+					ERR_post(Arg::Gds(isc_range_for_by_should_be_positive));
+				}
+
+				EVL_make_value(tdbb, byDesc, &impure->byValue);
+			}
+			else
+			{
+				request->req_operation = Request::req_return;
+				return parentStmt;
+			}
+
+			[[fallthrough]];
+		}
+
+		case Request::req_return:
+		{
+			const auto variableDesc = EVL_expr(tdbb, request, variable);
+
+			if (!variableDesc)
+			{
+				request->req_operation = Request::req_return;
+				return parentStmt;
+			}
+
+			if (request->req_operation == Request::req_return)
+			{
+				impure_value nextValue;
+
+				ArithmeticNode::add(tdbb,
+					&impure->byValue.vlu_desc,
+					variableDesc,
+					&nextValue,
+					(direction == Direction::TO ? blr_add : blr_subtract),
+					(request->getStatement()->blrVersion == 4),
+					incDecScale,
+					incDecFlags);
+
+				EXE_assignment(tdbb, variable, &nextValue.vlu_desc, false, nullptr, nullptr);
+			}
+
+			const auto comparison = MOV_compare(tdbb, variableDesc, &impure->finalValue.vlu_desc);
+
+			if (direction == Direction::TO && comparison > 0 ||
+				direction == Direction::DOWNTO && comparison < 0)
+			{
+				request->req_operation = Request::req_return;
+				return parentStmt;
+			}
+
+			request->req_operation = Request::req_evaluate;
+			return statement;
+		}
+
+		case Request::req_unwind:
+		{
+			const LabelNode* label = nodeAs<LabelNode>(parentStmt.getObject());
+
+			if (label && request->req_label == label->labelNumber &&
+				(request->req_flags & req_continue_loop))
+			{
+				request->req_flags &= ~req_continue_loop;
+				request->req_operation = Request::req_return;
+				return this;
+			}
+
+			[[fallthrough]];
+		}
+
+		default:
+			return parentStmt;
+	}
+
+	return nullptr;
+}
+
+
 //--------------------
 
 
@@ -6014,8 +6302,6 @@ const StmtNode* LabelNode::execute(thread_db* /*tdbb*/, Request* request, ExeSta
 			return statement;
 
 		case Request::req_unwind:
-			fb_assert(!(request->req_flags & req_continue_loop));
-
 			if (request->req_label == labelNumber &&
 				(request->req_flags & (req_leave | req_error_handler)))
 			{
@@ -8958,8 +9244,7 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 
 				rpb->rpb_number.setValid(true);
 
-				if (relation && (relation->rel_post_store || relation->isSystem()) &&
-					relation->rel_post_store && whichTrig != PRE_TRIG)
+				if (relation && (relation->rel_post_store || relation->isSystem()) && whichTrig != PRE_TRIG)
 				{
 					EXE_execute_triggers(tdbb, &relation->rel_post_store, NULL, rpb,
 						TRIGGER_INSERT, POST_TRIG);
@@ -10597,6 +10882,8 @@ static dsql_ctx* dsqlGetContext(const RecordSourceNode* node)
 		return procNode->dsqlContext;
 	else if (auto relNode = nodeAs<RelationSourceNode>(node))
 		return relNode->dsqlContext;
+	else if (auto tableValueFunctionNode = nodeAs<TableValueFunctionSourceNode>(node))
+		return tableValueFunctionNode->dsqlContext;
 	//// TODO: LocalTableSourceNode
 	else if (auto rseNode = nodeAs<RseNode>(node))
 		return rseNode->dsqlContext;
@@ -10614,6 +10901,8 @@ static void dsqlGetContexts(DsqlContextStack& contexts, const RecordSourceNode* 
 		contexts.push(procNode->dsqlContext);
 	else if (auto relNode = nodeAs<RelationSourceNode>(node))
 		contexts.push(relNode->dsqlContext);
+	else if (auto tableValueFunctionNode = nodeAs<TableValueFunctionSourceNode>(node))
+		contexts.push(tableValueFunctionNode->dsqlContext);
 	//// TODO: LocalTableSourceNode
 	else if (auto rseNode = nodeAs<RseNode>(node))
 	{
@@ -11087,7 +11376,13 @@ static ReturningClause* dsqlProcessReturning(DsqlCompilerScratch* dsqlScratch, d
 
 				// When RETURNING context marked with CTX_null is processed first, parameter
 				// node should be fixed when resolving parameters in the real context.
-				if (nodeIs<NullNode>(parameterNode->dsqlParameter->par_node))
+
+				auto parNode = parameterNode->dsqlParameter->par_node;
+
+				if (const auto aliasNode = nodeAs<DsqlAliasNode>(parNode))
+					parNode = aliasNode->value;
+
+				if (nodeIs<NullNode>(parNode))
 				{
 					parameterNode->dsqlParameter->par_node = src;
 					DsqlDescMaker::fromNode(dsqlScratch, &parameterNode->dsqlParameter->par_desc, src, true);

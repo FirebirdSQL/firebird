@@ -93,6 +93,30 @@ public:
 	int compare(const AbstractString& s) const { return compare(s.c_str(), s.length()); }
 	int compare(const MetaString& m) const { return memcmp(data, m.data, MAX_SQL_IDENTIFIER_SIZE); }
 
+	string toQuotedString() const
+	{
+		string s;
+
+		if (hasData())
+		{
+			s.reserve(count + 2);
+
+			s.append("\"");
+
+			for (const auto c : *this)
+			{
+				if (c == '"')
+					s.append("\"");
+
+				s.append(&c, 1);
+			}
+
+			s.append("\"");
+		}
+
+		return s;
+	}
+
 	bool operator==(const char* s) const { return compare(s) == 0; }
 	bool operator!=(const char* s) const { return compare(s) != 0; }
 	bool operator==(const AbstractString& s) const { return compare(s) == 0; }

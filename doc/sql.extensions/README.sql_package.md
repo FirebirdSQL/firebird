@@ -19,14 +19,14 @@ Output parameters:
 - `LEVEL` type `INTEGER NOT NULL` - indentation level (may have gaps in relation to parent's level)
 - `PACKAGE_NAME` type `RDB$PACKAGE_NAME` - package name of a stored procedure
 - `OBJECT_NAME` type `RDB$RELATION_NAME` - object (table, procedure) name
-- `ALIAS` type `RDB$RELATION_NAME` - alias name
+- `ALIAS` type `RDB$SHORT_DESCRIPTION` - alias name
 - `RECORD_LENGTH` type `INTEGER` - record length for the record source
 - `KEY_LENGTH` type `INTEGER` - key length for the record source
-- `ACCESS_PATH` type `VARCHAR(255) CHARACTER SET UTF8 NOT NULL` - friendly plan description
+- `ACCESS_PATH` type `RDB$DESCRIPTION NOT NULL` - friendly plan description
 
 ```
 select *
-  from rdb$sql.explain('select * from employees where id = ?');
+  from rdb$sql.explain('select * from employee where emp_no = ?');
 ```
 
 ```
@@ -34,9 +34,9 @@ select *
   from rdb$sql.explain(q'{
     select *
     from (
-      select name from employees
+      select full_name name from employee
       union all
-      select name from customers
+      select customer name from customer
     )
     where name = ?
   }');

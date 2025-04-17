@@ -434,7 +434,7 @@ bool DPM_chain( thread_db* tdbb, record_param* org_rpb, record_param* new_rpb)
 	if (fill < 0)
 		fill = 0;
 
-	// Accomodate max record size i.e. 64K
+	// Accommodate max record size i.e. 64K
 	const SLONG length = ROUNDUP(header_size + size + fill, ODS_ALIGNMENT);
 
 	// Find space on page and open slot
@@ -2199,7 +2199,7 @@ void DPM_store( thread_db* tdbb, record_param* rpb, PageStack& stack, const Jrd:
 	if (fill < 0)
 		fill = 0;
 
-	// Accomodate max record size i.e. 64K
+	// Accommodate max record size i.e. 64K
 	const SLONG length = header_size + size + fill;
 	rhd* header = locate_space(tdbb, rpb, (SSHORT) length, stack, NULL, type);
 
@@ -2428,7 +2428,7 @@ void DPM_update( thread_db* tdbb, record_param* rpb, PageStack* stack, const jrd
 	if (fill < 0)
 		fill = 0;
 
-	// Accomodate max record size i.e. 64K
+	// Accommodate max record size i.e. 64K
 	const SLONG length = ROUNDUP(header_size + size + fill, ODS_ALIGNMENT);
 	const USHORT slot = rpb->rpb_line;
 

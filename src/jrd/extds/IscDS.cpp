@@ -123,7 +123,7 @@ void IscConnection::attach(thread_db* tdbb)
 	{
 		EngineCallbackGuard guard(tdbb, *this, FB_FUNCTION);
 
-		ICryptKeyCallback* cb = tdbb->getAttachment()->att_crypt_callback;
+		ICryptKeyCallback* cb = &m_cryptCallbackRedir;
 		try
 		{
 			m_iscProvider.fb_database_crypt_callback(&status, cb);

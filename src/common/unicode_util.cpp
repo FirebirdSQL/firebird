@@ -1615,7 +1615,7 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 
 		if (len >= 2)
 		{
-			obj->maxContractionsPrefixLength = len - 1 > obj->maxContractionsPrefixLength ?
+			obj->maxContractionsPrefixLength = static_cast<ULONG>(len - 1) > obj->maxContractionsPrefixLength ?
 				len - 1 : obj->maxContractionsPrefixLength;
 
 			UCHAR key[100];
@@ -1865,7 +1865,7 @@ USHORT UnicodeUtil::Utf16Collation::stringToKey(USHORT srcLen, const USHORT* src
 						lastCharKeyLen = icu->ucolGetSortKey(coll,
 							reinterpret_cast<const UChar*>(src + srcLenLong), i, lastCharKey, sizeof(lastCharKey));
 
-						if (prefixLen == 0 || prefixLen > dstLen - 2 || prefixLen > MAX_USHORT ||
+						if (prefixLen == 0 || prefixLen > dstLen - 2u || prefixLen > MAX_USHORT ||
 							lastCharKeyLen == 0)
 						{
 							return INTL_BAD_KEY_LENGTH;
@@ -1895,7 +1895,7 @@ USHORT UnicodeUtil::Utf16Collation::stringToKey(USHORT srcLen, const USHORT* src
 
 						const ULONG keyLen = prefixLen + keyIt.getCount() - advance;
 
-						if (keyLen > dstLen - 2 || keyLen > MAX_USHORT)
+						if (keyLen > dstLen - 2u || keyLen > MAX_USHORT)
 							return INTL_BAD_KEY_LENGTH;
 
 						dst[0] = UCHAR(keyLen & 0xFF);
@@ -1920,7 +1920,7 @@ USHORT UnicodeUtil::Utf16Collation::stringToKey(USHORT srcLen, const USHORT* src
 		ULONG keyLen = icu->ucolGetSortKey(coll,
 			reinterpret_cast<const UChar*>(src), srcLenLong, originalDst + 2, originalDstLen - 3);
 
-		if (keyLen == 0 || keyLen > originalDstLen - 3 || keyLen > MAX_USHORT)
+		if (keyLen == 0 || keyLen > originalDstLen - 3u || keyLen > MAX_USHORT)
 			return INTL_BAD_KEY_LENGTH;
 
 		fb_assert(originalDst[2 + keyLen - 1] == '\0');

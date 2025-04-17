@@ -153,7 +153,7 @@ TextType::TextType(TTYPE_ID _type, texttype *_tt, USHORT _attributes, CharSet* _
 			{'S', CHAR_UPPER_S}
 		};
 
-	for (int i = 0; i < FB_NELEM(conversions); i++)
+	for (FB_SIZE_T i = 0; i < FB_NELEM(conversions); i++)
 	{
 		try
 		{

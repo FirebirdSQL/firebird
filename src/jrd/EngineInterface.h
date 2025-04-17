@@ -307,6 +307,9 @@ public:
 	JBatch* createBatch(Firebird::CheckStatusWrapper* status, Firebird::IMessageMetadata* inMetadata,
 		unsigned parLength, const unsigned char* par) override;
 
+	unsigned getMaxInlineBlobSize(Firebird::CheckStatusWrapper* status) override;
+	void setMaxInlineBlobSize(Firebird::CheckStatusWrapper* status, unsigned size) override;
+
 public:
 	JStatement(DsqlRequest* handle, StableAttachmentPart* sa, Firebird::Array<UCHAR>& meta);
 
@@ -460,6 +463,10 @@ public:
 		Firebird::IMessageMetadata* inMetadata, unsigned parLength, const unsigned char* par) override;
 	Firebird::IReplicator* createReplicator(Firebird::CheckStatusWrapper* status) override;
 
+	unsigned getMaxBlobCacheSize(Firebird::CheckStatusWrapper* status) override;
+	void setMaxBlobCacheSize(Firebird::CheckStatusWrapper* status, unsigned size) override;
+	unsigned getMaxInlineBlobSize(Firebird::CheckStatusWrapper* status) override;
+	void setMaxInlineBlobSize(Firebird::CheckStatusWrapper* status, unsigned size) override;
 public:
 	explicit JAttachment(StableAttachmentPart* js);
 

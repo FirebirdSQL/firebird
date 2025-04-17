@@ -176,6 +176,8 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\..\src\common\classes\tests\ClumpletTest.cpp" />
+    <ClCompile Include="..\..\..\src\common\classes\tests\VectorTest.cpp" />
     <ClCompile Include="..\..\..\src\common\tests\CommonTest.cpp" />
     <ClCompile Include="..\..\..\src\common\tests\CvtTest.cpp" />
     <ClCompile Include="..\..\..\src\common\tests\StringTest.cpp" />

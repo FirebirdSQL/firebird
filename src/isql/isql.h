@@ -111,7 +111,7 @@ const int ISQL_MSG_FAC	= FB_IMPL_MSG_FACILITY_ISQL;
 #define FB_IMPL_MSG_NO_SYMBOL(facility, number, text)
 
 #define FB_IMPL_MSG_SYMBOL(facility, number, symbol, text) \
-	const int symbol = number;
+	inline constexpr int symbol = number;
 
 #define FB_IMPL_MSG(facility, number, symbol, sqlCode, sqlClass, sqlSubClass, text) \
 	FB_IMPL_MSG_SYMBOL(facility, number, symbol, text)

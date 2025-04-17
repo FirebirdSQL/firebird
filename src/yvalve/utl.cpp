@@ -1443,32 +1443,39 @@ int API_ROUTINE gds__blob_size(FB_API_HANDLE* b, SLONG* size, SLONG* seg_count, 
 		return FALSE;
 	}
 
-	for (ClumpletReader p(ClumpletReader::InfoResponse, buffer, sizeof(buffer)); !p.isEof(); p.moveNext())
+	try
 	{
-		UCHAR item = p.getClumpTag();
-		if (item == isc_info_end)
-			break;
-
-		switch (item)
+		for (ClumpletReader p(ClumpletReader::InfoResponse, buffer, sizeof(buffer)); !p.isEof(); p.moveNext())
 		{
-		case isc_info_blob_max_segment:
-			if (max_seg)
-				*max_seg = p.getInt();
-			break;
+			UCHAR item = p.getClumpTag();
+			if (item == isc_info_end)
+				break;
 
-		case isc_info_blob_num_segments:
-			if (seg_count)
-				*seg_count = p.getInt();
-			break;
+			switch (item)
+			{
+			case isc_info_blob_max_segment:
+				if (max_seg)
+					*max_seg = p.getInt();
+				break;
 
-		case isc_info_blob_total_length:
-			if (size)
-				*size = p.getInt();
-			break;
+			case isc_info_blob_num_segments:
+				if (seg_count)
+					*seg_count = p.getInt();
+				break;
 
-		default:
-			return FALSE;
+			case isc_info_blob_total_length:
+				if (size)
+					*size = p.getInt();
+				break;
+
+			default:
+				return FALSE;
+			}
 		}
+	}
+	catch (const Exception&)
+	{
+		return FALSE;
 	}
 
 	return TRUE;

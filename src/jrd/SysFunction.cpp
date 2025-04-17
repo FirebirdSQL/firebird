@@ -62,6 +62,7 @@
 #include "../common/classes/FpeControl.h"
 #include "../jrd/extds/ExtDS.h"
 #include "../jrd/align.h"
+#include "firebird/impl/types_pub.h"
 
 #include <functional>
 #include <cmath>
@@ -2625,7 +2626,7 @@ dsc* evlCharToUuid(thread_db* tdbb, const SysFunction* function, const NestValue
 										Arg::Str(function->name));
 	}
 
-	for (int i = 0; i < Uuid::STR_LEN; ++i)
+	for (unsigned int i = 0; i < Uuid::STR_LEN; ++i)
 	{
 		if (i == 8 || i == 13 || i == 18 || i == 23)
 		{
@@ -2709,7 +2710,7 @@ const char* extractParts[] =
 
 const char* getPartName(int n)
 {
-	if (n < 0 || n >= FB_NELEM(extractParts) || !extractParts[n])
+	if (n < 0 || static_cast<FB_SIZE_T>(n) >= FB_NELEM(extractParts) || !extractParts[n])
 		return "Unknown";
 
 	return extractParts[n];
@@ -4591,7 +4592,7 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 		else if (nameStr == DATABASE_NAME)
 			resultStr = dbb->dbb_database_name.ToString();
 		else if (nameStr == DATABASE_GUID)
-			resultStr = dbb->dbb_guid.value().toString();
+			resultStr = dbb->dbb_guid.toString();
         else if (nameStr == PAGES_ALLOCATED)
         {
             resultStr.printf("%" ULONGFORMAT, PageSpace::actAlloc(dbb));
@@ -4610,13 +4611,13 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 		}
 		else if (nameStr == REPLICA_MODE)
 		{
-			if (dbb->dbb_replica_mode == REPLICA_READ_ONLY)
+			if (dbb->isReplica(REPLICA_READ_ONLY))
 				resultStr = RO_VALUE;
-			else if (dbb->dbb_replica_mode == REPLICA_READ_WRITE)
+			else if (dbb->isReplica(REPLICA_READ_WRITE))
 				resultStr = RW_VALUE;
 			else
 			{
-				fb_assert(dbb->dbb_replica_mode == REPLICA_NONE);
+				fb_assert(!dbb->isReplica());
 				return NULL;
 			}
 		}
@@ -4996,8 +4997,8 @@ dsc* evlGetTranCN(thread_db* tdbb, const SysFunction* function, const NestValueA
 	if ((traNum > traMax) && !(dbb->dbb_flags & DBB_shared))
 	{
 		WIN window(HEADER_PAGE_NUMBER);
-		const Ods::header_page* header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
-		traMax = Ods::getNT(header);
+		const auto header = (const Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
+		traMax = header->hdr_next_transaction;
 		CCH_RELEASE(tdbb, &window);
 	}
 
@@ -5510,9 +5511,36 @@ dsc* evlMaxMinValue(thread_db* tdbb, const SysFunction* function, const NestValu
 	}
 
 	DataTypeUtil(tdbb).makeFromList(&impure->vlu_desc, function->name, argTypes.getCount(), argTypes.begin());
-	impure->vlu_desc.dsc_address = (UCHAR*) &impure->vlu_misc;
+
+	if (impure->vlu_desc.isText())
+	{
+		const USHORT length = impure->vlu_desc.dsc_length;
+
+		// Allocate a string block of sufficient size
+
+		auto string = impure->vlu_string;
+
+		if (string && string->str_length < length)
+		{
+			delete string;
+			string = nullptr;
+		}
+
+		if (!string)
+		{
+			string = impure->vlu_string = FB_NEW_RPT(*tdbb->getDefaultPool(), length) VaryingString();
+			string->str_length = length;
+		}
+
+		impure->vlu_desc.dsc_address = string->str_data;
+	}
+	else
+		impure->vlu_desc.dsc_address = (UCHAR*) &impure->vlu_misc;
 
 	MOV_move(tdbb, result, &impure->vlu_desc);
+
+	if (impure->vlu_desc.dsc_dtype == dtype_text)
+		INTL_adjust_text_descriptor(tdbb, &impure->vlu_desc);
 
 	return &impure->vlu_desc;
 }
