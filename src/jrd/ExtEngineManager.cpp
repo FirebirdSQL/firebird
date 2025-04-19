@@ -195,7 +195,8 @@ namespace
 			if (request->req_operation == Request::req_evaluate)
 			{
 				// Clear the message. This is important for external routines.
-				UCHAR* msg = request->getImpure<UCHAR>(impureOffset);
+				fb_assert(MessageNode::getFormat(request)->fmt_length == format->fmt_length);
+				UCHAR* msg = getBuffer(request);
 				memset(msg, 0, format->fmt_length);
 			}
 
@@ -212,7 +213,7 @@ namespace
 	{
 	public:
 		InitParametersNode(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
-				Array<NestConst<Parameter>>& parameters, MessageNode* aMessage)
+				Array<NestConst<Parameter>>& parameters, ExtMessageNode* aMessage)
 			: TypedNode<StmtNode, StmtNode::TYPE_EXT_INIT_PARAMETERS>(pool),
 			  message(aMessage)
 		{
@@ -269,7 +270,7 @@ namespace
 		{
 			if (request->req_operation == Request::req_evaluate)
 			{
-				const auto msg = request->getImpure<UCHAR>(message->impureOffset);
+				const auto msg = message->getBuffer(request);
 				const auto paramCount = defaultValuesNode->items.getCount();
 
 				for (unsigned paramIndex = 0; paramIndex < paramCount; ++paramIndex)
@@ -304,7 +305,7 @@ namespace
 		}
 
 		private:
-			MessageNode* const message;
+			ExtMessageNode* const message;
 			ValueListNode* defaultValuesNode;
 	};
 
@@ -317,8 +318,9 @@ namespace
 			: CompoundStmtNode(pool),
 			  checkMessageEof(aCheckMessageEof)
 		{
+			const Format* format = fromMessage->getFormat(nullptr);
 			// Iterate over the format items, except the EOF item.
-			for (unsigned i = 0; i < (fromMessage->format->fmt_count / 2u) * 2u; i += 2)
+			for (unsigned i = 0; i < (format->fmt_count / 2u) * 2u; i += 2)
 			{
 				auto flag = FB_NEW_POOL(pool) ParameterNode(pool);
 				flag->messageNumber = fromMessage->messageNumber;
@@ -356,8 +358,8 @@ namespace
 				request->req_operation == Request::req_evaluate &&
 				(request->req_flags & req_proc_select))
 			{
-				const auto msg = request->getImpure<UCHAR>(checkMessageEof->impureOffset);
-				const auto eof = (SSHORT*) (msg + (IPTR) checkMessageEof->format->fmt_desc.back().dsc_address);
+				const auto msg = checkMessageEof->getBuffer(request);
+				const auto eof = (SSHORT*) (msg + (IPTR) checkMessageEof->getFormat(request)->fmt_desc.back().dsc_address);
 
 				if (!*eof)
 					request->req_operation = Request::req_return;
@@ -395,11 +397,11 @@ namespace
 		{
 			impure_state* const impure = request->getImpure<impure_state>(impureOffset);
 			ExtEngineManager::ResultSet*& resultSet = request->req_ext_resultset;
-			UCHAR* extInMsg = extInMessageNode ? request->getImpure<UCHAR>(extInMessageNode->impureOffset) : NULL;
-			UCHAR* extOutMsg = extOutMessageNode ? request->getImpure<UCHAR>(extOutMessageNode->impureOffset) : NULL;
-			UCHAR* intOutMsg = intOutMessageNode ? request->getImpure<UCHAR>(intOutMessageNode->impureOffset) : NULL;
+			UCHAR* extInMsg = extInMessageNode ? extInMessageNode->getBuffer(request) : NULL;
+			UCHAR* extOutMsg = extOutMessageNode ? extOutMessageNode->getBuffer(request) : NULL;
+			UCHAR* intOutMsg = intOutMessageNode ? intOutMessageNode->getBuffer(request) : NULL;
 			SSHORT* eof = intOutMsg ?
-				(SSHORT*) (intOutMsg + (IPTR) intOutMessageNode->format->fmt_desc.back().dsc_address) : NULL;
+				(SSHORT*) (intOutMsg + (IPTR) intOutMessageNode->getFormat(request)->fmt_desc.back().dsc_address) : NULL;
 
 			switch (request->req_operation)
 			{
