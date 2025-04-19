@@ -544,9 +544,15 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 	case op_commit_retaining:
 	case op_rollback_retaining:
 	case op_allocate_statement:
+	case op_batch_rls:
+	case op_batch_cancel:
 		release = &p->p_rlse;
 		MAP(xdr_short, reinterpret_cast<SSHORT&>(release->p_rlse_object));
 		DEBUG_PRINTSIZE(xdrs, p->p_operation);
+#ifdef NEVERDEF
+		if (xdrs->x_op != XDR_FREE && (p->p_operation == op_batch_rls || p->p_operation == op_batch_cancel))
+			DEB_RBATCH(fprintf(stderr, "BatRem: xdr release/cancel %d\n", p->p_operation));
+#endif
 		return P_TRUE(xdrs, p);
 
 	case op_prepare2:
@@ -1077,18 +1083,6 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 				}
 				++i;
 			}
-
-			return P_TRUE(xdrs, p);
-		}
-
-	case op_batch_rls:
-	case op_batch_cancel:
-		{
-			P_RLSE* b = &p->p_rlse;
-			MAP(xdr_short, reinterpret_cast<SSHORT&>(b->p_rlse_object));
-
-			if (xdrs->x_op != XDR_FREE)
-				DEB_RBATCH(fprintf(stderr, "BatRem: xdr release/cancel %d\n", p->p_operation));
 
 			return P_TRUE(xdrs, p);
 		}
