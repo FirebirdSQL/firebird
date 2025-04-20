@@ -76,7 +76,7 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 	  invariants(*p),
 	  blr(*p),
 	  mapFieldInfo(*p),
-	  messages(*p, csb->csb_rpt.getCount())
+	  messages(*p, 2) // Most statements has two messages, preallocate space for them
 {
 	try
 	{
@@ -209,6 +209,10 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 				// When outer messages are mapped to inner just pointers are assigned so they keep original numbers inside.
 				// That's why this assert is commented out.
 				//fb_assert(i == message->messageNumber);
+				if (messages.getCount() >= i)
+				{
+					messages.grow(i + 1);
+				}
 				messages[i] = message;
 			}
 		}

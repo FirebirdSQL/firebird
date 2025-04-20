@@ -557,7 +557,7 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 	{
 		fb_assert(inMsg != nullptr);
 
-		ULONG inMsgLength = dsqlStatement->getStatement()->getMessage(message->msg_number)->getFormat(request)->fmt_length;
+		const ULONG inMsgLength = dsqlStatement->getStatement()->getMessage(message->msg_number)->getFormat(request)->fmt_length;
 		JRD_start_and_send(tdbb, request, req_transaction, message->msg_number,
 			inMsgLength, inMsg);
 	}
@@ -586,7 +586,7 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 		{
 			MessageNode* msg = dsqlStatement->getStatement()->getMessage(message->msg_number);
 			// outMetadata can be nullptr. If not - it is already converted to message above
-			ULONG outMsgLength = msg->getFormat(request)->fmt_length;
+			const ULONG outMsgLength = msg->getFormat(request)->fmt_length;
 
 			JRD_receive(tdbb, request, message->msg_number, outMsgLength, outMsg);
 

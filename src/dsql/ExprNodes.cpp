@@ -9966,7 +9966,7 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 				switch (retDesc->dsc_dtype)
 				{
 					case dtype_cstring:
-						len = static_cast<decltype(len)>(strnlen((const char*) p, maxLen));
+						len = static_cast<USHORT>(strnlen((const char*) p, maxLen));
 						--maxLen;
 						break;
 
@@ -14054,7 +14054,7 @@ ValueExprNode* VariableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				{
 					// 0 = input, 1 = output. Start outer messages with 2.
 					dsqlScratch->outerMessagesMap.put(
-						node->dsqlVar->msgNumber, static_cast<decltype(dsqlScratch->outerMessagesMap)::ValueType>(2 + dsqlScratch->outerMessagesMap.count()));
+						node->dsqlVar->msgNumber, static_cast<USHORT>(2 + dsqlScratch->outerMessagesMap.count()));
 				}
 			}
 			else

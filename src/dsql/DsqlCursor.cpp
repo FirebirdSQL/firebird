@@ -38,13 +38,9 @@ static const ULONG PREFETCH_SIZE = 65536; // 64 KB
 
 DsqlCursor::DsqlCursor(DsqlDmlRequest* req, ULONG flags)
 	: m_dsqlRequest(req),
-	  m_keyBuffer(nullptr),
-	  m_keyBufferLength(0),
 	  m_message(req->getDsqlStatement()->getReceiveMsg()->msg_number),
-	  m_messageLength(0),
-	  m_resultSet(NULL), m_flags(flags),
-	  m_space(req->getPool(), SCRATCH),
-	  m_state(BOS), m_eof(false), m_position(0), m_cachedCount(0)
+	  m_flags(flags),
+	  m_space(req->getPool(), SCRATCH)
 {
 	TRA_link_cursor(m_dsqlRequest->req_transaction, this);
 }
@@ -53,11 +49,8 @@ DsqlCursor::~DsqlCursor()
 {
 	if (m_resultSet)
 		m_resultSet->resetHandle();
-	if (m_keyBuffer)
-	{
-		delete[] m_keyBuffer;
-		m_keyBuffer = nullptr;
-	}
+
+	delete[] m_keyBuffer;
 }
 
 jrd_tra* DsqlCursor::getTransaction() const

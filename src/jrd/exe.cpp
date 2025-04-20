@@ -940,7 +940,7 @@ void EXE_send(thread_db* tdbb, Request* request, USHORT msg, ULONG length, const
 		ERR_post(Arg::Gds(isc_port_len) << Arg::Num(length) << Arg::Num(format->fmt_length));
 
 	// Set data buffer to read parameters from
-	UCHAR* msgBuffer = messageNode->getBuffer(request);
+	UCHAR* const msgBuffer = messageNode->getBuffer(request);
 	memcpy(msgBuffer, buffer, length);
 
 	// Process received data

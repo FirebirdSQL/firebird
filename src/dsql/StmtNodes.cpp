@@ -7489,13 +7489,13 @@ const StmtNode* MessageNode::execute(thread_db* /*tdbb*/, Request* request, ExeS
 
 UCHAR* MessageNode::getBuffer(Request* request) const
 {
-	MessageBuffer* buffer = request->getImpure<MessageBuffer>(impureOffset);
-	if (buffer->buffer == nullptr)
+	MessageBuffer* data = request->getImpure<MessageBuffer>(impureOffset);
+	if (data->buffer == nullptr)
 	{
-		size_t length = buffer->format == nullptr ? format->fmt_length : buffer->format->fmt_length;
-		buffer->buffer = reinterpret_cast<UCHAR*>(request->req_pool->calloc(length ALLOC_ARGS));
+		const ULONG length = data->format == nullptr ? format->fmt_length : data->format->fmt_length;
+		data->buffer = reinterpret_cast<UCHAR*>(request->req_pool->calloc(length ALLOC_ARGS));
 	}
-	return buffer->buffer;
+	return data->buffer;
 }
 
 const Format* MessageNode::getFormat(const Request* request) const
@@ -7514,20 +7514,20 @@ const Format* MessageNode::getFormat(const Request* request) const
 void MessageNode::setFormat(Request* request, Format* newFormat)
 {
 	fb_assert(request != nullptr);
-	MessageBuffer* buffer = request->getImpure<MessageBuffer>(impureOffset);
+	MessageBuffer* data = request->getImpure<MessageBuffer>(impureOffset);
 	ULONG oldLength = format->fmt_length;
-	if (buffer->format != nullptr)
+	if (data->format != nullptr)
 	{
-		oldLength = buffer->format->fmt_length;
-		delete buffer->format;
+		oldLength = data->format->fmt_length;
+		delete data->format;
 	}
-	buffer->format = newFormat;
+	data->format = newFormat;
 
 	// Take care about existing buffer because it is the last point where its size is (roughly) known
-	if (buffer->buffer != nullptr && oldLength < newFormat->fmt_length)
+	if (data->buffer != nullptr && oldLength < newFormat->fmt_length)
 	{
-		request->req_pool->deallocate(buffer->buffer);
-		buffer->buffer = nullptr;
+		request->req_pool->deallocate(data->buffer);
+		data->buffer = nullptr;
 		// but leave allocation of the new buffer to following getBuffer() if any
 	}
 }

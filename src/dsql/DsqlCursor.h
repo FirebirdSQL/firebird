@@ -72,17 +72,17 @@ private:
 	bool cacheInput(thread_db* tdbb, UCHAR* buffer, FB_UINT64 position = MAX_UINT64);
 
 	DsqlDmlRequest* const m_dsqlRequest;
-	RecordKey* m_keyBuffer;
-	ULONG m_keyBufferLength;
+	RecordKey* m_keyBuffer = nullptr;
+	ULONG m_keyBufferLength = 0;
 	const USHORT m_message;
-	ULONG m_messageLength;
-	JResultSet* m_resultSet;
+	ULONG m_messageLength = 0;
+	JResultSet* m_resultSet = nullptr;
 	const ULONG m_flags;
 	TempSpace m_space;
-	State m_state;
-	bool m_eof;
-	FB_UINT64 m_position;
-	FB_UINT64 m_cachedCount;
+	State m_state = BOS;
+	bool m_eof = false;
+	FB_UINT64 m_position = 0;
+	FB_UINT64 m_cachedCount = 0;
 };
 
 } // namespace
