@@ -209,7 +209,7 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 				// When outer messages are mapped to inner just pointers are assigned so they keep original numbers inside.
 				// That's why this assert is commented out.
 				//fb_assert(i == message->messageNumber);
-				if (messages.getCount() >= i)
+				if (messages.getCount() <= i)
 				{
 					messages.grow(i + 1);
 				}
