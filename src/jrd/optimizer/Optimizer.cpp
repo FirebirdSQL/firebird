@@ -591,11 +591,10 @@ namespace
 //
 
 Optimizer::Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse,
-					 bool parentFirstRows, double parentCardinality)
+					 bool parentFirstRows)
 	: PermanentStorage(*aTdbb->getDefaultPool()),
 	  tdbb(aTdbb), csb(aCsb), rse(aRse),
 	  firstRows(rse->firstRows.valueOr(parentFirstRows)),
-	  cardinality(parentCardinality),
 	  compileStreams(getPool()),
 	  bedStreams(getPool()),
 	  keyStreams(getPool()),
@@ -651,7 +650,7 @@ RecordSource* Optimizer::compile(RseNode* subRse, BoolExprNodeStack* parentStack
 	//			if we're going to sort/aggregate the resultset afterwards
 	const bool subFirstRows = firstRows && !rse->rse_sorted && !rse->rse_aggregate;
 
-	Optimizer subOpt(tdbb, csb, subRse, subFirstRows, cardinality);
+	Optimizer subOpt(tdbb, csb, subRse, subFirstRows);
 	const auto rsb = subOpt.compile(parentStack);
 
 	if (parentStack && subOpt.isInnerJoin())
@@ -702,31 +701,11 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 
 	conjunctCount += distributeEqualities(conjunctStack, conjunctCount);
 
-	if (parentStack)
-	{
-		// AB: If we have limit our retrieval with FIRST / SKIP syntax then
-		// we may not deliver above conditions (from higher rse's) to this
-		// rse, because the results should be consistent.
-		if (rse->rse_skip || rse->rse_first)
-			parentStack = nullptr;
-
-		if (isSpecialJoin() && parentStack->hasData())
-		{
-			// We have a semi-join, look at the parent (priorly joined streams) cardinality.
-			// If it's known to be not very small, nullify the parent conjuncts
-			// to give up a possible nested loop join in favor of a hash join.
-			// Here we assume every equi-join condition having a default selectivity (0.1).
-			// TODO: replace with a proper cost-based decision in the future.
-
-			double subSelectivity = MAXIMUM_SELECTIVITY;
-			for (auto count = parentStack->getCount(); count; count--)
-				subSelectivity *= DEFAULT_SELECTIVITY;
-			const auto thresholdCardinality = MINIMUM_CARDINALITY / subSelectivity;
-
-			if (!cardinality || cardinality > thresholdCardinality)
-				parentStack = nullptr;
-		}
-	}
+	// AB: If we have limit our retrieval with FIRST / SKIP syntax then
+	// we may not deliver above conditions (from higher rse's) to this
+	// rse, because the results should be consistent.
+	if (rse->rse_skip || rse->rse_first)
+		parentStack = nullptr;
 
 	// Set base-point before the parent/distributed nodes begin.
 	const unsigned baseCount = conjunctCount;
@@ -905,7 +884,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 			bool computable = false;
 
 			// AB: Save all outer-part streams
-			if (isInnerJoin() || (isLeftJoin() && !innerSubStream))
+			if (isInnerJoin() || ((isLeftJoin() || isSpecialJoin()) && !innerSubStream))
 			{
 				if (node->computable(csb, INVALID_STREAM, false))
 					computable = true;

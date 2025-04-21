@@ -3469,7 +3469,7 @@ RecordSource* RseNode::compile(thread_db* tdbb, Optimizer* opt, bool innerSubStr
 
 	// Pass RseNode boolean only to inner substreams because join condition
 	// should never exclude records from outer substreams
-	if (opt->isInnerJoin() || (opt->isLeftJoin() && innerSubStream))
+	if (opt->isInnerJoin() || ((opt->isLeftJoin() || opt->isSpecialJoin()) && innerSubStream))
 	{
 		// AB: For an (X LEFT JOIN Y) mark the outer-streams (X) as
 		// active because the inner-streams (Y) are always "dependent"
@@ -3477,7 +3477,7 @@ RecordSource* RseNode::compile(thread_db* tdbb, Optimizer* opt, bool innerSubStr
 		//
 		// dimitr: the same for lateral derived tables in inner joins
 
-		if (opt->isLeftJoin() || isLateral())
+		if (!opt->isInnerJoin() || isLateral())
 			stateHolder.activate();
 
 		// For the LEFT JOIN, push all conjuncts except "missing" ones (e.g. IS NULL)
@@ -3486,6 +3486,9 @@ RecordSource* RseNode::compile(thread_db* tdbb, Optimizer* opt, bool innerSubStr
 			if (iter->containsAnyStream(rseStreams))
 				conjunctStack.push(iter);
 		}
+
+		if (opt->isSpecialJoin() && !opt->deliverJoinConjuncts(conjunctStack))
+			conjunctStack.clear();
 	}
 	else
 	{

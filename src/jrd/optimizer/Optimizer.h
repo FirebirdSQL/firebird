@@ -438,6 +438,23 @@ public:
 		selectivity = minSelectivity + diffSelectivity * factor;
 	}
 
+	bool deliverJoinConjuncts(const BoolExprNodeStack& conjuncts)
+	{
+		fb_assert(conjuncts.hasData());
+
+		// Look at cardinality of the priorly joined streams. If it's known to be
+		// not very small, give up a possible nested loop join in favor of a hash join.
+		// Here we assume every equi-join condition having a default selectivity (0.1).
+		// TODO: replace with a proper cost-based decision in the future.
+
+		double subSelectivity = MAXIMUM_SELECTIVITY;
+		for (auto count = conjuncts.getCount(); count; count--)
+			subSelectivity *= DEFAULT_SELECTIVITY;
+		const auto thresholdCardinality = MINIMUM_CARDINALITY / subSelectivity;
+
+		return (cardinality && cardinality <= thresholdCardinality);
+	}
+
 	static RecordSource* compile(thread_db* tdbb, CompilerScratch* csb, RseNode* rse)
 	{
 		bool firstRows = false;
@@ -452,7 +469,7 @@ public:
 			firstRows = attachment->att_opt_first_rows.valueOr(defaultFirstRows);
 		}
 
-		return Optimizer(tdbb, csb, rse, firstRows, 0).compile(nullptr);
+		return Optimizer(tdbb, csb, rse, firstRows).compile(nullptr);
 	}
 
 	~Optimizer();
@@ -537,7 +554,7 @@ public:
 
 private:
 	Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse,
-			  bool parentFirstRows, double parentCardinality);
+			  bool parentFirstRows);
 
 	RecordSource* compile(BoolExprNodeStack* parentStack);
 
