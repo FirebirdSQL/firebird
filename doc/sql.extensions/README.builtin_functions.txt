@@ -13,6 +13,7 @@ Authors:
     Alexey Karyakin <aleksey.karyakin@mail.ru>
     Claudio Valderrama C. <cvalde at usa.net>
     Alexander Peshkov <peshkoff@mail.ru>
+    Alexey Chudaykin <chudaykinalex@gmail.com>
 
 
 ---
@@ -568,6 +569,22 @@ Example:
 See also: CHAR_TO_UUID and UUID_TO_CHAR
 
 
+--------
+GREATEST
+--------
+
+Function:
+    Returns the maximum value of a list of values.
+
+Format:
+    GREATEST( <value> [, <value> ...] )
+
+Example:
+    select greatest(v1, v2, 10) from x;
+
+See also: MAXVALUE
+
+
 ----
 HASH
 ----
@@ -628,6 +645,22 @@ Example:
     select last_day(of month from current_date) from rdb$database;
     select last_day(of year from current_timestamp) from rdb$database;
     select last_day(of week from date '2017-11-01') from rdb$database;
+
+
+-----
+LEAST
+-----
+
+Function:
+    Returns the minimun value of a list of values.
+
+Format:
+    LEAST( <value> [, <value> ...] )
+
+Example:
+    select least(v1, v2, 10) from x;
+
+See also: MINVALUE
 
 
 ----
@@ -797,7 +830,7 @@ MINVALUE
 --------
 
 Function:
-    Returns the minimun value of a list of values.
+    Returns the minimum value of a list of values.
 
 Format:
     MINVALUE( <value> [, <value> ...] )
