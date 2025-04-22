@@ -363,7 +363,7 @@ bool DsqlCursor::cacheInput(thread_db* tdbb, UCHAR* buffer, FB_UINT64 position)
 		// Create a temporary one.
 		// This code cannot be moved into getInfo() itself because it is most likely called before fetch()
 		// so m_messageLength is still unknown there.
-		ownBuffer.reset(buffer = new UCHAR[m_messageLength]);
+		ownBuffer.reset(buffer = FB_NEW UCHAR[m_messageLength]);
 	}
 
 	const ULONG prefetchCount = MAX(PREFETCH_SIZE / (m_messageLength + m_keyBufferLength), 1);
