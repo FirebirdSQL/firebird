@@ -140,7 +140,7 @@ int DsqlCursor::fetchNext(thread_db* tdbb, UCHAR* buffer)
 			Request* req = m_dsqlRequest->getRequest();
 			m_keyBufferLength = req->req_rpb.getCount() * sizeof(RecordKey);
 			fb_assert(m_keyBufferLength > 0);
-			m_keyBuffer = new RecordKey[req->req_rpb.getCount()];
+			m_keyBuffer = FB_NEW_POOL(m_dsqlRequest->getPool()) RecordKey[req->req_rpb.getCount()];
 		}
 
 		m_dsqlRequest->gatherRecordKey(m_keyBuffer);
@@ -353,7 +353,7 @@ bool DsqlCursor::cacheInput(thread_db* tdbb, UCHAR* buffer, FB_UINT64 position)
 		m_messageLength = msg->getFormat(req)->fmt_length;
 		// Save record key unconditionally because setCursorName() can be called after openCursor()
 		m_keyBufferLength = req->req_rpb.getCount() * sizeof(RecordKey);
-		m_keyBuffer = new RecordKey[req->req_rpb.getCount()];
+		m_keyBuffer = FB_NEW_POOL(m_dsqlRequest->getPool()) RecordKey[req->req_rpb.getCount()];
 	}
 
 	std::unique_ptr<UCHAR[]> ownBuffer;

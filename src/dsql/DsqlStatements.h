@@ -60,8 +60,6 @@ public:
 
 	// Statement flags.
 	static const unsigned FLAG_NO_BATCH		= 0x01;
-	//static const unsigned FLAG_BLR_VERSION4	= 0x04;
-	//static const unsigned FLAG_BLR_VERSION5	= 0x08;
 	static const unsigned FLAG_SELECTABLE	= 0x02;
 
 	static void rethrowDdlException(Firebird::status_exception& ex, bool metadataUpdate, DdlNode* node);
