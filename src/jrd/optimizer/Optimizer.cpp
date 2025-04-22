@@ -174,7 +174,7 @@ namespace
 			fb_assert(joinType != OUTER_JOIN);
 
 			const auto csb = opt->getCompilerScratch();
-			Optimizer::ConjunctIterator iter(opt->getBaseConjuncts());
+			auto iter = opt->getBaseConjuncts();
 
 			// Save states of the underlying streams and restore them afterwards
 
