@@ -117,6 +117,29 @@
 using namespace Jrd;
 using namespace Firebird;
 
+dsc* EVL_put_desc(thread_db* tdbb, const dsc* desc, impure_value* value, MemoryPool* pool)
+{
+/**************************************
+ *
+ *      E V L _ p u t _ d e s c
+ *
+ **************************************
+ *
+ * Functional description
+ *      Free old subdescriptors and copy
+ *      new ones inside appropriate pool
+ *
+ **************************************/
+	delete value->vlu_desc.dsc_sub_first;
+
+	if (!pool)
+		pool = tdbb->getDefaultPool();
+
+	value->vlu_desc.pool = pool;
+	value->vlu_desc = *desc;
+
+	return &value->vlu_desc;
+}
 
 dsc* EVL_assign_to(thread_db* tdbb, const ValueExprNode* node)
 {
@@ -151,7 +174,7 @@ dsc* EVL_assign_to(thread_db* tdbb, const ValueExprNode* node)
 
 		if (desc->dsc_dtype == dtype_rowtype)
 		{
-			impure->vlu_desc = *desc;
+			EVL_put_desc(tdbb, desc, impure);
 			impure->vlu_desc.setAddressRecursively(paramNode->getParamRequest(request)->getImpure<UCHAR>(
 				message->impureOffset + (IPTR) desc->dsc_address));
 			return &impure->vlu_desc;
