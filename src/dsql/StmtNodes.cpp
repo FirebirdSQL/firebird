@@ -3574,16 +3574,16 @@ const StmtNode* DeclareVariableNode::execute(thread_db* tdbb, Request* request, 
 {
 	if (request->req_operation == Request::req_evaluate)
 	{
+		impure_value* variable = request->getImpure<impure_value>(impureOffset);
+		EVL_put_desc(tdbb, &varDesc, variable);
+		variable->vlu_desc.clearFlags();
+
 		if (varDesc.dsc_dtype == dtype_rowtype)
 		{
 			request->req_rpb[compositeContextNum].rpb_record = compositeRecord;
 		}
 		else
 		{
-			impure_value* variable = request->getImpure<impure_value>(impureOffset);
-			variable->vlu_desc = varDesc;
-			variable->vlu_desc.clearFlags();
-
 			variable->makeValueAddress(*tdbb->getDefaultPool());
 		}
 

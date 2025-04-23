@@ -1680,7 +1680,7 @@ void AvgAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) const
 	if (impure->vlux_count++ == 0)		// first call to aggPass()
 	{
 		impure_value_ex* impureTemp = request->getImpure<impure_value_ex>(tempImpure);
-		impureTemp->vlu_desc = *desc;
+		EVL_put_desc(tdbb, desc, impureTemp);
 		outputDesc(&impureTemp->vlu_desc);
 	}
 

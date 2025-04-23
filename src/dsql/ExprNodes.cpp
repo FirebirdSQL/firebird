@@ -3739,7 +3739,7 @@ dsc* CastNode::perform(thread_db* tdbb, impure_value* impure, dsc* value,
 	if (!itemInfo && (!value || DSC_EQUIV(value, castDesc, true)))
 		return value;
 
-	impure->vlu_desc = *castDesc;
+	EVL_put_desc(tdbb, castDesc, impure);
 	impure->vlu_desc.dsc_address = (UCHAR*) &impure->vlu_misc;
 
 	if (DTYPE_IS_TEXT(impure->vlu_desc.dsc_dtype))
@@ -7199,7 +7199,7 @@ dsc* FieldNode::execute(thread_db* tdbb, Request* request) const
 		!DSC_EQUIV(&impure->vlu_desc, &format->fmt_desc[fieldId], true))
 	{
 		dsc desc = impure->vlu_desc;
-		impure->vlu_desc = format->fmt_desc[fieldId];
+		EVL_put_desc(tdbb, &format->fmt_desc[fieldId], impure);
 
 		impure->makeValueAddress(*tdbb->getDefaultPool());
 		MOV_move(tdbb, &desc, &impure->vlu_desc);
@@ -11894,7 +11894,7 @@ dsc* SubQueryNode::execute(thread_db* tdbb, Request* request) const
 		if (!desc)
 			*invariant_flags |= VLU_null;
 		if (desc && (desc != &impure->vlu_desc))
-			impure->vlu_desc = *desc;
+			EVL_put_desc(tdbb, desc, impure);
 	}
 
 	return desc;
@@ -13773,7 +13773,7 @@ dsc* UdfCallNode::execute(thread_db* tdbb, Request* request) const
 	if (func->fun_entrypoint)
 	{
 		const Parameter* const returnParam = func->getOutputFields()[0];
-		value->vlu_desc = returnParam->prm_desc;
+		EVL_put_desc(tdbb, &returnParam->prm_desc, value);
 
 		value->makeValueAddress(*tdbb->getDefaultPool());
 
@@ -13937,7 +13937,7 @@ dsc* UdfCallNode::execute(thread_db* tdbb, Request* request) const
 			{
 
 				const ULONG argOffset = (IPTR) fmtDesc[0].dsc_address;
-				value->vlu_desc = *fmtDesc;
+				EVL_put_desc(tdbb, &(*fmtDesc), value);
 				value->vlu_desc.setAddressRecursively(outMsg + argOffset);
 
 				trace.finish(ITracePlugin::RESULT_SUCCESS, &value->vlu_desc);
