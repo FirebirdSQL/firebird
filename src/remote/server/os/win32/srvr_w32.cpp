@@ -113,7 +113,6 @@
 #include "../common/os/os_utils.h"
 #include "../common/status.h"
 #include "../auth/trusted/AuthSspi.h"
-#include "../auth/SecurityDatabase/LegacyServer.h"
 #include "../auth/SecureRemotePassword/server/SrpServer.h"
 
 
@@ -269,7 +268,6 @@ int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs,
 
 	{ // scope for interface ptr
 		PluginManagerInterfacePtr pi;
-		//Auth::registerLegacyServer(pi);
 		Auth::registerSrpServer(pi);
 #ifdef TRUSTED_AUTH
 		Auth::registerTrustedServer(pi);

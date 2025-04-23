@@ -184,18 +184,6 @@ ISQL_Test_Objects:= $(call dirObjects,isql/tests)
 AllObjects += $(ISQL_Objects) $(ISQL_Test_Objects)
 
 
-# Legacy users management in security database
-LEGACY_USERS_MANAGE_Objects:= $(call makeObjects,auth/SecurityDatabase,LegacyManagement.epp)
-
-AllObjects += $(LEGACY_USERS_MANAGE_Objects)
-
-
-# Legacy authentication on server
-LEGACY_AUTH_SERVER_Objects:= $(call makeObjects,auth/SecurityDatabase,LegacyServer.cpp) $(SecDbCache)
-
-AllObjects += $(LEGACY_AUTH_SERVER_Objects)
-
-
 # SRP-based users management in security database
 SRP_USERS_MANAGE_Objects:= $(call dirObjects,auth/SecureRemotePassword/manage) \
 						   $(call dirObjects,auth/SecureRemotePassword)
