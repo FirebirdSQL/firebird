@@ -811,6 +811,7 @@ Examples:
 		 where rdb$db_key >= make_dbkey('SOMETABLE', 0, 0, 5)
 		   and rdb$db_key <  make_dbkey('SOMETABLE', 0, 1, 5)
 
+
 --------
 MAXVALUE
 --------
@@ -823,6 +824,8 @@ Format:
 
 Example:
     select maxvalue(v1, v2, 10) from x;
+
+See also: GREATEST
 
 
 --------
@@ -837,6 +840,8 @@ Format:
 
 Example:
     select minvalue(v1, v2, 10) from x;
+
+See also: LEAST
 
 
 ---

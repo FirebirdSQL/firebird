@@ -4597,6 +4597,8 @@ keyword_or_column
 	| CALL
 	| LTRIM
 	| RTRIM
+	| GREATEST
+	| LEAST
 	;
 
 col_opt
