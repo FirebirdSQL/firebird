@@ -158,6 +158,7 @@ void DsqlDescMaker::composeDesc(dsc* desc,
 								bool nullable)
 {
 	auto pool = desc->pool;
+	delete desc->dsc_sub_first;	// if we are going to clear desc anyway, destroy all subdescs too
 	desc->clear();
 	desc->pool = pool;
 	desc->dsc_dtype = static_cast<UCHAR>(dtype);
@@ -476,8 +477,8 @@ FieldNode* MAKE_field(dsql_ctx* context, dsql_fld* field, ValueListNode* indices
 	FieldNode* const node = FB_NEW_POOL(*tdbb->getDefaultPool()) FieldNode(
 		*tdbb->getDefaultPool(), context, field, indices);
 
-	// dsc desc(tdbb->getDefaultPool()); // use same memory pool as for field node
-	dsc desc; // use same memory pool as for field node
+	dsc desc(*tdbb->getDefaultPool()); // use same memory pool as for field node
+	// dsc desc; // use same memory pool as for field node
 
 	if (field->dimensions)
 	{
@@ -514,6 +515,7 @@ FieldNode* MAKE_field(dsql_ctx* context, dsql_fld* field, ValueListNode* indices
 
 	if ((field->flags & FLD_nullable) || (context->ctx_flags & CTX_outer_join))
 	{
+		delete desc.dsc_sub_first;
 		desc = node->getDsqlDesc();
 		desc.dsc_flags |= DSC_nullable;
 		node->setDsqlDesc(desc);

@@ -422,7 +422,11 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 		itemInfo->fullDomain = false;
 	}
 
-	desc->clear();
+	{
+		auto preservedPool = desc->pool;
+		desc->clear();
+		desc->pool = preservedPool;
+	}
 
 	bool explicitCollation = false;
 	const USHORT dtype = csb->csb_blr_reader.getByte();

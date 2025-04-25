@@ -619,7 +619,8 @@ class DeclareVariableNode final : public TypedNode<StmtNode, StmtNode::TYPE_DECL
 {
 public:
 	explicit DeclareVariableNode(MemoryPool& pool)
-		: TypedNode<StmtNode, StmtNode::TYPE_DECLARE_VARIABLE>(pool)
+		: TypedNode<StmtNode, StmtNode::TYPE_DECLARE_VARIABLE>(pool),
+		  varDesc(pool)
 	{
 	}
 

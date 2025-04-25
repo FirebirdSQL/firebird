@@ -7187,8 +7187,12 @@ dsc* FieldNode::execute(thread_db* tdbb, Request* request) const
 	// In order to "map a null to a default" value (in EVL_field()), the relation block is referenced.
 	// Reference: Bug 10116, 10424
 
-	if (!EVL_field(relation, record, fieldId, &impure->vlu_desc))
-		return NULL;
+	{
+		dsc tmpDesc;
+		if (!EVL_field(relation, record, fieldId, &tmpDesc))
+			return NULL;
+		EVL_put_desc(tdbb, &tmpDesc, impure);
+	}
 
 	// ASF: CORE-1432 - If the record is not on the latest format, upgrade it.
 	// AP: for fields that are missing in original format use record's one.
@@ -10105,18 +10109,18 @@ ParameterNode* ParameterNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 {
-	dsc* retDesc;
+	dsc* retImpureDesc;
 	impure_value* impureForOuter;
 
 	if (outerDecl)
 	{
 		impureForOuter = request->getImpure<impure_value>(impureOffset);
-		retDesc = &impureForOuter->vlu_desc;
+		retImpureDesc = &impureForOuter->vlu_desc;
 	}
 	else
 	{
 		impureForOuter = nullptr;
-		retDesc = request->getImpure<dsc>(impureOffset);
+		retImpureDesc = request->getImpure<dsc>(impureOffset);
 	}
 
 	const auto paramRequest = getParamRequest(request);
@@ -10136,14 +10140,14 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 
 	desc = &message->getFormat(paramRequest)->fmt_desc[argNumber];
 
-	*retDesc = *desc;
-	retDesc->setAddressRecursively(paramRequest->getImpure<UCHAR>(message->impureOffset + (IPTR) desc->dsc_address));
-	retDesc->propagateNullMask();
+	EVL_put_desc(tdbb, desc, retImpureDesc);
+	retImpureDesc->setAddressRecursively(paramRequest->getImpure<UCHAR>(message->impureOffset + (IPTR) desc->dsc_address));
+	retImpureDesc->propagateNullMask();
 
 	if (!isNull)
 	{
 		if (impureForOuter)
-			EVL_make_value(tdbb, retDesc, impureForOuter);
+			EVL_make_value(tdbb, retImpureDesc, impureForOuter);
 	}
 
 	auto impureFlags = paramRequest->getImpure<USHORT>(
@@ -10154,19 +10158,19 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 		if (!isNull)
 		{
 
-			if (DTYPE_IS_TEXT(retDesc->dsc_dtype))
+			if (DTYPE_IS_TEXT(retImpureDesc->dsc_dtype))
 			{
-				const UCHAR* p = retDesc->dsc_address;
+				const UCHAR* p = retImpureDesc->dsc_address;
 				USHORT len;
 
-				switch (retDesc->dsc_dtype)
+				switch (retImpureDesc->dsc_dtype)
 				{
 					case dtype_cstring:
 						len = static_cast<USHORT>(strnlen((const char*) p, desc->dsc_length));
 						break;
 
 					case dtype_text:
-						len = retDesc->dsc_length;
+						len = retImpureDesc->dsc_length;
 						break;
 
 					case dtype_varying:
@@ -10175,26 +10179,26 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 						break;
 				}
 
-				const auto charSet = INTL_charset_lookup(tdbb, retDesc->getCharSet());
+				const auto charSet = INTL_charset_lookup(tdbb, retImpureDesc->getCharSet());
 
 				EngineCallbacks::instance->validateData(charSet, len, p);
 
 				// Validation of length for user-provided data against user-provided metadata makes a little sense here. Leave it to the real assignment.
 				// Besides in some cases overlong values are valid. For example `field like ?`
 			}
-			else if (retDesc->isBlob())
+			else if (retImpureDesc->isBlob())
 			{
-				const bid* const blobId = reinterpret_cast<bid*>(retDesc->dsc_address);
+				const bid* const blobId = reinterpret_cast<bid*>(retImpureDesc->dsc_address);
 
 				if (!blobId->isEmpty())
 				{
 					if (!request->hasInternalStatement())
 						tdbb->getTransaction()->checkBlob(tdbb, blobId, NULL, false);
 
-					if (retDesc->getCharSet() != CS_NONE && retDesc->getCharSet() != CS_BINARY)
+					if (retImpureDesc->getCharSet() != CS_NONE && retImpureDesc->getCharSet() != CS_BINARY)
 					{
 						AutoBlb blob(tdbb, blb::open(tdbb, tdbb->getTransaction(), blobId));
-						blob.getBlb()->BLB_check_well_formed(tdbb, retDesc);
+						blob.getBlb()->BLB_check_well_formed(tdbb, retImpureDesc);
 					}
 				}
 			}
@@ -10203,7 +10207,7 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 		if (argInfo)
 		{
 			EVL_validate(tdbb, Item(Item::TYPE_PARAMETER, message->messageNumber, argNumber),
-				argInfo, retDesc, isNull);
+				argInfo, retImpureDesc, isNull);
 		}
 
 		*impureFlags |= VLU_checked;
@@ -10228,7 +10232,7 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 		}
 	}
 
-	return isNull ? nullptr : retDesc;
+	return isNull ? nullptr : retImpureDesc;
 }
 
 

@@ -141,6 +141,34 @@ dsc* EVL_put_desc(thread_db* tdbb, const dsc* desc, impure_value* value, MemoryP
 	return &value->vlu_desc;
 }
 
+
+dsc* EVL_put_desc(thread_db* tdbb, const dsc* desc, dsc* impure_desc, MemoryPool* pool)
+{
+/**************************************
+ *
+ *      E V L _ p u t _ d e s c
+ *
+ **************************************
+ *
+ * Functional description
+ *      Free old subdescriptors and copy
+ *      new ones inside appropriate pool
+ *
+ * 		Explicite impure dsc overload
+ *
+ **************************************/
+	delete impure_desc->dsc_sub_first;
+
+	if (!pool)
+		pool = tdbb->getDefaultPool();
+
+	impure_desc->pool = pool;
+	*impure_desc = *desc;
+
+	return impure_desc;
+}
+
+
 dsc* EVL_assign_to(thread_db* tdbb, const ValueExprNode* node)
 {
 /**************************************

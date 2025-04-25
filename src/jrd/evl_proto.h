@@ -36,6 +36,7 @@ namespace Jrd
 }
 
 dsc*		EVL_put_desc(Jrd::thread_db* tdbb, const dsc*, Jrd::impure_value*, MemoryPool* pool = NULL);
+dsc*		EVL_put_desc(Jrd::thread_db* tdbb, const dsc*, dsc*, MemoryPool* pool = NULL);
 dsc*		EVL_assign_to(Jrd::thread_db* tdbb, const Jrd::ValueExprNode*);
 Jrd::RecordBitmap**	EVL_bitmap(Jrd::thread_db* tdbb, const Jrd::InversionNode*, Jrd::RecordBitmap*);
 void		EVL_dbkey_bounds(Jrd::thread_db* tdbb, const Firebird::Array<Jrd::DbKeyRangeNode*>&,
