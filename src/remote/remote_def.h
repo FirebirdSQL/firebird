@@ -70,7 +70,7 @@ const P_ARCH ARCHITECTURE	= arch_intel_32;
 const P_ARCH ARCHITECTURE	= arch_darwin_x64;
 #elif defined(DARWINPPC64)
 const P_ARCH ARCHITECTURE	= arch_darwin_ppc64;
-#elif defined(ARM)
+#elif defined(ARM) || defined(ARM64)
 const P_ARCH ARCHITECTURE	= arch_arm;
 #endif
 

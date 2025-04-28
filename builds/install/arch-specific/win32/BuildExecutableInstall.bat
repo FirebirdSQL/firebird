@@ -176,7 +176,11 @@ if "%FB2_SNAPSHOT%"=="1" (
 @if "%FB_TARGET_PLATFORM%"=="x64" (
   set FBBUILD_FILE_ID=%PRODUCT_VER_STRING%-%FBBUILD_PACKAGE_NUMBER%%FBBUILD_FILENAME_SUFFIX%-windows-x64
 ) else (
-  set FBBUILD_FILE_ID=%PRODUCT_VER_STRING%-%FBBUILD_PACKAGE_NUMBER%%FBBUILD_FILENAME_SUFFIX%-windows-x86
+  @if "%FB_TARGET_PLATFORM%"=="arm64" (
+    set FBBUILD_FILE_ID=%PRODUCT_VER_STRING%-%FBBUILD_PACKAGE_NUMBER%%FBBUILD_FILENAME_SUFFIX%-windows-arm64
+  ) else (
+    set FBBUILD_FILE_ID=%PRODUCT_VER_STRING%-%FBBUILD_PACKAGE_NUMBER%%FBBUILD_FILENAME_SUFFIX%-windows-x86
+  )
 )
 
 @setlocal
@@ -508,7 +512,11 @@ for %%v in (IPLicense.txt IDPLicense.txt ) do (
 ::
 ::=================================================
 @echo.
-@call %ISCC_COMMAND% %FB_ROOT_PATH%\builds\install\arch-specific\win32\FirebirdInstall.iss
+if "%FB_TARGET_PLATFORM%"=="arm64" (
+  @call %ISCC_COMMAND% /DPlatformTarget=arm64 %FB_ROOT_PATH%\builds\install\arch-specific\win32\FirebirdInstall.iss
+) else (
+  @call %ISCC_COMMAND% %FB_ROOT_PATH%\builds\install\arch-specific\win32\FirebirdInstall.iss
+)
 @echo.
 
 ::End of ISX_PACK

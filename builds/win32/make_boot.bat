@@ -55,8 +55,10 @@ if "!ERRLEV!"=="1" goto :END
 	call :btyacc
 	if "!ERRLEV!"=="1" goto :END
 
-	call :libcds
-	if "!ERRLEV!"=="1" goto :END
+	if not "%FB_TARGET_PLATFORM%"=="arm64" (
+		call :libcds
+		if "!ERRLEV!"=="1" goto :END
+	)
 
 	echo Generating DSQL parser...
 	call parse.bat %*
@@ -245,10 +247,13 @@ goto :EOF
 @echo.
 @echo Building ttmath (%FB_OBJ_DIR%)...
 @mkdir %FB_ROOT_PATH%\extern\ttmath\%FB_CONFIG% 2>nul
-if /I "%FB_CONFIG%"=="debug" (
-  @ml64.exe /c /Zi /Fo %FB_ROOT_PATH%\extern\ttmath\%FB_CONFIG%\ttmathuint_x86_64_msvc.obj %FB_ROOT_PATH%\extern\ttmath\ttmathuint_x86_64_msvc.asm
-) else (
-  @ml64.exe /c /Fo %FB_ROOT_PATH%\extern\ttmath\%FB_CONFIG%\ttmathuint_x86_64_msvc.obj %FB_ROOT_PATH%\extern\ttmath\ttmathuint_x86_64_msvc.asm
+
+if not "%FB_TARGET_PLATFORM%"=="arm64" (
+  if /I "%FB_CONFIG%"=="debug" (
+    @ml64.exe /c /Zi /Fo %FB_ROOT_PATH%\extern\ttmath\%FB_CONFIG%\ttmathuint_x86_64_msvc.obj %FB_ROOT_PATH%\extern\ttmath\ttmathuint_x86_64_msvc.asm
+  ) else (
+    @ml64.exe /c /Fo %FB_ROOT_PATH%\extern\ttmath\%FB_CONFIG%\ttmathuint_x86_64_msvc.obj %FB_ROOT_PATH%\extern\ttmath\ttmathuint_x86_64_msvc.asm
+  )
 )
 if errorlevel 1 call :boot2 ttmath_%FB_OBJ_DIR%
 goto :EOF
