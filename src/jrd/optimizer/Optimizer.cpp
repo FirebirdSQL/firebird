@@ -1837,8 +1837,6 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 	// correctly, two sort keys are made for each field, one for the null flag
 	// and one for field itself.
 
-	dsc descriptor;
-
 	SortedStream::SortMap::Item* map_item = map->items.getBuffer(items);
 	sort_key_def* sort_key = map->keyItems.getBuffer(2 * sort->expressions.getCount());
 
@@ -1857,6 +1855,8 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 		// Pick up sort key expression.
 
 		NestConst<ValueExprNode> node = *node_ptr;
+
+		dsc descriptor;
 		dsc* desc = &descriptor;
 		node->getDesc(tdbb, csb, desc);
 

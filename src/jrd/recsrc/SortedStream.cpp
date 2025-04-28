@@ -204,8 +204,6 @@ Sort* SortedStream::init(thread_db* tdbb) const
 	// each record, map all fields into the sort record. The reverse
 	// mapping is done in get_sort().
 
-	dsc to, temp;
-
 	while (m_next->getRecord(tdbb))
 	{
 		// "Put" a record to sort. Actually, get the address of a place
@@ -226,6 +224,8 @@ Sort* SortedStream::init(thread_db* tdbb) const
 		const SortMap::Item* const end_item = m_map->items.begin() + m_map->items.getCount();
 		for (const SortMap::Item* item = m_map->items.begin(); item < end_item; item++)
 		{
+			dsc to, temp;
+
 			to = item->desc;
 			to.setAddressRecursively(data + (IPTR) to.dsc_address);
 			bool flag = false;
@@ -354,12 +354,12 @@ UCHAR* SortedStream::getData(thread_db* tdbb) const
 void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 {
 	StreamType stream = INVALID_STREAM;
-	dsc from, to;
 	StreamList refetchStreams;
 	auto subfieldsSkipCounter = 0;
 
 	for (const auto& item : m_map->items)
 	{
+		dsc from, to;
 		const auto flag = (*(data + item.flagOffset) == TRUE);
 		from = item.desc;
 		from.setAddressRecursively(data + (IPTR) from.dsc_address);
@@ -549,6 +549,8 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 
 			for (const auto& item : m_map->items)
 			{
+				dsc from;
+
 				// Stop comparing at the first non-key field (if any)
 
 				if (!isKey(&item.desc))
@@ -578,6 +580,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 
 					if (IS_INTL_DATA(&item.desc))
 					{
+						dsc to;
 						// For an INTL string, compute the language dependent key
 
 						to = item.desc;
