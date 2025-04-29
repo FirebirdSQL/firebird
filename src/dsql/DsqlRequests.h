@@ -130,7 +130,6 @@ public:
 	Firebird::string req_cursor_name{getPool()};	// Cursor name, if any
 	DsqlCursor* req_cursor = nullptr;	// Open cursor, if any
 	DsqlBatch* req_batch = nullptr;		// Active batch, if any
-	Firebird::NonPooledMap<const dsql_par*, dsc> req_user_descs{getPool()}; // SQLDA data type
 
 	Firebird::AutoPtr<Jrd::RuntimeStatistics> req_fetch_baseline; // State of request performance counters when we reported it last time
 	SINT64 req_fetch_elapsed = 0;	// Number of clock ticks spent while fetching rows for this request since we reported it last time
