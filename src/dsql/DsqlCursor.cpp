@@ -71,7 +71,15 @@ void DsqlCursor::setInterfacePtr(JResultSet* interfacePtr) noexcept
 
 bool DsqlCursor::getCurrentRecordKey(USHORT context, RecordKey& key) const
 {
-	if (m_keyBuffer == nullptr || context * sizeof(RecordKey) >= m_keyBufferLength)
+	if (m_keyBuffer == nullptr)
+	{
+		// A possible situation for a cursor not based on any record source such as
+		// a = 1;
+		// suspend;
+		return false;
+	}
+
+	if (context * sizeof(RecordKey) >= m_keyBufferLength)
 	{
 		fb_assert(false);
 		return false;
@@ -139,11 +147,13 @@ int DsqlCursor::fetchNext(thread_db* tdbb, UCHAR* buffer)
 		{
 			Request* req = m_dsqlRequest->getRequest();
 			m_keyBufferLength = req->req_rpb.getCount() * sizeof(RecordKey);
-			fb_assert(m_keyBufferLength > 0);
-			m_keyBuffer = FB_NEW_POOL(m_dsqlRequest->getPool()) RecordKey[req->req_rpb.getCount()];
+			if (m_keyBufferLength > 0)
+				m_keyBuffer = FB_NEW_POOL(m_dsqlRequest->getPool()) RecordKey[req->req_rpb.getCount()];
 		}
 
-		m_dsqlRequest->gatherRecordKey(m_keyBuffer);
+		if (m_keyBufferLength > 0)
+			m_dsqlRequest->gatherRecordKey(m_keyBuffer);
+
 		m_state = POSITIONED;
 		return 0;
 	}
@@ -332,8 +342,13 @@ int DsqlCursor::fetchFromCache(thread_db* tdbb, UCHAR* buffer, FB_UINT64 positio
 
 	FB_UINT64 offset = position * (m_messageLength + m_keyBufferLength);
 	FB_UINT64 readBytes = m_space.read(offset, buffer, m_messageLength);
-	offset += m_messageLength;
-	readBytes += m_space.read(offset, m_keyBuffer, m_keyBufferLength);
+
+	if (m_keyBufferLength > 0)
+	{
+		offset += m_messageLength;
+		readBytes += m_space.read(offset, m_keyBuffer, m_keyBufferLength);
+	}
+
 	fb_assert(readBytes == m_messageLength + m_keyBufferLength);
 
 	m_position = position;
@@ -351,9 +366,12 @@ bool DsqlCursor::cacheInput(thread_db* tdbb, UCHAR* buffer, FB_UINT64 position)
 		Request* req = m_dsqlRequest->getRequest();
 		const MessageNode* msg = req->getStatement()->getMessage(m_message);
 		m_messageLength = msg->getFormat(req)->fmt_length;
-		// Save record key unconditionally because setCursorName() can be called after openCursor()
 		m_keyBufferLength = req->req_rpb.getCount() * sizeof(RecordKey);
-		m_keyBuffer = FB_NEW_POOL(m_dsqlRequest->getPool()) RecordKey[req->req_rpb.getCount()];
+		if (m_keyBufferLength > 0)
+		{
+			// Save record key unconditionally because setCursorName() can be called after openCursor()
+			m_keyBuffer = FB_NEW_POOL(m_dsqlRequest->getPool()) RecordKey[req->req_rpb.getCount()];
+		}
 	}
 
 	std::unique_ptr<UCHAR[]> ownBuffer;
@@ -378,12 +396,16 @@ bool DsqlCursor::cacheInput(thread_db* tdbb, UCHAR* buffer, FB_UINT64 position)
 				break;
 			}
 
-			m_dsqlRequest->gatherRecordKey(m_keyBuffer);
-
 			FB_UINT64 offset = m_cachedCount * (m_messageLength + m_keyBufferLength);
 			FB_UINT64 writtenBytes = m_space.write(offset, buffer, m_messageLength);
-			offset += m_messageLength;
-			writtenBytes += m_space.write(offset, m_keyBuffer, m_keyBufferLength);
+
+			if (m_keyBufferLength > 0)
+			{
+				offset += m_messageLength;
+				m_dsqlRequest->gatherRecordKey(m_keyBuffer);
+				writtenBytes += m_space.write(offset, m_keyBuffer, m_keyBufferLength);
+			}
+
 			fb_assert(writtenBytes == m_messageLength + m_keyBufferLength);
 			m_cachedCount++;
 		}
