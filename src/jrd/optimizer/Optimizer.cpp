@@ -1837,7 +1837,8 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 	// correctly, two sort keys are made for each field, one for the null flag
 	// and one for field itself.
 
-	SortedStream::SortMap::Item* map_item = map->items.getBuffer(items);
+	map->items.resize(items);
+	auto& map_item = map->items;
 	sort_key_def* sort_key = map->keyItems.getBuffer(2 * sort->expressions.getCount());
 
 	// We have to depend on indexes instead of pointers due to map->items and map->keyItems
@@ -1935,7 +1936,7 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 		{
 			// add slots for internal fields
 			sort_key = map->keyItems.getBuffer(map->keyItems.getCount() + desc->dsc_sub_count, true);
-			map_item = map->items.getBuffer(map->items.getCount() + desc->dsc_sub_count, true);
+			map->items.resize(map->items.getCount() + desc->dsc_sub_count);
 
 			desc = desc->dsc_sub_first;
 			while (desc)
@@ -2018,7 +2019,7 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 		map_item_index++;
 	}
 
-	fb_assert((map_item + map_item_index) == map->items.end());
+	fb_assert(map_item_index == map->items.getCount());
 	fb_assert((sort_key + sort_key_index) == map->keyItems.end());
 
 	map_length = ROUNDUP(map_length, sizeof(SLONG));

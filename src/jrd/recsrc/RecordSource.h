@@ -782,9 +782,14 @@ namespace Jrd
 		public:
 			struct Item
 			{
+				Item(MemoryPool& p) : desc(p)
+				{}
+
 				void reset(NestConst<ValueExprNode> _node, ULONG _flagOffset = 0)
 				{
+					auto preservePool = desc.pool;
 					desc.clear();
+					desc.pool = preservePool;
 					stream = fieldId = 0;
 					node = _node;
 					flagOffset = _flagOffset;
@@ -792,7 +797,9 @@ namespace Jrd
 
 				void reset(StreamType _stream, SSHORT _fieldId, ULONG _flagOffset = 0)
 				{
+					auto preservePool = desc.pool;
 					desc.clear();
+					desc.pool = preservePool;
 					node = nullptr;
 					stream = _stream;
 					fieldId = _fieldId;
@@ -820,7 +827,7 @@ namespace Jrd
 			ULONG keyLength;		// key length
 			USHORT flags;			// misc sort flags
 			Firebird::Array<sort_key_def> keyItems;	// address of key descriptors
-			Firebird::Array<Item> items;
+			Firebird::ObjectsArray<Item> items;
 		};
 
 		SortedStream(CompilerScratch* csb, RecordSource* next, SortMap* map);

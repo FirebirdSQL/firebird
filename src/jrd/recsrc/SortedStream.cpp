@@ -221,8 +221,7 @@ Sort* SortedStream::init(thread_db* tdbb) const
 
 		auto subfieldsSkipCounter = 0;
 
-		const SortMap::Item* const end_item = m_map->items.begin() + m_map->items.getCount();
-		for (const SortMap::Item* item = m_map->items.begin(); item < end_item; item++)
+		for (auto item = m_map->items.begin(); item != m_map->items.end(); item++)
 		{
 			dsc to, temp;
 
