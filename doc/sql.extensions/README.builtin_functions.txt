@@ -582,7 +582,8 @@ Format:
 Example:
     select greatest(v1, v2, 10) from x;
 
-See also: MAXVALUE
+Notes:
+    This function is a SQL-compliant alias to the MAXVALUE function. They work identically.
 
 
 ----
@@ -660,7 +661,8 @@ Format:
 Example:
     select least(v1, v2, 10) from x;
 
-See also: MINVALUE
+Notes:
+    This function is a SQL-compliant alias to the MINVALUE function. They work identically.
 
 
 ----
@@ -825,7 +827,8 @@ Format:
 Example:
     select maxvalue(v1, v2, 10) from x;
 
-See also: GREATEST
+Notes:
+    This function is a legacy name for the SQL-compliant GREATEST function. They work identically.
 
 
 --------
@@ -841,7 +844,8 @@ Format:
 Example:
     select minvalue(v1, v2, 10) from x;
 
-See also: LEAST
+Notes:
+    This function is a legacy name for the SQL-compliant LEAST function. They work identically.
 
 
 ---
