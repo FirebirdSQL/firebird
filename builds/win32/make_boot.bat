@@ -55,10 +55,8 @@ if "!ERRLEV!"=="1" goto :END
 	call :btyacc
 	if "!ERRLEV!"=="1" goto :END
 
-	if not "%FB_TARGET_PLATFORM%"=="arm64" (
-		call :libcds
-		if "!ERRLEV!"=="1" goto :END
-	)
+	call :libcds
+	if "!ERRLEV!"=="1" goto :END
 
 	echo Generating DSQL parser...
 	call parse.bat %*

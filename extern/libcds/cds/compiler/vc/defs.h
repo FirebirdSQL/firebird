@@ -62,6 +62,11 @@
 #   define CDS_PROCESSOR_ARCH   CDS_PROCESSOR_AMD64
 #   define CDS_PROCESSOR__NAME  "AMD64"
 #   define CDS_PROCESSOR__NICK  "amd64"
+#elif _M_ARM64
+#   define CDS_BUILD_BITS       64
+#   define CDS_PROCESSOR_ARCH   CDS_PROCESSOR_ARM8
+#   define CDS_PROCESSOR__NAME  "ARM64"
+#   define CDS_PROCESSOR__NICK  "arm64"
 #else
 #   define CDS_BUILD_BITS        -1
 #   define CDS_PROCESSOR_ARCH    CDS_PROCESSOR_UNKNOWN
