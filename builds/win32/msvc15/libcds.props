@@ -5,7 +5,7 @@
     <LIBCDS_ROOT>..\..\..\extern\libcds</LIBCDS_ROOT>
   </PropertyGroup>
   <PropertyGroup />
-  <ItemDefinitionGroup Condition="'$(Platform)'=='Win32'">
+  <ItemDefinitionGroup>
     <ClCompile>
       <AdditionalIncludeDirectories>$(LIBCDS_ROOT);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>CDS_BUILD_STATIC_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -13,26 +13,6 @@
     <Link>
       <AdditionalLibraryDirectories>$(LIBCDS_ROOT)\bin\vc.$(PlatformToolset)\$(Platform)-$(Configuration)-static;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>libcds-$(PlatformTarget).lib;%(AdditionalDependencies)</AdditionalDependencies>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Platform)'=='x64'">
-    <ClCompile>
-      <AdditionalIncludeDirectories>$(LIBCDS_ROOT);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>CDS_BUILD_STATIC_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-    </ClCompile>
-    <Link>
-      <AdditionalLibraryDirectories>$(LIBCDS_ROOT)\bin\vc.$(PlatformToolset)\$(Platform)-$(Configuration)-static;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>libcds-$(PlatformTarget).lib;%(AdditionalDependencies)</AdditionalDependencies>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Platform)'=='arm64'">
-    <ClCompile>
-      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>%(PreprocessorDefinitions)</PreprocessorDefinitions>
-    </ClCompile>
-    <Link>
-      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
