@@ -251,13 +251,19 @@ jobs:
       - name: Upload zip
         uses: actions/upload-artifact@v4
         with:
-          name: firebird-windows-vs-${{ env.VS_VERSION }}-arm64-zip
+          name: firebird-windows-arm64-zip
           path: builds/install_images/Firebird-*-windows-arm64.zip
+
+      - name: Upload zip (withDebugSymbols)
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebird-windows-arm64-withDebugSymbols-zip
+          path: builds/install_images/Firebird-*-windows-arm64-withDebugSymbols.zip
 
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
-          name: firebird-windows-vs-${{ env.VS_VERSION }}-arm64-installer
+          name: firebird-windows-arm64-installer
           path: builds/install_images/*-windows-arm64.exe
 
       - name: Upload installer (withDebugSymbols)
