@@ -326,7 +326,12 @@ WizardResizable=yes
 WizardImageFile={#ScriptsDir}\firebird_install_logo1.bmp
 WizardSmallImageFile={#ScriptsDir}\firebird_install_logo1.bmp
 
+#if PlatformTarget == "arm64"
+DefaultDirName={code:ChooseInstallDir|{commonpf64}\Firebird\Firebird_{#AppVer}}
+#else
 DefaultDirName={code:ChooseInstallDir|{commonpf}\Firebird\Firebird_{#AppVer}}
+#endif
+
 DefaultGroupName=Firebird {#GroupnameVer} ({#PlatformTarget})
 
 UninstallDisplayIcon={code:ChooseUninstallIcon|{#UninstallBinary}}
@@ -346,6 +351,7 @@ ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
 #elif PlatformTarget == "arm64"
 ArchitecturesAllowed=arm64
+ArchitecturesInstallIn64BitMode=arm64
 #endif
 
 ;This feature is incomplete, as more thought is required.
