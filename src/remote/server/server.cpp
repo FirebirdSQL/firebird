@@ -3853,7 +3853,7 @@ void rem_port::batch_sync(PACKET* sendL)
 }
 
 
-void rem_port::replicate(P_REPLICATE* repl, PACKET* sendL)
+void rem_port::replicate(P_REPLICATE* repl, PACKET* sendL, bool initialize)
 {
 	LocalStatus ls;
 	CheckStatusWrapper status_vector(&ls);
@@ -3872,7 +3872,12 @@ void rem_port::replicate(P_REPLICATE* repl, PACKET* sendL)
 		fb_assert(this->port_replicator);
 	}
 
-	if (repl->p_repl_data.cstr_length)
+	if (initialize)
+	{
+		const string guid(repl->p_repl_data.cstr_address, repl->p_repl_data.cstr_length);
+		this->port_replicator->init(&status_vector, guid.c_str());
+	}
+	else if (repl->p_repl_data.cstr_length)
 	{
 		this->port_replicator->process(&status_vector,
 			repl->p_repl_data.cstr_length, repl->p_repl_data.cstr_address);
@@ -5347,7 +5352,8 @@ static bool process_packet(rem_port* port, PACKET* sendL, PACKET* receive, rem_p
 			break;
 
 		case op_repl_data:
-			port->replicate(&receive->p_replicate, sendL);
+		case op_repl_init:
+			port->replicate(&receive->p_replicate, sendL, (op == op_repl_init));
 			break;
 
 		///case op_insert:
