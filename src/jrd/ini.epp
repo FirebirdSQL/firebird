@@ -411,7 +411,7 @@ namespace
 			const char* users[] = {userName, "PUBLIC"};
 			int grantOptions[] = {WITH_GRANT_OPTION, 0};
 
-			for (unsigned i = 0; i < FB_NELEM(users); i++)
+			for (int i = 0; i < FB_NELEM(users); i++)
 			{
 				STORE(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
 					PRIV IN RDB$USER_PRIVILEGES
