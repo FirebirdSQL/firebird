@@ -154,7 +154,7 @@
 #endif
 
 
-#ifdef RC_ARH_x64
+#if defined(RC_ARH_x64) || defined(__x86_64__)
 #define VER_ARCH "64-bit"
 #else
 #define VER_ARCH "32-bit"

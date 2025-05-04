@@ -1206,7 +1206,7 @@ static rem_port* listener_socket(rem_port* port, USHORT flag, const addrinfo* pa
 			forkEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
 			forkSockets = FB_NEW SocketsArray(*getDefaultMemoryPool());
 
-			Thread::start(forkThread, (void*) flag, THREAD_medium);
+			Thread::start(forkThread, (void*)(U_IPTR) flag, THREAD_medium);
 		}
 		forkSockets->add(s);
 		SetEvent(forkEvent);
