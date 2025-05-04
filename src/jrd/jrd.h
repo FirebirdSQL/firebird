@@ -1073,6 +1073,7 @@ namespace Jrd {
 		template <typename I>
 		EngineContextHolder(Firebird::CheckStatusWrapper* status, I* interfacePtr, const char* from,
 							unsigned lockFlags = 0);
+		~EngineContextHolder();
 	};
 
 	class AstLockHolder : public Firebird::ReadLockGuard

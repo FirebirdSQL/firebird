@@ -897,6 +897,18 @@ EngineContextHolder::EngineContextHolder(CheckStatusWrapper* status, I* interfac
 	validateHandle(*this, interfacePtr->getHandle());
 }
 
+EngineContextHolder::~EngineContextHolder()
+{
+	thread_db* const tdbb = *this;
+	const auto attachment = tdbb->getAttachment();
+
+	if (attachment && attachment->att_use_count == 1 && (attachment->att_flags & ATT_reset_scheduled))
+	{
+		auto transaction = tdbb->getTransaction();
+		attachment->resetSession(tdbb, &transaction);
+	}
+}
+
 // Used in ProfilerManager.cpp
 template EngineContextHolder::EngineContextHolder(
 	CheckStatusWrapper* status, JAttachment* interfacePtr, const char* from, unsigned lockFlags);

@@ -510,6 +510,11 @@ static void runDBTriggers(thread_db* tdbb, TriggerAction action)
 	}
 }
 
+void Jrd::Attachment::scheduleResetSession()
+{
+	att_flags |= ATT_reset_scheduled;
+}
+
 void Jrd::Attachment::resetSession(thread_db* tdbb, jrd_tra** traHandle)
 {
 	jrd_tra* oldTran = traHandle ? *traHandle : nullptr;
@@ -582,6 +587,8 @@ void Jrd::Attachment::resetSession(thread_db* tdbb, jrd_tra** traHandle)
 
 		// reset GTT's
 		releaseGTTs(tdbb);
+
+		att_flags &= ~ATT_reset_scheduled;
 
 		// Run ON CONNECT trigger after reset
 		if (!(att_flags & ATT_no_db_triggers))

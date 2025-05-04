@@ -10069,11 +10069,11 @@ void SetTransactionNode::genTableLock(DsqlCompilerScratch* dsqlScratch,
 //--------------------
 
 
-void SessionResetNode::execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const
+void SessionResetNode::execute(thread_db* tdbb, DsqlRequest* request, jrd_tra**) const
 {
 	SET_TDBB(tdbb);
-	Attachment* const attachment = tdbb->getAttachment();
-	attachment->resetSession(tdbb, traHandle);
+	const auto attachment = tdbb->getAttachment();
+	attachment->scheduleResetSession();
 }
 
 

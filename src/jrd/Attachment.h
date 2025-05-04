@@ -172,7 +172,8 @@ const ULONG ATT_monitor_init		= 0x100000L; // Attachment is registered in monito
 const ULONG ATT_repl_reset			= 0x200000L; // Replication set has been reset
 const ULONG ATT_replicating			= 0x400000L; // Replication is active
 const ULONG ATT_resetting			= 0x800000L; // Session reset is in progress
-const ULONG ATT_worker				= 0x1000000L; // Worker attachment, managed by the engine
+const ULONG ATT_reset_scheduled		= 0x1000000L; // Session reset scheduled
+const ULONG ATT_worker				= 0x2000000L; // Worker attachment, managed by the engine
 
 const ULONG ATT_NO_CLEANUP			= (ATT_no_cleanup | ATT_notify_gc);
 
@@ -736,6 +737,7 @@ public:
 
 	void releaseBatches();
 	void releaseGTTs(thread_db* tdbb);
+	void scheduleResetSession();
 	void resetSession(thread_db* tdbb, jrd_tra** traHandle);
 
 	void signalCancel();
