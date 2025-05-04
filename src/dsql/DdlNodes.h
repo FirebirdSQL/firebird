@@ -1083,6 +1083,7 @@ public:
 		  alter(false),
 		  legacy(false),
 		  restartSpecified(false),
+		  startWithSpecified(false),
 		  name(pool, aName)
 	{
 		// Unfortunately, line/column carry no useful information here.
@@ -1127,6 +1128,7 @@ public:
 	bool createIfNotExistsOnly = false;
 	bool legacy;
 	bool restartSpecified;
+	bool startWithSpecified;
 	const MetaName name;
 	std::optional<SINT64> value;
 	std::optional<SLONG> step;

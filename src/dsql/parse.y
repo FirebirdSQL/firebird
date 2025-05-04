@@ -2001,6 +2001,7 @@ alter_sequence_options($seqNode)
 %type alter_seq_option(<createAlterSequenceNode>)
 alter_seq_option($seqNode)
 	: restart_option($seqNode)
+	| start_with_opt_for_alter($seqNode)
 	| step_option($seqNode)
 	;
 
@@ -2065,6 +2066,14 @@ sequence_value
 		}
 	;
 
+%type start_with_opt_for_alter(<createAlterSequenceNode>)
+start_with_opt_for_alter($seqNode)
+	: START WITH sequence_value
+		{
+			setClause($seqNode->value, "START WITH", $3);
+			setClause($seqNode->startWithSpecified, "RESTART", true);
+		}
+	;
 
 // CREATE / ALTER ROLE
 
