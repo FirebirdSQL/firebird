@@ -209,7 +209,7 @@ CommitNumber TipCache::cacheState(TraNumber number)
 	ULONG offset = number % m_transactionsPerBlock;
 
 	Sync sync(&m_sync_status, FB_FUNCTION);
-	TransactionStatusBlock* block = getTransactionStatusBlock(sync, blockNumber);
+	TransactionStatusBlock* block = getTransactionStatusBlock(header, blockNumber, sync);
 
 	// This should not really happen ever
 	fb_assert(block);
@@ -365,7 +365,7 @@ void TipCache::mapInventoryPages(GlobalTpcHeader* header)
 	for (; blockNumber <= lastNumber; blockNumber++)
 	{
 		Sync sync(&m_sync_status, FB_FUNCTION);
-		getTransactionStatusBlock(sync, blockNumber);
+		getTransactionStatusBlock(header, blockNumber, sync);
 	}
 }
 
@@ -500,7 +500,7 @@ TipCache::TransactionStatusBlock* TipCache::createTransactionStatusBlock(ULONG b
 	return blockData->memory->getHeader();
 }
 
-TipCache::TransactionStatusBlock* TipCache::getTransactionStatusBlock(Sync& sync, TpcBlockNumber blockNumber)
+TipCache::TransactionStatusBlock* TipCache::getTransactionStatusBlock(GlobalTpcHeader* header, TpcBlockNumber blockNumber, Sync& sync)
 {
 	fb_assert(sync.getState() == SYNC_NONE);
 
@@ -523,8 +523,6 @@ TipCache::TransactionStatusBlock* TipCache::getTransactionStatusBlock(Sync& sync
 			block = acc.current()->memory->getHeader();
 		else
 		{
-			GlobalTpcHeader* header = m_tpcHeader->getHeader();
-
 			// Check if block might be too old to be created.
 			TraNumber oldest = header->oldest_transaction.load(std::memory_order_relaxed);
 			if (blockNumber >= oldest / m_transactionsPerBlock)
@@ -563,7 +561,7 @@ TraNumber TipCache::findStates(TraNumber minNumber, TraNumber maxNumber, ULONG m
 
 			const TpcBlockNumber blockNumber = tran / m_transactionsPerBlock;
 			transOffset = tran % m_transactionsPerBlock;
-			statusBlock = getTransactionStatusBlock(sync, blockNumber);
+			statusBlock = getTransactionStatusBlock(header, blockNumber, sync);
 
 			if (sync.getState() == SYNC_EXCLUSIVE)
 				sync.downgrade(SYNC_SHARED);
@@ -616,7 +614,7 @@ CommitNumber TipCache::setState(TraNumber number, int state)
 	ULONG offset = number % m_transactionsPerBlock;
 
 	Sync sync(&m_sync_status, FB_FUNCTION);
-	TransactionStatusBlock* block = getTransactionStatusBlock(sync, blockNumber);
+	TransactionStatusBlock* block = getTransactionStatusBlock(header, blockNumber, sync);
 
 	// This should not really happen
 	if (!block)

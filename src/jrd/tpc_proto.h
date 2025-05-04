@@ -313,7 +313,7 @@ private:
 	// Returns NULL if requested block is too old and is no longer cached.
 	// Sync should be bound to m_sync_status. On enter, sync must be unlocked.
 	// If returns not NULL then sync remains locked.
-	TransactionStatusBlock* getTransactionStatusBlock(Firebird::Sync& sync, TpcBlockNumber blockNumber);
+	TransactionStatusBlock* getTransactionStatusBlock(GlobalTpcHeader* header, TpcBlockNumber blockNumber, Firebird::Sync& sync);
 
 	// Map shared memory for a block.
 	// Assume exclusive lock of m_sync_status.
