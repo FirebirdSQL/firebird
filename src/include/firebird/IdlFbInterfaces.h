@@ -5477,7 +5477,7 @@ namespace Firebird
 		struct VTable : public IVersioned::VTable
 		{
 			unsigned (CLOOP_CARG *getCount)(ITraceParams* self) CLOOP_NOEXCEPT;
-			const dsc* (CLOOP_CARG *getParam)(ITraceParams* self, unsigned idx) CLOOP_NOEXCEPT;
+			const paramdsc* (CLOOP_CARG *getParam)(ITraceParams* self, unsigned idx) CLOOP_NOEXCEPT;
 			const char* (CLOOP_CARG *getTextUTF8)(ITraceParams* self, IStatus* status, unsigned idx) CLOOP_NOEXCEPT;
 		};
 
@@ -5500,9 +5500,9 @@ namespace Firebird
 			return ret;
 		}
 
-		const dsc* getParam(unsigned idx)
+		const paramdsc* getParam(unsigned idx)
 		{
-			const dsc* ret = static_cast<VTable*>(this->cloopVTable)->getParam(this, idx);
+			const paramdsc* ret = static_cast<VTable*>(this->cloopVTable)->getParam(this, idx);
 			return ret;
 		}
 
@@ -17551,7 +17551,7 @@ namespace Firebird
 			}
 		}
 
-		static const dsc* CLOOP_CARG cloopgetParamDispatcher(ITraceParams* self, unsigned idx) CLOOP_NOEXCEPT
+		static const paramdsc* CLOOP_CARG cloopgetParamDispatcher(ITraceParams* self, unsigned idx) CLOOP_NOEXCEPT
 		{
 			try
 			{
@@ -17560,7 +17560,7 @@ namespace Firebird
 			catch (...)
 			{
 				StatusType::catchException(0);
-				return static_cast<const dsc*>(0);
+				return static_cast<const paramdsc*>(0);
 			}
 		}
 
@@ -17594,7 +17594,7 @@ namespace Firebird
 		}
 
 		virtual unsigned getCount() = 0;
-		virtual const dsc* getParam(unsigned idx) = 0;
+		virtual const paramdsc* getParam(unsigned idx) = 0;
 		virtual const char* getTextUTF8(StatusType* status, unsigned idx) = 0;
 	};
 
