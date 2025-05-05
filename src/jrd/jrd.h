@@ -60,7 +60,9 @@
 #include "../jrd/Attachment.h"
 #include "firebird/Interface.h"
 
+#ifndef CDS_UNAVAILABLE
 #include <cds/threading/model.h>	// cds::threading::Manager
+#endif
 
 #define BUGCHECK(number)		ERR_bugcheck(number, __FILE__, __LINE__)
 #define SOFT_BUGCHECK(number)	ERR_soft_bugcheck(number, __FILE__, __LINE__)
@@ -773,8 +775,10 @@ public:
 	{
 		context.putSpecific();
 
+#ifndef CDS_UNAVAILABLE
 		if (!cds::threading::Manager::isThreadAttached())
 			cds::threading::Manager::attachThread();
+#endif
 	}
 
 	ThreadContextHolder(Database* dbb, Jrd::Attachment* att, FbStatusVector* status = NULL)
@@ -784,8 +788,10 @@ public:
 		context.setDatabase(dbb);
 		context.setAttachment(att);
 
+#ifndef CDS_UNAVAILABLE
 		if (!cds::threading::Manager::isThreadAttached())
 			cds::threading::Manager::attachThread();
+#endif
 	}
 
 	~ThreadContextHolder()

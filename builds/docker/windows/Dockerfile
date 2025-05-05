@@ -10,8 +10,8 @@ SHELL ["cmd", "/S", "/C"]
 # - Open (extract) the downloaded file, for example using 7-Zip.
 # - Open file vs_setup_bootstrapper.json and extract the installChannelUri to VS_INSTALL_CHANNEL_URI.
 
-# 17.7.4
-ARG VS_INSTALL_CHANNEL_URI=https://aka.ms/vs/17/release/134599118_118780349/channel
+# 17.13.6
+ARG VS_INSTALL_CHANNEL_URI=https://aka.ms/vs/17/release/656692964_-684260800/channel
 
 ADD https://aka.ms/vs/17/release/vs_buildtools.exe C:/temp/vs_BuildTools.exe
 

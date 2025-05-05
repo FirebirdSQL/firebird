@@ -64,8 +64,10 @@
 #include "../common/utils_proto.h"
 #include "../jrd/PageToBufferMap.h"
 
+#ifndef CDS_UNAVAILABLE
 // Use lock-free lists in hash table implementation
 #define HASH_USE_CDS_LIST
+#endif
 
 
 #ifdef HASH_USE_CDS_LIST

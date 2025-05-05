@@ -29,40 +29,41 @@ platform_aix() {
 	echo '#!'
 
 	for i in `grep -v '#' ${1}`
-	do 
+	do
 		echo "${TAB}$i"
 	done
 }
 
 platform_darwin() {
 for i in `grep -v '#' ${1}`
-do 
+do
 	echo "${TAB}_$i"
 done
 }
 
 platform_hpux() {
 	for i in `grep -v '#' ${1}`
-	do 
+	do
 		echo "+e $i"
 	done
 }
 
 platform_linux() {
 	echo '{'
-	echo 'global:'
+
+	if grep -qv '^#' "${1}"; then
+		echo 'global:'
+	fi
 
 	for i in `grep -v '#' ${1}`
-	do 
+	do
 		echo "${TAB}$i;"
 	done
 
-	echo "${TAB}_IO_stdin_used;"
 	echo 'local:'
 	echo "${TAB}*;"
 	echo '};'
 }
-
 
 # main
 FILE=${1}

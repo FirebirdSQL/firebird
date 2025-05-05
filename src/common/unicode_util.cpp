@@ -175,7 +175,7 @@ ModuleLoader::Module* BaseICU::formatAndLoad(const char* templateName)
 
 #ifndef WIN_NT
 		// There is no sence to try pattern "%d" for different minor versions
-		// ASF: In Windows ICU 63.1 libraries use 63.dll suffix. This is handled in 'patterns' above.
+		// ASF: In Windows ICU 77.1 libraries use 77.dll suffix. This is handled in 'patterns' above.
 		if (!module && minorVersion == 0)
 		{
 			s.printf("%d", majorVersion);
@@ -1295,7 +1295,7 @@ UnicodeUtil::ConversionICU& UnicodeUtil::getConversionICU()
 	}
 
 	// Try "favorite" (distributed on windows) version first
-	const int favMaj = 63;
+	const int favMaj = 77;
 	const int favMin = 1;
 	try
 	{

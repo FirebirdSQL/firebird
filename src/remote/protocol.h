@@ -138,7 +138,8 @@ enum P_ARCH
 	arch_darwin_x64		= 41,
 	arch_darwin_ppc64	= 42,
 	arch_arm            = 43,
-	arch_max			= 44	// Keep this at the end
+	arch_winnt_arm64	= 44,
+	arch_max			= 45	// Keep this at the end
 };
 
 // Protocol Types

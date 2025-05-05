@@ -13,6 +13,8 @@
 #       include <cds/compiler/vc/x86/backoff.h>
 #   elif CDS_PROCESSOR_ARCH == CDS_PROCESSOR_AMD64
 #       include <cds/compiler/vc/amd64/backoff.h>
+#   elif CDS_PROCESSOR_ARCH == CDS_PROCESSOR_ARM8
+#       include <cds/compiler/vc/arm8/backoff.h>
 #   else
 #       error "MS VC++ compiler: unsupported processor architecture"
 #   endif

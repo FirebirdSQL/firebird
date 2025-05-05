@@ -4648,7 +4648,6 @@ void rem_port::info(P_OP op, P_INFO* stuff, PACKET* sendL)
 	// Make sure there is a suitable temporary blob buffer
 	Array<UCHAR> buf;
 	UCHAR* const buffer = buffer_length ? buf.getBuffer(buffer_length) : NULL;
-	memset(buffer, 0, buffer_length);
 
 	HalfStaticArray<UCHAR, 1024> info;
 	UCHAR* info_buffer = NULL;

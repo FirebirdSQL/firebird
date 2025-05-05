@@ -559,6 +559,9 @@ extern "C" int remove(const char* path);
 
 #ifdef AMD64
 #define FB_CPU CpuAmd
+#elif defined(ARM64)
+#define FB_CPU CpuArm64
+//#define CDS_UNAVAILABLE
 #else
 #ifndef I386
 #define I386
