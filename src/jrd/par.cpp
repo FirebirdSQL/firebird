@@ -652,7 +652,7 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 						}
 						else
 						{
-							CompilerScratch::Dependency dependency(obj_packaged_type);
+							CompilerScratch::Dependency dependency(obj_field);
 							dependency.name = FB_NEW_POOL(csb->csb_pool) MetaName(csb->csb_pool, fieldSourceName);
 							csb->addDependency(dependency);
 						}

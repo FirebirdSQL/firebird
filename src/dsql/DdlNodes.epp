@@ -5439,7 +5439,7 @@ void DropPackageTypeNode::check(thread_db* tdbb, jrd_tra* transaction)
 	FOR(REQUEST_HANDLE request2)
 		DEP IN RDB$DEPENDENCIES
 			WITH DEP.RDB$DEPENDED_ON_NAME EQ generatedTypeName.c_str()
-			AND DEP.RDB$DEPENDED_ON_TYPE = obj_packaged_type				// 38
+			AND DEP.RDB$DEPENDED_ON_TYPE = obj_field				// 9
 			AND (DEP.RDB$PACKAGE_NAME NE NULLIF(package.c_str(), '') OR DEP.RDB$PACKAGE_NAME MISSING)
 			REDUCED TO DEP.RDB$DEPENDENT_NAME
 	{
