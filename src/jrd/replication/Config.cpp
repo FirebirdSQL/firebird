@@ -83,7 +83,7 @@ namespace
 	{
 		string msg;
 		msg.printf("%s specifies %s: %s", key.c_str(), type.c_str(), value.c_str());
-		raiseError(msg.c_str());
+		raiseError("%s", msg.c_str());
 	}
 
 	void checkAccess(const PathName& path, const string& key)
