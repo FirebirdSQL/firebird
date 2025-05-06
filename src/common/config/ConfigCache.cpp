@@ -114,8 +114,13 @@ void ConfigCache::File::getTime(timespec& time)
 		system_call_failed::raise("stat");
 	}
 
+#ifdef DARWIN
+	time.tv_sec = st.st_mtimespec.tv_sec;
+	time.tv_nsec = st.st_mtimespec.tv_nsec;
+#else
 	time.tv_sec = st.st_mtim.tv_sec;
 	time.tv_nsec = st.st_mtim.tv_nsec;
+#endif
 }
 #endif
 
