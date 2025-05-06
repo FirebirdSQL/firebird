@@ -85,19 +85,17 @@ Firebird::PathName ConfigCache::getFileName()
 #ifdef WIN_NT
 void ConfigCache::File::getTime(DWORD& timeLow, DWORD& timeHigh)
 {
-	WIN32_FIND_DATA findFileData;
-	HANDLE hFind = FindFirstFile(fileName.c_str(), &findFileData);
+	WIN32_FILE_ATTRIBUTE_DATA fInfo;
 
-	if (hFind == INVALID_HANDLE_VALUE)
+	if (!GetFileAttributesEx(fileName.c_str(), GetFileExInfoStandard, &fInfo))
 	{
 		timeLow = 0;
 		timeHigh = 0;
 		return;
 	}
 
-	FindClose(hFind);
-	timeLow = findFileData.ftLastWriteTime.dwLowDateTime;
-	timeHigh = findFileData.ftLastWriteTime.dwHighDateTime;
+	timeLow = fInfo.ftLastWriteTime.dwLowDateTime;
+	timeHigh = fInfo.ftLastWriteTime.dwHighDateTime;
 }
 #else
 void ConfigCache::File::getTime(timespec& time)
