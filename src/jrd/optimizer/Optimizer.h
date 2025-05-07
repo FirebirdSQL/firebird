@@ -527,7 +527,8 @@ public:
 	bool checkEquiJoin(BoolExprNode* boolean);
 	bool getEquiJoinKeys(BoolExprNode* boolean,
 						 NestConst<ValueExprNode>* node1,
-						 NestConst<ValueExprNode>* node2);
+						 NestConst<ValueExprNode>* node2,
+						 UCHAR* blrOp);
 
 	Firebird::string getStreamName(StreamType stream);
 	Firebird::string makeAlias(StreamType stream);

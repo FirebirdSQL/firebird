@@ -205,9 +205,27 @@ Sort* SortedStream::init(thread_db* tdbb) const
 	// mapping is done in get_sort().
 
 	dsc to, temp;
+	HalfStaticArray<dsc*, 8> keys;
 
 	while (m_next->getRecord(tdbb))
 	{
+		// Loop thru all field (keys and hangers on) involved in the sort.
+		// Be careful to null field all unused bytes in the sort key.
+
+		for (const auto& item : m_map->items)
+		{
+			if (!isKey(&item.desc))
+				break;
+
+			fb_assert(item.node);
+
+			const auto desc = EVL_expr(tdbb, request, item.node);
+			keys.add(desc);
+		}
+
+		if ((m_map->flags & FLAG_NO_NULLS) && keys.exist(nullptr))
+			continue;
+
 		// "Put" a record to sort. Actually, get the address of a place
 		// to build a record.
 
@@ -217,33 +235,33 @@ Sort* SortedStream::init(thread_db* tdbb) const
 		// Zero out the sort key. This solves a multitude of problems.
 
 		memset(data, 0, m_map->length);
+		FB_SIZE_T keyPos = 0;
 
 		// Loop thru all field (keys and hangers on) involved in the sort.
 		// Be careful to null field all unused bytes in the sort key.
 
-		const SortMap::Item* const end_item = m_map->items.begin() + m_map->items.getCount();
-		for (const SortMap::Item* item = m_map->items.begin(); item < end_item; item++)
+		for (const auto& item : m_map->items)
 		{
-			to = item->desc;
-			to.dsc_address = data + (IPTR) to.dsc_address;
-			bool flag = false;
-			dsc* from = nullptr;
+			to = item.desc;
+			to.dsc_address += (IPTR) data;
 
-			if (item->node)
+			dsc* from;
+			bool flag = false;
+
+			if (isKey(&item.desc))
 			{
-				from = EVL_expr(tdbb, request, item->node);
-				if (request->req_flags & req_null)
+				if (!(from = keys[keyPos++]))
 					flag = true;
 			}
 			else
 			{
 				from = &temp;
 
-				record_param* const rpb = &request->req_rpb[item->stream];
+				record_param* const rpb = &request->req_rpb[item.stream];
 
-				if (item->fieldId < 0)
+				if (item.fieldId < 0)
 				{
-					switch (item->fieldId)
+					switch (item.fieldId)
 					{
 					case ID_TRANS:
 						*reinterpret_cast<SINT64*>(to.dsc_address) = rpb->rpb_transaction_nr;
@@ -260,20 +278,25 @@ Sort* SortedStream::init(thread_db* tdbb) const
 					continue;
 				}
 
-				if (!EVL_field(rpb->rpb_relation, rpb->rpb_record, item->fieldId, from))
+				if (!EVL_field(rpb->rpb_relation, rpb->rpb_record, item.fieldId, from))
 					flag = true;
 			}
 
-			*(data + item->flagOffset) = flag ? TRUE : FALSE;
+			const bool hasNullFlag = !isKey(&item.desc) || !(m_map->flags & FLAG_NO_NULLS);
+
+			if (hasNullFlag)
+				*(data + item.flagOffset) = flag ? TRUE : FALSE;
+			else
+				fb_assert(!flag);
 
 			if (!flag)
 			{
 				// If an INTL string is moved into the key portion of the sort record,
 				// then we want to sort by language dependent order
 
-				if (IS_INTL_DATA(&item->desc) && isKey(&item->desc))
+				if (IS_INTL_DATA(&item.desc) && isKey(&item.desc))
 				{
-					INTL_string_to_key(tdbb, INTL_INDEX_TYPE(&item->desc), from, &to,
+					INTL_string_to_key(tdbb, INTL_INDEX_TYPE(&item.desc), from, &to,
 						(m_map->flags & FLAG_UNIQUE ? INTL_KEY_UNIQUE : INTL_KEY_SORT));
 				}
 				else
@@ -300,27 +323,35 @@ bool SortedStream::compareKeys(const UCHAR* p, const UCHAR* q) const
 	// Binary-distinct varying length string keys may in fact be equal.
 	// Re-check the keys at the higher level. See CORE-4909.
 
-	fb_assert(m_map->keyItems.getCount() % 2 == 0);
-	const USHORT count = m_map->keyItems.getCount() / 2;
 	thread_db* tdbb = JRD_get_thread_data();
 
-	for (USHORT i = 0; i < count; i++)
+	for (const auto& item : m_map->items)
 	{
-		const SortMap::Item* const item = &m_map->items[i];
+		if (!isKey(&item.desc))
+			break;
 
-		const UCHAR flag1 = *(p + item->flagOffset);
-		const UCHAR flag2 = *(q + item->flagOffset);
+		fb_assert(item.node);
 
-		if (flag1 != flag2)
-			return false;
+		bool notNull = true;
 
-		if (!flag1)
+		if (!(m_map->flags & FLAG_NO_NULLS))
 		{
-			dsc desc1 = item->desc;
-			desc1.dsc_address = const_cast<UCHAR*>(p) + (IPTR) desc1.dsc_address;
+			const UCHAR flag1 = *(p + item.flagOffset);
+			const UCHAR flag2 = *(q + item.flagOffset);
 
-			dsc desc2 = item->desc;
-			desc2.dsc_address = const_cast<UCHAR*>(q) + (IPTR) desc2.dsc_address;
+			if (flag1 != flag2)
+				return false;
+
+			notNull = (flag1 == TRUE);
+		}
+
+		if (notNull)
+		{
+			dsc desc1 = item.desc;
+			desc1.dsc_address += (IPTR) const_cast<UCHAR*>(p);
+
+			dsc desc2 = item.desc;
+			desc2.dsc_address += (IPTR) const_cast<UCHAR*>(q);
 
 			if (MOV_compare(tdbb, &desc1, &desc2))
 				return false;
@@ -349,10 +380,6 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 
 	for (const auto& item : m_map->items)
 	{
-		const auto flag = (*(data + item.flagOffset) == TRUE);
-		from = item.desc;
-		from.dsc_address = data + (IPTR) from.dsc_address;
-
 		if (item.node && !nodeIs<FieldNode>(item.node))
 			continue;
 
@@ -364,6 +391,12 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 
 		if (hasVolatileKey(&item.desc) && isKey(&item.desc))
 			continue;
+
+		const bool hasNullFlag = !isKey(&item.desc) || !(m_map->flags & FLAG_NO_NULLS);
+		const bool flag = hasNullFlag && (*(data + item.flagOffset) == TRUE);
+
+		from = item.desc;
+		from.dsc_address += (IPTR) data;
 
 		const auto rpb = &request->req_rpb[item.stream];
 		const auto relation = rpb->rpb_relation;
@@ -540,7 +573,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 				if (item.stream != stream || item.fieldId < 0)
 					continue;
 
-				const auto null1 = (*(data + item.flagOffset) == TRUE);
+				const auto null1 = !(m_map->flags & FLAG_NO_NULLS) && (*(data + item.flagOffset) == TRUE);
 				const auto null2 = !EVL_field(relation, temp.rpb_record, item.fieldId, &from);
 
 				if (null1 != null2)
