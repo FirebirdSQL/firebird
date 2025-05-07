@@ -1120,20 +1120,6 @@ static void sql_info(thread_db* tdbb,
 		case isc_info_sql_describe_vars:
 			if (messageFound)
 			{
-				number = message ? message->msg_index : 0;
-				length = put_vax_long(buffer, (SLONG) number);
-				if (!(info = put_item(item, length, buffer, info, end_info)))
-					return;
-				if (item == isc_info_sql_num_variables)
-					continue;
-
-				const UCHAR* end_describe = items;
-				while (end_describe < end_items &&
-					*end_describe != isc_info_end && *end_describe != isc_info_sql_describe_end)
-				{
-					end_describe++;
-				}
-
 				if ((tdbb->getAttachment()->att_flatten_row_types || tdbb->getDatabase()->dbb_config->getFlattenRowType())
 					&& message && message == dsqlStatement->getReceiveMsg())
 				{
@@ -1148,6 +1134,7 @@ static void sql_info(thread_db* tdbb,
 						{
 							if (param->par_sub_first)
 							{
+								message->msg_index--; // decrease due to top level rowtype parameter removal
 								auto internalParamNullOffset = param->par_desc.dsc_address;
 								// replace with subparameters
 								auto chainParam = param->par_sub_first;
@@ -1160,6 +1147,7 @@ static void sql_info(thread_db* tdbb,
 									chainParam->par_null->par_desc.dsc_address = internalParamNullOffset;
 									internalParamNullOffset += 2;
 									chainParam = chainParam->par_next;
+									message->msg_index++;	// increment for every flattened subparameter
 								}
 								internalParamValueOffset += param->par_desc.dsc_length;
 								message->msg_parameters.remove(i--);
@@ -1177,6 +1165,20 @@ static void sql_info(thread_db* tdbb,
 							internalParamValueOffset += 2;
 						}
 					}
+				}
+
+				number = message ? message->msg_index : 0;
+				length = put_vax_long(buffer, (SLONG) number);
+				if (!(info = put_item(item, length, buffer, info, end_info)))
+					return;
+				if (item == isc_info_sql_num_variables)
+					continue;
+
+				const UCHAR* end_describe = items;
+				while (end_describe < end_items &&
+					*end_describe != isc_info_end && *end_describe != isc_info_sql_describe_end)
+				{
+					end_describe++;
 				}
 
 				info = var_info(message, items, end_describe, info, end_info, first_index,
