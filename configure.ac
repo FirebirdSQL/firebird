@@ -92,7 +92,7 @@ if test "x$VCPKG_TRIPLET" != "x" ; then
     ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
   fi
 
-  ./vcpkg/vcpkg install --triplet=$VCPKG_TRIPLET
+  ./vcpkg/vcpkg install --triplet=$VCPKG_TRIPLET --debug
 
   VCPKG_INSTALLED=`pwd`/vcpkg_installed/$VCPKG_TRIPLET
   AC_SUBST(VCPKG_INSTALLED)
