@@ -363,6 +363,7 @@ jobs:
     name: build-macos-${{ matrix.arch }}
     runs-on: ${{ (matrix.arch == 'arm64' && 'macos-14') || 'macos-13' }}
     env:
+      VCPKG_FEATURE_FLAGS: "binarycaching"
       VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
 
     strategy:
