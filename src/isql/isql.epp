@@ -329,6 +329,11 @@ static int win32ReadConsole(FILE* file, char* buffer, size_t bufferSize)
 		return -1;
 	}
 
+	const size_t MAX_LINE_LENGTH = 32765;
+	static WCHAR wideBuf[MAX_LINE_LENGTH +1];
+
+	WCHAR* pWide;
+	DWORD charsRead = 0;
 	size_t leftToRead = bufferSize;
 
 	while (leftToRead)
@@ -378,34 +383,42 @@ static int win32ReadConsole(FILE* file, char* buffer, size_t bufferSize)
 				break;
 		}
 
-		WCHAR wideBuf[2];
-		DWORD charsRead;
-
-		// Reading one code unit at a time is inefficient, but since this code
-		// is used only for the interactive console, that shouldn't matter.
-		if (!ReadConsoleW(handle, wideBuf, 1, &charsRead, 0))
-			return -1;
-
 		if (!charsRead)
-			break;
-
-		DWORD wideBufLen = 1;
-
-		if (wideBuf[0] >= 0xD800 && wideBuf[0] <= 0xDBFF)
 		{
-			// High surrogate, read one more code unit.
-			if (!ReadConsoleW(handle, wideBuf + 1, 1, &charsRead, 0))
+			if (!ReadConsoleW(handle, wideBuf, MAX_LINE_LENGTH, &charsRead, NULL))
 				return -1;
 
-			if (charsRead)
-				++wideBufLen;
+			if (!charsRead)
+				break;
+
+			pWide = wideBuf;
 		}
 
-		convertedBufLen = WideCharToMultiByte(GetConsoleCP(), 0, wideBuf, wideBufLen,
+		DWORD wideBufLen = 1;
+		charsRead--;
+
+		if (IS_HIGH_SURROGATE(*pWide))
+		{
+			// High surrogate, read one more code unit.
+			if (charsRead)
+				charsRead--;
+			else
+			{
+				DWORD read2;
+				if (!ReadConsoleW(handle, pWide + 1, 1, &read2, NULL))
+					return -1;
+			}
+
+			++wideBufLen;
+		}
+
+		convertedBufLen = WideCharToMultiByte(GetConsoleCP(), 0, pWide, wideBufLen,
 			convertedBuf, sizeof(convertedBuf), NULL, NULL);
 
 		if (!convertedBufLen)
 			return -1;
+
+		pWide += wideBufLen;
 	}
 
 	return bufferSize - leftToRead;
