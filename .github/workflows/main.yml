@@ -391,7 +391,7 @@ jobs:
           path: ~/.cache/vcpkg/archives
           key: vcpkg-cache-${{ runner.os }}-${{ matrix.arch }}-${{ github.run_id }}
           restore-keys: |
-            vcpkg-vcpackage-${{ runner.os }}-${{ matrix.arch }}
+            vcpkg-cache-${{ runner.os }}-${{ matrix.arch }}-
 
       - name: Build
         run: |
