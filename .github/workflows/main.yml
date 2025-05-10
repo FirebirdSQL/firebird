@@ -389,9 +389,8 @@ jobs:
         id: restore-vcpkg-cache
         with:
           path: ~/.cache/vcpkg/archives
-          key: vcpkg-cache-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('vcpkg-custom/**') }}
-          restore-keys: |
-            vcpkg-cache-${{ runner.os }}-${{ matrix.arch }}-
+          # We're always matching on a partial key here!
+          key: vcpkg-cache-${{ runner.os }}-${{ matrix.arch }}-
 
       - name: Build
         run: |
@@ -421,10 +420,10 @@ jobs:
 
       - name: Save vcpkg cache
         uses: actions/cache/save@v4
-        # if: steps.restore-vcpkg-cache.outputs.cache-hit != 'true'
+        if: steps.restore-vcpkg-cache.outputs.cache-matched-key != 'vcpkg-cache-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('~/.cache/vcpkg/archives/**') }}'
         with:
           path: ~/.cache/vcpkg/archives
-          key: ${{ steps.restore-vcpkg-cache.outputs.cache-primary-key }}
+          key: vcpkg-cache-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('~/.cache/vcpkg/archives/**') }}
 
       - name: Upload installer
         uses: actions/upload-artifact@v4
