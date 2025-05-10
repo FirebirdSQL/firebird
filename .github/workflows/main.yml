@@ -382,10 +382,11 @@ jobs:
 
       - name: Prepare - Install tools
         run: |
-          brew install automake autoconf-archive libtool ninja
+          brew install --quiet automake autoconf-archive libtool ninja
 
       - name: Restore vcpkg cache
         uses: actions/cache/restore@v4
+        id: restore-vcpkg-cache
         with:
           path: ~/.cache/vcpkg/archives
           key: vcpkg-cache-${{ runner.os }}-${{ matrix.arch }}-${{ github.run_id }}
@@ -422,7 +423,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ~/.cache/vcpkg/archives
-          key: vcpkg-cache-${{ runner.os }}-${{ matrix.arch }}-${{ github.run_id }}
+          key: ${{ steps.restore-vcpkg-cache.outputs.cache-primary-key }}
 
       - name: Upload installer
         uses: actions/upload-artifact@v4
