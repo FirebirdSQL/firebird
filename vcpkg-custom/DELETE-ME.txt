@@ -1,0 +1,1 @@
+Test for https://github.com/FirebirdSQL/firebird/pull/8560, should not be merged
