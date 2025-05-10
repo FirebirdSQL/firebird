@@ -421,7 +421,7 @@ jobs:
 
       - name: Save vcpkg cache
         uses: actions/cache/save@v4
-        if: steps.restore-vcpkg-cache.outputs.cache-hit != 'true'
+        # if: steps.restore-vcpkg-cache.outputs.cache-hit != 'true'
         with:
           path: ~/.cache/vcpkg/archives
           key: ${{ steps.restore-vcpkg-cache.outputs.cache-primary-key }}
