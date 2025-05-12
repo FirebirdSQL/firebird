@@ -148,7 +148,7 @@
     <ClCompile Include="..\..\..\src\jrd\recsrc\SingularStream.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\SkipRowsStream.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\SortedStream.cpp" />
-	<ClCompile Include="..\..\..\src\jrd\recsrc\TableValueFunctionScan.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\recsrc\TableValueFunctionScan.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\Union.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\VirtualTableScan.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\WindowedStream.cpp" />
@@ -291,7 +291,7 @@
     <ClInclude Include="..\..\..\src\jrd\idx.h" />
     <ClInclude Include="..\..\..\src\jrd\idx_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\inf_proto.h" />
-    <ClInclude Include="..\..\..\src\jrd\inf_pub.h" />
+    <ClInclude Include="..\..\..\src\include\firebird\impl\inf_pub.h" />
     <ClInclude Include="..\..\..\src\jrd\ini.h" />
     <ClInclude Include="..\..\..\src\jrd\InitCDSLib.h" />
     <ClInclude Include="..\..\..\src\jrd\ini_proto.h" />

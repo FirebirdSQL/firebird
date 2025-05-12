@@ -246,8 +246,6 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 
 	message->msg_length = offset;
 
-	dsqlScratch->getDsqlStatement()->getPorts().add(message);
-
 	// Remove gaps in par_index due to output parameters using question-marks (CALL syntax).
 
 	USHORT parIndex = 0;

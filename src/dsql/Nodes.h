@@ -698,6 +698,14 @@ public:
 		return false;
 	}
 
+	bool containsAnyStream() const
+	{
+		SortedStreamList nodeStreams;
+		collectStreams(nodeStreams);
+
+		return nodeStreams.hasData();
+	}
+
 	virtual bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const;
 
 	virtual ExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)

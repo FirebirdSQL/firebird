@@ -104,13 +104,6 @@ void DsqlStatement::setOrgText(const char* ptr, ULONG len)
 
 void DsqlDmlStatement::doRelease()
 {
-	if (auto parent = getParentRequest())
-	{
-		FB_SIZE_T pos;
-		if (parent->cursors.find(this, pos))
-			parent->cursors.remove(pos);
-	}
-
 	if (statement)
 	{
 		thread_db* tdbb = JRD_get_thread_data();
@@ -147,9 +140,6 @@ void DsqlDmlStatement::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, n
 	GEN_statement(scratch, node);
 
 	unsigned messageNumber = 0;
-
-	for (auto message : ports)
-		message->msg_buffer_number = messageNumber++;
 
 	// have the access method compile the statement
 
@@ -219,7 +209,8 @@ void DsqlDmlStatement::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, n
 	if (status)
 		status_exception::raise(tdbb->tdbb_status_vector);
 
-	node = NULL;
+	node = nullptr;
+	scratch = nullptr;
 }
 
 DsqlDmlRequest* DsqlDmlStatement::createRequest(thread_db* tdbb, dsql_dbb* dbb)

@@ -82,6 +82,8 @@ public:
 	Firebird::string getPlan(thread_db* tdbb, bool detailed) const;
 	void getPlan(thread_db* tdbb, PlanEntry& planEntry) const;
 
+	MessageNode* getMessage(USHORT messageNumber) const;
+
 private:
 	static void verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation, TrigVector* triggers,
 		MetaName userName);
@@ -114,6 +116,9 @@ public:
 	Firebird::RefStrPtr sqlText;		// SQL text (encoded in the metadata charset)
 	Firebird::Array<UCHAR> blr;			// BLR for non-SQL query
 	MapFieldInfo mapFieldInfo;			// Map field name to field info
+
+private:
+	Firebird::Array<MessageNode*> messages;	// Input/output messages
 };
 
 

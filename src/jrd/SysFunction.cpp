@@ -70,6 +70,8 @@
 
 #ifndef WIN_NT
 #define LTC_PTHREAD
+#else
+#include <process.h>
 #endif
 #define USE_LTM
 #define LTM_DESC

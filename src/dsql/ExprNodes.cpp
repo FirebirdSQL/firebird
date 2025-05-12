@@ -9630,8 +9630,7 @@ ValueExprNode* ParameterNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 					Arg::Gds(isc_dsql_command_err));
 	}
 
-	auto msg = dsqlMessage ? dsqlMessage :
-		dsqlParameter ? dsqlParameter->par_message :
+	auto msg = dsqlParameter ? dsqlParameter->par_message :
 		dsqlScratch->getDsqlStatement()->getSendMsg();
 
 	auto node = FB_NEW_POOL(dsqlScratch->getPool()) ParameterNode(dsqlScratch->getPool());
@@ -9808,10 +9807,15 @@ Request* ParameterNode::getParamRequest(Request* request) const
 
 void ParameterNode::getDesc(thread_db* /*tdbb*/, CompilerScratch* /*csb*/, dsc* desc)
 {
-	*desc = message->format->fmt_desc[argNumber];
+	const auto format = message->getFormat(nullptr);
+
+	if (argNumber >= format->fmt_count)
+		status_exception::raise(Arg::Gds(isc_badparnum));
+
+	*desc = format->fmt_desc[argNumber];
 	// Must reset dsc_address because it's used in others places to read literals, but here it was
 	// an offset in the message.
-	desc->dsc_address = NULL;
+	desc->dsc_address = nullptr;
 }
 
 ParameterNode* ParameterNode::copy(thread_db* tdbb, NodeCopier& copier) const
@@ -9855,7 +9859,7 @@ ParameterNode* ParameterNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 		outerDecl = csb->outerMessagesMap.exist(messageNumber);
 	}
 
-	const auto format = message->format;
+	const auto format = message->getFormat(nullptr);
 
 	if (argNumber >= format->fmt_count)
 		status_exception::raise(Arg::Gds(isc_badparnum));
@@ -9873,8 +9877,8 @@ ParameterNode* ParameterNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 	{
 		fb_assert(csb->mainCsb);
 
-		if (csb->mainCsb)
-			message->itemsUsedInSubroutines.add(argNumber);
+		if (!csb->mainCsb)
+			status_exception::raise(Arg::Gds(isc_ctxnotdef) << Arg::Gds(isc_random) << Arg::Str("Outer parameter has no outer scratch"));
 	}
 
 	return this;
@@ -9889,10 +9893,7 @@ ParameterNode* ParameterNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	ValueExprNode::pass2(tdbb, csb);
 
-	dsc desc;
-	getDesc(tdbb, csb, &desc);
-
-	if (message->itemsUsedInSubroutines.exist(argNumber))
+	if (outerDecl)
 		impureOffset = csb->allocImpure<impure_value>();
 	else
 		impureOffset = csb->allocImpure<dsc>();
@@ -9905,7 +9906,7 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 	dsc* retDesc;
 	impure_value* impureForOuter;
 
-	if (message->itemsUsedInSubroutines.exist(argNumber))
+	if (outerDecl)
 	{
 		impureForOuter = request->getImpure<impure_value>(impureOffset);
 		retDesc = &impureForOuter->vlu_desc;
@@ -9931,10 +9932,9 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 			request->req_flags |= req_null;
 	}
 
-	desc = &message->format->fmt_desc[argNumber];
+	desc = &message->getFormat(paramRequest)->fmt_desc[argNumber];
 
-	retDesc->dsc_address = paramRequest->getImpure<UCHAR>(
-		message->impureOffset + (IPTR) desc->dsc_address);
+	retDesc->dsc_address = message->getBuffer(paramRequest) + (IPTR) desc->dsc_address;
 	retDesc->dsc_dtype = desc->dsc_dtype;
 	retDesc->dsc_length = desc->dsc_length;
 	retDesc->dsc_scale = desc->dsc_scale;
@@ -9966,7 +9966,7 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 				switch (retDesc->dsc_dtype)
 				{
 					case dtype_cstring:
-						len = strnlen((const char*) p, maxLen);
+						len = static_cast<USHORT>(strnlen((const char*) p, maxLen));
 						--maxLen;
 						break;
 
@@ -10193,7 +10193,6 @@ void RecordKeyNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 void RecordKeyNode::make(DsqlCompilerScratch* /*dsqlScratch*/, dsc* desc)
 {
-	fb_assert(blrOp == blr_dbkey || blrOp == blr_record_version2);
 	fb_assert(dsqlRelation);
 
 	// Fix for bug 10072 check that the target is a relation
@@ -10203,22 +10202,19 @@ void RecordKeyNode::make(DsqlCompilerScratch* /*dsqlScratch*/, dsc* desc)
 	{
 		USHORT dbKeyLength = (relation->rel_flags & REL_creating ? 8 : relation->rel_dbkey_length);
 
-		if (blrOp == blr_dbkey)
+		if (blrOp == blr_record_version2)
 		{
+			desc->makeInt64(0);
+			desc->setNullable(true);
+		}
+		else
+		{
+			// If views are ever allowed to be used in positional DML,
+			// we have to concatenate record versions the same way as dbkeys
 			desc->dsc_dtype = dtype_text;
 			desc->dsc_length = dbKeyLength;
 			desc->dsc_flags = DSC_nullable;
 			desc->dsc_ttype() = ttype_binary;
-		}
-		else	// blr_record_version2
-		{
-			if (dbKeyLength == 8)
-			{
-				desc->makeInt64(0);
-				desc->setNullable(true);
-			}
-			else
-				raiseError(dsqlRelation->dsqlContext);
 		}
 	}
 	else
@@ -10494,7 +10490,7 @@ dsc* RecordKeyNode::execute(thread_db* /*tdbb*/, Request* request) const
 	else if (blrOp == blr_record_version)
 	{
 		// Make up a record version for a record stream. The tid of the record will be used.
-		// This will be returned as a 4 byte character string.
+		// This will be returned as a 8 byte character string.
 
 		// If the current transaction has updated the record, the record version
 		// coming in from DSQL will have the original transaction # (or current
@@ -13429,12 +13425,28 @@ ValueExprNode* UdfCallNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 ValueExprNode* UdfCallNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
-	if (function->fun_deterministic && !function->fun_inputs)
+	if (function->fun_deterministic)
 	{
 		// Deterministic function without input arguments is expected to be
-		// always returning the same result, so it can be marked as invariant
-		nodFlags |= FLAG_INVARIANT;
-		csb->csb_invariants.push(&impureOffset);
+		// always returning the same result, so it can be marked as invariant.
+		// Ditto if all its input arguments are deterministic expressions
+		// that do not reference any stream.
+
+		bool invariant = true;
+		for (const auto& arg : args->items)
+		{
+			if (!arg->deterministic() || arg->containsAnyStream())
+			{
+				invariant = false;
+				break;
+			}
+		}
+
+		if (invariant)
+		{
+			nodFlags |= FLAG_INVARIANT;
+			csb->csb_invariants.push(&impureOffset);
+		}
 	}
 
 	ValueExprNode::pass2(tdbb, csb);
@@ -14050,11 +14062,7 @@ ValueExprNode* VariableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		{
 			node->outerDecl = true;
 
-			const bool execBlock = (dsqlScratch->mainScratch->flags & DsqlCompilerScratch::FLAG_BLOCK) &&
-				!(dsqlScratch->mainScratch->flags &
-				  (DsqlCompilerScratch::FLAG_PROCEDURE |
-				   DsqlCompilerScratch::FLAG_TRIGGER |
-				   DsqlCompilerScratch::FLAG_FUNCTION));
+			const bool execBlock = (dsqlScratch->mainScratch->flags & DsqlCompilerScratch::FLAG_EXEC_BLOCK);
 
 			if (node->dsqlVar->type == dsql_var::TYPE_INPUT && !execBlock)
 			{
@@ -14062,7 +14070,7 @@ ValueExprNode* VariableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				{
 					// 0 = input, 1 = output. Start outer messages with 2.
 					dsqlScratch->outerMessagesMap.put(
-						node->dsqlVar->msgNumber, 2 + dsqlScratch->outerMessagesMap.count());
+						node->dsqlVar->msgNumber, static_cast<USHORT>(2 + dsqlScratch->outerMessagesMap.count()));
 				}
 			}
 			else
@@ -14091,11 +14099,7 @@ void VariableNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	auto varScratch = outerDecl ? dsqlScratch->mainScratch : dsqlScratch;
 
-	const bool execBlock = (varScratch->flags & DsqlCompilerScratch::FLAG_BLOCK) &&
-		!(varScratch->flags &
-		  (DsqlCompilerScratch::FLAG_PROCEDURE |
-		   DsqlCompilerScratch::FLAG_TRIGGER |
-		   DsqlCompilerScratch::FLAG_FUNCTION));
+	const bool execBlock = (varScratch->flags & DsqlCompilerScratch::FLAG_EXEC_BLOCK);
 
 	if (dsqlVar->type == dsql_var::TYPE_INPUT && !execBlock)
 	{
