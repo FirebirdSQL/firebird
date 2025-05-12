@@ -347,6 +347,14 @@ private:
 	}
 	void checkTimeDialect();
 
+	void exceptionNumericLiterals(const Firebird::string& text)
+	{
+		using namespace Firebird;
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) << Arg::Gds(isc_dsql_token_unk_err)
+									   << Arg::Num(yyposn.firstLine) << Arg::Num(yyposn.firstColumn)
+									   << Arg::Gds(isc_random) << Arg::Str(text));
+	}
+
 // start - defined in btyacc_fb.ske
 private:
 	static void yySCopy(YYSTYPE* to, YYSTYPE* from, int size);
