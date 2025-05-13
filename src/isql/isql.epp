@@ -2162,6 +2162,9 @@ bool ISQL_printNumericType(const QualifiedMetaString& fieldName, const int field
 			return true;
 		}
 		break;
+	case blr_rowtype:
+		isqlGlob.printf("ROWTYPE");
+		return true;
 	}
 
 	// Field type without recognizable subtypes

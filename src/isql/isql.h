@@ -155,6 +155,7 @@ static inline constexpr sqltypes Column_types[] = {
 	{blr_timestamp_tz, "TIMESTAMP WITH TIME ZONE"},
 	{blr_ex_time_tz, "TIME WITH TIME ZONE"},
 	{blr_ex_timestamp_tz, "TIMESTAMP WITH TIME ZONE"},
+	{blr_rowtype, "ROWTYPE"},
 	{0, ""}
 };
 
