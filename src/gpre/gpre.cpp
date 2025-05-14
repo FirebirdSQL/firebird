@@ -1181,9 +1181,8 @@ tok* CPR_token()
 		gpre_sym* symbol = MSC_find_symbol(HSH_lookup(token->tok_string + 1), SYM_charset);
 		if (!symbol)
 		{
-			TEXT err_buffer[100];
-
-			sprintf(err_buffer, "Character set not recognized: '%.50s'", token->tok_string);
+			TEXT err_buffer[BUFFER_MEDIUM];
+			snprintf(err_buffer, sizeof(err_buffer), "Character set not recognized: '%s'", token->tok_string);
 			CPR_error(err_buffer);
 		}
 		token = get_token();
@@ -1448,7 +1447,6 @@ static void finish_based( act* action)
 {
 	gpre_rel* relation = NULL;
 	gpre_fld* field = NULL;
-	TEXT s[MAXPATHLEN << 1];
 
 	for (; action; action = action->act_rest)
 	{
@@ -1484,6 +1482,7 @@ static void finish_based( act* action)
 				relation = MET_get_relation(db, based_on->bas_rel_name->str_string, "");
 				if (!relation)
 				{
+					TEXT s[BUFFER_LARGE];
 					fb_utils::snprintf(s, sizeof(s), "relation %s is not defined in database %s",
 							based_on->bas_rel_name->str_string, based_on->bas_db_name->str_string);
 					CPR_error(s);
@@ -1506,6 +1505,7 @@ static void finish_based( act* action)
 				}
 				else
 				{
+					TEXT s[MAXPATHLEN << 1];
 					fb_utils::snprintf(s, sizeof(s), "database %s is not defined",
 							based_on->bas_db_name->str_string);
 					CPR_error(s);
@@ -1524,7 +1524,7 @@ static void finish_based( act* action)
 					{
 						// The field reference is ambiguous.  It exists in more
 						// than one database.
-
+						TEXT s[BUFFER_LARGE];
 						fb_utils::snprintf(s, sizeof(s), "field %s in relation %s ambiguous",
 								based_on->bas_fld_name->str_string, based_on->bas_rel_name->str_string);
 						CPR_error(s);
@@ -1537,7 +1537,8 @@ static void finish_based( act* action)
 				continue;
 			if (!relation && !field)
 			{
-				sprintf(s, "relation %s is not defined", based_on->bas_rel_name->str_string);
+				TEXT s[BUFFER_MEDIUM];
+				snprintf(s, sizeof(s), "relation %s is not defined", based_on->bas_rel_name->str_string);
 				CPR_error(s);
 				continue;
 			}
@@ -1545,7 +1546,8 @@ static void finish_based( act* action)
 
 		if (!field)
 		{
-			sprintf(s, "field %s is not defined in relation %s",
+			TEXT s[BUFFER_LARGE];
+			snprintf(s, sizeof(s), "field %s is not defined in relation %s",
 					based_on->bas_fld_name->str_string, based_on->bas_rel_name->str_string);
 			CPR_error(s);
 			continue;
@@ -1553,7 +1555,8 @@ static void finish_based( act* action)
 
 		if ((based_on->bas_flags & BAS_segment) && !(field->fld_flags & FLD_blob))
 		{
-			sprintf(s, "field %s is not a blob", field->fld_symbol->sym_string);
+			TEXT s[BUFFER_MEDIUM];
+			snprintf(s, sizeof(s), "field %s is not a blob", field->fld_symbol->sym_string);
 			CPR_error(s);
 			continue;
 		}

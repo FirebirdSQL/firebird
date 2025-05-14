@@ -143,11 +143,12 @@ namespace Jrd
 			UCharBuffer buffer;
 			os_utils::getUniqueFileId(pageSpace->file->fil_desc, buffer);
 
-			auto ptr = dbb_file_id.getBuffer(2 * buffer.getCount());
+			dbb_file_id.reserve(2 * static_cast<size_t>(buffer.getCount()));
+			char hex[3];
 			for (const auto val : buffer)
 			{
-				sprintf(ptr, "%02x", (int) val);
-				ptr += 2;
+				snprintf(hex, sizeof(hex), "%02x", static_cast<unsigned>(val));
+				dbb_file_id.append(hex);
 			}
 		}
 

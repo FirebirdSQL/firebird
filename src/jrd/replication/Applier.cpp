@@ -1401,7 +1401,7 @@ void Applier::logConflict(const char* msg, ...)
 
 	va_list ptr;
 	va_start(ptr, msg);
-	vsprintf(buffer, msg, ptr);
+	vsnprintf(buffer, sizeof(buffer), msg, ptr);
 	va_end(ptr);
 
 	logReplicaWarning(m_database, buffer);

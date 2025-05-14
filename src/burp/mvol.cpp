@@ -2119,7 +2119,7 @@ bool MVOL_split_hdr_write()
 	time_t seconds = time(NULL);
 
 	Firebird::string nm = tdgbl->toSystem(tdgbl->action->act_file->fil_name);
-	sprintf(buffer, "%s%.24s      , file No. %4d of %4d, %-27.27s",
+	snprintf(buffer, sizeof(buffer), "%s%.24s      , file No. %4d of %4d, %-27.27s",
 			HDR_SPLIT_TAG, ctime(&seconds), tdgbl->action->act_file->fil_seq,
 			tdgbl->action->act_total, nm.c_str());
 

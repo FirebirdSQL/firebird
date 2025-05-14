@@ -1036,7 +1036,8 @@ static void sql_info(thread_db* tdbb,
 										--lineLen;
 
 									char offsetStr[10];
-									const auto offsetLen = sprintf(offsetStr, "%5d", (int) offset);
+									const auto offsetLen = snprintf(offsetStr, sizeof(offsetStr),
+										"%5d", (int) offset);
 
 									localPath.push(reinterpret_cast<const UCHAR*>(offsetStr), offsetLen);
 									localPath.push(' ');

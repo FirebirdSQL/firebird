@@ -451,9 +451,9 @@ static void gen_raw( const gpre_req* request)
 	{
 		const UCHAR c = *blr++;
 		if ((c >= 'A' && c <= 'Z') || c == '$' || c == '_')
-			sprintf(p, "'%c',", c);
+			snprintf(p, sizeof(buffer) - (p - buffer), "'%c',", c);
 		else
-			sprintf(p, "%d,", c);
+			snprintf(p, sizeof(buffer) - (p - buffer), "%d,", c);
 		while (*p)
 			p++;
 		if (p - buffer > 60)

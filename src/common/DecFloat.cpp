@@ -386,8 +386,8 @@ Decimal64 Decimal64::set(Int128 value, DecimalStatus decSt, int scale)
 Decimal64 Decimal64::set(SINT64 value, DecimalStatus decSt, int scale)
 {
 	{
-		char s[30];		// for sure enough for int64
-		sprintf(s, "%" SQUADFORMAT, value);
+		char s[30];
+		snprintf(s, sizeof(s), "%" SQUADFORMAT, value);
 		DecimalContext context(this, decSt);
 		decDoubleFromString(&dec, s, &context);
 	}
@@ -408,7 +408,7 @@ Decimal64 Decimal64::set(const char* value, DecimalStatus decSt)
 Decimal64 Decimal64::set(double value, DecimalStatus decSt)
 {
 	char s[50];
-	sprintf(s, "%.016e", value);
+	snprintf(s, sizeof(s), "%.016e", value);
 	DecimalContext context(this, decSt);
 	decDoubleFromString(&dec, s, &context);
 
@@ -685,7 +685,7 @@ Decimal128 Decimal128::set(const char* value, DecimalStatus decSt)
 Decimal128 Decimal128::set(double value, DecimalStatus decSt)
 {
 	char s[50];
-	sprintf(s, "%.016e", value);
+	snprintf(s, sizeof(s), "%.016e", value);
 	DecimalContext context(this, decSt);
 	decQuadFromString(&dec, s, &context);
 

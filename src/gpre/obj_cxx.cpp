@@ -859,7 +859,7 @@ static void gen_based( const act* action, int column)
 	default:
 		{
 			TEXT s[MAX_CURSOR_SIZE];
-			sprintf(s, "datatype %d unknown\n", field->fld_dtype);
+			snprintf(s, sizeof(s), "datatype %d unknown\n", field->fld_dtype);
 			CPR_error(s);
 			return;
 		}
@@ -969,7 +969,7 @@ static void gen_blob_end( const act* action, USHORT column)
 	args.pat_blob = (const blb*) action->act_object;
 	if (action->act_error)
 	{
-		sprintf(s1, "%s2", global_status_name);
+		snprintf(s1, sizeof(s1), "%s2", global_status_name);
 		args.pat_vector1 = s1;
 	}
 	else
@@ -1252,12 +1252,12 @@ static void gen_create_database( const act* action, int column)
 	const gpre_req* request = ((const mdbb*) action->act_object)->mdbb_dpb_request;
 	const gpre_dbb* db = request->req_database;
 
-	sprintf(s1, "fb_%dl", request->req_ident);
-	sprintf(trname, "fb_%dt", request->req_ident);
+	snprintf(s1, sizeof(s1), "fb_%dl", request->req_ident);
+	snprintf(trname, sizeof(trname), "fb_%dt", request->req_ident);
 
 	if (request->req_flags & REQ_extend_dpb)
 	{
-		sprintf(s2, "fb_%dp", request->req_ident);
+		snprintf(s2, sizeof(s2), "fb_%dp", request->req_ident);
 		if (request->req_length)
 			printa(column, "%s = fb_%d;", s2, request->req_ident);
 		else
@@ -1273,7 +1273,7 @@ static void gen_create_database( const act* action, int column)
 			   db->dbb_r_lc_ctype ? db->dbb_r_lc_ctype : "(char*) 0");
 	}
 	else
-		sprintf(s2, "fb_%d", request->req_ident);
+		snprintf(s2, sizeof(s2), "fb_%d", request->req_ident);
 
 	PAT args;
 	args.pat_vector1 = status_vector(action);
@@ -2160,7 +2160,7 @@ static void gen_event_wait( const act* action, int column)
 
 	if (ident < 0)
 	{
-		sprintf(s, "event handle \"%s\" not found", event_name->sym_string);
+		snprintf(s, sizeof(s), "event handle \"%s\" not found", event_name->sym_string);
 		CPR_error(s);
 		return;
 	}
@@ -2461,7 +2461,7 @@ static void gen_get_or_put_slice(const act* action, const ref* reference, bool g
 	gen_name(s1, reference, true);	// blob handle
 	args.pat_string2 = s1;
 	args.pat_value1 = reference->ref_sdl_length;	// slice description length
-	sprintf(s2, "fb_%d", reference->ref_sdl_ident);	// slice description
+	snprintf(s2, sizeof(s2), "fb_%d", reference->ref_sdl_ident);	// slice description
 	args.pat_string3 = s2;
 
 	args.pat_long1 = reference->ref_field->fld_array_info->ary_size;
@@ -2472,7 +2472,7 @@ static void gen_get_or_put_slice(const act* action, const ref* reference, bool g
 		args.pat_string5 = reference->ref_value;
 	else
 	{
-		sprintf(s4, "fb_%d", reference->ref_field->fld_array_info->ary_ident);
+		snprintf(s4, sizeof(s4), "fb_%d", reference->ref_field->fld_array_info->ary_ident);
 		args.pat_string5 = s4;	// array name
 	}
 
@@ -2711,9 +2711,9 @@ static void gen_raw(const UCHAR* blr, int request_length)
 	{
 		const TEXT c = *blr++;
 		if ((c >= 'A' && c <= 'Z') || c == '$' || c == '_')
-			sprintf(p, "'%c'", c);
+			snprintf(p, sizeof(buffer) - (p - buffer), "'%c'", c);
 		else
-			sprintf(p, "%d", c);
+			snprintf(p, sizeof(buffer) - (p - buffer), "%d", c);
 		while (*p)
 			p++;
 		if (count - 1)
@@ -3410,7 +3410,8 @@ static void gen_tpb(const tpb* tpb_buffer, int column)
 	for (length = 0; length < column; length++)
 		*p++ = ' ';
 
-	sprintf(p, "fb_tpb_%d [%d] = {", tpb_buffer->tpb_ident, tpb_buffer->tpb_length);
+	snprintf(p, sizeof(buffer) - (p - buffer), "fb_tpb_%d [%d] = {", tpb_buffer->tpb_ident,
+		tpb_buffer->tpb_length);
 	while (*p)
 		p++;
 
@@ -3421,9 +3422,9 @@ static void gen_tpb(const tpb* tpb_buffer, int column)
 	{
 		const TEXT c = *text++;
 		if ((c >= 'A' && c <= 'Z') || c == '$' || c == '_')
-			sprintf(p, "'%c'", c);
+			snprintf(p, sizeof(buffer) - (p - buffer), "'%c'", c);
 		else
-			sprintf(p, "%d", c);
+			snprintf(p, sizeof(buffer) - (p - buffer), "%d", c);
 		while (*p)
 			p++;
 		if (tpb_length)
@@ -3818,12 +3819,12 @@ static void make_ready(const gpre_dbb* db,
 
 	if (request)
 	{
-		sprintf(s1, "fb_%dl", request->req_ident);
+		snprintf(s1, sizeof(s1), "fb_%dl", request->req_ident);
 
 		if (request->req_flags & REQ_extend_dpb)
-			sprintf(s2, "fb_%dp", request->req_ident);
+			snprintf(s2, sizeof(s2), "fb_%dp", request->req_ident);
 		else
-			sprintf(s2, "fb_%d", request->req_ident);
+			snprintf(s2, sizeof(s2), "fb_%d", request->req_ident);
 
 		// if the dpb needs to be extended at runtime to include items
 		// in host variables, do so here; this assumes that there is

@@ -411,12 +411,12 @@ BOOL CanEndServer(HWND hWnd)
 	if (usNumAtt)
 	{
 		LoadString(hInstance, IDS_QUIT1, szMsgString1, sizeof(szMsgString1));
-		sprintf(szMsgString2, szMsgString1, usNumAtt);
+		snprintf(szMsgString2, sizeof(szMsgString2), szMsgString1, usNumAtt);
 	}
 	else
 	{
 		LoadString(hInstance, IDS_QUIT2, szMsgString1, sizeof(szMsgString1));
-		sprintf(szMsgString2, szMsgString1, usNumSvc);
+		snprintf(szMsgString2, sizeof(szMsgString2), szMsgString1, usNumSvc);
 	}
 
 	return (MessageBox(hWnd, szMsgString2, APP_LABEL, MB_ICONQUESTION | MB_OKCANCEL) == IDOK);

@@ -1017,8 +1017,6 @@ int gstat(Firebird::UtilSvc* uSvc)
 
 	// Print results
 
-	UCHAR buf[BUFFER_SMALL], buf2[BUFFER_SMALL];
-
 	for (const dba_rel* relation = tddba->relations; relation; relation = relation->rel_next)
 	{
 		if (relation->rel_id == -1) {
@@ -1039,35 +1037,25 @@ int gstat(Firebird::UtilSvc* uSvc)
 
 				double average = relation->rel_records ?
 					(double) relation->rel_record_space / relation->rel_records : 0.0;
-				sprintf((char*) buf, "%.2f", average);
-				uSvc->printf(false, "    Average record length: %s, total records: %" UQUADFORMAT "\n",
-							 buf, relation->rel_records);
-				// dba_print(false, 18, SafeArg() << buf << relation->rel_records);
-				// msg 18: "    Average record length: %s, total records: %ld
+				uSvc->printf(false, "    Average record length: %.2f, total records: %" UQUADFORMAT "\n",
+							 average, relation->rel_records);
 
 				average = relation->rel_versions ?
 					(double) relation->rel_version_space / relation->rel_versions : 0.0;
-				sprintf((char*) buf, "%.2f", average);
-				uSvc->printf(false, "    Average version length: %s, total versions: %" UQUADFORMAT ", max versions: %" UQUADFORMAT "\n",
-							 buf, relation->rel_versions, relation->rel_max_versions);
-				// dba_print(false, 19, SafeArg() << buf << relation->rel_versions <<
-				//			 relation->rel_max_versions);
-				// msg 19: " Average version length: %s, total versions: %ld, max versions: %ld
+				uSvc->printf(false, "    Average version length: %.2f, total versions: %" UQUADFORMAT ", max versions: %" UQUADFORMAT "\n",
+							 average, relation->rel_versions, relation->rel_max_versions);
 
 				average = relation->rel_fragments ?
 					(double) relation->rel_fragment_space / relation->rel_fragments : 0.0;
-				sprintf((char*) buf, "%.2f", average);
-				uSvc->printf(false, "    Average fragment length: %s, total fragments: %" UQUADFORMAT ", max fragments: %" UQUADFORMAT "\n",
-							 buf, relation->rel_fragments, relation->rel_max_fragments);
+				uSvc->printf(false, "    Average fragment length: %.2f, total fragments: %" UQUADFORMAT ", max fragments: %" UQUADFORMAT "\n",
+							 average, relation->rel_fragments, relation->rel_max_fragments);
 
 				average = relation->rel_records ?
 					(double) relation->rel_format_space / relation->rel_records : 0.0;
-				sprintf((char*) buf, "%.2f", average);
-				average = relation->rel_record_space ?
+				double average2 = relation->rel_record_space ?
 					(double) relation->rel_format_space / relation->rel_record_space : 0.0;
-				sprintf((char*) buf2, "%.2f", average);
-				uSvc->printf(false, "    Average unpacked length: %s, compression ratio: %s\n",
-							 buf, buf2);
+				uSvc->printf(false, "    Average unpacked length: %.2f, compression ratio: %.2f\n",
+							 average, average2);
 
 			}
 
@@ -1077,10 +1065,8 @@ int gstat(Firebird::UtilSvc* uSvc)
 			const double average = (relation->rel_data_pages) ?
 				(double) relation->rel_total_space * 100 /
 				((double) relation->rel_data_pages * (tddba->page_size - DPG_SIZE)) : 0.0;
-			sprintf((char*) buf, "%.0f%%", average);
-			//dba_print(false, 12, SafeArg() << relation->rel_data_pages << relation->rel_slots << buf);
-			// msg 12: "    Data pages: %ld, data page slots: %ld, average fill: %s
-			uSvc->printf(false, "    Data pages: %ld, average fill: %s\n", relation->rel_data_pages, buf);
+			uSvc->printf(false, "    Data pages: %ld, average fill: %.0f%%\n",
+				relation->rel_data_pages, average);
 
 			dba_print(false, 46, SafeArg() << relation->rel_primary_pages <<
 				relation->rel_data_pages - relation->rel_primary_pages <<
@@ -1147,36 +1133,34 @@ int gstat(Firebird::UtilSvc* uSvc)
 		{
 			dba_print(false, 14, SafeArg() << index->idx_name << index->idx_id);
 			// msg 14: "    Index %s (%d)"
-			//dba_print(false, 15, SafeArg() << index->idx_depth << index->idx_leaf_buckets << index->idx_nodes);
-			// msg 15: \tDepth: %d, leaf buckets: %ld, nodes: %ld
+
 			uSvc->printf(false, "\tRoot page: %d, depth: %d, leaf buckets: %ld, nodes: %" UQUADFORMAT "\n",
 						 index->idx_root, index->idx_depth, index->idx_leaf_buckets, index->idx_nodes);
+
 			double average = (index->idx_nodes) ?
 				(double) index->idx_total_length / index->idx_nodes : 0.0;
-			sprintf((char*) buf, "%.2f", average);
-			// dba_print(false, 16, SafeArg() << buf << index->idx_total_duplicates << index->idx_max_duplicates);
-			// msg 16: \tAverage data length: %s, total dup: %ld, max dup: %ld"
-			uSvc->printf(false, "\tAverage node length: %s, total dup: %" UQUADFORMAT ", max dup: %" UQUADFORMAT "\n",
-						 buf, index->idx_total_duplicates, index->idx_max_duplicates);
+			uSvc->printf(false, "\tAverage node length: %.2f, total dup: %" UQUADFORMAT ", max dup: %" UQUADFORMAT "\n",
+						 average, index->idx_total_duplicates, index->idx_max_duplicates);
+			
 			average = (index->idx_nodes) ?
 				(double) index->idx_packed_length / index->idx_nodes : 0.0;
-			sprintf((char*) buf, "%.2f", average);
-			average = index->idx_packed_length ?
+			double average2 = index->idx_packed_length ?
 				(double) index->idx_unpacked_length / index->idx_packed_length : 0.0;
-			sprintf((char*) buf2, "%.2f", average);
-			uSvc->printf(false, "\tAverage key length: %s, compression ratio: %s\n", buf, buf2);
+			uSvc->printf(false, "\tAverage key length: %.2f, compression ratio: %.2f\n", average,
+				average2);
+
 			average = (index->idx_nodes) ?
 				(double) index->idx_prefix_length / index->idx_nodes : 0.0;
-			sprintf((char*) buf, "%.2f", average);
-			average = (index->idx_nodes) ?
+			average2 = (index->idx_nodes) ?
 				(double) index->idx_data_length / index->idx_nodes : 0.0;
-			sprintf((char*) buf2, "%.2f", average);
-			uSvc->printf(false, "\tAverage prefix length: %s, average data length: %s\n", buf, buf2);
+			uSvc->printf(false, "\tAverage prefix length: %.2f, average data length: %.2f\n", average,
+				average2);
+
 			average = (index->idx_nodes) ?
 				(double) index->idx_diff_pages / index->idx_nodes : 0.0;
-			sprintf((char*) buf, "%.2f", average);
-			uSvc->printf(false, "\tClustering factor: %" UQUADFORMAT ", ratio: %s\n",
-						 index->idx_diff_pages, buf);
+			uSvc->printf(false, "\tClustering factor: %" UQUADFORMAT ", ratio: %.2f\n",
+						 index->idx_diff_pages, average);
+
 			dba_print(false, 17);
 			// msg 17: \tFill distribution:
 			print_distribution("\t    ", index->idx_fill_distribution);
@@ -1863,7 +1847,7 @@ static void db_error( SLONG status)
 						sizeof(s),
 						NULL))
 	{
-		sprintf(s, "unknown Windows NT error %ld", status);
+		snprintf(s, sizeof(s), "unknown Windows NT error %ld", status);
 	}
 
 	if (!tddba->uSvc->isService())

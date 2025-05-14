@@ -124,7 +124,7 @@ static const ISC_STATUS wrn[] = { isc_arg_gds, isc_random, isc_arg_string, (ISC_
 ReplPlugin::ReplPlugin(IPluginConfig* conf)
 {
 	char fn[100];
-	sprintf(fn, "session_%08x_%d.log", (unsigned)time(nullptr), logCounter++);
+	snprintf(fn, sizeof(fn), "session_%08x_%d.log", (unsigned)time(nullptr), logCounter++);
 	log = fopen(fn, "w");
 	WriteLog(log, "%p\tReplicatedSession constructed\n", this);
 	status = master->getStatus();

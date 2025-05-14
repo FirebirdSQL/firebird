@@ -52,7 +52,7 @@ const FB_SIZE_T MAX_STRING = 1 << 16;
 // Generic functions.
 int decode(uint64_t value, char* const rc, int radix = 10);
 int decode(int64_t value, char* const rc, int radix = 10);
-int decode(double value, char* rc);
+int decode(double value, char* const rc, const size_t sz);
 int adjust_prefix(int radix, int rev, bool is_neg, char* const rc);
 int MsgPrintHelper(BaseStream& out_stream, const safe_cell& item);
 
@@ -131,9 +131,10 @@ int decode(int64_t value, char* const rc, int radix)
 
 // Stub that relies on the printf family to write a double using "g"
 // for smallest representation in text form.
-int decode(double value, char* rc)
+int decode(double value, char* const rc, const size_t sz)
 {
-	return sprintf(rc, "%g", value);
+	int n = snprintf(rc, sz, "%g", value);
+	return std::min(n, static_cast<int>(sz - 1));
 }
 
 
@@ -203,7 +204,7 @@ int MsgPrintHelper(BaseStream& out_stream, const safe_cell& item)
 	case safe_cell::at_double:
 		{
 			char s[DECODE_BUF_SIZE];
-			int n = decode(item.d_value, s);
+			int n = decode(item.d_value, s, sizeof(s));
 			return out_stream.write(s, n);
 		}
 	case safe_cell::at_str:

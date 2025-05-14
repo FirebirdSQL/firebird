@@ -525,19 +525,19 @@ DescPrinter::DescPrinter(thread_db* tdbb, const dsc* desc, FB_SIZE_T mLen, USHOR
 
 		if (isBinary)
 		{
-			string hex;
-
 			FB_SIZE_T len = value.length();
 			const bool cut = (len > (maxLen - 3) / 2);	// 3 is a length of enclosing symbols: x' and '
 			if (cut)
 				len = (maxLen - 5) / 2;					// 5 is a length of enclosing symbols: x' and ...
 
-			char* s = hex.getBuffer(2 * len);			// each raw byte represented by 2 chars in string
+			string hex;
+			hex.reserve(2 * len);						// each raw byte represented by 2 chars in string
 
+			char s[3];
 			for (FB_SIZE_T i = 0; i < len; i++)
 			{
-				sprintf(s, "%02X", (int)(unsigned char) str[i]);
-				s += 2;
+				snprintf(s, sizeof(s), "%02X", (int)(unsigned char) str[i]);
+				hex.append(s);
 			}
 			value = "x'" + hex + (cut ? "..." : "'");
 		}

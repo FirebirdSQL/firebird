@@ -7997,7 +7997,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 		//// TODO: <Missing arg #1 - possibly status vector overflow>
 		/***
 		char linecol[64];
-		sprintf(linecol, "At line %d, column %d.", (int) dsqlNode->line, (int) dsqlNode->column);
+		snprintf(linecol, sizeof(linecol), "At line %d, column %d.", (int) dsqlNode->line, (int) dsqlNode->column);
 		***/
 
 		status_exception::raise(
@@ -13204,7 +13204,8 @@ void GrantRevokeNode::setFieldClassName(thread_db* tdbb, jrd_tra* transaction,
 		MODIFY RFR
 			while (!unique)
 		    {
-				sprintf(RFR.RDB$SECURITY_CLASS, "%s%" SQUADFORMAT, SQL_FLD_SECCLASS_PREFIX,
+				snprintf(RFR.RDB$SECURITY_CLASS, sizeof(RFR.RDB$SECURITY_CLASS), "%s%" SQUADFORMAT, 
+					SQL_FLD_SECCLASS_PREFIX,
 					DPM_gen_id(tdbb,
 						MET_lookup_generator(tdbb, QualifiedName(SQL_SECCLASS_GENERATOR, SYSTEM_SCHEMA)), false, 1));
 

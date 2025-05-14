@@ -127,8 +127,9 @@ void CMP_compile_request( gpre_req* request)
 
 	if (!request->req_handle && (request->req_type != REQ_procedure))
 	{
-		request->req_handle = (TEXT*) MSC_alloc(20);
-		sprintf(request->req_handle, gpreGlob.ident_pattern, CMP_next_ident());
+		static constexpr size_t handleSize = 20;
+		request->req_handle = (TEXT*) MSC_alloc(handleSize);
+		snprintf(request->req_handle, handleSize, gpreGlob.ident_pattern, CMP_next_ident());
 	}
 
 	if (!request->req_trans)
@@ -857,7 +858,7 @@ static void cmp_field( gpre_req* request, const gpre_fld* field,
 	default:
 		{
 			TEXT s[50];
-			sprintf(s, "datatype %d not understood", field->fld_dtype);
+			snprintf(s, sizeof(s), "datatype %d not understood", field->fld_dtype);
 			CPR_error(s);
 		}
 	}

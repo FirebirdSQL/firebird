@@ -402,7 +402,7 @@ SINT64 EXP_SINT64_ordinal(bool advance_flag)
 	sscanf(gpreGlob.token_global.tok_string, format, &n);
 
 	char buffer[64];
-	sprintf(buffer, format, n);
+	snprintf(buffer, sizeof(buffer), format, n);
 	if (strcmp(buffer, gpreGlob.token_global.tok_string) != 0)
 		PAR_error("Numeric value out of range");
 
@@ -427,7 +427,7 @@ SLONG EXP_SLONG_ordinal(bool advance_flag)
 
 	const SLONG n = atoi(gpreGlob.token_global.tok_string);
 	char buffer[32];
-	sprintf(buffer, "%" SLONGFORMAT, n);
+	snprintf(buffer, sizeof(buffer), "%" SLONGFORMAT, n);
 	if (strcmp(buffer, gpreGlob.token_global.tok_string) != 0)
 		PAR_error("Numeric value out of range");
 
@@ -477,7 +477,7 @@ ULONG EXP_ULONG_ordinal(bool advance_flag)
 
 	const ULONG n = atoi(gpreGlob.token_global.tok_string);
 	char buffer[32];
-	sprintf(buffer, "%" ULONGFORMAT, n);
+	snprintf(buffer, sizeof(buffer), "%" ULONGFORMAT, n);
 	if (strcmp(buffer, gpreGlob.token_global.tok_string) != 0)
 		PAR_error("Numeric value out of range");
 
@@ -569,8 +569,6 @@ void EXP_post_array( ref* reference)
 
 ref* EXP_post_field(gpre_fld* field, gpre_ctx* context, bool null_flag)
 {
-	TEXT s[128];
-
 	gpre_req* request = context->ctx_request;
 
 	// If the reference is already posted, return the reference
@@ -593,7 +591,9 @@ ref* EXP_post_field(gpre_fld* field, gpre_ctx* context, bool null_flag)
 						reference->ref_field = field;
 					else
 					{
-						sprintf(s, "field %s is inconsistently cast", field->fld_symbol->sym_string);
+						TEXT s[BUFFER_MEDIUM];
+						snprintf(s, sizeof(s), "field %s is inconsistently cast",
+							field->fld_symbol->sym_string);
 						PAR_error(s);
 					}
 				}
@@ -1026,13 +1026,13 @@ static gpre_nod* normalize_index( dim* dimension, gpre_nod* user_index, USHORT a
 	case ZERO_BASED:
 		if (dimension->dim_lower < 0)
 			negate = true;
-		sprintf(string, "%d", abs(dimension->dim_lower));
+		snprintf(string, sizeof(string), "%d", abs(dimension->dim_lower));
 		break;
 
 	case ONE_BASED:
 		if (dimension->dim_lower - 1 < 0)
 			negate = true;
-		sprintf(string, "%d", abs(dimension->dim_lower - 1));
+		snprintf(string, sizeof(string), "%d", abs(dimension->dim_lower - 1));
 		break;
 
 	default:
@@ -1304,8 +1304,6 @@ static gpre_nod* par_multiply( gpre_req* request, gpre_fld* field)
 
 static gpre_nod* par_native_value( gpre_req* request, gpre_fld* field)
 {
-	TEXT s[64];
-
 	// Special case literals
 
 	if (gpreGlob.token_global.tok_type == tok_number ||
@@ -1327,7 +1325,8 @@ static gpre_nod* par_native_value( gpre_req* request, gpre_fld* field)
 
 	if (!field)
 	{
-		sprintf(s, "no reference field for %s", reference->ref_value);
+		TEXT s[64];
+		snprintf(s, sizeof(s), "no reference field for %s", reference->ref_value);
 		PAR_error(s);
 	}
 
