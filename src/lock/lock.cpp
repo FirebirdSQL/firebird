@@ -1544,7 +1544,7 @@ void LockManager::bug_assert(const TEXT* string, ULONG line)
 	TEXT buffer[MAXPATHLEN + 100];
 	lhb LOCK_header_copy;
 
-	sprintf((char*) buffer, "%s %" ULONGFORMAT": lock assertion failure: %.60s\n",
+	snprintf(buffer, sizeof(buffer), "%s %" ULONGFORMAT": lock assertion failure: %s\n",
 			__FILE__, line, string);
 
 	// Copy the shared memory so we can examine its state when we crashed
@@ -1569,9 +1569,9 @@ void LockManager::bug(CheckStatusWrapper* statusVector, const TEXT* string)
 	TEXT s[2 * MAXPATHLEN];
 
 #ifdef WIN_NT
-	sprintf(s, "Fatal lock manager error: %s, errno: %ld", string, ERRNO);
+	snprintf(s, sizeof(s), "Fatal lock manager error: %s, errno: %ld", string, ERRNO);
 #else
-	sprintf(s, "Fatal lock manager error: %s, errno: %d", string, ERRNO);
+	snprintf(s, sizeof(s), "Fatal lock manager error: %s, errno: %d", string, ERRNO);
 #endif
 
 #if !(defined WIN_NT)
@@ -2101,19 +2101,19 @@ lrq* LockManager::get_request(SRQ_PTR offset)
  *	Locate and validate user supplied request offset.
  *
  **************************************/
-	TEXT s[BUFFER_TINY];
-
 	lrq* request = (lrq*) SRQ_ABS_PTR(offset);
 	if (offset == -1 || request->lrq_type != type_lrq)
 	{
-		sprintf(s, "invalid lock id (%" SLONGFORMAT")", offset);
+		TEXT s[BUFFER_TINY];
+		snprintf(s, sizeof(s), "invalid lock id (%" SLONGFORMAT")", offset);
 		bug(NULL, s);
 	}
 
 	const lbl* lock = (lbl*) SRQ_ABS_PTR(request->lrq_lock);
 	if (lock->lbl_type != type_lbl)
 	{
-		sprintf(s, "invalid lock (%" SLONGFORMAT")", offset);
+		TEXT s[BUFFER_TINY];
+		snprintf(s, sizeof(s), "invalid lock (%" SLONGFORMAT")", offset);
 		bug(NULL, s);
 	}
 

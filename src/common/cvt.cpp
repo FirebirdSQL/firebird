@@ -2361,70 +2361,73 @@ static void datetime_to_text(const dsc* from, dsc* to, Callbacks* cb)
 
 	// Decode the timestamp into human readable terms
 
-	// yyyy-mm-dd hh:mm:ss.tttt +th:tm OR dd-MMM-yyyy hh:mm:ss.tttt +th:tm
-	TEXT temp[27 + TimeZoneUtil::MAX_LEN];
-	TEXT* p = temp;
+	string temp;
+	// yyyy-mm-dd hh:mm:ss.tttt [{ +th:tm | zone-name }] OR dd-MMM-yyyy hh:mm:ss.tttt [{ +th:tm | zone-name }]
+	temp.reserve(26 + TimeZoneUtil::MAX_LEN);
 
 	// Make a textual date for data types that include it
 
 	if (!from->isTime())
 	{
+		// yyyy-mm-dd OR dd-MMM-yyyy + nul-termination
+		char dateStr[11 + 1];
 		if (from->dsc_dtype == dtype_sql_date || !version4)
 		{
-			sprintf(p, "%4.4d-%2.2d-%2.2d",
+			snprintf(dateStr, sizeof(dateStr), "%4.4d-%2.2d-%2.2d",
 					times.tm_year + 1900, times.tm_mon + 1, times.tm_mday);
 		}
 		else
 		{
 			// Prior to BLR version 5 timestamps were converted to text in the dd-MMM-yyyy format
-			sprintf(p, "%2.2d-%.3s-%4.4d",
+			snprintf(dateStr, sizeof(dateStr), "%2.2d-%.3s-%4.4d",
 					times.tm_mday,
 					FB_LONG_MONTHS_UPPER[times.tm_mon], times.tm_year + 1900);
 		}
-
-		while (*p)
-			p++;
+		temp.append(dateStr);
 	}
 
 	// Put in a space to separate date & time components
 
 	if (from->isTimeStamp() && !version4)
-		*p++ = ' ';
+		temp.append(" ");
 
 	// Add the time part for data types that include it
 
 	if (from->dsc_dtype != dtype_sql_date)
 	{
+		// hh:mm:ss.tttt + nul-termination
+		char timeStr[13 + 1];
 		if (from->isTime() || !version4)
 		{
-			sprintf(p, "%2.2d:%2.2d:%2.2d.%4.4d",
+			snprintf(timeStr, sizeof(timeStr), "%2.2d:%2.2d:%2.2d.%4.4d",
 					times.tm_hour, times.tm_min, times.tm_sec, fractions);
 		}
 		else if (times.tm_hour || times.tm_min || times.tm_sec || fractions)
 		{
 			// Timestamp formating prior to BLR Version 5 is slightly different
-			sprintf(p, " %d:%.2d:%.2d.%.4d",
+			snprintf(timeStr, sizeof(timeStr), " %d:%.2d:%.2d.%.4d",
 					times.tm_hour, times.tm_min, times.tm_sec, fractions);
 		}
-
-		while (*p)
-			p++;
+		temp.append(timeStr);
 	}
 
 	if (from->isDateTimeTz())
 	{
-		*p++ = ' ';
-		p += TimeZoneUtil::format(p, sizeof(temp) - (p - temp), timezone, !tzLookup);
+		temp.append(" ");
+		// [{ +th:tm | zone-name }] + nul-termination
+		char tzStr[TimeZoneUtil::MAX_LEN + 1];
+		TimeZoneUtil::format(tzStr, sizeof(tzStr), timezone, !tzLookup);
+		temp.append(tzStr);
 	}
 
 	// Move the text version of the date/time value into the destination
 
 	dsc desc;
 	MOVE_CLEAR(&desc, sizeof(desc));
-	desc.dsc_address = (UCHAR*) temp;
+	desc.dsc_address = (UCHAR*) temp.c_str();
 	desc.dsc_dtype = dtype_text;
 	desc.dsc_ttype() = ttype_ascii;
-	desc.dsc_length = (p - temp);
+	desc.dsc_length = static_cast<USHORT>(temp.length());
 
 	if (from->isTimeStamp() && version4)
 	{

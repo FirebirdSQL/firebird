@@ -72,7 +72,7 @@ USHORT SERVICES_install(SC_HANDLE manager,
 
 	char path_name[MAX_PATH * 2];
 	const char* path_format = (strchr(exe_name, ' ') ? "\"%s\"" : "%s");
-	sprintf(path_name, path_format, exe_name);
+	snprintf(path_name, sizeof(path_name), path_format, exe_name);
 
 	if (switches)
 	{

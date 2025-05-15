@@ -154,7 +154,7 @@ void ERR_error(int number)
 	TEXT errmsg[MAX_ERRMSG_LEN + 1];
 
 	if (gds__msg_lookup(0, FB_IMPL_MSG_FACILITY_JRD_BUGCHK, number, sizeof(errmsg), errmsg, NULL) < 1)
-		sprintf(errmsg, "error code %d", number);
+		snprintf(errmsg, sizeof(errmsg), "error code %d", number);
 
 	ERR_post(Arg::Gds(isc_random) << Arg::Str(errmsg));
 }
