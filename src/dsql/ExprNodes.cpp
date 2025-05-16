@@ -9944,9 +9944,6 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 	{
 		if (impureForOuter)
 			EVL_make_value(tdbb, retDesc, impureForOuter);
-
-		if (retDesc->dsc_dtype == dtype_text)
-			INTL_adjust_text_descriptor(tdbb, retDesc);
 	}
 
 	auto impureFlags = paramRequest->getImpure<USHORT>(
@@ -9984,7 +9981,7 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 				auto charSet = INTL_charset_lookup(tdbb, DSC_GET_CHARSET(retDesc));
 
 				EngineCallbacks::instance->validateData(charSet, len, p);
-				EngineCallbacks::instance->validateLength(charSet, DSC_GET_CHARSET(retDesc), len, p, maxLen);
+				// Validation of length for user-provided data against user-provided metadata makes a little sense here. Leave it to the real assignment.
 			}
 			else if (retDesc->isBlob())
 			{
