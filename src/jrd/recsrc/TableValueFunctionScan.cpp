@@ -200,7 +200,7 @@ void UnlistFunctionScan::internalOpen(thread_db* tdbb) const
 	Record* const record = VIO_record(tdbb, rpb, m_format, &pool);
 
 	auto toDesc = m_format->fmt_desc.begin();
-	fb_assert(toDesc);
+	fb_assert(m_format->fmt_desc.getCount());
 	const auto textType = toDesc->getTextType();
 
 	impure->m_separatorStr = FB_NEW_POOL(pool)
@@ -211,7 +211,7 @@ void UnlistFunctionScan::internalOpen(thread_db* tdbb) const
 		const string valueStr(MOV_make_string2(tdbb, valueDesc, textType, false));
 		dsc fromDesc;
 		fromDesc.makeText(valueStr.size(), textType, (UCHAR*)(IPTR)(valueStr.c_str()));
-		assignParameter(tdbb, &fromDesc, toDesc, 0, record);
+		assignParameter(tdbb, &fromDesc, &(*toDesc), 0, record);
 		impure->m_recordBuffer->store(record);
 		return;
 	}
@@ -288,7 +288,7 @@ bool UnlistFunctionScan::nextBuffer(thread_db* tdbb) const
 
 			dsc fromDesc;
 			fromDesc.makeText(str.length(), textType, (UCHAR*)(IPTR)(str.c_str()));
-			assignParameter(tdbb, &fromDesc, toDesc, 0, record);
+			assignParameter(tdbb, &fromDesc, &(*toDesc), 0, record);
 			impure->m_recordBuffer->store(record);
 		};
 

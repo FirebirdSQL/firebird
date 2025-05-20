@@ -9379,6 +9379,11 @@ const Format* MessageNode::getFormat(const Request* request) const
 	return format.getObject();
 }
 
+ULONG MessageNode::getImpureOffset() const
+{
+	return impureOffset;
+}
+
 void MessageNode::setFormat(Request* request, Format* newFormat)
 {
 	fb_assert(request != nullptr);

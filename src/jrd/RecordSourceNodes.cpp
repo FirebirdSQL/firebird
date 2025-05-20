@@ -4176,7 +4176,7 @@ TableValueFunctionSourceNode* TableValueFunctionSourceNode::parse(thread_db* tdb
 	SSHORT fieldId = 0;
 	while (count--)
 	{
-		PAR_desc(tdbb, csb, descIt, nullptr);
+		PAR_desc(tdbb, csb, &(*descIt), nullptr);
 
 		const USHORT align = type_alignments[descIt->dsc_dtype];
 		if (align)

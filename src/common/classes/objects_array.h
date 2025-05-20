@@ -378,6 +378,12 @@ namespace Firebird
 			return *iterator(this, getCount() - 1);
 		}
 
+		const T& back() const
+		{
+			fb_assert(getCount() > 0);
+			return *const_iterator(this, getCount() - 1);
+		}
+
 		const_iterator begin() const
 		{
 			return const_iterator(this, 0);

@@ -4349,7 +4349,7 @@ const
 	isc_dpb_search_path = byte(105);
 	isc_dpb_blr_request_search_path = byte(106);
 	isc_dpb_gbak_restore_has_schema = byte(107);
-	isc_dpb_flatten_row_type = byte(103);
+	isc_dpb_flatten_row_type = byte(105);
 	isc_dpb_address = byte(1);
 	isc_dpb_addr_protocol = byte(1);
 	isc_dpb_addr_endpoint = byte(2);

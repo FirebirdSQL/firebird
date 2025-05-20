@@ -152,13 +152,13 @@ public:
 	Firebird::RefStrPtr sqlText;		// SQL text (encoded in the metadata charset)
 	Firebird::Array<UCHAR> blr;			// BLR for non-SQL query
 	MapFieldInfo mapFieldInfo;			// Map field name to field info
+	MapContextVariableName mapContextVariableNames;	// Map of variable names related to context number
 
 private:
 	Resources* resources;				// Resources (relations, routines, etc.)
 	Firebird::RefPtr<VersionedObjects> latestVer;
 	Firebird::Mutex lvMutex;			// Protects upgrade of latestVer
 	Firebird::Array<MessageNode*> messages;	// Input/output messages
-	MapContextVariableName mapContextVariableNames;	// Map of variable names related to context number
 };
 
 

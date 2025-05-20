@@ -203,13 +203,11 @@ dsc* EVL_assign_to(thread_db* tdbb, const ValueExprNode* node)
 		if (desc->dsc_dtype == dtype_rowtype)
 		{
 			EVL_put_desc(tdbb, desc, impure);
-			impure->vlu_desc.setAddressRecursively(paramNode->getParamRequest(request)->getImpure<UCHAR>(
-				message->impureOffset + (IPTR) desc->dsc_address));
+			impure->vlu_desc.setAddressRecursively(message->getBuffer(paramRequest) + (IPTR) desc->dsc_address);
 			return &impure->vlu_desc;
 		}
 
-		impure->vlu_desc.dsc_address = paramNode->getParamRequest(request)->getImpure<UCHAR>(
-			message->impureOffset + (IPTR) desc->dsc_address);
+		impure->vlu_desc.dsc_address = message->getBuffer(paramRequest) + (IPTR) desc->dsc_address;
 		impure->vlu_desc.dsc_dtype = desc->dsc_dtype;
 		impure->vlu_desc.dsc_length = desc->dsc_length;
 		impure->vlu_desc.dsc_scale = desc->dsc_scale;

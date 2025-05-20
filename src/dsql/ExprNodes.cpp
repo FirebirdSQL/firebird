@@ -10141,7 +10141,7 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 	desc = &message->getFormat(paramRequest)->fmt_desc[argNumber];
 
 	EVL_put_desc(tdbb, desc, retImpureDesc);
-	retImpureDesc->setAddressRecursively(paramRequest->getImpure<UCHAR>(message->impureOffset + (IPTR) desc->dsc_address));
+	retImpureDesc->setAddressRecursively(message->getBuffer(paramRequest) + (IPTR) desc->dsc_address);
 	retImpureDesc->propagateNullMask();
 
 	if (!isNull)
