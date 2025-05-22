@@ -247,7 +247,7 @@ namespace fb_utils
 
 	// Returns next offset value
 	unsigned sqlTypeToDsc(unsigned prevOffset, unsigned sqlType, unsigned sqlLength,
-		unsigned* dtype, unsigned* len, unsigned* offset, unsigned* nullOffset);
+		unsigned* dtype, unsigned* len, unsigned* offset, unsigned* nullOffset, bool omitNullIndicator = false);
 
 	bool inline isNetworkError(ISC_STATUS code) noexcept
 	{

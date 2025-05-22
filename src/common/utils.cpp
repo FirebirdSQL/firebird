@@ -1558,7 +1558,7 @@ USHORT dscTypeToSqlType(SSHORT dscType)
 }
 
 unsigned sqlTypeToDsc(unsigned runOffset, unsigned sqlType, unsigned sqlLength,
-	unsigned* dtype, unsigned* len, unsigned* offset, unsigned* nullOffset)
+	unsigned* dtype, unsigned* len, unsigned* offset, unsigned* nullOffset, bool omitNullIndicator)
 {
 	sqlType &= ~1;
 	unsigned dscType = sqlTypeToDscType(sqlType);
@@ -1584,6 +1584,10 @@ unsigned sqlTypeToDsc(unsigned runOffset, unsigned sqlType, unsigned sqlLength,
 		*offset = runOffset;
 
 	runOffset += sqlLength;
+
+	if (omitNullIndicator)
+		return runOffset;
+
 	align = type_alignments[dtype_short];
 	if (align)
 		runOffset = FB_ALIGN(runOffset, align);

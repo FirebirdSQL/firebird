@@ -85,6 +85,29 @@ void BlrFromMessage::buildBlr(IMessageMetadata* metadata)
 	appendUChar(0);
 	appendUShort(count * 2);
 
+	buildBlrForItems(metadata, count, true);
+}
+
+void BlrFromMessage::buildRowTypeBlr(IMessageMetadata* submeta)
+{
+	LocalStatus ls;
+	CheckStatusWrapper st(&ls);
+
+	const unsigned subcount = submeta->getCount(&st);
+	check(&st);
+
+	appendUChar(blr_rowtype);
+	appendUChar(blr_rt_full);
+	appendUShort(subcount);
+
+	buildBlrForItems(submeta, subcount, false);
+}
+
+void BlrFromMessage::buildBlrForItems(IMessageMetadata* metadata, unsigned count, bool isTopLevel)
+{
+	LocalStatus ls;
+	CheckStatusWrapper st(&ls);
+
 	unsigned msgLen = 0;
 
 	for (unsigned i = 0; i < count; ++i)
@@ -242,19 +265,18 @@ void BlrFromMessage::buildBlr(IMessageMetadata* metadata)
 				break;
 
 			case SQL_ROWTYPE:
-				appendUChar(blr_rowtype);
-				appendUChar(blr_rt_full);
-				appendUShort(len);
+			{
+				auto submeta = metadata->getSubMetadata(&st, i);
+				check(&st);
+				buildRowTypeBlr(submeta);
 				dtype = dtype_rowtype;
 				break;
+			}
 
 			default:
 				Arg::Gds(isc_dsql_sqlda_value_err).raise();
 				break;
 		}
-
-		appendUChar(blr_short);
-		appendUChar(0);
 
 		unsigned align = type_alignments[dtype];
 		if (align)
@@ -262,19 +284,28 @@ void BlrFromMessage::buildBlr(IMessageMetadata* metadata)
 
 		msgLen += len;
 
-		align = type_alignments[dtype_short];
-		if (align)
-			msgLen = FB_ALIGN(msgLen, align);
+		if (isTopLevel)
+		{
+			appendUChar(blr_short);
+			appendUChar(0);
 
-		msgLen += sizeof(SSHORT);
+			align = type_alignments[dtype_short];
+			if (align)
+				msgLen = FB_ALIGN(msgLen, align);
+
+			msgLen += sizeof(SSHORT);
+		}
 	}
 
-	appendUChar(blr_end);
-	appendUChar(blr_eoc);
-
-	if (expectedMessageLength && msgLen && (expectedMessageLength != msgLen))
+	if (isTopLevel)
 	{
-		Arg::Gds(isc_wrong_message_length).raise();
+		appendUChar(blr_end);
+		appendUChar(blr_eoc);
+
+		if (expectedMessageLength && msgLen && (expectedMessageLength != msgLen))
+		{
+			Arg::Gds(isc_wrong_message_length).raise();
+		}
 	}
 }
 

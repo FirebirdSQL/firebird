@@ -39,6 +39,7 @@
 using namespace Firebird;
 
 static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length);
+static bool parse_descriptor(const UCHAR*& blr, size_t& blr_length, dsc* desc, USHORT& align, bool& is_blob);
 
 
 RMessage* PARSE_messages(const UCHAR* blr, size_t blr_length)
@@ -169,221 +170,13 @@ static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length)
 			return NULL;
 
 		USHORT align = 4;
-		switch (*blr++)
-		{
-		case blr_text:
-			if (blr_length < 2)
-				return NULL;
-			blr_length -= 2;
-			desc->dsc_dtype = dtype_text;
-			desc->dsc_length = *blr++;
-			desc->dsc_length += (*blr++) << 8;
-			break;
+		bool is_blob = false;
 
-		case blr_varying:
-		{
-			if (blr_length < 2)
-				return NULL;
-			blr_length -= 2;
-			desc->dsc_dtype = dtype_varying;
-			unsigned length = sizeof(USHORT) + *blr++;
-			length += (*blr++) << 8;
-			desc->dsc_length = length <= MAX_USHORT ? static_cast<USHORT>(length) : MAX_USHORT;
-			break;
-		}
-
-		case blr_cstring:
-			if (blr_length < 2)
-				return NULL;
-			blr_length -= 2;
-			desc->dsc_dtype = dtype_cstring;
-			desc->dsc_length = *blr++;
-			desc->dsc_length += (*blr++) << 8;
-			if (desc->dsc_length == 0)
-				desc->dsc_length = 1;
-			break;
-
-			// Parse the tagged blr types correctly
-
-		case blr_text2:
-			if (blr_length < 4)
-				return NULL;
-			blr_length -= 4;
-			desc->dsc_dtype = dtype_text;
-			desc->dsc_scale = *blr++;
-			desc->dsc_scale += (*blr++) << 8;
-			desc->dsc_length = *blr++;
-			desc->dsc_length += (*blr++) << 8;
-			break;
-
-		case blr_varying2:
-		{
-			if (blr_length < 4)
-				return NULL;
-			blr_length -= 4;
-			desc->dsc_dtype = dtype_varying;
-			desc->dsc_scale = *blr++;
-			desc->dsc_scale += (*blr++) << 8;
-			unsigned length = sizeof(USHORT) + *blr++;
-			length += (*blr++) << 8;
-			desc->dsc_length = length <= MAX_USHORT ? static_cast<USHORT>(length) : MAX_USHORT;
-			break;
-		}
-
-		case blr_cstring2:
-			if (blr_length < 4)
-				return NULL;
-			blr_length -= 4;
-			desc->dsc_dtype = dtype_cstring;
-			desc->dsc_scale = *blr++;
-			desc->dsc_scale += (*blr++) << 8;
-			desc->dsc_length = *blr++;
-			desc->dsc_length += (*blr++) << 8;
-			if (desc->dsc_length == 0)
-				desc->dsc_length = 1;
-			break;
-
-		case blr_short:
-			if (blr_length-- == 0)
-				return NULL;
-			desc->dsc_dtype = dtype_short;
-			desc->dsc_length = sizeof(SSHORT);
-			desc->dsc_scale = *blr++;
-			break;
-
-		case blr_long:
-			if (blr_length-- == 0)
-				return NULL;
-			desc->dsc_dtype = dtype_long;
-			desc->dsc_length = sizeof(SLONG);
-			desc->dsc_scale = *blr++;
-			break;
-
-		case blr_int64:
-			if (blr_length-- == 0)
-				return NULL;
-			desc->dsc_dtype = dtype_int64;
-			desc->dsc_length = sizeof(SINT64);
-			desc->dsc_scale = *blr++;
-			break;
-
-		case blr_quad:
-			if (blr_length-- == 0)
-				return NULL;
-			desc->dsc_dtype = dtype_quad;
-			desc->dsc_length = sizeof(SLONG) * 2;
-			desc->dsc_scale = *blr++;
-
-			format->fmt_blob_idx.add(desc - begin);
-			break;
-
-		case blr_float:
-			desc->dsc_dtype = dtype_real;
-			desc->dsc_length = sizeof(float);
-			break;
-
-		case blr_double:
-		case blr_d_float:
-			desc->dsc_dtype = dtype_double;
-			desc->dsc_length = sizeof(double);
-			break;
-
-		case blr_dec64:
-			desc->dsc_dtype = dtype_dec64;
-			desc->dsc_length = sizeof(Decimal64);
-			break;
-
-		case blr_dec128:
-			desc->dsc_dtype = dtype_dec128;
-			desc->dsc_length = sizeof(Decimal128);
-			break;
-
-		case blr_int128:
-			if (blr_length < 1)
-				return nullptr;
-			desc->dsc_dtype = dtype_int128;
-			desc->dsc_length = sizeof(Int128);
-			desc->dsc_scale = *blr++;
-			break;
-
-		// this case cannot occur as switch parameter is char and blr_blob
-        // is 261. blob_ids are actually passed around as blr_quad.
-
-	    //case blr_blob:
-		//	desc->dsc_dtype = dtype_blob;
-		//	desc->dsc_length = sizeof (SLONG) * 2;
-		//	break;
-
-		case blr_blob2:
-			{
-				if (blr_length < 4)
-					return NULL;
-				blr_length -= 4;
-				desc->dsc_dtype = dtype_blob;
-				desc->dsc_length = sizeof(SLONG) * 2;
-				desc->dsc_sub_type = *blr++;
-				desc->dsc_sub_type += (*blr++) << 8;
-
-				USHORT textType = *blr++;
-				textType += (*blr++) << 8;
-				desc->setTextType(TTypeId(textType));
-
-				format->fmt_blob_idx.add(desc - begin);
-			}
-			break;
-
-		case blr_timestamp:
-			desc->dsc_dtype = dtype_timestamp;
-			desc->dsc_length = sizeof(SLONG) * 2;
-			break;
-
-		case blr_timestamp_tz:
-			desc->dsc_dtype = dtype_timestamp_tz;
-			desc->dsc_length = sizeof(ISC_TIMESTAMP_TZ);
-			break;
-
-		case blr_ex_timestamp_tz:
-			desc->dsc_dtype = dtype_ex_timestamp_tz;
-			desc->dsc_length = sizeof(ISC_TIMESTAMP_TZ_EX);
-			break;
-
-		case blr_sql_date:
-			desc->dsc_dtype = dtype_sql_date;
-			desc->dsc_length = sizeof(SLONG);
-			break;
-
-		case blr_sql_time:
-			desc->dsc_dtype = dtype_sql_time;
-			desc->dsc_length = sizeof(ULONG);
-			break;
-
-		case blr_sql_time_tz:
-			desc->dsc_dtype = dtype_sql_time_tz;
-			desc->dsc_length = sizeof(ISC_TIME_TZ);
-			break;
-
-		case blr_ex_time_tz:
-			desc->dsc_dtype = dtype_ex_time_tz;
-			desc->dsc_length = sizeof(ISC_TIME_TZ_EX);
-			break;
-
-		case blr_bool:
-			desc->dsc_dtype = dtype_boolean;
-			desc->dsc_length = sizeof(UCHAR);
-			break;
-
-		case blr_rowtype:
-			desc->dsc_dtype = dtype_rowtype;
-			*blr++;	// skip sub parameter
-			desc->dsc_length = *blr++;
-			desc->dsc_length += (*blr++) << 8;
-			break;
-
-		default:
-			fb_assert(false);
+		if (!parse_descriptor(blr, blr_length, desc, align, is_blob))
 			return NULL;
-		}
-		align = type_alignments[desc->dsc_dtype];
+
+		if (is_blob)
+			format->fmt_blob_idx.add(desc - begin);
 
 		if (desc->dsc_dtype == dtype_varying)
 			net_length += 4 + ((desc->dsc_length - 2 + 3) & ~3);
@@ -401,4 +194,259 @@ static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length)
 	format->fmt_net_length = net_length;
 
 	return format.release();
+}
+
+static bool parse_descriptor(const UCHAR*& blr, size_t& blr_length, dsc* desc, USHORT& align, bool& is_blob)
+{
+	switch (*blr++)
+	{
+	case blr_text:
+		if (blr_length < 2)
+			return false;
+		blr_length -= 2;
+		desc->dsc_dtype = dtype_text;
+		desc->dsc_length = *blr++;
+		desc->dsc_length += (*blr++) << 8;
+		break;
+
+	case blr_varying:
+	{
+		if (blr_length < 2)
+			return false;
+		blr_length -= 2;
+		desc->dsc_dtype = dtype_varying;
+		unsigned length = sizeof(USHORT) + *blr++;
+		length += (*blr++) << 8;
+		desc->dsc_length = length <= MAX_USHORT ? static_cast<USHORT>(length) : MAX_USHORT;
+		break;
+	}
+
+	case blr_cstring:
+		if (blr_length < 2)
+			return false;
+		blr_length -= 2;
+		desc->dsc_dtype = dtype_cstring;
+		desc->dsc_length = *blr++;
+		desc->dsc_length += (*blr++) << 8;
+		if (desc->dsc_length == 0)
+			desc->dsc_length = 1;
+		break;
+
+		// Parse the tagged blr types correctly
+
+	case blr_text2:
+		if (blr_length < 4)
+			return false;
+		blr_length -= 4;
+		desc->dsc_dtype = dtype_text;
+		desc->dsc_scale = *blr++;
+		desc->dsc_scale += (*blr++) << 8;
+		desc->dsc_length = *blr++;
+		desc->dsc_length += (*blr++) << 8;
+		break;
+
+	case blr_varying2:
+	{
+		if (blr_length < 4)
+			return false;
+		blr_length -= 4;
+		desc->dsc_dtype = dtype_varying;
+		desc->dsc_scale = *blr++;
+		desc->dsc_scale += (*blr++) << 8;
+		unsigned length = sizeof(USHORT) + *blr++;
+		length += (*blr++) << 8;
+		desc->dsc_length = length <= MAX_USHORT ? static_cast<USHORT>(length) : MAX_USHORT;
+		break;
+	}
+
+	case blr_cstring2:
+		if (blr_length < 4)
+			return false;
+		blr_length -= 4;
+		desc->dsc_dtype = dtype_cstring;
+		desc->dsc_scale = *blr++;
+		desc->dsc_scale += (*blr++) << 8;
+		desc->dsc_length = *blr++;
+		desc->dsc_length += (*blr++) << 8;
+		if (desc->dsc_length == 0)
+			desc->dsc_length = 1;
+		break;
+
+	case blr_short:
+		if (blr_length-- == 0)
+			return false;
+		desc->dsc_dtype = dtype_short;
+		desc->dsc_length = sizeof(SSHORT);
+		desc->dsc_scale = *blr++;
+		break;
+
+	case blr_long:
+		if (blr_length-- == 0)
+			return false;
+		desc->dsc_dtype = dtype_long;
+		desc->dsc_length = sizeof(SLONG);
+		desc->dsc_scale = *blr++;
+		break;
+
+	case blr_int64:
+		if (blr_length-- == 0)
+			return false;
+		desc->dsc_dtype = dtype_int64;
+		desc->dsc_length = sizeof(SINT64);
+		desc->dsc_scale = *blr++;
+		break;
+
+	case blr_quad:
+		if (blr_length-- == 0)
+			return false;
+		desc->dsc_dtype = dtype_quad;
+		desc->dsc_length = sizeof(SLONG) * 2;
+		desc->dsc_scale = *blr++;
+
+		format->fmt_blob_idx.add(desc - begin);
+		break;
+
+	case blr_float:
+		desc->dsc_dtype = dtype_real;
+		desc->dsc_length = sizeof(float);
+		break;
+
+	case blr_double:
+	case blr_d_float:
+		desc->dsc_dtype = dtype_double;
+		desc->dsc_length = sizeof(double);
+		break;
+
+	case blr_dec64:
+		desc->dsc_dtype = dtype_dec64;
+		desc->dsc_length = sizeof(Decimal64);
+		break;
+
+	case blr_dec128:
+		desc->dsc_dtype = dtype_dec128;
+		desc->dsc_length = sizeof(Decimal128);
+		break;
+
+	case blr_int128:
+		if (blr_length < 1)
+			return false;
+		desc->dsc_dtype = dtype_int128;
+		desc->dsc_length = sizeof(Int128);
+		desc->dsc_scale = *blr++;
+		break;
+
+	// this case cannot occur as switch parameter is char and blr_blob
+	// is 261. blob_ids are actually passed around as blr_quad.
+
+	//case blr_blob:
+	//	desc->dsc_dtype = dtype_blob;
+	//	desc->dsc_length = sizeof (SLONG) * 2;
+	//	break;
+
+	case blr_blob2:
+		{
+			if (blr_length < 4)
+				return false;
+			blr_length -= 4;
+			desc->dsc_dtype = dtype_blob;
+			desc->dsc_length = sizeof(SLONG) * 2;
+			desc->dsc_sub_type = *blr++;
+			desc->dsc_sub_type += (*blr++) << 8;
+
+			USHORT textType = *blr++;
+			textType += (*blr++) << 8;
+			desc->setTextType(TTypeId(textType));
+
+			format->fmt_blob_idx.add(desc - begin);
+			is_blob = true;
+		}
+		break;
+
+	case blr_timestamp:
+		desc->dsc_dtype = dtype_timestamp;
+		desc->dsc_length = sizeof(SLONG) * 2;
+		break;
+
+	case blr_timestamp_tz:
+		desc->dsc_dtype = dtype_timestamp_tz;
+		desc->dsc_length = sizeof(ISC_TIMESTAMP_TZ);
+		break;
+
+	case blr_ex_timestamp_tz:
+		desc->dsc_dtype = dtype_ex_timestamp_tz;
+		desc->dsc_length = sizeof(ISC_TIMESTAMP_TZ_EX);
+		break;
+
+	case blr_sql_date:
+		desc->dsc_dtype = dtype_sql_date;
+		desc->dsc_length = sizeof(SLONG);
+		break;
+
+	case blr_sql_time:
+		desc->dsc_dtype = dtype_sql_time;
+		desc->dsc_length = sizeof(ULONG);
+		break;
+
+	case blr_sql_time_tz:
+		desc->dsc_dtype = dtype_sql_time_tz;
+		desc->dsc_length = sizeof(ISC_TIME_TZ);
+		break;
+
+	case blr_ex_time_tz:
+		desc->dsc_dtype = dtype_ex_time_tz;
+		desc->dsc_length = sizeof(ISC_TIME_TZ_EX);
+		break;
+
+	case blr_bool:
+		desc->dsc_dtype = dtype_boolean;
+		desc->dsc_length = sizeof(UCHAR);
+		break;
+
+	case blr_rowtype:
+		{
+			desc->dsc_dtype = dtype_rowtype;
+			*blr++;	// skip blr_rt_full
+
+			USHORT count = *blr++;
+			count += (*blr++) << 8;
+
+			desc->dsc_sub_count = count;
+			dsc** next_desc = &desc->dsc_sub_first;
+
+			ULONG offset = NULL_BYTES(count);
+
+			for (USHORT i = 0; i < count; i++)
+			{
+				if (blr_length-- == 0)
+					return false;
+
+				*next_desc = FB_NEW dsc();
+				dsc* cur_desc = *next_desc;
+
+				USHORT sub_align = 4;
+				bool sub_is_blob = false;
+
+				if (!parse_descriptor(blr, blr_length, cur_desc, sub_align, sub_is_blob))
+					return false;
+
+				if (sub_align > 1)
+					offset = FB_ALIGN(offset, sub_align);
+
+				cur_desc->dsc_address = (UCHAR*)(IPTR) offset;
+				offset += cur_desc->dsc_length;
+
+				next_desc = &cur_desc->dsc_next;
+			}
+
+			desc->dsc_length = offset;
+		}
+		break;
+
+	default:
+		fb_assert(false);
+		return false;
+	}
+
+	align = type_alignments[desc->dsc_dtype];
+	return true;
 }

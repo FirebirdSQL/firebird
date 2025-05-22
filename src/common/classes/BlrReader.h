@@ -65,6 +65,11 @@ public:
 		return (unsigned) (end - start);
 	}
 
+	unsigned getRemainingLength() const
+	{
+		return (unsigned) (end - pos);
+	}
+
 	const UCHAR* getPos() const
 	{
 		fb_assert(pos);

@@ -47,6 +47,8 @@ public:
 
 private:
 	void buildBlr(Firebird::IMessageMetadata* metadata);
+	void buildRowTypeBlr(Firebird::IMessageMetadata* metadata);
+	void buildBlrForItems(Firebird::IMessageMetadata* metadata, unsigned count, bool isTopLevel);
 
 	unsigned expectedMessageLength;
 	unsigned dialect;

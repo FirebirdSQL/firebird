@@ -788,14 +788,49 @@ void DsqlDmlRequest::executeReceiveWithRestarts(thread_db* tdbb, jrd_tra** traHa
 	}
 }
 
+void setDescFromMeta(Firebird::CheckStatusWrapper* st, Firebird::IMessageMetadata* meta, unsigned int index, dsc* desc)
+{
+	unsigned sqlType = meta->getType(st, index);
+	checkD(st);
+	unsigned sqlLength = meta->getLength(st, index);
+	checkD(st);
+
+	desc->dsc_flags = 0;
+	desc->dsc_dtype = fb_utils::sqlTypeToDscType(sqlType);
+	desc->dsc_length = sqlLength;
+	if (sqlType == SQL_VARYING)
+		desc->dsc_length += sizeof(USHORT);
+	desc->dsc_scale = meta->getScale(st, index);
+	checkD(st);
+	desc->dsc_sub_type = meta->getSubType(st, index);
+	checkD(st);
+	const auto textType = CSetId(meta->getCharSet(&st, index));
+	checkD(st);
+	desc->setTextType(textType);
+	desc->dsc_address = (UCHAR*)(IPTR) meta->getOffset(st, index);
+	checkD(st);
+
+	if (sqlType == SQL_ROWTYPE)
+	{
+		auto submeta = meta->getSubMetadata(st, index);
+		checkD(st);
+		auto subparametersNumber = submeta->getCount(st);
+		checkD(st);
+		auto nextDsc = &desc->dsc_sub_first;
+
+		for (auto indx = 0; indx < subparametersNumber; indx++)
+		{
+			*nextDsc = FB_NEW_POOL(*desc->pool) dsc(*desc->pool);
+			setDescFromMeta(st, submeta, indx, *nextDsc);
+			nextDsc = &(*nextDsc)->dsc_next;
+			desc->dsc_sub_count++;
+		}
+	}
+}
+
 void DsqlDmlRequest::metadataToFormat(Firebird::IMessageMetadata* meta, const dsql_msg* message)
 {
-	if (!message)
-	{
-		fb_assert(false);
-		return;
-	}
-	if (!meta)
+	if (!message || !meta)
 	{
 		fb_assert(false);
 		return;
@@ -839,27 +874,10 @@ void DsqlDmlRequest::metadataToFormat(Firebird::IMessageMetadata* meta, const ds
 		}
 
 		unsigned index = param->par_index - 1;
-		unsigned sqlType = meta->getType(&st, index);
-		checkD(&st);
-		unsigned sqlLength = meta->getLength(&st, index);
-		checkD(&st);
 
 		// For unknown reason parameters in Format has reversed order
 		dsc& desc = newFormat->fmt_desc[param->par_parameter];
-		desc.dsc_flags = 0;
-		desc.dsc_dtype = fb_utils::sqlTypeToDscType(sqlType);
-		desc.dsc_length = sqlLength;
-		if (sqlType == SQL_VARYING)
-			desc.dsc_length += sizeof(USHORT);
-		desc.dsc_scale = meta->getScale(&st, index);
-		checkD(&st);
-		desc.dsc_sub_type = meta->getSubType(&st, index);
-		checkD(&st);
-		const auto textType = CSetId(meta->getCharSet(&st, index));
-		checkD(&st);
-		desc.setTextType(textType);
-		desc.dsc_address = (UCHAR*)(IPTR) meta->getOffset(&st, index);
-		checkD(&st);
+		setDescFromMeta(&st, meta, index, &desc);
 		++assigned;
 
 		if (param->par_null != nullptr)

@@ -42,6 +42,10 @@ class MetadataFromBlr : public MsgMetadata
 {
 public:
 	MetadataFromBlr(unsigned blrLength, const unsigned char* blr, unsigned aBufferLength);
+
+private:
+	unsigned parseCompositeItemFromBlr(BlrReader& rdr, IMessageMetadata** subMetadata, unsigned blrLength, const unsigned char* blr);
+	void parseItemFromBlr(BlrReader& rdr, Item* item);
 };
 
 MetadataFromBlr::MetadataFromBlr(unsigned aBlrLength, const unsigned char* aBlr, unsigned aLength)
@@ -84,144 +88,7 @@ MetadataFromBlr::MetadataFromBlr(unsigned aBlrLength, const unsigned char* aBlr,
 		item->scale = 0;
 		item->subType = 0;
 
-		switch (rdr.getByte())
-		{
-		case blr_text:
-			item->type = SQL_TEXT;
-			item->charSet = CS_dynamic;
-			item->length = rdr.getWord();
-			break;
-
-		case blr_varying:
-			item->type = SQL_VARYING;
-			item->charSet = CS_dynamic;
-			item->length = rdr.getWord();
-			break;
-
-		case blr_text2:
-			item->type = SQL_TEXT;
-			item->charSet = rdr.getWord();
-			item->length = rdr.getWord();
-			break;
-
-		case blr_varying2:
-			item->type = SQL_VARYING;
-			item->charSet = rdr.getWord();
-			item->length = rdr.getWord();
-			break;
-
-		case blr_short:
-			item->type = SQL_SHORT;
-			item->length = sizeof(SSHORT);
-			item->scale = rdr.getByte();
-			break;
-
-		case blr_long:
-			item->type = SQL_LONG;
-			item->length = sizeof(SLONG);
-			item->scale = rdr.getByte();
-			break;
-
-		case blr_int64:
-			item->type = SQL_INT64;
-			item->length = sizeof(SINT64);
-			item->scale = rdr.getByte();
-			break;
-
-		case blr_quad:
-			item->type = SQL_QUAD;
-			item->length = sizeof(SLONG) * 2;
-			item->scale = rdr.getByte();
-			break;
-
-		case blr_float:
-			item->type = SQL_FLOAT;
-			item->length = sizeof(float);
-			break;
-
-		case blr_double:
-		case blr_d_float:
-			item->type = SQL_DOUBLE;
-			item->length = sizeof(double);
-			break;
-
-		case blr_timestamp:
-			item->type = SQL_TIMESTAMP;
-			item->length = sizeof(SLONG) * 2;
-			break;
-
-		case blr_timestamp_tz:
-			item->type = SQL_TIMESTAMP_TZ;
-			item->length = sizeof(ISC_TIMESTAMP_TZ);
-			break;
-
-		case blr_ex_timestamp_tz:
-			item->type = SQL_TIMESTAMP_TZ_EX;
-			item->length = sizeof(ISC_TIMESTAMP_TZ_EX);
-			break;
-
-		case blr_sql_date:
-			item->type = SQL_TYPE_DATE;
-			item->length = sizeof(SLONG);
-			break;
-
-		case blr_sql_time:
-			item->type = SQL_TYPE_TIME;
-			item->length = sizeof(SLONG);
-			break;
-
-		case blr_sql_time_tz:
-			item->type = SQL_TIME_TZ;
-			item->length = sizeof(ISC_TIME_TZ);
-			break;
-
-		case blr_ex_time_tz:
-			item->type = SQL_TIME_TZ_EX;
-			item->length = sizeof(ISC_TIME_TZ_EX);
-			break;
-
-		case blr_blob2:
-			item->type = SQL_BLOB;
-			item->length = sizeof(ISC_QUAD);
-			item->subType = rdr.getWord();
-			item->charSet = rdr.getWord();
-			break;
-
-		case blr_bool:
-			item->type = SQL_BOOLEAN;
-			item->length = sizeof(UCHAR);
-			break;
-
-		case blr_dec64:
-			item->type = SQL_DEC16;
-			item->length = sizeof(Decimal64);
-			break;
-
-		case blr_dec128:
-			item->type = SQL_DEC34;
-			item->length = sizeof(Decimal128);
-			break;
-
-		case blr_int128:
-			item->type = SQL_INT128;
-			item->length = sizeof(Int128);
-			item->scale = rdr.getByte();
-			break;
-
-		case blr_rowtype:
-			item->type = SQL_ROWTYPE;
-			rdr.getByte();
-			item->length = rdr.getWord();
-			break;
-
-		default:
-			(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-			 Arg::Gds(isc_dsql_sqlda_err)
-#ifdef DEV_BUILD
-			 << Arg::Gds(isc_random) << "Wrong BLR type"
-#endif
-			).raise();
-		}
+		parseItemFromBlr(rdr, item);
 
 		if (rdr.getByte() != blr_short || rdr.getByte() != 0)
 		{
@@ -244,6 +111,198 @@ MetadataFromBlr::MetadataFromBlr(unsigned aBlrLength, const unsigned char* aBlr,
 		 Arg::Gds(isc_dsql_sqlda_err)
 #ifdef DEV_BUILD
 		 << Arg::Gds(isc_random) << (length != aLength ? "Invalid message length" : "Missing blr_end")
+#endif
+		).raise();
+	}
+}
+
+unsigned MetadataFromBlr::parseCompositeItemFromBlr(BlrReader& rdr, IMessageMetadata** subMetadata, unsigned blrLength, const unsigned char* blr)
+{
+	unsigned count = rdr.getWord();
+
+	MsgMetadata* metadata = FB_NEW MsgMetadata;
+	*subMetadata = metadata;
+	(*subMetadata)->addRef();
+
+	metadata->items.grow(count);
+
+	for (unsigned index = 0; index < count; index++)
+	{
+		Item* item = &metadata->items[index];
+		item->scale = 0;
+		item->subType = 0;
+
+		parseItemFromBlr(rdr, item);
+		item->finished = true;
+	}
+
+	metadata->length += NULL_BYTES(count);
+	metadata->alignedLength = 0;
+
+	for (unsigned n = 0; n < metadata->items.getCount(); ++n)
+	{
+		Item* param = &metadata->items[n];
+		if (!param->finished)
+		{
+			metadata->length = metadata->alignment = 0;
+			break;
+		}
+
+		unsigned dtype;
+		metadata->length = fb_utils::sqlTypeToDsc(metadata->length, param->type, param->length,
+			&dtype, NULL /*length*/, &param->offset, &param->nullInd, true);
+
+		if (dtype >= DTYPE_TYPE_MAX)
+		{
+			metadata->length = metadata->alignment = 0;
+			break;
+		}
+
+		metadata->alignment = MAX(metadata->alignment, type_alignments[dtype]);
+	}
+
+	metadata->alignedLength = FB_ALIGN(metadata->length, metadata->alignment);
+
+	return metadata->getMessageLength();
+}
+
+void MetadataFromBlr::parseItemFromBlr(BlrReader& rdr, Item* item)
+{
+	switch (rdr.getByte())
+	{
+	case blr_text:
+		item->type = SQL_TEXT;
+		item->charSet = CS_dynamic;
+		item->length = rdr.getWord();
+		break;
+
+	case blr_varying:
+		item->type = SQL_VARYING;
+		item->charSet = CS_dynamic;
+		item->length = rdr.getWord();
+		break;
+
+	case blr_text2:
+		item->type = SQL_TEXT;
+		item->charSet = rdr.getWord();
+		item->length = rdr.getWord();
+		break;
+
+	case blr_varying2:
+		item->type = SQL_VARYING;
+		item->charSet = rdr.getWord();
+		item->length = rdr.getWord();
+		break;
+
+	case blr_short:
+		item->type = SQL_SHORT;
+		item->length = sizeof(SSHORT);
+		item->scale = rdr.getByte();
+		break;
+
+	case blr_long:
+		item->type = SQL_LONG;
+		item->length = sizeof(SLONG);
+		item->scale = rdr.getByte();
+		break;
+
+	case blr_int64:
+		item->type = SQL_INT64;
+		item->length = sizeof(SINT64);
+		item->scale = rdr.getByte();
+		break;
+
+	case blr_quad:
+		item->type = SQL_QUAD;
+		item->length = sizeof(SLONG) * 2;
+		item->scale = rdr.getByte();
+		break;
+
+	case blr_float:
+		item->type = SQL_FLOAT;
+		item->length = sizeof(float);
+		break;
+
+	case blr_double:
+	case blr_d_float:
+		item->type = SQL_DOUBLE;
+		item->length = sizeof(double);
+		break;
+
+	case blr_timestamp:
+		item->type = SQL_TIMESTAMP;
+		item->length = sizeof(SLONG) * 2;
+		break;
+
+	case blr_timestamp_tz:
+		item->type = SQL_TIMESTAMP_TZ;
+		item->length = sizeof(ISC_TIMESTAMP_TZ);
+		break;
+
+	case blr_ex_timestamp_tz:
+		item->type = SQL_TIMESTAMP_TZ_EX;
+		item->length = sizeof(ISC_TIMESTAMP_TZ_EX);
+		break;
+
+	case blr_sql_date:
+		item->type = SQL_TYPE_DATE;
+		item->length = sizeof(SLONG);
+		break;
+
+	case blr_sql_time:
+		item->type = SQL_TYPE_TIME;
+		item->length = sizeof(SLONG);
+		break;
+
+	case blr_sql_time_tz:
+		item->type = SQL_TIME_TZ;
+		item->length = sizeof(ISC_TIME_TZ);
+		break;
+
+	case blr_ex_time_tz:
+		item->type = SQL_TIME_TZ_EX;
+		item->length = sizeof(ISC_TIME_TZ_EX);
+		break;
+
+	case blr_blob2:
+		item->type = SQL_BLOB;
+		item->length = sizeof(ISC_QUAD);
+		item->subType = rdr.getWord();
+		item->charSet = rdr.getWord();
+		break;
+
+	case blr_bool:
+		item->type = SQL_BOOLEAN;
+		item->length = sizeof(UCHAR);
+		break;
+
+	case blr_dec64:
+		item->type = SQL_DEC16;
+		item->length = sizeof(Decimal64);
+		break;
+
+	case blr_dec128:
+		item->type = SQL_DEC34;
+		item->length = sizeof(Decimal128);
+		break;
+
+	case blr_int128:
+		item->type = SQL_INT128;
+		item->length = sizeof(Int128);
+		item->scale = rdr.getByte();
+		break;
+
+	case blr_rowtype:
+		item->type = SQL_ROWTYPE;
+		rdr.getByte();	// skip blr_rt_full
+		item->length = parseCompositeItemFromBlr(rdr, &item->subMetadata, rdr.getRemainingLength(), rdr.getPos());
+		break;
+
+	default:
+		(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+		 Arg::Gds(isc_dsql_sqlda_err)
+#ifdef DEV_BUILD
+		 << Arg::Gds(isc_random) << "Wrong BLR type"
 #endif
 		).raise();
 	}
