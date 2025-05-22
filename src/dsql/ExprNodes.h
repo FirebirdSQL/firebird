@@ -1671,6 +1671,7 @@ public:
 	// Message can be modified during merge of SP/view subtrees
 	USHORT messageNumber = MAX_USHORT;
 	USHORT argNumber = 0;
+	USHORT maxCharLength = 0;
 	bool outerDecl = false;
 };
 
