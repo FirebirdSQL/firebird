@@ -21,17 +21,21 @@
  * Contributor(s): ______________________________________.
  */
 
-const SCHAR CHR_LETTER		= 1;
-const SCHAR CHR_DIGIT		= 2;
-const SCHAR CHR_IDENT		= 4;
-const SCHAR CHR_QUOTE		= 8;
-const SCHAR CHR_WHITE		= 16;
-const SCHAR CHR_HEX			= 32;
-const SCHAR CHR_INTRODUCER	= 64;
+const SSHORT CHR_LETTER		= (1 << 0);
+const SSHORT CHR_DIGIT		= (1 << 1);
+const SSHORT CHR_IDENT		= (1 << 2);
+const SSHORT CHR_QUOTE		= (1 << 3);
+const SSHORT CHR_WHITE		= (1 << 4);
+const SSHORT CHR_HEX		= (1 << 5);
+const SSHORT CHR_INTRODUCER	= (1 << 6);
+const SSHORT CHR_BIN		= (1 << 7);
+const SSHORT CHR_OCT		= (1 << 8);
+const SSHORT CHR_BRACE		= (1 << 9);
+
 
 // Use the functions at the end of this file; do not reference the array directly.
 
-static const SCHAR classes_array[] = {
+static const SSHORT classes_array[] = {
 /* 000     */ 0,
 /* 001     */ 0,
 /* 002     */ 0,
@@ -80,14 +84,14 @@ static const SCHAR classes_array[] = {
 /* 045  -  */ 0,
 /* 046  .  */ 0,
 /* 047  /  */ 0,
-/* 048  0  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX,
-/* 049  1  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX,
-/* 050  2  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX,
-/* 051  3  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX,
-/* 052  4  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX,
-/* 053  5  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX,
-/* 054  6  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX,
-/* 055  7  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX,
+/* 048  0  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX | CHR_OCT | CHR_BIN,
+/* 049  1  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX | CHR_OCT | CHR_BIN,
+/* 050  2  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX | CHR_OCT,
+/* 051  3  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX | CHR_OCT,
+/* 052  4  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX | CHR_OCT,
+/* 053  5  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX | CHR_OCT,
+/* 054  6  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX | CHR_OCT,
+/* 055  7  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX | CHR_OCT,
 /* 056  8  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX,
 /* 057  9  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX,
 /* 058  :  */ 0,
@@ -155,9 +159,9 @@ static const SCHAR classes_array[] = {
 /* 120  x  */ 0 | CHR_LETTER | CHR_IDENT,
 /* 121  y  */ 0 | CHR_LETTER | CHR_IDENT,
 /* 122  z  */ 0 | CHR_LETTER | CHR_IDENT,
-/* 123  {  */ 0 | CHR_LETTER | CHR_IDENT,
+/* 123  {  */ 0 | CHR_LETTER | CHR_IDENT | CHR_BRACE,
 /* 124  |  */ 0,
-/* 125  }  */ 0 | CHR_LETTER | CHR_IDENT,
+/* 125  }  */ 0 | CHR_LETTER | CHR_IDENT | CHR_BRACE,
 /* 126  ~  */ 0,
 /* 127     */ 0,
 /* 128     */ 0,
@@ -290,12 +294,12 @@ static const SCHAR classes_array[] = {
 /* 255     */ 0
 };
 
-inline SCHAR classes(int idx)
+inline SSHORT classes(int idx)
 {
 	return classes_array[(UCHAR) idx];
 }
 
-inline SCHAR classes(UCHAR idx)
+inline SSHORT classes(UCHAR idx)
 {
 	return classes_array[idx];
 }

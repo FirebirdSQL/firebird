@@ -292,7 +292,7 @@ int Parser::yylex()
 
 bool Parser::yylexSkipSpaces()
 {
-	UCHAR tok_class;
+	USHORT tok_class;
 	SSHORT c;
 
 	// Find end of white space and skip comments
@@ -399,7 +399,7 @@ int Parser::yylexAux()
 	MemoryPool& pool = *tdbb->getDefaultPool();
 
 	SSHORT c = lex.ptr[-1];
-	UCHAR tok_class = classes(c);
+	USHORT tok_class = classes(c);
 	char string[MAX_TOKEN_LEN];
 
 	// Depending on tok_class of token, parse token
@@ -408,6 +408,10 @@ int Parser::yylexAux()
 
 	if (tok_class & CHR_INTRODUCER)
 	{
+		// restriction for underscores before numeric literals
+		if ((classes(*lex.ptr) & CHR_DIGIT) || *lex.ptr == '.')
+			exceptionNumericLiterals(Firebird::string(lex.last_token, lex.ptr - lex.last_token + 1));
+
 		// The Introducer (_) is skipped, all other idents are copied
 		// to become the name of the character set.
 		char* p = string;
@@ -799,417 +803,373 @@ int Parser::yylexAux()
 		lex.ptr = lex.last_token + 1;
 	}
 
-	// Hexadecimal numeric constants - 0xBBBBBB
-	//
-	// where the '0' and the 'X' (or 'x') are literal, followed
-	// by a set of nibbles, using 0-9, a-f, or A-F.  Odd numbers
-	// of nibbles assume a leading '0'.  The result is converted
-	// to an integer, and the result returned to the caller.  The
-	// token is identified as a NUMBER32BIT if it's a 32-bit or less
-	// value, or a NUMBER64INT if it requires a 64-bit number.
-	if (c == '0' && lex.ptr + 1 < lex.end && (*lex.ptr == 'x' || *lex.ptr == 'X') &&
-		(classes(lex.ptr[1]) & CHR_HEX))
+	// Non-decimal integer literals (SQL:2023 T661)
+	// Underscores in numeric literal support (SQ:2023 T662)
+	// See README.decimal_and_non_decimal_literals
+
+	if (c == '0' && lex.ptr + 1 < lex.end)
 	{
-		bool hexerror = false;
+		auto base = 0;
+		SSHORT currExpcChar;
 
-		// Remember where we start from, to rescan later.
-		// Also we'll need to know the length of the buffer.
-
-		++lex.ptr;  // Skip the 'X' and point to the first digit
-		const char* hexstring = lex.ptr;
-		int charlen = 0;
-
-		// Time to scan the string. Make sure the characters are legal,
-		// and find out how long the hex digit string is.
-
-		while (lex.ptr < lex.end)
+		if (*lex.ptr == 'x' || *lex.ptr == 'X')
 		{
-			c = *lex.ptr;
-
-			if (!(classes(c) & CHR_HEX))	// End of digit string
-				break;
-
-			++charlen;			// Okay, just count 'em
-			++lex.ptr;			// and advance...
-
-			if (charlen > 32)	// Too many digits...
-			{
-				hexerror = true;
-				break;
-			}
+			base = 4; // 2^4 0b1111
+			currExpcChar = CHR_HEX;
+		}
+		else if (*lex.ptr == 'o' || *lex.ptr == 'O')
+		{
+			base = 3; // 2^3 0b111
+			currExpcChar = CHR_OCT;
+		}
+		else if (*lex.ptr == 'b' || *lex.ptr == 'B')
+		{
+			base = 1; // 2^1 0b1
+			currExpcChar = CHR_BIN;
 		}
 
-		// we have a valid hex token. Now give it back, either as
-		// an NUMBER32BIT or NUMBER64BIT.
-		if (!hexerror)
+		if (base)
 		{
-			if (charlen > 16)
+			const auto decimalConversion = 10;
+			auto isLastIntroducer = false;
+			Int128 value128;
+			value128.set(0.0);
+
+			const CInt128 MAX_VALUE(MAX_Int128 >> base);
+
+			// Skip the 'X' or 'O' or 'B' and point to the first digit
+			for (++lex.ptr; lex.ptr < lex.end; lex.ptr++)
 			{
-				// we deal with int128
-				fb_assert(charlen <= 32);	// charlen is always <= 32, see 10-15 lines upper
+				c = *lex.ptr;
 
-				Firebird::string sbuff(hexstring, charlen);
-				sbuff.insert(0, "0X");
+				if ((classes(c) & CHR_INTRODUCER))
+				{
+					if (isLastIntroducer)
+					{
+						exceptionNumericLiterals(
+							Firebird::string(lex.last_token, lex.ptr - lex.last_token + 1));
+					}
 
-				yylval.lim64ptr = newLim64String(sbuff, 0);
+					isLastIntroducer = true;
+				}
+				else if ((classes(c) & currExpcChar))
+				{
+					// check overflow
+					if (value128 > MAX_VALUE)
+						exceptionNumericLiterals(Firebird::string("Overflow of the number"));
 
+					auto ch = UPPER(c);
+					if (ch >= 'A')
+						ch = (ch - 'A') + decimalConversion;
+					else
+						ch = (ch - '0');
+
+					value128 *= 1 << base;
+					value128 += ch;
+
+					isLastIntroducer = false;
+				}
+				else if ((classes(c) & CHR_IDENT) && !(classes(c) & CHR_BRACE))
+				{
+					exceptionNumericLiterals(
+						Firebird::string(lex.last_token, lex.ptr - lex.last_token + 1));
+				}
+				else // We have reached the separator
+					break;
+			}
+
+			// Error 0x
+			const auto minimalLength = 3U;
+			if ((lex.ptr - lex.last_token) < minimalLength)
+			{
+				exceptionNumericLiterals(
+					Firebird::string(lex.last_token, lex.ptr - lex.last_token));
+			}
+
+			// Error of having '_' at the end
+			if (isLastIntroducer)
+			{
+				exceptionNumericLiterals(
+					Firebird::string(lex.last_token, lex.ptr - lex.last_token));
+			}
+
+			Int128 tmp;
+			tmp.set(MAX_SINT64, 0);
+			if (value128 > tmp)
+			{
+				Firebird::string strValue;
+				value128.toString(0, strValue);
+				yylval.lim64ptr = newLim64String(strValue, 0);
 				return TOK_NUM128;
 			}
 
-			// if charlen > 8 (something like FFFF FFFF 0, w/o the spaces)
-			// then we have to return a NUMBER64BIT. We'll make a string
-			// node here, and let make.cpp worry about converting the
-			// string to a number and building the node later.
-			else if (charlen > 8)
+			tmp.set(MAX_SLONG);
+			if (value128 > tmp)
 			{
-				char cbuff[32];
-				fb_assert(charlen <= 16);	// charlen is always <= 16, see 10-15 lines upper
-				cbuff[0] = 'X';
-				fb_utils::copy_terminate(&cbuff[1], hexstring, charlen + 1);
-
-				char* p = &cbuff[1];
-				UCHAR byte = 0;
-				bool nibble = strlen(p) & 1;
-
-				yylval.scaledNumber.number = 0;
+				yylval.scaledNumber.number = value128.toInt64(0);
 				yylval.scaledNumber.scale = 0;
-				yylval.scaledNumber.hex = true;
-
-				while (*p)
-				{
-					if ((*p >= 'a') && (*p <= 'f'))
-						*p = UPPER(*p);
-
-					// Now convert the character to a nibble
-					SSHORT c;
-
-					if (*p >= 'A')
-						c = (*p - 'A') + 10;
-					else
-						c = (*p - '0');
-
-					if (nibble)
-					{
-						byte = (byte << 4) + (UCHAR) c;
-						nibble = false;
-						yylval.scaledNumber.number = (yylval.scaledNumber.number << 8) + byte;
-					}
-					else
-					{
-						byte = c;
-						nibble = true;
-					}
-
-					++p;
-				}
-
-				// The return value can be a negative number.
+				yylval.scaledNumber.hex = false;
 				return TOK_NUMBER64BIT;
 			}
 			else
 			{
-				// we have an integer value. we'll return NUMBER32BIT.
-				// but we have to make a number value to be compatible
-				// with existing code.
-
-				// See if the string length is odd.  If so,
-				// we'll assume a leading zero.  Then figure out the length
-				// of the actual resulting hex string.  Allocate a second
-				// temporary buffer for it.
-
-				bool nibble = (charlen & 1);  // IS_ODD(temp.length)
-
-				// Re-scan over the hex string we got earlier, converting
-				// adjacent bytes into nibble values.  Every other nibble,
-				// write the saved byte to the temp space.  At the end of
-				// this, the temp.space area will contain the binary
-				// representation of the hex constant.
-
-				UCHAR byte = 0;
-				SINT64 value = 0;
-
-				for (int i = 0; i < charlen; i++)
-				{
-					c = UPPER(hexstring[i]);
-
-					// Now convert the character to a nibble
-
-					if (c >= 'A')
-						c = (c - 'A') + 10;
-					else
-						c = (c - '0');
-
-					if (nibble)
-					{
-						byte = (byte << 4) + (UCHAR) c;
-						nibble = false;
-						value = (value << 8) + byte;
-					}
-					else
-					{
-						byte = c;
-						nibble = true;
-					}
-				}
-
-				yylval.int32Val = (SLONG) value;
+				yylval.int32Val = (SLONG)value128.toInteger(0);
 				return TOK_NUMBER32BIT;
-			} // integer value
-		}  // if (!hexerror)...
-
-		// If we got here, there was a parsing error.  Set the
-		// position back to where it was before we messed with
-		// it.  Then fall through to the next thing we might parse.
-
-		c = *lex.last_token;
-		lex.ptr = lex.last_token + 1;
-	} // headecimal numeric constants
+			}
+		}
+	}
 
 	if ((tok_class & CHR_DIGIT) ||
 		((c == '.') && (lex.ptr < lex.end) && (classes(*lex.ptr) & CHR_DIGIT)))
 	{
-		// The following variables are used to recognize kinds of numbers.
+		Firebird::string pureString;
+		auto isLastIntroducer = false;
+		SCHAR scale = 0;
+		auto exponentValue = 0;
+		auto isOverExponent64b = false;
+		auto isOverMantisa64b = false;
+		auto isOverMantisa128b = false;
+		auto signExponent = 0;
 
-		bool have_error = false;		// syntax error or value too large
-		bool have_digit = false;		// we've seen a digit
-		bool have_decimal = false;		// we've seen a '.'
-		bool have_exp = false;			// digit ... [eE]
-		bool have_exp_sign = false;		// digit ... [eE] {+-]
-		bool have_exp_digit = false;	// digit ... [eE] ... digit
-		bool have_overflow = false;		// value of digits > MAX_SINT64
-		bool positive_overflow = false;	// number is exactly (MAX_SINT64 + 1)
-		bool have_128_over = false;		// value of digits > MAX_INT128
-		FB_UINT64 number = 0;
-		Int128 num128;
-		int expVal = 0;
-		FB_UINT64 limit_by_10 = MAX_SINT64 / 10;
-		int scale = 0;
-		int expSign = 1;
+		Int128 mantisaValue;
+		mantisaValue.set(0.0);
+
+		const auto decimalConversion = 10;
+		const CInt128 MAX_MANTISA_128(MAX_Int128 / decimalConversion);
+		const CInt128 MAX_MANTISA_64(MAX_SINT64 / decimalConversion);
+
+		enum
+		{
+			state_mantisa = 0,
+			state_precision,
+			state_exponent,
+		} state = state_mantisa;
 
 		for (--lex.ptr; lex.ptr < lex.end; lex.ptr++)
 		{
 			c = *lex.ptr;
-			if (have_exp_digit && (! (classes(c) & CHR_DIGIT)))
-				// First non-digit after exponent and digit terminates the token.
-				break;
 
-			if (have_exp_sign && (! (classes(c) & CHR_DIGIT)))
+			if (classes(c) & CHR_INTRODUCER)
 			{
-				// only digits can be accepted after "1E-"
-				have_error = true;
-				break;
-			}
-
-			if (have_exp)
-			{
-				// We've seen e or E, but nothing beyond that.
-				if ( ('-' == c) || ('+' == c) )
+				if (isLastIntroducer)
 				{
-					have_exp_sign = true;
-					if ('-' == c)
-						expSign = -1;
+					exceptionNumericLiterals(
+						Firebird::string(lex.last_token, lex.ptr - lex.last_token + 1));
 				}
-				else if ( classes(c) & CHR_DIGIT )
+
+				const char lastSymbol = *(lex.ptr - 1);
+				if ((lastSymbol == '.') || (UPPER(lastSymbol) == 'E') || (lastSymbol == '-') ||
+					(lastSymbol == '+'))
 				{
-					// We have a digit: we haven't seen a sign yet, but it's too late now.
-					have_exp_digit = have_exp_sign  = true;
-					if (!have_overflow)
+					exceptionNumericLiterals(
+						Firebird::string(lex.last_token, lex.ptr - lex.last_token + 1));
+				}
+
+				isLastIntroducer = true;
+				continue;
+			}
+			if (classes(c) & CHR_DIGIT)
+			{
+				pureString += static_cast<string::char_type>(c);
+				auto ch = (c - '0');
+
+				if (state == state_exponent)
+				{
+					if (signExponent == 0)
+						signExponent = 1;
+
+					exponentValue *= decimalConversion;
+
+					if (signExponent == 1)
+						exponentValue += ch;
+					else
+						exponentValue -= ch;
+
+					if (!isOverExponent64b)
 					{
-						expVal = expVal * 10 + (c - '0');
-						if (expVal > DBL_MAX_10_EXP)
-							have_overflow = true;
+						if (exponentValue > DBL_MAX_10_EXP || exponentValue < DBL_MIN_10_EXP)
+							isOverExponent64b = true;
 					}
+					else if (exponentValue > DECQUAD_Emax || exponentValue < DECQUAD_Emin)
+						exceptionNumericLiterals(Firebird::string("Overflow of the exponent"));
 				}
 				else
 				{
-					// end of the token
-					have_error = true;
-					break;
-				}
-			}
-			else if ('.' == c)
-			{
-				if (!have_decimal)
-					have_decimal = true;
-				else
-				{
-					have_error = true;
-					break;
-				}
-			}
-			else if (classes(c) & CHR_DIGIT)
-			{
-				// Before computing the next value, make sure there will be no overflow.
-
-				if (!have_overflow)
-				{
-					have_digit = true;
-
-					if (number >= limit_by_10)
+					if (!isOverMantisa64b)
 					{
-						// possibility of an overflow
-						if ((number > limit_by_10) || (c >= '8'))
+						if (mantisaValue >= MAX_MANTISA_64 &&
+							((mantisaValue > MAX_MANTISA_64) || (c >= '8')))
+							isOverMantisa64b = true;
+					}
+					else if (!isOverMantisa128b)
+					{
+						if ((mantisaValue >= MAX_MANTISA_128) &&
+							((mantisaValue > MAX_MANTISA_128) || (c >= '8')))
 						{
-							have_overflow = true;
-							fb_assert(number <= MAX_SINT64);
-							num128.set((SINT64)number, 0);
-							if ((number == limit_by_10) && (c == '8'))
-								positive_overflow = true;
+							isOverMantisa128b = true;
+							isOverExponent64b = true;
+						}
+					}
+
+					if (!isOverMantisa64b || !isOverMantisa128b)
+					{
+						mantisaValue *= decimalConversion;
+						mantisaValue += ch;
+					}
+
+					if (state == state_precision)
+					{
+						--scale;
+						// protection against too low precision over 15 characters
+						// next, we assume that the number is "Decimal 128-bit"
+						if (-scale > DBL_DIG)
+						{
+							isOverMantisa128b = true;
+							isOverExponent64b = true;
 						}
 					}
 				}
+			}
+			else if (c == '.')
+			{
+				if (isLastIntroducer)
+				{
+					exceptionNumericLiterals(
+						Firebird::string(lex.last_token, lex.ptr - lex.last_token + 1));
+				}
+
+				pureString += static_cast<string::char_type>(c);
+
+				if (state == state_mantisa)
+					state = state_precision;
 				else
 				{
-					positive_overflow = false;
-					if (!have_128_over)
+					exceptionNumericLiterals(
+						Firebird::string(lex.last_token, lex.ptr - lex.last_token + 1));
+				}
+			}
+			else if (UPPER(c) == 'E')
+			{
+				if (isLastIntroducer)
+				{
+					exceptionNumericLiterals(
+						Firebird::string(lex.last_token, lex.ptr - lex.last_token + 1));
+				}
+
+				pureString += static_cast<string::char_type>(c);
+
+				if (state != state_exponent)
+					state = state_exponent;
+				else
+				{
+					exceptionNumericLiterals(
+						Firebird::string(lex.last_token, lex.ptr - lex.last_token + 1));
+				}
+			}
+			else if ((classes(c) & CHR_IDENT) && (c != '{') && (c != '}'))
+			{
+				exceptionNumericLiterals(
+					Firebird::string(lex.last_token, lex.ptr - lex.last_token + 1));
+			}
+			else // We have reached the separator
+			{
+				if ((c == '-') || (c == '+'))
+				{
+					if (state == state_exponent && signExponent == 0)
 					{
-						static const CInt128 MAX_BY10(MAX_Int128 / 10);
-						if ((num128 >= MAX_BY10) && ((num128 > MAX_BY10) || (c >= '8')))
-							have_128_over = true;
+						pureString += static_cast<string::char_type>(c);
+
+						if (c == '-')
+							signExponent = -1;
+						else
+							signExponent = 1;
+						continue;
 					}
 				}
-
-				if (!have_overflow)
-					number = number * 10 + (c - '0');
-				else if (!have_128_over)
-				{
-					num128 *= 10;
-					num128 += (c - '0');
-				}
-
-				if (have_decimal)
-					--scale;
-			}
-			else if ( (('E' == c) || ('e' == c)) && have_digit )
-				have_exp = true;
-			else
-				// Unexpected character: this is the end of the number.
 				break;
+			}
+
+			isLastIntroducer = false;
+		}
+		// We have reached the separator or the end of the line
+
+		if (isLastIntroducer)
+			exceptionNumericLiterals(Firebird::string(lex.last_token, lex.ptr - lex.last_token));
+
+		if (state == state_exponent && signExponent == 0)
+			exceptionNumericLiterals(Firebird::string(lex.last_token, lex.ptr - lex.last_token));
+
+		if (state == state_precision && scale == 0)
+			exceptionNumericLiterals(Firebird::string(lex.last_token, lex.ptr - lex.last_token));
+
+		lex.last_token_bk = lex.last_token;
+		lex.line_start_bk = lex.line_start;
+		lex.lines_bk = lex.lines;
+
+		// Any with an exponent "E" or a very big number
+		if (state == state_exponent || isOverMantisa128b)
+		{
+			// Check for a more complex overflow case
+			if ((!isOverExponent64b) && (signExponent == 1) && (exponentValue > (-scale)))
+			{
+				const auto degreeBase = 10.0;
+				exponentValue += scale;
+				double check_num = DBL_MAX / pow(degreeBase, exponentValue);
+				if (mantisaValue.toDouble() > check_num)
+					isOverExponent64b = true;
+			}
+
+			yylval.stringPtr = newString(pureString);
+			// Long double or double
+			return isOverExponent64b ? TOK_DECIMAL_NUMBER : TOK_FLOAT_NUMBER;
 		}
 
-		// We're done scanning the characters: now return the right kind
-		// of number token, if any fits the bill.
-
-		if (!have_error)
+		// 128-bit
+		if (isOverMantisa64b)
 		{
-			fb_assert(have_digit);
+			yylval.lim64ptr = newLim64String(pureString, scale);
+			return TOK_NUM128;
+		}
 
-			if (positive_overflow)
-				have_overflow = false;
-
-			if (scale < MIN_SCHAR || scale > MAX_SCHAR)
+		Int128 tmp;
+		if (state != state_precision)
+		{
+			tmp.set(MAX_SLONG, 0);
+			if (tmp >= mantisaValue)
 			{
-				have_overflow = true;
-				positive_overflow = false;
-				have_128_over = true;
+				// A natural 32 bit number
+				yylval.int32Val = (SLONG)mantisaValue.toInteger(0);
+				return TOK_NUMBER32BIT;
 			}
+		}
+		/* We have either a decimal point with no exponent
+		   or a string of digits whose value exceeds MAX_SLONG:
+		   the returned type depends on the client dialect,
+		   so warn of the difference if the client dialect is
+		   SQL_DIALECT_V6_TRANSITION.
+		*/
+		if (SQL_DIALECT_V6_TRANSITION == client_dialect)
+		{
+			/* Issue a warning about the ambiguity of the numeric
+			 * numeric literal.  There are multiple calls because
+			 * the message text exceeds the 119-character limit
+			 * of our message database.
+			 */
+			ERRD_post_warning(Arg::Warning(isc_dsql_warning_number_ambiguous) << Arg::Str(
+								  Firebird::string(lex.last_token, lex.ptr - lex.last_token)));
+			ERRD_post_warning(Arg::Warning(isc_dsql_warning_number_ambiguous1));
+		}
 
-			// check for a more complex overflow case
-			if ((!have_overflow) && (expSign > 0) && (expVal > -scale))
-			{
-				expVal += scale;
-				double maxNum = DBL_MAX / pow(10.0, expVal);
-				if (double(number) > maxNum)
-				{
-					have_overflow = true;
-					positive_overflow = false;
-					have_128_over = true;
-				}
-			}
+		if (client_dialect < SQL_DIALECT_V6_TRANSITION)
+		{
+			yylval.stringPtr = newString(pureString);
+			return TOK_FLOAT_NUMBER;
+		}
 
-			// Special case - on the boarder of positive number
-			if (positive_overflow)
-			{
-				yylval.lim64ptr = newLim64String(
-					Firebird::string(lex.last_token, lex.ptr - lex.last_token), scale);
-				lex.last_token_bk = lex.last_token;
-				lex.line_start_bk = lex.line_start;
-				lex.lines_bk = lex.lines;
-
-				return scale ? TOK_LIMIT64_NUMBER : TOK_LIMIT64_INT;
-			}
-
-			// Should we use floating point type?
-			if (have_exp_digit || have_128_over)
-			{
-				yylval.stringPtr = newString(
-					Firebird::string(lex.last_token, lex.ptr - lex.last_token));
-				lex.last_token_bk = lex.last_token;
-				lex.line_start_bk = lex.line_start;
-				lex.lines_bk = lex.lines;
-
-				return have_overflow ? TOK_DECIMAL_NUMBER : TOK_FLOAT_NUMBER;
-			}
-
-			// May be 128-bit integer?
-			if (have_overflow)
-			{
-				yylval.lim64ptr = newLim64String(
-					Firebird::string(lex.last_token, lex.ptr - lex.last_token), scale);
-				lex.last_token_bk = lex.last_token;
-				lex.line_start_bk = lex.line_start;
-				lex.lines_bk = lex.lines;
-
-				return TOK_NUM128;
-			}
-
-			if (!have_exp)
-			{
-				// We should return some kind (scaled-) integer type
-				// except perhaps in dialect 1.
-
-				if (!have_decimal && (number <= MAX_SLONG))
-				{
-					yylval.int32Val = (SLONG) number;
-					//printf ("parse.y %p %d\n", yylval.legacyStr, number);
-					return TOK_NUMBER32BIT;
-				}
-				else
-				{
-					/* We have either a decimal point with no exponent
-					   or a string of digits whose value exceeds MAX_SLONG:
-					   the returned type depends on the client dialect,
-					   so warn of the difference if the client dialect is
-					   SQL_DIALECT_V6_TRANSITION.
-					*/
-
-					if (SQL_DIALECT_V6_TRANSITION == client_dialect)
-					{
-						/* Issue a warning about the ambiguity of the numeric
-						 * numeric literal.  There are multiple calls because
-						 * the message text exceeds the 119-character limit
-						 * of our message database.
-						 */
-						ERRD_post_warning(Arg::Warning(isc_dsql_warning_number_ambiguous) <<
-										  Arg::Str(Firebird::string(lex.last_token, lex.ptr - lex.last_token)));
-						ERRD_post_warning(Arg::Warning(isc_dsql_warning_number_ambiguous1));
-					}
-
-					lex.last_token_bk = lex.last_token;
-					lex.line_start_bk = lex.line_start;
-					lex.lines_bk = lex.lines;
-
-					if (client_dialect < SQL_DIALECT_V6_TRANSITION)
-					{
-						yylval.stringPtr = newString(
-							Firebird::string(lex.last_token, lex.ptr - lex.last_token));
-						return TOK_FLOAT_NUMBER;
-					}
-
-					yylval.scaledNumber.number = number;
-					yylval.scaledNumber.scale = scale;
-					yylval.scaledNumber.hex = false;
-
-					if (have_decimal)
-						return TOK_SCALEDINT;
-
-					return TOK_NUMBER64BIT;
-				}
-			} // else if (!have_exp)
-		} // if (!have_error)
-
-		// we got some kind of error or overflow, so don't recognize this
-		// as a number: just pass it through to the next part of the lexer.
+		yylval.scaledNumber.number = mantisaValue.toInt64(0);
+		yylval.scaledNumber.scale = scale;
+		yylval.scaledNumber.hex = false;
+		return state == state_precision ? TOK_SCALEDINT : TOK_NUMBER64BIT;
 	}
 
 	// Restore the status quo ante, before we started our unsuccessful
