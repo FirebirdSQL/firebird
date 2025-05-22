@@ -2368,7 +2368,7 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 		break;
 
 	case dtype_rowtype:
-		cb->err(Arg::Gds(isc_random) << "A composite type cannot be converted to a type with a different structure");
+		cb->err(Arg::Gds(isc_rowtype_bad_conversion));
 		break;
 	}
 
@@ -2404,7 +2404,7 @@ void CVT_conversion_error(const dsc* desc, ErrorFunction err, const Exception* o
 
 	if (desc->dsc_dtype == dtype_rowtype)
 	{
-		err(Arg::Gds(isc_random) << "A composite type cannot be converted to a type with a different structure");
+		err(Arg::Gds(isc_rowtype_bad_conversion));
 	}
 
 	if (desc->dsc_dtype == dtype_blob)

@@ -3524,93 +3524,65 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 
 		// ... and insert the new ones
 
+		// Helper function to process rowtype fields
+		auto processRowtype = [&](dsql_fld* field) {
+			if (field->fromCursor)
+			{
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+					Arg::Gds(isc_invalid_parameter_decl) <<
+					Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable));
+			}
+
+			dsql_rel* relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, field->typeOfTable.c_str());
+
+			if (relation)
+				field->fld_sub_first = relation->rel_fields;
+			else if (field->packageName.hasData())
+			{
+				if (!METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, field->relationName, field->fld_sub_first))
+					dsqlScratch->genCompositeTypeFromCache(field, field->fld_sub_first);
+
+				field->fieldSource = field->typeOfName;
+			}
+
+			if (!field->fld_sub_first)
+			{
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+					Arg::Gds(isc_invalid_parameter_decl) <<
+					Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable));
+			}
+
+			calculateCompositeFieldLength(*field);
+		};
+
+		// Helper function to process a parameter
+		auto processParameter = [&](ParameterClause& parameter, FB_SIZE_T paramIndex, SSHORT paramType) {
+			CollectedParameter collectedParameter;
+
+			// Find the original parameter to recreate in the new parameter.
+			collectedParameters.get(parameter.name, collectedParameter);
+
+			auto field = parameter.type;
+			auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.hasData() && field->typeOfTable.hasData());
+
+			if (isRowtype)
+				processRowtype(field);
+
+			storeParameter(tdbb, dsqlScratch, transaction, paramType, paramIndex, &parameter, &collectedParameter);
+		};
+
+		// Process input parameters
 		for (FB_SIZE_T i = 0; i < parameters.getCount(); ++i)
 		{
 			ParameterClause parameter = *parameters[i];
-			CollectedParameter collectedParameter;
-
-			// Find the original parameter to recreate in the new parameter.
-			collectedParameters.get(parameter.name, collectedParameter);
-
-			auto field = parameter.type;
-			auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.hasData() && field->typeOfTable.hasData());
-			if (isRowtype)
-			{
-				if (field->fromCursor)
-				{
-					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-					Arg::Gds(isc_invalid_parameter_decl) <<
-					Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable));
-				}
-
-				dsql_rel* relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, field->typeOfTable.c_str());
-
-				if (relation)
-					field->fld_sub_first = relation->rel_fields;
-				else if (field->packageName.hasData())
-				{
-					if (!METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, field->relationName, field->fld_sub_first))
-						dsqlScratch->genCompositeTypeFromCache(field, field->fld_sub_first);
-
-					field->fieldSource = field->typeOfName;
-					field->fld_sub_first = field->fld_sub_first;
-				}
-
-				if (!field->fld_sub_first)
-				{
-					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-					Arg::Gds(isc_invalid_parameter_decl) <<
-					Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable));
-				}
-
-				calculateCompositeFieldLength(*field);
-			}
-
-			storeParameter(tdbb, dsqlScratch, transaction, 0, i, &parameter, &collectedParameter);	// TODO: 4th argument should be defined as TYPE_INPUT_PARAMETER
+			processParameter(parameter, i, 0);  // TYPE_INPUT_PARAMETER
 		}
 
+		// Process output parameters
 		for (FB_SIZE_T i = 0; i < returns.getCount(); ++i)
 		{
 			ParameterClause parameter = *returns[i];
-			CollectedParameter collectedParameter;
-
-			// Find the original parameter to recreate in the new parameter.
-			collectedParameters.get(parameter.name, collectedParameter);
-
-			auto field = parameter.type;
-			auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.hasData() && field->typeOfTable.hasData());
-			if (isRowtype)
-			{
-				if (field->fromCursor)
-				{
-					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-					Arg::Gds(isc_invalid_parameter_decl) <<
-					Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable));
-				}
-
-				dsql_rel* relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, field->typeOfTable.c_str());
-
-				if (relation)
-					field->fld_sub_first = relation->rel_fields;
-				else if (field->packageName.hasData())
-				{
-					if (!METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, field->relationName, field->fld_sub_first))
-						dsqlScratch->genCompositeTypeFromCache(field, field->fld_sub_first);
-
-					field->fieldSource = field->typeOfName;
-				}
-
-				if (!field->fld_sub_first)
-				{
-					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-					Arg::Gds(isc_invalid_parameter_decl) <<
-					Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable));
-				}
-
-				calculateCompositeFieldLength(*field);
-			}
-
-			storeParameter(tdbb, dsqlScratch, transaction, 1, i, &parameter, &collectedParameter);	// TODO: 4th argument should be defined as TYPE_OUTPUT_PARAMETER
+			processParameter(parameter, i, 1);  // TYPE_OUTPUT_PARAMETER
 		}
 
 		AutoCacheRequest requestHandle2(tdbb, drq_m_prm_view, DYN_REQUESTS);

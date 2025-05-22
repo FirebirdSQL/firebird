@@ -6094,6 +6094,11 @@ const
 	 isc_composite_type_notdef = 335545309;
 	 isc_packaged_type_notdef = 335545310;
 	 isc_cursor_notdef = 335545311;
+	 isc_invalid_parameter_decl = 335545316;
+	 isc_composite_type_notdef = 335545317;
+	 isc_packaged_type_notdef = 335545318;
+	 isc_cursor_notdef = 335545319;
+	 isc_rowtype_bad_conversion = 335545320;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;

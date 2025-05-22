@@ -549,42 +549,28 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 		};
 
 		if (from_desc->dsc_sub_count != to_desc->dsc_sub_count)
-			ERR_post(Arg::Gds(isc_random) << "A composite type cannot be converted to a type with a different structure");
+			ERR_post(Arg::Gds(isc_rowtype_bad_conversion));
 
-		HalfStaticArray<dsc*, BUFFER_TINY> fromStackArray;
-		auto fromStack = fromStackArray.getBuffer(2); // one for next descriptor and second for first sub descriptor
-		HalfStaticArray<dsc*, BUFFER_TINY> toStackArray;
-		auto toStack = toStackArray.getBuffer(2);
-		int stackIndex = 0;
+		struct DescriptorPair {
+			dsc* from;
+			dsc* to;
+		};
 
-		fromStack[stackIndex] = from_desc;
-		toStack[stackIndex] = to_desc;
-		stackIndex++;
+		HalfStaticArray<DescriptorPair, BUFFER_TINY> stack;
+		stack.push(DescriptorPair{from_desc, to_desc});
 
-		while (stackIndex > 0)
+		while (!stack.isEmpty())
 		{
-			stackIndex--;
-			dsc* from = fromStack[stackIndex];
-			dsc* to = toStack[stackIndex];
+			const auto pair = stack.pop();
+			assignmentWrapper(pair.from, pair.to);
 
-			assignmentWrapper(from, to);
+			// Process next descriptor in chain if exists
+			if (pair.from->dsc_next && pair.to->dsc_next)
+				stack.push(DescriptorPair{pair.from->dsc_next, pair.to->dsc_next});
 
-			if (from->dsc_next && to->dsc_next)
-			{
-				fromStack[stackIndex] = from->dsc_next;
-				toStack[stackIndex] = to->dsc_next;
-				stackIndex++;
-			}
-
-			if (from->dsc_sub_first && to->dsc_sub_first)
-			{
-				// increase size of stack by one element to store additional descriptor
-				fromStack = fromStackArray.getBuffer(fromStackArray.getCount() + 1);
-				toStack = toStackArray.getBuffer(toStackArray.getCount() + 1);
-				fromStack[stackIndex] = from->dsc_sub_first;
-				toStack[stackIndex] = to->dsc_sub_first;
-				stackIndex++;
-			}
+			// Process sub-descriptors if exist
+			if (pair.from->dsc_sub_first && pair.to->dsc_sub_first)
+				stack.push(DescriptorPair{pair.from->dsc_sub_first, pair.to->dsc_sub_first});
 		}
 	}
 	else

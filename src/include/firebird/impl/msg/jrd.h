@@ -1026,3 +1026,4 @@ FB_IMPL_MSG(JRD, 1023, invalid_parameter_decl, -901, "HY", "000", "Invalid param
 FB_IMPL_MSG(JRD, 1024, composite_type_notdef, -104, "HY", "000", "composite type @1 not defined (BLR error)")
 FB_IMPL_MSG(JRD, 1025, packaged_type_notdef, -104, "HY", "000", "packaged type @1 of @2 is not defined or private")
 FB_IMPL_MSG(JRD, 1026, cursor_notdef, -219, "42", "S02", "cursor @1 is not defined")
+FB_IMPL_MSG(JRD, 1027, rowtype_bad_conversion, -104, "HY", "000", "A composite type cannot be converted to a type with a different structure")
