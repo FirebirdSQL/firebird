@@ -2389,17 +2389,14 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 
 		// ... and insert the new ones
 
-		if (returnType && returnType->type)
-		{
-			auto field = returnType->type;
-			auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.hasData() && field->typeOfTable.hasData());
-			if (isRowtype)
+		auto processRowtype = [&](dsql_fld* field) {
+			if (field->dtype == dtype_rowtype || (!field->typeOfName.hasData() && field->typeOfTable.hasData()))
 			{
 				if (field->fromCursor)
 				{
 					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-					Arg::Gds(isc_invalid_parameter_decl) <<
-					Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable));
+						Arg::Gds(isc_invalid_parameter_decl) <<
+						Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable));
 				}
 
 				dsql_rel* relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, field->typeOfTable.c_str());
@@ -2417,13 +2414,17 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 				if (!field->fld_sub_first)
 				{
 					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-					Arg::Gds(isc_invalid_parameter_decl) <<
-					Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable));
+						Arg::Gds(isc_invalid_parameter_decl) <<
+						Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable));
 				}
 
 				calculateCompositeFieldLength(*field);
 			}
+		};
 
+		if (returnType && returnType->type)
+		{
+			processRowtype(returnType->type);
 			storeArgument(tdbb, dsqlScratch, transaction, 0, true, returnType, NULL);
 		}
 
@@ -2435,39 +2436,7 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 			// Find the original parameter to recreate in the new parameter.
 			collectedParameters.get(parameter->name, collectedParameter);
 
-			auto field = parameter->type;
-			auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.hasData() && field->typeOfTable.hasData());
-			if (isRowtype)
-			{
-				if (field->fromCursor)
-				{
-					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-					Arg::Gds(isc_invalid_parameter_decl) <<
-					Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable));
-				}
-
-				dsql_rel* relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, field->typeOfTable.c_str());
-
-				if (relation)
-					field->fld_sub_first = relation->rel_fields;
-				else if (field->packageName.hasData())
-				{
-					if (!METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, field->relationName, field->fld_sub_first))
-						dsqlScratch->genCompositeTypeFromCache(field, field->fld_sub_first);
-
-					field->fieldSource = field->typeOfName;
-				}
-
-				if (!field->fld_sub_first)
-				{
-					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-					Arg::Gds(isc_invalid_parameter_decl) <<
-					Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable));
-				}
-
-				calculateCompositeFieldLength(*field);
-			}
-
+			processRowtype(parameter->type);
 			storeArgument(tdbb, dsqlScratch, transaction, i + 1, false, parameter, &collectedParameter);
 		}
 	}
@@ -3878,32 +3847,17 @@ void CreateAlterProcedureNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch*
 		}
 	}
 
-	// dsqlScratch->putLocalTypes();
-
-	auto rowtypeOffset = 0;
 	for (Array<dsql_var*>::const_iterator i = dsqlScratch->variables.begin();
 		 i != dsqlScratch->variables.end();
 		 ++i)
 	{
-		if ((*i)->type == dsql_var::TYPE_INPUT)
+		if ((*i)->type == dsql_var::TYPE_INPUT && (*i)->field->dtype == dtype_rowtype)
 		{
-			(*i)->msgItem = rowtypeOffset * 2;
-			auto isRowtype = (*i)->field->dtype == dtype_rowtype;
-
 			// AAM: we have to put the rowtype variable which will be used instead of rowtype parameter
-			if (isRowtype)
-			{
-				rowtypeOffset++;
-				dsqlScratch->putLocalVariable(*i, nullptr, {});
-			}
-			else
-			{
-				rowtypeOffset++;
-			}
+			dsqlScratch->putLocalVariable(*i, nullptr, {});
 		}
 	}
 
-	rowtypeOffset = 0;
 	for (Array<dsql_var*>::const_iterator i = dsqlScratch->outputVariables.begin();
 		 i != dsqlScratch->outputVariables.end();
 		 ++i)

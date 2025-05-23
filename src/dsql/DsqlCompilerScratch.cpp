@@ -533,7 +533,6 @@ void DsqlCompilerScratch::putLocalVariableDecl(dsql_var* variable, DeclareVariab
 		appendUChar(blr_rowtype);
 		if (field->typeOfTable.hasData())
 		{
-			// appendUChar(blr_rowtype);
 			appendUChar(blr_rt_type_of_table);
 			appendUShort(field->fld_sub_count);
 			appendUShort(variable->contextNum);
@@ -541,7 +540,6 @@ void DsqlCompilerScratch::putLocalVariableDecl(dsql_var* variable, DeclareVariab
 		}
 		else if (field->fieldSource.hasData())
 		{
-			// appendUChar(blr_rowtype);
 			appendUChar(blr_rt_pagacked_type);
 			appendUShort(field->fld_sub_count);
 			appendUShort(variable->contextNum);
@@ -549,7 +547,6 @@ void DsqlCompilerScratch::putLocalVariableDecl(dsql_var* variable, DeclareVariab
 		}
 		else if (field->typeOfName.hasData())
 		{
-			// appendUChar(blr_rowtype);
 			appendUChar(blr_rt_local_type);
 			appendUShort(field->fld_sub_count);
 			appendUShort(variable->contextNum);
@@ -557,7 +554,6 @@ void DsqlCompilerScratch::putLocalVariableDecl(dsql_var* variable, DeclareVariab
 		}
 		else
 		{
-			// appendUChar(blr_rowtype);
 			appendUChar(blr_rt_full);
 			appendUShort(field->fld_sub_count);
 			appendUShort(variable->contextNum);
@@ -916,7 +912,6 @@ void DsqlCompilerScratch::genParameters(Array<NestConst<ParameterClause> >& para
 				appendUChar(blr_rowtype);
 				if (field->fieldSource.hasData())
 				{
-					// appendUChar(blr_rowtype);
 					appendUChar(blr_rt_pagacked_type);
 					appendUShort(field->fld_sub_count);
 					appendUShort(variable->contextNum);
@@ -924,7 +919,6 @@ void DsqlCompilerScratch::genParameters(Array<NestConst<ParameterClause> >& para
 				}
 				else if (field->typeOfTable.hasData())
 				{
-					// appendUChar(blr_rowtype);
 					appendUChar(blr_rt_type_of_table);
 					appendUShort(field->fld_sub_count);
 					appendUShort(variable->contextNum);
@@ -932,7 +926,6 @@ void DsqlCompilerScratch::genParameters(Array<NestConst<ParameterClause> >& para
 				}
 				else
 				{
-					// appendUChar(blr_rowtype);
 					appendUChar(blr_rt_full);
 					appendUShort(field->fld_sub_count);
 					appendUShort(variable->contextNum);

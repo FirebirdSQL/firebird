@@ -419,7 +419,6 @@ public:
 	USHORT number = 0;			// Local variable number
 	bool initialized = false;	// Is variable initialized?
 
-	dsql_fld* row_typeclause = nullptr;	// rowtype field base
 	UCHAR contextNum = 0;
 	dsc desc;
 };
