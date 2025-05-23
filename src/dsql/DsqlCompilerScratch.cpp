@@ -841,242 +841,49 @@ void DsqlCompilerScratch::genReturn(bool eosFlag)
 void DsqlCompilerScratch::genParameters(Array<NestConst<ParameterClause> >& parameters,
 	Array<NestConst<ParameterClause> >& returns)
 {
-	if (parameters.hasData())
+	const auto processParameters = [&](Array<NestConst<ParameterClause>>& params, dsql_var::Type direction)
 	{
-		fb_assert(parameters.getCount() < MAX_USHORT / 2);
+		if (!params.hasData() && direction == dsql_var::TYPE_INPUT)
+			return;
+
+		fb_assert(params.getCount() < MAX_USHORT / 2);
 		appendUChar(blr_message);
-		appendUChar(0);
-		appendUShort(2 * parameters.getCount());
+		appendUChar(direction);
+		appendUShort(2 * params.getCount() + (direction == dsql_var::TYPE_OUTPUT ? 1 : 0));
 
-		for (FB_SIZE_T i = 0; i < parameters.getCount(); ++i)
+		for (FB_SIZE_T i = 0; i < params.getCount(); ++i)
 		{
-			ParameterClause* parameter = parameters[i];
+			auto parameter = params[i];
+			dsql_var* variable = nullptr;
+
+			putDebugArgument(direction, i, parameter->name.c_str());
 
 			auto field = parameter->type;
 			auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.hasData() && field->typeOfTable.hasData());
+
 			if (isRowtype)
 			{
-				if (field->fromCursor)
-				{
-					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-					Arg::Gds(isc_invalid_parameter_decl) <<
-					Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable));
-				}
-
-				dsql_rel* relation = METD_get_relation(getTransaction(), this, field->typeOfTable.c_str());
-				dsql_fld* fld = NULL;
-
-				if (!field->packageName.hasData() && getTypeFromCache(field, field->typeOfName))
-				{
-					genCompositeTypeFromCache(field, fld);
-					field->fld_sub_first = fld;
-				}
-				else if (!relation && field->packageName.hasData())
-				{
-					if (!METD_gen_composite_type_fields(getTransaction(), this, field->relationName, fld))
-						genCompositeTypeFromCache(field, fld);
-
-					field->fieldSource = field->typeOfName;
-					field->fld_sub_first = fld;
-				}
-
-				if (relation)
-				{
-					fld = field->fld_sub_first = relation->rel_fields;
-					field->fld_sub_count = relation->rel_fields_number;
-				}
-				else if (!fld)
-				{
-					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-					Arg::Gds(isc_invalid_parameter_decl) <<
-					Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable));
-				}
-
-				calculateCompositeFieldLength(*field);
-
-				dsql_var* variable = makeVariable(nullptr, field->fld_name.c_str(),
-					dsql_var::TYPE_INPUT, 0, (USHORT) (2 * i));
-
-				dsql_ctx* new_context = FB_NEW_POOL(getPool()) dsql_ctx(getPool());
-				new_context->ctx_context = contextNumber++;
-				new_context->ctx_scope_level = scopeLevel;
-				new_context->ctx_alias = new_context->ctx_internal_alias = field->fld_name.c_str();
-				new_context->ctx_flags = CTX_rowtype_var;
-				new_context->ctx_rowtype_var = variable;
-				context->push(new_context);
-				variable->contextNum = new_context->ctx_context;
-
-				putDebugArgument(fb_dbg_arg_output, i, parameter->name.c_str());
-				variable->field = field;
-
-				appendUChar(blr_rowtype);
-				if (field->fieldSource.hasData())
-				{
-					appendUChar(blr_rt_pagacked_type);
-					appendUShort(field->fld_sub_count);
-					appendUShort(variable->contextNum);
-					appendMetaString(field->fieldSource.c_str());
-				}
-				else if (field->typeOfTable.hasData())
-				{
-					appendUChar(blr_rt_type_of_table);
-					appendUShort(field->fld_sub_count);
-					appendUShort(variable->contextNum);
-					appendMetaString(field->typeOfTable.c_str());
-				}
-				else
-				{
-					appendUChar(blr_rt_full);
-					appendUShort(field->fld_sub_count);
-					appendUShort(variable->contextNum);
-					auto next = field->fld_sub_first;
-					while (next)
-					{
-						putDtype(next, true);
-						next = next->fld_next;
-					}
-				}
-
-				// Add slot for null flag (parameter2).
-				appendUChar(blr_short);
-				appendUChar(0);
+				variable = genRowtypeParameter(field, direction, direction == dsql_var::TYPE_OUTPUT ? 1 : 0, i);
 			}
 			else
 			{
-				putDebugArgument(fb_dbg_arg_input, i, parameter->name.c_str());
 				putType(parameter->type, true);
-
-				// Add slot for null flag (parameter2).
-				appendUChar(blr_short);
-				appendUChar(0);
-
-				makeVariable(parameter->type, parameter->name.c_str(),
-					dsql_var::TYPE_INPUT, 0, (USHORT) (2 * i), 0);
+				variable = makeVariable(parameter->type, parameter->name.c_str(),
+					direction, direction == dsql_var::TYPE_OUTPUT ? 1 : 0, (USHORT) (2 * i),
+					direction == dsql_var::TYPE_OUTPUT ? std::nullopt : std::make_optional(0));
 			}
-		}
-	}
 
-	fb_assert(returns.getCount() < MAX_USHORT / 2);
-	appendUChar(blr_message);
-	appendUChar(1);
-	appendUShort(2 * returns.getCount() + 1);
+			// Add slot for null flag (parameter2).
+			appendUChar(blr_short);
+			appendUChar(0);
 
-	if (returns.hasData())
-	{
-		for (FB_SIZE_T i = 0; i < returns.getCount(); ++i)
-		{
-			ParameterClause* parameter = returns[i];
-
-			auto field = parameter->type;
-			auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.hasData() && field->typeOfTable.hasData());
-			if (isRowtype)
-			{
-				if (field->fromCursor)
-				{
-					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-					Arg::Gds(isc_invalid_parameter_decl) <<
-					Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable));
-				}
-
-				dsql_rel* relation = METD_get_relation(getTransaction(), this, field->typeOfTable.c_str());
-				dsql_fld* fld = nullptr;
-
-				if (!field->packageName.hasData() && getTypeFromCache(field, field->typeOfName))
-				{
-					genCompositeTypeFromCache(field, fld);
-					field->fld_sub_first = fld;
-				}
-				else if (!relation && field->packageName.hasData())
-				{
-					if (!METD_gen_composite_type_fields(getTransaction(), this, field->relationName, fld))
-						genCompositeTypeFromCache(field, fld);
-
-					field->fieldSource = field->typeOfName;
-					field->fld_sub_first = fld;
-				}
-
-				if (relation)
-				{
-					fld = field->fld_sub_first = relation->rel_fields;
-					field->fld_sub_count = relation->rel_fields_number;
-				}
-				else if (!fld)
-				{
-					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-					Arg::Gds(isc_invalid_parameter_decl) <<
-					Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable));
-				}
-
-				calculateCompositeFieldLength(*field);
-
-				dsql_var* variable = makeVariable(nullptr, field->fld_name.c_str(),
-					dsql_var::TYPE_OUTPUT, 1, (USHORT) (2 * i));
-
-				dsql_ctx* new_context = FB_NEW_POOL(this->getPool()) dsql_ctx(this->getPool());
-				new_context->ctx_context = this->contextNumber++;
-				new_context->ctx_scope_level = this->scopeLevel;
-				new_context->ctx_alias = new_context->ctx_internal_alias = field->fld_name.c_str();
-				new_context->ctx_flags = CTX_rowtype_var;
-				new_context->ctx_rowtype_var = variable;
-				this->context->push(new_context);
-				variable->contextNum = new_context->ctx_context;
-
-				putDebugArgument(fb_dbg_arg_output, i, parameter->name.c_str());
-				variable->field = field;
-
-				appendUChar(blr_rowtype);
-				if (field->fieldSource.hasData())
-				{
-					// appendUChar(blr_rowtype);
-					appendUChar(blr_rt_pagacked_type);
-					appendUShort(field->fld_sub_count);
-					appendUShort(variable->contextNum);
-					appendMetaString(field->fieldSource.c_str());
-				}
-				else if (field->typeOfTable.hasData())
-				{
-					// appendUChar(blr_rowtype);
-					appendUChar(blr_rt_type_of_table);
-					appendUShort(field->fld_sub_count);
-					appendUShort(variable->contextNum);
-					appendMetaString(field->typeOfTable.c_str());
-				}
-				else
-				{
-					// appendUChar(blr_rowtype);
-					appendUChar(blr_rt_full);
-					appendUShort(field->fld_sub_count);
-					appendUShort(variable->contextNum);
-					auto next = field->fld_sub_first;
-					while (next)
-					{
-						putDtype(next, true);
-						next = next->fld_next;
-					}
-				}
-
-				// Add slot for null flag (parameter2).
-				appendUChar(blr_short);
-				appendUChar(0);
-
+			if (direction == dsql_var::TYPE_OUTPUT)
 				functionOutputVariableNumber = variable->number;
-			}
-			else
-			{
-				putDebugArgument(fb_dbg_arg_output, i, parameter->name.c_str());
-				putType(parameter->type, true);
-
-				// Add slot for null flag (parameter2).
-				appendUChar(blr_short);
-				appendUChar(0);
-
-				dsql_var* variable = makeVariable(parameter->type, parameter->name.c_str(),
-					dsql_var::TYPE_OUTPUT, 1, (USHORT) (2 * i));
-
-				functionOutputVariableNumber = variable->number;
-			}
 		}
-	}
+	};
+
+	processParameters(parameters, dsql_var::TYPE_INPUT);
+	processParameters(returns, dsql_var::TYPE_OUTPUT);
 
 	// Add slot for EOS.
 	appendUChar(blr_short);
@@ -1273,6 +1080,91 @@ void DsqlCompilerScratch::compileAggregateFunction(Array<NestConst<ParameterClau
 	appendUChar(blr_eoc);
 
 	endDebug();
+}
+
+dsql_var* DsqlCompilerScratch::genRowtypeParameter(dsql_fld* field,
+	dsql_var::Type varType, USHORT msgNumber, FB_SIZE_T index)
+{
+	if (field->fromCursor)
+	{
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+			Arg::Gds(isc_invalid_parameter_decl) <<
+			Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable));
+	}
+
+	dsql_rel* relation = METD_get_relation(getTransaction(), this, field->typeOfTable.c_str());
+	dsql_fld* fld = nullptr;
+
+	if (!field->packageName.hasData() && getTypeFromCache(field, field->typeOfName))
+	{
+		genCompositeTypeFromCache(field, fld);
+		field->fld_sub_first = fld;
+	}
+	else if (!relation && field->packageName.hasData())
+	{
+		if (!METD_gen_composite_type_fields(getTransaction(), this, field->relationName, fld))
+			genCompositeTypeFromCache(field, fld);
+
+		field->fieldSource = field->typeOfName;
+		field->fld_sub_first = fld;
+	}
+
+	if (relation)
+	{
+		fld = field->fld_sub_first = relation->rel_fields;
+		field->fld_sub_count = relation->rel_fields_number;
+	}
+	else if (!fld)
+	{
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+			Arg::Gds(isc_invalid_parameter_decl) <<
+			Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable));
+	}
+
+	calculateCompositeFieldLength(*field);
+
+	dsql_var* variable = makeVariable(nullptr, field->fld_name.c_str(),
+		varType, msgNumber, (USHORT) (2 * index));
+
+	dsql_ctx* new_context = FB_NEW_POOL(getPool()) dsql_ctx(getPool());
+	new_context->ctx_context = contextNumber++;
+	new_context->ctx_scope_level = scopeLevel;
+	new_context->ctx_alias = new_context->ctx_internal_alias = field->fld_name.c_str();
+	new_context->ctx_flags = CTX_rowtype_var;
+	new_context->ctx_rowtype_var = variable;
+	context->push(new_context);
+	variable->contextNum = new_context->ctx_context;
+	variable->field = field;
+
+	appendUChar(blr_rowtype);
+	if (field->fieldSource.hasData())
+	{
+		appendUChar(blr_rt_pagacked_type);
+		appendUShort(field->fld_sub_count);
+		appendUShort(variable->contextNum);
+		appendMetaString(field->fieldSource.c_str());
+	}
+	else if (field->typeOfTable.hasData())
+	{
+		appendUChar(blr_rt_type_of_table);
+		appendUShort(field->fld_sub_count);
+		appendUShort(variable->contextNum);
+		appendMetaString(field->typeOfTable.c_str());
+	}
+	else
+	{
+		appendUChar(blr_rt_full);
+		appendUShort(field->fld_sub_count);
+		appendUShort(variable->contextNum);
+		auto next = field->fld_sub_first;
+		while (next)
+		{
+			putDtype(next, true);
+			next = next->fld_next;
+		}
+	}
+
+	return variable;
 }
 
 void DsqlCompilerScratch::addCTEs(WithClause* withClause)

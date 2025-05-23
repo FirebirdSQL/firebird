@@ -314,6 +314,7 @@ private:
 	void putTypeName(const TypeClause& type, const bool useExplicitCollate);
 
 	void putDtype(const TypeClause& type, const bool useSubType);
+	dsql_var* genRowtypeParameter(dsql_fld* field, dsql_var::Type varType, USHORT msgNumber, FB_SIZE_T index);
 
 	dsql_dbb* dbb = nullptr;				// DSQL attachment
 	jrd_tra* transaction = nullptr;			// Transaction
