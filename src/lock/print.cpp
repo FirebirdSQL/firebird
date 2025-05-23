@@ -197,9 +197,10 @@ public:
 	HtmlLink(const TEXT* prefix, const SLONG value)
 	{
 		if (sw_html_format && value && prefix)
-			sprintf(strBuffer, "<a href=\"#%s%" SLONGFORMAT"\">%6" SLONGFORMAT"</a>", prefix, value, value);
+			snprintf(strBuffer, sizeof(strBuffer),
+				"<a href=\"#%s%" SLONGFORMAT"\">%6" SLONGFORMAT "</a>", prefix, value, value);
 		else
-			sprintf(strBuffer, "%6" SLONGFORMAT, value);
+			snprintf(strBuffer, sizeof(strBuffer), "%6" SLONGFORMAT, value);
 	}
 	operator const TEXT*()
 	{
@@ -534,7 +535,7 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 		for (FB_SIZE_T i = 0; i < buffer.getCount(); i++)
 		{
 			char hex[3];
-			sprintf(hex, "%02x", (int) buffer[i]);
+			snprintf(hex, sizeof(hex), "%02x", (int) buffer[i]);
 			file_id.append(hex);
 		}
 
@@ -1324,7 +1325,7 @@ static void prt_lock(OUTFILE outfile, const lhb* LOCK_header, const lbl* lock, U
 			else
 			{
 				char buf[6] = "";
-				int n = sprintf(buf, "<%d>", c);
+				int n = snprintf(buf, sizeof(buf), "<%d>", c);
 				if (n < 1 || p + n >= end_temp)
 				{
 					while (p < end_temp)

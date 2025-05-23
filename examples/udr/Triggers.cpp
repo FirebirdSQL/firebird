@@ -135,7 +135,8 @@ FB_UDR_BEGIN_TRIGGER(replicate)
 			const char* name = triggerMetadata->getField(status, i);
 
 			strcat(buffer, "    p");
-			sprintf(buffer + strlen(buffer), "%d type of column \"%s\".\"%s\" = ?", i, table, name);
+			const size_t buflen = strlen(buffer);
+			snprintf(buffer + buflen, sizeof(buffer) - buflen, "%d type of column \"%s\".\"%s\" = ?", i, table, name);
 		}
 
 		strcat(buffer,
@@ -175,7 +176,8 @@ FB_UDR_BEGIN_TRIGGER(replicate)
 			if (i > 0)
 				strcat(buffer, ", ");
 			strcat(buffer, ":p");
-			sprintf(buffer + strlen(buffer), "%d", i);
+			const size_t buflen = strlen(buffer);
+			snprintf(buffer + buflen, sizeof(buffer) - buflen, "%d", i);
 		}
 
 		strcat(buffer, ")\n        on external data source '");

@@ -778,9 +778,10 @@ static SecurityClass::flags_t save_field_privileges(thread_db* tdbb,
 					MODIFY RFR
 						while (!unique)
 						{
-							sprintf(RFR.RDB$SECURITY_CLASS, "%s%" SQUADFORMAT, SQL_FLD_SECCLASS_PREFIX,
+							snprintf(RFR.RDB$SECURITY_CLASS, sizeof(RFR.RDB$SECURITY_CLASS), 
+								"%s%" SQUADFORMAT, SQL_FLD_SECCLASS_PREFIX,
 								DPM_gen_id(tdbb, MET_lookup_generator(tdbb, SQL_SECCLASS_GENERATOR),
-										   false, 1));
+									false, 1));
 
 							unique = true;
 							FOR (REQUEST_HANDLE request3)
