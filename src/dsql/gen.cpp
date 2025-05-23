@@ -91,7 +91,7 @@ void GEN_hidden_variables(DsqlCompilerScratch* dsqlScratch)
 
 	for (const auto var : dsqlScratch->hiddenVariables)
 	{
-		if (!var->desc.dsc_dtype == dtype_rowtype)
+		if (var->desc.dsc_dtype != dtype_rowtype)
 		{
 			dsqlScratch->appendUChar(blr_dcl_variable);
 			dsqlScratch->appendUShort(var->number);
