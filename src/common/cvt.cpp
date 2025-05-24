@@ -1669,7 +1669,11 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 	// optimal, it would cost more to find the fast move than the
 	// fast move would gain.
 
-	if (DSC_EQUIV(from, to, false))
+	// But do not do it for strings because their length has not been validated until this moment
+	// (real source length must be validated against target maximum length
+	// and this is the first common place where both are present).
+
+	if (DSC_EQUIV(from, to, false) && !DTYPE_IS_TEXT(from->dsc_dtype))
 	{
 		if (length) {
 			memcpy(p, q, length);
