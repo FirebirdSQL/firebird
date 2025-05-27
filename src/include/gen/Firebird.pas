@@ -5903,6 +5903,7 @@ const
 	 isc_dyn_cant_set_ts_table = 336068923;
 	 isc_dyn_cant_set_ts_index = 336068924;
 	 isc_dyn_ts_already_exists = 336068925;
+	 isc_dyn_cannot_mod_sys_ts = 336068926;
 	 isc_gbak_unknown_switch = 336330753;
 	 isc_gbak_page_size_missing = 336330754;
 	 isc_gbak_page_size_toobig = 336330755;

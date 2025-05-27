@@ -3765,8 +3765,9 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation)
 			// ODS 12
 			X.RDB$GENERATOR_NAME.NULL = TRUE;
 			X.RDB$IDENTITY_TYPE.NULL = TRUE;
-			// ODS 14
-			X.RDB$TABLESPACE_NAME.NULL = TRUE;
+
+			strcpy(X.RDB$TABLESPACE_NAME, PRIMARY_TABLESPACE_NAME);
+			X.RDB$TABLESPACE_NAME.NULL = FALSE;
 
 			skip_init(&scan_next_attr);
 			while (get_attribute(&attribute, tdgbl) != att_end)
@@ -3940,9 +3941,13 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation)
 
 				case att_field_tablespace_name:
 				{
-					GET_TEXT(X.RDB$TABLESPACE_NAME);
-					const auto str = tdgbl->tablespace_mapping.get(X.RDB$TABLESPACE_NAME);
-					X.RDB$TABLESPACE_NAME.NULL = str ? str->equals(PRIMARY_TABLESPACE_NAME) : FALSE;
+					BASED_ON RDB$RELATIONS.RDB$TABLESPACE_NAME tablespaceName;
+
+					GET_TEXT(tablespaceName);
+					const auto str = tdgbl->tablespace_mapping.get(tablespaceName);
+
+					if (str && !str->equals(PRIMARY_TABLESPACE_NAME))
+						strcpy(X.RDB$TABLESPACE_NAME, tablespaceName);
 					break;
 				}
 
@@ -6548,8 +6553,8 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 		X.RDB$CONDITION_BLR.NULL = TRUE;
 		X.RDB$SYSTEM_FLAG = 0;
 		X.RDB$SYSTEM_FLAG.NULL = FALSE;
-		// ODS 14
-		X.RDB$TABLESPACE_NAME.NULL = TRUE;
+		strcpy(X.RDB$TABLESPACE_NAME, PRIMARY_TABLESPACE_NAME);
+		X.RDB$TABLESPACE_NAME.NULL = !(relation->rel_flags & REL_has_tablespace_name);
 
 		skip_init(&scan_next_attr);
 		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
@@ -6666,9 +6671,13 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 
 			case att_index_tablespace_name:
 			{
-				GET_TEXT(X.RDB$TABLESPACE_NAME);
-				const auto str = tdgbl->tablespace_mapping.get(X.RDB$TABLESPACE_NAME);
-				X.RDB$TABLESPACE_NAME.NULL = str ? str->equals(PRIMARY_TABLESPACE_NAME) : FALSE;
+				BASED_ON RDB$RELATIONS.RDB$TABLESPACE_NAME tablespaceName;
+
+				GET_TEXT(tablespaceName);
+				const auto str = tdgbl->tablespace_mapping.get(tablespaceName);
+
+				if (str && !str->equals(PRIMARY_TABLESPACE_NAME))
+					strcpy(X.RDB$TABLESPACE_NAME, tablespaceName);
 				break;
 			}
 
@@ -7971,8 +7980,7 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 	bool		ext_file_name_null = true;
 
 	BASED_ON RDB$RELATIONS.RDB$TABLESPACE_NAME tableSpace;
-	tableSpace[0] = '\0';
-	bool tableSpaceNull = true;
+	strcpy(tableSpace, PRIMARY_TABLESPACE_NAME);
 
 	// Before starting to restore relations, commit everything that was restored
 	// prior to this point. This ensures that no pending error can later affect
@@ -8094,7 +8102,10 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 
 		case att_relation_type:
 			if (tdgbl->RESTORE_format >= 8)
+			{
 				type = get_int32(tdgbl);
+				relation->rel_flags |= fb_utils::hasTablespaceName(rel_t(type)) ? REL_has_tablespace_name : 0;
+			}
 			else
 				bad_attribute(scan_next_attr, attribute, 111);
 			break;
@@ -8107,9 +8118,15 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 
 		case att_relation_tablespace_name:
 		{
-			GET_TEXT(tableSpace);
-			const auto str = tdgbl->tablespace_mapping.get(tableSpace);
-			tableSpaceNull = str ? str->equals(PRIMARY_TABLESPACE_NAME) : FALSE;
+			BASED_ON RDB$RELATIONS.RDB$TABLESPACE_NAME tablespaceName;
+
+			GET_TEXT(tablespaceName);
+
+			const auto str = tdgbl->tablespace_mapping.get(tablespaceName);
+
+			if (str && !str->equals(PRIMARY_TABLESPACE_NAME))
+				strcpy(tableSpace, tablespaceName);
+
 			break;
 		}
 
@@ -8160,7 +8177,7 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 			X.RDB$SQL_SECURITY = (FB_BOOLEAN) sql_security;
 
 			// ODS 14
-			X.RDB$TABLESPACE_NAME.NULL = tableSpaceNull;
+			X.RDB$TABLESPACE_NAME.NULL = !fb_utils::hasTablespaceName(rel_t(type));
 			strcpy(X.RDB$TABLESPACE_NAME, tableSpace);
 
 		END_STORE;
@@ -10878,7 +10895,8 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 		{
 			// Clean up RDB$TABLESPACES to prevent creation of files during DFW
 			FOR (REQUEST_HANDLE tdgbl->handles_get_ts_req_handle2)
-				X IN RDB$TABLESPACES
+				X IN RDB$TABLESPACES WITH
+				(X.RDB$SYSTEM_FLAG MISSING OR X.RDB$SYSTEM_FLAG NE RDB_system)
 				ERASE X;
 				ON_ERROR
 					general_on_error();

@@ -204,6 +204,9 @@ bool CreateAlterTablespaceNode::executeAlter(thread_db* tdbb, DsqlCompilerScratc
 		X IN RDB$TABLESPACES
 		WITH X.RDB$TABLESPACE_NAME EQ name.c_str()
 	{
+		if (X.RDB$SYSTEM_FLAG)
+			ERR_post(Arg::Gds(isc_dyn_cannot_mod_sys_ts) << Arg::Str(name));
+
 		modified = true;
 		tableSpaceId = X.RDB$TABLESPACE_ID;
 
@@ -299,6 +302,9 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 		X IN RDB$TABLESPACES
 		WITH X.RDB$TABLESPACE_NAME EQ name.c_str()
 	{
+		if (X.RDB$SYSTEM_FLAG)
+			ERR_post(Arg::Gds(isc_dyn_cannot_mod_sys_ts) << Arg::Str(name));
+
 		found = true;
 		tableSpaceId = X.RDB$TABLESPACE_ID;
 		tableSpaceFileName = X.RDB$FILE_NAME;

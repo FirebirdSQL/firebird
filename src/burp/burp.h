@@ -771,7 +771,8 @@ struct burp_rel
 
 enum burp_rel_flags_vals {
 	REL_view		= 1,
-	REL_external	= 2
+	REL_external	= 2,
+	REL_has_tablespace_name = 4
 };
 
 // package definition

@@ -4246,7 +4246,8 @@ void write_tablespaces()
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
 	FOR (REQUEST_HANDLE req_handle1)
-		X IN RDB$TABLESPACES
+		X IN RDB$TABLESPACES WITH
+		(X.RDB$SYSTEM_FLAG MISSING OR X.RDB$SYSTEM_FLAG NE RDB_system)
 	{
 		put(tdgbl, rec_tablespace);
 

@@ -353,10 +353,10 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 			else
 				isqlGlob.printf("%s ", new_name ? new_name : relation_name);
 
-			if (!REL.RDB$TABLESPACE_NAME.NULL)
+			fb_utils::exact_name(REL.RDB$TABLESPACE_NAME);
+			if (!REL.RDB$TABLESPACE_NAME.NULL && strcmp(REL.RDB$TABLESPACE_NAME, PRIMARY_TABLESPACE_NAME))
 			{
-				fb_utils::exact_name(REL.RDB$TABLESPACE_NAME);
-				IUTILS_copy_SQL_id (REL.RDB$TABLESPACE_NAME, SQL_identifier, DBL_QUOTE);
+				IUTILS_copy_SQL_id(REL.RDB$TABLESPACE_NAME, SQL_identifier, DBL_QUOTE);
 				tableSpaceName.printf(" TABLESPACE %s", SQL_identifier);
 			}
 
@@ -3393,11 +3393,9 @@ static void list_indexes()
 			END_FOR
 		}
 
-		if (!IDX.RDB$TABLESPACE_NAME.NULL)
-		{
-			fb_utils::exact_name(IDX.RDB$TABLESPACE_NAME);
+		fb_utils::exact_name(IDX.RDB$TABLESPACE_NAME);
+		if (strcmp(IDX.RDB$TABLESPACE_NAME, PRIMARY_TABLESPACE_NAME))
 			isqlGlob.printf(" TABLESPACE %s", IDX.RDB$TABLESPACE_NAME);
-		}
 
 		isqlGlob.printf("%s%s", isqlGlob.global_Term, NEWLINE);
 

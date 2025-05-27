@@ -588,6 +588,19 @@ namespace
 				END_MODIFY
 			}
 			END_FOR
+
+			handle.reset();
+
+			FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
+				TS IN RDB$TABLESPACES
+				WITH TS.RDB$SYSTEM_FLAG EQ RDB_system
+			{
+				MODIFY TS USING
+					TS.RDB$SECURITY_CLASS.NULL = FALSE;
+					PAD(securityClass, TS.RDB$SECURITY_CLASS);
+				END_MODIFY
+			}
+			END_FOR
 		}
 
 	private:
@@ -693,6 +706,31 @@ void INI_format(thread_db* tdbb, const string& charset)
 
 	for (const gfld* gfield = gfields; gfield->gfld_name; gfield++)
 		store_global_field(tdbb, gfield, handle, nonRelSec);
+
+	// Store PRIMARY TABLESPACE record
+
+	handle.reset();
+
+	STORE(REQUEST_HANDLE handle) X IN RDB$TABLESPACES
+	{
+		X.RDB$TABLESPACE_ID = DB_PAGE_SPACE;
+		PAD(PRIMARY_TABLESPACE_NAME, X.RDB$TABLESPACE_NAME);
+
+		X.RDB$SYSTEM_FLAG = RDB_system;
+
+		PAD(ownerName, X.RDB$OWNER_NAME);
+		X.RDB$OWNER_NAME.NULL = FALSE;
+
+		PAD(dbb->dbb_filename.c_str(), X.RDB$FILE_NAME);
+		X.RDB$FILE_NAME.NULL = FALSE;
+
+		X.RDB$OFFLINE.NULL = FALSE;
+		X.RDB$OFFLINE = FALSE;
+
+		X.RDB$READ_ONLY.NULL = FALSE;
+		X.RDB$READ_ONLY = FALSE;
+	}
+	END_STORE
 
 	// Store DATABASE record
 
@@ -1682,6 +1720,9 @@ static void store_indices(thread_db* tdbb, USHORT odsVersion)
 				transaction, selectivity);
 
 			X.RDB$INDEX_ID = idx.idx_id + 1;
+
+			PAD(PRIMARY_TABLESPACE_NAME, X.RDB$TABLESPACE_NAME);
+			X.RDB$TABLESPACE_NAME.NULL = FALSE;
 		}
 		END_STORE
 
@@ -1828,6 +1869,9 @@ static void store_relation(thread_db* tdbb,
 		X.RDB$FORMAT = getLatestFormat(tdbb, relId, fieldId);
 		X.RDB$SYSTEM_FLAG = RDB_system;
 		X.RDB$DBKEY_LENGTH = 8;
+
+		PAD(PRIMARY_TABLESPACE_NAME, X.RDB$TABLESPACE_NAME);
+		X.RDB$TABLESPACE_NAME.NULL = !fb_utils::hasTablespaceName(rel_t(relType));
 	}
 	END_STORE;
 
@@ -1856,6 +1900,9 @@ static void store_relation_field(thread_db* tdbb,
 		X.RDB$SYSTEM_FLAG = RDB_system;
 		X.RDB$SYSTEM_FLAG.NULL = FALSE;
 		X.RDB$UPDATE_FLAG = updateFlag;
+
+		PAD(PRIMARY_TABLESPACE_NAME, X.RDB$TABLESPACE_NAME);
+		X.RDB$TABLESPACE_NAME.NULL = FALSE;
 	}
 	END_STORE
 }

@@ -5544,6 +5544,11 @@ ULONG MET_rel_pagespace(Jrd::thread_db* tdbb, USHORT rel_id)
 			WITH REL.RDB$RELATION_ID EQ rel_id AND
 				 REL.RDB$TABLESPACE_NAME NOT MISSING
 	{
+#ifdef DEV_BUILD
+		if (!tdbb->getAttachment()->isGbak() && fb_utils::hasTablespaceName(rel_t(REL.RDB$RELATION_TYPE)))
+			fb_assert(!REL.RDB$TABLESPACE_NAME.NULL);
+#endif
+
 		pageSpaceId = MET_tablespace(tdbb, REL.RDB$TABLESPACE_NAME)->id;
 	}
 	END_FOR
@@ -5725,7 +5730,9 @@ Tablespace* MET_tablespace(Jrd::thread_db* tdbb, const MetaName& tableSpaceName)
 	CHECK_DBB(dbb);
 
 	Attachment* attachment = tdbb->getAttachment();
-	if (tableSpaceName.isEmpty())
+
+	// Tablespace name can be empty for view, gtt, virtual tables
+	if (tableSpaceName.isEmpty() || tableSpaceName == PRIMARY_TABLESPACE_NAME)
 		return attachment->getTablespace(DB_PAGE_SPACE);
 
 	Tablespace* ts = attachment->getTablespaceByName(tableSpaceName);
@@ -5832,7 +5839,8 @@ void MET_ts_files(Jrd::thread_db* tdbb, ObjectsArray<PathName>& files)
 	AutoCacheRequest request(tdbb, irq_list_ts_files, IRQ_REQUESTS);
 
 	FOR(REQUEST_HANDLE request)
-		TS IN RDB$TABLESPACES
+		TS IN RDB$TABLESPACES WITH
+		(TS.RDB$SYSTEM_FLAG MISSING OR TS.RDB$SYSTEM_FLAG NE RDB_system)
 	{
 		files.push(TS.RDB$FILE_NAME);
 	}

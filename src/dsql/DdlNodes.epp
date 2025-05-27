@@ -6190,7 +6190,7 @@ void RelationNode::FieldDefinition::store(thread_db* tdbb, jrd_tra* transaction)
 		RFR.RDB$VIEW_CONTEXT.NULL = TRUE;
 		RFR.RDB$BASE_FIELD.NULL = TRUE;
 		///RFR.RDB$UPDATE_FLAG.NULL = TRUE;
-		RFR.RDB$TABLESPACE_NAME.NULL = TRUE;
+		RFR.RDB$TABLESPACE_NAME.NULL = FALSE;
 
 		if (collationId.has_value())
 		{
@@ -6262,11 +6262,13 @@ void RelationNode::FieldDefinition::store(thread_db* tdbb, jrd_tra* transaction)
 
 		if (tableSpace.hasData() && applyTablespacesDdl(tdbb))
 		{
-			if (!checkObjectExist(tdbb, transaction, tableSpace, obj_tablespaces))
+			if ((tableSpace != PRIMARY_TABLESPACE_NAME) && !checkObjectExist(tdbb, transaction, tableSpace, obj_tablespaces))
 				status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << tableSpace.c_str());
-			RFR.RDB$TABLESPACE_NAME.NULL = FALSE;
+
 			strcpy(RFR.RDB$TABLESPACE_NAME, tableSpace.c_str());
 		}
+		else
+			strcpy(RFR.RDB$TABLESPACE_NAME, PRIMARY_TABLESPACE_NAME);
 	}
 	END_STORE
 }
@@ -7582,16 +7584,6 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 		REL.RDB$VIEW_SOURCE.NULL = TRUE;
 		REL.RDB$EXTERNAL_FILE.NULL = TRUE;
 
-		if (tableSpace.hasData() && tableSpace != PRIMARY_TABLESPACE_NAME && applyTablespacesDdl(tdbb))
-		{
-			if (!checkObjectExist(tdbb, transaction, tableSpace, obj_tablespaces))
-				status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << tableSpace.c_str());
-			REL.RDB$TABLESPACE_NAME.NULL = FALSE;
-			strcpy(REL.RDB$TABLESPACE_NAME, tableSpace.c_str());
-		}
-		else
-			REL.RDB$TABLESPACE_NAME.NULL = TRUE;
-
 		if (externalFile)
 		{
 			if (externalFile->length() >= sizeof(REL.RDB$EXTERNAL_FILE))
@@ -7603,6 +7595,22 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 			REL.RDB$EXTERNAL_FILE.NULL = FALSE;
 			strcpy(REL.RDB$EXTERNAL_FILE, externalFile->c_str());
 			REL.RDB$RELATION_TYPE = rel_external;
+		}
+
+		const bool nullTsName = !fb_utils::hasTablespaceName(rel_t(REL.RDB$RELATION_TYPE));
+		REL.RDB$TABLESPACE_NAME.NULL = nullTsName;
+
+		if (!nullTsName)
+		{
+			if (tableSpace.hasData() && applyTablespacesDdl(tdbb))
+			{
+				if ((tableSpace != PRIMARY_TABLESPACE_NAME) && !checkObjectExist(tdbb, transaction, tableSpace, obj_tablespaces))
+					status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << tableSpace.c_str());
+
+				strcpy(REL.RDB$TABLESPACE_NAME, tableSpace.c_str());
+			}
+			else
+				strcpy(REL.RDB$TABLESPACE_NAME, PRIMARY_TABLESPACE_NAME);
 		}
 	}
 	END_STORE
@@ -8087,9 +8095,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 					if (!applyTablespacesDdl(tdbb))
 						break;
 
-					const bool primary_ts = (tableSpace == PRIMARY_TABLESPACE_NAME);
-
-					if (!primary_ts && !checkObjectExist(tdbb, transaction, tableSpace, obj_tablespaces))
+					if ((tableSpace != PRIMARY_TABLESPACE_NAME) && !checkObjectExist(tdbb, transaction, tableSpace, obj_tablespaces))
 						status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << tableSpace.c_str());
 
 					AutoRequest request2;
@@ -8106,12 +8112,11 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 								status_exception::raise(Arg::Gds(isc_dyn_cant_set_ts_table) << name);
 						}
 
+						fb_assert(!REL.RDB$TABLESPACE_NAME.NULL);
+
 						// Check if we are trying to change tablespace name to the already set
-						if ( (REL.RDB$TABLESPACE_NAME.NULL && primary_ts) ||
-							 (!REL.RDB$TABLESPACE_NAME.NULL && tableSpace == REL.RDB$TABLESPACE_NAME) )
-						{
+						if (tableSpace == REL.RDB$TABLESPACE_NAME)
 							break;
-						}
 
 						if (!REL.RDB$RELATION_ID.NULL)
 						{
@@ -8123,16 +8128,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 						MODIFY REL
 						{
-							if (!primary_ts)
-							{
-								REL.RDB$TABLESPACE_NAME.NULL = FALSE;
-								strcpy(REL.RDB$TABLESPACE_NAME, tableSpace.c_str());
-							}
-							else
-							{
-								REL.RDB$TABLESPACE_NAME.NULL = TRUE;
-								REL.RDB$TABLESPACE_NAME[0] = 0;
-							}
+							strcpy(REL.RDB$TABLESPACE_NAME, tableSpace.c_str());
 						}
 						END_MODIFY
 
@@ -9800,7 +9796,6 @@ void CreateIndexNode::store(thread_db* tdbb, jrd_tra* transaction, MetaName& nam
 		IDX.RDB$RELATION_NAME.NULL = FALSE;
 		IDX.RDB$SYSTEM_FLAG = 0;
 		IDX.RDB$SYSTEM_FLAG.NULL = FALSE; // Probably redundant.
-		IDX.RDB$TABLESPACE_NAME.NULL = TRUE;
 
 		MetaName relationTablespace;
 		bool temporary = false;
@@ -9848,28 +9843,29 @@ void CreateIndexNode::store(thread_db* tdbb, jrd_tra* transaction, MetaName& nam
 			IDX.RDB$INDEX_TYPE = SSHORT(definition.descending.asBool());
 		}
 
+		IDX.RDB$TABLESPACE_NAME.NULL = temporary;
+
 		if (definition.tableSpace.hasData() && applyTablespacesDdl(tdbb))
 		{
 			if (temporary)
 				status_exception::raise(Arg::Gds(isc_dyn_cant_set_ts_index) << IDX.RDB$INDEX_NAME);
 
-			if (definition.tableSpace != PRIMARY_TABLESPACE_NAME)
+			if ((definition.tableSpace != PRIMARY_TABLESPACE_NAME) &&
+			     !checkObjectExist(tdbb, transaction, definition.tableSpace, obj_tablespaces))
 			{
-				if (!checkObjectExist(tdbb, transaction, definition.tableSpace, obj_tablespaces))
-					status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << definition.tableSpace.c_str());
-
-				IDX.RDB$TABLESPACE_NAME.NULL = FALSE;
-				strcpy(IDX.RDB$TABLESPACE_NAME, definition.tableSpace.c_str());
+				status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << definition.tableSpace.c_str());
 			}
+
+			strcpy(IDX.RDB$TABLESPACE_NAME, definition.tableSpace.c_str());
+
 		}
-		else if (relationTablespace.hasData())
+		else
 		{
 			/**
 			 * If TABLESPACE clause is omitted, the index uses relation tablespace.
 			 * It's necessary to write it explicitly since later we can move relation
 			 * into another tablespace.
 			*/
-			IDX.RDB$TABLESPACE_NAME.NULL = FALSE;
 			strcpy(IDX.RDB$TABLESPACE_NAME, relationTablespace.c_str());
 		}
 
@@ -10341,24 +10337,14 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 			}
 			END_FOR
 
+			fb_assert(!IDX.RDB$TABLESPACE_NAME.NULL);
+
 			// Check if we are trying to change tablespace name to the already set
-			if ( (IDX.RDB$TABLESPACE_NAME.NULL && primary_ts) ||
-				 (!IDX.RDB$TABLESPACE_NAME.NULL && tableSpace == IDX.RDB$TABLESPACE_NAME) )
-			{
+			if (tableSpace == IDX.RDB$TABLESPACE_NAME)
 				break;
-			}
 
 			MODIFY IDX
-				if (!primary_ts)
-				{
-					IDX.RDB$TABLESPACE_NAME.NULL = FALSE;
-					strcpy(IDX.RDB$TABLESPACE_NAME, tableSpace.c_str());
-				}
-				else
-				{
-					IDX.RDB$TABLESPACE_NAME.NULL = TRUE;
-					IDX.RDB$TABLESPACE_NAME[0] = 0;
-				}
+				strcpy(IDX.RDB$TABLESPACE_NAME, tableSpace.c_str());
 			END_MODIFY
 		}
 	}
@@ -12001,6 +11987,12 @@ static bool checkObjectExist(thread_db* tdbb, jrd_tra* transaction, const MetaNa
 
 		case obj_tablespaces:
 		{
+			if (name == PRIMARY_TABLESPACE_NAME)
+			{
+				rc = true;
+				break;
+			}
+
 			AutoCacheRequest request(tdbb, drq_tablespace_exist, DYN_REQUESTS);
 			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 				X IN RDB$TABLESPACES

@@ -307,3 +307,4 @@ FB_IMPL_MSG(DYN, 314, dyn_ts_not_found, -901, "42", "000", "Tablespace @1 not fo
 FB_IMPL_MSG(DYN, 315, dyn_cant_set_ts_table, -901, "42", "000", "Cannot set tablespace for temporary table @1")
 FB_IMPL_MSG(DYN, 316, dyn_cant_set_ts_index, -901, "42", "000", "Cannot set tablespace for temporary index @1")
 FB_IMPL_MSG(DYN, 317, dyn_ts_already_exists, -901, "42", "000", "Tablespace @1 already exists")
+FB_IMPL_MSG(DYN, 318, dyn_cannot_mod_sys_ts, -901, "42", "000", "Cannot ALTER or DROP system tablespace @1")

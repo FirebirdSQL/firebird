@@ -4865,12 +4865,9 @@ static void show_index(SCHAR* relation_name,
 			(unique_flag ? " UNIQUE" : ""),
 			(index_type == 1 ? " DESCENDING" : ""), relation_name);
 
-	if (tablespace_name)
-	{
-		fb_utils::exact_name(tablespace_name);
-		if (tablespace_name[0])
-			isqlGlob.printf(" TABLESPACE %s", tablespace_name);
-	}
+	fb_utils::exact_name(tablespace_name);
+	if (strcmp(tablespace_name, PRIMARY_TABLESPACE_NAME))
+		isqlGlob.printf(" TABLESPACE %s", tablespace_name);
 
 	// Get column names
 
@@ -6129,11 +6126,9 @@ static processing_state show_table(const SCHAR* relation_name, bool isView)
 			if (!REL.RDB$EXTERNAL_FILE.NULL)
 				isqlGlob.printf("External file: %s%s", REL.RDB$EXTERNAL_FILE, NEWLINE);
 
-			if (!REL.RDB$TABLESPACE_NAME.NULL)
-			{
-				fb_utils::exact_name(REL.RDB$TABLESPACE_NAME);
+			fb_utils::exact_name(REL.RDB$TABLESPACE_NAME);
+			if (!REL.RDB$TABLESPACE_NAME.NULL && strcmp(REL.RDB$TABLESPACE_NAME, PRIMARY_TABLESPACE_NAME))
 				isqlGlob.printf("TABLESPACE: %s%s", REL.RDB$TABLESPACE_NAME, NEWLINE);
-			}
 		}
 		first = false;
 		if ((isView && REL.RDB$VIEW_BLR.NULL) || (!isView && !REL.RDB$VIEW_BLR.NULL))
