@@ -399,7 +399,7 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 			if ((FLD.RDB$FIELD_TYPE == blr_text || FLD.RDB$FIELD_TYPE == blr_varying) &&
 				!RFR.RDB$COLLATION_ID.NULL)
 			{
-				// There is no need to print character set for domain at all because it cannot be overriden.
+				// There is no need to print character set for domain at all because it cannot be overridden.
 				// Collation will be printed later.
 				collation = RFR.RDB$COLLATION_ID;
 				char_set_id = FLD.RDB$CHARACTER_SET_ID;

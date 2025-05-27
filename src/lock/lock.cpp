@@ -804,7 +804,7 @@ bool LockManager::cancelWait(SRQ_PTR owner_offset)
  *
  * Functional description
  *	Wakeup waiting owner to make it check if wait should be cancelled.
- *	As this routine could be called asyncronous, take extra care and
+ *	As this routine could be called asynchronous, take extra care and
  *	don't trust the input params blindly.
  *
  **************************************/

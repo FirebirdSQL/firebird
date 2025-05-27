@@ -812,7 +812,7 @@ public:
 		return isSharedNode() ? nullptr : &dsqlDesc;
 	}
 
-	// Must be overriden returning true in shared nodes.
+	// Must be overridden returning true in shared nodes.
 	virtual bool isSharedNode()
 	{
 		return false;
