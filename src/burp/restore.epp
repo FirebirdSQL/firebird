@@ -12482,8 +12482,9 @@ inline void RestoreRelationTask::checkSpace(IOBuffer** pBuf, const FB_SIZE_T len
 	(*pBuf)->setUsed((*pBuf)->getSize() - *pSpace);
 
 	IOBuffer* newBuf = getCleanBuffer();
-	if (!newBuf)	// error ?
-		throw LongJump();
+	if (!newBuf)
+		LongJump::raise(); // We received command to stop our task (possible due to errors)
+
 	(*pBuf)->linkNext(newBuf);
 
 	if ((*pBuf)->getRecs())

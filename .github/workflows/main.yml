@@ -290,8 +290,6 @@ jobs:
   build-macos:
     name: build-macos-${{ matrix.arch }}
     runs-on: ${{ (matrix.arch == 'arm64' && 'macos-14') || 'macos-13' }}
-    env:
-      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
 
     strategy:
       fail-fast: false
@@ -312,14 +310,16 @@ jobs:
 
       - name: Prepare - Install tools
         run: |
-          brew install automake autoconf-archive libtool ninja python-setuptools
+          brew install --quiet automake autoconf-archive libtool ninja python-setuptools
 
-      - name: Export GitHub Actions cache environment variables
-        uses: actions/github-script@v7
+      - name: Restore vcpkg cache
+        uses: actions/cache/restore@v4
+        id: restore-vcpkg-cache
         with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+          path: ~/.cache/vcpkg/archives
+          key: vcpkg-cache-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('vcpkg-custom/**', 'vcpkg.json', 'vcpkg-configuration.json') }}
+          restore-keys: |
+            vcpkg-cache-${{ runner.os }}-${{ matrix.arch }}-
 
       - name: Build
         run: |
@@ -347,6 +347,14 @@ jobs:
           mv gen2 gen
           mkdir gen/artifacts
           mv gen/Release/*.pkg gen/artifacts
+
+      - name: Save vcpkg cache
+        uses: actions/cache/save@v4
+        # Saves if the key changed (hashes on vcpkg/**, vcpkg.json, vcpkg-configuration.json)
+        if: steps.restore-vcpkg-cache.outputs.cache-hit != 'true'
+        with:
+          path: ~/.cache/vcpkg/archives
+          key: ${{ steps.restore-vcpkg-cache.outputs.cache-primary-key }}
 
       - name: Upload installer
         uses: actions/upload-artifact@v4

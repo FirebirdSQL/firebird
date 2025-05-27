@@ -1101,6 +1101,9 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 			MAP(xdr_short, reinterpret_cast<SSHORT&>(b->p_batch_statement));
 			MAP(xdr_cstring_const, b->p_batch_blob_bpb);
 
+			if (xdrs->x_op == XDR_FREE)
+				return P_TRUE(xdrs, p);
+
 			Rsr* statement = getStatement(xdrs, b->p_batch_statement);
 			if (!statement)
 				return P_FALSE(xdrs, p);
