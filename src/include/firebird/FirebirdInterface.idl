@@ -140,7 +140,7 @@ interface Master : Versioned
  * </plugin_config>
  *
  * Note that the external_engine tag is ignored at this stage. Only plugin_module and plugin_config
- * are read. The dynamic library extension may be ommitted, and $(this) expands to the directory of
+ * are read. The dynamic library extension may be omitted, and $(this) expands to the directory of
  * the .conf file.
  *
  * Plugins may access Firebird API through the fbclient library.

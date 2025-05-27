@@ -300,7 +300,7 @@ select
 |  5 |  10.00 |      37.00 |
 |  2 |  12.00 |      49.00 |
 
-You can explicitely set a frame to sum the whole partition as following query:
+You can explicitly set a frame to sum the whole partition as following query:
 
 ```sql
 select

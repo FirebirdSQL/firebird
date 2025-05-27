@@ -12123,7 +12123,7 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 			{
 				// In the case where the object is a view, then the grantor must have
 				// some kind of grant privileges on the base table(s)/view(s).  If the
-				// grantor is the owner of the view, then we have to explicitely check
+				// grantor is the owner of the view, then we have to explicitly check
 				// this because the owner of a view by default has grant privileges on
 				// his own view.  If the grantor is not the owner of the view, then the
 				// base table/view grant privilege checks were made when the grantor

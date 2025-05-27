@@ -152,19 +152,19 @@ a) Start user trace named "My trace" using configuration file fbtrace.conf and r
 another console : list sessions and look for interesting session ID (b) and stop it 
 using this found ID (e).
 
-b) List trace sesions
+b) List trace sessions
 
 	fbtracemgr -se service_mgr -list
 	
-c) Suspend trace sesson with ID 1
+c) Suspend trace session with ID 1
 
 	fbtracemgr -se service_mgr -suspend -id 1
 	
-d) Resume trace sesson with ID 1
+d) Resume trace session with ID 1
 
 	fbtracemgr -se service_mgr -resume -id 1
 	
-e) Stop trace sesson with ID 1
+e) Stop trace session with ID 1
 
 	fbtracemgr -se service_mgr -stop -id 1
 	
