@@ -21,7 +21,7 @@
 (*
  *	PROGRAM:	JRD Access Method
  *	MODULE:		perf.pas
- *	DESCRIPTION:	Peformance tool block
+ *	DESCRIPTION:	Performance tool block
  *)
 
 type

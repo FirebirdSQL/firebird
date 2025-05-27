@@ -399,7 +399,7 @@ private:
 	yyparsestate* yypath;
 	// Base of the lexical value queue
 	YYSTYPE* yylvals;
-	// Current posistion at lexical value queue
+	// Current position at lexical value queue
 	YYSTYPE* yylvp;
 	// End position of lexical value queue
 	YYSTYPE* yylve;
@@ -407,7 +407,7 @@ private:
 	YYSTYPE* yylvlim;
 	// Base of the lexical position queue
 	Position* yylpsns;
-	// Current posistion at lexical position queue
+	// Current position at lexical position queue
 	Position* yylpp;
 	// End position of lexical position queue
 	Position* yylpe;

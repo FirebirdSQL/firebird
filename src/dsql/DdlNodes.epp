@@ -7099,7 +7099,7 @@ void RelationNode::defineSetDefaultTrigger(DsqlCompilerScratch* dsqlScratch,
 		// If the FK table's column is NOT NULL without DEFAULT, we want to avoid the engine throwing a constraint
 		// violation on our trigger's variable, so we declare two variables, one with blr_domain_type_of (don't use
 		// DEFAULT and null flag) and another blr_domain_full with DEFAULT and null flag. We swallow the error when
-		// transfering the value from the second to the first variable.
+		// transferring the value from the second to the first variable.
 
 		// This could be better done with blr_default, but let's maintain backward compatible BLR for now.
 

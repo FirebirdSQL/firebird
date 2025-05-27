@@ -2244,7 +2244,7 @@ int put_text( att_type attribute, const TEXT* text, SSHORT size_len)
  * Write a variable length text string, with embedded spaces.
  * Truncate trailing spaces.
  * Now this routine does not truncate trailing spaces, 3-2002 MOD
- * transfering changes from fb1, I believe this is to do with problems
+ * transferring changes from fb1, I believe this is to do with problems
  * with quoted names and embedded spaces.
  * CVC: This routine does trailing spaces truncation, but correctly.
  *

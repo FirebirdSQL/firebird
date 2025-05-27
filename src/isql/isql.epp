@@ -1265,7 +1265,7 @@ void ISQL_warning(Firebird::IStatus* st)
  *
  **************************************
  *
- * Functional desription
+ * Functional description
  *	Report warning
  *	Simulate isc_print_status exactly, to control stderr
  **************************************/
