@@ -14710,6 +14710,7 @@ static RegisterNode<RowValueExpressionNode> regRowValueExpressionNode({blr_row_v
 RowValueExpressionNode::RowValueExpressionNode(MemoryPool& pool)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_ROW_VALUE_EXPRESSION>(pool),
 	  rowValueExpressionList(nullptr),
+	  subquery(nullptr),
 	  compositeRecord(nullptr),
 	  subFieldsNumber(0),
 	  defaultSource(nullptr),
@@ -14723,6 +14724,9 @@ DmlNode* RowValueExpressionNode::parse(thread_db* tdbb, MemoryPool& pool, Compil
 
 	node->subFieldsNumber = csb->csb_blr_reader.getWord();
 	node->rowValueExpressionList = FB_NEW_POOL(pool) ValueListNode(pool);
+
+	if (csb->csb_blr_reader.getByte() == blr_rve_subselect)
+		node->subquery = PAR_parse_value(tdbb, csb);
 
 	for (auto i = 0; i < node->subFieldsNumber; i++)
 		node->rowValueExpressionList->add(PAR_parse_value(tdbb, csb));
@@ -14746,6 +14750,12 @@ ValueExprNode* RowValueExpressionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch
 
 	RowValueExpressionNode* node = FB_NEW_POOL(pool) RowValueExpressionNode(pool);
 	node->rowValueExpressionList = rowValueExpressionList;
+
+	if (subquery)
+	{
+		node->subquery = doDsqlPass(dsqlScratch, subquery);
+		node->rowValueExpressionList = nodeAs<SubQueryNode>(node->subquery)->rse->dsqlSelectList;
+	}
 
 	node->rowField = FB_NEW_POOL(pool) dsql_fld(pool);
 	node->rowField->dtype = dtype_rowtype;
@@ -14872,6 +14882,17 @@ void RowValueExpressionNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	dsqlScratch->appendUChar(blr_row_value_expression);
 	dsqlScratch->appendUShort(rowValueExpressionList->items.getCount());
 
+	// if we have subquery inside row value expression, add it to blr
+	if (subquery)
+	{
+		dsqlScratch->appendUChar(blr_rve_subselect);
+		GEN_expr(dsqlScratch, subquery);
+	}
+	else
+	{
+		dsqlScratch->appendUChar(0);
+	}
+
 	for (auto& valueExprNode : rowValueExpressionList->items)
 	{
 		valueExprNode->genBlr(dsqlScratch);
@@ -14943,6 +14964,9 @@ ValueExprNode* RowValueExpressionNode::copy(thread_db* tdbb, NodeCopier& copier)
 
 ValueExprNode* RowValueExpressionNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 {
+	if (subquery)
+		subquery->pass1(tdbb, csb);
+
 	ValueExprNode::pass1(tdbb, csb);
 
 	return this;
@@ -14951,6 +14975,9 @@ ValueExprNode* RowValueExpressionNode::pass1(thread_db* tdbb, CompilerScratch* c
 ValueExprNode* RowValueExpressionNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
 	auto& pool = *tdbb->getDefaultPool();
+
+	if (subquery)
+		subquery->pass2(tdbb, csb);
 
 	rowDesc.dsc_dtype = dtype_rowtype;
 	rowDesc.dsc_sub_count = subFieldsNumber;
@@ -15011,13 +15038,39 @@ dsc* RowValueExpressionNode::execute(thread_db* tdbb, Request* request) const
 	// set null flags to composite record's null bytes
 	memset(impure->vlu_desc.dsc_address, 0xFF, NULL_BYTES(impure->vlu_desc.dsc_sub_count));
 
-	auto nextDesc = &impure->vlu_desc.dsc_sub_first;
+	dsc* from_desc = nullptr;
+	if (subquery)
+	{
+		from_desc = subquery->execute(tdbb, request);
+	}
+	else
+	{
+		// Build linked list of descriptors from rowValueExpressionList
+		dsc* first = nullptr;
+		dsc* current = nullptr;
 
+		for (auto& valueExprNode : rowValueExpressionList->items)
+		{
+			dsc* new_desc = valueExprNode->execute(tdbb, request);
+
+			if (!first)
+				first = new_desc;
+			else
+				current->dsc_next = new_desc;
+
+			current = new_desc;
+		}
+
+		from_desc = first;
+	}
+
+	auto nextDesc = &impure->vlu_desc.dsc_sub_first;
 	auto fieldSequencialId = 0;
-	for (auto& valueExprNode : rowValueExpressionList->items)
+
+	// Process all descriptors in a single loop
+	for (; from_desc; from_desc = from_desc->dsc_next)
 	{
 		auto to_desc = *nextDesc;
-		auto from_desc = valueExprNode->execute(tdbb, request);
 
 		if (from_desc)
 		{

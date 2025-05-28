@@ -547,6 +547,8 @@
 #define blr_flags_search_system_schema	(unsigned char) 1
 // rowtype variables
 #define blr_row_value_expression					(unsigned char) 231
+#define blr_rve_subselect							(unsigned char) 1
+
 #define blr_dcl_composite_type						(unsigned char) 232
 
 #define blr_not_missing								(unsigned char) 233

@@ -2032,7 +2032,8 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 	selectList = PASS1_expand_select_list(dsqlScratch, selectList, rse->dsqlStreams);
 
 	if ((flags & RecordSourceNode::DFLAG_VALUE) &&
-		(!selectList || selectList->items.getCount() > 1))
+		// (!selectList || selectList->items.getCount() > 1))
+		!selectList)
 	{
 		// More than one column (or asterisk) is specified in column_singleton
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<

@@ -8958,6 +8958,15 @@ row_value_expression
 			node->rowValueExpressionList = $2;
 			$$ = node;
 		}
+	| ROW '(' column_select ')'
+		{
+			RowValueExpressionNode* node = newNode<RowValueExpressionNode>();
+
+			//$3->dsqlFlags |= RecordSourceNode::DFLAG_SINGLETON;
+			node->subquery = newNode<SubQueryNode>(blr_via, $3);
+
+			$$ = node;
+		}
 	;
 
 %type <valueListNode> value_list_opt

@@ -2489,6 +2489,7 @@ public:
 
 public:
 	NestConst<ValueListNode> rowValueExpressionList;
+	NestConst<ValueExprNode> subquery;
 	USHORT contextNumber;
 	Record* compositeRecord;
 	dsc rowDesc;
