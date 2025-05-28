@@ -616,6 +616,9 @@ interface Replicator : ReferenceCounted
 version:	// 4.0.0 => 4.0.1
 	[notImplementedAction if ::FB_UsedInYValve then defaultAction else call deprecatedClose(status) endif]
 	void close(Status status);
+
+version:	// 4.0 => 6.0
+	void init(Status status, const string guid);
 }
 
 interface Request : ReferenceCounted

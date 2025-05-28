@@ -380,6 +380,7 @@ type
 	IReplicator_processPtr = procedure(this: IReplicator; status: IStatus; length: Cardinal; data: BytePtr); cdecl;
 	IReplicator_deprecatedClosePtr = procedure(this: IReplicator; status: IStatus); cdecl;
 	IReplicator_closePtr = procedure(this: IReplicator; status: IStatus); cdecl;
+	IReplicator_initPtr = procedure(this: IReplicator; status: IStatus; guid: PAnsiChar); cdecl;
 	IRequest_receivePtr = procedure(this: IRequest; status: IStatus; level: Integer; msgType: Cardinal; length: Cardinal; message: Pointer); cdecl;
 	IRequest_sendPtr = procedure(this: IRequest; status: IStatus; level: Integer; msgType: Cardinal; length: Cardinal; message: Pointer); cdecl;
 	IRequest_getInfoPtr = procedure(this: IRequest; status: IStatus; level: Integer; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr); cdecl;
@@ -1699,14 +1700,16 @@ type
 		process: IReplicator_processPtr;
 		deprecatedClose: IReplicator_deprecatedClosePtr;
 		close: IReplicator_closePtr;
+		init: IReplicator_initPtr;
 	end;
 
 	IReplicator = class(IReferenceCounted)
-		const VERSION = 4;
+		const VERSION = 5;
 
 		procedure process(status: IStatus; length: Cardinal; data: BytePtr);
 		procedure deprecatedClose(status: IStatus);
 		procedure close(status: IStatus);
+		procedure init(status: IStatus; guid: PAnsiChar);
 	end;
 
 	IReplicatorImpl = class(IReplicator)
@@ -1717,6 +1720,7 @@ type
 		procedure process(status: IStatus; length: Cardinal; data: BytePtr); virtual; abstract;
 		procedure deprecatedClose(status: IStatus); virtual; abstract;
 		procedure close(status: IStatus); virtual; abstract;
+		procedure init(status: IStatus; guid: PAnsiChar); virtual; abstract;
 	end;
 
 	RequestVTable = class(ReferenceCountedVTable)
@@ -7434,6 +7438,17 @@ begin
 	FbException.checkException(status);
 end;
 
+procedure IReplicator.init(status: IStatus; guid: PAnsiChar);
+begin
+	if (vTable.version < 5) then begin
+		FbException.setVersionError(status, 'IReplicator', vTable.version, 5);
+	end
+	else begin
+		ReplicatorVTable(vTable).init(Self, status, guid);
+	end;
+	FbException.checkException(status);
+end;
+
 procedure IRequest.receive(status: IStatus; level: Integer; msgType: Cardinal; length: Cardinal; message: Pointer);
 begin
 	RequestVTable(vTable).receive(Self, status, level, msgType, length, message);
@@ -11986,6 +12001,15 @@ procedure IReplicatorImpl_closeDispatcher(this: IReplicator; status: IStatus); c
 begin
 	try
 		IReplicatorImpl(this).close(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IReplicatorImpl_initDispatcher(this: IReplicator; status: IStatus; guid: PAnsiChar); cdecl;
+begin
+	try
+		IReplicatorImpl(this).init(status, guid);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -17581,12 +17605,13 @@ initialization
 	IBatchCompletionStateImpl_vTable.getStatus := @IBatchCompletionStateImpl_getStatusDispatcher;
 
 	IReplicatorImpl_vTable := ReplicatorVTable.create;
-	IReplicatorImpl_vTable.version := 4;
+	IReplicatorImpl_vTable.version := 5;
 	IReplicatorImpl_vTable.addRef := @IReplicatorImpl_addRefDispatcher;
 	IReplicatorImpl_vTable.release := @IReplicatorImpl_releaseDispatcher;
 	IReplicatorImpl_vTable.process := @IReplicatorImpl_processDispatcher;
 	IReplicatorImpl_vTable.deprecatedClose := @IReplicatorImpl_deprecatedCloseDispatcher;
 	IReplicatorImpl_vTable.close := @IReplicatorImpl_closeDispatcher;
+	IReplicatorImpl_vTable.init := @IReplicatorImpl_initDispatcher;
 
 	IRequestImpl_vTable := RequestVTable.create;
 	IRequestImpl_vTable.version := 4;

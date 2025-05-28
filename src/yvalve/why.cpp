@@ -5244,6 +5244,20 @@ void YReplicator::destroy(unsigned dstrFlags)
 }
 
 
+void YReplicator::init(CheckStatusWrapper* status, const char* guid)
+{
+	try
+	{
+		YEntry<YReplicator> entry(status, this);
+		entry.next()->init(status, guid);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+}
+
+
 void YReplicator::process(CheckStatusWrapper* status, unsigned length, const unsigned char* data)
 {
 	try

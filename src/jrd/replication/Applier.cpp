@@ -225,6 +225,22 @@ namespace
 } // namespace
 
 
+void Applier::init(thread_db* tdbb, const char* guidStr)
+{
+	if (!guidStr)
+		raiseError("Source GUID is invalid");
+
+	const auto guid = Guid::fromString(guidStr);
+
+	if (!guid)
+		raiseError("Source GUID is invalid");
+
+	if (m_sourceGuid && guid.value() != m_sourceGuid.value())
+		raiseError("Source GUID mismatch");
+
+	m_currentGuid = guid;
+}
+
 Applier* Applier::create(thread_db* tdbb)
 {
 	const auto dbb = tdbb->getDatabase();
@@ -260,10 +276,9 @@ Applier* Applier::create(thread_db* tdbb)
 	}
 
 	const auto config = dbb->replConfig();
-	const bool cascade = (config && config->cascadeReplication);
 
 	const auto applier = FB_NEW_POOL(*attachment->att_pool)
-		Applier(*attachment->att_pool, dbb->dbb_filename, request, cascade);
+		Applier(*attachment->att_pool, dbb->dbb_filename, config, request);
 
 	attachment->att_repl_appliers.add(applier);
 

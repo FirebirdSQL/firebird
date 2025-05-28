@@ -125,14 +125,18 @@ namespace Jrd
 	public:
 		Applier(Firebird::MemoryPool& pool,
 				const Firebird::PathName& database,
-				Request* request, bool cascade)
+				const Replication::Config* config,
+				Request* request)
 			: PermanentStorage(pool),
 			  m_txnMap(pool), m_database(pool, database),
-			  m_request(request), m_enableCascade(cascade)
+			  m_request(request),
+			  m_sourceGuid(config ? config->sourceGuid : std::nullopt),
+			  m_enableCascade(config ? config->cascadeReplication : false)
 		{}
 
 		static Applier* create(thread_db* tdbb);
 
+		void init(thread_db* tdbb, const char* guidStr);
 		void process(thread_db* tdbb, ULONG length, const UCHAR* data);
 		void cleanupTransactions(thread_db* tdbb);
 		void shutdown(thread_db* tdbb);
@@ -155,6 +159,8 @@ namespace Jrd
 		Record* m_record = nullptr;
 		JReplicator* m_interface;
 		const bool m_enableCascade;
+		const std::optional<Firebird::Guid> m_sourceGuid;
+		std::optional<Firebird::Guid> m_currentGuid;
 
 		void startTransaction(thread_db* tdbb, TraNumber traNum);
 		void prepareTransaction(thread_db* tdbb, TraNumber traNum);

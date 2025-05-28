@@ -1729,7 +1729,7 @@ public:
 	void		batch_cancel(P_RLSE*, PACKET*);
 	void		batch_sync(PACKET*);
 	void		batch_bpb(P_BATCH_SETBPB*, PACKET*);
-	void		replicate(P_REPLICATE*, PACKET*);
+	void		replicate(P_REPLICATE*, PACKET*, bool);
 
 	Firebird::string getRemoteId() const;
 	void auxAcceptError(PACKET* packet);

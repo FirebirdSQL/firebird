@@ -2322,7 +2322,7 @@ namespace Firebird
 		}
 	};
 
-#define FIREBIRD_IREPLICATOR_VERSION 4u
+#define FIREBIRD_IREPLICATOR_VERSION 5u
 
 	class IReplicator : public IReferenceCounted
 	{
@@ -2332,6 +2332,7 @@ namespace Firebird
 			void (CLOOP_CARG *process)(IReplicator* self, IStatus* status, unsigned length, const unsigned char* data) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *deprecatedClose)(IReplicator* self, IStatus* status) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *close)(IReplicator* self, IStatus* status) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *init)(IReplicator* self, IStatus* status, const char* guid) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -2376,6 +2377,19 @@ namespace Firebird
 			}
 			StatusType::clearException(status);
 			static_cast<VTable*>(this->cloopVTable)->close(this, status);
+			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> void init(StatusType* status, const char* guid)
+		{
+			if (cloopVTable->version < 5)
+			{
+				StatusType::setVersionError(status, "IReplicator", cloopVTable->version, 5);
+				StatusType::checkException(status);
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->init(this, status, guid);
 			StatusType::checkException(status);
 		}
 	};
@@ -11362,6 +11376,7 @@ namespace Firebird
 					this->process = &Name::cloopprocessDispatcher;
 					this->deprecatedClose = &Name::cloopdeprecatedCloseDispatcher;
 					this->close = &Name::cloopcloseDispatcher;
+					this->init = &Name::cloopinitDispatcher;
 				}
 			} vTable;
 
@@ -11403,6 +11418,20 @@ namespace Firebird
 			try
 			{
 				static_cast<Name*>(self)->Name::close(&status2);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
+		static void CLOOP_CARG cloopinitDispatcher(IReplicator* self, IStatus* status, const char* guid) CLOOP_NOEXCEPT
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::init(&status2, guid);
 			}
 			catch (...)
 			{
@@ -11452,6 +11481,7 @@ namespace Firebird
 		virtual void process(StatusType* status, unsigned length, const unsigned char* data) = 0;
 		virtual void deprecatedClose(StatusType* status) = 0;
 		virtual void close(StatusType* status) = 0;
+		virtual void init(StatusType* status, const char* guid) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
