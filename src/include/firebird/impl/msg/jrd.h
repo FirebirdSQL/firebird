@@ -995,3 +995,4 @@ FB_IMPL_MSG(JRD, 992, invalid_timezone_region_or_displacement, -901, "HY", "000"
 FB_IMPL_MSG(JRD, 993, argmustbe_exact_range_for, -833, "42", "000", "Arguments for range-based FOR must be exact numeric types")
 FB_IMPL_MSG(JRD, 994, range_for_by_should_be_positive, -833, "42", "000", "Range-based FOR BY argument must be positive")
 FB_IMPL_MSG(JRD, 995, missing_value_for_format_pattern, -901, "HY", "000", "Cannot find value in input string for \"@1\" pattern")
+FB_IMPL_MSG(JRD, 996, no_user_att_while_restore, -901, "HY", "000", "User attachments are not allowed for the database being restored")
