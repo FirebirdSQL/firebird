@@ -207,7 +207,7 @@ bool AggNode::dsqlAggregate2Finder(Aggregate2Finder& visitor)
 	if (!fieldFinder.getField())
 	{
 		// For example COUNT(*) is always same scope_level (node->nod_count = 0)
-		// Normaly COUNT(*) is the only way to come here but something stupid
+		// Normally COUNT(*) is the only way to come here but something stupid
 		// as SUM(5) is also possible.
 		// If currentScopeLevelEqual is false scopeLevel is always higher
 		switch (visitor.matchType)

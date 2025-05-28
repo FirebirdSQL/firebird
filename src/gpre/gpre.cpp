@@ -2440,7 +2440,7 @@ static void pass2( SLONG start_position)
 	const bool sw_block_comments = gpreGlob.sw_language == lang_c ||
 		isLangCpp(gpreGlob.sw_language) || gpreGlob.sw_language == lang_pascal;
 
-	// Put out a distintive module header
+	// Put out a distinctive module header
 
 	if (!sw_first)
 	{

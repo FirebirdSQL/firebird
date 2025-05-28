@@ -395,7 +395,7 @@ FB_IMPL_MSG(JRD, 393, dsql_sqlda_value_err, -804, "HY", "000", "Incorrect values
 FB_IMPL_MSG(JRD, 394, invalid_array_id, -104, "HY", "000", "invalid blob id")
 FB_IMPL_MSG(JRD, 395, extfile_uns_op, -816, "42", "000", "Operation not supported for EXTERNAL FILE table @1")
 FB_IMPL_MSG(JRD, 396, svc_in_use, -901, "HY", "000", "Service is currently busy: @1")
-FB_IMPL_MSG(JRD, 397, err_stack_limit, -902, "HY", "013", "stack size insufficent to execute current request")
+FB_IMPL_MSG(JRD, 397, err_stack_limit, -902, "HY", "013", "stack size insufficient to execute current request")
 FB_IMPL_MSG(JRD, 398, invalid_key, -827, "42", "000", "Invalid key for find operation")
 FB_IMPL_MSG(JRD, 399, net_init_error, -901, "08", "006", "Error initializing the network software.")
 FB_IMPL_MSG(JRD, 400, loadlib_failure, -901, "HY", "000", "Unable to load required library @1.")

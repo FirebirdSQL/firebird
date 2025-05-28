@@ -29,7 +29,7 @@
 
 /* Indices to be created */
 
-/* Maxinum number of segments in any existing system index */
+/* Maximum number of segments in any existing system index */
 const int  INI_IDX_MAX_SEGMENTS		= 3;
 
 struct ini_idx_t

@@ -46,7 +46,7 @@ using namespace Jrd;
 // non-compressable runs. Compressable runs between 4 and 8 bytes are somewhat border case, as
 // they do not compress much but increase total number of runs thus affecting decompression speed.
 // Starting from Firebird v5, we don't compress runs shorter than 8 bytes. But this rule is not
-// set in stone, so let's not use lenghts between 4 and 7 bytes as some other special markers.
+// set in stone, so let's not use lengths between 4 and 7 bytes as some other special markers.
 
 namespace
 {

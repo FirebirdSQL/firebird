@@ -251,7 +251,7 @@ int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt
 	thread_db* tdbb = NULL;
 
 	// AB: Maybe we need a other error-message, but at least throw
-	// a message when 1 or both input paramters are empty.
+	// a message when 1 or both input parameters are empty.
 	if (!arg1 || !arg2) {
 		BUGCHECK(189);	// msg 189 comparison not supported for specified data types.
 	}

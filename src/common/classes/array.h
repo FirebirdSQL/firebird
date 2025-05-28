@@ -435,7 +435,7 @@ public:
 		return FB_ALIGN(data, alignL);
 	}
 
-	// clear array and release dinamically allocated memory
+	// clear array and release dynamically allocated memory
 	void free()
 	{
 		clear();

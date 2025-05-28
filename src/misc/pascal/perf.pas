@@ -44,7 +44,7 @@ type
 	perf_times		: tms;
     end;
 
-(* Letter codes controlling printting of statistics:
+(* Letter codes controlling printing of statistics:
 
 	!f - fetches
 	!m - marks

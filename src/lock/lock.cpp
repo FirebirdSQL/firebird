@@ -3958,7 +3958,7 @@ void LockManager::wait_for_request(thread_db* tdbb, lrq* request, SSHORT lck_wai
 			// Our request is not resolved, all the owners are alive, there's
 			// no deadlock -- there's nothing else to do.  Let's
 			// make sure our request hasn't been forgotten by reminding
-			// all the owners we're waiting - some plaforms under CLASSIC
+			// all the owners we're waiting - some platforms under CLASSIC
 			// architecture had problems with "missing signals" - which is
 			// another reason to repost the blockage.
 			// Also, the ownership of the lock could have changed, and we
