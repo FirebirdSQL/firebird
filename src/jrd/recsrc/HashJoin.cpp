@@ -458,8 +458,10 @@ bool HashJoin::internalGetRecord(thread_db* tdbb) const
 
 					while (m_args[i].buffer->getRecord(tdbb))
 					{
+						const auto position = counter++;
+
 						if (const auto hash = computeHash(tdbb, request, m_args[i], keyBuffer))
-							impure->irsb_hash_table->put(i, hash.value(), counter++);
+							impure->irsb_hash_table->put(i, hash.value(), position);
 					}
 				}
 
