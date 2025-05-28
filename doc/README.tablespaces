@@ -91,6 +91,9 @@ ODS CHANGES
     3) Rebuild RDB$PAGES
     4) clear old data pages (as post-dfw operation)
     It can be interrupted but not resumed.
+    
+    By default, the RDB$TABLESPACES table stores a record about the PRIMARY tablespace. 
+    PRIMARY tablespace has the system flag and FILE_NAME matches the path to the database file.
 
 -----------------
 UTILITIES
@@ -177,13 +180,11 @@ CONSTRAINTS
 PLANS
 -----------------
 
-    1. Add the main database file to the RDB$TABLESPACES table. Designate it as PRIMARY.
-    The RDB$TABLESPACE_NAME field contained in the system tables of tables, indexes will have the value “PRIMARY” instead of NULL.
-    2. TEMPORARY predefined tablespaces.
-    3. Grouping page counters by tablespace (For output in trace and monitoring).
-    4. New header page for tablespaces
-    5. NBACKUP support for tablespaces
-    6. Moving blobs to separate tablespaces  (The RDB$TABLESPACE_NAME column in RDB$RELATION_FIELDS is reserved for this purpose).
-    7. Possibility to introduce UNDO tablespace in future versions
-    8. The ability to set default tablespaces for tables, indexes and BLOBs at the database or schema level.
+    1. TEMPORARY predefined tablespaces.
+    2. Grouping page counters by tablespace (For output in trace and monitoring).
+    3. New header page for tablespaces
+    4. NBACKUP support for tablespaces
+    5. Moving blobs to separate tablespaces  (The RDB$TABLESPACE_NAME column in RDB$RELATION_FIELDS is reserved for this purpose).
+    6. Possibility to introduce UNDO tablespace in future versions
+    7. The ability to set default tablespaces for tables, indexes and BLOBs at the database or schema level.
 
