@@ -653,6 +653,7 @@ namespace Jrd
 		static const USHORT FLAG_UNIQUE		= 0x2;	// sorts using unique key - for distinct and group by
 		static const USHORT FLAG_KEY_VARY	= 0x4;	// sort key contains varying length string(s)
 		static const USHORT FLAG_REFETCH	= 0x8;	// refetch data after sorting
+		static const USHORT FLAG_NO_NULLS	= 0x10;	// skip records containing NULL keys
 
 		// Special values for SortMap::Item::fieldId.
 		static const SSHORT ID_DBKEY		= -1;	// dbkey value
@@ -689,21 +690,14 @@ namespace Jrd
 				NestConst<ValueExprNode> node;	// expression node
 			};
 
-			explicit SortMap(MemoryPool& p)
-				: PermanentStorage(p),
-				  length(0),
-				  keyLength(0),
-				  flags(0),
-				  keyItems(p),
-				  items(p)
-			{
-			}
+			explicit SortMap(MemoryPool& p) : PermanentStorage(p)
+			{}
 
-			ULONG length;			// sort record length
-			ULONG keyLength;		// key length
-			USHORT flags;			// misc sort flags
-			Firebird::Array<sort_key_def> keyItems;	// address of key descriptors
-			Firebird::Array<Item> items;
+			ULONG length = 0;			// sort record length
+			ULONG keyLength = 0;		// key length
+			USHORT flags = 0;			// misc sort flags
+			Firebird::Array<sort_key_def> keyItems {getPool()};	// address of key descriptors
+			Firebird::Array<Item> items {getPool()};
 		};
 
 		SortedStream(CompilerScratch* csb, RecordSource* next, SortMap* map);
@@ -1247,11 +1241,11 @@ namespace Jrd
 		};
 
 	public:
-		HashJoin(thread_db* tdbb, CompilerScratch* csb, JoinType joinType,
+		HashJoin(thread_db* tdbb, CompilerScratch* csb, JoinType joinType, bool ignoreNulls,
 				 FB_SIZE_T count, RecordSource* const* args, NestValueArray* const* keys,
 				 double selectivity = 0);
 		HashJoin(thread_db* tdbb, CompilerScratch* csb,
-				 BoolExprNode* boolean,
+				 BoolExprNode* boolean, bool ignoreNulls,
 				 RecordSource* const* args, NestValueArray* const* keys,
 				 double selectivity = 0);
 
@@ -1280,12 +1274,13 @@ namespace Jrd
 		void init(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
 				  RecordSource* const* args, NestValueArray* const* keys,
 				  double selectivity);
-		ULONG computeHash(thread_db* tdbb, Request* request,
-						  const SubStream& sub, UCHAR* buffer) const;
+		std::optional<ULONG> computeHash(thread_db* tdbb, Request* request,
+										 const SubStream& sub, UCHAR* buffer) const;
 		bool fetchRecord(thread_db* tdbb, Impure* impure, FB_SIZE_T stream) const;
 
 		const JoinType m_joinType;
 		const NestConst<BoolExprNode> m_boolean;
+		const bool m_ignoreNulls;
 
 		SubStream m_leader;
 		Firebird::Array<SubStream> m_args;
@@ -1323,8 +1318,7 @@ namespace Jrd
 
 	public:
 		MergeJoin(CompilerScratch* csb, FB_SIZE_T count,
-				  SortedStream* const* args,
-				  const NestValueArray* const* keys);
+				  SortedStream* const* args, const NestValueArray* const* keys);
 
 		void close(thread_db* tdbb) const override;
 
