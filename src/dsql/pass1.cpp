@@ -752,8 +752,9 @@ void PASS1_field_unknown(const TEXT* qualifier_name, const TEXT* field_name,
 
 	if (qualifier_name)
 	{
-		sprintf(field_buffer, "%.*s.%.*s", (int) MAX_SQL_IDENTIFIER_LEN, qualifier_name,
-				(int) MAX_SQL_IDENTIFIER_LEN, field_name ? field_name : "*");
+		snprintf(field_buffer, sizeof(field_buffer), "%.*s.%.*s",
+			(int) MAX_SQL_IDENTIFIER_LEN, qualifier_name,
+			(int) MAX_SQL_IDENTIFIER_LEN, field_name ? field_name : "*");
 		field_name = field_buffer;
 	}
 
@@ -1191,7 +1192,7 @@ RseNode* PASS1_derived_table(DsqlCompilerScratch* dsqlScratch, SelectExprNode* i
 
 				// Construct dummy fieldname
 				char fieldname[25];
-				sprintf(fieldname, "f%u", static_cast<unsigned>(count));
+				snprintf(fieldname, sizeof(fieldname), "f%u", static_cast<unsigned>(count));
 
 				// Make new derived field node.
 

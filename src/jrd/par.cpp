@@ -1416,7 +1416,7 @@ SortNode* PAR_sort(thread_db* tdbb, CompilerScratch* csb, UCHAR expectedBlr,
 	if (blrOp != expectedBlr)
 	{
 		char s[20];
-		sprintf(s, "blr code %d", expectedBlr);
+		snprintf(s, sizeof(s), "blr code %d", expectedBlr);
 		PAR_syntax_error(csb, s);
 	}
 

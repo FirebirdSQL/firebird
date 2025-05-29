@@ -1153,7 +1153,8 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 				{
 					MODIFY REL
 					{
-						sprintf(REL.RDB$SECURITY_CLASS, "%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
+						snprintf(REL.RDB$SECURITY_CLASS, sizeof(REL.RDB$SECURITY_CLASS),
+							"%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
 							DPM_gen_id(tdbb, MET_lookup_generator(tdbb, SQL_SECCLASS_GENERATOR), false, 1));
 						REL.RDB$SECURITY_CLASS.NULL = FALSE;
 					}
@@ -1178,7 +1179,8 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 					{
 						MODIFY RFL6
 						{
-							sprintf(RFL6.RDB$SECURITY_CLASS, "%s%" SQUADFORMAT, SQL_FLD_SECCLASS_PREFIX,
+							snprintf(RFL6.RDB$SECURITY_CLASS, sizeof(RFL6.RDB$SECURITY_CLASS),
+								"%s%" SQUADFORMAT, SQL_FLD_SECCLASS_PREFIX,
 								DPM_gen_id(tdbb, MET_lookup_generator(tdbb, SQL_SECCLASS_GENERATOR), false, 1));
 							RFL6.RDB$SECURITY_CLASS.NULL = TRUE;
 						}
@@ -1207,7 +1209,8 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 				{
 					MODIFY PRC
 					{
-						sprintf(PRC.RDB$SECURITY_CLASS, "%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
+						snprintf(PRC.RDB$SECURITY_CLASS, sizeof(PRC.RDB$SECURITY_CLASS),
+							"%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
 							DPM_gen_id(tdbb, MET_lookup_generator(tdbb, SQL_SECCLASS_GENERATOR), false, 1));
 						PRC.RDB$SECURITY_CLASS.NULL = FALSE;
 					}
@@ -1235,7 +1238,8 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 				{
 					MODIFY FUN
 					{
-						sprintf(FUN.RDB$SECURITY_CLASS, "%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
+						snprintf(FUN.RDB$SECURITY_CLASS, sizeof(FUN.RDB$SECURITY_CLASS),
+							"%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
 							DPM_gen_id(tdbb, MET_lookup_generator(tdbb, SQL_SECCLASS_GENERATOR), false, 1));
 						FUN.RDB$SECURITY_CLASS.NULL = FALSE;
 					}
@@ -1262,7 +1266,8 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 				{
 					MODIFY PKG
 					{
-						sprintf(PKG.RDB$SECURITY_CLASS, "%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
+						snprintf(PKG.RDB$SECURITY_CLASS, sizeof(PKG.RDB$SECURITY_CLASS),
+							"%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
 							DPM_gen_id(tdbb, MET_lookup_generator(tdbb, SQL_SECCLASS_GENERATOR), false, 1));
 						PKG.RDB$SECURITY_CLASS.NULL = FALSE;
 					}

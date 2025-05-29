@@ -267,8 +267,7 @@ void PluginLogWriter::checkErrno(const char* operation)
 void PluginLogWriter::mutexBug(int state, const TEXT* string)
 {
 	TEXT msg[BUFFER_TINY];
-
-	sprintf(msg, "PluginLogWriter: mutex %s error, status = %d", string, state);
+	snprintf(msg, sizeof(msg), "PluginLogWriter: mutex %s error, status = %d", string, state);
 	fb_utils::logAndDie(msg);
 }
 

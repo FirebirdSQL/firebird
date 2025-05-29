@@ -3836,7 +3836,7 @@ static ULONG fast_load(thread_db* tdbb,
 		bucket->btr_jump_count = 0;
 
 #ifdef DEBUG_BTR_PAGES
-		sprintf(debugtext, "\t new page (%d)", windows[0].win_page);
+		snprintf(debugtext, sizeof(debugtext), "\t new page (%d)", windows[0].win_page);
 		gds__log(debugtext);
 #endif
 
@@ -3971,7 +3971,7 @@ static ULONG fast_load(thread_db* tdbb,
 				split->btr_jump_count = 0;
 
 #ifdef DEBUG_BTR_PAGES
-				sprintf(debugtext, "\t new page (%d), left page (%d)",
+				snprintf(debugtext, sizeof(debugtext), "\t new page (%d), left page (%d)",
 					split_window.win_page, split->btr_left_sibling);
 				gds__log(debugtext);
 #endif
@@ -3995,7 +3995,8 @@ static ULONG fast_load(thread_db* tdbb,
 				CCH_RELEASE(tdbb, &leafLevel->window);
 
 #ifdef DEBUG_BTR_PAGES
-				sprintf(debugtext, "\t release page (%d), left page (%d), right page (%d)",
+				snprintf(debugtext, sizeof(debugtext),
+					"\t release page (%d), left page (%d), right page (%d)",
 					leafLevel->window.win_page,
 					((btr*) leafLevel->window.win_buffer)->btr_left_sibling,
 					((btr*) leafLevel->window.win_buffer)->btr_sibling);
@@ -4191,7 +4192,7 @@ static ULONG fast_load(thread_db* tdbb,
 					bucket->btr_jump_count = 0;
 
 #ifdef DEBUG_BTR_PAGES
-					sprintf(debugtext, "\t new page (%d)", window->win_page);
+					snprintf(debugtext, sizeof(debugtext), "\t new page (%d)", window->win_page);
 					gds__log(debugtext);
 #endif
 
@@ -4286,7 +4287,7 @@ static ULONG fast_load(thread_db* tdbb,
 					split->btr_jump_count = 0;
 
 #ifdef DEBUG_BTR_PAGES
-					sprintf(debugtext, "\t new page (%d), left page (%d)",
+					snprintf(debugtext, sizeof(debugtext), "\t new page (%d), left page (%d)",
 						split_window.win_page, split->btr_left_sibling);
 					gds__log(debugtext);
 #endif
@@ -4310,7 +4311,8 @@ static ULONG fast_load(thread_db* tdbb,
 					CCH_RELEASE(tdbb, window);
 
 #ifdef DEBUG_BTR_PAGES
-					sprintf(debugtext, "\t release page (%d), left page (%d), right page (%d)",
+					snprintf(debugtext, sizeof(debugtext),
+						"\t release page (%d), left page (%d), right page (%d)",
 						window->win_page,
 						((btr*)window->win_buffer)->btr_left_sibling,
 						((btr*)window->win_buffer)->btr_sibling);
@@ -4446,7 +4448,8 @@ static ULONG fast_load(thread_db* tdbb,
 			CCH_RELEASE(tdbb, &currLevel->window);
 
 #ifdef DEBUG_BTR_PAGES
-			sprintf(debugtext, "\t release page (%d), left page (%d), right page (%d)",
+			snprintf(debugtext, sizeof(debugtext),
+				"\t release page (%d), left page (%d), right page (%d)",
 				currLevel->window.win_page,
 				((btr*) currLevel->window.win_buffer)->btr_left_sibling,
 				((btr*) currLevel->window.win_buffer)->btr_sibling);

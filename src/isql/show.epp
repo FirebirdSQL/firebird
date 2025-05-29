@@ -755,50 +755,55 @@ static const char* granted_by(char* buffer, const char* grantor, bool nullGranto
 }
 
 
-static void set_grantee(int user_type, const char* SQL_identifier, char* user_string)
+static void set_grantee(int user_type, const char* SQL_identifier, char* const user_string, size_t sz)
 {
+	const char* format;
 	switch (user_type)
 	{
 	case obj_view:
-		sprintf(user_string, "VIEW %s", SQL_identifier);
+		format = "VIEW %s";
 		break;
 	case obj_trigger:
-		sprintf(user_string, "TRIGGER %s", SQL_identifier);
+		format = "TRIGGER %s";
 		break;
 	case obj_procedure:
-		sprintf(user_string, "PROCEDURE %s", SQL_identifier);
+		format = "PROCEDURE %s";
 		break;
 	case obj_udf:
-		sprintf(user_string, "FUNCTION %s", SQL_identifier);
+		format = "FUNCTION %s";
 		break;
 	case obj_user:
 		if (strcmp(SQL_identifier, "PUBLIC"))
-			sprintf(user_string, "USER %s", SQL_identifier);
+			format = "USER %s";
 		else
-			strcpy(user_string, SQL_identifier);
+			format = "%s";
 		break;
 	case obj_user_group:
-		sprintf(user_string, "GROUP %s", SQL_identifier);
+		format = "GROUP %s";
 		break;
 	case obj_sql_role:
-		sprintf(user_string, "ROLE %s", SQL_identifier);
+		format = "ROLE %s";
 		break;
 	case obj_package_header:
-		sprintf(user_string, "PACKAGE %s", SQL_identifier);
+		format = "PACKAGE %s";
 		break;
 	case obj_privilege:
 		FOR T IN RDB$TYPES
 			WITH T.RDB$FIELD_NAME EQ 'RDB$SYSTEM_PRIVILEGES' AND
 				 T.RDB$TYPE EQ atoi(SQL_identifier)
 		{
-			sprintf(user_string, "SYSTEM PRIVILEGE %s", fb_utils::exact_name(T.RDB$TYPE_NAME));
+			snprintf(user_string, sz, "SYSTEM PRIVILEGE %s", fb_utils::exact_name(T.RDB$TYPE_NAME));
+			return;
 		}
 		END_FOR
+		// In case none was found
+		format = "<unknown privilege %s>";
 		break;
 	default:
-		strcpy(user_string, SQL_identifier);
+		format = "%s";
 		break;
 	}
+	snprintf(user_string, sz, format, SQL_identifier);
 }
 
 
@@ -997,7 +1002,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 					break;
 				}
 
-				set_grantee(PRV.RDB$USER_TYPE, SQL_identifier, user_string);
+				set_grantee(PRV.RDB$USER_TYPE, SQL_identifier, user_string, sizeof(user_string));
 
 				// Only the first character is used for permissions
 				const char c = PRV.RDB$PRIVILEGE[0];
@@ -1122,7 +1127,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 					break;
 				}
 
-				set_grantee(PRV.RDB$USER_TYPE, SQL_identifier, user_string);
+				set_grantee(PRV.RDB$USER_TYPE, SQL_identifier, user_string, sizeof(user_string));
 
 				if (PRV.RDB$GRANT_OPTION)
 					strcpy(with_option, " WITH GRANT OPTION");
@@ -1262,7 +1267,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 						break;
 					}
 
-					set_grantee(PRV.RDB$USER_TYPE, SQL_identifier, user_string);
+					set_grantee(PRV.RDB$USER_TYPE, SQL_identifier, user_string, sizeof(user_string));
 
 					if (PRV.RDB$GRANT_OPTION)
 						strcpy(with_option, " WITH GRANT OPTION");
@@ -1340,7 +1345,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 						break;
 					}
 
-					set_grantee(PRV.RDB$USER_TYPE, SQL_identifier, user_string);
+					set_grantee(PRV.RDB$USER_TYPE, SQL_identifier, user_string, sizeof(user_string));
 
 					if (PRV.RDB$GRANT_OPTION)
 						strcpy(with_option, " WITH GRANT OPTION");
@@ -1414,7 +1419,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 						break;
 					}
 
-					set_grantee(PRV.RDB$USER_TYPE, SQL_identifier, user_string);
+					set_grantee(PRV.RDB$USER_TYPE, SQL_identifier, user_string, sizeof(user_string));
 
 					if (PRV.RDB$GRANT_OPTION)
 						strcpy(with_option, " WITH GRANT OPTION");
@@ -1488,7 +1493,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 						break;
 					}
 
-					set_grantee(PRV.RDB$USER_TYPE, SQL_identifier, user_string);
+					set_grantee(PRV.RDB$USER_TYPE, SQL_identifier, user_string, sizeof(user_string));
 
 					if (PRV.RDB$GRANT_OPTION)
 						strcpy(with_option, " WITH GRANT OPTION");
@@ -1563,7 +1568,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 						break;
 					}
 
-					set_grantee(PRV.RDB$USER_TYPE, SQL_identifier, user_string);
+					set_grantee(PRV.RDB$USER_TYPE, SQL_identifier, user_string, sizeof(user_string));
 
 					if (PRV.RDB$GRANT_OPTION)
 						strcpy(with_option, " WITH GRANT OPTION");
@@ -1637,7 +1642,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 						break;
 					}
 
-					set_grantee(PRV.RDB$USER_TYPE, SQL_identifier, user_string);
+					set_grantee(PRV.RDB$USER_TYPE, SQL_identifier, user_string, sizeof(user_string));
 
 					if (PRV.RDB$GRANT_OPTION)
 						strcpy(with_option, " WITH GRANT OPTION");
@@ -1711,7 +1716,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 						break;
 					}
 
-					set_grantee(PRV.RDB$USER_TYPE, SQL_identifier, user_string);
+					set_grantee(PRV.RDB$USER_TYPE, SQL_identifier, user_string, sizeof(user_string));
 
 					if (PRV.RDB$GRANT_OPTION)
 						strcpy(with_option, " WITH GRANT OPTION");
@@ -1812,7 +1817,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 					break;
 				}
 
-				set_grantee(PRV.RDB$USER_TYPE, SQL_identifier, user_string);
+				set_grantee(PRV.RDB$USER_TYPE, SQL_identifier, user_string, sizeof(user_string));
 
 				strcpy(obj_string, getDdlObjectName(PRV.RDB$OBJECT_TYPE));
 
@@ -1858,7 +1863,7 @@ processing_state SHOW_grants2 (const SCHAR* object,
 						break;
 					}
 
-					set_grantee(PRV.SEC$USER_TYPE, SQL_identifier, user_string);
+					set_grantee(PRV.SEC$USER_TYPE, SQL_identifier, user_string, sizeof(user_string));
 
 					isqlGlob.printf("GRANT CREATE DATABASE TO %s%s%s",
 						user_string, terminator, NEWLINE);
@@ -2944,9 +2949,8 @@ static void show_charsets(SSHORT char_set_id, SSHORT collation)
 	if (!found)
 	{
 		TEXT Print_buffer[PRINT_BUFFER_LENGTH];
-		sprintf(Print_buffer,
-				"ISQL_get_character_set: charset %d collation %d not found.\n",
-				char_set_id, collation);
+		snprintf(Print_buffer, sizeof(Print_buffer),
+			"ISQL_get_character_set: charset %d collation %d not found.\n", char_set_id, collation);
 		STDERROUT(Print_buffer);
 	}
 #endif
@@ -6339,12 +6343,12 @@ static processing_state show_trigger(const SCHAR* object, bool show_source, bool
 
 	if (isTriggerName)
 	{
-		sprintf(triggerName, "%s", object);
+		snprintf(triggerName, sizeof(triggerName), "%s", object);
 		relationName[0] = '\0';
 	}
 	else
 	{
-		sprintf(relationName, "%s", object);
+		snprintf(relationName, sizeof(relationName), "%s", object);
 		triggerName[0] = '\0';
 	}
 
