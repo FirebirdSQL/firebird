@@ -95,8 +95,8 @@ Firebird::Decimal128 CVT_get_dec128(const dsc*, Firebird::DecimalStatus, ErrorFu
 Firebird::Int128 CVT_get_int128(const dsc*, SSHORT, Firebird::DecimalStatus, ErrorFunction);
 Firebird::Int128 CVT_hex_to_int128(const char* str, USHORT len);
 USHORT CVT_make_string(const dsc*, USHORT, const char**, vary*, USHORT, Firebird::DecimalStatus, ErrorFunction);
-void CVT_move_common(const dsc*, dsc*, Firebird::DecimalStatus, Firebird::Callbacks*);
-void CVT_move(const dsc*, dsc*, Firebird::DecimalStatus, ErrorFunction);
+void CVT_move_common(const dsc*, dsc*, Firebird::DecimalStatus, Firebird::Callbacks*, bool trustedSource = false);
+void CVT_move(const dsc*, dsc*, Firebird::DecimalStatus, ErrorFunction, bool trustedSource = false);
 SSHORT CVT_decompose(const char*, USHORT, Firebird::Int128*, ErrorFunction);
 USHORT CVT_get_string_ptr(const dsc*, USHORT*, UCHAR**, vary*, USHORT, Firebird::DecimalStatus, ErrorFunction);
 USHORT CVT_get_string_ptr_common(const dsc*, USHORT*, UCHAR**, vary*, USHORT, Firebird::DecimalStatus, Firebird::Callbacks*);
