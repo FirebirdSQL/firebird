@@ -724,7 +724,7 @@ typedef struct dsc
 
 struct alt_dsc
 {
-	SLONG dsc_combined_type;
+	SLONG dsc_combined_type;	// 1 byte type, 1 byte scale, 2 bytes length
 	SSHORT dsc_sub_type;
 	USHORT dsc_flags;			// Not currently used
 };

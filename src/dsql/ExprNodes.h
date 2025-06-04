@@ -2054,7 +2054,7 @@ class SubQueryNode final : public TypedNode<ValueExprNode, ExprNode::TYPE_SUBQUE
 {
 public:
 	explicit SubQueryNode(MemoryPool& pool, UCHAR aBlrOp, SelectExprNode* aDsqlSelectExpr = NULL,
-		ValueExprNode* aValue1 = NULL, ValueExprNode* aValue2 = NULL);
+		ValueExprNode* aValue2 = NULL);
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
@@ -2105,11 +2105,11 @@ public:
 public:
 	NestConst<SelectExprNode> dsqlSelectExpr;
 	NestConst<RseNode> rse;
-	NestConst<ValueExprNode> value1;
 	NestConst<ValueExprNode> value2;
 	NestConst<SubQuery> subQuery;
 	const UCHAR blrOp;
 	bool ownSavepoint;
+	NestConst<ValueListNode> selectList;
 };
 
 

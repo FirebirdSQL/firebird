@@ -1783,7 +1783,7 @@ static ValueExprNode* pass1_make_derived_field(thread_db* tdbb, DsqlCompilerScra
 	{
 		// Try to generate derived field from sub-select
 		ValueExprNode* derived_field = pass1_make_derived_field(tdbb, dsqlScratch,
-			subQueryNode->value1);
+			subQueryNode->selectList->items[0]);
 
 		if ((derivedField = nodeAs<DerivedFieldNode>(derived_field)))
 		{

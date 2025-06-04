@@ -11390,15 +11390,14 @@ static RegisterNode<SubQueryNode> regSubQueryNode({
 	blr_via, blr_from, blr_average, blr_count, blr_maximum, blr_minimum, blr_total
 });
 
-SubQueryNode::SubQueryNode(MemoryPool& pool, UCHAR aBlrOp, SelectExprNode* aDsqlSelectExpr,
-			ValueExprNode* aValue1, ValueExprNode* aValue2)
+SubQueryNode::SubQueryNode(MemoryPool& pool, UCHAR aBlrOp, SelectExprNode* aDsqlSelectExpr, ValueExprNode* aValue2)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_SUBQUERY>(pool),
 	  dsqlSelectExpr(aDsqlSelectExpr),
-	  value1(aValue1),
 	  value2(aValue2),
 	  subQuery(NULL),
 	  blrOp(aBlrOp),
-	  ownSavepoint(true)
+	  ownSavepoint(true),
+	  selectList(NULL)
 {
 }
 
@@ -11411,7 +11410,14 @@ DmlNode* SubQueryNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch*
 	node->rse->flags |= RseNode::FLAG_SUB_QUERY;
 
 	if (blrOp != blr_count)
-		node->value1 = PAR_parse_value(tdbb, csb);
+	{
+		auto fieldsNumber = csb->csb_blr_reader.getByte();
+		node->selectList = FB_NEW_POOL(pool) ValueListNode(pool);
+		for (auto i = 0; i < fieldsNumber; i++)
+		{
+			node->selectList->add(PAR_parse_value(tdbb, csb));
+		}
+	}
 
 	if (blrOp == blr_via)
 	{
@@ -11438,7 +11444,10 @@ void SubQueryNode::getChildren(NodeRefsHolder& holder, bool dsql) const
 	ValueExprNode::getChildren(holder, dsql);
 
 	holder.add(rse);
-	holder.add(value1);
+	for (auto& item : selectList->items)
+	{
+		holder.add(item);
+	}
 	holder.add(value2);
 }
 
@@ -11450,9 +11459,9 @@ string SubQueryNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, ownSavepoint);
 	NODE_PRINT(printer, dsqlSelectExpr);
 	NODE_PRINT(printer, rse);
-	NODE_PRINT(printer, value1);
 	NODE_PRINT(printer, value2);
 	NODE_PRINT(printer, subQuery);
+	NODE_PRINT(printer, selectList);
 
 	return "SubQueryNode";
 }
@@ -11469,8 +11478,10 @@ ValueExprNode* SubQueryNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	RseNode* rse = PASS1_rse(dsqlScratch, dsqlSelectExpr);
 
-	SubQueryNode* node = FB_NEW_POOL(dsqlScratch->getPool()) SubQueryNode(dsqlScratch->getPool(), blrOp, dsqlSelectExpr,
-		rse->dsqlSelectList->items[0], NullNode::instance());
+	SubQueryNode* node = FB_NEW_POOL(dsqlScratch->getPool()) SubQueryNode(dsqlScratch->getPool(), blrOp, dsqlSelectExpr, NullNode::instance());
+
+	// save the entire list of SELECT subquery fields for support of multiple values
+	node->selectList = rse->dsqlSelectList;
 	node->rse = rse;
 
 	node->line = line;
@@ -11484,7 +11495,7 @@ ValueExprNode* SubQueryNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 void SubQueryNode::setParameterName(dsql_par* parameter) const
 {
-	MAKE_parameter_names(parameter, value1);
+	MAKE_parameter_names(parameter, selectList->items[0]);
 }
 
 void SubQueryNode::genBlr(DsqlCompilerScratch* dsqlScratch)
@@ -11494,7 +11505,12 @@ void SubQueryNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	dsqlScratch->putDebugSrcInfo(line, column);
 	GEN_expr(dsqlScratch, rse);
 
-	GEN_expr(dsqlScratch, value1);
+	dsqlScratch->appendUChar(selectList->items.getCount());
+	for (auto& item : selectList->items)
+	{
+		GEN_expr(dsqlScratch, item);
+	}
+
 	GEN_expr(dsqlScratch, value2);
 }
 
@@ -11504,7 +11520,7 @@ void SubQueryNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 	// based on the WHERE clause. Setting this flag warns the client to expect null values.
 	// (bug 10379)
 
-	DsqlDescMaker::fromNode(dsqlScratch, desc, value1, true);
+	DsqlDescMaker::fromNode(dsqlScratch, desc, selectList->items[0], true);
 }
 
 bool SubQueryNode::dsqlAggregateFinder(AggregateFinder& visitor)
@@ -11530,7 +11546,6 @@ bool SubQueryNode::dsqlFieldFinder(FieldFinder& visitor)
 ValueExprNode* SubQueryNode::dsqlFieldRemapper(FieldRemapper& visitor)
 {
 	doDsqlFieldRemapper(visitor, rse);
-	value1 = rse->dsqlSelectList->items[0];
 	return this;
 }
 
@@ -11539,8 +11554,8 @@ void SubQueryNode::collectStreams(SortedStreamList& streamList) const
 	if (rse)
 		rse->collectStreams(streamList);
 
-	if (value1)
-		value1->collectStreams(streamList);
+	if (!selectList->items.isEmpty())
+		selectList->items[0]->collectStreams(streamList);
 }
 
 bool SubQueryNode::computable(CompilerScratch* csb, StreamType stream,
@@ -11549,7 +11564,7 @@ bool SubQueryNode::computable(CompilerScratch* csb, StreamType stream,
 	if (value2 && !value2->computable(csb, stream, allowOnlyCurrentStream))
 		return false;
 
-	return rse->computable(csb, stream, allowOnlyCurrentStream, value1);
+	return rse->computable(csb, stream, allowOnlyCurrentStream, selectList->items[0]);
 }
 
 void SubQueryNode::findDependentFromStreams(const CompilerScratch* csb,
@@ -11561,16 +11576,45 @@ void SubQueryNode::findDependentFromStreams(const CompilerScratch* csb,
 	rse->findDependentFromStreams(csb, currentStream, streamList);
 
 	// Check value expression, if any.
-	if (value1)
-		value1->findDependentFromStreams(csb, currentStream, streamList);
+	if (!selectList->items.isEmpty())
+		selectList->items[0]->findDependentFromStreams(csb, currentStream, streamList);
 }
 
 void SubQueryNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 {
+	if (selectList && selectList->items.getCount() > 1)
+	{
+		// create a rowtype descriptor for multiple values
+		desc->dsc_dtype = dtype_rowtype;
+		desc->dsc_sub_count = selectList->items.getCount();
+		desc->dsc_length = NULL_BYTES(selectList->items.getCount());
+
+		auto& pool = *tdbb->getDefaultPool();
+		dsc** currentSubDesc = &desc->dsc_sub_first;
+
+		for (FB_SIZE_T i = 0; i < selectList->items.getCount(); ++i)
+		{
+			*currentSubDesc = FB_NEW_POOL(pool) dsc(pool);
+			selectList->items[i]->getDesc(tdbb, csb, *currentSubDesc);
+
+			if ((*currentSubDesc)->dsc_dtype >= dtype_aligned)
+				desc->dsc_length = FB_ALIGN(desc->dsc_length, type_alignments[(*currentSubDesc)->dsc_dtype]);
+
+			desc->dsc_length += (*currentSubDesc)->dsc_length;
+
+			if (i < selectList->items.getCount() - 1)
+				currentSubDesc = &(*currentSubDesc)->dsc_next;
+		}
+
+		desc->setNullable(true);
+		return;
+	}
+
+	// for a single value, use the standard logic
 	if (blrOp == blr_count)
 		desc->makeLong(0);
-	else if (value1)
-		value1->getDesc(tdbb, csb, desc);
+	else if (!selectList->items.isEmpty())
+		selectList->items[0]->getDesc(tdbb, csb, desc);
 
 	if (blrOp == blr_average)
 	{
@@ -11672,7 +11716,7 @@ ValueExprNode* SubQueryNode::copy(thread_db* tdbb, NodeCopier& copier) const
 	node->nodScale = nodScale;
 	node->ownSavepoint = this->ownSavepoint;
 	node->rse = copier.copy(tdbb, rse);
-	node->value1 = copier.copy(tdbb, value1);
+	node->selectList = copier.copy(tdbb, selectList);
 	node->value2 = copier.copy(tdbb, value2);
 
 	return node;
@@ -11689,7 +11733,11 @@ ValueExprNode* SubQueryNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 	csb->csb_current_nodes.push(rse.getObject());
 
-	doPass1(tdbb, csb, value1.getAddress());
+	for (auto& item : selectList->items)
+	{
+		doPass1(tdbb, csb, item.getAddress());
+	}
+
 	doPass1(tdbb, csb, value2.getAddress());
 
 	csb->csb_current_nodes.pop();
@@ -11797,7 +11845,7 @@ dsc* SubQueryNode::execute(thread_db* tdbb, Request* request) const
 			case blr_maximum:
 				while (subQuery->fetch(tdbb))
 				{
-					dsc* value = EVL_expr(tdbb, request, value1);
+					dsc* value = EVL_expr(tdbb, request, selectList->items[0]);
 					if (!value)
 						continue;
 
@@ -11816,7 +11864,7 @@ dsc* SubQueryNode::execute(thread_db* tdbb, Request* request) const
 			case blr_total:
 				while (subQuery->fetch(tdbb))
 				{
-					desc = EVL_expr(tdbb, request, value1);
+					desc = EVL_expr(tdbb, request, selectList->items[0]);
 					if (!desc)
 						continue;
 
@@ -11850,7 +11898,39 @@ dsc* SubQueryNode::execute(thread_db* tdbb, Request* request) const
 
 			case blr_via:
 				if (subQuery->fetch(tdbb))
-					desc = EVL_expr(tdbb, request, value1);
+				{
+					dsc* currentDesc = nullptr;
+					auto& pool = *tdbb->getDefaultPool();
+
+					// create a chain of descriptors for all fields SELECT
+					for (FB_SIZE_T i = 0; i < selectList->items.getCount(); ++i)
+					{
+						dsc* fieldDesc = EVL_expr(tdbb, request, selectList->items[i]);
+
+						if (!currentDesc)
+						{
+							if (fieldDesc)
+								*desc = *fieldDesc;
+							else
+								desc->setNull();
+
+							currentDesc = desc;
+						}
+						else
+						{
+							currentDesc->dsc_next = FB_NEW_POOL(pool) dsc(pool);
+
+							if (fieldDesc && fieldDesc->dsc_length > 0)
+								*currentDesc->dsc_next = *fieldDesc;
+							else
+								currentDesc->dsc_next->setNull();
+
+							currentDesc = currentDesc->dsc_next;
+						}
+					}
+
+					request->req_flags &= ~req_null;
+				}
 				else
 				{
 					if (value2)
@@ -15038,61 +15118,69 @@ dsc* RowValueExpressionNode::execute(thread_db* tdbb, Request* request) const
 	// set null flags to composite record's null bytes
 	memset(impure->vlu_desc.dsc_address, 0xFF, NULL_BYTES(impure->vlu_desc.dsc_sub_count));
 
+	auto nextDesc = &impure->vlu_desc.dsc_sub_first;
+	auto fieldSequencialId = 0;
+
 	dsc* from_desc = nullptr;
 	if (subquery)
 	{
 		from_desc = subquery->execute(tdbb, request);
+		for (; from_desc; from_desc = from_desc->dsc_next)
+		{
+			auto to_desc = *nextDesc;
+
+			if (!(from_desc->dsc_flags & DSC_null) && from_desc->dsc_length > 0)
+			{
+				memcpy(to_desc->dsc_address, from_desc->dsc_address, from_desc->dsc_length);
+				// MOV_move(tdbb, from_desc, to_desc);
+				to_desc->clearNull();
+				compositeRecord->clearNull(fieldSequencialId);
+				to_desc->dsc_length = from_desc->dsc_length;
+			}
+			else
+			{
+				request->req_flags |= req_row_subnulls;
+				memset(to_desc->dsc_address, 0, to_desc->dsc_length);
+				to_desc->setNull();
+
+				// For rowtype, we need to set all fields (via flag bytes) to 0xff what means NULL
+				if (to_desc->dsc_dtype == dtype_rowtype)
+					memset(to_desc->dsc_address, 0xFF, NULL_BYTES(to_desc->dsc_sub_count));
+			}
+
+			nextDesc = &to_desc->dsc_next;
+			fieldSequencialId++;
+		}
 	}
 	else
 	{
-		// Build linked list of descriptors from rowValueExpressionList
-		dsc* first = nullptr;
-		dsc* current = nullptr;
-
 		for (auto& valueExprNode : rowValueExpressionList->items)
 		{
-			dsc* new_desc = valueExprNode->execute(tdbb, request);
+			auto to_desc = *nextDesc;
+			auto from_desc = valueExprNode->execute(tdbb, request);
 
-			if (!first)
-				first = new_desc;
+			if (from_desc)
+			{
+				memcpy(to_desc->dsc_address, from_desc->dsc_address, from_desc->dsc_length);
+				// MOV_move(tdbb, from_desc, to_desc);	// there is no need to move, because descs are identical
+				to_desc->clearNull();
+				compositeRecord->clearNull(fieldSequencialId);
+				to_desc->dsc_length = from_desc->dsc_length;
+			}
 			else
-				current->dsc_next = new_desc;
+			{
+				request->req_flags |= req_row_subnulls;
+				memset(to_desc->dsc_address, 0, to_desc->dsc_length);
+				to_desc->setNull();
 
-			current = new_desc;
+				// For rowtype, we need to set all fields (via flag bytes) to 0xff what means NULL
+				if (to_desc->dsc_dtype == dtype_rowtype)
+					memset(to_desc->dsc_address, 0xFF, NULL_BYTES(to_desc->dsc_sub_count));
+			}
+
+			nextDesc = &to_desc->dsc_next;
+			fieldSequencialId++;
 		}
-
-		from_desc = first;
-	}
-
-	auto nextDesc = &impure->vlu_desc.dsc_sub_first;
-	auto fieldSequencialId = 0;
-
-	// Process all descriptors in a single loop
-	for (; from_desc; from_desc = from_desc->dsc_next)
-	{
-		auto to_desc = *nextDesc;
-
-		if (from_desc)
-		{
-			memcpy(to_desc->dsc_address, from_desc->dsc_address, from_desc->dsc_length);
-			// MOV_move(tdbb, from_desc, to_desc);
-			to_desc->clearNull();
-			compositeRecord->clearNull(fieldSequencialId);
-			to_desc->dsc_length = from_desc->dsc_length;
-		}
-		else
-		{
-			request->req_flags |= req_row_subnulls;
-			memset(to_desc->dsc_address, 0, to_desc->dsc_length);
-			to_desc->setNull();
-
-			// For rowtype, we need to set all fields (via flag bytes) to 0xff what means NULL
-			if (to_desc->dsc_dtype == dtype_rowtype)
-				memset(to_desc->dsc_address, 0xFF, NULL_BYTES(to_desc->dsc_sub_count));
-		}
-
-		nextDesc = &to_desc->dsc_next;
-		fieldSequencialId++;
 	}
 
 	if (isDescNull(*impure->vlu_desc.dsc_sub_first))
