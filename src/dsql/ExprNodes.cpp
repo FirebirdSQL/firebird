@@ -14835,6 +14835,11 @@ ValueExprNode* RowValueExpressionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch
 	{
 		node->subquery = doDsqlPass(dsqlScratch, subquery);
 		node->rowValueExpressionList = nodeAs<SubQueryNode>(node->subquery)->rse->dsqlSelectList;
+
+		if (!forcedMultiColumn && node->rowValueExpressionList->items.getCount() == 1)
+		{
+			return node->subquery;
+		}
 	}
 
 	node->rowField = FB_NEW_POOL(pool) dsql_fld(pool);

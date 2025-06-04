@@ -8832,8 +8832,6 @@ nonparenthesized_value
 		{ $$ = newNode<ArithmeticNode>(blr_multiply, (client_dialect < SQL_DIALECT_V6_TRANSITION), $1, $3); }
 	| value_special '/' value_special
 		{ $$ = newNode<ArithmeticNode>(blr_divide, (client_dialect < SQL_DIALECT_V6_TRANSITION), $1, $3); }
-	| '(' column_singleton ')'
-		{ $$ = $2; }
 	| current_user
 		{ $$ = $1; }
 	| current_role
@@ -8958,13 +8956,17 @@ row_value_expression
 			node->rowValueExpressionList = $2;
 			$$ = node;
 		}
-	| ROW '(' column_select ')'
+	| ROW '(' column_singleton ')'
 		{
 			RowValueExpressionNode* node = newNode<RowValueExpressionNode>();
-
-			//$3->dsqlFlags |= RecordSourceNode::DFLAG_SINGLETON;
-			node->subquery = newNode<SubQueryNode>(blr_via, $3);
-
+			node->subquery = $3;
+			node->forcedMultiColumn = true;
+			$$ = node;
+		}
+	| '(' column_singleton ')'
+		{
+			RowValueExpressionNode* node = newNode<RowValueExpressionNode>();
+			node->subquery = $2;
 			$$ = node;
 		}
 	;

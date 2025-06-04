@@ -2496,6 +2496,7 @@ public:
 	dsql_fld *rowField;
 	int subFieldsNumber;
 	dsql_fld* defaultSource;
+	bool forcedMultiColumn = false;
 };
 
 } // namespace
