@@ -28,6 +28,7 @@
 #include "fb_types.h"
 #include "../../../../common/classes/fb_string.h"
 #include "../../../../common/dllinst.h"
+#include "../../../../common/pathtools.h"
 #include "../../../../yvalve/config/os/config_root.h"
 
 using Firebird::PathName;
@@ -60,7 +61,11 @@ bool getPathFromHInstance(PathName& root)
 
 void ConfigRoot::osConfigRoot()
 {
+#ifdef MINGW
+	root_dir = single_path_relocation(FB_BINDIR,FB_PREFIX);
+#else
 	root_dir = install_dir;
+#endif
 }
 
 void ConfigRoot::osConfigInstallDir()
@@ -107,7 +112,11 @@ void ConfigRoot::osConfigInstallDir()
 	if (install_dir.isEmpty())
 	{
 		// As a last resort get it from the default install directory
+#ifdef MINGW
+		install_dir = single_path_relocation(FB_BINDIR,FB_PREFIX);
+#else
 		install_dir = FB_PREFIX;
+#endif
 	}
 
 	PathUtils::ensureSeparator(install_dir);
