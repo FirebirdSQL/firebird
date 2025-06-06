@@ -7,6 +7,7 @@ Support for hexadecimal numeric and binary string literals.
 Authors:
     Bill Oliver <Bill.Oliver@sas.com>
     Adriano dos Santos Fernandes <adrianosf@uol.com.br>
+    Alexey Chudaykin <chudaykinalex@gmail.com>
 
 Syntax:
 
@@ -35,3 +36,8 @@ Notes (binary string literal):
 Example:
     select 0x10, cast('0x0F0000000' as bigint) from rdb$database;
     select x'deadbeef' from rdb$database;
+
+Notes by Alexey Chudaykin:
+    ISO/IEC 9075-2:2023(E) introduces rules for hexadecimal numbers, so this document should be
+    considered obsolete in the <numeric hex literal> part. Refer to the new document
+    README.decimal_and_non_decimal_literals.
