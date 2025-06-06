@@ -884,9 +884,8 @@ static void bug_lck(const TEXT* string)
  *	and get out.
  *
  **************************************/
-	TEXT s[128];
-
-	sprintf(s, "Fatal lock interface error: %.96s", string);
+	TEXT s[BUFFER_TINY];
+	snprintf(s, sizeof(s), "Fatal lock interface error: %s", string);
 	gds__log(s);
 	ERR_post(Arg::Gds(isc_db_corrupt) << Arg::Str(string));
 }

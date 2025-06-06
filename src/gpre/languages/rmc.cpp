@@ -412,7 +412,7 @@ void RMC_action(const act* action, int /*column*/)
 		gen_blob_end(action);
 		return;
 	case ACT_enderror:
-		sprintf(output_buffer, "%sEND-IF", names[COLUMN]);
+		snprintf(output_buffer, sizeof(output_buffer), "%sEND-IF", names[COLUMN]);
 		RMC_print_buffer(output_buffer, false);
 		return;
 	case ACT_endfor:
@@ -744,42 +744,46 @@ static void asgn_from( const act* action, const ref* reference)
 			if (reference->ref_field->fld_dtype == dtype_date &&
 				strlen(gpreGlob.sw_cob_dformat) != 0)
 			{
-				sprintf(output_buffer, "%sCALL \"rmc_dtoc\" USING %s, %s, \"%s\"\n",
-				        names[COLUMN], variable, value, gpreGlob.sw_cob_dformat);
+				snprintf(output_buffer, sizeof(output_buffer),
+					"%sCALL \"rmc_dtoc\" USING %s, %s, \"%s\"\n",
+					names[COLUMN], variable, value, gpreGlob.sw_cob_dformat);
 			}
 			else
 			{
 				if (reference->ref_field->fld_dtype == dtype_sql_date &&
 					strlen(gpreGlob.sw_cob_dformat) != 0)
 				{
-					sprintf(output_buffer, "%sCALL \"rmc_dtoc\" USING ISC-TEMP-QUAD, %s, \"%s\"\n",
-							names[COLUMN], value, gpreGlob.sw_cob_dformat);
+					snprintf(output_buffer, sizeof(output_buffer),
+						"%sCALL \"rmc_dtoc\" USING ISC-TEMP-QUAD, %s, \"%s\"\n",
+						names[COLUMN], value, gpreGlob.sw_cob_dformat);
 					RMC_print_buffer(output_buffer, false);
-					sprintf(output_buffer, "%sMOVE ISC-TEMP-QUAD-HIGH TO %s\n",
-							names[COLUMN], variable);
+					snprintf(output_buffer, sizeof(output_buffer),
+						"%sMOVE ISC-TEMP-QUAD-HIGH TO %s\n", names[COLUMN], variable);
 				}
 				else
 				{
 					if (reference->ref_field->fld_dtype == dtype_sql_time &&
 						strlen(gpreGlob.sw_cob_dformat) != 0)
 					{
-						sprintf(output_buffer, "%sCALL \"rmc_dtoc\" USING ISC-TEMP-QUAD, %s, \"%s\"\n",
-								names[COLUMN], value, gpreGlob.sw_cob_dformat);
+						snprintf(output_buffer, sizeof(output_buffer),
+							"%sCALL \"rmc_dtoc\" USING ISC-TEMP-QUAD, %s, \"%s\"\n",
+							names[COLUMN], value, gpreGlob.sw_cob_dformat);
 						RMC_print_buffer(output_buffer, false);
-						sprintf(output_buffer, "%sMOVE ISC-TEMP-QUAD-LOW TO %s\n",
-								names[COLUMN], variable);
+						snprintf(output_buffer, sizeof(output_buffer),
+							"%sMOVE ISC-TEMP-QUAD-LOW TO %s\n", names[COLUMN], variable);
 					}
 					else
 					{
 						if (reference->ref_field->fld_dtype == dtype_cstring)
 						{
-							sprintf(output_buffer, "%sCALL \"rmc_stoc\" USING %s GIVING %s\n",
-									names[COLUMN], value, variable);
+							snprintf(output_buffer, sizeof(output_buffer),
+								"%sCALL \"rmc_stoc\" USING %s GIVING %s\n",
+								names[COLUMN], value, variable);
 						}
 						else
 						{
-							sprintf(output_buffer, "%sMOVE %s TO %s\n",
-									names[COLUMN], value, variable);
+							snprintf(output_buffer, sizeof(output_buffer), "%sMOVE %s TO %s\n",
+								names[COLUMN], value, variable);
 
 							switch (reference->ref_field->fld_dtype)
 							{
@@ -787,14 +791,16 @@ static void asgn_from( const act* action, const ref* reference)
 							case dtype_long:
 							case dtype_int64:
 								RMC_print_buffer(output_buffer, false);
-								sprintf(output_buffer, "%sCALL \"rmc_btoc\" USING %s GIVING %s\n",
-										names[COLUMN], variable, variable);
+								snprintf(output_buffer, sizeof(output_buffer),
+									"%sCALL \"rmc_btoc\" USING %s GIVING %s\n",
+									names[COLUMN], variable, variable);
 								break;
 							case dtype_real:
 							case dtype_double:
 								RMC_print_buffer(output_buffer, false);
-								sprintf(output_buffer, "%sCALL \"rmc_ftoc\" USING %s GIVING %s\n",
-										names[COLUMN], variable, variable);
+								snprintf(output_buffer, sizeof(output_buffer),
+									"%sCALL \"rmc_ftoc\" USING %s GIVING %s\n",
+									names[COLUMN], variable, variable);
 								break;
 							}
 						}
@@ -804,15 +810,18 @@ static void asgn_from( const act* action, const ref* reference)
 		}
 		else
 		{
-			sprintf(output_buffer, "%sIF %s < 0 THEN\n", names[COLUMN], value);
+			snprintf(output_buffer, sizeof(output_buffer), "%sIF %s < 0 THEN\n", names[COLUMN],
+				value);
 			RMC_print_buffer(output_buffer, false);
-			sprintf(output_buffer, "%sMOVE -1 TO %s\n", names[COLUMN_INDENT], variable);
+			snprintf(output_buffer, sizeof(output_buffer), "%sMOVE -1 TO %s\n",
+				names[COLUMN_INDENT], variable);
 			RMC_print_buffer(output_buffer, false);
-			sprintf(output_buffer, "%sELSE\n", names[COLUMN]);
+			snprintf(output_buffer, sizeof(output_buffer), "%sELSE\n", names[COLUMN]);
 			RMC_print_buffer(output_buffer, false);
-			sprintf(output_buffer, "%sMOVE 0 TO %s\n", names[COLUMN_INDENT], variable);
+			snprintf(output_buffer, sizeof(output_buffer), "%sMOVE 0 TO %s\n", names[COLUMN_INDENT],
+				variable);
 			RMC_print_buffer(output_buffer, false);
-			sprintf(output_buffer, "%sEND-IF\n", names[COLUMN]);
+			snprintf(output_buffer, sizeof(output_buffer), "%sEND-IF\n", names[COLUMN]);
 		}
 		RMC_print_buffer(output_buffer, false);
 	}
@@ -841,43 +850,47 @@ static void asgn_to( const act* action, ref* reference)
 
 	if ((field->fld_dtype == dtype_date) && (strlen(gpreGlob.sw_cob_dformat) != 0))
 	{
-		sprintf(output_buffer, "%sCALL \"rmc_ctod\" USING %s, %s, \"%s\"\n",
-			    names[COLUMN],
-				reference->ref_value,
-				s,
-				gpreGlob.sw_cob_dformat);
+		snprintf(output_buffer, sizeof(output_buffer), "%sCALL \"rmc_ctod\" USING %s, %s, \"%s\"\n",
+			names[COLUMN], reference->ref_value, s, gpreGlob.sw_cob_dformat);
 		RMC_print_buffer(output_buffer, false);
 	}
 	else
 	{
 		if ((field->fld_dtype == dtype_sql_date) && (strlen(gpreGlob.sw_cob_dformat) != 0))
 		{
-			sprintf(output_buffer, "%sMOVE ZERO TO ISC-TEMP-QUAD-LOW\n", names[COLUMN]);
+			snprintf(output_buffer, sizeof(output_buffer), "%sMOVE ZERO TO ISC-TEMP-QUAD-LOW\n",
+				names[COLUMN]);
 			RMC_print_buffer(output_buffer, false);
-			sprintf(output_buffer, "%sMOVE %s TO ISC-TEMP-QUAD-HIGH\n", names[COLUMN], s);
+			snprintf(output_buffer, sizeof(output_buffer), "%sMOVE %s TO ISC-TEMP-QUAD-HIGH\n",
+				names[COLUMN], s);
 			RMC_print_buffer(output_buffer, false);
-			sprintf(output_buffer, "%sCALL \"rmc_ctod\" USING %s, ISC-TEMP-QUAD, \"%s\"\n",
-					names[COLUMN], reference->ref_value, gpreGlob.sw_cob_dformat);
+			snprintf(output_buffer, sizeof(output_buffer),
+				"%sCALL \"rmc_ctod\" USING %s, ISC-TEMP-QUAD, \"%s\"\n",
+				names[COLUMN], reference->ref_value, gpreGlob.sw_cob_dformat);
 			RMC_print_buffer(output_buffer, false);
 		}
 		else
 		{
 			if ((field->fld_dtype == dtype_sql_time) && (strlen(gpreGlob.sw_cob_dformat) != 0))
 			{
-				sprintf(output_buffer, "%sMOVE ZERO TO ISC-TEMP-QUAD-HIGH\n", names[COLUMN]);
+				snprintf(output_buffer, sizeof(output_buffer),
+					"%sMOVE ZERO TO ISC-TEMP-QUAD-HIGH\n", names[COLUMN]);
 				RMC_print_buffer(output_buffer, false);
-				sprintf(output_buffer, "%sMOVE %s TO ISC-TEMP-QUAD-LOW\n", names[COLUMN], s);
+				snprintf(output_buffer, sizeof(output_buffer), "%sMOVE %s TO ISC-TEMP-QUAD-LOW\n",
+					names[COLUMN], s);
 				RMC_print_buffer(output_buffer, false);
-				sprintf(output_buffer, "%sCALL \"rmc_ctod\" USING %s, ISC-TEMP-QUAD, \"%s\"\n",
-						names[COLUMN], reference->ref_value, gpreGlob.sw_cob_dformat);
+				snprintf(output_buffer, sizeof(output_buffer),
+					"%sCALL \"rmc_ctod\" USING %s, ISC-TEMP-QUAD, \"%s\"\n",
+					names[COLUMN], reference->ref_value, gpreGlob.sw_cob_dformat);
 				RMC_print_buffer(output_buffer, false);
 			}
 			else
 			{
 				if (field->fld_dtype == dtype_cstring)
 				{
-					sprintf(output_buffer, "%sCALL \"rmc_ctos\" USING %s GIVING %s\n",
-							names[COLUMN], s, reference->ref_value);
+					snprintf(output_buffer, sizeof(output_buffer),
+						"%sCALL \"rmc_ctos\" USING %s GIVING %s\n",
+						names[COLUMN], s, reference->ref_value);
 					RMC_print_buffer(output_buffer, false);
 				}
 				else
@@ -887,19 +900,20 @@ static void asgn_to( const act* action, ref* reference)
 					case dtype_short:
 					case dtype_long:
 					case dtype_int64:
-						sprintf(output_buffer, "%sCALL \"rmc_ctob\" USING %s GIVING %s\n",
-								names[COLUMN], s, s);
+						snprintf(output_buffer, sizeof(output_buffer),
+							"%sCALL \"rmc_ctob\" USING %s GIVING %s\n", names[COLUMN], s, s);
 						RMC_print_buffer(output_buffer, false);
 						break;
 					case dtype_real:
 					case dtype_double:
-						sprintf(output_buffer, "%sCALL \"rmc_ctof\" USING %s GIVING %s\n",
-								names[COLUMN], s, s);
+						snprintf(output_buffer, sizeof(output_buffer),
+							"%sCALL \"rmc_ctof\" USING %s GIVING %s\n", names[COLUMN], s, s);
 						RMC_print_buffer(output_buffer, false);
 						break;
 					}
 					field = reference->ref_field;
-					sprintf(output_buffer, "%sMOVE %s TO %s\n", names[COLUMN], s, reference->ref_value);
+					snprintf(output_buffer, sizeof(output_buffer), "%sMOVE %s TO %s\n",
+						names[COLUMN], s, reference->ref_value);
 					RMC_print_buffer(output_buffer, false);
 				}
 			}
@@ -910,8 +924,8 @@ static void asgn_to( const act* action, ref* reference)
 
 	if (reference = reference->ref_null)
 	{
-		sprintf(output_buffer, "%sMOVE %s TO %s\n",
-				names[COLUMN], gen_name(s, reference, true), reference->ref_value);
+		snprintf(output_buffer, sizeof(output_buffer), "%sMOVE %s TO %s\n",
+			names[COLUMN], gen_name(s, reference, true), reference->ref_value);
 		RMC_print_buffer(output_buffer, false);
 	}
 }
@@ -935,43 +949,48 @@ static void asgn_to_proc( const ref* reference)
 		gen_name(s, reference, true);
 		if ((reference->ref_field->fld_dtype == dtype_date) && strlen(gpreGlob.sw_cob_dformat) != 0)
 		{
-			sprintf(output_buffer, "%sCALL \"rmc_ctod\" USING %s, %s, \"%s\"\n",
-					names[COLUMN],
-					reference->ref_value,
-					s,
-					gpreGlob.sw_cob_dformat);
+			snprintf(output_buffer, sizeof(output_buffer),
+				"%sCALL \"rmc_ctod\" USING %s, %s, \"%s\"\n",
+				names[COLUMN], reference->ref_value, s, gpreGlob.sw_cob_dformat);
 			RMC_print_buffer(output_buffer, false);
 		}
 		else
 		{
 			if ((reference->ref_field->fld_dtype == dtype_sql_date) && (strlen(gpreGlob.sw_cob_dformat) != 0))
 			{
-				sprintf(output_buffer, "%sMOVE ZERO TO ISC-TEMP-QUAD-LOW\n", names[COLUMN]);
+				snprintf(output_buffer, sizeof(output_buffer), "%sMOVE ZERO TO ISC-TEMP-QUAD-LOW\n",
+					names[COLUMN]);
 				RMC_print_buffer(output_buffer, false);
-				sprintf(output_buffer, "%sMOVE %s TO ISC-TEMP-QUAD-HIGH\n", names[COLUMN], s);
+				snprintf(output_buffer, sizeof(output_buffer), "%sMOVE %s TO ISC-TEMP-QUAD-HIGH\n",
+					names[COLUMN], s);
 				RMC_print_buffer(output_buffer, false);
-				sprintf(output_buffer, "%sCALL \"rmc_ctod\" USING %s, ISC-TEMP-QUAD, \"%s\"\n",
-						names[COLUMN], reference->ref_value, gpreGlob.sw_cob_dformat);
+				snprintf(output_buffer, sizeof(output_buffer),
+					"%sCALL \"rmc_ctod\" USING %s, ISC-TEMP-QUAD, \"%s\"\n",
+					names[COLUMN], reference->ref_value, gpreGlob.sw_cob_dformat);
 				RMC_print_buffer(output_buffer, false);
 			}
 			else
 			{
 				if ((reference->ref_field->fld_dtype == dtype_sql_time) && (strlen(gpreGlob.sw_cob_dformat) != 0))
 				{
-					sprintf(output_buffer, "%sMOVE ZERO TO ISC-TEMP-QUAD-HIGH\n", names[COLUMN]);
+					snprintf(output_buffer, sizeof(output_buffer),
+						"%sMOVE ZERO TO ISC-TEMP-QUAD-HIGH\n", names[COLUMN]);
 					RMC_print_buffer(output_buffer, false);
-					sprintf(output_buffer, "%sMOVE %s TO ISC-TEMP-QUAD-LOW\n", names[COLUMN], s);
+					snprintf(output_buffer, sizeof(output_buffer),
+						"%sMOVE %s TO ISC-TEMP-QUAD-LOW\n", names[COLUMN], s);
 					RMC_print_buffer(output_buffer, false);
-					sprintf(output_buffer, "%sCALL \"rmc_ctod\" USING %s, ISC-TEMP-QUAD, \"%s\"\n",
-							names[COLUMN], reference->ref_value, gpreGlob.sw_cob_dformat);
+					snprintf(output_buffer, sizeof(output_buffer),
+						"%sCALL \"rmc_ctod\" USING %s, ISC-TEMP-QUAD, \"%s\"\n",
+						names[COLUMN], reference->ref_value, gpreGlob.sw_cob_dformat);
 					RMC_print_buffer(output_buffer, false);
 				}
 				else
 				{
 					if (reference->ref_field->fld_dtype == dtype_cstring)
 					{
-						sprintf(output_buffer, "%sCALL \"rmc_ctos\" USING %s GIVING %s\n",
-								names[COLUMN], s, reference->ref_value);
+						snprintf(output_buffer, sizeof(output_buffer),
+							"%sCALL \"rmc_ctos\" USING %s GIVING %s\n",
+							names[COLUMN], s, reference->ref_value);
 						RMC_print_buffer(output_buffer, false);
 					}
 					else
@@ -980,11 +999,11 @@ static void asgn_to_proc( const ref* reference)
 							(reference->ref_field->fld_dtype == dtype_long) ||
 							(reference->ref_field->fld_dtype == dtype_int64))
 						{
-							sprintf(output_buffer, "%sCALL \"rmc_ctob\" USING %s GIVING %s\n",
-									names[COLUMN], s, s);
+							snprintf(output_buffer, sizeof(output_buffer),
+								"%sCALL \"rmc_ctob\" USING %s GIVING %s\n", names[COLUMN], s, s);
 							RMC_print_buffer(output_buffer, false);
 						}
-						sprintf(output_buffer, "%sMOVE %s TO %s\n",
+						snprintf(output_buffer, sizeof(output_buffer), "%sMOVE %s TO %s\n",
 								names[COLUMN], s, reference->ref_value);
 						RMC_print_buffer(output_buffer, false);
 					}
@@ -1156,7 +1175,7 @@ static void gen_based( const act* action)
 	default:
 		{
 			TEXT s[64];
-			sprintf(s, "datatype %d unknown\n", field->fld_dtype);
+			snprintf(s, sizeof(s), "datatype %d unknown\n", field->fld_dtype);
 			CPR_error(s);
 			return;
 		}
@@ -1186,7 +1205,7 @@ static void gen_blob_close( const act* action)
 
 	const TEXT* command = (action->act_type == ACT_blob_cancel) ? CANCEL : CLOSE;
 	TEXT buffer[80];
-	sprintf(buffer, ISC_BLOB, command);
+	snprintf(buffer, sizeof(buffer), ISC_BLOB, command);
 
 	printa(names[COLUMN], true, "CALL \"%s\" USING %s, %s%d",
 		   buffer,
@@ -1422,11 +1441,11 @@ static void gen_compile( const act* action)
 	// cause other difficult to find memory corruption problems.  This implies
 	// that the user must issue a RELEASE_REQUESTS request before exiting any
 	// subprogram in order to clean up its handles.
-	sprintf(output_buffer, "%sCALL \"%s\" USING %s, %s, %s, %d, %s%d\n",
-			names[COLUMN], ISC_COMPILE_REQUEST,
-			status_vector(action), symbol->sym_string,
-			request->req_handle, request->req_length,
-			names[isc_a_pos], request->req_ident);
+	snprintf(output_buffer, sizeof(output_buffer), "%sCALL \"%s\" USING %s, %s, %s, %d, %s%d\n",
+		names[COLUMN], ISC_COMPILE_REQUEST,
+		status_vector(action), symbol->sym_string,
+		request->req_handle, request->req_length,
+		names[isc_a_pos], request->req_ident);
 
 	RMC_print_buffer(output_buffer, true);
 	if (gpreGlob.sw_auto && action->act_error)
@@ -1440,8 +1459,8 @@ static void gen_compile( const act* action)
 
 	for (const blb* blob = request->req_blobs; blob; blob = blob->blb_next)
 	{
-		sprintf(output_buffer, "%sMOVE 0 TO %s%d\n",
-				names[COLUMN], names[isc_a_pos], blob->blb_ident);
+		snprintf(output_buffer, sizeof(output_buffer), "%sMOVE 0 TO %s%d\n",
+			names[COLUMN], names[isc_a_pos], blob->blb_ident);
 
 		RMC_print_buffer(output_buffer, false);
 	}
@@ -1461,11 +1480,11 @@ static void gen_create_database( const act* action)
 	gpre_dbb* db = (gpre_dbb*) request->req_database;
 	if (request)
 	{
-		sprintf(s1, "%s%dL", names[isc_b_pos], request->req_ident);
+		snprintf(s1, sizeof(s1), "%s%dL", names[isc_b_pos], request->req_ident);
 		if (request->req_flags & REQ_extend_dpb)
-			sprintf(s2, "%s%dp", names[isc_b_pos], request->req_ident);
+			snprintf(s2, sizeof(s2), "%s%dp", names[isc_b_pos], request->req_ident);
 		else
-			sprintf(s2, "%s%d", names[isc_b_pos], request->req_ident);
+			snprintf(s2, sizeof(s2), "%s%d", names[isc_b_pos], request->req_ident);
 
 		// if the dpb needs to be extended at runtime to include items
 		// in host variables, do so here; this assumes that there is
@@ -1475,73 +1494,58 @@ static void gen_create_database( const act* action)
 		{
 			if (request->req_length)
 			{
-				sprintf(output_buffer, "%sMOVE %s%d to %s\n",
-						names[COLUMN], names[isc_b_pos], request->req_ident, s2);
+				snprintf(output_buffer, sizeof(output_buffer), "%sMOVE %s%d to %s\n",
+					names[COLUMN], names[isc_b_pos], request->req_ident, s2);
 			}
 			if (db->dbb_r_user)
 			{
-				sprintf(output_buffer, "%sCALL \"%s\" USING %s, %s, 28, %s\n",
-						names[COLUMN],
-						ISC_EXPAND_DPB,
-						s2,
-						s1,
-						db->dbb_r_user);
+				snprintf(output_buffer, sizeof(output_buffer),
+					"%sCALL \"%s\" USING %s, %s, 28, %s\n",
+					names[COLUMN], ISC_EXPAND_DPB, s2, s1, db->dbb_r_user);
 				RMC_print_buffer(output_buffer, true);
 			}
 			if (db->dbb_r_password)
 			{
-				sprintf(output_buffer, "%sCALL \"%s\" USING %s, %s, 29, %s\n",
-						names[COLUMN],
-						ISC_EXPAND_DPB,
-						s2,
-						s1,
-						db->dbb_r_password);
+				snprintf(output_buffer, sizeof(output_buffer),
+					"%sCALL \"%s\" USING %s, %s, 29, %s\n",
+					names[COLUMN], ISC_EXPAND_DPB, s2, s1, db->dbb_r_password);
 				RMC_print_buffer(output_buffer, true);
 			}
 
 			// Process Role Name, isc_dpb_sql_role_name/60
 			if (db->dbb_r_sql_role)
 			{
-				sprintf(output_buffer, "%sCALL \"%s\" USING %s, %s, 60, %s\n",
-						names[COLUMN],
-						ISC_EXPAND_DPB,
-						s2,
-						s1,
-						db->dbb_r_sql_role);
+				snprintf(output_buffer, sizeof(output_buffer),
+					"%sCALL \"%s\" USING %s, %s, 60, %s\n",
+					names[COLUMN], ISC_EXPAND_DPB, s2, s1, db->dbb_r_sql_role);
 				RMC_print_buffer(output_buffer, true);
 			}
 
 			if (db->dbb_r_lc_messages)
 			{
-				sprintf(output_buffer, "%sCALL \"%s\" USING %s, %s, 47, %s\n",
-						names[COLUMN],
-						ISC_EXPAND_DPB,
-						s2,
-						s1,
-						db->dbb_r_lc_messages);
+				snprintf(output_buffer, sizeof(output_buffer),
+					"%sCALL \"%s\" USING %s, %s, 47, %s\n",
+					names[COLUMN], ISC_EXPAND_DPB, s2, s1, db->dbb_r_lc_messages);
 				RMC_print_buffer(output_buffer, true);
 			}
 			if (db->dbb_r_lc_ctype)
 			{
-				sprintf(output_buffer, "%sCALL \"%s\" USING %s %s, 48, %s\n",
-						names[COLUMN],
-						ISC_EXPAND_DPB,
-						s2,
-						s1,
-						db->dbb_r_lc_ctype);
+				snprintf(output_buffer, sizeof(output_buffer),
+					"%sCALL \"%s\" USING %s %s, 48, %s\n",
+					names[COLUMN], ISC_EXPAND_DPB, s2, s1, db->dbb_r_lc_ctype);
 				RMC_print_buffer(output_buffer, true);
 			}
 		}
 
 		if (request->req_flags & REQ_extend_dpb)
 		{
-			sprintf(s1Tmp, "%s", s1);
-			sprintf(s2Tmp, "%s", s2);
+			snprintf(s1Tmp, sizeof(s1Tmp), "%s", s1);
+			snprintf(s2Tmp, sizeof(s2Tmp), "%s", s2);
 		}
 		else
 		{
-			sprintf(s2Tmp, "%s", s2);
-			sprintf(s1Tmp, "%d", request->req_length);
+			snprintf(s2Tmp, sizeof(s2Tmp), "%s", s2);
+			snprintf(s1Tmp, sizeof(s1Tmp), "%d", request->req_length);
 		}
 	}
 
@@ -1552,17 +1556,18 @@ static void gen_create_database( const act* action)
 			db->dbb_id = dbisc->dbb_id;
 	}
 
-	sprintf(dbname, "%s%ddb", names[isc_b_pos], db->dbb_id);
+	snprintf(dbname, sizeof(dbname), "%s%ddb", names[isc_b_pos], db->dbb_id);
 
-	sprintf(output_buffer, "%sCALL \"%s\" USING %s, %" SIZEFORMAT", %s, %s, %s, %s, 0\n",
-			names[COLUMN],
-			ISC_CREATE_DATABASE,
-			status_vector(action),
-			strlen(db->dbb_filename),
-			dbname,
-			db->dbb_name->sym_string,
-			request->req_length ? s1Tmp : OMITTED,
-			request->req_length ? s2Tmp : OMITTED);
+	snprintf(output_buffer, sizeof(output_buffer),
+		"%sCALL \"%s\" USING %s, %" SIZEFORMAT ", %s, %s, %s, %s, 0\n",
+		names[COLUMN],
+		ISC_CREATE_DATABASE,
+		status_vector(action),
+		strlen(db->dbb_filename),
+		dbname,
+		db->dbb_name->sym_string,
+		request->req_length ? s1Tmp : OMITTED,
+		request->req_length ? s2Tmp : OMITTED);
 
 	RMC_print_buffer(output_buffer, true);
 	// if the dpb was extended, free it here
@@ -1571,15 +1576,18 @@ static void gen_create_database( const act* action)
 	{
 		if (request->req_length)
 		{
-			sprintf(output_buffer, "if (%s != %s%d)", s2, names[isc_b_pos], request->req_ident);
+			snprintf(output_buffer, sizeof(output_buffer), "if (%s != %s%d)", s2, names[isc_b_pos],
+				request->req_ident);
 			RMC_print_buffer(output_buffer, true);
 		}
 
-		sprintf(output_buffer, "%sCALL \"%s\" USING %s\n", names[COLUMN], ISC_FREE, s2Tmp);
+		snprintf(output_buffer, sizeof(output_buffer), "%sCALL \"%s\" USING %s\n", names[COLUMN],
+			ISC_FREE, s2Tmp);
 		RMC_print_buffer(output_buffer, true);
 
 		// reset the length of the dpb
-		sprintf(output_buffer, "%sMOVE %d to %s", names[COLUMN], request->req_length, s1);
+		snprintf(output_buffer, sizeof(output_buffer), "%sMOVE %d to %s", names[COLUMN],
+			request->req_length, s1);
 		RMC_print_buffer(output_buffer, true);
 	}
 	const bool save_sw_auto = gpreGlob.sw_auto;
@@ -1688,7 +1696,8 @@ static void gen_database( const act* action)
 
 	global_first_flag = true;
 
-	sprintf(output_buffer, "\n%s**** GDS Preprocessor Definitions ****\n\n", names[COMMENT]);
+	snprintf(output_buffer, sizeof(output_buffer), "\n%s**** GDS Preprocessor Definitions ****\n\n",
+		names[COMMENT]);
 	RMC_print_buffer(output_buffer, false);
 
 	printa(COLUMN8, false, "01  %s PIC S9(19) %s VALUE IS 0.", names[isc_blob_null_pos], USAGE_BINARY8);
@@ -1929,11 +1938,11 @@ static void gen_ddl( const act* action)
 	}
 
 
-	sprintf(output_buffer, "%sCALL \"%s\" USING %s, %s, %s, %d, %s%d\n",
-			names[COLUMN], ISC_DDL, status_vector(action),
-			request->req_database->dbb_name->sym_string,
-			names[isc_trans_pos], request->req_length,
-			names[isc_a_pos], request->req_ident);
+	snprintf(output_buffer, sizeof(output_buffer), "%sCALL \"%s\" USING %s, %s, %s, %d, %s%d\n",
+		names[COLUMN], ISC_DDL, status_vector(action),
+		request->req_database->dbb_name->sym_string,
+		names[isc_trans_pos], request->req_length,
+		names[isc_a_pos], request->req_ident);
 
 	RMC_print_buffer(output_buffer, true);
 
@@ -2122,7 +2131,7 @@ static void gen_dyn_immediate( const act* action)
 	TEXT s[64];
 	const TEXT* s2 = "ISC-CONST-DYN-IMMEDL";
 	printa(names[COLUMN], true, GET_LEN_CALL_TEMPLATE, STRING_LENGTH, statement->dyn_string, s2);
-	sprintf(s, " %s,", s2);
+	snprintf(s, sizeof(s), " %s,", s2);
 
 	if (gpreGlob.sw_auto)
 	{
@@ -2253,7 +2262,7 @@ static void gen_dyn_prepare( const act* action)
 	TEXT s[MAX_CURSOR_SIZE], s3[80];
 	make_name_formatted(s, "ISC-CONST-%s", statement->dyn_statement_name);
 	TEXT s2[MAX_CURSOR_SIZE + 1];
-	sprintf(s2, "%sL", s);
+	snprintf(s2, sizeof(s2), "%sL", s);
 	printa(names[COLUMN], true, GET_LEN_CALL_TEMPLATE, STRING_LENGTH, statement->dyn_string, s2);
 	fb_utils::snprintf(s3, sizeof(s3), " %s,", s2);
 
@@ -2304,10 +2313,12 @@ static void gen_emodify( const act* action)
 		if (field->fld_dtype == dtype_blob || field->fld_dtype == dtype_quad ||
 			field->fld_dtype == dtype_date)
 		{
-			sprintf(output_buffer, "%sCALL \"isc_qtoq\" USING %s, %s\n", names[COLUMN], s1, s2);
+			snprintf(output_buffer, sizeof(output_buffer), "%sCALL \"isc_qtoq\" USING %s, %s\n",
+				names[COLUMN], s1, s2);
 		}
 		else
-			sprintf(output_buffer, "%sMOVE %s TO %s\n", names[COLUMN], s1, s2);
+			snprintf(output_buffer, sizeof(output_buffer), "%sMOVE %s TO %s\n", names[COLUMN], s1,
+				s2);
 		RMC_print_buffer(output_buffer, true);
 		if (field->fld_array_info)
 			gen_get_or_put_slice(action, reference, false);
@@ -2739,7 +2750,7 @@ static void gen_get_or_put_slice(const act* action, const ref* reference, bool g
 	args.pat_value1 = reference->ref_sdl_length;	// slice descr length
 
 	TEXT s2[MAX_REF_SIZE];
-	sprintf(s2, "%s%d", names[isc_a_pos], reference->ref_sdl_ident);	// slice description
+	snprintf(s2, sizeof(s2), "%s%d", names[isc_a_pos], reference->ref_sdl_ident);	// slice description
 	args.pat_string3 = s2;
 
 	args.pat_value2 = 0;		// parameter length
@@ -2754,7 +2765,8 @@ static void gen_get_or_put_slice(const act* action, const ref* reference, bool g
 	}
 	else
 	{
-		sprintf(s4, "%s%dL", names[isc_a_pos], reference->ref_field->fld_array_info->ary_ident);
+		snprintf(s4, sizeof(s4), "%s%dL", names[isc_a_pos],
+			reference->ref_field->fld_array_info->ary_ident);
 		args.pat_string5 = s4;	// array name
 	}
 
@@ -2780,14 +2792,14 @@ static void gen_get_segment( const act* action)
 	else
 		blob = (blb*) action->act_object;
 
-	sprintf(output_buffer, GET_SEG_CALL_TEMPLATE,
-			names[COLUMN],
-			ISC_GET_SEGMENT,
-			names[isc_status_vector_pos],
-			names[isc_a_pos], blob->blb_ident,
-			names[isc_a_pos], blob->blb_len_ident,
-			blob->blb_seg_length,
-			names[isc_a_pos], blob->blb_buff_ident, names[isc_status_pos]);
+	snprintf(output_buffer, sizeof(output_buffer), GET_SEG_CALL_TEMPLATE,
+		names[COLUMN],
+		ISC_GET_SEGMENT,
+		names[isc_status_vector_pos],
+		names[isc_a_pos], blob->blb_ident,
+		names[isc_a_pos], blob->blb_len_ident,
+		blob->blb_seg_length,
+		names[isc_a_pos], blob->blb_buff_ident, names[isc_status_pos]);
 
 	RMC_print_buffer(output_buffer, true);
 
@@ -2946,13 +2958,13 @@ static void gen_put_segment( const act* action)
 		blob = (blb*) action->act_object;
 
 
-	sprintf(output_buffer, PUT_SEG_CALL_TEMPLATE,
-			names[COLUMN],
-			ISC_PUT_SEGMENT,
-			status_vector(action),
-			names[isc_a_pos], blob->blb_ident,
-			names[isc_a_pos], blob->blb_len_ident,
-			names[isc_a_pos], blob->blb_buff_ident, names[isc_status_pos]);
+	snprintf(output_buffer, sizeof(output_buffer), PUT_SEG_CALL_TEMPLATE,
+		names[COLUMN],
+		ISC_PUT_SEGMENT,
+		status_vector(action),
+		names[isc_a_pos], blob->blb_ident,
+		names[isc_a_pos], blob->blb_len_ident,
+		names[isc_a_pos], blob->blb_buff_ident, names[isc_status_pos]);
 	RMC_print_buffer(output_buffer, true);
 
 	set_sqlcode(action);
@@ -2982,7 +2994,8 @@ static void gen_raw(const UCHAR* blr, req_t request_type, int request_length, in
 			strcpy(s, COLUMN12);
 			strcat(s, RAW_BLR_TEMPLATE);
 			strcat(s, "\n");
-			sprintf(output_buffer, s, names[isc_a_pos], ident, names[UNDER], length++, ltemp);
+			snprintf(output_buffer, sizeof(output_buffer), s, names[isc_a_pos], ident, names[UNDER],
+				length++, ltemp);
 			RMC_print_buffer(output_buffer, false);
 			ltemp = 0;
 			offset = 24;
@@ -3006,7 +3019,8 @@ static void gen_raw(const UCHAR* blr, req_t request_type, int request_length, in
 	strcpy(s, COLUMN12);
 	strcat(s, RAW_BLR_TEMPLATE);
 	strcat(s, "\n");
-	sprintf(output_buffer, s, names[isc_a_pos], ident, names[UNDER], length++, ltemp);
+	snprintf(output_buffer, sizeof(output_buffer), s, names[isc_a_pos], ident, names[UNDER],
+		length++, ltemp);
 	RMC_print_buffer(output_buffer, false);
 }
 
@@ -3038,7 +3052,7 @@ static void gen_ready( const act* action)
 			if (filename)
 			{
 				namelength = static_cast<USHORT>(strlen(filename));
-				sprintf(dbname, "%s%ddb", names[isc_b_pos], dbisc->dbb_id);
+				snprintf(dbname, sizeof(dbname), "%s%ddb", names[isc_b_pos], dbisc->dbb_id);
 				filename = dbname;
 			}
 			else
@@ -3051,7 +3065,7 @@ static void gen_ready( const act* action)
 
 		if (ready->rdy_id)
 		{
-			sprintf(dbname, "%s%ddb", names[isc_b_pos], ready->rdy_id);
+			snprintf(dbname, sizeof(dbname), "%s%ddb", names[isc_b_pos], ready->rdy_id);
 			filename = dbname;
 			namelength -= 2;
 		}
@@ -3132,15 +3146,15 @@ static void gen_release( const act* action)
 static void gen_receive( const act* action, const gpre_port* port)
 {
 	const gpre_req* request = action->act_request;
-	sprintf(output_buffer, "%sCALL \"%s\" USING %s, %s, %d, %d, %s%d, %s\n",
-			names[COLUMN],
-			ISC_RECEIVE,
-			status_vector(action),
-			request->req_handle,
-			port->por_msg_number,
-			port->por_length,
-			names[isc_a_pos], port->por_ident,
-			request->req_request_level);
+	snprintf(output_buffer, sizeof(output_buffer), "%sCALL \"%s\" USING %s, %s, %d, %d, %s%d, %s\n",
+		names[COLUMN],
+		ISC_RECEIVE,
+		status_vector(action),
+		request->req_handle,
+		port->por_msg_number,
+		port->por_length,
+		names[isc_a_pos], port->por_ident,
+		request->req_request_level);
 	RMC_print_buffer(output_buffer, true);
 
 	set_sqlcode(action);
@@ -3414,15 +3428,15 @@ static void gen_send( const act* action, const gpre_port* port)
 {
 	const gpre_req* request = action->act_request;
 
-	sprintf(output_buffer, "%sCALL \"%s\" USING %s, %s, %d, %d, %s%d, %s\n",
-			names[COLUMN],
-			ISC_SEND,
-			status_vector(action),
-			request->req_handle,
-			port->por_msg_number,
-			port->por_length,
-			names[isc_a_pos], port->por_ident,
-			request->req_request_level);
+	snprintf(output_buffer, sizeof(output_buffer), "%sCALL \"%s\" USING %s, %s, %d, %d, %s%d, %s\n",
+		names[COLUMN],
+		ISC_SEND,
+		status_vector(action),
+		request->req_handle,
+		port->por_msg_number,
+		port->por_length,
+		names[isc_a_pos], port->por_ident,
+		request->req_request_level);
 
 	RMC_print_buffer(output_buffer, true);
 	set_sqlcode(action);
@@ -3562,25 +3576,26 @@ static void gen_start( const act* action, const gpre_port* port)
 				gen_get_or_put_slice(action, reference, false);
 		}
 
-		sprintf(output_buffer, "%sCALL \"%s\" USING %s, %s, %s, %d, %d, %s%d, %s\n",
-				names[COLUMN],
-				ISC_START_AND_SEND,
-				vector,
-				request->req_handle,
-				request_trans(action, request),
-				port->por_msg_number,
-				port->por_length,
-				names[isc_a_pos], port->por_ident,
-				request->req_request_level);
+		snprintf(output_buffer, sizeof(output_buffer),
+			"%sCALL \"%s\" USING %s, %s, %s, %d, %d, %s%d, %s\n",
+			names[COLUMN],
+			ISC_START_AND_SEND,
+			vector,
+			request->req_handle,
+			request_trans(action, request),
+			port->por_msg_number,
+			port->por_length,
+			names[isc_a_pos], port->por_ident,
+			request->req_request_level);
 	}
 	else
-		sprintf(output_buffer, "%sCALL \"%s\" USING %s, %s, %s, %s\n",
-				names[COLUMN],
-				ISC_START_REQUEST,
-				vector,
-				request->req_handle,
-				request_trans(action, request),
-				request->req_request_level);
+		snprintf(output_buffer, sizeof(output_buffer), "%sCALL \"%s\" USING %s, %s, %s, %s\n",
+			names[COLUMN],
+			ISC_START_REQUEST,
+			vector,
+			request->req_handle,
+			request_trans(action, request),
+			request->req_request_level);
 
 	RMC_print_buffer(output_buffer, true);
 
@@ -3645,7 +3660,7 @@ static void gen_t_start( const act* action)
 				const USHORT namelength = static_cast<USHORT>(filename ? strlen(filename) : 0);
 				if (filename)
 				{
-					sprintf(dbname, "%s%ddb", names[isc_b_pos], db->dbb_id);
+					snprintf(dbname, sizeof(dbname), "%s%ddb", names[isc_b_pos], db->dbb_id);
 					filename = dbname;
 				}
 				make_ready(db, filename, status_vector(action), 0, namelength);
@@ -3715,8 +3730,8 @@ static void gen_tpb(const tpb* tpb_buffer)
 			   names[UNDER],
 			   length++,
 			   ltemp);
-	sprintf(output_buffer, "%sEnd of data for %s%d\n",
-			names[COMMENT], names[isc_tpb_pos], tpb_buffer->tpb_ident);
+	snprintf(output_buffer, sizeof(output_buffer), "%sEnd of data for %s%d\n",
+		names[COMMENT], names[isc_tpb_pos], tpb_buffer->tpb_ident);
 	RMC_print_buffer(output_buffer, false);
 }
 
@@ -3867,10 +3882,10 @@ static void make_array_declaration( ref* reference)
 	}
 
 	TEXT string1[256];
-	TEXT* p = string1;
 	const int dimension_size = dimension->dim_upper - dimension->dim_lower + 1;
-	sprintf(p, "%02d  %s%d OCCURS %d TIMES ",
-			i, names[isc_a_pos], field->fld_array_info->ary_ident, dimension_size);
+	snprintf(string1, sizeof(string1), "%02d  %s%d OCCURS %d TIMES ",
+		i, names[isc_a_pos], field->fld_array_info->ary_ident, dimension_size);
+	TEXT* p = string1;
 	while (*p)
 		p++;
 
@@ -3894,16 +3909,16 @@ static void make_array_declaration( ref* reference)
 		if (scale >= -digits && scale <= 0)
 		{
 			if (scale > -digits)
-				sprintf(p, "9(%d)", digits + scale);
+				snprintf(p, sizeof(string1) - (p - string1), "9(%d)", digits + scale);
 			while (*p)
 				p++;
 			if (scale)
-				sprintf(p, "V9(%d)", digits - (digits + scale));
+				snprintf(p, sizeof(string1) - (p - string1), "V9(%d)", digits - (digits + scale));
 		}
 		else if (scale > 0)
-			sprintf(p, "9(%d)P(%d)", digits, scale);
+			snprintf(p, sizeof(string1) - (p - string1), "9(%d)P(%d)", digits, scale);
 		else
-			sprintf(p, "VP(%d)9(%d)", -(scale + digits), digits);
+			snprintf(p, sizeof(string1) - (p - string1), "VP(%d)9(%d)", -(scale + digits), digits);
 		while (*p)
 			p++;
 		if (field->fld_array_info->ary_dtype == dtype_short)
@@ -3919,7 +3934,7 @@ static void make_array_declaration( ref* reference)
 	case dtype_cstring:
 	case dtype_text:
 	case dtype_varying:
-		sprintf(p, "PIC X(%d).", field->fld_array->fld_length);
+		snprintf(p, sizeof(string1) - (p - string1), "PIC X(%d).", field->fld_array->fld_length);
 		break;
 
 	case dtype_date:
@@ -3936,13 +3951,14 @@ static void make_array_declaration( ref* reference)
 		break;
 
 	case dtype_quad:
-		sprintf(p, "PIC S9(%d)", 19 + field->fld_array->fld_scale);
+		snprintf(p, sizeof(string1) - (p - string1), "PIC S9(%d)",
+			19 + field->fld_array->fld_scale);
 		while (*p)
 			p++;
 		if (field->fld_array->fld_scale < 0)
-			sprintf(p, "V9(%d)", -field->fld_array->fld_scale);
+			snprintf(p, sizeof(string1) - (p - string1), "V9(%d)", -field->fld_array->fld_scale);
 		else if (field->fld_array->fld_scale > 0)
-			sprintf(p, "P(%d)", field->fld_array->fld_scale);
+			snprintf(p, sizeof(string1) - (p - string1), "P(%d)", field->fld_array->fld_scale);
 		while (*p)
 			p++;
 		strcpy(p, USAGE_BINARY8);
@@ -3964,16 +3980,16 @@ static void make_array_declaration( ref* reference)
 		if (scale >= -digits && scale <= 0)
 		{
 			if (scale > -digits)
-				sprintf(p, "9(%d)", digits + scale);
+				snprintf(p, sizeof(string1) - (p - string1), "9(%d)", digits + scale);
 			while (*p)
 				p++;
 			if (scale)
-				sprintf(p, "V9(%d)", digits - (digits + scale));
+				snprintf(p, sizeof(string1) - (p - string1), "V9(%d)", digits - (digits + scale));
 		}
 		else if (scale > 0)
-			sprintf(p, "9(%d)P(%d)", digits, scale);
+			snprintf(p, sizeof(string1) - (p - string1), "9(%d)P(%d)", digits, scale);
 		else
-			sprintf(p, "VP(%d)9(%d)", -(scale + digits), digits);
+			snprintf(p, sizeof(string1) - (p - string1), "VP(%d)9(%d)", -(scale + digits), digits);
 		while (*p)
 			p++;
 		strcpy(p, (field->fld_array_info->ary_dtype == dtype_real) ? USAGE_BINARY4 : USAGE_BINARY8);
@@ -4165,11 +4181,11 @@ static void make_ready(const gpre_dbb* db,
 
 	if (request)
 	{
-		sprintf(s1, "%s%dL", names[isc_b_pos], request->req_ident);
+		snprintf(s1, sizeof(s1), "%s%dL", names[isc_b_pos], request->req_ident);
 		if (request->req_flags & REQ_extend_dpb)
-			sprintf(s2, "%s%dp", names[isc_b_pos], request->req_ident);
+			snprintf(s2, sizeof(s2), "%s%dp", names[isc_b_pos], request->req_ident);
 		else
-			sprintf(s2, "%s%d", names[isc_b_pos], request->req_ident);
+			snprintf(s2, sizeof(s2), "%s%d", names[isc_b_pos], request->req_ident);
 
 		// if the dpb needs to be extended at runtime to include items
 		// in host variables, do so here; this assumes that there is
@@ -4179,102 +4195,85 @@ static void make_ready(const gpre_dbb* db,
 		{
 			if (request->req_length)
 			{
-				sprintf(output_buffer, "%sCALL \"%s\" USING %s%d GIVING %s\n",
-						names[COLUMN],
-						ISC_BADDRESS,
-						names[isc_b_pos],
-						request->req_ident,
-						s2);
-				//sprintf(output_buffer, "%sMOVE %s%d to %s\n",
+				snprintf(output_buffer, sizeof(output_buffer),
+					"%sCALL \"%s\" USING %s%d GIVING %s\n",
+					names[COLUMN], ISC_BADDRESS, names[isc_b_pos], request->req_ident, s2);
+				//snprintf(output_buffer, sizeof(output_buffer), "%sMOVE %s%d to %s\n",
 				//		names[COLUMN], names[isc_b_pos], request->req_ident, s2);
 			}
 			else
-				sprintf(output_buffer, "%sMOVE 0 TO %s\n", names[COLUMN], s2);
+				snprintf(output_buffer, sizeof(output_buffer), "%sMOVE 0 TO %s\n", names[COLUMN],
+					s2);
 
 			RMC_print_buffer(output_buffer, true);
 			if (db->dbb_r_user)
 			{
-				sprintf(output_buffer, "%sCALL \"%s\" USING %s, %s, 28, %s\n",
-						names[COLUMN],
-						ISC_EXPAND_DPB,
-						s2,
-						s1,
-						db->dbb_r_user);
+				snprintf(output_buffer, sizeof(output_buffer),
+					"%sCALL \"%s\" USING %s, %s, 28, %s\n",
+					names[COLUMN], ISC_EXPAND_DPB, s2, s1, db->dbb_r_user);
 				RMC_print_buffer(output_buffer, true);
 			}
 			if (db->dbb_r_password)
 			{
-				sprintf(output_buffer, "%sCALL \"%s\" USING %s, %s, 29, %s\n",
-						names[COLUMN],
-						ISC_EXPAND_DPB,
-						s2,
-						s1,
-						db->dbb_r_password);
+				snprintf(output_buffer, sizeof(output_buffer),
+					"%sCALL \"%s\" USING %s, %s, 29, %s\n",
+					names[COLUMN], ISC_EXPAND_DPB, s2, s1, db->dbb_r_password);
 				RMC_print_buffer(output_buffer, true);
 			}
 
 			// Process Role Name, isc_dpb_sql_role_name/60
 			if (db->dbb_r_sql_role)
 			{
-				sprintf(output_buffer, "%sCALL \"%s\" USING %s, %s, 60, %s\n",
-						names[COLUMN],
-						ISC_EXPAND_DPB,
-						s2,
-						s1,
-						db->dbb_r_sql_role);
+				snprintf(output_buffer, sizeof(output_buffer),
+					"%sCALL \"%s\" USING %s, %s, 60, %s\n",
+					names[COLUMN], ISC_EXPAND_DPB, s2, s1, db->dbb_r_sql_role);
 				RMC_print_buffer(output_buffer, true);
 			}
 
 			if (db->dbb_r_lc_messages)
 			{
-				sprintf(output_buffer, "%sCALL \"%s\" USING %s, %s, 47, %s\n",
-						names[COLUMN],
-						ISC_EXPAND_DPB,
-						s2,
-						s1,
-						db->dbb_r_lc_messages);
+				snprintf(output_buffer, sizeof(output_buffer),
+					"%sCALL \"%s\" USING %s, %s, 47, %s\n",
+					names[COLUMN], ISC_EXPAND_DPB, s2, s1, db->dbb_r_lc_messages);
 				RMC_print_buffer(output_buffer, true);
 			}
 			if (db->dbb_r_lc_ctype)
 			{
-				sprintf(output_buffer, "%sCALL \"%s\" USING %s %s, 48, %s\n",
-						names[COLUMN],
-						ISC_EXPAND_DPB,
-						s2,
-						s1,
-						db->dbb_r_lc_ctype);
+				snprintf(output_buffer, sizeof(output_buffer),
+					"%sCALL \"%s\" USING %s %s, 48, %s\n",
+					names[COLUMN], ISC_EXPAND_DPB, s2, s1, db->dbb_r_lc_ctype);
 				RMC_print_buffer(output_buffer, true);
 			}
 		}
 
 		if (request->req_flags & REQ_extend_dpb)
 		{
-			sprintf(s1Tmp, "%s", s1);
-			sprintf(s2Tmp, "%s", s2);
+			snprintf(s1Tmp, sizeof(s1Tmp), "%s", s1);
+			snprintf(s2Tmp, sizeof(s2Tmp), "%s", s2);
 		}
 		else
 		{
-			sprintf(s2Tmp, "%s", s2);
-			sprintf(s1Tmp, "%d", request->req_length);
+			snprintf(s2Tmp, sizeof(s2Tmp), "%s", s2);
+			snprintf(s1Tmp, sizeof(s1Tmp), "%d", request->req_length);
 		}
 	}
 
 	TEXT dbname[128];
 	if (!filename)
 	{
-		sprintf(dbname, "%s%ddb", names[isc_b_pos], dbisc->dbb_id);
+		snprintf(dbname, sizeof(dbname), "%s%ddb", names[isc_b_pos], dbisc->dbb_id);
 		filename = dbname;
 		namelength = static_cast<USHORT>(strlen(db->dbb_filename));
 
 	}
-	sprintf(output_buffer, "%sCALL \"%s\" USING %s, %d, %s, %s, %s, %s\n",
-			names[COLUMN],
-			ISC_ATTACH_DATABASE,
-			vector,
-			namelength,
-			filename,
-			db->dbb_name->sym_string,
-			request ? s1Tmp : OMITTED, request ? s2Tmp : OMITTED);
+	snprintf(output_buffer, sizeof(output_buffer), "%sCALL \"%s\" USING %s, %d, %s, %s, %s, %s\n",
+		names[COLUMN],
+		ISC_ATTACH_DATABASE,
+		vector,
+		namelength,
+		filename,
+		db->dbb_name->sym_string,
+		request ? s1Tmp : OMITTED, request ? s2Tmp : OMITTED);
 
 
 	RMC_print_buffer(output_buffer, true);
@@ -4285,32 +4284,34 @@ static void make_ready(const gpre_dbb* db,
 	{
 		if (request->req_length)
 		{
-			sprintf(output_buffer, "%sCALL \"%s\" USING %s%d GIVING %s1\n",
-					names[COLUMN],
-					ISC_BADDRESS,
-					names[isc_b_pos],
-					request->req_ident,
-					s2);
+			snprintf(output_buffer, sizeof(output_buffer), "%sCALL \"%s\" USING %s%d GIVING %s1\n",
+				names[COLUMN],
+				ISC_BADDRESS,
+				names[isc_b_pos],
+				request->req_ident,
+				s2);
 			RMC_print_buffer(output_buffer, true);
-			sprintf(output_buffer, "%sIF %s NOT = %s1 THEN\n",
-					names[COLUMN],
-					s2,
-					s2);
+			snprintf(output_buffer, sizeof(output_buffer), "%sIF %s NOT = %s1 THEN\n",
+				names[COLUMN],
+				s2,
+				s2);
 					//"if (%s != %s%d)", s2, names[isc_b_pos], request->req_ident);
 			RMC_print_buffer(output_buffer, true);
 		}
 
-		sprintf(output_buffer, "%sCALL \"%s\" USING %s\n", names[COLUMN], ISC_FREE, s2Tmp);
+		snprintf(output_buffer, sizeof(output_buffer), "%sCALL \"%s\" USING %s\n", names[COLUMN],
+			ISC_FREE, s2Tmp);
 		RMC_print_buffer(output_buffer, true);
 
 		if (request->req_length)
 		{
-			sprintf(output_buffer, "%sEND-IF\n", names[COLUMN]);
+			snprintf(output_buffer, sizeof(output_buffer), "%sEND-IF\n", names[COLUMN]);
 			RMC_print_buffer(output_buffer, true);
 		}
 
 		// reset the length of the dpb
-		sprintf(output_buffer, "%sMOVE %d to %s\n", names[COLUMN], request->req_length, s1);
+		snprintf(output_buffer, sizeof(output_buffer), "%sMOVE %d to %s\n", names[COLUMN],
+			request->req_length, s1);
 		RMC_print_buffer(output_buffer, true);
 	}
 }
@@ -4330,7 +4331,7 @@ static void printa(const TEXT* column, bool call, const TEXT* string, ...)
 	strcpy(s, column);
 	strcat(s, string);
 	strcat(s, "\n");
-	vsprintf(output_buffer, s, ptr);
+	vsnprintf(output_buffer, sizeof(output_buffer), s, ptr);
 	va_end(ptr);
 	RMC_print_buffer(output_buffer, call);
 }
@@ -4444,7 +4445,7 @@ static void t_start_auto(const gpre_req* request,
 				const USHORT namelength = static_cast<USHORT>(filename ? strlen(filename) : 0);
 				if (filename)
 				{
-					sprintf(dbname, "%s%ddb", names[isc_b_pos], db->dbb_id);
+					snprintf(dbname, sizeof(dbname), "%s%ddb", names[isc_b_pos], db->dbb_id);
 					filename = dbname;
 				}
 				make_ready(db, filename, vector, 0, namelength);

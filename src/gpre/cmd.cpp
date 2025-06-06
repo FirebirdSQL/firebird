@@ -756,7 +756,6 @@ static void create_set_default_trg(gpre_req* request,
 								   cnstrt* constraint,
 								   bool on_upd_trg)
 {
-	TEXT s[512];
 	TEXT default_val[BLOB_BUFFER_SIZE];
 
 	fb_assert(request->req_actions->act_type == ACT_create_table ||
@@ -881,7 +880,8 @@ static void create_set_default_trg(gpre_req* request,
 			// Nop. The column is not being created in this ddl statement
 			if (request->req_actions->act_type == ACT_create_table)
 			{
-				sprintf(s, "field \"%s\" does not exist in relation \"%s\"",
+				TEXT s[BUFFER_LARGE];
+				snprintf(s, sizeof(s), "field \"%s\" does not exist in relation \"%s\"",
 						for_key_fld_name->str_string, relation->rel_symbol->sym_string);
 				CPR_error(s);
 			}
@@ -1129,7 +1129,6 @@ static void create_set_null_trg(gpre_req* request,
 
 static void get_referred_fields(const act* action, cnstrt* constraint)
 {
-	TEXT s[512];
 	const gpre_rel* relation = (gpre_rel*) action->act_object;
 
 	for (gpre_req* req = gpreGlob.requests; req; req = req->req_next)
@@ -1172,7 +1171,8 @@ static void get_referred_fields(const act* action, cnstrt* constraint)
 	if (constraint->cnstrt_referred_fields == NULL)
 	{
 		// Nothing is in system tables.
-		sprintf(s,
+		TEXT s[BUFFER_MEDIUM];
+		snprintf(s, sizeof(s),
 				"\"REFERENCES %s\" without \"(column list)\" requires PRIMARY KEY on referenced table",
 				constraint->cnstrt_referred_rel->str_string);
 		CPR_error(s);
@@ -1195,7 +1195,8 @@ static void get_referred_fields(const act* action, cnstrt* constraint)
 		}
 		if (prim_key_num_flds != for_key_num_flds)
 		{
-			sprintf(s,
+			TEXT s[BUFFER_LARGE];
+			snprintf(s, sizeof(s),
 					"PRIMARY KEY column count in relation \"%s\" does not match FOREIGN KEY in relation \"%s\"",
 					constraint->cnstrt_referred_rel->str_string,
 					relation->rel_symbol->sym_string);
