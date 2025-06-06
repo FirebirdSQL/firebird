@@ -545,12 +545,15 @@ River* InnerJoin::formRiver()
 			keys.add(FB_NEW_POOL(getPool()) NestValueArray(getPool()));
 			keys.add(FB_NEW_POOL(getPool()) NestValueArray(getPool()));
 
+			bool ignoreNulls = true;
+
 			for (const auto match : stream.equiMatches)
 			{
 				NestConst<ValueExprNode> node1;
 				NestConst<ValueExprNode> node2;
+				UCHAR blrOp;
 
-				if (!optimizer->getEquiJoinKeys(match, &node1, &node2))
+				if (!optimizer->getEquiJoinKeys(match, &node1, &node2, &blrOp))
 					fb_assert(false);
 
 				if (!node2->containsStream(stream.number))
@@ -565,6 +568,9 @@ River* InnerJoin::formRiver()
 				keys[1]->add(node2);
 
 				equiMatches.add(match);
+
+				if (blrOp == blr_equiv)
+					ignoreNulls = false;
 			}
 
 			// Ensure the smallest stream is the one to be hashed,
@@ -580,7 +586,7 @@ River* InnerJoin::formRiver()
 
 			// Create a hash join
 			rsb = FB_NEW_POOL(getPool())
-				HashJoin(tdbb, csb, INNER_JOIN, 2, hashJoinRsbs, keys.begin(), stream.selectivity);
+				HashJoin(tdbb, csb, INNER_JOIN, ignoreNulls, 2, hashJoinRsbs, keys.begin(), stream.selectivity);
 
 			// Clear priorly processed rsb's, as they're already incorporated into a hash join
 			rsbs.clear();
