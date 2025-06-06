@@ -1275,10 +1275,10 @@ static void		addClumplets(ClumpletWriter*, const ParametersSet&, const rem_port*
 
 static void		cancel_operation(rem_port*, USHORT);
 
-static bool		check_request(Rrq*, USHORT, USHORT);
+static bool		check_request(Rrq* request, USHORT incarnation, USHORT msg_number, CheckStatusWrapper* status);
 static USHORT	check_statement_type(Rsr*);
 
-static bool		get_next_msg_no(Rrq*, USHORT, USHORT*);
+static bool		get_next_msg_no(Rrq* request, USHORT incarnation, USHORT* msg_number, CheckStatusWrapper* status);
 static Rtr*		make_transaction(Rdb*, ITransaction*);
 static void		ping_connection(rem_port*, PACKET*);
 static bool		process_packet(rem_port* port, PACKET* sendL, PACKET* receive, rem_port** result);
@@ -2819,7 +2819,7 @@ static void cancel_operation(rem_port* port, USHORT kind)
 }
 
 
-static bool check_request(Rrq* request, USHORT incarnation, USHORT msg_number)
+static bool check_request(Rrq* request, USHORT incarnation, USHORT msg_number, CheckStatusWrapper* status)
 {
 /**************************************
  *
@@ -2834,7 +2834,7 @@ static bool check_request(Rrq* request, USHORT incarnation, USHORT msg_number)
  **************************************/
 	USHORT n;
 
-	if (!get_next_msg_no(request, incarnation, &n))
+	if (!get_next_msg_no(request, incarnation, &n, status))
 		return false;
 
 	return msg_number == n;
@@ -4430,7 +4430,7 @@ ISC_STATUS rem_port::fetch(P_SQLDATA * sqldata, PACKET* sendL, bool scroll)
 }
 
 
-static bool get_next_msg_no(Rrq* request, USHORT incarnation, USHORT * msg_number)
+static bool get_next_msg_no(Rrq* request, USHORT incarnation, USHORT * msg_number, CheckStatusWrapper* status)
 {
 /**************************************
  *
@@ -4443,14 +4443,12 @@ static bool get_next_msg_no(Rrq* request, USHORT incarnation, USHORT * msg_numbe
  *	in the request.
  *
  **************************************/
-	LocalStatus ls;
-	CheckStatusWrapper status_vector(&ls);
 	UCHAR info_buffer[128];
 
-	request->rrq_iface->getInfo(&status_vector, incarnation,
+	request->rrq_iface->getInfo(status, incarnation,
 		sizeof(request_info), request_info, sizeof(info_buffer), info_buffer);
 
-	if (status_vector.getState() & IStatus::STATE_ERRORS)
+	if (status->getState() & IStatus::STATE_ERRORS)
 		return false;
 
 	bool result = false;
@@ -5614,7 +5612,7 @@ ISC_STATUS rem_port::que_events(P_EVENT * stuff, PACKET* sendL)
 }
 
 
-ISC_STATUS rem_port::receive_after_start(P_DATA* data, PACKET* sendL, IStatus* status_vector)
+ISC_STATUS rem_port::receive_after_start(P_DATA* data, PACKET* sendL, CheckStatusWrapper* status_vector)
 {
 /**************************************
  *
@@ -5636,7 +5634,7 @@ ISC_STATUS rem_port::receive_after_start(P_DATA* data, PACKET* sendL, IStatus* s
 	// Figure out the number of the message that we're stalled on.
 
 	USHORT msg_number;
-	if (!get_next_msg_no(requestL, level, &msg_number))
+	if (!get_next_msg_no(requestL, level, &msg_number, status_vector))
 		return this->send_response(sendL, 0, 0, status_vector, false);
 
 	sendL->p_operation = op_response_piggyback;
@@ -5751,9 +5749,12 @@ ISC_STATUS rem_port::receive_msg(P_DATA * data, PACKET* sendL)
 		RMessage* next = message->msg_next;
 
 		if ((next == message || !next->msg_address) &&
-			!check_request(requestL, data->p_data_incarnation, msg_number))
+			!check_request(requestL, data->p_data_incarnation, msg_number, &status_vector))
 		{
-			// We've reached the end of the RSE - don't prefetch and flush
+			if (status_vector.getState() & IStatus::STATE_ERRORS)
+				return this->send_response(sendL, 0, 0, &status_vector, false);
+
+			// We've reached the end of the RSE or ReceiveNode/SelectMessageNode - don't prefetch and flush
 			// everything we've buffered so far
 
 			count2 = 0;
@@ -5784,8 +5785,21 @@ ISC_STATUS rem_port::receive_msg(P_DATA * data, PACKET* sendL)
 	while (message->msg_address && message->msg_next != tail->rrq_xdr)
 		message = message->msg_next;
 
-	for (; count2 && check_request(requestL, data->p_data_incarnation, msg_number); --count2)
+	for (; count2; --count2)
 	{
+		if (!check_request(requestL, data->p_data_incarnation, msg_number, &status_vector))
+		{
+			if (status_vector.getState() & IStatus::STATE_ERRORS)
+			{
+				// If already have an error queued, don't overwrite it
+
+				if (requestL->rrqStatus.isSuccess())
+					requestL->rrqStatus.save(&status_vector);
+			}
+
+			break;
+		}
+
 		if (message->msg_address)
 		{
 			if (!prior)

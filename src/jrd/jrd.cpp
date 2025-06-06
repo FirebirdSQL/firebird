@@ -4104,6 +4104,26 @@ void JRequest::getInfo(CheckStatusWrapper* user_status, int level, unsigned int 
 
 		try
 		{
+			for (unsigned i = 0; i < itemsLength; ++i)
+			{
+				if (items[i] == isc_info_message_number || items[i] == isc_info_message_size)
+				{
+					// For proper return these items require request operation req_send or req_receive
+					// Run request from stale status until we get one of these (or end of program)
+					// It is up to caller to make sure that there is no heavy operations between req_next
+					// and the next SuspendNode/ReceiveNode/SelectMessageNode
+					while ((request->req_flags & req_active)
+							&& request->req_operation != Request::req_receive
+							&& request->req_operation != Request::req_send)
+					{
+						request->req_flags &= ~req_stall;
+						request->req_operation = Request::req_sync;
+						EXE_looper(tdbb, request, request->req_next);
+					}
+					break;
+				}
+			}
+
 			INF_request_info(request, itemsLength, items, bufferLength, buffer);
 		}
 		catch (const Exception& ex)
