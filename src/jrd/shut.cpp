@@ -52,6 +52,10 @@ union shutdown_data
 	SLONG data_long;
 };
 
+// Low byte of shutdown_data::flag used by shutdown modes, see isc_dpb_shut_XXX
+// High byte used for additional flags
+
+const SSHORT SHUT_flag_restoring = 0x0100;		// database restore is in progress
 
 // Define this to true if you need to allow no-op behavior when requested shutdown mode
 // matches current. Logic of jrd8_create_database may need attention in this case too
@@ -121,6 +125,9 @@ bool SHUT_blocking_ast(thread_db* tdbb, bool ast)
 		dbb->dbb_shutdown_mode.store(shutMode, std::memory_order_relaxed);
 		return false;
 	}
+
+	if (flag & SHUT_flag_restoring)
+		dbb->setRestoring(true);
 
 	if ((flag & isc_dpb_shut_force) && !delay)
 		return shutdown(tdbb, flag, ast);
@@ -471,6 +478,9 @@ static bool notify_shutdown(thread_db* tdbb, SSHORT flag, SSHORT delay, Sync* gu
 	shutdown_data data;
 	data.data_items.flag = flag;
 	data.data_items.delay = delay;
+
+	if (dbb->isRestoring())
+		data.data_items.flag |= SHUT_flag_restoring;
 
 	LCK_write_data(tdbb, dbb->dbb_lock, data.data_long);
 
