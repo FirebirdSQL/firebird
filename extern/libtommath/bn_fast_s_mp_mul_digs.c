@@ -37,6 +37,10 @@ int fast_s_mp_mul_digs (mp_int * a, mp_int * b, mp_int * c, int digs)
   mp_digit W[MP_WARRAY];
   register mp_word  _W;
 
+  if (digs < 0) {
+    return MP_VAL;
+  }
+
   /* grow the destination as required */
   if (c->alloc < digs) {
     if ((res = mp_grow (c, digs)) != MP_OKAY) {
