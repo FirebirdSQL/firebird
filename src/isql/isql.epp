@@ -7755,23 +7755,7 @@ processing_state ISQL_print_item_blob(FILE* fp, const IsqlVar* var, Firebird::IT
 			break;
 
 		buffer[length] = 0;
-
-		// Special displays for blr or acl subtypes
-
-		if (blob_subtype > isc_blob_text && blob_subtype < isc_blob_max_predefined_subtype)
-		{
-			for (char* b = buffer + length - 1; b >= buffer;)
-			{
-				if (*b == '\n' || *b == '\t' || *b == BLANK)
-					*b-- = 0;
-				else
-					break;
-			}
-
-			IUTILS_printf2(fp, "%s	%s%s", TAB_AS_SPACES, buffer, NEWLINE);
-		}
-		else
-			IUTILS_printf(fp, buffer);
+		IUTILS_printf(fp, buffer);
 
 	} while (true);
 

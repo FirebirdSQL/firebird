@@ -1366,7 +1366,7 @@ static void string_put(BlobControl* control, const char* line)
  *
  **************************************/
 	const USHORT len = static_cast<USHORT>(strlen(line));
-	filter_tmp* string = (filter_tmp*) gds__alloc((SLONG) (sizeof(filter_tmp) + len));
+	filter_tmp* string = (filter_tmp*) gds__alloc((SLONG) (sizeof(filter_tmp) + len + 1));
 	// FREE: on isc_blob_filter_close in string_filter()
 	if (!string)
 	{
@@ -1375,8 +1375,9 @@ static void string_put(BlobControl* control, const char* line)
 		return;					// & No error handling at this level
 	}
 	string->tmp_next = NULL;
-	string->tmp_length = len;
+	string->tmp_length = len + 1;
 	memcpy(string->tmp_string, line, len);
+	string->tmp_string[len] = '\n';
 
 	filter_tmp* prior = (filter_tmp*) control->ctl_data[1];
 	if (prior)
@@ -1386,8 +1387,8 @@ static void string_put(BlobControl* control, const char* line)
 
 	control->ctl_data[1] = (IPTR) string;
 	++control->ctl_number_segments;
-	control->ctl_total_length += len;
-	control->ctl_max_segment = MAX(control->ctl_max_segment, len);
+	control->ctl_total_length += len + 1;
+	control->ctl_max_segment = MAX(control->ctl_max_segment, len + 1);
 }
 
 
