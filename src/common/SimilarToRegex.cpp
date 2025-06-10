@@ -501,7 +501,7 @@ namespace
 
 							if (c > 0)
 							{
-								sprintf(hex, "\\x00-\\x{%X}", (int) c - 1);
+								snprintf(hex, sizeof(hex), "\\x00-\\x{%X}", (int) c - 1);
 								re2PatternStr.append(hex);
 							}
 
@@ -510,7 +510,7 @@ namespace
 
 							if (c < maxChar)
 							{
-								sprintf(hex, "\\x{%X}-\\x{%X}", (int) c + 1, maxChar);
+								snprintf(hex, sizeof(hex), "\\x{%X}-\\x{%X}", (int) c + 1, maxChar);
 								re2PatternStr.append(hex);
 							}
 						}
@@ -572,7 +572,7 @@ namespace
 					else if (invalidInclude)
 					{
 						char str[30];
-						sprintf(str, "[^\\x{0}-\\x{%X}]", maxChar);
+						snprintf(str, sizeof(str), "[^\\x{0}-\\x{%X}]", maxChar);
 						re2PatternStr.append(str);
 					}
 					else

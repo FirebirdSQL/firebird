@@ -220,7 +220,6 @@ gpre_nod* SQE_boolean( gpre_req* request, USHORT* paren_count)
 gpre_ctx* SQE_context(gpre_req* request)
 {
 	SCHAR r_name[NAME_SIZE], db_name[NAME_SIZE], owner_name[NAME_SIZE];
-	SCHAR s[ERROR_LENGTH];
 
 	assert_IS_REQ(request);
 
@@ -255,10 +254,11 @@ gpre_ctx* SQE_context(gpre_req* request)
 		}
 		else
 		{
+			SCHAR s[ERROR_LENGTH];
 			if (owner_name[0])
-				sprintf(s, "table %s.%s not defined", owner_name, r_name);
+				snprintf(s, sizeof(s), "table %s.%s not defined", owner_name, r_name);
 			else
-				sprintf(s, "table %s not defined", r_name);
+				snprintf(s, sizeof(s), "table %s not defined", r_name);
 			PAR_error(s);
 		}
 
@@ -306,8 +306,10 @@ gpre_ctx* SQE_context(gpre_req* request)
 			break;
 		default:
 			error_type = "context";
+			break;
 		}
 
+		SCHAR s[ERROR_LENGTH];
 		fb_utils::snprintf(s, sizeof(s), "context %s conflicts with a %s in the same statement",
 				gpreGlob.token_global.tok_string, error_type);
 		PAR_error(s);
