@@ -64,6 +64,10 @@
 #include "../common/ThreadStart.h"
 #include "../common/Int128.h"
 
+#ifdef MINGW
+#include "../common/pathtools.h"
+#endif
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -104,7 +108,7 @@
 
 #ifdef WIN_NT
 #include <shlobj.h>
-#if _MSC_VER <= 1500
+#if defined(_MSC_VER) && (_MSC_VER<=1500)
 #include <shfolder.h>
 #endif
 #define _WINSOCKAPI_
@@ -4573,13 +4577,21 @@ public:
 		{
 			prefix = Firebird::Config::getRootDirectory();
 			if (prefix.isEmpty() && !GetProgramFilesDir(prefix))
+#ifdef MINGW
+				prefix = FB_CONFDIR[0] ? single_path_relocation(FB_BINDIR,FB_CONFDIR) : single_path_relocation(FB_BINDIR,FB_PREFIX);
+#else
 				prefix = FB_CONFDIR[0] ? FB_CONFDIR : FB_PREFIX;
+#endif
 		}
 		catch (const Firebird::Exception&)
 		{
 			// CVC: Presumably here we failed because the config file can't be located.
 			if (!GetProgramFilesDir(prefix))
+#ifdef MINGW
+				prefix = FB_CONFDIR[0] ? single_path_relocation(FB_BINDIR,FB_CONFDIR) : single_path_relocation(FB_BINDIR,FB_PREFIX);
+#else
 				prefix = FB_CONFDIR[0] ? FB_CONFDIR : FB_PREFIX;
+#endif
 		}
 		prefix.copyTo(fb_prefix_val, sizeof(fb_prefix_val));
 		fb_prefix = fb_prefix_val;
@@ -4642,7 +4654,11 @@ public:
 			if (FB_MSGDIR[0] && PathUtils::isRelative(FB_MSGDIR))
 				PathUtils::concatPath(msgPrefix, prefix, FB_MSGDIR);
 			else
+#ifdef MINGW
+				msgPrefix = FB_MSGDIR[0] ? single_path_relocation(FB_BINDIR,FB_MSGDIR) : prefix;
+#else
 				msgPrefix = FB_MSGDIR[0] ? FB_MSGDIR : prefix;
+#endif
 		}
 		msgPrefix.copyTo(fb_prefix_msg_val, sizeof(fb_prefix_msg_val));
 		fb_prefix_msg = fb_prefix_msg_val;
