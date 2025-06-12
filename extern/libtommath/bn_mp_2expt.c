@@ -25,6 +25,10 @@ mp_2expt (mp_int * a, int b)
 {
   int     res;
 
+  if (b < 0) {
+      return MP_VAL;
+   }
+
   /* zero a as per default */
   mp_zero (a);
 
