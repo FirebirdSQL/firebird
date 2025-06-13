@@ -249,12 +249,13 @@ private:
 };
 
 
-HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, JoinType joinType,
+HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, JoinType joinType, bool ignoreNulls,
 				   FB_SIZE_T count, RecordSource* const* args, NestValueArray* const* keys,
 				   double selectivity)
 	: RecordSource(csb),
 	  m_joinType(joinType),
 	  m_boolean(nullptr),
+	  m_ignoreNulls(ignoreNulls),
 	  m_args(csb->csb_pool, count - 1)
 {
 	fb_assert(count >= 2);
@@ -263,12 +264,13 @@ HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, JoinType joinType,
 }
 
 HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb,
-				   BoolExprNode* boolean,
+				   BoolExprNode* boolean, bool ignoreNulls,
 				   RecordSource* const* args, NestValueArray* const* keys,
 				   double selectivity)
 	: RecordSource(csb),
 	  m_joinType(OUTER_JOIN),
 	  m_boolean(boolean),
+	  m_ignoreNulls(ignoreNulls),
 	  m_args(csb->csb_pool, 1)
 {
 	init(tdbb, csb, 2, args, keys, selectivity);
@@ -456,8 +458,10 @@ bool HashJoin::internalGetRecord(thread_db* tdbb) const
 
 					while (m_args[i].buffer->getRecord(tdbb))
 					{
-						const auto hash = computeHash(tdbb, request, m_args[i], keyBuffer);
-						impure->irsb_hash_table->put(i, hash, counter++);
+						const auto position = counter++;
+
+						if (const auto hash = computeHash(tdbb, request, m_args[i], keyBuffer))
+							impure->irsb_hash_table->put(i, hash.value(), position);
 					}
 				}
 
@@ -466,8 +470,20 @@ bool HashJoin::internalGetRecord(thread_db* tdbb) const
 
 			// Compute and hash the comparison keys
 
-			impure->irsb_leader_hash =
-				computeHash(tdbb, request, m_leader, impure->irsb_leader_buffer);
+			const auto hash = computeHash(tdbb, request, m_leader, impure->irsb_leader_buffer);
+
+			if (!hash)
+			{
+				if (m_joinType == INNER_JOIN || m_joinType == SEMI_JOIN)
+					continue;
+
+				if (m_joinType == OUTER_JOIN)
+					inner->nullRecords(tdbb);
+
+				return true;
+			}
+
+			impure->irsb_leader_hash = hash.value();
 
 			// Ensure the every inner stream having matches for this hash slot.
 			// Setup the hash table for the iteration through collisions.
@@ -657,10 +673,8 @@ void HashJoin::nullRecords(thread_db* tdbb) const
 		arg.source->nullRecords(tdbb);
 }
 
-ULONG HashJoin::computeHash(thread_db* tdbb,
-							Request* request,
-						    const SubStream& sub,
-							UCHAR* keyBuffer) const
+std::optional<ULONG> HashJoin::computeHash(thread_db* tdbb, Request* request,
+										   const SubStream& sub, UCHAR* keyBuffer) const
 {
 	memset(keyBuffer, 0, sub.totalKeyLength);
 
@@ -668,10 +682,9 @@ ULONG HashJoin::computeHash(thread_db* tdbb,
 
 	for (FB_SIZE_T i = 0; i < sub.keys->getCount(); i++)
 	{
-		dsc* const desc = EVL_expr(tdbb, request, (*sub.keys)[i]);
 		const USHORT keyLength = sub.keyLengths[i];
 
-		if (desc && !(request->req_flags & req_null))
+		if (const auto desc = EVL_expr(tdbb, request, (*sub.keys)[i]))
 		{
 			if (desc->isText())
 			{
@@ -727,6 +740,8 @@ ULONG HashJoin::computeHash(thread_db* tdbb,
 				}
 			}
 		}
+		else if (m_ignoreNulls)
+			return std::nullopt;
 
 		keyPtr += keyLength;
 	}
