@@ -50,6 +50,7 @@ public:
 	{
 		explicit Item(MemoryPool& pool)
 			: field(pool),
+			  schema(pool),
 			  relation(pool),
 			  owner(pool),
 			  alias(pool),
@@ -67,6 +68,7 @@ public:
 
 		Item(MemoryPool& pool, const Item& v)
 			: field(pool, v.field),
+			  schema(pool, v.schema),
 			  relation(pool, v.relation),
 			  owner(pool, v.owner),
 			  alias(pool, v.alias),
@@ -83,6 +85,7 @@ public:
 		}
 
 		string field;
+		string schema;
 		string relation;
 		string owner;
 		string alias;
@@ -162,6 +165,15 @@ public:
 			return items[index].field.c_str();
 
 		raiseIndexError(status, index, "getField");
+		return NULL;
+	}
+
+	const char* getSchema(CheckStatusWrapper* status, unsigned index)
+	{
+		if (index < items.getCount())
+			return items[index].schema.c_str();
+
+		raiseIndexError(status, index, "getSchema");
 		return NULL;
 	}
 
@@ -329,6 +341,7 @@ public:
 	unsigned addField(CheckStatusWrapper* status);
 	IMessageMetadata* getMetadata(CheckStatusWrapper* status);
 	void setField(CheckStatusWrapper* status, unsigned index, const char* field);
+	void setSchema(CheckStatusWrapper* status, unsigned index, const char* schema);
 	void setRelation(CheckStatusWrapper* status, unsigned index, const char* relation);
 	void setOwner(CheckStatusWrapper* status, unsigned index, const char* owner);
 	void setAlias(CheckStatusWrapper* status, unsigned index, const char* alias);

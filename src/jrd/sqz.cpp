@@ -46,7 +46,7 @@ using namespace Jrd;
 // non-compressable runs. Compressable runs between 4 and 8 bytes are somewhat border case, as
 // they do not compress much but increase total number of runs thus affecting decompression speed.
 // Starting from Firebird v5, we don't compress runs shorter than 8 bytes. But this rule is not
-// set in stone, so let's not use lenghts between 4 and 7 bytes as some other special markers.
+// set in stone, so let's not use lengths between 4 and 7 bytes as some other special markers.
 
 namespace
 {
@@ -76,7 +76,7 @@ unsigned Compressor::nonCompressableRun(unsigned length)
 
 	if (m_runs.hasData() && m_runs.back() > 0 && m_runs.back() < MAX_NONCOMP_RUN)
 	{
-		const auto max = MIN(MAX_NONCOMP_RUN - m_runs.back(), length);
+		const auto max = MIN(static_cast<unsigned>(MAX_NONCOMP_RUN - m_runs.back()), length);
 		length -= max;
 		m_runs.back() += max;
 	}
@@ -558,7 +558,7 @@ ULONG Difference::apply(ULONG diffLength, ULONG outLength, UCHAR* const output)
 			BUGCHECK(177);	// msg 177 applied differences will not fit in record
 	}
 
-	const auto length = p - output;
+	const ULONG length = p - output;
 
 	if (length > outLength)
 		BUGCHECK(177);	// msg 177 applied differences will not fit in record

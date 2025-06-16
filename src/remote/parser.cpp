@@ -294,7 +294,7 @@ static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length)
 			desc->dsc_scale = *blr++;
 			break;
 
-		// this case cannot occur as switch paramater is char and blr_blob
+		// this case cannot occur as switch parameter is char and blr_blob
         // is 261. blob_ids are actually passed around as blr_quad.
 
 	    //case blr_blob:

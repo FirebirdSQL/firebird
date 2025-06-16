@@ -86,7 +86,7 @@ public:
 	void activate(const int in_sw);
 
 	// Checks if an item by key exists in a list of strings that represent the set of command-line
-	// arguments. This is more eficient than finding the key for each parameter and then checking
+	// arguments. This is more efficient than finding the key for each parameter and then checking
 	// if it's the one we want (we reduce loop from Nkeys*Nargs to Nkeys+Nargs in the worst case).
 	// It throws system_call_failed if the key is not found or it's negative or zero.
 	bool exists(const int in_sw, const char* const* argv, const int start, const int stop) const;

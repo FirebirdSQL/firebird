@@ -111,7 +111,7 @@ inline const UCHAR* put_block(BurpGlobals* tdgbl, const UCHAR* p, ULONG n)
 void compress(const UCHAR*, ULONG);
 int copy(const TEXT*, TEXT*, ULONG);
 burp_fld* get_fields(burp_rel*);
-SINT64 get_gen_id(const TEXT*, SSHORT);
+SINT64 get_gen_id(const QualifiedMetaString& name);
 void get_ranges(burp_fld*);
 void put_array(burp_fld*, burp_rel*, ISC_QUAD*);
 void put_asciz(const att_type, const TEXT*);
@@ -126,6 +126,7 @@ void put_boolean(att_type, FB_BOOLEAN value);
 void put_relation(burp_rel*);
 bool put_source_blob(att_type, att_type, ISC_QUAD&);
 int put_text(att_type, const TEXT*, SSHORT);
+int put_text(att_type attribute, const MetaString& name);
 void write_character_sets();
 void write_check_constraints();
 void write_collations();
@@ -134,7 +135,7 @@ void write_exceptions();
 void write_field_dimensions();
 void write_filters();
 void write_functions();
-void write_function_args(const GDS_NAME, GDS_NAME);
+void write_function_args(const QualifiedMetaString& name);
 void write_global_fields();
 void write_generators();
 void write_sql_roles();
@@ -142,12 +143,13 @@ void write_mapping();
 void write_db_creators();
 void write_packages();
 void write_procedures();
-void write_procedure_prms(const GDS_NAME, const GDS_NAME);
+void write_procedure_prms(const QualifiedMetaString& name);
 void write_publications();
 void write_pub_tables();
 void write_ref_constraints();
 void write_rel_constraints();
 void write_relations();
+void write_schemas();
 void write_secclasses();
 void write_shadow_files();
 void write_triggers();
@@ -338,6 +340,13 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 
 	write_database(dbb_file);
 
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
+	{
+		// Write schemas
+		BURP_verbose(412);	// msg 412 writing schemas
+		write_schemas();
+	}
+
 	// Write global fields
 
 	BURP_verbose(150);
@@ -411,7 +420,12 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 	for (burp_rel* relation = tdgbl->relations; relation; relation = relation->rel_next)
 	{
 		put(tdgbl, (UCHAR) rec_relation_data);
-		PUT_TEXT(att_relation_name, relation->rel_name);
+
+		if (relation->rel_name.schema.hasData())
+			put_text(att_relation_schema_name, relation->rel_name.schema);
+
+		put_text(att_relation_name, relation->rel_name.object);
+
 		put(tdgbl, att_end);
 
 		if (!(relation->rel_flags & REL_view) && !(relation->rel_flags & REL_external))
@@ -656,8 +670,10 @@ burp_fld* get_fields( burp_rel* relation)
 		FOR (REQUEST_HANDLE tdgbl->handles_get_fields_req_handle1)
 			X IN RDB$RELATION_FIELDS CROSS
 			Y IN RDB$FIELDS WITH
+			X.RDB$FIELD_SOURCE_SCHEMA_NAME EQUIV Y.RDB$SCHEMA_NAME AND
 			X.RDB$FIELD_SOURCE = Y.RDB$FIELD_NAME AND
-			X.RDB$RELATION_NAME EQ relation->rel_name
+			X.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
+			X.RDB$RELATION_NAME EQ relation->rel_name.object.c_str()
 		{
 			field = (burp_fld*) BURP_alloc_zero(sizeof(burp_fld));
 			field->fld_number = count++;
@@ -692,7 +708,12 @@ burp_fld* get_fields( burp_rel* relation)
 				field->fld_update_flag = X.RDB$UPDATE_FLAG;
 
 			COPY (X.RDB$FIELD_NAME, field->fld_name);
-			COPY (X.RDB$FIELD_SOURCE, field->fld_source);
+
+			if (!X.RDB$FIELD_SOURCE_SCHEMA_NAME.NULL)
+				field->fld_source.schema = X.RDB$FIELD_SOURCE_SCHEMA_NAME;
+
+			field->fld_source.object = X.RDB$FIELD_SOURCE;
+
 			COPY (X.RDB$BASE_FIELD, field->fld_base);
 			COPY (X.RDB$QUERY_NAME, field->fld_query_name);
 			COPY (X.RDB$EDIT_STRING, field->fld_edit_string);
@@ -776,7 +797,7 @@ burp_fld* get_fields( burp_rel* relation)
 			X IN RDB$RELATION_FIELDS CROSS
 			Y IN RDB$FIELDS WITH
 			X.RDB$FIELD_SOURCE = Y.RDB$FIELD_NAME AND
-			X.RDB$RELATION_NAME EQ relation->rel_name
+			X.RDB$RELATION_NAME EQ relation->rel_name.object.c_str()
 		{
 			field = (burp_fld*) BURP_alloc_zero(sizeof(burp_fld));
 			field->fld_number = count++;
@@ -811,7 +832,7 @@ burp_fld* get_fields( burp_rel* relation)
 				field->fld_update_flag = X.RDB$UPDATE_FLAG;
 
 			COPY (X.RDB$FIELD_NAME, field->fld_name);
-			COPY (X.RDB$FIELD_SOURCE, field->fld_source);
+			field->fld_source.object = X.RDB$FIELD_SOURCE;
 			COPY (X.RDB$BASE_FIELD, field->fld_base);
 			COPY (X.RDB$QUERY_NAME, field->fld_query_name);
 			COPY (X.RDB$EDIT_STRING, field->fld_edit_string);
@@ -896,7 +917,7 @@ burp_fld* get_fields( burp_rel* relation)
 }
 
 
-SINT64 get_gen_id( const TEXT* name, SSHORT name_len)
+SINT64 get_gen_id(const QualifiedMetaString& name)
 {
 /**************************************
  *
@@ -912,10 +933,11 @@ SINT64 get_gen_id( const TEXT* name, SSHORT name_len)
 	{
 		BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
-		Firebird::string nm, sql;
-		nm.assign(name, name_len);
-		BURP_makeSymbol(tdgbl, nm);
-		sql = "select first(1) gen_id(" + nm + ", 0) from rdb$database";
+		Firebird::string sql;
+		sql.printf(
+			"select first(1) gen_id(%s, 0) from %srdb$database",
+			name.toQuotedString().c_str(),
+			(tdgbl->runtimeODS >= DB_VERSION_DDL14 ? "system." : ""));
 
 		BurpSql getGenerator(tdgbl, sql.c_str());
 		FB_MESSAGE(GetGen, Firebird::ThrowWrapper, (FB_BIGINT, id));
@@ -962,20 +984,21 @@ void get_ranges( burp_fld* field)
 
 	FOR (REQUEST_HANDLE tdgbl->handles_get_ranges_req_handle1)
 		X IN RDB$FIELD_DIMENSIONS
-		WITH X.RDB$FIELD_NAME EQ field->fld_source
+		WITH X.RDB$SCHEMA_NAME EQUIV NULLIF(field->fld_source.schema.c_str(), '') AND
+			 X.RDB$FIELD_NAME EQ field->fld_source.object.c_str()
 		SORTED BY X.RDB$DIMENSION
-
+	{
 		if (count != X.RDB$DIMENSION)
 			BURP_error_redirect (NULL, 52, SafeArg() << field->fld_name);
 			// msg 52 array dimension for field %s is invalid
 		*rp++ = X.RDB$LOWER_BOUND;
 		*rp++ = X.RDB$UPPER_BOUND;
 		count++;
-
-	END_FOR;
+	}
+	END_FOR
 	ON_ERROR
 		general_on_error();
-	END_ERROR;
+	END_ERROR
 
 	if (count != field->fld_dimensions)
 		BURP_error_redirect(NULL, 52, SafeArg() << field->fld_name);
@@ -1610,7 +1633,6 @@ void put_index( burp_rel* relation)
  *
  **************************************/
 	ULONG count;
-	TEXT temp[GDS_NAME_LEN];
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -1624,19 +1646,22 @@ void put_index( burp_rel* relation)
 	{
 		FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle1)
 			X IN RDB$INDICES WITH
-			X.RDB$RELATION_NAME EQ relation->rel_name
-
+			X.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
+			X.RDB$RELATION_NAME EQ relation->rel_name.object.c_str()
+		{
 			count = 0;
 			FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle2)
 				I_S IN RDB$INDEX_SEGMENTS CROSS
 				RFR IN RDB$RELATION_FIELDS WITH
 				I_S.RDB$FIELD_NAME = RFR.RDB$FIELD_NAME AND
+				I_S.RDB$SCHEMA_NAME EQUIV X.RDB$SCHEMA_NAME AND
 				I_S.RDB$INDEX_NAME = X.RDB$INDEX_NAME AND
-				RFR.RDB$RELATION_NAME = relation->rel_name
-
+				RFR.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
+				RFR.RDB$RELATION_NAME = relation->rel_name.object.c_str()
+			{
 				count++;
-
-			END_FOR;
+			}
+			END_FOR
 			ON_ERROR
 				general_on_error();
 			END_ERROR;
@@ -1648,22 +1673,23 @@ void put_index( burp_rel* relation)
 			}
 
 			put(tdgbl, rec_index);
-			const ULONG l = PUT_TEXT (att_index_name, X.RDB$INDEX_NAME);
-			MISC_terminate (X.RDB$INDEX_NAME, temp, l, sizeof(temp));
-			BURP_verbose (151, temp);
+			PUT_TEXT(att_index_name, X.RDB$INDEX_NAME);
+			BURP_verbose(151, QualifiedMetaString(X.RDB$INDEX_NAME, relation->rel_name.schema).toQuotedString());
 			// msg 151 writing index %s
+
 			put_int32 (att_segment_count, X.RDB$SEGMENT_COUNT);
 			put_int32 (att_index_inactive, X.RDB$INDEX_INACTIVE);
 			put_int32 (att_index_unique_flag, X.RDB$UNIQUE_FLAG);
 
 			FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle5)
 				Y IN RDB$INDEX_SEGMENTS WITH
+				Y.RDB$SCHEMA_NAME EQUIV X.RDB$SCHEMA_NAME AND
 				Y.RDB$INDEX_NAME EQ X.RDB$INDEX_NAME
 				SORTED BY Y.RDB$FIELD_POSITION
-
+			{
 				PUT_TEXT (att_index_field_name, Y.RDB$FIELD_NAME);
-
-			END_FOR;
+			}
+			END_FOR
 			ON_ERROR
 				general_on_error();
 			END_ERROR;
@@ -1679,6 +1705,9 @@ void put_index( burp_rel* relation)
 			if (!X.RDB$EXPRESSION_BLR.NULL)
 				put_blr_blob(att_index_expression_blr, X.RDB$EXPRESSION_BLR);
 
+			if (!X.RDB$FOREIGN_KEY_SCHEMA_NAME.NULL)
+				PUT_TEXT(att_index_foreign_key_schema_name, X.RDB$FOREIGN_KEY_SCHEMA_NAME);
+
 			if (!X.RDB$FOREIGN_KEY.NULL)
 				PUT_TEXT (att_index_foreign_key, X.RDB$FOREIGN_KEY);
 
@@ -1691,8 +1720,8 @@ void put_index( burp_rel* relation)
 				put_blr_blob(att_index_condition_blr, X.RDB$CONDITION_BLR);
 
 			put(tdgbl, att_end);
-
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
 		END_ERROR;
@@ -1701,7 +1730,7 @@ void put_index( burp_rel* relation)
 	{
 		FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle1)
 			X IN RDB$INDICES WITH
-			X.RDB$RELATION_NAME EQ relation->rel_name
+			X.RDB$RELATION_NAME EQ relation->rel_name.object.c_str()
 
 			count = 0;
 			FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle2)
@@ -1709,7 +1738,7 @@ void put_index( burp_rel* relation)
 				RFR IN RDB$RELATION_FIELDS WITH
 				I_S.RDB$FIELD_NAME = RFR.RDB$FIELD_NAME AND
 				I_S.RDB$INDEX_NAME = X.RDB$INDEX_NAME AND
-				RFR.RDB$RELATION_NAME = relation->rel_name
+				RFR.RDB$RELATION_NAME = relation->rel_name.object.c_str()
 
 				count++;
 
@@ -1725,9 +1754,8 @@ void put_index( burp_rel* relation)
 			}
 
 			put(tdgbl, rec_index);
-			const ULONG l = PUT_TEXT (att_index_name, X.RDB$INDEX_NAME);
-			MISC_terminate (X.RDB$INDEX_NAME, temp, l, sizeof(temp));
-			BURP_verbose (151, temp);
+			PUT_TEXT(att_index_name, X.RDB$INDEX_NAME);
+			BURP_verbose(151, MetaString(X.RDB$INDEX_NAME).toQuotedString());
 			// msg 151 writing index %s
 			put_int32 (att_segment_count, X.RDB$SEGMENT_COUNT);
 			put_int32 (att_index_inactive, X.RDB$INDEX_INACTIVE);
@@ -1903,8 +1931,6 @@ void put_relation( burp_rel* relation)
  *	Write relation meta-data and data.
  *
  **************************************/
-	TEXT temp[GDS_NAME_LEN];
-
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
 	// Write local field information.  This is made slightly more complicated
@@ -1984,11 +2010,15 @@ void put_relation( burp_rel* relation)
 	for (field = relation->rel_fields; field; field = field->fld_next)
 	{
 		put(tdgbl, (UCHAR) rec_field);
-		const USHORT l = PUT_TEXT(att_field_name, field->fld_name);
-		MISC_terminate(field->fld_name, temp, l, sizeof(temp));
-		BURP_verbose(144, temp);
+		PUT_TEXT(att_field_name, field->fld_name);
+		BURP_verbose(144, MetaString(field->fld_name).toQuotedString());
 		// msg 144  writing field %s
-		PUT_TEXT(att_field_source, field->fld_source);
+
+		if (field->fld_source.schema.hasData())
+			put_text(att_field_schema_name, field->fld_source.schema);
+
+		put_text(att_field_source, field->fld_source.object);
+
 		if (field->fld_query_name[0])
 			PUT_TEXT(att_field_query_name, field->fld_query_name);
 		if (field->fld_complex_name[0])
@@ -2055,9 +2085,17 @@ void put_relation( burp_rel* relation)
 		if (tdgbl->runtimeODS >= DB_VERSION_DDL12)
 		{
 			FOR (REQUEST_HANDLE tdgbl->handles_put_relation_req_handle1)
-				X IN RDB$VIEW_RELATIONS WITH X.RDB$VIEW_NAME EQ relation->rel_name
+				X IN RDB$VIEW_RELATIONS
+				WITH X.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
+					 X.RDB$VIEW_NAME EQ relation->rel_name.object.c_str()
+			{
 				put(tdgbl, rec_view);
-				PUT_TEXT (att_view_relation_name, X.RDB$RELATION_NAME);
+
+				if (!X.RDB$RELATION_SCHEMA_NAME.NULL)
+					PUT_TEXT(att_view_relation_schema_name, X.RDB$RELATION_SCHEMA_NAME);
+
+				PUT_TEXT(att_view_relation_name, X.RDB$RELATION_NAME);
+
 				put_int32 (att_view_context_id, X.RDB$VIEW_CONTEXT);
 				// Will need PUT_MESSAGE if this field grows to more than 255 bytes.
 				PUT_TEXT (att_view_context_name, X.RDB$CONTEXT_NAME);
@@ -2066,6 +2104,7 @@ void put_relation( burp_rel* relation)
 				if (!X.RDB$PACKAGE_NAME.NULL)
 					PUT_TEXT(att_view_context_package, X.RDB$PACKAGE_NAME);
 				put(tdgbl, att_end);
+			}
 			END_FOR
 			ON_ERROR
 				general_on_error();
@@ -2074,7 +2113,7 @@ void put_relation( burp_rel* relation)
 		else
 		{
 			FOR (REQUEST_HANDLE tdgbl->handles_put_relation_req_handle1)
-				X IN RDB$VIEW_RELATIONS WITH X.RDB$VIEW_NAME EQ relation->rel_name
+				X IN RDB$VIEW_RELATIONS WITH X.RDB$VIEW_NAME EQ relation->rel_name.object.c_str()
 				put(tdgbl, rec_view);
 				PUT_TEXT (att_view_relation_name, X.RDB$RELATION_NAME);
 				put_int32 (att_view_context_id, X.RDB$VIEW_CONTEXT);
@@ -2232,7 +2271,7 @@ bool put_source_blob(att_type attribute, att_type old_attribute, ISC_QUAD& blob_
 }
 
 
-int put_text( att_type attribute, const TEXT* text, SSHORT size_len)
+int put_text(att_type attribute, const TEXT* text, SSHORT size_len)
 {
 /**************************************
  *
@@ -2244,7 +2283,7 @@ int put_text( att_type attribute, const TEXT* text, SSHORT size_len)
  * Write a variable length text string, with embedded spaces.
  * Truncate trailing spaces.
  * Now this routine does not truncate trailing spaces, 3-2002 MOD
- * transfering changes from fb1, I believe this is to do with problems
+ * transferring changes from fb1, I believe this is to do with problems
  * with quoted names and embedded spaces.
  * CVC: This routine does trailing spaces truncation, but correctly.
  *
@@ -2266,6 +2305,12 @@ int put_text( att_type attribute, const TEXT* text, SSHORT size_len)
 		put_block(tdgbl, (const UCHAR*) text, l);
 
 	return l;
+}
+
+
+int put_text(att_type attribute, const MetaString& name)
+{
+	return put_text(attribute, name.c_str(), name.length() + 1);
 }
 
 
@@ -2291,9 +2336,14 @@ void write_character_sets()
 		FOR (REQUEST_HANDLE req_handle1)
 			X IN RDB$CHARACTER_SETS
 			WITH X.RDB$SYSTEM_FLAG NE 1 OR
-				 X.RDB$DEFAULT_COLLATE_NAME NE X.RDB$CHARACTER_SET_NAME
-
+				 NOT (X.RDB$DEFAULT_COLLATE_SCHEMA_NAME EQUIV X.RDB$SCHEMA_NAME AND
+					  X.RDB$DEFAULT_COLLATE_NAME = X.RDB$CHARACTER_SET_NAME)
+		{
 			put(tdgbl, rec_charset);
+
+			if (!X.RDB$SCHEMA_NAME.NULL)
+				PUT_TEXT(att_charset_schema_name, X.RDB$SCHEMA_NAME);
+
 			PUT_TEXT (att_charset_name, X.RDB$CHARACTER_SET_NAME);
 
 			if (X.RDB$SYSTEM_FLAG != 1)
@@ -2320,12 +2370,16 @@ void write_character_sets()
 					PUT_TEXT(att_charset_owner_name, X.RDB$OWNER_NAME);
 			}
 
-			PUT_TEXT (att_charset_coll, X.RDB$DEFAULT_COLLATE_NAME);
+			if (!X.RDB$DEFAULT_COLLATE_SCHEMA_NAME.NULL)
+				PUT_TEXT(att_charset_coll_schema_name, X.RDB$DEFAULT_COLLATE_SCHEMA_NAME);
+
+			PUT_TEXT(att_charset_coll, X.RDB$DEFAULT_COLLATE_NAME);
 			put(tdgbl, att_end);
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
-		END_ERROR;
+		END_ERROR
 	}
 	else
 	{
@@ -2386,13 +2440,19 @@ void write_check_constraints()
 
 	FOR (REQUEST_HANDLE req_handle1)
 		X IN RDB$CHECK_CONSTRAINTS
+	{
 		put(tdgbl, rec_chk_constraint);
 
-		PUT_TEXT (att_chk_constraint_name, X.RDB$CONSTRAINT_NAME);
+		if (!X.RDB$SCHEMA_NAME.NULL)
+			PUT_TEXT(att_chk_schema_name, X.RDB$SCHEMA_NAME);
+
+		PUT_TEXT(att_chk_constraint_name, X.RDB$CONSTRAINT_NAME);
+
 		if (!X.RDB$TRIGGER_NAME.NULL)
 			PUT_TEXT (att_chk_trigger_name, X.RDB$TRIGGER_NAME);
 		put(tdgbl, att_end);
-	END_FOR;
+	}
+	END_FOR
 	ON_ERROR
 		general_on_error();
 	END_ERROR;
@@ -2422,7 +2482,12 @@ void write_collations()
 	{
 		FOR (REQUEST_HANDLE req_handle1)
 			X IN RDB$COLLATIONS WITH X.RDB$SYSTEM_FLAG NE 1
+		{
 			put(tdgbl, rec_collation);
+
+			if (!X.RDB$SCHEMA_NAME.NULL)
+				PUT_TEXT(att_coll_schema_name, X.RDB$SCHEMA_NAME);
+
 			PUT_TEXT (att_coll_name, X.RDB$COLLATION_NAME);
 			put_int32 (att_coll_id, X.RDB$COLLATION_ID);
 			put_int32 (att_coll_cs_id, X.RDB$CHARACTER_SET_ID);
@@ -2433,8 +2498,10 @@ void write_collations()
 				put_source_blob (att_coll_description, att_coll_description, X.RDB$DESCRIPTION);
 			if (!X.RDB$FUNCTION_NAME.NULL)
 				PUT_TEXT (att_coll_funct, X.RDB$FUNCTION_NAME);
+
 			if (!X.RDB$BASE_COLLATION_NAME.NULL)
 				PUT_TEXT(att_coll_base_collation_name, X.RDB$BASE_COLLATION_NAME);
+
 			if (!X.RDB$SPECIFIC_ATTRIBUTES.NULL)
 				put_source_blob (att_coll_specific_attr, att_coll_specific_attr, X.RDB$SPECIFIC_ATTRIBUTES);
 
@@ -2444,10 +2511,11 @@ void write_collations()
 				PUT_TEXT(att_coll_owner_name, X.RDB$OWNER_NAME);
 
 			put(tdgbl, att_end);
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
-		END_ERROR;
+		END_ERROR
 	}
 	else if (tdgbl->runtimeODS >= DB_VERSION_DDL11)
 	{
@@ -2607,16 +2675,20 @@ void write_database( const TEXT* dbb_file)
 	{
 		FOR (REQUEST_HANDLE req_handle1)
 			D IN RDB$DATABASE
+		{
 			if (!D.RDB$SECURITY_CLASS.NULL)
 				PUT_TEXT (att_database_security_class, D.RDB$SECURITY_CLASS);
 			put_source_blob (att_database_description2, att_database_description, D.RDB$DESCRIPTION);
+			if (!D.RDB$CHARACTER_SET_SCHEMA_NAME.NULL)
+				PUT_TEXT (att_database_dfl_charset_schema_name, D.RDB$CHARACTER_SET_SCHEMA_NAME);
 			if (!D.RDB$CHARACTER_SET_NAME.NULL)
 				PUT_TEXT (att_database_dfl_charset, D.RDB$CHARACTER_SET_NAME);
 			if (!D.RDB$LINGER.NULL)
 				put_int32(att_database_linger, D.RDB$LINGER);
 			if (!D.RDB$SQL_SECURITY.NULL)
 				put_boolean(att_database_sql_security, D.RDB$SQL_SECURITY);
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
 		END_ERROR;
@@ -2676,7 +2748,7 @@ void write_exceptions()
  *	each exception.
  *
  **************************************/
-	TEXT temp[GDS_NAME_LEN];
+	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -2686,11 +2758,20 @@ void write_exceptions()
 		FOR (REQUEST_HANDLE req_handle1)
 			X IN RDB$EXCEPTIONS
 			WITH X.RDB$SYSTEM_FLAG NE 1
+		{
 			put(tdgbl, rec_exception);
-			const SSHORT l = PUT_TEXT (att_exception_name, X.RDB$EXCEPTION_NAME);
-			MISC_terminate (X.RDB$EXCEPTION_NAME, temp, l, sizeof(temp));
-			BURP_verbose (198, temp);
+
+			if (!X.RDB$SCHEMA_NAME.NULL)
+			{
+				PUT_TEXT(att_exception_schema_name, X.RDB$SCHEMA_NAME);
+				name.schema = X.RDB$SCHEMA_NAME;
+			}
+
+			PUT_TEXT(att_exception_name, X.RDB$EXCEPTION_NAME);
+			name.object = X.RDB$EXCEPTION_NAME;
+			BURP_verbose(198, name.toQuotedString());
 			// msg 198 writing exception %s
+
 			PUT_MESSAGE(att_exception_msg, att_exception_msg2, X.RDB$MESSAGE);
 			put_source_blob (att_exception_description2, att_exception_description, X.RDB$DESCRIPTION);
 
@@ -2700,7 +2781,8 @@ void write_exceptions()
 				PUT_TEXT(att_exception_owner_name, X.RDB$OWNER_NAME);
 
 			put(tdgbl, att_end);
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
 		END_ERROR;
@@ -2710,18 +2792,22 @@ void write_exceptions()
 		FOR (REQUEST_HANDLE req_handle1)
 			X IN RDB$EXCEPTIONS
 			WITH X.RDB$SYSTEM_FLAG MISSING OR X.RDB$SYSTEM_FLAG NE 1
+		{
 			put(tdgbl, rec_exception);
-			const SSHORT l = PUT_TEXT (att_exception_name, X.RDB$EXCEPTION_NAME);
-			MISC_terminate (X.RDB$EXCEPTION_NAME, temp, l, sizeof(temp));
-			BURP_verbose (198, temp);
+
+			PUT_TEXT(att_exception_name, X.RDB$EXCEPTION_NAME);
+			name.object = X.RDB$EXCEPTION_NAME;
+			BURP_verbose(198, name.toQuotedString());
 			// msg 198 writing exception %s
+
 			PUT_MESSAGE(att_exception_msg, att_exception_msg2, X.RDB$MESSAGE);
 			put_source_blob (att_exception_description2, att_exception_description, X.RDB$DESCRIPTION);
 			put(tdgbl, att_end);
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
-		END_ERROR;
+		END_ERROR
 	}
 
 	MISC_release_request_silent(req_handle1);
@@ -2747,13 +2833,19 @@ void write_field_dimensions()
 
 	FOR (REQUEST_HANDLE req_handle1)
 		X IN RDB$FIELD_DIMENSIONS
+	{
 		put(tdgbl, rec_field_dimensions);
+
+		if (!X.RDB$SCHEMA_NAME.NULL)
+			PUT_TEXT(att_field_schema_name, X.RDB$SCHEMA_NAME);
+
 		PUT_TEXT (att_field_name, X.RDB$FIELD_NAME);
 		put_int32 (att_field_dimensions, X.RDB$DIMENSION);
 		put_int32 (att_field_range_low, X.RDB$LOWER_BOUND);
 		put_int32 (att_field_range_high, X.RDB$UPPER_BOUND);
 		put(tdgbl, att_end);
-	END_FOR;
+	}
+	END_FOR
 	ON_ERROR
 		general_on_error();
 	END_ERROR;
@@ -2775,7 +2867,6 @@ void write_filters()
  *	each filter.
  *
  **************************************/
-	TEXT temp[GDS_NAME_LEN];
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -2783,10 +2874,10 @@ void write_filters()
 	FOR (REQUEST_HANDLE req_handle1)
 		X IN RDB$FILTERS
 		WITH X.RDB$SYSTEM_FLAG MISSING OR X.RDB$SYSTEM_FLAG NE 1
+	{
 		put(tdgbl, rec_filter);
-		const SSHORT l = PUT_TEXT (att_filter_name, X.RDB$FUNCTION_NAME);
-		MISC_terminate (X.RDB$FUNCTION_NAME, temp, l, sizeof(temp));
-		BURP_verbose (145, temp);
+		PUT_TEXT(att_filter_name, X.RDB$FUNCTION_NAME);
+		BURP_verbose(145, MetaString(X.RDB$FUNCTION_NAME).toQuotedString());
 		// msg 145 writing filter %s
 		put_source_blob (att_filter_description2, att_filter_description, X.RDB$DESCRIPTION);
 		PUT_TEXT (att_filter_module_name, X.RDB$MODULE_NAME);
@@ -2794,10 +2885,11 @@ void write_filters()
 		put_int32 (att_filter_input_sub_type, X.RDB$INPUT_SUB_TYPE);
 		put_int32 (att_filter_output_sub_type, X.RDB$OUTPUT_SUB_TYPE);
 		put(tdgbl, att_end);
-	END_FOR;
+	}
+	END_FOR
 	ON_ERROR
 		general_on_error();
-	END_ERROR;
+	END_ERROR
 
 	MISC_release_request_silent(req_handle1);
 }
@@ -2816,8 +2908,7 @@ void write_functions()
  *	each function.
  *
  **************************************/
-	GDS_NAME func;
-	TEXT temp[GDS_NAME_LEN * 2];
+	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -2826,21 +2917,26 @@ void write_functions()
 	{
 		FOR (REQUEST_HANDLE req_handle1)
 			X IN RDB$FUNCTIONS WITH X.RDB$SYSTEM_FLAG NE 1
+		{
 			put(tdgbl, rec_function);
 
-			SSHORT prefixLen = 0;
+			if (!X.RDB$SCHEMA_NAME.NULL)
+			{
+				PUT_TEXT(att_function_schema_name, X.RDB$SCHEMA_NAME);
+				name.schema = X.RDB$SCHEMA_NAME;
+			}
 
 			if (!X.RDB$PACKAGE_NAME.NULL)
 			{
-				prefixLen = PUT_TEXT(att_function_package_name, X.RDB$PACKAGE_NAME);
-				MISC_terminate(X.RDB$PACKAGE_NAME, temp, prefixLen, sizeof(temp));
-				temp[prefixLen++] = '.';
+				PUT_TEXT(att_function_package_name, X.RDB$PACKAGE_NAME);
+				name.package = X.RDB$PACKAGE_NAME;
 			}
 
-			const SSHORT l = PUT_TEXT (att_function_name, X.RDB$FUNCTION_NAME);
-			MISC_terminate (X.RDB$FUNCTION_NAME, temp + prefixLen, l, sizeof(temp) - prefixLen);
-			BURP_verbose (147, temp);
+			PUT_TEXT(att_function_name, X.RDB$FUNCTION_NAME);
+			name.object = X.RDB$FUNCTION_NAME;
+			BURP_verbose(147, name.toQuotedString());
 			// msg 147 writing function %.*s
+
 			put_source_blob (att_function_description2, att_function_description, X.RDB$DESCRIPTION);
 
 			if (!X.RDB$RETURN_ARGUMENT.NULL)
@@ -2879,10 +2975,11 @@ void write_functions()
 
 			put(tdgbl, att_end);
 
-			COPY (X.RDB$FUNCTION_NAME, func);
-			write_function_args ((X.RDB$PACKAGE_NAME.NULL ? "" : X.RDB$PACKAGE_NAME), func);
+			write_function_args(name);
+
 			put(tdgbl, rec_function_end);
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
 		END_ERROR;
@@ -2891,11 +2988,14 @@ void write_functions()
 	{
 		FOR (REQUEST_HANDLE req_handle1)
 			X IN RDB$FUNCTIONS WITH X.RDB$SYSTEM_FLAG MISSING OR X.RDB$SYSTEM_FLAG NE 1
+		{
 			put(tdgbl, rec_function);
-			const SSHORT l = PUT_TEXT (att_function_name, X.RDB$FUNCTION_NAME);
-			MISC_terminate (X.RDB$FUNCTION_NAME, temp, l, sizeof(temp));
-			BURP_verbose (147, temp);
+
+			PUT_TEXT(att_function_name, X.RDB$FUNCTION_NAME);
+			name.object = X.RDB$FUNCTION_NAME;
+			BURP_verbose(147, name.toQuotedString());
 			// msg 147 writing function %.*s
+
 			put_source_blob (att_function_description2, att_function_description, X.RDB$DESCRIPTION);
 			PUT_TEXT (att_function_module_name, X.RDB$MODULE_NAME);
 			PUT_TEXT (att_function_entrypoint, X.RDB$ENTRYPOINT);
@@ -2906,20 +3006,21 @@ void write_functions()
 			put_int32 (att_function_type, X.RDB$FUNCTION_TYPE);
 			PUT_TEXT (att_function_query_name, X.RDB$QUERY_NAME);
 			put(tdgbl, att_end);
-			COPY (X.RDB$FUNCTION_NAME, func);
-			write_function_args ("", func);
+			write_function_args(name);
+
 			put(tdgbl, rec_function_end);
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
-		END_ERROR;
+		END_ERROR
 	}
 
 	MISC_release_request_silent(req_handle1);
 }
 
 
-void write_function_args(const GDS_NAME package, GDS_NAME funcptr)
+void write_function_args(const QualifiedMetaString& name)
 {
 /**************************************
  *
@@ -2931,8 +3032,6 @@ void write_function_args(const GDS_NAME package, GDS_NAME funcptr)
  * 	write all arguments for a function.
  *
  **************************************/
-	TEXT temp[GDS_NAME_LEN * 2];
-
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
 	// if we have all capabilities, use the first request to get the
@@ -2945,23 +3044,20 @@ void write_function_args(const GDS_NAME package, GDS_NAME funcptr)
 	{
 		FOR (REQUEST_HANDLE tdgbl->handles_write_function_args_req_handle1)
 			X IN RDB$FUNCTION_ARGUMENTS
-			WITH X.RDB$FUNCTION_NAME EQ funcptr AND
-				 X.RDB$PACKAGE_NAME EQUIV NULLIF(package, '')
-
+			WITH X.RDB$SCHEMA_NAME EQUIV NULLIF(name.schema.c_str(), '') AND
+				 X.RDB$FUNCTION_NAME EQ name.object.c_str() AND
+				 X.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '')
+		{
 			put(tdgbl, rec_function_arg);
 
-			SSHORT prefixLen = 0;
+			if (name.schema.hasData())
+				put_text(att_functionarg_schema_name, name.schema);
 
-			if (!X.RDB$PACKAGE_NAME.NULL)
-			{
-				prefixLen = PUT_TEXT(att_functionarg_package_name, X.RDB$PACKAGE_NAME);
-				MISC_terminate(X.RDB$PACKAGE_NAME, temp, prefixLen, sizeof(temp));
-				temp[prefixLen++] = '.';
-			}
+			if (name.package.hasData())
+				put_text(att_functionarg_package_name, name.package);
 
-			const SSHORT l = PUT_TEXT (att_functionarg_name, X.RDB$FUNCTION_NAME);
-			MISC_terminate (X.RDB$FUNCTION_NAME, temp + prefixLen, l, sizeof(temp) - prefixLen);
-			BURP_verbose (141, temp);
+			put_text(att_functionarg_name, name.object);
+			BURP_verbose(141, name.toQuotedString());
 			// msg 141 writing argument for function %s
 
 			if (!X.RDB$ARGUMENT_POSITION.NULL)
@@ -2980,6 +3076,8 @@ void write_function_args(const GDS_NAME package, GDS_NAME funcptr)
 
 			if (!X.RDB$ARGUMENT_NAME.NULL)
 				PUT_TEXT(att_functionarg_arg_name, X.RDB$ARGUMENT_NAME);
+			if (!X.RDB$FIELD_SOURCE_SCHEMA_NAME.NULL)
+				PUT_TEXT(att_functionarg_field_source_schema_name, X.RDB$FIELD_SOURCE_SCHEMA_NAME);
 			if (!X.RDB$FIELD_SOURCE.NULL)
 				PUT_TEXT(att_functionarg_field_source, X.RDB$FIELD_SOURCE);
 			if (!X.RDB$DEFAULT_VALUE.NULL)
@@ -2995,13 +3093,16 @@ void write_function_args(const GDS_NAME package, GDS_NAME funcptr)
 				put_int32(att_functionarg_type_mechanism, X.RDB$ARGUMENT_MECHANISM);
 			if (!X.RDB$FIELD_NAME.NULL)
 				PUT_TEXT(att_functionarg_field_name, X.RDB$FIELD_NAME);
+			if (!X.RDB$RELATION_SCHEMA_NAME.NULL)
+				PUT_TEXT(att_functionarg_relation_schema_name, X.RDB$RELATION_SCHEMA_NAME);
 			if (!X.RDB$RELATION_NAME.NULL)
 				PUT_TEXT(att_functionarg_relation_name, X.RDB$RELATION_NAME);
 			if (!X.RDB$DESCRIPTION.NULL)
 				put_source_blob(att_functionarg_description, att_functionarg_description, X.RDB$DESCRIPTION);
 
 			put(tdgbl, att_end);
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
 		END_ERROR;
@@ -3010,12 +3111,12 @@ void write_function_args(const GDS_NAME package, GDS_NAME funcptr)
 	{
 		FOR (REQUEST_HANDLE tdgbl->handles_write_function_args_req_handle1)
 			X IN RDB$FUNCTION_ARGUMENTS WITH
-			X.RDB$FUNCTION_NAME EQ funcptr
-
+			X.RDB$FUNCTION_NAME EQ name.object.c_str()
+		{
 			put(tdgbl, rec_function_arg);
-			const SSHORT l = PUT_TEXT (att_functionarg_name, X.RDB$FUNCTION_NAME);
-			MISC_terminate (X.RDB$FUNCTION_NAME, temp, l, sizeof(temp));
-			BURP_verbose (141, temp);
+
+			put_text(att_functionarg_name, name.object);
+			BURP_verbose(141, name.toQuotedString());
 			// msg 141 writing argument for function %s
 
 			if (!X.RDB$ARGUMENT_POSITION.NULL)
@@ -3032,21 +3133,22 @@ void write_function_args(const GDS_NAME package, GDS_NAME funcptr)
 			if (!X.RDB$FIELD_PRECISION.NULL)
 				put_int32 (att_functionarg_field_precision, X.RDB$FIELD_PRECISION);
 			put(tdgbl, att_end);
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
-		END_ERROR;
+		END_ERROR
 	}
 	else
 	{
 		FOR (REQUEST_HANDLE tdgbl->handles_write_function_args_req_handle1)
 			X IN RDB$FUNCTION_ARGUMENTS WITH
-			X.RDB$FUNCTION_NAME EQ funcptr
-
+			X.RDB$FUNCTION_NAME EQ name.object.c_str()
+		{
 			put(tdgbl, rec_function_arg);
-			const SSHORT l = PUT_TEXT (att_functionarg_name, X.RDB$FUNCTION_NAME);
-			MISC_terminate (X.RDB$FUNCTION_NAME, temp, l, sizeof(temp));
-			BURP_verbose (141, temp);
+
+			put_text(att_functionarg_name, name.object);
+			BURP_verbose(141, name.toQuotedString());
 			// msg 141 writing argument for function %s
 
 			if (!X.RDB$ARGUMENT_POSITION.NULL)
@@ -3065,11 +3167,11 @@ void write_function_args(const GDS_NAME package, GDS_NAME funcptr)
 			// bit and store the RDB$FIELD_PRECISION.
 
 			put(tdgbl, att_end);
-
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
-		END_ERROR;
+		END_ERROR
 	}
 }
 
@@ -3087,7 +3189,7 @@ void write_generators()
  *
  **************************************/
 	Firebird::IRequest* req_handle1 = nullptr;
-	TEXT temp[GDS_NAME_LEN];
+	QualifiedMetaString name;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -3096,17 +3198,33 @@ void write_generators()
 		FOR (REQUEST_HANDLE req_handle1)
 			X IN RDB$GENERATORS
 			WITH X.RDB$SYSTEM_FLAG NE 1
+		{
 			put(tdgbl, rec_generator);
-			const SSHORT l = PUT_TEXT (att_gen_generator, X.RDB$GENERATOR_NAME);
+
+			if (!X.RDB$SCHEMA_NAME.NULL)
+			{
+				PUT_TEXT(att_gen_schema_name, X.RDB$SCHEMA_NAME);
+				name.schema = X.RDB$SCHEMA_NAME;
+			}
+
+			PUT_TEXT(att_gen_generator, X.RDB$GENERATOR_NAME);
+			name.object = X.RDB$GENERATOR_NAME;
+
 			SINT64 value = 0;
 			if (!tdgbl->gbl_sw_meta)
 			{
-				value = get_gen_id (X.RDB$GENERATOR_NAME, l);
+				value = get_gen_id(name);
+				put_int64(att_gen_value_int64, value);
+			}
+
+			BURP_verbose(165, SafeArg() << name.toQuotedString().c_str() << value);
+			// msg 165 writing generator %s value %ld
+
+			if (!tdgbl->gbl_sw_meta)
 				put_int64 (att_gen_value_int64, value);
-			}
-			if (!X.RDB$DESCRIPTION.NULL) {
+
+			if (!X.RDB$DESCRIPTION.NULL)
 				put_source_blob (att_gen_description, att_gen_description, X.RDB$DESCRIPTION);
-			}
 
 			if (X.RDB$SYSTEM_FLAG)
 				put_int32(att_gen_sysflag, X.RDB$SYSTEM_FLAG);
@@ -3121,10 +3239,8 @@ void write_generators()
 			put_int32(att_gen_id_increment, X.RDB$GENERATOR_INCREMENT);
 
 			put(tdgbl, att_end);
-			MISC_terminate (X.RDB$GENERATOR_NAME, temp, l, sizeof(temp));
-			BURP_verbose (165, SafeArg() << temp << value);
-			// msg 165 writing generator %s value %ld
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
 		END_ERROR;
@@ -3134,47 +3250,55 @@ void write_generators()
 		FOR (REQUEST_HANDLE req_handle1)
 			X IN RDB$GENERATORS
 			WITH X.RDB$SYSTEM_FLAG MISSING OR X.RDB$SYSTEM_FLAG NE 1
+		{
 			put(tdgbl, rec_generator);
-			const SSHORT l = PUT_TEXT (att_gen_generator, X.RDB$GENERATOR_NAME);
+			PUT_TEXT(att_gen_generator, X.RDB$GENERATOR_NAME);
+			name.object = X.RDB$GENERATOR_NAME;
+
 			SINT64 value = 0;
 			if (!tdgbl->gbl_sw_meta)
 			{
-				value = get_gen_id (X.RDB$GENERATOR_NAME, l);
-				put_int64 (att_gen_value_int64, value);
+				value = get_gen_id(name);
+				put_int64(att_gen_value_int64, value);
 			}
 			if (!X.RDB$DESCRIPTION.NULL) {
 				put_source_blob (att_gen_description, att_gen_description, X.RDB$DESCRIPTION);
 			}
 			put(tdgbl, att_end);
-			MISC_terminate (X.RDB$GENERATOR_NAME, temp, l, sizeof(temp));
-			BURP_verbose (165, SafeArg() << temp << value);
+
+			BURP_verbose(165, SafeArg() << name.toQuotedString().c_str() << value);
 			// msg 165 writing generator %s value %ld
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
-		END_ERROR;
+		END_ERROR
 	}
 	else
 	{
 		FOR (REQUEST_HANDLE req_handle1)
 			X IN RDB$GENERATORS
 			WITH X.RDB$SYSTEM_FLAG MISSING OR X.RDB$SYSTEM_FLAG NE 1
+		{
 			put(tdgbl, rec_generator);
-			const SSHORT l = PUT_TEXT (att_gen_generator, X.RDB$GENERATOR_NAME);
+			PUT_TEXT(att_gen_generator, X.RDB$GENERATOR_NAME);
+			name.object = X.RDB$GENERATOR_NAME;
+
 			SINT64 value = 0;
 			if (!tdgbl->gbl_sw_meta)
 			{
-				value = get_gen_id (X.RDB$GENERATOR_NAME, l);
-				put_int64 (att_gen_value_int64, value);
+				value = get_gen_id(name);
+				put_int64(att_gen_value_int64, value);
 			}
 			put(tdgbl, att_end);
-			MISC_terminate (X.RDB$GENERATOR_NAME, temp, l, sizeof(temp));
-			BURP_verbose (165, SafeArg() << temp << value);
+
+			BURP_verbose(165, SafeArg() << name.toQuotedString().c_str() << value);
 			// msg 165 writing generator %s value %ld
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
-		END_ERROR;
+		END_ERROR
 	}
 
 	MISC_release_request_silent(req_handle1);
@@ -3194,7 +3318,7 @@ void write_global_fields()
  *	each global field.
  *
  **************************************/
-	TEXT temp[GDS_NAME_LEN];
+	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -3210,11 +3334,20 @@ void write_global_fields()
 		FOR (REQUEST_HANDLE req_handle1)
 			X IN RDB$FIELDS WITH
 			X.RDB$SYSTEM_FLAG NE 1
-
+		{
 			put(tdgbl, rec_global_field);
-			const SSHORT l = PUT_TEXT (att_field_name, X.RDB$FIELD_NAME);
-			MISC_terminate (X.RDB$FIELD_NAME, temp, l, sizeof(temp));
-			BURP_verbose (149, temp);
+
+			if (!X.RDB$SCHEMA_NAME.NULL)
+			{
+				PUT_TEXT(att_field_schema_name, X.RDB$SCHEMA_NAME);
+				name.schema = X.RDB$SCHEMA_NAME;
+			}
+
+			PUT_TEXT(att_field_name, X.RDB$FIELD_NAME);
+			name.object = X.RDB$FIELD_NAME;
+
+			BURP_verbose(149, name.toQuotedString());
+
 			// msg 149  writing global field %.*s
 			if (!X.RDB$QUERY_NAME.NULL && X.RDB$QUERY_NAME [0] != ' ')
 				PUT_TEXT (att_field_query_name, X.RDB$QUERY_NAME);
@@ -3270,8 +3403,8 @@ void write_global_fields()
 				PUT_TEXT(att_field_owner_name, X.RDB$OWNER_NAME);
 
 			put(tdgbl, att_end);
-
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
 		END_ERROR;
@@ -3284,10 +3417,13 @@ void write_global_fields()
 			X.RDB$SYSTEM_FLAG MISSING
 
 			put(tdgbl, rec_global_field);
-			const SSHORT l = PUT_TEXT (att_field_name, X.RDB$FIELD_NAME);
-			MISC_terminate (X.RDB$FIELD_NAME, temp, l, sizeof(temp));
-			BURP_verbose (149, temp);
+
+			PUT_TEXT(att_field_name, X.RDB$FIELD_NAME);
+			name.object = X.RDB$FIELD_NAME;
+
+			BURP_verbose(149, name.toQuotedString());
 			// msg 149  writing global field %.*s
+
 			if (!X.RDB$QUERY_NAME.NULL && X.RDB$QUERY_NAME [0] != ' ')
 				PUT_TEXT (att_field_query_name, X.RDB$QUERY_NAME);
 			if (!X.RDB$EDIT_STRING.NULL && X.RDB$EDIT_STRING [0] != ' ')
@@ -3352,10 +3488,13 @@ void write_global_fields()
 			X.RDB$SYSTEM_FLAG MISSING
 
 			put(tdgbl, rec_global_field);
-			const SSHORT l = PUT_TEXT (att_field_name, X.RDB$FIELD_NAME);
-			MISC_terminate (X.RDB$FIELD_NAME, temp, l, sizeof(temp));
-			BURP_verbose (149, temp);
+
+			PUT_TEXT(att_field_name, X.RDB$FIELD_NAME);
+			name.object = X.RDB$FIELD_NAME;
+
+			BURP_verbose(149, name.toQuotedString());
 			// msg 149  writing global field %.*s
+
 			if (!X.RDB$QUERY_NAME.NULL && X.RDB$QUERY_NAME [0] != ' ')
 				PUT_TEXT (att_field_query_name, X.RDB$QUERY_NAME);
 			if (!X.RDB$EDIT_STRING.NULL && X.RDB$EDIT_STRING [0] != ' ')
@@ -3425,7 +3564,7 @@ void write_packages()
  *	each package.
  *
  **************************************/
-	TEXT temp[GDS_NAME_LEN];
+	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -3436,10 +3575,17 @@ void write_packages()
 		WITH X.RDB$SYSTEM_FLAG NE 1
 	{
 		put(tdgbl, rec_package);
-		const SSHORT l = PUT_TEXT(att_package_name, X.RDB$PACKAGE_NAME);
-		MISC_terminate(X.RDB$PACKAGE_NAME, temp, l, sizeof(temp));
 
-		BURP_verbose(335, temp);	// msg 335 writing package @1
+		if (!X.RDB$SCHEMA_NAME.NULL)
+		{
+			PUT_TEXT(att_package_schema_name, X.RDB$SCHEMA_NAME);
+			name.schema = X.RDB$SCHEMA_NAME;
+		}
+
+		PUT_TEXT(att_package_name, X.RDB$PACKAGE_NAME);
+		name.object = X.RDB$PACKAGE_NAME;
+
+		BURP_verbose(335, name.toQuotedString());	// msg 335 writing package @1
 
 		if (!X.RDB$PACKAGE_HEADER_SOURCE.NULL)
 		{
@@ -3491,8 +3637,7 @@ void write_procedures()
  *	each stored procedure.
  *
  **************************************/
-	GDS_NAME proc;
-	TEXT temp[GDS_NAME_LEN * 2];
+	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -3502,22 +3647,27 @@ void write_procedures()
 		FOR (REQUEST_HANDLE req_handle1)
 			X IN RDB$PROCEDURES
 			WITH X.RDB$SYSTEM_FLAG MISSING OR X.RDB$SYSTEM_FLAG NE 1
+		{
 			put(tdgbl, rec_procedure);
 
-			SSHORT prefixLen = 0;
+			if (!X.RDB$SCHEMA_NAME.NULL)
+			{
+				PUT_TEXT(att_procedure_schema_name, X.RDB$SCHEMA_NAME);
+				name.schema = X.RDB$SCHEMA_NAME;
+			}
 
 			if (!X.RDB$PACKAGE_NAME.NULL)
 			{
-				prefixLen = PUT_TEXT(att_procedure_package_name, X.RDB$PACKAGE_NAME);
-				MISC_terminate (X.RDB$PACKAGE_NAME, temp, prefixLen, sizeof(temp));
-				temp[prefixLen++] = '.';
+				PUT_TEXT(att_procedure_package_name, X.RDB$PACKAGE_NAME);
+				name.package = X.RDB$PACKAGE_NAME;
 			}
 
-			const SSHORT len = PUT_TEXT (att_procedure_name, X.RDB$PROCEDURE_NAME);
-			MISC_terminate (X.RDB$PROCEDURE_NAME, temp + prefixLen, len, sizeof(temp) - prefixLen);
+			PUT_TEXT(att_procedure_name, X.RDB$PROCEDURE_NAME);
+			name.object = X.RDB$PROCEDURE_NAME;
 
-			BURP_verbose (193, temp);
+			BURP_verbose(193, name.toQuotedString());
 			// msg 193 writing stored procedure %.*s
+
 			put_int32 (att_procedure_inputs, X.RDB$PROCEDURE_INPUTS);
 			put_int32 (att_procedure_outputs, X.RDB$PROCEDURE_OUTPUTS);
 			put_source_blob(att_procedure_description2, att_procedure_description, X.RDB$DESCRIPTION);
@@ -3550,24 +3700,28 @@ void write_procedures()
 				put_boolean(att_procedure_sql_security, X.RDB$SQL_SECURITY);
 
 			put(tdgbl, att_end);
-			COPY(X.RDB$PROCEDURE_NAME, proc);
-			write_procedure_prms ((X.RDB$PACKAGE_NAME.NULL ? "" : X.RDB$PACKAGE_NAME), proc);
+
+			write_procedure_prms(name);
 			put(tdgbl, rec_procedure_end);
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
-		END_ERROR;
+		END_ERROR
 	}
 	else
 	{
 		FOR (REQUEST_HANDLE req_handle1)
 			X IN RDB$PROCEDURES
 			WITH X.RDB$SYSTEM_FLAG MISSING OR X.RDB$SYSTEM_FLAG NE 1
+		{
 			put(tdgbl, rec_procedure);
-			const SSHORT l = PUT_TEXT (att_procedure_name, X.RDB$PROCEDURE_NAME);
-			MISC_terminate (X.RDB$PROCEDURE_NAME, temp, l, sizeof(temp));
-			BURP_verbose (193, temp);
+
+			PUT_TEXT(att_procedure_name, X.RDB$PROCEDURE_NAME);
+			name.object = X.RDB$PROCEDURE_NAME;
+			BURP_verbose(193, name.toQuotedString());
 			// msg 193 writing stored procedure %.*s
+
 			put_int32 (att_procedure_inputs, X.RDB$PROCEDURE_INPUTS);
 			put_int32 (att_procedure_outputs, X.RDB$PROCEDURE_OUTPUTS);
 			put_source_blob (att_procedure_description2, att_procedure_description, X.RDB$DESCRIPTION);
@@ -3578,20 +3732,21 @@ void write_procedures()
 			if (!X.RDB$SECURITY_CLASS.NULL)
 				PUT_TEXT (att_procedure_owner_name, X.RDB$OWNER_NAME);
 			put(tdgbl, att_end);
-			COPY(X.RDB$PROCEDURE_NAME, proc);
-			write_procedure_prms ("", proc);
+
+			write_procedure_prms(name);
 			put(tdgbl, rec_procedure_end);
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
-		END_ERROR;
+		END_ERROR
 	}
 
 	MISC_release_request_silent(req_handle1);
 }
 
 
-void write_procedure_prms(const GDS_NAME package, const GDS_NAME procptr)
+void write_procedure_prms(const QualifiedMetaString& name)
 {
 /**************************************
  *
@@ -3603,25 +3758,29 @@ void write_procedure_prms(const GDS_NAME package, const GDS_NAME procptr)
  * 	write all parameters of a stored procedure.
  *
  **************************************/
-	TEXT temp[GDS_NAME_LEN];
-
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL11_1)
 	{
 		FOR (REQUEST_HANDLE tdgbl->handles_write_procedure_prms_req_handle1)
 			X IN RDB$PROCEDURE_PARAMETERS
-			WITH X.RDB$PROCEDURE_NAME EQ procptr AND
-				 X.RDB$PACKAGE_NAME EQUIV NULLIF(package, '')
+			WITH X.RDB$SCHEMA_NAME EQUIV NULLIF(name.schema.c_str(), '') AND
+				 X.RDB$PROCEDURE_NAME EQ name.object.c_str() AND
+				 X.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '')
 		{
 			put(tdgbl, rec_procedure_prm);
-			const SSHORT l = PUT_TEXT (att_procedureprm_name, X.RDB$PARAMETER_NAME);
-			MISC_terminate (X.RDB$PARAMETER_NAME, temp, l, sizeof(temp));
-			BURP_verbose (194, temp);
+
+			PUT_TEXT(att_procedureprm_name, X.RDB$PARAMETER_NAME);
+			BURP_verbose(194, MetaString(X.RDB$PARAMETER_NAME).toQuotedString());
 			// msg 194 writing parameter %s for stored procedure
+
 			put_int32 (att_procedureprm_number, X.RDB$PARAMETER_NUMBER);
 			put_int32 (att_procedureprm_type, X.RDB$PARAMETER_type);
-			PUT_TEXT (att_procedureprm_field_source, X.RDB$FIELD_SOURCE);
+
+			if (!X.RDB$FIELD_SOURCE_SCHEMA_NAME.NULL)
+				PUT_TEXT(att_procedureprm_field_source_schema_name, X.RDB$FIELD_SOURCE_SCHEMA_NAME);
+
+			PUT_TEXT(att_procedureprm_field_source, X.RDB$FIELD_SOURCE);
 			put_source_blob(att_procedureprm_description2, att_procedureprm_description,
 							X.RDB$DESCRIPTION);
 			put_blr_blob (att_procedureprm_default_value, X.RDB$DEFAULT_VALUE);
@@ -3637,6 +3796,10 @@ void write_procedure_prms(const GDS_NAME package, const GDS_NAME procptr)
 			// DB_VERSION_DDL11_2
 			if (!X.RDB$FIELD_NAME.NULL)
 				PUT_TEXT(att_procedureprm_field_name, X.RDB$FIELD_NAME);
+
+			if (!X.RDB$RELATION_SCHEMA_NAME.NULL)
+				PUT_TEXT(att_procedureprm_relation_schema_name, X.RDB$RELATION_SCHEMA_NAME);
+
 			if (!X.RDB$RELATION_NAME.NULL)
 				PUT_TEXT(att_procedureprm_relation_name, X.RDB$RELATION_NAME);
 
@@ -3645,27 +3808,30 @@ void write_procedure_prms(const GDS_NAME package, const GDS_NAME procptr)
 		END_FOR;
 		ON_ERROR
 			general_on_error();
-		END_ERROR;
+		END_ERROR
 	}
 	else
 	{
 		FOR (REQUEST_HANDLE tdgbl->handles_write_procedure_prms_req_handle1)
-			X IN RDB$PROCEDURE_PARAMETERS WITH X.RDB$PROCEDURE_NAME EQ procptr
+			X IN RDB$PROCEDURE_PARAMETERS WITH X.RDB$PROCEDURE_NAME EQ name.object.c_str()
+		{
 			put(tdgbl, rec_procedure_prm);
-			const SSHORT l = PUT_TEXT (att_procedureprm_name, X.RDB$PARAMETER_NAME);
-			MISC_terminate (X.RDB$PARAMETER_NAME, temp, l, sizeof(temp));
-			BURP_verbose (194, temp);
+
+			PUT_TEXT(att_procedureprm_name, X.RDB$PARAMETER_NAME);
+			BURP_verbose(194, MetaString(X.RDB$PARAMETER_NAME).toQuotedString());
 			// msg 194 writing parameter %s for stored procedure
+
 			put_int32 (att_procedureprm_number, X.RDB$PARAMETER_NUMBER);
 			put_int32 (att_procedureprm_type, X.RDB$PARAMETER_type);
 			PUT_TEXT (att_procedureprm_field_source, X.RDB$FIELD_SOURCE);
 			put_source_blob(att_procedureprm_description2, att_procedureprm_description,
 							X.RDB$DESCRIPTION);
 			put(tdgbl, att_end);
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
-		END_ERROR;
+		END_ERROR
 	}
 }
 
@@ -3683,7 +3849,6 @@ void write_publications()
  *	each publication.
  *
  **************************************/
-	TEXT temp[GDS_NAME_LEN];
 	Firebird::IRequest* req_handle = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -3694,10 +3859,9 @@ void write_publications()
 	{
 		put(tdgbl, rec_publication);
 
-		const SSHORT l = PUT_TEXT(att_pub_name, X.RDB$PUBLICATION_NAME);
-		MISC_terminate(X.RDB$PUBLICATION_NAME, temp, l, sizeof(temp));
+		PUT_TEXT(att_pub_name, X.RDB$PUBLICATION_NAME);
 
-		BURP_verbose(397, temp);
+		BURP_verbose(397, MetaString(X.RDB$PUBLICATION_NAME).toQuotedString());
 		// msg 397 writing publication %s
 
 		if (!X.RDB$OWNER_NAME.NULL)
@@ -3733,7 +3897,7 @@ void write_pub_tables()
  *	each publication table.
  *
  **************************************/
-	TEXT temp[GDS_NAME_LEN];
+	QualifiedMetaString tableName;
 	Firebird::IRequest* req_handle = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -3745,10 +3909,16 @@ void write_pub_tables()
 
 		PUT_TEXT(att_ptab_pub_name, X.RDB$PUBLICATION_NAME);
 
-		const SSHORT l = PUT_TEXT(att_ptab_table_name, X.RDB$TABLE_NAME);
-		MISC_terminate(X.RDB$TABLE_NAME, temp, l, sizeof(temp));
+		if (!X.RDB$TABLE_SCHEMA_NAME.NULL)
+		{
+			PUT_TEXT(att_ptab_table_schema_name, X.RDB$TABLE_NAME);
+			tableName.schema = X.RDB$TABLE_SCHEMA_NAME;
+		}
 
-		BURP_verbose(398, temp);
+		PUT_TEXT(att_ptab_table_name, X.RDB$TABLE_NAME);
+		tableName.object = X.RDB$TABLE_NAME;
+
+		BURP_verbose(398, tableName.toQuotedString());
 		// msg 398 writing publication for table %s
 
 		put(tdgbl, att_end);
@@ -3781,14 +3951,25 @@ void write_ref_constraints()
 
 	FOR (REQUEST_HANDLE req_handle1)
 		X IN RDB$REF_CONSTRAINTS
+	{
 		put(tdgbl, rec_ref_constraint);
-		PUT_TEXT (att_ref_constraint_name, X.RDB$CONSTRAINT_NAME);
-		PUT_TEXT (att_ref_unique_const_name, X.RDB$CONST_NAME_UQ);
-		PUT_TEXT (att_ref_match_option, X.RDB$MATCH_OPTION);
-		PUT_TEXT (att_ref_update_rule, X.RDB$UPDATE_RULE);
-		PUT_TEXT (att_ref_delete_rule, X.RDB$DELETE_RULE);
+
+		if (!X.RDB$SCHEMA_NAME.NULL)
+			PUT_TEXT(att_ref_schema_name, X.RDB$SCHEMA_NAME);
+
+		PUT_TEXT(att_ref_constraint_name, X.RDB$CONSTRAINT_NAME);
+
+		if (!X.RDB$CONST_SCHEMA_NAME_UQ.NULL)
+			PUT_TEXT(att_ref_unique_const_schema_name, X.RDB$CONST_SCHEMA_NAME_UQ);
+
+		PUT_TEXT(att_ref_unique_const_name, X.RDB$CONST_NAME_UQ);
+
+		PUT_TEXT(att_ref_match_option, X.RDB$MATCH_OPTION);
+		PUT_TEXT(att_ref_update_rule, X.RDB$UPDATE_RULE);
+		PUT_TEXT(att_ref_delete_rule, X.RDB$DELETE_RULE);
 		put(tdgbl, att_end);
-	END_FOR;
+	}
+	END_FOR
 	ON_ERROR
 		general_on_error();
 	END_ERROR;
@@ -3810,7 +3991,7 @@ void write_rel_constraints()
  *	each relation constraint.
  *
  **************************************/
-	TEXT temp[GDS_NAME_LEN];
+	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -3818,13 +3999,23 @@ void write_rel_constraints()
 	FOR (REQUEST_HANDLE req_handle1)
 		X IN RDB$RELATION_CONSTRAINTS CROSS
 		REL IN RDB$RELATIONS
-		WITH REL.RDB$RELATION_NAME EQ X.RDB$RELATION_NAME AND
+		WITH REL.RDB$SCHEMA_NAME EQUIV X.RDB$SCHEMA_NAME AND
+			 REL.RDB$RELATION_NAME EQ X.RDB$RELATION_NAME AND
 			 (REL.RDB$SYSTEM_FLAG MISSING OR REL.RDB$SYSTEM_FLAG NE 1)
+	{
 		put(tdgbl, rec_rel_constraint);
-		const SSHORT l = PUT_TEXT (att_rel_constraint_name, X.RDB$CONSTRAINT_NAME);
-		MISC_terminate (X.RDB$CONSTRAINT_NAME, temp, l, sizeof(temp));
-		BURP_verbose (207, temp);
+
+		if (!X.RDB$SCHEMA_NAME.NULL)
+		{
+			PUT_TEXT(att_rel_constraint_schema_name, X.RDB$SCHEMA_NAME);
+			name.schema = X.RDB$SCHEMA_NAME;
+		}
+
+		PUT_TEXT(att_rel_constraint_name, X.RDB$CONSTRAINT_NAME);
+		name.object = X.RDB$CONSTRAINT_NAME;
+		BURP_verbose(207, name.toQuotedString());
 		// msg 207 writing constraint %s
+
 		PUT_TEXT (att_rel_constraint_type, X.RDB$CONSTRAINT_TYPE);
 		PUT_TEXT (att_rel_constraint_rel_name, X.RDB$RELATION_NAME);
 		PUT_TEXT (att_rel_constraint_defer, X.RDB$DEFERRABLE);
@@ -3832,7 +4023,8 @@ void write_rel_constraints()
 		if (!X.RDB$INDEX_NAME.NULL)
 			PUT_TEXT (att_rel_constraint_index, X.RDB$INDEX_NAME);
 		put(tdgbl, att_end);
-	END_FOR;
+	}
+	END_FOR
 	ON_ERROR
 		general_on_error();
 	END_ERROR;
@@ -3854,7 +4046,7 @@ void write_relations()
  *	each relation.
  *
  **************************************/
-	TEXT temp[GDS_NAME_LEN];
+	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -3870,15 +4062,23 @@ void write_relations()
 		FOR (REQUEST_HANDLE req_handle1)
 			X IN RDB$RELATIONS WITH X.RDB$SYSTEM_FLAG NE 1 OR
 			X.RDB$SYSTEM_FLAG MISSING
-
+		{
 			SSHORT flags = 0;
 			put(tdgbl, rec_relation);
-			const SSHORT l = PUT_TEXT (att_relation_name, X.RDB$RELATION_NAME);
-			MISC_terminate (X.RDB$RELATION_NAME, temp, l, sizeof(temp));
+
+			if (!X.RDB$SCHEMA_NAME.NULL)
+			{
+				PUT_TEXT(att_relation_schema_name, X.RDB$SCHEMA_NAME);
+				name.schema = X.RDB$SCHEMA_NAME;
+			}
+
+			PUT_TEXT(att_relation_name, X.RDB$RELATION_NAME);
+			name.object = X.RDB$RELATION_NAME;
+
 			if (X.RDB$VIEW_BLR.NULL)
-				BURP_verbose(153, temp); // msg 153 writing table @1
+				BURP_verbose(153, name.toQuotedString()); // msg 153 writing table @1
 			else
-				BURP_verbose(345, temp); // msg 345 writing view @1
+				BURP_verbose(345, name.toQuotedString()); // msg 345 writing view @1
 
 			// RDB$VIEW_BLR must be the first blob field in the backup file.
 			// RESTORE.EPP makes this assumption in get_relation().
@@ -3922,10 +4122,15 @@ void write_relations()
 			relation->rel_next = tdgbl->relations;
 			tdgbl->relations = relation;
 			relation->rel_id = X.RDB$RELATION_ID;
-			relation->rel_name_length = COPY(X.RDB$RELATION_NAME, relation->rel_name);
+
+			if (!X.RDB$SCHEMA_NAME.NULL)
+				relation->rel_name.schema = X.RDB$SCHEMA_NAME;
+
+			relation->rel_name = name;
 			relation->rel_flags |= flags;
 			put_relation (relation);
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
 		END_ERROR;
@@ -3935,12 +4140,12 @@ void write_relations()
 		FOR (REQUEST_HANDLE req_handle1)
 			X IN RDB$RELATIONS WITH X.RDB$SYSTEM_FLAG NE 1 OR
 			X.RDB$SYSTEM_FLAG MISSING
-
+		{
 			SSHORT flags = 0;
 			put(tdgbl, rec_relation);
-			const SSHORT l = PUT_TEXT(att_relation_name, X.RDB$RELATION_NAME);
-			MISC_terminate (X.RDB$RELATION_NAME, temp, l, sizeof(temp));
-			BURP_verbose (153, temp);
+			PUT_TEXT(att_relation_name, X.RDB$RELATION_NAME);
+			name.object = X.RDB$RELATION_NAME;
+			BURP_verbose(153, name.toQuotedString());
 			// msg 153 writing table %.*s
 
 			// RDB$VIEW_BLR must be the first blob field in the backup file.
@@ -3974,40 +4179,86 @@ void write_relations()
 			relation->rel_next = tdgbl->relations;
 			tdgbl->relations = relation;
 			relation->rel_id = X.RDB$RELATION_ID;
-			relation->rel_name_length = COPY(X.RDB$RELATION_NAME, relation->rel_name);
+			relation->rel_name = name;
 			relation->rel_flags |= flags;
 			put_relation (relation);
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
-		END_ERROR;
+		END_ERROR
 	}
 
 	MISC_release_request_silent(req_handle1);
 }
 
 
+// Write a record in the burp file for each schema.
+void write_schemas()
+{
+	IRequest* reqHandle1 = nullptr;
+	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+
+	FOR (REQUEST_HANDLE reqHandle1)
+		X IN RDB$SCHEMAS
+		WITH X.RDB$SYSTEM_FLAG NE 1
+	{
+		put(tdgbl, rec_schema);
+
+		PUT_TEXT(att_schema_name, X.RDB$SCHEMA_NAME);
+
+		BURP_verbose(411, MetaString(X.RDB$SCHEMA_NAME).toQuotedString());	// msg 411 writing schema @1
+
+		if (!X.RDB$CHARACTER_SET_SCHEMA_NAME.NULL)
+			PUT_TEXT(att_schema_charset_schema_name, X.RDB$CHARACTER_SET_SCHEMA_NAME);
+
+		if (!X.RDB$CHARACTER_SET_NAME.NULL)
+			PUT_TEXT(att_schema_charset_name, X.RDB$CHARACTER_SET_NAME);
+
+		if (!X.RDB$SQL_SECURITY.NULL)
+			put_boolean(att_schema_sql_security, X.RDB$SQL_SECURITY);
+
+		if (!X.RDB$SECURITY_CLASS.NULL)
+			PUT_TEXT(att_schema_security_class, X.RDB$SECURITY_CLASS);
+
+		if (!X.RDB$OWNER_NAME.NULL)
+			PUT_TEXT(att_schema_owner_name, X.RDB$OWNER_NAME);
+
+		if (!X.RDB$DESCRIPTION.NULL)
+			put_source_blob(att_schema_description, att_schema_description, X.RDB$DESCRIPTION);
+
+		put(tdgbl, att_end);
+	}
+	END_FOR
+	ON_ERROR
+		general_on_error();
+	END_ERROR
+
+	MISC_release_request_silent(reqHandle1);
+}
+
+
 void write_secclasses()
 {
-	TEXT temp[GDS_NAME_LEN];
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
 	FOR (REQUEST_HANDLE req_handle1)
 		X IN RDB$SECURITY_CLASSES WITH X.RDB$SECURITY_CLASS NOT STARTING "SQL$"
+	{
 		put(tdgbl, rec_security_class);
-		const ULONG l = PUT_TEXT (att_class_security_class, X.RDB$SECURITY_CLASS);
-		MISC_terminate (X.RDB$SECURITY_CLASS, temp, l, sizeof(temp));
-		BURP_verbose (155, temp);
+		PUT_TEXT(att_class_security_class, X.RDB$SECURITY_CLASS);
+		BURP_verbose(155, MetaString(X.RDB$SECURITY_CLASS).toQuotedString());
 		// msg 155 writing security class @1
 		put_blr_blob (att_class_acl, X.RDB$ACL);
 		put_source_blob (att_class_description2, att_class_description, X.RDB$DESCRIPTION);
 		put(tdgbl, att_end);
-	END_FOR;
+	}
+	END_FOR
 	ON_ERROR
 		general_on_error();
-	END_ERROR;
+	END_ERROR
 
 	MISC_release_request_silent(req_handle1);
 }
@@ -4025,7 +4276,6 @@ void write_shadow_files()
  *	Write out files to use as shadows.
  *
  **************************************/
-	BASED ON RDB$FILES.RDB$FILE_NAME temp;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -4034,10 +4284,10 @@ void write_shadow_files()
 		X IN RDB$FILES
 		WITH X.RDB$SHADOW_NUMBER NOT MISSING
 		AND X.RDB$SHADOW_NUMBER NE 0
+	{
 		put(tdgbl, rec_files);
-		const SSHORT l = PUT_TEXT (att_file_filename, X.RDB$FILE_NAME);
-		MISC_terminate (X.RDB$FILE_NAME, temp, l, sizeof(temp));
-		BURP_verbose (163, temp);
+		PUT_TEXT(att_file_filename, X.RDB$FILE_NAME);
+		BURP_verbose(163, MetaString(X.RDB$FILE_NAME).toQuotedString());
 		// msg 163 writing shadow file %s
 		put_int32 (att_file_sequence, X.RDB$FILE_SEQUENCE);
 		put_int32 (att_file_start, X.RDB$FILE_START);
@@ -4045,10 +4295,11 @@ void write_shadow_files()
 		put_int32 (att_file_flags, X.RDB$FILE_FLAGS);
 		put_int32 (att_shadow_number, X.RDB$SHADOW_NUMBER);
 		put(tdgbl, att_end);
-	END_FOR;
+	}
+	END_FOR
 	ON_ERROR
 		general_on_error();
-	END_ERROR;
+	END_ERROR
 
 	MISC_release_request_silent(req_handle1);
 }
@@ -4068,7 +4319,6 @@ void write_sql_roles()
  *
  **************************************/
 	Firebird::IRequest* req_handle1 = nullptr;
-	TEXT temp[GDS_NAME_LEN];
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -4077,10 +4327,10 @@ void write_sql_roles()
 		FOR (REQUEST_HANDLE req_handle1)
 			X IN RDB$ROLES
 			WITH X.RDB$SYSTEM_FLAG EQ 0 OR X.RDB$SYSTEM_FLAG MISSING
-
+		{
 			put(tdgbl, rec_sql_roles);
-			const SSHORT l = PUT_TEXT(att_role_name, X.RDB$ROLE_NAME);
-			PUT_TEXT (att_role_owner_name, X.RDB$OWNER_NAME);
+			PUT_TEXT(att_role_name, X.RDB$ROLE_NAME);
+			PUT_TEXT(att_role_owner_name, X.RDB$OWNER_NAME);
 			if (!X.RDB$DESCRIPTION.NULL) {
 				put_source_blob (att_role_description, att_role_description, X.RDB$DESCRIPTION);
 			}
@@ -4091,32 +4341,30 @@ void write_sql_roles()
 			put_block(tdgbl, (const UCHAR*) (X.RDB$SYSTEM_PRIVILEGES), ll);
 
 			put(tdgbl, att_end);
-			MISC_terminate (X.RDB$ROLE_NAME, temp, l, sizeof(temp));
-			BURP_verbose (249, temp);
+			BURP_verbose(249, MetaString(X.RDB$ROLE_NAME).toQuotedString());
 			// msg 249 writing SQL role: %s
-
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
-		END_ERROR;
+		END_ERROR
 	}
 	else
 	{
 		FOR (REQUEST_HANDLE req_handle1)
 			X IN RDB$ROLES
-
+		{
 			put(tdgbl, rec_sql_roles);
-			const SSHORT l = PUT_TEXT(att_role_name, X.RDB$ROLE_NAME);
-			PUT_TEXT (att_role_owner_name, X.RDB$OWNER_NAME);
+			PUT_TEXT(att_role_name, X.RDB$ROLE_NAME);
+			PUT_TEXT(att_role_owner_name, X.RDB$OWNER_NAME);
 			put(tdgbl, att_end);
-			MISC_terminate (X.RDB$ROLE_NAME, temp, l, sizeof(temp));
-			BURP_verbose (249, temp);
+			BURP_verbose(249, MetaString(X.RDB$ROLE_NAME).toQuotedString());
 			// msg 249 writing SQL role: %s
-
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
-		END_ERROR;
+		END_ERROR
 	}
 
 	MISC_release_request_silent(req_handle1);
@@ -4137,8 +4385,6 @@ void write_mapping()
  *
  **************************************/
 	Firebird::IRequest* req_handle = nullptr;
-	TEXT temp[GDS_NAME_LEN];
-
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL12)
@@ -4146,9 +4392,9 @@ void write_mapping()
 		FOR (REQUEST_HANDLE req_handle)
 			M IN RDB$AUTH_MAPPING
 			WITH M.RDB$SYSTEM_FLAG EQ 0
-
+		{
 			put(tdgbl, rec_mapping);
-			const SSHORT l = PUT_TEXT(att_map_name, M.RDB$MAP_NAME);
+			PUT_TEXT(att_map_name, M.RDB$MAP_NAME);
 			PUT_TEXT(att_map_using, M.RDB$MAP_USING);
 
 			if (!M.RDB$MAP_PLUGIN.NULL)
@@ -4172,34 +4418,33 @@ void write_mapping()
 
 			put(tdgbl, att_end);
 
-			MISC_terminate (M.RDB$MAP_NAME, temp, l, sizeof(temp));
-			BURP_verbose (297, temp);
+			BURP_verbose(297, MetaString(M.RDB$MAP_NAME).toQuotedString());
 			// msg 297 writing mapping for %s
-
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
-		END_ERROR;
+		END_ERROR
 	}
 	else if (tdgbl->runtimeODS >= DB_VERSION_DDL11_2)
 	{
 		FOR (REQUEST_HANDLE req_handle)
 			X IN RDB$ROLES
 			WITH X.RDB$ROLE_NAME EQ ADMIN_ROLE
-
+		{
 			if (X.RDB$SYSTEM_FLAG == 6)		// constant 6 turns on auto admin mapping in FB 2.5
 			{
 				put(tdgbl, rec_mapping);
 				put_text(att_auto_map_role, ADMIN_ROLE, static_cast<SSHORT>(strlen(ADMIN_ROLE) + 1));
 				put(tdgbl, att_end);
-				BURP_verbose (297, ADMIN_ROLE);
+				BURP_verbose(297, MetaString(ADMIN_ROLE).toQuotedString());
 				// msg 297 writing mapping for @1
 			}
-
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
-		END_ERROR;
+		END_ERROR
 	}
 
 	MISC_release_request_silent(req_handle);
@@ -4220,7 +4465,6 @@ void write_db_creators()
  *
  **************************************/
 	Firebird::IRequest* req_handle = nullptr;
-	TEXT temp[GDS_NAME_LEN];
 	bool first = true;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -4249,10 +4493,9 @@ void write_db_creators()
 			if (fl)
 				put(tdgbl, rec_db_creator);
 			fl = false;
-			const SSHORT l = PUT_TEXT(att_dbc_user, C.RDB$USER);
+			PUT_TEXT(att_dbc_user, C.RDB$USER);
 
-			MISC_terminate (C.RDB$USER, temp, l, sizeof(temp));
-			BURP_verbose (392, temp);
+			BURP_verbose(392, MetaString(C.RDB$USER).toQuotedString());
 			// msg 392 writing db creator %s
 		}
 
@@ -4280,7 +4523,7 @@ void write_triggers()
  * 	write the triggers in rdb$triggers
  *
  **************************************/
-	TEXT temp[GDS_NAME_LEN];
+	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -4297,11 +4540,18 @@ void write_triggers()
 			X IN RDB$TRIGGERS WITH
 			X.RDB$SYSTEM_FLAG NE 1 OR
 			X.RDB$SYSTEM_FLAG MISSING
-
+		{
 			put(tdgbl, rec_trigger);
-			const SSHORT l = PUT_TEXT (att_trig_name, X.RDB$TRIGGER_NAME);
-			MISC_terminate (X.RDB$TRIGGER_NAME, temp, l, sizeof(temp));
-			BURP_verbose (156, temp);
+
+			if (!X.RDB$SCHEMA_NAME.NULL)
+			{
+				PUT_TEXT(att_trig_schema_name, X.RDB$SCHEMA_NAME);
+				name.schema = X.RDB$SCHEMA_NAME;
+			}
+
+			PUT_TEXT(att_trig_name, X.RDB$TRIGGER_NAME);
+			name.object = X.RDB$TRIGGER_NAME;
+			BURP_verbose(156, name.toQuotedString());
 			// msg 156   writing trigger %s
 
 			if (!X.RDB$RELATION_NAME.NULL)
@@ -4339,8 +4589,8 @@ void write_triggers()
 				put_boolean(att_trig_sql_security, X.RDB$SQL_SECURITY);
 
 			put(tdgbl, att_end);
-
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
 		END_ERROR;
@@ -4351,11 +4601,12 @@ void write_triggers()
 			X IN RDB$TRIGGERS WITH
 			X.RDB$SYSTEM_FLAG NE 1 OR
 			X.RDB$SYSTEM_FLAG MISSING
-
+		{
 			put(tdgbl, rec_trigger);
-			const SSHORT l = PUT_TEXT (att_trig_name, X.RDB$TRIGGER_NAME);
-			MISC_terminate (X.RDB$TRIGGER_NAME, temp, l, sizeof(temp));
-			BURP_verbose (156, temp);
+
+			PUT_TEXT(att_trig_name, X.RDB$TRIGGER_NAME);
+			name.object = X.RDB$TRIGGER_NAME;
+			BURP_verbose(156, name.toQuotedString());
 			// msg 156   writing trigger %s
 
 			if (!X.RDB$RELATION_NAME.NULL)
@@ -4373,11 +4624,11 @@ void write_triggers()
 				put_int32 (att_trig_flags, X.RDB$FLAGS);
 
 			put(tdgbl, att_end);
-
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
-		END_ERROR;
+		END_ERROR
 	}
 
 	MISC_release_request_silent(req_handle1);
@@ -4397,25 +4648,37 @@ void write_trigger_messages()
  *	each trigger message.
  *
  **************************************/
-	TEXT temp[GDS_NAME_LEN];
+	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
 	FOR (REQUEST_HANDLE req_handle1)
-		T IN RDB$TRIGGERS CROSS X IN RDB$TRIGGER_MESSAGES
-		OVER RDB$TRIGGER_NAME
-		WITH T.RDB$SYSTEM_FLAG NE 1 OR T.RDB$SYSTEM_FLAG MISSING
-
+		T IN RDB$TRIGGERS
+		CROSS X IN RDB$TRIGGER_MESSAGES
+		WITH X.RDB$SCHEMA_NAME EQUIV T.RDB$SCHEMA_NAME AND
+			 X.RDB$TRIGGER_NAME EQ T.RDB$TRIGGER_NAME AND
+			 T.RDB$SYSTEM_FLAG NE 1 OR T.RDB$SYSTEM_FLAG MISSING
+	{
 		put(tdgbl, rec_trigger_message);
-		const SSHORT l = PUT_TEXT (att_trigmsg_name, X.RDB$TRIGGER_NAME);
-		MISC_terminate (X.RDB$TRIGGER_NAME, temp, l, sizeof(temp));
-		BURP_verbose (157, temp);
+
+		if (!X.RDB$SCHEMA_NAME.NULL)
+		{
+			PUT_TEXT(att_trigmsg_schema_name, X.RDB$SCHEMA_NAME);
+			name.schema = X.RDB$SCHEMA_NAME;
+		}
+
+		PUT_TEXT(att_trigmsg_name, X.RDB$TRIGGER_NAME);
+		name.object = X.RDB$TRIGGER_NAME;
+
+		BURP_verbose(157, name.toQuotedString());
 		// msg 157 writing trigger message for %s
+
 		put_int32 (att_trigmsg_number, X.RDB$MESSAGE_NUMBER);
 		PUT_MESSAGE (att_trigmsg_text, att_end, X.RDB$MESSAGE);
 		put(tdgbl, att_end);
-	END_FOR;
+	}
+	END_FOR
 	ON_ERROR
 		general_on_error();
 	END_ERROR;
@@ -4444,6 +4707,7 @@ void write_types()
 	FOR (REQUEST_HANDLE req_handle1)
 		X IN RDB$TYPES WITH X.RDB$SYSTEM_FLAG NE 1 OR
 		X.RDB$SYSTEM_FLAG MISSING
+	{
 		put(tdgbl, rec_system_type);
 		PUT_TEXT (att_type_name, X.RDB$TYPE_NAME);
 		PUT_TEXT (att_type_field_name, X.RDB$FIELD_NAME);
@@ -4454,10 +4718,11 @@ void write_types()
 		if (X.RDB$SYSTEM_FLAG)
 			put_int32 (att_type_system_flag, X.RDB$SYSTEM_FLAG);
 		put(tdgbl, att_end);
-	END_FOR;
+	}
+	END_FOR
 	ON_ERROR
 		general_on_error();
-	END_ERROR;
+	END_ERROR
 
 	MISC_release_request_silent(req_handle1);
 }
@@ -4476,7 +4741,7 @@ void write_user_privileges()
  *	each user privilege.
  *
  **************************************/
-	TEXT temp[GDS_NAME_LEN];
+	QualifiedMetaString user;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -4484,21 +4749,36 @@ void write_user_privileges()
 	FOR (REQUEST_HANDLE req_handle1)
 		X IN RDB$USER_PRIVILEGES
 		WITH X.RDB$GRANTOR NOT MISSING
+	{
 		put(tdgbl, rec_user_privilege);
-		const SSHORT l = PUT_TEXT (att_priv_user, X.RDB$USER);
-		MISC_terminate (X.RDB$USER, temp, l, sizeof(temp));
-		BURP_verbose (152, temp);
+
+		if (!X.RDB$USER_SCHEMA_NAME.NULL)
+		{
+			PUT_TEXT(att_priv_user_schema_name, X.RDB$USER_SCHEMA_NAME);
+			user.schema = X.RDB$USER_SCHEMA_NAME;
+		}
+
+		PUT_TEXT(att_priv_user, X.RDB$USER);
+		user.object = X.RDB$USER;
+		BURP_verbose(152, user.toQuotedString());
 		// msg 152 writing privilege for user %s
+
 		PUT_TEXT (att_priv_grantor, X.RDB$GRANTOR);
 		PUT_TEXT (att_priv_privilege, X.RDB$PRIVILEGE);
 		if (!X.RDB$GRANT_OPTION.NULL)
 			put_int32 (att_priv_grant_option, X.RDB$GRANT_OPTION);
-		PUT_TEXT (att_priv_object_name, X.RDB$RELATION_NAME);
+
+		if (!X.RDB$RELATION_SCHEMA_NAME.NULL)
+			PUT_TEXT(att_priv_object_schema_name, X.RDB$RELATION_SCHEMA_NAME);
+
+		PUT_TEXT(att_priv_object_name, X.RDB$RELATION_NAME);
+
 		if (!X.RDB$FIELD_NAME.NULL)
 		   PUT_TEXT (att_priv_field_name, X.RDB$FIELD_NAME);
 		put_int32 (att_priv_user_type, X.RDB$USER_TYPE);
 		put_int32 (att_priv_obj_type, X.RDB$OBJECT_TYPE);
 		put(tdgbl, att_end);
+	}
 	END_FOR
 	ON_ERROR
 		general_on_error();

@@ -306,10 +306,22 @@ namespace Firebird
 			return iterator(this, getCount());
 		}
 
+		const T& front() const
+		{
+			fb_assert(getCount() > 0);
+			return *begin();
+		}
+
 		T& front()
 		{
-  			fb_assert(getCount() > 0);
+			fb_assert(getCount() > 0);
 			return *begin();
+		}
+
+		const T& back() const
+		{
+			fb_assert(getCount() > 0);
+			return *iterator(this, getCount() - 1);
 		}
 
 		T& back()
@@ -367,6 +379,13 @@ namespace Firebird
 
 		ObjectsArray(MemoryPool& p, std::initializer_list<T> items)
 			: A(p)
+		{
+			for (auto& item : items)
+				add(item);
+		}
+
+		ObjectsArray(std::initializer_list<T> items)
+			: A()
 		{
 			for (auto& item : items)
 				add(item);

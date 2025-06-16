@@ -246,8 +246,6 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 
 	message->msg_length = offset;
 
-	dsqlScratch->getDsqlStatement()->getPorts().add(message);
-
 	// Remove gaps in par_index due to output parameters using question-marks (CALL syntax).
 
 	USHORT parIndex = 0;
@@ -505,9 +503,20 @@ static void gen_plan(DsqlCompilerScratch* dsqlScratch, const PlanNode* planNode)
 
 		// now stuff the access method for this stream
 
-		ObjectsArray<PlanNode::AccessItem>::const_iterator idx_iter =
-			node->accessType->items.begin();
+		auto idx_iter = node->accessType->items.begin();
 		FB_SIZE_T idx_count = node->accessType->items.getCount();
+
+		const auto checkIndexSchema = [&]()
+		{
+			if (node->recordSourceNode &&
+				node->recordSourceNode->dsqlContext &&
+				node->recordSourceNode->dsqlContext->ctx_relation &&
+				idx_iter->indexName.schema.hasData() &&
+				idx_iter->indexName.schema != node->recordSourceNode->dsqlContext->ctx_relation->rel_name.schema)
+			{
+				ERRD_post(Arg::Gds(isc_index_unused) << idx_iter->indexName.toQuotedString());
+			}
+		};
 
 		switch (node->accessType->type)
 		{
@@ -516,8 +525,9 @@ static void gen_plan(DsqlCompilerScratch* dsqlScratch, const PlanNode* planNode)
 				break;
 
 			case PlanNode::AccessType::TYPE_NAVIGATIONAL:
+				checkIndexSchema();
 				dsqlScratch->appendUChar(blr_navigational);
-				dsqlScratch->appendNullString(idx_iter->indexName.c_str());
+				dsqlScratch->appendNullString(idx_iter->indexName.object.c_str());
 				if (idx_count == 1)
 					break;
 				// dimitr: FALL INTO, if the plan item is ORDER ... INDEX (...)
@@ -532,7 +542,10 @@ static void gen_plan(DsqlCompilerScratch* dsqlScratch, const PlanNode* planNode)
 				dsqlScratch->appendUChar(idx_count);
 
 				for (; idx_iter != node->accessType->items.end(); ++idx_iter)
-					dsqlScratch->appendNullString(idx_iter->indexName.c_str());
+				{
+					checkIndexSchema();
+					dsqlScratch->appendNullString(idx_iter->indexName.object.c_str());
+				}
 
 				break;
 			}

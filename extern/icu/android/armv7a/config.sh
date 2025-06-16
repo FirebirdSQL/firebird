@@ -2,7 +2,7 @@
 
 . ../env.sh
 
-../source/configure --prefix=$(pwd)/prebuilt \
+../icu/source/configure --prefix=$(pwd)/prebuilt \
     --host=arm-linux-androideabi \
     --enable-static=no \
     --enable-shared \

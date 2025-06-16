@@ -1,6 +1,6 @@
 #!/bin/sh
 
-MAJOR=63
+MAJOR=77
 MINOR=1
 
 mv libicuuc.so.$MAJOR.$MINOR libicuuc.$MAJOR.$MINOR.so

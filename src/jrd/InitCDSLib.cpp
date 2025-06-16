@@ -27,6 +27,9 @@
 
 
 #include "firebird.h"
+
+#ifndef CDS_UNAVAILABLE
+
 #include "../common/classes/array.h"
 #include "../common/classes/init.h"
 #include "../common/classes/locks.h"
@@ -134,3 +137,5 @@ MemoryPool* InitCDS::createPool()
 }
 
 } // namespace Jrd
+
+#endif	// CDS_UNAVAILABLE

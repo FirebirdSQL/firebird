@@ -583,7 +583,7 @@ bool BackupRelationTask::fileWriter(Item& item)
 	BurpGlobals* tdgbl = item.m_gbl;
 	fb_assert(tdgbl == m_masterGbl);
 
-	BURP_verbose(142, m_relation->rel_name);
+	BURP_verbose(142, m_relation->rel_name.toQuotedString());
 	// msg 142  writing data for relation %s
 
 	IOBuffer*& buf = item.m_buffer = NULL;
@@ -840,7 +840,7 @@ void RestoreRelationTask::verbRecs(FB_UINT64& records, bool total)
 
 void RestoreRelationTask::verbRecsFinal()
 {
-	if (m_verbRecs < m_records)
+	if (m_verbRecs < static_cast<FB_UINT64>(m_records))
 	{
 		m_verbRecs = m_records;
 		BURP_verbose(107, SafeArg() << m_verbRecs);

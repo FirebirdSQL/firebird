@@ -374,7 +374,7 @@ void IndexTableScan::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level
 	if (!level)
 		plan += "(";
 
-	plan += printName(tdbb, m_alias, false) + " ORDER ";
+	plan += printName(tdbb, m_alias) + " ORDER ";
 	string index;
 	printLegacyInversion(tdbb, m_index, index);
 	plan += index;
@@ -395,7 +395,8 @@ void IndexTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsi
 {
 	planEntry.className = "IndexTableScan";
 
-	planEntry.lines.add().text = "Table " + printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Access By ID";
+	planEntry.lines.add().text = "Table " +
+		printName(tdbb, m_relation->rel_name.toQuotedString(), m_alias) + " Access By ID";
 	printOptInfo(planEntry.lines);
 
 	printInversion(tdbb, m_index, planEntry.lines, true, 1, true);
@@ -403,7 +404,7 @@ void IndexTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsi
 	planEntry.objectType = m_relation->getObjectType();
 	planEntry.objectName = m_relation->rel_name;
 
-	if (m_alias.hasData() && m_alias != m_relation->rel_name.c_str())
+	if (m_alias.hasData() && m_alias != string(m_relation->rel_name.object))
 		planEntry.alias = m_alias;
 
 	if (m_inversion)

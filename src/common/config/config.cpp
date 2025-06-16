@@ -27,6 +27,7 @@
 #include "../common/classes/init.h"
 #include "../common/dllinst.h"
 #include "../common/os/fbsyslog.h"
+#include "../common/os/path_utils.h"
 #include "../common/utils_proto.h"
 #include "../jrd/constants.h"
 #include "firebird/Interface.h"
@@ -60,22 +61,17 @@ public:
 	explicit ConfigImpl(Firebird::MemoryPool& p)
 		: Firebird::PermanentStorage(p), missConf(false)
 	{
-		try
+		const auto fullName = fb_utils::getPrefix(Firebird::IConfigManager::DIR_CONF, Firebird::CONFIG_FILE);
+		missConf = !PathUtils::canAccess(fullName, 0);
+
+		if (missConf)
 		{
-			ConfigFile file(fb_utils::getPrefix(Firebird::IConfigManager::DIR_CONF, Firebird::CONFIG_FILE),
-				ConfigFile::ERROR_WHEN_MISS);
+			ConfigFile file(ConfigFile::USE_TEXT, "");
 			defaultConfig = FB_NEW Firebird::Config(file);
 		}
-		catch (const Firebird::status_exception& ex)
+		else
 		{
-			if (ex.value()[1] != isc_miss_config)
-			{
-				throw;
-			}
-
-			missConf = true;
-
-			ConfigFile file(ConfigFile::USE_TEXT, "");
+			ConfigFile file(fullName, ConfigFile::ERROR_WHEN_MISS);
 			defaultConfig = FB_NEW Firebird::Config(file);
 		}
 	}

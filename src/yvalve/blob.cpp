@@ -141,8 +141,33 @@ void iscBlobLookupDescImpl(Why::YAttachment* attachment, Why::YTransaction* tran
 		(FB_INTEGER, characterSetId)
 	) outputMessage(&statusWrapper, MasterInterfacePtr());
 
+	USHORT majorOdsVersion = 0;
+	USHORT minorOdsVersion = 0;
+	attachment->getOdsVersion(&majorOdsVersion, &minorOdsVersion);
+
 	{	// scope
-		constexpr auto sql = R"""(
+		constexpr auto sqlSchemas = R"""(
+			with search_path as (
+			    select row_number() over () rn,
+			           name
+			      from system.rdb$sql.parse_unqualified_names(rdb$get_context('SYSTEM', 'SEARCH_PATH'))
+			)
+			select f.rdb$field_sub_type,
+			       f.rdb$segment_length,
+			       f.rdb$character_set_id
+			    from search_path sp
+			    join system.rdb$relation_fields rf
+			      on rf.rdb$schema_name = sp.name
+			    join system.rdb$fields f
+			      on f.rdb$schema_name = rf.rdb$field_source_schema_name and
+			         f.rdb$field_name = rf.rdb$field_source
+			    where rf.rdb$relation_name = ? and
+			          rf.rdb$field_name = ?
+			    order by sp.rn
+			    rows 1
+		)""";
+
+		constexpr auto sqlNoSchemas = R"""(
 			select f.rdb$field_sub_type,
 			       f.rdb$segment_length,
 			       f.rdb$character_set_id
@@ -152,6 +177,8 @@ void iscBlobLookupDescImpl(Why::YAttachment* attachment, Why::YTransaction* tran
 			    where rf.rdb$relation_name = ? and
 			          rf.rdb$field_name = ?
 		)""";
+
+		const auto sql = majorOdsVersion >= ODS_VERSION14 ? sqlSchemas : sqlNoSchemas;
 
 		FB_MESSAGE(InputMessage, CheckStatusWrapper,
 			(FB_VARCHAR(MAX_SQL_IDENTIFIER_LEN), relationName)
@@ -184,7 +211,29 @@ void iscBlobLookupDescImpl(Why::YAttachment* attachment, Why::YTransaction* tran
 
 	if (!flag)
 	{
-		constexpr auto sql = R"""(
+		constexpr auto sqlSchemas = R"""(
+			with search_path as (
+			    select row_number() over () rn,
+			           name
+			      from system.rdb$sql.parse_unqualified_names(rdb$get_context('SYSTEM', 'SEARCH_PATH'))
+			)
+			select f.rdb$field_sub_type,
+			       f.rdb$segment_length,
+			       f.rdb$character_set_id
+			    from search_path sp
+			    join system.rdb$procedure_parameters pp
+			      on pp.rdb$schema_name = sp.name
+			    join system.rdb$fields f
+			      on f.rdb$schema_name = pp.rdb$field_source_schema_name and
+			         f.rdb$field_name = pp.rdb$field_source
+			    where pp.rdb$procedure_name = ? and
+			          pp.rdb$parameter_name = ? and
+			          pp.rdb$package_name is null
+			    order by sp.rn
+			    rows 1
+		)""";
+
+		constexpr auto sqlNoSchemas = R"""(
 			select f.rdb$field_sub_type,
 			       f.rdb$segment_length,
 			       f.rdb$character_set_id
@@ -195,6 +244,8 @@ void iscBlobLookupDescImpl(Why::YAttachment* attachment, Why::YTransaction* tran
 			          pp.rdb$parameter_name = ? and
 			          pp.rdb$package_name is null
 		)""";
+
+		const auto sql = majorOdsVersion >= ODS_VERSION14 ? sqlSchemas : sqlNoSchemas;
 
 		FB_MESSAGE(InputMessage, CheckStatusWrapper,
 			(FB_VARCHAR(MAX_SQL_IDENTIFIER_LEN), procedureName)

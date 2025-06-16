@@ -3333,8 +3333,8 @@ void Batch::cancel(CheckStatusWrapper* status)
 		PACKET* packet = &rdb->rdb_packet;
 		packet->p_operation = op_batch_cancel;
 
-		P_BATCH_FREE_CANCEL* batch = &packet->p_batch_free_cancel;
-		batch->p_batch_statement = statement->rsr_id;
+		P_RLSE* batch = &packet->p_rlse;
+		batch->p_rlse_object = statement->rsr_id;
 
 		send_and_receive(status, rdb, packet);
 
@@ -3367,8 +3367,8 @@ void Batch::freeClientData(CheckStatusWrapper* status, bool force)
 		PACKET* packet = &rdb->rdb_packet;
 		packet->p_operation = op_batch_rls;
 
-		P_BATCH_FREE_CANCEL* batch = &packet->p_batch_free_cancel;
-		batch->p_batch_statement = statement->rsr_id;
+		P_RLSE* batch = &packet->p_rlse;
+		batch->p_rlse_object = statement->rsr_id;
 
 		if (rdb->rdb_port->port_flags & PORT_lazy)
 		{
@@ -10096,7 +10096,7 @@ Transaction* Attachment::remoteTransactionInterface(ITransaction* apiTra)
 	if (!valid)
 		return NULL;
 
-	// If validation is successfull, this means that this attachment and valid transaction
+	// If validation is successful, this means that this attachment and valid transaction
 	// use same provider. I.e. the following cast is safe.
 	return static_cast<Transaction*>(valid);
 }

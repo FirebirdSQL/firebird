@@ -3810,13 +3810,13 @@ void rem_port::batch_exec(P_BATCH_EXEC* batch, PACKET* sendL)
 }
 
 
-void rem_port::batch_rls(P_BATCH_FREE_CANCEL* batch, PACKET* sendL)
+void rem_port::batch_rls(P_RLSE* batch, PACKET* sendL)
 {
 	LocalStatus ls;
 	CheckStatusWrapper status_vector(&ls);
 
 	Rsr* statement;
-	getHandle(statement, batch->p_batch_statement);
+	getHandle(statement, batch->p_rlse_object);
 	statement->checkIface();
 	statement->checkBatch();
 
@@ -3827,13 +3827,13 @@ void rem_port::batch_rls(P_BATCH_FREE_CANCEL* batch, PACKET* sendL)
 }
 
 
-void rem_port::batch_cancel(P_BATCH_FREE_CANCEL* batch, PACKET* sendL)
+void rem_port::batch_cancel(P_RLSE* batch, PACKET* sendL)
 {
 	LocalStatus ls;
 	CheckStatusWrapper status_vector(&ls);
 
 	Rsr* statement;
-	getHandle(statement, batch->p_batch_statement);
+	getHandle(statement, batch->p_rlse_object);
 	statement->checkIface();
 	statement->checkBatch();
 
@@ -4648,7 +4648,6 @@ void rem_port::info(P_OP op, P_INFO* stuff, PACKET* sendL)
 	// Make sure there is a suitable temporary blob buffer
 	Array<UCHAR> buf;
 	UCHAR* const buffer = buffer_length ? buf.getBuffer(buffer_length) : NULL;
-	memset(buffer, 0, buffer_length);
 
 	HalfStaticArray<UCHAR, 1024> info;
 	UCHAR* info_buffer = NULL;
@@ -5324,11 +5323,11 @@ static bool process_packet(rem_port* port, PACKET* sendL, PACKET* receive, rem_p
 			break;
 
 		case op_batch_rls:
-			port->batch_rls(&receive->p_batch_free_cancel, sendL);
+			port->batch_rls(&receive->p_rlse, sendL);
 			break;
 
 		case op_batch_cancel:
-			port->batch_cancel(&receive->p_batch_free_cancel, sendL);
+			port->batch_cancel(&receive->p_rlse, sendL);
 			break;
 
 		case op_batch_sync:

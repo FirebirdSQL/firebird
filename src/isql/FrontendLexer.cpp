@@ -76,7 +76,7 @@ std::string FrontendLexer::stripComments(std::string_view statement)
 
 		return trim(processedStatement);
 	}
-	catch (const IncompleteTokenError& error)
+	catch (const IncompleteTokenError&)
 	{
 		return trim(statement);
 	}

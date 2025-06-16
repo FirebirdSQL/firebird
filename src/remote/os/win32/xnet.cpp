@@ -731,7 +731,7 @@ static rem_port* aux_connect(rem_port* port, PACKET* /*packet*/)
  *
  * Functional description
  *	Try to establish an alternative connection for handling events.
- *  Somebody has already done a successfull connect request.
+ *  Somebody has already done a successful connect request.
  *  This uses the existing xcc for the parent port to more
  *  or less duplicate a new xcc for the new aux port pointing
  *  to the event stuff in the map.

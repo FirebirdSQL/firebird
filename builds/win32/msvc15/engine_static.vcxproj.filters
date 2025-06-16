@@ -111,7 +111,7 @@
     <ClCompile Include="..\..\..\src\jrd\recsrc\SortedStream.cpp">
       <Filter>JRD files\Data Access</Filter>
     </ClCompile>
-	<ClCompile Include="..\..\..\src\jrd\recsrc\Union.cpp">
+    <ClCompile Include="..\..\..\src\jrd\recsrc\Union.cpp">
       <Filter>JRD files\Data Access</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\recsrc\TableValueFunctionScan.cpp">
@@ -848,7 +848,7 @@
     <ClInclude Include="..\..\..\src\jrd\inf_proto.h">
       <Filter>Header files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\jrd\inf_pub.h">
+    <ClInclude Include="..\..\..\src\include\firebird\impl\inf_pub.h">
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\ini.h">

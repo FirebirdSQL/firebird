@@ -258,9 +258,13 @@ dsc* PercentRankWinNode::winPass(thread_db* /*tdbb*/, Request* request, SlidingW
 {
 	impure_value_ex* impureTemp = request->getImpure<impure_value_ex>(tempImpure);
 
-	double partitionSize = window->getPartitionSize();
+	const double partitionSize = window->getPartitionSize();
+	const double divisor = (partitionSize - 1) * (impureTemp->vlux_count - 1);
 
-	impureTemp->vlu_misc.vlu_double = 1 / (partitionSize - 1) * (impureTemp->vlux_count - 1);
+	impureTemp->vlu_misc.vlu_double = divisor == 0 ?
+		0 :
+		1 / divisor;
+
 	return &impureTemp->vlu_desc;
 }
 

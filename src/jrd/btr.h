@@ -184,7 +184,7 @@ const int ISR_null		= 2;	// Record consists of NULL values only
 
 // Index retrieval block -- hold stuff for index retrieval
 
-class IndexRetrieval
+class IndexRetrieval final
 {
 public:
 	IndexRetrieval(jrd_rel* relation, const index_desc* idx, USHORT count, temporary_key* key)
@@ -196,10 +196,10 @@ public:
 	}
 
 	IndexRetrieval(MemoryPool& pool, jrd_rel* relation, const index_desc* idx,
-				   const MetaName& name)
+				   const QualifiedName& name)
 		: irb_relation(relation), irb_index(idx->idx_id),
 		  irb_generic(0), irb_lower_count(0), irb_upper_count(0), irb_key(NULL),
-		  irb_name(FB_NEW_POOL(pool) MetaName(name)),
+		  irb_name(FB_NEW_POOL(pool) QualifiedName(name)),
 		  irb_value(FB_NEW_POOL(pool) ValueExprNode*[idx->idx_count * 2]),
 		  irb_list(nullptr), irb_scale(nullptr)
 	{
@@ -220,7 +220,7 @@ public:
 	USHORT irb_lower_count;			// Number of segments for retrieval
 	USHORT irb_upper_count;			// Number of segments for retrieval
 	temporary_key* irb_key;			// Key for equality retrieval
-	MetaName* irb_name;				// Index name
+	QualifiedName* irb_name;		// Index name
 	ValueExprNode** irb_value;		// Matching value (for equality search)
 	LookupValueList* irb_list;		// Matching values list (for IN <list>)
 	SSHORT* irb_scale;				// Scale for int64/int128 key
@@ -295,7 +295,7 @@ struct IndexCreation
 {
 	jrd_rel* relation;
 	index_desc* index;
-	const TEXT* index_name;
+	QualifiedName index_name;
 	jrd_tra* transaction;
 	PartitionedSort* sort;
 	sort_key_def* key_desc;
@@ -316,7 +316,7 @@ class IndexErrorContext
 	};
 
 public:
-	IndexErrorContext(jrd_rel* relation, index_desc* index, const char* indexName = nullptr)
+	IndexErrorContext(jrd_rel* relation, index_desc* index, const QualifiedName& indexName = {})
 		: m_relation(relation), m_index(index), m_indexName(indexName)
 	{}
 
@@ -332,7 +332,7 @@ public:
 private:
 	jrd_rel* const m_relation;
 	index_desc* const m_index;
-	const char* const m_indexName;
+	const QualifiedName m_indexName;
 	Location m_location;
 	bool isLocationDefined = false;
 };

@@ -106,6 +106,7 @@ const int csb_reuse_context		= 128;	// allow context reusage
 const int csb_subroutine		= 256;	// sub routine
 const int csb_reload			= 512;	// request's BLR should be loaded and parsed again
 const int csb_computed_field	= 1024;	// computed field expression
+const int csb_search_system_schema = 2048;	// search system schema
 
 // CompilerScratch.csb_rpt[].csb_flags's values.
 const int csb_active		= 1;		// stream is active
@@ -216,8 +217,8 @@ struct AccessItem
 {
 	MetaName		acc_security_name;
 	SLONG			acc_ss_rel_id;	// Relation Id which owner will be used to check permissions
-	MetaName		acc_name;
-	MetaName		acc_r_name;
+	QualifiedName	acc_name;
+	MetaName		acc_col_name;
 	ObjectType		acc_type;
 	SecurityClass::flags_t	acc_mask;
 
@@ -243,20 +244,20 @@ struct AccessItem
 		if (i1.acc_mask != i2.acc_mask)
 			return i1.acc_mask > i2.acc_mask;
 
-		if ((v = i1.acc_name.compare(i2.acc_name)) != 0)
-			return v > 0;
+		if (i1.acc_name != i2.acc_name)
+			return i1.acc_name > i2.acc_name;
 
-		if ((v = i1.acc_r_name.compare(i2.acc_r_name)) != 0)
-			return v > 0;
+		if (i1.acc_col_name != i2.acc_col_name)
+			return i1.acc_col_name > i2.acc_col_name;
 
 		return false; // Equal
 	}
 
 	AccessItem(const MetaName& security_name, SLONG view_id,
-		const MetaName& name, ObjectType type,
-		SecurityClass::flags_t mask, const MetaName& relName)
+		const QualifiedName& name, ObjectType type,
+		SecurityClass::flags_t mask, const MetaName& columnName)
 		: acc_security_name(security_name), acc_ss_rel_id(view_id), acc_name(name),
-			acc_r_name(relName), acc_type(type), acc_mask(mask)
+			acc_col_name(columnName), acc_type(type), acc_mask(mask)
 	{}
 };
 
@@ -422,13 +423,13 @@ public:
 
 public:
 	MetaName name;
-	MetaNamePair field;
+	QualifiedNameMetaNamePair field;
 	bool nullable;
 	bool explicitCollation;
 	bool fullDomain;
 };
 
-typedef Firebird::LeftPooledMap<MetaNamePair, FieldInfo> MapFieldInfo;
+typedef Firebird::LeftPooledMap<QualifiedNameMetaNamePair, FieldInfo> MapFieldInfo;
 typedef Firebird::RightPooledMap<Item, ItemInfo> MapItemInfo;
 
 // Table value function block
@@ -473,7 +474,7 @@ public:
 			jrd_rel* relation;
 			const Function* function;
 			const jrd_prc* procedure;
-			const MetaName* name;
+			const QualifiedName* name;
 			SLONG number;
 		};
 
@@ -515,6 +516,7 @@ public:
 		subProcedures(p),
 		outerMessagesMap(p),
 		outerVarsMap(p),
+		csb_schema(p),
 		csb_currentForNode(NULL),
 		csb_currentDMLNode(NULL),
 		csb_currentAssignTarget(NULL),
@@ -550,6 +552,28 @@ public:
 	{
 		auto& dependencies = mainCsb ? mainCsb->csb_dependencies : csb_dependencies;
 		dependencies.add(dependency);
+	}
+
+	void qualifyExistingName(thread_db* tdbb, QualifiedName& name, ObjectType objType)
+	{
+		if (!(name.schema.isEmpty() && name.object.hasData()))
+			return;
+
+		const auto attachment = tdbb->getAttachment();
+
+		if (csb_schema.hasData())
+		{
+			Firebird::ObjectsArray<Firebird::MetaString> schemaSearchPath;
+
+			if (csb_g_flags & csb_search_system_schema)
+				schemaSearchPath.push(SYSTEM_SCHEMA);
+
+			schemaSearchPath.push(csb_schema);
+
+			attachment->qualifyExistingName(tdbb, name, {objType}, &schemaSearchPath);
+		}
+		else
+			attachment->qualifyExistingName(tdbb, name, {objType});
 	}
 
 #ifdef CMP_DEBUG
@@ -599,7 +623,7 @@ public:
 	// Map of message number to field number to pad for external routines.
 	Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<USHORT, USHORT> > > csb_message_pad;
 
-	MetaName	csb_domain_validation;	// Parsing domain constraint in PSQL
+	QualifiedName	csb_domain_validation;	// Parsing domain constraint in PSQL
 
 	// used in cmp.cpp/pass1
 	jrd_rel*	csb_view;
@@ -615,6 +639,8 @@ public:
 	Firebird::LeftPooledMap<MetaName, DeclareSubProcNode*> subProcedures;
 	Firebird::NonPooledMap<USHORT, USHORT> outerMessagesMap;	// <inner, outer>
 	Firebird::NonPooledMap<USHORT, USHORT> outerVarsMap;		// <inner, outer>
+
+	MetaName csb_schema;
 
 	ForNode*	csb_currentForNode;
 	StmtNode*	csb_currentDMLNode;		// could be StoreNode or ModifyNode
@@ -632,7 +658,7 @@ public:
 
 		void activate();
 		void deactivate();
-		Firebird::string getName(bool allowEmpty = true) const;
+		QualifiedName getName(bool allowEmpty = true) const;
 
 		std::optional<USHORT> csb_cursor_number;	// Cursor number for this stream
 		StreamType csb_stream;			// Map user context to internal stream
@@ -693,19 +719,19 @@ inline void CompilerScratch::csb_repeat::deactivate()
 	csb_flags &= ~csb_active;
 }
 
-inline Firebird::string CompilerScratch::csb_repeat::getName(bool allowEmpty) const
+inline QualifiedName CompilerScratch::csb_repeat::getName(bool allowEmpty) const
 {
 	if (csb_relation)
-		return csb_relation->rel_name.c_str();
+		return csb_relation->rel_name;
 	else if (csb_procedure)
-		return csb_procedure->getName().toString();
+		return csb_procedure->getName();
 	else if (csb_table_value_fun)
-		return csb_table_value_fun->name.c_str();
+		return QualifiedName(csb_table_value_fun->name);
 	//// TODO: LocalTableSourceNode
 	else
 	{
 		fb_assert(allowEmpty);
-		return "";
+		return {};
 	}
 }
 

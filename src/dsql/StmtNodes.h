@@ -97,11 +97,8 @@ public:
 public:
 	Type type;
 	SLONG code;
-	// ASF: There are some inconsistencies in the type of 'name'. Metanames have maximum of 31 chars,
-	// while there are system exceptions with 32 chars. The parser always expects metanames, but
-	// I'm following the legacy code and making this a string.
-	Firebird::string name;
-	MetaName secName;
+	QualifiedName name;
+	QualifiedName secName;
 };
 
 typedef Firebird::ObjectsArray<ExceptionItem> ExceptionArray;
@@ -589,7 +586,7 @@ class ExecProcedureNode final : public TypedNode<StmtNode, StmtNode::TYPE_EXEC_P
 {
 public:
 	explicit ExecProcedureNode(MemoryPool& pool,
-				const QualifiedName& aDsqlName = QualifiedName(),
+				const QualifiedName& aDsqlName = {},
 				ValueListNode* aInputs = nullptr, ValueListNode* aOutputs = nullptr,
 				Firebird::ObjectsArray<MetaName>* aDsqlInputArgNames = nullptr)
 		: TypedNode<StmtNode, StmtNode::TYPE_EXEC_PROCEDURE>(pool),
@@ -802,7 +799,7 @@ public:
 class ExceptionNode final : public TypedNode<StmtNode, StmtNode::TYPE_EXCEPTION>
 {
 public:
-	ExceptionNode(MemoryPool& pool, const MetaName& name,
+	ExceptionNode(MemoryPool& pool, const QualifiedName& name,
 				ValueExprNode* aMessageExpr = NULL, ValueListNode* aParameters = NULL)
 		: TypedNode<StmtNode, StmtNode::TYPE_EXCEPTION>(pool),
 		  messageExpr(aMessageExpr),
@@ -810,7 +807,7 @@ public:
 	{
 		exception = FB_NEW_POOL(pool) ExceptionItem(pool);
 		exception->type = ExceptionItem::XCP_CODE;
-		exception->name = name.c_str();
+		exception->name = name;
 	}
 
 	explicit ExceptionNode(MemoryPool& pool)
@@ -918,6 +915,51 @@ public:
 	USHORT dsqlLabelNumber;
 	bool dsqlForceSingular;
 	bool withLock;				// part of SELECT ... WITH LOCK	statement
+};
+
+
+class ForRangeNode final : public TypedNode<StmtNode, StmtNode::TYPE_FOR_RANGE>
+{
+public:
+	enum class Direction : UCHAR
+	{
+		TO = blr_for_range_direction_to,
+		DOWNTO = blr_for_range_direction_downto
+	};
+
+	struct Impure
+	{
+		impure_value finalValue;
+		impure_value byValue;
+	};
+
+public:
+	explicit ForRangeNode(MemoryPool& pool)
+		: TypedNode<StmtNode, StmtNode::TYPE_FOR_RANGE>(pool)
+	{
+	}
+
+public:
+	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
+
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	StmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	ForRangeNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	ForRangeNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
+
+public:
+	NestConst<ValueExprNode> variable;
+	NestConst<ValueExprNode> initialExpr;
+	NestConst<ValueExprNode> finalExpr;
+	NestConst<ValueExprNode> byExpr;
+	NestConst<StmtNode> statement;
+	MetaName* dsqlLabelName = nullptr;
+	USHORT dsqlLabelNumber = 0;
+	Direction direction = Direction::TO;
+	SCHAR incDecScale = 0;
+	USHORT incDecFlags = 0;
 };
 
 
@@ -1114,11 +1156,24 @@ public:
 
 class MessageNode : public TypedNode<StmtNode, StmtNode::TYPE_MESSAGE>
 {
+	struct MessageBuffer
+	{
+		const Format* format; // Message format derived from user MessageMetadata. Overrides default format.
+		UCHAR* buffer = nullptr;
+	};
+
 public:
 	explicit MessageNode(MemoryPool& pool)
-		: TypedNode<StmtNode, StmtNode::TYPE_MESSAGE>(pool),
-		  itemsUsedInSubroutines(pool)
+		: TypedNode<StmtNode, StmtNode::TYPE_MESSAGE>(pool)
 	{
+	}
+	// This constructor is temporary workaround for copying of existing format.
+	// For details look at comment in CMP_procedure_arguments()
+	explicit MessageNode(MemoryPool& pool, const Format& oldFormat)
+		: TypedNode<StmtNode, StmtNode::TYPE_MESSAGE>(pool)
+	{
+		format = Format::newFormat(pool, oldFormat.fmt_count);
+		*format = oldFormat;
 	}
 
 public:
@@ -1137,11 +1192,17 @@ public:
 	virtual MessageNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
 
+	UCHAR* getBuffer(Request* request) const;
+	const Format* getFormat(const Request* request) const;
+	void setFormat(Request* request, Format* newFormat);
+
 public:
-	Firebird::SortedArray<USHORT> itemsUsedInSubroutines;
-	NestConst<Format> format;
 	ULONG impureFlags = 0;
 	USHORT messageNumber = 0;
+
+private:
+	using StmtNode::impureOffset; // Made private to incapsulate it's interpretation logic
+	NestConst<Format> format;
 };
 
 
@@ -1386,7 +1447,7 @@ public:
 class SetGeneratorNode final : public TypedNode<StmtNode, StmtNode::TYPE_SET_GENERATOR>
 {
 public:
-	SetGeneratorNode(MemoryPool& pool, const MetaName& name, ValueExprNode* aValue = NULL)
+	SetGeneratorNode(MemoryPool& pool, const QualifiedName& name, ValueExprNode* aValue = NULL)
 		: TypedNode<StmtNode, StmtNode::TYPE_SET_GENERATOR>(pool),
 		  generator(pool, name), value(aValue)
 	{
@@ -1561,7 +1622,7 @@ class SetTransactionNode : public TransactionNode
 public:
 	struct RestrictionOption : Firebird::PermanentStorage
 	{
-		RestrictionOption(MemoryPool& p, Firebird::ObjectsArray<MetaName>* aTables,
+		RestrictionOption(MemoryPool& p, Firebird::ObjectsArray<QualifiedName>* aTables,
 					unsigned aLockMode)
 			: PermanentStorage(p),
 			  tables(aTables),
@@ -1569,7 +1630,7 @@ public:
 		{
 		}
 
-		Firebird::ObjectsArray<MetaName>* tables;
+		Firebird::ObjectsArray<QualifiedName>* tables;
 		unsigned lockMode;
 	};
 
@@ -1905,6 +1966,32 @@ public:
 
 public:
 	Firebird::TriState optimizeMode;
+};
+
+
+class SetSearchPathNode : public SessionManagementNode
+{
+public:
+	SetSearchPathNode(MemoryPool& pool, Firebird::ObjectsArray<MetaName>* aSchemas)
+		: SessionManagementNode(pool),
+		  schemas(aSchemas)
+	{
+	}
+
+public:
+	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	{
+		SessionManagementNode::internalPrint(printer);
+
+		NODE_PRINT(printer, schemas);
+
+		return "SetSearchPathNode";
+	}
+
+	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const;
+
+public:
+	NestConst<Firebird::ObjectsArray<MetaName>> schemas;
 };
 
 

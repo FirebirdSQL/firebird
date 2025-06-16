@@ -1,5 +1,5 @@
 #!/bin/sh
-../source/runConfigureICU Linux --prefix=$PWD/prebuilt \
+../icu/source/runConfigureICU Linux --prefix=$PWD/prebuilt \
     CFLAGS="-Os" \
     CXXFLAGS="--std=c++17" \
     --enable-static \

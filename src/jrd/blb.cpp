@@ -1505,8 +1505,11 @@ blb* blb::open2(thread_db* tdbb,
 		{
 			if (!to_type_specified)
 				to = isc_blob_text;
+			// Source is either a temporary BLOB already created by data coercion logic
+			// or a permanent blob which ID was delivered to client "as is" i.e. data coercion is not needed.
+			// In either case it is already in needed character set and further filtering is not needed
 			if (!to_charset_specified)
-				to_charset = CS_dynamic;
+				to_charset = blob->blb_charset;
 		}
 
 		BLB_gen_bpb(from, to, from_charset, to_charset, new_bpb);
@@ -1756,8 +1759,12 @@ void blb::put_slice(thread_db*	tdbb,
 		ERR_punt();
 
 	jrd_rel* relation;
-	if (info.sdl_info_relation.length()) {
-		relation = MET_lookup_relation(tdbb, info.sdl_info_relation);
+	if (info.sdl_info_relation.object.hasData())
+	{
+		QualifiedName infoRelationName(info.sdl_info_relation);
+		tdbb->getAttachment()->qualifyExistingName(tdbb, infoRelationName, {obj_relation});
+
+		relation = MET_lookup_relation(tdbb, infoRelationName);
 	}
 	else {
 		relation = MET_relation(tdbb, info.sdl_info_rid);

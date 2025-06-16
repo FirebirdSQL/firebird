@@ -45,6 +45,8 @@
 #include "../common/classes/ParsedList.h"
 #include "firebird/Interface.h"
 
+using namespace Firebird;
+
 // Here we use version-independent symbolic link (or copy) of actual database
 DATABASE database = STATIC FILENAME "security.fdb";
 
@@ -129,6 +131,10 @@ void SecurityDatabaseManagement::start(Firebird::CheckStatusWrapper* st, Firebir
 		Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
 		dpb.insertByte(isc_dpb_sec_attach, TRUE);
 		dpb.insertString(isc_dpb_config, Firebird::ParsedList::getNonLoopbackProviders(secDbName));
+
+		string schemaSearchPath;
+		schemaSearchPath.printf("%s, %s", PLG_LEGACY_SEC_SCHEMA, SYSTEM_SCHEMA);
+		dpb.insertString(isc_dpb_search_path, schemaSearchPath.c_str(), fb_strlen(schemaSearchPath.c_str()));
 
 		unsigned int authBlockSize;
 		const unsigned char* authBlock = logonInfo->authBlock(&authBlockSize);

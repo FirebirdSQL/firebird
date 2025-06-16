@@ -24,6 +24,7 @@
 #define JRD_RUNTIME_STATISTICS_H
 
 #include "../common/classes/alloc.h"
+#include "../common/classes/fb_string.h"
 #include "../common/classes/objects_array.h"
 #include "../common/classes/init.h"
 #include "../common/classes/tree.h"
@@ -239,7 +240,7 @@ public:
 	// Calculate difference between counts stored in this object and current
 	// counts of given request. Counts stored in object are destroyed.
 	Firebird::PerformanceInfo* computeDifference(Attachment* att, const RuntimeStatistics& new_stat,
-		Firebird::PerformanceInfo& dest, TraceCountsArray& temp);
+		Firebird::PerformanceInfo& dest, TraceCountsArray& temp, Firebird::ObjectsArray<Firebird::string>& tempNames);
 
 	// add difference between newStats and baseStats to our counters
 	// newStats and baseStats must be "in-sync"

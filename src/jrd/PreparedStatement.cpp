@@ -416,10 +416,17 @@ PreparedStatement::~PreparedStatement()
 void PreparedStatement::init(thread_db* tdbb, Attachment* attachment, jrd_tra* transaction,
 	const Firebird::string& text, bool isInternalRequest)
 {
+	auto newSchemaSearchPath = isInternalRequest ?
+		attachment->att_system_schema_search_path :
+		attachment->att_schema_search_path;
+
+	AutoSetRestore<RefPtr<AnyRef<ObjectsArray<MetaString>>>> autoSchemaSearchPath(
+		&attachment->att_schema_search_path, newSchemaSearchPath);
+
 	AutoSetRestore<SSHORT> autoAttCharset(&attachment->att_charset,
 		(isInternalRequest ? CS_METADATA : attachment->att_charset));
 
-	dsqlRequest = NULL;
+	dsqlRequest = nullptr;
 	try
 	{
 		const Database& dbb = *tdbb->getDatabase();

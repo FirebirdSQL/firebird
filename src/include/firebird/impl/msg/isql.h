@@ -206,3 +206,5 @@ FB_IMPL_MSG_SYMBOL(ISQL, 206, USAGE_AUTOTERM, "	-autot(erm)             use auto
 FB_IMPL_MSG_SYMBOL(ISQL, 207, AUTOTERM_NOT_SUPPORTED, "SET AUTOTERM ON is not supported in engine/server and has been disabled")
 FB_IMPL_MSG_SYMBOL(ISQL, 208, HLP_SETAUTOTERM, "    SET AUTOTERM           -- toggle auto statement terminator")
 FB_IMPL_MSG_SYMBOL(ISQL, 209, HLP_SETWIRESTATS, "    SET WIRE_stats         -- toggle display of wire (network) statistics")
+FB_IMPL_MSG_SYMBOL(ISQL, 210, USAGE_SEARCH_PATH, "	-(se)arch_path <path>   set schema search path")
+FB_IMPL_MSG_SYMBOL(ISQL, 211, MSG_SCHEMAS, "Schemas:")

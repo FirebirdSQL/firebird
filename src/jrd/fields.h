@@ -234,3 +234,6 @@
 	FIELD(fld_integer		, nam_integer		, dtype_long	, sizeof(SLONG)				, 0							, NULL		, true		, ODS_13_1)
 
 	FIELD(fld_par_workers	, nam_par_workers	, dtype_long	, sizeof(SLONG)				, 0							, NULL		, true		, ODS_13_1)
+
+	FIELD(fld_sch_name		, nam_sch_name		, dtype_text	, MAX_SQL_IDENTIFIER_LEN	, dsc_text_type_metadata	, NULL		, true		, ODS_14_0)
+	FIELD(fld_text_max		, nam_text_max		, dtype_varying, MAX_VARY_COLUMN_SIZE / METADATA_BYTES_PER_CHAR * METADATA_BYTES_PER_CHAR, dsc_text_type_metadata, NULL, true, ODS_14_0)

@@ -28,8 +28,6 @@
  *   double quotes if they are in dialect 3 and have special characters.
  * 2001.09.21 Claudio Valderrama: Show correct mechanism for UDF parameters
  *   and support the RETURNS PARAMETER <n> syntax.
- * 2001.10.01 Claudio Valderrama: list_all_grants2() and EXTRACT_list_grants()
- *   to better organize the code that should be called to handle SHOW GRANTS.
  *
  * Revision 1.2  2000/11/18 16:49:24  fsg
  * Increased PRINT_BUFFER_LENGTH to 2048 to show larger plans
@@ -45,6 +43,9 @@
 #include <string.h>
 #include <math.h>
 #include <ctype.h>				// isdigit
+#include <map>
+#include "../common/classes/MetaString.h"
+#include "../common/classes/QualifiedMetaString.h"
 #include "../jrd/constants.h"
 #include "ibase.h"
 #include "../yvalve/gds_proto.h"
@@ -60,39 +61,43 @@
 #include "../common/utils_proto.h"
 #include "../jrd/constants.h"
 
+using namespace Firebird;
 using MsgFormat::SafeArg;
 
 
 //DATABASE DB = EXTERN COMPILETIME "yachts.lnk";
 DATABASE DB = EXTERN COMPILETIME "yachts.lnk" RUNTIME isqlGlob.global_Db_name;
 
-static bool extract_rel_constraints(const char* relation_name);
-static void get_procedure_args(const char* proc_name, SSHORT default_char_set_id);
-static void get_function_args_ods12(const char*, USHORT, SSHORT default_char_set_id);
-static void list_all_grants();
-static processing_state list_all_grants2(bool, const SCHAR*);
-static void list_all_tables(LegacyTables flag, SSHORT);
+static bool extract_rel_constraints(const QualifiedMetaString& relation_name);
+static void get_procedure_args(const QualifiedMetaString& proc_name,
+	GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc);
+static void get_function_args_ods12(const QualifiedMetaString& func_name, USHORT,
+	GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc);
+static processing_state list_all_grants(bool, const SCHAR*);
+static void list_all_tables(LegacyTables flag, GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc);
 static void list_all_triggers();
 static void list_check();
 static void list_charsets();
 static void list_collations();
 static void list_create_db();
-static void list_domain_table(const SCHAR*, SSHORT);
-static void list_domains(SSHORT);
+static void list_domain_table(const QualifiedMetaString&,
+	GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc);
+static void list_domains(GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc);
 static void listDomainConstraints();
-static void listRelationComputed(LegacyTables flag, SSHORT);
+static void listRelationComputed(LegacyTables flag, GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc);
 static void list_exceptions();
 static void list_filters();
 static void list_foreign();
-static void list_functions_ods12_headers(SSHORT default_char_set_id);
-static void list_functions_ods12_bodies(SSHORT default_char_set_id);
+static void list_functions_ods12_headers(GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc);
+static void list_functions_ods12_bodies(GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc);
 static void list_functions_legacy();
 static void list_generators();
 static void list_indexes();
 static void list_package_bodies();
 static void list_package_headers();
-static void list_procedure_bodies(SSHORT default_char_set_id);
-static void list_procedure_headers(SSHORT default_char_set_id);
+static void list_procedure_bodies(GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc);
+static void list_procedure_headers(GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc);
+static void list_schemas();
 static void list_views();
 
 static const char* const Procterm = "^";	// TXNN: script use only
@@ -102,7 +107,7 @@ static TEXT SQL_identifier2[BUFFER_XLARGE]; // should be >= 1026 bytes (exceptio
 
 
 
-int EXTRACT_ddl(LegacyTables flag, const SCHAR* tabname)
+int EXTRACT_ddl(LegacyTables flag, const QualifiedMetaString& tabname)
 {
 /**************************************
  *
@@ -156,15 +161,40 @@ int EXTRACT_ddl(LegacyTables flag, const SCHAR* tabname)
 	}
 
 	const SSHORT default_char_set_id = ISQL_get_default_char_set_id();
+	std::map<MetaString, SSHORT> defaultSchemaCharSetMap;
+
+	const auto getDefaultCharSetForSchema = [&](const MetaString& schemaName) -> SSHORT
+	{
+		if (schemaName.hasData())
+		{
+			if (const auto it = defaultSchemaCharSetMap.find(schemaName); it != defaultSchemaCharSetMap.end())
+				return it->second;
+			else if (isqlGlob.major_ods >= ODS_VERSION14)
+			{
+				FOR SCH IN RDB$SCHEMAS
+					CROSS CHR IN RDB$CHARACTER_SETS
+					WITH SCH.RDB$SCHEMA_NAME EQ schemaName.c_str() AND
+						 CHR.RDB$SCHEMA_NAME EQ SCH.RDB$CHARACTER_SET_SCHEMA_NAME AND
+						 CHR.RDB$CHARACTER_SET_NAME EQ SCH.RDB$CHARACTER_SET_NAME
+				{
+					return defaultSchemaCharSetMap[schemaName] = CHR.RDB$CHARACTER_SET_ID;
+				}
+				END_FOR
+			}
+		}
+
+		return default_char_set_id;
+	};
+
 	int ret_code = FINI_OK;
 
 	// If a table name was passed, extract only that table and domains
-	if (*tabname)
+	if (tabname.object.hasData())
 	{
-		if (EXTRACT_list_table(tabname, NULL, true, default_char_set_id))
+		if (EXTRACT_list_table(tabname, {}, true, getDefaultCharSetForSchema))
 		{
 			SCHAR errbuf[MSG_LENGTH];
-			IUTILS_msg_get(NOT_FOUND, errbuf, SafeArg() << tabname);
+			IUTILS_msg_get(NOT_FOUND, errbuf, SafeArg() << IUTILS_name_to_string(tabname).c_str());
 			STDERROUT(errbuf);
 			ret_code = FINI_ERROR;
 		}
@@ -173,28 +203,29 @@ int EXTRACT_ddl(LegacyTables flag, const SCHAR* tabname)
 	{
 		list_create_db();
 		list_filters();
+		list_schemas();
 		list_charsets();
 		list_collations();
 		list_generators();
-		list_domains(default_char_set_id);
-		list_all_tables(flag, default_char_set_id);
+		list_domains(getDefaultCharSetForSchema);
+		list_all_tables(flag, getDefaultCharSetForSchema);
 		list_functions_legacy();
-		list_functions_ods12_headers(default_char_set_id);
-		list_procedure_headers(default_char_set_id);
+		list_functions_ods12_headers(getDefaultCharSetForSchema);
+		list_procedure_headers(getDefaultCharSetForSchema);
 		list_package_headers();
 		list_indexes();
 		list_foreign();
 		list_views();
 		list_exceptions();
-		list_functions_ods12_bodies(default_char_set_id);
-		list_procedure_bodies(default_char_set_id);
+		list_functions_ods12_bodies(getDefaultCharSetForSchema);
+		list_procedure_bodies(getDefaultCharSetForSchema);
 		list_package_bodies();
 		listDomainConstraints();
 		list_check();
-		listRelationComputed(flag, default_char_set_id);
+		listRelationComputed(flag, getDefaultCharSetForSchema);
 		list_all_triggers();
-		list_all_grants();
-		SHOW_maps(true, "");
+		list_all_grants(true, isqlGlob.global_Term);
+		SHOW_maps(true, std::nullopt);
 		SHOW_comments(false); // Let's make this an option later.
 	}
 
@@ -230,14 +261,14 @@ processing_state EXTRACT_list_grants(const SCHAR* terminator)
  *	Print the permissions on all user tables, views and procedures.
  *
  **************************************/
-	return list_all_grants2(false, terminator);
+	return list_all_grants(false, terminator);
 }
 
 
-int EXTRACT_list_table(const SCHAR* relation_name,
-						  const SCHAR* new_name,
+int EXTRACT_list_table(const QualifiedMetaString& relation_name,
+						  const QualifiedMetaString& new_name,
 						  bool domain_flag,
-						  SSHORT default_char_set_id)
+						  GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc)
 {
 /**************************************
  *
@@ -300,7 +331,7 @@ int EXTRACT_list_table(const SCHAR* relation_name,
  **************************************/
 
 	bool first = true;
-	SCHAR char_sets[CHARSET_COLLATE_SIZE];
+	string char_sets;
 	rel_t rel_type = rel_persistent;
 	char ss[28] = "";
 
@@ -308,14 +339,19 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 
 	FOR REL IN RDB$RELATIONS CROSS
 		RFR IN RDB$RELATION_FIELDS CROSS
-		FLD IN RDB$FIELDS WITH
-		RFR.RDB$FIELD_SOURCE EQ FLD.RDB$FIELD_NAME AND
-		RFR.RDB$RELATION_NAME EQ REL.RDB$RELATION_NAME AND
-		REL.RDB$RELATION_NAME EQ relation_name
+		FLD IN RDB$FIELDS
+		WITH RFR.RDB$SCHEMA_NAME EQUIV REL.RDB$SCHEMA_NAME AND
+			 RFR.RDB$RELATION_NAME EQ REL.RDB$RELATION_NAME AND
+			 FLD.RDB$SCHEMA_NAME EQUIV RFR.RDB$FIELD_SOURCE_SCHEMA_NAME AND
+			 FLD.RDB$FIELD_NAME EQ RFR.RDB$FIELD_SOURCE AND
+			 REL.RDB$SCHEMA_NAME EQUIV NULLIF(relation_name.schema.c_str(), '') AND
+			 REL.RDB$RELATION_NAME EQ relation_name.object.c_str()
 		SORTED BY RFR.RDB$FIELD_POSITION, RFR.RDB$FIELD_NAME
-
+	{
 		if (!REL.RDB$RELATION_TYPE.NULL)
 			rel_type = (rel_t) REL.RDB$RELATION_TYPE;
+
+		const QualifiedMetaString fieldName(FLD.RDB$FIELD_NAME, FLD.RDB$SCHEMA_NAME);
 
 		SSHORT collation = 0;
 		SSHORT char_set_id = 0;
@@ -325,13 +361,14 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 			first = false;
 			// Do we need to print domains
 			if (domain_flag)
-				list_domain_table (relation_name, default_char_set_id);
+				list_domain_table(relation_name, getDefaultCharSetForSchemaFunc);
 
-			fb_utils::exact_name(REL.RDB$OWNER_NAME);
+			const MetaString ownerName(REL.RDB$OWNER_NAME);
+
 			isqlGlob.printf("%s/* Table: %s, Owner: %s */%s",
 					 NEWLINE,
-					 relation_name,
-					 REL.RDB$OWNER_NAME,
+					 IUTILS_name_to_string(relation_name).c_str(),
+					 IUTILS_name_to_string(ownerName).c_str(),
 					 NEWLINE);
 
 			if (rel_type == rel_global_temp_preserve || rel_type == rel_global_temp_delete)
@@ -339,16 +376,7 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 			else
 				isqlGlob.printf("CREATE TABLE ");
 
-			if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-			{
-				if (new_name)
-					IUTILS_copy_SQL_id (new_name, SQL_identifier, DBL_QUOTE);
-				else
-					IUTILS_copy_SQL_id (relation_name, SQL_identifier, DBL_QUOTE);
-				isqlGlob.printf("%s ", SQL_identifier);
-			}
-			else
-				isqlGlob.printf("%s ", new_name ? new_name : relation_name);
+			isqlGlob.printf("%s ", IUTILS_name_to_string(new_name.object.hasData() ? new_name : relation_name).c_str());
 
 			if (!REL.RDB$SQL_SECURITY.NULL)
 			{
@@ -369,13 +397,8 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 		else
 			isqlGlob.printf(",%s%s", NEWLINE, TAB_AS_SPACES);
 
-		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-		{
-			IUTILS_copy_SQL_id (fb_utils::exact_name(RFR.RDB$FIELD_NAME), SQL_identifier, DBL_QUOTE);
-			isqlGlob.printf("%s ", SQL_identifier);
-		}
-		else
-			isqlGlob.printf("%s ", fb_utils::exact_name(RFR.RDB$FIELD_NAME));
+		const MetaString columnName(RFR.RDB$FIELD_NAME);
+		isqlGlob.printf("%s ", IUTILS_name_to_string(columnName).c_str());
 
 		/*
 		** If this is a known domain, then just print the domain rather than type
@@ -383,23 +406,16 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 		** may have not null, default and check overriding their definitions
 		*/
 
-		if (!(fb_utils::implicit_domain(FLD.RDB$FIELD_NAME) && FLD.RDB$SYSTEM_FLAG != 1))
+		if (!(fb_utils::implicit_domain(fieldName.object.c_str()) && FLD.RDB$SYSTEM_FLAG != 1))
 		{
-			fb_utils::exact_name(FLD.RDB$FIELD_NAME);
-			if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-			{
-				IUTILS_copy_SQL_id (FLD.RDB$FIELD_NAME, SQL_identifier, DBL_QUOTE);
-				isqlGlob.prints(SQL_identifier);
-			}
-			else
-				isqlGlob.prints(FLD.RDB$FIELD_NAME);
+			isqlGlob.prints(IUTILS_name_to_string(fieldName).c_str());
 
 			// International character sets
 			// Print only the character set
 			if ((FLD.RDB$FIELD_TYPE == blr_text || FLD.RDB$FIELD_TYPE == blr_varying) &&
 				!RFR.RDB$COLLATION_ID.NULL)
 			{
-				// There is no need to print character set for domain at all because it cannot be overriden.
+				// There is no need to print character set for domain at all because it cannot be overridden.
 				// Collation will be printed later.
 				collation = RFR.RDB$COLLATION_ID;
 				char_set_id = FLD.RDB$CHARACTER_SET_ID;
@@ -407,7 +423,7 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 		}
 		else
 		{
-			if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE,
+			if (!ISQL_printNumericType(fieldName, FLD.RDB$FIELD_TYPE,
 					FLD.RDB$FIELD_SUB_TYPE, FLD.RDB$FIELD_PRECISION, FLD.RDB$FIELD_SCALE))
 			{
 				return FINI_ERROR;
@@ -427,7 +443,7 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 			// Catch arrays after printing the type
 
 			if (!FLD.RDB$DIMENSIONS.NULL)
-				ISQL_array_dimensions(FLD.RDB$FIELD_NAME);
+				ISQL_array_dimensions(fieldName);
 
 			if (FLD.RDB$FIELD_TYPE == blr_blob)
 			{
@@ -448,8 +464,6 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 				 FLD.RDB$FIELD_TYPE == blr_blob) &&
 				!FLD.RDB$CHARACTER_SET_ID.NULL)
 			{
-				char_sets[0] = '\0';
-
 				// Override rdb$fields id with relation_fields if present
 
 				if (!RFR.RDB$COLLATION_ID.NULL)
@@ -459,9 +473,13 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 
 				if (!FLD.RDB$CHARACTER_SET_ID.NULL)
 					char_set_id = FLD.RDB$CHARACTER_SET_ID;
-				ISQL_get_character_sets(char_set_id, collation, default_char_set_id, Get::CHARSET_ONLY, false, true, char_sets);
-				if (char_sets[0])
-					isqlGlob.prints(char_sets);
+
+				if (ISQL_get_character_sets(char_set_id, collation,
+						getDefaultCharSetForSchemaFunc(relation_name.schema), Get::CHARSET_ONLY, false, char_sets))
+				{
+					isqlGlob.prints(char_sets.c_str());
+				}
+
 				// CVC: Someone deleted the code that checks intchar when handling collations
 				// several lines below, so it didn't have any effect. Commented it.
 				//if (!char_set_id)
@@ -481,14 +499,13 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 			}
 			else if (!RFR.RDB$COLLATION_ID.NULL)
 			{
-				SCHAR collate_name[CHARSET_COLLATE_SIZE];
-				collate_name[0] = '\0';
-				ISQL_get_character_sets(char_set_id, collation, default_char_set_id, Get::COLLATE_ONLY, false, true, collate_name);
+				string collate_name;
 
-				if (collate_name[0])
+				if (ISQL_get_character_sets(char_set_id, collation,
+						getDefaultCharSetForSchemaFunc(relation_name.schema), Get::COLLATE_ONLY, false, collate_name))
 				{
-					isqlGlob.printf("(CAST(NULL AS VARCHAR(1)%s)", char_sets);
-					isqlGlob.printf("%s)", collate_name);
+					isqlGlob.printf("(CAST(NULL AS VARCHAR(1)%s)", char_sets.c_str());
+					isqlGlob.printf("%s)", collate_name.c_str());
 				}
 				else
 					isqlGlob.printf("(NULL)");
@@ -510,7 +527,8 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 		if (!RFR.RDB$GENERATOR_NAME.NULL)
 		{
 			FOR GEN IN RDB$GENERATORS
-				WITH GEN.RDB$GENERATOR_NAME = RFR.RDB$GENERATOR_NAME
+				WITH GEN.RDB$SCHEMA_NAME EQUIV NULLIF(RFR.RDB$SCHEMA_NAME, '') AND
+					 GEN.RDB$GENERATOR_NAME = RFR.RDB$GENERATOR_NAME
 			{
 				isqlGlob.printf(" GENERATED %s AS IDENTITY",
 					(RFR.RDB$IDENTITY_TYPE == IDENT_TYPE_BY_DEFAULT ? "BY DEFAULT" :
@@ -551,28 +569,25 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 		if (RFR.RDB$NULL_FLAG == 1)
 		{
 			FOR RCO IN RDB$RELATION_CONSTRAINTS CROSS
-				CON IN RDB$CHECK_CONSTRAINTS WITH
-				CON.RDB$TRIGGER_NAME = RFR.RDB$FIELD_NAME AND
-				CON.RDB$CONSTRAINT_NAME = RCO.RDB$CONSTRAINT_NAME AND
-				RCO.RDB$CONSTRAINT_TYPE EQ "NOT NULL" AND
-				RCO.RDB$RELATION_NAME = RFR.RDB$RELATION_NAME
-
+				CON IN RDB$CHECK_CONSTRAINTS
+				WITH CON.RDB$SCHEMA_NAME EQUIV NULLIF(RFR.RDB$SCHEMA_NAME, '') AND
+					 CON.RDB$TRIGGER_NAME = RFR.RDB$FIELD_NAME AND
+					 CON.RDB$CONSTRAINT_NAME = RCO.RDB$CONSTRAINT_NAME AND
+					 RCO.RDB$CONSTRAINT_TYPE EQ "NOT NULL" AND
+					 RCO.RDB$SCHEMA_NAME EQUIV CON.RDB$SCHEMA_NAME AND
+					 RCO.RDB$RELATION_NAME = RFR.RDB$RELATION_NAME
+			{
 				if (!fb_utils::implicit_integrity(CON.RDB$CONSTRAINT_NAME))
 				{
-					fb_utils::exact_name(CON.RDB$CONSTRAINT_NAME);
-					if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-					{
-						IUTILS_copy_SQL_id (CON.RDB$CONSTRAINT_NAME, SQL_identifier, DBL_QUOTE);
-						isqlGlob.printf(" CONSTRAINT %s", SQL_identifier);
-					}
-					else
-						isqlGlob.printf(" CONSTRAINT %s", CON.RDB$CONSTRAINT_NAME);
+					const MetaString constraintName(CON.RDB$CONSTRAINT_NAME);
+					isqlGlob.printf(" CONSTRAINT %s", IUTILS_name_to_string(constraintName).c_str());
 				}
+			}
 			END_FOR
 			ON_ERROR
-				ISQL_errmsg (fbStatus);
+				ISQL_errmsg(fbStatus);
 				return FINI_ERROR;
-			END_ERROR;
+			END_ERROR
 
 			isqlGlob.printf(" NOT NULL");
 		}
@@ -581,16 +596,18 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 
 		if (!RFR.RDB$COLLATION_ID.NULL)
 		{
-			char_sets[0] = '\0';
-			ISQL_get_character_sets(char_set_id, collation, default_char_set_id, Get::COLLATE_ONLY, false, true, char_sets);
-			if (char_sets[0])
-				isqlGlob.prints(char_sets);
+			if (ISQL_get_character_sets(char_set_id, collation,
+					getDefaultCharSetForSchemaFunc(relation_name.schema), Get::COLLATE_ONLY, false, char_sets))
+			{
+				isqlGlob.prints(char_sets.c_str());
+			}
 		}
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return FINI_ERROR;
-	END_ERROR;
+	END_ERROR
 
 	// Do primary and unique keys only. References come later.
 	if (!extract_rel_constraints(relation_name))
@@ -616,7 +633,7 @@ int EXTRACT_list_table(const SCHAR* relation_name,
 }
 
 
-static bool extract_rel_constraints(const char* relation_name)
+static bool extract_rel_constraints(const QualifiedMetaString& relation_name)
 {
 /**************************************************
  *
@@ -633,30 +650,25 @@ static bool extract_rel_constraints(const char* relation_name)
 
 	// PK and UK are always based on indices for now, hence this join is safe.
 	FOR RELC IN RDB$RELATION_CONSTRAINTS
-		CROSS IDX IN RDB$INDICES OVER RDB$INDEX_NAME
-		WITH
-		(RELC.RDB$CONSTRAINT_TYPE EQ "PRIMARY KEY" OR
-		RELC.RDB$CONSTRAINT_TYPE EQ "UNIQUE") AND
-		RELC.RDB$RELATION_NAME EQ relation_name
+		CROSS IDX IN RDB$INDICES
+		WITH (RELC.RDB$CONSTRAINT_TYPE EQ "PRIMARY KEY" OR
+			  RELC.RDB$CONSTRAINT_TYPE EQ "UNIQUE") AND
+			 RELC.RDB$SCHEMA_NAME EQUIV NULLIF(relation_name.schema.c_str(), '') AND
+			 RELC.RDB$RELATION_NAME EQ relation_name.object.c_str() AND
+			 IDX.RDB$SCHEMA_NAME EQUIV RELC.RDB$SCHEMA_NAME AND
+			 IDX.RDB$INDEX_NAME EQ RELC.RDB$INDEX_NAME
 		SORTED BY RELC.RDB$CONSTRAINT_TYPE, RELC.RDB$CONSTRAINT_NAME
+	{
+		const QualifiedMetaString indexName(IDX.RDB$INDEX_NAME, IDX.RDB$SCHEMA_NAME);
+		const MetaString constraintName(RELC.RDB$CONSTRAINT_NAME);
 
 		isqlGlob.printf(",%s", NEWLINE);
-		fb_utils::exact_name(RELC.RDB$CONSTRAINT_NAME);
-		fb_utils::exact_name(IDX.RDB$INDEX_NAME);
 
 		// If the name of the constraint is not INTEG_..., print it
- 		if (!fb_utils::implicit_integrity(RELC.RDB$CONSTRAINT_NAME))
-		{
-			if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-			{
-				IUTILS_copy_SQL_id (RELC.RDB$CONSTRAINT_NAME, SQL_identifier, DBL_QUOTE);
-				isqlGlob.printf("CONSTRAINT %s ", SQL_identifier);
-			}
-			else
-				isqlGlob.printf("CONSTRAINT %s ", RELC.RDB$CONSTRAINT_NAME);
-		}
+ 		if (!fb_utils::implicit_integrity(constraintName.c_str()))
+			isqlGlob.printf("CONSTRAINT %s ", IUTILS_name_to_string(constraintName).c_str());
 
-		ISQL_get_index_segments (collist, sizeof(collist), RELC.RDB$INDEX_NAME, true);
+		ISQL_get_index_segments(collist, sizeof(collist), indexName);
 
 		const bool isPK = !strncmp (RELC.RDB$CONSTRAINT_TYPE, "PRIMARY", 7);
 		if (isPK)
@@ -666,32 +678,29 @@ static bool extract_rel_constraints(const char* relation_name)
 
 		// Yes, the same RDB$... naming convention is used for both domains and indices.
 		const bool explicit_index = ((isPK && !fb_utils::implicit_pk(IDX.RDB$INDEX_NAME)) ||
-			(!isPK && !fb_utils::implicit_domain(IDX.RDB$INDEX_NAME))) &&
-		    strcmp(RELC.RDB$CONSTRAINT_NAME, IDX.RDB$INDEX_NAME);
+			(!isPK && !fb_utils::implicit_domain(indexName.object.c_str()))) &&
+		    constraintName != indexName.object;
 		const bool descending_index = !IDX.RDB$INDEX_TYPE.NULL && IDX.RDB$INDEX_TYPE == 1;
 		if (explicit_index || descending_index)
 		{
-			isqlGlob.printf(" USING %sINDEX", descending_index ? "DESCENDING " : "");
-			if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-			{
-				IUTILS_copy_SQL_id(IDX.RDB$INDEX_NAME, SQL_identifier, DBL_QUOTE);
-				isqlGlob.printf(" %s", SQL_identifier);
-			}
-			else
-				isqlGlob.printf(" %s", IDX.RDB$INDEX_NAME);
+			isqlGlob.printf(
+				" USING %sINDEX %s",
+				(descending_index ? "DESCENDING " : ""),
+				IUTILS_name_to_string(indexName.object).c_str());
 		}
-
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return false;
-	END_ERROR;
+	END_ERROR
 
 	return true;
 }
 
 
-static void get_procedure_args(const char* proc_name, SSHORT default_char_set_id)
+static void get_procedure_args(const QualifiedMetaString& proc_name,
+	GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc)
 {
 /**************************************
  *
@@ -705,7 +714,7 @@ static void get_procedure_args(const char* proc_name, SSHORT default_char_set_id
  *  Make sure to pass here only the names of procedures that are global.
  *
  **************************************/
-	SCHAR char_sets[95];
+	string char_sets;
 
 	// query to retrieve the parameters.
 
@@ -722,13 +731,15 @@ static void get_procedure_args(const char* proc_name, SSHORT default_char_set_id
 		bool first_time = true;
 
 		FOR PRM IN RDB$PROCEDURE_PARAMETERS CROSS
-			FLD IN RDB$FIELDS WITH
-			PRM.RDB$PROCEDURE_NAME = proc_name AND
-			PRM.RDB$FIELD_SOURCE EQ FLD.RDB$FIELD_NAME AND
-			PRM.RDB$PARAMETER_TYPE = ptype AND
-			PRM.RDB$PACKAGE_NAME MISSING
+			FLD IN RDB$FIELDS
+			WITH FLD.RDB$SCHEMA_NAME EQUIV PRM.RDB$FIELD_SOURCE_SCHEMA_NAME AND
+				 FLD.RDB$FIELD_NAME EQ PRM.RDB$FIELD_SOURCE AND
+				 PRM.RDB$SCHEMA_NAME EQUIV NULLIF(proc_name.schema.c_str(), '') AND
+				 PRM.RDB$PROCEDURE_NAME = proc_name.object.c_str() AND
+				 PRM.RDB$PARAMETER_TYPE = ptype AND
+				 PRM.RDB$PACKAGE_NAME MISSING
 			SORTED BY PRM.RDB$PARAMETER_NUMBER
-
+		{
 			bool prm_collation_id_null = PRM.RDB$COLLATION_ID.NULL;
 			SSHORT prm_collation_id = PRM.RDB$COLLATION_ID;
 
@@ -743,26 +754,8 @@ static void get_procedure_args(const char* proc_name, SSHORT default_char_set_id
 			if (!PRM.RDB$PARAMETER_MECHANISM.NULL)
 				prm_mech = (prm_mech_t) PRM.RDB$PARAMETER_MECHANISM;
 
-			char relationName[BUFFER_LENGTH256] = "";
-			char relationField[BUFFER_LENGTH256] = "";
-
-			if (!PRM.RDB$RELATION_NAME.NULL)
-			{
-				fb_utils::exact_name(PRM.RDB$RELATION_NAME);
-				if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-					IUTILS_copy_SQL_id(PRM.RDB$RELATION_NAME, relationName, DBL_QUOTE);
-				else
-					strcpy(relationName, PRM.RDB$RELATION_NAME);
-			}
-
-			if (!PRM.RDB$FIELD_NAME.NULL)
-			{
-				fb_utils::exact_name(PRM.RDB$FIELD_NAME);
-				if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-					IUTILS_copy_SQL_id(PRM.RDB$FIELD_NAME, relationField, DBL_QUOTE);
-				else
-					strcpy(relationField, PRM.RDB$FIELD_NAME);
-			}
+			QualifiedMetaString relationName(PRM.RDB$RELATION_NAME, PRM.RDB$RELATION_SCHEMA_NAME);
+			MetaString relationField(PRM.RDB$FIELD_NAME);
 
 			if (first_time)
 			{
@@ -781,48 +774,39 @@ static void get_procedure_args(const char* proc_name, SSHORT default_char_set_id
 			else
 				isqlGlob.printf(",%s", NEWLINE);
 
-			fb_utils::exact_name(PRM.RDB$PARAMETER_NAME);
+			const MetaString parameterName(PRM.RDB$PARAMETER_NAME);
+			const QualifiedMetaString fieldName(FLD.RDB$FIELD_NAME, FLD.RDB$SCHEMA_NAME);
 
-			// CVC: Parameter names need check for dialect 3, too.
+			isqlGlob.printf("%s ", IUTILS_name_to_string(parameterName).c_str());
 
-			if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-				IUTILS_copy_SQL_id (PRM.RDB$PARAMETER_NAME, SQL_identifier, DBL_QUOTE);
-			else
-				strcpy (SQL_identifier, PRM.RDB$PARAMETER_NAME);
-
-			isqlGlob.printf("%s ", SQL_identifier);
-
-			const bool basedOnColumn = relationName[0] && relationField[0];
-			if (!fb_utils::implicit_domain(FLD.RDB$FIELD_NAME) || FLD.RDB$SYSTEM_FLAG == 1 ||
+			const bool basedOnColumn = relationName.object.hasData() && relationField.hasData();
+			if (!fb_utils::implicit_domain(fieldName.object.c_str()) || FLD.RDB$SYSTEM_FLAG == 1 ||
 				basedOnColumn)
 			{
 				if (prm_mech == prm_mech_type_of)
 					isqlGlob.printf("TYPE OF ");
 
 				if (basedOnColumn)
-					isqlGlob.printf("COLUMN %s.%s", relationName, relationField);
-				else
 				{
-					fb_utils::exact_name(FLD.RDB$FIELD_NAME);
-					if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-					{
-						IUTILS_copy_SQL_id (FLD.RDB$FIELD_NAME, SQL_identifier, DBL_QUOTE);
-						isqlGlob.prints(SQL_identifier);
-					}
-					else
-						isqlGlob.prints(FLD.RDB$FIELD_NAME);
+					isqlGlob.printf(
+						"COLUMN %s.%s",
+						IUTILS_name_to_string(relationName).c_str(),
+						IUTILS_name_to_string(relationField).c_str());
 				}
+				else
+					isqlGlob.prints(IUTILS_name_to_string(fieldName).c_str());
 
 				// International character sets
 				// Print only the collation
 				if ((FLD.RDB$FIELD_TYPE == blr_text || FLD.RDB$FIELD_TYPE == blr_varying) &&
 					!prm_collation_id_null)
 				{
-					char_sets[0] = '\0';
-					ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, prm_collation_id, default_char_set_id, Get::COLLATE_ONLY,
-						!prm_null_flag_null && prm_null_flag, true, char_sets);
-					if (char_sets[0])
-						isqlGlob.prints(char_sets);
+					if (ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, prm_collation_id,
+							getDefaultCharSetForSchemaFunc(proc_name.schema),
+							Get::COLLATE_ONLY, !prm_null_flag_null && prm_null_flag, char_sets))
+					{
+						isqlGlob.prints(char_sets.c_str());
+					}
 				}
 				else if (!prm_null_flag_null && prm_null_flag)
 					isqlGlob.printf(" NOT NULL");
@@ -838,7 +822,7 @@ static void get_procedure_args(const char* proc_name, SSHORT default_char_set_id
 			}
 			else
 			{
-				if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE,
+				if (!ISQL_printNumericType(fieldName, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE,
 						FLD.RDB$FIELD_PRECISION, FLD.RDB$FIELD_SCALE))
 				{
 					return; // ps_ERR;
@@ -863,8 +847,6 @@ static void get_procedure_args(const char* proc_name, SSHORT default_char_set_id
 					!(((FLD.RDB$FIELD_TYPE == blr_text) || (FLD.RDB$FIELD_TYPE == blr_varying)) &&
 					  FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_text))
 				{
-					char_sets[0] = 0;
-
 					SSHORT collation = 0;
 
 					if (!prm_collation_id_null)
@@ -875,10 +857,12 @@ static void get_procedure_args(const char* proc_name, SSHORT default_char_set_id
 					if (FLD.RDB$CHARACTER_SET_ID.NULL)
 						FLD.RDB$CHARACTER_SET_ID = 0;
 
-					ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, collation, default_char_set_id, Get::BOTH,
-						!prm_null_flag_null && prm_null_flag, true, char_sets);
-					if (char_sets[0])
-						isqlGlob.prints(char_sets);
+					if (ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, collation,
+							getDefaultCharSetForSchemaFunc(proc_name.schema),
+							Get::BOTH, !prm_null_flag_null && prm_null_flag, char_sets))
+					{
+						isqlGlob.prints(char_sets.c_str());
+					}
 				}
 				else if (!prm_null_flag_null && prm_null_flag)
 					isqlGlob.printf(" NOT NULL");
@@ -897,22 +881,23 @@ static void get_procedure_args(const char* proc_name, SSHORT default_char_set_id
 					}
 				}
 			}
+		}
 		END_FOR
 		ON_ERROR
 			ISQL_errmsg(fbStatus);
 			return;
-		END_ERROR;
+		END_ERROR
 
 		// If there was at least one param, close parens
 
 		if (!first_time)
 			isqlGlob.printf(")%s", NEWLINE);
-
 	}						// end for ptype
 }
 
 
-static void get_function_args_ods12(const char* func_name, USHORT out_arg, SSHORT default_char_set_id)
+static void get_function_args_ods12(const QualifiedMetaString& func_name, USHORT out_arg,
+	GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc)
 {
 /**************************************
  *
@@ -926,7 +911,7 @@ static void get_function_args_ods12(const char* func_name, USHORT out_arg, SSHOR
  *  Make sure to pass here only the names of functions that are global.
  *
  **************************************/
-	SCHAR char_sets[95];
+	string char_sets;
 
 	// Pass 0 - inputs, pass 1 - return value
 
@@ -935,12 +920,14 @@ static void get_function_args_ods12(const char* func_name, USHORT out_arg, SSHOR
 		bool first_time = true;
 
 		FOR ARG IN RDB$FUNCTION_ARGUMENTS CROSS
-			FLD IN RDB$FIELDS WITH
-			ARG.RDB$FUNCTION_NAME = func_name AND
-			ARG.RDB$FIELD_SOURCE EQ FLD.RDB$FIELD_NAME AND
-			ARG.RDB$PACKAGE_NAME MISSING
+			FLD IN RDB$FIELDS
+			WITH FLD.RDB$SCHEMA_NAME EQUIV ARG.RDB$FIELD_SOURCE_SCHEMA_NAME AND
+				 FLD.RDB$FIELD_NAME EQ ARG.RDB$FIELD_SOURCE AND
+				 ARG.RDB$SCHEMA_NAME EQUIV NULLIF(func_name.schema.c_str(), '') AND
+				 ARG.RDB$FUNCTION_NAME = func_name.object.c_str() AND
+				 ARG.RDB$PACKAGE_NAME MISSING
 			SORTED BY ARG.RDB$ARGUMENT_POSITION
-
+		{
 			if ((pass == 0 && ARG.RDB$ARGUMENT_POSITION == out_arg) ||
 				(pass != 0 && ARG.RDB$ARGUMENT_POSITION != out_arg))
 			{
@@ -961,28 +948,9 @@ static void get_function_args_ods12(const char* func_name, USHORT out_arg, SSHOR
 			if (!ARG.RDB$ARGUMENT_MECHANISM.NULL)
 				prm_mech = (prm_mech_t) ARG.RDB$ARGUMENT_MECHANISM;
 
-			char relationName[BUFFER_LENGTH256] = "";
-			char relationField[BUFFER_LENGTH256] = "";
-
-			if (!ARG.RDB$RELATION_NAME.NULL)
-			{
-				fb_utils::exact_name(ARG.RDB$RELATION_NAME);
-
-				if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-					IUTILS_copy_SQL_id(ARG.RDB$RELATION_NAME, relationName, DBL_QUOTE);
-				else
-					strcpy(relationName, ARG.RDB$RELATION_NAME);
-			}
-
-			if (!ARG.RDB$FIELD_NAME.NULL)
-			{
-				fb_utils::exact_name(ARG.RDB$FIELD_NAME);
-
-				if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-					IUTILS_copy_SQL_id(ARG.RDB$FIELD_NAME, relationField, DBL_QUOTE);
-				else
-					strcpy(relationField, ARG.RDB$FIELD_NAME);
-			}
+			const QualifiedMetaString relationName(ARG.RDB$RELATION_NAME, ARG.RDB$RELATION_SCHEMA_NAME);
+			const MetaString relationField(ARG.RDB$FIELD_NAME);
+			const QualifiedMetaString fieldName(FLD.RDB$FIELD_NAME, FLD.RDB$SCHEMA_NAME);
 
 			if (first_time)
 			{
@@ -1003,50 +971,38 @@ static void get_function_args_ods12(const char* func_name, USHORT out_arg, SSHOR
 
 			if (pass == 0)
 			{
-				fb_utils::exact_name(ARG.RDB$ARGUMENT_NAME);
-
-				// CVC: Parameter names need check for dialect 3, too.
-
-				if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-					IUTILS_copy_SQL_id(ARG.RDB$ARGUMENT_NAME, SQL_identifier, DBL_QUOTE);
-				else
-					strcpy (SQL_identifier, ARG.RDB$ARGUMENT_NAME);
-
-				isqlGlob.printf("%s ", SQL_identifier);
+				const MetaString argumentName(ARG.RDB$ARGUMENT_NAME);
+				isqlGlob.printf("%s ", IUTILS_name_to_string(argumentName).c_str());
 			}
 
-			const bool basedOnColumn = relationName[0] && relationField[0];
-			if (!fb_utils::implicit_domain(FLD.RDB$FIELD_NAME) || FLD.RDB$SYSTEM_FLAG == 1 ||
+			const bool basedOnColumn = relationName.object.hasData() && relationField.hasData();
+			if (!fb_utils::implicit_domain(fieldName.object.c_str()) || FLD.RDB$SYSTEM_FLAG == 1 ||
 				basedOnColumn)
 			{
 				if (prm_mech == prm_mech_type_of)
 					isqlGlob.printf("TYPE OF ");
 
 				if (basedOnColumn)
-					isqlGlob.printf("COLUMN %s.%s", relationName, relationField);
-				else
 				{
-					fb_utils::exact_name(FLD.RDB$FIELD_NAME);
-
-					if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-					{
-						IUTILS_copy_SQL_id (FLD.RDB$FIELD_NAME, SQL_identifier, DBL_QUOTE);
-						isqlGlob.prints(SQL_identifier);
-					}
-					else
-						isqlGlob.prints(FLD.RDB$FIELD_NAME);
+					isqlGlob.printf(
+						"COLUMN %s.%s",
+						IUTILS_name_to_string(relationName).c_str(),
+						IUTILS_name_to_string(relationField).c_str());
 				}
+				else
+					isqlGlob.prints(IUTILS_name_to_string(fieldName).c_str());
 
 				// International character sets
 				// Print only the collation
 				if ((FLD.RDB$FIELD_TYPE == blr_text || FLD.RDB$FIELD_TYPE == blr_varying) &&
 					!prm_collation_id_null)
 				{
-					char_sets[0] = '\0';
-					ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, prm_collation_id, default_char_set_id, Get::COLLATE_ONLY,
-						!prm_null_flag_null && prm_null_flag, true, char_sets);
-					if (char_sets[0])
-						isqlGlob.prints(char_sets);
+					if (ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, prm_collation_id,
+							getDefaultCharSetForSchemaFunc(func_name.schema),
+							Get::COLLATE_ONLY, !prm_null_flag_null && prm_null_flag, char_sets))
+					{
+						isqlGlob.prints(char_sets.c_str());
+					}
 				}
 				else if (!prm_null_flag_null && prm_null_flag)
 					isqlGlob.printf(" NOT NULL");
@@ -1062,7 +1018,7 @@ static void get_function_args_ods12(const char* func_name, USHORT out_arg, SSHOR
 			}
 			else
 			{
-				if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE,
+				if (!ISQL_printNumericType(fieldName, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE,
 						FLD.RDB$FIELD_PRECISION, FLD.RDB$FIELD_SCALE))
 				{
 					return; // ps_ERR;
@@ -1087,8 +1043,6 @@ static void get_function_args_ods12(const char* func_name, USHORT out_arg, SSHOR
 					!(((FLD.RDB$FIELD_TYPE == blr_text) || (FLD.RDB$FIELD_TYPE == blr_varying)) &&
 					  FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_text))
 				{
-					char_sets[0] = 0;
-
 					SSHORT collation = 0;
 
 					if (!prm_collation_id_null)
@@ -1099,16 +1053,17 @@ static void get_function_args_ods12(const char* func_name, USHORT out_arg, SSHOR
 					if (FLD.RDB$CHARACTER_SET_ID.NULL)
 						FLD.RDB$CHARACTER_SET_ID = 0;
 
-					ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, collation, default_char_set_id, Get::BOTH,
-						!prm_null_flag_null && prm_null_flag, true, char_sets);
-
-					if (char_sets[0])
-						isqlGlob.prints(char_sets);
+					if (ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, collation,
+							getDefaultCharSetForSchemaFunc(func_name.schema), Get::BOTH,
+							!prm_null_flag_null && prm_null_flag, char_sets))
+					{
+						isqlGlob.prints(char_sets.c_str());
+					}
 				}
 				else if (!prm_null_flag_null && prm_null_flag)
 					isqlGlob.printf(" NOT NULL");
 
-				if (pass == 0) // input, try to extract default and make Vlad happy.
+				if (pass == 0) // input, try to extract default
 				{
 					if (!prm_default_source_null)
 					{
@@ -1122,11 +1077,12 @@ static void get_function_args_ods12(const char* func_name, USHORT out_arg, SSHOR
 					}
 				}
 			}
+		}
 		END_FOR
 		ON_ERROR
 			ISQL_errmsg(fbStatus);
 			return;
-		END_ERROR;
+		END_ERROR
 
 		// If there was at least one param, close parens
 
@@ -1137,30 +1093,11 @@ static void get_function_args_ods12(const char* func_name, USHORT out_arg, SSHOR
 			else
 				isqlGlob.printf("%s", NEWLINE);
 		}
-
 	}						// end for ptype
 }
 
 
-static void list_all_grants()
-{
-/**************************************
- *
- *	l i s t _ a l l _ g r a n t s
- *
- **************************************
- *
- * Functional description
- *	Print the permissions on all user tables, views and procedures.
- *
- *	Wrapper around list_all_grants2().
- *
- **************************************/
-	list_all_grants2(true, isqlGlob.global_Term);
-}
-
-
-static processing_state list_all_grants2(bool show_role_list, const SCHAR* terminator)
+static processing_state list_all_grants(bool extract, const SCHAR* terminator)
 {
 /**************************************
  *
@@ -1175,60 +1112,50 @@ static processing_state list_all_grants2(bool show_role_list, const SCHAR* termi
  *
  **************************************/
 	bool first_role = true;
-	TEXT prev_owner[44];
-
-	// Only extract (not show) wants the role list and with escaped quoted identifiers.
-	const bool mangle = show_role_list;
+	MetaString prev_owner;
 
 	// Process GRANT roles
-	if (isqlGlob.major_ods >= ODS_VERSION9 && show_role_list)
+	if (isqlGlob.major_ods >= ODS_VERSION9 && extract)
 	{
 		prev_owner[0] = '\0';
 
 		FOR XX IN RDB$ROLES
 			SORTED BY XX.RDB$ROLE_NAME
-
+		{
 			bool system_flag = !XX.RDB$SYSTEM_FLAG.NULL && XX.RDB$SYSTEM_FLAG > 0;
 
 			if (!system_flag)
 			{
+				const MetaString roleName(XX.RDB$ROLE_NAME);
+				const MetaString ownerName(XX.RDB$OWNER_NAME);
+
 				if (first_role)
 				{
 					isqlGlob.printf("%s/* Grant roles for this database */%s", NEWLINE, NEWLINE);
 					first_role = false;
 				}
 
-				// Null terminate name string
-				fb_utils::exact_name(XX.RDB$ROLE_NAME);
-				fb_utils::exact_name(XX.RDB$OWNER_NAME);
-
-				if (strcmp (prev_owner, XX.RDB$OWNER_NAME) != 0)
+				if (ownerName != prev_owner)
 				{
 					isqlGlob.printf("%s/* Role: %s, Owner: %s */%s",
 							 NEWLINE,
-							 XX.RDB$ROLE_NAME,
-							 XX.RDB$OWNER_NAME,
+							 IUTILS_name_to_string(roleName).c_str(),
+							 IUTILS_name_to_string(ownerName).c_str(),
 							 NEWLINE);
-					strcpy (prev_owner, XX.RDB$OWNER_NAME);
+					prev_owner = ownerName;
 				}
 
-				if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-				{
-					IUTILS_copy_SQL_id (XX.RDB$ROLE_NAME, SQL_identifier, DBL_QUOTE);
-					isqlGlob.printf("CREATE ROLE %s", SQL_identifier);
-				}
-				else
-					isqlGlob.printf("CREATE ROLE %s", XX.RDB$ROLE_NAME);
+				isqlGlob.printf("CREATE ROLE %s", IUTILS_name_to_string(roleName).c_str());
 
 				SHOW_system_privileges(XX.RDB$ROLE_NAME, " SET SYSTEM PRIVILEGES TO", false);
 				isqlGlob.printf(";%s", NEWLINE);
 			}
-
+		}
 		END_FOR
 		ON_ERROR
 			ISQL_errmsg(fbStatus);
 		    return OBJECT_NOT_FOUND;
-		END_ERROR;
+		END_ERROR
 	}
 
 	// This version of cursor gets only sql tables identified by security class
@@ -1239,67 +1166,64 @@ static processing_state list_all_grants2(bool show_role_list, const SCHAR* termi
 
 	bool first = true;
 
-	FOR REL IN RDB$RELATIONS WITH
-		(REL.RDB$SYSTEM_FLAG NE 1 OR REL.RDB$SYSTEM_FLAG MISSING) AND
-		REL.RDB$SECURITY_CLASS STARTING "SQL$"
-		SORTED BY REL.RDB$RELATION_NAME
-
-		// Null terminate name string
-
-		fb_utils::exact_name(REL.RDB$RELATION_NAME);
+	FOR REL IN RDB$RELATIONS
+		WITH (REL.RDB$SYSTEM_FLAG NE 1 OR REL.RDB$SYSTEM_FLAG MISSING) AND
+			  REL.RDB$SECURITY_CLASS STARTING "SQL$"
+		SORTED BY REL.RDB$SCHEMA_NAME, REL.RDB$RELATION_NAME
+	{
+		const QualifiedMetaString relationName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME);
 
 		const processing_state rc =
-			SHOW_grants2(REL.RDB$RELATION_NAME, terminator, obj_relation,
-						   first ? banner : 0, mangle);
-		if (rc == SKIP) {
-			first = false;
-		}
+			SHOW_grants(relationName, terminator, obj_relation, (first ? banner : nullptr));
 
+		if (rc == SKIP)
+			first = false;
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return OBJECT_NOT_FOUND;
-	END_ERROR;
+	END_ERROR
 
 	if (first)
-		SHOW_grant_roles2(terminator, &first, banner, mangle);
+		SHOW_grant_roles(terminator, &first, banner);
 	else
-		SHOW_grant_roles2(terminator, 0, 0, mangle);
+		SHOW_grant_roles(terminator, nullptr, nullptr);
 
 	// For stored procedures, but ignore procedures inside packages.
 	FOR PRC IN RDB$PROCEDURES
-		WITH (PRC.RDB$SYSTEM_FLAG NE 1 OR PRC.RDB$SYSTEM_FLAG MISSING)
-		AND PRC.RDB$PACKAGE_NAME MISSING
-		SORTED BY PRC.RDB$PROCEDURE_NAME
-
-		// Null terminate name string
-		fb_utils::exact_name(PRC.RDB$PROCEDURE_NAME);
+		WITH (PRC.RDB$SYSTEM_FLAG NE 1 OR PRC.RDB$SYSTEM_FLAG MISSING) AND
+			 PRC.RDB$PACKAGE_NAME MISSING
+		SORTED BY PRC.RDB$SCHEMA_NAME, PRC.RDB$PROCEDURE_NAME
+	{
+		const QualifiedMetaString procedureName(PRC.RDB$PROCEDURE_NAME, PRC.RDB$SCHEMA_NAME);
 
 		const processing_state rc =
-			SHOW_grants2(PRC.RDB$PROCEDURE_NAME, terminator, obj_procedure,
-							   first ? banner : 0, mangle);
+			SHOW_grants(procedureName, terminator, obj_procedure, (first ? banner : nullptr));
+
 		if (rc == SKIP)
 			first = false;
-
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return OBJECT_NOT_FOUND;
-	END_ERROR;
+	END_ERROR
 
 	if (isqlGlob.major_ods >= ODS_VERSION12)
 	{
 		FOR PACK IN RDB$PACKAGES
 			WITH (PACK.RDB$SYSTEM_FLAG NE 1 OR PACK.RDB$SYSTEM_FLAG MISSING)
-			SORTED BY PACK.RDB$PACKAGE_NAME
+			SORTED BY PACK.RDB$SCHEMA_NAME, PACK.RDB$PACKAGE_NAME
+		{
+			const QualifiedMetaString packageName(PACK.RDB$PACKAGE_NAME, PACK.RDB$SCHEMA_NAME);
 
-			// Null terminate name string
-			fb_utils::exact_name(PACK.RDB$PACKAGE_NAME);
 			const processing_state rc =
-				SHOW_grants2(PACK.RDB$PACKAGE_NAME, terminator, obj_package_header,
-													first ? banner : 0, mangle);
+				SHOW_grants(packageName, terminator, obj_package_header, (first ? banner : nullptr));
+
 			if (rc == SKIP)
 				first = false;
+		}
 		END_FOR
 		ON_ERROR
 			ISQL_errmsg(fbStatus);
@@ -1309,15 +1233,16 @@ static processing_state list_all_grants2(bool show_role_list, const SCHAR* termi
 		FOR FUN IN RDB$FUNCTIONS
 			WITH (FUN.RDB$SYSTEM_FLAG NE 1 OR FUN.RDB$SYSTEM_FLAG MISSING) AND
 				 FUN.RDB$PACKAGE_NAME MISSING
-			SORTED BY FUN.RDB$FUNCTION_NAME
+			SORTED BY FUN.RDB$SCHEMA_NAME, FUN.RDB$FUNCTION_NAME
+		{
+			const QualifiedMetaString functionName(FUN.RDB$FUNCTION_NAME, FUN.RDB$SCHEMA_NAME);
 
-			// Null terminate name string
-			fb_utils::exact_name(FUN.RDB$FUNCTION_NAME);
 			const processing_state rc =
-				SHOW_grants2(FUN.RDB$FUNCTION_NAME, terminator, obj_udf,
-													first ? banner : 0, mangle);
+				SHOW_grants(functionName, terminator, obj_udf, (first ? banner : nullptr));
+
 			if (rc == SKIP)
 				first = false;
+		}
 		END_FOR
 		ON_ERROR
 			ISQL_errmsg(fbStatus);
@@ -1326,15 +1251,16 @@ static processing_state list_all_grants2(bool show_role_list, const SCHAR* termi
 
 		FOR GEN IN RDB$GENERATORS
 			WITH (GEN.RDB$SYSTEM_FLAG NE 1 OR GEN.RDB$SYSTEM_FLAG MISSING)
-			SORTED BY GEN.RDB$GENERATOR_NAME
+			SORTED BY GEN.RDB$SCHEMA_NAME, GEN.RDB$GENERATOR_NAME
+		{
+			const QualifiedMetaString generatorName(GEN.RDB$GENERATOR_NAME, GEN.RDB$SCHEMA_NAME);
 
-			// Null terminate name string
-			fb_utils::exact_name(GEN.RDB$GENERATOR_NAME);
 			const processing_state rc =
-				SHOW_grants2(GEN.RDB$GENERATOR_NAME, terminator, obj_generator,
-													 first ? banner : 0, mangle);
+				SHOW_grants(generatorName, terminator, obj_generator, (first ? banner : nullptr));
+
 			if (rc == SKIP)
 				first = false;
+		}
 		END_FOR
 		ON_ERROR
 			ISQL_errmsg(fbStatus);
@@ -1343,32 +1269,12 @@ static processing_state list_all_grants2(bool show_role_list, const SCHAR* termi
 
 		FOR XCP IN RDB$EXCEPTIONS
 			WITH (XCP.RDB$SYSTEM_FLAG NE 1 OR XCP.RDB$SYSTEM_FLAG MISSING)
-			SORTED BY XCP.RDB$EXCEPTION_NAME
-
-			// Null terminate name string
-			fb_utils::exact_name(XCP.RDB$EXCEPTION_NAME);
-			const processing_state rc =
-				SHOW_grants2(XCP.RDB$EXCEPTION_NAME, terminator, obj_exception,
-													 first ? banner : 0, mangle);
-			if (rc == SKIP)
-				first = false;
-		END_FOR
-		ON_ERROR
-			ISQL_errmsg(fbStatus);
-			return OBJECT_NOT_FOUND;
-		END_ERROR
-
-		/***
-		FOR FLD IN RDB$FIELDS WITH
-			FLD.RDB$FIELD_NAME NOT MATCHING "RDB$+" USING "+=[0-9][0-9]* *"
-			AND FLD.RDB$SYSTEM_FLAG NE 1
-			SORTED BY FLD.RDB$FIELD_NAME
+			SORTED BY XCP.RDB$SCHEMA_NAME, XCP.RDB$EXCEPTION_NAME
 		{
-			// Null terminate name string
-			fb_utils::exact_name(FLD.RDB$FIELD_NAME);
+			const QualifiedMetaString exceptionName(XCP.RDB$EXCEPTION_NAME, XCP.RDB$SCHEMA_NAME);
+
 			const processing_state rc =
-				SHOW_grants2(FLD.RDB$FIELD_NAME, terminator, obj_field,
-					(first ? banner : 0), mangle);
+				SHOW_grants(exceptionName, terminator, obj_exception, (first ? banner : nullptr));
 
 			if (rc == SKIP)
 				first = false;
@@ -1379,54 +1285,28 @@ static processing_state list_all_grants2(bool show_role_list, const SCHAR* termi
 			return OBJECT_NOT_FOUND;
 		END_ERROR
 
-		FOR CS IN RDB$CHARACTER_SETS
-			SORTED BY CS.RDB$CHARACTER_SET_NAME
+		if (isqlGlob.major_ods >= ODS_VERSION14)
 		{
-			// Null terminate name string
-			fb_utils::exact_name(CS.RDB$CHARACTER_SET_NAME);
-			const processing_state rc =
-				SHOW_grants2(CS.RDB$CHARACTER_SET_NAME, terminator, obj_charset,
-					(first ? banner : 0), mangle);
+			FOR SCH IN RDB$SCHEMAS
+				WITH SCH.RDB$SYSTEM_FLAG NE 1 OR SCH.RDB$SYSTEM_FLAG MISSING
+				SORTED BY SCH.RDB$SCHEMA_NAME
+			{
+				const QualifiedMetaString schemaName(SCH.RDB$SCHEMA_NAME);
 
-			if (rc == SKIP)
-				first = false;
+				const processing_state rc = SHOW_grants(schemaName, terminator, obj_schema, (first ? banner : nullptr));
+
+				if (rc == SKIP)
+					first = false;
+			}
+			END_FOR
+			ON_ERROR
+				ISQL_errmsg(fbStatus);
+				return OBJECT_NOT_FOUND;
+			END_ERROR
 		}
-		END_FOR
-		ON_ERROR
-			ISQL_errmsg(fbStatus);
-			return OBJECT_NOT_FOUND;
-		END_ERROR
 
-		FOR COL IN RDB$COLLATIONS
-			SORTED BY COL.RDB$COLLATION_NAME
-		{
-			// Null terminate name string
-			fb_utils::exact_name(COL.RDB$COLLATION_NAME);
-			const processing_state rc =
-				SHOW_grants2(COL.RDB$COLLATION_NAME, terminator, obj_collation,
-					(first ? banner : 0), mangle);
-
-			if (rc == SKIP)
-				first = false;
-		}
-		END_FOR
-		ON_ERROR
-			ISQL_errmsg(fbStatus);
-			return OBJECT_NOT_FOUND;
-		END_ERROR
-		***/
-
-		// Process DDL permissions
-		for (SSHORT obj = obj_database; obj < obj_type_MAX; obj++)
-		{
-			if (!isDdlObject(obj))
-				continue;
-
-			const processing_state rc =
-				SHOW_grants2(getSecurityClassName(obj), terminator, obj, first ? banner : 0, mangle);
-			if (rc == SKIP)
-				first = false;
-		}
+		if (SHOW_ddl_grants(std::nullopt, terminator, obj_any, (first ? banner : 0)) == SKIP)
+			first = false;
 	}
 
 	return first_role && first ? OBJECT_NOT_FOUND : SKIP;
@@ -1479,7 +1359,7 @@ static void print_proc_suffix(int obj_type)
 		isqlGlob.printf("SET AUTODDL ON%s%s", isqlGlob.global_Term, NEWLINE);
 }
 
-static void list_procedure_headers(SSHORT default_char_set_id)
+static void list_procedure_headers(GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc)
 {
 /**************************************
  *
@@ -1507,26 +1387,22 @@ static void list_procedure_headers(SSHORT default_char_set_id)
 	// create the procedures with their parameters
 
 	FOR PRC IN RDB$PROCEDURES
-		WITH (PRC.RDB$SYSTEM_FLAG NE 1 OR PRC.RDB$SYSTEM_FLAG MISSING)
-		AND PRC.RDB$PACKAGE_NAME MISSING
-		SORTED BY PRC.RDB$PROCEDURE_NAME
+		WITH (PRC.RDB$SYSTEM_FLAG NE 1 OR PRC.RDB$SYSTEM_FLAG MISSING) AND
+			 PRC.RDB$PACKAGE_NAME MISSING
+		SORTED BY PRC.RDB$SCHEMA_NAME, PRC.RDB$PROCEDURE_NAME
+	{
+		const QualifiedMetaString name(PRC.RDB$PROCEDURE_NAME, PRC.RDB$SCHEMA_NAME);
+
 		if (header)
 		{
 			print_proc_prefix(obj_procedure, true);
 			header = false;
 		}
-		fb_utils::exact_name(PRC.RDB$PROCEDURE_NAME);
-		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-		{
-			IUTILS_copy_SQL_id (PRC.RDB$PROCEDURE_NAME, SQL_identifier, DBL_QUOTE);
-			isqlGlob.printf(create_procedure, SQL_identifier);
-		}
-		else
-		{
-			isqlGlob.printf(create_procedure, PRC.RDB$PROCEDURE_NAME, default_char_set_id);
-		}
 
-		get_procedure_args(PRC.RDB$PROCEDURE_NAME, default_char_set_id);
+		isqlGlob.printf(create_procedure, IUTILS_name_to_string(name).c_str());
+
+		get_procedure_args(name, getDefaultCharSetForSchemaFunc);
+
 		isqlGlob.printf("AS %s", NEWLINE);
 
 		prc_t proc_type = PRC.RDB$PROCEDURE_TYPE.NULL ? prc_legacy : (prc_t) PRC.RDB$PROCEDURE_TYPE;
@@ -1536,12 +1412,13 @@ static void list_procedure_headers(SSHORT default_char_set_id)
 			isqlGlob.printf(body_execut_proc, Procterm, NEWLINE);
 		else
 			isqlGlob.printf(body_select_proc, Procterm, NEWLINE);
-
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return;
-	END_ERROR;
+	END_ERROR
+
 	// Only reset the terminators if there were procs to print
 	if (!header)
 		print_proc_suffix(obj_procedure);
@@ -1549,7 +1426,7 @@ static void list_procedure_headers(SSHORT default_char_set_id)
 
 
 
-static void list_procedure_bodies(SSHORT default_char_set_id)
+static void list_procedure_bodies(GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc)
 {
 /**************************************
  *
@@ -1571,25 +1448,21 @@ static void list_procedure_bodies(SSHORT default_char_set_id)
 	TEXT msg[MSG_LENGTH];
 
 	FOR PRC IN RDB$PROCEDURES
-		WITH (PRC.RDB$SYSTEM_FLAG NE 1 OR PRC.RDB$SYSTEM_FLAG MISSING)
-		AND PRC.RDB$PACKAGE_NAME MISSING
-		SORTED BY PRC.RDB$PROCEDURE_NAME
+		WITH (PRC.RDB$SYSTEM_FLAG NE 1 OR PRC.RDB$SYSTEM_FLAG MISSING) AND
+			 PRC.RDB$PACKAGE_NAME MISSING
+		SORTED BY PRC.RDB$SCHEMA_NAME, PRC.RDB$PROCEDURE_NAME
+	{
+		const QualifiedMetaString name(PRC.RDB$PROCEDURE_NAME, PRC.RDB$SCHEMA_NAME);
+
 		if (header)
 		{
 			print_proc_prefix(obj_procedure, false);
 			header = false;
 		}
-		fb_utils::exact_name(PRC.RDB$PROCEDURE_NAME);
 
-		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-		{
-			IUTILS_copy_SQL_id (PRC.RDB$PROCEDURE_NAME, SQL_identifier, DBL_QUOTE);
-			isqlGlob.printf("%sALTER PROCEDURE %s ", NEWLINE, SQL_identifier);
-		}
-		else
-			isqlGlob.printf("%sALTER PROCEDURE %s ", NEWLINE, PRC.RDB$PROCEDURE_NAME);
+		isqlGlob.printf("%sALTER PROCEDURE %s ", NEWLINE, IUTILS_name_to_string(name).c_str());
 
-		get_procedure_args(PRC.RDB$PROCEDURE_NAME, default_char_set_id);
+		get_procedure_args(name, getDefaultCharSetForSchemaFunc);
 
 		// Print the procedure body
 
@@ -1625,14 +1498,14 @@ static void list_procedure_bodies(SSHORT default_char_set_id)
 		}
 
 		isqlGlob.printf(" %s%s", Procterm, NEWLINE);
-
+	}
 	END_FOR
 	ON_ERROR
 		IUTILS_msg_get(GEN_ERR, msg, SafeArg() << isc_sqlcode(fbStatus->getErrors()));
 		STDERROUT(msg);			// Statement failed, SQLCODE = %d\n\n
 		ISQL_errmsg(fbStatus);
 		return;
-	END_ERROR;
+	END_ERROR
 
 	// Only reset the terminators if there were procs to print
 	if (!header)
@@ -1641,7 +1514,7 @@ static void list_procedure_bodies(SSHORT default_char_set_id)
 
 
 
-static void list_all_tables(LegacyTables flag, SSHORT default_char_set_id)
+static void list_all_tables(LegacyTables flag, GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc)
 {
 /**************************************
  *
@@ -1660,27 +1533,26 @@ static void list_all_tables(LegacyTables flag, SSHORT default_char_set_id)
 	// This version of cursor gets only sql tables identified by security class
 	// and misses views, getting only null view_source
 
-	FOR REL IN RDB$RELATIONS WITH
-		(REL.RDB$SYSTEM_FLAG NE 1 OR REL.RDB$SYSTEM_FLAG MISSING) AND
-		REL.RDB$VIEW_BLR MISSING
-		SORTED BY REL.RDB$RELATION_NAME
-
+	FOR REL IN RDB$RELATIONS
+		WITH (REL.RDB$SYSTEM_FLAG NE 1 OR REL.RDB$SYSTEM_FLAG MISSING) AND
+			 REL.RDB$VIEW_BLR MISSING
+		SORTED BY REL.RDB$SCHEMA_NAME, REL.RDB$RELATION_NAME
+	{
 		// If this is not an SQL table and we aren't doing ALL objects
 		if ((REL.RDB$FLAGS.NULL || !(REL.RDB$FLAGS & REL_sql)) && (flag != ALL_objects) )
 			continue;
-		// Null terminate name string
 
-		fb_utils::exact_name(REL.RDB$RELATION_NAME);
+		const QualifiedMetaString relationName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME);
 
 		if (flag || !strncmp (REL.RDB$SECURITY_CLASS, "SQL$", 4))
-			EXTRACT_list_table (REL.RDB$RELATION_NAME, NULL,  false, default_char_set_id);
+			EXTRACT_list_table(relationName, {}, false, getDefaultCharSetForSchemaFunc);
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		ROLLBACK;
 		return;
-	END_ERROR;
-
+	END_ERROR
 }
 
 
@@ -1705,14 +1577,15 @@ static void list_all_triggers()
 	FOR TRG IN RDB$TRIGGERS
 		WITH (TRG.RDB$SYSTEM_FLAG EQ 0 OR TRG.RDB$SYSTEM_FLAG MISSING) AND
 			 TRG.RDB$RELATION_NAME MISSING
-		SORTED BY TRG.RDB$TRIGGER_TYPE, TRG.RDB$TRIGGER_SEQUENCE, TRG.RDB$TRIGGER_NAME
-
+		SORTED BY TRG.RDB$TRIGGER_TYPE, TRG.RDB$TRIGGER_SEQUENCE, TRG.RDB$SCHEMA_NAME, TRG.RDB$TRIGGER_NAME
+	{
 		if (header)
 		{
 			print_proc_prefix(obj_trigger, false);
 			header = false;
 		}
-		fb_utils::exact_name(TRG.RDB$TRIGGER_NAME);
+
+		const QualifiedMetaString name(TRG.RDB$TRIGGER_NAME, TRG.RDB$SCHEMA_NAME);
 
 		if (TRG.RDB$TRIGGER_INACTIVE.NULL)
 			TRG.RDB$TRIGGER_INACTIVE = 0;
@@ -1721,13 +1594,9 @@ static void list_all_triggers()
 		if (!(TRG.RDB$FLAGS & TRG_sql))
 			isqlGlob.printf("/* ");
 
-		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-			IUTILS_copy_SQL_id (TRG.RDB$TRIGGER_NAME, SQL_identifier,  DBL_QUOTE);
-		else
-			strcpy (SQL_identifier,  TRG.RDB$TRIGGER_NAME);
-
 		isqlGlob.printf("CREATE TRIGGER %s %s%s %s POSITION %d %s",
-				 SQL_identifier, NEWLINE,
+				 IUTILS_name_to_string(name).c_str(),
+				 NEWLINE,
 				 (TRG.RDB$TRIGGER_INACTIVE ? "INACTIVE" : "ACTIVE"),
 				 SHOW_trigger_action(TRG.RDB$TRIGGER_TYPE).c_str(), TRG.RDB$TRIGGER_SEQUENCE,
 				 NEWLINE);
@@ -1767,21 +1636,24 @@ static void list_all_triggers()
 		{
 			isqlGlob.printf("*/%s", NEWLINE);
 		}
-
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return;
-	END_ERROR;
+	END_ERROR
 
-	FOR TRG IN RDB$TRIGGERS CROSS REL IN RDB$RELATIONS OVER RDB$RELATION_NAME
+	FOR TRG IN RDB$TRIGGERS CROSS
+		REL IN RDB$RELATIONS
 		//WITH (REL.RDB$SYSTEM_FLAG NE 1 OR REL.RDB$SYSTEM_FLAG MISSING) AND
 		//NOT (ANY CHK IN RDB$CHECK_CONSTRAINTS WITH
 		//TRG.RDB$TRIGGER_NAME EQ CHK.RDB$TRIGGER_NAME)
-		WITH (TRG.RDB$SYSTEM_FLAG EQ 0 OR TRG.RDB$SYSTEM_FLAG MISSING)
-		SORTED BY TRG.RDB$RELATION_NAME, TRG.RDB$TRIGGER_TYPE,
-			TRG.RDB$TRIGGER_SEQUENCE, TRG.RDB$TRIGGER_NAME
-
+		WITH REL.RDB$SCHEMA_NAME EQUIV TRG.RDB$SCHEMA_NAME AND
+			 REL.RDB$RELATION_NAME EQ TRG.RDB$RELATION_NAME AND
+			 (TRG.RDB$SYSTEM_FLAG EQ 0 OR TRG.RDB$SYSTEM_FLAG MISSING)
+		SORTED BY TRG.RDB$SCHEMA_NAME, TRG.RDB$RELATION_NAME, TRG.RDB$TRIGGER_TYPE,
+				  TRG.RDB$TRIGGER_SEQUENCE, TRG.RDB$TRIGGER_NAME
+	{
 		if (header)
 		{
 			isqlGlob.printf("SET TERM %s %s%s", Procterm, isqlGlob.global_Term, NEWLINE);
@@ -1790,8 +1662,9 @@ static void list_all_triggers()
 					 NEWLINE);
 			header = false;
 		}
-		fb_utils::exact_name(TRG.RDB$TRIGGER_NAME);
-		fb_utils::exact_name(TRG.RDB$RELATION_NAME);
+
+		const QualifiedMetaString name(TRG.RDB$TRIGGER_NAME, TRG.RDB$SCHEMA_NAME);
+		const MetaString relationName(TRG.RDB$RELATION_NAME);
 
 		if (TRG.RDB$TRIGGER_INACTIVE.NULL)
 			TRG.RDB$TRIGGER_INACTIVE = 0;
@@ -1800,19 +1673,10 @@ static void list_all_triggers()
 		if (!(TRG.RDB$FLAGS & TRG_sql))
 			isqlGlob.printf("/* ");
 
-		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-		{
-			IUTILS_copy_SQL_id (TRG.RDB$TRIGGER_NAME, SQL_identifier,  DBL_QUOTE);
-			IUTILS_copy_SQL_id (TRG.RDB$RELATION_NAME, SQL_identifier2, DBL_QUOTE);
-		}
-		else
-		{
-			strcpy (SQL_identifier,  TRG.RDB$TRIGGER_NAME);
-			strcpy (SQL_identifier2, TRG.RDB$RELATION_NAME);
-		}
-
 		isqlGlob.printf("CREATE TRIGGER %s FOR %s %s%s %s POSITION %d %s",
-				 SQL_identifier, SQL_identifier2, NEWLINE,
+				 IUTILS_name_to_string(name).c_str(),
+				 IUTILS_name_to_string(relationName).c_str(),
+				 NEWLINE,
 				 (TRG.RDB$TRIGGER_INACTIVE ? "INACTIVE" : "ACTIVE"),
 				 SHOW_trigger_action(TRG.RDB$TRIGGER_TYPE).c_str(), TRG.RDB$TRIGGER_SEQUENCE,
 				 NEWLINE);
@@ -1852,12 +1716,12 @@ static void list_all_triggers()
 		{
 			isqlGlob.printf("*/%s", NEWLINE);
 		}
-
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return;
-	END_ERROR;
+	END_ERROR
 
 	if (!header)
 		print_proc_suffix(obj_trigger);
@@ -1882,57 +1746,47 @@ static void list_check()
 	bool first = true;
 
 	FOR TRG IN RDB$TRIGGERS CROSS
-		CHK IN RDB$CHECK_CONSTRAINTS WITH
-		TRG.RDB$TRIGGER_TYPE EQ 1 AND
-		TRG.RDB$SYSTEM_FLAG EQ int(fb_sysflag_check_constraint) AND
-		TRG.RDB$TRIGGER_NAME EQ CHK.RDB$TRIGGER_NAME AND
-		(ANY RELC IN RDB$RELATION_CONSTRAINTS WITH
-		CHK.RDB$CONSTRAINT_NAME EQ RELC.RDB$CONSTRAINT_NAME
-		AND RELC.RDB$CONSTRAINT_TYPE EQ "CHECK")
-		REDUCED TO CHK.RDB$CONSTRAINT_NAME
-		SORTED BY CHK.RDB$CONSTRAINT_NAME
-
+		CHK IN RDB$CHECK_CONSTRAINTS
+		WITH TRG.RDB$TRIGGER_TYPE EQ 1 AND
+			 TRG.RDB$SYSTEM_FLAG EQ int(fb_sysflag_check_constraint) AND
+			 TRG.RDB$SCHEMA_NAME EQUIV CHK.RDB$SCHEMA_NAME AND
+			 TRG.RDB$TRIGGER_NAME EQ CHK.RDB$TRIGGER_NAME AND
+			 (ANY RELC IN RDB$RELATION_CONSTRAINTS
+			 	WITH CHK.RDB$SCHEMA_NAME EQUIV RELC.RDB$SCHEMA_NAME AND
+			 		 CHK.RDB$CONSTRAINT_NAME EQ RELC.RDB$CONSTRAINT_NAME AND
+			 		 RELC.RDB$CONSTRAINT_TYPE EQ "CHECK")
+		REDUCED TO CHK.RDB$SCHEMA_NAME, CHK.RDB$CONSTRAINT_NAME
+		SORTED BY CHK.RDB$SCHEMA_NAME, CHK.RDB$CONSTRAINT_NAME
+	{
 		if (first)
 		{
 			isqlGlob.printf("%s/* Table constraints */%s", NEWLINE, NEWLINE);
 			first = false;
 		}
 
-		fb_utils::exact_name(TRG.RDB$RELATION_NAME);
+		const QualifiedMetaString relationName(TRG.RDB$RELATION_NAME, TRG.RDB$SCHEMA_NAME);
 
 		isqlGlob.printf(NEWLINE);
 
-		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-		{
-			IUTILS_copy_SQL_id (TRG.RDB$RELATION_NAME, SQL_identifier, DBL_QUOTE);
-			isqlGlob.printf("ALTER TABLE %s ADD %s%s", SQL_identifier, NEWLINE, TAB_AS_SPACES);
-		}
-		else
-			isqlGlob.printf("ALTER TABLE %s ADD %s%s", TRG.RDB$RELATION_NAME, NEWLINE, TAB_AS_SPACES);
+		isqlGlob.printf("ALTER TABLE %s ADD %s%s", IUTILS_name_to_string(relationName).c_str(), NEWLINE, TAB_AS_SPACES);
 
 		// If the name of the constraint is not INTEG_..., print it
 		if (!fb_utils::implicit_integrity(CHK.RDB$CONSTRAINT_NAME))
 		{
-			fb_utils::exact_name(CHK.RDB$CONSTRAINT_NAME);
-			if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-			{
-				IUTILS_copy_SQL_id (CHK.RDB$CONSTRAINT_NAME, SQL_identifier, DBL_QUOTE);
-				isqlGlob.printf("CONSTRAINT %s ", SQL_identifier);
-			}
-			else
-				isqlGlob.printf("CONSTRAINT %s ", CHK.RDB$CONSTRAINT_NAME);
+			const MetaString constraintName(CHK.RDB$CONSTRAINT_NAME);
+			isqlGlob.printf("CONSTRAINT %s ", IUTILS_name_to_string(constraintName).c_str());
 		}
 
 		if (!TRG.RDB$TRIGGER_SOURCE.NULL)
 			SHOW_print_metadata_text_blob (isqlGlob.Out, &TRG.RDB$TRIGGER_SOURCE);
 
 		isqlGlob.printf("%s%s", isqlGlob.global_Term, NEWLINE);
-
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return;
-	END_ERROR;
+	END_ERROR
 }
 
 
@@ -1952,37 +1806,33 @@ static void list_charsets()
 	bool first = true;
 
 	FOR CS IN RDB$CHARACTER_SETS
-		WITH NOT CS.RDB$CHARACTER_SET_NAME EQ CS.RDB$DEFAULT_COLLATE_NAME
-		SORTED BY CS.RDB$CHARACTER_SET_NAME
-
+		WITH NOT (
+				CS.RDB$SCHEMA_NAME EQUIV CS.RDB$DEFAULT_COLLATE_SCHEMA_NAME AND
+				CS.RDB$CHARACTER_SET_NAME EQ CS.RDB$DEFAULT_COLLATE_NAME)
+		SORTED BY CS.RDB$SCHEMA_NAME, CS.RDB$CHARACTER_SET_NAME
+	{
 		if (first)
 		{
 			isqlGlob.printf("%s/*  Character sets */%s", NEWLINE, NEWLINE);
 			first = false;
 		}
 
-		isqlGlob.printf("ALTER CHARACTER SET ");
+		const QualifiedMetaString name(CS.RDB$CHARACTER_SET_NAME, CS.RDB$SCHEMA_NAME);
+		const QualifiedMetaString defaultCollateName(
+			CS.RDB$DEFAULT_COLLATE_NAME, CS.RDB$DEFAULT_COLLATE_SCHEMA_NAME);
 
-		fb_utils::exact_name(CS.RDB$CHARACTER_SET_NAME);
-		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-			IUTILS_copy_SQL_id (CS.RDB$CHARACTER_SET_NAME, SQL_identifier, DBL_QUOTE);
-		else
-			strcpy (SQL_identifier, CS.RDB$CHARACTER_SET_NAME);
-		isqlGlob.printf("%s", SQL_identifier);
-
-		fb_utils::exact_name(CS.RDB$DEFAULT_COLLATE_NAME);
-		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-			IUTILS_copy_SQL_id (CS.RDB$DEFAULT_COLLATE_NAME, SQL_identifier, DBL_QUOTE);
-		else
-			strcpy (SQL_identifier, CS.RDB$DEFAULT_COLLATE_NAME);
-		isqlGlob.printf(" SET DEFAULT COLLATION %s", SQL_identifier);
+		isqlGlob.printf(
+			"ALTER CHARACTER SET %s SET DEFAULT COLLATION %s",
+			IUTILS_name_to_string(name).c_str(),
+			IUTILS_name_to_string(defaultCollateName).c_str());
 
 		isqlGlob.printf("%s%s", isqlGlob.global_Term, NEWLINE);
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return;
-	END_ERROR;
+	END_ERROR
 
 	if (! first)
 		isqlGlob.printf(NEWLINE);
@@ -2008,32 +1858,24 @@ static void list_collations()
 	bool first = true;
 
 	FOR CL IN RDB$COLLATIONS CROSS
-		CS IN RDB$CHARACTER_SETS WITH
-		CS.RDB$CHARACTER_SET_ID EQ CL.RDB$CHARACTER_SET_ID AND
-		(CL.RDB$SYSTEM_FLAG MISSING OR CL.RDB$SYSTEM_FLAG NE 1)
-		SORTED BY CS.RDB$CHARACTER_SET_NAME, CL.RDB$COLLATION_NAME
-
+		CS IN RDB$CHARACTER_SETS
+		WITH CS.RDB$CHARACTER_SET_ID EQ CL.RDB$CHARACTER_SET_ID AND
+			 (CL.RDB$SYSTEM_FLAG MISSING OR CL.RDB$SYSTEM_FLAG NE 1)
+		SORTED BY CS.RDB$SCHEMA_NAME, CS.RDB$CHARACTER_SET_NAME, CL.RDB$SCHEMA_NAME, CL.RDB$COLLATION_NAME
+	{
 		if (first)
 		{
 			isqlGlob.printf("%s/*  Collations */%s", NEWLINE, NEWLINE);
 			first = false;
 		}
 
-		isqlGlob.printf("CREATE COLLATION ");
+		const QualifiedMetaString name(CL.RDB$COLLATION_NAME, CL.RDB$SCHEMA_NAME);
+		const QualifiedMetaString charSetName(CS.RDB$CHARACTER_SET_NAME, CS.RDB$SCHEMA_NAME);
 
-		fb_utils::exact_name(CL.RDB$COLLATION_NAME);
-		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-			IUTILS_copy_SQL_id (CL.RDB$COLLATION_NAME, SQL_identifier, DBL_QUOTE);
-		else
-			strcpy (SQL_identifier, CL.RDB$COLLATION_NAME);
-		isqlGlob.printf("%s", SQL_identifier);
-
-		fb_utils::exact_name(CS.RDB$CHARACTER_SET_NAME);
-		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-			IUTILS_copy_SQL_id (CS.RDB$CHARACTER_SET_NAME, SQL_identifier, DBL_QUOTE);
-		else
-			strcpy (SQL_identifier, CS.RDB$CHARACTER_SET_NAME);
-		isqlGlob.printf(" FOR %s", SQL_identifier);
+		isqlGlob.printf(
+			"CREATE COLLATION %s FOR %s",
+			IUTILS_name_to_string(name).c_str(),
+			IUTILS_name_to_string(charSetName).c_str());
 
 		if (!CL.RDB$BASE_COLLATION_NAME.NULL)
 		{
@@ -2062,11 +1904,12 @@ static void list_collations()
 		}
 
 		isqlGlob.printf("%s%s", isqlGlob.global_Term, NEWLINE);
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return;
-	END_ERROR;
+	END_ERROR
 
 	isqlGlob.printf(NEWLINE);
 }
@@ -2109,36 +1952,46 @@ static void list_create_db()
 	SHOW_dbb_parameters(DB, page_items, sizeof(page_items), translate, " ");
 
 	FOR DBP IN RDB$DATABASE
-		WITH DBP.RDB$CHARACTER_SET_NAME NOT MISSING
-		AND DBP.RDB$CHARACTER_SET_NAME != " "
+		WITH DBP.RDB$CHARACTER_SET_NAME NOT MISSING AND
+			 DBP.RDB$CHARACTER_SET_NAME != " "
+	{
+		const QualifiedMetaString charSetName(
+			DBP.RDB$CHARACTER_SET_NAME, DBP.RDB$CHARACTER_SET_SCHEMA_NAME);
+
 		isqlGlob.printf("DEFAULT CHARACTER SET %s%s",
-			fb_utils::exact_name(DBP.RDB$CHARACTER_SET_NAME), isqlGlob.global_Term);
+			IUTILS_name_to_string(charSetName).c_str(),
+			isqlGlob.global_Term);
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return;
-	END_ERROR;
+	END_ERROR
 
 	FOR DBP2 IN RDB$DATABASE
-		WITH DBP2.RDB$LINGER NOT MISSING
-		AND DBP2.RDB$LINGER > 0
+		WITH DBP2.RDB$LINGER NOT MISSING AND
+			 DBP2.RDB$LINGER > 0
+	{
 		isqlGlob.printf("%sALTER DATABASE SET LINGER TO %d%s", NEWLINE, DBP2.RDB$LINGER,
 			isqlGlob.global_Term);
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return;
-	END_ERROR;
+	END_ERROR
 
 	FOR DBPSS IN RDB$DATABASE
-		WITH DBPSS.RDB$SQL_SECURITY NOT MISSING
-		AND DBPSS.RDB$SQL_SECURITY == FB_TRUE
+		WITH DBPSS.RDB$SQL_SECURITY NOT MISSING AND
+			 DBPSS.RDB$SQL_SECURITY == FB_TRUE
+	{
 		isqlGlob.printf("%sALTER DATABASE SET DEFAULT SQL SECURITY DEFINER%s", NEWLINE, isqlGlob.global_Term);
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return;
-	END_ERROR;
+	END_ERROR
 
 	if (nodb)
 		isqlGlob.printf(" */%s", NEWLINE);
@@ -2151,7 +2004,7 @@ static void list_create_db()
 
 	FOR FIL IN RDB$FILES
 		SORTED BY FIL.RDB$SHADOW_NUMBER, FIL.RDB$FILE_SEQUENCE
-
+	{
 		// reset nulls to zero
 		if (FIL.RDB$FILE_FLAGS.NULL)
 			FIL.RDB$FILE_FLAGS = 0;
@@ -2233,12 +2086,12 @@ static void list_create_db()
 			isqlGlob.printf("%sALTER DATABASE ADD DIFFERENCE FILE '%s'", NEWLINE, FIL.RDB$FILE_NAME);
 			isqlGlob.printf("%s%s", isqlGlob.global_Term, NEWLINE);
 		}
-
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return;
-	END_ERROR;
+	END_ERROR
 
 	if (!first)
 	{
@@ -2248,7 +2101,8 @@ static void list_create_db()
 }
 
 
-static void list_domain_table(const SCHAR* table_name, SSHORT default_char_set_id)
+static void list_domain_table(const QualifiedMetaString& table_name,
+	GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc)
 {
 /**************************************
  *
@@ -2265,14 +2119,16 @@ static void list_domain_table(const SCHAR* table_name, SSHORT default_char_set_i
  *
  **************************************/
 	bool first = true;
-	SCHAR char_sets[CHARSET_COLLATE_SIZE];
+	string char_sets;
 
 	FOR FLD IN RDB$FIELDS CROSS
-		RFR IN RDB$RELATION_FIELDS WITH
-		RFR.RDB$FIELD_SOURCE EQ FLD.RDB$FIELD_NAME AND
-		RFR.RDB$RELATION_NAME EQ table_name
-		SORTED BY FLD.RDB$FIELD_NAME
-
+		RFR IN RDB$RELATION_FIELDS
+		WITH RFR.RDB$FIELD_SOURCE_SCHEMA_NAME EQUIV FLD.RDB$SCHEMA_NAME AND
+			 RFR.RDB$FIELD_SOURCE EQ FLD.RDB$FIELD_NAME AND
+			 RFR.RDB$SCHEMA_NAME EQUIV NULLIF(table_name.schema.c_str(), '') AND
+			 RFR.RDB$RELATION_NAME EQ table_name.object.c_str()
+		SORTED BY FLD.RDB$SCHEMA_NAME, FLD.RDB$FIELD_NAME
+	{
 		// Skip over artificial domains
 		if (fb_utils::implicit_domain(FLD.RDB$FIELD_NAME) &&
 			(FLD.RDB$SYSTEM_FLAG.NULL || FLD.RDB$SYSTEM_FLAG != 1))
@@ -2285,11 +2141,12 @@ static void list_domain_table(const SCHAR* table_name, SSHORT default_char_set_i
 			isqlGlob.printf("/* Domain definitions */%s", NEWLINE);
 			first = false;
 		}
-		fb_utils::exact_name(FLD.RDB$FIELD_NAME);
 
-		isqlGlob.printf("CREATE DOMAIN %s AS ", FLD.RDB$FIELD_NAME);
+		const QualifiedMetaString name(FLD.RDB$FIELD_NAME, FLD.RDB$SCHEMA_NAME);
 
-		if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE,
+		isqlGlob.printf("CREATE DOMAIN %s AS ", IUTILS_name_to_string(name).c_str());
+
+		if (!ISQL_printNumericType(name, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE,
 				FLD.RDB$FIELD_PRECISION, FLD.RDB$FIELD_SCALE))
 		{
 			return; // ps_ERR;
@@ -2312,11 +2169,11 @@ static void list_domain_table(const SCHAR* table_name, SSHORT default_char_set_i
 		else if ((FLD.RDB$FIELD_TYPE == blr_text) || (FLD.RDB$FIELD_TYPE == blr_varying))
 		{
 			// Length for chars
-			isqlGlob.printf("(%d)", ISQL_get_field_length(FLD.RDB$FIELD_NAME));
+			isqlGlob.printf("(%d)", ISQL_get_field_length(name));
 		}
 
 		if (!FLD.RDB$DIMENSIONS.NULL)
-			ISQL_array_dimensions(FLD.RDB$FIELD_NAME);
+			ISQL_array_dimensions(name);
 
 		// Bug 8261: do not show the collation information just yet!  If you
 		// do, then the domain syntax when printed is not correct.
@@ -2326,11 +2183,11 @@ static void list_domain_table(const SCHAR* table_name, SSHORT default_char_set_i
 			!(((FLD.RDB$FIELD_TYPE == blr_text) || (FLD.RDB$FIELD_TYPE == blr_varying)) &&
 			  FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_text))
 		{
-
-			char_sets[0] = 0;
-			ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, FLD.RDB$COLLATION_ID, default_char_set_id, Get::CHARSET_ONLY, false, true, char_sets);
-			if (char_sets[0])
-				isqlGlob.prints(char_sets);
+			if (ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, FLD.RDB$COLLATION_ID,
+					getDefaultCharSetForSchemaFunc(name.schema), Get::CHARSET_ONLY, false, char_sets))
+			{
+				isqlGlob.prints(char_sets.c_str());
+			}
 		}
 
 		if (!FLD.RDB$DEFAULT_SOURCE.NULL)
@@ -2355,24 +2212,24 @@ static void list_domain_table(const SCHAR* table_name, SSHORT default_char_set_i
 
 		if (!FLD.RDB$COLLATION_ID.NULL)
 		{
-			char_sets[0] = 0;
-			ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, FLD.RDB$COLLATION_ID, default_char_set_id, Get::COLLATE_ONLY,
-				false, true, char_sets);
-
-			if (char_sets[0])
-				isqlGlob.prints(char_sets);
+			if (ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, FLD.RDB$COLLATION_ID,
+					getDefaultCharSetForSchemaFunc(name.schema), Get::COLLATE_ONLY, false, char_sets))
+			{
+				isqlGlob.prints(char_sets.c_str());
+			}
 		}
 
 		isqlGlob.printf("%s%s", isqlGlob.global_Term, NEWLINE);
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return;
-	END_ERROR;
+	END_ERROR
 }
 
 
-static void list_domains(SSHORT default_char_set_id)
+static void list_domains(GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc)
 {
 /**************************************
  *
@@ -2388,29 +2245,24 @@ static void list_domains(SSHORT default_char_set_id)
  *
  **************************************/
 	bool first = true;
-	SCHAR char_sets[CHARSET_COLLATE_SIZE];
+	string char_sets;
 
-	FOR FLD IN RDB$FIELDS WITH
-		FLD.RDB$FIELD_NAME NOT MATCHING "RDB$+" USING "+=[0-9][0-9]* *"
-		AND FLD.RDB$SYSTEM_FLAG NE 1
-		SORTED BY FLD.RDB$FIELD_NAME
-
+	FOR FLD IN RDB$FIELDS
+		WITH FLD.RDB$FIELD_NAME NOT MATCHING "RDB$+" USING "+=[0-9][0-9]* *" AND
+			 FLD.RDB$SYSTEM_FLAG NE 1
+		SORTED BY FLD.RDB$SCHEMA_NAME, FLD.RDB$FIELD_NAME
+	{
 		if (first)
 		{
 			isqlGlob.printf("/* Domain definitions */%s", NEWLINE);
 			first = false;
 		}
-		fb_utils::exact_name(FLD.RDB$FIELD_NAME);
 
-		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-		{
-			IUTILS_copy_SQL_id(FLD.RDB$FIELD_NAME, SQL_identifier, DBL_QUOTE);
-			isqlGlob.printf("CREATE DOMAIN %s AS ", SQL_identifier);
-		}
-		else
-			isqlGlob.printf("CREATE DOMAIN %s AS ", FLD.RDB$FIELD_NAME);
+		const QualifiedMetaString name(FLD.RDB$FIELD_NAME, FLD.RDB$SCHEMA_NAME);
 
-		if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE,
+		isqlGlob.printf("CREATE DOMAIN %s AS ", IUTILS_name_to_string(name).c_str());
+
+		if (!ISQL_printNumericType(name, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE,
 				FLD.RDB$FIELD_PRECISION, FLD.RDB$FIELD_SCALE))
 		{
 			return; // ps_ERR;
@@ -2434,11 +2286,11 @@ static void list_domains(SSHORT default_char_set_id)
 		else if ((FLD.RDB$FIELD_TYPE == blr_text) || (FLD.RDB$FIELD_TYPE == blr_varying))
 		{
 			// Length for chars
-			isqlGlob.printf("(%d)", ISQL_get_field_length(FLD.RDB$FIELD_NAME));
+			isqlGlob.printf("(%d)", ISQL_get_field_length(name));
 		}
 
 		if (!FLD.RDB$DIMENSIONS.NULL)
-			ISQL_array_dimensions(FLD.RDB$FIELD_NAME);
+			ISQL_array_dimensions(name);
 
 		// Bug 8261: do not show the collation information just yet!  If you
 		// do, then the domain syntax when printed is not correct.
@@ -2448,10 +2300,12 @@ static void list_domains(SSHORT default_char_set_id)
 			!(((FLD.RDB$FIELD_TYPE == blr_text) || (FLD.RDB$FIELD_TYPE == blr_varying)) &&
 			  FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_text))
 		{
-			char_sets[0] = 0;
-			ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, FLD.RDB$COLLATION_ID, default_char_set_id, Get::CHARSET_ONLY, false, true, char_sets);
-			if (char_sets[0])
-				isqlGlob.prints(char_sets);
+			if (ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, FLD.RDB$COLLATION_ID,
+					getDefaultCharSetForSchemaFunc(name.schema),
+					Get::CHARSET_ONLY, false, char_sets))
+			{
+				isqlGlob.prints(char_sets.c_str());
+			}
 		}
 
 		if (!FLD.RDB$DEFAULT_SOURCE.NULL)
@@ -2472,20 +2326,21 @@ static void list_domains(SSHORT default_char_set_id)
 
 		if (!FLD.RDB$COLLATION_ID.NULL)
 		{
-			char_sets[0] = 0;
-			ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, FLD.RDB$COLLATION_ID, default_char_set_id, Get::COLLATE_ONLY,
-				false, true, char_sets);
-
-			if (char_sets[0])
-				isqlGlob.prints(char_sets);
+			if (ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, FLD.RDB$COLLATION_ID,
+					getDefaultCharSetForSchemaFunc(name.schema), Get::COLLATE_ONLY, false, char_sets))
+			{
+				isqlGlob.prints(char_sets.c_str());
+			}
 		}
 
 		isqlGlob.printf("%s%s", isqlGlob.global_Term, NEWLINE);
+	}
 	END_FOR
     ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return;
-	END_ERROR;
+	END_ERROR
+
 	isqlGlob.printf("COMMIT WORK%s%s", isqlGlob.global_Term, NEWLINE);
 }
 
@@ -2494,47 +2349,43 @@ static void listDomainConstraints()
 {
 	bool first = true;
 
-	FOR FLD IN RDB$FIELDS WITH
-		FLD.RDB$FIELD_NAME NOT MATCHING "RDB$+" USING "+=[0-9][0-9]* *"
-		AND FLD.RDB$SYSTEM_FLAG NE 1
-		AND FLD.RDB$VALIDATION_SOURCE NOT MISSING
-		SORTED BY FLD.RDB$FIELD_NAME
-
+	FOR FLD IN RDB$FIELDS
+		WITH FLD.RDB$FIELD_NAME NOT MATCHING "RDB$+" USING "+=[0-9][0-9]* *" AND
+			 FLD.RDB$SYSTEM_FLAG NE 1 AND
+			 FLD.RDB$VALIDATION_SOURCE NOT MISSING
+		SORTED BY FLD.RDB$SCHEMA_NAME, FLD.RDB$FIELD_NAME
+	{
 		if (first)
 		{
 			isqlGlob.printf("%s/* Domain constraints */%s", NEWLINE, NEWLINE);
 			first = false;
 		}
-		fb_utils::exact_name(FLD.RDB$FIELD_NAME);
 
-		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-		{
-			IUTILS_copy_SQL_id(FLD.RDB$FIELD_NAME, SQL_identifier, DBL_QUOTE);
-			isqlGlob.printf("ALTER DOMAIN %s ADD CONSTRAINT", SQL_identifier);
-		}
-		else
-			isqlGlob.printf("ALTER DOMAIN %s ADD CONSTRAINT", FLD.RDB$FIELD_NAME);
+		const QualifiedMetaString name(FLD.RDB$FIELD_NAME, FLD.RDB$SCHEMA_NAME);
+
+		isqlGlob.printf("ALTER DOMAIN %s ADD CONSTRAINT", IUTILS_name_to_string(name).c_str());
 
 		isqlGlob.printf("%s%s ", NEWLINE, TAB_AS_SPACES);
 		ISQL_print_validation (isqlGlob.Out, &FLD.RDB$VALIDATION_SOURCE, false, fbTrans);
 
 		isqlGlob.printf("%s%s", isqlGlob.global_Term, NEWLINE);
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return;
-	END_ERROR;
+	END_ERROR
 }
 
 
 // Fix computed field expressions.
-static void listRelationComputed(LegacyTables flag, SSHORT default_char_set_id)
+static void listRelationComputed(LegacyTables flag, GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc)
 {
 	// This version of cursor gets only sql tables identified by security class
 	// and misses views, getting only null view_source
 
-	Firebird::string lastTable;
-	SCHAR char_sets[CHARSET_COLLATE_SIZE];
+	QualifiedMetaString lastRelation;
+	string char_sets;
 
 	FOR REL IN RDB$RELATIONS CROSS
 		RFR IN RDB$RELATION_FIELDS CROSS
@@ -2542,10 +2393,12 @@ static void listRelationComputed(LegacyTables flag, SSHORT default_char_set_id)
 		WITH (REL.RDB$SYSTEM_FLAG NE 1 OR REL.RDB$SYSTEM_FLAG MISSING) AND
 			 REL.RDB$VIEW_BLR MISSING AND
 			 FLD.RDB$COMPUTED_BLR NOT MISSING AND
+			 RFR.RDB$FIELD_SOURCE_SCHEMA_NAME EQUIV FLD.RDB$SCHEMA_NAME AND
 			 RFR.RDB$FIELD_SOURCE EQ FLD.RDB$FIELD_NAME AND
+			 RFR.RDB$SCHEMA_NAME EQUIV REL.RDB$SCHEMA_NAME AND
 			 RFR.RDB$RELATION_NAME EQ REL.RDB$RELATION_NAME
-		SORTED BY REL.RDB$RELATION_NAME, RFR.RDB$FIELD_POSITION, RFR.RDB$FIELD_NAME
-
+		SORTED BY REL.RDB$SCHEMA_NAME, REL.RDB$RELATION_NAME, RFR.RDB$FIELD_POSITION, RFR.RDB$FIELD_NAME
+	{
 		// If this is not an SQL table and we aren't doing ALL objects
 		if ((REL.RDB$FLAGS.NULL || !(REL.RDB$FLAGS & REL_sql)) && (flag != ALL_objects) )
 			continue;
@@ -2553,44 +2406,29 @@ static void listRelationComputed(LegacyTables flag, SSHORT default_char_set_id)
 		SSHORT collation = 0;
 		SSHORT char_set_id = 0;
 
-		// Null terminate name string
-		fb_utils::exact_name(REL.RDB$RELATION_NAME);
+		const QualifiedMetaString relationName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME);
+		const QualifiedMetaString fieldName(FLD.RDB$FIELD_NAME, FLD.RDB$SCHEMA_NAME);
 
 		if (flag || !strncmp(REL.RDB$SECURITY_CLASS, "SQL$", 4))
 		{
-			if (lastTable.isEmpty())
+			if (lastRelation.object.isEmpty())
 				isqlGlob.printf("%s/* Computed fields */%s%s", NEWLINE, NEWLINE, NEWLINE);
 
-			if (lastTable != REL.RDB$RELATION_NAME)
+			if (lastRelation != relationName)
 			{
-				if (!lastTable.isEmpty())
+				if (!lastRelation.object.isEmpty())
 					isqlGlob.printf("%s%s%s", isqlGlob.global_Term, NEWLINE, NEWLINE);
 
-				isqlGlob.printf("ALTER TABLE ");
+				isqlGlob.printf("ALTER TABLE %s", IUTILS_name_to_string(relationName).c_str());
 
-				if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-				{
-					IUTILS_copy_SQL_id(REL.RDB$RELATION_NAME, SQL_identifier, DBL_QUOTE);
-					isqlGlob.printf("%s ", SQL_identifier);
-				}
-				else
-					isqlGlob.printf("%s ", REL.RDB$RELATION_NAME);
-
-				lastTable = REL.RDB$RELATION_NAME;
+				lastRelation = relationName;
 			}
 			else
 				isqlGlob.printf(",");
 
-			isqlGlob.printf("%s%sALTER ", NEWLINE, TAB_AS_SPACES);
+			const MetaString columnName(RFR.RDB$FIELD_NAME);
 
-			if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-			{
-				IUTILS_copy_SQL_id(fb_utils::exact_name(RFR.RDB$FIELD_NAME), SQL_identifier, DBL_QUOTE);
-				isqlGlob.printf("%s ", SQL_identifier);
-			}
-			else
-				isqlGlob.printf("%s ", fb_utils::exact_name(RFR.RDB$FIELD_NAME));
-
+			isqlGlob.printf("%s%sALTER %s ", NEWLINE, TAB_AS_SPACES, IUTILS_name_to_string(columnName).c_str());
 			isqlGlob.printf("TYPE ");
 
 			/*
@@ -2599,34 +2437,28 @@ static void listRelationComputed(LegacyTables flag, SSHORT default_char_set_id)
 			** may have not null, default and check overriding their definitions
 			*/
 
-			if (!(fb_utils::implicit_domain(FLD.RDB$FIELD_NAME) && FLD.RDB$SYSTEM_FLAG != 1))
+			if (!(fb_utils::implicit_domain(fieldName.object.c_str()) && FLD.RDB$SYSTEM_FLAG != 1))
 			{
-				fb_utils::exact_name(FLD.RDB$FIELD_NAME);
-				if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-				{
-					IUTILS_copy_SQL_id (FLD.RDB$FIELD_NAME, SQL_identifier, DBL_QUOTE);
-					isqlGlob.prints(SQL_identifier);
-				}
-				else
-					isqlGlob.prints(FLD.RDB$FIELD_NAME);
+				isqlGlob.prints(IUTILS_name_to_string(fieldName).c_str());
 
 				// International character sets
 				// Print only the collation
 				if ((FLD.RDB$FIELD_TYPE == blr_text || FLD.RDB$FIELD_TYPE == blr_varying) &&
 					!RFR.RDB$COLLATION_ID.NULL)
 				{
-					char_sets[0] = '\0';
 					collation = RFR.RDB$COLLATION_ID;
 					char_set_id = FLD.RDB$CHARACTER_SET_ID;
-					ISQL_get_character_sets(char_set_id, collation, default_char_set_id, Get::COLLATE_ONLY, false, true, char_sets);
 
-					if (char_sets[0])
-						isqlGlob.prints(char_sets);
+					if (ISQL_get_character_sets(char_set_id, collation,
+							getDefaultCharSetForSchemaFunc(relationName.schema), Get::COLLATE_ONLY, false, char_sets))
+					{
+						isqlGlob.prints(char_sets.c_str());
+					}
 				}
 			}
 			else
 			{
-				if (!ISQL_printNumericType(FLD.RDB$FIELD_NAME, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE,
+				if (!ISQL_printNumericType(fieldName, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE,
 						FLD.RDB$FIELD_PRECISION, FLD.RDB$FIELD_SCALE))
 				{
 					return;
@@ -2646,7 +2478,7 @@ static void listRelationComputed(LegacyTables flag, SSHORT default_char_set_id)
 				// Catch arrays after printing the type
 
 				if (!FLD.RDB$DIMENSIONS.NULL)
-					ISQL_array_dimensions(FLD.RDB$FIELD_NAME);
+					ISQL_array_dimensions(fieldName);
 
 				if (FLD.RDB$FIELD_TYPE == blr_blob)
 				{
@@ -2667,7 +2499,7 @@ static void listRelationComputed(LegacyTables flag, SSHORT default_char_set_id)
 					 FLD.RDB$FIELD_TYPE == blr_blob) &&
 					!FLD.RDB$CHARACTER_SET_ID.NULL)
 				{
-					char_sets[0] = '\0';
+					char_sets.clear();
 
 					// Override rdb$fields id with relation_fields if present
 
@@ -2678,13 +2510,18 @@ static void listRelationComputed(LegacyTables flag, SSHORT default_char_set_id)
 
 					if (!FLD.RDB$CHARACTER_SET_ID.NULL)
 						char_set_id = FLD.RDB$CHARACTER_SET_ID;
-					if (char_set_id != default_char_set_id)
+
+					if (char_set_id != getDefaultCharSetForSchemaFunc(relationName.schema))
 					{
 						// Currently ALTER TABLE syntax doesn't allow collation here.
-						ISQL_get_character_sets(char_set_id, collation, default_char_set_id, Get::CHARSET_ONLY, false, true, char_sets);
+						if (ISQL_get_character_sets(char_set_id, collation,
+								getDefaultCharSetForSchemaFunc(relationName.schema),
+								Get::CHARSET_ONLY, false, char_sets))
+						{
+							isqlGlob.prints(char_sets.c_str());
+						}
 					}
-					if (char_sets[0])
-						isqlGlob.prints(char_sets);
+
 					// CVC: Someone deleted the code that checks intchar when handling collations
 					// several lines below, so it didn't have any effect. Commented it.
 					//if (!char_set_id)
@@ -2697,14 +2534,15 @@ static void listRelationComputed(LegacyTables flag, SSHORT default_char_set_id)
 			if (!FLD.RDB$COMPUTED_SOURCE.NULL)
 				ISQL_print_validation(isqlGlob.Out, &FLD.RDB$COMPUTED_SOURCE, true, fbTrans);
 		}
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		ROLLBACK;
 		return;
-	END_ERROR;
+	END_ERROR
 
-	if (lastTable.hasData())
+	if (lastRelation.object.hasData())
 		isqlGlob.printf("%s%s%s", isqlGlob.global_Term, NEWLINE, NEWLINE);
 }
 
@@ -2726,31 +2564,29 @@ static void list_exceptions()
 	bool first = true;
 
 	FOR EXC IN RDB$EXCEPTIONS
-		SORTED BY EXC.RDB$EXCEPTION_NAME
-
+		SORTED BY EXC.RDB$SCHEMA_NAME, EXC.RDB$EXCEPTION_NAME
+	{
 		if (first)
-		{
 			isqlGlob.printf("%s/*  Exceptions */%s", NEWLINE, NEWLINE);
-		}
+
 		first = false;
-		fb_utils::exact_name(EXC.RDB$EXCEPTION_NAME);
+
+		const QualifiedMetaString name(EXC.RDB$EXCEPTION_NAME, EXC.RDB$SCHEMA_NAME);
 
 		IUTILS_copy_SQL_id (EXC.RDB$MESSAGE, SQL_identifier2, SINGLE_QUOTE);
-		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-		{
-			IUTILS_copy_SQL_id (EXC.RDB$EXCEPTION_NAME, SQL_identifier, DBL_QUOTE);
-			isqlGlob.printf("CREATE EXCEPTION %s %s%s%s",
-					 SQL_identifier, SQL_identifier2, isqlGlob.global_Term, NEWLINE);
-		}
-		else
-			isqlGlob.printf("CREATE EXCEPTION %s %s%s%s",
-					 EXC.RDB$EXCEPTION_NAME, SQL_identifier2, isqlGlob.global_Term, NEWLINE);
 
+		isqlGlob.printf(
+			"CREATE EXCEPTION %s %s%s%s",
+			IUTILS_name_to_string(name).c_str(),
+			SQL_identifier2,
+			isqlGlob.global_Term,
+			NEWLINE);
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return;
-	END_ERROR;
+	END_ERROR
 }
 
 
@@ -2774,8 +2610,7 @@ static void list_filters()
 
 	FOR FIL IN RDB$FILTERS
 		SORTED BY FIL.RDB$FUNCTION_NAME
-
-		fb_utils::exact_name(FIL.RDB$FUNCTION_NAME);
+	{
 		fb_utils::exact_name(FIL.RDB$MODULE_NAME);
 		fb_utils::exact_name(FIL.RDB$ENTRYPOINT);
 
@@ -2785,13 +2620,10 @@ static void list_filters()
 			first = false;
 		}
 
-		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-			IUTILS_copy_SQL_id(FIL.RDB$FUNCTION_NAME, SQL_identifier, DBL_QUOTE);
-		else
-			strcpy(SQL_identifier, FIL.RDB$FUNCTION_NAME);
+		const MetaString name(FIL.RDB$FUNCTION_NAME);
 
 		isqlGlob.printf("DECLARE FILTER %s INPUT_TYPE %d OUTPUT_TYPE %d%s",
-			SQL_identifier, FIL.RDB$INPUT_SUB_TYPE, FIL.RDB$OUTPUT_SUB_TYPE, NEWLINE);
+			IUTILS_name_to_string(name).c_str(), FIL.RDB$INPUT_SUB_TYPE, FIL.RDB$OUTPUT_SUB_TYPE, NEWLINE);
 
 		IUTILS_copy_SQL_id(FIL.RDB$ENTRYPOINT, SQL_identifier, SINGLE_QUOTE);
 		IUTILS_copy_SQL_id(FIL.RDB$MODULE_NAME, SQL_identifier2, SINGLE_QUOTE);
@@ -2799,13 +2631,12 @@ static void list_filters()
 		isqlGlob.printf("%sENTRY_POINT %s MODULE_NAME %s%s%s%s",
 			TAB_AS_SPACES, SQL_identifier, SQL_identifier2,
 			isqlGlob.global_Term, NEWLINE, NEWLINE);
-
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return;
-	END_ERROR;
-
+	END_ERROR
 }
 
 
@@ -2828,55 +2659,43 @@ static void list_foreign()
 
 	FOR RELC1 IN RDB$RELATION_CONSTRAINTS CROSS
 		RELC2 IN RDB$RELATION_CONSTRAINTS CROSS
-		REFC IN RDB$REF_CONSTRAINTS WITH
-		RELC1.RDB$CONSTRAINT_TYPE EQ "FOREIGN KEY" AND
-		REFC.RDB$CONST_NAME_UQ EQ RELC2.RDB$CONSTRAINT_NAME AND
-		REFC.RDB$CONSTRAINT_NAME EQ RELC1.RDB$CONSTRAINT_NAME AND
-		(RELC2.RDB$CONSTRAINT_TYPE EQ "UNIQUE" OR
-		RELC2.RDB$CONSTRAINT_TYPE EQ "PRIMARY KEY")
-		SORTED BY RELC1.RDB$RELATION_NAME, RELC1.RDB$CONSTRAINT_NAME
+		REFC IN RDB$REF_CONSTRAINTS
+		WITH RELC1.RDB$CONSTRAINT_TYPE EQ "FOREIGN KEY" AND
+			 REFC.RDB$CONST_SCHEMA_NAME_UQ EQUIV RELC2.RDB$SCHEMA_NAME AND
+			 REFC.RDB$CONST_NAME_UQ EQ RELC2.RDB$CONSTRAINT_NAME AND
+			 REFC.RDB$SCHEMA_NAME EQUIV RELC1.RDB$SCHEMA_NAME AND
+			 REFC.RDB$CONSTRAINT_NAME EQ RELC1.RDB$CONSTRAINT_NAME AND
+			 (RELC2.RDB$CONSTRAINT_TYPE EQ "UNIQUE" OR
+			 RELC2.RDB$CONSTRAINT_TYPE EQ "PRIMARY KEY")
+		SORTED BY RELC1.RDB$SCHEMA_NAME, RELC1.RDB$RELATION_NAME, RELC1.RDB$CONSTRAINT_NAME
+	{
+		const QualifiedMetaString relationName1(RELC1.RDB$RELATION_NAME, RELC1.RDB$SCHEMA_NAME);
+		const QualifiedMetaString indexName1(RELC1.RDB$INDEX_NAME, RELC1.RDB$SCHEMA_NAME);
+		const QualifiedMetaString relationName2(RELC2.RDB$RELATION_NAME, RELC2.RDB$SCHEMA_NAME);
+		const QualifiedMetaString indexName2(RELC2.RDB$INDEX_NAME, RELC2.RDB$SCHEMA_NAME);
+		const MetaString constraintName(RELC1.RDB$CONSTRAINT_NAME);
 
-		fb_utils::exact_name(RELC1.RDB$RELATION_NAME);
-		fb_utils::exact_name(RELC2.RDB$RELATION_NAME);
-
-		ISQL_get_index_segments (collist, sizeof(collist), RELC1.RDB$INDEX_NAME, true);
+		ISQL_get_index_segments(collist, sizeof(collist), indexName1);
 
 		isqlGlob.printf(NEWLINE);
 
-		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-		{
-			IUTILS_copy_SQL_id (RELC1.RDB$RELATION_NAME, SQL_identifier, DBL_QUOTE);
-			isqlGlob.printf("ALTER TABLE %s ADD ", SQL_identifier);
-		}
-		else
-			isqlGlob.printf("ALTER TABLE %s ADD ", RELC1.RDB$RELATION_NAME);
+		isqlGlob.printf("ALTER TABLE %s ADD ", IUTILS_name_to_string(relationName1).c_str());
 
 		// If the name of the constraint is not INTEG..., print it.
 	    // INTEG_... are internally generated names.
 		if (!RELC1.RDB$CONSTRAINT_NAME.NULL &&
-			!fb_utils::implicit_integrity(RELC1.RDB$CONSTRAINT_NAME))
+			!fb_utils::implicit_integrity(constraintName.c_str()))
 		{
-			IUTILS_truncate_term (RELC1.RDB$CONSTRAINT_NAME, static_cast<USHORT>(strlen(RELC1.RDB$CONSTRAINT_NAME)));
-			if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-			{
-				IUTILS_copy_SQL_id (RELC1.RDB$CONSTRAINT_NAME, SQL_identifier, DBL_QUOTE);
-				isqlGlob.printf("CONSTRAINT %s ", SQL_identifier);
-			}
-			else
-				isqlGlob.printf("CONSTRAINT %s ", RELC1.RDB$CONSTRAINT_NAME);
+			isqlGlob.printf(
+				"CONSTRAINT %s ",
+				IUTILS_name_to_string(constraintName).c_str());
 		}
 
-		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-		{
-			IUTILS_copy_SQL_id (RELC2.RDB$RELATION_NAME, SQL_identifier, DBL_QUOTE);
-			isqlGlob.printf("FOREIGN KEY (%s) REFERENCES %s ", collist, SQL_identifier);
-		}
-		else
-			isqlGlob.printf("FOREIGN KEY (%s) REFERENCES %s ", collist, RELC2.RDB$RELATION_NAME);
+		isqlGlob.printf("FOREIGN KEY (%s) REFERENCES %s ", collist, IUTILS_name_to_string(relationName2).c_str());
 
 		// Get the column list for the primary key
 
-		ISQL_get_index_segments (collist, sizeof(collist), RELC2.RDB$INDEX_NAME, true);
+		ISQL_get_index_segments(collist, sizeof(collist), indexName2);
 
 		isqlGlob.printf("(%s)", collist);
 
@@ -2894,12 +2713,12 @@ static void list_foreign()
 		}
 
 		isqlGlob.printf("%s%s", isqlGlob.global_Term, NEWLINE);
-
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return;
-	END_ERROR;
+	END_ERROR
 }
 
 
@@ -2921,18 +2740,17 @@ static void list_functions_legacy()
  *               RETURNS INTEGER BY VALUE
  *               ENTRY_POINT entrypoint MODULE_NAME module;
  **************************************/
-	char type_buffer[BUFFER_LENGTH256];
-	char return_buffer[BUFFER_LENGTH256];
+	string type_buffer;
+	string return_buffer;
 
 	bool first = true;
 
 	FOR FUN IN RDB$FUNCTIONS
-		WITH (FUN.RDB$SYSTEM_FLAG NE 1 OR FUN.RDB$SYSTEM_FLAG MISSING)
-		AND FUN.RDB$MODULE_NAME NOT MISSING
-		AND FUN.RDB$PACKAGE_NAME MISSING
-		SORTED BY FUN.RDB$FUNCTION_NAME
-
-		fb_utils::exact_name(FUN.RDB$FUNCTION_NAME);
+		WITH (FUN.RDB$SYSTEM_FLAG NE 1 OR FUN.RDB$SYSTEM_FLAG MISSING) AND
+			 FUN.RDB$MODULE_NAME NOT MISSING AND
+			 FUN.RDB$PACKAGE_NAME MISSING
+		SORTED BY FUN.RDB$SCHEMA_NAME, FUN.RDB$FUNCTION_NAME
+	{
 		fb_utils::exact_name(FUN.RDB$MODULE_NAME);
 		fb_utils::exact_name(FUN.RDB$ENTRYPOINT);
 		if (first)
@@ -2941,21 +2759,19 @@ static void list_functions_legacy()
 			first = false;
 		}
 
-		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-			IUTILS_copy_SQL_id(FUN.RDB$FUNCTION_NAME, SQL_identifier, DBL_QUOTE);
-		else
-			strcpy(SQL_identifier, FUN.RDB$FUNCTION_NAME);
+		const QualifiedMetaString name(FUN.RDB$FUNCTION_NAME, FUN.RDB$SCHEMA_NAME);
 
 		// Start new function declaration
-		isqlGlob.printf("DECLARE EXTERNAL FUNCTION %s%s", SQL_identifier, NEWLINE);
+		isqlGlob.printf("DECLARE EXTERNAL FUNCTION %s%s", IUTILS_name_to_string(name).c_str(), NEWLINE);
 
 		bool firstarg = true;
 
 		FOR FNA IN RDB$FUNCTION_ARGUMENTS
-			WITH FUN.RDB$FUNCTION_NAME EQ FNA.RDB$FUNCTION_NAME
-			AND FNA.RDB$PACKAGE_NAME MISSING
+			WITH FNA.RDB$SCHEMA_NAME EQUIV NULLIF(FUN.RDB$SCHEMA_NAME, '') AND
+				 FNA.RDB$FUNCTION_NAME EQ FUN.RDB$FUNCTION_NAME AND
+				 FNA.RDB$PACKAGE_NAME MISSING
 			SORTED BY FNA.RDB$ARGUMENT_POSITION
-
+		{
 			// Find parameter type
 			int i = 0;
 			while (FNA.RDB$FIELD_TYPE != Column_types[i].type)
@@ -2971,23 +2787,27 @@ static void list_functions_legacy()
 				bool did_charset = false;
 				FOR CHARSET IN RDB$CHARACTER_SETS
 					WITH CHARSET.RDB$CHARACTER_SET_ID = FNA.RDB$CHARACTER_SET_ID
+				{
+					const QualifiedMetaString charSetName(
+						CHARSET.RDB$CHARACTER_SET_NAME, CHARSET.RDB$SCHEMA_NAME);
 
 					did_charset = true;
-					fb_utils::exact_name(CHARSET.RDB$CHARACTER_SET_NAME);
-					fb_utils::snprintf(type_buffer, sizeof(type_buffer), "%s(%d) CHARACTER SET %s",
+					type_buffer.printf("%s(%d) CHARACTER SET %s",
 							 Column_types[i].type_name,
 							 (FNA.RDB$FIELD_LENGTH / MAX (1, CHARSET.RDB$BYTES_PER_CHARACTER)),
-							 CHARSET.RDB$CHARACTER_SET_NAME);
-
+							 IUTILS_name_to_string(charSetName).c_str());
+				}
 				END_FOR
 				ON_ERROR
 					ISQL_errmsg (fbStatus);
 					return;
-				END_ERROR;
+				END_ERROR
 
 				if (!did_charset)
-					fb_utils::snprintf(type_buffer, sizeof(type_buffer), "%s(%d)",
+				{
+					type_buffer.printf("%s(%d)",
 							Column_types[i].type_name, FNA.RDB$FIELD_LENGTH);
+				}
 			}
 			else
 			{
@@ -3005,7 +2825,7 @@ static void list_functions_legacy()
 						FNA.RDB$FIELD_SUB_TYPE > 0 &&
 						FNA.RDB$FIELD_SUB_TYPE <= MAX_INTSUBTYPES)
 					{
-						fb_utils::snprintf(type_buffer, sizeof(type_buffer), "%s(%d, %d)",
+						type_buffer.printf("%s(%d, %d)",
 								Integral_subtypes[FNA.RDB$FIELD_SUB_TYPE],
 								FNA.RDB$FIELD_PRECISION,
 								-FNA.RDB$FIELD_SCALE);
@@ -3017,13 +2837,13 @@ static void list_functions_legacy()
 				{
 					// Take a stab at numerics and decimals
 					if ((FNA.RDB$FIELD_TYPE == blr_short) && (FNA.RDB$FIELD_SCALE < 0))
-						fb_utils::snprintf(type_buffer, sizeof(type_buffer), "NUMERIC(4, %d)", -FNA.RDB$FIELD_SCALE);
+						type_buffer.printf("NUMERIC(4, %d)", -FNA.RDB$FIELD_SCALE);
 					else if ((FNA.RDB$FIELD_TYPE == blr_long) && (FNA.RDB$FIELD_SCALE < 0))
-						fb_utils::snprintf(type_buffer, sizeof(type_buffer), "NUMERIC(9, %d)", -FNA.RDB$FIELD_SCALE);
+						type_buffer.printf("NUMERIC(9, %d)", -FNA.RDB$FIELD_SCALE);
 					else if ((FNA.RDB$FIELD_TYPE == blr_double) && (FNA.RDB$FIELD_SCALE < 0))
-						fb_utils::snprintf(type_buffer, sizeof(type_buffer), "NUMERIC(15, %d)", -FNA.RDB$FIELD_SCALE);
+						type_buffer.printf("NUMERIC(15, %d)", -FNA.RDB$FIELD_SCALE);
 					else
-						fb_utils::snprintf(type_buffer, sizeof(type_buffer), "%s", Column_types[i].type_name);
+						type_buffer.printf("%s", Column_types[i].type_name);
 				} // if !precision_known
 			} // if blr_text or blr_varying or blr_cstring ... else
 
@@ -3046,36 +2866,34 @@ static void list_functions_legacy()
 
 			bool printarg = true;
 
-
 			if (FUN.RDB$RETURN_ARGUMENT == FNA.RDB$ARGUMENT_POSITION)
 			{
 				if (FUN.RDB$RETURN_ARGUMENT)
-					fb_utils::snprintf(return_buffer, sizeof(return_buffer), "RETURNS PARAMETER %d", FUN.RDB$RETURN_ARGUMENT);
+					return_buffer.printf("RETURNS PARAMETER %d", FUN.RDB$RETURN_ARGUMENT);
 				else
 				{
-					fb_utils::snprintf(return_buffer, sizeof(return_buffer), "RETURNS %s%s %s", type_buffer,
+					return_buffer.printf("RETURNS %s%s %s", type_buffer.c_str(),
 							 UDF_param_types[ptype],
 							 (FNA.RDB$MECHANISM < 0 ? "FREE_IT" : ""));
 					printarg = false;
 				}
-
 			}
 
 			if (printarg)
 			{
 				// First arg needs no comma
-				isqlGlob.printf("%s%s%s", (firstarg ? "" : ", "), type_buffer, UDF_param_types[ptype]);
+				isqlGlob.printf("%s%s%s", (firstarg ? "" : ", "), type_buffer.c_str(), UDF_param_types[ptype]);
 				firstarg = false;
 			}
-
+		}
 		END_FOR
 		ON_ERROR
 			ISQL_errmsg (fbStatus);
 			return;
-		END_ERROR;
+		END_ERROR
 
 		// Print the return type -- All functions return a type
-		isqlGlob.printf("%s%s%s", NEWLINE, return_buffer, NEWLINE);
+		isqlGlob.printf("%s%s%s", NEWLINE, return_buffer.c_str(), NEWLINE);
 
 		// Print out entrypoint information
 		IUTILS_copy_SQL_id(FUN.RDB$ENTRYPOINT, SQL_identifier, SINGLE_QUOTE);
@@ -3087,15 +2905,15 @@ static void list_functions_legacy()
 				 isqlGlob.global_Term,
 				 NEWLINE,
 				 NEWLINE);
-
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return;
-	END_ERROR;
+	END_ERROR
 }
 
-static void list_functions_ods12_headers(SSHORT default_char_set_id)
+static void list_functions_ods12_headers(GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc)
 {
 	fb_assert(isqlGlob.major_ods >= ODS_VERSION12);
 
@@ -3106,10 +2924,12 @@ static void list_functions_ods12_headers(SSHORT default_char_set_id)
 	//  First the dummy functions (without bodies)
 
 	FOR FUN IN RDB$FUNCTIONS
-		WITH (FUN.RDB$SYSTEM_FLAG NE 1 OR FUN.RDB$SYSTEM_FLAG MISSING)
-		AND FUN.RDB$PACKAGE_NAME MISSING
-		AND FUN.RDB$MODULE_NAME MISSING
-		SORTED BY FUN.RDB$FUNCTION_NAME
+		WITH (FUN.RDB$SYSTEM_FLAG NE 1 OR FUN.RDB$SYSTEM_FLAG MISSING) AND
+			 FUN.RDB$PACKAGE_NAME MISSING AND
+			 FUN.RDB$MODULE_NAME MISSING
+		SORTED BY FUN.RDB$SCHEMA_NAME, FUN.RDB$FUNCTION_NAME
+	{
+		const QualifiedMetaString name(FUN.RDB$FUNCTION_NAME, FUN.RDB$SCHEMA_NAME);
 
 		if (header)
 		{
@@ -3117,37 +2937,28 @@ static void list_functions_ods12_headers(SSHORT default_char_set_id)
 			header = false;
 		}
 
-		fb_utils::exact_name(FUN.RDB$FUNCTION_NAME);
-		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-		{
-			IUTILS_copy_SQL_id(FUN.RDB$FUNCTION_NAME, SQL_identifier, DBL_QUOTE);
-			isqlGlob.printf(create_function, SQL_identifier);
-		}
-		else
-		{
-			isqlGlob.printf(create_function, FUN.RDB$FUNCTION_NAME);
-		}
+		isqlGlob.printf(create_function, IUTILS_name_to_string(name).c_str());
 
-		get_function_args_ods12(FUN.RDB$FUNCTION_NAME, FUN.RDB$RETURN_ARGUMENT, default_char_set_id);
+		get_function_args_ods12(name, FUN.RDB$RETURN_ARGUMENT, getDefaultCharSetForSchemaFunc);
 
 		if (!FUN.RDB$DETERMINISTIC_FLAG.NULL && FUN.RDB$DETERMINISTIC_FLAG)
 			isqlGlob.printf("DETERMINISTIC %s", NEWLINE);
 
 		isqlGlob.printf("AS %s", NEWLINE);
 		isqlGlob.printf(body_function, Procterm, NEWLINE);
-
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return;
-	END_ERROR;
+	END_ERROR
 
 	// Only reset the terminators if there were procs to print
 	if (!header)
 		print_proc_suffix(obj_udf);
 }
 
-static void list_functions_ods12_bodies(SSHORT default_char_set_id)
+static void list_functions_ods12_bodies(GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc)
 {
 	fb_assert(isqlGlob.major_ods >= ODS_VERSION12);
 
@@ -3158,26 +2969,22 @@ static void list_functions_ods12_bodies(SSHORT default_char_set_id)
 	TEXT msg[MSG_LENGTH];
 
 	FOR FUN IN RDB$FUNCTIONS
-		WITH (FUN.RDB$SYSTEM_FLAG NE 1 OR FUN.RDB$SYSTEM_FLAG MISSING)
-		AND FUN.RDB$PACKAGE_NAME MISSING
-		AND FUN.RDB$MODULE_NAME MISSING
-		SORTED BY FUN.RDB$FUNCTION_NAME
+		WITH (FUN.RDB$SYSTEM_FLAG NE 1 OR FUN.RDB$SYSTEM_FLAG MISSING) AND
+			 FUN.RDB$PACKAGE_NAME MISSING AND
+			 FUN.RDB$MODULE_NAME MISSING
+		SORTED BY FUN.RDB$SCHEMA_NAME, FUN.RDB$FUNCTION_NAME
+	{
+		const QualifiedMetaString name(FUN.RDB$FUNCTION_NAME, FUN.RDB$SCHEMA_NAME);
+
 		if (header)
 		{
 			print_proc_prefix(obj_udf, false);
 			header = false;
 		}
-		fb_utils::exact_name(FUN.RDB$FUNCTION_NAME);
 
-		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-		{
-			IUTILS_copy_SQL_id(FUN.RDB$FUNCTION_NAME, SQL_identifier, DBL_QUOTE);
-			isqlGlob.printf("%sALTER FUNCTION %s ", NEWLINE, SQL_identifier);
-		}
-		else
-			isqlGlob.printf("%sALTER FUNCTION %s ", NEWLINE, FUN.RDB$FUNCTION_NAME);
+		isqlGlob.printf("%sALTER FUNCTION %s ", NEWLINE, IUTILS_name_to_string(name).c_str());
 
-		get_function_args_ods12(FUN.RDB$FUNCTION_NAME, FUN.RDB$RETURN_ARGUMENT, default_char_set_id);
+		get_function_args_ods12(name, FUN.RDB$RETURN_ARGUMENT, getDefaultCharSetForSchemaFunc);
 
 		if (!FUN.RDB$DETERMINISTIC_FLAG.NULL && FUN.RDB$DETERMINISTIC_FLAG)
 			isqlGlob.printf("DETERMINISTIC %s", NEWLINE);
@@ -3216,14 +3023,14 @@ static void list_functions_ods12_bodies(SSHORT default_char_set_id)
 		}
 
 		isqlGlob.printf(" %s%s", Procterm, NEWLINE);
-
+	}
 	END_FOR
 	ON_ERROR
 		IUTILS_msg_get(GEN_ERR, msg, SafeArg() << isc_sqlcode(fbStatus->getErrors()));
 		STDERROUT(msg);			// Statement failed, SQLCODE = %d\n\n
 		ISQL_errmsg(fbStatus);
 		return;
-	END_ERROR;
+	END_ERROR
 
 	// Only reset the terminators if there were procs to print
 	if (!header)
@@ -3250,7 +3057,7 @@ static void list_generators()
 		WITH GEN.RDB$GENERATOR_NAME NOT MATCHING "RDB$+" USING "+=[0-9][0-9]* *" AND
 			 GEN.RDB$GENERATOR_NAME NOT MATCHING "SQL$+" USING "+=[0-9][0-9]* *" AND
 			 (GEN.RDB$SYSTEM_FLAG MISSING OR GEN.RDB$SYSTEM_FLAG NE 1)
-		SORTED BY GEN.RDB$GENERATOR_NAME
+		SORTED BY GEN.RDB$SCHEMA_NAME, GEN.RDB$GENERATOR_NAME
 	{
 		if (first)
 		{
@@ -3258,31 +3065,17 @@ static void list_generators()
 			first = false;
 		}
 
-		fb_utils::exact_name(GEN.RDB$GENERATOR_NAME);
+		const QualifiedMetaString name(GEN.RDB$GENERATOR_NAME, GEN.RDB$SCHEMA_NAME);
 
-		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-			IUTILS_copy_SQL_id(GEN.RDB$GENERATOR_NAME, SQL_identifier, DBL_QUOTE);
-		else
-			strcpy(SQL_identifier, GEN.RDB$GENERATOR_NAME);
-
-		isqlGlob.printf("CREATE GENERATOR %s", SQL_identifier);
+		isqlGlob.printf("CREATE GENERATOR %s", IUTILS_name_to_string(name).c_str());
 
 		if (isqlGlob.major_ods >= ODS_VERSION12)
 		{
-			FOR G2 IN RDB$GENERATORS
-				WITH G2.RDB$GENERATOR_NAME = GEN.RDB$GENERATOR_NAME
+			if (!GEN.RDB$INITIAL_VALUE.NULL && GEN.RDB$INITIAL_VALUE != 0)
+				isqlGlob.printf(" START WITH %" SQUADFORMAT, GEN.RDB$INITIAL_VALUE);
 
-				if (!G2.RDB$INITIAL_VALUE.NULL && G2.RDB$INITIAL_VALUE != 0)
-					isqlGlob.printf(" START WITH %" SQUADFORMAT, G2.RDB$INITIAL_VALUE);
-
-				if (G2.RDB$GENERATOR_INCREMENT != 1)
-					isqlGlob.printf(" INCREMENT %" SLONGFORMAT, G2.RDB$GENERATOR_INCREMENT);
-
-			END_FOR
-			ON_ERROR
-				ISQL_errmsg(fbStatus);
-				return;
-			END_ERROR;
+			if (GEN.RDB$GENERATOR_INCREMENT != 1)
+				isqlGlob.printf(" INCREMENT %" SLONGFORMAT, GEN.RDB$GENERATOR_INCREMENT);
 		}
 
 		isqlGlob.printf("%s%s", isqlGlob.global_Term, NEWLINE);
@@ -3316,41 +3109,33 @@ static void list_indexes()
 
 	bool first = true;
 
-	FOR IDX IN RDB$INDICES CROSS RELC IN RDB$RELATIONS
-		OVER RDB$RELATION_NAME
-		WITH (RELC.RDB$SYSTEM_FLAG NE 1 OR RELC.RDB$SYSTEM_FLAG MISSING)
-		AND NOT (ANY RC IN RDB$RELATION_CONSTRAINTS
-				WITH RC.RDB$INDEX_NAME EQ IDX.RDB$INDEX_NAME)
-		SORTED BY IDX.RDB$RELATION_NAME, IDX.RDB$INDEX_NAME
-
+	FOR IDX IN RDB$INDICES CROSS
+		RELC IN RDB$RELATIONS
+		WITH RELC.RDB$SCHEMA_NAME EQUIV IDX.RDB$SCHEMA_NAME AND
+			 RELC.RDB$RELATION_NAME EQ IDX.RDB$RELATION_NAME AND
+			 (RELC.RDB$SYSTEM_FLAG NE 1 OR RELC.RDB$SYSTEM_FLAG MISSING) AND
+			 NOT (
+				ANY RC IN RDB$RELATION_CONSTRAINTS
+				WITH RC.RDB$SCHEMA_NAME EQUIV IDX.RDB$SCHEMA_NAME AND
+					 RC.RDB$INDEX_NAME EQ IDX.RDB$INDEX_NAME)
+		SORTED BY IDX.RDB$SCHEMA_NAME, IDX.RDB$RELATION_NAME, IDX.RDB$INDEX_NAME
+	{
 		if (first)
 		{
 			isqlGlob.printf("%s/*  Index definitions for all user tables */%s", NEWLINE, NEWLINE);
 			first = false;
 		}
 
-		// Strip trailing blanks
-		fb_utils::exact_name(IDX.RDB$RELATION_NAME);
-		fb_utils::exact_name(IDX.RDB$INDEX_NAME);
+		const QualifiedMetaString name(IDX.RDB$INDEX_NAME, IDX.RDB$SCHEMA_NAME);
+		const MetaString relationName(IDX.RDB$RELATION_NAME);
 
-		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-		{
-			IUTILS_copy_SQL_id (IDX.RDB$INDEX_NAME,    SQL_identifier,  DBL_QUOTE);
-			IUTILS_copy_SQL_id (IDX.RDB$RELATION_NAME, SQL_identifier2, DBL_QUOTE);
-			isqlGlob.printf("CREATE%s%s INDEX %s%s ON %s",
-					(IDX.RDB$UNIQUE_FLAG ? " UNIQUE" : ""),
-					(IDX.RDB$INDEX_TYPE ? " DESCENDING" : ""),
-					SQL_identifier,
-					(IDX.RDB$INDEX_INACTIVE ? " INACTIVE" : ""),
-					SQL_identifier2);
-		}
-		else
-			isqlGlob.printf("CREATE%s%s INDEX %s%s ON %s",
-					(IDX.RDB$UNIQUE_FLAG ? " UNIQUE" : ""),
-					(IDX.RDB$INDEX_TYPE ? " DESCENDING" : ""),
-					IDX.RDB$INDEX_NAME,
-					(IDX.RDB$INDEX_INACTIVE ? " INACTIVE" : ""),
-					IDX.RDB$RELATION_NAME);
+		isqlGlob.printf(
+			"CREATE%s%s INDEX %s%s ON %s",
+			(IDX.RDB$UNIQUE_FLAG ? " UNIQUE" : ""),
+			(IDX.RDB$INDEX_TYPE ? " DESCENDING" : ""),
+			IUTILS_name_to_string(name).c_str(),
+			(IDX.RDB$INDEX_INACTIVE ? " INACTIVE" : ""),
+			IUTILS_name_to_string(relationName).c_str());
 
 		// Get index expression or column names
 
@@ -3360,32 +3145,24 @@ static void list_indexes()
 			if (!IDX.RDB$EXPRESSION_SOURCE.NULL)
 				SHOW_print_metadata_text_blob(isqlGlob.Out, &IDX.RDB$EXPRESSION_SOURCE, false, true);
 		}
-		else if (ISQL_get_index_segments (collist, sizeof(collist), IDX.RDB$INDEX_NAME, true))
-		{
+		else if (ISQL_get_index_segments(collist, sizeof(collist), name))
 			isqlGlob.printf(" (%s)", collist);
-		}
 
 		// Get index condition, if present
 
-		if (ENCODE_ODS(isqlGlob.major_ods, isqlGlob.minor_ods) >= ODS_13_1)
+		if (ENCODE_ODS(isqlGlob.major_ods, isqlGlob.minor_ods) >= ODS_13_1 && !IDX.RDB$CONDITION_SOURCE.NULL)
 		{
-			FOR IDX2 IN RDB$INDICES WITH
-				IDX2.RDB$INDEX_NAME = IDX.RDB$INDEX_NAME
-				AND IDX2.RDB$CONDITION_SOURCE NOT MISSING
-			{
-				isqlGlob.printf("%s ", NEWLINE);
-				SHOW_print_metadata_text_blob(isqlGlob.Out, &IDX2.RDB$CONDITION_SOURCE, false, true);
-			}
-			END_FOR
+			isqlGlob.printf("%s ", NEWLINE);
+			SHOW_print_metadata_text_blob(isqlGlob.Out, &IDX.RDB$CONDITION_SOURCE, false, true);
 		}
 
 		isqlGlob.printf("%s%s", isqlGlob.global_Term, NEWLINE);
-
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return;
-	END_ERROR;
+	END_ERROR
 }
 
 
@@ -3409,45 +3186,39 @@ static void list_package_bodies()
 
 	bool header = true;
 
-	FOR PACK IN RDB$PACKAGES WITH
-		(PACK.RDB$SYSTEM_FLAG NE 1 OR PACK.RDB$SYSTEM_FLAG MISSING)
-		AND PACK.RDB$PACKAGE_BODY_SOURCE NOT MISSING
-		SORTED BY PACK.RDB$PACKAGE_NAME
-
+	FOR PACK IN RDB$PACKAGES
+		WITH (PACK.RDB$SYSTEM_FLAG NE 1 OR PACK.RDB$SYSTEM_FLAG MISSING) AND
+			 PACK.RDB$PACKAGE_BODY_SOURCE NOT MISSING
+		SORTED BY PACK.RDB$SCHEMA_NAME, PACK.RDB$PACKAGE_NAME
+	{
 		if (header)
 		{
 			print_proc_prefix(obj_package_body, false);
 			header = false;
 		}
 
-		fb_utils::exact_name(PACK.RDB$PACKAGE_NAME);
-
-		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-			IUTILS_copy_SQL_id (PACK.RDB$PACKAGE_NAME, SQL_identifier, DBL_QUOTE);
-		else
-			strcpy(SQL_identifier, PACK.RDB$PACKAGE_NAME);
-
-		fb_utils::exact_name(PACK.RDB$OWNER_NAME);
+		const QualifiedMetaString name(PACK.RDB$PACKAGE_NAME, PACK.RDB$SCHEMA_NAME);
+		const MetaString ownerName(PACK.RDB$OWNER_NAME);
 
 		isqlGlob.printf("%s/* Package body: %s, Owner: %s%s */%s",
 				 NEWLINE,
-				 PACK.RDB$PACKAGE_NAME,
-				 PACK.RDB$OWNER_NAME,
+				 IUTILS_name_to_string(name).c_str(),
+				 IUTILS_name_to_string(ownerName).c_str(),
 				 (!PACK.RDB$VALID_BODY_FLAG.NULL && PACK.RDB$VALID_BODY_FLAG != 0 ? "" : ", Invalid"),
 				 NEWLINE);
 
 		if (!PACK.RDB$VALID_BODY_FLAG.NULL && PACK.RDB$VALID_BODY_FLAG != 0)
 		{
-			isqlGlob.printf("CREATE PACKAGE BODY %s AS%s", SQL_identifier, NEWLINE);
+			isqlGlob.printf("CREATE PACKAGE BODY %s AS%s", IUTILS_name_to_string(name).c_str(), NEWLINE);
 			SHOW_print_metadata_text_blob(isqlGlob.Out, &PACK.RDB$PACKAGE_BODY_SOURCE);
 			isqlGlob.printf("%s%s", Procterm, NEWLINE);
 		}
-
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return;
-	END_ERROR;
+	END_ERROR
 
 	if (!header)
 		print_proc_suffix(obj_package_body);
@@ -3473,35 +3244,29 @@ static void list_package_headers()
 
  	bool header = true;
 
-	FOR PACK IN RDB$PACKAGES WITH
-		(PACK.RDB$SYSTEM_FLAG NE 1 OR PACK.RDB$SYSTEM_FLAG MISSING)
-		SORTED BY PACK.RDB$PACKAGE_NAME
-
+	FOR PACK IN RDB$PACKAGES
+		WITH (PACK.RDB$SYSTEM_FLAG NE 1 OR PACK.RDB$SYSTEM_FLAG MISSING)
+		SORTED BY PACK.RDB$SCHEMA_NAME, PACK.RDB$PACKAGE_NAME
+	{
 		if (header)
 		{
 			print_proc_prefix(obj_package_header, false);
 			header = false;
 		}
 
-		fb_utils::exact_name(PACK.RDB$PACKAGE_NAME);
-
-		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-			IUTILS_copy_SQL_id (PACK.RDB$PACKAGE_NAME, SQL_identifier, DBL_QUOTE);
-		else
-			strcpy(SQL_identifier, PACK.RDB$PACKAGE_NAME);
-
-		fb_utils::exact_name(PACK.RDB$OWNER_NAME);
+		const QualifiedMetaString name(PACK.RDB$PACKAGE_NAME, PACK.RDB$SCHEMA_NAME);
+		const MetaString ownerName(PACK.RDB$OWNER_NAME);
 
 		isqlGlob.printf("%s/* Package header: %s, Owner: %s */%s",
 				 NEWLINE,
-				 PACK.RDB$PACKAGE_NAME,
-				 PACK.RDB$OWNER_NAME,
+				 IUTILS_name_to_string(name).c_str(),
+				 IUTILS_name_to_string(ownerName).c_str(),
 				 NEWLINE);
 
 		const char* ss = PACK.RDB$SQL_SECURITY.NULL ? "" :
 						(PACK.RDB$SQL_SECURITY ? " SQL SECURITY DEFINER" : " SQL SECURITY INVOKER");
 
-		isqlGlob.printf("CREATE PACKAGE %s%s AS%s", SQL_identifier, ss, NEWLINE);
+		isqlGlob.printf("CREATE PACKAGE %s%s AS%s", IUTILS_name_to_string(name).c_str(), ss, NEWLINE);
 
 		if (!PACK.RDB$PACKAGE_HEADER_SOURCE.NULL)
 			SHOW_print_metadata_text_blob(isqlGlob.Out, &PACK.RDB$PACKAGE_HEADER_SOURCE);
@@ -3509,15 +3274,79 @@ static void list_package_headers()
 			isqlGlob.printf("BEGIN END /* Missing package header info. */");
 
 		isqlGlob.printf("%s%s", Procterm, NEWLINE);
-
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return;
-	END_ERROR;
+	END_ERROR
 
 	if (!header)
 		print_proc_suffix(obj_package_header);
+}
+
+
+// Show schemas.
+static void list_schemas()
+{
+	if (isqlGlob.major_ods < ODS_VERSION14)
+		return;
+
+	bool first = true;
+
+	FOR SCH IN RDB$SCHEMAS
+		WITH (SCH.RDB$SYSTEM_FLAG NE 1 OR SCH.RDB$SYSTEM_FLAG MISSING)
+		SORTED BY SCH.RDB$SCHEMA_NAME
+	{
+		const MetaString name(SCH.RDB$SCHEMA_NAME);
+		const MetaString ownerName(SCH.RDB$OWNER_NAME);
+
+		if (first)
+		{
+			isqlGlob.printf("%s/* Schema definitions */%s", NEWLINE, NEWLINE);
+			first = false;
+		}
+
+		const bool isPublicSchema = name == "PUBLIC";
+
+		isqlGlob.printf("%s/* Schema: %s, Owner: %s */%s",
+				 NEWLINE,
+				 IUTILS_name_to_string(name).c_str(),
+				 IUTILS_name_to_string(ownerName).c_str(),
+				 NEWLINE);
+
+		isqlGlob.printf(
+			"CREATE%s SCHEMA %s",
+			(isPublicSchema ? " OR ALTER" : ""),
+			IUTILS_name_to_string(name).c_str());
+
+		if (!SCH.RDB$CHARACTER_SET_NAME.NULL)
+		{
+			const QualifiedMetaString defaultCharSetName(
+				SCH.RDB$CHARACTER_SET_NAME, SCH.RDB$CHARACTER_SET_SCHEMA_NAME);
+
+			isqlGlob.printf(
+				" DEFAULT CHARACTER SET %s",
+				IUTILS_name_to_string(defaultCharSetName).c_str());
+		}
+
+		if (!SCH.RDB$SQL_SECURITY.NULL)
+		{
+			isqlGlob.printf(
+				" DEFAULT SQL SECURITY %s",
+				(SCH.RDB$SQL_SECURITY ? "DEFINER" : "INVOKER"));
+		}
+
+		isqlGlob.printf("%s%s", isqlGlob.global_Term, NEWLINE);
+	}
+	END_FOR
+	ON_ERROR
+		ISQL_errmsg(fbStatus);
+		return;
+	END_ERROR
+
+	if (!first)
+		isqlGlob.printf("%sCOMMIT WORK%s%s", NEWLINE, isqlGlob.global_Term, NEWLINE);
 }
 
 
@@ -3538,50 +3367,39 @@ static void list_views()
 
 	// If this is a view, use print_blob to print the view text
 
-	FOR REL IN RDB$RELATIONS WITH
-		(REL.RDB$SYSTEM_FLAG NE 1 OR REL.RDB$SYSTEM_FLAG MISSING) AND
-		REL.RDB$VIEW_BLR NOT MISSING AND
-		REL.RDB$FLAGS = REL_sql
-		SORTED BY REL.RDB$RELATION_ID
-
-		fb_utils::exact_name(REL.RDB$RELATION_NAME);
-
-		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-			IUTILS_copy_SQL_id (REL.RDB$RELATION_NAME, SQL_identifier, DBL_QUOTE);
-		else
-			strcpy (SQL_identifier, REL.RDB$RELATION_NAME);
-
-		fb_utils::exact_name(REL.RDB$OWNER_NAME);
+	FOR REL IN RDB$RELATIONS
+		WITH (REL.RDB$SYSTEM_FLAG NE 1 OR REL.RDB$SYSTEM_FLAG MISSING) AND
+			 REL.RDB$VIEW_BLR NOT MISSING AND
+			 REL.RDB$FLAGS = REL_sql
+		SORTED BY REL.RDB$SCHEMA_NAME, REL.RDB$RELATION_ID
+	{
+		const QualifiedMetaString name(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME);
+		const MetaString ownerName(REL.RDB$OWNER_NAME);
 
 		isqlGlob.printf("%s/* View: %s, Owner: %s */%s",
 				 NEWLINE,
-				 REL.RDB$RELATION_NAME,
-				 REL.RDB$OWNER_NAME,
+				 IUTILS_name_to_string(name).c_str(),
+				 IUTILS_name_to_string(ownerName).c_str(),
 				 NEWLINE);
-		isqlGlob.printf("CREATE VIEW %s (", SQL_identifier);
+		isqlGlob.printf("CREATE VIEW %s (", IUTILS_name_to_string(name).c_str());
 
 		bool first = true;
 
 		// Get column list
-		FOR RFR IN RDB$RELATION_FIELDS WITH
-			RFR.RDB$RELATION_NAME = REL.RDB$RELATION_NAME
+		FOR RFR IN RDB$RELATION_FIELDS
+			WITH RFR.RDB$SCHEMA_NAME EQUIV NULLIF(REL.RDB$SCHEMA_NAME, '') AND
+				 RFR.RDB$RELATION_NAME = REL.RDB$RELATION_NAME
 			SORTED BY RFR.RDB$FIELD_POSITION
-
-			fb_utils::exact_name(RFR.RDB$FIELD_NAME);
-
-			if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-				IUTILS_copy_SQL_id (RFR.RDB$FIELD_NAME, SQL_identifier, DBL_QUOTE);
-			else
-				strcpy (SQL_identifier, RFR.RDB$FIELD_NAME);
-
-			isqlGlob.printf("%s%s", (first ? "" : ", "), SQL_identifier);
+		{
+			const MetaString columnName(RFR.RDB$FIELD_NAME);
+			isqlGlob.printf("%s%s", (first ? "" : ", "), IUTILS_name_to_string(columnName).c_str());
 			first = false;
-
+		}
 		END_FOR
 		ON_ERROR
 			ISQL_errmsg (fbStatus);
 			return;
-		END_ERROR;
+		END_ERROR
 
 		isqlGlob.printf(") AS%s", NEWLINE);
 
@@ -3589,10 +3407,10 @@ static void list_views()
 			SHOW_print_metadata_text_blob (isqlGlob.Out, &REL.RDB$VIEW_SOURCE);
 
 		isqlGlob.printf("%s%s", isqlGlob.global_Term, NEWLINE);
-
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return;
-	END_ERROR;
+	END_ERROR
 }

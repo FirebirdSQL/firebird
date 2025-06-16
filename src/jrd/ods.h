@@ -217,7 +217,7 @@ inline constexpr ULONG FIRST_SCN_PAGE	= 2;
 inline constexpr USHORT PAGE_SIZE_BASE		= 1024;		// Minimal page size ever supported,
 														// common divisor for valid page sizes
 
-inline constexpr USHORT MIN_PAGE_SIZE		= 4096;
+inline constexpr USHORT MIN_PAGE_SIZE		= 8192;
 inline constexpr USHORT MAX_PAGE_SIZE		= 32768;
 
 inline constexpr USHORT DEFAULT_PAGE_SIZE	= 8192;

@@ -102,6 +102,9 @@ const int IN_SW_BURP_REPLICA			= 53;	// replica mode
 const int IN_SW_BURP_PARALLEL_WORKERS	= 54;	// parallel workers
 const int IN_SW_BURP_DIRECT_IO			= 55;	// direct IO for backup files
 
+const int IN_SW_BURP_SKIP_SCHEMA_DATA		= 56;	// skip data from schema
+const int IN_SW_BURP_INCLUDE_SCHEMA_DATA	= 57;	// backup data from schemas
+
 /**************************************************************************/
 
 static const char* const BURP_SW_MODE_NONE = "NONE";
@@ -186,8 +189,12 @@ static const Switches::in_sw_tab_t reference_burp_in_sw_table[] =
 	{IN_SW_BURP_S,	  0,						"SKIP_BAD_DATA",	0, 0, 0, false, false,	0,		4, NULL, boRestore},
 	{IN_SW_BURP_SE,   0,						"SERVICE",			0, 0, 0, false, false,	277,	2, NULL, boGeneral},
 				// msg 277: @1SE(RVICE) use services manager
+	{IN_SW_BURP_SKIP_SCHEMA_DATA, isc_spb_res_skip_schema_data, "SKIP_SCHEMA_DATA",	0, 0, 0, false, false,	415,	13, NULL, boGeneral},
+				// msg 415: @1SKIP_SCHEMA_DATA skip data for schema
 	{IN_SW_BURP_SKIP_DATA, isc_spb_res_skip_data, "SKIP_DATA",		0, 0, 0, false, false,	355,	6, NULL, boGeneral},
 				// msg 355: @1SKIP_DATA skip data for table
+	{IN_SW_BURP_INCLUDE_SCHEMA_DATA, isc_spb_res_include_schema_data, "INCLUDE_SCHEMA_DATA",	0, 0, 0, false, false,	416,	16, NULL, boGeneral},
+				// msg 416: @1INCLUDE_SCHEMA_D(ATA) backup data of schemas(s)
 	{IN_SW_BURP_INCLUDE_DATA, isc_spb_res_include_data, "INCLUDE_DATA",		0, 0, 0, false, false,	388,	7, NULL, boGeneral},
 				// msg 388: @1INCLUDE(_DATA) backup data of table(s)
 	{IN_SW_BURP_STATS, isc_spb_bkp_stat,		"STATISTICS",		0, 0, 0, false, false,	361,	2, NULL, boGeneral},

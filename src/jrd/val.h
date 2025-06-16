@@ -33,7 +33,6 @@
 #include "../common/classes/array.h"
 #include "../jrd/intl_classes.h"
 #include "../jrd/MetaName.h"
-#include "../jrd/QualifiedName.h"
 #include "../jrd/RecordNumber.h"
 #include "../common/dsc.h"
 

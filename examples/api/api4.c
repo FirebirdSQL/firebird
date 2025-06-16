@@ -1,7 +1,7 @@
 /*
  *  Program type:  API Interface
  *
- *  Desription:
+ *  Description:
  *      This program updates departments' budgets, given
  *      the department and the new budget information parameters.
  *

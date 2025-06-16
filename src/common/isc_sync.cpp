@@ -1723,7 +1723,10 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 			(Arg::Gds(isc_random) << Arg::Str("File for memory mapping is empty.")).raise();
 		}
 
-		if (SetFilePointer(file_handle, length, NULL, FILE_BEGIN) == INVALID_SET_FILE_POINTER ||
+		LARGE_INTEGER offset;
+		offset.QuadPart = length;
+
+		if (SetFilePointer(file_handle, offset.LowPart, &offset.HighPart, FILE_BEGIN) == INVALID_SET_FILE_POINTER ||
 			!SetEndOfFile(file_handle) || !FlushFileBuffers(file_handle))
 		{
 			err = GetLastError();
@@ -2564,7 +2567,10 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector,
 
 	if (flag)
 	{
-		if (SetFilePointer(sh_mem_handle, new_length, NULL, FILE_BEGIN) == INVALID_SET_FILE_POINTER ||
+		LARGE_INTEGER offset;
+		offset.QuadPart = new_length;
+
+		if (SetFilePointer(sh_mem_handle, offset.LowPart, &offset.HighPart, FILE_BEGIN) == INVALID_SET_FILE_POINTER ||
 			!SetEndOfFile(sh_mem_handle) ||
 			!FlushViewOfFile(sh_mem_header, 0))
 		{
