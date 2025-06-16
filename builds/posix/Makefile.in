@@ -818,14 +818,14 @@ run_tests_process: tests_process
 #___________________________________________________________________________
 # various cleaning
 #
-.PHONY: clean clean_process clean_objects clean_dependancies clean_extern_objects clean_build \
+.PHONY: clean clean_process clean_objects clean_dependencies clean_extern_objects clean_build \
 		clean_gpre_gen clean_icu clean_dbs clean_examples clean_makefiles \
 		clean_editline clean_all clean_decfloat clean_int128 clean_vers clean_misc
 
 clean:
 	$(MAKE) TARGET?=$(DefaultTarget) clean_process
 
-clean_process: clean_objects clean_dependancies clean_extern_objects clean_build \
+clean_process: clean_objects clean_dependencies clean_extern_objects clean_build \
 		clean_yacc_gen clean_gpre_gen clean_dbs clean_examples clean_cds clean_tommath \
 		clean_tomcrypt clean_decfloat clean_int128 clean_vers clean_misc
 
@@ -898,11 +898,11 @@ clean_extern_objects:
 	$(RM) `find $(ROOT)/extern/ -type f -name '*.lo' -print`
 	$(RM) `find $(ROOT)/extern/ -type f -name '*.o' -print`
 
-# Clear out dependancies files created by the gcc compiler
+# Clear out dependencies files created by the gcc compiler
 # since when .o and other files are deleted the dependant
 # targets need to be recalculated
 
-clean_dependancies:
+clean_dependencies:
 	$(RM) -f `find $(TMP_ROOT)/ -type f -name '*.d' -print`
 
 # delete only all of the files of type regular file in $FIREBIRD

@@ -178,7 +178,7 @@ ISC_STATUS filter_acl(USHORT action, BlobControl* control)
 	USHORT length;
 	const ISC_STATUS status = caller(isc_blob_filter_get_segment, control, (USHORT) l, temp, &length);
 
-	TEXT line[BUFFER_SMALL];
+	TEXT line[BUFFER_LARGE];
 
 	if (!status)
 	{
@@ -198,10 +198,27 @@ ISC_STATUS filter_acl(USHORT action, BlobControl* control)
 				while ((c = *p++) != 0)
 				{
 					all_wild = false;
-					sprintf(out, "%s%.*s, ", acl_ids[c], *p, p + 1);
+					sprintf(out, "%s%.*s", acl_ids[c], *p, p + 1);
 					p += *p + 1;
 					while (*out)
 						++out;
+
+					switch (c)
+					{
+						case id_view:
+						case id_package:
+						case id_procedure:
+						case id_trigger:
+						case id_function:
+							sprintf(out, ".%.*s", *p, p + 1);
+							p += *p + 1;
+							while (*out)
+								++out;
+							break;
+					}
+
+					*out++ = ',';
+					*out++ = ' ';
 				}
 				if (all_wild)
 				{
@@ -1101,7 +1118,7 @@ ISC_STATUS filter_transliterate_text(USHORT action, BlobControl* control)
 		return isc_transliteration_failed;
 	}
 
-	if (err_position == 0 && bytes_read_from_source != 0 && length != 0 && length < 4)
+	if (err_position == 0 && length != 0 && control->ctl_buffer_length < 8)
 	{
 		// We don't have sufficient bytes to always transliterate a character.
 		// A bad input on the first character is unrecoverable, so we cache
@@ -1309,7 +1326,6 @@ static ISC_STATUS string_filter(USHORT action, BlobControl* control)
  *
  **************************************/
 	filter_tmp* string;
-	USHORT length;
 
 	switch (action)
 	{
@@ -1322,10 +1338,14 @@ static ISC_STATUS string_filter(USHORT action, BlobControl* control)
 		return FB_SUCCESS;
 
 	case isc_blob_filter_get_segment:
+	{
 		if (!(string = (filter_tmp*) control->ctl_data[1]))
 			return isc_segstr_eof;
-		length = string->tmp_length - control->ctl_data[2];
-		if (length > control->ctl_buffer_length)
+
+		USHORT length = string->tmp_length - control->ctl_data[2];
+		const bool outOfBuffer = (length > control->ctl_buffer_length);
+
+		if (outOfBuffer)
 			length = control->ctl_buffer_length;
 		memcpy(control->ctl_buffer, string->tmp_string + (USHORT) control->ctl_data[2], length);
 		control->ctl_data[2] += length;
@@ -1334,7 +1354,8 @@ static ISC_STATUS string_filter(USHORT action, BlobControl* control)
 			control->ctl_data[2] = 0;
 		}
 		control->ctl_segment_length = length;
-		return (length <= control->ctl_buffer_length) ? FB_SUCCESS : isc_segment;
+		return (!outOfBuffer) ? FB_SUCCESS : isc_segment;
+	}
 
 	case isc_blob_filter_put_segment:
 	case isc_blob_filter_create:
@@ -1427,96 +1448,123 @@ ISC_STATUS filter_debug_info(USHORT action, BlobControl* control)
 	if (p > end)
 		return isc_segstr_eof;
 
-	DbgInfo dbgInfo(*getDefaultMemoryPool());
-	DBG_parse_debug_info(p - temp, temp, dbgInfo);
+	DbgInfo mainDbgInfo(*getDefaultMemoryPool());
+	DBG_parse_debug_info(p - temp, temp, mainDbgInfo);
 
 	string str;
 
-	if (auto args = dbgInfo.argInfoToName.constAccessor();
-		args.getFirst())
+	const auto print = [&](const DbgInfo* dbgInfo)
 	{
-		string_put(control, "Parameters:");
-		str.printf("%10s %-32s %-6s", "Number", "Name", "Type");
+		if (auto args = dbgInfo->argInfoToName.constAccessor();
+			args.getFirst())
+		{
+			string_put(control, "Parameters:");
+			str.printf("%10s %-32s %-6s", "Number", "Name", "Type");
+			string_put(control, str.c_str());
+			str.replace(str.begin(), str.end(), str.length(), '-');
+			string_put(control, str.c_str());
+
+			do
+			{
+				str.printf("%10d %-32s %-6s",
+					args.current()->first.index,
+					args.current()->second.c_str(),
+					(args.current()->first.type == fb_dbg_arg_input ? "INPUT" : "OUTPUT"));
+				string_put(control, str.c_str());
+			} while (args.getNext());
+
+			string_put(control, "");
+		}
+
+		if (auto vars = dbgInfo->varIndexToName.constAccessor();
+			vars.getFirst())
+		{
+			string_put(control, "Variables:");
+			str.printf("%10s %-32s", "Number", "Name");
+			string_put(control, str.c_str());
+			str.replace(str.begin(), str.end(), str.length(), '-');
+			string_put(control, str.c_str());
+
+			do
+			{
+				str.printf("%10d %-32s", vars.current()->first, vars.current()->second.c_str());
+				string_put(control, str.c_str());
+			} while (vars.getNext());
+
+			string_put(control, "");
+		}
+
+		if (auto cursors = dbgInfo->declaredCursorIndexToName.constAccessor();
+			cursors.getFirst())
+		{
+			string_put(control, "Cursors:");
+			str.printf("%10s %-32s", "Number", "Name");
+			string_put(control, str.c_str());
+			str.replace(str.begin(), str.end(), str.length(), '-');
+			string_put(control, str.c_str());
+
+			do
+			{
+				str.printf("%10d %-32s", cursors.current()->first, cursors.current()->second.c_str());
+				string_put(control, str.c_str());
+			} while (cursors.getNext());
+
+			string_put(control, "");
+		}
+
+		if (auto cursors = dbgInfo->forCursorOffsetToName.constAccessor();
+			cursors.getFirst())
+		{
+			string_put(control, "FOR Cursors:");
+			str.printf("%10s %-32s", "Offset", "Name");
+			string_put(control, str.c_str());
+			str.replace(str.begin(), str.end(), str.length(), '-');
+			string_put(control, str.c_str());
+
+			do
+			{
+				str.printf("%10d %-32s", cursors.current()->first, cursors.current()->second.c_str());
+				string_put(control, str.c_str());
+			} while (cursors.getNext());
+
+			string_put(control, "");
+		}
+
+		string_put(control, "BLR to Source mapping:");
+		str.printf("%10s %10s %10s", "BLR offset", "Line", "Column");
 		string_put(control, str.c_str());
 		str.replace(str.begin(), str.end(), str.length(), '-');
 		string_put(control, str.c_str());
 
-		do
+		for (const MapBlrToSrcItem* i = dbgInfo->blrToSrc.begin(); i < dbgInfo->blrToSrc.end(); i++)
 		{
-			str.printf("%10d %-32s %-6s",
-				args.current()->first.index,
-				args.current()->second.c_str(),
-				(args.current()->first.type == fb_dbg_arg_input ? "INPUT" : "OUTPUT"));
+			str.printf("%10d %10d %10d", i->mbs_offset, i->mbs_src_line, i->mbs_src_col);
 			string_put(control, str.c_str());
-		} while (args.getNext());
+		}
+	};
 
+	print(&mainDbgInfo);
+
+	for (const auto& [name, dbgInfo] : mainDbgInfo.subFuncs)
+	{
 		string_put(control, "");
+		string_put(control, "");
+		str.printf("Sub function %s:", name.c_str());
+		string_put(control, str.c_str());
+		string_put(control, "");
+
+		print(dbgInfo);
 	}
 
-	if (auto vars = dbgInfo.varIndexToName.constAccessor();
-		vars.getFirst())
+	for (const auto& [name, dbgInfo] : mainDbgInfo.subProcs)
 	{
-		string_put(control, "Variables:");
-		str.printf("%10s %-32s", "Number", "Name");
-		string_put(control, str.c_str());
-		str.replace(str.begin(), str.end(), str.length(), '-');
-		string_put(control, str.c_str());
-
-		do
-		{
-			str.printf("%10d %-32s", vars.current()->first, vars.current()->second.c_str());
-			string_put(control, str.c_str());
-		} while (vars.getNext());
-
 		string_put(control, "");
-	}
-
-	if (auto cursors = dbgInfo.declaredCursorIndexToName.constAccessor();
-		cursors.getFirst())
-	{
-		string_put(control, "Cursors:");
-		str.printf("%10s %-32s", "Number", "Name");
-		string_put(control, str.c_str());
-		str.replace(str.begin(), str.end(), str.length(), '-');
-		string_put(control, str.c_str());
-
-		do
-		{
-			str.printf("%10d %-32s", cursors.current()->first, cursors.current()->second.c_str());
-			string_put(control, str.c_str());
-		} while (cursors.getNext());
-
 		string_put(control, "");
-	}
-
-	if (auto cursors = dbgInfo.forCursorOffsetToName.constAccessor();
-		cursors.getFirst())
-	{
-		string_put(control, "FOR Cursors:");
-		str.printf("%10s %-32s", "Offset", "Name");
+		str.printf("Sub procedure %s:", name.c_str());
 		string_put(control, str.c_str());
-		str.replace(str.begin(), str.end(), str.length(), '-');
-		string_put(control, str.c_str());
-
-		do
-		{
-			str.printf("%10d %-32s", cursors.current()->first, cursors.current()->second.c_str());
-			string_put(control, str.c_str());
-		} while (cursors.getNext());
-
 		string_put(control, "");
-	}
 
-	string_put(control, "BLR to Source mapping:");
-	str.printf("%10s %10s %10s", "BLR offset", "Line", "Column");
-	string_put(control, str.c_str());
-	str.replace(str.begin(), str.end(), str.length(), '-');
-	string_put(control, str.c_str());
-
-	for (const MapBlrToSrcItem* i = dbgInfo.blrToSrc.begin(); i < dbgInfo.blrToSrc.end(); i++)
-	{
-		str.printf("%10d %10d %10d", i->mbs_offset, i->mbs_src_line, i->mbs_src_col);
-		string_put(control, str.c_str());
+		print(dbgInfo);
 	}
 
 	control->ctl_data[1] = control->ctl_data[0];

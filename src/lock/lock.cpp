@@ -804,7 +804,7 @@ bool LockManager::cancelWait(SRQ_PTR owner_offset)
  *
  * Functional description
  *	Wakeup waiting owner to make it check if wait should be cancelled.
- *	As this routine could be called asyncronous, take extra care and
+ *	As this routine could be called asynchronous, take extra care and
  *	don't trust the input params blindly.
  *
  **************************************/
@@ -1145,7 +1145,7 @@ void LockManager::acquire_shmem(SRQ_PTR owner_offset)
 #endif //USE_SHMEM_EXT
 
 	// If we were able to acquire the MUTEX, but there is an prior owner marked
-	// in the the lock table, it means that someone died while owning
+	// in the lock table, it means that someone died while owning
 	// the lock mutex.  In that event, lets see if there is any unfinished work
 	// left around that we need to finish up.
 
@@ -3958,7 +3958,7 @@ void LockManager::wait_for_request(thread_db* tdbb, lrq* request, SSHORT lck_wai
 			// Our request is not resolved, all the owners are alive, there's
 			// no deadlock -- there's nothing else to do.  Let's
 			// make sure our request hasn't been forgotten by reminding
-			// all the owners we're waiting - some plaforms under CLASSIC
+			// all the owners we're waiting - some platforms under CLASSIC
 			// architecture had problems with "missing signals" - which is
 			// another reason to repost the blockage.
 			// Also, the ownership of the lock could have changed, and we

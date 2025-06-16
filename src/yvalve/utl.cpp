@@ -117,7 +117,6 @@ const int BSTR_input	= 0;
 const int BSTR_output	= 1;
 const int BSTR_alloc	= 2;
 
-static void get_ods_version(CheckStatusWrapper*, IAttachment*, USHORT*, USHORT*);
 static void isc_expand_dpb_internal(const UCHAR** dpb, SSHORT* dpb_size, ...);
 
 
@@ -556,7 +555,7 @@ void UtilInterface::getFbVersion(CheckStatusWrapper* status, IAttachment* att,
 		}
 
 		USHORT ods_version, ods_minor_version;
-		get_ods_version(status, att, &ods_version, &ods_minor_version);
+		UTL_get_ods_version(status, att, &ods_version, &ods_minor_version);
 		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
 			return;
 
@@ -569,9 +568,9 @@ void UtilInterface::getFbVersion(CheckStatusWrapper* status, IAttachment* att,
 	}
 }
 
-YAttachment* UtilInterface::executeCreateDatabase(
+YAttachment* UtilInterface::executeCreateDatabase2(
 	Firebird::CheckStatusWrapper* status, unsigned stmtLength, const char* creatDBstatement,
-	unsigned dialect, FB_BOOLEAN* stmtIsCreateDb)
+	unsigned dialect, unsigned dpbLength, const unsigned char* dpb, FB_BOOLEAN* stmtIsCreateDb)
 {
 	try
 	{
@@ -584,7 +583,7 @@ YAttachment* UtilInterface::executeCreateDatabase(
 		string statement(creatDBstatement,
 			(stmtLength == 0 && creatDBstatement ? strlen(creatDBstatement) : stmtLength));
 
-		if (!PREPARSE_execute(status, &att, statement, &stmtEaten, dialect))
+		if (!PREPARSE_execute(status, &att, statement, &stmtEaten, dialect, dpbLength, dpb))
 			return NULL;
 
 		if (stmtIsCreateDb)
@@ -2954,7 +2953,7 @@ int API_ROUTINE gds__thread_start(FPTR_INT_VOID_PTR* entrypoint,
 #endif
 
 
-static void get_ods_version(CheckStatusWrapper* status, IAttachment* att,
+void UTL_get_ods_version(CheckStatusWrapper* status, IAttachment* att,
 	USHORT* ods_version, USHORT* ods_minor_version)
 {
 /**************************************

@@ -96,9 +96,10 @@ struct ExternalInfo
 	string configInfo;
 };
 
+using CharSetCollationName = FullPooledPair<QualifiedMetaString, string>;
 
 static GlobalPtr<ModulesMap> modules;
-static GlobalPtr<GenericMap<Pair<Full<string, ExternalInfo> > > > charSetCollations;
+static GlobalPtr<FullPooledMap<CharSetCollationName, ExternalInfo>> charSetCollations;
 
 
 const IntlManager::CharSetDefinition IntlManager::defaultCharSets[] =
@@ -417,7 +418,7 @@ const IntlManager::CollationDefinition IntlManager::defaultCollations[] =
 bool IntlManager::initialize()
 {
 	bool ok = true;
-	ObjectsArray<ConfigFile::String> conflicts;
+	ObjectsArray<CharSetCollationName> conflicts;
 	string builtinConfig;
 
 	PathName intlPath = fb_utils::getPrefix(Firebird::IConfigManager::DIR_INTL, "");
@@ -449,7 +450,10 @@ bool IntlManager::initialize()
 					continue;
 				}
 
-				const ConfigFile::String charSetName = ch->value;
+				QualifiedMetaString charSetName = QualifiedMetaString::parseSchemaObject(ch->value);
+				if (charSetName.schema.isEmpty())
+					charSetName.schema = SYSTEM_SCHEMA;
+
 				PathName filename;
 				string configInfo;
 
@@ -459,15 +463,11 @@ bool IntlManager::initialize()
 					(objModule = configFile.findParameter("intl_module", module->value.c_str())))
 				{
 					if (!objModule->sub)
-					{
 						fatal_exception::raiseFmt("Missing parameters for intl_module %s\n", module->value.c_str());
-					}
 
 					const ConfigFile::Parameter* fname = objModule->sub->findParameter("filename");
 					if (!fname)
-					{
 						fatal_exception::raiseFmt("Missing parameter 'filename' for intl_module %s\n", module->value.c_str());
-					}
 
 					filename = fname->value.ToPathName();
 					configInfo = getConfigInfo(objModule);
@@ -542,26 +542,30 @@ bool IntlManager::initialize()
 				for (FB_SIZE_T coll = 0; coll < sub.getCount(); ++coll)
 				{
 					if (sub[coll].name != "collation")
-					{
 						continue;
+
+					const auto& collationStr = sub[coll].value;
+					string collationName;
+					string externalName;
+
+					if (const auto pos = collationStr.find(' ');
+						pos != ConfigFile::String::npos)
+					{
+						collationName = collationStr.substr(0, pos);
+						externalName = collationStr.substr(pos).ToString();
+					}
+					else
+					{
+						collationName = collationStr;
+						externalName = collationName;
 					}
 
-					ConfigFile::String collationName = sub[coll].value;
-					ConfigFile::String externalName;
-					FB_SIZE_T pos = collationName.find(' ');
-					if (pos != ConfigFile::String::npos)
-					{
-						externalName = collationName.substr(pos);
-						externalName.ltrim(" \t");
-						collationName = collationName.substr(0, pos);
-					}
-					const ConfigFile::String charSetCollation = charSetName + ":" + collationName;
+					externalName.trim(" \t");
 
-					if (!registerCharSetCollation(charSetCollation.ToString(), filename,
-							(externalName.hasData() ? externalName : collationName).ToString(),
-							configInfo))
+					if (!registerCharSetCollation(charSetName, collationName, filename,
+							externalName.c_str(), configInfo))
 					{
-						conflicts.add(charSetCollation);
+						conflicts.add({charSetName, collationName});
 						ok = false;
 					}
 				}
@@ -576,45 +580,56 @@ bool IntlManager::initialize()
 		ok = false;
 	}
 
-	registerCharSetCollation("NONE:NONE", "", "NONE", builtinConfig);
-	registerCharSetCollation("OCTETS:OCTETS", "", "OCTETS", builtinConfig);
-	registerCharSetCollation("ASCII:ASCII", "", "ASCII", builtinConfig);
-	registerCharSetCollation("UNICODE_FSS:UNICODE_FSS", "", "UNICODE_FSS", builtinConfig);
-	registerCharSetCollation("UTF8:UTF8", "", "UTF8", builtinConfig);
-	registerCharSetCollation("UTF8:UCS_BASIC", "", "UCS_BASIC", builtinConfig);
-	registerCharSetCollation("UTF8:UNICODE", "", "UNICODE", builtinConfig);
+	registerCharSetCollation(QualifiedMetaString("NONE", SYSTEM_SCHEMA),
+		"NONE", "", "NONE", builtinConfig);
+	registerCharSetCollation(QualifiedMetaString("OCTETS", SYSTEM_SCHEMA),
+		"OCTETS", "", "OCTETS", builtinConfig);
+	registerCharSetCollation(QualifiedMetaString("ASCII", SYSTEM_SCHEMA),
+		"ASCII", "", "ASCII", builtinConfig);
+	registerCharSetCollation(QualifiedMetaString("UNICODE_FSS", SYSTEM_SCHEMA),
+		"UNICODE_FSS", "", "UNICODE_FSS", builtinConfig);
+	registerCharSetCollation(QualifiedMetaString("UTF8", SYSTEM_SCHEMA),
+		"UTF8", "", "UTF8", builtinConfig);
+	registerCharSetCollation(QualifiedMetaString("UTF8", SYSTEM_SCHEMA),
+		"UCS_BASIC", "", "UCS_BASIC", builtinConfig);
+	registerCharSetCollation(QualifiedMetaString("UTF8", SYSTEM_SCHEMA),
+		"UNICODE", "", "UNICODE", builtinConfig);
 
-	registerCharSetCollation("UTF16:UTF16", "", "UTF16", builtinConfig);
+	registerCharSetCollation(QualifiedMetaString("UTF16", SYSTEM_SCHEMA),
+		"UTF16", "", "UTF16", builtinConfig);
 #ifdef FB_NEW_INTL_ALLOW_NOT_READY
-	registerCharSetCollation("UTF16:UCS_BASIC", "", "UCS_BASIC", builtinConfig);
-	registerCharSetCollation("UTF32:UTF32", "", "UTF32", builtinConfig);
-	registerCharSetCollation("UTF32:UCS_BASIC", "", "UCS_BASIC", builtinConfig);
+	registerCharSetCollation(QualifiedMetaString("UTF16", SYSTEM_SCHEMA),
+		"UCS_BASIC", "", "UCS_BASIC", builtinConfig);
+	registerCharSetCollation(QualifiedMetaString("UTF32", SYSTEM_SCHEMA),
+		"UTF32", "", "UTF32", builtinConfig);
+	registerCharSetCollation(QualifiedMetaString("UTF32", SYSTEM_SCHEMA),
+		"UCS_BASIC", "", "UCS_BASIC", builtinConfig);
 #endif
 
-	for (ObjectsArray<ConfigFile::String>::const_iterator name(conflicts.begin()); name != conflicts.end(); ++name)
-		charSetCollations->remove(name->ToString());
+	for (const auto& conflict : conflicts)
+		charSetCollations->remove(conflict);
 
 	return ok;
 }
 
 
-bool IntlManager::charSetInstalled(const string& charSetName)
+bool IntlManager::charSetInstalled(const QualifiedMetaString& charSetName)
 {
-	return charSetCollations->exist(charSetName + ":" + charSetName);
+	return charSetCollations->exist({charSetName, charSetName.object});
 }
 
 
-bool IntlManager::collationInstalled(const string& collationName, const string& charSetName)
+bool IntlManager::collationInstalled(const string& collationName, const QualifiedMetaString& charSetName)
 {
-	return charSetCollations->exist(charSetName + ":" + collationName);
+	return charSetCollations->exist({charSetName, collationName});
 }
 
 
-bool IntlManager::lookupCharSet(const string& charSetName, charset* cs)
+bool IntlManager::lookupCharSet(const QualifiedMetaString& charSetName, charset* cs)
 {
 	ExternalInfo externalInfo;
 
-	if (charSetCollations->get(charSetName + ":" + charSetName, externalInfo))
+	if (charSetCollations->get({charSetName, charSetName.object}, externalInfo))
 	{
 		pfn_INTL_lookup_charset lookupFunction = NULL;
 
@@ -640,7 +655,7 @@ bool IntlManager::lookupCharSet(const string& charSetName, charset* cs)
 
 
 void IntlManager::lookupCollation(const string& collationName,
-								  const string& charSetName,
+								  const QualifiedMetaString& charSetName,
 								  USHORT attributes, const UCHAR* specificAttributes,
 								  ULONG specificAttributesLen, bool ignoreAttributes,
 								  texttype* tt)
@@ -649,8 +664,8 @@ void IntlManager::lookupCollation(const string& collationName,
 	ExternalInfo collationExternalInfo;
 	char statusBuffer[BUFFER_LARGE] = "";
 
-	if (charSetCollations->get(charSetName + ":" + charSetName, charSetExternalInfo) &&
-		charSetCollations->get(charSetName + ":" + collationName, collationExternalInfo))
+	if (charSetCollations->get({charSetName, charSetName.object}, charSetExternalInfo) &&
+		charSetCollations->get({charSetName, collationName}, collationExternalInfo))
 	{
 		ModuleLoader::Module* module = nullptr;
 
@@ -691,17 +706,17 @@ void IntlManager::lookupCollation(const string& collationName,
 
 	if (statusBuffer[0])
 	{
-		(Arg::Gds(isc_collation_not_installed) << collationName << charSetName <<
+		(Arg::Gds(isc_collation_not_installed) << collationName << charSetName.toQuotedString() <<
 			Arg::Gds(isc_random) << statusBuffer
 		).raise();
 	}
 	else
-		(Arg::Gds(isc_collation_not_installed) << collationName << charSetName).raise();
+		(Arg::Gds(isc_collation_not_installed) << collationName << charSetName.toQuotedString()).raise();
 }
 
 
 bool IntlManager::setupCollationAttributes(
-	const string& collationName, const string& charSetName,
+	const string& collationName, const QualifiedMetaString& charSetName,
 	const string& specificAttributes, string& newSpecificAttributes)
 {
 	ExternalInfo charSetExternalInfo;
@@ -709,8 +724,8 @@ bool IntlManager::setupCollationAttributes(
 
 	newSpecificAttributes = specificAttributes;
 
-	if (charSetCollations->get(charSetName + ":" + charSetName, charSetExternalInfo) &&
-		charSetCollations->get(charSetName + ":" + collationName, collationExternalInfo))
+	if (charSetCollations->get({charSetName, charSetName.object}, charSetExternalInfo) &&
+		charSetCollations->get({charSetName, collationName}, collationExternalInfo))
 	{
 		pfn_INTL_setup_attributes attributesFunction = NULL;
 
@@ -793,32 +808,33 @@ string IntlManager::getConfigInfo(const ConfigFile::Parameter* confObj)
 }
 
 
-bool IntlManager::registerCharSetCollation(const string& name, const PathName& filename,
-	const string& externalName, const string& configInfo
+bool IntlManager::registerCharSetCollation(const QualifiedMetaString& charSetName,
+	const string& collationName, const PathName& filename, const string& externalName,
+	const string& configInfo
 )
 {
 	ExternalInfo conflict;
 
-	if (charSetCollations->get(name, conflict))
+	if (charSetCollations->get({charSetName, collationName}, conflict))
 	{
-		gds__log((string("INTL plugin conflict: ") + name + " defined in " +
-			(conflict.moduleName.isEmpty() ? "<builtin>" : conflict.moduleName.c_str()) +
+		gds__log((string("INTL plugin conflict: ") + charSetName.toQuotedString() + ":" + collationName +
+			" defined in " + (conflict.moduleName.isEmpty() ? "<builtin>" : conflict.moduleName.c_str()) +
 			" and " + filename.c_str()).c_str());
 		return false;
 	}
 
-	charSetCollations->put(name, ExternalInfo(filename, externalName, configInfo));
+	charSetCollations->put({charSetName, collationName}, ExternalInfo(filename, externalName, configInfo));
 	return true;
 }
 
 
-bool IntlManager::validateCharSet(const string& charSetName, charset* cs)
+bool IntlManager::validateCharSet(const QualifiedMetaString& charSetName, charset* cs)
 {
 	bool valid = true;
 	string s;
 
 	string unsupportedMsg;
-	unsupportedMsg.printf("Unsupported character set %s.", charSetName.c_str());
+	unsupportedMsg.printf("Unsupported character set %s.", charSetName.toQuotedString().c_str());
 
 	if (!(cs->charset_flags & CHARSET_ASCII_BASED))
 	{

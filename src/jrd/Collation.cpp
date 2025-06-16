@@ -595,7 +595,7 @@ public:
 private:
 	 // Return true if a string (p1, l1) matches a given pattern (p2, l2).
 	 // The character '?' in the pattern may match any single character
-	 // in the the string, and the character '*' may match any sequence
+	 // in the string, and the character '*' may match any sequence
 	 // of characters.
 	 //
 	 // Wide SCHAR version operates on short-based buffer,

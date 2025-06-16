@@ -53,12 +53,14 @@ public:
 	{
 		VALUE_UNKNOWN,
 		VALUE_GLOBAL_ID,
-		VALUE_TABLE_ID,
+		VALUE_TABLE_ID_OBJECT_NAME,
 		VALUE_INTEGER,
 		VALUE_TIMESTAMP,
 		VALUE_TIMESTAMP_TZ,
 		VALUE_STRING,
-		VALUE_BOOLEAN
+		VALUE_BOOLEAN,
+		VALUE_TABLE_ID_SCHEMA_NAME,
+		VALUE_LAST_MARKER	// Should be last item
 	};
 
 	struct DumpField
@@ -122,9 +124,14 @@ public:
 			storeField(field_id, VALUE_GLOBAL_ID, sizeof(SINT64), &value);
 		}
 
-		void storeTableId(int field_id, SLONG value)
+		void storeTableIdObjectName(int field_id, SLONG value)
 		{
-			storeField(field_id, VALUE_TABLE_ID, sizeof(SLONG), &value);
+			storeField(field_id, VALUE_TABLE_ID_OBJECT_NAME, sizeof(SLONG), &value);
+		}
+
+		void storeTableIdSchemaName(int field_id, SLONG value)
+		{
+			storeField(field_id, VALUE_TABLE_ID_SCHEMA_NAME, sizeof(SLONG), &value);
 		}
 
 		void storeInteger(int field_id, SINT64 value)
@@ -175,7 +182,7 @@ public:
 			{
 				field.id = (USHORT) buffer[offset++];
 				field.type = (ValueType) buffer[offset++];
-				fb_assert(field.type >= VALUE_GLOBAL_ID && field.type <= VALUE_BOOLEAN);
+				fb_assert(field.type >= VALUE_GLOBAL_ID && field.type < VALUE_LAST_MARKER);
 				memcpy(&field.length, &buffer[offset], sizeof(ULONG));
 				offset += sizeof(ULONG);
 				field.data = &buffer[offset];

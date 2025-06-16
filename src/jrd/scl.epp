@@ -71,14 +71,14 @@ DATABASE DB = FILENAME "ODS.RDB";
 static bool check_number(const UCHAR*, USHORT);
 static bool check_user_group(thread_db* tdbb, const UCHAR*, USHORT);
 static bool check_string(const UCHAR*, const MetaName&);
-static SecurityClass::flags_t compute_access(thread_db* tdbb, const SecurityClass*,	SLONG, const MetaName&);
+static SecurityClass::flags_t compute_access(thread_db* tdbb, const SecurityClass*,	SLONG, const QualifiedName&);
 static SecurityClass::flags_t get_sys_privileges(thread_db* tdbb);
 static SecurityClass::flags_t walk_acl(thread_db* tdbb, const Acl&, const MetaName&,
-	SLONG, const MetaName&);
-static void raiseError(thread_db* tdbb, SecurityClass::flags_t mask, ObjectType type, const MetaName& name,
-	const MetaName& r_name, const MetaName &invoker);
+	SLONG, const QualifiedName&);
+static void raiseError(thread_db* tdbb, SecurityClass::flags_t mask, ObjectType type, const QualifiedName& name,
+	const MetaName& col_name, const MetaName& invoker);
 static bool check_object(thread_db* tdbb, bool found, const SecurityClass* s_class, SLONG obj_type,
-	const MetaName& obj_name, SecurityClass::flags_t mask, ObjectType type, const MetaName& name);
+	const QualifiedName& obj_name, SecurityClass::flags_t mask, ObjectType type, const QualifiedName& name);
 
 
 namespace
@@ -108,8 +108,8 @@ namespace
 } // anonymous namespace
 
 
-static void raiseError(thread_db* tdbb, SecurityClass::flags_t mask, ObjectType type, const MetaName& name,
-	const MetaName& r_name, const MetaName& invoker)
+static void raiseError(thread_db* tdbb, SecurityClass::flags_t mask, ObjectType type, const QualifiedName& name,
+	const MetaName& col_name, const MetaName& invoker)
 {
 	const P_NAMES* names;
 	for (names = p_names; names->p_names_priv; names++)
@@ -119,8 +119,8 @@ static void raiseError(thread_db* tdbb, SecurityClass::flags_t mask, ObjectType 
 	}
 
 	const char* const ddlObjectName = getDdlObjectName(type);
-	const Firebird::string fullName = r_name.hasData() ?
-		r_name.c_str() + Firebird::string(".") + name.c_str() : name.c_str();
+	const Firebird::string fullName = col_name.hasData() ?
+		name.toQuotedString() + "." + col_name.toQuotedString() : name.toQuotedString();
 
 	Arg::StatusVector status;
 	status << Arg::Gds(isc_no_priv) << Arg::Str(names->p_names_string) <<
@@ -135,16 +135,15 @@ static void raiseError(thread_db* tdbb, SecurityClass::flags_t mask, ObjectType 
 }
 
 
-
 void SCL_check_access(thread_db* tdbb,
 					  const SecurityClass* s_class,
 					  SLONG obj_id,
-					  const MetaName& obj_name,
+					  const QualifiedName& obj_name,
 					  SecurityClass::flags_t mask,
 					  ObjectType type,
 					  bool recursive,
-					  const MetaName& name,
-					  const MetaName& r_name)
+					  const QualifiedName& name,
+					  const MetaName& col_name)
 {
 /**************************************
  *
@@ -170,7 +169,7 @@ void SCL_check_access(thread_db* tdbb,
 		Arg::StatusVector status;
 		status << Arg::Gds(isc_no_priv) << Arg::Str("(ACL unrecognized)") <<
 										  Arg::Str("security_class") <<
-										  Arg::Str(s_class->sclClassUser.first);
+										  s_class->sclClassUser.first;
 		if (userName.hasData())
 		{
 			status << Arg::Gds(isc_effective_user) << Arg::Str(userName);
@@ -183,13 +182,13 @@ void SCL_check_access(thread_db* tdbb,
 		return;
 
 	// Check global DDL permissions with ANY option which allow user to make changes non owned objects
-	if (isDdlObject(type) && (mask & SCL_get_object_mask(type)))
+	if (isDdlObject(type) && (mask & SCL_get_object_mask(type, name.schema)))
 		return;
 
 	if (!s_class || (mask & s_class->scl_flags) )
 		return;
 
-	if (obj_name.hasData() && (compute_access(tdbb, s_class, obj_id, obj_name) & mask) )
+	if (obj_name.object.hasData() && (compute_access(tdbb, s_class, obj_id, obj_name) & mask) )
 	{
 		return;
 	}
@@ -204,11 +203,11 @@ void SCL_check_access(thread_db* tdbb,
 		return;
 	}
 
-	raiseError(tdbb, mask, type, name, r_name, userName);
+	raiseError(tdbb, mask, type, name, col_name, userName);
 }
 
 
-void SCL_check_create_access(thread_db* tdbb, ObjectType type)
+void SCL_check_create_access(thread_db* tdbb, ObjectType type, const MetaName& schema)
 {
 /**************************************
  *
@@ -232,7 +231,7 @@ void SCL_check_create_access(thread_db* tdbb, ObjectType type)
 	if (attachment->locksmith(tdbb, SystemPrivilege::MODIFY_ANY_OBJECT_IN_DATABASE))
 		return;
 
-	const SecurityClass::flags_t obj_mask = SCL_get_object_mask(type);
+	const SecurityClass::flags_t obj_mask = SCL_get_object_mask(type, schema);
 
 	if (!(obj_mask & SCL_create))
 	{
@@ -242,7 +241,7 @@ void SCL_check_create_access(thread_db* tdbb, ObjectType type)
 }
 
 
-void SCL_check_charset(thread_db* tdbb, const MetaName& name, SecurityClass::flags_t mask)
+void SCL_check_charset(thread_db* tdbb, const QualifiedName& name, SecurityClass::flags_t mask)
 {
 /**************************************
  *
@@ -262,7 +261,8 @@ void SCL_check_charset(thread_db* tdbb, const MetaName& name, SecurityClass::fla
 
 	FOR (REQUEST_HANDLE request)
 		CS IN RDB$CHARACTER_SETS
-		WITH CS.RDB$CHARACTER_SET_NAME EQ name.c_str()
+		WITH CS.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 CS.RDB$CHARACTER_SET_NAME EQ name.object.c_str()
 	{
 		if (!CS.RDB$SECURITY_CLASS.NULL)
 			s_class = SCL_get_class(tdbb, CS.RDB$SECURITY_CLASS);
@@ -273,7 +273,7 @@ void SCL_check_charset(thread_db* tdbb, const MetaName& name, SecurityClass::fla
 }
 
 
-void SCL_check_collation(thread_db* tdbb, const MetaName& name, SecurityClass::flags_t mask)
+void SCL_check_collation(thread_db* tdbb, const QualifiedName& name, SecurityClass::flags_t mask)
 {
 /**************************************
  *
@@ -293,7 +293,8 @@ void SCL_check_collation(thread_db* tdbb, const MetaName& name, SecurityClass::f
 
 	FOR (REQUEST_HANDLE request)
 		COLL IN RDB$COLLATIONS
-		WITH COLL.RDB$COLLATION_NAME EQ name.c_str()
+		WITH COLL.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 COLL.RDB$COLLATION_NAME EQ name.object.c_str()
 	{
 		if (!COLL.RDB$SECURITY_CLASS.NULL)
 			s_class = SCL_get_class(tdbb, COLL.RDB$SECURITY_CLASS);
@@ -342,7 +343,7 @@ void SCL_check_database(thread_db* tdbb, SecurityClass::flags_t mask)
 }
 
 
-void SCL_check_domain(thread_db* tdbb, const MetaName& name, SecurityClass::flags_t mask)
+void SCL_check_domain(thread_db* tdbb, const QualifiedName& name, SecurityClass::flags_t mask)
 {
 /**************************************
  *
@@ -362,7 +363,8 @@ void SCL_check_domain(thread_db* tdbb, const MetaName& name, SecurityClass::flag
 
 	FOR (REQUEST_HANDLE request)
 		FLD IN RDB$FIELDS
-		WITH FLD.RDB$FIELD_NAME EQ name.c_str()
+		WITH FLD.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 FLD.RDB$FIELD_NAME EQ name.object.c_str()
 	{
 		if (!FLD.RDB$SECURITY_CLASS.NULL)
 			s_class = SCL_get_class(tdbb, FLD.RDB$SECURITY_CLASS);
@@ -373,7 +375,7 @@ void SCL_check_domain(thread_db* tdbb, const MetaName& name, SecurityClass::flag
 }
 
 
-bool SCL_check_exception(thread_db* tdbb, const MetaName& name, SecurityClass::flags_t mask)
+bool SCL_check_exception(thread_db* tdbb, const QualifiedName& name, SecurityClass::flags_t mask)
 {
 /**************************************
  *
@@ -394,7 +396,8 @@ bool SCL_check_exception(thread_db* tdbb, const MetaName& name, SecurityClass::f
 
 	FOR (REQUEST_HANDLE request)
 		XCP IN RDB$EXCEPTIONS
-		WITH XCP.RDB$EXCEPTION_NAME EQ name.c_str()
+		WITH XCP.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 XCP.RDB$EXCEPTION_NAME EQ name.object.c_str()
 	{
 		if (!XCP.RDB$SECURITY_CLASS.NULL)
 			s_class = SCL_get_class(tdbb, XCP.RDB$SECURITY_CLASS);
@@ -406,7 +409,7 @@ bool SCL_check_exception(thread_db* tdbb, const MetaName& name, SecurityClass::f
 }
 
 
-bool SCL_check_generator(thread_db* tdbb, const MetaName& name, SecurityClass::flags_t mask)
+bool SCL_check_generator(thread_db* tdbb, const QualifiedName& name, SecurityClass::flags_t mask)
 {
 /**************************************
  *
@@ -427,7 +430,8 @@ bool SCL_check_generator(thread_db* tdbb, const MetaName& name, SecurityClass::f
 
 	FOR (REQUEST_HANDLE request)
 		GEN IN RDB$GENERATORS
-		WITH GEN.RDB$GENERATOR_NAME EQ name.c_str()
+		WITH GEN.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 GEN.RDB$GENERATOR_NAME EQ name.object.c_str()
 	{
 		if (!GEN.RDB$SECURITY_CLASS.NULL)
 			s_class = SCL_get_class(tdbb, GEN.RDB$SECURITY_CLASS);
@@ -439,7 +443,7 @@ bool SCL_check_generator(thread_db* tdbb, const MetaName& name, SecurityClass::f
 }
 
 
-void SCL_check_index(thread_db* tdbb, const MetaName& index_name, UCHAR index_id,
+void SCL_check_index(thread_db* tdbb, const QualifiedName& index_name, UCHAR index_id,
 	SecurityClass::flags_t mask)
 {
 /******************************************************
@@ -467,13 +471,13 @@ void SCL_check_index(thread_db* tdbb, const MetaName& index_name, UCHAR index_id
 
 	// No security to check for if the index is not yet created
 
-    if ((index_name.length() == 0) && (index_id < 1)) {
+    if ((index_name.object.length() == 0) && (index_id < 1)) {
         return;
     }
 
-    MetaName reln_name, aux_idx_name;
-    const MetaName* idx_name_ptr = &index_name;
-	const MetaName* relation_name_ptr = &index_name;
+	QualifiedName reln_name, aux_idx_name;
+	auto idx_name_ptr = &index_name;
+	const auto relation_name_ptr = &index_name;
 
 	AutoRequest request;
 	int systemFlag = 0;
@@ -483,12 +487,13 @@ void SCL_check_index(thread_db* tdbb, const MetaName& index_name, UCHAR index_id
 
     if (index_id < 1)
     {
-        FOR(REQUEST_HANDLE request) IND IN RDB$INDICES
-            CROSS REL IN RDB$RELATIONS
-			OVER RDB$RELATION_NAME
-			WITH IND.RDB$INDEX_NAME EQ index_name.c_str()
+        FOR(REQUEST_HANDLE request)
+			IND IN RDB$INDICES
+			CROSS REL IN RDB$RELATIONS OVER RDB$SCHEMA_NAME, RDB$RELATION_NAME
+			WITH IND.RDB$SCHEMA_NAME EQ index_name.schema.c_str() AND
+				 IND.RDB$INDEX_NAME EQ index_name.object.c_str()
 		{
-            reln_name = REL.RDB$RELATION_NAME;
+            reln_name = QualifiedName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME);
 		    if (!REL.RDB$SECURITY_CLASS.NULL)
                 s_class = SCL_get_class(tdbb, REL.RDB$SECURITY_CLASS);
             if (!REL.RDB$DEFAULT_CLASS.NULL)
@@ -500,14 +505,15 @@ void SCL_check_index(thread_db* tdbb, const MetaName& index_name, UCHAR index_id
     else
     {
         idx_name_ptr = &aux_idx_name;
-        FOR (REQUEST_HANDLE request) IND IN RDB$INDICES
-            CROSS REL IN RDB$RELATIONS
-            OVER RDB$RELATION_NAME
-            WITH IND.RDB$RELATION_NAME EQ relation_name_ptr->c_str()
-            AND IND.RDB$INDEX_ID EQ index_id
+		FOR (REQUEST_HANDLE request)
+			IND IN RDB$INDICES
+            CROSS REL IN RDB$RELATIONS OVER RDB$SCHEMA_NAME, RDB$RELATION_NAME
+			WITH IND.RDB$SCHEMA_NAME EQ relation_name_ptr->schema.c_str() AND
+				 IND.RDB$RELATION_NAME EQ relation_name_ptr->object.c_str() AND
+				 IND.RDB$INDEX_ID EQ index_id
 		{
-            reln_name = REL.RDB$RELATION_NAME;
-            aux_idx_name = IND.RDB$INDEX_NAME;
+            reln_name = QualifiedName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME);
+            aux_idx_name = QualifiedName(IND.RDB$INDEX_NAME, IND.RDB$SCHEMA_NAME);
             if (!REL.RDB$SECURITY_CLASS.NULL)
                 s_class = SCL_get_class(tdbb, REL.RDB$SECURITY_CLASS);
             if (!REL.RDB$DEFAULT_CLASS.NULL)
@@ -521,16 +527,16 @@ void SCL_check_index(thread_db* tdbb, const MetaName& index_name, UCHAR index_id
 	{
 		// Someone is going to reference system table in FK
 		// Usually it's not good idea
-		raiseError(tdbb, mask, obj_relations, reln_name, "", NULL);
+		raiseError(tdbb, mask, obj_relations, reln_name, {}, {});
 	}
 
 	// Check if the relation exists. It may not have been created yet.
 	// Just return in that case.
 
-	if (reln_name.isEmpty())
+	if (reln_name.object.isEmpty())
 		return;
 
-	SCL_check_access(tdbb, s_class, 0, NULL, mask, obj_relations, false, reln_name);
+	SCL_check_access(tdbb, s_class, 0, {}, mask, obj_relations, false, reln_name);
 
 	request.reset();
 
@@ -542,22 +548,24 @@ void SCL_check_index(thread_db* tdbb, const MetaName& index_name, UCHAR index_id
 	// No need to cache this request handle, it's only used when
 	// new constraints are created
 
-	FOR(REQUEST_HANDLE request) ISEG IN RDB$INDEX_SEGMENTS
-		CROSS RF IN RDB$RELATION_FIELDS
-			OVER RDB$FIELD_NAME
-			WITH RF.RDB$RELATION_NAME EQ reln_name.c_str()
-			AND ISEG.RDB$INDEX_NAME EQ idx_name_ptr->c_str()
+	FOR(REQUEST_HANDLE request)
+		ISEG IN RDB$INDEX_SEGMENTS
+		CROSS RF IN RDB$RELATION_FIELDS OVER RDB$SCHEMA_NAME, RDB$FIELD_NAME
+		WITH RF.RDB$SCHEMA_NAME EQ reln_name.schema.c_str() AND
+			 RF.RDB$RELATION_NAME EQ reln_name.object.c_str() AND
+			 ISEG.RDB$SCHEMA_NAME EQ idx_name_ptr->schema.c_str() AND
+			 ISEG.RDB$INDEX_NAME EQ idx_name_ptr->object.c_str()
 	{
 		s_class = (!RF.RDB$SECURITY_CLASS.NULL) ?
 			SCL_get_class(tdbb, RF.RDB$SECURITY_CLASS) : default_s_class;
-		SCL_check_access(tdbb, s_class, 0, NULL, mask,
-						 obj_column, false, RF.RDB$FIELD_NAME, reln_name);
+		SCL_check_access(tdbb, s_class, 0, {}, mask,
+						 obj_column, false, reln_name, RF.RDB$FIELD_NAME);
 	}
 	END_FOR
 }
 
 
-bool SCL_check_package(thread_db* tdbb, const dsc* dsc_name, SecurityClass::flags_t mask)
+bool SCL_check_package(thread_db* tdbb, const QualifiedName& name, SecurityClass::flags_t mask)
 {
 /**************************************
  *
@@ -574,9 +582,6 @@ bool SCL_check_package(thread_db* tdbb, const dsc* dsc_name, SecurityClass::flag
 	SET_TDBB(tdbb);
 
 	// Get the name in CSTRING format, ending on NULL or SPACE
-	fb_assert(dsc_name->dsc_dtype == dtype_text);
-	const MetaName name(reinterpret_cast<TEXT*>(dsc_name->dsc_address),
-		dsc_name->dsc_length);
 
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
 
@@ -586,7 +591,8 @@ bool SCL_check_package(thread_db* tdbb, const dsc* dsc_name, SecurityClass::flag
 
 	FOR (REQUEST_HANDLE request)
 		PKG IN RDB$PACKAGES
-		WITH PKG.RDB$PACKAGE_NAME EQ name.c_str()
+		WITH PKG.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 PKG.RDB$PACKAGE_NAME EQ name.object.c_str()
 	{
 		if (!PKG.RDB$SECURITY_CLASS.NULL)
 			s_class = SCL_get_class(tdbb, PKG.RDB$SECURITY_CLASS);
@@ -598,7 +604,7 @@ bool SCL_check_package(thread_db* tdbb, const dsc* dsc_name, SecurityClass::flag
 }
 
 
-bool SCL_check_procedure(thread_db* tdbb, const dsc* dsc_name, SecurityClass::flags_t mask)
+bool SCL_check_procedure(thread_db* tdbb, const QualifiedName& name, SecurityClass::flags_t mask)
 {
 /**************************************
  *
@@ -614,11 +620,6 @@ bool SCL_check_procedure(thread_db* tdbb, const dsc* dsc_name, SecurityClass::fl
  **************************************/
 	SET_TDBB(tdbb);
 
-	// Get the name in CSTRING format, ending on NULL or SPACE
-	fb_assert(dsc_name->dsc_dtype == dtype_text);
-	const MetaName name(reinterpret_cast<TEXT*>(dsc_name->dsc_address),
-							dsc_name->dsc_length);
-
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
 
 	const SecurityClass* s_class = NULL;
@@ -626,12 +627,13 @@ bool SCL_check_procedure(thread_db* tdbb, const dsc* dsc_name, SecurityClass::fl
 	AutoCacheRequest request(tdbb, irq_p_security, IRQ_REQUESTS);
 
 	FOR (REQUEST_HANDLE request)
-		SPROC IN RDB$PROCEDURES
-		WITH SPROC.RDB$PROCEDURE_NAME EQ name.c_str() AND
-			 SPROC.RDB$PACKAGE_NAME MISSING
+		PRC IN RDB$PROCEDURES
+		WITH PRC.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 PRC.RDB$PROCEDURE_NAME EQ name.object.c_str() AND
+			 PRC.RDB$PACKAGE_NAME MISSING
 	{
-		if (!SPROC.RDB$SECURITY_CLASS.NULL)
-			s_class = SCL_get_class(tdbb, SPROC.RDB$SECURITY_CLASS);
+		if (!PRC.RDB$SECURITY_CLASS.NULL)
+			s_class = SCL_get_class(tdbb, PRC.RDB$SECURITY_CLASS);
 		found = true;
 	}
 	END_FOR
@@ -640,7 +642,7 @@ bool SCL_check_procedure(thread_db* tdbb, const dsc* dsc_name, SecurityClass::fl
 }
 
 
-bool SCL_check_function(thread_db* tdbb, const dsc* dsc_name, SecurityClass::flags_t mask)
+bool SCL_check_function(thread_db* tdbb, const QualifiedName& name, SecurityClass::flags_t mask)
 {
 /**************************************
  *
@@ -656,11 +658,6 @@ bool SCL_check_function(thread_db* tdbb, const dsc* dsc_name, SecurityClass::fla
  **************************************/
 	SET_TDBB(tdbb);
 
-	// Get the name in CSTRING format, ending on NULL or SPACE
-	fb_assert(dsc_name->dsc_dtype == dtype_text);
-	const MetaName name(reinterpret_cast<TEXT*>(dsc_name->dsc_address),
-							dsc_name->dsc_length);
-
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
 
 	const SecurityClass* s_class = NULL;
@@ -668,12 +665,13 @@ bool SCL_check_function(thread_db* tdbb, const dsc* dsc_name, SecurityClass::fla
 	AutoCacheRequest request(tdbb, irq_f_security, IRQ_REQUESTS);
 
 	FOR (REQUEST_HANDLE request)
-		SFUN IN RDB$FUNCTIONS
-		WITH SFUN.RDB$FUNCTION_NAME EQ name.c_str() AND
-			 SFUN.RDB$PACKAGE_NAME MISSING
+		FUN IN RDB$FUNCTIONS
+		WITH FUN.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 FUN.RDB$FUNCTION_NAME EQ name.object.c_str() AND
+			 FUN.RDB$PACKAGE_NAME MISSING
 	{
-		if (!SFUN.RDB$SECURITY_CLASS.NULL)
-			s_class = SCL_get_class(tdbb, SFUN.RDB$SECURITY_CLASS);
+		if (!FUN.RDB$SECURITY_CLASS.NULL)
+			s_class = SCL_get_class(tdbb, FUN.RDB$SECURITY_CLASS);
 		found = true;
 	}
 	END_FOR
@@ -682,7 +680,7 @@ bool SCL_check_function(thread_db* tdbb, const dsc* dsc_name, SecurityClass::fla
 }
 
 
-void SCL_check_filter(thread_db* tdbb, const MetaName &name, SecurityClass::flags_t mask)
+void SCL_check_filter(thread_db* tdbb, const MetaName& name, SecurityClass::flags_t mask)
 {
 /**************************************
  *
@@ -704,19 +702,20 @@ void SCL_check_filter(thread_db* tdbb, const MetaName &name, SecurityClass::flag
 	AutoCacheRequest request(tdbb, irq_f_security, IRQ_REQUESTS);
 
 	FOR (REQUEST_HANDLE request)
-		F IN RDB$FILTERS
-		WITH F.RDB$FUNCTION_NAME EQ name.c_str()
+		FLT IN RDB$FILTERS
+		WITH FLT.RDB$FUNCTION_NAME EQ name.c_str()
 	{
-		if (!F.RDB$SECURITY_CLASS.NULL)
-			s_class = SCL_get_class(tdbb, F.RDB$SECURITY_CLASS);
+		if (!FLT.RDB$SECURITY_CLASS.NULL)
+			s_class = SCL_get_class(tdbb, FLT.RDB$SECURITY_CLASS);
 	}
 	END_FOR
 
-	SCL_check_access(tdbb, s_class, id_filter, name, mask, obj_filters, false, name);
+	SCL_check_access(tdbb, s_class, id_filter, QualifiedName(name), mask,
+		obj_filters, false, QualifiedName(name));
 }
 
 
-void SCL_check_relation(thread_db* tdbb, const dsc* dsc_name, SecurityClass::flags_t mask,
+void SCL_check_relation(thread_db* tdbb, const QualifiedName& name, SecurityClass::flags_t mask,
 	bool protectSys)
 {
 /**************************************
@@ -733,35 +732,56 @@ void SCL_check_relation(thread_db* tdbb, const dsc* dsc_name, SecurityClass::fla
  **************************************/
 	SET_TDBB(tdbb);
 
-	// Get the name in CSTRING format, ending on NULL or SPACE
-	fb_assert(dsc_name->dsc_dtype == dtype_text);
-	const MetaName name(reinterpret_cast<TEXT*>(dsc_name->dsc_address),
-								  dsc_name->dsc_length);
-
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
 
 	const SecurityClass* s_class = NULL;
 	AutoCacheRequest request(tdbb, irq_v_security_r, IRQ_REQUESTS);
 
 	FOR(REQUEST_HANDLE request) REL IN RDB$RELATIONS
-		WITH REL.RDB$RELATION_NAME EQ name.c_str()
+		WITH REL.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 REL.RDB$RELATION_NAME EQ name.object.c_str()
 	{
 		if (protectSys && REL.RDB$SYSTEM_FLAG == 1 && !attachment->isRWGbak())
 		{
 			// Someone is going to modify system table layout
 			// Usually it's not good idea
-			raiseError(tdbb, mask, obj_relations, name, "", NULL);
+			raiseError(tdbb, mask, obj_relations, name, {}, {});
 		}
 
-        if (!REL.RDB$SECURITY_CLASS.NULL)
+		if (!REL.RDB$SECURITY_CLASS.NULL)
 			s_class = SCL_get_class(tdbb, REL.RDB$SECURITY_CLASS);
 	}
 	END_FOR
 
-	SCL_check_access(tdbb, s_class, 0, NULL, mask, obj_relations, false, name);
+	SCL_check_access(tdbb, s_class, 0, {}, mask, obj_relations, false, name);
 }
 
-bool SCL_check_view(thread_db* tdbb, const dsc* dsc_name, SecurityClass::flags_t mask)
+// Given a schema name, check for a set of privileges.
+bool SCL_check_schema(thread_db* tdbb, const MetaName& name, SecurityClass::flags_t mask)
+{
+	SET_TDBB(tdbb);
+
+	Jrd::Attachment* const attachment = tdbb->getAttachment();
+
+	const SecurityClass* s_class = nullptr;
+	bool found = false;
+
+	static const CachedRequestId requestId;
+	AutoCacheRequest request(tdbb, requestId);
+
+	FOR(REQUEST_HANDLE request) SCH IN RDB$SCHEMAS
+		WITH SCH.RDB$SCHEMA_NAME EQ name.c_str()
+	{
+		if (!SCH.RDB$SECURITY_CLASS.NULL)
+			s_class = SCL_get_class(tdbb, SCH.RDB$SECURITY_CLASS);
+		found = true;
+	}
+	END_FOR
+
+	return check_object(tdbb, found, s_class, 0, {}, mask, obj_schemas, QualifiedName(name));
+}
+
+bool SCL_check_view(thread_db* tdbb, const QualifiedName& name, SecurityClass::flags_t mask)
 {
 /**************************************
  *
@@ -777,11 +797,6 @@ bool SCL_check_view(thread_db* tdbb, const dsc* dsc_name, SecurityClass::flags_t
  **************************************/
 	SET_TDBB(tdbb);
 
-	// Get the name in CSTRING format, ending on NULL or SPACE
-	fb_assert(dsc_name->dsc_dtype == dtype_text);
-	const MetaName name(reinterpret_cast<TEXT*>(dsc_name->dsc_address),
-								  dsc_name->dsc_length);
-
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
 
 	const SecurityClass* s_class = NULL;
@@ -789,7 +804,8 @@ bool SCL_check_view(thread_db* tdbb, const dsc* dsc_name, SecurityClass::flags_t
 	AutoCacheRequest request(tdbb, irq_v_security_v, IRQ_REQUESTS);
 
 	FOR(REQUEST_HANDLE request) REL IN RDB$RELATIONS
-		WITH REL.RDB$RELATION_NAME EQ name.c_str()
+		WITH REL.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 REL.RDB$RELATION_NAME EQ name.object.c_str()
 	{
 		if (!REL.RDB$SECURITY_CLASS.NULL)
 			s_class = SCL_get_class(tdbb, REL.RDB$SECURITY_CLASS);
@@ -797,7 +813,7 @@ bool SCL_check_view(thread_db* tdbb, const dsc* dsc_name, SecurityClass::flags_t
 	}
 	END_FOR
 
-	return check_object(tdbb, found, s_class, 0, NULL, mask, obj_views, name);
+	return check_object(tdbb, found, s_class, 0, {}, mask, obj_views, name);
 }
 
 void SCL_check_role(thread_db* tdbb, const MetaName& name, SecurityClass::flags_t mask)
@@ -827,10 +843,10 @@ void SCL_check_role(thread_db* tdbb, const MetaName& name, SecurityClass::flags_
 	}
 	END_FOR
 
-	SCL_check_access(tdbb, s_class, 0, NULL, mask, obj_roles, false, name);
+	SCL_check_access(tdbb, s_class, 0, {}, mask, obj_roles, false, QualifiedName(name));
 }
 
-SecurityClass* SCL_get_class(thread_db* tdbb, const TEXT* par_string)
+SecurityClass* SCL_get_class(thread_db* tdbb, const MetaName& name)
 {
 /**************************************
  *
@@ -845,19 +861,14 @@ SecurityClass* SCL_get_class(thread_db* tdbb, const TEXT* par_string)
  **************************************/
 	SET_TDBB(tdbb);
 
-	// Name may be absent or terminated with NULL or blank.  Clean up name.
-
-	if (!par_string)
-		return NULL;
-
-	MetaName string(par_string);
-	if (string.isEmpty())
-		return NULL;
+	// Name may be absent.
+	if (name.isEmpty())
+		return nullptr;
 
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
 	const MetaString& userName = attachment->getEffectiveUserName();
 
-	MetaNamePair key(string, userName);
+	const MetaNamePair key(name, userName);
 	// Look for the class already known
 
 	SecurityClassList* list = attachment->att_security_classes;
@@ -868,8 +879,8 @@ SecurityClass* SCL_get_class(thread_db* tdbb, const TEXT* par_string)
 
 	MemoryPool& pool = *attachment->att_pool;
 
-	SecurityClass* const s_class = FB_NEW_POOL(pool) SecurityClass(pool, string, userName);
-	s_class->scl_flags = compute_access(tdbb, s_class, 0, NULL);
+	SecurityClass* const s_class = FB_NEW_POOL(pool) SecurityClass(pool, name, userName);
+	s_class->scl_flags = compute_access(tdbb, s_class, 0, {});
 
 	if (s_class->scl_flags & SCL_exists)
 	{
@@ -887,7 +898,7 @@ SecurityClass* SCL_get_class(thread_db* tdbb, const TEXT* par_string)
 }
 
 
-SecurityClass::flags_t SCL_get_mask(thread_db* tdbb, const TEXT* relation_name, const TEXT* field_name)
+SecurityClass::flags_t SCL_get_mask(thread_db* tdbb, const QualifiedName& relation_name, const TEXT* field_name)
 {
 /**************************************
  *
@@ -907,11 +918,11 @@ SecurityClass::flags_t SCL_get_mask(thread_db* tdbb, const TEXT* relation_name, 
 
 	// If there's a relation, track it down
 	jrd_rel* relation;
-	if (relation_name && (relation = MET_lookup_relation(tdbb, relation_name)))
+	if (relation_name.object.hasData() && (relation = MET_lookup_relation(tdbb, relation_name)))
 	{
 		MET_scan_relation(tdbb, relation);
 		const SecurityClass* s_class;
-		if ( (s_class = SCL_get_class(tdbb, relation->rel_security_name.c_str())) )
+		if ( (s_class = SCL_get_class(tdbb, relation->rel_security_name.object)) )
 		{
 			access &= s_class->scl_flags;
 		}
@@ -921,7 +932,7 @@ SecurityClass::flags_t SCL_get_mask(thread_db* tdbb, const TEXT* relation_name, 
 		if (field_name &&
 			(id = MET_lookup_field(tdbb, relation, field_name)) >= 0 &&
 			(field = MET_get_field(relation, id)) &&
-			(s_class = SCL_get_class(tdbb, field->fld_security_name.c_str())))
+			(s_class = SCL_get_class(tdbb, field->fld_security_name)))
 		{
 			access &= s_class->scl_flags;
 		}
@@ -995,20 +1006,20 @@ void UserId::findGrantedRoles(thread_db* tdbb) const
 		MetaName usr_get_role;
 		string usr_get_priv;
 		sql << "with recursive role_tree as ( "
-			<< "   select rdb$relation_name as nm, 0 as ur from rdb$user_privileges "
+			<< "   select rdb$relation_name as nm, 0 as ur from system.rdb$user_privileges "
 			<< "       where rdb$privilege = 'M' and rdb$field_name = 'D'"
 			<< "			and (rdb$user = " << usr_user_name << "	or rdb$user = 'PUBLIC')"
 			<< "			and rdb$user_type = 8 "
 			<< "   union all "
-			<< "   select rdb$role_name as nm, 1 as ur from rdb$roles "
+			<< "   select rdb$role_name as nm, 1 as ur from system.rdb$roles "
 			<< "       where rdb$role_name = " << usr_sql_role_name
 			<< "   union all "
-			<< "   select p.rdb$relation_name as nm, t.ur from rdb$user_privileges p "
+			<< "   select p.rdb$relation_name as nm, t.ur from system.rdb$user_privileges p "
 			<< "       join role_tree t on t.nm = p.rdb$user "
 			<< "       where p.rdb$privilege = 'M' and (p.rdb$field_name = 'D' or t.ur = 1)) "
 			<< "select " << sql("r.rdb$role_name, ",  usr_get_role)
 			<< 	   sql("r.rdb$system_privileges ", usr_get_priv)
-			<< "   from role_tree t join rdb$roles r on t.nm = r.rdb$role_name ";
+			<< "   from role_tree t join system.rdb$roles r on t.nm = r.rdb$role_name ";
 
 		AutoPreparedStatement stmt(attachment->prepareStatement(tdbb, attachment->getSysTransaction(), sql));
 		AutoResultSet rs(stmt->executeQuery(tdbb, attachment->getSysTransaction()));
@@ -1126,7 +1137,8 @@ void UserId::sclInit(thread_db* tdbb, bool create)
 
 			FOR(REQUEST_HANDLE request2)
 				FIRST 1 REL IN RDB$RELATIONS
-				WITH REL.RDB$RELATION_NAME EQ "RDB$DATABASE"
+				WITH REL.RDB$SCHEMA_NAME EQ SYSTEM_SCHEMA AND
+					 REL.RDB$RELATION_NAME EQ "RDB$DATABASE"
 			{
 	            if (!REL.RDB$OWNER_NAME.NULL)
 					dbb->dbb_owner = REL.RDB$OWNER_NAME;
@@ -1179,7 +1191,7 @@ bool SCL_move_priv(SecurityClass::flags_t mask, Acl& acl)
 }
 
 
-void SCL_clear_classes(thread_db* tdbb, const TEXT* string)
+void SCL_clear_classes(thread_db* tdbb, const MetaName& name)
 {
 /**************************************
  *
@@ -1200,11 +1212,11 @@ void SCL_clear_classes(thread_db* tdbb, const TEXT* string)
 	if (!list)
 		return;
 
-	MetaNamePair key(string, NULL);
+	MetaNamePair key(name, {});
 	if (!list->locate(Firebird::locGreatEqual, key))
 		return;
 
-	while (list->current()->sclClassUser.first == string)
+	while (list->current()->sclClassUser.first == name)
 	{
 		delete list->current();
 		if (!list->fastRemove())	// removing moves current item to the next one
@@ -1240,7 +1252,7 @@ void SCL_release_all(SecurityClassList*& list)
 }
 
 
-SecurityClass::flags_t SCL_get_object_mask(ObjectType object_type)
+SecurityClass::flags_t SCL_get_object_mask(ObjectType object_type, const MetaName& schema)
 {
 /**************************************
  *
@@ -1255,13 +1267,10 @@ SecurityClass::flags_t SCL_get_object_mask(ObjectType object_type)
 	thread_db* tdbb = JRD_get_thread_data();
 	Database* dbb = tdbb->getDatabase();
 
-	const TEXT* object_name = getSecurityClassName(object_type);
-	if (!*object_name)
-		return 0;
+	const auto securityClass = SCL_getDdlSecurityClassName(object_type, schema);
 
-	const Jrd::SecurityClass* s_class = SCL_get_class(tdbb, object_name);
-	if (s_class)
-		return s_class->scl_flags;
+	if (const auto* const secClass = SCL_get_class(tdbb, securityClass))
+		return secClass->scl_flags;
 
 	return -1 & ~SCL_corrupt;
 }
@@ -1435,7 +1444,7 @@ static SecurityClass::flags_t get_sys_privileges(thread_db* tdbb)
 static SecurityClass::flags_t compute_access(thread_db* tdbb,
 											 const SecurityClass* s_class,
 											 SLONG obj_type,
-											 const MetaName& obj_name)
+											 const QualifiedName& obj_name)
 {
 /**************************************
  *
@@ -1499,7 +1508,7 @@ static SecurityClass::flags_t walk_acl(thread_db* tdbb,
 									   const Acl& acl,
 									   const MetaName& userName,
 									   SLONG obj_type,
-									   const MetaName& obj_name)
+									   const QualifiedName& obj_name)
 {
 /**************************************
  *
@@ -1578,7 +1587,14 @@ static SecurityClass::flags_t walk_acl(thread_db* tdbb,
 				case id_procedure:
 				case id_trigger:
 				case id_function:
-					if (c != obj_type || check_string(a, obj_name))
+					if (c != obj_type)
+						hit = false;
+
+					if (check_string(a, obj_name.schema))
+						hit = false;
+					a += *a + 1;
+
+					if (check_string(a, obj_name.object))
 						hit = false;
 					break;
 
@@ -1609,6 +1625,7 @@ static SecurityClass::flags_t walk_acl(thread_db* tdbb,
 				default:
 					return SCL_corrupt;
 				}
+
 				a += *a + 1;
 			}
 			break;
@@ -1782,10 +1799,10 @@ static bool check_object(thread_db* tdbb,
 						 bool found,
 						 const SecurityClass* s_class,
 						 SLONG obj_type,
-						 const MetaName& obj_name,
+						 const QualifiedName& obj_name,
 						 SecurityClass::flags_t mask,
 						 ObjectType type,
-						 const MetaName& name)
+						 const QualifiedName& name)
 {
 	if (s_class)
 	{

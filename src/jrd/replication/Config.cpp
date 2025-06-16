@@ -81,9 +81,7 @@ namespace
 
 	void configError(const string& type, const string& key, const string& value)
 	{
-		string msg;
-		msg.printf("%s specifies %s: %s", key.c_str(), type.c_str(), value.c_str());
-		raiseError(msg.c_str());
+		raiseError("%s specifies %s: %s", key.c_str(), type.c_str(), value.c_str());
 	}
 
 	void checkAccess(const PathName& path, const string& key)
@@ -178,6 +176,8 @@ namespace
 Config::Config()
 	: dbName(getPool()),
 	  bufferSize(DEFAULT_BUFFER_SIZE),
+	  includeSchemaFilter(getPool()),
+	  excludeSchemaFilter(getPool()),
 	  includeFilter(getPool()),
 	  excludeFilter(getPool()),
 	  segmentSize(DEFAULT_SEGMENT_SIZE),
@@ -193,6 +193,7 @@ Config::Config()
 	  verboseLogging(false),
 	  applyIdleTimeout(DEFAULT_APPLY_IDLE_TIMEOUT),
 	  applyErrorTimeout(DEFAULT_APPLY_ERROR_TIMEOUT),
+	  schemaSearchPath(getPool()),
 	  pluginName(getPool()),
 	  logErrors(true),
 	  reportErrors(false),
@@ -204,6 +205,8 @@ Config::Config()
 Config::Config(const Config& other)
 	: dbName(getPool(), other.dbName),
 	  bufferSize(other.bufferSize),
+	  includeSchemaFilter(getPool(), other.includeSchemaFilter),
+	  excludeSchemaFilter(getPool(), other.excludeSchemaFilter),
 	  includeFilter(getPool(), other.includeFilter),
 	  excludeFilter(getPool(), other.excludeFilter),
 	  segmentSize(other.segmentSize),
@@ -219,6 +222,7 @@ Config::Config(const Config& other)
 	  verboseLogging(other.verboseLogging),
 	  applyIdleTimeout(other.applyIdleTimeout),
 	  applyErrorTimeout(other.applyErrorTimeout),
+	  schemaSearchPath(getPool(), other.schemaSearchPath),
 	  pluginName(getPool(), other.pluginName),
 	  logErrors(other.logErrors),
 	  reportErrors(other.reportErrors),
@@ -301,6 +305,16 @@ Config* Config::get(const PathName& lookupName)
 				else if (key == "buffer_size")
 				{
 					parseLong(value, config->bufferSize);
+				}
+				else if (key == "include_schema_filter")
+				{
+					ISC_systemToUtf8(value);
+					config->includeSchemaFilter = value;
+				}
+				else if (key == "exclude_schema_filter")
+				{
+					ISC_systemToUtf8(value);
+					config->excludeSchemaFilter = value;
 				}
 				else if (key == "include_filter")
 				{
@@ -485,6 +499,8 @@ void Config::enumerate(ReplicaList& replicas)
 				{
 					parseLong(value, config->applyErrorTimeout);
 				}
+				else if (key == "schema_search_path")
+					config->schemaSearchPath = value;
 			}
 
 			if (dbName.hasData() && config->sourceDirectory.hasData())

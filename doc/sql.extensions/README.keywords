@@ -396,6 +396,8 @@ Firebird 6.0
   Added as reserved words:
 
 	CALL
+    GREATEST
+    LEAST
 
   Added as non-reserved words:
 

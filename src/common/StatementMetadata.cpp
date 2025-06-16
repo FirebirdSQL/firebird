@@ -43,6 +43,7 @@ static const UCHAR DESCRIBE_VARS[] =
 	isc_info_sql_scale,
 	isc_info_sql_length,
 	isc_info_sql_field,
+	isc_info_sql_relation_schema,
 	isc_info_sql_relation,
 	isc_info_sql_owner,
 	isc_info_sql_alias,
@@ -335,6 +336,10 @@ void StatementMetadata::parse(unsigned bufferLength, const UCHAR* buffer)
 
 						case isc_info_sql_field:
 							getStringInfo(&buffer, bufferEnd, &param->field);
+							break;
+
+						case isc_info_sql_relation_schema:
+							getStringInfo(&buffer, bufferEnd, &param->schema);
 							break;
 
 						case isc_info_sql_relation:

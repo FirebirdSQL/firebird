@@ -75,7 +75,8 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 	  localTables(*p),
 	  invariants(*p),
 	  blr(*p),
-	  mapFieldInfo(*p)
+	  mapFieldInfo(*p),
+	  messages(*p, 2) // Most statements has two messages, preallocate space for them
 {
 	try
 	{
@@ -198,6 +199,22 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 
 			delete tail->csb_fields;
 			tail->csb_fields = NULL;
+		}
+
+		messages.grow(csb->csb_rpt.getCount());
+		for (decltype(messages)::size_type i = 0; i < csb->csb_rpt.getCount(); ++i)
+		{
+			if (auto message = csb->csb_rpt[i].csb_message)
+			{
+				// When outer messages are mapped to inner just pointers are assigned so they keep original numbers inside.
+				// That's why this assert is commented out.
+				//fb_assert(i == message->messageNumber);
+				if (messages.getCount() <= i)
+				{
+					messages.grow(i + 1);
+				}
+				messages[i] = message;
+			}
 		}
 
 		if (csb->csb_variables)
@@ -568,17 +585,17 @@ void Statement::verifyAccess(thread_db* tdbb)
 			UserId* effectiveUser = userName.hasData() ? attachment->getUserId(userName) : attachment->att_ss_user;
 			AutoSetRestore<UserId*> userIdHolder(&attachment->att_ss_user, effectiveUser);
 
-			const SecurityClass* sec_class = SCL_get_class(tdbb, access.acc_security_name.c_str());
+			const SecurityClass* sec_class = SCL_get_class(tdbb, access.acc_security_name);
 
 			if (routine->getName().package.isEmpty())
 			{
-				SCL_check_access(tdbb, sec_class, aclType, routine->getName().identifier,
-							access.acc_mask, access.acc_type, true, access.acc_name, access.acc_r_name);
+				SCL_check_access(tdbb, sec_class, aclType, routine->getName(),
+							access.acc_mask, access.acc_type, true, access.acc_name, access.acc_col_name);
 			}
 			else
 			{
-				SCL_check_access(tdbb, sec_class, id_package, routine->getName().package,
-							access.acc_mask, access.acc_type, true, access.acc_name, access.acc_r_name);
+				SCL_check_access(tdbb, sec_class, id_package, routine->getName().getSchemaAndPackage(),
+							access.acc_mask, access.acc_type, true, access.acc_name, access.acc_col_name);
 			}
 		}
 	}
@@ -593,7 +610,7 @@ void Statement::verifyAccess(thread_db* tdbb)
 
 	for (const AccessItem* access = accessList.begin(); access != accessList.end(); ++access)
 	{
-		MetaName objName;
+		QualifiedName objName;
 		SLONG objType = 0;
 
 		MetaName userName;
@@ -615,7 +632,7 @@ void Statement::verifyAccess(thread_db* tdbb)
 					objType = id_package;
 					break;
 				case obj_type_MAX:	// CallerName() constructor
-					fb_assert(transaction->tra_caller_name.name.isEmpty());
+					fb_assert(transaction->tra_caller_name.name.object.isEmpty());
 					break;
 				default:
 					fb_assert(false);
@@ -636,10 +653,10 @@ void Statement::verifyAccess(thread_db* tdbb)
 		UserId* effectiveUser = userName.hasData() ? attachment->getUserId(userName) : attachment->att_ss_user;
 		AutoSetRestore<UserId*> userIdHolder(&attachment->att_ss_user, effectiveUser);
 
-		const SecurityClass* sec_class = SCL_get_class(tdbb, access->acc_security_name.c_str());
+		const SecurityClass* sec_class = SCL_get_class(tdbb, access->acc_security_name);
 
 		SCL_check_access(tdbb, sec_class, objType, objName,
-			access->acc_mask, access->acc_type, true, access->acc_name, access->acc_r_name);
+			access->acc_mask, access->acc_type, true, access->acc_name, access->acc_col_name);
 	}
 }
 
@@ -778,7 +795,7 @@ void Statement::verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation,
 					continue;
 				}
 				if (access->acc_type == obj_column &&
-					(ownerRelation->rel_name == access->acc_r_name))
+					(ownerRelation->rel_name == access->acc_name))
 				{
 					continue;
 				}
@@ -798,10 +815,10 @@ void Statement::verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation,
 			UserId* effectiveUser = userName.hasData() ? attachment->getUserId(userName) : attachment->att_ss_user;
 			AutoSetRestore<UserId*> userIdHolder(&attachment->att_ss_user, effectiveUser);
 
-			const SecurityClass* sec_class = SCL_get_class(tdbb, access->acc_security_name.c_str());
+			const SecurityClass* sec_class = SCL_get_class(tdbb, access->acc_security_name);
 
 			SCL_check_access(tdbb, sec_class, id_trigger, t.statement->triggerName, access->acc_mask,
-				access->acc_type, true, access->acc_name, access->acc_r_name);
+				access->acc_type, true, access->acc_name, access->acc_col_name);
 		}
 	}
 }
@@ -894,6 +911,20 @@ void Statement::buildExternalAccess(thread_db* tdbb, ExternalAccessList& list, c
 			triggersExternalAccess(tdbb, list, vec2, item->user);
 		}
 	}
+}
+
+MessageNode* Statement::getMessage(USHORT messageNumber) const
+{
+	if (messageNumber >= messages.getCount())
+	{
+		status_exception::raise(Arg::Gds(isc_badmsgnum));
+	}
+	MessageNode* result = messages[messageNumber];
+	if (result == nullptr)
+	{
+		status_exception::raise(Arg::Gds(isc_badmsgnum));
+	}
+	return result;
 }
 
 

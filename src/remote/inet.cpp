@@ -97,7 +97,7 @@
 
 #endif // !WIN_NT
 
-const int INET_RETRY_CALL = 5;
+constexpr int INET_RETRY_CALL = 5;
 
 #include "../remote/remote.h"
 #include "../remote/SockAddr.h"
@@ -136,7 +136,7 @@ using namespace Firebird;
 #define INET_RETRY_ERRNO	WSAEINPROGRESS
 #define INET_ADDR_IN_USE	WSAEADDRINUSE
 #define sleep(seconds)  Sleep ((seconds) * 1000)
-const int NOTASOCKET = WSAENOTSOCK;
+constexpr int NOTASOCKET = WSAENOTSOCK;
 
 #else // WIN_NT
 
@@ -184,9 +184,9 @@ static void SOCLOSE(SOCKET& socket)
 #ifdef HAVE_SYS_TIMEB_H
 # include <sys/timeb.h>
 #endif
-const int TRACE_packets		= 1 << 0;	// bit 0
-const int TRACE_operations	= 1 << 1;	// bit 1
-const int TRACE_summary		= 1 << 2;	// bit 2
+constexpr int TRACE_packets		= 1 << 0;	// bit 0
+constexpr int TRACE_operations	= 1 << 1;	// bit 1
+constexpr int TRACE_summary		= 1 << 2;	// bit 2
 
 static int INET_trace = TRACE_summary | TRACE_packets | TRACE_operations;
 static time_t INET_start_time = 0;
@@ -224,20 +224,20 @@ static ULONG inet_debug_timer()
 }
 #endif // DEBUG
 
-const ULONG MAX_DATA_LW		= 1448;		// Low  Water mark
-const ULONG MAX_DATA_HW		= 32768;	// High Water mark
-const ULONG DEF_MAX_DATA	= 8192;
+constexpr ULONG MAX_DATA_LW		= 1448;		// Low  Water mark
+constexpr ULONG MAX_DATA_HW		= 32768;	// High Water mark
+constexpr ULONG DEF_MAX_DATA	= 8192;
 
-//const int MAXHOSTLEN		= 64;
+//constexpr int MAXHOSTLEN		= 64;
 
-const int SELECT_TIMEOUT	= 60;		// Dispatch thread select timeout (sec)
+constexpr int SELECT_TIMEOUT	= 60;		// Dispatch thread select timeout (sec)
 
 class Select
 {
 #ifdef HAVE_POLL
 private:
-	static const int SEL_INIT_EVENTS = POLLIN;
-	static const int SEL_CHECK_MASK = POLLIN;
+	static constexpr int SEL_INIT_EVENTS = POLLIN;
+	static constexpr int SEL_CHECK_MASK = POLLIN;
 
 	pollfd* getPollFd(int n)
 	{
@@ -275,7 +275,7 @@ public:
 
 	enum HandleState {SEL_BAD, SEL_DISCONNECTED, SEL_NO_DATA, SEL_READY};
 
-	// set first port to check for readyness
+	// set first port to check for readiness
 	void checkStart(RemPortPtr& port)
 	{
 		slct_main = port;
@@ -285,7 +285,7 @@ public:
 #endif
 	}
 
-	// get port to check for readyness
+	// get port to check for readiness
 	// assume port_mutex is locked
 	HandleState checkNext(RemPortPtr& port)
 	{
@@ -471,7 +471,7 @@ public:
 #endif // HAVE_POLL
 	}
 
-	int getCount()
+	int getCount() noexcept
 	{
 		return slct_count;
 	}
@@ -494,8 +494,8 @@ private:
 	int		slct_width;
 	fd_set	slct_fdset;
 #endif
-	RemPortPtr slct_main;	// first port to check for readyness
-	RemPortPtr slct_port;	// next port to check for readyness
+	RemPortPtr slct_main;	// first port to check for readiness
+	RemPortPtr slct_port;	// next port to check for readiness
 #ifdef WIRE_COMPRESS_SUPPORT
 	RemPortPtr slct_zport;	// port with some compressed data remaining in the buffer
 #endif
@@ -696,7 +696,7 @@ rem_port* INET_analyze(ClntAuthBlock* cBlock,
 
 	// Should compression be tried?
 
-	bool compression = config && (*config)->getWireCompression();
+	const bool compression = config && (*config)->getWireCompression();
 
 	// Establish connection to server
 	// If we want user verification, we can't speak anything less than version 7
@@ -706,7 +706,7 @@ rem_port* INET_analyze(ClntAuthBlock* cBlock,
 	cnct->p_cnct_user_id.cstr_length = (ULONG) user_id.getBufferLength();
 	cnct->p_cnct_user_id.cstr_address = user_id.getBuffer();
 
-	static const p_cnct::p_cnct_repeat protocols_to_try[] =
+	static constexpr p_cnct::p_cnct_repeat protocols_to_try[] =
 	{
 		REMOTE_PROTOCOL(PROTOCOL_VERSION10, ptype_lazy_send, 1),
 		REMOTE_PROTOCOL(PROTOCOL_VERSION11, ptype_lazy_send, 2),
@@ -775,7 +775,7 @@ rem_port* INET_analyze(ClntAuthBlock* cBlock,
 						cc->p_cc_reply = 1;
 					}
 					UCHAR* reply = buf.getBuffer(cc->p_cc_reply);
-					unsigned l = cryptCb->callback(cc->p_cc_data.cstr_length,
+					const unsigned l = cryptCb->callback(cc->p_cc_data.cstr_length,
 						cc->p_cc_data.cstr_address, cc->p_cc_reply, reply);
 
 					REMOTE_free_packet(port, packet, true);
@@ -815,7 +815,7 @@ rem_port* INET_analyze(ClntAuthBlock* cBlock,
 				throw;
 			}
 			// fall through - response is not a required accept
-
+			[[fallthrough]];
 		default:
 			disconnect(port);
 			delete rdb;
@@ -841,7 +841,7 @@ rem_port* INET_analyze(ClntAuthBlock* cBlock,
 		port->port_flags |= PORT_symmetric;
 	}
 
-	bool compress = accept->p_acpt_type & pflag_compress;
+	const bool compress = accept->p_acpt_type & pflag_compress;
 	accept->p_acpt_type &= ptype_MASK;
 
 	if (accept->p_acpt_type != ptype_out_of_band) {
@@ -955,8 +955,7 @@ rem_port* INET_connect(const TEXT* name,
 	// Prepare hints
 	const bool ipv6 = os_utils::isIPv6supported();
 
-	struct addrinfo gai_hints;
-	memset(&gai_hints, 0, sizeof(gai_hints));
+	addrinfo gai_hints {};
 	if (packet)
 		gai_hints.ai_family = af;
 	else
@@ -1082,7 +1081,7 @@ static rem_port* listener_socket(rem_port* port, USHORT flag, const addrinfo* pa
  *
  **************************************/
 
-	int ipv6_v6only = port->getPortConfig()->getIPv6V6Only() ? 1 : 0;
+	const int ipv6_v6only = port->getPortConfig()->getIPv6V6Only() ? 1 : 0;
 
 	int n = setsockopt(port->port_handle, IPPROTO_IPV6, IPV6_V6ONLY,
 				   (SCHAR*) &ipv6_v6only, sizeof(ipv6_v6only));
@@ -1097,7 +1096,7 @@ static rem_port* listener_socket(rem_port* port, USHORT flag, const addrinfo* pa
 	//			e.g. while it's listening. This is surely not what we want.
 	//			We set this options for any kind of listener, including standalone Classic.
 
-	int optval = TRUE;
+	constexpr int optval = TRUE;
 	n = setsockopt(port->port_handle, SOL_SOCKET, SO_REUSEADDR,
 					(SCHAR*) &optval, sizeof(optval));
 	if (n == -1)
@@ -1108,9 +1107,7 @@ static rem_port* listener_socket(rem_port* port, USHORT flag, const addrinfo* pa
 
 	if (flag & SRVR_multi_client)
 	{
-		struct linger lingerInfo;
-		lingerInfo.l_onoff = 0;
-		lingerInfo.l_linger = 0;
+		const linger lingerInfo {};
 
 		// Get any values for SO_LINGER so that they can be reset during
 		// disconnect.  SO_LINGER should be set by default on the socket
@@ -1393,7 +1390,7 @@ static rem_port* alloc_port(rem_port* const parent, const USHORT flags)
 		{
 #ifdef WIN_NT
 			static WSADATA wsadata;
-			const WORD version = MAKEWORD(2, 0);
+			constexpr WORD version = MAKEWORD(2, 2);
 			const int wsaError = WSAStartup(version, &wsadata);
 			if (wsaError)
 			{
@@ -1485,7 +1482,7 @@ static rem_port* aux_connect(rem_port* port, PACKET* packet)
  *
  * Functional description
  *	Try to establish an alternative connection.  Somebody has already
- *	done a successfull connect request ("packet" contains the response).
+ *	done a successful connect request ("packet" contains the response).
  *
  **************************************/
 
@@ -1493,9 +1490,8 @@ static rem_port* aux_connect(rem_port* port, PACKET* packet)
 
 	if (port->port_server_flags)
 	{
-		struct timeval timeout;
+		timeval timeout {};
 		timeout.tv_sec = port->port_connect_timeout;
-		timeout.tv_usec = 0;
 
 		Select slct;
 		slct.set(port->port_channel);
@@ -1515,7 +1511,7 @@ static rem_port* aux_connect(rem_port* port, PACKET* packet)
 
 				const ISC_STATUS error_code =
 					(count == 0) ? isc_net_event_connect_timeout : isc_net_event_connect_err;
-				int savedError = inetErrNo;
+				const int savedError = inetErrNo;
 				SOCLOSE(port->port_channel);
 				inet_error(false, port, "select", error_code, savedError);
 			}
@@ -1529,7 +1525,7 @@ static rem_port* aux_connect(rem_port* port, PACKET* packet)
 
 		if (n == INVALID_SOCKET)
 		{
-			int savedError = inetErrNo;
+			const int savedError = inetErrNo;
 			SOCLOSE(port->port_channel);
 			inet_error(false, port, "accept", isc_net_event_connect_err, savedError);
 		}
@@ -1563,7 +1559,7 @@ static rem_port* aux_connect(rem_port* port, PACKET* packet)
 	int status = address.getpeername(port->port_handle);
 	if (status != 0)
 	{
-		int savedError = INET_ERRNO;
+		const int savedError = INET_ERRNO;
 		port->auxAcceptError(packet);
 		inet_error(false, port, "socket", isc_net_event_connect_err, savedError);
 	}
@@ -1576,7 +1572,7 @@ static rem_port* aux_connect(rem_port* port, PACKET* packet)
 	SOCKET n = os_utils::socket(address.family(), SOCK_STREAM, 0);
 	if (n == INVALID_SOCKET)
 	{
-		int savedError = INET_ERRNO;
+		const int savedError = INET_ERRNO;
 		port->auxAcceptError(packet);
 		inet_error(false, port, "socket", isc_net_event_connect_err, savedError);
 	}
@@ -1586,7 +1582,7 @@ static rem_port* aux_connect(rem_port* port, PACKET* packet)
 	status = address.connect(n);
 	if (status < 0)
 	{
-		int savedError = INET_ERRNO;
+		const int savedError = INET_ERRNO;
 		SOCLOSE(n);
 		port->auxAcceptError(packet);
 		inet_error(false, port, "connect", isc_net_event_connect_err, savedError);
@@ -1621,10 +1617,10 @@ static rem_port* aux_request( rem_port* port, PACKET* packet)
 		gds__log("INET/aux_request: failed to get local address of the original socket");
 		inet_error(false, port, "getsockname", isc_net_event_listen_err, INET_ERRNO);
 	}
-	unsigned short aux_port = port->getPortConfig()->getRemoteAuxPort();
+	const unsigned short aux_port = port->getPortConfig()->getRemoteAuxPort();
 	our_address.setPort(aux_port); // may be 0
 
-	SOCKET n = os_utils::socket(our_address.family(), SOCK_STREAM, 0);
+	const SOCKET n = os_utils::socket(our_address.family(), SOCK_STREAM, 0);
 	if (n == INVALID_SOCKET)
 	{
 		inet_error(false, port, "socket", isc_net_event_listen_err, INET_ERRNO);
@@ -1686,19 +1682,20 @@ static rem_port* aux_request( rem_port* port, PACKET* packet)
 	// Here we try to make this case work. However it's not bullet-proof for others platforms and architectures.
 	// A proper solution would be to just send the port number in a protocol friendly way.
 
-	bool macOsClient =
+	const bool macOsClient =
 		port->port_client_arch == arch_darwin_ppc ||
 		port->port_client_arch == arch_darwin_x64 ||
 		port->port_client_arch == arch_darwin_ppc64;
 
-	bool macOsServer =
+	if constexpr (
 		ARCHITECTURE == arch_darwin_ppc ||
 		ARCHITECTURE == arch_darwin_x64 ||
-		ARCHITECTURE == arch_darwin_ppc64;
-
-	if (macOsServer && !macOsClient)
-		port_address.convertFromMacOsToPosixWindows();
-	else if (!macOsServer && macOsClient)
+		ARCHITECTURE == arch_darwin_ppc64)
+	{
+		if (!macOsClient)
+			port_address.convertFromMacOsToPosixWindows();
+	}
+	else if (macOsClient)
 		port_address.convertFromPosixWindowsToMacOs();
 
 	response->p_resp_data.cstr_length = (ULONG) port_address.length();
@@ -2211,7 +2208,7 @@ static void select_port(rem_port* main_port, Select* selct, RemPortPtr& port)
 	MutexLockGuard guard(port_mutex, FB_FUNCTION);
 	while (true)
 	{
-		Select::HandleState result = selct->checkNext(port);
+		const Select::HandleState result = selct->checkNext(port);
 		if (!port)
 			return;
 
@@ -2254,7 +2251,6 @@ static bool select_wait( rem_port* main_port, Select* selct)
  *	to read from them.
  *
  **************************************/
-	struct timeval timeout;
 	bool checkPorts = false;
 
 	for (;;)
@@ -2305,13 +2301,12 @@ static bool select_wait( rem_port* main_port, Select* selct)
 						// in current fdset. Search and return it to caller to close
 						// broken connection correctly
 
-						struct linger lngr;
+						linger lngr {};
 						socklen_t optlen = sizeof(lngr);
-						const bool badSocket =
 #ifdef WIN_NT
-							false;
+						constexpr bool badSocket = false;
 #else
-							(port->port_handle < 0 || port->port_handle >= FD_SETSIZE);
+						const bool badSocket = (port->port_handle < 0 || port->port_handle >= FD_SETSIZE);
 #endif
 
 						if (badSocket || getsockopt(port->port_handle,
@@ -2365,9 +2360,8 @@ static bool select_wait( rem_port* main_port, Select* selct)
 
 			// Some platforms change the timeout in the select call.
 			// Reset timeout for each iteration to avoid problems.
+			timeval timeout {};
 			timeout.tv_sec = SELECT_TIMEOUT;
-			timeout.tv_usec = 0;
-
 			selct->select(&timeout);
 			const int inetErrNo = INET_ERRNO;
 
@@ -2529,7 +2523,7 @@ void get_peer_info(rem_port* port)
 		address.unmapV4();	// convert mapped IPv4 to regular IPv4
 		char host[64];		// 32 digits, 7 colons, 1 trailing null byte
 		char serv[16];
-		int nameinfo = getnameinfo(address.ptr(), address.length(), host, sizeof(host),
+		const int nameinfo = getnameinfo(address.ptr(), address.length(), host, sizeof(host),
 			serv, sizeof(serv), NI_NUMERICHOST | NI_NUMERICSERV);
 
 		if (!nameinfo)
@@ -2969,8 +2963,7 @@ static bool packet_receive(rem_port* port, UCHAR* buffer, SSHORT buffer_length, 
 		return false;
 	}
 
-	timeval timeout;
-	timeout.tv_usec = 0;
+	timeval timeout{};
 	timeval* time_ptr = NULL;
 
 	if (port->port_protocol == 0)
@@ -3330,8 +3323,8 @@ static bool setNoNagleOption(rem_port* port)
  **************************************/
 	if (port->getPortConfig()->getTcpNoNagle())
 	{
-		int optval = TRUE;
-		int n = setsockopt(port->port_handle, IPPROTO_TCP, TCP_NODELAY,
+		constexpr int optval = TRUE;
+		const int n = setsockopt(port->port_handle, IPPROTO_TCP, TCP_NODELAY,
 						   (SCHAR*) &optval, sizeof(optval));
 
 		if (n == -1)
@@ -3355,8 +3348,8 @@ static bool setKeepAlive(SOCKET s)
  *		in case of unexpected error
  *
  **************************************/
-	int optval = 1;
-	int n = setsockopt(s, SOL_SOCKET, SO_KEEPALIVE,
+	constexpr int optval = 1;
+	const int n = setsockopt(s, SOL_SOCKET, SO_KEEPALIVE,
 					   (SCHAR*) &optval, sizeof(optval));
 	return n != -1;
 }

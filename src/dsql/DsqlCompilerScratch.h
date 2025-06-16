@@ -30,7 +30,9 @@
 #include "../jrd/MetaName.h"
 #include "../common/classes/stack.h"
 #include "../common/classes/alloc.h"
+#include <initializer_list>
 #include <optional>
+#include <variant>
 
 namespace Jrd
 {
@@ -51,7 +53,10 @@ typedef Firebird::Pair<
 	Firebird::NonPooled<NestConst<ValueListNode>, NestConst<ValueListNode>>> ReturningClause;
 
 
-// DSQL Compiler scratch block - may be discarded after compilation in the future.
+// DSQL Compiler scratch block.
+// Contains any kind of objects used during DsqlStatement compilation
+// Is deleted with its pool as soon as DsqlStatement is fully formed in prepareStatement()
+// or with the statement itself (if the statement reqested it returning true from shouldPreserveScratch())
 class DsqlCompilerScratch : public BlrDebugWriter
 {
 public:
@@ -70,6 +75,7 @@ public:
 	static const unsigned FLAG_DDL					= 0x2000;
 	static const unsigned FLAG_FETCH				= 0x4000;
 	static const unsigned FLAG_VIEW_WITH_CHECK		= 0x8000;
+	static const unsigned FLAG_EXEC_BLOCK			= 0x010000;
 
 	static const unsigned MAX_NESTING = 512;
 
@@ -96,6 +102,7 @@ public:
 		  mainScratch(aMainScratch),
 		  outerMessagesMap(p),
 		  outerVarsMap(p),
+		  ddlSchema(p),
 		  ctes(p),
 		  cteAliases(p),
 		  subFunctions(p),
@@ -105,7 +112,7 @@ public:
 
 protected:
 	// DsqlCompilerScratch should never be destroyed using delete.
-	// It dies together with it's pool in release_request().
+	// It dies together with it's pool.
 	~DsqlCompilerScratch()
 	{
 	}
@@ -151,16 +158,28 @@ public:
 		dsqlStatement = aDsqlStatement;
 	}
 
+	void qualifyNewName(QualifiedName& name) const;
+	void qualifyExistingName(QualifiedName& name, std::initializer_list<ObjectType> objectTypes);
+
+	void qualifyExistingName(QualifiedName& name, ObjectType objectType)
+	{
+		qualifyExistingName(name, {objectType});
+	}
+
+	std::variant<std::monostate, dsql_prc*, dsql_rel*, dsql_udf*> resolveRoutineOrRelation(QualifiedName& name,
+		std::initializer_list<ObjectType> objectTypes);
+
 	void putBlrMarkers(ULONG marks);
 	void putDtype(const TypeClause* field, bool useSubType);
 	void putType(const TypeClause* type, bool useSubType);
-	void putLocalVariableDecl(dsql_var* variable, DeclareVariableNode* hostParam, const MetaName& collationName);
+	void putLocalVariableDecl(dsql_var* variable, DeclareVariableNode* hostParam, QualifiedName& collationName);
 	void putLocalVariableInit(dsql_var* variable, const DeclareVariableNode* hostParam);
 
-	void putLocalVariable(dsql_var* variable, DeclareVariableNode* hostParam, const MetaName& collationName)
+	void putLocalVariable(dsql_var* variable)
 	{
-		putLocalVariableDecl(variable, hostParam, collationName);
-		putLocalVariableInit(variable, hostParam);
+		QualifiedName dummyCollationName;
+		putLocalVariableDecl(variable, nullptr, dummyCollationName);
+		putLocalVariableInit(variable, nullptr);
 	}
 
 	void putOuterMaps();
@@ -301,8 +320,8 @@ public:
 	USHORT errorHandlers = 0;				// count of active error handlers
 	USHORT clientDialect = 0;				// dialect passed into the API call
 	USHORT inOuterJoin = 0;					// processing inside outer-join part
-	Firebird::string aliasRelationPrefix;	// prefix for every relation-alias.
-	MetaName package;						// package being defined
+	Firebird::ObjectsArray<QualifiedName> aliasRelationPrefix;	// prefix for every relation-alias.
+	QualifiedName package;				// package being defined
 	Firebird::Stack<SelectExprNode*> currCtes;	// current processing CTE's
 	dsql_ctx* recursiveCtx = nullptr;		// context of recursive CTE
 	USHORT recursiveCtxId = 0;				// id of recursive union stream context
@@ -317,6 +336,9 @@ public:
 	DsqlCompilerScratch* mainScratch = nullptr;
 	Firebird::NonPooledMap<USHORT, USHORT> outerMessagesMap;	// <outer, inner>
 	Firebird::NonPooledMap<USHORT, USHORT> outerVarsMap;		// <outer, inner>
+	MetaName ddlSchema;
+	Firebird::AutoPtr<Firebird::ObjectsArray<Firebird::MetaString>> cachedDdlSchemaSearchPath;
+	dsql_msg* recordKeyMessage = nullptr;	// Side message for positioned DML
 
 private:
 	Firebird::HalfStaticArray<SelectExprNode*, 4> ctes; // common table expressions

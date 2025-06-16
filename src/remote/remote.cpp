@@ -1004,11 +1004,10 @@ void Rtr::setupInlineBlob(P_INLINE_BLOB* p_blob)
 	}
 
 	blb->rbl_blob_id = p_blob->p_blob_id;
-	if (!rtr_blobs.add(blb))
+	if (Rbl* old = rtr_blobs.locate(blb->rbl_blob_id))
 	{
 		// Blob with the same blob id already exists. It could be in use, or it
 		// could be opened by user explicitly with custom BPB - thus delete new one.
-		Rbl* old = rtr_blobs.current();
 
 		fb_assert(blb != old);
 		delete blb;
@@ -1016,6 +1015,8 @@ void Rtr::setupInlineBlob(P_INLINE_BLOB* p_blob)
 		rtr_rdb->decBlobCache(cachedSize);
 		return;
 	}
+	else
+		rtr_blobs.add(blb);
 
 	blb->rbl_info.parseInfo(p_blob->p_blob_info.cstr_length, p_blob->p_blob_info.cstr_address);
 

@@ -101,8 +101,8 @@ namespace Jrd
 		const QualifiedName& getName() const { return name; }
 		void setName(const QualifiedName& value) { name = value; }
 
-		const MetaName& getSecurityName() const { return securityName; }
-		void setSecurityName(const MetaName& value) { securityName = value; }
+		const QualifiedName& getSecurityName() const { return securityName; }
+		void setSecurityName(const QualifiedName& value) { securityName = value; }
 
 		/*const*/ Statement* getStatement() const { return statement; }
 		void setStatement(Statement* value);
@@ -163,8 +163,8 @@ namespace Jrd
 
 	private:
 		USHORT id;							// routine ID
-		QualifiedName name;					// routine name
-		MetaName securityName;				// security class name
+		QualifiedName name;				// routine name
+		QualifiedName securityName;		// security class name
 		Statement* statement;			// compiled routine statement
 		bool subRoutine;					// Is this a subroutine?
 		bool implemented;					// Is the packaged routine missing the body/entrypoint?

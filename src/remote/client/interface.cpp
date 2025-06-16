@@ -215,6 +215,8 @@ private:
 	void freeClientData(CheckStatusWrapper* status, bool force = false);
 	void internalCancel(CheckStatusWrapper* status);
 	void internalClose(CheckStatusWrapper* status);
+	// seek in cached blob
+	int seekCached(int mode, int offset);
 
 	Rbl* blob;
 };
@@ -3331,8 +3333,8 @@ void Batch::cancel(CheckStatusWrapper* status)
 		PACKET* packet = &rdb->rdb_packet;
 		packet->p_operation = op_batch_cancel;
 
-		P_BATCH_FREE_CANCEL* batch = &packet->p_batch_free_cancel;
-		batch->p_batch_statement = statement->rsr_id;
+		P_RLSE* batch = &packet->p_rlse;
+		batch->p_rlse_object = statement->rsr_id;
 
 		send_and_receive(status, rdb, packet);
 
@@ -3365,8 +3367,8 @@ void Batch::freeClientData(CheckStatusWrapper* status, bool force)
 		PACKET* packet = &rdb->rdb_packet;
 		packet->p_operation = op_batch_rls;
 
-		P_BATCH_FREE_CANCEL* batch = &packet->p_batch_free_cancel;
-		batch->p_batch_statement = statement->rsr_id;
+		P_RLSE* batch = &packet->p_rlse;
+		batch->p_rlse_object = statement->rsr_id;
 
 		if (rdb->rdb_port->port_flags & PORT_lazy)
 		{
@@ -5897,18 +5899,30 @@ IBlob* Attachment::openBlob(CheckStatusWrapper* status, ITransaction* apiTra, IS
 		Rtr* transaction = remoteTransaction(apiTra);
 		CHECK_HANDLE(transaction, isc_bad_trans_handle);
 
-		if (transaction->rtr_blobs.locate(*id))
+		for (Rbl* blob = transaction->rtr_blobs.locate(*id); blob;
+			 blob = transaction->rtr_blobs.getNext())
 		{
-			Rbl* blob = transaction->rtr_blobs.current();
+			if (blob->rbl_blob_id != *id)
+				break;
 
-			if (!bpb_length)
+			if (!(blob->rbl_flags & Rbl::CACHED))
+				continue;
+
+			if (bpb_length)
 			{
-				Blob* iBlob = FB_NEW Blob(blob);
-				iBlob->addRef();
-				return iBlob;
+				if (!(blob->rbl_flags & Rbl::USED))
+					release_blob(blob);
+				break;
 			}
 
-			release_blob(blob);
+			if (blob->rbl_flags & Rbl::USED)
+				break;
+
+			blob->rbl_flags |= Rbl::USED;
+
+			Blob* iBlob = FB_NEW Blob(blob);
+			iBlob->addRef();
+			return iBlob;
 		}
 
 		// Validate data length
@@ -6863,36 +6877,7 @@ int Blob::seek(CheckStatusWrapper* status, int mode, int offset)
 		CHECK_HANDLE(blob, isc_bad_segstr_handle);
 
 		if (blob->isCached())
-		{
-			// Segmented blobs does not support seek
-			if (blob->rbl_info.blob_type == 0)
-				Arg::Gds(isc_bad_segstr_type).raise();
-
-			if (mode == 1)						// seek from current position
-				offset += blob->rbl_offset;
-			else if (mode == 2)					// seek from end of blob
-				offset = blob->rbl_info.total_length + offset;
-
-			if (offset < 0)
-				offset = 0;
-
-			if (offset > blob->rbl_info.total_length)
-				offset = blob->rbl_info.total_length;
-
-			// Assume stream blob with single segment in buffer
-			fb_assert(blob->rbl_info.num_segments <= 1);
-			fb_assert(blob->rbl_info.total_length <= MAX_USHORT);
-
-			blob->rbl_offset = offset;
-			if (!blob->rbl_data.isEmpty())
-			{
-				blob->rbl_ptr = blob->rbl_buffer + offset + 2;
-				blob->rbl_length = blob->rbl_data.end() - blob->rbl_ptr;
-				blob->rbl_fragment_length = blob->rbl_length;
-			}
-			blob->rbl_flags &= ~(Rbl::EOF_SET | Rbl::SEGMENT);
-			return blob->rbl_offset;
-		}
+			return seekCached(mode, offset);
 
 		Rdb* rdb = blob->rbl_rdb;
 		CHECK_HANDLE(rdb, isc_bad_db_handle);
@@ -6928,6 +6913,57 @@ int Blob::seek(CheckStatusWrapper* status, int mode, int offset)
 	return 0;
 }
 
+
+int Blob::seekCached(int mode, int offset)
+{
+	// Segmented blobs does not support seek
+	if (blob->rbl_info.blob_type == 0)
+		Arg::Gds(isc_bad_segstr_type).raise();
+
+	if (mode == 1)						// seek from current position
+		offset += blob->rbl_offset;
+	else if (mode == 2)					// seek from end of blob
+		offset = blob->rbl_info.total_length + offset;
+
+	if (offset < 0)
+		offset = 0;
+
+	// Engine allows to set seek position to the total length of the blob,
+	// but it's not documented and seems to be wrong. See blb::BLB_lseek().
+	// Here this behavior is supported for compatibility with the engine.
+	if (offset > blob->rbl_info.total_length)
+		offset = blob->rbl_info.total_length;
+
+	fb_assert(blob->rbl_info.total_length <= MAX_USHORT);
+
+	blob->rbl_offset = offset;
+	if (!blob->rbl_data.isEmpty())
+	{
+		if (offset == blob->rbl_info.total_length)
+		{
+			blob->rbl_ptr = blob->rbl_data.end();
+			blob->rbl_fragment_length = blob->rbl_length = 0;
+		}
+		else
+		{
+			const auto seg = offset / blob->rbl_info.max_segment + 1;
+			fb_assert(seg <= blob->rbl_info.num_segments);
+
+			blob->rbl_ptr = blob->rbl_buffer + offset + 2 * seg;
+			fb_assert(blob->rbl_ptr < blob->rbl_data.end());
+
+			blob->rbl_length = blob->rbl_data.end() - blob->rbl_ptr;
+
+			if (seg < blob->rbl_info.num_segments)
+				blob->rbl_fragment_length = blob->rbl_info.max_segment - offset % blob->rbl_info.max_segment;
+			else
+				blob->rbl_fragment_length = blob->rbl_length;
+		}
+	}
+
+	blob->rbl_flags &= ~(Rbl::EOF_SET | Rbl::SEGMENT);
+	return blob->rbl_offset;
+}
 
 void Request::send(CheckStatusWrapper* status, int level, unsigned int msg_type,
 				   unsigned int /*length*/, const void* msg)
@@ -9528,9 +9564,7 @@ static void release_blob( Rbl* blob)
 	else
 		rdb->rdb_port->releaseObject(blob->rbl_id);
 
-	if (transaction->rtr_blobs.locate(blob->rbl_blob_id))
-		transaction->rtr_blobs.fastRemove();
-
+	transaction->rtr_blobs.remove(blob);
 	delete blob;
 }
 
@@ -9687,8 +9721,8 @@ static void release_transaction( Rtr* transaction)
 	Rdb* rdb = transaction->rtr_rdb;
 	rdb->rdb_port->releaseObject(transaction->rtr_id);
 
-	while (transaction->rtr_blobs.getFirst())
-		release_blob(transaction->rtr_blobs.current());
+	while (Rbl* blob = transaction->rtr_blobs.getFirst())
+		release_blob(blob);
 
 	for (Rtr** p = &rdb->rdb_transactions; *p; p = &(*p)->rtr_next)
 	{
@@ -10062,7 +10096,7 @@ Transaction* Attachment::remoteTransactionInterface(ITransaction* apiTra)
 	if (!valid)
 		return NULL;
 
-	// If validation is successfull, this means that this attachment and valid transaction
+	// If validation is successful, this means that this attachment and valid transaction
 	// use same provider. I.e. the following cast is safe.
 	return static_cast<Transaction*>(valid);
 }

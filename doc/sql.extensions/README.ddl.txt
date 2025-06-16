@@ -569,7 +569,7 @@ With support for various system privileges in engine it's getting very convenien
 rights to users already having specific system privilege. Therefore appropriate grantee type is
 suppoprted now. Example:
 
-GRANT ALL ON PLG$SRP_VIEW TO SYSTEM PRIVILEGE USER_MANAGEMENT
+GRANT ALL ON PLG$SRP.PLG$SRP_VIEW TO SYSTEM PRIVILEGE USER_MANAGEMENT
 
 Grants all rights to view (used in SRP management plugin) to users having USER_MANAGEMENT privilege.
 
@@ -715,6 +715,6 @@ ALTER TABLE <table> ADD CONSTRAINT [IF NOT EXISTS] <constraint name> ...
 CREATE [UNIQUE] [ASC[ENDING] | DESC[ENDING]]
   INDEX indexname [{ACTIVE | INACTIVE}]
   ON tablename {(col [, col ...]) | COMPUTED BY (<expression>)}
-  [WHERE <search_condition>] 
+  [WHERE <search_condition>]
 
 'isql -x' generates script accordingly.

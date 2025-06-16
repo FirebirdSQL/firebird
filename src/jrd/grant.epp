@@ -55,11 +55,10 @@
 #include "../common/classes/array.h"
 #include "../jrd/constants.h"
 
+using namespace Firebird;
 using namespace Jrd;
 
 // privileges given to the owner of a relation
-
-const SecurityClass::flags_t OWNER_PRIVS = SCL_control | SCL_drop | SCL_alter;
 
 inline void CHECK_AND_MOVE(Acl& to, UCHAR from)
 {
@@ -68,24 +67,24 @@ inline void CHECK_AND_MOVE(Acl& to, UCHAR from)
 
 DATABASE DB = STATIC "yachts.lnk";
 
-static void define_default_class(thread_db*, const TEXT*, MetaName&, const Acl&,
+static void define_default_class(thread_db*, const QualifiedName&, MetaName&, const Acl&,
 							jrd_tra*);
 static void finish_security_class(Acl&, SecurityClass::flags_t);
-static void get_object_info(thread_db*, const TEXT*, ObjectType,
+static void get_object_info(thread_db*, const QualifiedName&, ObjectType,
 							MetaName&, MetaName&, MetaName&, bool&);
-static SecurityClass::flags_t get_public_privs(thread_db*, const TEXT*, SSHORT);
-static void get_user_privs(thread_db*, Acl&, const TEXT*, SSHORT, const MetaName&,
+static SecurityClass::flags_t get_public_privs(thread_db*, const QualifiedName&, SSHORT);
+static void get_user_privs(thread_db*, Acl&, const QualifiedName&, SSHORT, const MetaName&,
 							SecurityClass::flags_t);
-static void grant_user(Acl&, const MetaName&, SSHORT, SecurityClass::flags_t);
-static SecurityClass::flags_t save_field_privileges(thread_db*, Acl&, const TEXT*,
+static void grant_user(Acl&, const QualifiedName&, SSHORT, SecurityClass::flags_t);
+static SecurityClass::flags_t save_field_privileges(thread_db*, Acl&, const QualifiedName&,
 							const MetaName&, SecurityClass::flags_t, jrd_tra*);
 static void save_security_class(thread_db*, const MetaName&, const Acl&, jrd_tra*);
 static SecurityClass::flags_t trans_sql_priv(const TEXT*);
-static SecurityClass::flags_t squeeze_acl(Acl&, const MetaName&, SSHORT);
+static SecurityClass::flags_t squeeze_acl(Acl&, const QualifiedName&, SSHORT);
 static bool check_string(const UCHAR*, const MetaName&);
 
 
-void GRANT_privileges(thread_db* tdbb, const Firebird::string& name, ObjectType id, jrd_tra* transaction)
+void GRANT_privileges(thread_db* tdbb, const QualifiedName& name, ObjectType id, jrd_tra* transaction)
 {
 /**************************************
  *
@@ -104,20 +103,20 @@ void GRANT_privileges(thread_db* tdbb, const Firebird::string& name, ObjectType 
 
 	bool restrct = false;
 
-	MetaName s_class, owner, default_class;
+	MetaName s_class, default_class;
+	MetaName owner;
 	bool view; // unused after being retrieved.
-	get_object_info(tdbb, name.c_str(), id, owner, s_class, default_class, view);
+	get_object_info(tdbb, name, id, owner, s_class, default_class, view);
 
-	if (s_class.length() == 0) {
+	if (s_class.isEmpty())
 		return;
-	}
 
 	// start the acl off by giving the owner all privileges
 	Acl acl, default_acl;
 
 	CHECK_AND_MOVE(acl, ACL_version);
 
-	SecurityClass::flags_t priv = OWNER_PRIVS;
+	SecurityClass::flags_t priv = SCL_control | SCL_drop | SCL_alter;
 
 	switch (id)
 	{
@@ -138,21 +137,22 @@ void GRANT_privileges(thread_db* tdbb, const Firebird::string& name, ObjectType 
 		case obj_generator:
 		case obj_charset:
 		case obj_collation:
+		case obj_schema:
 			priv |= SCL_usage;
 			break;
 
 		default:
 			if (isDdlObject(id))
-				priv = OWNER_PRIVS;
+				priv = SCL_create | SCL_drop | SCL_alter;
 			break;
 	}
 
-	grant_user(acl, owner, obj_user, priv);
+	grant_user(acl, QualifiedName(owner), obj_user, priv);
 
 	// Pick up core privileges
 
-	const SecurityClass::flags_t public_priv = get_public_privs(tdbb, name.c_str(), id);
-	get_user_privs(tdbb, acl, name.c_str(), id, owner, public_priv);
+	const SecurityClass::flags_t public_priv = get_public_privs(tdbb, name, id);
+	get_user_privs(tdbb, acl, name, id, owner, public_priv);
 
 	if (id == obj_relation)
 	{
@@ -164,8 +164,7 @@ void GRANT_privileges(thread_db* tdbb, const Firebird::string& name, ObjectType 
 		default_acl.assign(acl);
 
 		const SecurityClass::flags_t aggregate_public =
-			save_field_privileges(tdbb, acl, name.c_str(), owner, public_priv,
-										  transaction);
+			save_field_privileges(tdbb, acl, name, owner, public_priv, transaction);
 
 		// finish off and store the security class for the relation
 
@@ -183,8 +182,7 @@ void GRANT_privileges(thread_db* tdbb, const Firebird::string& name, ObjectType 
 		if (restrct)
 		{
 			finish_security_class(default_acl, public_priv);
-			define_default_class(tdbb, name.c_str(), default_class, default_acl,
-								 transaction);
+			define_default_class(tdbb, name, default_class, default_acl, transaction);
 		}
 	}
 	else
@@ -196,7 +194,7 @@ void GRANT_privileges(thread_db* tdbb, const Firebird::string& name, ObjectType 
 
 
 static void define_default_class(thread_db* tdbb,
-								 const TEXT* relation_name,
+								 const QualifiedName& relationName,
 								 MetaName& default_class,
 								 const Acl& acl,
 								 jrd_tra* transaction)
@@ -219,21 +217,21 @@ static void define_default_class(thread_db* tdbb,
  **************************************/
 	SET_TDBB(tdbb);
 
-	if (default_class.length() == 0)
+	if (default_class.isEmpty())
 	{
 		default_class.printf("%s%" SQUADFORMAT, DEFAULT_CLASS,
-				DPM_gen_id(tdbb, MET_lookup_generator(tdbb, DEFAULT_CLASS), false, 1));
+			DPM_gen_id(tdbb, MET_lookup_generator(tdbb, QualifiedName(DEFAULT_CLASS, SYSTEM_SCHEMA)), false, 1));
 
 		AutoCacheRequest request(tdbb, irq_grant7, IRQ_REQUESTS);
 
 		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 			REL IN RDB$RELATIONS
-				WITH REL.RDB$RELATION_NAME EQ relation_name
+			WITH REL.RDB$SCHEMA_NAME EQ relationName.schema.c_str() AND
+				 REL.RDB$RELATION_NAME EQ relationName.object.c_str()
 		{
             MODIFY REL USING
 				REL.RDB$DEFAULT_CLASS.NULL = FALSE;
-				jrd_vtof(default_class.c_str(), REL.RDB$DEFAULT_CLASS,
-						 sizeof(REL.RDB$DEFAULT_CLASS));
+				jrd_vtof(default_class.c_str(), REL.RDB$DEFAULT_CLASS, sizeof(REL.RDB$DEFAULT_CLASS));
 			END_MODIFY
 		}
 		END_FOR
@@ -241,14 +239,10 @@ static void define_default_class(thread_db* tdbb,
 
 	save_security_class(tdbb, default_class, acl, transaction);
 
-	dsc desc;
-	desc.dsc_dtype = dtype_text;
-	desc.dsc_sub_type = 0;
-	desc.dsc_scale = 0;
-	desc.dsc_ttype() = ttype_metadata;
-	desc.dsc_address = (UCHAR *) relation_name;
-	desc.dsc_length = static_cast<USHORT>(strlen(relation_name));
-	DFW_post_work(transaction, dfw_scan_relation, &desc, 0);
+	dsc schemaDesc, nameDesc;
+	schemaDesc.makeText((USHORT) strlen(relationName.schema.c_str()), CS_METADATA, (UCHAR*) relationName.schema.c_str());
+	nameDesc.makeText((USHORT) strlen(relationName.object.c_str()), CS_METADATA, (UCHAR*) relationName.object.c_str());
+	DFW_post_work(transaction, dfw_scan_relation, &nameDesc, &schemaDesc, 0);
 }
 
 
@@ -276,7 +270,7 @@ static void finish_security_class(Acl& acl, SecurityClass::flags_t public_priv)
 
 
 static SecurityClass::flags_t get_public_privs(thread_db* tdbb,
-											   const TEXT* object_name,
+											   const QualifiedName& object_name,
 											   SSHORT obj_type)
 {
 /**************************************
@@ -298,13 +292,14 @@ static SecurityClass::flags_t get_public_privs(thread_db* tdbb,
 
 	FOR(REQUEST_HANDLE request)
 		PRV IN RDB$USER_PRIVILEGES
-			WITH PRV.RDB$RELATION_NAME EQ object_name AND
-			PRV.RDB$OBJECT_TYPE EQ obj_type AND
-			PRV.RDB$USER EQ "PUBLIC" AND
-			PRV.RDB$USER_TYPE EQ obj_user AND
-			PRV.RDB$FIELD_NAME MISSING
+		WITH PRV.RDB$RELATION_SCHEMA_NAME EQUIV NULLIF(object_name.schema.c_str(), '') AND
+			 PRV.RDB$RELATION_NAME EQUIV NULLIF(object_name.object.c_str(), '') AND
+			 PRV.RDB$OBJECT_TYPE EQ obj_type AND
+			 PRV.RDB$USER EQ "PUBLIC" AND
+			 PRV.RDB$USER_TYPE EQ obj_user AND
+			 PRV.RDB$FIELD_NAME MISSING
 	{
-        public_priv |= trans_sql_priv(PRV.RDB$PRIVILEGE);
+		public_priv |= trans_sql_priv(PRV.RDB$PRIVILEGE);
 	}
 	END_FOR
 
@@ -313,7 +308,7 @@ static SecurityClass::flags_t get_public_privs(thread_db* tdbb,
 
 
 static void get_object_info(thread_db* tdbb,
-							const TEXT* object_name,
+							const QualifiedName& object_name,
 							ObjectType obj_type,
 							MetaName& owner,
 							MetaName& s_class,
@@ -335,7 +330,9 @@ static void get_object_info(thread_db* tdbb,
 	SET_TDBB(tdbb);
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 
-	owner = s_class = default_class = "";
+	owner = "";
+	s_class = "";
+	default_class = "";
 	view = false;
 
 	if (obj_type == obj_relation)
@@ -343,8 +340,9 @@ static void get_object_info(thread_db* tdbb,
 		AutoCacheRequest request(tdbb, irq_grant1, IRQ_REQUESTS);
 
 		FOR(REQUEST_HANDLE request)
-			REL IN RDB$RELATIONS WITH
-				REL.RDB$RELATION_NAME EQ object_name
+			REL IN RDB$RELATIONS
+			WITH REL.RDB$SCHEMA_NAME EQ object_name.schema.c_str() AND
+				 REL.RDB$RELATION_NAME EQ object_name.object.c_str()
 		{
 			s_class = REL.RDB$SECURITY_CLASS;
 			default_class = REL.RDB$DEFAULT_CLASS;
@@ -359,7 +357,8 @@ static void get_object_info(thread_db* tdbb,
 
 		FOR (REQUEST_HANDLE request)
 			PKG IN RDB$PACKAGES
-			WITH PKG.RDB$PACKAGE_NAME EQ object_name
+			WITH PKG.RDB$SCHEMA_NAME EQ object_name.schema.c_str() AND
+				 PKG.RDB$PACKAGE_NAME EQ object_name.object.c_str()
 		{
 			s_class = PKG.RDB$SECURITY_CLASS;
 			default_class = "";
@@ -373,9 +372,10 @@ static void get_object_info(thread_db* tdbb,
 		AutoCacheRequest request(tdbb, irq_grant9, IRQ_REQUESTS);
 
 		FOR(REQUEST_HANDLE request)
-			PRC IN RDB$PROCEDURES WITH
-				PRC.RDB$PROCEDURE_NAME EQ object_name AND
-				PRC.RDB$PACKAGE_NAME MISSING
+			PRC IN RDB$PROCEDURES
+			WITH PRC.RDB$SCHEMA_NAME EQ object_name.schema.c_str() AND
+				 PRC.RDB$PROCEDURE_NAME EQ object_name.object.c_str() AND
+				 PRC.RDB$PACKAGE_NAME MISSING
 		{
 			s_class = PRC.RDB$SECURITY_CLASS;
 			default_class = "";
@@ -389,9 +389,10 @@ static void get_object_info(thread_db* tdbb,
 		AutoCacheRequest request(tdbb, irq_grant11, IRQ_REQUESTS);
 
 		FOR(REQUEST_HANDLE request)
-			FUN IN RDB$FUNCTIONS WITH
-				FUN.RDB$FUNCTION_NAME EQ object_name AND
-				FUN.RDB$PACKAGE_NAME MISSING
+			FUN IN RDB$FUNCTIONS
+			WITH FUN.RDB$SCHEMA_NAME EQ object_name.schema.c_str() AND
+				 FUN.RDB$FUNCTION_NAME EQ object_name.object.c_str() AND
+				 FUN.RDB$PACKAGE_NAME MISSING
 		{
 			s_class = FUN.RDB$SECURITY_CLASS;
 			default_class = "";
@@ -405,8 +406,9 @@ static void get_object_info(thread_db* tdbb,
 		AutoCacheRequest request(tdbb, irq_grant12, IRQ_REQUESTS);
 
 		FOR(REQUEST_HANDLE request)
-			CS IN RDB$CHARACTER_SETS WITH
-				CS.RDB$CHARACTER_SET_NAME EQ object_name
+			CS IN RDB$CHARACTER_SETS
+			WITH CS.RDB$SCHEMA_NAME EQ object_name.schema.c_str() AND
+				 CS.RDB$CHARACTER_SET_NAME EQ object_name.object.c_str()
 		{
 			s_class = CS.RDB$SECURITY_CLASS;
 			default_class = "";
@@ -420,8 +422,9 @@ static void get_object_info(thread_db* tdbb,
 		AutoCacheRequest request(tdbb, irq_grant13, IRQ_REQUESTS);
 
 		FOR(REQUEST_HANDLE request)
-			COLL IN RDB$COLLATIONS WITH
-				COLL.RDB$COLLATION_NAME EQ object_name
+			COLL IN RDB$COLLATIONS
+			WITH COLL.RDB$SCHEMA_NAME EQ object_name.schema.c_str() AND
+				 COLL.RDB$COLLATION_NAME EQ object_name.object.c_str()
 		{
 			s_class = COLL.RDB$SECURITY_CLASS;
 			default_class = "";
@@ -435,8 +438,9 @@ static void get_object_info(thread_db* tdbb,
 		AutoCacheRequest request(tdbb, irq_grant14, IRQ_REQUESTS);
 
 		FOR(REQUEST_HANDLE request)
-			XCP IN RDB$EXCEPTIONS WITH
-				XCP.RDB$EXCEPTION_NAME EQ object_name
+			XCP IN RDB$EXCEPTIONS
+			WITH XCP.RDB$SCHEMA_NAME EQ object_name.schema.c_str() AND
+				 XCP.RDB$EXCEPTION_NAME EQ object_name.object.c_str()
 		{
 			s_class = XCP.RDB$SECURITY_CLASS;
 			default_class = "";
@@ -450,8 +454,9 @@ static void get_object_info(thread_db* tdbb,
 		AutoCacheRequest request(tdbb, irq_grant15, IRQ_REQUESTS);
 
 		FOR(REQUEST_HANDLE request)
-			GEN IN RDB$GENERATORS WITH
-				GEN.RDB$GENERATOR_NAME EQ object_name
+			GEN IN RDB$GENERATORS
+			WITH GEN.RDB$SCHEMA_NAME EQ object_name.schema.c_str() AND
+				 GEN.RDB$GENERATOR_NAME EQ object_name.object.c_str()
 		{
 			s_class = GEN.RDB$SECURITY_CLASS;
 			default_class = "";
@@ -465,8 +470,9 @@ static void get_object_info(thread_db* tdbb,
 		AutoCacheRequest request(tdbb, irq_grant16, IRQ_REQUESTS);
 
 		FOR(REQUEST_HANDLE request)
-			FLD IN RDB$FIELDS WITH
-				FLD.RDB$FIELD_NAME EQ object_name
+			FLD IN RDB$FIELDS
+			WITH FLD.RDB$SCHEMA_NAME EQ object_name.schema.c_str() AND
+				 FLD.RDB$FIELD_NAME EQ object_name.object.c_str()
 		{
 			s_class = FLD.RDB$SECURITY_CLASS;
 			default_class = "";
@@ -477,6 +483,8 @@ static void get_object_info(thread_db* tdbb,
 	}
 	else if (obj_type == obj_database)
 	{
+		fb_assert(object_name.schema.isEmpty() && object_name.object.isEmpty());
+
 		AutoCacheRequest request(tdbb, irq_grant17, IRQ_REQUESTS);
 
 		FOR(REQUEST_HANDLE request)
@@ -489,13 +497,33 @@ static void get_object_info(thread_db* tdbb,
 		}
 		END_FOR
 	}
+	else if (obj_type == obj_schema)
+	{
+		fb_assert(object_name.object.hasData() && object_name.schema.isEmpty());
+
+		static const CachedRequestId requestHandleId;
+		AutoCacheRequest requestHandle(tdbb, requestHandleId);
+
+		FOR(REQUEST_HANDLE requestHandle)
+			SCH IN RDB$SCHEMAS
+			WITH SCH.RDB$SCHEMA_NAME EQ object_name.object.c_str()
+		{
+			s_class = SCH.RDB$SECURITY_CLASS;
+			default_class = "";
+			owner = SCH.RDB$OWNER_NAME;
+			view = false;
+		}
+		END_FOR
+	}
 	else if (obj_type == obj_blob_filter)
 	{
+		fb_assert(object_name.schema.isEmpty());
+
 		AutoCacheRequest request(tdbb, irq_grant18, IRQ_REQUESTS);
 
 		FOR(REQUEST_HANDLE request)
-			FLT IN RDB$FILTERS WITH
-				FLT.RDB$FUNCTION_NAME EQ object_name
+			FLT IN RDB$FILTERS
+			WITH FLT.RDB$FUNCTION_NAME EQ object_name.object.c_str()
 		{
 			s_class = FLT.RDB$SECURITY_CLASS;
 			default_class = "";
@@ -506,11 +534,13 @@ static void get_object_info(thread_db* tdbb,
 	}
 	else if (obj_type == obj_sql_role)
 	{
+		fb_assert(object_name.schema.isEmpty());
+
 		AutoCacheRequest request(tdbb, irq_grant19, IRQ_REQUESTS);
 
 		FOR(REQUEST_HANDLE request)
-			ROL IN RDB$ROLES WITH
-				ROL.RDB$ROLE_NAME EQ object_name
+			ROL IN RDB$ROLES
+			WITH ROL.RDB$ROLE_NAME EQ object_name.object.c_str()
 		{
 			s_class = ROL.RDB$SECURITY_CLASS;
 			default_class = "";
@@ -521,7 +551,7 @@ static void get_object_info(thread_db* tdbb,
 	}
 	else
 	{
-		s_class = getSecurityClassName(obj_type);
+		s_class = SCL_getDdlSecurityClassName(obj_type, object_name.schema);
 		default_class = "";
 		owner = tdbb->getDatabase()->dbb_owner;
 		view = false;
@@ -531,7 +561,7 @@ static void get_object_info(thread_db* tdbb,
 
 static void get_user_privs(thread_db*					tdbb,
 						   Acl&							acl,
-						   const TEXT*					object_name,
+						   const QualifiedName&		object_name,
 						   SSHORT						obj_type,
 						   const MetaName&	owner,
 						   SecurityClass::flags_t		public_priv)
@@ -549,7 +579,7 @@ static void get_user_privs(thread_db*					tdbb,
 	SET_TDBB(tdbb);
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 
-	MetaName user;
+	QualifiedName user;
 	SSHORT user_type = -2;
 	SecurityClass::flags_t priv = 0;
 
@@ -557,45 +587,45 @@ static void get_user_privs(thread_db*					tdbb,
 
 	FOR(REQUEST_HANDLE request)
 		PRV IN RDB$USER_PRIVILEGES
-			WITH PRV.RDB$RELATION_NAME EQ object_name AND
-			PRV.RDB$OBJECT_TYPE EQ obj_type AND
-			(PRV.RDB$USER NE "PUBLIC" OR PRV.RDB$USER_TYPE NE obj_user) AND
-			(PRV.RDB$USER NE owner.c_str() OR PRV.RDB$USER_TYPE NE obj_user) AND
-			((PRV.RDB$OBJECT_TYPE NE obj_sql_role AND
-			  PRV.RDB$FIELD_NAME MISSING) OR
-			 (PRV.RDB$OBJECT_TYPE EQ obj_sql_role AND
-			  PRV.RDB$GRANT_OPTION EQ WITH_ADMIN_OPTION))
-			SORTED BY PRV.RDB$USER, PRV.RDB$USER_TYPE
+		WITH PRV.RDB$RELATION_SCHEMA_NAME EQUIV NULLIF(object_name.schema.c_str(), '') AND
+			 PRV.RDB$RELATION_NAME EQUIV NULLIF(object_name.object.c_str(), '') AND
+			 PRV.RDB$OBJECT_TYPE EQ obj_type AND
+			 (PRV.RDB$USER NE "PUBLIC" OR PRV.RDB$USER_TYPE NE obj_user) AND
+			 (PRV.RDB$USER NE owner.c_str() OR PRV.RDB$USER_TYPE NE obj_user) AND
+			 ((PRV.RDB$OBJECT_TYPE NE obj_sql_role AND
+			   PRV.RDB$FIELD_NAME MISSING) OR
+			  (PRV.RDB$OBJECT_TYPE EQ obj_sql_role AND
+			   PRV.RDB$GRANT_OPTION EQ WITH_ADMIN_OPTION))
+		SORTED BY PRV.RDB$USER, PRV.RDB$USER_SCHEMA_NAME, PRV.RDB$USER_TYPE
 	{
-		fb_utils::exact_name_limit(PRV.RDB$USER, sizeof(PRV.RDB$USER));
-		if (user != PRV.RDB$USER || user_type != PRV.RDB$USER_TYPE)
+		const QualifiedName thisUser(PRV.RDB$USER, PRV.RDB$USER_SCHEMA_NAME);
+
+		if (user != thisUser || user_type != PRV.RDB$USER_TYPE)
 		{
-			if (user.length())
-			{
+			if (user.object.hasData())
 				grant_user(acl, user, user_type, priv);
-			}
+
 			user_type = PRV.RDB$USER_TYPE;
+
 			if (user_type == obj_user)
-			{
 				priv = public_priv;
-			}
 			else
-			{
 				priv = 0;
-			}
-			user = PRV.RDB$USER;
+
+			user = thisUser;
 		}
+
 		priv |= trans_sql_priv(obj_type == obj_sql_role ? "O" : PRV.RDB$PRIVILEGE);
 	}
 	END_FOR
 
-	if (user.length())
+	if (user.object.length())
 		grant_user(acl, user, user_type, priv);
 }
 
 
 static void grant_user(Acl& acl,
-					   const MetaName& user,
+					   const QualifiedName& user,
 					   SSHORT user_type,
 					   SecurityClass::flags_t privs)
 {
@@ -648,19 +678,38 @@ static void grant_user(Acl& acl,
 
 	case obj_privilege:
 		CHECK_AND_MOVE(acl, id_privilege);
-		fb_assert(isdigit(user[0]));
+		fb_assert(isdigit(user.object[0]));
 		break;
 
 	default:
 		BUGCHECK(292);			// Illegal user_type
-
 	}
 
-	const UCHAR length = user.length();
+	switch (user_type)
+	{
+		case obj_package_header:
+		case obj_procedure:
+		case obj_udf:
+		case obj_trigger:
+		case obj_view:
+		{
+			fb_assert(user.schema.hasData());
+
+			const UCHAR length = user.schema.length();
+			CHECK_AND_MOVE(acl, length);
+
+			if (length)
+				acl.add(reinterpret_cast<const UCHAR*>(user.schema.c_str()), length);
+
+			break;
+		}
+	}
+
+	const UCHAR length = user.object.length();
 	CHECK_AND_MOVE(acl, length);
-	if (length) {
-		acl.add(reinterpret_cast<const UCHAR*>(user.c_str()), length);
-	}
+
+	if (length)
+		acl.add(reinterpret_cast<const UCHAR*>(user.object.c_str()), length);
 
 	if (!SCL_move_priv(privs, acl))
 		acl.shrink(back);
@@ -669,7 +718,7 @@ static void grant_user(Acl& acl,
 
 static SecurityClass::flags_t save_field_privileges(thread_db* tdbb,
 													Acl& relation_acl,
-													const TEXT* relation_name,
+													const QualifiedName& relation_name,
 													const MetaName& owner,
 													SecurityClass::flags_t public_priv,
 													jrd_tra* transaction)
@@ -693,7 +742,9 @@ static SecurityClass::flags_t save_field_privileges(thread_db* tdbb,
 	Acl field_acl(relation_acl);
 	const Acl acl_start(relation_acl);
 
-	MetaName field_name, user, s_class;
+	QualifiedName user;
+	MetaName field_name;
+	MetaName s_class;
 	SecurityClass::flags_t aggregate_public = public_priv;
 	SecurityClass::flags_t priv = 0;
 	SecurityClass::flags_t field_public = 0;
@@ -703,27 +754,27 @@ static SecurityClass::flags_t save_field_privileges(thread_db* tdbb,
 	AutoRequest request2, request3;
 
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		FLD IN RDB$RELATION_FIELDS CROSS
-			PRV IN RDB$USER_PRIVILEGES
-			OVER RDB$RELATION_NAME, RDB$FIELD_NAME
-			WITH PRV.RDB$OBJECT_TYPE EQ obj_relation AND
-			PRV.RDB$RELATION_NAME EQ relation_name AND
-			PRV.RDB$FIELD_NAME NOT MISSING AND
-			(PRV.RDB$USER NE owner.c_str() OR PRV.RDB$USER_TYPE NE obj_user)
-		SORTED BY PRV.RDB$FIELD_NAME, PRV.RDB$USER
+		FLD IN RDB$RELATION_FIELDS
+		CROSS PRV IN RDB$USER_PRIVILEGES OVER RDB$RELATION_NAME, RDB$FIELD_NAME
+		WITH PRV.RDB$RELATION_SCHEMA_NAME EQ FLD.RDB$SCHEMA_NAME AND
+			 PRV.RDB$OBJECT_TYPE EQ obj_relation AND
+			 PRV.RDB$RELATION_SCHEMA_NAME EQ relation_name.schema.c_str() AND
+			 PRV.RDB$RELATION_NAME EQ relation_name.object.c_str() AND
+			 PRV.RDB$FIELD_NAME NOT MISSING AND
+			 (PRV.RDB$USER NE owner.c_str() OR PRV.RDB$USER_TYPE NE obj_user)
+		SORTED BY PRV.RDB$FIELD_NAME, PRV.RDB$USER, PRV.RDB$USER_SCHEMA_NAME
 	{
-		fb_utils::exact_name_limit(PRV.RDB$USER, sizeof(PRV.RDB$USER));
-		fb_utils::exact_name_limit(PRV.RDB$FIELD_NAME, sizeof(PRV.RDB$FIELD_NAME));
+		const QualifiedName thisUser(PRV.RDB$USER, PRV.RDB$USER_SCHEMA_NAME);
 
 		// create a control break on field_name,user
 
-		if (user != PRV.RDB$USER || field_name != PRV.RDB$FIELD_NAME)
+		if (user != thisUser || field_name != PRV.RDB$FIELD_NAME)
 		{
 			// flush out information for old user
 
-			if (user.length())
+			if (user.object.hasData())
 			{
-				if (user != "PUBLIC")
+				if (!(user.schema.isEmpty() && user.object == "PUBLIC"))
 				{
 					const SecurityClass::flags_t field_priv =
 						public_priv | priv | squeeze_acl(field_acl, user, user_type);
@@ -734,15 +785,12 @@ static SecurityClass::flags_t save_field_privileges(thread_db* tdbb,
 					grant_user(relation_acl, user, user_type, relation_priv);
 				}
 				else
-				{
 					field_public = field_public | public_priv | priv;
-				}
 			}
 
 			// initialize for new user
-
 			priv = 0;
-			user = PRV.RDB$USER;
+			user = thisUser;
 			user_type = PRV.RDB$USER_TYPE;
 		}
 
@@ -766,26 +814,29 @@ static SecurityClass::flags_t save_field_privileges(thread_db* tdbb,
 			field_name = PRV.RDB$FIELD_NAME;
 			s_class = FLD.RDB$SECURITY_CLASS;
 
-			if (FLD.RDB$SECURITY_CLASS.NULL || s_class.length() == 0)
+			if (FLD.RDB$SECURITY_CLASS.NULL || s_class.isEmpty())
 			{
 				bool unique = false;
 
 				FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
-					RFR IN RDB$RELATION_FIELDS WITH
-						RFR.RDB$RELATION_NAME EQ FLD.RDB$RELATION_NAME
-						AND RFR.RDB$FIELD_NAME EQ FLD.RDB$FIELD_NAME
+					RFR IN RDB$RELATION_FIELDS
+					WITH RFR.RDB$SCHEMA_NAME EQ FLD.RDB$SCHEMA_NAME AND
+						 RFR.RDB$RELATION_NAME EQ FLD.RDB$RELATION_NAME AND
+						 RFR.RDB$FIELD_NAME EQ FLD.RDB$FIELD_NAME
 				{
 					MODIFY RFR
 						while (!unique)
 						{
 							sprintf(RFR.RDB$SECURITY_CLASS, "%s%" SQUADFORMAT, SQL_FLD_SECCLASS_PREFIX,
-								DPM_gen_id(tdbb, MET_lookup_generator(tdbb, SQL_SECCLASS_GENERATOR),
-										   false, 1));
+								DPM_gen_id(tdbb,
+									MET_lookup_generator(tdbb, QualifiedName(SQL_SECCLASS_GENERATOR, SYSTEM_SCHEMA)),
+									false, 1));
 
 							unique = true;
 							FOR (REQUEST_HANDLE request3)
 								RFR2 IN RDB$RELATION_FIELDS
-								WITH RFR2.RDB$SECURITY_CLASS = RFR.RDB$SECURITY_CLASS
+								WITH RFR2.RDB$SCHEMA_NAME = RFR.RDB$SCHEMA_NAME AND
+									 RFR2.RDB$SECURITY_CLASS = RFR.RDB$SECURITY_CLASS
 							{
 								unique = false;
 							}
@@ -811,9 +862,9 @@ static SecurityClass::flags_t save_field_privileges(thread_db* tdbb,
 
 	// flush out the last user's info
 
-	if (user.length())
+	if (user.object.hasData())
 	{
-		if (user != "PUBLIC")
+		if (!(user.schema.isEmpty() && user.object == "PUBLIC"))
 		{
 			const SecurityClass::flags_t field_priv =
 				public_priv | priv | squeeze_acl(field_acl, user, user_type);
@@ -837,14 +888,12 @@ static SecurityClass::flags_t save_field_privileges(thread_db* tdbb,
 		finish_security_class(field_acl, (field_public | public_priv));
 		save_security_class(tdbb, s_class, field_acl, transaction);
 
-		dsc desc;
-		desc.dsc_dtype = dtype_text;
-		desc.dsc_sub_type = 0;
-		desc.dsc_scale = 0;
-		desc.dsc_ttype() = ttype_metadata;
-		desc.dsc_address = (UCHAR *) relation_name;
-		desc.dsc_length = static_cast<USHORT>(strlen(relation_name));
-		DFW_post_work(transaction, dfw_update_format, &desc, 0);
+		dsc schemaDesc, nameDesc;
+		schemaDesc.makeText((USHORT) strlen(relation_name.schema.c_str()), CS_METADATA,
+			(UCHAR*) relation_name.schema.c_str());
+		nameDesc.makeText((USHORT) strlen(relation_name.object.c_str()), CS_METADATA,
+			(UCHAR*) relation_name.object.c_str());
+		DFW_post_work(transaction, dfw_update_format, &nameDesc, &schemaDesc, 0);
 	}
 
 	return aggregate_public;
@@ -886,7 +935,7 @@ static void save_security_class(thread_db* tdbb,
 	bool found = false;
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		CLS IN RDB$SECURITY_CLASSES
-			WITH CLS.RDB$SECURITY_CLASS EQ s_class.c_str()
+		WITH CLS.RDB$SECURITY_CLASS EQ s_class.c_str()
 	{
         found = true;
 		MODIFY CLS
@@ -902,7 +951,7 @@ static void save_security_class(thread_db* tdbb,
 		STORE(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 			CLS IN RDB$SECURITY_CLASSES
 		{
-            jrd_vtof(s_class.c_str(), CLS.RDB$SECURITY_CLASS, sizeof(CLS.RDB$SECURITY_CLASS));
+			jrd_vtof(s_class.c_str(), CLS.RDB$SECURITY_CLASS, sizeof(CLS.RDB$SECURITY_CLASS));
 			CLS.RDB$ACL = blob_id;
 		}
 		END_STORE
@@ -962,7 +1011,7 @@ static SecurityClass::flags_t trans_sql_priv(const TEXT* privileges)
 }
 
 
-static SecurityClass::flags_t squeeze_acl(Acl& acl, const MetaName& user, SSHORT user_type)
+static SecurityClass::flags_t squeeze_acl(Acl& acl, const QualifiedName& user, SSHORT user_type)
 {
 /**************************************
  *
@@ -992,6 +1041,7 @@ static SecurityClass::flags_t squeeze_acl(Acl& acl, const MetaName& user, SSHORT
 	bool hit = false;
 
 	while ( (c = *a++) )
+	{
 		switch (c)
 		{
 		case ACL_id_list:
@@ -1004,42 +1054,62 @@ static SecurityClass::flags_t squeeze_acl(Acl& acl, const MetaName& user, SSHORT
 				case id_person:
 					if (user_type != obj_user)
 						hit = false;
-					if (check_string(a, user))
+					if (check_string(a, user.object))
 						hit = false;
 					break;
 
 				case id_sql_role:
 					if (user_type != obj_sql_role)
 						hit = false;
-					if (check_string(a, user))
+					if (check_string(a, user.object))
 						hit = false;
 					break;
 
 				case id_view:
 					if (user_type != obj_view)
 						hit = false;
-					if (check_string(a, user))
+
+					if (check_string(a, user.schema))
+						hit = false;
+					a += *a + 1;
+
+					if (check_string(a, user.object))
 						hit = false;
 					break;
 
 				case id_procedure:
 					if (user_type != obj_procedure)
 						hit = false;
-					if (check_string(a, user))
+
+					if (check_string(a, user.schema))
+						hit = false;
+					a += *a + 1;
+
+					if (check_string(a, user.object))
 						hit = false;
 					break;
 
 				case id_function:
 					if (user_type != obj_udf)
 						hit = false;
-					if (check_string(a, user))
+
+					if (check_string(a, user.schema))
+						hit = false;
+					a += *a + 1;
+
+					if (check_string(a, user.object))
 						hit = false;
 					break;
 
 				case id_trigger:
 					if (user_type != obj_trigger)
 						hit = false;
-					if (check_string(a, user))
+
+					if (check_string(a, user.schema))
+						hit = false;
+					a += *a + 1;
+
+					if (check_string(a, user.object))
 						hit = false;
 					break;
 
@@ -1048,7 +1118,7 @@ static SecurityClass::flags_t squeeze_acl(Acl& acl, const MetaName& user, SSHORT
 					hit = false;
 					// CVC: What's the idea of calling a function whose only
 					// result is boolean without checking it?
-					check_string(a, user);
+					check_string(a, user.object);
 					break;
 
 				case id_views:
@@ -1067,20 +1137,21 @@ static SecurityClass::flags_t squeeze_acl(Acl& acl, const MetaName& user, SSHORT
 				case id_group:
 					if (user_type != obj_user_group)
 						hit = false;
-					if (check_string(a, user))
+					if (check_string(a, user.object))
 						hit = false;
 					break;
 
 				case id_privilege:
 					if (user_type != obj_privilege)
 						hit = false;
-					if (check_string(a, user))
+					if (check_string(a, user.object))
 						hit = false;
 					break;
 
 				default:
 					BUGCHECK(293);	// bad ACL
 				}
+
 				a += *a + 1;
 			}
 			break;
@@ -1158,6 +1229,7 @@ static SecurityClass::flags_t squeeze_acl(Acl& acl, const MetaName& user, SSHORT
 		default:
 			BUGCHECK(293);		// bad ACL
 		}
+	}
 
 	// remove added extra '\0' byte
     acl.pop();

@@ -25,6 +25,7 @@
 #include "../dsql/DsqlBatch.h"
 #include "../dsql/DsqlStatementCache.h"
 #include "../dsql/Nodes.h"
+#include "../dsql/StmtNodes.h"
 #include "../jrd/Statement.h"
 #include "../jrd/req.h"
 #include "../jrd/tra.h"
@@ -53,6 +54,59 @@ DsqlRequest::DsqlRequest(MemoryPool& pool, dsql_dbb* dbb, DsqlStatement* aDsqlSt
 
 DsqlRequest::~DsqlRequest()
 {
+}
+
+void DsqlRequest::releaseRequest(thread_db* tdbb)
+{
+	if (req_timer)
+	{
+		req_timer->stop();
+		req_timer = nullptr;
+	}
+
+	// Prevent new children from appear
+	if (req_cursor_name.hasData())
+		req_dbb->dbb_cursors.remove(req_cursor_name);
+
+	// If request is parent, orphan the children and release a portion of their requests
+
+	for (auto childStatement : cursors)
+	{
+		// Without parent request prepared DsqlRequest will throw error on execute which is exactly what one would expect
+		childStatement->onReferencedCursorClose();
+
+		// hvlad: lines below is commented out as
+		// - child is already unlinked from its parent request
+		// - we should not free child's sql text until its owner request is alive
+		// It seems to me we should destroy owner request here, not a child
+		// statement - as it always was before
+
+		//Jrd::ContextPoolHolder context(tdbb, &childStatement->getPool());
+		//releaseStatement(childStatement);
+	}
+
+	// If the request had an open cursor, close it
+
+	if (req_cursor)
+		DsqlCursor::close(tdbb, req_cursor);
+
+	if (req_batch)
+	{
+		delete req_batch;
+		req_batch = nullptr;
+	}
+
+	Jrd::Attachment* att = req_dbb->dbb_attachment;
+	const bool need_trace_free = req_traced && TraceManager::need_dsql_free(att);
+	if (need_trace_free)
+	{
+		TraceSQLStatementImpl stmt(this, nullptr, nullptr);
+		TraceManager::event_dsql_free(att, &stmt, DSQL_drop);
+	}
+
+	// If a request has been compiled, release it now
+	if (getRequest())
+		EXE_release(tdbb, getRequest());
 }
 
 void DsqlRequest::setCursor(thread_db* /*tdbb*/, const TEXT* /*name*/)
@@ -165,180 +219,106 @@ void DsqlRequest::destroy(thread_db* tdbb, DsqlRequest* dsqlRequest)
 {
 	SET_TDBB(tdbb);
 
-	if (dsqlRequest->req_timer)
-	{
-		dsqlRequest->req_timer->stop();
-		dsqlRequest->req_timer = nullptr;
-	}
-
-	// If request is parent, orphan the children and release a portion of their requests
-
-	for (auto childStatement : dsqlRequest->cursors)
-	{
-		childStatement->addFlags(DsqlStatement::FLAG_ORPHAN);
-		childStatement->setParentRequest(nullptr);
-		childStatement->setParentDbKey(nullptr);
-		childStatement->setParentRecVersion(nullptr);
-		dsqlRequest->req_dbb->dbb_statement_cache->removeStatement(tdbb, childStatement);
-
-		// hvlad: lines below is commented out as
-		// - child is already unlinked from its parent request
-		// - we should not free child's sql text until its owner request is alive
-		// It seems to me we should destroy owner request here, not a child
-		// statement - as it always was before
-
-		//Jrd::ContextPoolHolder context(tdbb, &childStatement->getPool());
-		//releaseStatement(childStatement);
-	}
-
-	// If the request had an open cursor, close it
-
-	if (dsqlRequest->req_cursor)
-		DsqlCursor::close(tdbb, dsqlRequest->req_cursor);
-
-	if (dsqlRequest->req_batch)
-	{
-		delete dsqlRequest->req_batch;
-		dsqlRequest->req_batch = nullptr;
-	}
-
-	Jrd::Attachment* att = dsqlRequest->req_dbb->dbb_attachment;
-	const bool need_trace_free = dsqlRequest->req_traced && TraceManager::need_dsql_free(att);
-	if (need_trace_free)
-	{
-		TraceSQLStatementImpl stmt(dsqlRequest, NULL);
-		TraceManager::event_dsql_free(att, &stmt, DSQL_drop);
-	}
-
-	if (dsqlRequest->req_cursor_name.hasData())
-		dsqlRequest->req_dbb->dbb_cursors.remove(dsqlRequest->req_cursor_name);
-
-	// If a request has been compiled, release it now
-	if (dsqlRequest->getRequest())
-		EXE_release(tdbb, dsqlRequest->getRequest());
-
 	// Increase the statement refCount so its pool is not destroyed before the request is gone.
 	auto dsqlStatement = dsqlRequest->getDsqlStatement();
 
+	// Let request to clean itself
+	try
+	{
+		dsqlRequest->releaseRequest(tdbb);
+	}
+	catch(...)
+	{
+		fb_assert(false);
+	}
+
 	// Release the entire request
 	delete dsqlRequest;
-
 	dsqlStatement = nullptr;
 }
 
-// Parse the message of a request.
-USHORT DsqlRequest::parseMetadata(IMessageMetadata* meta, const Array<dsql_par*>& parameters_list)
-{
-	HalfStaticArray<const dsql_par*, 16> parameters;
-
-	for (FB_SIZE_T i = 0; i < parameters_list.getCount(); ++i)
-	{
-		dsql_par* param = parameters_list[i];
-
-		if (param->par_index)
-		{
-			if (param->par_index > parameters.getCount())
-				parameters.grow(param->par_index);
-			fb_assert(!parameters[param->par_index - 1]);
-			parameters[param->par_index - 1] = param;
-		}
-	}
-
-	// If there's no metadata, then the format of the current message buffer
-	// is identical to the format of the previous one.
-
-	if (!meta)
-		return parameters.getCount();
-
-	FbLocalStatus st;
-	unsigned count = meta->getCount(&st);
-	checkD(&st);
-
-	unsigned count2 = parameters.getCount();
-
-	if (count != count2)
-	{
-		ERRD_post(Arg::Gds(isc_dsql_sqlda_err) <<
-				  Arg::Gds(isc_dsql_wrong_param_num) <<Arg::Num(count2) << Arg::Num(count));
-	}
-
-	unsigned offset = 0;
-
-	for (USHORT index = 0; index < count; index++)
-	{
-		unsigned sqlType = meta->getType(&st, index);
-		checkD(&st);
-		unsigned sqlLength = meta->getLength(&st, index);
-		checkD(&st);
-
-		dsc desc;
-		desc.dsc_flags = 0;
-
-		unsigned dataOffset, nullOffset, dtype, dlength;
-		offset = fb_utils::sqlTypeToDsc(offset, sqlType, sqlLength,
-			&dtype, &dlength, &dataOffset, &nullOffset);
-		desc.dsc_dtype = dtype;
-		desc.dsc_length = dlength;
-
-		desc.dsc_scale = meta->getScale(&st, index);
-		checkD(&st);
-		desc.dsc_sub_type = meta->getSubType(&st, index);
-		checkD(&st);
-		unsigned textType = meta->getCharSet(&st, index);
-		checkD(&st);
-		desc.setTextType(textType);
-		desc.dsc_address = (UCHAR*)(IPTR) dataOffset;
-
-		const dsql_par* const parameter = parameters[index];
-		fb_assert(parameter);
-
-		// ASF: Older than 2.5 engine hasn't validating strings in DSQL. After this has been
-		// implemented in 2.5, selecting a NONE column with UTF-8 attachment charset started
-		// failing. The real problem is that the client encodes SQL_TEXT/SQL_VARYING using
-		// blr_text/blr_varying (i.e. with the connection charset). I'm reseting the charset
-		// here at the server as a way to make older (and not yet changed) client work
-		// correctly.
-		if (desc.isText() && desc.getTextType() == ttype_dynamic)
-			desc.setTextType(ttype_none);
-
-		req_user_descs.put(parameter, desc);
-
-		dsql_par* null = parameter->par_null;
-		if (null)
-		{
-			desc.clear();
-			desc.dsc_dtype = dtype_short;
-			desc.dsc_scale = 0;
-			desc.dsc_length = sizeof(SSHORT);
-			desc.dsc_address = (UCHAR*)(IPTR) nullOffset;
-
-			req_user_descs.put(null, desc);
-		}
-	}
-
-	return count;
-}
-
-
 // DsqlDmlRequest
 
-DsqlDmlRequest::DsqlDmlRequest(thread_db* tdbb, MemoryPool& pool, dsql_dbb* dbb, DsqlStatement* aStatement)
-	: DsqlRequest(pool, dbb, aStatement),
-	  req_msg_buffers(pool)
+DsqlDmlRequest::DsqlDmlRequest(thread_db* tdbb, MemoryPool& pool, dsql_dbb* dbb, DsqlDmlStatement* aStatement)
+	: DsqlRequest(pool, dbb, aStatement)
 {
-	// Create the messages buffers
-	for (auto message : aStatement->getPorts())
-	{
-		// Allocate buffer for message
-		const ULONG newLen = message->msg_length + FB_DOUBLE_ALIGN - 1;
-		UCHAR* msgBuffer = FB_NEW_POOL(getPool()) UCHAR[newLen];
-		msgBuffer = FB_ALIGN(msgBuffer, FB_DOUBLE_ALIGN);
-		fb_assert(message->msg_buffer_number == req_msg_buffers.getCount());
-		req_msg_buffers.add(msgBuffer);
-	}
-
 	request = aStatement->getStatement()->findRequest(tdbb);
 	tdbb->getAttachment()->att_requests.add(request);
+
+	// If this is positional DML - subscribe to parent cursor as well
+
+	if (aStatement->parentCursorName.hasData())
+	{
+		const auto* const symbol = dbb->dbb_cursors.get(aStatement->parentCursorName.c_str());
+
+		if (!symbol)
+		{
+			// cursor is not found
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
+					  Arg::Gds(isc_dsql_cursor_err) <<
+					  Arg::Gds(isc_dsql_cursor_not_found) << aStatement->parentCursorName);
+		}
+
+		parentRequest = *symbol;
+		fb_assert(parentRequest != nullptr);
+
+		// Verify that the cursor is appropriate and updatable
+
+		if (parentRequest->getDsqlStatement()->getType() != DsqlStatement::TYPE_SELECT_UPD)
+		{
+			// cursor is not updatable
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-510) <<
+					  Arg::Gds(isc_dsql_cursor_update_err) << aStatement->parentCursorName);
+		}
+
+		// Check that it contains this relation name
+		Request* request = parentRequest->getRequest();
+		fb_assert(request->req_rpb.getCount() > 0 && request->req_rpb[0].rpb_relation != nullptr);
+
+		const auto& relName = request->req_rpb[0].rpb_relation->rel_name;
+		bool found = false;
+		for (FB_SIZE_T i = 0; i < request->req_rpb.getCount(); ++i)
+		{
+			jrd_rel* relation = request->req_rpb[i].rpb_relation;
+
+			if (relation && relation->rel_name == relName)
+			{
+				if (found)
+				{
+					// Relation is used twice in cursor
+					ERRD_post(
+						Arg::Gds(isc_dsql_cursor_err) <<
+						Arg::Gds(isc_dsql_cursor_rel_ambiguous) <<
+							relName.toQuotedString() << aStatement->parentCursorName.toQuotedString());
+				}
+				parentContext = i;
+				found = true;
+			}
+		}
+
+		if (!found)
+		{
+			// Relation is not in cursor
+			ERRD_post(
+				Arg::Gds(isc_dsql_cursor_err) <<
+				Arg::Gds(isc_dsql_cursor_rel_not_found) <<
+					relName.toQuotedString() << aStatement->parentCursorName.toQuotedString());
+		}
+		parentRequest->cursors.add(this);
+	}
+}
+
+void DsqlDmlRequest::releaseRequest(thread_db* tdbb)
+{
+	// If request is a child - unsubscribe
+	if (parentRequest)
+	{
+		parentRequest->cursors.findAndRemove(this);
+		parentRequest = nullptr;
+	}
+
+	// Let ancestor do cleanup as well
+	DsqlRequest::releaseRequest(tdbb);
 }
 
 Statement* DsqlDmlRequest::getStatement() const
@@ -357,8 +337,8 @@ void DsqlDmlRequest::setDelayedFormat(thread_db* tdbb, IMessageMetadata* metadat
 			Arg::Gds(isc_req_sync));
 	}
 
+	metadataToFormat(metadata, dsqlStatement->getReceiveMsg());
 	needDelayedFormat = false;
-	delayedFormat = metadata;
 }
 
 // Fetch next record from a dynamic SQL cursor.
@@ -385,12 +365,11 @@ bool DsqlDmlRequest::fetch(thread_db* tdbb, UCHAR* msgBuffer)
 				  Arg::Gds(isc_unprepared_stmt));
 	}
 
-	dsql_msg* message = (dsql_msg*) dsqlStatement->getReceiveMsg();
-
-	if (delayedFormat && message)
+	// At this point we have to have output metadata from client
+	if (needDelayedFormat)
 	{
-		parseMetadata(delayedFormat, message->msg_parameters);
-		delayedFormat = NULL;
+		ERRD_post(Arg::Gds(isc_dsql_sqlda_err) <<
+				  Arg::Gds(isc_dsql_no_output_sqlda));
 	}
 
 	// Set up things for tracing this call
@@ -401,26 +380,8 @@ bool DsqlDmlRequest::fetch(thread_db* tdbb, UCHAR* msgBuffer)
 	if (req_timer && req_timer->expired())
 		tdbb->checkCancelState();
 
-	UCHAR* dsqlMsgBuffer = req_msg_buffers[message->msg_buffer_number];
-	if (!firstRowFetched && needRestarts())
-	{
-		// Note: tra_handle can't be changed by executeReceiveWithRestarts below
-		// and outMetadata and outMsg in not used there, so passing NULL's is safe.
-		jrd_tra* tra = req_transaction;
-
-		executeReceiveWithRestarts(tdbb, &tra, NULL, NULL, false, false, true);
-		fb_assert(tra == req_transaction);
-	}
-	else
-		JRD_receive(tdbb, request, message->msg_number, message->msg_length, dsqlMsgBuffer);
-
-	firstRowFetched = true;
-
-	const dsql_par* const eof = dsqlStatement->getEof();
-	const USHORT* eofPtr = eof ? (USHORT*) (dsqlMsgBuffer + (IPTR) eof->par_desc.dsc_address) : NULL;
-	const bool eofReached = eof && !(*eofPtr);
-
-	if (eofReached)
+	// Fetch from already finished request should not produce error
+	if (!(request->req_flags & req_active))
 	{
 		if (req_timer)
 			req_timer->stop();
@@ -429,12 +390,32 @@ bool DsqlDmlRequest::fetch(thread_db* tdbb, UCHAR* msgBuffer)
 		return false;
 	}
 
-	if (msgBuffer)
+	if (!firstRowFetched && needRestarts())
 	{
-		Request* old = tdbb->getRequest();
-		Cleanup restoreRequest([tdbb, old] {tdbb->setRequest(old);});
-		tdbb->setRequest(request);
-		mapInOut(tdbb, true, message, NULL, msgBuffer);
+		// Note: tra_handle can't be changed by executeReceiveWithRestarts below
+		// and outMetadata and outMsg in not used there, so passing NULL's is safe.
+		jrd_tra* tra = req_transaction;
+
+		executeReceiveWithRestarts(tdbb, &tra, nullptr, nullptr, msgBuffer, false, false, true);
+		fb_assert(tra == req_transaction);
+	}
+	else
+	{
+		MessageNode* msg = dsqlStatement->getStatement()->getMessage(dsqlStatement->getReceiveMsg()->msg_number);
+		const Format* fmt = msg->getFormat(request);
+
+		JRD_receive(tdbb, request, msg->messageNumber, fmt->fmt_length, msgBuffer);
+	}
+
+	firstRowFetched = true;
+
+	if (!(request->req_flags & req_active))
+	{
+		if (req_timer)
+			req_timer->stop();
+
+		trace.fetch(true, ITracePlugin::RESULT_SUCCESS);
+		return false;
 	}
 
 	trace.fetch(false, ITracePlugin::RESULT_SUCCESS);
@@ -524,12 +505,6 @@ DsqlCursor* DsqlDmlRequest::openCursor(thread_db* tdbb, jrd_tra** traHandle,
 
 	Jrd::ContextPoolHolder context(tdbb, &getPool());
 
-	if (dsqlStatement->getFlags() & DsqlStatement::FLAG_ORPHAN)
-	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-		          Arg::Gds(isc_bad_req_handle));
-	}
-
 	// Validate transaction handle
 
 	if (!*traHandle)
@@ -572,30 +547,29 @@ bool DsqlDmlRequest::needRestarts()
 
 // Execute a dynamic SQL statement
 void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
-	IMessageMetadata* outMetadata, UCHAR* outMsg,
+	const UCHAR* inMsg, IMessageMetadata* outMetadata, UCHAR* outMsg,
 	bool singleton)
 {
 	firstRowFetched = false;
 	const dsql_msg* message = dsqlStatement->getSendMsg();
 
 	if (!message)
+	{
 		JRD_start(tdbb, request, req_transaction);
+	}
 	else
 	{
-		UCHAR* msgBuffer = req_msg_buffers[message->msg_buffer_number];
+		fb_assert(inMsg != nullptr);
+
+		const ULONG inMsgLength = dsqlStatement->getStatement()->getMessage(message->msg_number)->getFormat(request)->fmt_length;
 		JRD_start_and_send(tdbb, request, req_transaction, message->msg_number,
-			message->msg_length, msgBuffer);
+			inMsgLength, inMsg);
 	}
 
 	// Selectable execute block should get the "proc fetch" flag assigned,
 	// which ensures that the savepoint stack is preserved while suspending
 	if (dsqlStatement->getType() == DsqlStatement::TYPE_SELECT_BLOCK)
 		request->req_flags |= req_proc_fetch;
-
-	// TYPE_EXEC_BLOCK has no outputs so there are no out_msg
-	// supplied from client side, but TYPE_EXEC_BLOCK requires
-	// 2-byte message for EOS synchronization
-	const bool isBlock = (dsqlStatement->getType() == DsqlStatement::TYPE_EXEC_BLOCK);
 
 	message = dsqlStatement->getReceiveMsg();
 
@@ -605,77 +579,38 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 		outMetadata = NULL;
 	}
 
-	if (outMetadata && message)
-		parseMetadata(outMetadata, message->msg_parameters);
-
-	if ((outMsg && message) || isBlock)
+	if (message && (request->req_flags & req_active))
 	{
-		UCHAR temp_buffer[FB_DOUBLE_ALIGN * 2];
-		dsql_msg temp_msg(*getDefaultMemoryPool());
-
-		// Insure that the metadata for the message is parsed, regardless of
-		// whether anything is found by the call to receive.
-
-		UCHAR* msgBuffer = req_msg_buffers[message->msg_buffer_number];
-
-		if (!outMetadata && isBlock)
+		if (outMetadata)
 		{
-			message = &temp_msg;
-			temp_msg.msg_number = 1;
-			temp_msg.msg_length = 2;
-			msgBuffer = FB_ALIGN(temp_buffer, FB_DOUBLE_ALIGN);
+			metadataToFormat(outMetadata, message);
 		}
 
-		JRD_receive(tdbb, request, message->msg_number, message->msg_length, msgBuffer);
-
 		if (outMsg)
-			mapInOut(tdbb, true, message, NULL, outMsg);
-
-		// if this is a singleton select, make sure there's in fact one record
-
-		if (singleton)
 		{
-			USHORT counter;
+			MessageNode* msg = dsqlStatement->getStatement()->getMessage(message->msg_number);
+			// outMetadata can be nullptr. If not - it is already converted to message above
+			const ULONG outMsgLength = msg->getFormat(request)->fmt_length;
 
-			// Create a temp message buffer and try two more receives.
-			// If both succeed then the first is the next record and the
-			// second is either another record or the end of record message.
-			// In either case, there's more than one record.
+			JRD_receive(tdbb, request, message->msg_number, outMsgLength, outMsg);
 
-			UCHAR* message_buffer = (UCHAR*) gds__alloc(message->msg_length);
+			// if this is a singleton select that return some data, make sure there's in fact one record
 
-			ISC_STATUS status = FB_SUCCESS;
-			FbLocalStatus localStatus;
-
-			for (counter = 0; counter < 2 && !status; counter++)
+			if (singleton && (request->req_flags & req_active) && outMsgLength > 0)
 			{
-				localStatus->init();
-				AutoSetRestore<Jrd::FbStatusVector*> autoStatus(&tdbb->tdbb_status_vector, &localStatus);
+				// Create a temp message buffer and try one more receive.
+				// If it succeed then the next record exists.
 
-				try
+				std::unique_ptr<UCHAR[]> message_buffer(new UCHAR[outMsgLength]);
+
+				JRD_receive(tdbb, request, message->msg_number, outMsgLength, message_buffer.get());
+
+				// Still active request means that second record exists
+				if ((request->req_flags & req_active))
 				{
-					JRD_receive(tdbb, request, message->msg_number,
-						message->msg_length, message_buffer);
-					status = FB_SUCCESS;
-				}
-				catch (Exception&)
-				{
-					status = tdbb->tdbb_status_vector->getErrors()[1];
+					status_exception::raise(Arg::Gds(isc_sing_select_err));
 				}
 			}
-
-			gds__free(message_buffer);
-
-			// two successful receives means more than one record
-			// a req_sync error on the first pass above means no records
-			// a non-req_sync error on any of the passes above is an error
-
-			if (!status)
-				status_exception::raise(Arg::Gds(isc_sing_select_err));
-			else if (status == isc_req_sync && counter == 1)
-				status_exception::raise(Arg::Gds(isc_stream_eof));
-			else if (status != isc_req_sync)
-				status_exception::raise(&localStatus);
 		}
 	}
 
@@ -723,11 +658,25 @@ void DsqlDmlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 
 	const dsql_msg* message = dsqlStatement->getSendMsg();
 	if (message)
-		mapInOut(tdbb, false, message, inMetadata, NULL, inMsg);
+	{
+		if (!inMetadata)
+		{
+			ERRD_post(Arg::Gds(isc_dsql_sqlda_err) <<
+					  Arg::Gds(isc_dsql_no_input_sqlda));
+		}
 
-	// we need to mapInOut() before tracing of execution start to let trace
+		// If this is not first call of execute(), metadata most likely is already converted to message
+		// but there is no easy way to check if they match so conversion is unconditional.
+		// Even if value of inMetadata is the same, other instance could be placed in the same memory.
+		// Even if the instance is the same, its content may be different from previous call.
+		metadataToFormat(inMetadata, message);
+	}
+
+	mapCursorKey(tdbb);
+
+	// we need to set new format before tracing of execution start to let trace
 	// manager know statement parameters values
-	TraceDSQLExecute trace(req_dbb->dbb_attachment, this);
+	TraceDSQLExecute trace(req_dbb->dbb_attachment, this, inMsg);
 
 	// Setup and start timeout timer
 	const bool have_cursor = dsqlStatement->isCursorBased() && !singleton;
@@ -736,15 +685,16 @@ void DsqlDmlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 	thread_db::TimerGuard timerGuard(tdbb, req_timer, !have_cursor);
 
 	if (needRestarts())
-		executeReceiveWithRestarts(tdbb, traHandle, outMetadata, outMsg, singleton, true, false);
+		executeReceiveWithRestarts(tdbb, traHandle, inMsg, outMetadata, outMsg, singleton, true, false);
 	else {
-		doExecute(tdbb, traHandle, outMetadata, outMsg, singleton);
+		doExecute(tdbb, traHandle, inMsg, outMetadata, outMsg, singleton);
 	}
 
 	trace.finish(have_cursor, ITracePlugin::RESULT_SUCCESS);
 }
 
 void DsqlDmlRequest::executeReceiveWithRestarts(thread_db* tdbb, jrd_tra** traHandle,
+	const UCHAR* inMsg,
 	IMessageMetadata* outMetadata, UCHAR* outMsg,
 	bool singleton, bool exec, bool fetch)
 {
@@ -764,16 +714,16 @@ void DsqlDmlRequest::executeReceiveWithRestarts(thread_db* tdbb, jrd_tra** traHa
 		try
 		{
 			if (exec)
-				doExecute(tdbb, traHandle, outMetadata, outMsg, singleton);
+				doExecute(tdbb, traHandle, inMsg, outMetadata, outMsg, singleton);
 
 			if (fetch)
 			{
 				fb_assert(dsqlStatement->isCursorBased());
 
 				const dsql_msg* message = dsqlStatement->getReceiveMsg();
+				const Format* fmt = dsqlStatement->getStatement()->getMessage(message->msg_number)->getFormat(request);
 
-				UCHAR* dsqlMsgBuffer = req_msg_buffers[message->msg_buffer_number];
-				JRD_receive(tdbb, request, message->msg_number, message->msg_length, dsqlMsgBuffer);
+				JRD_receive(tdbb, request, message->msg_number, fmt->fmt_length, outMsg);
 			}
 		}
 		catch (const status_exception&)
@@ -821,203 +771,172 @@ void DsqlDmlRequest::executeReceiveWithRestarts(thread_db* tdbb, jrd_tra** traHa
 				"\tQuery:\n%s\n", numTries, request->getStatement()->sqlText->c_str() );
 		}
 
-		TraceManager::event_dsql_restart(req_dbb->dbb_attachment, req_transaction, this, numTries);
+		TraceManager::event_dsql_restart(req_dbb->dbb_attachment, req_transaction, this, inMsg, numTries);
 
 		// When restart we must execute query
 		exec = true;
+		// Next fetch will be performed by doExecute(), so do not call JRD_receive again
+		fetch = false;
 	}
 }
 
-// Map data from external world into message or from message to external world.
-void DsqlDmlRequest::mapInOut(thread_db* tdbb, bool toExternal, const dsql_msg* message,
-	IMessageMetadata* meta, UCHAR* dsql_msg_buf, const UCHAR* in_dsql_msg_buf)
+void DsqlDmlRequest::metadataToFormat(Firebird::IMessageMetadata* meta, const dsql_msg* message)
 {
-	USHORT count = parseMetadata(meta, message->msg_parameters);
-
-	// Sanity check
-
-	if (count)
+	if (!message)
 	{
-		if (toExternal)
-		{
-			if (dsql_msg_buf == NULL)
-			{
-				ERRD_post(Arg::Gds(isc_dsql_sqlda_err) <<
-						  Arg::Gds(isc_dsql_no_output_sqlda));
-			}
-		}
-		else
-		{
-			if (in_dsql_msg_buf == NULL)
-			{
-				ERRD_post(Arg::Gds(isc_dsql_sqlda_err) <<
-						  Arg::Gds(isc_dsql_no_input_sqlda));
-			}
-		}
+		fb_assert(false);
+		return;
+	}
+	if (!meta)
+	{
+		fb_assert(false);
+		return;
 	}
 
-	USHORT count2 = 0;
+	MessageNode* msg = dsqlStatement->getStatement()->getMessage(message->msg_number);
 
-	for (FB_SIZE_T i = 0; i < message->msg_parameters.getCount(); ++i)
+	FbLocalStatus st;
+	unsigned count = meta->getCount(&st);
+	checkD(&st);
+
+	const Format* oldFormat = msg->getFormat(nullptr);
+	unsigned count2 = oldFormat->fmt_count;
+
+	if (count * 2 != count2)
 	{
-		dsql_par* parameter = message->msg_parameters[i];
+		ERRD_post(Arg::Gds(isc_dsql_sqlda_err) <<
+				  Arg::Gds(isc_dsql_wrong_param_num) <<Arg::Num(count2 / 2) << Arg::Num(count));
+	}
 
-		if (parameter->par_index)
+	if (count == 0)
+	{
+		// No point to continue, old format is fine
+		return;
+	}
+
+	// Dumb pointer is fine: on error request pool will be destructed anyway
+	Format* newFormat = Format::newFormat(*request->req_pool, count2);
+
+	newFormat->fmt_length = meta->getMessageLength(&st);
+	checkD(&st);
+
+	unsigned assigned = 0; // Counter of initialized dsc in newFormat
+	for (unsigned i = 0; i < count2; ++i)
+	{
+		const dsql_par* param = message->msg_parameters[i];
+		if (param->par_index == 0)
 		{
-			 // Make sure the message given to us is long enough
+			// Skip parameters not bound to SQLDA: they must be null indicators handled later.
+			continue;
+		}
 
-			dsc desc;
-			if (!req_user_descs.get(parameter, desc))
-				desc.clear();
+		unsigned index = param->par_index - 1;
+		unsigned sqlType = meta->getType(&st, index);
+		checkD(&st);
+		unsigned sqlLength = meta->getLength(&st, index);
+		checkD(&st);
 
-			/***
-			ULONG length = (IPTR) desc.dsc_address + desc.dsc_length;
-			if (length > msg_length)
-			{
-				ERRD_post(Arg::Gds(isc_dsql_sqlda_err) <<
-					Arg::Gds(isc_random) << "Message buffer too short");
-			}
-			***/
-			if (!desc.dsc_dtype)
-			{
-				ERRD_post(Arg::Gds(isc_dsql_sqlda_err) <<
-					Arg::Gds(isc_dsql_datatype_err) <<
-					Arg::Gds(isc_dsql_sqlvar_index) << Arg::Num(parameter->par_index-1));
-			}
+		// For unknown reason parameters in Format has reversed order
+		dsc& desc = newFormat->fmt_desc[param->par_parameter];
+		desc.dsc_flags = 0;
+		desc.dsc_dtype = fb_utils::sqlTypeToDscType(sqlType);
+		desc.dsc_length = sqlLength;
+		if (sqlType == SQL_VARYING)
+			desc.dsc_length += sizeof(USHORT);
+		desc.dsc_scale = meta->getScale(&st, index);
+		checkD(&st);
+		desc.dsc_sub_type = meta->getSubType(&st, index);
+		checkD(&st);
+		unsigned textType = meta->getCharSet(&st, index);
+		checkD(&st);
+		desc.setTextType(textType);
+		desc.dsc_address = (UCHAR*)(IPTR) meta->getOffset(&st, index);
+		checkD(&st);
+		++assigned;
 
-			UCHAR* msgBuffer = req_msg_buffers[parameter->par_message->msg_buffer_number];
-
-			SSHORT* flag = NULL;
-			dsql_par* const null_ind = parameter->par_null;
-			if (null_ind != NULL)
-			{
-				dsc userNullDesc;
-				if (!req_user_descs.get(null_ind, userNullDesc))
-					userNullDesc.clear();
-
-				const ULONG null_offset = (IPTR) userNullDesc.dsc_address;
-
-				/***
-				length = null_offset + sizeof(SSHORT);
-				if (length > msg_length)
-				{
-					ERRD_post(Arg::Gds(isc_dsql_sqlda_err)
-						<< Arg::Gds(isc_random) << "Message buffer too short");
-				}
-				***/
-
-				dsc nullDesc = null_ind->par_desc;
-				nullDesc.dsc_address = msgBuffer + (IPTR) nullDesc.dsc_address;
-
-				if (toExternal)
-				{
-					flag = reinterpret_cast<SSHORT*>(dsql_msg_buf + null_offset);
-					*flag = *reinterpret_cast<const SSHORT*>(nullDesc.dsc_address);
-				}
-				else
-				{
-					flag = reinterpret_cast<SSHORT*>(nullDesc.dsc_address);
-					*flag = *reinterpret_cast<const SSHORT*>(in_dsql_msg_buf + null_offset);
-				}
-			}
-
-			const bool notNull = (!flag || *flag >= 0);
-
-			dsc parDesc = parameter->par_desc;
-			parDesc.dsc_address = msgBuffer + (IPTR) parDesc.dsc_address;
-
-			if (toExternal)
-			{
-				desc.dsc_address = dsql_msg_buf + (IPTR) desc.dsc_address;
-
-				if (notNull)
-					MOVD_move(tdbb, &parDesc, &desc);
-				else
-					memset(desc.dsc_address, 0, desc.dsc_length);
-			}
-			else if (notNull && !parDesc.isNull())
-			{
-				// Safe cast because desc is used as source only.
-				desc.dsc_address = const_cast<UCHAR*>(in_dsql_msg_buf) + (IPTR) desc.dsc_address;
-				MOVD_move(tdbb, &desc, &parDesc);
-			}
-			else
-				memset(parDesc.dsc_address, 0, parDesc.dsc_length);
-
-			++count2;
+		if (param->par_null != nullptr)
+		{
+			dsc& null = newFormat->fmt_desc[param->par_null->par_parameter];
+			null.dsc_dtype = dtype_short;
+			null.dsc_scale = 0;
+			null.dsc_length = sizeof(SSHORT);
+			null.dsc_address = (UCHAR*)(IPTR) meta->getNullOffset(&st, index);
+			checkD(&st);
+			++assigned;
 		}
 	}
-
-	if (count != count2)
+	// Last sanity check
+	if (assigned != newFormat->fmt_count)
 	{
-		ERRD_post(
-			Arg::Gds(isc_dsql_sqlda_err) <<
-			Arg::Gds(isc_dsql_wrong_param_num) << Arg::Num(count) <<Arg::Num(count2));
+		fb_assert(false);
+		ERRD_post(Arg::Gds(isc_dsql_sqlda_err) <<
+				  Arg::Gds(isc_dsql_wrong_param_num) <<Arg::Num(newFormat->fmt_count) << Arg::Num(assigned));
 	}
 
+	msg->setFormat(request, newFormat);
+}
+
+void DsqlDmlRequest::mapCursorKey(thread_db* tdbb)
+{
 	const auto dsqlStatement = getDsqlStatement();
-	const dsql_par* parameter;
+	if (!dsqlStatement->parentCursorName.hasData())
+		return;
 
-	const dsql_par* dbkey;
-	if (!toExternal && (dbkey = dsqlStatement->getParentDbKey()) &&
-		(parameter = dsqlStatement->getDbKey()))
+	RecordKey dbKey = {};
+
+	if (!parentRequest || !parentRequest->req_cursor) // It has been already closed
 	{
-		UCHAR* parentMsgBuffer = dsqlStatement->getParentRequest() ?
-			dsqlStatement->getParentRequest()->req_msg_buffers[dbkey->par_message->msg_buffer_number] : NULL;
-		UCHAR* msgBuffer = req_msg_buffers[parameter->par_message->msg_buffer_number];
-
-		fb_assert(parentMsgBuffer);
-
-		dsc parentDesc = dbkey->par_desc;
-		parentDesc.dsc_address = parentMsgBuffer + (IPTR) parentDesc.dsc_address;
-
-		dsc desc = parameter->par_desc;
-		desc.dsc_address = msgBuffer + (IPTR) desc.dsc_address;
-
-		MOVD_move(tdbb, &parentDesc, &desc);
-
-		dsql_par* null_ind = parameter->par_null;
-		if (null_ind != NULL)
-		{
-			desc = null_ind->par_desc;
-			desc.dsc_address = msgBuffer + (IPTR) desc.dsc_address;
-
-			SSHORT* flag = (SSHORT*) desc.dsc_address;
-			*flag = 0;
-		}
+		// Here may be code to re-establish link to parent cursor.
+		ERRD_post(Arg::Gds(isc_dsql_cursor_err) <<
+				  Arg::Gds(isc_dsql_cursor_not_found) << dsqlStatement->parentCursorName);
 	}
 
-	const dsql_par* rec_version;
-	if (!toExternal && (rec_version = dsqlStatement->getParentRecVersion()) &&
-		(parameter = dsqlStatement->getRecVersion()))
+	if (!parentRequest->req_cursor->getCurrentRecordKey(parentContext, dbKey))
 	{
-		UCHAR* parentMsgBuffer = dsqlStatement->getParentRequest() ?
-			dsqlStatement->getParentRequest()->req_msg_buffers[rec_version->par_message->msg_buffer_number] :
-			NULL;
-		UCHAR* msgBuffer = req_msg_buffers[parameter->par_message->msg_buffer_number];
+		ERRD_post(Arg::Gds(isc_cursor_not_positioned) << dsqlStatement->parentCursorName);
+	}
 
-		fb_assert(parentMsgBuffer);
+	fb_assert(request);
 
-		dsc parentDesc = rec_version->par_desc;
-		parentDesc.dsc_address = parentMsgBuffer + (IPTR) parentDesc.dsc_address;
+	// Assign record key
+	MessageNode* message = request->getStatement()->getMessage(2);
+	fb_assert(message);
 
-		dsc desc = parameter->par_desc;
-		desc.dsc_address = msgBuffer + (IPTR) desc.dsc_address;
+	dsc desc = message->getFormat(request)->fmt_desc[0];
+	UCHAR* msgBuffer = message->getBuffer(request);
+	desc.dsc_address = msgBuffer + (IPTR) desc.dsc_address;
 
-		MOVD_move(tdbb, &parentDesc, &desc);
+	dsc parentDesc;
+	parentDesc.makeDbkey(&dbKey.recordNumber);
 
-		dsql_par* null_ind = parameter->par_null;
-		if (null_ind != NULL)
+	MOVD_move(tdbb, &parentDesc, &desc);
+
+	// Assign version number
+
+	desc = message->getFormat(request)->fmt_desc[1];
+	desc.dsc_address = msgBuffer + (IPTR) desc.dsc_address;
+
+	// This is not a mistake, record version is represented as a DbKey in RecordKeyNode::make() to allow (theoretically now) positional DML on views
+	parentDesc.makeDbkey(&dbKey.recordVersion);
+
+	MOVD_move(tdbb, &parentDesc, &desc);
+}
+
+void DsqlDmlRequest::gatherRecordKey(RecordKey* buffer) const
+{
+	fb_assert(request->req_rpb.getCount() > 0);
+	memset(buffer, 0, request->req_rpb.getCount() * sizeof(RecordKey));
+	for (unsigned i = 0; i < request->req_rpb.getCount(); ++i)
+	{
+		record_param& rpb = request->req_rpb[i];
+		if (rpb.rpb_relation && rpb.rpb_number.isValid() && !rpb.rpb_number.isBof())
 		{
-			desc = null_ind->par_desc;
-			desc.dsc_address = msgBuffer + (IPTR) desc.dsc_address;
-
-			SSHORT* flag = (SSHORT*) desc.dsc_address;
-			*flag = 0;
+			buffer[i].recordNumber.bid_encode(rpb.rpb_number.getValue() + 1);
+			buffer[i].recordNumber.bid_relation_id = rpb.rpb_relation->rel_id;
+			buffer[i].recordVersion = rpb.rpb_transaction_nr;
 		}
 	}
 }
-
 
 // DsqlDdlRequest
 
@@ -1034,7 +953,7 @@ void DsqlDdlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 	IMessageMetadata* outMetadata, UCHAR* outMsg,
 	bool singleton)
 {
-	TraceDSQLExecute trace(req_dbb->dbb_attachment, this);
+	TraceDSQLExecute trace(req_dbb->dbb_attachment, this, inMsg);
 
 	fb_utils::init_status(tdbb->tdbb_status_vector);
 
@@ -1055,7 +974,10 @@ void DsqlDdlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 				(internalScratch->flags & DsqlCompilerScratch::FLAG_INTERNAL_REQUEST);
 
 			if (!isInternalRequest && node->mustBeReplicated())
-				REPL_exec_sql(tdbb, req_transaction, getDsqlStatement()->getOrgText());
+			{
+				REPL_exec_sql(tdbb, req_transaction, getDsqlStatement()->getOrgText(),
+					*getDsqlStatement()->getSchemaSearchPath());
+			}
 		}
 		catch (status_exception& ex)
 		{
@@ -1081,11 +1003,11 @@ DsqlTransactionRequest::DsqlTransactionRequest(MemoryPool& pool, dsql_dbb* dbb, 
 
 // Execute a dynamic SQL statement.
 void DsqlTransactionRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
-	IMessageMetadata* /*inMetadata*/, const UCHAR* /*inMsg*/,
+	IMessageMetadata* /*inMetadata*/, const UCHAR* inMsg,
 	IMessageMetadata* /*outMetadata*/, UCHAR* /*outMsg*/,
 	bool /*singleton*/)
 {
-	TraceDSQLExecute trace(req_dbb->dbb_attachment, this);
+	TraceDSQLExecute trace(req_dbb->dbb_attachment, this, inMsg);
 	node->execute(tdbb, this, traHandle);
 	trace.finish(false, ITracePlugin::RESULT_SUCCESS);
 }
@@ -1117,7 +1039,7 @@ void DsqlSessionManagementRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 	IMessageMetadata* outMetadata, UCHAR* outMsg,
 	bool singleton)
 {
-	TraceDSQLExecute trace(req_dbb->dbb_attachment, this);
+	TraceDSQLExecute trace(req_dbb->dbb_attachment, this, inMsg);
 	node->execute(tdbb, this, traHandle);
 	trace.finish(false, ITracePlugin::RESULT_SUCCESS);
 }

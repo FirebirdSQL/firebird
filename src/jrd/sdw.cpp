@@ -685,7 +685,7 @@ bool SDW_rollover_to_shadow(thread_db* tdbb, jrd_file* file, const bool inAst)
 	shadow->sdw_flags |= SDW_rollover;
 
 	// check conditional does a meta data update - since we were
-	// successfull updating LCK_data we will be the only one doing so
+	// successful updating LCK_data we will be the only one doing so
 
 	bool start_conditional = false;
 	if (!inAst)

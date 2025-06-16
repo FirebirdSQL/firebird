@@ -89,6 +89,11 @@ inline bool operator==(const SQUAD& s1, const SQUAD& s2)
 		   s2.gds_quad_low == s1.gds_quad_low;
 }
 
+inline bool operator!=(const SQUAD& s1, const SQUAD& s2)
+{
+	return !(s1 == s2);
+}
+
 inline bool operator>(const SQUAD& s1, const SQUAD& s2)
 {
 	return (s1.gds_quad_high > s2.gds_quad_high) ||

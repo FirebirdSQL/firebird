@@ -25,13 +25,9 @@
 #define JRD_GRANT_PROTO_H
 
 #include "../common/classes/fb_string.h"
+#include "../jrd/QualifiedName.h"
 #include "../jrd/obj.h"
 
-namespace Jrd
-{
-	class DeferredWork;
-}
-
-void GRANT_privileges(Jrd::thread_db*, const Firebird::string&, ObjectType, Jrd::jrd_tra*);
+void GRANT_privileges(Jrd::thread_db*, const Jrd::QualifiedName&, ObjectType, Jrd::jrd_tra*);
 
 #endif // JRD_GRANT_PROTO_H

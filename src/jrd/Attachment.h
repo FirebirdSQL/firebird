@@ -50,8 +50,9 @@
 #include "../jrd/sbm.h"
 
 #include <atomic>
+#include <initializer_list>
 
-#define DEBUG_LCK_LIST
+//#define DEBUG_LCK_LIST
 
 namespace EDS {
 	class Connection;
@@ -116,7 +117,7 @@ struct DSqlCacheItem
 	}
 
 	Firebird::string key;
-	Firebird::GenericMap<Firebird::Pair<Firebird::Left<QualifiedName, bool> > > obsoleteMap;
+	Firebird::LeftPooledMap<QualifiedName, bool> obsoleteMap;
 	Lock* lock;
 	bool locked;
 };
@@ -139,9 +140,9 @@ struct DdlTriggerContext
 
 	Firebird::string eventType;
 	Firebird::string objectType;
-	MetaName objectName;
-	MetaName oldObjectName;
-	MetaName newObjectName;
+	QualifiedName objectName;
+	QualifiedName oldObjectName;
+	QualifiedName newObjectName;
 	Firebird::string sqlText;
 };
 
@@ -173,6 +174,7 @@ const ULONG ATT_repl_reset			= 0x200000L; // Replication set has been reset
 const ULONG ATT_replicating			= 0x400000L; // Replication is active
 const ULONG ATT_resetting			= 0x800000L; // Session reset is in progress
 const ULONG ATT_worker				= 0x1000000L; // Worker attachment, managed by the engine
+const ULONG ATT_gbak_restore_has_schema = 0x2000000L;
 
 const ULONG ATT_NO_CLEANUP			= (ATT_no_cleanup | ATT_notify_gc);
 
@@ -443,14 +445,14 @@ public:
 			: m_objects(pool)
 		{}
 
-		void store(SLONG id, const MetaName& name)
+		void store(SLONG id, const QualifiedName& name)
 		{
 			fb_assert(id >= 0);
-			fb_assert(name.hasData());
+			fb_assert(name.object.hasData());
 
 			if (id < (int) m_objects.getCount())
 			{
-				fb_assert(m_objects[id].isEmpty());
+				fb_assert(m_objects[id].object.isEmpty());
 				m_objects[id] = name;
 			}
 			else
@@ -460,9 +462,9 @@ public:
 			}
 		}
 
-		bool lookup(SLONG id, MetaName& name)
+		bool lookup(SLONG id, QualifiedName& name)
 		{
-			if (id < (int) m_objects.getCount() && m_objects[id].hasData())
+			if (id < (int) m_objects.getCount() && m_objects[id].object.hasData())
 			{
 				name = m_objects[id];
 				return true;
@@ -471,7 +473,7 @@ public:
 			return false;
 		}
 
-		SLONG lookup(const MetaName& name)
+		SLONG lookup(const QualifiedName& name)
 		{
 			FB_SIZE_T pos;
 
@@ -482,14 +484,17 @@ public:
 		}
 
 	private:
-		Firebird::Array<MetaName> m_objects;
+		Firebird::Array<QualifiedName> m_objects;
 	};
 
 	class InitialOptions
 	{
 	public:
-		InitialOptions(MemoryPool& p)
-			: bindings(p)
+		InitialOptions(MemoryPool& pool)
+			: bindings(pool),
+			  schemaSearchPath(FB_NEW_POOL(pool) Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>(pool)),
+			  blrRequestSchemaSearchPath(
+				FB_NEW_POOL(pool) Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>(pool))
 		{
 		}
 
@@ -510,7 +515,8 @@ public:
 	private:
 		Firebird::DecimalStatus decFloatStatus = Firebird::DecimalStatus::DEFAULT;
 		CoercionArray bindings;
-
+		Firebird::RefPtr<Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>> schemaSearchPath;
+		Firebird::RefPtr<Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>> blrRequestSchemaSearchPath;
 		USHORT originalTimeZone = Firebird::TimeZoneUtil::GMT_ZONE;
 	};
 
@@ -642,6 +648,9 @@ public:
 	CoercionArray* att_dest_bind;
 	USHORT att_original_timezone;
 	USHORT att_current_timezone;
+	Firebird::RefPtr<Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>> att_schema_search_path;
+	Firebird::RefPtr<Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>> att_blr_request_schema_search_path;
+	Firebird::RefPtr<Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>> att_system_schema_search_path;
 	int att_parallel_workers;
 	Firebird::TriState att_opt_first_rows;
 
@@ -673,8 +682,7 @@ public:
 	Request* findSystemRequest(thread_db* tdbb, USHORT id, USHORT which);
 
 	Firebird::Array<CharSetContainer*>	att_charsets;		// intl character set descriptions
-	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
-		MetaName, USHORT> > > att_charset_ids;	// Character set ids
+	Firebird::GenericMap<Firebird::Pair<Firebird::Left<QualifiedName, USHORT>>> att_charset_ids;	// Character set ids
 
 	void releaseIntlObjects(thread_db* tdbb);			// defined in intl.cpp
 	void destroyIntlObjects(thread_db* tdbb);			// defined in intl.cpp
@@ -725,8 +733,6 @@ public:
 
 	MetaName nameToMetaCharSet(thread_db* tdbb, const MetaName& name);
 	MetaName nameToUserCharSet(thread_db* tdbb, const MetaName& name);
-	Firebird::string stringToMetaCharSet(thread_db* tdbb, const Firebird::string& str,
-		const char* charSet = NULL);
 	Firebird::string stringToUserCharSet(thread_db* tdbb, const Firebird::string& str);
 
 	void storeMetaDataBlob(thread_db* tdbb, jrd_tra* transaction,
@@ -856,6 +862,13 @@ public:
 		fb_assert(att_provider);
 		return att_provider;
 	}
+
+	bool qualifyNewName(thread_db* tdbb, QualifiedName& name,
+		const Firebird::ObjectsArray<Firebird::MetaString>* schemaSearchPath = nullptr);
+
+	void qualifyExistingName(thread_db* tdbb, QualifiedName& name,
+		std::initializer_list<ObjectType> objTypes,
+		const Firebird::ObjectsArray<Firebird::MetaString>* schemaSearchPath = nullptr);
 
 private:
 	Attachment(MemoryPool* pool, Database* dbb, JProvider* provider);

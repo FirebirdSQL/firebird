@@ -70,6 +70,8 @@
 
 #ifndef WIN_NT
 #define LTC_PTHREAD
+#else
+#include <process.h>
 #endif
 #define USE_LTM
 #define LTM_DESC
@@ -398,6 +400,8 @@ const char
 	CURRENT_USER_NAME[] = "CURRENT_USER",
 	CURRENT_ROLE_NAME[] = "CURRENT_ROLE",
 	SERVER_PID_NAME[] = "SERVER_PID",
+	CURRENT_SCHEMA_NAME[] = "CURRENT_SCHEMA",
+	SEARCH_PATH[] = "SEARCH_PATH",
 	SESSION_IDLE_TIMEOUT[] = "SESSION_IDLE_TIMEOUT",
 	STATEMENT_TIMEOUT[] = "STATEMENT_TIMEOUT",
 	EFFECTIVE_USER_NAME[] = "EFFECTIVE_USER",
@@ -414,6 +418,7 @@ const char
 	// DDL_TRIGGER namespace
 	DDL_EVENT_NAME[] = "DDL_EVENT",
 	EVENT_TYPE_NAME[] = "EVENT_TYPE",
+	SCHEMA_NAME[] = "SCHEMA_NAME",
 	OBJECT_NAME[] = "OBJECT_NAME",
 	OLD_OBJECT_NAME[] = "OLD_OBJECT_NAME",
 	NEW_OBJECT_NAME[] = "NEW_OBJECT_NAME",
@@ -4713,6 +4718,26 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 		}
 		else if (nameStr == SERVER_PID_NAME)
 			resultStr.printf("%d", getpid());
+		else if (nameStr == CURRENT_SCHEMA_NAME)
+		{
+			QualifiedName name;
+			attachment->qualifyNewName(tdbb, name);
+
+			if (name.schema.isEmpty())
+				return nullptr;
+
+			resultStr = name.schema.c_str();
+		}
+		else if (nameStr == SEARCH_PATH)
+		{
+			for (const auto& schema : *attachment->att_schema_search_path)
+			{
+				if (resultStr.hasData())
+					resultStr += ", ";
+
+				resultStr += schema.toQuotedString();
+			}
+		}
 		else if (nameStr == SESSION_IDLE_TIMEOUT)
 			resultStr.printf("%" ULONGFORMAT, attachment->getIdleTimeout());
 		else if (nameStr == STATEMENT_TIMEOUT)
@@ -4805,25 +4830,30 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 			resultStr = context->objectType;
 		else if (nameStr == DDL_EVENT_NAME)
 			resultStr = context->eventType + " " + context->objectType;
+		else if (nameStr == SCHEMA_NAME)
+		{
+			resultStr = context->objectName.schema.c_str();
+			resultType = ttype_metadata;
+		}
 		else if (nameStr == OBJECT_NAME)
 		{
-			resultStr = context->objectName.c_str();
+			resultStr = context->objectName.object.c_str();
 			resultType = ttype_metadata;
 		}
 		else if (nameStr == OLD_OBJECT_NAME)
 		{
-			if (context->oldObjectName.isEmpty())
+			if (context->oldObjectName.object.isEmpty())
 				return NULL;
 
-			resultStr = context->oldObjectName.c_str();
+			resultStr = context->oldObjectName.object.c_str();
 			resultType = ttype_metadata;
 		}
 		else if (nameStr == NEW_OBJECT_NAME)
 		{
-			if (context->newObjectName.isEmpty())
+			if (context->newObjectName.object.isEmpty())
 				return NULL;
 
-			resultStr = context->newObjectName.c_str();
+			resultStr = context->newObjectName.object.c_str();
 			resultType = ttype_metadata;
 		}
 		else if (nameStr == SQL_TEXT_NAME)
@@ -5374,8 +5404,9 @@ dsc* evlMakeDbkey(Jrd::thread_db* tdbb, const SysFunction* function, const NestV
 {
 	// MAKE_DBKEY ( REL_NAME | REL_ID, RECNUM [, DPNUM [, PPNUM] ] )
 
-	Database* const dbb = tdbb->getDatabase();
-	Request* const request = tdbb->getRequest();
+	const auto dbb = tdbb->getDatabase();
+	const auto attachment = tdbb->getAttachment();
+	const auto request = tdbb->getRequest();
 
 	fb_assert(args.getCount() >= 2 && args.getCount() <= 4);
 
@@ -5387,12 +5418,14 @@ dsc* evlMakeDbkey(Jrd::thread_db* tdbb, const SysFunction* function, const NestV
 
 	if (argDsc->isText())
 	{
-		MetaName relName;
-		CVT2_make_metaname(argDsc, relName, tdbb->getAttachment()->att_dec_status);
+		UCHAR* argPtr;
+		USHORT len = MOV_get_string(tdbb, argDsc, &argPtr, NULL, 0);
+		auto relName = QualifiedName::parseSchemaObject(string((const char*) argPtr, len));
+		attachment->qualifyExistingName(tdbb, relName, {obj_relation});
 
 		const jrd_rel* const relation = MET_lookup_relation(tdbb, relName);
 		if (!relation)
-			(Arg::Gds(isc_relnotdef) << Arg::Str(relName)).raise();
+			(Arg::Gds(isc_relnotdef) << relName.toQuotedString()).raise();
 
 		relId = relation->rel_id;
 	}
@@ -6950,10 +6983,12 @@ const SysFunction SysFunction::functions[] =
 		{"FIRST_DAY", 2, 2, true, setParamsFirstLastDay, makeFirstLastDayResult, evlFirstLastDay, (void*) funFirstDay},
 		{"FLOOR", 1, 1, true, setParamsDblDec, makeCeilFloor, evlFloor, NULL},
 		{"GEN_UUID", 0, 1, false, NULL, makeUuid, evlGenUuid, NULL},
+		{"GREATEST", 1, -1, true, setParamsFromList, makeFromListResult, evlMaxMinValue, (void*) funMaxValue},
 		{"HASH", 1, 2, true, setParamsHash, makeHash, evlHash, NULL},
 		{"HEX_DECODE", 1, 1, true, NULL, makeDecodeHex, evlDecodeHex, NULL},
 		{"HEX_ENCODE", 1, 1, true, NULL, makeEncodeHex, evlEncodeHex, NULL},
 		{"LAST_DAY", 2, 2, true, setParamsFirstLastDay, makeFirstLastDayResult, evlFirstLastDay, (void*) funLastDay},
+		{"LEAST", 1, -1, true, setParamsFromList, makeFromListResult, evlMaxMinValue, (void*) funMinValue},
 		{"LEFT", 2, 2, true, setParamsSecondInteger, makeLeftRight, evlLeft, NULL},
 		{"LN", 1, 1, true, setParamsDblDec, makeDblDecResult, evlLnLog10, (void*) funLnat},
 		{"LOG", 2, 2, true, setParamsDblDec, makeDblDecResult, evlLog, NULL},

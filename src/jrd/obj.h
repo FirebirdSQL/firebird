@@ -76,10 +76,13 @@ const ObjectType obj_tablespace = 35;
 const ObjectType obj_tablespaces = 36;
 const ObjectType obj_index_condition = 37;
 
-const ObjectType obj_type_MAX = 38;
+const ObjectType obj_schema = 38;
+const ObjectType obj_schemas = 39;
 
-// not used in metadata / no relation with obj_type_MAX (should be greater)
-const ObjectType obj_user_or_role= 100;
+const ObjectType obj_type_MAX = 40;
+
+// used in the parser only / no relation with obj_type_MAX (should be greater)
+const ObjectType obj_user_or_role = 100;
 const ObjectType obj_parameter = 101;
 const ObjectType obj_column = 102;
 const ObjectType obj_publication = 103;
@@ -87,33 +90,42 @@ const ObjectType obj_publication = 103;
 const ObjectType obj_any = 255;
 
 
-inline bool isDdlObject(ObjectType object_type)
+inline bool isDdlObject(ObjectType objectType, bool* useSchema = nullptr)
 {
-	switch (object_type)
+	if (useSchema)
+		*useSchema = false;
+
+	switch (objectType)
 	{
-		case obj_database:
 		case obj_relations:
 		case obj_views:
 		case obj_procedures:
 		case obj_functions:
 		case obj_packages:
 		case obj_generators:
-		case obj_filters:
 		case obj_domains:
 		case obj_exceptions:
-		case obj_roles:
 		case obj_charsets:
 		case obj_collations:
+			if (useSchema)
+				*useSchema = true;
+			[[fallthrough]];
+
+		case obj_database:
+		case obj_filters:
+		case obj_roles:
 		case obj_jobs:
 		case obj_tablespaces:
+		case obj_schemas:
 			return true;
+
 		default:
 			return false;
 	}
 }
 
 
-inline const char* getSecurityClassName(ObjectType object_type)
+inline const char* getDllSecurityName(ObjectType object_type)
 {
 	switch (object_type)
 	{
@@ -143,10 +155,12 @@ inline const char* getSecurityClassName(ObjectType object_type)
 			return "SQL$CHARSETS";
 		case obj_collations:
 			return "SQL$COLLATIONS";
-		case obj_tablespaces:
-			return "SQL$TABLESPACES";
 		case obj_jobs:
 			return "SQL$JOBS";
+		case obj_tablespaces:
+			return "SQL$TABLESPACES";
+		case obj_schemas:
+			return "SQL$SCHEMAS";
 		default:
 			return "";
 	}
@@ -185,10 +199,51 @@ inline const char* getDdlObjectName(ObjectType object_type)
 			return "ROLE";
 		case obj_filters:
 			return "FILTER";
-		case obj_tablespaces:
-			return "TABLESPACE";
 		case obj_jobs:
 			return "JOB";
+		case obj_tablespaces:
+			return "TABLESPACE";
+		case obj_schemas:
+			return "SCHEMA";
+		default:
+			fb_assert(false);
+			return "<unknown object type>";
+	}
+}
+
+
+inline const char* getObjectName(ObjectType objType)
+{
+	switch (objType)
+	{
+		case obj_relation:
+			return "TABLE";
+		case obj_package_header:
+			return "PACKAGE";
+		case obj_procedure:
+			return "PROCEDURE";
+		case obj_udf:
+			return "FUNCTION";
+		case obj_column:
+			return "COLUMN";
+		case obj_charset:
+			return "CHARACTER SET";
+		case obj_collation:
+			return "COLLATION";
+		case obj_field:
+			return "DOMAIN";
+		case obj_exception:
+			return "EXCEPTION";
+		case obj_generator:
+			return "GENERATOR";
+		case obj_view:
+			return "VIEW";
+		case obj_sql_role:
+			return "ROLE";
+		case obj_blob_filter:
+			return "FILTER";
+		case obj_schema:
+			return "SCHEMA";
 		default:
 			fb_assert(false);
 			return "<unknown object type>";

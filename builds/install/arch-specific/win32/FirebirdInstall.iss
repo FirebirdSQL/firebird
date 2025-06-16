@@ -212,6 +212,9 @@
 ;Assume native platform
 #if IsWin64
 #define PlatformTarget "x64"
+;---- IsArm64 is not available in preprocessor, so /DPlatformTarget=arm64 should be passed in the command line
+;#elif IsArm64
+;#define PlatformTarget "arm64"
 #else
 #define PlatformTarget "win32"
 #endif
@@ -219,6 +222,8 @@
 
 #if PlatformTarget == "x64"
 #define ReleasePlatformTarget "x64"
+#elif PlatformTarget == "arm64"
+#define ReleasePlatformTarget "arm64"
 #else
 #define ReleasePlatformTarget "x86"
 #endif
@@ -309,7 +314,12 @@ WizardResizable=yes
 WizardImageFile={#ScriptsDir}\firebird_install_logo1.bmp
 WizardSmallImageFile={#ScriptsDir}\firebird_install_logo1.bmp
 
+#if PlatformTarget == "arm64"
+DefaultDirName={code:ChooseInstallDir|{commonpf64}\Firebird\Firebird_{#AppVer}}
+#else
 DefaultDirName={code:ChooseInstallDir|{commonpf}\Firebird\Firebird_{#AppVer}}
+#endif
+
 DefaultGroupName=Firebird {#GroupnameVer} ({#PlatformTarget})
 
 UninstallDisplayIcon={code:ChooseUninstallIcon|{#UninstallBinary}}
@@ -327,6 +337,9 @@ SetupMutex={#MyAppName}
 #if PlatformTarget == "x64"
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
+#elif PlatformTarget == "arm64"
+ArchitecturesAllowed=arm64
+ArchitecturesInstallIn64BitMode=arm64
 #endif
 
 ;This feature is incomplete, as more thought is required.
@@ -398,9 +411,12 @@ Name: CopyFbClientAsGds32Task; Description: {cm:CopyFbClientAsGds32Task}; Compon
 [Run]
 ; due to the changes required to support MSVC15 support for earlier versions is now broken.
 #if Int(msvc_runtime_major_version,14) >= 14
+#if PlatformTarget != "arm64"
 Filename: msiexec.exe; Parameters: "/qn /norestart /i ""{tmp}\vccrt{#msvc_runtime_library_version}_Win32.msi"" /L*v ""{tmp}\vccrt{#msvc_runtime_library_version}_Win32.log"" "; StatusMsg: "Installing MSVC 32-bit runtime libraries to system directory"; Check: HasWI30; Components: ClientComponent;
-#if PlatformTarget == "x64"
+#elif PlatformTarget == "x64"
 Filename: msiexec.exe; Parameters: "/qn /norestart /i ""{tmp}\vccrt{#msvc_runtime_library_version}_x64.msi"" /L*v ""{tmp}\vccrt{#msvc_runtime_library_version}_x64.log"" ";  StatusMsg: "Installing MSVC 64-bit runtime libraries to system directory"; Check: HasWI30; Components: ClientComponent;
+#elif PlatformTarget == "arm64"
+; Filename: msiexec.exe; Parameters: "/qn /norestart /i ""{tmp}\vccrt{#msvc_runtime_library_version}_arm64.msi"" /L*v ""{tmp}\vccrt{#msvc_runtime_library_version}_arm64.log"" ";  StatusMsg: "Installing MSVC ARM64 runtime libraries to system directory"; Check: HasWI30; Components: ClientComponent;
 #endif
 #endif
 
@@ -547,8 +563,10 @@ Source: {#WOW64Dir}\msvcp{#msvc_runtime_file_version}.dll; DestDir: {app}\WOW64;
 ;In addition, O/S must have Windows Installer 3.0.
 Source: {#FilesDir}\system32\vccrt{#msvc_runtime_library_version}_x64.msi; DestDir: {tmp};  Check: HasWI30; MinVersion: {#MinVer}; Components: ClientComponent;
 Source: {#WOW64Dir}\system32\vccrt{#msvc_runtime_library_version}_Win32.msi; DestDir: {tmp}; Check: HasWI30; MinVersion: {#MinVer}; Components: ClientComponent;
-#else
+#elif PlatformTarget == "Win32"
 Source: {#FilesDir}\system32\vccrt{#msvc_runtime_library_version}_Win32.msi; DestDir: {tmp}; Check: HasWI30; MinVersion: {#MinVer}; Components: ClientComponent;
+#elif PlatformTarget == "arm64"
+; Source: {#FilesDir}\system32\vccrt{#msvc_runtime_library_version}_arm64.msi; DestDir: {tmp}; Check: HasWI30; MinVersion: {#MinVer}; Components: ClientComponent;
 #endif
 #endif
 

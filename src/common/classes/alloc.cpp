@@ -3034,3 +3034,15 @@ void operator delete[](void* mem) noexcept
 {
 	MemoryPool::globalFree(mem);
 }
+
+#if __cplusplus >= 201402L
+void operator delete(void* mem, std::size_t s) noexcept
+{
+	MemoryPool::globalFree(mem);
+}
+
+void operator delete[](void* mem, std::size_t s) noexcept
+{
+	MemoryPool::globalFree(mem);
+}
+#endif

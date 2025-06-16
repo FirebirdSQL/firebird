@@ -2101,7 +2101,9 @@ static tok* get_token()
 			}
 			else
 #endif
-			if (next == EOF || (next == '\n' && (p[-1] != '\\' || gpreGlob.sw_sql)))
+			// ASF: Allow multi-line C++ strings
+			if (next == EOF ||
+				(!isLangCpp(gpreGlob.sw_language) && next == '\n' && (p[-1] != '\\' || gpreGlob.sw_sql)))
 			{
 				return_char(*p);
 
@@ -2440,7 +2442,7 @@ static void pass2( SLONG start_position)
 	const bool sw_block_comments = gpreGlob.sw_language == lang_c ||
 		isLangCpp(gpreGlob.sw_language) || gpreGlob.sw_language == lang_pascal;
 
-	// Put out a distintive module header
+	// Put out a distinctive module header
 
 	if (!sw_first)
 	{

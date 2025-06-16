@@ -1058,7 +1058,7 @@ bool ComparativeBoolNode::stringBoolean(thread_db* tdbb, Request* request, dsc* 
 			cache->matcher->reset();
 		else
 		{
-			if (cache && cache->keySize < patternLen + escapeLen)
+			if (cache && cache->keySize < static_cast<ULONG>(patternLen) + escapeLen)
 			{
 				delete cache;
 				cache = nullptr;

@@ -142,7 +142,7 @@ void BlrDebugWriter::putDebugSubFunction(DeclareSubFuncNode* subFuncNode)
 	debugData.add(fb_dbg_subfunc);
 
 	dsql_udf* subFunc = subFuncNode->dsqlFunction;
-	const MetaName& name = subFunc->udf_name.identifier;
+	const auto& name = subFunc->udf_name.object;
 	USHORT len = MIN(name.length(), MAX_UCHAR);
 
 	debugData.add(len);
@@ -162,7 +162,7 @@ void BlrDebugWriter::putDebugSubProcedure(DeclareSubProcNode* subProcNode)
 	debugData.add(fb_dbg_subproc);
 
 	dsql_prc* subProc = subProcNode->dsqlProcedure;
-	const MetaName& name = subProc->prc_name.identifier;
+	const auto& name = subProc->prc_name.object;
 	USHORT len = MIN(name.length(), MAX_UCHAR);
 
 	debugData.add(len);

@@ -153,13 +153,35 @@ void iscArrayLookupBoundsImpl(Why::YAttachment* attachment,
 
 	ISC_ARRAY_BOUND* tail = desc->array_desc_bounds;
 
-	constexpr auto sql = R"""(
+	USHORT majorOdsVersion = 0;
+	USHORT minorOdsVersion = 0;
+	attachment->getOdsVersion(&majorOdsVersion, &minorOdsVersion);
+
+	constexpr auto sqlSchemas = R"""(
+		with search_path as (
+		    select row_number() over () rn,
+		           name
+		      from system.rdb$sql.parse_unqualified_names(rdb$get_context('SYSTEM', 'SEARCH_PATH'))
+		)
+		select fd.rdb$lower_bound,
+		       fd.rdb$upper_bound
+		    from search_path sp
+		    join system.rdb$field_dimensions fd
+		      on fd.rdb$schema_name = sp.name
+		    where fd.rdb$field_name = ?
+		    order by sp.rn
+		    rows 1
+	)""";
+
+	constexpr auto sqlNoSchemas = R"""(
 		select fd.rdb$lower_bound,
 		       fd.rdb$upper_bound
 		    from rdb$field_dimensions fd
 		    where fd.rdb$field_name = ?
 		    order by fd.rdb$dimension
 	)""";
+
+	const auto sql = majorOdsVersion >= ODS_VERSION14 ? sqlSchemas : sqlNoSchemas;
 
 	FB_MESSAGE(InputMessage, CheckStatusWrapper,
 		(FB_VARCHAR(MAX_SQL_IDENTIFIER_LEN), fieldName)
@@ -202,7 +224,34 @@ void iscArrayLookupDescImpl(Why::YAttachment* attachment,
 
 	desc->array_desc_flags = 0;
 
-	constexpr auto sql = R"""(
+	USHORT majorOdsVersion = 0;
+	USHORT minorOdsVersion = 0;
+	attachment->getOdsVersion(&majorOdsVersion, &minorOdsVersion);
+
+	constexpr auto sqlSchemas = R"""(
+		with search_path as (
+		    select row_number() over () rn,
+		           name
+		      from system.rdb$sql.parse_unqualified_names(rdb$get_context('SYSTEM', 'SEARCH_PATH'))
+		)
+		select f.rdb$field_name,
+		       f.rdb$field_type,
+		       f.rdb$field_scale,
+		       f.rdb$field_length,
+		       f.rdb$dimensions
+		    from search_path sp
+		    join system.rdb$relation_fields rf
+		      on rf.rdb$schema_name = sp.name
+		    join system.rdb$fields f
+		      on f.rdb$schema_name = rf.rdb$field_source_schema_name and
+		         f.rdb$field_name = rf.rdb$field_source
+		    where rf.rdb$relation_name = ? and
+		          rf.rdb$field_name = ?
+		    order by sp.rn
+		    rows 1
+	)""";
+
+	constexpr auto sqlNoSchemas = R"""(
 		select f.rdb$field_name,
 		       f.rdb$field_type,
 		       f.rdb$field_scale,
@@ -214,6 +263,8 @@ void iscArrayLookupDescImpl(Why::YAttachment* attachment,
 		    where rf.rdb$relation_name = ? and
 		          rf.rdb$field_name = ?
 	)""";
+
+	const auto sql = majorOdsVersion >= ODS_VERSION14 ? sqlSchemas : sqlNoSchemas;
 
 	FB_MESSAGE(InputMessage, CheckStatusWrapper,
 		(FB_VARCHAR(MAX_SQL_IDENTIFIER_LEN), relationName)

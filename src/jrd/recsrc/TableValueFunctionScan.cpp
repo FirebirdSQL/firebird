@@ -86,7 +86,7 @@ void TableValueFunctionScan::getLegacyPlan(thread_db* tdbb, string& plan, unsign
 	if (!level)
 		plan += "(";
 
-	plan += printName(tdbb, m_alias, false) + " NATURAL";
+	plan += printName(tdbb, m_alias) + " NATURAL";
 
 	if (!level)
 		plan += ")";
@@ -219,16 +219,18 @@ void UnlistFunctionScan::internalOpen(thread_db* tdbb) const
 	}
 	else
 	{
-		const string& separatorStr = *impure->m_separatorStr;
+		const std::string_view separatorView(impure->m_separatorStr->data(),
+											 impure->m_separatorStr->length());
 		string valueStr(MOV_make_string2(tdbb, valueDesc, textType, true));
-		auto end = AbstractString::npos;
+		std::string_view valueView(valueStr.data(), valueStr.length());
+		auto end = std::string_view::npos;
 		do
 		{
-			auto size = end = valueStr.find(separatorStr);
-			if (end == AbstractString::npos)
+			auto size = end = valueView.find(separatorView);
+			if (end == std::string_view::npos)
 			{
-				if (valueStr.hasData())
-					size = valueStr.size();
+				if (!valueView.empty())
+					size = valueView.length();
 				else
 					break;
 			}
@@ -236,13 +238,14 @@ void UnlistFunctionScan::internalOpen(thread_db* tdbb) const
 			if (size > 0)
 			{
 				dsc fromDesc;
-				fromDesc.makeText(size, textType, (UCHAR*)(IPTR)(valueStr.c_str()));
+				fromDesc.makeText(size, textType, (UCHAR*)(IPTR) valueView.data());
 				assignParameter(tdbb, &fromDesc, toDesc, 0, record);
 				impure->m_recordBuffer->store(record);
 			}
 
-			valueStr.erase(valueStr.begin(), valueStr.begin() + end + separatorStr.length());
-		} while (end != AbstractString::npos);
+			valueView.remove_prefix(size + separatorView.length());
+
+		} while (end != std::string_view::npos);
 	}
 }
 
@@ -278,15 +281,24 @@ bool UnlistFunctionScan::nextBuffer(thread_db* tdbb) const
 			impure->m_recordBuffer->store(record);
 		};
 
-		MoveBuffer buffer;
-		const auto address = buffer.getBuffer(MAX_COLUMN_SIZE);
-		const auto length = impure->m_blob->BLB_get_data(tdbb, address, MAX_COLUMN_SIZE, false);
-		if (length > 0)
+		string bufferString;
+
+		if (impure->m_resultStr->hasData())
+			bufferString = *impure->m_resultStr;
+
+		const auto resultLength = impure->m_resultStr->length();
+		bufferString.reserve(MAX_COLUMN_SIZE + resultLength);
+		const auto address = bufferString.begin() + resultLength;
+
+		const auto blobLength = impure->m_blob->BLB_get_data(tdbb, reinterpret_cast<UCHAR*>(address),
+														 MAX_COLUMN_SIZE, false);
+		if (blobLength)
 		{
 			const std::string_view separatorView(impure->m_separatorStr->data(),
 												 impure->m_separatorStr->length());
-			std::string_view valueView(reinterpret_cast<char*>(address), length);
+			std::string_view valueView(bufferString.data(), blobLength + resultLength);
 			auto end = std::string_view::npos;
+			impure->m_resultStr->erase();
 			do
 			{
 				auto size = end = valueView.find(separatorView);

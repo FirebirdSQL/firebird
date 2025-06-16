@@ -138,7 +138,7 @@ CreateGrant checkCreateDatabaseGrant(const MetaString& userName, const MetaStrin
 		UserId::makeRoleName(role, dialect);
 
 		// We need to check is role granted to userName in security DB
-		const char* sql = "select count(*) from RDB$USER_PRIVILEGES "
+		const char* sql = "select count(*) from SYSTEM.RDB$USER_PRIVILEGES "
 			"where RDB$USER = ? and RDB$RELATION_NAME = ? and RDB$PRIVILEGE = 'M'";
 
 		Message prm;
@@ -189,7 +189,7 @@ CreateGrant checkCreateDatabaseGrant(const MetaString& userName, const MetaStrin
 	Field<ISC_INT64> cnt(result);
 
 	att->execute(&st, tra, 0,
-		"select count(*) from RDB$DB_CREATORS"
+		"select count(*) from SYSTEM.RDB$DB_CREATORS"
 		" where (RDB$USER_TYPE = ? and RDB$USER = ?) or (RDB$USER_TYPE = ? and RDB$USER = ?)",
 		SQL_DIALECT_V6, gr.getMetadata(), gr.getBuffer(), result.getMetadata(), result.getBuffer());
 	if (st->getState() & IStatus::STATE_ERRORS)
@@ -222,17 +222,17 @@ CreateGrant checkCreateDatabaseGrant(const MetaString& userName, const MetaStrin
 
 	const char* sql =
 		"with recursive role_tree as ( "
-		"   select rdb$relation_name as nm, 0 as ur from rdb$user_privileges "
+		"   select rdb$relation_name as nm, 0 as ur from system.rdb$user_privileges "
 		"       where rdb$privilege = 'M' and rdb$field_name = 'D' and rdb$user_type = ? and rdb$user = ? "
 		"   union all "
-		"   select rdb$role_name as nm, 1 as ur from rdb$roles "
+		"   select rdb$role_name as nm, 1 as ur from system.rdb$roles "
 		"       where rdb$role_name = ? "
 		"   union all "
-		"   select p.rdb$relation_name as nm, t.ur from rdb$user_privileges p "
+		"   select p.rdb$relation_name as nm, t.ur from system.rdb$user_privileges p "
 		"       join role_tree t on t.nm = p.rdb$user "
 		"       where p.rdb$privilege = 'M' and (p.rdb$field_name = 'D' or t.ur = 1)) "
 		"select r.rdb$system_privileges "
-		"   from role_tree t join rdb$roles r on t.nm = r.rdb$role_name ";
+		"   from role_tree t join system.rdb$roles r on t.nm = r.rdb$role_name ";
 	RefPtr<IResultSet> rs(REF_NO_INCR, att->openCursor(&st, tra, 0, sql,
 		SQL_DIALECT_V6, par2.getMetadata(), par2.getBuffer(), res2.getMetadata(), NULL, 0));
 	check("IAttachment::execute", &st);
@@ -304,7 +304,7 @@ RecordBuffer* DbCreatorsList::getList(thread_db* tdbb, jrd_rel* relation)
 
 	FbLocalStatus st;
 	RefPtr<IResultSet> curs(REF_NO_INCR, att->openCursor(&st, tra, 0,
-		"select RDB$USER_TYPE, RDB$USER from RDB$DB_CREATORS",
+		"select RDB$USER_TYPE, RDB$USER from SYSTEM.RDB$DB_CREATORS",
 		SQL_DIALECT_V6, NULL, NULL, gr.getMetadata(), NULL, 0));
 
 	if (st->getState() & IStatus::STATE_ERRORS)

@@ -127,7 +127,7 @@ double CVT_date_to_double(const dsc* desc)
 			// Unknown type - most likely a string.  Try to convert it to a
 			// timestamp -- or die trying (reporting an error).
 			// Don't worry about users putting a TIME or DATE here - this
-			// conversion is occuring in really flexible spots - we don't
+			// conversion is occurring in really flexible spots - we don't
 			// want to overdo it.
 
 			dsc temp_desc;

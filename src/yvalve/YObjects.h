@@ -521,6 +521,7 @@ public:
 	void destroy(unsigned dstrFlags);
 	void shutdown();
 	isc_db_handle& getHandle();
+	void getOdsVersion(USHORT* majorVersion, USHORT* minorVersion);
 
 	// IAttachment implementation
 	void getInfo(Firebird::CheckStatusWrapper* status, unsigned int itemsLength,
@@ -598,6 +599,10 @@ public:
 	HandleArray<YTransaction> childTransactions;
 	Firebird::Array<CleanupCallback*> cleanupHandlers;
 	Firebird::StatusHolder savedStatus;	// Do not use raise() method of this class in yValve.
+
+private:
+	USHORT cachedOdsMajorVersion = 0;
+	USHORT cachedOdsMinorVersion = 0;
 };
 
 class YService final :
@@ -687,9 +692,20 @@ public:
 		Firebird::ITransaction* tra, const char* file, FB_BOOLEAN txt);
 	void getPerfCounters(Firebird::CheckStatusWrapper* status, Firebird::IAttachment* att,
 		const char* countersSet, ISC_INT64* counters);			// in perf.cpp
+
 	YAttachment* executeCreateDatabase(Firebird::CheckStatusWrapper* status,
 		unsigned stmtLength, const char* creatDBstatement, unsigned dialect,
-		FB_BOOLEAN* stmtIsCreateDb = NULL);
+		FB_BOOLEAN* stmtIsCreateDb = nullptr)
+	{
+		return executeCreateDatabase2(status, stmtLength, creatDBstatement, dialect,
+			0, nullptr, stmtIsCreateDb);
+	}
+
+	YAttachment* executeCreateDatabase2(Firebird::CheckStatusWrapper* status,
+		unsigned stmtLength, const char* creatDBstatement, unsigned dialect,
+		unsigned dpbLength, const unsigned char* dpb,
+		FB_BOOLEAN* stmtIsCreateDb = nullptr);
+
 	void decodeDate(ISC_DATE date, unsigned* year, unsigned* month, unsigned* day);
 	void decodeTime(ISC_TIME time,
 		unsigned* hours, unsigned* minutes, unsigned* seconds, unsigned* fractions);

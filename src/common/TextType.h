@@ -30,7 +30,7 @@
 #ifndef COMMON_TEXTTYPE_H
 #define COMMON_TEXTTYPE_H
 
-#include "../common/classes/MetaString.h"
+#include "../common/classes/QualifiedMetaString.h"
 
 struct texttype;
 
@@ -96,7 +96,7 @@ public:
 	USHORT getFlags() const;
 
 public:
-	Firebird::MetaString name;
+	Firebird::QualifiedMetaString name;
 
 protected:
 	texttype* tt;
