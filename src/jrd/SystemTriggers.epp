@@ -24,10 +24,12 @@
 #include <optional>
 #include "firebird/Interface.h"
 #include "../jrd/SystemTriggers.h"
+#include "../jrd/acl.h"
 #include "../jrd/constants.h"
 #include "../jrd/ids.h"
 #include "../jrd/ini.h"
 #include "../jrd/req.h"
+#include "../jrd/cvt_proto.h"
 #include "../jrd/dpm_proto.h"
 #include "../jrd/err_proto.h"
 #include "../jrd/exe_proto.h"
@@ -48,18 +50,23 @@ namespace
 void beforeDeleteCheckConstraint(thread_db* tdbb, Record* record)
 {
 	const auto transaction = tdbb->getTransaction();
+	dsc desc;
 
-	dsc descConstraintName;
+	MetaName schemaName;
+	if (EVL_field(nullptr, record, f_ccon_schema, &desc))
+		MOV_get_metaname(tdbb, &desc, schemaName);
+
 	MetaName constraintName;
-	if (EVL_field(nullptr, record, f_ccon_cname, &descConstraintName))
-		MOV_get_metaname(tdbb, &descConstraintName, constraintName);
+	if (EVL_field(nullptr, record, f_ccon_cname, &desc))
+		MOV_get_metaname(tdbb, &desc, constraintName);
 
 	static const CachedRequestId requestCacheId;
 	AutoCacheRequest request(tdbb, requestCacheId);
 
 	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		RLC IN RDB$RELATION_CONSTRAINTS
-		WITH RLC.RDB$CONSTRAINT_NAME EQ constraintName.c_str()
+		WITH RLC.RDB$SCHEMA_NAME EQ schemaName.c_str() AND
+			 RLC.RDB$CONSTRAINT_NAME EQ constraintName.c_str()
 	{
 		ERR_post(Arg::Gds(isc_check_cnstrnt_del));
 	}
@@ -70,6 +77,10 @@ void afterDeleteCheckConstraint(thread_db* tdbb, Record* record)
 {
 	const auto transaction = tdbb->getTransaction();
 	dsc desc;
+
+	MetaName schemaName;
+	if (EVL_field(nullptr, record, f_ccon_schema, &desc))
+		MOV_get_metaname(tdbb, &desc, schemaName);
 
 	MetaName constraintName;
 	if (EVL_field(nullptr, record, f_ccon_cname, &desc))
@@ -85,8 +96,10 @@ void afterDeleteCheckConstraint(thread_db* tdbb, Record* record)
 	FOR (REQUEST_HANDLE request1 TRANSACTION_HANDLE transaction)
 		TRG IN RDB$TRIGGERS
 		CROSS RLC IN RDB$RELATION_CONSTRAINTS
-		WITH RLC.RDB$CONSTRAINT_NAME = constraintName.c_str() AND
+		WITH RLC.RDB$SCHEMA_NAME EQ schemaName.c_str() AND
+			 RLC.RDB$CONSTRAINT_NAME = constraintName.c_str() AND
 			 RLC.RDB$CONSTRAINT_TYPE = FOREIGN_KEY AND
+			 TRG.RDB$SCHEMA_NAME = RLC.RDB$SCHEMA_NAME AND
 			 TRG.RDB$TRIGGER_NAME = triggerName.c_str()
 	{
 		ERASE TRG;
@@ -99,7 +112,9 @@ void afterDeleteCheckConstraint(thread_db* tdbb, Record* record)
 	FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
 		RFR IN RDB$RELATION_FIELDS
 		CROSS RLC IN RDB$RELATION_CONSTRAINTS
-		WITH RFR.RDB$FIELD_NAME = triggerName.c_str() AND
+		WITH RFR.RDB$SCHEMA_NAME = schemaName.c_str() AND
+			 RFR.RDB$FIELD_NAME = triggerName.c_str() AND
+			 RLC.RDB$SCHEMA_NAME = RFR.RDB$SCHEMA_NAME AND
 			 RLC.RDB$CONSTRAINT_NAME = constraintName.c_str() AND
 			 RLC.RDB$RELATION_NAME = RFR.RDB$RELATION_NAME AND
 			 RLC.RDB$CONSTRAINT_TYPE = NOT_NULL_CNSTRT
@@ -116,8 +131,10 @@ void afterDeleteCheckConstraint(thread_db* tdbb, Record* record)
 	FOR (REQUEST_HANDLE request3 TRANSACTION_HANDLE transaction)
 		TRG IN RDB$TRIGGERS
 		CROSS RLC IN RDB$RELATION_CONSTRAINTS
-		WITH RLC.RDB$CONSTRAINT_NAME = constraintName.c_str() AND
+		WITH RLC.RDB$SCHEMA_NAME EQ schemaName.c_str() AND
+			 RLC.RDB$CONSTRAINT_NAME = constraintName.c_str() AND
 			 RLC.RDB$CONSTRAINT_TYPE = CHECK_CNSTRT AND
+			 TRG.RDB$SCHEMA_NAME = RLC.RDB$SCHEMA_NAME AND
 			 TRG.RDB$RELATION_NAME = RLC.RDB$RELATION_NAME AND
 			 TRG.RDB$TRIGGER_NAME = triggerName.c_str()
 	{
@@ -129,11 +146,15 @@ void afterDeleteCheckConstraint(thread_db* tdbb, Record* record)
 void beforeUpdateCheckConstraint(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 {
 	const auto transaction = tdbb->getTransaction();
+	dsc desc;
 
-	dsc descConstraintName;
+	MetaName schemaName;
+	if (EVL_field(nullptr, orgRecord, f_ccon_schema, &desc))
+		MOV_get_metaname(tdbb, &desc, schemaName);
+
 	MetaName constraintName;
-	if (EVL_field(nullptr, orgRecord, f_ccon_cname, &descConstraintName))
-		MOV_get_metaname(tdbb, &descConstraintName, constraintName);
+	if (EVL_field(nullptr, orgRecord, f_ccon_cname, &desc))
+		MOV_get_metaname(tdbb, &desc, constraintName);
 
 	static const CachedRequestId requestCacheId;
 	AutoCacheRequest request(tdbb, requestCacheId);
@@ -141,6 +162,7 @@ void beforeUpdateCheckConstraint(thread_db* tdbb, Record* orgRecord, Record* new
 	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		RLC IN RDB$RELATION_CONSTRAINTS
 		WITH RLC.RDB$CONSTRAINT_TYPE != NOT_NULL_CNSTRT AND
+			 RLC.RDB$SCHEMA_NAME EQ schemaName.c_str() AND
 			 RLC.RDB$CONSTRAINT_NAME EQ constraintName.c_str()
 	{
 		ERR_post(Arg::Gds(isc_check_cnstrnt_update));
@@ -151,18 +173,23 @@ void beforeUpdateCheckConstraint(thread_db* tdbb, Record* orgRecord, Record* new
 void beforeDeleteIndex(thread_db* tdbb, Record* record)
 {
 	const auto transaction = tdbb->getTransaction();
+	dsc desc;
 
-	dsc descIndexName;
+	MetaName schemaName;
+	if (EVL_field(nullptr, record, f_idx_schema, &desc))
+		MOV_get_metaname(tdbb, &desc, schemaName);
+
 	MetaName indexName;
-	if (EVL_field(nullptr, record, f_idx_name, &descIndexName))
-		MOV_get_metaname(tdbb, &descIndexName, indexName);
+	if (EVL_field(nullptr, record, f_idx_name, &desc))
+		MOV_get_metaname(tdbb, &desc, indexName);
 
 	static const CachedRequestId requestCacheId;
 	AutoCacheRequest request(tdbb, requestCacheId);
 
 	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		RLC IN RDB$RELATION_CONSTRAINTS
-		WITH RLC.RDB$INDEX_NAME EQ indexName.c_str()
+		WITH RLC.RDB$SCHEMA_NAME EQ schemaName.c_str() AND
+			 RLC.RDB$INDEX_NAME EQ indexName.c_str()
 	{
 		ERR_post(Arg::Gds(isc_integ_index_del));
 	}
@@ -172,19 +199,26 @@ void beforeDeleteIndex(thread_db* tdbb, Record* record)
 void beforeUpdateIndex(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 {
 	const auto transaction = tdbb->getTransaction();
+	dsc desc;
 
-	dsc descOldIndexName;
+	MetaName oldSchemaName;
+	if (EVL_field(nullptr, orgRecord, f_idx_schema, &desc))
+		MOV_get_metaname(tdbb, &desc, oldSchemaName);
+
 	MetaName oldIndexName;
-	if (EVL_field(nullptr, orgRecord, f_idx_name, &descOldIndexName))
-		MOV_get_metaname(tdbb, &descOldIndexName, oldIndexName);
+	if (EVL_field(nullptr, orgRecord, f_idx_name, &desc))
+		MOV_get_metaname(tdbb, &desc, oldIndexName);
 
 	static const CachedRequestId request1CacheId;
 	AutoCacheRequest request1(tdbb, request1CacheId);
 
 	FOR (REQUEST_HANDLE request1 TRANSACTION_HANDLE transaction)
 		RLC IN RDB$RELATION_CONSTRAINTS
-		WITH RLC.RDB$INDEX_NAME EQ oldIndexName.c_str()
+		WITH RLC.RDB$SCHEMA_NAME EQ oldSchemaName.c_str() AND
+			 RLC.RDB$INDEX_NAME EQ oldIndexName.c_str()
 	{
+		dsc descNewSchemaName;
+		MetaName newSchemaName;
 		dsc descNewIndexName;
 		MetaName newIndexName;
 		dsc descOldRelationName, descNewRelationName;
@@ -196,7 +230,8 @@ void beforeUpdateIndex(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 		dsc descOldForeignKey, descNewForeignKey;
 		MetaName oldForeignKey, newForeignKey;
 
-		if (EVL_field(nullptr, newRecord, f_idx_name, &descNewIndexName) &&
+		if (EVL_field(nullptr, newRecord, f_idx_schema, &descNewSchemaName) &&
+			EVL_field(nullptr, newRecord, f_idx_name, &descNewIndexName) &&
 			EVL_field(nullptr, orgRecord, f_idx_relation, &descOldRelationName) &&
 			EVL_field(nullptr, newRecord, f_idx_relation, &descNewRelationName) &&
 			EVL_field(nullptr, orgRecord, f_idx_id, &descOldIndexId) &&
@@ -206,6 +241,7 @@ void beforeUpdateIndex(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 			EVL_field(nullptr, orgRecord, f_idx_foreign, &descOldForeignKey) &&
 			EVL_field(nullptr, newRecord, f_idx_foreign, &descNewForeignKey))
 		{
+			MOV_get_metaname(tdbb, &descNewSchemaName, newSchemaName);
 			MOV_get_metaname(tdbb, &descNewIndexName, newIndexName);
 			MOV_get_metaname(tdbb, &descOldRelationName, oldRelationName);
 			MOV_get_metaname(tdbb, &descNewRelationName, newRelationName);
@@ -216,7 +252,8 @@ void beforeUpdateIndex(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 			MOV_get_metaname(tdbb, &descOldForeignKey, oldForeignKey);
 			MOV_get_metaname(tdbb, &descNewForeignKey, newForeignKey);
 
-			if (oldIndexName != newIndexName ||
+			if (oldSchemaName != newSchemaName ||
+				oldIndexName != newIndexName ||
 				oldRelationName != newRelationName ||
 				oldIndexId != newIndexId ||
 				oldSegmentCount != newSegmentCount ||
@@ -242,9 +279,12 @@ void beforeUpdateIndex(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 			RCL IN RDB$RELATION_CONSTRAINTS
 			CROSS IND1 IN RDB$INDICES
 			CROSS IND2 IN RDB$INDICES
-			WITH RCL.RDB$INDEX_NAME = oldIndexName.c_str() AND
+			WITH RCL.RDB$SCHEMA_NAME = oldSchemaName.c_str() AND
+				 RCL.RDB$INDEX_NAME = oldIndexName.c_str() AND
+				 IND1.RDB$SCHEMA_NAME = RCL.RDB$SCHEMA_NAME AND
 				 IND1.RDB$INDEX_NAME = RCL.RDB$INDEX_NAME AND
-				 IND2.RDB$FOREIGN_KEY = RCL.RDB$INDEX_NAME
+				 IND2.RDB$FOREIGN_KEY_SCHEMA_NAME = IND1.RDB$SCHEMA_NAME AND
+				 IND2.RDB$FOREIGN_KEY = IND1.RDB$INDEX_NAME
 		{
 			ERR_post(Arg::Gds(isc_integ_index_deactivate));
 		}
@@ -255,7 +295,8 @@ void beforeUpdateIndex(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 
 		FOR (REQUEST_HANDLE request3 TRANSACTION_HANDLE transaction)
 			RCL IN RDB$RELATION_CONSTRAINTS
-			WITH RCL.RDB$INDEX_NAME = oldIndexName.c_str() AND
+			WITH RCL.RDB$SCHEMA_NAME = oldSchemaName.c_str() AND
+				 RCL.RDB$INDEX_NAME = oldIndexName.c_str() AND
 				 (RCL.RDB$CONSTRAINT_TYPE = PRIMARY_KEY OR
 				  RCL.RDB$CONSTRAINT_TYPE = UNIQUE_CNSTRT OR
 				  RCL.RDB$CONSTRAINT_TYPE = FOREIGN_KEY)
@@ -274,18 +315,23 @@ void beforeUpdateIndex(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 void beforeDeleteIndexSegment(thread_db* tdbb, Record* record)
 {
 	const auto transaction = tdbb->getTransaction();
+	dsc desc;
 
-	dsc descIndexName;
+	MetaName schemaName;
+	if (EVL_field(nullptr, record, f_seg_schema, &desc))
+		MOV_get_metaname(tdbb, &desc, schemaName);
+
 	MetaName indexName;
-	if (EVL_field(nullptr, record, f_seg_name, &descIndexName))
-		MOV_get_metaname(tdbb, &descIndexName, indexName);
+	if (EVL_field(nullptr, record, f_seg_name, &desc))
+		MOV_get_metaname(tdbb, &desc, indexName);
 
 	static const CachedRequestId requestCacheId;
 	AutoCacheRequest request(tdbb, requestCacheId);
 
 	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		RLC IN RDB$RELATION_CONSTRAINTS
-		WITH RLC.RDB$INDEX_NAME EQ indexName.c_str()
+		WITH RLC.RDB$SCHEMA_NAME EQ schemaName.c_str() AND
+			 RLC.RDB$INDEX_NAME EQ indexName.c_str()
 	{
 		ERR_post(Arg::Gds(isc_integ_index_seg_del));
 	}
@@ -295,19 +341,26 @@ void beforeDeleteIndexSegment(thread_db* tdbb, Record* record)
 void beforeUpdateIndexSegment(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 {
 	const auto transaction = tdbb->getTransaction();
+	dsc desc;
 
-	dsc descOldIndexName;
+	MetaName oldSchemaName;
+	if (EVL_field(nullptr, orgRecord, f_seg_schema, &desc))
+		MOV_get_metaname(tdbb, &desc, oldSchemaName);
+
 	MetaName oldIndexName;
-	if (EVL_field(nullptr, orgRecord, f_seg_name, &descOldIndexName))
-		MOV_get_metaname(tdbb, &descOldIndexName, oldIndexName);
+	if (EVL_field(nullptr, orgRecord, f_seg_name, &desc))
+		MOV_get_metaname(tdbb, &desc, oldIndexName);
 
 	static const CachedRequestId requestCacheId;
 	AutoCacheRequest request(tdbb, requestCacheId);
 
 	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		RLC IN RDB$RELATION_CONSTRAINTS
-		WITH RLC.RDB$INDEX_NAME EQ oldIndexName.c_str()
+		WITH RLC.RDB$SCHEMA_NAME EQ oldSchemaName.c_str() AND
+			 RLC.RDB$INDEX_NAME EQ oldIndexName.c_str()
 	{
+		dsc descNewSchemaName;
+		MetaName newSchemaName;
 		dsc descNewIndexName;
 		MetaName newIndexName;
 		dsc descOldFieldName, descNewFieldName;
@@ -315,19 +368,22 @@ void beforeUpdateIndexSegment(thread_db* tdbb, Record* orgRecord, Record* newRec
 		dsc descOldFieldPosition, descNewFieldPosition;
 		SLONG oldFieldPosition, newFieldPosition;
 
-		if (EVL_field(nullptr, newRecord, f_seg_name, &descNewIndexName) &&
+		if (EVL_field(nullptr, newRecord, f_seg_schema, &descNewSchemaName) &&
+			EVL_field(nullptr, newRecord, f_seg_name, &descNewIndexName) &&
 			EVL_field(nullptr, orgRecord, f_seg_field, &descOldFieldName) &&
 			EVL_field(nullptr, newRecord, f_seg_field, &descNewFieldName) &&
 			EVL_field(nullptr, orgRecord, f_seg_position, &descOldFieldPosition) &&
 			EVL_field(nullptr, newRecord, f_seg_position, &descNewFieldPosition))
 		{
+			MOV_get_metaname(tdbb, &descNewSchemaName, newSchemaName);
 			MOV_get_metaname(tdbb, &descNewIndexName, newIndexName);
 			MOV_get_metaname(tdbb, &descOldFieldName, oldFieldName);
 			MOV_get_metaname(tdbb, &descNewFieldName, newFieldName);
 			oldFieldPosition = MOV_get_long(tdbb, &descOldFieldPosition, 0);
 			newFieldPosition = MOV_get_long(tdbb, &descNewFieldPosition, 0);
 
-			if (oldIndexName != newIndexName ||
+			if (newSchemaName != oldSchemaName ||
+				oldIndexName != newIndexName ||
 				oldFieldName != newFieldName ||
 				oldFieldPosition != newFieldPosition)
 			{
@@ -341,12 +397,17 @@ void beforeUpdateIndexSegment(thread_db* tdbb, Record* orgRecord, Record* newRec
 void beforeUpdateField(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 {
 	const auto transaction = tdbb->getTransaction();
+	dsc desc;
 
-	dsc descFieldName;
-	MetaName fieldName;
-	if (!EVL_field(nullptr, orgRecord, f_fld_name, &descFieldName))
+	MetaName schemaName;
+	if (!EVL_field(nullptr, orgRecord, f_fld_schema, &desc))
 		return;
-	MOV_get_metaname(tdbb, &descFieldName, fieldName);
+	MOV_get_metaname(tdbb, &desc, schemaName);
+
+	MetaName fieldName;
+	if (!EVL_field(nullptr, orgRecord, f_fld_name, &desc))
+		return;
+	MOV_get_metaname(tdbb, &desc, fieldName);
 
 	dsc descOldFieldLength, descNewFieldLength;
 	SLONG oldFieldLength, newFieldLength;
@@ -388,10 +449,14 @@ void beforeUpdateField(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 				CROSS IND IN RDB$INDICES
 				CROSS RLC IN RDB$RELATION_CONSTRAINTS
 				CROSS IDS IN RDB$INDEX_SEGMENTS
-				WITH RFL.RDB$FIELD_SOURCE = fieldName.c_str() AND
+				WITH RFL.RDB$FIELD_SOURCE_SCHEMA_NAME = schemaName.c_str() AND
+					 RFL.RDB$FIELD_SOURCE = fieldName.c_str() AND
+					 IND.RDB$SCHEMA_NAME = RFL.RDB$SCHEMA_NAME AND
 					 IND.RDB$RELATION_NAME = RFL.RDB$RELATION_NAME AND
+					 IDS.RDB$SCHEMA_NAME = IND.RDB$SCHEMA_NAME AND
 					 IDS.RDB$INDEX_NAME = IND.RDB$INDEX_NAME AND
 					 IDS.RDB$FIELD_NAME = RFL.RDB$FIELD_NAME AND
+					 RLC.RDB$SCHEMA_NAME = IND.RDB$SCHEMA_NAME AND
 					 RLC.RDB$INDEX_NAME = IND.RDB$INDEX_NAME
 			{
 				ERR_post(Arg::Gds(isc_integ_index_seg_mod));
@@ -404,11 +469,23 @@ void beforeUpdateField(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 void beforeInsertRefConstraint(thread_db* tdbb, Record* record)
 {
 	const auto transaction = tdbb->getTransaction();
+	dsc desc;
 
-	dsc descConstraintName;
+	MetaName schemaName;
+	if (EVL_field(nullptr, record, f_refc_schema, &desc))
+		MOV_get_metaname(tdbb, &desc, schemaName);
+	else
+		schemaName = PUBLIC_SCHEMA;
+
+	MetaName uqSchemaName;
+	if (EVL_field(nullptr, record, f_refc_uq_schema, &desc))
+		MOV_get_metaname(tdbb, &desc, uqSchemaName);
+	else
+		uqSchemaName = PUBLIC_SCHEMA;
+
 	MetaName constraintName;
-	if (EVL_field(nullptr, record, f_refc_cname, &descConstraintName))
-		MOV_get_metaname(tdbb, &descConstraintName, constraintName);
+	if (EVL_field(nullptr, record, f_refc_cname, &desc))
+		MOV_get_metaname(tdbb, &desc, constraintName);
 
 	static const CachedRequestId request1CacheId;
 	AutoCacheRequest request1(tdbb, request1CacheId);
@@ -417,6 +494,7 @@ void beforeInsertRefConstraint(thread_db* tdbb, Record* record)
 	FOR (REQUEST_HANDLE request1 TRANSACTION_HANDLE transaction)
 		RLC IN RDB$RELATION_CONSTRAINTS
 		WITH RLC.RDB$CONSTRAINT_TYPE = FOREIGN_KEY AND
+			 RLC.RDB$SCHEMA_NAME = schemaName.c_str() AND
 			 RLC.RDB$CONSTRAINT_NAME EQ constraintName.c_str()
 	{
 		fkFound = true;
@@ -426,10 +504,9 @@ void beforeInsertRefConstraint(thread_db* tdbb, Record* record)
 	if (!fkFound)
 		ERR_post(Arg::Gds(isc_ref_cnstrnt_notfound));
 
-	dsc descConstraintNameUq;
 	MetaName constraintNameUq;
-	if (EVL_field(nullptr, record, f_refc_uq, &descConstraintNameUq))
-		MOV_get_metaname(tdbb, &descConstraintNameUq, constraintNameUq);
+	if (EVL_field(nullptr, record, f_refc_uq, &desc))
+		MOV_get_metaname(tdbb, &desc, constraintNameUq);
 
 	static const CachedRequestId request2CacheId;
 	AutoCacheRequest request2(tdbb, request2CacheId);
@@ -438,6 +515,7 @@ void beforeInsertRefConstraint(thread_db* tdbb, Record* record)
 	FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
 		RLC IN RDB$RELATION_CONSTRAINTS
 		WITH (RLC.RDB$CONSTRAINT_TYPE = PRIMARY_KEY OR RLC.RDB$CONSTRAINT_TYPE = UNIQUE_CNSTRT) AND
+			 RLC.RDB$SCHEMA_NAME = uqSchemaName.c_str() AND
 			 RLC.RDB$CONSTRAINT_NAME EQ constraintNameUq.c_str()
 	{
 		pkUniqueFound = true;
@@ -452,6 +530,10 @@ void beforeDeleteRelationConstraint(thread_db* tdbb, Record* record)
 {
 	const auto transaction = tdbb->getTransaction();
 	dsc desc;
+
+	MetaName schemaName;
+	if (EVL_field(nullptr, record, f_rcon_schema, &desc))
+		MOV_get_metaname(tdbb, &desc, schemaName);
 
 	MetaName constraintName;
 	if (EVL_field(nullptr, record, f_rcon_cname, &desc))
@@ -471,7 +553,8 @@ void beforeDeleteRelationConstraint(thread_db* tdbb, Record* record)
 
 		FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 			REF IN RDB$REF_CONSTRAINTS
-			WITH REF.RDB$CONST_NAME_UQ = constraintName.c_str()
+			WITH REF.RDB$CONST_SCHEMA_NAME_UQ = schemaName.c_str() AND
+				 REF.RDB$CONST_NAME_UQ = constraintName.c_str()
 		{
 			ERR_post(Arg::Gds(isc_primary_key_ref));
 		}
@@ -484,7 +567,8 @@ void beforeDeleteRelationConstraint(thread_db* tdbb, Record* record)
 
 		FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 			REF IN RDB$REF_CONSTRAINTS
-			WITH REF.RDB$CONSTRAINT_NAME = constraintName.c_str()
+			WITH REF.RDB$SCHEMA_NAME = schemaName.c_str() AND
+				 REF.RDB$CONSTRAINT_NAME = constraintName.c_str()
 		{
 			ERASE REF;
 		}
@@ -505,12 +589,17 @@ void beforeDeleteRelationConstraint(thread_db* tdbb, Record* record)
 			CROSS FLD IN RDB$FIELDS
 			CROSS IND IN RDB$INDICES
 			CROSS IDS IN RDB$INDEX_SEGMENTS
-			WITH CHK.RDB$CONSTRAINT_NAME = constraintName.c_str() AND
+			WITH CHK.RDB$SCHEMA_NAME = schemaName.c_str() AND
+				 CHK.RDB$CONSTRAINT_NAME = constraintName.c_str() AND
+				 RFL.RDB$SCHEMA_NAME = CHK.RDB$SCHEMA_NAME AND
 				 RFL.RDB$RELATION_NAME = relationName.c_str() AND
 				 RFL.RDB$FIELD_NAME = CHK.RDB$TRIGGER_NAME AND
-				 IND.RDB$RELATION_NAME = relationName.c_str() AND
+				 IND.RDB$SCHEMA_NAME = RFL.RDB$SCHEMA_NAME AND
+				 IND.RDB$RELATION_NAME = RFL.RDB$RELATION_NAME AND
+				 IDS.RDB$SCHEMA_NAME = IND.RDB$SCHEMA_NAME AND
 				 IDS.RDB$INDEX_NAME = IND.RDB$INDEX_NAME AND
 				 IDS.RDB$FIELD_NAME = RFL.RDB$FIELD_NAME AND
+				 FLD.RDB$SCHEMA_NAME = RFL.RDB$FIELD_SOURCE_SCHEMA_NAME AND
 				 FLD.RDB$FIELD_NAME = RFL.RDB$FIELD_SOURCE AND
 				 (FLD.RDB$NULL_FLAG MISSING OR FLD.RDB$NULL_FLAG = 0)
 		{
@@ -519,7 +608,8 @@ void beforeDeleteRelationConstraint(thread_db* tdbb, Record* record)
 
 			FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
 				RCL IN RDB$RELATION_CONSTRAINTS
-				WITH RCL.RDB$INDEX_NAME = IND.RDB$INDEX_NAME AND
+				WITH RCL.RDB$SCHEMA_NAME = IND.RDB$SCHEMA_NAME AND
+					 RCL.RDB$INDEX_NAME = IND.RDB$INDEX_NAME AND
 					 RCL.RDB$CONSTRAINT_TYPE = PRIMARY_KEY
 			{
 				ERR_post(Arg::Gds(isc_primary_key_notnull));
@@ -542,6 +632,10 @@ void afterDeleteRelationConstraint(thread_db* tdbb, Record* record)
 		constraintType.rtrim();
 	}
 
+	MetaName schemaName;
+	if (EVL_field(nullptr, record, f_rcon_schema, &desc))
+		MOV_get_metaname(tdbb, &desc, schemaName);
+
 	MetaName constraintName;
 	if (EVL_field(nullptr, record, f_rcon_cname, &desc))
 		MOV_get_metaname(tdbb, &desc, constraintName);
@@ -561,7 +655,8 @@ void afterDeleteRelationConstraint(thread_db* tdbb, Record* record)
 
 		FOR (REQUEST_HANDLE request1 TRANSACTION_HANDLE transaction)
 			CHK IN RDB$CHECK_CONSTRAINTS
-			WITH CHK.RDB$CONSTRAINT_NAME = constraintName.c_str()
+			WITH CHK.RDB$SCHEMA_NAME = schemaName.c_str() AND
+				 CHK.RDB$CONSTRAINT_NAME = constraintName.c_str()
 		{
 			ERASE CHK;
 
@@ -570,7 +665,8 @@ void afterDeleteRelationConstraint(thread_db* tdbb, Record* record)
 
 			FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
 				TRG IN RDB$TRIGGERS
-				WITH TRG.RDB$TRIGGER_NAME = CHK.RDB$TRIGGER_NAME
+				WITH TRG.RDB$SCHEMA_NAME = CHK.RDB$SCHEMA_NAME AND
+					 TRG.RDB$TRIGGER_NAME = CHK.RDB$TRIGGER_NAME
 			{
 				ERASE TRG;
 			}
@@ -586,7 +682,8 @@ void afterDeleteRelationConstraint(thread_db* tdbb, Record* record)
 
 		FOR (REQUEST_HANDLE request3 TRANSACTION_HANDLE transaction)
 			IND IN RDB$INDICES
-			WITH IND.RDB$INDEX_NAME = indexName.c_str()
+			WITH IND.RDB$SCHEMA_NAME = schemaName.c_str() AND
+				 IND.RDB$INDEX_NAME = indexName.c_str()
 		{
 			ERASE IND;
 
@@ -595,7 +692,8 @@ void afterDeleteRelationConstraint(thread_db* tdbb, Record* record)
 
 			FOR (REQUEST_HANDLE request4 TRANSACTION_HANDLE transaction)
 				IDS IN RDB$INDEX_SEGMENTS
-				WITH IDS.RDB$INDEX_NAME = IND.RDB$INDEX_NAME
+				WITH IDS.RDB$SCHEMA_NAME = IND.RDB$SCHEMA_NAME AND
+					 IDS.RDB$INDEX_NAME = IND.RDB$INDEX_NAME
 			{
 				ERASE IDS;
 			}
@@ -612,7 +710,9 @@ void afterDeleteRelationConstraint(thread_db* tdbb, Record* record)
 		FOR (REQUEST_HANDLE request5 TRANSACTION_HANDLE transaction)
 			CHK IN RDB$CHECK_CONSTRAINTS
 			CROSS RFL IN RDB$RELATION_FIELDS
-			WITH CHK.RDB$CONSTRAINT_NAME = constraintName.c_str() AND
+			WITH CHK.RDB$SCHEMA_NAME = schemaName.c_str() AND
+				 CHK.RDB$CONSTRAINT_NAME = constraintName.c_str() AND
+				 RFL.RDB$SCHEMA_NAME = CHK.RDB$SCHEMA_NAME AND
 				 RFL.RDB$RELATION_NAME = relationName.c_str() AND
 				 RFL.RDB$FIELD_NAME = CHK.RDB$TRIGGER_NAME
 		{
@@ -634,7 +734,8 @@ void afterDeleteRelationConstraint(thread_db* tdbb, Record* record)
 
 		FOR (REQUEST_HANDLE request6 TRANSACTION_HANDLE transaction)
 			CHK IN RDB$CHECK_CONSTRAINTS
-			WITH CHK.RDB$CONSTRAINT_NAME = constraintName.c_str()
+			WITH CHK.RDB$SCHEMA_NAME = schemaName.c_str() AND
+				 CHK.RDB$CONSTRAINT_NAME = constraintName.c_str()
 		{
 			ERASE CHK;
 
@@ -643,7 +744,8 @@ void afterDeleteRelationConstraint(thread_db* tdbb, Record* record)
 
 			FOR (REQUEST_HANDLE request7 TRANSACTION_HANDLE transaction)
 				TRG IN RDB$TRIGGERS
-				WITH TRG.RDB$TRIGGER_NAME = CHK.RDB$TRIGGER_NAME AND
+				WITH TRG.RDB$SCHEMA_NAME = CHK.RDB$SCHEMA_NAME AND
+					 TRG.RDB$TRIGGER_NAME = CHK.RDB$TRIGGER_NAME AND
 					 TRG.RDB$RELATION_NAME = relationName.c_str()
 			{
 				ERASE TRG;
@@ -658,6 +760,12 @@ void beforeInsertRelationConstraint(thread_db* tdbb, Record* record)
 {
 	const auto transaction = tdbb->getTransaction();
 	dsc desc;
+
+	MetaName schemaName;
+	if (EVL_field(nullptr, record, f_rcon_schema, &desc))
+		MOV_get_metaname(tdbb, &desc, schemaName);
+	else
+		schemaName = PUBLIC_SCHEMA;
 
 	MetaName relationName;
 	if (EVL_field(nullptr, record, f_rcon_rname, &desc))
@@ -675,7 +783,8 @@ void beforeInsertRelationConstraint(thread_db* tdbb, Record* record)
 
 	FOR (REQUEST_HANDLE request1 TRANSACTION_HANDLE transaction)
 		REL IN RDB$RELATIONS
-		WITH REL.RDB$RELATION_NAME EQ relationName.c_str() AND
+		WITH REL.RDB$SCHEMA_NAME EQ schemaName.c_str() AND
+			 REL.RDB$RELATION_NAME EQ relationName.c_str() AND
 			 REL.RDB$VIEW_SOURCE NOT MISSING
 	{
 		ERR_post(Arg::Gds(isc_constaint_on_view));
@@ -689,7 +798,8 @@ void beforeInsertRelationConstraint(thread_db* tdbb, Record* record)
 
 		FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
 			RLC IN RDB$RELATION_CONSTRAINTS
-			WITH RLC.RDB$RELATION_NAME EQ relationName.c_str() AND
+			WITH RLC.RDB$SCHEMA_NAME EQ schemaName.c_str() AND
+				 RLC.RDB$RELATION_NAME EQ relationName.c_str() AND
 				 RLC.RDB$CONSTRAINT_TYPE = PRIMARY_KEY
 		{
 			ERR_post(Arg::Gds(isc_primary_key_exists));
@@ -702,6 +812,11 @@ void beforeDeleteRelationField(thread_db* tdbb, Record* record)
 {
 	const auto transaction = tdbb->getTransaction();
 	dsc desc;
+
+	MetaName schemaName;
+	if (!EVL_field(nullptr, record, f_rfr_schema, &desc))
+		return;
+	MOV_get_metaname(tdbb, &desc, schemaName);
 
 	MetaName relationName;
 	if (!EVL_field(nullptr, record, f_rfr_rname, &desc))
@@ -720,17 +835,21 @@ void beforeDeleteRelationField(thread_db* tdbb, Record* record)
 		IND IN RDB$INDICES
 		CROSS RCL IN RDB$RELATION_CONSTRAINTS
 		CROSS IDS IN RDB$INDEX_SEGMENTS
-		WITH IND.RDB$RELATION_NAME = relationName.c_str() AND
+		WITH IND.RDB$SCHEMA_NAME = schemaName.c_str() AND
+			 IND.RDB$RELATION_NAME = relationName.c_str() AND
+			 IDS.RDB$SCHEMA_NAME = IND.RDB$SCHEMA_NAME AND
 			 IDS.RDB$INDEX_NAME = IND.RDB$INDEX_NAME AND
-			 RCL.RDB$INDEX_NAME = IND.RDB$INDEX_NAME AND
-			 IDS.RDB$FIELD_NAME = fieldName.c_str()
+			 IDS.RDB$FIELD_NAME = fieldName.c_str() AND
+			 RCL.RDB$SCHEMA_NAME = IND.RDB$SCHEMA_NAME AND
+			 RCL.RDB$INDEX_NAME = IND.RDB$INDEX_NAME
 	{
 		static const CachedRequestId request2CacheId;
 		AutoCacheRequest request2(tdbb, request2CacheId);
 
 		FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
 			IDS2 IN RDB$INDEX_SEGMENTS
-			WITH IDS2.RDB$INDEX_NAME = IND.RDB$INDEX_NAME AND
+			WITH IDS2.RDB$SCHEMA_NAME = IND.RDB$SCHEMA_NAME AND
+				 IDS2.RDB$INDEX_NAME = IND.RDB$INDEX_NAME AND
 				 IDS2.RDB$FIELD_NAME != fieldName.c_str()
 		{
 			ERR_post(Arg::Gds(isc_cnstrnt_fld_del));
@@ -748,12 +867,15 @@ void beforeDeleteRelationField(thread_db* tdbb, Record* record)
 		RCL IN RDB$RELATION_CONSTRAINTS
 		CROSS CHK IN RDB$CHECK_CONSTRAINTS
 		CROSS DEP IN RDB$DEPENDENCIES
-		WITH RCL.RDB$RELATION_NAME = relationName.c_str() AND
+		WITH RCL.RDB$SCHEMA_NAME = schemaName.c_str() AND
+			 RCL.RDB$RELATION_NAME = relationName.c_str() AND
 			 RCL.RDB$CONSTRAINT_TYPE = CHECK_CNSTRT AND
-			 DEP.RDB$DEPENDED_ON_NAME = relationName.c_str() AND
+			 DEP.RDB$DEPENDED_ON_SCHEMA_NAME = RCL.RDB$SCHEMA_NAME AND
+			 DEP.RDB$DEPENDED_ON_NAME = RCL.RDB$RELATION_NAME AND
 			 DEP.RDB$FIELD_NAME = fieldName.c_str() AND
 			 DEP.RDB$DEPENDENT_TYPE = obj_trigger AND
 			 DEP.RDB$DEPENDED_ON_TYPE = obj_relation AND
+			 CHK.RDB$SCHEMA_NAME = DEP.RDB$DEPENDENT_SCHEMA_NAME AND
 			 CHK.RDB$TRIGGER_NAME = DEP.RDB$DEPENDENT_NAME
 	{
 		static const CachedRequestId request4CacheId;
@@ -761,9 +883,11 @@ void beforeDeleteRelationField(thread_db* tdbb, Record* record)
 
 		FOR (REQUEST_HANDLE request4 TRANSACTION_HANDLE transaction)
 			DEP4 IN RDB$DEPENDENCIES
-			WITH DEP4.RDB$DEPENDENT_NAME = CHK.RDB$TRIGGER_NAME AND
+			WITH DEP4.RDB$DEPENDENT_SCHEMA_NAME = CHK.RDB$SCHEMA_NAME AND
+				 DEP4.RDB$DEPENDENT_NAME = CHK.RDB$TRIGGER_NAME AND
 				 DEP4.RDB$DEPENDENT_TYPE = obj_trigger AND
 				 DEP4.RDB$DEPENDED_ON_TYPE = obj_relation AND
+				 DEP4.RDB$DEPENDED_ON_SCHEMA_NAME = schemaName.c_str() AND
 				 DEP4.RDB$DEPENDED_ON_NAME = relationName.c_str() AND
 				 DEP4.RDB$FIELD_NAME != fieldName.c_str()
 		{
@@ -781,6 +905,11 @@ void afterDeleteRelationField(thread_db* tdbb, Record* record)
 	const auto transaction = tdbb->getTransaction();
 	dsc desc;
 
+	MetaName schemaName;
+	if (!EVL_field(nullptr, record, f_rfr_schema, &desc))
+		return;
+	MOV_get_metaname(tdbb, &desc, schemaName);
+
 	MetaName relationName;
 	if (!EVL_field(nullptr, record, f_rfr_rname, &desc))
 		return;
@@ -797,7 +926,9 @@ void afterDeleteRelationField(thread_db* tdbb, Record* record)
 	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		CHK IN RDB$CHECK_CONSTRAINTS
 		CROSS RCL IN RDB$RELATION_CONSTRAINTS
-		WITH CHK.RDB$TRIGGER_NAME EQ fieldName.c_str() AND
+		WITH CHK.RDB$SCHEMA_NAME = schemaName.c_str() AND
+			 CHK.RDB$TRIGGER_NAME EQ fieldName.c_str() AND
+			 RCL.RDB$SCHEMA_NAME = CHK.RDB$SCHEMA_NAME AND
 			 RCL.RDB$CONSTRAINT_NAME EQ CHK.RDB$CONSTRAINT_NAME AND
 			 RCL.RDB$RELATION_NAME = relationName.c_str() AND
 			 RCL.RDB$CONSTRAINT_TYPE = NOT_NULL_CNSTRT
@@ -811,12 +942,16 @@ void afterDeleteRelationField(thread_db* tdbb, Record* record)
 void beforeUpdateRelationField(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 {
 	const auto transaction = tdbb->getTransaction();
-
 	dsc desc;
+
+	MetaName oldSchemaName;
 	MetaName oldRelationName;
 	MetaName oldFieldName, newFieldName;
 	MetaName oldFieldSource, newFieldSource;
 	std::optional<SLONG> oldCollationId, newCollationId;
+
+	if (EVL_field(nullptr, orgRecord, f_rfr_schema, &desc))
+		MOV_get_metaname(tdbb, &desc, oldSchemaName);
 
 	if (EVL_field(nullptr, orgRecord, f_rfr_rname, &desc))
 		MOV_get_metaname(tdbb, &desc, oldRelationName);
@@ -849,9 +984,12 @@ void beforeUpdateRelationField(thread_db* tdbb, Record* orgRecord, Record* newRe
 			IND IN RDB$INDICES
 			CROSS IDS IN RDB$INDEX_SEGMENTS
 			CROSS RLC IN RDB$RELATION_CONSTRAINTS
-			WITH IND.RDB$RELATION_NAME = oldRelationName.c_str() AND
+			WITH IND.RDB$SCHEMA_NAME = oldSchemaName.c_str() AND
+				 IND.RDB$RELATION_NAME = oldRelationName.c_str() AND
+				 IDS.RDB$SCHEMA_NAME = IND.RDB$SCHEMA_NAME AND
 				 IDS.RDB$INDEX_NAME = IND.RDB$INDEX_NAME AND
 				 IDS.RDB$FIELD_NAME = oldFieldName.c_str() AND
+				 RLC.RDB$SCHEMA_NAME = IND.RDB$SCHEMA_NAME AND
 				 RLC.RDB$INDEX_NAME = IND.RDB$INDEX_NAME
 		{
 			if (oldFieldName != newFieldName)
@@ -864,6 +1002,30 @@ void beforeUpdateRelationField(thread_db* tdbb, Record* orgRecord, Record* newRe
 	}
 }
 
+void beforeInsertSchema(thread_db* tdbb, Record* record)
+{
+	const auto transaction = tdbb->getTransaction();
+	dsc desc;
+
+	if (!EVL_field(nullptr, record, f_sch_schema, &desc))
+		return;;
+
+	USHORT ttype;
+	UCHAR* schemaStr;
+	const auto schemaByteLen = CVT_get_string_ptr(&desc, &ttype, &schemaStr, nullptr, 0, 0);
+
+	const auto utf8CharSet = IntlUtil::getUtf8CharSet();
+	const int schemaCharLen = utf8CharSet->length(schemaByteLen, schemaStr, false);
+	const int schemaCharLenLimit = METADATA_IDENTIFIER_CHAR_LEN - SQL_DDL_SECCLASS_PREFIX_LEN;
+
+	if (schemaCharLen > schemaCharLenLimit)
+	{
+		string message;
+		message.printf("schema name is limited to %d characters", schemaCharLenLimit);
+		ERR_post(Arg::Gds(isc_wish_list) << Arg::Gds(isc_random) << message);
+	}
+}
+
 void beforeDeleteTrigger(thread_db* tdbb, Record* record)
 {
 	const auto transaction = tdbb->getTransaction();
@@ -871,6 +1033,10 @@ void beforeDeleteTrigger(thread_db* tdbb, Record* record)
 
 	if (EVL_field(nullptr, record, f_trg_sys_flag, &desc) && MOV_get_long(tdbb, &desc, 0) == 1)
 		ERR_post(Arg::Gds(isc_systrig_update));
+
+	MetaName oldSchemaName;
+	if (EVL_field(nullptr, record, f_trg_schema, &desc))
+		MOV_get_metaname(tdbb, &desc, oldSchemaName);
 
 	MetaName oldTriggerName;
 	if (EVL_field(nullptr, record, f_trg_name, &desc))
@@ -882,7 +1048,9 @@ void beforeDeleteTrigger(thread_db* tdbb, Record* record)
 	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		CHK IN RDB$CHECK_CONSTRAINTS
 		CROSS RCL IN RDB$RELATION_CONSTRAINTS
-		WITH CHK.RDB$TRIGGER_NAME EQ oldTriggerName.c_str() AND
+		WITH CHK.RDB$SCHEMA_NAME = oldSchemaName.c_str() AND
+			 CHK.RDB$TRIGGER_NAME EQ oldTriggerName.c_str() AND
+			 RCL.RDB$SCHEMA_NAME = CHK.RDB$SCHEMA_NAME AND
 			 RCL.RDB$CONSTRAINT_NAME EQ CHK.RDB$CONSTRAINT_NAME AND
 			 RCL.RDB$CONSTRAINT_TYPE = CHECK_CNSTRT
 	{
@@ -898,6 +1066,12 @@ void beforeUpdateTrigger(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 
 	if (EVL_field(nullptr, orgRecord, f_trg_sys_flag, &desc) && MOV_get_long(tdbb, &desc, 0) == 1)
 		ERR_post(Arg::Gds(isc_systrig_update));
+
+	MetaName oldSchemaName, newSchemaName;
+	if (EVL_field(nullptr, orgRecord, f_trg_schema, &desc))
+		MOV_get_metaname(tdbb, &desc, oldSchemaName);
+	if (EVL_field(nullptr, newRecord, f_trg_schema, &desc))
+		MOV_get_metaname(tdbb, &desc, newSchemaName);
 
 	MetaName oldTriggerName, newTriggerName;
 	if (EVL_field(nullptr, orgRecord, f_trg_name, &desc))
@@ -947,11 +1121,13 @@ void beforeUpdateTrigger(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		CHK IN RDB$CHECK_CONSTRAINTS
 		CROSS RCL IN RDB$RELATION_CONSTRAINTS
-		WITH CHK.RDB$TRIGGER_NAME = oldTriggerName.c_str() AND
+		WITH CHK.RDB$SCHEMA_NAME = oldSchemaName.c_str() AND
+			 CHK.RDB$TRIGGER_NAME = oldTriggerName.c_str() AND
 			 RCL.RDB$CONSTRAINT_NAME = CHK.RDB$CONSTRAINT_NAME AND
 			 RCL.RDB$CONSTRAINT_TYPE = CHECK_CNSTRT
 	{
-		if (!(oldTriggerName == newTriggerName &&
+		if (!(oldSchemaName == newSchemaName &&
+			  oldTriggerName == newTriggerName &&
 			  oldRelationName == newRelationName &&
 			  oldTriggerSequence == newTriggerSequence &&
 			  oldTriggerBlr == newTriggerBlr &&
@@ -970,6 +1146,11 @@ void beforeDeleteUserPrivilege(thread_db* tdbb, Record* record)
 	const auto transaction = tdbb->getTransaction();
 	dsc desc;
 
+	MetaName schemaName;
+	if (!EVL_field(nullptr, record, f_prv_rel_schema, &desc))
+		return;
+	MOV_get_metaname(tdbb, &desc, schemaName);
+
 	MetaName relationName;
 	if (!EVL_field(nullptr, record, f_prv_rname, &desc))
 		return;
@@ -986,7 +1167,8 @@ void beforeDeleteUserPrivilege(thread_db* tdbb, Record* record)
 	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		RFL IN RDB$RELATION_FIELDS
 		CROSS SEC IN RDB$SECURITY_CLASSES
-		WITH RFL.RDB$RELATION_NAME = relationName.c_str() AND
+		WITH RFL.RDB$SCHEMA_NAME = schemaName.c_str() AND
+			 RFL.RDB$RELATION_NAME = relationName.c_str() AND
 			 RFL.RDB$FIELD_NAME = fieldName.c_str() AND
 			 RFL.RDB$SECURITY_CLASS STARTING SQL_FLD_SECCLASS_PREFIX AND
 			 SEC.RDB$SECURITY_CLASS = RFL.RDB$SECURITY_CLASS
@@ -1036,6 +1218,12 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 	if (EVL_field(nullptr, record, f_prv_priv, &desc))
 		MOV_get_string(tdbb, &desc, privilege);
 
+	MetaName schemaName;
+	if (EVL_field(nullptr, record, f_prv_rel_schema, &desc))
+		MOV_get_metaname(tdbb, &desc, schemaName);
+	else
+		schemaName = PUBLIC_SCHEMA;
+
 	MetaName relationName;
 	if (EVL_field(nullptr, record, f_prv_rname, &desc))
 		MOV_get_metaname(tdbb, &desc, relationName);
@@ -1053,7 +1241,8 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 
 			FOR (REQUEST_HANDLE request1 TRANSACTION_HANDLE transaction)
 				REL IN RDB$RELATIONS
-				WITH REL.RDB$RELATION_NAME EQ relationName.c_str()
+				WITH REL.RDB$SCHEMA_NAME EQ schemaName.c_str() AND
+					 REL.RDB$RELATION_NAME EQ relationName.c_str()
 			{
 				const MetaName relationOwner(REL.RDB$OWNER_NAME);
 
@@ -1071,11 +1260,14 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 								RFL2 IN RDB$RELATION_FIELDS
 								CROSS VRL2 IN RDB$VIEW_RELATIONS
 								CROSS REL2 IN RDB$RELATIONS
-								WITH RFL2.RDB$RELATION_NAME = relationName.c_str() AND
+								WITH RFL2.RDB$SCHEMA_NAME = schemaName.c_str() AND
+									 RFL2.RDB$RELATION_NAME = relationName.c_str() AND
 									 RFL2.RDB$FIELD_NAME = fieldName.c_str() AND
 									 RFL2.RDB$BASE_FIELD NOT MISSING AND
+									 VRL2.RDB$SCHEMA_NAME = RFL2.RDB$SCHEMA_NAME AND
 									 VRL2.RDB$VIEW_NAME = RFL2.RDB$RELATION_NAME AND
 									 VRL2.RDB$VIEW_CONTEXT = RFL2.RDB$VIEW_CONTEXT AND
+									 REL2.RDB$SCHEMA_NAME = VRL2.RDB$RELATION_SCHEMA_NAME AND
 									 REL2.RDB$RELATION_NAME = VRL2.RDB$RELATION_NAME
 							{
 								const MetaName relation2Owner(REL2.RDB$OWNER_NAME);
@@ -1088,7 +1280,8 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 
 									FOR (REQUEST_HANDLE request3 TRANSACTION_HANDLE transaction)
 										PRIV3 IN RDB$USER_PRIVILEGES
-										WITH PRIV3.RDB$RELATION_NAME = REL2.RDB$RELATION_NAME AND
+										WITH PRIV3.RDB$RELATION_SCHEMA_NAME = REL2.RDB$SCHEMA_NAME AND
+											 PRIV3.RDB$RELATION_NAME = REL2.RDB$RELATION_NAME AND
 											 PRIV3.RDB$OBJECT_TYPE = obj_relation AND
 											 PRIV3.RDB$PRIVILEGE = privilege.c_str() AND
 											 PRIV3.RDB$USER = relationOwner.c_str() AND
@@ -1115,7 +1308,9 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 							FOR (REQUEST_HANDLE request4 TRANSACTION_HANDLE transaction)
 								VRL4 IN RDB$VIEW_RELATIONS
 								CROSS REL4 IN RDB$RELATIONS
-								WITH VRL4.RDB$VIEW_NAME = relationName.c_str() AND
+								WITH VRL4.RDB$SCHEMA_NAME = schemaName.c_str() AND
+									 VRL4.RDB$VIEW_NAME = relationName.c_str() AND
+									 REL4.RDB$SCHEMA_NAME = VRL4.RDB$RELATION_SCHEMA_NAME AND
 									 REL4.RDB$RELATION_NAME = VRL4.RDB$RELATION_NAME
 							{
 								const MetaName relation4Owner(REL4.RDB$OWNER_NAME);
@@ -1128,7 +1323,8 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 
 									FOR (REQUEST_HANDLE request5 TRANSACTION_HANDLE transaction)
 										PRIV5 IN RDB$USER_PRIVILEGES
-										WITH PRIV5.RDB$RELATION_NAME = REL4.RDB$RELATION_NAME AND
+										WITH PRIV5.RDB$RELATION_SCHEMA_NAME = REL4.RDB$SCHEMA_NAME AND
+											 PRIV5.RDB$RELATION_NAME = REL4.RDB$RELATION_NAME AND
 											 PRIV5.RDB$OBJECT_TYPE = obj_relation AND
 											 PRIV5.RDB$PRIVILEGE = privilege.c_str() AND
 											 PRIV5.RDB$USER = relationOwner.c_str() AND
@@ -1154,7 +1350,9 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 					MODIFY REL
 					{
 						sprintf(REL.RDB$SECURITY_CLASS, "%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
-							DPM_gen_id(tdbb, MET_lookup_generator(tdbb, SQL_SECCLASS_GENERATOR), false, 1));
+							DPM_gen_id(tdbb,
+								MET_lookup_generator(tdbb,
+									QualifiedName(SQL_SECCLASS_GENERATOR, SYSTEM_SCHEMA)), false, 1));
 						REL.RDB$SECURITY_CLASS.NULL = FALSE;
 					}
 					END_MODIFY
@@ -1171,7 +1369,8 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 
 				FOR (REQUEST_HANDLE request6 TRANSACTION_HANDLE transaction)
 					RFL6 IN RDB$RELATION_FIELDS
-					WITH RFL6.RDB$RELATION_NAME = relationName.c_str() AND
+					WITH RFL6.RDB$SCHEMA_NAME = schemaName.c_str() AND
+						 RFL6.RDB$RELATION_NAME = relationName.c_str() AND
 						 RFL6.RDB$FIELD_NAME = fieldName.c_str()
 				{
 					if (RFL6.RDB$SECURITY_CLASS.NULL)
@@ -1179,7 +1378,9 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 						MODIFY RFL6
 						{
 							sprintf(RFL6.RDB$SECURITY_CLASS, "%s%" SQUADFORMAT, SQL_FLD_SECCLASS_PREFIX,
-								DPM_gen_id(tdbb, MET_lookup_generator(tdbb, SQL_SECCLASS_GENERATOR), false, 1));
+								DPM_gen_id(tdbb,
+									MET_lookup_generator(tdbb,
+										QualifiedName(SQL_SECCLASS_GENERATOR, SYSTEM_SCHEMA)), false, 1));
 							RFL6.RDB$SECURITY_CLASS.NULL = TRUE;
 						}
 						END_MODIFY
@@ -1200,7 +1401,8 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 
 			FOR (REQUEST_HANDLE request1 TRANSACTION_HANDLE transaction)
 				PRC IN RDB$PROCEDURES
-				WITH PRC.RDB$PROCEDURE_NAME EQ relationName.c_str() AND
+				WITH PRC.RDB$SCHEMA_NAME = schemaName.c_str() AND
+					 PRC.RDB$PROCEDURE_NAME EQ relationName.c_str() AND
 					 PRC.RDB$PACKAGE_NAME MISSING
 			{
 				if (PRC.RDB$SECURITY_CLASS.NULL)
@@ -1208,7 +1410,9 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 					MODIFY PRC
 					{
 						sprintf(PRC.RDB$SECURITY_CLASS, "%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
-							DPM_gen_id(tdbb, MET_lookup_generator(tdbb, SQL_SECCLASS_GENERATOR), false, 1));
+							DPM_gen_id(tdbb,
+								MET_lookup_generator(tdbb,
+									QualifiedName(SQL_SECCLASS_GENERATOR, SYSTEM_SCHEMA)), false, 1));
 						PRC.RDB$SECURITY_CLASS.NULL = FALSE;
 					}
 					END_MODIFY
@@ -1228,7 +1432,8 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 
 			FOR (REQUEST_HANDLE request1 TRANSACTION_HANDLE transaction)
 				FUN IN RDB$FUNCTIONS
-				WITH FUN.RDB$FUNCTION_NAME EQ relationName.c_str() AND
+				WITH FUN.RDB$SCHEMA_NAME = schemaName.c_str() AND
+					 FUN.RDB$FUNCTION_NAME EQ relationName.c_str() AND
 					 FUN.RDB$PACKAGE_NAME MISSING
 			{
 				if (FUN.RDB$SECURITY_CLASS.NULL)
@@ -1236,7 +1441,9 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 					MODIFY FUN
 					{
 						sprintf(FUN.RDB$SECURITY_CLASS, "%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
-							DPM_gen_id(tdbb, MET_lookup_generator(tdbb, SQL_SECCLASS_GENERATOR), false, 1));
+							DPM_gen_id(tdbb,
+								MET_lookup_generator(tdbb,
+									QualifiedName(SQL_SECCLASS_GENERATOR, SYSTEM_SCHEMA)), false, 1));
 						FUN.RDB$SECURITY_CLASS.NULL = FALSE;
 					}
 					END_MODIFY
@@ -1256,19 +1463,58 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 
 			FOR (REQUEST_HANDLE request1 TRANSACTION_HANDLE transaction)
 				PKG IN RDB$PACKAGES
-				WITH PKG.RDB$PACKAGE_NAME EQ relationName.c_str()
+				WITH PKG.RDB$SCHEMA_NAME = schemaName.c_str() AND
+					 PKG.RDB$PACKAGE_NAME EQ relationName.c_str()
 			{
 				if (PKG.RDB$SECURITY_CLASS.NULL)
 				{
 					MODIFY PKG
 					{
 						sprintf(PKG.RDB$SECURITY_CLASS, "%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
-							DPM_gen_id(tdbb, MET_lookup_generator(tdbb, SQL_SECCLASS_GENERATOR), false, 1));
+							DPM_gen_id(tdbb,
+								MET_lookup_generator(tdbb,
+									QualifiedName(SQL_SECCLASS_GENERATOR, SYSTEM_SCHEMA)), false, 1));
 						PKG.RDB$SECURITY_CLASS.NULL = FALSE;
 					}
 					END_MODIFY
 				}
 				else if (strncmp(PKG.RDB$SECURITY_CLASS, SQL_SECCLASS_PREFIX, SQL_SECCLASS_PREFIX_LEN) != 0)
+					ERR_post(Arg::Gds(isc_nonsql_security_rel));
+			}
+			END_FOR
+
+			break;
+		}
+
+		default:
+			if (bool useSchema; !(isDdlObject(objectType, &useSchema) && useSchema))
+				break;
+			[[fallthrough]];
+
+		case obj_schema:
+		{
+			const auto filterSchemaName = (objectType == obj_schema ? relationName : schemaName);
+
+			static const CachedRequestId request1CacheId;
+			AutoCacheRequest request1(tdbb, request1CacheId);
+
+			FOR (REQUEST_HANDLE request1 TRANSACTION_HANDLE transaction)
+				SCH IN RDB$SCHEMAS
+				WITH SCH.RDB$SCHEMA_NAME = filterSchemaName.c_str()
+			{
+				if (SCH.RDB$SECURITY_CLASS.NULL)
+				{
+					MODIFY SCH
+					{
+						sprintf(SCH.RDB$SECURITY_CLASS, "%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
+							DPM_gen_id(tdbb,
+								MET_lookup_generator(tdbb,
+									QualifiedName(SQL_SECCLASS_GENERATOR, SYSTEM_SCHEMA)), false, 1));
+						SCH.RDB$SECURITY_CLASS.NULL = FALSE;
+					}
+					END_MODIFY
+				}
+				else if (strncmp(SCH.RDB$SECURITY_CLASS, SQL_SECCLASS_PREFIX, SQL_SECCLASS_PREFIX_LEN) != 0)
 					ERR_post(Arg::Gds(isc_nonsql_security_rel));
 			}
 			END_FOR
@@ -1347,6 +1593,10 @@ void SystemTriggers::executeBeforeInsertTriggers(thread_db* tdbb, jrd_rel* relat
 
 		case rel_refc:
 			beforeInsertRefConstraint(tdbb, record);
+			break;
+
+		case rel_schemas:
+			beforeInsertSchema(tdbb, record);
 			break;
 	}
 }

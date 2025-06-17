@@ -64,8 +64,10 @@
 #include "../common/utils_proto.h"
 #include "../jrd/PageToBufferMap.h"
 
+#ifndef CDS_UNAVAILABLE
 // Use lock-free lists in hash table implementation
 #define HASH_USE_CDS_LIST
+#endif
 
 
 #ifdef HASH_USE_CDS_LIST
@@ -544,7 +546,7 @@ bool CCH_exclusive_attachment(thread_db* tdbb, USHORT level, SSHORT wait_flag, S
  *	return false.
  *
  **************************************/
-	const int CCH_EXCLUSIVE_RETRY_INTERVAL = 10;	// retry interval in millseconds
+	const int CCH_EXCLUSIVE_RETRY_INTERVAL = 10;	// retry interval in milliseconds
 
 	SET_TDBB(tdbb);
 	Database* const dbb = tdbb->getDatabase();

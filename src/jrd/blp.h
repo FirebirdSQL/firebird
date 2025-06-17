@@ -173,7 +173,7 @@ static const struct
 	{"retrieve", two},
 	{"relation2", relation2},
 	{"rid2", rid2},
-	{NULL, NULL},
+	{"relation3", relation3},
 	{NULL, NULL},
 	{"set_generator", gen_id},	// 150
 	{"ansi_any", one},
@@ -262,5 +262,10 @@ static const struct
 	{"default_arg", zero},
 	{"cast_format", cast_format},
 	{"table_value_fun", table_value_fun},
+	{"for_range", for_range},
+	{"gen_id3", gen_id3},
+	{"default2", default2},
+	{"current_schema", zero},
+	{NULL, NULL},	// flags - part of header
 	{0, 0}
 };

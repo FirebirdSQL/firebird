@@ -26,6 +26,8 @@
 #include "firebird.h"
 #include "firebird/Message.h"
 #include "../common/classes/array.h"
+#include "../common/classes/MetaString.h"
+#include "../common/classes/objects_array.h"
 #include "../jrd/SystemPackages.h"
 
 namespace Jrd {
@@ -50,6 +52,7 @@ private:
 		(FB_BIGINT, parentRecordSourceId)
 		(FB_INTEGER, level)
 		(FB_SMALLINT, objectType)
+		(FB_INTL_VARCHAR(METADATA_IDENTIFIER_CHAR_LEN * METADATA_BYTES_PER_CHAR, CS_METADATA), schemaName)
 		(FB_INTL_VARCHAR(METADATA_IDENTIFIER_CHAR_LEN * METADATA_BYTES_PER_CHAR, CS_METADATA), packageName)
 		(FB_INTL_VARCHAR(METADATA_IDENTIFIER_CHAR_LEN * METADATA_BYTES_PER_CHAR, CS_METADATA), objectName)
 		(FB_INTL_VARCHAR(255 * METADATA_BYTES_PER_CHAR, CS_METADATA), alias)
@@ -87,10 +90,50 @@ private:
 		Firebird::Array<ExplainOutput::Type>::const_iterator resultIterator = nullptr;
 	};
 
-	//----------
-
 	static Firebird::IExternalResultSet* explainProcedure(Firebird::ThrowStatusExceptionWrapper* status,
 		Firebird::IExternalContext* context, const ExplainInput::Type* in, ExplainOutput::Type* out);
+
+	//----------
+
+	FB_MESSAGE(ParseUnqualifiedNamesInput, Firebird::ThrowStatusExceptionWrapper,
+		(FB_INTL_VARCHAR(MAX_VARY_COLUMN_SIZE / METADATA_BYTES_PER_CHAR * METADATA_BYTES_PER_CHAR, CS_METADATA), names)
+	);
+
+	FB_MESSAGE(ParseUnqualifiedNamesOutput, Firebird::ThrowStatusExceptionWrapper,
+		(FB_INTL_VARCHAR(METADATA_IDENTIFIER_CHAR_LEN * METADATA_BYTES_PER_CHAR, CS_METADATA), name)
+	);
+
+	class ParseUnqualifiedNamesResultSet :
+		public
+			Firebird::DisposeIface<
+				Firebird::IExternalResultSetImpl<
+					ParseUnqualifiedNamesResultSet,
+					Firebird::ThrowStatusExceptionWrapper
+				>
+			>
+	{
+	public:
+		ParseUnqualifiedNamesResultSet(Firebird::ThrowStatusExceptionWrapper* status, Firebird::IExternalContext* context,
+			const ParseUnqualifiedNamesInput::Type* in, ParseUnqualifiedNamesOutput::Type* out);
+
+	public:
+		void dispose() override
+		{
+			delete this;
+		}
+
+	public:
+		FB_BOOLEAN fetch(Firebird::ThrowStatusExceptionWrapper* status) override;
+
+	private:
+		ParseUnqualifiedNamesOutput::Type* out;
+		Firebird::ObjectsArray<Firebird::MetaString> resultEntries{*getDefaultMemoryPool()};
+		Firebird::ObjectsArray<Firebird::MetaString>::const_iterator resultIterator;
+	};
+
+	static Firebird::IExternalResultSet* parseUnqualifiedNamesProcedure(Firebird::ThrowStatusExceptionWrapper* status,
+		Firebird::IExternalContext* context,
+		const ParseUnqualifiedNamesInput::Type* in, ParseUnqualifiedNamesOutput::Type* out);
 };
 
 

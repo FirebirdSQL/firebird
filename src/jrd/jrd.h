@@ -60,7 +60,9 @@
 #include "../jrd/Attachment.h"
 #include "firebird/Interface.h"
 
+#ifndef CDS_UNAVAILABLE
 #include <cds/threading/model.h>	// cds::threading::Manager
+#endif
 
 #define BUGCHECK(number)		ERR_bugcheck(number, __FILE__, __LINE__)
 #define SOFT_BUGCHECK(number)	ERR_soft_bugcheck(number, __FILE__, __LINE__)
@@ -146,7 +148,7 @@ public:
 	FB_UINT64 type = 0;					// Trigger type
 	USHORT flags = 0;					// Flags as they are in RDB$TRIGGERS table
 	jrd_rel* relation = nullptr;		// Trigger parent relation
-	MetaName name;						// Trigger name
+	QualifiedName name;				// Trigger name
 	MetaName engine;					// External engine name
 	MetaName owner;						// Owner for SQL SECURITY
 	Firebird::string entryPoint;		// External trigger entrypoint
@@ -281,9 +283,9 @@ public:
 	bool		prm_nullable;
 	prm_mech_t	prm_mechanism;
 	MetaName prm_name;
-	MetaName prm_field_source;
+	QualifiedName prm_field_source;
 	MetaName prm_type_of_column;
-	MetaName prm_type_of_table;
+	QualifiedName prm_type_of_table;
 	std::optional<USHORT> prm_text_type;
 	FUN_T		prm_fun_mechanism;
 
@@ -773,8 +775,10 @@ public:
 	{
 		context.putSpecific();
 
+#ifndef CDS_UNAVAILABLE
 		if (!cds::threading::Manager::isThreadAttached())
 			cds::threading::Manager::attachThread();
+#endif
 	}
 
 	ThreadContextHolder(Database* dbb, Jrd::Attachment* att, FbStatusVector* status = NULL)
@@ -784,8 +788,10 @@ public:
 		context.setDatabase(dbb);
 		context.setAttachment(att);
 
+#ifndef CDS_UNAVAILABLE
 		if (!cds::threading::Manager::isThreadAttached())
 			cds::threading::Manager::attachThread();
+#endif
 	}
 
 	~ThreadContextHolder()

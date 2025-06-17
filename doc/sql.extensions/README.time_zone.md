@@ -354,7 +354,7 @@ set time zone '-3:00';
 
 In version 4.0, `CURRENT_TIME` and `CURRENT_TIMESTAMP` are changed to return `TIME WITH TIME ZONE` and `TIMESTAMP WITH TIME ZONE` (with time zone set to the session time zone), different than previous versions, that returned the types without time zone.
 
-To make transition easier, `LOCALTIME` and `LOCALTIMESTAMP` was added in v3.0.4, so applications can be adjusted in v3 and migrated to v4 without funcional changes.
+To make transition easier, `LOCALTIME` and `LOCALTIMESTAMP` was added in v3.0.4, so applications can be adjusted in v3 and migrated to v4 without functional changes.
 
 ## Virtual table `RDB$TIME_ZONES`
 
@@ -432,7 +432,7 @@ An updated database can be found in [this Firebird's GitHub page](https://github
 
 The content of the zip file must be extracted in the `tzdata` subdirectory of Firebird's root, overwriting the others `*.res` files of the old database.
 
-Note: `<firebird root>/tzdata` is the default directory where Firebird looks for the database. It could be overriden with the `ICU_TIMEZONE_FILES_DIR` environment variable.
+Note: `<firebird root>/tzdata` is the default directory where Firebird looks for the database. It could be overridden with the `ICU_TIMEZONE_FILES_DIR` environment variable.
 
 Important note: Firebird stores `WITH TIME ZONE` values translated to UTC time. If a value is created with one time zone database and later that database is updated and the update changes the information in the range of a stored value, when reading that value it will be returned as a different value than the one initially stored.
 

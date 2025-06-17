@@ -208,12 +208,6 @@ DsqlBatch* DsqlBatch::open(thread_db* tdbb, DsqlDmlRequest* req, IMessageMetadat
 
 	const auto statement = req->getDsqlStatement();
 
-	if (statement->getFlags() & DsqlStatement::FLAG_ORPHAN)
-	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-		          Arg::Gds(isc_bad_req_handle));
-	}
-
 	switch (statement->getType())
 	{
 		case DsqlStatement::TYPE_INSERT:
@@ -229,7 +223,7 @@ DsqlBatch* DsqlBatch::open(thread_db* tdbb, DsqlDmlRequest* req, IMessageMetadat
 	}
 
 	const dsql_msg* message = statement->getSendMsg();
-	if (! (inMetadata && message && req->parseMetadata(inMetadata, message->msg_parameters)))
+	if (! (inMetadata && message && message->msg_parameter > 0))
 	{
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
 				  Arg::Gds(isc_batch_param));
@@ -659,18 +653,23 @@ private:
 	// execute request
 	m_dsqlRequest->req_transaction = transaction;
 	Request* req = m_dsqlRequest->getRequest();
+	DsqlStatement* dStmt = m_dsqlRequest->getDsqlStatement();
 	fb_assert(req);
 
 	// prepare completion interface
 	AutoPtr<BatchCompletionState, SimpleDispose> completionState
 		(FB_NEW BatchCompletionState(m_flags & (1 << IBatch::TAG_RECORD_COUNTS), m_detailed));
 	AutoSetRestore<bool> batchFlag(&req->req_batch_mode, true);
-	const dsql_msg* message = m_dsqlRequest->getDsqlStatement()->getSendMsg();
+	const dsql_msg* sendMessage = dStmt->getSendMsg();
+	// map message to internal engine format
+	// Do it one time only to avoid parsing its metadata for every message
+	m_dsqlRequest->metadataToFormat(m_meta, sendMessage);
+	// Using of positional DML in batch is strange but not forbidden
+	m_dsqlRequest->mapCursorKey(tdbb);
 	bool startRequest = true;
 
-	bool isExecBlock = m_dsqlRequest->getDsqlStatement()->getType() == DsqlStatement::TYPE_EXEC_BLOCK;
-	const auto receiveMessage = isExecBlock ? m_dsqlRequest->getDsqlStatement()->getReceiveMsg() : nullptr;
-	auto receiveMsgBuffer = isExecBlock ? m_dsqlRequest->req_msg_buffers[receiveMessage->msg_buffer_number] : nullptr;
+	bool isExecBlock = dStmt->getType() == DsqlStatement::TYPE_EXEC_BLOCK;
+	const dsql_msg* receiveMessage = isExecBlock ? dStmt->getReceiveMsg() : nullptr;
 
 	// process messages
 	ULONG remains;
@@ -726,25 +725,18 @@ private:
 				*id = newId;
 			}
 
-			// map message to internal engine format
-			// pass m_meta one time only to avoid parsing its metadata for every message
-			m_dsqlRequest->mapInOut(tdbb, false, message, start ? m_meta : nullptr, nullptr, data);
-			data += m_messageSize;
-			remains -= m_messageSize;
-
-			UCHAR* msgBuffer = m_dsqlRequest->req_msg_buffers[message->msg_buffer_number];
 			try
 			{
 				// runsend data to request and collect stats
 				ULONG before = req->req_records_inserted + req->req_records_updated +
 					req->req_records_deleted;
-				EXE_send(tdbb, req, message->msg_number, message->msg_length, msgBuffer);
+				EXE_send(tdbb, req, sendMessage->msg_number, m_messageSize, data);
 				ULONG after = req->req_records_inserted + req->req_records_updated +
 					req->req_records_deleted;
 				completionState->regUpdate(after - before);
 
-				if (isExecBlock)
-					EXE_receive(tdbb, req, receiveMessage->msg_number, receiveMessage->msg_length, receiveMsgBuffer);
+				if (receiveMessage)
+					EXE_receive(tdbb, req, receiveMessage->msg_number, receiveMessage->msg_length, nullptr); // We don't care about returned record
 			}
 			catch (const Exception& ex)
 			{
@@ -764,6 +756,9 @@ private:
 
 				startRequest = true;
 			}
+
+			data += m_messageSize;
+			remains -= m_messageSize;
 		}
 
 		UCHAR* alignedData = FB_ALIGN(data, m_alignment);

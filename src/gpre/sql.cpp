@@ -816,7 +816,7 @@ void SQL_par_field_dtype(gpre_req* request, gpre_fld* field, bool is_udf)
 
 	if (field->fld_flags & FLD_national)
 	{
-        gpre_sym* symbol = MSC_find_symbol(HSH_lookup(DEFAULT_CHARACTER_SET_NAME), SYM_charset);
+        gpre_sym* symbol = MSC_find_symbol(HSH_lookup(NATIONAL_CHARACTER_SET), SYM_charset);
 		if (!symbol)
 		{
 			PAR_error("NATIONAL character set missing");
@@ -4592,7 +4592,7 @@ static act* act_update()
 			else
 			{
 				// does not specify transaction clause in
-				// "update ... where cuurent of cursor" stmt
+				// "update ... where current of cursor" stmt
 				const USHORT trans_nm_len = static_cast<USHORT>(strlen(request->req_trans));
 				char* newtrans = (SCHAR *) MSC_alloc(trans_nm_len + 1);
 				transaction = newtrans;

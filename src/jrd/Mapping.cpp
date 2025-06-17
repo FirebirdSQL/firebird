@@ -347,7 +347,7 @@ bool Mapping::Cache::populate(IAttachment *att)
 		curs = att->openCursor(&st, tra, 0,
 			"SELECT RDB$MAP_USING, RDB$MAP_PLUGIN, RDB$MAP_DB, RDB$MAP_FROM_TYPE, "
 			"	RDB$MAP_FROM, RDB$MAP_TO_TYPE, RDB$MAP_TO "
-			"FROM RDB$AUTH_MAPPING",
+			"FROM SYSTEM.RDB$AUTH_MAPPING",
 			3, nullptr, nullptr, mMap.getMetadata(), nullptr, 0);
 		if (st->getState() & IStatus::STATE_ERRORS)
 		{
@@ -998,26 +998,26 @@ void setupIpc()
 
 const char* roleSql =
 "with recursive role_tree as ( "
-"   select rdb$role_name as nm from rdb$roles "
+"   select rdb$role_name as nm from system.rdb$roles "
 "       where rdb$role_name = ? "
 "   union all "
-"   select p.rdb$relation_name as nm from rdb$user_privileges p "
+"   select p.rdb$relation_name as nm from system.rdb$user_privileges p "
 "       join role_tree t on t.nm = p.rdb$user "
 "       where p.rdb$privilege = 'M') "
 "select r.rdb$system_privileges from role_tree t "
-"   join rdb$roles r on t.nm = r.rdb$role_name "
+"   join system.rdb$roles r on t.nm = r.rdb$role_name "
 	;
 
 const char* userSql =
 "with recursive role_tree as ( "
-"   select rdb$relation_name as nm from rdb$user_privileges "
+"   select rdb$relation_name as nm from system.rdb$user_privileges "
 "       where rdb$privilege = 'M' and rdb$field_name = 'D' and rdb$user = ? and rdb$user_type = 8 "
 "   union all "
-"   select p.rdb$relation_name as nm from rdb$user_privileges p "
+"   select p.rdb$relation_name as nm from system.rdb$user_privileges p "
 "       join role_tree t on t.nm = p.rdb$user "
 "       where p.rdb$privilege = 'M' and p.rdb$field_name = 'D') "
 "select r.rdb$system_privileges from role_tree t "
-"   join rdb$roles r on t.nm = r.rdb$role_name "
+"   join system.rdb$roles r on t.nm = r.rdb$role_name "
 	;
 
 class SysPrivCache : public PermanentStorage
@@ -1228,7 +1228,7 @@ private:
 				Message cols;
 				Field<Varying> role(cols, MAX_SQL_IDENTIFIER_SIZE);
 
-				const char* sql = "select RDB$RELATION_NAME from RDB$USER_PRIVILEGES "
+				const char* sql = "select RDB$RELATION_NAME from SYSTEM.RDB$USER_PRIVILEGES "
 					"where RDB$USER = ? and RDB$PRIVILEGE = 'M' and RDB$USER_TYPE = 8 and RDB$OBJECT_TYPE = 13";
 
 				RefPtr<IResultSet> curs(REF_NO_INCR, iDb->openCursor(&st, tra, 0, sql, 3,
@@ -1744,7 +1744,7 @@ RecordBuffer* MappingList::getList(thread_db* tdbb, jrd_rel* relation)
 		curs = att->openCursor(&st, tra, 0,
 			"SELECT RDB$MAP_NAME, RDB$MAP_USING, RDB$MAP_PLUGIN, RDB$MAP_DB, "
 			"	RDB$MAP_FROM_TYPE, RDB$MAP_FROM, RDB$MAP_TO_TYPE, RDB$MAP_TO, RDB$DESCRIPTION "
-			"FROM RDB$AUTH_MAPPING",
+			"FROM SYSTEM.RDB$AUTH_MAPPING",
 			3, nullptr, nullptr, mMap.getMetadata(), nullptr, 0);
 		if (st->getState() & IStatus::STATE_ERRORS)
 		{

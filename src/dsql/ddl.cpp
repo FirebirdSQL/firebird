@@ -125,7 +125,7 @@ bool DDL_ids(const DsqlCompilerScratch* scratch)
 
 
 void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
-	const MetaName& collation_name, bool modifying)
+	QualifiedName& collation_name, bool modifying)
 {
 /**************************************
  *
@@ -152,17 +152,18 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
  *
  **************************************/
 
-	if (field->typeOfName.hasData())
+	if (field->typeOfName.object.hasData())
 	{
-		if (field->typeOfTable.hasData())
+		if (field->typeOfTable.object.hasData())
 		{
-			dsql_rel* relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch,
-				field->typeOfTable.c_str());
+			dsqlScratch->qualifyExistingName(field->typeOfTable, obj_relation);
+
+			dsql_rel* relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, field->typeOfTable);
 			const dsql_fld* fld = NULL;
 
 			if (relation)
 			{
-				const MetaName fieldName(field->typeOfName);
+				const MetaName fieldName(field->typeOfName.object);
 
 				for (fld = relation->rel_fields; fld; fld = fld->fld_next)
 				{
@@ -188,16 +189,18 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 			{
 				// column @1 does not exist in table/view @2
 				post_607(Arg::Gds(isc_dyn_column_does_not_exist) <<
-						 		Arg::Str(field->typeOfName) <<
-								field->typeOfTable);
+						 		field->typeOfName.toQuotedString() <<
+								field->typeOfTable.toQuotedString());
 			}
 		}
 		else
 		{
+			dsqlScratch->qualifyExistingName(field->typeOfName, obj_field);
+
 			if (!METD_get_domain(dsqlScratch->getTransaction(), field, field->typeOfName))
 			{
 				// Specified domain or source field does not exist
-				post_607(Arg::Gds(isc_dsql_domain_not_found) << Arg::Str(field->typeOfName));
+				post_607(Arg::Gds(isc_dsql_domain_not_found) << field->typeOfName.toQuotedString());
 			}
 		}
 
@@ -217,7 +220,7 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 
 	if ((field->dtype > dtype_any_text) && field->dtype != dtype_blob)
 	{
-		if (field->charSet.hasData() || collation_name.hasData() || (field->flags & FLD_national))
+		if (field->charSet.object.hasData() || collation_name.object.hasData() || (field->flags & FLD_national))
 		{
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
 					  Arg::Gds(isc_dsql_datatype_err) << Arg::Gds(isc_collation_requires_text));
@@ -236,7 +239,7 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
 						  Arg::Gds(isc_dsql_datatype_err) <<
 						  Arg::Gds(isc_dsql_blob_type_unknown) <<
-						  		Arg::Str(field->subTypeName));
+						  field->subTypeName);
 			}
 			field->subType = blob_sub_type;
 		}
@@ -248,17 +251,17 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 					  Arg::Gds(isc_subtype_for_internal_use));
 		}
 
-		if (field->charSet.hasData() && (field->subType == isc_blob_untyped))
+		if (field->charSet.object.hasData() && (field->subType == isc_blob_untyped))
 			field->subType = isc_blob_text;
 
-		if (field->charSet.hasData() && (field->subType != isc_blob_text))
+		if (field->charSet.object.hasData() && (field->subType != isc_blob_text))
 		{
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
 					  Arg::Gds(isc_dsql_datatype_err) <<
                       Arg::Gds(isc_collation_requires_text));
 		}
 
-		if (collation_name.hasData() && (field->subType != isc_blob_text))
+		if (collation_name.object.hasData() && (field->subType != isc_blob_text))
 		{
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
 					  Arg::Gds(isc_dsql_datatype_err) <<
@@ -269,14 +272,14 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 			return;
 	}
 
-	if (field->charSetId.has_value() && collation_name.isEmpty())
+	if (field->charSetId.has_value() && collation_name.object.isEmpty())
 	{
 		// This field has already been resolved once, and the collation
 		// hasn't changed.  Therefore, no need to do it again.
 		return;
 	}
 
-	if (modifying && field->charSet.isEmpty() && field->collate.isEmpty())
+	if (modifying && field->charSet.object.isEmpty() && field->collate.object.isEmpty())
 	{
 		// Use charset and collation from already existing field if any
 		const dsql_fld* afield = field->fld_next;
@@ -311,15 +314,17 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 		}
 	}
 
-	if (!modifying && !(field->charSet.hasData() || field->charSetId.has_value() ||	// set if a domain
+	if (!modifying && !(field->charSet.object.hasData() || field->charSetId.has_value() ||	// set if a domain
 		(field->flags & FLD_national)))
 	{
 		// Attach the database default character set to the new field, if not otherwise specified
 
-		MetaName defaultCharSet;
+		QualifiedName defaultCharSet;
 
-		if (dsqlScratch->flags & DsqlCompilerScratch::FLAG_DDL)
-			defaultCharSet = METD_get_default_charset(dsqlScratch->getTransaction());
+		if (dsqlScratch->ddlSchema.hasData())
+			defaultCharSet = METD_get_schema_charset(dsqlScratch->getTransaction(), dsqlScratch->ddlSchema);
+		else if (dsqlScratch->flags & DsqlCompilerScratch::FLAG_DDL)
+			defaultCharSet = METD_get_database_charset(dsqlScratch->getTransaction());
 		else
 		{
 			USHORT charSet = dsqlScratch->getAttachment()->dbb_attachment->att_charset;
@@ -327,7 +332,7 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 				defaultCharSet = METD_get_charset_name(dsqlScratch->getTransaction(), charSet);
 		}
 
-		if (defaultCharSet.hasData())
+		if (defaultCharSet.object.hasData())
 			field->charSet = defaultCharSet;
 		else
 		{
@@ -336,25 +341,27 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 			assign_field_length(field, 1);
 			field->textType = 0;
 
-			if (collation_name.isEmpty())
+			if (collation_name.object.isEmpty())
 				return;
 		}
 	}
 
-	MetaName charset_name;
+	QualifiedName charset_name;
 
 	if (field->flags & FLD_national)
-		charset_name = NATIONAL_CHARACTER_SET;
-	else if (field->charSet.hasData())
+		charset_name = QualifiedName(NATIONAL_CHARACTER_SET, SYSTEM_SCHEMA);
+	else if (field->charSet.object.hasData())
+	{
+		dsqlScratch->qualifyExistingName(field->charSet, obj_charset);
 		charset_name = field->charSet;
+	}
 
 	// Find an intlsym for any specified character set name & collation name
 	const dsql_intlsym* resolved_type = NULL;
 
-	if (charset_name.hasData())
+	if (charset_name.object.hasData())
 	{
-		const dsql_intlsym* resolved_charset =
-			METD_get_charset(dsqlScratch->getTransaction(), (USHORT) charset_name.length(), charset_name.c_str());
+		const dsql_intlsym* resolved_charset = METD_get_charset(dsqlScratch->getTransaction(), charset_name);
 
 		// Error code -204 (IBM's DB2 manual) is close enough
 		if (!resolved_charset)
@@ -362,23 +369,25 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 			// specified character set not found
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
 					  Arg::Gds(isc_dsql_datatype_err) <<
-                      Arg::Gds(isc_charset_not_found) << Arg::Str(charset_name));
+                      Arg::Gds(isc_charset_not_found) << charset_name.toQuotedString());
 		}
 
 		field->charSetId = resolved_charset->intlsym_charset_id;
 		resolved_type = resolved_charset;
 	}
 
-	if (collation_name.hasData())
+	if (collation_name.object.hasData())
 	{
+		dsqlScratch->qualifyExistingName(collation_name, obj_collation);
+
 		const dsql_intlsym* resolved_collation = METD_get_collation(dsqlScratch->getTransaction(),
 			collation_name, field->charSetId.value_or(CS_NONE));
 
 		if (!resolved_collation)
 		{
-			MetaName charSetName;
+			QualifiedName charSetName;
 
-			if (charset_name.hasData())
+			if (charset_name.object.hasData())
 				charSetName = charset_name;
 			else
 			{
@@ -389,7 +398,7 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 			// Specified collation not found
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
 					  ///Arg::Gds(isc_dsql_datatype_err) <<	// (too large status vector)
-                      Arg::Gds(isc_collation_not_found) << collation_name << charSetName);
+                      Arg::Gds(isc_collation_not_found) << collation_name.toQuotedString() << charSetName.toQuotedString());
 		}
 
 		// If both specified, must be for same character set
@@ -402,7 +411,7 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 		{
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
 					  Arg::Gds(isc_dsql_datatype_err) <<
-                      Arg::Gds(isc_collation_not_for_charset) << collation_name);
+                      Arg::Gds(isc_collation_not_for_charset) << collation_name.toQuotedString());
 		}
 
 		field->explicitCollation = true;

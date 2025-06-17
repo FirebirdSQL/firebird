@@ -330,7 +330,7 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 	if (!function->fun_entrypoint)
 	{
 		Firebird::status_exception::raise(Arg::Gds(isc_funnotdef) <<
-										  Arg::Str(function->getName().toString()) <<
+										  Arg::Str(function->getName().toQuotedString()) <<
 										  Arg::Gds(isc_modnotfound));
 	}
 
@@ -787,13 +787,13 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 			{
 				status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
 									Arg::Gds(isc_udf_fp_overflow) <<
-									Arg::Str(function->getName().toString()));
+									Arg::Str(function->getName().toQuotedString()));
 			}
 			else if (std::isnan(value->vlu_misc.vlu_double))
 			{
 				status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
 									Arg::Gds(isc_udf_fp_nan) <<
-									Arg::Str(function->getName().toString()));
+									Arg::Str(function->getName().toQuotedString()));
 			}
 			break;
 
@@ -802,13 +802,13 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 			{
 				status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
 									Arg::Gds(isc_udf_fp_overflow) <<
-									Arg::Str(function->getName().toString()));
+									Arg::Str(function->getName().toQuotedString()));
 			}
 			else if (value->vlu_misc.vlu_dec64.isNan())
 			{
 				status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
 									Arg::Gds(isc_udf_fp_nan) <<
-									Arg::Str(function->getName().toString()));
+									Arg::Str(function->getName().toQuotedString()));
 			}
 			break;
 
@@ -817,13 +817,13 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 			{
 				status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
 									Arg::Gds(isc_udf_fp_overflow) <<
-									Arg::Str(function->getName().toString()));
+									Arg::Str(function->getName().toQuotedString()));
 			}
 			else if (value->vlu_misc.vlu_dec128.isNan())
 			{
 				status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
 									Arg::Gds(isc_udf_fp_nan) <<
-									Arg::Str(function->getName().toString()));
+									Arg::Str(function->getName().toQuotedString()));
 			}
 			break;
 		}
@@ -837,7 +837,7 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 	catch (const Exception& ex)
 	{
 		Arg::StatusVector v(ex);
-		const string msg = "UDF: " + function->getName().toString();
+		const string msg = "UDF: " + function->getName().toQuotedString();
 		v << Arg::Gds(isc_random) << msg;
 
 		status->setErrors(v.value());

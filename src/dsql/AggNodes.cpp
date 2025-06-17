@@ -207,7 +207,7 @@ bool AggNode::dsqlAggregate2Finder(Aggregate2Finder& visitor)
 	if (!fieldFinder.getField())
 	{
 		// For example COUNT(*) is always same scope_level (node->nod_count = 0)
-		// Normaly COUNT(*) is the only way to come here but something stupid
+		// Normally COUNT(*) is the only way to come here but something stupid
 		// as SUM(5) is also possible.
 		// If currentScopeLevelEqual is false scopeLevel is always higher
 		switch (visitor.matchType)
@@ -800,10 +800,7 @@ void AvgAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) const
 		outputDesc(&impureTemp->vlu_desc);
 	}
 
-	if (dialect1)
-		ArithmeticNode::add(tdbb, desc, impure, this, blr_add);
-	else
-		ArithmeticNode::add2(tdbb, desc, impure, this, blr_add);
+	ArithmeticNode::add(tdbb, desc, &impure->vlu_desc, impure, blr_add, dialect1, nodScale, nodFlags);
 }
 
 dsc* AvgAggNode::aggExecute(thread_db* tdbb, Request* request) const
@@ -1360,10 +1357,7 @@ void SumAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) const
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	++impure->vlux_count;
 
-	if (dialect1)
-		ArithmeticNode::add(tdbb, desc, impure, this, blr_add);
-	else
-		ArithmeticNode::add2(tdbb, desc, impure, this, blr_add);
+	ArithmeticNode::add(tdbb, desc, &impure->vlu_desc, impure, blr_add, dialect1, nodScale, nodFlags);
 }
 
 dsc* SumAggNode::aggExecute(thread_db* /*tdbb*/, Request* request) const

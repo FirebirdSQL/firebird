@@ -373,6 +373,9 @@ namespace
 			dpb.insertString(isc_dpb_user_name, DBA_USER_NAME);
 			dpb.insertString(isc_dpb_config, ParsedList::getNonLoopbackProviders(m_config->dbName));
 
+			if (m_config->schemaSearchPath.hasData())
+				dpb.insertString(isc_dpb_search_path, m_config->schemaSearchPath.c_str());
+
 #ifndef NO_DATABASE
 			DispatcherPtr provider;
 			FbLocalStatus localStatus;
@@ -394,7 +397,7 @@ namespace
 			localStatus.check();
 
 			const char* sql =
-				"select rdb$get_context('SYSTEM', 'REPLICATION_SEQUENCE') from rdb$database";
+				"select rdb$get_context('SYSTEM', 'REPLICATION_SEQUENCE') from system.rdb$database";
 
 			FB_MESSAGE(Result, CheckStatusWrapper,
 				(FB_BIGINT, sequence)

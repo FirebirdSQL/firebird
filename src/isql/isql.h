@@ -99,7 +99,6 @@ const size_t CHARSET_COLLATE_SIZE	=
 	1;		// null terminator
 
 static const char* const DEFTERM	= ";";
-static const char* const DEFCHARSET	= "NONE";
 const unsigned NULL_DISP_LEN		= 6;
 
 
@@ -111,7 +110,7 @@ const int ISQL_MSG_FAC	= FB_IMPL_MSG_FACILITY_ISQL;
 #define FB_IMPL_MSG_NO_SYMBOL(facility, number, text)
 
 #define FB_IMPL_MSG_SYMBOL(facility, number, symbol, text) \
-	const int symbol = number;
+	inline constexpr int symbol = number;
 
 #define FB_IMPL_MSG(facility, number, symbol, sqlCode, sqlClass, sqlSubClass, text) \
 	FB_IMPL_MSG_SYMBOL(facility, number, symbol, text)
@@ -234,6 +233,7 @@ public:
 	size_t Termlen;
 	SCHAR User[128];
 	SCHAR Role[256];
+	SCHAR SearchPath[512];
 	USHORT SQL_dialect;
 	USHORT db_SQL_dialect;
 	// from isql.epp

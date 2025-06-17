@@ -39,6 +39,9 @@ namespace Jrd
 }
 
 void PASS1_ambiguity_check(Jrd::DsqlCompilerScratch*, const Jrd::MetaName&, const Jrd::DsqlContextStack&);
+bool PASS1_compare_alias(const Jrd::QualifiedName& contextAlias, const Jrd::QualifiedName& lookupAlias);
+bool PASS1_compare_alias(const Firebird::ObjectsArray<Jrd::QualifiedName>& contextAlias,
+	const Firebird::ObjectsArray<Jrd::QualifiedName>& lookupAlias);
 Jrd::BoolExprNode* PASS1_compose(Jrd::BoolExprNode*, Jrd::BoolExprNode*, UCHAR);
 Jrd::DeclareCursorNode* PASS1_cursor_name(Jrd::DsqlCompilerScratch*, const Jrd::MetaName&, USHORT, bool);
 Jrd::RseNode* PASS1_derived_table(Jrd::DsqlCompilerScratch*, Jrd::SelectExprNode*, const char*,

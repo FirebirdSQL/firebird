@@ -385,8 +385,10 @@ static void threadDetach()
 	ThreadSync* thd = ThreadSync::findThread();
 	delete thd;
 
+#ifndef CDS_UNAVAILABLE
 	if (cds::threading::Manager::isThreadAttached())
 		cds::threading::Manager::detachThread();
+#endif
 }
 
 static void shutdownBeforeUnload()
@@ -731,7 +733,7 @@ namespace
 		{
 			PreparedStatement::Builder sql;
 			MetaName missPriv("UNKNOWN");
-			sql << "select" << sql("rdb$type_name", missPriv) << "from rdb$types"
+			sql << "select" << sql("rdb$type_name", missPriv) << "from system.rdb$types"
 				<< "where rdb$field_name = 'RDB$SYSTEM_PRIVILEGES'"
 				<< "  and rdb$type =" << SSHORT(sp);
 			jrd_tra* transaction = attachment->getSysTransaction();
@@ -950,7 +952,7 @@ void Trigger::compile(thread_db* tdbb)
 									 *csb->csb_dbg_info);
 			}
 
-			PAR_blr(tdbb, relation, blr.begin(), (ULONG) blr.getCount(), NULL, &csb, &statement,
+			PAR_blr(tdbb, &name.schema, relation, blr.begin(), (ULONG) blr.getCount(), NULL, &csb, &statement,
 				(relation ? true : false), par_flags);
 
 			trace.finish(statement, ITracePlugin::RESULT_SUCCESS);
@@ -1101,6 +1103,7 @@ namespace Jrd
 		SLONG	dpb_remote_pid;
 		bool	dpb_no_db_triggers;
 		bool	dpb_gbak_attach;
+		bool 	dpb_gbak_restore_has_schema;
 		bool	dpb_utf8_filename;
 		ULONG	dpb_ext_call_depth;
 		ULONG	dpb_flags;			// to OR'd with dbb_flags
@@ -1122,7 +1125,7 @@ namespace Jrd
 		AuthReader::AuthBlock	dpb_auth_block;
 		string	dpb_role_name;
 		string	dpb_journal;
-		string	dpb_lc_ctype;
+		QualifiedMetaString	dpb_lc_ctype;
 		PathName	dpb_working_directory;
 		string	dpb_set_db_charset;
 		string	dpb_network_protocol;
@@ -1141,6 +1144,8 @@ namespace Jrd
 		string	dpb_decfloat_round;
 		string	dpb_decfloat_traps;
 		string	dpb_owner;
+		Firebird::ObjectsArray<Firebird::MetaString> dpb_schema_search_path;
+		Firebird::ObjectsArray<Firebird::MetaString> dpb_blr_request_schema_search_path;
 
 	public:
 		static const ULONG DPB_FLAGS_MASK = DBB_damaged;
@@ -1289,6 +1294,25 @@ namespace Jrd
 			decFloatStatus.decExtFlag = traps;
 		}
 
+		if (options.dpb_schema_search_path.hasData())
+		{
+			for (const auto& schema : options.dpb_schema_search_path)
+				schemaSearchPath->push(schema);
+		}
+		else
+		{
+			schemaSearchPath->push(PUBLIC_SCHEMA);
+			schemaSearchPath->push(SYSTEM_SCHEMA);
+		}
+
+		if (options.dpb_blr_request_schema_search_path.hasData())
+		{
+			for (const auto& schema : options.dpb_blr_request_schema_search_path)
+				blrRequestSchemaSearchPath->push(schema);
+		}
+		else
+			blrRequestSchemaSearchPath = schemaSearchPath;
+
 		originalTimeZone = options.dpb_session_tz.isEmpty() ?
 			TimeZoneUtil::getSystemTimeZone() :
 			TimeZoneUtil::parse(options.dpb_session_tz.c_str(), options.dpb_session_tz.length());
@@ -1304,6 +1328,10 @@ namespace Jrd
 
 		// reset bindings
 		attachment->att_bindings.clear();
+
+		// reset schema search path
+		attachment->att_schema_search_path = schemaSearchPath;
+		attachment->att_blr_request_schema_search_path = blrRequestSchemaSearchPath;
 	}
 }	// namespace Jrd
 
@@ -1320,7 +1348,7 @@ public:
 	int getProcessID()					{ return m_options->dpb_remote_pid; }
 	const char* getUserName()			{ return m_id.getUserName().c_str(); }
 	const char* getRoleName()			{ return m_options->dpb_role_name.c_str(); }
-	const char* getCharSet()			{ return m_options->dpb_lc_ctype.c_str(); }
+	const char* getCharSet()			{ return m_options->dpb_lc_ctype.object.c_str(); }
 	const char* getRemoteProtocol()		{ return m_options->dpb_network_protocol.c_str(); }
 	const char* getRemoteAddress()		{ return m_options->dpb_remote_address.c_str(); }
 	int getRemoteProcessID()			{ return m_options->dpb_remote_pid; }
@@ -1793,7 +1821,12 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				attachment->att_flags |= ATT_mapping;
 
 			if (options.dpb_gbak_attach)
+			{
 				attachment->att_utility = Attachment::UTIL_GBAK;
+
+				if (options.dpb_gbak_restore_has_schema)
+					attachment->att_flags |= ATT_gbak_restore_has_schema;
+			}
 			else if (options.dpb_gstat_attach)
 				attachment->att_utility = Attachment::UTIL_GSTAT;
 			else if (options.dpb_gfix_attach)
@@ -2741,9 +2774,13 @@ JRequest* JAttachment::compileRequest(CheckStatusWrapper* user_status,
 		TraceBlrCompile trace(tdbb, blr_length, blr);
 		try
 		{
+			const auto attachment = tdbb->getAttachment();
+
+			AutoSetRestore autoSchemaSearchPath(
+				&attachment->att_schema_search_path, attachment->att_blr_request_schema_search_path);
+
 			stmt = CMP_compile(tdbb, blr, blr_length, false, 0, nullptr);
 
-			const auto attachment = tdbb->getAttachment();
 			const auto rootRequest = stmt->getRequest(tdbb, 0);
 			rootRequest->setAttachment(attachment);
 			attachment->att_requests.add(rootRequest);
@@ -3010,7 +3047,12 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 				attachment->att_flags |= ATT_mapping;
 
 			if (options.dpb_gbak_attach)
+			{
 				attachment->att_utility = Attachment::UTIL_GBAK;
+
+				if (options.dpb_gbak_restore_has_schema)
+					attachment->att_flags |= ATT_gbak_restore_has_schema;
+			}
 
 			if (options.dpb_no_db_triggers)
 				attachment->att_flags |= ATT_no_db_triggers;
@@ -4850,7 +4892,7 @@ void JAttachment::transactRequest(CheckStatusWrapper* user_status, ITransaction*
 
 			if (in_msg_length)
 			{
-				const ULONG len = inMessage ? inMessage->format->fmt_length : 0;
+				const ULONG len = inMessage ? inMessage->getFormat(request)->fmt_length : 0;
 
 				if (in_msg_length != len)
 				{
@@ -4858,12 +4900,12 @@ void JAttachment::transactRequest(CheckStatusWrapper* user_status, ITransaction*
 													   Arg::Num(len));
 				}
 
-				memcpy(request->getImpure<UCHAR>(inMessage->impureOffset), in_msg, in_msg_length);
+				memcpy(inMessage->getBuffer(request), in_msg, in_msg_length);
 			}
 
 			EXE_start(tdbb, request, transaction);
 
-			const ULONG len = outMessage ? outMessage->format->fmt_length : 0;
+			const ULONG len = outMessage ? outMessage->getFormat(request)->fmt_length : 0;
 
 			if (out_msg_length != len)
 			{
@@ -4873,8 +4915,7 @@ void JAttachment::transactRequest(CheckStatusWrapper* user_status, ITransaction*
 
 			if (out_msg_length)
 			{
-				memcpy(out_msg, request->getImpure<UCHAR>(outMessage->impureOffset),
-					out_msg_length);
+				memcpy(out_msg, outMessage->getBuffer(request), out_msg_length);
 			}
 
 			check_autocommit(tdbb, request);
@@ -6716,8 +6757,8 @@ void JRD_print_procedure_info(thread_db* tdbb, const char* mesg)
 			if (procedure)
 			{
 				fprintf(fptr, "%s  ,  %d,  %X,  %d, %d\n",
-					(procedure->getName().toString().hasData() ?
-						procedure->getName().toString().c_str() : "NULL"),
+					(procedure->getName().toQuotedString().hasData() ?
+						procedure->getName().toQuotedString().c_str() : "NULL"),
 					procedure->getId(), procedure->flags, procedure->useCount,
 					0); // procedure->prc_alter_count
 			}
@@ -6904,7 +6945,7 @@ static void find_intl_charset(thread_db* tdbb, Jrd::Attachment* attachment, cons
  **************************************/
 	SET_TDBB(tdbb);
 
-	if (options->dpb_lc_ctype.isEmpty())
+	if (options->dpb_lc_ctype.object.isEmpty())
 	{
 		// No declaration of character set, act like 3.x Interbase
 		attachment->att_client_charset = attachment->att_charset = DEFAULT_ATTACHMENT_CHARSET;
@@ -6912,15 +6953,14 @@ static void find_intl_charset(thread_db* tdbb, Jrd::Attachment* attachment, cons
 	}
 
 	USHORT id;
-	const UCHAR* lc_ctype = reinterpret_cast<const UCHAR*>(options->dpb_lc_ctype.c_str());
 
-	if (MET_get_char_coll_subtype(tdbb, &id, lc_ctype, options->dpb_lc_ctype.length()) &&
+	if (MET_get_char_coll_subtype(tdbb, &id, options->dpb_lc_ctype) &&
 		INTL_defined_type(tdbb, id & 0xFF))
 	{
 		if ((id & 0xFF) == CS_BINARY)
 		{
 			ERR_post(Arg::Gds(isc_bad_dpb_content) <<
-					 Arg::Gds(isc_invalid_attachment_charset) << Arg::Str(options->dpb_lc_ctype));
+					 Arg::Gds(isc_invalid_attachment_charset) << options->dpb_lc_ctype.toQuotedString());
 		}
 
 		attachment->att_client_charset = attachment->att_charset = id & 0xFF;
@@ -6929,7 +6969,7 @@ static void find_intl_charset(thread_db* tdbb, Jrd::Attachment* attachment, cons
 	{
 		// Report an error - we can't do what user has requested
 		ERR_post(Arg::Gds(isc_bad_dpb_content) <<
-				 Arg::Gds(isc_charset_not_found) << Arg::Str(options->dpb_lc_ctype));
+				 Arg::Gds(isc_charset_not_found) << options->dpb_lc_ctype.toQuotedString());
 	}
 }
 
@@ -6971,6 +7011,8 @@ void DatabaseOptions::get(const UCHAR* dpb, FB_SIZE_T dpb_length, bool& invalid_
 	dumpAuthBlock("DatabaseOptions::get()", &rdr, isc_dpb_auth_block);
 
 	dpb_utf8_filename = rdr.find(isc_dpb_utf8_filename);
+
+	string tempStr;
 
 	for (rdr.rewind(); !rdr.isEof(); rdr.moveNext())
 	{
@@ -7131,7 +7173,22 @@ void DatabaseOptions::get(const UCHAR* dpb, FB_SIZE_T dpb_length, bool& invalid_
 			break;
 
 		case isc_dpb_lc_ctype:
-			rdr.getString(dpb_lc_ctype);
+			rdr.getString(tempStr);
+
+			// hack for aliases like utf-8
+			if (tempStr.find('-') != string::npos &&
+				tempStr.find('.') == string::npos &&
+				tempStr.find('"') == string::npos)
+			{
+				tempStr.upper();
+				tempStr = '"' + tempStr + '"';
+			}
+
+			dpb_lc_ctype = QualifiedMetaString::parseSchemaObject(tempStr);
+
+			if (dpb_lc_ctype.schema.isEmpty())
+				dpb_lc_ctype.schema = SYSTEM_SCHEMA;
+
 			break;
 
 		case isc_dpb_shutdown:
@@ -7191,6 +7248,10 @@ void DatabaseOptions::get(const UCHAR* dpb, FB_SIZE_T dpb_length, bool& invalid_
 				rdr.getString(gbakStr);
 				dpb_gbak_attach = gbakStr.hasData();
 			}
+			break;
+
+		case isc_dpb_gbak_restore_has_schema:
+			dpb_gbak_restore_has_schema = true;
 			break;
 
 		case isc_dpb_gstat_attach:
@@ -7371,6 +7432,16 @@ void DatabaseOptions::get(const UCHAR* dpb, FB_SIZE_T dpb_length, bool& invalid_
 			getString(rdr, dpb_owner);
 			break;
 
+		case isc_dpb_search_path:
+			getString(rdr, tempStr);
+			MetaString::parseList(tempStr, dpb_schema_search_path);
+			break;
+
+		case isc_dpb_blr_request_search_path:
+			getString(rdr, tempStr);
+			MetaString::parseList(tempStr, dpb_blr_request_schema_search_path);
+			break;
+
 		default:
 			break;
 		}
@@ -7430,10 +7501,18 @@ static JAttachment* initAttachment(thread_db* tdbb, const PathName& expanded_nam
 
 	engineStartup.init();
 
+	QualifiedMetaString charSetName;
+
+	if (options.dpb_set_db_charset.hasData())
+		charSetName = QualifiedMetaString::parseSchemaObject(options.dpb_set_db_charset);
+
+	if (charSetName.schema.isEmpty())
+		charSetName.schema = SYSTEM_SCHEMA;
+
 	if (!attach_flag && options.dpb_set_db_charset.hasData() &&
-		!IntlManager::charSetInstalled(options.dpb_set_db_charset))
+		!IntlManager::charSetInstalled(charSetName))
 	{
-		ERR_post(Arg::Gds(isc_charset_not_installed) << options.dpb_set_db_charset);
+		ERR_post(Arg::Gds(isc_charset_not_installed) << charSetName.toQuotedString());
 	}
 
 	// Check to see if the database is already attached

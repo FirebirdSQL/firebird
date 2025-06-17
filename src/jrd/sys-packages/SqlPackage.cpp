@@ -42,9 +42,6 @@ IExternalResultSet* SqlPackage::explainProcedure(ThrowStatusExceptionWrapper* st
 }
 
 
-//--------------------------------------
-
-
 SqlPackage::ExplainResultSet::ExplainResultSet(ThrowStatusExceptionWrapper* status,
 		IExternalContext* context, const ExplainInput::Type* in, ExplainOutput::Type* aOut)
 	: out(aOut)
@@ -105,13 +102,23 @@ SqlPackage::ExplainResultSet::ExplainResultSet(ThrowStatusExceptionWrapper* stat
 		if (planEntry->objectType.has_value())
 			resultEntry.objectType = planEntry->objectType.value();
 
-		resultEntry.packageNameNull = planEntry->packageName.hasData() ? FB_FALSE : FB_TRUE;
-		if (planEntry->packageName.hasData())
-			resultEntry.packageName.set(planEntry->packageName.c_str(), planEntry->packageName.length());
+		resultEntry.schemaNameNull = planEntry->objectName.schema.hasData() ? FB_FALSE : FB_TRUE;
+		if (planEntry->objectName.schema.hasData())
+		{
+			resultEntry.schemaName.set(planEntry->objectName.schema.c_str(),
+				planEntry->objectName.schema.length());
+		}
 
-		resultEntry.objectNameNull = planEntry->objectName.hasData() ? FB_FALSE : FB_TRUE;
-		if (planEntry->objectName.hasData())
-			resultEntry.objectName.set(planEntry->objectName.c_str(), planEntry->objectName.length());
+		resultEntry.packageNameNull = planEntry->objectName.package.hasData() ? FB_FALSE : FB_TRUE;
+		if (planEntry->objectName.package.hasData())
+		{
+			resultEntry.packageName.set(planEntry->objectName.package.c_str(),
+				planEntry->objectName.package.length());
+		}
+
+		resultEntry.objectNameNull = planEntry->objectName.object.hasData() ? FB_FALSE : FB_TRUE;
+		if (planEntry->objectName.object.hasData())
+			resultEntry.objectName.set(planEntry->objectName.object.c_str(), planEntry->objectName.object.length());
 
 		resultEntry.aliasNull = planEntry->alias.hasData() ? FB_FALSE : FB_TRUE;
 		if (planEntry->alias.hasData())
@@ -161,6 +168,42 @@ FB_BOOLEAN SqlPackage::ExplainResultSet::fetch(ThrowStatusExceptionWrapper* stat
 //--------------------------------------
 
 
+IExternalResultSet* SqlPackage::parseUnqualifiedNamesProcedure(ThrowStatusExceptionWrapper* status,
+	IExternalContext* context, const ParseUnqualifiedNamesInput::Type* in, ParseUnqualifiedNamesOutput::Type* out)
+{
+	return FB_NEW ParseUnqualifiedNamesResultSet(status, context, in, out);
+}
+
+
+SqlPackage::ParseUnqualifiedNamesResultSet::ParseUnqualifiedNamesResultSet(ThrowStatusExceptionWrapper* status,
+		IExternalContext* context, const ParseUnqualifiedNamesInput::Type* in, ParseUnqualifiedNamesOutput::Type* aOut)
+	: out(aOut)
+{
+	if (!in->namesNull)
+	{
+		const string namesStr(in->names.str, in->names.length);
+		MetaString::parseList(namesStr, resultEntries);
+	}
+
+	resultIterator = resultEntries.begin();
+}
+
+FB_BOOLEAN SqlPackage::ParseUnqualifiedNamesResultSet::fetch(ThrowStatusExceptionWrapper* status)
+{
+	if (resultIterator == resultEntries.end())
+		return false;
+
+	out->name.set(resultIterator->c_str(), resultIterator->length());
+	out->nameNull = FB_FALSE;
+	++resultIterator;
+
+	return true;
+}
+
+
+//--------------------------------------
+
+
 SqlPackage::SqlPackage(MemoryPool& pool)
 	: SystemPackage(
 		pool,
@@ -184,6 +227,7 @@ SqlPackage::SqlPackage(MemoryPool& pool)
 					{"PARENT_RECORD_SOURCE_ID", fld_gen_val, true},
 					{"LEVEL", fld_integer, false},
 					{"OBJECT_TYPE", fld_obj_type, true},
+					{"SCHEMA_NAME", fld_sch_name, true},
 					{"PACKAGE_NAME", fld_pkg_name, true},
 					{"OBJECT_NAME", fld_r_name, true},
 					{"ALIAS", fld_short_description, true},
@@ -191,6 +235,21 @@ SqlPackage::SqlPackage(MemoryPool& pool)
 					{"RECORD_LENGTH", fld_integer, true},
 					{"KEY_LENGTH", fld_integer, true},
 					{"ACCESS_PATH", fld_description, false}
+				}
+			),
+			SystemProcedure(
+				pool,
+				"PARSE_UNQUALIFIED_NAMES",
+				SystemProcedureFactory<
+					ParseUnqualifiedNamesInput, ParseUnqualifiedNamesOutput, parseUnqualifiedNamesProcedure>(),
+				prc_selectable,
+				// input parameters
+				{
+					{"NAMES", fld_text_max, true}
+				},
+				// output parameters
+				{
+					{"NAME", fld_r_name, false}
 				}
 			),
 		},

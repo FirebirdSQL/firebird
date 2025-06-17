@@ -75,13 +75,13 @@ public:
 		if (m_statement)
 		{
 			if (m_statement->procedure)
-				return m_statement->procedure->getName().toString();
+				return m_statement->procedure->getName().toQuotedString();
 
 			if (m_statement->function)
-				return m_statement->function->getName().toString();
+				return m_statement->function->getName().toQuotedString();
 
-			if (m_statement->triggerName.hasData())
-				return m_statement->triggerName.c_str();
+			if (m_statement->triggerName.object.hasData())
+				return m_statement->triggerName.toQuotedString();
 		}
 
 		return "";
@@ -221,11 +221,11 @@ class TraceSQLStatementImpl :
 	public StatementHolder
 {
 public:
-	TraceSQLStatementImpl(DsqlRequest* stmt, Firebird::PerformanceInfo* perf) :
+	TraceSQLStatementImpl(DsqlRequest* stmt, Firebird::PerformanceInfo* perf, const UCHAR* inputBuffer) :
 		StatementHolder(stmt ? stmt->getStatement() : nullptr),
 		m_stmt(stmt),
 		m_perf(perf),
-		m_inputs(stmt)
+		m_inputs(stmt, inputBuffer)
 	{}
 
 	// TraceSQLStatement implementation
@@ -250,23 +250,21 @@ private:
 		public Firebird::AutoIface<Firebird::ITraceParamsImpl<DSQLParamsImpl, Firebird::CheckStatusWrapper> >
 	{
 	public:
-		explicit DSQLParamsImpl(DsqlRequest* const stmt) :
-			m_stmt(stmt)
+		explicit DSQLParamsImpl(DsqlRequest* const stmt, const UCHAR* const inputBuffer) :
+			m_stmt(stmt), m_buffer(inputBuffer)
 		{
-			if (const auto msg = m_stmt->getDsqlStatement()->getSendMsg())
-				m_params = &msg->msg_parameters;
 		}
 
 		FB_SIZE_T getCount();
-		const dsc* getParam(FB_SIZE_T idx);
+		const paramdsc* getParam(FB_SIZE_T idx);
 		const char* getTextUTF8(Firebird::CheckStatusWrapper* status, FB_SIZE_T idx);
 
 	private:
 		void fillParams();
 
 		DsqlRequest* const m_stmt;
-		const Firebird::Array<dsql_par*>* m_params = nullptr;
-		Firebird::HalfStaticArray<dsc, 16> m_descs;
+		const UCHAR* m_buffer;
+		Firebird::HalfStaticArray<paramdsc, 16> m_descs;
 		Firebird::string m_tempUTF8;
 	};
 
@@ -335,7 +333,7 @@ public:
 
 	// TraceParams implementation
 	FB_SIZE_T getCount();
-	const dsc* getParam(FB_SIZE_T idx);
+	const paramdsc* getParam(FB_SIZE_T idx);
 	const char* getTextUTF8(Firebird::CheckStatusWrapper* status, FB_SIZE_T idx);
 
 private:
@@ -358,11 +356,11 @@ public:
 		return m_descs.getCount();
 	}
 
-	const dsc* getParam(FB_SIZE_T idx)
+	const paramdsc* getParam(FB_SIZE_T idx)
 	{
 		fillParams();
 
-		if (/*idx >= 0 &&*/ idx < m_descs.getCount())
+		if (idx < m_descs.getCount())
 			return &m_descs[idx];
 
 		return NULL;
@@ -376,7 +374,7 @@ public:
 protected:
 	virtual void fillParams() = 0;
 
-	Firebird::HalfStaticArray<dsc, 16> m_descs;
+	Firebird::HalfStaticArray<paramdsc, 16> m_descs;
 
 private:
 	TraceParamsImpl	m_traceParams;
@@ -429,7 +427,7 @@ public:
 		else
 		{
 			m_descs.grow(1);
-			m_descs[0].setNull();
+			m_descs[0].dsc_flags |= DSC_null;
 		}
 	}
 
@@ -580,7 +578,7 @@ public:
 		StatementHolder(request),
 		m_name(getName()),
 		m_relationName((request->req_rpb.hasData() && request->req_rpb[0].rpb_relation) ?
-			request->req_rpb[0].rpb_relation->rel_name : ""),
+			request->req_rpb[0].rpb_relation->rel_name.toQuotedString() : ""),
 		m_which(which),
 		m_action(request->req_trigger_action),
 		m_perf(perf)
@@ -675,6 +673,7 @@ public:
 private:
 	Firebird::PerformanceInfo m_info;
 	TraceCountsArray m_counts;
+	Firebird::ObjectsArray<Firebird::string> m_tempNames;
 	static SINT64 m_dummy_counts[RuntimeStatistics::TOTAL_ITEMS];	// Zero-initialized array with zero counts
 };
 

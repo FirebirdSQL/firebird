@@ -704,10 +704,16 @@ using namespace Firebird;
 %token <metaNamePtr> ANY_VALUE
 %token <metaNamePtr> BTRIM
 %token <metaNamePtr> CALL
+%token <metaNamePtr> CURRENT_SCHEMA
+%token <metaNamePtr> DOWNTO
 %token <metaNamePtr> FORMAT
+%token <metaNamePtr> GREATEST
+%token <metaNamePtr> LEAST
 %token <metaNamePtr> LTRIM
 %token <metaNamePtr> NAMED_ARG_ASSIGN
 %token <metaNamePtr> RTRIM
+%token <metaNamePtr> SCHEMA
+%token <metaNamePtr> SEARCH_PATH
 %token <metaNamePtr> UNLIST
 
 // precedence declarations for expression evaluation
@@ -763,6 +769,7 @@ using namespace Firebird;
 	Jrd::ReturningClause* returningClause;
 	Jrd::MetaName* metaNamePtr;
 	Firebird::ObjectsArray<Jrd::MetaName>* metaNameArray;
+	Firebird::ObjectsArray<Jrd::QualifiedName>* qualifiedNameArray;
 	Firebird::PathName* pathNamePtr;
 	Jrd::QualifiedName* qualifiedNamePtr;
 	Firebird::string* stringPtr;
@@ -814,6 +821,7 @@ using namespace Firebird;
 	Jrd::CreateFilterNode::NameNumber* filterNameNumber;
 	Jrd::CreateAlterExceptionNode* createAlterExceptionNode;
 	Jrd::CreateAlterSequenceNode* createAlterSequenceNode;
+	Jrd::CreateAlterSchemaNode* createAlterSchemaNode;
 	Jrd::CreateShadowNode* createShadowNode;
 	Firebird::Array<Jrd::CreateAlterPackageNode::Item>* packageItems;
 	Jrd::ExceptionArray* exceptionArray;
@@ -864,6 +872,7 @@ using namespace Firebird;
 	Jrd::SetDecFloatTrapsNode* setDecFloatTrapsNode;
 	Jrd::SetBindNode* setBindNode;
 	Jrd::SessionResetNode* sessionResetNode;
+	Jrd::ForRangeNode::Direction forRangeDirection;
 }
 
 %include types.y
@@ -945,6 +954,7 @@ mng_statement
 	| set_time_zone								{ $$ = $1; }
 	| set_bind									{ $$ = $1; }
 	| set_optimize								{ $$ = $1; }
+	| set_search_path							{ $$ = $1; }
 	;
 
 
@@ -1009,6 +1019,13 @@ grant0($node)
 			$node->grantAdminOption = $7;
 			$node->grantor = $8;
 		}
+	| usage_privilege(NOTRIAL(&$node->privileges)) ON SCHEMA symbol_schema_name
+			TO non_role_grantee_list(NOTRIAL(&$node->users)) grant_option granted_by
+		{
+			$node->object = newNode<GranteeClause>(obj_schema, QualifiedName(*$4));
+			$node->grantAdminOption = $7;
+			$node->grantor = $8;
+		}
 	/***
 	| usage_privilege(NOTRIAL(&$node->privileges)) ON DOMAIN symbol_domain_name
 			TO non_role_grantee_list(NOTRIAL(&$node->users)) grant_option granted_by
@@ -1032,7 +1049,15 @@ grant0($node)
 			$node->grantor = $8;
 		}
 	***/
-	| ddl_privileges(NOTRIAL(&$node->privileges)) object
+	| ddl_privileges(NOTRIAL(&$node->privileges)) schema_object on_schema_opt
+			TO non_role_grantee_list(NOTRIAL(&$node->users)) grant_option granted_by
+		{
+			$node->object = newNode<GranteeClause>($2, QualifiedName(getDllSecurityName($2), ($3 ? *$3 : "")));
+			$node->grantAdminOption = $6;
+			$node->grantor = $7;
+			$node->isDdl = true;
+		}
+	| ddl_privileges(NOTRIAL(&$node->privileges)) schemaless_object
 			TO non_role_grantee_list(NOTRIAL(&$node->users)) grant_option granted_by
 		{
 			$node->object = $2;
@@ -1043,7 +1068,7 @@ grant0($node)
 	| db_ddl_privileges(NOTRIAL(&$node->privileges)) DATABASE
 			TO non_role_grantee_list(NOTRIAL(&$node->users)) grant_option granted_by
 		{
-			$node->object = newNode<GranteeClause>(obj_database, getSecurityClassName(obj_database));
+			$node->object = newNode<GranteeClause>(obj_database, QualifiedName(getDllSecurityName(obj_database)));
 			$node->grantAdminOption = $5;
 			$node->grantor = $6;
 			$node->isDdl = true;
@@ -1056,34 +1081,35 @@ grant0($node)
 		}
 	;
 
-%type <granteeClause> object
-object
-	: TABLE
-		{ $$ = newNode<GranteeClause>(obj_relations, getSecurityClassName(obj_relations)); }
-	| VIEW
-		{ $$ = newNode<GranteeClause>(obj_views, getSecurityClassName(obj_views)); }
-	| PROCEDURE
-		{ $$ = newNode<GranteeClause>(obj_procedures, getSecurityClassName(obj_procedures)); }
-	| FUNCTION
-		{ $$ = newNode<GranteeClause>(obj_functions, getSecurityClassName(obj_functions)); }
-	| PACKAGE
-		{ $$ = newNode<GranteeClause>(obj_packages, getSecurityClassName(obj_packages)); }
-	| GENERATOR
-		{ $$ = newNode<GranteeClause>(obj_generators, getSecurityClassName(obj_generators)); }
-	| SEQUENCE
-		{ $$ = newNode<GranteeClause>(obj_generators, getSecurityClassName(obj_generators)); }
-	| DOMAIN
-		{ $$ = newNode<GranteeClause>(obj_domains, getSecurityClassName(obj_domains)); }
-	| EXCEPTION
-		{ $$ = newNode<GranteeClause>(obj_exceptions, getSecurityClassName(obj_exceptions)); }
-	| ROLE
-		{ $$ = newNode<GranteeClause>(obj_roles, getSecurityClassName(obj_roles)); }
-	| CHARACTER SET
-		{ $$ = newNode<GranteeClause>(obj_charsets, getSecurityClassName(obj_charsets)); }
-	| COLLATION
-		{ $$ = newNode<GranteeClause>(obj_collations, getSecurityClassName(obj_collations)); }
+%type <metaNamePtr> on_schema_opt
+on_schema_opt
+	: /* nothing */					{ $$ = nullptr; }
+	| ON SCHEMA symbol_schema_name	{ $$ = $3; }
+	;
+
+%type <intVal> schema_object
+schema_object
+	: TABLE			{ $$ = obj_relations; }
+	| VIEW			{ $$ = obj_views; }
+	| PROCEDURE		{ $$ = obj_procedures; }
+	| FUNCTION		{ $$ = obj_functions; }
+	| PACKAGE		{ $$ = obj_packages; }
+	| GENERATOR		{ $$ = obj_generators; }
+	| SEQUENCE		{ $$ = obj_generators; }
+	| DOMAIN		{ $$ = obj_domains; }
+	| EXCEPTION		{ $$ = obj_exceptions; }
+	| CHARACTER SET	{ $$ = obj_charsets; }
+	| COLLATION		{ $$ = obj_collations; }
+	;
+
+%type <granteeClause> schemaless_object
+schemaless_object
+	: ROLE
+		{ $$ = newNode<GranteeClause>(obj_roles, QualifiedName(getDllSecurityName(obj_roles))); }
 	| FILTER
-		{ $$ = newNode<GranteeClause>(obj_filters, getSecurityClassName(obj_filters)); }
+		{ $$ = newNode<GranteeClause>(obj_filters, QualifiedName(getDllSecurityName(obj_filters))); }
+	| SCHEMA
+		{ $$ = newNode<GranteeClause>(obj_schemas, QualifiedName(getDllSecurityName(obj_schemas))); }
 	;
 
 table_noise
@@ -1115,11 +1141,33 @@ usage_privilege($privilegeArray)
 
 %type privilege(<privilegeArray>)
 privilege($privilegeArray)
-	: SELECT						{ $privilegeArray->add(PrivilegeClause('S', NULL)); }
-	| INSERT						{ $privilegeArray->add(PrivilegeClause('I', NULL)); }
-	| DELETE						{ $privilegeArray->add(PrivilegeClause('D', NULL)); }
-	| UPDATE column_parens_opt		{ $privilegeArray->add(PrivilegeClause('U', $2)); }
-	| REFERENCES column_parens_opt	{ $privilegeArray->add(PrivilegeClause('R', $2)); }
+	: SELECT									{ $privilegeArray->add(PrivilegeClause('S', NULL)); }
+	| INSERT									{ $privilegeArray->add(PrivilegeClause('I', NULL)); }
+	| DELETE									{ $privilegeArray->add(PrivilegeClause('D', NULL)); }
+	| UPDATE column_name_list_parens_opt		{ $privilegeArray->add(PrivilegeClause('U', $2)); }
+	| REFERENCES column_name_list_parens_opt	{ $privilegeArray->add(PrivilegeClause('R', $2)); }
+	;
+
+%type <metaNameArray> column_name_list_parens_opt
+column_name_list_parens_opt
+	: /* nothing */				{ $$ = nullptr; }
+	| '(' column_name_list ')'	{ $$ = $2; }
+	;
+
+%type <metaNameArray> column_name_list
+column_name_list
+	: symbol_column_name
+		{
+			const auto node = newNode<ObjectsArray<MetaName>>();
+			node->add(*$1);
+			$$ = node;
+		}
+	| column_name_list ',' symbol_column_name
+		{
+			const auto node = $1;
+			node->add(*$3);
+			$$ = node;
+		}
 	;
 
 %type ddl_privileges(<privilegeArray>)
@@ -1223,7 +1271,6 @@ revoke0($node)
 			$node->grantAdminOption = $1;
 			$node->grantor = $8;
 		}
-
 	| rev_grant_option execute_privilege(NOTRIAL(&$node->privileges)) ON PROCEDURE symbol_procedure_name
 			FROM non_role_grantee_list(NOTRIAL(&$node->users)) granted_by
 		{
@@ -1266,6 +1313,13 @@ revoke0($node)
 			$node->grantAdminOption = $1;
 			$node->grantor = $8;
 		}
+	| rev_grant_option usage_privilege(NOTRIAL(&$node->privileges)) ON SCHEMA symbol_schema_name
+			FROM non_role_grantee_list(NOTRIAL(&$node->users)) granted_by
+		{
+			$node->object = newNode<GranteeClause>(obj_schema, QualifiedName(*$5));
+			$node->grantAdminOption = $1;
+			$node->grantor = $8;
+		}
 	/***
 	| rev_grant_option usage_privilege(NOTRIAL(&$node->privileges)) ON DOMAIN symbol_domain_name
 			FROM non_role_grantee_list(NOTRIAL(&$node->users)) granted_by
@@ -1289,7 +1343,15 @@ revoke0($node)
 			$node->grantor = $8;
 		}
 	***/
-	| rev_grant_option ddl_privileges(NOTRIAL(&$node->privileges)) object
+	| rev_grant_option ddl_privileges(NOTRIAL(&$node->privileges)) schema_object on_schema_opt
+			FROM non_role_grantee_list(NOTRIAL(&$node->users)) granted_by
+		{
+			$node->object = newNode<GranteeClause>($3, QualifiedName(getDllSecurityName($3), ($4 ? *$4 : "")));
+			$node->grantAdminOption = $1;
+			$node->grantor = $7;
+			$node->isDdl = true;
+		}
+	| rev_grant_option ddl_privileges(NOTRIAL(&$node->privileges)) schemaless_object
 			FROM non_role_grantee_list(NOTRIAL(&$node->users)) granted_by
 		{
 			$node->object = $3;
@@ -1300,7 +1362,7 @@ revoke0($node)
 	| rev_grant_option db_ddl_privileges(NOTRIAL(&$node->privileges)) DATABASE
 			FROM non_role_grantee_list(NOTRIAL(&$node->users)) granted_by
 		{
-			$node->object = newNode<GranteeClause>(obj_database, getSecurityClassName(obj_database));
+			$node->object = newNode<GranteeClause>(obj_database, QualifiedName(getDllSecurityName(obj_database)));
 			$node->grantAdminOption = $1;
 			$node->grantor = $6;
 			$node->isDdl = true;
@@ -1347,9 +1409,9 @@ grantee($granteeArray)
 	| VIEW symbol_view_name
 		{ $granteeArray->add(GranteeClause(obj_view, *$2)); }
 	| ROLE symbol_role_name
-		{ $granteeArray->add(GranteeClause(obj_sql_role, *$2)); }
+		{ $granteeArray->add(GranteeClause(obj_sql_role, QualifiedName(*$2))); }
 	| SYSTEM PRIVILEGE valid_symbol_name
-		{ $granteeArray->add(GranteeClause(obj_privilege, *$3)); }
+		{ $granteeArray->add(GranteeClause(obj_privilege, QualifiedName(*$3))); }
 	;
 
 // CVC: In the future we can deprecate the first implicit form since we'll support
@@ -1358,11 +1420,11 @@ grantee($granteeArray)
 %type user_grantee(<granteeArray>)
 user_grantee($granteeArray)
 	: symbol_user_name
-		{ $granteeArray->add(GranteeClause(obj_user_or_role, *$1)); }
+		{ $granteeArray->add(GranteeClause(obj_user_or_role, QualifiedName(*$1))); }
 	| USER symbol_user_name
-		{ $granteeArray->add(GranteeClause(obj_user, *$2)); }
+		{ $granteeArray->add(GranteeClause(obj_user, QualifiedName(*$2))); }
 	| GROUP symbol_user_name
-		{ $granteeArray->add(GranteeClause(obj_user_group, *$2)); }
+		{ $granteeArray->add(GranteeClause(obj_user_group, QualifiedName(*$2))); }
 	;
 
 %type role_name_list(<grantRevokeNode>)
@@ -1375,12 +1437,12 @@ role_name_list($grantRevokeNode)
 role_name($grantRevokeNode)
 	: symbol_role_name
 		{
-			$grantRevokeNode->roles.add(GranteeClause(obj_sql_role, *$1));
+			$grantRevokeNode->roles.add(GranteeClause(obj_sql_role, QualifiedName(*$1)));
 			$grantRevokeNode->defaultRoles.add(false);
 		}
 	| DEFAULT symbol_role_name
 		{
-			$grantRevokeNode->roles.add(GranteeClause(obj_sql_role, *$2));
+			$grantRevokeNode->roles.add(GranteeClause(obj_sql_role, QualifiedName(*$2)));
 			$grantRevokeNode->defaultRoles.add(true);
 		}
 	;
@@ -1393,9 +1455,9 @@ role_grantee_list($granteeArray)
 
 %type role_grantee(<granteeArray>)
 role_grantee($granteeArray)
-	: symbol_user_name		{ $granteeArray->add(GranteeClause(obj_user_or_role, *$1)); }
-	| USER symbol_user_name	{ $granteeArray->add(GranteeClause(obj_user, *$2)); }
-	| ROLE symbol_user_name	{ $granteeArray->add(GranteeClause(obj_sql_role, *$2)); }
+	: symbol_user_name		{ $granteeArray->add(GranteeClause(obj_user_or_role, QualifiedName(*$1))); }
+	| USER symbol_user_name	{ $granteeArray->add(GranteeClause(obj_user, QualifiedName(*$2))); }
+	| ROLE symbol_user_name	{ $granteeArray->add(GranteeClause(obj_sql_role, QualifiedName(*$2))); }
 	;
 
 // DECLARE operations
@@ -1665,6 +1727,12 @@ create_clause
 			node->createIfNotExistsOnly = $3;
 			$$ = node;
 		}
+	| SCHEMA if_not_exists_opt schema_clause
+		{
+			const auto node = $3;
+			node->createIfNotExistsOnly = $2;
+			$$ = node;
+		}
 	;
 
 
@@ -1699,6 +1767,8 @@ recreate_clause
 		{ $$ = newNode<RecreateSequenceNode>($2); }
 	| USER create_user_clause
 		{ $$ = newNode<RecreateUserNode>($2); }
+	| SCHEMA schema_clause
+		{ $$ = newNode<RecreateSchemaNode>($2); }
 	;
 
 %type <ddlNode> create_or_alter
@@ -1720,6 +1790,7 @@ replace_clause
 	| USER replace_user_clause					{ $$ = $2; }
 	| MAPPING replace_map_clause(false)			{ $$ = $2; }
 	| GLOBAL MAPPING replace_map_clause(true)	{ $$ = $3; }
+	| SCHEMA replace_schema_clause				{ $$ = $2; }
 	;
 
 
@@ -1828,11 +1899,9 @@ conditional
 
 %type <createDomainNode> domain_clause
 domain_clause
-	: symbol_column_name as_opt data_type domain_default_opt
+	: symbol_domain_name as_opt data_type domain_default_opt
 			{
-				$3->fld_name = *$1;
-				$<createDomainNode>$ = newNode<CreateDomainNode>(
-					newNode<ParameterClause>($3, $4));
+				$<createDomainNode>$ = newNode<CreateDomainNode>(*$1, $3, $4);
 			}
 		domain_constraints_opt($5) collate_clause
 			{
@@ -2495,14 +2564,14 @@ computed_by
 %type <legacyField> data_type_or_domain
 data_type_or_domain
 	: data_type
-	| symbol_column_name
+	| symbol_domain_name
 		{
 			$$ = newNode<dsql_fld>();
 			$$->typeOfName = *$1;
 		}
 	;
 
-%type <metaNamePtr> collate_clause
+%type <qualifiedNamePtr> collate_clause
 collate_clause
 	:								{ $$ = NULL; }
 	| COLLATE symbol_collation_name	{ $$ = $2; }
@@ -2512,23 +2581,7 @@ collate_clause
 %type <legacyField> data_type_descriptor
 data_type_descriptor
 	: data_type
-	| TYPE OF symbol_column_name
-		{
-			$$ = newNode<dsql_fld>();
-			$$->typeOfName = *$3;
-		}
-	| TYPE OF COLUMN symbol_column_name '.' symbol_column_name
-		{
-			$$ = newNode<dsql_fld>();
-			$$->typeOfTable = *$4;
-			$$->typeOfName = *$6;
-		}
-	| symbol_column_name
-		{
-			$$ = newNode<dsql_fld>();
-			$$->typeOfName = *$1;
-			$$->fullDomain = true;
-		}
+	| domain_type
 	;
 
 
@@ -2708,7 +2761,7 @@ table_constraint($relationNode)
 constraint_index_opt
 	: // nothing
 		{ $$ = newNode<RelationNode::IndexConstraintClause>(); }
-	| USING order_direction INDEX symbol_index_name
+	| USING order_direction INDEX valid_symbol_name
 		{
 			RelationNode::IndexConstraintClause* clause = $$ =
 				newNode<RelationNode::IndexConstraintClause>();
@@ -3156,12 +3209,81 @@ package_body_item
 		{ $$ = CreateAlterPackageNode::Item::create($2); }
 	;
 
-
 %type <ddlNode> replace_package_body_clause
 replace_package_body_clause
 	: package_body_clause
 		{ $$ = newNode<RecreatePackageBodyNode>($1); }
 	;
+
+
+%type <createAlterSchemaNode> replace_schema_clause
+replace_schema_clause
+	: schema_clause
+		{
+			$$ = $1;
+			$$->alter = true;
+		}
+	;
+
+%type <createAlterSchemaNode> schema_clause
+schema_clause
+	: symbol_schema_name
+			{ $$ = newNode<CreateAlterSchemaNode>(*$1); }
+		schema_clause_options_opt($2)
+			{ $$ = $2; }
+	;
+
+%type schema_clause_options_opt(<createAlterSchemaNode>)
+schema_clause_options_opt($createAlterSchemaNode)
+	: // nothing
+	| schema_clause_options($createAlterSchemaNode)
+	;
+
+%type schema_clause_options(<createAlterSchemaNode>)
+schema_clause_options($createAlterSchemaNode)
+	: schema_clause_option($createAlterSchemaNode)
+	| schema_clause_options schema_clause_option($createAlterSchemaNode)
+	;
+
+%type schema_clause_option(<createAlterSchemaNode>)
+schema_clause_option($createAlterSchemaNode)
+	: DEFAULT CHARACTER SET symbol_character_set_name
+		{ setClause($createAlterSchemaNode->setDefaultCharSet, "DEFAULT CHARACTER SET", *$4); }
+	| DEFAULT optional_sql_security_clause
+		{ setClause($createAlterSchemaNode->setDefaultSqlSecurity, "DEFAULT SQL SECURITY", *$2); }
+	;
+
+%type <createAlterSchemaNode> alter_schema_clause
+alter_schema_clause
+	: symbol_schema_name
+			{
+				const auto node = newNode<CreateAlterSchemaNode>(*$1);
+				node->create = false;
+				node->alter = true;
+				$$ = node;
+			}
+		alter_schema_options($2)
+			{ $$ = $2; }
+	;
+
+%type alter_schema_options(<createAlterSchemaNode>)
+alter_schema_options($alterSchemaNode)
+	: alter_schema_option($alterSchemaNode)
+	| alter_schema_options alter_schema_option($alterSchemaNode)
+	;
+
+%type alter_schema_option(<createAlterSchemaNode>)
+alter_schema_option($alterSchemaNode)
+	: SET DEFAULT CHARACTER SET symbol_character_set_name
+		{ setClause($alterSchemaNode->setDefaultCharSet, "DEFAULT CHARACTER SET", *$5); }
+	| SET DEFAULT optional_sql_security_clause
+		{ setClause($alterSchemaNode->setDefaultSqlSecurity, "DEFAULT SQL SECURITY", *$3); }
+	| DROP DEFAULT CHARACTER SET
+		{ setClause($alterSchemaNode->setDefaultCharSet, "DEFAULT CHARACTER SET", QualifiedName()); }
+	| DROP DEFAULT SQL SECURITY
+		{ setClause($alterSchemaNode->setDefaultSqlSecurity, "DEFAULT SQL SECURITY", SS_DROP); }
+	;
+
 
 %type <localDeclarationsNode> local_declarations_opt
 local_declarations_opt
@@ -3262,7 +3384,7 @@ local_nonforward_declaration
 
 %type <declareSubProcNode> local_declaration_subproc_start
 local_declaration_subproc_start
-	: DECLARE PROCEDURE symbol_procedure_name
+	: DECLARE PROCEDURE valid_symbol_name
 			{
 				$$ = newNode<DeclareSubProcNode>(NOTRIAL(*$3));
 				$$->dsqlBlock = newNode<ExecBlockNode>();
@@ -3274,7 +3396,7 @@ local_declaration_subproc_start
 
 %type <declareSubFuncNode> local_declaration_subfunc_start
 local_declaration_subfunc_start
-	: DECLARE FUNCTION symbol_UDF_name
+	: DECLARE FUNCTION valid_symbol_name
 			{
 				$$ = newNode<DeclareSubFuncNode>(NOTRIAL(*$3));
 				$$->dsqlBlock = newNode<ExecBlockNode>();
@@ -3441,6 +3563,7 @@ complex_proc_statement
 	: in_autonomous_transaction
 	| if_then_else
 	| while
+	| for_range
 	| for_select					{ $$ = $1; }
 	| for_exec_into					{ $$ = $1; }
 	;
@@ -3468,6 +3591,46 @@ excp_statement
 %type <stmtNode> raise_statement
 raise_statement
 	: EXCEPTION		{ $$ = newNode<ExceptionNode>(); }
+	;
+
+%type <stmtNode> for_range
+for_range
+	: label_def_opt FOR for_range_variable '=' value for_range_direction value for_range_by_opt DO proc_block
+		{
+			const auto node = newNode<ForRangeNode>();
+			node->dsqlLabelName = $1;
+			node->variable = $3;
+			node->initialExpr = $5;
+			node->direction = $6;
+			node->finalExpr = $7;
+			node->byExpr = $8;
+			node->statement = $10;
+			node->direction = $6;
+			$$ = node;
+		}
+	;
+
+%type <valueExprNode> for_range_variable
+for_range_variable
+	: symbol_variable_name
+		{
+			const auto node = newNode<VariableNode>();
+			node->dsqlName = *$1;
+			$$ = node;
+		}
+	| variable
+	;
+
+%type <forRangeDirection> for_range_direction
+for_range_direction
+	: TO		{ $$ = ForRangeNode::Direction::TO; }
+	| DOWNTO	{ $$ = ForRangeNode::Direction::DOWNTO; }
+	;
+
+%type <valueExprNode> for_range_by_opt
+for_range_by_opt
+	: /* nothing */	{ $$ = nullptr; }
+	| BY value		{ $$ = $2; }
 	;
 
 %type <forNode> for_select
@@ -3810,19 +3973,19 @@ err($exceptionArray)
 		{
 			ExceptionItem& item = $exceptionArray->add();
 			item.type = ExceptionItem::SQL_STATE;
-			item.name = $2->getString();
+			item.name.object = $2->getString();
 		}
 	| GDSCODE symbol_gdscode_name
 		{
 			ExceptionItem& item = $exceptionArray->add();
 			item.type = ExceptionItem::GDS_CODE;
-			item.name = $2->c_str();
+			item.name.object = *$2;
 		}
 	| EXCEPTION symbol_exception_name
 		{
 			ExceptionItem& item = $exceptionArray->add();
 			item.type = ExceptionItem::XCP_CODE;
-			item.name = $2->c_str();
+			item.name = *$2;
 		}
 	| ANY
 		{
@@ -3892,21 +4055,13 @@ fetch_scroll($cursorStmtNode)
 
 %type <stmtNode> exec_procedure
 exec_procedure
-	: EXECUTE PROCEDURE symbol_procedure_name proc_inputs proc_outputs_opt
+	: EXECUTE PROCEDURE scoped_qualified_name proc_inputs proc_outputs_opt
 		{
 			$$ = newNode<ExecProcedureNode>(
-				QualifiedName(*$3),
+				*$3,
 				($4 ? $4->second : nullptr),
 				$5,
 				($4 ? $4->first : nullptr));
-		}
-	| EXECUTE PROCEDURE symbol_package_name '.' symbol_procedure_name proc_inputs proc_outputs_opt
-		{
-			$$ = newNode<ExecProcedureNode>(
-				QualifiedName(*$5, *$3),
-				($6 ? $6->second : nullptr),
-				$7,
-				($6 ? $6->first : nullptr));
 		}
 	;
 
@@ -3928,22 +4083,12 @@ proc_outputs_opt
 
 %type <stmtNode> call
 call
-	: CALL symbol_procedure_name '(' argument_list_opt ')'
+	: CALL scoped_qualified_name '(' argument_list_opt ')'
 		{
-			auto node = newNode<ExecProcedureNode>(QualifiedName(*$2),
+			auto node = newNode<ExecProcedureNode>(*$2,
 				($4 ? $4->second : nullptr),
 				nullptr,
 				($4 ? $4->first : nullptr));
-			node->dsqlCallSyntax = true;
-			$$ = node;
-		}
-	| CALL symbol_package_name '.' symbol_procedure_name '(' argument_list_opt ')'
-			into_variable_list_opt
-		{
-			auto node = newNode<ExecProcedureNode>(QualifiedName(*$4, *$2),
-				($6 ? $6->second : nullptr),
-				nullptr,
-				($6 ? $6->first : nullptr));
 			node->dsqlCallSyntax = true;
 			$$ = node;
 		}
@@ -4247,14 +4392,21 @@ alter_clause
 	| MAPPING alter_map_clause(false)		{ $$ = $2; }
 	| GLOBAL MAPPING alter_map_clause(true)	{ $$ = $3; }
 	| EXTERNAL CONNECTIONS POOL alter_eds_conn_pool_clause	{ $$ = $4; }
+	| SCHEMA alter_schema_clause			{ $$ = $2; }
 	;
 
 %type <alterDomainNode> alter_domain
 alter_domain
-	: keyword_or_column
+	: alter_domain_name
 			{ $<alterDomainNode>$ = newNode<AlterDomainNode>(*$1); }
 		alter_domain_ops($2)
 			{ $$ = $2; }
+	;
+
+%type <qualifiedNamePtr> alter_domain_name
+alter_domain_name
+	: keyword_or_column							{ $$ = newNode<QualifiedName>(*$1); }
+	| valid_symbol_name '.' keyword_or_column	{ $$ = newNode<QualifiedName>(*$3, *$1); }
 	;
 
 %type alter_domain_ops(<alterDomainNode>)
@@ -4279,7 +4431,7 @@ alter_domain_op($alterDomainNode)
 		{ setClause($alterDomainNode->notNullFlag, "{SET | DROP} NOT NULL", false); }
 	| SET NOT NULL
 		{ setClause($alterDomainNode->notNullFlag, "{SET | DROP} NOT NULL", true); }
-	| TO symbol_column_name
+	| TO valid_symbol_name
 		{ setClause($alterDomainNode->renameTo, "DOMAIN NAME", *$2); }
 	| TYPE non_array_type
 		{ setClause($alterDomainNode->type, "DOMAIN TYPE", $2);}
@@ -4550,8 +4702,11 @@ keyword_or_column
 	| WITHOUT
 	| BTRIM					// added in FB 6.0
 	| CALL
+	| CURRENT_SCHEMA
 	| LTRIM
 	| RTRIM
+	| GREATEST
+	| LEAST
 	;
 
 col_opt
@@ -4562,7 +4717,7 @@ col_opt
 %type <legacyField> alter_data_type_or_domain
 alter_data_type_or_domain
 	: non_array_type
-	| symbol_column_name
+	| symbol_domain_name
 		{
 			$$ = newNode<dsql_fld>();
 			$$->typeOfName = *$1;
@@ -4967,6 +5122,12 @@ drop_clause
 			node->silentDrop = $3;
 			$$ = node;
 		}
+	| SCHEMA if_exists_opt symbol_schema_name
+		{
+			const auto node = newNode<DropSchemaNode>(*$3);
+			node->silent = $2;
+			$$ = node;
+		}
 	;
 
 %type <boolVal> if_exists_opt
@@ -5014,18 +5175,18 @@ domain_or_non_array_type_name
 
 %type <legacyField> domain_type
 domain_type
-	: TYPE OF symbol_column_name
+	: TYPE OF symbol_domain_name
 		{
 			$$ = newNode<dsql_fld>();
 			$$->typeOfName = *$3;
 		}
-	| TYPE OF COLUMN symbol_column_name '.' symbol_column_name
+	| TYPE OF COLUMN symbol_domain_name '.' symbol_column_name
 		{
 			$$ = newNode<dsql_fld>();
-			$$->typeOfName = *$6;
+			$$->typeOfName = QualifiedName(*$6);
 			$$->typeOfTable = *$4;
 		}
-	| symbol_column_name
+	| symbol_domain_name
 		{
 			$$ = newNode<dsql_fld>();
 			$$->typeOfName = *$1;
@@ -5229,7 +5390,7 @@ blob_subtype($field)
 		{ $field->subTypeName = *$2; $field->flags |= FLD_has_sub; }
 	;
 
-%type <metaNamePtr> charset_clause
+%type <qualifiedNamePtr> charset_clause
 charset_clause
 	: /* nothing */								{ $$ = NULL; }
 	| CHARACTER SET symbol_character_set_name	{ $$ = $3; }
@@ -5787,6 +5948,28 @@ set_optimize
 		{ $$ = newNode<SetOptimizeNode>(); }
 	;
 
+%type <mngNode> set_search_path
+set_search_path
+	: SET SEARCH_PATH TO schema_name_list
+		{ $$ = newNode<SetSearchPathNode>($4); }
+	;
+
+%type <metaNameArray> schema_name_list
+schema_name_list
+	: symbol_schema_name
+		{
+			const auto node = newNode<ObjectsArray<MetaName>>();
+			node->add(*$1);
+			$$ = node;
+		}
+	| schema_name_list ',' symbol_schema_name
+		{
+			const auto node = $1;
+			node->add(*$3);
+			$$ = node;
+		}
+	;
+
 %type <setSessionNode> session_statement
 session_statement
 	: SET SESSION IDLE TIMEOUT long_integer timepart_sesion_idle_tout
@@ -5945,17 +6128,17 @@ table_lock
 	| FOR lock_type lock_mode	{ $$ = $2 | $3; }
 	;
 
-%type <metaNameArray> table_list
+%type <qualifiedNameArray> table_list
 table_list
 	: symbol_table_name
 		{
-			ObjectsArray<MetaName>* node = newNode<ObjectsArray<MetaName> >();
+			ObjectsArray<QualifiedName>* node = newNode<ObjectsArray<QualifiedName>>();
 			node->add(*$1);
 			$$ = node;
 		}
 	| table_list ',' symbol_table_name
 		{
-			ObjectsArray<MetaName>* node = $1;
+			ObjectsArray<QualifiedName>* node = $1;
 			node->add(*$3);
 			$$ = node;
 		}
@@ -5971,14 +6154,16 @@ set_statistics
 %type <ddlNode> comment
 comment
 	: COMMENT ON ddl_type0 IS ddl_desc
-		{ $$ = newNode<CommentOnNode>($3, QualifiedName(""), "", *$5); }
-	| COMMENT ON ddl_type1 symbol_ddl_name IS ddl_desc
+		{ $$ = newNode<CommentOnNode>($3, QualifiedName(), "", *$5); }
+	| COMMENT ON ddl_type1_schema symbol_ddl_name IS ddl_desc
+		{ $$ = newNode<CommentOnNode>($3, *$4, "", *$6); }
+	| COMMENT ON ddl_type1_noschema valid_symbol_name IS ddl_desc
 		{ $$ = newNode<CommentOnNode>($3, QualifiedName(*$4), "", *$6); }
-	| COMMENT ON ddl_type2 symbol_ddl_name ddl_subname IS ddl_desc
-		{ $$ = newNode<CommentOnNode>($3, QualifiedName(*$4), *$5, *$7); }
-	| COMMENT ON ddl_type3 ddl_qualified_name ddl_subname IS ddl_desc
-		{ $$ = newNode<CommentOnNode>($3, *$4, *$5, *$7); }
-	| COMMENT ON ddl_type4 ddl_qualified_name IS ddl_desc
+	| COMMENT ON COLUMN symbol_ddl_name '.' valid_symbol_name IS ddl_desc
+		{ $$ = newNode<CommentOnNode>(obj_relation, *$4, *$6, *$8); }
+	| COMMENT ON ddl_type3 qualified_name '.' valid_symbol_name IS ddl_desc
+		{ $$ = newNode<CommentOnNode>($3, *$4, *$6, *$8); }
+	| COMMENT ON ddl_type4 qualified_name IS ddl_desc
 		{ $$ = newNode<CommentOnNode>($3, *$4, "", *$6); }
 	| comment_on_user
 		{ $$ = $1; }
@@ -6011,29 +6196,26 @@ ddl_type0
 		{ $$ = obj_database; }
 	;
 
-%type <intVal> ddl_type1
-ddl_type1
+%type <intVal> ddl_type1_schema
+ddl_type1_schema
 	: DOMAIN				{ $$ = obj_field; }
 	| TABLE					{ $$ = obj_relation; }
 	| VIEW					{ $$ = obj_view; }
 	| TRIGGER				{ $$ = obj_trigger; }
-	| FILTER				{ $$ = obj_blob_filter; }
 	| EXCEPTION				{ $$ = obj_exception; }
 	| GENERATOR				{ $$ = obj_generator; }
 	| SEQUENCE				{ $$ = obj_generator; }
 	| INDEX					{ $$ = obj_index; }
-	| ROLE					{ $$ = obj_sql_role; }
 	| CHARACTER SET			{ $$ = obj_charset; }
 	| COLLATION				{ $$ = obj_collation; }
 	| PACKAGE				{ $$ = obj_package_header; }
-	/***
-	| SECURITY CLASS		{ $$ = ddl_sec_class; }
-	***/
 	;
 
-%type <intVal> ddl_type2
-ddl_type2
-	: COLUMN					{ $$ = obj_relation; }
+%type <intVal> ddl_type1_noschema
+ddl_type1_noschema
+	: FILTER				{ $$ = obj_blob_filter; }
+	| ROLE					{ $$ = obj_sql_role; }
+	| SCHEMA				{ $$ = obj_schema; }
 	;
 
 %type <intVal> ddl_type3
@@ -6050,20 +6232,39 @@ ddl_type4
 	| FUNCTION				{ $$ = obj_udf; }
 	;
 
-%type <metaNamePtr> ddl_subname
-ddl_subname
-	: '.' symbol_ddl_name	{ $$ = $2; }
+%type <qualifiedNamePtr> scoped_qualified_name
+scoped_qualified_name
+	: qualified_name
+	| scoped_only_qualified_name
 	;
 
-%type <qualifiedNamePtr> ddl_qualified_name
-ddl_qualified_name
-	: symbol_ddl_name						{ $$ = newNode<QualifiedName>(*$1); }
-	| symbol_ddl_name '.' symbol_ddl_name	{ $$ = newNode<QualifiedName>(*$3, *$1); }
+%type <qualifiedNamePtr> qualified_name
+qualified_name
+	: valid_symbol_name
+		{ $$ = newNode<QualifiedName>(*$1); }
+	| valid_symbol_name '.' valid_symbol_name
+		{ $$ = newNode<QualifiedName>(*$3, *$1); }
+	| valid_symbol_name '.' valid_symbol_name '.' valid_symbol_name
+		{ $$ = newNode<QualifiedName>(*$5, *$1, *$3); }
+	;
+
+%type <qualifiedNamePtr> scoped_only_qualified_name
+scoped_only_qualified_name
+	: valid_symbol_name '%' SCHEMA '.' valid_symbol_name
+		{
+			$$ = newNode<QualifiedName>(*$5, *$1);
+			$$->setUnambiguous(true);
+		}
+	| valid_symbol_name '%' PACKAGE '.' valid_symbol_name
+		{
+			$$ = newNode<QualifiedName>(*$5, MetaName(), *$1);
+			$$->setUnambiguous(true);
+		}
 	;
 
 %type <stringPtr> ddl_desc
 ddl_desc
-    : utf_string	{ $$ = $1; }
+	: utf_string	{ $$ = $1; }
 	| NULL			{ $$ = newString(""); }
 	;
 
@@ -6184,7 +6385,7 @@ with_list
 
 %type <selectExprNode> with_item
 with_item
-	: symbol_table_alias_name derived_column_list AS '(' select_expr ')'
+	: valid_symbol_name derived_column_list AS '(' select_expr ')'
 		{
 			$$ = $5;
 			$$->dsqlFlags |= RecordSourceNode::DFLAG_DERIVED;
@@ -6424,9 +6625,9 @@ lateral_derived_table
 
 %type <metaNamePtr> correlation_name_opt
 correlation_name_opt
-	: /* nothing */					{ $$ = nullptr; }
-	| symbol_table_alias_name
-	| AS symbol_table_alias_name	{ $$ = $2; }
+	: /* nothing */				{ $$ = nullptr; }
+	| valid_symbol_name
+	| AS valid_symbol_name		{ $$ = $2; }
 	;
 
 %type <metaNameArray> derived_column_list
@@ -6439,7 +6640,7 @@ derived_column_list
 alias_list
 	: symbol_item_alias_name
 		{
-			ObjectsArray<MetaName>* node = newNode<ObjectsArray<MetaName> >();
+			ObjectsArray<MetaName>* node = newNode<ObjectsArray<MetaName>>();
 			node->add(*$1);
 			$$ = node;
 		}
@@ -6519,36 +6720,13 @@ named_columns_join
 
 %type <recSourceNode> table_proc
 table_proc
-	: symbol_procedure_name table_proc_inputs as_noise symbol_table_alias_name
+	: scoped_qualified_name table_proc_inputs correlation_name_opt
 		{
-			const auto node = newNode<ProcedureSourceNode>(QualifiedName(*$1));
+			const auto node = newNode<ProcedureSourceNode>(*$1);
 			node->inputSources = $2 ? $2->second : nullptr;
 			node->dsqlInputArgNames = $2 ? $2->first : nullptr;
-			node->alias = $4->c_str();
-			$$ = node;
-		}
-	| symbol_procedure_name table_proc_inputs
-		{
-			const auto node = newNode<ProcedureSourceNode>(QualifiedName(*$1));
-			node->inputSources = $2 ? $2->second : nullptr;
-			node->dsqlInputArgNames = $2 ? $2->first : nullptr;
-			$$ = node;
-		}
-	| symbol_package_name '.' symbol_procedure_name table_proc_inputs as_noise symbol_table_alias_name
-		{
-			const auto node = newNode<ProcedureSourceNode>(
-				QualifiedName(*$3, *$1));
-			node->inputSources = $4 ? $4->second : nullptr;
-			node->dsqlInputArgNames = $4 ? $4->first : nullptr;
-			node->alias = $6->c_str();
-			$$ = node;
-		}
-	| symbol_package_name '.' symbol_procedure_name table_proc_inputs
-		{
-			const auto node = newNode<ProcedureSourceNode>(
-				QualifiedName(*$3, *$1));
-			node->inputSources = $4 ? $4->second : nullptr;
-			node->dsqlInputArgNames = $4 ? $4->first : nullptr;
+			if ($3)
+				node->alias = $3->c_str();
 			$$ = node;
 		}
 	;
@@ -6561,11 +6739,11 @@ table_proc_inputs
 
 %type <relSourceNode> table_name
 table_name
-	: simple_table_name
-	| symbol_table_name as_noise symbol_table_alias_name
+	: symbol_table_name correlation_name_opt
 		{
 			RelationSourceNode* node = newNode<RelationSourceNode>(*$1);
-			node->alias = $3->c_str();
+			if ($2)
+				node->alias = $2->c_str();
 			$$ = node;
 		}
 	;
@@ -6639,7 +6817,7 @@ table_value_function_returning
 
 %type <metaNamePtr> table_value_function_correlation_name
 table_value_function_correlation_name
-	: as_noise symbol_table_alias_name	{ $$ = $2; }
+	: as_noise symbol_item_alias_name	{ $$ = $2; }
 	;
 
 
@@ -6753,17 +6931,17 @@ plan_item
 	| plan_expression
 	;
 
-%type <metaNameArray> table_or_alias_list
+%type <qualifiedNameArray> table_or_alias_list
 table_or_alias_list
 	: symbol_table_name
 		{
-			ObjectsArray<MetaName>* node = newNode<ObjectsArray<MetaName> >();
+			const auto node = newNode<ObjectsArray<QualifiedName>>();
 			node->add(*$1);
 			$$ = node;
 		}
 	| table_or_alias_list symbol_table_name
 		{
-			ObjectsArray<MetaName>* node = $1;
+			const auto node = $1;
 			node->add(*$2);
 			$$ = node;
 		}
@@ -7016,7 +7194,7 @@ by_target_noise
 	| BY TARGET
 	;
 
-%type merge_update_specification(<mergeMatchedClause>, <metaNamePtr>)
+%type merge_update_specification(<mergeMatchedClause>, <qualifiedNamePtr>)
 merge_update_specification($mergeMatchedClause, $relationName)
 	: THEN UPDATE SET update_assignments(NOTRIAL($relationName))
 		{ $mergeMatchedClause->assignments = $4; }
@@ -7203,7 +7381,7 @@ assignment
 		}
 	;
 
-%type <compoundStmtNode> update_assignments(<metaNamePtr>)
+%type <compoundStmtNode> update_assignments(<qualifiedNamePtr>)
 update_assignments($relationName)
 	: update_assignment($relationName)
 		{
@@ -7217,7 +7395,7 @@ update_assignments($relationName)
 		}
 	;
 
-%type <stmtNode> update_assignment(<metaNamePtr>)
+%type <stmtNode> update_assignment(<qualifiedNamePtr>)
 update_assignment($relationName)
 	: update_column_name '=' value
 		{
@@ -7578,6 +7756,7 @@ in_predicate_value
 %type <selectExprNode> table_subquery
 table_subquery
 	: '(' column_select ')'		{ $$ = $2; }
+	| '(' table_subquery ')'	{ $$ = $2; }
 	;
 
 // USER control SQL interface
@@ -7933,6 +8112,8 @@ nonparenthesized_value
 		{ $$ = $1; }
 	| current_role
 		{ $$ = $1; }
+	| current_schema
+		{ $$ = $1; }
 	| internal_info
 		{ $$ = $1; }
 	| recordKeyType
@@ -8160,6 +8341,11 @@ current_role
 	: CURRENT_ROLE	{ $$ = newNode<CurrentRoleNode>(); }
 	;
 
+%type <valueExprNode> current_schema
+current_schema
+	: CURRENT_SCHEMA	{ $$ = newNode<CurrentSchemaNode>(); }
+	;
+
 %type <valueExprNode> internal_info
 internal_info
 	: CURRENT_CONNECTION
@@ -8191,18 +8377,18 @@ error_context
 %type <intlStringPtr> sql_string
 sql_string
 	: STRING					// string in current charset
-	| INTRODUCER
+	| INTRODUCER schema_opt_qualified_name
 			[
 				// feedback for lexer
-				introducerCharSetName = $1;
+				introducerCharSetName = $2;
 			]
 		 STRING			// string in specific charset
 			[ introducerCharSetName = nullptr; ]
 		{
-			$$ = $3;
-			$$->setCharSet(*$1);
+			$$ = $4;
+			$$->setCharSet(*$2);
 
-			StrMark* mark = strMarks.get($3);
+			StrMark* mark = strMarks.get($4);
 
 			if (mark)	// hex string is not in strMarks
 				mark->introduced = true;
@@ -8616,8 +8802,10 @@ system_function_std_syntax
 	| EXP
 	| FLOOR
 	| GEN_UUID
+	| GREATEST
 	| HEX_DECODE
 	| HEX_ENCODE
+	| LEAST
 	| LEFT
 	| LN
 	| LOG
@@ -8936,9 +9124,18 @@ rtrim_function
 %type <valueExprNode> udf
 udf
 	: symbol_UDF_call_name '(' argument_list_opt ')'
-		{ $$ = newNode<UdfCallNode>(QualifiedName(*$1, ""), $3->second, $3->first); }
-	| symbol_package_name '.' symbol_UDF_name '(' argument_list_opt ')'
-		{ $$ = newNode<UdfCallNode>(QualifiedName(*$3, *$1), $5->second, $5->first); }
+		{ $$ = newNode<UdfCallNode>(*$1, $3->second, $3->first); }
+	;
+
+%type <qualifiedNamePtr> symbol_UDF_call_name
+symbol_UDF_call_name
+	: SYMBOL
+		{ $$ = newNode<QualifiedName>(*$1); }
+	| valid_symbol_name '.' valid_symbol_name
+		{ $$ = newNode<QualifiedName>(*$3, *$1); }
+	| valid_symbol_name '.' valid_symbol_name '.' valid_symbol_name
+		{ $$ = newNode<QualifiedName>(*$5, *$1, *$3); }
+	| scoped_only_qualified_name
 	;
 
 %type <namedArguments> argument_list_opt
@@ -9290,14 +9487,9 @@ null_value
 
 // Performs special mapping of keywords into symbols
 
-%type <metaNamePtr> symbol_UDF_call_name
-symbol_UDF_call_name
-	: SYMBOL
-	;
-
-%type <metaNamePtr> symbol_UDF_name
+%type <qualifiedNamePtr> symbol_UDF_name
 symbol_UDF_name
-	: valid_symbol_name
+	: schema_opt_qualified_name
 	;
 
 %type <metaNamePtr> symbol_blob_subtype_name
@@ -9306,15 +9498,15 @@ symbol_blob_subtype_name
 	| BINARY
 	;
 
-%type <metaNamePtr> symbol_character_set_name
+%type <qualifiedNamePtr> symbol_character_set_name
 symbol_character_set_name
-	: valid_symbol_name
-	| BINARY
+	: schema_opt_qualified_name
+	| BINARY				{ $$ = newNode<QualifiedName>(*$1, SYSTEM_SCHEMA); }
 	;
 
-%type <metaNamePtr> symbol_collation_name
+%type <qualifiedNamePtr> symbol_collation_name
 symbol_collation_name
-	: valid_symbol_name
+	: schema_opt_qualified_name
 	;
 
 %type <metaNamePtr> symbol_column_name
@@ -9332,14 +9524,14 @@ symbol_cursor_name
 	: valid_symbol_name
 	;
 
-%type <metaNamePtr> symbol_domain_name
+%type <qualifiedNamePtr> symbol_domain_name
 symbol_domain_name
-	: valid_symbol_name
+	: schema_opt_qualified_name
 	;
 
-%type <metaNamePtr> symbol_exception_name
+%type <qualifiedNamePtr> symbol_exception_name
 symbol_exception_name
-	: valid_symbol_name
+	: schema_opt_qualified_name
 	;
 
 %type <metaNamePtr> symbol_filter_name
@@ -9352,14 +9544,14 @@ symbol_gdscode_name
 	: valid_symbol_name
 	;
 
-%type <metaNamePtr> symbol_generator_name
+%type <qualifiedNamePtr> symbol_generator_name
 symbol_generator_name
-	: valid_symbol_name
+	: schema_opt_qualified_name
 	;
 
-%type <metaNamePtr> symbol_index_name
+%type <qualifiedNamePtr> symbol_index_name
 symbol_index_name
-	: valid_symbol_name
+	: schema_opt_qualified_name
 	;
 
 %type <metaNamePtr> symbol_item_alias_name
@@ -9372,14 +9564,14 @@ symbol_label_name
 	: valid_symbol_name
 	;
 
-%type <metaNamePtr> symbol_ddl_name
+%type <qualifiedNamePtr> symbol_ddl_name
 symbol_ddl_name
-	: valid_symbol_name
+	: schema_opt_qualified_name
 	;
 
-%type <metaNamePtr> symbol_procedure_name
+%type <qualifiedNamePtr> symbol_procedure_name
 symbol_procedure_name
-	: valid_symbol_name
+	: schema_opt_qualified_name
 	;
 
 %type <metaNamePtr> symbol_role_name
@@ -9387,19 +9579,19 @@ symbol_role_name
 	: valid_symbol_name
 	;
 
-%type <metaNamePtr> symbol_table_alias_name
+%type <qualifiedNamePtr> symbol_table_alias_name
 symbol_table_alias_name
-	: valid_symbol_name
+	: schema_opt_qualified_name
 	;
 
-%type <metaNamePtr> symbol_table_name
+%type <qualifiedNamePtr> symbol_table_name
 symbol_table_name
-	: valid_symbol_name
+	: schema_opt_qualified_name
 	;
 
-%type <metaNamePtr> symbol_trigger_name
+%type <qualifiedNamePtr> symbol_trigger_name
 symbol_trigger_name
-	: valid_symbol_name
+	: schema_opt_qualified_name
 	;
 
 %type <metaNamePtr> symbol_user_name
@@ -9412,9 +9604,9 @@ symbol_variable_name
 	: valid_symbol_name
 	;
 
-%type <metaNamePtr> symbol_view_name
+%type <qualifiedNamePtr> symbol_view_name
 symbol_view_name
-	: valid_symbol_name
+	: schema_opt_qualified_name
 	;
 
 %type <metaNamePtr> symbol_savepoint_name
@@ -9422,8 +9614,13 @@ symbol_savepoint_name
 	: valid_symbol_name
 	;
 
-%type <metaNamePtr> symbol_package_name
+%type <qualifiedNamePtr> symbol_package_name
 symbol_package_name
+	: schema_opt_qualified_name
+	;
+
+%type <metaNamePtr> symbol_schema_name
+symbol_schema_name
 	: valid_symbol_name
 	;
 
@@ -9433,6 +9630,12 @@ symbol_window_name
 	;
 
 // symbols
+
+%type <qualifiedNamePtr> schema_opt_qualified_name
+schema_opt_qualified_name
+	: valid_symbol_name							{ $$ = newNode<QualifiedName>(*$1); }
+	| valid_symbol_name '.' valid_symbol_name	{ $$ = newNode<QualifiedName>(*$3, *$1); }
+	;
 
 %type <metaNamePtr> valid_symbol_name
 valid_symbol_name
@@ -9735,8 +9938,11 @@ non_reserved_word
 	| UNICODE_VAL
 	// added in FB 6.0
 	| ANY_VALUE
+	| DOWNTO
 	| FORMAT
 	| OWNER
+	| SEARCH_PATH
+	| SCHEMA
 	| UNLIST
 	;
 

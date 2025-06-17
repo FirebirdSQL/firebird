@@ -47,7 +47,7 @@ namespace Replication
 		VERBOSE_MSG
 	};
 
-	void raiseError(const char* msg, ...);
+	[[noreturn]] void raiseError(const char* msg, ...);
 	int executeShell(const Firebird::string& command);
 
 	void logPrimaryError(const Firebird::PathName& database,

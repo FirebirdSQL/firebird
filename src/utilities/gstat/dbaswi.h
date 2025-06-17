@@ -51,6 +51,7 @@ const int IN_SW_DBA_FETCH_PASS		= 14;	// fetch password from file
 const int IN_SW_DBA_ENCRYPTION		= 15;	// analyze pages encryption
 const int IN_SW_DBA_HELP			= 16;	// show help
 const int IN_SW_DBA_ROLE			= 17;	// SQL role
+const int IN_SW_DBA_SCHEMA			= 18;	// analyze specific schemas
 
 const static struct Switches::in_sw_tab_t dba_in_sw_table[] =
 {
@@ -65,6 +66,7 @@ const static struct Switches::in_sw_tab_t dba_in_sw_table[] =
     {IN_SW_DBA_PASSWORD,		0,							"PASSWORD",	0,0,0,	false,	false,	33,	1, NULL},	// msg 33: -p      password
     {IN_SW_DBA_FETCH_PASS,		0,					"FETCH_PASSWORD",	0,0,0,	false,	false,	37,	2, NULL},	// msg 37: -fetch  fetch password from file
     {IN_SW_DBA_RECORD,			isc_spb_sts_record_versions,"RECORD",	0,0,0,	false,	true,	34,	1, NULL},	// msg 34: -r      analyze average record and version length
+    {IN_SW_DBA_SCHEMA,			isc_spb_sts_schema,			"SCHEMA",	0,0,0,	false,	false,	65,	1, NULL},	// msg 65: -sch    schemaname (case sensitive)
     {IN_SW_DBA_RELATION,		isc_spb_sts_table,			"TABLE",	0,0,0,	false,	false,	35,	1, NULL},	// msg 35: -t      tablename
     {IN_SW_DBA_RELATION,		isc_spb_sts_table,			"TABLE",	0,0,0,	false,	true,	0,	1, NULL},	// no msg: let run old buggy code
     {IN_SW_DBA_ROLE,			0,							"ROLE",		0,0,0,	false,	false,	57,	1, NULL},	// msg 57: -role   SQL role name

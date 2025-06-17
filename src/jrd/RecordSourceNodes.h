@@ -147,7 +147,7 @@ public:
 
 		SLONG relationId;
 		SLONG indexId;
-		MetaName indexName;
+		QualifiedName indexName;
 	};
 
 	struct AccessType
@@ -192,14 +192,14 @@ public:
 private:
 	dsql_ctx* dsqlPassAliasList(DsqlCompilerScratch* dsqlScratch);
 	static dsql_ctx* dsqlPassAlias(DsqlCompilerScratch* dsqlScratch, DsqlContextStack& stack,
-		const MetaName& alias);
+		const QualifiedName& alias);
 
 public:
 	Type const type;
 	AccessType* accessType;
 	RecordSourceNode* recordSourceNode;
 	Firebird::Array<NestConst<PlanNode> > subNodes;
-	Firebird::ObjectsArray<MetaName>* dsqlNames;
+	Firebird::ObjectsArray<QualifiedName>* dsqlNames;
 };
 
 class InversionNode
@@ -354,7 +354,7 @@ public:
 class RelationSourceNode final : public TypedNode<RecordSourceNode, RecordSourceNode::TYPE_RELATION>
 {
 public:
-	explicit RelationSourceNode(MemoryPool& pool, const MetaName& aDsqlName = NULL)
+	explicit RelationSourceNode(MemoryPool& pool, const QualifiedName& aDsqlName = {})
 		: TypedNode<RecordSourceNode, RecordSourceNode::TYPE_RELATION>(pool),
 		  dsqlName(pool, aDsqlName),
 		  alias(pool),
@@ -416,7 +416,7 @@ public:
 	virtual RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream);
 
 public:
-	MetaName dsqlName;
+	QualifiedName dsqlName;
 	Firebird::string alias;	// SQL alias for the relation
 	jrd_rel* relation;
 
@@ -431,7 +431,7 @@ class ProcedureSourceNode final : public TypedNode<RecordSourceNode, RecordSourc
 {
 public:
 	explicit ProcedureSourceNode(MemoryPool& pool,
-			const QualifiedName& aDsqlName = QualifiedName())
+			const QualifiedName& aDsqlName = {})
 		: TypedNode<RecordSourceNode, RecordSourceNode::TYPE_PROCEDURE>(pool),
 		  dsqlName(pool, aDsqlName),
 		  alias(pool)

@@ -125,9 +125,8 @@ namespace Jrd
 		Firebird::ObjectsArray<Line> lines{getPool()};
 		Firebird::ObjectsArray<PlanEntry> children{getPool()};
 		std::optional<ObjectType> objectType;
-		MetaName packageName;
-		MetaName objectName;
-		MetaName alias;
+		QualifiedName objectName;
+		Firebird::string alias{getPool()};
 		const AccessPath* accessPath = nullptr;
 		ULONG recordLength = 0;
 		ULONG keyLength = 0;
@@ -179,9 +178,8 @@ namespace Jrd
 
 		RecordSource(CompilerScratch* csb);
 
-		static Firebird::string printName(thread_db* tdbb, const Firebird::string& name, bool quote = true);
 		static Firebird::string printName(thread_db* tdbb, const Firebird::string& name,
-										  const Firebird::string& alias);
+										  const Firebird::string& alias = {});
 
 		static void printInversion(thread_db* tdbb, const InversionNode* inversion,
 								   Firebird::ObjectsArray<PlanEntry::Line>& planLines,
@@ -971,7 +969,8 @@ namespace Jrd
 
 				void operator ()(thread_db* tdbb, impure_value* target)
 				{
-					ArithmeticNode::add2(tdbb, offsetDesc, target, arithNode, arithNode->blrOp);
+					ArithmeticNode::add(tdbb, offsetDesc, &target->vlu_desc, target, arithNode->blrOp, false,
+						arithNode->nodScale, arithNode->nodFlags);
 				}
 
 				const ArithmeticNode* arithNode;

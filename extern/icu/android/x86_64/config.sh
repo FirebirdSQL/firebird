@@ -2,7 +2,7 @@
 
 . ../env.sh
 
-../source/configure --prefix=$(pwd)/prebuilt \
+../icu/source/configure --prefix=$(pwd)/prebuilt \
     --host=x86_64-android-linux \
     --enable-static=no \
     --enable-shared \

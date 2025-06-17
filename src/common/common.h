@@ -559,6 +559,9 @@ extern "C" int remove(const char* path);
 
 #ifdef AMD64
 #define FB_CPU CpuAmd
+#elif defined(ARM64)
+#define FB_CPU CpuArm64
+//#define CDS_UNAVAILABLE
 #else
 #ifndef I386
 #define I386
@@ -924,7 +927,7 @@ void GDS_breakpoint(int);
 
 // ASF: Currently, all little-endian are FB_SWAP_DOUBLE and big-endian aren't.
 // AP: Define it for your hardware correctly in case your CPU do not follow mentioned rule.
-//     The follwoing lines are kept for reference only.
+//     The following lines are kept for reference only.
 //#if defined(i386) || defined(I386) || defined(_M_IX86) || defined(AMD64) || defined(ARM) || defined(MIPSEL) || defined(DARWIN64) || defined(IA64)
 //#define		FB_SWAP_DOUBLE 1
 //#elif defined(sparc) || defined(PowerPC) || defined(PPC) || defined(__ppc__) || defined(HPUX) || defined(MIPS) || defined(__ppc64__)

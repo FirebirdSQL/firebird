@@ -342,7 +342,7 @@ ValueExprNode* MAKE_constant(const char* str, dsql_constant_type numeric_flag, S
     @param character_set
 
  **/
-LiteralNode* MAKE_str_constant(const IntlString* constant, SSHORT character_set)
+LiteralNode* MAKE_str_constant(IntlString* constant, SSHORT character_set)
 {
 	thread_db* tdbb = JRD_get_thread_data();
 
@@ -531,9 +531,9 @@ dsql_par* MAKE_parameter(dsql_msg* message, bool sqlda_flag, bool null_flag,
 	message->msg_parameters.insert(0, parameter);
 	parameter->par_parameter = message->msg_parameter++;
 
-	parameter->par_rel_name = NULL;
-	parameter->par_owner_name = NULL;
-	parameter->par_rel_alias = NULL;
+	parameter->par_rel_name.clear();
+	parameter->par_owner_name = nullptr;
+	parameter->par_rel_alias = nullptr;
 
 	if (node)
 		MAKE_parameter_names(parameter, node);

@@ -150,6 +150,7 @@ public:
 
 	unsigned getCount(CheckStatusWrapper* status);
 	const char* getField(CheckStatusWrapper* status, unsigned index);
+	const char* getSchema(CheckStatusWrapper* status, unsigned index);
 	const char* getRelation(CheckStatusWrapper* status, unsigned index);
 	const char* getOwner(CheckStatusWrapper* status, unsigned index);
 	const char* getAlias(CheckStatusWrapper* status, unsigned index);
@@ -267,6 +268,11 @@ const char* SQLDAMetadata::getField(CheckStatusWrapper* status, unsigned index)
 
 	// we are in free fly. It is only possible for input sqlda which usually have no names inside
 	return "";	// Old conversion sqlda->BLR->metadata dropped them anyway
+}
+
+const char* SQLDAMetadata::getSchema(CheckStatusWrapper* status, unsigned index)
+{
+	return "";
 }
 
 const char* SQLDAMetadata::getRelation(CheckStatusWrapper* status, unsigned index)
@@ -1424,7 +1430,7 @@ static void setTextType(XSQLVAR* var, unsigned charSet)
 static int sqldaTruncateString(char* buffer, FB_SIZE_T size, const char* s)
 {
 	int ret = fb_utils::snprintf(buffer, size, "%s", s);
-	return MIN(ret, size - 1);
+	return MIN(ret, static_cast<int>(size - 1));
 }
 
 // Describe parameters metadata in an sqlda.
@@ -5341,7 +5347,8 @@ void YTransaction::getInfo(CheckStatusWrapper* status, unsigned int itemsLength,
 		fb_utils::getDbPathInfo(itemsLength, items, bufferLength, buffer,
 								newItemsBuffer, attachment.get()->dbPath);
 
-		entry.next()->getInfo(status, itemsLength, items, bufferLength, buffer);
+		if (itemsLength)
+			entry.next()->getInfo(status, itemsLength, items, bufferLength, buffer);
 	}
 	catch (const Exception& e)
 	{
@@ -5577,6 +5584,22 @@ isc_db_handle& YAttachment::getHandle()
 {
 	fb_assert(handle);
 	return handle;
+}
+
+void YAttachment::getOdsVersion(USHORT* majorVersion, USHORT* minorVersion)
+{
+	if (cachedOdsMajorVersion == 0)
+	{
+		FbLocalStatus status;
+		return UTL_get_ods_version(&status, this, &cachedOdsMajorVersion, &cachedOdsMinorVersion);
+		status.check();
+	}
+
+	if (majorVersion)
+		*majorVersion = cachedOdsMajorVersion;
+
+	if (minorVersion)
+		*minorVersion = cachedOdsMinorVersion;
 }
 
 YAttachment::~YAttachment()

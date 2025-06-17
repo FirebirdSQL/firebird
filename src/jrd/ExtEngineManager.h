@@ -32,6 +32,7 @@
 #include "../common/classes/fb_string.h"
 #include "../common/classes/GenericMap.h"
 #include "../jrd/MetaName.h"
+#include "../jrd/QualifiedName.h"
 #include "../common/classes/NestConst.h"
 #include "../common/classes/auto.h"
 #include "../common/classes/rwlock.h"
@@ -74,7 +75,6 @@ private:
 	public:
 		explicit RoutineMetadata(MemoryPool& pool)
 			: PermanentStorage(pool),
-			  package(pool),
 			  name(pool),
 			  entryPoint(pool),
 			  body(pool),
@@ -85,12 +85,12 @@ private:
 
 		const char* getPackage(Firebird::CheckStatusWrapper* /*status*/) const
 		{
-			return package.nullStr();
+			return name.package.nullStr();
 		}
 
 		const char* getName(Firebird::CheckStatusWrapper* /*status*/) const
 		{
-			return name.c_str();
+			return name.object.c_str();
 		}
 
 		const char* getEntryPoint(Firebird::CheckStatusWrapper* /*status*/) const
@@ -120,7 +120,7 @@ private:
 
 		const char* getTriggerTable(Firebird::CheckStatusWrapper* /*status*/) const
 		{
-			return triggerTable.c_str();
+			return triggerTable.object.c_str();
 		}
 
 		unsigned getTriggerType(Firebird::CheckStatusWrapper* /*status*/) const
@@ -128,15 +128,19 @@ private:
 			return triggerType;
 		}
 
+		const char* getSchema(Firebird::CheckStatusWrapper* /*status*/) const
+		{
+			return name.schema.c_str();
+		}
+
 	public:
-		MetaName package;
-		MetaName name;
+		QualifiedName name;
 		Firebird::string entryPoint;
 		Firebird::string body;
 		Firebird::RefPtr<Firebird::IMessageMetadata> inputParameters;
 		Firebird::RefPtr<Firebird::IMessageMetadata> outputParameters;
 		Firebird::RefPtr<Firebird::IMessageMetadata> triggerFields;
-		MetaName triggerTable;
+		QualifiedName triggerTable;
 		unsigned triggerType;
 
 	private:

@@ -512,7 +512,19 @@ typedef struct dsc
 		d.dsc_length = dsc_length;
 		d.dsc_sub_type = dsc_sub_type;
 		d.dsc_flags = dsc_flags;
-		d.dsc_offset = (ULONG)(IPTR)dsc_address;
+		d.dsc_offset = (ULONG)(IPTR) dsc_address;
+		return d;
+	}
+
+	operator paramdsc() const
+	{
+		paramdsc d;
+		d.dsc_dtype = dsc_dtype;
+		d.dsc_scale = dsc_scale;
+		d.dsc_length = dsc_length;
+		d.dsc_sub_type = dsc_sub_type;
+		d.dsc_flags = dsc_flags;
+		d.dsc_address = dsc_address;
 		return d;
 	}
 
