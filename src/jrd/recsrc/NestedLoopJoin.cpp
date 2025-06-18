@@ -37,9 +37,7 @@ using namespace Jrd;
 
 NestedLoopJoin::NestedLoopJoin(CompilerScratch* csb, JoinType joinType,
 							   FB_SIZE_T count, RecordSource* const* args)
-	: Join(csb, joinType),
-	  m_boolean(nullptr),
-	  m_args(csb->csb_pool, count)
+	: Join(csb, count, joinType)
 {
 	m_impure = csb->allocImpure<Impure>();
 	m_cardinality = MINIMUM_CARDINALITY;
@@ -54,18 +52,15 @@ NestedLoopJoin::NestedLoopJoin(CompilerScratch* csb, JoinType joinType,
 NestedLoopJoin::NestedLoopJoin(CompilerScratch* csb,
 							   RecordSource* outer, RecordSource* inner,
 							   BoolExprNode* boolean)
-	: Join(csb, JoinType::OUTER),
-	  m_boolean(boolean),
-	  m_args(csb->csb_pool, 2)
+	: Join(csb, 2, JoinType::OUTER, boolean)
 {
 	fb_assert(outer && inner);
 
 	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = outer->getCardinality() * inner->getCardinality();
 
 	m_args.add(outer);
 	m_args.add(inner);
-
-	m_cardinality = outer->getCardinality() * inner->getCardinality();
 }
 
 void NestedLoopJoin::internalOpen(thread_db* tdbb) const
@@ -88,8 +83,7 @@ void NestedLoopJoin::close(thread_db* tdbb) const
 	{
 		impure->irsb_flags &= ~irsb_open;
 
-		for (const auto arg : m_args)
-			arg->close(tdbb);
+		Join::close(tdbb);
 	}
 }
 
@@ -237,29 +231,13 @@ bool NestedLoopJoin::internalGetRecord(thread_db* tdbb) const
 	return true;
 }
 
-bool NestedLoopJoin::refetchRecord(thread_db* /*tdbb*/) const
-{
-	return true;
-}
-
-WriteLockResult NestedLoopJoin::lockRecord(thread_db* /*tdbb*/) const
-{
-	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
-}
-
 void NestedLoopJoin::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
 	if (m_args.hasData())
 	{
 		level++;
 		plan += "JOIN (";
-		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		{
-			if (i)
-				plan += ", ";
-
-			m_args[i]->getLegacyPlan(tdbb, plan, level);
-		}
+		Join::getLegacyPlan(tdbb, plan, level);
 		plan += ")";
 	}
 }
@@ -271,48 +249,7 @@ void NestedLoopJoin::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsi
 	planEntry.lines.add().text = "Nested Loop Join " + printType();
 	printOptInfo(planEntry.lines);
 
-	if (recurse)
-	{
-		++level;
-
-		for (const auto arg : m_args)
-			arg->getPlan(tdbb, planEntry.children.add(), level, recurse);
-	}
-}
-
-void NestedLoopJoin::markRecursive()
-{
-	for (auto arg : m_args)
-		arg->markRecursive();
-}
-
-void NestedLoopJoin::findUsedStreams(StreamList& streams, bool expandAll) const
-{
-	for (const auto arg : m_args)
-		arg->findUsedStreams(streams, expandAll);
-}
-
-bool NestedLoopJoin::isDependent(const StreamList& streams) const
-{
-	for (const auto arg : m_args)
-	{
-		if (arg->isDependent(streams))
-			return true;
-	}
-
-	return (m_boolean && m_boolean->containsAnyStream(streams));
-}
-
-void NestedLoopJoin::invalidateRecords(Request* request) const
-{
-	for (const auto arg : m_args)
-		arg->invalidateRecords(request);
-}
-
-void NestedLoopJoin::nullRecords(thread_db* tdbb) const
-{
-	for (const auto arg : m_args)
-		arg->nullRecords(tdbb);
+	Join::getPlan(tdbb, planEntry, level, recurse);
 }
 
 bool NestedLoopJoin::fetchRecord(thread_db* tdbb, FB_SIZE_T n) const
