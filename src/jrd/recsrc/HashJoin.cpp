@@ -276,7 +276,6 @@ void HashJoin::init(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
 {
 	m_impure = csb->allocImpure<Impure>();
 
-	m_args.add(args[0]);
 	m_leader.source = args[0];
 	m_leader.keys = keys[0];
 	const FB_SIZE_T leaderKeyCount = m_leader.keys->getCount();
@@ -284,6 +283,7 @@ void HashJoin::init(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
 	m_leader.totalKeyLength = 0;
 
 	m_cardinality = m_leader.source->getCardinality();
+	m_args.add(m_leader.source);
 
 	for (FB_SIZE_T j = 0; j < leaderKeyCount; j++)
 	{
@@ -314,7 +314,6 @@ void HashJoin::init(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
 		const auto subRsb = args[i];
 		fb_assert(subRsb);
 
-		m_args.add(subRsb);
 		m_cardinality *= subRsb->getCardinality();
 
 		SubStream sub;
@@ -349,6 +348,7 @@ void HashJoin::init(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
 		}
 
 		m_subs.add(sub);
+		m_args.add(sub.buffer);
 	}
 
 	if (!selectivity)
