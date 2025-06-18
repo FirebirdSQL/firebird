@@ -717,18 +717,13 @@ class RseNode final : public TypedNode<RecordSourceNode, RecordSourceNode::TYPE_
 {
 	enum : UCHAR							// storage is BLR-compatible
 	{
-		INNER_JOIN = 0,
-		LEFT_JOIN = 1,
-		RIGHT_JOIN = 2,
-		FULL_JOIN = 3,
-		SEMI_JOIN = 4,
-		ANTI_JOIN = 5
+		INNER_JOIN	= blr_inner,
+		LEFT_JOIN	= blr_left,
+		RIGHT_JOIN	= blr_right,
+		FULL_JOIN	= blr_full,
+		SEMI_JOIN,
+		ANTI_JOIN
 	};
-
-	static_assert(INNER_JOIN == blr_inner, "join type mismatch");
-	static_assert(LEFT_JOIN == blr_left, "join type mismatch");
-	static_assert(RIGHT_JOIN == blr_right, "join type mismatch");
-	static_assert(FULL_JOIN == blr_full, "join type mismatch");
 
 public:
 	enum : USHORT
