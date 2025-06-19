@@ -337,7 +337,7 @@ void DsqlDmlRequest::setDelayedFormat(thread_db* tdbb, IMessageMetadata* metadat
 			Arg::Gds(isc_req_sync));
 	}
 
-	metadataToFormat(metadata, dsqlStatement->getReceiveMsg());
+	metadataToFormat(tdbb, metadata, dsqlStatement->getReceiveMsg());
 	needDelayedFormat = false;
 }
 
@@ -405,6 +405,9 @@ bool DsqlDmlRequest::fetch(thread_db* tdbb, UCHAR* msgBuffer)
 		const Format* fmt = msg->getFormat(request);
 
 		JRD_receive(tdbb, request, msg->messageNumber, fmt->fmt_length, msgBuffer);
+
+		if (msg->flattened)
+			msg->mapInOutFlattenedRowtypes(tdbb, request, msgBuffer);
 	}
 
 	firstRowFetched = true;
@@ -583,7 +586,7 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 	{
 		if (outMetadata)
 		{
-			metadataToFormat(outMetadata, message);
+			metadataToFormat(tdbb, outMetadata, message);
 		}
 
 		if (outMsg)
@@ -677,7 +680,7 @@ void DsqlDmlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 		// but there is no easy way to check if they match so conversion is unconditional.
 		// Even if value of inMetadata is the same, other instance could be placed in the same memory.
 		// Even if the instance is the same, its content may be different from previous call.
-		metadataToFormat(inMetadata, message);
+		metadataToFormat(tdbb, inMetadata, message);
 	}
 
 	mapCursorKey(tdbb);
@@ -828,7 +831,7 @@ void setDescFromMeta(Firebird::CheckStatusWrapper* st, Firebird::IMessageMetadat
 	}
 }
 
-void DsqlDmlRequest::metadataToFormat(Firebird::IMessageMetadata* meta, const dsql_msg* message)
+void DsqlDmlRequest::metadataToFormat(thread_db* tdbb, Firebird::IMessageMetadata* meta, const dsql_msg* message)
 {
 	if (!message || !meta)
 	{
@@ -844,6 +847,38 @@ void DsqlDmlRequest::metadataToFormat(Firebird::IMessageMetadata* meta, const ds
 
 	const Format* oldFormat = msg->getFormat(nullptr);
 	unsigned count2 = oldFormat->fmt_count;
+
+	bool flattenRowTypes = tdbb->getAttachment()->att_flatten_row_types || tdbb->getDatabase()->dbb_config->getFlattenRowType();
+
+	if (flattenRowTypes)
+	{
+		// Count total fields including nested fields in composite types
+		// AAM: this code should be rewritten if nested row types will be introduced and flattening will be supported
+		unsigned actualFieldCountWithComposites = 0;
+		bool nextIsNullIndicator = false;
+		for (unsigned i = 0; i < count2; ++i)
+		{
+			const dsc& desc = oldFormat->fmt_desc[i];
+			if (desc.dsc_dtype == dtype_rowtype)
+			{
+				actualFieldCountWithComposites += desc.dsc_sub_count;
+				nextIsNullIndicator = true;
+				msg->flattened = true;
+			}
+			else
+			{
+				if (nextIsNullIndicator)
+					nextIsNullIndicator = false;
+				else
+				{
+					nextIsNullIndicator = true;
+					actualFieldCountWithComposites++;
+				}
+			}
+		}
+
+		count2 = actualFieldCountWithComposites * 2;
+	}
 
 	if (count * 2 != count2)
 	{

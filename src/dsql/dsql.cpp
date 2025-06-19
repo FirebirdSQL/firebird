@@ -1125,6 +1125,7 @@ static void sql_info(thread_db* tdbb,
 				{
 					FB_SIZE_T flattenedParamIndexOffset = 1;
 					auto internalParamValueOffset = 0;
+					auto parameterInternalIndex = 0;
 
 					for (FB_SIZE_T i = 0; i < message->msg_parameters.getCount(); ++i)
 					{
@@ -1141,15 +1142,21 @@ static void sql_info(thread_db* tdbb,
 								while (chainParam)
 								{
 									chainParam->par_index = flattenedParamIndexOffset++;
+									chainParam->par_parameter = parameterInternalIndex++;
 									message->msg_parameters.insert(i++, chainParam);
 									chainParam->par_message = message;
 									chainParam->par_desc.dsc_address += internalParamValueOffset;
 									chainParam->par_null->par_desc.dsc_address = internalParamNullOffset;
-									internalParamNullOffset += 2;
+									chainParam->par_null->par_parameter = parameterInternalIndex++;
+									message->msg_parameters.insert(i++, chainParam->par_null);
+									internalParamNullOffset += 2; // shift to the next null indicator
 									chainParam = chainParam->par_next;
 									message->msg_index++;	// increment for every flattened subparameter
 								}
-								internalParamValueOffset += param->par_desc.dsc_length;
+								internalParamValueOffset += param->par_desc.dsc_length; // TODO: here could be an alignment error
+								message->msg_parameters.remove(i);
+								internalParamValueOffset = FB_ALIGN(internalParamValueOffset, type_alignments[dtype_short]);
+								internalParamValueOffset += 2;
 								message->msg_parameters.remove(i--);
 							}
 							else
@@ -1157,12 +1164,14 @@ static void sql_info(thread_db* tdbb,
 								internalParamValueOffset = FB_ALIGN(internalParamValueOffset, type_alignments[param->par_desc.dsc_dtype]);
 								internalParamValueOffset += param->par_desc.dsc_length;
 								param->par_index = flattenedParamIndexOffset++;
+								param->par_parameter = parameterInternalIndex++;
 							}
 						}
 						else
 						{
 							internalParamValueOffset = FB_ALIGN(internalParamValueOffset, type_alignments[dtype_short]);
 							internalParamValueOffset += 2;
+							param->par_parameter = parameterInternalIndex++;
 						}
 					}
 				}

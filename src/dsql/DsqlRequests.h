@@ -186,7 +186,7 @@ public:
 
 	// Convert IMessageMetadata to Format and force it to corresponding MessageNode for current request.
 	// After that this MessageNode and their ParameterNodes can work with client message buffer directly
-	void metadataToFormat(Firebird::IMessageMetadata* metadata, const dsql_msg* message);
+	void metadataToFormat(thread_db* tdbb, Firebird::IMessageMetadata* metadata, const dsql_msg* message);
 	void mapCursorKey(thread_db* tdbb);
 	void gatherRecordKey(RecordKey* buffer) const;
 

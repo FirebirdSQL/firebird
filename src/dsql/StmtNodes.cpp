@@ -9368,7 +9368,7 @@ UCHAR* MessageNode::getBuffer(Request* request) const
 
 const Format* MessageNode::getFormat(const Request* request) const
 {
-	if (request != nullptr)
+	if (!flattened && request != nullptr)
 	{
 		const MessageBuffer* buffer = request->getImpure<const MessageBuffer>(impureOffset);
 		if (buffer->format != nullptr)
@@ -9377,6 +9377,101 @@ const Format* MessageNode::getFormat(const Request* request) const
 		}
 	}
 	return format.getObject();
+}
+
+void MessageNode::mapInOutFlattenedRowtypes(thread_db* tdbb, Request* request, UCHAR* msgBuffer)
+{
+	MessageBuffer* data = request->getImpure<MessageBuffer>(impureOffset);
+	flattenedBuffer.ensureCapacity(data->format->fmt_length);
+
+	// Copy data from msgBuffer to flattenedBuffer according to the old format in data->format
+	ULONG clientFormatOffset = 0;
+	ULONG internalFormatOffset = 0;
+
+	// Iterate over every descriptor in the old format
+	auto newFormatDescIter = data->format->fmt_desc.begin();
+
+	for (auto desc = format->fmt_desc.begin(); desc < format->fmt_desc.end(); ++desc)
+	{
+		if (desc->dsc_dtype == dtype_rowtype)
+		{
+			// Process rowtype field
+			internalFormatOffset = FB_ALIGN(internalFormatOffset, type_alignments[dtype_rowtype]);
+			auto rowValueBeginningOffset = internalFormatOffset;
+			internalFormatOffset += NULL_BYTES(desc->dsc_sub_count);
+
+			auto currentDesc = desc->dsc_sub_first;
+			auto subfieldSequentialIndex = 0;
+
+			while (currentDesc)
+			{
+				// Align next value if applicable
+				if (currentDesc->dsc_dtype >= dtype_aligned)
+				{
+					internalFormatOffset = FB_ALIGN(internalFormatOffset, type_alignments[currentDesc->dsc_dtype]);
+					clientFormatOffset = FB_ALIGN(clientFormatOffset, type_alignments[currentDesc->dsc_dtype]);
+				}
+
+				// Copy field data
+				memcpy(flattenedBuffer.begin() + clientFormatOffset,
+					   msgBuffer + internalFormatOffset,
+					   currentDesc->dsc_length);
+
+				++newFormatDescIter;
+				clientFormatOffset += currentDesc->dsc_length;
+				internalFormatOffset += currentDesc->dsc_length;
+
+				// Align and copy null indicator
+				clientFormatOffset = FB_ALIGN(clientFormatOffset, type_alignments[dtype_short]);
+				memcpy(flattenedBuffer.begin() + clientFormatOffset,
+					   msgBuffer + rowValueBeginningOffset + sizeof(USHORT) * subfieldSequentialIndex,
+					   sizeof(USHORT));
+
+				++newFormatDescIter;
+				clientFormatOffset += sizeof(USHORT);
+
+				currentDesc = currentDesc->dsc_next;
+				++subfieldSequentialIndex;
+			}
+
+			++desc;
+			internalFormatOffset = FB_ALIGN(internalFormatOffset, type_alignments[dtype_short]);
+			internalFormatOffset += sizeof(USHORT);
+		}
+		else
+		{
+			// Process regular field
+
+			// Handle varchar to text transformation (see CORE2606)
+			auto varcharToTextTransformingAdditionalOffset = 0;
+			if (newFormatDescIter->dsc_dtype == dtype_text && desc->dsc_dtype == dtype_varying)
+				varcharToTextTransformingAdditionalOffset = 2;
+
+			// Apply alignment for client format
+			if (newFormatDescIter->dsc_dtype >= dtype_aligned)
+			{
+				clientFormatOffset = FB_ALIGN(clientFormatOffset, type_alignments[newFormatDescIter->dsc_dtype]);
+			}
+
+			// Apply alignment for internal format
+			if (desc->dsc_dtype >= dtype_aligned)
+			{
+				internalFormatOffset = FB_ALIGN(internalFormatOffset, type_alignments[desc->dsc_dtype]);
+			}
+
+			// Copy field data
+			memcpy(flattenedBuffer.begin() + clientFormatOffset,
+				   msgBuffer + internalFormatOffset + varcharToTextTransformingAdditionalOffset,
+				   newFormatDescIter->dsc_length);
+
+			clientFormatOffset += newFormatDescIter->dsc_length;
+			internalFormatOffset += desc->dsc_length;
+			++newFormatDescIter;
+		}
+	}
+
+	// Copy the flattened buffer back to the message buffer
+	memcpy(msgBuffer, flattenedBuffer.begin(), data->format->fmt_length);
 }
 
 ULONG MessageNode::getImpureOffset() const

@@ -663,7 +663,7 @@ private:
 	const dsql_msg* sendMessage = dStmt->getSendMsg();
 	// map message to internal engine format
 	// Do it one time only to avoid parsing its metadata for every message
-	m_dsqlRequest->metadataToFormat(m_meta, sendMessage);
+	m_dsqlRequest->metadataToFormat(tdbb, m_meta, sendMessage);
 	// Using of positional DML in batch is strange but not forbidden
 	m_dsqlRequest->mapCursorKey(tdbb);
 	bool startRequest = true;

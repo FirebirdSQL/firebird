@@ -1298,13 +1298,15 @@ class MessageNode : public TypedNode<StmtNode, StmtNode::TYPE_MESSAGE>
 
 public:
 	explicit MessageNode(MemoryPool& pool)
-		: TypedNode<StmtNode, StmtNode::TYPE_MESSAGE>(pool)
+		: TypedNode<StmtNode, StmtNode::TYPE_MESSAGE>(pool),
+		  flattenedBuffer(pool)
 	{
 	}
 	// This constructor is temporary workaround for copying of existing format.
 	// For details look at comment in CMP_procedure_arguments()
 	explicit MessageNode(MemoryPool& pool, const Format& oldFormat)
-		: TypedNode<StmtNode, StmtNode::TYPE_MESSAGE>(pool)
+		: TypedNode<StmtNode, StmtNode::TYPE_MESSAGE>(pool),
+		flattenedBuffer(pool)
 	{
 		format = Format::newFormat(pool, oldFormat.fmt_count);
 		*format = oldFormat;
@@ -1330,10 +1332,13 @@ public:
 	const Format* getFormat(const Request* request) const;
 	void setFormat(Request* request, Format* newFormat);
 	ULONG getImpureOffset() const;
+	void mapInOutFlattenedRowtypes(thread_db* tdbb, Request* request, UCHAR* msgBuffer);
 
 public:
 	ULONG impureFlags = 0;
 	USHORT messageNumber = 0;
+	bool flattened = false;
+	Firebird::HalfStaticArray<UCHAR, BUFFER_SMALL> flattenedBuffer;
 
 private:
 	using StmtNode::impureOffset; // Made private to incapsulate it's interpretation logic
