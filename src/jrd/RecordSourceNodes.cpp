@@ -4171,7 +4171,7 @@ void TableValueFunctionSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	for (const auto& fld : arrayFld)
 	{
-		dsqlScratch->putDtype(fld, true);
+		dsqlScratch->putType(fld, true);
 		dsqlScratch->appendMetaString(fld->fld_name.c_str());
 	}
 }

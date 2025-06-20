@@ -3604,7 +3604,7 @@ void CastNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	else
 		dsqlScratch->appendUChar(blr_cast);
 
-	dsqlScratch->putDtype(dsqlField, true);
+	dsqlScratch->putType(dsqlField, true);
 
 	GEN_expr(dsqlScratch, source);
 }
