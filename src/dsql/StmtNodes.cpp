@@ -2248,19 +2248,7 @@ const StmtNode* DeclareVariableNode::execute(thread_db* tdbb, Request* request, 
 		variable->vlu_desc = varDesc;
 		variable->vlu_desc.clearFlags();
 
-		if (variable->vlu_desc.dsc_dtype <= dtype_varying)
-		{
-			if (!variable->vlu_string)
-			{
-				const USHORT len = variable->vlu_desc.dsc_length;
-				variable->vlu_string = FB_NEW_RPT(*tdbb->getDefaultPool(), len) VaryingString();
-				variable->vlu_string->str_length = len;
-			}
-
-			variable->vlu_desc.dsc_address = variable->vlu_string->str_data;
-		}
-		else
-			variable->vlu_desc.dsc_address = (UCHAR*) &variable->vlu_misc;
+		variable->makeValueAddress(*tdbb->getDefaultPool());
 
 		request->req_operation = Request::req_return;
 	}

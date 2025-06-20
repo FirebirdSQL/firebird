@@ -3752,25 +3752,8 @@ dsc* CastNode::perform(thread_db* tdbb, impure_value* impure, dsc* value,
 			impure->vlu_desc.dsc_length = length;
 		}
 
-		length = impure->vlu_desc.dsc_length;
-
 		// Allocate a string block of sufficient size.
-
-		auto string = impure->vlu_string;
-
-		if (string && string->str_length < length)
-		{
-			delete string;
-			string = nullptr;
-		}
-
-		if (!string)
-		{
-			string = impure->vlu_string = FB_NEW_RPT(*tdbb->getDefaultPool(), length) VaryingString();
-			string->str_length = length;
-		}
-
-		impure->vlu_desc.dsc_address = string->str_data;
+		impure->makeTextValueAddress(*tdbb->getDefaultPool());
 	}
 
 	EVL_validate(tdbb, Item(Item::TYPE_CAST), itemInfo,
@@ -7139,29 +7122,7 @@ dsc* FieldNode::execute(thread_db* tdbb, Request* request) const
 		dsc desc = impure->vlu_desc;
 		impure->vlu_desc = format->fmt_desc[fieldId];
 
-		if (impure->vlu_desc.isText())
-		{
-			// Allocate a string block of sufficient size.
-			VaryingString* string = impure->vlu_string;
-
-			if (string && string->str_length < impure->vlu_desc.dsc_length)
-			{
-				delete string;
-				string = NULL;
-			}
-
-			if (!string)
-			{
-				string = impure->vlu_string = FB_NEW_RPT(*tdbb->getDefaultPool(),
-					impure->vlu_desc.dsc_length) VaryingString();
-				string->str_length = impure->vlu_desc.dsc_length;
-			}
-
-			impure->vlu_desc.dsc_address = string->str_data;
-		}
-		else
-			impure->vlu_desc.dsc_address = (UCHAR*) &impure->vlu_misc;
-
+		impure->makeValueAddress(*tdbb->getDefaultPool());
 		MOV_move(tdbb, &desc, &impure->vlu_desc);
 	}
 
@@ -13687,30 +13648,7 @@ dsc* UdfCallNode::execute(thread_db* tdbb, Request* request) const
 		const Parameter* const returnParam = function->getOutputFields()[0];
 		value->vlu_desc = returnParam->prm_desc;
 
-		// If the return data type is any of the string types, allocate space to hold value.
-
-		if (value->vlu_desc.dsc_dtype <= dtype_varying)
-		{
-			const USHORT retLength = value->vlu_desc.dsc_length;
-			VaryingString* string = value->vlu_string;
-
-			if (string && string->str_length < retLength)
-			{
-				delete string;
-				string = NULL;
-			}
-
-			if (!string)
-			{
-				string = FB_NEW_RPT(*tdbb->getDefaultPool(), retLength) VaryingString;
-				string->str_length = retLength;
-				value->vlu_string = string;
-			}
-
-			value->vlu_desc.dsc_address = string->str_data;
-		}
-		else
-			value->vlu_desc.dsc_address = (UCHAR*) &value->vlu_misc;
+		value->makeValueAddress(*tdbb->getDefaultPool());
 
 		if (!impureArea->temp)
 		{
