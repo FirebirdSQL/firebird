@@ -6209,6 +6209,19 @@ DmlNode* FieldNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* cs
 		fieldNode->itemInfo->nullable = true;
 		fieldNode->itemInfo->field.first = fieldNode->contextTypeName;
 		fieldNode->itemInfo->field.second.printf("%d", fieldNode->fieldId);
+		fieldNode->itemInfo->compositeSubfield = true;
+
+		DeclareLocalTypeNode* typeDeclaration;
+
+		if (csb->csb_local_type_declarations.hasData()
+			&& csb->csb_local_type_declarations.get(fieldNode->contextTypeName, typeDeclaration))
+		{
+			for (auto& it : typeDeclaration->fieldNameToIdMap)
+			{
+				if (it.second == fieldNode->fieldId)
+					fieldNode->itemInfo->name = it.first;
+			}
+		}
 
 		FieldInfo fieldInfo;
 		if (csb->csb_map_field_info.get(fieldNode->itemInfo->field, fieldInfo))

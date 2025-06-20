@@ -121,7 +121,7 @@ using namespace Firebird;
 
 string Item::getDescription(Request* request, const ItemInfo* itemInfo) const
 {
-	if (itemInfo && itemInfo->name.hasData())
+	if (itemInfo && itemInfo->name.hasData() && !itemInfo->compositeSubfield)
 		return itemInfo->name.toQuotedString();
 
 	const int oneBasedIndex = index + 1;
@@ -152,7 +152,10 @@ string Item::getDescription(Request* request, const ItemInfo* itemInfo) const
 	{
 		MetaName variableName;
 		request->getStatement()->mapContextVariableNames.get(itemInfo->compositeContextNum, variableName);
-		s.printf("%s, subfield ID %d", variableName.c_str(), itemInfo->fieldId);
+		if (itemInfo->name.hasData())
+			s.printf("%s, subfield %s", variableName.c_str(), itemInfo->name.c_str());
+		else
+			s.printf("%s, subfield ID %d", variableName.c_str(), itemInfo->fieldId);
 	}
 
 	if (s.isEmpty())

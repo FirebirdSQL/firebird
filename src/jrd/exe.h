@@ -354,6 +354,7 @@ public:
 		  nullable(o.nullable),
 		  explicitCollation(o.explicitCollation),
 		  fullDomain(o.fullDomain),
+		  compositeSubfield(o.compositeSubfield),
 		  compositeContextNum(o.compositeContextNum),
 		  fieldId(o.fieldId)
 	{
@@ -365,6 +366,7 @@ public:
 		  nullable(true),
 		  explicitCollation(false),
 		  fullDomain(false),
+		  compositeSubfield(false),
 		  compositeContextNum(0),
 		  fieldId(0)
 	{
@@ -376,6 +378,7 @@ public:
 		  nullable(true),
 		  explicitCollation(false),
 		  fullDomain(false),
+		  compositeSubfield(false),
 		  compositeContextNum(0),
 		  fieldId(0)
 	{
@@ -406,6 +409,7 @@ public:
 	bool nullable;
 	bool explicitCollation;
 	bool fullDomain;
+	bool compositeSubfield;
 	USHORT compositeContextNum;
 	USHORT fieldId;
 };

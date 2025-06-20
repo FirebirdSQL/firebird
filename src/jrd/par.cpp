@@ -612,6 +612,7 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 					if (itemInfo)
 						itemInfo->fullDomain = true;
 				}
+				// fall through
 				case blr_rt_type_of_table:
 				// type of table
 				{
