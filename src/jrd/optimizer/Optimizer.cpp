@@ -1472,7 +1472,6 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 
 	ULONG items = sort->expressions.getCount() +
 		3 * streams.getCount() + 2 * (dbkeyStreams ? dbkeyStreams->getCount() : 0);
-	const NestConst<ValueExprNode>* const end_node = sort->expressions.end();
 
 	// Collect all fields involved into the sort
 
@@ -1570,33 +1569,35 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 	if (sort->unique)
 		map->flags |= SortedStream::FLAG_UNIQUE;
 
-    sort_key_def* prev_key = nullptr;
+	if (sort->ignoreNulls)
+		map->flags |= SortedStream::FLAG_NO_NULLS;
+
+	sort_key_def* prevKey = nullptr;
 
 	// Loop thru sort keys building sort keys.  Actually, to handle null values
 	// correctly, two sort keys are made for each field, one for the null flag
-	// and one for field itself.
+	// and one for field itself -- unless NULLs are requested to be ignored.
 
-	dsc descriptor;
+	const auto keyItemCount = sort->expressions.getCount() * (sort->ignoreNulls ? 1 : 2);
 
-	SortedStream::SortMap::Item* map_item = map->items.getBuffer(items);
-	sort_key_def* sort_key = map->keyItems.getBuffer(2 * sort->expressions.getCount());
+	SortedStream::SortMap::Item* mapItem = map->items.getBuffer(items);
+	sort_key_def* sortKey = map->keyItems.getBuffer(keyItemCount);
 	const SortDirection* direction = sort->direction.begin();
 	const NullsPlacement* nullOrder = sort->nullOrder.begin();
 
-	for (NestConst<ValueExprNode>* node_ptr = sort->expressions.begin();
-		 node_ptr != end_node;
-		 ++node_ptr, ++nullOrder, ++direction, ++map_item)
-	{
-		// Pick up sort key expression.
+	dsc descriptor;
 
-		NestConst<ValueExprNode> node = *node_ptr;
-		dsc* desc = &descriptor;
+	for (auto node : sort->expressions)
+	{
+		// Pick up sort key expression
+
+		dsc* const desc = &descriptor;
 		node->getDesc(tdbb, csb, desc);
 
 		// Allow for "key" forms of International text to grow
 		if (IS_INTL_DATA(desc))
 		{
-			// Turn varying text and cstrings into text.
+			// Turn varying text and cstrings into text
 
 			if (desc->dsc_dtype == dtype_varying)
 			{
@@ -1612,57 +1613,67 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 			desc->dsc_length = INTL_key_length(tdbb, INTL_INDEX_TYPE(desc), desc->dsc_length);
 		}
 
-		// Make key for null flag
-		sort_key->setSkdLength(SKD_text, 1);
-		sort_key->setSkdOffset(prev_key);
+		if (!sort->ignoreNulls)
+		{
+			// Make key for null flag
+			sortKey->setSkdLength(SKD_text, 1);
+			sortKey->setSkdOffset(prevKey);
 
-		// Handle nulls placement
-		sort_key->skd_flags = SKD_ascending;
+			// Handle nulls placement
+			sortKey->skd_flags = SKD_ascending;
 
-		// Have SQL-compliant nulls ordering for ODS11+
-		if ((*nullOrder == NULLS_DEFAULT && *direction != ORDER_DESC) || *nullOrder == NULLS_FIRST)
-			sort_key->skd_flags |= SKD_descending;
+			// Have SQL-compliant nulls ordering for ODS11+
+			if ((*nullOrder == NULLS_DEFAULT && *direction != ORDER_DESC) || *nullOrder == NULLS_FIRST)
+				sortKey->skd_flags |= SKD_descending;
 
-		prev_key = sort_key++;
+			prevKey = sortKey++;
+		}
 
 		// Make key for sort key proper
 		fb_assert(desc->dsc_dtype < FB_NELEM(sort_dtypes));
-		sort_key->setSkdLength(sort_dtypes[desc->dsc_dtype], desc->dsc_length);
-		sort_key->setSkdOffset(&sort_key[-1], desc);
-		sort_key->skd_flags = SKD_ascending;
-		if (*direction == ORDER_DESC)
-			sort_key->skd_flags |= SKD_descending;
+		sortKey->setSkdLength(sort_dtypes[desc->dsc_dtype], desc->dsc_length);
+		sortKey->setSkdOffset(prevKey, desc);
 
-		if (!sort_key->skd_dtype)
+		sortKey->skd_flags = SKD_ascending;
+		if (*direction == ORDER_DESC)
+			sortKey->skd_flags |= SKD_descending;
+
+		if (!sortKey->skd_dtype)
 			ERR_post(Arg::Gds(isc_invalid_sort_datatype) << Arg::Str(DSC_dtype_tostring(desc->dsc_dtype)));
 
-		if (sort_key->skd_dtype == SKD_varying || sort_key->skd_dtype == SKD_cstring)
+		if (sortKey->skd_dtype == SKD_varying || sortKey->skd_dtype == SKD_cstring)
 		{
 			if (desc->dsc_ttype() == ttype_binary)
-				sort_key->skd_flags |= SKD_binary;
+				sortKey->skd_flags |= SKD_binary;
 		}
 
 		if (SortedStream::hasVolatileKey(desc) && !refetchFlag)
-			sort_key->skd_flags |= SKD_separate_data;
+			sortKey->skd_flags |= SKD_separate_data;
 
-		map_item->reset(node, prev_key->getSkdOffset());
-		map_item->desc = *desc;
-		map_item->desc.dsc_address = (UCHAR*)(IPTR) sort_key->getSkdOffset();
+		const auto flagOffset = sort->ignoreNulls ? 0 : prevKey->getSkdOffset();
 
-		prev_key = sort_key++;
+		mapItem->reset(node, flagOffset);
+		mapItem->desc = *desc;
+		mapItem->desc.dsc_address = (UCHAR*)(IPTR) sortKey->getSkdOffset();
+
+		prevKey = sortKey++;
 
 		if (const auto fieldNode = nodeAs<FieldNode>(node))
 		{
-			map_item->stream = fieldNode->fieldStream;
-			map_item->fieldId = fieldNode->fieldId;
+			mapItem->stream = fieldNode->fieldStream;
+			mapItem->fieldId = fieldNode->fieldId;
 		}
+
+		mapItem++;
+		direction++;
+		nullOrder++;
 	}
 
-	fb_assert(prev_key);
-	ULONG map_length = prev_key ? ROUNDUP(prev_key->getSkdOffset() + prev_key->getSkdLength(), sizeof(SLONG)) : 0;
-	map->keyLength = map_length;
-	ULONG flag_offset = map_length;
-	map_length += fieldCount;
+	fb_assert(prevKey);
+	ULONG mapLength = prevKey ? ROUNDUP(prevKey->getSkdOffset() + prevKey->getSkdLength(), sizeof(SLONG)) : 0;
+	map->keyLength = mapLength;
+	ULONG flagOffset = mapLength;
+	mapLength += fieldCount;
 
 	// Now go back and process all to fields involved with the sort
 
@@ -1672,64 +1683,64 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 			continue;
 
 		if (item.desc->dsc_dtype >= dtype_aligned)
-			map_length = FB_ALIGN(map_length, type_alignments[item.desc->dsc_dtype]);
+			mapLength = FB_ALIGN(mapLength, type_alignments[item.desc->dsc_dtype]);
 
-		map_item->reset(item.stream, (SSHORT) item.id, flag_offset++);
-		map_item->desc = *item.desc;
-		map_item->desc.dsc_address = (UCHAR*)(IPTR) map_length;
-		map_length += item.desc->dsc_length;
-		map_item++;
+		mapItem->reset(item.stream, (SSHORT) item.id, flagOffset++);
+		mapItem->desc = *item.desc;
+		mapItem->desc.dsc_address = (UCHAR*)(IPTR) mapLength;
+		mapLength += item.desc->dsc_length;
+		mapItem++;
 	}
 
 	// Make fields for record numbers and transaction ids for all streams
 
-	map_length = ROUNDUP(map_length, sizeof(SINT64));
+	mapLength = ROUNDUP(mapLength, sizeof(SINT64));
 	for (const auto stream : streams)
 	{
-		map_item->reset(stream, SortedStream::ID_DBKEY);
-		map_item->desc.makeInt64(0, (SINT64*)(IPTR) map_length);
-		map_length += map_item->desc.dsc_length;
-		map_item++;
+		mapItem->reset(stream, SortedStream::ID_DBKEY);
+		mapItem->desc.makeInt64(0, (SINT64*)(IPTR) mapLength);
+		mapLength += mapItem->desc.dsc_length;
+		mapItem++;
 
-		map_item->reset(stream, SortedStream::ID_TRANS);
-		map_item->desc.makeInt64(0, (SINT64*)(IPTR) map_length);
-		map_length += map_item->desc.dsc_length;
-		map_item++;
+		mapItem->reset(stream, SortedStream::ID_TRANS);
+		mapItem->desc.makeInt64(0, (SINT64*)(IPTR) mapLength);
+		mapLength += mapItem->desc.dsc_length;
+		mapItem++;
 	}
 
 	if (dbkeyStreams && dbkeyStreams->hasData())
 	{
-		map_length = ROUNDUP(map_length, sizeof(SINT64));
+		mapLength = ROUNDUP(mapLength, sizeof(SINT64));
 
 		for (const auto stream : *dbkeyStreams)
 		{
-			map_item->reset(stream, SortedStream::ID_DBKEY);
-			map_item->desc.makeInt64(0, (SINT64*)(IPTR) map_length);
-			map_length += map_item->desc.dsc_length;
-			map_item++;
+			mapItem->reset(stream, SortedStream::ID_DBKEY);
+			mapItem->desc.makeInt64(0, (SINT64*)(IPTR) mapLength);
+			mapLength += mapItem->desc.dsc_length;
+			mapItem++;
 		}
 
 		for (const auto stream : *dbkeyStreams)
 		{
-			map_item->reset(stream, SortedStream::ID_DBKEY_VALID);
-			map_item->desc.makeText(1, CS_BINARY, (UCHAR*)(IPTR) map_length);
-			map_length += map_item->desc.dsc_length;
-			map_item++;
+			mapItem->reset(stream, SortedStream::ID_DBKEY_VALID);
+			mapItem->desc.makeText(1, CS_BINARY, (UCHAR*)(IPTR) mapLength);
+			mapLength += mapItem->desc.dsc_length;
+			mapItem++;
 		}
 	}
 
 	for (const auto stream : streams)
 	{
-		map_item->reset(stream, SortedStream::ID_DBKEY_VALID);
-		map_item->desc.makeText(1, CS_BINARY, (UCHAR*)(IPTR) map_length);
-		map_length += map_item->desc.dsc_length;
-		map_item++;
+		mapItem->reset(stream, SortedStream::ID_DBKEY_VALID);
+		mapItem->desc.makeText(1, CS_BINARY, (UCHAR*)(IPTR) mapLength);
+		mapLength += mapItem->desc.dsc_length;
+		mapItem++;
 	}
 
-	fb_assert(map_item == map->items.end());
-	fb_assert(sort_key == map->keyItems.end());
+	fb_assert(mapItem == map->items.end());
+	fb_assert(sortKey == map->keyItems.end());
 
-	map_length = ROUNDUP(map_length, sizeof(SLONG));
+	mapLength = ROUNDUP(mapLength, sizeof(SLONG));
 
 	// Make fields to store varying and cstring length
 
@@ -1739,19 +1750,19 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 
 		if (sortKey.skd_dtype == SKD_varying || sortKey.skd_dtype == SKD_cstring)
 		{
-			sortKey.skd_vary_offset = map_length;
-			map_length += sizeof(USHORT);
+			sortKey.skd_vary_offset = mapLength;
+			mapLength += sizeof(USHORT);
 			map->flags |= SortedStream::FLAG_KEY_VARY;
 		}
 	}
 
-	if (map_length > MAX_SORT_RECORD)
+	if (mapLength > MAX_SORT_RECORD)
 	{
-		ERR_post(Arg::Gds(isc_sort_rec_size_err) << Arg::Num(map_length));
+		ERR_post(Arg::Gds(isc_sort_rec_size_err) << Arg::Num(mapLength));
 		// Msg438: sort record size of %ld bytes is too big
 	}
 
-	map->length = map_length;
+	map->length = mapLength;
 
 	// That was most unpleasant.  Never the less, it's done (except for the debugging).
 	// All that remains is to build the record source block for the sort.
@@ -2430,6 +2441,7 @@ bool Optimizer::generateEquiJoin(RiverList& rivers, JoinType joinType)
 	HalfStaticArray<ValueExprNode*, OPT_STATIC_ITEMS> scratch;
 	scratch.grow(baseConjuncts * orgCount);
 	ValueExprNode** classes = scratch.begin();
+	bool ignoreNulls = true;
 
 	// Compute equivalence classes among streams. This involves finding groups
 	// of streams joined by field equalities.
@@ -2447,8 +2459,9 @@ bool Optimizer::generateEquiJoin(RiverList& rivers, JoinType joinType)
 
 		NestConst<ValueExprNode> node1;
 		NestConst<ValueExprNode> node2;
+		UCHAR blrOp;
 
-		if (!getEquiJoinKeys(*iter, &node1, &node2))
+		if (!getEquiJoinKeys(*iter, &node1, &node2, &blrOp))
 			continue;
 
 		for (unsigned i = 0; i < orgRivers.getCount(); i++)
@@ -2483,6 +2496,9 @@ bool Optimizer::generateEquiJoin(RiverList& rivers, JoinType joinType)
 
 					if (eq_class == last_class)
 						last_class += orgCount;
+
+					if (blrOp == blr_equiv)
+						ignoreNulls = false;
 
 					iter |= Optimizer::CONJUNCT_JOINED;
 				}
@@ -2594,13 +2610,14 @@ bool Optimizer::generateEquiJoin(RiverList& rivers, JoinType joinType)
 		for (const auto river : joinedRivers)
 		{
 			const auto sort = FB_NEW_POOL(getPool()) SortNode(getPool());
+			sort->ignoreNulls = ignoreNulls;
 
 			for (const auto key : *keys[position++])
 			{
 				fb_assert(river->isReferenced(key));
 
 				sort->direction.add(ORDER_ASC);	// ascending sort
-				sort->nullOrder.add(NULLS_DEFAULT);	// default nulls placement
+				sort->nullOrder.add(NULLS_DEFAULT); // default nulls placement
 				sort->expressions.add(key);
 			}
 
@@ -2633,7 +2650,7 @@ bool Optimizer::generateEquiJoin(RiverList& rivers, JoinType joinType)
 			rsbs.add(river->getRecordSource());
 
 		finalRsb = FB_NEW_POOL(getPool())
-			HashJoin(tdbb, csb, joinType, rsbs.getCount(), rsbs.begin(), keys.begin());
+			HashJoin(tdbb, csb, joinType, ignoreNulls, rsbs.getCount(), rsbs.begin(), keys.begin());
 	}
 
 	// Pick up any boolean that may apply
@@ -2971,7 +2988,8 @@ bool Optimizer::checkEquiJoin(BoolExprNode* boolean)
 
 bool Optimizer::getEquiJoinKeys(BoolExprNode* boolean,
 								NestConst<ValueExprNode>* node1,
-								NestConst<ValueExprNode>* node2)
+								NestConst<ValueExprNode>* node2,
+								UCHAR* blrOp)
 {
 	auto cmpNode = nodeAs<ComparativeBoolNode>(boolean);
 	if (!cmpNode || (cmpNode->blrOp != blr_eql && cmpNode->blrOp != blr_equiv))
@@ -2985,6 +3003,7 @@ bool Optimizer::getEquiJoinKeys(BoolExprNode* boolean,
 
 	*node1 = arg1;
 	*node2 = arg2;
+	*blrOp = cmpNode->blrOp;
 	return true;
 }
 

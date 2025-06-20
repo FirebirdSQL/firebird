@@ -51,7 +51,6 @@ class SortNode : public Firebird::PermanentStorage, public Printable
 public:
 	explicit SortNode(MemoryPool& pool)
 		: PermanentStorage(pool),
-		  unique(false),
 		  expressions(pool),
 		  direction(pool),
 		  nullOrder(pool)
@@ -76,7 +75,8 @@ public:
 	{
 		if (direction[index] == ORDER_ASC)
 			return (nullOrder[index] == NULLS_DEFAULT) ? NULLS_FIRST : nullOrder[index];
-		else if (direction[index] == ORDER_DESC)
+
+		if (direction[index] == ORDER_DESC)
 			return (nullOrder[index] == NULLS_DEFAULT) ? NULLS_LAST : nullOrder[index];
 
 		fb_assert(false);
@@ -84,7 +84,8 @@ public:
 	}
 
 public:
-	bool unique;						// sort uses unique key - for DISTINCT and GROUP BY
+	bool unique = false;				// sort uses unique key - for DISTINCT and GROUP BY
+	bool ignoreNulls = false;			// sort skips NULL keys
 	NestValueArray expressions;			// sort expressions
 	Firebird::Array<SortDirection> direction;	// rse_order_*
 	Firebird::Array<NullsPlacement> nullOrder;	// rse_nulls_*
