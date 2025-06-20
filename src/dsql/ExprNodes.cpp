@@ -7190,7 +7190,15 @@ dsc* FieldNode::execute(thread_db* tdbb, Request* request) const
 	{
 		dsc tmpDesc;
 		if (!EVL_field(relation, record, fieldId, &tmpDesc))
+		{
+			if (itemInfo)
+			{
+				EVL_validate(tdbb, Item(Item::TYPE_FIELD, contextNum, fieldId),
+					itemInfo, &impure->vlu_desc, true);
+			}
+
 			return NULL;
+		}
 		EVL_put_desc(tdbb, &tmpDesc, impure);
 	}
 
