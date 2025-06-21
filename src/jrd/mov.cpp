@@ -438,7 +438,7 @@ Firebird::string MOV_make_string2(Jrd::thread_db* tdbb, const dsc* desc, USHORT 
 }
 
 
-void MOV_move(Jrd::thread_db* tdbb, /*const*/ dsc* from, dsc* to)
+void MOV_move(Jrd::thread_db* tdbb, /*const*/ dsc* from, dsc* to, bool trustedSource)
 {
 /**************************************
  *
@@ -454,7 +454,7 @@ void MOV_move(Jrd::thread_db* tdbb, /*const*/ dsc* from, dsc* to)
 	if (DTYPE_IS_BLOB_OR_QUAD(from->dsc_dtype) || DTYPE_IS_BLOB_OR_QUAD(to->dsc_dtype))
 		Jrd::blb::move(tdbb, from, to);
 	else
-		CVT_move(from, to, tdbb->getAttachment()->att_dec_status);
+		CVT_move_common(from, to, tdbb->getAttachment()->att_dec_status, &Jrd::EngineCallbacks::instance, trustedSource);
 }
 
 

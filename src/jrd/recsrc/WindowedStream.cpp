@@ -574,6 +574,9 @@ void WindowedStream::WindowStream::internalOpen(thread_db* tdbb) const
 
 	if (m_invariantOffsets & 0x2)
 		getFrameValue(tdbb, request, m_frameExtent->frame2, &impure->endOffset);
+
+	// Make initial values for partitioning fields clean.
+	request->req_rpb[m_stream].rpb_record->nullify();
 }
 
 void WindowedStream::WindowStream::close(thread_db* tdbb) const
@@ -886,7 +889,7 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 				record->setNull(id);
 			else
 			{
-				MOV_move(tdbb, desc, EVL_assign_to(tdbb, *target));
+				MOV_move(tdbb, desc, EVL_assign_to(tdbb, *target), true);
 				record->clearNull(id);
 			}
 

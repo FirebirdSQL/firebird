@@ -584,7 +584,7 @@ ULONG HashJoin::computeHash(thread_db* tdbb,
 				else
 				{
 					// This call ensures that the padding bytes are appended
-					MOV_move(tdbb, desc, &to);
+					MOV_move(tdbb, desc, &to, true);
 				}
 			}
 			else
