@@ -7435,6 +7435,8 @@ void DatabaseOptions::get(const UCHAR* dpb, FB_SIZE_T dpb_length, bool& invalid_
 		case isc_dpb_search_path:
 			getString(rdr, tempStr);
 			MetaString::parseList(tempStr, dpb_schema_search_path);
+			if (!dpb_schema_search_path.exist(SYSTEM_SCHEMA))
+				dpb_schema_search_path.add(SYSTEM_SCHEMA);
 			break;
 
 		case isc_dpb_blr_request_search_path:

@@ -10412,8 +10412,18 @@ void SetSearchPathNode::execute(thread_db* tdbb, DsqlRequest* /*request*/, jrd_t
 	auto newSearchPath = makeRef(
 		FB_NEW_POOL(*attachment->att_pool) AnyRef<ObjectsArray<MetaString>>(*attachment->att_pool));
 
+	bool hasSystem = false;
+
 	for (const auto& schema : *schemas)
+	{
+		if (schema == SYSTEM_SCHEMA)
+			hasSystem = true;
+
 		newSearchPath->add(schema);
+	}
+
+	if (!hasSystem)
+		newSearchPath->add(SYSTEM_SCHEMA);
 
 	attachment->att_schema_search_path = std::move(newSearchPath);
 }
