@@ -2445,9 +2445,9 @@ db_rem_option($alterDatabaseNode)
 
 %type <declareLocalTypeNode> composite_type_clause
 composite_type_clause
-	: symbol_table_name
+	: symbol_localtype_name
 			{
-				$<declareLocalTypeNode>$ = newNode<DeclareLocalTypeNode>(NOTRIAL(*$1));
+				$<declareLocalTypeNode>$ = newNode<DeclareLocalTypeNode>(*$1);
 			}
 		'(' composite_type_elements($2) ')'
 			{
@@ -5763,25 +5763,25 @@ domain_type
 	| TYPE OF TABLE symbol_column_name
 		{
 			$$ = newNode<dsql_fld>();
-			$$->typeOfTable = *$4;
+			$$->typeOfTable = QualifiedName(*$4);
 			$$->fromCursor = false;
 		}
 	| TYPE OF CURSOR symbol_column_name
 		{
 			$$ = newNode<dsql_fld>();
-			$$->typeOfTable = *$4;
+			$$->typeOfTable = QualifiedName(*$4);
 			$$->fromCursor = true;
 		}
 	| TYPE OF symbol_package_name '.' symbol_package_type_name	// packaged type without constraints
 		{
 			$$ = newNode<dsql_fld>();
-			$$->typeOfName = *$3;
-			$$->packageName = *$1;
+			$$->typeOfName = QualifiedName(*$5);
+			$$->packageName = *$3;
 		}
 	| symbol_package_name '.' symbol_package_type_name	// packaged type with constraints
 		{
 			$$ = newNode<dsql_fld>();
-			$$->typeOfName = *$3;
+			$$->typeOfName = QualifiedName(*$3);
 			$$->packageName = *$1;
 			$$->fullDomain = true;
 		}
@@ -10510,6 +10510,11 @@ symbol_user_name
 
 %type <metaNamePtr> symbol_variable_name
 symbol_variable_name
+	: valid_symbol_name
+	;
+
+%type <metaNamePtr> symbol_localtype_name
+symbol_localtype_name
 	: valid_symbol_name
 	;
 

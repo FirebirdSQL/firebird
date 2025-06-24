@@ -1130,7 +1130,7 @@ void DdlNode::storeGlobalField(thread_db* tdbb, jrd_tra* transaction, QualifiedN
 			Arg::Gds(isc_dsql_max_arr_dim_exceeded));
 	}
 
-	if (field->packageName.hasData())
+	if (field->packageName.object.hasData())
 	{
 		AutoCacheRequest requestHandle(tdbb, drq_s_pkg_type, DYN_REQUESTS);
 
@@ -1147,7 +1147,7 @@ void DdlNode::storeGlobalField(thread_db* tdbb, jrd_tra* transaction, QualifiedN
 			strcpy(PKGT.RDB$TYPE_NAME, packagedTypeName.c_str());
 
 			PKGT.RDB$PACKAGE_NAME.NULL = FALSE;
-			strcpy(PKGT.RDB$PACKAGE_NAME, field->packageName.c_str());
+			strcpy(PKGT.RDB$PACKAGE_NAME, field->packageName.object.c_str());
 
 			PKGT.RDB$PRIVATE_FLAG.NULL = FALSE;
 			PKGT.RDB$PRIVATE_FLAG = field->privateFlag;
@@ -1196,10 +1196,10 @@ void DdlNode::storeGlobalField(thread_db* tdbb, jrd_tra* transaction, QualifiedN
 			FLD.RDB$COLLATION_ID.NULL, FLD.RDB$COLLATION_ID,
 			FLD.RDB$SEGMENT_LENGTH.NULL, FLD.RDB$SEGMENT_LENGTH);
 
-		if (field->relationName.hasData() || field->typeOfTable.hasData())
+		if (field->relationName.object.hasData() || field->typeOfTable.object.hasData())
 		{
 			FLD.RDB$RELATION_NAME.NULL = FALSE;
-			auto& name = field->relationName.hasData() ? field->relationName : field->typeOfTable;
+			auto& name = field->relationName.object.hasData() ? field->relationName.object : field->typeOfTable.object;
 			strcpy(FLD.RDB$RELATION_NAME, name.c_str());
 		}
 
@@ -2390,20 +2390,20 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 		// ... and insert the new ones
 
 		auto processRowtype = [&](dsql_fld* field) {
-			if (field->dtype == dtype_rowtype || (!field->typeOfName.hasData() && field->typeOfTable.hasData()))
+			if (field->dtype == dtype_rowtype || (!field->typeOfName.object.hasData() && field->typeOfTable.object.hasData()))
 			{
 				if (field->fromCursor)
 				{
 					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
 						Arg::Gds(isc_invalid_parameter_decl) <<
-						Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable));
+						Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable.object));
 				}
 
-				dsql_rel* relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, field->typeOfTable.c_str());
+				dsql_rel* relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, QualifiedName(field->typeOfTable.object, ""));
 
 				if (relation)
 					field->fld_sub_first = relation->rel_fields;
-				else if (field->packageName.hasData())
+				else if (field->packageName.object.hasData())
 				{
 					if (!METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, field->relationName, field->fld_sub_first))
 						dsqlScratch->genCompositeTypeFromCache(field, field->fld_sub_first);
@@ -2415,7 +2415,7 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 				{
 					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
 						Arg::Gds(isc_invalid_parameter_decl) <<
-						Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable));
+						Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable.object));
 				}
 
 				calculateCompositeFieldLength(*field);
@@ -2804,7 +2804,7 @@ void CreateAlterFunctionNode::compile(thread_db* tdbb, DsqlCompilerScratch* dsql
 				if (isRowtype)
 				{
 					rowtypeOffset++;
-					dsqlScratch->putLocalVariable(*i, nullptr, {});
+					dsqlScratch->putLocalVariable(*i);
 				}
 				else
 				{
@@ -3499,14 +3499,14 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 			{
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
 					Arg::Gds(isc_invalid_parameter_decl) <<
-					Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable));
+					Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable.object));
 			}
 
-			dsql_rel* relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, field->typeOfTable.c_str());
+			dsql_rel* relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, QualifiedName(field->typeOfTable.object, ""));
 
 			if (relation)
 				field->fld_sub_first = relation->rel_fields;
-			else if (field->packageName.hasData())
+			else if (field->packageName.object.hasData())
 			{
 				if (!METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, field->relationName, field->fld_sub_first))
 					dsqlScratch->genCompositeTypeFromCache(field, field->fld_sub_first);
@@ -3518,7 +3518,7 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 			{
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
 					Arg::Gds(isc_invalid_parameter_decl) <<
-					Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable));
+					Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable.object));
 			}
 
 			calculateCompositeFieldLength(*field);
@@ -3532,7 +3532,7 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 			collectedParameters.get(parameter.name, collectedParameter);
 
 			auto field = parameter.type;
-			auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.hasData() && field->typeOfTable.hasData());
+			auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.object.hasData() && field->typeOfTable.object.hasData());
 
 			if (isRowtype)
 				processRowtype(field);
@@ -3854,7 +3854,7 @@ void CreateAlterProcedureNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch*
 		if ((*i)->type == dsql_var::TYPE_INPUT && (*i)->field->dtype == dtype_rowtype)
 		{
 			// AAM: we have to put the rowtype variable which will be used instead of rowtype parameter
-			dsqlScratch->putLocalVariable(*i, nullptr, {});
+			dsqlScratch->putLocalVariable(*i);
 		}
 	}
 
@@ -3862,8 +3862,6 @@ void CreateAlterProcedureNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch*
 		 i != dsqlScratch->outputVariables.end();
 		 ++i)
 	{
-		auto isRowtype = (*i)->row_typeclause;
-		(*i)->msgItem += rowtypeOffset;
 		dsqlScratch->putLocalVariable(*i);
 	}
 
@@ -5062,7 +5060,7 @@ string DeclarePackageTypeNode::internalPrint(NodePrinter& printer) const
 void DeclarePackageTypeNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 {
 	// TODO: which type of privilege should we use?
-	SCL_check_create_access(tdbb, obj_domains);
+	SCL_check_create_access(tdbb, obj_domains, {});
 }
 
 bool DeclarePackageTypeNode::updateFieldDefaultAndValidation(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
@@ -5165,9 +5163,9 @@ void DeclarePackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 		DsqlDescMaker::fromField(&dsqlScratch->domainValue, type);
 		DYN_UTIL_check_unique_name(tdbb, transaction, fieldSource, obj_field);
 
-		type->packageName = package;
+		type->packageName = QualifiedName(package, "");
 		type->privateFlag = privateFlag;
-		typeName = fieldSource;
+		typeName = fieldSource.object;
 		storeGlobalField(tdbb, transaction, fieldSource, type);
 	}
 	else
@@ -5176,11 +5174,11 @@ void DeclarePackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 		MetaName relationGeneratedName;
 		DYN_UTIL_generate_composite_type_relation_name(tdbb, relationGeneratedName);
 
-		DYN_UTIL_check_unique_name(tdbb, transaction, relationGeneratedName, obj_field);
+		DYN_UTIL_check_unique_name(tdbb, transaction, QualifiedName(relationGeneratedName, ""), obj_field);
 
 		dsql_fld* field = FB_NEW_POOL(*tdbb->getDefaultPool()) dsql_fld(*tdbb->getDefaultPool());
-		field->packageName = package;
-		field->relationName = relationGeneratedName;
+		field->packageName = QualifiedName(package, "");
+		field->relationName = QualifiedName(relationGeneratedName, "");
 		field->privateFlag = privateFlag;
 		field->dtype = dtype_rowtype;
 
@@ -5204,18 +5202,18 @@ void DeclarePackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 
 			DsqlDescMaker::fromField(&dsqlScratch->domainValue, type);
 
-			MetaName generatedFieldName;
+			QualifiedName generatedFieldName;
 			DYN_UTIL_generate_field_name(tdbb, generatedFieldName);
 			storeGlobalField(tdbb, transaction, generatedFieldName, type);
 
-			updateFieldDefaultAndValidation(tdbb, dsqlScratch, transaction, generatedFieldName,
+			updateFieldDefaultAndValidation(tdbb, dsqlScratch, transaction, generatedFieldName.object,
 				typeClause->defaultClause, typeClause->checkClause, type->notNull);
 
 			type->fieldSource = generatedFieldName;
 
 			RelationNode::FieldDefinition fieldDefinition(*tdbb->getDefaultPool());
 			fieldDefinition.fieldSource = generatedFieldName;
-			fieldDefinition.relationName = relationGeneratedName;
+			fieldDefinition.relationName = QualifiedName(relationGeneratedName, "");
 			fieldDefinition.name = type->fld_name;
 			fieldDefinition.position = positionCounter++;
 
@@ -5226,7 +5224,7 @@ void DeclarePackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 		}
 
 		calculateCompositeFieldLength(*field);
-		typeName = fieldSource;
+		typeName = fieldSource.object;
 		storeGlobalField(tdbb, transaction, fieldSource, field);
 		relationName = relationGeneratedName;
 
@@ -5240,7 +5238,7 @@ void DeclarePackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 			typeClause->defaultClause = FB_NEW_POOL(pool) ValueSourceClause(pool);
 			typeClause->defaultClause->value = rowValue;
 
-			updateFieldDefaultAndValidation(tdbb, dsqlScratch, transaction, fieldSource,
+			updateFieldDefaultAndValidation(tdbb, dsqlScratch, transaction, fieldSource.object,
 				typeClause->defaultClause, check, notNull);
 		}
 	}
@@ -5317,7 +5315,7 @@ void DropPackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 				Y IN RDB$RELATION_FIELDS
 				WITH Y.RDB$RELATION_NAME EQ compositeTypeRelationName.c_str()
 			{
-				if (!MET_lookup_relation(tdbb, compositeTypeRelationName))
+				if (!MET_lookup_relation(tdbb, QualifiedName(compositeTypeRelationName, "")))
 					ERASE Y;
 			}
 			END_FOR
@@ -5332,7 +5330,7 @@ void DropPackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 	}
 	END_FOR
 
-	deletePrivilegesByRelName(tdbb, transaction, name, obj_field);
+	deletePrivilegesByRelName(tdbb, transaction, QualifiedName(name, ""), obj_field);
 
 	savePoint.release();	// everything is ok
 }
@@ -6243,7 +6241,7 @@ void AlterDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	FOR(REQUEST_HANDLE pkgTypesRequest TRANSACTION_HANDLE transaction)
 		X IN RDB$FIELDS CROSS
 		Y IN RDB$PACKAGED_TYPES
-		WITH X.RDB$FIELD_NAME EQ name.c_str() AND
+		WITH X.RDB$FIELD_NAME EQ name.object.c_str() AND
 			 X.RDB$FIELD_NAME EQ Y.RDB$FIELD_SOURCE
 	{
 		// msg 89: "Domain not found"
@@ -6626,7 +6624,7 @@ void DropDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 	FOR(REQUEST_HANDLE pkgTypesRequest TRANSACTION_HANDLE transaction)
 		X IN RDB$FIELDS CROSS
 		Y IN RDB$PACKAGED_TYPES
-		WITH X.RDB$FIELD_NAME EQ name.c_str() AND
+		WITH X.RDB$FIELD_NAME EQ name.object.c_str() AND
 			 X.RDB$FIELD_NAME EQ Y.RDB$FIELD_SOURCE
 	{
 		// msg 89: "Domain not found"

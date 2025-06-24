@@ -531,26 +531,26 @@ void DsqlCompilerScratch::putLocalVariableDecl(dsql_var* variable, DeclareVariab
 			appendUChar(blr_not_nullable);
 
 		appendUChar(blr_rowtype);
-		if (field->typeOfTable.hasData())
+		if (field->typeOfTable.object.hasData())
 		{
 			appendUChar(blr_rt_type_of_table);
 			appendUShort(field->fld_sub_count);
 			appendUShort(variable->contextNum);
-			appendMetaString(field->typeOfTable.c_str());
+			appendMetaString(field->typeOfTable.object.c_str());
 		}
-		else if (field->fieldSource.hasData())
+		else if (field->fieldSource.object.hasData())
 		{
 			appendUChar(blr_rt_pagacked_type);
 			appendUShort(field->fld_sub_count);
 			appendUShort(variable->contextNum);
-			appendMetaString(field->fieldSource.c_str());
+			appendMetaString(field->fieldSource.object.c_str());
 		}
-		else if (field->typeOfName.hasData())
+		else if (field->typeOfName.object.hasData())
 		{
 			appendUChar(blr_rt_local_type);
 			appendUShort(field->fld_sub_count);
 			appendUShort(variable->contextNum);
-			appendMetaString(field->typeOfName.c_str());
+			appendMetaString(field->typeOfName.object.c_str());
 		}
 		else
 		{
@@ -625,7 +625,7 @@ bool DsqlCompilerScratch::genCompositeTypeFromCache(dsql_fld* srcField, dsql_fld
 {
 	for (auto it : localCompositeTypeDeclarations)
 	{
-		if (it.first == srcField->typeOfName)
+		if (it.first == srcField->typeOfName.object)
 		{
 			auto tmp = nodeAs<DeclareLocalTypeNode>(it.second)->dsqlField;
 			resFields = tmp->fld_sub_first;
@@ -639,18 +639,18 @@ bool DsqlCompilerScratch::genCompositeTypeFromCache(dsql_fld* srcField, dsql_fld
 
 	for(auto it : packagedTypesCache)
 	{
-		if (it->typeName == srcField->typeOfName)
+		if (it->typeName == srcField->typeOfName.object)
 		{
 			srcField->fieldSource = srcField->typeOfName = it->fieldSource;
-			srcField->relationName = it->relationName;
+			srcField->relationName.object = it->relationName;
 
 			auto nextPtr = &resFields;
 			for (auto decl : it->fieldDeclarations)
 			{
-				dsql_fld* field123 = FB_NEW_POOL(this->getPool()) dsql_fld(this->getPool());
-				*nextPtr = field123;
-				*field123 = *(decl->type);
-				field123->relationName = it->relationName;
+				dsql_fld* newField = FB_NEW_POOL(this->getPool()) dsql_fld(this->getPool());
+				*nextPtr = newField;
+				*newField = *(decl->type);
+				newField->relationName.object = it->relationName;
 				nextPtr = &(*nextPtr)->fld_next;
 				srcField->fld_sub_count++;
 			}
@@ -669,7 +669,7 @@ bool DsqlCompilerScratch::getTypeFromCache(dsql_fld* field, const MetaName& type
 		if (it.first == typeName)
 		{
 			field->dtype = dtype_rowtype;
-			field->typeOfName = it.first;
+			field->typeOfName.object = it.first;
 			field->fullDomain = true;
 			return true;
 		}
@@ -677,11 +677,11 @@ bool DsqlCompilerScratch::getTypeFromCache(dsql_fld* field, const MetaName& type
 
 	for (auto it : packagedTypesCache)
 	{
-		if (it->fieldSource == typeName)
+		if (it->fieldSource.object == typeName)
 		{
 			field->dtype = it->compositeTypeDeclaration ? dtype_rowtype : it->typeClause->type->dtype;
 			field->typeOfName = it->fieldSource;
-			field->packageName = it->package;
+			field->packageName.object = it->package;
 			// field->fullDomain = false;
 			return true;
 		}
@@ -859,7 +859,7 @@ void DsqlCompilerScratch::genParameters(Array<NestConst<ParameterClause> >& para
 			putDebugArgument(direction, i, parameter->name.c_str());
 
 			auto field = parameter->type;
-			auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.hasData() && field->typeOfTable.hasData());
+			auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.object.hasData() && field->typeOfTable.object.hasData());
 
 			if (isRowtype)
 			{
@@ -1089,18 +1089,18 @@ dsql_var* DsqlCompilerScratch::genRowtypeParameter(dsql_fld* field,
 	{
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
 			Arg::Gds(isc_invalid_parameter_decl) <<
-			Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable));
+			Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable.object.c_str()));
 	}
 
-	dsql_rel* relation = METD_get_relation(getTransaction(), this, field->typeOfTable.c_str());
+	dsql_rel* relation = METD_get_relation(getTransaction(), this, field->typeOfTable);
 	dsql_fld* fld = nullptr;
 
-	if (!field->packageName.hasData() && getTypeFromCache(field, field->typeOfName))
+	if (!field->packageName.object.hasData() && getTypeFromCache(field, field->typeOfName.object))
 	{
 		genCompositeTypeFromCache(field, fld);
 		field->fld_sub_first = fld;
 	}
-	else if (!relation && field->packageName.hasData())
+	else if (!relation && field->packageName.object.hasData())
 	{
 		if (!METD_gen_composite_type_fields(getTransaction(), this, field->relationName, fld))
 			genCompositeTypeFromCache(field, fld);
@@ -1118,7 +1118,7 @@ dsql_var* DsqlCompilerScratch::genRowtypeParameter(dsql_fld* field,
 	{
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
 			Arg::Gds(isc_invalid_parameter_decl) <<
-			Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable));
+			Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable.object.c_str()));
 	}
 
 	calculateCompositeFieldLength(*field);
@@ -1129,7 +1129,7 @@ dsql_var* DsqlCompilerScratch::genRowtypeParameter(dsql_fld* field,
 	dsql_ctx* new_context = FB_NEW_POOL(getPool()) dsql_ctx(getPool());
 	new_context->ctx_context = contextNumber++;
 	new_context->ctx_scope_level = scopeLevel;
-	new_context->ctx_alias = new_context->ctx_internal_alias = field->fld_name.c_str();
+	new_context->ctx_alias[0] = new_context->ctx_internal_alias = QualifiedName(field->fld_name);
 	new_context->ctx_flags = CTX_rowtype_var;
 	new_context->ctx_rowtype_var = variable;
 	context->push(new_context);
@@ -1137,19 +1137,19 @@ dsql_var* DsqlCompilerScratch::genRowtypeParameter(dsql_fld* field,
 	variable->field = field;
 
 	appendUChar(blr_rowtype);
-	if (field->fieldSource.hasData())
+	if (field->fieldSource.object.hasData())
 	{
 		appendUChar(blr_rt_pagacked_type);
 		appendUShort(field->fld_sub_count);
 		appendUShort(variable->contextNum);
-		appendMetaString(field->fieldSource.c_str());
+		appendMetaString(field->fieldSource.object.c_str());
 	}
-	else if (field->typeOfTable.hasData())
+	else if (field->typeOfTable.object.hasData())
 	{
 		appendUChar(blr_rt_type_of_table);
 		appendUShort(field->fld_sub_count);
 		appendUShort(variable->contextNum);
-		appendMetaString(field->typeOfTable.c_str());
+		appendMetaString(field->typeOfTable.object.c_str());
 	}
 	else
 	{

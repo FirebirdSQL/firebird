@@ -249,8 +249,8 @@ public:
 	SSHORT dimensions = 0;				// Non-zero means array
 	ValueListNode* ranges = nullptr;	// ranges for multi dimension array
 	bool explicitCollation = false;		// COLLATE was explicit specified
-	MetaName packageName;
-	MetaName relationName;
+	QualifiedName packageName;
+	QualifiedName relationName;
 	bool privateFlag = false;
 	bool fromCursor = false;
 };

@@ -76,7 +76,7 @@
 #define blr_ex_timestamp_tz	(unsigned char)31
 #define blr_domain_name3	(unsigned char)32
 #define blr_column_name3	(unsigned char)33
-#define blr_rowtype			(unsigned char)32
+#define blr_rowtype			(unsigned char)34
 
 // rowtype subparameter codes
 #define blr_rt_full				(unsigned char)0	// fully described type
@@ -546,12 +546,12 @@
 // subcodes of blr_flags
 #define blr_flags_search_system_schema	(unsigned char) 1
 // rowtype variables
-#define blr_row_value_expression					(unsigned char) 231
+#define blr_row_value_expression					(unsigned char) 235
 #define blr_rve_subselect							(unsigned char) 1
 
-#define blr_dcl_composite_type						(unsigned char) 232
+#define blr_dcl_composite_type						(unsigned char) 236
 
-#define blr_not_missing								(unsigned char) 233
+#define blr_not_missing								(unsigned char) 237
 
 #define blr_within_group_order		(unsigned char) 235
 

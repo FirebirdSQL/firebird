@@ -366,11 +366,11 @@ namespace Firebird
 			return *begin();
 		}
 
-		const T& back() const
-		{
-			fb_assert(getCount() > 0);
-			return *iterator(this, getCount() - 1);
-		}
+		// const T& back() const
+		// {
+		// 	fb_assert(getCount() > 0);
+		// 	return *iterator(this, getCount() - 1);
+		// }
 
 		T& back()
 		{

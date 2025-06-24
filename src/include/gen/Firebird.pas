@@ -4349,7 +4349,7 @@ const
 	isc_dpb_search_path = byte(105);
 	isc_dpb_blr_request_search_path = byte(106);
 	isc_dpb_gbak_restore_has_schema = byte(107);
-	isc_dpb_flatten_row_type = byte(105);
+	isc_dpb_flatten_row_type = byte(108);
 	isc_dpb_address = byte(1);
 	isc_dpb_addr_protocol = byte(1);
 	isc_dpb_addr_endpoint = byte(2);
@@ -5033,8 +5033,8 @@ const
 	isc_info_sql_exec_path_blr_bytes = byte(31);
 	isc_info_sql_exec_path_blr_text = byte(32);
 	isc_info_sql_relation_schema = byte(33);
-	isc_info_sql_parent_field_name = byte(33);
-	isc_info_sql_composite_descriptor = byte(34);
+	isc_info_sql_parent_field_name = byte(34);
+	isc_info_sql_composite_descriptor = byte(35);
 	isc_info_sql_stmt_select = byte(1);
 	isc_info_sql_stmt_insert = byte(2);
 	isc_info_sql_stmt_update = byte(3);
@@ -6099,6 +6099,11 @@ const
 	 isc_packaged_type_notdef = 335545318;
 	 isc_cursor_notdef = 335545319;
 	 isc_rowtype_bad_conversion = 335545320;
+	 isc_invalid_parameter_decl = 335545318;
+	 isc_composite_type_notdef = 335545319;
+	 isc_packaged_type_notdef = 335545320;
+	 isc_cursor_notdef = 335545321;
+	 isc_rowtype_bad_conversion = 335545322;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;

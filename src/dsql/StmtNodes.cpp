@@ -1514,7 +1514,7 @@ void CursorStmtNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 					context = stack.object();
 					if (context->ctx_alias.hasData() && context->ctx_flags & CTX_rowtype_var)
 					{
-						if (rowvar->dsqlVar->field->fld_name != context->ctx_alias)
+						if (rowvar->dsqlVar->field->fld_name != context->ctx_alias[0].object)
 							continue;
 					}
 					else
@@ -3236,7 +3236,7 @@ DmlNode* DeclareLocalTypeNode::parse(thread_db* tdbb, MemoryPool& pool, Compiler
 	FieldInfo** nextSubfieldInfo = nullptr;
 	auto fieldInfoMap = &csb->csb_map_field_info;
 
-	MetaNamePair namePair(compositeTypeName, "");
+	QualifiedNameMetaNamePair namePair(QualifiedName(compositeTypeName, ""), "");
 	auto fieldInfo = fieldInfoMap->get(namePair);
 	if (!fieldInfo)
 		fieldInfo = fieldInfoMap->put(namePair);
@@ -3264,7 +3264,7 @@ DmlNode* DeclareLocalTypeNode::parse(thread_db* tdbb, MemoryPool& pool, Compiler
 		MetaName fieldIdString;
 		fieldIdString.printf("%d", fieldId);
 
-		MetaNamePair namePair(compositeTypeName, fieldIdString);
+		QualifiedNameMetaNamePair namePair(QualifiedName(compositeTypeName, ""), fieldIdString);
 		*nextSubfieldInfo = fieldInfoMap->get(namePair);
 		if (!*nextSubfieldInfo)
 			*nextSubfieldInfo = fieldInfoMap->put(namePair);
@@ -3311,7 +3311,7 @@ DeclareLocalTypeNode* DeclareLocalTypeNode::dsqlPass(DsqlCompilerScratch* dsqlSc
 
 	dsql_fld* dsqlField = node->dsqlField = FB_NEW_POOL(p) dsql_fld(p);
 
-	dsqlField->typeOfName = name;
+	dsqlField->typeOfName.object = name;
 	dsqlField->dtype = dtype_rowtype;
 	dsqlField->scale = 0;
 	dsqlField->length = 0;
@@ -6552,22 +6552,22 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		 ++i)
 	{
 		auto field = (*i)->field;
-		auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.hasData() && field->typeOfTable.hasData());
+		auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.object.hasData() && field->typeOfTable.object.hasData());
 		if (isRowtype)
 		{
 			if (field->fromCursor)
 			{
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
 				Arg::Gds(isc_invalid_parameter_decl) <<
-				Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable));
+				Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable.object.c_str()));
 			}
 
-			dsql_rel* relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, field->typeOfTable.c_str());
+			dsql_rel* relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, QualifiedName(field->typeOfTable.object, ""));
 			dsql_fld* fld = NULL;
 
-			if (!relation && field->packageName.hasData())
+			if (!relation && field->packageName.object.hasData())
 			{
-				METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, field->relationName, fld);
+				METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, QualifiedName(field->relationName.object, ""), fld);
 				field->fieldSource = field->typeOfName;
 				field->fld_sub_first = fld;
 			}
@@ -6581,7 +6581,7 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			{
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
 				Arg::Gds(isc_invalid_parameter_decl) <<
-				Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable));
+				Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable.object.c_str()));
 			}
 
 			calculateCompositeFieldLength(*field);
@@ -6664,7 +6664,7 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	for (const auto variable : dsqlScratch->variables)
 	{
 		auto field = variable->field;
-		auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.hasData() && field->typeOfTable.hasData());
+		auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.object.hasData() && field->typeOfTable.object.hasData());
 
 		if (subRoutine && !isRowtype && variable->type == dsql_var::TYPE_INPUT)
 			continue;
@@ -6680,17 +6680,17 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			{
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
 				Arg::Gds(isc_invalid_parameter_decl) <<
-				Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable));
+				Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable.object.c_str()));
 			}
 
-			if (auto relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, field->typeOfTable.c_str()))
+			if (auto relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, QualifiedName(field->typeOfTable.object, "")))
 			{
 				field->fld_sub_first = relation->rel_fields;
 				field->fld_sub_count = relation->rel_fields_number;
 			}
-			else if (field->packageName.hasData())
+			else if (field->packageName.object.hasData())
 			{
-				METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, field->relationName, field->fld_sub_first);
+				METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, QualifiedName(field->relationName.object, ""), field->fld_sub_first);
 				field->fieldSource = field->typeOfName;
 			}
 
@@ -6698,13 +6698,13 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			{
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
 				Arg::Gds(isc_invalid_parameter_decl) <<
-				Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable));
+				Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable.object.c_str()));
 			}
 
 			dsql_ctx* new_context = FB_NEW_POOL(*tdbb->getDefaultPool()) dsql_ctx(*tdbb->getDefaultPool());
 			variable->contextNum = new_context->ctx_context = dsqlScratch->contextNumber++;
 			new_context->ctx_scope_level = dsqlScratch->scopeLevel;
-			new_context->ctx_alias = new_context->ctx_internal_alias = field->fld_name.c_str();
+			new_context->ctx_alias[0] = new_context->ctx_internal_alias = QualifiedName(field->fld_name, "");
 			new_context->ctx_flags = CTX_rowtype_var;
 			new_context->ctx_rowtype_var = variable;
 			dsqlScratch->context->push(new_context);
@@ -7326,7 +7326,7 @@ void ForNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 					context = stack.object();
 					if (context->ctx_alias.hasData() && context->ctx_flags & CTX_rowtype_var)
 					{
-						if (rowvar->dsqlVar->field->fld_name != context->ctx_alias)
+						if (rowvar->dsqlVar->field->fld_name != context->ctx_alias[0].object)
 							continue;
 					}
 					else
@@ -8165,27 +8165,27 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			dsql_var* variable = varNode->dsqlVar;
 			fb_assert(variable);
 
-			auto isRowtype = dsqlScratch->localCompositeTypeDeclarations.exist(field->typeOfName);
+			auto isRowtype = dsqlScratch->localCompositeTypeDeclarations.exist(field->typeOfName.object);
 			if (!isRowtype)
 			{
 				DDL_resolve_intl_type(dsqlScratch, field, varNode->dsqlDef->type->collate);
-				isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.hasData() && field->typeOfTable.hasData());
+				isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.object.hasData() && field->typeOfTable.object.hasData());
 			}
 
 			if (isRowtype)
 			{
-				dsql_rel* relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, field->typeOfTable.c_str());
+				dsql_rel* relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, QualifiedName(field->typeOfTable.object, ""));
 				dsql_fld* fld = nullptr;
 
-				if (!relation && field->packageName.hasData())
+				if (!relation && field->packageName.object.hasData())
 				{
-					if (!METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, field->relationName, fld))
+					if (!METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, QualifiedName(field->relationName.object, ""), fld))
 						dsqlScratch->genCompositeTypeFromCache(field, fld);
 
 					field->fieldSource = field->typeOfName;
 					field->fld_sub_first = fld;
 				}
-				else if (auto compositeTypeDeclPtr = dsqlScratch->localCompositeTypeDeclarations.get(field->typeOfName))
+				else if (auto compositeTypeDeclPtr = dsqlScratch->localCompositeTypeDeclarations.get(field->typeOfName.object))
 				{
 					auto localTypeNode = nodeAs<DeclareLocalTypeNode>(*compositeTypeDeclPtr);
 					fld = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
@@ -8205,12 +8205,12 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 				auto cursorFound = false;
 				for (auto cursor : dsqlScratch->cursors)
 				{
-					if (cursor->dsqlName != field->typeOfTable)
+					if (cursor->dsqlName != field->typeOfTable.object)
 						continue;
 					else if (!field->fromCursor)
 					{
 						ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-						Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable) <<
+						Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable.object) <<
 						Arg::Gds(isc_dsql_line_col_error) << Arg::Num(parameter->line) << Arg::Num(parameter->column));
 					}
 
@@ -8240,8 +8240,8 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 						*next = nullptr;
 					}
 
-					field->typeOfTable = "";
-					field->typeOfName = "";
+					field->typeOfTable.object = "";
+					field->typeOfName.object = "";
 					cursorFound = true;
 					break;
 				}
@@ -8249,7 +8249,7 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 				if (field->fromCursor && !cursorFound)
 				{
 					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-					Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable) <<
+					Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable.object) <<
 					Arg::Gds(isc_dsql_line_col_error) << Arg::Num(parameter->line) << Arg::Num(parameter->column));
 				}
 
@@ -8261,7 +8261,7 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 				else if (!field->fld_sub_first)
 				{
 					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-					Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable) <<
+					Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable.object) <<
 					Arg::Gds(isc_dsql_line_col_error) << Arg::Num(parameter->line) << Arg::Num(parameter->column));
 				}
 
@@ -8273,7 +8273,7 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 				new_context->ctx_context = dsqlScratch->contextNumber++;
 				new_context->ctx_scope_level = dsqlScratch->scopeLevel;
-				new_context->ctx_alias = new_context->ctx_internal_alias = field->fld_name.c_str();
+				new_context->ctx_alias[0] = new_context->ctx_internal_alias = QualifiedName(field->fld_name, "");
 				new_context->ctx_flags = CTX_rowtype_var;
 				// new_context->ctx_relation = relation;
 				new_context->ctx_rowtype_var = variable;
@@ -9685,12 +9685,12 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 				newValues.add(field);
 		}
 
-		dsql_rel* rel = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, relation->dsqlName.c_str());
+		dsql_rel* rel = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, QualifiedName(relation->dsqlName.object, ""));
 
 		if (!rel)
 		{
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-			Arg::Gds(isc_relnotdef) << Arg::Str(relation->dsqlName) <<
+			Arg::Gds(isc_relnotdef) << Arg::Str(relation->dsqlName.object) <<
 			Arg::Gds(isc_dsql_line_col_error) << Arg::Num(relation->line) << Arg::Num(relation->column));
 		}
 
@@ -9698,9 +9698,9 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 			0, 0);
 
 		dsql_fld* field = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
-		field->fld_name = relation->dsqlName.c_str();
+		field->fld_name = relation->dsqlName.object.c_str();
 		field->fld_relation = rel;
-		field->typeOfTable = relation->dsqlName.c_str();
+		field->typeOfTable.object = relation->dsqlName.object.c_str();
 		field->dtype = dtype_rowtype;
 
 		if (targetList.hasData())
@@ -9738,7 +9738,7 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 		dsql_ctx* new_context = FB_NEW_POOL(dsqlScratch->getPool()) dsql_ctx(dsqlScratch->getPool());
 		new_context->ctx_context = dsqlScratch->contextNumber++;
 		new_context->ctx_scope_level = dsqlScratch->scopeLevel;
-		new_context->ctx_alias = new_context->ctx_internal_alias = relation->dsqlName.c_str();
+		new_context->ctx_alias[0] = new_context->ctx_internal_alias = relation->dsqlName;
 		new_context->ctx_flags = CTX_rowtype_var;
 		new_context->ctx_rowtype_var = variable;
 		variable->contextNum = new_context->ctx_context;
@@ -9761,7 +9761,7 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 			else
 			{
 				FieldNode* fieldNode = FB_NEW_POOL(dsqlScratch->getPool()) FieldNode(dsqlScratch->getPool(), new_context, nextField);
-				fieldNode->dsqlQualifier = variableNode->dsqlName;
+				fieldNode->dsqlQualifier.object = variableNode->dsqlName;
 				fieldNode->dsqlName = nextField->fld_name;
 				node = fieldNode;
 			}
@@ -14003,7 +14003,7 @@ static ReturningClause* dsqlProcessReturning(DsqlCompilerScratch* dsqlScratch, d
 					context = stack.object();
 					if (context->ctx_alias.hasData() && context->ctx_flags & CTX_rowtype_var)
 					{
-						if (rowvar->dsqlVar->field->fld_name != context->ctx_alias)
+						if (rowvar->dsqlVar->field->fld_name != context->ctx_alias[0].object)
 							continue;
 					}
 					else

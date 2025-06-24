@@ -1348,7 +1348,7 @@ static UCHAR* describe_parameter(thread_db* tdbb,
 			case isc_info_sql_relation:
 				if (param->par_rel_name.object.hasData())
 				{
-					name = attachment->nameToUserCharSet(tdbb, param->par_rel_name);
+					name = attachment->nameToUserCharSet(tdbb, param->par_rel_name.object);
 					length = name.length();
 					buffer = reinterpret_cast<const UCHAR*>(name.c_str());
 				}

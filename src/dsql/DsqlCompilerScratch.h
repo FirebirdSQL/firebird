@@ -191,6 +191,8 @@ public:
 	// blr_column_name2/blr_domain_name2 for explicit collate
 	// blr_column_name/blr_domain_name for regular field
 	void putType(const TypeClause* type, bool useSubType);
+	void putLocalTypes();
+
 	void putLocalVariableDecl(dsql_var* variable, DeclareVariableNode* hostParam, QualifiedName& collationName);
 	void putLocalVariableInit(dsql_var* variable, const DeclareVariableNode* hostParam);
 

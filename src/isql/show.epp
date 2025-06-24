@@ -4418,7 +4418,7 @@ static processing_state show_func(const QualifiedMetaString& name)
 						isqlGlob.printf(", ");
 					firsttime = false;
 
-					if (!ISQL_printNumericType(INNERFLD.RDB$FIELD_NAME, INNERFLD.RDB$FIELD_TYPE, INNERFLD.RDB$FIELD_SUB_TYPE,
+					if (!ISQL_printNumericType(QualifiedMetaString(INNERFLD.RDB$FIELD_NAME, ""), INNERFLD.RDB$FIELD_TYPE, INNERFLD.RDB$FIELD_SUB_TYPE,
 						INNERFLD.RDB$FIELD_PRECISION, INNERFLD.RDB$FIELD_SCALE))
 					{
 						return ps_ERR;
@@ -5396,7 +5396,7 @@ static processing_state show_proc(const std::optional<QualifiedMetaString>& name
 						isqlGlob.printf(", ");
 					firsttime = false;
 
-					if (!ISQL_printNumericType(INNERFLD.RDB$FIELD_NAME, INNERFLD.RDB$FIELD_TYPE, INNERFLD.RDB$FIELD_SUB_TYPE,
+					if (!ISQL_printNumericType(QualifiedMetaString(INNERFLD.RDB$FIELD_NAME, ""), INNERFLD.RDB$FIELD_TYPE, INNERFLD.RDB$FIELD_SUB_TYPE,
 						INNERFLD.RDB$FIELD_PRECISION, INNERFLD.RDB$FIELD_SCALE))
 					{
 						return ps_ERR;

@@ -692,130 +692,7 @@ burp_fld* get_fields( burp_rel* relation)
 	// requests--this requires more code but it is well worth it
 	// for the performance benefits, especially remotely--deej
 
-	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
-	{
-		FOR (REQUEST_HANDLE tdgbl->handles_get_fields_req_handle1)
-			X IN RDB$RELATION_FIELDS CROSS
-			Y IN RDB$FIELDS WITH
-			X.RDB$FIELD_SOURCE = Y.RDB$FIELD_NAME AND
-			X.RDB$RELATION_NAME EQ relation->rel_name
-		{
-			field = (burp_fld*) BURP_alloc_zero(sizeof(burp_fld));
-			field->fld_number = count++;
-			field->fld_type = Y.RDB$FIELD_TYPE;
-			field->fld_sub_type = Y.RDB$FIELD_SUB_TYPE;
-			field->fld_length = Y.RDB$FIELD_LENGTH;
-			field->fld_scale = Y.RDB$FIELD_SCALE;
-			field->fld_id = X.RDB$FIELD_ID;
-
-			if (!X.RDB$DESCRIPTION.NULL)
-			{
-				blob_id = &X.RDB$DESCRIPTION;
-				if (blob_id->gds_quad_low || blob_id->gds_quad_high)
-					field->fld_description = X.RDB$DESCRIPTION;
-			}
-
-			if (!X.RDB$QUERY_HEADER.NULL)
-			{
-				blob_id = &X.RDB$QUERY_HEADER;
-				if (blob_id->gds_quad_low || blob_id->gds_quad_high)
-					field->fld_query_header = X.RDB$QUERY_HEADER;
-			}
-
-			if (X.RDB$FIELD_POSITION.NULL)
-				field->fld_flags |= FLD_position_missing;
-			else
-				field->fld_position = X.RDB$FIELD_POSITION;
-			field->fld_view_context = X.RDB$VIEW_CONTEXT;
-			if (X.RDB$UPDATE_FLAG.NULL)
-				field->fld_flags |= FLD_update_missing;
-			else
-				field->fld_update_flag = X.RDB$UPDATE_FLAG;
-
-			COPY (X.RDB$FIELD_NAME, field->fld_name);
-			COPY (X.RDB$FIELD_SOURCE, field->fld_source);
-			COPY (X.RDB$BASE_FIELD, field->fld_base);
-			COPY (X.RDB$QUERY_NAME, field->fld_query_name);
-			COPY (X.RDB$EDIT_STRING, field->fld_edit_string);
-			COPY (X.RDB$COMPLEX_NAME, field->fld_complex_name);
-
-			blob_id = &Y.RDB$COMPUTED_BLR;
-
-			if (blob_id->gds_quad_low || blob_id->gds_quad_high) {
-				field->fld_flags |= FLD_computed;
-			}
-
-			field->fld_system_flag = X.RDB$SYSTEM_FLAG;
-
-			COPY (X.RDB$SECURITY_CLASS, field->fld_security_class);
-
-			// use the fld_flags to mark the field as an array and
-			// to differentiate it from other blobs
-
-			if (Y.RDB$DIMENSIONS)
-			{
-				field->fld_flags |= FLD_array;
-				field->fld_dimensions = Y.RDB$DIMENSIONS;
-				if (field->fld_dimensions < 0) {
-					BURP_error_redirect (NULL, 52, SafeArg() << field->fld_name);
-				}
-				// msg 52 array dimension for field %s is invalid
-				get_ranges (field);
-			}
-
-			if (!X.RDB$NULL_FLAG.NULL)
-			{
-				field->fld_null_flag = X.RDB$NULL_FLAG;
-				field->fld_flags |= FLD_null_flag;
-			}
-
-			if (!X.RDB$DEFAULT_VALUE.NULL)
-			{
-				blob_id = &X.RDB$DEFAULT_VALUE;
-				if (blob_id->gds_quad_low || blob_id->gds_quad_high) {
-					field->fld_default_value = X.RDB$DEFAULT_VALUE;
-				}
-			}
-
-			if (!X.RDB$DEFAULT_SOURCE.NULL)
-			{
-				blob_id = &X.RDB$DEFAULT_SOURCE;
-				if (blob_id->gds_quad_low || blob_id->gds_quad_high) {
-					field->fld_default_source = X.RDB$DEFAULT_SOURCE;
-				}
-			}
-
-			if (!Y.RDB$CHARACTER_SET_ID.NULL)
-			{
-				field->fld_character_set_id = Y.RDB$CHARACTER_SET_ID;
-				field->fld_flags |= FLD_charset_flag;
-			}
-
-			if (!X.RDB$COLLATION_ID.NULL)
-			{
-				field->fld_collation_id = X.RDB$COLLATION_ID;
-				field->fld_flags |= FLD_collate_flag;
-			}
-
-			// ODS 12
-			if (!X.RDB$GENERATOR_NAME.NULL)
-			{
-				COPY(X.RDB$GENERATOR_NAME, field->fld_generator);
-				field->fld_identity_type = X.RDB$IDENTITY_TYPE;
-			}
-
-			// ODS 14
-			if (!X.RDB$RELATION_NAME.NULL)
-				COPY(X.RDB$RELATION_NAME, field->fld_relation_name);
-
-			field_list.add(field);
-		}
-		END_FOR
-		ON_ERROR
-			general_on_error();
-		END_ERROR
-	}
-	else if (tdgbl->runtimeODS >= DB_VERSION_DDL12)
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL12)
 	{
 		FOR (REQUEST_HANDLE tdgbl->handles_get_fields_req_handle1)
 			X IN RDB$RELATION_FIELDS CROSS
@@ -935,6 +812,10 @@ burp_fld* get_fields( burp_rel* relation)
 				COPY(X.RDB$GENERATOR_NAME, field->fld_generator);
 				field->fld_identity_type = X.RDB$IDENTITY_TYPE;
 			}
+
+			// ODS 14
+			if (!X.RDB$RELATION_NAME.NULL)
+				COPY(X.RDB$RELATION_NAME, field->fld_relation_name);
 
 			field_list.add(field);
 		}
@@ -3236,70 +3117,7 @@ void write_function_args(const QualifiedMetaString& name)
 	// requests--this requires more code but it is well worth it
 	// for the performance benefits, especially remotely--deej
 
-	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
-	{
-		FOR (REQUEST_HANDLE tdgbl->handles_write_function_args_req_handle1)
-			X IN RDB$FUNCTION_ARGUMENTS
-			WITH X.RDB$FUNCTION_NAME EQ funcptr AND
-				 X.RDB$PACKAGE_NAME EQUIV NULLIF(package, '')
-
-			put(tdgbl, rec_function_arg);
-
-			SSHORT prefixLen = 0;
-
-			if (!X.RDB$PACKAGE_NAME.NULL)
-			{
-				prefixLen = PUT_TEXT(att_functionarg_package_name, X.RDB$PACKAGE_NAME);
-				MISC_terminate(X.RDB$PACKAGE_NAME, temp, prefixLen, sizeof(temp));
-				temp[prefixLen++] = '.';
-			}
-
-			const SSHORT l = PUT_TEXT (att_functionarg_name, X.RDB$FUNCTION_NAME);
-			MISC_terminate (X.RDB$FUNCTION_NAME, temp + prefixLen, l, sizeof(temp) - prefixLen);
-			BURP_verbose (141, temp);
-			// msg 141 writing argument for function %s
-
-			put_int32 (att_functionarg_position, X.RDB$ARGUMENT_POSITION);
-			put_int32 (att_functionarg_passing_mechanism, X.RDB$MECHANISM);
-			put_int32 (att_functionarg_field_type, X.RDB$FIELD_TYPE);
-			put_int32 (att_functionarg_field_scale, X.RDB$FIELD_SCALE);
-			put_int32 (att_functionarg_field_length, X.RDB$FIELD_LENGTH);
-			put_int32 (att_functionarg_field_sub_type, X.RDB$FIELD_SUB_TYPE);
-			if (!X.RDB$CHARACTER_SET_ID.NULL)
-				put_int32 (att_functionarg_character_set, X.RDB$CHARACTER_SET_ID);
-
-			if (!X.RDB$FIELD_PRECISION.NULL)
-				put_int32 (att_functionarg_field_precision, X.RDB$FIELD_PRECISION);
-
-			if (!X.RDB$ARGUMENT_NAME.NULL)
-				PUT_TEXT(att_functionarg_arg_name, X.RDB$ARGUMENT_NAME);
-			if (!X.RDB$FIELD_SOURCE.NULL)
-				PUT_TEXT(att_functionarg_field_source, X.RDB$FIELD_SOURCE);
-			if (!X.RDB$DEFAULT_VALUE.NULL)
-				put_blr_blob(att_functionarg_default_value, X.RDB$DEFAULT_VALUE);
-			if (!X.RDB$DEFAULT_SOURCE.NULL)
-				put_source_blob(att_functionarg_default_source, att_functionarg_default_source,
-								X.RDB$DEFAULT_SOURCE);
-			if (!X.RDB$COLLATION_ID.NULL)
-				put_int32(att_functionarg_collation_id, X.RDB$COLLATION_ID);
-			if (!X.RDB$NULL_FLAG.NULL)
-				put_int32(att_functionarg_null_flag, X.RDB$NULL_FLAG);
-			if (!X.RDB$ARGUMENT_MECHANISM.NULL)
-				put_int32(att_functionarg_type_mechanism, X.RDB$ARGUMENT_MECHANISM);
-			if (!X.RDB$FIELD_NAME.NULL)
-				PUT_TEXT(att_functionarg_field_name, X.RDB$FIELD_NAME);
-			if (!X.RDB$RELATION_NAME.NULL)
-				PUT_TEXT(att_functionarg_relation_name, X.RDB$RELATION_NAME);
-			if (!X.RDB$DESCRIPTION.NULL)
-				put_source_blob(att_functionarg_description, att_functionarg_description, X.RDB$DESCRIPTION);
-
-			put(tdgbl, att_end);
-		END_FOR;
-		ON_ERROR
-			general_on_error();
-		END_ERROR;
-	}
-	else if (tdgbl->runtimeODS >= DB_VERSION_DDL12)
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL12)
 	{
 		FOR (REQUEST_HANDLE tdgbl->handles_write_function_args_req_handle1)
 			X IN RDB$FUNCTION_ARGUMENTS
@@ -3592,80 +3410,7 @@ void write_global_fields()
 	// requests--this requires more code but it is well worth it
 	// for the performance benefits, especially remotely--deej
 
-	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
-	{
-		FOR (REQUEST_HANDLE req_handle1)
-			X IN RDB$FIELDS WITH
-			X.RDB$SYSTEM_FLAG NE 1
-
-			put(tdgbl, rec_global_field);
-			const SSHORT l = PUT_TEXT (att_field_name, X.RDB$FIELD_NAME);
-			MISC_terminate (X.RDB$FIELD_NAME, temp, l, sizeof(temp));
-			BURP_verbose (149, temp);
-			// msg 149  writing global field %.*s
-			if (!X.RDB$QUERY_NAME.NULL && X.RDB$QUERY_NAME [0] != ' ')
-				PUT_TEXT (att_field_query_name, X.RDB$QUERY_NAME);
-			if (!X.RDB$EDIT_STRING.NULL && X.RDB$EDIT_STRING [0] != ' ')
-				PUT_TEXT (att_field_edit_string, X.RDB$EDIT_STRING);
-			put_source_blob (att_field_query_header, att_field_query_header, X.RDB$QUERY_HEADER);
-			put_int32 (att_field_type, X.RDB$FIELD_TYPE);
-			put_int32 (att_field_length, X.RDB$FIELD_LENGTH);
-			put_int32 (att_field_sub_type, X.RDB$FIELD_SUB_TYPE);
-			put_int32 (att_field_scale, X.RDB$FIELD_SCALE);
-			put_blr_blob (att_field_missing_value, X.RDB$MISSING_VALUE);
-			put_blr_blob (att_field_default_value, X.RDB$DEFAULT_VALUE);
-			put_blr_blob (att_field_validation_blr, X.RDB$VALIDATION_BLR);
-			put_source_blob(att_field_validation_source2, att_field_validation_source,
-							X.RDB$VALIDATION_SOURCE);
-			put_blr_blob (att_field_computed_blr, X.RDB$COMPUTED_BLR);
-			put_source_blob(att_field_computed_source2, att_field_computed_source,
-							X.RDB$COMPUTED_SOURCE);
-			if (X.RDB$SEGMENT_LENGTH)
-				put_int32 (att_field_segment_length, X.RDB$SEGMENT_LENGTH);
-			if (X.RDB$SYSTEM_FLAG)
-				put_int32 (att_field_system_flag, X.RDB$SYSTEM_FLAG);
-			put_source_blob (att_field_description2, att_field_description, X.RDB$DESCRIPTION);
-
-			if (X.RDB$EXTERNAL_LENGTH)
-				put_int32 (att_field_external_length, X.RDB$EXTERNAL_LENGTH);
-			if (X.RDB$EXTERNAL_TYPE)
-				put_int32 (att_field_external_type, X.RDB$EXTERNAL_TYPE);
-			if (X.RDB$EXTERNAL_SCALE)
-				put_int32 (att_field_external_scale, X.RDB$EXTERNAL_SCALE);
-			if (X.RDB$DIMENSIONS)
-				put_int32 (att_field_dimensions, X.RDB$DIMENSIONS);
-			if (!X.RDB$NULL_FLAG.NULL)
-				put_int32 (att_field_null_flag, X.RDB$NULL_FLAG);
-			if (!X.RDB$CHARACTER_LENGTH.NULL)
-				put_int32 (att_field_character_length, X.RDB$CHARACTER_LENGTH);
-			if (!X.RDB$DEFAULT_SOURCE.NULL)
-				put_source_blob(att_field_default_source, att_field_default_source,
-								X.RDB$DEFAULT_SOURCE);
-			if (!X.RDB$MISSING_SOURCE.NULL)
-				put_source_blob(att_field_missing_source, att_field_missing_source,
-								X.RDB$MISSING_SOURCE);
-			if (!X.RDB$CHARACTER_SET_ID.NULL)
-				put_int32 (att_field_character_set, X.RDB$CHARACTER_SET_ID);
-			if (!X.RDB$COLLATION_ID.NULL)
-				put_int32 (att_field_collation_id, X.RDB$COLLATION_ID);
-			if (!X.RDB$FIELD_PRECISION.NULL)
-				put_int32 (att_field_precision, X.RDB$FIELD_PRECISION);
-
-			if (!X.RDB$SECURITY_CLASS.NULL)
-				PUT_TEXT(att_field_security_class, X.RDB$SECURITY_CLASS);
-			if (!X.RDB$OWNER_NAME.NULL)
-				PUT_TEXT(att_field_owner_name, X.RDB$OWNER_NAME);
-			if (!X.RDB$RELATION_NAME.NULL)
-				PUT_TEXT(att_field_relation_name, X.RDB$RELATION_NAME);
-
-			put(tdgbl, att_end);
-
-		END_FOR;
-		ON_ERROR
-			general_on_error();
-		END_ERROR;
-	}
-	else if (tdgbl->runtimeODS >= DB_VERSION_DDL12)
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL12)
 	{
 		FOR (REQUEST_HANDLE req_handle1)
 			X IN RDB$FIELDS WITH
@@ -3739,6 +3484,10 @@ void write_global_fields()
 				PUT_TEXT(att_field_security_class, X.RDB$SECURITY_CLASS);
 			if (!X.RDB$OWNER_NAME.NULL)
 				PUT_TEXT(att_field_owner_name, X.RDB$OWNER_NAME);
+
+			// ODS 14
+			if (!X.RDB$RELATION_NAME.NULL)
+				PUT_TEXT(att_field_relation_name, X.RDB$RELATION_NAME);
 
 			put(tdgbl, att_end);
 		}
@@ -4680,7 +4429,7 @@ void write_packaged_type_fields()
 			burp_rel* relation = (burp_rel*) BURP_alloc_zero (sizeof(burp_rel));
 			relation->rel_next = tdgbl->relations;
 			tdgbl->relations = relation;
-			relation->rel_name_length = COPY(Z.RDB$RELATION_NAME, relation->rel_name);
+			relation->rel_name.object = Z.RDB$RELATION_NAME;
 			relation->rel_flags = 0;
 			put_relation (relation);
 		}

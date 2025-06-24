@@ -966,7 +966,8 @@ public:
 		  notNull(false),
 		  check(NULL)
 	{
-		fieldSource = typeName = typeClause->name;
+		typeName = typeClause->name;
+		fieldSource = QualifiedName(typeName, "");
 		fieldDeclarations.add(aNameType);
 	}
 
@@ -988,7 +989,8 @@ public:
 		  notNull(false),
 		  check(NULL)
 	{
-		fieldSource = typeName = tName;
+		typeName = tName;
+		fieldSource = QualifiedName(typeName, "");
 	}
 
 public:
@@ -999,7 +1001,7 @@ public:
 protected:
 	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_create_domain_failed) << fieldSource;
+		statusVector << Firebird::Arg::Gds(isc_dsql_create_domain_failed) << fieldSource.object;
 	}
 
 private:
@@ -1010,7 +1012,7 @@ public:
 	NestConst<ParameterClause> typeClause;
 	bool notNull;
 	NestConst<BoolSourceClause> check;
-	MetaName fieldSource;
+	QualifiedName fieldSource;
 	bool create;
 	bool alter;
 	MetaName package;

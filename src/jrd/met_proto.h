@@ -142,6 +142,6 @@ std::optional<ObjectType> MET_qualify_existing_name(Jrd::thread_db* tdbb, Jrd::Q
 bool MET_check_schema_exists(Jrd::thread_db* tdbb, const Jrd::MetaName& name);
 bool MET_get_ltt_index(Jrd::Attachment* attachment, const Jrd::QualifiedName& indexName,
 	Jrd::LocalTemporaryTable** outLtt = nullptr, Jrd::LocalTemporaryTable::Index** outIndex = nullptr);
-bool MET_get_composite_type(Jrd::thread_db*, MemoryPool&, const Jrd::MetaName&, dsc*, Jrd::MapFieldInfo* = nullptr);
+bool MET_get_composite_type(Jrd::thread_db*, MemoryPool&, const Jrd::QualifiedName&, dsc*, Jrd::MapFieldInfo* = nullptr);
 
 #endif // JRD_MET_PROTO_H

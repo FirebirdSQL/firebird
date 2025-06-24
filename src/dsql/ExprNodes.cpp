@@ -5197,7 +5197,7 @@ DmlNode* DefaultNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 				// If we are here, it means that the field is not found in the relation,
 				// so we will try to find it in the local type declarations.
 				// If it is not found there, we will rethrow the exception.
-				if (auto typeDeclaration = csb->csb_local_type_declarations.get(relationName))
+				if (auto typeDeclaration = csb->csb_local_type_declarations.get(relationName.object))
 				{
 					tdbb->tdbb_status_vector->clearException();
 					DefaultNode* node = FB_NEW_POOL(pool) DefaultNode(pool, relationName, fieldName);
@@ -6207,7 +6207,7 @@ DmlNode* FieldNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* cs
 		fieldNode->itemInfo->fieldId = fieldNode->fieldId;
 		fieldNode->itemInfo->compositeContextNum = fieldNode->contextNum;
 		fieldNode->itemInfo->nullable = true;
-		fieldNode->itemInfo->field.first = fieldNode->contextTypeName;
+		fieldNode->itemInfo->field.first = QualifiedName(fieldNode->contextTypeName, "");
 		fieldNode->itemInfo->field.second.printf("%d", fieldNode->fieldId);
 		fieldNode->itemInfo->compositeSubfield = true;
 
@@ -6636,7 +6636,7 @@ dsql_fld* FieldNode::resolveContext(DsqlCompilerScratch* dsqlScratch, const Qual
 		dsqlName.object = tableValueFunctionContext->funName;
 		outputField = tableValueFunctionContext->outputField;
 	}
-	else if (!(context->ctx_flags & CTX_rowtype_var) || !qualifier.hasData())
+	else if (!(context->ctx_flags & CTX_rowtype_var) || qualifier.object.isEmpty())
 		return nullptr;
 
 	// AB: If this context is a system generated context as in NEW/OLD inside
@@ -6675,7 +6675,7 @@ dsql_fld* FieldNode::resolveContext(DsqlCompilerScratch* dsqlScratch, const Qual
 
 	// there could be rowtype variable contexts without name, like function return rowtyped value
 	if (aliasName.object.isEmpty() && !(context->ctx_flags & CTX_rowtype_var))
-		aliasName = relation ? relation->rel_name : procedure->prc_name.identifier;
+		aliasName = relation ? relation->rel_name : procedure->prc_name;
 
 	// If a context qualifier is present, make sure this is the proper context
 	if (qualifier.object.hasData() && !PASS1_compare_alias(aliasName, qualifier))
@@ -14119,7 +14119,7 @@ ValueExprNode* UdfCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		}
 		else
 		{
-			ERRD_post(Arg::Gds(isc_fun_param_mismatch) << Arg::Str(name.toString()));
+			ERRD_post(Arg::Gds(isc_fun_param_mismatch) << Arg::Str(name.object.c_str()));
 		}
 
 		++pos;
@@ -14889,7 +14889,7 @@ ValueExprNode* RowValueExpressionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch
 
 		if (!valueExprNode)	// it's nullptr for DEFAULT
 		{
-			MetaName relationSource = "";
+			QualifiedName relationSource;
 			MetaName fieldName = "";
 			if (defaultSource)
 			{
@@ -14907,7 +14907,7 @@ ValueExprNode* RowValueExpressionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch
 						relationSource = rel->rel_name;
 					}
 				}
-				else if (defaultSource->packageName.hasData() || defaultSource->typeOfName.hasData())
+				else if (defaultSource->packageName.object.hasData() || defaultSource->typeOfName.object.hasData())
 				{
 					if (!METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, defaultSource->relationName, defaultSource->fld_sub_first))
 						dsqlScratch->genCompositeTypeFromCache(defaultSource, defaultSource->fld_sub_first);
@@ -14922,12 +14922,12 @@ ValueExprNode* RowValueExpressionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch
 					if (field)
 					{
 						fieldName = field->fld_name;
-						relationSource = defaultSource->relationName.hasData() ? defaultSource->relationName : defaultSource->typeOfName;
+						relationSource.object = defaultSource->relationName.object.hasData() ? defaultSource->relationName.object : defaultSource->typeOfName.object;
 					}
 				}
 			}
 
-			if (relationSource.isEmpty() || fieldName.isEmpty())
+			if (relationSource.object.isEmpty() || fieldName.isEmpty())
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
 						  Arg::Gds(isc_dsql_field_err) <<
 						  Arg::Gds(isc_random) << Arg::Str("DEFAULT"));

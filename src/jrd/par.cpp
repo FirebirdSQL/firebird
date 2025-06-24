@@ -621,8 +621,9 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 					auto fields_num = csb->csb_blr_reader.getWord() + 1;	// number of internal fields + parent field
 					auto context_num = csb->csb_blr_reader.getWord();
 
-					MetaName fieldSourceName;
-					csb->csb_blr_reader.getMetaName(fieldSourceName);
+					QualifiedName fieldSourceName;
+					csb->csb_blr_reader.getMetaName(fieldSourceName.object);
+					csb->qualifyExistingName(tdbb, fieldSourceName, obj_relation);
 
 					FieldInfo fieldInfo;
 					MET_get_composite_type(tdbb, csb->csb_pool, fieldSourceName, desc, itemInfo ? &csb->csb_map_field_info : nullptr);
@@ -630,9 +631,9 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 					if (itemInfo)
 					{
 						itemInfo->compositeContextNum = context_num;
-						csb->csb_map_context_type.put(context_num, fieldSourceName);
+						csb->csb_map_context_type.put(context_num, fieldSourceName.object);
 
-						MetaNamePair namePair(fieldSourceName, "");
+						QualifiedNameMetaNamePair namePair(fieldSourceName, "");
 
 						FieldInfo fieldInfo;
 						bool exist = csb->csb_map_field_info.get(namePair, fieldInfo);
@@ -654,7 +655,7 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 						else
 						{
 							CompilerScratch::Dependency dependency(obj_field);
-							dependency.name = FB_NEW_POOL(csb->csb_pool) MetaName(csb->csb_pool, fieldSourceName);
+							dependency.name = FB_NEW_POOL(csb->csb_pool) QualifiedName(csb->csb_pool, fieldSourceName);
 							csb->addDependency(dependency);
 						}
 					}
@@ -667,16 +668,17 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 					auto fields_num = csb->csb_blr_reader.getWord() + 1;	// number of internal fields + parent field
 					auto context_num = csb->csb_blr_reader.getWord();
 
-					MetaName* localTypeName = FB_NEW_POOL(csb->csb_pool) MetaName(csb->csb_pool);
-					csb->csb_blr_reader.getMetaName(*localTypeName);
+					QualifiedName localTypeName;
+					csb->csb_blr_reader.getMetaName(localTypeName.object);
+					csb->qualifyExistingName(tdbb, localTypeName, obj_relation);
 
 					if (itemInfo)
 					{
 						itemInfo->fullDomain = true;
 						itemInfo->compositeContextNum = context_num;
-						csb->csb_map_context_type.put(context_num, *localTypeName);
+						csb->csb_map_context_type.put(context_num, localTypeName.object);
 
-						MetaNamePair namePair(*localTypeName, "");
+						QualifiedNameMetaNamePair namePair(localTypeName, "");
 
 						FieldInfo fieldInfo;
 						bool exist = csb->csb_map_field_info.get(namePair, fieldInfo);
@@ -686,7 +688,7 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 						itemInfo->field = namePair;
 					}
 
-					auto localTypeNode = csb->csb_local_type_declarations.get(*localTypeName);
+					auto localTypeNode = csb->csb_local_type_declarations.get(localTypeName.object);
 					if (!localTypeNode)
 						PAR_error(csb, Arg::Gds(isc_dsql_datatype_err));
 

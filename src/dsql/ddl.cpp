@@ -198,18 +198,18 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 			dsqlScratch->qualifyExistingName(field->typeOfName, obj_field);
 
 			auto typeNameBackup = field->typeOfName;
-			if (!dsqlScratch->getTypeFromCache(field, field->typeOfName)
+			if (!dsqlScratch->getTypeFromCache(field, field->typeOfName.object)
 				&& !METD_get_packaged_type(dsqlScratch->getTransaction(), field, field->typeOfName,
-										field->packageName.hasData() ? field->packageName : dsqlScratch->package)
+										field->packageName.object.hasData() ? field->packageName : dsqlScratch->package)
 				&& !METD_get_domain(dsqlScratch->getTransaction(), field, field->typeOfName))
 			{
 				// Specified domain or source field does not exist
 				post_607(Arg::Gds(isc_dsql_domain_not_found) << field->typeOfName.toQuotedString());
 			}
 
-			if (field->packageName.hasData() && field->privateFlag && field->packageName.compare(dsqlScratch->package) != 0)
+			if (field->packageName.object.hasData() && field->privateFlag && field->packageName.object.compare(dsqlScratch->package.object) != 0)
 			{
-				string packagedTypeFullname(field->packageName.c_str() + string(".") + typeNameBackup.c_str());
+				string packagedTypeFullname(field->packageName.object.c_str() + string(".") + typeNameBackup.object.c_str());
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
 				Arg::Gds(isc_invalid_parameter_decl) <<
 				Arg::Gds(isc_packaged_type_notdef) << Arg::Str(packagedTypeFullname) << Arg::Str(field->fld_name));
@@ -229,9 +229,9 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 			field->charSet = METD_get_charset_name(dsqlScratch->getTransaction(), field->charSetId.value_or(CS_NONE));
 		}
 	}
-	else if (field->typeOfTable.hasData())
+	else if (field->typeOfTable.object.hasData())
 	{
-		if (METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, field->typeOfTable.c_str()))
+		if (METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, field->typeOfTable))
 		{
 			field->dtype = dtype_rowtype;
 		}
