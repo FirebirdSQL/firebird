@@ -1566,8 +1566,22 @@ bool METD_get_view_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 	{
 		QualifiedName relationName(X.RDB$RELATION_NAME, X.RDB$RELATION_SCHEMA_NAME);
 
+		ObjectsArray<QualifiedMetaString> contextName;
+		try
+		{
+			QualifiedMetaString::parseSchemaObjectListNoSep(X.RDB$CONTEXT_NAME, contextName);
+		}
+		catch (const status_exception&)
+		{
+			// Legacy (restored from backups) data stored in RDB$CONTEXT_NAME may cause exceptions.
+			contextName.clear();
+			contextName.push(QualifiedMetaString(X.RDB$CONTEXT_NAME));
+		}
+
 		if (PASS1_compare_alias(relationName, relation_or_alias) ||
-			(relation_or_alias.schema.isEmpty() && relation_or_alias.object == X.RDB$CONTEXT_NAME))
+			(relation_or_alias.schema.isEmpty() &&
+				contextName.getCount() == 1 &&
+				PASS1_compare_alias(contextName[0], relation_or_alias)))
 		{
 			if ((relation = METD_get_relation(transaction, dsqlScratch, relationName)))
 				return true;
