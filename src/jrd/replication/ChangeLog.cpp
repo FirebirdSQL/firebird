@@ -73,7 +73,7 @@ namespace
 
 	const unsigned COPY_BLOCK_SIZE = 64 * 1024; // 64 KB
 
-	const char* FILENAME_PATTERN = "%s.journal-%09" UQUADFORMAT;
+	const char* FILENAME_PATTERN = "%s_%s.journal-%09" UQUADFORMAT;
 
 	const char* FILENAME_WILDCARD = "$(filename)";
 	const char* PATHNAME_WILDCARD = "$(pathname)";
@@ -885,6 +885,26 @@ void ChangeLog::bgArchiver()
 	}
 }
 
+void ChangeLog::cleanup()
+{
+	LockGuard guard(this);
+
+	while (m_segments.hasData())
+	{
+		const auto segment = m_segments.pop();
+
+		if (segment->getState() == SEGMENT_STATE_USED && segment->hasData())
+			segment->setState(SEGMENT_STATE_FULL);
+
+		if (segment->getState() == SEGMENT_STATE_FULL)
+			archiveSegment(segment);
+
+		const PathName filename = segment->getPathName();
+		segment->release();
+		unlink(filename.c_str());
+	}
+}
+
 void ChangeLog::initSegments()
 {
 	clearSegments();
@@ -939,7 +959,7 @@ ChangeLog::Segment* ChangeLog::createSegment()
 	const auto sequence = state->sequence + 1;
 
 	PathName filename;
-	filename.printf(FILENAME_PATTERN, m_config->filePrefix.c_str(), sequence);
+	filename.printf(FILENAME_PATTERN, m_config->filePrefix.c_str(), m_guid.toString(false).c_str(), sequence);
 	filename = m_config->journalDirectory + filename;
 
 	const auto fd = os_utils::openCreateSharedFile(filename.c_str(), O_EXCL | O_BINARY);
@@ -989,7 +1009,7 @@ ChangeLog::Segment* ChangeLog::reuseSegment(ChangeLog::Segment* segment)
 	// Attempt to rename the backing file
 
 	PathName newname;
-	newname.printf(FILENAME_PATTERN, m_config->filePrefix.c_str(), sequence);
+	newname.printf(FILENAME_PATTERN, m_config->filePrefix.c_str(), m_guid.toString(false).c_str(), sequence);
 	newname = m_config->journalDirectory + newname;
 
 	// If renaming fails, then we just create a new file.

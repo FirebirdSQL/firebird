@@ -213,6 +213,7 @@ namespace Replication
 		FB_UINT64 write(ULONG length, const UCHAR* data, bool sync);
 
 		void bgArchiver();
+		void cleanup();
 
 	private:
 		void initSharedFile();

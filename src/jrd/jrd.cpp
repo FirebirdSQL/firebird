@@ -3116,6 +3116,8 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 				if (attachment2)
 				{
 					allow_overwrite = attachment2->getHandle()->locksmith(tdbb, DROP_DATABASE);
+					if (allow_overwrite)
+						REPL_journal_cleanup(attachment2->getHandle()->att_database);
 					attachment2->detach(user_status);
 				}
 				else
@@ -3603,6 +3605,9 @@ void JAttachment::internalDropDatabase(CheckStatusWrapper* user_status)
 				CCH_release_exclusive(tdbb);
 				throw;
 			}
+
+			// Unlink active replication segments
+			REPL_journal_cleanup(dbb);
 
 			// Unlink attachment from database
 			release_attachment(tdbb, attachment, &threadGuard);
