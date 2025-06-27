@@ -9982,6 +9982,19 @@ ParameterNode* ParameterNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 			status_exception::raise(Arg::Gds(isc_ctxnotdef) << Arg::Gds(isc_random) << Arg::Str("Outer parameter has no outer scratch"));
 	}
 
+	const dsc& desc = format->fmt_desc[argNumber];
+	if (desc.isText())
+	{
+		// Remember expected maximum length in characters to be able to recognize format of the real data buffer later
+		const CharSet* charSet = INTL_charset_lookup(tdbb, desc.getCharSet());
+		USHORT length = TEXT_LEN(&desc);
+		if (charSet->isMultiByte())
+		{
+			length /= charSet->maxBytesPerChar();
+		}
+		maxCharLength = length;
+	}
+
 	return this;
 }
 
@@ -10045,9 +10058,6 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 	{
 		if (impureForOuter)
 			EVL_make_value(tdbb, retDesc, impureForOuter);
-
-		if (retDesc->dsc_dtype == dtype_text)
-			INTL_adjust_text_descriptor(tdbb, retDesc);
 	}
 
 	auto impureFlags = paramRequest->getImpure<USHORT>(
@@ -10057,7 +10067,6 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 	{
 		if (!(request->req_flags & req_null))
 		{
-			USHORT maxLen = desc->dsc_length;	// not adjusted length
 
 			if (DTYPE_IS_TEXT(retDesc->dsc_dtype))
 			{
@@ -10067,8 +10076,7 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 				switch (retDesc->dsc_dtype)
 				{
 					case dtype_cstring:
-						len = static_cast<USHORT>(strnlen((const char*) p, maxLen));
-						--maxLen;
+						len = static_cast<USHORT>(strnlen((const char*) p, desc->dsc_length));
 						break;
 
 					case dtype_text:
@@ -10078,14 +10086,15 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 					case dtype_varying:
 						len = reinterpret_cast<const vary*>(p)->vary_length;
 						p += sizeof(USHORT);
-						maxLen -= sizeof(USHORT);
 						break;
 				}
 
 				auto charSet = INTL_charset_lookup(tdbb, DSC_GET_CHARSET(retDesc));
 
 				EngineCallbacks::instance->validateData(charSet, len, p);
-				EngineCallbacks::instance->validateLength(charSet, DSC_GET_CHARSET(retDesc), len, p, maxLen);
+
+				// Validation of length for user-provided data against user-provided metadata makes a little sense here. Leave it to the real assignment.
+				// Besides in some cases overlong values are valid. For example `field like ?`
 			}
 			else if (retDesc->isBlob())
 			{
@@ -10112,6 +10121,25 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 		}
 
 		*impureFlags |= VLU_checked;
+	}
+
+	// This block is after validation because having here a malformed data would produce a wrong result
+	if (!(request->req_flags & req_null) && retDesc->dsc_dtype == dtype_text && maxCharLength != 0)
+	{
+		// Data in the message buffer can be in a padded Firebird format or in an application-defined format with real length.
+		// API provides no way to distinguish these cases so we must use some heuristics:
+		// perform the adjustment only if the data length matches the length that would be expected in the padded format.
+
+		const CharSet* charSet = INTL_charset_lookup(tdbb, retDesc->getCharSet());
+
+		if (charSet->isMultiByte() && maxCharLength * charSet->maxBytesPerChar() == retDesc->dsc_length)
+		{
+			Firebird::HalfStaticArray<UCHAR, BUFFER_SMALL> buffer;
+
+			retDesc->dsc_length = charSet->substring(retDesc->dsc_length, retDesc->dsc_address,
+				retDesc->dsc_length, buffer.getBuffer(retDesc->dsc_length), 0,
+				maxCharLength);
+		}
 	}
 
 	return (request->req_flags & req_null) ? nullptr : retDesc;
