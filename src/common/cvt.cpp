@@ -3169,10 +3169,10 @@ Int128 CVT_get_int128(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorF
 	Decimal128 tmp;
 	double d, eps;
 
-	static const double I128_MIN_dbl = -1.701411834604692e+38;
-	static const double I128_MAX_dbl =  1.701411834604692e+38;
+	static const double I128_MIN_dbl = -1.7014118346046923e+38;
+	static const double I128_MAX_dbl =  1.7014118346046921e+38;
 	static const CDecimal128 I128_MIN_dcft("-1.701411834604692317316873037158841E+38", decSt);
-	static const CDecimal128 I128_MAX_dcft("1.701411834604692317316873037158841E+38", decSt);
+	static const CDecimal128 I128_MAX_dcft( "1.701411834604692317316873037158841E+38", decSt);
 	static const CDecimal128 DecFlt_05("0.5", decSt);
 
 	// adjust exact numeric values to same scaling
