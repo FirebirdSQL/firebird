@@ -121,34 +121,27 @@ public:
 		memcpy(&m_data, buffer, SIZE);
 	}
 
-	[[deprecated("use toString(char* buffer, size_t sz)")]]
-	void toString(char* buffer) const
+	template<typename T>
+	void toString(T& str) const
 	{
-		sprintf(buffer, GUID_FORMAT,
+		str.printf(GUID_FORMAT,
 			m_data.Data1, m_data.Data2, m_data.Data3,
 			m_data.Data4[0], m_data.Data4[1], m_data.Data4[2], m_data.Data4[3],
 			m_data.Data4[4], m_data.Data4[5], m_data.Data4[6], m_data.Data4[7]);
 	}
 
-	void toString(char* buffer, size_t sz) const
-	{
-		snprintf(buffer, sz, GUID_FORMAT,
-			m_data.Data1, m_data.Data2, m_data.Data3,
-			m_data.Data4[0], m_data.Data4[1], m_data.Data4[2], m_data.Data4[3],
-			m_data.Data4[4], m_data.Data4[5], m_data.Data4[6], m_data.Data4[7]);
-	}
 
 	Firebird::string toString() const
 	{
 		Firebird::string result;
-		toString(result.getBuffer(GUID_BUFF_SIZE - 1), GUID_BUFF_SIZE);
+		toString(result);
 		return result;
 	}
 
 	Firebird::PathName toPathName() const
 	{
 		Firebird::PathName result;
-		toString(result.getBuffer(GUID_BUFF_SIZE - 1), GUID_BUFF_SIZE);
+		toString(result);
 		return result;
 	}
 

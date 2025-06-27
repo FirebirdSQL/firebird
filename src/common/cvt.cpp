@@ -2369,17 +2369,18 @@ static void datetime_to_text(const dsc* from, dsc* to, Callbacks* cb)
 
 	if (!from->isTime())
 	{
-		// yyyy-mm-dd OR dd-MMM-yyyy + nul-termination
-		char dateStr[11 + 1];
+		string dateStr;
+		// yyyy-mm-dd OR dd-MMM-yyyy
+		dateStr.reserve(11);
 		if (from->dsc_dtype == dtype_sql_date || !version4)
 		{
-			snprintf(dateStr, sizeof(dateStr), "%4.4d-%2.2d-%2.2d",
+			dateStr.printf("%4.4d-%2.2d-%2.2d",
 					times.tm_year + 1900, times.tm_mon + 1, times.tm_mday);
 		}
 		else
 		{
 			// Prior to BLR version 5 timestamps were converted to text in the dd-MMM-yyyy format
-			snprintf(dateStr, sizeof(dateStr), "%2.2d-%.3s-%4.4d",
+			dateStr.printf("%2.2d-%.3s-%4.4d",
 					times.tm_mday,
 					FB_LONG_MONTHS_UPPER[times.tm_mon], times.tm_year + 1900);
 		}
@@ -2395,17 +2396,18 @@ static void datetime_to_text(const dsc* from, dsc* to, Callbacks* cb)
 
 	if (from->dsc_dtype != dtype_sql_date)
 	{
-		// hh:mm:ss.tttt + nul-termination
-		char timeStr[13 + 1];
+		string timeStr;
+		// hh:mm:ss.tttt
+		timeStr.reserve(13);
 		if (from->isTime() || !version4)
 		{
-			snprintf(timeStr, sizeof(timeStr), "%2.2d:%2.2d:%2.2d.%4.4d",
+			timeStr.printf("%2.2d:%2.2d:%2.2d.%4.4d",
 					times.tm_hour, times.tm_min, times.tm_sec, fractions);
 		}
 		else if (times.tm_hour || times.tm_min || times.tm_sec || fractions)
 		{
 			// Timestamp formating prior to BLR Version 5 is slightly different
-			snprintf(timeStr, sizeof(timeStr), " %d:%.2d:%.2d.%.4d",
+			timeStr.printf(" %d:%.2d:%.2d.%.4d",
 					times.tm_hour, times.tm_min, times.tm_sec, fractions);
 		}
 		temp.append(timeStr);
