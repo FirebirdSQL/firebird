@@ -1511,7 +1511,8 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 				{
 					MODIFY SCH
 					{
-						sprintf(SCH.RDB$SECURITY_CLASS, "%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
+						snprintf(SCH.RDB$SECURITY_CLASS, sizeof(SCH.RDB$SECURITY_CLASS), 
+							"%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
 							DPM_gen_id(tdbb,
 								MET_lookup_generator(tdbb,
 									QualifiedName(SQL_SECCLASS_GENERATOR, SYSTEM_SCHEMA)), false, 1));
