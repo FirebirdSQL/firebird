@@ -61,11 +61,13 @@ struct ctl
 	SSHORT ctl_level;
 	TEXT ctl_buffer[PRETTY_BUFFER_SIZE];
 
-	void reset() noexcept {
+	void reset() noexcept
+	{
 		ctl_ptr = ctl_buffer;
 	}
 
-	size_t remaining() const noexcept {
+	size_t remaining() const noexcept
+	{
 		if (!ctl_ptr)
 			return 0;
 		return sizeof(ctl_buffer) - (ctl_ptr - ctl_buffer);
