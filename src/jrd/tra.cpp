@@ -990,8 +990,8 @@ void TRA_post_resources(thread_db* tdbb, jrd_tra* transaction, ResourceList& res
 					rsc->rsc_routine->addRef();
 #ifdef DEBUG_PROCS
 					{
-						char buffer[256];
-						sprintf(buffer,
+						char buffer[BUFFER_MEDIUM];
+						snprintf(buffer, sizeof(buffer),
 								"Called from TRA_post_resources():\n\t Incrementing use count of %s\n",
 								rsc->rsc_routine->prc_name->c_str());
 						JRD_print_procedure_info(tdbb, buffer);

@@ -246,8 +246,7 @@ void DsqlCompilerScratch::putDtype(const TypeClause* field, bool useSubType)
 	if (field->dtype > FB_NELEM(blr_dtypes) || !blr_dtypes[field->dtype])
 	{
 		SCHAR buffer[100];
-
-		sprintf(buffer, "Invalid dtype %d in BlockNode::putDtype", field->dtype);
+		snprintf(buffer, sizeof(buffer), "Invalid dtype %d in BlockNode::putDtype", field->dtype);
 		ERRD_bugcheck(buffer);
 	}
 #endif
@@ -394,8 +393,7 @@ void DsqlCompilerScratch::putType(const TypeClause* type, bool useSubType)
 	if (type->dtype > FB_NELEM(blr_dtypes) || !blr_dtypes[type->dtype])
 	{
 		SCHAR buffer[100];
-
-		sprintf(buffer, "Invalid dtype %d in put_dtype", type->dtype);
+		snprintf(buffer, sizeof(buffer), "Invalid dtype %d in put_dtype", type->dtype);
 		ERRD_bugcheck(buffer);
 	}
 #endif

@@ -60,6 +60,18 @@ struct ctl
 	SSHORT ctl_language;
 	SSHORT ctl_level;
 	TEXT ctl_buffer[PRETTY_BUFFER_SIZE];
+
+	void reset() noexcept
+	{
+		ctl_ptr = ctl_buffer;
+	}
+
+	size_t remaining() const noexcept
+	{
+		if (!ctl_ptr)
+			return 0;
+		return sizeof(ctl_buffer) - (ctl_ptr - ctl_buffer);
+	}
 };
 
 
@@ -80,7 +92,7 @@ static int print_word(ctl*);
 
 static inline void CHECK_BUFFER(ctl* control, SSHORT offset)
 {
-	if (control->ctl_ptr > control->ctl_buffer + sizeof(control->ctl_buffer) - 20)
+	if (control->remaining() < 20)
 		print_line(control, offset);
 }
 
@@ -138,8 +150,8 @@ int PRETTY_print_cdb(const UCHAR* blr, FPTR_PRINT_CALLBACK routine, void* user_a
 	control->ctl_routine = routine;
 	control->ctl_user_arg = user_arg;
 	control->ctl_blr = control->ctl_blr_start = blr;
-	control->ctl_ptr = control->ctl_buffer;
 	control->ctl_language = language;
+	control->reset();
 
 	SSHORT level = 0;
 	indent(control, level);
@@ -147,9 +159,9 @@ int PRETTY_print_cdb(const UCHAR* blr, FPTR_PRINT_CALLBACK routine, void* user_a
 
 	SCHAR temp[32];
 	if (*control->ctl_blr)
-		sprintf(temp, "gds__dpb_version%d, ", i);
+		snprintf(temp, sizeof(temp), "gds__dpb_version%d, ", i);
 	else
-		sprintf(temp, "gds__dpb_version%d", i);
+		snprintf(temp, sizeof(temp), "gds__dpb_version%d", i);
 	blr_format(control, temp);
 
 	SSHORT offset = 0;
@@ -199,8 +211,8 @@ int PRETTY_print_dyn(const UCHAR* blr, FPTR_PRINT_CALLBACK routine, void* user_a
 	control->ctl_routine = routine;
 	control->ctl_user_arg = user_arg;
 	control->ctl_blr = control->ctl_blr_start = blr;
-	control->ctl_ptr = control->ctl_buffer;
 	control->ctl_language = language;
+	control->reset();
 
 	const SSHORT version = BLR_BYTE;
 
@@ -241,8 +253,8 @@ int PRETTY_print_sdl(const UCHAR* blr, FPTR_PRINT_CALLBACK routine, void *user_a
 	control->ctl_routine = routine;
 	control->ctl_user_arg = user_arg;
 	control->ctl_blr = control->ctl_blr_start = blr;
-	control->ctl_ptr = control->ctl_buffer;
 	control->ctl_language = language;
+	control->reset();
 
 	const SSHORT version = BLR_BYTE;
 
@@ -275,10 +287,9 @@ static int blr_format(ctl* control, const char *string, ...)
 	va_list ptr;
 
 	va_start(ptr, string);
-	vsprintf(control->ctl_ptr, string, ptr);
+	vsnprintf(control->ctl_ptr, control->remaining(), string, ptr);
 	va_end(ptr);
-	while (*control->ctl_ptr)
-		control->ctl_ptr++;
+	ADVANCE_PTR(control->ctl_ptr);
 
 	return 0;
 }
@@ -293,7 +304,7 @@ static int error( ctl* control, SSHORT offset, const TEXT* string, int arg)
 {
 
 	print_line(control, offset);
-	sprintf(control->ctl_ptr, string, arg);
+	snprintf(control->ctl_ptr, control->remaining(), string, arg);
 	fprintf(stderr, "%s", control->ctl_ptr);
 	ADVANCE_PTR(control->ctl_ptr);
 	print_line(control, offset);
@@ -514,7 +525,8 @@ static void print_blr_line(void* arg, SSHORT offset, const char* line)
 static int print_byte( ctl* control)
 {
 	const UCHAR v = BLR_BYTE;
-	sprintf(control->ctl_ptr, control->ctl_language ? "chr(%d), " : "%d, ", v);
+	snprintf(control->ctl_ptr, control->remaining(),
+		control->ctl_language ? "chr(%d), " : "%d, ", v);
 	ADVANCE_PTR(control->ctl_ptr);
 
 	return v;
@@ -532,7 +544,8 @@ static int print_char( ctl* control, SSHORT offset)
 	const bool printable = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
 		(c >= '0' && c <= '9') || c == '$' || c == '_';
 
-	sprintf(control->ctl_ptr, printable ? "'%c'," : control->ctl_language ? "chr(%d)," : "%d,", c);
+	snprintf(control->ctl_ptr, control->remaining(),
+		printable ? "'%c'," : control->ctl_language ? "chr(%d)," : "%d,", c);
 	ADVANCE_PTR(control->ctl_ptr);
 
 	CHECK_BUFFER(control, offset);
@@ -732,10 +745,9 @@ static int print_dyn_verb( ctl* control, SSHORT level)
 
 static int print_line( ctl* control, SSHORT offset)
 {
-
 	*control->ctl_ptr = 0;
 	(*control->ctl_routine) (control->ctl_user_arg, offset, control->ctl_buffer);
-	control->ctl_ptr = control->ctl_buffer;
+	control->reset();
 	return 0;
 }
 
@@ -751,9 +763,9 @@ static SLONG print_long( ctl* control)
 	const UCHAR v2 = BLR_BYTE;
 	const UCHAR v3 = BLR_BYTE;
 	const UCHAR v4 = BLR_BYTE;
-	sprintf(control->ctl_ptr, control->ctl_language ?
-			"chr(%d),chr(%d),chr(%d),chr(%d) " : "%d,%d,%d,%d, ",
-			v1, v2, v3, v4);
+	snprintf(control->ctl_ptr, control->remaining(),
+		control->ctl_language ? "chr(%d),chr(%d),chr(%d),chr(%d) " : "%d,%d,%d,%d, ",
+		v1, v2, v3, v4);
 	ADVANCE_PTR(control->ctl_ptr);
 
 	return v1 | (v2 << 8) | (v3 << 16) | (v4 << 24);
@@ -893,7 +905,8 @@ static int print_word( ctl* control)
 {
 	const UCHAR v1 = BLR_BYTE;
 	const UCHAR v2 = BLR_BYTE;
-	sprintf(control->ctl_ptr, control->ctl_language ? "chr(%d),chr(%d), " : "%d,%d, ", v1, v2);
+	snprintf(control->ctl_ptr, control->remaining(),
+		control->ctl_language ? "chr(%d),chr(%d), " : "%d,%d, ", v1, v2);
 	ADVANCE_PTR(control->ctl_ptr);
 
 	return (v2 << 8) | v1;

@@ -1212,7 +1212,7 @@ RseNode* PASS1_derived_table(DsqlCompilerScratch* dsqlScratch, SelectExprNode* i
 
 				// Construct dummy fieldname
 				char fieldname[25];
-				sprintf(fieldname, "f%u", static_cast<unsigned>(count));
+				snprintf(fieldname, sizeof(fieldname), "f%u", static_cast<unsigned>(count));
 
 				// Make new derived field node.
 

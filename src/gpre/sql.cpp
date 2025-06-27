@@ -853,8 +853,6 @@ gpre_prc* SQL_procedure(gpre_req* request,
 					   const TEXT* owner_string,
 					   bool err_flag)
 {
-	SCHAR s[ERROR_LENGTH];
-
 	if (db_string && db_string[0])
 	{
 		// a database was specified for the procedure
@@ -890,8 +888,8 @@ gpre_prc* SQL_procedure(gpre_req* request,
 				if (procedure)
 				{
 					// relation was found in more than one database
-
-					sprintf(s, "PROCEDURE %s is ambiguous", prc_string);
+					SCHAR s[ERROR_LENGTH];
+					snprintf(s, sizeof(s), "PROCEDURE %s is ambiguous", prc_string);
 					PAR_error(s);
 				}
 				else
@@ -907,10 +905,11 @@ gpre_prc* SQL_procedure(gpre_req* request,
 	{
 		if (!err_flag)
 			return NULL;
+		SCHAR s[ERROR_LENGTH];
 		if (owner_string[0])
-			sprintf(s, "PROCEDURE %s.%s not defined", owner_string, prc_string);
+			snprintf(s, sizeof(s), "PROCEDURE %s.%s not defined", owner_string, prc_string);
 		else
-			sprintf(s, "PROCEDURE %s not defined", prc_string);
+			snprintf(s, sizeof(s), "PROCEDURE %s not defined", prc_string);
 		PAR_error(s);
 	}
 
@@ -947,7 +946,6 @@ gpre_rel* SQL_relation(gpre_req* request,
 			request->req_database = (gpre_dbb*) symbol->sym_object;
 	}
 
-	SCHAR s[ERROR_LENGTH];
 	gpre_rel* relation = NULL;
 
 	if (request->req_database)
@@ -966,8 +964,8 @@ gpre_rel* SQL_relation(gpre_req* request,
 				if (relation)
 				{
 					// relation was found in more than one database
-
-					sprintf(s, "TABLE %s is ambiguous", rel_string);
+					SCHAR s[ERROR_LENGTH];
+					snprintf(s, sizeof(s), "TABLE %s is ambiguous", rel_string);
 					PAR_error(s);
 				}
 				else
@@ -983,10 +981,11 @@ gpre_rel* SQL_relation(gpre_req* request,
 	{
 		if (!err_flag)
 			return (NULL);
+		SCHAR s[ERROR_LENGTH];
 		if (owner_string[0])
-			sprintf(s, "TABLE %s.%s not defined", owner_string, rel_string);
+			snprintf(s, sizeof(s), "TABLE %s.%s not defined", owner_string, rel_string);
 		else
-			sprintf(s, "TABLE %s not defined", rel_string);
+			snprintf(s, sizeof(s), "TABLE %s not defined", rel_string);
 		PAR_error(s);
 	}
 
@@ -1988,9 +1987,9 @@ static act* act_create_shadow()
 		if (!length && !file->fil_start)
 		{
 			TEXT err_string[1024];
-			sprintf(err_string,
-					"Preceding file did not specify length, so %s must include starting page number",
-					file->fil_name);
+			snprintf(err_string, sizeof(err_string),
+				"Preceding file did not specify length, so %s must include starting page number",
+				file->fil_name);
 			PAR_error(err_string);
 		}
 		length = file->fil_length;
@@ -3017,8 +3016,8 @@ static act* act_execute()
 		if (gpreGlob.isc_databases && gpreGlob.isc_databases->dbb_next)
 		{
 			TEXT s[ERROR_LENGTH];
-			sprintf(s, "Executing dynamic SQL statement in context of database %s",
-					gpreGlob.isc_databases->dbb_name->sym_string);
+			snprintf(s, sizeof(s), "Executing dynamic SQL statement in context of database %s",
+				gpreGlob.isc_databases->dbb_name->sym_string);
 			CPR_warn(s);
 		}
 		dyn* statement = (dyn*) MSC_alloc(DYN_LEN);
@@ -3250,7 +3249,6 @@ static act* act_grant_revoke(act_t type)
 	gpre_usn* usernames = 0;
 	gpre_usn* user = 0;
 	USHORT user_dyn = 0;
-	SCHAR s[ERROR_LENGTH];
 
 	while (true)
 	{
@@ -3266,7 +3264,8 @@ static act* act_grant_revoke(act_t type)
 			SQL_relation_name(r_name, db_name, owner_name);
 			if (!MET_trigger_exists(request->req_database, r_name))
 			{
-				sprintf(s, "TRIGGER %s not defined", r_name);
+				SCHAR s[ERROR_LENGTH];
+				snprintf(s, sizeof(s), "TRIGGER %s not defined", r_name);
 				PAR_error(s);
 			}
 			user_dyn = isc_dyn_grant_trig;
@@ -3277,7 +3276,8 @@ static act* act_grant_revoke(act_t type)
 			SQL_relation_name(r_name, db_name, owner_name);
 			if (!MET_get_view_relation(request, r_name, relation_name->str_string, 0))
 			{
-				sprintf(s, "VIEW %s not defined on table %s", r_name, relation_name->str_string);
+				SCHAR s[ERROR_LENGTH];
+				snprintf(s, sizeof(s), "VIEW %s not defined on table %s", r_name, relation_name->str_string);
 				PAR_error(s);
 			}
 			user_dyn = isc_dyn_grant_view;
@@ -4181,16 +4181,17 @@ static act* act_set_dialect()
 		gpreGlob.sw_ods_version < 10)
 	{
 		char warn_mesg[100];
-		sprintf(warn_mesg, "Pre 6.0 database. Cannot use dialect %d, Resetting to %d\n",
-				dialect, SQL_DIALECT_V5);
+		snprintf(warn_mesg, sizeof(warn_mesg),
+			"Pre 6.0 database. Cannot use dialect %d, Resetting to %d\n", dialect, SQL_DIALECT_V5);
 		dialect = SQL_DIALECT_V5;
 		CPR_warn(warn_mesg);
 	}
 	else if (gpreGlob.isc_databases && dialect != gpreGlob.compiletime_db_dialect)
 	{
 		char warn_mesg[100];
-		sprintf(warn_mesg, "Client dialect set to %d. Compiletime database dialect is %d\n",
-				dialect, gpreGlob.compiletime_db_dialect);
+		snprintf(warn_mesg, sizeof(warn_mesg),
+			"Client dialect set to %d. Compiletime database dialect is %d\n",
+			dialect, gpreGlob.compiletime_db_dialect);
 		CPR_warn(warn_mesg);
 	}
 
@@ -6459,15 +6460,16 @@ static USHORT resolve_dtypes(kwwords_t typ, bool sql_date)
 			case 1:
 				return dtype_timestamp;
 			case 2:
-				sprintf(err_mesg, "Encountered column type DATE which is ambiguous in dialect %d\n",
-						gpreGlob.sw_sql_dialect);
+				snprintf(err_mesg, sizeof(err_mesg),
+					"Encountered column type DATE which is ambiguous in dialect %d\n",
+					gpreGlob.sw_sql_dialect);
 				PAR_error(err_mesg);
 				return dtype_unknown;	// TMN: FIX FIX
-				// return;
+
 			default:
-				sprintf(err_mesg,
-						"Encountered column type DATE which is not supported in ods version %d\n",
-						gpreGlob.sw_ods_version);
+				snprintf(err_mesg, sizeof(err_mesg),
+					"Encountered column type DATE which is not supported in ods version %d\n",
+					gpreGlob.sw_ods_version);
 				PAR_error(err_mesg);
 			}
 		else
@@ -6481,8 +6483,9 @@ static USHORT resolve_dtypes(kwwords_t typ, bool sql_date)
 			case 1:
 				return dtype_timestamp;
 			case 2:
-				sprintf(err_mesg, "Encountered column type DATE which is ambiguous in dialect %d\n",
-						gpreGlob.sw_sql_dialect);
+				snprintf(err_mesg, sizeof(err_mesg),
+					"Encountered column type DATE which is ambiguous in dialect %d\n",
+					gpreGlob.sw_sql_dialect);
 				PAR_error(err_mesg);
 				return dtype_unknown;	// TMN: FIX FIX
 				// return;
@@ -6495,8 +6498,8 @@ static USHORT resolve_dtypes(kwwords_t typ, bool sql_date)
 	case KW_TIME:
 		if ((gpreGlob.sw_ods_version < 10) || (gpreGlob.sw_server_version < 6))
 		{
-			sprintf(err_mesg,
-					"Encountered column type TIME which is not supported by pre 6.0 Servers\n");
+			snprintf(err_mesg, sizeof(err_mesg),
+				"Encountered column type TIME which is not supported by pre 6.0 Servers\n");
 			PAR_error(err_mesg);
 			return dtype_unknown;	// TMN: FIX FIX
 			// return;
@@ -6507,7 +6510,7 @@ static USHORT resolve_dtypes(kwwords_t typ, bool sql_date)
 		return dtype_timestamp;
 
 	default:
-		sprintf(err_mesg, "resolve_dtypes(): Unknown dtype %d\n", typ);
+		snprintf(err_mesg, sizeof(err_mesg), "resolve_dtypes(): Unknown dtype %d\n", typ);
 		PAR_error(err_mesg);
 		break;
 	}
@@ -6827,9 +6830,7 @@ void SQL_resolve_identifier( const TEXT* err_mesg, TEXT* str_in, int in_size)
 
 void SQL_dialect1_bad_type(USHORT field_dtype)
 {
-	char buffer[200];
-	const char* s = "unknown";
-
+	const char* s;
 	switch (field_dtype)
 	{
 	case dtype_sql_date:
@@ -6841,7 +6842,12 @@ void SQL_dialect1_bad_type(USHORT field_dtype)
 	case dtype_int64:
 		s = "64-bit numeric";
 		break;
+	default:
+		s = "unknown";
+		break;
 	}
-	sprintf(buffer, "Client SQL dialect 1 does not support reference to the %s datatype", s);
+	char buffer[200];
+	snprintf(buffer, sizeof(buffer),
+		"Client SQL dialect 1 does not support reference to the %s datatype", s);
 	PAR_error(buffer);
 }

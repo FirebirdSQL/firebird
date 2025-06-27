@@ -977,8 +977,8 @@ static SLONG safe_interpret(char* const s, const FB_SIZE_T bufsize,
 					{
 						if (legacy && strchr(messages[i].code_text, '%'))
 						{
-							sprintf(s, messages[i].code_text,
-									args[0], args[1], args[2], args[3], args[4]);
+							snprintf(s, bufsize, messages[i].code_text,
+								args[0], args[1], args[2], args[3], args[4]);
 						}
 						else
 							MsgFormat::MsgPrint(s, bufsize, messages[i].code_text, safe);
@@ -988,7 +988,7 @@ static SLONG safe_interpret(char* const s, const FB_SIZE_T bufsize,
 				}
 
 				if (!found) {
-					sprintf(s, "unknown ISC error %" SLONGFORMAT, (SLONG) code);	// TXNN
+					snprintf(s, bufsize, "unknown ISC error %" SLONGFORMAT, (SLONG) code);	// TXNN
 				}
 			}
 		}
@@ -1013,11 +1013,11 @@ static SLONG safe_interpret(char* const s, const FB_SIZE_T bufsize,
 		break;
 
 	case isc_arg_dos:
-		sprintf(s, "unknown dos error %" SLONGFORMAT, (SLONG) code);	// TXNN
+		snprintf(s, bufsize, "unknown dos error %" SLONGFORMAT, (SLONG) code);	// TXNN
 		break;
 
 	case isc_arg_next_mach:
-		sprintf(s, "next/mach error %" SLONGFORMAT, (SLONG) code);	// AP
+		snprintf(s, bufsize, "next/mach error %" SLONGFORMAT, (SLONG) code);	// AP
 		break;
 
 	case isc_arg_win32:
@@ -1029,7 +1029,7 @@ static SLONG safe_interpret(char* const s, const FB_SIZE_T bufsize,
 						   s, bufsize, NULL))
 #endif
 		{
-			sprintf(s, "unknown Win32 error %" SLONGFORMAT, (SLONG) code);	// TXNN
+			snprintf(s, bufsize, "unknown Win32 error %" SLONGFORMAT, (SLONG) code);	// TXNN
 		}
 		break;
 
@@ -2843,7 +2843,7 @@ void API_ROUTINE isc_print_sqlerror(SSHORT sqlcode, const ISC_STATUS* status)
  **************************************/
 	TEXT error_buffer[192];
 
-	sprintf(error_buffer, "SQLCODE: %d\nSQL ERROR:\n", sqlcode);
+	snprintf(error_buffer, sizeof(error_buffer), "SQLCODE: %d\nSQL ERROR:\n", sqlcode);
 	TEXT* p = error_buffer;
 	while (*p)
 		p++;

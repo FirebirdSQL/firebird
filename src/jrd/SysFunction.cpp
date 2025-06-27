@@ -6776,7 +6776,7 @@ dsc* evlUuidToChar(thread_db* tdbb, const SysFunction* function, const NestValue
 	}
 
 	UCHAR buffer[GUID_BUFF_SIZE];
-	sprintf(reinterpret_cast<char*>(buffer),
+	snprintf(reinterpret_cast<char*>(buffer), sizeof(buffer),
 		Uuid::STR_FORMAT,
 		data[0], data[1], data[2], data[3], data[4],
 		data[5], data[6], data[7], data[8], data[9],

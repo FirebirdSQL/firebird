@@ -193,7 +193,7 @@ void main( int argc, char **argv)
 	{
 		if (*r > 1 || *w > 1)
 		{
-			sprintf(string, "  Read: %d, write: %d", *r, *w);
+			snprintf(string, sizeof(string), "  Read: %d, write: %d", *r, *w);
 			if (page = db_read(n))
 				analyse(n, string, page, 0);
 		}

@@ -147,7 +147,7 @@ void CNTL_shutdown_service(const TEXT* message)
 	const char* strings[2];
 	char buffer[BUFFER_SMALL];
 
-	sprintf(buffer, "%s error: %lu", service_name->c_str(), GetLastError());
+	snprintf(buffer, sizeof(buffer), "%s error: %lu", service_name->c_str(), GetLastError());
 
 	HANDLE event_source = RegisterEventSource(NULL, service_name->c_str());
 	if (event_source)

@@ -483,10 +483,14 @@ void MET_verify_cache(thread_db* tdbb)
 			 !(routine->flags & Routine::FLAG_OBSOLETE) && */
 			 routine->useCount < routine->intUseCount)
 		{
-			char buffer[1024], *buf = buffer;
-			buf += sprintf(buf, "Procedure %d:%s is not properly counted (use count=%d, prc use=%d). Used by: \n",
+			string output;
+			output.reserve(BUFFER_LARGE);
+			char buffer[BUFFER_LARGE];
+			snprintf(buffer, sizeof(buffer),
+				"Procedure %d:%s is not properly counted (use count=%d, prc use=%d). Used by:\n",
 				routine->getId(), routine->getName().toQuotedString().c_str(),
 				routine->useCount, routine->intUseCount);
+			output.append(buffer);
 
 			for (jrd_prc** iter2 = att->att_procedures.begin(); iter2 != att->att_procedures.end(); ++iter2)
 			{
@@ -507,10 +511,9 @@ void MET_verify_cache(thread_db* tdbb)
 
 						if (resource.rsc_routine == routine)
 						{
-							// Do not enable this code in production builds unless
-							// the possible B.O. is fixed here.
-							buf += sprintf(buf, "%d:%s\n", routine2->getId(),
+							snprintf(buffer, sizeof(buffer), "%d:%s\n", routine2->getId(),
 								routine2->getName().toQuotedString().c_str());
+							output.append(buffer);
 						}
 					}
 				}
@@ -535,16 +538,15 @@ void MET_verify_cache(thread_db* tdbb)
 
 						if (resource.rsc_routine == routine)
 						{
-							// Do not enable this code in production builds unless
-							// the possible B.O. is fixed here.
-							buf += sprintf(buf, "%d:%s\n", routine2->getId(),
+							snprintf(buffer, sizeof(buffer), "%d:%s\n", routine2->getId(),
 								routine2->getName().toQuotedString().c_str());
+							output.append(buffer);
 						}
 					}
 				}
 			}
 
-			gds__log(buffer);
+			gds__log(output.c_str());
 			fb_assert(false);
 		}
 	}
@@ -558,10 +560,14 @@ void MET_verify_cache(thread_db* tdbb)
 			 !(routine->flags & Routine::FLAG_OBSOLETE) && */
 			 routine->useCount < routine->intUseCount)
 		{
-			char buffer[1024], *buf = buffer;
-			buf += sprintf(buf, "Function %d:%s is not properly counted (use count=%d, func use=%d). Used by: \n",
+			string output;
+			output.reserve(BUFFER_LARGE);
+			char buffer[BUFFER_LARGE];
+			snprintf(buffer, sizeof(buffer),
+				"Function %d:%s is not properly counted (use count=%d, func use=%d). Used by:\n",
 				routine->getId(), routine->getName().toQuotedString().c_str(),
 				routine->useCount, routine->intUseCount);
+			output.append(buffer);
 
 			for (jrd_prc** iter2 = att->att_procedures.begin(); iter2 != att->att_procedures.end(); ++iter2)
 			{
@@ -582,10 +588,9 @@ void MET_verify_cache(thread_db* tdbb)
 
 						if (resource.rsc_routine == routine)
 						{
-							// Do not enable this code in production builds unless
-							// the possible B.O. is fixed here.
-							buf += sprintf(buf, "%d:%s\n", routine2->getId(),
+							snprintf(buffer, sizeof(buffer), "%d:%s\n", routine2->getId(),
 								routine2->getName().toQuotedString().c_str());
+							output.append(buffer);
 						}
 					}
 				}
@@ -610,16 +615,15 @@ void MET_verify_cache(thread_db* tdbb)
 
 						if (resource.rsc_routine == routine)
 						{
-							// Do not enable this code in production builds unless
-							// the possible B.O. is fixed here.
-							buf += sprintf(buf, "%d:%s\n", routine2->getId(),
+							snprintf(buffer, sizeof(buffer), "%d:%s\n", routine2->getId(),
 								routine2->getName().toQuotedString().c_str());
+							output.append(buffer);
 						}
 					}
 				}
 			}
 
-			gds__log(buffer);
+			gds__log(output.c_str());
 			fb_assert(false);
 		}
 	}
