@@ -27,6 +27,7 @@ namespace Jrd
 {
 	class thread_db;
 	class jrd_tra;
+	class Database;
 	class Savepoint;
 	struct record_param;
 }
@@ -47,5 +48,6 @@ void REPL_gen_id(Jrd::thread_db* tdbb, SLONG genId, SINT64 value);
 void REPL_exec_sql(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction, const Firebird::string& sql,
 	const Firebird::ObjectsArray<Firebird::MetaString>& schemaSearchPath);
 void REPL_journal_switch(Jrd::thread_db* tdbb);
+void REPL_journal_cleanup(Jrd::Database* dbb);
 
 #endif // JRD_REPLICATION_PUBLISHER_H
