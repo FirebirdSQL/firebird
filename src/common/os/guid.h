@@ -51,8 +51,7 @@ static_assert(sizeof(UUID) == 16, "Guid size mismatch");
 
 namespace Firebird {
 
-const int GUID_BUFF_SIZE = 39;
-const int GUID_BODY_SIZE = 36;
+constexpr int GUID_BUFF_SIZE = 39;
 
 void GenerateRandomBytes(void* buffer, FB_SIZE_T size);
 
@@ -65,8 +64,10 @@ void GenerateGuid(UUID* guid);
 class Guid
 {
 	// Some versions of MSVC cannot recognize hh specifier but MSVC 2015 has it
-	static constexpr const char* GUID_FORMAT =
-		"{%08X-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX}";
+#define GUID_FORMAT_BASE "%08X-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX"
+	static constexpr const char* GUID_FORMAT = "{" GUID_FORMAT_BASE "}";
+	static constexpr const char* GUID_FORMAT_WITHOUT_BRACKETS = GUID_FORMAT_BASE;
+#undef GUID_FORMAT_BASE
 	static constexpr int GUID_FORMAT_ARGS = 11;
 
 	Guid()
@@ -121,25 +122,25 @@ public:
 		memcpy(&m_data, buffer, SIZE);
 	}
 
-	void toString(char* buffer) const
+	void toString(char* buffer, bool withBrackets = true) const
 	{
-		sprintf(buffer, GUID_FORMAT,
+		sprintf(buffer, withBrackets ? GUID_FORMAT : GUID_FORMAT_WITHOUT_BRACKETS,
 			m_data.Data1, m_data.Data2, m_data.Data3,
 			m_data.Data4[0], m_data.Data4[1], m_data.Data4[2], m_data.Data4[3],
 			m_data.Data4[4], m_data.Data4[5], m_data.Data4[6], m_data.Data4[7]);
 	}
 
-	Firebird::string toString() const
+	Firebird::string toString(bool withBrackets = true) const
 	{
 		Firebird::string result;
-		toString(result.getBuffer(GUID_BUFF_SIZE - 1));
+		toString(result.getBuffer(GUID_BUFF_SIZE - (withBrackets ? 1 : 3)), withBrackets);
 		return result;
 	}
 
-	Firebird::PathName toPathName() const
+	Firebird::PathName toPathName(bool withBrackets = true) const
 	{
 		Firebird::PathName result;
-		toString(result.getBuffer(GUID_BUFF_SIZE - 1));
+		toString(result.getBuffer(GUID_BUFF_SIZE - (withBrackets ? 1 : 3)), withBrackets);
 		return result;
 	}
 

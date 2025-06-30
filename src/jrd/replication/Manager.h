@@ -88,6 +88,12 @@ namespace Replication
 				m_changeLog->forceSwitch();
 		}
 
+		void journalCleanup()
+		{
+			if (m_changeLog)
+				m_changeLog->cleanup();
+		}
+
 		const Replication::Config* getConfig() const
 		{
 			return m_config;

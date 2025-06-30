@@ -707,3 +707,9 @@ void REPL_journal_switch(thread_db* tdbb)
 
 	replMgr->forceJournalSwitch();
 }
+
+void REPL_journal_cleanup(Database* dbb)
+{
+	if (const auto replMgr = dbb->replManager(true))
+		replMgr->journalCleanup();
+}
