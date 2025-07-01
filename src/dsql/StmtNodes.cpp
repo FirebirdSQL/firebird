@@ -6562,8 +6562,13 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 				Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable.object.c_str()));
 			}
 
-			dsql_rel* relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, QualifiedName(field->typeOfTable.object, ""));
-			dsql_fld* fld = NULL;
+			dsql_rel* relation = nullptr;
+			dsql_fld* fld = nullptr;
+
+			const auto resolvedObject = dsqlScratch->resolveRoutineOrRelation(field->typeOfTable, std::initializer_list<ObjectType>{obj_relation});
+
+			if (const auto resolvedRelation = std::get_if<dsql_rel*>(&resolvedObject))
+				relation = *resolvedRelation;
 
 			if (!relation && field->packageName.object.hasData())
 			{
@@ -6704,7 +6709,7 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			dsql_ctx* new_context = FB_NEW_POOL(*tdbb->getDefaultPool()) dsql_ctx(*tdbb->getDefaultPool());
 			variable->contextNum = new_context->ctx_context = dsqlScratch->contextNumber++;
 			new_context->ctx_scope_level = dsqlScratch->scopeLevel;
-			new_context->ctx_alias[0] = new_context->ctx_internal_alias = QualifiedName(field->fld_name, "");
+			new_context->ctx_alias.push(new_context->ctx_internal_alias = QualifiedName(field->fld_name));
 			new_context->ctx_flags = CTX_rowtype_var;
 			new_context->ctx_rowtype_var = variable;
 			dsqlScratch->context->push(new_context);
@@ -8174,8 +8179,13 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 			if (isRowtype)
 			{
-				dsql_rel* relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, QualifiedName(field->typeOfTable.object, ""));
+				dsql_rel* relation = nullptr;
 				dsql_fld* fld = nullptr;
+
+				const auto resolvedObject = dsqlScratch->resolveRoutineOrRelation(field->typeOfTable, std::initializer_list<ObjectType>{obj_relation});
+
+				if (const auto resolvedRelation = std::get_if<dsql_rel*>(&resolvedObject))
+					relation = *resolvedRelation;
 
 				if (!relation && field->packageName.object.hasData())
 				{
@@ -8273,7 +8283,7 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 				new_context->ctx_context = dsqlScratch->contextNumber++;
 				new_context->ctx_scope_level = dsqlScratch->scopeLevel;
-				new_context->ctx_alias[0] = new_context->ctx_internal_alias = QualifiedName(field->fld_name, "");
+				new_context->ctx_alias.push(new_context->ctx_internal_alias = QualifiedName(field->fld_name));
 				new_context->ctx_flags = CTX_rowtype_var;
 				// new_context->ctx_relation = relation;
 				new_context->ctx_rowtype_var = variable;

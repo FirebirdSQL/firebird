@@ -1129,7 +1129,7 @@ dsql_var* DsqlCompilerScratch::genRowtypeParameter(dsql_fld* field,
 	dsql_ctx* new_context = FB_NEW_POOL(getPool()) dsql_ctx(getPool());
 	new_context->ctx_context = contextNumber++;
 	new_context->ctx_scope_level = scopeLevel;
-	new_context->ctx_alias[0] = new_context->ctx_internal_alias = QualifiedName(field->fld_name);
+	new_context->ctx_alias.push(new_context->ctx_internal_alias = QualifiedName(field->fld_name));
 	new_context->ctx_flags = CTX_rowtype_var;
 	new_context->ctx_rowtype_var = variable;
 	context->push(new_context);

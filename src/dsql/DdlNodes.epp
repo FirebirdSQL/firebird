@@ -2399,7 +2399,13 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 						Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable.object));
 				}
 
-				dsql_rel* relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, QualifiedName(field->typeOfTable.object, ""));
+				dsql_rel* relation = nullptr;
+				dsql_fld* fld = nullptr;
+
+				const auto resolvedObject = dsqlScratch->resolveRoutineOrRelation(field->typeOfTable, std::initializer_list<ObjectType>{obj_relation});
+
+				if (const auto resolvedRelation = std::get_if<dsql_rel*>(&resolvedObject))
+					relation = *resolvedRelation;
 
 				if (relation)
 					field->fld_sub_first = relation->rel_fields;
@@ -2507,8 +2513,7 @@ bool CreateAlterFunctionNode::executeAlterIndividualParameters(thread_db* tdbb, 
 
 void CreateAlterFunctionNode::storeArgument(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction, unsigned pos, bool returnArg, ParameterClause* parameter,
-	const CollectedParameter* collectedParameter,
-	int composite_pos, ValueExprNode* defaultValue)
+	const CollectedParameter* collectedParameter)
 {
 	Attachment* const attachment = transaction->getAttachment();
 	TypeClause* type = parameter->type;
@@ -2651,10 +2656,6 @@ void CreateAlterFunctionNode::storeArgument(thread_db* tdbb, DsqlCompilerScratch
 
 		if (parameter->defaultClause)
 		{
-			// this means that parameter is composite
-			if (composite_pos > -1)
-            	ERR_post(Arg::Gds(isc_dyn_wrong_default_syntax));
-
 			if (preserveDefaults)
 			{
 				status_exception::raise(

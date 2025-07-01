@@ -231,6 +231,8 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 	}
 	else if (field->typeOfTable.object.hasData())
 	{
+		dsqlScratch->qualifyExistingName(field->typeOfTable, obj_relation);
+
 		if (METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, field->typeOfTable))
 		{
 			field->dtype = dtype_rowtype;

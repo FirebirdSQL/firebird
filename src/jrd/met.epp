@@ -163,7 +163,7 @@ bool MET_get_composite_type(thread_db* tdbb, MemoryPool& csbPool, const Qualifie
 								FLD.RDB$COLLATION_ID))
 		{
 			found = true;
-			relationName = QualifiedName(FLD.RDB$RELATION_NAME, "");
+			relationName = QualifiedName(FLD.RDB$RELATION_NAME, FLD.RDB$SCHEMA_NAME);
 
 			if (FLD.RDB$NULL_FLAG.NULL && FLD.RDB$NULL_FLAG == 0)
 				desc->dsc_flags |= DSC_nullable;

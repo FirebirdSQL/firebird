@@ -294,6 +294,10 @@ void StatementMetadata::parseSubfields(const UCHAR*& buffer, const UCHAR* buffer
 				getStringInfo(&buffer, bufferEnd, &param->field);
 				break;
 
+			case isc_info_sql_relation_schema:
+				getStringInfo(&buffer, bufferEnd, &param->schema);
+				break;
+
 			case isc_info_sql_relation:
 				getStringInfo(&buffer, bufferEnd, &param->relation);
 				break;

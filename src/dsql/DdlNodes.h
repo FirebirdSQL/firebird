@@ -446,8 +446,7 @@ private:
 
 	void storeArgument(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		unsigned pos, bool returnArg, ParameterClause* parameter,
-		const CollectedParameter* collectedParameter,
-		int composite_pos = -1, ValueExprNode* defaultValue = nullptr);
+		const CollectedParameter* collectedParameter);
 	void compile(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch);
 	void collectParameters(thread_db* tdbb, CollectedParameterMap& items);
 
