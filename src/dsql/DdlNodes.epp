@@ -3503,7 +3503,10 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 					Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable.object));
 			}
 
-			dsql_rel* relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, QualifiedName(field->typeOfTable.object, ""));
+			dsql_rel* relation = nullptr;
+			const auto resolvedObject = dsqlScratch->resolveRoutineOrRelation(field->typeOfTable, std::initializer_list<ObjectType>{obj_relation});
+			if (const auto resolvedRelation = std::get_if<dsql_rel*>(&resolvedObject))
+				relation = *resolvedRelation;
 
 			if (relation)
 				field->fld_sub_first = relation->rel_fields;
@@ -3725,6 +3728,7 @@ void CreateAlterProcedureNode::storeParameter(thread_db* tdbb, DsqlCompilerScrat
 			if (type->typeOfTable.object.hasData())
 			{
 				strcpy(PRM.RDB$RELATION_NAME, type->typeOfTable.object.c_str());
+				strcpy(PRM.RDB$RELATION_SCHEMA_NAME, type->typeOfTable.schema.c_str());
 			}
 		}
 		else

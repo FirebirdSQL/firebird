@@ -77,8 +77,8 @@ static inline constexpr USHORT gds_cvt_blr_dtype[DTYPE_BLR_MAX + 1] =
 	dtype_timestamp_tz,			/* blr_timestamp_tz == 29 */
 	dtype_ex_time_tz,			/* blr_ex_time_tz == 30 */
 	dtype_ex_timestamp_tz,		/* blr_ex_timestamp_tz == 31 */
-	dtype_rowtype,				/* blr_rowtype == 32 */
 	0, 0,
+	dtype_rowtype,				/* blr_rowtype == 34 */
 	dtype_timestamp,			/* blr_timestamp == 35 */
 	0,
 	dtype_varying,				/* blr_varying == 37 */
