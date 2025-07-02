@@ -2690,11 +2690,11 @@ static void gen_raw(const UCHAR* blr, int request_length)
 
 	for (int count = request_length; count; count--)
 	{
-		const TEXT c = *blr++;
+		const UCHAR c = *blr++;
 		if ((c >= 'A' && c <= 'Z') || c == '$' || c == '_')
 			snprintf(p, sizeof(buffer) - (p - buffer), "'%c'", c);
 		else
-			snprintf(p, sizeof(buffer) - (p - buffer), "%d", c);
+			snprintf(p, sizeof(buffer) - (p - buffer), "%u", c);
 		while (*p)
 			p++;
 		if (count - 1)
