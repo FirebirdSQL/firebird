@@ -14970,6 +14970,30 @@ ValueExprNode* RowValueExpressionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch
 	return node;
 }
 
+bool RowValueExpressionNode::setParameterType(DsqlCompilerScratch* dsqlScratch,
+											  std::function<void(dsc*)> makeDesc, bool forceVarChar)
+{
+	dsc subDesc;
+	makeDesc(&subDesc);
+
+	if (rowValueExpressionList->items.getCount() != subDesc.dsc_sub_count)
+		return false;
+
+	subDesc = *subDesc.dsc_sub_first;
+
+	for (auto& value : rowValueExpressionList->items)
+	{
+		auto makeDesc = [&](dsc* desc) { *desc = subDesc; };
+
+		PASS1_set_parameter_type(dsqlScratch, value, makeDesc, forceVarChar);
+
+		if (subDesc.dsc_next)
+			subDesc = *subDesc.dsc_next;
+	}
+
+	return true;
+}
+
 void RowValueExpressionNode::setParameterName(dsql_par* parameter) const
 {
 	parameter->par_name = parameter->par_alias = "ROW";

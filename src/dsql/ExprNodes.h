@@ -2452,6 +2452,7 @@ public:
 
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
+	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,	std::function<void (dsc*)>, bool forceVarChar) final;
 	virtual void setParameterName(dsql_par* parameter) const;
 	virtual void setParameterCompositeDescriptor(dsql_par* parameter) const;
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
