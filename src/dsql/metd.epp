@@ -620,7 +620,7 @@ bool METD_get_domain(jrd_tra* transaction, TypeClause* field, const QualifiedNam
 	return found;
 }
 
-bool METD_get_packaged_type(jrd_tra* transaction, TypeClause* field, const QualifiedName& type_name, const QualifiedName& packet_name) // UTF-8
+bool METD_get_packaged_type(jrd_tra* transaction, TypeClause* field, const QualifiedName& type_name) // UTF-8
 {
 /**************************************
  *
@@ -644,7 +644,8 @@ bool METD_get_packaged_type(jrd_tra* transaction, TypeClause* field, const Quali
 		FLX IN RDB$FIELDS CROSS
 		PKGT IN RDB$PACKAGED_TYPES
 		WITH PKGT.RDB$TYPE_NAME EQ type_name.object.c_str()
-		AND PKGT.RDB$PACKAGE_NAME EQ packet_name.object.c_str()
+		AND FLX.RDB$SCHEMA_NAME EQ type_name.schema.c_str()
+		AND PKGT.RDB$PACKAGE_NAME EQ type_name.package.c_str()
 		AND FLX.RDB$FIELD_NAME EQ PKGT.RDB$FIELD_SOURCE
 	{
 		found = true;
@@ -680,6 +681,7 @@ bool METD_get_packaged_type(jrd_tra* transaction, TypeClause* field, const Quali
 			field->packageName.object = PKGT.RDB$PACKAGE_NAME;
 
 		field->typeOfName.object = FLX.RDB$FIELD_NAME;
+		field->typeOfName.schema = FLX.RDB$SCHEMA_NAME;
 
 		field->relationName.object = FLX.RDB$RELATION_NAME;
 		field->relationName.schema = FLX.RDB$SCHEMA_NAME;

@@ -57,8 +57,7 @@ Jrd::QualifiedName METD_get_database_charset(Jrd::jrd_tra*);
 Jrd::QualifiedName METD_get_schema_charset(Jrd::jrd_tra*, const Jrd::MetaName&);
 bool METD_get_domain(Jrd::jrd_tra*, class Jrd::TypeClause*, const Jrd::QualifiedName& name);
 bool METD_get_composite_type_descriptors(Jrd::jrd_tra* transaction, Jrd::TypeClause* field, dsc* desc);
-bool METD_get_packaged_type(Jrd::jrd_tra*, Jrd::TypeClause*, const Jrd::QualifiedName& name,
-	const Jrd::QualifiedName& packet);
+bool METD_get_packaged_type(Jrd::jrd_tra*, Jrd::TypeClause*, const Jrd::QualifiedName& name);
 Jrd::dsql_udf* METD_get_function(Jrd::jrd_tra*, Jrd::DsqlCompilerScratch*,
 	const Jrd::QualifiedName&);
 void METD_get_primary_key(Jrd::jrd_tra*, const Jrd::QualifiedName&,

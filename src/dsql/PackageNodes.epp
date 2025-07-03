@@ -962,7 +962,8 @@ DdlNode* CreateAlterPackageNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				packageTypeNames.addName<PackageItemType::PACKAGE_TYPE>(type->name);
 
 				type->alter = true;
-				type->package = name.object;
+				type->name.schema = name.schema;
+				type->name.package = name.object;
 				type->privateFlag = false;
 				type->name.schema = name.schema;
 				type->name.package = name.object;
@@ -1481,7 +1482,7 @@ DdlNode* CreatePackageBodyNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 					names[i].packageTypes.addName<PackageItemType::PACKAGE_TYPE>(type->name);
 
-					type->package = name.object;
+					type->name = name;
 					type->create = true;
 					type->privateFlag = true;
 					dsqlScratch->packagedTypesCache.add(type);
@@ -1889,8 +1890,7 @@ void DropPackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 	existingItems.collectPackagedItems(tdbb, transaction, name, true, false);
 	for (auto i = existingItems.packageTypes.begin(); i != existingItems.packageTypes.end(); ++i)
 	{
-		DropPackageTypeNode dropNode(pool, i->name);
-		dropNode.package = name.object;
+		DropPackageTypeNode dropNode(pool, QualifiedName(i->name, name.schema, name.object));
 		dropNode.dsqlPass(dsqlScratch);
 		dropNode.execute(tdbb, dsqlScratch, transaction);
 	}

@@ -681,7 +681,8 @@ bool DsqlCompilerScratch::getTypeFromCache(dsql_fld* field, const MetaName& type
 		{
 			field->dtype = it->compositeTypeDeclaration ? dtype_rowtype : it->typeClause->type->dtype;
 			field->typeOfName = it->fieldSource;
-			field->packageName.object = it->package;
+			field->packageName.object = it->name.package;
+			field->packageName.schema = it->name.schema;
 			// field->fullDomain = false;
 			return true;
 		}

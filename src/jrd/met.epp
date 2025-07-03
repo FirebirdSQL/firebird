@@ -5846,6 +5846,27 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 						WITH CONST.RDB$SCHEMA_NAME EQ searchSchema.c_str() AND
 							 CONST.RDB$CONSTANT_NAME EQ name.object.c_str() AND
 							 CONST.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '')
+						{
+						found = true;
+						break;
+					}
+					END_FOR
+
+					break;
+				}
+
+				case obj_packaged_type:
+				{
+					static const CachedRequestId packagedTypeHandleId;
+					handle.reset(tdbb, packagedTypeHandleId);
+
+					FOR (REQUEST_HANDLE handle)
+						FLX IN RDB$FIELDS CROSS
+						PKGT IN RDB$PACKAGED_TYPES
+						WITH PKGT.RDB$TYPE_NAME EQ name.object.c_str()
+						AND FLX.RDB$SCHEMA_NAME EQ name.schema.c_str()
+						AND PKGT.RDB$PACKAGE_NAME EQ name.package.c_str()
+						AND FLX.RDB$FIELD_NAME EQ PKGT.RDB$FIELD_SOURCE
 					{
 						found = true;
 						break;

@@ -195,24 +195,29 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 		}
 		else
 		{
+			QualifiedName packagedTypeFullname = field->packageName.object.hasData()
+				? QualifiedName(field->typeOfName.object, field->packageName.schema, field->packageName.object)
+				: QualifiedName(field->typeOfName.object, {}, field->typeOfName.schema);
+
+			dsqlScratch->qualifyExistingName(packagedTypeFullname, obj_packaged_type);
 			dsqlScratch->qualifyExistingName(field->typeOfName, obj_field);
 
 			auto typeNameBackup = field->typeOfName;
 			if (!dsqlScratch->getTypeFromCache(field, field->typeOfName.object)
-				&& !METD_get_packaged_type(dsqlScratch->getTransaction(), field, field->typeOfName,
-										field->packageName.object.hasData() ? field->packageName : dsqlScratch->package)
+				&& !METD_get_packaged_type(dsqlScratch->getTransaction(), field, packagedTypeFullname)
 				&& !METD_get_domain(dsqlScratch->getTransaction(), field, field->typeOfName))
 			{
 				// Specified domain or source field does not exist
-				post_607(Arg::Gds(isc_dsql_domain_not_found) << field->typeOfName.toQuotedString());
+				post_607(Arg::Gds(isc_dsql_domain_not_found) <<
+					(field->packageName.object.hasData() ?
+						packagedTypeFullname.toQuotedString() : field->typeOfName.toQuotedString()));
 			}
 
 			if (field->packageName.object.hasData() && field->privateFlag && field->packageName.object.compare(dsqlScratch->package.object) != 0)
 			{
-				string packagedTypeFullname(field->packageName.object.c_str() + string(".") + typeNameBackup.object.c_str());
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
 				Arg::Gds(isc_invalid_parameter_decl) <<
-				Arg::Gds(isc_packaged_type_notdef) << Arg::Str(packagedTypeFullname) << Arg::Str(field->fld_name));
+				Arg::Gds(isc_packaged_type_notdef) << packagedTypeFullname.toQuotedString());
 			}
 		}
 

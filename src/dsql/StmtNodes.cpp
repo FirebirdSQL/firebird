@@ -6572,7 +6572,7 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 			if (!relation && field->packageName.object.hasData())
 			{
-				METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, QualifiedName(field->relationName.object, ""), fld);
+				METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, field->relationName, fld);
 				field->fieldSource = field->typeOfName;
 				field->fld_sub_first = fld;
 			}

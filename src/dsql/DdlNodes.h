@@ -953,7 +953,7 @@ public:
 		  fieldSource(p),
 		  create(true),
 		  alter(false),
-		  package(p),
+		  name(p),
 		  privateScope(false),
 		  preserveDefaults(false),
 		  packageOwner(p),
@@ -976,7 +976,7 @@ public:
 		  fieldSource(p),
 		  create(true),
 		  alter(false),
-		  package(p),
+		  name(p),
 		  privateScope(false),
 		  preserveDefaults(false),
 		  packageOwner(p),
@@ -1008,13 +1008,13 @@ private:
 		MetaName& name, ValueSourceClause* defaultClause, BoolSourceClause* check, bool notNull);
 
 public:
+	QualifiedName name;
 	NestConst<ParameterClause> typeClause;
 	bool notNull;
 	NestConst<BoolSourceClause> check;
 	QualifiedName fieldSource;
 	bool create;
 	bool alter;
-	MetaName package;
 	bool privateScope;
 	bool preserveDefaults;
 	MetaName packageOwner;
@@ -1028,15 +1028,14 @@ public:
 class DropPackageTypeNode : public DdlNode
 {
 public:
-	DropPackageTypeNode(MemoryPool& p, const MetaName& aName)
+	DropPackageTypeNode(MemoryPool& p, const QualifiedName& aName)
 		: DdlNode(p),
-		  name(p, aName),
-		  package(p)
+		  name(p, aName)
 	{
 	}
 
 	static bool deleteDimensionRecords(thread_db* tdbb, jrd_tra* transaction,
-		const MetaName& name);
+		const QualifiedName& name);
 
 public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
@@ -1046,15 +1045,14 @@ public:
 protected:
 	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_domain_failed) << name;
+		statusVector << Firebird::Arg::Gds(isc_dsql_drop_domain_failed) << name.toQuotedString().c_str();
 	}
 
 private:
 	void check(thread_db* tdbb, jrd_tra* transaction);
 
 public:
-	MetaName name;
-	MetaName package;
+	QualifiedName name;
 };
 
 class CreateDomainNode final : public DdlNode
