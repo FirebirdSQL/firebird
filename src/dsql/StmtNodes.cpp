@@ -9695,7 +9695,12 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 				newValues.add(field);
 		}
 
-		dsql_rel* rel = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, QualifiedName(relation->dsqlName.object, ""));
+		dsql_rel* rel = nullptr;
+		const auto resolvedObject = dsqlScratch->resolveRoutineOrRelation(relation->dsqlName, std::initializer_list<ObjectType>{obj_relation});
+
+		if (const auto resolvedRelation = std::get_if<dsql_rel*>(&resolvedObject))
+			rel = *resolvedRelation;
+
 
 		if (!rel)
 		{
@@ -9748,7 +9753,7 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 		dsql_ctx* new_context = FB_NEW_POOL(dsqlScratch->getPool()) dsql_ctx(dsqlScratch->getPool());
 		new_context->ctx_context = dsqlScratch->contextNumber++;
 		new_context->ctx_scope_level = dsqlScratch->scopeLevel;
-		new_context->ctx_alias[0] = new_context->ctx_internal_alias = relation->dsqlName;
+		new_context->ctx_alias.push(new_context->ctx_internal_alias = relation->dsqlName);
 		new_context->ctx_flags = CTX_rowtype_var;
 		new_context->ctx_rowtype_var = variable;
 		variable->contextNum = new_context->ctx_context;

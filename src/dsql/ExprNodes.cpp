@@ -14893,7 +14893,12 @@ ValueExprNode* RowValueExpressionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch
 			MetaName fieldName = "";
 			if (defaultSource)
 			{
-				auto rel = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, defaultSource->typeOfTable);
+				dsql_rel* rel = nullptr;
+				const auto resolvedObject = dsqlScratch->resolveRoutineOrRelation(defaultSource->typeOfTable, std::initializer_list<ObjectType>{obj_relation});
+
+				if (const auto resolvedRelation = std::get_if<dsql_rel*>(&resolvedObject))
+					rel = *resolvedRelation;
+
 				if (rel)
 				{
 					dsql_fld* field = rel->rel_fields;
