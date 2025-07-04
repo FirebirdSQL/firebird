@@ -153,9 +153,9 @@ string Item::getDescription(Request* request, const ItemInfo* itemInfo) const
 		MetaName variableName;
 		request->getStatement()->mapContextVariableNames.get(itemInfo->compositeContextNum, variableName);
 		if (itemInfo->name.hasData())
-			s.printf("%s, subfield %s", variableName.c_str(), itemInfo->name.c_str());
+			s.printf("%s, subfield %s", variableName.toQuotedString().c_str(), itemInfo->name.toQuotedString().c_str());
 		else
-			s.printf("%s, subfield ID %d", variableName.c_str(), itemInfo->fieldId);
+			s.printf("%s, subfield ID %d", variableName.toQuotedString().c_str(), itemInfo->fieldId);
 	}
 
 	if (s.isEmpty())

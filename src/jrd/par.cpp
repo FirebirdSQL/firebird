@@ -670,7 +670,6 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 
 					QualifiedName localTypeName;
 					csb->csb_blr_reader.getMetaName(localTypeName.object);
-					csb->qualifyExistingName(tdbb, localTypeName, obj_relation);
 
 					if (itemInfo)
 					{
