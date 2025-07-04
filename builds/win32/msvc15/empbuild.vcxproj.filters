@@ -13,10 +13,18 @@
       <UniqueIdentifier>{307f31db-efbf-4c9c-9aa6-dbda2d6d8484}</UniqueIdentifier>
       <Extensions>ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe</Extensions>
     </Filter>
+    <Filter Include="GPRE files">
+      <UniqueIdentifier>{dbcdcdf8-efc8-4106-b609-1e490745e955}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\gen\examples\empbuild.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\..\examples\empbuild\empbuild.epp">
+      <Filter>GPRE files</Filter>
+    </None>
   </ItemGroup>
 </Project>

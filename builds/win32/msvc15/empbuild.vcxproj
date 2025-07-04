@@ -282,6 +282,9 @@
       <Project>{4fe03933-98cd-4879-a135-fd9430087a6b}</Project>
     </ProjectReference>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\..\examples\empbuild\empbuild.epp" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
