@@ -5545,31 +5545,7 @@ dsc* evlMaxMinValue(thread_db* tdbb, const SysFunction* function, const NestValu
 
 	DataTypeUtil(tdbb).makeFromList(&impure->vlu_desc, function->name, argTypes.getCount(), argTypes.begin());
 
-	if (impure->vlu_desc.isText())
-	{
-		const USHORT length = impure->vlu_desc.dsc_length;
-
-		// Allocate a string block of sufficient size
-
-		auto string = impure->vlu_string;
-
-		if (string && string->str_length < length)
-		{
-			delete string;
-			string = nullptr;
-		}
-
-		if (!string)
-		{
-			string = impure->vlu_string = FB_NEW_RPT(*tdbb->getDefaultPool(), length) VaryingString();
-			string->str_length = length;
-		}
-
-		impure->vlu_desc.dsc_address = string->str_data;
-	}
-	else
-		impure->vlu_desc.dsc_address = (UCHAR*) &impure->vlu_misc;
-
+	impure->makeValueAddress(*tdbb->getDefaultPool());
 	MOV_move(tdbb, result, &impure->vlu_desc);
 
 	if (impure->vlu_desc.dsc_dtype == dtype_text)
@@ -6800,7 +6776,7 @@ dsc* evlUuidToChar(thread_db* tdbb, const SysFunction* function, const NestValue
 	}
 
 	UCHAR buffer[GUID_BUFF_SIZE];
-	sprintf(reinterpret_cast<char*>(buffer),
+	snprintf(reinterpret_cast<char*>(buffer), sizeof(buffer),
 		Uuid::STR_FORMAT,
 		data[0], data[1], data[2], data[3], data[4],
 		data[5], data[6], data[7], data[8], data[9],

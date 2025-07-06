@@ -47,12 +47,12 @@ enum idx_e {
 } //namespace Jrd
 
 void	ERR_post_warning(const Firebird::Arg::StatusVector& v);
-void	ERR_assert(const TEXT*, int);
-void	ERR_bugcheck(int, const TEXT* = NULL, int = 0);
-void	ERR_bugcheck_msg(const TEXT*);
-void	ERR_soft_bugcheck(int, const TEXT*, int);
-void	ERR_corrupt(int);
-void	ERR_error(int);
+//void	ERR_assert(const TEXT*, int);
+[[noreturn]] void ERR_bugcheck(int, const TEXT* = NULL, int = 0);
+[[noreturn]] void ERR_bugcheck_msg(const TEXT*);
+[[noreturn]] void ERR_soft_bugcheck(int, const TEXT*, int);
+[[noreturn]] void ERR_corrupt(int);
+[[noreturn]] void ERR_error(int);
 [[noreturn]] void ERR_post(const Firebird::Arg::StatusVector& v);
 void	ERR_post_nothrow(const Firebird::Arg::StatusVector& v, Jrd::FbStatusVector* statusVector = NULL);
 void	ERR_post_nothrow(const Firebird::IStatus* v, Jrd::FbStatusVector* statusVector = NULL);
@@ -60,6 +60,6 @@ void	ERR_post_nothrow(const Firebird::IStatus* v, Jrd::FbStatusVector* statusVec
 void	ERR_warning(const Firebird::Arg::StatusVector& v);
 void	ERR_log(int, int, const TEXT*);
 void	ERR_append_status(Jrd::FbStatusVector*, const Firebird::Arg::StatusVector& v);
-void	ERR_build_status(Jrd::FbStatusVector*, const Firebird::Arg::StatusVector& v);
+void	ERR_build_status(Jrd::FbStatusVector*, const Firebird::Arg::StatusVector& v) noexcept;
 
 #endif // JRD_ERR_PROTO_H

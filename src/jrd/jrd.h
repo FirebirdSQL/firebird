@@ -144,11 +144,11 @@ public:
 	Firebird::HalfStaticArray<UCHAR, 128> debugInfo;	// Debug info
 	Statement* statement = nullptr;						// Compiled statement
 	bool releaseInProgress = false;
-	bool sysTrigger = false;
+	SSHORT sysTrigger = 0;				// See fb_sysflag in constants.h
 	FB_UINT64 type = 0;					// Trigger type
 	USHORT flags = 0;					// Flags as they are in RDB$TRIGGERS table
 	jrd_rel* relation = nullptr;		// Trigger parent relation
-	QualifiedName name;				// Trigger name
+	QualifiedName name;					// Trigger name
 	MetaName engine;					// External engine name
 	MetaName owner;						// Owner for SQL SECURITY
 	Firebird::string entryPoint;		// External trigger entrypoint

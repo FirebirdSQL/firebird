@@ -231,11 +231,11 @@ int SecurityDatabaseManagement::release()
 
 #define STR_STORE(to, from) fb_utils::copy_terminate(to, from, sizeof(to))
 #define STR_VSTORE(to, from) string2vary(&to, from, sizeof(to))
-static void string2vary(void* to, Firebird::string& from, size_t to_size)
+static void string2vary(void* to, const Firebird::string& from, size_t to_size)
 {
-	size_t len = MIN(to_size - sizeof(USHORT), from.size());
+	const size_t len = MIN(to_size - sizeof(USHORT), from.size());
 	paramvary* v = reinterpret_cast<paramvary*>(to);
-	v->vary_length = len;
+	v->vary_length = static_cast<ISC_USHORT>(len);
 	memcpy(v->vary_string, from.c_str(), len);
 }
 

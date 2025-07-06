@@ -128,7 +128,7 @@ private:
 	};
 
 public:
-	static const int MAX_TOKEN_LEN = 256;
+	static inline constexpr int MAX_TOKEN_LEN = 256;
 
 public:
 	Parser(thread_db* tdbb, MemoryPool& pool, MemoryPool* aStatementPool, DsqlCompilerScratch* aScratch,
@@ -380,14 +380,14 @@ private:
 	USHORT client_dialect;
 	USHORT db_dialect;
 	const bool requireSemicolon;
-	USHORT parser_version;
+	USHORT parser_version = 0;
 	Firebird::CharSet* charSet;
 
 	Firebird::CharSet* metadataCharSet;
 	Firebird::string transformedString;
 	Firebird::GenericMap<Firebird::NonPooled<IntlString*, StrMark> > strMarks;
 	bool stmt_ambiguous;
-	DsqlStatement* parsedStatement;
+	DsqlStatement* parsedStatement = nullptr;
 
 	// Parser feedback for lexer
 	QualifiedName* introducerCharSetName = nullptr;
@@ -398,10 +398,10 @@ private:
 
 	// These value/posn of the root non-terminal are returned to the caller
 	YYSTYPE yyretlval;
-	Position yyretposn;
+	Position yyretposn{};
 
-	int yynerrs;
-	int yym;	// ASF: moved from local variable of Parser::parseAux()
+	int yynerrs = 0;
+	int yym = 0;	// ASF: moved from local variable of Parser::parseAux()
 
 	// Current parser state
 	yyparsestate* yyps;

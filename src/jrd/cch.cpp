@@ -5516,7 +5516,8 @@ public:
 
 #ifdef DEBUG_CDS_MEMORY
 		char str[256];
-		sprintf(str, "CCH list's common pool stats:\n"
+		snprintf(str, sizeof(str),
+			"CCH list's common pool stats:\n"
 			"  usage         = %llu\n"
 			"  mapping       = %llu\n"
 			"  max usage     = %llu\n"

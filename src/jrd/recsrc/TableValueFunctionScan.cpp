@@ -242,7 +242,8 @@ void UnlistFunctionScan::internalOpen(thread_db* tdbb) const
 			if (size > 0)
 			{
 				dsc fromDesc;
-				fromDesc.makeText(size, textType, (UCHAR*)(IPTR) valueView.data());
+				fromDesc.makeText(static_cast<USHORT>(size), textType,
+					(UCHAR*)(IPTR) valueView.data());
 				assignParameter(tdbb, &fromDesc, toDesc, 0, record);
 				impure->m_recordBuffer->store(record);
 			}
@@ -307,17 +308,19 @@ bool UnlistFunctionScan::nextBuffer(thread_db* tdbb) const
 			impure->m_resultStr->erase();
 			do
 			{
-				auto size = end = valueView.find(separatorView);
+				const auto size = end = valueView.find(separatorView);
 				if (end == std::string_view::npos)
 				{
 					if (!valueView.empty())
-						impure->m_resultStr->append(valueView.data(), valueView.length());
+						impure->m_resultStr->append(valueView.data(), 
+							static_cast<string::size_type>(valueView.length()));
 
 					break;
 				}
 
 				if (size > 0)
-					impure->m_resultStr->append(valueView.data(), size);
+					impure->m_resultStr->append(valueView.data(),
+						static_cast<string::size_type>(size));
 
 				valueView.remove_prefix(size + separatorView.length());
 

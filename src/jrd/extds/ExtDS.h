@@ -270,7 +270,7 @@ protected:
 };
 
 // Provider flags
-const int prvTrustedAuth	= 0x0001;	// supports trusted authentication
+inline constexpr int prvTrustedAuth = 0x0001;	// supports trusted authentication
 
 
 class ConnectionsPool
@@ -608,7 +608,7 @@ protected:
 
 	ConnectionsPool::Data m_poolData;
 
-	static const int MAX_CACHED_STMTS = 16;
+	static inline constexpr int MAX_CACHED_STMTS = 16;
 	int	m_used_stmts;
 	int	m_free_stmts;
 	bool m_deleting;

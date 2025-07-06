@@ -140,11 +140,11 @@
 
 // Define range of user relation ids
 
-const int MIN_RELATION_ID	= rel_MAX;
-const int MAX_RELATION_ID	= 32767;
+inline constexpr int MIN_RELATION_ID = rel_MAX;
+inline constexpr int MAX_RELATION_ID = 32767;
 
-const int COMPUTED_FLAG	= 128;
-const int WAIT_PERIOD	= -1;
+inline constexpr int COMPUTED_FLAG = 128;
+inline constexpr int WAIT_PERIOD = -1;
 
 DATABASE DB = FILENAME "ODS.RDB";
 
@@ -300,7 +300,7 @@ public:
 
 	static FB_SIZE_T hash(const DeferredWork& work, FB_SIZE_T hashSize)
 	{
-		const int nameLimit = 32;
+		constexpr int nameLimit = 32;
 		char key[sizeof work.dfw_type + sizeof work.dfw_id + nameLimit + nameLimit];
 		memset(key, 0, sizeof key);
 		char* place = key;
@@ -663,7 +663,7 @@ void Jrd::ProtectRelations::relLock::releaseLock(thread_db* tdbb, jrd_tra* trans
 	}
 }
 
-static const UCHAR nonnull_validation_blr[] =
+static inline constexpr UCHAR nonnull_validation_blr[] =
 {
 	blr_version5,
 	blr_not,
@@ -1285,7 +1285,7 @@ namespace
 	}
 } // namespace
 
-static const deferred_task task_table[] =
+static inline constexpr deferred_task task_table[] =
 {
 	{ dfw_add_shadow, add_shadow },
 	{ dfw_delete_index, modify_index },
@@ -1912,9 +1912,7 @@ static bool add_shadow(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tr
 
 	AutoRequest handle;
 	Shadow* shadow;
-	USHORT sequence, add_sequence;
 	bool finished;
-	ULONG min_page;
 	Firebird::PathName expanded_fname;
 
 	SET_TDBB(tdbb);
@@ -3628,7 +3626,7 @@ static bool create_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 	Database* dbb = tdbb->getDatabase();
 
-	const USHORT local_min_relation_id = USER_DEF_REL_INIT_ID;
+	constexpr USHORT local_min_relation_id = USER_DEF_REL_INIT_ID;
 
 	switch (phase)
 	{
@@ -4397,7 +4395,7 @@ static bool create_field(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 				attachment->deletePool(new_pool);
 			}
 		}
-		// fall through
+		return true;
 
 	case 2:
 	case 3:
@@ -4568,7 +4566,7 @@ static bool modify_field(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 				attachment->deletePool(new_pool);
 			}
 		}
-		// fall through
+		return true;
 
 	case 2:
 	case 3:
@@ -5221,6 +5219,7 @@ static bool delete_rfr(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tr
 				// Msg354: last column in a relation cannot be deleted
 			}
 		}
+		return true;
 
 	case 2:
 		return true;

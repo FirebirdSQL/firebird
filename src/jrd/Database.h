@@ -228,8 +228,9 @@ const ULONG DBB_new						= 0x8000L;		// Database object is just created
 const ULONG DBB_gc_cooperative			= 0x10000L;		// cooperative garbage collection
 const ULONG DBB_gc_background			= 0x20000L;		// background garbage collection by gc_thread
 const ULONG DBB_sweep_starting			= 0x40000L;		// Auto-sweep is starting
-const ULONG DBB_creating				= 0x80000L;	// Database creation is in progress
+const ULONG DBB_creating				= 0x80000L;		// Database creation is in progress
 const ULONG DBB_shared					= 0x100000L;	// Database object is shared among connections
+const ULONG DBB_restoring				= 0x200000L;	// Database restore is in progress
 
 //
 // dbb_ast_flags
@@ -716,6 +717,19 @@ public:
 	void decTempCacheUsage(FB_SIZE_T size)
 	{
 		dbb_gblobj_holder->decTempCacheUsage(size);
+	}
+
+	bool isRestoring() const
+	{
+		return dbb_flags & DBB_restoring;
+	}
+
+	void setRestoring(bool value)
+	{
+		if (value)
+			dbb_flags |= DBB_restoring;
+		else
+			dbb_flags &= ~DBB_restoring;
 	}
 
 private:

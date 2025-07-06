@@ -39,7 +39,7 @@ static void testCVTDatetimeToFormatString(T date, const string& format, const st
 
 		BOOST_TEST(result == expected, "\nRESULT: " << result.c_str() << "\nEXPECTED: " << expected.c_str());
 	}
-	catch(const Exception& ex)
+	catch(const Exception&)
 	{
 		BOOST_TEST_INFO("Exception was caught!");
 		BOOST_TEST(false);
@@ -269,11 +269,11 @@ static void testCVTStringToFormatDateTime(const string& date, const string& form
 	{
 		string varyingString = "xx";
 		varyingString += date;
-		*(USHORT*) varyingString.data() = varyingString.size() - sizeof(USHORT);
+		*(USHORT*) varyingString.data() = static_cast<USHORT>(date.size());
 
 		dsc desc;
 		desc.dsc_dtype = dtype_varying;
-		desc.dsc_length = varyingString.size() + sizeof(USHORT);
+		desc.dsc_length = static_cast<USHORT>(varyingString.size());
 		desc.dsc_address = (UCHAR*) varyingString.data();
 		desc.dsc_scale = 0;
 
@@ -302,7 +302,7 @@ static void testCVTStringToFormatDateTime(const string& date, const string& form
 		BOOST_TEST(isEqual, "\nRESULT: " << DECOMPOSE_TM_STRUCT(resultTimes, resultFractions, resultOffset)
 			<< "\nEXPECTED: " << DECOMPOSE_TM_STRUCT(expectedTimes, expectedFractions, expectedOffset));
 	}
-	catch(const Exception& ex)
+	catch(const Exception&)
 	{
 		BOOST_TEST_INFO("Exception was caught!");
 		BOOST_TEST(false);
@@ -331,11 +331,11 @@ static void testExceptionCvtStringToFormatDateTime(const string& date, const str
 {
 	string varyingString = "xx";
 	varyingString += date;
-	*(USHORT*) varyingString.data() = varyingString.size() - sizeof(USHORT);
+	*(USHORT*) varyingString.data() = static_cast<USHORT>(date.size());
 
 	dsc desc;
 	desc.dsc_dtype = dtype_varying;
-	desc.dsc_length = varyingString.size() + sizeof(USHORT);
+	desc.dsc_length = static_cast<USHORT>(varyingString.size());
 	desc.dsc_address = (UCHAR*) varyingString.data();
 	desc.dsc_scale = 0;
 

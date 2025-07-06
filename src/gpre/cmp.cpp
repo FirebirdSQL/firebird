@@ -127,8 +127,9 @@ void CMP_compile_request( gpre_req* request)
 
 	if (!request->req_handle && (request->req_type != REQ_procedure))
 	{
-		request->req_handle = (TEXT*) MSC_alloc(20);
-		sprintf(request->req_handle, gpreGlob.ident_pattern, CMP_next_ident());
+		static constexpr size_t handleSize = 20;
+		request->req_handle = (TEXT*) MSC_alloc(handleSize);
+		snprintf(request->req_handle, handleSize, gpreGlob.ident_pattern, CMP_next_ident());
 	}
 
 	if (!request->req_trans)
@@ -857,7 +858,7 @@ static void cmp_field( gpre_req* request, const gpre_fld* field,
 	default:
 		{
 			TEXT s[50];
-			sprintf(s, "datatype %d not understood", field->fld_dtype);
+			snprintf(s, sizeof(s), "datatype %d not understood", field->fld_dtype);
 			CPR_error(s);
 		}
 	}
@@ -1204,12 +1205,6 @@ static void cmp_procedure( gpre_req* request)
 	for (gpre_port* port = request->req_ports; port; port = port->por_next)
 		cmp_port(port, request);
 
-	if (request->req_values)
-	{
-		request->add_byte(blr_begin);
-		make_send(request->req_vport, request);
-	}
-
 	if (gpreGlob.sw_ids)
 	{
 		request->add_byte(blr_exec_pid);
@@ -1246,8 +1241,6 @@ static void cmp_procedure( gpre_req* request)
 	else
 		request->add_word(0);
 
-	if (request->req_values)
-		request->add_byte(blr_end);
 	request->add_byte(blr_end);
 	request->add_byte(blr_eoc);
 	request->req_length = request->req_blr - request->req_base;

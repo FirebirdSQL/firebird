@@ -114,7 +114,7 @@ static int blocking_ast_relation(void*);
 static int partners_ast_relation(void*);
 static int rescan_ast_relation(void*);
 static ULONG get_rel_flags_from_FLAGS(USHORT);
-static void get_trigger(thread_db*, jrd_rel*, bid*, bid*, TrigVector**, const QualifiedName&, FB_UINT64, bool,
+static void get_trigger(thread_db*, jrd_rel*, bid*, bid*, TrigVector**, const QualifiedName&, FB_UINT64, SSHORT,
 	USHORT, const MetaName&, const string&, const bid*, TriState ssDefiner);
 static bool get_type(thread_db*, USHORT*, const MetaName&, const TEXT*);
 static void lookup_view_contexts(thread_db*, jrd_rel*);
@@ -123,7 +123,7 @@ static ValueExprNode* parse_field_default_blr(thread_db* tdbb, const MetaName& s
 static BoolExprNode* parse_field_validation_blr(thread_db* tdbb, bid* blob_id, const QualifiedName& name);
 static bool resolve_charset_and_collation(thread_db*, USHORT*, const QualifiedName&, const QualifiedName&);
 static void save_trigger_data(thread_db*, TrigVector**, jrd_rel*, Statement*, blb*, blb*,
-	const QualifiedName*, FB_UINT64, bool, USHORT, const MetaName&, const string&,
+	const QualifiedName*, FB_UINT64, SSHORT, USHORT, const MetaName&, const string&,
 	const bid*, TriState ssDefiner);
 static void scan_partners(thread_db*, jrd_rel*);
 static bool verify_TRG_ignore_perm(thread_db*, const QualifiedName&);
@@ -483,10 +483,14 @@ void MET_verify_cache(thread_db* tdbb)
 			 !(routine->flags & Routine::FLAG_OBSOLETE) && */
 			 routine->useCount < routine->intUseCount)
 		{
-			char buffer[1024], *buf = buffer;
-			buf += sprintf(buf, "Procedure %d:%s is not properly counted (use count=%d, prc use=%d). Used by: \n",
+			string output;
+			output.reserve(BUFFER_LARGE);
+			char buffer[BUFFER_LARGE];
+			snprintf(buffer, sizeof(buffer),
+				"Procedure %d:%s is not properly counted (use count=%d, prc use=%d). Used by:\n",
 				routine->getId(), routine->getName().toQuotedString().c_str(),
 				routine->useCount, routine->intUseCount);
+			output.append(buffer);
 
 			for (jrd_prc** iter2 = att->att_procedures.begin(); iter2 != att->att_procedures.end(); ++iter2)
 			{
@@ -507,10 +511,9 @@ void MET_verify_cache(thread_db* tdbb)
 
 						if (resource.rsc_routine == routine)
 						{
-							// Do not enable this code in production builds unless
-							// the possible B.O. is fixed here.
-							buf += sprintf(buf, "%d:%s\n", routine2->getId(),
+							snprintf(buffer, sizeof(buffer), "%d:%s\n", routine2->getId(),
 								routine2->getName().toQuotedString().c_str());
+							output.append(buffer);
 						}
 					}
 				}
@@ -535,16 +538,15 @@ void MET_verify_cache(thread_db* tdbb)
 
 						if (resource.rsc_routine == routine)
 						{
-							// Do not enable this code in production builds unless
-							// the possible B.O. is fixed here.
-							buf += sprintf(buf, "%d:%s\n", routine2->getId(),
+							snprintf(buffer, sizeof(buffer), "%d:%s\n", routine2->getId(),
 								routine2->getName().toQuotedString().c_str());
+							output.append(buffer);
 						}
 					}
 				}
 			}
 
-			gds__log(buffer);
+			gds__log(output.c_str());
 			fb_assert(false);
 		}
 	}
@@ -558,10 +560,14 @@ void MET_verify_cache(thread_db* tdbb)
 			 !(routine->flags & Routine::FLAG_OBSOLETE) && */
 			 routine->useCount < routine->intUseCount)
 		{
-			char buffer[1024], *buf = buffer;
-			buf += sprintf(buf, "Function %d:%s is not properly counted (use count=%d, func use=%d). Used by: \n",
+			string output;
+			output.reserve(BUFFER_LARGE);
+			char buffer[BUFFER_LARGE];
+			snprintf(buffer, sizeof(buffer),
+				"Function %d:%s is not properly counted (use count=%d, func use=%d). Used by:\n",
 				routine->getId(), routine->getName().toQuotedString().c_str(),
 				routine->useCount, routine->intUseCount);
+			output.append(buffer);
 
 			for (jrd_prc** iter2 = att->att_procedures.begin(); iter2 != att->att_procedures.end(); ++iter2)
 			{
@@ -582,10 +588,9 @@ void MET_verify_cache(thread_db* tdbb)
 
 						if (resource.rsc_routine == routine)
 						{
-							// Do not enable this code in production builds unless
-							// the possible B.O. is fixed here.
-							buf += sprintf(buf, "%d:%s\n", routine2->getId(),
+							snprintf(buffer, sizeof(buffer), "%d:%s\n", routine2->getId(),
 								routine2->getName().toQuotedString().c_str());
+							output.append(buffer);
 						}
 					}
 				}
@@ -610,16 +615,15 @@ void MET_verify_cache(thread_db* tdbb)
 
 						if (resource.rsc_routine == routine)
 						{
-							// Do not enable this code in production builds unless
-							// the possible B.O. is fixed here.
-							buf += sprintf(buf, "%d:%s\n", routine2->getId(),
+							snprintf(buffer, sizeof(buffer), "%d:%s\n", routine2->getId(),
 								routine2->getName().toQuotedString().c_str());
+							output.append(buffer);
 						}
 					}
 				}
 			}
 
-			gds__log(buffer);
+			gds__log(output.c_str());
 			fb_assert(false);
 		}
 	}
@@ -1983,7 +1987,7 @@ void MET_load_trigger(thread_db* tdbb,
 							triggers,
 							trigger_name,
 							TRG.RDB$TRIGGER_TYPE,
-							(bool) TRG.RDB$SYSTEM_FLAG,
+							TRG.RDB$SYSTEM_FLAG,
 							trig_flags,
 							engine,
 							entryPoint,
@@ -2004,7 +2008,7 @@ void MET_load_trigger(thread_db* tdbb,
 							triggers + trigger_action,
 							trigger_name,
 							(UCHAR) trigger_action,
-							(bool) TRG.RDB$SYSTEM_FLAG,
+							TRG.RDB$SYSTEM_FLAG,
 							trig_flags,
 							engine,
 							entryPoint,
@@ -4612,7 +4616,7 @@ ULONG MET_get_rel_flags_from_TYPE(USHORT type)
 static void get_trigger(thread_db* tdbb, jrd_rel* relation,
 						bid* blob_id, bid* debug_blob_id, TrigVector** ptr,
 						const QualifiedName& name, FB_UINT64 type,
-						bool sys_trigger, USHORT flags,
+						SSHORT sys_trigger, USHORT flags,
 						const MetaName& engine, const string& entryPoint,
 						const bid* body, TriState ssDefiner)
 {
@@ -4993,7 +4997,7 @@ static bool resolve_charset_and_collation(thread_db* tdbb,
 static void save_trigger_data(thread_db* tdbb, TrigVector** ptr, jrd_rel* relation,
 							  Statement* statement, blb* blrBlob, blb* debugInfoBlob,
 							  const QualifiedName* name, FB_UINT64 type,
-							  bool sys_trigger, USHORT flags,
+							  SSHORT sys_trigger, USHORT flags,
 							  const MetaName& engine, const string& entryPoint,
 							  const bid* body, TriState ssDefiner)
 {

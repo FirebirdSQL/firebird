@@ -1232,14 +1232,16 @@ void NBackup::backup_database(int level, const string& guidStr, const PathName& 
 			char str[200];
 			if (level > 0)
 			{
-				sprintf(str, "SELECT RDB$GUID, RDB$SCN FROM RDB$BACKUP_HISTORY "
+				snprintf(str, sizeof(str),
+					"SELECT RDB$GUID, RDB$SCN FROM RDB$BACKUP_HISTORY "
 					"WHERE RDB$BACKUP_ID = "
 					"(SELECT MAX(RDB$BACKUP_ID) FROM RDB$BACKUP_HISTORY "
 					"WHERE RDB$BACKUP_LEVEL = %d)", level - 1);
 			}
 			else
 			{
-				sprintf(str, "SELECT RDB$GUID, RDB$SCN FROM RDB$BACKUP_HISTORY "
+				snprintf(str, sizeof(str),
+					"SELECT RDB$GUID, RDB$SCN FROM RDB$BACKUP_HISTORY "
 					"WHERE RDB$GUID = '%s'", guidStr.c_str());
 			}
 			if (isc_dsql_prepare(status, &trans, &stmt, 0, str, 1, NULL))

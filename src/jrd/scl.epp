@@ -61,7 +61,7 @@
 #include "../jrd/ResultSet.h"
 
 
-const int UIC_BASE	= 10;
+inline constexpr int UIC_BASE = 10;
 
 using namespace Jrd;
 using namespace Firebird;
@@ -90,7 +90,7 @@ namespace
 		const TEXT* p_names_string;
 	};
 
-	const P_NAMES p_names[] =
+	inline constexpr P_NAMES p_names[] =
 	{
 		{ SCL_alter, priv_alter, "ALTER" },
 		{ SCL_control, priv_control, "CONTROL" },
@@ -1407,7 +1407,7 @@ static void get_string(const UCHAR* acl, MetaName& string)
  **************************************/
 	fb_assert(acl);
 
-	const size_t length = *acl++;
+	const FB_SIZE_T length = *acl++;
 	const TEXT* const ptr = (TEXT*) acl;
 	string.assign(ptr, length);
 }

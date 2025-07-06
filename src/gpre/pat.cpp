@@ -394,7 +394,8 @@ void PATTERN_expand( USHORT column, const TEXT* pattern, PAT* args)
 			break;
 
 		default:
-			sprintf(buffer, "Unknown substitution \"%c%c\"", pattern[-2], pattern[-1]);
+			snprintf(buffer, sizeof(buffer), "Unknown substitution \"%c%c\"", pattern[-2],
+				pattern[-1]);
 			CPR_error(buffer);
 			continue;
 		}
@@ -419,19 +420,21 @@ void PATTERN_expand( USHORT column, const TEXT* pattern, PAT* args)
 		if (sw_ident)
 		{
 			if (long_flag)
-				sprintf(p, gpreGlob.long_ident_pattern, long_value);
+				snprintf(p, sizeof(buffer) - (p - buffer), gpreGlob.long_ident_pattern, long_value);
 			else
-				sprintf(p, gpreGlob.ident_pattern, value);
+				snprintf(p, sizeof(buffer) - (p - buffer), gpreGlob.ident_pattern, value);
 		}
 		else if (reference)
 		{
 			if (!reference->ref_port)
-				sprintf(p, gpreGlob.ident_pattern, reference->ref_ident);
+				snprintf(p, sizeof(buffer) - (p - buffer), gpreGlob.ident_pattern,
+					reference->ref_ident);
 			else
 			{
 				TEXT temp1[16], temp2[16];
-				sprintf(temp1, gpreGlob.ident_pattern, reference->ref_port->por_ident);
-				sprintf(temp2, gpreGlob.ident_pattern, reference->ref_ident);
+				snprintf(temp1, sizeof(temp1), gpreGlob.ident_pattern,
+					reference->ref_port->por_ident);
+				snprintf(temp2, sizeof(temp2), gpreGlob.ident_pattern, reference->ref_ident);
 				switch (gpreGlob.sw_language)
 				{
 				case lang_fortran:
@@ -440,15 +443,16 @@ void PATTERN_expand( USHORT column, const TEXT* pattern, PAT* args)
 					break;
 
 				default:
-					sprintf(p, "%s.%s", temp1, temp2);
+					snprintf(p, sizeof(buffer) - (p - buffer), "%s.%s", temp1, temp2);
+					break;
 				}
 			}
 		}
 		else if (long_flag) {
-			sprintf(p, "%" SLONGFORMAT, long_value);
+			snprintf(p, sizeof(buffer) - (p - buffer), "%" SLONGFORMAT, long_value);
 		}
 		else {
-			sprintf(p, "%d", value);
+			snprintf(p, sizeof(buffer) - (p - buffer), "%d", value);
 		}
 
 		while (*p)

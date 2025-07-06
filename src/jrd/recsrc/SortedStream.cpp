@@ -278,7 +278,7 @@ Sort* SortedStream::init(thread_db* tdbb) const
 				}
 				else
 				{
-					MOV_move(tdbb, from, &to);
+					MOV_move(tdbb, from, &to, true);
 				}
 			}
 		}
@@ -438,7 +438,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 		else
 		{
 			EVL_field(relation, record, id, &to);
-			MOV_move(tdbb, &from, &to);
+			MOV_move(tdbb, &from, &to, true);
 			record->clearNull(id);
 		}
 	}

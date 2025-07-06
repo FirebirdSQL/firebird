@@ -260,7 +260,6 @@ public:
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
 	{
 		dsqlScratch->qualifyExistingName(charSet, obj_charset);
-		protectSystemSchema(charSet.schema, obj_charset);
 		dsqlScratch->ddlSchema = charSet.schema;
 
 		dsqlScratch->qualifyExistingName(defaultCollation, obj_collation);
@@ -352,7 +351,7 @@ private:
 class CommentOnNode final : public DdlNode
 {
 public:
-	CommentOnNode(MemoryPool& pool, int aObjType,
+	CommentOnNode(MemoryPool& pool, ObjectType aObjType,
 				const QualifiedName& aName, const MetaName& aSubName,
 				const Firebird::string aText)
 		: DdlNode(pool),
@@ -382,7 +381,7 @@ protected:
 	}
 
 private:
-	int objType;
+	ObjectType objType;
 	QualifiedName name;
 	MetaName subName;
 	Firebird::string text, str;
@@ -2245,6 +2244,14 @@ public:
 	void validateAdmin();
 
 public:
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
+	{
+		if (from)
+			from->dsqlPass(dsqlScratch);
+
+		return DdlNode::dsqlPass(dsqlScratch);
+	}
+
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;

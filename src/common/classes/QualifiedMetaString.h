@@ -101,7 +101,7 @@ public:
 
 			string result;
 
-			for (size_t i = 1; i < name.length() - 1; ++i)
+			for (FB_SIZE_T i = 1; i < name.length() - 1; ++i)
 			{
 				if (name[i] == '"')
 				{
@@ -143,7 +143,7 @@ public:
 			return true;
 		};
 
-		size_t i = 0;
+		FB_SIZE_T i = 0;
 
 		const auto skipSpaces = [&]()
 		{

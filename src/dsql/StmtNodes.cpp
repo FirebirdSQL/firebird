@@ -2248,19 +2248,7 @@ const StmtNode* DeclareVariableNode::execute(thread_db* tdbb, Request* request, 
 		variable->vlu_desc = varDesc;
 		variable->vlu_desc.clearFlags();
 
-		if (variable->vlu_desc.dsc_dtype <= dtype_varying)
-		{
-			if (!variable->vlu_string)
-			{
-				const USHORT len = variable->vlu_desc.dsc_length;
-				variable->vlu_string = FB_NEW_RPT(*tdbb->getDefaultPool(), len) VaryingString();
-				variable->vlu_string->str_length = len;
-			}
-
-			variable->vlu_desc.dsc_address = variable->vlu_string->str_data;
-		}
-		else
-			variable->vlu_desc.dsc_address = (UCHAR*) &variable->vlu_misc;
+		variable->makeValueAddress(*tdbb->getDefaultPool());
 
 		request->req_operation = Request::req_return;
 	}
@@ -6241,6 +6229,7 @@ const StmtNode* ForRangeNode::execute(thread_db* tdbb, Request* request, ExeStat
 		}
 
 		case Request::req_return:
+		case Request::req_sync:
 		{
 			const auto variableDesc = EVL_expr(tdbb, request, variable);
 
@@ -6250,7 +6239,7 @@ const StmtNode* ForRangeNode::execute(thread_db* tdbb, Request* request, ExeStat
 				return parentStmt;
 			}
 
-			if (request->req_operation == Request::req_return)
+			if (request->req_operation != Request::req_evaluate)
 			{
 				impure_value nextValue;
 
@@ -10412,8 +10401,18 @@ void SetSearchPathNode::execute(thread_db* tdbb, DsqlRequest* /*request*/, jrd_t
 	auto newSearchPath = makeRef(
 		FB_NEW_POOL(*attachment->att_pool) AnyRef<ObjectsArray<MetaString>>(*attachment->att_pool));
 
+	bool hasSystem = false;
+
 	for (const auto& schema : *schemas)
+	{
+		if (schema == SYSTEM_SCHEMA)
+			hasSystem = true;
+
 		newSearchPath->add(schema);
+	}
+
+	if (!hasSystem)
+		newSearchPath->add(SYSTEM_SCHEMA);
 
 	attachment->att_schema_search_path = std::move(newSearchPath);
 }

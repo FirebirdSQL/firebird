@@ -199,7 +199,7 @@ HANDLE ISC_make_signal(bool /*create_flag*/, bool manual_reset, int process_idL,
 		return CreateEvent(NULL, man_rst, FALSE, NULL);
 
 	TEXT event_name[BUFFER_TINY];
-	sprintf(event_name, SHARED_EVENT, process_idL, signal_number);
+	snprintf(event_name, sizeof(event_name), SHARED_EVENT, process_idL, signal_number);
 
 	if (!fb_utils::private_kernel_object_name(event_name, sizeof(event_name)))
 	{

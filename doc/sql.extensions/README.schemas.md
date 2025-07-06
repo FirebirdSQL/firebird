@@ -76,6 +76,8 @@ you can reset the current search path to its initial configuration with the `ALT
 
 Nonexistent schemas can be included in the search path but are ignored during name resolution.
 
+If `SYSTEM` is not included in the schema list, it is automatically added as the last schema in the search path.
+
 The first existing schema in the search path is referred to as the **current schema** and is exclusively used in some 
 operations.
 
@@ -103,7 +105,7 @@ create or alter function F1 returns integer as begin end;
 grant create table to user USER1;
 ```
 
-For `ALTER`, `DROP`, and others statements, the system searches for the specified object across all schemas in the 
+For `ALTER`, `DROP`, and others statements, Firebird searches for the specified object across all schemas in the 
 search path. The reference is bound to the first matching object found. If no matching object exists in any schema, an 
 error is raised.
 
@@ -133,8 +135,7 @@ In this case, the search path is used to locate `TABLE1`, `DOMAIN1`, and `TABLE2
 
 For DDL statements, the search path operates similarly, but with a subtle difference. Once the object being created or 
 modified is bound to a schema during statement preparation, the search path is implicitly and temporarily modified. 
-This adjustment sets the search path to the schema of the object. Additionally, if the `SYSTEM` schema was already 
-present in the search path, it is appended as the last schema.
+This adjustment sets the search path to the schema of the object with `SYSTEM` added as the final schema in the path.
 
 ```sql
 create schema SCHEMA1;
@@ -198,8 +199,8 @@ grant select on table SCHEMA1.TABLE1 to user USER2;
 ## The SYSTEM schema
 
 All system schema-bound objects (e.g., `RDB$*` and `MON$*`) are now created in a dedicated schema called `SYSTEM`. 
-The `SYSTEM` schema has a default `USAGE` permission granted to `PUBLIC` and is included in the default search path. 
-This ensures backward compatibility with previous Firebird versions.
+The `SYSTEM` schema has a default `USAGE` permission granted to `PUBLIC` and is automatically included in the 
+search path. This ensures backward compatibility with previous Firebird versions.
 
 While the `SYSTEM` schema allows operations like index creation and manipulation of those indexes, it is otherwise 
 locked for DDL changes. Modifying objects within the `SYSTEM` schema through DDL operations is strongly discouraged.
@@ -264,6 +265,8 @@ schema exists, it returns `NULL`.
 ```sql
 SET SEARCH_PATH TO <schema name> [, <schema name>]...
 ```
+
+If `SYSTEM` is not included in the schema list, it is automatically added as the last schema in the search path.
 
 ### RDB$GET_CONTEXT
 
@@ -626,8 +629,7 @@ slave side. This allows mapping database objects to a specific schema using a se
 ## System packages and functions
 
 Firebird includes system packages such as `RDB$TIME_ZONE_UTIL`, `RDB$PROFILER`, and others. These system packages 
-are now located in the `SYSTEM` schema. If the `SYSTEM` schema is not included in the search path, their usage 
-requires explicit qualification with `SYSTEM`, as with any other object bound to the `SYSTEM` schema.
+are now located in the `SYSTEM` schema.
 
 In contrast, Firebird also provides non-packaged built-in functions like `RDB$GET_CONTEXT`, `ABS`, and `DATEDIFF`. 
 These functions are not listed in the database metadata (`RDB$FUNCTIONS`) and neither require nor accept the 

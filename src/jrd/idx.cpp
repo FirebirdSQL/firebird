@@ -1287,6 +1287,8 @@ void IDX_modify(thread_db* tdbb,
 	RelationPages* relPages = org_rpb->rpb_relation->getPages(tdbb);
 	WIN window(relPages->rel_pg_space_id, -1);
 
+	new_rpb->rpb_runtime_flags &= ~RPB_uk_updated;
+
 	while (BTR_next_index(tdbb, org_rpb->rpb_relation, transaction, &idx, &window))
 	{
 		IndexErrorContext context(new_rpb->rpb_relation, &idx);
@@ -1350,6 +1352,9 @@ void IDX_modify(thread_db* tdbb,
 		{
 			context.raise(tdbb, error_code, new_rpb->rpb_record);
 		}
+
+		if (idx.idx_flags & (idx_primary | idx_unique))
+			new_rpb->rpb_runtime_flags |= RPB_uk_updated;
 	}
 }
 

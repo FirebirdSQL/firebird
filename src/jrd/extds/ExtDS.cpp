@@ -83,11 +83,11 @@ Mutex Manager::m_mutex;
 Provider* Manager::m_providers = NULL;
 ConnectionsPool* Manager::m_connPool = NULL;
 
-const ULONG MIN_CONNPOOL_SIZE		= 0;
-const ULONG MAX_CONNPOOL_SIZE		= 1000;
+inline constexpr ULONG MIN_CONNPOOL_SIZE = 0;
+inline constexpr ULONG MAX_CONNPOOL_SIZE = 1000;
 
-const ULONG MIN_LIFE_TIME		= 1;
-const ULONG MAX_LIFE_TIME		= 60 * 60 * 24;	// one day
+inline constexpr ULONG MIN_LIFE_TIME = 1;
+inline constexpr ULONG MAX_LIFE_TIME = 60 * 60 * 24;	// one day
 
 Manager::Manager(MemoryPool& pool) :
 	PermanentStorage(pool)
@@ -387,7 +387,7 @@ void Provider::bindConnection(thread_db* tdbb, Connection* conn)
 		m_connections.fastRemove();
 
 	conn->setBoundAtt(attachment);
-	bool ret = m_connections.add(AttToConn(attachment, conn));
+	const bool ret = m_connections.add(AttToConn(attachment, conn));
 	fb_assert(ret);
 }
 
@@ -851,16 +851,17 @@ bool Connection::getWrapErrors(const ISC_STATUS* status)
 		case isc_net_read_err:
 		case isc_net_write_err:
 			m_broken = true;
-			break;
+			return m_wrapErrors;
 
 		// Always wrap shutdown errors, else user application will disconnect
 		case isc_att_shutdown:
 		case isc_shutdown:
 			m_broken = true;
 			return true;
-	}
 
-	return m_wrapErrors;
+		default:
+			return m_wrapErrors;
+	}
 }
 
 
@@ -933,7 +934,7 @@ Connection* ConnectionsPool::getConnection(thread_db* tdbb, Provider* prv, ULONG
 {
 	MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
-	Data data(hash);
+	const Data data(hash);
 
 	FB_SIZE_T pos;
 	m_idleArray.find(data, pos);
@@ -1010,6 +1011,7 @@ void ConnectionsPool::putConnection(thread_db* tdbb, Connection* conn)
 		{
 			FB_SIZE_T pos;
 			fb_assert(m_idleArray.find(*item, pos));
+			FB_UNUSED_VAR(pos); // Silence compiler warning
 
 #ifdef EDS_DEBUG
 			const bool ok = verifyPool();
@@ -1176,7 +1178,7 @@ void ConnectionsPool::clearIdle(thread_db* tdbb, bool all)
 		{
 			while (!m_idleArray.isEmpty())
 			{
-				FB_SIZE_T pos = m_idleArray.getCount() - 1;
+				const FB_SIZE_T pos = m_idleArray.getCount() - 1;
 				Data* item = m_idleArray[pos];
 				removeFromPool(item, pos);
 
@@ -1243,7 +1245,7 @@ void ConnectionsPool::clear(thread_db* tdbb)
 
 	while (m_idleArray.getCount())
 	{
-		FB_SIZE_T i = m_idleArray.getCount() - 1;
+		const FB_SIZE_T i = m_idleArray.getCount() - 1;
 		Data* data = m_idleArray[i];
 		Connection* conn = data->m_conn;
 
@@ -1992,7 +1994,7 @@ static TokenType getToken(const char** begin, const char* end)
 	TokenType ret = ttNone;
 	const char* p = *begin;
 
-	char c = *p++;
+	const char c = *p++;
 	switch (c)
 	{
 	case ':':
@@ -2174,7 +2176,7 @@ void Statement::preprocess(const string& sql, string& ret)
 				}
 
 				FB_SIZE_T n = 0;
-				MetaString name(ident);
+				const MetaString name(ident);
 				if (!m_sqlParamNames.find(name, n))
 					n = m_sqlParamNames.add(name);
 
@@ -2201,7 +2203,7 @@ void Statement::preprocess(const string& sql, string& ret)
 					return;
 				}
 			}
-			// fall thru
+			[[fallthrough]];
 
 		case ttWhite:
 		case ttComment:
@@ -2436,7 +2438,7 @@ void Statement::getExtBlob(thread_db* tdbb, const dsc& src, dsc& dst)
 		destBlob->blb_charset = src.getCharSet();
 
 		Array<UCHAR> buffer;
-		const int bufSize = 32 * 1024 - 2/*input->getMaxSegment()*/;
+		constexpr int bufSize = 32 * 1024 - 2/*input->getMaxSegment()*/;
 		UCHAR* buff = buffer.getBuffer(bufSize);
 
 		while (true)
@@ -2483,7 +2485,7 @@ void Statement::putExtBlob(thread_db* tdbb, dsc& src, dsc& dst)
 
 		while (true)
 		{
-			USHORT length = srcBlob->BLB_get_segment(tdbb, buff, srcBlob->getMaxSegment());
+			const USHORT length = srcBlob->BLB_get_segment(tdbb, buff, srcBlob->getMaxSegment());
 			if (srcBlob->blb_flags & BLB_eof) {
 				break;
 			}
@@ -2663,7 +2665,7 @@ void CryptHash::assign(ICryptKeyCallback* callback)
 
 	FbLocalStatus status;
 
-	int len = callback->getHashLength(&status);
+	const int len = callback->getHashLength(&status);
 	if (len > 0 && status.isSuccess())
 		callback->getHashData(&status, m_value.getBuffer(len));
 

@@ -232,8 +232,9 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 			// But we flag it to describe as text.
 			parameter->par_is_text = true;
 			parameter->par_desc.dsc_dtype = dtype_varying;
-			parameter->par_desc.dsc_length = dataTypeUtil.fixLength(
-				&parameter->par_desc, parameter->par_desc.dsc_length) + sizeof(USHORT);
+			parameter->par_desc.dsc_length = static_cast<USHORT>(
+				dataTypeUtil.fixLength(&parameter->par_desc, parameter->par_desc.dsc_length) 
+				+ sizeof(USHORT));
 		}
 
 		const USHORT align = type_alignments[parameter->par_desc.dsc_dtype];
@@ -534,6 +535,7 @@ static void gen_plan(DsqlCompilerScratch* dsqlScratch, const PlanNode* planNode)
 				// ASF: The first item of a TYPE_NAVIGATIONAL is not for blr_indices.
 				++idx_iter;
 				--idx_count;
+				[[fallthrough]];
 
 			case PlanNode::AccessType::TYPE_INDICES:
 			{

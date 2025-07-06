@@ -35,6 +35,7 @@
 #include "../jrd/MetaName.h"
 #include "../jrd/RecordNumber.h"
 #include "../common/dsc.h"
+#include "../jrd/align.h"
 
 #define FLAG_BYTES(n)	(((n + BITS_PER_LONG) & ~((ULONG)BITS_PER_LONG - 1)) >> 3)
 
@@ -168,6 +169,13 @@ struct impure_value
 	void make_double(const double val);
 	void make_decimal128(const Firebird::Decimal128 val);
 	void make_decimal_fixed(const Firebird::Int128 val, const signed char scale);
+
+	template<class T>
+	VaryingString* getString(MemoryPool& pool, const T length) = delete; // Prevent dangerous length shrink
+	VaryingString* getString(MemoryPool& pool, const USHORT length);
+
+	void makeValueAddress(MemoryPool& pool);
+	void makeTextValueAddress(MemoryPool& pool);
 };
 
 // Do not use these methods where dsc_sub_type is not explicitly set to zero.
@@ -220,6 +228,40 @@ inline void impure_value::make_decimal_fixed(const Firebird::Int128 val, const s
 	this->vlu_desc.dsc_sub_type = 0;
 	this->vlu_desc.dsc_address = reinterpret_cast<UCHAR*>(&this->vlu_misc.vlu_int128);
 }
+
+inline VaryingString* impure_value::getString(MemoryPool& pool, const USHORT length)
+{
+	if (vlu_string && vlu_string->str_length < length)
+	{
+		delete vlu_string;
+		vlu_string = nullptr;
+	}
+
+	if (!vlu_string)
+	{
+		vlu_string = FB_NEW_RPT(pool, length) VaryingString();
+		vlu_string->str_length = length;
+	}
+
+	return vlu_string;
+}
+
+inline void impure_value::makeValueAddress(MemoryPool& pool)
+{
+	if (type_lengths[vlu_desc.dsc_dtype] == 0)
+	{
+		// If the data type is any of the string types, allocate space to hold value.
+		makeTextValueAddress(pool);
+	}
+	else
+		vlu_desc.dsc_address = (UCHAR*) &vlu_misc;
+}
+
+inline void impure_value::makeTextValueAddress(MemoryPool& pool)
+{
+	vlu_desc.dsc_address = getString(pool, vlu_desc.dsc_length)->str_data;
+}
+
 
 struct impure_value_ex : public impure_value
 {

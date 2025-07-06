@@ -9595,17 +9595,22 @@ bool get_trigger(BurpGlobals* tdgbl)
 				case att_trig_relation_name:
 					X.RDB$RELATION_NAME.NULL = FALSE;
 					GET_TEXT(X.RDB$RELATION_NAME);
-					strcpy (relName, X.RDB$RELATION_NAME);
 
-					// Check for trigger on system relation
-					FOR (TRANSACTION_HANDLE local_trans REQUEST_HANDLE tdgbl->handles_get_trigger_req_handle2)
-						Y IN RDB$RELATIONS
-						WITH Y.RDB$SCHEMA_NAME EQUIV NULLIF(name.schema.c_str(), '') AND
-							 Y.RDB$RELATION_NAME EQ relName AND
-							 Y.RDB$SYSTEM_FLAG EQ 1
+					if (tdgbl->RESTORE_format < 12)
+					{
+						strcpy(relName, X.RDB$RELATION_NAME);
 
-						skipTrig = true;
-					END_FOR;
+						// Check for trigger on system relation
+						FOR (TRANSACTION_HANDLE local_trans REQUEST_HANDLE tdgbl->handles_get_trigger_req_handle2)
+							Y IN RDB$RELATIONS
+							WITH Y.RDB$RELATION_NAME EQ relName AND
+								 Y.RDB$SYSTEM_FLAG EQ 1
+						{
+							skipTrig = true;
+						}
+						END_FOR;
+					}
+
 					break;
 
 				case att_trig_sequence:
@@ -9692,7 +9697,8 @@ bool get_trigger(BurpGlobals* tdgbl)
 			// Skip trigger on system relation
 			if (skipTrig)
 			{
-				BURP_message(387, SafeArg() << name.toQuotedString().c_str() << relName);
+				BURP_message(387,
+					SafeArg() << name.object.toQuotedString().c_str() << MetaString(relName).toQuotedString().c_str());
 				return true;
 			}
 		}
@@ -9754,16 +9760,22 @@ bool get_trigger(BurpGlobals* tdgbl)
 				case att_trig_relation_name:
 					X.RDB$RELATION_NAME.NULL = FALSE;
 					GET_TEXT(X.RDB$RELATION_NAME);
-					strcpy (relName, X.RDB$RELATION_NAME);
 
-					// Check for trigger on system relation
-					FOR (TRANSACTION_HANDLE local_trans REQUEST_HANDLE tdgbl->handles_get_trigger_req_handle2)
-						Y IN RDB$RELATIONS
-						WITH Y.RDB$RELATION_NAME EQ relName
-						 AND Y.RDB$SYSTEM_FLAG EQ 1
+					if (tdgbl->RESTORE_format < 12)
+					{
+						strcpy(relName, X.RDB$RELATION_NAME);
 
-						skipTrig = true;
-					END_FOR;
+						// Check for trigger on system relation
+						FOR (TRANSACTION_HANDLE local_trans REQUEST_HANDLE tdgbl->handles_get_trigger_req_handle2)
+							Y IN RDB$RELATIONS
+							WITH Y.RDB$RELATION_NAME EQ relName AND
+								 Y.RDB$SYSTEM_FLAG EQ 1
+						{
+							skipTrig = true;
+						}
+						END_FOR;
+					}
+
 					break;
 
 				case att_trig_sequence:
@@ -9836,7 +9848,8 @@ bool get_trigger(BurpGlobals* tdgbl)
 			// Skip trigger on system relation
 			if (skipTrig)
 			{
-				BURP_message(387, SafeArg() << name.toQuotedString().c_str() << relName);
+				BURP_message(387,
+					SafeArg() << name.object.toQuotedString().c_str() << MetaString(relName).toQuotedString().c_str());
 				return true;
 			}
 
@@ -10158,6 +10171,9 @@ bool get_user_privilege(BurpGlobals* tdgbl)
 			break;
 		}
 	}
+
+	if (relation.schema.isEmpty() && tdgbl->runtimeODS >= DB_VERSION_DDL14 && isSchemaBoundObject(object_type))
+		relation.schema = PUBLIC_SCHEMA;
 
 	// Check if object exists
 	Firebird::ITransaction*	local_trans = nullptr;

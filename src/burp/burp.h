@@ -67,8 +67,8 @@
 //#define COMPRESS_DEBUG 1
 #endif // WIRE_COMPRESS_SUPPORT
 
-const int GDS_NAME_LEN		= METADATA_IDENTIFIER_CHAR_LEN * 4 /* max bytes per char */ + 1;
-typedef TEXT			GDS_NAME[GDS_NAME_LEN];
+inline constexpr int GDS_NAME_LEN = METADATA_IDENTIFIER_CHAR_LEN * 4 /* max bytes per char */ + 1;
+typedef TEXT GDS_NAME[GDS_NAME_LEN];
 
 enum redirect_vals {
 	NOREDIRECT = 0,
@@ -76,7 +76,7 @@ enum redirect_vals {
 	NOOUTPUT = 2
 };
 
-static const int burp_msg_fac = 12;
+static inline constexpr int burp_msg_fac = FB_IMPL_MSG_FACILITY_GBAK;
 
 // Record types in backup file
 
@@ -213,15 +213,15 @@ Version 12: FB6.0.
 			Schemas.
 */
 
-const int ATT_BACKUP_FORMAT		= 12;
+inline constexpr int ATT_BACKUP_FORMAT = 12;
 
 // max array dimension
 
-const int MAX_DIMENSION			= 16;
+inline constexpr int MAX_DIMENSION = 16;
 
-const int SERIES				= 1;
+inline constexpr int SERIES = 1;
 
-const USHORT MAX_UPDATE_DBKEY_RECURSION_DEPTH = 16;
+inline constexpr USHORT MAX_UPDATE_DBKEY_RECURSION_DEPTH = 16;
 
 
 enum att_type {
@@ -715,13 +715,13 @@ enum trig_t {
 // these types to go away when recognized by gpre as
 // <relation>.<field>.<type>  some time in the future
 
-const int TRIG_TYPE_PRE_STORE = 1;
-const int TRIG_TYPE_PRE_MODIFY = 3;
-const int TRIG_TYPE_POST_ERASE = 6;
+inline constexpr int TRIG_TYPE_PRE_STORE = 1;
+inline constexpr int TRIG_TYPE_PRE_MODIFY = 3;
+inline constexpr int TRIG_TYPE_POST_ERASE = 6;
 
 // default trigger name templates
 
-const int TRIGGER_SEQUENCE_DEFAULT	= 0;
+inline constexpr int TRIGGER_SEQUENCE_DEFAULT = 0;
 
 // common structure definitions
 
@@ -852,7 +852,7 @@ struct burp_meta_obj
 
 // CVC: Could use MAXPATHLEN, but what about restoring in a different system?
 // I need to review if we tolerate different lengths for different OS's here.
-const unsigned int MAX_FILE_NAME_SIZE		= 256;
+inline constexpr unsigned int MAX_FILE_NAME_SIZE = 256;
 
 #include "../burp/std_desc.h"
 
@@ -936,9 +936,9 @@ struct burp_act
 		act_t		act_action;
 };
 
-const size_t ACT_LEN = sizeof(burp_act);
+inline constexpr size_t ACT_LEN = sizeof(burp_act);
 
-const ULONG MAX_LENGTH = ~FB_CONST64(0);	// Keep in sync with burp_fil.fil_length
+inline constexpr ULONG MAX_LENGTH = ~FB_CONST64(0);	// Keep in sync with burp_fil.fil_length
 
 // This structure has been cloned from spit.cpp
 
@@ -958,12 +958,12 @@ struct hdr_split
 // NOTE: size of the hdr_split_tag and HDR_SPLIT_TAG must be the same and equal
 // to 18. Otherwise we will not be able to join the gbk files v5.x
 
-const size_t HDR_SPLIT_SIZE	= sizeof(hdr_split);
-static const char HDR_SPLIT_TAG5[]	= "InterBase/gsplit, ";
-static const char HDR_SPLIT_TAG6[]	= "InterBase/gbak,   ";
+inline constexpr size_t HDR_SPLIT_SIZE	= sizeof(hdr_split);
+static inline constexpr char HDR_SPLIT_TAG5[]	= "InterBase/gsplit, ";
+static inline constexpr char HDR_SPLIT_TAG6[]	= "InterBase/gbak,   ";
 // CVC: Don't convert to const char* or you will have to fix the sizeof()'s!!!
 #define HDR_SPLIT_TAG HDR_SPLIT_TAG6
-const FB_UINT64 MIN_SPLIT_SIZE	= FB_CONST64(2048);		// bytes
+inline constexpr FB_UINT64 MIN_SPLIT_SIZE	= FB_CONST64(2048);		// bytes
 
 
 // Global switches and data
@@ -1285,7 +1285,7 @@ public:
 void	BURP_exit_local(int code, BurpGlobals* tdgbl);
 
 // database is not on-line due to failure to activate one or more indices
-const int FINI_DB_NOT_ONLINE		= 2;
+inline constexpr int FINI_DB_NOT_ONLINE = 2;
 
 /* Burp will always write a backup in multiples of the following number
  * of bytes.  The initial value is the smallest which ensures that writes
@@ -1296,8 +1296,8 @@ const int FINI_DB_NOT_ONLINE		= 2;
  * bit masking.
  */
 
-const int BURP_BLOCK		= 512;
-inline static ULONG BURP_UP_TO_BLOCK(const ULONG size)
+inline constexpr int BURP_BLOCK = 512;
+static inline constexpr ULONG BURP_UP_TO_BLOCK(const ULONG size)
 {
 	return (((size) + BURP_BLOCK - 1) & ~(BURP_BLOCK - 1));
 }
@@ -1306,11 +1306,11 @@ inline static ULONG BURP_UP_TO_BLOCK(const ULONG size)
 // so that other files can see them for multivolume opens
 
 #ifdef WIN_NT
-static const ULONG MODE_READ	= GENERIC_READ;
-static const ULONG MODE_WRITE	= GENERIC_WRITE;
+static inline constexpr ULONG MODE_READ = GENERIC_READ;
+static inline constexpr ULONG MODE_WRITE = GENERIC_WRITE;
 #else
-static const ULONG MODE_READ	= O_RDONLY;
-static const ULONG MODE_WRITE	= O_WRONLY | O_CREAT;
+static inline constexpr ULONG MODE_READ = O_RDONLY;
+static inline constexpr ULONG MODE_WRITE = O_WRONLY | O_CREAT;
 #endif
 
 

@@ -1340,7 +1340,7 @@ void rem_port::addServerKeys(const CSTRING* passedStr)
 			break;
 		case TAG_PLUGIN_SPECIFIC:
 			plugin.assign(newKeys.getBytes(), newKeys.getClumpLength());
-			len = strlen(plugin.c_str()) + 1;
+			len = fb_strlen(plugin.c_str()) + 1;
 			if (len < plugin.length())
 			{
 				const char* data = &plugin[len];

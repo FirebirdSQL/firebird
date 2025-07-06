@@ -28,54 +28,54 @@
 // of int, based on usage, but they aren't coherent either with scl.epp's
 // P_NAMES.p_names_acl that's USHORT.
 
-const int ACL_version	= 2;
+inline constexpr int ACL_version	= 2;
 
-const int ACL_end		= 0;
-const int ACL_id_list	= 1;
-const int ACL_priv_list	= 2;
+inline constexpr int ACL_end		= 0;
+inline constexpr int ACL_id_list	= 1;
+inline constexpr int ACL_priv_list	= 2;
 
 // Privileges to be granted
 
-const int priv_end			= 0;
-const int priv_control		= 1;		// Control over ACL
-const int priv_grant		= 2;		// Unused
-const int priv_drop			= 3;		// Drop object
-const int priv_select		= 4;		// SELECT
-const int priv_write		= 5;		// Unused
-const int priv_alter		= 6;		// Alter object
-const int priv_insert		= 7;		// INSERT
-const int priv_delete		= 8;		// DELETE
-const int priv_update		= 9;		// UPDATE
-const int priv_references	= 10;		// REFERENCES for foreign key
-const int priv_execute		= 11;		// EXECUTE (procedure, function, package)
+inline constexpr int priv_end			= 0;
+inline constexpr int priv_control		= 1;		// Control over ACL
+inline constexpr int priv_grant			= 2;		// Unused
+inline constexpr int priv_drop			= 3;		// Drop object
+inline constexpr int priv_select		= 4;		// SELECT
+inline constexpr int priv_write			= 5;		// Unused
+inline constexpr int priv_alter			= 6;		// Alter object
+inline constexpr int priv_insert		= 7;		// INSERT
+inline constexpr int priv_delete		= 8;		// DELETE
+inline constexpr int priv_update		= 9;		// UPDATE
+inline constexpr int priv_references	= 10;		// REFERENCES for foreign key
+inline constexpr int priv_execute		= 11;		// EXECUTE (procedure, function, package)
 // New in FB3
-const int priv_usage		= 12;		// USAGE (domain, exception, sequence, collation)
-const int priv_create		= 13;		// Create object
-const int priv_alter_any	= 14;		// Alter any object
-const int priv_drop_any		= 15;		// Drop any object
-const int priv_max		= 16;
+inline constexpr int priv_usage			= 12;		// USAGE (domain, exception, sequence, collation)
+inline constexpr int priv_create		= 13;		// Create object
+inline constexpr int priv_alter_any		= 14;		// Alter any object
+inline constexpr int priv_drop_any		= 15;		// Drop any object
+inline constexpr int priv_max			= 16;
 
 // Identification criterias
 
-const int id_end			= 0;
-const int id_group			= 1;		// UNIX group id
-const int id_user			= 2;		// UNIX user
-const int id_person			= 3;		// User name
-const int id_project		= 4;		// Project name
-const int id_organization	= 5;		// Organization name
-const int id_node			= 6;		// Node id
-const int id_view			= 7;		// View name
-const int id_views			= 8;		// All views
-const int id_trigger		= 9;		// Trigger name
-const int id_procedure		= 10;		// Procedure name
-const int id_sql_role		= 11;		// SQL role
+inline constexpr int id_end				= 0;
+inline constexpr int id_group			= 1;		// UNIX group id
+inline constexpr int id_user			= 2;		// UNIX user
+inline constexpr int id_person			= 3;		// User name
+inline constexpr int id_project			= 4;		// Project name
+inline constexpr int id_organization	= 5;		// Organization name
+inline constexpr int id_node			= 6;		// Node id
+inline constexpr int id_view			= 7;		// View name
+inline constexpr int id_views			= 8;		// All views
+inline constexpr int id_trigger			= 9;		// Trigger name
+inline constexpr int id_procedure		= 10;		// Procedure name
+inline constexpr int id_sql_role		= 11;		// SQL role
 // New in FB3
-const int id_package		= 12;		// Package name
-const int id_function		= 13;		// Function name
-const int id_filter			= 14;		// Filter name
+inline constexpr int id_package			= 12;		// Package name
+inline constexpr int id_function		= 13;		// Function name
+inline constexpr int id_filter			= 14;		// Filter name
 // New in FB4
-const int id_privilege		= 15;		// System privilege
-const int id_max			= 16;
+inline constexpr int id_privilege		= 15;		// System privilege
+inline constexpr int id_max				= 16;
 
 /* Format of access control list:
 
@@ -91,10 +91,10 @@ const int id_max			= 16;
 // Transaction Description Record
 // CVC: This information should match enum tdr_vals in alice.h
 
-const int TDR_VERSION			= 1;
-const int TDR_HOST_SITE			= 1;
-const int TDR_DATABASE_PATH		= 2;
-const int TDR_TRANSACTION_ID	= 3;
-const int TDR_REMOTE_SITE		= 4;
+inline constexpr int TDR_VERSION		= 1;
+inline constexpr int TDR_HOST_SITE		= 1;
+inline constexpr int TDR_DATABASE_PATH	= 2;
+inline constexpr int TDR_TRANSACTION_ID	= 3;
+inline constexpr int TDR_REMOTE_SITE	= 4;
 
 #endif // JRD_ACL_H

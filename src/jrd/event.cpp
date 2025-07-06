@@ -1109,8 +1109,7 @@ void EventManager::mutex_bugcheck(const TEXT* string, int mutex_state)
  *
  **************************************/
 	TEXT msg[BUFFER_TINY];
-
-	sprintf(msg, "EVENT: %s error, status = %d", string, mutex_state);
+	snprintf(msg, sizeof(msg), "EVENT: %s error, status = %d", string, mutex_state);
 	fb_utils::logAndDie(msg);
 }
 

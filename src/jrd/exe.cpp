@@ -462,6 +462,8 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 			}
 		}
 
+		// Strings will be validated in CVT_move()
+
 		if (DTYPE_IS_BLOB_OR_QUAD(from_desc->dsc_dtype) || DTYPE_IS_BLOB_OR_QUAD(to_desc->dsc_dtype))
 		{
 			// ASF: Don't let MOV_move call blb::move because MOV
@@ -491,6 +493,11 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 		}
 		else if (!DSC_EQUIV(from_desc, to_desc, false))
 		{
+			MOV_move(tdbb, from_desc, to_desc);
+		}
+		else if (DTYPE_IS_TEXT(from_desc->dsc_dtype))
+		{
+			// Force slow move to properly handle the case when source string is provided with real length instead of padded length
 			MOV_move(tdbb, from_desc, to_desc);
 		}
 		else if (from_desc->dsc_dtype == dtype_short)
@@ -1419,6 +1426,17 @@ void EXE_execute_triggers(thread_db* tdbb,
 	{
 		for (TrigVector::iterator ptr = vector->begin(); ptr != vector->end(); ++ptr)
 		{
+			// The system trigger that implement cascading action can be skipped if
+			// no PK/UK field have been changed by UPDATE.
+
+			if ((which_trig == StmtNode::POST_TRIG) && (trigger_action == TRIGGER_UPDATE) &&
+				(ptr->sysTrigger == fb_sysflag_referential_constraint))
+			{
+				fb_assert(new_rpb);
+				if (!(new_rpb->rpb_runtime_flags & RPB_uk_updated))
+					continue;
+			}
+
 			if (trigger_action == TRIGGER_DDL && ddl_action)
 			{
 				// Skip triggers not matching our action

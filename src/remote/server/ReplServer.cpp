@@ -70,10 +70,10 @@ using namespace Replication;
 
 namespace
 {
-	const char CTL_SIGNATURE[] = "FBREPLCTL";
+	inline constexpr const char* CTL_SIGNATURE = "FBREPLCTL";
 
-	const USHORT CTL_VERSION1 = 1;
-	const USHORT CTL_CURRENT_VERSION = CTL_VERSION1;
+	inline constexpr USHORT CTL_VERSION1 = 1;
+	inline constexpr USHORT CTL_CURRENT_VERSION = CTL_VERSION1;
 
 	volatile bool shutdownFlag = false;
 	AtomicCounter activeThreads;
@@ -95,15 +95,15 @@ namespace
 
 	struct ActiveTransaction
 	{
-		ActiveTransaction()
+		ActiveTransaction() noexcept
 			: tra_id(0), sequence(0)
 		{}
 
-		ActiveTransaction(TraNumber id, FB_UINT64 seq)
+		ActiveTransaction(TraNumber id, FB_UINT64 seq) noexcept
 			: tra_id(id), sequence(seq)
 		{}
 
-	    static const TraNumber& generate(const ActiveTransaction& item)
+	    static const TraNumber& generate(const ActiveTransaction& item) noexcept
 		{
 			return item.tra_id;
 	    }
@@ -224,17 +224,17 @@ namespace
 #endif
 		}
 
-		FB_UINT64 getSequence() const
+		FB_UINT64 getSequence() const noexcept
 		{
 			return m_data.sequence;
 		}
 
-		ULONG getOffset() const
+		ULONG getOffset() const noexcept
 		{
 			return m_data.offset;
 		}
 
-		FB_UINT64 getDbSequence() const
+		FB_UINT64 getDbSequence() const noexcept
 		{
 			return m_data.db_sequence;
 		}
@@ -305,9 +305,9 @@ namespace
 		static int init(const PathName& directory, const Guid& guid)
 		{
 #ifdef WIN_NT
-			const mode_t ACCESS_MODE = DEFAULT_OPEN_MODE;
+			constexpr mode_t ACCESS_MODE = DEFAULT_OPEN_MODE;
 #else
-			const mode_t ACCESS_MODE = 0664;
+			constexpr mode_t ACCESS_MODE = 0664;
 #endif
 			const PathName filename = directory + guid.toPathName();
 
@@ -529,7 +529,7 @@ namespace
 #endif
 		}
 
-		static const FB_UINT64& generate(const Segment* item)
+		static const FB_UINT64& generate(const Segment* item) noexcept
 		{
 			return item->header.hdr_sequence;
 		}
@@ -542,7 +542,7 @@ namespace
 
 	string formatInterval(const TimeStamp& start, const TimeStamp& finish)
 	{
-		static const SINT64 MSEC_PER_DAY = 24 * 60 * 60 * 1000;
+		static constexpr SINT64 MSEC_PER_DAY = 24 * 60 * 60 * 1000;
 
 		const SINT64 startMsec = ((SINT64) start.value().timestamp_date) * MSEC_PER_DAY +
 			(SINT64) start.value().timestamp_time / 10;
@@ -755,8 +755,8 @@ namespace
 
 				ControlFile control(target->getDirectory(), guid, sequence, transactions);
 
-				FB_UINT64 last_sequence = control.getSequence();
-				ULONG last_offset = control.getOffset();
+				const FB_UINT64 last_sequence = control.getSequence();
+				const ULONG last_offset = control.getOffset();
 
 				const FB_UINT64 db_sequence = target->initReplica();
 				const FB_UINT64 last_db_sequence = control.getDbSequence();
@@ -873,7 +873,7 @@ namespace
 						raiseError("Journal file %s read failed (error %d)", segment->filename.c_str(), ERRNO);
 
 					const auto blockLength = header.length;
-					const auto length = sizeof(Block) + blockLength;
+					const ULONG length = static_cast<ULONG>(sizeof(Block) + blockLength);
 
 					if (blockLength)
 					{

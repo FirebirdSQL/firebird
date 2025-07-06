@@ -101,12 +101,12 @@
 // since UNIX isn't standard, we have to define
 // stuff which is in <limits.h> (which isn't available on all UNIXes...
 
-const long SHRT_POS_MAX			= 32767;
-const long SHRT_UNSIGNED_MAX	= 65535;
-const long SHRT_NEG_MAX			= 32768;
-const int POSITIVE	= 0;
-const int NEGATIVE	= 1;
-const int UNSIGNED	= 2;
+inline constexpr long SHRT_POS_MAX		= 32767;
+inline constexpr long SHRT_UNSIGNED_MAX	= 65535;
+inline constexpr long SHRT_NEG_MAX		= 32768;
+inline constexpr int POSITIVE	= 0;
+inline constexpr int NEGATIVE	= 1;
+inline constexpr int UNSIGNED	= 2;
 
 //const int MIN_CACHE_BUFFERS	= 250;
 //const int DEF_CACHE_BUFFERS	= 1000;
@@ -6161,9 +6161,9 @@ comment
 		{ $$ = newNode<CommentOnNode>($3, QualifiedName(*$4), "", *$6); }
 	| COMMENT ON COLUMN symbol_ddl_name '.' valid_symbol_name IS ddl_desc
 		{ $$ = newNode<CommentOnNode>(obj_relation, *$4, *$6, *$8); }
-	| COMMENT ON ddl_type3 qualified_name '.' valid_symbol_name IS ddl_desc
+	| COMMENT ON ddl_type3 scoped_qualified_name '.' valid_symbol_name IS ddl_desc
 		{ $$ = newNode<CommentOnNode>($3, *$4, *$6, *$8); }
-	| COMMENT ON ddl_type4 qualified_name IS ddl_desc
+	| COMMENT ON ddl_type4 scoped_qualified_name IS ddl_desc
 		{ $$ = newNode<CommentOnNode>($3, *$4, "", *$6); }
 	| comment_on_user
 		{ $$ = $1; }
@@ -8398,7 +8398,10 @@ sql_string
 %type <stringPtr> utf_string
 utf_string
 	: sql_string
-		{ $$ = newString($1->toUtf8(scratch->getTransaction())); }
+		{
+			$1->dsqlPass(scratch);
+			$$ = newString($1->toUtf8(scratch->getTransaction()));
+		}
 	;
 
 %type <int32Val> signed_short_integer

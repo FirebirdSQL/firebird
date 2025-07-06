@@ -238,300 +238,173 @@ void DsqlCompilerScratch::putBlrMarkers(ULONG marks)
 
 // Write out field data type.
 // Taking special care to declare international text.
-void DsqlCompilerScratch::putDtype(const TypeClause* field, bool useSubType)
+void DsqlCompilerScratch::putType(const dsql_fld* field, bool useSubType)
 {
-#ifdef DEV_BUILD
-	// Check if the field describes a known datatype
-
-	if (field->dtype > FB_NELEM(blr_dtypes) || !blr_dtypes[field->dtype])
-	{
-		SCHAR buffer[100];
-
-		sprintf(buffer, "Invalid dtype %d in BlockNode::putDtype", field->dtype);
-		ERRD_bugcheck(buffer);
-	}
-#endif
-
-	if (field->notNull)
-		appendUChar(blr_not_nullable);
-
-	if (field->typeOfName.object.hasData())
-	{
-		if (field->typeOfTable.object.hasData())
-		{
-			if (field->explicitCollation)
-			{
-				if (field->typeOfTable.schema != ddlSchema)
-				{
-					appendUChar(blr_column_name3);
-					appendUChar(field->fullDomain ? blr_domain_full : blr_domain_type_of);
-					appendMetaString(field->typeOfTable.schema.c_str());
-					appendMetaString(field->typeOfTable.object.c_str());
-					appendMetaString(field->typeOfName.object.c_str());
-					appendUChar(1);
-					appendUShort(field->textType);
-				}
-				else
-				{
-					appendUChar(blr_column_name2);
-					appendUChar(field->fullDomain ? blr_domain_full : blr_domain_type_of);
-					appendMetaString(field->typeOfTable.object.c_str());
-					appendMetaString(field->typeOfName.object.c_str());
-					appendUShort(field->textType);
-				}
-			}
-			else
-			{
-				if (field->typeOfTable.schema != ddlSchema)
-				{
-					appendUChar(blr_column_name3);
-					appendUChar(field->fullDomain ? blr_domain_full : blr_domain_type_of);
-					appendMetaString(field->typeOfTable.schema.c_str());
-					appendMetaString(field->typeOfTable.object.c_str());
-					appendMetaString(field->typeOfName.object.c_str());
-					appendUChar(0);
-				}
-				else
-				{
-					appendUChar(blr_column_name);
-					appendUChar(field->fullDomain ? blr_domain_full : blr_domain_type_of);
-					appendMetaString(field->typeOfTable.object.c_str());
-					appendMetaString(field->typeOfName.object.c_str());
-				}
-			}
-		}
-		else
-		{
-			if (field->explicitCollation)
-			{
-				if (field->typeOfName.schema != ddlSchema)
-				{
-					appendUChar(blr_domain_name3);
-					appendUChar(field->fullDomain ? blr_domain_full : blr_domain_type_of);
-					appendMetaString(field->typeOfName.schema.c_str());
-					appendMetaString(field->typeOfName.object.c_str());
-					appendUChar(1);
-					appendUShort(field->textType);
-				}
-				else
-				{
-					appendUChar(blr_domain_name2);
-					appendUChar(field->fullDomain ? blr_domain_full : blr_domain_type_of);
-					appendMetaString(field->typeOfName.object.c_str());
-					appendUShort(field->textType);
-				}
-			}
-			else
-			{
-				if (field->typeOfName.schema != ddlSchema)
-				{
-					appendUChar(blr_domain_name3);
-					appendUChar(field->fullDomain ? blr_domain_full : blr_domain_type_of);
-					appendMetaString(field->typeOfName.schema.c_str());
-					appendMetaString(field->typeOfName.object.c_str());
-					appendUChar(0);
-				}
-				else
-				{
-					appendUChar(blr_domain_name);
-					appendUChar(field->fullDomain ? blr_domain_full : blr_domain_type_of);
-					appendMetaString(field->typeOfName.object.c_str());
-				}
-			}
-		}
-
-		return;
-	}
-
-	switch (field->dtype)
-	{
-		case dtype_cstring:
-		case dtype_text:
-		case dtype_varying:
-		case dtype_blob:
-			if (!useSubType)
-				appendUChar(blr_dtypes[field->dtype]);
-			else if (field->dtype == dtype_varying)
-			{
-				appendUChar(blr_varying2);
-				appendUShort(field->textType);
-			}
-			else if (field->dtype == dtype_cstring)
-			{
-				appendUChar(blr_cstring2);
-				appendUShort(field->textType);
-			}
-			else if (field->dtype == dtype_blob)
-			{
-				appendUChar(blr_blob2);
-				appendUShort(field->subType);
-				appendUShort(field->textType);
-			}
-			else
-			{
-				appendUChar(blr_text2);
-				appendUShort(field->textType);
-			}
-
-			if (field->dtype == dtype_varying)
-				appendUShort(field->length - sizeof(USHORT));
-			else if (field->dtype != dtype_blob)
-				appendUShort(field->length);
-			break;
-
-		default:
-			appendUChar(blr_dtypes[field->dtype]);
-			if (DTYPE_IS_EXACT(field->dtype) || (dtype_quad == field->dtype))
-				appendUChar(field->scale);
-			break;
-	}
+	fb_assert(field);
+	putType(*field, useSubType, field->explicitCollation);
 }
 
 void DsqlCompilerScratch::putType(const TypeClause* type, bool useSubType)
 {
+	fb_assert(type);
+	putType(*type, useSubType, type->collate.object.hasData());
+}
+
+void DsqlCompilerScratch::putType(const TypeClause& type, bool useSubType, bool useExplicitCollate)
+{
 #ifdef DEV_BUILD
 	// Check if the field describes a known datatype
-	if (type->dtype > FB_NELEM(blr_dtypes) || !blr_dtypes[type->dtype])
+
+	if (type.dtype >= FB_NELEM(blr_dtypes) || !blr_dtypes[type.dtype])
 	{
 		SCHAR buffer[100];
-
-		sprintf(buffer, "Invalid dtype %d in put_dtype", type->dtype);
+		snprintf(buffer, sizeof(buffer), "Invalid dtype %d in DsqlCompilerScratch::putField", type.dtype);
 		ERRD_bugcheck(buffer);
 	}
 #endif
+	fb_assert(type.dtype < FB_NELEM(blr_dtypes) && blr_dtypes[type.dtype]);
 
-	if (type->notNull)
+	if (type.notNull)
 		appendUChar(blr_not_nullable);
 
-	if (type->typeOfName.object.hasData())
+	if (type.typeOfName.object.hasData())
 	{
-		if (type->typeOfTable.object.hasData())
+		if (type.typeOfTable.object.hasData())
 		{
-			if (type->collate.object.hasData())
-			{
-				if (type->typeOfTable.schema != ddlSchema)
-				{
-					appendUChar(blr_column_name3);
-					appendUChar(type->fullDomain ? blr_domain_full : blr_domain_type_of);
-					appendMetaString(type->typeOfTable.schema.c_str());
-					appendMetaString(type->typeOfTable.object.c_str());
-					appendMetaString(type->typeOfName.object.c_str());
-					appendUChar(1);
-					appendUShort(type->textType);
-				}
-				else
-				{
-					appendUChar(blr_column_name2);
-					appendUChar(type->fullDomain ? blr_domain_full : blr_domain_type_of);
-					appendMetaString(type->typeOfTable.object.c_str());
-					appendMetaString(type->typeOfName.object.c_str());
-					appendUShort(type->textType);
-				}
-			}
-			else
-			{
-				if (type->typeOfTable.schema != ddlSchema)
-				{
-					appendUChar(blr_column_name3);
-					appendUChar(type->fullDomain ? blr_domain_full : blr_domain_type_of);
-					appendMetaString(type->typeOfTable.schema.c_str());
-					appendMetaString(type->typeOfTable.object.c_str());
-					appendMetaString(type->typeOfName.object.c_str());
-					appendUChar(0);
-				}
-				else
-				{
-					appendUChar(blr_column_name);
-					appendUChar(type->fullDomain ? blr_domain_full : blr_domain_type_of);
-					appendMetaString(type->typeOfTable.object.c_str());
-					appendMetaString(type->typeOfName.object.c_str());
-				}
-			}
+			putTypeName<true>(type, useExplicitCollate);
 		}
 		else
 		{
-			if (type->collate.object.hasData())
-			{
-				if (type->typeOfName.schema != ddlSchema)
-				{
-					appendUChar(blr_domain_name3);
-					appendUChar(type->fullDomain ? blr_domain_full : blr_domain_type_of);
-					appendMetaString(type->typeOfName.schema.c_str());
-					appendMetaString(type->typeOfName.object.c_str());
-					appendUChar(1);
-					appendUShort(type->textType);
-				}
-				else
-				{
-					appendUChar(blr_domain_name2);
-					appendUChar(type->fullDomain ? blr_domain_full : blr_domain_type_of);
-					appendMetaString(type->typeOfName.object.c_str());
-					appendUShort(type->textType);
-				}
-			}
-			else
-			{
-				if (type->typeOfName.schema != ddlSchema)
-				{
-					appendUChar(blr_domain_name3);
-					appendUChar(type->fullDomain ? blr_domain_full : blr_domain_type_of);
-					appendMetaString(type->typeOfName.schema.c_str());
-					appendMetaString(type->typeOfName.object.c_str());
-					appendUChar(0);
-				}
-				else
-				{
-					appendUChar(blr_domain_name);
-					appendUChar(type->fullDomain ? blr_domain_full : blr_domain_type_of);
-					appendMetaString(type->typeOfName.object.c_str());
-				}
-			}
+			putTypeName<false>(type, useExplicitCollate);
 		}
-
 		return;
 	}
 
-	switch (type->dtype)
+	// Maybe it is possible to use GEN_descriptor here?
+	putDtype(type, useSubType);
+}
+
+void DsqlCompilerScratch::putDtype(const TypeClause& type, const bool useSubType)
+{
+	switch (type.dtype)
 	{
 		case dtype_cstring:
 		case dtype_text:
 		case dtype_varying:
 		case dtype_blob:
 			if (!useSubType)
-				appendUChar(blr_dtypes[type->dtype]);
-			else if (type->dtype == dtype_varying)
+				appendUChar(blr_dtypes[type.dtype]);
+			else if (type.dtype == dtype_varying)
 			{
 				appendUChar(blr_varying2);
-				appendUShort(type->textType);
+				appendUShort(type.textType);
 			}
-			else if (type->dtype == dtype_cstring)
+			else if (type.dtype == dtype_cstring)
 			{
 				appendUChar(blr_cstring2);
-				appendUShort(type->textType);
+				appendUShort(type.textType);
 			}
-			else if (type->dtype == dtype_blob)
+			else if (type.dtype == dtype_blob)
 			{
 				appendUChar(blr_blob2);
-				appendUShort(type->subType);
-				appendUShort(type->textType);
+				appendUShort(type.subType);
+				appendUShort(type.textType);
 			}
 			else
 			{
 				appendUChar(blr_text2);
-				appendUShort(type->textType);
+				appendUShort(type.textType);
 			}
 
-			if (type->dtype == dtype_varying)
-				appendUShort(type->length - sizeof(USHORT));
-			else if (type->dtype != dtype_blob)
-				appendUShort(type->length);
+			if (type.dtype == dtype_varying)
+				appendUShort(type.length - sizeof(USHORT));
+			else if (type.dtype != dtype_blob)
+				appendUShort(type.length);
 			break;
 
 		default:
-			appendUChar(blr_dtypes[type->dtype]);
-			if (DTYPE_IS_EXACT(type->dtype) || dtype_quad == type->dtype)
-				appendUChar(type->scale);
+			appendUChar(blr_dtypes[type.dtype]);
+			if (DTYPE_IS_EXACT(type.dtype) || dtype_quad == type.dtype)
+				appendUChar(type.scale);
 			break;
+	}
+}
+
+template<bool THasTableName>
+void DsqlCompilerScratch::putTypeName(const TypeClause& type, const bool useExplicitCollate)
+{
+	struct BlrNameSet
+	{
+		UCHAR name;
+		UCHAR name2;
+		UCHAR name3;
+	};
+
+	static constexpr BlrNameSet BLR_COLUMN_SET
+	{
+		blr_column_name,
+		blr_column_name2,
+		blr_column_name3,
+	};
+
+	static constexpr BlrNameSet BLR_DOMAIN_SET
+	{
+		blr_domain_name,
+		blr_domain_name2,
+		blr_domain_name3,
+	};
+
+	constexpr BlrNameSet blrSet = []()
+	{
+		if constexpr (THasTableName)
+			return BLR_COLUMN_SET;
+		else
+			return BLR_DOMAIN_SET;
+	}();
+
+	bool differentSchema;
+	if constexpr (THasTableName)
+		differentSchema = type.typeOfTable.schema != ddlSchema;
+	else
+		differentSchema = type.typeOfName.schema != ddlSchema;
+
+	const UCHAR domainBlr = type.fullDomain ? blr_domain_full : blr_domain_type_of;
+	if (differentSchema)
+	{
+		appendUChar(blrSet.name3);
+		appendUChar(domainBlr);
+		if constexpr (THasTableName)
+		{
+			appendMetaString(type.typeOfTable.schema.c_str());
+			appendMetaString(type.typeOfTable.object.c_str());
+		}
+		else
+			appendMetaString(type.typeOfName.schema.c_str());
+
+		appendMetaString(type.typeOfName.object.c_str());
+
+		if (useExplicitCollate)
+		{
+			appendUChar(1);
+			appendUShort(type.textType);
+		}
+		else
+			appendUChar(0);
+	}
+	else
+	{
+		const UCHAR nameBlr = useExplicitCollate ? blrSet.name2 : blrSet.name;
+
+		appendUChar(nameBlr);
+		appendUChar(domainBlr);
+
+		if constexpr (THasTableName)
+			appendMetaString(type.typeOfTable.object.c_str());
+
+		appendMetaString(type.typeOfName.object.c_str());
+
+		if (useExplicitCollate)
+			appendUShort(type.textType);
 	}
 }
 
@@ -545,7 +418,7 @@ void DsqlCompilerScratch::putLocalVariableDecl(dsql_var* variable, DeclareVariab
 	appendUShort(variable->number);
 	DDL_resolve_intl_type(this, field, collationName);
 
-	putDtype(field, true);
+	putType(field, true);
 
 	if (variable->field->fld_name.hasData())	// Not a function return value
 		putDebugVariable(variable->number, variable->field->fld_name);
@@ -1296,3 +1169,4 @@ BoolExprNode* DsqlCompilerScratch::pass1JoinIsRecursive(RecordSourceNode*& input
 
 	return NULL;
 }
+

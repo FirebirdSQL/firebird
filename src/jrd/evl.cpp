@@ -573,22 +573,10 @@ void EVL_make_value(thread_db* tdbb, const dsc* desc, impure_value* value, Memor
 
 	// Allocate a string block of sufficient size.
 
-	VaryingString* string = value->vlu_string;
+	if (!pool)
+		pool = tdbb->getDefaultPool();
 
-	if (string && string->str_length < length)
-	{
-		delete string;
-		string = NULL;
-	}
-
-	if (!string)
-	{
-		if (!pool)
-			pool = tdbb->getDefaultPool();
-
-		string = value->vlu_string = FB_NEW_RPT(*pool, length) VaryingString();
-		string->str_length = length;
-	}
+	VaryingString* string = value->getString(*pool, length);
 
 	value->vlu_desc.dsc_length = length;
 	UCHAR* target = string->str_data;

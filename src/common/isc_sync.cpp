@@ -886,28 +886,29 @@ ULONG ISC_exception_post(ULONG sig_num, const TEXT* err_msg, ISC_STATUS& /*isc_e
 		err_msg = "";
 	}
 
-	TEXT* const log_msg = (TEXT *) gds__alloc(strlen(err_msg) + 256);
+	const size_t msgsz = strlen(err_msg) + 256;
+	TEXT* const log_msg = (TEXT *) gds__alloc(static_cast<SLONG>(msgsz));
 	// NOMEM: crash!
 	log_msg[0] = '\0';
 
 	switch (sig_num)
 	{
 	case SIGSEGV:
-		sprintf(log_msg, "%s Segmentation Fault.\n"
+		snprintf(log_msg, msgsz, "%s Segmentation Fault.\n"
 				"\t\tThe code attempted to access memory\n"
 				"\t\twithout privilege to do so.\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case SIGBUS:
-		sprintf(log_msg, "%s Bus Error.\n"
+		snprintf(log_msg, msgsz, "%s Bus Error.\n"
 				"\t\tThe code caused a system bus error.\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case SIGILL:
 
-		sprintf(log_msg, "%s Illegal Instruction.\n"
+		snprintf(log_msg, msgsz, "%s Illegal Instruction.\n"
 				"\t\tThe code attempted to perform an\n"
 				"\t\tillegal operation."
 				"\tThis exception will cause the Firebird server\n"
@@ -915,14 +916,14 @@ ULONG ISC_exception_post(ULONG sig_num, const TEXT* err_msg, ISC_STATUS& /*isc_e
 		break;
 
 	case SIGFPE:
-		sprintf(log_msg, "%s Floating Point Error.\n"
+		snprintf(log_msg, msgsz, "%s Floating Point Error.\n"
 				"\t\tThe code caused an arithmetic exception\n"
 				"\t\tor floating point exception."
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	default:
-		sprintf(log_msg, "%s Unknown Exception.\n"
+		snprintf(log_msg, msgsz, "%s Unknown Exception.\n"
 				"\t\tException number %" ULONGFORMAT"."
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg, sig_num);
@@ -932,8 +933,10 @@ ULONG ISC_exception_post(ULONG sig_num, const TEXT* err_msg, ISC_STATUS& /*isc_e
 	if (err_msg)
 	{
 		gds__log(log_msg);
-		gds__free(log_msg);
 	}
+
+	gds__free(log_msg);
+
 	abort();
 
 	return 0;	// compiler silencer
@@ -968,35 +971,36 @@ ULONG ISC_exception_post(ULONG except_code, const TEXT* err_msg, ISC_STATUS& isc
 		err_msg = "";
 	}
 
-	TEXT* log_msg = (TEXT*) gds__alloc(static_cast<SLONG>(strlen(err_msg) + 256));
+	const size_t msgsz = strlen(err_msg) + 256;
+	TEXT* const log_msg = (TEXT*)gds__alloc(static_cast<SLONG>(msgsz));
 	// NOMEM: crash!
 	log_msg[0] = '\0';
 
 	switch (except_code)
 	{
 	case EXCEPTION_ACCESS_VIOLATION:
-		sprintf(log_msg, "%s Access violation.\n"
+		snprintf(log_msg, msgsz, "%s Access violation.\n"
 				"\t\tThe code attempted to access a virtual\n"
 				"\t\taddress without privilege to do so.\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case EXCEPTION_DATATYPE_MISALIGNMENT:
-		sprintf(log_msg, "%s Datatype misalignment.\n"
+		snprintf(log_msg, msgsz, "%s Datatype misalignment.\n"
 				"\t\tThe attempted to read or write a value\n"
 				"\t\tthat was not stored on a memory boundary.\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
-		sprintf(log_msg, "%s Array bounds exceeded.\n"
+		snprintf(log_msg, msgsz, "%s Array bounds exceeded.\n"
 				"\t\tThe code attempted to access an array\n"
 				"\t\telement that is out of bounds.\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case EXCEPTION_FLT_DENORMAL_OPERAND:
-		sprintf(log_msg, "%s Float denormal operand.\n"
+		snprintf(log_msg, msgsz, "%s Float denormal operand.\n"
 				"\t\tOne of the floating-point operands is too\n"
 				"\t\tsmall to represent as a standard floating-point\n"
 				"\t\tvalue.\n"
@@ -1004,56 +1008,56 @@ ULONG ISC_exception_post(ULONG except_code, const TEXT* err_msg, ISC_STATUS& isc
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case EXCEPTION_FLT_DIVIDE_BY_ZERO:
-		sprintf(log_msg, "%s Floating-point divide by zero.\n"
+		snprintf(log_msg, msgsz, "%s Floating-point divide by zero.\n"
 				"\t\tThe code attempted to divide a floating-point\n"
 				"\t\tvalue by a floating-point divisor of zero.\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case EXCEPTION_FLT_INEXACT_RESULT:
-		sprintf(log_msg, "%s Floating-point inexact result.\n"
+		snprintf(log_msg, msgsz, "%s Floating-point inexact result.\n"
 				"\t\tThe result of a floating-point operation cannot\n"
 				"\t\tbe represented exactly as a decimal fraction.\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case EXCEPTION_FLT_INVALID_OPERATION:
-		sprintf(log_msg, "%s Floating-point invalid operand.\n"
+		snprintf(log_msg, msgsz, "%s Floating-point invalid operand.\n"
 				"\t\tAn indeterminant error occurred during a\n"
 				"\t\tfloating-point operation.\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case EXCEPTION_FLT_OVERFLOW:
-		sprintf(log_msg, "%s Floating-point overflow.\n"
+		snprintf(log_msg, msgsz, "%s Floating-point overflow.\n"
 				"\t\tThe exponent of a floating-point operation\n"
 				"\t\tis greater than the magnitude allowed.\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case EXCEPTION_FLT_STACK_CHECK:
-		sprintf(log_msg, "%s Floating-point stack check.\n"
+		snprintf(log_msg, msgsz, "%s Floating-point stack check.\n"
 				"\t\tThe stack overflowed or underflowed as the\n"
 				"result of a floating-point operation.\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case EXCEPTION_FLT_UNDERFLOW:
-		sprintf(log_msg, "%s Floating-point underflow.\n"
+		snprintf(log_msg, msgsz, "%s Floating-point underflow.\n"
 				"\t\tThe exponent of a floating-point operation\n"
 				"\t\tis less than the magnitude allowed.\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case EXCEPTION_INT_DIVIDE_BY_ZERO:
-		sprintf(log_msg, "%s Integer divide by zero.\n"
+		snprintf(log_msg, msgsz, "%s Integer divide by zero.\n"
 				"\t\tThe code attempted to divide an integer value\n"
 				"\t\tby an integer divisor of zero.\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case EXCEPTION_INT_OVERFLOW:
-		sprintf(log_msg, "%s Interger overflow.\n"
+		snprintf(log_msg, msgsz, "%s Interger overflow.\n"
 				"\t\tThe result of an integer operation caused the\n"
 				"\t\tmost significant bit of the result to carry.\n"
 				"\tThis exception will cause the Firebird server\n"
@@ -1061,7 +1065,7 @@ ULONG ISC_exception_post(ULONG except_code, const TEXT* err_msg, ISC_STATUS& isc
 		break;
 	case EXCEPTION_STACK_OVERFLOW:
 		isc_error = isc_exception_stack_overflow;
-		result = (ULONG) EXCEPTION_EXECUTE_HANDLER;
+		result = EXCEPTION_EXECUTE_HANDLER;
 		is_critical = false;
 		break;
 
@@ -1086,7 +1090,7 @@ ULONG ISC_exception_post(ULONG except_code, const TEXT* err_msg, ISC_STATUS& isc
 		is_critical = false;
 		break;
 	default:
-		sprintf (log_msg, "%s An exception occurred that does\n"
+		snprintf(log_msg, msgsz, "%s An exception occurred that does\n"
 				"\t\tnot have a description.  Exception number %" XLONGFORMAT".\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg, except_code);
@@ -1807,7 +1811,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	// Create the real file mapping object.
 
 	TEXT mapping_name[64]; // enough for int32 as text
-	sprintf(mapping_name, "_mapping_%" ULONGFORMAT, header_address[1]);
+	snprintf(mapping_name, sizeof(mapping_name), "_mapping_%" ULONGFORMAT, header_address[1]);
 
 	if (!make_object_name(object_name, sizeof(object_name), filename, mapping_name))
 	{
@@ -2299,7 +2303,7 @@ static bool initializeFastMutex(FAST_MUTEX* lpMutex, LPSECURITY_ATTRIBUTES lpAtt
 	char sz[MAXPATHLEN];
 	if (lpName)
 	{
-		sprintf(sz, FAST_MUTEX_EVT_NAME, lpName);
+		snprintf(sz, sizeof(sz), FAST_MUTEX_EVT_NAME, lpName);
 		name = sz;
 	}
 
@@ -2316,7 +2320,7 @@ static bool initializeFastMutex(FAST_MUTEX* lpMutex, LPSECURITY_ATTRIBUTES lpAtt
 		SetHandleInformation(lpMutex->hEvent, HANDLE_FLAG_INHERIT, 0);
 
 		if (lpName)
-			sprintf(sz, FAST_MUTEX_MAP_NAME, lpName);
+			snprintf(sz, sizeof(sz), FAST_MUTEX_MAP_NAME, lpName);
 
 		lpMutex->hFileMap = CreateFileMapping(
 			INVALID_HANDLE_VALUE,
@@ -2595,7 +2599,7 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector,
 	while (true)
 	{
 		TEXT mapping_name[64]; // enough for int32 as text
-		sprintf(mapping_name, "_mapping_%" ULONGFORMAT, sh_mem_hdr_address[1] + 1);
+		snprintf(mapping_name, sizeof(mapping_name), "_mapping_%" ULONGFORMAT, sh_mem_hdr_address[1] + 1);
 
 		TEXT object_name[MAXPATHLEN];
 		if (!make_object_name(object_name, sizeof(object_name), sh_mem_name, mapping_name))

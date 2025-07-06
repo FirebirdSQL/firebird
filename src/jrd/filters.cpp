@@ -55,7 +55,7 @@ static void string_put(BlobControl*, const char*);
  *	  For V3 historical reasons, only ASCII byte values are passed
  *	  through.  All other byte values are mapped to ascii '.'
  */
-static const UCHAR char_tab[128] =
+static inline constexpr UCHAR char_tab[128] =
 {
 	0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -77,10 +77,10 @@ struct filter_tmp
 	TEXT tmp_string[1];
 };
 
-const char* const WILD_CARD_UIC = "(*.*)";
+inline constexpr const char* WILD_CARD_UIC = "(*.*)";
 
 // TXNN: Used on filter of internal data structure to text
-static const TEXT* acl_privs[priv_max] =
+static inline constexpr const TEXT* acl_privs[priv_max] =
 {
 	"?",
 	"control",
@@ -100,7 +100,7 @@ static const TEXT* acl_privs[priv_max] =
 	"drop_any"
 };
 
-static const TEXT* acl_ids[id_max] =
+static inline constexpr const TEXT* acl_ids[id_max] =
 {
 	"?: ",
 	"group: ",
@@ -119,7 +119,7 @@ static const TEXT* acl_ids[id_max] =
 };
 
 // TXNN: Used on filter of internal data structure to text
-static const TEXT dtypes[DTYPE_TYPE_MAX][36] =
+static inline constexpr TEXT dtypes[DTYPE_TYPE_MAX][36] =
 {
 	"none",
 	"CHAR",
@@ -182,7 +182,7 @@ ISC_STATUS filter_acl(USHORT action, BlobControl* control)
 
 	if (!status)
 	{
-		sprintf(line, "ACL version %d", (int) *p++);
+		snprintf(line, sizeof(line), "ACL version %d", (int) *p++);
 		string_put(control, line);
 		TEXT* out = line;
 
@@ -198,7 +198,7 @@ ISC_STATUS filter_acl(USHORT action, BlobControl* control)
 				while ((c = *p++) != 0)
 				{
 					all_wild = false;
-					sprintf(out, "%s%.*s", acl_ids[c], *p, p + 1);
+					snprintf(out, sizeof(line) - (out - line), "%s%.*s", acl_ids[c], *p, p + 1);
 					p += *p + 1;
 					while (*out)
 						++out;
@@ -210,7 +210,7 @@ ISC_STATUS filter_acl(USHORT action, BlobControl* control)
 						case id_procedure:
 						case id_trigger:
 						case id_function:
-							sprintf(out, ".%.*s", *p, p + 1);
+							snprintf(out, sizeof(line) - (out - line), ".%.*s", *p, p + 1);
 							p += *p + 1;
 							while (*out)
 								++out;
@@ -222,25 +222,25 @@ ISC_STATUS filter_acl(USHORT action, BlobControl* control)
 				}
 				if (all_wild)
 				{
-					sprintf(out, "all users: %s, ", WILD_CARD_UIC);
+					snprintf(out, sizeof(line) - (out - line), "all users: %s, ", WILD_CARD_UIC);
 					while (*out)
 						++out;
 				}
 				break;
 
 			case ACL_priv_list:
-				sprintf(out, "privileges: (");
+				snprintf(out, sizeof(line) - (out - line), "privileges: (");
 				while (*out)
 					++out;
 				if ((c = *p++) != 0)
 				{
-					sprintf(out, "%s", acl_privs[c]);
+					snprintf(out, sizeof(line) - (out - line), "%s", acl_privs[c]);
 					while (*out)
 						++out;
 
 					while ((c = *p++) != 0)
 					{
-						sprintf(out, ", %s", acl_privs[c]);
+						snprintf(out, sizeof(line) - (out - line), ", %s", acl_privs[c]);
 						while (*out)
 							++out;
 					}
@@ -474,11 +474,10 @@ ISC_STATUS filter_runtime(USHORT action, BlobControl* control)
 	// Loop thru descriptors looking for one with a data type
 	UCHAR temp[BUFFER_SMALL];
 	UCHAR* buff = temp;
-	const USHORT buff_len = sizeof(temp);
 	control->ctl_data[3] = 8;
 
 	USHORT length;
-	const ISC_STATUS status = caller(isc_blob_filter_get_segment, control, buff_len, buff, &length);
+	const ISC_STATUS status = caller(isc_blob_filter_get_segment, control, sizeof(temp), buff, &length);
 
 	if (status == isc_segment)
 		return isc_segstr_eof;
@@ -498,71 +497,71 @@ ISC_STATUS filter_runtime(USHORT action, BlobControl* control)
 	switch ((rsr_t) buff[0])
 	{
 	case RSR_field_name:
-		sprintf(line, "    name: %s", p);
+		snprintf(line, sizeof(line), "    name: %s", p);
 		break;
 
 	case RSR_field_id:
-		sprintf(line, "Field id: %d", n);
+		snprintf(line, sizeof(line), "Field id: %d", n);
 		break;
 
 	case RSR_dimensions:
-		sprintf(line, "Array dimensions: %d", n);
+		snprintf(line, sizeof(line), "Array dimensions: %d", n);
 		break;
 
 	case RSR_array_desc:
-		sprintf(line, "Array descriptor");
+		snprintf(line, sizeof(line), "Array descriptor");
 		break;
 
 	case RSR_view_context:
-		sprintf(line, "    view_context: %d", n);
+		snprintf(line, sizeof(line), "    view_context: %d", n);
 		break;
 
 	case RSR_base_field:
-		sprintf(line, "    base_field: %s", p);
+		snprintf(line, sizeof(line), "    base_field: %s", p);
 		break;
 
 	case RSR_computed_blr:
-		sprintf(line, "    computed_blr:");
+		snprintf(line, sizeof(line), "    computed_blr:");
 		blr = true;
 		break;
 
 	case RSR_missing_value:
-		sprintf(line, "    missing_value:");
+		snprintf(line, sizeof(line), "    missing_value:");
 		blr = true;
 		break;
 
 	case RSR_default_value:
-		sprintf(line, "    default_value:");
+		snprintf(line, sizeof(line), "    default_value:");
 		blr = true;
 		break;
 
 	case RSR_validation_blr:
-		sprintf(line, "    validation_blr:");
+		snprintf(line, sizeof(line), "    validation_blr:");
 		blr = true;
 		break;
 
 	case RSR_security_class:
-		sprintf(line, "    security_class: %s", p);
+		snprintf(line, sizeof(line), "    security_class: %s", p);
 		break;
 
 	case RSR_trigger_name:
-		sprintf(line, "    trigger_name: %s", p);
+		snprintf(line, sizeof(line), "    trigger_name: %s", p);
 		break;
 
 	case RSR_field_not_null:
-		sprintf(line, "    field_not_null");
+		snprintf(line, sizeof(line), "    field_not_null");
 		break;
 
 	case RSR_field_generator_name:
-		sprintf(line, "    field_generator_name: %s", p);
+		snprintf(line, sizeof(line), "    field_generator_name: %s", p);
 		break;
 
 	case RSR_field_identity_type:
-		sprintf(line, "Field identity type: %d", n);
+		snprintf(line, sizeof(line), "Field identity type: %d", n);
 		break;
 
 	default:
-		sprintf(line, "*** unknown verb %d ***", (int) buff[0]);
+		snprintf(line, sizeof(line), "*** unknown verb %d ***", (int) buff[0]);
 	}
 
 	USHORT strLen = static_cast<USHORT>(strlen(line));
@@ -814,7 +813,7 @@ ISC_STATUS filter_transliterate_text(USHORT action, BlobControl* control)
 	thread_db* tdbb = NULL;
 	// Note: Cannot pass tdbb without API change to user filters
 
-	const USHORT EXP_SCALE		= 128;		// to keep expansion non-floating
+	constexpr USHORT EXP_SCALE = 128; // to keep expansion non-floating
 
 	ctlaux* aux = (ctlaux*) control->ctl_data[0];
 
@@ -1191,7 +1190,7 @@ ISC_STATUS filter_trans(USHORT action, BlobControl* control)
 	if (!status)
 	{
         TEXT line[BUFFER_SMALL];
-		sprintf(line, "Transaction description version: %d", (int) *p++);
+		snprintf(line, sizeof(line), "Transaction description version: %d", (int) *p++);
 		string_put(control, line);
 		TEXT* out = line;
 		const UCHAR* const end = temp + length;
@@ -1202,7 +1201,8 @@ ISC_STATUS filter_trans(USHORT action, BlobControl* control)
 			length = *p++;
 			if (p + length > end)
 			{
-				sprintf(out, "item %d with inconsistent length", (int) p[-1]);
+				snprintf(out, sizeof(line) - (out - line), "item %d with inconsistent length",
+					(int) p[-1]);
 				string_put(control, line);
 				goto break_out;
 			}
@@ -1210,23 +1210,24 @@ ISC_STATUS filter_trans(USHORT action, BlobControl* control)
 			switch (c)
 			{
 			case TDR_HOST_SITE:
-				sprintf(out, "Host site: %.*s", length, p);
+				snprintf(out, sizeof(line) - (out - line), "Host site: %.*s", length, p);
 				break;
 
 			case TDR_DATABASE_PATH:
-				sprintf(out, "Database path: %.*s", length, p);
+				snprintf(out, sizeof(line) - (out - line), "Database path: %.*s", length, p);
 				break;
 
 			case TDR_REMOTE_SITE:
-				sprintf(out, "    Remote site: %.*s", length, p);
+				snprintf(out, sizeof(line) - (out - line), "    Remote site: %.*s", length, p);
 				break;
 
 			case TDR_TRANSACTION_ID:
-				sprintf(out, "    Transaction id: %" SQUADFORMAT, isc_portable_integer(p, length));
+				snprintf(out, sizeof(line) - (out - line), "    Transaction id: %" SQUADFORMAT,
+					isc_portable_integer(p, length));
 				break;
 
 			default:
-				sprintf(out, "item %d not understood", (int) p[-1]);
+				snprintf(out, sizeof(line) - (out - line), "item %d not understood", (int) p[-1]);
 				string_put(control, line);
 				goto break_out;
 			}
@@ -1303,8 +1304,7 @@ static void dump_blr(void* arg, SSHORT /*offset*/, const char* line)
 	}
 
 	// Pad out to indent length with spaces
-	memset(temp, ' ', data_len);
-	sprintf(temp + data_len, "%s", line);
+	snprintf(temp, l + 1, "%-*s%s", static_cast<int>(data_len), "", line);
 	string_put(control, temp);
 
 	if (temp != buffer)

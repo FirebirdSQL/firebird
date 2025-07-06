@@ -1039,6 +1039,7 @@ namespace Jrd
 				ClumpletWriter writer(ClumpletReader::dpbList, MAX_DPB_SIZE);
 				writer.insertString(isc_dpb_user_name, DBA_USER_NAME);
 				writer.insertByte(isc_dpb_no_db_triggers, TRUE);
+				writer.insertInt(isc_dpb_worker_attach, 1);
 
 				// Avoid races with release_attachment() in jrd.cpp
 				XThreadEnsureUnlock releaseGuard(dbb.dbb_thread_mutex, FB_FUNCTION);

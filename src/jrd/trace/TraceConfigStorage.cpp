@@ -177,9 +177,7 @@ void ConfigStorage::shutdown()
 void ConfigStorage::mutexBug(int state, const char* string)
 {
 	TEXT msg[BUFFER_TINY];
-
-	// While string is kept below length 70, all is well.
-	sprintf(msg, "ConfigStorage: mutex %s error, status = %d", string, state);
+	snprintf(msg, sizeof(msg), "ConfigStorage: mutex %s error, status = %d", string, state);
 	fb_utils::logAndDie(msg);
 }
 

@@ -38,6 +38,7 @@ enum pp_vals {
 	PP_CREATE = 0,
 	PP_DATABASE,
 	PP_PAGE_SIZE,
+	// Do not change order of above symbols. See usage of PP_PAGE_SIZE below for DPB creation.
 	PP_USER,
 	PP_PASSWORD,
 	PP_PAGESIZE,
@@ -242,7 +243,7 @@ bool PREPARSE_execute(CheckStatusWrapper* status, Why::YAttachment** ptrAtt,
 				}
 
 				matched = false;
-				for (int i = 3; pp_symbols[i].symbol[0] && !matched; i++)
+				for (int i = PP_PAGE_SIZE; pp_symbols[i].symbol[0] && !matched; i++)
 				{
 					if (token == pp_symbols[i].symbol)
 					{

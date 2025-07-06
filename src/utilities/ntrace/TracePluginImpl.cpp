@@ -1809,7 +1809,7 @@ void TracePluginImpl::register_sql_statement(ITraceSQLStatement* statement)
 	if (!sql)
 		return;
 
-	size_t sql_length = strlen(sql);
+	FB_SIZE_T sql_length = fb_strlen(sql);
 	if (!sql_length)
 		return;
 

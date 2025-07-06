@@ -1333,7 +1333,7 @@ DdlNode* CommentOnNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		fb_assert(subName.hasData());
 
 		auto nameCopy = name;
-		dsqlScratch->qualifyExistingName(nameCopy, obj_udf);
+		dsqlScratch->resolveRoutineOrRelation(nameCopy, {obj_udf});
 
 		static const CachedRequestId funcCachedHandleId;
 		AutoCacheRequest requestHandle(tdbb, funcCachedHandleId);
@@ -1354,7 +1354,7 @@ DdlNode* CommentOnNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		END_FOR
 
 		nameCopy = name;
-		dsqlScratch->qualifyExistingName(nameCopy, obj_procedure);
+		dsqlScratch->resolveRoutineOrRelation(nameCopy, {obj_procedure});
 
 		static const CachedRequestId procCachedHandleId;
 		requestHandle.reset(tdbb, procCachedHandleId);
@@ -1389,8 +1389,6 @@ DdlNode* CommentOnNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			name = nameCopy;
 	}
 
-	dsqlScratch->ddlSchema = name.schema;
-
 	switch (objType)
 	{
 		case obj_database:
@@ -1400,10 +1398,17 @@ DdlNode* CommentOnNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			fb_assert(name.schema.isEmpty());
 			break;
 
+		case obj_procedure:
+		case obj_udf:
+			dsqlScratch->resolveRoutineOrRelation(name, {objType});
+			break;
+
 		default:
 			dsqlScratch->qualifyExistingName(name, objType);
 			break;
 	}
+
+	dsqlScratch->ddlSchema = name.schema;
 
 	return DdlNode::dsqlPass(dsqlScratch);
 }
@@ -1503,8 +1508,7 @@ void CommentOnNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 // gives the list of objects that accept descriptions. At FB2 time, the only
 // subobjects with descriptions are relation's fields and procedure's parameters.
 // In FB3 we added function's arguments.
-void CommentOnNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
-	jrd_tra* transaction)
+void CommentOnNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
 {
 	Attachment* const attachment = transaction->tra_attachment;
 
@@ -7997,7 +8001,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 		//// TODO: <Missing arg #1 - possibly status vector overflow>
 		/***
 		char linecol[64];
-		sprintf(linecol, "At line %d, column %d.", (int) dsqlNode->line, (int) dsqlNode->column);
+		snprintf(linecol, sizeof(linecol), "At line %d, column %d.", (int) dsqlNode->line, (int) dsqlNode->column);
 		***/
 
 		status_exception::raise(
@@ -13204,7 +13208,8 @@ void GrantRevokeNode::setFieldClassName(thread_db* tdbb, jrd_tra* transaction,
 		MODIFY RFR
 			while (!unique)
 		    {
-				sprintf(RFR.RDB$SECURITY_CLASS, "%s%" SQUADFORMAT, SQL_FLD_SECCLASS_PREFIX,
+				snprintf(RFR.RDB$SECURITY_CLASS, sizeof(RFR.RDB$SECURITY_CLASS), "%s%" SQUADFORMAT,
+					SQL_FLD_SECCLASS_PREFIX,
 					DPM_gen_id(tdbb,
 						MET_lookup_generator(tdbb, QualifiedName(SQL_SECCLASS_GENERATOR, SYSTEM_SCHEMA)), false, 1));
 

@@ -3911,7 +3911,7 @@ void write_pub_tables()
 
 		if (!X.RDB$TABLE_SCHEMA_NAME.NULL)
 		{
-			PUT_TEXT(att_ptab_table_schema_name, X.RDB$TABLE_NAME);
+			PUT_TEXT(att_ptab_table_schema_name, X.RDB$TABLE_SCHEMA_NAME);
 			tableName.schema = X.RDB$TABLE_SCHEMA_NAME;
 		}
 

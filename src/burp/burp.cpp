@@ -88,15 +88,14 @@ using namespace Firebird;
 using MsgFormat::SafeArg;
 using namespace Burp;
 
-const char* fopen_write_type = "w";
-const char* fopen_read_type	 = "r";
+inline constexpr const char* fopen_write_type = "w";
+inline constexpr const char* fopen_read_type = "r";
 
-const int open_mask = 0666;
-const char switch_char = '-';
+inline constexpr int open_mask = 0666;
+inline constexpr char switch_char = '-';
 
-
-const char* const output_suppress	= "SUPPRESS";
-const int MIN_VERBOSE_INTERVAL		= 100;
+inline constexpr const char* output_suppress = "SUPPRESS";
+inline constexpr int MIN_VERBOSE_INTERVAL = 100;
 
 enum gbak_action
 {
@@ -121,9 +120,9 @@ static void processFetchPass(const SCHAR*& password, int& itr, const int argc, F
 
 
 // fil.fil_length is FB_UINT64
-const ULONG KBYTE	= 1024;
-const ULONG MBYTE	= KBYTE * KBYTE;
-const ULONG GBYTE	= MBYTE * KBYTE;
+inline constexpr ULONG KBYTE = 1024;
+inline constexpr ULONG MBYTE = 1024 * KBYTE;
+inline constexpr ULONG GBYTE = 1024 * MBYTE;
 
 // Must be consistent with enum BurpGlobals::StatCounter
 struct StatFormat
@@ -132,8 +131,8 @@ struct StatFormat
 	const char* format;
 	char width;
 };
-static const char* STAT_CHARS = "TDRW";
-static const StatFormat STAT_FORMATS[] =
+static inline constexpr const char* STAT_CHARS = "TDRW";
+static inline constexpr StatFormat STAT_FORMATS[] =
 {
 	{"time",	"%4lu.%03u ",  9},
 	{"delta",	"%2lu.%03u ",  7},
@@ -2607,7 +2606,7 @@ static ULONG get_size(const SCHAR* string, burp_fil* file)
  *	restoring to multiple files
  *
  **********************************************/
-	const FB_UINT64 overflow = MAX_UINT64 / 10 - 1;
+	constexpr FB_UINT64 overflow = MAX_UINT64 / 10 - 1;
 	UCHAR c;
 	FB_UINT64 size = 0;
 	bool digit = false;
@@ -2749,7 +2748,7 @@ namespace // for local symbols
 		if (!matcher)
 			return NOT_SET;
 
-		return matcher->matches(name, strlen(name))? MATCH : NOT_MATCH;
+		return matcher->matches(name, fb_strlen(name)) ? MATCH : NOT_MATCH;
 	}
 }
 
@@ -2829,7 +2828,7 @@ void BurpGlobals::print_stats(USHORT number)
 
 	burp_output(false, " ");
 
-	const int time_mask = (1 << TIME_TOTAL) | (1 << TIME_DELTA);
+	constexpr int time_mask = (1 << TIME_TOTAL) | (1 << TIME_DELTA);
 	if (gbl_stat_flags & time_mask)
 	{
 		const SINT64 t0 = fb_utils::query_performance_counter();

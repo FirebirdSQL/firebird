@@ -1944,6 +1944,12 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				dbb->dbb_crypto_manager->attach(tdbb, attachment);
 			}
 
+			if (dbb->isRestoring())
+			{
+				if (!options.dpb_gbak_attach && !options.dpb_map_attach && !options.dpb_worker_attach)
+					ERR_post(Arg::Gds(isc_no_user_att_while_restore));
+			}
+
 			// Basic DBB initialization complete
 			initGuard.leave();
 
@@ -3147,6 +3153,8 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 
 			// Initialize the global objects
 			dbb->initGlobalObjects();
+			if (attachment->isGbak())
+				dbb->setRestoring(true);
 
 			// Initialize locks
 			LCK_init(tdbb, LCK_OWNER_database);
@@ -4149,6 +4157,26 @@ void JRequest::getInfo(CheckStatusWrapper* user_status, int level, unsigned int 
 
 		try
 		{
+			for (unsigned i = 0; i < itemsLength; ++i)
+			{
+				if (items[i] == isc_info_message_number || items[i] == isc_info_message_size)
+				{
+					// For proper return these items require request operation req_send or req_receive
+					// Run request from stale status until we get one of these (or end of program)
+					// It is up to caller to make sure that there is no heavy operations between req_next
+					// and the next SuspendNode/ReceiveNode/SelectMessageNode
+					while ((request->req_flags & req_active)
+							&& request->req_operation != Request::req_receive
+							&& request->req_operation != Request::req_send)
+					{
+						request->req_flags &= ~req_stall;
+						request->req_operation = Request::req_sync;
+						EXE_looper(tdbb, request, request->req_next);
+					}
+					break;
+				}
+			}
+
 			INF_request_info(request, itemsLength, items, bufferLength, buffer);
 		}
 		catch (const Exception& ex)
@@ -4848,6 +4876,7 @@ void JAttachment::transactRequest(CheckStatusWrapper* user_status, ITransaction*
 		JTransaction* const jt = getTransactionInterface(user_status, tra);
 		EngineContextHolder tdbb(user_status, this, FB_FUNCTION);
 
+		Request* request = nullptr;
 		jrd_tra* transaction = jt->getHandle();
 		validateHandle(tdbb, transaction);
 		check_database(tdbb);
@@ -4859,7 +4888,6 @@ void JAttachment::transactRequest(CheckStatusWrapper* user_status, ITransaction*
 			const MessageNode* inMessage = NULL;
 			const MessageNode* outMessage = NULL;
 
-			Request* request = NULL;
 			MemoryPool* new_pool = att->createPool();
 
 			try
@@ -4885,9 +4913,7 @@ void JAttachment::transactRequest(CheckStatusWrapper* user_status, ITransaction*
 			}
 			catch (const Exception&)
 			{
-				if (request)
-					CMP_release(tdbb, request);
-				else
+				if (!request)
 					att->deletePool(new_pool);
 
 				throw;
@@ -4920,6 +4946,15 @@ void JAttachment::transactRequest(CheckStatusWrapper* user_status, ITransaction*
 
 			if (out_msg_length)
 			{
+				// Workaround for GPRE that generated unneeded blr_send
+				if ((request->req_flags & req_active)
+					&& request->req_operation == Request::req_send)
+				{
+					request->req_flags &= ~req_stall;
+					request->req_operation = Request::req_proceed;
+					EXE_looper(tdbb, request, request->req_next);
+				}
+
 				memcpy(out_msg, outMessage->getBuffer(request), out_msg_length);
 			}
 
@@ -4929,6 +4964,9 @@ void JAttachment::transactRequest(CheckStatusWrapper* user_status, ITransaction*
 		}
 		catch (const Exception& ex)
 		{
+			if (request)
+				CMP_release(tdbb, request);
+
 			transliterateException(tdbb, ex, user_status, "JAttachment::transactRequest");
 			return;
 		}
@@ -7440,6 +7478,8 @@ void DatabaseOptions::get(const UCHAR* dpb, FB_SIZE_T dpb_length, bool& invalid_
 		case isc_dpb_search_path:
 			getString(rdr, tempStr);
 			MetaString::parseList(tempStr, dpb_schema_search_path);
+			if (!dpb_schema_search_path.exist(SYSTEM_SCHEMA))
+				dpb_schema_search_path.add(SYSTEM_SCHEMA);
 			break;
 
 		case isc_dpb_blr_request_search_path:
@@ -7975,6 +8015,9 @@ void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment, XThreadEns
 	// restore database lock if needed
 	if (!other)
 		sync.lock(SYNC_EXCLUSIVE);
+
+	if (attachment->att_flags & ATT_creator)
+		dbb->setRestoring(false);
 
 	// remove the attachment block from the dbb linked list
 	for (Jrd::Attachment** ptr = &dbb->dbb_attachments; *ptr; ptr = &(*ptr)->att_next)

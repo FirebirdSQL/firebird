@@ -1040,7 +1040,7 @@ rem_port* INET_connect(const TEXT* name,
 			gds__log("setsockopt: error setting TCP_NODELAY");
 		else
 		{
-			n = connect(port->port_handle, pai->ai_addr, pai->ai_addrlen);
+			n = connect(port->port_handle, pai->ai_addr, static_cast<socklen_t>(pai->ai_addrlen));
 			if (n != -1)
 			{
 				port->port_peer_name = host;
@@ -1148,7 +1148,7 @@ static rem_port* listener_socket(rem_port* port, USHORT flag, const addrinfo* pa
 	{
 		if (++retry)
 			sleep(10);
-		n = bind(port->port_handle, pai->ai_addr, pai->ai_addrlen);
+		n = bind(port->port_handle, pai->ai_addr, static_cast<socklen_t>(pai->ai_addrlen));
 	} while (n == -1 && INET_ERRNO == INET_ADDR_IN_USE && retry < INET_RETRY_CALL);
 
 	if (n == -1)

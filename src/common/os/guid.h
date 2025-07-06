@@ -122,9 +122,10 @@ public:
 		memcpy(&m_data, buffer, SIZE);
 	}
 
-	void toString(char* buffer, bool withBrackets = true) const
+	template<typename T>
+	void toString(T& str, bool withBrackets = true) const
 	{
-		sprintf(buffer, withBrackets ? GUID_FORMAT : GUID_FORMAT_WITHOUT_BRACKETS,
+		str.printf(withBrackets ? GUID_FORMAT : GUID_FORMAT_WITHOUT_BRACKETS,
 			m_data.Data1, m_data.Data2, m_data.Data3,
 			m_data.Data4[0], m_data.Data4[1], m_data.Data4[2], m_data.Data4[3],
 			m_data.Data4[4], m_data.Data4[5], m_data.Data4[6], m_data.Data4[7]);
@@ -133,14 +134,14 @@ public:
 	Firebird::string toString(bool withBrackets = true) const
 	{
 		Firebird::string result;
-		toString(result.getBuffer(GUID_BUFF_SIZE - (withBrackets ? 1 : 3)), withBrackets);
+		toString(result, withBrackets);
 		return result;
 	}
 
 	Firebird::PathName toPathName(bool withBrackets = true) const
 	{
 		Firebird::PathName result;
-		toString(result.getBuffer(GUID_BUFF_SIZE - (withBrackets ? 1 : 3)), withBrackets);
+		toString(result, withBrackets);
 		return result;
 	}
 

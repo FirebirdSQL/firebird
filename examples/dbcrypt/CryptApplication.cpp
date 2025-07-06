@@ -113,7 +113,7 @@ public:
 			throw "setDbCryptCallback";
 
 		char s[256];
-		sprintf(s, "localhost:%s", dbName);
+		snprintf(s, sizeof(s), "localhost:%s", dbName);
 		att = p->attachDatabase(status, s, 0, NULL);
 		if (status->getState() & IStatus::STATE_ERRORS)
 			throw "attachDatabase";

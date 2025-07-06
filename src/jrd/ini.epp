@@ -97,7 +97,7 @@ namespace
 	}
 
 	template <typename T>
-	bool getCharsetByTextType(T& charSet, const USHORT subType)
+	bool getCharsetByTextType(T& charSet, const SSHORT subType) noexcept
 	{
 		switch (subType)
 		{
@@ -177,7 +177,7 @@ namespace
 
 	class SecurityHelper
 	{
-		static const unsigned FB_MAX_ACL_SIZE = 4096;
+		static inline constexpr unsigned FB_MAX_ACL_SIZE = 4096;
 
 	public:
 		SecurityHelper(const MetaName& ownerName, AutoRequest& handle)
@@ -207,7 +207,7 @@ namespace
 		}
 
 	protected:
-		UCHAR buffer[FB_MAX_ACL_SIZE];
+		UCHAR buffer[FB_MAX_ACL_SIZE]{};
 		ULONG length = 0;
 
 	protected:
@@ -661,7 +661,8 @@ void INI_format(thread_db* tdbb, const string& charset)
 		// Store RELATIONS and RELATION_FIELDS
 
 		dsc schemaDesc;
-		schemaDesc.makeText(strlen(SYSTEM_SCHEMA), CS_METADATA, (UCHAR*) SYSTEM_SCHEMA);
+		schemaDesc.makeText(static_cast<USHORT>(strlen(SYSTEM_SCHEMA)), CS_METADATA,
+			(UCHAR*) SYSTEM_SCHEMA);
 
 		AutoRequest handle2;
 
@@ -936,7 +937,7 @@ void INI_init(thread_db* tdbb)
 
 		relation->rel_formats = vec<Format*>::newVector(*pool, 1);
 
-		const auto majorVersion = ODS_VERSION;
+		constexpr auto majorVersion = ODS_VERSION;
 		const auto dbMinorVersion = dbb->dbb_ods_version ? dbb->dbb_minor_version : ODS_CURRENT;
 		// We need only the latest format for virtual tables
 		auto minorVersion = isPersistent ? ODS_RELEASED : ODS_CURRENT;
@@ -1209,7 +1210,8 @@ void INI_upgrade(thread_db* tdbb)
 	const char* context = nullptr;
 
 	dsc schemaDesc;
-	schemaDesc.makeText(strlen(SYSTEM_SCHEMA), CS_METADATA, (UCHAR*) SYSTEM_SCHEMA);
+	schemaDesc.makeText(static_cast<USHORT>(strlen(SYSTEM_SCHEMA)), CS_METADATA,
+		(UCHAR*) SYSTEM_SCHEMA);
 
 	try {
 

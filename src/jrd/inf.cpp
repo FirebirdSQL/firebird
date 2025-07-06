@@ -528,7 +528,7 @@ void INF_database_info(thread_db* tdbb,
 
 				TEXT site[256];
 				ISC_get_host(site, sizeof(site));
-				const ULONG siteLen = MIN(strlen(site), MAX_UCHAR);
+				const ULONG siteLen = MIN(fb_strlen(site), MAX_UCHAR);
 				counts_buffer.push(static_cast<UCHAR>(siteLen));
 				counts_buffer.push(reinterpret_cast<UCHAR*>(site), siteLen);
 
@@ -622,7 +622,7 @@ void INF_database_info(thread_db* tdbb,
 			{
 				const auto attachment = tdbb->getAttachment();
 				const char* userName = attachment->getUserName("<Unknown>").c_str();
-				const ULONG len = MIN(strlen(userName), MAX_UCHAR);
+				const ULONG len = MIN(fb_strlen(userName), MAX_UCHAR);
 				*p++ = static_cast<UCHAR>(len);
 				memcpy(p, userName, len);
 
@@ -653,7 +653,7 @@ void INF_database_info(thread_db* tdbb,
 						names.insert(pos, userName);
 
 						p = buffer;
-						const ULONG len = MIN(strlen(userName), MAX_UCHAR);
+						const ULONG len = MIN(fb_strlen(userName), MAX_UCHAR);
 						*p++ = static_cast<UCHAR>(len);
 						memcpy(p, userName, len);
 
@@ -838,7 +838,7 @@ void INF_database_info(thread_db* tdbb,
 			if (tdbb->getAttachment()->locksmith(tdbb, GET_DBCRYPT_INFO))
 			{
 				const char* key = dbb->dbb_crypto_manager->getKeyName();
-				if (!(info = INF_put_item(item, strlen(key), key, info, end)))
+				if (!(info = INF_put_item(item, fb_strlen(key), key, info, end)))
 					return;
 
 				continue;
@@ -853,7 +853,7 @@ void INF_database_info(thread_db* tdbb,
 			if (tdbb->getAttachment()->locksmith(tdbb, GET_DBCRYPT_INFO))
 			{
 				const char* key = dbb->dbb_crypto_manager->getPluginName();
-				if (!(info = INF_put_item(item, strlen(key), key, info, end)))
+				if (!(info = INF_put_item(item, fb_strlen(key), key, info, end)))
 					return;
 
 				continue;

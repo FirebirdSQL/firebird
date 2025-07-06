@@ -14,6 +14,11 @@ static constexpr char lbl[] = "0123456789";
 #define validate(A, B) BOOST_TEST(std::string_view(A.c_str(), A.length()) == std::string_view(B))
 #define check(A, B) BOOST_TEST(A == B)
 
+static constexpr string::size_type length(const std::string_view& str) noexcept
+{
+	return static_cast<string::size_type>(str.length());
+}
+
 BOOST_AUTO_TEST_CASE(StringInitializeTest)
 {
 	string a;
@@ -614,7 +619,7 @@ BOOST_AUTO_TEST_SUITE(MoveSematicsTests)
 // Move only big strings in the same pool
 BOOST_AUTO_TEST_CASE(DefaultPoolMoveTest)
 {
-	string sourceString(BigStringValue.data(), BigStringValue.length());
+	string sourceString(BigStringValue.data(), length(BigStringValue));
 
 	// Move c'tor
 	string newString(std::move(sourceString));
@@ -622,7 +627,7 @@ BOOST_AUTO_TEST_CASE(DefaultPoolMoveTest)
 	testBigString(newString);
 
 	// Reuse
-	sourceString.assign(BigStringValue.data(), BigStringValue.length());
+	sourceString.assign(BigStringValue.data(), length(BigStringValue));
 	testBigString(sourceString);
 
 	// Move assignment
@@ -634,7 +639,7 @@ BOOST_AUTO_TEST_CASE(DefaultPoolMoveTest)
 BOOST_AUTO_TEST_CASE(NewPoolMoveTest)
 {
 	AutoMemoryPool pool(MemoryPool::createPool());
-	string sourceString(*pool, BigStringValue.data(), BigStringValue.length());
+	string sourceString(*pool, BigStringValue.data(), length(BigStringValue));
 
 	// Move c'tor
 	string newString(*pool, std::move(sourceString));
@@ -642,7 +647,7 @@ BOOST_AUTO_TEST_CASE(NewPoolMoveTest)
 	testBigString(newString);
 
 	// Reuse
-	sourceString.assign(BigStringValue.data(), BigStringValue.length());
+	sourceString.assign(BigStringValue.data(), length(BigStringValue));
 	testBigString(sourceString);
 
 	// Move assignment
@@ -660,7 +665,7 @@ BOOST_AUTO_TEST_SUITE(CannotMoveTests)
 BOOST_AUTO_TEST_CASE(DifferentVsDefaultPoolMove)
 {
 	AutoMemoryPool pool(MemoryPool::createPool());
-	string sourceString(*pool, BigStringValue.data(), BigStringValue.length());
+	string sourceString(*pool, BigStringValue.data(), length(BigStringValue));
 
 	// Move c'tor
 	string newString(std::move(sourceString));
@@ -668,7 +673,7 @@ BOOST_AUTO_TEST_CASE(DifferentVsDefaultPoolMove)
 	testBigString(newString);
 
 	// Reuse
-	sourceString.assign(BigStringValue.data(), BigStringValue.length());
+	sourceString.assign(BigStringValue.data(), length(BigStringValue));
 	testBigString(sourceString);
 
 	// Move assignment
@@ -682,7 +687,7 @@ BOOST_AUTO_TEST_CASE(DifferentPoolsMove)
 {
 	AutoMemoryPool pool1(MemoryPool::createPool());
 	AutoMemoryPool pool2(MemoryPool::createPool());
-	string sourceString(*pool1, BigStringValue.data(), BigStringValue.length());
+	string sourceString(*pool1, BigStringValue.data(), length(BigStringValue));
 
 	// Move c'tor
 	string newString(*pool2, std::move(sourceString));
@@ -690,7 +695,7 @@ BOOST_AUTO_TEST_CASE(DifferentPoolsMove)
 	testBigString(newString);
 
 	// Reuse
-	sourceString.assign(BigStringValue.data(), BigStringValue.length());
+	sourceString.assign(BigStringValue.data(), length(BigStringValue));
 	testBigString(sourceString);
 
 	// Move assignment
@@ -702,7 +707,7 @@ BOOST_AUTO_TEST_CASE(DifferentPoolsMove)
 // Do not move
 BOOST_AUTO_TEST_CASE(SmallStringMove)
 {
-	string sourceString(SmallStringValue.data(), SmallStringValue.length());
+	string sourceString(SmallStringValue.data(), length(SmallStringValue));
 
 	// Move c'tor
 	string newString(std::move(sourceString));
@@ -710,7 +715,7 @@ BOOST_AUTO_TEST_CASE(SmallStringMove)
 	testSmallString(newString);
 
 	// Reuse
-	sourceString.assign(SmallStringValue.data(), SmallStringValue.length());
+	sourceString.assign(SmallStringValue.data(), length(SmallStringValue));
 	testSmallString(sourceString);
 
 	// Move assign

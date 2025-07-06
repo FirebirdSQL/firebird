@@ -453,6 +453,12 @@ namespace Firebird
 			return false;
 		}
 
+		bool exist(const T& item) const
+		{
+			size_type pos;	// ignored
+			return find(item, pos);
+		}
+
 	private:
 		void add(const ObjectsArray<T, A>& o)
 		{

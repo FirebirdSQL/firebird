@@ -276,7 +276,7 @@ int Parser::yylex()
 
 	// Lets skip spaces before store lastLine/lastColumn. This is necessary to avoid yyReducePosn
 	// produce invalid line/column information - CORE-4381.
-	bool spacesSkipped = yylexSkipSpaces();
+	const bool spacesSkipped = yylexSkipSpaces();
 
 	yyposn.lastLine = lex.lines;
 	yyposn.lastColumn = lex.ptr - lex.line_start;
@@ -399,7 +399,7 @@ int Parser::yylexAux()
 	MemoryPool& pool = *tdbb->getDefaultPool();
 
 	SSHORT c = lex.ptr[-1];
-	UCHAR tok_class = classes(c);
+	const UCHAR tok_class = classes(c);
 	char string[MAX_TOKEN_LEN];
 
 	// Depending on tok_class of token, parse token
@@ -602,7 +602,6 @@ int Parser::yylexAux()
 
 		bool hexerror = false;
 		Firebird::string temp;
-		int leadNibble = -1;
 
 		// Scan over the hex string converting adjacent bytes into nibble values.
 		// Every other nibble, write the saved byte to the temp space.
@@ -753,7 +752,7 @@ int Parser::yylexAux()
 				memcmp(lex.ptr, endChar, endCharSize) == 0 &&
 				lex.ptr[endCharSize] == '\'')
 			{
-				size_t len = lex.ptr - start;
+				const FB_SIZE_T len = lex.ptr - start;
 
 				if (len > MAX_STR_SIZE)
 				{
@@ -966,7 +965,7 @@ int Parser::yylexAux()
 		FB_UINT64 number = 0;
 		Int128 num128;
 		int expVal = 0;
-		FB_UINT64 limit_by_10 = MAX_SINT64 / 10;
+		constexpr FB_UINT64 limit_by_10 = MAX_SINT64 / 10;
 		int scale = 0;
 		int expSign = 1;
 

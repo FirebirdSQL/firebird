@@ -902,8 +902,6 @@ void RestoreRelationTask::initItem(BurpGlobals* tdgbl, Item& item)
 				m_masterGbl->gbl_dpb_data.begin(),
 				m_masterGbl->gbl_dpb_data.getCount());
 
-			dpb.deleteWithTag(isc_dpb_gbak_attach);
-
 			const UCHAR* dpbBuffer = dpb.getBuffer();
 			const USHORT dpbLength = dpb.getBufferLength();
 

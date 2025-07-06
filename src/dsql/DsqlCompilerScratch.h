@@ -170,7 +170,13 @@ public:
 		std::initializer_list<ObjectType> objectTypes);
 
 	void putBlrMarkers(ULONG marks);
-	void putDtype(const TypeClause* field, bool useSubType);
+	void putType(const dsql_fld* field, bool useSubType);
+
+	// * Generate TypeClause blr and put it to this Scratch
+	// Depends on: typeOfName, typeOfTable and schema:
+	// blr_column_name3/blr_domain_name3 for field with schema
+	// blr_column_name2/blr_domain_name2 for explicit collate
+	// blr_column_name/blr_domain_name for regular field
 	void putType(const TypeClause* type, bool useSubType);
 	void putLocalVariableDecl(dsql_var* variable, DeclareVariableNode* hostParam, QualifiedName& collationName);
 	void putLocalVariableInit(dsql_var* variable, const DeclareVariableNode* hostParam);
@@ -288,6 +294,13 @@ private:
 	RseNode* pass1RseIsRecursive(RseNode* input);
 	bool pass1RelProcIsRecursive(RecordSourceNode* input);
 	BoolExprNode* pass1JoinIsRecursive(RecordSourceNode*& input);
+
+	void putType(const TypeClause& type, bool useSubType, bool useExplicitCollate);
+
+	template<bool THasTableName>
+	void putTypeName(const TypeClause& type, const bool useExplicitCollate);
+
+	void putDtype(const TypeClause& type, const bool useSubType);
 
 	dsql_dbb* dbb = nullptr;				// DSQL attachment
 	jrd_tra* transaction = nullptr;			// Transaction

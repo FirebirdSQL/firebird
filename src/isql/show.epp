@@ -734,34 +734,35 @@ static string granted_by(const MetaString& grantor, bool nullGrantor)
 
 static void set_grantee(int user_type, const QualifiedMetaString& name, string& user_string)
 {
+	const char* format;
 	switch (user_type)
 	{
 	case obj_view:
-		user_string.printf("VIEW %s", IUTILS_name_to_string(name).c_str());
+		format = "VIEW %s";
 		break;
 	case obj_trigger:
-		user_string.printf("TRIGGER %s", IUTILS_name_to_string(name).c_str());
+		format = "TRIGGER %s";
 		break;
 	case obj_procedure:
-		user_string.printf("PROCEDURE %s", IUTILS_name_to_string(name).c_str());
+		format = "PROCEDURE %s";
 		break;
 	case obj_udf:
-		user_string.printf("FUNCTION %s", IUTILS_name_to_string(name).c_str());
+		format = "FUNCTION %s";
 		break;
 	case obj_user:
-		if (name.object == "PUBLIC")
-			user_string.printf("USER %s", IUTILS_name_to_string(name).c_str());
+		if (!(name.schema.isEmpty() && name.object == "PUBLIC"))
+			format = "USER %s";
 		else
-			user_string = IUTILS_name_to_string(name).c_str();
+			format = "%s";
 		break;
 	case obj_user_group:
-		user_string.printf("GROUP %s", IUTILS_name_to_string(name).c_str());
+		format = "GROUP %s";
 		break;
 	case obj_sql_role:
-		user_string.printf("ROLE %s", IUTILS_name_to_string(name).c_str());
+		format = "ROLE %s";
 		break;
 	case obj_package_header:
-		user_string.printf("PACKAGE %s", IUTILS_name_to_string(name).c_str());
+		format = "PACKAGE %s";
 		break;
 	case obj_privilege:
 		FOR T IN RDB$TYPES
@@ -769,13 +770,17 @@ static void set_grantee(int user_type, const QualifiedMetaString& name, string& 
 				 T.RDB$TYPE EQ atoi(name.object.c_str())
 		{
 			user_string.printf("SYSTEM PRIVILEGE %s", fb_utils::exact_name(T.RDB$TYPE_NAME));
+			return;
 		}
 		END_FOR
+		// In case none was found
+		format = "<unknown privilege %s>";
 		break;
 	default:
-		user_string = IUTILS_name_to_string(name).c_str();
+		format = "%s";
 		break;
 	}
+	user_string.printf(format, IUTILS_name_to_string(name).c_str());
 }
 
 
@@ -1062,7 +1067,6 @@ processing_state SHOW_grants(const std::optional<QualifiedMetaString>& name,
 	BASED_ON RDB$USER_PRIVILEGES.RDB$GRANT_OPTION prev_grant_option;
 	MetaString prev_grantor;
 	string user_string;
-	SCHAR obj_string[QUOTED_NAME_SIZE + 20];
 
 	PrivilegeFields priv_fields[] =
 	{
@@ -1652,10 +1656,6 @@ void SHOW_grant_roles(const SCHAR* terminator, bool* first, const TEXT* optional
  *	All membership privilege may have the with_admin or/and default options set.
  *
  **************************************/
-	BASED_ON RDB$USER_PRIVILEGES.RDB$GRANTOR dummy;	// used to declare buf_grantor
-	FB_UNUSED_VAR(dummy); // Silence compiler warning about unused variable
-	SCHAR buf_grantor[sizeof(dummy) + 20];
-
 	// process role "object"
 
 	FOR PRV IN RDB$USER_PRIVILEGES WITH
@@ -2744,9 +2744,8 @@ static void show_charsets(SSHORT char_set_id, SSHORT collation)
 	if (!found)
 	{
 		TEXT Print_buffer[PRINT_BUFFER_LENGTH];
-		sprintf(Print_buffer,
-				"ISQL_get_character_set: charset %d collation %d not found.\n",
-				char_set_id, collation);
+		snprintf(Print_buffer, sizeof(Print_buffer),
+			"ISQL_get_character_set: charset %d collation %d not found.\n", char_set_id, collation);
 		STDERROUT(Print_buffer);
 	}
 #endif

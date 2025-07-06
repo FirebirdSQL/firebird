@@ -97,15 +97,15 @@ ITransaction* handleToITransaction(CheckStatusWrapper*, FB_API_HANDLE*);
 // Bug 7119 - BLOB_load will open external file for read in BINARY mode.
 
 #ifdef WIN_NT
-static const char* const FOPEN_READ_TYPE		= "rb";
-static const char* const FOPEN_WRITE_TYPE		= "wb";
-static const char* const FOPEN_READ_TYPE_TEXT	= "rt";
-static const char* const FOPEN_WRITE_TYPE_TEXT	= "wt";
+static inline constexpr const char* FOPEN_READ_TYPE			= "rb";
+static inline constexpr const char* FOPEN_WRITE_TYPE		= "wb";
+static inline constexpr const char* FOPEN_READ_TYPE_TEXT	= "rt";
+static inline constexpr const char* FOPEN_WRITE_TYPE_TEXT	= "wt";
 #else
-static const char* const FOPEN_READ_TYPE		= "r";
-static const char* const FOPEN_WRITE_TYPE		= "w";
-static const char* const FOPEN_READ_TYPE_TEXT	= FOPEN_READ_TYPE;
-static const char* const FOPEN_WRITE_TYPE_TEXT	= FOPEN_WRITE_TYPE;
+static inline constexpr const char* FOPEN_READ_TYPE			= "r";
+static inline constexpr const char* FOPEN_WRITE_TYPE		= "w";
+static inline constexpr const char* FOPEN_READ_TYPE_TEXT	= FOPEN_READ_TYPE;
+static inline constexpr const char* FOPEN_WRITE_TYPE_TEXT	= FOPEN_WRITE_TYPE;
 #endif
 
 #define LOWER7(c) ( (c >= 'A' && c<= 'Z') ? c + 'a' - 'A': c )
@@ -113,16 +113,16 @@ static const char* const FOPEN_WRITE_TYPE_TEXT	= FOPEN_WRITE_TYPE;
 
 // Blob stream stuff
 
-const int BSTR_input	= 0;
-const int BSTR_output	= 1;
-const int BSTR_alloc	= 2;
+inline constexpr int BSTR_input		= 0;
+inline constexpr int BSTR_output	= 1;
+inline constexpr int BSTR_alloc		= 2;
 
 static void isc_expand_dpb_internal(const UCHAR** dpb, SSHORT* dpb_size, ...);
 
 
 // Blob info stuff
 
-static const char blob_items[] =
+static inline constexpr char blob_items[] =
 {
 	isc_info_blob_max_segment, isc_info_blob_num_segments,
 	isc_info_blob_total_length
@@ -131,13 +131,13 @@ static const char blob_items[] =
 
 // gds__version stuff
 
-static const unsigned char info[] =
+static inline constexpr unsigned char info[] =
 	{ isc_info_firebird_version, isc_info_implementation, fb_info_implementation, isc_info_end };
 
-static const unsigned char ods_info[] =
+static inline constexpr unsigned char ods_info[] =
 	{ isc_info_ods_version, isc_info_ods_minor_version, isc_info_end };
 
-static const TEXT* const impl_class[] =
+static inline constexpr const TEXT* impl_class[] =
 {
 	NULL,						// 0
 	"access method",			// 1
@@ -252,13 +252,12 @@ void dump(CheckStatusWrapper* status, ISC_QUAD* blobId, IAttachment* att, ITrans
 
 	// Copy data from blob to scratch file
 
-	SCHAR buffer[256];
-	const SSHORT short_length = sizeof(buffer);
+	SCHAR buffer[8192];
 
 	for (bool cond = true; cond; )
 	{
 		unsigned l = 0;
-		switch (blob->getSegment(status, short_length, buffer, &l))
+		switch (blob->getSegment(status, sizeof(buffer), buffer, &l))
 		{
 		case Firebird::IStatus::RESULT_ERROR:
 		case Firebird::IStatus::RESULT_NO_DATA:
@@ -486,7 +485,7 @@ void UtilInterface::getFbVersion(CheckStatusWrapper* status, IAttachment* att,
 
 				case isc_info_truncated:
 					redo = true;
-					// fall down...
+					[[fallthrough]];
 				case isc_info_end:
 					break;
 
@@ -581,7 +580,7 @@ YAttachment* UtilInterface::executeCreateDatabase2(
 			*stmtIsCreateDb = FB_FALSE;
 
 		string statement(creatDBstatement,
-			(stmtLength == 0 && creatDBstatement ? strlen(creatDBstatement) : stmtLength));
+			(stmtLength == 0 && creatDBstatement ? fb_strlen(creatDBstatement) : stmtLength));
 
 		if (!PREPARSE_execute(status, &att, statement, &stmtEaten, dialect, dpbLength, dpb))
 			return NULL;
@@ -716,7 +715,7 @@ void UtilInterface::encodeTimeTz(CheckStatusWrapper* status, ISC_TIME_TZ* timeTz
 	try
 	{
 		timeTz->utc_time = encodeTime(hours, minutes, seconds, fractions);
-		timeTz->time_zone = TimeZoneUtil::parse(timeZone, strlen(timeZone));
+		timeTz->time_zone = TimeZoneUtil::parse(timeZone, fb_strlen(timeZone));
 		TimeZoneUtil::localTimeToUtc(*timeTz);
 	}
 	catch (const Exception& ex)
@@ -790,7 +789,7 @@ void UtilInterface::encodeTimeStampTz(CheckStatusWrapper* status, ISC_TIMESTAMP_
 	{
 		timeStampTz->utc_timestamp.timestamp_date = encodeDate(year, month, day);
 		timeStampTz->utc_timestamp.timestamp_time = encodeTime(hours, minutes, seconds, fractions);
-		timeStampTz->time_zone = TimeZoneUtil::parse(timeZone, strlen(timeZone));
+		timeStampTz->time_zone = TimeZoneUtil::parse(timeZone, fb_strlen(timeZone));
 		TimeZoneUtil::localTimeStampToUtc(*timeStampTz);
 	}
 	catch (const Exception& ex)
@@ -1001,7 +1000,7 @@ public:
 	{
 		try
 		{
-			pb->insertString(tag, str, strlen(str));
+			pb->insertString(tag, str, fb_strlen(str));
 		}
 		catch (const Exception& ex)
 		{
@@ -1192,7 +1191,7 @@ public:
 
 private:
 	AutoPtr<ClumpletWriter> pb;
-	unsigned char nextTag;
+	unsigned char nextTag = 0;
 	string strVal;
 };
 
@@ -1229,7 +1228,7 @@ public:
 			{
 				char temp[STRING_SIZE];
 				decDoubleToString(reinterpret_cast<const decDouble*>(from), temp);
-				unsigned int len = strlen(temp);
+				unsigned int len = fb_strlen(temp);
 				if (len < bufSize)
 					strncpy(buffer, temp, bufSize);
 				else
@@ -1290,7 +1289,7 @@ public:
 			{
 				char temp[STRING_SIZE];
 				decQuadToString(reinterpret_cast<const decQuad*>(from), temp);
-				unsigned int len = strlen(temp);
+				unsigned int len = fb_strlen(temp);
 				if (len < bufSize)
 					strncpy(buffer, temp, bufSize);
 				else
@@ -3359,8 +3358,8 @@ void ThreadCleanup::remove(FPTR_VOID_PTR cleanup, void* arg)
 class ThreadBuffer : public GlobalStorage
 {
 private:
-	const static size_t BUFFER_SIZE = 8192;		// make it match with call stack limit == 2048
-	char buffer[BUFFER_SIZE];
+	static inline constexpr size_t BUFFER_SIZE = 8192;	// make it match with call stack limit == 2048
+	char buffer[BUFFER_SIZE]{};
 	char* buffer_ptr;
 
 public:
@@ -3429,7 +3428,7 @@ public:
 };
 Firebird::GlobalPtr<Strings> cleanStrings;
 
-const char* circularAlloc(const char* s, unsigned len)
+const char* circularAlloc(const char* s, size_t len)
 {
 	return getThreadBuffer()->alloc(s, len);
 }

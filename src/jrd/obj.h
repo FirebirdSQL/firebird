@@ -90,6 +90,30 @@ const ObjectType obj_publication = 103;
 const ObjectType obj_any = 255;
 
 
+inline bool isSchemaBoundObject(ObjectType objectType)
+{
+	switch (objectType)
+	{
+		case obj_relation:
+		case obj_view:
+		case obj_trigger:
+		case obj_procedure:
+		case obj_exception:
+		case obj_field:
+		case obj_index:
+		case obj_charset:
+		case obj_generator:
+		case obj_udf:
+		case obj_collation:
+		case obj_package_header:
+			return true;
+
+		default:
+			return false;
+	}
+}
+
+
 inline bool isDdlObject(ObjectType objectType, bool* useSchema = nullptr)
 {
 	if (useSchema)
@@ -218,6 +242,8 @@ inline const char* getObjectName(ObjectType objType)
 	{
 		case obj_relation:
 			return "TABLE";
+		case obj_trigger:
+			return "TRIGGER";
 		case obj_package_header:
 			return "PACKAGE";
 		case obj_procedure:
