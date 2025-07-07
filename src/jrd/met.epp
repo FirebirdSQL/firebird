@@ -893,7 +893,7 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 			CROSS PRC IN RDB$PROCEDURES
 			WITH DEP.RDB$DEPENDED_ON_SCHEMA_NAME EQ X.RDB$SCHEMA_NAME AND
 				 DEP.RDB$DEPENDED_ON_NAME EQ X.RDB$RELATION_NAME AND
-				 DEP.RDB$FIELD_NAME EQ X.RDB$FIELD_NAME AND
+				 (DEP.RDB$FIELD_NAME EQ X.RDB$FIELD_NAME OR DEP.RDB$FIELD_NAME MISSING) AND
 				 DEP.RDB$DEPENDED_ON_TYPE EQ obj_relation AND
 				 DEP.RDB$DEPENDENT_TYPE EQ obj_procedure AND
 				 DEP.RDB$DEPENDENT_SCHEMA_NAME EQ PRC.RDB$SCHEMA_NAME AND
@@ -920,7 +920,7 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 			CROSS TRG IN RDB$TRIGGERS
 			WITH DEP.RDB$DEPENDED_ON_SCHEMA_NAME EQ X.RDB$SCHEMA_NAME AND
 				 DEP.RDB$DEPENDED_ON_NAME EQ X.RDB$RELATION_NAME AND
-				 DEP.RDB$FIELD_NAME EQ X.RDB$FIELD_NAME AND
+				 (DEP.RDB$FIELD_NAME EQ X.RDB$FIELD_NAME OR DEP.RDB$FIELD_NAME MISSING) AND
 				 DEP.RDB$DEPENDED_ON_TYPE EQ obj_relation AND
 				 DEP.RDB$DEPENDENT_TYPE EQ obj_trigger AND
 				 DEP.RDB$DEPENDENT_SCHEMA_NAME EQ TRG.RDB$SCHEMA_NAME AND
@@ -936,7 +936,7 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 			nameDesc.dsc_address = (UCHAR*) triggerRelationName.c_str();
 			DFW_post_work_arg(transaction, dw2, &nameDesc, &schemaDesc, 0, dfw_arg_check_blr);
 			if (DEP.RDB$FIELD_NAME.NULL)
-				DFW_post_work_arg(transaction, dw2, &nameDesc, 0, dfw_arg_drop_routine_cache);
+				DFW_post_work_arg(transaction, dw2, &nameDesc, &schemaDesc, 0, dfw_arg_drop_routine_cache);
 		}
 		END_FOR
 
@@ -947,7 +947,7 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 			CROSS FUN IN RDB$FUNCTIONS
 			WITH DEP.RDB$DEPENDED_ON_SCHEMA_NAME EQ X.RDB$SCHEMA_NAME AND
 				 DEP.RDB$DEPENDED_ON_NAME EQ X.RDB$RELATION_NAME AND
-				 DEP.RDB$FIELD_NAME EQ X.RDB$FIELD_NAME AND
+				 (DEP.RDB$FIELD_NAME EQ X.RDB$FIELD_NAME OR DEP.RDB$FIELD_NAME MISSING) AND
 				 DEP.RDB$DEPENDED_ON_TYPE EQ obj_relation AND
 				 DEP.RDB$DEPENDENT_TYPE EQ obj_udf AND
 				 DEP.RDB$DEPENDENT_SCHEMA_NAME EQ FUN.RDB$SCHEMA_NAME AND

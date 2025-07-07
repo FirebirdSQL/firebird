@@ -958,8 +958,8 @@ namespace
 	{
 		Jrd::Attachment* attachment = tdbb->getAttachment();
 		// Update DSQL cache
-		METD_drop_function(transaction, QualifiedName(work->dfw_name, work->dfw_package));
-		MET_dsql_cache_release(tdbb, SYM_udf, QualifiedName(work->dfw_name, work->dfw_package));
+		METD_drop_function(transaction, QualifiedName(work->dfw_name, work->dfw_schema, work->dfw_package));
+		MET_dsql_cache_release(tdbb, SYM_udf, QualifiedName(work->dfw_name, work->dfw_schema, work->dfw_package));
 	}
 
 	void FunctionManager::checkParamDependencies(thread_db* tdbb, DeferredWork* work, jrd_tra* transaction)
@@ -1055,8 +1055,8 @@ namespace
 	{
 		Jrd::Attachment* attachment = tdbb->getAttachment();
 		// Update DSQL cache
-		METD_drop_procedure(transaction, QualifiedName(work->dfw_name, work->dfw_package));
-		MET_dsql_cache_release(tdbb, SYM_procedure, QualifiedName(work->dfw_name, work->dfw_package));
+		METD_drop_procedure(transaction, QualifiedName(work->dfw_name, work->dfw_schema, work->dfw_package));
+		MET_dsql_cache_release(tdbb, SYM_procedure, QualifiedName(work->dfw_name, work->dfw_schema, work->dfw_package));
 	}
 
 	void ProcedureManager::checkParamDependencies(thread_db* tdbb, DeferredWork* work, jrd_tra* transaction)
