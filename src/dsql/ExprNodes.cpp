@@ -6207,14 +6207,14 @@ DmlNode* FieldNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* cs
 		fieldNode->itemInfo->fieldId = fieldNode->fieldId;
 		fieldNode->itemInfo->compositeContextNum = fieldNode->contextNum;
 		fieldNode->itemInfo->nullable = true;
-		fieldNode->itemInfo->field.first = QualifiedName(fieldNode->contextTypeName, "");
+		fieldNode->itemInfo->field.first = fieldNode->contextTypeName;
 		fieldNode->itemInfo->field.second.printf("%d", fieldNode->fieldId);
 		fieldNode->itemInfo->compositeSubfield = true;
 
 		DeclareLocalTypeNode* typeDeclaration;
 
 		if (csb->csb_local_type_declarations.hasData()
-			&& csb->csb_local_type_declarations.get(fieldNode->contextTypeName, typeDeclaration))
+			&& csb->csb_local_type_declarations.get(fieldNode->contextTypeName.object, typeDeclaration))
 		{
 			for (auto& it : typeDeclaration->fieldNameToIdMap)
 			{
@@ -14779,7 +14779,10 @@ dsc* VariableNode::execute(thread_db* tdbb, Request* request) const
 			syncDescriptorsWithRecord(*record, *varImpure->vlu_desc.dsc_sub_first);
 
 			if (!isDescNull(*varImpure->vlu_desc.dsc_sub_first))
+			{
 				request->req_flags &= ~req_null;
+				varImpure->vlu_desc.dsc_flags &= ~DSC_null;
+			}
 
 			desc = &varImpure->vlu_desc;
 		}

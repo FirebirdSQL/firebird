@@ -5069,7 +5069,7 @@ void DeclarePackageTypeNode::checkPermission(thread_db* tdbb, jrd_tra* transacti
 }
 
 bool DeclarePackageTypeNode::updateFieldDefaultAndValidation(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
-	MetaName& name, ValueSourceClause* defaultClause, BoolSourceClause* check, bool notNull)
+	QualifiedName& name, ValueSourceClause* defaultClause, BoolSourceClause* check, bool notNull)
 {
 	auto found = false;
 	Attachment* const attachment = transaction->tra_attachment;
@@ -5080,7 +5080,8 @@ bool DeclarePackageTypeNode::updateFieldDefaultAndValidation(thread_db* tdbb, Ds
 
 		FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 			FLD IN RDB$FIELDS
-			WITH FLD.RDB$FIELD_NAME EQ name.c_str()
+			WITH FLD.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+				 FLD.RDB$FIELD_NAME EQ name.object.c_str()
 		{
 			MODIFY FLD
 				found = true;
@@ -5211,7 +5212,7 @@ void DeclarePackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 			DYN_UTIL_generate_field_name(tdbb, generatedFieldName);
 			storeGlobalField(tdbb, transaction, generatedFieldName, type);
 
-			updateFieldDefaultAndValidation(tdbb, dsqlScratch, transaction, generatedFieldName.object,
+			updateFieldDefaultAndValidation(tdbb, dsqlScratch, transaction, generatedFieldName,
 				typeClause->defaultClause, typeClause->checkClause, type->notNull);
 
 			type->fieldSource = generatedFieldName;
@@ -5244,7 +5245,7 @@ void DeclarePackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 			typeClause->defaultClause = FB_NEW_POOL(pool) ValueSourceClause(pool);
 			typeClause->defaultClause->value = rowValue;
 
-			updateFieldDefaultAndValidation(tdbb, dsqlScratch, transaction, fieldSource.object,
+			updateFieldDefaultAndValidation(tdbb, dsqlScratch, transaction, fieldSource,
 				typeClause->defaultClause, check, notNull);
 		}
 	}

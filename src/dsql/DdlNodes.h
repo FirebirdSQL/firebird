@@ -1005,7 +1005,7 @@ protected:
 
 private:
 	bool updateFieldDefaultAndValidation(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
-		MetaName& name, ValueSourceClause* defaultClause, BoolSourceClause* check, bool notNull);
+		QualifiedName& name, ValueSourceClause* defaultClause, BoolSourceClause* check, bool notNull);
 
 public:
 	QualifiedName name;

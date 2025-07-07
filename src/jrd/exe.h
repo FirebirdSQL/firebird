@@ -416,7 +416,7 @@ public:
 
 typedef Firebird::LeftPooledMap<QualifiedNameMetaNamePair, FieldInfo> MapFieldInfo;
 typedef Firebird::RightPooledMap<Item, ItemInfo> MapItemInfo;
-typedef Firebird::GenericMap<Firebird::Pair<Firebird::Right<int, MetaName> > > MapContextTypeName;
+typedef Firebird::GenericMap<Firebird::Pair<Firebird::Right<int, QualifiedName> > > MapContextTypeName;
 typedef Firebird::GenericMap<Firebird::Pair<Firebird::Right<int, MetaName> > > MapContextVariableName;
 
 // Table value function block

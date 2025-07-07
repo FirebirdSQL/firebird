@@ -8189,7 +8189,7 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 				if (!relation && field->packageName.object.hasData())
 				{
-					if (!METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, QualifiedName(field->relationName.object, ""), fld))
+					if (!METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, field->relationName, fld))
 						dsqlScratch->genCompositeTypeFromCache(field, fld);
 
 					field->fieldSource = field->typeOfName;
@@ -11738,6 +11738,15 @@ SelectNode* SelectNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		const auto parameter = MAKE_parameter(statement->getReceiveMsg(), true, true, 0, item);
 		parameter->par_node = item;
 		DsqlDescMaker::fromNode(dsqlScratch, &parameter->par_desc, item);
+
+		// dsql_par** subParam = &parameter->par_sub_first;
+		// dsc** subDesc = &parameter->par_desc.dsc_sub_first;
+		// while (*subParam)
+		// {
+		// 	(*subParam)->par_desc = *(*subDesc);
+		// 	subParam = &(*subParam)->par_next;
+		// 	subDesc = &(*subDesc)->dsc_next;
+		// }
 	}
 
 	return node;

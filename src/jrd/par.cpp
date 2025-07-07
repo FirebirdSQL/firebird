@@ -631,7 +631,7 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 					if (itemInfo)
 					{
 						itemInfo->compositeContextNum = context_num;
-						csb->csb_map_context_type.put(context_num, fieldSourceName.object);
+						csb->csb_map_context_type.put(context_num, fieldSourceName);
 
 						QualifiedNameMetaNamePair namePair(fieldSourceName, "");
 
@@ -675,7 +675,7 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 					{
 						itemInfo->fullDomain = true;
 						itemInfo->compositeContextNum = context_num;
-						csb->csb_map_context_type.put(context_num, localTypeName.object);
+						csb->csb_map_context_type.put(context_num, localTypeName);
 
 						QualifiedNameMetaNamePair namePair(localTypeName, "");
 

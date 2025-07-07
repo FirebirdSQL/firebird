@@ -926,7 +926,7 @@ public:
 	const bool byId;
 	bool dsqlCursorField;
 	bool nullable;
-	MetaName contextTypeName;
+	QualifiedName contextTypeName;
 	ItemInfo* itemInfo;
 };
 
