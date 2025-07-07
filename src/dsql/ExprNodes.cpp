@@ -14978,6 +14978,9 @@ ValueExprNode* RowValueExpressionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch
 bool RowValueExpressionNode::setParameterType(DsqlCompilerScratch* dsqlScratch,
 											  std::function<void(dsc*)> makeDesc, bool forceVarChar)
 {
+	if (!makeDesc)
+		return false;
+
 	dsc subDesc;
 	makeDesc(&subDesc);
 
