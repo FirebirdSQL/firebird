@@ -739,6 +739,10 @@ namespace Firebird
 		{
 			return assign(first, last - first);
 		}
+		StringType& assign(const std::string_view& s)
+		{
+			return assign(s.data(), static_cast<size_type>(s.length()));
+		}
 
 		StringType& operator=(const StringType& v)
 		{
