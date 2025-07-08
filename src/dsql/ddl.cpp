@@ -197,7 +197,7 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 		{
 			QualifiedName packagedTypeFullname = field->packageName.object.hasData()
 				? QualifiedName(field->typeOfName.object, field->packageName.schema, field->packageName.object)
-				: QualifiedName(field->typeOfName.object, {}, field->typeOfName.schema);
+				: QualifiedName(field->typeOfName.object, dsqlScratch->package.schema, field->typeOfName.schema.hasData() ? field->typeOfName.schema : dsqlScratch->package.object);
 
 			dsqlScratch->qualifyExistingName(packagedTypeFullname, obj_packaged_type);
 			dsqlScratch->qualifyExistingName(field->typeOfName, obj_field);
