@@ -221,7 +221,7 @@ public:
 		return *this;
 	}
 
-	StatusVector& operator<<(const std::string_view& text) noexcept
+	StatusVector& operator<<(std::string_view text) noexcept
 	{
 		implementation->shiftLeft(string(text.data(), static_cast<string::size_type>(text.length())));
 		return *this;
