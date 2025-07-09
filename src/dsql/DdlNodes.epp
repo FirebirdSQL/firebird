@@ -2412,7 +2412,11 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 				else if (field->packageName.object.hasData())
 				{
 					if (!METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, field->relationName, field->fld_sub_first))
+					{
 						dsqlScratch->genCompositeTypeFromCache(field, field->fld_sub_first);
+						field->relationName.schema = dsqlScratch->package.schema;
+						field->relationName.package = dsqlScratch->package.object;
+					}
 
 					field->fieldSource = field->typeOfName;
 				}
@@ -3513,7 +3517,11 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 			else if (field->packageName.object.hasData())
 			{
 				if (!METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, field->relationName, field->fld_sub_first))
+				{
 					dsqlScratch->genCompositeTypeFromCache(field, field->fld_sub_first);
+					field->relationName.schema = dsqlScratch->package.schema;
+					field->relationName.package = dsqlScratch->package.object;
+				}
 
 				field->fieldSource = field->typeOfName;
 			}

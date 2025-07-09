@@ -217,7 +217,7 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 			{
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
 				Arg::Gds(isc_invalid_parameter_decl) <<
-				Arg::Gds(isc_packaged_type_notdef) << packagedTypeFullname.toQuotedString());
+				Arg::Gds(isc_packaged_type_notdef) << packagedTypeFullname.toQuotedString() << Arg::Str(field->fld_name));
 			}
 		}
 

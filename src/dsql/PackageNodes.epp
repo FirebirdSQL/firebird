@@ -1482,7 +1482,8 @@ DdlNode* CreatePackageBodyNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 					names[i].packageTypes.addName<PackageItemType::PACKAGE_TYPE>(type->name);
 
-					type->name = name;
+					type->name.schema = name.schema;
+					type->name.package = name.object;
 					type->create = true;
 					type->privateFlag = true;
 					dsqlScratch->packagedTypesCache.add(type);
@@ -1717,6 +1718,8 @@ void CreatePackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 					headerItems.packageTypes.checkDuplicate<PackageItemType::PACKAGE_TYPE>(type->name);
 					existingItems.packageTypes.checkDuplicate<PackageItemType::PACKAGE_TYPE>(type->name);
 
+					type->name.schema = name.schema;
+					type->name.package = name.object;
 					type->packageOwner = owner;
 					type->preserveDefaults =
 						existingItems.packageTypes.exist(Signature(type->fieldSource)) && arrays[i] == items;
