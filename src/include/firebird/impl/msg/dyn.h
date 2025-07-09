@@ -321,7 +321,7 @@ FB_IMPL_MSG_SYMBOL(DYN, 328, dyn_index_cant_validate_inactive, "Can't validate i
 FB_IMPL_MSG_SYMBOL(DYN, 329, dyn_index_cant_validate_non_unique, "Can't validate non-unique index")
 FB_IMPL_MSG_SYMBOL(DYN, 330, dyn_index_already_validated, "Index uniqueness already validated")
 FB_IMPL_MSG_SYMBOL(DYN, 331, dyn_index_validation_failed, "Uniqueness validation of the index @1 failed")
-FB_IMPL_MSG(DYN, 332, dyn_wrong_default_syntax, -901, "42", "000", "Wrong default declaration syntax") // TODO ROWTYPE: possibly rewrite to *_MSG_SYMBOL
+FB_IMPL_MSG(DYN, 332, dyn_wrong_default_syntax, -901, "42", "000", "Wrong default declaration syntax")
 FB_IMPL_MSG(DYN, 333, dyn_wrong_default_param_number, -901, "42", "000", "Wrong default parameters number")
 FB_IMPL_MSG(DYN, 334, dyn_composite_not_fount, -901, "42", "000", "Composite type @1 not found")
-FB_IMPL_MSG(DYN, 335, dyn_packaged_type_is_used, -901, "42", "000", "Packaged type @1.@2 is used in @3 and cannot be dropped")
+FB_IMPL_MSG(DYN, 325, dyn_packaged_type_is_used, -901, "42", "000", "Packaged type @1 is used in @2 and cannot be dropped")
