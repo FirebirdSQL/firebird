@@ -269,7 +269,7 @@ bool MET_get_composite_type(thread_db* tdbb, MemoryPool& csbPool, const Qualifie
 				else
 				{
 					(*nextSubfieldInfo)->validationExpr = parse_field_validation_blr(tdbb,
-						&FLD.RDB$VALIDATION_BLR, QualifiedName(FLD.RDB$FIELD_NAME, ""));
+						&FLD.RDB$VALIDATION_BLR, QualifiedName(FLD.RDB$FIELD_NAME, FLD.RDB$SCHEMA_NAME));
 				}
 
 				nextSubfieldInfo = &(*nextSubfieldInfo)->next;
