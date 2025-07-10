@@ -4099,6 +4099,15 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation, USHORT id)
 				case att_field_relation_name:
 					GET_TEXT(X.RDB$RELATION_NAME);
 					X.RDB$RELATION_NAME.NULL = FALSE;
+					strcpy(field->fld_relation_name, X.RDB$RELATION_NAME);
+					relation->rel_name.object = field->fld_relation_name;
+					break;
+
+				case att_field_relation_schema_name:
+					GET_TEXT(X.RDB$SCHEMA_NAME);
+					strcpy(field->fld_schema_name, X.RDB$SCHEMA_NAME);
+					relation->rel_name.schema = field->fld_schema_name;
+					X.RDB$SCHEMA_NAME.NULL = FALSE;
 					break;
 
 				default:
@@ -8059,8 +8068,8 @@ bool get_packaged_types(BurpGlobals* tdgbl)
 				case att_ptype_name:
 					GET_TEXT(X.RDB$TYPE_NAME);
 					X.RDB$TYPE_NAME.NULL = FALSE;
-					BURP_verbose(411, X.RDB$TYPE_NAME);
-					// msg 411 restoring %s packaged type
+					BURP_verbose(423, X.RDB$TYPE_NAME);
+					// msg 423 restoring %s packaged type
 					break;
 
 				case att_ptype_package_name:

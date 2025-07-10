@@ -366,8 +366,9 @@ enum att_type {
 	att_field_owner_name, // FB3.0, ODS12_0,
 	att_field_generator_name,
 	att_field_identity_type,
-	att_field_schema_name,
-	att_field_relation_name,	// FB6.0, ODS14
+	att_field_schema_name, // FB6.0, ODS14
+	att_field_relation_name,
+	att_field_relation_schema_name,
 
 	// Index attributes
 
@@ -808,6 +809,7 @@ struct burp_fld
 	CollId		fld_collation_id;
 	RCRD_OFFSET	fld_sql;
 	RCRD_OFFSET	fld_null;
+	TEXT		fld_schema_name[GDS_NAME_LEN];
 	TEXT		fld_relation_name[GDS_NAME_LEN];
 };
 

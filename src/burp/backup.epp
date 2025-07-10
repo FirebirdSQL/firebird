@@ -526,7 +526,7 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 		write_constants();
 
 		// Write packaged types
-		BURP_verbose(414);	// msg 414 writing packaged types
+		BURP_verbose(426);	// msg 426 writing packaged types
 
 		write_packaged_types();
 		write_packaged_type_fields();
@@ -710,6 +710,9 @@ burp_fld* get_fields( burp_rel* relation)
 			field->fld_length = Y.RDB$FIELD_LENGTH;
 			field->fld_scale = Y.RDB$FIELD_SCALE;
 			field->fld_id = X.RDB$FIELD_ID;
+
+			if (!X.RDB$SCHEMA_NAME.NULL)
+				COPY(X.RDB$SCHEMA_NAME, field->fld_schema_name);
 
 			if (!X.RDB$DESCRIPTION.NULL)
 			{
@@ -2141,6 +2144,9 @@ void put_relation( burp_rel* relation)
 
 		if (field->fld_relation_name[0])
 			PUT_TEXT(att_field_relation_name, field->fld_relation_name);
+
+		if (field->fld_schema_name[0])
+			PUT_TEXT(att_field_relation_schema_name, field->fld_schema_name);
 
 		put(tdgbl, att_end);
 	}
@@ -4059,8 +4065,8 @@ void write_packaged_types()
 		const SSHORT l = PUT_TEXT(att_ptype_name, X.RDB$TYPE_NAME);
 		MISC_terminate(X.RDB$TYPE_NAME, temp, l, sizeof(temp));
 
-		BURP_verbose(413, temp);
-		// msg 413 writing packaged type %s
+		BURP_verbose(425, temp);
+		// msg 425 writing packaged type %s
 
 		put(tdgbl, att_end);
 	}
@@ -4430,6 +4436,7 @@ void write_packaged_type_fields()
 			relation->rel_next = tdgbl->relations;
 			tdgbl->relations = relation;
 			relation->rel_name.object = Z.RDB$RELATION_NAME;
+			relation->rel_name.schema = Z.RDB$SCHEMA_NAME;
 			relation->rel_flags = 0;
 			put_relation (relation);
 		}
