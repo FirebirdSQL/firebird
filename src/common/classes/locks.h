@@ -50,8 +50,7 @@ class Exception;	// Needed for catch
 
 #ifdef WIN_NT
 
-// Generic process-local mutex and spinlock. The latter
-// is used to manage memory heaps in a threaded environment.
+// Generic process-local mutex.
 
 // Windows version of the class
 
@@ -149,23 +148,6 @@ private:
 	// Forbid copying
 	Mutex(const Mutex&);
 	Mutex& operator=(const Mutex&);
-};
-
-class Spinlock : public Mutex
-{
-private:
-	void init();
-
-public:
-	Spinlock()
-	{
-		init();
-	}
-
-	explicit Spinlock(MemoryPool&)
-	{
-		init();
-	}
 };
 
 #else //WIN_NT
@@ -271,51 +253,6 @@ private:
 	Mutex(const Mutex&);
 	Mutex& operator=(const Mutex&);
 };
-
-#ifdef NOT_USED_OR_REPLACED		// we do not use spinlocks currently
-class Spinlock
-{
-private:
-	pthread_spinlock_t spinlock;
-public:
-	Spinlock()
-	{
-		if (pthread_spin_init(&spinlock, false))
-			system_call_failed::raise("pthread_spin_init");
-	}
-
-	explicit Spinlock(MemoryPool&)
-	{
-		if (pthread_spin_init(&spinlock, false))
-			system_call_failed::raise("pthread_spin_init");
-	}
-
-	~Spinlock()
-	{
-		if (pthread_spin_destroy(&spinlock))
-			system_call_failed::raise("pthread_spin_destroy");
-	}
-
-	void enter()
-	{
-		if (pthread_spin_lock(&spinlock))
-			system_call_failed::raise("pthread_spin_lock");
-	}
-
-	void leave()
-	{
-		if (pthread_spin_unlock(&spinlock))
-			system_call_failed::raise("pthread_spin_unlock");
-	}
-
-private:
-	// Forbid copying
-	Spinlock(const Spinlock&);
-	Spinlock& operator=(const Spinlock&);
-};
-#else
-typedef Mutex Spinlock;
-#endif
 
 #endif //WIN_NT
 

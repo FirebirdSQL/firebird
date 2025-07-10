@@ -38,14 +38,7 @@
 
 namespace Firebird {
 
-#if defined(WIN_NT)
-
-void Spinlock::init()
-{
-	SetCriticalSectionSpinCount(&spinlock, 4000);
-}
-
-#else //posix mutex
+#if !defined(WIN_NT)
 
 pthread_mutexattr_t Mutex::attr;
 
