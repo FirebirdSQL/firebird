@@ -253,7 +253,7 @@ int ExtAuthClient::authenticate(ThrowStatusWrapper* status, IClientBlock* cBlock
 			error(status, "Malformed data from server - missing random block");
 
 		// next append login to random block
-		unsigned long len = static_cast<unsigned long>(strlen(login));
+		unsigned len = static_cast<unsigned>(strlen(login));
 		if (len > LOGINSIZE)
 			len = LOGINSIZE;
 		memcpy(&bytes[RANDSIZE], login, len);
