@@ -668,7 +668,7 @@ dsql_par* MAKE_parameter(dsql_msg* message, bool sqlda_flag, bool null_flag,
 	if (node)
 	{
 		MAKE_parameter_names(parameter, node);
-		MAKE_parameter_composite(parameter, node);
+		MAKE_parameter_composite(message, parameter, node);
 	}
 
 	// If the parameter is used declared, set SQLDA index
@@ -726,10 +726,10 @@ void MAKE_parameter_names(dsql_par* parameter, const ValueExprNode* item)
 	@param item
 
 **/
-void MAKE_parameter_composite(dsql_par* parameter, const ValueExprNode* item)
+void MAKE_parameter_composite(dsql_msg* message, dsql_par* parameter, const ValueExprNode* item)
 {
 	fb_assert(parameter && item);
-	item->setParameterCompositeDescriptor(parameter);
+	item->setParameterCompositeDescriptor(message, parameter);
 }
 
 

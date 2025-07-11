@@ -6767,11 +6767,11 @@ void FieldNode::setParameterName(dsql_par* parameter) const
 	setParameterInfo(parameter, dsqlContext);
 }
 
-void FieldNode::setParameterCompositeDescriptor(dsql_par* parameter) const
+void FieldNode::setParameterCompositeDescriptor(dsql_msg* message, dsql_par* parameter) const
 {
 	if (dsqlField->dtype == dtype_rowtype)
 	{
-		Jrd::generate_sub_parameters(*dsqlField, *parameter);
+		Jrd::generate_sub_parameters(message, *dsqlField, *parameter);
 	}
 }
 
@@ -8663,9 +8663,9 @@ void DsqlAliasNode::setParameterName(dsql_par* parameter) const
 	parameter->par_alias = name;
 }
 
-void DsqlAliasNode::setParameterCompositeDescriptor(dsql_par* parameter) const
+void DsqlAliasNode::setParameterCompositeDescriptor(dsql_msg* message, dsql_par* parameter) const
 {
-	value->setParameterCompositeDescriptor(parameter);
+	value->setParameterCompositeDescriptor(message, parameter);
 }
 
 void DsqlAliasNode::genBlr(DsqlCompilerScratch* dsqlScratch)
@@ -13587,11 +13587,11 @@ void UdfCallNode::setParameterName(dsql_par* parameter) const
 	parameter->par_name = parameter->par_alias = dsqlFunction->udf_name.object;
 }
 
-void UdfCallNode::setParameterCompositeDescriptor(dsql_par* parameter) const
+void UdfCallNode::setParameterCompositeDescriptor(dsql_msg* message, dsql_par* parameter) const
 {
 	if (dsqlFunction->udf_outfield.dtype == dtype_rowtype)
 	{
-		Jrd::generate_sub_parameters(dsqlFunction->udf_outfield, *parameter);
+		Jrd::generate_sub_parameters(message, dsqlFunction->udf_outfield, *parameter);
 	}
 }
 
@@ -14545,11 +14545,11 @@ void VariableNode::setParameterName(dsql_par* parameter) const
 	parameter->par_name = parameter->par_alias = dsqlVar->field->fld_name.c_str();
 }
 
-void VariableNode::setParameterCompositeDescriptor(dsql_par* parameter) const
+void VariableNode::setParameterCompositeDescriptor(dsql_msg* message, dsql_par* parameter) const
 {
 	if (dsqlVar->desc.dsc_dtype == dtype_rowtype)
 	{
-		Jrd::generate_sub_parameters(*dsqlVar->field, *parameter);
+		Jrd::generate_sub_parameters(message, *dsqlVar->field, *parameter);
 	}
 }
 
@@ -15010,11 +15010,11 @@ void RowValueExpressionNode::setParameterName(dsql_par* parameter) const
 	parameter->par_name = parameter->par_alias = "ROW";
 }
 
-void RowValueExpressionNode::setParameterCompositeDescriptor(dsql_par* parameter) const
+void RowValueExpressionNode::setParameterCompositeDescriptor(dsql_msg* message, dsql_par* parameter) const
 {
 	if (rowDesc.dsc_dtype == dtype_rowtype)
 	{
-		Jrd::generate_sub_parameters(*rowField, *parameter);
+		Jrd::generate_sub_parameters(message, *rowField, *parameter);
 	}
 }
 

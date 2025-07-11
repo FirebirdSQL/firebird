@@ -859,7 +859,7 @@ public:
 	ValueExprNode* dsqlFieldRemapper(FieldRemapper& visitor) override;
 
 	void setParameterName(dsql_par* parameter) const override;
-	void setParameterCompositeDescriptor(dsql_par* parameter) const override;
+	void setParameterCompositeDescriptor(dsql_msg* message, dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
@@ -1094,7 +1094,7 @@ public:
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
 	void setParameterName(dsql_par* parameter) const override;
-	void setParameterCompositeDescriptor(dsql_par* parameter) const override;
+	void setParameterCompositeDescriptor(dsql_msg* message, dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 
@@ -2309,7 +2309,7 @@ public:
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
-	void setParameterCompositeDescriptor(dsql_par* parameter) const override;
+	void setParameterCompositeDescriptor(dsql_msg* message, dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 
@@ -2410,7 +2410,7 @@ public:
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
-	void setParameterCompositeDescriptor(dsql_par* parameter) const override;
+	void setParameterCompositeDescriptor(dsql_msg* message, dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
@@ -2454,7 +2454,7 @@ public:
 	virtual ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,	std::function<void (dsc*)>, bool forceVarChar) final;
 	virtual void setParameterName(dsql_par* parameter) const;
-	virtual void setParameterCompositeDescriptor(dsql_par* parameter) const;
+	virtual void setParameterCompositeDescriptor(dsql_msg* message, dsql_par* parameter) const;
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 	virtual bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const;

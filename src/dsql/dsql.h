@@ -949,7 +949,7 @@ enum class AggregateFunctionPhase : UCHAR
 	FINISH = 3
 };
 
-USHORT generate_sub_parameters(dsql_fld& parameterField, dsql_par& hostParameter);
+USHORT generate_sub_parameters(dsql_msg* message, dsql_fld& parameterField, dsql_par& hostParameter);
 
 } // namespace
 

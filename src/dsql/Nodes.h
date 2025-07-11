@@ -908,7 +908,7 @@ public:
 	}
 
 	virtual void setParameterName(dsql_par* parameter) const = 0;
-	virtual void setParameterCompositeDescriptor(dsql_par* parameter) const {};
+	virtual void setParameterCompositeDescriptor(dsql_msg* message, dsql_par* parameter) const {};
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) = 0;
 
 	ValueExprNode* dsqlFieldRemapper(FieldRemapper& visitor) override
@@ -957,7 +957,7 @@ public:
 		fb_assert(false);
 	}
 
-	void setParameterCompositeDescriptor(dsql_par* /*parameter*/) const override
+	void setParameterCompositeDescriptor(dsql_msg* /*message*/, dsql_par* /*parameter*/) const override
 	{
 		fb_assert(false);
 	}

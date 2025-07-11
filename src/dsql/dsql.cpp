@@ -1721,6 +1721,7 @@ dsql_udf::dsql_udf(MemoryPool& p, const class Function* jfun)
 }
 
 static USHORT generateSubparameterFields(thread_db* tdbb,
+										dsql_msg* message,
 										dsql_fld* parameterField,
 										dsc* parameterDsc,
 										dsql_par** lastParameterPtr,
@@ -1731,7 +1732,7 @@ static USHORT generateSubparameterFields(thread_db* tdbb,
 	if (!parameterField)
 		return 0;
 
-	auto pool = tdbb->getDefaultPool();
+	auto pool = &message->getPool();
 	USHORT count = 0;
 
 	// If the field is a composite type, add only its internal elements
@@ -1742,12 +1743,13 @@ static USHORT generateSubparameterFields(thread_db* tdbb,
 		{
 			UCHAR* nextoffset = parameterDsc->dsc_address;
 			count += generateSubparameterFields(tdbb,
-										  parameterField->fld_sub_first,
-										  parameterDsc->dsc_sub_first,
-										  lastParameterPtr,
-										  nextoffset,
-										  0,
-										  parameterField->fld_name);
+												message,
+												parameterField->fld_sub_first,
+												parameterDsc->dsc_sub_first,
+												lastParameterPtr,
+												nextoffset,
+												0,
+												parameterField->fld_name);
 		}
 	}
 	else
@@ -1781,12 +1783,13 @@ static USHORT generateSubparameterFields(thread_db* tdbb,
 	if (parameterField->fld_next)
 	{
 		count += generateSubparameterFields(tdbb,
-										parameterField->fld_next,
-										parameterDsc->dsc_next,
-										lastParameterPtr,
-										nulloffset,
-										previousParameterIndex,
-										parentName);
+											message,
+											parameterField->fld_next,
+											parameterDsc->dsc_next,
+											lastParameterPtr,
+											nulloffset,
+											previousParameterIndex,
+											parentName);
 	}
 
 	return count;
@@ -1803,7 +1806,7 @@ static USHORT generateSubparameterFields(thread_db* tdbb,
     @param hostParameter
 
  **/
-USHORT Jrd::generate_sub_parameters(dsql_fld& parameterField, dsql_par& hostParameter)
+USHORT Jrd::generate_sub_parameters(dsql_msg* message, dsql_fld& parameterField, dsql_par& hostParameter)
 {
 	if (parameterField.dtype != dtype_rowtype)
 		return 0;
@@ -1821,6 +1824,7 @@ USHORT Jrd::generate_sub_parameters(dsql_fld& parameterField, dsql_par& hostPara
 		UCHAR* nextoffset = hostParameter.par_desc.dsc_address;
 		// Convert the hierarchical field structure into a flat list of parameters
 		return generateSubparameterFields(tdbb,
+										message,
 										parameterField.fld_sub_first,
 										hostParameter.par_desc.dsc_sub_first,
 										nextPtr,
