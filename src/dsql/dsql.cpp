@@ -1254,6 +1254,9 @@ static UCHAR* describe_parameter(thread_db* tdbb,
 {
 	UCHAR buf[128];
 
+	// Create temp buffer for subfield tags
+	UCharBuffer subFieldsBuffer;
+
 	dsc desc = param->par_desc;
 
 	// Scan sources of coercion rules in reverse order to observe
@@ -1405,8 +1408,6 @@ static UCHAR* describe_parameter(thread_db* tdbb,
 					length = 0;
 				else if (param->par_sub_first)
 				{
-					// Create temp buffer for subfield tags
-					UCharBuffer subFieldsBuffer;
 					ULONG bufferSize = 1024;  // we should start from something
 					bool needRetry;
 					UCHAR* subInfo = nullptr;
@@ -1416,7 +1417,7 @@ static UCHAR* describe_parameter(thread_db* tdbb,
 					{
 						needRetry = false;
 						subInfo = subFieldsBuffer.getBuffer(bufferSize);
-						const UCHAR* const subEnd = subInfo + bufferSize;
+						UCHAR* subEnd = subInfo + bufferSize;
 						currentPos = subInfo;
 
 						// traverse all subfields recursively
@@ -1440,6 +1441,7 @@ static UCHAR* describe_parameter(thread_db* tdbb,
 								}
 
 								bufferSize = newSize;
+								subEnd = subInfo + bufferSize;
 								needRetry = true;
 								break;
 							}
