@@ -8368,7 +8368,9 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 							strcmp(RC.RDB$CONSTRAINT_TYPE, UNIQUE_CNSTRT) == 0)
 						{
 							// Deactivation of primary/unique key requires check for active foreign keys
-							checkIndexReferenced(tdbb, transaction, indexName);
+							if (!clause->enforced)
+								checkIndexReferenced(tdbb, transaction, indexName);
+
 							modifyIndex(tdbb, transaction, indexName, clause->enforced);
 						}
 						else if (strcmp(RC.RDB$CONSTRAINT_TYPE, FOREIGN_KEY) == 0)
@@ -10741,7 +10743,8 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_ALTER_INDEX, name, {});
 
-		checkIndexReferenced(tdbb, transaction, name);
+		if (!active)
+			checkIndexReferenced(tdbb, transaction, name);
 
 		MODIFY IDX
 			IDX.RDB$INDEX_INACTIVE.NULL = FALSE;
@@ -10755,7 +10758,7 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 	else
 	{
 		// msg 48: "Index not found"
-		status_exception::raise(Arg::PrivateDyn(48));
+		status_exception::raise(Arg::PrivateDyn(48) << Arg::Gds(isc_index_name) << name.toQuotedString());
 	}
 
 	savePoint.release();	// everything is ok
