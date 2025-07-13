@@ -109,6 +109,8 @@ static void updateRdbFields(const TypeClause* type,
 	SSHORT& fieldPrecisionNull, SSHORT& fieldPrecision,
 	SSHORT& collationIdNull, SSHORT& collationId,
 	SSHORT& segmentLengthNull, SSHORT& segmentLength);
+static void modifyIndex(thread_db* tdbb, jrd_tra* transaction,
+	const char* name, bool active);
 
 static const char* const CHECK_CONSTRAINT_EXCEPTION = "check_constraint";
 
@@ -176,6 +178,50 @@ void ExecInSecurityDb::executeInSecurityDb(jrd_tra* localTransaction)
 
 //----------------------
 
+
+// Activate/deactivate given index
+static void modifyIndex(thread_db* tdbb, jrd_tra* transaction,
+	const QualifiedName& name, bool active)
+{
+	AutoCacheRequest request(tdbb, drq_m_index, DYN_REQUESTS);
+
+	bool found = false;
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		IDX IN RDB$INDICES
+		WITH IDX.RDB$SCHEMA_NAME EQUIV name.schema.c_str() AND
+			 IDX.RDB$INDEX_NAME EQ name.object.c_str()
+	{
+		found = true;
+		MODIFY IDX
+			IDX.RDB$INDEX_INACTIVE.NULL = FALSE;
+			IDX.RDB$INDEX_INACTIVE = active ? FALSE : TRUE;
+		END_MODIFY
+	}
+	END_FOR
+
+	if (!found)
+	{
+		// msg 48: "Index not found"
+		status_exception::raise(Arg::PrivateDyn(48) << Arg::Gds(isc_index_name) << name.toQuotedString());
+	}
+}
+
+// Check if given index is referenced by active foreign key constraint
+static void checkIndexReferenced(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& name)
+{
+	AutoCacheRequest fkCheck(tdbb, drq_c_active_fk, DYN_REQUESTS);
+
+	FOR(REQUEST_HANDLE fkCheck TRANSACTION_HANDLE transaction)
+		IDX IN RDB$INDICES
+		WITH IDX.RDB$FOREIGN_KEY_SCHEMA_NAME EQ name.schema.c_str() AND
+			 IDX.RDB$FOREIGN_KEY EQ name.object.c_str() AND
+			 IDX.RDB$INDEX_INACTIVE EQ 0 OR IDX.RDB$INDEX_INACTIVE MISSING
+	{
+		// MSG 408: "Can't deactivate index used by an integrity constraint"
+		status_exception::raise(Arg::Gds(isc_integ_index_deactivate));
+	}
+	END_FOR
+}
 
 // Check temporary table reference rules between given child relation and master
 // relation (owner of given PK/UK index).
@@ -3616,7 +3662,6 @@ bool TriggerDefinition::modify(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		{
 			switch (TRG.RDB$SYSTEM_FLAG)
 			{
-				case fb_sysflag_check_constraint:
 				case fb_sysflag_referential_constraint:
 				case fb_sysflag_view_check:
 					status_exception::raise(Arg::Gds(isc_dyn_cant_modify_auto_trig));
@@ -6440,6 +6485,7 @@ DdlNode* RelationNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			case Clause::TYPE_ALTER_COL_NAME:
 			case Clause::TYPE_ALTER_COL_NULL:
 			case Clause::TYPE_ALTER_COL_POS:
+			case Clause::TYPE_ALTER_CONSTRAINT:
 			case Clause::TYPE_DROP_COLUMN:
 			case Clause::TYPE_DROP_CONSTRAINT:
 			case Clause::TYPE_ALTER_SQL_SECURITY:
@@ -6888,7 +6934,12 @@ void RelationNode::makeConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 				constraint.create = FB_NEW_POOL(pool) Constraint(pool);
 				constraint.create->type = Constraint::TYPE_NOT_NULL;
 				if (clause->constraintType == AddConstraintClause::CTYPE_NOT_NULL)
+				{
 					constraint.name = clause->name;
+					constraint.create->enforced = clause->enforced;
+					*notNull = clause->enforced;
+				}
+				// NOT NULL for PRIMARY KEY is always enforced
 			}
 
 			if (clause->constraintType == AddConstraintClause::CTYPE_NOT_NULL)
@@ -6908,6 +6959,7 @@ void RelationNode::makeConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 				constraint.create->index->name = constraint.name;
 
 			constraint.create->columns = clause->columns;
+			constraint.create->enforced = clause->enforced;
 			break;
 		}
 
@@ -6920,6 +6972,7 @@ void RelationNode::makeConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 			constraint.create->columns = clause->columns;
 			constraint.create->refRelation = clause->refRelation;
 			constraint.create->refColumns = clause->refColumns;
+			constraint.create->enforced = clause->enforced;
 
 			// If there is a referenced table name but no referenced field names, the
 			// primary key of the referenced table designates the referenced fields.
@@ -7035,6 +7088,7 @@ void RelationNode::makeConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 			CreateDropConstraint& constraint = constraints.add();
 			constraint.create = FB_NEW_POOL(pool) Constraint(pool);
 			constraint.create->type = Constraint::TYPE_CHECK;
+			constraint.create->enforced = clause->enforced;
 			constraint.name = clause->name;
 			defineCheckConstraint(dsqlScratch, *constraint.create, clause->check);
 			break;
@@ -7106,7 +7160,7 @@ void RelationNode::defineConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 				definition.unique = constraint.type != Constraint::TYPE_FK;
 				if (constraint.index->descending)
 					definition.descending = true;
-				definition.inactive = false;
+				definition.inactive = !constraint.enforced;
 				definition.columns = constraint.columns;
 				definition.refRelation = constraint.refRelation;
 				definition.refColumns = constraint.refColumns;
@@ -7381,6 +7435,7 @@ void RelationNode::defineCheckConstraintTrigger(DsqlCompilerScratch* dsqlScratch
 	trigger.type = triggerType;
 	trigger.source = clause->source;
 	trigger.blrData = blrWriter.getBlrData();
+	trigger.active = constraint.enforced;
 }
 
 // Define "on delete|update set default" trigger (for referential integrity) along with its blr.
@@ -8287,6 +8342,123 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 						CreateDropConstraint& dropConstraint = constraints.add();
 						dropConstraint.name = static_cast<const DropConstraintClause*>(i->getObject())->name;
 						dropConstraint.silent = static_cast<const DropConstraintClause*>(i->getObject())->silent;
+					}
+
+					break;
+				}
+
+				case Clause::TYPE_ALTER_CONSTRAINT:
+				{
+					executeBeforeTrigger();
+
+					const AlterConstraintClause* clause = static_cast<const AlterConstraintClause*>(i->getObject());
+					AutoCacheRequest request(tdbb, drq_get_constr_type, DYN_REQUESTS);
+					bool found = false;
+
+					FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+						RC IN RDB$RELATION_CONSTRAINTS
+						WITH RC.RDB$CONSTRAINT_NAME EQ clause->name.c_str() AND
+							 RC.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+							 RC.RDB$RELATION_NAME EQ name.object.c_str()
+					{
+						found = true;
+						QualifiedName indexName(RC.RDB$INDEX_NAME, RC.RDB$SCHEMA_NAME);
+						fb_utils::exact_name(RC.RDB$CONSTRAINT_TYPE);
+						if (strcmp(RC.RDB$CONSTRAINT_TYPE, PRIMARY_KEY) == 0 ||
+							strcmp(RC.RDB$CONSTRAINT_TYPE, UNIQUE_CNSTRT) == 0)
+						{
+							// Deactivation of primary/unique key requires check for active foreign keys
+							checkIndexReferenced(tdbb, transaction, indexName);
+							modifyIndex(tdbb, transaction, indexName, clause->enforced);
+						}
+						else if (strcmp(RC.RDB$CONSTRAINT_TYPE, FOREIGN_KEY) == 0)
+						{
+							// Activation of foreign key requires check for active partner which is done on index activation
+							// so there is nothing to check here
+							modifyIndex(tdbb, transaction, indexName, clause->enforced);
+						}
+						else if (strcmp(RC.RDB$CONSTRAINT_TYPE, CHECK_CNSTRT) == 0)
+						{
+							AutoCacheRequest requestHandle(tdbb, drq_m_check_trgs, DYN_REQUESTS);
+
+							FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+								TRG IN RDB$TRIGGERS CROSS
+								CHK IN RDB$CHECK_CONSTRAINTS
+								WITH TRG.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+									 TRG.RDB$RELATION_NAME EQ name.object.c_str() AND
+									 TRG.RDB$SCHEMA_NAME EQ CHK.RDB$SCHEMA_NAME AND
+									 TRG.RDB$TRIGGER_NAME EQ CHK.RDB$TRIGGER_NAME AND
+									 CHK.RDB$CONSTRAINT_NAME EQ clause->name.c_str()
+							{
+								MODIFY TRG
+									TRG.RDB$TRIGGER_INACTIVE = clause->enforced ? FALSE : TRUE;
+								END_MODIFY
+							}
+							END_FOR
+						}
+						else if (strcmp(RC.RDB$CONSTRAINT_TYPE, NOT_NULL_CNSTRT) == 0)
+						{
+							AutoRequest requestHandle;
+
+							FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+								CHK IN RDB$CHECK_CONSTRAINTS CROSS
+								RF  IN RDB$RELATION_FIELDS
+								WITH CHK.RDB$CONSTRAINT_NAME EQ clause->name.c_str() AND
+									 CHK.RDB$SCHEMA_NAME EQ RF.RDB$SCHEMA_NAME AND
+									 CHK.RDB$TRIGGER_NAME EQ RF.RDB$FIELD_NAME AND
+									 RF.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+									 RF.RDB$RELATION_NAME EQ name.object.c_str()
+							{
+								// Identity column cannot be NULL-able.
+								if (RF.RDB$IDENTITY_TYPE.NULL == FALSE)
+								{
+									fb_utils::exact_name(RF.RDB$FIELD_NAME);
+									// msg 274: Identity column @1 of table @2 cannot be changed to NULLable
+									status_exception::raise(Arg::PrivateDyn(274) << RF.RDB$FIELD_NAME << name.toQuotedString());
+								}
+
+								// Column of an active primary key cannot be nullable
+								AutoRequest request3;
+
+								FOR (REQUEST_HANDLE request3 TRANSACTION_HANDLE transaction)
+									ISG IN RDB$INDEX_SEGMENTS
+									CROSS IDX IN RDB$INDICES OVER RDB$SCHEMA_NAME, RDB$INDEX_NAME
+									CROSS RC2 IN RDB$RELATION_CONSTRAINTS OVER RDB$SCHEMA_NAME, RDB$INDEX_NAME
+									WITH ISG.RDB$FIELD_NAME EQ RF.RDB$FIELD_NAME AND
+										 IDX.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+										 IDX.RDB$RELATION_NAME EQ name.object.c_str() AND
+										 (IDX.RDB$INDEX_INACTIVE EQ 0 OR IDX.RDB$INDEX_INACTIVE MISSING) AND
+										 RC2.RDB$CONSTRAINT_TYPE EQ PRIMARY_KEY
+								{
+									status_exception::raise(Arg::Gds(isc_primary_key_notnull));
+								}
+								END_FOR
+
+								// Otherwise it is fine
+								MODIFY RF
+									if (clause->enforced)
+									{
+										RF.RDB$NULL_FLAG.NULL = FALSE;
+										RF.RDB$NULL_FLAG = TRUE;
+									}
+									else
+									{
+										RF.RDB$NULL_FLAG.NULL = TRUE;
+										RF.RDB$NULL_FLAG = FALSE; // For symmetry
+									}
+								END_MODIFY
+							}
+							END_FOR
+						}
+						else
+							status_exception::raise(Arg::Gds(isc_wish_list) << Arg::Gds(isc_ref_cnstrnt_update));
+					}
+					END_FOR
+
+					if (!found)
+					{
+						// msg 130: "CONSTRAINT %s does not exist."
+						status_exception::raise(Arg::PrivateDyn(130) << clause->name);
 					}
 
 					break;
@@ -10568,6 +10740,8 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 		found = true;
 
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_ALTER_INDEX, name, {});
+
+		checkIndexReferenced(tdbb, transaction, name);
 
 		MODIFY IDX
 			IDX.RDB$INDEX_INACTIVE.NULL = FALSE;
