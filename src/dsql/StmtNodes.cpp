@@ -2665,7 +2665,6 @@ string DeclareSubFuncNode::internalPrint(NodePrinter& printer) const
 	return "DeclareSubFuncNode";
 }
 
-// TODO: rowtype variables should work in sub function/procedures
 DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	MemoryPool& pool = dsqlScratch->getPool();
@@ -2691,14 +2690,6 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 	dsqlFunction->udf_sub_type = returnType->subType;
 	dsqlFunction->udf_length = returnType->length;
 	dsqlFunction->udf_character_set_id = returnType->charSetId.value_or(CS_NONE);
-
-	DSC desc;
-	desc.dsc_dtype = dsqlFunction->udf_dtype;
-	desc.dsc_scale = dsqlFunction->udf_scale;
-	desc.dsc_sub_type = dsqlFunction->udf_sub_type;
-	desc.dsc_length = dsqlFunction->udf_length;
-	desc.setTextType(dsqlFunction->udf_dtype);
-	dsqlFunction->udf_outputs.add(desc);
 
 	if (dsqlDeterministic)
 		dsqlSignature.flags |= Signature::FLAG_DETERMINISTIC;
@@ -11007,6 +10998,8 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch,
 	{
 		if (fields.getCount() != values->items.getCount())
 		{
+			DsqlDescMaker::fromNode(dsqlScratch, values->items[0]);
+
 			// if we have only one value and it is a row value, we can split it into fields
 			if (values->items.getCount() == 1 && values->items[0]->getDsqlDesc().dsc_dtype == dtype_rowtype
 				&& fields.getCount() == values->items[0]->getDsqlDesc().dsc_sub_count)

@@ -13661,7 +13661,11 @@ void UdfCallNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 void UdfCallNode::make(DsqlCompilerScratch* /*dsqlScratch*/, dsc* desc)
 {
-	*desc = dsqlFunction->udf_outputs[0];
+	DsqlDescMaker::fromField(desc, &dsqlFunction->udf_outfield);
+
+	// CVC: Setting flags to zero obviously impeded DSQL to acknowledge
+	// the fact that any UDF can return NULL simply returning a NULL
+	// pointer.
 	desc->setNullable(true);
 
 	if (!desc->isText())
@@ -13669,8 +13673,7 @@ void UdfCallNode::make(DsqlCompilerScratch* /*dsqlScratch*/, dsc* desc)
 		desc->dsc_sub_type = dsqlFunction->udf_outputs[0].getSubType();
 
 	if (desc->isText() || (desc->isBlob() && desc->getBlobSubType() == isc_blob_text))
-		// desc->setTextType(dsqlFunction->udf_character_set_id);
-		desc->setTextType(dsqlFunction->udf_outputs[0].getTextType());
+		desc->setTextType(dsqlFunction->udf_character_set_id);
 }
 
 bool UdfCallNode::deterministic(thread_db* tdbb) const

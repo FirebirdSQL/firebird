@@ -381,7 +381,6 @@ public:
 	bool udf_private = false;	// Packaged private function
 	bool udf_aggregate = false;
 	SSHORT udf_def_count = 0;	// number of inputs with default values
-	Firebird::ObjectsArray<dsc> udf_outputs;
 	dsql_fld	udf_outfield;
 };
 
