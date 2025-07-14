@@ -34,6 +34,7 @@ namespace Firebird {
 	{
 	public:
 		virtual void transliterate(IStatus* status) = 0;
+		virtual ~Transliterate() = default;
 	};
 
 	class BatchCompletionState final :
