@@ -1168,6 +1168,17 @@ bool CreateAlterPackageNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* 
 		dropMissingItems<DropConstantNode>(tdbb, dsqlScratch, name, existingItems.constants, constantNames);
 		dropItems<DropRelationNode>(tdbb, dsqlScratch, name, existingItems.tables);
 
+		for (SortedObjectsArray<Signature>::iterator i = existingPackageTypes.begin();
+			 i != existingPackageTypes.end(); ++i)
+		{
+			if (!packageTypeNames.exist(i->name))
+			{
+				DropPackageTypeNode dropNode(pool, QualifiedName(i->name, name.schema, name.object));
+				dropNode.dsqlPass(dsqlScratch);
+				dropNode.executeDdl(tdbb, dsqlScratch, transaction, true);
+			}
+		}
+
 		MODIFY PKG
 			PKG.RDB$PACKAGE_HEADER_SOURCE.NULL = FALSE;
 			attachment->storeMetaDataBlob(tdbb, transaction, &PKG.RDB$PACKAGE_HEADER_SOURCE,
