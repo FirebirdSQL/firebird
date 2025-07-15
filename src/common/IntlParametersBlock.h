@@ -58,8 +58,6 @@ class IntlDpb : public IntlParametersBlock
 public:
 	TagType checkTag(UCHAR tag, const char** tagName);
 	UCHAR getUtf8Tag();
-
-	~IntlDpb() override = default;
 };
 
 class IntlSpb : public IntlParametersBlock
@@ -67,8 +65,6 @@ class IntlSpb : public IntlParametersBlock
 public:
 	TagType checkTag(UCHAR tag, const char** tagName);
 	UCHAR getUtf8Tag();
-
-	~IntlSpb() override = default;
 };
 
 class IntlSpbStart : public IntlParametersBlock
@@ -80,9 +76,6 @@ public:
 
 	TagType checkTag(UCHAR tag, const char** tagName);
 	UCHAR getUtf8Tag();
-
-	~IntlSpbStart() override = default;
-
 private:
 	UCHAR mode;
 };
