@@ -20,6 +20,10 @@ int mp_init_size (mp_int * a, int size)
 {
   int x;
 
+  if (size < 0) {
+    return MP_VAL;
+  }
+
   /* pad size so there are always extra digits */
   size += (MP_PREC * 2) - (size % MP_PREC);	
   
