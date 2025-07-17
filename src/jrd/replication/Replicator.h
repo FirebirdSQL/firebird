@@ -341,6 +341,8 @@ namespace Replication
 							unsigned charset,
 							const char* schemaSearchPath,
 							const char* sql);
+
+		void storeBlobs(Transaction* transaction, Firebird::IReplicatedRecord* record);
 };
 
 } // namespace
