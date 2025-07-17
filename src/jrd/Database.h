@@ -290,6 +290,8 @@ class Database : public pool_alloc<type_dbb>
 
 		static Firebird::GlobalPtr<DbIdHash> g_hashTable;
 		static Firebird::GlobalPtr<Firebird::Mutex> g_mutex;
+		// It doesn't need to be atomic because all accesses is done under the mutex
+		static inline bool g_shuttingDown = false;
 
 	public:
 		static GlobalObjectHolder* init(const Firebird::string& id,

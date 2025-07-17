@@ -586,6 +586,15 @@ namespace Jrd
 	{
 		MutexLockGuard guard(g_mutex, FB_FUNCTION);
 
+		while (g_shuttingDown)
+		{
+			// Currently other GlobalObject is in shutdown process but he unlock the mutex for some reason,
+			// so it's better to wait until this process is over.
+			// This is done to eliminate potential race conditions involving global objects, such as shared memory.
+			MutexUnlockGuard unlockGuard(g_mutex, FB_FUNCTION);
+			Thread::yield();
+		}
+
 		Database::GlobalObjectHolder::DbId* entry = g_hashTable->lookup(id);
 		if (!entry)
 		{
@@ -606,6 +615,11 @@ namespace Jrd
 			fb_assert(false);
 
 		{ // scope
+			// We need to unlock mutex to safely shutdown some managers, so set shutdown flag to make sure that
+			// other threads will wait until we done our shutdown routine.
+			// This is done to eliminate potential race conditions involving global objects, such as shared memory.
+			AutoSetRestore shuttingDownGuard(&g_shuttingDown, true);
+
 			// here we cleanup what should not be globally protected
 			MutexUnlockGuard guard(g_mutex, FB_FUNCTION);
 			if (m_replMgr)
