@@ -416,6 +416,8 @@ unsigned MsgMetadata::makeSubfieldsOffsets(ULONG parentFieldValueOffset)
 
 		param->offset = offset + parentFieldValueOffset;
 		previousFieldLength = param->length;
+		if (param->type == SQL_VARYING)
+			previousFieldLength += sizeof(USHORT);
 	}
 
 	return ~0u;
