@@ -7689,7 +7689,10 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 				printWrapper(&subVar.subvars[i], length, firstInList);
 				firstInList = false;
 				string subVarValue(p, length);
-				subVarValue.trim();
+				subVarValue.ltrim();
+				auto realLength = strlen(subVarValue.c_str());
+				subVarValue.resize(realLength);
+				subVarValue.rtrim();
 				subfieldsValues.add(subVarValue);
 
 				dataOffset += subVar.subvars[i].length;
