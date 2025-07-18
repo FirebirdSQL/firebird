@@ -293,6 +293,8 @@ struct IsqlVar
 	const char* compositeDescriptor = nullptr;
 	Firebird::IMessageMetadata* subfieldsMetadata = nullptr;
 	unsigned subfieldsNum = 0;
+	bool hasBlob = false;
+	bool hasBlobSubfields = false;
 
 	union TypeMix
 	{

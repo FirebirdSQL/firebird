@@ -511,10 +511,32 @@ void MOV_move(Jrd::thread_db* tdbb, /*const*/ dsc* from, dsc* to, bool trustedSo
  *
  **************************************/
 
-	if (DTYPE_IS_BLOB_OR_QUAD(from->dsc_dtype) || DTYPE_IS_BLOB_OR_QUAD(to->dsc_dtype))
-		Jrd::blb::move(tdbb, from, to);
+	if (to->dsc_dtype == dtype_rowtype || from->dsc_dtype == dtype_rowtype)
+	{
+		if (to->dsc_sub_count != from->dsc_sub_count || to->dsc_dtype != from->dsc_dtype)
+			CVT_conversion_error(from, Jrd::EngineCallbacks::instance->err);
+
+		auto next_to = to->dsc_sub_first;
+		auto next_from = from->dsc_sub_first;
+		while (next_to && next_from)
+		{
+			if (DTYPE_IS_BLOB_OR_QUAD(next_from->dsc_dtype) || DTYPE_IS_BLOB_OR_QUAD(next_to->dsc_dtype))
+				Jrd::blb::move(tdbb, next_from, next_to);
+			else
+				CVT_move(next_from, next_to, tdbb->getAttachment()->att_dec_status);
+			next_to = next_to->dsc_next;
+			next_from = next_from->dsc_next;
+		}
+
+		memcpy(to->dsc_address, from->dsc_address, NULL_BYTES(to->dsc_sub_count));
+	}
 	else
-		CVT_move_common(from, to, tdbb->getAttachment()->att_dec_status, &Jrd::EngineCallbacks::instance, trustedSource);
+	{
+		if (DTYPE_IS_BLOB_OR_QUAD(from->dsc_dtype) || DTYPE_IS_BLOB_OR_QUAD(to->dsc_dtype))
+			Jrd::blb::move(tdbb, from, to);
+		else
+			CVT_move(from, to, tdbb->getAttachment()->att_dec_status);
+	}
 }
 
 

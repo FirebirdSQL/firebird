@@ -1560,6 +1560,7 @@ processing_state ISQL_fill_var(IsqlVar* var,
 	var->charSet = CSetId(msg->getCharSet(fbStatus, index));	if (failed()) return ps_ERR;
 	var->nullable = msg->isNullable(fbStatus, index);			if (failed()) return ps_ERR;
 	var->parentFieldName = msg->getParentFieldName(fbStatus, index);	if (failed()) return ps_ERR;
+	var->hasBlob = var->type == SQL_BLOB;
 
 	auto subfieldsMetadata = msg->getSubMetadata(fbStatus, index);	if (failed()) return ps_ERR;
 	if (subfieldsMetadata)
@@ -1568,6 +1569,7 @@ processing_state ISQL_fill_var(IsqlVar* var,
 		for (auto i = 0; i < subfieldsMetadata->getCount(fbStatus); i++)
 		{
 			ISQL_fill_var(&var->subvars[i], subfieldsMetadata, i, buf);
+			var->hasBlobSubfields |= var->subvars[i].hasBlob;
 		}
 	}
 
@@ -7951,7 +7953,8 @@ static processing_state print_line(Firebird::IMessageMetadata* message, UCHAR* b
 				// Save all the blob vars and print them at the end
 				// CVC: If varnum reaches 20, we must print an error instead of crashing.
 				const int rc = print_item(&p, &var, pad[i]);
-				if (rc == SQL_BLOB && varnum < maxblob)
+
+				if ((var.hasBlob || var.hasBlobSubfields) && varnum < maxblob)
 					varlist[varnum++] = var;
 			}
 		}
@@ -7981,20 +7984,40 @@ static processing_state print_line(Firebird::IMessageMetadata* message, UCHAR* b
 
 	for (unsigned i = 0; i < varnum; i++)
 	{
-		const IsqlVar* var = &varlist[i];
-		if (!var->nullable || *var->nullInd == 0)
+		// Print blob
+		auto printBlob = [&](const IsqlVar* var)
 		{
-			// Print blob title
+			if (!var->nullable || *var->nullInd == 0)
+			{
+				isqlGlob.printf(
+						"==============================================================================%s",
+						NEWLINE);
+				isqlGlob.printf("%s:  %s", var->alias, NEWLINE);
+				if (ISQL_print_item_blob(isqlGlob.Out, var, M__trans, setValues.Doblob) != CONT)
+					return (ps_ERR);
+				isqlGlob.printf(
+						"%s==============================================================================%s",
+						NEWLINE, NEWLINE);
+			}
+			return CONT;
+		};
 
-			isqlGlob.printf(
-					"==============================================================================%s",
-					NEWLINE);
-			isqlGlob.printf("%s:  %s", var->alias, NEWLINE);
-			if (ISQL_print_item_blob(isqlGlob.Out, var, M__trans, setValues.Doblob) != CONT)
-				return (ps_ERR);
-			isqlGlob.printf(
-					"%s==============================================================================%s",
-					NEWLINE, NEWLINE);
+		const IsqlVar* var = &varlist[i];
+		if (var->hasBlobSubfields)
+		{
+			for (auto& var : var->subvars)
+			{
+				if (var.hasBlob)
+				{
+					if (printBlob(&var) == ps_ERR)
+						return ps_ERR;
+				}
+			}
+		}
+		else
+		{
+			if (printBlob(var) == ps_ERR)
+				return ps_ERR;
 		}
 	}
 	return CONT;
