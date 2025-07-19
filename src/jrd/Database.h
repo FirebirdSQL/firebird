@@ -256,7 +256,7 @@ class Database : public pool_alloc<type_dbb>
 		typedef Firebird::HashTable<DbId, Firebird::DEFAULT_HASH_SIZE,
 			Firebird::string, DbId, DbId > DbIdHash;
 
-		struct DbId : public DbIdHash::Entry, public Firebird::GlobalStorage
+		struct DbId : public DbIdHash::Entry, public Firebird::GlobalStorage, public Firebird::RefCounted
 		{
 			DbId(const Firebird::string& x, GlobalObjectHolder* h)
 				: id(getPool(), x), holder(h)
@@ -286,6 +286,8 @@ class Database : public pool_alloc<type_dbb>
 
 			const Firebird::string id;
 			GlobalObjectHolder* const holder;
+
+			Firebird::Mutex shutdownMutex;
 		};
 
 		static Firebird::GlobalPtr<DbIdHash> g_hashTable;
