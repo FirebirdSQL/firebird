@@ -285,8 +285,8 @@ class Database : public pool_alloc<type_dbb>
 			}
 
 			const Firebird::string id;
-			GlobalObjectHolder* const holder;
-
+			GlobalObjectHolder* holder;
+			// This mutex is working very tight with `g_mutex`, so use it carefully to avoid possible deadlocks.
 			Firebird::Mutex shutdownMutex;
 		};
 

@@ -609,7 +609,7 @@ namespace Jrd
 				}
 				// Now we are the one who owned DbId object.
 				// It also was removed from hash table, so simply delete it and recreate it next.
-				fb_assert(entry->getRefCount() == 1);
+				fb_assert(entry->holder == nullptr);
 				entry = nullptr;
 			}
 		}
@@ -633,9 +633,12 @@ namespace Jrd
 		// at the end of this function.
 		RefPtr<Database::GlobalObjectHolder::DbId> entry(REF_NO_INCR, g_hashTable->lookup(m_id));
 		fb_assert(entry);
+		fb_assert(entry->holder == this);
 		// We need to unlock the global mutex to safely shutdown some managers, so lock shutdown mutex to make sure that
 		// other threads will wait until we done our shutdown routine.
 		// This is done to eliminate potential race conditions involving global objects, such as shared memory.
+		//! Be careful with order of mutex locking: first - `g_mutex`, second - `shutdownMutex`, but after `MutexUnlockGuard`
+		//! this order will be reversed, so potentially a deadlock situation may occur here.
 		MutexLockGuard guard(entry->shutdownMutex, FB_FUNCTION);
 
 		{ // scope
@@ -651,6 +654,8 @@ namespace Jrd
 
 		if (!g_hashTable->remove(m_id))
 			fb_assert(false);
+
+		entry->holder = nullptr;
 
 		fb_assert(m_tempCacheUsage == 0);
 	}

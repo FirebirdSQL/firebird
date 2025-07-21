@@ -48,11 +48,6 @@ namespace Firebird
 			return refCnt;
 		}
 
-		AtomicCounter::counter_type getRefCount() const noexcept
-		{
-			return m_refCnt.value();
-		}
-
 		void assertNonZero()
 		{
 			fb_assert(m_refCnt.value() > 0);
