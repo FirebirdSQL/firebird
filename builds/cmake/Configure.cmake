@@ -201,6 +201,7 @@ set(functions_list
     AO_compare_and_swap_full
     clock_gettime
     ctime_r
+    ctime_s
     dirname
     fallocate
     fchmod
@@ -213,6 +214,7 @@ set(functions_list
     gmtime_r
     initgroups
     localtime_r
+    localtime_s
     mkstemp
     mmap
     nanosleep
@@ -315,9 +317,11 @@ check_c_source_compiles("#include <unistd.h>\nmain(){setpgrp();}" SETPGRP_VOID)
 check_c_source_compiles("__thread int a = 42;main(){a = a + 1;}" HAVE___THREAD)
 check_c_source_compiles("#include <sys/time.h>\n#include <time.h>\nmain(){}" TIME_WITH_SYS_TIME)
 
-set(CMAKE_REQUIRED_LIBRARIES pthread)
-check_c_source_compiles("#include <semaphore.h>\nmain(){sem_t s;sem_init(&s,0,0);}" WORKING_SEM_INIT)
-set(CMAKE_REQUIRED_LIBRARIES)
+if (NOT WIN32)
+    set(CMAKE_REQUIRED_LIBRARIES pthread)
+    check_c_source_compiles("#include <semaphore.h>\nmain(){sem_t s;sem_init(&s,0,0);}" WORKING_SEM_INIT)
+    set(CMAKE_REQUIRED_LIBRARIES)
+endif()
 
 if (EXISTS "/proc/self/exe")
     set(HAVE__PROC_SELF_EXE 1)
@@ -343,6 +347,31 @@ if (WIN32)
     set(SUPPORT_RAW_DEVICES 0)
     set(WIN_NT 1)
     set(CASE_SENSITIVITY "false")
+    if (MINGW)
+        set(MINGW 1)
+
+        # We do not use pthread
+        set(HAVE_PTHREAD_H 0)
+        set(HAVE_SEMAPHORE_H 0)
+
+        # Disable pthread features
+        set(HAVE_PTHREAD_CANCEL 0)
+        set(HAVE_PTHREAD_KEY_CREATE 0)
+        set(HAVE_PTHREAD_MUTEXATTR_SETPROTOCOL 0)
+        set(HAVE_SEM_INIT 0)
+        set(HAVE_SEM_TIMEDWAIT 0)
+
+        # These were detected, but not needed
+        set(HAVE_CLOCK_GETTIME 0)
+        set(HAVE_GETPAGESIZE 0)
+        set(HAVE_GETTIMEOFDAY 0)
+        set(HAVE_NANOSLEEP 0)
+        set(HAVE__PROC_SELF_EXE 0)
+
+        # Exist, but not detected
+        set(HAVE_CTIME_S 1)
+        set(HAVE_LOCALTIME_S 1)
+    endif()
 endif(WIN32)
 
 if (APPLE)
