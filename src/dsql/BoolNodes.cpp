@@ -134,7 +134,7 @@ namespace
 
 BoolExprNode* BoolExprNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
-	pass2Boolean(tdbb, csb, [=] { ExprNode::pass2(tdbb, csb); });
+	pass2Boolean(tdbb, csb, [=, this] { ExprNode::pass2(tdbb, csb); });
 
 	if (nodFlags & FLAG_INVARIANT)
 	{
