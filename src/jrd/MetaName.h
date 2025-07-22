@@ -286,6 +286,11 @@ public:
 		return compare(s.c_str(), s.length());
 	}
 
+	int compare(const Firebird::MetaString& s) const
+	{
+		return compare(s.c_str(), s.length());
+	}
+
 	int compare(const MetaName& m) const
 	{
 		if (word == m.word)
@@ -315,6 +320,16 @@ public:
 	}
 
 	bool operator!=(const Firebird::AbstractString& s) const
+	{
+		return compare(s) != 0;
+	}
+
+	bool operator==(const Firebird::MetaString& s) const
+	{
+		return compare(s) == 0;
+	}
+
+	bool operator!=(const Firebird::MetaString& s) const
 	{
 		return compare(s) != 0;
 	}
