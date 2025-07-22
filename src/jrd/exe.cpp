@@ -840,33 +840,50 @@ void EXE_receive(thread_db* tdbb,
 					{
 						const DSC* desc = &format->fmt_desc[i];
 
-						if (desc->isBlob())
+						auto checkBlob = [&](const DSC* desc)
 						{
-							const bid* id = (bid*) (static_cast<UCHAR*>(buffer) + (ULONG)(IPTR) desc->dsc_address);
-
-							if (transaction->tra_blobs->locate(id->bid_temp_id()))
+							if (desc->isBlob())
 							{
-								BlobIndex* current = &transaction->tra_blobs->current();
+								const bid* id = (bid*) (static_cast<UCHAR*>(buffer) + (ULONG)(IPTR) desc->dsc_address);
 
-								if (top_level &&
-									current->bli_request &&
-									current->bli_request->req_blobs.locate(id->bid_temp_id()))
+								if (transaction->tra_blobs->locate(id->bid_temp_id()))
 								{
-									current->bli_request->req_blobs.fastRemove();
-									current->bli_request = NULL;
+									BlobIndex* current = &transaction->tra_blobs->current();
+
+									if (top_level &&
+										current->bli_request &&
+										current->bli_request->req_blobs.locate(id->bid_temp_id()))
+									{
+										current->bli_request->req_blobs.fastRemove();
+										current->bli_request = NULL;
+									}
+
+									if (!current->bli_materialized &&
+										(current->bli_blob_object->blb_flags & (BLB_close_on_read | BLB_stream)) ==
+											(BLB_close_on_read | BLB_stream))
+									{
+										current->bli_blob_object->BLB_close(tdbb);
+									}
 								}
-
-								if (!current->bli_materialized &&
-									(current->bli_blob_object->blb_flags & (BLB_close_on_read | BLB_stream)) ==
-										(BLB_close_on_read | BLB_stream))
+								else if (top_level)
 								{
-									current->bli_blob_object->BLB_close(tdbb);
+									transaction->checkBlob(tdbb, id, NULL, false);
 								}
 							}
-							else if (top_level)
+						};
+
+						if (desc->dsc_dtype == dtype_rowtype)
+						{
+							auto next = desc->dsc_sub_first;
+							while (next)
 							{
-								transaction->checkBlob(tdbb, id, NULL, false);
+								checkBlob(next);
+								next = next->dsc_next;
 							}
+						}
+						else
+						{
+							checkBlob(desc);
 						}
 					}
 				}
