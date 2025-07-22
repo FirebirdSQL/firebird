@@ -305,7 +305,7 @@ public:
 		Firebird::Mutex syncMutex;
 		std::atomic<int> waiters;
 		ThreadId threadId;
-		volatile FB_UINT64 totalLocksCounter;
+		std::atomic<FB_UINT64> totalLocksCounter;
 		int currentLocksCounter;
 	};
 

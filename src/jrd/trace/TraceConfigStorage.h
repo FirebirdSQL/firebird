@@ -35,6 +35,7 @@
 #include "../../common/ThreadStart.h"
 #include "../../jrd/trace/TraceSession.h"
 #include "../../common/classes/RefCounted.h"
+#include <atomic>
 
 namespace Jrd {
 
@@ -68,8 +69,8 @@ struct TraceCSHeader : public Firebird::MemoryHeader
 		ULONG ses_pid;
 	};
 
-	volatile ULONG change_number;
-	volatile ULONG session_number;
+	std::atomic<ULONG> change_number;
+	std::atomic<ULONG> session_number;
 	ULONG cnt_uses;
 	ULONG mem_max_size;			// maximum allowed mapping size
 	ULONG mem_allocated;		// currently mapped memory
@@ -100,7 +101,7 @@ public:
 	bool getSession(Firebird::TraceSession& session, GET_FLAGS getFlag);
 
 	ULONG getChangeNumber() const
-	{ return m_sharedMemory && m_sharedMemory->getHeader() ? m_sharedMemory->getHeader()->change_number : 0; }
+	{ return m_sharedMemory && m_sharedMemory->getHeader() ? m_sharedMemory->getHeader()->change_number.load() : 0; }
 
 	void acquire();
 	void release();
