@@ -112,7 +112,7 @@ eof
 
 [ -z "$CXX" ] && CXX=g++
 
-$CXX -std=c++17 $TestCpp -o $AOut
+$CXX -std=c++20 $TestCpp -o $AOut
 if [ -x $AOut ]
 then
 	$AOut
