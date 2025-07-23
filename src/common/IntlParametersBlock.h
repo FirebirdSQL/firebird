@@ -44,6 +44,8 @@ public:
 	virtual TagType checkTag(UCHAR tag, const char** tagName) = 0;
 	virtual UCHAR getUtf8Tag() = 0;
 
+	virtual ~IntlParametersBlock() = default;
+
 	void toUtf8(ClumpletWriter& pb);
 	void fromUtf8(ClumpletWriter& pb);
 
@@ -74,7 +76,6 @@ public:
 
 	TagType checkTag(UCHAR tag, const char** tagName);
 	UCHAR getUtf8Tag();
-
 private:
 	UCHAR mode;
 };
