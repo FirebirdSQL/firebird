@@ -2063,6 +2063,7 @@ public:
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
+	void setParameterCompositeDescriptor(dsql_msg* message, dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 

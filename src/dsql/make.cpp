@@ -667,8 +667,8 @@ dsql_par* MAKE_parameter(dsql_msg* message, bool sqlda_flag, bool null_flag,
 
 	if (node)
 	{
-		MAKE_parameter_names(parameter, node);
 		MAKE_parameter_composite(message, parameter, node);
+		MAKE_parameter_names(parameter, node);
 	}
 
 	// If the parameter is used declared, set SQLDA index

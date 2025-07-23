@@ -11519,6 +11519,11 @@ void SubQueryNode::setParameterName(dsql_par* parameter) const
 	MAKE_parameter_names(parameter, selectList->items[0]);
 }
 
+void SubQueryNode::setParameterCompositeDescriptor(dsql_msg* message, dsql_par* parameter) const
+{
+	selectList->items[0]->setParameterCompositeDescriptor(message, parameter);
+}
+
 void SubQueryNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	dsqlScratch->appendUChar(blrOp);
@@ -14948,6 +14953,12 @@ ValueExprNode* RowValueExpressionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch
 		}
 
 		DsqlDescMaker::fromNode(dsqlScratch, *nextDsc, valueExprNode, true);
+
+		if ((*nextDsc)->dsc_dtype == dtype_rowtype)
+		{
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
+						Arg::Gds(isc_random) << Arg::Str("Nested ROW values are not supported"));
+		}
 
 		if ((*nextDsc)->dsc_dtype >= dtype_aligned)
 			rowDesc.dsc_length = FB_ALIGN(rowDesc.dsc_length, type_alignments[(*nextDsc)->dsc_dtype]);
