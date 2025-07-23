@@ -2273,13 +2273,16 @@ void Statement::setInParams(thread_db* tdbb, const MetaName* const* names,
 			const MetaString* sqlName = m_sqlParamsMap[sqlNum];
 
 			unsigned int num = 0;
-			for (; num < count; num++)
+			if (names)
 			{
-				if (*names[num] == *sqlName)
-					break;
+				for (; num < count; num++)
+				{
+					if (*names[num] == *sqlName)
+						break;
+				}
 			}
 
-			if (num == count)
+			if (!names || (num == count))
 			{
 				m_error = true;
 				// Input parameter ''@1'' have no value set
