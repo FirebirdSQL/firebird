@@ -6343,7 +6343,7 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 
 			if (context->ctx_scope_level != currentScopeLevel - 1 ||
 				((context->ctx_flags & CTX_cursor) && dsqlQualifier.object.isEmpty()) ||
-				(!(context->ctx_flags & CTX_cursor) && dsqlCursorField))
+				(!(context->ctx_flags & CTX_cursor) && dsqlCursorField && !context->ctx_rowtype_var))
 			{
 				continue;
 			}
