@@ -8990,6 +8990,11 @@ void DerivedFieldNode::setParameterName(dsql_par* parameter) const
 	parameter->par_rel_alias = context->ctx_alias.hasData() ? context->ctx_alias.front().object : MetaName();
 }
 
+void DerivedFieldNode::setParameterCompositeDescriptor(dsql_msg* message, dsql_par* parameter) const
+{
+	value->setParameterCompositeDescriptor(message, parameter);
+}
+
 void DerivedFieldNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	// ASF: If we are not referencing a field, we should evaluate the expression based on
