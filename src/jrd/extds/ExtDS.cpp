@@ -2237,6 +2237,12 @@ void Statement::setInParams(thread_db* tdbb, const MetaName* const* names,
 	const FB_SIZE_T excCount = in_excess ? in_excess->getCount() : 0;
 	const FB_SIZE_T sqlCount = m_sqlParamNames.getCount();
 
+	if (m_error = (!names && sqlCount))
+	{
+		// Parameter name expected
+		ERR_post(Arg::Gds(isc_eds_prm_name_expected));
+	}
+
 	// OK : count - excCount <= sqlCount <= count
 
 	// Check if all passed named parameters, not marked as excess, are present in query text
@@ -2273,16 +2279,13 @@ void Statement::setInParams(thread_db* tdbb, const MetaName* const* names,
 			const MetaString* sqlName = m_sqlParamsMap[sqlNum];
 
 			unsigned int num = 0;
-			if (names)
+			for (; num < count; num++)
 			{
-				for (; num < count; num++)
-				{
-					if (*names[num] == *sqlName)
-						break;
-				}
+				if (*names[num] == *sqlName)
+					break;
 			}
 
-			if (!names || (num == count))
+			if (num == count)
 			{
 				m_error = true;
 				// Input parameter ''@1'' have no value set
