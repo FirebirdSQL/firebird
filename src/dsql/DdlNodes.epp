@@ -2617,7 +2617,6 @@ void CreateAlterFunctionNode::storeArgument(thread_db* tdbb, DsqlCompilerScratch
 
 					ARG.RDB$FIELD_SOURCE.NULL = FALSE;
 					strcpy(ARG.RDB$FIELD_SOURCE, fieldName.object.c_str());
-					type->fieldSource = std::move(fieldName);
 					ARG.RDB$FIELD_SOURCE.NULL = FALSE;
 					ARG.RDB$FIELD_TYPE = type->dtype;
 					ARG.RDB$FIELD_TYPE.NULL = FALSE;
