@@ -718,3 +718,54 @@ CREATE [UNIQUE] [ASC[ENDING] | DESC[ENDING]]
   [WHERE <search_condition>]
 
 'isql -x' generates script accordingly.
+
+4) Non-enforced constraints.
+
+CREATE/ALTER TABLE supports creation of non-enforced constraints.
+
+Syntax:
+
+<col_constraint> ::=
+  [CONSTRAINT constr_name]
+    { PRIMARY KEY [<using_index>]
+    | UNIQUE      [<using_index>]
+    | REFERENCES other_table [(colname)] [<using_index>]
+        [ON DELETE {NO ACTION | CASCADE | SET DEFAULT | SET NULL}]
+        [ON UPDATE {NO ACTION | CASCADE | SET DEFAULT | SET NULL}]
+    | CHECK (<check_condition>)
+    | NOT NULL }
+  [<constraint characteristics>]
+
+<tconstraint> ::=
+  [CONSTRAINT constr_name]
+    { PRIMARY KEY (<col_list>) [<using_index>]
+    | UNIQUE      (<col_list>) [<using_index>]
+    | FOREIGN KEY (<col_list>)
+        REFERENCES other_table [(<col_list>)] [<using_index>]
+        [ON DELETE {NO ACTION | CASCADE | SET DEFAULT | SET NULL}]
+        [ON UPDATE {NO ACTION | CASCADE | SET DEFAULT | SET NULL}]
+    | CHECK (<check_condition>) }
+  [<constraint characteristics>]
+
+<constraint characteristics> ::=
+  <constraint enforcement>
+
+<constraint enforcement> ::=
+  [ NOT ] ENFORCED
+
+Note: Unlike the ANSI SQL standard, this allows PRIMARY KEY and UNIQUE constraints to be not enforced.
+
+You can use the ALTER TABLE statement with the ALTER CONSTRAINT clause to change the enforcement of a constraint.
+
+Syntax:
+
+ALTER TABLE <table_name> ALTER CONSTRAINT <constraint_name> <constraint_enforcement>
+
+However, you cannot disable a primary or unique key constraint if it is referenced by an active foreign key constraint.
+
+Alternatively, you can control constraint enforcement through:
+
+- ALTER INDEX - for referential integrity constraints
+- ALTER TRIGGER - for CHECK constraints
+
+Disabling the associated index or trigger will also disable the corresponding constraint.
