@@ -18,6 +18,9 @@ for %%v in ( %* )  do (
   ( if /I "%%v"=="CLIENT_ONLY" (set FB_CLIENT_ONLY=TRUE) )
   ( if /I "%%v"=="CLIENT_ONLY=FALSE" (set FB_CLIENT_ONLY=) )
 )
+set VS160COMNTOOLS=C:\\Program Files (x86)\\Microsoft Visual Studio\2019\BuildTools\Common7\Tools
+set FB_CLIENT_ONLY=TRUE
+set FB_PROCESSOR_ARCHITECTURE=x86
 
 @if not defined FB_CONFIG (
   set FB_DBG=
@@ -123,10 +126,10 @@ rem NOTE 2 This code is likely to break again in the future !!!!
   @setlocal EnableDelayedExpansion
 
   if not exist "!VCToolsRedistDir!!VSCMD_ARG_TGT_ARCH!\Microsoft.VC!MSVC_RUNTIME_MAJOR_VERSION!!MSVC_RUNTIME_MINOR_VERSION!.CRT" (
-    @endlocal  
+    @endlocal
     set MSVC_RUNTIME_MINOR_VERSION=3
   ) else (
-    @endlocal  
+    @endlocal
   )
   set MSVC_RUNTIME_LIBRARY_VERSION=%MSVC_RUNTIME_MAJOR_VERSION%%MSVC_RUNTIME_MINOR_VERSION%
 

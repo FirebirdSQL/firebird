@@ -3126,8 +3126,7 @@ ISC_STATUS API_ROUTINE isc_open_blob2(ISC_STATUS* userStatus, isc_db_handle* dbH
 	isc_tr_handle* traHandle, isc_blob_handle* blobHandle, ISC_QUAD* blobId,
 	ISC_USHORT bpbLength, const UCHAR* bpb)
 {
-	return openOrCreateBlob(userStatus, dbHandle, traHandle, blobHandle, blobId,
-		bpbLength, bpb, false);
+	return openOrCreateBlob(userStatus, dbHandle, traHandle, blobHandle, blobId, 0, 0, false);
 }
 
 
