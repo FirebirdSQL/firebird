@@ -25,9 +25,9 @@ namespace
 #define SHA_DIGESTSIZE		Sha1::HASH_SIZE
 typedef Sha1::ShaInfo SHA_INFO;
 
-void sha_init(SHA_INFO *);
+void sha_init(SHA_INFO *) noexcept;
 void sha_update(SHA_INFO *, const BYTE *, size_t);
-void sha_final(unsigned char [SHA_DIGESTSIZE], SHA_INFO *);
+void sha_final(unsigned char [SHA_DIGESTSIZE], SHA_INFO *) noexcept;
 
 #define SHA_VERSION 1
 
@@ -124,7 +124,7 @@ void sha_final(unsigned char [SHA_DIGESTSIZE], SHA_INFO *);
 
 // do SHA transformation
 
-static void sha_transform(SHA_INFO *sha_info)
+static void sha_transform(SHA_INFO *sha_info) noexcept
 {
 	int i;
 	Sha1::LONG W[80];
@@ -243,7 +243,7 @@ nether regions of the anatomy...
 
 // initialize the SHA digest
 
-void sha_init(SHA_INFO *sha_info)
+void sha_init(SHA_INFO *sha_info) noexcept
 {
 	sha_info->digest[0] = 0x67452301L;
 	sha_info->digest[1] = 0xefcdab89L;
@@ -295,7 +295,7 @@ void sha_update(SHA_INFO *sha_info, const BYTE *buffer, size_t count)
 
 // finish computing the SHA digest
 
-void sha_final(unsigned char digest[SHA_DIGESTSIZE], SHA_INFO *sha_info)
+void sha_final(unsigned char digest[SHA_DIGESTSIZE], SHA_INFO *sha_info) noexcept
 {
 	const Sha1::LONG lo_bit_count = sha_info->count_lo;
 	const Sha1::LONG hi_bit_count = sha_info->count_hi;
@@ -355,7 +355,7 @@ namespace Firebird {
 		fb_utils::base64(hash, b);
 	}
 
-	Sha1::Sha1()
+	Sha1::Sha1() noexcept
 		: active(false)
 	{
 		reset();
@@ -372,7 +372,7 @@ namespace Firebird {
 		sha_final(hash.getBuffer(HASH_SIZE), &handle);
 	}
 
-	void Sha1::reset()
+	void Sha1::reset() noexcept
 	{
 		clear();
 		sha_init(&handle);
@@ -384,7 +384,7 @@ namespace Firebird {
 		clear();
 	}
 
-	void Sha1::clear()
+	void Sha1::clear() noexcept
 	{
 		if (active)
 		{

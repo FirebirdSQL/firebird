@@ -747,7 +747,7 @@ private:
 	void executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 	void compile(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch);
 
-	static inline bool hasOldContext(const unsigned value)
+	static inline bool hasOldContext(const unsigned value) noexcept
 	{
 		const unsigned val1 = ((value + 1) >> 1) & 3;
 		const unsigned val2 = ((value + 1) >> 3) & 3;
@@ -755,7 +755,7 @@ private:
 		return (val1 && val1 != 1) || (val2 && val2 != 1) || (val3 && val3 != 1);
 	}
 
-	static inline bool hasNewContext(const unsigned value)
+	static inline bool hasNewContext(const unsigned value) noexcept
 	{
 		const unsigned val1 = ((value + 1) >> 1) & 3;
 		const unsigned val2 = ((value + 1) >> 3) & 3;
@@ -983,7 +983,7 @@ public:
 
 public:
 	static void checkUpdate(const dyn_fld& origFld, const dyn_fld& newFld);
-	static ULONG checkUpdateNumericType(const dyn_fld& origFld, const dyn_fld& newFld);
+	static ULONG checkUpdateNumericType(const dyn_fld& origFld, const dyn_fld& newFld) noexcept;
 	static void getDomainType(thread_db* tdbb, jrd_tra* transaction, dyn_fld& dynFld);
 	static void modifyLocalFieldIndex(thread_db* tdbb, jrd_tra* transaction,
 		const QualifiedName& relationName, const MetaName& fieldName,
@@ -1411,7 +1411,7 @@ public:
 			TYPE_ALTER_PUBLICATION
 		};
 
-		explicit Clause(MemoryPool& p, Type aType)
+		explicit Clause(MemoryPool& p, Type aType) noexcept
 			: type(aType)
 		{
 		}
@@ -1421,12 +1421,12 @@ public:
 
 	struct RefActionClause
 	{
-		static const unsigned ACTION_CASCADE		= 1;
-		static const unsigned ACTION_SET_DEFAULT	= 2;
-		static const unsigned ACTION_SET_NULL		= 3;
-		static const unsigned ACTION_NONE			= 4;
+		static constexpr unsigned ACTION_CASCADE		= 1;
+		static constexpr unsigned ACTION_SET_DEFAULT	= 2;
+		static constexpr unsigned ACTION_SET_NULL		= 3;
+		static constexpr unsigned ACTION_NONE			= 4;
 
-		RefActionClause(MemoryPool& p, unsigned aUpdateAction, unsigned aDeleteAction)
+		RefActionClause(MemoryPool& p, unsigned aUpdateAction, unsigned aDeleteAction) noexcept
 			: updateAction(aUpdateAction),
 			  deleteAction(aDeleteAction)
 		{
@@ -1473,13 +1473,13 @@ public:
 
 	struct IdentityOptions
 	{
-		IdentityOptions(MemoryPool&, IdentityType aType)
+		IdentityOptions(MemoryPool&, IdentityType aType) noexcept
 			: type(aType),
 			  restart(false)
 		{
 		}
 
-		IdentityOptions(MemoryPool&)
+		IdentityOptions(MemoryPool&) noexcept
 			: restart(false)
 		{
 		}
@@ -1696,8 +1696,8 @@ private:
 public:
 	const Firebird::string* externalFile;
 	std::optional<rel_t> relationType = rel_persistent;
-	bool preserveRowsOpt;
-	bool deleteRowsOpt;
+	bool preserveRowsOpt = false;
+	bool deleteRowsOpt = false;
 	bool createIfNotExistsOnly = false;
 };
 
@@ -2580,7 +2580,7 @@ private:
 		const QualifiedName& relation, const MetaName& field);
 
 	// Diagnostics print helper.
-	static const char* privilegeName(char symbol)
+	static constexpr const char* privilegeName(char symbol) noexcept
 	{
 		switch (UPPER7(symbol))
 		{
@@ -2597,9 +2597,8 @@ private:
 			case 'C': return "CREATE";
 			case 'L': return "ALTER";
 			case 'O': return "DROP";
+			default: return "<Unknown>";
 		}
-
-		return "<Unknown>";
 	}
 
 	struct CreateDbJob
@@ -2632,16 +2631,16 @@ public:
 class AlterDatabaseNode final : public DdlNode
 {
 public:
-	static const unsigned CLAUSE_BEGIN_BACKUP		= 0x01;
-	static const unsigned CLAUSE_END_BACKUP			= 0x02;
-	static const unsigned CLAUSE_DROP_DIFFERENCE	= 0x04;
-	static const unsigned CLAUSE_CRYPT				= 0x08;
-	static const unsigned CLAUSE_ENABLE_PUB			= 0x10;
-	static const unsigned CLAUSE_DISABLE_PUB		= 0x20;
-	static const unsigned CLAUSE_PUB_INCL_TABLE		= 0x40;
-	static const unsigned CLAUSE_PUB_EXCL_TABLE		= 0x80;
+	static constexpr unsigned CLAUSE_BEGIN_BACKUP		= 0x01;
+	static constexpr unsigned CLAUSE_END_BACKUP			= 0x02;
+	static constexpr unsigned CLAUSE_DROP_DIFFERENCE	= 0x04;
+	static constexpr unsigned CLAUSE_CRYPT				= 0x08;
+	static constexpr unsigned CLAUSE_ENABLE_PUB			= 0x10;
+	static constexpr unsigned CLAUSE_DISABLE_PUB		= 0x20;
+	static constexpr unsigned CLAUSE_PUB_INCL_TABLE		= 0x40;
+	static constexpr unsigned CLAUSE_PUB_EXCL_TABLE		= 0x80;
 
-	static const unsigned RDB_DATABASE_MASK =
+	static constexpr unsigned RDB_DATABASE_MASK =
 		CLAUSE_BEGIN_BACKUP | CLAUSE_END_BACKUP | CLAUSE_DROP_DIFFERENCE;
 
 public:

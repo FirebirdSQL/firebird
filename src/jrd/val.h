@@ -49,7 +49,7 @@ public:
 	UCHAR str_data[2];			// one byte for ALLOC and one for the NULL
 };
 
-const ULONG MAX_RECORD_SIZE	= 65535;
+inline constexpr ULONG MAX_RECORD_SIZE = 65535;
 
 namespace Jrd {
 
@@ -269,10 +269,10 @@ struct impure_value_ex : public impure_value
 	blb* vlu_blob;
 };
 
-const int VLU_computed		= 1;	// An invariant sub-query has been computed
-const int VLU_null			= 2;	// An invariant sub-query computed to null
-const int VLU_checked		= 4;	// Constraint already checked in first read or assignment to argument/variable
-const int VLU_initialized	= 8;	// Variable initialized
+inline constexpr int VLU_computed		= 1;	// An invariant sub-query has been computed
+inline constexpr int VLU_null			= 2;	// An invariant sub-query computed to null
+inline constexpr int VLU_checked		= 4;	// Constraint already checked in first read or assignment to argument/variable
+inline constexpr int VLU_initialized	= 8;	// Variable initialized
 
 
 class Format : public pool_alloc<type_fmt>

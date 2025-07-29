@@ -1394,7 +1394,7 @@ static inline UCHAR* BURP_alloc_zero(ULONG size)
 	return (UCHAR*)(tdgbl->getPool().calloc(size ALLOC_ARGS));
 }
 
-static inline void BURP_free(void* block)
+static inline void BURP_free(void* block) noexcept
 {
 	MemoryPool::globalFree(block);
 }

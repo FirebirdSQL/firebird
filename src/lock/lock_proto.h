@@ -53,53 +53,53 @@ typedef SINT64 LOCK_DATA_T;
 
 // Maximum lock series for gathering statistics and querying data
 
-const int LCK_MAX_SERIES	= 7;
+inline constexpr int LCK_MAX_SERIES	= 7;
 
 // Lock query data aggregates
 
-const int LCK_MIN		= 1;
-const int LCK_MAX		= 2;
-const int LCK_CNT		= 3;
-const int LCK_SUM		= 4;
-const int LCK_AVG		= 5;
-const int LCK_ANY		= 6;
+inline constexpr int LCK_MIN	= 1;
+inline constexpr int LCK_MAX	= 2;
+inline constexpr int LCK_CNT	= 3;
+inline constexpr int LCK_SUM	= 4;
+inline constexpr int LCK_AVG	= 5;
+inline constexpr int LCK_ANY	= 6;
 
 // Lock states
 // in LCK_convert the type of level is USHORT instead of UCHAR
-const UCHAR LCK_none	= 0;
-const UCHAR LCK_null	= 1;
-const UCHAR LCK_SR		= 2;		// Shared Read
-const UCHAR LCK_PR		= 3;		// Protected Read
-const UCHAR LCK_SW		= 4;		// Shared Write
-const UCHAR LCK_PW		= 5;		// Protected Write
-const UCHAR LCK_EX		= 6;		// Exclusive
-const UCHAR LCK_max		= 7;
+inline constexpr UCHAR LCK_none	= 0;
+inline constexpr UCHAR LCK_null	= 1;
+inline constexpr UCHAR LCK_SR	= 2;	// Shared Read
+inline constexpr UCHAR LCK_PR	= 3;	// Protected Read
+inline constexpr UCHAR LCK_SW	= 4;	// Shared Write
+inline constexpr UCHAR LCK_PW	= 5;	// Protected Write
+inline constexpr UCHAR LCK_EX	= 6;	// Exclusive
+inline constexpr UCHAR LCK_max	= 7;
 
 enum locklevel_t {LCK_read = LCK_PR, LCK_write = LCK_EX};
 
-const SSHORT LCK_WAIT		= 1;
-const SSHORT LCK_NO_WAIT	= 0;
+inline constexpr SSHORT LCK_WAIT	= 1;
+inline constexpr SSHORT LCK_NO_WAIT	= 0;
 
 // Lock block types
 
-const UCHAR type_null	= 0;
-const UCHAR type_lhb	= 1;
-const UCHAR type_lrq	= 2;
-const UCHAR type_lbl	= 3;
-const UCHAR type_his	= 4;
-const UCHAR type_shb	= 5;
-const UCHAR type_own	= 6;
-const UCHAR type_lpr	= 7;
+inline constexpr UCHAR type_null	= 0;
+inline constexpr UCHAR type_lhb		= 1;
+inline constexpr UCHAR type_lrq		= 2;
+inline constexpr UCHAR type_lbl		= 3;
+inline constexpr UCHAR type_his		= 4;
+inline constexpr UCHAR type_shb		= 5;
+inline constexpr UCHAR type_own		= 6;
+inline constexpr UCHAR type_lpr		= 7;
 
 // Version number of the lock table.
 // Must be increased every time the shmem layout is changed.
-const USHORT BASE_LHB_VERSION = 19;
-const USHORT PLATFORM_LHB_VERSION = 128;	// 64-bit target
+inline constexpr USHORT BASE_LHB_VERSION = 19;
+inline constexpr USHORT PLATFORM_LHB_VERSION = 128;	// 64-bit target
 
 #if SIZEOF_VOID_P == 8
-const USHORT LHB_VERSION = PLATFORM_LHB_VERSION | BASE_LHB_VERSION;
+inline constexpr USHORT LHB_VERSION = PLATFORM_LHB_VERSION | BASE_LHB_VERSION;
 #else
-const USHORT LHB_VERSION = BASE_LHB_VERSION;
+inline constexpr USHORT LHB_VERSION = BASE_LHB_VERSION;
 #endif
 
 
@@ -197,15 +197,15 @@ struct lrq
 };
 
 // lrq_flags
-const USHORT LRQ_blocking		= 1;		// Request is blocking
-const USHORT LRQ_pending		= 2;		// Request is pending
-const USHORT LRQ_rejected		= 4;		// Request is rejected
-const USHORT LRQ_deadlock		= 8;		// Request has been seen by the deadlock-walk
-const USHORT LRQ_repost			= 16;		// Request block used for repost
-const USHORT LRQ_scanned		= 32;		// Request already scanned for deadlock
-const USHORT LRQ_blocking_seen	= 64;		// Blocking notification received by owner
-const USHORT LRQ_just_granted	= 128;		// Request is just granted and blocked owners still have not sent blocking AST
-const USHORT LRQ_wait_timeout	= 256;		// Request is being waited on with a timeout
+inline constexpr USHORT LRQ_blocking		= 1;	// Request is blocking
+inline constexpr USHORT LRQ_pending			= 2;	// Request is pending
+inline constexpr USHORT LRQ_rejected		= 4;	// Request is rejected
+inline constexpr USHORT LRQ_deadlock		= 8;	// Request has been seen by the deadlock-walk
+inline constexpr USHORT LRQ_repost			= 16;	// Request block used for repost
+inline constexpr USHORT LRQ_scanned			= 32;	// Request already scanned for deadlock
+inline constexpr USHORT LRQ_blocking_seen	= 64;	// Blocking notification received by owner
+inline constexpr USHORT LRQ_just_granted	= 128;	// Request is just granted and blocked owners still have not sent blocking AST
+inline constexpr USHORT LRQ_wait_timeout	= 256;	// Request is being waited on with a timeout
 
 // Process block
 
@@ -242,9 +242,9 @@ struct own
 };
 
 // Flags in own_flags
-const USHORT OWN_scanned	= 1;	// Owner has been deadlock scanned
-const USHORT OWN_wakeup		= 2;	// Owner has been awoken
-const USHORT OWN_signaled	= 4;	// Signal is thought to be delivered
+inline constexpr USHORT OWN_scanned		= 1;	// Owner has been deadlock scanned
+inline constexpr USHORT OWN_wakeup		= 2;	// Owner has been awoken
+inline constexpr USHORT OWN_signaled	= 4;	// Signal is thought to be delivered
 
 // Lock manager history block
 
@@ -260,26 +260,26 @@ struct his
 
 // his_operation definitions
 // should be UCHAR according to his_operation but is USHORT in lock.cpp:post_operation
-const UCHAR his_enq			= 1;
-const UCHAR his_deq			= 2;
-const UCHAR his_convert		= 3;
-const UCHAR his_signal		= 4;
-const UCHAR his_post_ast	= 5;
-const UCHAR his_wait		= 6;
-const UCHAR his_del_process	= 7;
-const UCHAR his_del_lock	= 8;
-const UCHAR his_del_request	= 9;
-const UCHAR his_deny		= 10;
-const UCHAR his_grant		= 11;
-const UCHAR his_leave_ast	= 12;
-const UCHAR his_scan		= 13;
-const UCHAR his_dead		= 14;
-const UCHAR his_enter		= 15;
-const UCHAR his_bug			= 16;
-const UCHAR his_active		= 17;
-const UCHAR his_cleanup		= 18;
-const UCHAR his_del_owner	= 19;
-const UCHAR his_MAX			= his_del_owner;
+inline constexpr UCHAR his_enq			= 1;
+inline constexpr UCHAR his_deq			= 2;
+inline constexpr UCHAR his_convert		= 3;
+inline constexpr UCHAR his_signal		= 4;
+inline constexpr UCHAR his_post_ast		= 5;
+inline constexpr UCHAR his_wait			= 6;
+inline constexpr UCHAR his_del_process	= 7;
+inline constexpr UCHAR his_del_lock		= 8;
+inline constexpr UCHAR his_del_request	= 9;
+inline constexpr UCHAR his_deny			= 10;
+inline constexpr UCHAR his_grant		= 11;
+inline constexpr UCHAR his_leave_ast	= 12;
+inline constexpr UCHAR his_scan			= 13;
+inline constexpr UCHAR his_dead			= 14;
+inline constexpr UCHAR his_enter		= 15;
+inline constexpr UCHAR his_bug			= 16;
+inline constexpr UCHAR his_active		= 17;
+inline constexpr UCHAR his_cleanup		= 18;
+inline constexpr UCHAR his_del_owner	= 19;
+inline constexpr UCHAR his_MAX			= his_del_owner;
 
 namespace Firebird {
 	class AtomicCounter;

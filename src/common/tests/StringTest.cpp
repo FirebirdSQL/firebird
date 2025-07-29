@@ -14,7 +14,7 @@ static constexpr char lbl[] = "0123456789";
 #define validate(A, B) BOOST_TEST(std::string_view(A.c_str(), A.length()) == std::string_view(B))
 #define check(A, B) BOOST_TEST(A == B)
 
-static constexpr string::size_type length(const std::string_view& str) noexcept
+static constexpr string::size_type length(std::string_view str) noexcept
 {
 	return static_cast<string::size_type>(str.length());
 }

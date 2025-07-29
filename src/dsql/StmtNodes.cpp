@@ -697,6 +697,7 @@ const StmtNode* BlockNode::execute(thread_db* tdbb, Request* request, ExeState* 
 					transaction->releaseSavepoint(tdbb);
 				}
 			}
+			return parentStmt;
 
 		default:
 			return parentStmt;
@@ -908,7 +909,7 @@ const StmtNode* CompoundStmtNode::execute(thread_db* tdbb, Request* request, Exe
 	{
 		case Request::req_evaluate:
 			impure->sta_state = 0;
-			// fall into
+			[[fallthrough]];
 
 		case Request::req_return:
 		case Request::req_sync:
@@ -918,7 +919,7 @@ const StmtNode* CompoundStmtNode::execute(thread_db* tdbb, Request* request, Exe
 				return statements[impure->sta_state++];
 			}
 			request->req_operation = Request::req_return;
-			// fall into
+			return parentStmt;
 
 		default:
 			return parentStmt;
@@ -1003,7 +1004,7 @@ DmlNode* CursorStmtNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratc
 		case blr_cursor_fetch_scroll:
 			node->scrollOp = csb->csb_blr_reader.getByte();
 			node->scrollExpr = PAR_parse_value(tdbb, csb);
-			// fall into
+			[[fallthrough]];
 
 		case blr_cursor_fetch:
 			csb->csb_g_flags |= csb_reuse_context;
@@ -1226,6 +1227,7 @@ const StmtNode* CursorStmtNode::execute(thread_db* tdbb, Request* request, ExeSt
 					}
 
 					request->req_operation = Request::req_return;
+					return parentStmt;
 
 				default:
 					return parentStmt;
@@ -5854,13 +5856,13 @@ const StmtNode* ForNode::execute(thread_db* tdbb, Request* request, ExeState* /*
 			if (cursor->isUpdateCounters())
 				request->req_records_affected.clear();
 
-			// fall into
+			[[fallthrough]];
 
 		case Request::req_return:
 			if (stall)
 				return stall;
 
-			// fall into
+			[[fallthrough]];
 
 		case Request::req_sync:
 			{
@@ -5907,7 +5909,7 @@ const StmtNode* ForNode::execute(thread_db* tdbb, Request* request, ExeState* /*
 				}
 			}
 
-			// fall into
+			[[fallthrough]];
 
 		default:
 		{
@@ -6224,9 +6226,8 @@ const StmtNode* ForRangeNode::execute(thread_db* tdbb, Request* request, ExeStat
 				request->req_operation = Request::req_return;
 				return parentStmt;
 			}
-
-			[[fallthrough]];
 		}
+		[[fallthrough]];
 
 		case Request::req_return:
 		case Request::req_sync:
@@ -6344,6 +6345,7 @@ const StmtNode* HandlerNode::execute(thread_db* /*tdbb*/, Request* request, ExeS
 		case Request::req_unwind:
 			if (!request->req_label)
 				request->req_operation = Request::req_return;
+			return parentStmt;
 
 		default:
 			return parentStmt;
@@ -6411,7 +6413,7 @@ const StmtNode* LabelNode::execute(thread_db* /*tdbb*/, Request* request, ExeSta
 				request->req_flags &= ~req_leave;
 				request->req_operation = Request::req_return;
 			}
-			// fall into
+			return parentStmt;
 
 		default:
 			return parentStmt;
@@ -6700,7 +6702,7 @@ const StmtNode* LoopNode::execute(thread_db* /*tdbb*/, Request* request, ExeStat
 				request->req_operation = Request::req_evaluate;
 				return statement;
 			}
-			// fall into
+			return parentStmt;
 		}
 
 		default:
@@ -8218,9 +8220,9 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 
 			if (impure->sta_state == 0 && forNode && forNode->isWriteLockMode(request))
 				request->req_operation = Request::req_return;
-				// fall thru
 			else
 				break;
+			[[fallthrough]];
 
 		case Request::req_return:
 			if (impure->sta_state == 1)
@@ -8334,6 +8336,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 				orgRpb->rpb_record = newRpb->rpb_record;
 				newRpb->rpb_record = orgRecord;
 			}
+			return parentStmt;
 
 		default:
 			return parentStmt;
@@ -8668,7 +8671,7 @@ const StmtNode* ReceiveNode::execute(thread_db* /*tdbb*/, Request* request, ExeS
 		case Request::req_return:
 			if (!(request->req_batch_mode && batchFlag))
 				break;
-			// fall into
+			[[fallthrough]];
 
 		case Request::req_evaluate:
 			request->req_operation = Request::req_receive;
@@ -9376,7 +9379,7 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 					return statement2;
 				}
 			}
-			// fall into
+			return parentStmt;
 
 		default:
 			return parentStmt;
@@ -10281,7 +10284,7 @@ void SetDecFloatTrapsNode::execute(thread_db* tdbb, DsqlRequest* /*request*/, jr
 
 SessionManagementNode* SetBindNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	static const USHORT NON_FIELD_MASK = FLD_legacy | FLD_native;
+	static constexpr USHORT NON_FIELD_MASK = FLD_legacy | FLD_native;
 
 	from->resolve(dsqlScratch);
 	if (!(to->flags & NON_FIELD_MASK))
@@ -11363,6 +11366,9 @@ static VariableNode* dsqlPassHiddenVariable(DsqlCompilerScratch* dsqlScratch, Va
 		case ExprNode::TYPE_RECORD_KEY:
 		case ExprNode::TYPE_VARIABLE:
 			return NULL;
+		default:
+			// create temporary value below
+			break;
 	}
 
 	VariableNode* varNode = FB_NEW_POOL(*tdbb->getDefaultPool()) VariableNode(*tdbb->getDefaultPool());
@@ -11687,6 +11693,9 @@ static void dsqlSetParameterName(DsqlCompilerScratch* dsqlScratch, ExprNode* exp
 			parameter->par_rel_name = relation->rel_name;
 			break;
 		}
+
+		default:
+			break;
 	}
 }
 

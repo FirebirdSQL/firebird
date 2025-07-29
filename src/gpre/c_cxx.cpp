@@ -132,16 +132,16 @@ static void t_start_auto(const act*, const gpre_req*, const TEXT*, int, bool);
 static bool global_first_flag = false;
 static const TEXT* global_status_name = 0;
 
-const int INDENT	= 3;
+constexpr int INDENT = 3;
 
-static const char* const NULL_STRING	= "(char*) 0";
-static const char* const NULL_STATUS	= "NULL";
-static const char* const NULL_SQLDA		= "NULL";
+static constexpr const char* NULL_STRING	= "(char*) 0";
+static constexpr const char* NULL_STATUS	= "NULL";
+static constexpr const char* NULL_SQLDA		= "NULL";
 
-static const char* const GDS_INCLUDE	= "<ibase.h>";
+static constexpr const char* GDS_INCLUDE	= "<ibase.h>";
 
-static const char* const DCL_LONG	= "ISC_LONG";
-static const char* const DCL_QUAD	= "ISC_QUAD";
+static constexpr const char* DCL_LONG	= "ISC_LONG";
+static constexpr const char* DCL_QUAD	= "ISC_QUAD";
 
 static inline void begin(const int column)
 {
@@ -239,6 +239,7 @@ void C_CXX_action(const act* action, int column)
 	case ACT_update:
 	case ACT_statistics:
 		begin(column);
+		break;
 
 	default:
 		break;
@@ -2852,6 +2853,9 @@ static void gen_request(const gpre_req* request)
 			case REQ_slice:
 				string_type = "sdl";
 				is_blr = false;
+				break;
+
+			default:
 				break;
 		}
 

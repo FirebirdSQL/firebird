@@ -51,7 +51,7 @@ static_assert(sizeof(UUID) == 16, "Guid size mismatch");
 
 namespace Firebird {
 
-constexpr int GUID_BUFF_SIZE = 39;
+inline constexpr int GUID_BUFF_SIZE = 39;
 
 void GenerateRandomBytes(void* buffer, FB_SIZE_T size);
 
@@ -70,24 +70,21 @@ class Guid
 #undef GUID_FORMAT_BASE
 	static constexpr int GUID_FORMAT_ARGS = 11;
 
-	Guid()
-	{
-		memset(&m_data, 0, SIZE);
-	}
+	Guid() noexcept {}
 
 public:
 	static constexpr ULONG SIZE = sizeof(UUID);
 
-	static Guid empty()
+	static Guid empty() noexcept
 	{
 		return Guid();
 	}
 
-	Guid(const Guid& other)
+	Guid(const Guid& other) noexcept
 		: m_data(other.m_data)
 	{}
 
-	Guid(const UUID& uuid)
+	Guid(const UUID& uuid) noexcept
 		: m_data(uuid)
 	{}
 
@@ -96,7 +93,7 @@ public:
 		memcpy(&m_data, data, SIZE);
 	}
 
-	Guid& operator=(const Guid& other)
+	Guid& operator=(const Guid& other) noexcept
 	{
 		m_data = other.m_data; // copy struct by value
 		return *this;
@@ -112,7 +109,7 @@ public:
 		return !(*this == other);
 	}
 
-	const UCHAR* getData() const
+	const UCHAR* getData() const noexcept
 	{
 		return reinterpret_cast<const UCHAR*>(&m_data);
 	}
@@ -163,7 +160,7 @@ public:
 		return fromString(str.nullStr());
 	}
 
-	void copyTo(UUID& ptr) const
+	void copyTo(UUID& ptr) const noexcept
 	{
 		ptr = m_data; // copy struct by value
 	}
@@ -175,7 +172,7 @@ public:
 
 	// Convert platform-dependent GUID into platform-independent form according to RFC 4122
 
-	void convert(UCHAR* data) const
+	void convert(UCHAR* data) const noexcept
 	{
 		data[0] = (m_data.Data1 >> 24) & 0xFF;
 		data[1] = (m_data.Data1 >> 16) & 0xFF;
@@ -205,7 +202,7 @@ public:
 	}
 
 private:
-	UUID m_data;
+	UUID m_data{};
 };
 
 }	// namespace

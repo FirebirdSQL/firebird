@@ -267,7 +267,7 @@ SLONG EventManager::queEvents(SLONG session_id,
 		const SLONG event_offset = SRQ_REL_PTR(event);
 
 		req_int* interest, *prior;
-		if (interest = historical_interest(session, event_offset))
+		if ((interest = historical_interest(session, event_offset)))
 		{
 			for (SRQ_PTR* ptr2 = &session->ses_interests;
 				 *ptr2 && (prior = (req_int*) SRQ_ABS_PTR(*ptr2));

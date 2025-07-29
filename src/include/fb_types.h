@@ -39,13 +39,13 @@
 	/* EKU: Firebird requires (S)LONG to be 32 bit */
 	typedef int SLONG;
 	typedef unsigned int ULONG;
-	const SLONG SLONG_MIN = INT_MIN;
-	const SLONG SLONG_MAX = INT_MAX;
+	inline constexpr SLONG SLONG_MIN = INT_MIN;
+	inline constexpr SLONG SLONG_MAX = INT_MAX;
 #elif SIZEOF_LONG == 4
 	typedef long SLONG;
 	typedef unsigned long ULONG;
-	const SLONG SLONG_MIN = LONG_MIN;
-	const SLONG SLONG_MAX = LONG_MAX;
+	inline constexpr SLONG SLONG_MIN = LONG_MIN;
+	inline constexpr SLONG SLONG_MAX = LONG_MAX;
 #else
 #error compile_time_failure: SIZEOF_LONG not specified
 #endif
@@ -81,20 +81,20 @@ typedef FB_UINT64 ISC_UINT64;
 
 typedef ISC_QUAD SQUAD;
 
-const SQUAD NULL_BLOB = { 0, 0 };
+inline constexpr SQUAD NULL_BLOB = { 0, 0 };
 
-inline bool operator==(const SQUAD& s1, const SQUAD& s2)
+inline bool operator==(const SQUAD& s1, const SQUAD& s2) noexcept
 {
 	return s1.gds_quad_high == s2.gds_quad_high &&
 		   s2.gds_quad_low == s1.gds_quad_low;
 }
 
-inline bool operator!=(const SQUAD& s1, const SQUAD& s2)
+inline bool operator!=(const SQUAD& s1, const SQUAD& s2) noexcept
 {
 	return !(s1 == s2);
 }
 
-inline bool operator>(const SQUAD& s1, const SQUAD& s2)
+inline bool operator>(const SQUAD& s1, const SQUAD& s2) noexcept
 {
 	return (s1.gds_quad_high > s2.gds_quad_high) ||
 		(s1.gds_quad_high == s2.gds_quad_high &&
@@ -156,7 +156,7 @@ typedef int (*lock_ast_t)(void*);
 
 // Number of elements in an array
 template <typename T, std::size_t N>
-constexpr FB_SIZE_T FB_NELEM(const T (&)[N])
+constexpr FB_SIZE_T FB_NELEM(const T (&)[N]) noexcept
 {
 	return static_cast<FB_SIZE_T>(N);
 }

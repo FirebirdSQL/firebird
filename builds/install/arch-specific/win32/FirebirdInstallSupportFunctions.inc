@@ -53,6 +53,8 @@ Function Prototypes
   function GetInstalledVersion(BinaryFile: String): Array of Integer;
   function ConvertIBVerStrToFbVerStr( VerStr: String) : String;
   function GetRegistryEntry(RegKey, RegEntry: string): String;
+  function SplitKeyValue( AString: String; theKey: Boolean): String;
+  function GuessFirebirdPath( Product_ID: Integer; RootKey: Integer; RegKey, RegEntry: string ): String;
 
  *)
 
@@ -476,5 +478,35 @@ begin
     else
       RegQueryStringValue(RootKey, RegKey, RegEntry, Result);
 end;
+
+
+// Split a key value pair in two and return the value by default
+function SplitKeyValue( AString: String; theKey: Boolean): String;
+var
+ apos: integer;
+ akey: String;
+ avalue: String;
+begin
+  Result := '';
+  apos := pos( '=', AString );
+  if apos <> 0 then begin
+    akey := Copy( Astring, 1, apos - 1 );
+    aValue := Copy ( AString, apos + 1, length (Astring) - apos );
+  end;
+  if theKey then 
+    Result := aKey
+  else 
+    Result := aValue;
+end;
+
+
+function GuessFirebirdPath( Product_ID: Integer; RootKey: Integer; RegKey, RegEntry: string ): String;
+begin
+  Result := GetRegistryEntry( RootKey, RegKey, RegEntry );
+
+  if Result = '' then
+    Result := ExpandConstant('{pf}') + '\Firebird\Firebird_' + IntToStr( Product_ID) + '_0';
+end;
+
 
 

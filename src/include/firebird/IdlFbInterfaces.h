@@ -17,7 +17,9 @@
 
 
 #ifndef CLOOP_CONSTEXPR
-#if __cplusplus >= 201103L
+#if __cplusplus >= 201703L
+#define CLOOP_CONSTEXPR inline constexpr
+#elif __cplusplus >= 201103L
 #define CLOOP_CONSTEXPR constexpr
 #else
 #define CLOOP_CONSTEXPR const

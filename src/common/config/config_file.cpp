@@ -342,7 +342,7 @@ ConfigFile::LineType ConfigFile::parseLine(const char* fileName, const String& i
 					return LINE_INCLUDE;
 				}
 			}
-			// fall down ...
+			[[fallthrough]];
 		case '\r':
 			break;
 
@@ -375,7 +375,7 @@ ConfigFile::LineType ConfigFile::parseLine(const char* fileName, const String& i
 				}
 				break;
 			}
-			// fall through ....
+			[[fallthrough]];
 
 		default:
 			if (inString >= 2)		// Something after the end of line
@@ -414,7 +414,7 @@ ConfigFile::LineType ConfigFile::parseLine(const char* fileName, const String& i
  *	Substitute macro values in a string
  */
 
-unsigned ConfigFile::getDirSeparatorLength(const String& value, size_t separatorPosition) const
+unsigned ConfigFile::getDirSeparatorLength(const String& value, String::size_type separatorPosition) const
 {
 	if (separatorPosition >= value.length())
 		return 0;
@@ -481,7 +481,7 @@ bool ConfigFile::macroParse(String& value, const char* fileName) const
 
 		if (flags & REGEXP_SUPPORT)
 		{
-			size_t pos = 0;
+			String::size_type pos = 0;
 			while ((pos = macro.find('\\', pos)) != String::npos)
 			{
 				macro.insert(pos, "\\");
@@ -567,7 +567,7 @@ bool ConfigFile::substituteStandardDir(const String& from, String& to) const
 {
 	using namespace fb_utils;
 
-	struct Dir {
+	constexpr struct Dir {
 		unsigned code;
 		const char* name;
 	} dirs[] = {

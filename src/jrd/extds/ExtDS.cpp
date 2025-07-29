@@ -231,7 +231,7 @@ Connection* Manager::getConnection(thread_db* tdbb, const string& dataSource,
 		CryptHash ch(att->att_crypt_callback);
 		hash = DefaultHash<UCHAR>::hash(dbName.c_str(), dbName.length(), MAX_ULONG) +
 			   DefaultHash<UCHAR>::hash(dpb.getBuffer(), dpb.getBufferLength(), MAX_ULONG) +
-			   DefaultHash<UCHAR>::hash(ch.getValue(), ch.getLength(), MAX_ULONG);
+			   (ch.isValid() ? DefaultHash<UCHAR>::hash(ch.getValue(), ch.getLength(), MAX_ULONG) : 0);
 
 		while (true)
 		{
@@ -297,8 +297,7 @@ int Manager::shutdown()
 
 Provider::Provider(const char* prvName) :
 	m_name(getPool()),
-	m_connections(getPool()),
-	m_flags(0)
+	m_connections(getPool())
 {
 	m_name = prvName;
 }
@@ -342,7 +341,7 @@ void Provider::generateDPB(thread_db* tdbb, ClumpletWriter& dpb,
 		attachment->att_user->populateDpb(dpb, false);
 	}
 
-	CharSet* const cs = INTL_charset_lookup(tdbb, attachment->att_charset);
+	const CharSet* const cs = INTL_charset_lookup(tdbb, attachment->att_charset);
 	if (cs) {
 		dpb.insertString(isc_dpb_lc_ctype, cs->getName());
 	}
@@ -842,7 +841,7 @@ void Connection::raise(const FbStatusVector* status, thread_db* /*tdbb*/, const 
 }
 
 
-bool Connection::getWrapErrors(const ISC_STATUS* status)
+bool Connection::getWrapErrors(const ISC_STATUS* status) noexcept
 {
 	// Detect if connection is broken
 	switch (status[1])
@@ -1989,7 +1988,7 @@ void Statement::deallocate(thread_db* tdbb)
 
 enum TokenType {ttNone, ttWhite, ttComment, ttBrokenComment, ttString, ttParamMark, ttIdent, ttOther};
 
-static TokenType getToken(const char** begin, const char* end)
+static TokenType getToken(const char** begin, const char* end) noexcept
 {
 	TokenType ret = ttNone;
 	const char* p = *begin;
@@ -2238,6 +2237,12 @@ void Statement::setInParams(thread_db* tdbb, const MetaName* const* names,
 	const FB_SIZE_T count = params ? params->items.getCount() : 0;
 	const FB_SIZE_T excCount = in_excess ? in_excess->getCount() : 0;
 	const FB_SIZE_T sqlCount = m_sqlParamNames.getCount();
+
+	if ((m_error = (!names && sqlCount)))
+	{
+		// Parameter name expected
+		ERR_post(Arg::Gds(isc_eds_prm_name_expected));
+	}
 
 	// OK : count - excCount <= sqlCount <= count
 

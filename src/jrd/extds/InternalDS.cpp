@@ -578,6 +578,7 @@ void InternalStatement::doPrepare(thread_db* tdbb, const string& sql)
 	case DsqlStatement::TYPE_SET_GENERATOR:
 	case DsqlStatement::TYPE_SAVEPOINT:
 	case DsqlStatement::TYPE_EXEC_BLOCK:
+	case DsqlStatement::TYPE_SESSION_MANAGEMENT:
 		break;
 	}
 }

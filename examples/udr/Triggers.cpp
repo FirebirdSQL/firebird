@@ -104,7 +104,7 @@ FB_UDR_BEGIN_TRIGGER(replicate)
 			SQL_DIALECT_CURRENT, inSqlDa), status, statusVector);
 		inSqlDa->sqlvar[0].sqldata = new char[sizeof(short) + inSqlDa->sqlvar[0].sqllen];
 		strncpy(inSqlDa->sqlvar[0].sqldata + sizeof(short), info, inSqlDa->sqlvar[0].sqllen);
-		*reinterpret_cast<short*>(inSqlDa->sqlvar[0].sqldata) = strlen(info);
+		*reinterpret_cast<short*>(inSqlDa->sqlvar[0].sqldata) = static_cast<short>(strlen(info));
 
 		XSQLDA* outSqlDa = reinterpret_cast<XSQLDA*>(new char[(XSQLDA_LENGTH(1))]);
 		outSqlDa->version = SQLDA_VERSION1;
@@ -136,7 +136,7 @@ FB_UDR_BEGIN_TRIGGER(replicate)
 
 			strcat(buffer, "    p");
 			const size_t buflen = strlen(buffer);
-			snprintf(buffer + buflen, sizeof(buffer) - buflen, "%d type of column \"%s\".\"%s\" = ?", i, table, name);
+			snprintf(buffer + buflen, sizeof(buffer) - buflen, "%u type of column \"%s\".\"%s\" = ?", i, table, name);
 		}
 
 		strcat(buffer,
@@ -177,7 +177,7 @@ FB_UDR_BEGIN_TRIGGER(replicate)
 				strcat(buffer, ", ");
 			strcat(buffer, ":p");
 			const size_t buflen = strlen(buffer);
-			snprintf(buffer + buflen, sizeof(buffer) - buflen, "%d", i);
+			snprintf(buffer + buflen, sizeof(buffer) - buflen, "%u", i);
 		}
 
 		strcat(buffer, ")\n        on external data source '");
@@ -255,7 +255,7 @@ FB_UDR_BEGIN_TRIGGER(replicate_persons)
 			statusVector, &stmtHandle, SQL_DIALECT_CURRENT, inSqlDa), status, statusVector);
 		inSqlDa->sqlvar[0].sqldata = new char[sizeof(short) + inSqlDa->sqlvar[0].sqllen];
 		strncpy(inSqlDa->sqlvar[0].sqldata + sizeof(short), info, inSqlDa->sqlvar[0].sqllen);
-		*reinterpret_cast<short*>(inSqlDa->sqlvar[0].sqldata) = strlen(info);
+		*reinterpret_cast<short*>(inSqlDa->sqlvar[0].sqldata) = static_cast<short>(strlen(info));
 
 		XSQLDA* outSqlDa = reinterpret_cast<XSQLDA*>(new char[(XSQLDA_LENGTH(1))]);
 		outSqlDa->version = SQLDA_VERSION1;

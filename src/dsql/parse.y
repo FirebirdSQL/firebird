@@ -2274,7 +2274,6 @@ eds_pool_lifetime_mult
 // in preparse.cpp.
 // Remote options always come after initial options, so they don't need to be parsed
 // in preparse.cpp. They are interpreted only in the server, using this grammar.
-// Although LENGTH is defined as an initial option, it's also used in the server.
 
 %type <alterDatabaseNode> db_clause
 db_clause

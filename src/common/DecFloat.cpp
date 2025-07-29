@@ -61,7 +61,7 @@ struct Dec2fb
 	ISC_STATUS fbDoubleError;
 };
 
-Dec2fb dec2fb[] = {
+constexpr Dec2fb dec2fb[] = {
 	{ DEC_IEEE_754_Division_by_zero, isc_decfloat_divide_by_zero, isc_exception_float_divide_by_zero },
 	{ DEC_IEEE_754_Inexact, isc_decfloat_inexact_result, isc_exception_float_inexact_result },
 	{ DEC_IEEE_754_Invalid_operation, isc_decfloat_invalid_operation, isc_exception_float_invalid_operand },
@@ -103,7 +103,7 @@ public:
 
 		decContextZeroStatus(this);
 
-		for (Dec2fb* e = dec2fb; e->decError; ++e)
+		for (const Dec2fb* e = dec2fb; e->decError; ++e)
 		{
 			// Arg::Gds(isc_arith_except) as first vector element ?
 			if (e->decError & unmaskedExceptions)
@@ -162,9 +162,9 @@ unsigned digits(const unsigned pMax, unsigned char* const coeff, int& exp)
 }
 
 // offsets down from MAX_SLONG
-const ULONG OFF_inf = 3;
-const ULONG OFF_snan = 2;
-const ULONG OFF_nan = 1;
+constexpr ULONG OFF_inf = 3;
+constexpr ULONG OFF_snan = 2;
+constexpr ULONG OFF_nan = 1;
 
 void make(ULONG* key,
 	const unsigned pMax, const int bias, const unsigned decSize,
@@ -426,10 +426,11 @@ void Decimal64::toString(DecimalStatus decSt, unsigned length, char* to) const
 		memset(s, 0, sizeof(s));
 		decDoubleToString(&dec, s);
 
-		if (strlen(s) > length)
+		const FB_SIZE_T sLen = fb_strlen(s);
+		if (sLen > length)
 			decContextSetStatus(&context, DEC_Invalid_operation);
 		else
-			length = strlen(s);
+			length = sLen;
 
 		memcpy(to, s, length + 1);
 	}
@@ -489,9 +490,9 @@ bool Decimal64::isInf() const
 	case DEC_CLASS_NEG_INF:
 	case DEC_CLASS_POS_INF:
 		return true;
+	default:
+		return false;
 	}
-
-	return false;
 }
 
 bool Decimal64::isNan() const
@@ -501,9 +502,9 @@ bool Decimal64::isNan() const
     case DEC_CLASS_SNAN:
     case DEC_CLASS_QNAN:
 		return true;
+	default:
+		return false;
 	}
-
-	return false;
 }
 
 int Decimal64::sign() const
@@ -718,10 +719,11 @@ void Decimal128::toString(DecimalStatus decSt, unsigned length, char* to) const
 		memset(s, 0, sizeof(s));
 		decQuadToString(&dec, s);
 
-		if (strlen(s) > length)
+		const FB_SIZE_T sLen = fb_strlen(s);
+		if (sLen > length)
 			decContextSetStatus(&context, DEC_Invalid_operation);
 		else
-			length = strlen(s);
+			length = sLen;
 
 		memcpy(to, s, length + 1);
 	}
@@ -831,9 +833,9 @@ bool Decimal128::isInf() const
 	case DEC_CLASS_NEG_INF:
 	case DEC_CLASS_POS_INF:
 		return true;
+	default:
+		return false;
 	}
-
-	return false;
 }
 
 bool Decimal128::isNan() const
@@ -843,9 +845,9 @@ bool Decimal128::isNan() const
     case DEC_CLASS_SNAN:
     case DEC_CLASS_QNAN:
 		return true;
+	default:
+		return false;
 	}
-
-	return false;
 }
 
 int Decimal128::sign() const

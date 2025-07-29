@@ -171,7 +171,9 @@ static const SCHAR* Object_types[] =
 	"Generator",
 	"User defined function",
 	"Blob filter",	// impossible to have explicit dependencies on it, but...
-	"Collation"
+	"Collation",
+	"Package",
+	"Package body"
 };
 
 
@@ -1951,7 +1953,10 @@ processing_state SHOW_metadata(const FrontendParser::AnyShowNode& node)
 			const auto ret = show_dependencies(node.name);
 
 			if (ret == OBJECT_NOT_FOUND)
+			{
 				key = NO_DEPENDENCIES;
+				notFoundName = node.name.value();
+			}
 
 			return ret;
 		},
@@ -3558,7 +3563,7 @@ static processing_state show_dependencies(const std::optional<QualifiedMetaStrin
 // - if it's procedure, list parameters that depend on other objects (unlikely for now)
 static processing_state show_dependencies(const QualifiedMetaString& name, int obj_type)
 {
-	Array<QualifiedMetaString> dependsOn;
+	SortedArray<QualifiedMetaString> dependsOn;
 
 	FOR DEP1 IN RDB$DEPENDENCIES
 		WITH DEP1.RDB$DEPENDED_ON_NAME EQ name.object.c_str() AND
@@ -3575,7 +3580,8 @@ static processing_state show_dependencies(const QualifiedMetaString& name, int o
 		if (dependsOn.hasData())
 			isqlGlob.prints(", ");
 
-		dependsOn.add(dependedOnName);
+		if (FB_SIZE_T pos; !dependsOn.find(dependedOnName, pos))
+				dependsOn.insert(pos, dependedOnName);
 
 		const char* type_name = Object_types[DEP1.RDB$DEPENDENT_TYPE];
 		if (DEP1.RDB$FIELD_NAME.NULL)

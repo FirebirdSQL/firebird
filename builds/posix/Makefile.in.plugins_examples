@@ -36,7 +36,7 @@ else
   DefaultTarget := Release
 endif
 
-CPPFLAGS += -std=c++17 -I$(FB_BUILD)/include
+CPPFLAGS += -std=c++20 -I$(FB_BUILD)/include
 
 include     $(ROOT)/gen/make.defaults
 

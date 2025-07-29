@@ -31,48 +31,48 @@
 
 namespace {
 
-static const UCHAR CpuIntel = 0;
-static const UCHAR CpuAmd = 1;
-static const UCHAR CpuUltraSparc = 2;
-static const UCHAR CpuPowerPc = 3;
-static const UCHAR CpuPowerPc64 = 4;
-static const UCHAR CpuMipsel = 5;
-static const UCHAR CpuMips = 6;
-static const UCHAR CpuArm = 7;
-static const UCHAR CpuIa64 = 8;
-static const UCHAR CpuS390 = 9;
-static const UCHAR CpuS390x = 10;
-static const UCHAR CpuSh = 11;
-static const UCHAR CpuSheb = 12;
-static const UCHAR CpuHppa = 13;
-static const UCHAR CpuAlpha = 14;
-static const UCHAR CpuArm64 = 15;
-static const UCHAR CpuPowerPc64el = 16;
-static const UCHAR CpuM68k = 17;
-static const UCHAR CpuRiscV64 = 18;
-static const UCHAR CpuMips64el = 19;
-static const UCHAR CpuLoongArch = 20;
+static constexpr UCHAR CpuIntel = 0;
+static constexpr UCHAR CpuAmd = 1;
+static constexpr UCHAR CpuUltraSparc = 2;
+static constexpr UCHAR CpuPowerPc = 3;
+static constexpr UCHAR CpuPowerPc64 = 4;
+static constexpr UCHAR CpuMipsel = 5;
+static constexpr UCHAR CpuMips = 6;
+static constexpr UCHAR CpuArm = 7;
+static constexpr UCHAR CpuIa64 = 8;
+static constexpr UCHAR CpuS390 = 9;
+static constexpr UCHAR CpuS390x = 10;
+static constexpr UCHAR CpuSh = 11;
+static constexpr UCHAR CpuSheb = 12;
+static constexpr UCHAR CpuHppa = 13;
+static constexpr UCHAR CpuAlpha = 14;
+static constexpr UCHAR CpuArm64 = 15;
+static constexpr UCHAR CpuPowerPc64el = 16;
+static constexpr UCHAR CpuM68k = 17;
+static constexpr UCHAR CpuRiscV64 = 18;
+static constexpr UCHAR CpuMips64el = 19;
+static constexpr UCHAR CpuLoongArch = 20;
 
-static const UCHAR OsWindows = 0;
-static const UCHAR OsLinux = 1;
-static const UCHAR OsDarwin = 2;
-static const UCHAR OsSolaris = 3;
-static const UCHAR OsHpux = 4;
-static const UCHAR OsAix = 5;
-static const UCHAR OsMms = 6;
-static const UCHAR OsFreeBsd = 7;
-static const UCHAR OsNetBsd = 8;
+static constexpr UCHAR OsWindows = 0;
+static constexpr UCHAR OsLinux = 1;
+static constexpr UCHAR OsDarwin = 2;
+static constexpr UCHAR OsSolaris = 3;
+static constexpr UCHAR OsHpux = 4;
+static constexpr UCHAR OsAix = 5;
+static constexpr UCHAR OsMms = 6;
+static constexpr UCHAR OsFreeBsd = 7;
+static constexpr UCHAR OsNetBsd = 8;
 
-static const UCHAR CcMsvc = 0;
-static const UCHAR CcGcc = 1;
-static const UCHAR CcXlc = 2;
-static const UCHAR CcAcc = 3;
-static const UCHAR CcSunStudio = 4;
-static const UCHAR CcIcc = 5;
+static constexpr UCHAR CcMsvc = 0;
+static constexpr UCHAR CcGcc = 1;
+static constexpr UCHAR CcXlc = 2;
+static constexpr UCHAR CcAcc = 3;
+static constexpr UCHAR CcSunStudio = 4;
+static constexpr UCHAR CcIcc = 5;
 
-static const UCHAR EndianLittle = 0;
-static const UCHAR EndianBig = 1;
-static const UCHAR EndianMask = 1;
+static constexpr UCHAR EndianLittle = 0;
+static constexpr UCHAR EndianBig = 1;
+static constexpr UCHAR EndianMask = 1;
 
 const char* hardware[] = {
 	"Intel/i386",
@@ -120,7 +120,7 @@ const char* compiler[] = {
 };
 
 // This table lists pre-fb3 implementation codes
-const UCHAR backwardTable[FB_NELEM(hardware) * FB_NELEM(operatingSystem)] =
+constexpr UCHAR backwardTable[FB_NELEM(hardware) * FB_NELEM(operatingSystem)] =
 {
 //				Intel	AMD		Sparc	PPC		PPC64	MIPSEL	MIPS	ARM		IA64	s390	s390x	SH		SHEB	HPPA	Alpha	ARM64	PPC64el	M68k	RiscV64 MIPS64EL LoongArch
 /* Windows */	50,		68,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,
@@ -135,7 +135,7 @@ const UCHAR backwardTable[FB_NELEM(hardware) * FB_NELEM(operatingSystem)] =
 };
 
 
-const UCHAR backEndianess[FB_NELEM(hardware)] =
+constexpr UCHAR backEndianess[FB_NELEM(hardware)] =
 {
 //	Intel	AMD		Sparc	PPC		PPC64	MIPSEL	MIPS	ARM		IA64	s390	s390x	SH		SHEB	HPPA	Alpha	ARM64	PPC64el	M68k	RiscV64 MIPS64EL LoongArch
 	0,		0,		1,		1,		1,		0,		1,		0,		0,		1,		1,		0,		1,		1,		0,		0,		0,		1,		0,		0,		0,
@@ -145,7 +145,7 @@ const UCHAR backEndianess[FB_NELEM(hardware)] =
 
 namespace Firebird {
 
-DbImplementation::DbImplementation(const Ods::header_page* h)
+DbImplementation::DbImplementation(const Ods::header_page* h) noexcept
 	: di_cpu(h->hdr_db_impl.hdr_cpu), di_os(h->hdr_db_impl.hdr_os),
 	  di_cc(h->hdr_db_impl.hdr_cc), di_flags(h->hdr_db_impl.hdr_compat)
 {
@@ -153,17 +153,17 @@ DbImplementation::DbImplementation(const Ods::header_page* h)
 
 #define GET_ARRAY_ELEMENT(array, elem) ((elem) < FB_NELEM(array) ? array[(elem)] : "** Unknown **")
 
-const char* DbImplementation::cpu() const
+const char* DbImplementation::cpu() const noexcept
 {
 	return GET_ARRAY_ELEMENT(hardware, di_cpu);
 }
 
-const char* DbImplementation::os() const
+const char* DbImplementation::os() const noexcept
 {
 	return GET_ARRAY_ELEMENT(operatingSystem, di_os);
 }
 
-const char* DbImplementation::cc() const
+const char* DbImplementation::cc() const noexcept
 {
 	return GET_ARRAY_ELEMENT(compiler, di_cc);
 }
@@ -177,7 +177,7 @@ string DbImplementation::implementation() const
 	return rc;
 }
 
-const char* DbImplementation::endianess() const
+const char* DbImplementation::endianess() const noexcept
 {
 	return (di_flags & EndianMask) == EndianBig ? "big" : "little";
 }
@@ -190,12 +190,12 @@ const DbImplementation DbImplementation::current(
 		EndianLittle);
 #endif
 
-bool DbImplementation::compatible(const DbImplementation& v) const
+bool DbImplementation::compatible(const DbImplementation& v) const noexcept
 {
 	return di_flags == v.di_flags;
 }
 
-void DbImplementation::store(Ods::header_page* h) const
+void DbImplementation::store(Ods::header_page* h) const noexcept
 {
 	h->hdr_db_impl.hdr_cpu = di_cpu;
 	h->hdr_db_impl.hdr_os = di_os;
@@ -203,7 +203,7 @@ void DbImplementation::store(Ods::header_page* h) const
 	h->hdr_db_impl.hdr_compat = di_flags;
 }
 
-void DbImplementation::stuff(UCHAR** info) const
+void DbImplementation::stuff(UCHAR** info) const noexcept
 {
 	UCHAR* p = *info;
 	*p++ = di_cpu;
@@ -213,13 +213,13 @@ void DbImplementation::stuff(UCHAR** info) const
 	*info = p;
 }
 
-DbImplementation DbImplementation::pick(const UCHAR* info)
+DbImplementation DbImplementation::pick(const UCHAR* info) noexcept
 {
 	//DbImplementation(UCHAR p_cpu, UCHAR p_os, UCHAR p_cc, UCHAR p_flags)
 	return DbImplementation(info[0], info[1], info[2], info[3]);
 }
 
-DbImplementation DbImplementation::fromBackwardCompatibleByte(UCHAR bcImpl)
+DbImplementation DbImplementation::fromBackwardCompatibleByte(UCHAR bcImpl) noexcept
 {
 	for (UCHAR os = 0; os < FB_NELEM(operatingSystem); ++os)
 	{
@@ -236,7 +236,7 @@ DbImplementation DbImplementation::fromBackwardCompatibleByte(UCHAR bcImpl)
 	return DbImplementation(0xFF, 0xFF, 0xFF, 0x80);
 }
 
-UCHAR DbImplementation::backwardCompatibleImplementation() const
+UCHAR DbImplementation::backwardCompatibleImplementation() const noexcept
 {
 	if (di_cpu >= FB_NELEM(hardware) || di_os >= FB_NELEM(operatingSystem))
 	{

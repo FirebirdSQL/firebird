@@ -32,65 +32,65 @@
 
 typedef SSHORT ObjectType;
 
-const ObjectType obj_relation = 0;
-const ObjectType obj_view = 1;
-const ObjectType obj_trigger = 2;
-const ObjectType obj_computed = 3;
-const ObjectType obj_validation = 4;
-const ObjectType obj_procedure = 5;
-const ObjectType obj_index_expression = 6;
-const ObjectType obj_exception = 7;
-const ObjectType obj_user = 8;
-const ObjectType obj_field = 9;
-const ObjectType obj_index = 10;
-const ObjectType obj_charset = 11;
-const ObjectType obj_user_group = 12;
-const ObjectType obj_sql_role = 13;
-const ObjectType obj_generator = 14;
-const ObjectType obj_udf = 15;
-const ObjectType obj_blob_filter = 16;
-const ObjectType obj_collation = 17;
-const ObjectType obj_package_header = 18;
-const ObjectType obj_package_body = 19;
-const ObjectType obj_privilege = 20;
+inline constexpr ObjectType obj_relation = 0;
+inline constexpr ObjectType obj_view = 1;
+inline constexpr ObjectType obj_trigger = 2;
+inline constexpr ObjectType obj_computed = 3;
+inline constexpr ObjectType obj_validation = 4;
+inline constexpr ObjectType obj_procedure = 5;
+inline constexpr ObjectType obj_index_expression = 6;
+inline constexpr ObjectType obj_exception = 7;
+inline constexpr ObjectType obj_user = 8;
+inline constexpr ObjectType obj_field = 9;
+inline constexpr ObjectType obj_index = 10;
+inline constexpr ObjectType obj_charset = 11;
+inline constexpr ObjectType obj_user_group = 12;
+inline constexpr ObjectType obj_sql_role = 13;
+inline constexpr ObjectType obj_generator = 14;
+inline constexpr ObjectType obj_udf = 15;
+inline constexpr ObjectType obj_blob_filter = 16;
+inline constexpr ObjectType obj_collation = 17;
+inline constexpr ObjectType obj_package_header = 18;
+inline constexpr ObjectType obj_package_body = 19;
+inline constexpr ObjectType obj_privilege = 20;
 
 // objects types for ddl operations
-const ObjectType obj_database = 21;
-const ObjectType obj_relations = 22;
-const ObjectType obj_views = 23;
-const ObjectType obj_procedures = 24;
-const ObjectType obj_functions = 25;
-const ObjectType obj_packages = 26;
-const ObjectType obj_generators = 27;
-const ObjectType obj_domains = 28;
-const ObjectType obj_exceptions = 29;
-const ObjectType obj_roles = 30;
-const ObjectType obj_charsets = 31;
-const ObjectType obj_collations = 32;
-const ObjectType obj_filters = 33;
+inline constexpr ObjectType obj_database = 21;
+inline constexpr ObjectType obj_relations = 22;
+inline constexpr ObjectType obj_views = 23;
+inline constexpr ObjectType obj_procedures = 24;
+inline constexpr ObjectType obj_functions = 25;
+inline constexpr ObjectType obj_packages = 26;
+inline constexpr ObjectType obj_generators = 27;
+inline constexpr ObjectType obj_domains = 28;
+inline constexpr ObjectType obj_exceptions = 29;
+inline constexpr ObjectType obj_roles = 30;
+inline constexpr ObjectType obj_charsets = 31;
+inline constexpr ObjectType obj_collations = 32;
+inline constexpr ObjectType obj_filters = 33;
 
 // Add new codes here if they are used in RDB$DEPENDENCIES or RDB$USER_PRIVILEGES or stored in backup
 // Codes for DDL operations add in isDdlObject function as well (find it below).
-const ObjectType obj_jobs = 34;
-const ObjectType obj_tablespace = 35;
-const ObjectType obj_tablespaces = 36;
-const ObjectType obj_index_condition = 37;
+inline constexpr ObjectType obj_jobs = 34;
+inline constexpr ObjectType obj_tablespace = 35;
+inline constexpr ObjectType obj_tablespaces = 36;
+inline constexpr ObjectType obj_index_condition = 37;
 
-const ObjectType obj_schema = 38;
-const ObjectType obj_schemas = 39;
+inline constexpr ObjectType obj_schema = 38;
+inline constexpr ObjectType obj_schemas = 39;
 
-const ObjectType obj_type_MAX = 40;
+inline constexpr ObjectType obj_type_MAX = 40;
 
 // used in the parser only / no relation with obj_type_MAX (should be greater)
-const ObjectType obj_user_or_role = 100;
-const ObjectType obj_parameter = 101;
-const ObjectType obj_column = 102;
-const ObjectType obj_publication = 103;
+inline constexpr ObjectType obj_user_or_role = 100;
+inline constexpr ObjectType obj_parameter = 101;
+inline constexpr ObjectType obj_column = 102;
+inline constexpr ObjectType obj_publication = 103;
 
-const ObjectType obj_any = 255;
+inline constexpr ObjectType obj_any = 255;
 
 
-inline bool isSchemaBoundObject(ObjectType objectType)
+inline bool isSchemaBoundObject(ObjectType objectType) noexcept
 {
 	switch (objectType)
 	{
@@ -114,7 +114,7 @@ inline bool isSchemaBoundObject(ObjectType objectType)
 }
 
 
-inline bool isDdlObject(ObjectType objectType, bool* useSchema = nullptr)
+inline bool isDdlObject(ObjectType objectType, bool* useSchema = nullptr) noexcept
 {
 	if (useSchema)
 		*useSchema = false;
@@ -149,7 +149,7 @@ inline bool isDdlObject(ObjectType objectType, bool* useSchema = nullptr)
 }
 
 
-inline const char* getDllSecurityName(ObjectType object_type)
+inline constexpr const char* getDllSecurityName(ObjectType object_type) noexcept
 {
 	switch (object_type)
 	{

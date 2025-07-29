@@ -197,15 +197,15 @@ static void recentlyUsed(BufferDesc* bdb);
 static void requeueRecentlyUsed(BufferControl* bcb);
 
 
-const ULONG MIN_BUFFER_SEGMENT = 65536;
+constexpr ULONG MIN_BUFFER_SEGMENT = 65536;
 
 // Given pointer a field in the block, find the block
 
 #define BLOCK(fld_ptr, type, fld) (type*)((SCHAR*) fld_ptr - offsetof(type, fld))
 
-const int PRE_SEARCH_LIMIT	= 256;
-const int PRE_EXISTS		= -1;
-const int PRE_UNKNOWN		= -2;
+constexpr int PRE_SEARCH_LIMIT	= 256;
+constexpr int PRE_EXISTS		= -1;
+constexpr int PRE_UNKNOWN		= -2;
 
 namespace Jrd
 {
@@ -546,7 +546,7 @@ bool CCH_exclusive_attachment(thread_db* tdbb, USHORT level, SSHORT wait_flag, S
  *	return false.
  *
  **************************************/
-	const int CCH_EXCLUSIVE_RETRY_INTERVAL = 10;	// retry interval in milliseconds
+	constexpr int CCH_EXCLUSIVE_RETRY_INTERVAL = 10;	// retry interval in milliseconds
 
 	SET_TDBB(tdbb);
 	Database* const dbb = tdbb->getDatabase();
@@ -807,6 +807,9 @@ pag* CCH_fetch(thread_db* tdbb, WIN* window, int lock_type, SCHAR page_type, int
 
 	switch (lockState)
 	{
+	case lsLockedHavePage:
+		// page available
+		break;
 	case lsLocked:
 		CCH_TRACE(("FE PAGE %d:%06d", window->win_page.getPageSpaceID(), window->win_page.getPageNum()));
 		CCH_fetch_page(tdbb, window, read_shadow);	// must read page from disk
@@ -817,6 +820,9 @@ pag* CCH_fetch(thread_db* tdbb, WIN* window, int lock_type, SCHAR page_type, int
 	case lsLatchTimeout:
 	case lsLockTimeout:
 		return NULL;			// latch or lock timeout
+	case lsError:
+		fb_assert(false);
+		break;
 	}
 
 	adjust_scan_count(window, lockState == lsLocked);

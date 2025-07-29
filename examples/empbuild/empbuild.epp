@@ -287,7 +287,7 @@ while (fgets (line, 100, Fp) != NULL)
 	if (*line == '\n')
 	    break;
 
-	len = strlen (line);
+	len = static_cast<int>(strlen(line));
 	EXEC SQL INSERT CURSOR be VALUES (:line INDICATOR :len);
 	}
 
@@ -365,7 +365,7 @@ while (fgets (line, 100, Fp) != NULL)
 	if (*line == '\n')
 	    break;
 
-	len = strlen (line);
+	len = static_cast<int>(strlen(line));
 	EXEC SQL INSERT CURSOR bd VALUES (:line INDICATOR :len);
 	}
 

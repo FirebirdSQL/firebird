@@ -24,7 +24,6 @@
  *  Contributor(s): ______________________________________.
  *
  *
-
  */
 
 #include "firebird.h"
@@ -297,12 +296,12 @@ void ClumpletWriter::insertTimeStamp(UCHAR tag, const ISC_TIMESTAMP value)
 
 void ClumpletWriter::insertString(UCHAR tag, const char* str)
 {
-	insertString(tag, str, strlen(str));
+	insertString(tag, str, fb_strlen(str));
 }
 
 void ClumpletWriter::insertString(UCHAR tag, char* str)
 {
-	insertString(tag, str, strlen(str));
+	insertString(tag, str, fb_strlen(str));
 }
 
 void ClumpletWriter::insertString(UCHAR tag, const char* str, FB_SIZE_T length)

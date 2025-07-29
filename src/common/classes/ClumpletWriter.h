@@ -34,8 +34,8 @@
 
 // This setting of maximum dpb size doesn't mean, that we
 // can't process larger DBPs! This is just recommended limit
-// cause it's hard to imagine sensefull DPB of even this size.
-constexpr FB_SIZE_T MAX_DPB_SIZE = 1024 * 1024;
+// cause it's hard to imagine a useful DPB of even this size.
+inline constexpr FB_SIZE_T MAX_DPB_SIZE = 1024 * 1024;
 
 namespace Firebird {
 

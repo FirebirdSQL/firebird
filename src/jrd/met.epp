@@ -5624,6 +5624,19 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 				{
 					fb_assert(name.package.isEmpty());
 
+					if (schemaSearchPath == attachment->att_schema_search_path.getPtr())
+					{
+						if (attachment->att_unqualified_charset_resolved_cache_search_path.getPtr() !=
+								attachment->att_schema_search_path)
+						{
+							attachment->att_unqualified_charset_resolved_cache.clear();
+							attachment->att_unqualified_charset_resolved_cache_search_path =
+								attachment->att_schema_search_path;
+						}
+						else if (attachment->att_unqualified_charset_resolved_cache.get(name.object, name))
+							return objType;
+					}
+
 					if (searchSchema == SYSTEM_SCHEMA)
 					{
 						USHORT charSetId = 0;
@@ -5855,6 +5868,10 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 			if (found)
 			{
 				name.schema = searchSchema;
+
+				if (objType == obj_charset && schemaSearchPath == attachment->att_schema_search_path.getPtr())
+					attachment->att_unqualified_charset_resolved_cache.put(name.object, name);
+
 				return objType;
 			}
 		}

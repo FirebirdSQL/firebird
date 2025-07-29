@@ -2963,7 +2963,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 				{
 					// Superuser can create databases for anyone other
 					fb_utils::dpbItemUpper(options.dpb_owner);
-					if (userId.getUserName() != options.dpb_owner)
+					if (userId.getUserName() != MetaString(options.dpb_owner))
 					{
 						(Arg::Gds(isc_no_priv) << "IMPERSONATE USER" << "DATABASE" << filename).raise();
 					}

@@ -151,32 +151,32 @@ IsqlGlobals isqlGlob;
 
 //  Print lengths of numeric values
 
-const int SHORT_LEN		= 7;	// NUMERIC (4,2) = -327.68
-const int LONG_LEN		= 12;	// NUMERIC (9,2) = -21474836.48
-const int INT64_LEN		= 21;	// NUMERIC(18,2) = -92233720368547758.08
-//const int QUAD_LEN		= 19;
-const int FLOAT_LEN		= 14;	// -1.2345678E+38
-const int DOUBLE_LEN		= 23;	// -1.234567890123456E+300
-const int DATE_LEN		= 11;	// 11 for date only
-const int DATETIME_LEN		= 25;	// 25 for date-time
-const int DATETIME_TZ_LEN	= DATETIME_LEN - 1 + 1 + TimeZoneUtil::MAX_LEN;	// DATETIME_LEN should be 24
-const int TIME_ONLY_LEN		= 13;	// 13 for time only
-const int TIME_TZ_ONLY_LEN	= TIME_ONLY_LEN + 1 + TimeZoneUtil::MAX_LEN;
-const int DATE_ONLY_LEN		= 11;
-const int BOOLEAN_LEN		= 7;	// <false>
-const int UNKNOWN_LEN		= 20;	// Unknown type: %d
+constexpr int SHORT_LEN			= 7;	// NUMERIC (4,2) = -327.68
+constexpr int LONG_LEN			= 12;	// NUMERIC (9,2) = -21474836.48
+constexpr int INT64_LEN			= 21;	// NUMERIC(18,2) = -92233720368547758.08
+//constexpr int QUAD_LEN		= 19;
+constexpr int FLOAT_LEN			= 14;	// -1.2345678E+38
+constexpr int DOUBLE_LEN		= 23;	// -1.234567890123456E+300
+constexpr int DATE_LEN			= 11;	// 11 for date only
+constexpr int DATETIME_LEN		= 25;	// 25 for date-time
+constexpr int DATETIME_TZ_LEN	= DATETIME_LEN - 1 + 1 + TimeZoneUtil::MAX_LEN;	// DATETIME_LEN should be 24
+constexpr int TIME_ONLY_LEN		= 13;	// 13 for time only
+constexpr int TIME_TZ_ONLY_LEN	= TIME_ONLY_LEN + 1 + TimeZoneUtil::MAX_LEN;
+constexpr int DATE_ONLY_LEN		= 11;
+constexpr int BOOLEAN_LEN		= 7;	// <false>
+constexpr int UNKNOWN_LEN		= 20;	// Unknown type: %d
 
-const int MAX_TERMS		= 10;	// max # of terms in an interactive cmd
+constexpr int MAX_TERMS		= 10;	// max # of terms in an interactive cmd
 
-const char* ISQL_COUNTERS_SET = "CurrentMemory, MaxMemory, RealTime, UserTime, Buffers, Reads, Writes, Fetches";
-const int ISQL_COUNTERS = 8;
+constexpr const char* ISQL_COUNTERS_SET = "CurrentMemory, MaxMemory, RealTime, UserTime, Buffers, Reads, Writes, Fetches";
+constexpr int ISQL_COUNTERS = 8;
 
-const char* UNKNOWN = "*unknown*";
+constexpr const char* UNKNOWN = "*unknown*";
 
 namespace IcuUtil
 {
 	// Duplicate from ICU to not need to link ISQL with it. It's used by U8_NEXT_UNSAFE.
-	static const uint8_t utf8_countTrailBytes[256] = {
+	static constexpr uint8_t utf8_countTrailBytes[256] = {
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -1638,6 +1638,9 @@ bool ISQL_statement_ends_in_comment(const char* statement)
 						if (!altQuoteChar || lastChar == altQuoteChar)
 							state = normal;
 						break;
+
+					default:
+						break;
 				}
 				break;
 
@@ -1649,6 +1652,8 @@ bool ISQL_statement_ends_in_comment(const char* statement)
 						break;
 					case in_double_quoted_string:
 						state = normal;
+						break;
+					default:
 						break;
 				}
 				break;
@@ -4105,7 +4110,7 @@ static processing_state create_db(const FrontendParser::CreateDatabaseNode& node
 
 		dpb.insertString(isc_dpb_blr_request_search_path, SYSTEM_SCHEMA);
 
-		DB = UtilInterfacePtr()->executeCreateDatabase2(fbStatus, 
+		DB = UtilInterfacePtr()->executeCreateDatabase2(fbStatus,
 			static_cast<unsigned>(statement.length()), statement.c_str(), dialect,
 			dpb.getBufferLength(), dpb.getBuffer(), nullptr);
 
@@ -6005,7 +6010,7 @@ static bool isyesno(const TEXT* buffer)
 
 static bool printUser(const char* dbName)
 {
-	unsigned char info[] = {fb_info_username, fb_info_sqlrole};
+	constexpr unsigned char info[] = {fb_info_username, fb_info_sqlrole};
 	unsigned char buffer[(1 + 2 + MAX_SQL_IDENTIFIER_SIZE) * 2 + 2];
 	string login, role;
 
@@ -6111,7 +6116,7 @@ static bool printUser(const char* dbName)
 		const char* text;
 		const char* skip;
 	};
-	FieldInfo fieldInfo[2] = {
+	constexpr FieldInfo fieldInfo[2] = {
 		{"User", NULL},
 		{"Role", "NONE"}
 	};
@@ -6681,7 +6686,7 @@ static processing_state parse_arg(int argc, SCHAR** argv, QualifiedMetaString& t
 
 	// Interpret each command line argument
 
-	const SCHAR switchchar = '-';
+	constexpr SCHAR switchchar = '-';
 
 #ifdef	DEV_BUILD
 	bool istable = false;
@@ -7781,7 +7786,7 @@ static processing_state print_line(Firebird::IMessageMetadata* message, UCHAR* b
  *		line = pointer to the line buffer.
  *
  **************************************/
-	const unsigned maxblob = 20;
+	constexpr unsigned maxblob = 20;
 	IsqlVar varlist[maxblob]; // No more than 20 blobs per line
 	unsigned varnum = 0;
 
@@ -9179,7 +9184,7 @@ void PerTableStats::printStats(Firebird::IAttachment* att)
 	string h;
 
 	const unsigned lenTable = maxTabLen < 32 ? 32 : FB_ALIGN(maxTabLen, 4);
-	const unsigned lenValue = 9;
+	constexpr unsigned lenValue = 9;
 
 	h.append(lenTable, '-');
 	h.append(1, '+');

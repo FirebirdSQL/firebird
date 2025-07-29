@@ -32,9 +32,9 @@ namespace Firebird {
 
 namespace SimilarToFlag
 {
-	static const unsigned CASE_INSENSITIVE = 0x1;
-	static const unsigned LATIN = 0x2;
-	static const unsigned WELLFORMED = 0x4;
+	static inline constexpr unsigned CASE_INSENSITIVE = 0x1;
+	static inline constexpr unsigned LATIN = 0x2;
+	static inline constexpr unsigned WELLFORMED = 0x4;
 };
 
 class SimilarToRegex : public PermanentStorage
@@ -71,9 +71,9 @@ public:
 			case '+':
 			case '*':
 				return true;
+			default:
+				return false;
 		}
-
-		return false;
 	}
 
 private:

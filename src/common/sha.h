@@ -33,10 +33,10 @@ namespace Firebird {
 class Sha1 : public GlobalStorage
 {
 public:
-	Sha1();
+	Sha1() noexcept;
 
-	static const unsigned int HASH_SIZE = 20;
-	static const unsigned int BLOCK_SIZE = 64;
+	static constexpr unsigned int HASH_SIZE = 20;
+	static constexpr unsigned int BLOCK_SIZE = 64;
 	typedef unsigned long LONG;
 
 	struct ShaInfo
@@ -65,14 +65,14 @@ public:
 	}
 
 	void getHash(UCharBuffer& h);
-	void reset();
+	void reset() noexcept;
 	~Sha1();
 
 	// return base64-coded values
 	static void hashBased64(Firebird::string& hashBase64, const Firebird::string& data);
 
 private:
-	void clear();
+	void clear() noexcept;
 
 	ShaInfo handle;
 	bool active;

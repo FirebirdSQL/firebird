@@ -101,11 +101,11 @@ namespace
 //-------------------------------------
 
 static const TimeZoneDesc* getDesc(USHORT timeZone);
-static inline bool isOffset(USHORT timeZone);
-static inline SSHORT offsetZoneToDisplacement(USHORT timeZone);
-static inline USHORT displacementToOffsetZone(SSHORT displacement);
-static int parseNumber(const char*& p, const char* end);
-static void skipSpaces(const char*& p, const char* end);
+static inline bool isOffset(USHORT timeZone) noexcept;
+static inline SSHORT offsetZoneToDisplacement(USHORT timeZone) noexcept;
+static inline USHORT displacementToOffsetZone(SSHORT displacement) noexcept;
+static int parseNumber(const char*& p, const char* end) noexcept;
+static void skipSpaces(const char*& p, const char* end) noexcept;
 
 //-------------------------------------
 
@@ -140,7 +140,7 @@ namespace
 			fb_utils::readenv(ICU_TIMEZONE_FILES_DIR, path);
 		}
 
-		const PathName& get()
+		const PathName& get() noexcept
 		{
 			return path;
 		}
@@ -175,7 +175,7 @@ namespace
 			}
 		}
 
-		const ObjectsArray<TimeZoneDesc>& getTimeZoneList()
+		const ObjectsArray<TimeZoneDesc>& getTimeZoneList() noexcept
 		{
 			return timeZoneList;
 		}
@@ -298,7 +298,7 @@ namespace
 
 static const UDate MIN_ICU_TIMESTAMP = TimeZoneUtil::timeStampToIcuDate(TimeStamp::MIN_TIMESTAMP);
 static const UDate MAX_ICU_TIMESTAMP = TimeZoneUtil::timeStampToIcuDate(TimeStamp::MAX_TIMESTAMP);
-static const unsigned ONE_DAY = 24 * 60 - 1;	// used for offset encoding
+static constexpr unsigned ONE_DAY = 24 * 60 - 1;	// used for offset encoding
 static InitInstance<TimeZoneDataPath> timeZoneDataPath;
 static InitInstance<TimeZoneStartup> timeZoneStartup;
 
@@ -347,7 +347,7 @@ USHORT TimeZoneUtil::getSystemTimeZone()
 	if (configDefault && configDefault[0])
 	{
 		str = configDefault;
-		len = strlen(str);
+		len = static_cast<int32_t>(strlen(str));
 	}
 	else
 	{
@@ -1154,26 +1154,26 @@ static const TimeZoneDesc* getDesc(USHORT timeZone)
 }
 
 // Returns true if the time zone is offset-based or false if region-based.
-static inline bool isOffset(USHORT timeZone)
+static inline bool isOffset(USHORT timeZone) noexcept
 {
 	return timeZone <= ONE_DAY * 2;
 }
 
 // Gets the displacement from a offset-based time zone id.
-static inline SSHORT offsetZoneToDisplacement(USHORT timeZone)
+static inline SSHORT offsetZoneToDisplacement(USHORT timeZone) noexcept
 {
 	fb_assert(isOffset(timeZone));
 
 	return (SSHORT) (int(timeZone) - ONE_DAY);
 }
 
-static inline USHORT displacementToOffsetZone(SSHORT displacement)
+static inline USHORT displacementToOffsetZone(SSHORT displacement) noexcept
 {
 	return (USHORT)(int(displacement) + ONE_DAY);
 }
 
 // Parses a integer number.
-static int parseNumber(const char*& p, const char* end)
+static int parseNumber(const char*& p, const char* end) noexcept
 {
 	const char* start = p;
 	int n = 0;
@@ -1188,7 +1188,7 @@ static int parseNumber(const char*& p, const char* end)
 }
 
 // Skip spaces and tabs.
-static void skipSpaces(const char*& p, const char* end)
+static void skipSpaces(const char*& p, const char* end) noexcept
 {
 	while (p < end && (*p == ' ' || *p == '\t'))
 		++p;

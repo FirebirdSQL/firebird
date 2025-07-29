@@ -185,7 +185,7 @@ RUN cd ~/build && \
 	tar xvf icu4c-${ARG_ICU_VERSION}-src.tgz --strip 1 -C icu4c-${ARG_ICU_VERSION}-src && \
 	mkdir icu4c-${ARG_ICU_VERSION}-build-x86_64 && \
 	cd icu4c-${ARG_ICU_VERSION}-build-x86_64 && \
-	CXXFLAGS='-std=c++17 -static-libstdc++' ../icu4c-${ARG_ICU_VERSION}-src/source/runConfigureICU \
+	CXXFLAGS='-std=c++20 -static-libstdc++' ../icu4c-${ARG_ICU_VERSION}-src/source/runConfigureICU \
 		Linux \
 		--host=x86_64-pc-linux-gnu && \
 	make -j${ARG_CPUCOUNT}
@@ -193,7 +193,7 @@ RUN cd ~/build && \
 RUN cd ~/build && \
 	mkdir icu4c-${ARG_ICU_VERSION}-build && \
 	cd icu4c-${ARG_ICU_VERSION}-build && \
-	CXXFLAGS='-std=c++17 -static-libstdc++' ../icu4c-${ARG_ICU_VERSION}-src/source/runConfigureICU \
+	CXXFLAGS='-std=c++20 -static-libstdc++' ../icu4c-${ARG_ICU_VERSION}-src/source/runConfigureICU \
 		Linux \
 		--host=${ARG_TARGET_ARCH} \
 		--with-cross-build=/home/ctng/build/icu4c-${ARG_ICU_VERSION}-build-x86_64 \

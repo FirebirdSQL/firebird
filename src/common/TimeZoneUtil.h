@@ -56,9 +56,9 @@ public:
 	static const ISC_DATE TIME_TZ_BASE_DATE;
 	static const char GMT_FALLBACK[5];	// "GMT*"
 
-	static const USHORT GMT_ZONE = 65535;
-	static const unsigned MAX_LEN = 32;
-	static const unsigned MAX_SIZE = MAX_LEN + 1;
+	static inline constexpr USHORT GMT_ZONE = 65535;
+	static inline constexpr unsigned MAX_LEN = 32;
+	static inline constexpr unsigned MAX_SIZE = MAX_LEN + 1;
 
 private:
 	static InitInstance<PathName> tzDataPath;
@@ -106,7 +106,7 @@ public:
 	static void localTimeStampToUtc(ISC_TIMESTAMP& timeStamp, Callbacks* cb);
 	static void localTimeStampToUtc(ISC_TIMESTAMP_TZ& timeStampTz);
 
-	static const SLONG NO_OFFSET = MAX_SLONG;
+	static inline constexpr SLONG NO_OFFSET = MAX_SLONG;
 
 	static bool decodeTime(const ISC_TIME_TZ& timeTz, bool gmtFallback, SLONG gmtOffset,
 		struct tm* times, int* fractions = NULL);
@@ -176,17 +176,17 @@ public:
 	IcuCalendarWrapper& operator=(const IcuCalendarWrapper&) = delete;
 
 public:
-	UCalendar* operator->()
+	UCalendar* operator->() noexcept
 	{
 		return wrapped;
 	}
 
-	operator UCalendar*()
+	operator UCalendar*() noexcept
 	{
 		return wrapped;
 	}
 
-	bool operator!() const
+	bool operator!() const noexcept
 	{
 		return !wrapped;
 	}

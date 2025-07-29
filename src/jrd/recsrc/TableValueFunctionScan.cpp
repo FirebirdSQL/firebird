@@ -312,7 +312,7 @@ bool UnlistFunctionScan::nextBuffer(thread_db* tdbb) const
 				if (end == std::string_view::npos)
 				{
 					if (!valueView.empty())
-						impure->m_resultStr->append(valueView.data(), 
+						impure->m_resultStr->append(valueView.data(),
 							static_cast<string::size_type>(valueView.length()));
 
 					break;

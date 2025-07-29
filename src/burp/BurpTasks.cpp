@@ -39,7 +39,7 @@ namespace Burp
 {
 
 // IO buffer should fit at least one blob segment, two is better.
-const FB_SIZE_T MIN_IO_BUFFER_SIZE = 128 * 1024;
+constexpr FB_SIZE_T MIN_IO_BUFFER_SIZE = 128 * 1024;
 
 /// class IOBuffer
 
@@ -826,10 +826,10 @@ void RestoreRelationTask::verbRecs(FB_UINT64& records, bool total)
 	if (records < verb && !total)
 		return;
 
-	FB_UINT64 newRecs = m_records.exchangeAdd(records) + records;
+	const FB_UINT64 newRecs = m_records.exchangeAdd(records) + records;
 	records = 0;
 
-	FB_UINT64 newVerb = (newRecs / m_masterGbl->verboseInterval) * m_masterGbl->verboseInterval;
+	const FB_UINT64 newVerb = (newRecs / m_masterGbl->verboseInterval) * m_masterGbl->verboseInterval;
 	if (newVerb > m_verbRecs)
 	{
 		m_verbRecs = newVerb;
@@ -993,7 +993,7 @@ IOBuffer* RestoreRelationTask::getCleanBuffer()
 
 		if (m_cleanBuffers.hasData())
 		{
-			const FB_SIZE_T idx = 0;
+			constexpr FB_SIZE_T idx = 0;
 			buf = m_cleanBuffers[idx];
 			m_cleanBuffers.remove(idx);
 		}
@@ -1094,7 +1094,7 @@ IOBuffer* RestoreRelationTask::getDirtyBuffer()
 			return NULL;
 		}
 
-		const FB_SIZE_T idx = 0;
+		constexpr FB_SIZE_T idx = 0;
 		buf = m_dirtyBuffers[idx];
 		m_dirtyBuffers.remove(idx);
 	}
@@ -1121,7 +1121,7 @@ RestoreRelationTask::Item::EnsureUnlockBuffer::~EnsureUnlockBuffer()
 
 void RestoreRelationTask::ExcReadDone::stuffByException(StaticStatusVector& status) const noexcept
 {
-	ISC_STATUS sv[] = {isc_arg_gds, isc_random, isc_arg_string,
+	const ISC_STATUS sv[] = {isc_arg_gds, isc_random, isc_arg_string,
 		(ISC_STATUS)(IPTR) "Unexpected call to RestoreRelationTask::ExcReadDone::stuffException()", isc_arg_end};
 
 	try

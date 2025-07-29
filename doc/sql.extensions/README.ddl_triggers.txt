@@ -64,6 +64,9 @@ Syntax:
 	  | DROP PACKAGE
 	  | CREATE PACKAGE BODY
 	  | DROP PACKAGE BODY
+	  | CREATE MAPPING
+	  | ALTER MAPPING
+	  | DROP MAPPING
 
 
 Syntax rules:

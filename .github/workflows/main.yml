@@ -179,7 +179,7 @@ jobs:
         run: |
           for /r %%i in (*.bat) do unix2dos "%%i"
           choco uninstall --no-progress --yes innosetup
-          choco install --no-progress --yes innosetup --version=6.1.2
+          choco install --no-progress --yes innosetup --version=6.4.0
 
       - name: Build
         shell: cmd

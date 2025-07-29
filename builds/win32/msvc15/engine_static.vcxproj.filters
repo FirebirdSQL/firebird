@@ -43,6 +43,9 @@
     <Filter Include="Optimizer">
       <UniqueIdentifier>{4acc7c23-ac25-4311-a075-813ed730cb40}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Replication\Headers">
+      <UniqueIdentifier>{4bcf3dd7-c9c1-4148-bfeb-d5960bf35faa}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\jrd\recsrc\WindowedStream.cpp">
@@ -707,9 +710,6 @@
     <ClInclude Include="..\..\..\src\jrd\blp.h">
       <Filter>Header files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\jrd\blr.h">
-      <Filter>Header files</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\btn.h">
       <Filter>Header files</Filter>
     </ClInclude>
@@ -1110,6 +1110,36 @@
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\PageToBufferMap.h" />
+    <ClInclude Include="..\..\..\src\jrd\replication\Applier.h">
+      <Filter>Replication\Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\replication\ChangeLog.h">
+      <Filter>Replication\Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\replication\Config.h">
+      <Filter>Replication\Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\replication\Manager.h">
+      <Filter>Replication\Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\replication\Protocol.h">
+      <Filter>Replication\Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\replication\Publisher.h">
+      <Filter>Replication\Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\replication\Replicator.h">
+      <Filter>Replication\Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\replication\Utils.h">
+      <Filter>Replication\Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\validation.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\include\firebird\impl\blr.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\src\dsql\DdlNodes.epp">

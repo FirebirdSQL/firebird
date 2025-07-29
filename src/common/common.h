@@ -94,14 +94,6 @@
 #define FB_CC CcIcc
 #endif
 
-// SLONG is a 32-bit integer on 64-bit platforms
-//#if SIZEOF_LONG == 4
-//#define SLONGFORMAT "ld"
-//#define ULONGFORMAT "lu"
-//#define XLONGFORMAT "lX"
-//#define xLONGFORMAT "lx"
-//#endif
-
 // format for size_t
 #ifndef SIZEFORMAT
 #define SIZEFORMAT "zi"
@@ -229,11 +221,6 @@
 
 //format for __LINE__
 #define LINEFORMAT "d"
-
-//#define SLONGFORMAT	"ld"
-//#define ULONGFORMAT "lu"
-//#define XLONGFORMAT "lX"
-//#define xLONGFORMAT "lx"
 
 #define FB_CC CcGcc
 
@@ -541,10 +528,6 @@ extern "C" int remove(const char* path);
 #endif
 
 #define SYS_ERR		Arg::Windows
-//#define SLONGFORMAT "ld"
-//#define ULONGFORMAT "lu"
-//#define XLONGFORMAT "lX"
-//#define xLONGFORMAT "lx"
 
 //format for __LINE__
 #define LINEFORMAT "d"
@@ -955,11 +938,11 @@ void GDS_breakpoint(int);
 
 // Used in quad operations
 #ifndef WORDS_BIGENDIAN
-const int LOW_WORD		= 0;
-const int HIGH_WORD		= 1;
+inline constexpr int LOW_WORD	= 0;
+inline constexpr int HIGH_WORD	= 1;
 #else
-const int LOW_WORD		= 1;
-const int HIGH_WORD		= 0;
+inline constexpr int LOW_WORD	= 1;
+inline constexpr int HIGH_WORD	= 0;
 #endif
 
 #ifndef HAVE_WORKING_VFORK
@@ -976,7 +959,7 @@ const int HIGH_WORD		= 0;
 #endif
 
 
-inline const TEXT FB_SHORT_MONTHS[][4] =
+inline constexpr TEXT FB_SHORT_MONTHS[][4] =
 {
 	"Jan", "Feb", "Mar",
 	"Apr", "May", "Jun",
@@ -985,7 +968,7 @@ inline const TEXT FB_SHORT_MONTHS[][4] =
 	"\0"
 };
 
-inline const TEXT* const FB_LONG_MONTHS_UPPER[] =
+inline constexpr const TEXT* FB_LONG_MONTHS_UPPER[] =
 {
 	"JANUARY",
 	"FEBRUARY",
@@ -1003,7 +986,7 @@ inline const TEXT* const FB_LONG_MONTHS_UPPER[] =
 };
 
 // Starts with SUNDAY cuz tm.tm_wday starts with it
-inline const TEXT FB_SHORT_DAYS[][4] =
+inline constexpr TEXT FB_SHORT_DAYS[][4] =
 {
 	"Sun",
 	"Mon",
@@ -1016,7 +999,7 @@ inline const TEXT FB_SHORT_DAYS[][4] =
 };
 
 // Starts with SUNDAY cuz tm.tm_wday starts with it
-inline const TEXT* const FB_LONG_DAYS_UPPER[] =
+inline constexpr const TEXT* FB_LONG_DAYS_UPPER[] =
 {
 	"SUNDAY",
 	"MONDAY",
@@ -1028,7 +1011,7 @@ inline const TEXT* const FB_LONG_DAYS_UPPER[] =
 	"\0"
 };
 
-const FB_SIZE_T FB_MAX_SIZEOF = ~FB_SIZE_T(0); // Assume FB_SIZE_T is unsigned
+inline constexpr FB_SIZE_T FB_MAX_SIZEOF = ~FB_SIZE_T(0); // Assume FB_SIZE_T is unsigned
 
 inline constexpr FB_SIZE_T fb_strlen(const char* str)
 {

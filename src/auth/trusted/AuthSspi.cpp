@@ -118,9 +118,9 @@ AuthSspi::AuthSspi()
 	  groupNames(*getDefaultMemoryPool()), sessionKey(*getDefaultMemoryPool())
 {
 	TimeStamp timeOut;
-	hasCredentials = initEntries() && (fAcquireCredentialsHandle(0,
-					legacySSP ? NTLMSP_NAME_A : NEGOSSP_NAME_A,
-					SECPKG_CRED_BOTH, 0, 0, 0, 0,
+	hasCredentials = initEntries() && (fAcquireCredentialsHandle(nullptr,
+					const_cast<SEC_CHAR*>(legacySSP ? NTLMSP_NAME_A : NEGOSSP_NAME_A),
+					SECPKG_CRED_BOTH, nullptr, nullptr, 0, nullptr,
 					&secHndl, &timeOut) == SEC_E_OK);
 }
 

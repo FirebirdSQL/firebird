@@ -834,6 +834,9 @@ static void sql_info(thread_db* tdbb,
 			case DsqlStatement::TYPE_RETURNING_CURSOR:
 				value |= IStatement::FLAG_HAS_CURSOR;
 				break;
+			default:
+				// no flag modification
+				break;
 			}
 			length = put_vax_long(buffer, value);
 			info = put_item(item, length, buffer, info, end_info);

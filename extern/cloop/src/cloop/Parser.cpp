@@ -529,15 +529,15 @@ TypeRef Parser::parseTypeRef()
 	return typeRef;
 }
 
-void Parser::syntaxError(const Token& token)
+[[noreturn]] void Parser::syntaxError(const Token& token)
 {
 	error(token, string("Syntax error at '") + token.text + "'.");
 }
 
-void Parser::error(const Token& token, const string& msg)
+[[noreturn]] void Parser::error(const Token& token, const string& msg)
 {
 	char buffer[1024];
-	sprintf(buffer, "%s:%i:%i: error: %s",
+	snprintf(buffer, sizeof(buffer), "%s:%i:%i: error: %s",
 		lexer->filename.c_str(), token.line, token.column, msg.c_str());
 	throw runtime_error(buffer);
 }

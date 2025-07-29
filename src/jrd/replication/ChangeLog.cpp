@@ -66,18 +66,18 @@ using namespace Replication;
 
 namespace
 {
-	const unsigned FLUSH_WAIT_INTERVAL = 1; // milliseconds
+	inline constexpr unsigned FLUSH_WAIT_INTERVAL = 1; // milliseconds
 
-	const unsigned NO_SPACE_TIMEOUT = 10;	// seconds
-	const unsigned NO_SPACE_RETRIES = 6;		// up to one minute
+	inline constexpr unsigned NO_SPACE_TIMEOUT = 10;	// seconds
+	inline constexpr unsigned NO_SPACE_RETRIES = 6;		// up to one minute
 
-	const unsigned COPY_BLOCK_SIZE = 64 * 1024; // 64 KB
+	inline constexpr unsigned COPY_BLOCK_SIZE = 64 * 1024; // 64 KB
 
-	const char* FILENAME_PATTERN = "%s_%s.journal-%09" UQUADFORMAT;
+	inline constexpr const char* FILENAME_PATTERN = "%s_%s.journal-%09" UQUADFORMAT;
 
-	const char* FILENAME_WILDCARD = "$(filename)";
-	const char* PATHNAME_WILDCARD = "$(pathname)";
-	const char* ARCHPATHNAME_WILDCARD = "$(archivepathname)";
+	inline constexpr const char* FILENAME_WILDCARD = "$(filename)";
+	inline constexpr const char* PATHNAME_WILDCARD = "$(pathname)";
+	inline constexpr const char* ARCHPATHNAME_WILDCARD = "$(archivepathname)";
 
 	static THREAD_ENTRY_DECLARE archiver_thread(THREAD_ENTRY_PARAM arg)
 	{
@@ -300,7 +300,7 @@ void ChangeLog::Segment::mapHeader()
 	m_mapping = CreateFileMapping((HANDLE) _get_osfhandle(m_handle), NULL, PAGE_READWRITE,
 								  0, sizeof(SegmentHeader), NULL);
 
-	if (m_mapping == INVALID_HANDLE_VALUE)
+	if (!m_mapping)
 		raiseError("Journal file %s mapping failed (error %d)", m_filename.c_str(), ERRNO);
 
 	auto address = MapViewOfFile(m_mapping, FILE_MAP_READ | FILE_MAP_WRITE,
@@ -323,7 +323,7 @@ void ChangeLog::Segment::unmapHeader()
 #ifdef WIN_NT
 	UnmapViewOfFile(m_header);
 	CloseHandle(m_mapping);
-	m_mapping = INVALID_HANDLE_VALUE;
+	m_mapping = 0;
 #else
 	munmap(m_header, sizeof(SegmentHeader));
 #endif
@@ -680,16 +680,16 @@ bool ChangeLog::archiveExecute(Segment* segment)
 		const auto archpathname = m_config->archiveDirectory.hasData() ?
 			m_config->archiveDirectory + filename : "";
 
-		size_t pos;
+		string::size_type pos;
 
 		while ( (pos = archiveCommand.find(FILENAME_WILDCARD)) != string::npos)
-			archiveCommand.replace(pos, strlen(FILENAME_WILDCARD), filename);
+			archiveCommand.replace(pos, fb_strlen(FILENAME_WILDCARD), filename);
 
 		while ( (pos = archiveCommand.find(PATHNAME_WILDCARD)) != string::npos)
-			archiveCommand.replace(pos, strlen(PATHNAME_WILDCARD), pathname);
+			archiveCommand.replace(pos, fb_strlen(PATHNAME_WILDCARD), pathname);
 
 		while ( (pos = archiveCommand.find(ARCHPATHNAME_WILDCARD)) != string::npos)
-			archiveCommand.replace(pos, strlen(ARCHPATHNAME_WILDCARD), archpathname);
+			archiveCommand.replace(pos, fb_strlen(ARCHPATHNAME_WILDCARD), archpathname);
 
 		LockCheckout checkout(this);
 
@@ -964,7 +964,7 @@ ChangeLog::Segment* ChangeLog::createSegment()
 
 	const auto fd = os_utils::openCreateSharedFile(filename.c_str(), O_EXCL | O_BINARY);
 
-	SegmentHeader dummyHeader = {0};
+	const SegmentHeader dummyHeader = {0};
 	if (::write(fd, &dummyHeader, sizeof(SegmentHeader)) != sizeof(SegmentHeader))
 	{
 		::close(fd);

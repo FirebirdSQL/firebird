@@ -487,12 +487,12 @@ namespace
 
 	void invalidPatternException(std::string_view pattern, Callbacks* cb)
 	{
-		cb->err(Arg::Gds(isc_invalid_date_format) << string(pattern.data(), pattern.length()));
+		cb->err(Arg::Gds(isc_invalid_date_format) << pattern);
 	}
 
 	void incompatibleDateFormatException(std::string_view pattern, Callbacks* cb)
 	{
-		cb->err(Arg::Gds(isc_incompatible_date_format_with_current_date_type) << string(pattern.data(), pattern.length()));
+		cb->err(Arg::Gds(isc_incompatible_date_format_with_current_date_type) << pattern);
 	}
 
 	//-----------------------------------------------------------------------------------------------------------------
@@ -915,7 +915,7 @@ namespace
 
 					if (format[0] == '\"')
 					{
-						patternResult.resize(format.length(), '\0');
+						patternResult.resize(static_cast<string::size_type>(format.length()), '\0');
 						for (FB_SIZE_T i = 1, j = 0; i < format.length(); i++, j++)
 						{
 							if (format[i] == '\"')
@@ -928,7 +928,7 @@ namespace
 						patternResult.recalculate_length();
 					}
 					else
-						patternResult.assign(format.data(), format.length());
+						patternResult.assign(format);
 					break;
 				}
 
@@ -951,7 +951,7 @@ namespace
 	void throwExceptionOnEmptyValue(std::optional<T> value, std::string_view pattern, Callbacks* cb)
 	{
 		if (!value.has_value())
-			cb->err(Arg::Gds(isc_missing_value_for_format_pattern) << string(pattern.data(), pattern.length()));
+			cb->err(Arg::Gds(isc_missing_value_for_format_pattern) << pattern);
 	}
 
 	std::vector<Token> parseStringToDateTimeFormat(const dsc* desc, const string& formatUpper, Format::Patterns& outFormatPatterns, Callbacks* cb)
@@ -982,7 +982,7 @@ namespace
 			if (pattern == Format::NONE)
 				invalidPatternException(patternStr, cb);
 			if (outFormatPatterns & pattern)
-				cb->err(Arg::Gds(isc_can_not_use_same_pattern_twice) << string(patternStr.data(), patternStr.length()));
+				cb->err(Arg::Gds(isc_can_not_use_same_pattern_twice) << patternStr);
 			if (!patternIsCompatibleWithDscType(desc, pattern))
 				incompatibleDateFormatException(patternStr, cb);
 
@@ -1136,7 +1136,7 @@ namespace
 		else if (period == FormatStr::PM)
 			return twelveHours == 12 ? twelveHours : 12 + twelveHours;
 
-		cb->err(Arg::Gds(isc_incorrect_hours_period) << string(period.data(), period.length()));
+		cb->err(Arg::Gds(isc_incorrect_hours_period) << period);
 		return 0; // suppress compiler warning/error
 	}
 
@@ -1275,8 +1275,8 @@ namespace
 
 		if (minutes.value() > 59)
 		{
-			cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-				string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(59));
+			cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr << Arg::Num(0) <<
+				Arg::Num(59));
 		}
 
 		if (!TimeZoneUtil::isValidOffset(sign, hours.value(), minutes.value()))
@@ -1398,8 +1398,8 @@ namespace
 
 					if (year > 9999)
 					{
-						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-							string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(9999));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(0) << Arg::Num(9999));
 					}
 					outTimes.tm_year = year.value() - 1900;
 					break;
@@ -1411,8 +1411,8 @@ namespace
 
 					if (minutes > 59)
 					{
-						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-							string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(59));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(0) << Arg::Num(59));
 					}
 
 					outTimes.tm_min = minutes.value();
@@ -1425,8 +1425,8 @@ namespace
 
 					if (month < 1 || month > 12)
 					{
-						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-							string(patternStr.data(), patternStr.length()) << Arg::Num(1) << Arg::Num(12));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(1) << Arg::Num(12));
 					}
 
 					outTimes.tm_mon = month.value() - 1;
@@ -1450,7 +1450,7 @@ namespace
 					}
 
 					if (!isFound)
-						cb->err(Arg::Gds(isc_month_name_mismatch) << string(monthShortName.data(), monthShortName.length()));
+						cb->err(Arg::Gds(isc_month_name_mismatch) << monthShortName);
 					break;
 				}
 				case Format::MONTH:
@@ -1471,7 +1471,7 @@ namespace
 					}
 
 					if (!isFound)
-						cb->err(Arg::Gds(isc_month_name_mismatch) << string(monthFullName.data(), monthFullName.length()));
+						cb->err(Arg::Gds(isc_month_name_mismatch) << monthFullName);
 					break;
 				}
 
@@ -1503,8 +1503,8 @@ namespace
 					const int month = romanToInt(str, strLength, strOffset);
 					if (month == 0 || month > 12)
 					{
-						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-							string(patternStr.data(), patternStr.length()) << Arg::Num(1) << Arg::Num(12));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(1) << Arg::Num(12));
 					}
 
 					outTimes.tm_mon = month - 1;
@@ -1518,8 +1518,8 @@ namespace
 
 					if (day == 0 || day > 31)
 					{
-						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-							string(patternStr.data(), patternStr.length()) << Arg::Num(1) << Arg::Num(31));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(1) << Arg::Num(31));
 					}
 
 					outTimes.tm_mday = day.value();
@@ -1535,8 +1535,8 @@ namespace
 					constexpr int maxJDN = 5373484; // 31.12.9999
 					if (JDN < minJDN || JDN > maxJDN)
 					{
-						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-							string(patternStr.data(), patternStr.length()) << Arg::Num(minJDN) << Arg::Num(maxJDN));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(minJDN) << Arg::Num(maxJDN));
 					}
 
 					int year = 0, month = 0, day = 0;
@@ -1555,8 +1555,8 @@ namespace
 
 					if (hours < 1 || hours > 12)
 					{
-						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-							string(patternStr.data(), patternStr.length()) << Arg::Num(1) << Arg::Num(12));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(1) << Arg::Num(12));
 					}
 
 					outTimes.tm_hour = hours.value();
@@ -1569,8 +1569,8 @@ namespace
 
 					if (hours > 23)
 					{
-						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-							string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(23));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(0) << Arg::Num(23));
 					}
 
 					outTimes.tm_hour = hours.value();
@@ -1584,8 +1584,8 @@ namespace
 
 					if (seconds > 59)
 					{
-						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-							string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(59));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(0) << Arg::Num(59));
 					}
 
 					outTimes.tm_sec = seconds.value();
@@ -1601,8 +1601,8 @@ namespace
 					const int secondsInDayValue = secondsInDay.value();
 					if (secondsInDayValue > maximumSecondsInDay)
 					{
-						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-							string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(maximumSecondsInDay));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(0) << Arg::Num(maximumSecondsInDay));
 					}
 
 					const int hours = secondsInDayValue / 24;
@@ -1677,8 +1677,8 @@ namespace
 
 						if (minutes > 59)
 						{
-							cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-								string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(59));
+							cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+								Arg::Num(0) << Arg::Num(59));
 						}
 
 						outTimezoneInMinutes += sign(outTimezoneInMinutes) * minutes.value();
@@ -1691,8 +1691,8 @@ namespace
 						const int minutesValue = minutes.value();
 						if (abs(minutesValue) > 59)
 						{
-							cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-								string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(59));
+							cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+								Arg::Num(0) << Arg::Num(59));
 						}
 
 						outTimezoneInMinutes = minutesValue;
@@ -1717,8 +1717,8 @@ namespace
 						}
 
 						std::string_view timezoneName = getTimezoneNameFromString(str, strLength, oldOffset);
-						status_exception::raise(Arg::Gds(isc_invalid_timezone_region_or_displacement)
-							<< string(timezoneName.data(), timezoneName.length()));
+						status_exception::raise(
+							Arg::Gds(isc_invalid_timezone_region_or_displacement) << timezoneName);
 					}
 
 					strOffset += parsedTimezoneNameLength;

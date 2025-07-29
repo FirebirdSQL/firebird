@@ -117,14 +117,14 @@ using namespace Firebird;
  * less than the number of bits in the type: one bit is for the sign,
  * and the other is because we divide by 5, rather than 10.  */
 
-const SSHORT SHORT_LIMIT = ((1 << 14) / 5);
-const SLONG LONG_LIMIT = ((1L << 30) / 5);
+constexpr SSHORT SHORT_LIMIT = ((1 << 14) / 5);
+constexpr SLONG LONG_LIMIT = ((1L << 30) / 5);
 
 // NOTE: The syntax for the below line may need modification to ensure
 // the result of 1 << 62 is a quad
 
 //#define QUAD_LIMIT      ((((SINT64) 1) << 62) / 5)
-const SINT64 INT64_LIMIT = ((((SINT64) 1) << 62) / 5);
+constexpr SINT64 INT64_LIMIT = ((((SINT64) 1) << 62) / 5);
 
 #define TODAY           "TODAY"
 #define NOW             "NOW"
@@ -201,13 +201,13 @@ public:
 
 	void truncate8() override
 	{
-		ULONG mask = 0xFFFFFFFF;
+		constexpr ULONG mask = 0xFFFFFFFF;
 		value &= mask;
 	}
 
 	void truncate16() override
 	{
-		FB_UINT64 mask = 0xFFFFFFFFFFFFFFFF;
+		constexpr FB_UINT64 mask = 0xFFFFFFFFFFFFFFFF;
 		value &= mask;
 	}
 
@@ -243,8 +243,8 @@ protected:
 
 } // anonymous namespace
 
-static const double eps_double = 1e-14;
-static const double eps_float  = 1e-5;
+static constexpr double eps_double = 1e-14;
+static constexpr double eps_float  = 1e-5;
 
 
 static void validateTimeStamp(const ISC_TIMESTAMP timestamp, const EXPECT_DATETIME expectedType, const dsc* desc,
@@ -459,7 +459,7 @@ static void decimal_float_to_text(const dsc* from, dsc* to, DecimalStatus decSt,
 	intermediate.dsc_dtype = dtype_text;
 	intermediate.dsc_ttype() = ttype_ascii;
 	intermediate.dsc_address = reinterpret_cast<UCHAR*>(temp);
-	intermediate.dsc_length = strlen(temp);
+	intermediate.dsc_length = static_cast<USHORT>(strlen(temp));
 
 	CVT_move_common(&intermediate, to, 0, cb);
 }
@@ -487,7 +487,7 @@ static void int128_to_text(const dsc* from, dsc* to, Callbacks* cb)
 	intermediate.dsc_dtype = dtype_text;
 	intermediate.dsc_ttype() = ttype_ascii;
 	intermediate.dsc_address = reinterpret_cast<UCHAR*>(temp);
-	intermediate.dsc_length = strlen(temp);
+	intermediate.dsc_length = static_cast<USHORT>(strlen(temp));
 
 	CVT_move_common(&intermediate, to, 0, cb);
 }
@@ -710,8 +710,8 @@ void CVT_string_to_datetime(const dsc* desc,
 	//   0 means missing
 	// ENGLISH_MONTH for the presence of an English month name
 	// SPECIAL       for a special date verb
-	const int ENGLISH_MONTH	= -1;
-	const int SPECIAL		= -2; // CVC: I see it set, but never tested.
+	constexpr int ENGLISH_MONTH	= -1;
+	constexpr int SPECIAL		= -2; // CVC: I see it set, but never tested.
 
 	unsigned int position_year = 0;
 	unsigned int position_month = 1;
@@ -1384,7 +1384,7 @@ bool CVT_get_boolean(const dsc* desc, ErrorFunction err)
 			else if (len == 5 && fb_utils::strnicmp(p, "FALSE", len) == 0)
 				return false;
 
-			// fall into
+			[[fallthrough]];
 		}
 
 		default:
@@ -1907,7 +1907,7 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 
 	case dtype_varying:
 		MOVE_CLEAR(to->dsc_address, to->dsc_length);
-		// fall through ...
+		[[fallthrough]];
 	case dtype_text:
 	case dtype_cstring:
 		switch (from->dsc_dtype)
@@ -2107,8 +2107,8 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 			}
 
 		default:
-			fb_assert(false);		// Fall into ...
-
+			fb_assert(false);
+			[[fallthrough]];
 		case dtype_blob:
 			CVT_conversion_error(from, cb->err);
 			return;
@@ -2344,7 +2344,7 @@ static void datetime_to_text(const dsc* from, dsc* to, Callbacks* cb)
 	memset(&times, 0, sizeof(struct tm));
 
 	int	fractions = 0;
-	USHORT timezone;
+	USHORT timezone = TimeZoneUtil::GMT_ZONE;
 
 	switch (from->dsc_dtype)
 	{
@@ -3198,8 +3198,8 @@ Int128 CVT_get_int128(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorF
 	Decimal128 tmp;
 	double d, eps;
 
-	static const double I128_MIN_dbl = -1.7014118346046923e+38;
-	static const double I128_MAX_dbl =  1.7014118346046921e+38;
+	static constexpr double I128_MIN_dbl = -1.7014118346046923e+38;
+	static constexpr double I128_MAX_dbl =  1.7014118346046921e+38;
 	static const CDecimal128 I128_MIN_dcft("-1.701411834604692317316873037158841E+38", decSt);
 	static const CDecimal128 I128_MAX_dcft( "1.701411834604692317316873037158841E+38", decSt);
 	static const CDecimal128 DecFlt_05("0.5", decSt);
@@ -3363,7 +3363,7 @@ const UCHAR* CVT_get_bytes(const dsc* desc, unsigned& size)
 			}
 
 		case dtype_cstring:
-			size = strlen((const char*) desc->dsc_address);
+			size = static_cast<unsigned>(strlen((const char*) desc->dsc_address));
 			return desc->dsc_address;
 
 		default:

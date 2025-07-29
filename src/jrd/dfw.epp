@@ -4376,7 +4376,7 @@ static bool create_field(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 
 			FOR(REQUEST_HANDLE handle)
 				FLD IN RDB$FIELDS
-				WITH FLD.RDB$FIELD_NAME EQ depName.schema.c_str() AND
+				WITH FLD.RDB$SCHEMA_NAME EQ depName.schema.c_str() AND
 					 FLD.RDB$FIELD_NAME EQ depName.object.c_str()
 			{
 				if (!FLD.RDB$VALIDATION_BLR.NULL)

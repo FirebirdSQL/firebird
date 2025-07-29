@@ -108,7 +108,7 @@ enum gbak_action
 static void close_out_transaction(gbak_action, Firebird::ITransaction**);
 //static void enable_signals();
 //static void excp_handler();
-static SLONG get_number(const SCHAR*);
+static SLONG get_number(const SCHAR*) noexcept;
 static ULONG get_size(const SCHAR*, burp_fil*);
 static gbak_action open_files(const TEXT *, const TEXT**, USHORT,
 							  const Firebird::ClumpletWriter&);
@@ -134,8 +134,8 @@ struct StatFormat
 static inline constexpr const char* STAT_CHARS = "TDRW";
 static inline constexpr StatFormat STAT_FORMATS[] =
 {
-	{"time",	"%4lu.%03u ",  9},
-	{"delta",	"%2lu.%03u ",  7},
+	{"time",	"%4u.%03u ",  9},
+	{"delta",	"%2u.%03u ",  7},
 	{"reads",	"%6" UQUADFORMAT" ", 7},
 	{"writes",	"%6" UQUADFORMAT" ", 7}
 };
@@ -260,7 +260,7 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 		case IN_SW_BURP_SE:				// service name
 			if (itr >= argc - 1)
 			{
-				int errnum = inSw->in_sw == IN_SW_BURP_USER ? 188 : // user name parameter missing
+				const int errnum = inSw->in_sw == IN_SW_BURP_USER ? 188 : // user name parameter missing
 						   		inSw->in_sw == IN_SW_BURP_PASS ? 189 : // password parameter missing
 									273; // service name parameter missing
 
@@ -953,7 +953,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 				if (++itr >= argc)
 					BURP_error(326, true); // verbose interval parameter missing
 
-				SLONG verbint_val = get_number(argv[itr]);
+				const SLONG verbint_val = get_number(argv[itr]);
 				if (verbint_val < MIN_VERBOSE_INTERVAL)
 				{
 					// verbose interval value cannot be smaller than @1
@@ -1170,7 +1170,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 	uSvc->fillDpb(dpb);
 
 	const UCHAR* authBlock;
-	unsigned int authSize = uSvc->getAuthBlock(&authBlock);
+	const unsigned int authSize = uSvc->getAuthBlock(&authBlock);
 	if (authBlock)
 	{
 		dpb.insertBytes(isc_dpb_auth_block, authBlock, authSize);
@@ -1521,7 +1521,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 
 
 
-void BURP_abort(Firebird::IStatus* status)
+void BURP_abort(const Firebird::IStatus* status)
 {
 /**************************************
  *
@@ -1536,7 +1536,7 @@ void BURP_abort(Firebird::IStatus* status)
 	BurpMaster master;
 	BurpGlobals* tdgbl = master.get();
 
-	USHORT code = tdgbl->action && tdgbl->action->act_action == ACT_backup_fini ? 351 : 83;
+	const USHORT code = tdgbl->action && tdgbl->action->act_action == ACT_backup_fini ? 351 : 83;
 	// msg 351 Error closing database, but backup file is OK
 	// msg 83 Exiting before completion due to errors
 
@@ -1606,7 +1606,7 @@ void BURP_error(USHORT errcode, bool abort, const char* str)
 }
 
 
-void BURP_error_redirect(Firebird::IStatus* status_vector, USHORT errcode, const SafeArg& arg)
+void BURP_error_redirect(const Firebird::IStatus* status_vector, USHORT errcode, const SafeArg& arg)
 {
 /**************************************
  *
@@ -1759,7 +1759,7 @@ void BURP_print(bool err, USHORT number, const char* str)
 }
 
 
-void BURP_print_status(bool err, Firebird::IStatus* status_vector, USHORT secondNumber)
+void BURP_print_status(bool err, const Firebird::IStatus* status_vector, USHORT secondNumber)
 {
 /**************************************
  *
@@ -1814,7 +1814,7 @@ void BURP_print_status(bool err, Firebird::IStatus* status_vector, USHORT second
 }
 
 
-void BURP_print_warning(Firebird::IStatus* status, bool printErrorAsWarning)
+void BURP_print_warning(const Firebird::IStatus* status, bool printErrorAsWarning)
 {
 /**************************************
  *
@@ -1977,7 +1977,7 @@ static void close_out_transaction(gbak_action action, Firebird::ITransaction** t
 }
 
 
-static SLONG get_number( const SCHAR* string)
+static SLONG get_number(const SCHAR* string) noexcept
 {
 /**************************************
  *
@@ -1986,15 +1986,12 @@ static SLONG get_number( const SCHAR* string)
  **************************************
  *
  * Functional description
- *	Convert a string to binary, complaining bitterly if
- *	the string is bum.
- *	CVC: where does it complain? It does return zero, nothing else.
- *	Worse, this function doesn't check for overflow.
+ *	Convert a string to binary
  **************************************/
 	SCHAR c;
 	SLONG value = 0;
 
-	for (const SCHAR* p = string; c = *p++;)
+	for (const SCHAR* p = string; (c = *p++);)
 	{
 		if (c < '0' || c > '9')
 			return 0;
@@ -2077,7 +2074,7 @@ static gbak_action open_files(const TEXT* file1,
 
 			if (tdgbl->gbl_sw_keyholder)
 			{
-				unsigned char info[] = {fb_info_crypt_key, fb_info_crypt_plugin};
+				constexpr unsigned char info[] = {fb_info_crypt_key, fb_info_crypt_plugin};
 				unsigned char buffer[(1 + 2 + MAX_SQL_IDENTIFIER_SIZE) * 2 + 2];
 				unsigned int len;
 
@@ -2612,11 +2609,11 @@ static ULONG get_size(const SCHAR* string, burp_fil* file)
 	bool digit = false;
 
 	file->fil_size_code = size_n;
-	for (const SCHAR *num = string; c = *num++;)
+	for (const SCHAR *num = string; (c = *num++);)
 	{
 		if (isdigit(c))
 		{
-			int val = c - '0';
+			const int val = c - '0';
 			if (size >= overflow)
 			{
 				file->fil_size_code = size_e;
@@ -2836,13 +2833,13 @@ void BurpGlobals::print_stats(USHORT number)
 
 		if (gbl_stat_flags & (1 << TIME_TOTAL))
 		{
-			SINT64 t1 = (t0 - gbl_stats[TIME_TOTAL]) / freq_ms;
+			const SINT64 t1 = (t0 - gbl_stats[TIME_TOTAL]) / freq_ms;
 			burp_output(false, STAT_FORMATS[TIME_TOTAL].format, (int)(t1 / 1000), (int)(t1 % 1000));
 		}
 
 		if (gbl_stat_flags & (1 << TIME_DELTA))
 		{
-			SINT64 t2 = (t0 - gbl_stats[TIME_DELTA]) / freq_ms;
+			const SINT64 t2 = (t0 - gbl_stats[TIME_DELTA]) / freq_ms;
 			burp_output(false, STAT_FORMATS[TIME_DELTA].format, (int)(t2 / 1000), (int)(t2 % 1000));
 
 			gbl_stats[TIME_DELTA] = t0;

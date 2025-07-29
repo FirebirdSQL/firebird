@@ -56,11 +56,11 @@ class Validation
 public:
 	// vdr_flags
 
-	static const USHORT VDR_online = 0x01;		// online validation (no exclusive attachment)
-	static const USHORT VDR_update = 0x02;		// fix simple things
-	static const USHORT VDR_repair = 0x04;		// fix non-simple things (-mend)
-	static const USHORT VDR_records = 0x08;		// Walk all records
-	static const USHORT VDR_partial = 0x10;		// Walk only (some) relations
+	static inline constexpr USHORT VDR_online = 0x01;		// online validation (no exclusive attachment)
+	static inline constexpr USHORT VDR_update = 0x02;		// fix simple things
+	static inline constexpr USHORT VDR_repair = 0x04;		// fix non-simple things (-mend)
+	static inline constexpr USHORT VDR_records = 0x08;		// Walk all records
+	static inline constexpr USHORT VDR_partial = 0x10;		// Walk only (some) relations
 
 private:
 

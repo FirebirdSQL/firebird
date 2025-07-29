@@ -164,25 +164,25 @@ UCHAR debug_on = 0;		// able to turn this on in debug mode
 #endif
 
 
-const UCHAR blob_items[] =
+constexpr UCHAR blob_items[] =
 {
 	isc_info_blob_max_segment,
 	isc_info_blob_num_segments,
 	isc_info_blob_type,
 	isc_info_blob_total_length
 };
-const UCHAR blr_items[] =
+constexpr UCHAR blr_items[] =
 {
 	isc_info_blob_max_segment,
 	isc_info_blob_total_length
 };
-const UCHAR source_items[] =
+constexpr UCHAR source_items[] =
 {
 	isc_info_blob_max_segment,
 	isc_info_blob_total_length,
 	isc_info_blob_num_segments
 };
-const UCHAR db_info_items[] =
+constexpr UCHAR db_info_items[] =
 {
 	isc_info_db_sql_dialect,
 	isc_info_page_size,
@@ -194,12 +194,12 @@ const UCHAR db_info_items[] =
 	fb_info_replica_mode,
 	isc_info_end
 };
-const UCHAR limbo_tpb[] =
+constexpr UCHAR limbo_tpb[] =
 {
 	isc_tpb_version1,
 	isc_tpb_ignore_limbo
 };
-const UCHAR limbo_nau_tpb[] =
+constexpr UCHAR limbo_nau_tpb[] =
 {
 	isc_tpb_version1,
 	isc_tpb_ignore_limbo,
@@ -291,7 +291,7 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 	// detect if MAKE_DBKEY is supported and decide kind of read relation query
 	if (tdgbl->gbl_sw_par_workers > 1)
 	{
-		const char* sql = "SELECT MAKE_DBKEY(0, 0) FROM RDB$DATABASE";
+		constexpr const char* sql = "SELECT MAKE_DBKEY(0, 0) FROM RDB$DATABASE";
 		IStatement* stmt = DB->prepare(fbStatus, gds_trans, 0, sql, 3, 0);
 		if (fbStatus->getState() & IStatus::RESULT_ERROR)
 		{
@@ -1945,7 +1945,7 @@ void put_relation( burp_rel* relation)
 
 	// sort the list of fields into three lists, depending on alignment
 	burp_fld* field;
-	for (field = fields; field = fields;)
+	for (field = fields; (field = fields);)
 	{
 		fields = field->fld_next;
 		USHORT l = field->fld_length;
@@ -1977,28 +1977,28 @@ void put_relation( burp_rel* relation)
 	// re-create (approximately) the original order of the fields.  This is
 	// not strictly required, but it certainly is polite.
 
-	while (field = unaligned)
+	while ((field = unaligned))
 	{
 		unaligned = field->fld_next;
 		field->fld_next = relation->rel_fields;
 		relation->rel_fields = field;
 	}
 
-	while (field = aligned)
+	while ((field = aligned))
 	{
 		aligned = field->fld_next;
 		field->fld_next = relation->rel_fields;
 		relation->rel_fields = field;
 	}
 
-	while (field = aligned4)
+	while ((field = aligned4))
 	{
 		aligned4 = field->fld_next;
 		field->fld_next = relation->rel_fields;
 		relation->rel_fields = field;
 	}
 
-	while (field = aligned8)
+	while ((field = aligned8))
 	{
 		aligned8 = field->fld_next;
 		field->fld_next = relation->rel_fields;
@@ -2628,12 +2628,12 @@ void write_database( const TEXT* dbb_file)
 			break;
 
 		case isc_info_no_reserve:
-			if (no_reserve = (USHORT) gds__vax_integer(d, length))
+			if ((no_reserve = (USHORT) gds__vax_integer(d, length)) != 0)
 				put_int32(att_no_reserve, no_reserve);
 			break;
 
 		case isc_info_set_page_buffers:
-			if (page_buffers = gds__vax_integer(d, length))
+			if ((page_buffers = gds__vax_integer(d, length)) != 0)
 				put_int32(att_page_buffers, page_buffers);
 			break;
 
@@ -2646,12 +2646,12 @@ void write_database( const TEXT* dbb_file)
 			break;
 
 		case isc_info_db_read_only:
-			if (db_read_only = (USHORT) gds__vax_integer(d, length))
+			if ((db_read_only = (USHORT) gds__vax_integer(d, length)) != 0)
 				put_int32(att_db_read_only, db_read_only);
 			break;
 
 		case fb_info_replica_mode:
-			if (replica_mode = (USHORT) gds__vax_integer(d, length))
+			if ((replica_mode = (USHORT) gds__vax_integer(d, length)) != 0)
 				put_int32(att_replica_mode, replica_mode);
 			break;
 
@@ -4335,7 +4335,7 @@ void write_sql_roles()
 				put_source_blob (att_role_description, att_role_description, X.RDB$DESCRIPTION);
 			}
 
-			const UCHAR ll = sizeof(X.RDB$SYSTEM_PRIVILEGES);
+			constexpr UCHAR ll = sizeof(X.RDB$SYSTEM_PRIVILEGES);
 			put(tdgbl, att_role_sys_priveleges);
 			put(tdgbl, ll);
 			put_block(tdgbl, (const UCHAR*) (X.RDB$SYSTEM_PRIVILEGES), ll);

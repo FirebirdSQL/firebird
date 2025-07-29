@@ -471,7 +471,7 @@ void TracePluginImpl::logRecordTrig(const char* action, ITraceDatabaseConnection
 			extras += "TRANSACTION_COMMIT";
 			break;
 		case TRIGGER_TRANS_ROLLBACK:
-			extras + "TRANSACTION_ROLLBACK";
+			extras += "TRANSACTION_ROLLBACK";
 			break;
 		case TRIGGER_DDL:
 			extras += "DDL";

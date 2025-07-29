@@ -191,7 +191,9 @@ void CppGenerator::generate()
 	fprintf(out, "#endif\n\n\n");
 
 	fprintf(out, "#ifndef CLOOP_CONSTEXPR\n");
-	fprintf(out, "#if __cplusplus >= 201103L\n");
+	fprintf(out, "#if __cplusplus >= 201703L\n");
+	fprintf(out, "#define CLOOP_CONSTEXPR inline constexpr\n");
+	fprintf(out, "#elif __cplusplus >= 201103L\n");
 	fprintf(out, "#define CLOOP_CONSTEXPR constexpr\n");
 	fprintf(out, "#else\n");
 	fprintf(out, "#define CLOOP_CONSTEXPR const\n");

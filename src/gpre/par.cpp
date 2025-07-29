@@ -713,7 +713,7 @@ bool PAR_end()
 //		Report an error during parse and unwind.
 //
 
-void PAR_error(const TEXT* string)
+[[noreturn]] void PAR_error(const TEXT* string)
 {
 	CPR_error(string);
 	PAR_unwind();
@@ -1182,7 +1182,7 @@ gpre_sym* PAR_symbol(sym_t type)
 //		There's been a parse error, so unwind out.
 //
 
-void PAR_unwind()
+[[noreturn]] void PAR_unwind()
 {
 	throw Firebird::LongJump();
 }
@@ -1534,6 +1534,7 @@ static act* par_based()
 			if (hold)
 				based_on->bas_variables = hold;
 		}
+		break;
 	default:
 		break;
 	}

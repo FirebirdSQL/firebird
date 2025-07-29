@@ -39,7 +39,7 @@ TimeZoneSnapshot::TimeZoneSnapshot(thread_db* tdbb, MemoryPool& pool)
 	tzRecord->nullify();
 
 	TimeZoneUtil::iterateRegions(
-		[=]
+		[=, this]
 		(USHORT id, const char* name)
 		{
 			SINT64 idValue = id;

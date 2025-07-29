@@ -1432,7 +1432,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 				if (!bugFlag)
 				{
 #endif
-					LOG_PTHREAD_ERROR(pthread_mutexattr_setrobust_np(&mattr, PTHREAD_MUTEX_ROBUST_NP));
+					LOG_PTHREAD_ERROR(pthread_mutexattr_setrobust(&mattr, PTHREAD_MUTEX_ROBUST));
 #ifdef BUGGY_LINUX_MUTEX
 				}
 #endif
@@ -1529,7 +1529,7 @@ static bool getMappedFileName(void* addr, PathName& mappedName)
 				//system_call_failed::raise("QueryDosDevice");
 				return false;
 
-			ntLen = strlen(ntDevice);
+			ntLen = static_cast<DWORD>(strlen(ntDevice));
 
 			if (ntLen <= mapLen &&
 				_memicmp(ntDevice, mapName, ntLen) == 0 &&
@@ -2095,11 +2095,11 @@ void SharedMemoryBase::unmapObject(CheckStatusWrapper* statusVector,
 
 #ifdef WIN_NT
 
-static const LPCSTR FAST_MUTEX_EVT_NAME	= "%s_FM_EVT";
-static const LPCSTR FAST_MUTEX_MAP_NAME	= "%s_FM_MAP";
+static constexpr LPCSTR FAST_MUTEX_EVT_NAME	= "%s_FM_EVT";
+static constexpr LPCSTR FAST_MUTEX_MAP_NAME	= "%s_FM_MAP";
 
-static const int DEFAULT_INTERLOCKED_SPIN_COUNT	= 0;
-static const int DEFAULT_INTERLOCKED_SPIN_COUNT_SMP	= 200;
+static constexpr int DEFAULT_INTERLOCKED_SPIN_COUNT	= 0;
+static constexpr int DEFAULT_INTERLOCKED_SPIN_COUNT_SMP	= 200;
 
 static SLONG pid = 0;
 
@@ -2579,7 +2579,7 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector,
 			!FlushViewOfFile(sh_mem_header, 0))
 		{
 			error(statusVector, "SetFilePointer", GetLastError());
-			return NULL;
+			return false;
 		}
 	}
 
@@ -2622,16 +2622,16 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector,
 	if (file_obj == NULL)
 	{
 		error(statusVector, "CreateFileMapping", GetLastError());
-		return NULL;
+		return false;
 	}
 
 	MemoryHeader* const address = (MemoryHeader*) MapViewOfFile(file_obj, FILE_MAP_WRITE, 0, 0, 0);
 
-	if (address == NULL)
+	if (!address)
 	{
 		error(statusVector, "MapViewOfFile", GetLastError());
 		CloseHandle(file_obj);
-		return NULL;
+		return false;
 	}
 
 	if (flag)
@@ -2650,10 +2650,10 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector,
 	if (!sh_mem_length_mapped)
 	{
 		error(statusVector, "sh_mem_length_mapped is 0", 0);
-		return NULL;
+		return false;
 	}
 
-	return (address);
+	return address != nullptr;
 }
 #endif
 
@@ -2757,7 +2757,7 @@ void SharedMemoryBase::mutexLock()
 	{
 		// We always perform check for dead process
 		// Therefore may safely mark mutex as recovered
-		LOG_PTHREAD_ERROR(pthread_mutex_consistent_np(sh_mem_mutex->mtx_mutex));
+		LOG_PTHREAD_ERROR(pthread_mutex_consistent(sh_mem_mutex->mtx_mutex));
 		state = 0;
 	}
 #endif
@@ -2785,7 +2785,7 @@ bool SharedMemoryBase::mutexLockCond()
 	{
 		// We always perform check for dead process
 		// Therefore may safely mark mutex as recovered
-		LOG_PTHREAD_ERROR(pthread_mutex_consistent_np(sh_mem_mutex->mtx_mutex));
+		LOG_PTHREAD_ERROR(pthread_mutex_consistent(sh_mem_mutex->mtx_mutex));
 		state = 0;
 	}
 #endif

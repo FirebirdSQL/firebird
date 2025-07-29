@@ -137,18 +137,18 @@ using namespace Firebird;
 // CVC: Unlike other definitions, SRQ_PTR is not a pointer to something in lowercase.
 // It's LONG.
 
-const SRQ_PTR DUMMY_OWNER = -1;
+constexpr SRQ_PTR DUMMY_OWNER = -1;
 
-const SLONG HASH_MIN_SLOTS	= 101;
-const SLONG HASH_MAX_SLOTS	= 65521;
-const USHORT HISTORY_BLOCKS	= 256;
+constexpr SLONG HASH_MIN_SLOTS	= 101;
+constexpr SLONG HASH_MAX_SLOTS	= 65521;
+constexpr USHORT HISTORY_BLOCKS	= 256;
 
-const ULONG MAX_TABLE_LENGTH = SLONG_MAX;
+constexpr ULONG MAX_TABLE_LENGTH = SLONG_MAX;
 
 // SRQ_ABS_PTR uses this macro.
 #define SRQ_BASE                    ((UCHAR*) m_sharedMemory->getHeader())
 
-static const bool compatibility[LCK_max][LCK_max] =
+static constexpr bool compatibility[LCK_max][LCK_max] =
 {
 /*							Shared	Prot	Shared	Prot
 			none	null	Read	Read	Write	Write	Exclusive */
@@ -1984,7 +1984,7 @@ lrq* LockManager::deadlock_walk(lrq* request, bool* maybe_deadlock)
 
 			// Check who is blocking the request whose owner is blocking the input request
 
-			if (target = deadlock_walk(target, maybe_deadlock))
+			if ((target = deadlock_walk(target, maybe_deadlock)))
 			{
 #ifdef DEBUG_TRACE_DEADLOCKS
 				const own* const owner2 = (own*) SRQ_ABS_PTR(request->lrq_owner);
@@ -3222,11 +3222,11 @@ bool LockManager::signal_owner(thread_db* tdbb, own* blocking_owner)
 }
 
 
-const USHORT EXPECT_inuse = 0;
-const USHORT EXPECT_freed = 1;
+constexpr USHORT EXPECT_inuse = 0;
+constexpr USHORT EXPECT_freed = 1;
 
-const USHORT RECURSE_yes = 0;
-const USHORT RECURSE_not = 1;
+constexpr USHORT RECURSE_yes = 0;
+constexpr USHORT RECURSE_not = 1;
 
 void LockManager::validate_history(const SRQ_PTR history_header)
 {
@@ -4007,7 +4007,7 @@ bool LockManager::checkHeader(const MemoryHeader* header, bool raiseError)
 		(header->mhb_version & ~PLATFORM_LHB_VERSION) == BASE_LHB_VERSION)
 	{
 		// @1-bit engine can't open database already opened by @2-bit engine
-		if (LHB_VERSION == BASE_LHB_VERSION)
+		if constexpr (LHB_VERSION == BASE_LHB_VERSION)
 			(Arg::Gds(isc_wrong_shmem_bitness) << Arg::Num(32) << Arg::Num(64)).raise();
 		else
 			(Arg::Gds(isc_wrong_shmem_bitness) << Arg::Num(64) << Arg::Num(32)).raise();

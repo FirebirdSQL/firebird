@@ -28,7 +28,7 @@ act*	PAR_action(const TEXT*);
 SSHORT	PAR_blob_subtype(gpre_dbb*);
 act*	PAR_database(bool, const TEXT*);
 bool	PAR_end();
-void	PAR_error(const TEXT*);
+[[noreturn]] void PAR_error(const TEXT*);
 act*	PAR_event_init(bool);
 act*	PAR_event_wait(bool);
 void	PAR_fini();
@@ -39,7 +39,7 @@ gpre_fld*	PAR_null_field();
 void	PAR_reserving(USHORT, bool);
 gpre_req*	PAR_set_up_dpb_info(rdy*, act*, USHORT);
 gpre_sym*	PAR_symbol(sym_t);
-void	PAR_unwind();
+[[noreturn]] void PAR_unwind();
 void	PAR_using_db();
 
 #endif // GPRE_PAR_PROTO_H

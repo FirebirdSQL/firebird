@@ -52,7 +52,7 @@ static void buildDpb(Firebird::ClumpletWriter&, const SINT64);
 static void extract_db_info(const UCHAR*, size_t);
 
 // Keep always in sync with function extract_db_info()
-static const TEXT val_errors[] =
+static constexpr TEXT val_errors[] =
 {
 	isc_info_page_errors, isc_info_record_errors, isc_info_bpage_errors,
 	isc_info_dpage_errors, isc_info_ipage_errors, isc_info_ppage_errors,
@@ -338,7 +338,7 @@ static void buildDpb(Firebird::ClumpletWriter& dpb, const SINT64 switches)
 		dpb.insertTag(isc_dpb_upgrade_db);
 
 	const unsigned char* authBlock;
-	unsigned int authBlockSize = tdgbl->uSvc->getAuthBlock(&authBlock);
+	const unsigned int authBlockSize = tdgbl->uSvc->getAuthBlock(&authBlock);
 
 	if (authBlockSize)
 	{

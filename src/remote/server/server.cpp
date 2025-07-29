@@ -178,7 +178,7 @@ public:
 
 	void getHashData(Firebird::CheckStatusWrapper* status, void* h) override
 	{
-		ISC_STATUS err[] = {isc_arg_gds, isc_wish_list};
+		constexpr ISC_STATUS err[] = {isc_arg_gds, isc_wish_list};
 		status->setErrors2(FB_NELEM(err), err);
 	}
 
@@ -307,7 +307,7 @@ public:
 
 		if (!networkCallback.isStopped())
 		{
-			ISC_STATUS err[] = {isc_arg_gds, isc_wish_list};
+			constexpr ISC_STATUS err[] = {isc_arg_gds, isc_wish_list};
 			status->setErrors2(FB_NELEM(err), err);
 		}
 	}
@@ -396,9 +396,9 @@ public:
 	}
 };
 
-const size_t MAX_CONCURRENT_FAILURES = 16;
-const int MAX_FAILED_ATTEMPTS = 4;
-const int FAILURE_DELAY = 8; // seconds
+constexpr size_t MAX_CONCURRENT_FAILURES = 16;
+constexpr int MAX_FAILED_ATTEMPTS = 4;
+constexpr int FAILURE_DELAY = 8; // seconds
 
 class FailedLogins : private SortedObjectsArray<FailedLogin,
 	InlineStorage<FailedLogin*, MAX_CONCURRENT_FAILURES>,
@@ -1701,7 +1701,7 @@ void SRVR_multi_thread( rem_port* main_port, USHORT flags)
 	{
 		set_server(main_port, flags);
 
-		const size_t MAX_PACKET_SIZE = MAX_SSHORT;
+		constexpr size_t MAX_PACKET_SIZE = MAX_SSHORT;
 		const SSHORT bufSize = MIN(main_port->port_buff_size, MAX_PACKET_SIZE);
 		UCharBuffer packet_buffer;
 		UCHAR* const buffer = packet_buffer.getBuffer(bufSize);
@@ -2259,7 +2259,7 @@ void ConnectAuth::accept(PACKET* send, Auth::WriterImplementation*)
 	{
 		CSTRING* const s = &send->p_resp.p_resp_data;
 		authPort->extractNewKeys(s);
-		ISC_STATUS sv[] = {1, 0, 0};
+		constexpr ISC_STATUS sv[] = { isc_arg_gds, 0, isc_arg_end };
 		authPort->send_response(send, 0, s->cstr_length, sv, false);
 	}
 	else
@@ -2327,7 +2327,7 @@ static ISC_STATUS allocate_statement( rem_port* port, /*P_RLSE* allocate,*/ PACK
 	statement->rsr_rdb = rdb;
 	statement->rsr_iface = NULL;
 
-	if (statement->rsr_id = port->get_id(statement))
+	if ((statement->rsr_id = port->get_id(statement)))
 	{
 		object = statement->rsr_id;
 		statement->rsr_next = rdb->rdb_sql_requests;
@@ -2857,7 +2857,6 @@ static USHORT check_statement_type( Rsr* statement)
 	LocalStatus ls;
 	CheckStatusWrapper local_status(&ls);
 	USHORT ret = 0;
-	bool done = false;
 
 	fb_assert(statement->rsr_iface);
 	statement->checkIface();		// this should not happen but...
@@ -2947,7 +2946,7 @@ ISC_STATUS rem_port::compile(P_CMPL* compileL, PACKET* sendL)
 	requestL->rrq_max_msg = max_msg;
 	OBJCT object = 0;
 
-	if (requestL->rrq_id = this->get_id(requestL))
+	if ((requestL->rrq_id = this->get_id(requestL)))
 	{
 		object = requestL->rrq_id;
 		requestL->rrq_next = rdb->rdb_requests;
@@ -3084,7 +3083,7 @@ void rem_port::disconnect(PACKET* sendL, PACKET* receiveL)
 
 		Rtr* transaction;
 
-		while (transaction = rdb->rdb_transactions)
+		while ((transaction = rdb->rdb_transactions))
 		{
 			if (!transaction->rtr_limbo)
 				transaction->rtr_iface->rollback(&status_vector);
@@ -3455,6 +3454,10 @@ ISC_STATUS rem_port::end_transaction(P_OP operation, P_RLSE * release, PACKET* s
 		transaction->rtr_iface->prepare(&status_vector, 0, NULL);
 		if (!(status_vector.getState() & IStatus::STATE_ERRORS))
 			transaction->rtr_limbo = true;
+		break;
+
+	default:
+		// not a transaction operation - ignore
 		break;
 	}
 
@@ -4795,7 +4798,7 @@ static Rtr* make_transaction (Rdb* rdb, ITransaction* iface)
 	Rtr* transaction = FB_NEW Rtr;
 	transaction->rtr_rdb = rdb;
 	transaction->rtr_iface = iface;
-	if (transaction->rtr_id = rdb->rdb_port->get_id(transaction))
+	if ((transaction->rtr_id = rdb->rdb_port->get_id(transaction)))
 	{
 		transaction->rtr_next = rdb->rdb_transactions;
 		rdb->rdb_transactions = transaction;
@@ -4882,7 +4885,7 @@ ISC_STATUS rem_port::open_blob(P_OP op, P_BLOB* stuff, PACKET* sendL)
 		blob->rbl_blob_id = stuff->p_blob_id;
 		blob->rbl_iface = iface;
 		blob->rbl_rdb = rdb;
-		if (blob->rbl_id = this->get_id(blob))
+		if ((blob->rbl_id = this->get_id(blob)))
 		{
 			object = blob->rbl_id;
 			blob->rbl_rtr = transaction;
@@ -6106,7 +6109,8 @@ bool rem_port::sendInlineBlob(PACKET* sendL, Rtr* rtr, SQUAD blobId, ULONG maxSi
 
 	ServAttachment att = port_context->rdb_iface;
 
-	ServBlob blob(att->openBlob(&status, rtr->rtr_iface, &blobId, 0, nullptr));
+	// openBlob() returns an IBlob with a reference count set to 1, no need to increment it.
+	ServBlob blob(REF_NO_INCR, att->openBlob(&status, rtr->rtr_iface, &blobId, 0, nullptr));
 	if (status.getState() & IStatus::STATE_ERRORS)
 		return false;
 
@@ -6193,6 +6197,7 @@ bool rem_port::sendInlineBlob(PACKET* sendL, Rtr* rtr, SQUAD blobId, ULONG maxSi
 	}
 
 	blob->close(&status);
+	blob.clear();
 
 	p_blob->p_blob_info.cstr_address = info;
 	p_blob->p_blob_data = &buff;

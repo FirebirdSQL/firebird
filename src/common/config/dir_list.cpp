@@ -221,6 +221,9 @@ bool DirectoryList::isPathInList(const PathName& path) const
 		return false;
 	case Full:
 		return true;
+	default:
+		// not a special case, continue processing
+		break;
 	}
 
 	PathName varpath(path);

@@ -228,6 +228,7 @@
     <ClInclude Include="..\..\..\src\dsql\utld_proto.h" />
     <ClInclude Include="..\..\..\src\dsql\Visitors.h" />
     <ClInclude Include="..\..\..\src\dsql\WinNodes.h" />
+    <ClInclude Include="..\..\..\src\include\firebird\impl\blr.h" />
     <ClInclude Include="..\..\..\src\jrd\acl.h" />
     <ClInclude Include="..\..\..\src\jrd\align.h" />
     <ClInclude Include="..\..\..\src\jrd\Attachment.h" />
@@ -237,7 +238,6 @@
     <ClInclude Include="..\..\..\src\jrd\blob_filter.h" />
     <ClInclude Include="..\..\..\src\jrd\BlobUtil.h" />
     <ClInclude Include="..\..\..\src\jrd\blp.h" />
-    <ClInclude Include="..\..\..\src\jrd\blr.h" />
     <ClInclude Include="..\..\..\src\jrd\btn.h" />
     <ClInclude Include="..\..\..\src\jrd\btr.h" />
     <ClInclude Include="..\..\..\src\jrd\btr_proto.h" />
@@ -339,6 +339,14 @@
     <ClInclude Include="..\..\..\src\jrd\recsrc\RecordSource.h" />
     <ClInclude Include="..\..\..\src\jrd\Relation.h" />
     <ClInclude Include="..\..\..\src\jrd\relations.h" />
+    <ClInclude Include="..\..\..\src\jrd\replication\Applier.h" />
+    <ClInclude Include="..\..\..\src\jrd\replication\ChangeLog.h" />
+    <ClInclude Include="..\..\..\src\jrd\replication\Config.h" />
+    <ClInclude Include="..\..\..\src\jrd\replication\Manager.h" />
+    <ClInclude Include="..\..\..\src\jrd\replication\Protocol.h" />
+    <ClInclude Include="..\..\..\src\jrd\replication\Publisher.h" />
+    <ClInclude Include="..\..\..\src\jrd\replication\Replicator.h" />
+    <ClInclude Include="..\..\..\src\jrd\replication\Utils.h" />
     <ClInclude Include="..\..\..\src\jrd\req.h" />
     <ClInclude Include="..\..\..\src\jrd\ResultSet.h" />
     <ClInclude Include="..\..\..\src\jrd\rlck_proto.h" />
@@ -379,6 +387,7 @@
     <ClInclude Include="..\..\..\src\jrd\types.h" />
     <ClInclude Include="..\..\..\src\jrd\UserManagement.h" />
     <ClInclude Include="..\..\..\src\jrd\val.h" />
+    <ClInclude Include="..\..\..\src\jrd\validation.h" />
     <ClInclude Include="..\..\..\src\jrd\val_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\vio_debug.h" />
     <ClInclude Include="..\..\..\src\jrd\vio_proto.h" />
@@ -464,42 +473,36 @@
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="$(VCTargetsPath)Microsoft.CPP.UpgradeFromVC71.props" />
     <Import Project="FirebirdCommon.props" />
     <Import Project="FirebirdRelease.props" />
     <Import Project="libcds.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="$(VCTargetsPath)Microsoft.CPP.UpgradeFromVC71.props" />
     <Import Project="FirebirdCommon.props" />
     <Import Project="FirebirdDebug.props" />
     <Import Project="libcds.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="$(VCTargetsPath)Microsoft.CPP.UpgradeFromVC71.props" />
     <Import Project="FirebirdCommon.props" />
     <Import Project="FirebirdRelease.props" />
     <Import Project="libcds.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="$(VCTargetsPath)Microsoft.CPP.UpgradeFromVC71.props" />
     <Import Project="FirebirdCommon.props" />
     <Import Project="FirebirdDebug.props" />
     <Import Project="libcds.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|arm64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="$(VCTargetsPath)Microsoft.CPP.UpgradeFromVC71.props" />
     <Import Project="FirebirdCommon.props" />
     <Import Project="FirebirdRelease.props" />
     <Import Project="libcds.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|arm64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="$(VCTargetsPath)Microsoft.CPP.UpgradeFromVC71.props" />
     <Import Project="FirebirdCommon.props" />
     <Import Project="FirebirdDebug.props" />
     <Import Project="libcds.props" />

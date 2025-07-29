@@ -45,7 +45,7 @@
 
 namespace {
 	// Didn't want to bring dyn.h and friends here.
-	const int DYN_MSG_FAC		= 8;
+	constexpr int DYN_MSG_FAC = FB_IMPL_MSG_FACILITY_DYN;
 }
 
 namespace Firebird {
@@ -166,7 +166,7 @@ void StatusVector::ImplStatusVector::putStrArg(unsigned startWith)
 			m_strings.append(1, '\0');
 		}
 		else
-			 m_strings.append(*ptr, strlen(*ptr) + 1);
+			 m_strings.append(*ptr, fb_strlen(*ptr) + 1);
 
 		*ptr = &m_strings[pos];
 		setStrPointers(oldBase);

@@ -396,12 +396,8 @@ char* cleanup_passwd(char* arg)
 
 #ifdef WIN_NT
 
-static bool validateProductSuite (LPCSTR lpszSuiteToValidate);
-
-// hvlad: begins from Windows 2000 we can safely add 'Global\' prefix for
-// names of all kernel objects we use. For Win9x we must not add this prefix.
-// Win NT will accept such names only if Terminal Server is installed.
-// Check OS version carefully and add prefix if we can add it
+// With sufficient privileges, we can add 'Global\' prefix for
+// names of all kernel objects we use.
 
 bool prefix_kernel_object_name(char* name, size_t bufsize)
 {
@@ -430,135 +426,51 @@ bool prefix_kernel_object_name(char* name, size_t bufsize)
 
 		memmove(name + move_prefix, name, len_name);
 		memcpy(name, prefix, move_prefix);
-		// CVC: Unfortunately, things like Glob instead of Global\\ do not achieve the objective
-		// of telling the NT kernel the object is global and hence I consider them failures.
-		//return move_prefix > 0; // Soft version of the check
-		return move_prefix == len_prefix; // Strict version of the check.
+		return move_prefix == len_prefix;
 	}
 	return true;
 }
 
-
-// Simply handle guardian.
-class DynLibHandle
-{
-public:
-	explicit DynLibHandle(HMODULE mod)
-		: m_handle(mod)
-	{}
-	~DynLibHandle()
-	{
-		if (m_handle)
-			FreeLibrary(m_handle);
-	}
-	operator HMODULE() const
-	{
-		return m_handle;
-	}
-	/* The previous conversion is invoked with !object so this is enough.
-	bool operator!() const
-	{
-		return !m_handle;
-	}
-	*/
-private:
-	HMODULE m_handle;
-};
-
-
-// hvlad: two functions below got from
-// http://msdn2.microsoft.com/en-us/library/aa380797.aspx
-// and slightly adapted for our coding style
-
-// -------------------------------------------------------------
-//   Note that the validateProductSuite and isTerminalServices
-//   functions use ANSI versions of the functions to maintain
-//   compatibility with Windows Me/98/95.
-//   -------------------------------------------------------------
-
 bool isGlobalKernelPrefix()
 {
 	// The strategy of this function is as follows: use Global\ kernel namespace
-	// for engine objects if we can. This can be prevented by either lack of OS support
-	// for the feature (Win9X) or lack of privileges (Vista, Windows 2000/XP restricted accounts)
+	// for engine objects if we can.
 
-	const DWORD dwVersion = GetVersion();
+	// Check if we have enough privileges to create global handles.
+	// If not fall back to creating local ones.
 
-	// Is Windows NT running?
-	if (!(dwVersion & 0x80000000))
+	HANDLE hProcess = GetCurrentProcess();
+	HANDLE hToken;
+	if (OpenProcessToken(hProcess, TOKEN_QUERY, &hToken) == 0)
 	{
-		if (LOBYTE(LOWORD(dwVersion)) <= 4) // This is Windows NT 4.0 or earlier.
-			return validateProductSuite("Terminal Server");
-
-		// Is it Windows 2000 or greater? It is possible to use Global\ prefix on any
-		// version of Windows from Windows 2000 and up
-		// Check if we have enough privileges to create global handles.
-		// If not fall back to creating local ones.
-		// The API for that is the NT thing, so we have to get addresses of the
-		// functions dynamically to avoid troubles on Windows 9X platforms
-
-		DynLibHandle hmodAdvApi(LoadLibrary("advapi32.dll"));
-
-		if (!hmodAdvApi)
-		{
-			gds__log("LoadLibrary failed for advapi32.dll. Error code: %lu", GetLastError());
-			return false;
-		}
-
-		typedef BOOL (WINAPI *PFnOpenProcessToken) (HANDLE, DWORD, PHANDLE);
-		typedef BOOL (WINAPI *PFnLookupPrivilegeValue) (LPCSTR, LPCSTR, PLUID);
-		typedef BOOL (WINAPI *PFnPrivilegeCheck) (HANDLE, PPRIVILEGE_SET, LPBOOL);
-
-		PFnOpenProcessToken pfnOpenProcessToken =
-			(PFnOpenProcessToken) GetProcAddress(hmodAdvApi, "OpenProcessToken");
-		PFnLookupPrivilegeValue pfnLookupPrivilegeValue =
-			(PFnLookupPrivilegeValue) GetProcAddress(hmodAdvApi, "LookupPrivilegeValueA");
-		PFnPrivilegeCheck pfnPrivilegeCheck =
-			(PFnPrivilegeCheck) GetProcAddress(hmodAdvApi, "PrivilegeCheck");
-
-		if (!pfnOpenProcessToken || !pfnLookupPrivilegeValue || !pfnPrivilegeCheck)
-		{
-			// Should never happen, really
-			gds__log("Cannot access privilege management API");
-			return false;
-		}
-
-		HANDLE hProcess = GetCurrentProcess();
-		HANDLE hToken;
-		if (pfnOpenProcessToken(hProcess, TOKEN_QUERY, &hToken) == 0)
-		{
-			gds__log("OpenProcessToken failed. Error code: %lu", GetLastError());
-			return false;
-		}
-
-		PRIVILEGE_SET ps;
-		memset(&ps, 0, sizeof(ps));
-		ps.Control = PRIVILEGE_SET_ALL_NECESSARY;
-		ps.PrivilegeCount = 1;
-		if (pfnLookupPrivilegeValue(NULL, TEXT("SeCreateGlobalPrivilege"), &ps.Privilege[0].Luid) == 0)
-		{
-			// Failure here means we're running on old version of Windows 2000 or XP
-			// which always allow creating global handles
-			CloseHandle(hToken);
-			return true;
-		}
-
-		BOOL checkResult;
-		if (pfnPrivilegeCheck(hToken, &ps, &checkResult) == 0)
-		{
-			gds__log("PrivilegeCheck failed. Error code: %lu", GetLastError());
-			CloseHandle(hToken);
-			return false;
-		}
-
-		CloseHandle(hToken);
-
-		return checkResult;
+		gds__log("OpenProcessToken failed. Error code: %lu", GetLastError());
+		return false;
 	}
 
-	return false;
-}
+	PRIVILEGE_SET ps{};
+	ps.Control = PRIVILEGE_SET_ALL_NECESSARY;
+	ps.PrivilegeCount = 1;
+	if (LookupPrivilegeValue(NULL, TEXT("SeCreateGlobalPrivilege"), &ps.Privilege[0].Luid) == 0)
+	{
+		// Failure here means we're running on old version of Windows 2000 or XP
+		// which always allow creating global handles;
+		// we don't run on those versions anymore, but leave this as is.
+		CloseHandle(hToken);
+		return true;
+	}
 
+	BOOL checkResult;
+	if (PrivilegeCheck(hToken, &ps, &checkResult) == 0)
+	{
+		gds__log("PrivilegeCheck failed. Error code: %lu", GetLastError());
+		CloseHandle(hToken);
+		return false;
+	}
+
+	CloseHandle(hToken);
+
+	return checkResult;
+}
 
 // Incapsulates Windows private namespace
 class PrivateNamespace
@@ -724,164 +636,6 @@ bool private_kernel_object_name(char* name, size_t bufsize)
 bool privateNameSpaceReady()
 {
 	return privateNamespace().isReady();
-}
-
-
-// This is a very basic registry querying class. Not much validation, but avoids
-// leaving the registry open by mistake.
-
-class NTRegQuery
-{
-public:
-	NTRegQuery();
-	~NTRegQuery();
-	bool openForRead(const char* key);
-	bool readValueSize(const char* value);
-	// Assumes previous call to readValueSize.
-	bool readValueData(LPSTR data);
-	void close();
-	DWORD getDataType() const;
-	DWORD getDataSize() const;
-private:
-	HKEY m_hKey;
-	DWORD m_dwType;
-	DWORD m_dwSize;
-	const char* m_value;
-};
-
-inline NTRegQuery::NTRegQuery()
-	: m_hKey(NULL), m_dwType(0), m_dwSize(0)
-{
-}
-
-inline NTRegQuery::~NTRegQuery()
-{
-	close();
-}
-
-bool NTRegQuery::openForRead(const char* key)
-{
-	return RegOpenKeyExA(HKEY_LOCAL_MACHINE, key, 0, KEY_QUERY_VALUE, &m_hKey) == ERROR_SUCCESS;
-}
-
-bool NTRegQuery::readValueSize(const char* value)
-{
-	m_value = value;
-	return RegQueryValueExA(m_hKey, value, NULL, &m_dwType, NULL, &m_dwSize) == ERROR_SUCCESS;
-}
-
-bool NTRegQuery::readValueData(LPSTR data)
-{
-	return RegQueryValueExA(m_hKey, m_value, NULL, &m_dwType, (LPBYTE) data, &m_dwSize) == ERROR_SUCCESS;
-}
-
-void NTRegQuery::close()
-{
-	if (m_hKey)
-		RegCloseKey(m_hKey);
-
-	m_hKey = NULL;
-}
-
-inline DWORD NTRegQuery::getDataType() const
-{
-	return m_dwType;
-}
-
-inline DWORD NTRegQuery::getDataSize() const
-{
-	return m_dwSize;
-}
-
-
-// This class represents the local allocation of dynamic memory in Windows.
-
-class NTLocalString
-{
-public:
-	explicit NTLocalString(DWORD dwSize);
-	LPCSTR c_str() const;
-	LPSTR getString();
-	bool allocated() const;
-	~NTLocalString();
-private:
-	LPSTR m_string;
-};
-
-NTLocalString::NTLocalString(DWORD dwSize)
-{
-	m_string = (LPSTR) LocalAlloc(LPTR, dwSize);
-}
-
-NTLocalString::~NTLocalString()
-{
-	if (m_string)
-		LocalFree(m_string);
-}
-
-inline LPCSTR NTLocalString::c_str() const
-{
-	return m_string;
-}
-
-inline LPSTR NTLocalString::getString()
-{
-	return m_string;
-}
-
-inline bool NTLocalString::allocated() const
-{
-	return m_string != 0;
-}
-
-
-////////////////////////////////////////////////////////////
-// validateProductSuite function
-//
-// Terminal Services detection code for systems running
-// Windows NT 4.0 and earlier.
-//
-////////////////////////////////////////////////////////////
-
-bool validateProductSuite (LPCSTR lpszSuiteToValidate)
-{
-	NTRegQuery query;
-
-	// Open the ProductOptions key.
-	if (!query.openForRead("System\\CurrentControlSet\\Control\\ProductOptions"))
-		return false;
-
-	// Determine required size of ProductSuite buffer.
-	// If we get size == 1 it means multi string data with only a terminator.
-	if (!query.readValueSize("ProductSuite") || query.getDataSize() < 2)
-		return false;
-
-	// Allocate buffer.
-	NTLocalString lpszProductSuites(query.getDataSize());
-	if (!lpszProductSuites.allocated())
-		return false;
-
-	// Retrieve array of product suite strings.
-	if (!query.readValueData(lpszProductSuites.getString()) || query.getDataType() != REG_MULTI_SZ)
-		return false;
-
-	query.close();  // explicit but redundant.
-
-	// Search for suite name in array of strings.
-	bool fValidated = false;
-	LPCSTR lpszSuite = lpszProductSuites.c_str();
-	LPCSTR end = lpszSuite + query.getDataSize(); // paranoid check
-	while (*lpszSuite && lpszSuite < end)
-	{
-		if (lstrcmpA(lpszSuite, lpszSuiteToValidate) == 0)
-		{
-			fValidated = true;
-			break;
-		}
-		lpszSuite += (lstrlenA(lpszSuite) + 1);
-	}
-
-	return fValidated;
 }
 
 #endif // WIN_NT
@@ -1130,8 +884,8 @@ void exactNumericToStr(SINT64 value, int scale, Firebird::string& target, bool a
 		return;
 	}
 
-	const int MAX_SCALE = 25;
-	const int MAX_BUFFER = 50;
+	constexpr int MAX_SCALE = 25;
+	constexpr int MAX_BUFFER = 50;
 
 	if (scale < -MAX_SCALE || scale > MAX_SCALE)
 	{
@@ -1233,7 +987,7 @@ Firebird::PathName getPrefix(unsigned int prefType, const char* name)
 #else
 	char tmp[MAXPATHLEN];
 
-	const char* configDir[] = {
+	static constexpr const char* configDir[] = {
 		FB_BINDIR, FB_SBINDIR, FB_CONFDIR, FB_LIBDIR, FB_INCDIR, FB_DOCDIR, "", FB_SAMPLEDIR,
 		FB_SAMPLEDBDIR, "", FB_INTLDIR, FB_MISCDIR, FB_SECDBDIR, FB_MSGDIR, FB_LOGDIR,
 		FB_GUARDDIR, FB_PLUGDIR, FB_TZDATADIR
@@ -1470,10 +1224,10 @@ bool cmpStatus(unsigned int len, const ISC_STATUS* a, const ISC_STATUS* b) noexc
 		if (i > len)		// arg does not fit
 			return false;
 
-		unsigned l1, l2;
-		const char *s1, *s2;
 		if (isStr(*op1))
 		{
+			FB_SIZE_T l1, l2;
+			const char* s1, * s2;
 			if (*op1 == isc_arg_cstring)
 			{
 				l1 = op1[1];
@@ -1485,8 +1239,8 @@ bool cmpStatus(unsigned int len, const ISC_STATUS* a, const ISC_STATUS* b) noexc
 			{
 				s1 = (const char*)(op1[1]);
 				s2 = (const char*)(op2[1]);
-				l1 = strlen(s1);
-				l2 = strlen(s2);
+				l1 = fb_strlen(s1);
+				l2 = fb_strlen(s2);
 			}
 
 			if (l1 != l2)
@@ -1520,7 +1274,7 @@ unsigned int subStatus(const ISC_STATUS* in, unsigned int cin,
 
 			if (isStr(*op1))
 			{
-				unsigned l1, l2;
+				FB_SIZE_T l1, l2;
 				const char *s1, *s2;
 				if (*op1 == isc_arg_cstring)
 				{
@@ -1533,8 +1287,8 @@ unsigned int subStatus(const ISC_STATUS* in, unsigned int cin,
 				{
 					s1 = (const char*) (op1[1]);
 					s2 = (const char*) (op2[1]);
-					l1 = strlen(s1);
-					l2 = strlen(s2);
+					l1 = fb_strlen(s1);
+					l2 = fb_strlen(s2);
 				}
 
 				if (l1 != l2)
@@ -1691,7 +1445,7 @@ void random64(Firebird::string& randomValue, FB_SIZE_T length)
 	randomValue.resize(length, '$');
 }
 
-void logAndDie(const char* text)
+[[noreturn]] void logAndDie(const char* text)
 {
 	gds__log(text);
 	Firebird::Syslog::Record(Firebird::Syslog::Error, text);

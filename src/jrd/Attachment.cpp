@@ -260,6 +260,8 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider
 	  att_current_timezone(att_original_timezone),
 	  att_schema_search_path(FB_NEW_POOL(*pool) AnyRef<ObjectsArray<MetaString>>(*pool)),
 	  att_system_schema_search_path(FB_NEW_POOL(*pool) AnyRef<ObjectsArray<MetaString>>(*pool)),
+	  att_unqualified_charset_resolved_cache_search_path(att_schema_search_path),
+	  att_unqualified_charset_resolved_cache(*pool),
 	  att_parallel_workers(0),
 	  att_repl_appliers(*pool),
 	  att_utility(UTIL_NONE),

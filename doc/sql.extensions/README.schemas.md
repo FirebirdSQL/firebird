@@ -44,6 +44,7 @@ These objects exist outside schemas and function as before:
 - Roles
 - Blob filters
 - Schemas
+- Mappings and global mappings
 
 ### Schema-bound objects
 

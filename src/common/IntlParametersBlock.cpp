@@ -100,7 +100,7 @@ namespace Firebird
 
 void IntlParametersBlock::toUtf8(ClumpletWriter& pb)
 {
-	UCHAR utf8Tag = getUtf8Tag();
+	const UCHAR utf8Tag = getUtf8Tag();
 	if (utf8Tag)
 	{
 		pb.insertTag(utf8Tag);
@@ -111,7 +111,7 @@ void IntlParametersBlock::toUtf8(ClumpletWriter& pb)
 
 void IntlParametersBlock::fromUtf8(ClumpletWriter& pb)
 {
-	UCHAR utf8Tag = getUtf8Tag();
+	const UCHAR utf8Tag = getUtf8Tag();
 	if (utf8Tag)
 	{
 		pb.deleteWithTag(utf8Tag);
@@ -128,7 +128,7 @@ void IntlParametersBlock::processParametersBlock(ProcessString* processString, C
 	{
 		for (pb.rewind(); !pb.isEof(); )
 		{
-			UCHAR tag = pb.getClumpTag();
+			const UCHAR tag = pb.getClumpTag();
 			string s;
 
 			tagName = NULL;
@@ -180,7 +180,7 @@ void IntlParametersBlock::processParametersBlock(ProcessString* processString, C
 #define FB_IPB_TAG(t) case t: if (!*tagName) *tagName = #t
 
 
-IntlParametersBlock::TagType IntlDpb::checkTag(UCHAR tag, const char** tagName)
+IntlParametersBlock::TagType IntlDpb::checkTag(UCHAR tag, const char** tagName) noexcept
 {
 	switch (tag)
 	{
@@ -197,13 +197,13 @@ IntlParametersBlock::TagType IntlDpb::checkTag(UCHAR tag, const char** tagName)
 	FB_IPB_TAG(isc_dpb_owner);
 	FB_IPB_TAG(isc_dpb_search_path);
 		return TAG_STRING;
+	default:
+		return TAG_SKIP;
 	}
-
-	return TAG_SKIP;
 }
 
 
-IntlParametersBlock::TagType IntlSpb::checkTag(UCHAR tag, const char** tagName)
+IntlParametersBlock::TagType IntlSpb::checkTag(UCHAR tag, const char** tagName) noexcept
 {
 	switch (tag)
 	{
@@ -218,13 +218,14 @@ IntlParametersBlock::TagType IntlSpb::checkTag(UCHAR tag, const char** tagName)
 
 	FB_IPB_TAG(isc_spb_command_line);
 		return TAG_COMMAND_LINE;
-	}
 
-	return TAG_SKIP;
+	default:
+		return TAG_SKIP;
+	}
 }
 
 
-IntlParametersBlock::TagType IntlSpbStart::checkTag(UCHAR tag, const char** tagName)
+IntlParametersBlock::TagType IntlSpbStart::checkTag(UCHAR tag, const char** tagName) noexcept
 {
 	switch (tag)
 	{
@@ -353,19 +354,19 @@ IntlParametersBlock::TagType IntlSpbStart::checkTag(UCHAR tag, const char** tagN
 #undef FB_IPB_TAG
 
 
-UCHAR IntlDpb::getUtf8Tag()
+UCHAR IntlDpb::getUtf8Tag() noexcept
 {
 	return isc_dpb_utf8_filename;
 }
 
 
-UCHAR IntlSpb::getUtf8Tag()
+UCHAR IntlSpb::getUtf8Tag() noexcept
 {
 	return isc_spb_utf8_filename;
 }
 
 
-UCHAR IntlSpbStart::getUtf8Tag()
+UCHAR IntlSpbStart::getUtf8Tag() noexcept
 {
 	return 0;
 }

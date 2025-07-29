@@ -225,7 +225,7 @@ namespace fb_utils
 	bool bootBuild();
 
 	// Add appropriate file prefix.
-	Firebird::PathName getPrefix(unsigned prefType, const char* name);
+	Firebird::PathName getPrefix(unsigned int prefType, const char* name);
 
 	// moves DB path information (from limbo transaction) to another buffer
 	void getDbPathInfo(unsigned int& itemsLength, const unsigned char*& items,
@@ -241,7 +241,7 @@ namespace fb_utils
 	// generate random string in BASE64 representation
 	void random64(Firebird::string& randomValue, FB_SIZE_T length);
 
-	void logAndDie(const char* text);
+	[[noreturn]] void logAndDie(const char* text);
 
 	// On incorrect sqlType returns dsc_unknown
 	UCHAR sqlTypeToDscType(SSHORT sqlType);

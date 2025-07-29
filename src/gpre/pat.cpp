@@ -57,7 +57,7 @@ enum pat_t {
 	FR							// Field reference
 };
 
-static const struct ops
+static constexpr struct ops
 {
 	pat_t ops_type;
 	TEXT ops_string[3];
@@ -183,7 +183,7 @@ void PATTERN_expand( USHORT column, const TEXT* pattern, PAT* args)
 								// values printed out are signed.
 	SLONG long_value;
 	TEXT c;
-	while (c = *pattern++)
+	while ((c = *pattern++))
 	{
 		if (c != '%')
 		{

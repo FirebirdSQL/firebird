@@ -9,9 +9,9 @@
 
 @echo off
 
-set FB_CLEAN=
+@set FB_CLEAN=
 
-for %%v in ( %* )  do (
+@for %%v in ( %* )  do (
   ( if /I "%%v"=="DEBUG" ( (set FB_DBG=TRUE) && (set FB_CONFIG=debug) ) )
   ( if /I "%%v"=="CLEAN" (set FB_CLEAN=:rebuild) )
   ( if /I "%%v"=="RELEASE" ( (set FB_DBG=) && (set FB_CONFIG=release) ) )

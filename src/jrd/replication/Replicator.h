@@ -90,8 +90,7 @@ namespace Replication
 				buffer->add(ptr, sizeof(SINT64));
 			}
 
-			template <typename T>
-			ULONG defineAtom(const T& name)
+			ULONG defineAtom(const Firebird::string& name)
 			{
 				if (lastAtom < atoms.getCount() && atoms[lastAtom] == name)
 					return lastAtom;

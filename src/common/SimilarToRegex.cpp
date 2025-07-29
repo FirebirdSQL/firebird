@@ -53,11 +53,11 @@ namespace
 		return c;
 	}
 
-	static const unsigned COMP_FLAG_PREFER_FEWER = 0x01;
-	static const unsigned COMP_FLAG_GROUP_CAPTURE = 0x02;
-	static const unsigned COMP_FLAG_CASE_INSENSITIVE = 0x04;
-	static const unsigned COMP_FLAG_LATIN = 0x08;
-	static const unsigned COMP_FLAG_WELLFORMED = 0x10;
+	static constexpr unsigned COMP_FLAG_PREFER_FEWER = 0x01;
+	static constexpr unsigned COMP_FLAG_GROUP_CAPTURE = 0x02;
+	static constexpr unsigned COMP_FLAG_CASE_INSENSITIVE = 0x04;
+	static constexpr unsigned COMP_FLAG_LATIN = 0x08;
+	static constexpr unsigned COMP_FLAG_WELLFORMED = 0x10;
 
 	class SimilarToCompiler
 	{
@@ -335,7 +335,7 @@ namespace
 					const char* re2ClassInclude;
 					const char* re2ClassExcludeUtf;
 					const char* re2ClassExcludeLatin;
-				} static const classes[] =
+				} static constexpr classes[] =
 					{
 						{"alnum", "[:alnum:]", "[:^alnum:]", "[:^alnum:]"},
 						{"alpha", "[:alpha:]", "[:^alpha:]", "[:^alpha:]"},
@@ -646,7 +646,7 @@ namespace
 		}
 
 	private:
-		static const int PARSE_FLAG_NOT_EMPTY = 1;	// known never to match empty string
+		static constexpr int PARSE_FLAG_NOT_EMPTY = 1;	// known never to match empty string
 
 		string re2PatternStr;
 		const char* patternStr;
@@ -880,7 +880,7 @@ bool SubstringSimilarRegex::matches(const char* buffer, unsigned bufferLen,
 	if (RE2::FullMatch(sp, *regexp.get(), nullptr, &spResult, nullptr))
 	{
 		*resultStart = spResult.begin() - buffer;
-		*resultLength = spResult.length();
+		*resultLength = static_cast<unsigned>(spResult.length());
 		return true;
 	}
 	else

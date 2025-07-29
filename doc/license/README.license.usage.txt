@@ -6,10 +6,10 @@ The applicable and approved licenses for the source files
 of the Firebird RDBMS project are:
 
   1) InterBase Public License (IPL), version 1.0
-     http://www.firebirdsql.org/en/interbase-public-license
+     https://www.firebirdsql.org/en/interbase-public-license
 
   2) Initial Developer's Public License (IDPL), version 1.0
-     http://www.firebirdsql.org/en/initial-developer-s-public-license-version-1-0/
+     https://www.firebirdsql.org/en/initial-developer-s-public-license-version-1-0/
 
 The IPL is copyright of Borland Corp., the other licenses are copyright
 by the source code authors and contributors.
@@ -31,14 +31,14 @@ USAGE RULES
 4) The new files contributed by people who are not members of the Firebird
    project should follow the rule #3. If an author (initial developer) doesn't
    specify the license to be used, the person who applies the contributed code
-   to the SVN tree (a committer) becomes responsible for the license assigned
+   to the Git tree (a committer) becomes responsible for the license assigned
    to the contributed code.
 
-5) Every non-binary file that exists in the SVN tree, should have a header
+5) Every non-binary file that exists in the Git tree, should have a header
    section which describes the license this code is released under. If a file
    contains no header, it means that this code is freeware and nobody owns the
    appropriate copyrights.
 
 
 You may find the exhibits for the approved licenses in /doc/license directory
-of the SVN tree.
+of the Git tree.

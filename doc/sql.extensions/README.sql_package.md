@@ -4,7 +4,7 @@
 
 ## Procedure `EXPLAIN`
 
-`RDB$SQL.EXPLAIN` returns tabular information of a query's plan, without execute the query.
+`RDB$SQL.EXPLAIN` returns tabular information of a query's plan, without executing the query.
 
 Since `SQL` text generally is multi-line string and have quotes, you may use `<alternate string literal>`
 (strings prefixed by `Q`) as a way to make escape easy.

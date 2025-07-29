@@ -226,7 +226,7 @@ public:
 	{}
 	~OwnedBlobStack();
 	void close();
-	void setBlobCreated(blb* b)
+	void setBlobCreated(blb* b) noexcept
 	{
 		m_blob_created = b;
 	}
@@ -761,6 +761,8 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 
 	switch (udfError)
 	{
+	case UeNone:
+		break;
 	case UeUnsupDtype:
 		IBERROR(169);			// msg 169 return data type not supported
 		break;
@@ -1142,7 +1144,7 @@ static void invoke(thread_db* tdbb,
 			//		convert it to the declared return type of the UDF.
 			dsc* return_dsc = 0;
 			result_is_null = false;
-			if ((FUN_T) abs(return_ptr->prm_fun_mechanism) == FUN_descriptor)
+			if (return_ptr->prm_fun_mechanism == FUN_descriptor)
 			{
 				// The formal param's type is contained in value->vlu_desc.dsc_dtype
 				// but I want to know if the UDF changed it to a compatible type
@@ -1262,7 +1264,7 @@ static bool private_move(Jrd::thread_db* tdbb, dsc* from, dsc* to)
 		MOV_move(tdbb, from, to);
 		return true;
 	}
-	catch (Firebird::status_exception& e)
+	catch (const Firebird::status_exception& e)
 	{
 		e.stuffException(tdbb->tdbb_status_vector);
 		return false;

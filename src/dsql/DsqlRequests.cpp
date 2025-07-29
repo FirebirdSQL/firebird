@@ -429,7 +429,7 @@ void DsqlDmlRequest::setCursor(thread_db* tdbb, const TEXT* name)
 
 	Jrd::ContextPoolHolder context(tdbb, &getPool());
 
-	const size_t MAX_CURSOR_LENGTH = 132 - 1;
+	constexpr size_t MAX_CURSOR_LENGTH = 132 - 1;
 	string cursor = name;
 
 	if (cursor.hasData() && cursor[0] == '\"')
@@ -633,6 +633,9 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 						  Arg::Gds(isc_update_conflict));
 			}
 			break;
+
+		default:
+			break;
 	}
 }
 
@@ -700,7 +703,7 @@ void DsqlDmlRequest::executeReceiveWithRestarts(thread_db* tdbb, jrd_tra** traHa
 {
 	request->req_flags &= ~req_update_conflict;
 	int numTries = 0;
-	const int MAX_RESTARTS = 10;
+	constexpr int MAX_RESTARTS = 10;
 
 	while (true)
 	{

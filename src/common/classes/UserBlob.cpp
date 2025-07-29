@@ -25,8 +25,7 @@
 #include "ibase.h"
 #include "../yvalve/gds_proto.h"
 
-static const USHORT SEGMENT_LIMIT = 65535;
-//static SLONG fb_vax_integer(const UCHAR* ptr, int length);
+static constexpr USHORT SEGMENT_LIMIT = 65535;
 
 
 bool UserBlob::open(FB_API_HANDLE& db, FB_API_HANDLE& trans, ISC_QUAD& blobid)
@@ -117,7 +116,7 @@ bool UserBlob::getSegment(FB_SIZE_T len, void* buffer, FB_SIZE_T& real_len)
 #endif
 
 	USHORT olen = 0;
-	USHORT ilen = len > SEGMENT_LIMIT ? SEGMENT_LIMIT : static_cast<USHORT>(len);
+	const USHORT ilen = len > SEGMENT_LIMIT ? SEGMENT_LIMIT : static_cast<USHORT>(len);
 	char* buf2 = static_cast<char*>(buffer);
 	if (!isc_get_segment(m_status, &m_blob, &olen, ilen, buf2) || m_status[1] == isc_segment)
 	{
@@ -142,7 +141,7 @@ bool UserBlob::getData(FB_SIZE_T len, void* buffer, FB_SIZE_T& real_len,
 	while (len)
 	{
 		USHORT olen = 0;
-		USHORT ilen = len > SEGMENT_LIMIT ? SEGMENT_LIMIT : static_cast<USHORT>(len);
+		const USHORT ilen = len > SEGMENT_LIMIT ? SEGMENT_LIMIT : static_cast<USHORT>(len);
 		if (!isc_get_segment(m_status, &m_blob, &olen, ilen, buf2) || m_status[1] == isc_segment)
 		{
 			len -= olen;
@@ -172,7 +171,7 @@ bool UserBlob::putSegment(FB_SIZE_T len, const void* buffer)
 		return false;
 #endif
 
-	USHORT ilen = len > SEGMENT_LIMIT ? SEGMENT_LIMIT : static_cast<USHORT>(len);
+	const USHORT ilen = len > SEGMENT_LIMIT ? SEGMENT_LIMIT : static_cast<USHORT>(len);
 	const char* buf2 = static_cast<const char*>(buffer);
 	return !isc_put_segment(m_status, &m_blob, ilen, buf2);
 }
@@ -227,8 +226,8 @@ bool UserBlob::getInfo(FB_SIZE_T items_size, const UCHAR* items,
 		return false;
 
 	// We have to cater for the API limitations.
-	SSHORT in_len = items_size > MAX_SSHORT ? MAX_SSHORT : static_cast<SSHORT>(items_size);
-	SSHORT out_len = info_size > MAX_SSHORT ? MAX_SSHORT : static_cast<SSHORT>(info_size);
+	const SSHORT in_len = static_cast<SSHORT>(MIN(items_size, MAX_SSHORT));
+	const SSHORT out_len = static_cast<SSHORT>(MIN(info_size, MAX_SSHORT));
 	// That the API declares the second param as non const is a bug.
 	FB_API_HANDLE blob = m_blob;
 	return !isc_blob_info(m_status, &blob,

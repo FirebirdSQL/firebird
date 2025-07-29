@@ -91,12 +91,12 @@ static void* stopAddress = (void*) 0x2254938;
 #endif
 
 #ifdef MEM_DEBUG
-static const int GUARD_BYTES	= ALLOC_ALIGNMENT; // * 2048;
-static const UCHAR INIT_BYTE	= 0xCC;
-static const UCHAR GUARD_BYTE	= 0xDD;
-static const UCHAR DEL_BYTE		= 0xEE;
+static constexpr int GUARD_BYTES	= ALLOC_ALIGNMENT; // * 2048;
+static constexpr UCHAR INIT_BYTE	= 0xCC;
+static constexpr UCHAR GUARD_BYTE	= 0xDD;
+static constexpr UCHAR DEL_BYTE		= 0xEE;
 #else
-static const int GUARD_BYTES = 0;
+static constexpr int GUARD_BYTES = 0;
 #endif
 
 template <typename T>
@@ -139,8 +139,8 @@ size_t delayedExtentsPos = 0;
 typedef Firebird::AtomicCounter::counter_type StatInt;
 
 // We cache this amount of extents to avoid memory mapping overhead
-const int MAP_CACHE_SIZE = 16; // == 1 MB
-const size_t DEFAULT_ALLOCATION = 65536;
+constexpr int MAP_CACHE_SIZE = 16; // == 1 MB
+constexpr size_t DEFAULT_ALLOCATION = 65536;
 
 struct ExtentsCache	// C++ aggregate - members are statically initialized to zeros
 {
@@ -271,15 +271,15 @@ class MemMediumHunk;
 class MemHeader
 {
 public:
-	static const size_t SIZE_MASK = 0xFFF0;
-	static const size_t MEM_MASK = 0xF;
-	static const size_t MEM_HUGE = 0x1;
-	static const size_t MEM_REDIRECT = 0x2;
-	static const size_t MEM_EXTENT = 0x4;
+	static constexpr size_t SIZE_MASK = 0xFFF0;
+	static constexpr size_t MEM_MASK = 0xF;
+	static constexpr size_t MEM_HUGE = 0x1;
+	static constexpr size_t MEM_REDIRECT = 0x2;
+	static constexpr size_t MEM_EXTENT = 0x4;
 #ifdef DELAYED_FREE
-	static const size_t MEM_ACTIVE = 0x8;
+	static constexpr size_t MEM_ACTIVE = 0x8;
 #endif
-	static const unsigned OFFSET_SHIFT = 16;
+	static constexpr unsigned OFFSET_SHIFT = 16;
 
 	enum HugeBlock {HUGE_BLOCK};
 
@@ -335,7 +335,7 @@ public:
 	MemMediumHunk* getHunk()
 	{
 		fb_assert(!(hdrLength & MEM_HUGE));
-		off_t offset = hdrLength >> OFFSET_SHIFT;
+		off_t offset = static_cast<off_t>(hdrLength >> OFFSET_SHIFT);
 		fb_assert(offset > 0);
 		return (MemMediumHunk*)(((UCHAR*)this) - offset);
 	}
@@ -571,7 +571,7 @@ public:
 	}
 #endif
 
-	static size_t hdrSize()
+	static constexpr size_t hdrSize()
 	{
 		return MEM_ALIGN(sizeof(MemSmallHunk));
 	}
@@ -643,7 +643,7 @@ public:
 	}
 #endif
 
-	static size_t hdrSize()
+	static constexpr size_t hdrSize()
 	{
 		return MEM_ALIGN(sizeof(MemMediumHunk));
 	}
@@ -674,7 +674,7 @@ public:
 	}
 #endif
 
-	static size_t hdrSize()
+	static constexpr size_t hdrSize()
 	{
 		return MEM_ALIGN(sizeof(MemBigHunk));
 	}
@@ -693,7 +693,7 @@ public:
 
 enum GetSlotFor { SLOT_ALLOC, SLOT_FREE };
 
-const unsigned char lowSlots[] =
+constexpr unsigned char lowSlots[] =
 {
 	0, // 32
 	1, // 48
@@ -760,7 +760,7 @@ const unsigned char lowSlots[] =
 	23, // 1024
 };
 
-const unsigned short lowLimits[] =
+constexpr unsigned short lowLimits[] =
 {
 	32, // 0
 	48, // 1
@@ -788,9 +788,9 @@ const unsigned short lowLimits[] =
 	1024, // 23
 };
 
-const int SLOT_SHIFT = 4;
+constexpr int SLOT_SHIFT = 4;
 
-const size_t TINY_SLOTS = FB_NELEM(lowLimits);
+constexpr size_t TINY_SLOTS = FB_NELEM(lowLimits);
 const unsigned short* TINY_BLOCK_LIMIT = &lowLimits[TINY_SLOTS - 1];
 
 // Access to slots for small (<= 1Kb) blocks
@@ -798,8 +798,8 @@ const unsigned short* TINY_BLOCK_LIMIT = &lowLimits[TINY_SLOTS - 1];
 class LowLimits
 {
 public:
-	static const unsigned TOTAL_ELEMENTS = 24;		// TINY_SLOTS
-	static const unsigned TOP_LIMIT = 1024;			// TINY_BLOCK_LIMIT
+	static constexpr unsigned TOTAL_ELEMENTS = 24;		// TINY_SLOTS
+	static constexpr unsigned TOP_LIMIT = 1024;			// TINY_BLOCK_LIMIT
 
 	static unsigned getSlot(size_t size, GetSlotFor mode)
 	{
@@ -833,7 +833,7 @@ public:
 };
 
 
-const unsigned char mediumSlots[] =
+constexpr unsigned char mediumSlots[] =
 {
 	0, // 1152
 	1, // 1280
@@ -1333,7 +1333,7 @@ const unsigned char mediumSlots[] =
 	35  // 64512
 };
 
-const unsigned short mediumLimits[] =
+constexpr unsigned short mediumLimits[] =
 {
 	1152, // 0
 	1280, // 1
@@ -1373,17 +1373,17 @@ const unsigned short mediumLimits[] =
 	64512  // 35
 };
 
-const size_t MEDIUM_SLOTS = FB_NELEM(mediumLimits);
+constexpr size_t MEDIUM_SLOTS = FB_NELEM(mediumLimits);
 const unsigned short* MEDIUM_BLOCK_LIMIT = &mediumLimits[MEDIUM_SLOTS - 1];
-const size_t PARENT_REDIRECT_THRESHOLD = 48 * 1024;
+constexpr size_t PARENT_REDIRECT_THRESHOLD = 48 * 1024;
 
 // Access to slots for medium (>1Kb, <64Kb) blocks
 
 class MediumLimits
 {
 public:
-	static const unsigned TOTAL_ELEMENTS = 36;		// MEDIUM_SLOTS
-	static const unsigned TOP_LIMIT = 64512;		// MEDIUM_BLOCK_LIMIT
+	static constexpr unsigned TOTAL_ELEMENTS = 36;		// MEDIUM_SLOTS
+	static constexpr unsigned TOP_LIMIT = 64512;		// MEDIUM_BLOCK_LIMIT
 
 	static unsigned getSlot(size_t size, GetSlotFor mode)
 	{
@@ -1391,7 +1391,7 @@ public:
 		fb_assert(TOTAL_ELEMENTS == MEDIUM_SLOTS);
 		fb_assert(TOP_LIMIT == *MEDIUM_BLOCK_LIMIT);
 
-		const size_t LOW_LIMIT = 1032;
+		constexpr size_t LOW_LIMIT = 1032;
 		fb_assert(size <= TOP_LIMIT);
 		fb_assert(size >= LOW_LIMIT);
 		fb_assert(MEM_ALIGN(size) == size);
@@ -2083,21 +2083,17 @@ void MemPool::newExtent(size_t& size, Extent** linkedList)
 {
 	// No large enough block found. We need to extend the pool
 	void* memory = NULL;
-	const unsigned TOTAL_OVERHEAD = DoubleLinkedList::MEM_OVERHEAD + GUARD_BYTES + VALGRIND_REDZONE;
-	const unsigned FROM_LIMIT = mediumLimits[10];	// 4224 // 10
-	const unsigned TO_LIMIT = mediumLimits[15];		// 7552 // 15
+	constexpr size_t TOTAL_OVERHEAD = DoubleLinkedList::MEM_OVERHEAD + GUARD_BYTES + VALGRIND_REDZONE;
+	constexpr size_t FROM_LIMIT = mediumLimits[10];	// 4224 // 10
+	constexpr size_t TO_LIMIT = mediumLimits[15];	// 7552 // 15
 
 	size_t ext_size = size + MEM_ALIGN(sizeof(Extent));
 	const bool allocByParent = parent && (ext_size <= TO_LIMIT);
 
 	if (allocByParent)
 	{
-		size_t from = FROM_LIMIT;
-		if (ext_size + TOTAL_OVERHEAD > from)
-			from = ext_size + TOTAL_OVERHEAD;
-		ext_size = TO_LIMIT;
-		if (ext_size < from)
-			ext_size = from;
+		const size_t from = std::max(FROM_LIMIT, ext_size + TOTAL_OVERHEAD);
+		ext_size = std::max(TO_LIMIT, from);
 
 		fb_assert(ext_size < DEFAULT_ALLOCATION);
 		memory = parent->getExtent(from, ext_size);
@@ -2641,7 +2637,7 @@ bool MemPool::validate(char* buf, FB_SIZE_T size)
 	if (vMap != mapped_memory.value() || vUse != used_memory.value())
 	{
 		char buf[256];
-		fb_utils::snprintf(buf, sizeof(buf), "Memory statistics does not match pool: "
+		snprintf(buf, sizeof(buf), "Memory statistics does not match pool: "
 			"mapped=%" SQUADFORMAT "(%" SQUADFORMAT " st), used=%" SQUADFORMAT "(%" SQUADFORMAT " st)",
 			SINT64(vMap), SINT64(mapped_memory.value()), SINT64(vUse), SINT64(used_memory.value()));
 		return false;

@@ -296,9 +296,6 @@
     <ClInclude Include="..\..\..\src\common\dsc_proto.h">
       <Filter>headers</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\common\dsc_pub.h">
-      <Filter>headers</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\src\common\dyntable.h">
       <Filter>headers</Filter>
     </ClInclude>
@@ -621,6 +618,9 @@
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\TimerImpl.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\include\firebird\impl\dsc_pub.h">
       <Filter>headers</Filter>
     </ClInclude>
   </ItemGroup>

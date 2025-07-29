@@ -662,7 +662,9 @@ bool SCL_check_function(thread_db* tdbb, const QualifiedName& name, SecurityClas
 
 	const SecurityClass* s_class = NULL;
 	bool found = false;
-	AutoCacheRequest request(tdbb, irq_f_security, IRQ_REQUESTS);
+
+	static const CachedRequestId requestId;
+	AutoCacheRequest request(tdbb, requestId);
 
 	FOR (REQUEST_HANDLE request)
 		FUN IN RDB$FUNCTIONS
@@ -699,7 +701,9 @@ void SCL_check_filter(thread_db* tdbb, const MetaName& name, SecurityClass::flag
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
 
 	const SecurityClass* s_class = NULL;
-	AutoCacheRequest request(tdbb, irq_f_security, IRQ_REQUESTS);
+
+	static const CachedRequestId requestId;
+	AutoCacheRequest request(tdbb, requestId);
 
 	FOR (REQUEST_HANDLE request)
 		FLT IN RDB$FILTERS

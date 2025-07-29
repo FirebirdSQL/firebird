@@ -598,7 +598,7 @@ static SimilarToRegex* createPatternMatcher(thread_db* tdbb, const char* pattern
 	{
 		if (pattern)
 		{
-			const int len = strlen(pattern);
+			const FB_SIZE_T len = fb_strlen(pattern);
 
 			//// TODO: Should this be different than trace and replication
 			//// and use case sensitive matcher?
@@ -1152,7 +1152,7 @@ Validation::RTN Validation::corrupt(int err_code, const jrd_rel* relation, ...)
 			fprintf(stdout, "LOG:\tDatabase: %s\n\t%s\n", fn, s.c_str());
 	}
 #endif
-	if (vdr_msg_table[err_code].error)
+	if (err_code >= VAL_MAX_ERROR || vdr_msg_table[err_code].error)
 	{
 		++vdr_errors;
 		s.insert(0, "Error: ");

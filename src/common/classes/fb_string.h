@@ -104,7 +104,7 @@ namespace Firebird
 					newSize = size_type(bufferSize) * 2u;
 
 				// Do not grow buffer beyond string length limit
-				size_type max_length = getMaxLength() + 1;
+				const size_type max_length = getMaxLength() + 1;
 				if (newSize > max_length)
 					newSize = max_length;
 
@@ -142,7 +142,7 @@ namespace Firebird
 				size_type newSize = len + 1 + INIT_RESERVE;
 
 				// Do not grow buffer beyond string length limit
-				size_type max_length = getMaxLength() + 1;
+				const size_type max_length = getMaxLength() + 1;
 				if (newSize > max_length)
 					newSize = max_length;
 
@@ -169,7 +169,7 @@ namespace Firebird
 		AbstractString(const size_type limit, const S& v)
 			: max_length(static_cast<internal_size_type>(limit))
 		{
-			FB_SIZE_T l = v.length();
+			const FB_SIZE_T l = v.length();
 			initialize(l);
 			memcpy(stringBuffer, v.c_str(), l);
 		}
@@ -225,7 +225,7 @@ namespace Firebird
 			}
 		}
 
-		pointer modify()
+		pointer modify() noexcept
 		{
 			return stringBuffer;
 		}
@@ -247,17 +247,17 @@ namespace Firebird
 
 		bool baseMove(AbstractString&& rhs);
 
-		size_type getMaxLength() const
+		size_type getMaxLength() const noexcept
 		{
 			return max_length;
 		}
 
 	public:
-		const_pointer c_str() const
+		const_pointer c_str() const noexcept
 		{
 			return stringBuffer;
 		}
-		size_type length() const
+		size_type length() const noexcept
 		{
 			return stringLength;
 		}
@@ -268,7 +268,7 @@ namespace Firebird
 		// Almost same as c_str(), but return 0, not "",
 		// when string has no data. Useful when interacting
 		// with old code, which does check for NULL.
-		const_pointer nullStr() const
+		const_pointer nullStr() const noexcept
 		{
 			return stringLength ? stringBuffer : 0;
 		}
@@ -367,19 +367,19 @@ namespace Firebird
 			return find_last_not_of(s, pos, 1);
 		}
 
-		iterator begin()
+		iterator begin() noexcept
 		{
 			return modify();
 		}
-		const_iterator begin() const
+		const_iterator begin() const noexcept
 		{
 			return c_str();
 		}
-		iterator end()
+		iterator end() noexcept
 		{
 			return modify() + length();
 		}
-		const_iterator end() const
+		const_iterator end() const noexcept
 		{
 			return c_str() + length();
 		}
@@ -401,28 +401,28 @@ namespace Firebird
 		{
 			return at(pos);
 		}
-		const_pointer data() const
+		const_pointer data() const noexcept
 		{
 			return c_str();
 		}
-		size_type size() const
+		size_type size() const noexcept
 		{
 			return length();
 		}
-		size_type capacity() const
+		size_type capacity() const noexcept
 		{
 			return bufferSize - 1u;
 		}
-		bool empty() const
+		bool empty() const noexcept
 		{
 			return length() == 0;
 		}
-		bool hasData() const
+		bool hasData() const noexcept
 		{
 			return !empty();
 		}
 		// to satisfy both ways to check for empty string
-		bool isEmpty() const
+		bool isEmpty() const noexcept
 		{
 			return empty();
 		}
@@ -637,7 +637,7 @@ namespace Firebird
 			return memcmp(s1, s2, n);
 		}
 
-		static AbstractString::size_type getMaxLength()
+		static AbstractString::size_type getMaxLength() noexcept
 		{
 			return 0xFFFFFFFEu;
 		}
@@ -650,7 +650,7 @@ namespace Firebird
 						   AbstractString::const_pointer s2,
 						   const AbstractString::size_type n);
 
-		static AbstractString::size_type getMaxLength()
+		static AbstractString::size_type getMaxLength() noexcept
 		{
 			return 0xFFFEu;
 		}
@@ -663,7 +663,7 @@ namespace Firebird
 						   AbstractString::const_pointer s2,
 						   const AbstractString::size_type n);
 
-		static AbstractString::size_type getMaxLength()
+		static AbstractString::size_type getMaxLength() noexcept
 		{
 			return 0xFFFFFFFEu;
 		}
@@ -738,6 +738,10 @@ namespace Firebird
 		StringType& assign(const_iterator first, const_iterator last)
 		{
 			return assign(first, last - first);
+		}
+		StringType& assign(std::string_view s)
+		{
+			return assign(s.data(), static_cast<size_type>(s.length()));
 		}
 
 		StringType& operator=(const StringType& v)

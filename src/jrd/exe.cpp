@@ -123,7 +123,7 @@ string Item::getDescription(Request* request, const ItemInfo* itemInfo) const
 	if (itemInfo && itemInfo->name.hasData())
 		return itemInfo->name.toQuotedString();
 
-	int oneBasedIndex = index + 1;
+	const int oneBasedIndex = index + 1;
 	string s;
 
 	if (type == Item::TYPE_VARIABLE)
@@ -156,23 +156,23 @@ string Item::getDescription(Request* request, const ItemInfo* itemInfo) const
 
 // AffectedRows class implementation
 
-AffectedRows::AffectedRows()
+AffectedRows::AffectedRows() noexcept
 {
 	clear();
 }
 
-void AffectedRows::clear()
+void AffectedRows::clear() noexcept
 {
 	writeFlag = false;
 	fetchedRows = modifiedRows = 0;
 }
 
-void AffectedRows::bumpFetched()
+void AffectedRows::bumpFetched() noexcept
 {
 	fetchedRows++;
 }
 
-void AffectedRows::bumpModified(bool increment)
+void AffectedRows::bumpModified(bool increment) noexcept
 {
 	if (increment) {
 		modifiedRows++;
@@ -182,7 +182,7 @@ void AffectedRows::bumpModified(bool increment)
 	}
 }
 
-int AffectedRows::getCount() const
+int AffectedRows::getCount() const noexcept
 {
 	return writeFlag ? modifiedRows : fetchedRows;
 }
@@ -200,12 +200,12 @@ void StatusXcp::clear()
 	status->init();
 }
 
-void StatusXcp::init(const FbStatusVector* vector)
+void StatusXcp::init(const FbStatusVector* vector) noexcept
 {
 	fb_utils::copyStatus(&status, vector);
 }
 
-void StatusXcp::copyTo(FbStatusVector* vector) const
+void StatusXcp::copyTo(FbStatusVector* vector) const noexcept
 {
 	fb_utils::copyStatus(vector, &status);
 }
@@ -261,7 +261,7 @@ static void release_blobs(thread_db*, Request*);
 static void trigger_failure(thread_db*, Request*);
 static void stuff_stack_trace(const Request*);
 
-const size_t MAX_STACK_TRACE = 2048;
+constexpr size_t MAX_STACK_TRACE = 2048;
 
 
 namespace
@@ -1375,6 +1375,10 @@ void EXE_execute_triggers(thread_db* tdbb,
 						case TriggerAction::TRIGGER_INSERT:
 							SystemTriggers::executeBeforeInsertTriggers(tdbb, relation, new_rec);
 							break;
+
+						default:
+							// other trigger actions not relevant here
+							break;
 					}
 					break;
 				}
@@ -1385,7 +1389,15 @@ void EXE_execute_triggers(thread_db* tdbb,
 						case TriggerAction::TRIGGER_DELETE:
 							SystemTriggers::executeAfterDeleteTriggers(tdbb, relation, old_rec);
 							break;
+
+						default:
+							// other trigger actions not relevant here
+							break;
 					}
+					break;
+
+				default:
+					// other trigger types not relevant here
 					break;
 			}
 		}

@@ -278,8 +278,9 @@ public:
 		case ACT_backup_split:
 		case ACT_backup_fini:
 			return true;
+		default:
+			return false;
 		}
-		return false;
 	}
 
 	bool isRestore() const
@@ -289,8 +290,9 @@ public:
 		case ACT_restore:
 		case ACT_restore_join:
 			return true;
+		default:
+			return false;
 		}
-		return false;
 	}
 
 protected:

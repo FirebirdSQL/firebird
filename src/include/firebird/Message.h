@@ -102,7 +102,7 @@
 			return getData();	\
 		}	\
 		\
-		Type data;	\
+		Type data{};	\
 		::Firebird::MessageDesc desc;	\
 	}
 

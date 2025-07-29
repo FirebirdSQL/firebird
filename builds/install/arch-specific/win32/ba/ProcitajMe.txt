@@ -27,7 +27,7 @@ prije instalacije ovog release-a na produkcioni server. tj:
  o Molimo prvo procitajte dokumente
    "Instalacija_ProcitajMe.txt" i release notes.
 
- o Ako imate vazne podatke, sjetite se da napravite 
+ o Ako imate vazne podatke, sjetite se da napravite
    back-up prije instalacije ovog release-a.
 
  o Preporucuje se da uklonite sve prethodne
@@ -67,16 +67,12 @@ Prije nego prijavite bug:
  o Mozda je neko vec prijavio bug? Pogledajte
    postojece prijave bugova ovdje:
 
-    http://tracker.firebirdsql.org/browse/CORE
+    https://github.com/FirebirdSQL/firebird/issues
 
  o Ako ste u dilemi zasto ne diskutujete o problemu na
    Firebird-devel listi? Mozete se prijaviti ovdje:
 
-    http://lists.sourceforge.net/lists/listinfo/firebird-devel
-
-   i listu je moguce pogledati kroz newsgroup interface ovdje:
-
-    news://news.atkin.com/
+    https://groups.google.com/g/firebird-devel
 
 
 Od Firebird team-a.

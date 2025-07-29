@@ -43,6 +43,7 @@
 #include "../common/StatusArg.h"
 #include "../jrd/constants.h"
 #include "../common/utils_proto.h"
+#include <optional>
 
 using namespace Firebird;
 
@@ -163,18 +164,20 @@ void iscArrayLookupBoundsImpl(Why::YAttachment* attachment,
 		           name
 		      from system.rdb$sql.parse_unqualified_names(rdb$get_context('SYSTEM', 'SEARCH_PATH'))
 		)
-		select fd.rdb$lower_bound,
+		select cast(sp.rn as integer) rn,
+		       fd.rdb$lower_bound,
 		       fd.rdb$upper_bound
 		    from search_path sp
 		    join system.rdb$field_dimensions fd
 		      on fd.rdb$schema_name = sp.name
 		    where fd.rdb$field_name = ?
-		    order by sp.rn
-		    rows 1
+		    order by sp.rn,
+		             fd.rdb$dimension
 	)""";
 
 	constexpr auto sqlNoSchemas = R"""(
-		select fd.rdb$lower_bound,
+		select 0 rn,
+		       fd.rdb$lower_bound,
 		       fd.rdb$upper_bound
 		    from rdb$field_dimensions fd
 		    where fd.rdb$field_name = ?
@@ -189,6 +192,7 @@ void iscArrayLookupBoundsImpl(Why::YAttachment* attachment,
 	inputMessage.clear();
 
 	FB_MESSAGE(OutputMessage, CheckStatusWrapper,
+		(FB_INTEGER, rn)
 		(FB_INTEGER, lowerBound)
 		(FB_INTEGER, upperBound)
 	) outputMessage(&statusWrapper, MasterInterfacePtr());
@@ -201,8 +205,15 @@ void iscArrayLookupBoundsImpl(Why::YAttachment* attachment,
 		outputMessage.getMetadata(), nullptr, 0));
 	status.check();
 
+	std::optional<SLONG> lastRn;
+
 	while (resultSet->fetchNext(&statusWrapper, outputMessage.getData()) == IStatus::RESULT_OK)
 	{
+		if (lastRn.has_value() && lastRn.value() != outputMessage->rn)
+			break;
+
+		lastRn = outputMessage->rn;
+
 		tail->array_bound_lower = outputMessage->lowerBoundNull ? 0 : outputMessage->lowerBound;
 		tail->array_bound_upper = outputMessage->upperBoundNull ? 0 : outputMessage->upperBound;
 		++tail;

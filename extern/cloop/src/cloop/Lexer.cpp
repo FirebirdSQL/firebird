@@ -154,7 +154,7 @@ Token& Lexer::getToken(Token& token)
 			if (token.text.length() == 2)
 			{
 				char buffer[1024];
-				sprintf(buffer, "%s:%i:%i: error: Invalid hexadecimal prefix.",
+				snprintf(buffer, sizeof(buffer), "%s:%i:%i: error: Invalid hexadecimal prefix.",
 					filename.c_str(), line, column);
 				throw runtime_error(buffer);
 			}
@@ -220,7 +220,7 @@ void Lexer::skip(Char& ch)	// skip spaces and comments
 					if (ch.c == -1)
 					{
 						char buffer[1024];
-						sprintf(buffer, "%s:%i:%i: error: Unterminated comment.",
+						snprintf(buffer, sizeof(buffer), "%s:%i:%i: error: Unterminated comment.",
 							filename.c_str(),
 							firstCh.line, firstCh.column);
 						throw runtime_error(buffer);

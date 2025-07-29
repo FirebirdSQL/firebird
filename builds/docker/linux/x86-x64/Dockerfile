@@ -183,7 +183,7 @@ RUN cd ~/build && \
 	tar xvf icu4c-${ARG_ICU_VERSION}-src.tgz --strip 1 -C icu4c-${ARG_ICU_VERSION}-src && \
 	mkdir icu4c-${ARG_ICU_VERSION}-build && \
 	cd icu4c-${ARG_ICU_VERSION}-build && \
-	CXXFLAGS='-std=c++17 -static-libstdc++' setarch $ARG_SET_ARCH ../icu4c-${ARG_ICU_VERSION}-src/source/runConfigureICU \
+	CXXFLAGS='-std=c++20 -static-libstdc++' setarch $ARG_SET_ARCH ../icu4c-${ARG_ICU_VERSION}-src/source/runConfigureICU \
 		Linux \
 		--host=${ARG_TARGET_ARCH} \
 		--prefix=/home/ctng/x-tools/${ARG_TARGET_ARCH}/${ARG_TARGET_ARCH}/sysroot/usr/local \
