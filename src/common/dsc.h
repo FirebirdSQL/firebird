@@ -36,7 +36,9 @@
 #include "../common/DecFloat.h"
 #include "../common/Int128.h"
 
-#define NULL_BYTES(n)	(n*2)
+// have to round up to the nearest multiple of sizeof(SLONG) due to sort value alignment
+// look at Sort::diddleKey and sort_key_def::setSkdOffset
+#define NULL_BYTES(n)	(ROUNDUP(n*2, sizeof(SLONG)))
 
 // Data type information
 
