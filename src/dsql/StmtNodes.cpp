@@ -8192,6 +8192,7 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 					fld = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
 					*fld = *localTypeNode->dsqlField;
 					fld->fld_name = field->fld_name;
+					fld->notNull = field->notNull;	// have to preserve notNull flag from variable declaration
 					field = fld;
 
 					if (!varNode->dsqlDef->defaultClause && localTypeNode->defaultList->items.getCount() > 0)
