@@ -280,10 +280,31 @@ Sort* SortedStream::init(thread_db* tdbb) const
 				// If an INTL string is moved into the key portion of the sort record,
 				// then we want to sort by language dependent order
 
-				if (IS_INTL_DATA(&item->desc) && isKey(&item->desc))
+				auto movel = [&] (const dsc* desc, dsc* from, dsc* to)
 				{
-					INTL_string_to_key(tdbb, INTL_INDEX_TYPE(&item->desc), from, &to,
-						(m_map->flags & FLAG_UNIQUE ? INTL_KEY_UNIQUE : INTL_KEY_SORT));
+					if (IS_INTL_DATA(desc) && isKey(desc))
+					{
+						INTL_string_to_key(tdbb, INTL_INDEX_TYPE(desc), from, to,
+							(m_map->flags & FLAG_UNIQUE ? INTL_KEY_UNIQUE : INTL_KEY_SORT));
+					}
+					else
+					{
+						MOV_move(tdbb, from, to);
+					}
+				};
+
+				if (item->desc.dsc_dtype == dtype_rowtype)
+				{
+					auto next = item->desc.dsc_sub_first;
+					auto fromNext = from->dsc_sub_first;
+					auto toNext = to.dsc_sub_first;
+					while (next)
+					{
+						movel(next, fromNext, toNext);
+						next = next->dsc_next;
+						fromNext = fromNext->dsc_next;
+						toNext = toNext->dsc_next;
+					}
 				}
 				else
 				{

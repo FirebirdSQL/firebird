@@ -225,6 +225,7 @@ bool MET_get_composite_type(thread_db* tdbb, MemoryPool& csbPool, const Qualifie
 		WITH REL.RDB$SCHEMA_NAME EQ relationName.schema.c_str()
 		AND REL.RDB$RELATION_NAME EQ relationName.object.c_str()
 		AND FLD.RDB$FIELD_NAME EQ REL.RDB$FIELD_SOURCE
+		SORTED BY REL.RDB$FIELD_POSITION
 	{
 		auto nextSub = FB_NEW_POOL(*tdbb->getDefaultPool()) dsc;
 		if (DSC_make_descriptor(nextSub,

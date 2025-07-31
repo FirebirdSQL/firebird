@@ -1861,23 +1861,40 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 		dsc* desc = &descriptor;
 		node->getDesc(tdbb, csb, desc);
 
-		// Allow for "key" forms of International text to grow
-		if (IS_INTL_DATA(desc))
+		auto transformTextDescriptors = [&] (dsc* desc)
 		{
-			// Turn varying text and cstrings into text.
-
-			if (desc->dsc_dtype == dtype_varying)
+			// Allow for "key" forms of International text to grow
+			if (IS_INTL_DATA(desc))
 			{
-				desc->dsc_dtype = dtype_text;
-				desc->dsc_length -= sizeof(USHORT);
-			}
-			else if (desc->dsc_dtype == dtype_cstring)
-			{
-				desc->dsc_dtype = dtype_text;
-				desc->dsc_length--;
-			}
+				// Turn varying text and cstrings into text.
 
-			desc->dsc_length = INTL_key_length(tdbb, INTL_INDEX_TYPE(desc), desc->dsc_length);
+				if (desc->dsc_dtype == dtype_varying)
+				{
+					desc->dsc_dtype = dtype_text;
+					desc->dsc_length -= sizeof(USHORT);
+				}
+				else if (desc->dsc_dtype == dtype_cstring)
+				{
+					desc->dsc_dtype = dtype_text;
+					desc->dsc_length--;
+				}
+
+				desc->dsc_length = INTL_key_length(tdbb, INTL_INDEX_TYPE(desc), desc->dsc_length);
+			}
+		};
+
+		if (desc->dsc_dtype == dtype_rowtype)
+		{
+			auto next = desc->dsc_sub_first;
+			while (next)
+			{
+				transformTextDescriptors(next);
+				next = next->dsc_next;
+			}
+		}
+		else
+		{
+			transformTextDescriptors(desc);
 		}
 
 		// Make key for null flag
