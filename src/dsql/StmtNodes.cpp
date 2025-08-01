@@ -3332,6 +3332,16 @@ DeclareLocalTypeNode* DeclareLocalTypeNode::dsqlPass(DsqlCompilerScratch* dsqlSc
 		(*next)->notNull = clause->notNullSpecified;
 		(*next)->resolve(dsqlScratch);
 
+		for (auto& constraint : clause->constraints)
+		{
+			// here we have to check if check constraint is valid (use "value" keyword as for domain constraint)
+			if (constraint.constraintType == RelationNode::AddConstraintClause::CTYPE_CHECK && constraint.check)
+			{
+				DsqlDescMaker::fromField(&dsqlScratch->domainValue, *next);
+				doDsqlPass(dsqlScratch, constraint.check->value);
+			}
+		}
+
 		dsqlField->length += (*next)->length;
 		dsqlField->fld_sub_count++;
 
