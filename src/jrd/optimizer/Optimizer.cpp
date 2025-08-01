@@ -1418,7 +1418,120 @@ void Optimizer::generateAggregateDistincts(MapNode* map)
 
 			aggNode->asb = asb;
 		}
+		else if (aggNode && aggNode->sort)
+		{
+			generateAggregateSort(aggNode);
+			continue;
+		}
 	}
+}
+
+void Optimizer::generateAggregateSort(AggNode* aggNode)
+{
+	dsc descriptor;
+	dsc* desc = &descriptor;
+
+	const auto asb = FB_NEW_POOL(getPool()) AggregateSort(getPool());
+
+	sort_key_def* prevKey = nullptr;
+	const auto keyCount = aggNode->sort->expressions.getCount() * 2;
+	sort_key_def* sortKey = asb->keyItems.getBuffer(keyCount);
+
+	auto const* direction = aggNode->sort->direction.begin();
+	auto const* nullOrder = aggNode->sort->nullOrder.begin();
+
+	for (auto& node : aggNode->sort->expressions)
+	{
+		node->getDesc(tdbb, csb, desc);
+
+		// Allow for "key" forms of International text to grow
+		if (IS_INTL_DATA(desc))
+		{
+			// Turn varying text and cstrings into text.
+			if (desc->dsc_dtype == dtype_varying)
+			{
+				desc->dsc_dtype = dtype_text;
+				desc->dsc_length -= sizeof(USHORT);
+			}
+			else if (desc->dsc_dtype == dtype_cstring)
+			{
+				desc->dsc_dtype = dtype_text;
+				desc->dsc_length--;
+			}
+			desc->dsc_length = INTL_key_length(tdbb, INTL_INDEX_TYPE(desc), desc->dsc_length);
+		}
+
+		// Make key for null flag
+		sortKey->setSkdLength(SKD_text, 1);
+		sortKey->setSkdOffset(prevKey);
+
+		// Handle nulls placement
+		sortKey->skd_flags = SKD_ascending;
+
+		// Have SQL-compliant nulls ordering for ODS11+
+		if ((*nullOrder == NULLS_DEFAULT && *direction != ORDER_DESC) || *nullOrder == NULLS_FIRST)
+			sortKey->skd_flags |= SKD_descending;
+
+		prevKey = sortKey++;
+
+		// Make key for sort key proper
+		fb_assert(desc->dsc_dtype < FB_NELEM(sort_dtypes));
+		sortKey->setSkdLength(sort_dtypes[desc->dsc_dtype], desc->dsc_length);
+		sortKey->setSkdOffset(prevKey, desc);
+
+		sortKey->skd_flags = SKD_ascending;
+		if (*direction == ORDER_DESC)
+			sortKey->skd_flags |= SKD_descending;
+
+		if (!sortKey->skd_dtype)
+		{
+			ERR_post(Arg::Gds(isc_invalid_sort_datatype)
+					 << Arg::Str(DSC_dtype_tostring(desc->dsc_dtype)));
+		}
+
+		if (sortKey->skd_dtype == SKD_varying || sortKey->skd_dtype == SKD_cstring)
+		{
+			if (desc->dsc_ttype() == ttype_binary)
+				sortKey->skd_flags |= SKD_binary;
+		}
+
+		if (desc->dsc_dtype == dtype_varying)
+		{
+			// allocate space to store varying length
+			sortKey->skd_vary_offset = sortKey->getSkdOffset() + ROUNDUP(desc->dsc_length, sizeof(SLONG));
+			sortKey->setSkdLength(sort_dtypes[desc->dsc_dtype], sortKey->skd_vary_offset + sizeof(USHORT));
+		}
+		else
+			sortKey->skd_vary_offset = 0;
+
+		desc->dsc_address = (UCHAR*)(IPTR) sortKey->getSkdOffset();
+		asb->descOrder.add(*desc);
+
+		prevKey = sortKey++;
+		direction++;
+		nullOrder++;
+	}
+
+	fb_assert(prevKey);
+	ULONG length = prevKey ? ROUNDUP(prevKey->getSkdOffset() + prevKey->getSkdLength(), sizeof(SLONG)) : 0;
+
+	aggNode->arg->getDesc(tdbb, csb, desc);
+
+	if (desc->dsc_dtype >= dtype_aligned)
+		length = FB_ALIGN(length, type_alignments[desc->dsc_dtype]);
+
+	if (desc->dsc_dtype == dtype_varying)
+		length += sizeof(USHORT);
+
+	desc->dsc_address = (UCHAR*)(IPTR)length;
+	length += desc->dsc_length;
+
+	asb->desc = *desc;
+
+	asb->length = ROUNDUP(length, sizeof(SLONG));
+
+	asb->impure = csb->allocImpure<impure_agg_sort>();
+	aggNode->asb = asb;
 }
 
 
