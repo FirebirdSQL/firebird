@@ -2470,7 +2470,7 @@ composite_type_element($declareLocalTypeNode)
 
 %type column_type_def(<localTypeNode>)
 column_type_def($localTypeNode)
-	: symbol_column_name data_type_or_domain domain_default_opt
+	: symbol_column_name data_type_descriptor domain_default_opt
 			{
 				RelationNode::AddColumnClause* clause = $<addColumnClause>$ =
 					newNode<RelationNode::AddColumnClause>();
@@ -2484,7 +2484,7 @@ column_type_def($localTypeNode)
 				if ($6)
 					$<addColumnClause>4->collate = *$6;
 			}
-	| symbol_column_name data_type_or_domain identity_clause
+	| symbol_column_name data_type_descriptor identity_clause
 			{
 				RelationNode::AddColumnClause* clause = $<addColumnClause>$ =
 					newNode<RelationNode::AddColumnClause>();

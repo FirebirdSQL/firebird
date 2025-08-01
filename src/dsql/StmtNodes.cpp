@@ -3317,6 +3317,7 @@ DeclareLocalTypeNode* DeclareLocalTypeNode::dsqlPass(DsqlCompilerScratch* dsqlSc
 		node->defaultList->add(clause->defaultValue ? doDsqlPass(dsqlScratch, clause->defaultValue->value) : nullptr);
 		onlyNulls &= !clause->defaultValue;
 
+		clause->field->resolve(dsqlScratch, false);
 		auto field = clause->field;
 
 		*next = FB_NEW_POOL(p) dsql_fld(p);
@@ -3330,7 +3331,6 @@ DeclareLocalTypeNode* DeclareLocalTypeNode::dsqlPass(DsqlCompilerScratch* dsqlSc
 		(*next)->charSet = field->charSet;
 		(*next)->length = field->length;
 		(*next)->notNull = clause->notNullSpecified;
-		(*next)->resolve(dsqlScratch);
 
 		for (auto& constraint : clause->constraints)
 		{
