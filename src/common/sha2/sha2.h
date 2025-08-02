@@ -49,9 +49,13 @@
 #ifndef _SHA2_H
 #define _SHA2_H
 
-#include <string.h>
 #ifndef NIST_COMPLIANCY_TESTS
 #include "firebird.h"
+#endif
+
+#include <string.h>
+
+#ifndef NIST_COMPLIANCY_TESTS
 #include "../../common/classes/alloc.h"
 #include "../../common/classes/array.h"
 #include "../../common/classes/fb_string.h"

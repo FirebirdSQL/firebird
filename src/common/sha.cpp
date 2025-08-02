@@ -9,6 +9,7 @@
 #ifndef SHA_H
 #define SHA_H
 
+#include "firebird.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include "../common/sha.h"
@@ -30,8 +31,6 @@ void sha_update(SHA_INFO *, const BYTE *, size_t);
 void sha_final(unsigned char [SHA_DIGESTSIZE], SHA_INFO *) noexcept;
 
 #define SHA_VERSION 1
-
-#include "firebird.h"
 
 #ifdef WORDS_BIGENDIAN
 #  if SIZEOF_LONG == 4

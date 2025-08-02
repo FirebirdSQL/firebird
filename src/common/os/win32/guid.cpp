@@ -26,17 +26,12 @@
  *
  */
 
-#ifndef __MINGW32__
-// minimum win32 version: win98 / winnt4 SP3
-#define _WIN32_WINNT 0x0403
-#endif
-
+#include "firebird.h"
 #include <windows.h>
 #include <bcrypt.h>
 #include <objbase.h>
 #include <stdio.h>
 
-#include "firebird.h"
 #include "../common/os/guid.h"
 #include "fb_exception.h"
 
