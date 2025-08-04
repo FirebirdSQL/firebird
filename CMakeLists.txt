@@ -204,8 +204,8 @@ if (MINGW)
     set(CMAKE_SHARED_MODULE_PREFIX)
     set(CMAKE_STATIC_LIBRARY_PREFIX)
 
-    # 0x0A00 is Windows 10
-    add_definitions(-D_WIN32_WINNT=0x0A00)
+    # 0x0601 is Windows 7 - see also comments in autoconfig_msvc.h
+    add_definitions(-D_WIN32_WINNT=0x0601)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4 -std=c++20")
 endif()
 
