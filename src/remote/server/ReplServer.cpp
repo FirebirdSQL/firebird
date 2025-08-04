@@ -416,7 +416,12 @@ namespace
 
 		void shutdown()
 		{
+			FbLocalStatus localStatus;
+			if (m_replicator.hasData())
+				m_replicator->close(&localStatus);
 			m_replicator = nullptr;
+			if (m_attachment.hasData())
+				m_attachment->detach(&localStatus);
 			m_attachment = nullptr;
 			m_sequence = 0;
 			m_connected = false;
@@ -437,7 +442,7 @@ namespace
 
 		bool isShutdown() const
 		{
-			return (m_attachment == NULL);
+			return (m_attachment == nullptr);
 		}
 
 		const PathName& getDirectory() const
