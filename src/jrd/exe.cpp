@@ -464,7 +464,12 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 
 		// Strings will be validated in CVT_move()
 
-		if (DTYPE_IS_BLOB_OR_QUAD(from_desc->dsc_dtype) || DTYPE_IS_BLOB_OR_QUAD(to_desc->dsc_dtype))
+		if (DSC_EQUIV(from_desc, to_desc, false) && from_desc->dsc_address == to_desc->dsc_address)
+		{
+			// Self-assignment. No need to do anything.
+			return;
+		}
+		else if (DTYPE_IS_BLOB_OR_QUAD(from_desc->dsc_dtype) || DTYPE_IS_BLOB_OR_QUAD(to_desc->dsc_dtype))
 		{
 			// ASF: Don't let MOV_move call blb::move because MOV
 			// will not pass the destination field to blb::move.
