@@ -1,15 +1,16 @@
 #ifndef AUTOCONFIG_H
 #define AUTOCONFIG_H
 
- // Windows 10 (0x0A00) is the baseline version for Firebird 6
-#define FB_WIN32_WINNT_BASELINE 0x0A00
+// Windows 7 (0x0601) is the baseline version for Firebird 6.
+// NOTE: This does not mean that this version is supported, but that we want to limit Windows API
+// use to this version.
+#define FB_WIN32_WINNT_BASELINE 0x0601
 
 #ifndef _WIN32_WINNT
-// By default set _WIN32_WINNT to the baseline, but allows overriding (maybe for fbclient?)
+// Set _WIN32_WINNT to the baseline, but allow overriding
 #define _WIN32_WINNT FB_WIN32_WINNT_BASELINE
-#elif (_WIN32_WINNT < 0x0601)
-// Consider Windows versions before Windows 7 (0x0601) really too old. This does not mean that
-// compilation for versions before Windows 10 will succeed (probably it will work for fbclient).
+#elif (_WIN32_WINNT < FB_WIN32_WINNT_BASELINE)
+// Consider Windows versions before the baseline really too old.
 #error The target Windows version (_WIN32_WINNT) is too old
 #endif
 
