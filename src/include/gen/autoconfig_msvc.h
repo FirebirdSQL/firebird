@@ -6,8 +6,9 @@
 // use to this version.
 #define FB_WIN32_WINNT_BASELINE 0x0601
 
+// Normally, _WIN32_WINNT is defined in the PreprocessorDefinitions of Firebird.Common.props.
 #ifndef _WIN32_WINNT
-// Set _WIN32_WINNT to the baseline, but allow overriding
+// Fallback to set _WIN32_WINNT to the baseline.
 #define _WIN32_WINNT FB_WIN32_WINNT_BASELINE
 #elif (_WIN32_WINNT < FB_WIN32_WINNT_BASELINE)
 // Consider Windows versions before the baseline really too old.
