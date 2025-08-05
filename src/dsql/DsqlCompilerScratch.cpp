@@ -477,7 +477,7 @@ void DsqlCompilerScratch::putLocalTypes()
 		while (fld)
 		{
 			appendMetaString(fld->fld_name.c_str());
-			putDtype(fld, false);
+			putType(fld, false);
 			auto clause = (static_cast<RelationNode::AddColumnClause*>(curClause->getObject()));
 			UCHAR hasCheckConstraint = false;
 			for (auto& constraint : clause->constraints)
@@ -1160,7 +1160,7 @@ dsql_var* DsqlCompilerScratch::genRowtypeParameter(dsql_fld* field,
 		auto next = field->fld_sub_first;
 		while (next)
 		{
-			putDtype(next, true);
+			putType(next, true);
 			next = next->fld_next;
 		}
 	}

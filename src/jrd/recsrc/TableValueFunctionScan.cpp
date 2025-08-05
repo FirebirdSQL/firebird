@@ -245,7 +245,7 @@ void UnlistFunctionScan::internalOpen(thread_db* tdbb) const
 				dsc fromDesc;
 				fromDesc.makeText(static_cast<USHORT>(size), textType,
 					(UCHAR*)(IPTR) valueView.data());
-				assignParameter(tdbb, &fromDesc, toDesc, 0, record);
+				assignParameter(tdbb, &fromDesc, &(*toDesc), 0, record);
 				impure->m_recordBuffer->store(record);
 			}
 

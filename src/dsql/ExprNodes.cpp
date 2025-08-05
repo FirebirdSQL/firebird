@@ -10240,20 +10240,20 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 	}
 
 	// This block is after validation because having here a malformed data would produce a wrong result
-	if (!isNull && retDesc->dsc_dtype == dtype_text && maxCharLength != 0)
+	if (!isNull && retImpureDesc->dsc_dtype == dtype_text && maxCharLength != 0)
 	{
 		// Data in the message buffer can be in a padded Firebird format or in an application-defined format with real length.
 		// API provides no way to distinguish these cases so we must use some heuristics:
 		// perform the adjustment only if the data length matches the length that would be expected in the padded format.
 
-		const CharSet* charSet = INTL_charset_lookup(tdbb, retDesc->getCharSet());
+		const CharSet* charSet = INTL_charset_lookup(tdbb, retImpureDesc->getCharSet());
 
-		if (charSet->isMultiByte() && maxCharLength * charSet->maxBytesPerChar() == retDesc->dsc_length)
+		if (charSet->isMultiByte() && maxCharLength * charSet->maxBytesPerChar() == retImpureDesc->dsc_length)
 		{
 			Firebird::HalfStaticArray<UCHAR, BUFFER_SMALL> buffer;
 
-			retDesc->dsc_length = charSet->substring(retDesc->dsc_length, retDesc->dsc_address,
-				retDesc->dsc_length, buffer.getBuffer(retDesc->dsc_length), 0,
+			retImpureDesc->dsc_length = charSet->substring(retImpureDesc->dsc_length, retImpureDesc->dsc_address,
+				retImpureDesc->dsc_length, buffer.getBuffer(retImpureDesc->dsc_length), 0,
 				maxCharLength);
 		}
 	}

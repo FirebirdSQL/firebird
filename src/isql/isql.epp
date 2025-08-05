@@ -7147,7 +7147,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 	unsigned dtype = var->type;		// may be modified by print_item_blob()
 
-	auto printWrapper = [&](const IsqlVar* var, const unsigned length, bool firstInList = true)
+	auto printWrapper = [&](const IsqlVar* var, const unsigned length, bool firstInList = true) -> void
 	{
 		auto dtype = var->type;
 		const int dscale = var->scale;
@@ -7556,12 +7556,16 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 					}
 
 					if (ISQL_errmsg(fbStatus))
-						return ps_ERR;
+					{
+						snprintf(d, sizeof(d), convErr);
+					}
+					else
+					{
+						snprintf(d, sizeof(d), "%4.4d-%2.2d-%2.2d %2.2d:%2.2d:%2.2d.%4.4d %s",
+							year, month, day, hours, minutes, seconds, fractions, timeZone);
 
-					snprintf(d, sizeof(d), "%4.4d-%2.2d-%2.2d %2.2d:%2.2d:%2.2d.%4.4d %s",
-						year, month, day, hours, minutes, seconds, fractions, timeZone);
-
-					snprintf(p, bufSize, "%-*.*s ", length, length, d);
+						snprintf(p, bufSize, "%-*.*s ", length, length, d);
+					}
 
 					if (setValues.List)
 						isqlGlob.printf("%s%s", d, NEWLINE);
@@ -7603,12 +7607,16 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 					}
 
 					if (ISQL_errmsg(fbStatus))
-						return ps_ERR;
+					{
+						snprintf(d, sizeof(d), convErr);
+					}
+					else
+					{
+						snprintf(d, sizeof(d), "%2.2d:%2.2d:%2.2d.%4.4d %s",
+							hours, minutes, seconds, fractions, timeZone);
 
-					snprintf(d, sizeof(d), "%2.2d:%2.2d:%2.2d.%4.4d %s",
-						hours, minutes, seconds, fractions, timeZone);
-
-					snprintf(p, bufSize, "%-*.*s ", length, length, d);
+						snprintf(p, bufSize, "%-*.*s ", length, length, d);
+					}
 
 					if (setValues.List)
 						isqlGlob.printf("%s%s", d, NEWLINE);
@@ -7952,7 +7960,7 @@ static processing_state print_line(Firebird::IMessageMetadata* message, UCHAR* b
 			{
 				// Save all the blob vars and print them at the end
 				// CVC: If varnum reaches 20, we must print an error instead of crashing.
-				const int rc = print_item(&p, &var, pad[i]);
+				print_item(&p, &var, pad[i]);
 
 				if ((var.hasBlob || var.hasBlobSubfields) && varnum < maxblob)
 					varlist[varnum++] = var;
