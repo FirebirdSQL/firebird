@@ -18,7 +18,7 @@ FB_IMPL_MSG_NO_SYMBOL(FBTRACEMGR, 17, "  -SE[RVICE]  <string>                  S
 FB_IMPL_MSG_NO_SYMBOL(FBTRACEMGR, 18, "  -U[SER]     <string>                  User name")
 FB_IMPL_MSG_NO_SYMBOL(FBTRACEMGR, 19, "  -P[ASSWORD] <string>                  Password")
 FB_IMPL_MSG_NO_SYMBOL(FBTRACEMGR, 20, "  -FE[TCH]    <string>                  Fetch password from file")
-FB_IMPL_MSG_NO_SYMBOL(FBTRACEMGR, 21, "  -T[RUSTED]  <string>                  Force trusted authentication")
+FB_IMPL_MSG_NO_SYMBOL(FBTRACEMGR, 21, "  -T[RUSTED]                            Force trusted authentication")
 FB_IMPL_MSG_NO_SYMBOL(FBTRACEMGR, 22, "Examples:")
 FB_IMPL_MSG_NO_SYMBOL(FBTRACEMGR, 23, "  fbtracemgr -SE remote_host:service_mgr -USER SYSDBA -PASS masterkey -LIST")
 FB_IMPL_MSG_NO_SYMBOL(FBTRACEMGR, 24, "  fbtracemgr -SE service_mgr -START -NAME my_trace -CONFIG my_cfg.txt")

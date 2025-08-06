@@ -254,6 +254,7 @@
     <ClCompile Include="..\..\..\src\utilities\install\install_client.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\..\src\utilities\install\install_nt.h" />
     <ClInclude Include="..\..\..\src\utilities\install\install_proto.h" />
   </ItemGroup>
   <ItemGroup>

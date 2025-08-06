@@ -298,7 +298,7 @@ public:
 	unsigned makeOffsets();
 
 private:
-	[[noreturn]] void raiseIndexError(CheckStatusWrapper* status, unsigned index, const char* method) const
+	void raiseIndexError(CheckStatusWrapper* status, unsigned index, const char* method) const
 	{
 		(Arg::Gds(isc_invalid_index_val) <<
 		 Arg::Num(index) << (string("IMessageMetadata::") + method)).copyTo(status);

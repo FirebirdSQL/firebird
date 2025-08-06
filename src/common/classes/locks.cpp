@@ -25,10 +25,6 @@
  *  Contributor(s): ______________________________________.
  */
 
-#ifndef __MINGW32__
-#define _WIN32_WINNT 0x0403
-#endif
-
 #include "firebird.h"
 
 #include "../../common/classes/locks.h"

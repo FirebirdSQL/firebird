@@ -41,9 +41,9 @@ namespace
 	Firebird::SimpleFactory<Auth::WinSspiClient> clientFactory;
 	Firebird::SimpleFactory<Auth::WinSspiServer> serverFactory;
 
-	const char* plugName = "Win_Sspi";
+	constexpr const char* plugName = "Win_Sspi";
 
-	void makeDesc(SecBufferDesc& d, SecBuffer& b, FB_SIZE_T len, void* p)
+	void makeDesc(SecBufferDesc& d, SecBuffer& b, FB_SIZE_T len, void* p) noexcept
 	{
 		b.BufferType = SECBUFFER_TOKEN;
 		b.cbBuffer = len;
@@ -57,7 +57,7 @@ namespace
 		ToType getProc(HINSTANCE lib, const char* entry)
 	{
 		FARPROC rc = GetProcAddress(lib, entry);
-		if (! rc)
+		if (!rc)
 		{
 			LongJump::raise();
 		}
@@ -70,7 +70,7 @@ namespace Auth {
 
 static thread_local bool legacySSP = false;
 
-void setLegacySSP(bool value)
+void setLegacySSP(bool value) noexcept
 {
 	legacySSP = value;
 }
@@ -78,13 +78,13 @@ void setLegacySSP(bool value)
 
 HINSTANCE AuthSspi::library = 0;
 
-bool AuthSspi::initEntries()
+bool AuthSspi::initEntries() noexcept
 {
-	if (! library)
+	if (!library)
 	{
 		library = LoadLibrary("secur32.dll");
 	}
-	if (! library)
+	if (!library)
 	{
 		return false;
 	}
@@ -136,7 +136,7 @@ AuthSspi::~AuthSspi()
 	}
 }
 
-const AuthSspi::Key* AuthSspi::getKey() const
+const AuthSspi::Key* AuthSspi::getKey() const noexcept
 {
 	if (sessionKey.hasData())
 		return &sessionKey;
@@ -152,6 +152,7 @@ bool AuthSspi::checkAdminPrivilege()
 	{
 		return false;
 	}
+	fb_assert(spc.AccessToken);
 
 	// Query required buffer size
 	DWORD token_len = 0;
@@ -187,7 +188,6 @@ bool AuthSspi::checkAdminPrivilege()
 	bool matched = false;
 	char groupName[256];
 	char domainName[256];
-	DWORD dwAcctName = 1, dwDomainName = 1;
 	SID_NAME_USE snu = SidTypeUnknown;
 
 	groupNames.clear();
@@ -200,8 +200,9 @@ bool AuthSspi::checkAdminPrivilege()
 		if ((ptg->Groups[i].Attributes & SE_GROUP_ENABLED) &&
 			!(ptg->Groups[i].Attributes & SE_GROUP_USE_FOR_DENY_ONLY))
 		{
-			DWORD dwSize = 256;
-			if (LookupAccountSid(NULL, ptg->Groups[i].Sid, groupName, &dwSize, domainName, &dwSize, &snu) &&
+			DWORD dwGroupName = sizeof(groupName);
+			DWORD dwDomainName = sizeof(domainName);
+			if (LookupAccountSid(NULL, ptg->Groups[i].Sid, groupName, &dwGroupName, domainName, &dwDomainName, &snu) &&
 				domainName[0] && strcmp(domainName, "NT AUTHORITY"))
 			{
 				string sumName = domainName;
@@ -246,7 +247,7 @@ bool AuthSspi::request(AuthSspi::DataHolder& data)
 
 	ULONG fContextAttr = 0;
 
-	SECURITY_STATUS x = fInitializeSecurityContext(
+	const SECURITY_STATUS x = fInitializeSecurityContext(
 		&secHndl, hasContext ? &ctxtHndl : 0, 0, 0, 0, SECURITY_NATIVE_DREP,
 		hasContext ? &inputDesc : 0, 0, &ctxtHndl, &outputDesc, &fContextAttr, &timeOut);
 
@@ -308,7 +309,7 @@ bool AuthSspi::accept(AuthSspi::DataHolder& data)
 	ULONG fContextAttr = 0;
 	SecPkgContext_Names name;
 	SecPkgContext_SessionKey key;
-	SECURITY_STATUS x = fAcceptSecurityContext(
+	const SECURITY_STATUS x = fAcceptSecurityContext(
 		&secHndl, hasContext ? &ctxtHndl : 0, &inputDesc, 0,
 		SECURITY_NATIVE_DREP, &ctxtHndl, &outputDesc,
 		&fContextAttr, &timeOut);

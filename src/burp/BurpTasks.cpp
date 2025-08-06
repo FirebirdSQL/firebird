@@ -106,7 +106,7 @@ public:
 
 	~SimpleGblHolder()
 	{
-		BurpGlobals* gbl = BurpGlobals::getSpecific();
+		const BurpGlobals* gbl = BurpGlobals::getSpecific();
 
 		if (m_prev != gbl)
 			BurpGlobals::restoreSpecific();
@@ -407,7 +407,7 @@ IOBuffer* BackupRelationTask::renewBuffer(BurpGlobals* tdgbl)
 
 void BackupRelationTask::releaseBuffer(Item& item)
 {
-	BurpGlobals* tdgbl = item.m_gbl;
+	const BurpGlobals* tdgbl = item.m_gbl;
 	IOBuffer* oldBuf = item.m_buffer;
 
 	fb_assert(tdgbl->mvol_io_buffer == oldBuf->getBuffer());
@@ -452,7 +452,7 @@ IOBuffer* BackupRelationTask::getDirtyBuffer()
 
 		if (m_dirtyBuffers.hasData())
 		{
-			const FB_SIZE_T idx = 0;
+			constexpr FB_SIZE_T idx = 0;
 			buf = m_dirtyBuffers[idx];
 			m_dirtyBuffers.remove(idx);
 		}
@@ -601,8 +601,8 @@ bool BackupRelationTask::fileWriter(Item& item)
 			break;
 
 		const UCHAR* p = buf->getBuffer();
-		FB_SIZE_T recs = buf->getRecs();
-		FB_SIZE_T len = (recs > 0) ? buf->getUsed() : buf->getSize();
+		const FB_SIZE_T recs = buf->getRecs();
+		const FB_SIZE_T len = (recs > 0) ? buf->getUsed() : buf->getSize();
 
 		// very inefficient !
 		MVOL_write_block(tdgbl, p, len);
@@ -1060,7 +1060,7 @@ IOBuffer* RestoreRelationTask::renewBuffer(BurpGlobals* tdgbl)
 
 void RestoreRelationTask::releaseBuffer(Item& item)
 {
-	BurpGlobals* tdgbl = item.m_gbl;
+	const BurpGlobals* tdgbl = item.m_gbl;
 	IOBuffer* oldBuf = item.m_buffer;
 
 	if (!oldBuf)
@@ -1139,7 +1139,7 @@ const char* RestoreRelationTask::ExcReadDone::what() const noexcept
 	return "RestoreRelationTask::ExcReadDone";
 }
 
-void RestoreRelationTask::ExcReadDone::raise()
+[[noreturn]] void RestoreRelationTask::ExcReadDone::raise()
 {
 	throw ExcReadDone();
 }

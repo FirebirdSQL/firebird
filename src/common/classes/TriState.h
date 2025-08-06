@@ -34,71 +34,71 @@ namespace Firebird {
 class TriState
 {
 public:
-	TriState();
-	explicit TriState(bool input);
+	TriState() noexcept;
+	explicit TriState(bool input) noexcept;
 
-	bool operator ==(const TriState& o) const
+	bool operator ==(const TriState& o) const noexcept
 	{
 		return m_init == o.m_init && m_val == o.m_val;
 	}
 
-	bool operator !=(const TriState& o) const
+	bool operator !=(const TriState& o) const noexcept
 	{
 		return m_init != o.m_init || m_val != o.m_val;
 	}
 
-	void operator=(bool input);
+	void operator=(bool input) noexcept;
 
-	bool asBool() const;
-	bool valueOr(bool value) const;
-	void reset();
-	bool assignOnce(bool input);
-	bool isUnknown() const;
-	bool isAssigned() const;
-	bool toggle();
+	bool asBool() const noexcept;
+	bool valueOr(bool value) const noexcept;
+	void reset() noexcept;
+	bool assignOnce(bool input) noexcept;
+	bool isUnknown() const noexcept;
+	bool isAssigned() const noexcept;
+	bool toggle() noexcept;
 
 private:
 	bool m_init, m_val;
 };
 
 // The var is left uninitialized.
-inline TriState::TriState()
+inline TriState::TriState() noexcept
 	: m_init(false), m_val(false)
 {
 }
 
 // The var is initialized to the explicit value.
-inline TriState::TriState(bool input)
+inline TriState::TriState(bool input) noexcept
 	: m_init(true), m_val(input)
 {
 }
 
 // The var receives a T/F value.
-inline void TriState::operator=(bool input)
+inline void TriState::operator=(bool input) noexcept
 {
 	m_init = true;
 	m_val = input;
 }
 
 // The var is coerced to a T/F value as result.
-inline bool TriState::asBool() const
+inline bool TriState::asBool() const noexcept
 {
 	return m_init && m_val;
 }
 
-inline bool TriState::valueOr(bool otherValue) const
+inline bool TriState::valueOr(bool otherValue) const noexcept
 {
 	return m_init ? m_val : otherValue;
 }
 
 // The var is returned to its uninitialized state.
-inline void TriState::reset()
+inline void TriState::reset() noexcept
 {
 	m_init = m_val = false;
 }
 
 // The assignment succeeds only if the var is uninitialized.
-inline bool TriState::assignOnce(bool input)
+inline bool TriState::assignOnce(bool input) noexcept
 {
 	if (m_init)
 		return false;
@@ -109,19 +109,19 @@ inline bool TriState::assignOnce(bool input)
 }
 
 // Tests whether the var is uninitialized.
-inline bool TriState::isUnknown() const
+inline bool TriState::isUnknown() const noexcept
 {
 	return !m_init;
 }
 
 // Tests whether the var is initialized.
-inline bool TriState::isAssigned() const
+inline bool TriState::isAssigned() const noexcept
 {
 	return m_init;
 }
 
 // The var is toggled between T and F only if it's already initialized.
-inline bool TriState::toggle()
+inline bool TriState::toggle() noexcept
 {
 	if (!m_init)
 		return false;

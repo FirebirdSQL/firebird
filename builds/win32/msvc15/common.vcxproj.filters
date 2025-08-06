@@ -623,5 +623,8 @@
     <ClInclude Include="..\..\..\src\include\firebird\impl\dsc_pub.h">
       <Filter>headers</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\include\fb_exception.h">
+      <Filter>headers</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

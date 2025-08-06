@@ -236,6 +236,7 @@
     <ClInclude Include="..\..\..\src\common\utils_proto.h" />
     <ClInclude Include="..\..\..\src\common\xdr.h" />
     <ClInclude Include="..\..\..\src\common\xdr_proto.h" />
+    <ClInclude Include="..\..\..\src\include\fb_exception.h" />
     <ClInclude Include="..\..\..\src\include\firebird\impl\dsc_pub.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

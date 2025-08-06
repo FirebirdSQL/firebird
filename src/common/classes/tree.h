@@ -45,7 +45,7 @@ namespace Firebird {
 // Be careful while changing this expression. N=2 must always cause merge
 
 // 2009-04 Please do not make this function static, it will break xlC build!
-inline bool NEED_MERGE(FB_SIZE_T current_count, FB_SIZE_T page_count)
+inline bool NEED_MERGE(FB_SIZE_T current_count, FB_SIZE_T page_count) noexcept
 {
 	return current_count * 4 / 3 <= page_count;
 }
@@ -57,12 +57,12 @@ inline bool NEED_MERGE(FB_SIZE_T current_count, FB_SIZE_T page_count)
 // they are modified less often, but are searched much more often.
 //
 // Values below are fine-tuned for AMD Athlon 64 3000+ with DDR400 memory.
-const int LEAF_PAGE_SIZE = 400;
-const int NODE_PAGE_SIZE = 3000;
+inline constexpr int LEAF_PAGE_SIZE = 400;
+inline constexpr int NODE_PAGE_SIZE = 3000;
 
 // This is maximum level of tree nesting. 10^9 elements for binary tree case
 // should be more than enough. No checks are performed in code against overflow of this value
-const int MAX_TREE_LEVEL = 30;
+inline constexpr int MAX_TREE_LEVEL = 30;
 
 enum LocType { locEqual, locLess, locGreat, locGreatEqual, locLessEqual };
 
@@ -98,8 +98,8 @@ template <typename Value, typename Key = Value,
 		  typename Cmp = DefaultComparator<Key> >
 class BePlusTree
 {
-	static const FB_SIZE_T LEAF_COUNT = LEAF_PAGE_SIZE / sizeof(Value);
-	static const FB_SIZE_T NODE_COUNT = NODE_PAGE_SIZE / sizeof(void*);
+	static constexpr FB_SIZE_T LEAF_COUNT = LEAF_PAGE_SIZE / sizeof(Value);
+	static constexpr FB_SIZE_T NODE_COUNT = NODE_PAGE_SIZE / sizeof(void*);
 public:
 	explicit BePlusTree(Firebird::MemoryPool& _pool)
 		: pool(&_pool), level(0), defaultAccessor(this)
@@ -284,13 +284,12 @@ private:
     class ItemList : public SortedVector<Value, LEAF_COUNT, Key, KeyOfValue, Cmp>
 	{
 	public:
-		NodeList* parent;
+		NodeList* parent = nullptr;
 		ItemList* next;
 		ItemList* prev;
 
 		// Adds newly created item to doubly-linked list
 		ItemList(ItemList* items)
-			: parent(nullptr)
 		{
 			if ((next = items->next))
 				next->prev = this;
@@ -298,16 +297,16 @@ private:
 			items->next = this;
 		}
 		// Create first item in the linked list
-		ItemList() : parent(nullptr), next(nullptr), prev(nullptr) {}
+		ItemList() noexcept : next(nullptr), prev(nullptr) {}
 	};
 
 	union NodePtr
 	{
-		NodePtr() : items(nullptr) {}
+		NodePtr() noexcept : items(nullptr) {}
 		NodePtr(ItemList* p) : items(p) {}
 		NodePtr(NodeList* p) : nodes(p) {}
 
-		operator bool() const { return items != nullptr; }
+		operator bool() const noexcept { return items != nullptr; }
 
 		ItemList* items;
 		NodeList* nodes;
@@ -318,7 +317,6 @@ private:
 	public:
 		// Adds newly created item to the doubly-linked list
 		NodeList(NodeList* items)
-			: parent(nullptr)
 		{
 			if ((next = items->next))
 				next->prev = this;
@@ -326,10 +324,10 @@ private:
 			items->next = this;
 		}
 		// Create first item in the linked list
-		NodeList() : parent(nullptr), next(nullptr), prev(nullptr) {}
+		NodeList() noexcept : next(nullptr), prev(nullptr) {}
 
 		int level;
-		NodeList *parent;
+		NodeList *parent = nullptr;
 		NodeList *next, *prev;
 		static const Key& generate(const void* sender, NodePtr item)
 		{
@@ -410,7 +408,7 @@ public:
 			case locLessEqual:
 				if (found)
 					return true;
-				// NOTE: fall into next case statement
+				[[fallthrough]];
 			case locLess:
 				if (curPos == 0)
 				{
@@ -738,7 +736,7 @@ bool BePlusTree<Value, Key, KeyOfValue, Cmp>::add(const Value& item, Accessor* a
 	// MAP_NEW_PAGE means that element is on new page
 	// In case of low memory condition we use this data to recover to innocent state
 	FB_SIZE_T recovery_map[MAX_TREE_LEVEL];
-	const FB_SIZE_T MAP_NEW_PAGE = ~((FB_SIZE_T) 0);
+	constexpr FB_SIZE_T MAP_NEW_PAGE = ~((FB_SIZE_T) 0);
 
 	if (pos == LEAF_COUNT)
 	{

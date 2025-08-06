@@ -43,10 +43,9 @@
 namespace Firebird
 {
 
-const int LOCK_WRITER_OFFSET = 50000;
+inline constexpr int LOCK_WRITER_OFFSET = 50000;
 
 // Should work pretty fast if atomic operations are native.
-// This is not the case for Win95
 class RWLock : public Reasons
 {
 private:
@@ -72,10 +71,6 @@ private:
 			system_call_failed::raise("CreateEvent");
 	}
 
-	// Forbid copying
-	RWLock(const RWLock&);
-	RWLock& operator=(const RWLock&);
-
 public:
 	RWLock() { init(); }
 	explicit RWLock(Firebird::MemoryPool&) { init(); }
@@ -86,12 +81,18 @@ public:
 		if (writers_event && !CloseHandle(writers_event))
 			system_call_failed::raise("CloseHandle");
 	}
+
+	// Forbid copying
+	RWLock(const RWLock&) = delete;
+	RWLock& operator=(const RWLock&) = delete;
+
 	// Returns negative value if writer is active.
 	// Otherwise returns a number of readers
-	LONG getState() const
+	LONG getState() const noexcept
 	{
 		return lock.value();
 	}
+
 	void unblockWaiting()
 	{
 		if (blockedWriters.value())
@@ -108,6 +109,7 @@ public:
 			}
 		}
 	}
+
 	bool tryBeginRead(const char* aReason)
 	{
 		if (lock.value() < 0)
@@ -122,6 +124,7 @@ public:
 			unblockWaiting();
 		return false;
 	}
+
 	bool tryBeginWrite(const char* aReason)
 	{
 		if (lock.value())
@@ -136,6 +139,7 @@ public:
 			unblockWaiting();
 		return false;
 	}
+
 	void beginRead(const char* aReason)
 	{
 		if (!tryBeginRead(aReason))
@@ -155,6 +159,7 @@ public:
 			}
 		}
 	}
+
 	void beginWrite(const char* aReason)
 	{
 		if (!tryBeginWrite(aReason))
@@ -168,6 +173,7 @@ public:
 			--blockedWriters;
 		}
 	}
+
 	void endRead()
 	{
 		if (--lock == 0)
@@ -202,10 +208,6 @@ private:
 	AtomicCounter lockCounter;
 #endif
 
-	// Forbid copying
-	RWLock(const RWLock&);
-	RWLock& operator=(const RWLock&);
-
 	void init()
 	{
 		int code;
@@ -238,6 +240,10 @@ public:
 		if (const int code = pthread_rwlock_destroy(&lock))
 			system_call_failed::raise("pthread_rwlock_destroy", code);
 	}
+
+	// Forbid copying
+	RWLock(const RWLock&) = delete;
+	RWLock& operator=(const RWLock&) = delete;
 
 	void beginRead(const char* aReason)
 	{
@@ -342,6 +348,10 @@ public:
 		release();
 	}
 
+	// Forbid copying
+	ReadLockGuard(const ReadLockGuard&) = delete;
+	ReadLockGuard& operator=(const ReadLockGuard&) = delete;
+
 	void release()
 	{
 		if (lock)
@@ -352,10 +362,6 @@ public:
 	}
 
 private:
-	// Forbid copying
-	ReadLockGuard(const ReadLockGuard&);
-	ReadLockGuard& operator=(const ReadLockGuard&);
-
 	RWLock* lock;
 };
 
@@ -381,6 +387,10 @@ public:
 		release();
 	}
 
+	// Forbid copying
+	WriteLockGuard(const WriteLockGuard&) = delete;
+	WriteLockGuard& operator=(const WriteLockGuard&) = delete;
+
 	void release()
 	{
 		if (lock)
@@ -391,10 +401,6 @@ public:
 	}
 
 private:
-	// Forbid copying
-	WriteLockGuard(const WriteLockGuard&);
-	WriteLockGuard& operator=(const WriteLockGuard&);
-
 	RWLock* lock;
 };
 

@@ -29,12 +29,13 @@
 #ifndef INCLUDE_FB_STRING_H
 #define INCLUDE_FB_STRING_H
 
+#include "firebird.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
 #include <utility>
 
-#include "firebird.h"
 #include "fb_types.h"
 #include "fb_exception.h"
 #include "../common/classes/alloc.h"

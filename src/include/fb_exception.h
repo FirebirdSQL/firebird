@@ -97,6 +97,8 @@ public:
 
 	virtual ~status_exception() noexcept;
 
+	status_exception& operator=(const status_exception&) = delete;
+
 	virtual void stuffByException(StaticStatusVector& status_vector) const noexcept;
 	virtual const char* what() const noexcept;
 
@@ -116,8 +118,6 @@ protected:
 private:
 	ISC_STATUS* m_status_vector;
 	ISC_STATUS_ARRAY m_buffer;
-
-	status_exception& operator=(const status_exception&);
 };
 
 // Parameter syscall later in both system_error & system_call_failed

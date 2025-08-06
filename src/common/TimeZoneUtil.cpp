@@ -70,17 +70,17 @@ namespace
 			unicodeName.push(0);
 		}
 
-		const char* getAsciiName() const
+		const char* getAsciiName() const noexcept
 		{
 			return asciiName.c_str();
 		}
 
-		const UChar* getUnicodeName() const
+		const UChar* getUnicodeName() const noexcept
 		{
 			return unicodeName.begin();
 		}
 
-		IcuCalendarWrapper getCalendar(const UnicodeUtil::ConversionICU& icuLib, UErrorCode* err = nullptr) const
+		IcuCalendarWrapper getCalendar(const UnicodeUtil::ConversionICU& icuLib, UErrorCode* err = nullptr) const noexcept
 		{
 			auto calendar = icuCachedCalendar.exchange(nullptr);
 			UErrorCode internalErr = U_ZERO_ERROR;
@@ -101,9 +101,9 @@ namespace
 //-------------------------------------
 
 static const TimeZoneDesc* getDesc(USHORT timeZone);
-static inline bool isOffset(USHORT timeZone) noexcept;
-static inline SSHORT offsetZoneToDisplacement(USHORT timeZone) noexcept;
-static inline USHORT displacementToOffsetZone(SSHORT displacement) noexcept;
+static inline constexpr bool isOffset(USHORT timeZone) noexcept;
+static inline constexpr SSHORT offsetZoneToDisplacement(USHORT timeZone) noexcept;
+static inline constexpr USHORT displacementToOffsetZone(SSHORT displacement) noexcept;
 static int parseNumber(const char*& p, const char* end) noexcept;
 static void skipSpaces(const char*& p, const char* end) noexcept;
 
@@ -240,7 +240,7 @@ namespace
 
 						if (end - p >= 2)
 						{
-							unsigned count = isc_portable_integer(p, 2);
+							const unsigned count = isc_portable_integer(p, 2);
 
 							// Our main criteria to choose the file or the builtin data is the count
 							// of entries. TZ database version is the second, as new version could
@@ -391,7 +391,7 @@ USHORT TimeZoneUtil::getSystemTimeZone()
 	{
 		try
 		{
-			USHORT id = parse(str, len, strictParse);
+			const USHORT id = parse(str, len, strictParse);
 			cachedTimeZoneId = id;
 			cachedTimeZoneNameLen = len;
 			return cachedTimeZoneId;
@@ -413,16 +413,16 @@ USHORT TimeZoneUtil::getSystemTimeZone()
 		return cachedTimeZoneId;	// GMT
 	}
 
-	int32_t displacement = (icuLib.ucalGet(icuCalendar, UCAL_ZONE_OFFSET, &icuErrorCode) +
+	const int32_t displacement = (icuLib.ucalGet(icuCalendar, UCAL_ZONE_OFFSET, &icuErrorCode) +
 		icuLib.ucalGet(icuCalendar, UCAL_DST_OFFSET, &icuErrorCode)) / U_MILLIS_PER_MINUTE;
 
 	icuLib.ucalClose(icuCalendar);
 
 	if (!U_FAILURE(icuErrorCode))
 	{
-		int sign = displacement < 0 ? -1 : 1;
-		unsigned tzh = (unsigned) abs(int(displacement / 60));
-		unsigned tzm = (unsigned) abs(int(displacement % 60));
+		const int sign = displacement < 0 ? -1 : 1;
+		const unsigned tzh = (unsigned) abs(int(displacement / 60));
+		const unsigned tzm = (unsigned) abs(int(displacement % 60));
 		cachedTimeZoneId = makeFromOffset(sign, tzh, tzm);
 	}
 	else
@@ -466,10 +466,10 @@ USHORT TimeZoneUtil::parse(const char* str, unsigned strLen, bool strict)
 
 	if (p < end && (*p == '-' || *p == '+'))
 	{
-		int sign = *p++ == '-' ? -1 : 1;
+		const int sign = *p++ == '-' ? -1 : 1;
 		skipSpaces(p, end);
 
-		int tzh = parseNumber(p, end);
+		const int tzh = parseNumber(p, end);
 
 		if (tzh >= 0)
 		{
@@ -482,7 +482,7 @@ USHORT TimeZoneUtil::parse(const char* str, unsigned strLen, bool strict)
 			{
 				++p;
 				skipSpaces(p, end);
-				int tzm = parseNumber(p, end);
+				const int tzm = parseNumber(p, end);
 
 				if (tzm >= 0)
 				{
@@ -522,7 +522,7 @@ USHORT TimeZoneUtil::parseRegion(const char* str, unsigned strLen)
 		++str;
 	}
 
-	unsigned len = str - start;
+	const unsigned len = str - start;
 
 	skipSpaces(str, end);
 
@@ -556,7 +556,7 @@ unsigned TimeZoneUtil::format(char* buffer, size_t bufferSize, USHORT timeZone, 
 			if (offset < 0)
 				offset = -offset;
 
-			int minutes = offset % 60;
+			const int minutes = offset % 60;
 			offset /= 60;
 			p += fb_utils::snprintf(p, bufferSize - (p - buffer), "%02d:%02d", offset, minutes);
 		}
@@ -583,7 +583,7 @@ unsigned TimeZoneUtil::format(char* buffer, size_t bufferSize, USHORT timeZone, 
 }
 
 // Returns if the offsets are valid.
-bool TimeZoneUtil::isValidOffset(int sign, unsigned tzh, unsigned tzm)
+bool TimeZoneUtil::isValidOffset(int sign, unsigned tzh, unsigned tzm) noexcept
 {
 	fb_assert(sign >= -1 && sign <= 1);
 	return tzm <= 59 && (tzh < 14 || (tzh == 14 && tzm == 0));
@@ -993,7 +993,7 @@ ISC_TIMESTAMP TimeZoneUtil::timeTzToTimeStamp(const ISC_TIME_TZ& timeTz, Callbac
 {
 	// SQL: source => TIMESTAMP WITH TIME ZONE => TIMESTAMP WITHOUT TIME ZONE
 
-	ISC_TIMESTAMP_TZ tsTz = timeTzToTimeStampTz(timeTz, cb);
+	const ISC_TIMESTAMP_TZ tsTz = timeTzToTimeStampTz(timeTz, cb);
 
 	return timeStampTzToTimeStamp(tsTz, cb->getSessionTimeZone());
 }
@@ -1077,8 +1077,8 @@ TimeZoneRuleIterator::TimeZoneRuleIterator(USHORT id, const ISC_TIMESTAMP_TZ& aF
 		status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_setMillis.");
 	}
 
-	UBool hasInitial = icuLib.ucalGetTimeZoneTransitionDate(icuCalendar, UCAL_TZ_TRANSITION_PREVIOUS_INCLUSIVE,
-		&icuDate, &icuErrorCode);
+	const UBool hasInitial = icuLib.ucalGetTimeZoneTransitionDate(icuCalendar,
+		UCAL_TZ_TRANSITION_PREVIOUS_INCLUSIVE, &icuDate, &icuErrorCode);
 
 	if (U_FAILURE(icuErrorCode))
 	{
@@ -1154,20 +1154,20 @@ static const TimeZoneDesc* getDesc(USHORT timeZone)
 }
 
 // Returns true if the time zone is offset-based or false if region-based.
-static inline bool isOffset(USHORT timeZone) noexcept
+static inline constexpr bool isOffset(USHORT timeZone) noexcept
 {
 	return timeZone <= ONE_DAY * 2;
 }
 
 // Gets the displacement from a offset-based time zone id.
-static inline SSHORT offsetZoneToDisplacement(USHORT timeZone) noexcept
+static inline constexpr SSHORT offsetZoneToDisplacement(USHORT timeZone) noexcept
 {
 	fb_assert(isOffset(timeZone));
 
 	return (SSHORT) (int(timeZone) - ONE_DAY);
 }
 
-static inline USHORT displacementToOffsetZone(SSHORT displacement) noexcept
+static inline constexpr USHORT displacementToOffsetZone(SSHORT displacement) noexcept
 {
 	return (USHORT)(int(displacement) + ONE_DAY);
 }

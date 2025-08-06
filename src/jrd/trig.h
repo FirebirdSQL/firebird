@@ -69,7 +69,7 @@ struct gen
 
 /* generators needed by the system triggers */
 // Keep in sync with constants.h
-static const Jrd::gen generators[] =
+static inline constexpr Jrd::gen generators[] =
 {
 	{ "RDB$SECURITY_CLASS", 1, NULL, ODS_13_0 },
 	{ "SQL$DEFAULT", 2, NULL, ODS_13_0 },

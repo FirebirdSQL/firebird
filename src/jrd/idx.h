@@ -30,7 +30,7 @@
 /* Indices to be created */
 
 /* Maximum number of segments in any existing system index */
-const int  INI_IDX_MAX_SEGMENTS		= 4;
+inline constexpr int INI_IDX_MAX_SEGMENTS = 4;
 
 struct ini_idx_t
 {
@@ -58,7 +58,7 @@ using Jrd::idx_timestamp_tz;
 #define INDEX(id, rel, unique, count, ods) {(id), (UCHAR) (rel), (unique), (count), (ods), {
 #define SEGMENT(fld, type) {(fld), (type)}
 
-static const struct ini_idx_t indices[] =
+static inline constexpr struct ini_idx_t indices[] =
 {
 	// define index RDB$INDEX_0 for RDB$RELATIONS unique RDB$SCHEMA_NAME, RDB$RELATION_NAME;
 	INDEX(0, rel_relations, idx_unique, 2, ODS_14_0)

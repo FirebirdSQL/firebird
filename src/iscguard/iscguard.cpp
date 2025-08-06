@@ -58,7 +58,7 @@ typedef void (__cdecl * LPFNREGCFG) (char *, short);
 // where the first of each pair is the control ID,
 // and the second is the context ID for a help topic,
 // which is used in the help file.
-static DWORD aMenuHelpIDs[] = {
+static constexpr DWORD aMenuHelpIDs[] = {
 	IDC_VERSION, ibs_guard_version,
 	IDC_LOG, ibs_guard_log,
 	IDC_LOCATION, ibs_server_directory,
@@ -71,7 +71,7 @@ static THREAD_ENTRY_DECLARE WINDOW_main(THREAD_ENTRY_PARAM);
 #ifdef NOT_USED_OR_REPLACED
 static void StartGuardian(HWND);
 #endif
-static bool parse_args(LPCSTR);
+static bool parse_args(LPCSTR) noexcept;
 
 THREAD_ENTRY_DECLARE start_and_watch_server(THREAD_ENTRY_PARAM);
 THREAD_ENTRY_DECLARE swap_icons(THREAD_ENTRY_PARAM);
@@ -160,7 +160,7 @@ int WINAPI WinMain(HINSTANCE hInstance,
 	return TRUE;
 }
 
-static bool parse_args(LPCSTR lpszArgs)
+static bool parse_args(LPCSTR lpszArgs) noexcept
 {
 /**************************************
 *
@@ -345,7 +345,7 @@ static THREAD_ENTRY_DECLARE WINDOW_main(THREAD_ENTRY_PARAM)
 		{
 			// If property sheet dialog is open
 			// Check if the message is property sheet dialog specific
-			BOOL bPSMsg = PropSheet_IsDialogMessage(hPSDlg, &message);
+			const BOOL bPSMsg = PropSheet_IsDialogMessage(hPSDlg, &message);
 
 			// Check if the property sheet dialog is still valid, if not destroy it
 			if (!PropSheet_GetCurrentPageHwnd(hPSDlg))
@@ -581,7 +581,7 @@ THREAD_ENTRY_DECLARE start_and_watch_server(THREAD_ENTRY_PARAM)
 
 	HANDLE procHandle = NULL;
 	bool done = true;
-	const UINT error_mode = SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX |
+	constexpr UINT error_mode = SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX |
 		SEM_NOOPENFILEERRORBOX | SEM_NOALIGNMENTFAULTEXCEPT;
 	SC_HANDLE hScManager = 0, hService = 0;
 
@@ -891,7 +891,7 @@ LRESULT CALLBACK GeneralPage(HWND hDlg, UINT unMsg, WPARAM /*wParam*/, LPARAM lP
 			char szWindowText[MAXPATHLEN];
 			char szFullPath[MAXPATHLEN];
 			int index = 0;
-			const int NCOLS = 3;
+			constexpr int NCOLS = 3;
 
 			// Display the number of times the server has been started by
 			//   this session of the guardian
@@ -1097,7 +1097,7 @@ static void write_log(int log_action, const char* buff)
  *                property sheet structure (log_entry) or to the Windows NT
  *                Event Log
  *****************************************************************************/
-	const size_t BUFF_SIZE = 512;
+	constexpr size_t BUFF_SIZE = 512;
 	char tmp_buff[BUFF_SIZE];
 
 	// Move to the end of the log_entry list

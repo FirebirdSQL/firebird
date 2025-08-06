@@ -87,7 +87,7 @@ Connection parameters switches :
   -U[SER]     <string>                  User name
   -P[ASSWORD] <string>                  Password
   -FE[TCH]    <string>                  Fetch password from file
-  -T[RUSTED]  <string>                  Force trusted authentication
+  -T[RUSTED]                            Force trusted authentication
 
 Also, it prints usage screen if run without parameters.
 

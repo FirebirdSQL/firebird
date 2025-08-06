@@ -26,25 +26,25 @@
 
 #include "../../jrd/constants.h"
 
-const int IN_SW_TRACE_START			= 1;
-const int IN_SW_TRACE_STOP			= 2;
-const int IN_SW_TRACE_SUSPEND		= 3;
-const int IN_SW_TRACE_RESUME		= 4;
-const int IN_SW_TRACE_LIST			= 5;
-const int IN_SW_TRACE_CONFIG		= 6;
-const int IN_SW_TRACE_NAME			= 7;
-const int IN_SW_TRACE_ID			= 8;
-const int IN_SW_TRACE_USERNAME		= 9;
-const int IN_SW_TRACE_PASSWORD		= 10;
-const int IN_SW_TRACE_SERVICE_NAME	= 11;
-const int IN_SW_TRACE_FETCH_PWD		= 12;
-const int IN_SW_TRACE_TRUSTED_AUTH	= 13;
-const int IN_SW_TRACE_VERSION		= 14;
-const int IN_SW_TRACE_ROLE			= 15;
+inline constexpr int IN_SW_TRACE_START			= 1;
+inline constexpr int IN_SW_TRACE_STOP			= 2;
+inline constexpr int IN_SW_TRACE_SUSPEND		= 3;
+inline constexpr int IN_SW_TRACE_RESUME			= 4;
+inline constexpr int IN_SW_TRACE_LIST			= 5;
+inline constexpr int IN_SW_TRACE_CONFIG			= 6;
+inline constexpr int IN_SW_TRACE_NAME			= 7;
+inline constexpr int IN_SW_TRACE_ID				= 8;
+inline constexpr int IN_SW_TRACE_USERNAME		= 9;
+inline constexpr int IN_SW_TRACE_PASSWORD		= 10;
+inline constexpr int IN_SW_TRACE_SERVICE_NAME	= 11;
+inline constexpr int IN_SW_TRACE_FETCH_PWD		= 12;
+inline constexpr int IN_SW_TRACE_TRUSTED_AUTH	= 13;
+inline constexpr int IN_SW_TRACE_VERSION		= 14;
+inline constexpr int IN_SW_TRACE_ROLE			= 15;
 
 
 // list of possible actions (services) for use with trace services
-static const struct Switches::in_sw_tab_t trace_action_in_sw_table [] =
+static inline constexpr struct Switches::in_sw_tab_t trace_action_in_sw_table [] =
 {
 	{IN_SW_TRACE_LIST,		isc_action_svc_trace_list,		"LIST", 	0, 0, 0, false,	false,	0,	1, NULL},
 	{IN_SW_TRACE_RESUME,	isc_action_svc_trace_resume,	"RESUME", 	0, 0, 0, false,	false,	0,	1, NULL},
@@ -57,7 +57,7 @@ static const struct Switches::in_sw_tab_t trace_action_in_sw_table [] =
 
 
 // list of actions (services) parameters
-static const struct Switches::in_sw_tab_t trace_option_in_sw_table [] =
+static inline constexpr struct Switches::in_sw_tab_t trace_option_in_sw_table [] =
 {
 	{IN_SW_TRACE_CONFIG,	isc_spb_trc_cfg,	"CONFIG", 	0, 0, 0, false,	false,	0,	1, NULL},
 	{IN_SW_TRACE_ID,		isc_spb_trc_id,		"ID",		0, 0, 0, false,	false,	0,	1, NULL},
@@ -66,7 +66,7 @@ static const struct Switches::in_sw_tab_t trace_option_in_sw_table [] =
 };
 
 // authentication switches, common for all utils (services)
-static const struct Switches::in_sw_tab_t trace_auth_in_sw_table [] =
+static inline constexpr struct Switches::in_sw_tab_t trace_auth_in_sw_table [] =
 {
 	{IN_SW_TRACE_FETCH_PWD,		0,	"FETCH_PASSWORD",		0, 0, 0, false,	false,	0,	2, NULL},
 	{IN_SW_TRACE_PASSWORD,		0,	PASSWORD_SWITCH,		0, 0, 0, false,	false,	0,	1, NULL},

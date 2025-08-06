@@ -73,11 +73,11 @@ private:
 	Routine routine;
 	Arg arg;
 public:
-	ThreadArgs(Routine r, Arg a) : routine(r), arg(a) { }
-	ThreadArgs(const ThreadArgs& t) : routine(t.routine), arg(t.arg) { }
+	ThreadArgs(Routine r, Arg a) noexcept : routine(r), arg(a) { }
+	ThreadArgs(const ThreadArgs& t) noexcept : routine(t.routine), arg(t.arg) { }
+	ThreadArgs& operator=(const ThreadArgs&) = delete;
+
 	void run() { routine(arg); }
-private:
-	ThreadArgs& operator=(const ThreadArgs&);
 };
 
 #ifdef __cplusplus

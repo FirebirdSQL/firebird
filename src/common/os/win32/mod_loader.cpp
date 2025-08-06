@@ -3,9 +3,6 @@
  *
  */
 
-// required to use activation context API structures
-#define _WIN32_WINNT 0x0501
-
 #include "firebird.h"
 #include "../../../common/dllinst.h"
 #include "../common/os/mod_loader.h"
