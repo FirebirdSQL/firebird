@@ -2580,6 +2580,9 @@ void CreateAlterFunctionNode::storeArgument(thread_db* tdbb, DsqlCompilerScratch
 
 		if (ARG.RDB$RELATION_NAME.NULL || ARG.RDB$FIELD_NAME.NULL)
 		{
+			if (!ARG.RDB$RELATION_NAME.NULL)
+				strcpy(ARG.RDB$RELATION_NAME, type->typeOfTable.object.c_str());
+
 			if (type->typeOfName.object.hasData())
 			{
 				ARG.RDB$FIELD_SOURCE_SCHEMA_NAME.NULL = FALSE;
