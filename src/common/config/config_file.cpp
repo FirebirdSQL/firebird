@@ -571,16 +571,14 @@ bool ConfigFile::substituteStandardDir(const String& from, String& to) const
 		unsigned code;
 		const char* name;
 	} dirs[] = {
-#define NMDIR(a) {Firebird::IConfigManager::a, "FB_"#a},
-		NMDIR(DIR_CONF)
-		NMDIR(DIR_SECDB)
-		NMDIR(DIR_PLUGINS)
-		NMDIR(DIR_UDF)
-		NMDIR(DIR_SAMPLE)
-		NMDIR(DIR_SAMPLEDB)
-		NMDIR(DIR_INTL)
-		NMDIR(DIR_MSG)
-#undef NMDIR
+		{Firebird::IConfigManager::DIR_CONF, "FB_dir_conf"},
+		{Firebird::IConfigManager::DIR_SECDB, "FB_dir_secdb"},
+		{Firebird::IConfigManager::DIR_PLUGINS, "FB_dir_plugins"},
+		{Firebird::IConfigManager::DIR_UDF, "FB_dir_udf"},
+		{Firebird::IConfigManager::DIR_SAMPLE, "FB_dir_sample"},
+		{Firebird::IConfigManager::DIR_SAMPLEDB, "FB_dir_sampledb"},
+		{Firebird::IConfigManager::DIR_INTL, "FB_dir_intl"},
+		{Firebird::IConfigManager::DIR_MSG, "FB_dir_msg"},
 		{Firebird::IConfigManager::DIR_COUNT, NULL}
 	};
 
