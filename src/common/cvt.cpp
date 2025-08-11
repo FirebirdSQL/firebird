@@ -2239,7 +2239,7 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 
 		case dtype_rowtype:
 			{
-				char* text = "ROWTYPE";	// TODO ROWTYPE: should we recursevily convert all subfields?
+				char* text = "ROWTYPE";
 
 				dsc intermediate;
 				intermediate.dsc_dtype = dtype_text;

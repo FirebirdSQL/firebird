@@ -736,7 +736,7 @@ void EVL_validate(thread_db* tdbb, const Item& item, const ItemInfo* itemInfo, d
 		Stack <dsc*> fromSubFields;
 		Stack <FieldInfo*> toFieldInfos;
 
-		fromSubFields.push(desc);	// TODO ROWTYPE: optimise those stacks, they are really slow
+		fromSubFields.push(desc);
 		toFieldInfos.push(&fieldInfo);
 
 		while (fromSubFields.hasData() && toFieldInfos.hasData())

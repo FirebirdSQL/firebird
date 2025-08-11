@@ -783,7 +783,7 @@ inline bool DSC_EQUIV(const dsc* d1, const dsc* d2, bool check_collate) noexcept
 		return true;
 	}
 
-	if (d1->dsc_dtype >= dtype_rowtype && d2->dsc_dtype <= dtype_rowtype)	// TODO ROWTYPE: does this make sense?
+	if (d1->dsc_dtype >= dtype_rowtype && d2->dsc_dtype <= dtype_rowtype)
 	{
 		if (d1->dsc_sub_count == d2->dsc_sub_count)
 			return true;

@@ -149,7 +149,6 @@ void dsql_fld::resolve(DsqlCompilerScratch* dsqlScratch, bool modifying)
 }
 
 
-// TODO ROWTYPE: add composite subfields length calculation
 int Jrd::calculateCompositeFieldLength(dsql_fld& fld)
 {
 	auto curFld = fld.fld_sub_first;
