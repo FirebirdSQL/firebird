@@ -618,7 +618,6 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 				{
 					desc->dsc_dtype = dtype_rowtype;
 
-					auto fields_num = csb->csb_blr_reader.getWord() + 1;	// number of internal fields + parent field
 					auto context_num = csb->csb_blr_reader.getWord();
 
 					QualifiedName fieldSourceName;
@@ -665,7 +664,6 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 				case blr_rt_local_type:
 				// local composite type
 				{
-					auto fields_num = csb->csb_blr_reader.getWord() + 1;	// number of internal fields + parent field
 					auto context_num = csb->csb_blr_reader.getWord();
 
 					QualifiedName localTypeName;

@@ -202,7 +202,6 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 			dsqlScratch->qualifyExistingName(packagedTypeFullname, obj_packaged_type);
 			dsqlScratch->qualifyExistingName(field->typeOfName, obj_field);
 
-			auto typeNameBackup = field->typeOfName;
 			if (!dsqlScratch->getTypeFromCache(field, field->typeOfName.object)
 				&& !METD_get_packaged_type(dsqlScratch->getTransaction(), field, packagedTypeFullname)
 				&& !METD_get_domain(dsqlScratch->getTransaction(), field, field->typeOfName))
@@ -218,6 +217,12 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
 				Arg::Gds(isc_invalid_parameter_decl) <<
 				Arg::Gds(isc_packaged_type_notdef) << packagedTypeFullname.toQuotedString() << Arg::Str(field->fld_name));
+			}
+
+			if (field->packageName.object.hasData())
+			{
+				METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, field->relationName, field->fld_sub_first);
+				field->fieldSource = field->typeOfName;
 			}
 		}
 
@@ -238,9 +243,14 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 	{
 		dsqlScratch->qualifyExistingName(field->typeOfTable, obj_relation);
 
-		if (METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, field->typeOfTable))
+		auto relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, field->typeOfTable);
+		if (relation)
 		{
 			field->dtype = dtype_rowtype;
+			field->fld_relation = relation;
+			field->fld_sub_count = relation->rel_fields_number;
+			field->fld_sub_first = relation->rel_fields;
+			calculateCompositeFieldLength(*field);
 		}
 
 		return;

@@ -492,21 +492,18 @@ void DsqlCompilerScratch::putLocalVariableDecl(dsql_var* variable, DeclareVariab
 		if (field->typeOfTable.object.hasData())
 		{
 			appendUChar(blr_rt_type_of_table);
-			appendUShort(field->fld_sub_count);
 			appendUShort(variable->contextNum);
 			appendMetaString(field->typeOfTable.object.c_str());
 		}
 		else if (field->fieldSource.object.hasData())
 		{
 			appendUChar(blr_rt_pagacked_type);
-			appendUShort(field->fld_sub_count);
 			appendUShort(variable->contextNum);
 			appendMetaString(field->fieldSource.object.c_str());
 		}
 		else if (field->typeOfName.object.hasData())
 		{
 			appendUChar(blr_rt_local_type);
-			appendUShort(field->fld_sub_count);
 			appendUShort(variable->contextNum);
 			appendMetaString(field->typeOfName.object.c_str());
 		}
@@ -627,6 +624,9 @@ bool DsqlCompilerScratch::getTypeFromCache(dsql_fld* field, const MetaName& type
 		if (it.first == typeName)
 		{
 			field->dtype = dtype_rowtype;
+			auto node = nodeAs<DeclareLocalTypeNode>(it.second);
+			field->fld_sub_count = node->dsqlField->fld_sub_count;
+			field->fld_sub_first = node->dsqlField->fld_sub_first;
 			field->typeOfName.object = it.first;
 			field->fullDomain = true;
 			return true;
@@ -1099,14 +1099,12 @@ dsql_var* DsqlCompilerScratch::genRowtypeParameter(dsql_fld* field,
 	if (field->fieldSource.object.hasData())
 	{
 		appendUChar(blr_rt_pagacked_type);
-		appendUShort(field->fld_sub_count);
 		appendUShort(variable->contextNum);
 		appendMetaString(field->fieldSource.object.c_str());
 	}
 	else if (field->typeOfTable.object.hasData())
 	{
 		appendUChar(blr_rt_type_of_table);
-		appendUShort(field->fld_sub_count);
 		appendUShort(variable->contextNum);
 		appendMetaString(field->typeOfTable.object.c_str());
 	}

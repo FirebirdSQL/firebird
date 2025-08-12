@@ -282,6 +282,7 @@ public:
 		std::function<void (dsc*)> makeDesc, bool forceVarChar) override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+	void setParameterCompositeDescriptor(dsql_msg* message, dsql_par* parameter) const override;
 
 	bool constant() const override
 	{

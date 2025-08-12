@@ -3532,6 +3532,7 @@ DmlNode* CastNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb
 
 	node->source = PAR_parse_value(tdbb, csb);
 
+	// if itemInfo does not contain !nullable constraint or fullDomain indication, then we should not use it
 	if (itemInfo.isSpecial())
 		node->itemInfo = FB_NEW_POOL(*tdbb->getDefaultPool()) ItemInfo(*tdbb->getDefaultPool(), itemInfo);
 
@@ -3618,7 +3619,44 @@ void CastNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	else
 		dsqlScratch->appendUChar(blr_cast);
 
-	dsqlScratch->putType(dsqlField, true);
+	if (dsqlField->dtype == dtype_rowtype)
+	{
+		const auto dummyContextNum = 1;
+		dsqlScratch->appendUChar(blr_rowtype);
+		if (dsqlField->typeOfTable.object.hasData())
+		{
+			dsqlScratch->appendUChar(blr_rt_type_of_table);
+			dsqlScratch->appendUShort(dummyContextNum);
+			dsqlScratch->appendMetaString(dsqlField->typeOfTable.object.c_str());
+		}
+		else if (dsqlField->fieldSource.object.hasData())
+		{
+			dsqlScratch->appendUChar(blr_rt_pagacked_type);
+			dsqlScratch->appendUShort(dummyContextNum);
+			dsqlScratch->appendMetaString(dsqlField->fieldSource.object.c_str());
+		}
+		else if (dsqlField->typeOfName.object.hasData())
+		{
+			dsqlScratch->appendUChar(blr_rt_local_type);
+			dsqlScratch->appendUShort(dummyContextNum);
+			dsqlScratch->appendMetaString(dsqlField->typeOfName.object.c_str());
+		}
+		// TODO: add fully described rowtype cast generation
+		// else
+		// {
+		// 	dsqlScratch->appendUChar(blr_rt_full);
+		// 	dsqlScratch->appendUShort(dsqlField->fld_sub_count);
+		// 	dsqlScratch->appendUShort(dummyContextNum);
+		// 	auto next = dsqlField->fld_sub_first;
+		// 	while (next)
+		// 	{
+		// 		dsqlScratch->putType(next, true);
+		// 		next = next->fld_next;
+		// 	}
+		// }
+	}
+	else
+		dsqlScratch->putType(dsqlField, true);
 
 	GEN_expr(dsqlScratch, source);
 }
@@ -3626,6 +3664,14 @@ void CastNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 void CastNode::make(DsqlCompilerScratch* /*dsqlScratch*/, dsc* desc)
 {
 	*desc = castDesc;
+}
+
+void CastNode::setParameterCompositeDescriptor(dsql_msg* message, dsql_par* parameter) const
+{
+	if (dsqlField->dtype == dtype_rowtype)
+	{
+		Jrd::generate_sub_parameters(message, *dsqlField, *parameter);
+	}
 }
 
 void CastNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
@@ -3740,7 +3786,7 @@ dsc* CastNode::perform(thread_db* tdbb, impure_value* impure, dsc* value,
 		return value;
 
 	EVL_put_desc(tdbb, castDesc, impure);
-	impure->vlu_desc.dsc_address = (UCHAR*) &impure->vlu_misc;
+	impure->vlu_desc.setAddressRecursively((UCHAR*) &impure->vlu_misc);
 
 	if (DTYPE_IS_TEXT(impure->vlu_desc.dsc_dtype))
 	{
