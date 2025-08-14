@@ -130,6 +130,7 @@ string Item::getDescription(Request* request, const ItemInfo* itemInfo) const
 	if (type == Item::TYPE_VARIABLE)
 	{
 		const auto* const procedure = request->getStatement()->procedure;
+		const auto* const function = request->getStatement()->function;
 
 		if (procedure)
 		{
@@ -140,6 +141,13 @@ string Item::getDescription(Request* request, const ItemInfo* itemInfo) const
 				s.printf("[number %d]",
 					oneBasedIndex - int(procedure->getOutputFields().getCount()));
 			}
+		}
+		else if (function)
+		{
+			if (oneBasedIndex - int(function->getInputFields().getCount() <= int(function->getOutputFields().getCount())))
+				s.printf("[output parameter]");
+			else
+				s.printf("[number %d]", oneBasedIndex - int(function->getInputFields().getCount()));
 		}
 		else
 			s.printf("[number %d]", oneBasedIndex);
