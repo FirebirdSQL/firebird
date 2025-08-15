@@ -2433,6 +2433,7 @@ void Statement::getOutParams(thread_db* tdbb, const ValueListNode* params)
 
 	if (intoRowtype)
 	{
+		auto isRowtypeNull = true;
 		HalfStaticArray<UCHAR, BUFFER_SMALL> nullIndicators;
 		dsc rowValueDesc;
 		rowValueDesc.clear();
@@ -2467,12 +2468,13 @@ void Statement::getOutParams(thread_db* tdbb, const ValueListNode* params)
 				*local = localDsc;
 			}
 
+			isRowtypeNull &= srcNull;
 			((SSHORT*)rowValueDesc.dsc_address)[i] = srcNull ? -1 : 0;
 
 			*currentRowValueDesc = local;
 			currentRowValueDesc = &(*currentRowValueDesc)->dsc_next;
 		}
-		EXE_assignment(tdbb, *jrdVar, &rowValueDesc, nullptr, nullptr);
+		EXE_assignment(tdbb, *jrdVar, (isRowtypeNull ? nullptr : &rowValueDesc), nullptr, nullptr);
 	}
 	else
 	{
