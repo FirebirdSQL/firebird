@@ -2406,7 +2406,20 @@ void Statement::getOutParams(thread_db* tdbb, const ValueListNode* params)
 {
 	const size_t count = params ? params->items.getCount() : 0;
 
-	if (count != getOutputs())
+	auto firstIntoValue = nodeAs<VariableNode>(params->items[0]);
+	auto outputParamSubfields = 0;
+	auto intoRowtype = false;
+
+	const dsc* intoDesc = nullptr;
+	firstIntoValue->getDesc(tdbb, nullptr, &intoDesc);
+
+	if (count == 1 && firstIntoValue && intoDesc->dsc_dtype == dtype_rowtype)
+	{
+		outputParamSubfields = intoDesc->dsc_sub_count;
+		intoRowtype = true;
+	}
+
+	if (count != getOutputs() && outputParamSubfields != getOutputs())
 	{
 		m_error = true;
 		// Output parameters mismatch
@@ -2418,36 +2431,82 @@ void Statement::getOutParams(thread_db* tdbb, const ValueListNode* params)
 
 	const NestConst<ValueExprNode>* jrdVar = params->items.begin();
 
-	for (FB_SIZE_T i = 0; i < count; ++i, ++jrdVar)
+	if (intoRowtype)
 	{
-		/*
-		dsc* d = EVL_assign_to(tdbb, *jrdVar);
-		if (d->dsc_dtype >= FB_NELEM(sqlType) || sqlType[d->dsc_dtype] < 0)
+		HalfStaticArray<UCHAR, BUFFER_SMALL> nullIndicators;
+		dsc rowValueDesc;
+		rowValueDesc.clear();
+		rowValueDesc.dsc_dtype = dtype_rowtype;
+		rowValueDesc.dsc_sub_type = intoDesc->dsc_sub_type;
+		rowValueDesc.dsc_sub_count = intoDesc->dsc_sub_count;
+		rowValueDesc.dsc_address = nullIndicators.getBuffer(NULL_BYTES(intoDesc->dsc_sub_count));
+		rowValueDesc.dsc_length = 0;
+		rowValueDesc.dsc_scale = 0;
+
+		dsc** currentRowValueDesc = &rowValueDesc.dsc_sub_first;
+
+		auto size = m_outDescs.getCount() / 2;
+		for (FB_SIZE_T i = 0; i < size; ++i)
 		{
-			m_error = true;
-			status_exception::raise(
-				Arg::Gds(isc_exec_sql_invalid_var) << Arg::Num(i + 1) << Arg::Str(m_sql.substr(0, 31)));
+			// build the src descriptor
+			dsc& src = m_outDescs[i * 2];
+			const dsc& null = m_outDescs[i * 2 + 1];
+
+			dsc* local = FB_NEW dsc(getPool());
+			local->clear();
+			*local = src;
+			dsc localDsc;
+			bid localBlobID;
+
+			const bool srcNull = (*(SSHORT*) null.dsc_address) == -1;
+			if (src.isBlob() && !srcNull)
+			{
+				localDsc = src;
+				localDsc.dsc_address = (UCHAR*) &localBlobID;
+				getExtBlob(tdbb, src, localDsc);
+				*local = localDsc;
+			}
+
+			((SSHORT*)rowValueDesc.dsc_address)[i] = srcNull ? -1 : 0;
+
+			*currentRowValueDesc = local;
+			currentRowValueDesc = &(*currentRowValueDesc)->dsc_next;
 		}
-		*/
-
-		// build the src descriptor
-		dsc& src = m_outDescs[i * 2];
-		const dsc& null = m_outDescs[i * 2 + 1];
-		dsc* local = &src;
-		dsc localDsc;
-		bid localBlobID;
-
-		const bool srcNull = (*(SSHORT*) null.dsc_address) == -1;
-		if (src.isBlob() && !srcNull)
+		EXE_assignment(tdbb, *jrdVar, &rowValueDesc, nullptr, nullptr);
+	}
+	else
+	{
+		for (FB_SIZE_T i = 0; i < count; ++i, ++jrdVar)
 		{
-			localDsc = src;
-			localDsc.dsc_address = (UCHAR*) &localBlobID;
-			getExtBlob(tdbb, src, localDsc);
-			local = &localDsc;
-		}
+			/*
+			dsc* d = EVL_assign_to(tdbb, *jrdVar);
+			if (d->dsc_dtype >= FB_NELEM(sqlType) || sqlType[d->dsc_dtype] < 0)
+			{
+				m_error = true;
+				status_exception::raise(
+					Arg::Gds(isc_exec_sql_invalid_var) << Arg::Num(i + 1) << Arg::Str(m_sql.substr(0, 31)));
+			}
+			*/
 
-		// and assign to the target
-		EXE_assignment(tdbb, *jrdVar, (srcNull ? nullptr : local), nullptr, nullptr);
+			// build the src descriptor
+			dsc& src = m_outDescs[i * 2];
+			const dsc& null = m_outDescs[i * 2 + 1];
+			dsc* local = &src;
+			dsc localDsc;
+			bid localBlobID;
+
+			const bool srcNull = (*(SSHORT*) null.dsc_address) == -1;
+			if (src.isBlob() && !srcNull)
+			{
+				localDsc = src;
+				localDsc.dsc_address = (UCHAR*) &localBlobID;
+				getExtBlob(tdbb, src, localDsc);
+				local = &localDsc;
+			}
+
+			// and assign to the target
+			EXE_assignment(tdbb, *jrdVar, (srcNull ? nullptr : local), nullptr, nullptr);
+		}
 	}
 }
 

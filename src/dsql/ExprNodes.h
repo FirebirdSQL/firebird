@@ -2431,6 +2431,7 @@ public:
 	}
 
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
+	void getDesc(thread_db* tdbb, CompilerScratch* csb, const dsc** desc) const;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 	ValueExprNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
 	ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;

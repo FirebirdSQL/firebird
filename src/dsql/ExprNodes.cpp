@@ -14693,6 +14693,11 @@ void VariableNode::getDesc(thread_db* /*tdbb*/, CompilerScratch* /*csb*/, dsc* d
 	*desc = varDecl->varDesc;
 }
 
+void VariableNode::getDesc(thread_db* /*tdbb*/, CompilerScratch* /*csb*/, const dsc** desc) const
+{
+	*desc = &varDecl->varDesc;
+}
+
 ValueExprNode* VariableNode::copy(thread_db* tdbb, NodeCopier& copier) const
 {
 	VariableNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) VariableNode(*tdbb->getDefaultPool());
