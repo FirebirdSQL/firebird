@@ -320,8 +320,8 @@ void PIO_extend(thread_db* tdbb, jrd_file* file, const ULONG extPages, const USH
 	if (file->fil_flags & FIL_no_fast_extend)
 		return;
 
-	const ULONG filePages = PIO_get_number_of_pages(file, pageSize);
-	const ULONG extendBy = MIN(MAX_ULONG - filePages, extPages);
+	const off_t filePages = PIO_get_number_of_pages(file, pageSize);
+	const off_t extendBy = MIN(MAX_ULONG - filePages, extPages);
 
 	int r;
 	for (r = 0; r < IO_RETRY; r++)
