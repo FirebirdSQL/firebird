@@ -33,6 +33,9 @@ LIB_PLATFORM_RPATH=-Wl,-rpath,\$$ORIGIN
 LibraryFullName=$(LibraryBaseName)
 LibrarySoName=$(LibraryBaseName)
 
+# Global c++ flags: firebird needs no RTTI, choose build standard and c++ specific warnings level
+PLUSPLUS_FLAGS:= -fno-rtti -std=c++20 -Werror=delete-incomplete -Werror=return-type
+
 COMMON_FLAGS=-ggdb -DFB_SEND_FLAGS=MSG_NOSIGNAL -DLINUX -DANDROID -DAMD64 -pipe -MMD -fPIC -fmessage-length=0 \
 			 -I$(ROOT)/extern/libtommath -I$(ROOT)/extern/libtomcrypt/src/headers \
 			 $(CROSS_FLAGS) \
