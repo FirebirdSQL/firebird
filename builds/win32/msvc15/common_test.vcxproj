@@ -249,6 +249,7 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\..\src\common\ipc\tests\IpcChatTest.cpp" />
     <ClCompile Include="..\..\..\src\common\ipc\tests\IpcMessageTest.cpp" />
     <ClCompile Include="..\..\..\src\common\tests\CommonTest.cpp" />
     <ClCompile Include="..\..\..\src\common\tests\CvtTest.cpp" />

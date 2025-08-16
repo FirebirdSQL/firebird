@@ -44,6 +44,7 @@ static inline constexpr const char* TPC_HDR_FILE	= "fb_tpc_%s";
 static inline constexpr const char* TPC_BLOCK_FILE	= "fb_tpc_%s_%" UQUADFORMAT;
 static inline constexpr const char* SNAPSHOTS_FILE	= "fb_snap_%s";
 static inline constexpr const char* PROFILER_FILE	= "fb_profiler_%s_%" UQUADFORMAT;
+static inline constexpr const char* IPC_CHAT_CLIENT_FILE = "fb_ipc_chat_%" UQUADFORMAT "_%" UQUADFORMAT;
 
 // Global usage
 static inline constexpr const char* TRACE_FILE		= "fb" COMMON_FILE_PREFIX "_trace";

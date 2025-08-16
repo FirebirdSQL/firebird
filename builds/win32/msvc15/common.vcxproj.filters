@@ -626,6 +626,9 @@
     <ClInclude Include="..\..\..\src\include\fb_exception.h">
       <Filter>headers</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\common\ipc\IpcChat.h">
+      <Filter>headers</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\src\common\ipc\IpcMessage.h">
       <Filter>headers</Filter>
     </ClInclude>
