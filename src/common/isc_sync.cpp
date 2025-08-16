@@ -38,6 +38,7 @@
  */
 
 #include "firebird.h"
+#include <chrono>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -2421,7 +2422,7 @@ void ISC_mutex_fini(struct mtx *mutex)
 }
 
 
-int ISC_mutex_lock(struct mtx* mutex)
+int ISC_mutex_lock(struct mtx* mutex, std::optional<std::chrono::milliseconds> timeout)
 {
 /**************************************
  *
@@ -2434,29 +2435,10 @@ int ISC_mutex_lock(struct mtx* mutex)
  *
  **************************************/
 
+	const DWORD dwTimeout = timeout.has_value() ? static_cast<DWORD>(timeout->count()) : INFINITE;
 	const DWORD status = (mutex->mtx_fast.lpSharedInfo) ?
-		enterFastMutex(&mutex->mtx_fast, INFINITE) :
-			WaitForSingleObject(mutex->mtx_fast.hEvent, INFINITE);
-
-    return (status == WAIT_OBJECT_0 || status == WAIT_ABANDONED) ? FB_SUCCESS : FB_FAILURE;
-}
-
-
-int ISC_mutex_lock_cond(struct mtx* mutex)
-{
-/**************************************
- *
- *	I S C _ m u t e x _ l o c k _ c o n d	( W I N _ N T )
- *
- **************************************
- *
- * Functional description
- *	Conditionally seize a mutex.
- *
- **************************************/
-
-	const DWORD status = (mutex->mtx_fast.lpSharedInfo) ?
-		enterFastMutex(&mutex->mtx_fast, 0) : WaitForSingleObject(mutex->mtx_fast.hEvent, 0L);
+		enterFastMutex(&mutex->mtx_fast, dwTimeout) :
+			WaitForSingleObject(mutex->mtx_fast.hEvent, dwTimeout);
 
     return (status == WAIT_OBJECT_0 || status == WAIT_ABANDONED) ? FB_SUCCESS : FB_FAILURE;
 }
@@ -2743,15 +2725,39 @@ static bool make_object_name(TEXT* buffer, size_t bufsize,
 #endif // WIN_NT
 
 
-void SharedMemoryBase::mutexLock()
+bool SharedMemoryBase::mutexLock(std::optional<std::chrono::milliseconds> timeout)
 {
 #if defined(WIN_NT)
 
-	int state = ISC_mutex_lock(sh_mem_mutex);
+	int state = ISC_mutex_lock(sh_mem_mutex, timeout);
 
 #else // POSIX SHARED MUTEX
 
-	int state = pthread_mutex_lock(sh_mem_mutex->mtx_mutex);
+	int state;
+
+	if (timeout.has_value())
+	{
+		if (timeout.value().count() == 0)
+			state = pthread_mutex_trylock(sh_mem_mutex->mtx_mutex);
+		else
+		{
+			const auto now = std::chrono::system_clock::now();
+			const auto deadline = now + timeout.value();
+			const auto deadlineDuration = deadline.time_since_epoch();
+			const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(deadlineDuration);
+			const auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(deadlineDuration - seconds);
+
+			const timespec ts{
+				.tv_sec = (time_t) seconds.count(),
+				.tv_nsec = (long) nanoseconds.count()
+			};
+
+			state = pthread_mutex_timedlock(sh_mem_mutex->mtx_mutex, &ts);
+		}
+	}
+	else
+		state = pthread_mutex_lock(sh_mem_mutex->mtx_mutex);
+
 #ifdef USE_ROBUST_MUTEX
 	if (state == EOWNERDEAD)
 	{
@@ -2764,35 +2770,16 @@ void SharedMemoryBase::mutexLock()
 
 #endif // os-dependent choice
 
-	if (state != 0)
-	{
+	if (!timeout.has_value() && state != 0)
 		sh_mem_callback->mutexBug(state, "mutexLock");
-	}
+
+	return state == 0;
 }
 
 
-bool SharedMemoryBase::mutexLockCond()
+bool SharedMemoryBase::mutexTryLock()
 {
-#if defined(WIN_NT)
-
-	return ISC_mutex_lock_cond(sh_mem_mutex) == 0;
-
-#else // POSIX SHARED MUTEX
-
-	int state = pthread_mutex_trylock(sh_mem_mutex->mtx_mutex);
-#ifdef USE_ROBUST_MUTEX
-	if (state == EOWNERDEAD)
-	{
-		// We always perform check for dead process
-		// Therefore may safely mark mutex as recovered
-		LOG_PTHREAD_ERROR(pthread_mutex_consistent(sh_mem_mutex->mtx_mutex));
-		state = 0;
-	}
-#endif
-	return state == 0;
-
-#endif // os-dependent choice
-
+	return mutexLock(std::chrono::milliseconds(0));
 }
 
 

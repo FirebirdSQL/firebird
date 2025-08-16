@@ -33,6 +33,8 @@
 #include "../common/classes/RefCounted.h"
 #include "../common/classes/fb_string.h"
 #include "../common/classes/timestamp.h"
+#include <chrono>
+#include <optional>
 
 // Firebird platform-specific synchronization data structures
 
@@ -267,8 +269,8 @@ public:
 	static void unlinkFile(const TEXT* expanded_filename) noexcept;
 	Firebird::PathName getMapFileName();
 
-	void mutexLock();
-	bool mutexLockCond();
+	bool mutexLock(std::optional<std::chrono::milliseconds> timeout = std::nullopt);
+	bool mutexTryLock();
 	void mutexUnlock();
 
 	int eventInit(event_t* event);
@@ -389,8 +391,8 @@ public:
 	SharedMutexGuard(const SharedMutexGuard&) = delete;
 	SharedMutexGuard& operator=(const SharedMutexGuard&) = delete;
 
-	bool tryLock() {
-		m_locked = m_shmem->mutexLockCond();
+	bool tryLock(std::optional<std::chrono::milliseconds> timeout) {
+		m_locked = m_shmem->mutexLock(timeout);
 		return m_locked;
 	}
 

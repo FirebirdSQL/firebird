@@ -34,6 +34,7 @@
 #include "../jrd/pag_proto.h"
 #include "../jrd/tra_proto.h"
 #include "../common/classes/Spinlock.h"
+#include "boost/interprocess/ipc/message_queue.hpp"
 
 #include <atomic>
 #include <mutex>

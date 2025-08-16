@@ -48,5 +48,8 @@
     <ClCompile Include="..\..\..\src\yvalve\gds.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\common\ipc\tests\IpcMessageTest.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

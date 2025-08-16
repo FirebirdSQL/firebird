@@ -39,7 +39,8 @@ AllObjects += $(Common_Objects)
 # Common test files
 COT1:= $(call dirObjects,common/tests)
 COT2:= $(call dirObjects,common/classes/tests)
-Common_Test_Objects:= $(COT1) $(COT2) $(call makeObjects,yvalve,gds.cpp)
+COT3:= $(call dirObjects,common/ipc/tests)
+Common_Test_Objects:= $(COT1) $(COT2) $(COT3) $(call makeObjects,yvalve,gds.cpp)
 
 AllObjects += $(Common_Test_Objects)
 

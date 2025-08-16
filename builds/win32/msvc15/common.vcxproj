@@ -197,6 +197,7 @@
     <ClInclude Include="..\..\..\src\common\intlobj_new.h" />
     <ClInclude Include="..\..\..\src\common\IntlParametersBlock.h" />
     <ClInclude Include="..\..\..\src\common\IntlUtil.h" />
+    <ClInclude Include="..\..\..\src\common\ipc\IpcMessage.h" />
     <ClInclude Include="..\..\..\src\common\isc_f_proto.h" />
     <ClInclude Include="..\..\..\src\common\isc_proto.h" />
     <ClInclude Include="..\..\..\src\common\isc_s_proto.h" />
