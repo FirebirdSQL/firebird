@@ -2752,7 +2752,11 @@ bool SharedMemoryBase::mutexLock(std::optional<std::chrono::milliseconds> timeou
 				.tv_nsec = (long) nanoseconds.count()
 			};
 
+#ifdef HAVE_PTHREAD_MUTEX_TIMEDLOCK
 			state = pthread_mutex_timedlock(sh_mem_mutex->mtx_mutex, &ts);
+#else
+			state = pthread_mutex_timedlock_fallback(sh_mem_mutex->mtx_mutex, &ts);
+#endif
 		}
 	}
 	else
