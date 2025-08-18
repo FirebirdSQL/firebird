@@ -1048,7 +1048,7 @@ void LockManager::acquire_shmem(SRQ_PTR owner_offset)
 	ULONG spins = 0;
 	while (spins++ < spins_to_try)
 	{
-		if (m_sharedMemory->mutexLockCond())
+		if (m_sharedMemory->mutexTryLock())
 		{
 			locked = true;
 			break;

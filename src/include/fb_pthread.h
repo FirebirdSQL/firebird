@@ -28,10 +28,48 @@
 #ifndef INCLUDE_FB_PTHREAD_H
 #define INCLUDE_FB_PTHREAD_H
 
+#include "firebird.h"
+
 #if defined(LINUX) && (!defined(__USE_GNU))
 #define __USE_GNU 1	// required on this OS to have required for us stuff declared
 #endif // LINUX		// should be defined before include <pthread.h> - AP 2009
 
 #include <pthread.h>
+
+#ifndef HAVE_PTHREAD_MUTEX_TIMEDLOCK
+
+#include <time.h>
+#include <errno.h>
+
+inline int pthread_mutex_timedlock_fallback(pthread_mutex_t* mutex, const timespec* timeout)
+{
+	timespec current_time, sleep_time;
+	sleep_time.tv_sec = 0;
+	sleep_time.tv_nsec = 10000000; // 10ms sleep between attempts
+
+	do
+	{
+		int result = pthread_mutex_trylock(mutex);
+
+		if (result == 0)
+			return 0; // Successfully acquired lock
+
+		if (result != EBUSY)
+			return result; // Some other error
+
+		clock_gettime(CLOCK_REALTIME, &current_time);
+
+		if (current_time.tv_sec > timeout->tv_sec ||
+			(current_time.tv_sec == timeout->tv_sec &&
+			current_time.tv_nsec >= timeout->tv_nsec))
+		{
+			return ETIMEDOUT;
+		}
+
+		nanosleep(&sleep_time, nullptr);
+	} while(true);
+}
+
+#endif	// !HAVE_PTHREAD_MUTEX_TIMEDLOCK
 
 #endif // INCLUDE_FB_PTHREAD_H
