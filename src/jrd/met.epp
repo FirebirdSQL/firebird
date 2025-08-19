@@ -3096,6 +3096,10 @@ jrd_rel* MET_lookup_relation(thread_db* tdbb, const QualifiedName& name)
 		WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 			 X.RDB$RELATION_NAME EQ name.object.c_str()
 	{
+		// RDB$RELATION_ID can be NULL here if the relation is not committed yet
+		if (X.RDB$RELATION_ID.NULL)
+			return NULL;
+
 		relation = MET_relation(tdbb, X.RDB$RELATION_ID);
 		if (relation->rel_name.object.isEmpty()) {
 			relation->rel_name = name;
