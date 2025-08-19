@@ -2406,12 +2406,16 @@ void Statement::getOutParams(thread_db* tdbb, const ValueListNode* params)
 {
 	const size_t count = params ? params->items.getCount() : 0;
 
-	auto firstIntoValue = nodeAs<VariableNode>(params->items[0]);
+	const VariableNode* firstIntoValue = nullptr;
+	if (count > 0)
+		firstIntoValue = nodeAs<VariableNode>(params->items[0]);
+
 	auto outputParamSubfields = 0;
 	auto intoSingleRowtype = false;
 
 	const dsc* intoDesc = nullptr;
-	firstIntoValue->getDesc(tdbb, nullptr, &intoDesc);
+	if (firstIntoValue)
+		firstIntoValue->getDesc(tdbb, nullptr, &intoDesc);
 
 	if (count == 1 && firstIntoValue && intoDesc->dsc_dtype == dtype_rowtype)
 	{
