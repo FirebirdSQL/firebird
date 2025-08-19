@@ -313,6 +313,7 @@ DsqlRequest* DSQL_prepare(thread_db* tdbb,
 					  Arg::Gds(isc_dsql_crdb_prepare_err));
 		}
 
+		// кажется это мертвый код
 		if (items && buffer)
 		{
 			Jrd::ContextPoolHolder context(tdbb, &dsqlRequest->getPool());

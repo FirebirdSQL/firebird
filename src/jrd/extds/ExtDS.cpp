@@ -2408,7 +2408,7 @@ void Statement::getOutParams(thread_db* tdbb, const ValueListNode* params)
 
 	auto firstIntoValue = nodeAs<VariableNode>(params->items[0]);
 	auto outputParamSubfields = 0;
-	auto intoRowtype = false;
+	auto intoSingleRowtype = false;
 
 	const dsc* intoDesc = nullptr;
 	firstIntoValue->getDesc(tdbb, nullptr, &intoDesc);
@@ -2416,7 +2416,7 @@ void Statement::getOutParams(thread_db* tdbb, const ValueListNode* params)
 	if (count == 1 && firstIntoValue && intoDesc->dsc_dtype == dtype_rowtype)
 	{
 		outputParamSubfields = intoDesc->dsc_sub_count;
-		intoRowtype = true;
+		intoSingleRowtype = true;
 	}
 
 	if (count != getOutputs() && outputParamSubfields != getOutputs())
@@ -2431,7 +2431,11 @@ void Statement::getOutParams(thread_db* tdbb, const ValueListNode* params)
 
 	const NestConst<ValueExprNode>* jrdVar = params->items.begin();
 
-	if (intoRowtype)
+	auto size = m_outDescs.getCount() / 2;
+
+	// check if we have single rowtype "into" variable and result of the query is not a single rowtype
+	// if so, do not merge query result and use old logic
+	if (intoSingleRowtype && size > 0 && !(size == 1 && m_outDescs[0].dsc_dtype == dtype_rowtype) && outputParamSubfields == size)
 	{
 		auto isRowtypeNull = true;
 		HalfStaticArray<UCHAR, BUFFER_SMALL> nullIndicators;
@@ -2446,12 +2450,18 @@ void Statement::getOutParams(thread_db* tdbb, const ValueListNode* params)
 
 		dsc** currentRowValueDesc = &rowValueDesc.dsc_sub_first;
 
-		auto size = m_outDescs.getCount() / 2;
 		for (FB_SIZE_T i = 0; i < size; ++i)
 		{
 			// build the src descriptor
 			dsc& src = m_outDescs[i * 2];
 			const dsc& null = m_outDescs[i * 2 + 1];
+
+			// we can't assign another rowtype into single rowtype variable, nested rowtypes are not supported
+			if (size > 1 && src.dsc_dtype == dtype_rowtype)
+			{
+				status_exception::raise(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
+							Arg::Gds(isc_random) << Arg::Str("Nested ROW values are not supported"));
+			}
 
 			dsc* local = FB_NEW dsc(getPool());
 			local->clear();

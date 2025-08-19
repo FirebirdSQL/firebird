@@ -64,7 +64,8 @@ public:
 			  nullable(false),
 			  finished(false),
 			  parentFieldName(pool),
-			  compositeDescriptor(pool)
+			  compositeDescriptor(pool),
+			  subMetadata(nullptr)
 		{
 		}
 
@@ -84,7 +85,8 @@ public:
 			  nullable(v.nullable),
 			  finished(v.finished),
 			  parentFieldName(pool, v.parentFieldName),
-			  compositeDescriptor(pool, v.compositeDescriptor)
+			  compositeDescriptor(pool, v.compositeDescriptor),
+			  subMetadata(v.subMetadata)
 		{
 		}
 

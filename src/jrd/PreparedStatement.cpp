@@ -165,6 +165,24 @@ namespace
 				item.length = sizeof(UCHAR);
 				break;
 
+			case dtype_rowtype:
+				{
+					item.type = SQL_ROWTYPE;
+					item.length = desc->dsc_length;
+					item.subType = desc->dsc_sub_type;
+
+					auto submeta = FB_NEW MsgMetadata;
+					submeta->setItemsCount(desc->dsc_sub_count);
+					dsc* next = desc->dsc_sub_first;
+					for (FB_SIZE_T i = 0; i < desc->dsc_sub_count; ++i)
+					{
+						dscToMetaItem(next, submeta->getItem(i));
+						next = next->dsc_next;
+					}
+					item.subMetadata = submeta;
+				}
+				break;
+
 			default:
 				item.finished = false;
 				fb_assert(false);
