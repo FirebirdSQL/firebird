@@ -1612,6 +1612,7 @@ void CommentOnNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 		case obj_blob_filter:
 			tableClause = "rdb$filters";
 			columnClause = "rdb$function_name";
+			useSchemaClause = false;
 			status << Arg::Gds(isc_dyn_filter_not_found) << Arg::Str(objNameStr);
 			break;
 
