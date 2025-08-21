@@ -66,6 +66,9 @@ SecDbCache:= $(call makeObjects,auth,SecDbCache.cpp)
 
 # Remote
 Remote_Common:= $(call dirObjects,remote) $(call dirObjects,auth/SecureRemotePassword)
+ifeq ($(PLATFORM),win32)
+Remote_Common += $(call makeObjects,auth/trusted,AuthSspi.cpp)
+endif
 Remote_Server:= $(call dirObjects,remote/server) $(call dirObjects,auth/SecureRemotePassword/server) \
 				$(call makeObjects,jrd/replication,Config.cpp Utils.cpp) $(SecDbCache)
 Remote_Client:= $(call dirObjects,remote/client) $(call dirObjects,auth/SecureRemotePassword/client) \
@@ -147,7 +150,11 @@ AllObjects += $(LOCKPRINT_Objects)
 
 
 # Guardian
+ifeq ($(PLATFORM),win32)
+FBGUARD_Objects:= $(call dirObjects,iscguard) $(call makeObjects,remote/server/os/win32,chop.cpp)
+else
 FBGUARD_Objects:= $(call dirObjects,utilities/guard)
+endif
 
 AllObjects += $(FBGUARD_Objects)
 
@@ -182,6 +189,24 @@ ISQL_Objects:= $(call dirObjects,isql)
 ISQL_Test_Objects:= $(call dirObjects,isql/tests)
 
 AllObjects += $(ISQL_Objects) $(ISQL_Test_Objects)
+
+
+# Registry install tool
+INSTREG_Objects:= $(call makeObjects,utilities/install,install_reg.cpp registry.cpp)
+
+AllObjects += $(INSTREG_Objects)
+
+
+# Service install tool
+INSTSVC_Objects:= $(call makeObjects,utilities/install,install_svc.cpp services.cpp)
+
+AllObjects += $(INSTSVC_Objects)
+
+
+# Client install tool
+INSTCLIENT_Objects:= $(call makeObjects,utilities/install,install.cpp install_client.cpp)
+
+AllObjects += $(INSTCLIENT_Objects)
 
 
 # Legacy users management in security database
