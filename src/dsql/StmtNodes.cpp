@@ -3581,6 +3581,7 @@ const StmtNode* DeclareVariableNode::execute(thread_db* tdbb, Request* request, 
 
 		if (varDesc.dsc_dtype == dtype_rowtype)
 		{
+			variable->vlu_flags = 0;
 			request->req_rpb[compositeContextNum].rpb_record = compositeRecord;
 		}
 		else
