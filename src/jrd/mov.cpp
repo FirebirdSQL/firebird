@@ -520,10 +520,18 @@ void MOV_move(Jrd::thread_db* tdbb, /*const*/ dsc* from, dsc* to, bool trustedSo
 		auto next_from = from->dsc_sub_first;
 		while (next_to && next_from)
 		{
-			if (DTYPE_IS_BLOB_OR_QUAD(next_from->dsc_dtype) || DTYPE_IS_BLOB_OR_QUAD(next_to->dsc_dtype))
-				Jrd::blb::move(tdbb, next_from, next_to);
+			if (next_from->dsc_flags & DSC_null)
+			{
+				next_to->dsc_flags |= DSC_null;
+			}
 			else
-				CVT_move(next_from, next_to, tdbb->getAttachment()->att_dec_status);
+			{
+				if (DTYPE_IS_BLOB_OR_QUAD(next_from->dsc_dtype) || DTYPE_IS_BLOB_OR_QUAD(next_to->dsc_dtype))
+					Jrd::blb::move(tdbb, next_from, next_to);
+				else
+					CVT_move(next_from, next_to, tdbb->getAttachment()->att_dec_status);
+			}
+
 			next_to = next_to->dsc_next;
 			next_from = next_from->dsc_next;
 		}
