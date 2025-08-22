@@ -7147,16 +7147,16 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 	unsigned dtype = var->type;		// may be modified by print_item_blob()
 
-	auto printWrapper = [&](const IsqlVar* var, const unsigned length, bool firstInList = true) -> void
+	auto printWrapper = [&](const IsqlVar* variable, const unsigned length, bool firstInList = true) -> void
 	{
-		auto dtype = var->type;
-		const int dscale = var->scale;
+		auto dtype = variable->type;
+		const int dscale = variable->scale;
 
 		if (setValues.List) {
 			isqlGlob.printf("%-31s ", firstInList ? var->alias : "");
 		}
 
-		if (var->nullable && (*var->nullInd < 0))
+		if (variable->nullable && (*variable->nullInd < 0))
 		{
 			// If field was missing print <null>
 
@@ -7169,13 +7169,13 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 			else
 				snprintf(p, bufSize, "%*.*s ", length, length, "<null>");
 		}
-		else if (!strncmp(var->field, "DB_KEY", 6))
+		else if (!strncmp(variable->field, "DB_KEY", 6))
 		{
 			// Special handling for db_keys printed in hex
 
 			// Keep a temp buf, d for building the binary string
 
-			for (const TEXT* t = var->value.asChar; t < var->value.asChar + var->length; t++)
+			for (const TEXT* t = variable->value.asChar; t < variable->value.asChar + variable->length; t++)
 			{
 				if (setValues.List) {
 					isqlGlob.printf("%02X", (unsigned int) (UCHAR) *t);
@@ -7204,7 +7204,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 				// Print blob-ids only here
 
-			blobid = var->value.blobid;
+			blobid = variable->value.blobid;
 			snprintf(blobbuf, sizeof(blobbuf), "%" xLONGFORMAT":%" xLONGFORMAT,
 				blobid->gds_quad_high, blobid->gds_quad_low);
 			snprintf(p, bufSize, "%*s ", MAX(17, length), blobbuf);
@@ -7214,14 +7214,14 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 				// Print blob-ids only here
 
-			blobid = var->value.blobid;
+			blobid = variable->value.blobid;
 			snprintf(blobbuf, sizeof(blobbuf), "%" xLONGFORMAT":%" xLONGFORMAT,
 				blobid->gds_quad_high, blobid->gds_quad_low);
 			snprintf(p, bufSize, "%*s ", MAX(17, length), blobbuf);
 			if (setValues.List)
 			{
 				isqlGlob.printf("%s%s", blobbuf, NEWLINE);
-				dtype = ISQL_print_item_blob(isqlGlob.Out, var, M__trans, setValues.Doblob);
+				dtype = ISQL_print_item_blob(isqlGlob.Out, variable, M__trans, setValues.Doblob);
 				isqlGlob.printf(NEWLINE);
 			}
 			break;
@@ -7235,13 +7235,13 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 					switch (dtype)
 					{
 					case SQL_SHORT:
-						value = *var->value.asSmallint;
+						value = *variable->value.asSmallint;
 						break;
 					case SQL_LONG:
-						value = *var->value.asInteger;
+						value = *variable->value.asInteger;
 						break;
 					case SQL_INT64:
-						value = *var->value.asBigint;
+						value = *variable->value.asBigint;
 						break;
 					}
 
@@ -7264,7 +7264,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 					// one digit more than the specified precision when the value is 0
 					// The bug appears in TCS DSQL_DOMAIN_12 and 13
 					//
-					const double value = *var->value.asFloat;
+					const double value = *variable->value.asFloat;
 
 					if (checkSpecial(p, length, value))
 					{
@@ -7297,7 +7297,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 			case SQL_DOUBLE:
 				{
-					const double value = *var->value.asDouble;
+					const double value = *variable->value.asDouble;
 
 					if (checkSpecial(p, length, value))
 					{
@@ -7379,7 +7379,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 					char decStr[Firebird::IDecFloat16::STRING_SIZE];
 					if (isqlGlob.df16)
 					{
-						isqlGlob.df16->toString(fbStatus, var->value.asDec16, sizeof(decStr), decStr);
+						isqlGlob.df16->toString(fbStatus, variable->value.asDec16, sizeof(decStr), decStr);
 						if (ISQL_errmsg(fbStatus))
 							strcpy(decStr, convErr);
 					}
@@ -7398,7 +7398,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 					char decStr[Firebird::IDecFloat34::STRING_SIZE];
 					if (isqlGlob.df34)
 					{
-						isqlGlob.df34->toString(fbStatus, var->value.asDec34, sizeof(decStr), decStr);
+						isqlGlob.df34->toString(fbStatus, variable->value.asDec34, sizeof(decStr), decStr);
 						if (ISQL_errmsg(fbStatus))
 							strcpy(decStr, convErr);
 					}
@@ -7421,7 +7421,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 					char intStr[Firebird::IInt128::STRING_SIZE];
 					if (isqlGlob.i128)
 					{
-						isqlGlob.i128->toString(fbStatus, var->value.asInt128, dscale, sizeof(intStr), intStr);
+						isqlGlob.i128->toString(fbStatus, variable->value.asInt128, dscale, sizeof(intStr), intStr);
 						if (ISQL_errmsg(fbStatus))
 							strcpy(intStr, convErr);
 					}
@@ -7440,41 +7440,41 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 				break;
 
 			case SQL_TEXT:
-				str2 = var->value.asChar;
+				str2 = variable->value.asChar;
 				// See if it is character set OCTETS
-				if (var->charSet == CS_BINARY)
+				if (variable->charSet == CS_BINARY)
 				{
 					string hexStr;
-					hexStr.reserve(2 * static_cast<FB_SIZE_T>(var->length));
+					hexStr.reserve(2 * static_cast<FB_SIZE_T>(variable->length));
 					char hex[3];
 					// Convert the string to hex digits
-					for (unsigned i = 0; i < var->length; i++) {
+					for (unsigned i = 0; i < variable->length; i++) {
 						snprintf(hex, sizeof(hex), "%02X", (UCHAR)str2[i]);
 						hexStr.append(hex);
 					}
 					if (setValues.List) {
-						isqlGlob.printf("%-*s%s", var->length, hexStr.c_str(), NEWLINE);
+						isqlGlob.printf("%-*s%s", variable->length, hexStr.c_str(), NEWLINE);
 					}
 					else
 						snprintf(p, bufSize, "%-*s ", length, hexStr.c_str());
 				}
 				else if (setValues.List)
-					isqlGlob.printf("%-*.*s%s", var->length, var->length, str2, NEWLINE);
+					isqlGlob.printf("%-*.*s%s", variable->length, variable->length, str2, NEWLINE);
 				else
 				{
-					IcuUtil::pad(p, var->charSet,
-						static_cast<unsigned>(strnlen(var->value.asChar, var->length)),
-						var->value.asChar, length, false);
+					IcuUtil::pad(p, variable->charSet,
+						static_cast<unsigned>(strnlen(variable->value.asChar, variable->length)),
+						variable->value.asChar, length, false);
 					strcat(p, " ");
 				}
 				break;
 
 			case SQL_VARYING:
 				{
-					vary* avary = var->value.asVary;
+					vary* avary = variable->value.asVary;
 
 					// If CHARACTER SET OCTETS, print two hex digits per octet
-					if (var->charSet == CS_BINARY)
+					if (variable->charSet == CS_BINARY)
 					{
 						string hexStr;
 						hexStr.reserve(2 * static_cast<FB_SIZE_T>(avary->vary_length));
@@ -7502,7 +7502,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 						isqlGlob.printf("%-*.*s%s", avary->vary_length, avary->vary_length, avary->vary_string, NEWLINE);
 					else
 					{
-						IcuUtil::pad(p, var->charSet, avary->vary_length, avary->vary_string, length, false);
+						IcuUtil::pad(p, variable->charSet, avary->vary_length, avary->vary_string, length, false);
 						strcat(p, " ");
 					}
 					break;
@@ -7510,8 +7510,8 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 			case SQL_TIMESTAMP:
 				{
-					isc_decode_timestamp(var->value.asDateTime, &times);
-					ULONG fractions = ((ULONG*) var->value.asChar)[1] % ISC_TIME_SECONDS_PRECISION;
+					isc_decode_timestamp(variable->value.asDateTime, &times);
+					ULONG fractions = ((ULONG*) variable->value.asChar)[1] % ISC_TIME_SECONDS_PRECISION;
 
 				if (isqlGlob.SQL_dialect > SQL_DIALECT_V5)
 				{
@@ -7546,12 +7546,12 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 					if (dtype == SQL_TIMESTAMP_TZ)
 					{
-						Firebird::UtilInterfacePtr()->decodeTimeStampTz(fbStatus, var->value.asDateTimeTz,
+						Firebird::UtilInterfacePtr()->decodeTimeStampTz(fbStatus, variable->value.asDateTimeTz,
 							&year, &month, &day, &hours, &minutes, &seconds, &fractions, sizeof(timeZone), timeZone);
 					}
 					else
 					{
-						Firebird::UtilInterfacePtr()->decodeTimeStampTzEx(fbStatus, var->value.asDateTimeTzEx,
+						Firebird::UtilInterfacePtr()->decodeTimeStampTzEx(fbStatus, variable->value.asDateTimeTzEx,
 							&year, &month, &day, &hours, &minutes, &seconds, &fractions, sizeof(timeZone), timeZone);
 					}
 
@@ -7575,8 +7575,8 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 			case SQL_TYPE_TIME:
 				{
-					isc_decode_sql_time(var->value.asTime, &times);
-					ULONG fractions = (*var->value.asTime) % ISC_TIME_SECONDS_PRECISION;
+					isc_decode_sql_time(variable->value.asTime, &times);
+					ULONG fractions = (*variable->value.asTime) % ISC_TIME_SECONDS_PRECISION;
 
 					snprintf(d, sizeof(d), "%2.2d:%2.2d:%2.2d.%4.4" ULONGFORMAT,
 						times.tm_hour, times.tm_min, times.tm_sec, fractions);
@@ -7597,12 +7597,12 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 					if (dtype == SQL_TIME_TZ)
 					{
-						Firebird::UtilInterfacePtr()->decodeTimeTz(fbStatus, var->value.asTimeTz, &hours, &minutes, &seconds,
+						Firebird::UtilInterfacePtr()->decodeTimeTz(fbStatus, variable->value.asTimeTz, &hours, &minutes, &seconds,
 							&fractions, sizeof(timeZone), timeZone);
 					}
 					else
 					{
-						Firebird::UtilInterfacePtr()->decodeTimeTzEx(fbStatus, var->value.asTimeTzEx, &hours, &minutes, &seconds,
+						Firebird::UtilInterfacePtr()->decodeTimeTzEx(fbStatus, variable->value.asTimeTzEx, &hours, &minutes, &seconds,
 							&fractions, sizeof(timeZone), timeZone);
 					}
 
@@ -7625,7 +7625,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 				}
 
 			case SQL_TYPE_DATE:
-				isc_decode_sql_date(var->value.asDate, &times);
+				isc_decode_sql_date(variable->value.asDate, &times);
 				snprintf(d, sizeof(d), "%4.4d-%2.2d-%2.2d",
 					times.tm_year + 1900, (times.tm_mon + 1), times.tm_mday);
 
@@ -7636,7 +7636,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 				break;
 
 			case SQL_BOOLEAN:
-				strcpy(d, (*var->value.asBoolean ? "<true>" : "<false>"));
+				strcpy(d, (*variable->value.asBoolean ? "<true>" : "<false>"));
 				snprintf(p, bufSize, "%-*.*s ", length, length, d);
 				if (setValues.List)
 					isqlGlob.printf("%s%s", d, NEWLINE);
