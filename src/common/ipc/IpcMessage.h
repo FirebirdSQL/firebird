@@ -29,6 +29,7 @@
 #include "../StatusArg.h"
 #include "../isc_s_proto.h"
 #include "../isc_proto.h"
+#include "../utils_proto.h"
 #include <atomic>
 #include <chrono>
 #include <functional>
@@ -39,11 +40,28 @@
 #include <string>
 #include <utility>
 #include <cstdint>
+#ifdef WIN_NT
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
+
+#ifndef WIN_NT
+#define IPC_MESSAGE_USE_SHARED_SIGNAL
+#endif
+
+#ifdef IPC_MESSAGE_USE_SHARED_SIGNAL
+#include "../ipc/IpcSharedSignal.h"
+#else
+#include "../ipc/IpcNamedSignal.h"
+#endif
 
 namespace Firebird {
 
 
-inline constexpr SLONG IPC_MESSAGE_TIMEOUT_MICROSECONDS = 500'000;	// 0.5s
+inline constexpr auto IPC_MESSAGE_TIMEOUT = std::chrono::milliseconds(500);	// 0.5s
+inline constexpr auto IPC_MESSAGE_SIGNAL_FORMAT = "ipc_message_%d_%d";
+inline std::atomic_uint32_t IPC_MESSAGE_COUNTER = 0;
 
 
 struct IpcMessageParameters final
@@ -96,26 +114,54 @@ private:
 public:
 	struct Header : public MemoryHeader
 	{
-		event_t receiverEvent;
-		event_t senderEvent;
+		int32_t ownerPid;
+		int32_t ownerId;
+#ifdef IPC_MESSAGE_USE_SHARED_SIGNAL
+		IpcSharedSignal receiverSignal;
+		IpcSharedSignal senderSignal;
+#endif
+		std::atomic_uint8_t receiverFlag;
+		std::atomic_uint8_t senderFlag;
 		uint16_t messageLen;
 		uint8_t messageIndex;
 		uint8_t messageBuffer[getMaxSize()];
 	};
 
 public:
-	explicit IpcMessageObjectImpl(const IpcMessageParameters& aParameters)
+	explicit IpcMessageObjectImpl(const IpcMessageParameters& aParameters, bool aIsOwner)
 		: parameters(aParameters),
-		  sharedMemory(parameters.physicalName.c_str(), sizeof(Header), this)
+		  sharedMemory(parameters.physicalName.c_str(), sizeof(Header), this),
+		  isOwner(aIsOwner)
 	{
-		checkHeader(sharedMemory.getHeader());
+		const auto header = sharedMemory.getHeader();
+		checkHeader(header);
+
+		if (isOwner)
+		{
+			header->ownerPid = (int) getpid();
+			header->ownerId = ++IPC_MESSAGE_COUNTER;
+
+#ifdef IPC_MESSAGE_USE_SHARED_SIGNAL
+			new (&header->receiverSignal) IpcSharedSignal();
+			new (&header->senderSignal) IpcSharedSignal();
+#endif
+		}
+
+		string signalPrefix;
+		signalPrefix.printf(IPC_MESSAGE_SIGNAL_FORMAT, (int) header->ownerPid, (int) header->ownerId);
+
+#ifdef IPC_MESSAGE_USE_SHARED_SIGNAL
+		receiverSignal = &header->receiverSignal;
+		senderSignal = &header->senderSignal;
+#else
+		receiverSignal.emplace(signalPrefix + "_r");
+		senderSignal.emplace(signalPrefix + "_s");
+#endif
 	}
 
 	~IpcMessageObjectImpl()
 	{
-		const auto header = sharedMemory.getHeader();
-
-		if (header->receiverEvent.event_pid == 0 && header->senderEvent.event_pid == 0)
+		if (isOwner)
 			sharedMemory.removeMapFile();
 	}
 
@@ -160,6 +206,14 @@ public:
 public:
 	IpcMessageParameters parameters;
 	SharedMemory<Header> sharedMemory;
+#ifdef IPC_MESSAGE_USE_SHARED_SIGNAL
+	IpcSharedSignal* receiverSignal = nullptr;
+	IpcSharedSignal* senderSignal = nullptr;
+#else
+	std::optional<IpcNamedSignal> receiverSignal;
+	std::optional<IpcNamedSignal> senderSignal;
+#endif
+	const bool isOwner;
 };
 
 
@@ -192,7 +246,6 @@ public:
 
 private:
 	IpcMessageObjectImpl<Message> ipc;
-	SLONG eventCounter = 1;
 	std::atomic_bool disconnected = false;
 	std::mutex mutex;
 };
@@ -237,30 +290,27 @@ private:
 
 template <MessageConcept Message>
 inline IpcMessageReceiver<Message>::IpcMessageReceiver(const IpcMessageParameters& parameters)
-	: ipc(parameters)
+	: ipc(parameters, true)
 {
-	const auto sharedMemory = &ipc.sharedMemory;
-	const auto header = sharedMemory->getHeader();
-
-	SharedMutexGuard guard(sharedMemory);
-
-	if (sharedMemory->eventInit(&header->receiverEvent) != FB_SUCCESS)
-		(Arg::Gds(isc_random) << (ipc.parameters.logicalName + " eventInit(receiverEvent) failed").c_str()).raise();
 }
 
 template <MessageConcept Message>
 inline IpcMessageReceiver<Message>::~IpcMessageReceiver()
 {
+	const auto header = ipc.sharedMemory.getHeader();
+
 	disconnect();
 
-	const auto sharedMemory = &ipc.sharedMemory;
-	const auto header = sharedMemory->getHeader();
+#ifdef IPC_MESSAGE_USE_SHARED_SIGNAL
+	header->receiverSignal.~IpcSharedSignal();
+	header->senderSignal.~IpcSharedSignal();
+#elif !defined(WIN_NT)
+	string signalPrefix;
+	signalPrefix.printf(IPC_MESSAGE_SIGNAL_FORMAT, (int) header->ownerPid, (int) header->ownerId);
 
-	if (header->receiverEvent.event_pid)
-	{
-		sharedMemory->eventFini(&header->receiverEvent);
-		header->receiverEvent.event_pid = 0;
-	}
+	IpcNamedSignal::remove(signalPrefix + "_r");
+	IpcNamedSignal::remove(signalPrefix + "_s");
+#endif
 }
 
 template <MessageConcept Message>
@@ -284,23 +334,27 @@ inline std::optional<Message> IpcMessageReceiver<Message>::receive(std::function
 	const auto sharedMemory = &ipc.sharedMemory;
 	const auto header = sharedMemory->getHeader();
 
-	while (sharedMemory->eventWait(&header->receiverEvent, eventCounter, IPC_MESSAGE_TIMEOUT_MICROSECONDS) !=
-				FB_SUCCESS)
+	while (header->receiverFlag.load(std::memory_order_acquire) == 0)
 	{
-		if (disconnected)
-			return std::nullopt;
+		if (!ipc.receiverSignal->wait(IPC_MESSAGE_TIMEOUT))
+		{
+			if (disconnected)
+				return std::nullopt;
 
-		if (idleFunc)
-			idleFunc();
+			if (idleFunc)
+				idleFunc();
+		}
 	}
 
-	eventCounter = sharedMemory->eventClear(&header->receiverEvent);
+	ipc.receiverSignal->reset();
+
+	std::optional<Message> messageOpt;
 
 	if constexpr (IpcMessageObjectImpl<Message>::isMessagePair)
 	{
-		std::optional<Message> messageOpt(std::make_pair(
+		messageOpt.emplace(
 			createVariantByIndex<typename Message::first_type>(header->messageIndex),
-			typename Message::second_type{}));
+			typename Message::second_type{});
 		auto& varMessage = messageOpt->first;
 		auto& fixedMessage = messageOpt->second;
 
@@ -309,33 +363,31 @@ inline std::optional<Message> IpcMessageReceiver<Message>::receive(std::function
 
 		memcpy(&fixedMessage, header->messageBuffer, sizeof(fixedMessage));
 		memcpy(span.data(), header->messageBuffer + sizeof(fixedMessage), span.size());
-
-		if (sharedMemory->eventPost(&header->senderEvent) != FB_SUCCESS)
-			(Arg::Gds(isc_random) << (ipc.parameters.logicalName + " eventPost(senderEvent) failed").c_str()).raise();
-
-		return messageOpt;
 	}
 	else
 	{
-		std::optional<Message> messageOpt(createVariantByIndex<Message>(header->messageIndex));
+		messageOpt.emplace(createVariantByIndex<Message>(header->messageIndex));
 		auto& varMessage = messageOpt.value();
 
 		const auto span = getVariantIndexAndSpan(varMessage).second;
 		fb_assert(span.size() == header->messageLen);
 
 		memcpy(span.data(), header->messageBuffer, span.size());
-
-		if (sharedMemory->eventPost(&header->senderEvent) != FB_SUCCESS)
-			(Arg::Gds(isc_random) << (ipc.parameters.logicalName + " eventPost(senderEvent) failed").c_str()).raise();
-
-		return messageOpt;
 	}
+
+	header->receiverFlag.store(0, std::memory_order_release);
+
+	ipc.senderSignal->signal();
+
+	header->senderFlag.store(1, std::memory_order_release);
+
+	return messageOpt;
 }
 
 
 template <MessageConcept Message>
 inline IpcMessageSender<Message>::IpcMessageSender(const IpcMessageParameters& parameters)
-	: ipc(parameters)
+	: ipc(parameters, false)
 {
 }
 
@@ -343,15 +395,6 @@ template <MessageConcept Message>
 inline IpcMessageSender<Message>::~IpcMessageSender()
 {
 	disconnect();
-
-	const auto sharedMemory = &ipc.sharedMemory;
-	const auto header = sharedMemory->getHeader();
-
-	if (header->senderEvent.event_pid)
-	{
-		sharedMemory->eventFini(&header->senderEvent);
-		header->senderEvent.event_pid = 0;
-	}
 }
 
 template <MessageConcept Message>
@@ -385,7 +428,7 @@ inline bool IpcMessageSender<Message>::send(const Message& message, std::functio
 
 	SharedMutexGuard guard(sharedMemory, false);
 
-	while (!guard.tryLock(std::chrono::milliseconds(IPC_MESSAGE_TIMEOUT_MICROSECONDS / 1000)))
+	while (!guard.tryLock(IPC_MESSAGE_TIMEOUT))
 	{
 		if (disconnected)
 			return false;
@@ -415,30 +458,25 @@ inline bool IpcMessageSender<Message>::send(const Message& message, std::functio
 		memcpy(header->messageBuffer, span.data(), span.size());
 	}
 
-	if (sharedMemory->eventInit(&header->senderEvent) != FB_SUCCESS)
-		(Arg::Gds(isc_random) << (ipc.parameters.logicalName + " eventInit(senderEvent) failed").c_str()).raise();
+	header->receiverFlag.store(1, std::memory_order_release);
 
-	Cleanup senderEventCleanup([&] {
-		if (header->senderEvent.event_pid)
-		{
-			sharedMemory->eventFini(&header->senderEvent);
-			header->senderEvent.event_pid = 0;
-		}
-	});
+	ipc.receiverSignal->signal();
 
-	const SLONG eventCounter = sharedMemory->eventClear(&header->senderEvent);
-
-	if (sharedMemory->eventPost(&header->receiverEvent) != FB_SUCCESS)
-		(Arg::Gds(isc_random) << (ipc.parameters.logicalName + " eventPost(receiverEvent) failed").c_str()).raise();
-
-	while (sharedMemory->eventWait(&header->senderEvent, eventCounter, IPC_MESSAGE_TIMEOUT_MICROSECONDS) != FB_SUCCESS)
+	while (header->senderFlag.load(std::memory_order_acquire) == 0)
 	{
-		if (disconnected)
-			return false;
+		if (!ipc.senderSignal->wait(IPC_MESSAGE_TIMEOUT))
+		{
+			if (disconnected)
+				return false;
 
-		if (idleFunc)
-			idleFunc();
+			if (idleFunc)
+				idleFunc();
+		}
 	}
+
+	ipc.senderSignal->reset();
+
+	header->senderFlag.store(0, std::memory_order_release);
 
 	return true;
 }

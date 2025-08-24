@@ -27,8 +27,11 @@
 #include "../common/ipc/IpcMessage.h"
 #include <atomic>
 #include <chrono>
+#include <optional>
 #include <string>
 #include <thread>
+#include <vector>
+#include <cstdlib>
 
 using namespace Firebird;
 using namespace std::chrono_literals;
@@ -77,28 +80,42 @@ BOOST_AUTO_TEST_CASE(ProducerConsumerMessageTest)
 
 	using TestMessage = std::variant<Small, Big, Stop>;
 
-	const auto testPath = getTempPath();
+	constexpr auto ENV_NAME = "FB_PRODUCER_CONSUMER_MESSAGE_TEST_NAME";
+	constexpr auto ENV_RECEIVER = "FB_PRODUCER_CONSUMER_MESSAGE_TEST_RECEIVER";
+	constexpr auto ENV_PRODUCER_PROCESSES = "FB_PRODUCER_CONSUMER_MESSAGE_TEST_PRODUCER_PROCESSES";
 
-	IpcMessageReceiver<TestMessage> server({
-		.physicalName = testPath,
-		.logicalName = "IpcMessageTest",
-		.type = 1,
-		.version = 1
-	});
-	IpcMessageSender<TestMessage> clients[2] = {
-		IpcMessageSender<TestMessage>({
+	const char* const envName = std::getenv(ENV_NAME);
+	const char* const envReceiver = std::getenv(ENV_RECEIVER);
+	const auto envProducerProcesses = std::getenv(ENV_PRODUCER_PROCESSES);
+
+	const bool multiProcess = envName != nullptr;
+	const bool multiProcessIsReceiver = multiProcess && envReceiver != nullptr;
+	const unsigned processCount = multiProcess ? (unsigned) std::stoi(envProducerProcesses) : 1u;
+	const auto testPath = envName ? std::string(envName) : getTempPath();
+
+	std::optional<IpcMessageReceiver<TestMessage>> receiver;
+
+	if (multiProcessIsReceiver || !multiProcess)
+	{
+		receiver.emplace(IpcMessageParameters{
 			.physicalName = testPath,
 			.logicalName = "IpcMessageTest",
 			.type = 1,
 			.version = 1
-		}),
-		IpcMessageSender<TestMessage>({
+		});
+	}
+
+	std::vector<std::unique_ptr<IpcMessageSender<TestMessage>>> senders;
+
+	for (unsigned i = 0u; i < (multiProcessIsReceiver ? 0u : 2u); ++i)
+	{
+		senders.emplace_back(std::make_unique<IpcMessageSender<TestMessage>>(IpcMessageParameters{
 			.physicalName = testPath,
 			.logicalName = "IpcMessageTest",
 			.type = 1,
 			.version = 1
-		})
-	};
+		}));
+	}
 
 	constexpr unsigned numMessages = 8'000;
 	constexpr unsigned start[2] = {0, numMessages + 10};
@@ -108,73 +125,87 @@ BOOST_AUTO_TEST_CASE(ProducerConsumerMessageTest)
 	unsigned smallReads = 0;
 	unsigned bigReads = 0;
 	std::atomic_uint problems = 0;
+	std::vector<std::thread> threads;
 
-	const auto producer = [&](int i) {
-		for (writeNum[i] = start[i]; writeNum[i] - start[i] < numMessages; ++writeNum[i])
-		{
-			if (writeNum[i] % 2 == 0)
+	if (!multiProcess || !multiProcessIsReceiver)
+	{
+		const auto senderFunc = [&](unsigned i) {
+			for (writeNum[i] = start[i]; writeNum[i] - start[i] < numMessages; ++writeNum[i])
 			{
-				if (!clients[i].send(Small{ writeNum[i] }))
-					++problems;
-			}
-			else
-			{
-				if (!clients[i].send(Big{ writeNum[i] }))
-					++problems;
-			}
-		}
-
-		if (!clients[i].send(Stop{}))
-			++problems;
-	};
-
-	std::thread producerThread1(producer, 0);
-	std::thread producerThread2(producer, 1);
-
-	std::thread consumerThread([&]() {
-		for (readCount = 0; readCount < numMessages * 2 + 2;)
-		{
-			const auto message = server.receive();
-
-			if (!message.has_value())
-				continue;
-
-			if (std::holds_alternative<Stop>(message.value()))
-				++stopReads;
-			else if (std::holds_alternative<Small>(message.value()))
-				++smallReads;
-			else
-			{
-				if (std::holds_alternative<Big>(message.value()))
+				if (writeNum[i] % 2 == 0)
 				{
-					const auto& big = std::get<Big>(message.value());
-
-					char s[sizeof(big.s)];
-					memset(s, big.n % 256, sizeof(s));
-					if (memcmp(s, big.s, sizeof(s)) != 0)
+					if (!senders[i]->send(Small{ writeNum[i] }))
 						++problems;
-
-					++bigReads;
 				}
 				else
-					++problems;
+				{
+					if (!senders[i]->send(Big{ writeNum[i] }))
+						++problems;
+				}
 			}
 
-			++readCount;
-		}
-	});
+			if (!senders[i]->send(Stop{}))
+				++problems;
+		};
 
-	producerThread1.join();
-	producerThread2.join();
-	consumerThread.join();
+		for (unsigned i = 0u; i < 2; ++i)
+			threads.emplace_back(senderFunc, i);
+	}
+
+	if (!multiProcess || multiProcessIsReceiver)
+	{
+		threads.emplace_back([&]() {
+			for (readCount = 0; readCount < (numMessages + 1u) * processCount * 2u;)
+			{
+				const auto message = receiver->receive();
+
+				if (!message.has_value())
+					continue;
+
+				if (std::holds_alternative<Stop>(message.value()))
+					++stopReads;
+				else if (std::holds_alternative<Small>(message.value()))
+					++smallReads;
+				else
+				{
+					if (std::holds_alternative<Big>(message.value()))
+					{
+						const auto& big = std::get<Big>(message.value());
+
+						char s[sizeof(big.s)];
+						memset(s, big.n % 256, sizeof(s));
+						if (memcmp(s, big.s, sizeof(s)) != 0)
+							++problems;
+
+						++bigReads;
+					}
+					else
+						++problems;
+				}
+
+				++readCount;
+			}
+		});
+	}
+
+	for (auto& thread : threads)
+		thread.join();
 
 	BOOST_CHECK_EQUAL(problems, 0);
-	BOOST_CHECK_EQUAL(writeNum[0], start[0] + numMessages);
-	BOOST_CHECK_EQUAL(writeNum[1], start[1] + numMessages);
-	BOOST_CHECK_EQUAL(readCount, numMessages * 2 + 2);
-	BOOST_CHECK_EQUAL(stopReads, 2u);
-	BOOST_CHECK_EQUAL(smallReads, numMessages);
-	BOOST_CHECK_EQUAL(bigReads, numMessages);
+
+	if (!multiProcess || !multiProcessIsReceiver)
+	{
+		BOOST_CHECK_EQUAL(writeNum[0], start[0] + numMessages);
+		BOOST_CHECK_EQUAL(writeNum[1], start[1] + numMessages);
+	}
+
+	if (!multiProcess || multiProcessIsReceiver)
+	{
+		BOOST_CHECK_EQUAL(readCount, (numMessages + 1u) * processCount * 2u);
+		BOOST_CHECK_EQUAL(stopReads, processCount * 2u);
+		BOOST_CHECK_EQUAL(smallReads, processCount * numMessages);
+		BOOST_CHECK_EQUAL(bigReads, processCount * numMessages);
+	}
 }
 
 
