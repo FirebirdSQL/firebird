@@ -739,10 +739,10 @@ void EVL_validate(thread_db* tdbb, const Item& item, const ItemInfo* itemInfo, d
 		fromSubFields.push(desc);
 		toFieldInfos.push(&fieldInfo);
 
-		while (fromSubFields.hasData() && toFieldInfos.hasData())
+		while (!null && fromSubFields.hasData() && toFieldInfos.hasData())
 		{
 			// do not get inside composite structure if top field is null
-			if (fromSubFields.object()->dsc_sub_first && toFieldInfos.object()->subFirst && !null)
+			if (fromSubFields.object()->dsc_sub_first && toFieldInfos.object()->subFirst)
 			{
 				fromSubFields.push(fromSubFields.object()->dsc_sub_first);
 				toFieldInfos.push(toFieldInfos.object()->subFirst);
