@@ -3379,7 +3379,7 @@ void DeclareLocalTypeNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	while (fld)
 	{
 		dsqlScratch->appendMetaString(fld->fld_name.c_str());
-		dsqlScratch->putType(fld, false);
+		dsqlScratch->putType(fld, true);
 		auto clause = (static_cast<RelationNode::AddColumnClause*>(curClause->getObject()));
 		UCHAR hasCheckConstraint = false;
 		for (auto& constraint : clause->constraints)

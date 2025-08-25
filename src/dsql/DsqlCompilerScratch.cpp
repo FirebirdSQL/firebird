@@ -435,7 +435,7 @@ void DsqlCompilerScratch::putLocalTypes()
 		while (fld)
 		{
 			appendMetaString(fld->fld_name.c_str());
-			putType(fld, false);
+			putType(fld, true);
 			auto clause = (static_cast<RelationNode::AddColumnClause*>(curClause->getObject()));
 			UCHAR hasCheckConstraint = false;
 			for (auto& constraint : clause->constraints)
