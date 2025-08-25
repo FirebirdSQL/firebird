@@ -8368,99 +8368,118 @@ static unsigned process_message_display(Firebird::IMessageMetadata* message, uns
 		if (namelength < NULL_DISP_LEN)
 			namelength = NULL_DISP_LEN;
 
+		// Lambda to calculate display length for a variable
+		auto calculateDisplayLength = [&](const IsqlVar& currentVar) -> unsigned {
+			const unsigned type = currentVar.type;
+			const SSHORT charSet = TTYPE_TO_CHARSET(currentVar.charSet);
+			unsigned currentDispLength = currentVar.length;
+			unsigned alignment = currentVar.length;
+
+			switch (type)
+			{
+			case SQL_BLOB:
+			case SQL_ARRAY:
+				// enough room for the blob id to print
+				currentDispLength = 17;
+				break;
+			case SQL_TIMESTAMP:
+				if (setValues.Time_display || isqlGlob.SQL_dialect > SQL_DIALECT_V5)
+					currentDispLength = DATETIME_LEN;
+				else
+					currentDispLength = DATE_ONLY_LEN;
+				break;
+			case SQL_TIMESTAMP_TZ:
+			case SQL_TIMESTAMP_TZ_EX:
+				currentDispLength = DATETIME_TZ_LEN;
+				break;
+			case SQL_TYPE_TIME:
+				currentDispLength = TIME_ONLY_LEN;
+				break;
+			case SQL_TIME_TZ:
+			case SQL_TIME_TZ_EX:
+				currentDispLength = TIME_TZ_ONLY_LEN;
+				break;
+			case SQL_TYPE_DATE:
+				currentDispLength = DATE_ONLY_LEN;
+				break;
+			case SQL_FLOAT:
+				currentDispLength = FLOAT_LEN;
+				break;
+			case SQL_DOUBLE:
+				currentDispLength = DOUBLE_LEN;
+				break;
+			case SQL_DEC16:
+				currentDispLength = Firebird::IDecFloat16::STRING_SIZE - 1;
+				break;
+			case SQL_INT128:
+				currentDispLength = Firebird::IInt128::STRING_SIZE - 1;
+				break;
+			case SQL_DEC34:
+				currentDispLength = Firebird::IDecFloat34::STRING_SIZE - 1;
+				break;
+			case SQL_TEXT:
+				alignment = 1;
+				// OCTETS data is displayed in hex
+				if (charSet == CS_BINARY)
+					currentDispLength = 2 * currentVar.length;
+				else if (charSet == CS_UNICODE_FSS)
+					currentDispLength /= 3;
+				else if (charSet == CS_UTF8)
+					currentDispLength /= 4;
+				break;
+			case SQL_VARYING:
+				alignment = sizeof(USHORT);
+				// OCTETS data is displayed in hex
+				if (charSet == CS_BINARY)
+					currentDispLength = 2 * currentVar.length;
+				else if (charSet == CS_UNICODE_FSS)
+					currentDispLength /= 3;
+				else if (charSet == CS_UTF8)
+					currentDispLength /= 4;
+				break;
+			case SQL_SHORT:
+				currentDispLength = SHORT_LEN;
+				break;
+			case SQL_LONG:
+				currentDispLength = LONG_LEN;
+				break;
+			case SQL_INT64:
+				currentDispLength = INT64_LEN;
+				break;
+			case SQL_BOOLEAN:
+				currentDispLength = BOOLEAN_LEN;
+				break;
+			case SQL_ROWTYPE:
+				currentDispLength = 2;	// add two characters for opening and closing parentheses
+				break;
+			default:
+				currentDispLength = UNKNOWN_LEN;
+				break;
+			}
+
+			// special case db_key alignment which arrives as an SQL_TEXT
+			if (!strncmp(currentVar.field, "DB_KEY", 6))
+			{
+				alignment = 8;
+				currentDispLength = 2 * currentVar.length;
+			}
+
+			return currentDispLength;
+		};
+
+		// Calculate display length for main variable and all subvariables
+		unsigned totalDispLength = 0;
+		disp_length = calculateDisplayLength(var);
+		totalDispLength += disp_length;
+
+		// Process all subvariables
+		for (const auto& subvar : var.subvars)
+		{
+			disp_length += calculateDisplayLength(subvar);
+		}
+
 		const unsigned type = var.type;
 		const auto charSet = var.charSet;
-
-		switch (type)
-		{
-		case SQL_BLOB:
-		case SQL_ARRAY:
-			// enough room for the blob id to print
-
-			disp_length = 17;
-			break;
-		case SQL_TIMESTAMP:
-			if (setValues.Time_display || isqlGlob.SQL_dialect > SQL_DIALECT_V5)
-				disp_length = DATETIME_LEN;
-			else
-				disp_length = DATE_ONLY_LEN;
-			break;
-		case SQL_TIMESTAMP_TZ:
-		case SQL_TIMESTAMP_TZ_EX:
-			disp_length = DATETIME_TZ_LEN;
-			break;
-		case SQL_TYPE_TIME:
-			disp_length = TIME_ONLY_LEN;
-			break;
-		case SQL_TIME_TZ:
-		case SQL_TIME_TZ_EX:
-			disp_length = TIME_TZ_ONLY_LEN;
-			break;
-		case SQL_TYPE_DATE:
-			disp_length = DATE_ONLY_LEN;
-			break;
-		case SQL_FLOAT:
-			disp_length = FLOAT_LEN;
-			break;
-		case SQL_DOUBLE:
-			disp_length = DOUBLE_LEN;
-			break;
-		case SQL_DEC16:
-			disp_length = Firebird::IDecFloat16::STRING_SIZE - 1;
-			break;
-		case SQL_INT128:
-			disp_length = Firebird::IInt128::STRING_SIZE - 1;
-			break;
-		case SQL_DEC34:
-			disp_length = Firebird::IDecFloat34::STRING_SIZE - 1;
-			break;
-		case SQL_TEXT:
-			alignment = 1;
-			// OCTETS data is displayed in hex
-			if (charSet == CS_BINARY)
-				disp_length = 2 * var.length;
-			else if (charSet == CS_UNICODE_FSS)
-				disp_length /= 3;
-			else if (charSet == CS_UTF8)
-				disp_length /= 4;
-			break;
-		case SQL_VARYING:
-			alignment = sizeof(USHORT);
-			// OCTETS data is displayed in hex
-			if (charSet == CS_BINARY)
-				disp_length = 2 * var.length;
-			else if (charSet == CS_UNICODE_FSS)
-				disp_length /= 3;
-			else if (charSet == CS_UTF8)
-				disp_length /= 4;
-			break;
-		case SQL_SHORT:
-			disp_length = SHORT_LEN;
-			break;
-		case SQL_LONG:
-			disp_length = LONG_LEN;
-			break;
-		case SQL_INT64:
-			disp_length = INT64_LEN;
-			break;
-		case SQL_BOOLEAN:
-			disp_length = BOOLEAN_LEN;
-			break;
-		case SQL_ROWTYPE:
-			disp_length = disp_length * 2;	// for debug purposes, TODO: rewrite
-			break;
-		default:
-			disp_length = UNKNOWN_LEN;
-			break;
-		}
-
-		// special case db_key alignment which arrives as an SQL_TEXT
-
-		if (!strncmp(var.field, "DB_KEY", 6))
-		{
-			alignment = 8;
-			disp_length = 2 * var.length;
-		}
 
 		// This is the print width of each column
 
