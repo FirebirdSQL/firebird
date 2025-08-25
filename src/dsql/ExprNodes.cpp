@@ -5249,7 +5249,8 @@ DmlNode* DefaultNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 					DefaultNode* node = FB_NEW_POOL(pool) DefaultNode(pool, relationName, fieldName);
 					node->field = FB_NEW_POOL(pool) jrd_fld(pool);
 					auto defaultValueFieldIndex = *(*typeDeclaration)->fieldNameToIdMap.get(fieldName);
-					node->field->fld_default_value = (*typeDeclaration)->defaultList->items[defaultValueFieldIndex];
+					if ((*typeDeclaration)->defaultList->items.getCount() > defaultValueFieldIndex)
+						node->field->fld_default_value = (*typeDeclaration)->defaultList->items[defaultValueFieldIndex];
 
 					return node;
 				}
