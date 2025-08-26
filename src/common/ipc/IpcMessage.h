@@ -116,6 +116,7 @@ public:
 	{
 		int32_t ownerPid;
 		int32_t ownerId;
+		std::atomic_uint8_t alive;
 #ifdef IPC_MESSAGE_USE_SHARED_SIGNAL
 		IpcSharedSignal receiverSignal;
 		IpcSharedSignal senderSignal;
@@ -140,6 +141,7 @@ public:
 		{
 			header->ownerPid = (int) getpid();
 			header->ownerId = ++IPC_MESSAGE_COUNTER;
+			header->alive = 1;
 
 #ifdef IPC_MESSAGE_USE_SHARED_SIGNAL
 			new (&header->receiverSignal) IpcSharedSignal();
@@ -320,6 +322,9 @@ inline void IpcMessageReceiver<Message>::disconnect()
 	{
 		disconnected = true;
 		std::lock_guard mutexLock(mutex);
+
+		const auto header = ipc.sharedMemory.getHeader();
+		header->alive = 0;
 	}
 }
 
@@ -347,6 +352,7 @@ inline std::optional<Message> IpcMessageReceiver<Message>::receive(std::function
 	}
 
 	ipc.receiverSignal->reset();
+	header->receiverFlag.store(0, std::memory_order_release);
 
 	std::optional<Message> messageOpt;
 
@@ -375,10 +381,7 @@ inline std::optional<Message> IpcMessageReceiver<Message>::receive(std::function
 		memcpy(span.data(), header->messageBuffer, span.size());
 	}
 
-	header->receiverFlag.store(0, std::memory_order_release);
-
 	ipc.senderSignal->signal();
-
 	header->senderFlag.store(1, std::memory_order_release);
 
 	return messageOpt;
@@ -430,6 +433,9 @@ inline bool IpcMessageSender<Message>::send(const Message& message, std::functio
 
 	while (!guard.tryLock(IPC_MESSAGE_TIMEOUT))
 	{
+		if (!header->alive.load(std::memory_order_relaxed))
+			disconnected = true;
+
 		if (disconnected)
 			return false;
 
@@ -458,14 +464,16 @@ inline bool IpcMessageSender<Message>::send(const Message& message, std::functio
 		memcpy(header->messageBuffer, span.data(), span.size());
 	}
 
-	header->receiverFlag.store(1, std::memory_order_release);
-
 	ipc.receiverSignal->signal();
+	header->receiverFlag.store(1, std::memory_order_release);
 
 	while (header->senderFlag.load(std::memory_order_acquire) == 0)
 	{
 		if (!ipc.senderSignal->wait(IPC_MESSAGE_TIMEOUT))
 		{
+			if (!header->alive.load(std::memory_order_relaxed))
+				disconnected = true;
+
 			if (disconnected)
 				return false;
 
@@ -475,7 +483,6 @@ inline bool IpcMessageSender<Message>::send(const Message& message, std::functio
 	}
 
 	ipc.senderSignal->reset();
-
 	header->senderFlag.store(0, std::memory_order_release);
 
 	return true;

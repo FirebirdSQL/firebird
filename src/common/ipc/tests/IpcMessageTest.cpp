@@ -240,7 +240,7 @@ BOOST_AUTO_TEST_CASE(ServerDisconnectMessageTest)
 	std::thread producerThread([&]() {
 		try
 		{
-			while (!server.isDisconnected())
+			while (!client.isDisconnected())
 			{
 				if (client.send(Message{0}))
 					++produced;

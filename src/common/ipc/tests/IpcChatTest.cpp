@@ -80,11 +80,11 @@ BOOST_AUTO_TEST_CASE(IpcChatTest)
 	IpcChatServer<RequestMessage, ResponseMessage> server(parameters);
 	IpcChatClient<RequestMessage, ResponseMessage> client(parameters);
 
-	constexpr unsigned numMessages = 4'000;
+	constexpr unsigned NUM_MESSAGES = 4'000;
 	unsigned readCount = 0;
 
 	std::thread consumerThread([&]() {
-		for (readCount = 0; readCount < numMessages; ++readCount)
+		for (readCount = 0; readCount < NUM_MESSAGES; ++readCount)
 		{
 			const auto requestMessageOpt = server.receive();
 
@@ -104,7 +104,7 @@ BOOST_AUTO_TEST_CASE(IpcChatTest)
 		}
 	});
 
-	for (unsigned writeCount = 0; writeCount < numMessages; ++writeCount)
+	for (unsigned writeCount = 0; writeCount < NUM_MESSAGES; ++writeCount)
 	{
 		BOOST_CHECK(client.send(Request{ .clientAddress = client.getAddress(), .n = writeCount }));
 		const auto responseMessageOpt = client.receive();
@@ -116,7 +116,7 @@ BOOST_AUTO_TEST_CASE(IpcChatTest)
 
 	consumerThread.join();
 
-	BOOST_CHECK_EQUAL(readCount, numMessages);
+	BOOST_CHECK_EQUAL(readCount, NUM_MESSAGES);
 }
 
 
