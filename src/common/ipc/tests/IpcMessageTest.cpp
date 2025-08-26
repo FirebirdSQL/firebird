@@ -80,6 +80,9 @@ BOOST_AUTO_TEST_CASE(ProducerConsumerMessageTest)
 
 	using TestMessage = std::variant<Small, Big, Stop>;
 
+	constexpr unsigned MESSAGE_COUNT = 8'000;
+	constexpr unsigned THREAD_COUNT = 2;
+
 	constexpr auto ENV_NAME = "FB_PRODUCER_CONSUMER_MESSAGE_TEST_NAME";
 	constexpr auto ENV_RECEIVER = "FB_PRODUCER_CONSUMER_MESSAGE_TEST_RECEIVER";
 	constexpr auto ENV_PRODUCER_PROCESSES = "FB_PRODUCER_CONSUMER_MESSAGE_TEST_PRODUCER_PROCESSES";
@@ -107,7 +110,7 @@ BOOST_AUTO_TEST_CASE(ProducerConsumerMessageTest)
 
 	std::vector<std::unique_ptr<IpcMessageSender<TestMessage>>> senders;
 
-	for (unsigned i = 0u; i < (multiProcessIsReceiver ? 0u : 2u); ++i)
+	for (unsigned i = 0u; i < (multiProcessIsReceiver ? 0u : THREAD_COUNT); ++i)
 	{
 		senders.emplace_back(std::make_unique<IpcMessageSender<TestMessage>>(IpcMessageParameters{
 			.physicalName = testPath,
@@ -117,9 +120,7 @@ BOOST_AUTO_TEST_CASE(ProducerConsumerMessageTest)
 		}));
 	}
 
-	constexpr unsigned numMessages = 8'000;
-	constexpr unsigned start[2] = {0, numMessages + 10};
-	unsigned writeNum[2] = {0, 0};
+	std::vector<unsigned> writeNum(THREAD_COUNT, 0);
 	unsigned readCount = 0;
 	unsigned stopReads = 0;
 	unsigned smallReads = 0;
@@ -130,9 +131,9 @@ BOOST_AUTO_TEST_CASE(ProducerConsumerMessageTest)
 	if (!multiProcess || !multiProcessIsReceiver)
 	{
 		const auto senderFunc = [&](unsigned i) {
-			for (writeNum[i] = start[i]; writeNum[i] - start[i] < numMessages; ++writeNum[i])
+			for (writeNum[i] = MESSAGE_COUNT * i; writeNum[i] - MESSAGE_COUNT * i < MESSAGE_COUNT; ++writeNum[i])
 			{
-				if (writeNum[i] % 2 == 0)
+				if (writeNum[i] % 2u == 0)
 				{
 					if (!senders[i]->send(Small{ writeNum[i] }))
 						++problems;
@@ -148,14 +149,14 @@ BOOST_AUTO_TEST_CASE(ProducerConsumerMessageTest)
 				++problems;
 		};
 
-		for (unsigned i = 0u; i < 2; ++i)
+		for (unsigned i = 0u; i < THREAD_COUNT; ++i)
 			threads.emplace_back(senderFunc, i);
 	}
 
 	if (!multiProcess || multiProcessIsReceiver)
 	{
 		threads.emplace_back([&]() {
-			for (readCount = 0; readCount < (numMessages + 1u) * processCount * 2u;)
+			for (readCount = 0u; readCount < (MESSAGE_COUNT + 1u) * processCount * THREAD_COUNT;)
 			{
 				const auto message = receiver->receive();
 
@@ -191,20 +192,20 @@ BOOST_AUTO_TEST_CASE(ProducerConsumerMessageTest)
 	for (auto& thread : threads)
 		thread.join();
 
-	BOOST_CHECK_EQUAL(problems, 0);
+	BOOST_CHECK_EQUAL(problems, 0u);
 
 	if (!multiProcess || !multiProcessIsReceiver)
 	{
-		BOOST_CHECK_EQUAL(writeNum[0], start[0] + numMessages);
-		BOOST_CHECK_EQUAL(writeNum[1], start[1] + numMessages);
+		for (unsigned i = 0u; i < THREAD_COUNT; ++i)
+			BOOST_CHECK_EQUAL(writeNum[i], MESSAGE_COUNT * (i + 1u));
 	}
 
 	if (!multiProcess || multiProcessIsReceiver)
 	{
-		BOOST_CHECK_EQUAL(readCount, (numMessages + 1u) * processCount * 2u);
-		BOOST_CHECK_EQUAL(stopReads, processCount * 2u);
-		BOOST_CHECK_EQUAL(smallReads, processCount * numMessages);
-		BOOST_CHECK_EQUAL(bigReads, processCount * numMessages);
+		BOOST_CHECK_EQUAL(readCount, (MESSAGE_COUNT + 1u) * processCount * THREAD_COUNT);
+		BOOST_CHECK_EQUAL(stopReads, processCount * THREAD_COUNT);
+		BOOST_CHECK_EQUAL(smallReads, processCount * MESSAGE_COUNT * THREAD_COUNT / 2u);
+		BOOST_CHECK_EQUAL(bigReads, processCount * MESSAGE_COUNT * THREAD_COUNT / 2u);
 	}
 }
 
