@@ -42,7 +42,7 @@
 namespace Firebird {
 
 
-class IpcSharedSignal
+class IpcSharedSignal final
 {
 public:
 	explicit IpcSharedSignal();

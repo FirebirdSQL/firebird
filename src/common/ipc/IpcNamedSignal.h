@@ -45,7 +45,7 @@ namespace Firebird {
 
 
 // An event in Windows, a semaphore in POSIX.
-class IpcNamedSignal
+class IpcNamedSignal final
 {
 public:
 	explicit IpcNamedSignal(const string& name);
