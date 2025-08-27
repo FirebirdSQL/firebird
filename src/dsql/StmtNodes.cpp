@@ -6423,6 +6423,7 @@ const StmtNode* InitVariableNode::execute(thread_db* tdbb, Request* request, Exe
 			{
 				if (fieldInfo.defaultValue)
 				{
+					// Evaluate the default value expression
 					dsc* value = EVL_expr(tdbb, request, fieldInfo.defaultValue);
 
 					if (value)
@@ -6433,25 +6434,31 @@ const StmtNode* InitVariableNode::execute(thread_db* tdbb, Request* request, Exe
 				}
 				else if (fieldInfo.subFirst)
 				{
-					auto next = fieldInfo.subFirst;
-					auto nextToDesc = toDesc->dsc_sub_first;
-					auto counter = 0;
-					while (next)
+					// Initialize sub-fields with their default values
+					auto currentSubField = fieldInfo.subFirst;
+					auto currentToDesc = toDesc->dsc_sub_first;
+					auto fieldIndex = 0;
+
+					while (currentSubField)
 					{
-						if (next->defaultValue)
+						if (currentSubField->defaultValue)
 						{
-							dsc* value = EVL_expr(tdbb, request, next->defaultValue);
+							dsc* value = EVL_expr(tdbb, request, currentSubField->defaultValue);
 							if (value)
 							{
-								nextToDesc->dsc_flags &= ~DSC_null;
-								MOV_move(tdbb, value, nextToDesc);
-								*(toDesc->dsc_address + (counter * 2)) = 0;
-								*(toDesc->dsc_address + (counter * 2 + 1)) = 0;
+								currentToDesc->dsc_flags &= ~DSC_null;
+								MOV_move(tdbb, value, currentToDesc);
+
+								// Clear null indicator bytes for this field
+								const auto nullByteOffset = fieldIndex * 2;
+								*(toDesc->dsc_address + nullByteOffset) = 0;
+								*(toDesc->dsc_address + nullByteOffset + 1) = 0;
 							}
 						}
-						counter++;
-						next = next->next;
-						nextToDesc = nextToDesc->dsc_next;
+
+						fieldIndex++;
+						currentSubField = currentSubField->next;
+						currentToDesc = currentToDesc->dsc_next;
 					}
 				}
 			}
