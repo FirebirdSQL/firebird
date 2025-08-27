@@ -5276,7 +5276,8 @@ bool DropPackageTypeNode::deleteDimensionRecords(thread_db* tdbb, jrd_tra* trans
 
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		X IN RDB$FIELD_DIMENSIONS
-		WITH X.RDB$FIELD_NAME EQ name.object.c_str()
+		WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 X.RDB$FIELD_NAME EQ name.object.c_str()
 	{
 		found = true;
 		ERASE X;

@@ -3225,12 +3225,11 @@ DmlNode* DeclareLocalTypeNode::parse(thread_db* tdbb, MemoryPool& pool, Compiler
 	auto next = &node->desc->dsc_sub_first;
 
 	FieldInfo** nextSubfieldInfo = nullptr;
-	auto fieldInfoMap = &csb->csb_map_field_info;
 
 	QualifiedNameMetaNamePair namePair(QualifiedName(compositeTypeName, ""), "");
-	auto fieldInfo = fieldInfoMap->get(namePair);
+	auto fieldInfo = csb->csb_map_field_info.get(namePair);
 	if (!fieldInfo)
-		fieldInfo = fieldInfoMap->put(namePair);
+		fieldInfo = csb->csb_map_field_info.put(namePair);
 
 	fieldInfo->nullable = true;
 	fieldInfo->defaultValue = NULL;
@@ -3256,20 +3255,39 @@ DmlNode* DeclareLocalTypeNode::parse(thread_db* tdbb, MemoryPool& pool, Compiler
 		fieldIdString.printf("%d", fieldId);
 
 		QualifiedNameMetaNamePair namePair(QualifiedName(compositeTypeName, ""), fieldIdString);
-		*nextSubfieldInfo = fieldInfoMap->get(namePair);
+		*nextSubfieldInfo = csb->csb_map_field_info.get(namePair);
 		if (!*nextSubfieldInfo)
-			*nextSubfieldInfo = fieldInfoMap->put(namePair);
+			*nextSubfieldInfo = csb->csb_map_field_info.put(namePair);
 
-		if (hasCheckConstraintFlag)
+		if (hasCheckConstraintFlag)		// explicit checks from declaration have highest priority
 		{
 			csb->csb_local_type_validation_desc = *next;
 			(*nextSubfieldInfo)->validationExpr = PAR_parse_boolean(tdbb, csb);
 			csb->csb_local_type_validation_desc = nullptr;
 		}
+		else if (itemInfo.field.first.object.hasData())		// there could be checks from domains
+		{
+			auto fieldInfo = csb->csb_map_field_info.get(itemInfo.field);
+			if (fieldInfo)
+			{
+				csb->csb_local_type_validation_desc = *next;
+				(*nextSubfieldInfo)->validationExpr = fieldInfo->validationExpr;
+				csb->csb_local_type_validation_desc = nullptr;
+			}
+		}
 
 		auto hasDefaultValueFlag = csb->csb_blr_reader.getByte() == DeclareLocalTypeNode::HAS_DEFAULT_VALUE;
-		if (hasDefaultValueFlag)
+		if (hasDefaultValueFlag)		// explicit default values have highest priority
 			node->defaultList->add(PAR_parse_value(tdbb, csb));
+		else if (itemInfo.field.first.object.hasData())		// there could be default values from domains
+		{
+			auto fieldInfo = csb->csb_map_field_info.get(itemInfo.field);
+			if (fieldInfo)
+			{
+				node->defaultList->add(fieldInfo->defaultValue);
+				(*nextSubfieldInfo)->defaultValue = fieldInfo->defaultValue;
+			}
+		}
 
 		(*nextSubfieldInfo)->nullable = itemInfo.nullable;
 		fieldInfo->nullable &= (*nextSubfieldInfo)->nullable;
@@ -3331,6 +3349,9 @@ DeclareLocalTypeNode* DeclareLocalTypeNode::dsqlPass(DsqlCompilerScratch* dsqlSc
 		(*next)->charSet = field->charSet;
 		(*next)->length = field->length;
 		(*next)->notNull = clause->notNullSpecified;
+		(*next)->typeOfName = field->typeOfName;
+		(*next)->typeOfTable = field->typeOfTable;
+		(*next)->fullDomain = field->fullDomain;
 
 		for (auto& constraint : clause->constraints)
 		{
@@ -6398,15 +6419,40 @@ const StmtNode* InitVariableNode::execute(thread_db* tdbb, Request* request, Exe
 			MapFieldInfo::ValueType fieldInfo;
 
 			if (varInfo->fullDomain &&
-				request->getStatement()->mapFieldInfo.get(varInfo->field, fieldInfo) &&
-				fieldInfo.defaultValue)
+				request->getStatement()->mapFieldInfo.get(varInfo->field, fieldInfo))
 			{
-				dsc* value = EVL_expr(tdbb, request, fieldInfo.defaultValue);
-
-				if (value)
+				if (fieldInfo.defaultValue)
 				{
-					toDesc->dsc_flags &= ~DSC_null;
-					MOV_move(tdbb, value, toDesc);
+					dsc* value = EVL_expr(tdbb, request, fieldInfo.defaultValue);
+
+					if (value)
+					{
+						toDesc->dsc_flags &= ~DSC_null;
+						MOV_move(tdbb, value, toDesc);
+					}
+				}
+				else if (fieldInfo.subFirst)
+				{
+					auto next = fieldInfo.subFirst;
+					auto nextToDesc = toDesc->dsc_sub_first;
+					auto counter = 0;
+					while (next)
+					{
+						if (next->defaultValue)
+						{
+							dsc* value = EVL_expr(tdbb, request, next->defaultValue);
+							if (value)
+							{
+								nextToDesc->dsc_flags &= ~DSC_null;
+								MOV_move(tdbb, value, nextToDesc);
+								*(toDesc->dsc_address + (counter * 2)) = 0;
+								*(toDesc->dsc_address + (counter * 2 + 1)) = 0;
+							}
+						}
+						counter++;
+						next = next->next;
+						nextToDesc = nextToDesc->dsc_next;
+					}
 				}
 			}
 		}
