@@ -5214,21 +5214,32 @@ void DeclarePackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 				status_exception::raise(Arg::PrivateDyn(226) << typeClause->name);
 			}
 
+			// save not null flag from type declaration because it will be overridden by not null flag from domain
+			// declaration after type->resolve
+			auto declaredNotNull = type->notNull;
+
 			type->resolve(dsqlScratch);
 
 			DsqlDescMaker::fromField(&dsqlScratch->domainValue, type);
 
-			QualifiedName generatedFieldName({}, name.schema, name.package);
-			DYN_UTIL_generate_field_name(tdbb, generatedFieldName);
-			storeGlobalField(tdbb, transaction, generatedFieldName, type);
+			if (typeClause->defaultClause || typeClause->checkClause || declaredNotNull || !type->typeOfName.object.hasData())
+			{
+				QualifiedName generatedFieldName({}, name.schema, name.package);
+				DYN_UTIL_generate_field_name(tdbb, generatedFieldName);
+				storeGlobalField(tdbb, transaction, generatedFieldName, type);
 
-			updateFieldDefaultAndValidation(tdbb, dsqlScratch, transaction, generatedFieldName,
-				typeClause->defaultClause, typeClause->checkClause, type->notNull);
+				updateFieldDefaultAndValidation(tdbb, dsqlScratch, transaction, generatedFieldName,
+					typeClause->defaultClause, typeClause->checkClause, type->notNull);
 
-			type->fieldSource = generatedFieldName;
+				type->fieldSource = generatedFieldName;
+			}
+			else if (type->typeOfName.object.hasData())
+			{
+				type->fieldSource = type->typeOfName;
+			}
 
 			RelationNode::FieldDefinition fieldDefinition(*tdbb->getDefaultPool());
-			fieldDefinition.fieldSource = generatedFieldName;
+			fieldDefinition.fieldSource = type->fieldSource;
 			fieldDefinition.relationName = field->relationName;
 			fieldDefinition.name = type->fld_name;
 			fieldDefinition.position = positionCounter++;
