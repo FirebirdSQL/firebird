@@ -40,9 +40,8 @@
 
 #include "firebird.h"
 #include "../lock/lock_proto.h"
+#include "../common/StatusHolder.h"
 #include "../common/ThreadStart.h"
-#include "../jrd/jrd.h"
-#include "../jrd/Attachment.h"
 #include "iberror.h"
 #include "../yvalve/gds_proto.h"
 #include "../common/gdsassert.h"
@@ -381,7 +380,7 @@ bool LockManager::initializeOwner(CheckStatusWrapper* statusVector,
 }
 
 
-void LockManager::shutdownOwner(thread_db* tdbb, SRQ_PTR* owner_handle)
+void LockManager::shutdownOwner(const Callbacks& callbacks, SRQ_PTR* owner_handle)
 {
 /**************************************
  *
@@ -413,8 +412,9 @@ void LockManager::shutdownOwner(thread_db* tdbb, SRQ_PTR* owner_handle)
 	{
 		{ // checkout scope
 			LockTableCheckout checkout(this, FB_FUNCTION);
-			EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
-			Thread::sleep(10);
+			callbacks.checkoutRun([] {
+				Thread::sleep(10);
+			});
 		}
 
 		owner = (own*) SRQ_ABS_PTR(owner_offset);
@@ -431,7 +431,7 @@ void LockManager::shutdownOwner(thread_db* tdbb, SRQ_PTR* owner_handle)
 }
 
 
-SRQ_PTR LockManager::enqueue(thread_db* tdbb,
+SRQ_PTR LockManager::enqueue(const Callbacks& callbacks,
 							 CheckStatusWrapper* statusVector,
 							 SRQ_PTR prior_request,
 							 const USHORT series,
@@ -528,7 +528,7 @@ SRQ_PTR LockManager::enqueue(thread_db* tdbb,
 		insert_tail(&lock->lbl_requests, &request->lrq_lbl_requests);
 		request->lrq_data = data;
 
-		if (grant_or_que(tdbb, request, lock, lck_wait))
+		if (grant_or_que(callbacks, request, lock, lck_wait))
 			return request_offset;
 
 		Arg::Gds(lck_wait > 0 ? isc_deadlock : lck_wait < 0 ? isc_lock_timeout :
@@ -584,7 +584,7 @@ SRQ_PTR LockManager::enqueue(thread_db* tdbb,
 }
 
 
-bool LockManager::convert(thread_db* tdbb,
+bool LockManager::convert(const Callbacks& callbacks,
 						  CheckStatusWrapper* statusVector,
 						  SRQ_PTR request_offset,
 						  UCHAR type,
@@ -623,14 +623,14 @@ bool LockManager::convert(thread_db* tdbb,
 		++(m_sharedMemory->getHeader()->lhb_operations[0]);
 
 	const bool result =
-		internal_convert(tdbb, statusVector, request_offset, type, lck_wait,
+		internal_convert(callbacks, statusVector, request_offset, type, lck_wait,
 						 ast_routine, ast_argument);
 
 	return result;
 }
 
 
-UCHAR LockManager::downgrade(thread_db* tdbb,
+UCHAR LockManager::downgrade(const Callbacks& callbacks,
 							 CheckStatusWrapper* statusVector,
 							 const SRQ_PTR request_offset)
 {
@@ -688,7 +688,7 @@ UCHAR LockManager::downgrade(thread_db* tdbb,
 	}
 	else
 	{
-		internal_convert(tdbb, statusVector, request_offset, state, LCK_NO_WAIT,
+		internal_convert(callbacks, statusVector, request_offset, state, LCK_NO_WAIT,
 						 request->lrq_ast_routine, request->lrq_ast_argument);
 	}
 
@@ -733,7 +733,7 @@ bool LockManager::dequeue(const SRQ_PTR request_offset)
 }
 
 
-void LockManager::repost(thread_db* tdbb, lock_ast_t ast, void* arg, SRQ_PTR owner_offset)
+void LockManager::repost(const Callbacks& callbacks, lock_ast_t ast, void* arg, SRQ_PTR owner_offset)
 {
 /**************************************
  *
@@ -790,7 +790,7 @@ void LockManager::repost(thread_db* tdbb, lock_ast_t ast, void* arg, SRQ_PTR own
 	DEBUG_DELAY;
 
 	if (!(owner->own_flags & OWN_signaled))
-		signal_owner(tdbb, owner);
+		signal_owner(callbacks, owner);
 }
 
 
@@ -1340,7 +1340,8 @@ lbl* LockManager::alloc_lock(USHORT length, CheckStatusWrapper* statusVector)
 }
 
 
-void LockManager::blocking_action(thread_db* tdbb, SRQ_PTR blocking_owner_offset)
+void LockManager::blocking_action(const Callbacks* callbacks,
+	SRQ_PTR blocking_owner_offset)
 {
 /**************************************
  *
@@ -1397,20 +1398,22 @@ void LockManager::blocking_action(thread_db* tdbb, SRQ_PTR blocking_owner_offset
 
 			{ // checkout scope
 				LockTableCheckout checkout(this, FB_FUNCTION);
-				EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 
-				try
-				{
-					(*routine)(arg);
-				}
-				catch (const Exception& ex)
-				{
-					iscLogException("Exception from AST routine - this should never happen", ex);
-				}
-				catch (...)
-				{
-					gds__log("Unknown C++ exception from AST routine - this should never happen");
-				}
+				fb_assert(callbacks);
+				callbacks->checkoutRun([&] {
+					try
+					{
+						(*routine)(arg);
+					}
+					catch (const Exception& ex)
+					{
+						iscLogException("Exception from AST routine - this should never happen", ex);
+					}
+					catch (...)
+					{
+						gds__log("Unknown C++ exception from AST routine - this should never happen");
+					}
+				});
 			}
 
 			owner = (own*) SRQ_ABS_PTR(blocking_owner_offset);
@@ -1485,7 +1488,7 @@ void LockManager::blocking_action_thread()
 						{
 							const SRQ_PTR owner_offset = SRQ_REL_PTR(owner);
 							guard.setOwner(owner_offset);
-							blocking_action(NULL, owner_offset);
+							blocking_action(nullptr, owner_offset);
 							completed = false;
 							break;
 						}
@@ -2163,7 +2166,7 @@ void LockManager::grant(lrq* request, lbl* lock)
 }
 
 
-bool LockManager::grant_or_que(thread_db* tdbb, lrq* request, lbl* lock, SSHORT lck_wait)
+bool LockManager::grant_or_que(const Callbacks& callbacks, lrq* request, lbl* lock, SSHORT lck_wait)
 {
 /**************************************
  *
@@ -2200,7 +2203,7 @@ bool LockManager::grant_or_que(thread_db* tdbb, lrq* request, lbl* lock, SSHORT 
 	{
 		const SRQ_PTR request_offset = SRQ_REL_PTR(request);
 
-		wait_for_request(tdbb, request, lck_wait);
+		wait_for_request(callbacks, request, lck_wait);
 
 		request = (lrq*) SRQ_ABS_PTR(request_offset);
 
@@ -2458,7 +2461,7 @@ void LockManager::insert_tail(SRQ lock_srq, SRQ node)
 }
 
 
-bool LockManager::internal_convert(thread_db* tdbb,
+bool LockManager::internal_convert(const Callbacks& callbacks,
 								   CheckStatusWrapper* statusVector,
 								   SRQ_PTR request_offset,
 								   UCHAR type,
@@ -2520,7 +2523,7 @@ bool LockManager::internal_convert(thread_db* tdbb,
 		else
 			new_ast = false;
 
-		wait_for_request(tdbb, request, lck_wait);
+		wait_for_request(callbacks, request, lck_wait);
 
 		request = (lrq*) SRQ_ABS_PTR(request_offset);
 		lock = (lbl*) SRQ_ABS_PTR(request->lrq_lock);
@@ -2605,7 +2608,7 @@ USHORT LockManager::lock_state(const lbl* lock)
 }
 
 
-void LockManager::post_blockage(thread_db* tdbb, lrq* request, lbl* lock)
+void LockManager::post_blockage(const Callbacks& callbacks, lrq* request, lbl* lock)
 {
 /**************************************
  *
@@ -2673,7 +2676,7 @@ void LockManager::post_blockage(thread_db* tdbb, lrq* request, lbl* lock)
 
 		if (blocking_owner->own_count &&
 			!(blocking_owner->own_flags & OWN_signaled) &&
-			!signal_owner(tdbb, blocking_owner))
+			!signal_owner(callbacks, blocking_owner))
 		{
 			dead_processes.add(blocking_owner->own_process);
 		}
@@ -3169,7 +3172,7 @@ void LockManager::release_request(lrq* request)
 }
 
 
-bool LockManager::signal_owner(thread_db* tdbb, own* blocking_owner)
+bool LockManager::signal_owner(const Callbacks& callbacks, own* blocking_owner)
 {
 /**************************************
  *
@@ -3202,7 +3205,7 @@ bool LockManager::signal_owner(thread_db* tdbb, own* blocking_owner)
 	if (process->prc_process_id == PID)
 	{
 		DEBUG_DELAY;
-		blocking_action(tdbb, SRQ_REL_PTR(blocking_owner));
+		blocking_action(&callbacks, SRQ_REL_PTR(blocking_owner));
 		DEBUG_DELAY;
 		return true;
 	}
@@ -3706,7 +3709,7 @@ void LockManager::validate_shb(const SRQ_PTR shb_ptr)
 }
 
 
-void LockManager::wait_for_request(thread_db* tdbb, lrq* request, SSHORT lck_wait)
+void LockManager::wait_for_request(const Callbacks& callbacks, lrq* request, SSHORT lck_wait)
 {
 /**************************************
  *
@@ -3763,7 +3766,7 @@ void LockManager::wait_for_request(thread_db* tdbb, lrq* request, SSHORT lck_wai
 	// Post blockage. If the blocking owner has disappeared, the blockage
 	// may clear spontaneously.
 
-	post_blockage(tdbb, request, lock);
+	post_blockage(callbacks, request, lock);
 	post_history(his_wait, owner_offset, lock_offset, request_offset, true);
 
 	owner = (own*) SRQ_ABS_PTR(owner_offset);
@@ -3776,7 +3779,7 @@ void LockManager::wait_for_request(thread_db* tdbb, lrq* request, SSHORT lck_wai
 	// out the time when the lock request will timeout
 
 	const time_t lock_timeout = (lck_wait < 0) ? current_time + (-lck_wait) : 0;
-	time_t deadlock_timeout = current_time + tdbb->adjustWait(scan_interval);
+	time_t deadlock_timeout = current_time + callbacks.adjustWait(scan_interval);
 
 	// Wait in a loop until the lock becomes available
 
@@ -3822,9 +3825,10 @@ void LockManager::wait_for_request(thread_db* tdbb, lrq* request, SSHORT lck_wai
 				}
 
 				{ // scope
-					EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
-					ret = m_sharedMemory->eventWait(&owner->own_wakeup, value, (timeout - current_time) * 1000000);
-					--m_waitingOwners;
+					callbacks.checkoutRun([&] {
+						ret = m_sharedMemory->eventWait(&owner->own_wakeup, value, (timeout - current_time) * 1000000);
+						--m_waitingOwners;
+					});
 				}
 			}
 
@@ -3881,8 +3885,7 @@ void LockManager::wait_for_request(thread_db* tdbb, lrq* request, SSHORT lck_wai
 		// See if we've waited beyond the lock timeout -
 		// if so we mark our own request as rejected
 
-		// !!! this will be changed to have no dependency on thread_db !!!
-		const bool cancelled = (tdbb->getCancelState() != FB_SUCCESS);
+		const bool cancelled = (callbacks.getCancelState() != FB_SUCCESS);
 
 		if (cancelled || (lck_wait < 0 && lock_timeout <= current_time))
 		{
@@ -3901,7 +3904,7 @@ void LockManager::wait_for_request(thread_db* tdbb, lrq* request, SSHORT lck_wai
 
 		// We're going to do some real work - reset when we next want to
 		// do a deadlock scan
-		deadlock_timeout = current_time + tdbb->adjustWait(scan_interval);
+		deadlock_timeout = current_time + callbacks.adjustWait(scan_interval);
 
 		// Handle lock event first
 		if (ret == FB_SUCCESS)
@@ -3911,7 +3914,7 @@ void LockManager::wait_for_request(thread_db* tdbb, lrq* request, SSHORT lck_wai
 			// This could happen if the lock was granted to a different request,
 			// we have to tell the new owner of the lock that they are blocking us.
 
-			post_blockage(tdbb, request, lock);
+			post_blockage(callbacks, request, lock);
 			continue;
 		}
 
@@ -3966,7 +3969,7 @@ void LockManager::wait_for_request(thread_db* tdbb, lrq* request, SSHORT lck_wai
 			// We need to inform the new owner.
 
 			DEBUG_MSG(0, ("wait_for_request: forcing a resignal of blockers\n"));
-			post_blockage(tdbb, request, lock);
+			post_blockage(callbacks, request, lock);
 #ifdef DEV_BUILD
 			repost_counter++;
 			if (repost_counter % 50 == 0)
