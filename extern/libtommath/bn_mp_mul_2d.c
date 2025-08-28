@@ -21,6 +21,10 @@ int mp_mul_2d (mp_int * a, int b, mp_int * c)
   mp_digit d;
   int      res;
 
+  if (b < 0) {
+    return MP_VAL;
+  }
+
   /* copy */
   if (a != c) {
      if ((res = mp_copy (a, c)) != MP_OKAY) {

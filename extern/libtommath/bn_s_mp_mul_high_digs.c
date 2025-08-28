@@ -27,6 +27,10 @@ s_mp_mul_high_digs (mp_int * a, mp_int * b, mp_int * c, int digs)
   mp_word r;
   mp_digit tmpx, *tmpt, *tmpy;
 
+  if (digs < 0) {
+    return MP_VAL;
+  }
+
   /* can we use the fast multiplier? */
 #ifdef BN_FAST_S_MP_MUL_HIGH_DIGS_C
   if (((a->used + b->used + 1) < MP_WARRAY)
