@@ -5235,7 +5235,9 @@ void DeclarePackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 			}
 			else if (type->typeOfName.object.hasData())
 			{
-				type->fieldSource = type->typeOfName;
+				type->typeOfTable = type->typeOfTable;
+				if (type->fullDomain)
+					type->fieldSource = type->typeOfName;
 			}
 
 			RelationNode::FieldDefinition fieldDefinition(*tdbb->getDefaultPool());
