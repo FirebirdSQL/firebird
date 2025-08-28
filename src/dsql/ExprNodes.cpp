@@ -15257,6 +15257,9 @@ dsc* RowValueExpressionNode::execute(thread_db* tdbb, Request* request) const
 	if (subquery)
 	{
 		from_desc = subquery->execute(tdbb, request);
+		if (!from_desc)
+			return nullptr;
+
 		for (; from_desc; from_desc = from_desc->dsc_next)
 		{
 			auto to_desc = *nextDesc;
