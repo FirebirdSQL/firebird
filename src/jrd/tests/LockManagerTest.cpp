@@ -28,7 +28,7 @@ namespace
 
 		ULONG adjustWait(ULONG wait) const
 		{
-			return 0;
+			return wait;
 		}
 
 		void checkoutRun(std::function<void()> func) const
