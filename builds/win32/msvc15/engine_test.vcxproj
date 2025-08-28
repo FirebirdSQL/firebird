@@ -261,6 +261,9 @@
     <ClCompile Include="..\..\..\src\jrd\tests\EngineTest.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\..\src\jrd\tests\LockManagerTest.cpp" />
+  </ItemGroup>
+  <ItemGroup>
     <ClCompile Include="..\..\..\src\jrd\tests\RecordNumberTest.cpp" />
   </ItemGroup>
   <ItemGroup>

@@ -21,6 +21,9 @@
     <ClCompile Include="..\..\..\src\jrd\tests\EngineTest.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\tests\LockManagerTest.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\tests\RecordNumberTest.cpp">
       <Filter>source</Filter>
     </ClCompile>
