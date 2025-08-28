@@ -3,7 +3,6 @@
 #include <atomic>
 #include <latch>
 #include <memory>
-#include <mutex>
 #include <thread>
 #include <vector>
 #include "../common/status.h"
@@ -74,11 +73,10 @@ BOOST_AUTO_TEST_CASE(LockUnlockTest, *boost::unit_test::disabled())
 
 	std::vector<std::thread> threads;
 	std::latch latch(THREAD_COUNT);
-	std::mutex mutex;
 
 	for (unsigned threadNum = 0u; threadNum < THREAD_COUNT; ++threadNum)
 	{
-		threads.emplace_back([&]() {
+		threads.emplace_back([&, threadNum]() {
 			const UCHAR LOCK_KEY[] = {'1'};
 			FbLocalStatus statusVector;
 			LOCK_OWNER_T ownerId = threadNum + 1;
@@ -90,8 +88,6 @@ BOOST_AUTO_TEST_CASE(LockUnlockTest, *boost::unit_test::disabled())
 
 			for (unsigned i = 0; i < ITERATION_COUNT; ++i)
 			{
-				// std::lock_guard mutexGuard(mutex);
-
 				const auto lockId = lockManager->enqueue(callbacks, &statusVector, 0,
 					LCK_expression, LOCK_KEY, sizeof(LOCK_KEY), LCK_EX, nullptr, nullptr, 0, LCK_WAIT, ownerHandle);
 
@@ -111,9 +107,8 @@ BOOST_AUTO_TEST_CASE(LockUnlockTest, *boost::unit_test::disabled())
 	for (auto& thread : threads)
 		thread.join();
 
-	BOOST_CHECK_EQUAL(lockFail + lockSuccess, THREAD_COUNT * ITERATION_COUNT);
-	// BOOST_CHECK_EQUAL(lockFail.load(), 0u);
-	// BOOST_CHECK_EQUAL(lockSuccess, THREAD_COUNT * ITERATION_COUNT);
+	BOOST_CHECK_EQUAL(lockFail.load(), 0u);
+	BOOST_CHECK_EQUAL(lockSuccess, THREAD_COUNT * ITERATION_COUNT);
 
 	lockManager.reset();
 }
