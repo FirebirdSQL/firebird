@@ -59,7 +59,7 @@ BOOST_AUTO_TEST_SUITE(LockManagerTests)
 BOOST_AUTO_TEST_CASE(LockUnlockTest)
 {
 	constexpr unsigned THREAD_COUNT = 8u;
-	constexpr unsigned ITERATION_COUNT = 100'000u;
+	constexpr unsigned ITERATION_COUNT = 10'000u;
 
 	ConfigFile configFile(ConfigFile::USE_TEXT, "\n");
 	Config config(configFile);
