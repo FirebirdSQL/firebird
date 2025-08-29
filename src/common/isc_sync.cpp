@@ -1438,7 +1438,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 #endif
 #endif
 
-				memset(sh_mem_mutex->mtx_mutex, 0, sizeof(*(sh_mem_mutex->mtx_mutex)));
+				memset(sh_mem_mutex->mtx_mutex, 0, sizeof(sh_mem_mutex->mtx_mutex));
 				//int state = LOG_PTHREAD_ERROR(pthread_mutex_init(sh_mem_mutex->mtx_mutex, &mattr));
 				state = pthread_mutex_init(sh_mem_mutex->mtx_mutex, &mattr);
 
