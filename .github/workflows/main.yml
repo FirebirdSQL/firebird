@@ -546,7 +546,7 @@ jobs:
           arch: x86_64
           api-level: 30
           target: google_apis
-          ndk: 25.1.8937393
+          ndk: 27.3.13750724
           emulator-options: -no-window -noaudio -no-boot-anim -camera-back none -port 5554
           emulator-boot-timeout: 900
           script: |
@@ -559,13 +559,13 @@ jobs:
           arch: x86_64
           api-level: 30
           target: google_apis
-          ndk: 25.1.8937393
+          ndk: 27.3.13750724
           emulator-options: -no-snapshot-save -no-window -noaudio -no-boot-anim -camera-back none -port 5554
           emulator-boot-timeout: 900
           script: |
             adb wait-for-device
             adb root
-            NDK=/usr/local/lib/android/sdk/ndk/25.1.8937393 builds/install/arch-specific/android/BuildFinalPackage.sh $ARCH
+            NDK=/usr/local/lib/android/sdk/ndk/27.3.13750724 builds/install/arch-specific/android/BuildFinalPackage.sh $ARCH
 
       - name: Upload installer
         uses: actions/upload-artifact@v4
