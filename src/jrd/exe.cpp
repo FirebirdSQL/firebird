@@ -574,7 +574,10 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 		{
 			const auto pair = stack.pop();
 			if (pair.from->dsc_flags & DSC_null)
+			{
 				pair.to->dsc_flags |= DSC_null;
+				memset(pair.to->dsc_address, 0, pair.to->dsc_length);
+			}
 			else
 				assignmentWrapper(pair.from, pair.to);
 
