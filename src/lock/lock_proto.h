@@ -427,7 +427,7 @@ private:
 	void acquire_shmem(SRQ_PTR);
 	UCHAR* alloc(USHORT, Firebird::CheckStatusWrapper*);
 	lbl* alloc_lock(USHORT, Firebird::CheckStatusWrapper*);
-	void blocking_action(const Callbacks*, SRQ_PTR);
+	void blocking_action(const Callbacks&, SRQ_PTR);
 	void blocking_action_thread();
 	void bug(Firebird::CheckStatusWrapper*, const TEXT*);
 	void bug_assert(const TEXT*, ULONG);

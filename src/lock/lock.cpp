@@ -1340,7 +1340,7 @@ lbl* LockManager::alloc_lock(USHORT length, CheckStatusWrapper* statusVector)
 }
 
 
-void LockManager::blocking_action(const Callbacks* callbacks,
+void LockManager::blocking_action(const Callbacks& callbacks,
 	SRQ_PTR blocking_owner_offset)
 {
 /**************************************
@@ -1399,8 +1399,7 @@ void LockManager::blocking_action(const Callbacks* callbacks,
 			{ // checkout scope
 				LockTableCheckout checkout(this, FB_FUNCTION);
 
-				fb_assert(callbacks);
-				callbacks->checkoutRun([&] {
+				callbacks.checkoutRun([&] {
 					try
 					{
 						(*routine)(arg);
@@ -1488,7 +1487,29 @@ void LockManager::blocking_action_thread()
 						{
 							const SRQ_PTR owner_offset = SRQ_REL_PTR(owner);
 							guard.setOwner(owner_offset);
-							blocking_action(nullptr, owner_offset);
+
+							class BlockingActionCallbacks final : public Callbacks
+							{
+							public:
+								ISC_STATUS getCancelState() const override
+								{
+									fb_assert(false);
+									return 0;
+								}
+
+								ULONG adjustWait(ULONG wait) const override
+								{
+									fb_assert(false);
+									return wait;
+								}
+
+								void checkoutRun(std::function<void()> func) const override
+								{
+									func();
+								}
+							};
+
+							blocking_action(BlockingActionCallbacks(), owner_offset);
 							completed = false;
 							break;
 						}
@@ -3205,7 +3226,7 @@ bool LockManager::signal_owner(const Callbacks& callbacks, own* blocking_owner)
 	if (process->prc_process_id == PID)
 	{
 		DEBUG_DELAY;
-		blocking_action(&callbacks, SRQ_REL_PTR(blocking_owner));
+		blocking_action(callbacks, SRQ_REL_PTR(blocking_owner));
 		DEBUG_DELAY;
 		return true;
 	}
