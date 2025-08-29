@@ -13,7 +13,7 @@ runs:
           )
         ) ||
         false
-      shell: bash
+      shell: sh
       run: |
         sed -i'' -e "s/SuffixKind=\(.*\)/SuffixKind=\"$(echo ${{ github.sha }} | cut -c 1-7)\"/" src/misc/writeBuildNum.sh
         mkdir gen
