@@ -573,7 +573,10 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 		while (!stack.isEmpty())
 		{
 			const auto pair = stack.pop();
-			assignmentWrapper(pair.from, pair.to);
+			if (pair.from->dsc_flags & DSC_null)
+				pair.to->dsc_flags |= DSC_null;
+			else
+				assignmentWrapper(pair.from, pair.to);
 
 			// Process next descriptor in chain if exists
 			if (pair.from->dsc_next && pair.to->dsc_next)

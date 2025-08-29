@@ -287,7 +287,7 @@ typedef struct dsc
 		auto next = dsc_sub_first;
 		for (auto i = 0; next; i++, next = next->dsc_next)
 		{
-			if (dsc_address[i/8] & 1 << i)
+			if (dsc_address[i * 2])
 				next->dsc_flags |= DSC_null;
 			else
 				next->dsc_flags &= ~DSC_null;
