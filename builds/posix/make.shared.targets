@@ -78,17 +78,39 @@ $(OBJ)/dsql/PackageNodes.cpp: $(SRC_ROOT)/dsql/PackageNodes.epp
 
 # Adding resources as prerequisite for some files
 
-$(FilesToAddVersionInfo): $(GEN_ROOT)/jrd/version.res
-$(FilesToAddDialog): $(GEN_ROOT)/remote/os/win32/window.res
-$(FilesToAddDialog2): $(GEN_ROOT)/iscguard/iscguard.res
+$(FilesToAddVersionInfo): $(OBJ)/jrd/version.res
+$(FilesToAddVersionInfo2): $(OBJ)/yvalve/config/os/win32/version.res
+$(FilesToAddVersionInfo3): $(OBJ)/jrd/os/win32/version.res
+$(FilesToAddVersionInfo4): $(OBJ)/intl/version.res
+$(FilesToAddVersionInfo5): $(OBJ)/extlib/version.res
+$(FilesToAddDialog): $(OBJ)/remote/server/os/win32/window.res
+$(FilesToAddDialog2): $(OBJ)/iscguard/iscguard.res
 
 # Explicit dependence of resource script
-$(GEN_ROOT)/remote/os/win32/window.res: $(SRC_ROOT)/remote/os/win32/window.rc $(SRC_ROOT)/remote/os/win32/window.rh \
- $(SRC_ROOT)/jrd/version.rc $(SRC_ROOT)/jrd/build_no.h $(SRC_ROOT)/remote/os/win32/property.rc \
- $(SRC_ROOT)/remote/os/win32/property.rh
 
-$(GEN_ROOT)/iscguard/iscguard.res: $(SRC_ROOT)/iscguard/iscguard.rc $(SRC_ROOT)/iscguard/iscguard.rh \
- $(SRC_ROOT)/jrd/version.rc
+# fbclient.dll
+$(OBJ)/yvalve/config/os/win32/version.res: $(SRC_ROOT)/jrd/version.rc
+	$(WINDRES) $(RCFLAGS) -DRC_TARGET_fbclient --output-format=coff --include-dir=$(<D) $< $@
+
+# engine14.dll
+$(OBJ)/jrd/os/win32/version.res: $(SRC_ROOT)/jrd/version.rc
+	$(WINDRES) $(RCFLAGS) -DRC_TARGET_engine14 --output-format=coff --include-dir=$(<D) $< $@
+
+# fbintl.dll
+$(OBJ)/intl/version.res: $(SRC_ROOT)/jrd/version.rc
+	$(WINDRES) $(RCFLAGS) -DRC_TARGET_fbintl --output-format=coff --include-dir=$(<D) $< $@
+
+# ib_util.dll
+$(OBJ)/extlib/version.res: $(SRC_ROOT)/jrd/version.rc
+	$(WINDRES) $(RCFLAGS) -DRC_TARGET_ib_util --output-format=coff --include-dir=$(<D) $< $@
+
+# firebird.exe
+$(OBJ)/remote/server/os/win32/window.res: $(SRC_ROOT)/remote/server/os/win32/window.rc
+	$(WINDRES) $(RCFLAGS) -DRC_TARGET_firebird --output-format=coff --include-dir=$(<D) $< $@
+
+# fbguard.exe
+$(OBJ)/iscguard/iscguard.res: $(SRC_ROOT)/iscguard/iscguard.rc
+	$(WINDRES) $(RCFLAGS) -DRC_TARGET_fbguard --output-format=coff --include-dir=$(<D) $< $@
 
 .PHONY: FORCE
 

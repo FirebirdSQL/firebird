@@ -900,6 +900,7 @@ AC_CHECK_TOOL([OBJCOPY], [objcopy])
 AC_CHECK_TOOL([OBJDUMP], [objdump])
 AC_CHECK_TOOL([RANLIB], [ranlib])
 AC_CHECK_TOOL([READELF], [readelf])
+AC_CHECK_TOOL([WINDRES], [windres])
 LT_INIT([dlopen win32-dll])
 
 dnl Check for system header files
@@ -1089,6 +1090,7 @@ fi
 AC_LANG_POP(C++)
 
 dnl Check for functions
+if test $PLATFORM != win32; then
 AC_CHECK_FUNCS(gettimeofday)
 if test "$ac_cv_func_gettimeofday" = "yes"; then
     AC_MSG_CHECKING(if gettimeofday accepts second (timezone) argument)
@@ -1100,6 +1102,7 @@ if test "$ac_cv_func_gettimeofday" = "yes"; then
 #else
 #define GETTIMEOFDAY(x) gettimeofday((x))
 #endif])
+fi
 fi
 AC_CHECK_FUNCS(time times)
 AC_CHECK_FUNCS(nanosleep)
@@ -1171,6 +1174,7 @@ dnl Check for time function
 AC_SEARCH_LIBS(clock_gettime, rt)
 AC_CHECK_FUNCS(clock_gettime)
 
+if test $PLATFORM != win32; then
 dnl Checks for pthread functions
 AC_CHECK_FUNCS(pthread_mutexattr_setprotocol)
 AC_CHECK_FUNCS(pthread_mutexattr_setrobust)
@@ -1209,6 +1213,7 @@ dnl Some OS place iconv() support in separate library
 if test "$ac_cv_header_iconv_h" = "yes"; then
 AC_SEARCH_LIBS(iconv_open, iconv)
 AC_SEARCH_LIBS(libiconv_open, iconv)
+fi
 fi
 
 dnl HPUX has a bug in .h files. To detect it we need C++ here.
@@ -1345,7 +1350,7 @@ case "$PLATFORM" in
     ;;
 
   win32)
-    XE_PREPEND( -mthreads -lmpr -lversion -lws2_32 -lole32,LIBS)
+    XE_PREPEND( -lmpr -lversion -lws2_32 -lole32,LIBS)
     ;;
 
   *)
@@ -1599,6 +1604,11 @@ case "$PLATFORM" in
 
   DARWIN)
     ;;
+  win32)
+    AC_CONFIG_FILES([
+        gen/$fb_tgt/firebird/bin/fb_install_service.bat:builds/install/arch-specific/win32/install_service.bat
+        gen/$fb_tgt/firebird/bin/fb_uninstall_service.bat:builds/install/arch-specific/win32/uninstall_service.bat])
+    ;;
 esac
 if test -f ${MAKE_SRC_DIR}/postfix.${MAKEFILE_POSTFIX};then
 	POSTFIX_FILE=gen/make.platform.postfix:${MAKE_SRC_DIR}/postfix.${MAKEFILE_POSTFIX}
@@ -1621,6 +1631,7 @@ gen/Makefile:${MAKE_SRC_DIR}/Makefile.in
 gen/examples/Makefile.examples:${MAKE_SRC_DIR}/Makefile.in.examples
 gen/Makefile.plugins_examples:${MAKE_SRC_DIR}/Makefile.in.plugins_examples
 gen/Makefile.install:builds/install/arch-specific/${INSTALL_PREFIX}/Makefile.in
+examples/extauth/Makefile:${MAKE_SRC_DIR}/Makefile.in.extauth
 Makefile:Makefile.in
 )
 if test "$STD_EDITLINE" = "false"; then
