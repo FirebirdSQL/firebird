@@ -4448,14 +4448,19 @@ alter_ops($relationNode)
 	| alter_ops ',' alter_op($relationNode)
 	;
 
+col_noise
+	:
+	| COLUMN
+	;
+
 %type alter_op(<relationNode>)
 alter_op($relationNode)
-	: DROP if_exists_opt symbol_column_name drop_behaviour
+	: DROP col_noise if_exists_opt symbol_column_name drop_behaviour
 		{
 			RelationNode::DropColumnClause* clause = newNode<RelationNode::DropColumnClause>();
-			clause->silent = $2;
-			clause->name = *$3;
-			clause->cascade = $4;
+			clause->silent = $3;
+			clause->name = *$4;
+			clause->cascade = $5;
 			$relationNode->clauses.add(clause);
 		}
 	| DROP CONSTRAINT if_exists_opt symbol_constraint_name
@@ -4465,10 +4470,10 @@ alter_op($relationNode)
 			clause->name = *$4;
 			$relationNode->clauses.add(clause);
 		}
-	| ADD if_not_exists_opt column_def($relationNode)
+	| ADD col_noise if_not_exists_opt column_def($relationNode)
 		{
-			const auto node = $3;
-			node->createIfNotExistsOnly = $2;
+			const auto node = $4;
+			node->createIfNotExistsOnly = $3;
 		}
 	| ADD table_constraint($relationNode)
 	| ADD CONSTRAINT if_not_exists_opt symbol_constraint_name table_constraint($relationNode)
