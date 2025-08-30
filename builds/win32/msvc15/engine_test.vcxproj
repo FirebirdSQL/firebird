@@ -264,6 +264,9 @@
     <ClCompile Include="..\..\..\src\jrd\tests\RecordNumberTest.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\..\src\lock\tests\LockManagerTest.cpp" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="alice.vcxproj">
       <Project>{0d616380-1a5a-4230-a80b-021360e4e669}</Project>
       <Private>true</Private>
