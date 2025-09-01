@@ -1771,7 +1771,7 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 	SLONG		fld_ranges[2 * MAX_DIMENSION];
 	SLONG       slice_length = 0;
 	SLONG       *range;
-	const SLONG* end_ranges;
+	const SLONG* end_ranges = nullptr;
 	scan_attr_t scan_next_attr;
 	skip_init(&scan_next_attr);
 	att_type	attribute;
