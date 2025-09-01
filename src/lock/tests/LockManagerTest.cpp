@@ -22,6 +22,12 @@ namespace
 	class LockManagerTestCallbacks : public LockManager::Callbacks
 	{
 	public:
+		LockManagerTestCallbacks(std::mutex* aMutex = nullptr)
+			: mutex(aMutex)
+		{
+		}
+
+	public:
 		ISC_STATUS getCancelState() const
 		{
 			return 0;
@@ -34,8 +40,18 @@ namespace
 
 		void checkoutRun(std::function<void()> func) const
 		{
-			func();
+			if (mutex)
+			{
+				Cleanup lockCleanup([&]() { mutex->lock(); });
+				mutex->unlock();
+				func();
+			}
+			else
+				func();
 		}
+
+	private:
+		std::mutex* mutex;
 	};
 }
 
@@ -182,7 +198,6 @@ BOOST_AUTO_TEST_CASE(LockUnlockAstTest)
 	struct ThreadData
 	{
 		LockManager* lockManager = nullptr;
-		std::mutex* globalMutex = nullptr;
 		std::mutex localMutex;
 		std::unordered_map<SLONG, Lock*> locks;
 	};
@@ -200,7 +215,6 @@ BOOST_AUTO_TEST_CASE(LockUnlockAstTest)
 	ConfigFile configFile(ConfigFile::USE_TEXT, "\n");
 	Config config(configFile);
 
-	LockManagerTestCallbacks callbacks;
 	const string lockManagerId(getUniqueId().c_str());
 	auto lockManager = std::make_unique<LockManager>(lockManagerId, &config);
 
@@ -234,8 +248,8 @@ BOOST_AUTO_TEST_CASE(LockUnlockAstTest)
 		threads.emplace_back([&, threadNum]() {
 			ThreadData threadData;
 			threadData.lockManager = lockManager.get();
-			threadData.globalMutex = &globalMutex;
 
+			LockManagerTestCallbacks callbacks(&threadData.localMutex);
 			FbLocalStatus statusVector;
 			LOCK_OWNER_T ownerId = threadNum + 1;
 			SLONG ownerHandle = 0;
