@@ -9066,7 +9066,7 @@ bool get_db_creator(BurpGlobals* tdgbl)
 	att_type		attribute;
 	scan_attr_t		scan_next_attr;
 	TEXT			usr[GDS_NAME_LEN];
-	SSHORT			uType;
+	SSHORT			uType = 0;
 	bool			userSet, typeSet;
 
 	userSet = typeSet = false;
@@ -9389,7 +9389,7 @@ bool get_trigger_old (BurpGlobals* tdgbl, burp_rel* relation)
  *	Get a trigger definition for a relation.
  *
  **************************************/
-	enum trig_t	type;
+	enum trig_t	type = trig_pre_store;
 	att_type	attribute;
 	TEXT		name[GDS_NAME_LEN];
 	scan_attr_t		scan_next_attr;
