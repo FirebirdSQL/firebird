@@ -3369,7 +3369,7 @@ void get_data(BurpGlobals* tdgbl, burp_rel* relation, WriteRelationReq* req)
 					}
 				}
 
-				UCHAR* p;
+				UCHAR* p = nullptr;
 				if (tdgbl->gbl_sw_transportable)
 				{
 					if (get(tdgbl) != att_xdr_length)
