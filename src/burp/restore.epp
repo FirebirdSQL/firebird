@@ -1596,7 +1596,7 @@ bool get_acl(BurpGlobals* tdgbl, const TEXT* owner_nm, ISC_QUAD* blob_id, ISC_QU
 
 	ULONG length = 0;
 	UCHAR item;
-	USHORT max_segment;
+	USHORT max_segment = 0;
 	ULONG num_segments;
 	const UCHAR* p = blob_info;
 
@@ -1837,7 +1837,7 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 	SLONG last_element_dim[MAX_DIMENSION];
 	if (return_length != slice_length)
 	{
-		int upper, lower;
+		int upper = 0, lower = 0;
 		//
 		// Ugh!  The full array wasn't returned and versions of gbak prior to
 		// V3.2I don't explicitly signal this.  We must recompute the top
