@@ -1,0 +1,14 @@
+- /*android*/
+- /*builds*/
+- /*doc*/
+- /*examples*/
+- /*extern*/
+- /*gen*/
+- /*m4*/
+- /*report_html*/
+- /*reports*/
++ /*src*/
+- /*temp*/
+- /*vcpkg*/
+- /*vcpkg-custom*/
+- /*src/remote/client/interface.cpp*/
