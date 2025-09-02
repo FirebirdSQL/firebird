@@ -5806,8 +5806,8 @@ static ULONG insert_node(thread_db* tdbb,
 
 	// For checking on duplicate nodes we should find the first matching key.
 	UCHAR* pointer = find_node_start_point(bucket, key, 0, &prefix,
-						idx->idx_flags & idx_descending,
-						false, true, validateDuplicates ? NO_VALUE : newRecordNumber);
+						(idx->idx_flags & idx_descending) != 0,
+						false ? 1 : 0, true, validateDuplicates ? NO_VALUE : newRecordNumber);
 	if (!pointer)
 		return NO_VALUE_PAGE;
 
@@ -6620,8 +6620,8 @@ static contents remove_leaf_node(thread_db* tdbb, index_insertion* insertion, WI
 	UCHAR* pointer;
 	USHORT prefix;
 	while (!(pointer = find_node_start_point(page, key, 0, &prefix,
-			(idx->idx_flags & idx_descending),
-			false, false,
+			(idx->idx_flags & idx_descending) != 0,
+			false ? 1 : 0, false,
 			(validateDuplicates ? NO_VALUE : insertion->iib_number))))
 	{
 		page = (btree_page*) CCH_HANDOFF(tdbb, window, page->btr_sibling, LCK_write, pag_index);
