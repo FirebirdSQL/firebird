@@ -183,7 +183,7 @@ int CLIB_ROUTINE main( int argc, char **argv)
 	time_t timer = 0;
 
 	do {
-		int ret_code;
+		int ret_code = 0;
 
 		if (shutting_down)
 		{
