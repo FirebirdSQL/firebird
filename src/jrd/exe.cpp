@@ -555,7 +555,7 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 
 		if (null && to_desc->dsc_dtype <= dtype_varying)
 		{
-			USHORT minlen;
+			USHORT minlen = 0;
 
 			switch (to_desc->dsc_dtype)
 			{
