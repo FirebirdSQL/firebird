@@ -3537,7 +3537,7 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 	blr_print_blr(control, blr_operator);
 	level++;
 	const UCHAR* ops = blr_print_table[blr_operator].blr_operators;
-	SSHORT n;
+	SSHORT n = 0;
 
 	while (*ops)
 	{
