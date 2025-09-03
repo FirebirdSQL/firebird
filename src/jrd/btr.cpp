@@ -2315,7 +2315,7 @@ void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation)
 	}
 
 	UCHAR* desc = 0;
-	USHORT len, space;
+	USHORT len = 0, space = 0;
 	index_root_page::irt_repeat* slot = NULL;
 	index_root_page::irt_repeat* end = NULL;
 
