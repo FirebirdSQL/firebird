@@ -197,9 +197,12 @@ BOOST_AUTO_TEST_CASE(LockUnlockAstTest)
 
 	struct ThreadData
 	{
+		std::thread::id threadId;
 		LockManager* lockManager = nullptr;
 		std::mutex localMutex;
 		std::unordered_map<SLONG, Lock*> locks;
+		SLONG ownerHandle;
+		bool shutdown = false;
 	};
 
 	struct Lock
@@ -207,10 +210,12 @@ BOOST_AUTO_TEST_CASE(LockUnlockAstTest)
 		ThreadData* threadData = nullptr;
 		unsigned key = 0;
 		SLONG lockId = 0;
+		bool locked = false;
+		bool blocking = false;
 	};
 
 	constexpr unsigned THREAD_COUNT = 8u;
-	constexpr unsigned ITERATION_COUNT = 10'000u;
+	constexpr unsigned ITERATION_COUNT = 100'000u;
 
 	ConfigFile configFile(ConfigFile::USE_TEXT, "\n");
 	Config config(configFile);
@@ -230,23 +235,33 @@ BOOST_AUTO_TEST_CASE(LockUnlockAstTest)
 
 		std::lock_guard localMutexGuard(threadData->localMutex);
 
-		fb_assert(lock->lockId);
+		if (threadData->shutdown)
+			return 0;
 
-		if (!threadData->lockManager->dequeue(lock->lockId))
-			fb_assert(false);
+		fb_assert(!lock->locked || lock->lockId);
 
-		threadData->locks.erase(lock->lockId);
-		delete lock;
+		if (lock->locked)
+		{
+			if (!threadData->lockManager->dequeue(lock->lockId))
+				fb_assert(false);
+
+			const auto num = threadData->locks.erase(lock->lockId);
+			fb_assert(num == 1);
+			delete lock;
+		}
+		else
+			lock->blocking = true;
 
 		return 0;
 	};
 
-	std::mutex globalMutex;
+	//std::mutex globalMutex;
 
 	for (unsigned threadNum = 0u; threadNum < THREAD_COUNT; ++threadNum)
 	{
 		threads.emplace_back([&, threadNum]() {
 			ThreadData threadData;
+			threadData.threadId = std::this_thread::get_id();
 			threadData.lockManager = lockManager.get();
 
 			LockManagerTestCallbacks callbacks(&threadData.localMutex);
@@ -255,25 +270,37 @@ BOOST_AUTO_TEST_CASE(LockUnlockAstTest)
 			SLONG ownerHandle = 0;
 
 			lockManager->initializeOwner(&statusVector, ownerId, LCK_OWNER_attachment, &ownerHandle);
+			threadData.ownerHandle = ownerHandle;
 
 			latch.arrive_and_wait();
 
 			for (unsigned i = 0; i < ITERATION_COUNT; ++i)
 			{
-				std::lock_guard globalMutexGuard(globalMutex);
+				//std::lock_guard globalMutexGuard(globalMutex);
 				std::lock_guard localMutexGuard(threadData.localMutex);
 
 				const auto lock = new Lock();
 				lock->threadData = &threadData;
 				lock->key = i;
+
 				lock->lockId = lockManager->enqueue(callbacks, &statusVector, 0,
 					LCK_expression, (const UCHAR*) &lock->key, sizeof(lock->key), LCK_EX,
 					ast, lock, 0, LCK_WAIT, ownerHandle);
 
 				if (lock->lockId)
 				{
-					threadData.locks.insert({ lock->lockId, lock });
 					++lockSuccess;
+
+					if (lock->blocking)
+					{
+						lockManager->dequeue(lock->lockId);
+						delete lock;
+					}
+					else
+					{
+						lock->locked = true;
+						threadData.locks.insert({ lock->lockId, lock });
+					}
 				}
 				else
 				{
@@ -284,19 +311,27 @@ BOOST_AUTO_TEST_CASE(LockUnlockAstTest)
 			}
 
 			{	// scope
-				std::lock_guard globalMutexGuard(globalMutex);
+				//std::lock_guard globalMutexGuard(globalMutex);
 				std::lock_guard localMutexGuard(threadData.localMutex);
+
+				threadData.shutdown = true;
 
 				for (const auto [lockId, lock] : threadData.locks)
 				{
+					fb_assert(!lock->blocking);
+					fb_assert(lock->locked);
+					fb_assert(lock->lockId);
 					lockManager->dequeue(lockId);
-					delete lock;
 				}
+
+				lockManager->shutdownOwner(callbacks, &ownerHandle);
+
+				for (const auto [lockId, lock] : threadData.locks)
+					delete lock;
 
 				threadData.locks.clear();
 			}
 
-			lockManager->shutdownOwner(callbacks, &ownerHandle);
 		});
 	}
 
