@@ -145,7 +145,7 @@ protected:
 			  m_status_vector(*getDefaultMemoryPool()),
 			  m_strings(*getDefaultMemoryPool())
 		{
-			clear();
+			ImplStatusVector::clear();
 		}
 
 		explicit ImplStatusVector(const ISC_STATUS* s) noexcept;
