@@ -521,7 +521,7 @@ BlockNode* BlockNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 const StmtNode* BlockNode::execute(thread_db* tdbb, Request* request, ExeState* exeState) const
 {
 	jrd_tra* transaction = request->req_transaction;
-	SavNumber savNumber;
+	SavNumber savNumber{};
 
 	switch (request->req_operation)
 	{
