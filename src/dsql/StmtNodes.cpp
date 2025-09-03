@@ -12195,7 +12195,7 @@ static void validateExpressions(thread_db* tdbb, const Array<ValidateInfo>& vali
 		if (!i->boolean->execute(tdbb, request) && !(request->req_flags & req_null))
 		{
 			// Validation error -- report result
-			const char* value;
+			const char* value = nullptr;
 			VaryStr<TEMP_STR_LENGTH> temp;
 
 			const dsc* desc = EVL_expr(tdbb, request, i->value);
