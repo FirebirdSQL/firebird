@@ -2475,7 +2475,7 @@ void EraseNode::pass1Erase(thread_db* tdbb, CompilerScratch* csb, EraseNode* nod
 
 	jrd_rel* parent = NULL;
 	jrd_rel* view = NULL;
-	StreamType parentStream;
+	StreamType parentStream{};
 
 	for (;;)
 	{
