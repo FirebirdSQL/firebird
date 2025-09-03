@@ -407,19 +407,22 @@ Num::Num(ISC_STATUS s) noexcept :
 Int64::Int64(SINT64 val) noexcept :
 	Str(text)
 {
-	snprintf(text, sizeof(text), "%" SQUADFORMAT, val);
+	(void)snprintf(text, sizeof(text), "%" SQUADFORMAT, val);
 }
 
 Int64::Int64(FB_UINT64 val) noexcept :
 	Str(text)
 {
-	snprintf(text, sizeof(text), "%" UQUADFORMAT, val);
+	(void)snprintf(text, sizeof(text), "%" UQUADFORMAT, val);
 }
 
 Quad::Quad(const ISC_QUAD* quad) noexcept :
 	Str(text)
 {
-	snprintf(text, sizeof(text), "%x:%x", quad->gds_quad_high, quad->gds_quad_low);
+	(void)snprintf(text, sizeof(text), "%x:%x",
+		(unsigned int)quad->gds_quad_high,
+		(unsigned int)quad->gds_quad_low
+	);
 }
 
 Interpreted::Interpreted(const char* text) noexcept :
