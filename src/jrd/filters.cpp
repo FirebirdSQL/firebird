@@ -1044,7 +1044,7 @@ ISC_STATUS filter_transliterate_text(USHORT action, BlobControl* control)
 
 	// Do we already have enough bytes in temp buffer to fill output buffer?
 
-	bool can_use_more;
+	bool can_use_more = true;
 	USHORT length = aux->ctlaux_buffer1_unused;
 	if (length)
 	{
