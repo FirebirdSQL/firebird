@@ -356,7 +356,7 @@ int NoThrowTimeStamp::convertGregorianDateToWeekDate(const struct tm& times) noe
 	const int weekday = 1 + ((h - 1) % 7);
 
 	// Find if y m d falls in yearNumber y-1, weekNumber 52 or 53
-	int yearNumber, weekNumber;
+	int yearNumber = 0, weekNumber = 0;
 
 	if ((dayOfYearNumber <= (8 - jan1Weekday)) && (jan1Weekday > 4))
 	{
