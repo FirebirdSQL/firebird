@@ -181,7 +181,7 @@ void PATTERN_expand( USHORT column, const TEXT* pattern, PAT* args)
 
 	SSHORT value;				// value needs to be signed since some of the
 								// values printed out are signed.
-	SLONG long_value;
+	SLONG long_value = 0;
 	TEXT c;
 	while ((c = *pattern++))
 	{
