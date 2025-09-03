@@ -5067,7 +5067,7 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	// Sub routine doesn't need ports and should generate BLR as declared in its metadata.
 	const bool subRoutine = dsqlScratch->flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE;
 
-	unsigned returnsPos;
+	unsigned returnsPos = 0;
 
 	if (!subRoutine)
 	{
