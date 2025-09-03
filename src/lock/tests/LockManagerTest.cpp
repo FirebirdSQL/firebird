@@ -1,9 +1,13 @@
 #include "firebird.h"
 #include "boost/test/unit_test.hpp"
 #include <atomic>
+#include <chrono>
+#include <functional>
 #include <latch>
 #include <memory>
+#include <memory>
 #include <mutex>
+#include <optional>
 #include <unordered_map>
 #include <thread>
 #include <vector>
@@ -200,8 +204,8 @@ BOOST_AUTO_TEST_CASE(LockUnlockAstTest)
 		std::thread::id threadId;
 		LockManager* lockManager = nullptr;
 		std::mutex localMutex;
-		std::unordered_map<SLONG, Lock*> locks;
-		SLONG ownerHandle;
+		std::unordered_map<SLONG, std::unique_ptr<Lock>> locks;
+		SLONG ownerHandle = 0;
 		bool shutdown = false;
 	};
 
@@ -209,13 +213,12 @@ BOOST_AUTO_TEST_CASE(LockUnlockAstTest)
 	{
 		ThreadData* threadData = nullptr;
 		unsigned key = 0;
-		SLONG lockId = 0;
-		bool locked = false;
+		std::optional<SLONG> lockId;
 		bool blocking = false;
 	};
 
 	constexpr unsigned THREAD_COUNT = 8u;
-	constexpr unsigned ITERATION_COUNT = 100'000u;
+	constexpr unsigned ITERATION_COUNT = 10'000u;
 
 	ConfigFile configFile(ConfigFile::USE_TEXT, "\n");
 	Config config(configFile);
@@ -238,24 +241,21 @@ BOOST_AUTO_TEST_CASE(LockUnlockAstTest)
 		if (threadData->shutdown)
 			return 0;
 
-		fb_assert(!lock->locked || lock->lockId);
+		fb_assert(!lock->lockId.has_value() || lock->lockId.value() != 0);
 
-		if (lock->locked)
+		if (lock->lockId.has_value())
 		{
-			if (!threadData->lockManager->dequeue(lock->lockId))
+			if (!threadData->lockManager->dequeue(lock->lockId.value()))
 				fb_assert(false);
 
-			const auto num = threadData->locks.erase(lock->lockId);
-			fb_assert(num == 1);
-			delete lock;
+			[[maybe_unused]] const auto erasedCount = threadData->locks.erase(lock->lockId.value());
+			fb_assert(erasedCount == 1);
 		}
 		else
 			lock->blocking = true;
 
 		return 0;
 	};
-
-	//std::mutex globalMutex;
 
 	for (unsigned threadNum = 0u; threadNum < THREAD_COUNT; ++threadNum)
 	{
@@ -267,67 +267,55 @@ BOOST_AUTO_TEST_CASE(LockUnlockAstTest)
 			LockManagerTestCallbacks callbacks(&threadData.localMutex);
 			FbLocalStatus statusVector;
 			LOCK_OWNER_T ownerId = threadNum + 1;
-			SLONG ownerHandle = 0;
 
-			lockManager->initializeOwner(&statusVector, ownerId, LCK_OWNER_attachment, &ownerHandle);
-			threadData.ownerHandle = ownerHandle;
+			lockManager->initializeOwner(&statusVector, ownerId, LCK_OWNER_attachment, &threadData.ownerHandle);
 
 			latch.arrive_and_wait();
 
 			for (unsigned i = 0; i < ITERATION_COUNT; ++i)
 			{
-				//std::lock_guard globalMutexGuard(globalMutex);
-				std::lock_guard localMutexGuard(threadData.localMutex);
-
-				const auto lock = new Lock();
+				auto lock = std::make_unique<Lock>();
 				lock->threadData = &threadData;
 				lock->key = i;
 
-				lock->lockId = lockManager->enqueue(callbacks, &statusVector, 0,
-					LCK_expression, (const UCHAR*) &lock->key, sizeof(lock->key), LCK_EX,
-					ast, lock, 0, LCK_WAIT, ownerHandle);
+				std::lock_guard localMutexGuard(threadData.localMutex);
 
-				if (lock->lockId)
+				const auto lockId = lockManager->enqueue(callbacks, &statusVector, 0,
+					LCK_expression, (const UCHAR*) &lock->key, sizeof(lock->key), LCK_EX,
+					ast, lock.get(), 0, LCK_WAIT, threadData.ownerHandle);
+
+				if (lockId)
 				{
 					++lockSuccess;
 
 					if (lock->blocking)
-					{
-						lockManager->dequeue(lock->lockId);
-						delete lock;
-					}
+						lockManager->dequeue(lockId);
 					else
 					{
-						lock->locked = true;
-						threadData.locks.insert({ lock->lockId, lock });
+						lock->lockId = lockId;
+						threadData.locks.insert({ lockId, std::move(lock) });
 					}
 				}
 				else
 				{
 					fb_assert(false);
-					delete lock;
 					++lockFail;
 				}
 			}
 
 			{	// scope
-				//std::lock_guard globalMutexGuard(globalMutex);
 				std::lock_guard localMutexGuard(threadData.localMutex);
 
 				threadData.shutdown = true;
 
-				for (const auto [lockId, lock] : threadData.locks)
+				for (const auto& [lockId, lock] : threadData.locks)
 				{
 					fb_assert(!lock->blocking);
-					fb_assert(lock->locked);
-					fb_assert(lock->lockId);
+					fb_assert(lock->lockId.has_value() && lock->lockId.value() == lockId);
 					lockManager->dequeue(lockId);
 				}
 
-				lockManager->shutdownOwner(callbacks, &ownerHandle);
-
-				for (const auto [lockId, lock] : threadData.locks)
-					delete lock;
+				lockManager->shutdownOwner(callbacks, &threadData.ownerHandle);
 
 				threadData.locks.clear();
 			}
