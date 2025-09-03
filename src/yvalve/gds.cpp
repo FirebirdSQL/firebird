@@ -3173,7 +3173,7 @@ static int blr_print_dtype(gds_ctl* control)
  *	data described.
  *
  **************************************/
-	SSHORT length;
+	SSHORT length = 0;
 
 	const USHORT dtype = control->ctl_blr_reader.getByte();
 
