@@ -7994,7 +7994,7 @@ void ModifyNode::pass1Modify(thread_db* tdbb, CompilerScratch* csb, ModifyNode* 
 
 	jrd_rel* parent = NULL;
 	jrd_rel* view = NULL;
-	StreamType parentStream, parentNewStream;
+	StreamType parentStream{}, parentNewStream{};
 
 	// To support nested views, loop until we hit a table or a view with user-defined triggers
 	// (which means no update).
