@@ -9044,7 +9044,7 @@ bool StoreNode::pass1Store(thread_db* tdbb, CompilerScratch* csb, StoreNode* nod
 
 	jrd_rel* parent = NULL;
 	jrd_rel* view = NULL;
-	StreamType parentStream;
+	StreamType parentStream{};
 
 	// To support nested views, loop until we hit a table or a view with user-defined triggers
 	// (which means no update).
