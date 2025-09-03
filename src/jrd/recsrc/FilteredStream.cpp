@@ -187,7 +187,7 @@ bool FilteredStream::evaluateBoolean(thread_db* tdbb) const
 	// on the right.
 
 	// ANY/ALL select node pointer
-	const BoolExprNode* select_node;
+	const BoolExprNode* select_node = nullptr;
 
 	// ANY/ALL column node pointer
 	const BoolExprNode* column_node = m_anyBoolean;
