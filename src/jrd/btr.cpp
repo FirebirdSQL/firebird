@@ -2817,7 +2817,7 @@ static void compress(thread_db* tdbb,
 	bool first_key = true;
 	VaryStr<MAX_KEY * 4> buffer;
 	size_t multiKeyLength = 0;
-	UCHAR* ptr;
+	UCHAR* ptr = nullptr;
 	UCHAR* p = key->key_data;
 	SSHORT scale = matchScale ? matchScale : desc->dsc_scale;
 
@@ -2829,7 +2829,7 @@ static void compress(thread_db* tdbb,
 
 		do
 		{
-			size_t length;
+			size_t length = 0;
 
 			has_next = false;
 
