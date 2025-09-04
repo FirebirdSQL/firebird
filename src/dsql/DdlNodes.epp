@@ -5235,8 +5235,7 @@ void DeclarePackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 			}
 			else if (type->typeOfName.object.hasData())
 			{
-				type->typeOfTable = type->typeOfTable;
-				if (type->fullDomain)
+				if (!type->typeOfTable.object.hasData())
 					type->fieldSource = type->typeOfName;
 			}
 
