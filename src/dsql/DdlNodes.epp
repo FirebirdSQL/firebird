@@ -345,7 +345,7 @@ void defineComputed(DsqlCompilerScratch* dsqlScratch, RelationSourceNode* relati
 	// Save the size of the field if it is specified.
 	dsc saveDesc;
 	saveDesc.dsc_dtype = 0;
-	bool saveCharSetIdSpecified;
+	bool saveCharSetIdSpecified = false;
 
 	if (field && field->dtype)
 	{

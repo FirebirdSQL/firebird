@@ -458,11 +458,11 @@ bool IntlManager::initialize()
 				string configInfo;
 
 				const ConfigFile::Parameter* module = ch->sub->findParameter("intl_module");
-				const ConfigFile::Parameter* objModule;
+				const ConfigFile::Parameter* objModule = NULL;
 				if (module &&
 					(objModule = configFile.findParameter("intl_module", module->value.c_str())))
 				{
-					if (!objModule->sub)
+					if (!objModule || !objModule->sub)
 						fatal_exception::raiseFmt("Missing parameters for intl_module %s\n", module->value.c_str());
 
 					const ConfigFile::Parameter* fname = objModule->sub->findParameter("filename");
