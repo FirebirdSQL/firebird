@@ -479,6 +479,7 @@ jobs:
 
       - name: Build
         run: |
+          export LDFLAGS="-Wl,-z,max-page-size=16384"
           ./autogen.sh --prefix=/opt/firebird --enable-binreloc --with-cross-build=android.$FB_PREFIX --without-editline
           make -j4
           make CROSS_OUT=Y tests -j4
