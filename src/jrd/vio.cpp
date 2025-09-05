@@ -7296,7 +7296,7 @@ void VIO_update_in_place(thread_db* tdbb,
 	{
 		stack = &new_rpb->rpb_record->getPrecedence();
 	}
-	else if (org_rpb->rpb_record) // we apply update to delete stub
+	else // we apply update to delete stub
 	{
 		stack = &org_rpb->rpb_record->getPrecedence();
 	}
