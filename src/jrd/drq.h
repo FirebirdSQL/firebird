@@ -254,6 +254,7 @@ enum drq_type_t
 	drq_g_nxt_pkg_type_name,// generate next packaged type field source name
 	drq_f_nxt_pkg_type_name,// find next packaged type field source name
 	drq_c_domain_pkg_type,	// check domain is packaged type
+	drq_m_rel_fld,			// modify relation field
 
 	drq_MAX
 };

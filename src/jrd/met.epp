@@ -255,23 +255,30 @@ bool MET_get_composite_type(thread_db* tdbb, MemoryPool& csbPool, const Qualifie
 				if (!*nextSubfieldInfo)
 					*nextSubfieldInfo = fieldInfoMap->put(namePair);
 
-				(*nextSubfieldInfo)->nullable = FLD.RDB$NULL_FLAG.NULL || FLD.RDB$NULL_FLAG == 0;
+				if (!REL.RDB$NULL_FLAG.NULL)
+					(*nextSubfieldInfo)->nullable = REL.RDB$NULL_FLAG == 0;
+				else if (!REL.RDB$FULL_DOMAIN.NULL && REL.RDB$FULL_DOMAIN == 1 && !FLD.RDB$NULL_FLAG.NULL)
+					(*nextSubfieldInfo)->nullable = FLD.RDB$NULL_FLAG == 0;
+				else
+					(*nextSubfieldInfo)->nullable = 1;
+
 				fieldInfo->nullable &= (*nextSubfieldInfo)->nullable;
 
 				(*nextSubfieldInfo)->fieldId = REL.RDB$FIELD_POSITION;
 
-				if (FLD.RDB$DEFAULT_VALUE.NULL)
-					(*nextSubfieldInfo)->defaultValue = NULL;
-				else
+				if (!REL.RDB$DEFAULT_VALUE.NULL)
+					(*nextSubfieldInfo)->defaultValue = parse_field_default_blr(tdbb, name.schema, &REL.RDB$DEFAULT_VALUE);
+				else if (!REL.RDB$FULL_DOMAIN.NULL && REL.RDB$FULL_DOMAIN == 1 && !FLD.RDB$DEFAULT_VALUE.NULL)
 					(*nextSubfieldInfo)->defaultValue = parse_field_default_blr(tdbb, name.schema, &FLD.RDB$DEFAULT_VALUE);
-
-				if (FLD.RDB$VALIDATION_BLR.NULL)
-					(*nextSubfieldInfo)->validationExpr = NULL;
 				else
-				{
-					(*nextSubfieldInfo)->validationExpr = parse_field_validation_blr(tdbb,
-						&FLD.RDB$VALIDATION_BLR, QualifiedName(FLD.RDB$FIELD_NAME, FLD.RDB$SCHEMA_NAME));
-				}
+					(*nextSubfieldInfo)->defaultValue = NULL;
+
+				if (!REL.RDB$VALIDATION_BLR.NULL)
+					(*nextSubfieldInfo)->validationExpr = parse_field_validation_blr(tdbb, &REL.RDB$VALIDATION_BLR, QualifiedName(FLD.RDB$FIELD_NAME, FLD.RDB$SCHEMA_NAME));
+				else if (!REL.RDB$FULL_DOMAIN.NULL && REL.RDB$FULL_DOMAIN == 1 && !FLD.RDB$VALIDATION_BLR.NULL)
+					(*nextSubfieldInfo)->validationExpr = parse_field_validation_blr(tdbb, &FLD.RDB$VALIDATION_BLR, QualifiedName(FLD.RDB$FIELD_NAME, FLD.RDB$SCHEMA_NAME));
+				else
+					(*nextSubfieldInfo)->validationExpr = NULL;
 
 				nextSubfieldInfo = &(*nextSubfieldInfo)->next;
 			}

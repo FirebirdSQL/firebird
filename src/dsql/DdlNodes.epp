@@ -5156,6 +5156,84 @@ bool DeclarePackageTypeNode::updateFieldDefaultAndValidation(thread_db* tdbb, Ds
 	return found;
 }
 
+bool DeclarePackageTypeNode::updateRelationFieldDefaultAndValidation(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
+	QualifiedName& relationName, MetaName& fieldName, ValueSourceClause* defaultClause, BoolSourceClause* check, bool notNull, bool fullDomain)
+{
+	auto found = false;
+	Attachment* const attachment = transaction->tra_attachment;
+
+	if (defaultClause || check || notNull || fullDomain)
+	{
+		AutoCacheRequest request(tdbb, drq_m_rel_fld, DYN_REQUESTS);
+
+		FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			RFR IN RDB$RELATION_FIELDS
+			WITH RFR.RDB$RELATION_NAME EQ relationName.object.c_str() AND
+				 RFR.RDB$FIELD_NAME EQ fieldName.c_str()
+		{
+			MODIFY RFR
+				found = true;
+				if (defaultClause)
+				{
+					RFR.RDB$DEFAULT_SOURCE.NULL = FALSE;
+					attachment->storeMetaDataBlob(tdbb, transaction, &RFR.RDB$DEFAULT_SOURCE,
+					defaultClause->source);
+
+					dsqlScratch->getBlrData().clear();
+					dsqlScratch->appendUChar(dsqlScratch->isVersion4() ? blr_version4 : blr_version5);
+
+					ValueExprNode* node = doDsqlPass(dsqlScratch, defaultClause->value);
+
+					GEN_expr(dsqlScratch, node);
+
+					dsqlScratch->appendUChar(blr_eoc);
+
+					RFR.RDB$DEFAULT_VALUE.NULL = FALSE;
+					attachment->storeBinaryBlob(tdbb, transaction, &RFR.RDB$DEFAULT_VALUE,
+					dsqlScratch->getBlrData());
+				}
+
+				if (check)
+				{
+					RFR.RDB$VALIDATION_SOURCE.NULL = FALSE;
+					attachment->storeMetaDataBlob(tdbb, transaction, &RFR.RDB$VALIDATION_SOURCE,
+					check->source);
+
+					dsqlScratch->getBlrData().clear();
+					dsqlScratch->appendUChar(dsqlScratch->isVersion4() ? blr_version4 : blr_version5);
+
+					++dsqlScratch->contextNumber;
+
+					BoolExprNode* node = doDsqlPass(dsqlScratch, check->value);
+
+					GEN_expr(dsqlScratch, node);
+
+					dsqlScratch->appendUChar(blr_eoc);
+
+					RFR.RDB$VALIDATION_BLR.NULL = FALSE;
+					attachment->storeBinaryBlob(tdbb, transaction, &RFR.RDB$VALIDATION_BLR,
+					dsqlScratch->getBlrData());
+				}
+
+				if (notNull)
+				{
+					RFR.RDB$NULL_FLAG.NULL = FALSE;
+					RFR.RDB$NULL_FLAG = 1;
+				}
+
+				if (fullDomain)
+				{
+					RFR.RDB$FULL_DOMAIN.NULL = FALSE;
+					RFR.RDB$FULL_DOMAIN = 1;
+				}
+			END_MODIFY
+		}
+		END_FOR
+	}
+
+	return found;
+}
+
 void DeclarePackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
@@ -5222,7 +5300,18 @@ void DeclarePackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 
 			DsqlDescMaker::fromField(&dsqlScratch->domainValue, type);
 
-			if (typeClause->defaultClause || typeClause->checkClause || declaredNotNull || !type->typeOfName.object.hasData())
+			bool updateRelationFields = false;
+			bool fullDomain = false;
+			if (type->typeOfName.object.hasData())
+			{
+				if (!type->typeOfTable.object.hasData())
+				{
+					type->fieldSource = type->typeOfName;
+					fullDomain = type->fullDomain;
+				}
+				updateRelationFields = true;
+			}
+			else
 			{
 				QualifiedName generatedFieldName({}, name.schema, name.package);
 				DYN_UTIL_generate_field_name(tdbb, generatedFieldName);
@@ -5233,11 +5322,6 @@ void DeclarePackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 
 				type->fieldSource = generatedFieldName;
 			}
-			else if (type->typeOfName.object.hasData())
-			{
-				if (!type->typeOfTable.object.hasData())
-					type->fieldSource = type->typeOfName;
-			}
 
 			RelationNode::FieldDefinition fieldDefinition(*tdbb->getDefaultPool());
 			fieldDefinition.fieldSource = type->fieldSource;
@@ -5246,6 +5330,15 @@ void DeclarePackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 			fieldDefinition.position = positionCounter++;
 
 			fieldDefinition.store(tdbb, transaction);
+
+			if (typeClause->defaultClause || typeClause->checkClause || declaredNotNull || fullDomain)
+			{
+				if (updateRelationFields)
+				{
+					updateRelationFieldDefaultAndValidation(tdbb, dsqlScratch, transaction, field->relationName, type->fld_name,
+						typeClause->defaultClause, typeClause->checkClause, type->notNull, fullDomain);
+				}
+			}
 
 			*next = type;
 			next = &type->fld_next;

@@ -138,6 +138,9 @@ RELATION(nam_r_fields, rel_rfr, ODS_8_0, rel_persistent)
 	FIELD(f_rfr_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
 	FIELD(f_rfr_field_source_schema, nam_field_source_sch_name, fld_sch_name, 1, ODS_14_0)
 	FIELD(f_rfr_pkg_name, nam_pkg_name, fld_pkg_name, 1, ODS_14_0)
+	FIELD(f_rfr_v_blr, nam_vl_blr, fld_validation, 1, ODS_14_0)
+	FIELD(f_rfr_v_source, nam_vl_source, fld_source, 1, ODS_14_0)
+	FIELD(f_rfr_fulldomain, nam_full_domain, fld_full_domain, 1, ODS_14_0)
 END_RELATION
 
 // Relation 6 (RDB$RELATIONS)

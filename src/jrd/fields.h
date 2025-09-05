@@ -245,3 +245,4 @@
 	FIELD(fld_const_name	, nam_const_name	, dtype_varying	, MAX_SQL_IDENTIFIER_LEN	, dsc_text_type_metadata	, NULL		, false		, ODS_14_0)
 	FIELD(fld_const_blr		, nam_const_blr		, dtype_blob	, BLOB_SIZE					, isc_blob_blr				, NULL		, true		, ODS_14_0)
 	FIELD(fld_const_source	, nam_const_source	, dtype_blob	, BLOB_SIZE					, isc_blob_text				, NULL		, true		, ODS_14_0)
+	FIELD(fld_full_domain	, nam_full_domain	, dtype_boolean, 1							, 0							, NULL		, true		, ODS_14_0)
