@@ -6655,6 +6655,10 @@ static processing_state parse_arg(int argc, SCHAR** argv, QualifiedMetaString& t
 
 	TEXT errbuf[MSG_LENGTH];
 
+#ifndef DEV_BUILD
+	(void) tabname;
+#endif
+
 	// Initialize database name
 
 	isqlGlob.global_Db_name[0] = '\0';
