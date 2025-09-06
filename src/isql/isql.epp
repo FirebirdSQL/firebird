@@ -7151,7 +7151,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 			blobid = var->value.blobid;
 			snprintf(blobbuf, sizeof(blobbuf), "%" xLONGFORMAT":%" xLONGFORMAT,
-				blobid->gds_quad_high, blobid->gds_quad_low);
+				(ISC_ULONG) blobid->gds_quad_high, blobid->gds_quad_low);
 			snprintf(p, bufSize, "%*s ", MAX(17, length), blobbuf);
 			break;
 
@@ -7161,7 +7161,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 			blobid = var->value.blobid;
 			snprintf(blobbuf, sizeof(blobbuf), "%" xLONGFORMAT":%" xLONGFORMAT,
-				blobid->gds_quad_high, blobid->gds_quad_low);
+				(ISC_ULONG) blobid->gds_quad_high, blobid->gds_quad_low);
 			snprintf(p, bufSize, "%*s ", MAX(17, length), blobbuf);
 			if (setValues.List)
 			{
