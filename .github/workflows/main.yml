@@ -473,9 +473,9 @@ jobs:
         run: |
           mkdir downloads
           pushd downloads
-          curl -OL https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
+          curl -OL https://dl.google.com/android/repository/android-ndk-r28c-linux.zip
           mkdir -p $NDK
-          unzip android-ndk-r25b-linux.zip -d $NDK && f=("$NDK"/*) && mv "$NDK"/*/* "$NDK" && rmdir "${f[@]}"
+          unzip android-ndk-r28c-linux.zip -d $NDK && f=("$NDK"/*) && mv "$NDK"/*/* "$NDK" && rmdir "${f[@]}"
 
       - name: Build
         run: |
@@ -546,7 +546,7 @@ jobs:
           arch: x86_64
           api-level: 30
           target: google_apis
-          ndk: 25.1.8937393
+          ndk: 28.2.13676358
           emulator-options: -no-window -noaudio -no-boot-anim -camera-back none -port 5554
           emulator-boot-timeout: 900
           script: |
@@ -559,13 +559,13 @@ jobs:
           arch: x86_64
           api-level: 30
           target: google_apis
-          ndk: 25.1.8937393
+          ndk: 28.2.13676358
           emulator-options: -no-snapshot-save -no-window -noaudio -no-boot-anim -camera-back none -port 5554
           emulator-boot-timeout: 900
           script: |
             adb wait-for-device
             adb root
-            NDK=/usr/local/lib/android/sdk/ndk/25.1.8937393 builds/install/arch-specific/android/BuildFinalPackage.sh $ARCH
+            NDK=/usr/local/lib/android/sdk/ndk/28.2.13676358 builds/install/arch-specific/android/BuildFinalPackage.sh $ARCH
 
       - name: Upload installer
         uses: actions/upload-artifact@v4
