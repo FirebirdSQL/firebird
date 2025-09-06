@@ -6142,13 +6142,15 @@ static bool printUser(const char* dbName)
 			continue;
 
 		string txt;
-		switch(v.type & ~1)
+		switch (v.type & ~1)
 		{
 		case SQL_TEXT:
 			txt.assign(v.value.asChar, v.length);
 			break;
 		case SQL_VARYING:
 			txt.assign(v.value.asVary->vary_string, v.value.asVary->vary_length);
+			break;
+		default:
 			break;
 		}
 
@@ -7187,6 +7189,8 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 					break;
 				case SQL_INT64:
 					value = *var->value.asBigint;
+					break;
+				default:
 					break;
 				}
 
