@@ -6898,6 +6898,8 @@ static processing_state parse_arg(int argc, SCHAR** argv, QualifiedMetaString& t
 							IUTILS_msg_get(EMPTY_PASS, errbuf, SafeArg() << swarg_str);
 							// empty password file @1
 							break;
+						case fb_utils::FETCH_PASS_OK:
+							break;
 						default:
 							break;
 						}
