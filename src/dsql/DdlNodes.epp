@@ -5157,7 +5157,7 @@ bool DeclarePackageTypeNode::updateFieldDefaultAndValidation(thread_db* tdbb, Ds
 }
 
 bool DeclarePackageTypeNode::updateRelationFieldDefaultAndValidation(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
-	QualifiedName& relationName, MetaName& fieldName, ValueSourceClause* defaultClause, BoolSourceClause* check, bool notNull, bool fullDomain)
+	QualifiedName& relationName, MetaName& fieldName, ValueSourceClause* defaultClause, BoolSourceClause* check, bool* notNull, bool fullDomain)
 {
 	auto found = false;
 	Attachment* const attachment = transaction->tra_attachment;
@@ -5215,7 +5215,7 @@ bool DeclarePackageTypeNode::updateRelationFieldDefaultAndValidation(thread_db* 
 					dsqlScratch->getBlrData());
 				}
 
-				if (notNull)
+				if (notNull && *notNull)
 				{
 					RFR.RDB$NULL_FLAG.NULL = FALSE;
 					RFR.RDB$NULL_FLAG = 1;
@@ -5300,7 +5300,7 @@ void DeclarePackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 
 			DsqlDescMaker::fromField(&dsqlScratch->domainValue, type);
 
-			bool updateRelationFields = false;
+			bool overloadDomainConstraints = false;
 			bool fullDomain = false;
 			if (type->typeOfName.object.hasData())
 			{
@@ -5309,7 +5309,7 @@ void DeclarePackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 					type->fieldSource = type->typeOfName;
 					fullDomain = type->fullDomain;
 				}
-				updateRelationFields = true;
+				overloadDomainConstraints = true;
 			}
 			else
 			{
@@ -5331,13 +5331,15 @@ void DeclarePackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 
 			fieldDefinition.store(tdbb, transaction);
 
-			if (typeClause->defaultClause || typeClause->checkClause || declaredNotNull || fullDomain)
+			if (overloadDomainConstraints)
 			{
-				if (updateRelationFields)
-				{
-					updateRelationFieldDefaultAndValidation(tdbb, dsqlScratch, transaction, field->relationName, type->fld_name,
-						typeClause->defaultClause, typeClause->checkClause, type->notNull, fullDomain);
-				}
+				updateRelationFieldDefaultAndValidation(tdbb, dsqlScratch, transaction, field->relationName, type->fld_name,
+					typeClause->defaultClause, typeClause->checkClause, &type->notNull, fullDomain);
+			}
+			else
+			{
+				updateRelationFieldDefaultAndValidation(tdbb, dsqlScratch, transaction, field->relationName, type->fld_name,
+					nullptr, nullptr, nullptr, true);
 			}
 
 			*next = type;

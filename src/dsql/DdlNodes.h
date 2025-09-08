@@ -1007,7 +1007,7 @@ private:
 	bool updateFieldDefaultAndValidation(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		QualifiedName& name, ValueSourceClause* defaultClause, BoolSourceClause* check, bool notNull);
 	bool updateRelationFieldDefaultAndValidation(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
-		QualifiedName& relationName, MetaName& fieldName, ValueSourceClause* defaultClause, BoolSourceClause* check, bool notNull, bool fullDomain);
+		QualifiedName& relationName, MetaName& fieldName, ValueSourceClause* defaultClause, BoolSourceClause* check, bool* notNull, bool fullDomain);
 
 public:
 	QualifiedName name;
