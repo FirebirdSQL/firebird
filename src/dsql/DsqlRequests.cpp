@@ -609,7 +609,7 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 					// Create a temp message buffer and try one more receive.
 					// If it succeed then the next record exists.
 
-					std::unique_ptr<UCHAR[]> message_buffer(new UCHAR[outMsgLength]);
+					std::unique_ptr<UCHAR[]> message_buffer(FB_NEW_POOL(getPool()) UCHAR[outMsgLength]);
 
 					JRD_receive(tdbb, request, message->msg_number, outMsgLength, message_buffer.get());
 
