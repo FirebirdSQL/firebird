@@ -596,19 +596,28 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 
 			// if this is a singleton select that return some data, make sure there's in fact one record
 
-			if (singleton && (request->req_flags & req_active) && outMsgLength > 0)
+			if (singleton)
 			{
-				// Create a temp message buffer and try one more receive.
-				// If it succeed then the next record exists.
-
-				std::unique_ptr<UCHAR[]> message_buffer(new UCHAR[outMsgLength]);
-
-				JRD_receive(tdbb, request, message->msg_number, outMsgLength, message_buffer.get());
-
-				// Still active request means that second record exists
-				if ((request->req_flags & req_active))
+				if (outMsgLength > 0)
 				{
-					status_exception::raise(Arg::Gds(isc_sing_select_err));
+					// No record returned though expected
+					if (!(request->req_flags & req_active))
+					{
+						status_exception::raise(Arg::Gds(isc_stream_eof));
+					}
+
+					// Create a temp message buffer and try one more receive.
+					// If it succeed then the next record exists.
+
+					std::unique_ptr<UCHAR[]> message_buffer(new UCHAR[outMsgLength]);
+
+					JRD_receive(tdbb, request, message->msg_number, outMsgLength, message_buffer.get());
+
+					// Still active request means that second record exists
+					if ((request->req_flags & req_active))
+					{
+						status_exception::raise(Arg::Gds(isc_sing_select_err));
+					}
 				}
 			}
 		}
