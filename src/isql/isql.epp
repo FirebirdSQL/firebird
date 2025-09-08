@@ -5544,7 +5544,7 @@ void ISQL_get_version(bool call_by_create_db)
 				if (isqlGlob.SQL_dialect > SQL_DIALECT_V5 && setValues.Warnings)
 				{
 					isqlGlob.printf(NEWLINE);
-					snprintf(bad_dialect_buf, sizeof(bad_dialect_buf),
+					(void) snprintf(bad_dialect_buf, sizeof(bad_dialect_buf),
 						"WARNING: Pre IB V6 database only speaks SQL dialect 1 and does not accept "
 						"Client SQL dialect %d . Client SQL dialect is reset to 1.\n",
 						isqlGlob.SQL_dialect);
@@ -5573,7 +5573,7 @@ void ISQL_get_version(bool call_by_create_db)
 				{
 					print_warning = false;
 					isqlGlob.printf(NEWLINE);
-					snprintf(bad_dialect_buf, sizeof(bad_dialect_buf),
+					(void) snprintf(bad_dialect_buf, sizeof(bad_dialect_buf),
 						"WARNING: This database speaks SQL dialect %d but Client SQL dialect was "
 						"set to %d .\n", global_dialect_spoken, isqlGlob.SQL_dialect);
 					isqlGlob.prints(bad_dialect_buf);
@@ -5592,14 +5592,14 @@ void ISQL_get_version(bool call_by_create_db)
 			{
 				isqlGlob.printf(NEWLINE);
 				if (call_by_create_db)
-					snprintf(bad_dialect_buf, sizeof(bad_dialect_buf),
+					(void) snprintf(bad_dialect_buf, sizeof(bad_dialect_buf),
 						"WARNING: Pre IB V6 server only speaks SQL dialect 1 and does not accept "
 						"Client SQL dialect %d . Client SQL dialect is reset to 1.\n",
 						isqlGlob.SQL_dialect);
 				else
 				{
 					//connecting_to_pre_v6_server = true; Not used anywhere.
-					snprintf(bad_dialect_buf, sizeof(bad_dialect_buf),
+					(void) snprintf(bad_dialect_buf, sizeof(bad_dialect_buf),
 						"ERROR: Pre IB V6 server only speaks SQL dialect 1 and does not accept "
 						"Client SQL dialect %d . Client SQL dialect is reset to 1.\n",
 						isqlGlob.SQL_dialect);
@@ -5611,7 +5611,7 @@ void ISQL_get_version(bool call_by_create_db)
 				if (isqlGlob.SQL_dialect == 0)
 				{
 					//connecting_to_pre_v6_server = true; Not used anywhere.
-					snprintf(bad_dialect_buf, sizeof(bad_dialect_buf),
+					(void) snprintf(bad_dialect_buf, sizeof(bad_dialect_buf),
 						"ERROR: Pre IB V6 server only speaks SQL dialect 1 and does not accept "
 						"Client SQL dialect %d . Client SQL dialect is reset to 1.\n",
 						isqlGlob.SQL_dialect);
@@ -6475,7 +6475,7 @@ static processing_state newoutput(const TEXT* outfile)
 		if (fp)
 		{
 			if (isqlGlob.Out && isqlGlob.Out != stdout)
-				fclose(isqlGlob.Out);
+				(void) fclose(isqlGlob.Out);
 			isqlGlob.Out = fp;
 			if (Merge_stderr)
 				isqlGlob.Errfp = isqlGlob.Out;
@@ -6495,7 +6495,7 @@ static processing_state newoutput(const TEXT* outfile)
 		// Revert to stdout
 		if (isqlGlob.Out != stdout)
 		{
-			fclose(isqlGlob.Out);
+			(void) fclose(isqlGlob.Out);
 			isqlGlob.Out = stdout;
 			if (Merge_stderr)
 				isqlGlob.Errfp = isqlGlob.Out;
@@ -7067,7 +7067,7 @@ static bool checkSpecial(TEXT* const p, const int length, const double value)
 	// produce of the value, and that the available buffer is at least 2 bytes longer for
 	// a space (column separator) and nul-termination.
 	const size_t bufSize = static_cast<size_t>(length) + 2;
-	snprintf(p, bufSize, "%*.*s ", length, length, t);
+	(void) snprintf(p, bufSize, "%*.*s ", length, length, t);
 
 	return true;
 }
@@ -7110,9 +7110,9 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 		}
 
 		if (dtype == SQL_TEXT || dtype == SQL_VARYING || dtype == SQL_BOOLEAN)
-			snprintf(p, bufSize, "%-*.*s ", length, length, "<null>");
+			(void) snprintf(p, bufSize, "%-*.*s ", length, length, "<null>");
 		else
-			snprintf(p, bufSize, "%*.*s ", length, length, "<null>");
+			(void) snprintf(p, bufSize, "%*.*s ", length, length, "<null>");
 	}
 	else if (!strncmp(var->field, "DB_KEY", 6))
 	{
@@ -7127,7 +7127,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 			}
 			else
 			{
-				snprintf(d, sizeof(d), "%02X", (unsigned int)(UCHAR)*t);
+				(void) snprintf(d, sizeof(d), "%02X", (unsigned int)(UCHAR)*t);
 				strcat(p, d);
 			}
 		}
@@ -7150,9 +7150,9 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 			// Print blob-ids only here
 
 			blobid = var->value.blobid;
-			snprintf(blobbuf, sizeof(blobbuf), "%" xLONGFORMAT":%" xLONGFORMAT,
+			(void) snprintf(blobbuf, sizeof(blobbuf), "%" xLONGFORMAT":%" xLONGFORMAT,
 				blobid->gds_quad_high, blobid->gds_quad_low);
-			snprintf(p, bufSize, "%*s ", MAX(17, length), blobbuf);
+			(void) snprintf(p, bufSize, "%*s ", MAX(17, length), blobbuf);
 			break;
 
 		case SQL_BLOB:
@@ -7160,9 +7160,9 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 			// Print blob-ids only here
 
 			blobid = var->value.blobid;
-			snprintf(blobbuf, sizeof(blobbuf), "%" xLONGFORMAT":%" xLONGFORMAT,
+			(void) snprintf(blobbuf, sizeof(blobbuf), "%" xLONGFORMAT":%" xLONGFORMAT,
 				blobid->gds_quad_high, blobid->gds_quad_low);
-			snprintf(p, bufSize, "%*s ", MAX(17, length), blobbuf);
+			(void) snprintf(p, bufSize, "%*s ", MAX(17, length), blobbuf);
 			if (setValues.List)
 			{
 				isqlGlob.printf("%s%s", blobbuf, NEWLINE);
@@ -7192,7 +7192,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 				string str_buf;
 				print_item_numeric(value, length, dscale, str_buf.getBuffer(length));
-				snprintf(p, bufSize, "%s ", str_buf.c_str());
+				(void) snprintf(p, bufSize, "%s ", str_buf.c_str());
 				if (setValues.List)
 				{
 					str_buf.ltrim(); // Added 1999-03-23 to left-justify in LIST ON mode
