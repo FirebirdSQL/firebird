@@ -89,7 +89,7 @@ struct date_fmt
 };
 
 #ifdef __WIN32__
-#define EXPORT __declspec(dllexport)
+#define EXPORT extern __declspec(dllexport)
 #define CDECL  __cdecl
 #else
 #define EXPORT

@@ -74,6 +74,9 @@ case "${host_cpu}-${host_os}" in
 
         acx_pthread_flags="-pthread -pthreads pthread -mt $acx_pthread_flags"
         ;;
+        *mingw*)
+        acx_pthread_flags="none"
+        ;;
 esac
 
 if test x"$acx_pthread_ok" = xno; then

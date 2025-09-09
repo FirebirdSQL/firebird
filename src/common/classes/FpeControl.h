@@ -30,7 +30,7 @@
 #define CLASSES_FPE_CONTROL_H
 
 #include <math.h>
-#if defined(WIN_NT)
+#if defined(_MSC_VER)
 #include <float.h>
 #else
 #include <fenv.h>
@@ -78,7 +78,7 @@ public:
 		}
 	}
 
-#if defined(WIN_NT)
+#if defined(_MSC_VER)
 	static void maskAll() noexcept
 	{
 		_clearfp(); // always call _clearfp() before setting control word
@@ -215,7 +215,7 @@ private:
 
 inline bool isNegativeInf(double x)
 {
-#ifdef WIN_NT
+#ifdef _MSC_VER
 	return _fpclass(x) == _FPCLASS_NINF;
 #else
 	return x == -INFINITY;

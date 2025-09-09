@@ -20,50 +20,81 @@
 #
 
 # -Wno-unused-variable is used due to unused gpre generated variables
-PROD_FLAGS=-O2  -DMINGW -Wall -Wshadow -Wundef -Wno-long-long -Wno-unused-variable -Wno-sign-compare -Wno-parentheses -Wno-switch -fmessage-length=0 -Dlint -DWIN32_LEAN_AND_MEAN -MMD -mthreads -Wno-non-virtual-dtor
-DEV_FLAGS=-ggdb -DMINGW -Wall -Wshadow -Wundef -Wno-long-long -Wno-unused-variable -Wno-sign-compare -Wno-parentheses -Wno-switch -fmessage-length=0 -Dlint -DWIN32_LEAN_AND_MEAN -MMD -mthreads -Wno-non-virtual-dtor
+PROD_FLAGS=-O2 -march=native -DNDEBUG $(COMMONFLAGS) $(EXTRAFLAGS)
+DEV_FLAGS=-ggdb -march=native -DDEBUG -DCOMPRESS_DEBUG $(COMMONFLAGS) $(EXTRAFLAGS)
+
+COMMONFLAGS=-DMINGW -DWIN_NT $(PROC) -DWIN32_LEAN_AND_MEAN -MMD -DTTMATH_NOASM -DHAVE_CTIME_S -DHAVE_LOCALTIME_S
+EXTRAFLAGS=-Wno-format -Wno-long-long -Wno-null-conversion -Wno-unused-variable -Wno-sign-compare -Wno-parentheses -Wno-switch -Wno-non-virtual-dtor -Wno-write-strings -Wno-invalid-offsetof -Wno-shift-count-overflow -Wno-ignored-attributes -Wno-deprecated-declarations
+
+ifeq ($(CpuType),x86_64)
+PROC=-DAMD64 -DDECUSE64
+else
+PROC=-DI386
+endif
+
+ifeq ($(TARGET),Debug)
+RCFLAGS=-DDEBUG
+else
+RCFLAGS=-DNDEBUG
+endif
 
 PLATFORM_PATH=os/win32
 
 # Override link command for implicit stdc++ linking
-LIB_LINK=$(LD)
+EXE_LINK = $(CXX) $(GLOB_OPTIONS)
+LIB_LINK = $(CXX) $(GLOB_OPTIONS)
 
-LIB_LINK_OPTIONS+=-Wl,--enable-stdcall-fixup
-
-# Strip symbols from release versions to decrease size
-ifeq ($(IsProdTypeBuild),Y)
-EXE_LINK_OPTIONS+=-Wl,-s
-LIB_LINK_OPTIONS+=-Wl,-s
-endif
-
-# Generation of fbclient_ms.lib
-LIB_LINK_IMPLIB:=-Wl,--out-implib,firebird/lib/fbclient_ms.lib
 LIB_GUI:= -mwindows -lcomctl32 -lgdi32
 
+# MinGW doesn't use mapfile or rpath
+LIB_LINK_MAPFILE=
+LIB_LINK_RPATH=
+LINK_DARWIN_RPATH=
+LIB_PLATFORM_RPATH=
+
+# Output an export library
+LIB_LINK_SONAME= -Wl,--out-implib,$(LIB)/lib$(1)$(ARCH_EXT)
+
 # Add resources to some files
-FilesToAddVersionInfo=$(LIBFBEMBED_SO) $(LIBFBCLIENT_SO) $(LIBFBINTL_SO) \
+FilesToAddVersionInfo=$(FBSVCMGR) $(FBTRACEMGR) $(LOCKPRINT) $(NBACKUP) \
+ $(INSTREG) $(INSTSVC) $(INSTCLIENT) $(GSPLIT) \
  $(GSTAT) $(GSEC) $(GFIX) $(ISQL) $(GBAK) $(GPRE)
-# TODO: guardians also must be here
-FilesToAddDialog=$(FB_SUPER_SERVER) $(FB_CLASSIC_SERVER)
-FilesToAddDialog2=$(IBGUARD)
+FilesToAddVersionInfo2=$(LIBFIREBIRD_SO)
+FilesToAddVersionInfo3=$(LIBENGINE_SO)
+FilesToAddVersionInfo4=$(LIBFBINTL_SO)
+FilesToAddVersionInfo5=$(LIBIBUTIL_SO)
+FilesToAddDialog=$(FB_DAEMON)
+FilesToAddDialog2=$(FBGUARD)
 
 # Suppress 'lib'-prefix
 LIB_PREFIX=
 
 # Override library names to suppress version suffix
-ClientLibraryNameFull := $(ClientLibraryName)
-ClientLibrarySoName := $(ClientLibraryName)
+LibraryFileName=fbclient
+LibraryFullName=$(LibraryFileName).${SHRLIB_EXT}
+LibrarySoName=$(LibraryFileName).${SHRLIB_EXT}
+LibraryBaseName=$(LibraryFileName).${SHRLIB_EXT}
 
-# Looks like MinGW 3 does not support version scripts but support def-files
-LINK_FIREBIRD_SYMBOLS = $(BLD_ROOT)/win32/defs/fbclient_s.def $(BLD_ROOT)/win32/defs/fbclient.def
+LIBFIREBIRD_FULLNAME = $(BIN)/$(LibraryFullName)
+LIBFIREBIRD_SONAME = $(BIN)/$(LibrarySoName)
+LIBFIREBIRD_BASENAME = $(BIN)/$(LibraryBaseName)
 
-# This is required for newly built executable to find newly built shared
-# libraries because on Win32 there is no such thing as LD_LIBRARY_PATH
-LIB=$(BIN)
+EngineFileName=engine${OdsVersion}
+EngineSoName=$(EngineFileName).${SHRLIB_EXT}
 
-# Special options for UDF link
-LINK_UDF = $(LIB_LINK) $(LIB_LINK_OPTIONS) $(call LIB_LINK_SONAME,$(1).$(SHRLIB_EXT)) -L$(LIB) -lib_util
-LINK_UDF_LIBS =
+LIBFIREBIRD_SO = $(BIN)/$(LibraryFileName).${SHRLIB_EXT}
+LIBENGINE_SO = $(PLUGINS)/$(EngineFileName).${SHRLIB_EXT}
+LIBFBINTL_SO = $(FB_BUILD)/intl/fbintl.$(SHRLIB_EXT)
 
-# Special options for trace plugin link
-LINK_TRACE_LIBS = -L$(LIB) $(SO_LINK_LIBS)
+PLUGIN_SONAME=$(notdir $@)
+
+# Shared library name for usage inside of the UDF
+IbUtilLibraryName = ib_util.$(SHRLIB_EXT)
+LIBIBUTIL_SO = $(BIN)/$(IbUtilLibraryName)
+
+# Library name differ from make.default
+LINK_INTL = $(LIB_LINK) $(LINK_FBINTL_SYMBOLS) $(LIB_LINK_OPTIONS) $(UNDEF_FLAGS) \
+  $(call LIB_LINK_SONAME,fbintl.$(SHRLIB_EXT))
+
+LINK_TRACE = $(LIB_LINK) $(LINK_PLUGIN_SYMBOLS) $(LIB_LINK_OPTIONS) $(UNDEF_FLAGS) \
+  $(call LIB_LINK_SONAME,fbtrace.$(SHRLIB_EXT))

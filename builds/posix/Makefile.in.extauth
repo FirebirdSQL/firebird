@@ -28,7 +28,9 @@ BIN=$(ROOT)/bin
 LIB=$(ROOT)/lib
 
 LIB_PREFIX=lib
-SHRLIB_EXT=so
+SHRLIB_EXT=@SHRLIB_EXT@
+EXEC_EXT=@EXEEXT@
+PLATFORM=@PLATFORM@
 
 ifndef INTERMED
   INTERMED=.
@@ -42,7 +44,12 @@ else
   OUT_PLUG=.
 endif
 
+ifeq ($(PLATFORM),win32)
+LIB_PREFIX=
+TOMCRYPT_COMPILE=-DUSE_LTM -DLTM_DESC
+else
 TOMCRYPT_COMPILE=-DLTC_PTHREAD -DUSE_LTM -DLTM_DESC
+endif
 OwnInclude=$(shell [ -d tomcrypt.include ] && echo Yes || echo No)
 ifeq ($(OwnInclude), Yes)
 TOMCRYPT_COMPILE += -Itomcrypt.include
@@ -53,7 +60,7 @@ SIMPLE_KEY_AUTH_NAME=$(LIB_PREFIX)fbSampleExtAuth.$(SHRLIB_EXT)
 BLD_SIMPLE_KEY_AUTH=$(OUT_PLUG)/$(SIMPLE_KEY_AUTH_NAME)
 SIMPLE_KEY_AUTH=$(PLUGINS)/$(SIMPLE_KEY_AUTH_NAME)
 
-KEYGEN_NAME=fbSampleExtAuthKeygen
+KEYGEN_NAME=fbSampleExtAuthKeygen$(EXEC_EXT)
 BLD_KEYGEN=$(OUT_BIN)/$(KEYGEN_NAME)
 KEYGEN=$(BIN)/$(KEYGEN_NAME)
 
@@ -61,8 +68,13 @@ KEYGEN_objects=$(INTERMED)/keygen.o
 TCWRAP_objects=$(INTERMED)/TcWrapper.o
 KEY_AUTH_objects=$(INTERMED)/ExtAuth.o
 
+ifeq ($(PLATFORM),win32)
+CXXFLAGS=-std=c++20 -I$(ROOT)/include $(TOMCRYPT_COMPILE)
+LDFLAGS=-L$(LIB)
+else
 CXXFLAGS=-std=c++20 -pthread -I$(ROOT)/include -fPIC $(TOMCRYPT_COMPILE)
 LDFLAGS=-pthread -L$(LIB) -Wl,-rpath,'$$ORIGIN/../lib' $(TOMCRYPT_LINK)
+endif
 
 LINK_LIBS=-lfbclient -ltomcrypt -ltommath
 
