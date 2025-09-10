@@ -611,7 +611,7 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 
 					HalfStaticArray<UCHAR, BUFFER_SMALL> message_buffer(getPool(), outMsgLength);
 
-					JRD_receive(tdbb, request, message->msg_number, outMsgLength, message_buffer.getBuffer(outMsgLength, false));
+					JRD_receive(tdbb, request, message->msg_number, outMsgLength, message_buffer.begin());
 
 					// Still active request means that second record exists
 					if ((request->req_flags & req_active))
