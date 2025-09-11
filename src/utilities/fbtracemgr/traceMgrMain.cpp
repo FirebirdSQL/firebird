@@ -109,6 +109,16 @@ void TraceSvcUtil::setAttachInfo(const string& service_name, const string& user,
 	}
 }
 
+static void insertString(UCHAR tag, ClumpletWriter& spb, const string& str)
+{
+	if (str.isEmpty())
+		return;
+
+	spb.insertBytes(tag,
+		reinterpret_cast<const UCHAR*> (str.c_str()),
+		str.length());
+}
+
 void TraceSvcUtil::startSession(TraceSession& session, bool /*interactive*/)
 {
 	HalfStaticArray<UCHAR, 1024> buff(*getDefaultMemoryPool());
@@ -158,12 +168,8 @@ void TraceSvcUtil::startSession(TraceSession& session, bool /*interactive*/)
 	spb.insertTag(isc_action_svc_trace_start);
 	spb.insertBytes(isc_spb_trc_cfg, p, len);
 
-	if (session.ses_name.hasData())
-	{
-		spb.insertBytes(isc_spb_trc_name,
-			reinterpret_cast<const UCHAR*> (session.ses_name.c_str()),
-			session.ses_name.length());
-	}
+	insertString(isc_spb_trc_name, spb, session.ses_name);
+	insertString(isc_spb_trc_plugins, spb, session.ses_plugins);
 
 	runService(spb.getBufferLength(), spb.getBuffer());
 }

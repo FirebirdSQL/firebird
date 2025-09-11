@@ -60,19 +60,18 @@ bool TableValueFunctionScan::internalGetRecord(thread_db* tdbb) const
 	}
 
 	rpb->rpb_number.increment();
+
 	do
 	{
-		if (!impure->m_recordBuffer->fetch(rpb->rpb_number.getValue(), rpb->rpb_record))
+		if (impure->m_recordBuffer->fetch(rpb->rpb_number.getValue(), rpb->rpb_record))
 		{
-			if (!nextBuffer(tdbb))
-			{
-				rpb->rpb_number.setValid(false);
-				return false;
-			}
-			continue;
+			rpb->rpb_number.setValid(true);
+			return true;
 		}
-		return true;
-	} while (true);
+	} while (nextBuffer(tdbb));
+
+	rpb->rpb_number.setValid(false);
+	return false;
 }
 
 bool TableValueFunctionScan::refetchRecord(thread_db* /*tdbb*/) const

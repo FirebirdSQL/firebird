@@ -7875,8 +7875,11 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 			if (externalFile->length() >= sizeof(REL.RDB$EXTERNAL_FILE))
 				status_exception::raise(Arg::Gds(isc_dyn_name_longer));
 
-			if (ISC_check_if_remote(externalFile->c_str(), false))
+			if (!(tdbb->tdbb_flags & TDBB_replicator) &&
+				ISC_check_if_remote(externalFile->c_str(), false))
+			{
 				status_exception::raise(Arg::PrivateDyn(163));
+			}
 
 			REL.RDB$EXTERNAL_FILE.NULL = FALSE;
 			strcpy(REL.RDB$EXTERNAL_FILE, externalFile->c_str());
@@ -10758,6 +10761,12 @@ void CreateFilterNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScrat
 {
 	Attachment* const attachment = transaction->tra_attachment;
 	const MetaString& ownerName = attachment->getEffectiveUserName();
+	const QualifiedName qualifiedName(name);
+
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, qualifiedName, obj_blob_filter))
+		return;
+
+	DYN_UTIL_check_unique_name(tdbb, transaction, qualifiedName, obj_blob_filter);
 
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);

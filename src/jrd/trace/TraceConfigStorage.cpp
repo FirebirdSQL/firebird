@@ -676,6 +676,9 @@ ULONG ConfigStorage::getSessionSize(const TraceSession& session) noexcept
 	if ((len = session.ses_logfile.length()))
 		ret += sz + len;
 
+	if ((len = session.ses_plugins.length()))
+		ret += sz + len;
+
 	ret += sz + sizeof(session.ses_start);
 
 	return ret;
@@ -717,25 +720,16 @@ void ConfigStorage::addSession(TraceSession& session)
 	char* p = reinterpret_cast<char*> (header) + slot->offset;
 	Writer writer(p, slot->size);
 
-	if (!session.ses_name.empty()) {
-		writer.write(tagName, session.ses_name.length(), session.ses_name.c_str());
-	}
-	if (session.ses_auth.hasData()) {
+	writer.writeData(tagName, session.ses_name);
+	if (session.ses_auth.hasData())
 		writer.write(tagAuthBlock, session.ses_auth.getCount(), session.ses_auth.begin());
-	}
-	if (!session.ses_user.empty()) {
-		writer.write(tagUserName, session.ses_user.length(), session.ses_user.c_str());
-	}
-	if (session.ses_role.hasData()) {
-		writer.write(tagRole, session.ses_role.length(), session.ses_role.c_str());
-	}
-	if (!session.ses_config.empty()) {
-		writer.write(tagConfig, session.ses_config.length(), session.ses_config.c_str());
-	}
+	writer.writeData(tagUserName, session.ses_user);
+	writer.writeData(tagRole, session.ses_role);
+	writer.writeData(tagConfig, session.ses_config);
 	writer.write(tagStartTS, sizeof(session.ses_start), &session.ses_start);
-	if (!session.ses_logfile.empty()) {
-		writer.write(tagLogFile, session.ses_logfile.length(), session.ses_logfile.c_str());
-	}
+	writer.writeData(tagLogFile, session.ses_logfile);
+	writer.writeData(tagPlugins, session.ses_plugins);
+
 	writer.write(tagEnd, 0, NULL);
 }
 
@@ -839,6 +833,10 @@ bool ConfigStorage::readSession(const TraceCSHeader::Slot* slot, TraceSession& s
 
 			case tagRole:
 				p = session.ses_role.getBuffer(len);
+				break;
+
+			case tagPlugins:
+				p = session.ses_plugins.getBuffer(len);
 				break;
 
 			default:

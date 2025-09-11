@@ -34,6 +34,7 @@
 #include "../../common/StatusArg.h"
 #include "../../common/ThreadStart.h"
 #include "../../common/db_alias.h"
+#include "../../common/classes/GetPlugins.h"
 #include "../../jrd/svc.h"
 #include "../../common/os/guid.h"
 #include "../../jrd/trace/TraceLog.h"
@@ -103,7 +104,8 @@ void TraceSvcJrd::setAttachInfo(const string& /*svc_name*/, const string& user, 
 
 void TraceSvcJrd::startSession(TraceSession& session, bool interactive)
 {
-	if (!TraceManager::pluginsCount())
+	GetPlugins<ITraceFactory> traceItr(IPluginManager::TYPE_TRACE, session.getPluginsList());
+	if (!traceItr.hasData())
 	{
 		m_svc.printf(false, "Can not start trace session. There are no trace plugins loaded\n");
 		return;
@@ -217,6 +219,10 @@ bool TraceSvcJrd::changeFlags(ULONG id, int setFlags, int clearFlags)
 
 void TraceSvcJrd::listSessions()
 {
+	// Do not use value from Config::getDefaultConfig() because
+	// tracemgr will reread config in embedded mode
+	constexpr const char* defaultPlugins = "<default>";
+
 	m_svc.started();
 
 	// Writing into service when storage is locked could lead to deadlock,
@@ -233,12 +239,12 @@ void TraceSvcJrd::listSessions()
 		{
 			m_svc.printf(false, "\nSession ID: %d\n", session.ses_id);
 			if (!session.ses_name.empty()) {
-				m_svc.printf(false, "  name:  %s\n", session.ses_name.c_str());
+				m_svc.printf(false, "  name:    %s\n", session.ses_name.c_str());
 			}
-			m_svc.printf(false, "  user:  %s\n", session.ses_user.c_str());
+			m_svc.printf(false, "  user:    %s\n", session.ses_user.c_str());
 
 			const struct tm* t = localtime(&session.ses_start);
-			m_svc.printf(false, "  date:  %04d-%02d-%02d %02d:%02d:%02d\n",
+			m_svc.printf(false, "  date:    %04d-%02d-%02d %02d:%02d:%02d\n",
 					t->tm_year + 1900, t->tm_mon + 1, t->tm_mday,
 					t->tm_hour, t->tm_min, t->tm_sec);
 
@@ -264,7 +270,10 @@ void TraceSvcJrd::listSessions()
 			if (session.ses_flags & trs_log_full) {
 				flags += ", log full";
 			}
-			m_svc.printf(false, "  flags: %s\n", flags.c_str());
+			m_svc.printf(false, "  flags:   %s\n", flags.c_str());
+
+			const char* pluginsList = session.getPluginsList();
+			m_svc.printf(false, "  plugins: %s\n", pluginsList ? pluginsList : defaultPlugins);
 		}
 	}
 }

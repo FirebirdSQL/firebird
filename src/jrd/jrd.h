@@ -234,12 +234,12 @@ public:
 	}
 
 public:
-	int getObjectType() const override
+	int getObjectType() const noexcept override
 	{
 		return obj_procedure;
 	}
 
-	SLONG getSclType() const override
+	SLONG getSclType() const noexcept override
 	{
 		return obj_procedures;
 	}

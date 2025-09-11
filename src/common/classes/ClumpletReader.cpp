@@ -476,6 +476,7 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 			{
 			case isc_spb_trc_cfg:
 			case isc_spb_trc_name:
+			case isc_spb_trc_plugins:
 				return StringSpb;
 			case isc_spb_trc_id:
 				return IntSpb;

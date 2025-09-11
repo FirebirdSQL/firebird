@@ -193,6 +193,7 @@ private:
 		tagStartTS,			// date+time when started
 		tagLogFile,			// log file name, if any
 		tagRole,			// SQL role name, if any
+		tagPlugins,			// trace plugins list, if any
 		tagEnd
 	};
 
@@ -239,6 +240,14 @@ private:
 		{}
 
 		void write(ITEM tag, ULONG len, const void* data);
+
+		inline void writeData(const ITEM tag, const Firebird::AbstractString& data)
+		{
+			if (data.empty())
+				return;
+
+			write(tag, data.length(), data.c_str());
+		}
 
 	private:
 		char* m_mem;

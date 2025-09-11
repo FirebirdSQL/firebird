@@ -591,6 +591,7 @@ constexpr SvcSwitches traceStartOptions[] =
 {
 	{"trc_cfg", putFileFromArgument, 0, isc_spb_trc_cfg, 0},
 	{"trc_name", putStringArgument, 0, isc_spb_trc_name, 0},
+	{"trc_plugins", putStringArgument, 0, isc_spb_trc_plugins, 0},
 	{0, 0, 0, 0, 0}
 };
 

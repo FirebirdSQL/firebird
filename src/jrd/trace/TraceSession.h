@@ -53,7 +53,8 @@ public:
 		ses_start(0),
 		ses_flags(0),
 		ses_logfile(pool),
-		ses_role(pool)
+		ses_role(pool),
+		ses_plugins(pool)
 	{}
 
 	TraceSession(MemoryPool& pool, TraceSession& other) :
@@ -65,7 +66,8 @@ public:
 		ses_start(other.ses_start),
 		ses_flags(other.ses_flags),
 		ses_logfile(pool, other.ses_logfile),
-		ses_role(pool, other.ses_role)
+		ses_role(pool, other.ses_role),
+		ses_plugins(pool, other.ses_plugins)
 	{}
 
 	~TraceSession() {}
@@ -81,6 +83,13 @@ public:
 		ses_flags = 0;
 		ses_logfile = "";
 		ses_role = "";
+		ses_plugins = "";
+	}
+
+	// Return string or nullptr
+	inline const char* getPluginsList() const noexcept
+	{
+		return ses_plugins.hasData() ? ses_plugins.data() : nullptr;
 	}
 
 	ULONG	ses_id;
@@ -92,6 +101,7 @@ public:
 	int		ses_flags;
 	PathName ses_logfile;
 	string	ses_role;
+	string	ses_plugins;
 };
 
 } // namespace Firebird

@@ -508,7 +508,7 @@ static bool create_expression_index(thread_db* tdbb, SSHORT phase, DeferredWork*
 static void check_computed_dependencies(thread_db* tdbb, jrd_tra* transaction,
 	const QualifiedName& fieldName);
 static void check_dependencies(thread_db*, const QualifiedName&, const MetaName&, int, jrd_tra*);
-static void check_filename(const Firebird::string&, bool);
+static void check_filename(thread_db*, const Firebird::string&, bool);
 static void cleanup_index_creation(thread_db*, DeferredWork*, jrd_tra*);
 static bool formatsAreEqual(const Format*, const Format*);
 static bool	find_depend_in_dfw(thread_db*, const QualifiedName&, USHORT, USHORT, jrd_tra*);
@@ -1930,7 +1930,7 @@ static bool add_shadow(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tr
 		return true;
 
 	case 4:
-		check_filename(work->dfw_name.c_str(), false);
+		check_filename(tdbb, work->dfw_name.c_str(), false);
 
 		/* could have two cases:
 		   1) this shadow has already been written to, so add this file using
@@ -2022,7 +2022,7 @@ static bool add_difference(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 				ERR_post(Arg::Gds(isc_no_meta_update) <<
 						 Arg::Gds(isc_wrong_backup_state));
 			}
-			check_filename(work->dfw_name.c_str(), true);
+			check_filename(tdbb, work->dfw_name.c_str(), true);
 			dbb->dbb_backup_manager->setDifference(tdbb, work->dfw_name.c_str());
 		}
 		break;
@@ -2931,7 +2931,7 @@ static void check_dependencies(thread_db* tdbb,
 }
 
 
-static void check_filename(const Firebird::string& name, bool shareExpand)
+static void check_filename(thread_db* tdbb, const Firebird::string& name, bool shareExpand)
 {
 /**************************************
  *
@@ -2944,6 +2944,9 @@ static void check_filename(const Firebird::string& name, bool shareExpand)
  *	inet node name.
  *
  **************************************/
+	if (tdbb->tdbb_flags & TDBB_replicator)
+		return;
+
 	const Firebird::PathName file_name(name.ToPathName());
 	const bool valid = file_name.find("::") == Firebird::PathName::npos;
 

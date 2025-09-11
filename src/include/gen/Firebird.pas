@@ -4418,6 +4418,7 @@ const
 	isc_spb_trc_id = byte(1);
 	isc_spb_trc_name = byte(2);
 	isc_spb_trc_cfg = byte(3);
+	isc_spb_trc_plugins = byte(4);
 	isc_sdl_version1 = byte(1);
 	isc_sdl_eoc = byte(255);
 	isc_sdl_relation = byte(2);

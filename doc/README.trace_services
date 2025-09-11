@@ -81,6 +81,7 @@ Action parameters switches :
   -N[AME]    <string>                   Session name
   -I[D]      <number>                   Session ID
   -C[ONFIG]  <string>                   Trace configuration file name
+  -P[LUGINS] <string list>              Plugins list for use with trace session; valid list separators: '\t', ',', ';'
 
 Connection parameters switches :
   -SE[RVICE]  <string>                  Service name

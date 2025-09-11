@@ -92,7 +92,7 @@ DATABASE DB = STATIC "yachts.lnk";
 #define DB          db_handle
 #define isc_status  status_vector
 
-const SSHORT BUCKETS	= 5;
+constexpr SSHORT BUCKETS = 5;
 //#define WINDOW_SIZE	(1 << 17)
 
 struct dba_idx
@@ -130,7 +130,7 @@ struct dba_blob_statistics
 	FB_UINT64 blob_space = 0;
 	FB_UINT64 blob_pages = 0;
 
-	dba_blob_statistics& operator+=(const dba_blob_statistics& rhs)
+	dba_blob_statistics& operator+=(const dba_blob_statistics& rhs) noexcept
 	{
 		blob_count += rhs.blob_count;
 		blob_space += rhs.blob_space;
@@ -202,9 +202,9 @@ static void analyze_index(const dba_rel*, dba_idx*);
 static ULONG lastUsedPage(ULONG);
 
 #if (defined WIN_NT)
-static void db_error(SLONG);
+[[noreturn]] static void db_error(SLONG);
 #else
-static void db_error(int);
+[[noreturn]] static void db_error(int);
 #endif
 
 static USHORT get_format_length(ISC_STATUS*, isc_db_handle, isc_tr_handle, ISC_QUAD&);
@@ -216,7 +216,7 @@ static void db_close(void* file_desc);
 #else
 static void db_close(int);
 #endif
-static void dba_error(USHORT, const SafeArg& arg = SafeArg());
+[[noreturn]] static void dba_error(USHORT, const SafeArg& arg = SafeArg());
 static void dba_print(bool, USHORT, const SafeArg& arg = SafeArg());
 static void print_distribution(const SCHAR*, const ULONG*);
 static void print_help();
@@ -239,45 +239,30 @@ struct dba_mem
 
 // threading declarations for thread data
 
-class tdba : public ThreadData
+class tdba final : public ThreadData
 {
 public:
 	explicit tdba(Firebird::UtilSvc* us)
 		: ThreadData(tddDBA), uSvc(us)
 	{
-		//dba_throw = false;
-		file = nullptr;
-		relations = nullptr;
-		schemas = nullptr;
-		page_size = 0;
-		dp_per_pp = 0;
-		max_records = 0;
-		page_number = 0;
-		buffer1 = nullptr;
-		buffer2 = nullptr;
-		global_buffer = nullptr;
-		exit_code = 0;
-		head_of_mem_list = nullptr;
-		memset(dba_status_vector, 0, sizeof (dba_status_vector));
 		dba_status = dba_status_vector;
 	}
 
-	//bool dba_throw;
 	Firebird::UtilSvc* uSvc;
-	dba_fil* file;
-	dba_rel* relations;
-	dba_schema* schemas;
-	USHORT page_size;
-	USHORT dp_per_pp;
-	USHORT max_records;
-	ULONG page_number;
-	pag* buffer1;
-	pag* buffer2;
-	pag* global_buffer;
-	int exit_code;
-	dba_mem *head_of_mem_list;
+	dba_fil* file = nullptr;
+	dba_rel* relations = nullptr;
+	dba_schema* schemas = nullptr;
+	USHORT page_size = 0;
+	USHORT dp_per_pp = 0;
+	USHORT max_records = 0;
+	ULONG page_number = 0;
+	pag* buffer1 = nullptr;
+	pag* buffer2 = nullptr;
+	pag* global_buffer = nullptr;
+	int exit_code = 0;
+	dba_mem *head_of_mem_list = nullptr;
 	ISC_STATUS *dba_status;
-	ISC_STATUS_ARRAY dba_status_vector;
+	ISC_STATUS_ARRAY dba_status_vector{};
 
 	static inline tdba* getSpecific()
 	{
@@ -295,7 +280,7 @@ public:
 };
 
 
-void inline dba_exit(int code, tdba* tddba)
+[[noreturn]] void inline dba_exit(int code, tdba* tddba)
 {
 	tddba->exit_code = code;
 	// Throw this kind of exception, because gstat uses status vector (and stuffException) to
@@ -310,7 +295,7 @@ namespace
 
 	bool shutdownRequested = false;
 
-	int gstatShutdown(const int reason, const int, void*)
+	int gstatShutdown(const int reason, const int, void*) noexcept
 	{
 		if (reason == fb_shutrsn_signal)
 		{
@@ -328,7 +313,7 @@ namespace
 		}
 	}
 
-	void getDateTime(char* datetime, FB_SIZE_T sizeof_datetime)
+	void getDateTime(char* datetime, FB_SIZE_T sizeof_datetime) noexcept
 	{
 		time_t t;
 		time(&t);
@@ -342,7 +327,7 @@ namespace
 	}
 } // namespace
 
-const USHORT GSTAT_MSG_FAC	= 21;
+constexpr USHORT GSTAT_MSG_FAC = FB_IMPL_MSG_FACILITY_GSTAT;
 
 
 int main_gstat(Firebird::UtilSvc* uSvc)
@@ -651,7 +636,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 	expandDatabaseName(fileName, tempStr, NULL);
 	fileName = tempStr;
 
-	dba_fil* file = db_open(fileName.c_str(), fileName.length());
+	const dba_fil* file = db_open(fileName.c_str(), fileName.length());
 
 	alignas(DIRECT_IO_BLOCK_SIZE) SCHAR temp[MAX(RAW_HEADER_SIZE, DIRECT_IO_BLOCK_SIZE)];
 	tddba->page_size = MAX(RAW_HEADER_SIZE, DIRECT_IO_BLOCK_SIZE);
@@ -704,17 +689,17 @@ int gstat(Firebird::UtilSvc* uSvc)
 		class Statist
 		{
 		public:
-			Statist()
+			Statist() noexcept
 				: enc(0), non(0)
 			{ }
 
-			void print(USHORT messageNo)
+			void print(USHORT messageNo) const
 			{
 				dba_print(false, messageNo, SafeArg() << enc + non << enc << non);
 				// msg 5[2-4]: <TYPE> pages: total @1, encrypted @2, non-crypted @3
 			}
 
-			void log(UCHAR flags)
+			void log(UCHAR flags) noexcept
 			{
 				if (flags & crypted_page)
 					++enc;
@@ -722,7 +707,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 					++non;
 			}
 
-			bool hasCrypted()
+			bool hasCrypted() const noexcept
 			{
 				return enc > 0;
 			}
@@ -733,7 +718,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 
 		Statist data, index, blob, generator, other;
 
-		ULONG last = lastUsedPage(header->hdr_page_size);
+		const ULONG last = lastUsedPage(header->hdr_page_size);
 		for (page = 0; page <= last; ++page)
 		{
 			const pag* p = db_read(page, true);
@@ -782,7 +767,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 	dpb.insertTag(isc_dpb_no_garbage_collect);
 
 	const unsigned char* authBlock;
-	unsigned int authBlockSize = uSvc->getAuthBlock(&authBlock);
+	const unsigned int authBlockSize = uSvc->getAuthBlock(&authBlock);
 	if (authBlockSize)
 	{
 		dpb.insertBytes(isc_dpb_auth_block, authBlock, authBlockSize);
@@ -1052,7 +1037,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 
 				average = relation->rel_records ?
 					(double) relation->rel_format_space / relation->rel_records : 0.0;
-				double average2 = relation->rel_record_space ?
+				const double average2 = relation->rel_record_space ?
 					(double) relation->rel_format_space / relation->rel_record_space : 0.0;
 				uSvc->printf(false, "    Average unpacked length: %.2f, compression ratio: %.2f\n",
 							 average, average2);
@@ -1247,10 +1232,10 @@ int gstat(Firebird::UtilSvc* uSvc)
 
 static ULONG lastUsedPage(ULONG pageSize)
 {
-	const ULONG pipFirst = FIRST_PIP_PAGE;
+	constexpr ULONG pipFirst = FIRST_PIP_PAGE;
 	ULONG pipLast = pipFirst;
-	ULONG pagesPerPIP = Ods::pagesPerPIP(pageSize);
-	ULONG bytesBitPIP = Ods::bytesBitPIP(pageSize);
+	const ULONG pagesPerPIP = Ods::pagesPerPIP(pageSize);
+	const ULONG bytesBitPIP = Ods::bytesBitPIP(pageSize);
 	page_inv_page* pip;
 
 	while (true)
@@ -1267,7 +1252,7 @@ static ULONG lastUsedPage(ULONG pageSize)
 		if (pip->pip_used != pagesPerPIP)
 			break;
 
-		UCHAR lastByte = pip->pip_bits[bytesBitPIP - 1];
+		const UCHAR lastByte = pip->pip_bits[bytesBitPIP - 1];
 		if (lastByte & 0x80)
 			break;
 
@@ -1577,7 +1562,7 @@ static void analyze_index( const dba_rel* relation, dba_idx* index)
  * Functional description
  *
  **************************************/
-	tdba* tddba = tdba::getSpecific();
+	const tdba* tddba = tdba::getSpecific();
 
 	const index_root_page* index_root = (const index_root_page*) db_read(relation->rel_index_root);
 
@@ -1816,7 +1801,7 @@ static void db_close(void* file_desc)
 	CloseHandle(file_desc);
 }
 
-static void db_error( SLONG status)
+[[noreturn]] static void db_error( SLONG status)
 {
 /**************************************
  *
@@ -1927,7 +1912,7 @@ static const pag* db_read( ULONG page_number, bool ok_enc)
 	if (SetFilePointer(tddba->file->fil_desc, (LONG) liOffset.LowPart, &liOffset.HighPart, FILE_BEGIN) ==
 		(DWORD) -1)
 	{
-		int lastError = GetLastError();
+		const int lastError = GetLastError();
 		if (lastError != NO_ERROR)
 		{
 			tddba->uSvc->getStatusAccessor().setServiceStatus(GSTAT_MSG_FAC, 30, SafeArg());
@@ -1983,7 +1968,7 @@ static void db_close( int file_desc)
 	close(file_desc);
 }
 
-static void db_error( int status)
+[[noreturn]] static void db_error( int status)
 {
 /**************************************
  *
@@ -2103,7 +2088,7 @@ static const pag* db_read( ULONG page_number, bool ok_enc)
 #endif
 
 
-static void dba_error(USHORT errcode, const SafeArg& arg)
+[[noreturn]] static void dba_error(USHORT errcode, const SafeArg& arg)
 {
 /**************************************
  *

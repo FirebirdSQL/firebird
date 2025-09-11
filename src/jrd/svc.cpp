@@ -3134,6 +3134,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			{
 			case isc_spb_trc_cfg:
 			case isc_spb_trc_name:
+			case isc_spb_trc_plugins:
 				get_action_svc_string(spb, switches);
 				break;
 			case isc_spb_trc_id:
