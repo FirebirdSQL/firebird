@@ -595,29 +595,25 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 			JRD_receive(tdbb, request, message->msg_number, outMsgLength, outMsg);
 
 			// if this is a singleton select that return some data, make sure there's in fact one record
-
-			if (singleton)
+			if (singleton && outMsgLength > 0)
 			{
-				if (outMsgLength > 0)
+				// No record returned though expected
+				if (!(request->req_flags & req_active))
 				{
-					// No record returned though expected
-					if (!(request->req_flags & req_active))
-					{
-						status_exception::raise(Arg::Gds(isc_stream_eof));
-					}
+					status_exception::raise(Arg::Gds(isc_stream_eof));
+				}
 
-					// Create a temp message buffer and try one more receive.
-					// If it succeed then the next record exists.
+				// Create a temp message buffer and try one more receive.
+				// If it succeed then the next record exists.
 
-					HalfStaticArray<UCHAR, BUFFER_SMALL> message_buffer(getPool(), outMsgLength);
+				HalfStaticArray<UCHAR, BUFFER_SMALL> message_buffer(getPool(), outMsgLength);
 
-					JRD_receive(tdbb, request, message->msg_number, outMsgLength, message_buffer.begin());
+				JRD_receive(tdbb, request, message->msg_number, outMsgLength, message_buffer.begin());
 
-					// Still active request means that second record exists
-					if ((request->req_flags & req_active))
-					{
-						status_exception::raise(Arg::Gds(isc_sing_select_err));
-					}
+				// Still active request means that second record exists
+				if ((request->req_flags & req_active))
+				{
+					status_exception::raise(Arg::Gds(isc_sing_select_err));
 				}
 			}
 		}
