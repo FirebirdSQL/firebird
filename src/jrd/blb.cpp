@@ -466,7 +466,8 @@ void BLB_garbage_collect(thread_db* tdbb,
 		for (USHORT id = 0; id < format->fmt_count; id++)
 		{
 			DSC desc;
-			if (DTYPE_IS_BLOB(format->fmt_desc[id].dsc_dtype) && EVL_field(0, rec, id, &desc))
+			if (DTYPE_IS_BLOB(format->fmt_desc[id].dsc_dtype) &&
+				EVL_field(tdbb, rec, id, &desc))
 			{
 				const bid* blob = (bid*) desc.dsc_address;
 				if (!blob->isEmpty())
@@ -506,7 +507,8 @@ void BLB_garbage_collect(thread_db* tdbb,
 		for (USHORT id = 0; id < format->fmt_count; id++)
 		{
 			DSC desc;
-			if (DTYPE_IS_BLOB(format->fmt_desc[id].dsc_dtype) && EVL_field(0, rec, id, &desc))
+			if (DTYPE_IS_BLOB(format->fmt_desc[id].dsc_dtype) &&
+				EVL_field(tdbb, rec, id, &desc))
 			{
 				const bid* blob = (bid*) desc.dsc_address;
 				if (!blob->isEmpty())

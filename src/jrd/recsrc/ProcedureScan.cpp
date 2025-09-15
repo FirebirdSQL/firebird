@@ -115,11 +115,10 @@ void ProcedureScan::internalOpen(thread_db* tdbb) const
 			Request* request = tdbb->getRequest();
 
 			// Get descriptors of src field/parameter/variable, etc.
-			request->req_flags &= ~req_null;
 			dsc* from_desc = EVL_expr(tdbb, request, *(sourcePtr+skip));
 			if (!from_desc)
 			{
-				EXE_assignment(tdbb, *(targetPtr+skip), nullptr, (request->req_flags & req_null), NULL, NULL);
+				EXE_assignment(tdbb, *(targetPtr+skip), from_desc);
 				continue;
 			}
 
@@ -127,7 +126,7 @@ void ProcedureScan::internalOpen(thread_db* tdbb) const
 			{
 				auto clonedDsc = *from_desc;
 				clonedDsc.dsc_next = nullptr;
-				EXE_assignment(tdbb, *(targetPtr+skip), &clonedDsc, (request->req_flags & req_null), NULL, NULL);
+				EXE_assignment(tdbb, *(targetPtr+skip), &clonedDsc);
 
 				from_desc = from_desc->dsc_next;
 				if (from_desc)

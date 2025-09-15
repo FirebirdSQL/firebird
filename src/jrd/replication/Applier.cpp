@@ -627,7 +627,7 @@ void Applier::insertRecord(thread_db* tdbb, TraNumber traNum,
 		{
 			dsc desc;
 			if (DTYPE_IS_BLOB(format->fmt_desc[id].dsc_dtype) &&
-				EVL_field(NULL, record, id, &desc))
+				EVL_field(tdbb, record, id, &desc))
 			{
 				const auto blobId = (bid*) desc.dsc_address;
 
@@ -772,7 +772,7 @@ void Applier::updateRecord(thread_db* tdbb, TraNumber traNum,
 	{
 		dsc desc;
 		if (DTYPE_IS_BLOB(orgFormat->fmt_desc[id].dsc_dtype) &&
-			EVL_field(NULL, orgRecord, id, &desc))
+			EVL_field(tdbb, orgRecord, id, &desc))
 		{
 			const auto source = (bid*) desc.dsc_address;
 
@@ -836,12 +836,12 @@ void Applier::updateRecord(thread_db* tdbb, TraNumber traNum,
 			{
 				dsc from, to;
 
-				const auto orgFlag = EVL_field(NULL, orgRecord, id, &from);
-				const auto newFlag = EVL_field(NULL, newRecord, id, &to);
+				const auto orgFlag = EVL_field(tdbb, orgRecord, id, &from);
+				const auto newFlag = EVL_field(tdbb, newRecord, id, &to);
 
 				if (orgFlag == newFlag && (!newFlag || !MOV_compare(tdbb, &from, &to)))
 				{
-					const auto flag = EVL_field(NULL, orgRpb.rpb_record, id, &from);
+					const auto flag = EVL_field(tdbb, orgRpb.rpb_record, id, &from);
 
 					if (flag)
 					{
@@ -1143,8 +1143,8 @@ bool Applier::compareKey(thread_db* tdbb, jrd_rel* relation, const index_desc& i
 
 		dsc desc1, desc2;
 
-		const bool null1 = !EVL_field(relation, record1, field_id, &desc1);
-		const bool null2 = !EVL_field(relation, record2, field_id, &desc2);
+		const bool null1 = !EVL_field(tdbb, relation, record1, field_id, &desc1);
+		const bool null2 = !EVL_field(tdbb, relation, record2, field_id, &desc2);
 
 		if (null1 != null2 || (!null1 && MOV_compare(tdbb, &desc1, &desc2)))
 		{
@@ -1236,7 +1236,7 @@ void Applier::doInsert(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 	{
 		dsc desc;
 		if (DTYPE_IS_BLOB(format->fmt_desc[id].dsc_dtype) &&
-			EVL_field(NULL, record, id, &desc))
+			EVL_field(tdbb, record, id, &desc))
 		{
 			const auto blobId = (bid*) desc.dsc_address;
 
@@ -1322,7 +1322,7 @@ void Applier::doUpdate(thread_db* tdbb, record_param* orgRpb, record_param* newR
 	{
 		dsc desc;
 		if (DTYPE_IS_BLOB(format->fmt_desc[id].dsc_dtype) &&
-			EVL_field(NULL, newRecord, id, &desc))
+			EVL_field(tdbb, newRecord, id, &desc))
 		{
 			const auto dstBlobId = (bid*) desc.dsc_address;
 			const auto srcBlobId = (blobs && id < blobs->getCount()) ? (bid*) &(*blobs)[id] : NULL;
@@ -1333,7 +1333,7 @@ void Applier::doUpdate(thread_db* tdbb, record_param* orgRpb, record_param* newR
 
 				if (same_blobs)
 				{
-					if (EVL_field(NULL, orgRecord, id, &desc))
+					if (EVL_field(tdbb, orgRecord, id, &desc))
 						*dstBlobId = *(bid*) desc.dsc_address;
 					else
 						dstBlobId->clear();

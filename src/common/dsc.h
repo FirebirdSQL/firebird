@@ -190,10 +190,25 @@ typedef struct dsc
 		delete dsc_next;
 	}
 
-	void setAddressRecursively(UCHAR* newAddress)
+	void setOffset(ULONG offset)
 	{
-		ULONG recordLength = 0;
-		setAddressRecursively(newAddress, recordLength);
+		dsc_address = (UCHAR*)(IPTR) offset;
+	}
+
+	void setAddress(UCHAR* newAddress)
+	{
+		if (dsc_sub_first || dsc_next)
+		{
+			ULONG recordLength = 0;
+			setAddressRecursively(newAddress, recordLength);
+		}
+		else
+			dsc_address = newAddress;
+	}
+
+	void rebaseAddress(UCHAR* baseAddress)
+	{
+		setAddress(baseAddress + (IPTR) dsc_address);
 	}
 
 	void setAddressRecursively(UCHAR* baseAddress, ULONG& recordLength)

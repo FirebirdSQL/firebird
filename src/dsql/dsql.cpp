@@ -1814,7 +1814,7 @@ USHORT Jrd::generate_sub_parameters(dsql_msg* message, dsql_fld& parameterField,
 	thread_db* tdbb = JRD_get_thread_data();
 
 	DsqlDescMaker::fromField(&hostParameter.par_desc, &parameterField);
-	hostParameter.par_desc.setAddressRecursively(0);
+	hostParameter.par_desc.setOffset(0);
 
 	if (parameterField.fld_sub_first)
 	{

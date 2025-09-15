@@ -226,7 +226,7 @@ Sort* SortedStream::init(thread_db* tdbb) const
 			dsc to, temp;
 
 			to = item->desc;
-			to.setAddressRecursively(data + (IPTR) to.dsc_address);
+			to.rebaseAddress(data);
 			bool flag = false;
 			dsc* from = nullptr;
 
@@ -269,7 +269,7 @@ Sort* SortedStream::init(thread_db* tdbb) const
 					continue;
 				}
 
-				if (!EVL_field(rpb->rpb_relation, rpb->rpb_record, item->fieldId, from))
+				if (!EVL_field(tdbb, rpb->rpb_relation, rpb->rpb_record, item->fieldId, from))
 					flag = true;
 			}
 
@@ -382,7 +382,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 		dsc from, to;
 		const auto flag = (*(data + item.flagOffset) == TRUE);
 		from = item.desc;
-		from.setAddressRecursively(data + (IPTR) from.dsc_address);
+		from.rebaseAddress(data);
 
 		// If we are dealing with a row type, then we need to set skip counter to the number of fields in
 		// the rowvalue. Dew to the fact that rowvalue itself has a node which will be skipped on next if,
@@ -477,7 +477,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 			record->setNull(id);
 		else
 		{
-			EVL_field(relation, record, id, &to);
+			EVL_field(tdbb, relation, record, id, &to);
 			MOV_move(tdbb, &from, &to, true);
 			record->clearNull(id);
 		}
@@ -583,7 +583,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 					continue;
 
 				const auto null1 = (*(data + item.flagOffset) == TRUE);
-				const auto null2 = !EVL_field(relation, temp.rpb_record, item.fieldId, &from);
+				const auto null2 = !EVL_field(tdbb, relation, temp.rpb_record, item.fieldId, &from);
 
 				if (null1 != null2)
 				{

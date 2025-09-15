@@ -3173,7 +3173,7 @@ ScanResult jrd_prc::scan(thread_db* tdbb, ObjectBase::Flag flags)
 					{
 						*desc = parameter->prm_desc;
 						length = MET_align(&(*desc), length);
-						desc->setAddressRecursively((UCHAR *) (IPTR) length);
+						desc->setOffset(length);
 						length += desc->dsc_length;
 					}
 				}

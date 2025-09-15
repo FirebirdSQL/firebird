@@ -1838,8 +1838,8 @@ void IDX_modify_flag_uk_modified(thread_db* tdbb,
 		{
 			const USHORT field_id = idx.idx_rpt[i].idx_field;
 
-			const bool flag_org = EVL_field(relation, org_rpb->rpb_record, field_id, &desc1);
-			const bool flag_new = EVL_field(relation, new_rpb->rpb_record, field_id, &desc2);
+			const bool flag_org = EVL_field(tdbb, relation, org_rpb->rpb_record, field_id, &desc1);
+			const bool flag_new = EVL_field(tdbb, relation, new_rpb->rpb_record, field_id, &desc2);
 
 			if (flag_org != flag_new || (flag_new && MOV_compare(tdbb, &desc1, &desc2)))
 			{
@@ -2073,10 +2073,10 @@ static bool cmpRecordKeys(thread_db* tdbb,
 			// In order to "map a null to a default" value (in EVL_field()),
 			// the relation block is referenced.
 			// Reference: Bug 10116, 10424
-			const bool flag_rec = EVL_field(rel1, rec1, field_id, &desc1);
+			const bool flag_rec = EVL_field(tdbb, rel1, rec1, field_id, &desc1);
 
 			field_id = idx2->idx_rpt[i].idx_field;
-			const bool flag_idx = EVL_field(rel2, rec2, field_id, &desc2);
+			const bool flag_idx = EVL_field(tdbb, rel2, rec2, field_id, &desc2);
 
 			if (flag_rec != flag_idx || (flag_rec && MOV_compare(tdbb, &desc1, &desc2)))
 				break;

@@ -3786,7 +3786,7 @@ dsc* CastNode::perform(thread_db* tdbb, impure_value* impure, dsc* value,
 		return value;
 
 	EVL_put_desc(tdbb, castDesc, impure);
-	impure->vlu_desc.setAddressRecursively((UCHAR*) &impure->vlu_misc);
+	impure->vlu_desc.setAddress((UCHAR*) &impure->vlu_misc);
 
 	if (DTYPE_IS_TEXT(impure->vlu_desc.dsc_dtype))
 	{
@@ -7247,16 +7247,15 @@ dsc* FieldNode::execute(thread_db* tdbb, Request* request) const
 	// In order to "map a null to a default" value (in EVL_field()), the relation block is referenced.
 	// Reference: Bug 10116, 10424
 
+	if (!EVL_field(tdbb, relation, record, fieldId, &impure->vlu_desc))
 	{
-		dsc tmpDesc;
-		auto null = !EVL_field(relation, record, fieldId, &tmpDesc);
 		if (itemInfo)
-			EVL_validate(tdbb, Item(Item::TYPE_FIELD, contextNum, fieldId), itemInfo, &tmpDesc, null ? true : (tmpDesc.dsc_flags & DSC_null));
+		{
+			EVL_validate(tdbb, Item(Item::TYPE_FIELD, contextNum, fieldId),
+				itemInfo, &impure->vlu_desc, true);
+		}
 
-		if (null)
-			return NULL;
-
-		EVL_put_desc(tdbb, &tmpDesc, impure);
+		return NULL;
 	}
 
 	// ASF: CORE-1432 - If the record is not on the latest format, upgrade it.
@@ -10211,7 +10210,7 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 	desc = &message->getFormat(paramRequest)->fmt_desc[argNumber];
 
 	EVL_put_desc(tdbb, desc, retImpureDesc);
-	retImpureDesc->setAddressRecursively(message->getBuffer(paramRequest) + (IPTR) desc->dsc_address);
+	retImpureDesc->rebaseAddress(message->getBuffer(paramRequest));
 	retImpureDesc->propagateNullMask();
 
 	if (!isNull)
@@ -13966,12 +13965,10 @@ dsc* UdfCallNode::execute(thread_db* tdbb, Request* request) const
 			auto skip = 0;
 			for (auto source = args->items.begin(); source < (args->items.end() - skip); source++)
 			{
-
-				ULONG argOffset = (IPTR) fmtDesc[0].dsc_address;
 				ULONG nullOffset = (IPTR) fmtDesc[1].dsc_address;
 
 				dsc argDesc = fmtDesc[0];
-				argDesc.setAddressRecursively(inMsg + argOffset);
+				argDesc.rebaseAddress(inMsg);
 
 				SSHORT* nullPtr = reinterpret_cast<SSHORT*>(inMsg + nullOffset);
 
@@ -13994,11 +13991,10 @@ dsc* UdfCallNode::execute(thread_db* tdbb, Request* request) const
 					{
 						srcDesc = srcDesc->dsc_next;
 						skip++;
-						argOffset = (IPTR) fmtDesc[0].dsc_address;
 						nullOffset = (IPTR) fmtDesc[1].dsc_address;
 
 						argDesc = fmtDesc[0];
-						argDesc.dsc_address = inMsg + argOffset;
+						argDesc.rebaseAddress(inMsg);
 
 						nullPtr = reinterpret_cast<SSHORT*>(inMsg + nullOffset);
 					}
@@ -14098,9 +14094,8 @@ dsc* UdfCallNode::execute(thread_db* tdbb, Request* request) const
 			else
 			{
 
-				const ULONG argOffset = (IPTR) fmtDesc[0].dsc_address;
 				EVL_put_desc(tdbb, &(*fmtDesc), value);
-				value->vlu_desc.setAddressRecursively(outMsg + argOffset);
+				value->vlu_desc.rebaseAddress(outMsg);
 
 				trace.finish(ITracePlugin::RESULT_SUCCESS, &value->vlu_desc);
 			}
@@ -15234,7 +15229,7 @@ ValueExprNode* RowValueExpressionNode::pass2(thread_db* tdbb, CompilerScratch* c
 
 	ValueExprNode::pass2(tdbb, csb);
 	impureOffset = csb->allocImpure<impure_value>();
-	rowDesc.setAddressRecursively(compositeRecord->getData());
+	rowDesc.setAddress(compositeRecord->getData());
 
 	return this;
 }

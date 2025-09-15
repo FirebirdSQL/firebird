@@ -187,13 +187,13 @@ bool BufferedStream::internalGetRecord(thread_db* tdbb) const
 
 			if (map.map_type == FieldMap::REGULAR_FIELD)
 			{
-				if (!EVL_field(rpb->rpb_relation, record, map.map_id, &from))
+				if (!EVL_field(tdbb, rpb->rpb_relation, record, map.map_id, &from))
 					continue;
 			}
 
 			buffer_record->clearNull(i);
 
-			if (!EVL_field(rpb->rpb_relation, buffer_record, (USHORT) i, &to))
+			if (!EVL_field(tdbb, rpb->rpb_relation, buffer_record, (USHORT) i, &to))
 				fb_assert(false);
 
 			switch (map.map_type)
@@ -259,7 +259,7 @@ bool BufferedStream::internalGetRecord(thread_db* tdbb) const
 					VIO_record(tdbb, rpb, relation->currentFormat(tdbb), tdbb->getDefaultPool());
 			}
 
-			const bool isNull = !EVL_field(relation, buffer_record, (USHORT) i, &from);
+			const bool isNull = !EVL_field(tdbb, relation, buffer_record, (USHORT) i, &from);
 
 			if (map.map_type == FieldMap::REGULAR_FIELD)
 			{
@@ -270,7 +270,7 @@ bool BufferedStream::internalGetRecord(thread_db* tdbb) const
 					record->setNull(map.map_id);
 				else
 				{
-					EVL_field(relation, record, map.map_id, &to);
+					EVL_field(tdbb, relation, record, map.map_id, &to);
 					MOV_move(tdbb, &from, &to, true);
 					record->clearNull(map.map_id);
 				}

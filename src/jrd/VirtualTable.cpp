@@ -62,12 +62,12 @@ void VirtualTable::erase(thread_db* tdbb, record_param* rpb)
 	if (relation->getId() == rel_mon_attachments)
 	{
 		// Get attachment id
-		if (!EVL_field(relation, rpb->rpb_record, f_mon_att_id, &desc))
+		if (!EVL_field(tdbb, relation, rpb->rpb_record, f_mon_att_id, &desc))
 			return;
 
 		// Ignore attempt to stop system attachment
 		dsc sysFlag;
-		if (EVL_field(relation, rpb->rpb_record, f_mon_att_sys_flag, &sysFlag) &&
+		if (EVL_field(tdbb, relation, rpb->rpb_record, f_mon_att_sys_flag, &sysFlag) &&
 			MOV_get_long(tdbb, &sysFlag, 0) != 0)
 		{
 			return;
@@ -78,7 +78,7 @@ void VirtualTable::erase(thread_db* tdbb, record_param* rpb)
 	else if (relation->getId() == rel_mon_statements)
 	{
 		// Get attachment id
-		if (!EVL_field(relation, rpb->rpb_record, f_mon_stmt_att_id, &desc))
+		if (!EVL_field(tdbb, relation, rpb->rpb_record, f_mon_stmt_att_id, &desc))
 			return;
 		lock_type = LCK_cancel;
 	}

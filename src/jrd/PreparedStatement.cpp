@@ -585,7 +585,7 @@ void PreparedStatement::parseDsqlMessage(const dsql_msg* dsqlMsg, Array<dsc>& va
 		*value = params[i]->par_desc;
 		value->dsc_address = msg.begin() + msgMetadata->getItem(i).offset;
 		if (value->dsc_dtype == dtype_rowtype)
-			value->setAddressRecursively(msg.begin() + msgMetadata->getItem(i).offset);
+			value->setAddress(msg.begin() + msgMetadata->getItem(i).offset);
 		++value;
 
 		// NULL indicator

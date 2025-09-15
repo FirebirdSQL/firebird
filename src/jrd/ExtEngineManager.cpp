@@ -1518,7 +1518,7 @@ void ExtEngineManager::Trigger::execute(thread_db* tdbb, Request* request, unsig
 			USHORT fieldPos = fieldsPos[i];
 
 			dsc target;
-			bool readonly = !EVL_field(newRpb->rpb_relation, record, fieldPos, &target) &&
+			bool readonly = !EVL_field(tdbb, newRpb->rpb_relation, record, fieldPos, &target) &&
 				target.dsc_address && !(target.dsc_flags & DSC_null);
 
 			if (!readonly && target.dsc_address)
@@ -1660,7 +1660,7 @@ void ExtEngineManager::Trigger::setValues(thread_db* tdbb, Request* request, Arr
 		}
 		else
 		{
-			if (!EVL_field(rpb->rpb_relation, rpb->rpb_record, fieldPos, &source))
+			if (!EVL_field(tdbb, rpb->rpb_relation, rpb->rpb_record, fieldPos, &source))
 				source.dsc_flags |= DSC_null;
 
 			*nullTarget = (source.dsc_flags & DSC_null) ? FB_TRUE : FB_FALSE;

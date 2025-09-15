@@ -2954,7 +2954,7 @@ DmlNode* DeclareSubProcNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerSc
 			fmtDesc = parameter->prm_desc;
 
 			format->fmt_length = MET_align(&fmtDesc, format->fmt_length);
-			fmtDesc.setAddressRecursively((UCHAR *) (IPTR) format->fmt_length);
+			fmtDesc.setOffset(format->fmt_length);
 			format->fmt_length += fmtDesc.dsc_length;
 		}
 
@@ -3587,7 +3587,7 @@ DeclareVariableNode* DeclareVariableNode::pass2(thread_db* /*tdbb*/, CompilerScr
 	impureOffset = csb->allocImpure<impure_value>();
 	if (varDesc.dsc_dtype == dtype_rowtype)
 	{
-		varDesc.setAddressRecursively(compositeRecord->getData());
+		varDesc.setAddress(compositeRecord->getData());
 	}
 	return this;
 }

@@ -437,8 +437,8 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 	}
 	else if (toField && toField->itemInfo)
 	{
-		EVL_validate(tdbb, Item(Item::TYPE_FIELD, toField->contextNum, toField->fieldId),
-				toField->itemInfo, from_desc, null == -1);
+//		EVL_validate(tdbb, Item(Item::TYPE_FIELD, toField->contextNum, toField->fieldId),
+//				toField->itemInfo, from_desc, null == -1);
 	}
 
 	if (impure_flags)
@@ -567,7 +567,7 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 			dsc* to;
 		};
 
-		HalfStaticArray<DescriptorPair, BUFFER_TINY> stack;
+		HalfStaticArray<DescriptorPair, 16> stack;
 		stack.push(DescriptorPair{from_desc, to_desc});
 
 		while (!stack.isEmpty())
