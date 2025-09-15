@@ -7247,16 +7247,12 @@ dsc* FieldNode::execute(thread_db* tdbb, Request* request) const
 	// In order to "map a null to a default" value (in EVL_field()), the relation block is referenced.
 	// Reference: Bug 10116, 10424
 
-	if (!EVL_field(tdbb, relation, record, fieldId, &impure->vlu_desc))
-	{
-		if (itemInfo)
-		{
-			EVL_validate(tdbb, Item(Item::TYPE_FIELD, contextNum, fieldId),
-				itemInfo, &impure->vlu_desc, true);
-		}
+	auto null = !EVL_field(tdbb, relation, record, fieldId, &impure->vlu_desc);
+	if (itemInfo)
+		EVL_validate(tdbb, Item(Item::TYPE_FIELD, contextNum, fieldId), itemInfo, &impure->vlu_desc, null ? true : (impure->vlu_desc.dsc_flags & DSC_null));
 
+	if (null)
 		return NULL;
-	}
 
 	// ASF: CORE-1432 - If the record is not on the latest format, upgrade it.
 	// AP: for fields that are missing in original format use record's one.

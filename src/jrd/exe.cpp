@@ -437,8 +437,8 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 	}
 	else if (toField && toField->itemInfo)
 	{
-//		EVL_validate(tdbb, Item(Item::TYPE_FIELD, toField->contextNum, toField->fieldId),
-//				toField->itemInfo, from_desc, null == -1);
+		EVL_validate(tdbb, Item(Item::TYPE_FIELD, toField->contextNum, toField->fieldId),
+				toField->itemInfo, from_desc, null == -1);
 	}
 
 	if (impure_flags)
