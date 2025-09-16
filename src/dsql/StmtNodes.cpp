@@ -3268,7 +3268,7 @@ DmlNode* DeclareLocalTypeNode::parse(thread_db* tdbb, MemoryPool& pool, Compiler
 		else if (itemInfo.field.first.object.hasData())		// there could be checks from domains
 		{
 			auto fieldInfo = csb->csb_map_field_info.get(itemInfo.field);
-			if (fieldInfo)
+			if (fieldInfo && itemInfo.fullDomain)
 			{
 				csb->csb_local_type_validation_desc = *next;
 				(*nextSubfieldInfo)->validationExpr = fieldInfo->validationExpr;
