@@ -3282,7 +3282,7 @@ DmlNode* DeclareLocalTypeNode::parse(thread_db* tdbb, MemoryPool& pool, Compiler
 		else if (itemInfo.field.first.object.hasData())		// there could be default values from domains
 		{
 			auto fieldInfo = csb->csb_map_field_info.get(itemInfo.field);
-			if (fieldInfo)
+			if (fieldInfo && itemInfo.fullDomain)
 			{
 				node->defaultList->add(fieldInfo->defaultValue);
 				(*nextSubfieldInfo)->defaultValue = fieldInfo->defaultValue;
