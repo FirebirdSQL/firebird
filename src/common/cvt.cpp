@@ -3185,7 +3185,7 @@ Int128 CVT_get_int128(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorF
 {
 /**************************************
  *
- *      C V T _ g e t _ d e c 1 2 8
+ *      C V T _ g e t _ i n t 1 2 8
  *
  **************************************
  *

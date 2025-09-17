@@ -54,11 +54,13 @@ public:
 		m_start_clock = fb_utils::query_performance_counter();
 
 		static const char empty_string[] = "";
-		if (!m_string_len || !string)
+		if (!string)
 		{
 			m_string = empty_string;
 			m_string_len = 0;
 		}
+		else if (m_string_len == 0)
+			m_string_len = fb_strlen(m_string);
 	}
 
 	~TraceDSQLPrepare()

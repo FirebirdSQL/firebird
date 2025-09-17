@@ -525,6 +525,8 @@ void TracePluginImpl::logRecordStmt(const char* action, ITraceDatabaseConnection
 
 		if (reg)
 		{
+			fb_assert(false);
+
 			string temp;
 			temp.printf(NEWLINE "Statement %" SQUADFORMAT", <unknown, bug?>:" NEWLINE, stmt_id);
 			record.insert(0, temp);
