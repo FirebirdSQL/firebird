@@ -14949,6 +14949,8 @@ ValueExprNode* RowValueExpressionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch
 			MetaName fieldName = "";
 			if (defaultSource)
 			{
+				DDL_resolve_intl_type(dsqlScratch, defaultSource, defaultSource->collate);
+
 				dsql_rel* rel = nullptr;
 				const auto resolvedObject = dsqlScratch->resolveRoutineOrRelation(defaultSource->typeOfTable, std::initializer_list<ObjectType>{obj_relation});
 
