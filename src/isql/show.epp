@@ -4322,7 +4322,7 @@ static processing_state show_func(const QualifiedMetaString& name)
 
 			isqlGlob.printf(
 				"%-33s %s ",
-				IUTILS_name_to_string(ARG.RDB$ARGUMENT_NAME).c_str(),
+				ARG.RDB$ARGUMENT_NAME,
 				(ARG.RDB$ARGUMENT_POSITION == FUN.RDB$RETURN_ARGUMENT ? "OUTPUT" : "INPUT"));
 
 			prm_mech_t mechanism = prm_mech_normal;
