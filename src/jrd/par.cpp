@@ -630,14 +630,16 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 					if (itemInfo)
 					{
 						itemInfo->compositeContextNum = context_num;
-						csb->csb_map_context_type.put(context_num, fieldSourceName);
-
 						QualifiedNameMetaNamePair namePair(fieldSourceName, "");
 
 						FieldInfo fieldInfo;
 						bool exist = csb->csb_map_field_info.get(namePair, fieldInfo);
 						if (exist)
 							itemInfo->nullable = fieldInfo.nullable;
+
+						// do not put context/type reference for generic fields, it will save a lot cpu on EVL_validate
+						if (itemInfo->isSpecial())
+							csb->csb_map_context_type.put(context_num, fieldSourceName);
 
 						itemInfo->field = namePair;
 					}
