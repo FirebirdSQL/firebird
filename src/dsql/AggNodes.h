@@ -95,8 +95,8 @@ private:
 class ListAggNode final : public AggNode
 {
 public:
-	explicit ListAggNode(MemoryPool& pool, bool aDistinct, ValueExprNode* aArg = NULL,
-		ValueExprNode* aDelimiter = NULL);
+	explicit ListAggNode(MemoryPool& pool, bool aDistinct, ValueExprNode* aArg = nullptr,
+			ValueExprNode* aDelimiter = nullptr, ValueListNode* aOrderClause = nullptr);
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
@@ -113,6 +113,8 @@ public:
 
 	virtual Firebird::string internalPrint(NodePrinter& printer) const;
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
+	virtual void genBlr(DsqlCompilerScratch* dsqlScratch) final;
+	virtual AggNode* pass1(thread_db* tdbb, CompilerScratch* csb) final;
 	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,
 		std::function<void (dsc*)> makeDesc, bool forceVarChar);
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
@@ -127,6 +129,7 @@ protected:
 
 private:
 	NestConst<ValueExprNode> delimiter;
+	NestConst<ValueListNode> dsqlOrderClause;
 };
 
 class CountAggNode final : public AggNode
