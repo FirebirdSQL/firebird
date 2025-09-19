@@ -4061,6 +4061,7 @@ void write_packaged_types()
 		PUT_TEXT(att_ptype_field_source, X.RDB$FIELD_SOURCE);
 		PUT_TEXT(att_ptype_package_name, X.RDB$PACKAGE_NAME);
 		put_int32 (att_ptype_private_flag, X.RDB$PRIVATE_FLAG);
+		PUT_TEXT(att_ptype_package_schema, X.RDB$SCHEMA_NAME);
 
 		const SSHORT l = PUT_TEXT(att_ptype_name, X.RDB$TYPE_NAME);
 		MISC_terminate(X.RDB$TYPE_NAME, temp, l, sizeof(temp));
@@ -4429,6 +4430,7 @@ void write_packaged_type_fields()
 		FOR (REQUEST_HANDLE req_handle2)
 			Y IN RDB$PACKAGED_TYPES CROSS Z IN RDB$FIELDS
 			WITH Y.RDB$FIELD_SOURCE EQ Z.RDB$FIELD_NAME AND
+				 Y.RDB$SCHEMA_NAME EQ Z.RDB$SCHEMA_NAME AND
 				 Z.RDB$RELATION_NAME STARTING WITH IMPLICIT_COMPOSITE_TYPE_PREFIX
 		{
 			put(tdgbl, rec_packaged_type_relation_fields);

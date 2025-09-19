@@ -1151,6 +1151,9 @@ void DdlNode::storeGlobalField(thread_db* tdbb, jrd_tra* transaction, QualifiedN
 
 			PKGT.RDB$PRIVATE_FLAG.NULL = FALSE;
 			PKGT.RDB$PRIVATE_FLAG = field->privateFlag;
+
+			PKGT.RDB$SCHEMA_NAME.NULL = FALSE;
+			strcpy(PKGT.RDB$SCHEMA_NAME, field->packageName.schema.c_str());
 		}
 		END_STORE
 	}
@@ -5362,8 +5365,13 @@ void DeclarePackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 			typeClause->defaultClause = FB_NEW_POOL(pool) ValueSourceClause(pool);
 			typeClause->defaultClause->value = rowValue;
 
+			// because default value is in package schema, we need to set ddlSchema to empty string to avoid resolving
+			// default value to package schema and force it to use blr_default2
+			auto oldDdlSchema = dsqlScratch->ddlSchema;
+			dsqlScratch->ddlSchema = "";
 			updateFieldDefaultAndValidation(tdbb, dsqlScratch, transaction, fieldSource,
 				typeClause->defaultClause, check, notNull);
+			dsqlScratch->ddlSchema = oldDdlSchema;
 		}
 	}
 
@@ -5424,6 +5432,7 @@ void DropPackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		P IN RDB$PACKAGED_TYPES CROSS
 		F IN RDB$FIELDS
 		WITH P.RDB$PACKAGE_NAME EQ name.package.c_str()
+		AND P.RDB$SCHEMA_NAME EQ name.schema.c_str()
 		AND P.RDB$FIELD_SOURCE EQ F.RDB$FIELD_NAME
 		AND P.RDB$TYPE_NAME EQ name.object.c_str()
 	{
@@ -5471,6 +5480,7 @@ void DropPackageTypeNode::check(thread_db* tdbb, jrd_tra* transaction)
 		Y IN RDB$PACKAGED_TYPES
 		WITH Y.RDB$TYPE_NAME EQ name.object.c_str()
 		AND Y.RDB$PACKAGE_NAME EQ name.package.c_str()
+		AND Y.RDB$SCHEMA_NAME EQ name.schema.c_str()
 	{
 		found = true;
 		generatedTypeName = Y.RDB$FIELD_SOURCE;

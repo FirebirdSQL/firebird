@@ -872,4 +872,5 @@ RELATION(nam_pkg_types, rel_pkg_types, ODS_14_0, rel_persistent)
 	FIELD(f_pt_type_name, nam_typ_name, fld_typ_name, 1, ODS_14_0)
 	FIELD(f_pt_pkg_name, nam_pkg_name, fld_pkg_name, 1, ODS_14_0)
 	FIELD(f_pt_private_flag, nam_private_flag, fld_flag_nullable, 1, ODS_14_0)
+	FIELD(f_pt_pkg_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION

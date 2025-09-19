@@ -737,7 +737,8 @@ enum att_type {
 	att_ptype_field_source = SERIES,
 	att_ptype_name,
 	att_ptype_package_name,
-	att_ptype_private_flag
+	att_ptype_private_flag,
+	att_ptype_package_schema
 };
 
 

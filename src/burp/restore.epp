@@ -8054,6 +8054,7 @@ bool get_packaged_types(BurpGlobals* tdgbl)
 			X.RDB$TYPE_NAME.NULL = TRUE;
 			X.RDB$PACKAGE_NAME.NULL = TRUE;
 			X.RDB$PRIVATE_FLAG.NULL = TRUE;
+			X.RDB$SCHEMA_NAME.NULL = TRUE;
 
 			skip_init(&scan_next_attr);
 			while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
@@ -8082,6 +8083,11 @@ bool get_packaged_types(BurpGlobals* tdgbl)
 					X.RDB$PRIVATE_FLAG.NULL = FALSE;
 					break;
 
+				case att_ptype_package_schema:
+					GET_TEXT(X.RDB$SCHEMA_NAME);
+					X.RDB$SCHEMA_NAME.NULL = FALSE;
+					break;
+
 				default:
 					bad_attribute(scan_next_attr, attribute, 412);
 					// msg 412 packaged type
@@ -8105,6 +8111,7 @@ bool get_packaged_types(BurpGlobals* tdgbl)
 			case att_ptype_name:
 			case att_ptype_package_name:
 			case att_ptype_private_flag:
+			case att_ptype_package_schema:
 				eat_text(tdgbl);
 				break;
 

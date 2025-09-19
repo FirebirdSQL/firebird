@@ -6743,14 +6743,14 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 				Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable.object.c_str()));
 			}
 
-			if (auto relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, QualifiedName(field->typeOfTable.object, "")))
+			if (auto relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, field->typeOfTable))
 			{
 				field->fld_sub_first = relation->rel_fields;
 				field->fld_sub_count = relation->rel_fields_number;
 			}
 			else if (field->packageName.object.hasData())
 			{
-				METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, QualifiedName(field->relationName.object, ""), field->fld_sub_first);
+				METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, field->relationName, field->fld_sub_first);
 				field->fieldSource = field->typeOfName;
 			}
 

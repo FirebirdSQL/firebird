@@ -14985,7 +14985,7 @@ ValueExprNode* RowValueExpressionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch
 					if (field)
 					{
 						fieldName = field->fld_name;
-						relationSource.object = defaultSource->relationName.object.hasData() ? defaultSource->relationName.object : defaultSource->typeOfName.object;
+						relationSource = defaultSource->relationName.object.hasData() ? defaultSource->relationName : defaultSource->typeOfName;
 					}
 				}
 			}
