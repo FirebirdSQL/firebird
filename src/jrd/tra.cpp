@@ -2942,17 +2942,6 @@ static void transaction_options(thread_db* tdbb,
 					Arg::Str("isc_tpb_consistency") << Arg::Str("isc_tpb_read_consistency"));
 			}
 
-			if (rec_version.isAssigned())
-			{
-				const auto tpbStr = rec_version.asBool() ?
-					"isc_tpb_rec_version" : "isc_tpb_no_rec_version";
-
-				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-					// 'Option @1 is not valid if @2 was used previously in TPB'
-					Arg::Gds(isc_tpb_conflicting_options) <<
-					Arg::Str("isc_tpb_consistency") << Arg::Str(tpbStr) );
-			}
-
 			if (shared_snapshot)
 			{
 				ERR_post(
@@ -2979,17 +2968,6 @@ static void transaction_options(thread_db* tdbb,
 					// 'Option @1 is not valid if @2 was used previously in TPB'
 					Arg::Gds(isc_tpb_conflicting_options) <<
 					Arg::Str("isc_tpb_concurrency") << Arg::Str("isc_tpb_read_consistency"));
-			}
-
-			if (rec_version.isAssigned())
-			{
-				const auto tpbStr = rec_version.asBool() ?
-					"isc_tpb_rec_version" : "isc_tpb_no_rec_version";
-
-				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-					// 'Option @1 is not valid if @2 was used previously in TPB'
-					Arg::Gds(isc_tpb_conflicting_options) <<
-					Arg::Str("isc_tpb_concurrency") << Arg::Str(tpbStr) );
 			}
 
 			transaction->tra_flags &= ~TRA_degree3;
@@ -3525,6 +3503,15 @@ static void transaction_options(thread_db* tdbb,
 		default:
 			ERR_post(Arg::Gds(isc_bad_tpb_form));
 		}
+	}
+
+	if (rec_version.isAssigned() && !(transaction->tra_flags & TRA_read_committed))
+	{
+		const auto tpbStr = rec_version.asBool() ?
+			"isc_tpb_rec_version" : "isc_tpb_no_rec_version";
+
+		ERR_post(Arg::Gds(isc_bad_tpb_content) <<
+				 Arg::Gds(isc_tpb_option_without_rc) << Arg::Str(tpbStr));
 	}
 
 	if ((transaction->tra_flags & TRA_read_committed) &&
