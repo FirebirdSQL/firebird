@@ -210,27 +210,21 @@ int TraceTransactionImpl::getWait()
 
 unsigned TraceTransactionImpl::getIsolation()
 {
-	switch (m_tran->tra_flags & (TRA_read_committed | TRA_rec_version | TRA_degree3 | TRA_read_consistency))
-	{
-	case TRA_degree3:
+	if (m_tran->tra_flags & TRA_degree3)
 		return ISOLATION_CONSISTENCY;
 
-	case TRA_read_committed:
+	if (m_tran->tra_flags & TRA_read_committed)
+	{
+		if (m_tran->tra_flags & TRA_read_consistency)
+			return ISOLATION_READ_COMMITTED_READ_CONSISTENCY;
+
+		if (m_tran->tra_flags & TRA_rec_version)
+			return ISOLATION_READ_COMMITTED_RECVER;
+
 		return ISOLATION_READ_COMMITTED_NORECVER;
-
-	case TRA_read_committed | TRA_rec_version:
-		return ISOLATION_READ_COMMITTED_RECVER;
-
-	case TRA_read_committed | TRA_rec_version | TRA_read_consistency:
-		return ISOLATION_READ_COMMITTED_READ_CONSISTENCY;
-
-	case 0:
-		return ISOLATION_CONCURRENCY;
-
-	default:
-		fb_assert(false);
-		return ISOLATION_CONCURRENCY;
 	}
+
+	return ISOLATION_CONCURRENCY;
 }
 
 ISC_INT64 TraceTransactionImpl::getInitialID()
