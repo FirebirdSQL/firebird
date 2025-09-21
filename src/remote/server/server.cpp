@@ -54,6 +54,7 @@
 #include "../common/isc_proto.h"
 #include "../jrd/constants.h"
 #include "firebird/impl/inf_pub.h"
+#include "../common/classes/auto.h"
 #include "../common/classes/init.h"
 #include "../common/classes/semaphore.h"
 #include "../common/classes/ClumpletWriter.h"
@@ -167,6 +168,19 @@ public:
 		return stopped;
 	}
 
+	int getHashLength(Firebird::CheckStatusWrapper* status) override
+	{
+		getHashData(status, nullptr);
+
+		return -1;
+	}
+
+	void getHashData(Firebird::CheckStatusWrapper* status, void* h) override
+	{
+		ISC_STATUS err[] = {isc_arg_gds, isc_wish_list};
+		status->setErrors2(FB_NELEM(err), err);
+	}
+
 private:
 	rem_port* port;
 	Semaphore sem;
@@ -182,7 +196,7 @@ class CryptKeyCallback : public VersionedIface<ICryptKeyCallbackImpl<CryptKeyCal
 {
 public:
 	explicit CryptKeyCallback(rem_port* prt)
-		: port(prt), networkCallback(prt), keyHolder(NULL), keyCallback(NULL)
+		: port(prt), networkCallback(prt)
 	{ }
 
 	~CryptKeyCallback()
@@ -212,7 +226,7 @@ public:
 
 	void loadClientKey()
 	{
-		if (keyCallback)
+		if (clientKeyChecked)
 			return;
 
 		Reference r(*port);
@@ -244,6 +258,8 @@ public:
 					check(&st);
 			}
 		}
+
+		clientKeyChecked = true;
 	}
 
 	void wakeup(unsigned int length, const void* data)
@@ -256,11 +272,49 @@ public:
 		networkCallback.stop();
 	}
 
+	int getHashLength(Firebird::CheckStatusWrapper* status) override
+	{
+		Reference r(*port);
+		loadClientKey();
+
+		if (keyCallback)
+			return keyCallback->getHashLength(status);
+
+		if (!networkCallback.isStopped())
+		{
+			ISC_STATUS err[] = {isc_arg_gds, isc_wish_list};
+			status->setErrors2(FB_NELEM(err), err);
+
+			return -1;
+		}
+
+		return 0;
+	}
+
+	void getHashData(Firebird::CheckStatusWrapper* status, void* h) override
+	{
+		Reference r(*port);
+		loadClientKey();
+
+		if (keyCallback)
+		{
+			keyCallback->getHashData(status, h);
+			return;
+		}
+
+		if (!networkCallback.isStopped())
+		{
+			ISC_STATUS err[] = {isc_arg_gds, isc_wish_list};
+			status->setErrors2(FB_NELEM(err), err);
+		}
+	}
+
 private:
 	rem_port* port;
 	NetworkCallback networkCallback;
-	IKeyHolderPlugin* keyHolder;
-	ICryptKeyCallback* keyCallback;
+	IKeyHolderPlugin* keyHolder = nullptr;
+	ICryptKeyCallback* keyCallback = nullptr;
+	bool clientKeyChecked = false;
 };
 
 class ServerCallback : public ServerCallbackBase, public GlobalStorage
@@ -1940,7 +1994,7 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 	{
 		if ((protocol->p_cnct_version == PROTOCOL_VERSION10 ||
 			 (protocol->p_cnct_version >= PROTOCOL_VERSION11 &&
-			  protocol->p_cnct_version <= PROTOCOL_VERSION18)) &&
+			  protocol->p_cnct_version <= PROTOCOL_VERSION19)) &&
 			 (protocol->p_cnct_architecture == arch_generic ||
 			  protocol->p_cnct_architecture == ARCHITECTURE) &&
 			protocol->p_cnct_weight >= weight)
@@ -3484,6 +3538,11 @@ ISC_STATUS rem_port::execute_immediate(P_OP op, P_SQLST * exnow, PACKET* sendL)
 	{
 		this->port_statement->rsr_format = this->port_statement->rsr_select_format;
 
+		if (out_msg && exnow->p_sqlst_inline_blob_size)
+		{
+			sendInlineBlobs(sendL, transaction, out_msg, port_statement->rsr_select_format,
+				exnow->p_sqlst_inline_blob_size);
+		}
 		sendL->p_operation = op_sql_response;
 		sendL->p_sqldata.p_sqldata_messages =
 			((status_vector.getState() & IStatus::STATE_ERRORS) || !out_msg) ? 0 : 1;
@@ -3919,10 +3978,17 @@ ISC_STATUS rem_port::execute_statement(P_OP op, P_SQLDATA* sqldata, PACKET* send
 			iMsgBuffer.metadata, iMsgBuffer.buffer, oMsgBuffer.metadata, oMsgBuffer.buffer);
 	}
 
+	statement->rsr_inline_blob_size = sqldata->p_sqldata_inline_blob_size;
+
 	if (op == op_execute2)
 	{
 		this->port_statement->rsr_format = this->port_statement->rsr_select_format;
 
+		if (out_msg && statement->rsr_inline_blob_size)
+		{
+			sendInlineBlobs(sendL, transaction, out_msg, port_statement->rsr_select_format,
+				statement->rsr_inline_blob_size);
+		}
 		sendL->p_operation = op_sql_response;
 		sendL->p_sqldata.p_sqldata_messages =
 			((status_vector.getState() & IStatus::STATE_ERRORS) || !out_msg) ? 0 : 1;
@@ -4219,6 +4285,15 @@ ISC_STATUS rem_port::fetch(P_SQLDATA * sqldata, PACKET* sendL, bool scroll)
 			// Take a message from the outqoing queue
 			fb_assert(statement->rsr_msgs_waiting >= 1);
 			statement->rsr_msgs_waiting--;
+		}
+
+		// send blob data inline
+		if (statement->haveBlobs() && statement->rsr_inline_blob_size)
+		{
+			AutoSaveRestore op(&sendL->p_operation);
+
+			sendInlineBlobs(sendL, statement->rsr_rtr, message->msg_buffer,
+				statement->rsr_select_format, statement->rsr_inline_blob_size);
 		}
 
 		// There's a buffer waiting -- send it
@@ -4546,7 +4621,6 @@ void rem_port::info(P_OP op, P_INFO* stuff, PACKET* sendL)
 	// Make sure there is a suitable temporary blob buffer
 	Array<UCHAR> buf;
 	UCHAR* const buffer = buffer_length ? buf.getBuffer(buffer_length) : NULL;
-	memset(buffer, 0, buffer_length);
 
 	HalfStaticArray<UCHAR, 1024> info;
 	UCHAR* info_buffer = NULL;
@@ -4776,18 +4850,18 @@ ISC_STATUS rem_port::open_blob(P_OP op, P_BLOB* stuff, PACKET* sendL)
 	USHORT object = 0;
 	if (!(status_vector.getState() & IStatus::STATE_ERRORS))
 	{
-		Rbl* blob = FB_NEW Rbl;
+		Rbl* blob = FB_NEW Rbl(BLOB_LENGTH);
 #ifdef DEBUG_REMOTE_MEMORY
 		printf("open_blob(server)         allocate blob    %x\n", blob);
 #endif
+		blob->rbl_blob_id = stuff->p_blob_id;
 		blob->rbl_iface = iface;
 		blob->rbl_rdb = rdb;
 		if (blob->rbl_id = this->get_id(blob))
 		{
 			object = blob->rbl_id;
 			blob->rbl_rtr = transaction;
-			blob->rbl_next = transaction->rtr_blobs;
-			transaction->rtr_blobs = blob;
+			transaction->rtr_blobs.add(blob);
 		}
 		else
 		{
@@ -5749,14 +5823,7 @@ static void release_blob(Rbl* blob)
 
 	rdb->rdb_port->releaseObject(blob->rbl_id);
 
-	for (Rbl** p = &transaction->rtr_blobs; *p; p = &(*p)->rbl_next)
-	{
-		if (*p == blob)
-		{
-			*p = blob->rbl_next;
-			break;
-		}
-	}
+	transaction->rtr_blobs.remove(blob);
 
 #ifdef DEBUG_REMOTE_MEMORY
 	printf("release_blob(server)      free blob        %x\n", blob);
@@ -5902,8 +5969,8 @@ static void release_transaction( Rtr* transaction)
 	Rdb* rdb = transaction->rtr_rdb;
 	rdb->rdb_port->releaseObject(transaction->rtr_id);
 
-	while (transaction->rtr_blobs)
-		release_blob(transaction->rtr_blobs);
+	while (Rbl* blob = transaction->rtr_blobs.getFirst())
+		release_blob(blob);
 
 	while (transaction->rtr_cursors.hasData())
 	{
@@ -5955,6 +6022,143 @@ ISC_STATUS rem_port::seek_blob(P_SEEK* seek, PACKET* sendL)
 	sendL->p_resp.p_resp_blob_id.gds_quad_low = result;
 
 	return this->send_response(sendL, 0, 0, &status_vector, false);
+}
+
+
+void rem_port::sendInlineBlobs(PACKET* sendL, Rtr* rtr, UCHAR* message,
+	const rem_fmt* format, ULONG maxSize)
+{
+	if (port_protocol < PROTOCOL_INLINE_BLOB || port_type == XNET)
+		return;
+
+	fb_assert(format && message);
+
+	if (!format || !format->haveBlobs() || !message)
+		return;
+
+	sendL->p_operation = op_inline_blob;
+
+	const auto& descs = format->fmt_desc;
+	for (unsigned ind : format->fmt_blob_idx)
+	{
+		const auto offs = (ULONG) (U_IPTR) descs[ind].dsc_address;
+		const auto blobId = (ISC_QUAD*) (message + offs);
+		if (*blobId == NULL_BLOB)
+			continue;
+
+		if (!sendInlineBlob(sendL, rtr, *blobId, maxSize))
+			break;
+	}
+}
+
+
+bool rem_port::sendInlineBlob(PACKET* sendL, Rtr* rtr, SQUAD blobId, ULONG maxSize)
+{
+	P_INLINE_BLOB* p_blob = &sendL->p_inline_blob;
+
+	p_blob->p_tran_id = rtr->rtr_id;
+	p_blob->p_blob_id = blobId;
+
+	LocalStatus ls;
+	CheckStatusWrapper status(&ls);
+
+	ServAttachment att = port_context->rdb_iface;
+
+	// openBlob() returns an IBlob with a reference count set to 1, no need to increment it.
+	ServBlob blob(REF_NO_INCR, att->openBlob(&status, rtr->rtr_iface, &blobId, 0, nullptr));
+	if (status.getState() & IStatus::STATE_ERRORS)
+		return false;
+
+	// ask blob info
+	const UCHAR items[] = {
+		isc_info_blob_num_segments,
+		isc_info_blob_max_segment,
+		isc_info_blob_total_length,
+		isc_info_blob_type,
+		isc_info_end
+	};
+
+	UCHAR info[64];
+
+	blob->getInfo(&status, sizeof(items), items, sizeof(info), info);
+	if (status.getState() & IStatus::STATE_ERRORS)
+		return false;
+
+	bool	segmented;
+	ULONG	num_segments;
+	ULONG	max_segment;
+	ULONG	total_length;
+
+	ClumpletReader p(ClumpletReader::InfoResponse, info, sizeof(info));
+	for (; !p.isEof(); p.moveNext())
+	{
+		switch (p.getClumpTag())
+		{
+		case isc_info_blob_num_segments:
+			num_segments = p.getInt();
+			break;
+		case isc_info_blob_max_segment:
+			max_segment = p.getInt();
+			break;
+		case isc_info_blob_total_length:
+			total_length = p.getInt();
+			break;
+		case isc_info_blob_type:
+			segmented = (p.getInt() == 0);
+			break;
+		case isc_info_end:
+			p_blob->p_blob_info.cstr_length = p.getCurOffset() + 1;
+			break;
+		default:
+			fb_assert(false);
+			break;
+		}
+	}
+
+	RemBlobBuffer buff(getPool());
+
+	if (total_length)
+	{
+		if (!segmented)
+			num_segments = (total_length + max_segment - 1) / max_segment;
+
+		const ULONG dataLen = total_length + num_segments * 2;
+
+		fb_assert(maxSize <= MAX_INLINE_BLOB_SIZE);
+		if (maxSize > MAX_INLINE_BLOB_SIZE)
+			maxSize = MAX_INLINE_BLOB_SIZE;
+
+		if (dataLen > maxSize)
+			return true;
+
+		UCHAR* ptr = buff.getBuffer(dataLen);
+		const UCHAR* const end = ptr + dataLen;
+
+		for (; num_segments; num_segments--)
+		{
+			const unsigned inLen = MIN(end - ptr, max_segment);
+			unsigned outLen;
+
+			const int res = blob->getSegment(&status, inLen, ptr + 2, &outLen);
+			if (res == IStatus::RESULT_ERROR)
+				return false;
+
+			ptr[0] = (UCHAR) outLen;
+			ptr[1] = (UCHAR) (outLen >> 8);
+
+			ptr += 2 + outLen;
+		}
+		fb_assert(ptr == end);
+	}
+
+	blob->close(&status);
+	blob.clear();
+
+	p_blob->p_blob_info.cstr_address = info;
+	p_blob->p_blob_data = &buff;
+
+	this->send_partial(sendL);
+	return true;
 }
 
 

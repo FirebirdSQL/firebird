@@ -56,8 +56,7 @@ protected:
 
 	explicit InternalConnection(InternalProvider& prov) :
 	  Connection(prov),
-	  m_attachment(0),
-	  m_isCurrent(false)
+	  m_attachment(0)
 	{}
 
 	virtual ~InternalConnection();
@@ -74,9 +73,9 @@ public:
 	virtual bool validate(Jrd::thread_db* tdbb);
 
 	virtual bool isSameDatabase(const Firebird::PathName& dbName,
-		Firebird::ClumpletReader& dpb) const;
+		Firebird::ClumpletReader& dpb, const CryptHash& ch) const override;
 
-	virtual bool isCurrent() const { return m_isCurrent; }
+	virtual bool isCurrent() const { return m_dpb.isEmpty(); }
 
 	Jrd::JAttachment* getJrdAtt() { return m_attachment; }
 
@@ -89,7 +88,6 @@ protected:
 
 	Firebird::AutoPlugin<Jrd::JProvider> m_provider;
 	Firebird::RefPtr<Jrd::JAttachment> m_attachment;
-	bool m_isCurrent;
 };
 
 

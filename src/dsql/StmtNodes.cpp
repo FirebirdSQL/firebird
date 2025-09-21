@@ -10439,7 +10439,13 @@ static ReturningClause* dsqlProcessReturning(DsqlCompilerScratch* dsqlScratch, d
 
 				// When RETURNING context marked with CTX_null is processed first, parameter
 				// node should be fixed when resolving parameters in the real context.
-				if (nodeIs<NullNode>(parameterNode->dsqlParameter->par_node))
+
+				auto parNode = parameterNode->dsqlParameter->par_node;
+
+				if (const auto aliasNode = nodeAs<DsqlAliasNode>(parNode))
+					parNode = aliasNode->value;
+
+				if (nodeIs<NullNode>(parNode))
 				{
 					parameterNode->dsqlParameter->par_node = src;
 					DsqlDescMaker::fromNode(dsqlScratch, &parameterNode->dsqlParameter->par_desc, src, true);

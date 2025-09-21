@@ -296,6 +296,8 @@ public:
 				pr_error(status, "nbackup needs local access to database file");
 		}
 
+		toSystem(decompress);
+		toSystem(db);
 		expandDatabaseName(db, dbname, NULL);
 
 		if (!uSvc->isService())
@@ -366,7 +368,7 @@ private:
 	void internal_unlock_database();
 	void attach_database();
 	void detach_database();
-	string to_system(const PathName& from);
+	void toSystem(AbstractString& from);
 	void cleanHistory();
 
 	// Create/open database and backup
@@ -595,12 +597,10 @@ void NBackup::close_database()
 	dbase = INVALID_HANDLE_VALUE;
 }
 
-string NBackup::to_system(const PathName& from)
+void NBackup::toSystem(AbstractString& from)
 {
-	string to = from.ToString();
 	if (uSvc->utf8FileNames())
-		ISC_utf8ToSystem(to);
-	return to;
+		ISC_utf8ToSystem(from);
 }
 
 
@@ -612,14 +612,13 @@ void NBackup::open_backup_scan()
 		return;
 	}
 
-	string nm = to_system(bakname);
 #ifdef WIN_NT
-	backup = CreateFile(nm.c_str(), GENERIC_READ, 0,
+	backup = CreateFile(bakname.c_str(), GENERIC_READ, 0,
 		NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL);
 	if (backup != INVALID_HANDLE_VALUE)
 		return;
 #else
-	backup = os_utils::open(nm.c_str(), O_RDONLY | O_LARGEFILE);
+	backup = os_utils::open(bakname.c_str(), O_RDONLY | O_LARGEFILE);
 	if (backup >= 0)
 		return;
 #endif
@@ -767,7 +766,6 @@ void NBackup::open_backup_decompress()
 
 void NBackup::create_backup()
 {
-	string nm = to_system(bakname);
 #ifdef WIN_NT
 	if (bakname == "stdout") {
 		backup = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -782,7 +780,7 @@ void NBackup::create_backup()
 		// avoids an issue where writing to a file across a network can occasionally
 		// return ERROR_ACCESS_DENIED.
 
-		backup = CreateFile(nm.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_DELETE,
+		backup = CreateFile(bakname.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_DELETE,
 			NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL);
 	}
 	if (backup != INVALID_HANDLE_VALUE)
@@ -793,7 +791,7 @@ void NBackup::create_backup()
 		backup = 1; // Posix file handle for stdout
 		return;
 	}
-	backup = os_utils::open(nm.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_LARGEFILE, 0660);
+	backup = os_utils::open(bakname.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_LARGEFILE, 0660);
 	if (backup >= 0)
 		return;
 #endif
@@ -1004,6 +1002,7 @@ void NBackup::attach_database()
 	}
 
 	ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
+	uSvc->fillDpb(dpb);
 
 	const unsigned char* authBlock;
 	unsigned int authBlockSize = uSvc->getAuthBlock(&authBlock);
@@ -1297,7 +1296,10 @@ void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 		detach_database();
 
 		if (fname.hasData())
+		{
 			bakname = fname;
+			toSystem(bakname);
+		}
 		else
 		{
 			// Let's generate nice new filename
@@ -1695,6 +1697,8 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 						fixup_database(repl_seq);
 						return;
 					}
+					toSystem(bakname);
+
 					// Never reaches this point when run as service
 					try {
 						fb_assert(!uSvc->isService());
@@ -1728,7 +1732,10 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 					return;
 				}
 				if (!inc_rest || curLevel)
+				{
 					bakname = files[curLevel - (inc_rest ? 1 : 0)];
+					toSystem(bakname);
+				}
 				if (!inc_rest || curLevel)
 					open_backup_scan();
 			}

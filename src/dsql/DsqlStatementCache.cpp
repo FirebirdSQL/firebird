@@ -164,6 +164,7 @@ void DsqlStatementCache::removeStatement(thread_db* tdbb, DsqlStatement* stateme
 		{
 			const auto entry = *entryPtr;
 
+			map.remove(entry->key);
 			entry->dsqlStatement->resetCacheKey();
 
 			if (entry->active)
@@ -173,11 +174,9 @@ void DsqlStatementCache::removeStatement(thread_db* tdbb, DsqlStatement* stateme
 			}
 			else
 			{
-				inactiveStatementList.erase(entry);
 				cacheSize -= entry->size;
+				inactiveStatementList.erase(entry);
 			}
-
-			map.remove(entry->key);
 		}
 	}
 }

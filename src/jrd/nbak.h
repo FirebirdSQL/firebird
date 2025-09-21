@@ -82,7 +82,7 @@ public:
 	}
 };
 
-typedef Firebird::BePlusTree<AllocItem, ULONG, MemoryPool, AllocItem> AllocItemTree;
+typedef Firebird::BePlusTree<AllocItem, ULONG, AllocItem> AllocItemTree;
 
 // Class to synchronize access to backup state
 

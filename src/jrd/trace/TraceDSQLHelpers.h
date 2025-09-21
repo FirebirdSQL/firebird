@@ -61,6 +61,8 @@ public:
 			m_string = empty_string;
 			m_string_len = empty_string_length;
 		}
+		else if (m_string_len == 0)
+			m_string_len = fb_strlen(m_string);
 	}
 
 	~TraceDSQLPrepare()

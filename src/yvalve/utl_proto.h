@@ -84,6 +84,9 @@ void setLogin(Firebird::ClumpletWriter& dpb, bool spbFlag);
 // Put status vector strings into strings circular buffer
 void makePermanentVector(ISC_STATUS* v) throw();
 
+void UTL_get_ods_version(Firebird::CheckStatusWrapper* status, Firebird::IAttachment* att,
+	USHORT* ods_version, USHORT* ods_minor_version);
+
 namespace Why
 {
 	void threadCleanup();

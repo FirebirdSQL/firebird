@@ -54,6 +54,7 @@ Function Prototypes
   function ConvertIBVerStrToFbVerStr( VerStr: String) : String;
   function GetRegistryEntry(RegKey, RegEntry: string): String;
   function SplitKeyValue( AString: String; theKey: Boolean): String;
+  function GuessFirebirdPath( Product_ID: Integer; RootKey: Integer; RegKey, RegEntry: string ): String;
 
  *)
 
@@ -499,5 +500,13 @@ begin
 end;
 
 
+function GuessFirebirdPath( Product_ID: Integer; RootKey: Integer; RegKey, RegEntry: string ): String;
+begin
+  Result := GetRegistryEntry( RootKey, RegKey, RegEntry );
 
-// kate: replace-tabs on; indent-width 2; tab-width 2; replace-tabs-save on; syntax Pascal;
+  if Result = '' then
+    Result := ExpandConstant('{pf}') + '\Firebird\Firebird_' + IntToStr( Product_ID) + '_0';
+end;
+
+
+

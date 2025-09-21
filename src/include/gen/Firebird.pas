@@ -358,6 +358,8 @@ type
 	IStatement_setTimeoutPtr = procedure(this: IStatement; status: IStatus; timeOut: Cardinal); cdecl;
 	IStatement_createBatchPtr = function(this: IStatement; status: IStatus; inMetadata: IMessageMetadata; parLength: Cardinal; par: BytePtr): IBatch; cdecl;
 	IStatement_freePtr = procedure(this: IStatement; status: IStatus); cdecl;
+	IStatement_getMaxInlineBlobSizePtr = function(this: IStatement; status: IStatus): Cardinal; cdecl;
+	IStatement_setMaxInlineBlobSizePtr = procedure(this: IStatement; status: IStatus; size: Cardinal); cdecl;
 	IBatch_addPtr = procedure(this: IBatch; status: IStatus; count: Cardinal; inBuffer: Pointer); cdecl;
 	IBatch_addBlobPtr = procedure(this: IBatch; status: IStatus; length: Cardinal; inBuffer: Pointer; blobId: ISC_QUADPtr; parLength: Cardinal; par: BytePtr); cdecl;
 	IBatch_appendBlobDataPtr = procedure(this: IBatch; status: IStatus; length: Cardinal; inBuffer: Pointer); cdecl;
@@ -414,6 +416,10 @@ type
 	IAttachment_createReplicatorPtr = function(this: IAttachment; status: IStatus): IReplicator; cdecl;
 	IAttachment_detachPtr = procedure(this: IAttachment; status: IStatus); cdecl;
 	IAttachment_dropDatabasePtr = procedure(this: IAttachment; status: IStatus); cdecl;
+	IAttachment_getMaxBlobCacheSizePtr = function(this: IAttachment; status: IStatus): Cardinal; cdecl;
+	IAttachment_setMaxBlobCacheSizePtr = procedure(this: IAttachment; status: IStatus; size: Cardinal); cdecl;
+	IAttachment_getMaxInlineBlobSizePtr = function(this: IAttachment; status: IStatus): Cardinal; cdecl;
+	IAttachment_setMaxInlineBlobSizePtr = procedure(this: IAttachment; status: IStatus; size: Cardinal); cdecl;
 	IService_deprecatedDetachPtr = procedure(this: IService; status: IStatus); cdecl;
 	IService_queryPtr = procedure(this: IService; status: IStatus; sendLength: Cardinal; sendItems: BytePtr; receiveLength: Cardinal; receiveItems: BytePtr; bufferLength: Cardinal; buffer: BytePtr); cdecl;
 	IService_startPtr = procedure(this: IService; status: IStatus; spbLength: Cardinal; spb: BytePtr); cdecl;
@@ -490,6 +496,10 @@ type
 	IWireCryptPlugin_getSpecificDataPtr = function(this: IWireCryptPlugin; status: IStatus; keyType: PAnsiChar; length: CardinalPtr): BytePtr; cdecl;
 	IWireCryptPlugin_setSpecificDataPtr = procedure(this: IWireCryptPlugin; status: IStatus; keyType: PAnsiChar; length: Cardinal; data: BytePtr); cdecl;
 	ICryptKeyCallback_callbackPtr = function(this: ICryptKeyCallback; dataLength: Cardinal; data: Pointer; bufferLength: Cardinal; buffer: Pointer): Cardinal; cdecl;
+	ICryptKeyCallback_dummy1Ptr = procedure(this: ICryptKeyCallback; status: IStatus); cdecl;
+	ICryptKeyCallback_dummy2Ptr = procedure(this: ICryptKeyCallback); cdecl;
+	ICryptKeyCallback_getHashLengthPtr = function(this: ICryptKeyCallback; status: IStatus): Integer; cdecl;
+	ICryptKeyCallback_getHashDataPtr = procedure(this: ICryptKeyCallback; status: IStatus; hash: Pointer); cdecl;
 	IKeyHolderPlugin_keyCallbackPtr = function(this: IKeyHolderPlugin; status: IStatus; callback: ICryptKeyCallback): Integer; cdecl;
 	IKeyHolderPlugin_keyHandlePtr = function(this: IKeyHolderPlugin; status: IStatus; keyName: PAnsiChar): ICryptKeyCallback; cdecl;
 	IKeyHolderPlugin_useOnlyOwnKeysPtr = function(this: IKeyHolderPlugin; status: IStatus): Boolean; cdecl;
@@ -1521,10 +1531,12 @@ type
 		setTimeout: IStatement_setTimeoutPtr;
 		createBatch: IStatement_createBatchPtr;
 		free: IStatement_freePtr;
+		getMaxInlineBlobSize: IStatement_getMaxInlineBlobSizePtr;
+		setMaxInlineBlobSize: IStatement_setMaxInlineBlobSizePtr;
 	end;
 
 	IStatement = class(IReferenceCounted)
-		const VERSION = 5;
+		const VERSION = 6;
 		const PREPARE_PREFETCH_NONE = Cardinal($0);
 		const PREPARE_PREFETCH_TYPE = Cardinal($1);
 		const PREPARE_PREFETCH_INPUT_PARAMETERS = Cardinal($2);
@@ -1554,6 +1566,8 @@ type
 		procedure setTimeout(status: IStatus; timeOut: Cardinal);
 		function createBatch(status: IStatus; inMetadata: IMessageMetadata; parLength: Cardinal; par: BytePtr): IBatch;
 		procedure free(status: IStatus);
+		function getMaxInlineBlobSize(status: IStatus): Cardinal;
+		procedure setMaxInlineBlobSize(status: IStatus; size: Cardinal);
 	end;
 
 	IStatementImpl = class(IStatement)
@@ -1576,6 +1590,8 @@ type
 		procedure setTimeout(status: IStatus; timeOut: Cardinal); virtual; abstract;
 		function createBatch(status: IStatus; inMetadata: IMessageMetadata; parLength: Cardinal; par: BytePtr): IBatch; virtual; abstract;
 		procedure free(status: IStatus); virtual; abstract;
+		function getMaxInlineBlobSize(status: IStatus): Cardinal; virtual; abstract;
+		procedure setMaxInlineBlobSize(status: IStatus; size: Cardinal); virtual; abstract;
 	end;
 
 	BatchVTable = class(ReferenceCountedVTable)
@@ -1789,10 +1805,14 @@ type
 		createReplicator: IAttachment_createReplicatorPtr;
 		detach: IAttachment_detachPtr;
 		dropDatabase: IAttachment_dropDatabasePtr;
+		getMaxBlobCacheSize: IAttachment_getMaxBlobCacheSizePtr;
+		setMaxBlobCacheSize: IAttachment_setMaxBlobCacheSizePtr;
+		getMaxInlineBlobSize: IAttachment_getMaxInlineBlobSizePtr;
+		setMaxInlineBlobSize: IAttachment_setMaxInlineBlobSizePtr;
 	end;
 
 	IAttachment = class(IReferenceCounted)
-		const VERSION = 5;
+		const VERSION = 6;
 
 		procedure getInfo(status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr);
 		function startTransaction(status: IStatus; tpbLength: Cardinal; tpb: BytePtr): ITransaction;
@@ -1820,6 +1840,10 @@ type
 		function createReplicator(status: IStatus): IReplicator;
 		procedure detach(status: IStatus);
 		procedure dropDatabase(status: IStatus);
+		function getMaxBlobCacheSize(status: IStatus): Cardinal;
+		procedure setMaxBlobCacheSize(status: IStatus; size: Cardinal);
+		function getMaxInlineBlobSize(status: IStatus): Cardinal;
+		procedure setMaxInlineBlobSize(status: IStatus; size: Cardinal);
 	end;
 
 	IAttachmentImpl = class(IAttachment)
@@ -1853,6 +1877,10 @@ type
 		function createReplicator(status: IStatus): IReplicator; virtual; abstract;
 		procedure detach(status: IStatus); virtual; abstract;
 		procedure dropDatabase(status: IStatus); virtual; abstract;
+		function getMaxBlobCacheSize(status: IStatus): Cardinal; virtual; abstract;
+		procedure setMaxBlobCacheSize(status: IStatus; size: Cardinal); virtual; abstract;
+		function getMaxInlineBlobSize(status: IStatus): Cardinal; virtual; abstract;
+		procedure setMaxInlineBlobSize(status: IStatus; size: Cardinal); virtual; abstract;
 	end;
 
 	ServiceVTable = class(ReferenceCountedVTable)
@@ -2375,18 +2403,30 @@ type
 
 	CryptKeyCallbackVTable = class(VersionedVTable)
 		callback: ICryptKeyCallback_callbackPtr;
+		dummy1: ICryptKeyCallback_dummy1Ptr;
+		dummy2: ICryptKeyCallback_dummy2Ptr;
+		getHashLength: ICryptKeyCallback_getHashLengthPtr;
+		getHashData: ICryptKeyCallback_getHashDataPtr;
 	end;
 
 	ICryptKeyCallback = class(IVersioned)
-		const VERSION = 2;
+		const VERSION = 3;
 
 		function callback(dataLength: Cardinal; data: Pointer; bufferLength: Cardinal; buffer: Pointer): Cardinal;
+		procedure dummy1(status: IStatus);
+		procedure dummy2();
+		function getHashLength(status: IStatus): Integer;
+		procedure getHashData(status: IStatus; hash: Pointer);
 	end;
 
 	ICryptKeyCallbackImpl = class(ICryptKeyCallback)
 		constructor create;
 
 		function callback(dataLength: Cardinal; data: Pointer; bufferLength: Cardinal; buffer: Pointer): Cardinal; virtual; abstract;
+		procedure dummy1(status: IStatus); virtual;
+		procedure dummy2(); virtual;
+		function getHashLength(status: IStatus): Integer; virtual; abstract;
+		procedure getHashData(status: IStatus; hash: Pointer); virtual; abstract;
 	end;
 
 	KeyHolderPluginVTable = class(PluginBaseVTable)
@@ -4045,6 +4085,8 @@ const
 	isc_dpb_upgrade_db = byte(97);
 	isc_dpb_parallel_workers = byte(100);
 	isc_dpb_worker_attach = byte(101);
+	isc_dpb_max_blob_cache_size = byte(103);
+	isc_dpb_max_inline_blob_size = byte(104);
 	isc_dpb_address = byte(1);
 	isc_dpb_addr_protocol = byte(1);
 	isc_dpb_addr_endpoint = byte(2);
@@ -4506,6 +4548,8 @@ const
 	fb_info_wire_snd_bytes = byte(156);
 	fb_info_wire_rcv_bytes = byte(157);
 	fb_info_wire_roundtrips = byte(158);
+	fb_info_max_blob_cache_size = byte(159);
+	fb_info_max_inline_blob_size = byte(160);
 	fb_info_crypt_encrypted = $01;
 	fb_info_crypt_process = $02;
 	fb_feature_multi_statements = byte(1);
@@ -5711,6 +5755,11 @@ const
 	 isc_bad_par_workers = 335545286;
 	 isc_idx_expr_not_found = 335545287;
 	 isc_idx_cond_not_found = 335545288;
+	 isc_sweep_unable_to_run = 335545308;
+	 isc_sweep_concurrent_instance = 335545309;
+	 isc_sweep_read_only = 335545310;
+	 isc_sweep_attach_no_cleanup = 335545311;
+	 isc_no_user_att_while_restore = 335545318;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;
@@ -7191,6 +7240,29 @@ begin
 	FbException.checkException(status);
 end;
 
+function IStatement.getMaxInlineBlobSize(status: IStatus): Cardinal;
+begin
+	if (vTable.version < 6) then begin
+		FbException.setVersionError(status, 'IStatement', vTable.version, 6);
+		Result := 0;
+	end
+	else begin
+		Result := StatementVTable(vTable).getMaxInlineBlobSize(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure IStatement.setMaxInlineBlobSize(status: IStatus; size: Cardinal);
+begin
+	if (vTable.version < 6) then begin
+		FbException.setVersionError(status, 'IStatement', vTable.version, 6);
+	end
+	else begin
+		StatementVTable(vTable).setMaxInlineBlobSize(Self, status, size);
+	end;
+	FbException.checkException(status);
+end;
+
 procedure IBatch.add(status: IStatus; count: Cardinal; inBuffer: Pointer);
 begin
 	BatchVTable(vTable).add(Self, status, count, inBuffer);
@@ -7622,6 +7694,52 @@ begin
 	end
 	else begin
 		AttachmentVTable(vTable).dropDatabase(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
+function IAttachment.getMaxBlobCacheSize(status: IStatus): Cardinal;
+begin
+	if (vTable.version < 6) then begin
+		FbException.setVersionError(status, 'IAttachment', vTable.version, 6);
+		Result := 0;
+	end
+	else begin
+		Result := AttachmentVTable(vTable).getMaxBlobCacheSize(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure IAttachment.setMaxBlobCacheSize(status: IStatus; size: Cardinal);
+begin
+	if (vTable.version < 6) then begin
+		FbException.setVersionError(status, 'IAttachment', vTable.version, 6);
+	end
+	else begin
+		AttachmentVTable(vTable).setMaxBlobCacheSize(Self, status, size);
+	end;
+	FbException.checkException(status);
+end;
+
+function IAttachment.getMaxInlineBlobSize(status: IStatus): Cardinal;
+begin
+	if (vTable.version < 6) then begin
+		FbException.setVersionError(status, 'IAttachment', vTable.version, 6);
+		Result := 0;
+	end
+	else begin
+		Result := AttachmentVTable(vTable).getMaxInlineBlobSize(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure IAttachment.setMaxInlineBlobSize(status: IStatus; size: Cardinal);
+begin
+	if (vTable.version < 6) then begin
+		FbException.setVersionError(status, 'IAttachment', vTable.version, 6);
+	end
+	else begin
+		AttachmentVTable(vTable).setMaxInlineBlobSize(Self, status, size);
 	end;
 	FbException.checkException(status);
 end;
@@ -8098,6 +8216,49 @@ end;
 function ICryptKeyCallback.callback(dataLength: Cardinal; data: Pointer; bufferLength: Cardinal; buffer: Pointer): Cardinal;
 begin
 	Result := CryptKeyCallbackVTable(vTable).callback(Self, dataLength, data, bufferLength, buffer);
+end;
+
+procedure ICryptKeyCallback.dummy1(status: IStatus);
+begin
+	if (vTable.version < 3) then begin
+		FbException.setVersionError(status, 'ICryptKeyCallback', vTable.version, 3);
+	end
+	else begin
+		CryptKeyCallbackVTable(vTable).dummy1(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure ICryptKeyCallback.dummy2();
+begin
+	if (vTable.version < 3) then begin
+	end
+	else begin
+		CryptKeyCallbackVTable(vTable).dummy2(Self);
+	end;
+end;
+
+function ICryptKeyCallback.getHashLength(status: IStatus): Integer;
+begin
+	if (vTable.version < 3) then begin
+		FbException.setVersionError(status, 'ICryptKeyCallback', vTable.version, 3);
+		Result := -1;
+	end
+	else begin
+		Result := CryptKeyCallbackVTable(vTable).getHashLength(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure ICryptKeyCallback.getHashData(status: IStatus; hash: Pointer);
+begin
+	if (vTable.version < 3) then begin
+		FbException.setVersionError(status, 'ICryptKeyCallback', vTable.version, 3);
+	end
+	else begin
+		CryptKeyCallbackVTable(vTable).getHashData(Self, status, hash);
+	end;
+	FbException.checkException(status);
 end;
 
 function IKeyHolderPlugin.keyCallback(status: IStatus; callback: ICryptKeyCallback): Integer;
@@ -11527,6 +11688,25 @@ begin
 	end
 end;
 
+function IStatementImpl_getMaxInlineBlobSizeDispatcher(this: IStatement; status: IStatus): Cardinal; cdecl;
+begin
+	Result := 0;
+	try
+		Result := IStatementImpl(this).getMaxInlineBlobSize(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IStatementImpl_setMaxInlineBlobSizeDispatcher(this: IStatement; status: IStatus; size: Cardinal); cdecl;
+begin
+	try
+		IStatementImpl(this).setMaxInlineBlobSize(status, size);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
 var
 	IStatementImpl_vTable: StatementVTable;
 
@@ -12198,6 +12378,44 @@ procedure IAttachmentImpl_dropDatabaseDispatcher(this: IAttachment; status: ISta
 begin
 	try
 		IAttachmentImpl(this).dropDatabase(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+function IAttachmentImpl_getMaxBlobCacheSizeDispatcher(this: IAttachment; status: IStatus): Cardinal; cdecl;
+begin
+	Result := 0;
+	try
+		Result := IAttachmentImpl(this).getMaxBlobCacheSize(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IAttachmentImpl_setMaxBlobCacheSizeDispatcher(this: IAttachment; status: IStatus; size: Cardinal); cdecl;
+begin
+	try
+		IAttachmentImpl(this).setMaxBlobCacheSize(status, size);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+function IAttachmentImpl_getMaxInlineBlobSizeDispatcher(this: IAttachment; status: IStatus): Cardinal; cdecl;
+begin
+	Result := 0;
+	try
+		Result := IAttachmentImpl(this).getMaxInlineBlobSize(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IAttachmentImpl_setMaxInlineBlobSizeDispatcher(this: IAttachment; status: IStatus; size: Cardinal); cdecl;
+begin
+	try
+		IAttachmentImpl(this).setMaxInlineBlobSize(status, size);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -13425,6 +13643,51 @@ begin
 		Result := ICryptKeyCallbackImpl(this).callback(dataLength, data, bufferLength, buffer);
 	except
 		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+procedure ICryptKeyCallbackImpl_dummy1Dispatcher(this: ICryptKeyCallback; status: IStatus); cdecl;
+begin
+	try
+		ICryptKeyCallbackImpl(this).dummy1(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure ICryptKeyCallbackImpl.dummy1(status: IStatus);
+begin
+end;
+
+procedure ICryptKeyCallbackImpl_dummy2Dispatcher(this: ICryptKeyCallback); cdecl;
+begin
+	try
+		ICryptKeyCallbackImpl(this).dummy2();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+procedure ICryptKeyCallbackImpl.dummy2();
+begin
+end;
+
+function ICryptKeyCallbackImpl_getHashLengthDispatcher(this: ICryptKeyCallback; status: IStatus): Integer; cdecl;
+begin
+	Result := 0;
+	try
+		Result := ICryptKeyCallbackImpl(this).getHashLength(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure ICryptKeyCallbackImpl_getHashDataDispatcher(this: ICryptKeyCallback; status: IStatus; hash: Pointer); cdecl;
+begin
+	try
+		ICryptKeyCallbackImpl(this).getHashData(status, hash);
+	except
+		on e: Exception do FbException.catchException(status, e);
 	end
 end;
 
@@ -17241,7 +17504,7 @@ initialization
 	IResultSetImpl_vTable.getInfo := @IResultSetImpl_getInfoDispatcher;
 
 	IStatementImpl_vTable := StatementVTable.create;
-	IStatementImpl_vTable.version := 5;
+	IStatementImpl_vTable.version := 6;
 	IStatementImpl_vTable.addRef := @IStatementImpl_addRefDispatcher;
 	IStatementImpl_vTable.release := @IStatementImpl_releaseDispatcher;
 	IStatementImpl_vTable.getInfo := @IStatementImpl_getInfoDispatcher;
@@ -17259,6 +17522,8 @@ initialization
 	IStatementImpl_vTable.setTimeout := @IStatementImpl_setTimeoutDispatcher;
 	IStatementImpl_vTable.createBatch := @IStatementImpl_createBatchDispatcher;
 	IStatementImpl_vTable.free := @IStatementImpl_freeDispatcher;
+	IStatementImpl_vTable.getMaxInlineBlobSize := @IStatementImpl_getMaxInlineBlobSizeDispatcher;
+	IStatementImpl_vTable.setMaxInlineBlobSize := @IStatementImpl_setMaxInlineBlobSizeDispatcher;
 
 	IBatchImpl_vTable := BatchVTable.create;
 	IBatchImpl_vTable.version := 4;
@@ -17315,7 +17580,7 @@ initialization
 	IEventsImpl_vTable.cancel := @IEventsImpl_cancelDispatcher;
 
 	IAttachmentImpl_vTable := AttachmentVTable.create;
-	IAttachmentImpl_vTable.version := 5;
+	IAttachmentImpl_vTable.version := 6;
 	IAttachmentImpl_vTable.addRef := @IAttachmentImpl_addRefDispatcher;
 	IAttachmentImpl_vTable.release := @IAttachmentImpl_releaseDispatcher;
 	IAttachmentImpl_vTable.getInfo := @IAttachmentImpl_getInfoDispatcher;
@@ -17344,6 +17609,10 @@ initialization
 	IAttachmentImpl_vTable.createReplicator := @IAttachmentImpl_createReplicatorDispatcher;
 	IAttachmentImpl_vTable.detach := @IAttachmentImpl_detachDispatcher;
 	IAttachmentImpl_vTable.dropDatabase := @IAttachmentImpl_dropDatabaseDispatcher;
+	IAttachmentImpl_vTable.getMaxBlobCacheSize := @IAttachmentImpl_getMaxBlobCacheSizeDispatcher;
+	IAttachmentImpl_vTable.setMaxBlobCacheSize := @IAttachmentImpl_setMaxBlobCacheSizeDispatcher;
+	IAttachmentImpl_vTable.getMaxInlineBlobSize := @IAttachmentImpl_getMaxInlineBlobSizeDispatcher;
+	IAttachmentImpl_vTable.setMaxInlineBlobSize := @IAttachmentImpl_setMaxInlineBlobSizeDispatcher;
 
 	IServiceImpl_vTable := ServiceVTable.create;
 	IServiceImpl_vTable.version := 5;
@@ -17513,8 +17782,12 @@ initialization
 	IWireCryptPluginImpl_vTable.setSpecificData := @IWireCryptPluginImpl_setSpecificDataDispatcher;
 
 	ICryptKeyCallbackImpl_vTable := CryptKeyCallbackVTable.create;
-	ICryptKeyCallbackImpl_vTable.version := 2;
+	ICryptKeyCallbackImpl_vTable.version := 3;
 	ICryptKeyCallbackImpl_vTable.callback := @ICryptKeyCallbackImpl_callbackDispatcher;
+	ICryptKeyCallbackImpl_vTable.dummy1 := @ICryptKeyCallbackImpl_dummy1Dispatcher;
+	ICryptKeyCallbackImpl_vTable.dummy2 := @ICryptKeyCallbackImpl_dummy2Dispatcher;
+	ICryptKeyCallbackImpl_vTable.getHashLength := @ICryptKeyCallbackImpl_getHashLengthDispatcher;
+	ICryptKeyCallbackImpl_vTable.getHashData := @ICryptKeyCallbackImpl_getHashDataDispatcher;
 
 	IKeyHolderPluginImpl_vTable := KeyHolderPluginVTable.create;
 	IKeyHolderPluginImpl_vTable.version := 5;

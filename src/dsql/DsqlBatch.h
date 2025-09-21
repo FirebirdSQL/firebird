@@ -29,8 +29,6 @@
 #include "../common/classes/vector.h"
 #include "../common/classes/GenericMap.h"
 
-#define DEB_BATCH(x)
-
 
 namespace Firebird {
 

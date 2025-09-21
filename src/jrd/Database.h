@@ -231,6 +231,7 @@ const ULONG DBB_sweep_starting			= 0x80000L;		// Auto-sweep is starting
 const ULONG DBB_creating				= 0x100000L;	// Database creation is in progress
 const ULONG DBB_shared					= 0x200000L;	// Database object is shared among connections
 //const ULONG DBB_closing					= 0x400000L;	// Database closing, special backgroud threads should exit
+const ULONG DBB_restoring				= 0x800000L;	// Database restore is in progress
 
 //
 // dbb_ast_flags
@@ -259,7 +260,7 @@ class Database : public pool_alloc<type_dbb>
 		typedef Firebird::HashTable<DbId, Firebird::DEFAULT_HASH_SIZE,
 			Firebird::string, DbId, DbId > DbIdHash;
 
-		struct DbId : public DbIdHash::Entry, public Firebird::GlobalStorage
+		struct DbId : public DbIdHash::Entry, public Firebird::GlobalStorage, public Firebird::RefCounted
 		{
 			DbId(const Firebird::string& x, GlobalObjectHolder* h)
 				: id(getPool(), x), holder(h)
@@ -288,7 +289,9 @@ class Database : public pool_alloc<type_dbb>
 			}
 
 			const Firebird::string id;
-			GlobalObjectHolder* const holder;
+			GlobalObjectHolder* holder;
+			// This mutex is working very tight with `g_mutex`, so use it carefully to avoid possible deadlocks.
+			Firebird::Mutex shutdownMutex;
 		};
 
 		static Firebird::GlobalPtr<DbIdHash> g_hashTable;
@@ -658,8 +661,8 @@ public:
 
 	// returns true if sweeper thread could start
 	bool allowSweepThread(thread_db* tdbb);
-	// returns true if sweep could run
-	bool allowSweepRun(thread_db* tdbb);
+	// Throw an exception if sweep cannot be run
+	void initiateSweepRun(thread_db* tdbb);
 	// reset sweep flag and release sweep lock
 	void clearSweepFlags(thread_db* tdbb);
 	// reset sweep starting flag, release thread starting mutex
@@ -709,6 +712,19 @@ public:
 	void decTempCacheUsage(FB_SIZE_T size)
 	{
 		dbb_gblobj_holder->decTempCacheUsage(size);
+	}
+
+	bool isRestoring() const
+	{
+		return dbb_flags & DBB_restoring;
+	}
+
+	void setRestoring(bool value)
+	{
+		if (value)
+			dbb_flags |= DBB_restoring;
+		else
+			dbb_flags &= ~DBB_restoring;
 	}
 
 private:

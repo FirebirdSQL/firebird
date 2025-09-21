@@ -38,6 +38,9 @@ namespace Firebird {
 	class DynamicStatusVector;
 }
 
+class RemBlobBuffer;	// see remote.h
+
+
 // dimitr: ask for asymmetric protocols only.
 // Comment it out to return back to FB 1.0 behaviour.
 #define ASYMMETRIC_PROTOCOLS_ONLY
@@ -103,6 +106,12 @@ const USHORT PROTOCOL_VERSION17 = (FB_PROTOCOL_FLAG | 17);
 
 const USHORT PROTOCOL_VERSION18 = (FB_PROTOCOL_FLAG | 18);
 const USHORT PROTOCOL_FETCH_SCROLL = PROTOCOL_VERSION18;
+
+// Protocol 19:
+//	- supports op_inline_blob
+
+const USHORT PROTOCOL_VERSION19 = (FB_PROTOCOL_FLAG | 19);
+const USHORT PROTOCOL_INLINE_BLOB = PROTOCOL_VERSION19;
 
 // Architecture types
 
@@ -318,6 +327,8 @@ enum P_OP
 
 	op_fetch_scroll			= 112,
 	op_info_cursor			= 113,
+
+	op_inline_blob			= 114,
 
 	op_max
 };
@@ -617,6 +628,7 @@ typedef struct p_sqlst
     USHORT	p_sqlst_messages;			// Number of messages
     CSTRING	p_sqlst_out_blr;			// blr describing output message
     USHORT	p_sqlst_out_message_number;
+	ULONG	p_sqlst_inline_blob_size;	// maximum size of inlined blob
 } P_SQLST;
 
 typedef struct p_sqldata
@@ -634,6 +646,7 @@ typedef struct p_sqldata
 	ULONG	p_sqldata_cursor_flags;		// cursor flags
 	P_FETCH	p_sqldata_fetch_op;			// Fetch operation
 	SLONG	p_sqldata_fetch_pos;		// Fetch position
+	ULONG	p_sqldata_inline_blob_size;	// maximum size of inlined blob
 } P_SQLDATA;
 
 typedef struct p_sqlfree
@@ -760,6 +773,14 @@ typedef struct p_replicate
      CSTRING_CONST	p_repl_data;		// replication data
 } P_REPLICATE;
 
+typedef struct p_inline_blob
+{
+	OBJCT			p_tran_id;			// transaction id
+	SQUAD			p_blob_id;			// blob id
+	CSTRING			p_blob_info;		// blob info
+	RemBlobBuffer*	p_blob_data;		// blob data
+} P_INLINE_BLOB;
+
 
 // Generalize packet (sic!)
 
@@ -813,6 +834,7 @@ typedef struct packet
 	P_BATCH_REGBLOB p_batch_regblob;	// Register already existing BLOB in batch
 	P_BATCH_SETBPB p_batch_setbpb;		// Set default BPB for batch
 	P_REPLICATE p_replicate;	// replicate
+	P_INLINE_BLOB p_inline_blob;		// inline blob
 
 public:
 	packet()

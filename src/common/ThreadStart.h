@@ -83,12 +83,11 @@ public:
 	static void kill(Handle& handle);
 
 	static ThreadId getId();
-	static ThreadId getIdFromHandle(Handle threadHandle);
 
 	static void sleep(unsigned milliseconds);
 	static void yield();
 
-	static bool isCurrent(InternalId iid);
+	static bool isCurrent(Handle threadHandle);
 	bool isCurrent();
 
 	Thread()

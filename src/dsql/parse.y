@@ -7228,6 +7228,7 @@ in_predicate_value
 %type <selectExprNode> table_subquery
 table_subquery
 	: '(' column_select ')'		{ $$ = $2; }
+	| '(' table_subquery ')'	{ $$ = $2; }
 	;
 
 // USER control SQL interface

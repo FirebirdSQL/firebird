@@ -37,6 +37,7 @@ namespace Jrd
 	{
 		typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<TraNumber, jrd_tra*> > > TransactionMap;
 		typedef Firebird::HalfStaticArray<bid, 16> BlobList;
+		typedef Firebird::GenericMap<MetaNamePair> ConstraintIndexMap;
 /*
 		class ReplicatedTransaction : public Firebird::IReplicatedTransaction
 		{
@@ -128,7 +129,8 @@ namespace Jrd
 				Request* request, bool cascade)
 			: PermanentStorage(pool),
 			  m_txnMap(pool), m_database(pool, database),
-			  m_request(request), m_enableCascade(cascade)
+			  m_request(request), m_enableCascade(cascade),
+			  m_constraintIndexMap(pool)
 		{}
 
 		static Applier* create(thread_db* tdbb);
@@ -155,6 +157,7 @@ namespace Jrd
 		Record* m_record = nullptr;
 		JReplicator* m_interface;
 		const bool m_enableCascade;
+		ConstraintIndexMap m_constraintIndexMap;
 
 		void startTransaction(thread_db* tdbb, TraNumber traNum);
 		void prepareTransaction(thread_db* tdbb, TraNumber traNum);
@@ -190,7 +193,7 @@ namespace Jrd
 						const index_desc& idx,
 						Record* record1, Record* record2);
 		bool lookupRecord(thread_db* tdbb, jrd_rel* relation,
-						  Record* record, index_desc& idx, const char* idxName = nullptr);
+						  Record* record, index_desc& idx, const MetaName* idxName = nullptr);
 
 		const Format* findFormat(thread_db* tdbb, jrd_rel* relation, ULONG length);
 

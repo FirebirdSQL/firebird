@@ -753,9 +753,19 @@ namespace
 	class DefaultCallback : public AutoIface<ICryptKeyCallbackImpl<DefaultCallback, CheckStatusWrapper> >
 	{
 	public:
-		unsigned int callback(unsigned int, const void*, unsigned int, void*)
+		unsigned int callback(unsigned int, const void*, unsigned int, void*) override
 		{
 			return 0;
+		}
+
+		int getHashLength(Firebird::CheckStatusWrapper* status) override
+		{
+			return 0;
+		}
+
+		void getHashData(Firebird::CheckStatusWrapper* status, void* h) override
+		{
+			fb_assert(false);
 		}
 	};
 
@@ -1873,6 +1883,12 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				INI_init(tdbb);
 				PAG_header(tdbb, true);
 				dbb->dbb_crypto_manager->attach(tdbb, attachment);
+			}
+
+			if (dbb->isRestoring())
+			{
+				if (!options.dpb_gbak_attach && !options.dpb_map_attach && !options.dpb_worker_attach)
+					ERR_post(Arg::Gds(isc_no_user_att_while_restore));
 			}
 
 			// Basic DBB initialization complete
@@ -3042,6 +3058,8 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 
 			// Initialize the global objects
 			dbb->initGlobalObjects();
+			if (attachment->isGbak())
+				dbb->setRestoring(true);
 
 			// Initialize locks
 			LCK_init(tdbb, LCK_OWNER_database);
@@ -3176,7 +3194,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 						options.dpb_session_tz.c_str(), options.dpb_session_tz.length());
 			}
 
-			CCH_flush(tdbb, FLUSH_FINI, 0);
+			CCH_flush(tdbb, FLUSH_ALL, 0);
 
 			if (!options.dpb_set_force_write)
 				PAG_set_force_write(tdbb, true);
@@ -5277,6 +5295,28 @@ IReplicator* JAttachment::createReplicator(CheckStatusWrapper* user_status)
 	return jr;
 }
 
+unsigned JAttachment::getMaxBlobCacheSize(CheckStatusWrapper* status)
+{
+	status->setErrors(Arg::Gds(isc_wish_list).value());
+	return 0;
+}
+
+void JAttachment::setMaxBlobCacheSize(CheckStatusWrapper* status, unsigned size)
+{
+	status->setErrors(Arg::Gds(isc_wish_list).value());
+}
+
+unsigned JAttachment::getMaxInlineBlobSize(CheckStatusWrapper* status)
+{
+	status->setErrors(Arg::Gds(isc_wish_list).value());
+	return 0;
+}
+
+void JAttachment::setMaxInlineBlobSize(CheckStatusWrapper* status, unsigned size)
+{
+	status->setErrors(Arg::Gds(isc_wish_list).value());
+}
+
 
 int JResultSet::fetchNext(CheckStatusWrapper* user_status, void* buffer)
 {
@@ -6056,6 +6096,17 @@ JBatch* JStatement::createBatch(Firebird::CheckStatusWrapper* status, Firebird::
 
 	successful_completion(status);
 	return batch;
+}
+
+unsigned JStatement::getMaxInlineBlobSize(CheckStatusWrapper* status)
+{
+	status->setErrors(Arg::Gds(isc_wish_list).value());
+	return 0;
+}
+
+void JStatement::setMaxInlineBlobSize(CheckStatusWrapper* status, unsigned size)
+{
+	status->setErrors(Arg::Gds(isc_wish_list).value());
 }
 
 
@@ -7735,8 +7786,8 @@ void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment, XThreadEns
 	XThreadEnsureUnlock* activeThreadGuard = dropGuard;
 	if (!activeThreadGuard)
 	{
-		if (dbb->dbb_crypto_manager
-			&& Thread::isCurrent(Thread::getIdFromHandle(dbb->dbb_crypto_manager->getCryptThreadHandle())))
+		if (dbb->dbb_crypto_manager &&
+			Thread::isCurrent(dbb->dbb_crypto_manager->getCryptThreadHandle()))
 		{
 			activeThreadGuard = &dummyGuard;
 		}
@@ -7796,6 +7847,9 @@ void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment, XThreadEns
 	// restore database lock if needed
 	if (!other)
 		sync.lock(SYNC_EXCLUSIVE);
+
+	if (attachment->att_flags & ATT_creator)
+		dbb->setRestoring(false);
 
 	// remove the attachment block from the dbb linked list
 	for (Jrd::Attachment** ptr = &dbb->dbb_attachments; *ptr; ptr = &(*ptr)->att_next)

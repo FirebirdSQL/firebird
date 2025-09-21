@@ -94,10 +94,10 @@ TracePluginImpl::TracePluginImpl(IPluginBase* plugin,
 	logWriter(initInfo->getLogWriter()),
 	config(configuration),
 	record(*getDefaultMemoryPool()),
-	connections(getDefaultMemoryPool()),
-	transactions(getDefaultMemoryPool()),
-	statements(getDefaultMemoryPool()),
-	services(getDefaultMemoryPool()),
+	connections(*getDefaultMemoryPool()),
+	transactions(*getDefaultMemoryPool()),
+	statements(*getDefaultMemoryPool()),
+	services(*getDefaultMemoryPool()),
 	routines(*getDefaultMemoryPool()),
 	include_codes(*getDefaultMemoryPool()),
 	exclude_codes(*getDefaultMemoryPool())
@@ -471,7 +471,7 @@ void TracePluginImpl::logRecordTrig(const char* action, ITraceDatabaseConnection
 			extras += "TRANSACTION_COMMIT";
 			break;
 		case TRIGGER_TRANS_ROLLBACK:
-			extras + "TRANSACTION_ROLLBACK";
+			extras += "TRANSACTION_ROLLBACK";
 			break;
 		case TRIGGER_DDL:
 			extras += "DDL";
@@ -525,6 +525,8 @@ void TracePluginImpl::logRecordStmt(const char* action, ITraceDatabaseConnection
 
 		if (reg)
 		{
+			fb_assert(false);
+
 			string temp;
 			temp.printf(NEWLINE "Statement %" SQUADFORMAT", <unknown, bug?>:" NEWLINE, stmt_id);
 			record.insert(0, temp);

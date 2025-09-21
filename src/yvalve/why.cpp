@@ -4582,6 +4582,36 @@ YBatch* YStatement::createBatch(CheckStatusWrapper* status, IMessageMetadata* in
 	return NULL;
 }
 
+
+unsigned YStatement::getMaxInlineBlobSize(CheckStatusWrapper* status)
+{
+	try
+	{
+		YEntry<YStatement> entry(status, this);
+		return entry.next()->getMaxInlineBlobSize(status);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+
+	return 0;
+}
+
+
+void YStatement::setMaxInlineBlobSize(CheckStatusWrapper* status, unsigned size)
+{
+	try
+	{
+		YEntry<YStatement> entry(status, this);
+		entry.next()->setMaxInlineBlobSize(status, size);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+}
+
 //-------------------------------------
 
 IscStatement::~IscStatement()
@@ -5311,7 +5341,8 @@ void YTransaction::getInfo(CheckStatusWrapper* status, unsigned int itemsLength,
 		fb_utils::getDbPathInfo(itemsLength, items, bufferLength, buffer,
 								newItemsBuffer, attachment.get()->dbPath);
 
-		entry.next()->getInfo(status, itemsLength, items, bufferLength, buffer);
+		if (itemsLength)
+			entry.next()->getInfo(status, itemsLength, items, bufferLength, buffer);
 	}
 	catch (const Exception& e)
 	{
@@ -5549,8 +5580,31 @@ isc_db_handle& YAttachment::getHandle()
 	return handle;
 }
 
+void YAttachment::getOdsVersion(USHORT* majorVersion, USHORT* minorVersion)
+{
+	if (cachedOdsMajorVersion == 0)
+	{
+		FbLocalStatus status;
+		return UTL_get_ods_version(&status, this, &cachedOdsMajorVersion, &cachedOdsMinorVersion);
+		status.check();
+	}
+
+	if (majorVersion)
+		*majorVersion = cachedOdsMajorVersion;
+
+	if (minorVersion)
+		*minorVersion = cachedOdsMinorVersion;
+}
+
 YAttachment::~YAttachment()
 {
+	if (handle)
+	{
+		// Currently it may be possible after ping() disconnected from the next
+		fb_assert(!next);
+		removeHandle(&attachments, handle);
+	}
+
 	if (provider)
 		PluginManagerInterfacePtr()->releasePlugin(provider);
 }
@@ -6004,10 +6058,8 @@ void YAttachment::ping(CheckStatusWrapper* status)
 			if (!savedStatus.getError())
 				savedStatus.save(status);
 
-			StatusVector temp(NULL);
-			CheckStatusWrapper tempCheckStatusWrapper(&temp);
-			entry.next()->detach(&tempCheckStatusWrapper);
-			next = NULL;
+			entry.next()->release();
+			next = nullptr;
 
 			status_exception::raise(savedStatus.value());
 		}
@@ -6217,6 +6269,66 @@ YReplicator* YAttachment::createReplicator(CheckStatusWrapper* status)
 	}
 
 	return NULL;
+}
+
+
+unsigned YAttachment::getMaxBlobCacheSize(CheckStatusWrapper* status)
+{
+	try
+	{
+		YEntry<YAttachment> entry(status, this);
+		return entry.next()->getMaxBlobCacheSize(status);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+
+	return 0;
+}
+
+
+void YAttachment::setMaxBlobCacheSize(CheckStatusWrapper* status, unsigned size)
+{
+	try
+	{
+		YEntry<YAttachment> entry(status, this);
+		entry.next()->setMaxBlobCacheSize(status, size);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+}
+
+
+unsigned YAttachment::getMaxInlineBlobSize(CheckStatusWrapper* status)
+{
+	try
+	{
+		YEntry<YAttachment> entry(status, this);
+		return entry.next()->getMaxInlineBlobSize(status);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+
+	return 0;
+}
+
+
+void YAttachment::setMaxInlineBlobSize(CheckStatusWrapper* status, unsigned size)
+{
+	try
+	{
+		YEntry<YAttachment> entry(status, this);
+		entry.next()->setMaxInlineBlobSize(status, size);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
 }
 
 
@@ -6790,7 +6902,10 @@ void Dispatcher::shutdown(CheckStatusWrapper* userStatus, unsigned int timeout, 
 			}
 
 			if (hasThreads)
+			{
+				PluginManager::deleteDelayed();
 				continue;
+			}
 
 			Stack<YAttachment*, 64> attStack;
 			{
@@ -6820,6 +6935,7 @@ void Dispatcher::shutdown(CheckStatusWrapper* userStatus, unsigned int timeout, 
 				attachment->release();
 			}
 
+			PluginManager::deleteDelayed();
 		}
 
 		// ... and wait for all providers to go away

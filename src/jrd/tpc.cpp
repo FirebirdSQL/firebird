@@ -205,14 +205,11 @@ CommitNumber TipCache::cacheState(TraNumber number)
 	if (number < oldest)
 		return CN_PREHISTORIC;
 
-	// It is possible to amortize barrier in getTransactionStatusBlock
-	// over large number of operations, if our callers are made aware of
-	// TransactionStatusBlock granularity and iterate over transactions
-	// directly. But since this function is not really called too frequently,
-	// it should not matter and we leave interface "as is" for now.
 	TpcBlockNumber blockNumber = number / m_transactionsPerBlock;
 	ULONG offset = number % m_transactionsPerBlock;
-	TransactionStatusBlock* block = getTransactionStatusBlock(header, blockNumber);
+
+	Sync sync(&m_sync_status, FB_FUNCTION);
+	TransactionStatusBlock* block = getTransactionStatusBlock(header, blockNumber, sync);
 
 	// This should not really happen ever
 	fb_assert(block);
@@ -334,7 +331,9 @@ void TipCache::loadInventoryPages(thread_db* tdbb, GlobalTpcHeader* header)
 
 	TpcBlockNumber blockNumber = hdr_oldest_transaction / m_transactionsPerBlock;
 	ULONG transOffset = hdr_oldest_transaction % m_transactionsPerBlock;
-	TransactionStatusBlock* statusBlock = getTransactionStatusBlock(header, blockNumber);
+
+	SyncLockGuard sync(&m_sync_status, SYNC_EXCLUSIVE, FB_FUNCTION);
+	TransactionStatusBlock* statusBlock = createTransactionStatusBlock(header->tpc_block_size, blockNumber);
 
 	for (TraNumber t = hdr_oldest_transaction; ; )
 	{
@@ -353,7 +352,7 @@ void TipCache::loadInventoryPages(thread_db* tdbb, GlobalTpcHeader* header)
 		{
 			blockNumber++;
 			transOffset = 0;
-			statusBlock = getTransactionStatusBlock(header, blockNumber);
+			statusBlock = createTransactionStatusBlock(header->tpc_block_size, blockNumber);
 		}
 	}
 }
@@ -364,7 +363,10 @@ void TipCache::mapInventoryPages(GlobalTpcHeader* header)
 	const TpcBlockNumber lastNumber = header->latest_transaction_id / m_transactionsPerBlock;
 
 	for (; blockNumber <= lastNumber; blockNumber++)
-		getTransactionStatusBlock(header, blockNumber);
+	{
+		Sync sync(&m_sync_status, FB_FUNCTION);
+		getTransactionStatusBlock(header, blockNumber, sync);
+	}
 }
 
 TipCache::StatusBlockData::StatusBlockData(thread_db* tdbb, TipCache* tipCache, ULONG blockSize, TpcBlockNumber blkNumber)
@@ -498,20 +500,24 @@ TipCache::TransactionStatusBlock* TipCache::createTransactionStatusBlock(ULONG b
 	return blockData->memory->getHeader();
 }
 
-TipCache::TransactionStatusBlock* TipCache::getTransactionStatusBlock(GlobalTpcHeader* header, TpcBlockNumber blockNumber)
+TipCache::TransactionStatusBlock* TipCache::getTransactionStatusBlock(GlobalTpcHeader* header, TpcBlockNumber blockNumber, Sync& sync)
 {
+	fb_assert(sync.getState() == SYNC_NONE);
+
 	// This is a double-checked locking pattern. SyncLockGuard uses atomic ops internally and should be cheap
 	TransactionStatusBlock* block = NULL;
 	{
-		SyncLockGuard sync(&m_sync_status, SYNC_SHARED, "TipCache::getTransactionStatusBlock");
+		sync.lock(SYNC_SHARED);
 		BlocksMemoryMap::ConstAccessor acc(&m_blocks_memory);
 		if (acc.locate(blockNumber))
 			block = acc.current()->memory->getHeader();
+		else
+			sync.unlock();
 	}
 
 	if (!block)
 	{
-		SyncLockGuard sync(&m_sync_status, SYNC_EXCLUSIVE, "TipCache::getTransactionStatusBlock");
+		sync.lock(SYNC_EXCLUSIVE);
 		BlocksMemoryMap::ConstAccessor acc(&m_blocks_memory);
 		if (acc.locate(blockNumber))
 			block = acc.current()->memory->getHeader();
@@ -521,6 +527,8 @@ TipCache::TransactionStatusBlock* TipCache::getTransactionStatusBlock(GlobalTpcH
 			TraNumber oldest = header->oldest_transaction.load(std::memory_order_relaxed);
 			if (blockNumber >= oldest / m_transactionsPerBlock)
 				block = createTransactionStatusBlock(header->tpc_block_size, blockNumber);
+			else
+				sync.unlock();
 		}
 	}
 	return block;
@@ -532,24 +540,36 @@ TraNumber TipCache::findStates(TraNumber minNumber, TraNumber maxNumber, ULONG m
 	fb_assert(m_tpcHeader);
 	GlobalTpcHeader* header = m_tpcHeader->getHeader();
 
-	TransactionStatusBlock* statusBlock;
-	TpcBlockNumber blockNumber;
-	ULONG transOffset;
+	TransactionStatusBlock* statusBlock = nullptr;
+	ULONG transOffset = 0;
 
-	do
+	Sync sync(&m_sync_status, FB_FUNCTION);
+	for (TraNumber tran = minNumber; ; tran++, transOffset++)
 	{
-		TraNumber oldest = header->oldest_transaction.load(std::memory_order_relaxed);
+		if (transOffset == m_transactionsPerBlock)
+		{
+			sync.unlock();
+			statusBlock = nullptr;
+		}
 
-		if (minNumber < oldest)
-			minNumber = oldest;
+		while (!statusBlock)
+		{
+			const TraNumber oldest = header->oldest_transaction.load(std::memory_order_relaxed);
 
-		blockNumber = minNumber / m_transactionsPerBlock;
-		transOffset = minNumber % m_transactionsPerBlock;
-		statusBlock = getTransactionStatusBlock(header, blockNumber);
-	} while (!statusBlock);
+			if (tran < oldest)
+				tran = oldest;
 
-	for (TraNumber t = minNumber; ; )
-	{
+			const TpcBlockNumber blockNumber = tran / m_transactionsPerBlock;
+			transOffset = tran % m_transactionsPerBlock;
+			statusBlock = getTransactionStatusBlock(header, blockNumber, sync);
+
+			if (sync.getState() == SYNC_EXCLUSIVE)
+				sync.downgrade(SYNC_SHARED);
+		}
+
+		if (tran >= maxNumber)
+			break;
+
 		// Barrier is not needed here. Slightly out-dated information shall be ok here.
 		// Such transaction shall already be considered active by our caller.
 		// TODO: check if this assumption is indeed correct.
@@ -577,18 +597,8 @@ TraNumber TipCache::findStates(TraNumber minNumber, TraNumber maxNumber, ULONG m
 			break;
 		}
 
-		if (((1 << state) & mask) != 0)
-			return t;
-
-		if (++t >= maxNumber)
-			break;
-
-		if (++transOffset == m_transactionsPerBlock)
-		{
-			blockNumber++;
-			transOffset = 0;
-			statusBlock = getTransactionStatusBlock(header, blockNumber);
-		}
+		if (((1UL << state) & mask) != 0)
+			return tran;
 	}
 
 	return 0;
@@ -600,13 +610,11 @@ CommitNumber TipCache::setState(TraNumber number, int state)
 	fb_assert(m_tpcHeader);
 	GlobalTpcHeader* header = m_tpcHeader->getHeader();
 
-	// over large number of operations, if our callers are made aware of
-	// TransactionStatusBlock granularity and iterate over transactions
-	// directly. But since this function is not really called too frequently,
-	// it should not matter and we leave interface "as is" for now.
 	TpcBlockNumber blockNumber = number / m_transactionsPerBlock;
 	ULONG offset = number % m_transactionsPerBlock;
-	TransactionStatusBlock* block = getTransactionStatusBlock(header, blockNumber);
+
+	Sync sync(&m_sync_status, FB_FUNCTION);
+	TransactionStatusBlock* block = getTransactionStatusBlock(header, blockNumber, sync);
 
 	// This should not really happen
 	if (!block)
@@ -799,7 +807,7 @@ void TipCache::releaseSharedMemory(thread_db* tdbb, TraNumber oldest_old, TraNum
 	if (blocksToCleanup.isEmpty())
 		return;
 
-	SyncLockGuard sync(&m_sync_status, SYNC_EXCLUSIVE, "TipCache::releaseSharedMemory");
+	SyncLockGuard sync(&m_sync_status, SYNC_EXCLUSIVE, FB_FUNCTION);
 	while (blocksToCleanup.hasData())
 	{
 		TpcBlockNumber blockNumber = blocksToCleanup.pop();

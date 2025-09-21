@@ -393,11 +393,11 @@ namespace
 				provider->attachDatabase(&localStatus, m_config->dbName.c_str(),
 										 dpb.getBufferLength(), dpb.getBuffer());
 			localStatus.check();
-			m_attachment.assignRefNoIncr(att);
+			m_attachment = att;
 
 			const auto repl = m_attachment->createReplicator(&localStatus);
 			localStatus.check();
-			m_replicator.assignRefNoIncr(repl);
+			m_replicator = repl;
 
 			fb_assert(!m_sequence);
 
@@ -425,8 +425,17 @@ namespace
 
 		void shutdown()
 		{
-			m_replicator = nullptr;
-			m_attachment = nullptr;
+			FbLocalStatus localStatus;
+			if (m_replicator)
+			{
+				m_replicator->close(&localStatus);
+				m_replicator = nullptr;
+			}
+			if (m_attachment)
+			{
+				m_attachment->detach(&localStatus);
+				m_attachment = nullptr;
+			}
 			m_sequence = 0;
 			m_connected = false;
 		}
@@ -446,7 +455,7 @@ namespace
 
 		bool isShutdown() const
 		{
-			return (m_attachment == NULL);
+			return (m_attachment == nullptr);
 		}
 
 		const PathName& getDirectory() const
@@ -504,8 +513,8 @@ namespace
 
 	private:
 		AutoPtr<const Replication::Config> m_config;
-		RefPtr<IAttachment> m_attachment;
-		RefPtr<IReplicator> m_replicator;
+		IAttachment* m_attachment;
+		IReplicator* m_replicator;
 		FB_UINT64 m_sequence;
 		bool m_connected;
 		string m_lastError;

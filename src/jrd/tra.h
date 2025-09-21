@@ -103,8 +103,8 @@ struct BlobIndex
 	{ }
 };
 
-typedef Firebird::BePlusTree<BlobIndex, ULONG, MemoryPool, BlobIndex> BlobIndexTree;
-typedef Firebird::BePlusTree<bid, bid, MemoryPool> FetchedBlobIdTree;
+typedef Firebird::BePlusTree<BlobIndex, ULONG, BlobIndex> BlobIndexTree;
+typedef Firebird::BePlusTree<bid, bid> FetchedBlobIdTree;
 
 // Transaction block
 
@@ -171,9 +171,9 @@ public:
 	:	tra_attachment(attachment),
 		tra_pool(p),
 		tra_memory_stats(parent_stats),
-		tra_blobs_tree(p),
+		tra_blobs_tree(*p),
 		tra_blobs(outer ? outer->tra_blobs : &tra_blobs_tree),
-		tra_fetched_blobs(p),
+		tra_fetched_blobs(*p),
 		tra_repl_blobs(*p),
 		tra_blob_util_map(*p),
 		tra_arrays(NULL),

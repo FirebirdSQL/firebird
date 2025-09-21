@@ -278,7 +278,7 @@ private:
 		const char* getName() const override { return "TipCache:TranBlock"; }
 	};
 
-	typedef Firebird::BePlusTree<StatusBlockData*, TpcBlockNumber, Firebird::MemoryPool, StatusBlockData> BlocksMemoryMap;
+	typedef Firebird::BePlusTree<StatusBlockData*, TpcBlockNumber, StatusBlockData> BlocksMemoryMap;
 
 	static const ULONG TPC_VERSION = 2;
 	static const int SAFETY_GAP_BLOCKS = 1;
@@ -303,9 +303,12 @@ private:
 
 	// Returns block holding transaction state.
 	// Returns NULL if requested block is too old and is no longer cached.
-	TransactionStatusBlock* getTransactionStatusBlock(GlobalTpcHeader* header, TpcBlockNumber blockNumber);
+	// Sync should be bound to m_sync_status. On enter, sync must be unlocked.
+	// If returns not NULL then sync remains locked.
+	TransactionStatusBlock* getTransactionStatusBlock(GlobalTpcHeader* header, TpcBlockNumber blockNumber, Firebird::Sync& sync);
 
-	// Map shared memory for a block
+	// Map shared memory for a block.
+	// Assume exclusive lock of m_sync_status.
 	TransactionStatusBlock* createTransactionStatusBlock(ULONG blockSize, TpcBlockNumber blockNumber);
 
 	// Release shared memory blocks, if possible.

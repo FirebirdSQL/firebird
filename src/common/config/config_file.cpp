@@ -669,14 +669,10 @@ void ConfigFile::parse(Stream* stream)
 		case LINE_END_SUB:
 		case LINE_BAD:
 			badLine(streamName, inputLine);
-			return;
 
 		case LINE_REGULAR:
 			if (current.name.isEmpty())
-			{
 				badLine(streamName, inputLine);
-				return;
-			}
 
 			previous = &parameters[parameters.add(current)];
 			break;
@@ -691,6 +687,9 @@ void ConfigFile::parse(Stream* stream)
 				FB_SIZE_T n = parameters.add(current);
 				previous = &parameters[n];
 			}
+
+			if (!previous)
+				badLine(streamName, "master parameter is missing before subconfig start '{'");
 
 			{ // subconf scope
 				SubStream subStream(stream->getFileName());
@@ -725,7 +724,6 @@ void ConfigFile::parse(Stream* stream)
 
 					case LINE_BAD:
 						badLine(streamName, inputLine);
-						return;
 
 					default:
 						subStream.putLine(inputLine, line);
@@ -735,7 +733,7 @@ void ConfigFile::parse(Stream* stream)
 				}
 
 				if (level > 0)
-					badLine(streamName, "< missed closing bracket '}' >");
+					badLine(streamName, "missed closing bracket '}'");
 
 				previous->sub = FB_NEW_POOL(getPool())
 					ConfigFile(getPool(), &subStream, flags);

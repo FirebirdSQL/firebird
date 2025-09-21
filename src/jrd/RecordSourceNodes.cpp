@@ -2175,21 +2175,29 @@ RecordSource* UnionSourceNode::compile(thread_db* tdbb, Optimizer* opt, bool /*i
 // Identify all of the streams for which a dbkey may need to be carried through a sort.
 void UnionSourceNode::computeDbKeyStreams(StreamList& streamList) const
 {
-	const NestConst<RseNode>* ptr = clauses.begin();
-
-	for (const NestConst<RseNode>* const end = clauses.end(); ptr != end; ++ptr)
-		(*ptr)->computeDbKeyStreams(streamList);
+	for (const auto& clause : clauses)
+		clause->computeDbKeyStreams(streamList);
 }
 
 bool UnionSourceNode::computable(CompilerScratch* csb, StreamType stream,
 	bool allowOnlyCurrentStream, ValueExprNode* /*value*/)
 {
-	NestConst<RseNode>* ptr = clauses.begin();
-
-	for (NestConst<RseNode>* const end = clauses.end(); ptr != end; ++ptr)
+	for (auto& clause : clauses)
 	{
-		if (!(*ptr)->computable(csb, stream, allowOnlyCurrentStream, NULL))
+		if (!clause->computable(csb, stream, allowOnlyCurrentStream, NULL))
 			return false;
+	}
+
+	for (auto& map : maps)
+	{
+		for (auto& source : map->sourceList)
+		{
+			if (!source->computable(csb, stream, allowOnlyCurrentStream, NULL))
+				return false;
+		}
+
+		// dimitr: no need to process also map->targetList,
+		// as its nodes are purely local to the union stream
 	}
 
 	return true;
@@ -2198,8 +2206,17 @@ bool UnionSourceNode::computable(CompilerScratch* csb, StreamType stream,
 void UnionSourceNode::findDependentFromStreams(const CompilerScratch* csb,
 	StreamType currentStream, SortedStreamList* streamList)
 {
-	for (auto clause : clauses)
+	for (auto& clause : clauses)
 		clause->findDependentFromStreams(csb, currentStream, streamList);
+
+	for (auto& map : maps)
+	{
+		for (auto& source : map->sourceList)
+			source->findDependentFromStreams(csb, currentStream, streamList);
+
+		// dimitr: no need to process also map->targetList,
+		// as its nodes are purely local to the union stream
+	}
 }
 
 

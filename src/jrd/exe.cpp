@@ -1157,6 +1157,17 @@ void EXE_execute_triggers(thread_db* tdbb,
 	{
 		for (TrigVector::iterator ptr = vector->begin(); ptr != vector->end(); ++ptr)
 		{
+			// The system trigger that implement cascading action can be skipped if
+			// no PK/UK field have been changed by UPDATE.
+
+			if ((which_trig == StmtNode::POST_TRIG) && (trigger_action == TRIGGER_UPDATE) &&
+				(ptr->sysTrigger == fb_sysflag_referential_constraint))
+			{
+				fb_assert(new_rpb);
+				if (!(new_rpb->rpb_runtime_flags & RPB_uk_updated))
+					continue;
+			}
+
 			if (trigger_action == TRIGGER_DDL && ddl_action)
 			{
 				// Skip triggers not matching our action

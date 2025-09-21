@@ -516,7 +516,7 @@ void Service::putBytes(const UCHAR* bytes, FB_SIZE_T len)
 
 void Service::setServiceStatus(const ISC_STATUS* status_vector)
 {
-	if (checkForShutdown())
+	if (checkForShutdown() || checkForFailedStart())
 	{
 		return;
 	}
@@ -529,7 +529,7 @@ void Service::setServiceStatus(const ISC_STATUS* status_vector)
 void Service::setServiceStatus(const USHORT facility, const USHORT errcode,
 	const MsgFormat::SafeArg& args)
 {
-	if (checkForShutdown())
+	if (checkForShutdown() || checkForFailedStart())
 	{
 		return;
 	}
@@ -973,6 +973,22 @@ bool Service::checkForShutdown()
 	return false;
 }
 
+
+bool Service::checkForFailedStart()
+{
+	if ((svc_flags & SVC_evnt_fired) == 0)
+	{
+		// Service has not been started but we have got an error
+		svc_flags |= SVC_failed_start;
+	}
+	else if ((svc_flags & SVC_failed_start) != 0)
+	{
+		// Service has started with an error but we are trying to write one more error
+		return true;
+	}
+
+	return false;
+}
 
 void Service::cancel(thread_db* /*tdbb*/)
 {

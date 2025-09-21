@@ -219,19 +219,15 @@ ThreadId Thread::getId()
 #endif
 }
 
-ThreadId Thread::getIdFromHandle(Handle threadHandle)
+bool Thread::isCurrent(Handle threadHandle)
 {
-	return threadHandle;
-}
-
-bool Thread::isCurrent(InternalId iid)
-{
-	return pthread_equal(iid, pthread_self());
+	static_assert(std::is_same<Handle, InternalId>().value, "type mismatch");
+	return pthread_equal(threadHandle, pthread_self());
 }
 
 bool Thread::isCurrent()
 {
-	return isCurrent(internalId);
+	return pthread_equal(internalId, pthread_self());
 }
 
 void Thread::sleep(unsigned milliseconds)
@@ -373,19 +369,14 @@ ThreadId Thread::getId()
 	return GetCurrentThreadId();
 }
 
-ThreadId Thread::getIdFromHandle(Handle threadHandle)
+bool Thread::isCurrent(Handle threadHandle)
 {
-	return GetThreadId(threadHandle);
-}
-
-bool Thread::isCurrent(InternalId iid)
-{
-	return GetCurrentThreadId() == iid;
+	return GetCurrentThreadId() == GetThreadId(threadHandle);
 }
 
 bool Thread::isCurrent()
 {
-	return isCurrent(internalId);
+	return GetCurrentThreadId() == internalId;
 }
 
 void Thread::sleep(unsigned milliseconds)
@@ -427,10 +418,6 @@ void Thread::kill(Handle&)
 }
 
 Thread::Handle Thread::getId()
-{
-}
-
-Thread::Handle Thread::getIdFromHandle(Handle)
 {
 }
 

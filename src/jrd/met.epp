@@ -115,7 +115,7 @@ static int blocking_ast_relation(void*);
 static int partners_ast_relation(void*);
 static int rescan_ast_relation(void*);
 static ULONG get_rel_flags_from_FLAGS(USHORT);
-static void get_trigger(thread_db*, jrd_rel*, bid*, bid*, TrigVector**, const TEXT*, FB_UINT64, bool,
+static void get_trigger(thread_db*, jrd_rel*, bid*, bid*, TrigVector**, const TEXT*, FB_UINT64, SSHORT,
 	USHORT, const MetaName&, const string&, const bid*, Nullable<bool> ssDefiner);
 static bool get_type(thread_db*, USHORT*, const UCHAR*, const TEXT*);
 static void lookup_view_contexts(thread_db*, jrd_rel*);
@@ -124,7 +124,7 @@ static ValueExprNode* parse_field_default_blr(thread_db* tdbb, bid* blob_id);
 static BoolExprNode* parse_field_validation_blr(thread_db* tdbb, bid* blob_id, const MetaName name);
 static bool resolve_charset_and_collation(thread_db*, USHORT*, const UCHAR*, const UCHAR*);
 static void save_trigger_data(thread_db*, TrigVector**, jrd_rel*, Statement*, blb*, blb*,
-	const TEXT*, FB_UINT64, bool, USHORT, const MetaName&, const string&,
+	const TEXT*, FB_UINT64, SSHORT, USHORT, const MetaName&, const string&,
 	const bid*, Nullable<bool> ssDefiner);
 static void scan_partners(thread_db*, jrd_rel*);
 static bool verify_TRG_ignore_perm(thread_db*, const MetaName&);
@@ -2049,7 +2049,7 @@ void MET_load_trigger(thread_db* tdbb,
 							triggers,
 							TRG.RDB$TRIGGER_NAME,
 							TRG.RDB$TRIGGER_TYPE,
-							(bool) TRG.RDB$SYSTEM_FLAG,
+							TRG.RDB$SYSTEM_FLAG,
 							trig_flags,
 							engine,
 							entryPoint,
@@ -2070,7 +2070,7 @@ void MET_load_trigger(thread_db* tdbb,
 							triggers + trigger_action,
 							TRG.RDB$TRIGGER_NAME,
 							(UCHAR) trigger_action,
-							(bool) TRG.RDB$SYSTEM_FLAG,
+							TRG.RDB$SYSTEM_FLAG,
 							trig_flags,
 							engine,
 							entryPoint,
@@ -2082,6 +2082,37 @@ void MET_load_trigger(thread_db* tdbb,
 	END_FOR
 }
 
+
+
+void MET_lookup_index_for_cnstrt(thread_db* tdbb,
+	MetaName& index_name,
+	const MetaName& constraint_name)
+{
+/**************************************
+*
+*      M E T _ l o o k u p _ i n d e x _ f o r _ c n s t r t
+*
+**************************************
+*
+* Functional description
+*      Lookup index name from constraint name, if one exists.
+*      index_name is output parameter.
+*
+**************************************/
+	SET_TDBB(tdbb);
+	Attachment* attachment = tdbb->getAttachment();
+
+	index_name = "";
+	AutoCacheRequest request(tdbb, irq_l_index_cnstrt, IRQ_REQUESTS);
+
+	FOR(REQUEST_HANDLE request)
+		X IN RDB$RELATION_CONSTRAINTS WITH X.RDB$CONSTRAINT_NAME EQ constraint_name.c_str()
+	{
+		if (!X.RDB$INDEX_NAME.NULL)
+			index_name = X.RDB$INDEX_NAME;
+	}
+	END_FOR
+}
 
 
 void MET_lookup_cnstrt_for_index(thread_db* tdbb,
@@ -2096,7 +2127,7 @@ void MET_lookup_cnstrt_for_index(thread_db* tdbb,
  *
  * Functional description
  *      Lookup  constraint name from index name, if one exists.
- *      Calling routine must pass a buffer of at least 32 bytes.
+ *      constraint_name is output parameter.
  *
  **************************************/
 	SET_TDBB(tdbb);
@@ -2127,7 +2158,7 @@ void MET_lookup_cnstrt_for_trigger(thread_db* tdbb,
  *
  * Functional description
  *      Lookup  constraint name from trigger name, if one exists.
- *      Calling routine must pass a buffer of at least 32 bytes.
+ *      constraint_name and relation_name are output parameters.
  *
  **************************************/
 	SET_TDBB(tdbb);
@@ -2504,7 +2535,7 @@ void MET_lookup_index(thread_db* tdbb,
  *
  * Functional description
  *      Lookup index name from relation and index number.
- *      Calling routine must pass a buffer of at least 32 bytes.
+ *      index_name is output parameter.
  *
  **************************************/
 	SET_TDBB(tdbb);
@@ -3351,7 +3382,7 @@ void MET_parse_sys_trigger(thread_db* tdbb, jrd_rel* relation)
 			if (trig_flags & TRG_ignore_perm)
 				statement->flags |= Statement::FLAG_IGNORE_PERM;
 
-			save_trigger_data(tdbb, ptr, relation, statement, NULL, NULL, NULL, type, true, 0, "",
+			save_trigger_data(tdbb, ptr, relation, statement, NULL, NULL, NULL, type, TRG.RDB$SYSTEM_FLAG, 0, "",
 				"", NULL, Nullable<bool>());
 		}
 	}
@@ -4713,7 +4744,7 @@ ULONG MET_get_rel_flags_from_TYPE(USHORT type)
 static void get_trigger(thread_db* tdbb, jrd_rel* relation,
 						bid* blob_id, bid* debug_blob_id, TrigVector** ptr,
 						const TEXT* name, FB_UINT64 type,
-						bool sys_trigger, USHORT flags,
+						SSHORT sys_trigger, USHORT flags,
 						const MetaName& engine, const string& entryPoint,
 						const bid* body, Nullable<bool> ssDefiner)
 {
@@ -5095,7 +5126,7 @@ static bool resolve_charset_and_collation(thread_db* tdbb,
 static void save_trigger_data(thread_db* tdbb, TrigVector** ptr, jrd_rel* relation,
 							  Statement* statement, blb* blrBlob, blb* debugInfoBlob,
 							  const TEXT* name, FB_UINT64 type,
-							  bool sys_trigger, USHORT flags,
+							  SSHORT sys_trigger, USHORT flags,
 							  const MetaName& engine, const string& entryPoint,
 							  const bid* body, Nullable<bool> ssDefiner)
 {

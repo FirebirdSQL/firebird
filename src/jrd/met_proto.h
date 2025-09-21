@@ -97,6 +97,7 @@ void		MET_load_db_triggers(Jrd::thread_db*, int);
 void		MET_load_ddl_triggers(Jrd::thread_db* tdbb);
 bool		MET_load_exception(Jrd::thread_db*, Jrd::ExceptionItem&);
 void		MET_load_trigger(Jrd::thread_db*, Jrd::jrd_rel*, const Jrd::MetaName&, Jrd::TrigVector**);
+void		MET_lookup_index_for_cnstrt(Jrd::thread_db*, Jrd::MetaName& index_name, const Jrd::MetaName& constraint);
 void		MET_lookup_cnstrt_for_index(Jrd::thread_db*, Jrd::MetaName& constraint, const Jrd::MetaName& index_name);
 void		MET_lookup_cnstrt_for_trigger(Jrd::thread_db*, Jrd::MetaName&, Jrd::MetaName&, const Jrd::MetaName&);
 void		MET_lookup_exception(Jrd::thread_db*, SLONG, /* OUT */ Jrd::MetaName&, /* OUT */ Firebird::string*);

@@ -63,6 +63,81 @@ enum TraScope {
 	traTwoPhase
 };
 
+
+// helper to work with ICryptKeyCallback
+class CryptHash
+{
+public:
+	explicit CryptHash(Firebird::ICryptKeyCallback* callback);
+	CryptHash();
+
+	void assign(Firebird::ICryptKeyCallback* callback);
+
+	bool isValid() const
+	{
+		return m_valid;
+	}
+
+	const UCHAR* getValue() const
+	{
+		fb_assert(isValid());
+
+		return m_value.begin();
+	}
+
+	int getLength() const
+	{
+		return isValid() ? m_value.getCount() : -1;
+	}
+
+	bool operator==(const CryptHash& h) const;
+
+private:
+	Firebird::UCharBuffer m_value;
+	bool m_valid = false;
+};
+
+
+class CryptCallbackRedirector :
+	public Firebird::VersionedIface<Firebird::ICryptKeyCallbackImpl<CryptCallbackRedirector, Firebird::CheckStatusWrapper>>
+{
+	public:
+		CryptCallbackRedirector() = default;
+
+		void setRedirect(Firebird::ICryptKeyCallback* originalCallback);
+		void resetRedirect(Firebird::ICryptKeyCallback* newCallback);
+		bool operator==(const CryptHash& h) const;
+
+		bool isValid() const
+		{
+			return m_hash.isValid();
+		}
+
+		// ICryptKeyCallback implementation
+		unsigned int callback(unsigned int dataLength, const void* data,
+			unsigned int bufferLength, void* buffer) override
+		{
+			return m_keyCallback ? m_keyCallback->callback(dataLength, data, bufferLength, buffer) : 0;
+		}
+
+		int getHashLength(Firebird::CheckStatusWrapper* status) override
+		{
+			return m_hash.getLength();
+		}
+
+		void getHashData(Firebird::CheckStatusWrapper* status, void* h) override
+		{
+			fb_assert(m_hash.isValid());
+			if (m_hash.isValid())
+				memcpy(h, m_hash.getValue(), m_hash.getLength());
+		}
+
+	private:
+		ICryptKeyCallback* m_keyCallback = nullptr;
+		CryptHash m_hash;
+	};
+
+
 // Known built-in provider's names
 extern const char* FIREBIRD_PROVIDER_NAME;
 extern const char* INTERNAL_PROVIDER_NAME;
@@ -117,7 +192,7 @@ public:
 	// get available connection already bound to the current attachment
 	Connection* getBoundConnection(Jrd::thread_db* tdbb,
 		const Firebird::PathName& dbName, Firebird::ClumpletReader& dpb,
-		TraScope tra_scope);
+		TraScope tra_scope, bool isCurrent);
 
 	// Connection gets unused, release it into pool or delete it immediately
 	virtual void releaseConnection(Jrd::thread_db* tdbb, Connection& conn, bool inPool = true);
@@ -187,8 +262,7 @@ protected:
 		}
 	};
 
-	typedef Firebird::BePlusTree<AttToConn, AttToConn, Firebird::MemoryPool,
-								 AttToConn, AttToConn>
+	typedef Firebird::BePlusTree<AttToConn, AttToConn, AttToConn, AttToConn>
 		AttToConnMap;
 
 	AttToConnMap m_connections;
@@ -207,7 +281,7 @@ public:
 
 	// find and return cached connection or NULL
 	Connection* getConnection(Jrd::thread_db* tdbb, Provider* prv, ULONG hash, const Firebird::PathName& dbName,
-		Firebird::ClumpletReader& dpb);
+		Firebird::ClumpletReader& dpb, const CryptHash& ch);
 
 	// put unused connection into pool or destroy it
 	void putConnection(Jrd::thread_db* tdbb, Connection* conn);
@@ -418,6 +492,11 @@ protected:
 	static void deleteConnection(Jrd::thread_db* tdbb, Connection* conn);
 	void setup(const Firebird::PathName& dbName, const Firebird::ClumpletReader& dpb);
 
+	void setCallbackRedirect(Firebird::ICryptKeyCallback* attCallback)
+	{
+		m_cryptCallbackRedir.setRedirect(attCallback);
+	}
+
 	void setBoundAtt(Jrd::Attachment* att) { m_boundAtt = att; }
 
 public:
@@ -448,7 +527,7 @@ public:
 	virtual bool validate(Jrd::thread_db* tdbb) = 0;
 
 	virtual bool isSameDatabase(const Firebird::PathName& dbName,
-		Firebird::ClumpletReader& dpb) const;
+		Firebird::ClumpletReader& dpb, const CryptHash& ch) const;
 
 	// only Internal provider is able to create "current" connections
 	virtual bool isCurrent() const { return false; }
@@ -496,6 +575,16 @@ public:
 	// Clear specified flag
 	void clearFeature(info_features value) { m_features[value] = false; }
 
+	void resetRedirect(Firebird::ICryptKeyCallback* originalCallback)
+	{
+		m_cryptCallbackRedir.resetRedirect(originalCallback);
+	}
+
+	bool hasValidCryptCallback() const
+	{
+		return m_cryptCallbackRedir.isValid();
+	}
+
 protected:
 	virtual Transaction* doCreateTransaction() = 0;
 	virtual Statement* doCreateStatement() = 0;
@@ -527,6 +616,8 @@ protected:
 	bool m_wrapErrors;
 	bool m_broken;
 	bool m_features[fb_feature_max];
+
+	CryptCallbackRedirector m_cryptCallbackRedir;
 };
 
 class Transaction : public Firebird::PermanentStorage

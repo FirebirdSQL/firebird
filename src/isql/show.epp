@@ -171,7 +171,9 @@ static const SCHAR* Object_types[] =
 	"Generator",
 	"User defined function",
 	"Blob filter",	// impossible to have explicit dependencies on it, but...
-	"Collation"
+	"Collation",
+	"Package",
+	"Package body"
 };
 
 
@@ -444,12 +446,12 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 			break;
 
 		case isc_info_page_size:
-			value_out = p.getInt();
+			value_out = p.getBigInt();
 			sprintf(info, "PAGE_SIZE %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case isc_info_db_size_in_pages:
-			value_out = p.getInt();
+			value_out = p.getBigInt();
 			if (translate)
 			{
 				IUTILS_msg_get(NUMBER_PAGES, msg, SafeArg() << value_out);
@@ -460,7 +462,7 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 			break;
 
 		case fb_info_pages_used:
-			value_out = p.getInt();
+			value_out = p.getBigInt();
 			if (translate)
 			{
 				IUTILS_msg_get(NUMBER_USED_PAGES, msg, SafeArg() << value_out);
@@ -471,7 +473,7 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 			break;
 
 		case fb_info_pages_free:
-			value_out = p.getInt();
+			value_out = p.getBigInt();
 			if (translate)
 			{
 				IUTILS_msg_get(NUMBER_FREE_PAGES, msg, SafeArg() << value_out);
@@ -482,7 +484,7 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 			break;
 
 		case fb_info_crypt_state:
-			value_out = p.getInt();
+			value_out = p.getBigInt();
 			if (translate)
 			{
 				Firebird::string s;
@@ -512,7 +514,7 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 			break;
 
 		case isc_info_sweep_interval:
-			value_out = p.getInt();
+			value_out = p.getBigInt();
 			if (translate)
 			{
 				IUTILS_msg_get(SWEEP_INTERV, msg, SafeArg() << value_out);
@@ -523,32 +525,32 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 			break;
 
 		case isc_info_forced_writes:
-			value_out = p.getInt();
+			value_out = p.getBigInt();
 			sprintf (info, "Forced Writes are %s%s", (value_out == 1 ? "ON" : "OFF"), separator);
 			break;
 
 		case isc_info_oldest_transaction :
-			value_out = p.getInt();
+			value_out = p.getBigInt();
 			sprintf(info, "Transaction - oldest = %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case isc_info_oldest_active :
-			value_out = p.getInt();
+			value_out = p.getBigInt();
 			sprintf(info, "Transaction - oldest active = %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case isc_info_oldest_snapshot :
-			value_out = p.getInt();
+			value_out = p.getBigInt();
 			sprintf(info, "Transaction - oldest snapshot = %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case isc_info_next_transaction :
-			value_out = p.getInt();
+			value_out = p.getBigInt();
 			sprintf (info, "Transaction - Next = %" SQUADFORMAT"%s", value_out, separator);
 			break;
 
 		case isc_info_base_level:
-			value_out = p.getInt();
+			value_out = p.getBigInt();
 			if (translate)
 			{
 				IUTILS_msg_get(BASE_LEVEL, msg, SafeArg() << value_out);
@@ -559,7 +561,7 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 			break;
 
 		case isc_info_limbo:
-			value_out = p.getInt();
+			value_out = p.getBigInt();
 			if (translate)
 			{
 				IUTILS_msg_get(LIMBO, msg, SafeArg() << value_out);
@@ -573,7 +575,7 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 			isqlGlob.major_ods = p.getInt();
 			break;
 		case isc_info_ods_minor_version:
-			value_out = p.getInt();
+			value_out = p.getBigInt();
 			sprintf(info, "ODS = %" SLONGFORMAT".%" SQUADFORMAT"%s",
 					(SLONG) isqlGlob.major_ods, value_out, separator);
 			break;
@@ -584,7 +586,7 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 			break;
 
 		case fb_info_protocol_version:
-			value_out = p.getInt();
+			value_out = p.getBigInt();
 			if (value_out)
 				sprintf(info, "Protocol version = %" SQUADFORMAT"%s", value_out, separator);
 			else
@@ -662,7 +664,7 @@ bool SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 
 		case fb_info_replica_mode:
 			{
-				value_out = p.getInt();
+				value_out = p.getBigInt();
 				const char* mode =
 					(value_out == fb_info_replica_none) ? "NONE" :
 					(value_out == fb_info_replica_read_only) ? "READ_ONLY" :

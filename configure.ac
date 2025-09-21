@@ -1167,9 +1167,9 @@ AC_CHECK_FUNCS(clock_gettime)
 
 dnl Checks for pthread functions
 AC_CHECK_FUNCS(pthread_mutexattr_setprotocol)
-AC_CHECK_FUNCS(pthread_mutexattr_setrobust_np)
-AC_CHECK_FUNCS(pthread_mutex_consistent_np)
-AC_CHECK_FUNCS(pthread_rwlockattr_setkind_np)
+AC_CHECK_FUNCS(pthread_mutexattr_setrobust)
+AC_CHECK_FUNCS(pthread_mutex_consistent)
+AC_CHECK_FUNCS(pthread_rwlockattr_setkind)
 AC_CHECK_FUNCS(pthread_cancel)
 AC_CHECK_FUNCS(pthread_atfork)
 AC_CHECK_FUNCS(sigset)

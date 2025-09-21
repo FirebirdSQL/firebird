@@ -1129,7 +1129,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 				}
 
 
-				const FB_SIZE_T tableSize = tddba->page_size * (
+				const FB_UINT64 tableSize = tddba->page_size * (
 					relation->rel_pointer_pages +
 					relation->rel_data_pages +
 					blobsTotal.blob_pages);

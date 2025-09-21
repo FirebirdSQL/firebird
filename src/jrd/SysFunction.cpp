@@ -5494,9 +5494,36 @@ dsc* evlMaxMinValue(thread_db* tdbb, const SysFunction* function, const NestValu
 	}
 
 	DataTypeUtil(tdbb).makeFromList(&impure->vlu_desc, function->name, argTypes.getCount(), argTypes.begin());
-	impure->vlu_desc.dsc_address = (UCHAR*) &impure->vlu_misc;
+
+	if (impure->vlu_desc.isText())
+	{
+		const USHORT length = impure->vlu_desc.dsc_length;
+
+		// Allocate a string block of sufficient size
+
+		auto string = impure->vlu_string;
+
+		if (string && string->str_length < length)
+		{
+			delete string;
+			string = nullptr;
+		}
+
+		if (!string)
+		{
+			string = impure->vlu_string = FB_NEW_RPT(*tdbb->getDefaultPool(), length) VaryingString();
+			string->str_length = length;
+		}
+
+		impure->vlu_desc.dsc_address = string->str_data;
+	}
+	else
+		impure->vlu_desc.dsc_address = (UCHAR*) &impure->vlu_misc;
 
 	MOV_move(tdbb, result, &impure->vlu_desc);
+
+	if (impure->vlu_desc.dsc_dtype == dtype_text)
+		INTL_adjust_text_descriptor(tdbb, &impure->vlu_desc);
 
 	return &impure->vlu_desc;
 }

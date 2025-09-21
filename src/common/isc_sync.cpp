@@ -1428,7 +1428,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 				if (!bugFlag)
 				{
 #endif
-					LOG_PTHREAD_ERROR(pthread_mutexattr_setrobust_np(&mattr, PTHREAD_MUTEX_ROBUST_NP));
+					LOG_PTHREAD_ERROR(pthread_mutexattr_setrobust(&mattr, PTHREAD_MUTEX_ROBUST));
 #ifdef BUGGY_LINUX_MUTEX
 				}
 #endif
@@ -1723,7 +1723,10 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 			(Arg::Gds(isc_random) << Arg::Str("File for memory mapping is empty.")).raise();
 		}
 
-		if (SetFilePointer(file_handle, length, NULL, FILE_BEGIN) == INVALID_SET_FILE_POINTER ||
+		LARGE_INTEGER offset;
+		offset.QuadPart = length;
+
+		if (SetFilePointer(file_handle, offset.LowPart, &offset.HighPart, FILE_BEGIN) == INVALID_SET_FILE_POINTER ||
 			!SetEndOfFile(file_handle) || !FlushFileBuffers(file_handle))
 		{
 			err = GetLastError();
@@ -2564,7 +2567,10 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector,
 
 	if (flag)
 	{
-		if (SetFilePointer(sh_mem_handle, new_length, NULL, FILE_BEGIN) == INVALID_SET_FILE_POINTER ||
+		LARGE_INTEGER offset;
+		offset.QuadPart = new_length;
+
+		if (SetFilePointer(sh_mem_handle, offset.LowPart, &offset.HighPart, FILE_BEGIN) == INVALID_SET_FILE_POINTER ||
 			!SetEndOfFile(sh_mem_handle) ||
 			!FlushViewOfFile(sh_mem_header, 0))
 		{
@@ -2747,7 +2753,7 @@ void SharedMemoryBase::mutexLock()
 	{
 		// We always perform check for dead process
 		// Therefore may safely mark mutex as recovered
-		LOG_PTHREAD_ERROR(pthread_mutex_consistent_np(sh_mem_mutex->mtx_mutex));
+		LOG_PTHREAD_ERROR(pthread_mutex_consistent(sh_mem_mutex->mtx_mutex));
 		state = 0;
 	}
 #endif
@@ -2775,7 +2781,7 @@ bool SharedMemoryBase::mutexLockCond()
 	{
 		// We always perform check for dead process
 		// Therefore may safely mark mutex as recovered
-		LOG_PTHREAD_ERROR(pthread_mutex_consistent_np(sh_mem_mutex->mtx_mutex));
+		LOG_PTHREAD_ERROR(pthread_mutex_consistent(sh_mem_mutex->mtx_mutex));
 		state = 0;
 	}
 #endif

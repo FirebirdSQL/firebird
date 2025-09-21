@@ -475,6 +475,9 @@ public:
 	YBatch* createBatch(Firebird::CheckStatusWrapper* status, Firebird::IMessageMetadata* inMetadata,
 		unsigned parLength, const unsigned char* par);
 
+	unsigned getMaxInlineBlobSize(Firebird::CheckStatusWrapper* status) override;
+	void setMaxInlineBlobSize(Firebird::CheckStatusWrapper* status, unsigned size) override;
+
 public:
 	AtomicAttPtr attachment;
 	Firebird::Mutex statementMutex;
@@ -516,6 +519,7 @@ public:
 	void destroy(unsigned dstrFlags);
 	void shutdown();
 	isc_db_handle& getHandle();
+	void getOdsVersion(USHORT* majorVersion, USHORT* minorVersion);
 
 	// IAttachment implementation
 	void getInfo(Firebird::CheckStatusWrapper* status, unsigned int itemsLength,
@@ -577,6 +581,11 @@ public:
 		Firebird::IMessageMetadata* inMetadata, unsigned parLength, const unsigned char* par);
 	YReplicator* createReplicator(Firebird::CheckStatusWrapper* status);
 
+	unsigned getMaxBlobCacheSize(Firebird::CheckStatusWrapper* status) override;
+	void setMaxBlobCacheSize(Firebird::CheckStatusWrapper* status, unsigned size) override;
+	unsigned getMaxInlineBlobSize(Firebird::CheckStatusWrapper* status) override;
+	void setMaxInlineBlobSize(Firebird::CheckStatusWrapper* status, unsigned size) override;
+
 public:
 	Firebird::IProvider* provider;
 	Firebird::PathName dbPath;
@@ -588,6 +597,10 @@ public:
 	HandleArray<YTransaction> childTransactions;
 	Firebird::Array<CleanupCallback*> cleanupHandlers;
 	Firebird::StatusHolder savedStatus;	// Do not use raise() method of this class in yValve.
+
+private:
+	USHORT cachedOdsMajorVersion = 0;
+	USHORT cachedOdsMinorVersion = 0;
 };
 
 class YService final :

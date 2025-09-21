@@ -156,14 +156,13 @@ jobs:
     if: github.ref_type != 'tag'
     runs-on: ${{ matrix.os }}
     env:
-      VS_VERSION: ${{ (matrix.os == 'windows-2019' && '2019' || (matrix.os == 'windows-2022' && '2022' || '')) }}
+      VS_VERSION: 2022
 
     strategy:
       fail-fast: false
       matrix:
         os:
-          - windows-2022
-          - windows-2019
+          - windows-2025
         platform: [x64, x86]
 
     steps:
@@ -186,7 +185,7 @@ jobs:
         shell: cmd
         env:
           PLATFORM: ${{ matrix.platform }}
-          VS_SCRIPT: ${{ matrix.os == 'windows-2022' && 'C:\Program Files\Microsoft Visual Studio\%VS_VERSION%\Enterprise\Common7\Tools\VsDevCmd.bat' || 'C:\Program Files (x86)\Microsoft Visual Studio\%VS_VERSION%\Enterprise\Common7\Tools\VsDevCmd.bat' }}
+          VS_SCRIPT: C:\Program Files\Microsoft Visual Studio\%VS_VERSION%\Enterprise\Common7\Tools\VsDevCmd.bat
         run: |
           set SEVENZIP=C:\Program Files\7-Zip
           set INNO6_SETUP_PATH=C:\Program Files (x86)\Inno Setup 6
@@ -290,8 +289,6 @@ jobs:
   build-macos:
     name: build-macos-${{ matrix.arch }}
     runs-on: ${{ (matrix.arch == 'arm64' && 'macos-14') || 'macos-13' }}
-    env:
-      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
 
     strategy:
       fail-fast: false
@@ -312,14 +309,16 @@ jobs:
 
       - name: Prepare - Install tools
         run: |
-          brew install automake autoconf-archive cmake libtool ninja python-setuptools
+          brew install --quiet automake autoconf-archive libtool ninja python-setuptools
 
-      - name: Export GitHub Actions cache environment variables
-        uses: actions/github-script@v7
+      - name: Restore vcpkg cache
+        uses: actions/cache/restore@v4
+        id: restore-vcpkg-cache
         with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+          path: ~/.cache/vcpkg/archives
+          key: vcpkg-cache-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('vcpkg-custom/**', 'vcpkg.json', 'vcpkg-configuration.json') }}
+          restore-keys: |
+            vcpkg-cache-${{ runner.os }}-${{ matrix.arch }}-
 
       - name: Build
         run: |
@@ -347,6 +346,14 @@ jobs:
           mv gen2 gen
           mkdir gen/artifacts
           mv gen/Release/*.pkg gen/artifacts
+
+      - name: Save vcpkg cache
+        uses: actions/cache/save@v4
+        # Saves if the key changed (hashes on vcpkg/**, vcpkg.json, vcpkg-configuration.json)
+        if: steps.restore-vcpkg-cache.outputs.cache-hit != 'true'
+        with:
+          path: ~/.cache/vcpkg/archives
+          key: ${{ steps.restore-vcpkg-cache.outputs.cache-primary-key }}
 
       - name: Upload installer
         uses: actions/upload-artifact@v4

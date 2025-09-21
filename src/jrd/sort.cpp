@@ -2398,7 +2398,7 @@ sort_record* PartitionedSort::getMerge()
 		if (l == 0 && aSort->m_dup_callback)
 		{
 			UCHAR* rec_a = (UCHAR*)merge->mrg_record_a;
-			UCHAR* rec_b = (UCHAR*)merge->mrg_record_a;
+			UCHAR* rec_b = (UCHAR*)merge->mrg_record_b;
 
 			aSort->diddleKey(rec_a, false, true);
 			aSort->diddleKey(rec_b, false, true);
