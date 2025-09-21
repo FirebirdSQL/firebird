@@ -51,7 +51,7 @@ public:
 		if (!m_need_trace)
 			return;
 
-		m_start_clock = fb_utils::query_performance_counter();std::string_view
+		m_start_clock = fb_utils::query_performance_counter();
 
 		static constexpr const char* empty_string = "<empty statement>";
 		static FB_SIZE_T empty_string_length = fb_strlen(empty_string);
