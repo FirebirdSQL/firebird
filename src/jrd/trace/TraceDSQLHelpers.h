@@ -53,10 +53,11 @@ public:
 
 		m_start_clock = fb_utils::query_performance_counter();
 
-		static constexpr const char* empty_string = "<empty statement>";
-		static FB_SIZE_T empty_string_length = fb_strlen(empty_string);
 		if (m_string == nullptr || (m_string_len == 0 && (m_string_len = fb_strlen(m_string)) == 0))
 		{
+			static constexpr const char* empty_string = "<empty statement>";
+			static FB_SIZE_T empty_string_length = fb_strlen(empty_string);
+
 			m_string = empty_string;
 			m_string_len = empty_string_length;
 		}
