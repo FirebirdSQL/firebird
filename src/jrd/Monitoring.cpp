@@ -1422,36 +1422,36 @@ void Monitoring::putStatistics(SnapshotData::DumpRecord& record, const RuntimeSt
 	record.reset(rel_mon_io_stats);
 	record.storeGlobalId(f_mon_io_stat_id, id);
 	record.storeInteger(f_mon_io_stat_group, stat_group);
-	record.storeInteger(f_mon_io_page_reads, statistics.getValue(RuntimeStatistics::PAGE_READS));
-	record.storeInteger(f_mon_io_page_writes, statistics.getValue(RuntimeStatistics::PAGE_WRITES));
-	record.storeInteger(f_mon_io_page_fetches, statistics.getValue(RuntimeStatistics::PAGE_FETCHES));
-	record.storeInteger(f_mon_io_page_marks, statistics.getValue(RuntimeStatistics::PAGE_MARKS));
+	record.storeInteger(f_mon_io_page_reads, statistics[PageStatType::READS]);
+	record.storeInteger(f_mon_io_page_writes, statistics[PageStatType::WRITES]);
+	record.storeInteger(f_mon_io_page_fetches, statistics[PageStatType::FETCHES]);
+	record.storeInteger(f_mon_io_page_marks, statistics[PageStatType::MARKS]);
 	record.write();
 
 	// logical I/O statistics (global)
 	record.reset(rel_mon_rec_stats);
 	record.storeGlobalId(f_mon_rec_stat_id, id);
 	record.storeInteger(f_mon_rec_stat_group, stat_group);
-	record.storeInteger(f_mon_rec_seq_reads, statistics.getValue(RuntimeStatistics::RECORD_SEQ_READS));
-	record.storeInteger(f_mon_rec_idx_reads, statistics.getValue(RuntimeStatistics::RECORD_IDX_READS));
-	record.storeInteger(f_mon_rec_inserts, statistics.getValue(RuntimeStatistics::RECORD_INSERTS));
-	record.storeInteger(f_mon_rec_updates, statistics.getValue(RuntimeStatistics::RECORD_UPDATES));
-	record.storeInteger(f_mon_rec_deletes, statistics.getValue(RuntimeStatistics::RECORD_DELETES));
-	record.storeInteger(f_mon_rec_backouts, statistics.getValue(RuntimeStatistics::RECORD_BACKOUTS));
-	record.storeInteger(f_mon_rec_purges, statistics.getValue(RuntimeStatistics::RECORD_PURGES));
-	record.storeInteger(f_mon_rec_expunges, statistics.getValue(RuntimeStatistics::RECORD_EXPUNGES));
-	record.storeInteger(f_mon_rec_locks, statistics.getValue(RuntimeStatistics::RECORD_LOCKS));
-	record.storeInteger(f_mon_rec_waits, statistics.getValue(RuntimeStatistics::RECORD_WAITS));
-	record.storeInteger(f_mon_rec_conflicts, statistics.getValue(RuntimeStatistics::RECORD_CONFLICTS));
-	record.storeInteger(f_mon_rec_bkver_reads, statistics.getValue(RuntimeStatistics::RECORD_BACKVERSION_READS));
-	record.storeInteger(f_mon_rec_frg_reads, statistics.getValue(RuntimeStatistics::RECORD_FRAGMENT_READS));
-	record.storeInteger(f_mon_rec_rpt_reads, statistics.getValue(RuntimeStatistics::RECORD_RPT_READS));
-	record.storeInteger(f_mon_rec_imgc, statistics.getValue(RuntimeStatistics::RECORD_IMGC));
+	record.storeInteger(f_mon_rec_seq_reads, statistics[RecordStatType::SEQ_READS]);
+	record.storeInteger(f_mon_rec_idx_reads, statistics[RecordStatType::IDX_READS]);
+	record.storeInteger(f_mon_rec_inserts, statistics[RecordStatType::INSERTS]);
+	record.storeInteger(f_mon_rec_updates, statistics[RecordStatType::UPDATES]);
+	record.storeInteger(f_mon_rec_deletes, statistics[RecordStatType::DELETES]);
+	record.storeInteger(f_mon_rec_backouts, statistics[RecordStatType::BACKOUTS]);
+	record.storeInteger(f_mon_rec_purges, statistics[RecordStatType::PURGES]);
+	record.storeInteger(f_mon_rec_expunges, statistics[RecordStatType::EXPUNGES]);
+	record.storeInteger(f_mon_rec_locks, statistics[RecordStatType::LOCKS]);
+	record.storeInteger(f_mon_rec_waits, statistics[RecordStatType::WAITS]);
+	record.storeInteger(f_mon_rec_conflicts, statistics[RecordStatType::CONFLICTS]);
+	record.storeInteger(f_mon_rec_bkver_reads, statistics[RecordStatType::BACK_READS]);
+	record.storeInteger(f_mon_rec_frg_reads, statistics[RecordStatType::FRAGMENT_READS]);
+	record.storeInteger(f_mon_rec_rpt_reads, statistics[RecordStatType::RPT_READS]);
+	record.storeInteger(f_mon_rec_imgc, statistics[RecordStatType::IMGC]);
 	record.write();
 
 	// logical I/O statistics (table wise)
 
-	for (RuntimeStatistics::Iterator iter = statistics.begin(); iter != statistics.end(); ++iter)
+	for (auto iter(statistics.getRelCounters()); iter; ++iter)
 	{
 		const auto rec_stat_id = getGlobalId(fb_utils::genUniqueId());
 
@@ -1466,21 +1466,21 @@ void Monitoring::putStatistics(SnapshotData::DumpRecord& record, const RuntimeSt
 		record.reset(rel_mon_rec_stats);
 		record.storeGlobalId(f_mon_rec_stat_id, rec_stat_id);
 		record.storeInteger(f_mon_rec_stat_group, stat_group);
-		record.storeInteger(f_mon_rec_seq_reads, (*iter).getCounter(RuntimeStatistics::RECORD_SEQ_READS));
-		record.storeInteger(f_mon_rec_idx_reads, (*iter).getCounter(RuntimeStatistics::RECORD_IDX_READS));
-		record.storeInteger(f_mon_rec_inserts, (*iter).getCounter(RuntimeStatistics::RECORD_INSERTS));
-		record.storeInteger(f_mon_rec_updates, (*iter).getCounter(RuntimeStatistics::RECORD_UPDATES));
-		record.storeInteger(f_mon_rec_deletes, (*iter).getCounter(RuntimeStatistics::RECORD_DELETES));
-		record.storeInteger(f_mon_rec_backouts, (*iter).getCounter(RuntimeStatistics::RECORD_BACKOUTS));
-		record.storeInteger(f_mon_rec_purges, (*iter).getCounter(RuntimeStatistics::RECORD_PURGES));
-		record.storeInteger(f_mon_rec_expunges, (*iter).getCounter(RuntimeStatistics::RECORD_EXPUNGES));
-		record.storeInteger(f_mon_rec_locks, (*iter).getCounter(RuntimeStatistics::RECORD_LOCKS));
-		record.storeInteger(f_mon_rec_waits, (*iter).getCounter(RuntimeStatistics::RECORD_WAITS));
-		record.storeInteger(f_mon_rec_conflicts, (*iter).getCounter(RuntimeStatistics::RECORD_CONFLICTS));
-		record.storeInteger(f_mon_rec_bkver_reads, (*iter).getCounter(RuntimeStatistics::RECORD_BACKVERSION_READS));
-		record.storeInteger(f_mon_rec_frg_reads, (*iter).getCounter(RuntimeStatistics::RECORD_FRAGMENT_READS));
-		record.storeInteger(f_mon_rec_rpt_reads, (*iter).getCounter(RuntimeStatistics::RECORD_RPT_READS));
-		record.storeInteger(f_mon_rec_imgc, (*iter).getCounter(RuntimeStatistics::RECORD_IMGC));
+		record.storeInteger(f_mon_rec_seq_reads, (*iter)[RecordStatType::SEQ_READS]);
+		record.storeInteger(f_mon_rec_idx_reads, (*iter)[RecordStatType::IDX_READS]);
+		record.storeInteger(f_mon_rec_inserts, (*iter)[RecordStatType::INSERTS]);
+		record.storeInteger(f_mon_rec_updates, (*iter)[RecordStatType::UPDATES]);
+		record.storeInteger(f_mon_rec_deletes, (*iter)[RecordStatType::DELETES]);
+		record.storeInteger(f_mon_rec_backouts, (*iter)[RecordStatType::BACKOUTS]);
+		record.storeInteger(f_mon_rec_purges, (*iter)[RecordStatType::PURGES]);
+		record.storeInteger(f_mon_rec_expunges, (*iter)[RecordStatType::EXPUNGES]);
+		record.storeInteger(f_mon_rec_locks, (*iter)[RecordStatType::LOCKS]);
+		record.storeInteger(f_mon_rec_waits, (*iter)[RecordStatType::WAITS]);
+		record.storeInteger(f_mon_rec_conflicts, (*iter)[RecordStatType::CONFLICTS]);
+		record.storeInteger(f_mon_rec_bkver_reads, (*iter)[RecordStatType::BACK_READS]);
+		record.storeInteger(f_mon_rec_frg_reads, (*iter)[RecordStatType::FRAGMENT_READS]);
+		record.storeInteger(f_mon_rec_rpt_reads, (*iter)[RecordStatType::RPT_READS]);
+		record.storeInteger(f_mon_rec_imgc, (*iter)[RecordStatType::IMGC]);
 		record.write();
 	}
 }

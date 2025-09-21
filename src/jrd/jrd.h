@@ -612,25 +612,25 @@ public:
 		tdbb_flags |= TDBB_sweeper;
 	}
 
-	void bumpStats(const RuntimeStatistics::StatType index, SINT64 delta = 1)
+	void bumpStats(const PageStatType type, SINT64 delta = 1)
 	{
-		reqStat->bumpValue(index, delta);
-		traStat->bumpValue(index, delta);
-		attStat->bumpValue(index, delta);
+		reqStat->bumpValue(type, delta);
+		traStat->bumpValue(type, delta);
+		attStat->bumpValue(type, delta);
 
 		if ((tdbb_flags & TDBB_async) && !attachment)
-			dbbStat->bumpValue(index, delta);
+			dbbStat->bumpValue(type, delta);
 
 		// else dbbStat is adjusted from attStat, see Attachment::mergeAsyncStats()
 	}
 
-	void bumpRelStats(const RuntimeStatistics::StatType index, SLONG relation_id, SINT64 delta = 1)
+	void bumpStats(const RecordStatType type, SLONG relation_id, SINT64 delta = 1)
 	{
 		// We don't bump counters for dbbStat here, they're merged from attStats on demand
 
-		reqStat->bumpValue(index, delta);
-		traStat->bumpValue(index, delta);
-		attStat->bumpValue(index, delta);
+		reqStat->bumpValue(type, delta);
+		traStat->bumpValue(type, delta);
+		attStat->bumpValue(type, delta);
 
 		const RuntimeStatistics* const dummyStat = RuntimeStatistics::getDummy();
 
@@ -643,13 +643,13 @@ public:
 		// dummy object concurrently.
 
 		if (reqStat != dummyStat)
-			reqStat->bumpRelValue(index, relation_id, delta);
+			reqStat->bumpValue(type, relation_id, delta);
 
 		if (traStat != dummyStat)
-			traStat->bumpRelValue(index, relation_id, delta);
+			traStat->bumpValue(type, relation_id, delta);
 
 		if (attStat != dummyStat)
-			attStat->bumpRelValue(index, relation_id, delta);
+			attStat->bumpValue(type, relation_id, delta);
 	}
 
 	ISC_STATUS getCancelState(ISC_STATUS* secondary = NULL);

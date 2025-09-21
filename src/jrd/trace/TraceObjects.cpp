@@ -655,7 +655,7 @@ TraceRuntimeStats::TraceRuntimeStats(Attachment* att, RuntimeStatistics* baselin
 	}
 }
 
-SINT64 TraceRuntimeStats::m_dummy_counts[RuntimeStatistics::TOTAL_ITEMS] = {0};
+SINT64 TraceRuntimeStats::m_dummy_counts[RuntimeStatistics::GLOBAL_ITEMS] = {0};
 
 
 /// TraceStatusVectorImpl

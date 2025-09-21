@@ -674,7 +674,7 @@ private:
 	Firebird::PerformanceInfo m_info;
 	TraceCountsArray m_counts;
 	Firebird::ObjectsArray<Firebird::string> m_tempNames;
-	static SINT64 m_dummy_counts[RuntimeStatistics::TOTAL_ITEMS];	// Zero-initialized array with zero counts
+	static SINT64 m_dummy_counts[RuntimeStatistics::GLOBAL_ITEMS];	// Zero-initialized array with zero counts
 };
 
 

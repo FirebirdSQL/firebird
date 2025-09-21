@@ -4295,17 +4295,10 @@ void TraceSweepEvent::endSweepRelation(jrd_rel* relation)
 	jrd_tra* tran = m_tdbb->getTransaction();
 
 	// don't report empty relation
-	if (m_base_stats.getValue(RuntimeStatistics::RECORD_SEQ_READS) ==
-		tran->tra_stats.getValue(RuntimeStatistics::RECORD_SEQ_READS) &&
-
-		m_base_stats.getValue(RuntimeStatistics::RECORD_BACKOUTS) ==
-		tran->tra_stats.getValue(RuntimeStatistics::RECORD_BACKOUTS) &&
-
-		m_base_stats.getValue(RuntimeStatistics::RECORD_PURGES) ==
-		tran->tra_stats.getValue(RuntimeStatistics::RECORD_PURGES) &&
-
-		m_base_stats.getValue(RuntimeStatistics::RECORD_EXPUNGES) ==
-		tran->tra_stats.getValue(RuntimeStatistics::RECORD_EXPUNGES) )
+	if (m_base_stats[RecordStatType::SEQ_READS] == tran->tra_stats[RecordStatType::SEQ_READS] &&
+		m_base_stats[RecordStatType::BACKOUTS] == tran->tra_stats[RecordStatType::BACKOUTS] &&
+		m_base_stats[RecordStatType::PURGES] == tran->tra_stats[RecordStatType::PURGES] &&
+		m_base_stats[RecordStatType::EXPUNGES] == tran->tra_stats[RecordStatType::EXPUNGES] )
 	{
 		return;
 	}

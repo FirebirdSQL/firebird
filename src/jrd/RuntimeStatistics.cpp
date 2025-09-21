@@ -33,47 +33,58 @@ namespace Jrd {
 
 GlobalPtr<RuntimeStatistics> RuntimeStatistics::dummy;
 
-void RuntimeStatistics::findAndBumpRelValue(const StatType index, SLONG relation_id, SINT64 delta)
+void RuntimeStatistics::adjustRelStats(const RuntimeStatistics& baseStats, const RuntimeStatistics& newStats)
 {
-	if (rel_counts.find(relation_id, rel_last_pos))
-		rel_counts[rel_last_pos].bumpCounter(index, delta);
-	else
-	{
-		RelationCounts counts(relation_id);
-		counts.bumpCounter(index, delta);
-		rel_counts.insert(rel_last_pos, counts);
-	}
-}
-
-void RuntimeStatistics::addRelCounts(const RelCounters& other, bool add)
-{
-	if (other.isEmpty())
+	if (baseStats.relChgNumber == newStats.relChgNumber)
 		return;
 
-	RelCounters::const_iterator src(other.begin());
-	const RelCounters::const_iterator end(other.end());
+	relChgNumber++;
 
-	FB_SIZE_T pos;
-	rel_counts.find(src->getRelationId(), pos);
-	for (; src != end; ++src)
+	auto locate = [this](SLONG relId) -> FB_SIZE_T
 	{
-		const FB_SIZE_T cnt = rel_counts.getCount();
+		FB_SIZE_T pos;
+		if (!rel_counts.find(relId, pos))
+			rel_counts.insert(pos, RelationCounts(relId));
+		return pos;
+	};
 
-		while (pos < cnt && rel_counts[pos].getRelationId() < src->getRelationId())
-			pos++;
+	auto baseIter = baseStats.rel_counts.begin(), newIter = newStats.rel_counts.begin();
+	const auto baseEnd = baseStats.rel_counts.end(), newEnd = newStats.rel_counts.end();
 
-		if (pos >= cnt || rel_counts[pos].getRelationId() > src->getRelationId())
+	// The loop below assumes that newStats cannot miss relations existing in baseStats,
+	// this must be always the case as long as newStats is an incremented version of baseStats
+
+	while (newIter != newEnd || baseIter != baseEnd)
+	{
+		if (baseIter == baseEnd)
 		{
-			RelationCounts counts(src->getRelationId());
-			rel_counts.insert(pos, counts);
+			// Relation exists in newStats but missing in baseStats
+			const auto newRelId = newIter->getRelationId();
+			rel_counts[locate(newRelId)] += *newIter++;
 		}
+		else if (newIter != newEnd)
+		{
+			const auto baseRelId = baseIter->getRelationId();
+			const auto newRelId = newIter->getRelationId();
 
-		fb_assert(pos >= 0 && pos < rel_counts.getCount());
-
-		if (add)
-			rel_counts[pos] += *src;
+			if (newRelId == baseRelId)
+			{
+				// Relation exists in both newStats and baseStats
+				fb_assert(baseRelId == newRelId);
+				const auto pos = locate(baseRelId);
+				rel_counts[pos] -= *baseIter++;
+				rel_counts[pos] += *newIter++;
+			}
+			else if (newRelId < baseRelId)
+			{
+				// Relation exists in newStats but missing in baseStats
+				rel_counts[locate(newRelId)] += *newIter++;
+			}
+			else
+				fb_assert(false); // should never happen
+		}
 		else
-			rel_counts[pos] -= *src;
+			fb_assert(false); // should never happen
 	}
 }
 
@@ -86,7 +97,7 @@ PerformanceInfo* RuntimeStatistics::computeDifference(Attachment* att,
 	// NOTE: we do not initialize dest.pin_time. This must be done by the caller
 
 	// Calculate database-level statistics
-	for (int i = 0; i < TOTAL_ITEMS; i++)
+	for (size_t i = 0; i < GLOBAL_ITEMS; i++)
 		values[i] = new_stat.values[i] - values[i];
 
 	dest.pin_counters = values;
@@ -99,16 +110,14 @@ PerformanceInfo* RuntimeStatistics::computeDifference(Attachment* att,
 	RelCounters::iterator base_cnts = rel_counts.begin();
 	bool base_found = (base_cnts != rel_counts.end());
 
-	RelCounters::const_iterator new_cnts = new_stat.rel_counts.begin();
-	const RelCounters::const_iterator end = new_stat.rel_counts.end();
-	for (; new_cnts != end; ++new_cnts)
+	for (const auto& new_cnts : new_stat.rel_counts)
 	{
-		const SLONG rel_id = new_cnts->getRelationId();
+		const SLONG rel_id = new_cnts.getRelationId();
 
 		if (base_found && base_cnts->getRelationId() == rel_id)
 		{
 			// Point TraceCounts to counts array from baseline object
-			if (base_cnts->setToDiff(*new_cnts))
+			if (base_cnts->setToDiff(new_cnts))
 			{
 				jrd_rel* const relation =
 					rel_id < static_cast<SLONG>(att->att_relations->count()) ?
@@ -142,7 +151,7 @@ PerformanceInfo* RuntimeStatistics::computeDifference(Attachment* att,
 			// Point TraceCounts to counts array from object with updated counters
 			TraceCounts traceCounts;
 			traceCounts.trc_relation_id = rel_id;
-			traceCounts.trc_counters = new_cnts->getCounterVector();
+			traceCounts.trc_counters = new_cnts.getCounterVector();
 
 			if (relation)
 			{
@@ -163,14 +172,42 @@ PerformanceInfo* RuntimeStatistics::computeDifference(Attachment* att,
 	return &dest;
 }
 
-RuntimeStatistics::Accumulator::Accumulator(thread_db* tdbb, const jrd_rel* relation, StatType type)
-	: m_tdbb(tdbb), m_type(type), m_id(relation->rel_id), m_counter(0)
+void RuntimeStatistics::adjust(const RuntimeStatistics& baseStats, const RuntimeStatistics& newStats)
+{
+	if (baseStats.allChgNumber == newStats.allChgNumber)
+		return;
+
+	allChgNumber++;
+	for (size_t i = 0; i < GLOBAL_ITEMS; ++i)
+		values[i] += newStats.values[i] - baseStats.values[i];
+
+	adjustRelStats(baseStats, newStats);
+}
+
+void RuntimeStatistics::adjustPageStats(RuntimeStatistics& baseStats, const RuntimeStatistics& newStats)
+{
+	if (baseStats.allChgNumber == newStats.allChgNumber)
+		return;
+
+	allChgNumber++;
+	for (size_t i = 0; i < PAGE_TOTAL_ITEMS; ++i)
+	{
+		const SINT64 delta = newStats.values[i] - baseStats.values[i];
+
+		values[i] += delta;
+		baseStats.values[i] += delta;
+	}
+}
+
+RuntimeStatistics::Accumulator::Accumulator(thread_db* tdbb, const jrd_rel* relation,
+											const RecordStatType type)
+	: m_tdbb(tdbb), m_type(type), m_id(relation->rel_id)
 {}
 
 RuntimeStatistics::Accumulator::~Accumulator()
 {
 	if (m_counter)
-		m_tdbb->bumpRelStats(m_type, m_id, m_counter);
+		m_tdbb->bumpStats(m_type, m_id, m_counter);
 }
 
 } // namespace

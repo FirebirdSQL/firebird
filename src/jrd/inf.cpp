@@ -125,20 +125,19 @@ namespace
 
 	typedef HalfStaticArray<UCHAR, BUFFER_SMALL> CountsBuffer;
 
-	ULONG getCounts(thread_db* tdbb, RuntimeStatistics::StatType type, CountsBuffer& buffer)
+	ULONG getCounts(thread_db* tdbb, RecordStatType type, CountsBuffer& buffer)
 	{
-		const Attachment* const attachment = tdbb->getAttachment();
-		const RuntimeStatistics& stats = attachment->att_stats;
+		const auto attachment = tdbb->getAttachment();
 
 		UCHAR num_buffer[BUFFER_TINY];
 
 		buffer.clear();
 		FB_SIZE_T buffer_length = 0;
 
-		for (RuntimeStatistics::Iterator iter = stats.begin(); iter != stats.end(); ++iter)
+		for (auto iter(attachment->att_stats.getRelCounters()); iter; ++iter)
 		{
 			const USHORT relation_id = (*iter).getRelationId();
-			const SINT64 n = (*iter).getCounter(type);
+			const SINT64 n = (*iter)[type];
 
 			if (n)
 			{
@@ -313,19 +312,19 @@ void INF_database_info(thread_db* tdbb,
 			break;
 
 		case isc_info_reads:
-			length = INF_convert(dbb->dbb_stats.getValue(RuntimeStatistics::PAGE_READS), buffer);
+			length = INF_convert(dbb->dbb_stats[PageStatType::READS], buffer);
 			break;
 
 		case isc_info_writes:
-			length = INF_convert(dbb->dbb_stats.getValue(RuntimeStatistics::PAGE_WRITES), buffer);
+			length = INF_convert(dbb->dbb_stats[PageStatType::WRITES], buffer);
 			break;
 
 		case isc_info_fetches:
-			length = INF_convert(dbb->dbb_stats.getValue(RuntimeStatistics::PAGE_FETCHES), buffer);
+			length = INF_convert(dbb->dbb_stats[PageStatType::FETCHES], buffer);
 			break;
 
 		case isc_info_marks:
-			length = INF_convert(dbb->dbb_stats.getValue(RuntimeStatistics::PAGE_MARKS), buffer);
+			length = INF_convert(dbb->dbb_stats[PageStatType::MARKS], buffer);
 			break;
 
 		case isc_info_page_size:
@@ -407,42 +406,42 @@ void INF_database_info(thread_db* tdbb,
 			break;
 
 		case isc_info_read_seq_count:
-			length = getCounts(tdbb, RuntimeStatistics::RECORD_SEQ_READS, counts_buffer);
+			length = getCounts(tdbb, RecordStatType::SEQ_READS, counts_buffer);
 			buffer = counts_buffer.begin();
 			break;
 
 		case isc_info_read_idx_count:
-			length = getCounts(tdbb, RuntimeStatistics::RECORD_IDX_READS, counts_buffer);
+			length = getCounts(tdbb, RecordStatType::IDX_READS, counts_buffer);
 			buffer = counts_buffer.begin();
 			break;
 
 		case isc_info_update_count:
-			length = getCounts(tdbb, RuntimeStatistics::RECORD_UPDATES, counts_buffer);
+			length = getCounts(tdbb, RecordStatType::UPDATES, counts_buffer);
 			buffer = counts_buffer.begin();
 			break;
 
 		case isc_info_insert_count:
-			length = getCounts(tdbb, RuntimeStatistics::RECORD_INSERTS, counts_buffer);
+			length = getCounts(tdbb, RecordStatType::INSERTS, counts_buffer);
 			buffer = counts_buffer.begin();
 			break;
 
 		case isc_info_delete_count:
-			length = getCounts(tdbb, RuntimeStatistics::RECORD_DELETES, counts_buffer);
+			length = getCounts(tdbb, RecordStatType::DELETES, counts_buffer);
 			buffer = counts_buffer.begin();
 			break;
 
 		case isc_info_backout_count:
-			length = getCounts(tdbb, RuntimeStatistics::RECORD_BACKOUTS, counts_buffer);
+			length = getCounts(tdbb, RecordStatType::BACKOUTS, counts_buffer);
 			buffer = counts_buffer.begin();
 			break;
 
 		case isc_info_purge_count:
-			length = getCounts(tdbb, RuntimeStatistics::RECORD_PURGES, counts_buffer);
+			length = getCounts(tdbb, RecordStatType::PURGES, counts_buffer);
 			buffer = counts_buffer.begin();
 			break;
 
 		case isc_info_expunge_count:
-			length = getCounts(tdbb, RuntimeStatistics::RECORD_EXPUNGES, counts_buffer);
+			length = getCounts(tdbb, RecordStatType::EXPUNGES, counts_buffer);
 			buffer = counts_buffer.begin();
 			break;
 
