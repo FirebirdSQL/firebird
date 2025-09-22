@@ -2533,8 +2533,8 @@ void CreateAlterFunctionNode::storeArgument(thread_db* tdbb, DsqlCompilerScratch
 		strcpy(ARG.RDB$SCHEMA_NAME, name.schema.c_str());
 		strcpy(ARG.RDB$FUNCTION_NAME, name.object.c_str());
 
-		ARG.RDB$ARGUMENT_NAME.NULL = (SSHORT) parameter->name.isEmpty();
-		strcpy(ARG.RDB$ARGUMENT_NAME, parameter->name.c_str());
+		ARG.RDB$ARGUMENT_NAME.NULL = (SSHORT) parameter->name.isEmpty() && pos != 0;
+		strcpy(ARG.RDB$ARGUMENT_NAME, pos == 0 ? string("return value").c_str() : parameter->name.c_str());
 
 		ARG.RDB$PACKAGE_NAME.NULL = (SSHORT) name.package.isEmpty();
 		strcpy(ARG.RDB$PACKAGE_NAME, name.package.c_str());
