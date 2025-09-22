@@ -45,6 +45,7 @@
 #include "../burp/burp.h"
 #include "../jrd/ods.h"
 #include "../jrd/align.h"
+#include "../jrd/intl.h"
 #include "../common/gdsassert.h"
 #include "../jrd/constants.h"
 #include "../common/stuff.h"
@@ -286,6 +287,63 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 			tdgbl->gbl_sw_par_workers = 1;
 	}
 
+	// decide what type of database we've got
+
+	detectRuntimeODS();
+	if (tdgbl->runtimeODS < DB_VERSION_OLDEST_SUPPORTED)
+	{
+		BURP_error(348, true, SafeArg() << tdgbl->runtimeODS);
+		// msg 348 database format @1 is too old to backup
+	}
+	else if (tdgbl->runtimeODS >= DB_VERSION_DDL13_1)
+	{
+		static constexpr UCHAR ODS_INFO[] = {
+			isc_info_ods_version,
+			isc_info_end
+		};
+		UCHAR infoBuffer[16];
+		USHORT odsMajorVersion;
+
+		FbLocalStatus checkStatus;
+
+		tdgbl->db_handle->getInfo(&checkStatus, sizeof(ODS_INFO), ODS_INFO, sizeof(infoBuffer), infoBuffer);
+
+		if (checkStatus.isSuccess() && infoBuffer[0] == isc_info_ods_version)
+		{
+			USHORT len = isc_portable_integer(&infoBuffer[1], 2);
+			odsMajorVersion = isc_portable_integer(&infoBuffer[3], len);
+
+			if (odsMajorVersion > ODS_VERSION13)
+				tdgbl->runtimeODS = DB_VERSION_DDL14;
+		}
+		else
+			fb_assert(false);
+	}
+
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
+	{
+		const char* getSchemasSql =
+			R""(SELECT LIST('"' || REPLACE(TRIM(RDB$SCHEMA_NAME), '"', '""') || '"') FROM RDB$SCHEMAS)"";
+		BurpSql getSchemasQuery(tdgbl, getSchemasSql);
+
+		FB_MESSAGE(GetSchemas, ThrowWrapper,
+			(FB_INTL_VARCHAR(4096 * METADATA_BYTES_PER_CHAR, CS_METADATA), schemaList)
+		) getSchemas(&tdgbl->throwStatus, MasterInterfacePtr());
+
+		getSchemasQuery.singleSelect(tdgbl->tr_handle, &getSchemas);
+
+		fb_assert(!getSchemas->schemaListNull);
+
+		if (!getSchemas->schemaListNull)
+		{
+			const string schemaList(getSchemas->schemaList.str, getSchemas->schemaList.length);
+			tdgbl->setSearchPath = "SET SEARCH_PATH TO " + schemaList;
+
+			BurpSql searchPathQuery(tdgbl, tdgbl->setSearchPath.c_str());
+			searchPathQuery.execute(tdgbl->tr_handle);
+		}
+	}
+
 	// detect if MAKE_DBKEY is supported and decide kind of read relation query
 	if (tdgbl->gbl_sw_par_workers > 1)
 	{
@@ -304,15 +362,6 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 	{
 		BURP_verbose(410, SafeArg() << tdgbl->gbl_sw_par_workers);
 		// msg 410 use up to @1 parallel workers
-	}
-
-	// decide what type of database we've got
-
-	detectRuntimeODS();
-	if (tdgbl->runtimeODS < DB_VERSION_OLDEST_SUPPORTED)
-	{
-		BURP_error(348, true, SafeArg() << tdgbl->runtimeODS);
-		// msg 348 database format @1 is too old to backup
 	}
 
 	// Write burp record first with other valuable information

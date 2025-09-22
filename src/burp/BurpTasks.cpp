@@ -531,6 +531,11 @@ void BackupRelationTask::initItem(BurpGlobals* tdgbl, Item& item)
 
 			if (status->getState() & IStatus::STATE_ERRORS)
 				BURP_abort(&status);
+
+			item.m_att->execute(&status, item.m_tra, 0, m_masterGbl->setSearchPath.c_str(),
+				SQL_DIALECT_CURRENT, nullptr, nullptr, nullptr, nullptr);
+
+			fb_assert(status->isSuccess());
 		}
 
 		tdgbl->db_handle = item.m_att;
