@@ -320,6 +320,7 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 			fb_assert(false);
 	}
 
+	// get schema list for v6 databases
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
 	{
 		const char* getSchemasSql =
