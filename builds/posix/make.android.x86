@@ -6,13 +6,13 @@ endif
 
 NDK_TOOLCHAIN ?= $(NDK)/toolchains/llvm/prebuilt/linux-x86_64
 
-CROSS_PREFIX24:=$(NDK_TOOLCHAIN)/bin/i686-linux-android24-
+CROSS_PREFIX29:=$(NDK_TOOLCHAIN)/bin/i686-linux-android29-
 CROSS_PREFIX:=$(NDK_TOOLCHAIN)/bin/llvm-
 
 CROSS_FLAGS:=-I$(ROOT)/gen/cross
 
-CXX:=$(CROSS_PREFIX24)clang++
-CC:=$(CROSS_PREFIX24)clang
+CXX:=$(CROSS_PREFIX29)clang++
+CC:=$(CROSS_PREFIX29)clang
 AR:=$(CROSS_PREFIX)ar
 AS:=$(CROSS_PREFIX)as
 LD:=$(CROSS_PREFIX)ld
@@ -46,7 +46,7 @@ DEV_FLAGS=$(COMMON_FLAGS) $(WARN_FLAGS)
 
 CROSS_CONFIG=android.x86
 
-LDFLAGS += -static-libstdc++
+LDFLAGS += -static-libstdc++ -Wl,-z,max-page-size=16384
 DroidLibs := -lm -ldl -llog $(DECLIB) $(I128LIB)
 UDR_SUPPORT_LIBS :=
 

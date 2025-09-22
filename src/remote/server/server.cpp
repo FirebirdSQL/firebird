@@ -6064,7 +6064,8 @@ bool rem_port::sendInlineBlob(PACKET* sendL, Rtr* rtr, SQUAD blobId, ULONG maxSi
 
 	ServAttachment att = port_context->rdb_iface;
 
-	ServBlob blob(att->openBlob(&status, rtr->rtr_iface, &blobId, 0, nullptr));
+	// openBlob() returns an IBlob with a reference count set to 1, no need to increment it.
+	ServBlob blob(REF_NO_INCR, att->openBlob(&status, rtr->rtr_iface, &blobId, 0, nullptr));
 	if (status.getState() & IStatus::STATE_ERRORS)
 		return false;
 
@@ -6151,6 +6152,7 @@ bool rem_port::sendInlineBlob(PACKET* sendL, Rtr* rtr, SQUAD blobId, ULONG maxSi
 	}
 
 	blob->close(&status);
+	blob.clear();
 
 	p_blob->p_blob_info.cstr_address = info;
 	p_blob->p_blob_data = &buff;

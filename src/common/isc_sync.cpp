@@ -1428,7 +1428,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 				if (!bugFlag)
 				{
 #endif
-					LOG_PTHREAD_ERROR(pthread_mutexattr_setrobust_np(&mattr, PTHREAD_MUTEX_ROBUST_NP));
+					LOG_PTHREAD_ERROR(pthread_mutexattr_setrobust(&mattr, PTHREAD_MUTEX_ROBUST));
 #ifdef BUGGY_LINUX_MUTEX
 				}
 #endif
@@ -2753,7 +2753,7 @@ void SharedMemoryBase::mutexLock()
 	{
 		// We always perform check for dead process
 		// Therefore may safely mark mutex as recovered
-		LOG_PTHREAD_ERROR(pthread_mutex_consistent_np(sh_mem_mutex->mtx_mutex));
+		LOG_PTHREAD_ERROR(pthread_mutex_consistent(sh_mem_mutex->mtx_mutex));
 		state = 0;
 	}
 #endif
@@ -2781,7 +2781,7 @@ bool SharedMemoryBase::mutexLockCond()
 	{
 		// We always perform check for dead process
 		// Therefore may safely mark mutex as recovered
-		LOG_PTHREAD_ERROR(pthread_mutex_consistent_np(sh_mem_mutex->mtx_mutex));
+		LOG_PTHREAD_ERROR(pthread_mutex_consistent(sh_mem_mutex->mtx_mutex));
 		state = 0;
 	}
 #endif

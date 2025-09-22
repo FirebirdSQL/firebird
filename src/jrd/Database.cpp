@@ -613,12 +613,39 @@ namespace Jrd
 	{
 		MutexLockGuard guard(g_mutex, FB_FUNCTION);
 
-		Database::GlobalObjectHolder::DbId* entry = g_hashTable->lookup(id);
+		// Get entry with incrementing ref counter, so if someone is currently destroying it, the object itself
+		// will remain alive.
+		RefPtr<Database::GlobalObjectHolder::DbId> entry(g_hashTable->lookup(id));
+		if (entry)
+		{
+			auto& shutdownMutex = entry->shutdownMutex;
+			// Check if someone else currently destroying GlobalObject.
+			if (shutdownMutex.tryEnter(FB_FUNCTION))
+			{
+				// No one is destroying GlobalObject, continue init routine.
+				shutdownMutex.leave();
+			}
+			else
+			{
+				// Someone is currently destroying GlobalObject, wait until he finish it to eliminate potential
+				// race conditions.
+				{
+					MutexUnlockGuard unlockGuard(g_mutex, FB_FUNCTION);
+
+					MutexLockGuard guard(shutdownMutex, FB_FUNCTION);
+				}
+				// Now we are the one who owned DbId object.
+				// It also was removed from hash table, so simply delete it and recreate it next.
+				fb_assert(entry->holder == nullptr);
+				entry = nullptr;
+			}
+		}
 		if (!entry)
 		{
 			const auto holder = FB_NEW Database::GlobalObjectHolder(id, filename, config);
-			entry = FB_NEW Database::GlobalObjectHolder::DbId(id, holder);
+			entry = makeRef(FB_NEW Database::GlobalObjectHolder::DbId(id, holder));
 			g_hashTable->add(entry);
+			entry->addRef();
 		}
 
 		entry->holder->addRef();
@@ -628,9 +655,18 @@ namespace Jrd
 	Database::GlobalObjectHolder::~GlobalObjectHolder()
 	{
 		// dtor is executed under g_mutex protection
-		Database::GlobalObjectHolder::DbId* entry = g_hashTable->lookup(m_id);
-		if (!g_hashTable->remove(m_id))
-			fb_assert(false);
+
+		// Stole the object from the hash table without incrementing ref counter, so we will be the one who will delete the object
+		// at the end of this function.
+		RefPtr<Database::GlobalObjectHolder::DbId> entry(REF_NO_INCR, g_hashTable->lookup(m_id));
+		fb_assert(entry);
+		fb_assert(entry->holder == this);
+		// We need to unlock the global mutex to safely shutdown some managers, so lock shutdown mutex to make sure that
+		// other threads will wait until we done our shutdown routine.
+		// This is done to eliminate potential race conditions involving global objects, such as shared memory.
+		//! Be careful with order of mutex locking: first - `g_mutex`, second - `shutdownMutex`, but after `MutexUnlockGuard`
+		//! this order will be reversed, so potentially a deadlock situation may occur here.
+		MutexLockGuard guard(entry->shutdownMutex, FB_FUNCTION);
 
 		{ // scope
 			// here we cleanup what should not be globally protected
@@ -643,7 +679,10 @@ namespace Jrd
 		m_eventMgr = nullptr;
 		m_replMgr = nullptr;
 
-		delete entry;
+		if (!g_hashTable->remove(m_id))
+			fb_assert(false);
+
+		entry->holder = nullptr;
 
 		fb_assert(m_tempCacheUsage == 0);
 	}

@@ -2180,62 +2180,94 @@ unsigned Optimizer::distributeEqualities(BoolExprNodeStack& orgStack, unsigned b
 	{
 		const auto boolean = iter.object();
 		const auto cmpNode = nodeAs<ComparativeBoolNode>(boolean);
-		ValueExprNode* node1;
-		ValueExprNode* node2;
+		const auto listNode = nodeAs<InListBoolNode>(boolean);
 
-		if (cmpNode &&
-			(cmpNode->blrOp == blr_eql ||
-			 cmpNode->blrOp == blr_gtr || cmpNode->blrOp == blr_geq ||
-			 cmpNode->blrOp == blr_leq || cmpNode->blrOp == blr_lss ||
-			 cmpNode->blrOp == blr_matching || cmpNode->blrOp == blr_containing ||
-			 cmpNode->blrOp == blr_like || cmpNode->blrOp == blr_similar))
-		{
-			node1 = cmpNode->arg1;
-			node2 = cmpNode->arg2;
-		}
-		else
+		if (!cmpNode && !listNode)
 			continue;
 
+		ValueExprNode* fieldNode;
 		bool reverse = false;
 
-		if (!nodeIs<FieldNode>(node1))
+		if (cmpNode)
 		{
-			ValueExprNode* swap_node = node1;
-			node1 = node2;
-			node2 = swap_node;
-			reverse = true;
+			if (cmpNode->blrOp != blr_eql &&
+				cmpNode->blrOp != blr_gtr && cmpNode->blrOp != blr_geq &&
+				cmpNode->blrOp != blr_leq && cmpNode->blrOp != blr_lss &&
+				cmpNode->blrOp != blr_matching && cmpNode->blrOp != blr_containing &&
+				cmpNode->blrOp != blr_like && cmpNode->blrOp != blr_similar)
+			{
+				continue;
+			}
+
+			fieldNode = cmpNode->arg1;
+			ValueExprNode* otherNode = cmpNode->arg2;
+
+			if (!nodeIs<FieldNode>(fieldNode))
+			{
+				std::swap(fieldNode, otherNode);
+				reverse = true;
+			}
+
+			if (!nodeIs<FieldNode>(fieldNode))
+				continue;
+
+			if (!nodeIs<LiteralNode>(otherNode) &&
+				!nodeIs<ParameterNode>(otherNode) &&
+				!nodeIs<VariableNode>(otherNode))
+			{
+				continue;
+			}
+		}
+		else // listNode != nullptr
+		{
+			fieldNode = listNode->arg;
+
+			if (!nodeIs<FieldNode>(fieldNode))
+				continue;
+
+			bool accept = true;
+
+			for (const auto item : listNode->list->items)
+			{
+				if (!nodeIs<LiteralNode>(item) &&
+					!nodeIs<ParameterNode>(item) &&
+					!nodeIs<VariableNode>(item))
+				{
+					accept = false;
+					break;
+				}
+			}
+
+			if (!accept)
+				continue;
 		}
 
-		if (!nodeIs<FieldNode>(node1))
-			continue;
-
-		if (!nodeIs<LiteralNode>(node2) && !nodeIs<ParameterNode>(node2) && !nodeIs<VariableNode>(node2))
-			continue;
+		fb_assert(nodeIs<FieldNode>(fieldNode));
 
 		for (eq_class = classes.begin(); eq_class != classes.end(); ++eq_class)
 		{
-			if (searchStack(node1, *eq_class))
+			if (searchStack(fieldNode, *eq_class))
 			{
 				for (ValueExprNodeStack::iterator temp(*eq_class); temp.hasData(); ++temp)
 				{
-					if (!fieldEqual(node1, temp.object()) && count < MAX_CONJUNCTS_TO_INJECT)
+					if (!fieldEqual(fieldNode, temp.object()) && count < MAX_CONJUNCTS_TO_INJECT)
 					{
-						ValueExprNode* arg1;
-						ValueExprNode* arg2;
-
-						if (reverse)
-						{
-							arg1 = cmpNode->arg1;
-							arg2 = temp.object();
-						}
-						else
-						{
-							arg1 = temp.object();
-							arg2 = cmpNode->arg2;
-						}
-
 						// From the conjuncts X(A,B) and A=C, infer the conjunct X(C,B)
-						AutoPtr<BoolExprNode> newNode(makeInferenceNode(boolean, arg1, arg2));
+
+						AutoPtr<BoolExprNode> newNode;
+
+						if (cmpNode)
+						{
+							newNode = reverse ?
+								makeInferenceNode(boolean, cmpNode->arg1, temp.object()) :
+								makeInferenceNode(boolean, temp.object(), cmpNode->arg2);
+						}
+						else // listNode != nullptr
+						{
+							newNode = makeInferenceNode(boolean, temp.object(), listNode->list);
+						}
+
+						fb_assert(newNode);
 
 						if (augmentStack(newNode, orgStack))
 						{
@@ -3233,6 +3265,37 @@ BoolExprNode* Optimizer::makeInferenceNode(BoolExprNode* boolean,
 		newCmpNode->arg3 = CMP_clone_node_opt(tdbb, csb, cmpNode->arg3);
 
 	return newCmpNode;
+}
+
+
+BoolExprNode* Optimizer::makeInferenceNode(BoolExprNode* boolean,
+										   ValueExprNode* arg,
+										   ValueListNode* list)
+{
+	const auto listNode = nodeAs<InListBoolNode>(boolean);
+	fb_assert(listNode);	// see our caller
+
+	// Clone the input predicate
+	const auto newListNode =
+		FB_NEW_POOL(getPool()) InListBoolNode(getPool());
+
+	// But substitute new values for some of the predicate arguments
+	SubExprNodeCopier copier(csb->csb_pool, csb);
+	newListNode->arg = copier.copy(tdbb, arg);
+	newListNode->list = copier.copy(tdbb, list);
+
+	// We may safely copy invariantness flag because:
+	// (1) we only distribute field equalities
+	// (2) invariantness of second argument of STARTING WITH or LIKE is solely
+	//    determined by its dependency on any of the fields
+	// If provisions above change the line below will have to be modified.
+	newListNode->nodFlags = listNode->nodFlags;
+
+	// We cannot safely share the impure area because the original/new data types
+	// for the substituted field could be different, thus affecting the lookup table.
+	// Thus perform the second pass to properly set up the boolean for execution.
+
+	return newListNode->pass2(tdbb, csb);
 }
 
 

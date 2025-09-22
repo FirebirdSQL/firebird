@@ -171,7 +171,9 @@ static const SCHAR* Object_types[] =
 	"Generator",
 	"User defined function",
 	"Blob filter",	// impossible to have explicit dependencies on it, but...
-	"Collation"
+	"Collation",
+	"Package",
+	"Package body"
 };
 
 

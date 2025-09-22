@@ -228,13 +228,17 @@ if "%FB2_SNAPSHOT%"=="1" (
 :: these version numbers. %MSVC_RUNTIME_FILE_VERSION% should represent 140.
 :: %MSVC_RUNTIME_LIBRARY_VERSION% is based on the Visual Studio version used.
 :: These variables are set in setenvvar.bat.
-@for %%f in ( msvcp%MSVC_RUNTIME_FILE_VERSION%.dll vcruntime%MSVC_RUNTIME_FILE_VERSION%.dll  ) do (
+:: Note 2: 32-bit vcruntime140_1.dll does not exist, hence the test for file existence
+@for %%f in ( msvcp%MSVC_RUNTIME_FILE_VERSION%.dll msvcp%MSVC_RUNTIME_FILE_VERSION%_1.dll vcruntime%MSVC_RUNTIME_FILE_VERSION%.dll vcruntime%MSVC_RUNTIME_FILE_VERSION%_1.dll ) do (
+  if exist "%VCToolsRedistDir%\%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_LIBRARY_VERSION%.CRT\%%f" (
     echo   Copying "%VCToolsRedistDir%\%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_LIBRARY_VERSION%.CRT\%%f"
     copy  "%VCToolsRedistDir%\%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_LIBRARY_VERSION%.CRT\%%f" %FB_OUTPUT_DIR%\ >nul
     if ERRORLEVEL 1 (
-    call :ERROR Copying "%VCToolsRedistDir%\%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_LIBRARY_VERSION%.CRT\%%f" failed with error %ERRLEV%  & goto :EOF
+      call :ERROR Copying "%VCToolsRedistDir%\%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_LIBRARY_VERSION%.CRT\%%f" failed with error %ERRLEV%  & goto :EOF
     )
+  )
 )
+
 
 @if "%VSCMD_ARG_TGT_ARCH%"=="x86" (
   echo     Generating fbclient_bor.lib
@@ -245,6 +249,7 @@ if "%FB2_SNAPSHOT%"=="1" (
     call :WARNING implib not found
   )
 )
+
 
 @if "%FBBUILD_SHIP_PDB%"=="ship_pdb" (
   echo   Copying pdb files...

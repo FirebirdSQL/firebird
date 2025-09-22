@@ -20,8 +20,8 @@
     CFLAGS='-Os' \
     CXXFLAGS='--std=c++17' \
     LDFLAGS='-static-libstdc++ -Wl,-rpath=\$$ORIGIN' \
-    CC=x86_64-linux-android24-clang \
-    CXX=x86_64-linux-android24-clang++ \
+    CC=x86_64-linux-android29-clang \
+    CXX=x86_64-linux-android29-clang++ \
     AR=llvm-ar \
     RANLIB=llvm-ranlib \
     --with-data-packaging=archive

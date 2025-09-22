@@ -141,6 +141,10 @@ void iscBlobLookupDescImpl(Why::YAttachment* attachment, Why::YTransaction* tran
 		(FB_INTEGER, characterSetId)
 	) outputMessage(&statusWrapper, MasterInterfacePtr());
 
+	USHORT majorOdsVersion = 0;
+	USHORT minorOdsVersion = 0;
+	attachment->getOdsVersion(&majorOdsVersion, &minorOdsVersion);
+
 	{	// scope
 		constexpr auto sql = R"""(
 			select f.rdb$field_sub_type,
@@ -184,7 +188,7 @@ void iscBlobLookupDescImpl(Why::YAttachment* attachment, Why::YTransaction* tran
 
 	if (!flag)
 	{
-		constexpr auto sql = R"""(
+		constexpr auto sqlPackages = R"""(
 			select f.rdb$field_sub_type,
 			       f.rdb$segment_length,
 			       f.rdb$character_set_id
@@ -195,6 +199,19 @@ void iscBlobLookupDescImpl(Why::YAttachment* attachment, Why::YTransaction* tran
 			          pp.rdb$parameter_name = ? and
 			          pp.rdb$package_name is null
 		)""";
+
+		constexpr auto sqlNoPackages = R"""(
+			select f.rdb$field_sub_type,
+			       f.rdb$segment_length,
+			       f.rdb$character_set_id
+			    from rdb$procedure_parameters pp
+			    join rdb$fields f
+			      on f.rdb$field_name = pp.rdb$field_source
+			    where pp.rdb$procedure_name = ? and
+			          pp.rdb$parameter_name = ?
+		)""";
+
+		const auto sql = majorOdsVersion >= ODS_VERSION12 ? sqlPackages : sqlNoPackages;
 
 		FB_MESSAGE(InputMessage, CheckStatusWrapper,
 			(FB_VARCHAR(MAX_SQL_IDENTIFIER_LEN), procedureName)

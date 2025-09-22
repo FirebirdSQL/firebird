@@ -43,5 +43,8 @@
     <ResourceCompile>
       <PreprocessorDefinitions>RC_ARH_$(Platform);RC_TARGET_$(TargetName);RC_TARGET_NAME=$(TargetName);RC_TARGET_FILENAME=$(TargetFileName);%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ResourceCompile>
+    <Manifest>
+      <AdditionalManifestFiles>..\defs\compatibility.manifest %(AdditionalManifestFiles)</AdditionalManifestFiles>
+    </Manifest>
   </ItemDefinitionGroup>
 </Project>
