@@ -82,24 +82,16 @@ Firebird::PathName ConfigCache::getFileName()
 	return files->fileName;
 }
 
-#ifdef WIN_NT
-void ConfigCache::File::getTime(DWORD& timeLow, DWORD& timeHigh)
+ConfigCache::File::PreciseTime ConfigCache::File::getTime()
 {
+#ifdef WIN_NT
 	WIN32_FILE_ATTRIBUTE_DATA fInfo;
 
 	if (!GetFileAttributesEx(fileName.c_str(), GetFileExInfoStandard, &fInfo))
-	{
-		timeLow = 0;
-		timeHigh = 0;
-		return;
-	}
+		return PreciseTime();
 
-	timeLow = fInfo.ftLastWriteTime.dwLowDateTime;
-	timeHigh = fInfo.ftLastWriteTime.dwHighDateTime;
-}
+	return PreciseTime(fInfo.ftLastWriteTime);
 #else
-void ConfigCache::File::getTime(timespec& time)
-{
 	struct STAT st;
 
 	if (os_utils::stat(fileName.c_str(), &st) != 0)
@@ -107,35 +99,22 @@ void ConfigCache::File::getTime(timespec& time)
 		if (errno == ENOENT)
 		{
 			// config file is missing, but this is not our problem
-			time.tv_sec = 0;
-			time.tv_nsec = 0;
-			return;
+			return PreciseTime();
 		}
 		system_call_failed::raise("stat");
 	}
 
 #ifdef DARWIN
-	time.tv_sec = st.st_mtimespec.tv_sec;
-	time.tv_nsec = st.st_mtimespec.tv_nsec;
+	return PreciseTime(st.st_mtimespec);
 #else
-	time.tv_sec = st.st_mtim.tv_sec;
-	time.tv_nsec = st.st_mtim.tv_nsec;
+	return PreciseTime(st.st_mtim);
+#endif
 #endif
 }
-#endif
 
 ConfigCache::File::File(MemoryPool& p, const PathName& fName)
-	: PermanentStorage(p), fileName(getPool(), fName),
-	next(NULL)
-{
-#ifdef WIN_NT
-	fileTimeLow = 0;
-	fileTimeHigh = 0;
-#else
-	fileTime.tv_sec = 0;
-	fileTime.tv_nsec = 0;
-#endif
-}
+	: PermanentStorage(p), fileName(getPool(), fName), next(NULL)
+{ }
 
 ConfigCache::File::~File()
 {
@@ -144,30 +123,15 @@ ConfigCache::File::~File()
 
 bool ConfigCache::File::checkLoadConfig(bool set)
 {
-#ifdef WIN_NT
-	DWORD newTimeLow;
-	DWORD newTimeHigh;
-	getTime(newTimeLow, newTimeHigh);
-	if (fileTimeLow == newTimeLow && fileTimeHigh == newTimeHigh)
-#else
-	timespec newTime;
-	getTime(newTime);
-	if (fileTime.tv_sec == newTime.tv_sec && fileTime.tv_nsec == newTime.tv_nsec)
-#endif
+	const PreciseTime newTime = getTime();
+	if (fileTime == newTime)
 	{
 		return next ? next->checkLoadConfig(set) : true;
 	}
 
 	if (set)
 	{
-#ifdef WIN_NT
-		fileTimeLow = newTimeLow;
-		fileTimeHigh = newTimeHigh;
-#else
-		fileTime.tv_sec = newTime.tv_sec;
-		fileTime.tv_nsec = newTime.tv_nsec;
-#endif
-
+		fileTime = newTime;
 		if (next)
 		{
 			next->checkLoadConfig(set);

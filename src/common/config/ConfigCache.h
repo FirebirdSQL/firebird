@@ -48,6 +48,39 @@ protected:
 private:
 	class File : public Firebird::PermanentStorage
 	{
+		class PreciseTime
+		{
+#ifdef WIN_NT
+			using TimeType = FILETIME;
+#else
+			using TimeType = timespec;
+#endif
+
+		public:
+			PreciseTime()
+			{
+			}
+
+			PreciseTime(TimeType time)
+				: m_time(time)
+			{
+			}
+
+			bool operator==(const PreciseTime& other) const
+			{
+#ifdef WIN_NT
+				return m_time.dwLowDateTime == other.m_time.dwLowDateTime &&
+					m_time.dwHighDateTime == other.m_time.dwHighDateTime;
+#else
+				return m_time.tv_sec == other.m_time.tv_sec &&
+					m_time.tv_nsec == other.m_time.tv_nsec;
+#endif
+			}
+
+		private:
+			TimeType m_time = {};
+		};
+
 	public:
 		File(Firebird::MemoryPool& p, const Firebird::PathName& fName);
 		~File();
@@ -60,16 +93,9 @@ private:
 		Firebird::PathName fileName;
 
 	private:
-#ifdef WIN_NT
-		volatile DWORD fileTimeLow;
-		volatile DWORD fileTimeHigh;
-		void getTime(DWORD& timeLow, DWORD& timeHigh);
-#else
-		volatile timespec fileTime;
-		void getTime(timespec& time);
-#endif
-
+		PreciseTime fileTime;
 		File* next;
+		PreciseTime getTime();
 	};
 	File* files;
 
