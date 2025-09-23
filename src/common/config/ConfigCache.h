@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef COMMON_CONFIG_CASHE_H
-#define COMMON_CONFIG_CASHE_H
+#ifndef COMMON_CONFIG_CACHE_H
+#define COMMON_CONFIG_CACHE_H
 
 #include "../common/classes/alloc.h"
 #include "../common/classes/fb_string.h"
@@ -103,4 +103,4 @@ public:
 	Firebird::RWLock rwLock;
 };
 
-#endif // COMMON_CONFIG_CASHE_H
+#endif // COMMON_CONFIG_CACHE_H
