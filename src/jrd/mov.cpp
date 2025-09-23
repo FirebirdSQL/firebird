@@ -514,7 +514,7 @@ void MOV_move(Jrd::thread_db* tdbb, /*const*/ dsc* from, dsc* to, bool trustedSo
 	if (to->dsc_dtype == dtype_rowtype || from->dsc_dtype == dtype_rowtype)
 	{
 		if (to->dsc_sub_count != from->dsc_sub_count || to->dsc_dtype != from->dsc_dtype)
-			CVT_conversion_error(from, Jrd::EngineCallbacks::instance->err);
+			CVT_conversion_error(to->dsc_dtype == dtype_rowtype ? to : from, Jrd::EngineCallbacks::instance->err);
 
 		auto next_to = to->dsc_sub_first;
 		auto next_from = from->dsc_sub_first;
