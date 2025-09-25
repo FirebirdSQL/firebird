@@ -5532,10 +5532,10 @@ void ISQL_get_version(bool call_by_create_db)
 		switch (item)
 		{
 		case isc_info_ods_version:
-			isqlGlob.major_ods = p.getInt();
+			isqlGlob.major_ods = static_cast<USHORT>(p.getInt());
 			break;
 		case isc_info_ods_minor_version:
-			isqlGlob.minor_ods = p.getInt();
+			isqlGlob.minor_ods = static_cast<USHORT>(p.getInt());
 			break;
 		case isc_info_db_sql_dialect:
 			global_dialect_spoken = p.getInt();
@@ -5641,7 +5641,7 @@ void ISQL_get_version(bool call_by_create_db)
 			break;
 
 		case frb_info_att_charset:
-			isqlGlob.att_charset = p.getInt();
+			isqlGlob.att_charset = static_cast<USHORT>(p.getInt());
 			break;
 
 		default:
@@ -6965,7 +6965,7 @@ static processing_state parse_arg(int argc, SCHAR** argv, QualifiedMetaString& t
 					break;
 
 				case IN_SW_ISQL_SQLDIALECT:
-					requested_SQL_dialect = swarg_int;
+					requested_SQL_dialect = static_cast<USHORT>(swarg_int);
 					if (requested_SQL_dialect < SQL_DIALECT_V5 ||
 						requested_SQL_dialect > SQL_DIALECT_CURRENT)
 					{
@@ -7151,7 +7151,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 			blobid = var->value.blobid;
 			snprintf(blobbuf, sizeof(blobbuf), "%" xLONGFORMAT":%" xLONGFORMAT,
-				blobid->gds_quad_high, blobid->gds_quad_low);
+				static_cast<ISC_ULONG>(blobid->gds_quad_high), blobid->gds_quad_low);
 			snprintf(p, bufSize, "%*s ", MAX(17, length), blobbuf);
 			break;
 
@@ -7161,7 +7161,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 			blobid = var->value.blobid;
 			snprintf(blobbuf, sizeof(blobbuf), "%" xLONGFORMAT":%" xLONGFORMAT,
-				blobid->gds_quad_high, blobid->gds_quad_low);
+				static_cast<ISC_ULONG>(blobid->gds_quad_high), blobid->gds_quad_low);
 			snprintf(p, bufSize, "%*s ", MAX(17, length), blobbuf);
 			if (setValues.List)
 			{
