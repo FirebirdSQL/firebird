@@ -25,6 +25,7 @@
 
 #include "iberror.h"
 #include "../common/classes/fb_string.h"
+#include "../common/classes/MetaString.h"
 #include "../common/StatusArg.h"
 #include "../jrd/constants.h"
 
@@ -121,6 +122,40 @@ public:
 		return (b4 << 24) | (b3 << 16) | (b2 << 8) | b1;
 	}
 
+	UCHAR parseHeader()
+	{
+		const auto version = getByte();
+
+		switch (version)
+		{
+			case blr_version4:
+			case blr_version5:
+			//case blr_version6:
+				break;
+
+			default:
+				status_exception::raise(
+					Arg::Gds(isc_metadata_corrupt) <<
+					Arg::Gds(isc_wroblrver2) << Arg::Num(blr_version4) << Arg::Num(blr_version5/*6*/) <<
+						Arg::Num(version));
+		}
+
+		auto code = getByte();
+
+		if (code == blr_flags)
+		{
+			while ((code = getByte()) != blr_end)
+			{
+				const auto len = getWord();
+				seekForward(len);
+			}
+		}
+		else
+			seekBackward(1);
+
+		return version;
+	}
+
 	UCHAR checkByte(UCHAR expected)
 	{
 		UCHAR byte = getByte();
@@ -175,6 +210,12 @@ public:
 			(Arg::Gds(isc_identifier_too_long) << Arg::Str(str)).raise();
 
 		name.assign(str.c_str());
+	}
+
+	void skipMetaName()
+	{
+		MetaString name;
+		getMetaName(name);
 	}
 
 private:
