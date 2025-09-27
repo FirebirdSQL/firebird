@@ -25,6 +25,7 @@
 #include "../common/isc_proto.h"
 #include "../common/isc_s_proto.h"
 #include "../jrd/jrd.h"
+#include "../jrd/cch_proto.h"
 
 #include "Manager.h"
 #include "Protocol.h"
@@ -112,10 +113,24 @@ Manager::Manager(const string& dbId,
 
 	dbb->ensureGuid(tdbb);
 	const Guid& guid = dbb->dbb_guid;
-	m_sequence = dbb->dbb_repl_sequence;
 
 	if (config->journalDirectory.hasData())
 	{
+		// At this point it is unknown if change log shared memory exists or not.
+		// To avoid race condition with concurrent changing of current replication
+		// sequence, take and hold shared lock on header page while creating
+		// ChangeLog instance.
+
+		WIN window(HEADER_PAGE_NUMBER);
+		CCH_FETCH(tdbb, &window, LCK_read, pag_header);
+
+		Cleanup releaseHeader([&] {
+			CCH_RELEASE(tdbb, &window);
+		});
+
+		// Call below will fetch header page with LCK_read lock, it is allowed and OK.
+		m_sequence = dbb->getReplSequence(tdbb);
+
 		m_changeLog = FB_NEW_POOL(getPool())
 			ChangeLog(getPool(), dbId, guid, m_sequence, config);
 	}
