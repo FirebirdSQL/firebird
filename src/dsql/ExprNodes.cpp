@@ -8061,14 +8061,17 @@ ValueExprNode* LiteralNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			constant->litDesc.setTextType(sym->intlsym_ttype);
 	}
 
+	// dsqlDesc needs dsc_length to be adjusted to maximum length for given charset,
+	// while litDesc must reflect the real literal length to prevent buffer overrun.
+
+	constant->dsqlDesc = constant->litDesc;
+
 	USHORT adjust = 0;
 
 	if (constant->litDesc.dsc_dtype == dtype_varying)
 		adjust = sizeof(USHORT);
 	else if (constant->litDesc.dsc_dtype == dtype_cstring)
 		adjust = 1;
-
-	constant->litDesc.dsc_length -= adjust;
 
 	CharSet* charSet = INTL_charset_lookup(tdbb, INTL_GET_CHARSET(&constant->litDesc));
 
@@ -8091,10 +8094,8 @@ ValueExprNode* LiteralNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 					  METD_get_charset_name(dsqlScratch->getTransaction(), constant->litDesc.getCharSet()).toQuotedString());
 		}
 		else
-			constant->litDesc.dsc_length = charLength * charSet->maxBytesPerChar();
+			constant->dsqlDesc.dsc_length = charLength * charSet->maxBytesPerChar() + adjust;
 	}
-
-	constant->litDesc.dsc_length += adjust;
 
 	return constant;
 }
