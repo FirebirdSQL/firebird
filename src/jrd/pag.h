@@ -129,8 +129,13 @@ public:
 	ULONG usedPages();
 	static ULONG usedPages(const Database* dbb);
 
+	struct ExtendResult
+	{
+		bool success = false;
+		ULONG pages_allocated = 0;
+	};
 	// extend page space
-	bool extend(thread_db*, const ULONG, const bool);
+	ExtendResult extend(thread_db* tdbb, ULONG pageNum, bool forceSize);
 
 	// get SCN's page number
 	ULONG getSCNPageNum(ULONG sequence) noexcept;
