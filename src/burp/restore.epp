@@ -167,6 +167,12 @@ bool	get_trigger_old (BurpGlobals* tdgbl, burp_rel*);
 bool	get_type(BurpGlobals* tdgbl);
 bool	get_user_privilege(BurpGlobals* tdgbl);
 bool	get_view(BurpGlobals* tdgbl, burp_rel*);
+bool	get_foreign_server(BurpGlobals* tdgbl);
+bool	get_foreign_server_option(BurpGlobals* tdgbl);
+bool	get_foreign_table_option(BurpGlobals* tdgbl);
+bool	get_foreign_table_field_option(BurpGlobals* tdgbl);
+bool	get_foreign_user_mapping(BurpGlobals* tdgbl);
+bool	get_foreign_mapping_option(BurpGlobals* tdgbl);
 void	ignore_array(BurpGlobals* tdgbl, burp_rel*);
 void	ignore_blob(BurpGlobals* tdgbl);
 rec_type	ignore_data(BurpGlobals* tdgbl, burp_rel*);
@@ -8072,6 +8078,11 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 			relation->rel_name.schema = temp;
 			break;
 
+		case att_relation_foreign_server_name:
+			GET_TEXT(temp);
+			relation->rel_foreign_server.object = temp;
+			break;
+
 		case att_relation_name:
 			{
 				GET_TEXT(temp);
@@ -8176,6 +8187,7 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 			X IN RDB$RELATIONS
 		{
 			X.RDB$SCHEMA_NAME.NULL = TRUE;
+			X.RDB$FOREIGN_SERVER_NAME.NULL = TRUE;
 			X.RDB$SYSTEM_FLAG.NULL = FALSE;
 			X.RDB$FLAGS.NULL = rel_flags_null;
 			X.RDB$SECURITY_CLASS.NULL = sec_class_null;
@@ -8199,6 +8211,12 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 			{
 				strcpy(X.RDB$SCHEMA_NAME, relation->rel_name.schema.c_str());
 				X.RDB$SCHEMA_NAME.NULL = FALSE;
+			}
+
+			if (relation->rel_foreign_server.object.hasData())
+			{
+				strcpy(X.RDB$FOREIGN_SERVER_NAME, relation->rel_foreign_server.object.c_str());
+				X.RDB$FOREIGN_SERVER_NAME.NULL = FALSE;
 			}
 
 			strcpy(X.RDB$SECURITY_CLASS, sec_class);
@@ -8285,6 +8303,10 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 
 		case rec_view:
 			get_view(tdgbl, relation);
+			break;
+
+		case rec_foreign_table_field_option:
+			get_foreign_table_field_option(tdgbl);
 			break;
 
 		default:
@@ -10522,6 +10544,643 @@ bool get_view(BurpGlobals* tdgbl, burp_rel* relation)
 	return true;
 }
 
+bool get_foreign_server(BurpGlobals* tdgbl)
+{
+/**************************************
+ *
+ *	g e t _ f o r e i g n _ s e r v e r
+ *
+ **************************************
+ *
+ * Functional description
+ *	Store a record in RDB$FOREIGN_SERVERS.
+ *
+ **************************************/
+
+	att_type attribute;
+	scan_attr_t scan_next_attr;
+
+	if (tdgbl->runtimeODS < DB_VERSION_DDL14)
+	{
+		skip_init(&scan_next_attr);
+
+		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
+		{
+			switch (attribute)
+			{
+				case att_foreign_server_name:
+					eat_text(tdgbl);
+					break;
+
+				case att_foreign_server_data_wrapper_name:
+					eat_text(tdgbl);
+					break;
+
+				case att_foreign_server_security_class:
+					eat_text(tdgbl);
+					break;
+
+				case att_foreign_server_owner_name:
+					eat_text(tdgbl);
+					break;
+
+				default:
+					bad_attribute(scan_next_attr, attribute, 426);	// msg 426 foreign server
+					break;
+			}
+		}
+
+		return true;
+	}
+
+	QualifiedMetaString name;
+	bool securityClass = false;
+	ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
+
+	STORE (TRANSACTION_HANDLE local_trans REQUEST_HANDLE tdgbl->handles_get_foreign_server_req_handle1)
+		X IN RDB$FOREIGN_SERVERS
+	{
+		X.RDB$FOREIGN_SERVER_NAME.NULL = TRUE;
+		X.RDB$FOREIGN_SERVER_WRAPPER.NULL = TRUE;
+		X.RDB$SECURITY_CLASS.NULL = TRUE;
+		X.RDB$OWNER_NAME.NULL = TRUE;
+
+		skip_init(&scan_next_attr);
+
+		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
+		{
+			switch (attribute)
+			{
+				case att_foreign_server_name:
+					GET_TEXT(X.RDB$FOREIGN_SERVER_NAME);
+					X.RDB$FOREIGN_SERVER_NAME.NULL = FALSE;
+					name.object = X.RDB$FOREIGN_SERVER_NAME;
+					BURP_verbose(425, name.object.toQuotedString());	// msg 425 restoring foreign server %s
+					break;
+
+				case att_foreign_server_data_wrapper_name:
+					GET_TEXT(X.RDB$FOREIGN_SERVER_WRAPPER);
+					X.RDB$FOREIGN_SERVER_WRAPPER.NULL = FALSE;
+					break;
+
+				case att_foreign_server_security_class:
+					GET_TEXT(X.RDB$SECURITY_CLASS);
+					fix_security_class_name(tdgbl, X.RDB$SECURITY_CLASS, false);
+					X.RDB$SECURITY_CLASS.NULL = FALSE;
+					securityClass = true;
+					break;
+
+				case att_foreign_server_owner_name:
+					GET_TEXT(X.RDB$OWNER_NAME);
+					X.RDB$OWNER_NAME.NULL = FALSE;
+					break;
+
+				default:
+					bad_attribute(scan_next_attr, attribute, 426);	// msg 426 foreign server
+					break;
+			}
+		}
+	}
+	END_STORE
+	ON_ERROR
+		general_on_error();
+	END_ERROR
+
+	collect_missing_privs(tdgbl, obj_foreign_servers, name, securityClass);
+
+	return true;
+}
+
+bool get_foreign_server_option(BurpGlobals* tdgbl)
+{
+/**************************************
+ *
+ *	g e t _ f o r e i g n _ s e r v e r _ o p t i o n
+ *
+ **************************************
+ *
+ * Functional description
+ *	Store a record in RDB$FOREIGN_SERVER_OPTIONS.
+ *
+ **************************************/
+
+	att_type attribute;
+	scan_attr_t scan_next_attr;
+
+	if (tdgbl->runtimeODS < DB_VERSION_DDL14)
+	{
+		skip_init(&scan_next_attr);
+
+		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
+		{
+			switch (attribute)
+			{
+				case att_foreign_server_option_server_name:
+					eat_text(tdgbl);
+					break;
+
+				case att_foreign_server_option_name:
+					eat_text(tdgbl);
+					break;
+
+				case att_foreign_server_option_value:
+					eat_text(tdgbl);
+					break;
+
+				case att_foreign_server_option_type:
+					get_int32(tdgbl);
+					break;
+
+				default:
+					bad_attribute(scan_next_attr, attribute, 429);	// msg 429 foreign server option
+					break;
+			}
+		}
+
+		return true;
+	}
+
+	QualifiedMetaString name;
+	ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
+
+	STORE (TRANSACTION_HANDLE local_trans REQUEST_HANDLE tdgbl->handles_get_foreign_server_option_req_handle1)
+		X IN RDB$FOREIGN_SERVER_OPTIONS
+	{
+		X.RDB$FOREIGN_SERVER_NAME.NULL = TRUE;
+		X.RDB$FOREIGN_OPTION_NAME.NULL = TRUE;
+		X.RDB$FOREIGN_OPTION_VALUE.NULL = TRUE;
+		X.RDB$FOREIGN_OPTION_TYPE.NULL = TRUE;
+
+		skip_init(&scan_next_attr);
+
+		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
+		{
+			switch (attribute)
+			{
+				case att_foreign_server_option_server_name:
+					GET_TEXT(X.RDB$FOREIGN_SERVER_NAME);
+					X.RDB$FOREIGN_SERVER_NAME.NULL = FALSE;
+					name.object = X.RDB$FOREIGN_SERVER_NAME;
+					break;
+
+				case att_foreign_server_option_name:
+					GET_TEXT(X.RDB$FOREIGN_OPTION_NAME);
+					X.RDB$FOREIGN_OPTION_NAME.NULL = FALSE;
+					// msg 428 restoring foreign server option %s
+					BURP_verbose(428, MetaString(X.RDB$FOREIGN_OPTION_NAME).toQuotedString());
+					break;
+
+				case att_foreign_server_option_value:
+					GET_TEXT(X.RDB$FOREIGN_OPTION_VALUE);
+					X.RDB$FOREIGN_OPTION_VALUE.NULL = FALSE;
+					break;
+
+				case att_foreign_server_option_type:
+					X.RDB$FOREIGN_OPTION_TYPE = get_int32(tdgbl);
+					X.RDB$FOREIGN_OPTION_TYPE.NULL = FALSE;
+					break;
+
+				default:
+					bad_attribute(scan_next_attr, attribute, 429);	// msg 429 foreign server option
+					break;
+			}
+		}
+	}
+	END_STORE
+	ON_ERROR
+		general_on_error();
+	END_ERROR
+
+	return true;
+}
+
+bool get_foreign_table_option(BurpGlobals* tdgbl)
+{
+/**************************************
+ *
+ *	g e t _ f o r e i g n _ t a b l e _ o p t i o n
+ *
+ **************************************
+ *
+ * Functional description
+ *	Store a record in RDB$FOREIGN_TABLE_OPTIONS.
+ *
+ **************************************/
+
+	att_type attribute;
+	scan_attr_t scan_next_attr;
+
+	if (tdgbl->runtimeODS < DB_VERSION_DDL14)
+	{
+		skip_init(&scan_next_attr);
+
+		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
+		{
+			switch (attribute)
+			{
+				case rec_foreign_table_option:
+					eat_text(tdgbl);
+					break;
+
+				case att_foreign_table_option_schema_name:
+					eat_text(tdgbl);
+					break;
+
+				case att_foreign_table_option_table_name:
+					eat_text(tdgbl);
+					break;
+
+				case att_foreign_table_option_name:
+					eat_text(tdgbl);
+					break;
+
+				case att_foreign_table_option_value:
+					eat_text(tdgbl);
+					break;
+
+				default:
+					bad_attribute(scan_next_attr, attribute, 432);	// msg 432 foreign table option
+					break;
+			}
+		}
+
+		return true;
+	}
+
+	QualifiedMetaString name;
+	ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
+
+	STORE (TRANSACTION_HANDLE local_trans REQUEST_HANDLE tdgbl->handles_get_foreign_table_option_req_handle1)
+		X IN RDB$FOREIGN_TABLE_OPTIONS
+	{
+		X.RDB$SCHEMA_NAME.NULL = TRUE;
+		X.RDB$TABLE_NAME.NULL = TRUE;
+		X.RDB$FOREIGN_OPTION_NAME.NULL = TRUE;
+		X.RDB$FOREIGN_OPTION_VALUE.NULL = TRUE;
+
+		skip_init(&scan_next_attr);
+
+		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
+		{
+			switch (attribute)
+			{
+				case att_foreign_table_option_schema_name:
+					GET_TEXT(X.RDB$SCHEMA_NAME);
+					X.RDB$SCHEMA_NAME.NULL = FALSE;
+					name.schema = X.RDB$SCHEMA_NAME;
+					break;
+
+				case att_foreign_table_option_table_name:
+					GET_TEXT(X.RDB$TABLE_NAME);
+					X.RDB$TABLE_NAME.NULL = FALSE;
+					name.object = X.RDB$TABLE_NAME;
+					break;
+
+				case att_foreign_table_option_name:
+					GET_TEXT(X.RDB$FOREIGN_OPTION_NAME);
+					X.RDB$FOREIGN_OPTION_NAME.NULL = FALSE;
+					// msg 431 restoring foreign table option %s
+					BURP_verbose(431, MetaString(X.RDB$FOREIGN_OPTION_NAME).toQuotedString());
+					break;
+
+				case att_foreign_table_option_value:
+					GET_TEXT(X.RDB$FOREIGN_OPTION_VALUE);
+					X.RDB$FOREIGN_OPTION_VALUE.NULL = FALSE;
+					break;
+
+				default:
+					bad_attribute(scan_next_attr, attribute, 432);	// msg 432 foreign table option
+					break;
+			}
+		}
+	}
+	END_STORE
+	ON_ERROR
+		general_on_error();
+	END_ERROR
+
+	return true;
+}
+
+bool get_foreign_table_field_option(BurpGlobals* tdgbl)
+{
+/**************************************
+ *
+ *	g e t _ f o r e i g n _ t a b l e _ f i e l d _ o p t i o n
+ *
+ **************************************
+ *
+ * Functional description
+ *	Store a record in RDB$FOREIGN_TABLE_FIELD_OPTIONS.
+ *
+ **************************************/
+
+	att_type attribute;
+	scan_attr_t scan_next_attr;
+
+	if (tdgbl->runtimeODS < DB_VERSION_DDL14)
+	{
+		skip_init(&scan_next_attr);
+
+		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
+		{
+			switch (attribute)
+			{
+				case att_foreign_table_field_option_schema_name:
+					eat_text(tdgbl);
+					break;
+
+				case att_foreign_table_field_option_table_name:
+					eat_text(tdgbl);
+					break;
+
+				case att_foreign_table_field_option_field_name:
+					eat_text(tdgbl);
+					break;
+
+				case att_foreign_table_field_option_name:
+					eat_text(tdgbl);
+					break;
+
+				case att_foreign_table_field_option_value:
+					eat_text(tdgbl);
+					break;
+
+				default:
+					// msg 435 foreign table column option
+					bad_attribute(scan_next_attr, attribute, 435);
+					break;
+			}
+		}
+
+		return true;
+	}
+
+	QualifiedMetaString tableName;
+	QualifiedMetaString fieldName;
+	ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
+
+	STORE (TRANSACTION_HANDLE local_trans REQUEST_HANDLE tdgbl->handles_get_foreign_table_field_option_req_handle1)
+		X IN RDB$FOREIGN_TABLE_FIELD_OPTIONS
+	{
+		X.RDB$SCHEMA_NAME.NULL = TRUE;
+		X.RDB$TABLE_NAME.NULL = TRUE;
+		X.RDB$FIELD_NAME.NULL = TRUE;
+		X.RDB$FOREIGN_OPTION_NAME.NULL = TRUE;
+		X.RDB$FOREIGN_OPTION_VALUE.NULL = TRUE;
+
+		skip_init(&scan_next_attr);
+
+		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
+		{
+			switch (attribute)
+			{
+				case att_foreign_table_field_option_schema_name:
+					GET_TEXT(X.RDB$SCHEMA_NAME);
+					X.RDB$SCHEMA_NAME.NULL = FALSE;
+					tableName.schema = X.RDB$SCHEMA_NAME;
+					break;
+
+				case att_foreign_table_field_option_table_name:
+					GET_TEXT(X.RDB$TABLE_NAME);
+					X.RDB$TABLE_NAME.NULL = FALSE;
+					tableName.object = X.RDB$TABLE_NAME;
+					break;
+
+				case att_foreign_table_field_option_field_name:
+					GET_TEXT(X.RDB$FIELD_NAME);
+					X.RDB$FIELD_NAME.NULL = FALSE;
+					fieldName.object = X.RDB$FIELD_NAME;
+					break;
+
+				case att_foreign_table_field_option_name:
+					GET_TEXT(X.RDB$FOREIGN_OPTION_NAME);
+					X.RDB$FOREIGN_OPTION_NAME.NULL = FALSE;
+					// msg 434 restoring foreign table column option %s
+					BURP_verbose(434, MetaString(X.RDB$FOREIGN_OPTION_NAME).toQuotedString());
+					break;
+
+				case att_foreign_table_field_option_value:
+					GET_TEXT(X.RDB$FOREIGN_OPTION_VALUE);
+					X.RDB$FOREIGN_OPTION_VALUE.NULL = FALSE;
+					break;
+
+				default:
+					// msg 435 foreign table column option
+					bad_attribute(scan_next_attr, attribute, 435);
+					break;
+			}
+		}
+	}
+	END_STORE
+	ON_ERROR
+		general_on_error();
+	END_ERROR
+
+	return true;
+}
+
+bool get_foreign_user_mapping(BurpGlobals* tdgbl)
+{
+/**************************************
+ *
+ *	g e t _ f o r e i g n _ u s e r _ m a p p i n g
+ *
+ **************************************
+ *
+ * Functional description
+ *	Store a record in RDB$FOREIGN_USER_MAPPINGS.
+ *
+ **************************************/
+
+	att_type attribute;
+	scan_attr_t scan_next_attr;
+
+	if (tdgbl->runtimeODS < DB_VERSION_DDL14)
+	{
+		skip_init(&scan_next_attr);
+
+		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
+		{
+			switch (attribute)
+			{
+				case att_foreign_user_mapping_user:
+					eat_text(tdgbl);
+					break;
+
+				case att_foreign_user_mapping_server_name:
+					eat_text(tdgbl);
+					break;
+
+				default:
+					bad_attribute(scan_next_attr, attribute, 439);	// msg 439 foreign user mapping
+					break;
+			}
+		}
+
+		return true;
+	}
+
+	QualifiedMetaString user;
+	QualifiedMetaString server;
+	ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
+
+	STORE (TRANSACTION_HANDLE local_trans REQUEST_HANDLE tdgbl->handles_get_foreign_user_mapping_req_handle1)
+		X IN RDB$FOREIGN_USER_MAPPINGS
+	{
+		X.RDB$USER.NULL = TRUE;
+		X.RDB$FOREIGN_SERVER_NAME.NULL = TRUE;
+
+		skip_init(&scan_next_attr);
+
+		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
+		{
+			switch (attribute)
+			{
+				case att_foreign_user_mapping_user:
+					GET_TEXT(X.RDB$USER);
+					X.RDB$USER.NULL = FALSE;
+					user.object = X.RDB$USER;
+					break;
+
+				case att_foreign_user_mapping_server_name:
+					GET_TEXT(X.RDB$FOREIGN_SERVER_NAME);
+					X.RDB$FOREIGN_SERVER_NAME.NULL = FALSE;
+					server.object = X.RDB$FOREIGN_SERVER_NAME;
+					// msg 438 restoring foreign user mapping for user %s and server %s
+					BURP_verbose(438, SafeArg() << user.object.toQuotedString().c_str() <<
+						server.object.toQuotedString().c_str());
+					break;
+
+				default:
+					bad_attribute(scan_next_attr, attribute, 439);	// msg 439 foreign user mapping
+					break;
+			}
+		}
+	}
+	END_STORE
+	ON_ERROR
+		general_on_error();
+	END_ERROR
+
+	return true;
+}
+
+bool get_foreign_mapping_option(BurpGlobals* tdgbl)
+{
+/**************************************
+ *
+ *	g e t _ f o r e i g n _ m a p p i n g _ o p t i o n
+ *
+ **************************************
+ *
+ * Functional description
+ *	Store a record in RDB$FOREIGN_MAPPING_OPTIONS.
+ *
+ **************************************/
+
+	att_type attribute;
+	scan_attr_t scan_next_attr;
+
+	if (tdgbl->runtimeODS < DB_VERSION_DDL14)
+	{
+		skip_init(&scan_next_attr);
+
+		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
+		{
+			switch (attribute)
+			{
+				case att_foreign_mapping_option_user:
+					eat_text(tdgbl);
+					break;
+
+				case att_foreign_mapping_option_server_name:
+					eat_text(tdgbl);
+					break;
+
+				case att_foreign_mapping_option_name:
+					eat_text(tdgbl);
+					break;
+
+				case att_foreign_mapping_option_value:
+					eat_text(tdgbl);
+					break;
+
+				case att_foreign_mapping_option_type:
+					get_int32(tdgbl);
+					break;
+
+				default:
+					bad_attribute(scan_next_attr, attribute, 442);	// msg 442 foreign user mapping option
+					break;
+			}
+		}
+
+		return true;
+	}
+
+	QualifiedMetaString user;
+	QualifiedMetaString server;
+	ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
+
+	STORE (TRANSACTION_HANDLE local_trans REQUEST_HANDLE tdgbl->handles_get_foreign_mapping_option_req_handle1)
+		X IN RDB$FOREIGN_MAPPING_OPTIONS
+	{
+		X.RDB$USER.NULL = TRUE;
+		X.RDB$FOREIGN_SERVER_NAME.NULL = TRUE;
+		X.RDB$FOREIGN_OPTION_NAME.NULL = TRUE;
+		X.RDB$FOREIGN_OPTION_VALUE.NULL = TRUE;
+		X.RDB$FOREIGN_OPTION_TYPE.NULL = TRUE;
+
+		skip_init(&scan_next_attr);
+
+		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
+		{
+			switch (attribute)
+			{
+				case att_foreign_mapping_option_user:
+					GET_TEXT(X.RDB$USER);
+					X.RDB$USER.NULL = FALSE;
+					user.object = X.RDB$USER;
+					break;
+
+				case att_foreign_mapping_option_server_name:
+					GET_TEXT(X.RDB$FOREIGN_SERVER_NAME);
+					X.RDB$FOREIGN_SERVER_NAME.NULL = FALSE;
+					server.object = X.RDB$FOREIGN_SERVER_NAME;
+					break;
+
+				case att_foreign_mapping_option_name:
+					GET_TEXT(X.RDB$FOREIGN_OPTION_NAME);
+					X.RDB$FOREIGN_OPTION_NAME.NULL = FALSE;
+					// msg 441 restoring foreign user mapping option %s
+					BURP_verbose(441, MetaString(X.RDB$FOREIGN_OPTION_NAME).toQuotedString());
+					break;
+
+				case att_foreign_mapping_option_value:
+					GET_TEXT(X.RDB$FOREIGN_OPTION_VALUE);
+					X.RDB$FOREIGN_OPTION_VALUE.NULL = FALSE;
+					break;
+
+				case att_foreign_mapping_option_type:
+					X.RDB$FOREIGN_OPTION_TYPE = get_int32(tdgbl);
+					X.RDB$FOREIGN_OPTION_TYPE.NULL = FALSE;
+					break;
+
+				default:
+					bad_attribute(scan_next_attr, attribute, 442);	// msg 442 foreign user mapping option
+					break;
+			}
+		}
+	}
+	END_STORE
+	ON_ERROR
+		general_on_error();
+	END_ERROR
+
+	return true;
+}
+
 void ignore_array(BurpGlobals* tdgbl, burp_rel* relation)
 {
 /**************************************
@@ -11351,6 +12010,36 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 
 		case rec_pub_table:
 			if (!get_pub_table(tdgbl))
+				return false;
+			flag = true;
+			break;
+
+		case rec_foreign_server:
+			if (!get_foreign_server(tdgbl))
+				return false;
+			flag = true;
+			break;
+
+		case rec_foreign_server_option:
+			if (!get_foreign_server_option(tdgbl))
+				return false;
+			flag = true;
+			break;
+
+		case rec_foreign_table_option:
+			if (!get_foreign_table_option(tdgbl))
+				return false;
+			flag = true;
+			break;
+
+		case rec_foreign_user_mapping:
+			if (!get_foreign_user_mapping(tdgbl))
+				return false;
+			flag = true;
+			break;
+
+		case rec_foreign_mapping_option:
+			if (!get_foreign_mapping_option(tdgbl))
 				return false;
 			flag = true;
 			break;

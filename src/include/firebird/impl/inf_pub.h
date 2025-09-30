@@ -192,6 +192,9 @@ enum db_info_types
 	fb_info_max_blob_cache_size = 159,
 	fb_info_max_inline_blob_size = 160,
 
+	// Return list of SQL features supported by engine of external connection
+	fb_info_sql_features = 161,
+
 	isc_info_db_last_value   /* Leave this LAST! */
 };
 
@@ -210,8 +213,18 @@ enum info_features // response to fb_info_features
 	fb_feature_read_consistency		= 5,	// Read consistency TIL is supported
 	fb_feature_statement_timeout	= 6,	// Statement timeout is supported
 	fb_feature_statement_long_life  = 7,    // Prepared statements are not dropped on transaction end
+	fb_feature_prepared_input_types = 8,    // Provider can return parameter types in input statement metadata
 
 	fb_feature_max      // Not really a feature. Keep this last.
+};
+
+enum info_sql_features // response to fb_info_sql_features
+{
+	fb_feature_sql_op_concatenate	= 1,	// Statement supports concatenation `||` operation
+	fb_feature_sql_op_equiv			= 2,	// Statement supports NULL-aware comparison `IS [NOT] DISTINCT FROM` operation
+	fb_feature_sql_op_null_ordering	= 3,	// Statement supports places the rows with the NULL column above/after the ordered rows
+
+	fb_feature_sql_max	// Not really a feature. Keep this last.
 };
 
 enum replica_mode // response to fb_info_replica_mode

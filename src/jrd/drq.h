@@ -242,6 +242,26 @@ enum drq_type_t
 	drq_e_pub_tab_all,		// erase relation from all publication
 	drq_l_rel_con,			// lookup relation constraint
 	drq_l_rel_fld_name,		// lookup relation field name
+	drq_l_f_server_name,		// lookup foreign server name
+	drq_f_server_exist,		// check if foreign server exists
+	drq_s_f_server,			// store foreign server (CreateAlterForeignServerNode)
+	drq_m_f_server,			// modify foreign server (CreateAlterForeignServerNode)
+	drq_drop_f_server,		// drop foreign server
+	drq_s_f_server_opt,		// store foreign server options (CreateAlterForeignServerNode)
+	drq_drop_f_server_opt,		// drop foreign server option
+	drq_drop_f_server_opts,		// drop foreign server options
+	drq_s_f_tbl_opt,		// store foreign table options (RelationNode)
+	drq_drop_f_tbl_opt,		// drop foreign table option
+	drq_drop_f_tbl_opts,		// drop foreign table options
+	drq_u_mapping_exist,		// check if user mapping exists
+	drq_s_u_mapping,		// store user mapping (CreateAlterUserMappingNode)
+	drq_m_u_mapping,		// modify user mapping (CreateAlterUserMappingNode)
+	drq_drop_u_mapping,		// drop user mapping
+	drq_s_u_mapping_opt,		// store user mapping options (CreateAlterUserMappingNode)
+	drq_drop_u_mapping_opt,		// drop user mapping option
+	drq_drop_u_m_opts,		// drop user mapping options
+	drq_s_f_tbl_f_opt,		// store foreign field option (RelationNode)
+	drq_drop_f_tbl_f_opt,		// drop foreign field option
 
 	drq_MAX
 };

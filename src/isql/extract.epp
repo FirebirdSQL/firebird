@@ -99,6 +99,14 @@ static void list_procedure_bodies(GetDefaultCharSetForSchemaFunc getDefaultCharS
 static void list_procedure_headers(GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc);
 static void list_schemas();
 static void list_views();
+static void list_foreign_servers();
+static bool extract_foreign_server_options(const MetaString& serverName);
+static void list_foreign_user_mappings();
+static bool extract_foreign_mapping_options(const MetaString& userName, const MetaString& serverName);
+static bool extract_foreign_table_field_options(const QualifiedMetaString& table, const MetaString& fieldName);
+static bool extract_foreign_table_options(const QualifiedMetaString& table);
+static void print_foreign_option(ExternalValueType type, const MetaString& optionName,
+	const Firebird::string& optionValue);
 
 static const char* const Procterm = "^";	// TXNN: script use only
 
@@ -204,6 +212,8 @@ int EXTRACT_ddl(LegacyTables flag, const QualifiedMetaString& tabname)
 		list_create_db();
 		list_filters();
 		list_schemas();
+		list_foreign_servers();
+		list_foreign_user_mappings();
 		list_charsets();
 		list_collations();
 		list_generators();
@@ -334,6 +344,7 @@ int EXTRACT_list_table(const QualifiedMetaString& relation_name,
 	string char_sets;
 	rel_t rel_type = rel_persistent;
 	char ss[28] = "";
+	MetaString foreignServerName;
 
 	// Query to obtain relation detail information
 
@@ -373,6 +384,8 @@ int EXTRACT_list_table(const QualifiedMetaString& relation_name,
 
 			if (rel_type == rel_global_temp_preserve || rel_type == rel_global_temp_delete)
 				isqlGlob.printf("CREATE GLOBAL TEMPORARY TABLE ");
+			else if (rel_type == rel_foreign)
+				isqlGlob.printf("CREATE FOREIGN TABLE ");
 			else
 				isqlGlob.printf("CREATE TABLE ");
 
@@ -390,6 +403,13 @@ int EXTRACT_list_table(const QualifiedMetaString& relation_name,
 			{
 				IUTILS_copy_SQL_id (REL.RDB$EXTERNAL_FILE, SQL_identifier2, SINGLE_QUOTE);
 				isqlGlob.printf("EXTERNAL FILE %s ", SQL_identifier2);
+			}
+
+			if (!REL.RDB$FOREIGN_SERVER_NAME.NULL)
+			{
+				fb_utils::exact_name(REL.RDB$FOREIGN_SERVER_NAME);
+				IUTILS_copy_SQL_id (REL.RDB$FOREIGN_SERVER_NAME, SQL_identifier, DBL_QUOTE);
+				foreignServerName.printf("SERVER %s", SQL_identifier);
 			}
 
 			isqlGlob.printf("(");
@@ -602,6 +622,12 @@ int EXTRACT_list_table(const QualifiedMetaString& relation_name,
 				isqlGlob.prints(char_sets.c_str());
 			}
 		}
+
+		if (rel_type == rel_foreign)
+		{
+			if (!extract_foreign_table_field_options(relation_name, columnName))
+				return FINI_ERROR;
+		}
 	}
 	END_FOR
 	ON_ERROR
@@ -628,8 +654,356 @@ int EXTRACT_list_table(const QualifiedMetaString& relation_name,
 	else
 		isqlGlob.printf(")");
 
+	if (rel_type == rel_foreign)
+	{
+		isqlGlob.printf("%s%s", NEWLINE, foreignServerName.c_str());
+		if (!extract_foreign_table_options(relation_name))
+			return FINI_ERROR;
+	}
+
 	isqlGlob.printf("%s%s", isqlGlob.global_Term, NEWLINE);
 	return FINI_OK;
+}
+
+
+static bool extract_foreign_table_field_options(const QualifiedMetaString& table, const MetaString& fieldName)
+{
+/**************************************************
+ *
+ *	e x t r a c t _ f o r e i g n _ t a b l e _ f i e l d _ o p t i o n s
+ *
+ **************************************************
+ *
+ * Functional description
+ *	This function extracts the foreign table field options.
+ *
+ **************************************/
+
+	bool first = true;
+
+	FOR FTFO IN RDB$FOREIGN_TABLE_FIELD_OPTIONS
+			WITH FTFO.RDB$SCHEMA_NAME EQ table.schema.c_str() AND
+			FTFO.RDB$TABLE_NAME EQ table.object.c_str() AND
+			FTFO.RDB$FIELD_NAME EQ fieldName.c_str()
+	{
+		const MetaString optionName(FTFO.RDB$FOREIGN_OPTION_NAME);
+		const Firebird::string optionValue(FTFO.RDB$FOREIGN_OPTION_VALUE);
+		ExternalValueType type = ExternalValueType::TYPE_STRING;
+
+		if (first)
+		{
+			isqlGlob.printf(" OPTIONS(");
+			first = false;
+		}
+		else
+			isqlGlob.printf(", ");
+
+		print_foreign_option(type, optionName, optionValue);
+	}
+	END_FOR
+	ON_ERROR
+		ISQL_errmsg(fbStatus);
+		return false;
+	END_ERROR
+
+	if (!first)
+		isqlGlob.printf(")");
+
+	return true;
+}
+
+
+static bool extract_foreign_table_options(const QualifiedMetaString& table)
+{
+/**************************************************
+ *
+ *	e x t r a c t _ f o r e i g n _ t a b l e _ o p t i o n s
+ *
+ **************************************************
+ *
+ * Functional description
+ *	This function extracts the foreign table options.
+ *
+ **************************************/
+
+	bool first = true;
+
+	FOR FTO IN RDB$FOREIGN_TABLE_OPTIONS
+			WITH FTO.RDB$SCHEMA_NAME EQ table.schema.c_str() AND
+			FTO.RDB$TABLE_NAME EQ table.object.c_str()
+	{
+		const MetaString optionName(FTO.RDB$FOREIGN_OPTION_NAME);
+		const Firebird::string optionValue(FTO.RDB$FOREIGN_OPTION_VALUE);
+		ExternalValueType type = ExternalValueType::TYPE_STRING;
+
+		if (first)
+		{
+			isqlGlob.printf(" OPTIONS(");
+			first = false;
+		}
+		else
+			isqlGlob.printf(", ");
+
+		print_foreign_option(type, optionName, optionValue);
+	}
+	END_FOR
+	ON_ERROR
+		ISQL_errmsg(fbStatus);
+		return false;
+	END_ERROR
+
+	if (!first)
+		isqlGlob.printf(")");
+
+	return true;
+}
+
+
+static void list_foreign_servers()
+{
+/**************************************************
+ *
+ *	l i s t _ f o r e i g n _ s e r v e r s
+ *
+ **************************************************
+ *
+ * Functional description
+ *	List all foreign servers defined in the database.
+ *
+ **************************************/
+
+	if (isqlGlob.major_ods < ODS_VERSION14)
+		return;
+
+	bool first = true;
+
+	FOR FS IN RDB$FOREIGN_SERVERS
+		SORTED BY FS.RDB$FOREIGN_SERVER_NAME
+	{
+		const MetaString serverName(FS.RDB$FOREIGN_SERVER_NAME);
+		const MetaString ownerName(FS.RDB$OWNER_NAME);
+
+		if (first)
+		{
+			isqlGlob.printf("%s/* Foreign server definitions */%s", NEWLINE, NEWLINE);
+			first = false;
+		}
+
+		isqlGlob.printf("%s/* Foreign server: %s, Owner: %s */%s",
+				 NEWLINE,
+				 IUTILS_name_to_string(serverName).c_str(),
+				 IUTILS_name_to_string(ownerName).c_str(),
+				 NEWLINE);
+
+		isqlGlob.printf(
+			"CREATE SERVER %s",	IUTILS_name_to_string(serverName).c_str());
+
+		if (!FS.RDB$FOREIGN_SERVER_WRAPPER.NULL)
+		{
+			const MetaString wrapper(FS.RDB$FOREIGN_SERVER_WRAPPER);
+
+			IUTILS_copy_SQL_id (FS.RDB$FOREIGN_SERVER_WRAPPER, SQL_identifier, DBL_QUOTE);
+
+			isqlGlob.printf(
+				" FOREIGN DATA WRAPPER %s",
+				SQL_identifier);
+		}
+
+		if (!extract_foreign_server_options(serverName))
+			return;
+
+		isqlGlob.printf("%s%s", isqlGlob.global_Term, NEWLINE);
+	}
+	END_FOR
+	ON_ERROR
+		ISQL_errmsg(fbStatus);
+		return;
+	END_ERROR
+
+	if (!first)
+		isqlGlob.printf("%sCOMMIT WORK%s%s", NEWLINE, isqlGlob.global_Term, NEWLINE);
+}
+
+
+static bool extract_foreign_server_options(const MetaString& serverName)
+{
+/**************************************************
+ *
+ *	e x t r a c t _ f o r e i g n _ s e r v e r _ o p t i o n s
+ *
+ **************************************************
+ *
+ * Functional description
+ *	This function extracts the foreign server options.
+ *
+ **************************************/
+
+	bool first = true;
+
+	FOR FSO IN RDB$FOREIGN_SERVER_OPTIONS
+			WITH FSO.RDB$FOREIGN_SERVER_NAME EQ serverName.c_str()
+	{
+		const MetaString optionName(FSO.RDB$FOREIGN_OPTION_NAME);
+		const Firebird::string optionValue(FSO.RDB$FOREIGN_OPTION_VALUE);
+		ExternalValueType type = ExternalValueType::TYPE_STRING;
+		if (!FSO.RDB$FOREIGN_OPTION_TYPE.NULL)
+			type = ExternalValueType(FSO.RDB$FOREIGN_OPTION_TYPE);
+
+		if (first)
+		{
+			isqlGlob.printf(" OPTIONS(");
+			first = false;
+		}
+		else
+			isqlGlob.printf(", ");
+
+		print_foreign_option(type, optionName, optionValue);
+	}
+	END_FOR
+	ON_ERROR
+		ISQL_errmsg(fbStatus);
+		return false;
+	END_ERROR
+
+	if (!first)
+		isqlGlob.printf(")");
+
+	return true;
+}
+
+static void list_foreign_user_mappings()
+{
+/**************************************************
+ *
+ *	l i s t _ f o r e i g n _ u s e r _ m a p p i n g s
+ *
+ **************************************************
+ *
+ * Functional description
+ *	List all foreign user mappings defined in the database.
+ *
+ **************************************/
+
+	if (isqlGlob.major_ods < ODS_VERSION14)
+		return;
+
+	bool first = true;
+
+	FOR FM IN RDB$FOREIGN_USER_MAPPINGS
+	{
+		const MetaString userName(FM.RDB$USER);
+		const MetaString serverName(FM.RDB$FOREIGN_SERVER_NAME);
+
+		if (first)
+		{
+			isqlGlob.printf("%s/* Foreign user mapping definitions */%s", NEWLINE, NEWLINE);
+			first = false;
+		}
+
+		isqlGlob.printf("%s/* Foreign user mapping for User: %s, Server: %s */%s",
+				 NEWLINE,
+				 IUTILS_name_to_string(userName).c_str(),
+				 IUTILS_name_to_string(serverName).c_str(),
+				 NEWLINE);
+
+		isqlGlob.printf(
+			"CREATE USER MAPPING FOR %s SERVER %s",	IUTILS_name_to_string(userName).c_str(),
+			IUTILS_name_to_string(serverName).c_str());
+
+		if (!extract_foreign_mapping_options(userName, serverName))
+			return;
+
+		isqlGlob.printf("%s%s", isqlGlob.global_Term, NEWLINE);
+	}
+	END_FOR
+	ON_ERROR
+		ISQL_errmsg(fbStatus);
+		return;
+	END_ERROR
+
+	if (!first)
+		isqlGlob.printf("%sCOMMIT WORK%s%s", NEWLINE, isqlGlob.global_Term, NEWLINE);
+}
+
+
+static bool extract_foreign_mapping_options(const MetaString& userName, const MetaString& serverName)
+{
+/**************************************************
+ *
+ *	e x t r a c t _ f o r e i g n _ m a p p i n g _ o p t i o n s
+ *
+ **************************************************
+ *
+ * Functional description
+ *	This function extracts the foreign user mapping options.
+ *
+ **************************************/
+
+	bool first = true;
+
+	FOR FMO IN RDB$FOREIGN_MAPPING_OPTIONS
+			WITH FMO.RDB$USER EQ userName.c_str() AND
+			FMO.RDB$FOREIGN_SERVER_NAME EQ serverName.c_str()
+	{
+		const MetaString optionName(FMO.RDB$FOREIGN_OPTION_NAME);
+		const Firebird::string optionValue(FMO.RDB$FOREIGN_OPTION_VALUE);
+		ExternalValueType type = ExternalValueType::TYPE_STRING;
+		if (!FMO.RDB$FOREIGN_OPTION_TYPE.NULL)
+			type = ExternalValueType(FMO.RDB$FOREIGN_OPTION_TYPE);
+
+		if (first)
+		{
+			isqlGlob.printf(" OPTIONS(");
+			first = false;
+		}
+		else
+			isqlGlob.printf(", ");
+
+		print_foreign_option(type, optionName, optionValue);
+	}
+	END_FOR
+	ON_ERROR
+		ISQL_errmsg(fbStatus);
+		return false;
+	END_ERROR
+
+	if (!first)
+		isqlGlob.printf(")");
+
+	return true;
+}
+
+
+static void print_foreign_option(ExternalValueType type, const MetaString& optionName,
+	const Firebird::string& optionValue)
+{
+/**************************************************
+ *
+ *	p r i n t _ f o r e i g n _ o p t i o n
+ *
+ **************************************************
+ *
+ * Functional description
+ *	This function prints the option with value for foreign object.
+ *
+ **************************************/
+	const char* stringType = NULL;
+	switch (type)
+	{
+	case ExternalValueType::TYPE_ENV:
+		stringType = " ENV";
+		break;
+
+	case ExternalValueType::TYPE_FILE:
+		stringType = " FILE";
+		break;
+
+	default:
+		break;
+	}
+
+	isqlGlob.printf("%s%s \'%s\'", IUTILS_name_to_string(optionName).c_str(), stringType ? stringType : " =",
+		optionValue.c_str());
 }
 
 

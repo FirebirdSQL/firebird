@@ -392,10 +392,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 			// So we need to refetch the stream, either immediately or on demand.
 			const auto refetch = (id == ID_TRANS);
 
-			if (refetch && relation &&
-				!relation->rel_file &&
-				!relation->rel_view_rse &&
-				!relation->isVirtual())
+			if (refetch && relation && relation->isPageBased())
 			{
 				if (m_map->flags & FLAG_REFETCH)
 				{

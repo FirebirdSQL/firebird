@@ -133,6 +133,8 @@ class dsql_dbb;
 class PreparedStatement;
 class TraceManager;
 class MessageNode;
+class ForeignServer;
+class ForeignTableAdapter;
 
 
 // Relation trigger definition

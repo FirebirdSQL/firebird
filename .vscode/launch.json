@@ -22,6 +22,86 @@
 			}
 		},
 		{
+			"name": "firebird - launch",
+			"type": "cppdbg",
+			"request": "launch",
+			"program": "${workspaceRoot}/gen/Debug/firebird/bin/firebird",
+			"args": [],
+			"stopAtEntry": false,
+			"cwd": "${workspaceRoot}",
+			"environment": [],
+			"externalConsole": false,
+			"linux": {
+				"MIMode": "gdb"
+			},
+			"osx": {
+				"MIMode": "lldb"
+			},
+			"windows": {
+				"MIMode": "gdb"
+			}
+		},
+		{
+			"name": "gbak - launch backup",
+			"type": "cppdbg",
+			"request": "launch",
+			"program": "${workspaceRoot}/gen/Debug/firebird/bin/gbak",
+			"args": ["-b", "-v", "-user", "SYSDBA", "-password", "masterkey", "localhost:employee", "/tmp/1.fbk"],
+			"stopAtEntry": false,
+			"cwd": "${workspaceRoot}",
+			"environment": [],
+			"externalConsole": false,
+			"linux": {
+				"MIMode": "gdb"
+			},
+			"osx": {
+				"MIMode": "lldb"
+			},
+			"windows": {
+				"MIMode": "gdb"
+			}
+		},
+		{
+			"name": "gbak - launch restore",
+			"type": "cppdbg",
+			"request": "launch",
+			"program": "${workspaceRoot}/gen/Debug/firebird/bin/gbak",
+			"args": ["-c", "-v", "-rep", "-user", "SYSDBA", "-password", "masterkey", "/tmp/1.fbk", "localhost:/tmp/2.fdb"],
+			"stopAtEntry": false,
+			"cwd": "${workspaceRoot}",
+			"environment": [],
+			"externalConsole": false,
+			"linux": {
+				"MIMode": "gdb"
+			},
+			"osx": {
+				"MIMode": "lldb"
+			},
+			"windows": {
+				"MIMode": "gdb"
+			}
+		},
+		{
+			"name": "gpre_current - launch",
+			"type": "cppdbg",
+			"request": "launch",
+			"program": "${workspaceRoot}/gen/Debug/firebird/bin/gpre_current",
+			"args": ["-m", "-z", "-n", "-ocxx", "/home/vasiliy/dev/github/firebird/src/burp/backup.epp", "/tmp/backup.cpp"],
+			"stopAtEntry": false,
+			"cwd": "${workspaceRoot}/gen",
+			"environment": [],
+			"externalConsole": false,
+			"linux": {
+				"MIMode": "gdb"
+			},
+			"osx": {
+				"MIMode": "lldb"
+			},
+			"windows": {
+				"MIMode": "gdb"
+			}
+		},
+		{
 			"name": "isql - attach",
 			"type": "cppdbg",
 			"request": "attach",

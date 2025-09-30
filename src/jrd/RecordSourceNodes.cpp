@@ -314,6 +314,22 @@ SortNode* SortNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	return this;
 }
 
+void SortNode::collectStreams(SortedStreamList& streamList) const
+{
+	for (const NestConst<ValueExprNode>* i = expressions.begin(); i != expressions.end(); ++i)
+		(*i)->collectStreams(streamList);
+}
+
+bool SortNode::containsStream(StreamType stream, bool only) const
+{
+	SortedStreamList nodeStreams;
+	collectStreams(nodeStreams);
+
+	return only ?
+		nodeStreams.getCount() == 1 && nodeStreams[0] == stream :
+		nodeStreams.exist(stream);
+}
+
 bool SortNode::computable(CompilerScratch* csb, StreamType stream, bool allowOnlyCurrentStream)
 {
 	for (NestConst<ValueExprNode>* i = expressions.begin(); i != expressions.end(); ++i)

@@ -175,6 +175,7 @@ enum irq_type_t
 	irq_grant17,			// process grant option (database)
 	irq_grant18,			// process grant option (filters)
 	irq_grant19,			// process grant option (roles)
+	irq_grant20,			// process grant option (foreign servers)
 	irq_l_curr_format,		// lookup table's current format
 	irq_c_relation3,		// lookup relation in phase 0 to cleanup
 	irq_linger,				// get database linger value
@@ -183,6 +184,12 @@ enum irq_type_t
 	irq_func_param_dep,		// check function parameter dependency
 	irq_l_pub_tab_state,	// lookup publication state for a table
 	irq_l_index_cnstrt,     // lookup index for constraint
+	irq_f_s_security,		// verify security for foreign server
+	irq_find_f_server,		// find foreign server by name
+	irq_find_f_s_opt,		// find foreign server options by server name
+	irq_find_f_server_dep,		// check foreign server dependency
+	irq_find_f_tbl_opt,		// find foreign table options by table name
+	irq_find_f_tbl_f_opt,		// find foreign field options by table and field names
 
 	irq_MAX
 };

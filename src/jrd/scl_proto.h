@@ -56,6 +56,7 @@ void SCL_check_relation(Jrd::thread_db* tdbb, const Jrd::QualifiedName& name, Jr
 bool SCL_check_schema(Jrd::thread_db* tdbb, const Jrd::MetaName&, Jrd::SecurityClass::flags_t);
 bool SCL_check_view(Jrd::thread_db* tdbb, const Jrd::QualifiedName& name, Jrd::SecurityClass::flags_t);
 void SCL_check_role(Jrd::thread_db* tdbb, const Jrd::MetaName&, Jrd::SecurityClass::flags_t);
+bool SCL_check_foreign_server(Jrd::thread_db* tdbb, const Jrd::MetaName&, Jrd::SecurityClass::flags_t);
 Jrd::SecurityClass* SCL_get_class(Jrd::thread_db*, const Jrd::MetaName& name);
 Jrd::SecurityClass::flags_t SCL_get_mask(Jrd::thread_db* tdbb, const Jrd::QualifiedName&, const TEXT*);
 void SCL_clear_classes(Jrd::thread_db*, const Jrd::MetaName&);
@@ -90,6 +91,7 @@ inline Jrd::MetaName SCL_getDdlSecurityClassName(ObjectType objectType, const Jr
 		case obj_jobs:
 		case obj_tablespaces:
 		case obj_schemas:
+		case obj_foreign_servers:
 		{
 			Firebird::string str;
 			str.printf(SQL_DDL_SECCLASS_FORMAT, (int) objectType, schema.c_str());
