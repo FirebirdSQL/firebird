@@ -1947,12 +1947,12 @@ PageSpace::ExtendResult PageSpace::extend(thread_db* tdbb, const ULONG pageNum, 
  *	extend can't be less than hardcoded value MIN_EXTEND_BYTES and more than
  *	configured value "DatabaseGrowthIncrement" (both values in bytes).
  *
- *	If "DatabaseGrowthIncrement" is less than MIN_EXTEND_BYTES then don't
- *	extend file(s)
- *
- *  If forceSize is true, extend file up to pageNum pages (despite of value
+ *  If `forceSize` is true, extend file up to pageNum pages (despite of value
  *  of "DatabaseGrowthIncrement") and don't make attempts to extend by less
  *	pages.
+ *
+ *	If "DatabaseGrowthIncrement" is less than MIN_EXTEND_BYTES, then treat
+ *	it as if `forceSize` is true.
  *
  **************************************/
 	fb_assert(dbb == tdbb->getDatabase());
