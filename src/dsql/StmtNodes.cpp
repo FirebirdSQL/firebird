@@ -12207,6 +12207,7 @@ static void validateExpressions(thread_db* tdbb, const Array<ValidateInfo>& vali
 			else if (!length)
 				value = "";
 			else
+				fb_assert(value);
 				const_cast<char*>(value)[length] = 0;	// safe cast - data is actually on the stack
 
 			string name;
