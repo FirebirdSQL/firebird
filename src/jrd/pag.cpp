@@ -275,9 +275,8 @@ namespace
 		const ULONG sequence = pageNum.getPageNum() / pageMgr.pagesPerPIP;
 		const ULONG relativeBit = pageNum.getPageNum() - sequence * pageMgr.pagesPerPIP;
 
-		if (relativeBit + 1 <= pipUsed)
+		if (relativeBit < pipUsed)
 			return pipUsed;
-		fb_assert(relativeBit >= pipUsed);
 
 		BackupManager::StateReadGuard stateGuard(tdbb);
 

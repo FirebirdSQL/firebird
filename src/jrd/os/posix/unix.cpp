@@ -302,9 +302,7 @@ bool PIO_expand(const TEXT* file_name, USHORT file_length, TEXT* expanded_name, 
 bool PIO_fast_extension_is_supported(const Jrd::jrd_file& file) noexcept
 {
 #if defined(HAVE_LINUX_FALLOC_H) && defined(HAVE_FALLOCATE)
-	return file.fil_flags & FIL_no_fast_extend
-		? false
-		: true;
+	return !(file.fil_flags & FIL_no_fast_extend);
 #else
 	return false;
 #endif
