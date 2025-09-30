@@ -767,7 +767,7 @@ int CVT2_blob_compare(const dsc* arg1, const dsc* arg2, DecimalStatus decSt)
  *
  **************************************/
 
-	SLONG l1, l2;
+	SLONG l1 = NULL, l2 = NULL;
 	USHORT ttype2;
 	int ret_val = 0;
 

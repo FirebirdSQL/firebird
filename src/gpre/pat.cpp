@@ -364,12 +364,14 @@ void PATTERN_expand( USHORT column, const TEXT* pattern, PAT* args)
 			break;
 
 		case L1:
-			long_value = args->pat_long1;
+			if (args && args->pat_long1) 
+				long_value = args->pat_long1;
 			long_flag = true;
 			break;
 
 		case L2:
-			long_value = args->pat_long2;
+			if (args && args->pat_long2) 
+				long_value = args->pat_long2;
 			long_flag = true;
 			break;
 
