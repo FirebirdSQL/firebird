@@ -132,7 +132,7 @@ public:
 	struct ExtendResult
 	{
 		bool success = false;
-		ULONG pages_allocated = 0;
+		ULONG pagesAllocated = 0;
 	};
 	// extend page space
 	ExtendResult extend(thread_db* tdbb, ULONG pageNum, bool forceSize);

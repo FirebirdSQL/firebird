@@ -266,18 +266,18 @@ namespace
 		CCH_RELEASE(tdbb, &window);
 	}
 
-	ULONG ensureDiskSpace(thread_db* tdbb, WIN* pip_window, const PageNumber page_num, const ULONG pip_used)
+	ULONG ensureDiskSpace(thread_db* tdbb, WIN* pipWindow, const PageNumber pageNum, const ULONG pipUsed)
 	{
 		const auto* dbb = tdbb->getDatabase();
 		const PageManager& pageMgr = dbb->dbb_page_manager;
-		PageSpace* const pageSpace = pageMgr.findPageSpace(page_num.getPageSpaceID());
+		PageSpace* const pageSpace = pageMgr.findPageSpace(pageNum.getPageSpaceID());
 
-		const ULONG sequence = page_num.getPageNum() / pageMgr.pagesPerPIP;
-		const ULONG relative_bit = page_num.getPageNum() - sequence * pageMgr.pagesPerPIP;
+		const ULONG sequence = pageNum.getPageNum() / pageMgr.pagesPerPIP;
+		const ULONG relativeBit = pageNum.getPageNum() - sequence * pageMgr.pagesPerPIP;
 
-		if (relative_bit + 1 <= pip_used)
-			return pip_used;
-		fb_assert(relative_bit >= pip_used);
+		if (relativeBit + 1 <= pipUsed)
+			return pipUsed;
+		fb_assert(relativeBit >= pipUsed);
 
 		BackupManager::StateReadGuard stateGuard(tdbb);
 
@@ -285,50 +285,50 @@ namespace
 		{
 			// Our file is locked, so we can't extend it anyway.
 			// Delta will be extended via simple `write` syscalls.
-			return relative_bit + 1;
+			return relativeBit + 1;
 		}
 
-		USHORT init_pages = 1;
+		USHORT initPages = 1;
 
 		if (!(dbb->dbb_flags & DBB_no_reserve))
 		{
-			const unsigned min_extend_pages = MIN_EXTEND_BYTES / dbb->dbb_page_size;
+			const unsigned minExtendPages = MIN_EXTEND_BYTES / dbb->dbb_page_size;
 
 			constexpr ULONG MAX_PAGES_IN_EXTENT = 64;
-			init_pages = sequence ? MAX_PAGES_IN_EXTENT : MIN(pip_used / 16, MAX_PAGES_IN_EXTENT);
+			initPages = sequence ? MAX_PAGES_IN_EXTENT : MIN(pipUsed / 16, MAX_PAGES_IN_EXTENT);
 
 			// don't touch pages belongs to the next PIP
-			init_pages = MIN(init_pages, pageMgr.pagesPerPIP - pip_used);
+			initPages = MIN(initPages, pageMgr.pagesPerPIP - pipUsed);
 
-			if (init_pages < min_extend_pages)
-				init_pages = 1;
+			if (initPages < minExtendPages)
+				initPages = 1;
 		}
 
-		if (init_pages < relative_bit + 1 - pip_used)
-			init_pages = relative_bit + 1 - pip_used;
+		if (initPages < relativeBit + 1 - pipUsed)
+			initPages = relativeBit + 1 - pipUsed;
 
 		// init_pages = FB_ALIGN(init_pages, PAGES_IN_EXTENT);
 
 		FbLocalStatus status;
-		const ULONG used_pages = sequence * pageMgr.pagesPerPIP + pip_used;
+		const ULONG usedPages = sequence * pageMgr.pagesPerPIP + pipUsed;
 
-		const bool allocate_exact_number_of_pages = dbb->dbb_flags & DBB_no_reserve;
-		const auto extension_result = pageSpace->extend(tdbb, used_pages + init_pages, allocate_exact_number_of_pages);
-		if (extension_result.success)
-			init_pages = extension_result.pages_allocated;
+		const bool allocateExactNumberOfPages = dbb->dbb_flags & DBB_no_reserve;
+		const auto extensionResult = pageSpace->extend(tdbb, usedPages + initPages, allocateExactNumberOfPages);
+		if (extensionResult.success)
+			initPages = extensionResult.pagesAllocated;
 		else
 		{
 			// For some reason fast file extension failed, maybe it is not supported by filesystem, or
 			// there is not enough space. Try the old way with writing zeroes to extend file.
-			init_pages = PIO_init_data(tdbb, pageSpace->file, &status, used_pages, init_pages);
+			initPages = PIO_init_data(tdbb, pageSpace->file, &status, usedPages, initPages);
 		}
 
-		if (!init_pages)
+		if (!initPages)
 		{
 			// Zero pages was allocated - perhaps it is not supported,
 			// no space left on disk or IO error occurred. Try to write
 			// one page and handle IO errors if any.
-			WIN window(page_num);
+			WIN window(pageNum);
 			CCH_fake(tdbb, &window, 1);
 			CCH_must_write(tdbb, &window);
 			try
@@ -343,17 +343,17 @@ namespace
 				// normally all page buffers now released by CCH_unwind
 				// only exception is when TDBB_no_cache_unwind flag is set
 				if (tdbb->tdbb_flags & TDBB_no_cache_unwind)
-					CCH_RELEASE(tdbb, pip_window);
+					CCH_RELEASE(tdbb, pipWindow);
 
 				throw;
 			}
 
-			return relative_bit + 1;
+			return relativeBit + 1;
 		}
 
 		// We can allocate more pages than we requested, so don't return value bigger
 		// than PIP can handle (`pagesPerPIP` is limit)
-		return MIN(pip_used + init_pages, pageMgr.pagesPerPIP);
+		return MIN(pipUsed + initPages, pageMgr.pagesPerPIP);
 	}
 
 } // namespace
@@ -1963,7 +1963,7 @@ PageSpace::ExtendResult PageSpace::extend(thread_db* tdbb, const ULONG pageNum, 
 
 	// First, check it with the cached `maxPageNumber` value.
 	if (pageNum < maxPageNumber || pageNum < maxAlloc())
-		return {.success = true, .pages_allocated = maxPageNumber - pageNum};
+		return {.success = true, .pagesAllocated = maxPageNumber - pageNum};
 
 	const ULONG MAX_EXTEND_BYTES = static_cast<ULONG>(dbb->dbb_config->getDatabaseGrowthIncrement());
 	if (MAX_EXTEND_BYTES < MIN_EXTEND_BYTES)
@@ -1995,7 +1995,7 @@ PageSpace::ExtendResult PageSpace::extend(thread_db* tdbb, const ULONG pageNum, 
 			// File was extended, reset cached value
 			maxPageNumber = 0;
 
-			return {.success = true, .pages_allocated = extPages};
+			return {.success = true, .pagesAllocated = extPages};
 		}
 		catch (const status_exception&)
 		{
@@ -2006,7 +2006,7 @@ PageSpace::ExtendResult PageSpace::extend(thread_db* tdbb, const ULONG pageNum, 
 				// if file was extended, return, else try to extend by less pages
 
 				if (const auto newMaxPageNumber = maxAlloc(); oldMaxPageNumber < newMaxPageNumber)
-					return {.success = true, .pages_allocated = newMaxPageNumber - oldMaxPageNumber};
+					return {.success = true, .pagesAllocated = newMaxPageNumber - oldMaxPageNumber};
 
 				extPages = MAX(reqPages, extPages / 2);
 			}
