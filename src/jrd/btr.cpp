@@ -2315,15 +2315,14 @@ void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation)
 	}
 
 	UCHAR* desc = 0;
-	USHORT len = 0, space = 0;
 	index_root_page::irt_repeat* slot = NULL;
 	index_root_page::irt_repeat* end = NULL;
 
 	for (int retry = 0; retry < 2; ++retry)
 	{
-		len = idx->idx_count * sizeof(irtd);
+		USHORT len = idx->idx_count * sizeof(irtd);
 
-		space = dbb->dbb_page_size;
+		USHORT space = dbb->dbb_page_size;
 		slot = NULL;
 
 		end = root->irt_rpt + root->irt_count;
