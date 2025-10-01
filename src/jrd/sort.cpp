@@ -417,7 +417,7 @@ void Sort::sort(thread_db* tdbb)
  **************************************/
 	run_control* run;
 	merge_control* merge;
-	merge_control* merge_pool = nullptr;
+	merge_control* merge_pool;
 
 	try
 	{
