@@ -181,9 +181,9 @@ int CLIB_ROUTINE main( int argc, char **argv)
 	divorce_terminal(mask);
 
 	time_t timer = 0;
+	int ret_code = NORMAL_EXIT;
 
 	do {
-		int ret_code = 0;
 
 		if (shutting_down)
 		{
