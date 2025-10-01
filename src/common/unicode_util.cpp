@@ -1877,8 +1877,6 @@ USHORT UnicodeUtil::Utf16Collation::stringToKey(USHORT srcLen, const USHORT* src
 						fb_assert(lastCharKey[lastCharKeyLen - 1] == '\0');
 						--lastCharKeyLen;
 					}
-					else
-						prefixLen = 0;
 
 					bool fallbackToPrefixKey = false;
 
