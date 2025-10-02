@@ -31,6 +31,8 @@
 #include "../../jrd/trace/TraceManager.h"
 #include "../../jrd/trace/TraceObjects.h"
 
+#include <string_view>
+
 namespace Jrd {
 
 using Firebird::ITracePlugin;
@@ -53,14 +55,12 @@ public:
 
 		m_start_clock = fb_utils::query_performance_counter();
 
-		static const char empty_string[] = "";
-		if (!string)
+		static constexpr std::string_view empty_string = "<empty statement>";
+		if (m_string == nullptr || (m_string_len == 0 && (m_string_len = fb_strlen(m_string)) == 0))
 		{
-			m_string = empty_string;
-			m_string_len = 0;
+			m_string = empty_string.data();
+			m_string_len = empty_string.length();
 		}
-		else if (m_string_len == 0)
-			m_string_len = fb_strlen(m_string);
 	}
 
 	~TraceDSQLPrepare()
