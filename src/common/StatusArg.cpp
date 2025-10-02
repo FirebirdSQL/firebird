@@ -420,8 +420,8 @@ Quad::Quad(const ISC_QUAD* quad) noexcept :
 	Str(text)
 {
 	(void)snprintf(text, sizeof(text), "%x:%x",
-		(unsigned int)quad->gds_quad_high,
-		(unsigned int)quad->gds_quad_low
+		static_cast<unsigned int>(quad->gds_quad_high),
+		quad->gds_quad_low
 	);
 }
 
