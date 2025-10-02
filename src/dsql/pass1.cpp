@@ -1906,7 +1906,7 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 			(streamList->items.getCount() != 1 ||
 				!(relNode = nodeAs<RelationSourceNode>(streamList->items[0])) ||
 				!(relation = relNode->dsqlContext->ctx_relation) ||
-				(relation->rel_flags & (REL_view | REL_external))))
+				(relation->rel_flags & (REL_view | REL_external | REL_foreign))))
 		{
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 					  Arg::Gds(isc_dsql_wlock_simple));

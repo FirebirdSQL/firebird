@@ -4134,6 +4134,7 @@ const
 	isc_dpb_search_path = byte(105);
 	isc_dpb_blr_request_search_path = byte(106);
 	isc_dpb_gbak_restore_has_schema = byte(107);
+	isc_dpb_foreign_options = byte(108);
 	isc_dpb_address = byte(1);
 	isc_dpb_addr_protocol = byte(1);
 	isc_dpb_addr_endpoint = byte(2);
@@ -4604,6 +4605,7 @@ const
 	fb_info_wire_roundtrips = byte(158);
 	fb_info_max_blob_cache_size = byte(159);
 	fb_info_max_inline_blob_size = byte(160);
+	fb_info_sql_features = byte(161);
 	fb_info_crypt_encrypted = $01;
 	fb_info_crypt_process = $02;
 	fb_feature_multi_statements = byte(1);
@@ -4613,6 +4615,10 @@ const
 	fb_feature_read_consistency = byte(5);
 	fb_feature_statement_timeout = byte(6);
 	fb_feature_statement_long_life = byte(7);
+	fb_feature_prepared_input_types = byte(8);
+	fb_feature_sql_op_concatenate = byte(1);
+	fb_feature_sql_op_equiv = byte(2);
+	fb_feature_sql_op_null_ordering = byte(3);
 	fb_info_replica_none = byte(0);
 	fb_info_replica_read_only = byte(1);
 	fb_info_replica_read_write = byte(2);
@@ -5840,6 +5846,8 @@ const
 	 isc_invalid_name = 335545316;
 	 isc_invalid_unqualified_name_list = 335545317;
 	 isc_no_user_att_while_restore = 335545318;
+	 isc_foreign_server = 335545319;
+	 isc_foreign_provider_not_found = 335545320;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;
@@ -6003,6 +6011,9 @@ const
 	 isc_dyn_cannot_mod_obj_sys_schema = 336068927;
 	 isc_dyn_cannot_create_reserved_schema = 336068928;
 	 isc_dyn_cannot_infer_schema = 336068929;
+	 isc_dyn_foreign_server_not_found = 336068931;
+	 isc_dyn_user_mapping_not_found = 336068932;
+	 isc_dyn_foreign_server_already_exists = 336068933;
 	 isc_gbak_unknown_switch = 336330753;
 	 isc_gbak_page_size_missing = 336330754;
 	 isc_gbak_page_size_toobig = 336330755;
@@ -6237,6 +6248,21 @@ const
 	 isc_dsql_recreate_schema_failed = 336397338;
 	 isc_dsql_alter_schema_failed = 336397339;
 	 isc_dsql_create_alter_schema_failed = 336397340;
+	 isc_dsql_create_foreign_server_failed = 336397341;
+	 isc_dsql_alter_foreign_server_failed = 336397342;
+	 isc_dsql_create_alter_foreign_server_failed = 336397343;
+	 isc_dsql_recreate_foreign_server_failed = 336397344;
+	 isc_dsql_drop_foreign_server_failed = 336397345;
+	 isc_dsql_create_user_mapping_failed = 336397346;
+	 isc_dsql_alter_user_mapping_failed = 336397347;
+	 isc_dsql_create_alter_user_mapping_failed = 336397348;
+	 isc_dsql_recreate_user_mapping_failed = 336397349;
+	 isc_dsql_drop_user_mapping_failed = 336397350;
+	 isc_dsql_foreign_table_not_found = 336397351;
+	 isc_dsql_create_foreign_table_failed = 336397352;
+	 isc_dsql_alter_foreign_table_failed = 336397353;
+	 isc_dsql_drop_foreign_table_failed = 336397354;
+	 isc_dsql_recreate_foreign_table_failed = 336397355;
 	 isc_gsec_cant_open_db = 336723983;
 	 isc_gsec_switches_error = 336723984;
 	 isc_gsec_no_op_spec = 336723985;

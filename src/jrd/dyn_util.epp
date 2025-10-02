@@ -301,6 +301,19 @@ bool DYN_UTIL_check_unique_name_nothrow(thread_db* tdbb, jrd_tra* transaction,
 			break;
 		}
 
+		case obj_foreign_server:
+			requestHandle.reset(tdbb, drq_l_f_server_name, DYN_REQUESTS);
+
+			FOR(REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+				FS IN RDB$FOREIGN_SERVERS
+				WITH FS.RDB$FOREIGN_SERVER_NAME EQ object_name.object.c_str()
+			{
+				*errorCode = 325;	// isc_dyn_foreign_server_already_exists
+			}
+			END_FOR
+
+			break;
+
 		default:
 			fb_assert(false);
 	}

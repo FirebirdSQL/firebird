@@ -110,6 +110,7 @@ inline constexpr const char* REL_SCOPE_GTT_DELETE	= "global temporary table %s o
 inline constexpr const char* REL_SCOPE_EXTERNAL		= "external table %s";
 inline constexpr const char* REL_SCOPE_VIEW			= "view %s";
 inline constexpr const char* REL_SCOPE_VIRTUAL		= "virtual table %s";
+inline constexpr const char* REL_SCOPE_FOREIGN		= "foreign table %s";
 
 // literal strings in rdb$ref_constraints to be used to identify
 // the cascade actions for referential constraints. Used
@@ -234,7 +235,8 @@ enum rel_t {
 	rel_external = 2,
 	rel_virtual = 3,
 	rel_global_temp_preserve = 4,
-	rel_global_temp_delete = 5
+	rel_global_temp_delete = 5,
+	rel_foreign = 6
 };
 
 // procedure types
@@ -412,7 +414,13 @@ static inline constexpr const char* DDL_TRIGGER_ACTION_NAMES[][2] =
 	{"DROP", "MAPPING"},
 	{"CREATE", "SCHEMA"},
 	{"ALTER", "SCHEMA"},
-	{"DROP", "SCHEMA"}
+	{"DROP", "SCHEMA"},
+	{"CREATE", "SERVER"},
+	{"ALTER", "SERVER"},
+	{"DROP", "SERVER"},
+	{"CREATE", "USER MAPPING FOR"},
+	{"ALTER", "USER MAPPING FOR"},
+	{"DROP", "USER MAPPING FOR"}
 };
 
 inline constexpr int DDL_TRIGGER_BEFORE	= 0;
@@ -468,6 +476,12 @@ inline constexpr int DDL_TRIGGER_DROP_MAPPING			= 47;
 inline constexpr int DDL_TRIGGER_CREATE_SCHEMA			= 48;
 inline constexpr int DDL_TRIGGER_ALTER_SCHEMA			= 49;
 inline constexpr int DDL_TRIGGER_DROP_SCHEMA			= 50;
+inline constexpr int DDL_TRIGGER_CREATE_FOREIGN_SERVER		= 51;
+inline constexpr int DDL_TRIGGER_ALTER_FOREIGN_SERVER		= 52;
+inline constexpr int DDL_TRIGGER_DROP_FOREIGN_SERVER		= 53;
+inline constexpr int DDL_TRIGGER_CREATE_USER_MAPPING		= 54;
+inline constexpr int DDL_TRIGGER_ALTER_USER_MAPPING		= 55;
+inline constexpr int DDL_TRIGGER_DROP_USER_MAPPING		= 56;
 
 // that's how database trigger action types are encoded
 //    (TRIGGER_TYPE_DB | type)
@@ -497,12 +511,20 @@ inline constexpr unsigned OPT_STATIC_STREAMS = 64;
 						 fb_feature_session_reset, \
 						 fb_feature_read_consistency, \
 						 fb_feature_statement_timeout, \
-						 fb_feature_statement_long_life}
+						 fb_feature_statement_long_life, \
+						 fb_feature_prepared_input_types}
 
 inline constexpr int WITH_GRANT_OPTION = 1;
 inline constexpr int WITH_ADMIN_OPTION = 2;
 
 // Max length of the string returned by ERROR_TEXT context variable
 inline constexpr USHORT MAX_ERROR_MSG_LENGTH = 1024 * METADATA_BYTES_PER_CHAR; // 1024 UTF-8 characters
+
+enum ExternalValueType
+{
+	TYPE_STRING = 0,
+	TYPE_ENV = 1,
+	TYPE_FILE = 2
+};
 
 #endif // JRD_CONSTANTS_H

@@ -715,6 +715,10 @@ using namespace Firebird;
 %token <metaNamePtr> SCHEMA
 %token <metaNamePtr> SEARCH_PATH
 %token <metaNamePtr> UNLIST
+%token <metaNamePtr> SERVER
+%token <metaNamePtr> OPTIONS
+%token <metaNamePtr> ENV
+%token <metaNamePtr> WRAPPER
 
 // precedence declarations for expression evaluation
 
@@ -836,6 +840,7 @@ using namespace Firebird;
 	Jrd::RelationNode::RefActionClause* refActionClause;
 	Jrd::RelationNode::IndexConstraintClause* indexConstraintClause;
 	Jrd::RelationNode::IdentityOptions* identityOptions;
+	Jrd::RelationNode::AlterForeignColumnClause* alterForeignColumnClause;
 	IdentityType identityType;
 	Jrd::CreateRelationNode* createRelationNode;
 	Jrd::CreateAlterViewNode* createAlterViewNode;
@@ -874,6 +879,9 @@ using namespace Firebird;
 	Jrd::SetBindNode* setBindNode;
 	Jrd::SessionResetNode* sessionResetNode;
 	Jrd::ForRangeNode::Direction forRangeDirection;
+	Jrd::CreateAlterForeignServerNode* createAlterForeignServerNode;
+	Jrd::CreateAlterUserMappingNode* createAlterUserMappingNode;
+	ExternalValueType extValueType;
 }
 
 %include types.y
@@ -1111,6 +1119,8 @@ schemaless_object
 		{ $$ = newNode<GranteeClause>(obj_filters, QualifiedName(getDdlSecurityName(obj_filters))); }
 	| SCHEMA
 		{ $$ = newNode<GranteeClause>(obj_schemas, QualifiedName(getDdlSecurityName(obj_schemas))); }
+	| SERVER
+		{ $$ = newNode<GranteeClause>(obj_foreign_servers, QualifiedName(getDdlSecurityName(obj_foreign_servers))); }
 	;
 
 table_noise
@@ -1653,6 +1663,12 @@ create_clause
 			node->createIfNotExistsOnly = $4;
 			$$ = node;
 		}
+	| FOREIGN TABLE if_not_exists_opt foreign_table_clause
+		{
+			const auto node = $4;
+			node->createIfNotExistsOnly = $3;
+			$$ = node;
+		}
 	| TRIGGER if_not_exists_opt trigger_clause
 		{
 			const auto node = $3;
@@ -1739,6 +1755,13 @@ create_clause
 			node->createIfNotExistsOnly = $2;
 			$$ = node;
 		}
+	| SERVER if_not_exists_opt create_foreign_server_clause
+		{
+			const auto node = $3;
+			node->createIfNotExistsOnly = $2;
+			$$ = node;
+		}
+	| USER MAPPING FOR create_foreign_user_mapping_clause	{ $$ = $4; }
 	;
 
 
@@ -1757,6 +1780,8 @@ recreate_clause
 		{ $$ = newNode<RecreateTableNode>($2); }
 	| GLOBAL TEMPORARY TABLE gtt_table_clause
 		{ $$ = newNode<RecreateTableNode>($4); }
+	| FOREIGN TABLE foreign_table_clause
+		{ $$ = newNode<RecreateForeignTableNode>($3); }
 	| VIEW view_clause
 		{ $$ = newNode<RecreateViewNode>($2); }
 	| TRIGGER trigger_clause
@@ -1775,6 +1800,8 @@ recreate_clause
 		{ $$ = newNode<RecreateUserNode>($2); }
 	| SCHEMA schema_clause
 		{ $$ = newNode<RecreateSchemaNode>($2); }
+	| SERVER create_foreign_server_clause
+		{ $$ = newNode<RecreateForeignServerNode>($2); }
 	;
 
 %type <ddlNode> create_or_alter
@@ -2432,6 +2459,23 @@ gtt_op($createRelationNode)
 		{ setClause($createRelationNode->relationType, "ON COMMIT PRESERVE ROWS", rel_global_temp_preserve); }
 	;
 
+%type <createRelationNode> foreign_table_clause
+foreign_table_clause
+	: simple_table_name
+			{
+				$<createRelationNode>$ = newNode<CreateForeignRelationNode>($1);
+			}
+		'(' foreign_table_elements($2) ')' SERVER valid_symbol_name
+			{
+				$$ = $2;
+				$$->foreignServer = *$7;
+			}
+		create_foreign_table_fixed_list_opt($8)
+			{
+				$$ = $8;
+			}
+	;
+
 %type <stringPtr> external_file
 external_file
 	: /* nothing */					{ $$ = NULL; }
@@ -2451,10 +2495,28 @@ table_element($createRelationNode)
 	| table_constraint_definition($createRelationNode)
 	;
 
+%type foreign_table_elements(<createRelationNode>)
+foreign_table_elements($createRelationNode)
+	: foreign_table_element($createRelationNode)
+	| foreign_table_elements ',' foreign_table_element($createRelationNode)
+	;
+
+%type foreign_table_element(<createRelationNode>)
+foreign_table_element($createRelationNode)
+	: basic_column_def($createRelationNode) create_foreign_column_fixed_list_opt($1)
+	| table_constraint_definition($createRelationNode)
+	;
+
 // column definition
 
 %type <addColumnClause> column_def(<relationNode>)
 column_def($relationNode)
+	: basic_column_def($relationNode) { $$ = $1; }
+	| computed_column_def($relationNode) { $$ = $1; }
+	;
+
+%type <addColumnClause> basic_column_def(<relationNode>)
+basic_column_def($relationNode)
 	: symbol_column_name data_type_or_domain domain_default_opt
 			{
 				RelationNode::AddColumnClause* clause = $<addColumnClause>$ =
@@ -2483,7 +2545,11 @@ column_def($relationNode)
 				setCollate($2, $6);
 				$$ = $<addColumnClause>4;
 			}
-	| symbol_column_name non_array_type def_computed
+	;
+
+%type <addColumnClause> computed_column_def(<relationNode>)
+computed_column_def($relationNode)
+	: symbol_column_name non_array_type def_computed
 		{
 			RelationNode::AddColumnClause* clause = newNode<RelationNode::AddColumnClause>();
 			clause->field = $2;
@@ -2670,6 +2736,80 @@ column_constraint($addColumnClause)
 		}
 	;
 
+%type create_foreign_column_fixed_list_opt(<addColumnClause>)
+create_foreign_column_fixed_list_opt($addColumnClause)
+	: // nothing
+	| create_foreign_column_fixed_list($addColumnClause)
+	;
+
+%type create_foreign_column_fixed_list(<addColumnClause>)
+create_foreign_column_fixed_list($addColumnClause)
+	: create_foreign_column_fixed_option($addColumnClause)
+	| create_foreign_column_fixed_list create_foreign_column_fixed_option($addColumnClause)
+	;
+
+%type create_foreign_column_fixed_option(<addColumnClause>)
+create_foreign_column_fixed_option($addColumnClause)
+	: OPTIONS '(' create_foreign_column_var_list($addColumnClause) ')'
+	;
+
+%type create_foreign_column_var_list(<addColumnClause>)
+create_foreign_column_var_list($addColumnClause)
+	: create_foreign_column_var_option($addColumnClause)
+	| create_foreign_column_var_list ',' create_foreign_column_var_option($addColumnClause)
+	;
+
+%type create_foreign_column_var_option(<addColumnClause>)
+create_foreign_column_var_option($addColumnClause)
+	: symbol_foreign_option_name '=' utf_string
+		{
+			$addColumnClause->addOption($1, $3);
+		}
+	| symbol_foreign_option_name utf_string
+		{
+			$addColumnClause->addOption($1, $2);
+		}
+	;
+
+%type alter_foreign_column_fixed_list_opt(<alterForeignColumnClause>)
+alter_foreign_column_fixed_list_opt($alterForeignColumnClause)
+	: // nothing
+	| alter_foreign_column_fixed_list($alterForeignColumnClause)
+	;
+
+%type alter_foreign_column_fixed_list(<alterForeignColumnClause>)
+alter_foreign_column_fixed_list($alterForeignColumnClause)
+	: alter_foreign_column_fixed_option($alterForeignColumnClause)
+	| alter_foreign_column_fixed_list alter_foreign_column_fixed_option($alterForeignColumnClause)
+	;
+
+%type alter_foreign_column_fixed_option(<alterForeignColumnClause>)
+alter_foreign_column_fixed_option($alterForeignColumnClause)
+	: OPTIONS '(' alter_foreign_column_var_list($alterForeignColumnClause) ')'
+	;
+
+%type alter_foreign_column_var_list(<alterForeignColumnClause>)
+alter_foreign_column_var_list($alterForeignColumnClause)
+	: alter_foreign_column_var_option($alterForeignColumnClause)
+	| alter_foreign_column_var_list ',' alter_foreign_column_var_option($alterForeignColumnClause)
+	;
+
+%type alter_foreign_column_var_option(<alterForeignColumnClause>)
+alter_foreign_column_var_option($alterForeignColumnClause)
+	: symbol_foreign_option_name '=' utf_string
+		{
+			$alterForeignColumnClause->addOption($1, $3);
+		}
+	| symbol_foreign_option_name utf_string
+		{
+			$alterForeignColumnClause->addOption($1, $2);
+		}
+	| DROP symbol_foreign_option_name
+		{
+			$alterForeignColumnClause->addOption($2);
+		}
+	;
+
 
 // table constraints
 
@@ -2806,6 +2946,72 @@ referential_action
 	| NO ACTION		{ $$ = RelationNode::RefActionClause::ACTION_NONE; }
 	;
 
+%type create_foreign_table_fixed_list_opt(<relationNode>)
+create_foreign_table_fixed_list_opt($node)
+	: // nothing
+	| create_foreign_table_fixed_list($node)
+	;
+
+%type create_foreign_table_fixed_list(<relationNode>)
+create_foreign_table_fixed_list($node)
+	: create_foreign_table_fixed_option($node)
+	| create_foreign_table_fixed_list create_foreign_table_fixed_option($node)
+	;
+
+%type create_foreign_table_fixed_option(<relationNode>)
+create_foreign_table_fixed_option($node)
+	: OPTIONS '(' create_foreign_table_var_list($node) ')'
+	;
+
+%type create_foreign_table_var_list(<relationNode>)
+create_foreign_table_var_list($node)
+	: foreign_table_var_option($node)
+	| create_foreign_table_var_list ',' foreign_table_var_option($node)
+	;
+
+%type foreign_table_var_option(<relationNode>)
+foreign_table_var_option($node)
+	: symbol_foreign_option_name '=' utf_string
+		{
+			$node->addOption($1, $3);
+		}
+	| symbol_foreign_option_name utf_string
+		{
+			$node->addOption($1, $2);
+		}
+	;
+
+%type alter_foreign_table_fixed_list_opt(<relationNode>)
+alter_foreign_table_fixed_list_opt($node)
+	: // nothing
+	| alter_foreign_table_fixed_list($node)
+	;
+
+%type alter_foreign_table_fixed_list(<relationNode>)
+alter_foreign_table_fixed_list($node)
+	: alter_foreign_table_fixed_option($node)
+	| alter_foreign_table_fixed_list alter_foreign_table_fixed_option($node)
+	;
+
+%type alter_foreign_table_fixed_option(<relationNode>)
+alter_foreign_table_fixed_option($node)
+	: OPTIONS '(' alter_foreign_table_var_list($node) ')'
+	;
+
+%type alter_foreign_table_var_list(<relationNode>)
+alter_foreign_table_var_list($node)
+	: alter_foreign_table_var_option($node)
+	| alter_foreign_table_var_list ',' alter_foreign_table_var_option($node)
+	;
+
+%type alter_foreign_table_var_option(<relationNode>)
+alter_foreign_table_var_option($node)
+	: foreign_table_var_option($node)
+	| DROP symbol_foreign_option_name
+		{
+			$node->addOption($2);
+		}
+	;
 
 // PROCEDURE
 
@@ -3793,6 +3999,8 @@ exec_stmt_option($execStatementNode)
 		{ setClause($execStatementNode->dataSource, "EXTERNAL DATA SOURCE", $5); }
 	| ON EXTERNAL value
 		{ setClause($execStatementNode->dataSource, "EXTERNAL DATA SOURCE", $3); }
+	| ON EXTERNAL SERVER symbol_foreign_server_name
+		{ setClause($execStatementNode->server, "SERVER", *$4); }
 	| AS USER value
 		{ setClause($execStatementNode->userName, "USER", $3); }
 	| PASSWORD value
@@ -4325,6 +4533,12 @@ trigger_ddl_type_items
 	| CREATE MAPPING		{ $$ = TRIGGER_TYPE_DDL | (1LL << DDL_TRIGGER_CREATE_MAPPING); }
 	| ALTER MAPPING			{ $$ = TRIGGER_TYPE_DDL | (1LL << DDL_TRIGGER_ALTER_MAPPING); }
 	| DROP MAPPING			{ $$ = TRIGGER_TYPE_DDL | (1LL << DDL_TRIGGER_DROP_MAPPING); }
+	| CREATE SERVER			{ $$ = TRIGGER_TYPE_DDL | (1LL << DDL_TRIGGER_CREATE_FOREIGN_SERVER); }
+	| ALTER SERVER			{ $$ = TRIGGER_TYPE_DDL | (1LL << DDL_TRIGGER_ALTER_FOREIGN_SERVER); }
+	| DROP SERVER			{ $$ = TRIGGER_TYPE_DDL | (1LL << DDL_TRIGGER_DROP_FOREIGN_SERVER); }
+	| CREATE USER MAPPING FOR		{ $$ = TRIGGER_TYPE_DDL | (1LL << DDL_TRIGGER_CREATE_USER_MAPPING); }
+	| ALTER USER MAPPING FOR		{ $$ = TRIGGER_TYPE_DDL | (1LL << DDL_TRIGGER_ALTER_USER_MAPPING); }
+	| DROP USER MAPPING FOR			{ $$ = TRIGGER_TYPE_DDL | (1LL << DDL_TRIGGER_DROP_USER_MAPPING); }
 	| trigger_ddl_type OR
 		trigger_ddl_type	{ $$ = $1 | $3; }
 	;
@@ -4375,6 +4589,10 @@ alter_clause
 			{ $$ = newNode<AlterRelationNode>($2); }
 		alter_ops($<relationNode>3)
 			{ $$ = $<relationNode>3; }
+	| FOREIGN TABLE simple_table_name
+			{ $$ = newNode<AlterForeignRelationNode>($3); }
+		foreign_alter_ops($<relationNode>4)
+			{ $$ = $<relationNode>4; }
 	| VIEW alter_view_clause				{ $$ = $2; }
 	| TRIGGER alter_trigger_clause			{ $$ = $2; }
 	| PROCEDURE alter_procedure_clause		{ $$ = $2; }
@@ -4398,6 +4616,8 @@ alter_clause
 	| GLOBAL MAPPING alter_map_clause(true)	{ $$ = $3; }
 	| EXTERNAL CONNECTIONS POOL alter_eds_conn_pool_clause	{ $$ = $4; }
 	| SCHEMA alter_schema_clause			{ $$ = $2; }
+	| SERVER alter_foreign_server_clause	{ $$ = $2; }
+	| USER MAPPING FOR alter_foreign_user_mapping_clause	{ $$ = $4; }
 	;
 
 %type <alterDomainNode> alter_domain
@@ -4603,6 +4823,42 @@ alter_op($relationNode)
 			RelationNode::Clause* clause =
 				newNode<RelationNode::Clause>(RelationNode::Clause::TYPE_ALTER_PUBLICATION);
 			$relationNode->clauses.add(clause);
+		}
+	;
+
+%type foreign_alter_ops(<relationNode>)
+foreign_alter_ops($relationNode)
+	: foreign_alter_op($relationNode)
+	| foreign_alter_ops ',' foreign_alter_op($relationNode)
+	;
+
+%type <alterForeignColumnClause> foreign_alter_op(<relationNode>)
+foreign_alter_op($relationNode)
+	: alter_op($relationNode)
+		{
+			$$ = NULL;
+		}
+	| alter_foreign_table_fixed_list_opt($relationNode)
+		{
+			RelationNode::Clause* clause =
+				newNode<RelationNode::Clause>(RelationNode::Clause::TYPE_ALTER_OPTIONS);
+			$relationNode->clauses.add(clause);
+		}
+	| ADD if_not_exists_opt column_def($relationNode) create_foreign_column_fixed_list_opt($3)
+		{
+			const auto node = $3;
+			node->createIfNotExistsOnly = $2;
+		}
+	| col_opt symbol_column_name
+		{
+			RelationNode::AlterForeignColumnClause* clause = newNode<RelationNode::AlterForeignColumnClause>();
+			clause->name = *$2;
+			$relationNode->clauses.add(clause);
+			$$ = clause;
+		}
+		alter_foreign_column_fixed_list_opt(NOTRIAL($<alterForeignColumnClause>3))
+		{
+			$$ = $<alterForeignColumnClause>3;
 		}
 	;
 
@@ -5030,6 +5286,12 @@ drop_clause
 			node->silent = $2;
 			$$ = node;
 		}
+	| FOREIGN TABLE if_exists_opt symbol_table_name
+		{
+			const auto node = newNode<DropForeignRelationNode>(*$4);
+			node->silent = $3;
+			$$ = node;
+		}
 	| TRIGGER if_exists_opt symbol_trigger_name
 		{
 			const auto node = newNode<DropTriggerNode>(*$3);
@@ -5136,6 +5398,18 @@ drop_clause
 		{
 			const auto node = newNode<DropSchemaNode>(*$3);
 			node->silent = $2;
+			$$ = node;
+		}
+	| SERVER if_exists_opt symbol_foreign_server_name
+		{
+			const auto node = newNode<DropForeignServerNode>(*$3);
+			node->silent = $2;
+			$$ = node;
+		}
+	| USER MAPPING FOR if_exists_opt symbol_user_name SERVER symbol_foreign_server_name
+		{
+			const auto node = newNode<DropUserMappingNode>(*$5, *$7);
+			node->silent = $4;
 			$$ = node;
 		}
 	;
@@ -6226,6 +6500,7 @@ ddl_type1_noschema
 	: FILTER				{ $$ = obj_blob_filter; }
 	| ROLE					{ $$ = obj_sql_role; }
 	| SCHEMA				{ $$ = obj_schema; }
+	| SERVER				{ $$ = obj_foreign_server; }
 	;
 
 %type <intVal> ddl_type3
@@ -8049,6 +8324,238 @@ map_role
 	;
 
 
+// SERVER
+
+%type <createAlterForeignServerNode> create_foreign_server_clause
+create_foreign_server_clause
+	: symbol_foreign_server_name
+ 		{
+			$$ = newNode<CreateAlterForeignServerNode>(*$1);
+			$$->create = true;
+			$$->alter = false;
+		}
+	create_foreign_server_fixed_list_opt($2)
+		{
+			$$ = $2;
+		}
+	;
+
+%type <createAlterForeignServerNode> alter_foreign_server_clause
+alter_foreign_server_clause
+	: symbol_foreign_server_name
+		{
+			$$ = newNode<CreateAlterForeignServerNode>(*$1);
+			$$->create = false;
+			$$->alter = true;
+		}
+	alter_foreign_server_fixed_list_opt($2)
+		{
+			$$ = $2;
+		}
+	;
+
+%type create_foreign_server_fixed_list_opt(<createAlterForeignServerNode>)
+create_foreign_server_fixed_list_opt($node)
+	: // nothing
+	| create_foreign_server_fixed_list($node)
+	;
+
+%type create_foreign_server_fixed_list(<createAlterForeignServerNode>)
+create_foreign_server_fixed_list($node)
+	: create_foreign_server_fixed_option($node)
+	| create_foreign_server_fixed_list create_foreign_server_fixed_option($node)
+	;
+
+%type create_foreign_server_fixed_option(<createAlterForeignServerNode>)
+create_foreign_server_fixed_option($node)
+	: create_foreign_server_plugin($node)
+	| OPTIONS '(' create_foreign_server_var_list($node) ')'
+	;
+
+%type create_foreign_server_plugin(<createAlterForeignServerNode>)
+create_foreign_server_plugin($node)
+	: USING PLUGIN valid_symbol_name
+							{ setClause($node->plugin, "USING PLUGIN", *$3); }
+	| FOREIGN DATA WRAPPER valid_symbol_name
+							{ setClause($node->plugin, "FOREIGN DATA WRAPPER", *$4); }
+	;
+
+%type create_foreign_server_var_list(<createAlterForeignServerNode>)
+create_foreign_server_var_list($node)
+	: foreign_server_var_option($node)
+	| create_foreign_server_var_list ',' foreign_server_var_option($node)
+	;
+
+%type foreign_server_var_option(<createAlterForeignServerNode>)
+foreign_server_var_option($node)
+	: symbol_foreign_option_name '=' utf_string
+		{
+			$node->addOption($1, $3);
+		}
+	| symbol_foreign_option_name value_storage_type_opt utf_string
+		{
+			$node->addOption($1, $3, $2);
+		}
+	;
+
+%type alter_foreign_server_fixed_list_opt(<createAlterForeignServerNode>)
+alter_foreign_server_fixed_list_opt($node)
+	: // nothing
+	| alter_foreign_server_fixed_list($node)
+	;
+
+%type alter_foreign_server_fixed_list(<createAlterForeignServerNode>)
+alter_foreign_server_fixed_list($node)
+	: alter_foreign_server_fixed_option($node)
+	| alter_foreign_server_fixed_list alter_foreign_server_fixed_option($node)
+	;
+
+%type alter_foreign_server_fixed_option(<createAlterForeignServerNode>)
+alter_foreign_server_fixed_option($node)
+	: alter_foreign_server_plugin($node)
+	| OPTIONS '(' alter_foreign_server_var_list($node) ')'
+	;
+
+%type alter_foreign_server_plugin(<createAlterForeignServerNode>)
+alter_foreign_server_plugin($node)
+	: USING PLUGIN valid_symbol_name
+							{ setClause($node->plugin, "USING PLUGIN", *$3); }
+	| DROP USING PLUGIN { setClause($node->dropPlugin, "DROP USING PLUGIN"); }
+	| FOREIGN DATA WRAPPER valid_symbol_name
+							{ setClause($node->plugin, "FOREIGN DATA WRAPPER", *$4); }
+	| DROP FOREIGN DATA WRAPPER
+							{ setClause($node->dropPlugin, "DROP FOREIGN DATA WRAPPER"); }
+	;
+
+%type alter_foreign_server_var_list(<createAlterForeignServerNode>)
+alter_foreign_server_var_list($node)
+	: alter_foreign_server_var_option($node)
+	| alter_foreign_server_var_list ',' alter_foreign_server_var_option($node)
+	;
+
+%type alter_foreign_server_var_option(<createAlterForeignServerNode>)
+alter_foreign_server_var_option($node)
+	: foreign_server_var_option($node)
+	| DROP symbol_foreign_option_name
+		{
+			$node->addOption($2);
+		}
+	;
+
+
+// USER MAPPING
+
+%type <createAlterUserMappingNode> foreign_user_mapping_clause
+foreign_user_mapping_clause
+	: symbol_user_name SERVER symbol_foreign_server_name
+ 		{
+			$$ = newNode<CreateAlterUserMappingNode>(*$1, *$3);
+		}
+	;
+
+%type <createAlterUserMappingNode> create_foreign_user_mapping_clause
+create_foreign_user_mapping_clause
+	: foreign_user_mapping_clause
+ 		{
+			$$ = $1;
+			$$->create = true;
+			$$->alter = false;
+		}
+	create_user_mapping_fixed_list_opt($2)
+		{
+			$$ = $2;
+		}
+	;
+
+%type <createAlterUserMappingNode> alter_foreign_user_mapping_clause
+alter_foreign_user_mapping_clause
+	: foreign_user_mapping_clause
+		{
+			$$ = $1;
+			$$->create = false;
+			$$->alter = true;
+		}
+	alter_user_mapping_fixed_list_opt($2)
+		{
+			$$ = $2;
+		}
+	;
+
+%type create_user_mapping_fixed_list_opt(<createAlterUserMappingNode>)
+create_user_mapping_fixed_list_opt($node)
+	: // nothing
+	| create_user_mapping_fixed_list($node)
+	;
+
+%type create_user_mapping_fixed_list(<createAlterUserMappingNode>)
+create_user_mapping_fixed_list($node)
+	: create_user_mapping_fixed_option($node)
+	| create_user_mapping_fixed_list create_user_mapping_fixed_option($node)
+	;
+
+%type create_user_mapping_fixed_option(<createAlterUserMappingNode>)
+create_user_mapping_fixed_option($node)
+	: OPTIONS '(' create_user_mapping_var_list($node) ')'
+	;
+
+%type create_user_mapping_var_list(<createAlterUserMappingNode>)
+create_user_mapping_var_list($node)
+	: user_mapping_var_option($node)
+	| create_user_mapping_var_list ',' user_mapping_var_option($node)
+	;
+
+%type user_mapping_var_option(<createAlterUserMappingNode>)
+user_mapping_var_option($node)
+	: symbol_foreign_option_name '=' utf_string
+		{
+			$node->addOption($1, $3);
+		}
+	| symbol_foreign_option_name value_storage_type_opt utf_string
+		{
+			$node->addOption($1, $3, $2);
+		}
+	;
+
+%type alter_user_mapping_fixed_list_opt(<createAlterUserMappingNode>)
+alter_user_mapping_fixed_list_opt($node)
+	: // nothing
+	| alter_user_mapping_fixed_list($node)
+	;
+
+%type alter_user_mapping_fixed_list(<createAlterUserMappingNode>)
+alter_user_mapping_fixed_list($node)
+	: alter_user_mapping_fixed_option($node)
+	| alter_user_mapping_fixed_list alter_user_mapping_fixed_option($node)
+	;
+
+%type alter_user_mapping_fixed_option(<createAlterUserMappingNode>)
+alter_user_mapping_fixed_option($node)
+	: OPTIONS '(' alter_user_mapping_var_list($node) ')'
+	;
+
+%type alter_user_mapping_var_list(<createAlterUserMappingNode>)
+alter_user_mapping_var_list($node)
+	: alter_user_mapping_var_option($node)
+	| alter_user_mapping_var_list ',' alter_user_mapping_var_option($node)
+	;
+
+%type alter_user_mapping_var_option(<createAlterUserMappingNode>)
+alter_user_mapping_var_option($node)
+	: user_mapping_var_option($node)
+	| DROP symbol_foreign_option_name
+		{
+			$node->addOption($2);
+		}
+	;
+
+%type <extValueType> value_storage_type_opt
+value_storage_type_opt
+	: { $$ = ExternalValueType::TYPE_STRING; }
+	| ENV { $$ = ExternalValueType::TYPE_ENV; }
+	| FILE { $$ = ExternalValueType::TYPE_FILE; }
+	;
+
+
 // value types
 
 %type <valueExprNode> value
@@ -9642,6 +10149,18 @@ symbol_window_name
 	: valid_symbol_name
 	;
 
+%type <metaNamePtr> symbol_foreign_server_name
+symbol_foreign_server_name
+	: valid_symbol_name
+	;
+
+%type <metaNamePtr> symbol_foreign_option_name
+symbol_foreign_option_name
+	: keyword_or_column
+	| USER
+	;
+
+
 // symbols
 
 %type <qualifiedNamePtr> schema_opt_qualified_name
@@ -9783,6 +10302,7 @@ non_reserved_word
 	| DO
 	| DOMAIN
 	| ENTRY_POINT
+	| ENV
 	| EXCEPTION
 	| EXIT
 	| FILE
@@ -9957,6 +10477,7 @@ non_reserved_word
 	| SEARCH_PATH
 	| SCHEMA
 	| UNLIST
+	| WRAPPER
 	;
 
 %%

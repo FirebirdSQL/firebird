@@ -128,6 +128,7 @@
 #include "../jrd/CryptoManager.h"
 #include "../jrd/Mapping.h"
 #include "../jrd/shut_proto.h"
+#include "../jrd/ForeignServer.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -500,6 +501,7 @@ static bool set_linger(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool clear_cache(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool change_repl_state(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static string remove_icu_info_from_attributes(const QualifiedName&, const string&);
+static bool delete_foreign_server(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 
 // ----------------------------------------------------------------
 
@@ -562,6 +564,9 @@ static ISC_STATUS getErrorCodeByObjectType(int obj_type)
 	case obj_package_header:
 	case obj_package_body:
 		err_code = isc_package_name;
+		break;
+	case obj_foreign_server:
+		err_code = isc_foreign_server;
 		break;
 	default:
 		fb_assert(false);
@@ -1333,6 +1338,7 @@ static inline constexpr deferred_task task_table[] =
 	{ dfw_set_linger, set_linger },
 	{ dfw_clear_cache, clear_cache },
 	{ dfw_change_repl_state, change_repl_state },
+	{ dfw_delete_foreign_server, delete_foreign_server },
 	{ dfw_null, NULL }
 };
 
@@ -5069,8 +5075,14 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 
 		// if this is a view (or even if we don't know), delete dependency lists
 
-		if (relation->rel_view_rse || !(relation->rel_flags & REL_scanned)) {
+		if (relation->rel_foreign_adapter || relation->rel_view_rse || !(relation->rel_flags & REL_scanned)) {
 			MET_delete_dependencies(tdbb, work->getQualifiedName(), obj_view, transaction);
+		}
+
+		if (relation->rel_foreign_adapter)
+		{
+			delete relation->rel_foreign_adapter;
+			relation->rel_foreign_adapter = NULL;
 		}
 
 		// Now that the data, pointer, and index pages are gone,
@@ -5393,6 +5405,9 @@ static bool find_depend_in_dfw(thread_db*	tdbb,
 		break;
 	case obj_udf:
 		dfw_type = dfw_delete_function;
+		break;
+	case obj_foreign_server:
+		dfw_type = dfw_delete_foreign_server;
 		break;
 	default:
 		fb_assert(false);
@@ -6834,4 +6849,30 @@ static string get_string(const dsc* desc)
 	length = (p + 1) - str;
 
 	return string(str, length);
+}
+
+static bool delete_foreign_server(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+{
+/**************************************
+ *
+ *	d e l e t e _ f o r e i g n _ s e r v e r
+ *
+ **************************************
+ *
+ * Functional description
+ *	Check if it is allowable to delete
+ *	an foreign server, and if so, clean up after it.
+ *
+ **************************************/
+
+	SET_TDBB(tdbb);
+
+	switch (phase)
+	{
+	case 1:
+		check_dependencies(tdbb, work->getQualifiedName(), {}, obj_foreign_server, transaction);
+		break;
+	}
+
+	return false;
 }

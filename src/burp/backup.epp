@@ -134,6 +134,10 @@ void write_database(const TEXT*);
 void write_exceptions();
 void write_field_dimensions();
 void write_filters();
+void write_foreign_mapping_options(const MetaString& userName, const MetaString& serverName);
+void write_foreign_table_options(const QualifiedMetaString& table);
+void write_foreign_table_field_options(const QualifiedMetaString& table, const MetaString& fieldName);
+void write_foreign_user_mappings();
 void write_functions();
 void write_function_args(const QualifiedMetaString& name);
 void write_global_fields();
@@ -151,6 +155,8 @@ void write_rel_constraints();
 void write_relations();
 void write_schemas();
 void write_secclasses();
+void write_foreign_servers();
+void write_foreign_server_options(const MetaString& serverName);
 void write_shadow_files();
 void write_triggers();
 void write_trigger_messages();
@@ -345,6 +351,14 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 		// Write schemas
 		BURP_verbose(412);	// msg 412 writing schemas
 		write_schemas();
+
+		// Write foreign servers
+		BURP_verbose(423);	// msg 423 writing foreign servers
+		write_foreign_servers();
+
+		// Write foreign user mappings
+		BURP_verbose(436);	// msg 436 writing foreign user mappings
+		write_foreign_user_mappings();
 	}
 
 	// Write global fields
@@ -428,7 +442,8 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 
 		put(tdgbl, att_end);
 
-		if (!(relation->rel_flags & REL_view) && !(relation->rel_flags & REL_external))
+		if (!(relation->rel_flags & REL_view) && !(relation->rel_flags & REL_external)
+			&& !(relation->rel_flags & REL_foreign))
 		{
 			put_index(relation);
 			if (!(tdgbl->gbl_sw_meta || tdgbl->skipRelation(relation->rel_name)))
@@ -2076,6 +2091,9 @@ void put_relation( burp_rel* relation)
 		}
 
 		put(tdgbl, att_end);
+
+		if (relation->rel_flags & REL_foreign)
+			write_foreign_table_field_options(relation->rel_name, field->fld_name);
 	}
 
 	// Write out view relations (if a view, of course)
@@ -2895,6 +2913,189 @@ void write_filters()
 	END_ERROR
 
 	MISC_release_request_silent(req_handle1);
+}
+
+
+void write_foreign_mapping_options(const MetaString& userName, const MetaString& serverName)
+{
+/**************************************
+ *
+ *	w r i t e _ f o r e i g n _ m a p p i n g _ o p t i o n s
+ *
+ **************************************
+ *
+ * Functional description
+ *	Write a record in the burp file for each foreign user mapping option.
+ *
+ **************************************/
+	IRequest* req_handle = nullptr;
+	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+
+	FOR (REQUEST_HANDLE req_handle)
+		X IN RDB$FOREIGN_MAPPING_OPTIONS
+			WITH X.RDB$USER EQ userName.c_str() AND
+			X.RDB$FOREIGN_SERVER_NAME EQ serverName.c_str()
+	{
+		put(tdgbl, rec_foreign_mapping_option);
+
+		PUT_TEXT(att_foreign_mapping_option_user, X.RDB$USER);
+
+		PUT_TEXT(att_foreign_mapping_option_server_name, X.RDB$FOREIGN_SERVER_NAME);
+
+		PUT_TEXT(att_foreign_mapping_option_name, X.RDB$FOREIGN_OPTION_NAME);
+
+		// msg 440 writing foreign user mapping option %s
+		BURP_verbose(440, MetaString(X.RDB$FOREIGN_OPTION_NAME).toQuotedString());
+
+		PUT_TEXT(att_foreign_mapping_option_value, X.RDB$FOREIGN_OPTION_VALUE);
+
+		if (!X.RDB$FOREIGN_OPTION_TYPE.NULL)
+			put_int32(att_foreign_mapping_option_type, X.RDB$FOREIGN_OPTION_TYPE);
+
+		put(tdgbl, att_end);
+	}
+	END_FOR
+	ON_ERROR
+		general_on_error();
+	END_ERROR
+
+	MISC_release_request_silent(req_handle);
+}
+
+
+void write_foreign_table_options(const QualifiedMetaString& table)
+{
+/**************************************
+ *
+ *	w r i t e _ f o r e i g n _ t a b l e _ o p t i o n s
+ *
+ **************************************
+ *
+ * Functional description
+ *	Write a record in the burp file for foreign table option.
+ *
+ **************************************/
+	IRequest* req_handle = nullptr;
+	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+
+	FOR (REQUEST_HANDLE req_handle)
+		X IN RDB$FOREIGN_TABLE_OPTIONS
+			WITH X.RDB$SCHEMA_NAME EQ table.schema.c_str() AND
+			X.RDB$TABLE_NAME EQ table.object.c_str()
+	{
+		QualifiedMetaString tableName;
+
+		put(tdgbl, rec_foreign_table_option);
+
+		PUT_TEXT(att_foreign_table_option_schema_name, X.RDB$SCHEMA_NAME);
+		tableName.schema = X.RDB$SCHEMA_NAME;
+
+		PUT_TEXT(att_foreign_table_option_table_name, X.RDB$TABLE_NAME);
+		tableName.object = X.RDB$TABLE_NAME;
+
+		PUT_TEXT(att_foreign_table_option_name, X.RDB$FOREIGN_OPTION_NAME);
+
+		PUT_TEXT(att_foreign_table_option_value, X.RDB$FOREIGN_OPTION_VALUE);
+
+		// msg 430 writing foreign table option %s
+		BURP_verbose(430, MetaString(X.RDB$FOREIGN_OPTION_NAME).toQuotedString());
+
+		put(tdgbl, att_end);
+	}
+	END_FOR
+	ON_ERROR
+		general_on_error();
+	END_ERROR
+
+	MISC_release_request_silent(req_handle);
+}
+
+
+void write_foreign_table_field_options(const QualifiedMetaString& table, const MetaString& fieldName)
+{
+/**************************************
+ *
+ *	w r i t e _ f o r e i g n _ t a b l e _ f i e l d _ o p t i o n s
+ *
+ **************************************
+ *
+ * Functional description
+ *	Write a record in the burp file for each foreign table field option.
+ *
+ **************************************/
+	IRequest* req_handle = nullptr;
+	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+
+	FOR (REQUEST_HANDLE req_handle)
+		X IN RDB$FOREIGN_TABLE_FIELD_OPTIONS
+			WITH X.RDB$SCHEMA_NAME EQ table.schema.c_str() AND
+			X.RDB$TABLE_NAME EQ table.object.c_str() AND
+			X.RDB$FIELD_NAME EQ fieldName.c_str()
+	{
+		put(tdgbl, rec_foreign_table_field_option);
+
+		PUT_TEXT(att_foreign_table_field_option_schema_name, X.RDB$SCHEMA_NAME);
+
+		PUT_TEXT(att_foreign_table_field_option_table_name, X.RDB$TABLE_NAME);
+
+		PUT_TEXT(att_foreign_table_field_option_field_name, X.RDB$FIELD_NAME);
+
+		PUT_TEXT(att_foreign_table_field_option_name, X.RDB$FOREIGN_OPTION_NAME);
+
+		PUT_TEXT(att_foreign_table_field_option_value, X.RDB$FOREIGN_OPTION_VALUE);
+
+		// msg 433 writing foreign table column option %s
+		BURP_verbose(433, MetaString(X.RDB$FOREIGN_OPTION_NAME).toQuotedString());
+
+		put(tdgbl, att_end);
+	}
+	END_FOR
+	ON_ERROR
+		general_on_error();
+	END_ERROR
+
+	MISC_release_request_silent(req_handle);
+}
+
+
+void write_foreign_user_mappings()
+{
+/**************************************
+ *
+ *	w r i t e _ f o r e i g n _ u s e r _ m a p p i n g s
+ *
+ **************************************
+ *
+ * Functional description
+ *	Write a record in the burp file for each user mapping.
+ *
+ **************************************/
+	IRequest* reqForeignUserMappings = nullptr;
+	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+
+	FOR (REQUEST_HANDLE reqForeignUserMappings)
+		X IN RDB$FOREIGN_USER_MAPPINGS
+	{
+		put(tdgbl, rec_foreign_user_mapping);
+
+		// msg 437 writing foreign user mapping options for user %s and server %s
+		BURP_verbose(437, SafeArg() << MetaString(X.RDB$USER).toQuotedString().c_str() <<
+			MetaString(X.RDB$FOREIGN_SERVER_NAME).toQuotedString().c_str());
+
+		PUT_TEXT(att_foreign_user_mapping_user, X.RDB$USER);
+
+		PUT_TEXT(att_foreign_user_mapping_server_name, X.RDB$FOREIGN_SERVER_NAME);
+
+		put(tdgbl, att_end);
+
+		write_foreign_mapping_options(MetaString(X.RDB$USER), MetaString(X.RDB$FOREIGN_SERVER_NAME));
+	}
+	END_FOR
+	ON_ERROR
+		general_on_error();
+	END_ERROR
+
+	MISC_release_request_silent(reqForeignUserMappings);
 }
 
 
@@ -4134,6 +4335,12 @@ void write_relations()
 				}
 			}
 
+			if (!X.RDB$FOREIGN_SERVER_NAME.NULL)
+			{
+				PUT_TEXT(att_relation_foreign_server_name, X.RDB$FOREIGN_SERVER_NAME);
+				flags |= REL_foreign;
+			}
+
 			if (!X.RDB$RELATION_TYPE.NULL)
 				put_int32 (att_relation_type, X.RDB$RELATION_TYPE);
 
@@ -4152,6 +4359,9 @@ void write_relations()
 			relation->rel_name = name;
 			relation->rel_flags |= flags;
 			put_relation (relation);
+
+			if (relation->rel_flags & REL_foreign)
+				write_foreign_table_options(relation->rel_name);
 		}
 		END_FOR
 		ON_ERROR
@@ -4286,6 +4496,97 @@ void write_secclasses()
 	END_ERROR
 
 	MISC_release_request_silent(req_handle1);
+}
+
+
+void write_foreign_servers()
+{
+/**************************************
+ *
+ *	w r i t e _ f o r e i g n _ s e r v e r s
+ *
+ **************************************
+ *
+ * Functional description
+ *	Write a record in the burp file for each foreign server.
+ *
+ **************************************/
+	IRequest* req_handle = nullptr;
+	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+
+	FOR (REQUEST_HANDLE req_handle)
+		X IN RDB$FOREIGN_SERVERS
+	{
+		put(tdgbl, rec_foreign_server);
+
+		PUT_TEXT(att_foreign_server_name, X.RDB$FOREIGN_SERVER_NAME);
+
+		// msg 424 writing foreign server %s
+		BURP_verbose(424, MetaString(X.RDB$FOREIGN_SERVER_NAME).toQuotedString());
+
+		if (!X.RDB$FOREIGN_SERVER_WRAPPER.NULL)
+			PUT_TEXT(att_foreign_server_data_wrapper_name, X.RDB$FOREIGN_SERVER_WRAPPER);
+
+		if (!X.RDB$SECURITY_CLASS.NULL)
+			PUT_TEXT(att_foreign_server_security_class, X.RDB$SECURITY_CLASS);
+
+		if (!X.RDB$OWNER_NAME.NULL)
+			PUT_TEXT(att_foreign_server_owner_name, X.RDB$OWNER_NAME);
+
+		put(tdgbl, att_end);
+
+		write_foreign_server_options(MetaString(X.RDB$FOREIGN_SERVER_NAME));
+	}
+	END_FOR
+	ON_ERROR
+		general_on_error();
+	END_ERROR
+
+	MISC_release_request_silent(req_handle);
+}
+
+
+void write_foreign_server_options(const MetaString& serverName)
+{
+/**************************************
+ *
+ *	w r i t e _ f o r e i g n _ s e r v e r _ o p t i o n s
+ *
+ **************************************
+ *
+ * Functional description
+ *	Write a record in the burp file for each foreign server option.
+ *
+ **************************************/
+	IRequest* req_handle = nullptr;
+	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+
+	FOR (REQUEST_HANDLE req_handle)
+		X IN RDB$FOREIGN_SERVER_OPTIONS
+			WITH X.RDB$FOREIGN_SERVER_NAME EQ serverName.c_str()
+	{
+		put(tdgbl, rec_foreign_server_option);
+
+		PUT_TEXT(att_foreign_server_option_server_name, X.RDB$FOREIGN_SERVER_NAME);
+
+		PUT_TEXT(att_foreign_server_option_name, X.RDB$FOREIGN_OPTION_NAME);
+
+		// msg 427 writing foreign server option %s
+		BURP_verbose(427, MetaString(X.RDB$FOREIGN_OPTION_NAME).toQuotedString());
+
+		PUT_TEXT(att_foreign_server_option_value, X.RDB$FOREIGN_OPTION_VALUE);
+
+		if (!X.RDB$FOREIGN_OPTION_TYPE.NULL)
+			put_int32(att_foreign_server_option_type, X.RDB$FOREIGN_OPTION_TYPE);
+
+		put(tdgbl, att_end);
+	}
+	END_FOR
+	ON_ERROR
+		general_on_error();
+	END_ERROR
+
+	MISC_release_request_silent(req_handle);
 }
 
 

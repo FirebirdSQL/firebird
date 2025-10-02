@@ -270,10 +270,14 @@ public:
 
 	Firebird::Mutex rel_drop_mutex;
 
+	ForeignTableAdapter* rel_foreign_adapter;
+
 	bool isSystem() const noexcept;
 	bool isTemporary() const noexcept;
-	bool isVirtual() const noexcept ;
+	bool isVirtual() const noexcept;
 	bool isView() const noexcept;
+
+	bool isPageBased() const noexcept;
 
 	ObjectType getObjectType() const noexcept
 	{
@@ -434,6 +438,11 @@ inline bool jrd_rel::isVirtual() const noexcept
 inline bool jrd_rel::isView() const noexcept
 {
 	return (rel_flags & REL_jrd_view);
+}
+
+inline bool jrd_rel::isPageBased() const noexcept
+{
+	return (!rel_file && !rel_view_rse && !isVirtual() && !rel_foreign_adapter);
 }
 
 inline RelationPages* jrd_rel::getPages(thread_db* tdbb, TraNumber tran, bool allocPages)

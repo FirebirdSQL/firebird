@@ -179,7 +179,7 @@ void PATTERN_expand( USHORT column, const TEXT* pattern, PAT* args)
 	bool sw_gen = true;
 	p += align(p, column);
 
-	SSHORT value;				// value needs to be signed since some of the
+	int value;				// value needs to be signed since some of the
 								// values printed out are signed.
 	SLONG long_value;
 	TEXT c;

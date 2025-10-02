@@ -98,6 +98,8 @@ static processing_state show_dependencies(const QualifiedMetaString& name, int o
 static processing_state show_dialect();
 static processing_state show_domains(const std::optional<QualifiedMetaString>& name);
 static processing_state show_exceptions(const std::optional<QualifiedMetaString>& name);
+static processing_state show_foreign_servers(const std::optional<MetaString>& name, const char* msg = nullptr);
+static processing_state show_foreign_user_mappings(const std::optional<MetaString>& name, const char* msg = nullptr);
 static processing_state show_filters(const std::optional<MetaString>& name);
 static processing_state show_functions(const std::optional<QualifiedMetaString>& name,
 	bool system, const char* msg = nullptr);
@@ -118,6 +120,8 @@ static processing_state show_trigger(const std::optional<QualifiedMetaString>& n
 static processing_state show_users();
 static processing_state show_users12();
 static processing_state show_wireStats();
+static void print_foreign_option(ExternalValueType type, const MetaString& optionName,
+	const Firebird::string& optionValue);
 
 const char* const spaces = "                                ";
 static TEXT Print_buffer[512];
@@ -1846,7 +1850,9 @@ processing_state SHOW_metadata(const FrontendParser::AnyShowNode& node)
 		{0, "COLLATES", 7},				// COLLATE
 		{0, "COLLATIONS", 9},			// COLLATION
 		{0, "SECCLASSES", 6},			// SECCLA
+		{0, "SERVERS", 6},				// SERVER
 		{0, "USERS", 0},
+		{0, "USER_MAPPINGS", 8},		// USER_MAP
 		{0, "PACKAGES", 4},				// PACK
 		{0, "SCHEMAS", 4},				// SCHE
 		{0, "MAPPINGS", 3},				// MAP
@@ -2010,6 +2016,42 @@ processing_state SHOW_metadata(const FrontendParser::AnyShowNode& node)
 				}
 				else
 					key = NO_FILTERS;
+			}
+
+			return ret;
+		},
+
+		[&](const FrontendParser::ShowForeignServersNode& node)
+		{
+			const auto ret = show_foreign_servers(node.name);
+
+			if (ret == OBJECT_NOT_FOUND)
+			{
+				if (node.name)
+				{
+					key = NO_FOREIGN_SERVER;
+					notFoundName.object = node.name.value();
+				}
+				else
+					key = NO_FOREIGN_SERVERS;
+			}
+
+			return ret;
+		},
+
+		[&](const FrontendParser::ShowForeignUserMappingsNode& node)
+		{
+			const auto ret = show_foreign_user_mappings(node.name);
+
+			if (ret == OBJECT_NOT_FOUND)
+			{
+				if (node.name)
+				{
+					key = NO_FOREIGN_USER_MAPPING;
+					notFoundName.object = node.name.value();
+				}
+				else
+					key = NO_FOREIGN_USER_MAPPINGS;
 			}
 
 			return ret;
@@ -4126,6 +4168,202 @@ static processing_state show_filters(const std::optional<MetaString>& name)
 }
 
 
+static processing_state show_foreign_servers(const std::optional<MetaString>& name, const char* msg)
+{
+/**************************************
+ *
+ *	s h o w _ f o r e i g n _ s e r v e r s
+ *
+ **************************************
+ *
+ * Functional description
+ *	Show foreign servers in general or for the named filters
+ *
+ **************************************/
+	bool first = true;
+
+	// Show all servers
+	if (!name)
+	{
+		FOR FS IN RDB$FOREIGN_SERVERS
+		SORTED BY FS.RDB$FOREIGN_SERVER_NAME
+		{
+			const MetaString serverName(FS.RDB$FOREIGN_SERVER_NAME);
+			if (first && msg)
+				isqlGlob.printf("%s%s", msg, NEWLINE);
+
+			first = false;
+			isqlGlob.printf("%s%s", IUTILS_name_to_string(serverName).c_str(), NEWLINE);
+		}
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return ps_ERR;
+		END_ERROR
+
+		if (!first)
+		{
+			isqlGlob.printf(NEWLINE);
+			return (SKIP);
+		}
+
+		return OBJECT_NOT_FOUND;
+	}
+
+	// We have a server name, so expand on it
+	FOR FS IN RDB$FOREIGN_SERVERS WITH
+	   FS.RDB$FOREIGN_SERVER_NAME EQ name->c_str()
+	{
+		const MetaString serverName(FS.RDB$FOREIGN_SERVER_NAME);
+		const MetaString ownerName(FS.RDB$OWNER_NAME);
+
+		first = false;
+
+		isqlGlob.printf("%s%s", serverName.c_str(), NEWLINE);
+		isqlGlob.printf("Owner: %s%s", ownerName.c_str(), NEWLINE);
+
+		if (!FS.RDB$FOREIGN_SERVER_WRAPPER.NULL)
+		{
+			const MetaString wrapper(FS.RDB$FOREIGN_SERVER_WRAPPER);
+
+			isqlGlob.printf("Foreign Data Wrapper: %s%s", wrapper.c_str(), NEWLINE);
+		}
+
+		bool firstOption = true;
+
+		FOR FSO IN RDB$FOREIGN_SERVER_OPTIONS
+				WITH FSO.RDB$FOREIGN_SERVER_NAME EQ serverName.c_str()
+		{
+			const MetaString optionName(FSO.RDB$FOREIGN_OPTION_NAME);
+			const Firebird::string optionValue(FSO.RDB$FOREIGN_OPTION_VALUE);
+			ExternalValueType type = ExternalValueType::TYPE_STRING;
+			if (!FSO.RDB$FOREIGN_OPTION_TYPE.NULL)
+				type = ExternalValueType(FSO.RDB$FOREIGN_OPTION_TYPE);
+
+			if (firstOption)
+			{
+				isqlGlob.printf("Options: %s", NEWLINE);
+				firstOption = false;
+			}
+			else
+				isqlGlob.printf("%s", NEWLINE);
+
+			print_foreign_option(type, optionName, optionValue);
+		}
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return ps_ERR;
+		END_ERROR
+	}
+	END_FOR
+	ON_ERROR
+		ISQL_errmsg(fbStatus);
+		return ps_ERR;
+	END_ERROR
+
+	if (first)
+		return (OBJECT_NOT_FOUND);
+
+	return (SKIP);
+}
+
+
+static processing_state show_foreign_user_mappings(const std::optional<MetaString>& name, const char* msg)
+{
+/**************************************
+ *
+ *	s h o w _ f o r e i g n _ u s e r _ m a p p i n g s
+ *
+ **************************************
+ *
+ * Functional description
+ *	Show foreign user mappings in general or for the named filters
+ *
+ **************************************/
+	bool first = true;
+
+	// Show all foreing user mappings
+	if (!name)
+	{
+		FOR FM IN RDB$FOREIGN_USER_MAPPINGS
+		SORTED BY FM.RDB$USER
+		{
+			const MetaString userName(FM.RDB$USER);
+				if (first && msg)
+					isqlGlob.printf("%s%s", msg, NEWLINE);
+
+				first = false;
+				isqlGlob.printf("User mapping for %s%s", IUTILS_name_to_string(userName).c_str(), NEWLINE);
+		}
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return ps_ERR;
+		END_ERROR
+
+		if (!first)
+		{
+			isqlGlob.printf(NEWLINE);
+			return (SKIP);
+		}
+
+		return OBJECT_NOT_FOUND;
+	}
+
+	// Show user mappings for giver user
+	FOR FM IN RDB$FOREIGN_USER_MAPPINGS WITH
+	   FM.RDB$USER EQ name->c_str()
+	{
+		const MetaString userName(FM.RDB$USER);
+		const MetaString serverName(FM.RDB$FOREIGN_SERVER_NAME);
+
+		first = false;
+
+		isqlGlob.printf("User: %s%s", userName.c_str(), NEWLINE);
+		isqlGlob.printf("Server: %s%s", serverName.c_str(), NEWLINE);
+
+		bool firstOption = true;
+
+		FOR FMO IN RDB$FOREIGN_MAPPING_OPTIONS
+			WITH FMO.RDB$USER EQ userName.c_str() AND
+			FMO.RDB$FOREIGN_SERVER_NAME EQ serverName.c_str()
+		{
+			const MetaString optionName(FMO.RDB$FOREIGN_OPTION_NAME);
+			const Firebird::string optionValue(FMO.RDB$FOREIGN_OPTION_VALUE);
+			ExternalValueType type = ExternalValueType::TYPE_STRING;
+			if (!FMO.RDB$FOREIGN_OPTION_TYPE.NULL)
+				type = ExternalValueType(FMO.RDB$FOREIGN_OPTION_TYPE);
+
+			if (firstOption)
+			{
+				isqlGlob.printf("Options: %s", NEWLINE);
+				firstOption = false;
+			}
+			else
+				isqlGlob.printf("%s", NEWLINE);
+
+			print_foreign_option(type, optionName, optionValue);
+		}
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return ps_ERR;
+		END_ERROR
+	}
+	END_FOR
+	ON_ERROR
+		ISQL_errmsg(fbStatus);
+		return ps_ERR;
+	END_ERROR
+
+	if (first)
+		return (OBJECT_NOT_FOUND);
+
+	return (SKIP);
+}
+
+
 static processing_state show_functions(const std::optional<QualifiedMetaString>& name, bool system, const char* msg)
 {
 /**************************************
@@ -6018,6 +6256,7 @@ static processing_state show_table(const QualifiedMetaString& name, bool isView)
 		WITH REL.RDB$RELATION_NAME EQ name.object.c_str()
 		SORTED BY REL.RDB$SCHEMA_NAME
 	{
+		bool isForeign = false;
 		const QualifiedMetaString relationName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME);
 
 		if (name.schema.hasData() && name.schema != relationName.schema)
@@ -6042,6 +6281,40 @@ static processing_state show_table(const QualifiedMetaString& name, bool isView)
 
 		if (!REL.RDB$EXTERNAL_FILE.NULL)
 			isqlGlob.printf("External file: %s%s", REL.RDB$EXTERNAL_FILE, NEWLINE);
+
+		if (!REL.RDB$FOREIGN_SERVER_NAME.NULL)
+		{
+			isForeign = true;
+			fb_utils::exact_name(REL.RDB$FOREIGN_SERVER_NAME);
+			isqlGlob.printf("Server: %s%s", REL.RDB$FOREIGN_SERVER_NAME, NEWLINE);
+
+			// Foreign table options
+			bool firstOption = true;
+
+			FOR FTO IN RDB$FOREIGN_TABLE_OPTIONS
+					WITH FTO.RDB$SCHEMA_NAME EQ relationName.schema.c_str() AND
+					FTO.RDB$TABLE_NAME EQ relationName.object.c_str()
+			{
+				const MetaString optionName(FTO.RDB$FOREIGN_OPTION_NAME);
+				const Firebird::string optionValue(FTO.RDB$FOREIGN_OPTION_VALUE);
+				ExternalValueType type = ExternalValueType::TYPE_STRING;
+
+				if (firstOption)
+				{
+					isqlGlob.printf("Options: %s", NEWLINE);
+					firstOption = false;
+				}
+				else
+					isqlGlob.printf("%s", NEWLINE);
+
+				print_foreign_option(type, optionName, optionValue);
+			}
+			END_FOR
+			ON_ERROR
+				ISQL_errmsg(fbStatus);
+				return ps_ERR;
+			END_ERROR
+		}
 
 	// TODO: indent
 
@@ -6173,6 +6446,37 @@ static processing_state show_table(const QualifiedMetaString& name, bool isView)
 			isqlGlob.printf("                                ");
 			SHOW_print_metadata_text_blob (isqlGlob.Out, &FLD.RDB$VALIDATION_SOURCE);
 			isqlGlob.printf(NEWLINE);
+		}
+
+		// Field options for foreign table
+		if (isForeign)
+		{
+			bool firstOption = true;
+
+			FOR FTFO IN RDB$FOREIGN_TABLE_FIELD_OPTIONS
+			WITH FTFO.RDB$SCHEMA_NAME EQ relationName.schema.c_str() AND
+			FTFO.RDB$TABLE_NAME EQ relationName.object.c_str() AND
+			FTFO.RDB$FIELD_NAME EQ columnName.c_str()
+			{
+				const MetaString optionName(FTFO.RDB$FOREIGN_OPTION_NAME);
+				const Firebird::string optionValue(FTFO.RDB$FOREIGN_OPTION_VALUE);
+				ExternalValueType type = ExternalValueType::TYPE_STRING;
+
+				if (firstOption)
+				{
+					isqlGlob.printf("Options: %s", NEWLINE);
+					firstOption = false;
+				}
+				else
+					isqlGlob.printf("%s", NEWLINE);
+
+				print_foreign_option(type, optionName, optionValue);
+			}
+			END_FOR
+			ON_ERROR
+				ISQL_errmsg(fbStatus);
+				return ps_ERR;
+			END_ERROR
 		}
 	}
 	END_FOR
@@ -6735,4 +7039,40 @@ static processing_state show_wireStats()
 		return ps_ERR;
 
 	return SKIP;
+}
+
+static void print_foreign_option(ExternalValueType type, const MetaString& optionName,
+	const Firebird::string& optionValue)
+{
+/**************************************************
+ *
+ *	p r i n t _ f o r e i g n _ o p t i o n
+ *
+ **************************************************
+ *
+ * Functional description
+ *	This function prints the option with value for foreign object.
+ *
+ **************************************/
+	const char* stringType = NULL;
+	switch (type)
+	{
+	case ExternalValueType::TYPE_ENV:
+		stringType = "ENV";
+		break;
+
+	case ExternalValueType::TYPE_FILE:
+		stringType = "FILE";
+		break;
+
+	default:
+		stringType = "STRING";
+		break;
+	}
+
+	isqlGlob.printf("%sOption: %s, Type: %s,  Value: \'%s\'", TAB_AS_SPACES,
+		IUTILS_name_to_string(optionName).c_str(), stringType,
+		optionValue.c_str());
+
+	isqlGlob.printf("%s", NEWLINE);
 }

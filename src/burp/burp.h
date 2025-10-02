@@ -123,7 +123,13 @@ enum rec_type {
 	rec_db_creator,			// Database creator
 	rec_publication,		// Publication
 	rec_pub_table,			// Publication table
-	rec_schema				// Schema
+	rec_schema,				// Schema
+	rec_foreign_server,		// Foreign server
+	rec_foreign_server_option,	// Foreign server option
+	rec_foreign_table_option,	// Foreign table option
+	rec_foreign_table_field_option,	// Foreign table field option
+	rec_foreign_user_mapping,	// Foreign user mapping
+	rec_foreign_mapping_option	// Foreign user mapping option
 };
 
 
@@ -290,6 +296,7 @@ enum att_type {
 	att_relation_sql_security_deprecated,	// can be removed later
 	att_relation_sql_security,
 	att_relation_schema_name,
+	att_relation_foreign_server_name,	// table is foreign
 
 	// Field attributes (used for both global and local fields)
 
@@ -700,6 +707,46 @@ enum att_type {
 	att_schema_security_class,
 	att_schema_owner_name,
 	att_schema_description,
+
+	// Foreign server attributes
+	att_foreign_server_name = SERIES,
+	att_foreign_server_data_wrapper_name,
+	att_foreign_server_security_class,
+	att_foreign_server_owner_name,
+
+	// Foreign server option attributes
+	att_foreign_server_option_server_name = SERIES,
+	att_foreign_server_option_name,
+	att_foreign_server_option_value,
+	att_foreign_server_option_type,
+
+	// Foreign table option attributes
+
+	att_foreign_table_option_schema_name = SERIES,
+	att_foreign_table_option_table_name,
+	att_foreign_table_option_name,
+	att_foreign_table_option_value,
+
+	// Foreign table field option attributes
+
+	att_foreign_table_field_option_schema_name = SERIES,
+	att_foreign_table_field_option_table_name,
+	att_foreign_table_field_option_field_name,
+	att_foreign_table_field_option_name,
+	att_foreign_table_field_option_value,
+
+	// Foreign user mapping attributes
+
+	att_foreign_user_mapping_user = SERIES,
+	att_foreign_user_mapping_server_name,
+
+	// Foreign mapping option attributes
+
+	att_foreign_mapping_option_user = SERIES,
+	att_foreign_mapping_option_server_name,
+	att_foreign_mapping_option_name,
+	att_foreign_mapping_option_value,
+	att_foreign_mapping_option_type,
 };
 
 
@@ -792,13 +839,15 @@ struct burp_rel
 	SSHORT		rel_flags;
 	SSHORT		rel_id;
 	Firebird::QualifiedMetaString rel_name;
+	Firebird::QualifiedMetaString rel_foreign_server;
 	GDS_NAME	rel_owner;		// relation owner, if not us
 	ULONG		rel_max_pp;		// max pointer page sequence number
 };
 
 enum burp_rel_flags_vals {
 	REL_view		= 1,
-	REL_external	= 2
+	REL_external	= 2,
+	REL_foreign		= 4
 };
 
 // package definition
@@ -1173,6 +1222,12 @@ public:
 	Firebird::IRequest*	handles_get_fields_req_handle6;
 	Firebird::IRequest*	handles_get_files_req_handle1;
 	Firebird::IRequest*	handles_get_filter_req_handle1;
+	Firebird::IRequest*	handles_get_foreign_mapping_option_req_handle1;
+	Firebird::IRequest*	handles_get_foreign_server_req_handle1;
+	Firebird::IRequest*	handles_get_foreign_server_option_req_handle1;
+	Firebird::IRequest*	handles_get_foreign_table_option_req_handle1;
+	Firebird::IRequest*	handles_get_foreign_table_field_option_req_handle1;
+	Firebird::IRequest*	handles_get_foreign_user_mapping_req_handle1;
 	Firebird::IRequest*	handles_get_function_arg_req_handle1;
 	Firebird::IRequest*	handles_get_function_req_handle1;
 	Firebird::IRequest*	handles_get_global_field_req_handle1;

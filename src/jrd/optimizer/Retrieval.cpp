@@ -249,7 +249,7 @@ InversionCandidate* Retrieval::getInversion()
 
 	InversionCandidate* invCandidate = nullptr;
 
-	if (relation && !relation->rel_file && !relation->isVirtual())
+	if (relation && !relation->rel_file && !relation->isVirtual() && !relation->rel_foreign_adapter)
 	{
 		InversionCandidateList inversions;
 

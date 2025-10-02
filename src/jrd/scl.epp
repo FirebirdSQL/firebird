@@ -850,6 +850,42 @@ void SCL_check_role(thread_db* tdbb, const MetaName& name, SecurityClass::flags_
 	SCL_check_access(tdbb, s_class, 0, {}, mask, obj_roles, false, QualifiedName(name));
 }
 
+bool SCL_check_foreign_server(thread_db* tdbb, const MetaName& name, SecurityClass::flags_t mask)
+{
+/**************************************
+ *
+ *	S C L _ c h e c k _ f o r e i g n _ s e r v e r
+ *
+ **************************************
+ *
+ * Functional description
+ *	Given a foreign server name, check for a set of privileges.  The
+ *	foreign server in question may or may not have been created, let alone
+ *	scanned. This is used exclusively for meta-data operations.
+ *
+ **************************************/
+	SET_TDBB(tdbb);
+
+	Jrd::Attachment* const attachment = tdbb->getAttachment();
+
+	const SecurityClass* s_class = NULL;
+	bool found = false;
+	AutoCacheRequest request(tdbb, irq_f_s_security, IRQ_REQUESTS);
+
+	FOR (REQUEST_HANDLE request)
+		FSER IN RDB$FOREIGN_SERVERS
+		WITH FSER.RDB$FOREIGN_SERVER_NAME EQ name.c_str()
+	{
+		if (!FSER.RDB$SECURITY_CLASS.NULL)
+			s_class = SCL_get_class(tdbb, FSER.RDB$SECURITY_CLASS);
+		found = true;
+	}
+	END_FOR
+
+	QualifiedName qName(name);
+	return check_object(tdbb, found, s_class, 0, qName, mask, obj_foreign_servers, qName);
+}
+
 SecurityClass* SCL_get_class(thread_db* tdbb, const MetaName& name)
 {
 /**************************************

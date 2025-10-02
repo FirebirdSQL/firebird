@@ -56,6 +56,8 @@
 #include "../common/isc_proto.h"
 #include "../common/classes/RefMutex.h"
 
+#include "../jrd/ForeignServer.h"
+
 
 using namespace Jrd;
 using namespace Firebird;
@@ -924,6 +926,12 @@ void Jrd::Attachment::releaseRelations(thread_db* tdbb)
 			{
 				if (relation->rel_file)
 					EXT_fini(relation, false);
+
+				if (relation->rel_foreign_adapter)
+				{
+					delete relation->rel_foreign_adapter;
+					relation->rel_foreign_adapter = NULL;
+				}
 
 				delete relation;
 			}

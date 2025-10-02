@@ -2399,6 +2399,24 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			DFW_post_work(transaction, dfw_change_repl_state, {}, {}, 1);
 			break;
 
+		case rel_foreign_servers:
+			protect_system_table_delupd(tdbb, relation, "DELETE");
+			if (EVL_field(0, rpb->rpb_record, f_fs_name, &desc))
+			{
+				MOV_get_metaname(tdbb, &desc, object_name.object);
+				SCL_check_foreign_server(tdbb, object_name.object, SCL_drop);
+				DFW_post_work(transaction, dfw_delete_foreign_server, &desc, nullptr, 0);
+			}
+			break;
+
+		case rel_foreign_server_options:
+		case rel_foreign_tbl_options:
+		case rel_foreign_tbl_f_options:
+		case rel_foreign_user_mappings:
+		case rel_foreign_mapping_options:
+			protect_system_table_delupd(tdbb, relation, "DELETE");
+			break;
+
 		default:    // Shut up compiler warnings
 			break;
 		}
@@ -3782,6 +3800,20 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 			check_repl_state(tdbb, transaction, org_rpb, new_rpb, f_pub_active_flag);
 			break;
 
+		case rel_foreign_servers:
+			protect_system_table_delupd(tdbb, relation, "UPDATE");
+			check_class(tdbb, transaction, org_rpb, new_rpb, f_fs_class);
+			check_owner(tdbb, transaction, org_rpb, new_rpb, f_fs_owner);
+			break;
+
+		case rel_foreign_server_options:
+		case rel_foreign_tbl_options:
+		case rel_foreign_tbl_f_options:
+		case rel_foreign_user_mappings:
+		case rel_foreign_mapping_options:
+			protect_system_table_delupd(tdbb, relation, "UPDATE");
+			break;
+
 		default:
 			break;
 		}
@@ -4669,6 +4701,23 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		case rel_pub_tables:
 			protect_system_table_insert(tdbb, request, relation);
 			DFW_post_work(transaction, dfw_change_repl_state, {}, {}, 1);
+			break;
+
+
+		case rel_foreign_servers:
+			protect_system_table_insert(tdbb, request, relation);
+			EVL_field(0, rpb->rpb_record, f_fs_name, &desc);
+			set_owner_name(tdbb, rpb->rpb_record, f_fs_owner);
+			if (set_security_class(tdbb, rpb->rpb_record, f_fs_class))
+				DFW_post_work(transaction, dfw_grant, &desc, {}, obj_foreign_server);
+			break;
+
+		case rel_foreign_server_options:
+		case rel_foreign_tbl_options:
+		case rel_foreign_tbl_f_options:
+		case rel_foreign_user_mappings:
+		case rel_foreign_mapping_options:
+			protect_system_table_insert(tdbb, request, relation);
 			break;
 
 		default:    // Shut up compiler warnings

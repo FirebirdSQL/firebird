@@ -156,7 +156,13 @@ public:
 	static Provider* getProvider(const Firebird::string& prvName);
 	static Connection* getConnection(Jrd::thread_db* tdbb,
 		const Firebird::string& dataSource, const Firebird::string& user,
-		const Firebird::string& pwd, const Firebird::string& role, TraScope tra_scope);
+		const Firebird::string& pwd, const Firebird::string& role,
+		const Firebird::PathName& providers, TraScope tra_scope);
+	static Connection* getProviderConnection(Jrd::thread_db* tdbb,
+		Provider* provider, Firebird::ClumpletWriter& dpb,
+		const Firebird::string& database, const Firebird::string& user,
+		const Firebird::string& pwd, const Firebird::string& role,
+		TraScope tra_scope);
 
 	static ConnectionsPool* getConnPool(bool create);
 

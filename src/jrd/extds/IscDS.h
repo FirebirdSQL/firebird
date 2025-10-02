@@ -576,6 +576,8 @@ class IscStatement : public Statement
 	friend class IscConnection;
 
 public:
+	typedef Firebird::HalfStaticArray<dsc, 64> DescList;
+
 	FB_API_HANDLE& getAPIHandle() { return m_handle; }
 
 protected:
@@ -592,6 +594,8 @@ protected:
 
 	virtual void doSetInParams(Jrd::thread_db* tdbb, unsigned int count,
 		const Firebird::MetaString* const* names, const NestConst<Jrd::ValueExprNode>* params);
+
+	void remakeInputSQLDA(Jrd::thread_db* tdbb, FB_SIZE_T count, const dsc* descs);
 
 	IscTransaction* getIscTransaction() { return (IscTransaction*) m_transaction; }
 

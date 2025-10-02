@@ -1272,6 +1272,8 @@ dsql_rel* METD_get_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 				relation->rel_flags |= REL_view;
 			if (!X.RDB$EXTERNAL_FILE.NULL)
 				relation->rel_flags |= REL_external;
+			if (!X.RDB$FOREIGN_SERVER_NAME.NULL)
+				relation->rel_flags |= REL_foreign;
 		}
 	}
 	END_FOR

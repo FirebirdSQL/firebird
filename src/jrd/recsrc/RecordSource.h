@@ -1615,6 +1615,59 @@ namespace Jrd
 		NestConst<ValueListNode> m_inputList;
 	};
 
+	class ForeignTableScan final : public RecordStream
+	{
+	private:
+		struct Impure : public RecordSource::Impure
+		{
+			EDS::Statement* statement;
+		};
+
+	public:
+		ForeignTableScan(CompilerScratch* csb, const Firebird::string& alias,
+						  StreamType stream, jrd_rel* relation);
+
+		void close(thread_db* tdbb) const override;
+
+		bool refetchRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb) const override;
+
+		void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override;
+
+		bool applyBoolean(thread_db* tdbb, const BoolExprNode* boolean);
+		bool applySort(thread_db* tdbb, const SortNode* sort);
+
+	protected:
+		void internalOpen(thread_db* tdbb) const override;
+		bool internalGetRecord(thread_db* tdbb) const override;
+		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
+
+	private:
+		bool checkBoolean(thread_db* tdbb, const BoolExprNode* boolean);
+		bool checkArgument(thread_db* tdbb, const ValueExprNode* node);
+		bool checkOperator(thread_db* tdbb, const UCHAR op);
+		void decomposeBoolean(thread_db* tdbb, Firebird::string& conjunctSql, const BoolExprNode* boolean,
+			bool isNotBoolNode = false) const;
+		void processArgument(thread_db* tdbb, Firebird::string& conjunctSql, const ValueExprNode* node,
+			bool isNotBoolNode = false) const;
+		void processOptionalArgument(thread_db* tdbb, Firebird::string& conjunctSql, const ValueExprNode* node,
+			const UCHAR op, bool isNotBoolNode = false) const;
+		void processOperation(thread_db* tdbb, Firebird::string& conjunctSql, const UCHAR op,
+			bool isNotBoolNode = false) const;
+		ULONG getDescString(thread_db* tdbb, const dsc* desc, Firebird::string& outString,
+			CHARSET_ID toCharset = CS_UTF8) const;
+		SSHORT getServerCharset(thread_db* tdbb) const;
+		void appendFilterValue(const Firebird::string& value, Firebird::string& conjunctSql) const;
+		// Removes quotes of a string literal
+		void trimLiteralSingleQuotes(Firebird::string& value) const;
+		// Checks sql-feature support by external provider
+		const bool externalSqlFeatureSupport(thread_db* tdbb, info_sql_features feature) const;
+
+		jrd_rel* const m_relation;
+		const Firebird::string m_alias;
+		Firebird::Array<const BoolExprNode*> m_filterNodes; // Stores nodes will be converted to a condition
+		const SortNode* m_sortNode;
+	};
 } // namespace
 
 #endif // JRD_RECORD_SOURCE_H
