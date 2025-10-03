@@ -541,6 +541,20 @@ BoolExprNode* ComparativeBoolNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		case blr_like:
 		case blr_similar:
 		case blr_starting:
+
+			// check that operands aren't rowtypes
+			{
+				dsc desc, desc2;
+				DsqlDescMaker::fromNode(dsqlScratch, &desc, node->arg1);
+				DsqlDescMaker::fromNode(dsqlScratch, &desc2, node->arg2);
+
+				if (desc.dsc_dtype == dtype_rowtype || desc2.dsc_dtype == dtype_rowtype)
+				{
+					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+						Arg::Gds(isc_rowtype_not_allowed_in_character_based_comparison));
+				}
+			}
+
 			// Try to force arg1 to be same type as arg2 eg: ? LIKE FIELD case
 			PASS1_set_parameter_type(dsqlScratch, node->arg1, procArg2, true);
 
