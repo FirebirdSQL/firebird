@@ -60,7 +60,8 @@ int MOV_recursive_compare(Jrd::thread_db* tdbb, dsc* desc1, dsc* desc2, bool use
 
 	if (desc1->dsc_dtype == dtype_rowtype || desc2->dsc_dtype == dtype_rowtype)
 	{
-		if (desc1->dsc_dtype != desc2->dsc_dtype)
+		if (desc1->dsc_dtype != desc2->dsc_dtype
+			|| desc1->dsc_sub_count != desc2->dsc_sub_count)
 			CVT_conversion_error(desc1, ERR_post);
 
 		comparison = MOV_recursive_compare(tdbb, desc1->dsc_sub_first, desc2->dsc_sub_first, use_null_equility);
