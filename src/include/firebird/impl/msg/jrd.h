@@ -1027,3 +1027,4 @@ FB_IMPL_MSG(JRD, 1024, composite_type_notdef, -104, "HY", "000", "composite type
 FB_IMPL_MSG(JRD, 1025, packaged_type_notdef, -104, "HY", "000", "packaged type @1 of @2 is not defined or private")
 FB_IMPL_MSG(JRD, 1026, cursor_notdef, -219, "42", "S02", "cursor @1 is not defined")
 FB_IMPL_MSG(JRD, 1027, rowtype_bad_conversion, -104, "HY", "000", "The degree of the operand descriptors does not match")
+FB_IMPL_MSG(JRD, 1028, simple_types_not_allowed_in_packaged_types, -901, "HY", "000", "Only composite types may be declared in packages")

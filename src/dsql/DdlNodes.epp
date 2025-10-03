@@ -5246,24 +5246,27 @@ void DeclarePackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 
 	if (!compositeTypeDeclaration)
 	{
-		dsql_fld* type = typeClause->type;
-		const ValueListNode* elements = type->ranges;
-		const USHORT dims = elements ? elements->items.getCount() / 2 : 0;
+		// Simple types declaration are not allowed in packaged types for now
+		status_exception::raise(Arg::Gds(isc_sqlerr) << Arg::Num(-604) << Arg::Gds(isc_simple_types_not_allowed_in_packaged_types));
+		// TODO: implement this if simple types declaration are allowed in packaged types
+		// dsql_fld* type = typeClause->type;
+		// const ValueListNode* elements = type->ranges;
+		// const USHORT dims = elements ? elements->items.getCount() / 2 : 0;
 
-		if (typeClause->defaultClause && dims != 0)
-		{
-			// Default value is not allowed for array type in domain %s
-			status_exception::raise(Arg::PrivateDyn(226) << typeClause->name);
-		}
-		type->resolve(dsqlScratch);
+		// if (typeClause->defaultClause && dims != 0)
+		// {
+		// 	// Default value is not allowed for array type in domain %s
+		// 	status_exception::raise(Arg::PrivateDyn(226) << typeClause->name);
+		// }
+		// type->resolve(dsqlScratch);
 
-		DsqlDescMaker::fromField(&dsqlScratch->domainValue, type);
-		DYN_UTIL_check_unique_name(tdbb, transaction, fieldSource, obj_field);
+		// DsqlDescMaker::fromField(&dsqlScratch->domainValue, type);
+		// DYN_UTIL_check_unique_name(tdbb, transaction, fieldSource, obj_field);
 
-		type->packageName = QualifiedName(name.package, name.schema);
-		type->privateFlag = privateFlag;
-		typeName = fieldSource.object;
-		storeGlobalField(tdbb, transaction, fieldSource, type);
+		// type->packageName = QualifiedName(name.package, name.schema);
+		// type->privateFlag = privateFlag;
+		// typeName = fieldSource.object;
+		// storeGlobalField(tdbb, transaction, fieldSource, type);
 	}
 	else
 	{
