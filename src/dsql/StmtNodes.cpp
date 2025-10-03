@@ -521,7 +521,7 @@ BlockNode* BlockNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 const StmtNode* BlockNode::execute(thread_db* tdbb, Request* request, ExeState* exeState) const
 {
 	jrd_tra* transaction = request->req_transaction;
-	SavNumber savNumber{};
+	SavNumber savNumber = 0;
 
 	switch (request->req_operation)
 	{
@@ -2475,7 +2475,7 @@ void EraseNode::pass1Erase(thread_db* tdbb, CompilerScratch* csb, EraseNode* nod
 
 	jrd_rel* parent = NULL;
 	jrd_rel* view = NULL;
-	StreamType parentStream{};
+	StreamType parentStream = 0;
 
 	for (;;)
 	{
@@ -7994,7 +7994,7 @@ void ModifyNode::pass1Modify(thread_db* tdbb, CompilerScratch* csb, ModifyNode* 
 
 	jrd_rel* parent = NULL;
 	jrd_rel* view = NULL;
-	StreamType parentStream{}, parentNewStream{};
+	StreamType parentStream = 0, parentNewStream = 0;
 
 	// To support nested views, loop until we hit a table or a view with user-defined triggers
 	// (which means no update).
@@ -9044,7 +9044,7 @@ bool StoreNode::pass1Store(thread_db* tdbb, CompilerScratch* csb, StoreNode* nod
 
 	jrd_rel* parent = NULL;
 	jrd_rel* view = NULL;
-	StreamType parentStream{};
+	StreamType parentStream = 0;
 
 	// To support nested views, loop until we hit a table or a view with user-defined triggers
 	// (which means no update).
