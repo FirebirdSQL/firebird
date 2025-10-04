@@ -218,9 +218,9 @@ V. WALK-THROUGH PHASE
       In order to ensure that all pages are fetched during validation, the
       following pages are fetched just for the most basic validation:
 
-      1. The header page (and for 4.0 any overflow header pages).
-      2. Log pages for after-image journalling (4.0 only).
-      3. Page Inventory pages.
+      1. The header page.
+      2. Page Inventory pages.
+      3. System Change Number pages.
       4. Transaction Inventory pages
 
          If the system relation RDB$PAGES could not be read or did not
@@ -598,7 +598,7 @@ static SimilarToRegex* createPatternMatcher(thread_db* tdbb, const char* pattern
 	{
 		if (pattern)
 		{
-			const int len = strlen(pattern);
+			const FB_SIZE_T len = fb_strlen(pattern);
 
 			//// TODO: Should this be different than trace and replication
 			//// and use case sensitive matcher?
@@ -740,7 +740,7 @@ static int validate(Firebird::UtilSvc* svc)
 
 	if (status->getState() & IStatus::STATE_ERRORS)
 	{
-		svc->setServiceStatus(status->getErrors());
+		svc->getStatusAccessor().setServiceStatus(status->getErrors());
 		return FB_FAILURE;
 	}
 
@@ -770,7 +770,7 @@ static int validate(Firebird::UtilSvc* svc)
 	{
 		att->att_use_count--;
 		ex.stuffException(&status);
-		svc->setServiceStatus(status->getErrors());
+		svc->getStatusAccessor().setServiceStatus(status->getErrors());
 		ret_code = FB_FAILURE;
 	}
 
@@ -782,7 +782,7 @@ static int validate(Firebird::UtilSvc* svc)
 
 int VAL_service(Firebird::UtilSvc* svc)
 {
-	svc->initStatus();
+	svc->getStatusAccessor().init();
 
 	int exit_code = FB_SUCCESS;
 
@@ -794,7 +794,7 @@ int VAL_service(Firebird::UtilSvc* svc)
 	{
 		FbLocalStatus status;
 		ex.stuffException(&status);
-		svc->setServiceStatus(status->getErrors());
+		svc->getStatusAccessor().setServiceStatus(status->getErrors());
 		exit_code = FB_FAILURE;
 	}
 
@@ -851,8 +851,9 @@ const Validation::MSG_ENTRY Validation::vdr_msg_table[VAL_MAX_ERROR] =
 	{true, isc_info_dpage_errors,	"Data page %" ULONGFORMAT" {sequence %" ULONGFORMAT"} marked as secondary but contains primary record versions"}
 };
 
-Validation::Validation(thread_db* tdbb, UtilSvc* uSvc) :
-	vdr_used_bdbs(*tdbb->getDefaultPool())
+Validation::Validation(thread_db* tdbb, UtilSvc* uSvc)
+	: vdr_cond_idx(*tdbb->getDefaultPool()),
+	  vdr_used_bdbs(*tdbb->getDefaultPool())
 {
 	vdr_tdbb = tdbb;
 	vdr_max_page = 0;
@@ -911,6 +912,8 @@ void Validation::parse_args(thread_db* tdbb)
 
 		switch (sw->in_sw)
 		{
+		case IN_SW_VAL_SCH_INCL:
+		case IN_SW_VAL_SCH_EXCL:
 		case IN_SW_VAL_TAB_INCL:
 		case IN_SW_VAL_TAB_EXCL:
 		case IN_SW_VAL_IDX_INCL:
@@ -932,6 +935,14 @@ void Validation::parse_args(thread_db* tdbb)
 
 		switch (sw->in_sw)
 		{
+		case IN_SW_VAL_SCH_INCL:
+			vdr_sch_incl = createPatternMatcher(tdbb, *argv);
+			break;
+
+		case IN_SW_VAL_SCH_EXCL:
+			vdr_sch_excl = createPatternMatcher(tdbb, *argv);
+			break;
+
 		case IN_SW_VAL_TAB_INCL:
 			vdr_tab_incl = createPatternMatcher(tdbb, *argv);
 			break;
@@ -1077,7 +1088,16 @@ void Validation::cleanup()
 
 	delete vdr_idx_records;
 	vdr_idx_records = NULL;
+
+	for (auto& item : vdr_cond_idx)
+	{
+		delete item.m_recs;
+		delete item.m_condition;
+	}
+
+	vdr_cond_idx.clear();
 }
+
 
 ULONG Validation::getInfo(UCHAR item)
 {
@@ -1132,7 +1152,7 @@ Validation::RTN Validation::corrupt(int err_code, const jrd_rel* relation, ...)
 			fprintf(stdout, "LOG:\tDatabase: %s\n\t%s\n", fn, s.c_str());
 	}
 #endif
-	if (vdr_msg_table[err_code].error)
+	if (err_code >= VAL_MAX_ERROR || vdr_msg_table[err_code].error)
 	{
 		++vdr_errors;
 		s.insert(0, "Error: ");
@@ -1146,7 +1166,7 @@ Validation::RTN Validation::corrupt(int err_code, const jrd_rel* relation, ...)
 	if (relation)
 	{
 		gds__log("Database: %s\n\t%s in table %s (%d)",
-			fn, s.c_str(), relation->rel_name.c_str(), relation->rel_id);
+			fn, s.c_str(), relation->rel_name.toQuotedString().c_str(), relation->rel_id);
 	}
 	else
 		gds__log("Database: %s\n\t%s", fn, s.c_str());
@@ -1552,8 +1572,8 @@ Validation::RTN Validation::walk_chain(jrd_rel* relation, const rhd* header,
 
 		if (page->dpg_relation != relation->rel_id)
 		{
-				 release_page(&window);
-				 return corrupt(VAL_DATA_PAGE_CONFUSED, relation, page_number, page->dpg_sequence);
+			release_page(&window);
+			return corrupt(VAL_DATA_PAGE_CONFUSED, relation, page_number, page->dpg_sequence);
 		}
 
 		vdr_rel_chain_counter++;
@@ -1605,15 +1625,13 @@ void Validation::walk_database()
 	WIN window(DB_PAGE_SPACE, -1);
 	header_page* page = 0;
 	fetch_page(true, HEADER_PAGE, pag_header, &window, &page);
- 	TraNumber next = vdr_max_transaction = Ods::getNT(page);
+	const TraNumber next = vdr_max_transaction = page->hdr_next_transaction;
 
-	if (vdr_flags & VDR_online) {
+	if (vdr_flags & VDR_online)
 		release_page(&window);
-	}
 
 	if (!(vdr_flags & VDR_partial))
 	{
-		walk_header(page->hdr_next_page);
 		walk_pip();
 		walk_scns();
 		walk_tip(next);
@@ -1639,15 +1657,27 @@ void Validation::walk_database()
 			if ((vdr_flags & VDR_online) && relation->isSystem())
 				continue;
 
+			if (vdr_sch_incl)
+			{
+				if (!vdr_sch_incl->matches(relation->rel_name.schema.c_str(), relation->rel_name.schema.length()))
+					continue;
+			}
+
+			if (vdr_sch_excl)
+			{
+				if (vdr_sch_excl->matches(relation->rel_name.schema.c_str(), relation->rel_name.schema.length()))
+					continue;
+			}
+
 			if (vdr_tab_incl)
 			{
-				if (!vdr_tab_incl->matches(relation->rel_name.c_str(), relation->rel_name.length()))
+				if (!vdr_tab_incl->matches(relation->rel_name.object.c_str(), relation->rel_name.object.length()))
 					continue;
 			}
 
 			if (vdr_tab_excl)
 			{
-				if (vdr_tab_excl->matches(relation->rel_name.c_str(), relation->rel_name.length()))
+				if (vdr_tab_excl->matches(relation->rel_name.object.c_str(), relation->rel_name.object.length()))
 					continue;
 			}
 
@@ -1657,7 +1687,7 @@ void Validation::walk_database()
 				vdr_page_bitmap->clear();
 
 			string relName;
-			relName.printf("Relation %d (%s)", relation->rel_id, relation->rel_name.c_str());
+			relName.printf("Relation %d (%s)", relation->rel_id, relation->rel_name.toQuotedString().c_str());
 			output("%s\n", relName.c_str());
 
 			int errs = vdr_errors;
@@ -1740,6 +1770,12 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 	RecordNumber number((SINT64)sequence * dbb->dbb_max_records);
 	int primary_versions = 0;
 	bool marked = false;
+	MemoryPool* pool = vdr_tdbb->getDefaultPool();
+
+	// Expression of condition index could try to read current data page when evaluated.
+	// Thus we collect all record numbers and will evaluate conditions expressions after
+	// releasing data page, to avoid deadlocks.
+	HalfStaticArray<FB_UINT64, 64> recnums;
 
 	for (const data_page::dpg_repeat* line = page->dpg_rpt; line < end; line++, number.increment())
 	{
@@ -1762,10 +1798,10 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 			if (header->rhd_flags & rhd_chain)
 			{
 				vdr_rel_backversion_counter++;
-				PBM_SET(vdr_tdbb->getDefaultPool(), &vdr_backversion_pages, page_number);
+				PBM_SET(pool, &vdr_backversion_pages, page_number);
 			}
 
-			// Record the existance of a primary version of a record
+			// Record the existence of a primary version of a record
 
 			if ((vdr_flags & VDR_records) &&
 				!(header->rhd_flags & (rhd_chain | rhd_fragment | rhd_blob)))
@@ -1774,18 +1810,23 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 				// is a backversion then at least one of the record versions is
 				// committed. If there's no backversion then check transaction
 				// state of the lone primary record version. Unless it is already deleted.
+				// Note, if the primary record version is deleted and committed, the
+				// existence of an index entry is not required for such version chain
+				// because it is all garbage.
+				const bool deleted_flag = header->rhd_flags & rhd_deleted;
 
-				if (header->rhd_b_page)
-					RBM_SET(vdr_tdbb->getDefaultPool(), &vdr_rel_records, number.getValue());
-				else if ((header->rhd_flags & rhd_deleted) == 0)
+				if (header->rhd_b_page && !deleted_flag)
+					RBM_SET(pool, &vdr_rel_records, number.getValue());
+				else if (header->rhd_b_page || !deleted_flag)
 				{
 					const TraNumber transaction = Ods::getTraNum(header);
 
 					const int state = (transaction < dbb->dbb_oldest_transaction) ?
 						tra_committed : TRA_fetch_state(vdr_tdbb, transaction);
 
-					if (state == tra_committed || state == tra_limbo)
-						RBM_SET(vdr_tdbb->getDefaultPool(), &vdr_rel_records, number.getValue());
+					if (!deleted_flag && (state == tra_committed || state == tra_limbo) ||
+						deleted_flag && state != tra_committed)
+						RBM_SET(pool, &vdr_rel_records, number.getValue());
 				}
 
 				primary_versions++;
@@ -1821,6 +1862,12 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 					vdr_fixed++;
 				}
 			}
+
+			if (!(header->rhd_flags & (rhd_chain | rhd_fragment | rhd_blob | rhd_damaged)) &&
+				(vdr_flags & VDR_records) && vdr_cond_idx.hasData())
+			{
+				recnums.add(number.getValue());
+			}
 		}
 #ifdef DEBUG_VAL_VERBOSE
 		else if (VAL_debug_level)
@@ -1848,6 +1895,45 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 
 	release_page(&window);
 
+	// Safe moment to evaluate condition indices expressions for collected records
+	// and build per-index bitmaps of passed record numbers.
+
+	if (recnums.hasData())
+	{
+		// Use system transaction to get most recently committed record version.
+
+		jrd_tra* sysTran = vdr_tdbb->getAttachment()->getSysTransaction();
+		AutoSetRestore2<jrd_tra*, thread_db> setTran(vdr_tdbb,
+			&thread_db::getTransaction,
+			&thread_db::setTransaction,
+			sysTran);
+
+		record_param rpb;
+		rpb.rpb_relation = relation;
+
+		for (auto& recno : recnums)
+		{
+			rpb.rpb_number.setValue(recno);
+
+			if (VIO_get(vdr_tdbb, &rpb, sysTran, pool))
+			{
+				for (auto& getInfo : vdr_cond_idx)
+				{
+					if (getInfo.m_desc.idx_flags & idx_condition)
+					{
+						if (!getInfo.m_condition)
+							getInfo.m_condition = FB_NEW_POOL(*pool) IndexCondition(vdr_tdbb, &getInfo.m_desc);
+
+						if (getInfo.m_condition->check(rpb.rpb_record).asBool())
+							RBM_SET(pool, &getInfo.m_recs, recno);
+					}
+				}
+			}
+		}
+
+		delete rpb.rpb_record;
+	}
+
 #ifdef DEBUG_VAL_VERBOSE
 	if (VAL_debug_level)
 		fprintf(stdout, "------------------------------------\n");
@@ -1872,55 +1958,26 @@ void Validation::walk_generators()
 
 	WIN window(DB_PAGE_SPACE, -1);
 
-	vcl* vector = dbb->dbb_gen_id_pages;
-	if (vector)
+	if (const auto idsCount = dbb->getKnownPagesCount(pag_ids))
 	{
-        vcl::iterator ptr, end;
-		for (ptr = vector->begin(), end = vector->end(); ptr < end; ++ptr)
+		for (ULONG sequence = 0; sequence < idsCount; sequence++)
 		{
-			if (*ptr)
+			if (const auto pageNumber = dbb->getKnownPage(pag_ids, sequence))
 			{
 #ifdef DEBUG_VAL_VERBOSE
 				if (VAL_debug_level)
-					fprintf(stdout, "walk_generator: page %d\n", *ptr);
+					fprintf(stdout, "walk_generator: page %d\n", pageNumber);
 #endif
 				// It doesn't make a difference generator_page or pointer_page because it's not used.
 				generator_page* page = NULL;
-				fetch_page(true, *ptr, pag_ids, &window, &page);
+				fetch_page(true, pageNumber, pag_ids, &window, &page);
 				release_page(&window);
 			}
 		}
 	}
 }
 
-void Validation::walk_header(ULONG page_num)
-{
-/**************************************
- *
- *	w a l k _ h e a d e r
- *
- **************************************
- *
- * Functional description
- *	Walk the overflow header pages
- *
- **************************************/
-
-	while (page_num)
-	{
-#ifdef DEBUG_VAL_VERBOSE
-		if (VAL_debug_level)
-			fprintf(stdout, "walk_header: page %d\n", page_num);
-#endif
-		WIN window(DB_PAGE_SPACE, -1);
-		header_page* page = 0;
-		fetch_page(true, page_num, pag_header, &window, &page);
-		page_num = page->hdr_next_page;
-		release_page(&window);
-	}
-}
-
-Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_page, USHORT id)
+Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page* root_page, USHORT id)
 {
 /**************************************
  *
@@ -1940,25 +1997,25 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
  **************************************/
 	Database* dbb = vdr_tdbb->getDatabase();
 
-	const ULONG page_number = root_page.irt_rpt[id].getRoot();
-	if (!page_number) {
+	const ULONG page_number = root_page->irt_rpt[id].getRoot();
+	if (!page_number)
 		return rtn_ok;
-	}
 
-	const bool unique = (root_page.irt_rpt[id].irt_flags & (irt_unique | idx_primary));
-	const bool descending = (root_page.irt_rpt[id].irt_flags & irt_descending);
+	const bool unique = (root_page->irt_rpt[id].irt_flags & (irt_unique | idx_primary));
+	const bool descending = (root_page->irt_rpt[id].irt_flags & irt_descending);
+	const bool condition = (root_page->irt_rpt[id].irt_flags & irt_condition);
 
-	temporary_key nullKey, *null_key = 0;
+	temporary_key nullKey, *null_key = nullptr;
 	if (unique)
 	{
-		const bool isExpression = root_page.irt_rpt[id].irt_flags & irt_expression;
-		if (isExpression)
-			root_page.irt_rpt[id].irt_flags &= ~irt_expression;
-
 		index_desc idx;
-		BTR_description(vdr_tdbb, relation, &root_page, &idx, id);
-		if (isExpression)
-			root_page.irt_rpt[id].irt_flags |= irt_expression;
+		{
+			// No need to evaluate index expression and/or condition
+			AutoSetRestoreFlag<USHORT> flags(&root_page->irt_rpt[id].irt_flags,
+				irt_expression | irt_condition, false);
+
+			BTR_description(vdr_tdbb, relation, root_page, &idx, id);
+		}
 
 		null_key = &nullKey;
 		BTR_make_null_key(vdr_tdbb, &idx, null_key);
@@ -2211,7 +2268,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 			if (node.isEndBucket || node.isEndLevel)
 				break;
 
-			// Record the existance of a primary version of a record
+			// Record the existence of a primary version of a record
 			if (leafPage && (vdr_flags & VDR_records))
 				RBM_SET(vdr_tdbb->getDefaultPool(), &vdr_idx_records, node.recordNumber.getValue());
 
@@ -2340,7 +2397,20 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 	// have a corrupt index
 	if (vdr_flags & VDR_records)
 	{
-		RecordBitmap::Accessor accessor(vdr_rel_records);
+		RecordBitmap* bm_records = vdr_rel_records;
+
+		if (condition)
+		{
+			for (auto& getInfo : vdr_cond_idx)
+			{
+				if (getInfo.m_desc.idx_id == id)
+				{
+					bm_records = getInfo.m_recs;
+					break;
+				}
+			}
+		}
+		RecordBitmap::Accessor accessor(bm_records);
 
 		if (accessor.getFirst())
 		{
@@ -2530,8 +2600,6 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 	// Walk the data pages (someday we may optionally walk pages with "large objects"
 
 	ULONG seq = sequence * dbb->dbb_dp_per_pp;
-
-
 	UCHAR* bits = (UCHAR*) (page->ppg_page + dbb->dbb_dp_per_pp);
 	bool marked = false;
 	USHORT slot = 0;
@@ -2541,7 +2609,25 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 		{
 			UCHAR new_pp_bits = 0;
 
+			// If walk_data_page() below going to evaluate conditions expressions,
+			// pointer page should be released to avoid deadlocks.
+
+			const bool releasePP = vdr_cond_idx.hasData();
+			if (releasePP)
+			{
+				release_page(&window);
+				marked = false;
+			}
+
 			const RTN result = walk_data_page(relation, *pages, seq, new_pp_bits);
+
+			if (releasePP)
+			{
+				fetch_page(false, (*vector)[sequence], pag_pointer, &window, &page);
+				bits = (UCHAR*) (page->ppg_page + dbb->dbb_dp_per_pp);
+				pages = &page->ppg_page[slot];
+			}
+
 			if (result != rtn_ok && (vdr_flags & VDR_repair))
 			{
 				if (!marked)
@@ -2693,21 +2779,45 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 	if (header->rhd_flags & rhd_incomplete)
 	{
 		p = fragment->rhdf_data;
-		length -= offsetof(rhdf, rhdf_data[0]);
+		length -= RHDF_SIZE;
 	}
 	else if (header->rhd_flags & rhd_long_tranum)
 	{
 		p = ((rhde*) header)->rhde_data;
-		length -= offsetof(rhde, rhde_data[0]);
+		length -= RHDE_SIZE;
 	}
 	else
 	{
 		p = header->rhd_data;
-		length -= offsetof(rhd, rhd_data[0]);
+		length -= RHD_SIZE;
 	}
 
-	ULONG record_length = (header->rhd_flags & rhd_not_packed) ?
-		length : Compressor::getUnpackedLength(length, p);
+	const auto format = MET_format(vdr_tdbb, relation, header->rhd_format);
+	auto remainingLength = format->fmt_length;
+
+	auto calculateLength = [remainingLength](ULONG length, const UCHAR* data, bool notPacked)
+	{
+		if (notPacked)
+		{
+			if (length > remainingLength)
+			{
+				// Short records may be zero-padded up to the fragmented header size.
+				// Find out how many zero bytes present inside the tail and adjust
+				// the calculated record length accordingly.
+
+				auto tail = data + remainingLength;
+				for (const auto end = data + length; tail < end && !*tail; tail++)
+					length--;
+			}
+
+			return length;
+		}
+
+		return Compressor::getUnpackedLength(length, data);
+	};
+
+	bool notPacked = (fragment->rhdf_flags & rhd_not_packed) != 0;
+	remainingLength -= calculateLength(length, p, notPacked);
 
 	// Next, chase down fragments, if any
 
@@ -2746,21 +2856,21 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 		if (fragment->rhdf_flags & rhd_incomplete)
 		{
 			p = fragment->rhdf_data;
-			length -= offsetof(rhdf, rhdf_data[0]);
+			length -= RHDF_SIZE;
 		}
 		else if (fragment->rhdf_flags & rhd_long_tranum)
 		{
 			p = ((rhde*) fragment)->rhde_data;
-			length -= offsetof(rhde, rhde_data[0]);
+			length -= RHDE_SIZE;
 		}
 		else
 		{
 			p = ((rhd*) fragment)->rhd_data;
-			length -= offsetof(rhd, rhd_data[0]);
+			length -= RHD_SIZE;
 		}
 
-		record_length += (fragment->rhdf_flags & rhd_not_packed) ?
-			length : Compressor::getUnpackedLength(length, p);
+		notPacked = (fragment->rhdf_flags & rhd_not_packed) != 0;
+		remainingLength -= calculateLength(length, p, notPacked);
 
 		page_number = fragment->rhdf_f_page;
 		line_number = fragment->rhdf_f_line;
@@ -2768,11 +2878,9 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 		release_page(&window);
 	}
 
-	// Check out record length and format
+	// Validate unpacked record length
 
-	const Format* format = MET_format(vdr_tdbb, relation, header->rhd_format);
-
-	if (!delta_flag && record_length != format->fmt_length)
+	if (!delta_flag && remainingLength != 0)
 		return corrupt(VAL_REC_WRONG_LENGTH, relation, number.getValue());
 
 	return rtn_ok;
@@ -2983,9 +3091,23 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 		WIN window(DB_PAGE_SPACE, -1);
 		header_page* page = NULL;
 		fetch_page(false, HEADER_PAGE, pag_header, &window, &page);
-		vdr_max_transaction = Ods::getNT(page);
+		vdr_max_transaction = page->hdr_next_transaction;
 		release_page(&window);
 	}
+
+	// If we going to check records, get getInfo about conditional indices before
+	// walking relation. System relations have no conditional indices.
+
+	for (auto& item : vdr_cond_idx)
+	{
+		delete item.m_recs;
+		delete item.m_condition;
+	}
+
+	vdr_cond_idx.clear();
+
+	const bool idxRootOk = (vdr_flags & VDR_records) && !relation->isSystem() ?
+		walk_root(relation, true) == rtn_ok : true;
 
 	// Walk pointer and selected data pages associated with relation
 
@@ -3010,7 +3132,8 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 	}
 
 	// Walk indices for the relation
-	walk_root(relation);
+	if (idxRootOk)
+		walk_root(relation, false);
 
 	lckGC.release();
 
@@ -3067,10 +3190,13 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 	{
 		if (!(vdr_flags & VDR_online))
 		{
-			const char* msg = relation->rel_name.length() > 0 ?
-				"bugcheck during scan of table %d (%s)" :
-				"bugcheck during scan of table %d";
-			gds__log(msg, relation->rel_id, relation->rel_name.c_str());
+			if (relation->rel_name.object.hasData())
+			{
+				gds__log("bugcheck during scan of table %d (%s)",
+					relation->rel_id, relation->rel_name.toQuotedString().c_str());
+			}
+			else
+				gds__log("bugcheck during scan of table %d", relation->rel_id);
 		}
 #ifdef DEBUG_VAL_VERBOSE
 		if (VAL_debug_level)
@@ -3087,7 +3213,7 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 }
 
 
-Validation::RTN Validation::walk_root(jrd_rel* relation)
+Validation::RTN Validation::walk_root(jrd_rel* relation, bool getInfo)
 {
 /**************************************
  *
@@ -3096,7 +3222,8 @@ Validation::RTN Validation::walk_root(jrd_rel* relation)
  **************************************
  *
  * Functional description
- *	Walk index root page for a relation as well as any indices.
+ *	Walk index root page for a relation. If getInfo is true
+ *  get index metadata for condition indices, else walk every index.
  *
  **************************************/
 
@@ -3106,35 +3233,61 @@ Validation::RTN Validation::walk_root(jrd_rel* relation)
 	if (!relPages->rel_index_root)
 		return corrupt(VAL_INDEX_ROOT_MISSING, relation);
 
-	index_root_page* page = 0;
+	index_root_page* page = nullptr;
 	WIN window(DB_PAGE_SPACE, -1);
-	fetch_page(true, relPages->rel_index_root, pag_root, &window, &page);
+	fetch_page(!getInfo, relPages->rel_index_root, pag_root, &window, &page);
 
 	for (USHORT i = 0; i < page->irt_count; i++)
 	{
-		if (page->irt_rpt[i].getRoot() == 0)
+		if (!page->irt_rpt[i].getRoot())
 			continue;
 
-		MetaName index;
+		QualifiedName index;
 
 		release_page(&window);
 		MET_lookup_index(vdr_tdbb, index, relation->rel_name, i + 1);
 		fetch_page(false, relPages->rel_index_root, pag_root, &window, &page);
 
+		if (vdr_sch_incl)
+		{
+			if (!vdr_sch_incl->matches(index.schema.c_str(), index.schema.length()))
+				continue;
+		}
+
+		if (vdr_sch_excl)
+		{
+			if (vdr_sch_excl->matches(index.schema.c_str(), index.schema.length()))
+				continue;
+		}
+
 		if (vdr_idx_incl)
 		{
-			if (!vdr_idx_incl->matches(index.c_str(), index.length()))
+			if (!vdr_idx_incl->matches(index.object.c_str(), index.object.length()))
 				continue;
 		}
 
 		if (vdr_idx_excl)
 		{
-			if (vdr_idx_excl->matches(index.c_str(), index.length()))
+			if (vdr_idx_excl->matches(index.object.c_str(), index.object.length()))
 				continue;
 		}
 
-		output("Index %d (%s)\n", i + 1, index.c_str());
-		walk_index(relation, *page, i);
+		if (getInfo)
+		{
+			if (page->irt_rpt[i].irt_flags & irt_condition)
+			{
+				// No need to evaluate index expression
+				AutoSetRestoreFlag<USHORT> flag(&page->irt_rpt[i].irt_flags, irt_expression, false);
+
+				IdxInfo info;
+				if (BTR_description(vdr_tdbb, relation, page, &info.m_desc, i))
+					vdr_cond_idx.add(info);
+			}
+			continue;
+		}
+
+		output("Index %d (%s)\n", i + 1, index.toQuotedString().c_str());
+		walk_index(relation, page, i);
 	}
 
 	release_page(&window);
@@ -3156,8 +3309,7 @@ Validation::RTN Validation::walk_tip(TraNumber transaction)
  **************************************/
 	Database* dbb = vdr_tdbb->getDatabase();
 
-	const vcl* vector = dbb->dbb_t_pages;
-	if (!vector)
+	if (!dbb->getKnownPagesCount(pag_transactions))
 		return corrupt(VAL_TIP_LOST, 0);
 
 	tx_inv_page* page = 0;
@@ -3165,25 +3317,28 @@ Validation::RTN Validation::walk_tip(TraNumber transaction)
 
 	for (ULONG sequence = 0; sequence <= pages; sequence++)
 	{
-		if (!(*vector)[sequence] || sequence >= vector->count())
+		auto pageNumber = dbb->getKnownPage(pag_transactions, sequence);
+		if (!pageNumber)
 		{
 			corrupt(VAL_TIP_LOST_SEQUENCE, 0, sequence);
 			if (!(vdr_flags & VDR_repair))
 				continue;
 
 			TRA_extend_tip(vdr_tdbb, sequence);
-			vector = dbb->dbb_t_pages;
 			vdr_fixed++;
+
+			pageNumber = dbb->getKnownPage(pag_transactions, sequence);
 		}
 
 		WIN window(DB_PAGE_SPACE, -1);
-		fetch_page(true, (*vector)[sequence], pag_transactions, &window, &page);
+		fetch_page(true, pageNumber, pag_transactions, &window, &page);
 
 #ifdef DEBUG_VAL_VERBOSE
 		if (VAL_debug_level)
-			fprintf(stdout, "walk_tip: page %d next %d\n", (*vector)[sequence], page->tip_next);
+			fprintf(stdout, "walk_tip: page %d next %d\n", pageNumber, page->tip_next);
 #endif
-		if (page->tip_next && page->tip_next != (*vector)[sequence + 1])
+		const auto next = dbb->getKnownPage(pag_transactions, sequence + 1);
+		if (page->tip_next && page->tip_next != next)
 		{
 			corrupt(VAL_TIP_CONFUSED, 0, sequence);
 		}

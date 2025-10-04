@@ -66,20 +66,18 @@ using namespace Replication;
 
 namespace
 {
-	const unsigned FLUSH_WAIT_INTERVAL = 1; // milliseconds
+	inline constexpr unsigned FLUSH_WAIT_INTERVAL = 1;	// milliseconds
 
-	const unsigned NO_SPACE_TIMEOUT = 10;	// seconds
-	const unsigned NO_SPACE_RETRIES = 6;		// up to one minute
+	inline constexpr unsigned NO_SPACE_TIMEOUT = 10000;	// milliseconds
+	inline constexpr unsigned NO_SPACE_RETRIES = 6;		// up to one minute
 
-	const unsigned COPY_BLOCK_SIZE = 64 * 1024; // 64 KB
+	inline constexpr unsigned COPY_BLOCK_SIZE = 64 * 1024; // 64 KB
 
-	const char* FILENAME_PATTERN = "%s.journal-%09" UQUADFORMAT;
+	inline constexpr const char* FILENAME_PATTERN = "%s_%s.journal-%09" UQUADFORMAT;
 
-	const char* FILENAME_WILDCARD = "$(filename)";
-	const char* PATHNAME_WILDCARD = "$(pathname)";
-	const char* ARCHPATHNAME_WILDCARD = "$(archivepathname)";
-
-	SegmentHeader g_dummyHeader;
+	inline constexpr const char* FILENAME_WILDCARD = "$(filename)";
+	inline constexpr const char* PATHNAME_WILDCARD = "$(pathname)";
+	inline constexpr const char* ARCHPATHNAME_WILDCARD = "$(archivepathname)";
 
 	static THREAD_ENTRY_DECLARE archiver_thread(THREAD_ENTRY_PARAM arg)
 	{
@@ -97,12 +95,12 @@ namespace
 #endif
 	}
 
-	void raiseIOError(const char* syscall, const char* filename)
+	void raiseIOError(const char* syscall, const char* filename, ISC_STATUS errcode)
 	{
 		Arg::Gds temp(isc_io_error);
 		temp << Arg::Str(syscall);
 		temp << Arg::Str(filename);
-		temp << SYS_ERR(ERRNO);
+		temp << SYS_ERR(errcode);
 		temp.raise();
 	}
 }
@@ -113,10 +111,12 @@ namespace
 ChangeLog::Segment::Segment(MemoryPool& pool, const PathName& filename, int handle)
 	: m_filename(pool, filename), m_handle(handle)
 {
+	memset(&m_builtinHeader, 0, sizeof(SegmentHeader));
+
 	struct stat stats;
 	if (fstat(m_handle, &stats) < 0 || stats.st_size < (int) sizeof(SegmentHeader))
 	{
-		m_header = &g_dummyHeader;
+		m_header = &m_builtinHeader;
 		return;
 	}
 
@@ -125,10 +125,11 @@ ChangeLog::Segment::Segment(MemoryPool& pool, const PathName& filename, int hand
 
 ChangeLog::Segment::~Segment()
 {
-	if (m_header != &g_dummyHeader)
+	if (m_header != &m_builtinHeader)
 		unmapHeader();
 
-	::close(m_handle);
+	if (m_handle != -1)
+		::close(m_handle);
 }
 
 void ChangeLog::Segment::init(FB_UINT64 sequence, const Guid& guid)
@@ -137,7 +138,7 @@ void ChangeLog::Segment::init(FB_UINT64 sequence, const Guid& guid)
 	strcpy(m_header->hdr_signature, CHANGELOG_SIGNATURE);
 	m_header->hdr_version = CHANGELOG_CURRENT_VERSION;
 	m_header->hdr_state = SEGMENT_STATE_USED;
-	memcpy(&m_header->hdr_guid, &guid, sizeof(Guid));
+	guid.copyTo(m_header->hdr_guid);
 	m_header->hdr_sequence = sequence;
 	m_header->hdr_length = sizeof(SegmentHeader);
 
@@ -160,7 +161,7 @@ bool ChangeLog::Segment::validate(const Guid& guid) const
 		return false;
 	}
 
-	if (memcmp(&m_header->hdr_guid, &guid, sizeof(Guid)))
+	if (Guid(m_header->hdr_guid) != guid)
 		return false;
 
 	return true;
@@ -168,8 +169,10 @@ bool ChangeLog::Segment::validate(const Guid& guid) const
 
 void ChangeLog::Segment::copyTo(const PathName& filename) const
 {
+	fb_assert(m_header != &m_builtinHeader);
+
 	if (os_utils::lseek(m_handle, 0, SEEK_SET) != 0)
-		raiseIOError("seek", m_filename.c_str());
+		raiseIOError("seek", m_filename.c_str(), ERRNO);
 
 	const auto totalLength = m_header->hdr_length;
 	fb_assert(totalLength > sizeof(SegmentHeader));
@@ -188,16 +191,20 @@ void ChangeLog::Segment::copyTo(const PathName& filename) const
 
 		if (::read(m_handle, data, length) != length)
 		{
+			const ISC_STATUS errcode = ERRNO;
+
 			dstFile.release();
 			unlink(filename.c_str());
-			raiseIOError("read", m_filename.c_str());
+			raiseIOError("read", m_filename.c_str(), errcode);
 		}
 
 		if (::write(dstFile, data, length) != length)
 		{
+			const ISC_STATUS errcode = ERRNO;
+
 			dstFile.release();
 			unlink(filename.c_str());
-			raiseIOError("write", filename.c_str());
+			raiseIOError("write", filename.c_str(), errcode);
 		}
 	}
 
@@ -206,6 +213,7 @@ void ChangeLog::Segment::copyTo(const PathName& filename) const
 
 void ChangeLog::Segment::append(ULONG length, const UCHAR* data)
 {
+	fb_assert(m_header != &m_builtinHeader);
 	fb_assert(m_header->hdr_state == SEGMENT_STATE_USED);
 	fb_assert(length);
 
@@ -225,10 +233,36 @@ void ChangeLog::Segment::setState(SegmentState state)
 	const auto full = (state == SEGMENT_STATE_FULL);
 	m_header->hdr_state = state;
 	flush(full);
+
+	if ((state == SEGMENT_STATE_FREE) && (m_header != &m_builtinHeader))
+		closeFile();
+}
+
+void ChangeLog::Segment::closeFile()
+{
+	if (m_header == &m_builtinHeader)
+	{
+		fb_assert(m_handle == -1);
+		return;
+	}
+
+	memcpy(&m_builtinHeader, m_header, sizeof(SegmentHeader));
+
+	unmapHeader();
+
+	if (m_handle != -1)
+	{
+		::close(m_handle);
+		m_handle = -1;
+	}
+
+	m_header = &m_builtinHeader;
 }
 
 void ChangeLog::Segment::truncate()
 {
+	fb_assert(m_header != &m_builtinHeader);
+
 	const auto length = m_header->hdr_length;
 
 	unmapHeader();
@@ -266,7 +300,7 @@ void ChangeLog::Segment::mapHeader()
 	m_mapping = CreateFileMapping((HANDLE) _get_osfhandle(m_handle), NULL, PAGE_READWRITE,
 								  0, sizeof(SegmentHeader), NULL);
 
-	if (m_mapping == INVALID_HANDLE_VALUE)
+	if (!m_mapping)
 		raiseError("Journal file %s mapping failed (error %d)", m_filename.c_str(), ERRNO);
 
 	auto address = MapViewOfFile(m_mapping, FILE_MAP_READ | FILE_MAP_WRITE,
@@ -289,7 +323,7 @@ void ChangeLog::Segment::unmapHeader()
 #ifdef WIN_NT
 	UnmapViewOfFile(m_header);
 	CloseHandle(m_mapping);
-	m_mapping = INVALID_HANDLE_VALUE;
+	m_mapping = 0;
 #else
 	munmap(m_header, sizeof(SegmentHeader));
 #endif
@@ -314,11 +348,9 @@ ChangeLog::ChangeLog(MemoryPool& pool,
 					 const FB_UINT64 sequence,
 					 const Replication::Config* config)
 	: PermanentStorage(pool),
-	  m_dbId(dbId), m_config(config), m_segments(pool),
+	  m_dbId(dbId), m_guid(guid), m_config(config), m_segments(pool),
 	  m_sequence(sequence), m_generation(0), m_shutdown(false)
 {
-	memcpy(&m_guid, &guid, sizeof(Guid));
-
 	initSharedFile();
 
 	{ // scope
@@ -648,16 +680,16 @@ bool ChangeLog::archiveExecute(Segment* segment)
 		const auto archpathname = m_config->archiveDirectory.hasData() ?
 			m_config->archiveDirectory + filename : "";
 
-		size_t pos;
+		string::size_type pos;
 
 		while ( (pos = archiveCommand.find(FILENAME_WILDCARD)) != string::npos)
-			archiveCommand.replace(pos, strlen(FILENAME_WILDCARD), filename);
+			archiveCommand.replace(pos, fb_strlen(FILENAME_WILDCARD), filename);
 
 		while ( (pos = archiveCommand.find(PATHNAME_WILDCARD)) != string::npos)
-			archiveCommand.replace(pos, strlen(PATHNAME_WILDCARD), pathname);
+			archiveCommand.replace(pos, fb_strlen(PATHNAME_WILDCARD), pathname);
 
 		while ( (pos = archiveCommand.find(ARCHPATHNAME_WILDCARD)) != string::npos)
-			archiveCommand.replace(pos, strlen(ARCHPATHNAME_WILDCARD), archpathname);
+			archiveCommand.replace(pos, fb_strlen(ARCHPATHNAME_WILDCARD), archpathname);
 
 		LockCheckout checkout(this);
 
@@ -853,6 +885,26 @@ void ChangeLog::bgArchiver()
 	}
 }
 
+void ChangeLog::cleanup()
+{
+	LockGuard guard(this);
+
+	while (m_segments.hasData())
+	{
+		const auto segment = m_segments.pop();
+
+		if (segment->getState() == SEGMENT_STATE_USED && segment->hasData())
+			segment->setState(SEGMENT_STATE_FULL);
+
+		if (segment->getState() == SEGMENT_STATE_FULL)
+			archiveSegment(segment);
+
+		const PathName filename = segment->getPathName();
+		segment->release();
+		unlink(filename.c_str());
+	}
+}
+
 void ChangeLog::initSegments()
 {
 	clearSegments();
@@ -876,6 +928,18 @@ void ChangeLog::initSegments()
 		if (segment->getSequence() > state->sequence)
 			segment->setState(SEGMENT_STATE_FREE);
 
+		if (segment->getState() == SEGMENT_STATE_FREE)
+		{
+			segment->closeFile();
+
+			if (segment->getSequence() + m_config->segmentCount <= state->sequence)
+			{
+				const PathName& fname = segment->getPathName();
+				unlink(fname.c_str());
+				continue;
+			}
+		}
+
 		segment->addRef();
 		m_segments.add(segment.release());
 	}
@@ -892,15 +956,16 @@ void ChangeLog::clearSegments()
 ChangeLog::Segment* ChangeLog::createSegment()
 {
 	const auto state = m_sharedMemory->getHeader();
-	const auto sequence = ++state->sequence;
+	const auto sequence = state->sequence + 1;
 
 	PathName filename;
-	filename.printf(FILENAME_PATTERN, m_config->filePrefix.c_str(), sequence);
+	filename.printf(FILENAME_PATTERN, m_config->filePrefix.c_str(), m_guid.toString(false).c_str(), sequence);
 	filename = m_config->journalDirectory + filename;
 
 	const auto fd = os_utils::openCreateSharedFile(filename.c_str(), O_EXCL | O_BINARY);
 
-	if (::write(fd, &g_dummyHeader, sizeof(SegmentHeader)) != sizeof(SegmentHeader))
+	const SegmentHeader dummyHeader = {0};
+	if (::write(fd, &dummyHeader, sizeof(SegmentHeader)) != sizeof(SegmentHeader))
 	{
 		::close(fd);
 		raiseError("Journal file %s write failed (error %d)", filename.c_str(), ERRNO);
@@ -913,6 +978,7 @@ ChangeLog::Segment* ChangeLog::createSegment()
 
 	m_segments.add(segment);
 	state->generation++;
+	state->sequence++;
 
 	return segment;
 }
@@ -938,18 +1004,29 @@ ChangeLog::Segment* ChangeLog::reuseSegment(ChangeLog::Segment* segment)
 	// Increase the sequence
 
 	const auto state = m_sharedMemory->getHeader();
-	const auto sequence = ++state->sequence;
+	const auto sequence = state->sequence + 1;
 
 	// Attempt to rename the backing file
 
 	PathName newname;
-	newname.printf(FILENAME_PATTERN, m_config->filePrefix.c_str(), sequence);
+	newname.printf(FILENAME_PATTERN, m_config->filePrefix.c_str(), m_guid.toString(false).c_str(), sequence);
 	newname = m_config->journalDirectory + newname;
 
 	// If renaming fails, then we just create a new file.
 	// The old segment will be reused later in this case.
 	if (::rename(orgname.c_str(), newname.c_str()) < 0)
+	{
+#ifdef DEV_BUILD
+		const auto err = ERRNO;
+
+		string warn;
+		warn.printf("Journal file %s rename to %s failed (error %d)",
+					orgname.c_str(), newname.c_str(), err);
+
+		logPrimaryWarning(m_config->dbName, warn);
+#endif
 		return createSegment();
+	}
 
 	// Re-open the segment using a new name and initialize it
 
@@ -962,6 +1039,7 @@ ChangeLog::Segment* ChangeLog::reuseSegment(ChangeLog::Segment* segment)
 
 	m_segments.add(segment);
 	state->generation++;
+	state->sequence++;
 
 	return segment;
 }

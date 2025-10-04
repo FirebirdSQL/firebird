@@ -52,11 +52,12 @@ class ConfigFile : public Firebird::AutoStorage, public Firebird::RefCounted
 {
 public:
 	// flags for config file
-	static const USHORT HAS_SUB_CONF	= 0x01;
-	static const USHORT ERROR_WHEN_MISS	= 0x02;
-	static const USHORT NATIVE_ORDER	= 0x04;
-	static const USHORT NO_COMMENTS		= 0x08;
-	static const USHORT CUSTOM_MACROS	= 0x10;
+	static inline constexpr USHORT HAS_SUB_CONF		= 0x01;
+	static inline constexpr USHORT ERROR_WHEN_MISS	= 0x02;
+	static inline constexpr USHORT NATIVE_ORDER		= 0x04;
+	static inline constexpr USHORT NO_COMMENTS		= 0x08;
+	static inline constexpr USHORT CUSTOM_MACROS	= 0x10;
+	static inline constexpr USHORT REGEXP_SUPPORT	= 0x20;
 
 	// enum to distinguish ctors
 	enum UseText {USE_TEXT};
@@ -78,10 +79,10 @@ public:
 	{
 		Parameter(MemoryPool& p, const Parameter& par)
 			: AutoStorage(p), name(getPool(), par.name), value(getPool(), par.value),
-			  sub(par.sub), line(par.line)
+			  sub(par.sub), line(par.line), hasValue(par.hasValue)
 		{ }
 		Parameter()
-			: AutoStorage(), name(getPool()), value(getPool()), line(0)
+			: AutoStorage(), name(getPool()), value(getPool()), line(0), hasValue(false)
 		{ }
 
 		SINT64 asInteger() const;
@@ -91,6 +92,7 @@ public:
 		String value;
 		Firebird::RefPtr<ConfigFile> sub;
 		unsigned int line;
+		bool hasValue;
 
 		static const KeyType* generate(const Parameter* item)
 		{
@@ -132,17 +134,19 @@ private:
 	USHORT flags;
 	unsigned includeLimit;
 	ConfigCache* filesCache;
-	static const unsigned INCLUDE_LIMIT = 64;
+	static inline constexpr unsigned INCLUDE_LIMIT = 64;
 
 	// utilities
 	bool getLine(Stream* stream, String&, unsigned int&);
 	void parse(Stream* stream);
 	LineType parseLine(const char* fileName, const String& input, Parameter& par);
 	bool translate(const char* fileName, const String& from, String& to) const;
-	void badLine(const char* fileName, const String& line);
+	[[noreturn]] void badLine(const char* fileName, const String& line);
 	void include(const char* currentFileName, const Firebird::PathName& path);
 	bool wildCards(const char* currentFileName, const Firebird::PathName& pathPrefix, FilesArray& components);
 	bool substituteStandardDir(const String& from, String& to) const;
+	void adjustMacroReplacePositions(const String& value, const String& macro, String::size_type& from, String::size_type& to) const;
+	unsigned getDirSeparatorLength(const String& value, String::size_type subFrom) const;
 };
 
 #endif	// CONFIG_CONFIG_FILE_H

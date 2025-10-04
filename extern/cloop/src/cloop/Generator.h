@@ -90,7 +90,7 @@ class CHeaderGenerator : public CBasedGenerator
 {
 public:
 	CHeaderGenerator(const std::string& filename, const std::string& prefix, Parser* parser,
-		const std::string& headerGuard);
+		const std::string& headerGuard, const std::string& macro);
 
 public:
 	virtual void generate();
@@ -98,6 +98,7 @@ public:
 private:
 	Parser* parser;
 	std::string headerGuard;
+	bool macro;
 };
 
 
@@ -126,11 +127,15 @@ public:
 
 public:
 	virtual void generate();
+	static std::string escapeName(std::string name);
 
 private:
 	std::string convertParameter(const Parameter& parameter);
 	std::string convertType(const TypeRef& typeRef);
-	std::string escapeName(std::string name, bool interfaceName = false);
+	std::string escapeIfaceName(std::string name)
+	{
+		return prefix + name;
+	}
 
 	void insertFile(const std::string& filename);
 

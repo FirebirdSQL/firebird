@@ -51,6 +51,7 @@
 #define COMMON_COMMON_H
 
 #include <string.h>
+#include <string>
 
 #ifdef HAVE_STDLIB_H
 #include <stdlib.h>
@@ -93,14 +94,6 @@
 #define FB_CC CcIcc
 #endif
 
-// SLONG is a 32-bit integer on 64-bit platforms
-//#if SIZEOF_LONG == 4
-//#define SLONGFORMAT "ld"
-//#define ULONGFORMAT "lu"
-//#define XLONGFORMAT "lX"
-//#define xLONGFORMAT "lx"
-//#endif
-
 // format for size_t
 #ifndef SIZEFORMAT
 #define SIZEFORMAT "zi"
@@ -142,6 +135,10 @@
 #ifdef RISCV64
 #define FB_CPU CpuRiscV64
 #endif /* RISCV64 */
+
+#ifdef LOONGARCH
+#define FB_CPU CpuLoongArch
+#endif /* LOONGARCH */
 
 #ifdef sparc
 #define FB_CPU CpuUltraSparc
@@ -225,11 +222,6 @@
 //format for __LINE__
 #define LINEFORMAT "d"
 
-//#define SLONGFORMAT	"ld"
-//#define ULONGFORMAT "lu"
-//#define XLONGFORMAT "lX"
-//#define xLONGFORMAT "lx"
-
 #define FB_CC CcGcc
 
 #define UNIX
@@ -285,6 +277,14 @@
 
 #ifdef PPC64EL
 #define FB_CPU CpuPowerPc64el
+#endif
+
+#ifdef PPC64
+#define FB_CPU CpuPowerPc64
+#endif
+
+#ifdef PPC
+#define FB_CPU CpuPowerPc
 #endif
 
 #if defined(i386) || defined(__i386) || defined(__i386__)
@@ -528,10 +528,6 @@ extern "C" int remove(const char* path);
 #endif
 
 #define SYS_ERR		Arg::Windows
-//#define SLONGFORMAT "ld"
-//#define ULONGFORMAT "lu"
-//#define XLONGFORMAT "lX"
-//#define xLONGFORMAT "lx"
 
 //format for __LINE__
 #define LINEFORMAT "d"
@@ -546,6 +542,9 @@ extern "C" int remove(const char* path);
 
 #ifdef AMD64
 #define FB_CPU CpuAmd
+#elif defined(ARM64)
+#define FB_CPU CpuArm64
+//#define CDS_UNAVAILABLE
 #else
 #ifndef I386
 #define I386
@@ -911,7 +910,7 @@ void GDS_breakpoint(int);
 
 // ASF: Currently, all little-endian are FB_SWAP_DOUBLE and big-endian aren't.
 // AP: Define it for your hardware correctly in case your CPU do not follow mentioned rule.
-//     The follwoing lines are kept for reference only.
+//     The following lines are kept for reference only.
 //#if defined(i386) || defined(I386) || defined(_M_IX86) || defined(AMD64) || defined(ARM) || defined(MIPSEL) || defined(DARWIN64) || defined(IA64)
 //#define		FB_SWAP_DOUBLE 1
 //#elif defined(sparc) || defined(PowerPC) || defined(PPC) || defined(__ppc__) || defined(HPUX) || defined(MIPS) || defined(__ppc64__)
@@ -939,11 +938,11 @@ void GDS_breakpoint(int);
 
 // Used in quad operations
 #ifndef WORDS_BIGENDIAN
-const int LOW_WORD		= 0;
-const int HIGH_WORD		= 1;
+inline constexpr int LOW_WORD	= 0;
+inline constexpr int HIGH_WORD	= 1;
 #else
-const int LOW_WORD		= 1;
-const int HIGH_WORD		= 0;
+inline constexpr int LOW_WORD	= 1;
+inline constexpr int HIGH_WORD	= 0;
 #endif
 
 #ifndef HAVE_WORKING_VFORK
@@ -959,7 +958,8 @@ const int HIGH_WORD		= 0;
 #endif
 #endif
 
-static const TEXT FB_SHORT_MONTHS[][4] =
+
+inline constexpr TEXT FB_SHORT_MONTHS[][4] =
 {
 	"Jan", "Feb", "Mar",
 	"Apr", "May", "Jun",
@@ -968,7 +968,7 @@ static const TEXT FB_SHORT_MONTHS[][4] =
 	"\0"
 };
 
-static const TEXT* const FB_LONG_MONTHS_UPPER[] =
+inline constexpr const TEXT* FB_LONG_MONTHS_UPPER[] =
 {
 	"JANUARY",
 	"FEBRUARY",
@@ -985,11 +985,37 @@ static const TEXT* const FB_LONG_MONTHS_UPPER[] =
 	0
 };
 
-const FB_SIZE_T FB_MAX_SIZEOF = ~FB_SIZE_T(0); // Assume FB_SIZE_T is unsigned
-
-inline FB_SIZE_T fb_strlen(const char* str)
+// Starts with SUNDAY cuz tm.tm_wday starts with it
+inline constexpr TEXT FB_SHORT_DAYS[][4] =
 {
-	return static_cast<FB_SIZE_T>(strlen(str));
+	"Sun",
+	"Mon",
+	"Tue",
+	"Wed",
+	"Thu",
+	"Fri",
+	"Sat",
+	"\0"
+};
+
+// Starts with SUNDAY cuz tm.tm_wday starts with it
+inline constexpr const TEXT* FB_LONG_DAYS_UPPER[] =
+{
+	"SUNDAY",
+	"MONDAY",
+	"TUESDAY",
+	"WEDNESDAY",
+	"THURSDAY",
+	"FRIDAY",
+	"SATURDAY",
+	"\0"
+};
+
+inline constexpr FB_SIZE_T FB_MAX_SIZEOF = ~FB_SIZE_T(0); // Assume FB_SIZE_T is unsigned
+
+inline constexpr FB_SIZE_T fb_strlen(const char* str) noexcept
+{
+	return static_cast<FB_SIZE_T>(std::char_traits<char>::length(str));
 }
 
 namespace Firebird {

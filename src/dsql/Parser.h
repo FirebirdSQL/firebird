@@ -23,6 +23,7 @@
 #ifndef DSQL_PARSER_H
 #define DSQL_PARSER_H
 
+#include <optional>
 #include "../dsql/dsql.h"
 #include "../dsql/DdlNodes.h"
 #include "../dsql/BoolNodes.h"
@@ -32,20 +33,20 @@
 #include "../dsql/PackageNodes.h"
 #include "../dsql/StmtNodes.h"
 #include "../jrd/RecordSourceNodes.h"
-#include "../common/classes/Nullable.h"
+#include "../common/classes/TriState.h"
 #include "../common/classes/stack.h"
 
 #include "gen/parse.h"
 
 namespace Firebird {
+class CharSet;
+
 namespace Arg {
 	class StatusVector;
 } // namespace
 } // namespace
 
 namespace Jrd {
-
-class CharSet;
 
 class Parser : public Firebird::PermanentStorage
 {
@@ -99,7 +100,7 @@ private:
 		const TEXT* line_start;
 		const TEXT* last_token_bk;
 		const TEXT* line_start_bk;
-		SSHORT att_charset;
+		SSHORT charSetId;
 		SLONG lines, lines_bk;
 		int prev_keyword;
 		USHORT param_number;
@@ -127,11 +128,12 @@ private:
 	};
 
 public:
-	static const int MAX_TOKEN_LEN = 256;
+	static inline constexpr int MAX_TOKEN_LEN = 256;
 
 public:
 	Parser(thread_db* tdbb, MemoryPool& pool, MemoryPool* aStatementPool, DsqlCompilerScratch* aScratch,
-		USHORT aClientDialect, USHORT aDbDialect, const TEXT* string, size_t length, SSHORT characterSet);
+		USHORT aClientDialect, USHORT aDbDialect, bool aRequireSemicolon,
+		const TEXT* string, size_t length, SSHORT charSetId);
 	~Parser();
 
 public:
@@ -162,42 +164,10 @@ public:
 		return FB_NEW_POOL(getPool()) IntlString(getPool(), s, charSet);
 	}
 
-	// newNode overloads
-
-	template <typename T>
-	T* newNode()
+	template <typename T, typename... Args>
+	T* newNode(Args&&... args)
 	{
-		return setupNode<T>(FB_NEW_POOL(getPool()) T(getPool()));
-	}
-
-	template <typename T, typename T1>
-	T* newNode(T1 a1)
-	{
-		return setupNode<T>(FB_NEW_POOL(getPool()) T(getPool(), a1));
-	}
-
-	template <typename T, typename T1, typename T2>
-	T* newNode(T1 a1, T2 a2)
-	{
-		return setupNode<T>(FB_NEW_POOL(getPool()) T(getPool(), a1, a2));
-	}
-
-	template <typename T, typename T1, typename T2, typename T3>
-	T* newNode(T1 a1, T2 a2, T3 a3)
-	{
-		return setupNode<T>(FB_NEW_POOL(getPool()) T(getPool(), a1, a2, a3));
-	}
-
-	template <typename T, typename T1, typename T2, typename T3, typename T4>
-	T* newNode(T1 a1, T2 a2, T3 a3, T4 a4)
-	{
-		return setupNode<T>(FB_NEW_POOL(getPool()) T(getPool(), a1, a2, a3, a4));
-	}
-
-	template <typename T, typename T1, typename T2, typename T3, typename T4, typename T5>
-	T* newNode(T1 a1, T2 a2, T3 a3, T4 a4, T5 a5)
-	{
-		return setupNode<T>(FB_NEW_POOL(getPool()) T(getPool(), a1, a2, a3, a4, a5));
+		return setupNode<T>(FB_NEW_POOL(getPool()) T(getPool(), std::forward<Args>(args)...));
 	}
 
 private:
@@ -255,6 +225,11 @@ private:
 		return (name ? *name : MetaName());
 	}
 
+	QualifiedName optName(QualifiedName* name)
+	{
+		return (name ? *name : QualifiedName());
+	}
+
 	void transformString(const char* start, unsigned length, Firebird::string& dest);
 	Firebird::string makeParseStr(const Position& p1, const Position& p2);
 	ParameterNode* make_parameter();
@@ -276,19 +251,34 @@ private:
 	}
 
 	template <typename T>
-	void setClause(BaseNullable<T>& clause, const char* duplicateMsg, const T& value)
+	void setClause(std::optional<T>& clause, const char* duplicateMsg, const T& value)
 	{
 		checkDuplicateClause(clause, duplicateMsg);
 		clause = value;
 	}
 
 	template <typename T>
-	void setClause(BaseNullable<T>& clause, const char* duplicateMsg, const BaseNullable<T>& value)
+	void setClause(std::optional<T>& clause, const char* duplicateMsg, const std::optional<T>& value)
 	{
-		if (value.specified)
+		if (value.has_value())
 		{
 			checkDuplicateClause(clause, duplicateMsg);
-			clause = value.value;
+			clause = value.value();
+		}
+	}
+
+	void setClause(Firebird::TriState& clause, const char* duplicateMsg, bool value)
+	{
+		checkDuplicateClause(clause, duplicateMsg);
+		clause = value;
+	}
+
+	void setClause(Firebird::TriState& clause, const char* duplicateMsg, const Firebird::TriState& value)
+	{
+		if (value.isAssigned())
+		{
+			checkDuplicateClause(clause, duplicateMsg);
+			clause = value;
 		}
 	}
 
@@ -338,10 +328,20 @@ private:
 		return clause.hasData();
 	}
 
-	template <typename T>
-	bool isDuplicateClause(const BaseNullable<T>& clause)
+	bool isDuplicateClause(const QualifiedName& clause)
 	{
-		return clause.specified;
+		return clause.object.hasData();
+	}
+
+	bool isDuplicateClause(const Firebird::TriState& clause)
+	{
+		return clause.isAssigned();
+	}
+
+	template <typename T>
+	bool isDuplicateClause(const std::optional<T>& clause)
+	{
+		return clause.has_value();
 	}
 
 	template <typename T>
@@ -350,6 +350,11 @@ private:
 		return clause.hasData();
 	}
 
+	void setCollate(TypeClause* fld, QualifiedName* name)
+	{
+		if (name)
+			setClause(fld->collate, "COLLATE", *name);
+	}
 	void checkTimeDialect();
 
 // start - defined in btyacc_fb.ske
@@ -374,13 +379,18 @@ private:
 	DsqlCompilerScratch* scratch;
 	USHORT client_dialect;
 	USHORT db_dialect;
-	USHORT parser_version;
+	const bool requireSemicolon;
+	USHORT parser_version = 0;
+	Firebird::CharSet* charSet;
 
-	CharSet* metadataCharSet;
+	Firebird::CharSet* metadataCharSet;
 	Firebird::string transformedString;
 	Firebird::GenericMap<Firebird::NonPooled<IntlString*, StrMark> > strMarks;
 	bool stmt_ambiguous;
-	DsqlStatement* parsedStatement;
+	DsqlStatement* parsedStatement = nullptr;
+
+	// Parser feedback for lexer
+	QualifiedName* introducerCharSetName = nullptr;
 
 	// These value/posn are taken from the lexer
 	YYSTYPE yylval;
@@ -388,10 +398,10 @@ private:
 
 	// These value/posn of the root non-terminal are returned to the caller
 	YYSTYPE yyretlval;
-	Position yyretposn;
+	Position yyretposn{};
 
-	int yynerrs;
-	int yym;	// ASF: moved from local variable of Parser::parseAux()
+	int yynerrs = 0;
+	int yym = 0;	// ASF: moved from local variable of Parser::parseAux()
 
 	// Current parser state
 	yyparsestate* yyps;
@@ -399,7 +409,7 @@ private:
 	yyparsestate* yypath;
 	// Base of the lexical value queue
 	YYSTYPE* yylvals;
-	// Current posistion at lexical value queue
+	// Current position at lexical value queue
 	YYSTYPE* yylvp;
 	// End position of lexical value queue
 	YYSTYPE* yylve;
@@ -407,7 +417,7 @@ private:
 	YYSTYPE* yylvlim;
 	// Base of the lexical position queue
 	Position* yylpsns;
-	// Current posistion at lexical position queue
+	// Current position at lexical position queue
 	Position* yylpp;
 	// End position of lexical position queue
 	Position* yylpe;

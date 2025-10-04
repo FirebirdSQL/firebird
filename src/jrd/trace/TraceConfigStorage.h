@@ -35,6 +35,7 @@
 #include "../../common/ThreadStart.h"
 #include "../../jrd/trace/TraceSession.h"
 #include "../../common/classes/RefCounted.h"
+#include <atomic>
 
 namespace Jrd {
 
@@ -49,12 +50,14 @@ namespace Jrd {
   Slot is reused with best-fit algorithm.
 */
 
-struct TraceCSHeader : public Firebird::MemoryHeader
+class StorageGuard;
+
+struct TraceCSHeader final : public Firebird::MemoryHeader
 {
-	static const USHORT TRACE_STORAGE_VERSION = 2;
-	static const USHORT TRACE_STORAGE_MAX_SLOTS = 1000;
-	static const ULONG TRACE_STORAGE_MIN_SIZE = 64 * 1024;
-	static const ULONG TRACE_STORAGE_MAX_SIZE = 16 * 1024 * 1024;
+	static constexpr USHORT TRACE_STORAGE_VERSION = 2;
+	static constexpr USHORT TRACE_STORAGE_MAX_SLOTS = 1000;
+	static constexpr ULONG TRACE_STORAGE_MIN_SIZE = 64 * 1024;
+	static constexpr ULONG TRACE_STORAGE_MAX_SIZE = 16 * 1024 * 1024;
 
 	struct Slot
 	{
@@ -66,8 +69,8 @@ struct TraceCSHeader : public Firebird::MemoryHeader
 		ULONG ses_pid;
 	};
 
-	volatile ULONG change_number;
-	volatile ULONG session_number;
+	std::atomic<ULONG> change_number;
+	std::atomic<ULONG> session_number;
 	ULONG cnt_uses;
 	ULONG mem_max_size;			// maximum allowed mapping size
 	ULONG mem_allocated;		// currently mapped memory
@@ -91,28 +94,56 @@ public:
 	~ConfigStorage();
 
 	void addSession(Firebird::TraceSession& session);
-	void updateFlags(Firebird::TraceSession& session);
+	void updateFlags(const Firebird::TraceSession& session);
 	void removeSession(ULONG id);
 
 	// get session by sesion id
 	bool getSession(Firebird::TraceSession& session, GET_FLAGS getFlag);
 
-	void restart();
-	bool getNextSession(Firebird::TraceSession& session, GET_FLAGS getFlag);
-
 	ULONG getChangeNumber() const
-	{ return m_sharedMemory && m_sharedMemory->getHeader() ? m_sharedMemory->getHeader()->change_number : 0; }
+	{ return m_sharedMemory && m_sharedMemory->getHeader() ? m_sharedMemory->getHeader()->change_number.load() : 0; }
 
 	void acquire();
 	void release();
 
 	void shutdown();
 
-	Firebird::Mutex m_localMutex;
+	mutable Firebird::Mutex m_localMutex;
+
+	class Accessor
+	{
+	public:
+		// Use when storage is not locked by caller
+		explicit Accessor(ConfigStorage* storage) noexcept :
+			m_storage(storage),
+			m_guard(nullptr)
+		{}
+
+		// Use when storage is locked by caller
+		explicit Accessor(StorageGuard* guard) noexcept;
+
+		void restart() noexcept
+		{
+			m_change_number = 0;
+			m_sesId = 0;
+			m_nextIdx = 0;
+		}
+
+		bool getNext(Firebird::TraceSession& session, GET_FLAGS getFlag);
+
+	private:
+		ConfigStorage* const m_storage;
+		StorageGuard* const m_guard;
+		ULONG m_change_number = 0;
+		ULONG m_sesId = 0;					// last seen session ID
+		ULONG m_nextIdx = 0;				// slot index next after last seen one
+	};
 
 private:
 	void mutexBug(int osErrorCode, const char* text) override;
 	bool initialize(Firebird::SharedMemoryBase*, bool) override;
+
+	void initSharedFile();
 
 	USHORT getType() const override { return Firebird::SharedMemoryBase::SRAM_TRACE_CONFIG; }
 	USHORT getVersion() const override { return TraceCSHeader::TRACE_STORAGE_VERSION; }
@@ -137,7 +168,7 @@ private:
 	};
 	Firebird::RefPtr<TouchFile> m_timer;
 
-	void checkDirty()
+	void checkDirty() noexcept
 	{
 		m_dirty = false;
 	}
@@ -162,6 +193,7 @@ private:
 		tagStartTS,			// date+time when started
 		tagLogFile,			// log file name, if any
 		tagRole,			// SQL role name, if any
+		tagPlugins,			// trace plugins list, if any
 		tagEnd
 	};
 
@@ -174,21 +206,25 @@ private:
 	void compact();
 	bool validate();
 
-	ULONG getSessionSize(const Firebird::TraceSession& session);
+	ULONG getSessionSize(const Firebird::TraceSession& session) noexcept;
 
 	bool findSession(ULONG sesId, ULONG& idx);
-	bool readSession(TraceCSHeader::Slot* slot, Firebird::TraceSession& session, GET_FLAGS getFlag);
+	bool readSession(const TraceCSHeader::Slot* slot, Firebird::TraceSession& session, GET_FLAGS getFlag);
+
+	// Search for used slot starting from nextIdx and increments nextIdx to point to the next slot
+	// returns false, if used slot was not found
+	bool getNextSession(Firebird::TraceSession& session, GET_FLAGS getFlag, ULONG& nextIdx);
 
 	class Reader
 	{
 	public:
-		Reader(const void* memory, ULONG size) :
-			m_mem(reinterpret_cast<const char*>(memory)),
+		Reader(const void* memory, ULONG size) noexcept :
+			m_mem(static_cast<const char*>(memory)),
 			m_end(m_mem + size)
 		{}
 
 		// fill tag and len, returns pointer to data or NULL if data can't be read
-		const void* read(ITEM& tag, ULONG& len);
+		const void* read(ITEM& tag, ULONG& len) noexcept;
 
 	private:
 		const char* m_mem;
@@ -198,12 +234,20 @@ private:
 	class Writer
 	{
 	public:
-		Writer(void* memory, ULONG size) :
-			m_mem(reinterpret_cast<char*>(memory)),
+		Writer(void* memory, ULONG size) noexcept :
+			m_mem(static_cast<char*>(memory)),
 			m_end(m_mem + size)
 		{}
 
 		void write(ITEM tag, ULONG len, const void* data);
+
+		inline void writeData(const ITEM tag, const Firebird::AbstractString& data)
+		{
+			if (data.empty())
+				return;
+
+			write(tag, data.length(), data.c_str());
+		}
 
 	private:
 		char* m_mem;
@@ -211,10 +255,10 @@ private:
 	};
 
 	Firebird::AutoPtr<Firebird::SharedMemory<TraceCSHeader> > m_sharedMemory;
+	Firebird::PathName m_filename;
 	int m_recursive;
 	ThreadId m_mutexTID;
 	bool m_dirty;
-	ULONG m_nextIdx;	// getNextSession() iterator index
 };
 
 
@@ -249,7 +293,7 @@ public:
 };
 
 
-class StorageGuard : public Firebird::MutexLockGuard
+class StorageGuard final : public Firebird::MutexLockGuard
 {
 public:
 	explicit StorageGuard(ConfigStorage* storage) :
@@ -262,9 +306,21 @@ public:
 	{
 		m_storage->release();
 	}
+
+	ConfigStorage* getStorage() noexcept
+	{
+		return m_storage;
+	}
+
 private:
 	ConfigStorage* m_storage;
 };
+
+
+inline ConfigStorage::Accessor::Accessor(StorageGuard* guard) noexcept :
+	m_storage(guard->getStorage()),
+	m_guard(guard)
+{}
 
 }
 

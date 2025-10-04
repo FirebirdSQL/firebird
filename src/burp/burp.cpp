@@ -88,16 +88,14 @@ using namespace Firebird;
 using MsgFormat::SafeArg;
 using namespace Burp;
 
-const char* fopen_write_type = "w";
-const char* fopen_read_type	 = "r";
+inline constexpr const char* fopen_write_type = "w";
+inline constexpr const char* fopen_read_type = "r";
 
-const int open_mask = 0666;
-const char switch_char = '-';
+inline constexpr int open_mask = 0666;
+inline constexpr char switch_char = '-';
 
-
-const char* const output_suppress	= "SUPPRESS";
-const int burp_msg_fac				= 12;
-const int MIN_VERBOSE_INTERVAL		= 100;
+inline constexpr const char* output_suppress = "SUPPRESS";
+inline constexpr int MIN_VERBOSE_INTERVAL = 100;
 
 enum gbak_action
 {
@@ -110,7 +108,7 @@ enum gbak_action
 static void close_out_transaction(gbak_action, Firebird::ITransaction**);
 //static void enable_signals();
 //static void excp_handler();
-static SLONG get_number(const SCHAR*);
+static SLONG get_number(const SCHAR*) noexcept;
 static ULONG get_size(const SCHAR*, burp_fil*);
 static gbak_action open_files(const TEXT *, const TEXT**, USHORT,
 							  const Firebird::ClumpletWriter&);
@@ -122,9 +120,9 @@ static void processFetchPass(const SCHAR*& password, int& itr, const int argc, F
 
 
 // fil.fil_length is FB_UINT64
-const ULONG KBYTE	= 1024;
-const ULONG MBYTE	= KBYTE * KBYTE;
-const ULONG GBYTE	= MBYTE * KBYTE;
+inline constexpr ULONG KBYTE = 1024;
+inline constexpr ULONG MBYTE = 1024 * KBYTE;
+inline constexpr ULONG GBYTE = 1024 * MBYTE;
 
 // Must be consistent with enum BurpGlobals::StatCounter
 struct StatFormat
@@ -133,11 +131,11 @@ struct StatFormat
 	const char* format;
 	char width;
 };
-static const char* STAT_CHARS = "TDRW";
-static const StatFormat STAT_FORMATS[] =
+static inline constexpr const char* STAT_CHARS = "TDRW";
+static inline constexpr StatFormat STAT_FORMATS[] =
 {
-	{"time",	"%4lu.%03u ",  9},
-	{"delta",	"%2lu.%03u ",  7},
+	{"time",	"%4u.%03u ",  9},
+	{"delta",	"%2u.%03u ",  7},
 	{"reads",	"%6" UQUADFORMAT" ", 7},
 	{"writes",	"%6" UQUADFORMAT" ", 7}
 };
@@ -163,8 +161,9 @@ int BURP_main(Firebird::UtilSvc* uSvc)
 	{
 		Firebird::StaticStatusVector status;
 		e.stuffException(status);
-		uSvc->initStatus();
-		uSvc->setServiceStatus(status.begin());
+		UtilSvc::StatusAccessor sa = uSvc->getStatusAccessor();
+		sa.init();
+		sa.setServiceStatus(status.begin());
 		exit_code = FB_FAILURE;
 	}
 
@@ -261,7 +260,7 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 		case IN_SW_BURP_SE:				// service name
 			if (itr >= argc - 1)
 			{
-				int errnum = inSw->in_sw == IN_SW_BURP_USER ? 188 : // user name parameter missing
+				const int errnum = inSw->in_sw == IN_SW_BURP_USER ? 188 : // user name parameter missing
 						   		inSw->in_sw == IN_SW_BURP_PASS ? 189 : // password parameter missing
 									273; // service name parameter missing
 
@@ -373,9 +372,8 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 			spb.getBufferLength(), spb.getBuffer());
 		if (!status.isSuccess())
 		{
-			BURP_print_status(true, &status);
-			BURP_print(true, 83);
-			// msg 83 Exiting before completion due to errors
+			BURP_print_status(true, &status, 83);
+				// msg 83 Exiting before completion due to errors
 			return FINI_ERROR;
 		}
 
@@ -408,9 +406,9 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 		svc_handle->start(&status, thdlen, thd);
 		if (!status.isSuccess())
 		{
-			BURP_print_status(true, &status);
+			BURP_print_status(true, &status, 83);
+				// msg 83 Exiting before completion due to errors
 			svc_handle->release();
-			BURP_print(true, 83);	// msg 83 Exiting before completion due to errors
 			return FINI_ERROR;
 		}
 
@@ -439,9 +437,9 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 							  sizeof(respbuf), respbuf);
 			if (!status.isSuccess())
 			{
-				BURP_print_status(true, &status);
+				BURP_print_status(true, &status, 83);
+					// msg 83 Exiting before completion due to errors
 				svc_handle->release();
-				BURP_print(true, 83);	// msg 83 Exiting before completion due to errors
 				return FINI_ERROR;
 			}
 
@@ -489,10 +487,10 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 	{
 		FbLocalStatus s;
 		e.stuffException(&s);
-		BURP_print_status(true, &s);
+		BURP_print_status(true, &s, 83);
+			// msg 83 Exiting before completion due to errors
 		if (svc_handle)
 			svc_handle->release();
-		BURP_print(true, 83);	// msg 83 Exiting before completion due to errors
 		return FINI_ERROR;
 	}
 }
@@ -573,8 +571,6 @@ int gbak(Firebird::UtilSvc* uSvc)
 	if (switches.exists(IN_SW_BURP_SE, argv.begin(), 1, argc))
 		return svc_api_gbak(uSvc, switches);
 
-	uSvc->started();
-
 	if (argc <= 1)
 	{
 		burp_usage(switches);
@@ -598,7 +594,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 	tdgbl->gbl_sw_old_descriptions = false;
 	tdgbl->gbl_sw_mode = false;
 	tdgbl->gbl_sw_skip_count = 0;
-	tdgbl->gbl_sw_par_workers = 1;
+	tdgbl->gbl_sw_par_workers = uSvc->getParallelWorkers();
 	tdgbl->action = NULL;
 
 	burp_fil* file = NULL;
@@ -768,13 +764,35 @@ int gbak(Firebird::UtilSvc* uSvc)
 			}
 			tdgbl->gbl_sw_user = argv[itr];
 			break;
+		case IN_SW_BURP_SKIP_SCHEMA_DATA:
+			if (++itr >= argc)
+			{
+				BURP_error(417, true);
+				// missing regular expression to skip tables
+			}
+
+			tdgbl->setupSkipIncludePattern(argv[itr], 419, tdgbl->skipSchemaDataMatcher);
+			// msg 419 regular expression to skip schemas was already set
+			break;
 		case IN_SW_BURP_SKIP_DATA:
 			if (++itr >= argc)
 			{
 				BURP_error(354, true);
 				// missing regular expression to skip tables
 			}
-			tdgbl->setupSkipData(argv[itr]);
+
+			tdgbl->setupSkipIncludePattern(argv[itr], 356, tdgbl->skipDataMatcher);
+			// msg 356 regular expression to skip tables was already set
+			break;
+		case IN_SW_BURP_INCLUDE_SCHEMA_DATA:
+			if (++itr >= argc)
+			{
+				BURP_error(418, true);
+				// missing regular expression to include tables
+			}
+
+			tdgbl->setupSkipIncludePattern(argv[itr], 420, tdgbl->includeSchemaDataMatcher);
+			// msg 420 regular expression to include schemas was already set
 			break;
 		case IN_SW_BURP_INCLUDE_DATA:
 			if (++itr >= argc)
@@ -782,7 +800,9 @@ int gbak(Firebird::UtilSvc* uSvc)
 				BURP_error(389, true);
 				// missing regular expression to include tables
 			}
-			tdgbl->setupIncludeData(argv[itr]);
+
+			tdgbl->setupSkipIncludePattern(argv[itr], 390, tdgbl->includeDataMatcher);
+			// msg 390 regular expression to include tables was already set
 			break;
 		case IN_SW_BURP_ROLE:
 			if (++itr >= argc)
@@ -933,7 +953,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 				if (++itr >= argc)
 					BURP_error(326, true); // verbose interval parameter missing
 
-				SLONG verbint_val = get_number(argv[itr]);
+				const SLONG verbint_val = get_number(argv[itr]);
 				if (verbint_val < MIN_VERBOSE_INTERVAL)
 				{
 					// verbose interval value cannot be smaller than @1
@@ -1150,11 +1170,13 @@ int gbak(Firebird::UtilSvc* uSvc)
 	uSvc->fillDpb(dpb);
 
 	const UCHAR* authBlock;
-	unsigned int authSize = uSvc->getAuthBlock(&authBlock);
+	const unsigned int authSize = uSvc->getAuthBlock(&authBlock);
 	if (authBlock)
 	{
 		dpb.insertBytes(isc_dpb_auth_block, authBlock, authSize);
 	}
+
+	dpb.insertString(isc_dpb_search_path, SYSTEM_SCHEMA);
 
 	// We call getTableMod() because we are interested in the items that were activated previously,
 	// not in the original, unchanged table that "switches" took as parameter in the constructor.
@@ -1319,7 +1341,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 			errNum = IN_SW_BURP_S;
 		else if (tdgbl->gbl_sw_no_reserve)
 			errNum = IN_SW_BURP_US;
-		else if (tdgbl->gbl_sw_replica.isAssigned())
+		else if (tdgbl->gbl_sw_replica.has_value())
 			errNum = IN_SW_BURP_REPLICA;
 
 		if (errNum != IN_SW_BURP_0)
@@ -1397,13 +1419,12 @@ int gbak(Firebird::UtilSvc* uSvc)
 	tdgbl->action->act_action = ACT_unknown;
 
 	action = open_files(file1, &file2, sw_replace, dpb);
-
 	MVOL_init(tdgbl->io_buffer_size);
+	uSvc->started();
 
 	int result;
 	tdgbl->gbl_dpb_data.add(dpb.getBuffer(), dpb.getBufferLength());
 
-	tdgbl->uSvc->started();
 	switch (action)
 	{
 	case RESTORE:
@@ -1500,7 +1521,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 
 
 
-void BURP_abort()
+void BURP_abort(const Firebird::IStatus* status)
 {
 /**************************************
  *
@@ -1515,18 +1536,24 @@ void BURP_abort()
 	BurpMaster master;
 	BurpGlobals* tdgbl = master.get();
 
-	USHORT code = tdgbl->action && tdgbl->action->act_action == ACT_backup_fini ? 351 : 83;
+	const USHORT code = tdgbl->action && tdgbl->action->act_action == ACT_backup_fini ? 351 : 83;
 	// msg 351 Error closing database, but backup file is OK
 	// msg 83 Exiting before completion due to errors
 
-	tdgbl->uSvc->setServiceStatus(burp_msg_fac, code, SafeArg());
-	tdgbl->uSvc->started();
+	// StatusAccessor is used only as RAII holder here
+	UtilSvc::StatusAccessor sa = tdgbl->uSvc->getStatusAccessor();
 
-	if (!tdgbl->uSvc->isService())
+	if (status)
+		BURP_print_status(true, status, code);
+	else
 	{
-		BURP_print(true, code);
+		sa.setServiceStatus(burp_msg_fac, code, SafeArg());
+
+		if (!tdgbl->uSvc->isService())
+			BURP_print(true, code);
 	}
 
+	tdgbl->uSvc->started();
 	BURP_exit_local(FINI_ERROR, tdgbl);
 }
 
@@ -1544,8 +1571,10 @@ void BURP_error(USHORT errcode, bool abort, const SafeArg& arg)
 	BurpMaster master;
 	BurpGlobals* tdgbl = master.get();
 
-	tdgbl->uSvc->setServiceStatus(burp_msg_fac, errcode, arg);
-	tdgbl->uSvc->started();
+	// StatusAccessor is used only as RAII holder here
+	UtilSvc::StatusAccessor sa = tdgbl->uSvc->getStatusAccessor();
+
+	sa.setServiceStatus(burp_msg_fac, errcode, arg);
 
 	if (!tdgbl->uSvc->isService())
 	{
@@ -1554,9 +1583,9 @@ void BURP_error(USHORT errcode, bool abort, const SafeArg& arg)
 	}
 
 	if (abort)
-	{
 		BURP_abort();
-	}
+	else
+		tdgbl->uSvc->started();
 }
 
 
@@ -1577,7 +1606,7 @@ void BURP_error(USHORT errcode, bool abort, const char* str)
 }
 
 
-void BURP_error_redirect(Firebird::IStatus* status_vector, USHORT errcode, const SafeArg& arg)
+void BURP_error_redirect(const Firebird::IStatus* status_vector, USHORT errcode, const SafeArg& arg)
 {
 /**************************************
  *
@@ -1590,6 +1619,9 @@ void BURP_error_redirect(Firebird::IStatus* status_vector, USHORT errcode, const
  *
  **************************************/
 	BurpMaster master;
+
+	// StatusAccessor is used only as RAII holder here
+	UtilSvc::StatusAccessor sa = master.get()->uSvc->getStatusAccessor();
 
 	BURP_print_status(true, status_vector);
 	BURP_error(errcode, true, arg);
@@ -1727,7 +1759,7 @@ void BURP_print(bool err, USHORT number, const char* str)
 }
 
 
-void BURP_print_status(bool err, Firebird::IStatus* status_vector)
+void BURP_print_status(bool err, const Firebird::IStatus* status_vector, USHORT secondNumber)
 {
 /**************************************
  *
@@ -1746,10 +1778,12 @@ void BURP_print_status(bool err, Firebird::IStatus* status_vector)
 		BurpGlobals* tdgbl = master.get();
 
 		const ISC_STATUS* vector = status_vector->getErrors();
-
 		if (err)
 		{
-			tdgbl->uSvc->setServiceStatus(vector);
+			UtilSvc::StatusAccessor sa = tdgbl->uSvc->getStatusAccessor();
+			sa.setServiceStatus(vector);
+			if (secondNumber)
+				sa.setServiceStatus(burp_msg_fac, secondNumber, SafeArg());
 			tdgbl->uSvc->started();
 
 			if (tdgbl->uSvc->isService())
@@ -1770,11 +1804,17 @@ void BURP_print_status(bool err, Firebird::IStatus* status_vector)
 				burp_output(err, "    %s\n", s);
 			}
 		}
+
+		if (secondNumber)
+		{
+			BURP_msg_partial(err, 169);	// msg 169: gbak:
+			BURP_msg_put(true, secondNumber, SafeArg());
+		}
 	}
 }
 
 
-void BURP_print_warning(Firebird::IStatus* status)
+void BURP_print_warning(const Firebird::IStatus* status, bool printErrorAsWarning)
 {
 /**************************************
  *
@@ -1787,25 +1827,36 @@ void BURP_print_warning(Firebird::IStatus* status)
  *	to allow redirecting output.
  *
  **************************************/
-	if (status && (status->getState() & Firebird::IStatus::STATE_WARNINGS))
+	if (!status || !(status->getState() & (IStatus::STATE_WARNINGS | IStatus::STATE_ERRORS)))
+		return;
+
+	const ISC_STATUS* vector;
+
+	if (const auto state = status->getState();
+		printErrorAsWarning && (state & IStatus::STATE_ERRORS))
 	{
-		BurpMaster master;
-		BurpGlobals* tdgbl = master.get();
+		vector = status->getErrors();
+	}
+	else if (state & IStatus::STATE_WARNINGS)
+		vector = status->getWarnings();
+	else
+		return;
 
-		// print the warning message
-		const ISC_STATUS* vector = status->getWarnings();
-		SCHAR s[1024];
+	BurpMaster master;
+	BurpGlobals* tdgbl = master.get();
 
-		if (fb_interpret(s, sizeof(s), &vector))
+	// print the warning message
+	SCHAR s[1024];
+
+	if (fb_interpret(s, sizeof(s), &vector))
+	{
+		BURP_msg_partial(false, 255); // msg 255: gbak: WARNING:
+		burp_output(false, "%s\n", s);
+
+		while (fb_interpret(s, sizeof(s), &vector))
 		{
 			BURP_msg_partial(false, 255); // msg 255: gbak: WARNING:
-			burp_output(false, "%s\n", s);
-
-			while (fb_interpret(s, sizeof(s), &vector))
-			{
-				BURP_msg_partial(false, 255); // msg 255: gbak: WARNING:
-				burp_output(false, "    %s\n", s);
-			}
+			burp_output(false, "    %s\n", s);
 		}
 	}
 }
@@ -1858,7 +1909,7 @@ void BURP_message(USHORT number, const MsgFormat::SafeArg& arg, bool totals)
 }
 
 
-void BURP_verbose(USHORT number, const char* str)
+void BURP_verbose(USHORT number, const string& str)
 {
 /**************************************
  *
@@ -1870,7 +1921,7 @@ void BURP_verbose(USHORT number, const char* str)
  *	Shortcut for text argument
  *
  **************************************/
-	BURP_verbose(number, SafeArg() << str);
+	BURP_verbose(number, SafeArg() << str.c_str());
 }
 
 
@@ -1926,7 +1977,7 @@ static void close_out_transaction(gbak_action action, Firebird::ITransaction** t
 }
 
 
-static SLONG get_number( const SCHAR* string)
+static SLONG get_number(const SCHAR* string) noexcept
 {
 /**************************************
  *
@@ -1935,15 +1986,12 @@ static SLONG get_number( const SCHAR* string)
  **************************************
  *
  * Functional description
- *	Convert a string to binary, complaining bitterly if
- *	the string is bum.
- *	CVC: where does it complain? It does return zero, nothing else.
- *	Worse, this function doesn't check for overflow.
+ *	Convert a string to binary
  **************************************/
 	SCHAR c;
 	SLONG value = 0;
 
-	for (const SCHAR* p = string; c = *p++;)
+	for (const SCHAR* p = string; (c = *p++);)
 	{
 		if (c < '0' || c > '9')
 			return 0;
@@ -2026,7 +2074,7 @@ static gbak_action open_files(const TEXT* file1,
 
 			if (tdgbl->gbl_sw_keyholder)
 			{
-				unsigned char info[] = {fb_info_crypt_key, fb_info_crypt_plugin};
+				constexpr unsigned char info[] = {fb_info_crypt_key, fb_info_crypt_plugin};
 				unsigned char buffer[(1 + 2 + MAX_SQL_IDENTIFIER_SIZE) * 2 + 2];
 				unsigned int len;
 
@@ -2555,17 +2603,17 @@ static ULONG get_size(const SCHAR* string, burp_fil* file)
  *	restoring to multiple files
  *
  **********************************************/
-	const FB_UINT64 overflow = MAX_UINT64 / 10 - 1;
+	constexpr FB_UINT64 overflow = MAX_UINT64 / 10 - 1;
 	UCHAR c;
 	FB_UINT64 size = 0;
 	bool digit = false;
 
 	file->fil_size_code = size_n;
-	for (const SCHAR *num = string; c = *num++;)
+	for (const SCHAR *num = string; (c = *num++);)
 	{
 		if (isdigit(c))
 		{
-			int val = c - '0';
+			const int val = c - '0';
 			if (size >= overflow)
 			{
 				file->fil_size_code = size_e;
@@ -2649,59 +2697,25 @@ void close_platf(DESC file)
 #endif // WIN_NT
 
 
-void BurpGlobals::setupSkipData(const Firebird::string& regexp)
+void BurpGlobals::setupSkipIncludePattern(const string& regexp, USHORT alreadySetErrorCode,
+	AutoPtr<SimilarToRegex>& matcher)
 {
-	if (skipDataMatcher)
-	{
-		BURP_error(356, true);
-		// msg 356 regular expression to skip tables was already set
-	}
+	if (matcher)
+		BURP_error(alreadySetErrorCode, true);
 
-	// Compile skip relation expressions
+	// Compile expressions
 	try
 	{
 		if (regexp.hasData())
 		{
-			Firebird::string filter(regexp);
+			string filter(regexp);
 			if (!uSvc->utf8FileNames())
 				ISC_systemToUtf8(filter);
 
 			BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
-			skipDataMatcher.reset(FB_NEW_POOL(tdgbl->getPool()) Firebird::SimilarToRegex(
-				tdgbl->getPool(), Firebird::SimilarToFlag::CASE_INSENSITIVE,
-				filter.c_str(), filter.length(),
-				"\\", 1));
-		}
-	}
-	catch (const Firebird::Exception&)
-	{
-		Firebird::fatal_exception::raiseFmt(
-			"error while compiling regular expression \"%s\"", regexp.c_str());
-	}
-}
-
-void BurpGlobals::setupIncludeData(const Firebird::string& regexp)
-{
-	if (includeDataMatcher)
-	{
-		BURP_error(390, true);
-		// msg 390 regular expression to include tables was already set
-	}
-
-	// Compile include relation expressions
-	try
-	{
-		if (regexp.hasData())
-		{
-			Firebird::string filter(regexp);
-			if (!uSvc->utf8FileNames())
-				ISC_systemToUtf8(filter);
-
-			BurpGlobals* tdgbl = BurpGlobals::getSpecific();
-
-			includeDataMatcher.reset(FB_NEW_POOL(tdgbl->getPool()) Firebird::SimilarToRegex(
-				tdgbl->getPool(), Firebird::SimilarToFlag::CASE_INSENSITIVE,
+			matcher.reset(FB_NEW_POOL(tdgbl->getPool()) SimilarToRegex(
+				tdgbl->getPool(), SimilarToFlag::CASE_INSENSITIVE,
 				filter.c_str(), filter.length(),
 				"\\", 1));
 		}
@@ -2731,11 +2745,11 @@ namespace // for local symbols
 		if (!matcher)
 			return NOT_SET;
 
-		return matcher->matches(name, strlen(name))? MATCH : NOT_MATCH;
+		return matcher->matches(name, fb_strlen(name)) ? MATCH : NOT_MATCH;
 	}
 }
 
-bool BurpGlobals::skipRelation(const char* name)
+bool BurpGlobals::skipRelation(const QualifiedMetaString& name)
 {
 	if (gbl_sw_meta)
 		return true;
@@ -2749,10 +2763,12 @@ bool BurpGlobals::skipRelation(const char* name)
 		{ false, false, true}  // NM  p
 	};
 
-	const enum Pattern res1 = checkPattern(skipDataMatcher, name);
-	const enum Pattern res2 = checkPattern(includeDataMatcher, name);
+	const enum Pattern res1sch = checkPattern(skipSchemaDataMatcher, name.schema.c_str());
+	const enum Pattern res1obj = checkPattern(skipDataMatcher, name.object.c_str());
+	const enum Pattern res2sch = checkPattern(includeSchemaDataMatcher, name.schema.c_str());
+	const enum Pattern res2obj = checkPattern(includeDataMatcher, name.object.c_str());
 
-	return result[res1][res2];
+	return result[res1sch][res2sch] || result[res1obj][res2obj];
 }
 
 void BurpGlobals::read_stats(SINT64* stats)
@@ -2809,7 +2825,7 @@ void BurpGlobals::print_stats(USHORT number)
 
 	burp_output(false, " ");
 
-	const int time_mask = (1 << TIME_TOTAL) | (1 << TIME_DELTA);
+	constexpr int time_mask = (1 << TIME_TOTAL) | (1 << TIME_DELTA);
 	if (gbl_stat_flags & time_mask)
 	{
 		const SINT64 t0 = fb_utils::query_performance_counter();
@@ -2817,13 +2833,13 @@ void BurpGlobals::print_stats(USHORT number)
 
 		if (gbl_stat_flags & (1 << TIME_TOTAL))
 		{
-			SINT64 t1 = (t0 - gbl_stats[TIME_TOTAL]) / freq_ms;
+			const SINT64 t1 = (t0 - gbl_stats[TIME_TOTAL]) / freq_ms;
 			burp_output(false, STAT_FORMATS[TIME_TOTAL].format, (int)(t1 / 1000), (int)(t1 % 1000));
 		}
 
 		if (gbl_stat_flags & (1 << TIME_DELTA))
 		{
-			SINT64 t2 = (t0 - gbl_stats[TIME_DELTA]) / freq_ms;
+			const SINT64 t2 = (t0 - gbl_stats[TIME_DELTA]) / freq_ms;
 			burp_output(false, STAT_FORMATS[TIME_DELTA].format, (int)(t2 / 1000), (int)(t2 % 1000));
 
 			gbl_stats[TIME_DELTA] = t0;
@@ -2871,24 +2887,6 @@ void BurpGlobals::print_stats_header()
 	}
 
 	burp_output(false, "\n");
-}
-
-void BURP_makeSymbol(BurpGlobals* tdgbl, Firebird::string& name)		// add double quotes to string
-{
-	if (tdgbl->gbl_dialect < SQL_DIALECT_V6)
-		return;
-
-	const char dq = '"';
-	for (unsigned p = 0; p < name.length(); ++p)
-	{
-		if (name[p] == dq)
-		{
-			name.insert(p, 1, dq);
-			++p;
-		}
-	}
-	name.insert(0u, 1, dq);
-	name += dq;
 }
 
 static void processFetchPass(const SCHAR*& password, int& itr, const int argc, Firebird::UtilSvc::ArgvType& argv)

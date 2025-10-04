@@ -37,12 +37,12 @@ public:
 	TempSpace(MemoryPool& pool, const Firebird::PathName& prefix, bool dynamic = true);
 	virtual ~TempSpace();
 
-	FB_SIZE_T read(offset_t offset, void* buffer, FB_SIZE_T length);
-	FB_SIZE_T write(offset_t offset, const void* buffer, FB_SIZE_T length);
+	FB_SIZE_T read(offset_t offset, void* buffer, FB_SIZE_T length) override;
+	FB_SIZE_T write(offset_t offset, const void* buffer, FB_SIZE_T length) override;
 
-	void unlink() {}
+	void unlink() noexcept override {}
 
-	offset_t getSize() const
+	offset_t getSize() const noexcept override
 	{
 		return logicalSize;
 	}
@@ -72,7 +72,7 @@ private:
 	class Block
 	{
 	public:
-		Block(Block* tail, size_t length)
+		Block(Block* tail, size_t length) noexcept
 			: next(NULL), size(length)
 		{
 			if (tail)
@@ -87,8 +87,8 @@ private:
 		virtual FB_SIZE_T read(offset_t offset, void* buffer, FB_SIZE_T length) = 0;
 		virtual FB_SIZE_T write(offset_t offset, const void* buffer, FB_SIZE_T length) = 0;
 
-		virtual UCHAR* inMemory(offset_t offset, size_t size) const = 0;
-		virtual bool sameFile(const Firebird::TempFile* file) const = 0;
+		virtual UCHAR* inMemory(offset_t offset, size_t size) const noexcept = 0;
+		virtual bool sameFile(const Firebird::TempFile* file) const noexcept = 0;
 
 		Block *prev;
 		Block *next;
@@ -98,7 +98,7 @@ private:
 	class MemoryBlock : public Block
 	{
 	public:
-		MemoryBlock(UCHAR* memory, Block* tail, size_t length)
+		MemoryBlock(UCHAR* memory, Block* tail, size_t length) noexcept
 			: Block(tail, length), ptr(memory)
 		{}
 
@@ -107,10 +107,10 @@ private:
 			delete[] ptr;
 		}
 
-		FB_SIZE_T read(offset_t offset, void* buffer, FB_SIZE_T length);
-		FB_SIZE_T write(offset_t offset, const void* buffer, FB_SIZE_T length);
+		FB_SIZE_T read(offset_t offset, void* buffer, FB_SIZE_T length) override;
+		FB_SIZE_T write(offset_t offset, const void* buffer, FB_SIZE_T length) override;
 
-		UCHAR* inMemory(offset_t offset, size_t _size) const
+		UCHAR* inMemory(offset_t offset, size_t _size) const noexcept override
 		{
 			if ((offset < this->size) && (offset + _size <= this->size))
 				return ptr + offset;
@@ -118,7 +118,7 @@ private:
 			return NULL;
 		}
 
-		bool sameFile(const Firebird::TempFile*) const
+		bool sameFile(const Firebird::TempFile*) const noexcept override
 		{
 			return false;
 		}
@@ -130,7 +130,7 @@ private:
 	class InitialBlock : public MemoryBlock
 	{
 	public:
-		InitialBlock(UCHAR* memory, size_t length)
+		InitialBlock(UCHAR* memory, size_t length) noexcept
 			: MemoryBlock(memory, NULL, length)
 		{}
 
@@ -155,15 +155,15 @@ private:
 
 		~FileBlock() {}
 
-		FB_SIZE_T read(offset_t offset, void* buffer, FB_SIZE_T length);
-		FB_SIZE_T write(offset_t offset, const void* buffer, FB_SIZE_T length);
+		FB_SIZE_T read(offset_t offset, void* buffer, FB_SIZE_T length) override;
+		FB_SIZE_T write(offset_t offset, const void* buffer, FB_SIZE_T length) override;
 
-		UCHAR* inMemory(offset_t /*offset*/, size_t /*a_size*/) const
+		UCHAR* inMemory(offset_t /*offset*/, size_t /*a_size*/) const noexcept override
 		{
 			return NULL;
 		}
 
-		bool sameFile(const Firebird::TempFile* aFile) const
+		bool sameFile(const Firebird::TempFile* aFile) const noexcept override
 		{
 			return (aFile == this->file);
 		}
@@ -182,19 +182,37 @@ private:
 	class Segment
 	{
 	public:
-		Segment() : position(0), size(0)
-		{}
-
-		Segment(offset_t aPosition, offset_t aSize) :
-			position(aPosition), size(aSize)
+		Segment(offset_t aPosition, offset_t aSize) noexcept :
+			position(aPosition), size(aSize), prev(nullptr), next(nullptr)
 		{}
 
 		offset_t position;
 		offset_t size;
+		Segment* prev;
+		Segment* next;
 
-		static const offset_t& generate(const void* /*sender*/, const Segment& segment)
+		static const offset_t& generate(const void* /*sender*/, const Segment* segment) noexcept
 		{
-			return segment.position;
+			return segment->position;
+		}
+	};
+
+	class SegmentsStack
+	{
+	public:
+		SegmentsStack() noexcept : size(0), tail(nullptr)
+		{}
+
+		SegmentsStack(offset_t aSize, Segment* aSegment) noexcept :
+			size(aSize), tail(aSegment)
+		{}
+
+		offset_t size;
+		Segment* tail;
+
+		static const offset_t& generate(const void* /*sender*/, const SegmentsStack& segment) noexcept
+		{
+			return segment.size;
 		}
 	};
 
@@ -209,8 +227,28 @@ private:
 	Firebird::Array<UCHAR> initialBuffer;
 	bool initiallyDynamic;
 
-	typedef Firebird::BePlusTree<Segment, offset_t, MemoryPool, Segment> FreeSegmentTree;
+	typedef Firebird::BePlusTree<Segment*, offset_t, Segment> FreeSegmentTree;
+	typedef Firebird::BePlusTree<SegmentsStack, offset_t, SegmentsStack> FreeSegmentsStackTree;
+
+	class FreeSegmentBySize
+	{
+		friend bool TempSpace::validate(offset_t& freeSize) const;
+
+	public:
+		FreeSegmentBySize(MemoryPool& pool)
+				: m_items(pool)
+		{}
+
+		void addSegment(Segment* const segment);
+		void removeSegment(Segment* const segment);
+		Segment* getSegment(FB_SIZE_T size);
+
+	private:
+		FreeSegmentsStackTree m_items;
+	};
+
 	FreeSegmentTree freeSegments;
+	FreeSegmentBySize freeSegmentsBySize;
 
 	static Firebird::GlobalPtr<Firebird::Mutex> initMutex;
 	static Firebird::TempDirectoryList* tempDirs;

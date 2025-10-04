@@ -62,24 +62,18 @@ class thread_db;
 struct que;
 class BufferDesc;
 class Database;
+class BCBHashTable;
 
 // Page buffer cache size constraints.
 
-const ULONG MIN_PAGE_BUFFERS = 50;
+inline constexpr ULONG MIN_PAGE_BUFFERS = 50;
 #if SIZEOF_VOID_P == 4
-const ULONG MAX_PAGE_BUFFERS = 131072;
+inline constexpr ULONG MAX_PAGE_BUFFERS = 131072;
 #else
-const ULONG MAX_PAGE_BUFFERS = MAX_SLONG - 1;
+inline constexpr ULONG MAX_PAGE_BUFFERS = MAX_SLONG - 1;
 #endif
 
-
 // BufferControl -- Buffer control block -- one per system
-
-struct bcb_repeat
-{
-	BufferDesc*	bcb_bdb;		// Buffer descriptor block
-	que			bcb_page_mod;	// Que of buffers with page mod n
-};
 
 class BufferControl : public pool_alloc<type_bcb>
 {
@@ -87,7 +81,8 @@ class BufferControl : public pool_alloc<type_bcb>
 		: bcb_bufferpool(&p),
 		  bcb_memory_stats(&parentStats),
 		  bcb_memory(p),
-		  bcb_writer_fini(p, cache_writer, THREAD_medium)
+		  bcb_writer_fini(p, cache_writer, THREAD_medium),
+		  bcb_bdbBlocks(p)
 	{
 		bcb_database = NULL;
 		QUE_INIT(bcb_in_use);
@@ -103,6 +98,7 @@ class BufferControl : public pool_alloc<type_bcb>
 		bcb_prec_walk_mark = 0;
 		bcb_page_size = 0;
 		bcb_page_incarnation = 0;
+		bcb_hashTable = nullptr;
 #ifdef SUPERSERVER_V2
 		bcb_prefetch = NULL;
 #endif
@@ -132,7 +128,7 @@ public:
 	SLONG		bcb_dirty_count;	// count of pages in dirty page btree
 
 	Precedence*	bcb_free;			// Free precedence blocks
-	SSHORT		bcb_flags;			// see below
+	Firebird::AtomicCounter	bcb_flags;	// see below
 	SSHORT		bcb_free_minimum;	// Threshold to activate cache writer
 	ULONG		bcb_count;			// Number of buffers allocated
 	ULONG		bcb_inuse;			// Number of buffers in use
@@ -142,9 +138,12 @@ public:
 
 	Firebird::SyncObject	bcb_syncObject;
 	Firebird::SyncObject	bcb_syncDirtyBdbs;
+	Firebird::SyncObject	bcb_syncEmpty;
 	Firebird::SyncObject	bcb_syncPrecedence;
 	Firebird::SyncObject	bcb_syncLRU;
-	//Firebird::SyncObject	bcb_syncPageWrite;
+
+	// If we make bcb_flags atomic this mutex will become unneeded: XCHG of bcb_flags is enough
+	Firebird::Mutex			bcb_threadStartup;
 
 	typedef ThreadFinishSync<BufferControl*> BcbThreadSync;
 
@@ -164,19 +163,27 @@ public:
 
 	void exceptionHandler(const Firebird::Exception& ex, BcbThreadSync::ThreadRoutine* routine);
 
-	bcb_repeat*	bcb_rpt;
+	BCBHashTable* bcb_hashTable;
+
+	// block of allocated BufferDesc's
+	struct BDBBlock
+	{
+		BufferDesc* m_bdbs;
+		ULONG m_count;
+	};
+	Firebird::Array<BDBBlock>	bcb_bdbBlocks;		// all allocated BufferDesc's
 };
 
-const int BCB_keep_pages	= 1;	// set during btc_flush(), pages not removed from dirty binary tree
-const int BCB_cache_writer	= 2;	// cache writer thread has been started
-const int BCB_writer_start  = 4;    // cache writer thread is starting now
-const int BCB_writer_active	= 8;	// no need to post writer event count
+inline constexpr int BCB_keep_pages		= 1;	// set during btc_flush(), pages not removed from dirty binary tree
+inline constexpr int BCB_cache_writer	= 2;	// cache writer thread has been started
+inline constexpr int BCB_writer_start	= 4;    // cache writer thread is starting now
+inline constexpr int BCB_writer_active	= 8;	// no need to post writer event count
 #ifdef SUPERSERVER_V2
-const int BCB_cache_reader	= 16;	// cache reader thread has been started
-const int BCB_reader_active	= 32;	// cache reader not blocked on event
+inline constexpr int BCB_cache_reader	= 16;	// cache reader thread has been started
+inline constexpr int BCB_reader_active	= 32;	// cache reader not blocked on event
 #endif
-const int BCB_free_pending	= 64;	// request cache writer to free pages
-const int BCB_exclusive		= 128;	// there is only BCB in whole system
+inline constexpr int BCB_free_pending	= 64;	// request cache writer to free pages
+inline constexpr int BCB_exclusive		= 128;	// there is only BCB in whole system
 
 
 // BufferDesc -- Buffer descriptor block
@@ -186,13 +193,13 @@ class BufferDesc : public pool_alloc<type_bdb>
 public:
 	explicit BufferDesc(BufferControl* bcb)
 		: bdb_bcb(bcb),
-		  bdb_page(0, 0),
-		  bdb_pending_page(0, 0)
+		  bdb_page(0, 0)
 	{
 		bdb_lock = NULL;
 		QUE_INIT(bdb_que);
 		QUE_INIT(bdb_in_use);
 		QUE_INIT(bdb_dirty);
+		bdb_lru_chain = NULL;
 		bdb_buffer = NULL;
 		bdb_incarnation = 0;
 		bdb_transactions = 0;
@@ -202,6 +209,7 @@ public:
 		bdb_exclusive = NULL;
 		bdb_io = NULL;
 		bdb_writers = 0;
+		bdb_io_locks = 0;
 		bdb_scan_count = 0;
 		bdb_difference_page = 0;
 		bdb_prec_walk_mark = 0;
@@ -233,13 +241,12 @@ public:
 	BufferControl*	bdb_bcb;
 	Firebird::SyncObject	bdb_syncPage;
 	Lock*		bdb_lock;				// Lock block for buffer
-	que			bdb_que;				// Either mod que in hash table or bcb_pending que if BDB_free_pending flag is set
+	que			bdb_que;				// Either mod que in hash table or bcb_empty que if never used
 	que			bdb_in_use;				// queue of buffers in use
 	que			bdb_dirty;				// dirty pages LRU queue
 	BufferDesc*	bdb_lru_chain;			// pending LRU chain
 	Ods::pag*	bdb_buffer;				// Actual buffer
 	PageNumber	bdb_page;				// Database page number in buffer
-	PageNumber	bdb_pending_page;		// Database page number to be
 	ULONG		bdb_incarnation;
 	ULONG		bdb_transactions;		// vector of dirty flags to reduce commit overhead
 	TraNumber	bdb_mark_transaction;	// hi-water mark transaction to defer header page I/O
@@ -266,28 +273,28 @@ public:
 
 // to set/clear BDB_dirty use set_dirty_flag()/clear_dirty_flag()
 // These constants should really be of type USHORT.
-const int BDB_dirty				= 0x0001;	// page has been updated but not written yet
-const int BDB_garbage_collect	= 0x0002;	// left by scan for garbage collector
-const int BDB_writer			= 0x0004;	// someone is updating the page
-const int BDB_marked			= 0x0008;	// page has been updated
-const int BDB_must_write		= 0x0010;	// forces a write as soon as the page is released
-const int BDB_faked				= 0x0020;	// page was just allocated
-//const int BDB_merge			= 0x0040;
-const int BDB_system_dirty 		= 0x0080;	// system transaction has marked dirty
-const int BDB_io_error	 		= 0x0100;	// page i/o error
-const int BDB_read_pending 		= 0x0200;	// read is pending
-const int BDB_free_pending 		= 0x0400;	// buffer being freed for reuse
-const int BDB_not_valid			= 0x0800;	// i/o error invalidated buffer
-const int BDB_db_dirty 			= 0x1000;	// page must be written to database
-//const int BDB_checkpoint		= 0x2000;	// page must be written by next checkpoint
-const int BDB_prefetch			= 0x4000;	// page has been prefetched but not yet referenced
-const int BDB_no_blocking_ast	= 0x8000;	// No blocking AST registered with page lock
-const int BDB_lru_chained		= 0x10000;	// buffer is in pending LRU chain
-const int BDB_nbak_state_lock	= 0x20000;	// nbak state lock should be released after buffer is written
+inline constexpr int BDB_dirty				= 0x0001;	// page has been updated but not written yet
+inline constexpr int BDB_garbage_collect	= 0x0002;	// left by scan for garbage collector
+inline constexpr int BDB_writer				= 0x0004;	// someone is updating the page
+inline constexpr int BDB_marked				= 0x0008;	// page has been updated
+inline constexpr int BDB_must_write			= 0x0010;	// forces a write as soon as the page is released
+inline constexpr int BDB_faked				= 0x0020;	// page was just allocated
+//inline constexpr int BDB_merge			= 0x0040;
+inline constexpr int BDB_system_dirty 		= 0x0080;	// system transaction has marked dirty
+inline constexpr int BDB_io_error	 		= 0x0100;	// page i/o error
+inline constexpr int BDB_read_pending 		= 0x0200;	// read is pending
+inline constexpr int BDB_free_pending 		= 0x0400;	// buffer being freed for reuse
+inline constexpr int BDB_not_valid			= 0x0800;	// i/o error invalidated buffer
+inline constexpr int BDB_db_dirty 			= 0x1000;	// page must be written to database
+//inline constexpr int BDB_checkpoint		= 0x2000;	// page must be written by next checkpoint
+inline constexpr int BDB_prefetch			= 0x4000;	// page has been prefetched but not yet referenced
+inline constexpr int BDB_no_blocking_ast	= 0x8000;	// No blocking AST registered with page lock
+inline constexpr int BDB_lru_chained		= 0x10000;	// buffer is in pending LRU chain
+inline constexpr int BDB_nbak_state_lock	= 0x20000;	// nbak state lock should be released after buffer is written
 
 // bdb_ast_flags
 
-const int BDB_blocking 			= 0x01;		// a blocking ast was sent while page locked
+inline constexpr int BDB_blocking 			= 0x01;		// a blocking ast was sent while page locked
 
 
 // PRE -- Precedence block
@@ -302,7 +309,7 @@ public:
 	SSHORT			pre_flags;
 };
 
-const int PRE_cleared	= 1;
+inline constexpr int PRE_cleared	= 1;
 
 /* Compatibility matrix for latch types.
 
@@ -346,9 +353,9 @@ enum LATCH
 
 // Constants used by prefetch mechanism
 
-const int PREFETCH_MAX_TRANSFER	= 16384;	// maximum block I/O transfer (bytes)
+inline constexpr int PREFETCH_MAX_TRANSFER	= 16384;	// maximum block I/O transfer (bytes)
 // maximum pages allowed per prefetch request
-const int PREFETCH_MAX_PAGES	= (2 * PREFETCH_MAX_TRANSFER / MIN_PAGE_SIZE);
+inline constexpr int PREFETCH_MAX_PAGES		= (2 * PREFETCH_MAX_TRANSFER / MIN_PAGE_SIZE);
 
 // Prefetch block
 
@@ -367,7 +374,7 @@ public:
 	SCHAR		prf_unaligned_buffer[PREFETCH_MAX_TRANSFER + MIN_PAGE_SIZE];
 };
 
-const int PRF_active	= 1;		// prefetch block currently in use
+inline constexpr int PRF_active = 1;		// prefetch block currently in use
 #endif // SUPERSERVER_V2
 
 typedef Firebird::SortedArray<SLONG, Firebird::InlineStorage<SLONG, 256>, SLONG> PagesArray;

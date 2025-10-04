@@ -30,12 +30,15 @@
 #include "../jrd/MetaName.h"
 #include "../common/classes/stack.h"
 #include "../common/classes/alloc.h"
+#include <initializer_list>
+#include <optional>
+#include <variant>
 
 namespace Jrd
 {
 
 class BinaryBoolNode;
-class CompoundStmtNode;
+class LocalDeclarationsNode;
 class DeclareCursorNode;
 class DeclareLocalTableNode;
 class DeclareVariableNode;
@@ -50,7 +53,10 @@ typedef Firebird::Pair<
 	Firebird::NonPooled<NestConst<ValueListNode>, NestConst<ValueListNode>>> ReturningClause;
 
 
-// DSQL Compiler scratch block - may be discarded after compilation in the future.
+// DSQL Compiler scratch block.
+// Contains any kind of objects used during DsqlStatement compilation
+// Is deleted with its pool as soon as DsqlStatement is fully formed in prepareStatement()
+// or with the statement itself (if the statement reqested it returning true from shouldPreserveScratch())
 class DsqlCompilerScratch : public BlrDebugWriter
 {
 public:
@@ -69,6 +75,7 @@ public:
 	static const unsigned FLAG_DDL					= 0x2000;
 	static const unsigned FLAG_FETCH				= 0x4000;
 	static const unsigned FLAG_VIEW_WITH_CHECK		= 0x8000;
+	static const unsigned FLAG_EXEC_BLOCK			= 0x010000;
 
 	static const unsigned MAX_NESTING = 512;
 
@@ -79,59 +86,33 @@ public:
 		  dbb(aDbb),
 		  transaction(aTransaction),
 		  dsqlStatement(aDsqlStatement),
-		  flags(0),
-		  nestingLevel(0),
-		  relation(NULL),
 		  mainContext(p),
 		  context(&mainContext),
 		  unionContext(p),
 		  derivedContext(p),
-		  outerAggContext(NULL),
-		  contextNumber(0),
-		  derivedContextNumber(0),
-		  scopeLevel(0),
-		  loopLevel(0),
 		  labels(p),
-		  cursorNumber(0),
 		  cursors(p),
-		  localTableNumber(0),
 		  localTables(p),
-		  inSelectList(0),
-		  inWhereClause(0),
-		  inGroupByClause(0),
-		  inHavingClause(0),
-		  inOrderByClause(0),
-		  errorHandlers(0),
-		  clientDialect(0),
-		  inOuterJoin(0),
 		  aliasRelationPrefix(p),
 		  package(p),
 		  currCtes(p),
-		  recursiveCtx(0),
-		  recursiveCtxId(0),
-		  processingWindow(false),
-		  checkConstraintTrigger(false),
-		  hiddenVarsNumber(0),
 		  hiddenVariables(p),
 		  variables(p),
 		  outputVariables(p),
-		  returningClause(nullptr),
-		  currCteAlias(NULL),
 		  mainScratch(aMainScratch),
 		  outerMessagesMap(p),
 		  outerVarsMap(p),
+		  ddlSchema(p),
 		  ctes(p),
 		  cteAliases(p),
-		  psql(false),
 		  subFunctions(p),
 		  subProcedures(p)
 	{
-		domainValue.clear();
 	}
 
 protected:
 	// DsqlCompilerScratch should never be destroyed using delete.
-	// It dies together with it's pool in release_request().
+	// It dies together with it's pool.
 	~DsqlCompilerScratch()
 	{
 	}
@@ -177,15 +158,39 @@ public:
 		dsqlStatement = aDsqlStatement;
 	}
 
+	void qualifyNewName(QualifiedName& name) const;
+	void qualifyExistingName(QualifiedName& name, std::initializer_list<ObjectType> objectTypes);
+
+	void qualifyExistingName(QualifiedName& name, ObjectType objectType)
+	{
+		qualifyExistingName(name, {objectType});
+	}
+
+	std::variant<std::monostate, dsql_prc*, dsql_rel*, dsql_udf*> resolveRoutineOrRelation(QualifiedName& name,
+		std::initializer_list<ObjectType> objectTypes);
+
 	void putBlrMarkers(ULONG marks);
-	void putDtype(const TypeClause* field, bool useSubType);
+	void putType(const dsql_fld* field, bool useSubType);
+
+	// * Generate TypeClause blr and put it to this Scratch
+	// Depends on: typeOfName, typeOfTable and schema:
+	// blr_column_name3/blr_domain_name3 for field with schema
+	// blr_column_name2/blr_domain_name2 for explicit collate
+	// blr_column_name/blr_domain_name for regular field
 	void putType(const TypeClause* type, bool useSubType);
-	void putLocalVariables(CompoundStmtNode* parameters, USHORT locals);
-	void putLocalVariable(dsql_var* variable, const DeclareVariableNode* hostParam,
-		const MetaName& collationName);
+	void putLocalVariableDecl(dsql_var* variable, DeclareVariableNode* hostParam, QualifiedName& collationName);
+	void putLocalVariableInit(dsql_var* variable, const DeclareVariableNode* hostParam);
+
+	void putLocalVariable(dsql_var* variable)
+	{
+		QualifiedName dummyCollationName;
+		putLocalVariableDecl(variable, nullptr, dummyCollationName);
+		putLocalVariableInit(variable, nullptr);
+	}
+
 	void putOuterMaps();
 	dsql_var* makeVariable(dsql_fld*, const char*, const dsql_var::Type type, USHORT,
-		USHORT, USHORT);
+		USHORT, std::optional<USHORT> = std::nullopt);
 	dsql_var* resolveVariable(const MetaName& varName);
 	void genReturn(bool eosFlag = false);
 
@@ -199,8 +204,7 @@ public:
 		context->clear();
 		contextNumber = 0;
 		derivedContextNumber = 0;
-
-		hiddenVarsNumber = 0;
+		nextVarNumber = 0;
 		hiddenVariables.clear();
 	}
 
@@ -255,11 +259,32 @@ public:
 		}
 	}
 
+	USHORT reserveVarNumber()
+	{
+		return nextVarNumber++;
+	}
+
+	void reserveInitialVarNumbers(USHORT count)
+	{
+		fb_assert(nextVarNumber == 0);
+		nextVarNumber = count;
+	}
+
 	bool isPsql() const { return psql; }
 	void setPsql(bool value) { psql = value; }
 
+	const auto& getSubFunctions() const
+	{
+		return subFunctions;
+	}
+
 	DeclareSubFuncNode* getSubFunction(const MetaName& name);
 	void putSubFunction(DeclareSubFuncNode* subFunc, bool replace = false);
+
+	const auto& getSubProcedures() const
+	{
+		return subProcedures;
+	}
 
 	DeclareSubProcNode* getSubProcedure(const MetaName& name);
 	void putSubProcedure(DeclareSubProcNode* subProc, bool replace = false);
@@ -270,59 +295,69 @@ private:
 	bool pass1RelProcIsRecursive(RecordSourceNode* input);
 	BoolExprNode* pass1JoinIsRecursive(RecordSourceNode*& input);
 
-	dsql_dbb* dbb;						// DSQL attachment
-	jrd_tra* transaction;				// Transaction
-	DsqlStatement* dsqlStatement;		// DSQL statement
+	void putType(const TypeClause& type, bool useSubType, bool useExplicitCollate);
+
+	template<bool THasTableName>
+	void putTypeName(const TypeClause& type, const bool useExplicitCollate);
+
+	void putDtype(const TypeClause& type, const bool useSubType);
+
+	dsql_dbb* dbb = nullptr;				// DSQL attachment
+	jrd_tra* transaction = nullptr;			// Transaction
+	DsqlStatement* dsqlStatement = nullptr;	// DSQL statement
 
 public:
-	unsigned flags;						// flags
-	unsigned nestingLevel;				// begin...end nesting level
-	dsql_rel* relation;					// relation created by this request (for DDL)
+	unsigned flags = 0;						// flags
+	unsigned nestingLevel = 0;				// begin...end nesting level
+	dsql_rel* relation = nullptr;			// relation created by this request (for DDL)
 	DsqlContextStack mainContext;
-	DsqlContextStack* context;
-	DsqlContextStack unionContext;		// Save contexts for views of unions
-	DsqlContextStack derivedContext;	// Save contexts for views of derived tables
-	dsql_ctx* outerAggContext;			// agg context for outer ref
+	DsqlContextStack* context = nullptr;
+	DsqlContextStack unionContext;			// Save contexts for views of unions
+	DsqlContextStack derivedContext;		// Save contexts for views of derived tables
+	dsql_ctx* outerAggContext = nullptr;	// agg context for outer ref
 	// CVC: I think the two contexts may need a bigger var, too.
-	USHORT contextNumber;				// Next available context number
-	USHORT derivedContextNumber;		// Next available context number for derived tables
-	USHORT scopeLevel;					// Scope level for parsing aliases in subqueries
-	USHORT loopLevel;					// Loop level
-	Firebird::Stack<MetaName*> labels;	// Loop labels
-	USHORT cursorNumber;				// Cursor number
+	USHORT contextNumber = 0;				// Next available context number
+	USHORT derivedContextNumber = 0;		// Next available context number for derived tables
+	USHORT scopeLevel = 0;					// Scope level for parsing aliases in subqueries
+	USHORT loopLevel = 0;					// Loop level
+	Firebird::Stack<MetaName*> labels;		// Loop labels
+	USHORT cursorNumber = 0;				// Cursor number
 	Firebird::Array<DeclareCursorNode*> cursors; // Cursors
-	USHORT localTableNumber;				// Local table number
+	USHORT localTableNumber = 0;			// Local table number
 	Firebird::Array<DeclareLocalTableNode*> localTables; // Local tables
-	USHORT inSelectList;				// now processing "select list"
-	USHORT inWhereClause;				// processing "where clause"
-	USHORT inGroupByClause;				// processing "group by clause"
-	USHORT inHavingClause;				// processing "having clause"
-	USHORT inOrderByClause;				// processing "order by clause"
-	USHORT errorHandlers;				// count of active error handlers
-	USHORT clientDialect;				// dialect passed into the API call
-	USHORT inOuterJoin;					// processing inside outer-join part
-	Firebird::string aliasRelationPrefix;	// prefix for every relation-alias.
-	MetaName package;			// package being defined
+	USHORT inSelectList = 0;				// now processing "select list"
+	USHORT inWhereClause = 0;				// processing "where clause"
+	USHORT inGroupByClause = 0;				// processing "group by clause"
+	USHORT inHavingClause = 0;				// processing "having clause"
+	USHORT inOrderByClause = 0;				// processing "order by clause"
+	USHORT errorHandlers = 0;				// count of active error handlers
+	USHORT clientDialect = 0;				// dialect passed into the API call
+	USHORT inOuterJoin = 0;					// processing inside outer-join part
+	Firebird::ObjectsArray<QualifiedName> aliasRelationPrefix;	// prefix for every relation-alias.
+	QualifiedName package;				// package being defined
 	Firebird::Stack<SelectExprNode*> currCtes;	// current processing CTE's
-	class dsql_ctx* recursiveCtx;		// context of recursive CTE
-	USHORT recursiveCtxId;				// id of recursive union stream context
-	bool processingWindow;				// processing window functions
-	bool checkConstraintTrigger;		// compiling a check constraint trigger
-	dsc domainValue;					// VALUE in the context of domain's check constraint
-	USHORT hiddenVarsNumber;			// next hidden variable number
+	dsql_ctx* recursiveCtx = nullptr;		// context of recursive CTE
+	USHORT recursiveCtxId = 0;				// id of recursive union stream context
+	bool processingWindow = false;			// processing window functions
+	bool checkConstraintTrigger = false;	// compiling a check constraint trigger
+	dsc domainValue;						// VALUE in the context of domain's check constraint
 	Firebird::Array<dsql_var*> hiddenVariables;	// hidden variables
 	Firebird::Array<dsql_var*> variables;
 	Firebird::Array<dsql_var*> outputVariables;
-	ReturningClause* returningClause;
-	const Firebird::string* const* currCteAlias;
-	DsqlCompilerScratch* mainScratch;
+	ReturningClause* returningClause = nullptr;
+	const Firebird::string* const* currCteAlias = nullptr;
+	DsqlCompilerScratch* mainScratch = nullptr;
 	Firebird::NonPooledMap<USHORT, USHORT> outerMessagesMap;	// <outer, inner>
 	Firebird::NonPooledMap<USHORT, USHORT> outerVarsMap;		// <outer, inner>
+	MetaName ddlSchema;
+	Firebird::AutoPtr<Firebird::ObjectsArray<Firebird::MetaString>> cachedDdlSchemaSearchPath;
+	dsql_msg* recordKeyMessage = nullptr;	// Side message for positioned DML
 
 private:
 	Firebird::HalfStaticArray<SelectExprNode*, 4> ctes; // common table expressions
 	Firebird::HalfStaticArray<const Firebird::string*, 4> cteAliases; // CTE aliases in recursive members
-	bool psql;
+	USHORT nextVarNumber = 0;				// Next available variable number
+	bool psql = false;
 	Firebird::LeftPooledMap<MetaName, DeclareSubFuncNode*> subFunctions;
 	Firebird::LeftPooledMap<MetaName, DeclareSubProcNode*> subProcedures;
 };

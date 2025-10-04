@@ -53,11 +53,11 @@ using namespace Firebird;
 //#define JRD_FAILURE_UNKNOWN	"<UNKNOWN>"	// Used when buffer fails
 
 
-static void internal_error(ISC_STATUS status, int number, const TEXT* file = NULL, int line = 0);
+[[noreturn]] static void internal_error(ISC_STATUS status, int number, const TEXT* file = NULL, int line = 0);
 static void post_nothrow(const unsigned lenToAdd, const ISC_STATUS* toAdd, FbStatusVector* statusVector);
 
 
-void ERR_bugcheck(int number, const TEXT* file, int line)
+[[noreturn]] void ERR_bugcheck(int number, const TEXT* file, int line)
 {
 /**************************************
  *
@@ -79,7 +79,7 @@ void ERR_bugcheck(int number, const TEXT* file, int line)
 }
 
 
-void ERR_bugcheck_msg(const TEXT* msg)
+[[noreturn]] void ERR_bugcheck_msg(const TEXT* msg)
 {
 /**************************************
  *
@@ -101,7 +101,7 @@ void ERR_bugcheck_msg(const TEXT* msg)
 }
 
 
-void ERR_soft_bugcheck(int number, const TEXT* file, int line)
+[[noreturn]] void ERR_soft_bugcheck(int number, const TEXT* file, int line)
 {
 /**************************************
  *
@@ -121,7 +121,7 @@ void ERR_soft_bugcheck(int number, const TEXT* file, int line)
 }
 
 
-void ERR_corrupt(int number)
+[[noreturn]] void ERR_corrupt(int number)
 {
 /**************************************
  *
@@ -138,7 +138,7 @@ void ERR_corrupt(int number)
 }
 
 
-void ERR_error(int number)
+[[noreturn]] void ERR_error(int number)
 {
 /**************************************
  *
@@ -154,7 +154,7 @@ void ERR_error(int number)
 	TEXT errmsg[MAX_ERRMSG_LEN + 1];
 
 	if (gds__msg_lookup(0, FB_IMPL_MSG_FACILITY_JRD_BUGCHK, number, sizeof(errmsg), errmsg, NULL) < 1)
-		sprintf(errmsg, "error code %d", number);
+		snprintf(errmsg, sizeof(errmsg), "error code %d", number);
 
 	ERR_post(Arg::Gds(isc_random) << Arg::Str(errmsg));
 }
@@ -181,7 +181,7 @@ void ERR_log(int facility, int number, const TEXT* message)
 		strcpy(errmsg, "Internal error code");
 
 	const size_t len = strlen(errmsg);
-	fb_utils::snprintf(errmsg + len, sizeof(errmsg) - len, " (%d)", number);
+	snprintf(errmsg + len, sizeof(errmsg) - len, " (%d)", number);
 
 	gds__log("Database: %s\n\t%s", (tdbb && tdbb->getAttachment()) ?
 		tdbb->getAttachment()->att_filename.c_str() : "", errmsg);
@@ -214,7 +214,7 @@ void ERR_post_warning(const Arg::StatusVector& v)
 	}
 
 	const ISC_STATUS* oldVector = statusVector->getWarnings();
-	unsigned lenOld = fb_utils::statusLength(oldVector);
+	const unsigned lenOld = fb_utils::statusLength(oldVector);
 
 	// check for duplicated error code
 	if (fb_utils::subStatus(oldVector, lenOld, toAdd, lenToAdd) != ~0u)
@@ -289,7 +289,7 @@ static void post_nothrow(const unsigned lenToAdd, const ISC_STATUS* toAdd, FbSta
 	}
 
 	const ISC_STATUS* oldVector = statusVector->getErrors();
-	unsigned lenOld = fb_utils::statusLength(oldVector);
+	const unsigned lenOld = fb_utils::statusLength(oldVector);
 
 	// check for duplicated error code
 	if (fb_utils::subStatus(oldVector, lenOld, toAdd, lenToAdd) != ~0u)
@@ -303,7 +303,7 @@ static void post_nothrow(const unsigned lenToAdd, const ISC_STATUS* toAdd, FbSta
 }
 
 
-void ERR_post(const Arg::StatusVector& v)
+[[noreturn]] void ERR_post(const Arg::StatusVector& v)
 /**************************************
  *
  *	E R R _ p o s t
@@ -321,7 +321,7 @@ void ERR_post(const Arg::StatusVector& v)
 }
 
 
-void ERR_punt()
+[[noreturn]] void ERR_punt()
 {
 /**************************************
  *
@@ -370,7 +370,8 @@ void ERR_warning(const Arg::StatusVector& v)
 	FbStatusVector* s = tdbb->tdbb_status_vector;
 
 	v.copyTo(s);
-	tdbb->getRequest()->req_flags |= req_warning;
+	if (auto request = tdbb->getRequest())
+		request->req_flags |= req_warning;
 }
 
 
@@ -397,7 +398,7 @@ void ERR_append_status(FbStatusVector* status_vector, const Arg::StatusVector& v
 }
 
 
-void ERR_build_status(FbStatusVector* status_vector, const Arg::StatusVector& v)
+void ERR_build_status(FbStatusVector* status_vector, const Arg::StatusVector& v) noexcept
 {
 /**************************************
  *
@@ -413,7 +414,7 @@ void ERR_build_status(FbStatusVector* status_vector, const Arg::StatusVector& v)
 }
 
 
-static void internal_error(ISC_STATUS status, int number, const TEXT* file, int line)
+[[noreturn]] static void internal_error(ISC_STATUS status, int number, const TEXT* file, int line)
 {
 /**************************************
  *
@@ -444,11 +445,10 @@ static void internal_error(ISC_STATUS status, int number, const TEXT* file, int 
 				break;
 			}
 		}
-		fb_utils::snprintf(errmsg + len, sizeof(errmsg) - len,
-			" (%d), file: %s line: %d", number, ptr, line);
+		snprintf(errmsg + len, sizeof(errmsg) - len, " (%d), file: %s line: %d", number, ptr, line);
 	}
 	else {
-		fb_utils::snprintf(errmsg + len, sizeof(errmsg) - len, " (%d)", number);
+		snprintf(errmsg + len, sizeof(errmsg) - len, " (%d)", number);
 	}
 
 	ERR_post(Arg::Gds(status) << Arg::Str(errmsg));

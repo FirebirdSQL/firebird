@@ -140,7 +140,7 @@
 /* message files DIR (PREFIX) */
 #define FB_MSGDIR "@FB_MSGDIR@"
 
-/* plugins DIR (PREFIX) */
+/* plugins DIR (PREFIX/plugins) */
 #define FB_PLUGDIR "@FB_PLUGDIR@"
 
 /* examples database DIR (PREFIX/examples/empbuild) */
@@ -481,14 +481,14 @@
 /* Define to 1 if you have the `pthread_mutexattr_setprotocol' function. */
 #cmakedefine HAVE_PTHREAD_MUTEXATTR_SETPROTOCOL 1
 
-/* Define to 1 if you have the `pthread_mutexattr_setrobust_np' function. */
-#cmakedefine HAVE_PTHREAD_MUTEXATTR_SETROBUST_NP 1
+/* Define to 1 if you have the `pthread_mutexattr_setrobust' function. */
+#cmakedefine HAVE_PTHREAD_MUTEXATTR_SETROBUST 1
 
-/* Define to 1 if you have the `pthread_mutex_consistent_np' function. */
-#cmakedefine HAVE_PTHREAD_MUTEX_CONSISTENT_NP 1
+/* Define to 1 if you have the `pthread_mutex_consistent' function. */
+#cmakedefine HAVE_PTHREAD_MUTEX_CONSISTENT 1
 
-/* Define to 1 if you have the `pthread_rwlockattr_setkind_np' function. */
-#cmakedefine HAVE_PTHREAD_RWLOCKATTR_SETKIND_NP 1
+/* Define to 1 if you have the `pthread_rwlockattr_setkind' function. */
+#cmakedefine HAVE_PTHREAD_RWLOCKATTR_SETKIND 1
 
 /* Define to 1 if you have the `qsort_r' function. */
 #cmakedefine HAVE_QSORT_R 1
@@ -580,9 +580,6 @@
 
 /* Define to 1 if the system has the type `caddr_t'. */
 #cmakedefine HAVE_CADDR_T 1
-
-/* Define to 1 if the system has the type `semun'. */
-#cmakedefine HAVE_SEMUN 1
 
 /* Define to 1 if the system has the type `socklen_t'. */
 #cmakedefine HAVE_SOCKLEN_T 1

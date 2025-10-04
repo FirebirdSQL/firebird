@@ -31,14 +31,14 @@
 
 namespace {
 
-const Firebird::Tokens::Comment sqlComments[3] = {
+constexpr Firebird::Tokens::Comment sqlComments[3] = {
 	{ "/*", "*/", false },
 	{ "--", "\n", true },
 	{ NULL, NULL, false }
 };
-const char* sqlSpaces = " \t\r\n";
-const char* sqlSeps = "!\"#%&'()*+,-./:;<=>?@[\\]^`{|}~";
-const char* sqlQuotes = "\"'";
+constexpr const char* sqlSpaces = " \t\r\n";
+constexpr const char* sqlSeps = "!\"#%&'()*+,-./:;<=>?@[\\]^`{|}~";
+constexpr const char* sqlQuotes = "\"'";
 
 } // anonymous namespace
 
@@ -59,7 +59,7 @@ void Tokens::parse(FB_SIZE_T length, const char* toParse)
 	tokens.clear();
 
 	if (!length)
-		length = strlen(toParse);
+		length = fb_strlen(toParse);
 	str.assign(toParse, length);
 
 	char inStr = '\0';
@@ -79,7 +79,7 @@ void Tokens::parse(FB_SIZE_T length, const char* toParse)
 			{
 				if (strncmp(comm->start, &str[p], strlen(comm->start)) == 0)
 				{
-					FB_SIZE_T p2 = p + strlen(comm->start);
+					FB_SIZE_T p2 = p + fb_strlen(comm->start);
 					p2 = str.find(comm->stop, p2);
 
 					if (p2 == str.npos)
@@ -89,7 +89,7 @@ void Tokens::parse(FB_SIZE_T length, const char* toParse)
 						p2 = str.length();
 					}
 					else
-						p2 += strlen(comm->stop);
+						p2 += fb_strlen(comm->stop);
 
 					str.erase(p, p2 - p);
 					origin += (p2 - p);
@@ -102,7 +102,7 @@ void Tokens::parse(FB_SIZE_T length, const char* toParse)
 				continue;
 		}
 
-		char c = str[p];
+		const char c = str[p];
 
 		if (inStr)
 		{
@@ -140,7 +140,7 @@ void Tokens::parse(FB_SIZE_T length, const char* toParse)
 			continue;
 		}
 
-		bool quote = qs && strchr(qs, c);
+		const bool quote = qs && strchr(qs, c);
 
 		if (quote)
 		{
@@ -218,7 +218,7 @@ void Tokens::error(const char* fmt, ...)
 string Tokens::Tok::stripped() const
 {
 	string rc;
-	char q = text[0];
+	const char q = text[0];
 
 	for (FB_SIZE_T i = 1; i < length - 1; ++i)
 	{

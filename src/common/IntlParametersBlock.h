@@ -41,8 +41,8 @@ public:
 	enum TagType { TAG_SKIP, TAG_STRING, TAG_COMMAND_LINE };
 	typedef void ProcessString(string& s);
 
-	virtual TagType checkTag(UCHAR tag, const char** tagName) = 0;
-	virtual UCHAR getUtf8Tag() = 0;
+	virtual TagType checkTag(UCHAR tag, const char** tagName) noexcept = 0;
+	virtual UCHAR getUtf8Tag() noexcept = 0;
 
 	void toUtf8(ClumpletWriter& pb);
 	void fromUtf8(ClumpletWriter& pb);
@@ -51,29 +51,29 @@ private:
 	void processParametersBlock(ProcessString* processString, ClumpletWriter& pb);
 };
 
-class IntlDpb : public IntlParametersBlock
+class IntlDpb final : public IntlParametersBlock
 {
 public:
-	TagType checkTag(UCHAR tag, const char** tagName);
-	UCHAR getUtf8Tag();
+	TagType checkTag(UCHAR tag, const char** tagName) noexcept override;
+	UCHAR getUtf8Tag() noexcept final;
 };
 
-class IntlSpb : public IntlParametersBlock
+class IntlSpb final : public IntlParametersBlock
 {
 public:
-	TagType checkTag(UCHAR tag, const char** tagName);
-	UCHAR getUtf8Tag();
+	TagType checkTag(UCHAR tag, const char** tagName) noexcept override;
+	UCHAR getUtf8Tag() noexcept override;
 };
 
-class IntlSpbStart : public IntlParametersBlock
+class IntlSpbStart final : public IntlParametersBlock
 {
 public:
-	IntlSpbStart()
+	IntlSpbStart() noexcept
 		: mode(0)
 	{ }
 
-	TagType checkTag(UCHAR tag, const char** tagName);
-	UCHAR getUtf8Tag();
+	TagType checkTag(UCHAR tag, const char** tagName) noexcept override;
+	UCHAR getUtf8Tag() noexcept final;
 
 private:
 	UCHAR mode;

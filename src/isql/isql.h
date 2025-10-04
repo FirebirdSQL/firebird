@@ -35,27 +35,28 @@
 
 #include "../jrd/flags.h"
 #include "../jrd/constants.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <firebird/Interface.h>
+#include "firebird/impl/msg_helper.h"
 
 // Define lengths used in isql.e
 
-const int PRINT_BUFFER_LENGTH	= 1024;
-const int MAXTERM_SIZE			= 32;	// SQL termination character
-const int USER_LENGTH 			= 128;
-const int PASSWORD_LENGTH		= 128;
-const int ROLE_LENGTH			= 128;
+inline constexpr int PRINT_BUFFER_LENGTH	= 1024;
+inline constexpr int MAXTERM_SIZE			= 32;	// SQL termination character
+inline constexpr int USER_LENGTH 			= 128;
+inline constexpr int PASSWORD_LENGTH		= 128;
+inline constexpr int ROLE_LENGTH			= 128;
 
 /* these constants are purely idiotic; there's no point in having
-   a predefined constant with no meaning, but that's Ed Simon the
-   master programmer for you! */
+   a predefined constant with no meaning... */
 
-const int BUFFER_LENGTH128	= 128;
-const int BUFFER_LENGTH256	= 256;
-const int BUFFER_LENGTH400	= 400;
-const int BUFFER_LENGTH512	= 512;
-const int BUFFER_LENGTH60	= 60;
-const int BUFFER_LENGTH180	= 180;
+inline constexpr int BUFFER_LENGTH128	= 128;
+inline constexpr int BUFFER_LENGTH256	= 256;
+inline constexpr int BUFFER_LENGTH400	= 400;
+inline constexpr int BUFFER_LENGTH512	= 512;
+inline constexpr int BUFFER_LENGTH60	= 60;
+inline constexpr int BUFFER_LENGTH180	= 180;
 
 // Define the possible states of processing commands
 
@@ -72,13 +73,13 @@ enum processing_state {
 	EXTRACTALL	=	8,
 	FETCH		=	9,
 	OBJECT_NOT_FOUND = 10,
-	ERR_BUFFER_OVERFLOW = 11
+	TRUNCATED = 11
 };
 
 // Which blob subtypes to print
 
-const int ALL_BLOBS	= -2;
-const int NO_BLOBS	= -1;
+inline constexpr int ALL_BLOBS	= -2;
+inline constexpr int NO_BLOBS	= -1;
 
 // Flag to decode all vs sql only objects
 enum LegacyTables
@@ -87,9 +88,9 @@ enum LegacyTables
 	ALL_objects
 };
 
-const size_t QUOTED_NAME_SIZE		= MAX_SQL_IDENTIFIER_SIZE + 2 /* quotes */;
+inline constexpr size_t QUOTED_NAME_SIZE = MAX_SQL_IDENTIFIER_SIZE + 2 /* quotes */;
 
-const size_t CHARSET_COLLATE_SIZE	=
+inline constexpr size_t CHARSET_COLLATE_SIZE	=
 	(MAX_SQL_IDENTIFIER_LEN + 2 /* quotes */) * 2 +	// charset and collate names
 	14 +	// CHARACTER SET
 	9 +		// NOT NULL
@@ -97,20 +98,19 @@ const size_t CHARSET_COLLATE_SIZE	=
 	30 +	// extra space
 	1;		// null terminator
 
-static const char* const DEFTERM	= ";";
-static const char* const DEFCHARSET	= "NONE";
-const unsigned NULL_DISP_LEN		= 6;
+static inline constexpr const char* DEFTERM = ";";
+inline constexpr unsigned NULL_DISP_LEN = 6;
 
 
 // Error codes
 
-const int MSG_LENGTH	= 1024;
-const int ISQL_MSG_FAC	= FB_IMPL_MSG_FACILITY_ISQL;
+inline constexpr int MSG_LENGTH = 1024;
+inline constexpr int ISQL_MSG_FAC = FB_IMPL_MSG_FACILITY_ISQL;
 
 #define FB_IMPL_MSG_NO_SYMBOL(facility, number, text)
 
 #define FB_IMPL_MSG_SYMBOL(facility, number, symbol, text) \
-	const int symbol = number;
+	inline constexpr int symbol = number;
 
 #define FB_IMPL_MSG(facility, number, symbol, sqlCode, sqlClass, sqlSubClass, text) \
 	FB_IMPL_MSG_SYMBOL(facility, number, symbol, text)
@@ -130,7 +130,7 @@ struct sqltypes
 	SCHAR type_name[QUOTED_NAME_SIZE];
 };
 
-static const sqltypes Column_types[] = {
+static inline constexpr sqltypes Column_types[] = {
 	{blr_short, "SMALLINT"},
 	{blr_long, "INTEGER"},
 	{blr_quad, "QUAD"},
@@ -158,9 +158,9 @@ static const sqltypes Column_types[] = {
 
 // Integral subtypes
 
-const int MAX_INTSUBTYPES	= 2;
+inline constexpr int MAX_INTSUBTYPES = 2;
 
-static const SCHAR* Integral_subtypes[] = {
+static inline constexpr const SCHAR* Integral_subtypes[] = {
 	"UNKNOWN",					// Defined type, keyword
 	"NUMERIC",					// NUMERIC, keyword
 	"DECIMAL"					// DECIMAL, keyword
@@ -168,27 +168,27 @@ static const SCHAR* Integral_subtypes[] = {
 
 // Text subtypes
 
-const int MAX_TEXTSUBTYPES = 1;
+inline constexpr int MAX_TEXTSUBTYPES = 1;
 
-static const SCHAR* Text_subtypes[] = {
+static inline constexpr const SCHAR* Text_subtypes[] = {
 	"CHAR",
 	"BINARY"
 };
 
 // Varying subtypes
 
-const int MAX_VARYINGSUBTYPES = 1;
+inline constexpr int MAX_VARYINGSUBTYPES = 1;
 
-static const SCHAR* Varying_subtypes[] = {
+static inline constexpr const SCHAR* Varying_subtypes[] = {
 	"VARCHAR",
 	"VARBINARY"
 };
 
 // Blob subtypes
 
-const int MAX_BLOBSUBTYPES	= 8;
+inline constexpr int MAX_BLOBSUBTYPES	= 8;
 
-static const SCHAR* Sub_types[] = {
+static inline constexpr const SCHAR* Sub_types[] = {
 	"BINARY",					// keyword
 	"TEXT",						// keyword
 	"BLR",						// keyword
@@ -210,9 +210,9 @@ BY REFERENCE_WITH_NULL his supported in FB2 to be able to signal SQL NULL
 in input parameters.
 The names mentioned here are documented in jrd/types.h. */
 
-const int MAX_UDFPARAM_TYPES = 6;
+inline constexpr int MAX_UDFPARAM_TYPES = 6;
 
-static const char* UDF_param_types[] = {
+static inline constexpr const char* UDF_param_types[] = {
 	" BY VALUE",			// keyword
 	"",						// BY REFERENCE
 	" BY DESCRIPTOR",		// keyword in FB, internally VMS descriptor
@@ -233,6 +233,7 @@ public:
 	size_t Termlen;
 	SCHAR User[128];
 	SCHAR Role[256];
+	SCHAR SearchPath[512];
 	USHORT SQL_dialect;
 	USHORT db_SQL_dialect;
 	// from isql.epp
@@ -250,7 +251,7 @@ public:
 
 extern IsqlGlobals isqlGlob;
 
-static const char* const SCRATCH = "fb_query_";
+static inline constexpr const char* SCRATCH = "fb_query_";
 
 inline void STDERROUT(const char* st, bool cr = true)
 {
@@ -267,12 +268,12 @@ inline void STDERROUT(const char* st, bool cr = true)
 #endif
 #define ISQL_FREE(x)     {gds__free(x); x = NULL;}
 
-static const char* const NEWLINE		= "\n";
-static const char* const TAB_AS_SPACES	= "        ";
+static inline constexpr const char* NEWLINE = "\n";
+static inline constexpr const char* TAB_AS_SPACES = "        ";
 
-const char BLANK		= '\040';
-const char DBL_QUOTE	= '\042';
-const char SINGLE_QUOTE	= '\'';
+inline constexpr char BLANK		= '\040';
+inline constexpr char DBL_QUOTE	= '\042';
+inline constexpr char SINGLE_QUOTE	= '\'';
 
 struct IsqlVar
 {
@@ -309,6 +310,30 @@ struct IsqlVar
 		void* setPtr;
 	};
 	TypeMix value;
+};
+
+class IsqlWireStats
+{
+public:
+	explicit IsqlWireStats(Firebird::IAttachment* att) noexcept :
+		m_att(att)
+	{}
+
+	bool print(bool initial);
+	bool get(bool initial);
+
+private:
+
+	Firebird::IAttachment* m_att;
+	FB_UINT64 m_snd_packets = 0;
+	FB_UINT64 m_rcv_packets = 0;
+	FB_UINT64 m_out_packets = 0;
+	FB_UINT64 m_in_packets = 0;
+	FB_UINT64 m_snd_bytes = 0;
+	FB_UINT64 m_rcv_bytes = 0;
+	FB_UINT64 m_out_bytes = 0;
+	FB_UINT64 m_in_bytes = 0;
+	FB_UINT64 m_roundtrips = 0;
 };
 
 #endif // ISQL_ISQL_H

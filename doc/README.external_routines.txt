@@ -86,7 +86,7 @@ External names of the UDR engine are defined as following:
 
 The <module name> is used to locate the library, <routine name> is used to locate the routine
 registered by the given module, and <misc info> is an user defined string passed to the routine
-and can be read by the user. "!<misc info>" may be ommitted.
+and can be read by the user. "!<misc info>" may be omitted.
 
 Modules available to the UDR engine should be in a directory listed through the path attribute of
 the correspondent plugin_config tag. By default, UDR modules should be on <fbroot>/plugins/udr,

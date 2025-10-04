@@ -95,7 +95,7 @@ bool ColList::remove(const char* name)
 		if (pold)
 			pold->next = p->next;
 		else
-			m_head = NULL;
+			m_head = p->next;
 
 		delete p;
 		--m_count;

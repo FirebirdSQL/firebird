@@ -96,7 +96,7 @@ struct sort_record
 
 };
 
-const ULONG MAX_SORT_RECORD = 1024 * 1024;	// 1MB
+inline constexpr ULONG MAX_SORT_RECORD = 1024 * 1024;	// 1MB
 
 // the record struct actually contains the keyids etc, and the back_pointer
 // which points to the sort_record structure.
@@ -129,32 +129,32 @@ until we are out of records to sort or memory.
 
 // skd_dtype
 
-const int SKD_long			= 1;
-const int SKD_ulong			= 2;
-const int SKD_short			= 3;
-const int SKD_ushort		= 4;
-const int SKD_text			= 5;
-const int SKD_float			= 6;
-const int SKD_double		= 7;
-const int SKD_quad			= 8;
-const int SKD_timestamp		= 9;
-const int SKD_bytes			= 10;
-const int SKD_varying		= 11;		// non-international
-const int SKD_cstring		= 12;		// non-international
-const int SKD_sql_time		= 13;
-const int SKD_sql_date		= 14;
-const int SKD_int64			= 15;
-const int SKD_dec64			= 16;
-const int SKD_dec128		= 17;
-const int SKD_sql_time_tz	= 18;
-const int SKD_timestamp_tz	= 19;
-const int SKD_int128		= 20;
+inline constexpr int SKD_long			= 1;
+inline constexpr int SKD_ulong			= 2;
+inline constexpr int SKD_short			= 3;
+inline constexpr int SKD_ushort			= 4;
+inline constexpr int SKD_text			= 5;
+inline constexpr int SKD_float			= 6;
+inline constexpr int SKD_double			= 7;
+inline constexpr int SKD_quad			= 8;
+inline constexpr int SKD_timestamp		= 9;
+inline constexpr int SKD_bytes			= 10;
+inline constexpr int SKD_varying		= 11;		// non-international
+inline constexpr int SKD_cstring		= 12;		// non-international
+inline constexpr int SKD_sql_time		= 13;
+inline constexpr int SKD_sql_date		= 14;
+inline constexpr int SKD_int64			= 15;
+inline constexpr int SKD_dec64			= 16;
+inline constexpr int SKD_dec128			= 17;
+inline constexpr int SKD_sql_time_tz	= 18;
+inline constexpr int SKD_timestamp_tz	= 19;
+inline constexpr int SKD_int128			= 20;
 
 // skd_flags
-const UCHAR SKD_ascending		= 0;	// default initializer
-const UCHAR SKD_descending		= 1;
-const UCHAR SKD_binary			= 2;
-const UCHAR SKD_separate_data	= 4;
+inline constexpr UCHAR SKD_ascending		= 0;	// default initializer
+inline constexpr UCHAR SKD_descending		= 1;
+inline constexpr UCHAR SKD_binary			= 2;
+inline constexpr UCHAR SKD_separate_data	= 4;
 
 // Sort key definition block
 
@@ -170,9 +170,9 @@ private:
 public:
 	ULONG	skd_vary_offset;	// Offset to varying/cstring length
 
-	USHORT getSkdLength() const { return skd_length; }
+	USHORT getSkdLength() const noexcept { return skd_length; }
 
-	void setSkdLength(UCHAR dtype, USHORT dscLength)
+	void setSkdLength(UCHAR dtype, USHORT dscLength) noexcept
 	{
 		skd_dtype = dtype;
 
@@ -191,9 +191,9 @@ public:
 		}
 	}
 
-	ULONG getSkdOffset() const { return skd_offset; }
+	ULONG getSkdOffset() const noexcept { return skd_offset; }
 
-	void setSkdOffset(const sort_key_def* prev = nullptr, dsc* desc = nullptr)
+	void setSkdOffset(const sort_key_def* prev = nullptr, dsc* desc = nullptr) noexcept
 	{
 		skd_offset = 0;
 		if (prev)
@@ -220,9 +220,9 @@ struct run_merge_hdr
 
 // rmh_type
 
-const int RMH_TYPE_RUN	= 0;
-const int RMH_TYPE_MRG	= 1;
-const int RMH_TYPE_SORT = 2;
+inline constexpr int RMH_TYPE_RUN	= 0;
+inline constexpr int RMH_TYPE_MRG	= 1;
+inline constexpr int RMH_TYPE_SORT	= 2;
 
 
 // Run control block
@@ -270,8 +270,8 @@ typedef bool (*FPTR_REJECT_DUP_CALLBACK)(const UCHAR*, const UCHAR*, void*);
 
 // flags as set in m_flags
 
-const int scb_sorted		= 1;	// stream has been sorted
-const int scb_reuse_buffer	= 2;	// reuse buffer if possible
+inline constexpr int scb_sorted			= 1;	// stream has been sorted
+inline constexpr int scb_reuse_buffer	= 2;	// reuse buffer if possible
 
 class Sort
 {
@@ -286,7 +286,7 @@ public:
 	void put(Jrd::thread_db*, ULONG**);
 	void sort(Jrd::thread_db*);
 
-	bool isSorted() const
+	bool isSorted() const noexcept
 	{
 		return m_flags & scb_sorted;
 	}
@@ -298,7 +298,7 @@ public:
 		return seek + bytes;
 	}
 
-	static FB_UINT64 writeBlock(TempSpace* space, FB_UINT64 seek, UCHAR* address, ULONG length)
+	static FB_UINT64 writeBlock(TempSpace* space, FB_UINT64 seek, const UCHAR* address, ULONG length)
 	{
 		const size_t bytes = space->write(seek, address, length);
 		fb_assert(bytes == length);
@@ -325,7 +325,7 @@ private:
 	void checkFile(const run_control*);
 #endif
 
-	static void quick(SLONG, SORTP**, ULONG);
+	static void quick(SLONG, SORTP**, ULONG) noexcept;
 
 	Database* m_dbb;							// Database
 	SortOwner* m_owner;							// Sort owner
@@ -374,7 +374,7 @@ public:
 		m_parts.add(item);
 	}
 
-	void buidMergeTree();
+	void buildMergeTree();
 
 private:
 	sort_record* getMerge();
@@ -389,8 +389,8 @@ private:
 class SortOwner
 {
 public:
-	explicit SortOwner(MemoryPool& p)
-		: pool(p), sorts(p)
+	SortOwner(MemoryPool& p, Database* database)
+		: pool(p), dbb(database), sorts(p), buffers(p)
 	{}
 
 	~SortOwner()
@@ -421,14 +421,19 @@ public:
 		}
 	}
 
-	MemoryPool& getPool() const
+	MemoryPool& getPool() const noexcept
 	{
 		return pool;
 	}
 
+	UCHAR* allocateBuffer();
+	void releaseBuffer(UCHAR*);
+
 private:
 	MemoryPool& pool;
+	Database* const dbb;
 	Firebird::SortedArray<Sort*> sorts;
+	Firebird::HalfStaticArray<UCHAR*, 4> buffers;
 };
 
 } //namespace Jrd

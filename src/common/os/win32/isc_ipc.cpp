@@ -45,6 +45,7 @@
 #include "../common/isc_proto.h"
 #include "../common/os/isc_i_proto.h"
 #include "../common/isc_s_proto.h"
+#include "../common/file_params.h"
 
 #include <windows.h>
 #include <process.h>
@@ -66,15 +67,14 @@
 
 namespace {
 
-static int process_id		= 0;
-const int MAX_OPN_EVENTS	= 40;
+static int process_id = 0;
+constexpr int MAX_OPN_EVENTS = 40;
 
 class OpenEvents
 {
 public:
-	explicit OpenEvents(Firebird::MemoryPool&)
+	explicit OpenEvents(Firebird::MemoryPool&) noexcept
 	{
-		memset(&m_events, 0, sizeof(m_events));
 		m_count = 0;
 		m_clock = 0;
 	}
@@ -91,8 +91,10 @@ public:
 
 	HANDLE getEvent(SLONG pid, SLONG signal_number)
 	{
+		Firebird::MutexLockGuard guard(&m_mutex, FB_FUNCTION);
+
 		Item* oldestEvent = NULL;
-		ULONG oldestAge = ~0;
+		FB_UINT64 oldestAge = ~(0ULL);
 
 		Item* evnt = m_events;
 		const Item* const end = evnt + m_count;
@@ -132,18 +134,18 @@ public:
 	}
 
 private:
-	class Item
+	struct Item
 	{
-	public:
 		SLONG pid;
 		SLONG signal;	// pseudo-signal number
 		HANDLE handle;	// local handle to foreign event
-		ULONG age;
+		FB_UINT64 age;
 	};
 
-	Item m_events[MAX_OPN_EVENTS];
+	Item m_events[MAX_OPN_EVENTS]{};
 	int m_count;
-	ULONG m_clock;
+	FB_UINT64 m_clock;
+	Firebird::Mutex m_mutex;
 };
 
 }  // namespace
@@ -198,7 +200,7 @@ HANDLE ISC_make_signal(bool /*create_flag*/, bool manual_reset, int process_idL,
 		return CreateEvent(NULL, man_rst, FALSE, NULL);
 
 	TEXT event_name[BUFFER_TINY];
-	sprintf(event_name, "_firebird_process%u_signal%d", process_idL, signal_number);
+	snprintf(event_name, sizeof(event_name), SHARED_EVENT, process_idL, signal_number);
 
 	if (!fb_utils::private_kernel_object_name(event_name, sizeof(event_name)))
 	{

@@ -27,6 +27,7 @@
 
 #include "firebird.h"
 
+#include <vector>
 #include "../../common/classes/TempFile.h"
 #include "../../common/StatusArg.h"
 #include "../../common/utils_proto.h"
@@ -64,7 +65,7 @@ using namespace Firebird;
 
 namespace Jrd {
 
-static const FB_UINT64 TOUCH_INTERVAL = 60 * 60;	// in seconds, one hour should be enough
+static constexpr FB_UINT64 TOUCH_INTERVAL = 60 * 60;	// in seconds, one hour should be enough
 
 void checkFileError(const char* filename, const char* operation, ISC_STATUS iscError)
 {
@@ -87,12 +88,11 @@ void checkFileError(const char* filename, const char* operation, ISC_STATUS iscE
 ConfigStorage::ConfigStorage()
 	: m_timer(FB_NEW TouchFile),
 	  m_sharedMemory(NULL),
+	  m_filename(getPool()),
 	  m_recursive(0),
 	  m_mutexTID(0),
-	  m_dirty(false),
-	  m_nextIdx(0)
+	  m_dirty(false)
 {
-	PathName filename;
 #ifdef WIN_NT
 	DWORD sesID = 0;
 
@@ -109,35 +109,23 @@ ConfigStorage::ConfigStorage()
 		pfnProcessIdToSessionId(GetCurrentProcessId(), &sesID) == 0 ||
 		sesID == 0)
 	{
-		filename.printf(TRACE_FILE); // TODO: it must be per engine instance
+		m_filename.printf(TRACE_FILE); // TODO: it must be per engine instance
 	}
 	else
 	{
-		filename.printf("%s.%u", TRACE_FILE, sesID);
+		m_filename.printf("%s.%u", TRACE_FILE, sesID);
 	}
 #else
-	filename.printf(TRACE_FILE); // TODO: it must be per engine instance
+	m_filename.printf(TRACE_FILE); // TODO: it must be per engine instance
 #endif
 
-	try
-	{
-		m_sharedMemory.reset(FB_NEW_POOL(getPool())
-			SharedMemory<TraceCSHeader>(filename.c_str(), TraceCSHeader::TRACE_STORAGE_MIN_SIZE, this));
-
-		checkHeader(m_sharedMemory->getHeader());
-	}
-	catch (const Exception& ex)
-	{
-		iscLogException("ConfigStorage: Cannot initialize the shared memory region", ex);
-		throw;
-	}
+	initSharedFile();
 
 	StorageGuard guard(this);
 	checkAudit();
 
 	TEXT fullName[MAXPATHLEN];
-	iscPrefixLock(fullName, filename.c_str(), false);
-
+	iscPrefixLock(fullName, m_filename.c_str(), false);
 	m_timer->start(fullName);	// do we still need a timer ?
 
 	++(m_sharedMemory->getHeader()->cnt_uses);
@@ -146,6 +134,22 @@ ConfigStorage::ConfigStorage()
 ConfigStorage::~ConfigStorage()
 {
 	fb_assert(!m_timer);
+}
+
+void ConfigStorage::initSharedFile()
+{
+	try
+	{
+		m_sharedMemory.reset(FB_NEW_POOL(getPool())
+			SharedMemory<TraceCSHeader>(m_filename.c_str(), TraceCSHeader::TRACE_STORAGE_MIN_SIZE, this));
+
+		checkHeader(m_sharedMemory->getHeader());
+	}
+	catch (const Exception& ex)
+	{
+		iscLogException("ConfigStorage: Cannot initialize the shared memory region", ex);
+		throw;
+	}
 }
 
 void ConfigStorage::shutdown()
@@ -160,6 +164,7 @@ void ConfigStorage::shutdown()
 
 	{
 		StorageGuard guard(this);
+		fb_assert(m_sharedMemory->getHeader()->cnt_uses != 0);
 		--(m_sharedMemory->getHeader()->cnt_uses);
 		if (m_sharedMemory->getHeader()->cnt_uses == 0)
 		{
@@ -173,9 +178,7 @@ void ConfigStorage::shutdown()
 void ConfigStorage::mutexBug(int state, const char* string)
 {
 	TEXT msg[BUFFER_TINY];
-
-	// While string is kept below length 70, all is well.
-	sprintf(msg, "ConfigStorage: mutex %s error, status = %d", string, state);
+	snprintf(msg, sizeof(msg), "ConfigStorage: mutex %s error, status = %d", string, state);
 	fb_utils::logAndDie(msg);
 }
 
@@ -293,7 +296,21 @@ void ConfigStorage::acquire()
 	fb_assert(m_mutexTID == 0);
 	m_mutexTID = currTID;
 
-	TraceCSHeader* header = m_sharedMemory->getHeader();
+	while (m_sharedMemory->getHeader()->isDeleted())
+	{
+		// Shared memory must be empty at this point
+		fb_assert(m_sharedMemory->getHeader()->cnt_uses == 0);
+
+		m_sharedMemory->mutexUnlock();
+		m_sharedMemory.reset();
+
+		Thread::yield();
+
+		initSharedFile();
+		m_sharedMemory->mutexLock();
+	}
+
+	const TraceCSHeader* header = m_sharedMemory->getHeader();
 	if (header->mem_allocated > m_sharedMemory->sh_mem_length_mapped)
 	{
 #ifdef HAVE_OBJECT_MAP
@@ -368,7 +385,7 @@ ULONG ConfigStorage::allocSlot(ULONG slotSize)
 		ULONG lenFound = 0;
 		for (ULONG i = 0; i < header->slots_cnt; i++)
 		{
-			TraceCSHeader::Slot* slot = header->slots + i;
+			const TraceCSHeader::Slot* slot = header->slots + i;
 			if (!slot->used && slot->size >= slotSize &&
 				(!lenFound || lenFound > slot->size))
 			{
@@ -385,7 +402,7 @@ ULONG ConfigStorage::allocSlot(ULONG slotSize)
 			// move free slot to the top position
 			if (idxFound != header->slots_cnt - 1)
 			{
-				TraceCSHeader::Slot tmp = header->slots[idxFound];
+				const TraceCSHeader::Slot tmp = header->slots[idxFound];
 
 				const FB_SIZE_T mv = sizeof(TraceCSHeader::Slot) * (header->slots_cnt - idxFound - 1);
 				memmove(&header->slots[idxFound], &header->slots[idxFound + 1], mv);
@@ -434,7 +451,7 @@ struct SlotByOffset
 	ULONG index;		// slot index
 	ULONG offset;		// initial data ofset
 
-	static ULONG generate(const SlotByOffset& i) { return i.offset; }
+	static ULONG generate(const SlotByOffset& i) noexcept { return i.offset; }
 };
 
 typedef SortedArray<SlotByOffset, EmptyStorage<SlotByOffset>, ULONG, SlotByOffset>
@@ -452,13 +469,20 @@ void ConfigStorage::compact()
 	ULONG check_used, check_size;
 	check_used = check_size = sizeof(TraceCSHeader);
 
+	// Track undeleted slots from dead processes
+	Firebird::SortedArray<ULONG, InlineStorage<ULONG, 16>> deadProcesses;
+
 	// collect used slots, sort them by offset
 	for (TraceCSHeader::Slot* slot = header->slots; slot < header->slots + header->slots_cnt; slot++)
 	{
-		if (!slot->used && slot->ses_pid != pid &&
+		if (slot->used && slot->ses_pid != pid &&
+			((slot->ses_flags & trs_system) == 0) && // System sessions are shared for multiple connections so they may live without the original process
 			!ISC_check_process_existence(slot->ses_pid))
 		{
-			header->cnt_uses--; // Process that created trace session disappeared, count it out
+			// A SUPER server may shut down, but its Storage shared memory continues to live due to an embedded user session.
+			// The process might allocate multiple slots, so count them carefully.
+			deadProcesses.add(slot->ses_pid);
+
 			markDeleted(slot);
 		}
 
@@ -470,6 +494,11 @@ void ConfigStorage::compact()
 		check_size += slot->size;
 		data.add(item);
 	}
+
+	// Process that created storages disappeared, count it out
+	fb_assert(header->cnt_uses > deadProcesses.getCount());
+	header->cnt_uses -= deadProcesses.getCount();
+	deadProcesses.clear();
 
 	fb_assert(check_used == header->mem_used);
 	fb_assert(check_size == header->mem_offset);
@@ -623,10 +652,10 @@ bool ConfigStorage::validate()
 }
 
 
-ULONG ConfigStorage::getSessionSize(const TraceSession& session)
+ULONG ConfigStorage::getSessionSize(const TraceSession& session) noexcept
 {
 	ULONG ret = 1; // tagEnd
-	const ULONG sz = 1 + sizeof(ULONG);		// sizeof tag + sizeof len
+	constexpr ULONG sz = 1 + sizeof(ULONG);		// sizeof tag + sizeof len
 
 	ULONG len = session.ses_name.length();
 	if (len)
@@ -644,18 +673,20 @@ ULONG ConfigStorage::getSessionSize(const TraceSession& session)
 	if ((len = session.ses_config.length()))
 		ret += sz + len;
 
-	if ((len = sizeof(session.ses_start)))
-		ret += sz + len;
-
 	if ((len = session.ses_logfile.length()))
 		ret += sz + len;
+
+	if ((len = session.ses_plugins.length()))
+		ret += sz + len;
+
+	ret += sz + sizeof(session.ses_start);
 
 	return ret;
 }
 
 bool ConfigStorage::findSession(ULONG sesId, ULONG& idx)
 {
-	TraceCSHeader* header = m_sharedMemory->getHeader();
+	const TraceCSHeader* header = m_sharedMemory->getHeader();
 
 	ULONG hi = header->slots_cnt, lo = 0;
 	while (hi > lo)
@@ -689,25 +720,16 @@ void ConfigStorage::addSession(TraceSession& session)
 	char* p = reinterpret_cast<char*> (header) + slot->offset;
 	Writer writer(p, slot->size);
 
-	if (!session.ses_name.empty()) {
-		writer.write(tagName, session.ses_name.length(), session.ses_name.c_str());
-	}
-	if (session.ses_auth.hasData()) {
+	writer.writeData(tagName, session.ses_name);
+	if (session.ses_auth.hasData())
 		writer.write(tagAuthBlock, session.ses_auth.getCount(), session.ses_auth.begin());
-	}
-	if (!session.ses_user.empty()) {
-		writer.write(tagUserName, session.ses_user.length(), session.ses_user.c_str());
-	}
-	if (session.ses_role.hasData()) {
-		writer.write(tagRole, session.ses_role.length(), session.ses_role.c_str());
-	}
-	if (!session.ses_config.empty()) {
-		writer.write(tagConfig, session.ses_config.length(), session.ses_config.c_str());
-	}
+	writer.writeData(tagUserName, session.ses_user);
+	writer.writeData(tagRole, session.ses_role);
+	writer.writeData(tagConfig, session.ses_config);
 	writer.write(tagStartTS, sizeof(session.ses_start), &session.ses_start);
-	if (!session.ses_logfile.empty()) {
-		writer.write(tagLogFile, session.ses_logfile.length(), session.ses_logfile.c_str());
-	}
+	writer.writeData(tagLogFile, session.ses_logfile);
+	writer.writeData(tagPlugins, session.ses_plugins);
+
 	writer.write(tagEnd, 0, NULL);
 }
 
@@ -717,8 +739,8 @@ bool ConfigStorage::getSession(Firebird::TraceSession& session, GET_FLAGS getFla
 	if (!findSession(session.ses_id, idx))
 		return false;
 
-	TraceCSHeader* header = m_sharedMemory->getHeader();
-	TraceCSHeader::Slot* slot = &header->slots[idx];
+	const TraceCSHeader* header = m_sharedMemory->getHeader();
+	const TraceCSHeader::Slot* slot = &header->slots[idx];
 
 	if (slot->ses_id != session.ses_id || !slot->used)
 		return false;
@@ -726,19 +748,14 @@ bool ConfigStorage::getSession(Firebird::TraceSession& session, GET_FLAGS getFla
 	return readSession(slot, session, getFlag);
 }
 
-void ConfigStorage::restart()
+bool ConfigStorage::getNextSession(TraceSession& session, GET_FLAGS getFlag, ULONG& nextIdx)
 {
-	m_nextIdx = 0;
-}
+	const TraceCSHeader* header = m_sharedMemory->getHeader();
 
-bool ConfigStorage::getNextSession(TraceSession& session, GET_FLAGS getFlag)
-{
-	TraceCSHeader* header = m_sharedMemory->getHeader();
-
-	while (m_nextIdx < header->slots_cnt)
+	while (nextIdx < header->slots_cnt)
 	{
-		TraceCSHeader::Slot* slot = header->slots + m_nextIdx;
-		m_nextIdx++;
+		const TraceCSHeader::Slot* slot = header->slots + nextIdx;
+		nextIdx++;
 
 		if (slot->used)
 			return readSession(slot, session, getFlag);
@@ -746,9 +763,9 @@ bool ConfigStorage::getNextSession(TraceSession& session, GET_FLAGS getFlag)
 	return false;
 }
 
-bool ConfigStorage::readSession(TraceCSHeader::Slot* slot, TraceSession& session, GET_FLAGS getFlag)
+bool ConfigStorage::readSession(const TraceCSHeader::Slot* slot, TraceSession& session, GET_FLAGS getFlag)
 {
-	const ULONG getMask[3] =
+	constexpr ULONG getMask[3] =
 	{
 		MAX_ULONG,				// ALL
 		0,						// FLAGS
@@ -757,7 +774,7 @@ bool ConfigStorage::readSession(TraceCSHeader::Slot* slot, TraceSession& session
 		(1 << tagRole)			// AUTH
 	};
 
-	TraceCSHeader* header = m_sharedMemory->getHeader();
+	const TraceCSHeader* header = m_sharedMemory->getHeader();
 
 	session.clear();
 	session.ses_id = slot->ses_id;
@@ -766,7 +783,7 @@ bool ConfigStorage::readSession(TraceCSHeader::Slot* slot, TraceSession& session
 	if (getFlag == FLAGS)
 		return true;
 
-	char* p = reinterpret_cast<char*> (header) + slot->offset;
+	const char* p = reinterpret_cast<const char*> (header) + slot->offset;
 	Reader reader(p, slot->size);
 
 	while (true)
@@ -818,6 +835,10 @@ bool ConfigStorage::readSession(TraceCSHeader::Slot* slot, TraceSession& session
 				p = session.ses_role.getBuffer(len);
 				break;
 
+			case tagPlugins:
+				p = session.ses_plugins.getBuffer(len);
+				break;
+
 			default:
 				fb_assert(false);
 				return false;
@@ -861,7 +882,7 @@ void ConfigStorage::markDeleted(TraceCSHeader::Slot* slot)
 	slot->used = 0;
 }
 
-void ConfigStorage::updateFlags(TraceSession& session)
+void ConfigStorage::updateFlags(const TraceSession& session)
 {
 	ULONG idx;
 	if (!findSession(session.ses_id, idx))
@@ -875,6 +896,31 @@ void ConfigStorage::updateFlags(TraceSession& session)
 
 	setDirty();
 	slot->ses_flags = session.ses_flags;
+}
+
+bool ConfigStorage::Accessor::getNext(TraceSession& session, GET_FLAGS getFlag)
+{
+	if (m_guard)
+		return m_storage->getNextSession(session, getFlag, m_nextIdx);
+
+	StorageGuard guard(m_storage);
+
+	// Restore position, if required: find index of slot with session ID greater than m_sesId.
+	if (m_change_number != m_storage->getChangeNumber())
+	{
+		if (m_storage->findSession(m_sesId, m_nextIdx))
+			m_nextIdx++;
+
+		m_change_number = m_storage->getChangeNumber();
+	}
+
+	if (m_storage->getNextSession(session, getFlag, m_nextIdx))
+	{
+		m_sesId = session.ses_id;
+		return true;
+	}
+
+	return false;
 }
 
 void ConfigStorage::Writer::write(ITEM tag, ULONG len, const void* data)
@@ -896,7 +942,7 @@ void ConfigStorage::Writer::write(ITEM tag, ULONG len, const void* data)
 	m_mem += len;
 }
 
-const void* ConfigStorage::Reader::read(ITEM& tag, ULONG& len)
+const void* ConfigStorage::Reader::read(ITEM& tag, ULONG& len) noexcept
 {
 	if (m_mem + 1 > m_end)
 		return NULL;

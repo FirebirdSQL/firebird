@@ -63,7 +63,7 @@
 #ifdef EDS_DEBUG
 
 #undef FB_ASSERT_FAILURE_STRING
-#define FB_ASSERT_FAILURE_STRING	"Procces ID %d: assertion (%s) failure: %s %" LINEFORMAT
+#define FB_ASSERT_FAILURE_STRING	"Process ID %d: assertion (%s) failure: %s %" LINEFORMAT
 
 #undef fb_assert
 #define fb_assert(ex)	{if (!(ex)) {gds__log(FB_ASSERT_FAILURE_STRING, getpid(), #ex, __FILE__, __LINE__);}}
@@ -83,11 +83,11 @@ Mutex Manager::m_mutex;
 Provider* Manager::m_providers = NULL;
 ConnectionsPool* Manager::m_connPool = NULL;
 
-const ULONG MIN_CONNPOOL_SIZE		= 0;
-const ULONG MAX_CONNPOOL_SIZE		= 1000;
+inline constexpr ULONG MIN_CONNPOOL_SIZE = 0;
+inline constexpr ULONG MAX_CONNPOOL_SIZE = 1000;
 
-const ULONG MIN_LIFE_TIME		= 1;
-const ULONG MAX_LIFE_TIME		= 60 * 60 * 24;	// one day
+inline constexpr ULONG MIN_LIFE_TIME = 1;
+inline constexpr ULONG MAX_LIFE_TIME = 60 * 60 * 24;	// one day
 
 Manager::Manager(MemoryPool& pool) :
 	PermanentStorage(pool)
@@ -115,6 +115,9 @@ Manager::~Manager()
 
 void Manager::addProvider(Provider* provider)
 {
+	// TODO: if\when usage of user providers will be implemented,
+	// need to check provider name for allowed chars (file system rules ?)
+
 	for (const Provider* prv = m_providers; prv; prv = prv->m_next)
 	{
 		if (prv->m_name == provider->m_name) {
@@ -155,6 +158,15 @@ static void splitDataSourceName(thread_db* tdbb, const string& dataSource,
 	else
 	{
 		FB_SIZE_T pos = dataSource.find("::");
+
+		// Check if it is part of IPv6 address, assume provider name can't contain square brackets
+		if (pos != string::npos &&
+			dataSource.rfind("[", pos) != string::npos &&
+			dataSource.find("]", pos) != string::npos)
+		{
+			pos = string::npos;
+		}
+
 		if (pos != string::npos)
 		{
 			prvName = dataSource.substr(0, pos);
@@ -195,15 +207,15 @@ Connection* Manager::getConnection(thread_db* tdbb, const string& dataSource,
 
 	Provider* prv = getProvider(prvName);
 
-	const bool isCurrent = (prvName == INTERNAL_PROVIDER_NAME) &&
+	const bool isCurrentAtt = (prvName == INTERNAL_PROVIDER_NAME) &&
 		isCurrentAccount(att->att_user, user, pwd, role);
 
 	ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
-	if (!isCurrent)
+	if (!isCurrentAtt)
 		prv->generateDPB(tdbb, dpb, user, pwd, role);
 
 	// look up at connections already bound to current attachment
-	Connection* conn = prv->getBoundConnection(tdbb, dbName, dpb, tra_scope);
+	Connection* conn = prv->getBoundConnection(tdbb, dbName, dpb, tra_scope, isCurrentAtt);
 	if (conn)
 		return conn;
 
@@ -214,20 +226,23 @@ Connection* Manager::getConnection(thread_db* tdbb, const string& dataSource,
 
 	ULONG hash = 0;
 
-	if (!isCurrent)
+	if (!isCurrentAtt)
 	{
+		CryptHash ch(att->att_crypt_callback);
 		hash = DefaultHash<UCHAR>::hash(dbName.c_str(), dbName.length(), MAX_ULONG) +
-			   DefaultHash<UCHAR>::hash(dpb.getBuffer(), dpb.getBufferLength(), MAX_ULONG);
+			   DefaultHash<UCHAR>::hash(dpb.getBuffer(), dpb.getBufferLength(), MAX_ULONG) +
+			   (ch.isValid() ? DefaultHash<UCHAR>::hash(ch.getValue(), ch.getLength(), MAX_ULONG) : 0);
 
 		while (true)
 		{
-			conn = m_connPool->getConnection(tdbb, prv, hash, dbName, dpb);
+			conn = m_connPool->getConnection(tdbb, prv, hash, dbName, dpb, ch);
 			if (!conn)
 				break;
 
 			if (conn->validate(tdbb))
 			{
 				prv->bindConnection(tdbb, conn);
+				conn->resetRedirect(att->att_crypt_callback);
 				break;
 			}
 
@@ -240,7 +255,7 @@ Connection* Manager::getConnection(thread_db* tdbb, const string& dataSource,
 	{
 		// finally, create new connection
 		conn = prv->createConnection(tdbb, dbName, dpb, tra_scope);
-		if (!isCurrent)
+		if (!isCurrentAtt)
 			m_connPool->addConnection(tdbb, conn, hash);
 	}
 
@@ -282,8 +297,7 @@ int Manager::shutdown()
 
 Provider::Provider(const char* prvName) :
 	m_name(getPool()),
-	m_connections(getPool()),
-	m_flags(0)
+	m_connections(getPool())
 {
 	m_name = prvName;
 }
@@ -327,7 +341,7 @@ void Provider::generateDPB(thread_db* tdbb, ClumpletWriter& dpb,
 		attachment->att_user->populateDpb(dpb, false);
 	}
 
-	CharSet* const cs = INTL_charset_lookup(tdbb, attachment->att_charset);
+	const CharSet* const cs = INTL_charset_lookup(tdbb, attachment->att_charset);
 	if (cs) {
 		dpb.insertString(isc_dpb_lc_ctype, cs->getName());
 	}
@@ -344,6 +358,9 @@ Connection* Provider::createConnection(thread_db* tdbb,
 {
 	Connection* conn = doCreateConnection();
 	conn->setup(dbName, dpb);
+	if (!conn->isCurrent())
+		conn->setCallbackRedirect(tdbb->getAttachment()->att_crypt_callback);
+
 	try
 	{
 		conn->attach(tdbb);
@@ -369,16 +386,19 @@ void Provider::bindConnection(thread_db* tdbb, Connection* conn)
 		m_connections.fastRemove();
 
 	conn->setBoundAtt(attachment);
-	bool ret = m_connections.add(AttToConn(attachment, conn));
+	const bool ret = m_connections.add(AttToConn(attachment, conn));
 	fb_assert(ret);
 }
 
 Connection* Provider::getBoundConnection(Jrd::thread_db* tdbb,
 	const Firebird::PathName& dbName, Firebird::ClumpletReader& dpb,
-	TraScope tra_scope)
+	TraScope tra_scope, bool isCurrentAtt)
 {
 	Database* dbb = tdbb->getDatabase();
 	Attachment* att = tdbb->getAttachment();
+	CryptHash ch;
+	if (!isCurrentAtt)
+		ch.assign(att->att_crypt_callback);
 
 	MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
@@ -392,7 +412,7 @@ Connection* Provider::getBoundConnection(Jrd::thread_db* tdbb,
 			if (conn->getBoundAtt() != att)
 				break;
 
-			if (conn->isSameDatabase(dbName, dpb) &&
+			if (conn->isSameDatabase(dbName, dpb, ch) &&
 				conn->isAvailable(tdbb, tra_scope))
 			{
 				fb_assert(conn->getProvider() == this);
@@ -402,6 +422,8 @@ Connection* Provider::getBoundConnection(Jrd::thread_db* tdbb,
 					continue;
 #endif
 
+				if (!isCurrentAtt)
+					conn->resetRedirect(att->att_crypt_callback);
 				return conn;
 			}
 		} while (acc.getNext());
@@ -441,9 +463,9 @@ void Provider::jrdAttachmentEnd(thread_db* tdbb, Jrd::Attachment* att, bool forc
 void Provider::releaseConnection(thread_db* tdbb, Connection& conn, bool inPool)
 {
 	ConnectionsPool* connPool = conn.getConnPool();
+	Attachment* att = conn.getBoundAtt();
 
 	{ // m_mutex scope
-		Attachment* att = conn.getBoundAtt();
 		MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
 		bool found = false;
@@ -464,7 +486,43 @@ void Provider::releaseConnection(thread_db* tdbb, Connection& conn, bool inPool)
 			m_connections.add(AttToConn(NULL, &conn));
 	}
 
-	if (!inPool || !connPool || !conn.isConnected() || !conn.resetSession(tdbb))
+	FbLocalStatus resetError;
+	inPool = inPool && connPool && connPool->getMaxCount() &&
+		conn.isConnected() && conn.hasValidCryptCallback();
+
+	if (inPool)
+	{
+		inPool = conn.resetSession(tdbb);
+
+		// Check if reset of external session failed when parent (local) attachment
+		// is resetting or run ON DISCONNECT trigger.
+
+		const auto status = tdbb->tdbb_status_vector;
+		if (!inPool && status->hasData())
+		{
+			if (att->att_flags & ATT_resetting)
+				resetError.loadFrom(status);
+			else
+			{
+				auto req = tdbb->getRequest();
+				while (req)
+				{
+					if (req->req_trigger_action == TRIGGER_DISCONNECT)
+					{
+						resetError.loadFrom(status);
+						break;
+					}
+					req = req->req_caller;
+				}
+			}
+		}
+	}
+
+	if (inPool)
+	{
+		connPool->putConnection(tdbb, &conn);
+	}
+	else
 	{
 		{	// scope
 			MutexLockGuard guard(m_mutex, FB_FUNCTION);
@@ -477,9 +535,8 @@ void Provider::releaseConnection(thread_db* tdbb, Connection& conn, bool inPool)
 			connPool->delConnection(tdbb, &conn, false);
 
 		Connection::deleteConnection(tdbb, &conn);
+		resetError.check();
 	}
-	else
-		connPool->putConnection(tdbb, &conn);
 }
 
 void Provider::clearConnections(thread_db* tdbb)
@@ -561,7 +618,7 @@ Connection::~Connection()
 	fb_assert(m_boundAtt == NULL);
 }
 
-bool Connection::isSameDatabase(const PathName& dbName, ClumpletReader& dpb) const
+bool Connection::isSameDatabase(const PathName& dbName, ClumpletReader& dpb, const CryptHash& hash) const
 {
 	if (m_dbName != dbName)
 		return false;
@@ -570,7 +627,8 @@ bool Connection::isSameDatabase(const PathName& dbName, ClumpletReader& dpb) con
 	// but in different order
 
 	const FB_SIZE_T len = m_dpb.getCount();
-	return (len == dpb.getBufferLength()) && (memcmp(m_dpb.begin(), dpb.getBuffer(), len) == 0);
+	return (len == dpb.getBufferLength()) && (memcmp(m_dpb.begin(), dpb.getBuffer(), len) == 0) &&
+		(m_cryptCallbackRedir == hash);
 }
 
 
@@ -783,7 +841,7 @@ void Connection::raise(const FbStatusVector* status, thread_db* /*tdbb*/, const 
 }
 
 
-bool Connection::getWrapErrors(const ISC_STATUS* status)
+bool Connection::getWrapErrors(const ISC_STATUS* status) noexcept
 {
 	// Detect if connection is broken
 	switch (status[1])
@@ -792,16 +850,17 @@ bool Connection::getWrapErrors(const ISC_STATUS* status)
 		case isc_net_read_err:
 		case isc_net_write_err:
 			m_broken = true;
-			break;
+			return m_wrapErrors;
 
 		// Always wrap shutdown errors, else user application will disconnect
 		case isc_att_shutdown:
 		case isc_shutdown:
 			m_broken = true;
 			return true;
-	}
 
-	return m_wrapErrors;
+		default:
+			return m_wrapErrors;
+	}
 }
 
 
@@ -870,11 +929,11 @@ ConnectionsPool::Data* ConnectionsPool::removeOldest()
 }
 
 Connection* ConnectionsPool::getConnection(thread_db* tdbb, Provider* prv, ULONG hash,
-	const PathName& dbName, ClumpletReader& dpb)
+	const PathName& dbName, ClumpletReader& dpb, const CryptHash& ch)
 {
 	MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
-	Data data(hash);
+	const Data data(hash);
 
 	FB_SIZE_T pos;
 	m_idleArray.find(data, pos);
@@ -886,7 +945,7 @@ Connection* ConnectionsPool::getConnection(thread_db* tdbb, Provider* prv, ULONG
 			break;
 
 		Connection* conn = item->m_conn;
-		if (conn->getProvider() == prv && conn->isSameDatabase(dbName, dpb))
+		if (conn->getProvider() == prv && conn->isSameDatabase(dbName, dpb, ch))
 		{
 			m_idleArray.remove(pos);
 			removeFromList(&m_idleList, item);
@@ -905,7 +964,8 @@ void ConnectionsPool::putConnection(thread_db* tdbb, Connection* conn)
 	fb_assert(conn->getConnPool() == this);
 
 	Connection* oldConn = NULL;
-	bool startIdleTimer = false;
+	Firebird::RefPtr<IdleTimer>	timer;
+
 	if (m_maxCount > 0)
 	{
 		MutexLockGuard guard(m_mutex, FB_FUNCTION);
@@ -917,7 +977,7 @@ void ConnectionsPool::putConnection(thread_db* tdbb, Connection* conn)
 			string str;
 			str.printf("Before put Item 0x%08X into pool\n", item);
 			printPool(str);
-			gds__log("Procces ID %d: connections pool is corrupted\n%s", getpid(), str.c_str());
+			gds__log("Process ID %d: connections pool is corrupted\n%s", getpid(), str.c_str());
 		}
 #endif
 
@@ -936,7 +996,7 @@ void ConnectionsPool::putConnection(thread_db* tdbb, Connection* conn)
 #ifdef EDS_DEBUG
 				string str;
 				str.printf("Item 0x%08X to put into pool is oldest", item);
-				gds__log("Procces ID %d: %s", getpid(), str.c_str());
+				gds__log("Process ID %d: %s", getpid(), str.c_str());
 #endif
 				m_allCount++;
 				oldest = removeOldest();
@@ -950,6 +1010,7 @@ void ConnectionsPool::putConnection(thread_db* tdbb, Connection* conn)
 		{
 			FB_SIZE_T pos;
 			fb_assert(m_idleArray.find(*item, pos));
+			FB_UNUSED_VAR(pos); // Silence compiler warning
 
 #ifdef EDS_DEBUG
 			const bool ok = verifyPool();
@@ -959,7 +1020,7 @@ void ConnectionsPool::putConnection(thread_db* tdbb, Connection* conn)
 			if (!ok)
 				printPool(str);
 
-			gds__log("Procces ID %d: %s", getpid(), str.c_str());
+			gds__log("Process ID %d: %s", getpid(), str.c_str());
 #endif
 		}
 		else
@@ -977,7 +1038,7 @@ void ConnectionsPool::putConnection(thread_db* tdbb, Connection* conn)
 			if (!m_timer)
 				m_timer = FB_NEW IdleTimer(*this);
 
-			startIdleTimer = true;
+			timer = m_timer;
 		}
 
 #ifdef EDS_DEBUG
@@ -986,7 +1047,7 @@ void ConnectionsPool::putConnection(thread_db* tdbb, Connection* conn)
 			string str;
 			str.printf("After put Item 0x%08X into pool\n", item);
 			printPool(str);
-			gds__log("Procces ID %d: connections pool is corrupted\n%s", getpid(), str.c_str());
+			gds__log("Process ID %d: connections pool is corrupted\n%s", getpid(), str.c_str());
 		}
 #endif
 	}
@@ -996,8 +1057,10 @@ void ConnectionsPool::putConnection(thread_db* tdbb, Connection* conn)
 	if (oldConn)
 		oldConn->getProvider()->releaseConnection(tdbb, *oldConn, false);
 
-	if (startIdleTimer)
-		m_timer->start();
+	// Note, m_timer could be cleared at this point - due to shutdown.
+	// Then m_idleList will be empty and start() will do nothing.
+	if (timer)
+		timer->start();
 }
 
 void ConnectionsPool::addConnection(thread_db* tdbb, Connection* conn, ULONG hash)
@@ -1017,7 +1080,7 @@ void ConnectionsPool::addConnection(thread_db* tdbb, Connection* conn, ULONG has
 			string str;
 			printPool(str);
 			str.printf("Before add Item 0x%08X into pool\n", item);
-			gds__log("Procces ID %d: connections pool is corrupted\n%s", getpid(), str.c_str());
+			gds__log("Process ID %d: connections pool is corrupted\n%s", getpid(), str.c_str());
 		}
 #endif
 		if (m_allCount >= m_maxCount)
@@ -1036,7 +1099,7 @@ void ConnectionsPool::addConnection(thread_db* tdbb, Connection* conn, ULONG has
 			string str;
 			printPool(str);
 			str.printf("After add Item 0x%08X into pool\n", item);
-			gds__log("Procces ID %d: connections pool is corrupted\n%s", getpid(), str.c_str());
+			gds__log("Process ID %d: connections pool is corrupted\n%s", getpid(), str.c_str());
 		}
 #endif
 	}
@@ -1057,7 +1120,7 @@ void ConnectionsPool::delConnection(thread_db* tdbb, Connection* conn, bool dest
 		{
 			string str;
 			str.printf("Item 0x%08X to delete from pool already not there", item);
-			gds__log("Procces ID %d: %s", getpid(), str.c_str());
+			gds__log("Process ID %d: %s", getpid(), str.c_str());
 		}
 #endif
 	}
@@ -1114,7 +1177,7 @@ void ConnectionsPool::clearIdle(thread_db* tdbb, bool all)
 		{
 			while (!m_idleArray.isEmpty())
 			{
-				FB_SIZE_T pos = m_idleArray.getCount() - 1;
+				const FB_SIZE_T pos = m_idleArray.getCount() - 1;
 				Data* item = m_idleArray[pos];
 				removeFromPool(item, pos);
 
@@ -1175,13 +1238,13 @@ void ConnectionsPool::clear(thread_db* tdbb)
 	{
 		string str;
 		printPool(str);
-		gds__log("Procces ID %d: connections pool is corrupted (clear)\n%s", getpid(), str.c_str());
+		gds__log("Process ID %d: connections pool is corrupted (clear)\n%s", getpid(), str.c_str());
 	}
 #endif
 
 	while (m_idleArray.getCount())
 	{
-		FB_SIZE_T i = m_idleArray.getCount() - 1;
+		const FB_SIZE_T i = m_idleArray.getCount() - 1;
 		Data* data = m_idleArray[i];
 		Connection* conn = data->m_conn;
 
@@ -1925,12 +1988,12 @@ void Statement::deallocate(thread_db* tdbb)
 
 enum TokenType {ttNone, ttWhite, ttComment, ttBrokenComment, ttString, ttParamMark, ttIdent, ttOther};
 
-static TokenType getToken(const char** begin, const char* end)
+static TokenType getToken(const char** begin, const char* end) noexcept
 {
 	TokenType ret = ttNone;
 	const char* p = *begin;
 
-	char c = *p++;
+	const char c = *p++;
 	switch (c)
 	{
 	case ':':
@@ -2112,7 +2175,7 @@ void Statement::preprocess(const string& sql, string& ret)
 				}
 
 				FB_SIZE_T n = 0;
-				MetaString name(ident);
+				const MetaString name(ident);
 				if (!m_sqlParamNames.find(name, n))
 					n = m_sqlParamNames.add(name);
 
@@ -2139,7 +2202,7 @@ void Statement::preprocess(const string& sql, string& ret)
 					return;
 				}
 			}
-			// fall thru
+			[[fallthrough]];
 
 		case ttWhite:
 		case ttComment:
@@ -2174,6 +2237,12 @@ void Statement::setInParams(thread_db* tdbb, const MetaName* const* names,
 	const FB_SIZE_T count = params ? params->items.getCount() : 0;
 	const FB_SIZE_T excCount = in_excess ? in_excess->getCount() : 0;
 	const FB_SIZE_T sqlCount = m_sqlParamNames.getCount();
+
+	if ((m_error = (!names && sqlCount)))
+	{
+		// Parameter name expected
+		ERR_post(Arg::Gds(isc_eds_prm_name_expected));
+	}
 
 	// OK : count - excCount <= sqlCount <= count
 
@@ -2374,7 +2443,7 @@ void Statement::getExtBlob(thread_db* tdbb, const dsc& src, dsc& dst)
 		destBlob->blb_charset = src.getCharSet();
 
 		Array<UCHAR> buffer;
-		const int bufSize = 32 * 1024 - 2/*input->getMaxSegment()*/;
+		constexpr int bufSize = 32 * 1024 - 2/*input->getMaxSegment()*/;
 		UCHAR* buff = buffer.getBuffer(bufSize);
 
 		while (true)
@@ -2421,7 +2490,7 @@ void Statement::putExtBlob(thread_db* tdbb, dsc& src, dsc& dst)
 
 		while (true)
 		{
-			USHORT length = srcBlob->BLB_get_segment(tdbb, buff, srcBlob->getMaxSegment());
+			const USHORT length = srcBlob->BLB_get_segment(tdbb, buff, srcBlob->getMaxSegment());
 			if (srcBlob->blb_flags & BLB_eof) {
 				break;
 			}
@@ -2580,6 +2649,65 @@ EngineCallbackGuard::~EngineCallbackGuard()
 		if (transaction)
 			transaction->tra_callback_count--;
 	}
+}
+
+
+// CryptHash
+
+CryptHash::CryptHash(ICryptKeyCallback* callback)
+	: m_value(*getDefaultMemoryPool())
+{
+	assign(callback);
+}
+
+CryptHash::CryptHash()
+	: m_value(*getDefaultMemoryPool())
+{ }
+
+void CryptHash::assign(ICryptKeyCallback* callback)
+{
+	fb_assert(!isValid());
+
+	FbLocalStatus status;
+
+	const int len = callback->getHashLength(&status);
+	if (len > 0 && status.isSuccess())
+		callback->getHashData(&status, m_value.getBuffer(len));
+
+	m_valid = (len >= 0) && status.isSuccess();
+}
+
+bool CryptHash::operator==(const CryptHash& h) const
+{
+	return (isValid() == h.isValid()) && (m_value == h.m_value);
+}
+
+
+// CryptCallbackRedirector
+
+void CryptCallbackRedirector::setRedirect(Firebird::ICryptKeyCallback* originalCallback)
+{
+	m_hash.assign(originalCallback);
+
+	if (m_hash.isValid())
+		m_keyCallback = originalCallback;
+}
+
+void CryptCallbackRedirector::resetRedirect(Firebird::ICryptKeyCallback* newCallback)
+{
+#ifdef DEV_BUILD
+	CryptHash ch(newCallback);
+	fb_assert(m_hash.isValid() == ch.isValid());
+	fb_assert(m_hash == ch);
+#endif
+
+	if (m_hash.isValid())
+		m_keyCallback = newCallback;
+}
+
+bool CryptCallbackRedirector::operator==(const CryptHash& ch) const
+{
+	return m_hash == ch;
 }
 
 } // namespace EDS

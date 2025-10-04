@@ -3,8 +3,8 @@
 //  Software License, Version 1.0. (See accompanying file
 //  LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-#ifndef BOOST_MP_PRECISION_HPP
-#define BOOST_MP_PRECISION_HPP
+#ifndef BOOST_MP_DETAIL_PRECISION_HPP
+#define BOOST_MP_DETAIL_PRECISION_HPP
 
 #include <boost/multiprecision/traits/is_variable_precision.hpp>
 #include <boost/multiprecision/detail/number_base.hpp>
@@ -310,4 +310,4 @@ struct scoped_precision_options<T, false>
 }
 } // namespace boost::multiprecision::detail
 
-#endif // BOOST_MP_IS_BACKEND_HPP
+#endif // BOOST_MP_DETAIL_PRECISION_HPP

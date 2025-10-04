@@ -35,7 +35,7 @@
 	facilities provided by the host operating system.  The class provides
 	functions to determine if the file at a given path is a loadable module,
 	to load that module, and to modify the filename in a way that is
-	appropiate to the host computer.
+	appropriate to the host computer.
 
 	All implementations of this interface are expected to provide definitions
 	for the 3 static functions in the ModuleLoader class, and provide a
@@ -55,12 +55,14 @@ public:
 	class Module
 	{
 	public:
-		/** findSymbol searchs through the module after it has been loaded into
+		/** findSymbol searches through the module after it has been loaded into
 			memory, and returns a pointer to that symbol's location in memory.
 			If the symbol can't be found or doesn't exist the function returns
 			NULL.
 		**/
 		virtual void* findSymbol(ISC_STATUS*, const Firebird::string&) = 0;
+
+		virtual bool getRealPath(const Firebird::string& anySymbol, Firebird::PathName& path) = 0;
 
 		template <typename T> T& findSymbol(ISC_STATUS* status, const Firebird::string& symbol, T& ptr)
 		{
@@ -70,11 +72,12 @@ public:
 		/// Destructor
 		virtual ~Module() {}
 
-		const Firebird::PathName fileName;
+		/// Copy construction is not supported
+		Module(const Module&) = delete;
+		/// assignment of Modules isn't supported
+		const Module& operator=(const Module&) = delete;
 
-#ifdef LINUX
-		virtual bool getRealPath(Firebird::PathName& path) = 0;
-#endif
+		const Firebird::PathName fileName;
 
 	protected:
 		/// The constructor is protected so normal code can't allocate instances
@@ -84,11 +87,6 @@ public:
 		{
 		}
 
-	private:
-		/// Copy construction is not supported, hence the copy constructor is private
-		Module(const Module&);		// no impl
-		/// assignment of Modules isn't supported so the assignment operator is private
-		const Module& operator=(const Module&);		// no impl
 	};
 
 	/** loadModule is given as a string the path to the module to load.  It
@@ -101,12 +99,12 @@ public:
 	static Module* loadModule(ISC_STATUS* status, const Firebird::PathName&);
 
 	/** doctorModuleExtension modifies the given path name to add the platform
-		specific module extention.  This allows the user to provide the root name
-		of the file, and the code to append the correct extention regardless of the
+		specific module extension.  This allows the user to provide the root name
+		of the file, and the code to append the correct extension regardless of the
 		host operating system. This process can take several iterations before final
 		form of name is reached.
 		This function is typically called after a failed attempt
-		to load the module without the extention.
+		to load the module without the extension.
 		Initialize step to zero before use.
 		Return false if no name modification can be done anymore.
 	**/

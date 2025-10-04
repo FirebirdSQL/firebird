@@ -53,6 +53,49 @@ class Database;
 class Attachment;
 class jrd_tra;
 
+
+class StatementHolder
+{
+public:
+	explicit StatementHolder(const Statement* statement)
+		: m_statement(statement)
+	{}
+
+	explicit StatementHolder(const Request* request)
+		: m_statement(request ? request->getStatement() : nullptr)
+	{}
+
+	SINT64 getId() const
+	{
+		return m_statement ? m_statement->getStatementId() : 0;
+	}
+
+	Firebird::string getName() const
+	{
+		if (m_statement)
+		{
+			if (m_statement->procedure)
+				return m_statement->procedure->getName().toQuotedString();
+
+			if (m_statement->function)
+				return m_statement->function->getName().toQuotedString();
+
+			if (m_statement->triggerName.object.hasData())
+				return m_statement->triggerName.toQuotedString();
+		}
+
+		return "";
+	}
+
+	const char* ensurePlan(bool explained);
+
+private:
+	const Statement* const m_statement;
+	Firebird::string m_plan;
+	bool m_planExplained = false;
+};
+
+
 class TraceConnectionImpl :
 	public Firebird::AutoIface<Firebird::ITraceDatabaseConnectionImpl<TraceConnectionImpl, Firebird::CheckStatusWrapper> >
 {
@@ -174,14 +217,15 @@ public:
 
 
 class TraceSQLStatementImpl :
-	public Firebird::AutoIface<Firebird::ITraceSQLStatementImpl<TraceSQLStatementImpl, Firebird::CheckStatusWrapper> >
+	public Firebird::AutoIface<Firebird::ITraceSQLStatementImpl<TraceSQLStatementImpl, Firebird::CheckStatusWrapper> >,
+	public StatementHolder
 {
 public:
-	TraceSQLStatementImpl(DsqlRequest* stmt, Firebird::PerformanceInfo* perf) :
+	TraceSQLStatementImpl(DsqlRequest* stmt, Firebird::PerformanceInfo* perf, const UCHAR* inputBuffer) :
+		StatementHolder(stmt ? stmt->getStatement() : nullptr),
 		m_stmt(stmt),
 		m_perf(perf),
-		m_planExplained(false),
-		m_inputs(*getDefaultMemoryPool(), m_stmt)
+		m_inputs(stmt, inputBuffer)
 	{}
 
 	// TraceSQLStatement implementation
@@ -189,44 +233,43 @@ public:
 	Firebird::PerformanceInfo* getPerf();
 	Firebird::ITraceParams* getInputs();
 	const char* getText();
-	const char* getPlan();
 	const char* getTextUTF8();
-	const char* getExplainedPlan();
+
+	const char* getPlan()
+	{
+		return ensurePlan(false);
+	}
+
+	const char* getExplainedPlan()
+	{
+		return ensurePlan(true);
+	}
 
 private:
 	class DSQLParamsImpl :
 		public Firebird::AutoIface<Firebird::ITraceParamsImpl<DSQLParamsImpl, Firebird::CheckStatusWrapper> >
 	{
 	public:
-		DSQLParamsImpl(Firebird::MemoryPool& pool, DsqlRequest* const stmt) :
-			m_stmt(stmt),
-			m_params(NULL),
-			m_descs(pool)
+		explicit DSQLParamsImpl(DsqlRequest* const stmt, const UCHAR* const inputBuffer) :
+			m_stmt(stmt), m_buffer(inputBuffer)
 		{
-			const dsql_msg* msg = m_stmt->getDsqlStatement()->getSendMsg();
-			if (msg)
-				m_params = &msg->msg_parameters;
 		}
 
 		FB_SIZE_T getCount();
-		const dsc* getParam(FB_SIZE_T idx);
+		const paramdsc* getParam(FB_SIZE_T idx);
 		const char* getTextUTF8(Firebird::CheckStatusWrapper* status, FB_SIZE_T idx);
 
 	private:
 		void fillParams();
 
 		DsqlRequest* const m_stmt;
-		const Firebird::Array<dsql_par*>* m_params;
-		Firebird::HalfStaticArray<dsc, 16> m_descs;
-		Firebird::string temp_utf8_text;
+		const UCHAR* m_buffer;
+		Firebird::HalfStaticArray<paramdsc, 16> m_descs;
+		Firebird::string m_tempUTF8;
 	};
-
-	void fillPlan(bool explained);
 
 	DsqlRequest* const m_stmt;
 	Firebird::PerformanceInfo* const m_perf;
-	Firebird::string m_plan;
-	bool m_planExplained;
 	DSQLParamsImpl m_inputs;
 	Firebird::string m_textUTF8;
 };
@@ -290,20 +333,19 @@ public:
 
 	// TraceParams implementation
 	FB_SIZE_T getCount();
-	const dsc* getParam(FB_SIZE_T idx);
+	const paramdsc* getParam(FB_SIZE_T idx);
 	const char* getTextUTF8(Firebird::CheckStatusWrapper* status, FB_SIZE_T idx);
 
 private:
 	TraceDescriptors* m_descs;
-	Firebird::string temp_utf8_text;
+	Firebird::string m_tempUTF8;
 };
 
 
 class TraceDescriptors
 {
 public:
-	explicit TraceDescriptors(Firebird::MemoryPool& pool) :
-		m_descs(pool),
+	TraceDescriptors() :
 		m_traceParams(this)
 	{
 	}
@@ -314,11 +356,11 @@ public:
 		return m_descs.getCount();
 	}
 
-	const dsc* getParam(FB_SIZE_T idx)
+	const paramdsc* getParam(FB_SIZE_T idx)
 	{
 		fillParams();
 
-		if (/*idx >= 0 &&*/ idx < m_descs.getCount())
+		if (idx < m_descs.getCount())
 			return &m_descs[idx];
 
 		return NULL;
@@ -332,7 +374,7 @@ public:
 protected:
 	virtual void fillParams() = 0;
 
-	Firebird::HalfStaticArray<dsc, 16> m_descs;
+	Firebird::HalfStaticArray<paramdsc, 16> m_descs;
 
 private:
 	TraceParamsImpl	m_traceParams;
@@ -342,8 +384,7 @@ private:
 class TraceDscFromValues : public TraceDescriptors
 {
 public:
-	TraceDscFromValues(Firebird::MemoryPool& pool, Request* request, const ValueListNode* params) :
-		TraceDescriptors(pool),
+	TraceDscFromValues(Request* request, const ValueListNode* params) :
 		m_request(request),
 		m_params(params)
 	{}
@@ -352,17 +393,15 @@ protected:
 	void fillParams();
 
 private:
-	Request* m_request;
-	const ValueListNode* m_params;
+	Request* const m_request;
+	const ValueListNode* const m_params;
 };
 
 
 class TraceDscFromMsg : public TraceDescriptors
 {
 public:
-	TraceDscFromMsg(Firebird::MemoryPool& pool, const Format* format,
-		const UCHAR* inMsg, ULONG inMsgLength) :
-		TraceDescriptors(pool),
+	TraceDscFromMsg(const Format* format, const UCHAR* inMsg, ULONG inMsgLength) :
 		m_format(format),
 		m_inMsg(inMsg),
 		m_inMsgLength(inMsgLength)
@@ -372,24 +411,23 @@ protected:
 	void fillParams();
 
 private:
-	const Format* m_format;
-	const UCHAR* m_inMsg;
-	ULONG m_inMsgLength;
+	const Format* const m_format;
+	const UCHAR* const m_inMsg;
+	const ULONG m_inMsgLength;
 };
 
 
 class TraceDscFromDsc : public TraceDescriptors
 {
 public:
-	TraceDscFromDsc(Firebird::MemoryPool& pool, const dsc* desc) :
-		TraceDescriptors(pool)
+	TraceDscFromDsc(const dsc* desc)
 	{
 		if (desc)
 			m_descs.add(*desc);
 		else
 		{
 			m_descs.grow(1);
-			m_descs[0].setNull();
+			m_descs[0].dsc_flags |= DSC_null;
 		}
 	}
 
@@ -399,15 +437,22 @@ protected:
 
 
 class TraceProcedureImpl :
-	public Firebird::AutoIface<Firebird::ITraceProcedureImpl<TraceProcedureImpl, Firebird::CheckStatusWrapper> >
+	public Firebird::AutoIface<Firebird::ITraceProcedureImpl<TraceProcedureImpl, Firebird::CheckStatusWrapper> >,
+	public StatementHolder
 {
 public:
-	TraceProcedureImpl(Request* request, Firebird::PerformanceInfo* perf) :
-		m_request(request),
-		m_perf(perf),
-		m_inputs(*getDefaultMemoryPool(), request->req_proc_caller, request->req_proc_inputs),
-		m_name(m_request->getStatement()->procedure->getName().toString())
+	TraceProcedureImpl(const Firebird::string& name, const Statement* statement) :
+		StatementHolder(statement),
+		m_name(name),
+		m_perf(nullptr),
+		m_inputs(nullptr, nullptr)
+	{}
 
+	TraceProcedureImpl(Request* request, Firebird::PerformanceInfo* perf) :
+		StatementHolder(request),
+		m_name(getName()),
+		m_perf(perf),
+		m_inputs(request->req_proc_caller, request->req_proc_inputs)
 	{}
 
 	// TraceProcedure implementation
@@ -416,27 +461,58 @@ public:
 		return m_name.c_str();
 	}
 
-	Firebird::ITraceParams* getInputs()	{ return m_inputs; }
-	Firebird::PerformanceInfo* getPerf()	{ return m_perf; };
+	Firebird::ITraceParams* getInputs()
+	{
+		return m_inputs;
+	}
+
+	Firebird::PerformanceInfo* getPerf()
+	{
+		return m_perf;
+	};
+
+	ISC_INT64 getStmtID()
+	{
+		return getId();
+	}
+
+	const char* getPlan()
+	{
+		return ensurePlan(false);
+	}
+
+	const char* getExplainedPlan()
+	{
+		return ensurePlan(true);
+	}
 
 private:
-	Request* const m_request;
+	const Firebird::string m_name;
 	Firebird::PerformanceInfo* const m_perf;
 	TraceDscFromValues m_inputs;
-	Firebird::string m_name;
 };
 
 
 class TraceFunctionImpl :
-	public Firebird::AutoIface<Firebird::ITraceFunctionImpl<TraceFunctionImpl, Firebird::CheckStatusWrapper> >
+	public Firebird::AutoIface<Firebird::ITraceFunctionImpl<TraceFunctionImpl, Firebird::CheckStatusWrapper> >,
+	public StatementHolder
 {
 public:
-	TraceFunctionImpl(Request* request, Firebird::ITraceParams* inputs, Firebird::PerformanceInfo* perf, const dsc* value) :
-		m_request(request),
+	TraceFunctionImpl(const Firebird::string& name, const Statement* statement) :
+		StatementHolder(statement),
+		m_name(name),
+		m_perf(nullptr),
+		m_inputs(nullptr),
+		m_value(nullptr)
+	{}
+
+	TraceFunctionImpl(Request* request, Firebird::PerformanceInfo* perf,
+					  Firebird::ITraceParams* inputs, const dsc* value) :
+		StatementHolder(request),
+		m_name(getName()),
 		m_perf(perf),
 		m_inputs(inputs),
-		m_value(*getDefaultMemoryPool(), value),
-		m_name(m_request->getStatement()->function->getName().toString())
+		m_value(value)
 	{}
 
 	// TraceFunction implementation
@@ -445,39 +521,115 @@ public:
 		return m_name.c_str();
 	}
 
-	Firebird::ITraceParams* getInputs()	{ return m_inputs; }
-	Firebird::ITraceParams* getResult()	{ return m_value; }
-	Firebird::PerformanceInfo* getPerf()	{ return m_perf; };
+	Firebird::ITraceParams* getInputs()
+	{
+		return m_inputs;
+	}
+
+	Firebird::ITraceParams* getResult()
+	{
+		return m_value;
+	}
+
+	Firebird::PerformanceInfo* getPerf()
+	{
+		return m_perf;
+	};
+
+	ISC_INT64 getStmtID()
+	{
+		return getId();
+	}
+
+	const char* getPlan()
+	{
+		return ensurePlan(false);
+	}
+
+	const char* getExplainedPlan()
+	{
+		return ensurePlan(true);
+	}
 
 private:
-	Request* const m_request;
-	Firebird::PerformanceInfo* const m_perf;
-	Firebird::ITraceParams* m_inputs;
-	TraceDscFromDsc m_value;
 	Firebird::string m_name;
+	Firebird::PerformanceInfo* const m_perf;
+	Firebird::ITraceParams* const m_inputs;
+	TraceDscFromDsc m_value;
 };
 
 
 class TraceTriggerImpl :
-	public Firebird::AutoIface<Firebird::ITraceTriggerImpl<TraceTriggerImpl, Firebird::CheckStatusWrapper> >
+	public Firebird::AutoIface<Firebird::ITraceTriggerImpl<TraceTriggerImpl, Firebird::CheckStatusWrapper> >,
+	public StatementHolder
 {
 public:
-	TraceTriggerImpl(const Request* trig, SSHORT which, Firebird::PerformanceInfo* perf) :
-	  m_trig(trig),
-	  m_which(which),
-	  m_perf(perf)
+	TraceTriggerImpl(const Firebird::string& name, const Firebird::string& relationName,
+		int which, int action, const Statement* statement) :
+		StatementHolder(statement),
+		m_name(name),
+		m_relationName(relationName),
+		m_which(which),
+		m_action(action),
+		m_perf(nullptr)
+	{}
+
+	TraceTriggerImpl(int which, const Request* request, Firebird::PerformanceInfo* perf) :
+		StatementHolder(request),
+		m_name(getName()),
+		m_relationName((request->req_rpb.hasData() && request->req_rpb[0].rpb_relation) ?
+			request->req_rpb[0].rpb_relation->rel_name.toQuotedString() : ""),
+		m_which(which),
+		m_action(request->req_trigger_action),
+		m_perf(perf)
 	{}
 
 	// TraceTrigger implementation
-	const char* getTriggerName();
-	const char* getRelationName();
-	int getAction()				{ return m_trig->req_trigger_action; }
-	int getWhich()				{ return m_which; }
-	Firebird::PerformanceInfo* getPerf()	{ return m_perf; }
+	const char* getTriggerName()
+	{
+		return m_name.nullStr();
+	}
+
+	const char* getRelationName()
+	{
+		return m_relationName.nullStr();
+	}
+
+	int getWhich()
+	{
+		return m_which;
+	}
+
+	int getAction()
+	{
+		return m_action;
+	}
+
+	Firebird::PerformanceInfo* getPerf()
+	{
+		return m_perf;
+	}
+
+	ISC_INT64 getStmtID()
+	{
+		return getId();
+	}
+
+	const char* getPlan()
+	{
+		return ensurePlan(false);
+	}
+
+	const char* getExplainedPlan()
+	{
+		return ensurePlan(true);
+	}
 
 private:
-	const Request* const m_trig;
-	const SSHORT m_which;
+	const Firebird::string m_name;
+	const Firebird::string m_relationName;
+	const int m_which;
+	const int m_action;
 	Firebird::PerformanceInfo* const m_perf;
 };
 
@@ -521,7 +673,8 @@ public:
 private:
 	Firebird::PerformanceInfo m_info;
 	TraceCountsArray m_counts;
-	static SINT64 m_dummy_counts[RuntimeStatistics::TOTAL_ITEMS];	// Zero-initialized array with zero counts
+	Firebird::ObjectsArray<Firebird::string> m_tempNames;
+	static SINT64 m_dummy_counts[RuntimeStatistics::GLOBAL_ITEMS];	// Zero-initialized array with zero counts
 };
 
 
@@ -617,10 +770,10 @@ public:
 
 	void update(const Ods::header_page* header)
 	{
-		m_oit = Ods::getOIT(header);
-		m_ost = Ods::getOST(header);
-		m_oat = Ods::getOAT(header);
-		m_next = Ods::getNT(header);
+		m_oit = header->hdr_oldest_transaction;
+		m_ost = header->hdr_oldest_snapshot;
+		m_oat = header->hdr_oldest_active;
+		m_next = header->hdr_next_transaction;
 	}
 
 	void setPerf(Firebird::PerformanceInfo* perf)

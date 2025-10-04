@@ -34,8 +34,8 @@
 
 // This setting of maximum dpb size doesn't mean, that we
 // can't process larger DBPs! This is just recommended limit
-// cause it's hard to imagine sensefull DPB of even this size.
-const FB_SIZE_T MAX_DPB_SIZE = 1024 * 1024;
+// cause it's hard to imagine a useful DPB of even this size.
+inline constexpr FB_SIZE_T MAX_DPB_SIZE = 1024 * 1024;
 
 namespace Firebird {
 
@@ -66,6 +66,7 @@ public:
 
 	void reset(UCHAR tag = 0);
 	void reset(const UCHAR* buffer, const FB_SIZE_T buffLen);
+	void reset(const ClumpletWriter& from);
 	void clear();
 
 	// Methods to create new clumplet at current position
@@ -99,7 +100,7 @@ public:
 	bool deleteWithTag(UCHAR tag);
 
 	const UCHAR* getBuffer() const override;
-	bool hasOverflow() const
+	bool hasOverflow() const noexcept
 	{
 		return flag_overflow;
 	}

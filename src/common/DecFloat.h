@@ -66,7 +66,7 @@ struct DecFloatConstant
 //#define FB_DECLOAT_CONST(x) { STRINGIZE(x), x }
 #define FB_DECLOAT_CONST(x) { #x, x }
 
-const DecFloatConstant FB_DEC_RoundModes[] = {
+inline constexpr DecFloatConstant FB_DEC_RoundModes[] = {
 	FB_DECLOAT_CONST(DEC_ROUND_CEILING),
 	FB_DECLOAT_CONST(DEC_ROUND_UP),
 	FB_DECLOAT_CONST(DEC_ROUND_HALF_UP),
@@ -80,9 +80,9 @@ const DecFloatConstant FB_DEC_RoundModes[] = {
 
 //DEC_ROUND_
 //0123456789
-const unsigned FB_DEC_RMODE_OFFSET = 10;
+inline constexpr unsigned FB_DEC_RMODE_OFFSET = 10;
 
-const DecFloatConstant FB_DEC_IeeeTraps[] = {
+inline constexpr DecFloatConstant FB_DEC_IeeeTraps[] = {
 	FB_DECLOAT_CONST(DEC_IEEE_754_Division_by_zero),
 	FB_DECLOAT_CONST(DEC_IEEE_754_Inexact),
 	FB_DECLOAT_CONST(DEC_IEEE_754_Invalid_operation),
@@ -93,18 +93,18 @@ const DecFloatConstant FB_DEC_IeeeTraps[] = {
 
 //DEC_IEEE_754_
 //0123456789012
-const unsigned FB_DEC_TRAPS_OFFSET = 13;
+inline constexpr unsigned FB_DEC_TRAPS_OFFSET = 13;
 
 #undef FB_DECLOAT_CONST
 
-static const USHORT FB_DEC_Errors =
+static inline constexpr USHORT FB_DEC_Errors =
 	DEC_IEEE_754_Division_by_zero |
 	DEC_IEEE_754_Invalid_operation |
 	DEC_IEEE_754_Overflow;
 
 struct DecimalStatus
 {
-	DecimalStatus(USHORT exc)
+	DecimalStatus(USHORT exc) noexcept
 		: decExtFlag(exc),
 		  roundingMode(DEC_ROUND_HALF_UP)
 	{}
@@ -112,6 +112,9 @@ struct DecimalStatus
 	static const DecimalStatus DEFAULT;
 
 	USHORT decExtFlag, roundingMode;
+
+	string getTxtRound();
+	string getTxtTraps();
 };
 
 struct NumericBinding
@@ -124,18 +127,18 @@ struct NumericBinding
 		NUM_INT64
 	};
 
-	NumericBinding()
+	NumericBinding() noexcept
 		: bind(NUM_NATIVE),
 		  numScale(0)
 	{}
 
-	NumericBinding(Bind aBind, SCHAR aNumScale = 0)
+	NumericBinding(Bind aBind, SCHAR aNumScale = 0) noexcept
 		: bind(aBind),
 		  numScale(aNumScale)
 	{}
 
 	static const NumericBinding DEFAULT;
-	static const SCHAR MAX_SCALE = 18;
+	static inline constexpr SCHAR MAX_SCALE = 18;
 
 	Bind bind;
 	SCHAR numScale;
@@ -172,7 +175,7 @@ public:
 	bool isNan() const;
 	int sign() const;
 
-	static ULONG getKeyLength()
+	static constexpr ULONG getKeyLength() noexcept
 	{
 		return sizeof(Decimal64) + sizeof(ULONG);
 	}
@@ -248,7 +251,7 @@ public:
 	bool isNan() const;
 	int sign() const;
 
-	static ULONG getKeyLength()
+	static constexpr ULONG getKeyLength() noexcept
 	{
 		return sizeof(Decimal128) + sizeof(ULONG);
 	}
@@ -256,7 +259,7 @@ public:
 	void makeKey(ULONG* key) const;
 	void grabKey(ULONG* key);
 
-	static ULONG getIndexKeyLength()
+	static constexpr ULONG getIndexKeyLength() noexcept
 	{
 		return 17;
 	}
@@ -310,8 +313,8 @@ public:
 static_assert(sizeof(Decimal64) % sizeof(ULONG) == 0, "Decimal64 size mismatch");
 static_assert(sizeof(Decimal128) % sizeof(ULONG) == 0, "Decimal128 size mismatch");
 
-static const size_t MAX_DEC_LONGS = MAX(sizeof(Decimal64), sizeof(Decimal128)) >> SHIFTLONG;
-static const size_t MAX_DEC_KEY_LONGS = MAX_DEC_LONGS + 1; // key is one longword bigger
+static inline constexpr size_t MAX_DEC_LONGS = MAX(sizeof(Decimal64), sizeof(Decimal128)) >> SHIFTLONG;
+static inline constexpr size_t MAX_DEC_KEY_LONGS = MAX_DEC_LONGS + 1; // key is one longword bigger
 
 } // namespace Firebird
 

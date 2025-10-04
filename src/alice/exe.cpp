@@ -52,7 +52,7 @@ static void buildDpb(Firebird::ClumpletWriter&, const SINT64);
 static void extract_db_info(const UCHAR*, size_t);
 
 // Keep always in sync with function extract_db_info()
-static const TEXT val_errors[] =
+static constexpr TEXT val_errors[] =
 {
 	isc_info_page_errors, isc_info_record_errors, isc_info_bpage_errors,
 	isc_info_dpage_errors, isc_info_ipage_errors, isc_info_ppage_errors,
@@ -126,7 +126,7 @@ int EXE_action(const TEXT* database, const SINT64 switches)
 
 		if (error)
 		{
-			tdgbl->uSvc->setServiceStatus(tdgbl->status);
+			tdgbl->uSvc->getStatusAccessor().setServiceStatus(tdgbl->status);
 		}
 	}
 
@@ -182,7 +182,7 @@ int EXE_two_phase(const TEXT* database, const SINT64 switches)
 
 		if (error)
 		{
-			tdgbl->uSvc->setServiceStatus(tdgbl->status);
+			tdgbl->uSvc->getStatusAccessor().setServiceStatus(tdgbl->status);
 		}
 	}
 
@@ -202,6 +202,7 @@ static void buildDpb(Firebird::ClumpletWriter& dpb, const SINT64 switches)
 	dpb.reset(isc_dpb_version1);
 	dpb.insertTag(isc_dpb_gfix_attach);
 	tdgbl->uSvc->fillDpb(dpb);
+	dpb.insertString(isc_dpb_search_path, SYSTEM_SCHEMA);
 
 	if (switches & sw_sweep) {
 		dpb.insertByte(isc_dpb_sweep, isc_dpb_records);
@@ -256,8 +257,6 @@ static void buildDpb(Firebird::ClumpletWriter& dpb, const SINT64 switches)
 		UCHAR b = 0;
 		if (switches & sw_attach)
 			b |= isc_dpb_shut_attachment;
-		else if (switches & sw_cache)
-			b |= isc_dpb_shut_cache;
 		else if (switches & sw_force)
 			b |= isc_dpb_shut_force;
 		else if (switches & sw_tran)
@@ -325,7 +324,7 @@ static void buildDpb(Firebird::ClumpletWriter& dpb, const SINT64 switches)
 		dpb.insertByte(isc_dpb_set_db_replica, tdgbl->ALICE_data.ua_replica_mode);
 	}
 
-	if (switches & sw_parallel_workers) {
+	if (tdgbl->ALICE_data.ua_parallel_workers > 0) {
 		dpb.insertInt(isc_dpb_parallel_workers, tdgbl->ALICE_data.ua_parallel_workers);
 	}
 
@@ -335,8 +334,11 @@ static void buildDpb(Firebird::ClumpletWriter& dpb, const SINT64 switches)
 	if (switches & sw_icu)
 		dpb.insertTag(isc_dpb_reset_icu);
 
+	if (switches & sw_upgrade)
+		dpb.insertTag(isc_dpb_upgrade_db);
+
 	const unsigned char* authBlock;
-	unsigned int authBlockSize = tdgbl->uSvc->getAuthBlock(&authBlock);
+	const unsigned int authBlockSize = tdgbl->uSvc->getAuthBlock(&authBlock);
 
 	if (authBlockSize)
 	{

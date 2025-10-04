@@ -41,9 +41,9 @@ namespace
 	Firebird::SimpleFactory<Auth::WinSspiClient> clientFactory;
 	Firebird::SimpleFactory<Auth::WinSspiServer> serverFactory;
 
-	const char* plugName = "Win_Sspi";
+	constexpr const char* plugName = "Win_Sspi";
 
-	void makeDesc(SecBufferDesc& d, SecBuffer& b, FB_SIZE_T len, void* p)
+	void makeDesc(SecBufferDesc& d, SecBuffer& b, FB_SIZE_T len, void* p) noexcept
 	{
 		b.BufferType = SECBUFFER_TOKEN;
 		b.cbBuffer = len;
@@ -57,7 +57,7 @@ namespace
 		ToType getProc(HINSTANCE lib, const char* entry)
 	{
 		FARPROC rc = GetProcAddress(lib, entry);
-		if (! rc)
+		if (!rc)
 		{
 			LongJump::raise();
 		}
@@ -67,15 +67,24 @@ namespace
 
 namespace Auth {
 
+
+static thread_local bool legacySSP = false;
+
+void setLegacySSP(bool value) noexcept
+{
+	legacySSP = value;
+}
+
+
 HINSTANCE AuthSspi::library = 0;
 
-bool AuthSspi::initEntries()
+bool AuthSspi::initEntries() noexcept
 {
-	if (! library)
+	if (!library)
 	{
 		library = LoadLibrary("secur32.dll");
 	}
-	if (! library)
+	if (!library)
 	{
 		return false;
 	}
@@ -109,8 +118,9 @@ AuthSspi::AuthSspi()
 	  groupNames(*getDefaultMemoryPool()), sessionKey(*getDefaultMemoryPool())
 {
 	TimeStamp timeOut;
-	hasCredentials = initEntries() && (fAcquireCredentialsHandle(0, "NTLM",
-					SECPKG_CRED_BOTH, 0, 0, 0, 0,
+	hasCredentials = initEntries() && (fAcquireCredentialsHandle(nullptr,
+					const_cast<SEC_CHAR*>(legacySSP ? NTLMSP_NAME_A : NEGOSSP_NAME_A),
+					SECPKG_CRED_BOTH, nullptr, nullptr, 0, nullptr,
 					&secHndl, &timeOut) == SEC_E_OK);
 }
 
@@ -126,7 +136,7 @@ AuthSspi::~AuthSspi()
 	}
 }
 
-const AuthSspi::Key* AuthSspi::getKey() const
+const AuthSspi::Key* AuthSspi::getKey() const noexcept
 {
 	if (sessionKey.hasData())
 		return &sessionKey;
@@ -142,6 +152,7 @@ bool AuthSspi::checkAdminPrivilege()
 	{
 		return false;
 	}
+	fb_assert(spc.AccessToken);
 
 	// Query required buffer size
 	DWORD token_len = 0;
@@ -177,7 +188,6 @@ bool AuthSspi::checkAdminPrivilege()
 	bool matched = false;
 	char groupName[256];
 	char domainName[256];
-	DWORD dwAcctName = 1, dwDomainName = 1;
 	SID_NAME_USE snu = SidTypeUnknown;
 
 	groupNames.clear();
@@ -190,8 +200,9 @@ bool AuthSspi::checkAdminPrivilege()
 		if ((ptg->Groups[i].Attributes & SE_GROUP_ENABLED) &&
 			!(ptg->Groups[i].Attributes & SE_GROUP_USE_FOR_DENY_ONLY))
 		{
-			DWORD dwSize = 256;
-			if (LookupAccountSid(NULL, ptg->Groups[i].Sid, groupName, &dwSize, domainName, &dwSize, &snu) &&
+			DWORD dwGroupName = sizeof(groupName);
+			DWORD dwDomainName = sizeof(domainName);
+			if (LookupAccountSid(NULL, ptg->Groups[i].Sid, groupName, &dwGroupName, domainName, &dwDomainName, &snu) &&
 				domainName[0] && strcmp(domainName, "NT AUTHORITY"))
 			{
 				string sumName = domainName;
@@ -236,7 +247,7 @@ bool AuthSspi::request(AuthSspi::DataHolder& data)
 
 	ULONG fContextAttr = 0;
 
-	SECURITY_STATUS x = fInitializeSecurityContext(
+	const SECURITY_STATUS x = fInitializeSecurityContext(
 		&secHndl, hasContext ? &ctxtHndl : 0, 0, 0, 0, SECURITY_NATIVE_DREP,
 		hasContext ? &inputDesc : 0, 0, &ctxtHndl, &outputDesc, &fContextAttr, &timeOut);
 
@@ -298,7 +309,7 @@ bool AuthSspi::accept(AuthSspi::DataHolder& data)
 	ULONG fContextAttr = 0;
 	SecPkgContext_Names name;
 	SecPkgContext_SessionKey key;
-	SECURITY_STATUS x = fAcceptSecurityContext(
+	const SECURITY_STATUS x = fAcceptSecurityContext(
 		&secHndl, hasContext ? &ctxtHndl : 0, &inputDesc, 0,
 		SECURITY_NATIVE_DREP, &ctxtHndl, &outputDesc,
 		&fContextAttr, &timeOut);
@@ -367,7 +378,8 @@ bool AuthSspi::getLogin(string& login, bool& wh, GroupsList& grNames)
 
 
 WinSspiServer::WinSspiServer(Firebird::IPluginConfig*)
-	: sspiData(getPool())
+	: sspiData(getPool()),
+	  done(false)
 { }
 
 int WinSspiServer::authenticate(Firebird::CheckStatusWrapper* status,
@@ -376,17 +388,18 @@ int WinSspiServer::authenticate(Firebird::CheckStatusWrapper* status,
 {
 	try
 	{
-		const bool wasActive = sspi.isActive();
-
 		sspiData.clear();
 		unsigned int length;
 		const unsigned char* bytes = sBlock->getData(&length);
 		sspiData.add(bytes, length);
 
+		if (done && !length && !sspi.isActive())
+			return AUTH_SUCCESS;
+
 		if (!sspi.accept(sspiData))
 			return AUTH_CONTINUE;
 
-		if (wasActive && !sspi.isActive())
+		if (!sspi.isActive())
 		{
 			bool wheel = false;
 			string login;
@@ -445,7 +458,9 @@ int WinSspiServer::authenticate(Firebird::CheckStatusWrapper* status,
 					return AUTH_FAILED;
 			}
 
-			return AUTH_SUCCESS;
+			done = true;
+			if (sspiData.isEmpty())
+				return AUTH_SUCCESS;
 		}
 
 		sBlock->putData(status, sspiData.getCount(), sspiData.begin());
@@ -456,7 +471,7 @@ int WinSspiServer::authenticate(Firebird::CheckStatusWrapper* status,
 		return AUTH_FAILED;
 	}
 
-	return AUTH_MORE_DATA;
+	return done ? AUTH_SUCCESS_WITH_DATA : AUTH_MORE_DATA;
 }
 
 

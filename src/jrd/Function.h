@@ -24,15 +24,15 @@
 #include "../common/classes/array.h"
 #include "../common/dsc.h"
 #include "../common/classes/NestConst.h"
+#include "../jrd/QualifiedName.h"
 #include "../jrd/val.h"
 #include "../dsql/Nodes.h"
 
 namespace Jrd
 {
 	class ValueListNode;
-	class QualifiedName;
 
-	class Function : public Routine
+	class Function final : public Routine
 	{
 		static const char* const EXCEPTION_MESSAGE;
 
@@ -58,29 +58,30 @@ namespace Jrd
 		static int blockingAst(void*);
 
 	public:
-		virtual int getObjectType() const
+		int getObjectType() const noexcept override
 		{
 			return obj_udf;
 		}
 
-		virtual SLONG getSclType() const
+		SLONG getSclType() const noexcept override
 		{
 			return obj_functions;
 		}
 
-		virtual bool checkCache(thread_db* tdbb) const;
-		virtual void clearCache(thread_db* tdbb);
+		bool checkCache(thread_db* tdbb) const override;
+		void clearCache(thread_db* tdbb) override;
 
-		virtual ~Function()
+		~Function() override
 		{
 			delete fun_external;
 		}
 
-		virtual void releaseExternal()
+		void releaseExternal() override
 		{
 			delete fun_external;
 			fun_external = NULL;
 		}
+
 	public:
 		int (*fun_entrypoint)();				// function entrypoint
 		USHORT fun_inputs;						// input arguments
@@ -93,7 +94,7 @@ namespace Jrd
 		const ExtEngineManager::Function* fun_external;
 
 	protected:
-		virtual bool reload(thread_db* tdbb);
+		bool reload(thread_db* tdbb) override;
 	};
 }
 

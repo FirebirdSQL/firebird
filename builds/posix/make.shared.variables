@@ -39,7 +39,8 @@ AllObjects += $(Common_Objects)
 # Common test files
 COT1:= $(call dirObjects,common/tests)
 COT2:= $(call dirObjects,common/classes/tests)
-Common_Test_Objects:= $(COT1) $(COT2) $(call makeObjects,yvalve,gds.cpp)
+COT3:= $(call dirObjects,common/ipc/tests)
+Common_Test_Objects:= $(COT1) $(COT2) $(COT3) $(call makeObjects,yvalve,gds.cpp)
 
 AllObjects += $(Common_Test_Objects)
 
@@ -87,10 +88,11 @@ AllObjects += $(Profiler_Objects)
 
 # Engine
 Engine_Objects:= $(call dirObjects,jrd) $(call dirObjects,dsql) $(call dirObjects,jrd/extds) \
-				 $(call dirObjects,jrd/optimizer) $(call dirObjects,jrd/recsrc) $(call dirObjects,jrd/replication) $(call dirObjects,jrd/trace) \
+				 $(call dirObjects,jrd/optimizer) $(call dirObjects,jrd/recsrc) $(call dirObjects,jrd/replication) \
+				 $(call dirObjects,jrd/sys-packages) $(call dirObjects,jrd/trace) \
 				 $(call makeObjects,lock,lock.cpp)
 
-Engine_Test_Objects:= $(call dirObjects,jrd/tests)
+Engine_Test_Objects:= $(call dirObjects,jrd/tests) $(call dirObjects,lock/tests)
 
 AllObjects += $(Engine_Objects) $(Engine_Test_Objects)
 
@@ -178,7 +180,9 @@ AllObjects += $(GSPLIT_Objects)
 # Interactive sql
 ISQL_Objects:= $(call dirObjects,isql)
 
-AllObjects += $(ISQL_Objects)
+ISQL_Test_Objects:= $(call dirObjects,isql/tests)
+
+AllObjects += $(ISQL_Objects) $(ISQL_Test_Objects)
 
 
 # Legacy users management in security database
@@ -218,7 +222,7 @@ UTIL_Objects:= $(call makeObjects,extlib,ib_util.cpp)
 # UDR backward compatible with distributed UDFs
 COMPAT_Objects:= $(call makeObjects,extlib,UdfBackwardCompatibility.cpp)
 SRC_COMPAT_SQL:= $(SRC_ROOT)/extlib/UdfBackwardCompatibility.sql
-COMPAT_SQL:= $(PLUGINS)/udr/udf_compat.sql
+COMPAT_SQL?= $(call buildSubDirectory,plugins/udr)/udf_compat.sql
 
 AllObjects += $(UTIL_Objects) $(COMPAT_Objects)
 

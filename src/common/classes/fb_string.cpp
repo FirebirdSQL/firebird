@@ -41,7 +41,7 @@
 #else
 namespace
 {
-	int StringIgnoreCaseCompare(const char* s1, const char* s2, unsigned int l)
+	int StringIgnoreCaseCompare(const char* s1, const char* s2, unsigned int l) noexcept
 	{
 		while (l--)
 		{
@@ -61,11 +61,10 @@ namespace {
 	class strBitMask
 	{
 	private:
-		char m[32];
+		char m[32]{};
 	public:
-		strBitMask(Firebird::AbstractString::const_pointer s, Firebird::AbstractString::size_type l)
+		strBitMask(Firebird::AbstractString::const_pointer s, Firebird::AbstractString::size_type l) noexcept
 		{
-			memset(m, 0, sizeof(m));
 			if (l == Firebird::AbstractString::npos) {
 				l = static_cast<Firebird::AbstractString::size_type>(strlen(s));
 			}
@@ -76,7 +75,8 @@ namespace {
 				m[uc >> 3] |= (1 << (uc & 7));
 			}
 		}
-		inline bool Contains(const char c) const
+
+		inline bool Contains(const char c) const noexcept
 		{
 			const unsigned char uc = static_cast<unsigned char>(c);
 			return m[uc >> 3] & (1 << (uc & 7));
@@ -126,7 +126,7 @@ namespace Firebird
 		memset(stringBuffer, c, sizeL);
 	}
 
-	void AbstractString::adjustRange(const size_type length, size_type& pos, size_type& n) throw()
+	void AbstractString::adjustRange(const size_type length, size_type& pos, size_type& n) noexcept
 	{
 		if (pos == npos) {
 			pos = length > n ? length - n : 0;
@@ -171,7 +171,7 @@ namespace Firebird
 		return stringBuffer + p0;
 	}
 
-	void AbstractString::baseErase(size_type p0, size_type n) throw()
+	void AbstractString::baseErase(size_type p0, size_type n) noexcept
 	{
 		adjustRange(length(), p0, n);
 		memmove(stringBuffer + p0, stringBuffer + p0 + n, stringLength - (p0 + n) + 1);
@@ -203,9 +203,9 @@ namespace Firebird
 		shrinkBuffer();
 	}
 
-	AbstractString::size_type AbstractString::rfind(const_pointer s, const size_type pos) const
+	AbstractString::size_type AbstractString::rfind(const_pointer s, const size_type pos) const noexcept
 	{
-		const size_type l = static_cast<size_type>(strlen(s));
+		const size_type l = length(s);
 		int lastpos = length() - l;
 		if (lastpos < 0) {
 			return npos;
@@ -223,7 +223,7 @@ namespace Firebird
 		return npos;
 	}
 
-	AbstractString::size_type AbstractString::rfind(char_type c, const size_type pos) const
+	AbstractString::size_type AbstractString::rfind(char_type c, const size_type pos) const noexcept
 	{
 		int lastpos = length() - 1;
 		if (lastpos < 0) {
@@ -242,7 +242,7 @@ namespace Firebird
 		return npos;
 	}
 
-	AbstractString::size_type AbstractString::find_first_of(const_pointer s, size_type pos, size_type n) const
+	AbstractString::size_type AbstractString::find_first_of(const_pointer s, size_type pos, size_type n) const noexcept
 	{
 		const strBitMask sm(s, n);
 		const_pointer p = &c_str()[pos];
@@ -256,7 +256,7 @@ namespace Firebird
 		return npos;
 	}
 
-	AbstractString::size_type AbstractString::find_last_of(const_pointer s, const size_type pos, size_type n) const
+	AbstractString::size_type AbstractString::find_last_of(const_pointer s, const size_type pos, size_type n) const noexcept
 	{
 		const strBitMask sm(s, n);
 		int lpos = length() - 1;
@@ -274,7 +274,7 @@ namespace Firebird
 		return npos;
 	}
 
-	AbstractString::size_type AbstractString::find_first_not_of(const_pointer s, size_type pos, size_type n) const
+	AbstractString::size_type AbstractString::find_first_not_of(const_pointer s, size_type pos, size_type n) const noexcept
 	{
 		const strBitMask sm(s, n);
 		const_pointer p = &c_str()[pos];
@@ -288,7 +288,7 @@ namespace Firebird
 		return npos;
 	}
 
-	AbstractString::size_type AbstractString::find_last_not_of(const_pointer s, const size_type pos, size_type n) const
+	AbstractString::size_type AbstractString::find_last_not_of(const_pointer s, const size_type pos, size_type n) const noexcept
 	{
 		const strBitMask sm(s, n);
 		int lpos = length() - 1;
@@ -357,16 +357,16 @@ extern "C" {
 #endif // WIN_NT
 	}
 
-	void AbstractString::baseTrim(const TrimType whereTrim, const_pointer toTrim)
+	void AbstractString::baseTrim(const TrimType whereTrim, const_pointer toTrim) noexcept
 	{
-		const strBitMask sm(toTrim, static_cast<size_type>(strlen(toTrim)));
+		const strBitMask sm(toTrim, length(toTrim));
 		const_pointer b = c_str();
 		const_pointer e = c_str() + length() - 1;
 		if (whereTrim != TrimRight)
 		{
 			while (b <= e)
 			{
-				if (! sm.Contains(*b)) {
+				if (!sm.Contains(*b)) {
 					break;
 				}
 				++b;
@@ -376,7 +376,7 @@ extern "C" {
 		{
 			while (b <= e)
 			{
-				if (! sm.Contains(*e)) {
+				if (!sm.Contains(*e)) {
 					break;
 				}
 				--e;
@@ -394,6 +394,20 @@ extern "C" {
 		stringLength = NewLength;
 		stringBuffer[NewLength] = 0;
 		shrinkBuffer();
+	}
+
+	bool AbstractString::baseMove(AbstractString&& rhs) noexcept
+	{
+		if (getPool() == rhs.getPool() && rhs.inlineBuffer != rhs.stringBuffer)
+		{
+			stringBuffer = std::exchange(rhs.stringBuffer, rhs.inlineBuffer);
+			stringLength = std::exchange(rhs.stringLength, 0);
+			bufferSize = std::exchange(rhs.bufferSize, INLINE_BUFFER_SIZE);
+			rhs.inlineBuffer[0] = '\0';
+			return true;
+		}
+
+		return false;
 	}
 
 	void AbstractString::printf(const char* format,...)
@@ -462,7 +476,7 @@ extern "C" {
 		}
 	}
 
-	unsigned int AbstractString::hash(const_pointer string, const size_type tableSize)
+	unsigned int AbstractString::hash(const_pointer string, const size_type tableSize) noexcept
 	{
 		unsigned int value = 0;
 		unsigned char c;
@@ -476,18 +490,14 @@ extern "C" {
 		return value % tableSize;
 	}
 
-	bool AbstractString::equalsNoCase(AbstractString::const_pointer string) const
+	bool AbstractString::equalsNoCase(AbstractString::const_pointer string) const noexcept
 	{
-		size_t l = strlen(string);
-		if (l > length())
-		{
-			l = length();
-		}
+		size_t l = MIN(strlen(string), length());
 		return (STRNCASECMP(c_str(), string, ++l) == 0);
 	}
 
 	int PathNameComparator::compare(AbstractString::const_pointer s1, AbstractString::const_pointer s2,
-		const AbstractString::size_type n)
+		const AbstractString::size_type n) noexcept
 	{
 		if (CASE_SENSITIVITY)
 			return memcmp(s1, s2, n);
@@ -496,7 +506,7 @@ extern "C" {
 	}
 
 	int IgnoreCaseComparator::compare(AbstractString::const_pointer s1, AbstractString::const_pointer s2,
-		const AbstractString::size_type n)
+		const AbstractString::size_type n) noexcept
 	{
 		return STRNCASECMP(s1, s2, n);
 	}

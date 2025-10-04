@@ -28,6 +28,7 @@
 
 #include "../dsql/dsql_proto.h"
 #include "../dsql/DsqlCursor.h"
+#include "../dsql/StmtNodes.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -36,10 +37,10 @@ static const char* const SCRATCH = "fb_cursor_";
 static const ULONG PREFETCH_SIZE = 65536; // 64 KB
 
 DsqlCursor::DsqlCursor(DsqlDmlRequest* req, ULONG flags)
-	: m_dsqlRequest(req), m_message(req->getDsqlStatement()->getReceiveMsg()),
-	  m_resultSet(NULL), m_flags(flags),
-	  m_space(req->getPool(), SCRATCH),
-	  m_state(BOS), m_eof(false), m_position(0), m_cachedCount(0)
+	: m_dsqlRequest(req),
+	  m_message(req->getDsqlStatement()->getReceiveMsg()->msg_number),
+	  m_flags(flags),
+	  m_space(req->getPool(), SCRATCH)
 {
 	TRA_link_cursor(m_dsqlRequest->req_transaction, this);
 }
@@ -48,6 +49,8 @@ DsqlCursor::~DsqlCursor()
 {
 	if (m_resultSet)
 		m_resultSet->resetHandle();
+
+	delete[] m_keyBuffer;
 }
 
 jrd_tra* DsqlCursor::getTransaction() const
@@ -60,10 +63,35 @@ Attachment* DsqlCursor::getAttachment() const
 	return m_dsqlRequest->req_dbb->dbb_attachment;
 }
 
-void DsqlCursor::setInterfacePtr(JResultSet* interfacePtr) throw()
+void DsqlCursor::setInterfacePtr(JResultSet* interfacePtr) noexcept
 {
 	fb_assert(!m_resultSet);
 	m_resultSet = interfacePtr;
+}
+
+bool DsqlCursor::getCurrentRecordKey(USHORT context, RecordKey& key) const
+{
+	if (m_keyBuffer == nullptr)
+	{
+		// A possible situation for a cursor not based on any record source such as
+		// a = 1;
+		// suspend;
+		return false;
+	}
+
+	if (context * sizeof(RecordKey) >= m_keyBufferLength)
+	{
+		fb_assert(false);
+		return false;
+	}
+
+	if (m_state != POSITIONED)
+	{
+		return false;
+	}
+
+	key = m_keyBuffer[context];
+	return key.recordNumber.bid_relation_id != 0;
 }
 
 void DsqlCursor::close(thread_db* tdbb, DsqlCursor* cursor)
@@ -88,7 +116,7 @@ void DsqlCursor::close(thread_db* tdbb, DsqlCursor* cursor)
 
 			if (dsqlRequest->req_traced && TraceManager::need_dsql_free(attachment))
 			{
-				TraceSQLStatementImpl stmt(dsqlRequest, NULL);
+				TraceSQLStatementImpl stmt(dsqlRequest, nullptr, nullptr);
 				TraceManager::event_dsql_free(attachment, &stmt, DSQL_close);
 			}
 
@@ -114,6 +142,17 @@ int DsqlCursor::fetchNext(thread_db* tdbb, UCHAR* buffer)
 			m_state = EOS;
 			return 1;
 		}
+
+		if (m_keyBufferLength == 0)
+		{
+			Request* req = m_dsqlRequest->getRequest();
+			m_keyBufferLength = req->req_rpb.getCount() * sizeof(RecordKey);
+			if (m_keyBufferLength > 0)
+				m_keyBuffer = FB_NEW_POOL(m_dsqlRequest->getPool()) RecordKey[req->req_rpb.getCount()];
+		}
+
+		if (m_keyBufferLength > 0)
+			m_dsqlRequest->gatherRecordKey(m_keyBuffer);
 
 		m_state = POSITIONED;
 		return 0;
@@ -163,7 +202,7 @@ int DsqlCursor::fetchAbsolute(thread_db* tdbb, UCHAR* buffer, SLONG position)
 	{
 		if (!m_eof)
 		{
-			cacheInput(tdbb);
+			cacheInput(tdbb, buffer);
 			fb_assert(m_eof);
 		}
 
@@ -248,7 +287,7 @@ void DsqlCursor::getInfo(thread_db* tdbb,
 			case IResultSet::INF_RECORD_COUNT:
 				if (isScrollable && !m_eof)
 				{
-					cacheInput(tdbb);
+					cacheInput(tdbb, nullptr);
 					fb_assert(m_eof);
 				}
 				response.insertInt(tag, isScrollable ? m_cachedCount : -1);
@@ -291,7 +330,7 @@ int DsqlCursor::fetchFromCache(thread_db* tdbb, UCHAR* buffer, FB_UINT64 positio
 {
 	if (position >= m_cachedCount)
 	{
-		if (m_eof || !cacheInput(tdbb, position))
+		if (m_eof || !cacheInput(tdbb, buffer, position))
 		{
 			m_state = EOS;
 			return 1;
@@ -299,40 +338,75 @@ int DsqlCursor::fetchFromCache(thread_db* tdbb, UCHAR* buffer, FB_UINT64 positio
 	}
 
 	fb_assert(position < m_cachedCount);
+	fb_assert(m_messageLength > 0); // At this point m_messageLength must be set by cacheInput
 
-	UCHAR* const msgBuffer = m_dsqlRequest->req_msg_buffers[m_message->msg_buffer_number];
+	FB_UINT64 offset = position * (m_messageLength + m_keyBufferLength);
+	FB_UINT64 readBytes = m_space.read(offset, buffer, m_messageLength);
 
-	const FB_UINT64 offset = position * m_message->msg_length;
-	const FB_UINT64 readBytes = m_space.read(offset, msgBuffer, m_message->msg_length);
-	fb_assert(readBytes == m_message->msg_length);
+	if (m_keyBufferLength > 0)
+	{
+		offset += m_messageLength;
+		readBytes += m_space.read(offset, m_keyBuffer, m_keyBufferLength);
+	}
 
-	m_dsqlRequest->mapInOut(tdbb, true, m_message, NULL, buffer);
+	fb_assert(readBytes == m_messageLength + m_keyBufferLength);
 
 	m_position = position;
 	m_state = POSITIONED;
 	return 0;
 }
 
-bool DsqlCursor::cacheInput(thread_db* tdbb, FB_UINT64 position)
+bool DsqlCursor::cacheInput(thread_db* tdbb, UCHAR* buffer, FB_UINT64 position)
 {
 	fb_assert(!m_eof);
 
-	const ULONG prefetchCount = MAX(PREFETCH_SIZE / m_message->msg_length, 1);
-	const UCHAR* const msgBuffer = m_dsqlRequest->req_msg_buffers[m_message->msg_buffer_number];
+	// It could not be done before: user buffer length may be unknown until call setDelayedOutputMetadata()
+	if (m_messageLength == 0)
+	{
+		Request* req = m_dsqlRequest->getRequest();
+		const MessageNode* msg = req->getStatement()->getMessage(m_message);
+		m_messageLength = msg->getFormat(req)->fmt_length;
+		m_keyBufferLength = req->req_rpb.getCount() * sizeof(RecordKey);
+		if (m_keyBufferLength > 0)
+		{
+			// Save record key unconditionally because setCursorName() can be called after openCursor()
+			m_keyBuffer = FB_NEW_POOL(m_dsqlRequest->getPool()) RecordKey[req->req_rpb.getCount()];
+		}
+	}
+
+	std::unique_ptr<UCHAR[]> ownBuffer;
+	if (buffer == nullptr)
+	{
+		// We are called from getInfo() and there is no user-provided buffer for data.
+		// Create a temporary one.
+		// This code cannot be moved into getInfo() itself because it is most likely called before fetch()
+		// so m_messageLength is still unknown there.
+		ownBuffer.reset(buffer = FB_NEW UCHAR[m_messageLength]);
+	}
+
+	const ULONG prefetchCount = MAX(PREFETCH_SIZE / (m_messageLength + m_keyBufferLength), 1);
 
 	while (position >= m_cachedCount)
 	{
 		for (ULONG count = 0; count < prefetchCount; count++)
 		{
-			if (!m_dsqlRequest->fetch(tdbb, NULL))
+			if (!m_dsqlRequest->fetch(tdbb, buffer))
 			{
 				m_eof = true;
 				break;
 			}
 
-			const FB_UINT64 offset = m_cachedCount * m_message->msg_length;
-			const FB_UINT64 writtenBytes = m_space.write(offset, msgBuffer, m_message->msg_length);
-			fb_assert(writtenBytes == m_message->msg_length);
+			FB_UINT64 offset = m_cachedCount * (m_messageLength + m_keyBufferLength);
+			FB_UINT64 writtenBytes = m_space.write(offset, buffer, m_messageLength);
+
+			if (m_keyBufferLength > 0)
+			{
+				offset += m_messageLength;
+				m_dsqlRequest->gatherRecordKey(m_keyBuffer);
+				writtenBytes += m_space.write(offset, m_keyBuffer, m_keyBufferLength);
+			}
+
+			fb_assert(writtenBytes == m_messageLength + m_keyBufferLength);
 			m_cachedCount++;
 		}
 

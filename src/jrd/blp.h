@@ -19,7 +19,7 @@
  * 2001.07.28: John Bellardo: Added skip and current_role to table.
  * Adriano dos Santos Fernandes
  */
-static const struct
+static inline constexpr struct
 {
 	const char* blr_string;
 	const UCHAR* blr_operators;
@@ -89,7 +89,7 @@ static const struct
 	{"missing", one},
 	{"unique", one},
 	{"like", two},
-	{NULL, NULL},
+	{"in_list", in_list},
 	{NULL, NULL},
 	{NULL, NULL},
 	{"rse", rse},
@@ -173,7 +173,7 @@ static const struct
 	{"retrieve", two},
 	{"relation2", relation2},
 	{"rid2", rid2},
-	{NULL, NULL},
+	{"relation3", relation3},
 	{NULL, NULL},
 	{"set_generator", gen_id},	// 150
 	{"ansi_any", one},
@@ -199,7 +199,7 @@ static const struct
 	{"agg_list", two}, // 170
 	{"agg_list_distinct", two},
 	{"modify2", modify2},
-	{NULL, NULL},
+	{"erase2", erase2},
 	// New BLR in FB1
 	{"current_role", zero},
 	{"skip", one},
@@ -251,7 +251,21 @@ static const struct
 	// New BLR in FB5.0
 	{"dcl_local_table", dcl_local_table},
 	{"local_table_truncate", one_word},
-	{"local_table_id", local_table},
+	{"local_table_id", local_table}, // 220
 	{"outer_map", outer_map},
+	{NULL, NULL},	// blr_json_function
+	{"skip_locked", zero},
+	// New BLR in FB6.0
+	{"invoke_function", invoke_function},
+	{"invoke_procedure", invsel_procedure},
+	{"select_procedure", invsel_procedure},
+	{"default_arg", zero},
+	{"cast_format", cast_format},
+	{"table_value_fun", table_value_fun},
+	{"for_range", for_range},
+	{"gen_id3", gen_id3},
+	{"default2", default2},
+	{"current_schema", zero},
+	{NULL, NULL},	// flags - part of header
 	{0, 0}
 };

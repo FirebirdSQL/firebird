@@ -26,6 +26,7 @@
 
 #include "../common/classes/array.h"
 #include "../common/classes/GenericMap.h"
+#include "../jrd/QualifiedName.h"
 #include "../jrd/jrd.h"
 #include "../jrd/tra.h"
 
@@ -37,6 +38,7 @@ namespace Jrd
 	{
 		typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<TraNumber, jrd_tra*> > > TransactionMap;
 		typedef Firebird::HalfStaticArray<bid, 16> BlobList;
+		typedef Firebird::GenericMap<QualifiedNamePair> ConstraintIndexMap;
 /*
 		class ReplicatedTransaction : public Firebird::IReplicatedTransaction
 		{
@@ -125,10 +127,11 @@ namespace Jrd
 	public:
 		Applier(Firebird::MemoryPool& pool,
 				const Firebird::PathName& database,
-				Jrd::Request* request)
+				Request* request, bool cascade)
 			: PermanentStorage(pool),
 			  m_txnMap(pool), m_database(pool, database),
-			  m_request(request), m_bitmap(FB_NEW_POOL(pool) RecordBitmap(pool)), m_record(NULL)
+			  m_request(request), m_enableCascade(cascade),
+			  m_constraintIndexMap(pool)
 		{}
 
 		static Applier* create(thread_db* tdbb);
@@ -151,10 +154,11 @@ namespace Jrd
 		TransactionMap m_txnMap;
 		const Firebird::PathName m_database;
 		Request* m_request;
-		Firebird::AutoPtr<RecordBitmap> m_bitmap;
-		Record* m_record;
+		RecordBitmap* m_bitmap = nullptr;
+		Record* m_record = nullptr;
 		JReplicator* m_interface;
-		bool m_enableCascade;
+		const bool m_enableCascade;
+		ConstraintIndexMap m_constraintIndexMap;
 
 		void startTransaction(thread_db* tdbb, TraNumber traNum);
 		void prepareTransaction(thread_db* tdbb, TraNumber traNum);
@@ -165,23 +169,24 @@ namespace Jrd
 		void cleanupSavepoint(thread_db* tdbb, TraNumber traNum, bool undo);
 
 		void insertRecord(thread_db* tdbb, TraNumber traNum,
-						  const MetaName& relName,
+						  const QualifiedName& relName,
 						  ULONG length, const UCHAR* data);
 		void updateRecord(thread_db* tdbb, TraNumber traNum,
-						  const MetaName& relName,
+						  const QualifiedName& relName,
 						  ULONG orgLength, const UCHAR* orgData,
 						  ULONG newLength, const UCHAR* newData);
 		void deleteRecord(thread_db* tdbb, TraNumber traNum,
-						  const MetaName& relName,
+						  const QualifiedName& relName,
 						  ULONG length, const UCHAR* data);
 
-		void setSequence(thread_db* tdbb, const MetaName& genName, SINT64 value);
+		void setSequence(thread_db* tdbb, const QualifiedName& genName, SINT64 value);
 
 		void storeBlob(thread_db* tdbb, TraNumber traNum, bid* blob_id,
 					   ULONG length, const UCHAR* data);
 
 		void executeSql(thread_db* tdbb, TraNumber traNum,
 						unsigned charset,
+						const Firebird::string& schemaSearchPath,
 						const Firebird::string& sql,
 						const MetaName& owner);
 
@@ -190,8 +195,7 @@ namespace Jrd
 						const index_desc& idx,
 						Record* record1, Record* record2);
 		bool lookupRecord(thread_db* tdbb, jrd_rel* relation,
-						  Record* record, RecordBitmap* bitmap,
-						  index_desc& idx);
+						  Record* record, index_desc& idx, const QualifiedName* idxName = nullptr);
 
 		const Format* findFormat(thread_db* tdbb, jrd_rel* relation, ULONG length);
 

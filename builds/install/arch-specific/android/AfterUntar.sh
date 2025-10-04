@@ -18,9 +18,9 @@ runAndCheckExit() {
     fi
 }
 
-runAndCheckExit "Build messages file (firebird.msg)" "bin/build_file -f firebird.msg"
-runAndCheckExit "Creating security database" "echo create database \'security5.fdb\'^ | bin/isql -q -term ^"
-runAndCheckExit "Creating security database metadata" "bin/isql -q security5.fdb -i security.sql"
-runAndCheckExit "Restore examples database (employee)" "(cd examples/empbuild ; ../../bin/isql -q -i ../../employe2.sql)"
+runAndCheckExit "Build messages file (firebird.msg)" "./build_file -f firebird.msg"
+runAndCheckExit "Creating security database" "echo create database \'security6.fdb\'^ | ./isql -q -term ^"
+runAndCheckExit "Creating security database metadata" "./isql -q security6.fdb -i security.sql"
+#runAndCheckExit "Restore examples database (employee)" "(cd examples/empbuild ; ../.././isql -q -i ../../employe2.sql)"
 
-rm -f security.sql employe2.sql bin/build_file AfterUntar.sh
+rm -f security.sql employe2.sql ./build_file AfterUntar.sh

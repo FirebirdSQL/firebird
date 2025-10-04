@@ -128,8 +128,7 @@ FB_UDR_BEGIN_FUNCTION(sum_args)
 		// Get a reference to the return value.
 		ISC_LONG& ret = *(ISC_LONG*) (out + outOffset);
 
-		// The return value is automatically initialized to 0.
-		///ret = 0;
+		ret = 0;
 
 		for (unsigned i = 0; i < inCount; ++i)
 		{

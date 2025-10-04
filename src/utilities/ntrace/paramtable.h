@@ -32,6 +32,8 @@
 // DATABASE_PARAMS, SERVICE_PARAMS
 
 
+STR_PARAMETER(include_schema_filter, "")
+STR_PARAMETER(exclude_schema_filter, "")
 STR_PARAMETER(include_filter, "")
 STR_PARAMETER(exclude_filter, "")
 PATH_PARAMETER(log_filename, "")
@@ -51,10 +53,13 @@ BOOL_PARAMETER(log_statement_prepare, false)
 BOOL_PARAMETER(log_statement_free, false)
 BOOL_PARAMETER(log_statement_start, false)
 BOOL_PARAMETER(log_statement_finish, false)
+BOOL_PARAMETER(log_procedure_compile, false)
 BOOL_PARAMETER(log_procedure_start, false)
 BOOL_PARAMETER(log_procedure_finish, false)
+BOOL_PARAMETER(log_function_compile, false)
 BOOL_PARAMETER(log_function_start, false)
 BOOL_PARAMETER(log_function_finish, false)
+BOOL_PARAMETER(log_trigger_compile, false)
 BOOL_PARAMETER(log_trigger_start, false)
 BOOL_PARAMETER(log_trigger_finish, false)
 BOOL_PARAMETER(print_plan, false)

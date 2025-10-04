@@ -80,12 +80,15 @@ void Replicator::storeBlob(Transaction* transaction, ISC_QUAD blobId)
 {
 	FbLocalStatus localStatus;
 
+	// We need the blob exactly as stored, without possible transliteration to the connection charset
+	const UCHAR bpb[] = {isc_bpb_version1, isc_bpb_target_interp, 1, CS_NONE};
+
 	BlobWrapper blob(&localStatus);
-	if (!blob.open(m_attachment, transaction->getInterface(), blobId))
+	if (!blob.open(m_attachment, transaction->getInterface(), blobId, sizeof(bpb), bpb))
 		localStatus.raise();
 
 	UCharBuffer buffer;
-	const auto bufferLength = MAX_USHORT;
+	constexpr FB_SIZE_T bufferLength = MAX_USHORT;
 	auto data = buffer.getBuffer(bufferLength);
 
 	auto& txnData = transaction->getData();
@@ -206,12 +209,13 @@ void Replicator::commitTransaction(CheckStatusWrapper* status, Transaction* tran
 
 		for (const auto& generator : m_generators)
 		{
-			fb_assert(generator.name.hasData());
+			fb_assert(generator.name.object.hasData() && generator.name.schema.hasData());
 
-			const auto atom = txnData.defineAtom(generator.name);
+			const auto [schemaAtom, objectAtom] = txnData.defineQualifiedAtom(generator.name);
 
 			txnData.putTag(opSetSequence);
-			txnData.putInt32(atom);
+			txnData.putInt32(schemaAtom);
+			txnData.putInt32(objectAtom);
 			txnData.putInt64(generator.value);
 		}
 
@@ -296,7 +300,8 @@ void Replicator::rollbackSavepoint(CheckStatusWrapper* status, Transaction* tran
 
 void Replicator::insertRecord(CheckStatusWrapper* status,
 							  Transaction* transaction,
-							  const char* relName,
+							  const char* schemaName,
+							  const char* tableName,
 							  IReplicatedRecord* record)
 {
 	try
@@ -306,12 +311,12 @@ void Replicator::insertRecord(CheckStatusWrapper* status,
 			IReplicatedField* field = record->getField(id);
 			if (field != nullptr)
 			{
-				auto type = field->getType();
+				const auto type = field->getType();
 				if (type == SQL_ARRAY || type == SQL_BLOB)
 				{
-					const auto blobId = (ISC_QUAD*) field->getData();
+					const auto* blobId = (ISC_QUAD*) field->getData();
 
-					if (blobId)
+					if (blobId && !BlobWrapper::blobIsNull(*blobId))
 						storeBlob(transaction, *blobId);
 				}
 			}
@@ -322,10 +327,11 @@ void Replicator::insertRecord(CheckStatusWrapper* status,
 
 		auto& txnData = transaction->getData();
 
-		const auto atom = txnData.defineAtom(relName);
+		const auto [schemaAtom, objectAtom] = txnData.defineQualifiedAtom(QualifiedMetaString(tableName, schemaName));
 
 		txnData.putTag(opInsertRecord);
-		txnData.putInt32(atom);
+		txnData.putInt32(schemaAtom);
+		txnData.putInt32(objectAtom);
 		txnData.putInt32(length);
 		txnData.putBinary(length, data);
 
@@ -340,7 +346,8 @@ void Replicator::insertRecord(CheckStatusWrapper* status,
 
 void Replicator::updateRecord(CheckStatusWrapper* status,
 							  Transaction* transaction,
-							  const char* relName,
+							  const char* schemaName,
+							  const char* tableName,
 							  IReplicatedRecord* orgRecord,
 							  IReplicatedRecord* newRecord)
 {
@@ -351,12 +358,12 @@ void Replicator::updateRecord(CheckStatusWrapper* status,
 			IReplicatedField* field = newRecord->getField(id);
 			if (field != nullptr)
 			{
-				auto type = field->getType();
+				const auto type = field->getType();
 				if (type == SQL_ARRAY || type == SQL_BLOB)
 				{
-					const auto blobId = (ISC_QUAD*) field->getData();
+					const auto* blobId = (ISC_QUAD*) field->getData();
 
-					if (blobId)
+					if (blobId && !BlobWrapper::blobIsNull(*blobId))
 						storeBlob(transaction, *blobId);
 				}
 			}
@@ -370,10 +377,11 @@ void Replicator::updateRecord(CheckStatusWrapper* status,
 
 		auto& txnData = transaction->getData();
 
-		const auto atom = txnData.defineAtom(relName);
+		const auto [schemaAtom, objectAtom] = txnData.defineQualifiedAtom(QualifiedMetaString(tableName, schemaName));
 
 		txnData.putTag(opUpdateRecord);
-		txnData.putInt32(atom);
+		txnData.putInt32(schemaAtom);
+		txnData.putInt32(objectAtom);
 		txnData.putInt32(orgLength);
 		txnData.putBinary(orgLength, orgData);
 		txnData.putInt32(newLength);
@@ -390,7 +398,8 @@ void Replicator::updateRecord(CheckStatusWrapper* status,
 
 void Replicator::deleteRecord(CheckStatusWrapper* status,
 							  Transaction* transaction,
-							  const char* relName,
+							  const char* schemaName,
+							  const char* tableName,
 							  IReplicatedRecord* record)
 {
 	try
@@ -400,10 +409,11 @@ void Replicator::deleteRecord(CheckStatusWrapper* status,
 
 		auto& txnData = transaction->getData();
 
-		const auto atom = txnData.defineAtom(relName);
+		const auto [schemaAtom, objectAtom] = txnData.defineQualifiedAtom(QualifiedMetaString(tableName, schemaName));
 
 		txnData.putTag(opDeleteRecord);
-		txnData.putInt32(atom);
+		txnData.putInt32(schemaAtom);
+		txnData.putInt32(objectAtom);
 		txnData.putInt32(length);
 		txnData.putBinary(length, data);
 
@@ -419,16 +429,19 @@ void Replicator::deleteRecord(CheckStatusWrapper* status,
 void Replicator::executeSqlIntl(CheckStatusWrapper* status,
 								Transaction* transaction,
 								unsigned charset,
+								const char* schemaSearchPath,
 								const char* sql)
 {
 	try
 	{
 		auto& txnData = transaction->getData();
 
-		const auto atom = txnData.defineAtom(m_user);
+		const auto userAtom = txnData.defineAtom(m_user);
+		const auto schemaSearchPathAtom = txnData.defineAtom(schemaSearchPath);
 
 		txnData.putTag(opExecuteSqlIntl);
-		txnData.putInt32(atom);
+		txnData.putInt32(userAtom);
+		txnData.putInt32(schemaSearchPathAtom);
 		txnData.putByte(charset);
 		txnData.putString(sql);
 
@@ -459,15 +472,18 @@ void Replicator::cleanupTransaction(CheckStatusWrapper* status,
 	}
 }
 
-void Replicator::setSequence(CheckStatusWrapper* status,
-							 const char* genName,
-							 SINT64 value)
+void Replicator::setSequence2(CheckStatusWrapper* status,
+							  const char* schemaName,
+							  const char* genName,
+							  SINT64 value)
 {
 	try
 	{
+		const QualifiedName qualifiedName(genName, schemaName);
+
 		for (auto& generator : m_generators)
 		{
-			if (generator.name == genName)
+			if (generator.name == qualifiedName)
 			{
 				generator.value = value;
 				return;
@@ -475,7 +491,7 @@ void Replicator::setSequence(CheckStatusWrapper* status,
 		}
 
 		GeneratorValue generator;
-		generator.name = genName;
+		generator.name = qualifiedName;
 		generator.value = value;
 
 		m_generators.add(generator);

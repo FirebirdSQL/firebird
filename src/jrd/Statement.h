@@ -28,6 +28,8 @@
 
 namespace Jrd {
 
+class PlanEntry;
+
 // Compiled statement.
 class Statement : public pool_alloc<type_req>
 {
@@ -48,6 +50,9 @@ private:
 public:
 	static Statement* makeStatement(thread_db* tdbb, CompilerScratch* csb, bool internalFlag,
 		std::function<void ()> beforeCsbRelease = nullptr);
+
+	static Statement* makeBoolExpression(thread_db* tdbb, BoolExprNode*& node,
+		CompilerScratch* csb, bool internalFlag);
 
 	static Statement* makeValueExpression(thread_db* tdbb, ValueExprNode*& node, dsc& desc,
 		CompilerScratch* csb, bool internalFlag);
@@ -75,6 +80,9 @@ public:
 	void release(thread_db* tdbb);
 
 	Firebird::string getPlan(thread_db* tdbb, bool detailed) const;
+	void getPlan(thread_db* tdbb, PlanEntry& planEntry) const;
+
+	MessageNode* getMessage(USHORT messageNumber) const;
 
 private:
 	static void verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation, TrigVector* triggers,
@@ -97,17 +105,20 @@ public:
 	ResourceList resources;				// Resources (relations and indices)
 	const jrd_prc* procedure;			// procedure, if any
 	const Function* function;			// function, if any
-	MetaName triggerName;		// name of request (trigger), if any
+	QualifiedName triggerName;		// name of request (trigger), if any
 	Jrd::UserId* triggerInvoker;		// user name if trigger run with SQL SECURITY DEFINER
 	Statement* parentStatement;		// Sub routine's parent statement
 	Firebird::Array<Statement*> subStatements;	// Array of subroutines' statements
 	const StmtNode* topNode;			// top of execution tree
-	Firebird::Array<const RecordSource*> fors;	// record sources
+	Firebird::Array<const Select*> fors;	// select expressions
 	Firebird::Array<const DeclareLocalTableNode*> localTables;	// local tables
 	Firebird::Array<ULONG*> invariants;	// pointer to nodes invariant offsets
 	Firebird::RefStrPtr sqlText;		// SQL text (encoded in the metadata charset)
 	Firebird::Array<UCHAR> blr;			// BLR for non-SQL query
 	MapFieldInfo mapFieldInfo;			// Map field name to field info
+
+private:
+	Firebird::Array<MessageNode*> messages;	// Input/output messages
 };
 
 

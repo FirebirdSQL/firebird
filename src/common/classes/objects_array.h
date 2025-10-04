@@ -306,10 +306,28 @@ namespace Firebird
 			return iterator(this, getCount());
 		}
 
-		iterator back()
+		const T& front() const
 		{
-  			fb_assert(getCount() > 0);
-			return iterator(this, getCount() - 1);
+			fb_assert(getCount() > 0);
+			return *begin();
+		}
+
+		T& front()
+		{
+			fb_assert(getCount() > 0);
+			return *begin();
+		}
+
+		const T& back() const
+		{
+			fb_assert(getCount() > 0);
+			return *iterator(this, getCount() - 1);
+		}
+
+		T& back()
+		{
+			fb_assert(getCount() > 0);
+			return *iterator(this, getCount() - 1);
 		}
 
 		const_iterator begin() const
@@ -366,6 +384,13 @@ namespace Firebird
 				add(item);
 		}
 
+		ObjectsArray(std::initializer_list<T> items)
+			: A()
+		{
+			for (auto& item : items)
+				add(item);
+		}
+
 		ObjectsArray() :
 			A()
 		{
@@ -377,7 +402,7 @@ namespace Firebird
 				delete getPointer(i);
 		}
 
-		size_type getCount() const throw()
+		size_type getCount() const noexcept
 		{
 			return inherited::getCount();
 		}
@@ -426,6 +451,12 @@ namespace Firebird
 				}
 			}
 			return false;
+		}
+
+		bool exist(const T& item) const
+		{
+			size_type pos;	// ignored
+			return find(item, pos);
 		}
 
 	private:
@@ -768,7 +799,7 @@ namespace Firebird
 		PointersArray() : values(), pointers() { }
 		~PointersArray() { }
 
-		size_type getCount() const throw()
+		size_type getCount() const noexcept
 		{
 			fb_assert(values.getCount() == pointers.getCount());
 			return values.getCount();

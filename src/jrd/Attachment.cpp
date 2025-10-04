@@ -47,6 +47,7 @@
 #include "../jrd/replication/Applier.h"
 #include "../jrd/replication/Manager.h"
 
+#include "../dsql/DsqlBatch.h"
 #include "../dsql/DsqlStatementCache.h"
 
 #include "../common/classes/fb_string.h"
@@ -257,6 +258,10 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider
 	  att_dest_bind(&att_bindings),
 	  att_original_timezone(TimeZoneUtil::getSystemTimeZone()),
 	  att_current_timezone(att_original_timezone),
+	  att_schema_search_path(FB_NEW_POOL(*pool) AnyRef<ObjectsArray<MetaString>>(*pool)),
+	  att_system_schema_search_path(FB_NEW_POOL(*pool) AnyRef<ObjectsArray<MetaString>>(*pool)),
+	  att_unqualified_charset_resolved_cache_search_path(att_schema_search_path),
+	  att_unqualified_charset_resolved_cache(*pool),
 	  att_parallel_workers(0),
 	  att_repl_appliers(*pool),
 	  att_utility(UTIL_NONE),
@@ -265,6 +270,7 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider
 	  att_generators(*pool),
 	  att_internal(*pool),
 	  att_dyn_req(*pool),
+	  att_internal_cached_statements(*pool),
 	  att_dec_status(DecimalStatus::DEFAULT),
 	  att_charsets(*pool),
 	  att_charset_ids(*pool),
@@ -277,6 +283,8 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider
 {
 	att_internal.grow(irq_MAX);
 	att_dyn_req.grow(drq_MAX);
+
+	att_system_schema_search_path->push(SYSTEM_SCHEMA);
 }
 
 
@@ -286,9 +294,6 @@ Jrd::Attachment::~Attachment()
 		att_idle_timer->stop();
 
 	delete att_trace_manager;
-
-	for (unsigned n = 0; n < att_batches.getCount(); ++n)
-		att_batches[n]->resetHandle();
 
 	for (Function** iter = att_functions.begin(); iter < att_functions.end(); ++iter)
 	{
@@ -369,38 +374,13 @@ MetaName Jrd::Attachment::nameToUserCharSet(thread_db* tdbb, const MetaName& nam
 }
 
 
-string Jrd::Attachment::stringToMetaCharSet(thread_db* tdbb, const string& str,
-	const char* charSet)
-{
-	USHORT charSetId = att_charset;
-
-	if (charSet)
-	{
-		if (!MET_get_char_coll_subtype(tdbb, &charSetId, (const UCHAR*) charSet,
-				static_cast<USHORT>(strlen(charSet))))
-		{
-			(Arg::Gds(isc_charset_not_found) << Arg::Str(charSet)).raise();
-		}
-	}
-
-	if (charSetId == CS_METADATA || charSetId == CS_NONE)
-		return str;
-
-	HalfStaticArray<UCHAR, BUFFER_MEDIUM> buffer(str.length() * sizeof(ULONG));
-	ULONG len = INTL_convert_bytes(tdbb, CS_METADATA, buffer.begin(), buffer.getCapacity(),
-		charSetId, (const BYTE*) str.c_str(), str.length(), ERR_post);
-
-	return string((char*) buffer.begin(), len);
-}
-
-
 string Jrd::Attachment::stringToUserCharSet(thread_db* tdbb, const string& str)
 {
 	if (att_charset == CS_METADATA || att_charset == CS_NONE)
 		return str;
 
 	HalfStaticArray<UCHAR, BUFFER_MEDIUM> buffer(str.length() * sizeof(ULONG));
-	ULONG len = INTL_convert_bytes(tdbb, att_charset, buffer.begin(), buffer.getCapacity(),
+	const ULONG len = INTL_convert_bytes(tdbb, att_charset, buffer.begin(), buffer.getCapacity(),
 		CS_METADATA, (const BYTE*) str.c_str(), str.length(), ERR_post);
 
 	return string((char*) buffer.begin(), len);
@@ -448,6 +428,12 @@ void Jrd::Attachment::storeBinaryBlob(thread_db* tdbb, jrd_tra* transaction,
 	blob->BLB_close(tdbb);
 }
 
+void Jrd::Attachment::releaseBatches()
+{
+	while (att_batches.hasData())
+		delete att_batches.pop();
+}
+
 void Jrd::Attachment::releaseGTTs(thread_db* tdbb)
 {
 	if (!att_relations)
@@ -468,8 +454,8 @@ static void runDBTriggers(thread_db* tdbb, TriggerAction action)
 {
 	fb_assert(action == TRIGGER_CONNECT || action == TRIGGER_DISCONNECT);
 
-	Database* dbb = tdbb->getDatabase();
-	Attachment* att = tdbb->getAttachment();
+	const Database* dbb = tdbb->getDatabase();
+	const Attachment* att = tdbb->getAttachment();
 	fb_assert(dbb);
 	fb_assert(att);
 
@@ -602,6 +588,12 @@ void Jrd::Attachment::resetSession(thread_db* tdbb, jrd_tra** traHandle)
 	}
 	catch (const Exception& ex)
 	{
+		if (att_ext_call_depth && !shutAtt)
+		{
+			flags.release(ATT_resetting);		// reset is incomplete - keep state
+			shutAtt = true;
+		}
+
 		if (shutAtt)
 			signalShutdown(isc_ses_reset_failed);
 
@@ -637,15 +629,21 @@ void Jrd::Attachment::signalShutdown(ISC_STATUS code)
 }
 
 
-void Jrd::Attachment::mergeStats()
+void Jrd::Attachment::mergeStats(bool pageStatsOnly)
 {
 	MutexLockGuard guard(att_database->dbb_stats_mutex, FB_FUNCTION);
-	att_database->dbb_stats.adjust(att_base_stats, att_stats, true);
-	att_base_stats.assign(att_stats);
+
+	if (pageStatsOnly)
+		att_database->dbb_stats.adjustPageStats(att_base_stats, att_stats);
+	else
+	{
+		att_database->dbb_stats.adjust(att_base_stats, att_stats);
+		att_base_stats.assign(att_stats);
+	}
 }
 
 
-bool Attachment::hasActiveRequests() const
+bool Attachment::hasActiveRequests() const noexcept
 {
 	for (const jrd_tra* transaction = att_transactions;
 		transaction; transaction = transaction->tra_next)
@@ -665,15 +663,21 @@ bool Attachment::hasActiveRequests() const
 // Find an inactive incarnation of a system request. If necessary, clone it.
 Request* Jrd::Attachment::findSystemRequest(thread_db* tdbb, USHORT id, USHORT which)
 {
-	static const int MAX_RECURSION = 100;
+	constexpr int MAX_RECURSION = 100;
 
 	// If the request hasn't been compiled or isn't active, there're nothing to do.
 
 	//Database::CheckoutLockGuard guard(this, dbb_cmp_clone_mutex);
 
-	fb_assert(which == IRQ_REQUESTS || which == DYN_REQUESTS);
+	fb_assert(which == IRQ_REQUESTS || which == DYN_REQUESTS || which == CACHED_REQUESTS);
 
-	Statement* statement = (which == IRQ_REQUESTS ? att_internal[id] : att_dyn_req[id]);
+	if (which == CACHED_REQUESTS && id >= att_internal_cached_statements.getCount())
+		att_internal_cached_statements.grow(id + 1);
+
+	Statement* statement =
+		which == IRQ_REQUESTS ? att_internal[id] :
+		which == DYN_REQUESTS ? att_dyn_req[id] :
+		att_internal_cached_statements[id];
 
 	if (!statement)
 		return NULL;
@@ -837,10 +841,10 @@ void Jrd::Attachment::releaseLocks(thread_db* tdbb)
 	for (bool getResult = accessor.getFirst(); getResult; getResult = accessor.getNext())
 		LCK_release(tdbb, accessor.current()->second.lock);
 
-	// Release dsql statement cache lock
+	// Release DSQL statement cache lock
 
 	if (att_dsql_instance)
-		att_dsql_instance->dbb_statement_cache->purge(tdbb);
+		att_dsql_instance->dbb_statement_cache->shutdown(tdbb);
 
 	// Release the remaining locks
 
@@ -969,28 +973,28 @@ int Jrd::Attachment::blockingAstCancel(void* ast_object)
 
 int Jrd::Attachment::blockingAstMonitor(void* ast_object)
 {
-	Jrd::Attachment* const attachment = static_cast<Jrd::Attachment*>(ast_object);
+	const auto attachment = static_cast<Jrd::Attachment*>(ast_object);
 
 	try
 	{
-		Database* const dbb = attachment->att_database;
+		const auto dbb = attachment->att_database;
 
 		AsyncContextHolder tdbb(dbb, FB_FUNCTION, attachment->att_monitor_lock);
 
-		if (!(attachment->att_flags & ATT_monitor_done))
+		if (const auto generation = Monitoring::checkGeneration(dbb, attachment))
 		{
 			try
 			{
-				Monitoring::dumpAttachment(tdbb, attachment);
+				Monitoring::dumpAttachment(tdbb, attachment, generation);
 			}
 			catch (const Exception& ex)
 			{
 				iscLogException("Cannot dump the monitoring data", ex);
 			}
-
-			LCK_downgrade(tdbb, attachment->att_monitor_lock);
-			attachment->att_flags |= ATT_monitor_done;
 		}
+
+		LCK_downgrade(tdbb, attachment->att_monitor_lock);
+		attachment->att_flags |= ATT_monitor_disabled;
 	}
 	catch (const Exception&)
 	{} // no-op
@@ -1066,7 +1070,7 @@ void StableAttachmentPart::doOnIdleTimer(TimerImpl*)
 	JRD_shutdown_attachment(att);
 }
 
-JAttachment* Attachment::getInterface() throw()
+JAttachment* Attachment::getInterface() noexcept
 {
 	return att_stable->getInterface();
 }
@@ -1082,7 +1086,7 @@ unsigned int Attachment::getActualIdleTimeout() const
 
 void Attachment::setupIdleTimer(bool clear)
 {
-	unsigned int timeout = clear ? 0 : getActualIdleTimeout();
+	const unsigned int timeout = clear ? 0 : getActualIdleTimeout();
 	if (!timeout || hasActiveRequests())
 	{
 		if (att_idle_timer)
@@ -1131,17 +1135,6 @@ void Attachment::checkReplSetLock(thread_db* tdbb)
 
 void Attachment::invalidateReplSet(thread_db* tdbb, bool broadcast)
 {
-	att_flags |= ATT_repl_reset;
-
-	if (att_relations)
-	{
-		for (auto relation : *att_relations)
-		{
-			if (relation)
-				relation->rel_repl_state.invalidate();
-		}
-	}
-
 	if (broadcast)
 	{
 		// Signal other attachments about the changed state
@@ -1149,6 +1142,20 @@ void Attachment::invalidateReplSet(thread_db* tdbb, bool broadcast)
 			LCK_lock(tdbb, att_repl_lock, LCK_EX, LCK_WAIT);
 		else
 			LCK_convert(tdbb, att_repl_lock, LCK_EX, LCK_WAIT);
+	}
+
+	if (att_flags & ATT_repl_reset)
+		return;
+
+	att_flags |= ATT_repl_reset;
+
+	if (att_relations)
+	{
+		for (auto relation : *att_relations)
+		{
+			if (relation)
+				relation->rel_repl_state.reset();
+		}
 	}
 
 	LCK_release(tdbb, att_repl_lock);
@@ -1180,12 +1187,63 @@ ProfilerManager* Attachment::getProfilerManager(thread_db* tdbb)
 	return profilerManager;
 }
 
+ProfilerManager* Attachment::getActiveProfilerManagerForNonInternalStatement(thread_db* tdbb)
+{
+	const auto* request = tdbb->getRequest();
+
+	return isProfilerActive() && !request->hasInternalStatement() ?
+		getProfilerManager(tdbb) :
+		nullptr;
+}
+
 bool Attachment::isProfilerActive()
 {
 	return att_profiler_manager && att_profiler_manager->isActive();
 }
 
-void Attachment::releaseProfilerManager()
+void Attachment::releaseProfilerManager(thread_db* tdbb)
 {
-	att_profiler_manager.reset();
+	if (!att_profiler_manager)
+		return;
+
+	if (att_profiler_manager->haveListener())
+	{
+		EngineCheckout cout(tdbb, FB_FUNCTION);
+		att_profiler_manager.reset();
+	}
+	else
+		att_profiler_manager.reset();
+}
+
+bool Attachment::qualifyNewName(thread_db* tdbb, QualifiedName& name, const ObjectsArray<MetaString>* schemaSearchPath)
+{
+	if (!schemaSearchPath)
+		schemaSearchPath = att_schema_search_path;
+
+	if (name.schema.isEmpty() && schemaSearchPath->hasData())
+	{
+		for (const auto& searchSchema : *schemaSearchPath)
+		{
+			if (MET_check_schema_exists(tdbb, searchSchema))
+			{
+				name.schema = searchSchema;
+				return true;
+			}
+		}
+	}
+
+	return MET_check_schema_exists(tdbb, name.schema);
+}
+
+void Attachment::qualifyExistingName(thread_db* tdbb, QualifiedName& name,
+	std::initializer_list<ObjectType> objTypes, const ObjectsArray<MetaString>* schemaSearchPath)
+{
+	if (name.object.hasData())
+	{
+		if (name.schema.isEmpty())
+		{
+			if (!MET_qualify_existing_name(tdbb, name, objTypes, schemaSearchPath))
+				qualifyNewName(tdbb, name, schemaSearchPath);
+		}
+	}
 }

@@ -305,6 +305,7 @@ ConfigFile::LineType ConfigFile::parseLine(const char* fileName, const String& i
 				if (par.name.isEmpty())		// not good - no key
 					return LINE_BAD;
 				valStart = n + 1;
+				par.hasValue = true;
 			}
 			else if (inString >= 2)		// Something after the end of line
 				return LINE_BAD;
@@ -341,7 +342,7 @@ ConfigFile::LineType ConfigFile::parseLine(const char* fileName, const String& i
 					return LINE_INCLUDE;
 				}
 			}
-			// fall down ...
+			[[fallthrough]];
 		case '\r':
 			break;
 
@@ -374,7 +375,7 @@ ConfigFile::LineType ConfigFile::parseLine(const char* fileName, const String& i
 				}
 				break;
 			}
-			// fall through ....
+			[[fallthrough]];
 
 		default:
 			if (inString >= 2)		// Something after the end of line
@@ -413,6 +414,41 @@ ConfigFile::LineType ConfigFile::parseLine(const char* fileName, const String& i
  *	Substitute macro values in a string
  */
 
+unsigned ConfigFile::getDirSeparatorLength(const String& value, String::size_type separatorPosition) const
+{
+	if (separatorPosition >= value.length())
+		return 0;
+
+	const char symbol = value[separatorPosition];
+	if (symbol == '/')
+		return 1;
+
+	if (flags & REGEXP_SUPPORT && symbol == '\\')
+	{
+		// Check forward and backward for second backslash
+		if (separatorPosition + 1 < value.length() && value[separatorPosition + 1] == '\\')
+			return 2;
+		if (separatorPosition > 0 && value[separatorPosition - 1] == '\\')
+			return 2;
+	}
+	else if (symbol == '\\')
+		return 1;
+
+	return 0;
+}
+
+void ConfigFile::adjustMacroReplacePositions(const String& value, const String& macro, String::size_type& from, String::size_type& to) const
+{
+	if (macro.empty())
+		return;
+
+	// Remove dir separators from value string if macro already contains them at start or end
+	if (macro[0] == PathUtils::dir_sep && from > 0)
+		from -= getDirSeparatorLength(value, from - 1);
+	if (macro[macro.length() - 1] == PathUtils::dir_sep)
+		to += getDirSeparatorLength(value, to);
+}
+
 bool ConfigFile::macroParse(String& value, const char* fileName) const
 {
 	String::size_type pos = 0;
@@ -441,19 +477,21 @@ bool ConfigFile::macroParse(String& value, const char* fileName) const
 		}
 
 		// Avoid incorrect slashes in pathnames
-		PathUtils::fixupSeparators(value.begin());
 		PathUtils::fixupSeparators(macro.begin());
 
-		if (subFrom > 0 && value[subFrom - 1] == PathUtils::dir_sep &&
-			macro.length() > 0 && macro[0] == PathUtils::dir_sep)
+		if (flags & REGEXP_SUPPORT)
 		{
-			--subFrom;
+			String::size_type pos = 0;
+			while ((pos = macro.find('\\', pos)) != String::npos)
+			{
+				macro.insert(pos, "\\");
+				pos += 2;
+			}
 		}
-		if (subTo < value.length() && value[subTo] == PathUtils::dir_sep &&
-			macro.length() > 0 && macro[macro.length() - 1] == PathUtils::dir_sep)
-		{
-			++subTo;
-		}
+		else
+			PathUtils::fixupSeparators(value.begin());
+
+		adjustMacroReplacePositions(value, macro, subFrom, subTo);
 
 		// Now perform operation
 		value.replace(subFrom, subTo - subFrom, macro);
@@ -529,7 +567,7 @@ bool ConfigFile::substituteStandardDir(const String& from, String& to) const
 {
 	using namespace fb_utils;
 
-	struct Dir {
+	constexpr struct Dir {
 		unsigned code;
 		const char* name;
 	} dirs[] = {
@@ -631,14 +669,10 @@ void ConfigFile::parse(Stream* stream)
 		case LINE_END_SUB:
 		case LINE_BAD:
 			badLine(streamName, inputLine);
-			return;
 
 		case LINE_REGULAR:
 			if (current.name.isEmpty())
-			{
 				badLine(streamName, inputLine);
-				return;
-			}
 
 			previous = &parameters[parameters.add(current)];
 			break;
@@ -653,6 +687,9 @@ void ConfigFile::parse(Stream* stream)
 				FB_SIZE_T n = parameters.add(current);
 				previous = &parameters[n];
 			}
+
+			if (!previous)
+				badLine(streamName, "master parameter is missing before subconfig start '{'");
 
 			{ // subconf scope
 				SubStream subStream(stream->getFileName());
@@ -687,7 +724,6 @@ void ConfigFile::parse(Stream* stream)
 
 					case LINE_BAD:
 						badLine(streamName, inputLine);
-						return;
 
 					default:
 						subStream.putLine(inputLine, line);
@@ -697,7 +733,7 @@ void ConfigFile::parse(Stream* stream)
 				}
 
 				if (level > 0)
-					badLine(streamName, "< missed closing bracket '}' >");
+					badLine(streamName, "missed closing bracket '}'");
 
 				previous->sub = FB_NEW_POOL(getPool())
 					ConfigFile(getPool(), &subStream, flags);
@@ -923,3 +959,4 @@ bool ConfigFile::Parameter::asBoolean() const
 		value.equalsNoCase("yes") ||
 		value.equalsNoCase("y");
 }
+

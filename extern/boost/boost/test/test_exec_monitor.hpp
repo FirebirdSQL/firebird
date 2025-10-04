@@ -43,6 +43,7 @@
 
 // Automatically link to the correct build variant where possible.
 #if !defined(BOOST_ALL_NO_LIB) && !defined(BOOST_TEST_NO_LIB) && \
+    !defined(BOOST_TEST_EXEC_MONITOR_NO_LIB) && \
     !defined(BOOST_TEST_SOURCE) && !defined(BOOST_TEST_INCLUDED)
 
 #  define BOOST_LIB_NAME boost_test_exec_monitor

@@ -95,24 +95,35 @@ public:
 		return maxCacheSize > 0;
 	}
 
+	bool isEmpty() const
+	{
+		return activeStatementList.isEmpty() && inactiveStatementList.isEmpty();
+	}
+
 	Firebird::RefPtr<DsqlStatement> getStatement(thread_db* tdbb, const Firebird::string& text,
 		USHORT clientDialect, bool isInternalRequest);
 
 	void putStatement(thread_db* tdbb, const Firebird::string& text, USHORT clientDialect, bool isInternalRequest,
 		Firebird::RefPtr<DsqlStatement> dsqlStatement);
 
+	void removeStatement(thread_db* tdbb, DsqlStatement* statement);
 	void statementGoingInactive(Firebird::RefStrPtr& key);
 
-	void purge(thread_db* tdbb);
+	void purge(thread_db* tdbb, bool releaseLock);
 	void purgeAllAttachments(thread_db* tdbb);
+
+	void shutdown(thread_db* tdbb)
+	{
+		purge(tdbb, true);
+	}
 
 private:
 	void buildStatementKey(thread_db* tdbb, Firebird::RefStrPtr& key, const Firebird::string& text,
 		USHORT clientDialect, bool isInternalRequest);
 
 	void buildVerifyKey(thread_db* tdbb, Firebird::string& key, bool isInternalRequest);
-
 	void shrink();
+	void ensureLockIsCreated(thread_db* tdbb);
 
 #ifdef DSQL_STATEMENT_CACHE_DEBUG
 	void dump();

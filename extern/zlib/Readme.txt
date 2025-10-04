@@ -1,20 +1,17 @@
-The zlib.exe is a SFX archive with set of include files required to build 
-Firebird with zlib support and compiled zlib DLL's for both win32 and x64 
+The zlib.exe is a SFX archive with set of include files required to build
+Firebird with zlib support and compiled zlib DLL's for Windows x86, x64 and arm64
 architectures.
 
-The source code of zlib library was downloaded from 
+The source code of zlib library was downloaded from
 
-  http://zlib.net/zlib1212.zip
+  https://www.zlib.net/zlib131.zip
 
-It was built with MSVC17 compilers using commands specified at win32/Makefile.msc:
+It was built with VS 2022 compilers using commands specified at win32/Makefile.msc:
 
-win32: 
-nmake -f win32/Makefile.msc 
+Open VsDevCmd prompt for the given architectures (-arch=amd64, -arch=x86 or -arch=arm64) and run:
+  nmake -f win32/Makefile.msc
 
-x64:
-nmake -f win32/Makefile.msc 
-
-Note, ASM files is not uses in build as it was not updated for a long time, not
+Note, ASM files are not used in build as they were not updated for a long time, not
 officially supported and 32-bit build crashes in simplest test, see:
 
 https://github.com/madler/zlib/issues/41

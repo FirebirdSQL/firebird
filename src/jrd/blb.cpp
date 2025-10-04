@@ -279,8 +279,10 @@ blb* blb::create2(thread_db* tdbb,
 	Database* dbb = tdbb->getDatabase();
 	CHECK_DBB(dbb);
 
-	const int maxTempBlobs = MAX_TEMP_BLOBS;
-	if (maxTempBlobs > 0 && transaction->tra_temp_blobs_count >= maxTempBlobs)
+	if constexpr (MAX_TEMP_BLOBS == 0) {
+		// unlimited temp blobs
+	}
+	else if (transaction->tra_temp_blobs_count >= MAX_TEMP_BLOBS)
 	{
 		const Request* request = tdbb->getRequest();
 		string info;
@@ -308,7 +310,7 @@ blb* blb::create2(thread_db* tdbb,
 			}
 		}
 
-		gds__log("Too many temporary blobs (%i allowed)\n%s", maxTempBlobs, info.c_str());
+		gds__log("Too many temporary blobs (%u allowed)\n%s", MAX_TEMP_BLOBS, info.c_str());
 
 		ERR_post(Arg::Gds(isc_random) << Arg::Str("Too many temporary blobs"));
 	}
@@ -325,6 +327,9 @@ blb* blb::create2(thread_db* tdbb,
 						   NULL, NULL, NULL, NULL);
 
 	blb* blob = allocate_blob(tdbb, transaction);
+
+	if (userBlob)
+		blob->blb_flags |= BLB_user;
 
 	if (type & isc_bpb_type_stream)
 		blob->blb_flags |= BLB_stream;
@@ -448,6 +453,7 @@ void BLB_garbage_collect(thread_db* tdbb,
  **************************************/
 	SET_TDBB(tdbb);
 
+	fb_assert(prior_page > 0);
 	RecordBitmap bmGoing;
 	ULONG cntGoing = 0;
 
@@ -645,7 +651,7 @@ ULONG blb::BLB_get_data(thread_db* tdbb, UCHAR* buffer, SLONG length, bool close
 		n = BLB_get_segment(tdbb, p, n);
 		p += n;
 		length -= n;
-		if (blb_flags & BLB_eof)
+		if ((blb_flags & BLB_eof) || (n == 0))
 			break;
 	}
 
@@ -728,7 +734,7 @@ USHORT blb::BLB_get_segment(thread_db* tdbb, void* segment, USHORT buffer_length
 		else
 		{
 			blb_space_remaining = blb_length - seek;
-			blb_segment = getBuffer() + seek;
+			blb_segment = ((UCHAR*) ((blob_page*) getBuffer())->blp_page) + seek;
 		}
 	}
 
@@ -973,22 +979,23 @@ SLONG blb::BLB_lseek(USHORT mode, SLONG offset)
 	if (!(blb_flags & BLB_stream))
 		ERR_post(Arg::Gds(isc_bad_segstr_type));
 
+	SINT64 position = offset;
+
 	if (mode == 1)
-		offset += blb_seek;
+		position += blb_seek;
 	else if (mode == 2)
-		offset = blb_length + offset;
+		position += blb_length;
 
-	if (offset < 0)
-		offset = 0;
-
-	if (offset > (SLONG) blb_length)
-		offset = blb_length;
-
-	blb_seek = offset;
+	if (position <= 0)
+		blb_seek = 0;
+	else if (static_cast<FB_UINT64>(position) > blb_length)
+		blb_seek = blb_length;
+	else
+		blb_seek = static_cast<FB_UINT64>(position);
 	blb_flags |= BLB_seek;
 	blb_flags &= ~BLB_eof;
 
-	return offset;
+	return blb_seek;
 }
 
 
@@ -1295,7 +1302,9 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 			array->arr_request = own_request;
 	}
 
-	blob->destroy(!materialized_blob);
+	const bool purgeBlob = !materialized_blob ||
+		((transaction->tra_flags & TRA_auto_release_temp_blobid) && (blob->blb_flags & BLB_user));
+	blob->destroy(purgeBlob);
 }
 
 
@@ -1481,7 +1490,7 @@ blb* blb::open2(thread_db* tdbb,
 		// Get first data page in anticipation of reading.
 
 		if (blob->blb_level == 0)
-			blob->blb_segment = blob->getBuffer();
+			blob->blb_segment = (UCHAR*) ((blob_page*) blob->getBuffer())->blp_page;
 	}
 
 	UCharBuffer new_bpb;
@@ -1497,8 +1506,11 @@ blb* blb::open2(thread_db* tdbb,
 		{
 			if (!to_type_specified)
 				to = isc_blob_text;
+			// Source is either a temporary BLOB already created by data coercion logic
+			// or a permanent blob which ID was delivered to client "as is" i.e. data coercion is not needed.
+			// In either case it is already in needed character set and further filtering is not needed
 			if (!to_charset_specified)
-				to_charset = CS_dynamic;
+				to_charset = blob->blb_charset;
 		}
 
 		BLB_gen_bpb(from, to, from_charset, to_charset, new_bpb);
@@ -1748,8 +1760,12 @@ void blb::put_slice(thread_db*	tdbb,
 		ERR_punt();
 
 	jrd_rel* relation;
-	if (info.sdl_info_relation.length()) {
-		relation = MET_lookup_relation(tdbb, info.sdl_info_relation);
+	if (info.sdl_info_relation.object.hasData())
+	{
+		QualifiedName infoRelationName(info.sdl_info_relation);
+		tdbb->getAttachment()->qualifyExistingName(tdbb, infoRelationName, {obj_relation});
+
+		relation = MET_lookup_relation(tdbb, infoRelationName);
 	}
 	else {
 		relation = MET_relation(tdbb, info.sdl_info_rid);
@@ -2112,7 +2128,7 @@ static ISC_STATUS blob_filter(USHORT action, BlobControl* control)
 
 	case isc_blob_filter_seek:
 		fb_assert(false);
-		// fail through ...
+		[[fallthrough]];
 
 	default:
 		ERR_post(Arg::Gds(isc_uns_ext));
@@ -2151,11 +2167,13 @@ blb* blb::copy_blob(thread_db* tdbb, const bid* source, bid* destination,
 	}
 
 	HalfStaticArray<UCHAR, 2048> buffer;
-	UCHAR* buff = buffer.getBuffer(input->blb_max_segment);
+	UCHAR* buff = buffer.getBuffer(input->isSegmented() ?
+		input->blb_max_segment :
+		MIN(input->blb_length, 32768));
 
 	while (true)
 	{
-		const USHORT length = input->BLB_get_segment(tdbb, buff, input->blb_max_segment);
+		const USHORT length = input->BLB_get_segment(tdbb, buff, buffer.getCapacity());
 		if (input->blb_flags & BLB_eof) {
 			break;
 		}
@@ -2601,8 +2619,7 @@ static void move_from_string(thread_db* tdbb, const dsc* from_desc, dsc* to_desc
 	temp_bid.clear();
 	blb* blob = blb::create2(tdbb, transaction, &temp_bid, bpb.getCount(), bpb.begin());
 
-	DSC blob_desc;
-	blob_desc.clear();
+	dsc blob_desc;
 
 	blob_desc.dsc_scale = to_desc->dsc_scale;	// blob charset
 	blob_desc.dsc_flags = (blob_desc.dsc_flags & 0xFF) | (to_desc->dsc_flags & 0xFF00);	// blob collation
@@ -2914,7 +2931,7 @@ static blb* store_array(thread_db* tdbb, jrd_tra* transaction, bid* blob_id)
 					array->arr_desc.iad_length);
 
 	// Write out actual array
-	const USHORT seg_limit = 32768;
+	constexpr USHORT seg_limit = 32768;
 	const BLOB_PTR* p = array->arr_data;
 	SLONG length = array->arr_effective_length;
 	while (length > seg_limit)
@@ -2967,7 +2984,7 @@ void blb::getFromPage(USHORT length, const UCHAR* data)
 {
 	if (blb_level == 0)
 	{
-		blb_space_remaining = length;
+		blb_space_remaining = length - BLH_SIZE;
 		if (length)
 			memcpy(getBuffer(), data, length);
 	}

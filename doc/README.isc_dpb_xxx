@@ -1,0 +1,6 @@
+New Database Parameter Block items:
+
+1. isc_dpb_owner :
+	Used for createDatabase() call to set the owner for the new database
+	to be different from user set with isc_user_name.
+	Can be used only by users with admin rights.

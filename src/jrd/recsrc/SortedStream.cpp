@@ -116,41 +116,47 @@ bool SortedStream::refetchRecord(thread_db* tdbb) const
 	return m_next->refetchRecord(tdbb);
 }
 
-bool SortedStream::lockRecord(thread_db* tdbb) const
+WriteLockResult SortedStream::lockRecord(thread_db* tdbb) const
 {
 	return m_next->lockRecord(tdbb);
 }
 
-void SortedStream::getChildren(Array<const RecordSource*>& children) const
+void SortedStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	children.add(m_next);
+	level++;
+	plan += "SORT (";
+	m_next->getLegacyPlan(tdbb, plan, level);
+	plan += ")";
 }
 
-void SortedStream::print(thread_db* tdbb, string& plan,
-						 bool detailed, unsigned level, bool recurse) const
+void SortedStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
 {
-	if (detailed)
+	planEntry.className = "SortedStream";
+
+	string extras;
+	extras.printf(" (record length: %" ULONGFORMAT", key length: %" ULONGFORMAT")",
+		m_map->length, m_map->keyLength);
+
+	auto planDescription = &planEntry.lines.add();
+
+	if (m_map->flags & FLAG_REFETCH)
 	{
-		string extras;
-		extras.printf(" (record length: %" ULONGFORMAT", key length: %" ULONGFORMAT")",
-					  m_map->length, m_map->keyLength);
-
-		if (m_map->flags & FLAG_REFETCH)
-			plan += printIndent(++level) + "Refetch";
-
-		plan += printIndent(++level) +
-			((m_map->flags & FLAG_PROJECT) ? "Unique Sort" : "Sort") + extras;
-		printOptInfo(plan);
-
-		if (recurse)
-			m_next->print(tdbb, plan, true, level, recurse);
+		planDescription->text = "Refetch";
+		planDescription = &planEntry.lines.add();
+		++planDescription->level;
+		++level;
 	}
-	else
+
+	planDescription->text += ((m_map->flags & FLAG_PROJECT) ? "Unique Sort" : "Sort") + extras;
+	printOptInfo(planEntry.lines);
+
+	planEntry.recordLength = m_map->length;
+	planEntry.keyLength = m_map->keyLength;
+
+	if (recurse)
 	{
-		level++;
-		plan += "SORT (";
-		m_next->print(tdbb, plan, false, level, recurse);
-		plan += ")";
+		++level;
+		m_next->getPlan(tdbb, planEntry.children.add(), level, recurse);
 	}
 }
 
@@ -162,6 +168,11 @@ void SortedStream::markRecursive()
 void SortedStream::findUsedStreams(StreamList& streams, bool expandAll) const
 {
 	m_next->findUsedStreams(streams, expandAll);
+}
+
+bool SortedStream::isDependent(const StreamList& streams) const
+{
+	return m_next->isDependent(streams);
 }
 
 void SortedStream::invalidateRecords(Request* request) const
@@ -179,7 +190,6 @@ Sort* SortedStream::init(thread_db* tdbb) const
 	Request* const request = tdbb->getRequest();
 
 	m_next->open(tdbb);
-	ULONG records = 0;
 
 	// Initialize for sort. If this is really a project operation,
 	// establish a callback routine to reject duplicate records.
@@ -198,8 +208,6 @@ Sort* SortedStream::init(thread_db* tdbb) const
 
 	while (m_next->getRecord(tdbb))
 	{
-		records++;
-
 		// "Put" a record to sort. Actually, get the address of a place
 		// to build a record.
 
@@ -270,7 +278,7 @@ Sort* SortedStream::init(thread_db* tdbb) const
 				}
 				else
 				{
-					MOV_move(tdbb, from, &to);
+					MOV_move(tdbb, from, &to, true);
 				}
 			}
 		}
@@ -395,8 +403,9 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 					if (!refetchStreams.exist(item.stream))
 						refetchStreams.add(item.stream);
 				}
-				else // delay refetch until really necessary
-					rpb->rpb_runtime_flags |= RPB_refetch;
+
+				// Ensure records are also refetched before update/delete
+				rpb->rpb_runtime_flags |= RPB_refetch;
 			}
 
 			continue;
@@ -429,7 +438,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 		else
 		{
 			EVL_field(relation, record, id, &to);
-			MOV_move(tdbb, &from, &to);
+			MOV_move(tdbb, &from, &to, true);
 			record->clearNull(id);
 		}
 	}
@@ -478,7 +487,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 		if (!DPM_get(tdbb, &temp, LCK_read))
 			Arg::Gds(isc_no_cur_rec).raise();
 
-		tdbb->bumpRelStats(RuntimeStatistics::RECORD_RPT_READS, relation->rel_id);
+		tdbb->bumpStats(RecordStatType::RPT_READS, relation->rel_id);
 
 		if (VIO_chase_record_version(tdbb, &temp, transaction, tdbb->getDefaultPool(), false, false))
 		{
@@ -582,8 +591,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 		// We have to find the original record version, sigh.
 		// Scan version chain backwards until it's done.
 
-		RuntimeStatistics::Accumulator backversions(tdbb, relation,
-													RuntimeStatistics::RECORD_BACKVERSION_READS);
+		RuntimeStatistics::Accumulator backversions(tdbb, relation, RecordStatType::BACK_READS);
 
 		while (temp.rpb_transaction_nr != orgTraNum)
 		{

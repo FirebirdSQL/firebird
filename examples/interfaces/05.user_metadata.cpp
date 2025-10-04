@@ -31,6 +31,7 @@
  */
 
 #include "ifaceExamples.h"
+#include <atomic>
 
 static IMaster* master = fb_get_master_interface();
 
@@ -66,7 +67,7 @@ private:
 		}
 	};
 
-	FbSampleAtomic referenceCounter;
+	std::atomic_int referenceCounter;
 
 	// we are using only single field (varchar) in a sample, therefore no strong alignment requirements.
 	// In general message alignment is the maximum field alignment in that message.

@@ -30,15 +30,15 @@
   o EnumerateObjectList;
      - Simple demonstration of object enumeration.
 
-	o Show Help	 
-		- CreateHelpDlg;
-		- ShowHelpDlg: Integer;
-		- CloseHelpDlg;
-	
-	o Show some debug info for debugging inno setup script
-		- CreateDebugDlg
-		- CloseDebugDlg;
-		- ShowDebugDlg
+  o Show Help
+    - CreateHelpDlg;
+    - ShowHelpDlg: Integer;
+    - CloseHelpDlg;
+
+  o Show some debug info for debugging inno setup script
+    - CreateDebugDlg
+    - CloseDebugDlg;
+    - ShowDebugDlg
 
 *)
 
@@ -49,9 +49,9 @@ var
   CompGroupButtonsArray: array of string;
   CompGroup1, CompGroup2, CompGroup3, CompGroupButtons: TStringList;
 
-// This is a non-exhaustive list of components that need to be repositioned 
-// and/or resized if the form size is changed. Use EnumerateObjectList to 
-// get a full list of components. 
+// This is a non-exhaustive list of components that need to be repositioned
+// and/or resized if the form size is changed. Use EnumerateObjectList to
+// get a full list of components.
 procedure SetupWizardFormComponentsArrays;
 var
   i: integer;
@@ -85,93 +85,93 @@ begin
   CompGroup1Array[23]:='OuterNotebook';
 
   CompGroup1 := TStringList.create;
-  
+
   for i := 0 to GetArrayLength( CompGroup1Array )-1 do begin
-    CompGroup1.add( CompGroup1Array[i] );	
+    CompGroup1.add( CompGroup1Array[i] );
     CompGroup1.objects[i] := (WizardForm.FindComponent(CompGroup1Array[i]));
   end;
-  
-	SetArrayLength(CompGroup2Array,8);
-	CompGroup2Array[0] := 'Bevel';
-	CompGroup2Array[1] := 'BeveledLabel';
-	CompGroup2Array[2] := 'LicenseAcceptedRadio';
-	CompGroup2Array[3] := 'LicenseNotAcceptedRadio';
-	CompGroup2Array[4] := 'DiskSpaceLabel';
-	CompGroup2Array[5] := 'ComponentsDiskSpaceLabel';
-	CompGroup2Array[6] := 'NoIconsCheck';
-	CompGroup2Array[7] := 'RunList';
+
+  SetArrayLength(CompGroup2Array,8);
+  CompGroup2Array[0] := 'Bevel';
+  CompGroup2Array[1] := 'BeveledLabel';
+  CompGroup2Array[2] := 'LicenseAcceptedRadio';
+  CompGroup2Array[3] := 'LicenseNotAcceptedRadio';
+  CompGroup2Array[4] := 'DiskSpaceLabel';
+  CompGroup2Array[5] := 'ComponentsDiskSpaceLabel';
+  CompGroup2Array[6] := 'NoIconsCheck';
+  CompGroup2Array[7] := 'RunList';
 
   CompGroup2 := TStringList.create;
   for i := 0 to GetArrayLength( CompGroup2Array )-1 do begin
-    CompGroup2.add(CompGroup2Array[i]);	
+    CompGroup2.add(CompGroup2Array[i]);
     CompGroup2.objects[i] := (WizardForm.FindComponent(CompGroup2Array[i]));
   end;
 
   SetArrayLength(CompGroup3Array,1);
-	CompGroup3Array[0] := 'WizardBitmapImage';
+  CompGroup3Array[0] := 'WizardBitmapImage';
   CompGroup3 := TStringList.create;
   for i:=0 to GetArrayLength(CompGroup3Array)-1 do begin
-    CompGroup3.add(CompGroup3Array[i]);	
+    CompGroup3.add(CompGroup3Array[i]);
     CompGroup3.objects[i] := (WizardForm.FindComponent(CompGroup3Array[i]));
   end;
 
-	SetArrayLength(CompGroupButtonsArray,3);
-	CompGroupButtonsArray[0] := 'BackButton';
-	CompGroupButtonsArray[1] := 'NextButton';
-	CompGroupButtonsArray[2] := 'CancelButton';
-	CompGroupButtons := TStringList.create;
+  SetArrayLength(CompGroupButtonsArray,3);
+  CompGroupButtonsArray[0] := 'BackButton';
+  CompGroupButtonsArray[1] := 'NextButton';
+  CompGroupButtonsArray[2] := 'CancelButton';
+  CompGroupButtons := TStringList.create;
   for i:=0 to GetArrayLength(CompGroupButtonsArray)-1 do begin
-    CompGroupButtons.add(CompGroupButtonsArray[i]);	
+    CompGroupButtons.add(CompGroupButtonsArray[i]);
     CompGroupButtons.objects[i] := (WizardForm.FindComponent(CompGroupButtonsArray[i]));
   end;
 
 end;
-	
+
 procedure ResizeWizardFormHeight(AValue: Integer);
 var
-	i: integer;
+  i: integer;
 begin
     wizardform.height := wizardform.height+AValue;
     wizardform.top := wizardform.top - (AValue div 2);
 
     // Group 1 - reset height of components
-		for i:=0 to GetArrayLength(CompGroup1Array)-1 do
-			TControl(CompGroup1.objects[i]).height := TControl(CompGroup1.objects[i]).height + Avalue;
+    for i:=0 to GetArrayLength(CompGroup1Array)-1 do
+      TControl(CompGroup1.objects[i]).height := TControl(CompGroup1.objects[i]).height + Avalue;
 
-		// Group 2 - reset top of components
-		for i:=0 to GetArrayLength(CompGroup2Array)-1 do
-			TControl(CompGroup2.objects[i]).top := TControl(CompGroup2.objects[i]).top + AValue;
+    // Group 2 - reset top of components
+    for i:=0 to GetArrayLength(CompGroup2Array)-1 do
+      TControl(CompGroup2.objects[i]).top := TControl(CompGroup2.objects[i]).top + AValue;
 
     // Group 3 - reset top of components but keep 'centered' vertically.
-		for i:=0 to GetArrayLength(CompGroup3Array)-1 do
-			TControl( CompGroup3.objects[i]).top := TControl(CompGroup3.objects[i]).top + (AValue div 2);
-			
-    // Group Buttons - reset top of components 
-		for i:=0 to GetArrayLength(CompGroupButtonsArray)-1 do
-			TControl(CompGroupButtons.objects[i]).top := TControl(CompGroupButtons.objects[i]).top + AValue;
-			
+    for i:=0 to GetArrayLength(CompGroup3Array)-1 do
+      TControl( CompGroup3.objects[i]).top := TControl(CompGroup3.objects[i]).top + (AValue div 2);
+
+    // Group Buttons - reset top of components
+    for i:=0 to GetArrayLength(CompGroupButtonsArray)-1 do
+      TControl(CompGroupButtons.objects[i]).top := TControl(CompGroupButtons.objects[i]).top + AValue;
+
 end;
 
 
 // This needs more work. for now it is not used by the installer.
 procedure ResizeWizardFormWidth(AValue: Integer);
 var
-	i: integer;
+  i: integer;
 begin
     wizardform.width := wizardform.width + AValue;
-		wizardform.left := wizardform.left - (AValue div 2);
-	
-    // Group 1 - reset width of components
-		for i:=0 to GetArrayLength(CompGroup1Array)-1 do begin
-			TControl(CompGroup1.objects[i]).width := TControl(CompGroup1.objects[i]).width + Avalue;
-//			TControl(CompGroup1.objects[i]).left := TControl(CompGroup1.objects[i]).left + (Avalue div 2);
-		end;
+    wizardform.left := wizardform.left - (AValue div 2);
 
-		// Group 2 - reset left of components
-		for i:=0 to GetArrayLength(CompGroup2Array)-1 do begin
-			TControl(CompGroup2.objects[i]).left := TControl(CompGroup2.objects[i]).left + AValue;
-			TControl(CompGroup2.objects[i]).width := TControl(CompGroup2.objects[i]).width + (AValue div 2);
-		end;
+    // Group 1 - reset width of components
+    for i:=0 to GetArrayLength(CompGroup1Array)-1 do begin
+      TControl(CompGroup1.objects[i]).width := TControl(CompGroup1.objects[i]).width + Avalue;
+//      TControl(CompGroup1.objects[i]).left := TControl(CompGroup1.objects[i]).left + (Avalue div 2);
+    end;
+
+    // Group 2 - reset left of components
+    for i:=0 to GetArrayLength(CompGroup2Array)-1 do begin
+      TControl(CompGroup2.objects[i]).left := TControl(CompGroup2.objects[i]).left + AValue;
+      TControl(CompGroup2.objects[i]).width := TControl(CompGroup2.objects[i]).width + (AValue div 2);
+    end;
 
     // Group 3 - reset left of components but keep 'centered' horizontally.
 //		for i:=0 to GetArrayLength(CompGroup3Array)-1 do
@@ -284,20 +284,20 @@ end;
 
 function ShowHelpDlg: Integer;
 begin
-	CreateHelpDlg;
+  CreateHelpDlg;
   result := HelpDlg.ShowModal;
-	CloseHelpDlg;
+  CloseHelpDlg;
 end;
 
 
 // Add a simple debug dialogue
-var 
-	DebugDlg: TForm;
-	
+var
+  DebugDlg: TForm;
+
 procedure CreateDebugDlg(aString: String; ADescription: String);
 var
   DebugText: TMemo;
-//	DebugDescription: TLabel;
+//  DebugDescription: TLabel;
   OKButton: TButton;
 begin
   DebugDlg := TForm.create(nil);
@@ -328,8 +328,8 @@ begin
   DebugDlg.ActiveControl := OKButton;
 
 end;
-	
-	
+
+
 procedure CloseDebugDlg;
 begin
   with DebugDlg do begin
@@ -341,8 +341,79 @@ end;
 
 function ShowDebugDlg(aString: String; aDescription: String): Integer;
 begin
-	CreateDebugDlg(aString,aDescription);
+  CreateDebugDlg(aString,aDescription);
   result := DebugDlg.ShowModal;
-	CloseDebugDlg;
+  CloseDebugDlg;
 end;
+
+
+procedure CreateAdminUserPage;
+
+begin
+
+  AdminUserPage := CreateInputQueryPage(wpSelectTasks,
+      ExpandConstant( '{cm:CreateSYSDBAPassword}' )
+    , ExpandConstant( '{cm:ClickThroughPWCreation}' ) + #13#10 +
+      ExpandConstant( '{cm:PasswordNote}' ) , '' );
+  AdminUserPage.Add( ExpandConstant( '{cm:SYSDBAPassword}' ), True);
+  AdminUserPage.Add( ExpandConstant( '{cm:RetypeSYSDBAPassword}' ), True);
+
+  AdminUserPage.Values[0] := SYSDBAPassword;
+  AdminUserPage.Values[1] := SYSDBAPassword;
+
+end;
+
+
+procedure DonateButtonOnClick(Sender: TObject);
+var
+  ErrorCode: Integer;
+begin
+  ShellExecAsOriginalUser('open', 'https://firebirdsql.org/en/donate/', '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
+end;
+
+
+procedure CreateDonorPage;
+var
+  DonorText: AnsiString;
+
+begin
+
+// NOTE - The rtf must be pasted as a single line in the custom_messages.inc for the translated language. When removomg the EOLs pay attention that \par is always followed by a space.
+(*
+{\rtf1\ansi\ansicpg1252\deff0\nouicompat\deflang1033{\fonttbl{\f0\fnil\fcharset0 Calibri;}}{\colortbl ;\red0\green0\blue255;}{\*\generator Riched20 10.0.17763}\viewkind4\uc1\pard\sa200\sl276\slmult1\qj\f0\fs24\lang9 Firebird has empowered users worldwide with its reliable and powerful database capabilities, thanks to years of dedicated development and community collaboration.\par \pard\li568\ri568\sa200\sl240\slmult1\qj\par  \pard\sa200\sl276\slmult1\qj To ensure Firebird\rquote s continued growth and advancement, we invite you to {{\field{\*\fldinst{HYPERLINK "https://firebirdsql.org/en/donate"}}{\fldrslt{\ul\cf1 make a donation}}}}\f0\fs24   through the Firebird Foundation. Your generous contributions help fund ongoing development, maintain critical infrastructure, and expand the features you rely on. Additionally, our affordable subscriptions offer exclusive benefits designed to enhance your Firebird experience.\par \par Every contribution, big or small, plays a vital role in keeping Firebird innovative and robust for everyone.\par \par Visit our {{\field{\*\fldinst{HYPERLINK https://firebirdsql.org/en/firebird-foundation/ }}{\fldrslt{website\ul0\cf0}}}}\f0\fs24  to explore how you can contribute to this mission and help ensure Firebird\rquote s bright future. Thank you for being a valued part of the Firebird community!\par };
+*)
+
+  DonorPage :=  CreateCustomPage( wpInfoAfter, 'Support Firebird Development', '');
+// For testing place it after the welcome page
+//  DonorPage :=  CreateCustomPage( wpWelcome, 'Support Firebird Development', '');
+
+  DonorText := ExpandConstant('{cm:DonorPage}');
+
+  RichEditViewer := TRichEditViewer.Create(DonorPage);
+  RichEditViewer.Width := DonorPage.SurfaceWidth;
+  RichEditViewer.Height := DonorPage.SurfaceHeight;
+  RichEditViewer.Anchors := [akLeft, akTop, akRight, akBottom];
+  RichEditViewer.BevelKind := bkNone;
+  RichEditViewer.BorderStyle := bsNone;
+  RichEditViewer.Parent := DonorPage.Surface;
+  RichEditViewer.ScrollBars := ssNone;
+  RichEditViewer.UseRichEdit := True;
+  RichEditViewer.RTFText := DonorText;
+  RichEditViewer.ReadOnly := True;
+
+  DonateButton := TNewButton.Create(WizardForm);
+  DonateButton.Left := 10;
+  DonateButton.Top := WizardForm.CancelButton.Top;
+  // NOTE - If adding new translations be sure to check that this button is wide enough
+  // for the translation of 'Donate Now'.
+  DonateButton.Width := WizardForm.CancelButton.Width + 40;
+  DonateButton.Height := WizardForm.CancelButton.Height;
+  DonateButton.Anchors := [akLeft, akBottom];
+  DonateButton.Caption := ExpandConstant('{cm:DonateNow}');
+  DonateButton.OnClick := @DonateButtonOnClick;
+  DonateButton.Parent := WizardForm;
+  DonateButton.Visible := False;
+
+end;
+
 

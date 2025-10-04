@@ -35,7 +35,6 @@
 #include "../gpre/gpre_proto.h"
 #include "../gpre/lang_proto.h"
 #include "../yvalve/gds_proto.h"
-#include "../common/utils_proto.h"
 
 static void align(const int);
 static void asgn_from(ref*, int);
@@ -51,7 +50,7 @@ static void gen_estore(const act*, int, bool);
 static void gen_endfor(const act*, int);
 static void gen_erase(const act*, int);
 static void gen_for(const act*, int);
-static char* gen_name(char* const, const ref*);
+static char* gen_name(char* const, const ref*) noexcept;
 static void gen_raw(const gpre_req*);
 static void gen_receive(const gpre_req*, const gpre_port*);
 static void gen_request(const gpre_req*);
@@ -68,7 +67,7 @@ static void printa(const int, const TEXT*, ...);
 
 static bool global_first_flag = false;
 
-const int INDENT = 3;
+constexpr int INDENT = 3;
 
 static const char* const GDS_VTOV = "gds__vtov";
 static const char* const JRD_VTOF = "jrd_vtof";
@@ -103,6 +102,7 @@ void INT_CXX_action( const act* action, int column)
 	case ACT_s_start:
 		begin(column);
 		align(column);
+		break;
 	default:
 		break;
 	}
@@ -388,9 +388,9 @@ static void gen_endfor( const act* action, int column)
 //		Generate substitution text for ERASE.
 //
 
-static void gen_erase( const act* action, int column)
+static void gen_erase(const act* action, int column)
 {
-	upd* erase = (upd*) action->act_object;
+	const upd* erase = (upd*) action->act_object;
 	gen_send(erase->upd_request, erase->upd_port, column, false);
 }
 
@@ -424,10 +424,10 @@ static void gen_for( const act* action, int column)
 //		port and parameter idents.
 //
 
-static char* gen_name(char* const string, const ref* reference)
+static char* gen_name(char* const string, const ref* reference) noexcept
 {
-	fb_utils::snprintf(string, MAX_REF_SIZE, "jrd_%d.jrd_%d",
-					   reference->ref_port->por_ident, reference->ref_ident);
+	snprintf(string, MAX_REF_SIZE, "jrd_%" ULONGFORMAT ".jrd_%u",
+		reference->ref_port->por_ident, reference->ref_ident);
 
 	return string;
 }
@@ -451,9 +451,9 @@ static void gen_raw( const gpre_req* request)
 	{
 		const UCHAR c = *blr++;
 		if ((c >= 'A' && c <= 'Z') || c == '$' || c == '_')
-			sprintf(p, "'%c',", c);
+			snprintf(p, sizeof(buffer) - (p - buffer), "'%c',", c);
 		else
-			sprintf(p, "%d,", c);
+			snprintf(p, sizeof(buffer) - (p - buffer), "%d,", c);
 		while (*p)
 			p++;
 		if (p - buffer > 60)
@@ -709,8 +709,8 @@ static void make_port( const gpre_port* port, int column)
 		default:
 			{
 				TEXT s[ERROR_LENGTH];
-				fb_utils::snprintf(s, sizeof(s), "datatype %d unknown for field %s, msg %d",
-						field->fld_dtype, name, port->por_msg_number);
+				snprintf(s, sizeof(s), "datatype %d unknown for field %s, msg %d",
+					field->fld_dtype, name, port->por_msg_number);
 				CPR_error(s);
 				return;
 			}

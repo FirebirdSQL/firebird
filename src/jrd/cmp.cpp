@@ -266,6 +266,8 @@ const Format* CMP_format(thread_db* tdbb, CompilerScratch* csb, StreamType strea
 			tail->csb_format = MET_current(tdbb, tail->csb_relation);
 		else if (tail->csb_procedure)
 			tail->csb_format = tail->csb_procedure->prc_record_format;
+		else if (tail->csb_table_value_fun)
+			tail->csb_format = tail->csb_table_value_fun->recordFormat;
 		//// TODO: LocalTableSourceNode
 		else
 			IBERROR(222);	// msg 222 bad blr - invalid stream
@@ -328,8 +330,8 @@ void CMP_post_access(thread_db* tdbb,
 					 SLONG ssRelationId,			// SQL SECURITY relation in which context permissions should be check
 					 SecurityClass::flags_t mask,
 					 ObjectType obj_type,
-					 const MetaName& name,
-					 const MetaName& r_name)
+					 const QualifiedName& name,
+					 const MetaName& columnName)
 {
 /**************************************
  *
@@ -353,7 +355,7 @@ void CMP_post_access(thread_db* tdbb,
 
 	SET_TDBB(tdbb);
 
-	AccessItem access(security_name, ssRelationId, name, obj_type, mask, r_name);
+	AccessItem access(security_name, ssRelationId, name, obj_type, mask, columnName);
 
 	FB_SIZE_T i;
 
@@ -459,6 +461,184 @@ ItemInfo* CMP_pass2_validation(thread_db* tdbb, CompilerScratch* csb, const Item
 }
 
 
+bool CMP_procedure_arguments(
+	thread_db* tdbb,
+	CompilerScratch* csb,
+	Routine* routine,
+	bool isInput,
+	USHORT argCount,
+	ObjectsArray<MetaName>* argNames,
+	NestConst<ValueListNode>& sources,
+	NestConst<ValueListNode>& targets,
+	NestConst<MessageNode>& message,
+	Arg::StatusVector& mismatchStatus)
+{
+	auto& pool = *tdbb->getDefaultPool();
+	auto& fields = isInput ? routine->getInputFields() : routine->getOutputFields();
+	const auto format = isInput ? routine->getInputFormat() : routine->getOutputFormat();
+
+	if ((isInput && fields.hasData() && (argCount || routine->getDefaultCount())) ||
+		(!isInput && argCount))
+	{
+		if (isInput)
+			sources->items.resize(fields.getCount());
+		else
+			targets = FB_NEW_POOL(pool) ValueListNode(pool, argCount);
+
+		// We have a few parameters. Get on with creating the message block
+		// Outer messages map may start with 2, but they are always in the routine start.
+		USHORT n = ++csb->csb_msg_number;
+		if (n < 2)
+			csb->csb_msg_number = n = 2;
+		const auto tail = CMP_csb_element(csb, n);
+
+		/* dimitr: procedure (with its parameter formats) is allocated out of
+					its own pool (prc_request->req_pool) and can be freed during
+					the cache cleanup (MET_clear_cache). Since the current
+					tdbb default pool is different from the procedure's one,
+					it's dangerous to copy a pointer from one request to another.
+					As an experiment, I've decided to copy format by value
+					instead of copying the reference. Since Format structure
+					doesn't contain any pointers, it should be safe to use a
+					default assignment operator which does a simple byte copy.
+					This change fixes one serious bug in the current codebase.
+					I think that this situation can (and probably should) be
+					handled by the metadata cache (via incrementing prc_use_count)
+					to avoid unexpected cache cleanups, but that area is out of my
+					knowledge. So this fix should be considered a temporary solution.
+
+		message->format = format;
+		*/
+		message = tail->csb_message = FB_NEW_POOL(pool) MessageNode(pool, *format);
+		// --- end of fix ---
+		message->messageNumber = n;
+
+		const auto positionalArgCount = argNames ? argCount - argNames->getCount() : argCount;
+		auto sourceArgIt = sources->items.begin();
+		LeftPooledMap<MetaName, NestConst<ValueExprNode>> argsByName;
+
+		if (positionalArgCount)
+		{
+			if (argCount > fields.getCount())
+				mismatchStatus << Arg::Gds(isc_wronumarg);
+
+			for (auto pos = 0u; pos < positionalArgCount; ++pos)
+			{
+				if (pos < fields.getCount())
+				{
+					const auto& parameter = fields[pos];
+
+					if (argsByName.put(parameter->prm_name, *sourceArgIt))
+						mismatchStatus << Arg::Gds(isc_param_multiple_assignments) << parameter->prm_name;
+				}
+
+				++sourceArgIt;
+			}
+		}
+
+		if (argNames)
+		{
+			for (const auto& argName : *argNames)
+			{
+				if (argsByName.put(argName, *sourceArgIt++))
+					mismatchStatus << Arg::Gds(isc_param_multiple_assignments) << argName;
+			}
+		}
+
+		sourceArgIt = sources->items.begin();
+		auto targetArgIt = targets->items.begin();
+
+		for (auto& parameter : fields)
+		{
+			const auto argValue = argsByName.get(parameter->prm_name);
+			const bool argExists = argsByName.exist(parameter->prm_name);
+
+			if (argValue)
+			{
+				*sourceArgIt = *argValue;
+				argsByName.remove(parameter->prm_name);
+			}
+
+			if (!argValue || !*argValue)
+			{
+				if (isInput)
+				{
+					if (parameter->prm_default_value)
+						*sourceArgIt = CMP_clone_node(tdbb, csb, parameter->prm_default_value);
+					else if (argExists)	// explicit DEFAULT in caller
+					{
+						FieldInfo fieldInfo;
+
+						if (parameter->prm_mechanism != prm_mech_type_of &&
+							!fb_utils::implicit_domain(parameter->prm_field_source.object.c_str()))
+						{
+							const QualifiedNameMetaNamePair entry(parameter->prm_field_source, {});
+
+							if (!csb->csb_map_field_info.get(entry, fieldInfo))
+							{
+								dsc dummyDesc;
+								MET_get_domain(tdbb, csb->csb_pool, parameter->prm_field_source, &dummyDesc, &fieldInfo);
+								csb->csb_map_field_info.put(entry, fieldInfo);
+							}
+						}
+
+						if (fieldInfo.defaultValue)
+							*sourceArgIt = CMP_clone_node(tdbb, csb, fieldInfo.defaultValue);
+						else
+							*sourceArgIt = NullNode::instance();
+					}
+					else
+						mismatchStatus << Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
+				}
+				else
+					continue;
+			}
+
+			++sourceArgIt;
+
+			const auto paramNode = FB_NEW_POOL(csb->csb_pool) ParameterNode(csb->csb_pool);
+			paramNode->messageNumber = message->messageNumber;
+			paramNode->message = message;
+			paramNode->argNumber = parameter->prm_number * 2;
+
+			const auto paramFlagNode = FB_NEW_POOL(csb->csb_pool) ParameterNode(csb->csb_pool);
+			paramFlagNode->messageNumber = message->messageNumber;
+			paramFlagNode->message = message;
+			paramFlagNode->argNumber = parameter->prm_number * 2 + 1;
+
+			paramNode->argFlag = paramFlagNode;
+
+			*targetArgIt++ = paramNode;
+		}
+
+		if (argsByName.hasData())
+		{
+			for (const auto& argPair : argsByName)
+				mismatchStatus << Arg::Gds(isc_param_not_exist) << argPair.first;
+		}
+	}
+	else if (isInput && !argNames)
+	{
+		if (argCount > fields.getCount())
+			mismatchStatus << Arg::Gds(isc_wronumarg);
+
+		for (unsigned i = 0; i < fields.getCount(); ++i)
+		{
+			// default value for parameter
+			if (i >= argCount)
+			{
+				auto parameter = fields[i];
+
+				if (!parameter->prm_default_value)
+					mismatchStatus << Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
+			}
+		}
+	}
+
+	return mismatchStatus.isEmpty();
+}
+
+
 void CMP_post_procedure_access(thread_db* tdbb, CompilerScratch* csb, jrd_prc* procedure)
 {
 /**************************************
@@ -482,18 +662,21 @@ void CMP_post_procedure_access(thread_db* tdbb, CompilerScratch* csb, jrd_prc* p
 	if (csb->csb_g_flags & (csb_internal | csb_ignore_perm))
 		return;
 
+	const SLONG ssRelationId = csb->csb_view ? csb->csb_view->rel_id : 0;
+
+	CMP_post_access(tdbb, csb, procedure->getSecurityName().schema, ssRelationId,
+		SCL_usage, obj_schemas, QualifiedName(procedure->getName().schema));
+
 	// this request must have EXECUTE permission on the stored procedure
 	if (procedure->getName().package.isEmpty())
 	{
-		CMP_post_access(tdbb, csb, procedure->getSecurityName(),
-			(csb->csb_view ? csb->csb_view->rel_id : 0),
-			SCL_execute, obj_procedures, procedure->getName().identifier);
+		CMP_post_access(tdbb, csb, procedure->getSecurityName().object, ssRelationId,
+			SCL_execute, obj_procedures, procedure->getName());
 	}
 	else
 	{
-		CMP_post_access(tdbb, csb, procedure->getSecurityName(),
-			(csb->csb_view ? csb->csb_view->rel_id : 0),
-			SCL_execute, obj_packages, procedure->getName().package);
+		CMP_post_access(tdbb, csb, procedure->getSecurityName().object, ssRelationId,
+			SCL_execute, obj_packages, procedure->getName().getSchemaAndPackage());
 	}
 
 	// Add the procedure to list of external objects accessed
@@ -518,7 +701,7 @@ RecordSource* CMP_post_rse(thread_db* tdbb, CompilerScratch* csb, RseNode* rse)
  **************************************/
 	SET_TDBB(tdbb);
 
-	AutoSetRestore<ULONG> autoCurrentCursorProfileId(&csb->csb_currentCursorProfileId, csb->csb_nextCursorProfileId++);
+	fb_assert(csb->csb_currentCursorId);
 
 	const auto rsb = Optimizer::compile(tdbb, csb, rse);
 

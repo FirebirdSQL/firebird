@@ -115,26 +115,28 @@ bool FirstRowsStream::refetchRecord(thread_db* tdbb) const
 	return m_next->refetchRecord(tdbb);
 }
 
-bool FirstRowsStream::lockRecord(thread_db* tdbb) const
+WriteLockResult FirstRowsStream::lockRecord(thread_db* tdbb) const
 {
 	return m_next->lockRecord(tdbb);
 }
 
-void FirstRowsStream::getChildren(Array<const RecordSource*>& children) const
+void FirstRowsStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	children.add(m_next);
+	m_next->getLegacyPlan(tdbb, plan, level);
 }
 
-void FirstRowsStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void FirstRowsStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
 {
-	if (detailed)
-	{
-		plan += printIndent(++level) + "First N Records";
-		printOptInfo(plan);
-	}
+	planEntry.className = "FirstRowsStream";
+
+	planEntry.lines.add().text = "First N Records";
+	printOptInfo(planEntry.lines);
 
 	if (recurse)
-		m_next->print(tdbb, plan, detailed, level, recurse);
+	{
+		++level;
+		m_next->getPlan(tdbb, planEntry.children.add(), level, recurse);
+	}
 }
 
 void FirstRowsStream::markRecursive()
@@ -145,6 +147,11 @@ void FirstRowsStream::markRecursive()
 void FirstRowsStream::findUsedStreams(StreamList& streams, bool expandAll) const
 {
 	m_next->findUsedStreams(streams, expandAll);
+}
+
+bool FirstRowsStream::isDependent(const StreamList& streams) const
+{
+	return m_value->containsAnyStream(streams) || m_next->isDependent(streams);
 }
 
 void FirstRowsStream::invalidateRecords(Request* request) const

@@ -46,19 +46,19 @@ Firebird::UnloadDetector myModule;
 namespace Firebird
 {
 
-UnloadDetectorHelper* getUnloadDetector()
+UnloadDetectorHelper* getUnloadDetector() noexcept
 {
 	return &myModule;
 }
 
-void CachedMasterInterface::set(IMaster* master)
+void CachedMasterInterface::set(IMaster* master) noexcept
 {
 	fb_assert(master);
 	fb_assert(!cached);
 	cached = master;
 }
 
-IMaster* CachedMasterInterface::getMasterInterface()
+IMaster* CachedMasterInterface::getMasterInterface() noexcept
 {
 	if (!cached)
 	{
@@ -70,14 +70,14 @@ IMaster* CachedMasterInterface::getMasterInterface()
 unsigned int ConfigKeys::getKey(IFirebirdConf* config, const char* keyName)
 {
 	FbLocalStatus status;
-	unsigned int version = config->getVersion(&status) & 0xFFFF0000;
+	const unsigned int version = config->getVersion(&status) & 0xFFFF0000;
 	for (const_iterator itr = this->begin(); itr != this->end(); ++itr)
 	{
 		if (((*itr) & 0xFFFF0000) == version)
 			return *itr;
 	}
 
-	unsigned int secDbKey = config->getKey(keyName);
+	const unsigned int secDbKey = config->getKey(keyName);
 	if (secDbKey != INVALID_KEY)
 		this->push(secDbKey);
 

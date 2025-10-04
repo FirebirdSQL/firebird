@@ -36,18 +36,19 @@
 
 enum pp_vals {
 	PP_CREATE = 0,
-	PP_DATABASE = 1,
-	PP_SCHEMA = 2,
-	PP_PAGE_SIZE = 3,
-	PP_USER = 4,
-	PP_PASSWORD = 5,
-	PP_PAGESIZE = 6,
-	PP_LENGTH = 7,
-	PP_PAGES = 8,
-	PP_PAGE = 9,
-	PP_SET = 10,
-	PP_NAMES = 11,
-	PP_ROLE = 12
+	PP_DATABASE,
+	PP_PAGE_SIZE,
+	// Do not change order of above symbols. See usage of PP_PAGE_SIZE below for DPB creation.
+	PP_USER,
+	PP_PASSWORD,
+	PP_PAGESIZE,
+	PP_LENGTH,
+	PP_PAGES,
+	PP_PAGE,
+	PP_SET,
+	PP_NAMES,
+	PP_ROLE,
+	PP_OWNER
 };
 
 
@@ -60,12 +61,10 @@ struct pp_table
 };
 
 // This should be kept in sync with the rule db_initial_desc of parse.y for CREATE DATABASE.
-// Should delete SCHEMA in the future.
 static const pp_table pp_symbols[] =
 {
 	{"CREATE",  PP_CREATE},
 	{"DATABASE",  PP_DATABASE},
-	{"SCHEMA", PP_SCHEMA},
 	{"PAGE_SIZE", PP_PAGE_SIZE},
 	{"USER", PP_USER},
 	{"PASSWORD", PP_PASSWORD},
@@ -76,6 +75,7 @@ static const pp_table pp_symbols[] =
 	{"SET", PP_SET},
 	{"NAMES", PP_NAMES},
 	{"ROLE", PP_ROLE},
+	{"OWNER", PP_OWNER},
 	{"", 0}
 };
 
@@ -156,7 +156,7 @@ static NoCaseString getToken(unsigned& pos, const Tokens& toks, int symbol = SYM
 
  **/
 bool PREPARSE_execute(CheckStatusWrapper* status, Why::YAttachment** ptrAtt,
-					  string& stmt, bool* stmt_eaten, USHORT dialect)
+					  string& stmt, bool* stmt_eaten, USHORT dialect, unsigned dpbLength, const unsigned char* dpb)
 {
 	// no use creating separate pool for a couple of strings
 	ContextPoolHolder context(getDefaultMemoryPool());
@@ -217,17 +217,15 @@ bool PREPARSE_execute(CheckStatusWrapper* status, Why::YAttachment** ptrAtt,
 			}
 
 			NoCaseString token(getToken(pos, tks));
-			if (token != pp_symbols[PP_DATABASE].symbol && token != pp_symbols[PP_SCHEMA].symbol)
-			{
+			if (token != pp_symbols[PP_DATABASE].symbol)
 				return false;
-			}
 
 			PathName file_name(getToken(pos, tks, STRING).ToPathName());
 			*stmt_eaten = false;
-			ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
+			ClumpletWriter dpbWriter(ClumpletReader::dpbList, MAX_DPB_SIZE, dpb, dpbLength);
 
-			dpb.insertByte(isc_dpb_overwrite, 0);
-			dpb.insertInt(isc_dpb_sql_dialect, dialect);
+			dpbWriter.insertByte(isc_dpb_overwrite, 0);
+			dpbWriter.insertInt(isc_dpb_sql_dialect, dialect);
 
 			SLONG page_size = 0;
 			bool matched;
@@ -245,7 +243,7 @@ bool PREPARSE_execute(CheckStatusWrapper* status, Why::YAttachment** ptrAtt,
 				}
 
 				matched = false;
-				for (int i = 3; pp_symbols[i].symbol[0] && !matched; i++)
+				for (int i = PP_PAGE_SIZE; pp_symbols[i].symbol[0] && !matched; i++)
 				{
 					if (token == pp_symbols[i].symbol)
 					{
@@ -261,14 +259,14 @@ bool PREPARSE_execute(CheckStatusWrapper* status, Why::YAttachment** ptrAtt,
 								token = getToken(pos, tks, NUMERIC);
 
 							page_size = token.length() > 8 ? 100000000 : atol(token.c_str());
-							dpb.insertInt(isc_dpb_page_size, page_size);
+							dpbWriter.insertInt(isc_dpb_page_size, page_size);
 							matched = true;
 							break;
 
 						case PP_USER:
 							token = getToken(pos, tks, qStrip ? STRING : SYMBOL);
 
-							dpb.insertString(isc_dpb_user_name, token.ToString());
+							dpbWriter.insertString(isc_dpb_user_name, token.ToString());
 							matched = true;
 							hasUser = true;
 							break;
@@ -276,14 +274,14 @@ bool PREPARSE_execute(CheckStatusWrapper* status, Why::YAttachment** ptrAtt,
 						case PP_PASSWORD:
 							token = getToken(pos, tks, STRING);
 
-							dpb.insertString(isc_dpb_password, token.ToString());
+							dpbWriter.insertString(isc_dpb_password, token.ToString());
 							matched = true;
 							break;
 
 						case PP_ROLE:
 							token = getToken(pos, tks);
 
-							dpb.insertString(isc_dpb_sql_role_name, token.ToString());
+							dpbWriter.insertString(isc_dpb_sql_role_name, token.ToString());
 							matched = true;
 							break;
 
@@ -293,7 +291,7 @@ bool PREPARSE_execute(CheckStatusWrapper* status, Why::YAttachment** ptrAtt,
 								generate_error(token, UNEXPECTED_TOKEN);
 							token = getToken(pos, tks, STRING);
 
-							dpb.insertString(isc_dpb_lc_ctype, token.ToString());
+							dpbWriter.insertString(isc_dpb_lc_ctype, token.ToString());
 							matched = true;
 							break;
 
@@ -310,6 +308,13 @@ bool PREPARSE_execute(CheckStatusWrapper* status, Why::YAttachment** ptrAtt,
 						case PP_PAGES:
 							matched = true;
 							break;
+
+						case PP_OWNER:
+							token = getToken(pos, tks);
+
+							dpbWriter.insertString(isc_dpb_owner, token);
+							matched = true;
+							break;
 						} // switch
 					} // if
 				} // for
@@ -317,7 +322,7 @@ bool PREPARSE_execute(CheckStatusWrapper* status, Why::YAttachment** ptrAtt,
 
 			RefPtr<Why::Dispatcher> dispatcher(FB_NEW Why::Dispatcher);
 			*ptrAtt = dispatcher->createDatabase(status, file_name.c_str(),
-				dpb.getBufferLength(), dpb.getBuffer());
+				dpbWriter.getBufferLength(), dpbWriter.getBuffer());
 
 			if ((!hasUser) || ((status->getState() & IStatus::STATE_ERRORS) == 0) ||
 				(status->getErrors()[1] != isc_login))

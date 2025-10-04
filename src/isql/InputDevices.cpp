@@ -251,7 +251,8 @@ void InputDevices::saveCommand(const char* statement, const char* term)
 		if (f)
 		{
 			fputs(statement, f);
-			fputs(term, f);
+			if (*term)
+				fputs(term, f);
 			// Add newline to make the file more readable.
 			fputc('\n', f);
 		}

@@ -103,7 +103,7 @@ void BlrDebugWriter::putDebugArgument(UCHAR type, USHORT number, const TEXT* nam
 	debugData.add(reinterpret_cast<const UCHAR*>(name), len);
 }
 
-void BlrDebugWriter::putDebugCursor(USHORT number, const MetaName& name)
+void BlrDebugWriter::putDebugDeclaredCursor(USHORT number, const MetaName& name)
 {
 	if (debugData.isEmpty())
 		return;
@@ -119,6 +119,21 @@ void BlrDebugWriter::putDebugCursor(USHORT number, const MetaName& name)
 	debugData.add(reinterpret_cast<const UCHAR*>(name.c_str()), len);
 }
 
+void BlrDebugWriter::putDebugForCursor(const MetaName& name)
+{
+	if (debugData.isEmpty())
+		return;
+
+	debugData.add(fb_dbg_map_for_curname);
+
+	putBlrOffset();
+
+	USHORT len = MIN(name.length(), MAX_UCHAR);
+	debugData.add(len);
+
+	debugData.add(reinterpret_cast<const UCHAR*>(name.c_str()), len);
+}
+
 void BlrDebugWriter::putDebugSubFunction(DeclareSubFuncNode* subFuncNode)
 {
 	if (debugData.isEmpty())
@@ -127,7 +142,7 @@ void BlrDebugWriter::putDebugSubFunction(DeclareSubFuncNode* subFuncNode)
 	debugData.add(fb_dbg_subfunc);
 
 	dsql_udf* subFunc = subFuncNode->dsqlFunction;
-	const MetaName& name = subFunc->udf_name.identifier;
+	const auto& name = subFunc->udf_name.object;
 	USHORT len = MIN(name.length(), MAX_UCHAR);
 
 	debugData.add(len);
@@ -147,7 +162,7 @@ void BlrDebugWriter::putDebugSubProcedure(DeclareSubProcNode* subProcNode)
 	debugData.add(fb_dbg_subproc);
 
 	dsql_prc* subProc = subProcNode->dsqlProcedure;
-	const MetaName& name = subProc->prc_name.identifier;
+	const auto& name = subProc->prc_name.object;
 	USHORT len = MIN(name.length(), MAX_UCHAR);
 
 	debugData.add(len);

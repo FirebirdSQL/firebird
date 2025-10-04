@@ -637,7 +637,7 @@ static int des_setkey(unsigned char* key)
 
 /*
  * Encrypt (or decrypt if num_iter < 0) the 8 chars at "in" with abs(num_iter)
- * iterations of DES, using the the given 24-bit salt and the pre-computed key
+ * iterations of DES, using the given 24-bit salt and the pre-computed key
  * schedule, and store the resulting 8 chars at "out" (in == out is permitted).
  *
  * NOTE: the performance of this routine is critically dependent on your

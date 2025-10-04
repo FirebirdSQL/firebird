@@ -314,7 +314,7 @@ void UserManagement::commit()
 	}
 }
 
-USHORT UserManagement::put(Auth::DynamicUserData* userData)
+USHORT UserManagement::put(Auth::UserData* userData)
 {
 	const FB_SIZE_T ret = commands.getCount();
 	if (ret > MAX_USHORT)
@@ -379,7 +379,7 @@ void UserManagement::execute(USHORT id)
 
 	if (command->attr.entered() || command->op == Auth::ADDMOD_OPER)
 	{
-		Auth::StackUserData cmd;
+		Auth::UserData cmd;
 		cmd.op = Auth::DIS_OPER;
 		cmd.user.set(&statusWrapper, command->userName()->get());
 		check(&statusWrapper);
@@ -482,8 +482,13 @@ void UserManagement::execute(USHORT id)
 	}
 
 	int errcode = manager->execute(&statusWrapper, command, NULL);
-	if (!command->silent)
+
+	if (!command->silent &&
+		!(command->createIfNotExistsOnly &&
+			fb_utils::containsErrorCode(status.getErrors(), isc_unique_key_violation)))
+	{
 		checkSecurityResult(errcode, &status, command->userName()->get(), command->operation());
+	}
 
 	delete commands[id];
 	commands[id] = NULL;
@@ -609,7 +614,7 @@ RecordBuffer* UserManagement::getList(thread_db* tdbb, jrd_rel* relation)
 
 		for (FillSnapshot fillSnapshot(this); fillSnapshot.pos < managers.getCount(); ++fillSnapshot.pos)
 		{
-			Auth::StackUserData u;
+			Auth::UserData u;
 			u.op = Auth::DIS_OPER;
 
 			*ec = managers[fillSnapshot.pos].second->execute(currentWrapper, &u, &fillSnapshot);

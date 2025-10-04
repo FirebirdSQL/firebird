@@ -173,9 +173,6 @@ Program               Description
 12.batch_isc.cpp      Working with batch interface from ISC API.
 
 
-FbSampleAtomic        typedef required in many examples.
-
-
 
 dbcrypt - a sample of XOR database encryption (do not use in production!!!)
 

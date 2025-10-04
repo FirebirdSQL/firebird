@@ -64,7 +64,7 @@ Scrollable cursors
         If calculated position is beyond the cursor's boundaries, NO_DATA condition is returned.
 
   Note(s):
-    1. When a scrolling option is ommitted, NO SCROLL is implied (ie. cursor is opened as forward-only).
+    1. When a scrolling option is omitted, NO SCROLL is implied (ie. cursor is opened as forward-only).
        In PSQL, this means that only FETCH [NEXT FROM] commands can be used, other commands will return an error.
        For API users, this means that only fetchNext() API call can be used, other fetch methods will return an error.
     2. Scrollable cursors are internally materialized as a temporary record set,

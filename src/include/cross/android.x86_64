@@ -299,14 +299,14 @@
 /* Define to 1 if you have the `pthread_mutexattr_setprotocol' function. */
 /* undef HAVE_PTHREAD_MUTEXATTR_SETPROTOCOL */
 
-/* Define to 1 if you have the `pthread_mutexattr_setrobust_np' function. */
-/* #undef HAVE_PTHREAD_MUTEXATTR_SETROBUST_NP */
+/* Define to 1 if you have the `pthread_mutexattr_setrobust' function. */
+/* #undef HAVE_PTHREAD_MUTEXATTR_SETROBUST */
 
-/* Define to 1 if you have the `pthread_mutex_consistent_np' function. */
-/* #undef HAVE_PTHREAD_MUTEX_CONSISTENT_NP */
+/* Define to 1 if you have the `pthread_mutex_consistent' function. */
+/* #undef HAVE_PTHREAD_MUTEX_CONSISTENT */
 
-/* Define to 1 if you have the `pthread_rwlockattr_setkind_np' function. */
-/* #undef HAVE_PTHREAD_RWLOCKATTR_SETKIND_NP */
+/* Define to 1 if you have the `pthread_rwlockattr_setkind' function. */
+/* #undef HAVE_PTHREAD_RWLOCKATTR_SETKIND */
 
 /* Define to 1 if you have the <pwd.h> header file. */
 #define HAVE_PWD_H 1
@@ -325,9 +325,6 @@
 
 /* Define to 1 if you have the `semtimedop' function. */
 #define HAVE_SEMTIMEDOP 1
-
-/* Define to 1 if the system has the type `semun'. */
-/* #undef HAVE_SEMUN */
 
 /* Define to 1 if you have the `sem_init' function. */
 #define HAVE_SEM_INIT 1
@@ -403,12 +400,6 @@
 
 /* Define this if struct dirent has d_type */
 #define HAVE_STRUCT_DIRENT_D_TYPE 1
-
-/* Define to 1 if the system has the type `struct xdr_ops'. */
-#define HAVE_STRUCT_XDR_OPS 1
-
-/* Define to 1 if the system has the type `struct XDR::xdr_ops'. */
-/* #undef HAVE_STRUCT_XDR__XDR_OPS */
 
 /* Define to 1 if you have the `swab' function. */
 #define HAVE_SWAB 1

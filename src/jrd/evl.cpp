@@ -140,14 +140,14 @@ dsc* EVL_assign_to(thread_db* tdbb, const ValueExprNode* node)
 
 	if (auto paramNode = nodeAs<ParameterNode>(node))
 	{
+		auto paramRequest = paramNode->getParamRequest(request);
 		auto message = paramNode->message;
 		auto arg_number = paramNode->argNumber;
-		auto desc = &message->format->fmt_desc[arg_number];
+		auto desc = &message->getFormat(paramRequest)->fmt_desc[arg_number];
 
 		auto impure = request->getImpure<impure_value>(node->impureOffset);
 
-		impure->vlu_desc.dsc_address = paramNode->getParamRequest(request)->getImpure<UCHAR>(
-			message->impureOffset + (IPTR) desc->dsc_address);
+		impure->vlu_desc.dsc_address = message->getBuffer(paramRequest) + (IPTR) desc->dsc_address;
 		impure->vlu_desc.dsc_dtype = desc->dsc_dtype;
 		impure->vlu_desc.dsc_length = desc->dsc_length;
 		impure->vlu_desc.dsc_scale = desc->dsc_scale;
@@ -573,22 +573,10 @@ void EVL_make_value(thread_db* tdbb, const dsc* desc, impure_value* value, Memor
 
 	// Allocate a string block of sufficient size.
 
-	VaryingString* string = value->vlu_string;
+	if (!pool)
+		pool = tdbb->getDefaultPool();
 
-	if (string && string->str_length < length)
-	{
-		delete string;
-		string = NULL;
-	}
-
-	if (!string)
-	{
-		if (!pool)
-			pool = tdbb->getDefaultPool();
-
-		string = value->vlu_string = FB_NEW_RPT(*pool, length) VaryingString();
-		string->str_length = length;
-	}
+	VaryingString* string = value->getString(*pool, length);
 
 	value->vlu_desc.dsc_length = length;
 	UCHAR* target = string->str_data;
@@ -677,41 +665,8 @@ void EVL_validate(thread_db* tdbb, const Item& item, const ItemInfo* itemInfo, d
 		}
 		else
 		{
-			if (itemInfo->name.isEmpty())
-			{
-				int index = item.index + 1;
-
-				status = isc_not_valid_for;
-
-				if (item.type == Item::TYPE_VARIABLE)
-				{
-					const jrd_prc* procedure = request->getStatement()->procedure;
-
-					if (procedure)
-					{
-						if (index <= int(procedure->getOutputFields().getCount()))
-							s.printf("output parameter number %d", index);
-						else
-						{
-							s.printf("variable number %d",
-								index - int(procedure->getOutputFields().getCount()));
-						}
-					}
-					else
-						s.printf("variable number %d", index);
-				}
-				else if (item.type == Item::TYPE_PARAMETER && item.subType == 0)
-					s.printf("input parameter number %d", (index - 1) / 2 + 1);
-				else if (item.type == Item::TYPE_PARAMETER && item.subType == 1)
-					s.printf("output parameter number %d", index);
-
-				if (s.isEmpty())
-					arg = UNKNOWN_STRING_MARK;
-				else
-					arg = s.c_str();
-			}
-			else
-				arg = itemInfo->name.c_str();
+			s = item.getDescription(request, itemInfo);
+			arg = s.c_str();
 		}
 
 		ERR_post(Arg::Gds(status) << Arg::Str(arg) << Arg::Str(value));

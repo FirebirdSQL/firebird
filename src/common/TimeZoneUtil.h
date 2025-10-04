@@ -27,6 +27,7 @@
 #ifndef COMMON_TIME_ZONE_UTIL_H
 #define COMMON_TIME_ZONE_UTIL_H
 
+#include <atomic>
 #include <functional>
 #include "../common/classes/fb_string.h"
 #include "../common/classes/timestamp.h"
@@ -55,22 +56,22 @@ public:
 	static const ISC_DATE TIME_TZ_BASE_DATE;
 	static const char GMT_FALLBACK[5];	// "GMT*"
 
-	static const USHORT GMT_ZONE = 65535;
-	static const unsigned MAX_LEN = 32;
-	static const unsigned MAX_SIZE = MAX_LEN + 1;
+	static inline constexpr USHORT GMT_ZONE = 65535;
+	static inline constexpr unsigned MAX_LEN = 32;
+	static inline constexpr unsigned MAX_SIZE = MAX_LEN + 1;
 
 private:
 	static InitInstance<PathName> tzDataPath;
 
 public:
-	static UDate timeStampToIcuDate(ISC_TIMESTAMP ts)
+	static constexpr UDate timeStampToIcuDate(ISC_TIMESTAMP ts) noexcept
 	{
 		return (TimeStamp::timeStampToTicks(ts) -
 			((TimeStamp::UNIX_DATE - TimeStamp::MIN_DATE) * TimeStamp::ISC_TICKS_PER_DAY)) /
 			(ISC_TIME_SECONDS_PRECISION / 1000);
 	}
 
-	static ISC_TIMESTAMP icuDateToTimeStamp(UDate icuDate)
+	static constexpr ISC_TIMESTAMP icuDateToTimeStamp(UDate icuDate) noexcept
 	{
 		return TimeStamp::ticksToTimeStamp(icuDate * (ISC_TIME_SECONDS_PRECISION / 1000) +
 			((TimeStamp::UNIX_DATE - TimeStamp::MIN_DATE) * TimeStamp::ISC_TICKS_PER_DAY));
@@ -91,11 +92,13 @@ public:
 	static unsigned format(char* buffer, size_t bufferSize, USHORT timeZone,
 		bool fallback = false, SLONG offset = NO_OFFSET);
 
-	static bool isValidOffset(int sign, unsigned tzh, unsigned tzm);
+	static bool isValidOffset(int sign, unsigned tzh, unsigned tzm) noexcept;
 
 	static void extractOffset(const ISC_TIMESTAMP_TZ& timeStampTz, int* sign, unsigned* tzh, unsigned* tzm);
 	static void extractOffset(const ISC_TIMESTAMP_TZ& timeStampTz, SSHORT* offset);
 	static void extractOffset(const ISC_TIME_TZ& timeTz, SSHORT* offset);
+
+	static USHORT makeFromOffset(int sign, unsigned tzh, unsigned tzm);
 
 	static void localTimeToUtc(ISC_TIME& time, ISC_USHORT timeZone);
 	static void localTimeToUtc(ISC_TIME_TZ& timeTz);
@@ -103,7 +106,7 @@ public:
 	static void localTimeStampToUtc(ISC_TIMESTAMP& timeStamp, Callbacks* cb);
 	static void localTimeStampToUtc(ISC_TIMESTAMP_TZ& timeStampTz);
 
-	static const SLONG NO_OFFSET = MAX_SLONG;
+	static inline constexpr SLONG NO_OFFSET = MAX_SLONG;
 
 	static bool decodeTime(const ISC_TIME_TZ& timeTz, bool gmtFallback, SLONG gmtOffset,
 		struct tm* times, int* fractions = NULL);
@@ -140,11 +143,63 @@ public:
 	static ISC_TIMESTAMP_TZ dateToTimeStampTz(const ISC_DATE& date, Callbacks* cb);
 };
 
+class IcuCalendarWrapper
+{
+public:
+	IcuCalendarWrapper(UCalendar* aWrapped, std::atomic<UCalendar*>* aCachePtr) noexcept
+		: wrapped(aWrapped),
+		  cachePtr(aCachePtr)
+	{}
+
+	IcuCalendarWrapper(IcuCalendarWrapper&& o) noexcept
+		: wrapped(o.wrapped),
+		  cachePtr(o.cachePtr)
+	{
+		o.wrapped = nullptr;
+	}
+
+	~IcuCalendarWrapper()
+	{
+		if (wrapped)
+		{
+			auto newCached = cachePtr->exchange(wrapped);
+
+			if (newCached)
+			{
+				auto& icuLib = UnicodeUtil::getConversionICU();
+				icuLib.ucalClose(newCached);
+			}
+		}
+	}
+
+	IcuCalendarWrapper(const IcuCalendarWrapper&) = delete;
+	IcuCalendarWrapper& operator=(const IcuCalendarWrapper&) = delete;
+
+public:
+	UCalendar* operator->() noexcept
+	{
+		return wrapped;
+	}
+
+	operator UCalendar*() noexcept
+	{
+		return wrapped;
+	}
+
+	bool operator!() const noexcept
+	{
+		return !wrapped;
+	}
+
+private:
+	UCalendar* wrapped;
+	std::atomic<UCalendar*>* cachePtr;
+};
+
 class TimeZoneRuleIterator
 {
 public:
-	TimeZoneRuleIterator(USHORT aId, const ISC_TIMESTAMP_TZ& aFrom, const ISC_TIMESTAMP_TZ& aTo);
-	~TimeZoneRuleIterator();
+	TimeZoneRuleIterator(USHORT id, const ISC_TIMESTAMP_TZ& aFrom, const ISC_TIMESTAMP_TZ& aTo);
 
 public:
 	bool next();
@@ -156,11 +211,10 @@ public:
 	SSHORT dstOffset;
 
 private:
-	const USHORT id;
-	Jrd::UnicodeUtil::ConversionICU& icuLib;
+	UnicodeUtil::ConversionICU& icuLib;
 	SINT64 startTicks;
 	SINT64 toTicks;
-	UCalendar* icuCalendar;
+	IcuCalendarWrapper icuCalendar;
 	UDate icuDate;
 };
 

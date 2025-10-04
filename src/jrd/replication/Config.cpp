@@ -26,6 +26,8 @@
 #include "../common/isc_f_proto.h"
 #include "../common/status.h"
 #include "../common/StatusArg.h"
+#include "../common/utils_proto.h"
+#include "../common/os/os_utils.h"
 #include "../jrd/constants.h"
 
 #include "Utils.h"
@@ -49,15 +51,17 @@ using namespace Replication;
 
 namespace
 {
-	const char* REPLICATION_CFGFILE = "replication.conf";
+	constexpr const char* REPLICATION_CFGFILE = "replication.conf";
+	constexpr const char* KEY_SUFFIX_ENV = "env";
+	constexpr const char* KEY_SUFFIX_FILE = "file";
 
-	const ULONG DEFAULT_BUFFER_SIZE = 1024 * 1024; 				// 1 MB
-	const ULONG DEFAULT_SEGMENT_SIZE = 16 * 1024 * 1024;	// 16 MB
-	const ULONG DEFAULT_SEGMENT_COUNT = 8;
-	const ULONG DEFAULT_ARCHIVE_TIMEOUT = 60;				// seconds
-	const ULONG DEFAULT_GROUP_FLUSH_DELAY = 0;
-	const ULONG DEFAULT_APPLY_IDLE_TIMEOUT = 10;				// seconds
-	const ULONG DEFAULT_APPLY_ERROR_TIMEOUT = 60;				// seconds
+	constexpr ULONG DEFAULT_BUFFER_SIZE = 1024 * 1024; 			// 1 MB
+	constexpr ULONG DEFAULT_SEGMENT_SIZE = 16 * 1024 * 1024;	// 16 MB
+	constexpr ULONG DEFAULT_SEGMENT_COUNT = 8;
+	constexpr ULONG DEFAULT_ARCHIVE_TIMEOUT = 60;				// seconds
+	constexpr ULONG DEFAULT_GROUP_FLUSH_DELAY = 0;
+	constexpr ULONG DEFAULT_APPLY_IDLE_TIMEOUT = 10;			// seconds
+	constexpr ULONG DEFAULT_APPLY_ERROR_TIMEOUT = 60;			// seconds
 
 	void parseLong(const string& input, ULONG& output)
 	{
@@ -77,9 +81,7 @@ namespace
 
 	void configError(const string& type, const string& key, const string& value)
 	{
-		string msg;
-		msg.printf("%s specifies %s: %s", key.c_str(), type.c_str(), value.c_str());
-		raiseError(msg.c_str());
+		raiseError("%s specifies %s: %s", key.c_str(), type.c_str(), value.c_str());
 	}
 
 	void checkAccess(const PathName& path, const string& key)
@@ -99,6 +101,73 @@ namespace
 
 		status->setErrors(sv.value());
 	}
+
+	void parseExternalValue(const string& key, const string& value, string& output)
+	{
+		const auto pos = key.rfind('_');
+		if (pos == string::npos)
+		{
+			output = value.c_str();
+			return;
+		}
+
+		string temp;
+		const string key_source = key.substr(pos + 1);
+
+		if (key_source.equals(KEY_SUFFIX_ENV))
+		{
+			fb_utils::readenv(value.c_str(), temp);
+			if (temp.isEmpty())
+				configError("missing environment variable", key, value);
+		}
+		else if (key_source.equals(KEY_SUFFIX_FILE))
+		{
+			PathName filename = value.c_str();
+			PathUtils::fixupSeparators(filename);
+			if (PathUtils::isRelative(filename))
+				filename = fb_utils::getPrefix(IConfigManager::DIR_CONF, filename.c_str());
+
+			AutoPtr<FILE> file(os_utils::fopen(filename.c_str(), "rt"));
+			if (!file)
+				configError("missing or inaccessible file", key, filename.c_str());
+
+			if (temp.LoadFromFile(file))
+				temp.alltrim("\r");
+
+			if (temp.isEmpty())
+				configError("first empty line of file", key, filename.c_str());
+		}
+
+		output = temp.c_str();
+	}
+
+	void parseSyncReplica(const ConfigFile::Parameters& params, SyncReplica& output)
+	{
+		for (const auto& el : params)
+		{
+			const string key(el.name.c_str());
+			const string value(el.value);
+
+			if (value.isEmpty())
+				continue;
+
+			if (key.find("username") == 0)
+			{
+				if (output.username.hasData())
+					configError("multiple values", output.database, "username");
+				parseExternalValue(key, value, output.username);
+				output.username.rtrim(" ");
+			}
+			else if (key.find("password") == 0)
+			{
+				if (output.password.hasData())
+					configError("multiple values", output.database, "password");
+				parseExternalValue(key, value, output.password);
+			}
+			else
+				configError("unknown parameter", output.database, key);
+		}
+	}
 }
 
 
@@ -107,6 +176,8 @@ namespace
 Config::Config()
 	: dbName(getPool()),
 	  bufferSize(DEFAULT_BUFFER_SIZE),
+	  includeSchemaFilter(getPool()),
+	  excludeSchemaFilter(getPool()),
 	  includeFilter(getPool()),
 	  excludeFilter(getPool()),
 	  segmentSize(DEFAULT_SEGMENT_SIZE),
@@ -119,10 +190,10 @@ Config::Config()
 	  archiveTimeout(DEFAULT_ARCHIVE_TIMEOUT),
 	  syncReplicas(getPool()),
 	  sourceDirectory(getPool()),
-	  sourceGuid{},
 	  verboseLogging(false),
 	  applyIdleTimeout(DEFAULT_APPLY_IDLE_TIMEOUT),
 	  applyErrorTimeout(DEFAULT_APPLY_ERROR_TIMEOUT),
+	  schemaSearchPath(getPool()),
 	  pluginName(getPool()),
 	  logErrors(true),
 	  reportErrors(false),
@@ -134,6 +205,8 @@ Config::Config()
 Config::Config(const Config& other)
 	: dbName(getPool(), other.dbName),
 	  bufferSize(other.bufferSize),
+	  includeSchemaFilter(getPool(), other.includeSchemaFilter),
+	  excludeSchemaFilter(getPool(), other.excludeSchemaFilter),
 	  includeFilter(getPool(), other.includeFilter),
 	  excludeFilter(getPool(), other.excludeFilter),
 	  segmentSize(other.segmentSize),
@@ -146,10 +219,10 @@ Config::Config(const Config& other)
 	  archiveTimeout(other.archiveTimeout),
 	  syncReplicas(getPool(), other.syncReplicas),
 	  sourceDirectory(getPool(), other.sourceDirectory),
-	  sourceGuid{},
 	  verboseLogging(other.verboseLogging),
 	  applyIdleTimeout(other.applyIdleTimeout),
 	  applyErrorTimeout(other.applyErrorTimeout),
+	  schemaSearchPath(getPool(), other.schemaSearchPath),
 	  pluginName(getPool(), other.pluginName),
 	  logErrors(other.logErrors),
 	  reportErrors(other.reportErrors),
@@ -218,11 +291,30 @@ Config* Config::get(const PathName& lookupName)
 
 				if (key == "sync_replica")
 				{
-					config->syncReplicas.add(value);
+					SyncReplica syncReplica(config->getPool());
+					if (el.sub)
+					{
+						syncReplica.database = value;
+						parseSyncReplica(el.sub->getParameters(), syncReplica);
+					}
+					else
+						splitConnectionString(value, syncReplica.database, syncReplica.username, syncReplica.password);
+
+					config->syncReplicas.add(syncReplica);
 				}
 				else if (key == "buffer_size")
 				{
 					parseLong(value, config->bufferSize);
+				}
+				else if (key == "include_schema_filter")
+				{
+					ISC_systemToUtf8(value);
+					config->includeSchemaFilter = value;
+				}
+				else if (key == "exclude_schema_filter")
+				{
+					ISC_systemToUtf8(value);
+					config->excludeSchemaFilter = value;
 				}
 				else if (key == "include_filter")
 				{
@@ -303,7 +395,11 @@ Config* Config::get(const PathName& lookupName)
 
 		if (config->journalDirectory.hasData() || config->syncReplicas.hasData())
 		{
-			// If log_directory is specified, then replication is enabled
+			// If either journal_directory or sync_replicas is specified,
+			// then replication is enabled
+
+			if (config->dbName.isEmpty())
+				config->dbName = lookupName;
 
 			if (config->filePrefix.isEmpty())
 			{
@@ -329,7 +425,7 @@ Config* Config::get(const PathName& lookupName)
 // This routine is used to retrieve the list of replica databases.
 // Therefore it checks only the necessary settings.
 
-void Config::enumerate(Firebird::Array<Config*>& replicas)
+void Config::enumerate(ReplicaList& replicas)
 {
 	PathName dbName;
 
@@ -387,7 +483,8 @@ void Config::enumerate(Firebird::Array<Config*>& replicas)
 				}
 				else if (key == "source_guid")
 				{
-					if (!StringToGuid(&config->sourceGuid, value.c_str()))
+					config->sourceGuid = Guid::fromString(value);
+					if (!config->sourceGuid)
 						configError("invalid (misformatted) value", key, value);
 				}
 				else if (key == "verbose_logging")
@@ -402,6 +499,8 @@ void Config::enumerate(Firebird::Array<Config*>& replicas)
 				{
 					parseLong(value, config->applyErrorTimeout);
 				}
+				else if (key == "schema_search_path")
+					config->schemaSearchPath = value;
 			}
 
 			if (dbName.hasData() && config->sourceDirectory.hasData())
@@ -422,5 +521,37 @@ void Config::enumerate(Firebird::Array<Config*>& replicas)
 		composeError(&localStatus, ex);
 
 		logReplicaStatus(dbName, &localStatus);
+	}
+}
+
+// This routine is used for split input connection string to parts
+//   input => [<username>[:<password>]@]<database>
+//
+// Examples:
+// server2:/my/replica/database.fdb
+// john:smith@server2:/my/replica/database.fdb
+
+void Config::splitConnectionString(const string& input, string& database, string& username, string& password)
+{
+	database = input;
+
+	auto pos = database.rfind('@');
+	if (pos != string::npos)
+	{
+		//john:smith
+		const string temp = database.substr(0, pos);
+		//server2:/my/replica/database.fdb
+		database = database.substr(pos + 1);
+
+		pos = temp.find(':');
+		if (pos != string::npos)
+		{
+			username = temp.substr(0, pos);
+			password = temp.substr(pos + 1);
+		}
+		else
+		{
+			username = temp;
+		}
 	}
 }

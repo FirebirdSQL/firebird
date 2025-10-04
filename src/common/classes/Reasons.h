@@ -31,15 +31,7 @@
 
 #include <string.h>
 
-// __func__ is according to C99, but let's better define it for better flexibility
-// For example, MSVC 2005 does not support __func__
-#if defined _MSC_VER && (_MSC_VER <= 1800)
-#define FB_FUNCTION __FUNCTION__
-#elif defined(__GNUC__)
-#define FB_FUNCTION (__FILE__ ": " STRINGIZE(__LINE__) )
-#else
 #define FB_FUNCTION __func__
-#endif
 
 namespace Firebird
 {

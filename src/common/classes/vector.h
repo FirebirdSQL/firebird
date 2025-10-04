@@ -42,26 +42,26 @@ class Vector
 public:
 	Vector() : count(0) {}
 
-	T& operator[](FB_SIZE_T index) throw()
+	T& operator[](FB_SIZE_T index) noexcept
 	{
   		fb_assert(index < count);
   		return data[index];
 	}
 
-	const T& operator[](FB_SIZE_T index) const throw()
+	const T& operator[](FB_SIZE_T index) const noexcept
 	{
   		fb_assert(index < count);
   		return data[index];
 	}
 
-	T* begin() throw() { return data; }
-	T* end() throw() { return data + count; }
-	const T* begin() const throw() { return data; }
-	const T* end() const throw() { return data + count; }
-	bool hasData() const throw() { return (count != 0); }
-	FB_SIZE_T getCount() const throw() { return count; }
-	FB_SIZE_T getCapacity() const throw() { return Capacity; }
-	void clear() throw() { count = 0; }
+	T* begin() noexcept { return data; }
+	T* end() noexcept { return data + count; }
+	const T* begin() const noexcept { return data; }
+	const T* end() const noexcept { return data + count; }
+	bool hasData() const noexcept { return (count != 0); }
+	FB_SIZE_T getCount() const noexcept { return count; }
+	FB_SIZE_T getCapacity() const noexcept { return Capacity; }
+	void clear() noexcept { count = 0; }
 
 	void insert(FB_SIZE_T index, const T& item)
 	{
@@ -78,14 +78,14 @@ public:
   		return ++count;
 	}
 
-	T* remove(FB_SIZE_T index) throw()
+	T* remove(FB_SIZE_T index) noexcept
 	{
   		fb_assert(index < count);
   		memmove(data + index, data + index + 1, sizeof(T) * (--count - index));
 		return &data[index];
 	}
 
-	T* removeCount(const FB_SIZE_T index, const FB_SIZE_T n) throw()
+	T* removeCount(const FB_SIZE_T index, const FB_SIZE_T n) noexcept
 	{
   		fb_assert(index + n <= count);
   		memmove(data + index, data + index + n, sizeof(T) * (count - index - n));
@@ -93,13 +93,13 @@ public:
 		return &data[index];
 	}
 
-	void shrink(FB_SIZE_T newCount) throw()
+	void shrink(FB_SIZE_T newCount) noexcept
 	{
 		fb_assert(newCount <= count);
 		count = newCount;
 	}
 
-	void join(const Vector<T, Capacity>& L) throw()
+	void join(const Vector<T, Capacity>& L) noexcept
 	{
 		fb_assert(count + L.count <= Capacity);
 		memcpy(data + count, L.data, sizeof(T) * L.count);
@@ -107,7 +107,7 @@ public:
 	}
 
 	// prepare vector to be used as a buffer of capacity items
-	T* getBuffer(FB_SIZE_T capacityL) throw()
+	T* getBuffer(FB_SIZE_T capacityL) noexcept
 	{
 		fb_assert(capacityL <= Capacity);
 		count = capacityL;

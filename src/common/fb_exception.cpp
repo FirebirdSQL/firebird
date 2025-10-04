@@ -16,9 +16,9 @@ namespace Firebird {
 
 // ********************************* Exception *******************************
 
-Exception::~Exception() throw() { }
+Exception::~Exception() noexcept { }
 
-void Exception::stuffException(DynamicStatusVector& status_vector) const throw()
+void Exception::stuffException(DynamicStatusVector& status_vector) const noexcept
 {
 	StaticStatusVector status;
 	stuffException(status);
@@ -34,14 +34,14 @@ void Exception::stuffException(DynamicStatusVector& status_vector) const throw()
 	}
 }
 
-void Exception::stuffException(CheckStatusWrapper* status_vector) const throw()
+void Exception::stuffException(IStatus* status_vector) const noexcept
 {
 	StaticStatusVector status;
 	stuffException(status);
 	fb_utils::setIStatus(status_vector, status.begin());
 }
 
-void Exception::processUnexpectedException(ISC_STATUS* vector) throw()
+void Exception::processUnexpectedException(ISC_STATUS* vector) noexcept
 {
 	// do not use stuffException() here to avoid endless loop
 	try
@@ -62,13 +62,13 @@ void Exception::processUnexpectedException(ISC_STATUS* vector) throw()
 
 // ********************************* status_exception *******************************
 
-status_exception::status_exception() throw()
+status_exception::status_exception() noexcept
 	: m_status_vector(m_buffer)
 {
 	fb_utils::init_status(m_status_vector);
 }
 
-status_exception::status_exception(const ISC_STATUS *status_vector) throw()
+status_exception::status_exception(const ISC_STATUS *status_vector) noexcept
 	: m_status_vector(m_buffer)
 {
 	fb_utils::init_status(m_status_vector);
@@ -79,7 +79,7 @@ status_exception::status_exception(const ISC_STATUS *status_vector) throw()
 	}
 }
 
-status_exception::status_exception(const status_exception& from) throw()
+status_exception::status_exception(const status_exception& from) noexcept
 	: m_status_vector(m_buffer)
 {
 	fb_utils::init_status(m_status_vector);
@@ -87,7 +87,7 @@ status_exception::status_exception(const status_exception& from) throw()
 	set_status(from.m_status_vector);
 }
 
-void status_exception::set_status(const ISC_STATUS *new_vector) throw()
+void status_exception::set_status(const ISC_STATUS *new_vector) noexcept
 {
 	fb_assert(new_vector != 0);
 	unsigned len = fb_utils::statusLength(new_vector);
@@ -112,7 +112,7 @@ void status_exception::set_status(const ISC_STATUS *new_vector) throw()
 	}
 }
 
-status_exception::~status_exception() throw()
+status_exception::~status_exception() noexcept
 {
 	delete[] findDynamicStrings(fb_utils::statusLength(m_status_vector), m_status_vector);
 	if (m_status_vector != m_buffer)
@@ -121,29 +121,29 @@ status_exception::~status_exception() throw()
 	}
 }
 
-const char* status_exception::what() const throw()
+const char* status_exception::what() const noexcept
 {
 	return "Firebird::status_exception";
 }
 
-void status_exception::raise(const ISC_STATUS *status_vector)
+[[noreturn]] void status_exception::raise(const ISC_STATUS *status_vector)
 {
 	throw status_exception(status_vector);
 }
 
-void status_exception::raise(const IStatus* status)
+[[noreturn]] void status_exception::raise(const IStatus* status)
 {
 	StaticStatusVector status_vector;
 	status_vector.mergeStatus(status);
 	throw status_exception(status_vector.begin());
 }
 
-void status_exception::raise(const Arg::StatusVector& statusVector)
+[[noreturn]] void status_exception::raise(const Arg::StatusVector& statusVector)
 {
 	throw status_exception(statusVector.value());
 }
 
-void status_exception::stuffByException(StaticStatusVector& status) const throw()
+void status_exception::stuffByException(StaticStatusVector& status) const noexcept
 {
 	try
 	{
@@ -157,31 +157,31 @@ void status_exception::stuffByException(StaticStatusVector& status) const throw(
 
 // ********************************* BadAlloc ****************************
 
-void BadAlloc::raise()
+[[noreturn]] void BadAlloc::raise()
 {
 	throw BadAlloc();
 }
 
-void BadAlloc::stuffByException(StaticStatusVector& status) const throw()
+void BadAlloc::stuffByException(StaticStatusVector& status) const noexcept
 {
 	fb_utils::statusBadAlloc(status.makeEmergencyStatus());
 }
 
-const char* BadAlloc::what() const throw()
+const char* BadAlloc::what() const noexcept
 {
 	return "Firebird::BadAlloc";
 }
 
 // ********************************* LongJump ***************************
 
-void LongJump::raise()
+[[noreturn]] void LongJump::raise()
 {
 	throw LongJump();
 }
 
-void LongJump::stuffByException(StaticStatusVector& status) const throw()
+void LongJump::stuffByException(StaticStatusVector& status) const noexcept
 {
-	ISC_STATUS sv[] = {isc_arg_gds, isc_random, isc_arg_string,
+	const ISC_STATUS sv[] = {isc_arg_gds, isc_random, isc_arg_string,
 		(ISC_STATUS)(IPTR) "Unexpected call to Firebird::LongJump::stuffException()", isc_arg_end};
 
 	try
@@ -194,7 +194,7 @@ void LongJump::stuffByException(StaticStatusVector& status) const throw()
 	}
 }
 
-const char* LongJump::what() const throw()
+const char* LongJump::what() const noexcept
 {
 	return "Firebird::LongJump";
 }
@@ -202,7 +202,7 @@ const char* LongJump::what() const throw()
 
 // ********************************* system_error ***************************
 
-system_error::system_error(const char* syscall, const char* arg, int error_code) :
+system_error::system_error(const char* syscall, const char* arg, int error_code) noexcept :
 	status_exception(), errorCode(error_code)
 {
 	Arg::Gds temp(isc_sys_request);
@@ -213,17 +213,17 @@ system_error::system_error(const char* syscall, const char* arg, int error_code)
 	set_status(temp.value());
 }
 
-void system_error::raise(const char* syscall, int error_code)
+[[noreturn]] void system_error::raise(const char* syscall, int error_code)
 {
 	throw system_error(syscall, nullptr, error_code);
 }
 
-void system_error::raise(const char* syscall)
+[[noreturn]] void system_error::raise(const char* syscall)
 {
 	throw system_error(syscall, nullptr, getSystemError());
 }
 
-int system_error::getSystemError()
+int system_error::getSystemError() noexcept
 {
 #ifdef WIN_NT
 	return GetLastError();
@@ -247,30 +247,29 @@ system_call_failed::system_call_failed(const char* syscall, const char* arg, int
 #endif
 }
 
-void system_call_failed::raise(const char* syscall, int error_code)
+[[noreturn]] void system_call_failed::raise(const char* syscall, int error_code)
 {
 	throw system_call_failed(syscall, nullptr, error_code);
 }
 
-void system_call_failed::raise(const char* syscall)
+[[noreturn]] void system_call_failed::raise(const char* syscall)
 {
 	throw system_call_failed(syscall, nullptr, getSystemError());
 }
 
-
-void system_call_failed::raise(const char* syscall, const char* arg, int error_code)
+[[noreturn]] void system_call_failed::raise(const char* syscall, const char* arg, int error_code)
 {
 	throw system_call_failed(syscall, arg, error_code);
 }
 
-void system_call_failed::raise(const char* syscall, const char* arg)
+[[noreturn]] void system_call_failed::raise(const char* syscall, const char* arg)
 {
 	raise(syscall, arg, getSystemError());
 }
 
 // ********************************* fatal_exception *******************************
 
-fatal_exception::fatal_exception(const char* message) :
+fatal_exception::fatal_exception(const char* message) noexcept :
 	status_exception()
 {
 	const ISC_STATUS temp[] =
@@ -286,22 +285,22 @@ fatal_exception::fatal_exception(const char* message) :
 
 // Keep in sync with the constructor above, please; "message" becomes 4th element
 // after initialization of status vector in constructor.
-const char* fatal_exception::what() const throw()
+const char* fatal_exception::what() const noexcept
 {
 	return reinterpret_cast<const char*>(value()[3]);
 }
 
-void fatal_exception::raise(const char* message)
+[[noreturn]] void fatal_exception::raise(const char* message)
 {
 	throw fatal_exception(message);
 }
 
-void fatal_exception::raiseFmt(const char* format, ...)
+[[noreturn]] void fatal_exception::raiseFmt(const char* format, ...)
 {
 	va_list args;
 	va_start(args, format);
 	char buffer[1024];
-	VSNPRINTF(buffer, sizeof(buffer), format, args);
+	vsnprintf(buffer, sizeof(buffer), format, args);
 	buffer[sizeof(buffer) - 1] = 0;
 	va_end(args);
 	throw fatal_exception(buffer);

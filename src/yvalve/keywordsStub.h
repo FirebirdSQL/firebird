@@ -19,12 +19,12 @@
  *       2001.07.28   John Bellardo added tokens for FIRST and LIMIT
    See dsql/parse.y for a chronological list. */
 
-#include "../common/keywords.h"
+#include "../common/Token.h"
 #include "ibase.h"
 
 // These symbols are exported
 extern "C"
 {
 	int API_ROUTINE KEYWORD_stringIsAToken(const char*);
-	Tokens FB_API_DEPRECATED API_ROUTINE KEYWORD_getTokens();
+	ConstTokenPtr FB_API_DEPRECATED API_ROUTINE KEYWORD_getTokens();
 }

@@ -75,13 +75,12 @@ bool JRD_verify_database_access(const Firebird::PathName&);
 void JRD_shutdown_attachment(Jrd::Attachment* attachment);
 void JRD_shutdown_attachments(Jrd::Database* dbb);
 void JRD_cancel_operation(Jrd::thread_db* tdbb, Jrd::Attachment* attachment, int option);
-void JRD_make_role_name(Jrd::MetaName& userIdRole, const int dialect);
-void JRD_transliterate(Jrd::thread_db* tdbb, Firebird::IStatus* vector) throw();
+void JRD_transliterate(Jrd::thread_db* tdbb, Firebird::IStatus* vector) noexcept;
 
 bool JRD_shutdown_database(Jrd::Database* dbb, const unsigned flags = 0);
 // JRD_shutdown_database() flags
-static const unsigned SHUT_DBB_RELEASE_POOLS =		0x01;
-static const unsigned SHUT_DBB_LINGER =				0x02;
-static const unsigned SHUT_DBB_OVERWRITE_CHECK =	0x04;
+static constexpr unsigned SHUT_DBB_RELEASE_POOLS	= 0x01;
+static constexpr unsigned SHUT_DBB_LINGER			= 0x02;
+static constexpr unsigned SHUT_DBB_OVERWRITE_CHECK	= 0x04;
 
 #endif /* JRD_JRD_PROTO_H */

@@ -1,6 +1,7 @@
 name: tzdata-update
 
 on:
+  workflow_dispatch:
   schedule:
     - cron: '0 11 * * *'
 
@@ -14,19 +15,22 @@ jobs:
       matrix:
         branch:
           - master
+          - v5.0-release
           - v4.0-release
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: ${{ matrix.branch }}
 
-      - name: Checkout ICU
-        run: git clone --depth 1 https://github.com/unicode-org/icu-data.git -b main /tmp/icu-checkout
+      - name: Download ICU
+        run: |
+          wget --no-verbose -O /tmp/icu.zip https://github.com/unicode-org/icu-data/archive/refs/heads/main.zip
+          unzip -d /tmp /tmp/icu.zip
 
       - name: Check and update
         run: |
-          VERSION=`ls /tmp/icu-checkout/tzdata/icunew/ -r1a |head -1`
+          VERSION=`ls /tmp/icu-data-main/tzdata/icunew/ -r1a |head -1`
           echo Last version: $VERSION
 
           if [ "$VERSION" == "`cat extern/icu/tzdata/version.txt`" ]

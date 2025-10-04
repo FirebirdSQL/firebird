@@ -37,7 +37,6 @@ struct ActionParametersBlock
 	Language language;
 	const std::string& prefix;
 	const std::string& exceptionClass;
-	const std::string& statusName;
 	Interface* interface;
 	Method* method;
 };
@@ -91,7 +90,7 @@ public:
 class DefAction : public Action
 {
 public:
-	enum DefType { DEF_NOT_IMPLEMENTED };
+	enum DefType { DEF_NOT_IMPLEMENTED, DEF_IGNORE };
 
 	DefAction(DefType dt)
 		: defType(dt)

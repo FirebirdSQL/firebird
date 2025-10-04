@@ -28,6 +28,8 @@
 #include "TraceConfiguration.h"
 #include "../../common/SimilarToRegex.h"
 #include "../../common/isc_f_proto.h"
+#include "../../common/db_alias.h"
+#include "../../common/os/path_utils.h"
 
 using namespace Firebird;
 
@@ -45,6 +47,7 @@ void TraceCfgReader::readTraceConfiguration(const char* text,
 	if (!found && el->name == #NAME) { \
 		Firebird::PathName temp; \
 		expandPattern(el, temp); \
+		PathUtils::fixupSeparators(temp.begin()); \
 		m_config.NAME = temp.c_str(); \
 		found = true; \
 	}
@@ -69,7 +72,8 @@ void TraceCfgReader::readTraceConfiguration(const char* text,
 
 void TraceCfgReader::readConfig()
 {
-	ConfigFile cfgFile(ConfigFile::USE_TEXT, m_text, ConfigFile::HAS_SUB_CONF | ConfigFile::NATIVE_ORDER);
+	ConfigFile cfgFile(ConfigFile::USE_TEXT, m_text,
+		ConfigFile::HAS_SUB_CONF | ConfigFile::NATIVE_ORDER | ConfigFile::REGEXP_SUPPORT);
 
 	m_subpatterns[0].start = 0;
 	m_subpatterns[0].end = m_databaseName.length();
@@ -85,12 +89,8 @@ void TraceCfgReader::readConfig()
 	{
 		const ConfigFile::Parameter* section = &params[n];
 
-		const bool isDatabase = (section->name == "database");
-		if (!isDatabase && section->name != "services")
-			//continue;
-			fatal_exception::raiseFmt(ERROR_PREFIX
-				"line %d: wrong section header, \"database\" or \"service\" is expected",
-				section->line);
+		const SectionType sectionType = parseSectionKey(section);
+		const bool isDatabase = (sectionType != SectionType::SERVICES);
 
 		const ConfigFile::String pattern = section->value;
 		bool match = false;
@@ -106,7 +106,6 @@ void TraceCfgReader::readConfig()
 				}
 
 				match = !m_databaseName.empty();
-				//match = m_databaseName.empty();
 				defDB = true;
 			}
 			else
@@ -125,18 +124,25 @@ void TraceCfgReader::readConfig()
 		{
 			PathName noQuotePattern = pattern.ToPathName();
 			noQuotePattern.alltrim(" '\'");
+			PathName expandedName;
 
-			if (m_databaseName == noQuotePattern)
-				match = exactMatch = true;
-			else
+			if (sectionType != SectionType::DATABASE_REGEX && (m_databaseName == noQuotePattern ||
+				(expandDatabaseName(noQuotePattern, expandedName, nullptr),
+				m_databaseName == expandedName) ))
 			{
+				// Compare by name
+				match = exactMatch = true;
+			}
+			else if (sectionType != SectionType::DATABASE_NAME)
+			{
+				// Compare by regex
 				bool regExpOk = false;
 				try
 				{
 #ifdef WIN_NT	// !CASE_SENSITIVITY
-					const unsigned regexFlags = SimilarToFlag::CASE_INSENSITIVE;
+					constexpr unsigned regexFlags = SimilarToFlag::CASE_INSENSITIVE;
 #else
-					const unsigned regexFlags = 0;
+					constexpr unsigned regexFlags = 0;
 #endif
 					string utf8Pattern = pattern;
 					ISC_systemToUtf8(utf8Pattern);
@@ -309,5 +315,36 @@ void TraceCfgReader::expandPattern(const ConfigFile::Parameter* el, PathName& va
 		}
 
 		pos++;
+	}
+}
+
+TraceCfgReader::SectionType TraceCfgReader::parseSectionKey(const ConfigFile::Parameter* el) const
+{
+	fb_assert(el);
+
+	if (el->name == "database")
+	{
+		return SectionType::DATABASE;
+	}
+	else if (el->name == "databaseName")
+	{
+		return SectionType::DATABASE_NAME;
+	}
+	else if (el->name == "databaseRegex")
+	{
+		return SectionType::DATABASE_REGEX;
+	}
+	else if (el->name == "services")
+	{
+		return SectionType::SERVICES;
+	}
+	else
+	{
+		fatal_exception::raiseFmt("error while parsing trace configuration\n\t"
+			"line %d: wrong section header, \"database\", \"databaseName\", \"databaseRegex\" or \"services\" is expected",
+			el->line);
+
+		// Return something to calm down the compiler
+		return SectionType::DATABASE;
 	}
 }

@@ -28,13 +28,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#if defined(__cplusplus) && (__cplusplus >= 201103L)
-#include <atomic>
-typedef std::atomic_int FbSampleAtomic;
-#else
-typedef int FbSampleAtomic;
-#endif
-
 #include <firebird/Interface.h>
 
 using namespace Firebird;

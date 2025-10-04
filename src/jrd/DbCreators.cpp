@@ -104,11 +104,11 @@ bool openDb(const char* securityDb, RefPtr<IAttachment>& att, RefPtr<ITransactio
 
 namespace Jrd {
 
-bool checkCreateDatabaseGrant(const MetaString& userName, const MetaString& trustedRole,
+CreateGrant checkCreateDatabaseGrant(const MetaString& userName, const MetaString& trustedRole,
 	const MetaString& sqlRole, const char* securityDb)
 {
 	if (userName == DBA_USER_NAME)
-		return true;
+		return CreateGrant::ASSUMED;
 
 	RefPtr<IAttachment> att;
 	RefPtr<ITransaction> tra;
@@ -138,7 +138,7 @@ bool checkCreateDatabaseGrant(const MetaString& userName, const MetaString& trus
 		UserId::makeRoleName(role, dialect);
 
 		// We need to check is role granted to userName in security DB
-		const char* sql = "select count(*) from RDB$USER_PRIVILEGES "
+		const char* sql = "select count(*) from SYSTEM.RDB$USER_PRIVILEGES "
 			"where RDB$USER = ? and RDB$RELATION_NAME = ? and RDB$PRIVILEGE = 'M'";
 
 		Message prm;
@@ -169,10 +169,10 @@ bool checkCreateDatabaseGrant(const MetaString& userName, const MetaString& trus
 		role = trustedRole;
 
 	if (role == ADMIN_ROLE)
-		return true;
+		return CreateGrant::ASSUMED;
 
 	if (!hasDb)
-		return false;
+		return CreateGrant::NONE;
 
 	// check db creators table
 	Message gr;
@@ -189,7 +189,7 @@ bool checkCreateDatabaseGrant(const MetaString& userName, const MetaString& trus
 	Field<ISC_INT64> cnt(result);
 
 	att->execute(&st, tra, 0,
-		"select count(*) from RDB$DB_CREATORS"
+		"select count(*) from SYSTEM.RDB$DB_CREATORS"
 		" where (RDB$USER_TYPE = ? and RDB$USER = ?) or (RDB$USER_TYPE = ? and RDB$USER = ?)",
 		SQL_DIALECT_V6, gr.getMetadata(), gr.getBuffer(), result.getMetadata(), result.getBuffer());
 	if (st->getState() & IStatus::STATE_ERRORS)
@@ -198,13 +198,13 @@ bool checkCreateDatabaseGrant(const MetaString& userName, const MetaString& trus
 		{
 			// isc_dsql_relation_err when exec SQL - i.e. table RDB$DB_CREATORS
 			// is missing due to non-FB3 security DB
-			return false;
+			return CreateGrant::NONE;
 		}
 		check("IAttachment::execute", &st);
 	}
 
 	if (cnt > 0)
-		return true;
+		return CreateGrant::GRANTED;
 
 	if (!role.hasData())
 		role = "NONE";
@@ -222,17 +222,17 @@ bool checkCreateDatabaseGrant(const MetaString& userName, const MetaString& trus
 
 	const char* sql =
 		"with recursive role_tree as ( "
-		"   select rdb$relation_name as nm, 0 as ur from rdb$user_privileges "
+		"   select rdb$relation_name as nm, 0 as ur from system.rdb$user_privileges "
 		"       where rdb$privilege = 'M' and rdb$field_name = 'D' and rdb$user_type = ? and rdb$user = ? "
 		"   union all "
-		"   select rdb$role_name as nm, 1 as ur from rdb$roles "
+		"   select rdb$role_name as nm, 1 as ur from system.rdb$roles "
 		"       where rdb$role_name = ? "
 		"   union all "
-		"   select p.rdb$relation_name as nm, t.ur from rdb$user_privileges p "
+		"   select p.rdb$relation_name as nm, t.ur from system.rdb$user_privileges p "
 		"       join role_tree t on t.nm = p.rdb$user "
 		"       where p.rdb$privilege = 'M' and (p.rdb$field_name = 'D' or t.ur = 1)) "
 		"select r.rdb$system_privileges "
-		"   from role_tree t join rdb$roles r on t.nm = r.rdb$role_name ";
+		"   from role_tree t join system.rdb$roles r on t.nm = r.rdb$role_name ";
 	RefPtr<IResultSet> rs(REF_NO_INCR, att->openCursor(&st, tra, 0, sql,
 		SQL_DIALECT_V6, par2.getMetadata(), par2.getBuffer(), res2.getMetadata(), NULL, 0));
 	check("IAttachment::execute", &st);
@@ -247,7 +247,7 @@ bool checkCreateDatabaseGrant(const MetaString& userName, const MetaString& trus
 
 	check("IResultSet::fetchNext", &st);
 
-	return wrk.test(CREATE_DATABASE);
+	return wrk.test(CREATE_DATABASE) ? CreateGrant::GRANTED : CreateGrant::NONE;
 }
 
 
@@ -304,7 +304,7 @@ RecordBuffer* DbCreatorsList::getList(thread_db* tdbb, jrd_rel* relation)
 
 	FbLocalStatus st;
 	RefPtr<IResultSet> curs(REF_NO_INCR, att->openCursor(&st, tra, 0,
-		"select RDB$USER_TYPE, RDB$USER from RDB$DB_CREATORS",
+		"select RDB$USER_TYPE, RDB$USER from SYSTEM.RDB$DB_CREATORS",
 		SQL_DIALECT_V6, NULL, NULL, gr.getMetadata(), NULL, 0));
 
 	if (st->getState() & IStatus::STATE_ERRORS)

@@ -4,16 +4,11 @@
 
     Unicode mapping table generated from file asia/KSC/KSC5601.TXT
 
-#
 #    Name:     Unified Hangeul(KSC5601-1992) to Unicode table
 #    Unicode version: 2.0
 #    Table version: 1.0
 #    Table format:  Format A
 #    Date:          07/24/95
-#    Authors:       Lori Hoerth <lorih@microsoft.com>
-#                   K.D.Chang   <a-kchang@microsoft.com>
-#    General notes: none
-#
 
  * The contents of this file are subject to the Interbase Public
  * License Version 1.0 (the "License"); you may not use this file

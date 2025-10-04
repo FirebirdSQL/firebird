@@ -146,14 +146,10 @@ bool FullTableScan::internalGetRecord(thread_db* tdbb) const
 		return false;
 	}
 
-	if (VIO_next_record(tdbb, rpb, request->req_transaction, request->req_pool, DPM_next_all))
-	{
-		if (impure->irsb_upper.isValid() && rpb->rpb_number > impure->irsb_upper)
-		{
-			rpb->rpb_number.setValid(false);
-			return false;
-		}
+	const RecordNumber* upper = impure->irsb_upper.isValid() ? &impure->irsb_upper : nullptr;
 
+	if (VIO_next_record(tdbb, rpb, request->req_transaction, request->req_pool, DPM_next_all, upper))
+	{
 		rpb->rpb_number.setValid(true);
 		return true;
 	}
@@ -162,44 +158,46 @@ bool FullTableScan::internalGetRecord(thread_db* tdbb) const
 	return false;
 }
 
-void FullTableScan::getChildren(Array<const RecordSource*>& children) const
+void FullTableScan::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
+	if (!level)
+		plan += "(";
+
+	plan += printName(tdbb, m_alias) + " NATURAL";
+
+	if (!level)
+		plan += ")";
 }
 
-void FullTableScan::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void FullTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
 {
-	if (detailed)
+	planEntry.className = "FullTableScan";
+
+	auto lowerBounds = 0, upperBounds = 0;
+	for (const auto range : m_dbkeyRanges)
 	{
-		auto lowerBounds = 0, upperBounds = 0;
-		for (const auto range : m_dbkeyRanges)
-		{
-			if (range->lower)
-				lowerBounds++;
+		if (range->lower)
+			lowerBounds++;
 
-			if (range->upper)
-				upperBounds++;
-		}
-
-		string bounds;
-		if (lowerBounds && upperBounds)
-			bounds += " (lower bound, upper bound)";
-		else if (lowerBounds)
-			bounds += " (lower bound)";
-		else if (upperBounds)
-			bounds += " (upper bound)";
-
-		plan += printIndent(++level) + "Table " +
-			printName(tdbb, m_relation->rel_name.c_str(), m_alias) + " Full Scan" + bounds;
-		printOptInfo(plan);
+		if (range->upper)
+			upperBounds++;
 	}
-	else
-	{
-		if (!level)
-			plan += "(";
 
-		plan += printName(tdbb, m_alias, false) + " NATURAL";
+	string bounds;
+	if (lowerBounds && upperBounds)
+		bounds += " (lower bound, upper bound)";
+	else if (lowerBounds)
+		bounds += " (lower bound)";
+	else if (upperBounds)
+		bounds += " (upper bound)";
 
-		if (!level)
-			plan += ")";
-	}
+	planEntry.lines.add().text = "Table " +
+		printName(tdbb, m_relation->rel_name.toQuotedString(), m_alias) + " Full Scan" + bounds;
+	printOptInfo(planEntry.lines);
+
+	planEntry.objectType = m_relation->getObjectType();
+	planEntry.objectName = m_relation->rel_name;
+
+	if (m_alias.hasData() && m_alias != string(m_relation->rel_name.object))
+		planEntry.alias = m_alias;
 }

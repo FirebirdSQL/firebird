@@ -27,15 +27,15 @@ Function Prototypes
 
   function IsWin32: boolean;
   function Is32BitInstallMode: boolean;
-	function IsWinTen: boolean;
-	function IsWinEightOne: boolean;
-	function IsWinEight: boolean;
-	function IsW2K12: boolean;
+  function IsWinTen: boolean;
+  function IsWinEightOne: boolean;
+  function IsWinEight: boolean;
+  function IsW2K12: boolean;
   function IsVista: boolean;
-	function IsVistaSP1: boolean;
-	function IsWin2K8R1: boolean;
-	function IsWinSeven: boolean;
-	function IsWin2K8R2: boolean;
+  function IsVistaSP1: boolean;
+  function IsWin2K8R1: boolean;
+  function IsWinSeven: boolean;
+  function IsWin2K8R2: boolean;
   function IsWin2k3: boolean;
   function IsWinXP: boolean;
   function IsWin2K: boolean;
@@ -53,7 +53,9 @@ Function Prototypes
   function GetInstalledVersion(BinaryFile: String): Array of Integer;
   function ConvertIBVerStrToFbVerStr( VerStr: String) : String;
   function GetRegistryEntry(RegKey, RegEntry: string): String;
-	
+  function SplitKeyValue( AString: String; theKey: Boolean): String;
+  function GuessFirebirdPath( Product_ID: Integer; RootKey: Integer; RegKey, RegEntry: string ): String;
+
  *)
 
 (*
@@ -68,21 +70,21 @@ InnoSetup Help Extract on Windows version strings:
 Windows NT versions:
 4.0.1381      Windows NT 4.0
 5.0.2195      Windows 2000
-5.01.2600 		Windows XP
-							or Windows XP 64-Bit Edition Version 2002 (Itanium)
-5.02.3790 		Windows Server 2003
-							or Windows XP x64 Edition (AMD64/EM64T)
-							or Windows XP 64-Bit Edition Version 2003 (Itanium)
-6.0.6000 			Windows Vista
-6.0.6001 			Windows Vista with Service Pack 1
-							or Windows Server 2008
-6.0.6002 			Windows Vista with Service Pack 2
-6.1.7600 			Windows 7 
-							or Windows Server 2008 R2 
-6.2.9200 			Windows 8 or Windows Server 2012
-6.3.9200 			Windows 8.1 or Windows Server 2012 R2 
-6.3.9600 			Windows 8.1 with Update 1 
-10.0.10240 		Windows 10 
+5.01.2600     Windows XP
+              or Windows XP 64-Bit Edition Version 2002 (Itanium)
+5.02.3790     Windows Server 2003
+              or Windows XP x64 Edition (AMD64/EM64T)
+              or Windows XP 64-Bit Edition Version 2003 (Itanium)
+6.0.6000       Windows Vista
+6.0.6001       Windows Vista with Service Pack 1
+                or Windows Server 2008
+6.0.6002       Windows Vista with Service Pack 2
+6.1.7600       Windows 7
+                or Windows Server 2008 R2
+6.2.9200       Windows 8 or Windows Server 2012
+6.3.9200       Windows 8.1 or Windows Server 2012 R2
+6.3.9600       Windows 8.1 with Update 1
+10.0.10240     Windows 10
 
 *)
 
@@ -356,6 +358,20 @@ begin
 end;
 
 
+function FindInFile( Filename, StringToFind: String): Boolean;
+var
+  i: Integer;
+  AString: AnsiString;
+begin
+  Result := False;
+  LoadStringFromFile( Filename, Astring );
+  i := Length( Astring );
+  if i <> 0 then
+    i := Pos ( StringToFind, Astring );
+  if i <> 0 then Result := True;
+end;
+
+
 procedure DecodeVersion( VerStr: String; var VerInt: array of Integer );
 var
   i,p: Integer; s: string;
@@ -462,5 +478,35 @@ begin
     else
       RegQueryStringValue(RootKey, RegKey, RegEntry, Result);
 end;
+
+
+// Split a key value pair in two and return the value by default
+function SplitKeyValue( AString: String; theKey: Boolean): String;
+var
+ apos: integer;
+ akey: String;
+ avalue: String;
+begin
+  Result := '';
+  apos := pos( '=', AString );
+  if apos <> 0 then begin
+    akey := Copy( Astring, 1, apos - 1 );
+    aValue := Copy ( AString, apos + 1, length (Astring) - apos );
+  end;
+  if theKey then 
+    Result := aKey
+  else 
+    Result := aValue;
+end;
+
+
+function GuessFirebirdPath( Product_ID: Integer; RootKey: Integer; RegKey, RegEntry: string ): String;
+begin
+  Result := GetRegistryEntry( RootKey, RegKey, RegEntry );
+
+  if Result = '' then
+    Result := ExpandConstant('{pf}') + '\Firebird\Firebird_' + IntToStr( Product_ID) + '_0';
+end;
+
 
 

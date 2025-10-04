@@ -40,12 +40,12 @@
 
 // Thread priorities (may be ignored)
 
-const int THREAD_high			= 1;
-const int THREAD_medium_high	= 2;
-const int THREAD_medium			= 3;
-const int THREAD_medium_low		= 4;
-const int THREAD_low			= 5;
-const int THREAD_critical		= 6;
+inline constexpr int THREAD_high		= 1;
+inline constexpr int THREAD_medium_high	= 2;
+inline constexpr int THREAD_medium		= 3;
+inline constexpr int THREAD_medium_low	= 4;
+inline constexpr int THREAD_low			= 5;
+inline constexpr int THREAD_critical	= 6;
 
 
 // Thread startup
@@ -87,19 +87,17 @@ public:
 	static void sleep(unsigned milliseconds);
 	static void yield();
 
+	static bool isCurrent(Handle threadHandle);
 	bool isCurrent();
 
-	Thread()
-	{
-		memset(&internalId, 0, sizeof(internalId));
-	}
+	Thread() noexcept { }
 
 private:
-	Thread(InternalId iid)
+	Thread(InternalId iid) noexcept
 		: internalId(iid)
 	{ }
 
-	InternalId internalId;
+	InternalId internalId{};
 };
 
 inline ThreadId getThreadId()
@@ -108,23 +106,14 @@ inline ThreadId getThreadId()
 }
 
 
-#ifndef USE_POSIX_THREADS
-#define USE_FINI_SEM
-#endif
-
-template <typename TA>
+template <typename TA, void (*cleanup) (TA) = nullptr>
 class ThreadFinishSync
 {
 public:
 	typedef void ThreadRoutine(TA);
 
 	ThreadFinishSync(Firebird::MemoryPool& pool, ThreadRoutine* routine, int priority_arg = THREAD_medium)
-		:
-#ifdef USE_FINI_SEM
-		  fini(pool),
-#else
-		  threadHandle(0),
-#endif
+		: threadHandle(0),
 		  threadRoutine(routine),
 		  threadPriority(priority_arg),
 		  closing(false)
@@ -133,12 +122,7 @@ public:
 	void run(TA arg)
 	{
 		threadArg = arg;
-
-		Thread::start(internalRun, this, threadPriority
-#ifndef USE_FINI_SEM
-					, &threadHandle
-#endif
-			);
+		Thread::start(internalRun, this, threadPriority, &threadHandle);
 	}
 
 	bool tryWait()
@@ -153,24 +137,15 @@ public:
 
 	void waitForCompletion()
 	{
-#ifdef USE_FINI_SEM
-		fini.enter();
-#else
 		if (threadHandle)
 		{
 			Thread::waitForCompletion(threadHandle);
 			threadHandle = 0;
 		}
-#endif
 	}
 
 private:
-#ifdef USE_FINI_SEM
-	Firebird::Semaphore fini;
-#else
 	Thread::Handle threadHandle;
-#endif
-
 	TA threadArg;
 	ThreadRoutine* threadRoutine;
 	int threadPriority;
@@ -193,16 +168,8 @@ private:
 			threadArg->exceptionHandler(ex, threadRoutine);
 		}
 
-#ifdef USE_FINI_SEM
-		try
-		{
-			fini.release();
-		}
-		catch (const Firebird::Exception& ex)
-		{
-			threadArg->exceptionHandler(ex, threadRoutine);
-		}
-#endif
+		if (cleanup != nullptr)
+			cleanup(threadArg);
 		closing = true;
 	}
 };

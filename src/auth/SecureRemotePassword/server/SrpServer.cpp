@@ -45,7 +45,7 @@ namespace {
 
 GlobalPtr<PluginDatabases> instances;
 
-const unsigned int SZ_LOGIN = 63;
+constexpr unsigned int SZ_LOGIN = 63;
 
 struct Metadata
 {
@@ -81,8 +81,8 @@ public:
 	{ }
 
 	// IServer implementation
-	int authenticate(CheckStatusWrapper* status, IServerBlock* sBlock, IWriter* writerInterface);
-	void setDbCryptCallback(CheckStatusWrapper* status, ICryptKeyCallback* callback);
+	int authenticate(CheckStatusWrapper* status, IServerBlock* sBlock, IWriter* writerInterface) override;
+	void setDbCryptCallback(CheckStatusWrapper* status, ICryptKeyCallback* callback) override;
 
 	~SrpServer()
 	{
@@ -106,7 +106,7 @@ protected:
 };
 
 
-class SecurityDatabase : public VSecDb
+class SecurityDatabase final : public VSecDb
 {
 public:
 	// VSecDb implementation
@@ -183,7 +183,7 @@ public:
 			check(&status);
 			HANDSHAKE_DEBUG(fprintf(stderr, "Srv SRP: attached sec db %s\n", instance->secureDbName));
 
-			const UCHAR tpb[] =
+			constexpr UCHAR tpb[] =
 			{
 				isc_tpb_version1,
 				isc_tpb_read,
@@ -196,7 +196,7 @@ public:
 			HANDSHAKE_DEBUG(fprintf(stderr, "Srv: SRP1: started transaction\n"));
 
 			const char* sql =
-				"SELECT PLG$VERIFIER, PLG$SALT FROM PLG$SRP WHERE PLG$USER_NAME = ? AND PLG$ACTIVE";
+				"SELECT PLG$VERIFIER, PLG$SALT FROM PLG$SRP%SCHEMA.PLG$SRP WHERE PLG$USER_NAME = ? AND PLG$ACTIVE";
 			stmt = att->prepare(&status, tra, 0, sql, 3, IStatement::PREPARE_PREFETCH_METADATA);
 			if (status->getState() & IStatus::STATE_ERRORS)
 			{
@@ -247,7 +247,7 @@ private:
 template <class SHA> class SrpServerImpl final : public SrpServer
 {
 public:
-	explicit SrpServerImpl<SHA>(IPluginConfig* ipc)
+	explicit SrpServerImpl(IPluginConfig* ipc)
 		: SrpServer(ipc)
 	{}
 
@@ -273,6 +273,10 @@ int SrpServer::authenticate(CheckStatusWrapper* status, IServerBlock* sb, IWrite
 			}
 
 			account = sb->getLogin();
+
+			const size_t len = account.length();
+			if (len > SZ_LOGIN)
+				status_exception::raise(Arg::Gds(isc_long_login) << Arg::Num(len) << Arg::Num(SZ_LOGIN));
 
 			unsigned int length;
 			const unsigned char* val = sb->getData(&length);

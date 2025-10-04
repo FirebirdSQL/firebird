@@ -17,7 +17,7 @@ enabled. There are two ways to enable parallelism in user attachment:
   firebird.conf.
 
   For gfix utility there is new command-line switch -parallel that allows to
-set number of parallel workers for the sweep task. For example:
+set number of parallel workers for the "sweep" and "icu" tasks. For example:
 
   gfix -sweep -parallel 4 <database>
 
@@ -34,7 +34,7 @@ DPB have higher priority than setting in firebird.conf.
 there are two new settings in firebird.conf: 
 - ParallelWorkers - set default number of parallel workers that used by user 
   attachments. 
-  Could be overriden by attachment using tag isc_dpb_parallel_workers in DPB.
+  Could be overridden by attachment using tag isc_dpb_parallel_workers in DPB.
 - MaxParallelWorkers - limit number of simultaneously used workers for the
   given database and Firebird process.
 

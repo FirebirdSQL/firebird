@@ -38,12 +38,14 @@
  */
 
 #include "firebird.h"
+#include <chrono>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #ifdef SOLARIS
 #include "../common/gdsassert.h"
+#define PER_THREAD_RWLOCK
 #endif
 
 #ifdef HPUX
@@ -64,10 +66,10 @@
 #include "../common/StatusArg.h"
 #include "../common/ThreadData.h"
 #include "../common/ThreadStart.h"
-#include "../common/classes/rwlock.h"
 #include "../common/classes/GenericMap.h"
 #include "../common/classes/RefMutex.h"
 #include "../common/classes/array.h"
+#include "../common/classes/condition.h"
 #include "../common/StatusHolder.h"
 
 #ifdef WIN_NT
@@ -96,13 +98,6 @@ static int process_id;
 #endif
 
 #include <sys/mman.h>
-
-#define FTOK_KEY	15
-#define PRIV		S_IRUSR | S_IWUSR
-
-//#ifndef SHMEM_DELTA
-//#define SHMEM_DELTA	(1 << 22)
-//#endif
 
 #endif // UNIX
 
@@ -144,87 +139,27 @@ static bool		event_blocked(const event_t* event, const SLONG value);
 
 #ifdef UNIX
 
-static GlobalPtr<Mutex> openFdInit;
+#ifdef FILELOCK_DEBUG
 
-class DevNode
+#include <stdarg.h>
+
+void DEB_FLOCK(const char* format, ...)
 {
-public:
-	DevNode()
-		: f_dev(0), f_ino(0)
-	{ }
+	va_list params;
+	va_start(params, format);
+	::vfprintf(stderr, format, params);
+	va_end(params);
+}
 
-	DevNode(dev_t d, ino_t i)
-		: f_dev(d), f_ino(i)
-	{ }
+#else
 
-	DevNode(const DevNode& v)
-		: f_dev(v.f_dev), f_ino(v.f_ino)
-	{ }
+void DEB_FLOCK(const char* format, ...) { }
 
-	dev_t	f_dev;
-	ino_t	f_ino;
 
-	bool operator==(const DevNode& v) const
-	{
-		return f_dev == v.f_dev && f_ino == v.f_ino;
-	}
-
-	bool operator>(const DevNode& v) const
-	{
-		return f_dev > v.f_dev ? true :
-			   f_dev < v.f_dev ? false :
-			   f_ino > v.f_ino;
-	}
-
-	const DevNode& operator=(const DevNode& v)
-	{
-		f_dev = v.f_dev;
-		f_ino = v.f_ino;
-		return *this;
-	}
-};
-
-namespace Firebird {
-
-class CountedRWLock
-{
-public:
-	CountedRWLock()
-		: sharedAccessCounter(0)
-	{ }
-	RWLock rwlock;
-	AtomicCounter cnt;
-	Mutex sharedAccessMutex;
-	int sharedAccessCounter;
-};
-
-class CountedFd
-{
-public:
-	explicit CountedFd(int f)
-		: fd(f), useCount(0)
-	{ }
-
-	~CountedFd()
-	{
-		fb_assert(useCount == 0);
-	}
-
-	int fd;
-	int useCount;
-
-private:
-	CountedFd(const CountedFd&);
-	const CountedFd& operator=(const CountedFd&);
-};
-
-} // namespace Firebird
+#endif //FILELOCK_DEBUG
 
 namespace {
 
-	typedef GenericMap<Pair<Left<string, Firebird::CountedRWLock*> > > RWLocks;
-	GlobalPtr<RWLocks> rwlocks;
-	GlobalPtr<Mutex> rwlocksMutex;
 #ifdef USE_FCNTL
 	const char* NAME = "fcntl";
 #else
@@ -255,6 +190,44 @@ namespace {
 		FileLock* lock;
 	};
 
+	class DevNode
+	{
+	public:
+		DevNode()
+			: f_dev(0), f_ino(0)
+		{ }
+
+		DevNode(dev_t d, ino_t i)
+			: f_dev(d), f_ino(i)
+		{ }
+
+		DevNode(const DevNode& v)
+			: f_dev(v.f_dev), f_ino(v.f_ino)
+		{ }
+
+		dev_t	f_dev;
+		ino_t	f_ino;
+
+		bool operator==(const DevNode& v) const
+		{
+			return f_dev == v.f_dev && f_ino == v.f_ino;
+		}
+
+		bool operator>(const DevNode& v) const
+		{
+			return f_dev > v.f_dev ? true :
+				   f_dev < v.f_dev ? false :
+				   f_ino > v.f_ino;
+		}
+
+		const DevNode& operator=(const DevNode& v)
+		{
+			f_dev = v.f_dev;
+			f_ino = v.f_ino;
+			return *this;
+		}
+	};
+
 	DevNode getNode(const char* name)
 	{
 		struct STAT statistics;
@@ -281,80 +254,231 @@ namespace {
 		return DevNode(statistics.st_dev, statistics.st_ino);
 	}
 
+	GlobalPtr<Mutex> openFdInit;
+
 } // anonymous namespace
 
 
-typedef GenericMap<Pair<NonPooled<DevNode, Firebird::CountedFd*> > > FdNodes;
-static GlobalPtr<Mutex> fdNodesMutex;
-static GlobalPtr<FdNodes> fdNodes;
+namespace Firebird {
+
+class SharedFileInfo : public RefCounted
+{
+	SharedFileInfo(int f, const DevNode& id)
+		: counter(0), threadId(0), fd(f), devNode(id)
+	{ }
+
+	~SharedFileInfo()
+	{
+		fb_assert(sharedFilesMutex->locked());
+		fb_assert(counter == 0);
+
+		DEB_FLOCK("~ %p\n", this);
+		sharedFiles->remove(devNode);
+		close(fd);
+	}
+
+public:
+	static SharedFileInfo* get(const char* fileName)
+	{
+		DevNode id(getNode(fileName));
+
+		MutexLockGuard g(sharedFilesMutex, FB_FUNCTION);
+
+		SharedFileInfo* file = nullptr;
+		if (id.f_ino)
+		{
+			SharedFileInfo** got = sharedFiles->get(id);
+			if (got)
+			{
+				file = *got;
+				DEB_FLOCK("'%s': in map %p\n", fileName, file);
+				file->assertNonZero();
+			}
+		}
+
+		if (!file)
+		{
+			int fd = os_utils::openCreateSharedFile(fileName, 0);
+			id = getNode(fd);
+			file = FB_NEW_POOL(*getDefaultMemoryPool()) SharedFileInfo(fd, id);
+			SharedFileInfo** put = sharedFiles->put(id);
+			fb_assert(put);
+			*put = file;
+			DEB_FLOCK("'%s': new %p\n", fileName, file);
+		}
+
+		file->addRef();
+		return file;
+	}
+
+	int release() const override
+	{
+		// Release should be executed under mutex protection
+		// in order to modify reference counter & map atomically
+		MutexLockGuard guard(sharedFilesMutex, FB_FUNCTION);
+
+		return RefCounted::release();
+	}
+
+	int lock(bool shared, bool wait, FileLock::InitFunction* init)
+	{
+		MutexEnsureUnlock guard(mutex, FB_FUNCTION);
+		if (wait)
+			guard.enter();
+		else if (!guard.tryEnter())
+			return -1;
+
+		DEB_FLOCK("%d lock %p %c%c\n", Thread::getId(), this, shared ? 's' : 'X', wait ? 'W' : 't');
+
+		while (counter != 0)	// file lock belongs to our process
+		{
+			// check for compatible locks
+			if (shared && counter > 0)
+			{
+				// one more shared lock
+				++counter;
+				DEB_FLOCK("%d fast %p c=%d\n", Thread::getId(), this, counter);
+				return 0;
+			}
+			if ((!shared) && counter < 0 && threadId == Thread::getId())
+			{
+				// recursive excl lock
+				--counter;
+				DEB_FLOCK("%d fast %p c=%d\n", Thread::getId(), this, counter);
+				return 0;
+			}
+
+			// non compatible lock needed
+			// wait for another thread to release a lock
+			if (!wait)
+			{
+				DEB_FLOCK("%d failed internally %p c=%d rc -1\n", Thread::getId(), this, counter);
+				return -1;
+			}
+
+			DEB_FLOCK("%d wait %p c=%d\n", Thread::getId(), this, counter);
+			waitOn.wait(mutex);
+		}
+
+		// Take lock on a file
+		fb_assert(counter == 0);
+#ifdef USE_FCNTL
+		struct FLOCK lock;
+		lock.l_type = shared ? F_RDLCK : F_WRLCK;
+		lock.l_whence = SEEK_SET;
+		lock.l_start = 0;
+		lock.l_len = 1;
+		if (fcntl(fd, wait ? F_SETLKW : F_SETLK, &lock) == -1)
+		{
+			int rc = errno;
+			if (!wait && (rc == EACCES || rc == EAGAIN))
+				rc = -1;
+#else
+		if (flock(fd, (shared ? LOCK_SH : LOCK_EX) | (wait ? 0 : LOCK_NB)))
+		{
+			int rc = errno;
+			if (!wait && (rc == EWOULDBLOCK))
+				rc = -1;
+#endif
+			DEB_FLOCK("%d failed on file %p c=%d rc %d\n", Thread::getId(), this, counter, rc);
+			return rc;
+		}
+
+		if (!shared)
+		{
+			threadId = Thread::getId();
+
+			// call init() when needed
+			if (init && !shared)
+				init(fd);
+		}
+
+		// mark lock as taken
+		counter = shared ? 1 : -1;
+		DEB_FLOCK("%d filelock %p c=%d\n", Thread::getId(), this, counter);
+		return 0;
+	}
+
+	void unlock()
+	{
+		fb_assert(counter != 0);
+
+		MutexEnsureUnlock guard(mutex, FB_FUNCTION);
+		guard.enter();
+
+		DEB_FLOCK("%d UNlock %p c=%d\n", Thread::getId(), this, counter);
+
+		if (counter < 0)
+			++counter;
+		else
+			--counter;
+
+		if (counter != 0)
+		{
+			DEB_FLOCK("%d done %p c=%d\n", Thread::getId(), this, counter);
+			return;
+		}
+
+		// release file lock
+#ifdef USE_FCNTL
+		struct FLOCK lock;
+		lock.l_type = F_UNLCK;
+		lock.l_whence = SEEK_SET;
+		lock.l_start = 0;
+		lock.l_len = 1;
+
+		if (fcntl(fd, F_SETLK, &lock) != 0)
+		{
+#else
+		if (flock(fd, LOCK_UN) != 0)
+		{
+#endif
+			LocalStatus ls;
+			CheckStatusWrapper local(&ls);
+			error(&local, NAME, errno);
+			iscLogStatus("Unlock error", &local);
+		}
+
+		DEB_FLOCK("%d file-done %p\n", Thread::getId(), this);
+		waitOn.notifyAll();
+	}
+
+	int getFd()
+	{
+		return fd;
+	}
+
+private:
+	typedef GenericMap<Pair<NonPooled<DevNode, SharedFileInfo*> > > SharedFiles;
+	static GlobalPtr<SharedFiles> sharedFiles;
+	static GlobalPtr<Mutex> sharedFilesMutex;
+
+	Condition waitOn;
+	Mutex mutex;
+	int counter;
+	ThreadId threadId;
+	int fd;
+	DevNode devNode;
+};
+
+GlobalPtr<SharedFileInfo::SharedFiles> SharedFileInfo::sharedFiles;
+GlobalPtr<Mutex> SharedFileInfo::sharedFilesMutex;
+
+} // namespace Firebird
+
 
 FileLock::FileLock(const char* fileName, InitFunction* init)
-	: level(LCK_NONE), oFile(NULL),
-#ifdef USE_FCNTL
-	  lStart(0),
-#endif
-	  rwcl(NULL)
-{
-	MutexLockGuard g(fdNodesMutex, FB_FUNCTION);
-
-	DevNode id(getNode(fileName));
-
-	if (id.f_ino)
-	{
-		CountedFd** got = fdNodes->get(id);
-		if (got)
-		{
-			oFile = *got;
-		}
-	}
-
-	if (!oFile)
-	{
-		int fd = os_utils::openCreateSharedFile(fileName, 0);
-		oFile = FB_NEW_POOL(*getDefaultMemoryPool()) CountedFd(fd);
-		CountedFd** put = fdNodes->put(getNode(fd));
-		fb_assert(put);
-		*put = oFile;
-
-		if (init)
-		{
-			init(fd);
-		}
-	}
-
-	rwcl = getRw();
-	++(oFile->useCount);
-}
-
+	: file(REF_NO_INCR, SharedFileInfo::get(fileName)), initFunction(init), level(LCK_NONE)
+{ }
 
 FileLock::~FileLock()
 {
 	unlock();
-
-	{ // guard scope
-		MutexLockGuard g(rwlocksMutex, FB_FUNCTION);
-
-		if (--(rwcl->cnt) == 0)
-		{
-			rwlocks->remove(getLockId());
-			delete rwcl;
-		}
-	}
-	{ // guard scope
-		MutexLockGuard g(fdNodesMutex, FB_FUNCTION);
-
-		if (--(oFile->useCount) == 0)
-		{
-			fdNodes->remove(getNode(oFile->fd));
-			close(oFile->fd);
-			delete oFile;
-		}
-	}
 }
 
 int FileLock::getFd()
 {
-	return oFile->fd;
+	return file->getFd();
 }
 
 int FileLock::setlock(const LockMode mode)
@@ -368,9 +492,6 @@ int FileLock::setlock(const LockMode mode)
 		case FLM_EXCLUSIVE:
 			shared = false;
 			break;
-		case FLM_TRY_SHARED:
-			wait = false;
-			// fall through
 		case FLM_SHARED:
 			break;
 	}
@@ -385,99 +506,11 @@ int FileLock::setlock(const LockMode mode)
 		return wait ? EBUSY : -1;
 	}
 
-	// first take appropriate rwlock to avoid conflicts with other threads in our process
-	bool rc = true;
-	try
-	{
-		switch (mode)
-		{
-		case FLM_TRY_EXCLUSIVE:
-			rc = rwcl->rwlock.tryBeginWrite(FB_FUNCTION);
-			break;
-		case FLM_EXCLUSIVE:
-			rwcl->rwlock.beginWrite(FB_FUNCTION);
-			break;
-		case FLM_TRY_SHARED:
-			rc = rwcl->rwlock.tryBeginRead(FB_FUNCTION);
-			break;
-		case FLM_SHARED:
-			rwcl->rwlock.beginRead(FB_FUNCTION);
-			break;
-		}
-	}
-	catch (const system_call_failed& fail)
-	{
-		return fail.getErrorCode();
-	}
-	if (!rc)
-	{
-		return -1;
-	}
+	int rc = file->lock(shared, wait, initFunction);
+	if (rc == 0)	// lock taken
+		level = newLevel;
 
-	// For shared lock we must take into an account reenterability
-	MutexEnsureUnlock guard(rwcl->sharedAccessMutex, FB_FUNCTION);
-	if (shared)
-	{
-		if (wait)
-		{
-			guard.enter();
-		}
-		else if (!guard.tryEnter())
-		{
-			return -1;
-		}
-
-		fb_assert(rwcl->sharedAccessCounter >= 0);
-		if (rwcl->sharedAccessCounter++ > 0)
-		{
-			// counter is non-zero - we already have file lock
-			level = LCK_SHARED;
-			return 0;
-		}
-	}
-
-#ifdef USE_FCNTL
-	// Take lock on a file
-	struct FLOCK lock;
-	lock.l_type = shared ? F_RDLCK : F_WRLCK;
-	lock.l_whence = SEEK_SET;
-	lock.l_start = lStart;
-	lock.l_len = 1;
-	if (fcntl(oFile->fd, wait ? F_SETLKW : F_SETLK, &lock) == -1)
-	{
-		int rc = errno;
-		if (!wait && (rc == EACCES || rc == EAGAIN))
-		{
-			rc = -1;
-		}
-#else
-	if (flock(oFile->fd, (shared ? LOCK_SH : LOCK_EX) | (wait ? 0 : LOCK_NB)))
-	{
-		int rc = errno;
-		if (!wait && (rc == EWOULDBLOCK))
-		{
-			rc = -1;
-		}
-#endif
-
-		try
-		{
-			if (shared)
-			{
-				rwcl->sharedAccessCounter--;
-				rwcl->rwlock.endRead();
-			}
-			else
-				rwcl->rwlock.endWrite();
-		}
-		catch (const Exception&)
-		{ }
-
-		return rc;
-	}
-
-	level = newLevel;
-	return 0;
+	return rc;
 }
 
 bool FileLock::setlock(CheckStatusWrapper* status, const LockMode mode)
@@ -494,25 +527,6 @@ bool FileLock::setlock(CheckStatusWrapper* status, const LockMode mode)
 	return true;
 }
 
-void FileLock::rwUnlock()
-{
-	fb_assert(level != LCK_NONE);
-
-	try
-	{
-		if (level == LCK_SHARED)
-			rwcl->rwlock.endRead();
-		else
-			rwcl->rwlock.endWrite();
-	}
-	catch (const Exception& ex)
-	{
-		iscLogException("rwlock end-operation error", ex);
-	}
-
-	level = LCK_NONE;
-}
-
 void FileLock::unlock()
 {
 	if (level == LCK_NONE)
@@ -520,97 +534,8 @@ void FileLock::unlock()
 		return;
 	}
 
-	// For shared lock we must take into an account reenterability
-	MutexEnsureUnlock guard(rwcl->sharedAccessMutex, FB_FUNCTION);
-	if (level == LCK_SHARED)
-	{
-		guard.enter();
-
-		fb_assert(rwcl->sharedAccessCounter > 0);
-		if (--(rwcl->sharedAccessCounter) > 0)
-		{
-			// counter is non-zero - we must keep file lock
-			rwUnlock();
-			return;
-		}
-	}
-
-#ifdef USE_FCNTL
-	struct FLOCK lock;
-	lock.l_type = F_UNLCK;
-	lock.l_whence = SEEK_SET;
-	lock.l_start = lStart;
-	lock.l_len = 1;
-
-	if (fcntl(oFile->fd, F_SETLK, &lock) != 0)
-	{
-#else
-	if (flock(oFile->fd, LOCK_UN) != 0)
-	{
-#endif
-		LocalStatus ls;
-		CheckStatusWrapper local(&ls);
-		error(&local, NAME, errno);
-		iscLogStatus("Unlock error", &local);
-	}
-
-	rwUnlock();
-}
-
-string FileLock::getLockId()
-{
-	fb_assert(oFile);
-
-	DevNode id(getNode(oFile->fd));
-
-	const size_t len1 = sizeof(id.f_dev);
-	const size_t len2 = sizeof(id.f_ino);
-#ifdef USE_FCNTL
-	const size_t len3 = sizeof(int);
-#endif
-
-	string rc(len1 + len2
-#ifdef USE_FCNTL
-						  + len3
-#endif
-								, ' ');
-	char* p = rc.begin();
-
-	memcpy(p, &id.f_dev, len1);
-	p += len1;
-	memcpy(p, &id.f_ino, len2);
-#ifdef USE_FCNTL
-	p += len2;
-	memcpy(p, &lStart, len3);
-#endif
-
-	return rc;
-}
-
-CountedRWLock* FileLock::getRw()
-{
-	string id = getLockId();
-	CountedRWLock* rc = NULL;
-
-	MutexLockGuard g(rwlocksMutex, FB_FUNCTION);
-
-	CountedRWLock** got = rwlocks->get(id);
-	if (got)
-	{
-		rc = *got;
-	}
-
-	if (!rc)
-	{
-		rc = FB_NEW_POOL(*getDefaultMemoryPool()) CountedRWLock;
-		CountedRWLock** put = rwlocks->put(id);
-		fb_assert(put);
-		*put = rc;
-	}
-
-	++(rc->cnt);
-
-	return rc;
+	file->unlock();
+	level = LCK_NONE;
 }
 
 #endif // UNIX
@@ -687,7 +612,7 @@ int SharedMemoryBase::eventInit(event_t* event)
 #else // pthread-based event
 
 	event->event_count = 0;
-	event->pid = getpid();
+	event->event_pid = getpid();
 
 	// Prepare an Inter-Process event block
 	pthread_mutexattr_t mattr;
@@ -738,7 +663,7 @@ void SharedMemoryBase::eventFini(event_t* event)
 
 #else // pthread-based event
 
-	if (event->pid == getpid())
+	if (event->event_pid == getpid())
 	{
 		LOG_PTHREAD_ERROR(pthread_mutex_destroy(event->event_mutex));
 		LOG_PTHREAD_ERROR(pthread_cond_destroy(event->event_cond));
@@ -766,6 +691,8 @@ SLONG SharedMemoryBase::eventClear(event_t* event)
  *	    3.  Wait on event.
  *
  **************************************/
+
+	fb_assert(event->event_pid == getpid());
 
 #if defined(WIN_NT)
 
@@ -798,6 +725,8 @@ int SharedMemoryBase::eventWait(event_t* event, const SLONG value, const SLONG m
  *
  **************************************/
 
+	fb_assert(event->event_pid == getpid());
+
 	// If we're not blocked, the rest is a gross waste of time
 
 	if (!event_blocked(event, value)) {
@@ -828,9 +757,24 @@ int SharedMemoryBase::eventWait(event_t* event, const SLONG value, const SLONG m
 	struct timespec timer;
 	if (micro_seconds > 0)
 	{
-		timer.tv_sec = time(NULL);
-		timer.tv_sec += micro_seconds / 1000000;
-		timer.tv_nsec = 1000 * (micro_seconds % 1000000);
+#if defined(HAVE_CLOCK_GETTIME)
+		clock_gettime(CLOCK_REALTIME, &timer);
+#elif defined(HAVE_GETTIMEOFDAY)
+		struct timeval tp;
+		GETTIMEOFDAY(&tp);
+		timer.tv_sec = tp.tv_sec;
+		timer.tv_nsec = tp.tv_usec * 1000;
+#else
+		struct timeb time_buffer;
+		ftime(&time_buffer);
+		timer.tv_sec = time_buffer.time;
+		timer.tv_nsec = time_buffer.millitm * 1000000;
+#endif
+		const SINT64 BILLION = 1000000000;
+		const SINT64 nanos = (SINT64) timer.tv_sec * BILLION + timer.tv_nsec +
+			(SINT64) micro_seconds * 1000;
+		timer.tv_sec = nanos / BILLION;
+		timer.tv_nsec = nanos % BILLION;
 	}
 
 	int ret = FB_SUCCESS;
@@ -892,7 +836,7 @@ int SharedMemoryBase::eventPost(event_t* event)
 	++event->event_count;
 
 	if (event->event_pid != process_id)
-		return ISC_kill(event->event_pid, event->event_id, event->event_handle);
+		return ISC_kill(event->event_pid, event->event_id, event->event_handle) == 0 ? FB_SUCCESS : FB_FAILURE;
 
 	return SetEvent(event->event_handle) ? FB_SUCCESS : FB_FAILURE;
 
@@ -943,28 +887,29 @@ ULONG ISC_exception_post(ULONG sig_num, const TEXT* err_msg, ISC_STATUS& /*isc_e
 		err_msg = "";
 	}
 
-	TEXT* const log_msg = (TEXT *) gds__alloc(strlen(err_msg) + 256);
+	const size_t msgsz = strlen(err_msg) + 256;
+	TEXT* const log_msg = (TEXT *) gds__alloc(static_cast<SLONG>(msgsz));
 	// NOMEM: crash!
 	log_msg[0] = '\0';
 
 	switch (sig_num)
 	{
 	case SIGSEGV:
-		sprintf(log_msg, "%s Segmentation Fault.\n"
+		snprintf(log_msg, msgsz, "%s Segmentation Fault.\n"
 				"\t\tThe code attempted to access memory\n"
 				"\t\twithout privilege to do so.\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case SIGBUS:
-		sprintf(log_msg, "%s Bus Error.\n"
+		snprintf(log_msg, msgsz, "%s Bus Error.\n"
 				"\t\tThe code caused a system bus error.\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case SIGILL:
 
-		sprintf(log_msg, "%s Illegal Instruction.\n"
+		snprintf(log_msg, msgsz, "%s Illegal Instruction.\n"
 				"\t\tThe code attempted to perform an\n"
 				"\t\tillegal operation."
 				"\tThis exception will cause the Firebird server\n"
@@ -972,14 +917,14 @@ ULONG ISC_exception_post(ULONG sig_num, const TEXT* err_msg, ISC_STATUS& /*isc_e
 		break;
 
 	case SIGFPE:
-		sprintf(log_msg, "%s Floating Point Error.\n"
+		snprintf(log_msg, msgsz, "%s Floating Point Error.\n"
 				"\t\tThe code caused an arithmetic exception\n"
 				"\t\tor floating point exception."
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	default:
-		sprintf(log_msg, "%s Unknown Exception.\n"
+		snprintf(log_msg, msgsz, "%s Unknown Exception.\n"
 				"\t\tException number %" ULONGFORMAT"."
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg, sig_num);
@@ -989,8 +934,10 @@ ULONG ISC_exception_post(ULONG sig_num, const TEXT* err_msg, ISC_STATUS& /*isc_e
 	if (err_msg)
 	{
 		gds__log(log_msg);
-		gds__free(log_msg);
 	}
+
+	gds__free(log_msg);
+
 	abort();
 
 	return 0;	// compiler silencer
@@ -1025,35 +972,36 @@ ULONG ISC_exception_post(ULONG except_code, const TEXT* err_msg, ISC_STATUS& isc
 		err_msg = "";
 	}
 
-	TEXT* log_msg = (TEXT*) gds__alloc(static_cast<SLONG>(strlen(err_msg) + 256));
+	const size_t msgsz = strlen(err_msg) + 256;
+	TEXT* const log_msg = (TEXT*)gds__alloc(static_cast<SLONG>(msgsz));
 	// NOMEM: crash!
 	log_msg[0] = '\0';
 
 	switch (except_code)
 	{
 	case EXCEPTION_ACCESS_VIOLATION:
-		sprintf(log_msg, "%s Access violation.\n"
+		snprintf(log_msg, msgsz, "%s Access violation.\n"
 				"\t\tThe code attempted to access a virtual\n"
 				"\t\taddress without privilege to do so.\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case EXCEPTION_DATATYPE_MISALIGNMENT:
-		sprintf(log_msg, "%s Datatype misalignment.\n"
+		snprintf(log_msg, msgsz, "%s Datatype misalignment.\n"
 				"\t\tThe attempted to read or write a value\n"
 				"\t\tthat was not stored on a memory boundary.\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
-		sprintf(log_msg, "%s Array bounds exceeded.\n"
+		snprintf(log_msg, msgsz, "%s Array bounds exceeded.\n"
 				"\t\tThe code attempted to access an array\n"
 				"\t\telement that is out of bounds.\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case EXCEPTION_FLT_DENORMAL_OPERAND:
-		sprintf(log_msg, "%s Float denormal operand.\n"
+		snprintf(log_msg, msgsz, "%s Float denormal operand.\n"
 				"\t\tOne of the floating-point operands is too\n"
 				"\t\tsmall to represent as a standard floating-point\n"
 				"\t\tvalue.\n"
@@ -1061,56 +1009,56 @@ ULONG ISC_exception_post(ULONG except_code, const TEXT* err_msg, ISC_STATUS& isc
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case EXCEPTION_FLT_DIVIDE_BY_ZERO:
-		sprintf(log_msg, "%s Floating-point divide by zero.\n"
+		snprintf(log_msg, msgsz, "%s Floating-point divide by zero.\n"
 				"\t\tThe code attempted to divide a floating-point\n"
 				"\t\tvalue by a floating-point divisor of zero.\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case EXCEPTION_FLT_INEXACT_RESULT:
-		sprintf(log_msg, "%s Floating-point inexact result.\n"
+		snprintf(log_msg, msgsz, "%s Floating-point inexact result.\n"
 				"\t\tThe result of a floating-point operation cannot\n"
 				"\t\tbe represented exactly as a decimal fraction.\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case EXCEPTION_FLT_INVALID_OPERATION:
-		sprintf(log_msg, "%s Floating-point invalid operand.\n"
+		snprintf(log_msg, msgsz, "%s Floating-point invalid operand.\n"
 				"\t\tAn indeterminant error occurred during a\n"
 				"\t\tfloating-point operation.\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case EXCEPTION_FLT_OVERFLOW:
-		sprintf(log_msg, "%s Floating-point overflow.\n"
+		snprintf(log_msg, msgsz, "%s Floating-point overflow.\n"
 				"\t\tThe exponent of a floating-point operation\n"
 				"\t\tis greater than the magnitude allowed.\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case EXCEPTION_FLT_STACK_CHECK:
-		sprintf(log_msg, "%s Floating-point stack check.\n"
+		snprintf(log_msg, msgsz, "%s Floating-point stack check.\n"
 				"\t\tThe stack overflowed or underflowed as the\n"
 				"result of a floating-point operation.\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case EXCEPTION_FLT_UNDERFLOW:
-		sprintf(log_msg, "%s Floating-point underflow.\n"
+		snprintf(log_msg, msgsz, "%s Floating-point underflow.\n"
 				"\t\tThe exponent of a floating-point operation\n"
 				"\t\tis less than the magnitude allowed.\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case EXCEPTION_INT_DIVIDE_BY_ZERO:
-		sprintf(log_msg, "%s Integer divide by zero.\n"
+		snprintf(log_msg, msgsz, "%s Integer divide by zero.\n"
 				"\t\tThe code attempted to divide an integer value\n"
 				"\t\tby an integer divisor of zero.\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg);
 		break;
 	case EXCEPTION_INT_OVERFLOW:
-		sprintf(log_msg, "%s Interger overflow.\n"
+		snprintf(log_msg, msgsz, "%s Interger overflow.\n"
 				"\t\tThe result of an integer operation caused the\n"
 				"\t\tmost significant bit of the result to carry.\n"
 				"\tThis exception will cause the Firebird server\n"
@@ -1118,7 +1066,7 @@ ULONG ISC_exception_post(ULONG except_code, const TEXT* err_msg, ISC_STATUS& isc
 		break;
 	case EXCEPTION_STACK_OVERFLOW:
 		isc_error = isc_exception_stack_overflow;
-		result = (ULONG) EXCEPTION_EXECUTE_HANDLER;
+		result = EXCEPTION_EXECUTE_HANDLER;
 		is_critical = false;
 		break;
 
@@ -1143,7 +1091,7 @@ ULONG ISC_exception_post(ULONG except_code, const TEXT* err_msg, ISC_STATUS& isc
 		is_critical = false;
 		break;
 	default:
-		sprintf (log_msg, "%s An exception occurred that does\n"
+		snprintf(log_msg, msgsz, "%s An exception occurred that does\n"
 				"\t\tnot have a description.  Exception number %" XLONGFORMAT".\n"
 				"\tThis exception will cause the Firebird server\n"
 				"\tto terminate abnormally.", err_msg, except_code);
@@ -1188,13 +1136,17 @@ void SharedMemoryBase::removeMapFile()
 	if (!sh_mem_header->isDeleted())
 	{
 #ifndef WIN_NT
-		unlinkFile();
+		FileLockHolder initLock(initFile);
+		if (!sh_mem_header->isDeleted())
+		{
+			unlinkFile();
+			sh_mem_header->markAsDeleted();
+		}
 #else
 		fb_assert(!sh_mem_unlink);
 		sh_mem_unlink = true;
-#endif // WIN_NT
-
 		sh_mem_header->markAsDeleted();
+#endif // WIN_NT
 	}
 }
 
@@ -1238,6 +1190,56 @@ void SharedMemoryBase::unlinkFile(const TEXT* expanded_filename) noexcept
 
 
 #ifdef UNIX
+
+static inline void reportError(const char* func, CheckStatusWrapper* statusVector)
+{
+	if (!statusVector)
+		system_call_failed::raise(func);
+	else
+		error(statusVector, func, errno);
+}
+
+bool allocFileSpace(int fd, off_t offset, FB_SIZE_T length, CheckStatusWrapper* statusVector)
+{
+#if defined(HAVE_LINUX_FALLOC_H) && defined(HAVE_FALLOCATE)
+	if (fallocate(fd, 0, offset, length) == 0)
+		return true;
+
+	if (errno != EOPNOTSUPP && errno != ENOSYS)
+	{
+		reportError("fallocate", statusVector);
+		return false;
+	}
+	// fallocate is not supported by this kernel or file system
+	// take the long way around
+#endif
+	static const FB_SIZE_T buf128KSize = 131072;
+	HalfStaticArray<UCHAR, BUFFER_LARGE> buf;
+	const FB_SIZE_T bufSize = length < buf128KSize ? length : buf128KSize;
+
+	memset(buf.getBuffer(bufSize), 0, bufSize);
+	os_utils::lseek(fd, LSEEK_OFFSET_CAST offset, SEEK_SET);
+
+	while (length)
+	{
+		const FB_SIZE_T cnt = length < bufSize ? length : bufSize;
+		if (write(fd, buf.begin(), cnt) != (ssize_t) cnt)
+		{
+			reportError("write", statusVector);
+			return false;
+		}
+		length -= cnt;
+	}
+
+	if (fsync(fd))
+	{
+		reportError("fsync", statusVector);
+		return false;
+	}
+
+	return true;
+}
+
 
 void SharedMemoryBase::internalUnmap()
 {
@@ -1374,7 +1376,10 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	if (mainLock->setlock(&statusVector, FileLock::FLM_TRY_EXCLUSIVE))
 	{
 		if (trunc_flag)
+		{
 			FB_UNUSED(os_utils::ftruncate(mainLock->getFd(), length));
+			allocFileSpace(mainLock->getFd(), 0, length, NULL);
+		}
 
 		if (callback->initialize(this, true))
 		{
@@ -1428,7 +1433,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 				if (!bugFlag)
 				{
 #endif
-					LOG_PTHREAD_ERROR(pthread_mutexattr_setrobust_np(&mattr, PTHREAD_MUTEX_ROBUST_NP));
+					LOG_PTHREAD_ERROR(pthread_mutexattr_setrobust(&mattr, PTHREAD_MUTEX_ROBUST));
 #ifdef BUGGY_LINUX_MUTEX
 				}
 #endif
@@ -1525,7 +1530,7 @@ static bool getMappedFileName(void* addr, PathName& mappedName)
 				//system_call_failed::raise("QueryDosDevice");
 				return false;
 
-			ntLen = strlen(ntDevice);
+			ntLen = static_cast<DWORD>(strlen(ntDevice));
 
 			if (ntLen <= mapLen &&
 				_memicmp(ntDevice, mapName, ntLen) == 0 &&
@@ -1723,7 +1728,10 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 			(Arg::Gds(isc_random) << Arg::Str("File for memory mapping is empty.")).raise();
 		}
 
-		if (SetFilePointer(file_handle, length, NULL, FILE_BEGIN) == INVALID_SET_FILE_POINTER ||
+		LARGE_INTEGER offset;
+		offset.QuadPart = length;
+
+		if (SetFilePointer(file_handle, offset.LowPart, &offset.HighPart, FILE_BEGIN) == INVALID_SET_FILE_POINTER ||
 			!SetEndOfFile(file_handle) || !FlushFileBuffers(file_handle))
 		{
 			err = GetLastError();
@@ -1804,7 +1812,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	// Create the real file mapping object.
 
 	TEXT mapping_name[64]; // enough for int32 as text
-	sprintf(mapping_name, "_mapping_%" ULONGFORMAT, header_address[1]);
+	snprintf(mapping_name, sizeof(mapping_name), "_mapping_%" ULONGFORMAT, header_address[1]);
 
 	if (!make_object_name(object_name, sizeof(object_name), filename, mapping_name))
 	{
@@ -2088,11 +2096,11 @@ void SharedMemoryBase::unmapObject(CheckStatusWrapper* statusVector,
 
 #ifdef WIN_NT
 
-static const LPCSTR FAST_MUTEX_EVT_NAME	= "%s_FM_EVT";
-static const LPCSTR FAST_MUTEX_MAP_NAME	= "%s_FM_MAP";
+static constexpr LPCSTR FAST_MUTEX_EVT_NAME	= "%s_FM_EVT";
+static constexpr LPCSTR FAST_MUTEX_MAP_NAME	= "%s_FM_MAP";
 
-static const int DEFAULT_INTERLOCKED_SPIN_COUNT	= 0;
-static const int DEFAULT_INTERLOCKED_SPIN_COUNT_SMP	= 200;
+static constexpr int DEFAULT_INTERLOCKED_SPIN_COUNT	= 0;
+static constexpr int DEFAULT_INTERLOCKED_SPIN_COUNT_SMP	= 200;
 
 static SLONG pid = 0;
 
@@ -2296,7 +2304,7 @@ static bool initializeFastMutex(FAST_MUTEX* lpMutex, LPSECURITY_ATTRIBUTES lpAtt
 	char sz[MAXPATHLEN];
 	if (lpName)
 	{
-		sprintf(sz, FAST_MUTEX_EVT_NAME, lpName);
+		snprintf(sz, sizeof(sz), FAST_MUTEX_EVT_NAME, lpName);
 		name = sz;
 	}
 
@@ -2313,7 +2321,7 @@ static bool initializeFastMutex(FAST_MUTEX* lpMutex, LPSECURITY_ATTRIBUTES lpAtt
 		SetHandleInformation(lpMutex->hEvent, HANDLE_FLAG_INHERIT, 0);
 
 		if (lpName)
-			sprintf(sz, FAST_MUTEX_MAP_NAME, lpName);
+			snprintf(sz, sizeof(sz), FAST_MUTEX_MAP_NAME, lpName);
 
 		lpMutex->hFileMap = CreateFileMapping(
 			INVALID_HANDLE_VALUE,
@@ -2414,7 +2422,7 @@ void ISC_mutex_fini(struct mtx *mutex)
 }
 
 
-int ISC_mutex_lock(struct mtx* mutex)
+int ISC_mutex_lock(struct mtx* mutex, std::optional<std::chrono::milliseconds> timeout)
 {
 /**************************************
  *
@@ -2427,29 +2435,10 @@ int ISC_mutex_lock(struct mtx* mutex)
  *
  **************************************/
 
+	const DWORD dwTimeout = timeout.has_value() ? static_cast<DWORD>(timeout->count()) : INFINITE;
 	const DWORD status = (mutex->mtx_fast.lpSharedInfo) ?
-		enterFastMutex(&mutex->mtx_fast, INFINITE) :
-			WaitForSingleObject(mutex->mtx_fast.hEvent, INFINITE);
-
-    return (status == WAIT_OBJECT_0 || status == WAIT_ABANDONED) ? FB_SUCCESS : FB_FAILURE;
-}
-
-
-int ISC_mutex_lock_cond(struct mtx* mutex)
-{
-/**************************************
- *
- *	I S C _ m u t e x _ l o c k _ c o n d	( W I N _ N T )
- *
- **************************************
- *
- * Functional description
- *	Conditionally seize a mutex.
- *
- **************************************/
-
-	const DWORD status = (mutex->mtx_fast.lpSharedInfo) ?
-		enterFastMutex(&mutex->mtx_fast, 0) : WaitForSingleObject(mutex->mtx_fast.hEvent, 0L);
+		enterFastMutex(&mutex->mtx_fast, dwTimeout) :
+			WaitForSingleObject(mutex->mtx_fast.hEvent, dwTimeout);
 
     return (status == WAIT_OBJECT_0 || status == WAIT_ABANDONED) ? FB_SUCCESS : FB_FAILURE;
 }
@@ -2507,7 +2496,18 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector, ULONG new_len
 	}
 
 	if (flag)
+	{
 		FB_UNUSED(os_utils::ftruncate(mainLock->getFd(), new_length));
+
+		if (new_length > sh_mem_length_mapped)
+		{
+			if (!allocFileSpace(mainLock->getFd(), sh_mem_length_mapped,
+				new_length - sh_mem_length_mapped, statusVector))
+			{
+				return false;
+			}
+		}
+	}
 
 	MemoryHeader* const address = (MemoryHeader*) os_utils::mmap(0, new_length,
 		PROT_READ | PROT_WRITE, MAP_SHARED, mainLock->getFd(), 0);
@@ -2553,12 +2553,15 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector,
 
 	if (flag)
 	{
-		if (SetFilePointer(sh_mem_handle, new_length, NULL, FILE_BEGIN) == INVALID_SET_FILE_POINTER ||
+		LARGE_INTEGER offset;
+		offset.QuadPart = new_length;
+
+		if (SetFilePointer(sh_mem_handle, offset.LowPart, &offset.HighPart, FILE_BEGIN) == INVALID_SET_FILE_POINTER ||
 			!SetEndOfFile(sh_mem_handle) ||
 			!FlushViewOfFile(sh_mem_header, 0))
 		{
 			error(statusVector, "SetFilePointer", GetLastError());
-			return NULL;
+			return false;
 		}
 	}
 
@@ -2578,7 +2581,7 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector,
 	while (true)
 	{
 		TEXT mapping_name[64]; // enough for int32 as text
-		sprintf(mapping_name, "_mapping_%" ULONGFORMAT, sh_mem_hdr_address[1] + 1);
+		snprintf(mapping_name, sizeof(mapping_name), "_mapping_%" ULONGFORMAT, sh_mem_hdr_address[1] + 1);
 
 		TEXT object_name[MAXPATHLEN];
 		if (!make_object_name(object_name, sizeof(object_name), sh_mem_name, mapping_name))
@@ -2601,16 +2604,16 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector,
 	if (file_obj == NULL)
 	{
 		error(statusVector, "CreateFileMapping", GetLastError());
-		return NULL;
+		return false;
 	}
 
 	MemoryHeader* const address = (MemoryHeader*) MapViewOfFile(file_obj, FILE_MAP_WRITE, 0, 0, 0);
 
-	if (address == NULL)
+	if (!address)
 	{
 		error(statusVector, "MapViewOfFile", GetLastError());
 		CloseHandle(file_obj);
-		return NULL;
+		return false;
 	}
 
 	if (flag)
@@ -2629,10 +2632,10 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector,
 	if (!sh_mem_length_mapped)
 	{
 		error(statusVector, "sh_mem_length_mapped is 0", 0);
-		return NULL;
+		return false;
 	}
 
-	return (address);
+	return address != nullptr;
 }
 #endif
 
@@ -2722,56 +2725,65 @@ static bool make_object_name(TEXT* buffer, size_t bufsize,
 #endif // WIN_NT
 
 
-void SharedMemoryBase::mutexLock()
+bool SharedMemoryBase::mutexLock(std::optional<std::chrono::milliseconds> timeout)
 {
 #if defined(WIN_NT)
 
-	int state = ISC_mutex_lock(sh_mem_mutex);
+	int state = ISC_mutex_lock(sh_mem_mutex, timeout);
 
 #else // POSIX SHARED MUTEX
 
-	int state = pthread_mutex_lock(sh_mem_mutex->mtx_mutex);
+	int state;
+
+	if (timeout.has_value())
+	{
+		if (timeout.value().count() == 0)
+			state = pthread_mutex_trylock(sh_mem_mutex->mtx_mutex);
+		else
+		{
+			const auto now = std::chrono::system_clock::now();
+			const auto deadline = now + timeout.value();
+			const auto deadlineDuration = deadline.time_since_epoch();
+			const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(deadlineDuration);
+			const auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(deadlineDuration - seconds);
+
+			const timespec ts{
+				.tv_sec = (time_t) seconds.count(),
+				.tv_nsec = (long) nanoseconds.count()
+			};
+
+#ifdef HAVE_PTHREAD_MUTEX_TIMEDLOCK
+			state = pthread_mutex_timedlock(sh_mem_mutex->mtx_mutex, &ts);
+#else
+			state = pthread_mutex_timedlock_fallback(sh_mem_mutex->mtx_mutex, &ts);
+#endif
+		}
+	}
+	else
+		state = pthread_mutex_lock(sh_mem_mutex->mtx_mutex);
+
 #ifdef USE_ROBUST_MUTEX
 	if (state == EOWNERDEAD)
 	{
 		// We always perform check for dead process
 		// Therefore may safely mark mutex as recovered
-		LOG_PTHREAD_ERROR(pthread_mutex_consistent_np(sh_mem_mutex->mtx_mutex));
+		LOG_PTHREAD_ERROR(pthread_mutex_consistent(sh_mem_mutex->mtx_mutex));
 		state = 0;
 	}
 #endif
 
 #endif // os-dependent choice
 
-	if (state != 0)
-	{
+	if (!timeout.has_value() && state != 0)
 		sh_mem_callback->mutexBug(state, "mutexLock");
-	}
+
+	return state == 0;
 }
 
 
-bool SharedMemoryBase::mutexLockCond()
+bool SharedMemoryBase::mutexTryLock()
 {
-#if defined(WIN_NT)
-
-	return ISC_mutex_lock_cond(sh_mem_mutex) == 0;
-
-#else // POSIX SHARED MUTEX
-
-	int state = pthread_mutex_trylock(sh_mem_mutex->mtx_mutex);
-#ifdef USE_ROBUST_MUTEX
-	if (state == EOWNERDEAD)
-	{
-		// We always perform check for dead process
-		// Therefore may safely mark mutex as recovered
-		LOG_PTHREAD_ERROR(pthread_mutex_consistent_np(sh_mem_mutex->mtx_mutex));
-		state = 0;
-	}
-#endif
-	return state == 0;
-
-#endif // os-dependent choice
-
+	return mutexLock(std::chrono::milliseconds(0));
 }
 
 

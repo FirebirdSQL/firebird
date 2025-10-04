@@ -1,6 +1,6 @@
 @echo off
 
-call "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x86
+call C:\VisualStudio\Common7\Tools\VsDevCmd.bat -arch=x86
 
 set FB_PROCESSOR_ARCHITECTURE=x86
 
@@ -12,3 +12,4 @@ call run_all.bat PDB
 call run_tests.bat
 
 copy C:\firebird-build\builds\install_images\* C:\firebird\builds\install_images
+xcopy /h /e /i /q C:\firebird-build\output_Win32_release C:\firebird\output_Win32_release

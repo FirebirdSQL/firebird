@@ -15,7 +15,7 @@
 #include "../common/classes/Aligner.h"
 
 using Firebird::IntlUtil;
-using Jrd::UnicodeUtil;
+using Firebird::UnicodeUtil;
 
 
 static USHORT internal_keylength(texttype*, USHORT);

@@ -1,26 +1,19 @@
-/*
- * 2002.02.15 Sean Leyne - Code Cleanup, removed obsolete ports:
- *                          - MAC (MAC, MAC_AUX and "MAC_CP" defines)
- *                          - EPSON, DELTA, IMP, NCR3000, NeXT, M88K, Cray
- *                          - OS/2, Apollo
- *
- * 2002-02-23 Sean Leyne - Code Cleanup, removed old Win3.1 port (Windows_Only)
- *
- * 2002.10.27 Sean Leyne - Code Cleanup, removed obsolete "UNIXWARE" port
- * 2002.10.27 Sean Leyne - Code Cleanup, removed obsolete "Ultrix" port
- *
- * 2002.10.28 Sean Leyne - Completed removal of obsolete "DGUX" port
- * 2002.10.28 Sean Leyne - Code cleanup, removed obsolete "MPEXL" port
- * 2002.10.28 Sean Leyne - Code cleanup, removed obsolete "SGI" port
- *
- * 2002.10.29 Sean Leyne - Removed obsolete "Netware" port
- *
- * 2002.10.30 Sean Leyne - Removed support for obsolete "PC_PLATFORM" define
- *
- */
-
 #ifndef AUTOCONFIG_H
 #define AUTOCONFIG_H
+
+// Windows 7 (0x0601) is the baseline version for Firebird 6.
+// NOTE: This does not mean that this version is supported, but that we want to limit Windows API
+// use to this version.
+#define FB_WIN32_WINNT_BASELINE 0x0601
+
+// Normally, _WIN32_WINNT is defined in the PreprocessorDefinitions of Firebird.Common.props.
+#ifndef _WIN32_WINNT
+// Fallback to set _WIN32_WINNT to the baseline.
+#define _WIN32_WINNT FB_WIN32_WINNT_BASELINE
+#elif (_WIN32_WINNT < FB_WIN32_WINNT_BASELINE)
+// Consider Windows versions before the baseline really too old.
+#error The target Windows version (_WIN32_WINNT) is too old
+#endif
 
 //#pragma warning(disable:4099)	// class/struct mixups
 #pragma warning(disable:4251)	// needs to have dll-interface
@@ -67,7 +60,6 @@
 // New MSVC8 warnings
 
 #pragma warning(disable:4996)  // 'identificator' was declared deprecated
-
 
 #define WIN32_LEAN_AND_MEAN		// Exclude rarely-used stuff from Windows headers
 
@@ -242,6 +234,14 @@
 #define SIZEOF_SIZE_T 8
 /* alignment of long */
 #define FB_ALIGNMENT 8
+#elif defined(_M_ARM64)
+#define ARM64
+/* sizeof(void *) */
+#define SIZEOF_VOID_P 8
+/* sizeof(size_t) */
+#define SIZEOF_SIZE_T 8
+/* alignment of long */
+#define FB_ALIGNMENT 8
 #else
 #error unknown target platform
 #endif
@@ -251,12 +251,6 @@
 
 /* alignment of double */
 #define FB_DOUBLE_ALIGN 8
-
-/* Is union semun defined? */
-#undef HAVE_SEMUN
-
-/* Is struct xdr_ops defined? */
-#undef HAVE_STRUCT_XDR_OPS
 
 /* Functions */
 #if defined(_MSC_VER) && (_MSC_VER < 1900)

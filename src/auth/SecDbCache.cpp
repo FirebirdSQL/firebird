@@ -94,9 +94,9 @@ void PluginDatabases::getInstance(IPluginConfig* pluginConfig, CachedSecurityDat
 		if (!instance)
 		{
 			instance.set(FB_NEW CachedSecurityDatabase(this, secDbName));
-			instance->addRef();
 			secDbName.copyTo(instance->secureDbName, sizeof(instance->secureDbName));
 			dbArray.add(instance);
+			instance->addRef();
 		}
 	}
 }

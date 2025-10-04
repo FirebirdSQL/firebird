@@ -30,25 +30,26 @@
 
 #include "../common/classes/alloc.h"
 #include "../common/classes/array.h"
+#include <type_traits>
 
 // Number of pattern items statically allocated
-const int STATIC_PATTERN_ITEMS	= 16;
+inline constexpr int STATIC_PATTERN_ITEMS	= 16;
 
 // Number of pattern items that are matched in parallel statically allocated
-const int STATIC_STATUS_ITEMS	= 16;
+inline constexpr int STATIC_STATUS_ITEMS	= 16;
 
 // Size of internal static buffer used for allocation
 // This buffer is used for KMP masks and string unescaping
 #ifdef TESTING_ONLY
-const int STATIC_PATTERN_BUFFER		= 16;
+inline constexpr int STATIC_PATTERN_BUFFER		= 16;
 #else
-const int STATIC_PATTERN_BUFFER		= 256;
+inline constexpr int STATIC_PATTERN_BUFFER		= 256;
 #endif
 
 namespace Firebird {
 
 template <typename CharType>
-static void preKmp(const CharType *x, int m, SLONG kmpNext[])
+static void preKmp(const CharType *x, int m, SLONG kmpNext[]) noexcept(std::is_scalar_v<CharType>)
 {
 	SLONG i = 0;
 	SLONG j = kmpNext[0] = -1;
@@ -125,13 +126,13 @@ public:
 		reset();
 	}
 
-	void reset()
+	void reset() noexcept
 	{
 		result = true;
 		offset = 0;
 	}
 
-	bool getResult() const
+	bool getResult() const noexcept
 	{
 		return offset >= pattern_len && result;
 	}
@@ -174,18 +175,18 @@ public:
 		reset();
 	}
 
-	void reset()
+	void reset() noexcept
 	{
 		offset = 0;
 		result = (pattern_len == 0);
 	}
 
-	bool getResult() const
+	bool getResult() const noexcept
 	{
 		return result;
 	}
 
-	bool processNextChunk(const CharType* data, SLONG data_len)
+	bool processNextChunk(const CharType* data, SLONG data_len) noexcept(std::is_scalar_v<CharType>)
 	{
 		// Should work fine when called with data_len equal to zero
 		if (result)
@@ -249,13 +250,13 @@ public:
 			match_type = (patternItems[0].match_any ? MATCH_ANY : MATCH_FIXED);
 		}
 		else {
-			BranchItem temp = {&patternItems[0], 0};
+			const BranchItem temp = {&patternItems[0], 0};
 			branches.add(temp);
 			match_type = MATCH_NONE;
 		}
 	}
 
-	bool getResult() const
+	bool getResult() const noexcept
 	{
 		return match_type != MATCH_NONE;
 	}
@@ -327,7 +328,7 @@ LikeEvaluator<CharType>::LikeEvaluator(
 					case piSkipMore:
 						patternItems.grow(patternItems.getCount() + 1);
 						item = patternItems.end() - 1;
-						// Note: fall into
+						[[fallthrough]];
 					case piNone:
 						item->type = piEscapedString;
 						item->str.data = const_cast<CharType*>(pattern_str + pattern_pos - 2);
@@ -335,7 +336,7 @@ LikeEvaluator<CharType>::LikeEvaluator(
 						break;
 					case piSearch:
 						item->type = piEscapedString;
-						// Note: fall into
+						[[fallthrough]];
 					case piEscapedString:
 						item->str.length++;
 						break;
@@ -356,7 +357,7 @@ LikeEvaluator<CharType>::LikeEvaluator(
 			case piEscapedString:
 				patternItems.grow(patternItems.getCount() + 1);
 				item = patternItems.end() - 1;
-				// Note: fall into
+				[[fallthrough]];
 			case piSkipFixed:
 			case piNone:
 				item->type = piSkipMore;
@@ -375,7 +376,7 @@ LikeEvaluator<CharType>::LikeEvaluator(
 			case piEscapedString:
 				patternItems.grow(patternItems.getCount() + 1);
 				item = patternItems.end() - 1;
-				// Note: fall into
+				[[fallthrough]];
 			case piNone:
 				item->type = piSkipFixed;
 				item->skipCount = 1;
@@ -396,7 +397,7 @@ LikeEvaluator<CharType>::LikeEvaluator(
 		case piSkipMore:
 			patternItems.grow(patternItems.getCount() + 1);
 			item = patternItems.end() - 1;
-			// Note: fall into
+			[[fallthrough]];
 		case piNone:
 			item->type = piSearch;
 			item->str.data = const_cast<CharType*>(pattern_str + pattern_pos - 1);
@@ -430,7 +431,7 @@ LikeEvaluator<CharType>::LikeEvaluator(
 					itemL->str.data[j] = *curPos++;
 				}
 				itemL->type = piSearch;
-				// Note: fall into
+				[[fallthrough]];
 			}
 		case piSearch:
 			if (directMatch)
@@ -516,7 +517,7 @@ bool LikeEvaluator<CharType>::processNextChunk(const CharType* data, SLONG data_
 						return false;
 					continue;
 				}
-				// Note: fall into
+				[[fallthrough]];
 			case piSkipFixed:
 				current_branch->offset++;
 				if (current_branch->offset >= current_pattern->str.length)
@@ -588,7 +589,7 @@ bool LikeEvaluator<CharType>::processNextChunk(const CharType* data, SLONG data_
 						{
 							// Try to apply further non-search patterns and continue searching
 							current_branch->offset = current_pattern->str.kmpNext[current_branch->offset];
-							BranchItem temp = {next_pattern, 0};
+							const BranchItem temp = {next_pattern, 0};
 							branches.insert(branch_number + 1, temp); // +1 is to reduce movement effort :)
 							branch_number++; // Skip newly inserted branch in this cycle
 						}

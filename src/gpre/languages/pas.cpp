@@ -722,8 +722,6 @@ static void gen_based( const act* action, int column)
 			fprintf(gpreGlob.out_file, "%s [1..%d] of ", PACKED_ARRAY, field->fld_length);
 	}
 
-	TEXT s[64];
-
 	switch (datatype)
 	{
 	case dtype_short:
@@ -753,9 +751,12 @@ static void gen_based( const act* action, int column)
 		break;
 
 	default:
-		sprintf(s, "datatype %d unknown\n", field->fld_dtype);
+	{
+		TEXT s[64];
+		snprintf(s, sizeof(s), "datatype %d unknown\n", field->fld_dtype);
 		CPR_error(s);
 		return;
+	}
 	}
 }
 
@@ -1880,7 +1881,7 @@ static void gen_event_wait( const act* action, int column)
 	if (ident < 0)
 	{
 		TEXT s[64];
-		sprintf(s, "event handle \"%s\" not found", event_name->sym_string);
+		snprintf(s, sizeof(s), "event handle \"%s\" not found", event_name->sym_string);
 		CPR_error(s);
 		return;
 	}
@@ -2056,19 +2057,18 @@ static void gen_get_or_put_slice(const act* action,
 	args.pat_database = action->act_request->req_database;	// database handle
 	args.pat_string1 = action->act_request->req_trans;	// transaction handle
 
-	TEXT s1[MAX_REF_SIZE], s2[MAX_REF_SIZE], s3[MAX_REF_SIZE], s4[MAX_REF_SIZE];
+	TEXT s1[MAX_REF_SIZE], s2[MAX_REF_SIZE], s4[MAX_REF_SIZE];
 	gen_name(s1, reference, true);	// blob handle
 	args.pat_string2 = s1;
 
 	args.pat_value1 = reference->ref_sdl_length;	// slice descr. length
 
-	sprintf(s2, "gds__%d", reference->ref_sdl_ident);	// slice description
+	snprintf(s2, sizeof(s2), "gds__%d", reference->ref_sdl_ident);	// slice description
 	args.pat_string3 = s2;
 
 	args.pat_value2 = 0;		// parameter length
 
-	sprintf(s3, "0");			// parameter
-	args.pat_string4 = s3;
+	args.pat_string4 = "0";		// parameter
 
 	args.pat_long1 = reference->ref_field->fld_array_info->ary_size;
 	// slice size
@@ -2078,7 +2078,7 @@ static void gen_get_or_put_slice(const act* action,
 	}
 	else
 	{
-		sprintf(s4, "gds__%d", reference->ref_field->fld_array_info->ary_ident);
+		snprintf(s4, sizeof(s4), "gds__%d", reference->ref_field->fld_array_info->ary_ident);
 		args.pat_string5 = s4;	// array name
 	}
 
@@ -2344,9 +2344,9 @@ static void gen_raw(const UCHAR* blr, int request_length) //, int column)
 	{
 		const UCHAR c = *blr;
 		if ((c >= 'A' && c <= 'Z') || c == '$' || c == '_')
-			sprintf(p, "'%c'", c);
+			snprintf(p, sizeof(buffer) - (p - buffer), "'%c'", c);
 		else
-			sprintf(p, "chr(%d)", c);
+			snprintf(p, sizeof(buffer) - (p - buffer), "chr(%d)", c);
 		while (*p)
 			p++;
 		if (blr != end)
@@ -3027,9 +3027,9 @@ static void gen_tpb( const tpb* tpb_val, int column)
 	{
 		const TEXT c = *text++;
 		if ((c >= 'A' && c <= 'Z') || c == '$' || c == '_')
-			sprintf(p, "'%c', ", c);
+			snprintf(p, sizeof(buffer) - (p - buffer), "'%c', ", c);
 		else
-			sprintf(p, "chr(%d), ", c);
+			snprintf(p, sizeof(buffer) - (p - buffer), "chr(%d), ", c);
 		while (*p)
 			p++;
 		if (p - buffer > 60)
@@ -3045,9 +3045,9 @@ static void gen_tpb( const tpb* tpb_val, int column)
 	TEXT c = *text++;
 
 	if ((c >= 'A' && c <= 'Z') || c == '$' || c == '_')
-		sprintf(p, "'%c',", c);
+		snprintf(p, sizeof(buffer) - (p - buffer), "'%c',", c);
 	else
-		sprintf(p, "chr(%d)", c);
+		snprintf(p, sizeof(buffer) - (p - buffer), "chr(%d)", c);
 
 	align(column + INDENT);
 	fprintf(gpreGlob.out_file, "%s", buffer);
@@ -3350,8 +3350,8 @@ static void make_ready(const gpre_dbb* db,
 
 	if (request)
 	{
-		sprintf(s1, "gds__%dL", request->req_ident);
-		sprintf(s2, "gds__%d", request->req_ident);
+		snprintf(s1, sizeof(s1), "gds__%dL", request->req_ident);
+		snprintf(s2, sizeof(s2), "gds__%d", request->req_ident);
 	}
 
 	align(column);
@@ -3467,7 +3467,7 @@ static void t_start_auto( const act* action, const gpre_req* request,
 						strcat(buffer, ") and\n\t(");
 				and_count++;
 				TEXT temp[40];
-				sprintf(temp, "%s <> nil", db->dbb_name->sym_string);
+				snprintf(temp, sizeof(temp), "%s <> nil", db->dbb_name->sym_string);
 				strcat(buffer, temp);
 				printa(column, "if (%s) then", buffer);
 				align(column + INDENT);

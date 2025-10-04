@@ -37,15 +37,19 @@ using namespace Jrd;
 // Data access: full outer join
 // ----------------------------
 
-FullOuterJoin::FullOuterJoin(CompilerScratch* csb, RecordSource* arg1, RecordSource* arg2)
-	: RecordSource(csb),
-	  m_arg1(arg1),
-	  m_arg2(arg2)
+FullOuterJoin::FullOuterJoin(CompilerScratch* csb,
+							 RecordSource* arg1, RecordSource* arg2,
+							 const StreamList& checkStreams)
+	: Join(csb, 2, JoinType::OUTER),
+	  m_checkStreams(csb->csb_pool, checkStreams)
 {
-	fb_assert(m_arg1 && m_arg2);
+	fb_assert(arg1 && arg2);
 
 	m_impure = csb->allocImpure<Impure>();
 	m_cardinality = arg1->getCardinality() + arg2->getCardinality();
+
+	m_args.add(arg1);
+	m_args.add(arg2);
 }
 
 void FullOuterJoin::internalOpen(thread_db* tdbb) const
@@ -55,25 +59,22 @@ void FullOuterJoin::internalOpen(thread_db* tdbb) const
 
 	impure->irsb_flags = irsb_open | irsb_first;
 
-	m_arg1->open(tdbb);
+	m_args[0]->open(tdbb);
 }
 
 void FullOuterJoin::close(thread_db* tdbb) const
 {
-	Request* const request = tdbb->getRequest();
+	const auto request = tdbb->getRequest();
 
 	invalidateRecords(request);
 
-	Impure* const impure = request->getImpure<Impure>(m_impure);
+	const auto impure = request->getImpure<Impure>(m_impure);
 
 	if (impure->irsb_flags & irsb_open)
 	{
 		impure->irsb_flags &= ~irsb_open;
 
-		if (impure->irsb_flags & irsb_first)
-			m_arg1->close(tdbb);
-		else
-			m_arg2->close(tdbb);
+		Join::close(tdbb);
 	}
 }
 
@@ -81,87 +82,62 @@ bool FullOuterJoin::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
-	Request* const request = tdbb->getRequest();
-	Impure* const impure = request->getImpure<Impure>(m_impure);
+	const auto request = tdbb->getRequest();
+	const auto impure = request->getImpure<Impure>(m_impure);
 
 	if (!(impure->irsb_flags & irsb_open))
 		return false;
 
+	const auto arg1 = m_args[0];
+	const auto arg2 = m_args[1];
+
 	if (impure->irsb_flags & irsb_first)
 	{
-		if (m_arg1->getRecord(tdbb))
+		if (arg1->getRecord(tdbb))
 			return true;
 
 		impure->irsb_flags &= ~irsb_first;
-		m_arg1->close(tdbb);
-		m_arg2->open(tdbb);
+		arg1->close(tdbb);
+		arg2->open(tdbb);
 	}
 
-	return m_arg2->getRecord(tdbb);
-}
+	// We should exclude matching records from the right-joined (second) record source,
+	// as they're already returned from the left-joined (first) record source
 
-bool FullOuterJoin::refetchRecord(thread_db* /*tdbb*/) const
-{
-	return true;
-}
-
-bool FullOuterJoin::lockRecord(thread_db* tdbb) const
-{
-	SET_TDBB(tdbb);
-
-	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
-	return false; // compiler silencer
-}
-
-void FullOuterJoin::getChildren(Array<const RecordSource*>& children) const
-{
-	children.add(m_arg1);
-	children.add(m_arg2);
-}
-
-void FullOuterJoin::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
-{
-	if (detailed)
+	while (arg2->getRecord(tdbb))
 	{
-		plan += printIndent(++level) + "Full Outer Join";
+		bool matched = false;
 
-		if (recurse)
+		for (const auto stream : m_checkStreams)
 		{
-			m_arg1->print(tdbb, plan, true, level, recurse);
-			m_arg2->print(tdbb, plan, true, level, recurse);
+			if (request->req_rpb[stream].rpb_number.isValid())
+			{
+				matched = true;
+				break;
+			}
 		}
+
+		if (!matched)
+			return true;
 	}
-	else
-	{
-		level++;
-		plan += "JOIN (";
-		m_arg1->print(tdbb, plan, false, level, recurse);
-		plan += ", ";
-		m_arg2->print(tdbb, plan, false, level, recurse);
-		plan += ")";
-	}
+
+	return false;
 }
 
-void FullOuterJoin::markRecursive()
+void FullOuterJoin::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	m_arg1->markRecursive();
-	m_arg2->markRecursive();
+	level++;
+	plan += "JOIN (";
+	Join::getLegacyPlan(tdbb, plan, level);
+	plan += ")";
 }
 
-void FullOuterJoin::findUsedStreams(StreamList& streams, bool expandAll) const
+void FullOuterJoin::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
 {
-	m_arg1->findUsedStreams(streams, expandAll);
-	m_arg2->findUsedStreams(streams, expandAll);
-}
+	planEntry.className = "FullOuterJoin";
 
-void FullOuterJoin::invalidateRecords(Request* request) const
-{
-	m_arg1->invalidateRecords(request);
-	m_arg2->invalidateRecords(request);
-}
+	planEntry.lines.add().text = "Full Outer Join";
+	printOptInfo(planEntry.lines);
 
-void FullOuterJoin::nullRecords(thread_db* tdbb) const
-{
-	m_arg1->nullRecords(tdbb);
-	m_arg2->nullRecords(tdbb);
+	Join::internalGetPlan(tdbb, planEntry, level, recurse);
 }

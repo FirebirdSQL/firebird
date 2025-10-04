@@ -41,7 +41,7 @@ inline constexpr int digits(BOOST_MATH_EXPLICIT_TEMPLATE_TYPE_SPEC(T)) noexcept
    static_assert( ::std::numeric_limits<T>::is_specialized, "Type T must be specialized");
    static_assert( ::std::numeric_limits<T>::radix == 2 || ::std::numeric_limits<T>::radix == 10, "Type T must have a radix of 2 or 10");
 
-   return std::numeric_limits<T>::radix == 2 
+   return std::numeric_limits<T>::radix == 2
       ? std::numeric_limits<T>::digits
       : ((std::numeric_limits<T>::digits + 1) * 1000L) / 301L;
 }
@@ -182,8 +182,8 @@ struct log_limit_traits
       std::integral_constant<int, (std::numeric_limits<T>::max_exponent > INT_MAX ? INT_MAX : static_cast<int>(std::numeric_limits<T>::max_exponent))>,
       std::integral_constant<int, 0>
    >::type tag_type;
-   static constexpr bool value = tag_type::value ? true : false;
-   static_assert(::std::numeric_limits<T>::is_specialized || (value == 0), "Type T must be specialized or equal to 0");
+   static constexpr bool value = (tag_type::value != 0);
+   static_assert(::std::numeric_limits<T>::is_specialized || !value, "Type T must be specialized or equal to 0");
 };
 
 template <class T, bool b> struct log_limit_noexcept_traits_imp : public log_limit_traits<T> {};
@@ -372,19 +372,19 @@ struct root_epsilon_traits
 template <class T>
 inline constexpr T root_epsilon() noexcept(std::is_floating_point<T>::value && detail::root_epsilon_traits<T>::has_noexcept)
 {
-   return detail::root_epsilon_imp(static_cast<T const*>(0), typename detail::root_epsilon_traits<T>::tag_type());
+   return detail::root_epsilon_imp(static_cast<T const*>(nullptr), typename detail::root_epsilon_traits<T>::tag_type());
 }
 
 template <class T>
 inline constexpr T cbrt_epsilon() noexcept(std::is_floating_point<T>::value && detail::root_epsilon_traits<T>::has_noexcept)
 {
-   return detail::cbrt_epsilon_imp(static_cast<T const*>(0), typename detail::root_epsilon_traits<T>::tag_type());
+   return detail::cbrt_epsilon_imp(static_cast<T const*>(nullptr), typename detail::root_epsilon_traits<T>::tag_type());
 }
 
 template <class T>
 inline constexpr T forth_root_epsilon() noexcept(std::is_floating_point<T>::value && detail::root_epsilon_traits<T>::has_noexcept)
 {
-   return detail::forth_root_epsilon_imp(static_cast<T const*>(0), typename detail::root_epsilon_traits<T>::tag_type());
+   return detail::forth_root_epsilon_imp(static_cast<T const*>(nullptr), typename detail::root_epsilon_traits<T>::tag_type());
 }
 
 } // namespace tools

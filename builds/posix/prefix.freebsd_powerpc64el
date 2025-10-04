@@ -24,6 +24,6 @@ COMMON_FLAGS=-DFREEBSD -DPPC64EL -pipe -MMD -fPIC -fsigned-char
 PROD_FLAGS=$(COMMON_FLAGS) -O3 -g -fno-builtin -Wno-deprecated
 DEV_FLAGS=$(COMMON_FLAGS) -ggdb -p -Wall -Wno-non-virtual-dtor
 
-# These files are generated incorrectly (e.g. array.epp => array.cpp)
-%/array.o %/blob.o %/alice_meta.o %/restore.o %/backup.o: COMMON_FLAGS += -Wno-narrowing
+# These files are generated incorrectly (e.g. alice_meta.epp => alice_meta.cpp)
+%/alice_meta.o %/restore.o %/backup.o: COMMON_FLAGS += -Wno-narrowing
 %/OdsDetection.o %/dba.o: COMMON_FLAGS += -Wno-narrowing

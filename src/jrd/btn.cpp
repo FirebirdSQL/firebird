@@ -100,7 +100,7 @@ SLONG IndexNode::findPageInDuplicates(const btree_page* page, UCHAR* pointer,
 			return previousNumber;
 		}
 		// Save current page number and fetch next node
-		// for comparision.
+		// for comparison.
 		previousNumber = node.pageNumber;
 		previousNode = node;
 		pointer = node.readNode(pointer, leafPage);

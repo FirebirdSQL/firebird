@@ -207,7 +207,7 @@ bool AggNode::dsqlAggregate2Finder(Aggregate2Finder& visitor)
 	if (!fieldFinder.getField())
 	{
 		// For example COUNT(*) is always same scope_level (node->nod_count = 0)
-		// Normaly COUNT(*) is the only way to come here but something stupid
+		// Normally COUNT(*) is the only way to come here but something stupid
 		// as SUM(5) is also possible.
 		// If currentScopeLevelEqual is false scopeLevel is always higher
 		switch (visitor.matchType)
@@ -491,6 +491,92 @@ dsc* AggNode::execute(thread_db* tdbb, Request* request) const
 //--------------------
 
 
+static AggNode::RegisterFactory0<AnyValueAggNode> anyValueAggInfo("ANY_VALUE");
+
+AnyValueAggNode::AnyValueAggNode(MemoryPool& pool, ValueExprNode* aArg)
+	: AggNode(pool, anyValueAggInfo, false, false, aArg)
+{
+}
+
+DmlNode* AnyValueAggNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR /*blrOp*/)
+{
+	const auto node = FB_NEW_POOL(pool) AnyValueAggNode(pool);
+	node->arg = PAR_parse_value(tdbb, csb);
+	return node;
+}
+
+void AnyValueAggNode::parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned /*count*/)
+{
+	arg = PAR_parse_value(tdbb, csb);
+}
+
+void AnyValueAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
+{
+	DsqlDescMaker::fromNode(dsqlScratch, desc, arg, true);
+}
+
+void AnyValueAggNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
+{
+	arg->getDesc(tdbb, csb, desc);
+}
+
+ValueExprNode* AnyValueAggNode::copy(thread_db* tdbb, NodeCopier& copier) const
+{
+	const auto node = FB_NEW_POOL(*tdbb->getDefaultPool()) AnyValueAggNode(*tdbb->getDefaultPool());
+	node->nodScale = nodScale;
+	node->arg = copier.copy(tdbb, arg);
+	return node;
+}
+
+string AnyValueAggNode::internalPrint(NodePrinter& printer) const
+{
+	AggNode::internalPrint(printer);
+
+	return "AnyValueAggNode";
+}
+
+void AnyValueAggNode::aggInit(thread_db* tdbb, Request* request) const
+{
+	AggNode::aggInit(tdbb, request);
+
+	const auto impure = request->getImpure<impure_value_ex>(impureOffset);
+	impure->vlu_desc.dsc_dtype = 0;
+}
+
+void AnyValueAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) const
+{
+	const auto impure = request->getImpure<impure_value_ex>(impureOffset);
+
+	if (!impure->vlu_desc.dsc_dtype)
+	{
+		const auto argValue = EVL_expr(tdbb, request, arg);
+
+		if (!(request->req_flags & req_null))
+			EVL_make_value(tdbb, argValue, impure);
+	}
+
+}
+
+dsc* AnyValueAggNode::aggExecute(thread_db* /*tdbb*/, Request* request) const
+{
+	const auto impure = request->getImpure<impure_value_ex>(impureOffset);
+
+	if (impure->vlu_desc.dsc_dtype)
+		return &impure->vlu_desc;
+
+	return nullptr;
+}
+
+AggNode* AnyValueAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
+{
+	return FB_NEW_POOL(dsqlScratch->getPool()) AnyValueAggNode(dsqlScratch->getPool(),
+		doDsqlPass(dsqlScratch, arg));
+}
+
+
+//--------------------
+
+
 static AggNode::Register<AvgAggNode> avgAggInfo("AVG", blr_agg_average, blr_agg_average_distinct);
 
 AvgAggNode::AvgAggNode(MemoryPool& pool, bool aDistinct, bool aDialect1, ValueExprNode* aArg)
@@ -714,10 +800,7 @@ void AvgAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) const
 		outputDesc(&impureTemp->vlu_desc);
 	}
 
-	if (dialect1)
-		ArithmeticNode::add(tdbb, desc, impure, this, blr_add);
-	else
-		ArithmeticNode::add2(tdbb, desc, impure, this, blr_add);
+	ArithmeticNode::add(tdbb, desc, &impure->vlu_desc, impure, blr_add, dialect1, nodScale, nodFlags);
 }
 
 dsc* AvgAggNode::aggExecute(thread_db* tdbb, Request* request) const
@@ -819,8 +902,9 @@ void ListAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 bool ListAggNode::setParameterType(DsqlCompilerScratch* dsqlScratch,
 	std::function<void (dsc*)> makeDesc, bool forceVarChar)
 {
-	return PASS1_set_parameter_type(dsqlScratch, arg, makeDesc, forceVarChar) |
-		PASS1_set_parameter_type(dsqlScratch, delimiter, makeDesc, forceVarChar);
+	const bool argType = PASS1_set_parameter_type(dsqlScratch, arg, makeDesc, forceVarChar);
+	const bool delimiterType = PASS1_set_parameter_type(dsqlScratch, delimiter, makeDesc, forceVarChar);
+	return argType || delimiterType;
 }
 
 void ListAggNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
@@ -1274,10 +1358,7 @@ void SumAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) const
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	++impure->vlux_count;
 
-	if (dialect1)
-		ArithmeticNode::add(tdbb, desc, impure, this, blr_add);
-	else
-		ArithmeticNode::add2(tdbb, desc, impure, this, blr_add);
+	ArithmeticNode::add(tdbb, desc, &impure->vlu_desc, impure, blr_add, dialect1, nodScale, nodFlags);
 }
 
 dsc* SumAggNode::aggExecute(thread_db* /*tdbb*/, Request* request) const

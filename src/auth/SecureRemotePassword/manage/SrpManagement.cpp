@@ -26,6 +26,8 @@
 
 #include "firebird.h"
 
+#include <algorithm>
+
 #include "../common/classes/ImplementHelper.h"
 #include "../common/classes/ClumpletWriter.h"
 #include "../common/StatusHolder.h"
@@ -40,8 +42,6 @@
 
 namespace {
 
-const unsigned int SZ_LOGIN = 31;
-const unsigned int SZ_NAME = 31;
 typedef Field<Varying> Varfield;
 typedef Field<ISC_QUAD> Blob;
 typedef Field<FB_BOOLEAN> Boolean;
@@ -68,28 +68,32 @@ private:
 	void prepareDataStructures()
 	{
 		const char* script[] = {
-			"CREATE TABLE PLG$SRP (PLG$USER_NAME SEC$USER_NAME NOT NULL PRIMARY KEY, "
+			"CREATE SCHEMA PLG$SRP DEFAULT CHARACTER SET UTF8",
+			"GRANT USAGE ON SCHEMA PLG$SRP TO PUBLIC",
+
+			"CREATE TABLE PLG$SRP.PLG$SRP (PLG$USER_NAME SYSTEM.SEC$USER_NAME NOT NULL PRIMARY KEY, "
 			"PLG$VERIFIER VARCHAR(128) CHARACTER SET OCTETS NOT NULL, "
 			"PLG$SALT VARCHAR(32) CHARACTER SET OCTETS NOT NULL, "
-			"PLG$COMMENT RDB$DESCRIPTION, PLG$FIRST SEC$NAME_PART, "
-			"PLG$MIDDLE SEC$NAME_PART, PLG$LAST SEC$NAME_PART, "
-			"PLG$ATTRIBUTES RDB$DESCRIPTION, "
+			"PLG$COMMENT SYSTEM.RDB$DESCRIPTION, PLG$FIRST SYSTEM.SEC$NAME_PART, "
+			"PLG$MIDDLE SYSTEM.SEC$NAME_PART, PLG$LAST SYSTEM.SEC$NAME_PART, "
+			"PLG$ATTRIBUTES SYSTEM.RDB$DESCRIPTION, "
 			"PLG$ACTIVE BOOLEAN)"
 			,
-			"CREATE VIEW PLG$SRP_VIEW AS "
+			"CREATE VIEW PLG$SRP.PLG$SRP_VIEW AS "
 			"SELECT PLG$USER_NAME, PLG$VERIFIER, PLG$SALT, PLG$COMMENT, "
 			"   PLG$FIRST, PLG$MIDDLE, PLG$LAST, PLG$ATTRIBUTES, PLG$ACTIVE "
-			"FROM PLG$SRP WHERE RDB$SYSTEM_PRIVILEGE(USER_MANAGEMENT) "
+			"FROM PLG$SRP.PLG$SRP WHERE RDB$SYSTEM_PRIVILEGE(USER_MANAGEMENT) "
 			"   OR CURRENT_USER = PLG$SRP.PLG$USER_NAME"
 			,
-			"GRANT ALL ON PLG$SRP TO VIEW PLG$SRP_VIEW"
+
+			"GRANT ALL ON PLG$SRP.PLG$SRP TO VIEW PLG$SRP.PLG$SRP_VIEW"
 			,
-			"GRANT SELECT ON PLG$SRP_VIEW TO PUBLIC"
+			"GRANT SELECT ON PLG$SRP.PLG$SRP_VIEW TO PUBLIC"
 			,
 			"GRANT UPDATE(PLG$VERIFIER, PLG$SALT, PLG$FIRST, PLG$MIDDLE, PLG$LAST, "
-			"   PLG$COMMENT, PLG$ATTRIBUTES) ON PLG$SRP_VIEW TO PUBLIC"
+			"   PLG$COMMENT, PLG$ATTRIBUTES) ON PLG$SRP.PLG$SRP_VIEW TO PUBLIC"
 			,
-			"GRANT ALL ON PLG$SRP_VIEW TO SYSTEM PRIVILEGE USER_MANAGEMENT"
+			"GRANT ALL ON PLG$SRP.PLG$SRP_VIEW TO SYSTEM PRIVILEGE USER_MANAGEMENT"
 			,
 			NULL
 		};
@@ -160,7 +164,7 @@ private:
 			Firebird::string userName2(user->userName()->get());
 			prepareName(userName2, '\'');
 			Firebird::string selGrantor;
-			selGrantor.printf("SELECT RDB$GRANTOR FROM RDB$USER_PRIVILEGES "
+			selGrantor.printf("SELECT RDB$GRANTOR FROM SYSTEM.RDB$USER_PRIVILEGES "
 				"WHERE RDB$USER = '%s' AND RDB$RELATION_NAME = '%s' AND RDB$PRIVILEGE = 'M'",
 				userName2.c_str(), ADMIN_ROLE);
 			Message out;
@@ -169,7 +173,7 @@ private:
 				selGrantor.c_str(), SQL_DIALECT_V6, NULL, NULL, out.getMetadata(), NULL, 0);
 			check(&statusWrapper);
 
-			bool hasGrant = curs->fetchNext(&statusWrapper, out.getBuffer()) == Firebird::IStatus::RESULT_OK;
+			const bool hasGrant = curs->fetchNext(&statusWrapper, out.getBuffer()) == Firebird::IStatus::RESULT_OK;
 			curs->close(&statusWrapper);
 			check(&statusWrapper);
 
@@ -240,7 +244,7 @@ public:
 				(Firebird::Arg::Gds(isc_random) << "Database is already attached in SRP user management").raise();
 			}
 
-			unsigned int secDbKey = keys->getKey(config, "SecurityDatabase");
+			const unsigned int secDbKey = keys->getKey(config, "SecurityDatabase");
 			const char* secDbName = config->asString(secDbKey);
 			if (!(secDbName && secDbName[0]))
 			{
@@ -353,7 +357,7 @@ public:
 			case Firebird::IUser::OP_USER_ADD:
 				{
 					const char* insert =
-						"INSERT INTO plg$srp_view(PLG$USER_NAME, PLG$VERIFIER, PLG$SALT, PLG$FIRST, PLG$MIDDLE, PLG$LAST,"
+						"INSERT INTO plg$srp.plg$srp_view(PLG$USER_NAME, PLG$VERIFIER, PLG$SALT, PLG$FIRST, PLG$MIDDLE, PLG$LAST,"
 						"PLG$COMMENT, PLG$ATTRIBUTES, PLG$ACTIVE) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
 					Firebird::IStatement* stmt = NULL;
@@ -455,7 +459,7 @@ public:
 
 			case Firebird::IUser::OP_USER_MODIFY:
 				{
-					Firebird::string update = "UPDATE plg$srp_view SET ";
+					Firebird::string update = "UPDATE plg$srp.plg$srp_view SET ";
 
 					Firebird::AutoPtr<Varfield> verifier, slt;
 					if (user->password()->entered())
@@ -558,7 +562,7 @@ public:
 
 			case Firebird::IUser::OP_USER_DELETE:
 				{
-					const char* del = "DELETE FROM plg$srp_view WHERE PLG$USER_NAME=?";
+					const char* del = "DELETE FROM plg$srp.plg$srp_view WHERE PLG$USER_NAME=?";
 					Firebird::IStatement* stmt = NULL;
 					try
 					{
@@ -601,11 +605,11 @@ public:
 			case Firebird::IUser::OP_USER_DISPLAY:
 				{
 					Firebird::string disp =
-						"WITH ADMINS AS (SELECT RDB$USER FROM RDB$USER_PRIVILEGES "
+						"WITH ADMINS AS (SELECT RDB$USER FROM SYSTEM.RDB$USER_PRIVILEGES "
 						"	WHERE RDB$RELATION_NAME = 'RDB$ADMIN' AND RDB$PRIVILEGE = 'M' GROUP BY RDB$USER) "
 						"SELECT PLG$USER_NAME, PLG$FIRST, PLG$MIDDLE, PLG$LAST, PLG$COMMENT, PLG$ATTRIBUTES, "
 						"	CASE WHEN RDB$USER IS NULL THEN FALSE ELSE TRUE END, PLG$ACTIVE "
-						"FROM PLG$SRP_VIEW LEFT JOIN ADMINS "
+						"FROM PLG$SRP%SCHEMA.PLG$SRP_VIEW LEFT JOIN ADMINS "
 						"	ON PLG$SRP_VIEW.PLG$USER_NAME = ADMINS.RDB$USER ";
 					if (user->userName()->entered())
 					{
@@ -749,7 +753,7 @@ private:
 		return 0;
 	}
 
-	static void check(Firebird::CheckStatusWrapper* status)
+	static void check(const Firebird::CheckStatusWrapper* status)
 	{
 		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
 		{
@@ -907,7 +911,7 @@ private:
 				unsigned len;
 				for (;;)
 				{
-					int cc = blob->getSegment(&statusWrapper, sizeof(segbuf), segbuf, &len);
+					const int cc = blob->getSegment(&statusWrapper, sizeof(segbuf), segbuf, &len);
 					check(&statusWrapper);
 					if (cc == Firebird::IStatus::RESULT_NO_DATA)
 						break;
@@ -943,7 +947,7 @@ private:
 
 			while (len)
 			{
-				unsigned seg = len > MAX_USHORT ? MAX_USHORT : len;
+				const unsigned seg = std::min(len, unsigned{ MAX_USHORT });
 				blob->putSegment(st, seg, ptr);
 				check(st);
 				len -= seg;

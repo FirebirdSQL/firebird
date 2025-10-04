@@ -133,7 +133,7 @@ makeDirs() {
 # This function copies all the files into the installation directory(ies).
 
 copyFiles() {
-# The guts of the tranfer of files and other directories
+# The guts of the transfer of files and other directories
 
 	#directories
     makeDirs "@FB_BINDIR@ @FB_SBINDIR@ @FB_CONFDIR@ @FB_LIBDIR@ @FB_INCDIR@ @FB_DOCDIR@/sql.extensions @FB_SAMPLEDIR@ \
@@ -248,7 +248,7 @@ copyFiles() {
 	chown root:wheel ${TargetDir}@FB_PLUGDIR@/*.so*
 	chmod 0755 ${TargetDir}@FB_PLUGDIR@/*.so*
 
-	makeDirs ${TargetDir}@FB_TZDATADIR@
+	makeDirs @FB_TZDATADIR@
 	cp $BuiltFBDir/tzdata/*.res ${TargetDir}@FB_TZDATADIR@
 	chmod 0444 ${TargetDir}@FB_TZDATADIR@/*.res
 

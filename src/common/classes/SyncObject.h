@@ -62,6 +62,9 @@ public:
 
 	~SyncObject()
 	{
+		MutexLockGuard waitForWakeupThreads(mutex, FB_FUNCTION);
+		// No actions - just lock / unlock is needed to prevent races
+		// when sync object was destroyed before grantLocks() completion
 	}
 
 	void lock(Sync* sync, SyncType type, const char* from)

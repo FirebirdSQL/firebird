@@ -34,6 +34,7 @@
 #include "../../common/StatusArg.h"
 #include "../../common/ThreadStart.h"
 #include "../../common/db_alias.h"
+#include "../../common/classes/GetPlugins.h"
 #include "../../jrd/svc.h"
 #include "../../common/os/guid.h"
 #include "../../jrd/trace/TraceLog.h"
@@ -66,12 +67,12 @@ public:
 	virtual void listSessions();
 
 private:
-	void readSession(TraceSession& session);
+	void readSession(const TraceSession& session);
 	bool changeFlags(ULONG id, int setFlags, int clearFlags);
 	bool checkAliveAndFlags(ULONG sesId, int& flags);
 
 	// Check if current service is allowed to list\stop given other session
-	bool checkPrivileges(TraceSession& session);
+	bool checkPrivileges(const TraceSession& session);
 
 	Service& m_svc;
 	string m_user;
@@ -85,7 +86,7 @@ void TraceSvcJrd::setAttachInfo(const string& /*svc_name*/, const string& user, 
 	const string& /*pwd*/, bool /*trusted*/)
 {
 	const unsigned char* bytes;
-	unsigned int authBlockSize = m_svc.getAuthBlock(&bytes);
+	const unsigned int authBlockSize = m_svc.getAuthBlock(&bytes);
 	if (authBlockSize)
 	{
 		m_authBlock.add(bytes, authBlockSize);
@@ -103,7 +104,8 @@ void TraceSvcJrd::setAttachInfo(const string& /*svc_name*/, const string& user, 
 
 void TraceSvcJrd::startSession(TraceSession& session, bool interactive)
 {
-	if (!TraceManager::pluginsCount())
+	GetPlugins<ITraceFactory> traceItr(IPluginManager::TYPE_TRACE, session.getPluginsList());
+	if (!traceItr.hasData())
 	{
 		m_svc.printf(false, "Can not start trace session. There are no trace plugins loaded\n");
 		return;
@@ -121,20 +123,11 @@ void TraceSvcJrd::startSession(TraceSession& session, bool interactive)
 		session.ses_role = role.c_str();
 
 		session.ses_flags = trs_active;
-		if (m_admin) {
+		if (m_admin)
 			session.ses_flags |= trs_admin;
-		}
 
 		if (interactive)
-		{
-			Guid guid;
-			GenerateGuid(&guid);
-
-			char* buff = session.ses_logfile.getBuffer(GUID_BUFF_SIZE);
-			GuidToString(buff, &guid);
-
-			session.ses_logfile.insert(0, FB_TRACE_FILE);
-		}
+			session.ses_logfile = FB_TRACE_FILE + Guid::generate().toPathName();
 
 		storage->addSession(session);
 		m_chg_number = storage->getChangeNumber();
@@ -226,26 +219,32 @@ bool TraceSvcJrd::changeFlags(ULONG id, int setFlags, int clearFlags)
 
 void TraceSvcJrd::listSessions()
 {
+	// Do not use value from Config::getDefaultConfig() because
+	// tracemgr will reread config in embedded mode
+	constexpr const char* defaultPlugins = "<default>";
+
 	m_svc.started();
 
-	ConfigStorage* storage = TraceManager::getStorage();
-	StorageGuard guard(storage);
+	// Writing into service when storage is locked could lead to deadlock,
+	// therefore don't use StorageGuard here.
 
-	storage->restart();
+	ConfigStorage* storage = TraceManager::getStorage();
+	ConfigStorage::Accessor acc(storage);
 
 	TraceSession session(*getDefaultMemoryPool());
-	while (storage->getNextSession(session, ConfigStorage::ALL))
+
+	while (acc.getNext(session, ConfigStorage::ALL))
 	{
 		if (checkPrivileges(session))
 		{
 			m_svc.printf(false, "\nSession ID: %d\n", session.ses_id);
 			if (!session.ses_name.empty()) {
-				m_svc.printf(false, "  name:  %s\n", session.ses_name.c_str());
+				m_svc.printf(false, "  name:    %s\n", session.ses_name.c_str());
 			}
-			m_svc.printf(false, "  user:  %s\n", session.ses_user.c_str());
+			m_svc.printf(false, "  user:    %s\n", session.ses_user.c_str());
 
-			struct tm* t = localtime(&session.ses_start);
-			m_svc.printf(false, "  date:  %04d-%02d-%02d %02d:%02d:%02d\n",
+			const struct tm* t = localtime(&session.ses_start);
+			m_svc.printf(false, "  date:    %04d-%02d-%02d %02d:%02d:%02d\n",
 					t->tm_year + 1900, t->tm_mon + 1, t->tm_mday,
 					t->tm_hour, t->tm_min, t->tm_sec);
 
@@ -271,12 +270,15 @@ void TraceSvcJrd::listSessions()
 			if (session.ses_flags & trs_log_full) {
 				flags += ", log full";
 			}
-			m_svc.printf(false, "  flags: %s\n", flags.c_str());
+			m_svc.printf(false, "  flags:   %s\n", flags.c_str());
+
+			const char* pluginsList = session.getPluginsList();
+			m_svc.printf(false, "  plugins: %s\n", pluginsList ? pluginsList : defaultPlugins);
 		}
 	}
 }
 
-void TraceSvcJrd::readSession(TraceSession& session)
+void TraceSvcJrd::readSession(const TraceSession& session)
 {
 	if (session.ses_logfile.empty())
 	{
@@ -338,7 +340,7 @@ bool TraceSvcJrd::checkAliveAndFlags(ULONG sesId, int& flags)
 	return alive;
 }
 
-bool TraceSvcJrd::checkPrivileges(TraceSession& session)
+bool TraceSvcJrd::checkPrivileges(const TraceSession& session)
 {
 	// Our service run in embedded mode and have no auth info - trust user name as is
 	if (m_admin || (m_user.hasData() && (m_user == session.ses_user)))
@@ -401,8 +403,10 @@ int TRACE_main(UtilSvc* arg)
 	{
 		StaticStatusVector status;
 		e.stuffException(status);
-		svc->initStatus();
-		svc->setServiceStatus(status.begin());
+
+		UtilSvc::StatusAccessor sa = svc->getStatusAccessor();
+		sa.init();
+		sa.setServiceStatus(status.begin());
 		exit_code = FB_FAILURE;
 	}
 

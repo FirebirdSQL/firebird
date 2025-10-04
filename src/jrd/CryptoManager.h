@@ -36,6 +36,7 @@
 #include "../common/classes/objects_array.h"
 #include "../common/classes/condition.h"
 #include "../jrd/MetaName.h"
+#include "../jrd/Attachment.h"
 #include "../common/classes/GetPlugins.h"
 #include "../common/ThreadStart.h"
 #include "../jrd/ods.h"
@@ -266,7 +267,6 @@ class CryptoManager final : public Firebird::PermanentStorage, public BarSync::I
 {
 public:
 	typedef Firebird::GetPlugins<Firebird::IDbCryptPlugin> Factory;
-	typedef Firebird::HalfStaticArray<Attachment*, 16> AttVector;
 
 	explicit CryptoManager(thread_db* tdbb);
 	~CryptoManager();
@@ -301,6 +301,10 @@ public:
 	UCHAR getCurrentState(thread_db* tdbb) const;
 	const char* getKeyName() const;
 	const char* getPluginName() const;
+	Thread::Handle getCryptThreadHandle() const
+	{
+		return cryptThreadHandle;
+	}
 
 private:
 	enum IoResult {SUCCESS_ALL, FAILED_CRYPT, FAILED_IO};
@@ -312,16 +316,16 @@ private:
 	public:
 		operator Ods::pag*()
 		{
-			return reinterpret_cast<Ods::pag*>(FB_ALIGN(buf, PAGE_ALIGNMENT));
+			return reinterpret_cast<Ods::pag*>(buf);
 		}
 
 		Ods::pag* operator->()
 		{
-			return reinterpret_cast<Ods::pag*>(FB_ALIGN(buf, PAGE_ALIGNMENT));
+			return reinterpret_cast<Ods::pag*>(buf);
 		}
 
 	private:
-		char buf[MAX_PAGE_SIZE + PAGE_ALIGNMENT - 1];
+		alignas(DIRECT_IO_BLOCK_SIZE) char buf[MAX_PAGE_SIZE];
 	};
 
 	class DbInfo;
@@ -364,6 +368,7 @@ private:
 	void lockAndReadHeader(thread_db* tdbb, unsigned flags = 0);
 	static const unsigned CRYPT_HDR_INIT =		0x01;
 	static const unsigned CRYPT_HDR_NOWAIT =	0x02;
+	static const unsigned CRYPT_RELOAD_PLUGIN =	0x04;
 
 	void addClumplet(Firebird::string& value, Firebird::ClumpletReader& block, UCHAR tag);
 	void calcDigitalSignature(thread_db* tdbb, Firebird::string& signature, const class Header& hdr);
@@ -374,10 +379,10 @@ private:
 	MetaName keyName, pluginName;
 	ULONG currentPage;
 	Firebird::Mutex pluginLoadMtx, cryptThreadMtx, holdersMutex;
-	AttVector keyProviders, keyConsumers;
+	AttachmentsRefHolder keyProviders, keyConsumers;
 	Firebird::string hash;
 	Firebird::RefPtr<DbInfo> dbInfo;
-	Thread::Handle cryptThreadId;
+	Thread::Handle cryptThreadHandle;
 	Firebird::IDbCryptPlugin* cryptPlugin;
 	Factory* checkFactory;
 	Database& dbb;

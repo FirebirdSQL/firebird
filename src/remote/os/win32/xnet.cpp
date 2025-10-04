@@ -237,7 +237,7 @@ rem_port* XNET_analyze(ClntAuthBlock* cBlock,
 					   const PathName& file_name,
 					   bool uv_flag,
 					   RefPtr<const Config>* config,
-					   const Firebird::PathName* ref_db_name)
+					   const PathName* ref_db_name)
 {
 /**************************************
  *
@@ -307,9 +307,12 @@ rem_port* XNET_analyze(ClntAuthBlock* cBlock,
 		REMOTE_PROTOCOL(PROTOCOL_VERSION15, ptype_batch_send, 6),
 		REMOTE_PROTOCOL(PROTOCOL_VERSION16, ptype_batch_send, 7),
 		REMOTE_PROTOCOL(PROTOCOL_VERSION17, ptype_batch_send, 8),
-		REMOTE_PROTOCOL(PROTOCOL_VERSION18, ptype_batch_send, 9)
+		REMOTE_PROTOCOL(PROTOCOL_VERSION18, ptype_batch_send, 9),
+		REMOTE_PROTOCOL(PROTOCOL_VERSION19, ptype_batch_send, 10),
+		REMOTE_PROTOCOL(PROTOCOL_VERSION20, ptype_batch_send, 11)
 	};
-	fb_assert(FB_NELEM(protocols_to_try) <= FB_NELEM(cnct->p_cnct_versions));
+	static_assert(FB_NELEM(protocols_to_try) <= MAX_CNCT_VERSIONS);
+
 	cnct->p_cnct_count = FB_NELEM(protocols_to_try);
 
 	for (size_t i = 0; i < cnct->p_cnct_count; i++) {
@@ -361,10 +364,10 @@ rem_port* XNET_analyze(ClntAuthBlock* cBlock,
 	case op_response:
 		try
 		{
-			Firebird::LocalStatus warning;		// Ignore connect warnings for a while
+			LocalStatus warning;		// Ignore connect warnings for a while
 			REMOTE_check_response(&warning, rdb, packet);
 		}
-		catch (const Firebird::Exception&)
+		catch (const Exception&)
 		{
 			disconnect(port);
 			delete rdb;
@@ -405,7 +408,7 @@ rem_port* XNET_analyze(ClntAuthBlock* cBlock,
 
 rem_port* XNET_connect(PACKET* packet,
 					   USHORT flag,
-					   Firebird::RefPtr<const Config>* config)
+					   RefPtr<const Config>* config)
 {
 /**************************************
  *
@@ -728,7 +731,7 @@ static rem_port* aux_connect(rem_port* port, PACKET* /*packet*/)
  *
  * Functional description
  *	Try to establish an alternative connection for handling events.
- *  Somebody has already done a successfull connect request.
+ *  Somebody has already done a successful connect request.
  *  This uses the existing xcc for the parent port to more
  *  or less duplicate a new xcc for the new aux port pointing
  *  to the event stuff in the map.
@@ -1108,7 +1111,7 @@ rem_port* XnetClientEndPoint::connect_client(PACKET* packet, const RefPtr<const 
  *
  **************************************/
 
-	const Firebird::RefPtr<const Config>& conf(config ? *config : Config::getDefaultConfig());
+	const RefPtr<const Config>& conf(config ? *config : Config::getDefaultConfig());
 
 	if (!xnet_initialized)
 	{
@@ -1991,8 +1994,8 @@ static bool_t xnet_read(RemoteXdr* xdrs)
 		{
 			// Client has written some data for us (server) to read
 
-			port->port_rcv_packets++;
-			port->port_rcv_bytes += xch->xch_length;
+			port->bumpPhysStats(rem_port::RECEIVE, xch->xch_length);
+			port->bumpLogBytes(rem_port::RECEIVE, xch->xch_length);	// XNET not calls REMOTE_inflate
 
 			xdrs->x_handy = xch->xch_length;
 			xdrs->x_private = xdrs->x_base;
@@ -2048,8 +2051,8 @@ static bool_t xnet_write(RemoteXdr* xdrs)
 	xch->xch_length = xdrs->x_private - xdrs->x_base;
 	if (SetEvent(xcc->xcc_event_send_channel_filled))
 	{
-		port->port_snd_packets++;
-		port->port_snd_bytes += xch->xch_length;
+		port->bumpPhysStats(rem_port::SEND, xch->xch_length);
+		port->bumpLogBytes(rem_port::SEND, xch->xch_length);	// XNET not calls REMOTE_deflate
 
 		xdrs->x_private = xdrs->x_base;
 		xdrs->x_handy = xch->xch_size;

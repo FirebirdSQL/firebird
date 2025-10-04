@@ -24,9 +24,10 @@
  *  Contributor(s): ______________________________________.
  */
 
-#ifndef JRD_UNICODE_UTIL_H
-#define JRD_UNICODE_UTIL_H
+#ifndef COMMON_UNICODE_UTIL_H
+#define COMMON_UNICODE_UTIL_H
 
+#include <algorithm>
 #include "intlobj_new.h"
 #include "../common/IntlUtil.h"
 #include "../common/os/mod_loader.h"
@@ -40,7 +41,7 @@
 struct UCollator;
 struct USet;
 
-namespace Jrd {
+namespace Firebird {
 
 class UnicodeUtil
 {
@@ -58,7 +59,6 @@ public:
 											  const UChar *src, int32_t srcLength,
 											  UErrorCode *pErrorCode);
 
-		void (U_EXPORT2* u_getVersion) (UVersionInfo versionArray);
 		UChar32 (U_EXPORT2* u_tolower) (UChar32 c);
 		UChar32 (U_EXPORT2* u_toupper) (UChar32 c);
 		int32_t (U_EXPORT2* u_strCompare) (const UChar* s1, int32_t length1,
@@ -67,14 +67,6 @@ public:
 
 		UChar32 (U_EXPORT2* utf8_nextCharSafeBody) (const uint8_t* s, int32_t* pi, int32_t length, UChar32 c, UBool strict);
 
-		void (U_EXPORT2* UCNV_FROM_U_CALLBACK_STOP) (
-                const void *context,
-                UConverterFromUnicodeArgs *fromUArgs,
-                const UChar* codeUnits,
-                int32_t length,
-                UChar32 codePoint,
-                UConverterCallbackReason reason,
-                UErrorCode * err);
 		void (U_EXPORT2* UCNV_TO_U_CALLBACK_STOP) (
                 const void *context,
                 UConverterToUnicodeArgs *toUArgs,
@@ -150,35 +142,35 @@ public:
 	class ICUModules;
 	// routines semantically equivalent with intlobj_new.h
 
-	static USHORT utf16KeyLength(USHORT len);	// BOCU-1
+	static USHORT utf16KeyLength(USHORT len) noexcept;	// BOCU-1
 	static USHORT utf16ToKey(USHORT srcLen, const USHORT* src, USHORT dstLen, UCHAR* dst);	// BOCU-1
 	static ULONG utf16LowerCase(ULONG srcLen, const USHORT* src, ULONG dstLen, USHORT* dst,
 								const ULONG* exceptions);
 	static ULONG utf16UpperCase(ULONG srcLen, const USHORT* src, ULONG dstLen, USHORT* dst,
 								const ULONG* exceptions);
 	static ULONG utf16ToUtf8(ULONG srcLen, const USHORT* src, ULONG dstLen, UCHAR* dst,
-							 USHORT* err_code, ULONG* err_position);
+							 USHORT* err_code, ULONG* err_position) noexcept;
 	static ULONG utf8ToUtf16(ULONG srcLen, const UCHAR* src, ULONG dstLen, USHORT* dst,
 							 USHORT* err_code, ULONG* err_position);
 	static ULONG utf16ToUtf32(ULONG srcLen, const USHORT* src, ULONG dstLen, ULONG* dst,
-							  USHORT* err_code, ULONG* err_position);
+							  USHORT* err_code, ULONG* err_position) noexcept;
 	static ULONG utf32ToUtf16(ULONG srcLen, const ULONG* src, ULONG dstLen, USHORT* dst,
-							  USHORT* err_code, ULONG* err_position);
+							  USHORT* err_code, ULONG* err_position) noexcept;
 	static SSHORT utf16Compare(ULONG len1, const USHORT* str1, ULONG len2, const USHORT* str2,
 							   INTL_BOOL* error_flag);
 
 	static ULONG utf16Length(ULONG len, const USHORT* str);
 	static ULONG utf16Substring(ULONG srcLen, const USHORT* src, ULONG dstLen, USHORT* dst,
-								ULONG startPos, ULONG length);
+								ULONG startPos, ULONG length) noexcept;
 	static INTL_BOOL utf8WellFormed(ULONG len, const UCHAR* str, ULONG* offending_position);
-	static INTL_BOOL utf16WellFormed(ULONG len, const USHORT* str, ULONG* offending_position);
-	static INTL_BOOL utf32WellFormed(ULONG len, const ULONG* str, ULONG* offending_position);
+	static INTL_BOOL utf16WellFormed(ULONG len, const USHORT* str, ULONG* offending_position) noexcept;
+	static INTL_BOOL utf32WellFormed(ULONG len, const ULONG* str, ULONG* offending_position) noexcept;
 
 	static void utf8Normalize(Firebird::UCharBuffer& data);
 
 	static ConversionICU& getConversionICU();
 	static ICU* loadICU(const Firebird::string& icuVersion, const Firebird::string& configInfo);
-	static void getICUVersion(ICU* icu, int& majorVersion, int& minorVersion);
+	static void getICUVersion(ICU* icu, int& majorVersion, int& minorVersion) noexcept;
 	static ICU* getCollVersion(const Firebird::string& icuVersion,
 		const Firebird::string& configInfo, Firebird::string& collVersion);
 
@@ -196,7 +188,7 @@ public:
 
 		~Utf16Collation();
 
-		USHORT keyLength(USHORT len) const;
+		USHORT keyLength(USHORT len) const noexcept;
 		USHORT stringToKey(USHORT srcLen, const USHORT* src, USHORT dstLen, UCHAR* dst,
 						   USHORT key_type) const;
 		SSHORT compare(ULONG len1, const USHORT* str1, ULONG len2, const USHORT* str2,
@@ -210,8 +202,8 @@ public:
 		public:
 			static bool greaterThan(const Firebird::Array<T>& i1, const Firebird::Array<T>& i2)
 			{
-				FB_SIZE_T minCount = MIN(i1.getCount(), i2.getCount());
-				int cmp = memcmp(i1.begin(), i2.begin(), minCount * sizeof(T));
+				const FB_SIZE_T minCount = std::min(i1.getCount(), i2.getCount());
+				const int cmp = memcmp(i1.begin(), i2.begin(), minCount * sizeof(T));
 
 				if (cmp != 0)
 					return cmp > 0;
@@ -263,6 +255,6 @@ public:
 	friend class Utf16Collation;
 };
 
-}	// namespace Jrd
+}	// namespace Firebird
 
-#endif	// JRD_UNICODE_UTIL_H
+#endif	// COMMON_UNICODE_UTIL_H

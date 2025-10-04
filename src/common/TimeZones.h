@@ -1,6 +1,6 @@
 // The content of this file is generated with help of update-ids utility Do not edit.
 
-static const char* BUILTIN_TIME_ZONE_VERSION = "2022d";
+static const char* BUILTIN_TIME_ZONE_VERSION = "2025b";
 
 // Do not change order of items in this array! The index corresponds to a TimeZone ID, which must be fixed!
 static const char* BUILTIN_TIME_ZONE_LIST[] = {
@@ -639,5 +639,7 @@ static const char* BUILTIN_TIME_ZONE_LIST[] = {
 	"America/Nuuk",	// fb_tzid_america_nuuk - 64903
 	"Asia/Qostanay",	// fb_tzid_asia_qostanay - 64902
 	"Pacific/Kanton",	// fb_tzid_pacific_kanton - 64901
-	"Europe/Kyiv"	// fb_tzid_europe_kyiv - 64900
+	"Europe/Kyiv",	// fb_tzid_europe_kyiv - 64900
+	"America/Ciudad_Juarez",	// fb_tzid_america_ciudad_juarez - 64899
+	"America/Coyhaique"	// fb_tzid_america_coyhaique - 64898
 };

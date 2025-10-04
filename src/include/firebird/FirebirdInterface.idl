@@ -140,7 +140,7 @@ interface Master : Versioned
  * </plugin_config>
  *
  * Note that the external_engine tag is ignored at this stage. Only plugin_module and plugin_config
- * are read. The dynamic library extension may be ommitted, and $(this) expands to the directory of
+ * are read. The dynamic library extension may be omitted, and $(this) expands to the directory of
  * the .conf file.
  *
  * Plugins may access Firebird API through the fbclient library.
@@ -408,6 +408,9 @@ interface MessageMetadata : ReferenceCounted
 version:	// 3.0 => 4.0
 	uint getAlignment(Status status);
 	uint getAlignedLength(Status status);
+
+version:	// 5.0 => 6.0 Alpha1
+	const string getSchema(Status status, uint index);
 }
 
 interface MetadataBuilder : ReferenceCounted
@@ -430,6 +433,9 @@ version:	// 3.0 => 4.0
 	void setRelation(Status status, uint index, const string relation);
 	void setOwner(Status status, uint index, const string owner);
 	void setAlias(Status status, uint index, const string alias);
+
+version:	// 5.0 => 6.0 Alpha1
+	void setSchema(Status status, uint index, const string schema);
 }
 
 interface ResultSet : ReferenceCounted
@@ -474,6 +480,7 @@ interface Statement : ReferenceCounted
 	const uint PREPARE_PREFETCH_DETAILED_PLAN		= 0x10;
 	const uint PREPARE_PREFETCH_AFFECTED_RECORDS	= 0x20;	// not used yet
 	const uint PREPARE_PREFETCH_FLAGS				= 0x40;
+	const uint PREPARE_REQUIRE_SEMICOLON			= 0x80;
 	const uint PREPARE_PREFETCH_METADATA =
 		PREPARE_PREFETCH_TYPE | PREPARE_PREFETCH_FLAGS |
 		PREPARE_PREFETCH_INPUT_PARAMETERS | PREPARE_PREFETCH_OUTPUT_PARAMETERS;
@@ -520,6 +527,11 @@ version:	// 3.0 => 4.0
 version:	// 3.0.7 => 3.0.8, 4.0.0 => 4.0.1
 	[notImplementedAction if ::FB_UsedInYValve then defaultAction else call deprecatedFree(status) endif]
 	void free(Status status);
+
+version:	// 6.0
+	// Inline blob transfer
+	uint getMaxInlineBlobSize(Status status);
+	void setMaxInlineBlobSize(Status status, uint size);
 }
 
 interface Batch : ReferenceCounted
@@ -712,6 +724,15 @@ version:	// 3.0.7 => 3.0.8, 4.0.0 => 4.0.1
 	void detach(Status status);
 	[notImplementedAction if ::FB_UsedInYValve then defaultAction else call deprecatedDropDatabase(status) endif]
 	void dropDatabase(Status status);
+
+version:	// 6.0
+	// Blob caching by client
+	uint getMaxBlobCacheSize(Status status);
+	void setMaxBlobCacheSize(Status status, uint size);
+
+	// Inline blob transfer
+	uint getMaxInlineBlobSize(Status status);
+	void setMaxInlineBlobSize(Status status, uint size);
 }
 
 interface Service : ReferenceCounted
@@ -749,7 +770,7 @@ interface DtcStart : Disposable
 {
 	void addAttachment(Status status, Attachment att);
 	void addWithTpb(Status status, Attachment att, uint length, const uchar* tpb);
-	Transaction start(Status status);	// successfull call disposes interfaces
+	Transaction start(Status status);	// successful call disposes interfaces
 }
 
 // Distributed transactions coordinator
@@ -768,6 +789,7 @@ interface Auth : PluginBase
 	const int AUTH_SUCCESS = 0;
 	const int AUTH_MORE_DATA = 1;
 	const int AUTH_CONTINUE = 2;
+	const int AUTH_SUCCESS_WITH_DATA = 3;
 }
 
 interface Writer : Versioned
@@ -940,6 +962,27 @@ interface CryptKeyCallback : Versioned
 	// any further details.
 	uint callback(uint dataLength, const void* data,
 		uint bufferLength, void* buffer);
+
+version:		// 6.0, 5.0.2, 4.0.6
+	// Result returned by afterAttach()
+	const uint NO_RETRY		= 0;	// Returned by old plugins & stub
+	const uint DO_RETRY		= 1;
+
+	// NULL in attStatus means attach was successful.
+	// DO_RETRY return will be ignored in this case, but plugin has a chance
+	// to reflect internally success.
+	[stub defaultAction]
+	uint afterAttach(Status status, const string dbName, const Status attStatus);
+
+	// interface not needed any more
+	[stub defaultAction]
+	void dispose();
+
+version:		// 6.0, 5.0.2, 4.0.6
+	// Produce something to be compared with other interface instance
+	[notImplemented(-1)]
+	int getHashLength(Status status);
+	void getHashData(Status status, void* hash);
 }
 
 
@@ -1115,6 +1158,9 @@ interface RoutineMetadata : Versioned
 	MessageMetadata getTriggerMetadata(Status status) const;
 	const string getTriggerTable(Status status) const;
 	uint getTriggerType(Status status) const;
+
+version:	// 5.0 => 6.0 Alpha1
+	const string getSchema(Status status) const;
 }
 
 
@@ -1211,6 +1257,12 @@ version:	// 4.0 Beta1 => 4.0 Beta2
 		uint* fractions, uint timeZoneBufferLength, string timeZoneBuffer);
 	void decodeTimeStampTzEx(Status status, const ISC_TIMESTAMP_TZ_EX* timeStampTz, uint* year, uint* month, uint* day,
 		uint* hours, uint* minutes, uint* seconds, uint* fractions, uint timeZoneBufferLength, string timeZoneBuffer);
+
+version:	// 5.0 => 6.0 Alpha1
+	Attachment executeCreateDatabase2(Status status,
+		uint stmtLength, const string creatDBstatement, uint dialect,
+		uint dpbLength, const uchar* dpb,
+		boolean* stmtIsCreateDb);
 }
 
 interface OffsetsCallback : Versioned
@@ -1266,7 +1318,7 @@ interface XpbBuilder : Disposable
 // Database trace objects
 
 struct PerformanceInfo;
-struct dsc;
+struct paramdsc;
 
 interface TraceConnection : Versioned
 {
@@ -1313,7 +1365,7 @@ version: // 3.0.4 -> 3.0.5
 interface TraceParams : Versioned
 {
 	uint getCount();
-	const dsc* getParam(uint idx);
+	const paramdsc* getParam(uint idx);
 
 version:
 	const string getTextUTF8(Status status, uint idx);
@@ -1360,6 +1412,11 @@ interface TraceProcedure : Versioned
 	const string getProcName();
 	TraceParams getInputs();
 	PerformanceInfo* getPerf();
+
+version: // 4.0 -> 5.0
+	int64 getStmtID();
+	const string getPlan();
+	const string getExplainedPlan();
 }
 
 interface TraceFunction : Versioned
@@ -1368,6 +1425,11 @@ interface TraceFunction : Versioned
 	TraceParams getInputs();
 	TraceParams getResult();
 	PerformanceInfo* getPerf();
+
+version: // 4.0 -> 5.0
+	int64 getStmtID();
+	const string getPlan();
+	const string getExplainedPlan();
 }
 
 interface TraceTrigger : Versioned
@@ -1385,6 +1447,11 @@ interface TraceTrigger : Versioned
 	int getAction();
 	int getWhich();
 	PerformanceInfo* getPerf();
+
+version: // 4.0 -> 5.0
+	int64 getStmtID();
+	const string getPlan();
+	const string getExplainedPlan();
 }
 
 interface TraceServiceConnection : TraceConnection
@@ -1539,13 +1606,29 @@ interface TracePlugin : ReferenceCounted
 	// Stored functions execution
 
 	[notImplemented(true)]
-	boolean trace_func_execute (TraceDatabaseConnection connection, TraceTransaction transaction, TraceFunction function,
-			boolean started, uint func_result);
+	boolean trace_func_execute(TraceDatabaseConnection connection, TraceTransaction transaction,
+		TraceFunction function,	boolean started, uint func_result);
 
 version:	// 4.0.1 -> 4.0.2
-	boolean trace_dsql_restart(TraceDatabaseConnection connection, TraceTransaction transaction, TraceSQLStatement statement,
-		uint number);
+	[notImplemented(true)]
+	boolean trace_dsql_restart(TraceDatabaseConnection connection, TraceTransaction transaction,
+		TraceSQLStatement statement, uint number);
 
+version:	// 4.0 -> 5.0
+
+	// Compilation of stored procedures, functions, triggers
+
+	[notImplemented(true)]
+	boolean trace_proc_compile(TraceDatabaseConnection connection, TraceProcedure procedure,
+		int64 time_millis, uint proc_result);
+
+	[notImplemented(true)]
+	boolean trace_func_compile(TraceDatabaseConnection connection, TraceFunction function,
+		int64 time_millis, uint func_result);
+
+	[notImplemented(true)]
+	boolean trace_trigger_compile(TraceDatabaseConnection connection, TraceTrigger trigger,
+		int64 time_millis, uint trig_result);
 }
 
 // Trace plugin second level factory (this is what is known to PluginManager as "trace plugin")
@@ -1572,7 +1655,10 @@ interface TraceFactory : PluginBase
 	const uint TRACE_EVENT_ERROR = 17;
 	const uint TRACE_EVENT_SWEEP = 18;
 	const uint TRACE_EVENT_FUNC_EXECUTE = 19;
-	const uint TRACE_EVENT_MAX = 20;	// keep it last
+	const uint TRACE_EVENT_PROC_COMPILE = 20;
+	const uint TRACE_EVENT_FUNC_COMPILE = 21;
+	const uint TRACE_EVENT_TRIGGER_COMPILE = 22;
+	const uint TRACE_EVENT_MAX = 23;	// keep it last
 
 	// What notifications does plugin need
 	uint64 trace_needs();
@@ -1691,16 +1777,24 @@ interface ReplicatedTransaction : Disposable
 	void rollbackSavepoint(Status status);
 
 	// ReplicatedRecords parameters point to local objects, do not ever store the pointer.
-	void insertRecord(Status status, const string name,
-					  ReplicatedRecord record);
-	void updateRecord(Status status, const string name,
-					  ReplicatedRecord orgRecord,
-					  ReplicatedRecord newRecord);
-	void deleteRecord(Status status, const string name,
-					  ReplicatedRecord record);
+	void deprecatedInsertRecord(Status status, const string name, ReplicatedRecord record);
+	void deprecatedUpdateRecord(Status status, const string name,
+		ReplicatedRecord orgRecord, ReplicatedRecord newRecord);
+	void deprecatedDeleteRecord(Status status, const string name, ReplicatedRecord record);
 
-	void executeSql(Status status, const string sql);
-	void executeSqlIntl(Status status, uint charset, const string sql);
+	void deprecatedExecuteSql(Status status, const string sql);
+	void deprecatedExecuteSqlIntl(Status status, uint charset, const string sql);
+
+version:	// 5.0 => 6.0 Alpha1
+	// ReplicatedRecords parameters point to local objects, do not ever store the pointer.
+	void insertRecord2(Status status, const string schemaName, const string tableName,
+		ReplicatedRecord record);
+	void updateRecord2(Status status, const string schemaName, const string tableName,
+		ReplicatedRecord orgRecord, ReplicatedRecord newRecord);
+	void deleteRecord2(Status status, const string schemaName, const string tableName,
+		ReplicatedRecord record);
+
+	void executeSqlIntl2(Status status, uint charset, const string schemaSearchPath, const string sql);
 }
 
 interface ReplicatedSession : PluginBase
@@ -1710,14 +1804,17 @@ interface ReplicatedSession : PluginBase
 
 	ReplicatedTransaction startTransaction(Status status, Transaction transaction, int64 number);
 	void cleanupTransaction(Status status, int64 number);
-	void setSequence(Status status, const string name, int64 value);
+	void deprecatedSetSequence(Status status, const string name, int64 value);
+
+version:	// 5.0 => 6.0 Alpha1
+	void setSequence2(Status status, const string schemaName, const string genName, int64 value);
 }
 
 // Profiler interfaces
 
 interface ProfilerPlugin : PluginBase
 {
-	void init(Status status, Attachment attachment);
+	void init(Status status, Attachment attachment, uint64 ticksFrequency);
 
 	ProfilerSession startSession(Status status, const string description,
 		const string options, ISC_TIMESTAMP_TZ timestamp);
@@ -1738,30 +1835,40 @@ interface ProfilerSession : Disposable
 
 	void finish(Status status, ISC_TIMESTAMP_TZ timestamp);
 
-	void defineStatement(Status status, int64 statementId, int64 parentStatementId,
+	void deprecatedDefineStatement(Status status, int64 statementId, int64 parentStatementId,
 		const string type, const string packageName, const string routineName, const string sqlText);
 
-	//// TODO: Add defineCursor with line/column
+	void defineCursor(int64 statementId, uint cursorId, const string name, uint line, uint column);
 
 	void defineRecordSource(int64 statementId, uint cursorId, uint recSourceId,
-		const string accessPath, uint parentRecSourceId);
+		uint level, const string accessPath, uint parentRecSourceId);
 
-	void onRequestStart(Status status, int64 requestId, int64 statementId, int64 callerRequestId,
-		ISC_TIMESTAMP_TZ timestamp);
+	void onRequestStart(Status status, int64 statementId, int64 requestId,
+		int64 callerStatementId, int64 callerRequestId, ISC_TIMESTAMP_TZ timestamp);
 
-	void onRequestFinish(Status status, int64 requestId, ISC_TIMESTAMP_TZ timestamp, ProfilerStats stats);
+	void onRequestFinish(Status status, int64 statementId, int64 requestId,
+		ISC_TIMESTAMP_TZ timestamp, ProfilerStats stats);
 
-	void beforePsqlLineColumn(int64 requestId, uint line, uint column);
-	void afterPsqlLineColumn(int64 requestId, uint line, uint column, ProfilerStats stats);
+	void beforePsqlLineColumn(int64 statementId, int64 requestId, uint line, uint column);
+	void afterPsqlLineColumn(int64 statementId, int64 requestId, uint line, uint column, ProfilerStats stats);
 
-	void beforeRecordSourceOpen(int64 requestId, uint cursorId, uint recSourceId);
-	void afterRecordSourceOpen(int64 requestId, uint cursorId, uint recSourceId, ProfilerStats stats);
+	void beforeRecordSourceOpen(int64 statementId, int64 requestId, uint cursorId, uint recSourceId);
+	void afterRecordSourceOpen(int64 statementId, int64 requestId, uint cursorId, uint recSourceId,
+		ProfilerStats stats);
 
-	void beforeRecordSourceGetRecord(int64 requestId, uint cursorId, uint recSourceId);
-	void afterRecordSourceGetRecord(int64 requestId, uint cursorId, uint recSourceId, ProfilerStats stats);
+	void beforeRecordSourceGetRecord(int64 statementId, int64 requestId, uint cursorId, uint recSourceId);
+	void afterRecordSourceGetRecord(int64 statementId, int64 requestId, uint cursorId, uint recSourceId,
+		ProfilerStats stats);
+
+version:	// 5.0 => 6.0 Alpha1
+	[notImplementedAction call deprecatedDefineStatement(status, statementId, parentStatementId,
+		type, packageName, routineName, sqlText)]
+	void defineStatement2(Status status, int64 statementId, int64 parentStatementId,
+		const string type, const string schemaName, const string packageName, const string routineName,
+		const string sqlText);
 }
 
 interface ProfilerStats : Versioned
 {
-	uint64 getElapsedTime();
+	uint64 getElapsedTicks();
 }

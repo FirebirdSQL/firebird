@@ -25,6 +25,7 @@
  */
 
 #include "../interfaces/ifaceExamples.h"
+#include <atomic>
 
 namespace
 {
@@ -67,9 +68,9 @@ private:
 class CryptKeyHolder : public IKeyHolderPluginImpl<CryptKeyHolder, CheckStatusWrapper>
 {
 public:
-	explicit CryptKeyHolder(IPluginConfig* cnf) throw()
+	explicit CryptKeyHolder(IPluginConfig* cnf) noexcept
 		: callbackInterface(this), named(NULL), tempStatus(master->getStatus()),
-		  config(cnf), key(0), owner(NULL)
+		  config(cnf), key(0), init(false), owner(NULL)
 	{
 		config->addRef();
 	}
@@ -110,10 +111,13 @@ public:
 		return owner;
 	}
 
-	ISC_UCHAR getKey()
+	const ISC_UCHAR& getKey()
 	{
-		if (!key)
+		if (!init)
+		{
 			keyCallback(&tempStatus, NULL);
+			init = true;
+		}
 
 		return key;
 	}
@@ -137,9 +141,9 @@ private:
 			: holder(p)
 		{ }
 
-		unsigned int callback(unsigned int, const void*, unsigned int length, void* buffer)
+		unsigned int callback(unsigned int, const void*, unsigned int length, void* buffer) override
 		{
-			ISC_UCHAR k = holder->getKey();
+			const ISC_UCHAR& k = holder->getKey();
 			if (!k)
 			{
 				return 0;
@@ -150,6 +154,36 @@ private:
 				memcpy(buffer, &k, 1);
 			}
 			return 1;
+		}
+
+		int getHashLength(Firebird::CheckStatusWrapper* status) override
+		{
+			const ISC_UCHAR& k = holder->getKey();
+			if (!k)
+			{
+				ISC_STATUS err[] = {isc_arg_gds, isc_wish_list};
+				status->setErrors2(2, err);
+
+				return -1;
+			}
+
+			return 1;
+		}
+
+		void getHashData(Firebird::CheckStatusWrapper* status, void* h) override
+		{
+			// here key value is returned by hash function as is
+			// do not do it in production - use some hash function
+			const ISC_UCHAR& k = holder->getKey();
+			if (!k)
+			{
+				ISC_STATUS err[] = {isc_arg_gds, isc_wish_list};
+				status->setErrors2(2, err);
+
+				return;
+			}
+
+			memcpy(h, &k, 1);
 		}
 
 	private:
@@ -166,10 +200,22 @@ private:
 			name[sizeof(name) - 1] = 0;
 		}
 
-		unsigned int callback(unsigned int, const void*, unsigned int length, void* buffer)
+		unsigned int callback(unsigned int, const void*, unsigned int length, void* buffer) override
 		{
 			memcpy(buffer, &key, 1);
 			return 1;
+		}
+
+		int getHashLength(Firebird::CheckStatusWrapper* status) override
+		{
+			return 1;
+		}
+
+		void getHashData(Firebird::CheckStatusWrapper* status, void* h) override
+		{
+			// here key value is returned by hash function as is
+			// do not do it in production - use some hash function
+			memcpy(h, &key, 1);
 		}
 
 		~NamedCallback()
@@ -188,8 +234,9 @@ private:
 
 	IPluginConfig* config;
 	ISC_UCHAR key;
+	bool init;
 
-	FbSampleAtomic refCounter;
+	std::atomic_int refCounter;
 	IReferenceCounted* owner;
 
 	IConfigEntry* getEntry(CheckStatusWrapper* status, const char* entryName);
@@ -226,7 +273,7 @@ int CryptKeyHolder::keyCallback(CheckStatusWrapper* status, ICryptKeyCallback* c
 			confEntry = getEntry(status, "Key");
 			if (confEntry)
 			{
-				key = confEntry->getIntValue();
+				key = static_cast<ISC_UCHAR>(confEntry->getIntValue());
 				confEntry->release();
 			}
 			else
@@ -264,7 +311,7 @@ ICryptKeyCallback* CryptKeyHolder::keyHandle(CheckStatusWrapper* status, const c
 	IConfigEntry* confEntry = getEntry(status, kn);
 	if (confEntry)
 	{
-		int k = confEntry->getIntValue();
+		int k = static_cast<int>(confEntry->getIntValue());
 		confEntry->release();
 		if (k > 0 && k < 256)
 		{

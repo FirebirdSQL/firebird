@@ -37,8 +37,8 @@ namespace StaticMutex
 {
 	// Support for common mutex for various inits
 	extern Mutex* mutex;
-	void create();
-	void release();
+	void create() noexcept;
+	void release() noexcept;
 }
 
 // InstanceControl - interface for almost all global variables
@@ -77,7 +77,7 @@ public:
 
 	private:
 		virtual void dtor() = 0;
-		void unlist();
+		void unlist() noexcept;
 
 		InstanceList* next;
 		InstanceList* prev;
@@ -118,7 +118,7 @@ public:
 	static void registerGdsCleanup(FPTR_VOID cleanup);
 	static void registerShutdown(FPTR_VOID shutdown);
 
-	static void cancelCleanup();
+	static void cancelCleanup() noexcept;
 };
 
 
@@ -131,7 +131,7 @@ private:
 	T* instance;
 
 public:
-	void dtor()
+	void dtor() noexcept
 	{
 		delete instance;
 		instance = 0;
@@ -147,15 +147,20 @@ public:
 		FB_NEW InstanceControl::InstanceLink<GlobalPtr, P>(this);
 	}
 
-	T* operator->() throw()
+	T* operator->() noexcept
 	{
 		return instance;
 	}
-	operator T&() throw()
+	operator T&() noexcept
 	{
 		return *instance;
 	}
-	T* operator&() throw()
+	T* operator&() noexcept
+	{
+		return instance;
+	}
+
+	operator bool() noexcept
 	{
 		return instance;
 	}
@@ -172,7 +177,7 @@ private:
 	const char* from;
 #endif
 public:
-	explicit InitMutex(const char* f)
+	explicit InitMutex(const char* f) noexcept
 		: flag(false)
 #ifdef DEV_BUILD
 			  , from(f)
@@ -219,7 +224,7 @@ public:
 		return FB_NEW_POOL(*getDefaultMemoryPool()) T(*getDefaultMemoryPool());
 	}
 
-	static void destroy(T* inst)
+	static void destroy(T* inst) noexcept
 	{
 		delete inst;
 	}
@@ -270,7 +275,7 @@ private:
 	A allocator;
 
 public:
-	InitInstance()
+	InitInstance() noexcept
 		: instance(NULL), flag(false)
 	{ }
 

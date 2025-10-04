@@ -1,16 +1,16 @@
-ARG ARG_BASE=ubuntu:22.04
+ARG ARG_BASE=debian:bookworm
 ARG ARG_SET_ARCH=x86_64
 ARG ARG_TARGET_ARCH=x86_64-pc-linux-gnu
 ARG ARG_CTNF_CONFIG=crosstool-ng-config-x64
 
-ARG ARG_CTNG_VERSION=1.25.0
+ARG ARG_CTNG_VERSION=1.26.0
 ARG ARG_LIBTOOL_VERSION=2.4.6
 ARG ARG_NCURSES_VERSION=6.3
 ARG ARG_LTM_VERSION=1.2.0
-ARG ARG_ZLIB_VERSION=1.2.12
+ARG ARG_ZLIB_VERSION=1.3.1
 ARG ARG_ICU_VERSION=70-1
 
-ARG ARG_CPUCOUNT=6
+ARG ARG_CPUCOUNT=24
 
 ARG ARG_CTNG_UID=1000
 ARG ARG_CTNG_GID=1000
@@ -44,6 +44,7 @@ RUN groupadd -g $ARG_CTNG_GID ctng && \
 		sudo \
 		automake \
 		bison \
+		bzip2 \
 		chrpath \
 		flex \
 		gcc \
@@ -58,13 +59,13 @@ RUN groupadd -g $ARG_CTNG_GID ctng && \
 		libtool \
 		libtool-bin \
 		libtool-doc \
-		python2.7-dev \
 		python3-dev \
 		texinfo \
 		make \
 		curl \
 		wget \
 		unzip \
+		xz-utils \
 		nano && \
 	\
 	adduser ctng sudo && \
@@ -182,7 +183,7 @@ RUN cd ~/build && \
 	tar xvf icu4c-${ARG_ICU_VERSION}-src.tgz --strip 1 -C icu4c-${ARG_ICU_VERSION}-src && \
 	mkdir icu4c-${ARG_ICU_VERSION}-build && \
 	cd icu4c-${ARG_ICU_VERSION}-build && \
-	CXXFLAGS='-std=c++17 -static-libstdc++' setarch $ARG_SET_ARCH ../icu4c-${ARG_ICU_VERSION}-src/source/runConfigureICU \
+	CXXFLAGS='-std=c++20 -static-libstdc++' setarch $ARG_SET_ARCH ../icu4c-${ARG_ICU_VERSION}-src/source/runConfigureICU \
 		Linux \
 		--host=${ARG_TARGET_ARCH} \
 		--prefix=/home/ctng/x-tools/${ARG_TARGET_ARCH}/${ARG_TARGET_ARCH}/sysroot/usr/local \
@@ -195,14 +196,15 @@ FROM $ARG_BASE
 
 ARG ARG_TARGET_ARCH
 ARG ARG_SET_ARCH
-ARG ARG_CPUCOUNT
 ARG ARG_CTNG_UID
 ARG ARG_CTNG_GID
 
 RUN apt-get update && \
 	apt-get -y install \
+		cmake \
 		libfile-copy-recursive-perl \
-		unzip && \
+		unzip \
+		xz-utils && \
 	rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -g $ARG_CTNG_GID ctng && \
@@ -221,7 +223,6 @@ ENV LD_LIBRARY_PATH "/home/ctng/x-tools/${ARG_TARGET_ARCH}/${ARG_TARGET_ARCH}/sy
 
 ENV BUILD_ARCH=$ARG_TARGET_ARCH
 ENV SET_ARCH=$ARG_SET_ARCH
-ENV CPUCOUNT=$ARG_CPUCOUNT
 
 WORKDIR /firebird
 

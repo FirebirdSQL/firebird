@@ -31,9 +31,9 @@
 // Version 2 of the debug information replaces 16-bit values
 // inside the fb_dbg_map_src2blr tag with 32-bit ones.
 // Also, it introduces some new tags.
-const UCHAR DBG_INFO_VERSION_1 = UCHAR(1);
-const UCHAR DBG_INFO_VERSION_2 = UCHAR(2);
-const UCHAR CURRENT_DBG_INFO_VERSION = DBG_INFO_VERSION_2;
+inline constexpr UCHAR DBG_INFO_VERSION_1 = UCHAR(1);
+inline constexpr UCHAR DBG_INFO_VERSION_2 = UCHAR(2);
+inline constexpr UCHAR CURRENT_DBG_INFO_VERSION = DBG_INFO_VERSION_2;
 
 namespace Jrd {
 class MetaName;
@@ -48,7 +48,7 @@ public:
 	ULONG mbs_src_line;
 	ULONG mbs_src_col;
 
-	static ULONG generate(const MapBlrToSrcItem& Item)
+	static ULONG generate(const MapBlrToSrcItem& Item) noexcept
 	{ return Item.mbs_offset; }
 };
 
@@ -58,17 +58,15 @@ typedef Firebird::SortedArray<
 	ULONG,
 	MapBlrToSrcItem> MapBlrToSrc;
 
-typedef GenericMap<Pair<Right<USHORT, Jrd::MetaName> > > MapVarIndexToName;
-
 struct ArgumentInfo
 {
-	ArgumentInfo(UCHAR aType, USHORT aIndex)
+	ArgumentInfo(UCHAR aType, USHORT aIndex) noexcept
 		: type(aType),
 		  index(aIndex)
 	{
 	}
 
-	ArgumentInfo()
+	ArgumentInfo() noexcept
 		: type(0),
 		  index(0)
 	{
@@ -77,7 +75,7 @@ struct ArgumentInfo
 	UCHAR type;
 	USHORT index;
 
-	bool operator >(const ArgumentInfo& x) const
+	bool operator >(const ArgumentInfo& x) const noexcept
 	{
 		if (type == x.type)
 			return index > x.index;
@@ -86,8 +84,6 @@ struct ArgumentInfo
 	}
 };
 
-typedef GenericMap<Pair<Right<ArgumentInfo, Jrd::MetaName> > > MapArgumentInfoToName;
-
 struct DbgInfo : public PermanentStorage
 {
 	explicit DbgInfo(MemoryPool& p)
@@ -95,7 +91,8 @@ struct DbgInfo : public PermanentStorage
 		  blrToSrc(p),
 		  varIndexToName(p),
 		  argInfoToName(p),
-		  curIndexToName(p),
+		  declaredCursorIndexToName(p),
+		  forCursorOffsetToName(p),
 		  subFuncs(p),
 		  subProcs(p)
 	{
@@ -111,10 +108,11 @@ struct DbgInfo : public PermanentStorage
 		blrToSrc.clear();
 		varIndexToName.clear();
 		argInfoToName.clear();
-		curIndexToName.clear();
+		declaredCursorIndexToName.clear();
+		forCursorOffsetToName.clear();
 
 		{	// scope
-			GenericMap<Pair<Left<Jrd::MetaName, DbgInfo*> > >::Accessor accessor(&subFuncs);
+			LeftPooledMap<Jrd::MetaName, DbgInfo*>::Accessor accessor(&subFuncs);
 
 			for (bool found = accessor.getFirst(); found; found = accessor.getNext())
 				delete accessor.current()->second;
@@ -123,7 +121,7 @@ struct DbgInfo : public PermanentStorage
 		}
 
 		{	// scope
-			GenericMap<Pair<Left<Jrd::MetaName, DbgInfo*> > >::Accessor accessor(&subProcs);
+			LeftPooledMap<Jrd::MetaName, DbgInfo*>::Accessor accessor(&subProcs);
 
 			for (bool found = accessor.getFirst(); found; found = accessor.getNext())
 				delete accessor.current()->second;
@@ -133,11 +131,12 @@ struct DbgInfo : public PermanentStorage
 	}
 
 	MapBlrToSrc blrToSrc;					// mapping between blr offsets and source text position
-	MapVarIndexToName varIndexToName;		// mapping between variable index and name
-	MapArgumentInfoToName argInfoToName;	// mapping between argument info (type, index) and name
-	MapVarIndexToName curIndexToName;		// mapping between cursor index and name
-	GenericMap<Pair<Left<Jrd::MetaName, DbgInfo*> > > subFuncs;	// sub functions
-	GenericMap<Pair<Left<Jrd::MetaName, DbgInfo*> > > subProcs;	// sub procedures
+	RightPooledMap<USHORT, Jrd::MetaName> varIndexToName;		// mapping between variable index and name
+	RightPooledMap<ArgumentInfo, Jrd::MetaName> argInfoToName;	// mapping between argument info (type, index) and name
+	RightPooledMap<USHORT, Jrd::MetaName> declaredCursorIndexToName;	// mapping between declared cursor index and name
+	RightPooledMap<ULONG, Jrd::MetaName> forCursorOffsetToName;	// mapping between for-cursor offset and name
+	LeftPooledMap<Jrd::MetaName, DbgInfo*> subFuncs;	// sub functions
+	LeftPooledMap<Jrd::MetaName, DbgInfo*> subProcs;	// sub procedures
 };
 
 } // namespace Firebird

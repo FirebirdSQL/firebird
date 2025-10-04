@@ -25,14 +25,14 @@
 
 //#define VIO_DEBUG
 
-const int DEBUG_WRITES			= 1;
-const int DEBUG_WRITES_INFO		= 2;
-const int DEBUG_READS			= 3;
-const int DEBUG_READS_INFO		= 4;
-const int DEBUG_TRACE			= 5;
-const int DEBUG_TRACE_INFO		= 6;
-const int DEBUG_TRACE_ALL		= 7;
-const int DEBUG_TRACE_ALL_INFO	= 8;
+inline constexpr int DEBUG_WRITES			= 1;
+inline constexpr int DEBUG_WRITES_INFO		= 2;
+inline constexpr int DEBUG_READS			= 3;
+inline constexpr int DEBUG_READS_INFO		= 4;
+inline constexpr int DEBUG_TRACE			= 5;
+inline constexpr int DEBUG_TRACE_INFO		= 6;
+inline constexpr int DEBUG_TRACE_ALL		= 7;
+inline constexpr int DEBUG_TRACE_ALL_INFO	= 8;
 
 // defined at vio.cpp
 extern int vio_debug_flag;

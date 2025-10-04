@@ -54,6 +54,7 @@
 #include "../common/classes/GenericMap.h"
 #include "../common/classes/RefCounted.h"
 #include "../common/classes/semaphore.h"
+#include "../common/classes/TriState.h"
 #include "../common/classes/XThreadMutex.h"
 #include "../common/utils_proto.h"
 #include "../jrd/RandomGenerator.h"
@@ -71,6 +72,7 @@
 #include "../common/classes/SyncObject.h"
 #include "../common/classes/Synchronize.h"
 #include "../jrd/replication/Manager.h"
+#include "../dsql/Keywords.h"
 #include "fb_types.h"
 
 
@@ -90,14 +92,6 @@ class MonitoringData;
 class GarbageCollector;
 class CryptoManager;
 class KeywordsMap;
-
-// allocator for keywords table
-class KeywordsMapAllocator
-{
-public:
-	static KeywordsMap* create();
-	static void destroy(KeywordsMap* inst);
-};
 
 // general purpose vector
 template <class T, BlockType TYPE = type_vec>
@@ -215,42 +209,38 @@ typedef vec<TraNumber> TransactionsVector;
 //
 // bit values for dbb_flags
 //
-const ULONG DBB_damaged					= 0x1L;
-const ULONG DBB_exclusive				= 0x2L;			// Database is accessed in exclusive mode
-const ULONG DBB_bugcheck				= 0x4L;			// Bugcheck has occurred
-const ULONG DBB_garbage_collector		= 0x8L;			// garbage collector thread exists
-const ULONG DBB_gc_active				= 0x10L;		// ... and is actively working.
-const ULONG DBB_gc_pending				= 0x20L;		// garbage collection requested
-const ULONG DBB_force_write				= 0x40L;		// Database is forced write
-const ULONG DBB_no_reserve				= 0x80L;		// No reserve space for versions
-const ULONG DBB_DB_SQL_dialect_3		= 0x100L;		// database SQL dialect 3
-const ULONG DBB_read_only				= 0x200L;		// DB is ReadOnly (RO). If not set, DB is RW
-const ULONG DBB_being_opened_read_only	= 0x400L;		// DB is being opened RO. If unset, opened as RW
-const ULONG DBB_no_ast					= 0x800L;		// AST delivery is prohibited
-const ULONG DBB_sweep_in_progress		= 0x1000L;		// A database sweep operation is in progress
-const ULONG DBB_gc_starting				= 0x2000L;		// garbage collector thread is starting
-const ULONG DBB_suspend_bgio			= 0x4000L;		// Suspend I/O by background threads
-const ULONG DBB_new						= 0x8000L;		// Database object is just created
-const ULONG DBB_gc_cooperative			= 0x10000L;		// cooperative garbage collection
-const ULONG DBB_gc_background			= 0x20000L;		// background garbage collection by gc_thread
-const ULONG DBB_no_fs_cache				= 0x40000L;		// Not using file system cache
-const ULONG DBB_sweep_starting			= 0x80000L;		// Auto-sweep is starting
-const ULONG DBB_creating				= 0x100000L;	// Database creation is in progress
-const ULONG DBB_shared					= 0x200000L;	// Database object is shared among connections
-//const ULONG DBB_closing					= 0x400000L;	// Database closing, special backgroud threads should exit
+inline constexpr ULONG DBB_damaged					= 0x1L;
+inline constexpr ULONG DBB_exclusive				= 0x2L;			// Database is accessed in exclusive mode
+inline constexpr ULONG DBB_bugcheck					= 0x4L;			// Bugcheck has occurred
+inline constexpr ULONG DBB_garbage_collector		= 0x8L;			// garbage collector thread exists
+inline constexpr ULONG DBB_gc_active				= 0x10L;		// ... and is actively working.
+inline constexpr ULONG DBB_gc_pending				= 0x20L;		// garbage collection requested
+inline constexpr ULONG DBB_force_write				= 0x40L;		// Database is forced write
+inline constexpr ULONG DBB_no_reserve				= 0x80L;		// No reserve space for versions
+inline constexpr ULONG DBB_DB_SQL_dialect_3			= 0x100L;		// database SQL dialect 3
+inline constexpr ULONG DBB_read_only				= 0x200L;		// DB is ReadOnly (RO). If not set, DB is RW
+inline constexpr ULONG DBB_being_opened_read_only	= 0x400L;		// DB is being opened RO. If unset, opened as RW
+inline constexpr ULONG DBB_no_ast					= 0x800L;		// AST delivery is prohibited
+inline constexpr ULONG DBB_sweep_in_progress		= 0x1000L;		// A database sweep operation is in progress
+inline constexpr ULONG DBB_gc_starting				= 0x2000L;		// garbage collector thread is starting
+inline constexpr ULONG DBB_suspend_bgio				= 0x4000L;		// Suspend I/O by background threads
+inline constexpr ULONG DBB_new						= 0x8000L;		// Database object is just created
+inline constexpr ULONG DBB_gc_cooperative			= 0x10000L;		// cooperative garbage collection
+inline constexpr ULONG DBB_gc_background			= 0x20000L;		// background garbage collection by gc_thread
+inline constexpr ULONG DBB_sweep_starting			= 0x40000L;		// Auto-sweep is starting
+inline constexpr ULONG DBB_creating					= 0x80000L;		// Database creation is in progress
+inline constexpr ULONG DBB_shared					= 0x100000L;	// Database object is shared among connections
+inline constexpr ULONG DBB_restoring				= 0x200000L;	// Database restore is in progress
 
 //
 // dbb_ast_flags
 //
-const ULONG DBB_blocking			= 0x1L;		// Exclusive mode is blocking
-const ULONG DBB_get_shadows			= 0x2L;		// Signal received to check for new shadows
-const ULONG DBB_assert_locks		= 0x4L;		// Locks are to be asserted
-const ULONG DBB_shutdown			= 0x8L;		// Database is shutdown
-const ULONG DBB_shut_attach			= 0x10L;	// no new attachments accepted
-const ULONG DBB_shut_tran			= 0x20L;	// no new transactions accepted
-const ULONG DBB_shut_force			= 0x40L;	// forced shutdown in progress
-const ULONG DBB_shutdown_full		= 0x80L;	// Database fully shut down
-const ULONG DBB_shutdown_single		= 0x100L;	// Database is in single-user maintenance mode
+inline constexpr ULONG DBB_blocking		= 0x1L;		// Exclusive mode is blocking
+inline constexpr ULONG DBB_get_shadows	= 0x2L;		// Signal received to check for new shadows
+inline constexpr ULONG DBB_assert_locks	= 0x4L;		// Locks are to be asserted
+inline constexpr ULONG DBB_shut_attach	= 0x8L;		// No new attachments accepted
+inline constexpr ULONG DBB_shut_tran	= 0x10L;	// No new transactions accepted
+inline constexpr ULONG DBB_shut_force	= 0x20L;	// Forced shutdown in progress
 
 class Database : public pool_alloc<type_dbb>
 {
@@ -266,7 +256,7 @@ class Database : public pool_alloc<type_dbb>
 		typedef Firebird::HashTable<DbId, Firebird::DEFAULT_HASH_SIZE,
 			Firebird::string, DbId, DbId > DbIdHash;
 
-		struct DbId : public DbIdHash::Entry, public Firebird::GlobalStorage
+		struct DbId : public DbIdHash::Entry, public Firebird::GlobalStorage, public Firebird::RefCounted
 		{
 			DbId(const Firebird::string& x, GlobalObjectHolder* h)
 				: id(getPool(), x), holder(h)
@@ -295,7 +285,9 @@ class Database : public pool_alloc<type_dbb>
 			}
 
 			const Firebird::string id;
-			GlobalObjectHolder* const holder;
+			GlobalObjectHolder* holder;
+			// This mutex is working very tight with `g_mutex`, so use it carefully to avoid possible deadlocks.
+			Firebird::Mutex shutdownMutex;
 		};
 
 		static Firebird::GlobalPtr<DbIdHash> g_hashTable;
@@ -319,6 +311,9 @@ class Database : public pool_alloc<type_dbb>
 			return m_replConfig.get();
 		}
 
+		bool incTempCacheUsage(FB_SIZE_T size);
+		void decTempCacheUsage(FB_SIZE_T size);
+
 	private:
 		const Firebird::string m_id;
 		const Firebird::RefPtr<const Firebird::Config> m_config;
@@ -327,12 +322,16 @@ class Database : public pool_alloc<type_dbb>
 		Firebird::AutoPtr<EventManager> m_eventMgr;
 		Firebird::AutoPtr<Replication::Manager> m_replMgr;
 		Firebird::Mutex m_mutex;
+		std::atomic<FB_UINT64> m_tempCacheUsage;		// total size of in-memory temp space chunks (see TempSpace class)
+		const FB_UINT64 m_tempCacheLimit;
 
 		explicit GlobalObjectHolder(const Firebird::string& id,
 									const Firebird::PathName& filename,
 									Firebird::RefPtr<const Firebird::Config> config)
 			: m_id(getPool(), id), m_config(config),
-			  m_replConfig(Replication::Config::get(filename))
+			  m_replConfig(Replication::Config::get(filename)),
+			  m_tempCacheUsage(0),
+			  m_tempCacheLimit(m_config->getTempCacheLimit())
 		{}
 	};
 
@@ -431,7 +430,7 @@ public:
 
 	MemoryPool* dbb_permanent;
 
-	Firebird::Guid dbb_guid;			// database GUID
+	Firebird::Guid	dbb_guid;			// database GUID
 
 	Firebird::SyncObject	dbb_sync;
 	Firebird::SyncObject	dbb_sys_attach;		// synchronize operations with dbb_sys_attachments
@@ -452,8 +451,6 @@ public:
 
 	Lock*		dbb_retaining_lock;		// lock for preserving commit retaining snapshot
 	PageManager dbb_page_manager;
-	vcl*		dbb_t_pages;			// pages number for transactions
-	vcl*		dbb_gen_id_pages;		// known pages for gen_id
 	BlobFilter*	dbb_blob_filters;		// known blob filters
 
 	MonitoringData*			dbb_monitoring_data;	// monitoring data
@@ -464,6 +461,10 @@ private:
 	Firebird::SyncObject dbb_modules_sync;
 	DatabaseModules	dbb_modules;		// external function/filter modules
 
+	// Vectors of known pages and their synchronization
+	Firebird::SyncObject dbb_pages_sync;	// guard access to dbb_XXX_pages vectors
+	vcl* dbb_tip_pages;						// known TIP pages
+	vcl* dbb_gen_pages;						// known generator pages
 public:
 	Firebird::AutoPtr<ExtEngineManager>	dbb_extManager;	// external engine manager
 
@@ -471,6 +472,7 @@ public:
 	Firebird::RWLock		dbb_ast_lock;		// avoids delivering AST to going away database
 	Firebird::AtomicCounter dbb_ast_flags;		// flags modified at AST level
 	Firebird::AtomicCounter dbb_flags;
+	std::atomic<shut_mode_t> dbb_shutdown_mode;		// shutdown mode
 	USHORT dbb_ods_version;				// major ODS version number
 	USHORT dbb_minor_version;			// minor ODS version number
 	USHORT dbb_page_size;				// page size
@@ -495,9 +497,6 @@ public:
 
 	Firebird::SyncObject			dbb_sortbuf_sync;
 	Firebird::Array<UCHAR*>			dbb_sort_buffers;	// sort buffers ready for reuse
-
-	Firebird::Mutex dbb_temp_cache_mutex;
-	FB_UINT64 dbb_temp_cache_size;		// total size of in-memory temp space chunks (see TempSpace class)
 
 	TraNumber dbb_oldest_active;		// Cached "oldest active" transaction
 	TraNumber dbb_oldest_transaction;	// Cached "oldest interesting" transaction
@@ -538,21 +537,24 @@ public:
 	time_t dbb_linger_end;
 	Firebird::RefPtr<Firebird::IPluginConfig> dbb_plugin_config;
 
-	TriState dbb_repl_state;			// replication state
+	Firebird::TriState dbb_repl_state;	// replication state
 	Lock* dbb_repl_lock;				// replication state lock
 	Firebird::SyncObject dbb_repl_sync;
 	FB_UINT64 dbb_repl_sequence;		// replication sequence
-	ReplicaMode dbb_replica_mode;		// replica access mode
+	std::atomic<ReplicaMode> dbb_replica_mode;		// replica access mode
 
 	unsigned dbb_compatibility_index;	// datatype backward compatibility level
 	Dictionary dbb_dic;					// metanames dictionary
-	Firebird::InitInstance<KeywordsMap, KeywordsMapAllocator, Firebird::TraditionalDelete> dbb_keywords_map;
+	Firebird::InitInstance<Keywords, Keywords::Allocator, Firebird::TraditionalDelete> dbb_keywords;
 
 	// returns true if primary file is located on raw device
 	bool onRawDevice() const;
 
 	// returns an unique ID string for a database file
 	const Firebird::string& getUniqueFileId();
+
+	// returns the minimum IO block size
+	ULONG getIOBlockSize() const;
 
 #ifdef DEV_BUILD
 	// returns true if main lock is in exclusive state
@@ -575,14 +577,24 @@ public:
 
 	void registerModule(Module&);
 
+	bool isShutdown() const
+	{
+		return (dbb_shutdown_mode.load(std::memory_order_relaxed) != shut_mode_online);
+	}
+
+	bool isShutdown(shut_mode_t mode) const
+	{
+		return (dbb_shutdown_mode.load(std::memory_order_relaxed) == mode);
+	}
+
 	bool isReplica() const
 	{
-		return (dbb_replica_mode != REPLICA_NONE);
+		return (dbb_replica_mode.load(std::memory_order_relaxed) != REPLICA_NONE);
 	}
 
 	bool isReplica(ReplicaMode mode) const
 	{
-		return (dbb_replica_mode == mode);
+		return (dbb_replica_mode.load(std::memory_order_relaxed) == mode);
 	}
 
 	USHORT getEncodedOdsVersion() const
@@ -590,14 +602,22 @@ public:
 		return ENCODE_ODS(dbb_ods_version, dbb_minor_version);
 	}
 
+	// Methods encapsulating operations with vectors of known pages
+	ULONG getKnownPagesCount(SCHAR ptype);
+	ULONG getKnownPage(SCHAR ptype, ULONG sequence);
+	void setKnownPage(SCHAR ptype, ULONG sequence, ULONG value);
+	void copyKnownPages(SCHAR ptype, ULONG count, ULONG* data);
+
 private:
 	Database(MemoryPool* p, Firebird::IPluginConfig* pConf, bool shared)
 	:	dbb_permanent(p),
+		dbb_guid(Firebird::Guid::empty()),
 		dbb_page_manager(this, *p),
 		dbb_file_id(*p),
 		dbb_modules(*p),
 		dbb_extManager(nullptr),
 		dbb_flags(shared ? DBB_shared : 0),
+		dbb_shutdown_mode(shut_mode_online),
 		dbb_filename(*p),
 		dbb_database_name(*p),
 #ifdef HAVE_ID_BY_NAME
@@ -635,6 +655,9 @@ public:
 	AttNumber getLatestAttachmentId() const;
 	StmtNumber getLatestStatementId() const;
 
+	ULONG getMonitorGeneration() const;
+	ULONG newMonitorGeneration() const;
+
 	USHORT getMaxIndexKeyLength() const
 	{
 		return dbb_page_size / 4;
@@ -647,8 +670,8 @@ public:
 
 	// returns true if sweeper thread could start
 	bool allowSweepThread(thread_db* tdbb);
-	// returns true if sweep could run
-	bool allowSweepRun(thread_db* tdbb);
+	// Throw an exception if sweep cannot be run
+	void initiateSweepRun(thread_db* tdbb);
 	// reset sweep flag and release sweep lock
 	void clearSweepFlags(thread_db* tdbb);
 	// reset sweep starting flag, release thread starting mutex
@@ -657,7 +680,6 @@ public:
 	static void garbage_collector(Database* dbb);
 	void exceptionHandler(const Firebird::Exception& ex, ThreadFinishSync<Database*>::ThreadRoutine* routine);
 
-	void ensureGuid(thread_db* tdbb);
 	FB_UINT64 getReplSequence(thread_db* tdbb);
 	void setReplSequence(thread_db* tdbb, FB_UINT64 sequence);
 	bool isReplicating(thread_db* tdbb);
@@ -687,6 +709,29 @@ public:
 	const Replication::Config* replConfig()
 	{
 		return dbb_gblobj_holder->getReplConfig();
+	}
+
+	bool incTempCacheUsage(FB_SIZE_T size)
+	{
+		return dbb_gblobj_holder->incTempCacheUsage(size);
+	}
+
+	void decTempCacheUsage(FB_SIZE_T size)
+	{
+		dbb_gblobj_holder->decTempCacheUsage(size);
+	}
+
+	bool isRestoring() const
+	{
+		return dbb_flags & DBB_restoring;
+	}
+
+	void setRestoring(bool value)
+	{
+		if (value)
+			dbb_flags |= DBB_restoring;
+		else
+			dbb_flags &= ~DBB_restoring;
 	}
 
 private:

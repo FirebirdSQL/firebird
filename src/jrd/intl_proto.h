@@ -41,13 +41,13 @@ CHARSET_ID	INTL_charset(Jrd::thread_db*, USHORT);
 int			INTL_compare(Jrd::thread_db*, const dsc*, const dsc*, ErrorFunction);
 ULONG		INTL_convert_bytes(Jrd::thread_db*, CHARSET_ID, UCHAR*, const ULONG, CHARSET_ID,
 								const BYTE*, const ULONG, ErrorFunction);
-Jrd::CsConvert	INTL_convert_lookup(Jrd::thread_db*, CHARSET_ID, CHARSET_ID);
+Firebird::CsConvert	INTL_convert_lookup(Jrd::thread_db*, CHARSET_ID, CHARSET_ID);
 void		INTL_convert_string(dsc*, const dsc*, Firebird::Callbacks* cb);
 bool		INTL_data(const dsc*);
 bool		INTL_data_or_binary(const dsc*);
 bool		INTL_defined_type(Jrd::thread_db*, USHORT);
 USHORT		INTL_key_length(Jrd::thread_db*, USHORT, USHORT);
-Jrd::CharSet*	INTL_charset_lookup(Jrd::thread_db* tdbb, USHORT parm1);
+Firebird::CharSet*	INTL_charset_lookup(Jrd::thread_db* tdbb, USHORT parm1);
 Jrd::Collation*	INTL_texttype_lookup(Jrd::thread_db* tdbb, USHORT parm1);
 void		INTL_texttype_unload(Jrd::thread_db*, USHORT);
 bool		INTL_texttype_validate(Jrd::thread_db*, const SubtypeInfo*);

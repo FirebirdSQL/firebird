@@ -31,6 +31,7 @@
 
 #include "../common/classes/fb_string.h"
 #include "../common/classes/fb_pair.h"
+#include "../common/classes/MetaString.h"
 #include "../jrd/constants.h"
 
 #include <atomic>
@@ -49,12 +50,6 @@
 #define DIC_STAT_SEGMENT_CALL
 #define DIC_STAT_SEGMENT_PAR
 #endif
-
-namespace Firebird {
-
-class MetaString;
-
-}
 
 
 namespace Jrd {
@@ -78,12 +73,12 @@ public:
 		char text[1];
 
 	public:
-		const char* c_str() const
+		const char* c_str() const noexcept
 		{
 			return text;
 		}
 
-		FB_SIZE_T length() const
+		FB_SIZE_T length() const noexcept
 		{
 			return textLen;
 		}
@@ -107,7 +102,7 @@ private:
 	public:
 		HashTable(MemoryPool& p, unsigned lvl);
 		Dictionary::TableData* getEntryByHash(const char* s, FB_SIZE_T len);
-		static unsigned getMaxLevel();
+		static unsigned getMaxLevel() noexcept;
 
 		const unsigned level;
 		TableData* table;
@@ -115,23 +110,23 @@ private:
 	std::atomic<HashTable*> hashTable;
 	std::atomic<unsigned> nextLevel;
 
-	bool checkConsistency(HashTable* oldValue);
+	bool checkConsistency(const HashTable* oldValue) noexcept;
 	HashTable* waitForMutex(Word** checkWordPtr = nullptr);
 
 	class Segment
 	{
 	public:
-		Segment();
-		Word* getSpace(FB_SIZE_T l DIC_STAT_SEGMENT_PAR);
-		static unsigned getWordCapacity();
+		Segment() noexcept;
+		Word* getSpace(FB_SIZE_T len DIC_STAT_SEGMENT_PAR) noexcept;
+		static constexpr unsigned getWordCapacity() noexcept;
 
 	private:
-		static unsigned getWordLength(FB_SIZE_T len);
+		static constexpr unsigned getWordLength(FB_SIZE_T len) noexcept;
 
 #if GROW_DEBUG > 1
-		static const unsigned SEG_BUFFER_SIZE = 256;		// size in sizeof(pointer)
+		static constexpr unsigned SEG_BUFFER_SIZE = 256;		// size in sizeof(pointer)
 #else
-		static const unsigned SEG_BUFFER_SIZE = 16384;		// size in sizeof(pointer)
+		static constexpr unsigned SEG_BUFFER_SIZE = 16384;		// size in sizeof(pointer)
 #endif
 		void* buffer[SEG_BUFFER_SIZE];
 		std::atomic<unsigned> position;
@@ -157,7 +152,7 @@ private:
 	}
 
 public:
-	MetaName()
+	MetaName() noexcept
 		: word(nullptr)
 	{ }
 
@@ -182,7 +177,7 @@ public:
 	{ }
 
 
-	explicit MetaName(MemoryPool&)
+	explicit MetaName(MemoryPool&) noexcept
 		: word(nullptr)
 	{ }
 
@@ -238,43 +233,43 @@ public:
 
 	MetaName& operator=(const Firebird::MetaString& s);
 
-	FB_SIZE_T length() const
+	FB_SIZE_T length() const noexcept
 	{
 		return word ? word->length() : 0;
 	}
 
-	const char* c_str() const
+	const char* c_str() const noexcept
 	{
 		return word ? word->c_str() : EMPTY;
 	}
 
-	const char* nullStr() const
+	const char* nullStr() const noexcept
 	{
 		return word ? word->c_str() : nullptr;
 	}
 
-	bool isEmpty() const
+	bool isEmpty() const noexcept
 	{
 		return !word;
 	}
 
-	bool hasData() const
+	bool hasData() const noexcept
 	{
 		return word;
 	}
 
-	char operator[](unsigned n) const
+	char operator[](unsigned n) const noexcept
 	{
 		fb_assert(n < length());
 		return word->c_str()[n];
 	}
 
-	const char* begin() const
+	const char* begin() const noexcept
 	{
 		return word ? word->c_str() : EMPTY;
 	}
 
-	const char* end() const
+	const char* end() const noexcept
 	{
 		return word ? &word->c_str()[length()] : EMPTY;
 	}
@@ -291,12 +286,22 @@ public:
 		return compare(s.c_str(), s.length());
 	}
 
+	int compare(const Firebird::MetaString& s) const
+	{
+		return compare(s.c_str(), s.length());
+	}
+
 	int compare(const MetaName& m) const
 	{
 		if (word == m.word)
 			return 0;
 
 		return compare(m.begin(), m.length());
+	}
+
+	Firebird::string toQuotedString() const
+	{
+		return Firebird::toQuotedString(*this);
 	}
 
 	bool operator==(const char* s) const
@@ -315,6 +320,16 @@ public:
 	}
 
 	bool operator!=(const Firebird::AbstractString& s) const
+	{
+		return compare(s) != 0;
+	}
+
+	bool operator==(const Firebird::MetaString& s) const
+	{
+		return compare(s) == 0;
+	}
+
+	bool operator!=(const Firebird::MetaString& s) const
 	{
 		return compare(s) != 0;
 	}
@@ -339,22 +354,22 @@ public:
 		return compare(m) >  0;
 	}
 
-	bool operator==(const MetaName& m) const
+	bool operator==(const MetaName& m) const noexcept
 	{
 		return word == m.word;
 	}
 
-	bool operator!=(const MetaName& m) const
+	bool operator!=(const MetaName& m) const noexcept
 	{
 		return word != m.word;
 	}
 
 	void printf(const char*, ...);
 	FB_SIZE_T copyTo(char* to, FB_SIZE_T toSize) const;
-	operator Firebird::MetaString() const;
+	operator Firebird::MetaString() const noexcept;
 
 protected:
-	static void adjustLength(const char* const s, FB_SIZE_T& l);
+	static void adjustLength(const char* const s, FB_SIZE_T& l) noexcept;
 };
 
 typedef Firebird::Pair<Firebird::Full<MetaName, MetaName> > MetaNamePair;

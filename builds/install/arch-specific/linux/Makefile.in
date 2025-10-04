@@ -42,6 +42,10 @@ include     $(ROOT)/gen/make.shared.variables
 # root of the build tree.
 
 BuildRoot=$(GEN_ROOT)
+CLIENT_ONLY_FLG=@CLIENT_ONLY_FLG@
+WITH_TOMCRYPT=@WITH_TOMCRYPT@
+
+TAR=tar --owner root --group root
 
 InstallRoot=.
 
@@ -78,12 +82,12 @@ packages: tarfile debugfile
 tarfile:  $(TarFile)
 
 $(TarFile) :  buildTarDir
-	(cd $(GEN_ROOT); tar -czf $(TarFile) $(TarDir))
+	(cd $(GEN_ROOT); $(TAR) -czf $(TarFile) $(TarDir))
 
 debugfile:  $(DebugFile)
 
 $(DebugFile) :  buildImageDir
-	(cd $(GEN_ROOT)/$(DebugDir); tar -czf ../$(DebugFile) .)
+	(cd $(GEN_ROOT)/$(DebugDir); $(TAR) -czf ../$(DebugFile) `find . -not -type d`)
 
 buildRoot:
 	(cd $(GEN_ROOT); ./install/makeInstallImage.sh)
@@ -112,10 +116,12 @@ buildImageDir: buildDebugInfo
 
 buildTarDir: buildImageDir
 	mkdir -p $(GEN_ROOT)/$(TarDir)
+ifeq ($(CLIENT_ONLY_FLG),N)
 	cp -r $(GEN_ROOT)/install/install.sh $(GEN_ROOT)/$(TarDir)
 	chmod a+x $(GEN_ROOT)/$(TarDir)/*.sh
-	(cd $(GEN_ROOT)/$(TarDir); tar -C ../buildroot -czf buildroot.tar.gz . )
-	(cd $(GEN_ROOT)/$(TarDir); tar -tzf buildroot.tar.gz > manifest.txt )
+endif
+	(cd $(GEN_ROOT)/$(TarDir); $(TAR) -C ../buildroot -czf buildroot.tar.gz . )
+	(cd $(GEN_ROOT)/$(TarDir); $(TAR) -tzf buildroot.tar.gz > manifest.txt )
 
 
 install: buildTarDir

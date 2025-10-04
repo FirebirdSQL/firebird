@@ -74,6 +74,7 @@ void	DPM_pages(Jrd::thread_db*, SSHORT, int, ULONG, ULONG);
 #ifdef SUPERSERVER_V2
 SLONG	DPM_prefetch_bitmap(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::PageBitmap*, SLONG);
 #endif
+ULONG	DPM_pointer_pages(Jrd::thread_db*, Jrd::jrd_rel*);
 void	DPM_scan_pages(Jrd::thread_db*);
 void	DPM_store(Jrd::thread_db*, Jrd::record_param*, Jrd::PageStack&, const Jrd::RecordStorageType type);
 RecordNumber DPM_store_blob(Jrd::thread_db*, Jrd::blb*, Jrd::Record*);

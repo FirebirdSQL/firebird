@@ -31,6 +31,7 @@
 #define LTC_NO_HASHES
 #define LTC_MD5
 #define LTC_SHA1
+#define LTC_SHA3
 #define LTC_SHA256
 #define LTC_SHA512
 #define LTC_HASH_HELPERS
@@ -49,6 +50,7 @@
 #define LTC_YARROW
 #define LTC_RNG_MAKE_PRNG
 #define LTC_RNG_GET_BYTES
+#define LTC_DEVRANDOM
 
 #define LTC_NO_PK
 #define LTC_MRSA

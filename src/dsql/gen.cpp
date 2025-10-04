@@ -65,6 +65,17 @@ using namespace Firebird;
 static void gen_plan(DsqlCompilerScratch*, const PlanNode*);
 
 
+// Generate blr for an argument.
+// When it is nullptr, generate blr_default_arg.
+void GEN_arg(DsqlCompilerScratch* dsqlScratch, ExprNode* node)
+{
+	if (node)
+		GEN_expr(dsqlScratch, node);
+	else
+		dsqlScratch->appendUChar(blr_default_arg);
+}
+
+
 void GEN_hidden_variables(DsqlCompilerScratch* dsqlScratch)
 {
 /**************************************
@@ -159,9 +170,24 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 	DSqlDataTypeUtil dataTypeUtil(dsqlScratch);
 	ULONG offset = 0;
 
+	class ParamCmp
+	{
+	public:
+		static int greaterThan(const Jrd::dsql_par* p1, const Jrd::dsql_par* p2) noexcept
+		{
+			return p1->par_index > p2->par_index;
+		}
+	};
+
+	SortedArray<dsql_par*, InlineStorage<dsql_par*, 16>, dsql_par*,
+		DefaultKeyValue<dsql_par*>, ParamCmp> dsqlParams;
+
 	for (FB_SIZE_T i = 0; i < message->msg_parameters.getCount(); ++i)
 	{
-		dsql_par* parameter = message->msg_parameters[i];
+		const auto parameter = message->msg_parameters[i];
+
+		if (parameter->par_index)
+			dsqlParams.add(parameter);
 
 		parameter->par_parameter = (USHORT) i;
 
@@ -206,8 +232,9 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 			// But we flag it to describe as text.
 			parameter->par_is_text = true;
 			parameter->par_desc.dsc_dtype = dtype_varying;
-			parameter->par_desc.dsc_length = dataTypeUtil.fixLength(
-				&parameter->par_desc, parameter->par_desc.dsc_length) + sizeof(USHORT);
+			parameter->par_desc.dsc_length = static_cast<USHORT>(
+				dataTypeUtil.fixLength(&parameter->par_desc, parameter->par_desc.dsc_length)
+				+ sizeof(USHORT));
 		}
 
 		const USHORT align = type_alignments[parameter->par_desc.dsc_dtype];
@@ -220,7 +247,12 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 
 	message->msg_length = offset;
 
-	dsqlScratch->getDsqlStatement()->getPorts().add(message);
+	// Remove gaps in par_index due to output parameters using question-marks (CALL syntax).
+
+	USHORT parIndex = 0;
+
+	for (auto dsqlParam : dsqlParams)
+		dsqlParam->par_index = ++parIndex;
 }
 
 
@@ -472,9 +504,20 @@ static void gen_plan(DsqlCompilerScratch* dsqlScratch, const PlanNode* planNode)
 
 		// now stuff the access method for this stream
 
-		ObjectsArray<PlanNode::AccessItem>::const_iterator idx_iter =
-			node->accessType->items.begin();
+		auto idx_iter = node->accessType->items.begin();
 		FB_SIZE_T idx_count = node->accessType->items.getCount();
+
+		const auto checkIndexSchema = [&]()
+		{
+			if (node->recordSourceNode &&
+				node->recordSourceNode->dsqlContext &&
+				node->recordSourceNode->dsqlContext->ctx_relation &&
+				idx_iter->indexName.schema.hasData() &&
+				idx_iter->indexName.schema != node->recordSourceNode->dsqlContext->ctx_relation->rel_name.schema)
+			{
+				ERRD_post(Arg::Gds(isc_index_unused) << idx_iter->indexName.toQuotedString());
+			}
+		};
 
 		switch (node->accessType->type)
 		{
@@ -483,14 +526,16 @@ static void gen_plan(DsqlCompilerScratch* dsqlScratch, const PlanNode* planNode)
 				break;
 
 			case PlanNode::AccessType::TYPE_NAVIGATIONAL:
+				checkIndexSchema();
 				dsqlScratch->appendUChar(blr_navigational);
-				dsqlScratch->appendNullString(idx_iter->indexName.c_str());
+				dsqlScratch->appendNullString(idx_iter->indexName.object.c_str());
 				if (idx_count == 1)
 					break;
 				// dimitr: FALL INTO, if the plan item is ORDER ... INDEX (...)
 				// ASF: The first item of a TYPE_NAVIGATIONAL is not for blr_indices.
 				++idx_iter;
 				--idx_count;
+				[[fallthrough]];
 
 			case PlanNode::AccessType::TYPE_INDICES:
 			{
@@ -499,7 +544,10 @@ static void gen_plan(DsqlCompilerScratch* dsqlScratch, const PlanNode* planNode)
 				dsqlScratch->appendUChar(idx_count);
 
 				for (; idx_iter != node->accessType->items.end(); ++idx_iter)
-					dsqlScratch->appendNullString(idx_iter->indexName.c_str());
+				{
+					checkIndexSchema();
+					dsqlScratch->appendNullString(idx_iter->indexName.object.c_str());
+				}
 
 				break;
 			}
@@ -525,6 +573,12 @@ static void gen_plan(DsqlCompilerScratch* dsqlScratch, const PlanNode* planNode)
  **/
 void GEN_rse(DsqlCompilerScratch* dsqlScratch, RseNode* rse)
 {
+	if ((rse->dsqlFlags & RecordSourceNode::DFLAG_BODY_WRAPPER))
+	{
+		GEN_expr(dsqlScratch, rse->dsqlStreams->items[0]);
+		return;
+	}
+
 	if (rse->dsqlFlags & RecordSourceNode::DFLAG_SINGLETON)
 		dsqlScratch->appendUChar(blr_singular);
 
@@ -547,8 +601,11 @@ void GEN_rse(DsqlCompilerScratch* dsqlScratch, RseNode* rse)
 	for (const NestConst<RecordSourceNode>* const end = rse->dsqlStreams->items.end(); ptr != end; ++ptr)
 		GEN_expr(dsqlScratch, *ptr);
 
-	if (rse->flags & RseNode::FLAG_WRITELOCK)
+	if (rse->hasWriteLock())
 		dsqlScratch->appendUChar(blr_writelock);
+
+	if (rse->hasSkipLocked())
+		dsqlScratch->appendUChar(blr_skip_locked);
 
 	if (rse->dsqlFirst)
 	{
@@ -596,6 +653,12 @@ void GEN_rse(DsqlCompilerScratch* dsqlScratch, RseNode* rse)
 		gen_plan(dsqlScratch, rse->rse_plan);
 	}
 
+	if (rse->firstRows.isAssigned())
+	{
+		dsqlScratch->appendUChar(blr_optimize);
+		dsqlScratch->appendUChar(static_cast<UCHAR>(rse->firstRows.asBool()));
+	}
+
 	dsqlScratch->appendUChar(blr_end);
 }
 
@@ -621,6 +684,9 @@ void GEN_sort(DsqlCompilerScratch* dsqlScratch, UCHAR blrVerb, ValueListNode* li
 					break;
 				case OrderNode::NULLS_LAST:
 					dsqlScratch->appendUChar(blr_nullslast);
+					break;
+				case OrderNode::NULLS_DEFAULT:
+					// Nothing to do for default placement
 					break;
 			}
 

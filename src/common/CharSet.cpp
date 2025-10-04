@@ -239,7 +239,7 @@ ULONG MultiByteCharSet::substring(const ULONG srcLen, const UCHAR* src, const UL
 //-------------
 
 
-namespace Jrd {
+namespace Firebird {
 
 
 CharSet* CharSet::createInstance(MemoryPool& pool, USHORT id, charset* cs)
@@ -300,4 +300,4 @@ ULONG CharSet::removeTrailingSpaces(ULONG srcLen, const UCHAR* src) const
 }
 
 
-}	// namespace Jrd
+}	// namespace Firebird

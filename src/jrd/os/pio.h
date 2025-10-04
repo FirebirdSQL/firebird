@@ -41,11 +41,6 @@ namespace Jrd {
 class jrd_file : public pool_alloc_rpt<SCHAR, type_fil>
 {
 public:
-	jrd_file*	fil_next;		// Next file in database
-	ULONG fil_min_page;			// Minimum page number in file
-	ULONG fil_max_page;			// Maximum page number in file
-	USHORT fil_sequence;		// Sequence number of file
-	USHORT fil_fudge;			// Fudge factor for page relocation
 	int fil_desc;
 	Firebird::Mutex fil_mutex;
 	USHORT fil_flags;
@@ -57,7 +52,7 @@ public:
 
 #ifdef WIN_NT
 #ifdef SUPERSERVER_V2
-const int MAX_FILE_IO	= 32;	// Maximum "allocated" overlapped I/O events
+inline constexpr int MAX_FILE_IO = 32;	// Maximum "allocated" overlapped I/O events
 #endif
 
 class jrd_file : public pool_alloc_rpt<SCHAR, type_fil>
@@ -69,11 +64,6 @@ public:
 		delete fil_ext_lock;
 	}
 
-	jrd_file*	fil_next;				// Next file in database
-	ULONG fil_min_page;					// Minimum page number in file
-	ULONG fil_max_page;					// Maximum page number in file
-	USHORT fil_sequence;				// Sequence number of file
-	USHORT fil_fudge;					// Fudge factor for page relocation
 	HANDLE fil_desc;					// File descriptor
 	Firebird::RWLock* fil_ext_lock;		// file extend lock
 	USHORT fil_flags;
@@ -83,21 +73,21 @@ public:
 #endif
 
 
-const USHORT FIL_force_write		= 1;
-const USHORT FIL_no_fs_cache		= 2;	// not using file system cache
-const USHORT FIL_readonly			= 4;	// file opened in readonly mode
-const USHORT FIL_sh_write			= 8;	// file opened in shared write mode
-const USHORT FIL_no_fast_extend		= 16;	// file not supports fast extending
-const USHORT FIL_raw_device			= 32;	// file is raw device
+inline constexpr USHORT FIL_force_write		= 1;
+inline constexpr USHORT FIL_no_fs_cache		= 2;	// not using file system cache
+inline constexpr USHORT FIL_readonly		= 4;	// file opened in readonly mode
+inline constexpr USHORT FIL_sh_write		= 8;	// file opened in shared write mode
+inline constexpr USHORT FIL_no_fast_extend	= 16;	// file not supports fast extending
+inline constexpr USHORT FIL_raw_device		= 32;	// file is raw device
 
 // Physical IO trace events
 
-const SSHORT trace_create	= 1;
-const SSHORT trace_open		= 2;
-const SSHORT trace_page_size	= 3;
-const SSHORT trace_read		= 4;
-const SSHORT trace_write	= 5;
-const SSHORT trace_close	= 6;
+inline constexpr SSHORT trace_create	= 1;
+inline constexpr SSHORT trace_open		= 2;
+inline constexpr SSHORT trace_page_size	= 3;
+inline constexpr SSHORT trace_read		= 4;
+inline constexpr SSHORT trace_write		= 5;
+inline constexpr SSHORT trace_close		= 6;
 
 // Physical I/O status block, used only in SS v2 for Win32
 
@@ -114,9 +104,9 @@ struct phys_io_blk
 };
 
 // piob_flags
-const UCHAR PIOB_error		= 1;	// I/O error occurred
-const UCHAR PIOB_success	= 2;	// I/O successfully completed
-const UCHAR PIOB_pending	= 4;	// Asynchronous I/O not yet completed
+inline constexpr UCHAR PIOB_error	= 1;	// I/O error occurred
+inline constexpr UCHAR PIOB_success	= 2;	// I/O successfully completed
+inline constexpr UCHAR PIOB_pending	= 4;	// Asynchronous I/O not yet completed
 #endif
 
 } //namespace Jrd

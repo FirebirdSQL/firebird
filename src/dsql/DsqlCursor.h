@@ -29,6 +29,7 @@ namespace Jrd {
 
 class DsqlDmlRequest;
 class JResultSet;
+struct RecordKey;
 
 class DsqlCursor
 {
@@ -40,7 +41,8 @@ public:
 
 	jrd_tra* getTransaction() const;
 	Attachment* getAttachment() const;
-	void setInterfacePtr(JResultSet* interfacePtr) throw();
+	void setInterfacePtr(JResultSet* interfacePtr) noexcept;
+	bool getCurrentRecordKey(USHORT context, RecordKey& key) const;
 
 	static void close(thread_db* tdbb, DsqlCursor* cursor);
 
@@ -67,17 +69,20 @@ public:
 
 private:
 	int fetchFromCache(thread_db* tdbb, UCHAR* buffer, FB_UINT64 position);
-	bool cacheInput(thread_db* tdbb, FB_UINT64 position = MAX_UINT64);
+	bool cacheInput(thread_db* tdbb, UCHAR* buffer, FB_UINT64 position = MAX_UINT64);
 
 	DsqlDmlRequest* const m_dsqlRequest;
-	const dsql_msg* const m_message;
-	JResultSet* m_resultSet;
+	RecordKey* m_keyBuffer = nullptr;
+	ULONG m_keyBufferLength = 0;
+	const USHORT m_message;
+	ULONG m_messageLength = 0;
+	JResultSet* m_resultSet = nullptr;
 	const ULONG m_flags;
 	TempSpace m_space;
-	State m_state;
-	bool m_eof;
-	FB_UINT64 m_position;
-	FB_UINT64 m_cachedCount;
+	State m_state = BOS;
+	bool m_eof = false;
+	FB_UINT64 m_position = 0;
+	FB_UINT64 m_cachedCount = 0;
 };
 
 } // namespace

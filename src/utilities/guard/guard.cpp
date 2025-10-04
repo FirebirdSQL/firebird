@@ -93,6 +93,7 @@ int CLIB_ROUTINE main( int argc, char **argv)
 	const TEXT* prog_name = argv[0];
 	const TEXT* pidfilename = 0;
 	int guard_exit_code = 0;
+	int timeout_term = 30;
 
 	const TEXT* const* const end = argc + argv;
 	argv++;
@@ -117,9 +118,13 @@ int CLIB_ROUTINE main( int argc, char **argv)
 			case 'P':
 				pidfilename = *argv++;
 				break;
+			case 'T':
+				timeout_term = atoi(*argv++);
+				break;
 			default:
 				fprintf(stderr,
-						"Usage: %s [-signore | -onetime | -forever (default)] [-daemon] [-pidfile filename]\n",
+						"Usage: %s [-signore | -onetime | -forever (default)] [-daemon] [-pidfile filename] "
+							"[-timeout seconds (default 30)]\n",
 						prog_name);
 				exit(-1);
 				break;
@@ -141,7 +146,7 @@ int CLIB_ROUTINE main( int argc, char **argv)
 		exit(-3);
 	}
 
-	// the umask back to orignal donot want to carry this to child process
+	// the umask back to original do not want to carry this to child process
 	umask(old_mask);
 
 	// move the server name into the argument to be passed
@@ -231,7 +236,7 @@ int CLIB_ROUTINE main( int argc, char **argv)
 		{
 			if (shutdown_child)
 			{
-				ret_code = UTIL_shutdown_child(child_pid, 3, 1);
+				ret_code = UTIL_shutdown_child(child_pid, timeout_term, 1);
 				if (ret_code < 0)
 				{
 					gds__log("%s: error while shutting down %s (%d)\n",

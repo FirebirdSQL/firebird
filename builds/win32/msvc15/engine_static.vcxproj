@@ -9,6 +9,10 @@
       <Configuration>Debug</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|arm64">
+      <Configuration>Debug</Configuration>
+      <Platform>arm64</Platform>
+    </ProjectConfiguration>
     <ProjectConfiguration Include="Release|Win32">
       <Configuration>Release</Configuration>
       <Platform>Win32</Platform>
@@ -16,6 +20,10 @@
     <ProjectConfiguration Include="Release|x64">
       <Configuration>Release</Configuration>
       <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|arm64">
+      <Configuration>Release</Configuration>
+      <Platform>arm64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
@@ -31,6 +39,7 @@
     <ClCompile Include="..\..\..\gen\jrd\ini.cpp" />
     <ClCompile Include="..\..\..\gen\jrd\met.cpp" />
     <ClCompile Include="..\..\..\gen\jrd\scl.cpp" />
+    <ClCompile Include="..\..\..\gen\jrd\SystemTriggers.cpp" />
     <ClCompile Include="..\..\..\gen\utilities\gstat\dba.cpp" />
     <ClCompile Include="..\..\..\src\dsql\AggNodes.cpp" />
     <ClCompile Include="..\..\..\src\dsql\BlrDebugWriter.cpp" />
@@ -47,6 +56,7 @@
     <ClCompile Include="..\..\..\src\dsql\errd.cpp" />
     <ClCompile Include="..\..\..\src\dsql\ExprNodes.cpp" />
     <ClCompile Include="..\..\..\src\dsql\gen.cpp" />
+    <ClCompile Include="..\..\..\src\dsql\Keywords.cpp" />
     <ClCompile Include="..\..\..\src\dsql\make.cpp" />
     <ClCompile Include="..\..\..\src\dsql\movd.cpp" />
     <ClCompile Include="..\..\..\src\dsql\parse.cpp" />
@@ -58,6 +68,7 @@
     <ClCompile Include="..\..\..\src\jrd\Attachment.cpp" />
     <ClCompile Include="..\..\..\src\jrd\blb.cpp" />
     <ClCompile Include="..\..\..\src\jrd\blob_filter.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\BlobUtil.cpp" />
     <ClCompile Include="..\..\..\src\jrd\btn.cpp" />
     <ClCompile Include="..\..\..\src\jrd\btr.cpp" />
     <ClCompile Include="..\..\..\src\jrd\builtin.cpp" />
@@ -89,6 +100,7 @@
     <ClCompile Include="..\..\..\src\jrd\GlobalRWLock.cpp" />
     <ClCompile Include="..\..\..\src\jrd\idx.cpp" />
     <ClCompile Include="..\..\..\src\jrd\inf.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\InitCDSLib.cpp" />
     <ClCompile Include="..\..\..\src\jrd\intl.cpp" />
     <ClCompile Include="..\..\..\src\jrd\IntlManager.cpp" />
     <ClCompile Include="..\..\..\src\jrd\intl_builtin.cpp" />
@@ -105,6 +117,7 @@
     <ClCompile Include="..\..\..\src\jrd\optimizer\Optimizer.cpp" />
     <ClCompile Include="..\..\..\src\jrd\optimizer\Retrieval.cpp" />
     <ClCompile Include="..\..\..\src\jrd\optimizer\InnerJoin.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\optimizer\OuterJoin.cpp" />
     <ClCompile Include="..\..\..\src\jrd\os\win32\winnt.cpp" />
     <ClCompile Include="..\..\..\src\jrd\pag.cpp" />
     <ClCompile Include="..\..\..\src\jrd\par.cpp" />
@@ -135,6 +148,7 @@
     <ClCompile Include="..\..\..\src\jrd\recsrc\SingularStream.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\SkipRowsStream.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\SortedStream.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\recsrc\TableValueFunctionScan.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\Union.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\VirtualTableScan.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\WindowedStream.cpp" />
@@ -158,6 +172,7 @@
     <ClCompile Include="..\..\..\src\jrd\sqz.cpp" />
     <ClCompile Include="..\..\..\src\jrd\Statement.cpp" />
     <ClCompile Include="..\..\..\src\jrd\svc.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\sys-packages\SqlPackage.cpp" />
     <ClCompile Include="..\..\..\src\jrd\SysFunction.cpp" />
     <ClCompile Include="..\..\..\src\jrd\SystemPackages.cpp" />
     <ClCompile Include="..\..\..\src\jrd\TempSpace.cpp" />
@@ -199,6 +214,7 @@
     <ClInclude Include="..\..\..\src\dsql\errd_proto.h" />
     <ClInclude Include="..\..\..\src\dsql\ExprNodes.h" />
     <ClInclude Include="..\..\..\src\dsql\gen_proto.h" />
+    <ClInclude Include="..\..\..\src\dsql\Keywords.h" />
     <ClInclude Include="..\..\..\src\dsql\make_proto.h" />
     <ClInclude Include="..\..\..\src\dsql\metd_proto.h" />
     <ClInclude Include="..\..\..\src\dsql\movd_proto.h" />
@@ -212,6 +228,7 @@
     <ClInclude Include="..\..\..\src\dsql\utld_proto.h" />
     <ClInclude Include="..\..\..\src\dsql\Visitors.h" />
     <ClInclude Include="..\..\..\src\dsql\WinNodes.h" />
+    <ClInclude Include="..\..\..\src\include\firebird\impl\blr.h" />
     <ClInclude Include="..\..\..\src\jrd\acl.h" />
     <ClInclude Include="..\..\..\src\jrd\align.h" />
     <ClInclude Include="..\..\..\src\jrd\Attachment.h" />
@@ -219,8 +236,8 @@
     <ClInclude Include="..\..\..\src\jrd\blb_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\blf_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\blob_filter.h" />
+    <ClInclude Include="..\..\..\src\jrd\BlobUtil.h" />
     <ClInclude Include="..\..\..\src\jrd\blp.h" />
-    <ClInclude Include="..\..\..\src\jrd\blr.h" />
     <ClInclude Include="..\..\..\src\jrd\btn.h" />
     <ClInclude Include="..\..\..\src\jrd\btr.h" />
     <ClInclude Include="..\..\..\src\jrd\btr_proto.h" />
@@ -274,8 +291,9 @@
     <ClInclude Include="..\..\..\src\jrd\idx.h" />
     <ClInclude Include="..\..\..\src\jrd\idx_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\inf_proto.h" />
-    <ClInclude Include="..\..\..\src\jrd\inf_pub.h" />
+    <ClInclude Include="..\..\..\src\include\firebird\impl\inf_pub.h" />
     <ClInclude Include="..\..\..\src\jrd\ini.h" />
+    <ClInclude Include="..\..\..\src\jrd\InitCDSLib.h" />
     <ClInclude Include="..\..\..\src\jrd\ini_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\intl.h" />
     <ClInclude Include="..\..\..\src\jrd\IntlManager.h" />
@@ -305,7 +323,10 @@
     <ClInclude Include="..\..\..\src\jrd\ods.h" />
     <ClInclude Include="..\..\..\src\jrd\ods_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\optimizer\Optimizer.h" />
+    <ClInclude Include="..\..\..\src\jrd\os\pio.h" />
+    <ClInclude Include="..\..\..\src\jrd\os\pio_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\pag.h" />
+    <ClInclude Include="..\..\..\src\jrd\PageToBufferMap.h" />
     <ClInclude Include="..\..\..\src\jrd\pag_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\par_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\PreparedStatement.h" />
@@ -320,6 +341,14 @@
     <ClInclude Include="..\..\..\src\jrd\recsrc\RecordSource.h" />
     <ClInclude Include="..\..\..\src\jrd\Relation.h" />
     <ClInclude Include="..\..\..\src\jrd\relations.h" />
+    <ClInclude Include="..\..\..\src\jrd\replication\Applier.h" />
+    <ClInclude Include="..\..\..\src\jrd\replication\ChangeLog.h" />
+    <ClInclude Include="..\..\..\src\jrd\replication\Config.h" />
+    <ClInclude Include="..\..\..\src\jrd\replication\Manager.h" />
+    <ClInclude Include="..\..\..\src\jrd\replication\Protocol.h" />
+    <ClInclude Include="..\..\..\src\jrd\replication\Publisher.h" />
+    <ClInclude Include="..\..\..\src\jrd\replication\Replicator.h" />
+    <ClInclude Include="..\..\..\src\jrd\replication\Utils.h" />
     <ClInclude Include="..\..\..\src\jrd\req.h" />
     <ClInclude Include="..\..\..\src\jrd\ResultSet.h" />
     <ClInclude Include="..\..\..\src\jrd\rlck_proto.h" />
@@ -338,8 +367,10 @@
     <ClInclude Include="..\..\..\src\jrd\status.h" />
     <ClInclude Include="..\..\..\src\jrd\svc.h" />
     <ClInclude Include="..\..\..\src\jrd\svc_undoc.h" />
+    <ClInclude Include="..\..\..\src\jrd\sys-packages\SqlPackage.h" />
     <ClInclude Include="..\..\..\src\jrd\SysFunction.h" />
     <ClInclude Include="..\..\..\src\jrd\SystemPackages.h" />
+    <ClInclude Include="..\..\..\src\jrd\SystemTriggers.h" />
     <ClInclude Include="..\..\..\src\jrd\TempSpace.h" />
     <ClInclude Include="..\..\..\src\jrd\TimeZone.h" />
     <ClInclude Include="..\..\..\src\jrd\tpc_proto.h" />
@@ -358,6 +389,7 @@
     <ClInclude Include="..\..\..\src\jrd\types.h" />
     <ClInclude Include="..\..\..\src\jrd\UserManagement.h" />
     <ClInclude Include="..\..\..\src\jrd\val.h" />
+    <ClInclude Include="..\..\..\src\jrd\validation.h" />
     <ClInclude Include="..\..\..\src\jrd\val_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\vio_debug.h" />
     <ClInclude Include="..\..\..\src\jrd\vio_proto.h" />
@@ -380,6 +412,7 @@
     <None Include="..\..\..\src\jrd\ini.epp" />
     <None Include="..\..\..\src\jrd\met.epp" />
     <None Include="..\..\..\src\jrd\scl.epp" />
+    <None Include="..\..\..\src\jrd\SystemTriggers.epp" />
     <None Include="..\..\..\src\utilities\gstat\dba.epp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
@@ -393,7 +426,7 @@
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
-    <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141_xp</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='16.0'">v142</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='17.0'">v143</PlatformToolset>
   </PropertyGroup>
@@ -401,7 +434,7 @@
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
-    <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141_xp</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='16.0'">v142</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='17.0'">v143</PlatformToolset>
   </PropertyGroup>
@@ -421,32 +454,60 @@
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='16.0'">v142</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='17.0'">v143</PlatformToolset>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|arm64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseOfMfc>false</UseOfMfc>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='16.0'">v142</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='17.0'">v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|arm64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseOfMfc>false</UseOfMfc>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='16.0'">v142</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='17.0'">v143</PlatformToolset>
+  </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="$(VCTargetsPath)Microsoft.CPP.UpgradeFromVC71.props" />
     <Import Project="FirebirdCommon.props" />
     <Import Project="FirebirdRelease.props" />
+    <Import Project="libcds.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="$(VCTargetsPath)Microsoft.CPP.UpgradeFromVC71.props" />
     <Import Project="FirebirdCommon.props" />
     <Import Project="FirebirdDebug.props" />
+    <Import Project="libcds.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="$(VCTargetsPath)Microsoft.CPP.UpgradeFromVC71.props" />
     <Import Project="FirebirdCommon.props" />
     <Import Project="FirebirdRelease.props" />
+    <Import Project="libcds.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="$(VCTargetsPath)Microsoft.CPP.UpgradeFromVC71.props" />
     <Import Project="FirebirdCommon.props" />
     <Import Project="FirebirdDebug.props" />
+    <Import Project="libcds.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|arm64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="FirebirdCommon.props" />
+    <Import Project="FirebirdRelease.props" />
+    <Import Project="libcds.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|arm64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="FirebirdCommon.props" />
+    <Import Project="FirebirdDebug.props" />
+    <Import Project="libcds.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
@@ -457,12 +518,18 @@
     <CodeAnalysisRuleSet Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">AllRules.ruleset</CodeAnalysisRuleSet>
     <CodeAnalysisRules Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" />
     <CodeAnalysisRuleAssemblies Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" />
+    <CodeAnalysisRuleSet Condition="'$(Configuration)|$(Platform)'=='Debug|arm64'">AllRules.ruleset</CodeAnalysisRuleSet>
+    <CodeAnalysisRules Condition="'$(Configuration)|$(Platform)'=='Debug|arm64'" />
+    <CodeAnalysisRuleAssemblies Condition="'$(Configuration)|$(Platform)'=='Debug|arm64'" />
     <CodeAnalysisRuleSet Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">AllRules.ruleset</CodeAnalysisRuleSet>
     <CodeAnalysisRules Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" />
     <CodeAnalysisRuleAssemblies Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" />
     <CodeAnalysisRuleSet Condition="'$(Configuration)|$(Platform)'=='Release|x64'">AllRules.ruleset</CodeAnalysisRuleSet>
     <CodeAnalysisRules Condition="'$(Configuration)|$(Platform)'=='Release|x64'" />
     <CodeAnalysisRuleAssemblies Condition="'$(Configuration)|$(Platform)'=='Release|x64'" />
+    <CodeAnalysisRuleSet Condition="'$(Configuration)|$(Platform)'=='Release|arm64'">AllRules.ruleset</CodeAnalysisRuleSet>
+    <CodeAnalysisRules Condition="'$(Configuration)|$(Platform)'=='Release|arm64'" />
+    <CodeAnalysisRuleAssemblies Condition="'$(Configuration)|$(Platform)'=='Release|arm64'" />
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -481,12 +548,18 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_LIB;SUPERSERVER;DEV_BUILD;NAMESPACE=Vulcan;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|arm64'">
+    <Midl>
+      <TargetEnvironment>ARM64</TargetEnvironment>
+    </Midl>
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>../../../src/include;../../../src/include/gen;../../../extern/icu/include;../../../src/vulcan;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_LIB;SUPERSERVER;DEV_BUILD;NAMESPACE=Vulcan;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
-      <Optimization>MaxSpeed</Optimization>
-      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_LIB;SUPERSERVER;NAMESPACE=Vulcan;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PrecompiledHeader>
       </PrecompiledHeader>
@@ -497,10 +570,17 @@
       <TargetEnvironment>X64</TargetEnvironment>
     </Midl>
     <ClCompile>
-      <Optimization>MaxSpeed</Optimization>
-      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <AdditionalIncludeDirectories>../../../src/include;../../../src/include/gen;../../../extern/icu/include;../../../src/vulcan;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_LIB;SUPERSERVER;NAMESPACE=Vulcan;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|arm64'">
+    <Midl>
+      <TargetEnvironment>ARM64</TargetEnvironment>
+    </Midl>
+    <ClCompile>
       <AdditionalIncludeDirectories>../../../src/include;../../../src/include/gen;../../../extern/icu/include;../../../src/vulcan;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_LIB;SUPERSERVER;NAMESPACE=Vulcan;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PrecompiledHeader>

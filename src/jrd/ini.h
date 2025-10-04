@@ -58,7 +58,7 @@ enum name_ids
 
 #define NAME(name, id) name,
 
-static const TEXT* const names[] =
+static inline constexpr const TEXT* names[] =
 {
 	0,
 #include "../jrd/names.h"
@@ -68,14 +68,14 @@ static const TEXT* const names[] =
 //******************************
 // fields.h
 //******************************
-const USHORT BLOB_SIZE			= 8;
-const USHORT TIMESTAMP_SIZE		= 8;
-const USHORT TIMESTAMP_TZ_SIZE	= 12;
+inline constexpr USHORT BLOB_SIZE			= 8;
+inline constexpr USHORT TIMESTAMP_SIZE		= 8;
+inline constexpr USHORT TIMESTAMP_TZ_SIZE	= 12;
 
 // Pick up global ids
 
 
-#define FIELD(type, name, dtype, length, sub_type, dflt_blr, nullable)	type,
+#define FIELD(type, name, dtype, length, sub_type, dflt_blr, nullable, ods)	type,
 enum gflds
 {
 #include "../jrd/fields.h"
@@ -88,11 +88,11 @@ typedef gflds GFLDS;
 // Pick up actual global fields
 
 #ifndef GPRE
-#define FIELD(type, name, dtype, length, sub_type, dflt_blr, nullable)	\
-	{ (int) type, (int) name, dtype, length, sub_type, dflt_blr, sizeof(dflt_blr), nullable },
+#define FIELD(type, name, dtype, length, sub_type, dflt_blr, nullable, ods)	\
+	{ (int) type, (int) name, dtype, length, sub_type, dflt_blr, sizeof(dflt_blr), nullable, ods },
 #else
-#define FIELD(type, name, dtype, length, sub_type, dflt_blr, nullable)	\
-	{ (int) type, (int) name, dtype, length, sub_type, NULL, 0, true },
+#define FIELD(type, name, dtype, length, sub_type, dflt_blr, nullable, ods)	\
+	{ (int) type, (int) name, dtype, length, sub_type, NULL, 0, true, ods },
 #endif
 
 struct gfld
@@ -105,12 +105,13 @@ struct gfld
 	const UCHAR*	gfld_dflt_blr;
 	USHORT			gfld_dflt_len;
 	bool			gfld_nullable;
+	USHORT			gfld_ods_version;
 };
 
-static const struct gfld gfields[] =
+static inline constexpr struct gfld gfields[] =
 {
 #include "../jrd/fields.h"
-	{ 0, 0, dtype_unknown, 0, 0, NULL, 0, false }
+	{ 0, 0, dtype_unknown, 0, 0, NULL, 0, false, 0 }
 };
 #undef FIELD
 
@@ -141,19 +142,19 @@ typedef rids RIDS;
 				(int) name, (int) id, update, (int) ods,
 #define END_RELATION		0,
 
-const int RFLD_R_NAME	= 0;
-const int RFLD_R_ID		= 1;
-const int RFLD_R_ODS	= 2;
-const int RFLD_R_TYPE	= 3;
-const int RFLD_RPT		= 4;
+inline constexpr int RFLD_R_NAME	= 0;
+inline constexpr int RFLD_R_ID		= 1;
+inline constexpr int RFLD_R_ODS		= 2;
+inline constexpr int RFLD_R_TYPE	= 3;
+inline constexpr int RFLD_RPT		= 4;
 
-const int RFLD_F_NAME	= 0;
-const int RFLD_F_ID		= 1;
-const int RFLD_F_UPDATE	= 2;
-const int RFLD_F_ODS	= 3;
-const int RFLD_F_LENGTH	= 4;
+inline constexpr int RFLD_F_NAME	= 0;
+inline constexpr int RFLD_F_ID		= 1;
+inline constexpr int RFLD_F_UPDATE	= 2;
+inline constexpr int RFLD_F_ODS		= 3;
+inline constexpr int RFLD_F_LENGTH	= 4;
 
-static const int relfields[] =
+static inline constexpr int relfields[] =
 {
 #include "../jrd/relations.h"
 	0
@@ -185,7 +186,7 @@ struct rtyp
 
 #define TYPE(text, type, field)	{ text, type, field },
 
-static const rtyp types[] =
+static inline constexpr rtyp types[] =
 {
 #include "../jrd/types.h"
 	{NULL, 0, 0}

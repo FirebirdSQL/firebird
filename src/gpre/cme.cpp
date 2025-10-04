@@ -164,7 +164,6 @@ void CME_expr(gpre_nod* node, gpre_req* request)
 	gpre_ctx* context;
 	gpre_fld field;
 	const ref* reference;
-	TEXT s[128];
 
 	switch (node->nod_type)
 	{
@@ -226,7 +225,8 @@ void CME_expr(gpre_nod* node, gpre_req* request)
 
 			if (!MET_generator(p, request->req_database))
 			{
-				sprintf(s, "generator %s not found", p);
+				TEXT s[BUFFER_MEDIUM];
+				snprintf(s, sizeof(s), "generator %s not found", p);
 				CPR_error(s);
 			}
 			request->add_byte(static_cast<int>(strlen(p)));
@@ -1787,7 +1787,7 @@ static void cmp_sdl_dtype( const gpre_fld* field, ref* reference)
 	switch (field->fld_dtype)
 	{
 	case dtype_cstring:
-		// 3.2j has new, tagged blr intruction for cstring
+		// 3.2j has new, tagged blr instruction for cstring
 
 		if (gpreGlob.sw_know_interp)
 		{
@@ -1803,7 +1803,7 @@ static void cmp_sdl_dtype( const gpre_fld* field, ref* reference)
 		break;
 
 	case dtype_text:
-		// 3.2j has new, tagged blr intruction for text too
+		// 3.2j has new, tagged blr instruction for text too
 
 		if (gpreGlob.sw_know_interp)
 		{
@@ -1819,7 +1819,7 @@ static void cmp_sdl_dtype( const gpre_fld* field, ref* reference)
 		break;
 
 	case dtype_varying:
-		// 3.2j has new, tagged blr intruction for varying also
+		// 3.2j has new, tagged blr instruction for varying also
 
 		if (gpreGlob.sw_know_interp)
 		{
@@ -1883,7 +1883,7 @@ static void cmp_sdl_dtype( const gpre_fld* field, ref* reference)
 	default:
 		{
 			TEXT s[50];
-			sprintf(s, "datatype %d not understood", field->fld_dtype);
+			snprintf(s, sizeof(s), "datatype %d not understood", field->fld_dtype);
 			CPR_error(s);
 		}
 	}

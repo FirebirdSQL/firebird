@@ -29,11 +29,15 @@
 #ifndef INCLUDE_UTILS_PROTO_H
 #define INCLUDE_UTILS_PROTO_H
 
+#include <cctype>
 #include <string.h>
+#include <type_traits>
+
 #include "../common/classes/fb_string.h"
 #include "../common/classes/array.h"
 #include "iberror.h"
 #include "firebird/Interface.h"
+#include "memory_routines.h"
 
 #ifdef SFIO
 #include <stdio.h>
@@ -41,22 +45,22 @@
 
 namespace fb_utils
 {
-	char* copy_terminate(char* dest, const char* src, size_t bufsize);
-	char* exact_name(char* const name);
+	char* copy_terminate(char* dest, const char* src, size_t bufsize) noexcept;
+	char* exact_name(char* const name) noexcept;
 	inline void exact_name(Firebird::string& str)
 	{
 		str.rtrim();
 	}
-	char* exact_name_limit(char* const name, size_t bufsize);
-	bool implicit_domain(const char* domain_name);
-	bool implicit_integrity(const char* integ_name);
-	bool implicit_pk(const char* pk_name);
-	int name_length(const TEXT* const name);
-	int name_length_limit(const TEXT* const name, size_t bufsize);
+	char* exact_name_limit(char* const name, size_t bufsize) noexcept;
+	bool implicit_domain(const char* domain_name) noexcept;
+	bool implicit_integrity(const char* integ_name) noexcept;
+	bool implicit_pk(const char* pk_name) noexcept;
+	int name_length(const TEXT* const name) noexcept;
+	int name_length_limit(const TEXT* const name, size_t bufsize) noexcept;
 	bool readenv(const char* env_name, Firebird::string& env_value);
 	bool readenv(const char* env_name, Firebird::PathName& env_value);
 	bool setenv(const char* name, const char* value, bool overwrite);
-	int snprintf(char* buffer, size_t count, const char* format...);
+	int snprintf(char* buffer, size_t count, const char* format...) noexcept;
 	char* cleanup_passwd(char* arg);
 	inline char* get_passwd(char* arg)
 	{
@@ -71,7 +75,7 @@ namespace fb_utils
 	// ********************
 	// Abstraction of incompatible routine names
 	// for case insensitive comparison.
-	inline int stricmp(const char* a, const char* b)
+	inline int stricmp(const char* a, const char* b) noexcept
 	{
 #if defined(HAVE_STRCASECMP)
 		return ::strcasecmp(a, b);
@@ -88,7 +92,7 @@ namespace fb_utils
 	// ********************
 	// Abstraction of incompatible routine names
 	// for counted length and case insensitive comparison.
-	inline int strnicmp(const char* a, const char* b, size_t count)
+	inline int strnicmp(const char* a, const char* b, size_t count) noexcept
 	{
 #if defined(HAVE_STRNCASECMP)
 		return ::strncasecmp(a, b, count);
@@ -99,16 +103,23 @@ namespace fb_utils
 #endif
 	}
 
+	// std::isspace behavior is undefined with char and signed char.
+	// https://en.cppreference.com/w/cpp/string/byte/isspace
+	static inline int isspace(const char c)
+	{
+		return std::isspace(static_cast<unsigned char>(c));
+	}
+
 #ifdef WIN_NT
-	bool prefix_kernel_object_name(char* name, size_t bufsize);
-	bool isGlobalKernelPrefix();
+	bool prefix_kernel_object_name(char* name, size_t bufsize) noexcept;
+	bool isGlobalKernelPrefix() noexcept;
 	bool private_kernel_object_name(char* name, size_t bufsize);
 	bool privateNameSpaceReady();
 #endif
 
 	// Compare the absolute value of two SINT64 numbers.
 	// Return 0 if they are equal, <0 if n1 < n2 and >0 if n1 > n2.
-	inline int abs64Compare(SINT64 n1, SINT64 n2)
+	inline int abs64Compare(SINT64 n1, SINT64 n2) noexcept
 	{
 #ifndef FB_INT64_COMPARE_FAILED
 #define FB_INT64_COMPARE_FAILED 1
@@ -116,7 +127,7 @@ namespace fb_utils
 
 #if FB_INT64_COMPARE_FAILED
 		// avoid compiler bug when comparing minimum INT64
-		const SINT64 MININT64 = 0x8000000000000000;
+		constexpr SINT64 MININT64 = 0x8000000000000000;
 		if (n1 == MININT64)
 			return n2 == MININT64 ? 0 : 2;
 		if (n2 == MININT64)
@@ -129,27 +140,27 @@ namespace fb_utils
 	}
 
 	Firebird::PathName get_process_name();
-	SLONG genUniqueId();
+	SLONG genUniqueId() noexcept;
 	void getCwd(Firebird::PathName& pn);
 
-	void inline initStatusTo(ISC_STATUS* status, ISC_STATUS to)
+	void inline initStatusTo(ISC_STATUS* status, ISC_STATUS to) noexcept
 	{
 		status[0] = isc_arg_gds;
 		status[1] = to;
 		status[2] = isc_arg_end;
 	}
 
-	void inline init_status(ISC_STATUS* status)
+	void inline init_status(ISC_STATUS* status) noexcept
 	{
 		initStatusTo(status, FB_SUCCESS);
 	}
 
-	void inline statusBadAlloc(ISC_STATUS* status)
+	void inline statusBadAlloc(ISC_STATUS* status) noexcept
 	{
 		initStatusTo(status, isc_virmemexh);
 	}
 
-	void inline statusUnknown(ISC_STATUS* status)
+	void inline statusUnknown(ISC_STATUS* status) noexcept
 	{
 		initStatusTo(status, isc_exception_sigill);		// Any better ideas? New error code?
 	}
@@ -160,22 +171,22 @@ namespace fb_utils
 	}
 
 	unsigned int copyStatus(ISC_STATUS* const to, const unsigned int space,
-							const ISC_STATUS* const from, const unsigned int count) throw();
-	void copyStatus(Firebird::CheckStatusWrapper* to, const Firebird::IStatus* from) throw();
-	unsigned int mergeStatus(ISC_STATUS* const to, unsigned int space, const Firebird::IStatus* from) throw();
-	void setIStatus(Firebird::CheckStatusWrapper* to, const ISC_STATUS* from) throw();
-	unsigned int statusLength(const ISC_STATUS* const status) throw();
+							const ISC_STATUS* const from, const unsigned int count) noexcept;
+	void copyStatus(Firebird::CheckStatusWrapper* to, const Firebird::IStatus* from) noexcept;
+	unsigned int mergeStatus(ISC_STATUS* const to, unsigned int space, const Firebird::IStatus* from) noexcept;
+	void setIStatus(Firebird::IStatus* to, const ISC_STATUS* from) noexcept;
+	unsigned int statusLength(const ISC_STATUS* const status) noexcept;
 	unsigned int subStatus(const ISC_STATUS* in, unsigned int cin,
-						   const ISC_STATUS* sub, unsigned int csub) throw();
-	bool cmpStatus(unsigned int len, const ISC_STATUS* a, const ISC_STATUS* b) throw();
-	const ISC_STATUS* nextCode(const ISC_STATUS* v) throw();
+						   const ISC_STATUS* sub, unsigned int csub) noexcept;
+	bool cmpStatus(unsigned int len, const ISC_STATUS* a, const ISC_STATUS* b) noexcept;
+	const ISC_STATUS* nextCode(const ISC_STATUS* v) noexcept;
 
-	inline unsigned nextArg(const ISC_STATUS v) throw()
+	inline unsigned nextArg(const ISC_STATUS v) noexcept
 	{
 		return v == isc_arg_cstring ? 3 : 2;
 	}
 
-	inline bool isStr(const ISC_STATUS v) throw()
+	inline bool isStr(const ISC_STATUS v) noexcept
 	{
 		switch (v)
 		{
@@ -184,13 +195,13 @@ namespace fb_utils
 		case isc_arg_interpreted:
 		case isc_arg_sql_state:
 			return true;
+		default:
+			return false;
 		}
-
-		return false;
 	}
 
 	// Check does vector contain particular code or not
-	bool containsErrorCode(const ISC_STATUS* v, ISC_STATUS code);
+	bool containsErrorCode(const ISC_STATUS* v, ISC_STATUS code) noexcept;
 
 	enum FetchPassResult {
 		FETCH_PASS_OK,
@@ -214,7 +225,7 @@ namespace fb_utils
 	bool bootBuild();
 
 	// Add appropriate file prefix.
-	Firebird::PathName getPrefix(unsigned prefType, const char* name);
+	Firebird::PathName getPrefix(unsigned int prefType, const char* name);
 
 	// moves DB path information (from limbo transaction) to another buffer
 	void getDbPathInfo(unsigned int& itemsLength, const unsigned char*& items,
@@ -230,21 +241,26 @@ namespace fb_utils
 	// generate random string in BASE64 representation
 	void random64(Firebird::string& randomValue, FB_SIZE_T length);
 
-	void logAndDie(const char* text);
+	[[noreturn]] void logAndDie(const char* text);
 
 	// On incorrect sqlType returns dsc_unknown
-	UCHAR sqlTypeToDscType(SSHORT sqlType);
+	UCHAR sqlTypeToDscType(SSHORT sqlType) noexcept;
 
 	// Returns next offset value
 	unsigned sqlTypeToDsc(unsigned prevOffset, unsigned sqlType, unsigned sqlLength,
 		unsigned* dtype, unsigned* len, unsigned* offset, unsigned* nullOffset);
 
-	bool inline isNetworkError(ISC_STATUS code)
+	bool inline isNetworkError(ISC_STATUS code) noexcept
 	{
-		return code == isc_network_error ||
-			code == isc_net_write_err ||
-			code == isc_net_read_err ||
-			code == isc_lost_db_connection;
+		switch (code) {
+		case isc_network_error:
+		case isc_net_write_err:
+		case isc_net_read_err:
+		case isc_lost_db_connection:
+			return true;
+		default:
+			return false;
+		}
 	}
 
 	// Uppercase/strip string according to login rules
@@ -263,11 +279,56 @@ namespace fb_utils
 	// Frequently used actions with clumplets
 	bool isBpbSegmented(unsigned parLength, const unsigned char* par);
 
+
+	// Workaround, to be removed with C++ 23
+	template <typename... T>
+	constexpr bool fb_always_false_v = false;
+
+	// Put integer value into info buffer
+	template<typename T>
+	inline unsigned char* putInfoItemInt(const unsigned char item, T value,
+		unsigned char* ptr, const unsigned char* end)
+	{
+		static_assert(std::is_integral_v<T>, "Integral type expected");
+
+		constexpr auto len = sizeof(T);
+
+		if (ptr + len + 1 + 2 > end)
+		{
+			if (ptr < end)
+			{
+				*ptr++ = isc_info_truncated;
+				if (ptr < end)
+					*ptr++ = isc_info_end;
+			}
+			return nullptr;
+		}
+
+		*ptr++ = item;
+		*ptr++ = len;
+		*ptr++ = 0;
+
+		if constexpr (len == sizeof(SINT64))
+			put_vax_int64(ptr, value);
+		else if constexpr (len == sizeof(SLONG))
+			put_vax_long(ptr, value);
+		else if constexpr (len == sizeof(SSHORT))
+			put_vax_short(ptr, value);
+		else if constexpr (len == sizeof(char))
+			*ptr = value;
+		else
+			static_assert(fb_always_false_v<T>, "unknown data type");
+
+		ptr += len;
+		return ptr;
+	}
+
+
 	// RAII to call fb_shutdown() in utilities
 	class FbShutdown
 	{
 	public:
-		FbShutdown(int r)
+		FbShutdown(int r) noexcept
 			: reason(r)
 		{ }
 

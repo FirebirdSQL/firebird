@@ -1,0 +1,58 @@
+name: Get release info
+description: Get release info
+
+outputs:
+  version:
+    description: Version
+    value: ${{ steps.version.outputs.version }}
+  artifacts-repository:
+    description: Artifacts repository
+    value: ${{ steps.artifacts-repository.outputs.artifacts-repository }}
+  artifacts-tag:
+    description: Artifacts tag
+    value: ${{ steps.artifacts-tag.outputs.tag }}
+  artifacts-tag-description:
+    description: Artifacts tag description
+    value: ${{ steps.artifacts-tag.outputs.tag-description }}
+
+runs:
+  using: composite
+  steps:
+    - id: version
+      if: github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
+      shell: bash
+      run: |
+        version=$(echo ${{ github.ref_name }} | cut -c2-)
+        echo "version=$version" >> $GITHUB_OUTPUT
+
+    - id: artifacts-repository
+      if: github.repository == 'FirebirdSQL/firebird'
+      shell: bash
+      run: |
+        repository=${{
+          (github.ref_type == 'tag' && startsWith(github.ref_name, 'v') && github.repository) ||
+          (github.ref_type == 'branch' &&
+            (github.ref_name == 'master' ||
+              (startsWith(github.ref_name, 'v') && endsWith(github.ref_name, '-release'))
+            ) &&
+            'FirebirdSQL/snapshots'
+          ) ||
+          ''
+        }}
+        echo "artifacts-repository=$repository" >> $GITHUB_OUTPUT
+
+    - id: artifacts-tag
+      if: steps.artifacts-repository.outputs.artifacts-repository
+      shell: bash
+      run: |
+        tag=${{
+          (github.ref_type == 'tag' && github.ref_name) ||
+          format('snapshot-{0}', github.ref_name)
+        }}
+        echo "tag=$tag" >> $GITHUB_OUTPUT
+
+        tag_description="${{
+          (github.ref_type == 'tag' && github.ref_name) ||
+          format('Latest snapshots for {0}', github.ref_name)
+        }}"
+        echo "tag-description=$tag_description" >> $GITHUB_OUTPUT

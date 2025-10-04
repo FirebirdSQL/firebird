@@ -27,20 +27,20 @@
  *
  */
 
-#ifndef JRD_CSCONVERT_H
-#define JRD_CSCONVERT_H
+#ifndef COMMON_CSCONVERT_H
+#define COMMON_CSCONVERT_H
 
 #include "iberror.h"
 #include "../common/classes/array.h"
 #include "../common/StatusArg.h"
 
 
-namespace Jrd {
+namespace Firebird {
 
 class CsConvert
 {
 public:
-	CsConvert(charset* cs1, charset* cs2)
+	CsConvert(charset* cs1, charset* cs2) noexcept
 		: charSet1(cs1),
 		  charSet2(cs2),
 		  cnvt1((cs1 ? &cs1->charset_to_unicode : NULL)),
@@ -56,7 +56,7 @@ public:
 		}
 	}
 
-	CsConvert(const CsConvert& obj)
+	CsConvert(const CsConvert& obj) noexcept
 		: charSet1(obj.charSet1),
 		  charSet2(obj.charSet2),
 		  cnvt1(obj.cnvt1),
@@ -259,9 +259,9 @@ public:
 		return len;
 	}
 
-	const char* getName() const { return cnvt1->csconvert_name; }
+	const char* getName() const noexcept { return cnvt1->csconvert_name; }
 
-	csconvert* getStruct() const { return cnvt1; }
+	csconvert* getStruct() const noexcept { return cnvt1; }
 
 private:
 	charset* charSet1;
@@ -270,13 +270,13 @@ private:
 	csconvert* cnvt2;
 
 private:
-	void raiseError(ISC_STATUS code)
+	[[noreturn]] void raiseError(ISC_STATUS code)
 	{
 		Firebird::status_exception::raise(Firebird::Arg::Gds(isc_arith_except) <<
 			Firebird::Arg::Gds(code));
 	}
 
-	void raiseError(ULONG dstLen, ULONG srcLen)
+	[[noreturn]] void raiseError(ULONG dstLen, ULONG srcLen)
 	{
 		Firebird::status_exception::raise(Firebird::Arg::Gds(isc_arith_except) <<
 			Firebird::Arg::Gds(isc_string_truncation) <<
@@ -286,7 +286,7 @@ private:
 
 };
 
-}	// namespace Jrd
+}	// namespace Firebird
 
 
-#endif	// JRD_CSCONVERT_H
+#endif	// COMMON_CSCONVERT_H

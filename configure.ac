@@ -26,9 +26,19 @@ dnl XE_CONF_DIR(param, help, variable, default)
 define([XE_CONF_DIR],[
 AC_ARG_WITH([$1],
 	[AS_HELP_STRING([--with-$1],[$2])],
-	[[$3]="$withval"
-	 CHANGE_PATH_SUPPORT=no
-	 AC_DEFINE_UNQUOTED([$3], "$[$3]", [$2])],
+	[
+		case "$withval" in
+			/*)
+				CHANGE_PATH_SUPPORT=no
+				[$3]="$withval"
+				;;
+			*)
+				[$3]='${fb_install_prefix}'/"${withval}"
+				;;
+		esac
+
+		AC_DEFINE_UNQUOTED([$3], "${withval}", [$2])
+	],
 	[[$3]='${fb_install_prefix}[$4]'
 	 AC_DEFINE_UNQUOTED([$3], [""], [$2])]
 )
@@ -67,14 +77,37 @@ AC_CANONICAL_BUILD
 CPU_TYPE=$build_cpu
 AC_SUBST(CPU_TYPE)
 
+case "$build" in
+  aarch64-*-darwin*)
+    VCPKG_TRIPLET=fb-arm64-osx
+    ;;
 
-dnl EKU: set appropiate defaults for each platform
+  x*64-*-darwin*)
+    VCPKG_TRIPLET=fb-x64-osx
+    ;;
+esac
+
+if test "x$VCPKG_TRIPLET" != "x" ; then
+  if ! test -f ./vcpkg/vcpkg; then
+    ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+  fi
+
+  ./vcpkg/vcpkg install --triplet=$VCPKG_TRIPLET
+
+  VCPKG_INSTALLED=`pwd`/vcpkg_installed/$VCPKG_TRIPLET
+  AC_SUBST(VCPKG_INSTALLED)
+fi
+
+dnl EKU: set appropriate defaults for each platform
 dnl      EDITLINE_FLG     : support fancy command line editing in isql
 dnl      SHRLIB_EXT       : suffix of shared library files
 
 RAW_DEVICES_FLG=Y
 EXPORT_SYMBOLS_STYLE=linux
 INSTALL_PREFIX=""
+
+dnl do not use additional atomic support library by default
+ATOMICLIB=
 
 dnl Use /usr/lib for library links on most platforms except some 64-bit ones
 libdir=/usr/lib
@@ -188,6 +221,26 @@ dnl CPU_TYPE=ppc64
     SHRLIB_EXT=so
     ;;
 
+  powerpc64-*-freebsd*)
+    MAKEFILE_PREFIX=freebsd_powerpc64
+    PLATFORM=FREEBSD
+    INSTALL_PREFIX=freebsd
+    AC_DEFINE(FREEBSD, 1, [Define this if OS is FreeBSD])
+    AC_DEFINE(PPC64, 1, [Define this if CPU is ppc64])
+    EDITLINE_FLG=Y
+    SHRLIB_EXT=so
+    ;;
+
+  powerpc-*-freebsd*)
+    MAKEFILE_PREFIX=freebsd_powerpc
+    PLATFORM=FREEBSD
+    INSTALL_PREFIX=freebsd
+    AC_DEFINE(FREEBSD, 1, [Define this if OS is FreeBSD])
+    AC_DEFINE(PPC, 1, [Define this if CPU is ppc])
+    EDITLINE_FLG=Y
+    SHRLIB_EXT=so
+    ;;
+
   *-gentoo-freebsd*)
     MAKEFILE_PREFIX=freebsd
     PLATFORM=GENTOOFREEBSD
@@ -270,6 +323,7 @@ dnl CPU_TYPE=ppc64
     SHRLIB_EXT=so
     CPU_TYPE=arm32
     STD_EDITLINE=true
+    ATOMICLIB=atomic
     ;;
 
   aarch64*-*-linux*)
@@ -280,6 +334,18 @@ dnl CPU_TYPE=ppc64
     EDITLINE_FLG=Y
     SHRLIB_EXT=so
     CPU_TYPE=arm64
+    STD_EDITLINE=true
+    STD_ICU=true
+    libdir=/usr/lib64
+    ;;
+
+  loongarch*-*-linux*)
+    MAKEFILE_PREFIX=linux_loongarch
+    INSTALL_PREFIX=linux
+    PLATFORM=LINUX
+    AC_DEFINE(LINUX, 1, [Define this if OS is Linux])
+    EDITLINE_FLG=Y
+    SHRLIB_EXT=so
     STD_EDITLINE=true
     STD_ICU=true
     libdir=/usr/lib64
@@ -565,6 +631,16 @@ AC_ARG_ENABLE(developer,
    esac])
 AC_SUBST(DEVEL_FLG)
 
+CLIENT_ONLY_FLG=N
+AC_ARG_ENABLE(client-only,
+  [  --enable-client-only    use client-only mode rules (default=no)],
+  [case "$enableval" in
+     yes) CLIENT_ONLY_FLG=Y;;
+     no)  CLIENT_ONLY_FLG=N;;
+     *)   AC_MSG_ERROR(bad value '${enableval}' for --enable-client-only);;
+   esac])
+AC_SUBST(CLIENT_ONLY_FLG)
+
 CROSS=
 IS_CROSS=N
 AC_ARG_WITH(cross-build,
@@ -579,9 +655,19 @@ AC_ARG_WITH(builtin-tommath,
   [TOMMATH_BUILD=Y])
 AC_SUBST(TOMMATH_BUILD)
 
+WITH_TOMCRYPT=Y
+AC_ARG_WITH(tomcrypt,
+  [  --without-tomcrypt      do not use libtomcrypt (allowed with --enable-client-only)],
+  [case "$withval" in
+     yes) WITH_TOMCRYPT=Y;;
+     no)  WITH_TOMCRYPT=N;;
+     *)   AC_MSG_ERROR(bad value '${withval}' for --with-tomcrypt);;
+   esac])
+AC_SUBST(WITH_TOMCRYPT)
+
 TOMCRYPT_BUILD=N
 AC_ARG_WITH(builtin-tomcrypt,
-  [  --with-builtin-tomcrypt  build libtomcrypt library from firebird tree],
+  [  --with-builtin-tomcrypt build libtomcrypt library from firebird tree],
   [TOMCRYPT_BUILD=Y])
 AC_SUBST(TOMCRYPT_BUILD)
 
@@ -592,9 +678,14 @@ AC_ARG_WITH(termlib,
 
 RE2_BUILD=Y
 AC_ARG_WITH(system-re2,
-  [  --with-system-re2  use system-wide re2 library instead of embedded copy],
+  [  --with-system-re2       use system-wide re2 library instead of embedded copy],
   [RE2_BUILD=N])
 AC_SUBST(RE2_BUILD)
+
+dnl set required atomic support library
+AC_ARG_WITH(atomiclib,
+  [  --with-atomiclib        build with explicitly specified atomic support library],
+  [ATOMICLIB=${withval}])
 
 dnl This is currently used for internal and public (API headers) needs
 SYSTEM_BOOST=N
@@ -602,11 +693,6 @@ AC_ARG_WITH(system-boost,
   [  --with-system-boost     use system-wide boost library instead of embedded copy],
   [SYSTEM_BOOST=Y])
 AC_SUBST(SYSTEM_BOOST)
-
-ATOMICLIB=atomic
-AC_ARG_WITH(atomiclib,
-  [  --with-atomiclib        build with explicitly specified atomic support library],
-  [ATOMICLIB=${withval}])
 
 dnl Avoid dumb '-g -O2' autoconf's default
 dnl Debugging information and optimization flags should be set in prefix.$platform file
@@ -628,6 +714,14 @@ dnl Later we always build threaded binaries
 CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
 CXXFLAGS="$CXXFLAGS $PTHREAD_CFLAGS"
 LIBS="$LIBS $PTHREAD_LIBS"
+
+case "$build" in
+  *-*-darwin*)
+    CFLAGS="$CFLAGS -I${VCPKG_INSTALLED}/include"
+    CXXFLAGS="$CXXFLAGS -nostdinc++ -isystem ${VCPKG_INSTALLED}/include/c++/v1 -I${VCPKG_INSTALLED}/include"
+    LDFLAGS="$LDFLAGS -nostdlib++ -stdlib=libc++ -L${VCPKG_INSTALLED}/lib -lc++"
+    ;;
+esac
 
 AC_ARG_ENABLE(raw-devices,
   [  --enable-raw-devices    enable databases on raw devices (default on POSIX)],
@@ -696,8 +790,9 @@ if test "$STD_EDITLINE" = "true"; then
       AC_CHECK_LIB(readline, readline, [READLINE=readline EDITLINE_FLG=Y],
         [STD_EDITLINE=false
          if test "$EDITLINE_FLG" = "Y"; then
-           AC_MSG_WARN([[[--with-system-editline specified, not found. Using bundled editline]]])])))
+           AC_MSG_WARN([[[--with-system-editline specified, not found. Using bundled editline]]])
 		 fi
+           ])))
 fi
 XE_RESTORE_ENV()
 
@@ -784,7 +879,7 @@ AC_SUBST(GPRE_LANGUAGE_MODULES)
 dnl Compression switch
 COMPRESSION=Y
 AC_ARG_WITH(wire-compress,
-  [  --with-wire-compress    support compression of data, transfered over the wire (default=yes)],
+  [  --with-wire-compress    support compression of data, transferred over the wire (default=yes)],
   [case "$withval" in
      yes) ;;
      no)  COMPRESSION=N;;
@@ -909,16 +1004,18 @@ dnl check for tomcrypt presence
 if test "$TOMCRYPT_BUILD" = "Y"; then
 	CRYPTLIB=-ltomcrypt
 else
-	XE_SAVE_ENV()
-	CFLAGS="$CFLAGS -DLTC_NO_ASM"
-	AC_CHECK_HEADER(tomcrypt.h,,
-		AC_MSG_ERROR(Include file for tomcrypt not found - please install development tomcrypt package or use --with-builtin-tomcrypt))
-	XE_RESTORE_ENV()
-	XE_SAVE_ENV()
-	LIBS=
-	AC_CHECK_LIB(tomcrypt, sha1_init, CRYPTLIB=-ltomcrypt,
-		AC_MSG_ERROR(Library tomcrypt not found - please install development tomcrypt package or use --with-builtin-tomcrypt))
-	XE_RESTORE_ENV()
+	if test "$WITH_TOMCRYPT" = "Y"; then
+		XE_SAVE_ENV()
+		CFLAGS="$CFLAGS -DLTC_NO_ASM"
+		AC_CHECK_HEADER(tomcrypt.h,,
+			AC_MSG_ERROR(Include file for tomcrypt not found - please install development tomcrypt package or use --with-builtin-tomcrypt))
+		XE_RESTORE_ENV()
+		XE_SAVE_ENV()
+		LIBS=
+		AC_CHECK_LIB(tomcrypt, sha1_init, CRYPTLIB=-ltomcrypt,
+			AC_MSG_ERROR(Library tomcrypt not found - please install development tomcrypt package or use --with-builtin-tomcrypt))
+		XE_RESTORE_ENV()
+	fi
 fi
 AC_SUBST(CRYPTLIB)
 
@@ -934,22 +1031,26 @@ if test "$EDITLINE_FLG" = "Y"; then
 	AC_SUBST(TERMLIB)
 fi
 
-dnl check for re2 presence
-if test "$RE2_BUILD" != "Y"; then
-	XE_SAVE_ENV()
-	AC_LANG_PUSH(C++)
-	AC_CHECK_HEADER(re2/re2.h, RE2LIB=-lre2,
-		AC_MSG_ERROR(Include file for re2 not found - please install development re2 package or drop --with-system-re2))
-        AC_LANG_POP(C++)
-	XE_RESTORE_ENV()
+if test "$CLIENT_ONLY_FLG" = "N"; then
+	dnl check for re2 presence
+	if test "$RE2_BUILD" != "Y"; then
+		XE_SAVE_ENV()
+		AC_LANG_PUSH(C++)
+		AC_CHECK_HEADER(re2/re2.h, RE2LIB=-lre2,
+			AC_MSG_ERROR(Include file for re2 not found - please install development re2 package or drop --with-system-re2))
+			AC_LANG_POP(C++)
+		XE_RESTORE_ENV()
+	fi
+	AC_SUBST(RE2LIB)
 fi
-AC_SUBST(RE2LIB)
 
 dnl Check for libraries
 AC_SEARCH_LIBS(dlopen, dl)
 AC_CHECK_LIB(m, main)
 AC_SEARCH_LIBS(inet_aton, resolv)
-AC_CHECK_LIB($ATOMICLIB, main)
+if test "$ATOMICLIB"; then
+	AC_CHECK_LIB($ATOMICLIB, main)
+fi
 
 dnl Check for libraries for static C++ runtime linking
 AC_CHECK_LIB(supc++, main, XE_APPEND(-lsupc++, STATIC_CXXSUPPORT_LIB))
@@ -977,7 +1078,7 @@ dnl if 64-bit mode, then archive tool, ar, needs -X64 option
 fi
 
 XE_SAVE_ENV()
-CXXFLAGS="$CXXFLAGS -std=c++17"
+CXXFLAGS="$CXXFLAGS -std=c++20"
 AC_CACHE_CHECK([whether the C++ compiler understands noexcept], [ac_cv_cxx_noexcept], [
     AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[int f(int x) noexcept { return x + 1; }]], [[]])],
 	[ac_cv_cxx_noexcept=yes], [ac_cv_cxx_noexcept=no])])
@@ -1072,9 +1173,10 @@ AC_CHECK_FUNCS(clock_gettime)
 
 dnl Checks for pthread functions
 AC_CHECK_FUNCS(pthread_mutexattr_setprotocol)
-AC_CHECK_FUNCS(pthread_mutexattr_setrobust_np)
-AC_CHECK_FUNCS(pthread_mutex_consistent_np)
-AC_CHECK_FUNCS(pthread_rwlockattr_setkind_np)
+AC_CHECK_FUNCS(pthread_mutexattr_setrobust)
+AC_CHECK_FUNCS(pthread_mutex_consistent)
+AC_CHECK_FUNCS(pthread_mutex_timedlock)
+AC_CHECK_FUNCS(pthread_rwlockattr_setkind)
 AC_CHECK_FUNCS(pthread_cancel)
 AC_CHECK_FUNCS(pthread_atfork)
 AC_CHECK_FUNCS(sigset)
@@ -1093,7 +1195,7 @@ AC_CHECK_FUNCS(sem_init)
 if test "$ac_cv_func_sem_init" = "yes"; then
 AC_MSG_CHECKING(for working sem_init())
 AC_RUN_IFELSE([AC_LANG_SOURCE([[#include <semaphore.h>
-	main () {
+	int main () {
 		sem_t s;
 		return sem_init(&s,0,0);
 		}
@@ -1134,7 +1236,7 @@ AC_SYS_LARGEFILE
 if test "$ac_cv_sys_file_offset_bits" = "no"; then
   AC_MSG_CHECKING(for native large file support)
   AC_RUN_IFELSE([AC_LANG_SOURCE([[#include <unistd.h>
-    main () {
+    int main () {
     return !(sizeof(off_t) == 8);
   }]])],[ac_cv_sys_file_offset_bits=64; AC_DEFINE(_FILE_OFFSET_BITS,64)
    AC_MSG_RESULT(yes)],[AC_MSG_RESULT(no)],[])
@@ -1159,18 +1261,6 @@ AC_CHECK_TYPES([socklen_t],,,[#include <sys/socket.h>])
 AH_BOTTOM([#ifndef HAVE_SOCKLEN_T
 typedef int socklen_t;
 #endif])
-AC_CHECK_TYPES([semun])
-if test "$ac_cv_type_semun" = "no"; then
-  AC_MSG_CHECKING(if sem.h defines semun)
-  AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <sys/types.h>
-      #include <sys/ipc.h>
-      #include <sys/sem.h>]], [[union semun s;]])],[ac_cv_type_semun=yes; AC_DEFINE(HAVE_SEMUN) AC_MSG_RESULT(yes)],[AC_MSG_RESULT(no)])
-fi
-
-AC_CHECK_TYPES([struct XDR::xdr_ops],,,[#include <rpc/rpc.h>
-#include <rpc/xdr.h>])
-AC_CHECK_TYPES([struct xdr_ops],,,[#include <rpc/rpc.h>
-#include <rpc/xdr.h>])
 
 dnl AC_STRUCT_DIRENT_D_TYPE
 AC_CHECK_MEMBER([struct dirent.d_type],
@@ -1179,28 +1269,15 @@ AC_CHECK_MEMBER([struct dirent.d_type],
 
 dnl EKU: try to determine the alignment of long and double
 dnl      replaces FB_ALIGNMENT and FB_DOUBLE_ALIGN in src/jrd/common.h
-AC_MSG_CHECKING(alignment of long)
-AC_RUN_IFELSE([AC_LANG_SOURCE([[#include <semaphore.h>
-main () {
-  struct s {
-    char a;
-    union { long long x; sem_t y; } b;
-  };
-  return (int)&((struct s*)0)->b;
-}]])],[ac_cv_c_alignment=$ac_status],[ac_cv_c_alignment=$ac_status],[])
-AC_MSG_RESULT($ac_cv_c_alignment)
-AC_DEFINE_UNQUOTED(FB_ALIGNMENT, $ac_cv_c_alignment, [Alignment of long])
+AC_CHECK_ALIGNOF([union { long long x; void* y; }])
+if test "$ac_cv_alignof_union___long_long_x__voidp_y___" = "0"; then
+	AC_MSG_ERROR(Failed to detect FB_ALIGNMENT)
+fi
+AC_DEFINE_UNQUOTED(FB_ALIGNMENT, $ac_cv_alignof_union___long_long_x__voidp_y___, [Alignment of long])
 
-AC_MSG_CHECKING(alignment of double)
-AC_RUN_IFELSE([AC_LANG_SOURCE([[main () {
-  struct s {
-    char a;
-    double b;
-  };
-  return (int)&((struct s*)0)->b;
-}]])],[ac_cv_c_double_align=$ac_status],[ac_cv_c_double_align=$ac_status],[])
-AC_MSG_RESULT($ac_cv_c_double_align)
-AC_DEFINE_UNQUOTED(FB_DOUBLE_ALIGN, $ac_cv_c_double_align, [Alignment of double])
+dnl AC_MSG_CHECKING(alignment of double)
+AC_CHECK_ALIGNOF(double)
+AC_DEFINE_UNQUOTED(FB_DOUBLE_ALIGN, $ac_cv_alignof_double, [Alignment of double])
 
 AC_MSG_CHECKING(correctness of comparing 64-bit integers)
 ac_cv_compare_failed=1
@@ -1322,27 +1399,47 @@ for fb_tgt in \$FB_TARGETS; do
 	echo "Creating \$fb_tgt directories"
 
 dnl # output
-	mkdir -p gen/\$fb_tgt/firebird/bin
-	mkdir -p gen/\$fb_tgt/firebird/plugins
-	mkdir -p gen/\$fb_tgt/firebird/plugins/udr
-	mkdir -p gen/\$fb_tgt/firebird/examples/api
-	mkdir -p gen/\$fb_tgt/firebird/examples/dbcrypt
-	mkdir -p gen/\$fb_tgt/firebird/examples/empbuild
-	mkdir -p gen/\$fb_tgt/firebird/examples/extauth
-	mkdir -p gen/\$fb_tgt/firebird/examples/include
-	mkdir -p gen/\$fb_tgt/firebird/examples/interfaces
-	mkdir -p gen/\$fb_tgt/firebird/examples/object_pascal
-	mkdir -p gen/\$fb_tgt/firebird/examples/object_pascal/common
-	mkdir -p gen/\$fb_tgt/firebird/examples/package
-	mkdir -p gen/\$fb_tgt/firebird/examples/stat
-	mkdir -p gen/\$fb_tgt/firebird/examples/udf
-	mkdir -p gen/\$fb_tgt/firebird/examples/udr
-	mkdir -p gen/\$fb_tgt/firebird/examples/prebuilt/bin
-	mkdir -p gen/\$fb_tgt/firebird/examples/prebuilt/plugins
-	mkdir -p gen/\$fb_tgt/firebird/include/firebird/impl
-	mkdir -p gen/\$fb_tgt/firebird/lib
-	mkdir -p gen/\$fb_tgt/firebird/misc
-	mkdir -p gen/\$fb_tgt/firebird/tests
+
+	if test "x\$fb_tgt" = "xNative" || [[[ x$CROSS != xandroid* ]]]; then
+		mkdir -p gen/\$fb_tgt/firebird/bin
+		mkdir -p gen/\$fb_tgt/firebird/lib
+		mkdir -p gen/\$fb_tgt/firebird/tests
+		mkdir -p gen/\$fb_tgt/firebird/tzdata
+		mkdir -p gen/\$fb_tgt/firebird/include/firebird/impl
+		if test "$CLIENT_ONLY_FLG" = "N" || test "$WITH_TOMCRYPT" = "Y"; then
+			mkdir -p gen/\$fb_tgt/firebird/plugins
+		fi
+		if test "$CLIENT_ONLY_FLG" = "N"; then
+			mkdir -p gen/\$fb_tgt/firebird/plugins/udr
+			mkdir -p gen/\$fb_tgt/firebird/examples/api
+			mkdir -p gen/\$fb_tgt/firebird/examples/dbcrypt
+			mkdir -p gen/\$fb_tgt/firebird/examples/empbuild
+			mkdir -p gen/\$fb_tgt/firebird/examples/extauth
+			mkdir -p gen/\$fb_tgt/firebird/examples/include
+			mkdir -p gen/\$fb_tgt/firebird/examples/interfaces
+			mkdir -p gen/\$fb_tgt/firebird/examples/object_pascal
+			mkdir -p gen/\$fb_tgt/firebird/examples/object_pascal/common
+			mkdir -p gen/\$fb_tgt/firebird/examples/package
+			mkdir -p gen/\$fb_tgt/firebird/examples/stat
+			mkdir -p gen/\$fb_tgt/firebird/examples/udf
+			mkdir -p gen/\$fb_tgt/firebird/examples/udr
+			mkdir -p gen/\$fb_tgt/firebird/examples/prebuilt/bin
+			mkdir -p gen/\$fb_tgt/firebird/examples/prebuilt/plugins
+			mkdir -p gen/\$fb_tgt/firebird/misc
+		fi
+	fi
+
+  case "$build" in
+    *-*-darwin*)
+      cp -a $VCPKG_INSTALLED/lib/libicu* gen/\$fb_tgt/firebird/lib/
+      install_name_tool -id @rpath/lib/libicuuc.dylib gen/\$fb_tgt/firebird/lib/libicuuc.dylib
+      install_name_tool -id @rpath/lib/libicui18n.dylib gen/\$fb_tgt/firebird/lib/libicui18n.dylib
+      install_name_tool -id @rpath/lib/libicudata.dylib gen/\$fb_tgt/firebird/lib/libicudata.dylib
+      install_name_tool -change @rpath/libicudata.71.1.dylib @loader_path/libicudata.71.1.dylib gen/\$fb_tgt/firebird/lib/libicuuc.71.1.dylib
+      install_name_tool -change @rpath/libicudata.71.1.dylib @loader_path/libicudata.71.1.dylib gen/\$fb_tgt/firebird/lib/libicui18n.71.1.dylib
+      install_name_tool -change @rpath/libicuuc.71.1.dylib @loader_path/libicuuc.71.1.dylib gen/\$fb_tgt/firebird/lib/libicui18n.71.1.dylib
+      ;;
+  esac
 
 dnl ### TEMP ### directories for generated .cpp, .o and .d by module name
 	for src_dir in `cd src; ls -R -1 * | grep : | tr -d : | tr "\n" " "; cd ..`; do
@@ -1369,18 +1466,31 @@ dnl TODO: fix "arch-specific/linux/" paths for common posix scripts with SVN
 for fb_tgt in $FB_TARGETS; do
 AC_CONFIG_FILES([
 gen/$fb_tgt/firebird/firebird.conf:builds/install/misc/firebird.conf
+gen/$fb_tgt/firebird/plugins.conf:builds/install/misc/plugins.conf
+])
+if test "$CLIENT_ONLY_FLG" = "N"; then
+AC_CONFIG_FILES([
 gen/$fb_tgt/firebird/databases.conf:builds/install/misc/databases.conf
 gen/$fb_tgt/firebird/fbtrace.conf:src/utilities/ntrace/fbtrace.conf
-gen/$fb_tgt/firebird/intl/fbintl.conf:builds/install/misc/fbintl.conf
-gen/$fb_tgt/firebird/plugins.conf:builds/install/misc/plugins.conf
 gen/$fb_tgt/firebird/replication.conf:builds/install/misc/replication.conf
 ])
+if test "x$fb_tgt" != "xNative" && [[[ x$CROSS = xandroid* ]]]; then
+AC_CONFIG_FILES([
+gen/$fb_tgt/firebird/fbintl.conf:builds/install/misc/fbintl.conf
+])
+else
+AC_CONFIG_FILES([
+gen/$fb_tgt/firebird/intl/fbintl.conf:builds/install/misc/fbintl.conf
+])
+fi
+fi
 done
 
 if test "x$CROSS" != "x"; then
 AC_CONFIG_FILES([gen/make.crossPlatform:builds/posix/make.$CROSS])
 fi
 
+if [[[ x$CROSS != xandroid* ]]]; then
 AC_CONFIG_FILES([
 gen/Release/firebird/bin/fb_config:builds/install/posix-common/fb_config.in
 gen/Release/firebird/bin/posixLibrary.sh:builds/install/posix-common/posixLibrary.sh.in
@@ -1388,6 +1498,10 @@ gen/Release/firebird/bin/install.sh:builds/install/posix-common/install.sh.in
 gen/Release/firebird/bin/FirebirdUninstall.sh:builds/install/posix-common/FirebirdUninstall.sh.in
 gen/Release/firebird/bin/changeServerMode.sh:builds/install/posix-common/changeServerMode.sh.in
 gen/Release/firebird/bin/registerDatabase.sh:builds/install/posix-common/registerDatabase.sh.in
+])
+fi
+
+AC_CONFIG_FILES([
 gen/vers.sh:builds/posix/vers.sh.in
 ])
 
@@ -1408,10 +1522,17 @@ case "$PLATFORM" in
         gen/install/misc/firebird.init.d.gentoo:builds/install/arch-specific/linux/firebird.init.d.gentoo.in
         gen/install/misc/firebird.init.d.slackware:builds/install/arch-specific/linux/firebird.init.d.slackware.in
         gen/install/misc/rc.config.firebird:builds/install/arch-specific/linux/rc.config.firebird.in
-        gen/Release/firebird/bin/linuxLibrary.sh:builds/install/arch-specific/linux/linuxLibrary.sh.in
         gen/install/misc/firebird.service:builds/install/arch-specific/linux/firebird.service.in
     ],
 	[chmod a+x gen/install/*sh 2>/dev/null])
+
+    if [[[ x$CROSS != xandroid* ]]]; then
+        AC_CONFIG_FILES([
+            gen/Release/firebird/bin/linuxLibrary.sh:builds/install/arch-specific/linux/linuxLibrary.sh.in
+        ],
+        [chmod a+x gen/install/*sh 2>/dev/null])
+    fi
+
     ;;
 
   HPUX)
@@ -1515,12 +1636,15 @@ gen/make.platform.solaris.examples:${MAKE_SRC_DIR}/make.platform.solaris.example
 ;;
 esac
 
+# Fix problem with autoconf 2.72 inserting -std in CXX.
+CXX=`echo "$CXX" | sed -e 's/\(-std=c++11\)//g' -e 's/\(-std=gnu++11\)//g'`
+
 AC_OUTPUT
 
 dnl Print out the build configuration (the most interesting thing)
 echo
 echo
-echo The Firebird5 package has been configured with the following options:
+echo The Firebird6 package has been configured with the following options:
 echo
 
 case $DEVEL_FLG in

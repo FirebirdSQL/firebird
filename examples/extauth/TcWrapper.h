@@ -46,8 +46,8 @@ public:
 	void fini();
 	const PrngDescriptor* getDsc();
 
-	int index;
-	prng_state state;
+	int index = 0;
+	prng_state state{};
 };
 
 class Hash
@@ -163,7 +163,7 @@ public:
 		return ptr != r.ptr;
 	}
 
-	void clear() throw()	// Used after detach/commit/close/etc., i.e. release() not needed
+	void clear() noexcept	// Used after detach/commit/close/etc., i.e. release() not needed
 	{
 		ptr = NULL;
 	}

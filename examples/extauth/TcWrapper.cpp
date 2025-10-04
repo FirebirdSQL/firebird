@@ -58,7 +58,7 @@ void check(ThrowStatusWrapper* status, int err, const char* text)
 		return;
 
 	char buf[256];
-	sprintf(buf, "%s: %s", text, error_to_string(err));
+	snprintf(buf, sizeof(buf), "%s: %s", text, error_to_string(err));
 	error(status, buf);
 }
 
@@ -81,7 +81,7 @@ unsigned readHexKey(ThrowStatusWrapper* status, const char* hex, unsigned char* 
 			error(status, "Key format error");
 		*k++ = static_cast<unsigned char>(c);
 	}
-	return k - key;
+	return static_cast<unsigned>(k - key);
 }
 
 void PseudoRandom::init(ThrowStatusWrapper* status)

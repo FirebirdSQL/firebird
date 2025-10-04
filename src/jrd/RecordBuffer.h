@@ -23,36 +23,41 @@
 #ifndef JRD_RECORD_BUFFER_H
 #define JRD_RECORD_BUFFER_H
 
+#include "../common/classes/alloc.h"
+#include "../common/classes/auto.h"
 #include "../common/classes/File.h"
 #include "../jrd/TempSpace.h"
 
 namespace Jrd {
 
-class RecordBuffer
+class Format;
+class Record;
+
+class RecordBuffer : public Firebird::PermanentStorage
 {
 public:
 	RecordBuffer(MemoryPool&, const Format*);
-	~RecordBuffer();
 
 	size_t getCount() const
 	{
 		return count;
 	}
 
-	Record* getTempRecord() const
+	Record* getTempRecord()
 	{
-		return record;
+		return record.get();
 	}
 
 	const Format* getFormat() const;
 
+	void reset();
 	offset_t store(const Record*);
 	bool fetch(offset_t, Record*);
 
 private:
-	offset_t count;
-	Record* record;
-	TempSpace* space;
+	offset_t count = 0;
+	Firebird::AutoPtr<Record> record;
+	Firebird::AutoPtr<TempSpace> space;
 };
 
 } // namespace

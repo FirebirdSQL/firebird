@@ -79,7 +79,7 @@ static SINT64 get_parameter(const T** ptr)
 static void times(struct tms*);
 #endif
 
-static const SCHAR items[] =
+static constexpr SCHAR items[] =
 {
 	isc_info_reads,
 	isc_info_writes,
@@ -89,7 +89,7 @@ static const SCHAR items[] =
 	isc_info_current_memory, isc_info_max_memory
 };
 
-static const SCHAR* report = "elapsed = !e cpu = !u reads = !r writes = !w fetches = !f marks = !m$";
+static constexpr const SCHAR* report = "elapsed = !e cpu = !u reads = !r writes = !w fetches = !f marks = !m$";
 
 #if defined(WIN_NT) && !defined(CLOCKS_PER_SEC)
 #define TICK	100
@@ -108,117 +108,10 @@ template<typename P>
 static int perf_format(const P* before, const P* after,
 				const SCHAR* string, SCHAR* buffer, SSHORT* buf_len)
 {
-/**************************************
- *
- *	P E R F _ f o r m a t
- *
- **************************************
- *
- * Functional description
- *	Format a buffer with statistical stuff under control of formatting
- *	string.  Substitute in appropriate stuff.  Return the length of the
- *	formatting output.
- *
- **************************************/
-	SCHAR c;
-	SLONG buffer_length = buf_len ? *buf_len : 0;
-	SCHAR* p = buffer;
-
-	if (buffer_length < 0)
-	{
-		buffer_length = 0;
-	}
-
-	while ((c = *string++) && c != '$')
-	{
-		if (c != '!')
-			*p++ = c;
-		else
-		{
-			SINT64 delta;
-			switch (c = *string++)
-			{
-			case 'r':
-				delta = after->perf_reads - before->perf_reads;
-				break;
-			case 'w':
-				delta = after->perf_writes - before->perf_writes;
-				break;
-			case 'f':
-				delta = after->perf_fetches - before->perf_fetches;
-				break;
-			case 'm':
-				delta = after->perf_marks - before->perf_marks;
-				break;
-			case 'd':
-				delta = after->perf_current_memory - before->perf_current_memory;
-				break;
-			case 'p':
-				delta = after->perf_page_size;
-				break;
-			case 'b':
-				delta = after->perf_buffers;
-				break;
-			case 'c':
-				delta = after->perf_current_memory;
-				break;
-			case 'x':
-				delta = after->perf_max_memory;
-				break;
-			case 'e':
-				delta = after->perf_elapsed - before->perf_elapsed;
-				break;
-			case 'u':
-				delta = after->perf_times.tms_utime - before->perf_times.tms_utime;
-				break;
-			case 's':
-				delta = after->perf_times.tms_stime - before->perf_times.tms_stime;
-				break;
-			default:
-				sprintf(p, "?%c?", c);
-				while (*p)
-					p++;
-			}
-
-			switch (c)
-			{
-			case 'r':
-			case 'w':
-			case 'f':
-			case 'm':
-			case 'd':
-			case 'p':
-			case 'b':
-			case 'c':
-			case 'x':
-				sprintf(p, "%" SQUADFORMAT, delta);
-				while (*p)
-					p++;
-				break;
-
-			case 'u':
-			case 's':
-				sprintf(p, "%" SQUADFORMAT".%.2" SQUADFORMAT, delta / TICK, (delta % TICK) * 100 / TICK);
-				while (*p)
-					p++;
-				break;
-
-			case 'e':
-				sprintf(p, "%" SQUADFORMAT".%.2" SQUADFORMAT, delta / 100, delta % 100);
-				while (*p)
-					p++;
-				break;
-			}
-		}
-	}
-
-	*p = 0;
-	const int length = static_cast<int>(p - buffer);
-	if (buffer_length && (buffer_length -= length) >= 0) {
-		memset(p, ' ', static_cast<size_t>(buffer_length));
-	}
-
-	return length;
+	// This method was prone to buffer overflow and is no longer used in the current implementation.
+	// This stub is left in place as it may get called by older (2.5 or older) ISQL clients loading
+	// this fbclient.dll.
+	return 0;
 }
 
 
@@ -413,8 +306,8 @@ void API_ROUTINE perf64_report(const PERF64* before, const PERF64* after, SCHAR*
 
 namespace {
 
-static const unsigned CNT_DB_INFO = 1;
-static const unsigned CNT_TIMER = 2;
+static constexpr unsigned CNT_DB_INFO = 1;
+static constexpr unsigned CNT_TIMER = 2;
 enum CntTimer {CNT_TIME_REAL, CNT_TIME_USER, CNT_TIME_SYSTEM};
 
 struct KnownCounters
@@ -427,7 +320,7 @@ struct KnownCounters
 #define TOTAL_COUNTERS 11
 
 // we use case-insensitive names, here they are written with capital letters for human readability
-KnownCounters knownCounters[TOTAL_COUNTERS] = {
+constexpr KnownCounters knownCounters[TOTAL_COUNTERS] = {
 	{"RealTime", CNT_TIMER, CNT_TIME_REAL},
 	{"UserTime", CNT_TIMER, CNT_TIME_USER},
 	{"SystemTime", CNT_TIMER, CNT_TIME_SYSTEM},
@@ -454,7 +347,7 @@ void Why::UtilInterface::getPerfCounters(Firebird::CheckStatusWrapper* status,
 		Firebird::string dupSet(countersSet);
 		char* set = dupSet.begin();
 		char* save = NULL;
-		const char* delim = " \t,;";
+		constexpr const char* delim = " \t,;";
 		unsigned typeMask = 0;
 		unsigned n = 0;
 		UCHAR info[TOTAL_COUNTERS];		// will never use all, but do not care about few bytes
@@ -498,7 +391,7 @@ found:		;
 		// Fill time counters
 		if (typeMask & CNT_TIMER)
 		{
-			SINT64 tr = fb_utils::query_performance_counter() * 1000 / fb_utils::query_performance_frequency();
+			const SINT64 tr = fb_utils::query_performance_counter() * 1000 / fb_utils::query_performance_frequency();
 			SINT64 uTime, sTime;
 			fb_utils::get_process_times(uTime, sTime);
 
@@ -545,7 +438,7 @@ found:		;
 			while (true)
 			{
 				SINT64 v = 0;
-				UCHAR ipb = *p++;
+				const UCHAR ipb = *p++;
 
 				switch (ipb)
 				{

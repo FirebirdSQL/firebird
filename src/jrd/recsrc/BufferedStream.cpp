@@ -199,7 +199,7 @@ bool BufferedStream::internalGetRecord(thread_db* tdbb) const
 			switch (map.map_type)
 			{
 			case FieldMap::REGULAR_FIELD:
-				MOV_move(tdbb, &from, &to);
+				MOV_move(tdbb, &from, &to, true);
 				break;
 
 			case FieldMap::TRANSACTION_ID:
@@ -271,7 +271,7 @@ bool BufferedStream::internalGetRecord(thread_db* tdbb) const
 				else
 				{
 					EVL_field(relation, record, map.map_id, &to);
-					MOV_move(tdbb, &from, &to);
+					MOV_move(tdbb, &from, &to, true);
 					record->clearNull(map.map_id);
 				}
 
@@ -309,29 +309,30 @@ bool BufferedStream::refetchRecord(thread_db* tdbb) const
 	return m_next->refetchRecord(tdbb);
 }
 
-bool BufferedStream::lockRecord(thread_db* tdbb) const
+WriteLockResult BufferedStream::lockRecord(thread_db* tdbb) const
 {
 	return m_next->lockRecord(tdbb);
 }
 
-void BufferedStream::getChildren(Array<const RecordSource*>& children) const
+void BufferedStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	children.add(m_next);
+	m_next->getLegacyPlan(tdbb, plan, level);
 }
 
-void BufferedStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void BufferedStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
 {
-	if (detailed)
-	{
-		string extras;
-		extras.printf(" (record length: %" ULONGFORMAT")", m_format->fmt_length);
+	planEntry.className = "BufferedStream";
 
-		plan += printIndent(++level) + "Record Buffer" + extras;
-		printOptInfo(plan);
-	}
+	string extras;
+	extras.printf(" (record length: %" ULONGFORMAT")", m_format->fmt_length);
+
+	planEntry.lines.add().text = "Record Buffer" + extras;
+	printOptInfo(planEntry.lines);
+
+	planEntry.recordLength = m_format->fmt_length;
 
 	if (recurse)
-		m_next->print(tdbb, plan, detailed, level, recurse);
+		m_next->getPlan(tdbb, planEntry.children.add(), ++level, recurse);
 }
 
 void BufferedStream::markRecursive()
@@ -342,6 +343,11 @@ void BufferedStream::markRecursive()
 void BufferedStream::findUsedStreams(StreamList& streams, bool expandAll) const
 {
 	m_next->findUsedStreams(streams, expandAll);
+}
+
+bool BufferedStream::isDependent(const StreamList& streams) const
+{
+	return m_next->isDependent(streams);
 }
 
 void BufferedStream::invalidateRecords(Request* request) const

@@ -62,22 +62,12 @@ namespace {
 
 DsqlBatch::DsqlBatch(DsqlDmlRequest* req, const dsql_msg* /*message*/, IMessageMetadata* inMeta, ClumpletReader& pb)
 	: m_dsqlRequest(req),
-	  m_batch(NULL),
 	  m_meta(inMeta),
 	  m_messages(m_dsqlRequest->getPool()),
 	  m_blobs(m_dsqlRequest->getPool()),
 	  m_blobMap(m_dsqlRequest->getPool()),
 	  m_blobMeta(m_dsqlRequest->getPool()),
-	  m_defaultBpb(m_dsqlRequest->getPool()),
-	  m_messageSize(0),
-	  m_alignedMessage(0),
-	  m_alignment(0),
-	  m_flags(0),
-	  m_detailed(DETAILED_LIMIT),
-	  m_bufferSize(BUFFER_LIMIT),
-	  m_lastBlob(MAX_ULONG),
-	  m_setBlobSize(false),
-	  m_blobPolicy(IBatch::BLOB_NONE)
+	  m_defaultBpb(m_dsqlRequest->getPool())
 {
 	memset(&m_genId, 0, sizeof(m_genId));
 
@@ -161,15 +151,20 @@ DsqlBatch::DsqlBatch(DsqlDmlRequest* req, const dsql_msg* /*message*/, IMessageM
 
 	// assign initial default BPB
 	setDefBpb(FB_NELEM(initBlobParameters), initBlobParameters);
-}
 
+	if (const auto att = m_dsqlRequest->req_dbb->dbb_attachment)
+		att->registerBatch(this);
+}
 
 DsqlBatch::~DsqlBatch()
 {
 	if (m_batch)
 		m_batch->resetHandle();
 	if (m_dsqlRequest)
-		m_dsqlRequest->req_batch = NULL;
+		m_dsqlRequest->req_batch = nullptr;
+
+	if (const auto att = m_dsqlRequest->req_dbb->dbb_attachment)
+		att->deregisterBatch(this);
 }
 
 Attachment* DsqlBatch::getAttachment() const
@@ -177,7 +172,7 @@ Attachment* DsqlBatch::getAttachment() const
 	return m_dsqlRequest->req_dbb->dbb_attachment;
 }
 
-void DsqlBatch::setInterfacePtr(JBatch* interfacePtr) throw()
+void DsqlBatch::setInterfacePtr(JBatch* interfacePtr) noexcept
 {
 	fb_assert(!m_batch);
 	m_batch = interfacePtr;
@@ -213,12 +208,6 @@ DsqlBatch* DsqlBatch::open(thread_db* tdbb, DsqlDmlRequest* req, IMessageMetadat
 
 	const auto statement = req->getDsqlStatement();
 
-	if (statement->getFlags() & DsqlStatement::FLAG_ORPHAN)
-	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-		          Arg::Gds(isc_bad_req_handle));
-	}
-
 	switch (statement->getType())
 	{
 		case DsqlStatement::TYPE_INSERT:
@@ -234,7 +223,7 @@ DsqlBatch* DsqlBatch::open(thread_db* tdbb, DsqlDmlRequest* req, IMessageMetadat
 	}
 
 	const dsql_msg* message = statement->getSendMsg();
-	if (! (inMetadata && message && req->parseMetadata(inMetadata, message->msg_parameters)))
+	if (! (inMetadata && message && message->msg_parameter > 0))
 	{
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
 				  Arg::Gds(isc_batch_param));
@@ -265,7 +254,7 @@ void DsqlBatch::add(thread_db* tdbb, ULONG count, const void* inBuffer)
 		return;
 	m_messages.align(m_alignment);
 	m_messages.put(inBuffer, (count - 1) * m_alignedMessage + m_messageSize);
-	DEB_BATCH(fprintf(stderr, "Put to batch %d messages\n", count));
+	//DEB_BATCH(fprintf(stderr, "Put to batch %d messages\n", count));
 }
 
 void DsqlBatch::blobCheckMeta()
@@ -308,6 +297,7 @@ void DsqlBatch::blobSetSize()
 		m_blobs.put3(&blobSize, sizeof(blobSize), m_lastBlob + sizeof(ISC_QUAD));
 		m_setBlobSize = false;
 	}
+	DEB_BATCH(fprintf(stderr, "blobSetSize %u\n", blobSize));
 }
 
 void DsqlBatch::blobPrepare()
@@ -357,6 +347,8 @@ void DsqlBatch::addBlob(thread_db* tdbb, ULONG length, const void* inBuffer, ISC
 	ULONG fullLength = length + parLength;
 	m_blobs.put(&fullLength, sizeof(ULONG));
 	m_blobs.put(&parLength, sizeof(ULONG));
+	DEB_BATCH(fprintf(stderr, "addBlob %08x.%08x par %u full %u ",
+		blobId->gds_quad_high, blobId->gds_quad_low, parLength, fullLength));
 
 	// Store BPB
 	if (parLength)
@@ -393,8 +385,11 @@ void DsqlBatch::putSegment(ULONG length, const void* inBuffer)
 		m_blobs.align(IBatch::BLOB_SEGHDR_ALIGN);
 		m_blobs.put(&l, sizeof(l));
 		m_setBlobSize = true;
+
+		DEB_BATCH(fprintf(stderr, "segment header, "));
 	}
 	m_blobs.put(inBuffer, length);
+	DEB_BATCH(fprintf(stderr, "segment data %u ", length));
 }
 
 void DsqlBatch::addBlobStream(thread_db* tdbb, unsigned length, const void* inBuffer)
@@ -539,6 +534,10 @@ private:
 						ISC_QUAD batchBlobId = *reinterpret_cast<ISC_QUAD*>(flow.data);
 						ULONG* blobSize = reinterpret_cast<ULONG*>(flow.data + sizeof(ISC_QUAD));
 						ULONG* bpbSize = reinterpret_cast<ULONG*>(flow.data + sizeof(ISC_QUAD) + sizeof(ULONG));
+
+						DEB_BATCH(fprintf(stderr, "B-ID: %08x.%08x full=%u par=%u\n", batchBlobId.gds_quad_high, batchBlobId.gds_quad_low,
+							*blobSize, *bpbSize));
+
 						flow.newHdr(*blobSize);
 						ULONG currentBpbSize = *bpbSize;
 
@@ -589,7 +588,6 @@ private:
 							blob = blb::create2(tdbb, transaction, &engineBlobId, bpb->getCount(),
 								bpb->begin(), true);
 
-							//DEB_BATCH(fprintf(stderr, "B-ID: (%x,%x)\n", batchBlobId.gds_quad_high, batchBlobId.gds_quad_low));
 							registerBlob(reinterpret_cast<ISC_QUAD*>(&engineBlobId), &batchBlobId);
 						}
 					}
@@ -608,6 +606,8 @@ private:
 							flow.move(sizeof(USHORT));
 
 							dataSize = *segSize;
+
+							DEB_BATCH(fprintf(stderr, "  Seg: %u\n", dataSize));
 							if (dataSize > flow.currentBlobSize)
 							{
 								ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
@@ -626,7 +626,7 @@ private:
 							}
 						}
 
-						blob->BLB_put_segment(tdbb, flow.data, dataSize);
+						blob->BLB_put_data(tdbb, flow.data, dataSize);
 						flow.move(dataSize);
 					}
 				}
@@ -653,18 +653,23 @@ private:
 	// execute request
 	m_dsqlRequest->req_transaction = transaction;
 	Request* req = m_dsqlRequest->getRequest();
+	DsqlStatement* dStmt = m_dsqlRequest->getDsqlStatement();
 	fb_assert(req);
 
 	// prepare completion interface
 	AutoPtr<BatchCompletionState, SimpleDispose> completionState
 		(FB_NEW BatchCompletionState(m_flags & (1 << IBatch::TAG_RECORD_COUNTS), m_detailed));
 	AutoSetRestore<bool> batchFlag(&req->req_batch_mode, true);
-	const dsql_msg* message = m_dsqlRequest->getDsqlStatement()->getSendMsg();
+	const dsql_msg* sendMessage = dStmt->getSendMsg();
+	// map message to internal engine format
+	// Do it one time only to avoid parsing its metadata for every message
+	m_dsqlRequest->metadataToFormat(m_meta, sendMessage);
+	// Using of positional DML in batch is strange but not forbidden
+	m_dsqlRequest->mapCursorKey(tdbb);
 	bool startRequest = true;
 
-	bool isExecBlock = m_dsqlRequest->getDsqlStatement()->getType() == DsqlStatement::TYPE_EXEC_BLOCK;
-	const auto receiveMessage = isExecBlock ? m_dsqlRequest->getDsqlStatement()->getReceiveMsg() : nullptr;
-	auto receiveMsgBuffer = isExecBlock ? m_dsqlRequest->req_msg_buffers[receiveMessage->msg_buffer_number] : nullptr;
+	bool isExecBlock = dStmt->getType() == DsqlStatement::TYPE_EXEC_BLOCK;
+	const dsql_msg* receiveMessage = isExecBlock ? dStmt->getReceiveMsg() : nullptr;
 
 	// process messages
 	ULONG remains;
@@ -689,6 +694,7 @@ private:
 				continue;
 			}
 
+			const bool start = startRequest;
 			if (startRequest)
 			{
 				EXE_unwind(tdbb, req);
@@ -719,24 +725,18 @@ private:
 				*id = newId;
 			}
 
-			// map message to internal engine format
-			m_dsqlRequest->mapInOut(tdbb, false, message, m_meta, NULL, data);
-			data += m_messageSize;
-			remains -= m_messageSize;
-
-			UCHAR* msgBuffer = m_dsqlRequest->req_msg_buffers[message->msg_buffer_number];
 			try
 			{
 				// runsend data to request and collect stats
 				ULONG before = req->req_records_inserted + req->req_records_updated +
 					req->req_records_deleted;
-				EXE_send(tdbb, req, message->msg_number, message->msg_length, msgBuffer);
+				EXE_send(tdbb, req, sendMessage->msg_number, m_messageSize, data);
 				ULONG after = req->req_records_inserted + req->req_records_updated +
 					req->req_records_deleted;
 				completionState->regUpdate(after - before);
 
-				if (isExecBlock)
-					EXE_receive(tdbb, req, receiveMessage->msg_number, receiveMessage->msg_length, receiveMsgBuffer);
+				if (receiveMessage)
+					EXE_receive(tdbb, req, receiveMessage->msg_number, receiveMessage->msg_length, nullptr); // We don't care about returned record
 			}
 			catch (const Exception& ex)
 			{
@@ -756,6 +756,9 @@ private:
 
 				startRequest = true;
 			}
+
+			data += m_messageSize;
+			remains -= m_messageSize;
 		}
 
 		UCHAR* alignedData = FB_ALIGN(data, m_alignment);
@@ -805,8 +808,6 @@ void DsqlBatch::DataCache::setBuf(ULONG size, ULONG cacheCapacity)
 
 void DsqlBatch::DataCache::put3(const void* data, ULONG dataSize, ULONG offset)
 {
-	// This assertion guarantees that data always fits as a whole into m_cache or m_space,
-	// never placed half in one storage, half - in another.
 	fb_assert((DsqlBatch::RAM_BATCH % dataSize == 0) && (offset % dataSize == 0));
 
 	if (offset >= m_used)
@@ -819,6 +820,13 @@ void DsqlBatch::DataCache::put3(const void* data, ULONG dataSize, ULONG offset)
 	}
 	else
 	{
+		if (offset + dataSize > m_used)
+		{
+			// what a pity - data appears partilly divided between cache & tempspace
+			fb_assert(offset + dataSize <= getSize());
+			flush();
+		}
+
 		const FB_UINT64 writtenBytes = m_space->write(offset, data, dataSize);
 		fb_assert(writtenBytes == dataSize);
 	}
@@ -851,13 +859,7 @@ void DsqlBatch::DataCache::put(const void* d, ULONG dataSize)
 		}
 
 		// swap ram cache to tempspace
-		if (!m_space)
-			m_space = FB_NEW_POOL(getPool()) TempSpace(getPool(), TEMP_NAME);
-
-		const FB_UINT64 writtenBytes = m_space->write(m_used, m_cache.begin(), m_cache.getCount());
-		fb_assert(writtenBytes == m_cache.getCount());
-		m_used += m_cache.getCount();
-		m_cache.clear();
+		flush();
 
 		// in a case of huge buffer write directly to tempspace
 		if (dataSize > m_cacheCapacity / K)
@@ -870,6 +872,17 @@ void DsqlBatch::DataCache::put(const void* d, ULONG dataSize)
 	}
 
 	m_cache.append(data, dataSize);
+}
+
+void DsqlBatch::DataCache::flush()
+{
+	if (!m_space)
+		m_space = FB_NEW_POOL(getPool()) TempSpace(getPool(), TEMP_NAME);
+
+	const FB_UINT64 writtenBytes = m_space->write(m_used, m_cache.begin(), m_cache.getCount());
+	fb_assert(writtenBytes == m_cache.getCount());
+	m_used += m_cache.getCount();
+	m_cache.clear();
 }
 
 void DsqlBatch::DataCache::align(ULONG alignment)

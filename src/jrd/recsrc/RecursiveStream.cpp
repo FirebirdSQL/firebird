@@ -81,11 +81,8 @@ void RecursiveStream::internalOpen(thread_db* tdbb) const
 
 	// Initialize the record number of each stream in the union
 
-	for (FB_SIZE_T i = 0; i < m_innerStreams.getCount(); i++)
-	{
-		const StreamType stream = m_innerStreams[i];
+	for (const auto stream : m_innerStreams)
 		request->req_rpb[stream].rpb_number.setValue(BOF_NUMBER);
-	}
 
 	m_root->open(tdbb);
 }
@@ -233,44 +230,38 @@ bool RecursiveStream::refetchRecord(thread_db* /*tdbb*/) const
 	return true;
 }
 
-bool RecursiveStream::lockRecord(thread_db* /*tdbb*/) const
+WriteLockResult RecursiveStream::lockRecord(thread_db* /*tdbb*/) const
 {
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
-	return false; // compiler silencer
 }
 
-void RecursiveStream::getChildren(Array<const RecordSource*>& children) const
+void RecursiveStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	children.add(m_root);
-	children.add(m_inner);
+	if (!level)
+		plan += "(";
+
+	m_root->getLegacyPlan(tdbb, plan, level + 1);
+
+	plan += ", ";
+
+	m_inner->getLegacyPlan(tdbb, plan, level + 1);
+
+	if (!level)
+		plan += ")";
 }
 
-void RecursiveStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void RecursiveStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
 {
-	if (detailed)
+	planEntry.className = "RecursiveStream";
+
+	planEntry.lines.add().text = "Recursion";
+	printOptInfo(planEntry.lines);
+
+	if (recurse)
 	{
-		plan += printIndent(++level) + "Recursion";
-		printOptInfo(plan);
-
-		if (recurse)
-		{
-			m_root->print(tdbb, plan, true, level, recurse);
-			m_inner->print(tdbb, plan, true, level, recurse);
-		}
-	}
-	else
-	{
-		if (!level)
-			plan += "(";
-
-		m_root->print(tdbb, plan, false, level + 1, recurse);
-
-		plan += ", ";
-
-		m_inner->print(tdbb, plan, false, level + 1, recurse);
-
-		if (!level)
-			plan += ")";
+		++level;
+		m_root->getPlan(tdbb, planEntry.children.add(), level, recurse);
+		m_inner->getPlan(tdbb, planEntry.children.add(), level, recurse);
 	}
 }
 
@@ -300,6 +291,11 @@ void RecursiveStream::findUsedStreams(StreamList& streams, bool expandAll) const
 	}
 }
 
+bool RecursiveStream::isDependent(const StreamList& streams) const
+{
+	return m_root->isDependent(streams) || m_inner->isDependent(streams);
+}
+
 void RecursiveStream::cleanupLevel(Request* request, Impure* impure) const
 {
 	Impure* const saveImpure = request->getImpure<Impure>(m_saveOffset);
@@ -311,12 +307,11 @@ void RecursiveStream::cleanupLevel(Request* request, Impure* impure) const
 
 	const UCHAR* p = tmp + m_saveSize;
 
-	for (FB_SIZE_T i = 0; i < m_innerStreams.getCount(); i++)
+	for (const auto stream : m_innerStreams)
 	{
-		const StreamType stream = m_innerStreams[i];
 		record_param* const rpb = &request->req_rpb[stream];
 		Record* const tempRecord = rpb->rpb_record;
-		memmove(rpb, p, sizeof(record_param));
+		memmove(static_cast<void*>(rpb), p, sizeof(record_param));
 		p += sizeof(record_param);
 
 		// We just restored record of current recursion level, delete record

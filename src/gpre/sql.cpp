@@ -47,10 +47,10 @@
 #include "../common/utils_proto.h"
 
 
-const int DEFAULT_BLOB_SEGMENT_LENGTH	= 80;	// bytes
+constexpr int DEFAULT_BLOB_SEGMENT_LENGTH = 80;	// bytes
 
-const char* const OLD_CONTEXT = "OLD";
-const char* const NEW_CONTEXT = "NEW";
+constexpr const char* OLD_CONTEXT = "OLD";
+constexpr const char* NEW_CONTEXT = "NEW";
 
 static act* act_alter();
 static act* act_alter_database();
@@ -138,19 +138,19 @@ static void			to_upcase(const TEXT*, TEXT*, int);
 static swe* global_whenever[SWE_max];
 static swe* global_whenever_list;
 
-static inline bool end_of_command()
+static inline bool end_of_command() noexcept
 {
 	return
 		(gpreGlob.sw_language != lang_cobol && gpreGlob.token_global.tok_keyword == KW_SEMI_COLON) ||
 		(gpreGlob.sw_language == lang_cobol && gpreGlob.token_global.tok_keyword == KW_END_EXEC);
 }
 
-static inline bool range_short_integer(const SLONG x)
+static inline bool range_short_integer(const SLONG x) noexcept
 {
 	return (x < 32768 && x >= -32768);
 }
 
-static inline bool range_positive_short_integer(const SLONG x)
+static inline bool range_positive_short_integer(const SLONG x) noexcept
 {
 	return (x < 32768 && x >= 0);
 }
@@ -325,6 +325,11 @@ act* SQL_action(const TEXT* base_directory)
 	case KW_WHENEVER:
 		action = act_whenever();
 		break;
+
+	default:
+		// error was raised in previous switch
+		fb_assert(false);
+		break;
 	}
 
 	MSC_match(KW_END_EXEC);
@@ -469,7 +474,7 @@ void SQL_adjust_field_dtype( gpre_fld* field)
 //		Initialize (or re-initialize) to process a module.
 //
 
-void SQL_init()
+void SQL_init() noexcept
 {
 	global_whenever_list = NULL;
 
@@ -673,7 +678,7 @@ void SQL_par_field_dtype(gpre_req* request, gpre_fld* field, bool is_udf)
 			CPR_s_error("CHARACTER");
 		PAR_get_token();
 		field->fld_flags |= FLD_national;
-		// Fall into KW_CHAR
+		[[fallthrough]];
 	case KW_CHAR:
 		if (MSC_match(KW_VARYING))
 		{
@@ -683,6 +688,7 @@ void SQL_par_field_dtype(gpre_req* request, gpre_fld* field, bool is_udf)
 			EXP_match_paren();
 			break;
 		}
+		[[fallthrough]];
 	case KW_CSTRING:
 		if (keyword == KW_CSTRING)
 		{
@@ -816,7 +822,7 @@ void SQL_par_field_dtype(gpre_req* request, gpre_fld* field, bool is_udf)
 
 	if (field->fld_flags & FLD_national)
 	{
-        gpre_sym* symbol = MSC_find_symbol(HSH_lookup(DEFAULT_CHARACTER_SET_NAME), SYM_charset);
+        gpre_sym* symbol = MSC_find_symbol(HSH_lookup(NATIONAL_CHARACTER_SET), SYM_charset);
 		if (!symbol)
 		{
 			PAR_error("NATIONAL character set missing");
@@ -853,8 +859,6 @@ gpre_prc* SQL_procedure(gpre_req* request,
 					   const TEXT* owner_string,
 					   bool err_flag)
 {
-	SCHAR s[ERROR_LENGTH];
-
 	if (db_string && db_string[0])
 	{
 		// a database was specified for the procedure
@@ -890,8 +894,8 @@ gpre_prc* SQL_procedure(gpre_req* request,
 				if (procedure)
 				{
 					// relation was found in more than one database
-
-					sprintf(s, "PROCEDURE %s is ambiguous", prc_string);
+					SCHAR s[ERROR_LENGTH];
+					snprintf(s, sizeof(s), "PROCEDURE %s is ambiguous", prc_string);
 					PAR_error(s);
 				}
 				else
@@ -907,10 +911,11 @@ gpre_prc* SQL_procedure(gpre_req* request,
 	{
 		if (!err_flag)
 			return NULL;
+		SCHAR s[ERROR_LENGTH];
 		if (owner_string[0])
-			sprintf(s, "PROCEDURE %s.%s not defined", owner_string, prc_string);
+			snprintf(s, sizeof(s), "PROCEDURE %s.%s not defined", owner_string, prc_string);
 		else
-			sprintf(s, "PROCEDURE %s not defined", prc_string);
+			snprintf(s, sizeof(s), "PROCEDURE %s not defined", prc_string);
 		PAR_error(s);
 	}
 
@@ -947,7 +952,6 @@ gpre_rel* SQL_relation(gpre_req* request,
 			request->req_database = (gpre_dbb*) symbol->sym_object;
 	}
 
-	SCHAR s[ERROR_LENGTH];
 	gpre_rel* relation = NULL;
 
 	if (request->req_database)
@@ -966,8 +970,8 @@ gpre_rel* SQL_relation(gpre_req* request,
 				if (relation)
 				{
 					// relation was found in more than one database
-
-					sprintf(s, "TABLE %s is ambiguous", rel_string);
+					SCHAR s[ERROR_LENGTH];
+					snprintf(s, sizeof(s), "TABLE %s is ambiguous", rel_string);
 					PAR_error(s);
 				}
 				else
@@ -983,10 +987,11 @@ gpre_rel* SQL_relation(gpre_req* request,
 	{
 		if (!err_flag)
 			return (NULL);
+		SCHAR s[ERROR_LENGTH];
 		if (owner_string[0])
-			sprintf(s, "TABLE %s.%s not defined", owner_string, rel_string);
+			snprintf(s, sizeof(s), "TABLE %s.%s not defined", owner_string, rel_string);
 		else
-			sprintf(s, "TABLE %s not defined", rel_string);
+			snprintf(s, sizeof(s), "TABLE %s not defined", rel_string);
 		PAR_error(s);
 	}
 
@@ -1481,7 +1486,7 @@ static act* act_connect()
 	act* action = MSC_action(0, ACT_ready);
 	action->act_whenever = gen_whenever();
 	bool need_handle = false;
-	const USHORT default_buffers = 0; // useless?
+	constexpr USHORT default_buffers = 0; // useless?
 
 	MSC_match(KW_TO);
 
@@ -1988,9 +1993,9 @@ static act* act_create_shadow()
 		if (!length && !file->fil_start)
 		{
 			TEXT err_string[1024];
-			sprintf(err_string,
-					"Preceding file did not specify length, so %s must include starting page number",
-					file->fil_name);
+			snprintf(err_string, sizeof(err_string),
+				"Preceding file did not specify length, so %s must include starting page number",
+				file->fil_name);
 			PAR_error(err_string);
 		}
 		length = file->fil_length;
@@ -2250,7 +2255,6 @@ static act* act_declare()
 	{
 	case KW_FILTER:
 		return (act_declare_filter());
-		break;
 
 	case KW_EXTERNAL:
 		PAR_get_token();
@@ -2258,6 +2262,9 @@ static act* act_declare()
 			return (act_declare_udf());
 
 		CPR_s_error("FUNCTION");
+		break;
+
+	default:
 		break;
 	}
 
@@ -3017,8 +3024,8 @@ static act* act_execute()
 		if (gpreGlob.isc_databases && gpreGlob.isc_databases->dbb_next)
 		{
 			TEXT s[ERROR_LENGTH];
-			sprintf(s, "Executing dynamic SQL statement in context of database %s",
-					gpreGlob.isc_databases->dbb_name->sym_string);
+			snprintf(s, sizeof(s), "Executing dynamic SQL statement in context of database %s",
+				gpreGlob.isc_databases->dbb_name->sym_string);
 			CPR_warn(s);
 		}
 		dyn* statement = (dyn*) MSC_alloc(DYN_LEN);
@@ -3250,7 +3257,6 @@ static act* act_grant_revoke(act_t type)
 	gpre_usn* usernames = 0;
 	gpre_usn* user = 0;
 	USHORT user_dyn = 0;
-	SCHAR s[ERROR_LENGTH];
 
 	while (true)
 	{
@@ -3266,7 +3272,8 @@ static act* act_grant_revoke(act_t type)
 			SQL_relation_name(r_name, db_name, owner_name);
 			if (!MET_trigger_exists(request->req_database, r_name))
 			{
-				sprintf(s, "TRIGGER %s not defined", r_name);
+				SCHAR s[ERROR_LENGTH];
+				snprintf(s, sizeof(s), "TRIGGER %s not defined", r_name);
 				PAR_error(s);
 			}
 			user_dyn = isc_dyn_grant_trig;
@@ -3277,7 +3284,8 @@ static act* act_grant_revoke(act_t type)
 			SQL_relation_name(r_name, db_name, owner_name);
 			if (!MET_get_view_relation(request, r_name, relation_name->str_string, 0))
 			{
-				sprintf(s, "VIEW %s not defined on table %s", r_name, relation_name->str_string);
+				SCHAR s[ERROR_LENGTH];
+				snprintf(s, sizeof(s), "VIEW %s not defined on table %s", r_name, relation_name->str_string);
 				PAR_error(s);
 			}
 			user_dyn = isc_dyn_grant_view;
@@ -4181,16 +4189,17 @@ static act* act_set_dialect()
 		gpreGlob.sw_ods_version < 10)
 	{
 		char warn_mesg[100];
-		sprintf(warn_mesg, "Pre 6.0 database. Cannot use dialect %d, Resetting to %d\n",
-				dialect, SQL_DIALECT_V5);
+		snprintf(warn_mesg, sizeof(warn_mesg),
+			"Pre 6.0 database. Cannot use dialect %d, Resetting to %d\n", dialect, SQL_DIALECT_V5);
 		dialect = SQL_DIALECT_V5;
 		CPR_warn(warn_mesg);
 	}
 	else if (gpreGlob.isc_databases && dialect != gpreGlob.compiletime_db_dialect)
 	{
 		char warn_mesg[100];
-		sprintf(warn_mesg, "Client dialect set to %d. Compiletime database dialect is %d\n",
-				dialect, gpreGlob.compiletime_db_dialect);
+		snprintf(warn_mesg, sizeof(warn_mesg),
+			"Client dialect set to %d. Compiletime database dialect is %d\n",
+			dialect, gpreGlob.compiletime_db_dialect);
 		CPR_warn(warn_mesg);
 	}
 
@@ -4424,6 +4433,12 @@ static act* act_set_transaction()
 			continue;
 		}
 
+		if (MSC_match(KW_AUTO_RELEASE_TEMP_BLOBID))
+		{
+			trans->tra_flags |= TRA_auto_release_temp_blobid;
+			continue;
+		}
+
 		break;
 	}
 
@@ -4586,7 +4601,7 @@ static act* act_update()
 			else
 			{
 				// does not specify transaction clause in
-				// "update ... where cuurent of cursor" stmt
+				// "update ... where current of cursor" stmt
 				const USHORT trans_nm_len = static_cast<USHORT>(strlen(request->req_trans));
 				char* newtrans = (SCHAR *) MSC_alloc(trans_nm_len + 1);
 				transaction = newtrans;
@@ -4779,10 +4794,12 @@ static act* act_update()
 
 		gpre_nod* var_list = SQE_list(SQE_variable, request, false);
 
-		gpre_sym* old_ctx_sym = MSC_symbol(SYM_context, OLD_CONTEXT, strlen(OLD_CONTEXT), input_context);
+		gpre_sym* old_ctx_sym = MSC_symbol(SYM_context, OLD_CONTEXT,
+			static_cast<USHORT>(strlen(OLD_CONTEXT)), input_context);
 		HSH_insert(old_ctx_sym);
 
-		gpre_sym* new_ctx_sym = MSC_symbol(SYM_context, NEW_CONTEXT, strlen(NEW_CONTEXT), update_context);
+		gpre_sym* new_ctx_sym = MSC_symbol(SYM_context, NEW_CONTEXT,
+			static_cast<USHORT>(strlen(NEW_CONTEXT)), update_context);
 		HSH_insert(new_ctx_sym);
 
 		ret_list = return_values(request, value_list, var_list);
@@ -5042,7 +5059,8 @@ static act* act_upsert(void)
 
 		gpre_nod* var_list = SQE_list(SQE_variable, request, false);
 
-		gpre_sym* old_ctx_sym = MSC_symbol(SYM_context, OLD_CONTEXT, strlen(OLD_CONTEXT), context);
+		gpre_sym* old_ctx_sym = MSC_symbol(SYM_context, OLD_CONTEXT,
+			static_cast<USHORT>(strlen(OLD_CONTEXT)), context);
 		HSH_insert(old_ctx_sym);
 
 		// temporarily hide the insertion context
@@ -5050,7 +5068,8 @@ static act* act_upsert(void)
 		fb_assert(request->req_contexts == insert_context);
 		request->req_contexts = request->req_contexts->ctx_next;
 
-		gpre_sym* new_ctx_sym = MSC_symbol(SYM_context, NEW_CONTEXT, strlen(NEW_CONTEXT), update_context);
+		gpre_sym* new_ctx_sym = MSC_symbol(SYM_context, NEW_CONTEXT,
+			static_cast<USHORT>(strlen(NEW_CONTEXT)), update_context);
 		HSH_insert(new_ctx_sym);
 
 		upd_ret_list = return_values(request, value_list, var_list);
@@ -5578,6 +5597,9 @@ static void pair( gpre_nod* expr, gpre_nod* field_expr)
 	case nod_field:
 	case nod_literal:
 		return;
+
+	default:
+		break;
 	}
 
 	gpre_nod** ptr = expr->nod_arg;
@@ -5782,7 +5804,7 @@ static dyn* par_dynamic_cursor()
 		else
 			gpreGlob.token_global.tok_keyword = KW_none;
 	}
-	if (symbol = MSC_find_symbol(gpreGlob.token_global.tok_symbol, SYM_dyn_cursor))
+	if ((symbol = MSC_find_symbol(gpreGlob.token_global.tok_symbol, SYM_dyn_cursor)))
 	{
 		PAR_get_token();
 		return (dyn*) symbol->sym_object;
@@ -6453,15 +6475,16 @@ static USHORT resolve_dtypes(kwwords_t typ, bool sql_date)
 			case 1:
 				return dtype_timestamp;
 			case 2:
-				sprintf(err_mesg, "Encountered column type DATE which is ambiguous in dialect %d\n",
-						gpreGlob.sw_sql_dialect);
+				snprintf(err_mesg, sizeof(err_mesg),
+					"Encountered column type DATE which is ambiguous in dialect %d\n",
+					gpreGlob.sw_sql_dialect);
 				PAR_error(err_mesg);
 				return dtype_unknown;	// TMN: FIX FIX
-				// return;
+
 			default:
-				sprintf(err_mesg,
-						"Encountered column type DATE which is not supported in ods version %d\n",
-						gpreGlob.sw_ods_version);
+				snprintf(err_mesg, sizeof(err_mesg),
+					"Encountered column type DATE which is not supported in ods version %d\n",
+					gpreGlob.sw_ods_version);
 				PAR_error(err_mesg);
 			}
 		else
@@ -6475,8 +6498,9 @@ static USHORT resolve_dtypes(kwwords_t typ, bool sql_date)
 			case 1:
 				return dtype_timestamp;
 			case 2:
-				sprintf(err_mesg, "Encountered column type DATE which is ambiguous in dialect %d\n",
-						gpreGlob.sw_sql_dialect);
+				snprintf(err_mesg, sizeof(err_mesg),
+					"Encountered column type DATE which is ambiguous in dialect %d\n",
+					gpreGlob.sw_sql_dialect);
 				PAR_error(err_mesg);
 				return dtype_unknown;	// TMN: FIX FIX
 				// return;
@@ -6489,8 +6513,8 @@ static USHORT resolve_dtypes(kwwords_t typ, bool sql_date)
 	case KW_TIME:
 		if ((gpreGlob.sw_ods_version < 10) || (gpreGlob.sw_server_version < 6))
 		{
-			sprintf(err_mesg,
-					"Encountered column type TIME which is not supported by pre 6.0 Servers\n");
+			snprintf(err_mesg, sizeof(err_mesg),
+				"Encountered column type TIME which is not supported by pre 6.0 Servers\n");
 			PAR_error(err_mesg);
 			return dtype_unknown;	// TMN: FIX FIX
 			// return;
@@ -6501,7 +6525,7 @@ static USHORT resolve_dtypes(kwwords_t typ, bool sql_date)
 		return dtype_timestamp;
 
 	default:
-		sprintf(err_mesg, "resolve_dtypes(): Unknown dtype %d\n", typ);
+		snprintf(err_mesg, sizeof(err_mesg), "resolve_dtypes(): Unknown dtype %d\n", typ);
 		PAR_error(err_mesg);
 		break;
 	}
@@ -6762,9 +6786,9 @@ static void to_upcase(const TEXT* p, TEXT* q, int target_size)
 // with the internal buffer. We should provide the correct size if we provide
 // the output variable to put the result in it.
 
-void SQL_resolve_identifier( const TEXT* err_mesg, TEXT* str_in, int in_size)
+void SQL_resolve_identifier(const TEXT* err_mesg, TEXT* str_in, int in_size)
 {
-	static TEXT internal_buffer[MAX_CURSOR_SIZE];
+	TEXT internal_buffer[MAX_CURSOR_SIZE];
 	TEXT* str;
 	int len;
 	if (str_in)
@@ -6781,6 +6805,7 @@ void SQL_resolve_identifier( const TEXT* err_mesg, TEXT* str_in, int in_size)
 		else if (in_size > len + 1)
 		    PAR_error("Provide your own buffer for sizes bigger than 64.");
 	}
+	*str = '\0';
 
 	TEXT* const tk_string = gpreGlob.token_global.tok_string;
 
@@ -6789,7 +6814,7 @@ void SQL_resolve_identifier( const TEXT* err_mesg, TEXT* str_in, int in_size)
 	case 2:
 		if (gpreGlob.token_global.tok_type == tok_dblquoted)
 			PAR_error("Ambiguous use of double quotes in dialect 2");
-			// fall into
+		[[fallthrough]];
 	case 1:
 		if (gpreGlob.token_global.tok_type != tok_ident)
 			CPR_s_error(err_mesg);
@@ -6821,9 +6846,7 @@ void SQL_resolve_identifier( const TEXT* err_mesg, TEXT* str_in, int in_size)
 
 void SQL_dialect1_bad_type(USHORT field_dtype)
 {
-	char buffer[200];
-	const char* s = "unknown";
-
+	const char* s;
 	switch (field_dtype)
 	{
 	case dtype_sql_date:
@@ -6835,7 +6858,12 @@ void SQL_dialect1_bad_type(USHORT field_dtype)
 	case dtype_int64:
 		s = "64-bit numeric";
 		break;
+	default:
+		s = "unknown";
+		break;
 	}
-	sprintf(buffer, "Client SQL dialect 1 does not support reference to the %s datatype", s);
+	char buffer[200];
+	snprintf(buffer, sizeof(buffer),
+		"Client SQL dialect 1 does not support reference to the %s datatype", s);
 	PAR_error(buffer);
 }

@@ -50,9 +50,13 @@ FilteredStream::FilteredStream(CompilerScratch* csb, RecordSource* next,
 
 	m_impure = csb->allocImpure<Impure>();
 
-	const auto cardinality = next->getCardinality();
-	Optimizer::adjustSelectivity(selectivity, MAXIMUM_SELECTIVITY, cardinality);
-	m_cardinality = cardinality * selectivity;
+	auto cardinality = next->getCardinality();
+	if (selectivity)
+	{
+		Optimizer::adjustSelectivity(selectivity, MAXIMUM_SELECTIVITY, cardinality);
+		cardinality *= selectivity;
+	}
+	m_cardinality = cardinality;
 }
 
 void FilteredStream::internalOpen(thread_db* tdbb) const
@@ -111,30 +115,29 @@ bool FilteredStream::refetchRecord(thread_db* tdbb) const
 		m_boolean->execute(tdbb, request);
 }
 
-bool FilteredStream::lockRecord(thread_db* tdbb) const
+WriteLockResult FilteredStream::lockRecord(thread_db* tdbb) const
 {
 	return m_next->lockRecord(tdbb);
 }
 
-void FilteredStream::getChildren(Array<const RecordSource*>& children) const
+void FilteredStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	children.add(m_next);
+	m_next->getLegacyPlan(tdbb, plan, level);
 }
 
-void FilteredStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void FilteredStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
 {
-	if (detailed)
-	{
-		plan += printIndent(++level) + "Filter";
+	planEntry.className = "FilteredStream";
 
-		if (m_invariant)
-			plan += " (preliminary)";
+	planEntry.lines.add().text = "Filter";
 
-		printOptInfo(plan);
-	}
+	if (m_invariant)
+		planEntry.lines.back().text += " (preliminary)";
+
+	printOptInfo(planEntry.lines);
 
 	if (recurse)
-		m_next->print(tdbb, plan, detailed, level, recurse);
+		m_next->getPlan(tdbb, planEntry.children.add(), ++level, recurse);
 }
 
 void FilteredStream::markRecursive()
@@ -145,6 +148,14 @@ void FilteredStream::markRecursive()
 void FilteredStream::findUsedStreams(StreamList& streams, bool expandAll) const
 {
 	m_next->findUsedStreams(streams, expandAll);
+}
+
+bool FilteredStream::isDependent(const StreamList& streams) const
+{
+	if (m_anyBoolean && m_anyBoolean->containsAnyStream(streams))
+		return true;
+
+	return m_boolean->containsAnyStream(streams) || m_next->isDependent(streams);
 }
 
 void FilteredStream::invalidateRecords(Request* request) const

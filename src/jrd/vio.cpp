@@ -42,6 +42,7 @@
  */
 
 #include "firebird.h"
+#include <unordered_map>
 #include <stdio.h>
 #include <string.h>
 #include "../jrd/jrd.h"
@@ -142,26 +143,32 @@ enum UndoDataRet
 	udNone			// record was not changed under current savepoint, use it as is
 };
 
+static void gbak_put_search_system_schema_flag(thread_db* tdbb, record_param* rpb, jrd_tra* transaction);
+
 static UndoDataRet get_undo_data(thread_db* tdbb, jrd_tra* transaction,
 	record_param* rpb, MemoryPool* pool);
 
 static void invalidate_cursor_records(jrd_tra*, record_param*);
 
 // flags to pass into list_staying
-const int LS_ACTIVE_RPB		= 0x01;
-const int LS_NO_RESTART		= 0x02;
+inline constexpr int LS_ACTIVE_RPB	= 0x01;
+inline constexpr int LS_NO_RESTART	= 0x02;
 
 static void list_staying(thread_db*, record_param*, RecordStack&, int flags = 0);
 static void list_staying_fast(thread_db*, record_param*, RecordStack&, record_param* = NULL, int flags = 0);
 static void notify_garbage_collector(thread_db* tdbb, record_param* rpb,
 	TraNumber tranid = MAX_TRA_NUMBER);
 
-const int PREPARE_OK		= 0;
-const int PREPARE_CONFLICT	= 1;
-const int PREPARE_DELETE	= 2;
-const int PREPARE_LOCKERR	= 3;
+enum class PrepareResult
+{
+	SUCCESS,
+	CONFLICT,
+	DELETED,
+	SKIP_LOCKED,
+	LOCK_ERROR
+};
 
-static int prepare_update(thread_db*, jrd_tra*, TraNumber commit_tid_read, record_param*,
+static PrepareResult prepare_update(thread_db*, jrd_tra*, TraNumber commit_tid_read, record_param*,
 	record_param*, record_param*, PageStack&, bool);
 
 static void protect_system_table_insert(thread_db* tdbb, const Request* req, const jrd_rel* relation,
@@ -189,7 +196,6 @@ public:
 	SweepTask(thread_db* tdbb, MemoryPool* pool, TraceSweepEvent* traceSweep) : Task(),
 		m_pool(pool),
 		m_dbb(NULL),
-		m_trace(traceSweep),
 		m_items(*m_pool),
 		m_stop(false),
 		m_nextRelID(0),
@@ -377,7 +383,6 @@ private:
 
 	MemoryPool* m_pool;
 	Database* m_dbb;
-	TraceSweepEvent* m_trace;
 	Mutex m_mutex;
 	HalfStaticArray<Item*, 8> m_items;
 	StatusHolder m_status;
@@ -439,7 +444,7 @@ bool SweepTask::handler(WorkItem& _item)
 			if (!gcGuard.gcEnabled())
 			{
 				string str;
-				str.printf("Acquire garbage collection lock failed (%s)", relation->rel_name.c_str());
+				str.printf("Acquire garbage collection lock failed (%s)", relation->rel_name.toQuotedString().c_str());
 				status_exception::raise(Arg::Gds(isc_random) << Arg::Str(str));
 			}
 
@@ -572,8 +577,6 @@ namespace
 	{
 		if (rpb->rpb_flags & rpb_not_packed)
 		{
-			rpb->rpb_flags &= ~rpb_not_packed;
-
 			const auto length = MIN(rpb->rpb_length, outLength);
 
 			memcpy(output, rpb->rpb_address, length);
@@ -656,7 +659,7 @@ inline void check_gbak_cheating_insupd(thread_db* tdbb, const jrd_rel* relation,
 		!request->hasInternalStatement())
 	{
 		status_exception::raise(Arg::Gds(isc_protect_sys_tab) <<
-			Arg::Str(op) << Arg::Str(relation->rel_name));
+			Arg::Str(op) << relation->rel_name.toQuotedString());
 	}
 }
 
@@ -681,6 +684,21 @@ inline void check_gbak_cheating_delete(thread_db* tdbb, const jrd_rel* relation)
 			case rel_segments:
 			case rel_files:
 				return;
+
+			// fix_plugins_schemas may also delete these objects:
+			case rel_relations:
+			case rel_rfr:
+			case rel_fields:
+			case rel_vrel:
+			case rel_refc:
+			case rel_rcon:
+			case rel_ccon:
+			case rel_triggers:
+			case rel_indices:
+			case rel_gens:
+			case rel_classes:
+			case rel_priv:
+				return;
 			}
 		}
 
@@ -688,12 +706,13 @@ inline void check_gbak_cheating_delete(thread_db* tdbb, const jrd_rel* relation)
 	}
 }
 
-inline int wait(thread_db* tdbb, jrd_tra* transaction, const record_param* rpb)
+inline int wait(thread_db* tdbb, jrd_tra* transaction, const record_param* rpb, bool probe)
 {
-	if (transaction->getLockWait())
-		tdbb->bumpRelStats(RuntimeStatistics::RECORD_WAITS, rpb->rpb_relation->rel_id);
+	if (!probe && transaction->getLockWait())
+		tdbb->bumpStats(RecordStatType::WAITS, rpb->rpb_relation->rel_id);
 
-	return TRA_wait(tdbb, transaction, rpb->rpb_transaction_nr, jrd_tra::tra_wait);
+	return TRA_wait(tdbb, transaction, rpb->rpb_transaction_nr,
+		probe ? jrd_tra::tra_probe : jrd_tra::tra_wait);
 }
 
 inline bool checkGCActive(thread_db* tdbb, record_param* rpb, int& state)
@@ -775,7 +794,7 @@ inline void clearRecordStack(RecordStack& stack)
 	{
 		Record* r = stack.pop();
 		// records from undo log must not be deleted
-		if (!r->testFlags(REC_undo_active))
+		if (!r->isTempActive())
 			delete r;
 	}
 }
@@ -877,8 +896,8 @@ void VIO_backout(thread_db* tdbb, record_param* rpb, const jrd_tra* transaction)
 	Record* data = NULL;
 	Record* old_data = NULL;
 
-	AutoGCRecord gc_rec1;
-	AutoGCRecord gc_rec2;
+	AutoTempRecord gc_rec1;
+	AutoTempRecord gc_rec2;
 
 	bool samePage;
 	bool deleted;
@@ -902,8 +921,7 @@ void VIO_backout(thread_db* tdbb, record_param* rpb, const jrd_tra* transaction)
 
 	// If there is an old version of the record, fetch it's data now.
 
-	RuntimeStatistics::Accumulator backversions(tdbb, relation,
-												RuntimeStatistics::RECORD_BACKVERSION_READS);
+	RuntimeStatistics::Accumulator backversions(tdbb, relation, RecordStatType::BACK_READS);
 
 	if (rpb->rpb_b_page)
 	{
@@ -1015,7 +1033,7 @@ void VIO_backout(thread_db* tdbb, record_param* rpb, const jrd_tra* transaction)
 		gcLockGuard.release();
 		delete_record(tdbb, rpb, 0, NULL);
 
-		tdbb->bumpRelStats(RuntimeStatistics::RECORD_BACKOUTS, relation->rel_id);
+		tdbb->bumpStats(RecordStatType::BACKOUTS, relation->rel_id);
 		return;
 	}
 
@@ -1091,8 +1109,6 @@ void VIO_backout(thread_db* tdbb, record_param* rpb, const jrd_tra* transaction)
 		else
 		{
 			// There is cleanup to be done.  Bring the old version forward first
-
-			rpb->rpb_flags &= ~(rpb_fragment | rpb_incomplete | rpb_chained | rpb_gc_active | rpb_long_tranum);
 			DPM_update(tdbb, rpb, 0, transaction);
 			delete_tail(tdbb, &temp2, rpb->rpb_page);
 		}
@@ -1105,7 +1121,7 @@ void VIO_backout(thread_db* tdbb, record_param* rpb, const jrd_tra* transaction)
 		delete_record(tdbb, &temp, rpb->rpb_page, NULL);
 	}
 
-	tdbb->bumpRelStats(RuntimeStatistics::RECORD_BACKOUTS, relation->rel_id);
+	tdbb->bumpStats(RecordStatType::BACKOUTS, relation->rel_id);
 }
 
 
@@ -1210,8 +1226,15 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 	// satisfactory version is found or we run into a brick wall.  Do any
 	// garbage collection that seems appropriate.
 
-	RuntimeStatistics::Accumulator backversions(tdbb, relation,
-												RuntimeStatistics::RECORD_BACKVERSION_READS);
+	RuntimeStatistics::Accumulator backversions(tdbb, relation, RecordStatType::BACK_READS);
+
+	const bool skipLocked = rpb->rpb_stream_flags & RPB_s_skipLocked;
+
+	if (skipLocked && (state == tra_active || state == tra_limbo))
+	{
+		CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
+		return false;
+	}
 
 	// First, save the record indentifying information to be restored on exit
 
@@ -1267,7 +1290,7 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 			if (state == tra_limbo)
 			{
 				CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
-				state = wait(tdbb, transaction, rpb);
+				state = wait(tdbb, transaction, rpb, false);
 
 				if (!DPM_get(tdbb, rpb, LCK_read))
 					return false;
@@ -1298,14 +1321,14 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 				// of a dead record version.
 
 				CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
-				state = wait(tdbb, transaction, rpb);
+				state = wait(tdbb, transaction, rpb, false);
 
 				if (state == tra_committed)
 					state = check_precommitted(transaction, rpb);
 
 				if (state == tra_active)
 				{
-					tdbb->bumpRelStats(RuntimeStatistics::RECORD_CONFLICTS, relation->rel_id);
+					tdbb->bumpStats(RecordStatType::CONFLICTS, relation->rel_id);
 
 					// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
 					ERR_post(Arg::Gds(isc_deadlock) <<
@@ -1824,13 +1847,15 @@ void VIO_data(thread_db* tdbb, record_param* rpb, MemoryPool* pool)
 
 	tail = unpack(rpb, tail_end - tail, tail);
 
-	RuntimeStatistics::Accumulator fragments(tdbb, relation, RuntimeStatistics::RECORD_FRAGMENT_READS);
+	RuntimeStatistics::Accumulator fragments(tdbb, relation, RecordStatType::FRAGMENT_READS);
 
 	if (rpb->rpb_flags & rpb_incomplete)
 	{
 		const ULONG back_page  = rpb->rpb_b_page;
 		const USHORT back_line = rpb->rpb_b_line;
 		const USHORT save_flags = rpb->rpb_flags;
+		const ULONG save_f_page = rpb->rpb_f_page;
+		const USHORT save_f_line = rpb->rpb_f_line;
 
 		while (rpb->rpb_flags & rpb_incomplete)
 		{
@@ -1842,6 +1867,8 @@ void VIO_data(thread_db* tdbb, record_param* rpb, MemoryPool* pool)
 		rpb->rpb_b_page = back_page;
 		rpb->rpb_b_line = back_line;
 		rpb->rpb_flags = save_flags;
+		rpb->rpb_f_page = save_f_page;
+		rpb->rpb_f_line = save_f_line;
 	}
 
 	CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
@@ -1879,7 +1906,8 @@ void VIO_data(thread_db* tdbb, record_param* rpb, MemoryPool* pool)
 }
 
 
-static bool check_prepare_result(int prepare_result, jrd_tra* transaction, Request* request, record_param* rpb)
+static bool check_prepare_result(PrepareResult prepare_result, jrd_tra* transaction,
+	Request* request, record_param* rpb)
 {
 /**************************************
  *
@@ -1892,10 +1920,16 @@ static bool check_prepare_result(int prepare_result, jrd_tra* transaction, Reque
  *  read consistency transaction or lock error happens or if request is already
  *  in update conflict mode. In latter case set TRA_ex_restart flag to correctly
  *  handle request restart.
+ *	If record should be skipped, return false also.
  *
  **************************************/
-	if (prepare_result == PREPARE_OK)
+	if (prepare_result == PrepareResult::SUCCESS)
 		return true;
+
+	if ((rpb->rpb_stream_flags & RPB_s_skipLocked) && prepare_result == PrepareResult::SKIP_LOCKED)
+		return false;
+
+	fb_assert(prepare_result != PrepareResult::SKIP_LOCKED);
 
 	Request* top_request = request->req_snapshot.m_owner;
 
@@ -1907,9 +1941,9 @@ static bool check_prepare_result(int prepare_result, jrd_tra* transaction, Reque
 	// cursor. In this case all we can do is restart whole request immediately.
 	const bool secondary = top_request &&
 		(top_request->req_flags & req_update_conflict) &&
-		(prepare_result != PREPARE_LOCKERR);
+		(prepare_result != PrepareResult::LOCK_ERROR);
 
-	if (!(transaction->tra_flags & TRA_read_consistency) || prepare_result == PREPARE_LOCKERR ||
+	if (!(transaction->tra_flags & TRA_read_consistency) || prepare_result == PrepareResult::LOCK_ERROR ||
 		secondary || !restart_ready)
 	{
 		if (secondary)
@@ -1945,7 +1979,7 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
  *	stub.
  *
  **************************************/
-	MetaName object_name, package_name;
+	QualifiedName object_name;
 
 	SET_TDBB(tdbb);
 	Request* request = tdbb->getRequest();
@@ -1992,7 +2026,7 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 	// If we're about to erase a system relation, check to make sure
 	// everything is completely kosher.
 
-	DSC desc, desc2;
+	DSC desc, desc2, schemaDesc;
 
 	if (needDfw(tdbb, transaction))
 	{
@@ -2007,6 +2041,10 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		case rel_log:
 		case rel_global_auth_mapping:
 			protect_system_table_delupd(tdbb, relation, "DELETE", true);
+			break;
+
+		case rel_schemas:
+			protect_system_table_delupd(tdbb, relation, "DELETE");
 			break;
 
 		case rel_types:
@@ -2024,7 +2062,6 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		case rel_pages:
 		case rel_formats:
 		case rel_trans:
-		case rel_rcon:
 		case rel_refc:
 		case rel_ccon:
 		case rel_msgs:
@@ -2053,7 +2090,8 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 					IBERROR(187);	// msg 187 cannot delete system relations
 				}
 				EVL_field(0, rpb->rpb_record, f_rel_name, &desc);
-				DFW_post_work(transaction, dfw_delete_relation, &desc, id);
+				EVL_field(0, rpb->rpb_record, f_rel_schema, &schemaDesc);
+				DFW_post_work(transaction, dfw_delete_relation, &desc, &schemaDesc, id);
 				jrd_rel* rel_drop = MET_lookup_relation_id(tdbb, id, false);
 				if (rel_drop)
 					MET_scan_relation(tdbb, rel_drop);
@@ -2066,16 +2104,20 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			id = MOV_get_long(tdbb, &desc2, 0);
 
 			if (EVL_field(0, rpb->rpb_record, f_prc_pkg_name, &desc2))
-				MOV_get_metaname(tdbb, &desc2, package_name);
+				MOV_get_metaname(tdbb, &desc2, object_name.package);
 
+			EVL_field(0, rpb->rpb_record, f_prc_schema, &schemaDesc);
 			EVL_field(0, rpb->rpb_record, f_prc_name, &desc);
 
-			DFW_post_work(transaction, dfw_delete_procedure, &desc, id, package_name);
+			DFW_post_work(transaction, dfw_delete_procedure, &desc, &schemaDesc, id, object_name.package);
 			MET_lookup_procedure_id(tdbb, id, false, true, 0);
 			break;
 
 		case rel_collations:
 			protect_system_table_delupd(tdbb, relation, "DELETE");
+
+			EVL_field(0, rpb->rpb_record, f_coll_schema, &schemaDesc);
+
 			EVL_field(0, rpb->rpb_record, f_coll_cs_id, &desc2);
 			id = MOV_get_long(tdbb, &desc2, 0);
 
@@ -2083,28 +2125,36 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			id = INTL_CS_COLL_TO_TTYPE(id, MOV_get_long(tdbb, &desc2, 0));
 
 			EVL_field(0, rpb->rpb_record, f_coll_name, &desc);
-			DFW_post_work(transaction, dfw_delete_collation, &desc, id);
+			DFW_post_work(transaction, dfw_delete_collation, &desc, &schemaDesc, id);
 			break;
 
 		case rel_exceptions:
 			protect_system_table_delupd(tdbb, relation, "DELETE");
+			EVL_field(0, rpb->rpb_record, f_xcp_schema, &schemaDesc);
 			EVL_field(0, rpb->rpb_record, f_xcp_name, &desc);
-			DFW_post_work(transaction, dfw_delete_exception, &desc, 0);
+			DFW_post_work(transaction, dfw_delete_exception, &desc, &schemaDesc, 0);
 			break;
 
 		case rel_gens:
 			protect_system_table_delupd(tdbb, relation, "DELETE");
+			EVL_field(0, rpb->rpb_record, f_gen_schema, &schemaDesc);
 			EVL_field(0, rpb->rpb_record, f_gen_name, &desc);
-			DFW_post_work(transaction, dfw_delete_generator, &desc, 0);
+			DFW_post_work(transaction, dfw_delete_generator, &desc, &schemaDesc, 0);
 			break;
 
 		case rel_funs:
 			protect_system_table_delupd(tdbb, relation, "DELETE");
+
+			EVL_field(0, rpb->rpb_record, f_fun_schema, &schemaDesc);
 			EVL_field(0, rpb->rpb_record, f_fun_name, &desc);
+
+			if (EVL_field(0, rpb->rpb_record, f_fun_pkg_name, &desc2))
+				MOV_get_metaname(tdbb, &desc2, object_name.package);
+
 			EVL_field(0, rpb->rpb_record, f_fun_id, &desc2);
 			id = MOV_get_long(tdbb, &desc2, 0);
 
-			DFW_post_work(transaction, dfw_delete_function, &desc, id, package_name);
+			DFW_post_work(transaction, dfw_delete_function, &desc, &schemaDesc, id, object_name.package);
 			Function::lookup(tdbb, id, false, true, 0);
 			break;
 
@@ -2114,8 +2164,12 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			EVL_field(0, rpb->rpb_record, f_idx_id, &desc2);
 			if ( (id = MOV_get_long(tdbb, &desc2, 0)) )
 			{
-				MetaName relation_name;
-				MOV_get_metaname(tdbb, &desc, relation_name);
+				QualifiedName relation_name;
+
+				EVL_field(0, rpb->rpb_record, f_idx_schema, &schemaDesc);
+				MOV_get_metaname(tdbb, &schemaDesc, relation_name.schema);
+
+				MOV_get_metaname(tdbb, &desc, relation_name.object);
 				r2 = MET_lookup_relation(tdbb, relation_name);
 				fb_assert(r2);
 
@@ -2125,15 +2179,10 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 				// hvlad: lets add index name to the DFW item even if we add it again later within
 				// additional argument. This is needed to make DFW work items different for different
 				// indexes dropped at the same transaction and to not merge them at DFW_merge_work.
-				if (EVL_field(0, rpb->rpb_record, f_idx_exp_blr, &desc2)) {
-					work = DFW_post_work(transaction, dfw_delete_expression_index, &idx_name, r2->rel_id);
-				}
-				else {
-					work = DFW_post_work(transaction, dfw_delete_index, &idx_name, r2->rel_id);
-				}
+				work = DFW_post_work(transaction, dfw_delete_index, &idx_name, &schemaDesc, r2->rel_id);
 
 				// add index id and name (the latter is required to delete dependencies correctly)
-				DFW_post_work_arg(transaction, work, &idx_name, id, dfw_arg_index_name);
+				DFW_post_work_arg(transaction, work, &idx_name, &schemaDesc, id, dfw_arg_index_name);
 
 				// get partner relation for FK index
 				if (EVL_field(0, rpb->rpb_record, f_idx_foreign, &desc2))
@@ -2141,17 +2190,18 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 					DSC desc3;
 					EVL_field(0, rpb->rpb_record, f_idx_name, &desc3);
 
-					MetaName index_name;
-					MOV_get_metaname(tdbb, &desc3, index_name);
+					QualifiedName index_name;
+					MOV_get_metaname(tdbb, &schemaDesc, index_name.schema);
+					MOV_get_metaname(tdbb, &desc3, index_name.object);
 
-					jrd_rel *partner;
+					jrd_rel* partner;
 					index_desc idx;
 
 					if ((BTR_lookup(tdbb, r2, id - 1, &idx, r2->getBasePages())) &&
-						MET_lookup_partner(tdbb, r2, &idx, index_name.nullStr()) &&
+						MET_lookup_partner(tdbb, r2, &idx, index_name) &&
 						(partner = MET_lookup_relation_id(tdbb, idx.idx_primary_relation, false)) )
 					{
-						DFW_post_work_arg(transaction, work, 0, partner->rel_id,
+						DFW_post_work_arg(transaction, work, nullptr, nullptr, partner->rel_id,
 										  dfw_arg_partner_rel_id);
 					}
 					else
@@ -2159,7 +2209,7 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 						// can't find partner relation - impossible ?
 						// add empty argument to let DFW know dropping
 						// index was bound with FK
-						DFW_post_work_arg(transaction, work, 0, 0, dfw_arg_partner_rel_id);
+						DFW_post_work_arg(transaction, work, nullptr, nullptr, 0, dfw_arg_partner_rel_id);
 					}
 				}
 			}
@@ -2168,77 +2218,97 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		case rel_rfr:
 			protect_system_table_delupd(tdbb, relation, "DELETE");
 
+			EVL_field(0, rpb->rpb_record, f_rfr_schema, &schemaDesc);
+			MOV_get_metaname(tdbb, &schemaDesc, object_name.schema);
+
 			EVL_field(0, rpb->rpb_record, f_rfr_rname, &desc);
-			DFW_post_work(transaction, dfw_update_format, &desc, 0);
+			DFW_post_work(transaction, dfw_update_format, &desc, &schemaDesc, 0);
 
 			EVL_field(0, rpb->rpb_record, f_rfr_fname, &desc2);
-			MOV_get_metaname(tdbb, &desc, object_name);
+			MOV_get_metaname(tdbb, &desc, object_name.object);
+
 			if ( (r2 = MET_lookup_relation(tdbb, object_name)) )
-				DFW_post_work(transaction, dfw_delete_rfr, &desc2, r2->rel_id);
+				DFW_post_work(transaction, dfw_delete_rfr, &desc2, &schemaDesc, r2->rel_id);
+
+			EVL_field(0, rpb->rpb_record, f_rfr_field_source_schema, &schemaDesc);
+			MOV_get_metaname(tdbb, &schemaDesc, object_name.schema);
 
 			EVL_field(0, rpb->rpb_record, f_rfr_sname, &desc2);
-			MOV_get_metaname(tdbb, &desc2, object_name);
+			MOV_get_metaname(tdbb, &desc2, object_name.object);
 
-			if (fb_utils::implicit_domain(object_name.c_str()))
-				DFW_post_work(transaction, dfw_delete_global, &desc2, 0);
+			if (fb_utils::implicit_domain(object_name.object.c_str()))
+				DFW_post_work(transaction, dfw_delete_global, &desc2, &schemaDesc, 0);
 
 			break;
 
 		case rel_prc_prms:
 			protect_system_table_delupd(tdbb, relation, "DELETE");
+
+			EVL_field(0, rpb->rpb_record, f_prm_schema, &schemaDesc);
+			MOV_get_metaname(tdbb, &schemaDesc, object_name.schema);
+
 			EVL_field(0, rpb->rpb_record, f_prm_procedure, &desc);
-			MOV_get_metaname(tdbb, &desc, object_name);
+			MOV_get_metaname(tdbb, &desc, object_name.object);
 
 			if (EVL_field(0, rpb->rpb_record, f_prm_pkg_name, &desc2))
-			{
-				MOV_get_metaname(tdbb, &desc2, package_name);
-			}
+				MOV_get_metaname(tdbb, &desc2, object_name.package);
 
 			EVL_field(0, rpb->rpb_record, f_prm_name, &desc2);
 
-			if ( (procedure = MET_lookup_procedure(tdbb,
-					QualifiedName(object_name, package_name), true)) )
+			if ((procedure = MET_lookup_procedure(tdbb, object_name, true)))
 			{
-				work = DFW_post_work(transaction, dfw_delete_prm, &desc2, procedure->getId(),
-					package_name);
+				work = DFW_post_work(transaction, dfw_delete_prm, &desc2, &schemaDesc, procedure->getId(),
+					object_name.package);
 
 				// procedure name to track parameter dependencies
-				DFW_post_work_arg(transaction, work, &desc, procedure->getId(), dfw_arg_proc_name);
+				DFW_post_work_arg(transaction, work, &desc, &schemaDesc, procedure->getId(), dfw_arg_proc_name);
 			}
-			EVL_field(0, rpb->rpb_record, f_prm_sname, &desc2);
-			DFW_post_work(transaction, dfw_delete_global, &desc2, 0);
+
+			if (!EVL_field(0, rpb->rpb_record, f_prm_fname, &desc2))
+			{
+				EVL_field(0, rpb->rpb_record, f_prm_field_source_schema, &schemaDesc);
+				EVL_field(0, rpb->rpb_record, f_prm_sname, &desc2);
+				DFW_post_work(transaction, dfw_delete_global, &desc2, &schemaDesc, 0);
+			}
+
 			break;
 
 		case rel_fields:
 			protect_system_table_delupd(tdbb, relation, "DELETE");
+			EVL_field(0, rpb->rpb_record, f_fld_schema, &schemaDesc);
 			EVL_field(0, rpb->rpb_record, f_fld_name, &desc);
-			DFW_post_work(transaction, dfw_delete_field, &desc, 0);
-			MET_change_fields(tdbb, transaction, &desc);
+			DFW_post_work(transaction, dfw_delete_field, &desc, &schemaDesc, 0);
+			MET_change_fields(tdbb, transaction, &schemaDesc, &desc);
 			break;
 
 		case rel_files:
 			protect_system_table_delupd(tdbb, relation, "DELETE");
 			{
-				const bool name_defined = EVL_field(0, rpb->rpb_record, f_file_name, &desc);
-				const USHORT file_flags = EVL_field(0, rpb->rpb_record, f_file_flags, &desc2) ?
+				const bool nameDefined = EVL_field(0, rpb->rpb_record, f_file_name, &desc);
+
+				const auto shadowNumber = EVL_field(0, rpb->rpb_record, f_file_shad_num, &desc2) ?
 					MOV_get_long(tdbb, &desc2, 0) : 0;
-				if (file_flags & FILE_difference)
+
+				const auto fileFlags = EVL_field(0, rpb->rpb_record, f_file_flags, &desc2) ?
+					MOV_get_long(tdbb, &desc2, 0) : 0;
+
+				if (shadowNumber)
 				{
-					if (file_flags & FILE_backing_up)
-						DFW_post_work(transaction, dfw_end_backup, &desc, 0);
-					if (name_defined)
-						DFW_post_work(transaction, dfw_delete_difference, &desc, 0);
-				}
-				else if (EVL_field(0, rpb->rpb_record, f_file_shad_num, &desc2) &&
-					(id = MOV_get_long(tdbb, &desc2, 0)))
-				{
-					if (!(file_flags & FILE_inactive))
+					if (!(fileFlags & FILE_inactive))
 					{
-						if (file_flags & FILE_nodelete)
-							DFW_post_work(transaction, dfw_delete_shadow_nodelete, &desc, id);
-						else
-							DFW_post_work(transaction, dfw_delete_shadow, &desc, id);
+						const auto work = (fileFlags & FILE_nodelete) ?
+							dfw_delete_shadow_nodelete : dfw_delete_shadow;
+
+						DFW_post_work(transaction, work, &desc, nullptr, shadowNumber);
 					}
+				}
+				else if (fileFlags & FILE_difference)
+				{
+					if (fileFlags & FILE_backing_up)
+						DFW_post_work(transaction, dfw_end_backup, &desc, nullptr, 0);
+
+					if (nameDefined)
+						DFW_post_work(transaction, dfw_delete_difference, &desc, nullptr, 0);
 				}
 			}
 			break;
@@ -2246,22 +2316,23 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		case rel_classes:
 			protect_system_table_delupd(tdbb, relation, "DELETE");
 			EVL_field(0, rpb->rpb_record, f_cls_class, &desc);
-			DFW_post_work(transaction, dfw_compute_security, &desc, 0);
+			DFW_post_work(transaction, dfw_compute_security, &desc, nullptr, 0);
 			break;
 
 		case rel_triggers:
 			protect_system_table_delupd(tdbb, relation, "DELETE");
+			EVL_field(0, rpb->rpb_record, f_trg_schema, &schemaDesc);
 			EVL_field(0, rpb->rpb_record, f_trg_rname, &desc2);
-			DFW_post_work(transaction, dfw_update_format, &desc2, 0);
+			DFW_post_work(transaction, dfw_update_format, &desc2, &schemaDesc, 0);
 			EVL_field(0, rpb->rpb_record, f_trg_name, &desc);
-			work = DFW_post_work(transaction, dfw_delete_trigger, &desc, 0);
+			work = DFW_post_work(transaction, dfw_delete_trigger, &desc, &schemaDesc, 0);
 
 			if (!(desc2.dsc_flags & DSC_null))
-				DFW_post_work_arg(transaction, work, &desc2, 0, dfw_arg_rel_name);
+				DFW_post_work_arg(transaction, work, &desc2, &schemaDesc, 0, dfw_arg_rel_name);
 
 			if (EVL_field(0, rpb->rpb_record, f_trg_type, &desc2))
 			{
-				DFW_post_work_arg(transaction, work, &desc2,
+				DFW_post_work_arg(transaction, work, &desc2, &schemaDesc,
 					(USHORT) MOV_get_int64(tdbb, &desc2, 0), dfw_arg_trg_type);
 			}
 
@@ -2289,7 +2360,33 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			EVL_field(0, rpb->rpb_record, f_prv_rname, &desc);
 			EVL_field(0, rpb->rpb_record, f_prv_o_type, &desc2);
 			id = MOV_get_long(tdbb, &desc2, 0);
-			DFW_post_work(transaction, dfw_grant, &desc, id);
+
+			if (EVL_field(0, rpb->rpb_record, f_prv_rel_schema, &schemaDesc))
+				DFW_post_work(transaction, dfw_grant, &desc, &schemaDesc, id);
+			else
+				DFW_post_work(transaction, dfw_grant, &desc, nullptr, id);
+			break;
+
+		case rel_rcon:
+			protect_system_table_delupd(tdbb, relation, "DELETE");
+
+			// ensure relation partners is known
+			EVL_field(0, rpb->rpb_record, f_rcon_rname, &desc);
+
+			{
+				QualifiedName relation_name;
+
+				EVL_field(0, rpb->rpb_record, f_rcon_schema, &schemaDesc);
+				MOV_get_metaname(tdbb, &schemaDesc, relation_name.schema);
+
+				MOV_get_metaname(tdbb, &desc, relation_name.object);
+				r2 = MET_lookup_relation(tdbb, relation_name);
+				fb_assert(r2);
+
+				if (r2)
+					MET_scan_partners(tdbb, r2);
+			}
+
 			break;
 
 		case rel_backup_history:
@@ -2299,7 +2396,7 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 		case rel_pub_tables:
 			protect_system_table_delupd(tdbb, relation, "DELETE");
-			DFW_post_work(transaction, dfw_change_repl_state, "", 1);
+			DFW_post_work(transaction, dfw_change_repl_state, {}, {}, 1);
 			break;
 
 		default:    // Shut up compiler warnings
@@ -2339,7 +2436,7 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		if ((dbb->dbb_flags & DBB_gc_background) && !rpb->rpb_relation->isTemporary() && !backVersion)
 			notify_garbage_collector(tdbb, rpb, transaction->tra_number);
 
-		tdbb->bumpRelStats(RuntimeStatistics::RECORD_DELETES, relation->rel_id);
+		tdbb->bumpStats(RecordStatType::DELETES, relation->rel_id);
 		return true;
 	}
 
@@ -2358,7 +2455,7 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 	{
 		// Update stub didn't find one page -- do a long, hard update
 		PageStack stack;
-		int prepare_result = prepare_update(tdbb, transaction, tid_fetch, rpb, &temp, 0, stack, false);
+		const auto prepare_result = prepare_update(tdbb, transaction, tid_fetch, rpb, &temp, 0, stack, false);
 		if (!check_prepare_result(prepare_result, transaction, request, rpb))
 			return false;
 
@@ -2379,16 +2476,27 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 	if ((RIDS) relation->rel_id == rel_priv)
 	{
+		if (EVL_field(0, rpb->rpb_record, f_prv_rel_schema, &desc))
+			MOV_get_metaname(tdbb, &desc, object_name.schema);
+
 		EVL_field(0, rpb->rpb_record, f_prv_rname, &desc);
-		MOV_get_metaname(tdbb, &desc, object_name);
+		MOV_get_metaname(tdbb, &desc, object_name.object);
+
 		EVL_field(0, rpb->rpb_record, f_prv_grant, &desc2);
+
 		if (MOV_get_long(tdbb, &desc2, 0) == WITH_GRANT_OPTION)		// ADMIN option should not cause cascade
 		{
+			QualifiedName revokee;
+
+			if (EVL_field(0, rpb->rpb_record, f_prv_user_schema, &desc2))
+				MOV_get_metaname(tdbb, &desc2, revokee.schema);
+
 			EVL_field(0, rpb->rpb_record, f_prv_user, &desc2);
-			MetaName revokee;
-			MOV_get_metaname(tdbb, &desc2, revokee);
+			MOV_get_metaname(tdbb, &desc2, revokee.object);
+
 			EVL_field(0, rpb->rpb_record, f_prv_priv, &desc2);
 			const string privilege = MOV_make_string2(tdbb, &desc2, ttype_ascii);
+
 			MET_revoke(tdbb, transaction, object_name, revokee, privilege);
 		}
 	}
@@ -2396,7 +2504,7 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 	if (transaction->tra_save_point && transaction->tra_save_point->isChanging())
 		verb_post(tdbb, transaction, rpb, 0);
 
-	tdbb->bumpRelStats(RuntimeStatistics::RECORD_DELETES, relation->rel_id);
+	tdbb->bumpStats(RecordStatType::DELETES, relation->rel_id);
 
 	// for an autocommit transaction, mark a commit as necessary
 
@@ -2479,27 +2587,35 @@ static void delete_version_chain(thread_db* tdbb, record_param* rpb, bool delete
 		rpb->rpb_f_page, rpb->rpb_f_line);
 #endif
 
+	// It's possible to get rpb_page == 0 from VIO_intermediate_gc via
+	// staying_chain_rpb. This case happens there when the staying record
+	// stack has 1 item at the moment this rpb is created. So return to
+	// avoid an error on DPM_fetch below.
+	if (!rpb->rpb_page)
+		return;
+
 	ULONG prior_page = 0;
 
-	if (!delete_head)
+	// Note that the page number of the oldest version in the chain should
+	// be stored in rpb->rpb_page before exiting this function because
+	// VIO_intermediate_gc will use it as a prior page number.
+	while (rpb->rpb_b_page != 0 || delete_head)
 	{
-		prior_page = rpb->rpb_page;
-		rpb->rpb_page = rpb->rpb_b_page;
-		rpb->rpb_line = rpb->rpb_b_line;
-	}
+		if (!delete_head)
+		{
+			prior_page = rpb->rpb_page;
+			rpb->rpb_page = rpb->rpb_b_page;
+			rpb->rpb_line = rpb->rpb_b_line;
+		}
+		else
+			delete_head = false;
 
-	while (rpb->rpb_page != 0)
-	{
 		if (!DPM_fetch(tdbb, rpb, LCK_write))
 			BUGCHECK(291);		// msg 291 cannot find record back version
 
 		record_param temp_rpb = *rpb;
 		DPM_delete(tdbb, &temp_rpb, prior_page);
 		delete_tail(tdbb, &temp_rpb, temp_rpb.rpb_page);
-
-		prior_page = rpb->rpb_page;
-		rpb->rpb_page = rpb->rpb_b_page;
-		rpb->rpb_line = rpb->rpb_b_line;
 	}
 }
 
@@ -2727,7 +2843,7 @@ void VIO_intermediate_gc(thread_db* tdbb, record_param* rpb, jrd_tra* transactio
 	clearRecordStack(staying);
 	clearRecordStack(going);
 
-	tdbb->bumpRelStats(RuntimeStatistics::RECORD_IMGC, rpb->rpb_relation->rel_id);
+	tdbb->bumpStats(RecordStatType::IMGC, rpb->rpb_relation->rel_id);
 }
 
 bool VIO_garbage_collect(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
@@ -2854,10 +2970,11 @@ Record* VIO_gc_record(thread_db* tdbb, jrd_rel* relation)
 		Record* const record = *iter;
 		fb_assert(record);
 
-		if (!record->testFlags(REC_gc_active))
+		if (!record->isTempActive())
 		{
 			// initialize record for reuse
-			record->reset(format, REC_gc_active);
+			record->reset(format);
+			record->setTempActive();
 			return record;
 		}
 	}
@@ -2865,7 +2982,7 @@ Record* VIO_gc_record(thread_db* tdbb, jrd_rel* relation)
 	// Allocate a garbage collect record block if all are active
 
 	Record* const record = FB_NEW_POOL(*relation->rel_pool)
-		Record(*relation->rel_pool, format, REC_gc_active);
+		Record(*relation->rel_pool, format, true);
 	relation->rel_gc_records.add(record);
 	return record;
 }
@@ -2931,7 +3048,7 @@ bool VIO_get(thread_db* tdbb, record_param* rpb, jrd_tra* transaction, MemoryPoo
 			VIO_data(tdbb, rpb, pool);
 	}
 
-	tdbb->bumpRelStats(RuntimeStatistics::RECORD_IDX_READS, rpb->rpb_relation->rel_id);
+	tdbb->bumpStats(RecordStatType::IDX_READS, rpb->rpb_relation->rel_id);
 	return true;
 }
 
@@ -3006,7 +3123,7 @@ bool VIO_get_current(thread_db* tdbb,
 
 		if (!counted)
 		{
-			tdbb->bumpRelStats(RuntimeStatistics::RECORD_IDX_READS, rpb->rpb_relation->rel_id);
+			tdbb->bumpStats(RecordStatType::IDX_READS, rpb->rpb_relation->rel_id);
 			counted = true;
 		}
 
@@ -3068,7 +3185,7 @@ bool VIO_get_current(thread_db* tdbb,
 		// Wait as long as it takes for an active transaction which has modified
 		// the record.
 
-		state = wait(tdbb, transaction, rpb);
+		state = wait(tdbb, transaction, rpb, false);
 
 		if (state == tra_committed)
 			state = check_precommitted(transaction, rpb);
@@ -3112,7 +3229,7 @@ bool VIO_get_current(thread_db* tdbb,
 				// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
 				ERR_post(Arg::Gds(isc_rec_in_limbo) << Arg::Int64(rpb->rpb_transaction_nr));
 			}
-			// fall thru
+			[[fallthrough]];
 
 		case tra_active:
 			// clear lock error from status vector
@@ -3238,7 +3355,8 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
  **************************************/
 	SET_TDBB(tdbb);
 
-	MetaName object_name, package_name;
+	QualifiedName object_name;
+	const auto attachment = tdbb->getAttachment();
 	jrd_rel* relation = org_rpb->rpb_relation;
 
 #ifdef VIO_DEBUG
@@ -3268,7 +3386,7 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 	if (org_rpb->rpb_runtime_flags & (RPB_refetch | RPB_undo_read))
 	{
 		const bool undo_read = (org_rpb->rpb_runtime_flags & RPB_undo_read);
-		AutoGCRecord old_record;
+		AutoTempRecord old_record;
 		if (undo_read)
 		{
 			old_record = VIO_gc_record(tdbb, relation);
@@ -3289,20 +3407,27 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 	if (transaction->tra_flags & TRA_system)
 	{
 		VIO_update_in_place(tdbb, transaction, org_rpb, new_rpb);
-		tdbb->bumpRelStats(RuntimeStatistics::RECORD_UPDATES, relation->rel_id);
+		tdbb->bumpStats(RecordStatType::UPDATES, relation->rel_id);
 		return true;
 	}
 
 	check_gbak_cheating_insupd(tdbb, relation, "UPDATE");
 
+	if (attachment->isGbak() &&
+		!(attachment->att_flags & ATT_gbak_restore_has_schema) &&
+		!(attachment->att_database->dbb_flags & DBB_creating))
+	{
+		gbak_put_search_system_schema_flag(tdbb, new_rpb, transaction);
+	}
+
 	// If we're about to modify a system relation, check to make sure
 	// everything is completely kosher.
 
-	DSC desc1, desc2;
+	DSC desc1, desc2, schemaDesc;
 
 	if (needDfw(tdbb, transaction))
 	{
-		const SLONG nullLinger = 0;
+		constexpr SLONG nullLinger = 0;
 
 		switch ((RIDS) relation->rel_id)
 		{
@@ -3317,6 +3442,7 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 		case rel_roles:
 		case rel_ccon:
 		case rel_pub_tables:
+		case rel_priv:
 			protect_system_table_delupd(tdbb, relation, "UPDATE");
 			break;
 
@@ -3352,46 +3478,66 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 			if (!EVL_field(0, new_rpb->rpb_record, f_dat_linger, &desc2))
 				desc2.makeLong(0, const_cast<SLONG*>(&nullLinger));
 			if (MOV_compare(tdbb, &desc1, &desc2))
-				DFW_post_work(transaction, dfw_set_linger, &desc2, 0);
+				DFW_post_work(transaction, dfw_set_linger, &desc2, nullptr, 0);
+			break;
+
+		case rel_schemas:
+			protect_system_table_delupd(tdbb, relation, "UPDATE");
+			check_class(tdbb, transaction, org_rpb, new_rpb, f_sch_class);
 			break;
 
 		case rel_relations:
+			EVL_field(0, org_rpb->rpb_record, f_rel_schema, &schemaDesc);
 			EVL_field(0, org_rpb->rpb_record, f_rel_name, &desc1);
 			if (!check_nullify_source(tdbb, org_rpb, new_rpb, f_rel_source))
 				protect_system_table_delupd(tdbb, relation, "UPDATE");
 			else
-				SCL_check_relation(tdbb, &desc1, SCL_alter);
+			{
+				MOV_get_metaname(tdbb, &schemaDesc, object_name.schema);
+				MOV_get_metaname(tdbb, &desc1, object_name.object);
+				SCL_check_relation(tdbb, object_name, SCL_alter);
+			}
 			check_class(tdbb, transaction, org_rpb, new_rpb, f_rel_class);
 			check_owner(tdbb, transaction, org_rpb, new_rpb, f_rel_owner);
-			DFW_post_work(transaction, dfw_update_format, &desc1, 0);
+			DFW_post_work(transaction, dfw_update_format, &desc1, &schemaDesc, 0);
 			break;
 
 		case rel_packages:
+			EVL_field(0, org_rpb->rpb_record, f_pkg_schema, &schemaDesc);
 			if (!check_nullify_source(tdbb, org_rpb, new_rpb, f_pkg_header_source, f_pkg_body_source))
 				protect_system_table_delupd(tdbb, relation, "UPDATE");
 			else
 			{
 				if (EVL_field(0, org_rpb->rpb_record, f_pkg_name, &desc1))
-					SCL_check_package(tdbb, &desc1, SCL_alter);
+				{
+					MOV_get_metaname(tdbb, &schemaDesc, object_name.schema);
+					MOV_get_metaname(tdbb, &desc1, object_name.object);
+					SCL_check_package(tdbb, object_name, SCL_alter);
+				}
 			}
 			check_class(tdbb, transaction, org_rpb, new_rpb, f_pkg_class);
 			check_owner(tdbb, transaction, org_rpb, new_rpb, f_pkg_owner);
 			break;
 
 		case rel_procedures:
+			EVL_field(0, org_rpb->rpb_record, f_prc_schema, &schemaDesc);
 			EVL_field(0, org_rpb->rpb_record, f_prc_name, &desc1);
 
 			if (EVL_field(0, org_rpb->rpb_record, f_prc_pkg_name, &desc2))
-				MOV_get_metaname(tdbb, &desc2, package_name);
+				MOV_get_metaname(tdbb, &desc2, object_name.package);
 
 			if (!check_nullify_source(tdbb, org_rpb, new_rpb, f_prc_source))
 				protect_system_table_delupd(tdbb, relation, "UPDATE");
 			else
 			{
-				if (package_name.hasData())
-					SCL_check_package(tdbb, &desc2, SCL_alter);
+				if (object_name.package.hasData())
+					SCL_check_package(tdbb, object_name.getSchemaAndPackage(), SCL_alter);
 				else
-					SCL_check_procedure(tdbb, &desc1, SCL_alter);
+				{
+					MOV_get_metaname(tdbb, &schemaDesc, object_name.schema);
+					MOV_get_metaname(tdbb, &desc1, object_name.object);
+					SCL_check_procedure(tdbb, object_name, SCL_alter);
+				}
 			}
 
 			check_class(tdbb, transaction, org_rpb, new_rpb, f_prc_class);
@@ -3401,24 +3547,33 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 			{
 				EVL_field(0, org_rpb->rpb_record, f_prc_id, &desc2);
 				const USHORT id = MOV_get_long(tdbb, &desc2, 0);
-				DFW_post_work(transaction, dfw_modify_procedure, &desc1, id, package_name);
+				DFW_post_work(transaction, dfw_modify_procedure, &desc1, &schemaDesc, id, object_name.package);
 			}
 			break;
 
 		case rel_funs:
+			EVL_field(0, org_rpb->rpb_record, f_fun_schema, &schemaDesc);
 			EVL_field(0, org_rpb->rpb_record, f_fun_name, &desc1);
 
 			if (EVL_field(0, org_rpb->rpb_record, f_fun_pkg_name, &desc2))
-				MOV_get_metaname(tdbb, &desc2, package_name);
+				MOV_get_metaname(tdbb, &desc2, object_name.package);
 
 			if (!check_nullify_source(tdbb, org_rpb, new_rpb, f_fun_source))
 				protect_system_table_delupd(tdbb, relation, "UPDATE");
 			else
 			{
-				if (package_name.hasData())
-					SCL_check_package(tdbb, &desc2, SCL_alter);
+				if (object_name.package.hasData())
+				{
+					const auto package = object_name.getSchemaAndPackage();
+					SCL_check_package(tdbb, package, SCL_alter);
+					SCL_check_package(tdbb, package, SCL_alter);
+				}
 				else
-					SCL_check_function(tdbb, &desc1, SCL_alter);
+				{
+					MOV_get_metaname(tdbb, &schemaDesc, object_name.schema);
+					MOV_get_metaname(tdbb, &desc1, object_name.object);
+					SCL_check_function(tdbb, object_name, SCL_alter);
+				}
 			}
 
 			check_class(tdbb, transaction, org_rpb, new_rpb, f_fun_class);
@@ -3428,7 +3583,7 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 			{
 				EVL_field(0, org_rpb->rpb_record, f_fun_id, &desc2);
 				const USHORT id = MOV_get_long(tdbb, &desc2, 0);
-				DFW_post_work(transaction, dfw_modify_function, &desc1, id, package_name);
+				DFW_post_work(transaction, dfw_modify_function, &desc1, &schemaDesc, id, object_name.package);
 			}
 			break;
 
@@ -3457,10 +3612,11 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 					if ((rc2 && MOV_get_long(tdbb, &desc2, 0) != 0) ||
 						(rc3 && rc4 && MOV_compare(tdbb, &desc3, &desc4)))
 					{
+						EVL_field(0, new_rpb->rpb_record, f_rfr_schema, &schemaDesc);
 						EVL_field(0, new_rpb->rpb_record, f_rfr_rname, &desc1);
 						EVL_field(0, new_rpb->rpb_record, f_rfr_id, &desc2);
 
-						DeferredWork* work = DFW_post_work(transaction, dfw_check_not_null, &desc1, 0);
+						DeferredWork* work = DFW_post_work(transaction, dfw_check_not_null, &desc1, &schemaDesc, 0);
 						SortedArray<int>& ids = DFW_get_ids(work);
 
 						int id = MOV_get_long(tdbb, &desc2, 0);
@@ -3478,9 +3634,11 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 
 			if (dfw_should_know(tdbb, org_rpb, new_rpb, f_fld_desc, true))
 			{
-				MET_change_fields(tdbb, transaction, &desc1);
+				EVL_field(0, org_rpb->rpb_record, f_fld_schema, &schemaDesc);
+
+				MET_change_fields(tdbb, transaction, &schemaDesc, &desc1);
 				EVL_field(0, new_rpb->rpb_record, f_fld_name, &desc2);
-				DeferredWork* dw = MET_change_fields(tdbb, transaction, &desc2);
+				DeferredWork* dw = MET_change_fields(tdbb, transaction, &schemaDesc, &desc2);
 				dsc desc3, desc4;
 				bool rc1, rc2;
 
@@ -3494,18 +3652,18 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 					rc1 = EVL_field(0, org_rpb->rpb_record, f_fld_computed, &desc3);
 					rc2 = EVL_field(0, new_rpb->rpb_record, f_fld_computed, &desc4);
 					if (rc1 != rc2 || rc1 && MOV_compare(tdbb, &desc3, &desc4)) {
-						DFW_post_work_arg(transaction, dw, &desc1, 0, dfw_arg_force_computed);
+						DFW_post_work_arg(transaction, dw, &desc1, &schemaDesc, 0, dfw_arg_force_computed);
 					}
 				}
 
-				dw = DFW_post_work(transaction, dfw_modify_field, &desc1, 0);
-				DFW_post_work_arg(transaction, dw, &desc2, 0, dfw_arg_new_name);
+				dw = DFW_post_work(transaction, dfw_modify_field, &desc1, &schemaDesc, 0);
+				DFW_post_work_arg(transaction, dw, &desc2, &schemaDesc, 0, dfw_arg_new_name);
 
 				rc1 = EVL_field(NULL, org_rpb->rpb_record, f_fld_null_flag, &desc3);
 				rc2 = EVL_field(NULL, new_rpb->rpb_record, f_fld_null_flag, &desc4);
 
 				if ((!rc1 || MOV_get_long(tdbb, &desc3, 0) == 0) && rc2 && MOV_get_long(tdbb, &desc4, 0) != 0)
-					DFW_post_work_arg(transaction, dw, &desc2, 0, dfw_arg_field_not_null);
+					DFW_post_work_arg(transaction, dw, &desc2, &schemaDesc, 0, dfw_arg_field_not_null);
 			}
 			check_class(tdbb, transaction, org_rpb, new_rpb, f_fld_class);
 			check_owner(tdbb, transaction, org_rpb, new_rpb, f_fld_owner);
@@ -3514,9 +3672,13 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 		case rel_classes:
 			protect_system_table_delupd(tdbb, relation, "UPDATE");
 			EVL_field(0, org_rpb->rpb_record, f_cls_class, &desc1);
-			DFW_post_work(transaction, dfw_compute_security, &desc1, 0);
+			DFW_post_work(transaction, dfw_compute_security, &desc1, nullptr, 0);
 			EVL_field(0, new_rpb->rpb_record, f_cls_class, &desc1);
-			DFW_post_work(transaction, dfw_compute_security, &desc1, 0);
+#ifdef DEV_BUILD
+			MOV_get_metaname(tdbb, &desc1, object_name.object);
+			fb_assert(strncmp(object_name.object.c_str(), "SQL$", 4) == 0);
+#endif
+			DFW_post_work(transaction, dfw_compute_security, &desc1, nullptr, 0);
 			break;
 
 		case rel_indices:
@@ -3525,43 +3687,49 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 
 			if (dfw_should_know(tdbb, org_rpb, new_rpb, f_idx_desc, true))
 			{
+				EVL_field(0, new_rpb->rpb_record, f_idx_schema, &schemaDesc);
 				EVL_field(0, new_rpb->rpb_record, f_idx_name, &desc1);
 
 				if (EVL_field(0, new_rpb->rpb_record, f_idx_exp_blr, &desc2))
 				{
 					DFW_post_work(transaction, dfw_create_expression_index,
-								  &desc1, tdbb->getDatabase()->dbb_max_idx);
+								  &desc1, &schemaDesc, tdbb->getDatabase()->dbb_max_idx);
 				}
 				else
 				{
-					DFW_post_work(transaction, dfw_create_index, &desc1,
+					DFW_post_work(transaction, dfw_create_index, &desc1, &schemaDesc,
 								  tdbb->getDatabase()->dbb_max_idx);
 				}
 			}
 			break;
 
 		case rel_triggers:
+			EVL_field(0, new_rpb->rpb_record, f_trg_schema, &schemaDesc);
 			EVL_field(0, new_rpb->rpb_record, f_trg_rname, &desc1);
 			if (!check_nullify_source(tdbb, org_rpb, new_rpb, f_trg_source))
 				protect_system_table_delupd(tdbb, relation, "UPDATE");
 			else
-				SCL_check_relation(tdbb, &desc1, SCL_control | SCL_alter);
+			{
+				MOV_get_metaname(tdbb, &schemaDesc, object_name.schema);
+				MOV_get_metaname(tdbb, &desc1, object_name.object);
+				SCL_check_relation(tdbb, object_name, SCL_control | SCL_alter);
+			}
 
 			if (dfw_should_know(tdbb, org_rpb, new_rpb, f_trg_desc, true))
 			{
 				EVL_field(0, new_rpb->rpb_record, f_trg_rname, &desc1);
-				DFW_post_work(transaction, dfw_update_format, &desc1, 0);
+				DFW_post_work(transaction, dfw_update_format, &desc1, &schemaDesc, 0);
 				EVL_field(0, org_rpb->rpb_record, f_trg_rname, &desc1);
-				DFW_post_work(transaction, dfw_update_format, &desc1, 0);
+				DFW_post_work(transaction, dfw_update_format, &desc1, &schemaDesc, 0);
 				EVL_field(0, org_rpb->rpb_record, f_trg_name, &desc1);
-				DeferredWork* dw = DFW_post_work(transaction, dfw_modify_trigger, &desc1, 0);
+				DeferredWork* dw = DFW_post_work(transaction, dfw_modify_trigger, &desc1, &schemaDesc, 0);
 
 				if (EVL_field(0, new_rpb->rpb_record, f_trg_rname, &desc2))
-					DFW_post_work_arg(transaction, dw, &desc2, 0, dfw_arg_rel_name);
+					DFW_post_work_arg(transaction, dw, &desc2, &schemaDesc, 0, dfw_arg_rel_name);
 
 				if (EVL_field(0, new_rpb->rpb_record, f_trg_type, &desc2))
 				{
-					DFW_post_work_arg(transaction, dw, &desc2,
+					DFW_post_work_arg(transaction, dw, &desc2, &schemaDesc,
 						(USHORT) MOV_get_int64(tdbb, &desc2, 0), dfw_arg_trg_type);
 				}
 			}
@@ -3570,18 +3738,24 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 		case rel_files:
 			protect_system_table_delupd(tdbb, relation, "UPDATE");
 			{
-				SSHORT new_rel_flags, old_rel_flags;
 				EVL_field(0, new_rpb->rpb_record, f_file_name, &desc1);
-				if (EVL_field(0, new_rpb->rpb_record, f_file_flags, &desc2) &&
-					((new_rel_flags = MOV_get_long(tdbb, &desc2, 0)) & FILE_difference) &&
-					EVL_field(0, org_rpb->rpb_record, f_file_flags, &desc2) &&
-					((old_rel_flags = MOV_get_long(tdbb, &desc2, 0)) != new_rel_flags))
+
+				const auto orgFileFlags = EVL_field(0, org_rpb->rpb_record, f_file_flags, &desc2) ?
+					MOV_get_long(tdbb, &desc2, 0) : 0;
+				const auto newFileFlags = EVL_field(0, new_rpb->rpb_record, f_file_flags, &desc2) ?
+					MOV_get_long(tdbb, &desc2, 0) : 0;
+
+				if ((newFileFlags & FILE_difference) && orgFileFlags != newFileFlags)
 				{
 					DFW_post_work(transaction,
-								  (new_rel_flags & FILE_backing_up ? dfw_begin_backup : dfw_end_backup),
-								  &desc1, 0);
+								  (newFileFlags & FILE_backing_up) ? dfw_begin_backup : dfw_end_backup,
+								  &desc1, nullptr, 0);
 				}
 			}
+			// Nullify the unsupported fields
+			new_rpb->rpb_record->setNull(f_file_seq);
+			new_rpb->rpb_record->setNull(f_file_start);
+			new_rpb->rpb_record->setNull(f_file_length);
 			break;
 
 		case rel_charsets:
@@ -3649,14 +3823,14 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 			verb_post(tdbb, transaction, org_rpb, org_rpb->rpb_undo);
 		}
 
-		tdbb->bumpRelStats(RuntimeStatistics::RECORD_UPDATES, relation->rel_id);
+		tdbb->bumpStats(RecordStatType::UPDATES, relation->rel_id);
 		return true;
 	}
 
 	const bool backVersion = (org_rpb->rpb_b_page != 0);
 	record_param temp;
 	PageStack stack;
-	int prepare_result = prepare_update(tdbb, transaction, org_rpb->rpb_transaction_nr, org_rpb,
+	const auto prepare_result = prepare_update(tdbb, transaction, org_rpb->rpb_transaction_nr, org_rpb,
 										&temp, new_rpb, stack, false);
 	if (!check_prepare_result(prepare_result, transaction, tdbb->getRequest(), org_rpb))
 		return false;
@@ -3674,6 +3848,8 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 	org_rpb->rpb_flags &= ~(rpb_delta | rpb_uk_modified);
 	org_rpb->rpb_flags |= new_rpb->rpb_flags & (rpb_delta | rpb_uk_modified);
 
+	stack.merge(new_rpb->rpb_record->getPrecedence());
+
 	replace_record(tdbb, org_rpb, &stack, transaction);
 
 	if (!(transaction->tra_flags & TRA_system) &&
@@ -3682,7 +3858,7 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 		verb_post(tdbb, transaction, org_rpb, 0);
 	}
 
-	tdbb->bumpRelStats(RuntimeStatistics::RECORD_UPDATES, relation->rel_id);
+	tdbb->bumpStats(RecordStatType::UPDATES, relation->rel_id);
 
 	// for an autocommit transaction, mark a commit as necessary
 
@@ -3716,7 +3892,8 @@ bool VIO_next_record(thread_db* tdbb,
 					 record_param* rpb,
 					 jrd_tra* transaction,
 					 MemoryPool* pool,
-					 FindNextRecordScope scope)
+					 FindNextRecordScope scope,
+					 const RecordNumber* upper)
 {
 /**************************************
  *
@@ -3751,9 +3928,14 @@ bool VIO_next_record(thread_db* tdbb,
 		rpb->rpb_f_page, rpb->rpb_f_line);
 #endif
 
-	do {
+	do
+	{
 		if (!DPM_next(tdbb, rpb, lock_type, scope))
+			return false;
+
+		if (upper && rpb->rpb_number > *upper)
 		{
+			CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 			return false;
 		}
 	} while (!VIO_chase_record_version(tdbb, rpb, transaction, pool, false, false));
@@ -3785,7 +3967,7 @@ bool VIO_next_record(thread_db* tdbb,
 		rpb->rpb_f_page, rpb->rpb_f_line);
 #endif
 
-	tdbb->bumpRelStats(RuntimeStatistics::RECORD_SEQ_READS, rpb->rpb_relation->rel_id);
+	tdbb->bumpStats(RecordStatType::SEQ_READS, rpb->rpb_relation->rel_id);
 	return true;
 }
 
@@ -3808,7 +3990,7 @@ Record* VIO_record(thread_db* tdbb, record_param* rpb, const Format* format, Mem
 	jrd_rel* relation = rpb->rpb_relation;
 	VIO_trace(DEBUG_TRACE,
 		"VIO_record (rel_id %u, record_param %" QUADFORMAT"d, format %d, pool %p)\n",
-		relation->rel_id, rpb->rpb_number.getValue(), format ? format->fmt_version : 0,
+		relation ? relation->rel_id : 0, rpb->rpb_number.getValue(), format ? format->fmt_version : 0,
 		(void*) pool);
 #endif
 
@@ -3877,7 +4059,7 @@ bool VIO_refetch_record(thread_db* tdbb, record_param* rpb, jrd_tra* transaction
 			VIO_data(tdbb, rpb, tdbb->getDefaultPool());
 	}
 
-	tdbb->bumpRelStats(RuntimeStatistics::RECORD_RPT_READS, rpb->rpb_relation->rel_id);
+	tdbb->bumpStats(RecordStatType::RPT_READS, rpb->rpb_relation->rel_id);
 
 	// If record is present, and the transaction is read committed,
 	// make sure the record has not been updated.  Also, punt after
@@ -3892,7 +4074,7 @@ bool VIO_refetch_record(thread_db* tdbb, record_param* rpb, jrd_tra* transaction
 		// dimitr: reads using the undo log are also OK
 		!(rpb->rpb_runtime_flags & RPB_undo_read))
 	{
-		tdbb->bumpRelStats(RuntimeStatistics::RECORD_CONFLICTS, rpb->rpb_relation->rel_id);
+		tdbb->bumpStats(RecordStatType::CONFLICTS, rpb->rpb_relation->rel_id);
 
 		// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
 		ERR_post(Arg::Gds(isc_deadlock) <<
@@ -3917,13 +4099,13 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
  *
  **************************************/
 	SET_TDBB(tdbb);
-	Request* const request = tdbb->getRequest();
-	jrd_rel* relation = rpb->rpb_relation;
+	const auto attachment = tdbb->getAttachment();
+	const auto request = tdbb->getRequest();
+	const auto relation = rpb->rpb_relation;
 
 	DeferredWork* work = NULL;
-	MetaName package_name;
 	USHORT object_id;
-	MetaName object_name;
+	QualifiedName object_name;
 
 #ifdef VIO_DEBUG
 	VIO_trace(DEBUG_WRITES,
@@ -3933,9 +4115,206 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 #endif
 
 	transaction->tra_flags |= TRA_write;
-	DSC desc, desc2;
+	DSC desc, desc2, schemaDesc;
 
 	check_gbak_cheating_insupd(tdbb, relation, "INSERT");
+
+	if (attachment->isGbak() &&
+		!(attachment->att_flags & ATT_gbak_restore_has_schema) &&
+		!(attachment->att_database->dbb_flags & DBB_creating))
+	{
+		struct ObjTypeFieldId
+		{
+			ObjectType objType;
+			USHORT fieldId;
+		};
+
+		struct SchemaFieldDependency
+		{
+			USHORT fieldId;
+			std::optional<ObjTypeFieldId> dependencyId;
+		};
+
+		static const std::unordered_map<USHORT, std::vector<SchemaFieldDependency>> schemaFields = {
+			{rel_database, {
+				{f_dat_charset_schema, ObjTypeFieldId{obj_charset, f_dat_charset}}
+			}},
+			{rel_fields, {
+				{f_fld_schema}
+			}},
+			{rel_segments, {
+				{f_seg_schema}
+			}},
+			{rel_indices, {
+				{f_idx_schema},
+				{f_idx_foreign_schema, ObjTypeFieldId{obj_index, f_idx_foreign}}
+			}},
+			{rel_rfr, {
+				{f_rfr_schema},
+				{f_rfr_field_source_schema, ObjTypeFieldId{obj_field, f_rfr_sname}}
+			}},
+			{rel_relations, {
+				{f_rel_schema}
+			}},
+			{rel_vrel, {
+				{f_vrl_schema},
+				{f_vrl_rname_schema, ObjTypeFieldId{obj_relation, f_vrl_rname}}
+			}},
+			{rel_triggers, {
+				{f_trg_schema}
+			}},
+			/* RDB$DEPENDENCIES is not used in GBAK
+			{rel_dpds, {
+				{f_dpd_schema},
+				{f_dpd_o_schema}
+			}},
+			*/
+			{rel_funs, {
+				{f_fun_schema}
+			}},
+			{rel_args, {
+				{f_arg_schema},
+				{f_arg_rel_schema, ObjTypeFieldId{obj_relation, f_arg_rname}},
+				{f_arg_field_source_schema, ObjTypeFieldId{obj_field, f_arg_sname}}
+			}},
+			{rel_msgs, {
+				{f_msg_schema}
+			}},
+			{rel_gens, {
+				{f_gen_schema}
+			}},
+			{rel_dims, {
+				{f_dims_schema}
+			}},
+			{rel_rcon, {
+				{f_rcon_schema}
+			}},
+			{rel_refc, {
+				{f_refc_schema},
+				{f_refc_uq_schema, ObjTypeFieldId{obj_any, f_refc_uq}}
+			}},
+			{rel_ccon, {
+				{f_ccon_schema}
+			}},
+			{rel_procedures, {
+				{f_prc_schema}
+			}},
+			{rel_prc_prms, {
+				{f_prm_schema},
+				{f_prm_rel_schema, ObjTypeFieldId{obj_relation, f_prm_rname}},
+				{f_prm_field_source_schema, ObjTypeFieldId{obj_field, f_prm_sname}}
+			}},
+			{rel_charsets, {
+				{f_cs_schema},
+				{f_cs_def_coll_schema, ObjTypeFieldId{obj_collation, f_cs_def_collate}}
+			}},
+			{rel_collations, {
+				{f_coll_schema}
+			}},
+			{rel_exceptions, {
+				{f_xcp_schema}
+			}},
+			{rel_packages, {
+				{f_pkg_schema}
+			}},
+			{rel_pub_tables, {
+				{f_pubtab_tab_schema, ObjTypeFieldId{obj_relation, f_pubtab_tab_name}}
+			}},
+		};
+
+		ObjectsArray<MetaString> schemaSearchPath({SYSTEM_SCHEMA, PUBLIC_SCHEMA});
+
+		if (const auto relSchemaFields = schemaFields.find(relation->rel_id); relSchemaFields != schemaFields.end())
+		{
+			for (const auto [fieldId, dependency] : relSchemaFields->second)
+			{
+				if (rpb->rpb_record->isNull(fieldId) &&
+					(!dependency.has_value() || !rpb->rpb_record->isNull(dependency->fieldId)) &&
+					!EVL_field(0, rpb->rpb_record, fieldId, &schemaDesc))
+				{
+					auto schemaName = PUBLIC_SCHEMA;
+					QualifiedName depName;
+
+					if (dependency.has_value() &&
+						dependency->objType != obj_any &&
+						EVL_field(0, rpb->rpb_record, dependency->fieldId, &desc))
+					{
+						MOV_get_metaname(tdbb, &desc, depName.object);
+
+						if (MET_qualify_existing_name(tdbb, depName, {dependency->objType}, &schemaSearchPath))
+							schemaName = depName.schema.c_str();
+					}
+
+					desc.makeText(static_cast<USHORT>(strlen(schemaName)), CS_METADATA,
+						(UCHAR*) schemaName);
+
+					MOV_move(tdbb, &desc, &schemaDesc);
+					rpb->rpb_record->clearNull(fieldId);
+				}
+			}
+		}
+
+		if (relation->rel_id == rel_priv)
+		{
+			static constexpr int privSchemaFields[][2] = {
+				{f_prv_user_schema, f_prv_u_type},
+				{f_prv_rel_schema, f_prv_o_type}
+			};
+
+			for (const auto& [schemaFieldId, objTypeFieldId] : privSchemaFields)
+			{
+				if (rpb->rpb_record->isNull(schemaFieldId) &&
+					!rpb->rpb_record->isNull(objTypeFieldId) &&
+					EVL_field(0, rpb->rpb_record, objTypeFieldId, &desc2))
+				{
+					const auto objType = MOV_get_long(tdbb, &desc2, 0);
+
+					switch (objType)
+					{
+						case obj_relations:
+						case obj_views:
+						case obj_procedures:
+						case obj_functions:
+						case obj_packages:
+						case obj_generators:
+						case obj_domains:
+						case obj_exceptions:
+						case obj_charsets:
+						case obj_collations:
+
+						case obj_relation:
+						case obj_view:
+						case obj_trigger:
+						case obj_procedure:
+						case obj_exception:
+						case obj_field:
+						case obj_index:
+						case obj_charset:
+						case obj_generator:
+						case obj_udf:
+						case obj_collation:
+						case obj_package_header:
+						case obj_package_body:
+							EVL_field(0, rpb->rpb_record, schemaFieldId, &desc2);
+
+							desc.makeText(static_cast<USHORT>(strlen(PUBLIC_SCHEMA)), CS_METADATA,
+								(UCHAR*) PUBLIC_SCHEMA);
+
+							MOV_move(tdbb, &desc, &desc2);
+							rpb->rpb_record->clearNull(schemaFieldId);
+
+							break;
+					}
+				}
+			}
+
+			desc2.setNull();
+		}
+
+		gbak_put_search_system_schema_flag(tdbb, rpb, transaction);
+	}
+
+	desc.setNull();
 
 	if (needDfw(tdbb, transaction))
 	{
@@ -3963,7 +4342,7 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			protect_system_table_insert(tdbb, request, relation);
 			EVL_field(0, rpb->rpb_record, f_rol_name, &desc);
 			if (set_security_class(tdbb, rpb->rpb_record, f_rol_class))
-				DFW_post_work(transaction, dfw_grant, &desc, obj_sql_role);
+				DFW_post_work(transaction, dfw_grant, &desc, nullptr, obj_sql_role);
 			break;
 
 		case rel_db_creators:
@@ -3989,39 +4368,51 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		case rel_database:
 			protect_system_table_insert(tdbb, request, relation);
 			if (set_security_class(tdbb, rpb->rpb_record, f_dat_class))
-				DFW_post_work(transaction, dfw_grant, "", obj_database);
+				DFW_post_work(transaction, dfw_grant, {}, {}, obj_database);
+			break;
+
+		case rel_schemas:
+			protect_system_table_insert(tdbb, request, relation);
+			EVL_field(0, rpb->rpb_record, f_sch_schema, &desc);
+			if (set_security_class(tdbb, rpb->rpb_record, f_sch_class))
+				DFW_post_work(transaction, dfw_grant, &desc, nullptr, obj_schema);
 			break;
 
 		case rel_relations:
 			protect_system_table_insert(tdbb, request, relation);
+			EVL_field(0, rpb->rpb_record, f_rel_schema, &schemaDesc);
 			EVL_field(0, rpb->rpb_record, f_rel_name, &desc);
-			DFW_post_work(transaction, dfw_create_relation, &desc, 0);
-			DFW_post_work(transaction, dfw_update_format, &desc, 0);
+			DFW_post_work(transaction, dfw_create_relation, &desc, &schemaDesc, 0);
+			DFW_post_work(transaction, dfw_update_format, &desc, &schemaDesc, 0);
 			set_system_flag(tdbb, rpb->rpb_record, f_rel_sys_flag);
 			set_owner_name(tdbb, rpb->rpb_record, f_rel_owner);
 			if (set_security_class(tdbb, rpb->rpb_record, f_rel_class))
-				DFW_post_work(transaction, dfw_grant, &desc, obj_relation);
+				DFW_post_work(transaction, dfw_grant, &desc, &schemaDesc, obj_relation);
 			break;
 
 		case rel_packages:
 			protect_system_table_insert(tdbb, request, relation);
+			EVL_field(0, rpb->rpb_record, f_pkg_schema, &schemaDesc);
 			EVL_field(0, rpb->rpb_record, f_pkg_name, &desc);
 			set_system_flag(tdbb, rpb->rpb_record, f_pkg_sys_flag);
 			set_owner_name(tdbb, rpb->rpb_record, f_pkg_owner);
 			if (set_security_class(tdbb, rpb->rpb_record, f_pkg_class))
-				DFW_post_work(transaction, dfw_grant, &desc, obj_package_header);
+				DFW_post_work(transaction, dfw_grant, &desc, &schemaDesc, obj_package_header);
 			break;
 
 		case rel_procedures:
 			protect_system_table_insert(tdbb, request, relation);
+
+			EVL_field(0, rpb->rpb_record, f_prc_schema, &schemaDesc);
 			EVL_field(0, rpb->rpb_record, f_prc_name, &desc);
 
 			if (EVL_field(0, rpb->rpb_record, f_prc_pkg_name, &desc2))
-				MOV_get_metaname(tdbb, &desc2, package_name);
+				MOV_get_metaname(tdbb, &desc2, object_name.package);
 
 			object_id = set_metadata_id(tdbb, rpb->rpb_record,
 										f_prc_id, drq_g_nxt_prc_id, "RDB$PROCEDURES");
-			work = DFW_post_work(transaction, dfw_create_procedure, &desc, object_id, package_name);
+
+			work = DFW_post_work(transaction, dfw_create_procedure, &desc, &schemaDesc, object_id, object_name.package);
 
 			{ // scope
 				bool check_blr = true;
@@ -4029,29 +4420,32 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 					check_blr = MOV_get_long(tdbb, &desc2, 0) != 0;
 
 				if (check_blr)
-					DFW_post_work_arg(transaction, work, NULL, 0, dfw_arg_check_blr);
+					DFW_post_work_arg(transaction, work, nullptr, nullptr, 0, dfw_arg_check_blr);
 			} // scope
 
 			set_system_flag(tdbb, rpb->rpb_record, f_prc_sys_flag);
 			set_owner_name(tdbb, rpb->rpb_record, f_prc_owner);
 
-			if (package_name.isEmpty())
+			if (object_name.package.isEmpty())
 			{
 				if (set_security_class(tdbb, rpb->rpb_record, f_prc_class))
-					DFW_post_work(transaction, dfw_grant, &desc, obj_procedure);
+					DFW_post_work(transaction, dfw_grant, &desc, &schemaDesc, obj_procedure);
 			}
 			break;
 
 		case rel_funs:
 			protect_system_table_insert(tdbb, request, relation);
+
+			EVL_field(0, rpb->rpb_record, f_fun_schema, &schemaDesc);
 			EVL_field(0, rpb->rpb_record, f_fun_name, &desc);
 
 			if (EVL_field(0, rpb->rpb_record, f_fun_pkg_name, &desc2))
-				MOV_get_metaname(tdbb, &desc2, package_name);
+				MOV_get_metaname(tdbb, &desc2, object_name.package);
 
 			object_id = set_metadata_id(tdbb, rpb->rpb_record,
 										f_fun_id, drq_g_nxt_fun_id, "RDB$FUNCTIONS");
-			work = DFW_post_work(transaction, dfw_create_function, &desc, object_id, package_name);
+
+			work = DFW_post_work(transaction, dfw_create_function, &desc, &schemaDesc, object_id, object_name.package);
 
 			{ // scope
 				bool check_blr = true;
@@ -4059,116 +4453,129 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 					check_blr = MOV_get_long(tdbb, &desc2, 0) != 0;
 
 				if (check_blr)
-					DFW_post_work_arg(transaction, work, NULL, 0, dfw_arg_check_blr);
+					DFW_post_work_arg(transaction, work, nullptr, nullptr, 0, dfw_arg_check_blr);
 			} // scope
 
 			set_system_flag(tdbb, rpb->rpb_record, f_fun_sys_flag);
 			set_owner_name(tdbb, rpb->rpb_record, f_fun_owner);
 
-			if (package_name.isEmpty())
+			if (object_name.package.isEmpty())
 			{
 				if (set_security_class(tdbb, rpb->rpb_record, f_fun_class))
-					DFW_post_work(transaction, dfw_grant, &desc, obj_udf);
+					DFW_post_work(transaction, dfw_grant, &desc, &schemaDesc, obj_udf);
 			}
 			break;
 
 		case rel_indices:
 			protect_system_table_insert(tdbb, request, relation);
+
+			EVL_field(0, rpb->rpb_record, f_idx_schema, &schemaDesc);
 			EVL_field(0, rpb->rpb_record, f_idx_name, &desc);
+
 			if (EVL_field(0, rpb->rpb_record, f_idx_exp_blr, &desc2))
 			{
-				DFW_post_work(transaction, dfw_create_expression_index, &desc,
+				DFW_post_work(transaction, dfw_create_expression_index, &desc, &schemaDesc,
 							  tdbb->getDatabase()->dbb_max_idx);
 			}
-			else {
-				DFW_post_work(transaction, dfw_create_index, &desc, tdbb->getDatabase()->dbb_max_idx);
-			}
+			else
+				DFW_post_work(transaction, dfw_create_index, &desc, &schemaDesc, tdbb->getDatabase()->dbb_max_idx);
+
 			set_system_flag(tdbb, rpb->rpb_record, f_idx_sys_flag);
 			break;
 
 		case rel_rfr:
 			protect_system_table_insert(tdbb, request, relation);
+			EVL_field(0, rpb->rpb_record, f_rfr_schema, &schemaDesc);
 			EVL_field(0, rpb->rpb_record, f_rfr_rname, &desc);
-			DFW_post_work(transaction, dfw_update_format, &desc, 0);
+			DFW_post_work(transaction, dfw_update_format, &desc, &schemaDesc, 0);
 			set_system_flag(tdbb, rpb->rpb_record, f_rfr_sys_flag);
 			break;
 
 		case rel_classes:
 			protect_system_table_insert(tdbb, request, relation);
 			EVL_field(0, rpb->rpb_record, f_cls_class, &desc);
-			DFW_post_work(transaction, dfw_compute_security, &desc, 0);
+#ifdef DEV_BUILD
+			MOV_get_metaname(tdbb, &desc, object_name.object);
+			fb_assert(strncmp(object_name.object.c_str(), "SQL$", 4) == 0);
+#endif
+			DFW_post_work(transaction, dfw_compute_security, &desc, nullptr, 0);
 			break;
 
 		case rel_fields:
+			EVL_field(0, rpb->rpb_record, f_fld_schema, &schemaDesc);
+			MOV_get_metaname(tdbb, &schemaDesc, object_name.schema);
 			EVL_field(0, rpb->rpb_record, f_fld_name, &desc);
-			MOV_get_metaname(tdbb, &desc, object_name);
+			MOV_get_metaname(tdbb, &desc, object_name.object);
 			SCL_check_domain(tdbb, object_name, SCL_create);
-			DFW_post_work(transaction, dfw_create_field, &desc, 0);
+			DFW_post_work(transaction, dfw_create_field, &desc, &schemaDesc, 0);
 			set_system_flag(tdbb, rpb->rpb_record, f_fld_sys_flag);
 			set_owner_name(tdbb, rpb->rpb_record, f_fld_owner);
 			if (set_security_class(tdbb, rpb->rpb_record, f_fld_class))
-				DFW_post_work(transaction, dfw_grant, &desc, obj_field);
+				DFW_post_work(transaction, dfw_grant, &desc, &schemaDesc, obj_field);
 			break;
 
 		case rel_filters:
 			protect_system_table_insert(tdbb, request, relation);
 			EVL_field(0, rpb->rpb_record, f_flt_name, &desc);
 			if (set_security_class(tdbb, rpb->rpb_record, f_flt_class))
-				DFW_post_work(transaction, dfw_grant, &desc, obj_blob_filter);
+				DFW_post_work(transaction, dfw_grant, &desc, nullptr, obj_blob_filter);
 			break;
 
 		case rel_files:
 			protect_system_table_insert(tdbb, request, relation);
 			{
-				const bool name_defined = EVL_field(0, rpb->rpb_record, f_file_name, &desc);
-				if (EVL_field(0, rpb->rpb_record, f_file_shad_num, &desc2) &&
-					MOV_get_long(tdbb, &desc2, 0))
+				const bool nameDefined = EVL_field(0, rpb->rpb_record, f_file_name, &desc);
+
+				const auto shadowNumber = EVL_field(0, rpb->rpb_record, f_file_shad_num, &desc2) ?
+					MOV_get_long(tdbb, &desc2, 0) : 0;
+
+				const auto fileFlags = EVL_field(0, rpb->rpb_record, f_file_flags, &desc2) ?
+					MOV_get_long(tdbb, &desc2, 0) : 0;
+
+				if (shadowNumber)
 				{
-					EVL_field(0, rpb->rpb_record, f_file_flags, &desc2);
-					if (!(MOV_get_long(tdbb, &desc2, 0) & FILE_inactive)) {
-						DFW_post_work(transaction, dfw_add_shadow, &desc, 0);
-					}
+					if (!(fileFlags & FILE_inactive))
+						DFW_post_work(transaction, dfw_add_shadow, &desc, nullptr, 0);
 				}
-				else
+				else if (fileFlags & FILE_difference)
 				{
-					USHORT rel_flags;
-					if (EVL_field(0, rpb->rpb_record, f_file_flags, &desc2) &&
-						((rel_flags = MOV_get_long(tdbb, &desc2, 0)) & FILE_difference))
-					{
-						if (name_defined) {
-							DFW_post_work(transaction, dfw_add_difference, &desc, 0);
-						}
-						if (rel_flags & FILE_backing_up)
-						{
-							DFW_post_work(transaction, dfw_begin_backup, &desc, 0);
-						}
-					}
-					else {
-						DFW_post_work(transaction, dfw_add_file, &desc, 0);
-					}
+					if (nameDefined)
+						DFW_post_work(transaction, dfw_add_difference, &desc, nullptr, 0);
+
+					if (fileFlags & FILE_backing_up)
+						DFW_post_work(transaction, dfw_begin_backup, &desc, nullptr, 0);
 				}
 			}
+			// Nullify the unsupported fields
+			rpb->rpb_record->setNull(f_file_seq);
+			rpb->rpb_record->setNull(f_file_start);
+			rpb->rpb_record->setNull(f_file_length);
 			break;
 
 		case rel_triggers:
+			EVL_field(0, rpb->rpb_record, f_trg_schema, &schemaDesc);
 			EVL_field(0, rpb->rpb_record, f_trg_rname, &desc);
 
 			// check if this  request go through without checking permissions
 			if (!(request->getStatement()->flags & (Statement::FLAG_IGNORE_PERM | Statement::FLAG_INTERNAL)))
-				SCL_check_relation(tdbb, &desc, SCL_control | SCL_alter);
+			{
+				MOV_get_metaname(tdbb, &schemaDesc, object_name.schema);
+				MOV_get_metaname(tdbb, &desc, object_name.object);
+				SCL_check_relation(tdbb, object_name, SCL_control | SCL_alter);
+			}
 
 			if (EVL_field(0, rpb->rpb_record, f_trg_rname, &desc2))
-				DFW_post_work(transaction, dfw_update_format, &desc2, 0);
+				DFW_post_work(transaction, dfw_update_format, &desc2, &schemaDesc, 0);
 
 			EVL_field(0, rpb->rpb_record, f_trg_name, &desc);
-			work = DFW_post_work(transaction, dfw_create_trigger, &desc, 0);
+			work = DFW_post_work(transaction, dfw_create_trigger, &desc, &schemaDesc, 0);
 
 			if (!(desc2.dsc_flags & DSC_null))
-				DFW_post_work_arg(transaction, work, &desc2, 0, dfw_arg_rel_name);
+				DFW_post_work_arg(transaction, work, &desc2, &schemaDesc, 0, dfw_arg_rel_name);
 
 			if (EVL_field(0, rpb->rpb_record, f_trg_type, &desc2))
 			{
-				DFW_post_work_arg(transaction, work, &desc2,
+				DFW_post_work_arg(transaction, work, &desc2, &schemaDesc,
 					(USHORT) MOV_get_int64(tdbb, &desc2, 0), dfw_arg_trg_type);
 			}
 			set_system_flag(tdbb, rpb->rpb_record, f_trg_sys_flag);
@@ -4176,10 +4583,11 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 		case rel_priv:
 			protect_system_table_insert(tdbb, request, relation);
+			EVL_field(0, rpb->rpb_record, f_prv_rel_schema, &schemaDesc);
 			EVL_field(0, rpb->rpb_record, f_prv_rname, &desc);
 			EVL_field(0, rpb->rpb_record, f_prv_o_type, &desc2);
 			object_id = MOV_get_long(tdbb, &desc2, 0);
-			DFW_post_work(transaction, dfw_grant, &desc, object_id);
+			DFW_post_work(transaction, dfw_grant, &desc, &schemaDesc, object_id);
 			break;
 
 		case rel_vrel:
@@ -4190,53 +4598,59 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 				if (EVL_field(0, rpb->rpb_record, f_vrl_vname, &desc) &&
 					EVL_field(0, rpb->rpb_record, f_vrl_context, &desc2))
 				{
+					EVL_field(0, rpb->rpb_record, f_vrl_schema, &schemaDesc);
+
 					const USHORT id = MOV_get_long(tdbb, &desc2, 0);
-					DFW_post_work(transaction, dfw_store_view_context_type, &desc, id);
+					DFW_post_work(transaction, dfw_store_view_context_type, &desc, &schemaDesc, id);
 				}
 			}
 			break;
 
 		case rel_gens:
 			protect_system_table_insert(tdbb, request, relation);
+			EVL_field(0, rpb->rpb_record, f_gen_schema, &schemaDesc);
 			EVL_field(0, rpb->rpb_record, f_gen_name, &desc);
 			EVL_field(0, rpb->rpb_record, f_gen_id, &desc2);
 			object_id = set_metadata_id(tdbb, rpb->rpb_record,
 										f_gen_id, drq_g_nxt_gen_id, MASTER_GENERATOR);
 			transaction->getGenIdCache()->put(object_id, 0);
-			DFW_post_work(transaction, dfw_set_generator, &desc, object_id);
+			DFW_post_work(transaction, dfw_set_generator, &desc, &schemaDesc, object_id);
 			set_system_flag(tdbb, rpb->rpb_record, f_gen_sys_flag);
 			set_owner_name(tdbb, rpb->rpb_record, f_gen_owner);
 			if (set_security_class(tdbb, rpb->rpb_record, f_gen_class))
-				DFW_post_work(transaction, dfw_grant, &desc, obj_generator);
+				DFW_post_work(transaction, dfw_grant, &desc, &schemaDesc, obj_generator);
 			break;
 
 		case rel_charsets:
 			protect_system_table_insert(tdbb, request, relation);
+			EVL_field(0, rpb->rpb_record, f_cs_schema, &schemaDesc);
 			EVL_field(0, rpb->rpb_record, f_cs_cs_name, &desc);
 			set_system_flag(tdbb, rpb->rpb_record, f_cs_sys_flag);
 			set_owner_name(tdbb, rpb->rpb_record, f_cs_owner);
 			if (set_security_class(tdbb, rpb->rpb_record, f_cs_class))
-				DFW_post_work(transaction, dfw_grant, &desc, obj_charset);
+				DFW_post_work(transaction, dfw_grant, &desc, &schemaDesc, obj_charset);
 			break;
 
 		case rel_collations:
 			protect_system_table_insert(tdbb, request, relation);
+			EVL_field(0, rpb->rpb_record, f_coll_schema, &schemaDesc);
 			EVL_field(0, rpb->rpb_record, f_coll_name, &desc);
 			set_system_flag(tdbb, rpb->rpb_record, f_coll_sys_flag);
 			set_owner_name(tdbb, rpb->rpb_record, f_coll_owner);
 			if (set_security_class(tdbb, rpb->rpb_record, f_coll_class))
-				DFW_post_work(transaction, dfw_grant, &desc, obj_collation);
+				DFW_post_work(transaction, dfw_grant, &desc, &schemaDesc, obj_collation);
 			break;
 
 		case rel_exceptions:
 			protect_system_table_insert(tdbb, request, relation);
+			EVL_field(0, rpb->rpb_record, f_xcp_schema, &schemaDesc);
 			EVL_field(0, rpb->rpb_record, f_xcp_name, &desc);
 			set_metadata_id(tdbb, rpb->rpb_record,
 							f_xcp_number, drq_g_nxt_xcp_id, "RDB$EXCEPTIONS");
 			set_system_flag(tdbb, rpb->rpb_record, f_xcp_sys_flag);
 			set_owner_name(tdbb, rpb->rpb_record, f_xcp_owner);
 			if (set_security_class(tdbb, rpb->rpb_record, f_xcp_class))
-				DFW_post_work(transaction, dfw_grant, &desc, obj_exception);
+				DFW_post_work(transaction, dfw_grant, &desc, &schemaDesc, obj_exception);
 			break;
 
 		case rel_backup_history:
@@ -4254,7 +4668,7 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 		case rel_pub_tables:
 			protect_system_table_insert(tdbb, request, relation);
-			DFW_post_work(transaction, dfw_change_repl_state, "", 1);
+			DFW_post_work(transaction, dfw_change_repl_state, {}, {}, 1);
 			break;
 
 		default:    // Shut up compiler warnings
@@ -4267,6 +4681,8 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 	{
 		case rel_collations:
 			{
+				EVL_field(0, rpb->rpb_record, f_coll_schema, &schemaDesc);
+
 				EVL_field(0, rpb->rpb_record, f_coll_cs_id, &desc);
 				USHORT id = MOV_get_long(tdbb, &desc, 0);
 
@@ -4274,7 +4690,7 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 				id = INTL_CS_COLL_TO_TTYPE(id, MOV_get_long(tdbb, &desc, 0));
 
 				EVL_field(0, rpb->rpb_record, f_coll_name, &desc);
-				DFW_post_work(transaction, dfw_create_collation, &desc, id);
+				DFW_post_work(transaction, dfw_create_collation, &desc, &schemaDesc, id);
 			}
 			break;
 
@@ -4305,7 +4721,7 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		verb_post(tdbb, transaction, rpb, 0);
 	}
 
-	tdbb->bumpRelStats(RuntimeStatistics::RECORD_INSERTS, relation->rel_id);
+	tdbb->bumpStats(RecordStatType::INSERTS, relation->rel_id);
 
 	// for an autocommit transaction, mark a commit as necessary
 
@@ -4443,7 +4859,7 @@ bool VIO_sweep(thread_db* tdbb, jrd_tra* transaction, TraceSweepEvent* traceSwee
 }
 
 
-bool VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* transaction)
+WriteLockResult VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* transaction)
 {
 /**************************************
  *
@@ -4471,16 +4887,18 @@ bool VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* transaction)
 		org_rpb->rpb_f_page, org_rpb->rpb_f_line);
 #endif
 
+	const bool skipLocked = org_rpb->rpb_stream_flags & RPB_s_skipLocked;
+
 	if (transaction->tra_flags & TRA_system)
 	{
 		// Explicit locks are not needed in system transactions
-		return true;
+		return WriteLockResult::LOCKED;
 	}
 
 	if (org_rpb->rpb_runtime_flags & (RPB_refetch | RPB_undo_read))
 	{
 		if (!VIO_refetch_record(tdbb, org_rpb, transaction, true, true))
-			return false;
+			return WriteLockResult::CONFLICTED;
 
 		org_rpb->rpb_runtime_flags &= ~RPB_refetch;
 		fb_assert(!(org_rpb->rpb_runtime_flags & RPB_undo_read));
@@ -4489,7 +4907,7 @@ bool VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* transaction)
 	if (org_rpb->rpb_transaction_nr == transaction->tra_number)
 	{
 		// We already own this record, thus no writelock is required
-		return true;
+		return WriteLockResult::LOCKED;
 	}
 
 	transaction->tra_flags |= TRA_write;
@@ -4537,8 +4955,15 @@ bool VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* transaction)
 	switch (prepare_update(tdbb, transaction, org_rpb->rpb_transaction_nr, org_rpb, &temp, &new_rpb,
 						   stack, true))
 	{
-		case PREPARE_CONFLICT:
-		case PREPARE_DELETE:
+		case PrepareResult::SUCCESS:
+			break;
+
+		case PrepareResult::DELETED:
+			if (skipLocked && (transaction->tra_flags & TRA_read_committed))
+				return WriteLockResult::SKIPPED;
+			[[fallthrough]];
+
+		case PrepareResult::CONFLICT:
 			if ((transaction->tra_flags & TRA_read_consistency))
 			{
 				Request* top_request = tdbb->getRequest()->req_snapshot.m_owner;
@@ -4556,8 +4981,15 @@ bool VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* transaction)
 				}
 			}
 			org_rpb->rpb_runtime_flags |= RPB_refetch;
-			return false;
-		case PREPARE_LOCKERR:
+			return WriteLockResult::CONFLICTED;
+
+		case PrepareResult::SKIP_LOCKED:
+			fb_assert(skipLocked);
+			if (skipLocked)
+				return WriteLockResult::SKIPPED;
+			[[fallthrough]];
+
+		case PrepareResult::LOCK_ERROR:
 			// We got some kind of locking error (deadlock, timeout or lock_conflict)
 			// Error details should be stuffed into status vector at this point
 			// hvlad: we have no details as TRA_wait has already cleared the status vector
@@ -4589,7 +5021,7 @@ bool VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* transaction)
 	if (transaction->tra_flags & TRA_autocommit)
 		transaction->tra_flags |= TRA_perform_autocommit;
 
-	tdbb->bumpRelStats(RuntimeStatistics::RECORD_LOCKS, relation->rel_id);
+	tdbb->bumpStats(RecordStatType::LOCKS, relation->rel_id);
 
 	// VIO_writelock
 	Database* dbb = tdbb->getDatabase();
@@ -4609,7 +5041,7 @@ bool VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* transaction)
 		notify_garbage_collector(tdbb, org_rpb, transaction->tra_number);
 	}
 
-	return true;
+	return WriteLockResult::LOCKED;
 }
 
 
@@ -4663,9 +5095,10 @@ static void check_rel_field_class(thread_db* tdbb,
  **************************************/
 	SET_TDBB(tdbb);
 
-	DSC desc;
+	DSC schemaDesc, desc;
+	EVL_field(0, rpb->rpb_record, f_rfr_schema, &schemaDesc);
 	EVL_field(0, rpb->rpb_record, f_rfr_rname, &desc);
-	DFW_post_work(transaction, dfw_update_format, &desc, 0);
+	DFW_post_work(transaction, dfw_update_format, &desc, &schemaDesc, 0);
 }
 
 static void check_class(thread_db* tdbb,
@@ -4695,7 +5128,7 @@ static void check_class(thread_db* tdbb,
 	if (!flag_new || (flag_org && !MOV_compare(tdbb, &desc1, &desc2)))
 		return;
 
-	DFW_post_work(transaction, dfw_compute_security, &desc2, 0);
+	DFW_post_work(transaction, dfw_compute_security, &desc2, nullptr, 0);
 }
 
 
@@ -4829,7 +5262,7 @@ static void check_repl_state(thread_db* tdbb,
 	if (flag_org && flag_new && !MOV_compare(tdbb, &desc1, &desc2))
 		return;
 
-	DFW_post_work(transaction, dfw_change_repl_state, "", 0);
+	DFW_post_work(transaction, dfw_change_repl_state, {}, {}, 0);
 }
 
 
@@ -4929,7 +5362,7 @@ static UCHAR* delete_tail(thread_db* tdbb,
 	jrd_rel* relation = rpb->rpb_relation;
 	VIO_trace(DEBUG_WRITES,
 		"delete_tail (rel_id %u, record_param %" QUADFORMAT"d, prior_page %" SLONGFORMAT", tail %p, length %u)\n",
-		relation->rel_id, rpb->rpb_number.getValue(), prior_page, tail, tail_length);
+		relation->rel_id, rpb->rpb_number.getValue(), prior_page, tail, tail_end - tail);
 
 	VIO_trace(DEBUG_WRITES_INFO,
 		"   tail of record  %" SLONGFORMAT":%d, rpb_trans %" SQUADFORMAT
@@ -4939,8 +5372,7 @@ static UCHAR* delete_tail(thread_db* tdbb,
 		rpb->rpb_f_page, rpb->rpb_f_line);
 #endif
 
-	RuntimeStatistics::Accumulator fragments(tdbb, rpb->rpb_relation,
-		RuntimeStatistics::RECORD_FRAGMENT_READS);
+	RuntimeStatistics::Accumulator fragments(tdbb, rpb->rpb_relation, RecordStatType::FRAGMENT_READS);
 
 	while (rpb->rpb_flags & rpb_incomplete)
 	{
@@ -5084,7 +5516,7 @@ static void expunge(thread_db* tdbb, record_param* rpb, const jrd_tra* transacti
 	RecordStack empty_staying;
 	garbage_collect(tdbb, &temp, rpb->rpb_page, empty_staying);
 
-	tdbb->bumpRelStats(RuntimeStatistics::RECORD_EXPUNGES, rpb->rpb_relation->rel_id);
+	tdbb->bumpStats(RecordStatType::EXPUNGES, rpb->rpb_relation->rel_id);
 }
 
 
@@ -5123,8 +5555,7 @@ static void garbage_collect(thread_db* tdbb, record_param* rpb, ULONG prior_page
 		rpb->rpb_f_page, rpb->rpb_f_line);
 #endif
 
-	RuntimeStatistics::Accumulator backversions(tdbb, rpb->rpb_relation,
-		RuntimeStatistics::RECORD_BACKVERSION_READS);
+	RuntimeStatistics::Accumulator backversions(tdbb, rpb->rpb_relation, RecordStatType::BACK_READS);
 
 	// Delete old versions fetching data for garbage collection.
 
@@ -5250,7 +5681,6 @@ void Database::garbage_collector(Database* dbb)
 		{
 			LCK_init(tdbb, LCK_OWNER_attachment);
 			INI_init(tdbb);
-			INI_init2(tdbb);
 			PAG_header(tdbb, true);
 			PAG_attachment_id(tdbb);
 			TRA_init(attachment);
@@ -5421,6 +5851,8 @@ void Database::garbage_collector(Database* dbb)
 
 						CCH_flush(tdbb, FLUSH_SWEEP, 0);
 						flush = false;
+
+						attachment->mergeStats();
 					}
 
 					dbb->dbb_flags &= ~DBB_gc_active;
@@ -5478,6 +5910,90 @@ void Database::exceptionHandler(const Firebird::Exception& ex,
 	FbLocalStatus status_vector;
 	ex.stuffException(&status_vector);
 	iscDbLogStatus(dbb_filename.c_str(), &status_vector);
+}
+
+
+static void gbak_put_search_system_schema_flag(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
+{
+	static const std::unordered_map<USHORT, std::vector<USHORT>> schemaBlrFields = {
+		{rel_args, {f_arg_default}},
+		{rel_fields, {f_fld_v_blr, f_fld_computed, f_fld_default, f_fld_missing}},
+		{rel_funs, {f_fun_blr}},
+		{rel_indices, {f_idx_exp_blr, f_idx_cond_blr}},
+		{rel_prc_prms, {f_prm_default}},
+		{rel_procedures, {f_prc_blr}},
+		{rel_relations, {f_rel_blr}},
+		{rel_rfr, {f_rfr_default}},
+		{rel_triggers, {f_trg_blr}}
+	};
+
+	static const UCHAR bpb[] = {
+		isc_bpb_version1,
+		isc_bpb_type, 1, isc_bpb_type_stream
+	};
+
+	SET_TDBB(tdbb);
+
+	const auto relation = rpb->rpb_relation;
+	dsc desc, desc2;
+
+	if (const auto relBlrFields = schemaBlrFields.find(relation->rel_id); relBlrFields != schemaBlrFields.end())
+	{
+		UCHAR buffer[BUFFER_MEDIUM];
+
+		for (const auto field : relBlrFields->second)
+		{
+			if (EVL_field(0, rpb->rpb_record, field, &desc))
+			{
+				AutoBlb blob(tdbb, blb::open(tdbb, transaction, reinterpret_cast<bid*>(desc.dsc_address)));
+				bid newBid;
+				const auto newBlob = blb::create2(tdbb, transaction, &newBid, sizeof(bpb), bpb);
+				bool firstSegment = true;
+				UCHAR newHeader[] = {
+					0,
+					blr_flags,
+					blr_flags_search_system_schema,
+					0, 0,
+					blr_end
+				};
+
+				while (!(blob->blb_flags & BLB_eof))
+				{
+					const auto len = blob->BLB_get_data(tdbb, buffer, sizeof(buffer), false);
+
+					if (len > 1 && firstSegment)
+					{
+						newHeader[0] = buffer[0];
+						fb_assert(newHeader[0] == blr_version4 || newHeader[0] == blr_version5);
+
+						if ((newHeader[0] == blr_version4 || newHeader[0] == blr_version5) &&
+							buffer[1] != blr_flags)
+						{
+							newBlob->BLB_put_data(tdbb, newHeader, sizeof(newHeader));
+							newBlob->BLB_put_data(tdbb, buffer + 1, len - 1);
+
+							firstSegment = false;
+						}
+						else
+						{
+							newBid.clear();
+							break;
+						}
+					}
+					else
+						newBlob->BLB_put_data(tdbb, buffer, len);
+				}
+
+				newBlob->BLB_close(tdbb);
+
+				if (!newBid.isEmpty())
+				{
+					desc2.makeBlob(isc_blob_untyped, 0, reinterpret_cast<ISC_QUAD*>(&newBid));
+					blb::move(tdbb, &desc2, &desc, relation, rpb->rpb_record, field);
+				}
+			}
+		}
+	}
 }
 
 
@@ -5545,7 +6061,7 @@ static UndoDataRet get_undo_data(thread_db* tdbb, jrd_tra* transaction,
 		rpb->rpb_runtime_flags |= RPB_undo_data;
 		CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 
-		AutoUndoRecord undoRecord(undo.setupRecord(transaction));
+		AutoTempRecord undoRecord(undo.setupRecord(transaction));
 
 		Record* const record = VIO_record(tdbb, rpb, undoRecord->getFormat(), pool);
 		record->copyFrom(undoRecord);
@@ -5627,8 +6143,7 @@ static void list_staying_fast(thread_db* tdbb, record_param* rpb, RecordStack& s
 			  (rpb->rpb_flags & ~(rpb_incomplete | rpb_not_packed)));
 
 	Record* backout_rec = NULL;
-	RuntimeStatistics::Accumulator backversions(tdbb, rpb->rpb_relation,
-		RuntimeStatistics::RECORD_BACKVERSION_READS);
+	RuntimeStatistics::Accumulator backversions(tdbb, rpb->rpb_relation, RecordStatType::BACK_READS);
 
 	if (temp.rpb_flags & rpb_deleted)
 	{
@@ -5705,7 +6220,7 @@ static void list_staying_fast(thread_db* tdbb, record_param* rpb, RecordStack& s
 
 				garbage_collect(tdbb, &temp2, temp.rpb_page, staying);
 
-				tdbb->bumpRelStats(RuntimeStatistics::RECORD_PURGES, temp.rpb_relation->rel_id);
+				tdbb->bumpStats(RuntimeStatistics::RECORD_PURGES, temp.rpb_relation->rel_id);
 
 				if (back_rpb && back_rpb->rpb_page == page && back_rpb->rpb_line == line)
 				{
@@ -5767,9 +6282,7 @@ static void list_staying(thread_db* tdbb, record_param* rpb, RecordStack& stayin
 	//   significantly optimized in a case when VIO_data doesn't have to chase fragments.
 	//   I won't implement this now, because intermediate GC shall reduce likelihood
 	//   of encountering long version chains to almost zero.
-	RuntimeStatistics::Accumulator backversions(tdbb, rpb->rpb_relation,
-												RuntimeStatistics::RECORD_BACKVERSION_READS);
-
+	RuntimeStatistics::Accumulator backversions(tdbb, rpb->rpb_relation, RecordStatType::BACK_READS);
 
 	// Limit number of "restarts" if primary version constantly changed. Currently,
 	// LS_ACTIVE_RPB is passed by VIO_intermediate_gc only and it is ok to return
@@ -5970,14 +6483,8 @@ static void notify_garbage_collector(thread_db* tdbb, record_param* rpb, TraNumb
 }
 
 
-static int prepare_update(	thread_db*		tdbb,
-							jrd_tra*		transaction,
-							TraNumber		commit_tid_read,
-							record_param*	rpb,
-							record_param*	temp,
-							record_param*	new_rpb,
-							PageStack&		stack,
-							bool			writelock)
+static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNumber commit_tid_read,
+	record_param* rpb, record_param* temp, record_param* new_rpb, PageStack& stack, bool writelock)
 {
 /**************************************
  *
@@ -6101,6 +6608,7 @@ static int prepare_update(	thread_db*		tdbb,
 	// was the same one we stored above.
 	record_param org_rpb;
 	TraNumber update_conflict_trans = MAX_TRA_NUMBER; //-1;
+	const bool skipLocked = rpb->rpb_stream_flags & RPB_s_skipLocked;
 	while (true)
 	{
 		org_rpb.rpb_flags = rpb->rpb_flags;
@@ -6123,8 +6631,8 @@ static int prepare_update(	thread_db*		tdbb,
 
 				delete_record(tdbb, temp, 0, NULL);
 
-				tdbb->bumpRelStats(RuntimeStatistics::RECORD_CONFLICTS, relation->rel_id);
-				return PREPARE_DELETE;
+				tdbb->bumpStats(RecordStatType::CONFLICTS, relation->rel_id);
+				return PrepareResult::DELETED;
 			}
 		}
 
@@ -6166,10 +6674,10 @@ static int prepare_update(	thread_db*		tdbb,
 
 				delete_record(tdbb, temp, 0, NULL);
 
-				if (writelock || (transaction->tra_flags & TRA_read_consistency))
+				if (writelock || skipLocked || (transaction->tra_flags & TRA_read_consistency))
 				{
-					tdbb->bumpRelStats(RuntimeStatistics::RECORD_CONFLICTS, relation->rel_id);
-					return PREPARE_DELETE;
+					tdbb->bumpStats(RecordStatType::CONFLICTS, relation->rel_id);
+					return PrepareResult::DELETED;
 				}
 
 				IBERROR(188);	// msg 188 cannot update erased record
@@ -6189,8 +6697,8 @@ static int prepare_update(	thread_db*		tdbb,
 
 				delete_record(tdbb, temp, 0, NULL);
 
-				tdbb->bumpRelStats(RuntimeStatistics::RECORD_CONFLICTS, relation->rel_id);
-				return PREPARE_CONFLICT;
+				tdbb->bumpStats(RecordStatType::CONFLICTS, relation->rel_id);
+				return PrepareResult::CONFLICT;
 			}
 
 			/*
@@ -6247,7 +6755,7 @@ static int prepare_update(	thread_db*		tdbb,
 				const USHORT pageSpaceID = temp->getWindow(tdbb).win_page.getPageSpaceID();
 				stack.push(PageNumber(pageSpaceID, temp->rpb_page));
 			}
-			return PREPARE_OK;
+			return PrepareResult::SUCCESS;
 
 		case tra_active:
 		case tra_limbo:
@@ -6259,10 +6767,10 @@ static int prepare_update(	thread_db*		tdbb,
 #endif
 			CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 
-			// Wait as long as it takes for an active transaction which has modified
-			// the record.
+			// Wait as long as it takes (if not skipping locks) for an active
+			// transaction which has modified the record.
 
-			state = wait(tdbb, transaction, rpb);
+			state = wait(tdbb, transaction, rpb, skipLocked);
 
 			if (state == tra_committed)
 				state = check_precommitted(transaction, rpb);
@@ -6292,14 +6800,17 @@ static int prepare_update(	thread_db*		tdbb,
 				// For SNAPSHOT mode transactions raise error early
 				if (!(transaction->tra_flags & TRA_read_committed))
 				{
-					tdbb->bumpRelStats(RuntimeStatistics::RECORD_CONFLICTS, relation->rel_id);
+					tdbb->bumpStats(RecordStatType::CONFLICTS, relation->rel_id);
+
+					if (skipLocked)
+						return PrepareResult::SKIP_LOCKED;
 
 					// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
 					ERR_post(Arg::Gds(isc_deadlock) <<
 							 Arg::Gds(isc_update_conflict) <<
 							 Arg::Gds(isc_concurrent_transaction) << Arg::Int64(update_conflict_trans));
 				}
-				return PREPARE_CONFLICT;
+				return PrepareResult::CONFLICT;
 
 			case tra_limbo:
 				if (!(transaction->tra_flags & TRA_ignore_limbo))
@@ -6307,10 +6818,10 @@ static int prepare_update(	thread_db*		tdbb,
 					// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
 					ERR_post(Arg::Gds(isc_rec_in_limbo) << Arg::Int64(rpb->rpb_transaction_nr));
 				}
-				// fall thru
+				[[fallthrough]];
 
 			case tra_active:
-				return PREPARE_LOCKERR;
+				return skipLocked ? PrepareResult::SKIP_LOCKED : PrepareResult::LOCK_ERROR;
 
 			case tra_dead:
 				break;
@@ -6334,7 +6845,7 @@ static int prepare_update(	thread_db*		tdbb,
 		VIO_backout(tdbb, rpb, transaction);
 	}
 
-	return PREPARE_OK;
+	return PrepareResult::SUCCESS;
 }
 
 
@@ -6364,7 +6875,7 @@ static void protect_system_table_insert(thread_db* tdbb,
 	}
 
 	status_exception::raise(Arg::Gds(isc_protect_sys_tab) <<
-			Arg::Str("INSERT") << Arg::Str(relation->rel_name));
+			Arg::Str("INSERT") << relation->rel_name.toQuotedString());
 }
 
 
@@ -6396,7 +6907,7 @@ static void protect_system_table_delupd(thread_db* tdbb,
 	}
 
 	status_exception::raise(Arg::Gds(isc_protect_sys_tab) <<
-		Arg::Str(operation) << Arg::Str(relation->rel_name));
+		Arg::Str(operation) << relation->rel_name.toQuotedString());
 }
 
 
@@ -6441,7 +6952,7 @@ static void purge(thread_db* tdbb, record_param* rpb)
 	// the record.
 
 	record_param temp = *rpb;
-	AutoGCRecord gc_rec(VIO_gc_record(tdbb, relation));
+	AutoTempRecord gc_rec(VIO_gc_record(tdbb, relation));
 	Record* record = rpb->rpb_record = gc_rec;
 
 	VIO_data(tdbb, rpb, relation->rel_pool);
@@ -6478,7 +6989,7 @@ static void purge(thread_db* tdbb, record_param* rpb)
 	staying.push(record);
 	garbage_collect(tdbb, &temp, rpb->rpb_page, staying);
 
-	tdbb->bumpRelStats(RuntimeStatistics::RECORD_PURGES, relation->rel_id);
+	tdbb->bumpStats(RecordStatType::PURGES, relation->rel_id);
 	return; // true;
 }
 
@@ -6517,7 +7028,6 @@ static void replace_record(thread_db*		tdbb,
 #endif
 
 	record_param temp = *rpb;
-	rpb->rpb_flags &= ~(rpb_fragment | rpb_incomplete | rpb_chained | rpb_gc_active | rpb_long_tranum);
 	DPM_update(tdbb, rpb, stack, transaction);
 	delete_tail(tdbb, &temp, rpb->rpb_page);
 
@@ -6783,6 +7293,9 @@ void VIO_update_in_place(thread_db* tdbb,
 	{
 		stack = &org_rpb->rpb_record->getPrecedence();
 	}
+	// According to DS on firebird-devel: it is not possible update non-existing record so stack is
+	// unavoidable assigned to some value
+	fb_assert(stack);
 
 	Record* const old_data = org_rpb->rpb_record;
 
@@ -6791,7 +7304,7 @@ void VIO_update_in_place(thread_db* tdbb,
 	// becomes meaningless.  What we need to do is replace the old "delta" record
 	// with an old "complete" record, update in placement, then delete the old delta record
 
-	AutoGCRecord gc_rec;
+	AutoTempRecord gc_rec;
 
 	record_param temp2;
 	const Record* prior = org_rpb->rpb_prior;
@@ -6815,11 +7328,8 @@ void VIO_update_in_place(thread_db* tdbb,
 		temp2.rpb_number = org_rpb->rpb_number;
 		DPM_store(tdbb, &temp2, *stack, DPM_secondary);
 
-		if (stack)
-		{
-			const USHORT pageSpaceID = temp2.getWindow(tdbb).win_page.getPageSpaceID();
-			stack->push(PageNumber(pageSpaceID, temp2.rpb_page));
-		}
+		const USHORT pageSpaceID = temp2.getWindow(tdbb).win_page.getPageSpaceID();
+		stack->push(PageNumber(pageSpaceID, temp2.rpb_page));
 	}
 
 	if (!DPM_get(tdbb, org_rpb, LCK_write))

@@ -31,6 +31,7 @@
 #include "../common/SimpleStatusVector.h"
 #include "../common/dllinst.h"
 #include "../common/os/os_utils.h"
+#include <utility>
 
 #ifdef WIN_NT
 #include <windows.h>
@@ -52,7 +53,7 @@ static bool dontCleanup = false;
 namespace
 {
 #ifdef DEV_BUILD
-	void cleanError(const Firebird::Exception* e)
+	[[noreturn]] void cleanError(const Firebird::Exception* e)
 	{
 		if (e)
 		{
@@ -65,7 +66,7 @@ namespace
 		abort();
 	}
 #else
-	void cleanError(const Firebird::Exception*) { }
+	inline void cleanError(const Firebird::Exception*) noexcept { }
 #endif
 
 	// This helps initialize globals, needed before regular ctors run
@@ -145,7 +146,7 @@ namespace
 #ifndef DEBUG_INIT
 
 	// This instance ensures dtors run when program exits
-	Firebird::Cleanup global(allClean);
+	Firebird::CleanupFunction global(allClean);
 
 #endif //DEBUG_INIT
 
@@ -175,8 +176,7 @@ namespace
 
 		initDone = 1;
 #ifdef HAVE_PTHREAD_ATFORK
-		int ret = pthread_atfork(NULL, NULL, child);
-		(void) ret;
+		std::ignore = pthread_atfork(NULL, NULL, child);
 #endif
 
 		Firebird::MemoryPool::contextPoolInit();
@@ -219,7 +219,7 @@ namespace Firebird
 		unlist();
 	}
 
-	void InstanceControl::InstanceList::unlist()
+	void InstanceControl::InstanceList::unlist() noexcept
 	{
 		if (instanceList == this)
 			instanceList = next;
@@ -319,7 +319,7 @@ namespace Firebird
 		gdsShutdown = shutdown;
 	}
 
-	void InstanceControl::cancelCleanup()
+	void InstanceControl::cancelCleanup() noexcept
 	{
 		dontCleanup = true;
 	}
@@ -328,13 +328,13 @@ namespace Firebird
 	{
 		Firebird::Mutex* mutex = NULL;
 
-		void create()
+		void create() noexcept
 		{
 			static char place[sizeof(Firebird::Mutex) + FB_ALIGNMENT];
 			mutex = new((void*) FB_ALIGN(place, FB_ALIGNMENT)) Firebird::Mutex;
 		}
 
-		void release()
+		void release() noexcept
 		{
 			mutex->~Mutex();
 		}

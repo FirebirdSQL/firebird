@@ -27,8 +27,8 @@
  *
  */
 
-#ifndef JRD_CHARSET_H
-#define JRD_CHARSET_H
+#ifndef COMMON_CHARSET_H
+#define COMMON_CHARSET_H
 
 #include "CsConvert.h"
 #include "IntlUtil.h"
@@ -44,11 +44,6 @@ namespace Firebird {
 			delete cs;
 		}
 	}
-
-}
-
-
-namespace Jrd {
 
 class CharSet
 {
@@ -146,7 +141,7 @@ private:
 	BYTE sqlMatchOneLength;
 };
 
-}	// namespace Jrd
+}	// namespace Firebird
 
 
-#endif	// JRD_CHARSET_H
+#endif	// COMMON_CHARSET_H

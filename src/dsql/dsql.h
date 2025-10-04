@@ -34,6 +34,7 @@
 #ifndef DSQL_DSQL_H
 #define DSQL_DSQL_H
 
+#include <numeric>
 #include "../common/classes/array.h"
 #include "../common/classes/fb_atomic.h"
 #include "../common/classes/GenericMap.h"
@@ -66,11 +67,11 @@ DEFINE_TRACE_ROUTINE(dsql_trace);
 #include "../dsql/sym.h"
 
 // Context aliases used in triggers
-const char* const OLD_CONTEXT_NAME = "OLD";
-const char* const NEW_CONTEXT_NAME = "NEW";
+inline constexpr const char* OLD_CONTEXT_NAME = "OLD";
+inline constexpr const char* NEW_CONTEXT_NAME = "NEW";
 
-const int OLD_CONTEXT_VALUE = 0;
-const int NEW_CONTEXT_VALUE = 1;
+inline constexpr int OLD_CONTEXT_VALUE = 0;
+inline constexpr int NEW_CONTEXT_VALUE = 1;
 
 namespace Jrd
 {
@@ -96,10 +97,7 @@ namespace Jrd
 	class MetaName;
 
 	typedef Firebird::Stack<dsql_ctx*> DsqlContextStack;
-
-	typedef Firebird::Pair<Firebird::Left<MetaName, NestConst<Jrd::WindowClause> > >
-		NamedWindowClause;
-
+	typedef Firebird::Pair<Firebird::Left<MetaName, NestConst<Jrd::WindowClause>>> NamedWindowClause;
 	typedef Firebird::ObjectsArray<NamedWindowClause> NamedWindowsClause;
 }
 
@@ -119,19 +117,20 @@ namespace Jrd {
 class dsql_dbb : public pool_alloc<dsql_type_dbb>
 {
 public:
-	Firebird::LeftPooledMap<MetaName, class dsql_rel*> dbb_relations;		// known relations in database
+	Firebird::LeftPooledMap<QualifiedName, class dsql_rel*> dbb_relations;		// known relations in database
 	Firebird::LeftPooledMap<QualifiedName, class dsql_prc*> dbb_procedures;	// known procedures in database
 	Firebird::LeftPooledMap<QualifiedName, class dsql_udf*> dbb_functions;	// known functions in database
-	Firebird::LeftPooledMap<MetaName, class dsql_intlsym*> dbb_charsets;	// known charsets in database
-	Firebird::LeftPooledMap<MetaName, class dsql_intlsym*> dbb_collations;	// known collations in database
+	Firebird::LeftPooledMap<QualifiedName, class dsql_intlsym*> dbb_charsets;	// known charsets in database
+	Firebird::LeftPooledMap<QualifiedName, class dsql_intlsym*> dbb_collations;	// known collations in database
 	Firebird::NonPooledMap<SSHORT, dsql_intlsym*> dbb_charsets_by_id;		// charsets sorted by charset_id
 	Firebird::LeftPooledMap<Firebird::string, DsqlDmlRequest*> dbb_cursors;	// known cursors in database
 	Firebird::AutoPtr<DsqlStatementCache> dbb_statement_cache;
 
-	MemoryPool&		dbb_pool;			// The current pool for the dbb
-	Attachment*		dbb_attachment;
-	MetaName dbb_dfl_charset;
-	bool			dbb_no_charset;
+	MemoryPool& dbb_pool;			// The current pool for the dbb
+	Attachment* dbb_attachment;
+	Firebird::FullPooledMap<MetaName, QualifiedName> dbb_schemas_dfl_charset;
+	QualifiedName dbb_dfl_charset;
+	bool dbb_no_charset = false;
 
 	dsql_dbb(MemoryPool& p, Attachment* attachment);
 	~dsql_dbb();
@@ -157,13 +156,13 @@ public:
 	{
 	}
 
-	class dsql_fld* rel_fields;		// Field block
+	dsql_fld* rel_fields = nullptr;	// Field block
 	//dsql_rel* rel_base_relation;	// base relation for an updatable view
-	MetaName rel_name;				// Name of relation
+	QualifiedName rel_name;			// Name of relation
 	MetaName rel_owner;				// Owner of relation
-	USHORT rel_id;					// Relation id
-	USHORT rel_dbkey_length;
-	USHORT rel_flags;
+	USHORT rel_id = 0;				// Relation id
+	USHORT rel_dbkey_length = 0;
+	USHORT rel_flags = 0;
 };
 
 // rel_flags bits
@@ -178,30 +177,13 @@ enum rel_flags_vals {
 class TypeClause
 {
 public:
-	TypeClause(MemoryPool& pool, const MetaName& aCollate)
-		: dtype(dtype_unknown),
-		  length(0),
-		  scale(0),
-		  subType(0),
-		  segLength(0),
-		  precision(0),
-		  charLength(0),
-		  collationId(0),
-		  textType(0),
-		  fullDomain(false),
-		  notNull(false),
-		  fieldSource(pool),
+	TypeClause(MemoryPool& pool, const QualifiedName& aCollate)
+		: fieldSource(pool),
 		  typeOfTable(pool),
 		  typeOfName(pool),
 		  collate(pool, aCollate),
 		  charSet(pool),
-		  subTypeName(pool, NULL),
-		  flags(0),
-		  elementDtype(0),
-		  elementLength(0),
-		  dimensions(0),
-		  ranges(NULL),
-		  explicitCollation(false)
+		  subTypeName(pool, nullptr)
 	{
 	}
 
@@ -239,56 +221,49 @@ public:
 	}
 
 public:
-	USHORT dtype;
-	FLD_LENGTH length;
-	SSHORT scale;
-	SSHORT subType;
-	USHORT segLength;					// Segment length for blobs
-	USHORT precision;					// Precision for exact numeric types
-	USHORT charLength;					// Length of field in characters
-	Nullable<SSHORT> charSetId;
-	SSHORT collationId;
-	SSHORT textType;
-	bool fullDomain;					// Domain name without TYPE OF prefix
-	bool notNull;						// NOT NULL was explicit specified
-	MetaName fieldSource;
-	MetaName typeOfTable;		// TYPE OF table name
-	MetaName typeOfName;		// TYPE OF
-	MetaName collate;
-	MetaName charSet;		// empty means not specified
-	MetaName subTypeName;	// Subtype name for later resolution
-	USHORT flags;
-	USHORT elementDtype;			// Data type of array element
-	USHORT elementLength;			// Length of array element
-	SSHORT dimensions;				// Non-zero means array
-	ValueListNode* ranges;			// ranges for multi dimension array
-	bool explicitCollation;			// COLLATE was explicit specified
+	USHORT dtype = dtype_unknown;
+	FLD_LENGTH length = 0;
+	SSHORT scale = 0;
+	SSHORT subType = 0;
+	USHORT segLength = 0;				// Segment length for blobs
+	USHORT precision = 0;				// Precision for exact numeric types
+	USHORT charLength = 0;				// Length of field in characters
+	std::optional<SSHORT> charSetId;
+	SSHORT collationId = 0;
+	SSHORT textType = 0;
+	bool fullDomain = false;			// Domain name without TYPE OF prefix
+	bool notNull = false;				// NOT NULL was explicit specified
+	QualifiedName fieldSource;
+	QualifiedName typeOfTable;		// TYPE OF table name
+	QualifiedName typeOfName;		// TYPE OF
+	QualifiedName collate;
+	QualifiedName charSet;			// empty means not specified
+	MetaName subTypeName;				// Subtype name for later resolution
+	USHORT flags = 0;
+	USHORT elementDtype = 0;			// Data type of array element
+	USHORT elementLength = 0;			// Length of array element
+	SSHORT dimensions = 0;				// Non-zero means array
+	ValueListNode* ranges = nullptr;	// ranges for multi dimension array
+	bool explicitCollation = false;		// COLLATE was explicit specified
 };
 
 class dsql_fld : public TypeClause
 {
 public:
 	explicit dsql_fld(MemoryPool& p)
-		: TypeClause(p, NULL),
-		  fld_next(NULL),
-		  fld_relation(NULL),
-		  fld_procedure(NULL),
-		  fld_id(0),
+		: TypeClause(p, {}),
 		  fld_name(p)
 	{
 	}
 
 public:
-	void resolve(DsqlCompilerScratch* dsqlScratch, bool modifying = false)
-	{
-		DDL_resolve_intl_type(dsqlScratch, this, collate, modifying);
-	}
+	void resolve(DsqlCompilerScratch* dsqlScratch, bool modifying = false);
 
 public:
-	dsql_fld*	fld_next;				// Next field in relation
-	dsql_rel*	fld_relation;			// Parent relation
-	dsql_prc*	fld_procedure;			// Parent procedure
-	USHORT		fld_id;					// Field in in database
+	dsql_fld* fld_next = nullptr;		// Next field in relation
+	dsql_rel* fld_relation = nullptr;	// Parent relation
+	dsql_prc* fld_procedure = nullptr;	// Parent procedure
+	USHORT fld_id = 0;					// Field in in database
 	MetaName fld_name;
 };
 
@@ -319,16 +294,16 @@ public:
 	{
 	}
 
-	dsql_fld*	prc_inputs;		// Input parameters
-	dsql_fld*	prc_outputs;	// Output parameters
-	QualifiedName prc_name;	// Name of procedure
-	MetaName prc_owner;	// Owner of procedure
-	SSHORT		prc_in_count;
-	SSHORT		prc_def_count;	// number of inputs with default values
-	SSHORT		prc_out_count;
-	USHORT		prc_id;			// Procedure id
-	USHORT		prc_flags;
-	bool		prc_private;	// Packaged private procedure
+	dsql_fld* prc_inputs = nullptr;		// Input parameters
+	dsql_fld* prc_outputs = nullptr;	// Output parameters
+	QualifiedName prc_name;			// Name of procedure
+	MetaName prc_owner;					// Owner of procedure
+	SSHORT prc_in_count = 0;
+	SSHORT prc_def_count = 0;			// number of inputs with default values
+	SSHORT prc_out_count = 0;
+	USHORT prc_id = 0;					// Procedure id
+	USHORT prc_flags = 0;
+	bool prc_private = false;			// Packaged private procedure
 };
 
 // prc_flags bits
@@ -343,22 +318,35 @@ enum prc_flags_vals {
 class dsql_udf : public pool_alloc<dsql_type_udf>
 {
 public:
+	class Argument
+	{
+	public:
+		Argument(MemoryPool& p)
+			: name(p)
+		{}
+
+	public:
+		MetaName name;
+		dsc desc;
+	};
+
+public:
 	explicit dsql_udf(MemoryPool& p)
-		: udf_name(p), udf_arguments(p)
+		: udf_name(p),
+		  udf_arguments(p)
 	{
 	}
 
-	USHORT		udf_dtype;
-	SSHORT		udf_scale;
-	SSHORT		udf_sub_type;
-	USHORT		udf_length;
-	SSHORT		udf_character_set_id;
-	//USHORT		udf_character_length;
-    USHORT      udf_flags;
+	USHORT udf_dtype = 0;
+	SSHORT udf_scale = 0;
+	SSHORT udf_sub_type = 0;
+	USHORT udf_length = 0;
+	SSHORT udf_character_set_id = 0;
+	USHORT udf_flags = 0;
 	QualifiedName udf_name;
-	Firebird::Array<dsc> udf_arguments;
-	bool		udf_private;	// Packaged private function
-	SSHORT		udf_def_count;	// number of inputs with default values
+	Firebird::ObjectsArray<Argument> udf_arguments;
+	bool udf_private = false;	// Packaged private function
+	SSHORT udf_def_count = 0;	// number of inputs with default values
 };
 
 // udf_flags bits
@@ -386,21 +374,16 @@ public:
 
 public:
 	explicit dsql_var(MemoryPool& p)
-		: PermanentStorage(p),
-		  field(NULL),
-		  type(TYPE_INPUT),
-		  msgNumber(0),
-		  msgItem(0),
-		  number(0)
+		: PermanentStorage(p)
 	{
-		desc.clear();
 	}
 
-	dsql_fld* field;	// Field on which variable is based
-	Type type;			// Input, output, local or hidden variable
-	USHORT msgNumber;	// Message number containing variable
-	USHORT msgItem;		// Item number in message
-	USHORT number;		// Local variable number
+	dsql_fld* field = nullptr;	// Field on which variable is based
+	Type type = TYPE_INPUT;		// Input, output, local or hidden variable
+	USHORT msgNumber = 0;		// Message number containing variable
+	USHORT msgItem = 0;			// Item number in message
+	USHORT number = 0;			// Local variable number
+	bool initialized = false;	// Is variable initialized?
 	dsc desc;
 };
 
@@ -417,13 +400,28 @@ public:
 	{
 	}
 
-	MetaName intlsym_name;
-	USHORT		intlsym_type;		// what type of name
-	USHORT		intlsym_flags;
-	SSHORT		intlsym_ttype;		// id of implementation
-	SSHORT		intlsym_charset_id;
-	SSHORT		intlsym_collate_id;
-	USHORT		intlsym_bytes_per_char;
+	QualifiedName intlsym_name;
+	USHORT intlsym_type = 0;		// what type of name
+	USHORT intlsym_flags = 0;
+	SSHORT intlsym_ttype = 0;		// id of implementation
+	SSHORT intlsym_charset_id = 0;
+	SSHORT intlsym_collate_id = 0;
+	USHORT intlsym_bytes_per_char = 0;
+};
+
+
+// Table value function
+class dsql_tab_func : public pool_alloc<dsql_type_tab_func>
+{
+public:
+	explicit dsql_tab_func(MemoryPool& p)
+		: funName(p),
+		  outputField(nullptr)
+	{
+	}
+
+	MetaName	funName;			// Name of function
+	dsql_fld*	outputField;		// Output parameters
 };
 
 // values used in intlsym_flags
@@ -436,24 +434,21 @@ enum intlsym_flags_vals {
 class ImplicitJoin : public pool_alloc<dsql_type_imp_join>
 {
 public:
-	ValueExprNode* value;
-	dsql_ctx* visibleInContext;
+	ValueExprNode* value = nullptr;
+	dsql_ctx* visibleInContext = nullptr;
 };
 
 struct WindowMap
 {
 	WindowMap(WindowClause* aWindow)
-		: partitionRemapped(NULL),
-		  window(aWindow),
-		  map(NULL),
-		  context(0)
+		: window(aWindow)
 	{
 	}
 
 	NestConst<ValueListNode> partitionRemapped;
 	NestConst<WindowClause> window;
-	dsql_map* map;
-	USHORT context;
+	dsql_map* map = nullptr;
+	USHORT context = 0;
 };
 
 //! Context block used to create an instance of a relation reference
@@ -471,21 +466,22 @@ public:
 	{
 	}
 
-	dsql_rel*			ctx_relation;		// Relation for context
-	dsql_prc*			ctx_procedure;		// Procedure for context
+	dsql_rel* ctx_relation = nullptr;			// Relation for context
+	dsql_prc* ctx_procedure = nullptr;			// Procedure for context
+	dsql_tab_func* ctx_table_value_fun = nullptr;	// Table value function context
 	NestConst<ValueListNode> ctx_proc_inputs;	// Procedure input parameters
-	dsql_map*			ctx_map;			// Maps for aggregates and unions
-	RseNode*			ctx_rse;			// Sub-rse for aggregates
-	dsql_ctx*			ctx_parent;			// Parent context for aggregates
-	USHORT				ctx_context;		// Context id
-	USHORT				ctx_recursive;		// Secondary context id for recursive UNION (nobody referred to this context)
-	USHORT				ctx_scope_level;	// Subquery level within this request
-	USHORT				ctx_flags;			// Various flag values
-	USHORT				ctx_in_outer_join;	// inOuterJoin when context was created
-	Firebird::string	ctx_alias;			// Context alias (can include concatenated derived table alias)
-	Firebird::string	ctx_internal_alias;	// Alias as specified in query
-	DsqlContextStack	ctx_main_derived_contexts;	// contexts used for blr_derived_expr
-	DsqlContextStack	ctx_childs_derived_table;	// Childs derived table context
+	dsql_map* ctx_map = nullptr;				// Maps for aggregates and unions
+	RseNode* ctx_rse = nullptr;					// Sub-rse for aggregates
+	dsql_ctx* ctx_parent = nullptr;				// Parent context for aggregates
+	USHORT ctx_context = 0;						// Context id
+	USHORT ctx_recursive = 0;					// Secondary context id for recursive UNION (nobody referred to this context)
+	USHORT ctx_scope_level = 0;					// Subquery level within this request
+	USHORT ctx_flags = 0;						// Various flag values
+	USHORT ctx_in_outer_join = 0;				// inOuterJoin when context was created
+	Firebird::ObjectsArray<QualifiedName> ctx_alias;	// Context alias (can include concatenated derived table alias)
+	QualifiedName ctx_internal_alias;			// Alias as specified in query
+	DsqlContextStack ctx_main_derived_contexts;	// contexts used for blr_derived_expr
+	DsqlContextStack ctx_childs_derived_table;	// Childs derived table context
 	Firebird::LeftPooledMap<MetaName, ImplicitJoin*> ctx_imp_join;	// Map of USING fieldname to ImplicitJoin
 	Firebird::Array<WindowMap*> ctx_win_maps;	// Maps for window functions
 	Firebird::GenericMap<NamedWindowClause> ctx_named_windows;
@@ -494,6 +490,7 @@ public:
 	{
 		ctx_relation = v.ctx_relation;
 		ctx_procedure = v.ctx_procedure;
+		ctx_table_value_fun = v.ctx_table_value_fun;
 		ctx_proc_inputs = v.ctx_proc_inputs;
 		ctx_map = v.ctx_map;
 		ctx_rse = v.ctx_rse;
@@ -516,10 +513,27 @@ public:
 	Firebird::string getObjectName() const
 	{
 		if (ctx_relation)
-			return ctx_relation->rel_name.c_str();
+			return ctx_relation->rel_name.toQuotedString();
 		if (ctx_procedure)
-			return ctx_procedure->prc_name.toString();
+			return ctx_procedure->prc_name.toQuotedString();
 		return "";
+	}
+
+	Firebird::string getConcatenatedAlias() const
+	{
+		if (ctx_alias.hasData())
+		{
+			return std::accumulate(
+					std::next(ctx_alias.begin()),
+					ctx_alias.end(),
+					ctx_alias[0].toQuotedString(),
+					[](const auto& a, const auto& b) {
+						return a + " " + b.toQuotedString();
+					}
+				);
+		}
+
+		return {};
 	}
 
 	bool getImplicitJoinField(const MetaName& name, NestConst<ValueExprNode>& node);
@@ -528,24 +542,25 @@ public:
 
 // Flag values for ctx_flags
 
-const USHORT CTX_outer_join 			= 0x01;		// reference is part of an outer join
-const USHORT CTX_system					= 0x02;		// Context generated by system (NEW/OLD in triggers, check-constraint, RETURNING)
-const USHORT CTX_null					= 0x04;		// Fields of the context should be resolved to NULL constant
-const USHORT CTX_returning				= 0x08;		// Context generated by RETURNING
-const USHORT CTX_recursive				= 0x10;		// Context has secondary number (ctx_recursive) generated for recursive UNION
-const USHORT CTX_view_with_check_store	= 0x20;		// Context of WITH CHECK OPTION view's store trigger
-const USHORT CTX_view_with_check_modify	= 0x40;		// Context of WITH CHECK OPTION view's modify trigger
-const USHORT CTX_cursor					= 0x80;		// Context is a cursor
-const USHORT CTX_lateral				= 0x100;	// Context is a lateral derived table
+inline constexpr USHORT CTX_outer_join 				= 0x01;		// reference is part of an outer join
+inline constexpr USHORT CTX_system					= 0x02;		// Context generated by system (NEW/OLD in triggers, check-constraint, RETURNING)
+inline constexpr USHORT CTX_null					= 0x04;		// Fields of the context should be resolved to NULL constant
+inline constexpr USHORT CTX_returning				= 0x08;		// Context generated by RETURNING
+inline constexpr USHORT CTX_recursive				= 0x10;		// Context has secondary number (ctx_recursive) generated for recursive UNION
+inline constexpr USHORT CTX_view_with_check_store	= 0x20;		// Context of WITH CHECK OPTION view's store trigger
+inline constexpr USHORT CTX_view_with_check_modify	= 0x40;		// Context of WITH CHECK OPTION view's modify trigger
+inline constexpr USHORT CTX_cursor					= 0x80;		// Context is a cursor
+inline constexpr USHORT CTX_lateral					= 0x100;	// Context is a lateral derived table
+inline constexpr USHORT CTX_blr_fields				= 0x200;	// Fields of the context are defined inside BLR
 
 //! Aggregate/union map block to map virtual fields to their base
 //! TMN: NOTE! This datatype should definitely be renamed!
 class dsql_map : public pool_alloc<dsql_type_map>
 {
 public:
-	dsql_map* map_next;						// Next map in item
+	dsql_map* map_next = nullptr;			// Next map in item
 	NestConst<ValueExprNode> map_node;		// Value for map item
-	USHORT map_position;					// Position in map
+	USHORT map_position = 0;				// Position in map
 	NestConst<WindowMap> map_window;		// Partition
 };
 
@@ -555,21 +570,15 @@ class dsql_msg : public Firebird::PermanentStorage
 public:
 	explicit dsql_msg(MemoryPool& p)
 		: PermanentStorage(p),
-		  msg_parameters(p),
-		  msg_number(0),
-		  msg_buffer_number(0),
-		  msg_length(0),
-		  msg_parameter(0),
-		  msg_index(0)
+		  msg_parameters(p)
 	{
 	}
 
 	Firebird::Array<dsql_par*> msg_parameters;	// Parameter list
-	USHORT		msg_number;		// Message number
-	USHORT		msg_buffer_number;	// Message buffer number (used instead of msg_number for blob msgs)
-	ULONG		msg_length;		// Message length
-	USHORT		msg_parameter;	// Next parameter number
-	USHORT		msg_index;		// Next index into SQLDA
+	USHORT msg_number = 0;			// Message number
+	ULONG msg_length = 0;			// Message length
+	USHORT msg_parameter = 0;		// Next parameter number
+	USHORT msg_index = 0;			// Next index into SQLDA
 };
 
 // Parameter block used to describe a parameter of a message
@@ -578,37 +587,26 @@ class dsql_par : public Firebird::PermanentStorage
 public:
 	explicit dsql_par(MemoryPool& p)
 		: PermanentStorage(p),
-		  par_message(NULL),
-		  par_null(NULL),
-		  par_node(NULL),
-		  par_dbkey_relname(p),
-		  par_rec_version_relname(p),
 		  par_name(p),
 		  par_rel_name(p),
 		  par_owner_name(p),
 		  par_rel_alias(p),
-		  par_alias(p),
-		  par_parameter(0),
-		  par_index(0),
-		  par_is_text(false)
+		  par_alias(p)
 	{
-		par_desc.clear();
 	}
 
-	dsql_msg*	par_message;		// Parent message
-	dsql_par*	par_null;			// Null parameter, if used
-	ValueExprNode* par_node;					// Associated value node, if any
-	MetaName par_dbkey_relname;		// Context of internally requested dbkey
-	MetaName par_rec_version_relname;	// Context of internally requested rec. version
-	MetaName par_name;				// Parameter name, if any
-	MetaName par_rel_name;			// Relation name, if any
+	dsql_msg* par_message = nullptr;	// Parent message
+	dsql_par* par_null = nullptr;		// Null parameter, if used
+	ValueExprNode* par_node = nullptr;	// Associated value node, if any
+	MetaName par_name;					// Parameter name, if any
+	QualifiedName par_rel_name;			// Relation name, if any
 	MetaName par_owner_name;			// Owner name, if any
-	MetaName par_rel_alias;			// Relation alias, if any
-	MetaName par_alias;				// Alias, if any
-	dsc			par_desc;			// Field data type
-	USHORT		par_parameter;		// BLR parameter number
-	USHORT		par_index;			// Index into SQLDA, if appropriate
-	bool		par_is_text;		// Parameter should be dtype_text (SQL_TEXT) externaly
+	MetaName par_rel_alias;				// Relation alias, if any
+	MetaName par_alias;					// Alias, if any
+	dsc par_desc;						// Field data type
+	USHORT par_parameter = 0;			// BLR parameter number
+	USHORT par_index = 0;				// Index into SQLDA, if appropriate
+	bool par_is_text = false;			// Parameter should be dtype_text (SQL_TEXT) externaly
 };
 
 class CStrCmp
@@ -635,7 +633,7 @@ public:
 		  s(p, str)
 	{ }
 
-	explicit IntlString(const Firebird::string& str, const MetaName& cs = NULL)
+	explicit IntlString(const Firebird::string& str, const QualifiedName& cs = {})
 		: charset(cs),
 		  s(str)
 	{ }
@@ -650,19 +648,21 @@ public:
 		  s(p)
 	{ }
 
+	void dsqlPass(DsqlCompilerScratch* dsqlScratch);
+
 	Firebird::string toUtf8(jrd_tra* transaction) const;
 
-	const MetaName& getCharSet() const
+	const QualifiedName& getCharSet() const noexcept
 	{
 		return charset;
 	}
 
-	void setCharSet(const MetaName& value)
+	void setCharSet(const QualifiedName& value)
 	{
 		charset = value;
 	}
 
-	const Firebird::string& getString() const
+	const Firebird::string& getString() const noexcept
 	{
 		return s;
 	}
@@ -678,7 +678,7 @@ public:
 	}
 
 private:
-	MetaName charset;
+	QualifiedName charset;
 	Firebird::string s;
 };
 
@@ -690,7 +690,7 @@ public:
 		  scale(sc)
 	{ }
 
-	int getScale()
+	int getScale() noexcept
 	{
 		return scale;
 	}
@@ -702,16 +702,13 @@ private:
 struct SignatureParameter
 {
 	explicit SignatureParameter(MemoryPool& p)
-		: type(0),
-		  number(0),
-		  name(p),
+		: name(p),
 		  fieldSource(p),
 		  fieldName(p),
 		  relationName(p),
 		  charSetName(p),
 		  collationName(p),
-		  subTypeName(p),
-		  mechanism(0)
+		  subTypeName(p)
 	{
 	}
 
@@ -762,30 +759,30 @@ struct SignatureParameter
 		mechanism = (SSHORT) type->fullDomain;
 	}
 
-	SSHORT type;
-	SSHORT number;
+	SSHORT type = 0;
+	SSHORT number = 0;
 	MetaName name;
-	MetaName fieldSource;
-	MetaName fieldName;
-	MetaName relationName;
-	MetaName charSetName;
-	MetaName collationName;
+	QualifiedName fieldSource;
+	QualifiedName fieldName;
+	QualifiedName relationName;
+	QualifiedName charSetName;
+	QualifiedName collationName;
 	MetaName subTypeName;
-	Nullable<SSHORT> collationId;
-	Nullable<SSHORT> nullFlag;
-	SSHORT mechanism;
-	Nullable<SSHORT> fieldLength;
-	Nullable<SSHORT> fieldScale;
-	Nullable<SSHORT> fieldType;
-	Nullable<SSHORT> fieldSubType;
-	Nullable<SSHORT> fieldSegmentLength;
-	Nullable<SSHORT> fieldNullFlag;
-	Nullable<SSHORT> fieldCharLength;
-	Nullable<SSHORT> fieldCollationId;
-	Nullable<SSHORT> fieldCharSetId;
-	Nullable<SSHORT> fieldPrecision;
+	std::optional<SSHORT> collationId;
+	std::optional<SSHORT> nullFlag;
+	SSHORT mechanism = 0;
+	std::optional<SSHORT> fieldLength;
+	std::optional<SSHORT> fieldScale;
+	std::optional<SSHORT> fieldType;
+	std::optional<SSHORT> fieldSubType;
+	std::optional<SSHORT> fieldSegmentLength;
+	std::optional<SSHORT> fieldNullFlag;
+	std::optional<SSHORT> fieldCharLength;
+	std::optional<SSHORT> fieldCollationId;
+	std::optional<SSHORT> fieldCharSetId;
+	std::optional<SSHORT> fieldPrecision;
 
-	bool operator >(const SignatureParameter& o) const
+	bool operator >(const SignatureParameter& o) const noexcept
 	{
 		return type > o.type || (type == o.type && number > o.number);
 	}
@@ -796,24 +793,25 @@ struct SignatureParameter
 			number == o.number &&
 			name == o.name &&
 			(fieldSource == o.fieldSource ||
-				(fb_utils::implicit_domain(fieldSource.c_str()) &&
-					fb_utils::implicit_domain(o.fieldSource.c_str()))) &&
+				(fieldSource.schema == o.fieldSource.schema &&
+					fb_utils::implicit_domain(fieldSource.object.c_str()) &&
+					fb_utils::implicit_domain(o.fieldSource.object.c_str()))) &&
 			fieldName == o.fieldName &&
 			relationName == o.relationName &&
 			collationId == o.collationId &&
-			nullFlag.orElse(FALSE) == o.nullFlag.orElse(FALSE) &&
+			nullFlag.value_or(FALSE) == o.nullFlag.value_or(FALSE) &&
 			mechanism == o.mechanism &&
 			fieldLength == o.fieldLength &&
 			fieldScale == o.fieldScale &&
 			fieldType == o.fieldType &&
-			fieldSubType.orElse(0) == o.fieldSubType.orElse(0) &&
+			fieldSubType.value_or(0) == o.fieldSubType.value_or(0) &&
 			fieldSegmentLength == o.fieldSegmentLength &&
-			fieldNullFlag.orElse(FALSE) == o.fieldNullFlag.orElse(FALSE) &&
+			fieldNullFlag.value_or(FALSE) == o.fieldNullFlag.value_or(FALSE) &&
 			fieldCharLength == o.fieldCharLength &&
 			charSetName == o.charSetName &&
 			collationName == o.collationName &&
 			subTypeName == o.subTypeName &&
-			fieldCollationId.orElse(0) == o.fieldCollationId.orElse(0) &&
+			fieldCollationId.value_or(0) == o.fieldCollationId.value_or(0) &&
 			fieldCharSetId == o.fieldCharSetId &&
 			fieldPrecision == o.fieldPrecision;
 	}
@@ -830,25 +828,19 @@ struct Signature
 
 	Signature(MemoryPool& p, const MetaName& aName)
 		: name(p, aName),
-		  parameters(p),
-		  flags(0),
-		  defined(false)
+		  parameters(p)
 	{
 	}
 
 	explicit Signature(const MetaName& aName)
 		: name(aName),
-		  parameters(*getDefaultMemoryPool()),
-		  flags(0),
-		  defined(false)
+		  parameters(*getDefaultMemoryPool())
 	{
 	}
 
 	explicit Signature(MemoryPool& p)
 		: name(p),
-		  parameters(p),
-		  flags(0),
-		  defined(false)
+		  parameters(p)
 	{
 	}
 
@@ -895,8 +887,8 @@ struct Signature
 
 	MetaName name;
 	Firebird::SortedObjectsArray<SignatureParameter> parameters;
-	unsigned flags;
-	bool defined;
+	unsigned flags = 0;
+	bool defined = false;
 };
 
 
@@ -906,8 +898,8 @@ struct Signature
     \brief Debug level
 
     0       No output
-    1       Display output tree in PASS1_statment
-    2       Display input tree in PASS1_statment
+    1       Display output tree in PASS1_statement
+    2       Display input tree in PASS1_statement
     4       Display ddl BLR
     8       Display BLR
     16      Display PASS1_rse input tree

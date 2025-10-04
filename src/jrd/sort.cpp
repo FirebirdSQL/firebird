@@ -62,17 +62,11 @@
 #include <io.h> // lseek, read, write, close
 #endif
 
-const USHORT RUN_GROUP			= 8;
-const USHORT MAX_MERGE_LEVEL	= 2;
+constexpr USHORT RUN_GROUP			= 8;
+constexpr USHORT MAX_MERGE_LEVEL	= 2;
 
 using namespace Jrd;
 using namespace Firebird;
-
-void SortOwner::unlinkAll()
-{
-	while (sorts.getCount())
-		delete sorts.pop();
-}
 
 // The sort buffer size should be just under a multiple of the
 // hardware memory page size to account for memory allocator
@@ -82,8 +76,8 @@ void SortOwner::unlinkAll()
 // dimitr:	this comment is outdated since FB 1.5, where max buffer size
 //			of (128KB - overhead) has been replaced with exact 128KB.
 
-const ULONG MAX_SORT_BUFFER_SIZE = 1024 * 128;	// 128KB
-const ULONG MIN_RECORDS_TO_ALLOC = 8;
+constexpr ULONG MAX_SORT_BUFFER_SIZE = 1024 * 128;	// 128KB
+constexpr ULONG MIN_RECORDS_TO_ALLOC = 8;
 
 // the size of sr_bckptr (everything before sort_record) in bytes
 #define SIZEOF_SR_BCKPTR offsetof(sr, sr_sort_record)
@@ -129,15 +123,15 @@ static ULONG high_key[] =
 
 namespace
 {
-	static const char* const SCRATCH = "fb_sort_";
+	static constexpr const char* SCRATCH = "fb_sort_";
 
 	class RunSort
 	{
 	public:
-		explicit RunSort(run_control* irun) : run(irun) {}
-		RunSort() : run(NULL) {}
+		explicit RunSort(run_control* irun) noexcept : run(irun) {}
+		RunSort() noexcept : run(NULL) {}
 
-		static FB_UINT64 generate(const RunSort& item)
+		static FB_UINT64 generate(const RunSort& item) noexcept
 		{
 			return item.run->run_seek;
 		}
@@ -145,7 +139,7 @@ namespace
 		run_control* run;
 	};
 
-	inline void swap(SORTP** a, SORTP** b)
+	inline void swap(SORTP** a, SORTP** b) noexcept
 	{
 		((SORTP***) (*a))[BACK_OFFSET] = b;
 		((SORTP***) (*b))[BACK_OFFSET] = a;
@@ -165,10 +159,11 @@ Sort::Sort(Database* dbb,
 		   FPTR_REJECT_DUP_CALLBACK call_back,
 		   void* user_arg,
 		   FB_UINT64 max_records)
-	: m_dbb(dbb), m_last_record(NULL), m_next_pointer(NULL), m_records(0),
+	: m_dbb(dbb), m_owner(owner),
+	  m_last_record(NULL), m_next_pointer(NULL), m_records(0),
 	  m_runs(NULL), m_merge(NULL), m_free_runs(NULL),
 	  m_flags(0), m_merge_pool(NULL),
-	  m_description(owner->getPool(), keys)
+	  m_description(m_owner->getPool(), keys)
 {
 /**************************************
  *
@@ -185,7 +180,7 @@ Sort::Sort(Database* dbb,
  *		  includes index key (which must be unique) and record numbers.
  *
  **************************************/
-	fb_assert(owner);
+	fb_assert(m_owner);
 	fb_assert(unique_keys <= keys);
 
 	try
@@ -194,7 +189,7 @@ Sort::Sort(Database* dbb,
 		// key description vector. Round the record length up to the next
 		// longword, and add a longword to a pointer back to the pointer slot.
 
-		MemoryPool& pool = owner->getPool();
+		MemoryPool& pool = m_owner->getPool();
 
 		const ULONG record_size = ROUNDUP(record_length + SIZEOF_SR_BCKPTR, FB_ALIGNMENT);
 		m_longs = record_size >> SHIFTLONG;
@@ -248,8 +243,7 @@ Sort::Sort(Database* dbb,
 
 		// Link in new sort block
 
-		m_owner = owner;
-		owner->linkSort(this);
+		m_owner->linkSort(this);
 	}
 	catch (const BadAlloc&)
 	{
@@ -558,8 +552,8 @@ void Sort::sort(thread_db* tdbb)
 		// itself allocated memory by at least TempSpace::getMinBlockSize chunks.
 		// As we need contiguous memory don't ask for bigger parts
 		const ULONG rec_size = m_longs << SHIFTLONG;
-		ULONG allocSize = m_max_alloc_size * RUN_GROUP;
-		ULONG allocated = allocate(run_count, allocSize, true);
+		const ULONG allocSize = m_max_alloc_size * RUN_GROUP;
+		const ULONG allocated = allocate(run_count, allocSize, true);
 
 		if (allocated < run_count)
 		{
@@ -610,15 +604,12 @@ void Sort::sort(thread_db* tdbb)
 
 void Sort::allocateBuffer(MemoryPool& pool)
 {
-	if (m_dbb->dbb_sort_buffers.hasData() && m_max_alloc_size <= MAX_SORT_BUFFER_SIZE)
+	if (m_max_alloc_size <= MAX_SORT_BUFFER_SIZE)
 	{
-		SyncLockGuard guard(&m_dbb->dbb_sortbuf_sync, SYNC_EXCLUSIVE, "Sort::allocateBuffer");
-
-		if (m_dbb->dbb_sort_buffers.hasData())
+		m_memory = m_owner->allocateBuffer();
+		if (m_memory)
 		{
-			// The sort buffer cache has at least one big block, let's use it
 			m_size_memory = MAX_SORT_BUFFER_SIZE;
-			m_memory = m_dbb->dbb_sort_buffers.pop();
 			m_flags |= scb_reuse_buffer;
 			return;
 		}
@@ -666,23 +657,14 @@ void Sort::allocateBuffer(MemoryPool& pool)
 
 void Sort::releaseBuffer()
 {
-	// Here we cache blocks to be reused later, but only the biggest ones
-
-	const size_t MAX_CACHED_SORT_BUFFERS = 8; // 1MB
-
-	SyncLockGuard guard(&m_dbb->dbb_sortbuf_sync, SYNC_EXCLUSIVE, "Sort::releaseBuffer");
-
-	if ((m_flags & scb_reuse_buffer) &&
-		m_dbb->dbb_sort_buffers.getCount() < MAX_CACHED_SORT_BUFFERS)
+	if (m_flags & scb_reuse_buffer)
 	{
 		fb_assert(m_size_memory == MAX_SORT_BUFFER_SIZE);
-
-		m_dbb->dbb_sort_buffers.push(m_memory);
+		m_flags &= ~scb_reuse_buffer;
+		m_owner->releaseBuffer(m_memory);
 	}
 	else
 		delete[] m_memory;
-
-	m_flags &= ~scb_reuse_buffer;
 }
 
 
@@ -1504,7 +1486,8 @@ ULONG Sort::allocate(ULONG n, ULONG chunkSize, bool useFreeSpace)
 
 	if (segments.getCount())
 	{
-		TempSpace::SegmentInMemory *seg = segments.begin(), *lastSeg = segments.end();
+		auto seg = segments.begin();
+		const auto* lastSeg = segments.end();
 		for (run = m_runs, count = 0; count < n; run = run->run_next, count++)
 		{
 			if (!run->run_buffer)
@@ -1543,7 +1526,7 @@ void Sort::mergeRuns(USHORT n)
 	// and there n < RUN_GROUP * MAX_MERGE_LEVEL
 	merge_control blks[RUN_GROUP * MAX_MERGE_LEVEL];
 
-	fb_assert((n - 1) <= FB_NELEM(blks));	// stack var big enough?
+	fb_assert(static_cast<FB_SIZE_T>(n - 1) <= FB_NELEM(blks));	// stack var big enough?
 
 	m_longs -= SIZEOF_SR_BCKPTR_IN_LONGS;
 
@@ -1738,7 +1721,7 @@ void Sort::mergeRuns(USHORT n)
 }
 
 
-void Sort::quick(SLONG size, SORTP** pointers, ULONG length)
+void Sort::quick(SLONG size, SORTP** pointers, ULONG length) noexcept
 {
 /**************************************
  *
@@ -2181,6 +2164,53 @@ void Sort::sortRunsBySeek(int n)
 }
 
 
+/// class SortOwner
+
+UCHAR* SortOwner::allocateBuffer()
+{
+	if (buffers.hasData())
+		return buffers.pop();
+
+	if (dbb->dbb_sort_buffers.hasData())
+	{
+		SyncLockGuard guard(&dbb->dbb_sortbuf_sync, SYNC_EXCLUSIVE, FB_FUNCTION);
+
+		// The sort buffer cache has at least one big block, let's use it
+		if (dbb->dbb_sort_buffers.hasData())
+			return dbb->dbb_sort_buffers.pop();
+	}
+
+	return nullptr;
+}
+
+void SortOwner::releaseBuffer(UCHAR* memory)
+{
+	buffers.push(memory);
+}
+
+
+void SortOwner::unlinkAll()
+{
+	while (sorts.getCount())
+		delete sorts.pop();
+
+	if (buffers.hasData())
+	{
+		// Move cached buffers to the database level cache to be reused later by other attachments
+
+		constexpr size_t MAX_CACHED_SORT_BUFFERS = 8; // 1MB
+
+		SyncLockGuard guard(&dbb->dbb_sortbuf_sync, SYNC_EXCLUSIVE, FB_FUNCTION);
+
+		while (buffers.hasData() && dbb->dbb_sort_buffers.getCount() < MAX_CACHED_SORT_BUFFERS)
+			dbb->dbb_sort_buffers.push(buffers.pop());
+	}
+
+	while (buffers.hasData())
+		delete[] buffers.pop();
+}
+
+
 /// class PartitionedSort
 
 
@@ -2198,7 +2228,7 @@ PartitionedSort::~PartitionedSort()
 //		delete m_parts[p].srt_sort;
 }
 
-void PartitionedSort::buidMergeTree()
+void PartitionedSort::buildMergeTree()
 {
 	ULONG count = m_parts.getCount();
 	if (count <= 0)
@@ -2369,7 +2399,7 @@ sort_record* PartitionedSort::getMerge()
 		if (l == 0 && aSort->m_dup_callback)
 		{
 			UCHAR* rec_a = (UCHAR*)merge->mrg_record_a;
-			UCHAR* rec_b = (UCHAR*)merge->mrg_record_a;
+			UCHAR* rec_b = (UCHAR*)merge->mrg_record_b;
 
 			aSort->diddleKey(rec_a, false, true);
 			aSort->diddleKey(rec_b, false, true);

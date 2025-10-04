@@ -46,19 +46,19 @@ using namespace Jrd;
 // non-compressable runs. Compressable runs between 4 and 8 bytes are somewhat border case, as
 // they do not compress much but increase total number of runs thus affecting decompression speed.
 // Starting from Firebird v5, we don't compress runs shorter than 8 bytes. But this rule is not
-// set in stone, so let's not use lenghts between 4 and 7 bytes as some other special markers.
+// set in stone, so let's not use lengths between 4 and 7 bytes as some other special markers.
 
 namespace
 {
-	const unsigned MIN_COMPRESS_RUN = 8; // minimal length of compressable run
+	constexpr unsigned MIN_COMPRESS_RUN = 8; // minimal length of compressable run
 
-	const int MAX_NONCOMP_RUN = MAX_SCHAR;	// 127
+	constexpr int MAX_NONCOMP_RUN = MAX_SCHAR;	// 127
 
-	const int MAX_SHORT_RUN = -MIN_SCHAR;	// 128
-	const int MAX_MEDIUM_RUN = MAX_USHORT;	// 2^16
-	const int MAX_LONG_RUN = MAX_SLONG;		// 2^31
+	constexpr int MAX_SHORT_RUN = -MIN_SCHAR;	// 128
+	constexpr int MAX_MEDIUM_RUN = MAX_USHORT;	// 2^16
+	constexpr int MAX_LONG_RUN = MAX_SLONG;		// 2^31
 
-	inline int adjustRunLength(unsigned length)
+	inline int adjustRunLength(unsigned length) noexcept
 	{
 		return (length <= MAX_SHORT_RUN) ? 0 :
 			(length <= MAX_MEDIUM_RUN) ? sizeof(USHORT) : sizeof(ULONG);
@@ -76,7 +76,7 @@ unsigned Compressor::nonCompressableRun(unsigned length)
 
 	if (m_runs.hasData() && m_runs.back() > 0 && m_runs.back() < MAX_NONCOMP_RUN)
 	{
-		const auto max = MIN(MAX_NONCOMP_RUN - m_runs.back(), length);
+		const auto max = MIN(static_cast<unsigned>(MAX_NONCOMP_RUN - m_runs.back()), length);
 		length -= max;
 		m_runs.back() += max;
 	}
@@ -93,13 +93,20 @@ unsigned Compressor::nonCompressableRun(unsigned length)
 }
 
 Compressor::Compressor(thread_db* tdbb, ULONG length, const UCHAR* data)
-	: m_runs(*tdbb->getDefaultPool())
+	: Compressor(
+		*tdbb->getDefaultPool(),
+		tdbb->getDatabase()->getEncodedOdsVersion() >= ODS_13_1,
+		tdbb->getDatabase()->getEncodedOdsVersion() >= ODS_13_1,
+		length,
+		data)
 {
-	const auto dbb = tdbb->getDatabase();
+}
 
-	if (dbb->getEncodedOdsVersion() < ODS_13_1)
-		m_allowLongRuns = m_allowUnpacked = false;
-
+Compressor::Compressor(MemoryPool& pool, bool allowLongRuns, bool allowUnpacked, ULONG length, const UCHAR* data)
+	: m_runs(pool),
+	  m_allowLongRuns(allowLongRuns),
+	  m_allowUnpacked(allowUnpacked)
+{
 	const auto end = data + length;
 	const auto input = data;
 
@@ -462,7 +469,7 @@ UCHAR* Compressor::unpack(ULONG inLength, const UCHAR* input,
  *
  **************************************/
 	const auto end = input + inLength;
-	const auto output_end = output + outLength;
+	const auto* const output_end = output + outLength;
 
 	while (input < end)
 	{
@@ -519,9 +526,9 @@ ULONG Difference::apply(ULONG diffLength, ULONG outLength, UCHAR* const output)
 		BUGCHECK(176);	// msg 176 bad difference record
 
 	auto differences = m_differences;
-	const auto end = differences + diffLength;
+	const auto* const end = differences + diffLength;
 	auto p = output;
-	const auto p_end = output + outLength;
+	const auto* const p_end = output + outLength;
 
 	while (differences < end && p < p_end)
 	{
@@ -551,7 +558,7 @@ ULONG Difference::apply(ULONG diffLength, ULONG outLength, UCHAR* const output)
 			BUGCHECK(177);	// msg 177 applied differences will not fit in record
 	}
 
-	const auto length = p - output;
+	const ULONG length = p - output;
 
 	if (length > outLength)
 		BUGCHECK(177);	// msg 177 applied differences will not fit in record
@@ -559,7 +566,7 @@ ULONG Difference::apply(ULONG diffLength, ULONG outLength, UCHAR* const output)
 	return length;
 }
 
-ULONG Difference::makeNoDiff(ULONG length)
+ULONG Difference::makeNoDiff(ULONG length) noexcept
 {
 /**************************************
  *
@@ -567,14 +574,14 @@ ULONG Difference::makeNoDiff(ULONG length)
  *
  **************************************/
 	auto output = m_differences;
-	const auto end = output + MAX_DIFFERENCES;
+	const auto* const end = output + MAX_DIFFERENCES;
 
 	while (length)
 	{
 		if (output >= end)
 			return 0;
 
-		const auto max = MIN(length, 127);
+		const int max = MIN(length, 127);
 		*output++ = -max;
 		length -= max;
 	}
@@ -586,7 +593,7 @@ ULONG Difference::makeNoDiff(ULONG length)
 }
 
 ULONG Difference::make(ULONG length1, const UCHAR* rec1,
-					   ULONG length2, const UCHAR* rec2)
+					   ULONG length2, const UCHAR* rec2) noexcept
 {
 /**************************************
  *
@@ -604,7 +611,7 @@ ULONG Difference::make(ULONG length1, const UCHAR* rec1,
  *
  **************************************/
 	auto output = m_differences;
-	const auto end = output + MAX_DIFFERENCES;
+	const auto* const end = output + MAX_DIFFERENCES;
 	const auto end1 = rec1 + MIN(length1, length2);
 	const auto end2 = rec2 + length2;
 
@@ -614,7 +621,7 @@ ULONG Difference::make(ULONG length1, const UCHAR* rec1,
 		{
 			auto p = output++;
 
-			const auto yellow = (UCHAR*) MIN((U_IPTR) end1, ((U_IPTR) rec1 + 127)) - 1;
+			const auto* const yellow = (UCHAR*) MIN((U_IPTR) end1, ((U_IPTR) rec1 + 127)) - 1;
 			while (rec1 <= yellow && (rec1[0] != rec2[0] || (rec1 < yellow && rec1[1] != rec2[1])))
 			{
 				if (output >= end)
@@ -637,7 +644,7 @@ ULONG Difference::make(ULONG length1, const UCHAR* rec1,
 			if (output >= end)
 				return 0;
 
-			const auto max = MIN(count, 127);
+			const int max = MIN(count, 127);
 			*output++ = -max;
 			count -= max;
 		}
@@ -647,7 +654,7 @@ ULONG Difference::make(ULONG length1, const UCHAR* rec1,
 	{
 		auto p = output++;
 
-		const auto yellow = (UCHAR*) MIN((U_IPTR) end2, ((U_IPTR) rec2 + 127));
+		const auto* const yellow = (UCHAR*) MIN((U_IPTR) end2, ((U_IPTR) rec2 + 127));
 		while (rec2 < yellow)
 		{
 			if (output >= end)

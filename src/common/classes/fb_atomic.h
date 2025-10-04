@@ -37,35 +37,34 @@ class AtomicCounter
 public:
 	typedef IPTR counter_type;
 
-	explicit AtomicCounter(counter_type value = 0)
+	explicit AtomicCounter(counter_type value = 0) noexcept
 		: counter(value)
 	{
-		static_assert(sizeof(counter_type) == sizeof(counter), "Internal and external counter sizes need to match");
 	}
 
 	~AtomicCounter()
 	{
 	}
 
-	counter_type value() const { return counter.load(std::memory_order_acquire); }
+	counter_type value() const noexcept { return counter.load(std::memory_order_acquire); }
 
-	counter_type exchangeAdd(counter_type value)
+	counter_type exchangeAdd(counter_type value) noexcept
 	{
 		return counter.fetch_add(value);
 	}
 
-	void setValue(counter_type val)
+	void setValue(counter_type val) noexcept
 	{
 		counter.store(val, std::memory_order_release);
 	}
 
-	bool compareExchange(counter_type oldVal, counter_type newVal)
+	bool compareExchange(counter_type oldVal, counter_type newVal) noexcept
 	{
 		return counter.compare_exchange_strong(oldVal, newVal);
 	}
 
 	// returns old value
-	counter_type exchangeBitAnd(counter_type val)
+	counter_type exchangeBitAnd(counter_type val) noexcept
 	{
 		while (true)
 		{
@@ -76,7 +75,7 @@ public:
 	}
 
 	// returns old value
-	counter_type exchangeBitOr(counter_type val)
+	counter_type exchangeBitOr(counter_type val) noexcept
 	{
 		while (true)
 		{
@@ -87,7 +86,7 @@ public:
 	}
 
 	// returns old value
-	counter_type exchangeGreater(counter_type val)
+	counter_type exchangeGreater(counter_type val) noexcept
 	{
 		while (true)
 		{
@@ -102,7 +101,7 @@ public:
 	}
 
 	// returns old value
-	counter_type exchangeLower(counter_type val)
+	counter_type exchangeLower(counter_type val) noexcept
 	{
 		while (true)
 		{
@@ -116,59 +115,53 @@ public:
 		}
 	}
 
-	void operator &=(counter_type val)
+	void operator &=(counter_type val) noexcept
 	{
 		counter &= val;
 	}
 
-	void operator |=(counter_type val)
+	void operator |=(counter_type val) noexcept
 	{
 		counter |= val;
 	}
 
 	// returns new value !
-	counter_type operator ++()
+	counter_type operator ++() noexcept
 	{
 		return counter++ + 1;
 	}
 
 	// returns new value !
-	counter_type operator --()
+	counter_type operator --() noexcept
 	{
 		return counter-- - 1;
 	}
 
-	inline operator counter_type () const
+	inline operator counter_type () const noexcept
 	{
 		return value();
 	}
 
-	inline void operator =(counter_type val)
+	inline void operator =(counter_type val) noexcept
 	{
 		setValue(val);
 	}
 
-	inline counter_type operator +=(counter_type val)
+	inline counter_type operator +=(counter_type val) noexcept
 	{
 		return exchangeAdd(val) + val;
 	}
 
-	inline counter_type operator -=(counter_type val)
+	inline counter_type operator -=(counter_type val) noexcept
 	{
 		return exchangeAdd(-val) - val;
 	}
 
 private:
 	std::atomic<counter_type> counter;
+
+	static_assert(sizeof(counter_type) == sizeof(counter), "Internal and external counter sizes need to match");
 };
-
-
-
-// NS 2014-08-01: FIXME. Atomic counters use barriers on all platforms, so
-// these operations are no-ops and will always be no-ops. They were used
-// to work around (incorrectly) bugs in Sparc and PPC atomics code.
-inline void FlushCache() { }
-inline void WaitForFlushCache() { }
 
 } // namespace Firebird
 

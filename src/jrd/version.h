@@ -30,7 +30,7 @@
 #ifdef RC_TARGET_chacha
 #define VER_FILEDESC "Wire Encryption plugin using ChaCha cypher"
 
-#elif RC_TARGET_engine13
+#elif RC_TARGET_engine14
 #define VER_FILEDESC "Engine plugin"
 
 #elif defined RC_TARGET_fb_lock_print
@@ -138,6 +138,9 @@
 #elif defined RC_TARGET_engine_test
 #define VER_FILEDESC "Engine Tests"
 
+#elif defined RC_TARGET_isql_test
+#define VER_FILEDESC "ISQL Tests"
+
 #else
 #define VER_FILEDESC "SQL Server"
 
@@ -153,6 +156,8 @@
 
 #ifdef RC_ARH_x64
 #define VER_ARCH "64-bit"
+#elif defined(RC_ARH_arm64)
+#define VER_ARCH "ARM64"
 #else
 #define VER_ARCH "32-bit"
 #endif

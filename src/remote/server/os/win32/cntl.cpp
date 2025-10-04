@@ -36,7 +36,9 @@
 
 #include <windows.h>
 
-const unsigned int SHUTDOWN_TIMEOUT = 10 * 1000;	// 10 seconds
+using namespace Firebird;
+
+constexpr unsigned int SHUTDOWN_TIMEOUT = 10 * 1000;	// 10 seconds
 
 static void WINAPI control_thread(DWORD);
 
@@ -44,8 +46,8 @@ static USHORT report_status(DWORD, DWORD, DWORD, DWORD);
 
 static ThreadEntryPoint* main_handler;
 static SERVICE_STATUS_HANDLE service_handle;
-static Firebird::GlobalPtr<Firebird::string> service_name;
-static Firebird::GlobalPtr<Firebird::string> mutex_name;
+static GlobalPtr<string> service_name;
+static GlobalPtr<string> mutex_name;
 static HANDLE stop_event_handle;
 static HANDLE hMutex = NULL;
 
@@ -99,7 +101,7 @@ void WINAPI CNTL_main_thread( DWORD /*argc*/, char* /*argv*/[])
 				temp = WaitForSingleObject(stop_event_handle, INFINITE);
 			}
 		}
-		catch (const Firebird::Exception& ex)
+		catch (const Exception& ex)
 		{
 			iscLogException("CNTL: cannot start service handler thread", ex);
 		}
@@ -134,7 +136,7 @@ void CNTL_shutdown_service( const TEXT* message)
 	const char* strings[2];
 
 	char buffer[BUFFER_LARGE];
-	sprintf(buffer, "%s error: %lu", service_name->c_str(), GetLastError());
+	snprintf(buffer, sizeof(buffer), "%s error: %lu", service_name->c_str(), GetLastError());
 
 	HANDLE event_source = RegisterEventSource(NULL, service_name->c_str());
 	if (event_source)
@@ -169,7 +171,7 @@ static void WINAPI control_thread( DWORD action)
  *	Process a service control request.
  *
  **************************************/
-	const DWORD state = SERVICE_RUNNING;
+	constexpr DWORD state = SERVICE_RUNNING;
 
 	switch (action)
 	{
@@ -188,7 +190,7 @@ static void WINAPI control_thread( DWORD action)
 		hMutex = OpenMutex(SYNCHRONIZE, FALSE, mutex_name->c_str());
 		if (hMutex)
 		{
-			UINT error_mode = SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX |
+			constexpr UINT error_mode = SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX |
 				SEM_NOOPENFILEERRORBOX | SEM_NOALIGNMENTFAULTEXCEPT;
 			SetErrorMode(error_mode);
 			WaitForSingleObject(hMutex, INFINITE);

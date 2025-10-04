@@ -68,26 +68,26 @@ public:
 
 // tfb_flags
 
-const int TFB_computed			= 1;
-const int TFB_array				= 2;
+inline constexpr int TFB_computed			= 1;
+inline constexpr int TFB_array				= 2;
 
 
-const int TRIGGER_PRE_STORE		= 1;
-const int TRIGGER_POST_STORE	= 2;
-const int TRIGGER_PRE_MODIFY	= 3;
-const int TRIGGER_POST_MODIFY	= 4;
-const int TRIGGER_PRE_ERASE		= 5;
-const int TRIGGER_POST_ERASE	= 6;
-const int TRIGGER_MAX			= 7;
+inline constexpr int TRIGGER_PRE_STORE		= 1;
+inline constexpr int TRIGGER_POST_STORE		= 2;
+inline constexpr int TRIGGER_PRE_MODIFY		= 3;
+inline constexpr int TRIGGER_POST_MODIFY	= 4;
+inline constexpr int TRIGGER_PRE_ERASE		= 5;
+inline constexpr int TRIGGER_POST_ERASE		= 6;
+inline constexpr int TRIGGER_MAX			= 7;
 
 // trigger type prefixes
-const int TRIGGER_PRE			= 0;
-const int TRIGGER_POST			= 1;
+inline constexpr int TRIGGER_PRE			= 0;
+inline constexpr int TRIGGER_POST			= 1;
 
 // trigger type suffixes
-const int TRIGGER_STORE			= 1;
-const int TRIGGER_MODIFY		= 2;
-const int TRIGGER_ERASE			= 3;
+inline constexpr int TRIGGER_STORE			= 1;
+inline constexpr int TRIGGER_MODIFY			= 2;
+inline constexpr int TRIGGER_ERASE			= 3;
 
 // that's how trigger action types are encoded
 /*
@@ -123,7 +123,7 @@ example #3:
 #define TRIGGER_ACTION_SLOT(value, slot) \
 	TRIGGER_ACTION(value, (slot * 2 - 1) )
 
-const int TRIGGER_COMBINED_MAX	= 128;
+inline constexpr int TRIGGER_COMBINED_MAX = 128;
 
 #include "../jrd/obj.h"
 

@@ -33,6 +33,8 @@
 #include "../common/classes/RefCounted.h"
 #include "../common/classes/fb_string.h"
 #include "../common/classes/timestamp.h"
+#include <chrono>
+#include <optional>
 
 // Firebird platform-specific synchronization data structures
 
@@ -55,7 +57,7 @@
 
 #ifdef UNIX
 
-#if defined(HAVE_PTHREAD_MUTEXATTR_SETROBUST_NP) && defined(HAVE_PTHREAD_MUTEX_CONSISTENT_NP)
+#if defined(HAVE_PTHREAD_MUTEXATTR_SETROBUST) && defined(HAVE_PTHREAD_MUTEX_CONSISTENT)
 #define USE_ROBUST_MUTEX
 #endif // ROBUST mutex
 
@@ -73,7 +75,7 @@ struct mtx
 struct event_t
 {
 	SLONG event_count;
-	int pid;
+	int event_pid;
 	pthread_mutex_t event_mutex[1];
 	pthread_cond_t event_cond[1];
 };
@@ -130,10 +132,10 @@ struct event_t
 class MemoryHeader
 {
 public:
-	static const USHORT HEADER_VERSION = 2;
+	static constexpr USHORT HEADER_VERSION = 2;
 
 	// Values for mhb_flags
-	static const USHORT FLAG_DELETED = 1;	// Shared file has been deleted
+	static constexpr USHORT FLAG_DELETED = 1;	// Shared file has been deleted
 
 	void init(USHORT type, USHORT version)
 	{
@@ -149,12 +151,12 @@ public:
 
 	bool check(const char* name, USHORT type, USHORT version, bool raiseError = true) const;
 
-	void markAsDeleted()
+	void markAsDeleted() noexcept
 	{
 		mhb_flags |= FLAG_DELETED;
 	}
 
-	bool isDeleted() const
+	bool isDeleted() const noexcept
 	{
 		return (mhb_flags & FLAG_DELETED);
 	}
@@ -180,16 +182,18 @@ public:
 #define USE_FCNTL
 #endif
 
-class CountedFd;
+class SharedFileInfo;
 
 class FileLock
 {
+	friend class CountedRWLock;
+
 public:
-	enum LockMode {FLM_EXCLUSIVE, FLM_TRY_EXCLUSIVE, FLM_SHARED, FLM_TRY_SHARED};
+	enum LockMode {FLM_EXCLUSIVE, FLM_TRY_EXCLUSIVE, FLM_SHARED};
 
 	typedef void InitFunction(int fd);
-	explicit FileLock(const char* fileName, InitFunction* init = NULL);		// main ctor
-	FileLock(const FileLock* main, int s);	// creates additional lock for existing file
+
+	explicit FileLock(const char* fileName, InitFunction* init = NULL);
 	~FileLock();
 
 	// Main function to lock file
@@ -198,24 +202,18 @@ public:
 	// Alternative locker is using status vector to report errors
 	bool setlock(Firebird::CheckStatusWrapper* status, const LockMode mode);
 
-	// unlocking can only put error into log file - we can't throw in dtors
+	// Unlocking can only put error into log file - we can't throw in dtors
 	void unlock();
 
+	// Obvious access to file descriptor
 	int getFd();
 
-private:
 	enum LockLevel {LCK_NONE, LCK_SHARED, LCK_EXCL};
 
+private:
+	Firebird::RefPtr<SharedFileInfo> file;
+	InitFunction* initFunction;
 	LockLevel level;
-	CountedFd* oFile;
-#ifdef USE_FCNTL
-	int lStart;
-#endif
-	class CountedRWLock* rwcl;		// Due to order of init in ctor rwcl must go after fd & start
-
-	Firebird::string getLockId();
-	class CountedRWLock* getRw();
-	void rwUnlock();
 };
 
 #endif // UNIX
@@ -271,8 +269,8 @@ public:
 	static void unlinkFile(const TEXT* expanded_filename) noexcept;
 	Firebird::PathName getMapFileName();
 
-	void mutexLock();
-	bool mutexLockCond();
+	bool mutexLock(std::optional<std::chrono::milliseconds> timeout = std::nullopt);
+	bool mutexTryLock();
 	void mutexUnlock();
 
 	int eventInit(event_t* event);
@@ -333,7 +331,8 @@ public:
 		SRAM_TPC_SNAPSHOTS = 0xF7,
 		SRAM_CHANGELOG_STATE = 0xF6,
 		SRAM_TRACE_AUDIT_MTX = 0xF5,
-		SRAM_PROFILER = 0XF4
+		SRAM_PROFILER = 0XF4,
+		SRAM_CHAT_CLIENT = 0XF3
 	};
 
 protected:
@@ -390,8 +389,11 @@ public:
 			m_locked = false;
 	}
 
-	bool tryLock() {
-		m_locked = m_shmem->mutexLockCond();
+	SharedMutexGuard(const SharedMutexGuard&) = delete;
+	SharedMutexGuard& operator=(const SharedMutexGuard&) = delete;
+
+	bool tryLock(std::optional<std::chrono::milliseconds> timeout) {
+		m_locked = m_shmem->mutexLock(timeout);
 		return m_locked;
 	}
 
@@ -405,7 +407,7 @@ public:
 		m_locked = false;
 	}
 
-	bool isLocked() {
+	bool isLocked() noexcept {
 		return m_locked;
 	}
 
@@ -416,9 +418,6 @@ public:
 	}
 
 private:
-	SharedMutexGuard(const SharedMutexGuard&);
-	SharedMutexGuard& operator=(const SharedMutexGuard&);
-
 	SharedMemoryBase* m_shmem;
 	bool m_locked;
 };

@@ -69,7 +69,6 @@ enum drq_type_t
 	drq_s_lfields,			// store local fields
 	drq_s_gfields2,			// store global fields
 	drq_s_rels,				// store relations
-	drq_l_rel_name,			// lookup relation name
 	drq_l_view_rels,		// lookup relations in view
 	drq_s_usr_prvs,			// store user privileges
 	drq_s_sql_gfld,			// store sql fields
@@ -98,11 +97,8 @@ enum drq_type_t
 	drq_l_grant1,			// lookup grant
 	drq_s_grant,			// store grant
 	drq_l_fld_src2,			// lookup a field source
-	drq_m_database,			// modify database
 	drq_m_index,			// modify index
 	drq_m_set_statistics,	// modify index (set statistics)
-	drq_e_grant1,			// erase grant
-	drq_e_grant2,			// erase grant
 	drq_s_indices,			// store indices
 	drq_l_lfield,			// lookup local field
 	drq_s_idx_segs,			// store index segments
@@ -110,7 +106,6 @@ enum drq_type_t
 	drq_l_primary,			// lookup a primary something
 	drq_e_trg_msgs2,		// erase trigger messages
 	drq_e_trigger2,			// erase trigger
-	drq_l_prc_name,			// lookup procedure name
 	drq_s_xcp,				// store an exception
 	drq_m_xcp,				// modify an exception
 	drq_e_trg_prv,			// erase trigger's privileges
@@ -164,23 +159,22 @@ enum drq_type_t
 	drq_l_arg_coll,			// lookup function argument collation
 	drq_map_sto,			// store login mapping
 	drq_map_mod,			// modify/erase login mapping
-	drq_l_idx_name,			// lookup index name
 	drq_l_collation,		// DSQL/DdlNodes: lookup collation
 	drq_m_charset,			// DSQL/DdlNodes: modify character set
 	drq_g_nxt_gen_id,		// generate next generator id
 	drq_g_nxt_prc_id,		// generate next procedure id
 	drq_g_nxt_xcp_id,		// generate next exception id
-	drq_l_xcp_name,			// lookup exception name
-	drq_l_gen_name,			// lookup generator name
 	drq_e_grant3,			// revoke all on all
 	drq_s_funcs2,			// store functions (CreateAlterFunctionNode)
 	drq_s_func_args2,		// store function arguments (CreateAlterFunctionNode)
 	drq_m_funcs2,			// modify functions (CreateAlterFunctionNode)
+	drq_m_prm_funcs2,		// modify individual function parameters (CreateAlterFunctionNode)
 	drq_e_func_args2,		// erase function arguments (CreateAlterFunctionNode)
 	drq_s_prcs2,
 	drq_s_prms4,
 	drq_s_prm_src2,
 	drq_m_prcs2,
+	drq_m_prm_prcs2,		// modify individual procedure parameters (CreateAlterProcedureNode)
 	drq_e_prms2,
 	drq_m_trigger2,
 	drq_e_prcs2,
@@ -198,6 +192,7 @@ enum drq_type_t
 	drq_m_pkg_prc,			// drop package body
 	drq_m_pkg_fun,			// drop package body
 	drq_m_pkg,				// alter package
+	drq_m_prm_pkg,			// modify individual package parameters
 	drq_l_pkg_funcs,		// lookup packaged functions
 	drq_l_pkg_func_args,	// lookup packaged function arguments
 	drq_l_pkg_procs,		// lookup packaged procedures
@@ -205,7 +200,6 @@ enum drq_type_t
 	drq_e_pkg_prv,			// erase package privileges
 	drq_s2_difference,		// Store backup difference file, DYN_mod's change_backup_mode
 	drq_l_relation,			// lookup relation before erase
-	drq_l_fun_name,			// lookup function name
 	drq_g_nxt_fun_id,		// lookup next function ID
 	drq_e_arg_gfld,			// erase argument's global field
 	drq_e_fun_prv,			// erase function privileges
@@ -246,6 +240,8 @@ enum drq_type_t
 	drq_l_pub_rel_name,		// lookup relation by name
 	drq_l_pub_all_rels,		// iterate through all user relations
 	drq_e_pub_tab_all,		// erase relation from all publication
+	drq_l_rel_con,			// lookup relation constraint
+	drq_l_rel_fld_name,		// lookup relation field name
 
 	drq_MAX
 };

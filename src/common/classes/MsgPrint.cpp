@@ -37,29 +37,28 @@ namespace MsgFormat
 {
 
 // Enough to the current conversions. If SINT128 is decoded as a full number
-// instead of two parts, it may be updated to 64 and 63 respectively,
-// because 2^128 ~ 3.4e38.
-const int DECODE_BUF_SIZE = 32;
-const int DECODE_BUF_LEN = 31;
+// instead of two parts, it may be updated to 63, because 2^128 ~ 3.4e38.
+static constexpr int DECODE_BUF_LEN = 31;
+static constexpr int DECODE_BUF_SIZE = DECODE_BUF_LEN + 1;
 
 // The maximum numeric base we support, using 0..Z
-const int MAX_RADIX = 36;
+static constexpr int MAX_RADIX = 36;
 // We don't mess with octal and the like, otherwise DECODE_BUF_* constants have to be enlarged.
-const int MIN_RADIX = 10;
+static constexpr int MIN_RADIX = 10;
 // We won't output strings of more than 64K.
-const FB_SIZE_T MAX_STRING = 1 << 16;
+static constexpr FB_SIZE_T MAX_STRING = 1 << 16;
 
 // Generic functions.
-int decode(uint64_t value, char* const rc, int radix = 10);
-int decode(int64_t value, char* const rc, int radix = 10);
-int decode(double value, char* rc);
-int adjust_prefix(int radix, int rev, bool is_neg, char* const rc);
+int decode(uint64_t value, char* const rc, int radix = 10) noexcept;
+int decode(int64_t value, char* const rc, int radix = 10) noexcept;
+int decode(double value, char* const rc, const size_t sz) noexcept;
+int adjust_prefix(int radix, int rev, bool is_neg, char* const rc) noexcept;
 int MsgPrintHelper(BaseStream& out_stream, const safe_cell& item);
 
 
 
 // Decode unsigned integer values in any base between 10 and 36.
-int decode(uint64_t value, char* const rc, int radix)
+int decode(uint64_t value, char* const rc, int radix) noexcept
 {
 	int rev = DECODE_BUF_LEN;
 	if (radix < MIN_RADIX || radix > MAX_RADIX)
@@ -79,7 +78,7 @@ int decode(uint64_t value, char* const rc, int radix)
 	{
 		while (true)
 		{
-			int temp = static_cast<int>(value % radix);
+			const int temp = static_cast<int>(value % radix);
 			rc[rev--] = static_cast<unsigned char>(temp < 10 ? temp + '0' : temp - 10 + 'A');
 			value /= radix;
 			if (!value)
@@ -92,7 +91,7 @@ int decode(uint64_t value, char* const rc, int radix)
 
 
 // Decode signed integer values in any base between 10 and 36.
-int decode(int64_t value, char* const rc, int radix)
+int decode(int64_t value, char* const rc, int radix) noexcept
 {
 	if (value >= 0)
 		return decode(static_cast<uint64_t>(value), rc, radix);
@@ -106,7 +105,7 @@ int decode(int64_t value, char* const rc, int radix)
 	{
 		while (true)
 		{
-			int64_t temp = (value / 10) * 10 - value;
+			const int64_t temp = (value / 10) * 10 - value;
 			rc[rev--] = static_cast<unsigned char>(temp) + '0';
 			value /= 10;
 			if (!value)
@@ -117,7 +116,7 @@ int decode(int64_t value, char* const rc, int radix)
 	{
 		while (true)
 		{
-			int64_t temp = (value / radix) * radix - value;
+			const int64_t temp = (value / radix) * radix - value;
 			rc[rev--] = static_cast<unsigned char>(temp < 10 ? temp + '0' : temp - 10 + 'A');
 			value /= radix;
 			if (!value)
@@ -131,14 +130,15 @@ int decode(int64_t value, char* const rc, int radix)
 
 // Stub that relies on the printf family to write a double using "g"
 // for smallest representation in text form.
-int decode(double value, char* rc)
+int decode(double value, char* const rc, const size_t sz) noexcept
 {
-	return sprintf(rc, "%g", value);
+	const int n = snprintf(rc, sz, "%g", value);
+	return std::min(n, static_cast<int>(sz - 1));
 }
 
 
 // Sets the radix indicator and returns the length of the adjusted string.
-int adjust_prefix(int radix, int rev, bool is_neg, char* const rc)
+int adjust_prefix(int radix, int rev, bool is_neg, char* const rc) noexcept
 {
 	int fwd = 0;
 
@@ -182,13 +182,13 @@ int MsgPrintHelper(BaseStream& out_stream, const safe_cell& item)
 	case safe_cell::at_int64:
 		{
 			char s[DECODE_BUF_SIZE];
-			int n = decode(item.i_value, s);
+			const int n = decode(item.i_value, s);
 			return out_stream.write(s, n);
 		}
 	case safe_cell::at_uint64:
 		{
 			char s[DECODE_BUF_SIZE];
-			int n = decode(static_cast<uint64_t>(item.i_value), s);
+			const int n = decode(static_cast<uint64_t>(item.i_value), s);
 			return out_stream.write(s, n);
 		}
 	case safe_cell::at_int128:
@@ -196,14 +196,14 @@ int MsgPrintHelper(BaseStream& out_stream, const safe_cell& item)
 			// Warning: useless display in real life
 			char s[DECODE_BUF_SIZE];
 			int n = decode(item.i128_value.high, s);
-			int n2 = out_stream.write(s, n) + out_stream.write(".", 1);
+			const int n2 = out_stream.write(s, n) + out_stream.write(".", 1);
 			n = decode(item.i128_value.low, s);
 			return n2 + out_stream.write(s, n);
 		}
 	case safe_cell::at_double:
 		{
 			char s[DECODE_BUF_SIZE];
-			int n = decode(item.d_value, s);
+			const int n = decode(item.d_value, s, sizeof(s));
 			return out_stream.write(s, n);
 		}
 	case safe_cell::at_str:
@@ -220,9 +220,9 @@ int MsgPrintHelper(BaseStream& out_stream, const safe_cell& item)
 		}
 	case safe_cell::at_ptr:
 		{
-			uint64_t v = reinterpret_cast<uint64_t>(item.p_value);
+			const uint64_t v = reinterpret_cast<uint64_t>(item.p_value);
 			char s[DECODE_BUF_SIZE];
-			int n = decode(v, s, 16);
+			const int n = decode(v, s, 16);
 			return out_stream.write(s, n);
 		}
 	default: // safe_cell::at_none and whatever out of range.
@@ -359,9 +359,8 @@ int MsgPrintErr(const char* format, const SafeArg& arg, bool userFormatting)
 int fb_msg_format(void* handle, USHORT facility, USHORT number, unsigned int bsize, TEXT* buffer,
 	const MsgFormat::SafeArg& arg)
 {
-	// The field MESSAGES.TEXT is 138 bytes long.
 	int total_msg = 0;
-	char msg[138 + 2] = "";
+	char msg[BUFFER_SMALL] = "";
 	const int n = gds__msg_lookup(handle, facility, number, sizeof(msg), msg, NULL);
 
 	if (n > 0 && unsigned(n) < sizeof(msg))
@@ -371,7 +370,7 @@ int fb_msg_format(void* handle, USHORT facility, USHORT number, unsigned int bsi
 		{
 			const TEXT* rep[5];
 			arg.dump(rep, 5);
-			total_msg = fb_utils::snprintf(buffer, bsize, msg, rep[0], rep[1], rep[2], rep[3], rep[4]);
+			total_msg = snprintf(buffer, bsize, msg, rep[0], rep[1], rep[2], rep[3], rep[4]);
 		}
 		else
 			total_msg = MsgPrint(buffer, bsize, msg, arg);
@@ -390,7 +389,7 @@ int fb_msg_format(void* handle, USHORT facility, USHORT number, unsigned int bsi
 		}
 		else
 		{
-			fb_utils::snprintf(buffer, bsize, "message system code %d", n);
+			snprintf(buffer, bsize, "message system code %d", n);
 			s += buffer;
 		}
 		total_msg = s.copyTo(buffer, bsize);

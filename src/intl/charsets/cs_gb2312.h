@@ -4,56 +4,12 @@
 
     Unicode mapping table generated from file gb2312-2.txt
 
-#
 #	Name:             GB2312-80 to Unicode table (complete, hex format)
 #	Unicode version:  3.0
 #	Table version:    1.0
 #	Table format:     Format A
 #	Date:             1999 October 8
-#	Author:           Ken Whistler <kenw@sybase.com>
-#       Original authors: Glenn Adams, John H. Jenkin <jenkins@apple.com>
-#
-#	Copyright (c) 1991-1999 Unicode, Inc.  All Rights reserved.
-#
-#	This file is provided as-is by Unicode, Inc. (The Unicode Consortium).
-#	No claims are made as to fitness for any particular purpose.  No
-#	warranties of any kind are expressed or implied.  The recipient
-#	agrees to determine applicability of information provided.  If this
-#	file has been provided on optical media by Unicode, Inc., the sole
-#	remedy for any claim will be exchange of defective media within 90
-#	days of receipt.
-#
-#	Unicode, Inc. hereby grants the right to freely use the information
-#	supplied in this file in the creation of products supporting the
-#	Unicode Standard, and to make copies of this file in any form for
-#	internal or external distribution as long as this notice remains
-#	attached.
-#
-#	General notes:
-#
-#	This table contains the datathe Unicode Consortium currently has on how
-#       GB2312-80 characters map into Unicode.
-#
-#	The following algorithms can be used to change the hex form
-#		of GB2312 to other standard forms:
-#
-#		To change hex to EUC form, add 0x8080
-#		To change hex to kuten form, first subtract 0x2020.  Then
-#			the high and low bytes correspond to the ku and ten of
-#			the kuten form.  For example, 0x2121 -> 0x0101 -> 0101;
-#			0x777E -> 0x575E -> 8794
-#
-#	Version history
-#	1.0 version updates 0.0d2 version by correcting mapping for 0x212C
-#             from U+2225 to U+2016.
-#
-#	Updated versions of this file may be found in:
-#		<ftp://ftp.unicode.org/Public/MAPPINGS/>
-#
-#	Any comments or problems, contact <errata@unicode.orgm>
-#	Please note that <errata@unicode.org> is an archival address;
-#	notices will be checked, but do not expect an immediate response.
-#
+
  * The contents of this file are subject to the Interbase Public
  * License Version 1.0 (the "License"); you may not use this file
  * except in compliance with the License. You may obtain a copy

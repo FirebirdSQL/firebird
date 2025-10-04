@@ -54,23 +54,24 @@ DDL12_0			= 120	// rdb$engine_name and rdb$entrypoint in rdb$triggers
 						// Type of rdb$triggers.rdb$trigger_type changed from SMALLINT to BIGINT
 DDL13_0			= 130	// Table rdb$publications
 						// Table rdb$publication_tables
+DDL13_1			= 131	// rdb$condition_blr / rdb$condition_source in rdb$indices
 
 ASF: Engine that works with ODS11.1 and newer supports access to non-existent system fields.
 Reads return NULL and writes do nothing.
 */
 
-//const int DB_VERSION_DDL4		= 40;  // ods4 db
-//const int DB_VERSION_DDL5		= 50;  // ods5 db
-const int DB_VERSION_DDL8		= 80;  // ods8 db, IB4
-const int DB_VERSION_DDL9		= 90;  // ods9 db, IB5
-const int DB_VERSION_DDL10		= 100; // ods10 db, IB6, FB1, FB1.5
-const int DB_VERSION_DDL11		= 110; // ods11 db, FB2
-const int DB_VERSION_DDL11_1	= 111; // ods11.1 db, FB2.1
-const int DB_VERSION_DDL11_2	= 112; // ods11.2 db, FB2.5
-const int DB_VERSION_DDL12		= 120; // ods12.0 db, FB3.0
-const int DB_VERSION_DDL13		= 130; // ods13.0 db, FB4.0
+inline constexpr int DB_VERSION_DDL8	= 80;  // ods8 db, IB4
+inline constexpr int DB_VERSION_DDL9	= 90;  // ods9 db, IB5
+inline constexpr int DB_VERSION_DDL10	= 100; // ods10 db, IB6, FB1, FB1.5
+inline constexpr int DB_VERSION_DDL11	= 110; // ods11 db, FB2
+inline constexpr int DB_VERSION_DDL11_1	= 111; // ods11.1 db, FB2.1
+inline constexpr int DB_VERSION_DDL11_2	= 112; // ods11.2 db, FB2.5
+inline constexpr int DB_VERSION_DDL12	= 120; // ods12.0 db, FB3.0
+inline constexpr int DB_VERSION_DDL13	= 130; // ods13.0 db, FB4.0
+inline constexpr int DB_VERSION_DDL13_1	= 131; // ods13.1 db, FB5.0
+inline constexpr int DB_VERSION_DDL14	= 140; // ods14 db, FB6.0
 
-const int DB_VERSION_OLDEST_SUPPORTED = DB_VERSION_DDL8;  // IB4.0 is ods8
+inline constexpr int DB_VERSION_OLDEST_SUPPORTED = DB_VERSION_DDL8;  // IB4.0 is ods8
 
 void detectRuntimeODS();
 

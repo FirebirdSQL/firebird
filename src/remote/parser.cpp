@@ -161,8 +161,9 @@ static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length)
 
 	ULONG net_length = 0;
 	ULONG offset = 0;
+	dsc* const begin = format->fmt_desc.begin();
 
-	for (dsc* desc = format->fmt_desc.begin(); count; --count, ++desc)
+	for (dsc* desc = begin; count; --count, ++desc)
 	{
 		if (blr_length-- == 0)
 			return NULL;
@@ -262,6 +263,8 @@ static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length)
 			desc->dsc_dtype = dtype_quad;
 			desc->dsc_length = sizeof(SLONG) * 2;
 			desc->dsc_scale = *blr++;
+
+			format->fmt_blob_idx.add(desc - begin);
 			break;
 
 		case blr_float:
@@ -291,7 +294,7 @@ static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length)
 			desc->dsc_scale = *blr++;
 			break;
 
-		// this case cannot occur as switch paramater is char and blr_blob
+		// this case cannot occur as switch parameter is char and blr_blob
         // is 261. blob_ids are actually passed around as blr_quad.
 
 	    //case blr_blob:
@@ -312,6 +315,8 @@ static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length)
 				USHORT textType = *blr++;
 				textType += (*blr++) << 8;
 				desc->setTextType(textType);
+
+				format->fmt_blob_idx.add(desc - begin);
 			}
 			break;
 

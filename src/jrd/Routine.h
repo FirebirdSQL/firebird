@@ -28,7 +28,6 @@
 #include "../jrd/QualifiedName.h"
 #include "../common/classes/NestConst.h"
 #include "../common/MsgMetadata.h"
-#include "../common/classes/Nullable.h"
 
 namespace Jrd
 {
@@ -72,77 +71,83 @@ namespace Jrd
 		}
 
 	public:
-		static const USHORT FLAG_SCANNED			= 1;	// Field expressions scanned
-		static const USHORT FLAG_OBSOLETE			= 2;	// Procedure known gonzo
-		static const USHORT FLAG_BEING_SCANNED		= 4;	// New procedure needs dependencies during scan
-		static const USHORT FLAG_BEING_ALTERED		= 8;	// Procedure is getting altered
+		static constexpr USHORT FLAG_SCANNED			= 1;	// Field expressions scanned
+		static constexpr USHORT FLAG_OBSOLETE			= 2;	// Procedure known gonzo
+		static constexpr USHORT FLAG_BEING_SCANNED		= 4;	// New procedure needs dependencies during scan
+		static constexpr USHORT FLAG_BEING_ALTERED		= 8;	// Procedure is getting altered
 															// This flag is used to make sure that MET_remove_routine
 															// does not delete and remove procedure block from cache
 															// so dfw.epp:modify_procedure() can flip procedure body without
 															// invalidating procedure pointers from other parts of metadata cache
-		static const USHORT FLAG_CHECK_EXISTENCE	= 16;	// Existence lock released
-		static const USHORT FLAG_RELOAD		 		= 32;	// Recompile before execution
-		static const USHORT FLAG_CLEARED			= 64;	// Routine cleared but not removed from cache
+		static constexpr USHORT FLAG_CHECK_EXISTENCE	= 16;	// Existence lock released
+		static constexpr USHORT FLAG_RELOAD		 		= 32;	// Recompile before execution
+		static constexpr USHORT FLAG_CLEARED			= 64;	// Routine cleared but not removed from cache
 
-		static const USHORT MAX_ALTER_COUNT = 64;	// Number of times an in-cache routine can be altered
+		static constexpr USHORT MAX_ALTER_COUNT = 64;	// Number of times an in-cache routine can be altered
 
 		static Firebird::MsgMetadata* createMetadata(
 			const Firebird::Array<NestConst<Parameter> >& parameters, bool isExtern);
 		static Format* createFormat(MemoryPool& pool, Firebird::IMessageMetadata* params, bool addEof);
 
 	public:
-		USHORT getId() const
+		USHORT getId() const noexcept
 		{
 			fb_assert(!subRoutine);
 			return id;
 		}
 
-		void setId(USHORT value) { id = value; }
+		void setId(USHORT value) noexcept { id = value; }
 
-		const QualifiedName& getName() const { return name; }
+		const QualifiedName& getName() const noexcept { return name; }
 		void setName(const QualifiedName& value) { name = value; }
 
-		const MetaName& getSecurityName() const { return securityName; }
-		void setSecurityName(const MetaName& value) { securityName = value; }
+		const QualifiedName& getSecurityName() const noexcept { return securityName; }
+		void setSecurityName(const QualifiedName& value) { securityName = value; }
 
-		/*const*/ Statement* getStatement() const { return statement; }
+		/*const*/ Statement* getStatement() const noexcept { return statement; }
 		void setStatement(Statement* value);
 
-		bool isSubRoutine() const { return subRoutine; }
-		void setSubRoutine(bool value) { subRoutine = value; }
+		bool isSubRoutine() const noexcept { return subRoutine; }
+		void setSubRoutine(bool value) noexcept { subRoutine = value; }
 
-		bool isImplemented() const { return implemented; }
-		void setImplemented(bool value) { implemented = value; }
+		bool isImplemented() const noexcept { return implemented; }
+		void setImplemented(bool value) noexcept { implemented = value; }
 
-		bool isDefined() const { return defined; }
-		void setDefined(bool value) { defined = value; }
+		bool isDefined() const noexcept { return defined; }
+		void setDefined(bool value) noexcept { defined = value; }
 
 		void checkReload(thread_db* tdbb);
 
-		USHORT getDefaultCount() const { return defaultCount; }
-		void setDefaultCount(USHORT value) { defaultCount = value; }
+		USHORT getDefaultCount() const noexcept { return defaultCount; }
+		void setDefaultCount(USHORT value) noexcept { defaultCount = value; }
 
-		const Format* getInputFormat() const { return inputFormat; }
-		void setInputFormat(const Format* value) { inputFormat = value; }
+		const Format* getInputFormat() const noexcept { return inputFormat; }
+		void setInputFormat(const Format* value) noexcept { inputFormat = value; }
 
-		const Format* getOutputFormat() const { return outputFormat; }
-		void setOutputFormat(const Format* value) { outputFormat = value; }
+		const Format* getOutputFormat() const noexcept { return outputFormat; }
+		void setOutputFormat(const Format* value) noexcept { outputFormat = value; }
 
-		const Firebird::Array<NestConst<Parameter> >& getInputFields() const { return inputFields; }
-		Firebird::Array<NestConst<Parameter> >& getInputFields() { return inputFields; }
+		const Firebird::Array<NestConst<Parameter> >& getInputFields() const noexcept
+		{
+			return inputFields;
+		}
+		Firebird::Array<NestConst<Parameter> >& getInputFields() noexcept { return inputFields; }
 
-		const Firebird::Array<NestConst<Parameter> >& getOutputFields() const { return outputFields; }
-		Firebird::Array<NestConst<Parameter> >& getOutputFields() { return outputFields; }
+		const Firebird::Array<NestConst<Parameter> >& getOutputFields() const noexcept
+		{
+			return outputFields;
+		}
+		Firebird::Array<NestConst<Parameter> >& getOutputFields() noexcept { return outputFields; }
 
-		void parseBlr(thread_db* tdbb, CompilerScratch* csb, bid* blob_id, bid* blobDbg);
+		void parseBlr(thread_db* tdbb, CompilerScratch* csb, const bid* blob_id, bid* blobDbg);
 		void parseMessages(thread_db* tdbb, CompilerScratch* csb, Firebird::BlrReader blrReader);
 
-		bool isUsed() const
+		bool isUsed() const noexcept
 		{
 			return useCount != 0;
 		}
 
-		void addRef()
+		void addRef() noexcept
 		{
 			++useCount;
 		}
@@ -157,15 +162,15 @@ namespace Jrd
 		virtual void releaseExternal() {};
 
 	public:
-		virtual int getObjectType() const = 0;
-		virtual SLONG getSclType() const = 0;
+		virtual int getObjectType() const noexcept = 0;
+		virtual SLONG getSclType() const noexcept = 0;
 		virtual bool checkCache(thread_db* tdbb) const = 0;
 		virtual void clearCache(thread_db* tdbb) = 0;
 
 	private:
 		USHORT id;							// routine ID
-		QualifiedName name;					// routine name
-		MetaName securityName;				// security class name
+		QualifiedName name;				// routine name
+		QualifiedName securityName;		// security class name
 		Statement* statement;			// compiled routine statement
 		bool subRoutine;					// Is this a subroutine?
 		bool implemented;					// Is the packaged routine missing the body/entrypoint?

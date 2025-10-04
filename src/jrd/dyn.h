@@ -26,15 +26,18 @@
 
 #include "../common/classes/MsgPrint.h"
 #include "../jrd/MetaName.h"
+#include "../jrd/QualifiedName.h"
 #include "../common/classes/array.h"
 #include "../common/classes/fb_string.h"
 #include "../common/dsc.h"
+#include "firebird/impl/msg_helper.h"
 
-const char* const ALL_PRIVILEGES = "SIUDR";	// all applicable grant/revoke privileges
-const char* const EXEC_PRIVILEGES = "X";	// execute privilege
-const char* const USAGE_PRIVILEGES = "G";	// usage privilege
+inline constexpr const char* ALL_PRIVILEGES = "SIUDR";	// all applicable grant/revoke privileges
+inline constexpr const char* EXEC_PRIVILEGES = "X";		// execute privilege
+inline constexpr const char* USAGE_PRIVILEGES = "G";	// usage privilege
+inline constexpr const char* ALL_DDL_PRIVILEGES = "CLO";
 
-const int DYN_MSG_FAC		= 8;
+inline constexpr int DYN_MSG_FAC = FB_IMPL_MSG_FACILITY_DYN;
 
 
 namespace Jrd {
@@ -46,37 +49,29 @@ class dyn_fld
 {
 public:
 	dsc dyn_dsc;
-	bool dyn_null_flag;
-	USHORT dyn_dtype;
-	USHORT dyn_precision;
-	USHORT dyn_charlen;
-	SSHORT dyn_collation;
-	SSHORT dyn_charset;
-	SSHORT dyn_sub_type;
-	MetaName dyn_fld_source;
-	MetaName dyn_rel_name;
-	MetaName dyn_fld_name;
-    USHORT dyn_charbytelen; // Used to check modify operations on string types.
-    const UCHAR* dyn_default_src;
-    const UCHAR* dyn_default_val;
-    bool dyn_drop_default;
-    const UCHAR* dyn_computed_src;
-    const UCHAR* dyn_computed_val;
-    bool dyn_drop_computed;
+	bool dyn_null_flag = false;
+	USHORT dyn_dtype = 0;
+	USHORT dyn_precision = 0;
+	USHORT dyn_charlen = 0;
+	SSHORT dyn_collation = 0;
+	SSHORT dyn_charset = 0;
+	SSHORT dyn_sub_type = 0;
+	QualifiedName dyn_fld_source;
+	QualifiedName dyn_rel_name;
+	QualifiedName dyn_fld_name;
+    USHORT dyn_charbytelen = 0; // Used to check modify operations on string types.
+    const UCHAR* dyn_default_src = nullptr;
+    const UCHAR* dyn_default_val = nullptr;
+    bool dyn_drop_default = false;
+    const UCHAR* dyn_computed_src = nullptr;
+    const UCHAR* dyn_computed_val = nullptr;
+    bool dyn_drop_computed = false;
 public:
 	explicit dyn_fld(MemoryPool& p)
-		: dyn_null_flag(false), dyn_dtype(0), dyn_precision(0), dyn_charlen(0),
-		dyn_collation(0), dyn_charset(0), dyn_sub_type(0), dyn_fld_source(p), dyn_rel_name(p),
-		dyn_fld_name(p), dyn_charbytelen(0),
-		dyn_default_src(0), dyn_default_val(0), dyn_drop_default(false),
-		dyn_computed_src(0), dyn_computed_val(0), dyn_drop_computed(false)
+		: dyn_fld_source(p), dyn_rel_name(p), dyn_fld_name(p)
 	{ }
 
-	dyn_fld()
-		: dyn_null_flag(false), dyn_dtype(0), dyn_precision(0), dyn_charlen(0),
-		dyn_collation(0), dyn_charset(0), dyn_charbytelen(0),
-		dyn_default_src(0), dyn_default_val(0), dyn_drop_default(false),
-		dyn_computed_src(0), dyn_computed_val(0), dyn_drop_computed(false)
+	dyn_fld() noexcept
 	{ }
 };
 

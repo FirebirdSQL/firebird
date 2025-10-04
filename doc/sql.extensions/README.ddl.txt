@@ -559,6 +559,7 @@ CREATE_PRIVILEGED_ROLES			Use SET SYSTEM PRIVILEGES in roles
 MODIFY_EXT_CONN_POOL			Manage properties of pool of external connections
 REPLICATE_INTO_DATABASE			Use replication API to load changesets into database
 PROFILE_ANY_ATTACHMENT			Profile other users' attachments
+GET_DBCRYPT_INFO				Use getInfo() items, related with DB encryption
 
 
 22) New grantee type in GRANT and REVOKE operators - SYSTEM PRIVILEGE.
@@ -568,7 +569,7 @@ With support for various system privileges in engine it's getting very convenien
 rights to users already having specific system privilege. Therefore appropriate grantee type is
 suppoprted now. Example:
 
-GRANT ALL ON PLG$SRP_VIEW TO SYSTEM PRIVILEGE USER_MANAGEMENT
+GRANT ALL ON PLG$SRP.PLG$SRP_VIEW TO SYSTEM PRIVILEGE USER_MANAGEMENT
 
 Grants all rights to view (used in SRP management plugin) to users having USER_MANAGEMENT privilege.
 
@@ -603,3 +604,117 @@ ALTER TABLE <name> ... [ {ENABLE | DISABLE} PUBLICATION ]
 
 Defines whether replication is enabled for the specified table.
 If not specified in the CREATE TABLE statement, the database-level default behaviour is applied.
+
+24) Added the ability to change deterministic and sql security option without specifying the entire body of the function.
+(Alexander Zhdanov)
+
+ALTER FUNCTION <name> [ {DETERMINISTIC | NOT DETERMINISTIC} ] [ SQL SECURITY {DEFINER | INVOKER} | DROP SQL SECURITY ]
+
+25) Added the ability to change sql security option without specifying the entire body of the procedure
+(Alexander Zhdanov)
+
+ALTER PROCEDURE <name> SQL SECURITY {DEFINER | INVOKER} | DROP SQL SECURITY
+
+26) Added the ability to change sql security option without specifying the entire body of the package
+(Alexander Zhdanov)
+
+ALTER PACKAGE <name> SQL SECURITY {DEFINER | INVOKER} | DROP SQL SECURITY
+
+27) Added OWNER clause to CREATE DATABASE statement.
+(Dmitry Sibiryakov)
+
+<db_initial_option> list is expanded by "OWNER username" clause which allows to set an owner user name for the created database.
+Only users with administrator rights can use this option.
+
+28) COLLATE clause can be used as a part of character data type as per SQL standard.
+(Dmitry Sibiryakov)
+
+If is used twice, an error is returned.
+
+
+DDL enhancements in Firebird v6.
+--------------------------------
+
+1) DROP [IF EXISTS]
+
+Using subclause IF EXISTS, it's now possible to try to drop objects and do not get errors when they did not exist.
+
+For ALTER TABLE ... DROP subclause, DDL triggers are not fired if there are only DROP IF EXISTS subclauses and all
+of them are related to non existing columns or constraints.
+
+For others commands where IF EXISTS is part of the main command, DDL triggers are not fired when the object
+did not exist.
+
+The following statements are supported:
+
+DROP EXCEPTION [IF EXISTS] <exception>
+DROP INDEX [IF EXISTS] <index>
+DROP PROCEDURE [IF EXISTS] <procedure>
+DROP TABLE [IF EXISTS] <table>
+DROP TRIGGER [IF EXISTS] <trigger>
+DROP VIEW [IF EXISTS] <view>
+DROP FILTER [IF EXISTS] <filter>
+DROP DOMAIN [IF EXISTS] <domain>
+DROP [EXTERNAL] FUNCTION [IF EXISTS] <function>
+DROP SHADOW [IF EXISTS] <shadow>
+DROP ROLE [IF EXISTS] <role>
+DROP GENERATOR [IF EXISTS] <generator>
+DROP SEQUENCE [IF EXISTS] <sequence>
+DROP COLLATION [IF EXISTS] <collation>
+DROP USER [IF EXISTS] <user> [USING PLUGIN <plugin>]
+DROP PACKAGE [IF EXISTS] <package>
+DROP PACKAGE BODY [IF EXISTS] <package>
+DROP [GLOBAL] MAPPING [IF EXISTS] <mapping>
+ALTER TABLE <table> DROP [IF EXISTS] <column name>
+ALTER TABLE <table> DROP CONSTRAINT [IF EXISTS] <constraint name>
+
+2) CREATE [IF NOT EXISTS]
+
+Using subclause IF NOT EXISTS, it's now possible to try to create objects and do not get errors when they
+already exists.
+
+For ALTER TABLE ... ADD subclause, DDL triggers are not fired if there are only IF NOT EXISTS subclauses and all
+of them are related to existing columns or constraints.
+
+For others commands (except users currently) where IF NOT EXISTS is part of the main command,
+DDL triggers are not fired when the object already exists.
+
+The engine only verifies if the name (object, column or constraint) already exists, and if yes, do nothing.
+It never tries to match the existing object with the one being created.
+
+Some objects share the same "namespace", for example, there cannot be a table and a procedure with the same name.
+In this case, if there is table XYZ and CREATE PROCEDURE IF NOT EXISTS XYZ is tried, the procedure will not be created
+and no error will be raised.
+
+The following statements are supported:
+
+CREATE EXCEPTION [IF NOT EXISTS] ...
+CREATE INDEX [IF NOT EXISTS] ...
+CREATE PROCEDURE [IF NOT EXISTS] ...
+CREATE TABLE [IF NOT EXISTS] ...
+CREATE TRIGGER [IF NOT EXISTS] ...
+CREATE VIEW [IF NOT EXISTS] ...
+CREATE FILTER [IF NOT EXISTS] ...
+CREATE DOMAIN [IF NOT EXISTS] ...
+CREATE FUNCTION [IF NOT EXISTS] ...
+DECLARE EXTERNAL FUNCTION [IF NOT EXISTS] ...
+CREATE SHADOW [IF NOT EXISTS] ...
+CREATE ROLE [IF NOT EXISTS] ...
+CREATE GENERATOR [IF NOT EXISTS] ...
+CREATE SEQUENCE [IF NOT EXISTS] ...
+CREATE COLLATION [IF NOT EXISTS] ...
+CREATE USER [IF NOT EXISTS] ...
+CREATE PACKAGE [IF NOT EXISTS] ...
+CREATE PACKAGE BODY [IF NOT EXISTS] ...
+CREATE [GLOBAL] MAPPING [IF NOT EXISTS] ...
+ALTER TABLE <table> ADD [IF NOT EXISTS] <column name> ...
+ALTER TABLE <table> ADD CONSTRAINT [IF NOT EXISTS] <constraint name> ...
+
+3) Creation of an inactive index
+
+CREATE [UNIQUE] [ASC[ENDING] | DESC[ENDING]]
+  INDEX indexname [{ACTIVE | INACTIVE}]
+  ON tablename {(col [, col ...]) | COMPUTED BY (<expression>)}
+  [WHERE <search_condition>]
+
+'isql -x' generates script accordingly.

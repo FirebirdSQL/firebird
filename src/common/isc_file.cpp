@@ -91,7 +91,7 @@
 
 #include "../common/config/config.h"
 
-const char INET_FLAG = ':';
+constexpr char INET_FLAG = ':';
 
 // Unix/NFS specific stuff
 #ifndef NO_NFS
@@ -106,15 +106,15 @@ const char INET_FLAG = ':';
 #endif
 
 #if   defined(_PATH_MOUNTED)
-const char* const MTAB	= _PATH_MOUNTED;
+constexpr const char* MTAB = _PATH_MOUNTED;
 #elif defined(HPUX)
-const char* const MTAB	= "/etc/mnttab";
+constexpr const char* MTAB = "/etc/mnttab";
 #elif defined(SOLARIS)
-const char* const MTAB	= "/etc/mnttab";
+constexpr const char* MTAB = "/etc/mnttab";
 #elif defined(FREEBSD)
-const char* const MTAB	= "/etc/fstab";
+constexpr const char* MTAB = "/etc/fstab";
 #else
-const char* const MTAB	= "/etc/mtab";
+constexpr const char* MTAB = "/etc/mtab";
 #endif
 
 #ifdef HAVE_SETMNTENT
@@ -198,7 +198,7 @@ static void expand_filename2(tstring&, bool);
 
 
 #if defined(WIN_NT)
-static void translate_slashes(tstring&);
+static void translate_slashes(tstring&) noexcept;
 static void expand_share_name(tstring&);
 static void share_name_from_resource(tstring&, LPNETRESOURCE);
 static void share_name_from_unc(tstring&, LPREMOTE_NAME_INFO);
@@ -405,7 +405,11 @@ bool ISC_analyze_protocol(const char* protocol, tstring& expanded_name, tstring&
 	node_name.erase();
 
 	const PathName prefix = PathName(protocol) + "://";
-	if (expanded_name.find(prefix) != 0)
+
+	if (prefix.length() > expanded_name.length())
+		return false;
+
+	if (IgnoreCaseComparator::compare(prefix.c_str(), expanded_name.c_str(), prefix.length()) != 0)
 		return false;
 
 	PathName savedName = expanded_name;
@@ -598,10 +602,10 @@ bool ISC_expand_filename(tstring& buff, bool expand_mounts)
 
 #ifdef WIN_NT
 
-static void translate_slashes(tstring& Path)
+static void translate_slashes(tstring& Path) noexcept
 {
-	const char sep = '\\';
-	const char bad_sep = '/';
+	constexpr char sep = '\\';
+	constexpr char bad_sep = '/';
 	for (char *p = Path.begin(), *q = Path.end(); p < q; p++)
 	{
 		if (*p == bad_sep) {
@@ -611,7 +615,7 @@ static void translate_slashes(tstring& Path)
 }
 
 
-static bool isDriveLetter(const tstring::char_type letter)
+static bool isDriveLetter(const tstring::char_type letter) noexcept
 {
 	return (letter >= 'A' && letter <= 'Z') || (letter >= 'a' && letter <= 'z');
 }
@@ -624,8 +628,8 @@ static bool isDriveLetter(const tstring::char_type letter)
 static bool ShortToLongPathName(tstring& Path)
 {
 	// Special characters.
-	const char sep = '\\';
-	const char colon = ':';
+	constexpr char sep = '\\';
+	constexpr char colon = ':';
 
 	// Copy the short path into the work buffer and convert forward
 	// slashes to backslashes.
@@ -1714,7 +1718,7 @@ template <int BUFSIZE>
 class WideCharBuffer
 {
 public:
-	WideCharBuffer() :
+	WideCharBuffer() noexcept :
 		m_len16(0)
 	{}
 
@@ -1732,7 +1736,7 @@ public:
 
 		if (m_len16 == 0)
 		{
-			DWORD err = GetLastError();
+			const DWORD err = GetLastError();
 			if (err != ERROR_INSUFFICIENT_BUFFER)
 				return false;
 
@@ -1760,7 +1764,7 @@ public:
 		if (codePage == CP_UTF8 || codePage == CP_UTF7)
 			pDefaultCharUsed = NULL;
 
-		WCHAR* utf16Buffer = m_utf16.begin();
+		const WCHAR* utf16Buffer = m_utf16.begin();
 
 		char* utf8Buffer = str.getBuffer(str.capacity());
 		int len8 = WideCharToMultiByte(codePage, 0, utf16Buffer, m_len16,
@@ -1768,7 +1772,7 @@ public:
 
 		if (len8 == 0 || defaultCharUsed)
 		{
-			DWORD err = GetLastError();
+			const DWORD err = GetLastError();
 			if (err != ERROR_INSUFFICIENT_BUFFER)
 				return false;
 
@@ -1819,7 +1823,7 @@ void ISC_systemToUtf8(Firebird::AbstractString& str)
 
 	if (!wBuffer.fromString(CP_ACP, str) || !wBuffer.toString(CP_UTF8, str))
 	{
-		DWORD err = GetLastError();
+		const DWORD err = GetLastError();
 		status_exception::raise(
 			Arg::Gds(isc_bad_conn_str) << Arg::Gds(isc_transliteration_failed) <<
 			Arg::Windows(err));
@@ -1842,7 +1846,7 @@ void ISC_utf8ToSystem(Firebird::AbstractString& str)
 
 	if (!wBuffer.fromString(CP_UTF8, str) || !wBuffer.toString(CP_ACP, str))
 	{
-		DWORD err = GetLastError();
+		const DWORD err = GetLastError();
 		status_exception::raise(
 			Arg::Gds(isc_bad_conn_str) << Arg::Gds(isc_transliteration_failed) <<
 			Arg::Windows(err));

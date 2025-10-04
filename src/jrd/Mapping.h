@@ -46,30 +46,30 @@ class Mapping
 {
 public:
 	// constructor's flags
-	static const ULONG MAP_NO_FLAGS = 0;
-	static const ULONG MAP_THROW_NOT_FOUND = 1;
-	static const ULONG MAP_ERROR_HANDLER = 2;
+	static constexpr ULONG MAP_NO_FLAGS = 0;
+	static constexpr ULONG MAP_THROW_NOT_FOUND = 1;
+	static constexpr ULONG MAP_ERROR_HANDLER = 2;
 	Mapping(const ULONG flags, Firebird::ICryptKeyCallback* cryptCb);
 
 	~Mapping();
 
 	// First provide the main input information - old auth block ...
-	void setAuthBlock(const Firebird::AuthReader::AuthBlock& authBlock);
+	void setAuthBlock(const Firebird::AuthReader::AuthBlock& authBlock) noexcept;
 
 	// ... and finally specify additional information when available.
-	void setSqlRole(const Firebird::string& sqlRole);
+	void setSqlRole(const Firebird::string& sqlRole) noexcept;
 	void setDb(const char* alias, const char* db, Firebird::IAttachment* att);
 	void setSecurityDbAlias(const char* alias, const char* mainExpandedName);
-	void setErrorMessagesContextName(const char* context);
+	void setErrorMessagesContextName(const char* context) noexcept;
 
 	// This should be done before mapUser().
-	void needAuthMethod(Firebird::string& authMethod);
-	void needAuthBlock(Firebird::AuthReader::AuthBlock& newAuthBlock);
-	void needSystemPrivileges(UserId::Privileges& systemPrivileges);
+	void needAuthMethod(Firebird::string& authMethod) noexcept;
+	void needAuthBlock(Firebird::AuthReader::AuthBlock& newAuthBlock) noexcept;
+	void needSystemPrivileges(UserId::Privileges& systemPrivileges) noexcept;
 
 	// bits returned by mapUser
-	static const ULONG MAP_ERROR_NOT_THROWN = 1;
-	static const ULONG MAP_DOWN = 2;
+	static constexpr ULONG MAP_ERROR_NOT_THROWN = 1;
+	static constexpr ULONG MAP_DOWN = 2;
 	// Now mapper is ready to perform main task and provide mapped login and trusted role.
 	ULONG mapUser(Firebird::string& name, Firebird::string& trustedRole);
 
@@ -77,9 +77,9 @@ public:
 	void clearMainHandle();
 
 	// possible clearCache() flags
-	static const USHORT MAPPING_CACHE =				0x01;
-	static const USHORT SYSTEM_PRIVILEGES_CACHE =	0x02;
-	static const USHORT ALL_CACHE =					MAX_USHORT;
+	static constexpr USHORT MAPPING_CACHE =				0x01;
+	static constexpr USHORT SYSTEM_PRIVILEGES_CACHE =	0x02;
+	static constexpr USHORT ALL_CACHE =					MAX_USHORT;
 	// Helper statuc functions to perform cleanup & shutdown.
 	static void clearCache(const char* dbName, USHORT id);
 	static void shutdownIpc();
@@ -99,15 +99,15 @@ private:
 	const Firebird::string* sqlRole;
 
 public:
-	struct ExtInfo : public Firebird::AuthReader::Info
+	struct ExtInfo final : public Firebird::AuthReader::Info
 	{
 		Firebird::NoCaseString currentRole, currentUser;
 	};
 
-	class DbHandle : public Firebird::RefPtr<Firebird::IAttachment>
+	class DbHandle final : public Firebird::RefPtr<Firebird::IAttachment>
 	{
 	public:
-		DbHandle();
+		DbHandle() noexcept;
 		void setAttachment(Firebird::IAttachment* att);
 		void clear();
 		bool attach(const char* aliasDb, Firebird::ICryptKeyCallback* cryptCb);
@@ -116,7 +116,7 @@ public:
 	class Map;
 	typedef Firebird::HashTable<Map, Firebird::DEFAULT_HASH_SIZE, Map, Firebird::DefaultKeyValue<Map>, Map> MapHash;
 
-	class Map : public MapHash::Entry, public Firebird::GlobalStorage
+	class Map final : public MapHash::Entry, public Firebird::GlobalStorage
 	{
 	public:
 		Map(const char* aUsing, const char* aPlugin, const char* aDb,
@@ -127,15 +127,15 @@ public:
 		static FB_SIZE_T hash(const Map& value, FB_SIZE_T hashSize);
 		Firebird::NoCaseString makeHashKey() const;
 		void trimAll();
-		virtual bool isEqual(const Map& k) const;
-		virtual Map* get();
+		bool isEqual(const Map& k) const override;
+		Map* get() override;
 
 		Firebird::NoCaseString plugin, db, fromType, from, to;
 		bool toRole;
 		char usng;
 	};
 
-	class Cache : public MapHash, public Firebird::GlobalStorage, public Firebird::RefCounted
+	class Cache final : public MapHash, public Firebird::GlobalStorage, public Firebird::RefCounted
 	{
 	public:
 		Cache(const Firebird::NoCaseString& aliasDb, const Firebird::NoCaseString& db);
@@ -151,7 +151,7 @@ public:
 		void varUsing(ExtInfo& info, Map from, AuthWriter& newBlock);
 		bool map4(bool flagWild, unsigned flagSet, Firebird::AuthReader& rdr,
 			ExtInfo& info, AuthWriter& newBlock);
-		static void eraseEntry(Map* m);
+		static void eraseEntry(Map* m) noexcept;
 
 	public:
 		Firebird::Mutex populateMutex;
@@ -169,7 +169,7 @@ private:
 		const char* target, DbHandle& hdb, Firebird::ICryptKeyCallback* cryptCb, Cache* c2);
 };
 
-class GlobalMappingScan: public VirtualTableScan
+class GlobalMappingScan final : public VirtualTableScan
 {
 public:
 	GlobalMappingScan(CompilerScratch* csb, const Firebird::string& alias,
@@ -183,12 +183,12 @@ protected:
 		Record* record) const override;
 };
 
-class MappingList : public SnapshotData
+class MappingList final : public SnapshotData
 {
 public:
 	explicit MappingList(jrd_tra* tra);
 
-	RecordBuffer* getList(thread_db* tdbb, jrd_rel* relation);
+	RecordBuffer* getList(thread_db* tdbb, const jrd_rel* relation);
 
 private:
 	RecordBuffer* makeBuffer(thread_db* tdbb);

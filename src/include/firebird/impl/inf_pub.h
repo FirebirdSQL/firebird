@@ -176,6 +176,22 @@ enum db_info_types
 	fb_info_username = 147,
 	fb_info_sqlrole = 148,
 
+	fb_info_parallel_workers = 149,
+
+	// Wire stats items, implemented by Remote provider only
+	fb_info_wire_out_packets = 150,
+	fb_info_wire_in_packets = 151,
+	fb_info_wire_out_bytes = 152,
+	fb_info_wire_in_bytes = 153,
+	fb_info_wire_snd_packets = 154,
+	fb_info_wire_rcv_packets = 155,
+	fb_info_wire_snd_bytes = 156,
+	fb_info_wire_rcv_bytes = 157,
+	fb_info_wire_roundtrips = 158,
+
+	fb_info_max_blob_cache_size = 159,
+	fb_info_max_inline_blob_size = 160,
+
 	isc_info_db_last_value   /* Leave this LAST! */
 };
 
@@ -301,6 +317,9 @@ enum  info_db_implementations
 	isc_info_db_impl_freebsd_ppc64el = 89,
 
 	isc_info_db_impl_linux_mips64el = 90,
+
+	isc_info_db_impl_freebsd_ppc64 = 91,
+	isc_info_db_impl_freebsd_ppc = 92,
 
 	isc_info_db_impl_last_value   // Leave this LAST!
 };
@@ -484,6 +503,7 @@ enum info_db_provider
 #define isc_info_sql_stmt_blob_align	30
 #define isc_info_sql_exec_path_blr_bytes	31
 #define isc_info_sql_exec_path_blr_text		32
+#define isc_info_sql_relation_schema		33
 
 /*********************************/
 /* SQL information return values */

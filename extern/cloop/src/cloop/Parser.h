@@ -101,6 +101,7 @@ public:
 	Method()
 		: notImplementedExpr(NULL),
 		  notImplementedAction(NULL),
+		  stubAction(NULL),
 		  version(0),
 		  isConst(false)
 	{
@@ -111,9 +112,11 @@ public:
 	std::vector<Parameter*> parameters;
 	Expr* notImplementedExpr;
 	Action* notImplementedAction;
+	Action* stubAction;
 	unsigned version;
 	bool isConst;
 	std::string onErrorFunction;
+	std::string statusName;
 };
 
 
@@ -178,7 +181,7 @@ public:
 	void parseItem();
 	void parseConstant(const TypeRef& typeRef, const std::string& name);
 	void parseMethod(const TypeRef& returnTypeRef, const std::string& name, Expr* notImplementedExpr,
-		const std::string& onErrorFunction, Action* notImplementedAction);
+		const std::string& onErrorFunction, Action* notImplementedAction, Action* stubAction);
 
 	Expr* parseExpr();
 	Expr* parseLogicalExpr();

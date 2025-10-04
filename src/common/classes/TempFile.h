@@ -48,19 +48,19 @@ public:
 
 	virtual ~TempFile();
 
-	FB_SIZE_T read(offset_t, void*, FB_SIZE_T);
-	FB_SIZE_T write(offset_t, const void*, FB_SIZE_T);
+	FB_SIZE_T read(offset_t, void*, FB_SIZE_T) override;
+	FB_SIZE_T write(offset_t, const void*, FB_SIZE_T) override;
 
-	void unlink();
+	void unlink() noexcept override;
 
-	offset_t getSize() const
+	offset_t getSize() const noexcept override
 	{
 		return size;
 	}
 
 	void extend(offset_t);
 
-	const PathName& getName() const
+	const PathName& getName() const noexcept
 	{
 		return filename;
 	}

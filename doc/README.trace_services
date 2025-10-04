@@ -81,13 +81,14 @@ Action parameters switches :
   -N[AME]    <string>                   Session name
   -I[D]      <number>                   Session ID
   -C[ONFIG]  <string>                   Trace configuration file name
+  -P[LUGINS] <string list>              Plugins list for use with trace session; valid list separators: '\t', ',', ';'
 
 Connection parameters switches :
   -SE[RVICE]  <string>                  Service name
   -U[SER]     <string>                  User name
   -P[ASSWORD] <string>                  Password
   -FE[TCH]    <string>                  Fetch password from file
-  -T[RUSTED]  <string>                  Force trusted authentication
+  -T[RUSTED]                            Force trusted authentication
 
 Also, it prints usage screen if run without parameters.
 
@@ -98,7 +99,8 @@ I. Sample configuration files for user trace sessions:
 	
 a) Trace prepare, free and execution of all statements within connection 12345
 
-<database>
+database
+{
 	enabled			true
 	connection_id		12345
 	log_statement_prepare	true
@@ -106,13 +108,14 @@ a) Trace prepare, free and execution of all statements within connection 12345
 	log_statement_start	true
 	log_statement_finish	true
 	time_threshold		0
-</database>
+}
 
 b) Trace all connections of given user to database mydatabase.fdb
    Log executed INSERT, UPDATE and DELETE statements, nested calls to procedures
    and triggers and show corresponding PLAN's and performance statistics.
 
-<database %[\\/]mydatabase.fdb>
+database = %[\\/]mydatabase.fdb
+{
 	enabled			true
 	include_filter		(%)(INSERT|UPDATE|DELETE)(%)
 	log_statement_finish	true
@@ -121,19 +124,21 @@ b) Trace all connections of given user to database mydatabase.fdb
 	print_plan		true
 	print_perf		true
 	time_threshold		0
-</database>
+}
 	
 c) Trace connections and transactions in all databases except of security database
 
-<database>
+database
+{
 	enabled			true
 	log_connections		true
 	log_transactions	true
-</database>
+}
 
-<database security2.fdb>
+database = security.db
+{
 	enabled			false
-</database>
+}
 
 
 
@@ -148,19 +153,19 @@ a) Start user trace named "My trace" using configuration file fbtrace.conf and r
 another console : list sessions and look for interesting session ID (b) and stop it 
 using this found ID (e).
 
-b) List trace sesions
+b) List trace sessions
 
 	fbtracemgr -se service_mgr -list
 	
-c) Suspend trace sesson with ID 1
+c) Suspend trace session with ID 1
 
 	fbtracemgr -se service_mgr -suspend -id 1
 	
-d) Resume trace sesson with ID 1
+d) Resume trace session with ID 1
 
 	fbtracemgr -se service_mgr -resume -id 1
 	
-e) Stop trace sesson with ID 1
+e) Stop trace session with ID 1
 
 	fbtracemgr -se service_mgr -stop -id 1
 	

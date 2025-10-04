@@ -113,7 +113,7 @@ unsigned makeDynamicStrings(unsigned length, ISC_STATUS* const dst, const ISC_ST
 	return (to - dst) - 1;
 }
 
-char* findDynamicStrings(unsigned length, ISC_STATUS* ptr) throw()
+char* findDynamicStrings(unsigned length, ISC_STATUS* ptr) noexcept
 {
 	while (length--)
 	{

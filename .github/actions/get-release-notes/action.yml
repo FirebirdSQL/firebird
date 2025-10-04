@@ -1,0 +1,21 @@
+name: Get Release Notes
+description: Get Release Notes
+
+runs:
+  using: composite
+  steps:
+    - name: Get release info
+      id: release-info
+      uses: ./.github/actions/release-info
+
+    - id: filename
+      if: steps.release-info.outputs.version
+      shell: bash
+      run: |
+        echo "filename=Firebird-${{ steps.release-info.outputs.version }}-ReleaseNotes.pdf" >> $GITHUB_OUTPUT
+
+    - id: copy-release-notes-file
+      if: steps.filename.outputs.filename
+      shell: bash
+      run: |
+        (cd doc && curl -OL https://firebirdsql.org/file/documentation/release_notes/${{ steps.filename.outputs.filename }})

@@ -52,104 +52,115 @@
 
 // Column Limits (in bytes)
 
-const ULONG MAX_COLUMN_SIZE = 32767;
-const ULONG MAX_VARY_COLUMN_SIZE = MAX_COLUMN_SIZE - sizeof(USHORT);
+inline constexpr ULONG MAX_COLUMN_SIZE = 32767;
+inline constexpr ULONG MAX_VARY_COLUMN_SIZE = MAX_COLUMN_SIZE - sizeof(USHORT);
 
-const ULONG MAX_STR_SIZE = 65535;
+inline constexpr ULONG MAX_STR_SIZE = 65535;
 
-const int TEMP_STR_LENGTH = 128;
+inline constexpr int TEMP_STR_LENGTH = 128;
 
 // Metadata constants
 
-// When changing these constants, change MaxIdentifierByteLength and MaxIdentifierCharLength in
-// firebird.conf too.
-const unsigned METADATA_IDENTIFIER_CHAR_LEN	= 63;
-const unsigned METADATA_BYTES_PER_CHAR		= 4;
+inline constexpr unsigned METADATA_IDENTIFIER_CHAR_LEN	= 63;
+inline constexpr unsigned METADATA_BYTES_PER_CHAR		= 4;
 
 // Misc constant values
 
-const unsigned int USERNAME_LENGTH	= METADATA_IDENTIFIER_CHAR_LEN * METADATA_BYTES_PER_CHAR;
+inline constexpr unsigned int USERNAME_LENGTH = METADATA_IDENTIFIER_CHAR_LEN * METADATA_BYTES_PER_CHAR;
 
-const FB_SIZE_T MAX_SQL_IDENTIFIER_LEN = METADATA_IDENTIFIER_CHAR_LEN * METADATA_BYTES_PER_CHAR;
-const FB_SIZE_T MAX_SQL_IDENTIFIER_SIZE = MAX_SQL_IDENTIFIER_LEN + 1;
-const FB_SIZE_T MAX_CONFIG_NAME_LEN = 63;
+inline constexpr FB_SIZE_T MAX_SQL_IDENTIFIER_LEN = METADATA_IDENTIFIER_CHAR_LEN * METADATA_BYTES_PER_CHAR;
+inline constexpr FB_SIZE_T MAX_SQL_IDENTIFIER_SIZE = MAX_SQL_IDENTIFIER_LEN + 1;
+inline constexpr FB_SIZE_T MAX_CONFIG_NAME_LEN = 63;
 
-const ULONG MAX_SQL_LENGTH = 10 * 1024 * 1024; // 10 MB - just a safety check
+// Every character of the name may be a double-quote needed to be escaped (with another double-quote).
+// The name would also need to be enclosed in double-quotes.
+// There is two names, separated by a dot.
+inline constexpr FB_SIZE_T MAX_QUALIFIED_NAME_TO_STRING_LEN =
+	((METADATA_IDENTIFIER_CHAR_LEN * 2 + 2) * 2 + 1) * METADATA_BYTES_PER_CHAR;
 
-const char* const DB_KEY_NAME = "DB_KEY";
-const char* const RDB_DB_KEY_NAME = "RDB$DB_KEY";
-const char* const RDB_RECORD_VERSION_NAME = "RDB$RECORD_VERSION";
+inline constexpr ULONG MAX_SQL_LENGTH = 10 * 1024 * 1024; // 10 MB - just a safety check
 
-const char* const NULL_STRING_MARK = "*** null ***";
-const char* const UNKNOWN_STRING_MARK = "*** unknown ***";
+inline constexpr const char* DB_KEY_NAME = "DB_KEY";
+inline constexpr const char* RDB_DB_KEY_NAME = "RDB$DB_KEY";
+inline constexpr const char* RDB_RECORD_VERSION_NAME = "RDB$RECORD_VERSION";
 
-const char* const ISC_USER = "ISC_USER";
-const char* const ISC_PASSWORD = "ISC_PASSWORD";
+inline constexpr const char* NULL_STRING_MARK = "*** null ***";
+inline constexpr const char* UNKNOWN_STRING_MARK = "*** unknown ***";
 
-const char* const NULL_ROLE = "NONE";
+inline constexpr const char* ISC_USER = "ISC_USER";
+inline constexpr const char* ISC_PASSWORD = "ISC_PASSWORD";
+
+inline constexpr const char* NULL_ROLE = "NONE";
 #define ADMIN_ROLE "RDB$ADMIN"		// It's used in C-string concatenations
 
 // User name assigned to any user granted USR_locksmith rights.
 // If this name is changed, modify also the trigger in
 // jrd/grant.gdl (which turns into jrd/trig.h.
-const char* const DBA_USER_NAME		= "SYSDBA";
+inline constexpr const char* DBA_USER_NAME = "SYSDBA";
 
-const char* const PRIMARY_KEY		= "PRIMARY KEY";
-const char* const FOREIGN_KEY		= "FOREIGN KEY";
-const char* const UNIQUE_CNSTRT		= "UNIQUE";
-const char* const CHECK_CNSTRT		= "CHECK";
-const char* const NOT_NULL_CNSTRT	= "NOT NULL";
+inline constexpr const char* PRIMARY_KEY		= "PRIMARY KEY";
+inline constexpr const char* FOREIGN_KEY		= "FOREIGN KEY";
+inline constexpr const char* UNIQUE_CNSTRT		= "UNIQUE";
+inline constexpr const char* CHECK_CNSTRT		= "CHECK";
+inline constexpr const char* NOT_NULL_CNSTRT	= "NOT NULL";
 
-const char* const REL_SCOPE_PERSISTENT		= "persistent table \"%s\"";
-const char* const REL_SCOPE_GTT_PRESERVE	= "global temporary table \"%s\" of type ON COMMIT PRESERVE ROWS";
-const char* const REL_SCOPE_GTT_DELETE		= "global temporary table \"%s\" of type ON COMMIT DELETE ROWS";
-const char* const REL_SCOPE_EXTERNAL		= "external table \"%s\"";
-const char* const REL_SCOPE_VIEW			= "view \"%s\"";
-const char* const REL_SCOPE_VIRTUAL			= "virtual table \"%s\"";
+inline constexpr const char* REL_SCOPE_PERSISTENT	= "persistent table %s";
+inline constexpr const char* REL_SCOPE_GTT_PRESERVE	= "global temporary table %s of type ON COMMIT PRESERVE ROWS";
+inline constexpr const char* REL_SCOPE_GTT_DELETE	= "global temporary table %s of type ON COMMIT DELETE ROWS";
+inline constexpr const char* REL_SCOPE_EXTERNAL		= "external table %s";
+inline constexpr const char* REL_SCOPE_VIEW			= "view %s";
+inline constexpr const char* REL_SCOPE_VIRTUAL		= "virtual table %s";
 
 // literal strings in rdb$ref_constraints to be used to identify
 // the cascade actions for referential constraints. Used
 // by isql/show and isql/extract for now.
 
-const char* const RI_ACTION_CASCADE = "CASCADE";
-const char* const RI_ACTION_NULL    = "SET NULL";
-const char* const RI_ACTION_DEFAULT = "SET DEFAULT";
-const char* const RI_ACTION_NONE    = "NO ACTION";
-const char* const RI_RESTRICT       = "RESTRICT";
+inline constexpr const char* RI_ACTION_CASCADE = "CASCADE";
+inline constexpr const char* RI_ACTION_NULL    = "SET NULL";
+inline constexpr const char* RI_ACTION_DEFAULT = "SET DEFAULT";
+inline constexpr const char* RI_ACTION_NONE    = "NO ACTION";
+inline constexpr const char* RI_RESTRICT       = "RESTRICT";
 
 // Automatically created domains for fields with direct data type.
 // Also, automatically created indices that are unique or non-unique, but not PK.
-const char* const IMPLICIT_DOMAIN_PREFIX = "RDB$";
-const int IMPLICIT_DOMAIN_PREFIX_LEN = 4;
+inline constexpr const char* IMPLICIT_DOMAIN_PREFIX = "RDB$";
+inline constexpr int IMPLICIT_DOMAIN_PREFIX_LEN = 4;
 
 // Automatically created indices for PKs.
-const char* const IMPLICIT_PK_PREFIX = "RDB$PRIMARY";
-const int IMPLICIT_PK_PREFIX_LEN = 11;
+inline constexpr const char* IMPLICIT_PK_PREFIX = "RDB$PRIMARY";
+inline constexpr int IMPLICIT_PK_PREFIX_LEN = 11;
 
 // The invisible "id zero" generator.
-const char* const MASTER_GENERATOR = ""; //Was "RDB$GENERATORS";
+inline constexpr const char* MASTER_GENERATOR = ""; //Was "RDB$GENERATORS";
 
+inline constexpr const char* SYSTEM_SCHEMA = "SYSTEM";
+inline constexpr const char* PUBLIC_SCHEMA = "PUBLIC";
+inline constexpr const char* PLG_LEGACY_SEC_SCHEMA = "PLG$LEGACY_SEC";
 
 // Automatically created security classes for SQL objects.
 // Keep in sync with trig.h
-const char* const DEFAULT_CLASS				= "SQL$DEFAULT";
-const char* const SQL_SECCLASS_GENERATOR	= "RDB$SECURITY_CLASS";
-const char* const SQL_SECCLASS_PREFIX		= "SQL$";
-const int SQL_SECCLASS_PREFIX_LEN			= 4;
-const char* const SQL_FLD_SECCLASS_PREFIX	= "SQL$GRANT";
-const int SQL_FLD_SECCLASS_PREFIX_LEN		= 9;
-const char* const GEN_SECCLASS_PREFIX		= "GEN$";
-const int GEN_SECCLASS_PREFIX_LEN			= 4;
+inline constexpr const char* DEFAULT_CLASS				= "SQL$DEFAULT";
+inline constexpr const char* SQL_SECCLASS_GENERATOR		= "RDB$SECURITY_CLASS";
+inline constexpr const char* SQL_SECCLASS_PREFIX		= "SQL$";
+inline constexpr int SQL_SECCLASS_PREFIX_LEN			= 4;
+inline constexpr const char* SQL_FLD_SECCLASS_PREFIX	= "SQL$GRANT";
+inline constexpr int SQL_FLD_SECCLASS_PREFIX_LEN		= 9;
 
-const char* const PROCEDURES_GENERATOR = "RDB$PROCEDURES";
-const char* const FUNCTIONS_GENERATOR = "RDB$FUNCTIONS";
+inline constexpr const char* SQL_DDL_SECCLASS_FORMAT	= "SQL$D%02d%s";
+inline constexpr int SQL_DDL_SECCLASS_PREFIX_LEN		= 7;
+
+inline constexpr const char* GEN_SECCLASS_PREFIX		= "GEN$";
+inline constexpr int GEN_SECCLASS_PREFIX_LEN			= 4;
+
+inline constexpr const char* PROCEDURES_GENERATOR = "RDB$PROCEDURES";
+inline constexpr const char* FUNCTIONS_GENERATOR = "RDB$FUNCTIONS";
 
 // Automatically created check constraints for unnamed PRIMARY and UNIQUE declarations.
-const char* const IMPLICIT_INTEGRITY_PREFIX = "INTEG_";
-const int IMPLICIT_INTEGRITY_PREFIX_LEN = 6;
+inline constexpr const char* IMPLICIT_INTEGRITY_PREFIX = "INTEG_";
+inline constexpr int IMPLICIT_INTEGRITY_PREFIX_LEN = 6;
 
 // Default publication name
-const char* const DEFAULT_PUBLICATION = "RDB$DEFAULT";
+inline constexpr const char* DEFAULT_PUBLICATION = "RDB$DEFAULT";
 
 //*****************************************
 // System flag meaning - mainly Firebird.
@@ -184,36 +195,36 @@ enum SubRoutineType
 // UDF Arguments are numbered from 0 to MAX_UDF_ARGUMENTS --
 // argument 0 is reserved for the return-type of the UDF
 
-const unsigned MAX_UDF_ARGUMENTS	= 15;
+inline constexpr unsigned MAX_UDF_ARGUMENTS	= 15;
 
 // Maximum length of single line returned from pretty printer
-const int PRETTY_BUFFER_SIZE = 1024;
+inline constexpr int PRETTY_BUFFER_SIZE = 1024;
 
-const int MAX_INDEX_SEGMENTS = 16;
+inline constexpr int MAX_INDEX_SEGMENTS = 16;
 
 // Maximum index key length (must be in sync with MAX_PAGE_SIZE in ods.h)
-const ULONG MAX_KEY			= 8192;		// Maximum page size possible divide by 4 (MAX_PAGE_SIZE / 4)
+inline constexpr ULONG MAX_KEY = 8192; // Maximum page size possible divide by 4 (MAX_PAGE_SIZE / 4)
 
-const USHORT SQL_MATCH_1_CHAR		= '_';	// Not translatable
-const USHORT SQL_MATCH_ANY_CHARS	= '%';	// Not translatable
+inline constexpr USHORT SQL_MATCH_1_CHAR	= '_';
+inline constexpr USHORT SQL_MATCH_ANY_CHARS	= '%';
 
-const size_t MAX_CONTEXT_VARS	= 1000;		// Maximum number of context variables allowed for a single object
+inline constexpr size_t MAX_CONTEXT_VARS = 1000; // Maximum number of context variables allowed for a single object
 
 // Time precision limits and defaults for TIME/TIMESTAMP values.
 // Currently they're applied to CURRENT_TIME[STAMP] expressions only.
 
 // Should be more than 6 as per SQL spec, but we don't support more than 3 yet
-const size_t MAX_TIME_PRECISION			= 3;
+inline constexpr size_t MAX_TIME_PRECISION			= 3;
 // Consistent with the SQL spec
-const size_t DEFAULT_TIME_PRECISION		= 0;
+inline constexpr size_t DEFAULT_TIME_PRECISION		= 0;
 // Should be 6 as per SQL spec
-const size_t DEFAULT_TIMESTAMP_PRECISION	= 3;
+inline constexpr size_t DEFAULT_TIMESTAMP_PRECISION	= 3;
 
-const size_t MAX_ARRAY_DIMENSIONS = 16;
+inline constexpr size_t MAX_ARRAY_DIMENSIONS = 16;
 
-const size_t MAX_SORT_ITEMS = 255; // ORDER BY f1,...,f255
+inline constexpr size_t MAX_SORT_ITEMS = 255; // ORDER BY f1,...,f255
 
-const size_t MAX_DB_PER_TRANS = 256; // A multi-db txn can span up to 256 dbs
+inline constexpr size_t MAX_DB_PER_TRANS = 256; // A multi-db txn can span up to 256 dbs
 
 // relation types
 
@@ -249,7 +260,7 @@ enum mon_state_t {
 	mon_state_stalled = 2
 };
 
-// shutdown modes
+// shutdown modes (match hdr_nbak_* in ods.h)
 
 enum shut_mode_t {
 	shut_mode_online = 0,
@@ -258,7 +269,7 @@ enum shut_mode_t {
 	shut_mode_full = 3
 };
 
-// backup states
+// backup states (match hdr_backup_* in ods.h)
 
 enum backup_state_t {
 	backup_state_unknown = -1,
@@ -303,13 +314,17 @@ enum InfoType
 	MAX_INFO_TYPE
 };
 
-enum ReplicaMode {
+// Replica modes (match hdr_replica_* in ods.h)
+
+enum ReplicaMode
+{
 	REPLICA_NONE = 0,
 	REPLICA_READ_ONLY = 1,
 	REPLICA_READ_WRITE = 2
 };
 
-enum TriggerType {
+enum TriggerType
+{
 	PRE_STORE_TRIGGER = 1,
 	POST_STORE_TRIGGER = 2,
 	PRE_MODIFY_TRIGGER = 3,
@@ -318,7 +333,8 @@ enum TriggerType {
 	POST_ERASE_TRIGGER = 6
 };
 
-enum TriggerAction {
+enum TriggerAction
+{
 	// Order should be maintained because the numbers are stored in BLR
 	// and should be in sync with IExternalTrigger::ACTION_* .
 	TRIGGER_INSERT = 1,
@@ -332,21 +348,21 @@ enum TriggerAction {
 	TRIGGER_DDL = 9
 };
 
-const unsigned TRIGGER_TYPE_SHIFT			= 13;
-const FB_UINT64 TRIGGER_TYPE_MASK			= (QUADCONST(3) << TRIGGER_TYPE_SHIFT);
+inline constexpr unsigned TRIGGER_TYPE_SHIFT		= 13;
+inline constexpr FB_UINT64 TRIGGER_TYPE_MASK		= (QUADCONST(3) << TRIGGER_TYPE_SHIFT);
 
-const FB_UINT64 TRIGGER_TYPE_DML			= (QUADCONST(0) << TRIGGER_TYPE_SHIFT);
-const FB_UINT64 TRIGGER_TYPE_DB				= (QUADCONST(1) << TRIGGER_TYPE_SHIFT);
-const FB_UINT64 TRIGGER_TYPE_DDL			= (QUADCONST(2) << TRIGGER_TYPE_SHIFT);
+inline constexpr FB_UINT64 TRIGGER_TYPE_DML			= (QUADCONST(0) << TRIGGER_TYPE_SHIFT);
+inline constexpr FB_UINT64 TRIGGER_TYPE_DB			= (QUADCONST(1) << TRIGGER_TYPE_SHIFT);
+inline constexpr FB_UINT64 TRIGGER_TYPE_DDL			= (QUADCONST(2) << TRIGGER_TYPE_SHIFT);
 
-const unsigned DB_TRIGGER_CONNECT			= 0;
-const unsigned DB_TRIGGER_DISCONNECT		= 1;
-const unsigned DB_TRIGGER_TRANS_START		= 2;
-const unsigned DB_TRIGGER_TRANS_COMMIT		= 3;
-const unsigned DB_TRIGGER_TRANS_ROLLBACK	= 4;
-const unsigned DB_TRIGGER_MAX				= 5;
+inline constexpr unsigned DB_TRIGGER_CONNECT		= 0;
+inline constexpr unsigned DB_TRIGGER_DISCONNECT		= 1;
+inline constexpr unsigned DB_TRIGGER_TRANS_START	= 2;
+inline constexpr unsigned DB_TRIGGER_TRANS_COMMIT	= 3;
+inline constexpr unsigned DB_TRIGGER_TRANS_ROLLBACK	= 4;
+inline constexpr unsigned DB_TRIGGER_MAX			= 5;
 
-static const char* const DDL_TRIGGER_ACTION_NAMES[][2] =
+static inline constexpr const char* DDL_TRIGGER_ACTION_NAMES[][2] =
 {
 	{NULL, NULL},
 	{"CREATE", "TABLE"},
@@ -393,59 +409,65 @@ static const char* const DDL_TRIGGER_ACTION_NAMES[][2] =
 	{"DROP", "PACKAGE BODY"},
 	{"CREATE", "MAPPING"},
 	{"ALTER", "MAPPING"},
-	{"DROP", "MAPPING"}
+	{"DROP", "MAPPING"},
+	{"CREATE", "SCHEMA"},
+	{"ALTER", "SCHEMA"},
+	{"DROP", "SCHEMA"}
 };
 
-const int DDL_TRIGGER_BEFORE	= 0;
-const int DDL_TRIGGER_AFTER		= 1;
+inline constexpr int DDL_TRIGGER_BEFORE	= 0;
+inline constexpr int DDL_TRIGGER_AFTER	= 1;
 
-const FB_UINT64 DDL_TRIGGER_ANY					= 0x7FFFFFFFFFFFFFFFULL & ~(FB_UINT64) TRIGGER_TYPE_MASK & ~1ULL;
+inline constexpr FB_UINT64 DDL_TRIGGER_ANY				= 0x7FFFFFFFFFFFFFFFULL & ~(FB_UINT64) TRIGGER_TYPE_MASK & ~1ULL;
 
-const int DDL_TRIGGER_CREATE_TABLE				= 1;
-const int DDL_TRIGGER_ALTER_TABLE				= 2;
-const int DDL_TRIGGER_DROP_TABLE				= 3;
-const int DDL_TRIGGER_CREATE_PROCEDURE			= 4;
-const int DDL_TRIGGER_ALTER_PROCEDURE			= 5;
-const int DDL_TRIGGER_DROP_PROCEDURE			= 6;
-const int DDL_TRIGGER_CREATE_FUNCTION			= 7;
-const int DDL_TRIGGER_ALTER_FUNCTION			= 8;
-const int DDL_TRIGGER_DROP_FUNCTION				= 9;
-const int DDL_TRIGGER_CREATE_TRIGGER			= 10;
-const int DDL_TRIGGER_ALTER_TRIGGER				= 11;
-const int DDL_TRIGGER_DROP_TRIGGER				= 12;
+inline constexpr int DDL_TRIGGER_CREATE_TABLE			= 1;
+inline constexpr int DDL_TRIGGER_ALTER_TABLE			= 2;
+inline constexpr int DDL_TRIGGER_DROP_TABLE				= 3;
+inline constexpr int DDL_TRIGGER_CREATE_PROCEDURE		= 4;
+inline constexpr int DDL_TRIGGER_ALTER_PROCEDURE		= 5;
+inline constexpr int DDL_TRIGGER_DROP_PROCEDURE			= 6;
+inline constexpr int DDL_TRIGGER_CREATE_FUNCTION		= 7;
+inline constexpr int DDL_TRIGGER_ALTER_FUNCTION			= 8;
+inline constexpr int DDL_TRIGGER_DROP_FUNCTION			= 9;
+inline constexpr int DDL_TRIGGER_CREATE_TRIGGER			= 10;
+inline constexpr int DDL_TRIGGER_ALTER_TRIGGER			= 11;
+inline constexpr int DDL_TRIGGER_DROP_TRIGGER			= 12;
 // gap for TRIGGER_TYPE_MASK - 3 bits
-const int DDL_TRIGGER_CREATE_EXCEPTION			= 16;
-const int DDL_TRIGGER_ALTER_EXCEPTION			= 17;
-const int DDL_TRIGGER_DROP_EXCEPTION			= 18;
-const int DDL_TRIGGER_CREATE_VIEW				= 19;
-const int DDL_TRIGGER_ALTER_VIEW				= 20;
-const int DDL_TRIGGER_DROP_VIEW					= 21;
-const int DDL_TRIGGER_CREATE_DOMAIN				= 22;
-const int DDL_TRIGGER_ALTER_DOMAIN				= 23;
-const int DDL_TRIGGER_DROP_DOMAIN				= 24;
-const int DDL_TRIGGER_CREATE_ROLE				= 25;
-const int DDL_TRIGGER_ALTER_ROLE				= 26;
-const int DDL_TRIGGER_DROP_ROLE					= 27;
-const int DDL_TRIGGER_CREATE_INDEX				= 28;
-const int DDL_TRIGGER_ALTER_INDEX				= 29;
-const int DDL_TRIGGER_DROP_INDEX				= 30;
-const int DDL_TRIGGER_CREATE_SEQUENCE			= 31;
-const int DDL_TRIGGER_ALTER_SEQUENCE			= 32;
-const int DDL_TRIGGER_DROP_SEQUENCE				= 33;
-const int DDL_TRIGGER_CREATE_USER				= 34;
-const int DDL_TRIGGER_ALTER_USER				= 35;
-const int DDL_TRIGGER_DROP_USER					= 36;
-const int DDL_TRIGGER_CREATE_COLLATION			= 37;
-const int DDL_TRIGGER_DROP_COLLATION			= 38;
-const int DDL_TRIGGER_ALTER_CHARACTER_SET		= 39;
-const int DDL_TRIGGER_CREATE_PACKAGE			= 40;
-const int DDL_TRIGGER_ALTER_PACKAGE				= 41;
-const int DDL_TRIGGER_DROP_PACKAGE				= 42;
-const int DDL_TRIGGER_CREATE_PACKAGE_BODY		= 43;
-const int DDL_TRIGGER_DROP_PACKAGE_BODY			= 44;
-const int DDL_TRIGGER_CREATE_MAPPING			= 45;
-const int DDL_TRIGGER_ALTER_MAPPING				= 46;
-const int DDL_TRIGGER_DROP_MAPPING				= 47;
+inline constexpr int DDL_TRIGGER_CREATE_EXCEPTION		= 16;
+inline constexpr int DDL_TRIGGER_ALTER_EXCEPTION		= 17;
+inline constexpr int DDL_TRIGGER_DROP_EXCEPTION			= 18;
+inline constexpr int DDL_TRIGGER_CREATE_VIEW			= 19;
+inline constexpr int DDL_TRIGGER_ALTER_VIEW				= 20;
+inline constexpr int DDL_TRIGGER_DROP_VIEW				= 21;
+inline constexpr int DDL_TRIGGER_CREATE_DOMAIN			= 22;
+inline constexpr int DDL_TRIGGER_ALTER_DOMAIN			= 23;
+inline constexpr int DDL_TRIGGER_DROP_DOMAIN			= 24;
+inline constexpr int DDL_TRIGGER_CREATE_ROLE			= 25;
+inline constexpr int DDL_TRIGGER_ALTER_ROLE				= 26;
+inline constexpr int DDL_TRIGGER_DROP_ROLE				= 27;
+inline constexpr int DDL_TRIGGER_CREATE_INDEX			= 28;
+inline constexpr int DDL_TRIGGER_ALTER_INDEX			= 29;
+inline constexpr int DDL_TRIGGER_DROP_INDEX				= 30;
+inline constexpr int DDL_TRIGGER_CREATE_SEQUENCE		= 31;
+inline constexpr int DDL_TRIGGER_ALTER_SEQUENCE			= 32;
+inline constexpr int DDL_TRIGGER_DROP_SEQUENCE			= 33;
+inline constexpr int DDL_TRIGGER_CREATE_USER			= 34;
+inline constexpr int DDL_TRIGGER_ALTER_USER				= 35;
+inline constexpr int DDL_TRIGGER_DROP_USER				= 36;
+inline constexpr int DDL_TRIGGER_CREATE_COLLATION		= 37;
+inline constexpr int DDL_TRIGGER_DROP_COLLATION			= 38;
+inline constexpr int DDL_TRIGGER_ALTER_CHARACTER_SET	= 39;
+inline constexpr int DDL_TRIGGER_CREATE_PACKAGE			= 40;
+inline constexpr int DDL_TRIGGER_ALTER_PACKAGE			= 41;
+inline constexpr int DDL_TRIGGER_DROP_PACKAGE			= 42;
+inline constexpr int DDL_TRIGGER_CREATE_PACKAGE_BODY	= 43;
+inline constexpr int DDL_TRIGGER_DROP_PACKAGE_BODY		= 44;
+inline constexpr int DDL_TRIGGER_CREATE_MAPPING			= 45;
+inline constexpr int DDL_TRIGGER_ALTER_MAPPING			= 46;
+inline constexpr int DDL_TRIGGER_DROP_MAPPING			= 47;
+inline constexpr int DDL_TRIGGER_CREATE_SCHEMA			= 48;
+inline constexpr int DDL_TRIGGER_ALTER_SCHEMA			= 49;
+inline constexpr int DDL_TRIGGER_DROP_SCHEMA			= 50;
 
 // that's how database trigger action types are encoded
 //    (TRIGGER_TYPE_DB | type)
@@ -459,14 +481,14 @@ const int DDL_TRIGGER_DROP_MAPPING				= 47;
 #define PASSWORD_SWITCH "PASSWORD"
 
 // The highest transaction number possible
-const TraNumber MAX_TRA_NUMBER = 0x0000FFFFFFFFFFFF;	// ~2.8 * 10^14
+inline constexpr TraNumber MAX_TRA_NUMBER = 0x0000FFFFFFFFFFFF; // ~2.8 * 10^14
 
 // Number of streams, conjuncts, indices that will be statically allocated
 // in various arrays. Larger numbers will have to be allocated dynamically
-const unsigned OPT_STATIC_ITEMS = 16;
-const unsigned OPT_STATIC_STREAMS = 64;
+inline constexpr unsigned OPT_STATIC_ITEMS = 16;
+inline constexpr unsigned OPT_STATIC_STREAMS = 64;
 
-#define CURRENT_ENGINE "Engine13"
+#define CURRENT_ENGINE "Engine14"
 #define EMBEDDED_PROVIDERS "Providers=" CURRENT_ENGINE
 
 // Features set for current version of engine provider
@@ -477,10 +499,10 @@ const unsigned OPT_STATIC_STREAMS = 64;
 						 fb_feature_statement_timeout, \
 						 fb_feature_statement_long_life}
 
-const int WITH_GRANT_OPTION = 1;
-const int WITH_ADMIN_OPTION = 2;
+inline constexpr int WITH_GRANT_OPTION = 1;
+inline constexpr int WITH_ADMIN_OPTION = 2;
 
 // Max length of the string returned by ERROR_TEXT context variable
-const USHORT MAX_ERROR_MSG_LENGTH = 1024 * METADATA_BYTES_PER_CHAR; // 1024 UTF-8 characters
+inline constexpr USHORT MAX_ERROR_MSG_LENGTH = 1024 * METADATA_BYTES_PER_CHAR; // 1024 UTF-8 characters
 
 #endif // JRD_CONSTANTS_H

@@ -61,7 +61,7 @@ RecordBuffer* ConfigTable::getRecords(thread_db* tdbb, jrd_rel* relation)
 		putField(tdbb, rec, DumpField(f_cfg_id, VALUE_INTEGER, sizeof(id), &id));
 
 		const char* name = Config::getKeyName(key);
-		putField(tdbb, rec, DumpField(f_cfg_name, VALUE_STRING, strlen(name), name));
+		putField(tdbb, rec, DumpField(f_cfg_name, VALUE_STRING, fb_strlen(name), name));
 
 		string str;
 		if (m_conf->getValue(key, str))
@@ -75,7 +75,7 @@ RecordBuffer* ConfigTable::getRecords(thread_db* tdbb, jrd_rel* relation)
 
 		const char* valSrc = m_conf->getValueSource(key);
 		if (valSrc)
-			putField(tdbb, rec, DumpField(f_cfg_source, VALUE_STRING, strlen(valSrc), valSrc));
+			putField(tdbb, rec, DumpField(f_cfg_source, VALUE_STRING, fb_strlen(valSrc), valSrc));
 
 		recordBuffer->store(rec);
 	}

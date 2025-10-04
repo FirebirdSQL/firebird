@@ -1,0 +1,20 @@
+{
+  "default-registry": {
+    "kind": "git",
+    "repository": "https://github.com/Microsoft/vcpkg",
+    "baseline": "7f2db7475e745fe2b079173c35bc1ca384a43d59"
+  },
+  "registries": [
+    {
+      "kind": "filesystem",
+      "path": "vcpkg-custom/registry",
+      "baseline": "2023-08-23",
+      "packages": [
+        "libcxx"
+      ]
+    }
+  ],
+  "overlay-triplets": [
+    "vcpkg-custom/triplets"
+  ]
+}

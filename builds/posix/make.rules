@@ -38,6 +38,8 @@ ifneq ($(SYSTEM_BOOST_FLG),Y)
   WFLAGS += -I$(ROOT)/extern/boost
 endif
 
+WFLAGS += -I$(LIBCDS_INC) -D$(LIBCDS_DEF)
+
 ifeq ($(TOMMATH_BUILD_FLG),Y)
   WFLAGS += -I$(TOMMATH_INC)
 endif
@@ -66,6 +68,11 @@ endif
 
 WCFLAGS = $(WFLAGS) $(CFLAGS) $(AC_CFLAGS) $(GLOB_OPTIONS)
 WCXXFLAGS = $(WFLAGS) $(PLUSPLUS_FLAGS) $(PLATFORM_PLUSPLUS_FLAGS) $(CXXFLAGS) $(AC_CXXFLAGS) $(GLOB_OPTIONS)
+WLDFLAGS = $(LDFLAGS) $(AC_LDFLAGS)
+
+ifneq ($(PLATFORM),DARWIN)
+WLDFLAGS += -static-libstdc++
+endif
 
 # Here we have definitions for using the preprocessor.
 

@@ -32,7 +32,6 @@
 #define CLASSES_AUTO_PTR_H
 
 #include <stdio.h>
-#include <functional>
 
 namespace Firebird {
 
@@ -103,11 +102,11 @@ class AutoPtr
 private:
 	Where* ptr;
 public:
-	AutoPtr(Where* v = NULL)
+	AutoPtr(Where* v = nullptr) noexcept
 		: ptr(v)
 	{}
 
-	AutoPtr(AutoPtr&& v)
+	AutoPtr(AutoPtr&& v) noexcept
 		: ptr(v.ptr)
 	{
 		v.ptr = nullptr;
@@ -118,6 +117,10 @@ public:
 		Clear<Where>::clear(ptr);
 	}
 
+	// copying is prohibited
+	AutoPtr(AutoPtr&) = delete;
+	void operator=(AutoPtr&) = delete;
+
 	AutoPtr& operator= (Where* v)
 	{
 		Clear<Where>::clear(ptr);
@@ -125,7 +128,7 @@ public:
 		return *this;
 	}
 
-	AutoPtr& operator=(AutoPtr&& r)
+	AutoPtr& operator=(AutoPtr&& r) noexcept
 	{
 		if (this != &r)
 		{
@@ -136,47 +139,42 @@ public:
 		return *this;
 	}
 
-	operator Where*()
+	const Where* get() const noexcept
 	{
 		return ptr;
 	}
 
-	Where* get()
+	operator const Where*() const noexcept
 	{
 		return ptr;
 	}
 
-	operator const Where*() const
+	Where* get() noexcept
 	{
 		return ptr;
 	}
 
-	const Where* get() const
+	operator Where*() noexcept
 	{
 		return ptr;
 	}
 
-	bool operator !() const
+	bool operator !() const noexcept
 	{
 		return !ptr;
 	}
 
-	bool hasData() const
+	bool hasData() const noexcept
 	{
 		return ptr != NULL;
 	}
 
-	Where* operator->()
+	Where* operator->() const noexcept
 	{
 		return ptr;
 	}
 
-	const Where* operator->() const
-	{
-		return ptr;
-	}
-
-	Where* release()
+	Where* release() noexcept
 	{
 		Where* tmp = ptr;
 		ptr = NULL;
@@ -192,30 +190,13 @@ public:
 		}
 	}
 
-private:
-	AutoPtr(AutoPtr&);
-	void operator=(AutoPtr&);
 };
 
+template <typename T>
+using AutoDispose = AutoPtr<T, SimpleDispose>;
 
-template <typename Where>
-class AutoDispose : public AutoPtr<Where, SimpleDispose>
-{
-public:
-	AutoDispose(Where* v = nullptr)
-		: AutoPtr<Where, SimpleDispose>(v)
-	{ }
-};
-
-
-template <typename Where>
-class AutoRelease : public AutoPtr<Where, SimpleRelease>
-{
-public:
-	AutoRelease(Where* v = nullptr)
-		: AutoPtr<Where, SimpleRelease>(v)
-	{ }
-};
+template <typename T>
+using AutoRelease = AutoPtr<T, SimpleRelease>;
 
 
 template <typename T>
@@ -232,11 +213,11 @@ public:
 		*value = oldValue;
 	}
 
-private:
 	// copying is prohibited
-	AutoSaveRestore(const AutoSaveRestore&);
-	AutoSaveRestore& operator =(const AutoSaveRestore&);
+	AutoSaveRestore(const AutoSaveRestore&) = delete;
+	AutoSaveRestore& operator =(const AutoSaveRestore&) = delete;
 
+private:
 	T* value;
 	T oldValue;
 };
@@ -274,11 +255,17 @@ public:
 		*value |= oldValue;
 	}
 
-private:
-	// copying is prohibited
-	AutoSetRestoreFlag(const AutoSetRestoreFlag&);
-	AutoSetRestoreFlag& operator =(const AutoSetRestoreFlag&);
+	void release(T cleanBit)
+	{
+		bit &= ~cleanBit;
+		oldValue &= ~cleanBit;
+	}
 
+	// copying is prohibited
+	AutoSetRestoreFlag(const AutoSetRestoreFlag&) = delete;
+	AutoSetRestoreFlag& operator =(const AutoSetRestoreFlag&) = delete;
+
+private:
 	T* value;
 	T bit;
 	T oldValue;
@@ -306,10 +293,9 @@ public:
 		(pointer->*setter)(oldValue);
 	}
 
-private:
 	// copying is prohibited
-	AutoSetRestore2(const AutoSetRestore2&);
-	AutoSetRestore2& operator =(const AutoSetRestore2&);
+	AutoSetRestore2(const AutoSetRestore2&) = delete;
+	AutoSetRestore2& operator =(const AutoSetRestore2&) = delete;
 
 private:
 	T2* pointer;
@@ -317,11 +303,11 @@ private:
 	T oldValue;
 };
 
-
+template <typename F>
 class Cleanup
 {
 public:
-	Cleanup(std::function<void()> clFunc)
+	Cleanup(F&& clFunc)
 		: clean(clFunc)
 	{ }
 
@@ -331,7 +317,25 @@ public:
 	}
 
 private:
-	std::function<void()> clean;
+	F clean;
+};
+
+class CleanupFunction
+{
+	typedef void Func();
+
+public:
+	CleanupFunction(Func* clFunc) noexcept
+		: clean(clFunc)
+	{ }
+
+	~CleanupFunction()
+	{
+		clean();
+	}
+
+private:
+	Func* clean;
 };
 
 } //namespace Firebird

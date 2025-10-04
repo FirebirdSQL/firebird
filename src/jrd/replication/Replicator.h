@@ -26,25 +26,27 @@
 
 #include "../common/classes/timestamp.h"
 #include "../common/classes/MetaString.h"
+#include "../common/classes/objects_array.h"
+#include "../common/classes/QualifiedMetaString.h"
 #include "../common/os/guid.h"
 #include "../jrd/status.h"
-
 #include "Protocol.h"
 #include "Manager.h"
+#include <utility>
 
 namespace Replication
 {
-	class Replicator :
+	class Replicator final :
 		public Firebird::StdPlugin<Firebird::IReplicatedSessionImpl<Replicator, Firebird::CheckStatusWrapper> >
 	{
-		typedef Firebird::Array<Firebird::MetaString> MetaNameCache;
+		typedef Firebird::ObjectsArray<Firebird::string> NameCache;
 		typedef Firebird::HalfStaticArray<SavNumber, 16> SavepointStack;
 
 		struct BatchBlock
 		{
-			Block header;
+			Block header{};
 			Firebird::UCharBuffer* buffer;
-			MetaNameCache atoms;
+			NameCache atoms;
 			ULONG lastAtom;
 			ULONG flushes;
 
@@ -52,10 +54,9 @@ namespace Replication
 				: buffer(NULL), atoms(pool),
 				  lastAtom(MAX_ULONG), flushes(0)
 			{
-				memset(&header, 0, sizeof(Block));
 			}
 
-			ULONG getSize() const
+			ULONG getSize() const noexcept
 			{
 				return (ULONG) buffer->getCount();
 			}
@@ -88,7 +89,7 @@ namespace Replication
 				buffer->add(ptr, sizeof(SINT64));
 			}
 
-			ULONG defineAtom(const Firebird::MetaString& name)
+			ULONG defineAtom(const Firebird::string& name)
 			{
 				if (lastAtom < atoms.getCount() && atoms[lastAtom] == name)
 					return lastAtom;
@@ -104,6 +105,14 @@ namespace Replication
 
 				lastAtom = (ULONG) pos;
 				return lastAtom;
+			}
+
+			std::pair<ULONG, ULONG> defineQualifiedAtom(const Firebird::QualifiedMetaString& name)
+			{
+				const auto schemaAtom = defineAtom(name.schema);
+				const auto objectAtom = defineAtom(name.object);
+
+				return std::make_pair(schemaAtom, objectAtom);
 			}
 
 			void putMetaName(const Firebird::MetaString& name)
@@ -128,7 +137,7 @@ namespace Replication
 			}
 		};
 
-		class Transaction :
+		class Transaction final :
 			public Firebird::AutoIface<Firebird::IReplicatedTransactionImpl<Transaction, Firebird::CheckStatusWrapper> >
 		{
 		public:
@@ -136,12 +145,12 @@ namespace Replication
 				: m_replicator(replicator), m_transaction(trans), m_data(replicator->getPool())
 			{}
 
-			BatchBlock& getData()
+			BatchBlock& getData() noexcept
 			{
 				return m_data;
 			}
 
-			Firebird::ITransaction* getInterface()
+			Firebird::ITransaction* getInterface() noexcept
 			{
 				return m_transaction.getPtr();
 			}
@@ -186,33 +195,58 @@ namespace Replication
 				m_replicator->rollbackSavepoint(status, this);
 			}
 
-			void insertRecord(Firebird::CheckStatusWrapper* status, const char* name,
-							  Firebird::IReplicatedRecord* record) override
+			void deprecatedInsertRecord(Firebird::CheckStatusWrapper* status, const char* name,
+				Firebird::IReplicatedRecord* record) override
 			{
-				m_replicator->insertRecord(status, this, name, record);
+				insertRecord2(status, nullptr, name, record);
 			}
 
-			void updateRecord(Firebird::CheckStatusWrapper* status, const char* name,
-							  Firebird::IReplicatedRecord* orgRecord,
+			void insertRecord2(Firebird::CheckStatusWrapper* status, const char* schemaName, const char* tableName,
+				Firebird::IReplicatedRecord* record) override
+			{
+				m_replicator->insertRecord(status, this, schemaName, tableName, record);
+			}
+
+			void deprecatedUpdateRecord(Firebird::CheckStatusWrapper* status, const char* name,
+				Firebird::IReplicatedRecord* orgRecord, Firebird::IReplicatedRecord* newRecord) override
+			{
+				updateRecord2(status, nullptr, name, orgRecord, newRecord);
+			}
+
+			void updateRecord2(Firebird::CheckStatusWrapper* status, const char* schemaName, const char* tableName,
+				Firebird::IReplicatedRecord* orgRecord,
 							  Firebird::IReplicatedRecord* newRecord) override
 			{
-				m_replicator->updateRecord(status, this, name, orgRecord, newRecord);
+				m_replicator->updateRecord(status, this, schemaName, tableName, orgRecord, newRecord);
 			}
 
-			void deleteRecord(Firebird::CheckStatusWrapper* status, const char* name,
-							  Firebird::IReplicatedRecord* record) override
+			void deprecatedDeleteRecord(Firebird::CheckStatusWrapper* status, const char* name,
+				Firebird::IReplicatedRecord* record) override
 			{
-				m_replicator->deleteRecord(status, this, name, record);
+				deleteRecord2(status, nullptr, name, record);
 			}
 
-			void executeSql(Firebird::CheckStatusWrapper* status, const char* sql) override
+			void deleteRecord2(Firebird::CheckStatusWrapper* status, const char* schemaName, const char* tableName,
+				Firebird::IReplicatedRecord* record) override
+			{
+				m_replicator->deleteRecord(status, this, schemaName, tableName, record);
+			}
+
+			void deprecatedExecuteSql(Firebird::CheckStatusWrapper* status, const char* sql) override
 			{
 				m_replicator->executeSql(status, this, sql);
 			}
 
-			void executeSqlIntl(Firebird::CheckStatusWrapper* status, unsigned charset, const char* sql) override
+			void deprecatedExecuteSqlIntl(Firebird::CheckStatusWrapper* status, unsigned charset,
+				const char* sql) override
 			{
-				m_replicator->executeSqlIntl(status, this, charset, sql);
+				executeSqlIntl2(status, charset, "", sql);
+			}
+
+			void executeSqlIntl2(Firebird::CheckStatusWrapper* status, unsigned charset, const char* schemaSearchPath,
+				const char* sql) override
+			{
+				m_replicator->executeSqlIntl(status, this, charset, schemaSearchPath, sql);
 			}
 
 		private:
@@ -223,8 +257,8 @@ namespace Replication
 
 		struct GeneratorValue
 		{
-			Jrd::MetaName name;
-			SINT64 value;
+			Jrd::QualifiedName name;
+			SINT64 value = 0;
 		};
 
 		typedef Firebird::Array<GeneratorValue> GeneratorCache;
@@ -252,7 +286,14 @@ namespace Replication
 
 		Firebird::IReplicatedTransaction* startTransaction(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* trans, SINT64 number) override;
 		void cleanupTransaction(Firebird::CheckStatusWrapper* status, SINT64 number) override;
-		void setSequence(Firebird::CheckStatusWrapper* status, const char* name, SINT64 value) override;
+
+		void deprecatedSetSequence(Firebird::CheckStatusWrapper* status, const char* name, SINT64 value) override
+		{
+			setSequence2(status, nullptr, name, value);
+		}
+
+		void setSequence2(Firebird::CheckStatusWrapper* status, const char* schemaName, const char* genName,
+			SINT64 value) override;
 
 	private:
 		Manager* const m_manager;
@@ -278,24 +319,25 @@ namespace Replication
 		void rollbackSavepoint(Firebird::CheckStatusWrapper* status, Transaction* transaction);
 
 		void insertRecord(Firebird::CheckStatusWrapper* status, Transaction* transaction,
-						  const char* name,
+						  const char* schemaName, const char* tableName,
 						  Firebird::IReplicatedRecord* record);
 		void updateRecord(Firebird::CheckStatusWrapper* status, Transaction* transaction,
-						  const char* name,
+						  const char* schemaName, const char* tableName,
 						  Firebird::IReplicatedRecord* orgRecord,
 						  Firebird::IReplicatedRecord* newRecord);
 		void deleteRecord(Firebird::CheckStatusWrapper* status, Transaction* transaction,
-						  const char* name,
+						  const char* schemaName, const char* tableName,
 						  Firebird::IReplicatedRecord* record);
 
 		void executeSql(Firebird::CheckStatusWrapper* status, Transaction* transaction,
 						const char* sql)
 		{
-			executeSqlIntl(status, transaction, CS_UTF8, sql);
+			executeSqlIntl(status, transaction, CS_UTF8, "", sql);
 		}
 
 		void executeSqlIntl(Firebird::CheckStatusWrapper* status, Transaction* transaction,
 							unsigned charset,
+							const char* schemaSearchPath,
 							const char* sql);
 };
 

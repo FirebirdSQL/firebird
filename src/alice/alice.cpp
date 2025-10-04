@@ -63,7 +63,7 @@
 using MsgFormat::SafeArg;
 
 
-static const USHORT val_err_table[] =
+static constexpr USHORT val_err_table[] =
 {
 	0,
 	55,				// msg 55: \n\tNumber of record level errors\t: %ld
@@ -85,9 +85,9 @@ static const USHORT val_err_table[] =
 };
 
 
-const int ALICE_MSG_FAC = 3;
+constexpr int ALICE_MSG_FAC = FB_IMPL_MSG_FACILITY_GFIX;
 
-void ALICE_exit(int code, AliceGlobals* tdgbl)
+[[noreturn]] void ALICE_exit(int code, AliceGlobals* tdgbl)
 {
 	tdgbl->exit_code = code;
     Firebird::LongJump::raise();
@@ -113,7 +113,7 @@ int ALICE_main(Firebird::UtilSvc* uSvc)
 	{
 		Firebird::StaticStatusVector status;
 		e.stuffException(status);
-		uSvc->setServiceStatus(status.begin());
+		uSvc->getStatusAccessor().setServiceStatus(status.begin());
 		uSvc->started();
 		exit_code = FB_FAILURE;
 	}
@@ -146,6 +146,7 @@ int alice(Firebird::UtilSvc* uSvc)
 #ifdef TRUSTED_AUTH
 	tdgbl->ALICE_data.ua_trusted = false;
 #endif
+	tdgbl->ALICE_data.ua_parallel_workers = uSvc->getParallelWorkers();
 
 	//  Start by parsing switches
 
@@ -426,7 +427,7 @@ int alice(Firebird::UtilSvc* uSvc)
 			}
 		}
 
-		if (table->in_sw_value & (sw_attach | sw_force | sw_tran | sw_cache))
+		if (table->in_sw_value & (sw_attach | sw_force | sw_tran))
 		{
 			if (--argc <= 0) {
 				ALICE_error(17);	// msg 17: number of seconds required
@@ -480,7 +481,7 @@ int alice(Firebird::UtilSvc* uSvc)
 
 	// put this here since to put it above overly complicates the parsing.
 	// can't use tbl_requires since it only looks backwards on command line.
-	if ((flags & sw_shut) && !(flags & ((sw_attach | sw_force | sw_tran | sw_cache))))
+	if ((flags & sw_shut) && !(flags & ((sw_attach | sw_force | sw_tran))))
 	{
 		ALICE_error(19);	// msg 19: must specify type of shutdown
 	}
@@ -505,7 +506,7 @@ int alice(Firebird::UtilSvc* uSvc)
 	{
 		if (uSvc->isService())
 		{
-			uSvc->setServiceStatus(ALICE_MSG_FAC, 20, MsgFormat::SafeArg());
+			uSvc->getStatusAccessor().setServiceStatus(ALICE_MSG_FAC, 20, MsgFormat::SafeArg());
 		}
 		else
 		{
@@ -606,8 +607,9 @@ int alice(Firebird::UtilSvc* uSvc)
 	if ((exit_code != FINI_OK) && uSvc->isService() &&
 		(tdgbl->status[0] == 1) && (tdgbl->status[1] != 0))
 	{
-		uSvc->initStatus();
-		uSvc->setServiceStatus(tdgbl->status);
+		Firebird::UtilSvc::StatusAccessor sa = uSvc->getStatusAccessor();
+		sa.init();
+		uSvc->getStatusAccessor().setServiceStatus(tdgbl->status);
 	}
 	tdgbl->uSvc->started();
 
@@ -620,7 +622,7 @@ int alice(Firebird::UtilSvc* uSvc)
 //		Copy a string, uppercasing as we go.
 //
 
-void ALICE_upper_case(const TEXT* in, TEXT* out, const size_t buf_size)
+void ALICE_upper_case(const TEXT* in, TEXT* out, const size_t buf_size) noexcept
 {
 	const TEXT* const end = out + buf_size - 1;
 	for (TEXT c = *in++; c && out < end; c = *in++) {
@@ -640,7 +642,7 @@ void ALICE_print(USHORT	number, const SafeArg& arg)
 	AliceGlobals* tdgbl = AliceGlobals::getSpecific();
 	if (tdgbl->uSvc->isService())
 	{
-		tdgbl->uSvc->setServiceStatus(ALICE_MSG_FAC, number, arg);
+		tdgbl->uSvc->getStatusAccessor().setServiceStatus(ALICE_MSG_FAC, number, arg);
 		tdgbl->uSvc->started();
 		return;
 	}
@@ -663,7 +665,7 @@ void ALICE_print_status(bool error, const ISC_STATUS* status_vector)
 	{
 		const ISC_STATUS* vector = status_vector;
 		AliceGlobals* tdgbl = AliceGlobals::getSpecific();
-		tdgbl->uSvc->setServiceStatus(status_vector);
+		tdgbl->uSvc->getStatusAccessor().setServiceStatus(status_vector);
 
 		if (error && tdgbl->uSvc->isService())
 		{
@@ -690,12 +692,12 @@ void ALICE_print_status(bool error, const ISC_STATUS* status_vector)
 //		Format and print an error message, then punt.
 //
 
-void ALICE_error(USHORT	number, const SafeArg& arg)
+[[noreturn]] void ALICE_error(USHORT number, const SafeArg& arg)
 {
 	AliceGlobals* tdgbl = AliceGlobals::getSpecific();
 	TEXT buffer[256];
 
-	tdgbl->uSvc->setServiceStatus(ALICE_MSG_FAC, number, arg);
+	tdgbl->uSvc->getStatusAccessor().setServiceStatus(ALICE_MSG_FAC, number, arg);
 	if (!tdgbl->uSvc->isService())
 	{
 		fb_msg_format(0, ALICE_MSG_FAC, number, sizeof(buffer), buffer, arg);

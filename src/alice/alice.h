@@ -73,7 +73,6 @@ enum alice_repl_mode {
 
 struct user_action
 {
-	ULONG ua_switches;
 	const char* ua_user;
 	const char* ua_role;
 	const char* ua_password;
@@ -121,7 +120,7 @@ struct tdr : public pool_alloc<alice_type_tdr>
 };
 
 // CVC: This information should match Transaction Description Record constants in acl.h
-const int TDR_VERSION		= 1;
+inline constexpr int TDR_VERSION = 1;
 enum tdr_vals {
 	TDR_HOST_SITE		= 1,
 	TDR_DATABASE_PATH	= 2,

@@ -30,11 +30,13 @@
 #include "../yvalve/why_proto.h"
 
 #include "../common/os/path_utils.h"
+#include "../common/os/fbsyslog.h"
 #include "../common/StatusArg.h"
 #include "../common/isc_proto.h"
 #include "../common/classes/fb_string.h"
 #include "../common/classes/init.h"
 #include "../common/classes/semaphore.h"
+#include "../common/classes/RefMutex.h"
 #include "../common/config/config.h"
 #include "../common/config/config_file.h"
 #include "../common/utils_proto.h"
@@ -43,6 +45,7 @@
 #include "../common/db_alias.h"
 #include "../common/dllinst.h"
 #include "../common/file_params.h"
+#include "../common/status.h"
 
 #include "../yvalve/config/os/config_root.h"
 
@@ -247,8 +250,7 @@ namespace
 
 	IConfig* findPluginConfig(ConfigFile* pluginLoaderConfig, const PathName& confName)
 	{
-		LocalStatus ls;
-		CheckStatusWrapper s(&ls);
+		FbLocalStatus ls;
 
 		if (pluginLoaderConfig)
 		{
@@ -267,26 +269,37 @@ namespace
 			}
 		}
 
-		IConfig* rc = PluginManagerInterfacePtr()->getConfig(&s, confName.nullStr());
-		check(&s);
+		IConfig* rc = PluginManagerInterfacePtr()->getConfig(&ls, confName.nullStr());
+		check(&ls);
 		return rc;
 	}
 
 
 	// Plugins registered when loading plugin module.
-	// This is POD object - no dtor, only simple data types inside.
 	struct RegisteredPlugin
 	{
 		RegisteredPlugin(IPluginFactory* f, const char* nm, unsigned int t)
 			: factory(f), name(nm), type(t)
 		{ }
 
+		RegisteredPlugin(MemoryPool& p, IPluginFactory* f, const char* nm, unsigned int t)
+			: factory(f), name(p, nm), type(t)
+		{ }
+
 		RegisteredPlugin()
-			: factory(NULL), name(NULL), type(0)
+			: factory(NULL), name(), type(0)
+		{ }
+
+		RegisteredPlugin(MemoryPool& p)
+			: factory(NULL), name(p), type(0)
+		{ }
+
+		RegisteredPlugin(MemoryPool& p, const RegisteredPlugin& from)
+			: factory(from.factory), name(p, from.name), type(from.type)
 		{ }
 
 		IPluginFactory* factory;
-		const char* name;
+		PathName name;
 		unsigned int type;
 	};
 
@@ -335,7 +348,7 @@ namespace
 			return NULL;
 		}
 
-		const char* getName() const throw()
+		const char* getName() const noexcept
 		{
 			return name.nullStr();
 		}
@@ -397,7 +410,7 @@ namespace
 		PathName name;
 		Firebird::AutoPtr<ModuleLoader::Module> module;
 		Firebird::IPluginModule* cleanup;
-		HalfStaticArray<RegisteredPlugin, 2> regPlugins;
+		ObjectsArray<RegisteredPlugin> regPlugins;
 		PluginModule* next;
 		PluginModule** prev;
 	};
@@ -441,7 +454,7 @@ namespace
 						 const PathName& pplugName)
 			: module(pmodule), regPlugin(preg), pluginLoaderConfig(pconfig),
 			  confName(getPool(), pconfName), plugName(getPool(), pplugName),
-			  delay(DEFAULT_DELAY)
+			  processingDelayedDelete(false), delay(DEFAULT_DELAY)
 		{
 			if (pluginLoaderConfig.hasData())
 			{
@@ -458,7 +471,7 @@ namespace
 #ifdef DEBUG_PLUGINS
 			RegisteredPlugin& r(module->getPlugin(regPlugin));
 			fprintf(stderr, " ConfiguredPlugin %s module %s registered as %s type %d order %d\n",
-					plugName.c_str(), module->getName(), r.name, r.type, regPlugin);
+					plugName.c_str(), module->getName(), r.name.c_str(), r.type, regPlugin);
 #endif
 		}
 
@@ -472,7 +485,7 @@ namespace
 			return findPluginConfig(pluginLoaderConfig, confName);
 		}
 
-		const PluginModule* getPluggedModule() const throw()
+		const PluginModule* getPluggedModule() const noexcept
 		{
 			return module;
 		}
@@ -484,7 +497,7 @@ namespace
 			return plugName.c_str();
 		}
 
-		void setReleaseDelay(ISC_UINT64 microSeconds) throw()
+		void setReleaseDelay(ISC_UINT64 microSeconds) noexcept
 		{
 #ifdef DEBUG_PLUGINS
 			fprintf(stderr, "Set delay for ConfiguredPlugin %s:%p\n", plugName.c_str(), this);
@@ -502,6 +515,8 @@ namespace
 		{ }
 
 		int release();
+		static void processDelayedDelete();
+
 	private:
 		~ConfiguredPlugin() {}
 		void destroy();
@@ -511,6 +526,7 @@ namespace
 		RefPtr<ConfigFile> pluginLoaderConfig;
 		PathName confName;
 		PathName plugName;
+		bool processingDelayedDelete;
 
 		static const FB_UINT64 DEFAULT_DELAY = 1000000 * 60;		// 1 min
 		FB_UINT64 delay;
@@ -573,12 +589,11 @@ namespace
 		~FactoryParameter()
 		{
 #ifdef DEBUG_PLUGINS
-			fprintf(stderr, "~FactoryParameter places configuredPlugin %s in unload query for %d seconds\n",
+			fprintf(stderr, "~FactoryParameter places configuredPlugin %s in unload query for %lld seconds\n",
 				configuredPlugin->getPlugName(), configuredPlugin->getReleaseDelay() / 1000000);
 #endif
-			LocalStatus ls;
-			CheckStatusWrapper s(&ls);
-			TimerInterfacePtr()->start(&s, configuredPlugin, configuredPlugin->getReleaseDelay());
+			FbLocalStatus ls;
+			TimerInterfacePtr()->start(&ls, configuredPlugin, configuredPlugin->getReleaseDelay());
 			// errors are ignored here - configuredPlugin will be released at once
 		}
 
@@ -591,18 +606,17 @@ namespace
 		FactoryParameter* par = FB_NEW FactoryParameter(this, firebirdConf);
 		par->addRef();
 
-		LocalStatus ls;
-		CheckStatusWrapper s(&ls);
-		IPluginBase* plugin = module->getPlugin(regPlugin).factory->createPlugin(&s, par);
+		FbLocalStatus ls;
+		IPluginBase* plugin = module->getPlugin(regPlugin).factory->createPlugin(&ls, par);
 
-		if (!(s.getState() & Firebird::IStatus::STATE_ERRORS))
+		if (plugin && !(ls->getState() & Firebird::IStatus::STATE_ERRORS))
 		{
 			plugin->setOwner(par);
 			return plugin;
 		}
 
 		par->release();
-		check(&s);
+		check(&ls);
 		return NULL;
 	}
 
@@ -684,6 +698,9 @@ namespace
 #endif
 	}
 
+	typedef HalfStaticArray<ConfiguredPlugin*, 16> DelayedDelete;
+	static GlobalPtr<DelayedDelete> delayedDelete;
+
 	int ConfiguredPlugin::release()
 	{
 		int x = --refCounter;
@@ -699,6 +716,15 @@ namespace
 				if (refCounter != 0)
 					return 1;
 
+				if (Why::timerThreadStopped() && !processingDelayedDelete && delayedDelete)
+				{
+					// delay delete
+					addRef();
+					delayedDelete->push(this);
+
+					return 1;
+				}
+
 				destroy();
 			}
 
@@ -709,6 +735,26 @@ namespace
 		}
 
 		return 1;
+	}
+
+	void ConfiguredPlugin::processDelayedDelete()
+	{
+		DelayedDelete& dd(delayedDelete);
+		MutexEnsureUnlock g(plugins->mutex, FB_FUNCTION);
+		g.enter();
+		for (unsigned n = 0; n < dd.getCount(); ++n)
+		{
+			ConfiguredPlugin* ptr = dd[n];
+			if (ptr)
+			{
+				g.leave();
+				ptr->processingDelayedDelete = true;
+				ptr->release();
+				g.enter();
+			}
+			dd[n] = nullptr;
+		}
+		delayedDelete->clear();
 	}
 
 	PluginModule* modules = NULL;
@@ -765,6 +811,10 @@ namespace
 
 			plugConfigFile = curModule;
 			changeExtension(plugConfigFile, "conf");
+
+			PathUtils::fixupSeparators(curModule);
+			PathUtils::fixupSeparators(regName);
+			PathUtils::fixupSeparators(plugConfigFile);
 		}
 	};
 
@@ -809,8 +859,7 @@ namespace
 		{
 			namesList.assign(pnamesList);
 			namesList.alltrim(" \t");
-			Firebird::LocalStatus s;
-			Firebird::CheckStatusWrapper statusWrapper(&s);
+			FbLocalStatus statusWrapper;
 			next(&statusWrapper);
 			check(&statusWrapper);
 		}
@@ -1007,26 +1056,55 @@ PluginManager::PluginManager()
 
 void PluginManager::registerPluginFactory(unsigned int interfaceType, const char* defaultName, IPluginFactory* factory)
 {
-	MutexLockGuard g(plugins->mutex, FB_FUNCTION);
-
-	if (!current)
+	try
 	{
-		// not good time to call this function - ignore request
-		gds__log("Unexpected call to register plugin %s, type %d - ignored\n", defaultName, interfaceType);
-		return;
+		MutexLockGuard g(plugins->mutex, FB_FUNCTION);
+
+		if (!current)
+		{
+			// not good time to call this function - ignore request
+			gds__log("Unexpected call to register plugin %s, type %d - ignored\n", defaultName, interfaceType);
+			return;
+		}
+
+		unsigned int r = current->addPlugin(RegisteredPlugin(factory, defaultName, interfaceType));
+
+		if (current == builtin)
+		{
+			PathName plugConfigFile = fb_utils::getPrefix(IConfigManager::DIR_PLUGINS, defaultName);
+			changeExtension(plugConfigFile, "conf");
+
+			ConfiguredPlugin* p = FB_NEW ConfiguredPlugin(RefPtr<PluginModule>(builtin), r,
+				findInPluginsConf("Plugin", defaultName), plugConfigFile, defaultName);
+			p->addRef();  // Will never be unloaded
+			plugins->put(MapKey(interfaceType, defaultName), p);
+		}
 	}
-
-	unsigned int r = current->addPlugin(RegisteredPlugin(factory, defaultName, interfaceType));
-
-	if (current == builtin)
+	catch(const Exception& ex)
 	{
-		PathName plugConfigFile = fb_utils::getPrefix(IConfigManager::DIR_PLUGINS, defaultName);
-		changeExtension(plugConfigFile, "conf");
+		// looks like something gone seriously wrong - therefore add more error handling here
+		try
+		{
+			FbLocalStatus ls;
+			ex.stuffException(&ls);
+			char text[256];
+			UtilInterfacePtr()->formatStatus(text, sizeof(text), &ls);
+			Syslog::Record(Syslog::Error, text);
 
-		ConfiguredPlugin* p = FB_NEW ConfiguredPlugin(RefPtr<PluginModule>(builtin), r,
-			findInPluginsConf("Plugin", defaultName), plugConfigFile, defaultName);
-		p->addRef();  // Will never be unloaded
-		plugins->put(MapKey(interfaceType, defaultName), p);
+			iscLogException("Plugin registration error", ex);
+		}
+		catch(const BadAlloc&)
+		{
+			Syslog::Record(Syslog::Error, "Plugin registration error - out of memory");
+		}
+		catch(...)
+		{
+			Syslog::Record(Syslog::Error, "Double fault during plugin registration");
+		}
+
+#ifdef DEV_BUILD
+		abort();
+#endif
 	}
 }
 
@@ -1169,6 +1247,10 @@ void PluginManager::threadDetach()
 		modules->threadDetach();
 }
 
+void PluginManager::deleteDelayed()
+{
+	ConfiguredPlugin::processDelayedDelete();
+}
 
 }	// namespace Firebird
 

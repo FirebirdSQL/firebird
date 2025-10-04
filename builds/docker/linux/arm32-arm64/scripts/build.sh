@@ -1,4 +1,9 @@
 #!/bin/sh
+set -e
+
+gcc -v
+ld -v
+make -v
 
 ./autogen.sh \
 	--host=$BUILD_ARCH \
@@ -8,7 +13,7 @@
 	--with-termlib=:libncurses.a \
 	--with-atomiclib=:libatomic.a
 
-make -j${CPUCOUNT}
-make tests -j${CPUCOUNT}
+make -j$(nproc)
+make tests -j$(nproc)
 make run_tests
 make dist

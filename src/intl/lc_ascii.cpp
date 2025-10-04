@@ -49,7 +49,7 @@ namespace {
 
 struct TextTypeImpl
 {
-	Jrd::CharSet* charSet;
+	Firebird::CharSet* charSet;
 	charset cs;
 	const ULONG* lower_exceptions;
 	const ULONG* upper_exceptions;
@@ -136,7 +136,7 @@ static inline bool FAMILY_ASCII(texttype* cache,
 		memset(&impl->cs, 0, sizeof(impl->cs));
 		LD_lookup_charset(&impl->cs, cs_name, config_info);
 
-		impl->charSet = Jrd::CharSet::createInstance(*getDefaultMemoryPool(), 0, &impl->cs);
+		impl->charSet = Firebird::CharSet::createInstance(*getDefaultMemoryPool(), 0, &impl->cs);
 
 		impl->lower_exceptions = lower_exceptions;
 		impl->upper_exceptions = upper_exceptions;

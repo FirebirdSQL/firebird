@@ -19,9 +19,7 @@
 # 2 Oct 2002, Nickolay Samofatov - Major Cleanup
 
 TARGET ?= Release
-ICU_VERS = icu54
-ICU_LOC ?= $(HOME)/$(ICU_VERS)/icu/source/lib/
-FB_FW = ../gen/$(TARGET)/frameworks/Firebird5.framework
+FB_FW = ../gen/$(TARGET)/frameworks/Firebird6.framework
 
 all: framework
 
@@ -29,9 +27,7 @@ framework:
 	-$(RM) -rf $(FB_FW)
 	mkdir -p $(FB_FW)/Versions/A/Libraries
 
-	cp $(ICU_LOC)*.dylib ../gen/$(TARGET)/firebird/lib/
-
-	ln -s Versions/Current/Firebird $(FB_FW)/Firebird
+	ln -s Versions/Current/Libraries/libfbclient.dylib $(FB_FW)/Firebird
 	ln -s Versions/Current/Headers $(FB_FW)/Headers
 	ln -s Versions/Current/Resources $(FB_FW)/Resources
 	ln -s Versions/Current/Libraries $(FB_FW)/Libraries
@@ -53,7 +49,7 @@ framework:
 	cp ../gen/$(TARGET)/firebird/intl/fbintl.conf $(FB_FW)/Versions/A/Resources/intl/fbintl.conf
 	#chmod a+rx $(FB_FW)/Versions/A/Resources/intl/fbintl
 	cp -r ../gen/$(TARGET)/firebird/plugins $(FB_FW)/Versions/A/Resources/plugins
-	cp ../gen/$(TARGET)/firebird/security5.fdb $(FB_FW)/Versions/A/Resources/security5.fdb
+	cp ../gen/$(TARGET)/firebird/security6.fdb $(FB_FW)/Versions/A/Resources/security6.fdb
 	cp ../gen/$(TARGET)/firebird/firebird.msg $(FB_FW)/Versions/A/Resources/firebird.msg
 	cp -r ../gen/$(TARGET)/firebird/tzdata $(FB_FW)/Versions/A/Resources/tzdata
 	mkdir -p $(FB_FW)/Resources/doc

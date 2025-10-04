@@ -8,6 +8,7 @@
 #  */
 #
 # /* Revised by Paul Mensonides (2002) */
+# /* Revised by Edward Diener (2020) */
 #
 # /* See http://www.boost.org for most recent version. */
 #
@@ -26,6 +27,8 @@
 # endif
 #
 # define FB_BOOST_PP_BOOL_I(x) FB_BOOST_PP_BOOL_ ## x
+#
+# if ~FB_BOOST_PP_CONFIG_FLAGS() & FB_BOOST_PP_CONFIG_STRICT()
 #
 # define FB_BOOST_PP_BOOL_0 0
 # define FB_BOOST_PP_BOOL_1 1
@@ -284,5 +287,24 @@
 # define FB_BOOST_PP_BOOL_254 1
 # define FB_BOOST_PP_BOOL_255 1
 # define FB_BOOST_PP_BOOL_256 1
+#
+# else
+#
+# include <firebird/impl/boost/preprocessor/config/limits.hpp>
+#
+# if FB_BOOST_PP_LIMIT_MAG == 256
+# include <firebird/impl/boost/preprocessor/logical/limits/bool_256.hpp>
+# elif FB_BOOST_PP_LIMIT_MAG == 512
+# include <firebird/impl/boost/preprocessor/logical/limits/bool_256.hpp>
+# include <firebird/impl/boost/preprocessor/logical/limits/bool_512.hpp>
+# elif FB_BOOST_PP_LIMIT_MAG == 1024
+# include <firebird/impl/boost/preprocessor/logical/limits/bool_256.hpp>
+# include <firebird/impl/boost/preprocessor/logical/limits/bool_512.hpp>
+# include <firebird/impl/boost/preprocessor/logical/limits/bool_1024.hpp>
+# else
+# error Incorrect value for the FB_BOOST_PP_LIMIT_MAG limit
+# endif
+#
+# endif
 #
 # endif

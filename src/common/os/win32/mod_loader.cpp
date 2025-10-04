@@ -3,9 +3,6 @@
  *
  */
 
-// required to use activation context API structures
-#define _WIN32_WINNT 0x0501
-
 #include "firebird.h"
 #include "../../../common/dllinst.h"
 #include "../common/os/mod_loader.h"
@@ -39,7 +36,7 @@ template <typename PFN>
 class WinApiFunction
 {
 public:
-	WinApiFunction(const char *dllName, const char *fnName)
+	WinApiFunction(const char *dllName, const char *fnName) noexcept
 	{
 		m_ptr = NULL;
 		const HMODULE hDll = GetModuleHandle(dllName);
@@ -50,21 +47,21 @@ public:
 	~WinApiFunction()
 	{}
 
-	PFN operator* () const { return m_ptr; }
+	PFN operator* () const noexcept { return m_ptr; }
 
-	operator bool() const { return (m_ptr != NULL); }
+	operator bool() const noexcept { return (m_ptr != NULL); }
 
 private:
 	PFN m_ptr;
 };
 
-const char* const KERNEL32_DLL = "kernel32.dll";
+constexpr const char* KERNEL32_DLL = "kernel32.dll";
 
 
 class ContextActivator
 {
 public:
-	ContextActivator() :
+	ContextActivator() noexcept :
 	  mFindActCtxSectionString(KERNEL32_DLL, "FindActCtxSectionStringA"),
 	  mCreateActCtx(KERNEL32_DLL, "CreateActCtxA"),
 	  mReleaseActCtx(KERNEL32_DLL, "ReleaseActCtx"),
@@ -83,11 +80,7 @@ public:
 		if (!mCreateActCtx)
 			return;
 
-		ACTCTX_SECTION_KEYED_DATA ackd;
-		memset(&ackd, 0, sizeof(ackd));
-		ackd.cbSize = sizeof(ackd);
-
-		const char* crtDll =
+		constexpr const char* crtDll =
 #if _MSC_VER == 1400
 			"msvcr80.dll";
 #elif _MSC_VER == 1500
@@ -110,6 +103,9 @@ public:
 //		#error Specify CRT DLL name here !
 #endif
 
+		ACTCTX_SECTION_KEYED_DATA ackd{};
+		ackd.cbSize = sizeof(ackd);
+
 		// if CRT already present in some activation context then nothing to do
 		if ((*mFindActCtxSectionString)
 				(0, NULL,
@@ -120,8 +116,7 @@ public:
 		}
 
 		// create and use activation context from our own manifest
-		ACTCTXA actCtx;
-		memset(&actCtx, 0, sizeof(actCtx));
+		ACTCTXA actCtx{};
 		actCtx.cbSize = sizeof(actCtx);
 		actCtx.dwFlags = ACTCTX_FLAG_RESOURCE_NAME_VALID | ACTCTX_FLAG_HMODULE_VALID;
 		actCtx.lpResourceName = ISOLATIONAWARE_MANIFEST_RESOURCE_ID;
@@ -157,7 +152,7 @@ private:
 	WinApiFunction<PFN_DAC> mDeactivateActCtx;
 
 	HANDLE		hActCtx;
-	ULONG_PTR	mCookie;
+	ULONG_PTR	mCookie = 0;
 };
 
 
@@ -172,7 +167,9 @@ public:
 
 	~Win32Module();
 
-	void *findSymbol(ISC_STATUS* status, const string&);
+	void* findSymbol(ISC_STATUS* status, const string&) override;
+
+	bool getRealPath(const string& anySymbol, PathName& path) override;
 
 private:
 	const HMODULE module;
@@ -208,7 +205,7 @@ ModuleLoader::Module* ModuleLoader::loadModule(ISC_STATUS* status, const PathNam
 {
 	ContextActivator ctx;
 
-	// supress error message box if it is not done yet
+	// suppress error message box if it is not done yet
 	const UINT oldErrorMode =
 		SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
 
@@ -271,4 +268,17 @@ void* Win32Module::findSymbol(ISC_STATUS* status, const string& symName)
 	}
 
 	return (void*) result;
+}
+
+bool Win32Module::getRealPath(const string& /*anySymbol*/, PathName& path)
+{
+	char moduleFileName[MAX_PATH];
+
+	if (GetModuleFileName(module, moduleFileName, sizeof(moduleFileName)) != 0)
+	{
+		path = moduleFileName;
+		return true;
+	}
+
+	return false;
 }

@@ -57,9 +57,9 @@ void ConditionalStream::internalOpen(thread_db* tdbb) const
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
-	impure->irsb_flags = irsb_open;
-
 	impure->irsb_next = m_boolean->execute(tdbb, request) ? m_first : m_second;
+
+	impure->irsb_flags = irsb_open;
 	impure->irsb_next->open(tdbb);
 }
 
@@ -75,7 +75,8 @@ void ConditionalStream::close(thread_db* tdbb) const
 	{
 		impure->irsb_flags &= ~irsb_open;
 
-		impure->irsb_next->close(tdbb);
+		if (impure->irsb_next)
+			impure->irsb_next->close(tdbb);
 	}
 }
 
@@ -103,49 +104,44 @@ bool ConditionalStream::refetchRecord(thread_db* tdbb) const
 	return impure->irsb_next->refetchRecord(tdbb);
 }
 
-bool ConditionalStream::lockRecord(thread_db* tdbb) const
+WriteLockResult ConditionalStream::lockRecord(thread_db* tdbb) const
 {
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	if (!(impure->irsb_flags & irsb_open))
-		return false;
+		return WriteLockResult::CONFLICTED;
 
 	return impure->irsb_next->lockRecord(tdbb);
 }
 
-void ConditionalStream::getChildren(Array<const RecordSource*>& children) const
+void ConditionalStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
-	children.add(m_first);
-	children.add(m_second);
+	if (!level)
+		plan += "(";
+
+	m_first->getLegacyPlan(tdbb, plan, level + 1);
+
+	plan += ", ";
+
+	m_second->getLegacyPlan(tdbb, plan, level + 1);
+
+	if (!level)
+		plan += ")";
 }
 
-void ConditionalStream::print(thread_db* tdbb, string& plan, bool detailed, unsigned level, bool recurse) const
+void ConditionalStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
 {
-	if (detailed)
+	planEntry.className = "ConditionalStream";
+
+	planEntry.lines.add().text = "Condition";
+	printOptInfo(planEntry.lines);
+
+	if (recurse)
 	{
-		plan += printIndent(++level) + "Condition";
-		printOptInfo(plan);
-
-		if (recurse)
-		{
-			m_first->print(tdbb, plan, true, level, recurse);
-			m_second->print(tdbb, plan, true, level, recurse);
-		}
-	}
-	else
-	{
-		if (!level)
-			plan += "(";
-
-		m_first->print(tdbb, plan, false, level + 1, recurse);
-
-		plan += ", ";
-
-		m_second->print(tdbb, plan, false, level + 1, recurse);
-
-		if (!level)
-			plan += ")";
+		++level;
+		m_first->getPlan(tdbb, planEntry.children.add(), level, recurse);
+		m_second->getPlan(tdbb, planEntry.children.add(), level, recurse);
 	}
 }
 
@@ -159,6 +155,13 @@ void ConditionalStream::findUsedStreams(StreamList& streams, bool expandAll) con
 {
 	m_first->findUsedStreams(streams, expandAll);
 	m_second->findUsedStreams(streams, expandAll);
+}
+
+bool ConditionalStream::isDependent(const StreamList& streams) const
+{
+	return m_boolean->containsAnyStream(streams) ||
+		m_first->isDependent(streams) ||
+		m_second->isDependent(streams);
 }
 
 void ConditionalStream::invalidateRecords(Request* request) const

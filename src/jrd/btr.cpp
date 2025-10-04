@@ -45,6 +45,7 @@
 #include "../jrd/lck.h"
 #include "../jrd/cch.h"
 #include "../jrd/sort.h"
+#include "../jrd/val.h"
 #include "../common/gdsassert.h"
 #include "../jrd/btr_proto.h"
 #include "../jrd/cch_proto.h"
@@ -72,21 +73,21 @@ using namespace Firebird;
 
 namespace
 {
-	const unsigned MAX_LEVELS = 16;
+	constexpr unsigned MAX_LEVELS = 16;
 
-	const size_t OVERSIZE = (MAX_PAGE_SIZE + BTN_PAGE_SIZE + MAX_KEY + sizeof(SLONG) - 1) / sizeof(SLONG);
+	constexpr size_t OVERSIZE = (MAX_PAGE_SIZE + BTN_PAGE_SIZE + MAX_KEY + sizeof(SLONG) - 1) / sizeof(SLONG);
 
 	// END_LEVEL (~0) is choosen here as a unknown/none value, because it's
 	// already reserved as END_LEVEL marker for page number and record number.
 	//
 	// NO_VALUE_PAGE and NO_VALUE are the same constant, but with different size
 	// Sign-extension mechanizm guaranties that they may be compared to each other safely
-	const ULONG NO_VALUE_PAGE = END_LEVEL;
+	constexpr ULONG NO_VALUE_PAGE = END_LEVEL;
 	const RecordNumber NO_VALUE(END_LEVEL);
 
 	// A split page will never have the number 0, because that's the value
 	// of the main page.
-	const ULONG NO_SPLIT	= 0;
+	inline constexpr ULONG NO_SPLIT = 0;
 
 	// Thresholds for determing of a page should be garbage collected
 	// Garbage collect if page size is below GARBAGE_COLLECTION_THRESHOLD
@@ -104,9 +105,9 @@ namespace
 	};
 
 	// I assume this wasn't done sizeof(INT64_KEY) on purpose, since alignment might affect it.
-	const size_t INT64_KEY_LENGTH = sizeof (double) + sizeof (SSHORT);
+	constexpr size_t INT64_KEY_LENGTH = sizeof (double) + sizeof (SSHORT);
 
-	const double pow10_table[] =
+	constexpr double pow10_table[] =
 	{
 		1.e00, 1.e01, 1.e02, 1.e03, 1.e04, 1.e05, 1.e06, 1.e07, 1.e08, 1.e09,
 		1.e10, 1.e11, 1.e12, 1.e13, 1.e14, 1.e15, 1.e16, 1.e17, 1.e18, 1.e19,
@@ -114,12 +115,12 @@ namespace
 		1.e30, 1.e31, 1.e32, 1.e33, 1.e34, 1.e35, 1.e36
 	};
 
-	inline double powerof10(int index)
+	inline double powerof10(int index) noexcept
 	{
 		return (index <= 0) ? pow10_table[-index] : 1.0 / pow10_table[index];
 	}
 
-	const struct	// Used in make_int64_key()
+	constexpr struct	// Used in make_int64_key()
 	{
 		FB_UINT64 limit;
 		SINT64 factor;
@@ -188,23 +189,23 @@ namespace
 
 static ULONG add_node(thread_db*, WIN*, index_insertion*, temporary_key*, RecordNumber*,
 					  ULONG*, ULONG*);
-static void compress(thread_db*, const dsc*, temporary_key*, USHORT, bool, bool, USHORT);
+static void compress(thread_db*, const dsc*, const SSHORT scale, temporary_key*,
+					 USHORT, bool, USHORT, bool*);
 static USHORT compress_root(thread_db*, index_root_page*);
 static void copy_key(const temporary_key*, temporary_key*);
 static contents delete_node(thread_db*, WIN*, UCHAR*);
 static void delete_tree(thread_db*, USHORT, USHORT, PageNumber, PageNumber);
-static DSC* eval(thread_db*, const ValueExprNode*, DSC*, bool*);
 static ULONG fast_load(thread_db*, IndexCreation&, SelectivityList&);
 
 static index_root_page* fetch_root(thread_db*, WIN*, const jrd_rel*, const RelationPages*);
 static UCHAR* find_node_start_point(btree_page*, temporary_key*, UCHAR*, USHORT*,
-									bool, bool, bool = false, RecordNumber = NO_VALUE);
+									bool, int, bool = false, RecordNumber = NO_VALUE);
 
 static UCHAR* find_area_start_point(btree_page*, const temporary_key*, UCHAR*,
-									USHORT*, bool, bool, RecordNumber = NO_VALUE);
+									USHORT*, bool, int, RecordNumber = NO_VALUE);
 
 static ULONG find_page(btree_page*, const temporary_key*, const index_desc*, RecordNumber = NO_VALUE,
-					   bool = false);
+					   int = 0);
 
 static contents garbage_collect(thread_db*, WIN*, ULONG);
 static void generate_jump_nodes(thread_db*, btree_page*, JumpNodeList*, USHORT,
@@ -222,7 +223,7 @@ static contents remove_node(thread_db*, index_insertion*, WIN*);
 static contents remove_leaf_node(thread_db*, index_insertion*, WIN*);
 static bool scan(thread_db*, UCHAR*, RecordBitmap**, RecordBitmap*, index_desc*,
 				 const IndexRetrieval*, USHORT, temporary_key*,
-				 bool&, const temporary_key&);
+				 bool&, const temporary_key&, USHORT);
 static void update_selectivity(index_root_page*, USHORT, const SelectivityList&);
 static void checkForLowerKeySkip(bool&, const bool, const IndexNode&, const temporary_key&,
 								 const index_desc&, const IndexRetrieval*);
@@ -280,18 +281,19 @@ void IndexErrorContext::raise(thread_db* tdbb, idx_e result, Record* record)
 	if (result == idx_e_conversion || result == idx_e_interrupt)
 		ERR_punt();
 
-	const MetaName& relationName = isLocationDefined ? m_location.relation->rel_name : m_relation->rel_name;
+	const auto& relationName = isLocationDefined ? m_location.relation->rel_name : m_relation->rel_name;
 	const USHORT indexId = isLocationDefined ? m_location.indexId : m_index->idx_id;
 
-	MetaName indexName(m_indexName), constraintName;
+	QualifiedName indexName(m_indexName);
+	MetaName constraintName;
 
-	if (indexName.isEmpty())
+	if (indexName.object.isEmpty())
 		MET_lookup_index(tdbb, indexName, relationName, indexId + 1);
 
-	if (indexName.hasData())
+	if (indexName.object.hasData())
 		MET_lookup_cnstrt_for_index(tdbb, constraintName, indexName);
 	else
-		indexName = "***unknown***";
+		indexName.object = "***unknown***";
 
 	const bool haveConstraint = constraintName.hasData();
 
@@ -302,18 +304,18 @@ void IndexErrorContext::raise(thread_db* tdbb, idx_e result, Record* record)
 	{
 	case idx_e_keytoobig:
 		ERR_post_nothrow(Arg::Gds(isc_imp_exc) <<
-						 Arg::Gds(isc_keytoobig) << Arg::Str(indexName));
+						 Arg::Gds(isc_keytoobig) << indexName.toQuotedString());
 		break;
 
 	case idx_e_foreign_target_doesnt_exist:
 		ERR_post_nothrow(Arg::Gds(isc_foreign_key) <<
-						 Arg::Str(constraintName) << Arg::Str(relationName) <<
+						 constraintName.toQuotedString() << relationName.toQuotedString() <<
 						 Arg::Gds(isc_foreign_key_target_doesnt_exist));
 		break;
 
 	case idx_e_foreign_references_present:
 		ERR_post_nothrow(Arg::Gds(isc_foreign_key) <<
-						 Arg::Str(constraintName) << Arg::Str(relationName) <<
+						 constraintName.toQuotedString() << relationName.toQuotedString() <<
 						 Arg::Gds(isc_foreign_key_references_present));
 		break;
 
@@ -321,10 +323,10 @@ void IndexErrorContext::raise(thread_db* tdbb, idx_e result, Record* record)
 		if (haveConstraint)
 		{
 			ERR_post_nothrow(Arg::Gds(isc_unique_key_violation) <<
-							 Arg::Str(constraintName) << Arg::Str(relationName));
+							 constraintName.toQuotedString() << relationName.toQuotedString());
 		}
 		else
-			ERR_post_nothrow(Arg::Gds(isc_no_dup) << Arg::Str(indexName));
+			ERR_post_nothrow(Arg::Gds(isc_no_dup) << indexName.toQuotedString());
 		break;
 
 	default:
@@ -339,6 +341,464 @@ void IndexErrorContext::raise(thread_db* tdbb, idx_e result, Record* record)
 	}
 
 	ERR_punt();
+}
+
+// IndexCondition class
+
+IndexCondition::IndexCondition(thread_db* tdbb, index_desc* idx)
+	: m_tdbb(tdbb)
+{
+	if (!(idx->idx_flags & idx_condition))
+		return;
+
+	fb_assert(idx->idx_condition);
+	m_condition = idx->idx_condition;
+
+	fb_assert(idx->idx_condition_statement);
+	const auto orgRequest = tdbb->getRequest();
+	m_request = idx->idx_condition_statement->findRequest(tdbb, true);
+
+	if (!m_request)
+		ERR_post(Arg::Gds(isc_random) << "Attempt to evaluate index condition recursively");
+
+	fb_assert(m_request != orgRequest);
+
+	fb_assert(!m_request->req_caller);
+	m_request->req_caller = orgRequest;
+
+	m_request->req_flags &= req_in_use;
+	m_request->req_flags |= req_active;
+
+	TRA_attach_request(tdbb->getTransaction(), m_request);
+	fb_assert(m_request->req_transaction);
+
+	if (orgRequest)
+		m_request->setGmtTimeStamp(orgRequest->getGmtTimeStamp());
+	else
+		m_request->validateTimeStamp();
+
+	m_request->req_rpb[0].rpb_number.setValue(BOF_NUMBER);
+	m_request->req_rpb[0].rpb_number.setValid(true);
+}
+
+IndexCondition::~IndexCondition()
+{
+	if (m_request)
+	{
+		EXE_unwind(m_tdbb, m_request);
+
+		m_request->req_flags &= ~req_in_use;
+		m_request->req_attachment = nullptr;
+	}
+}
+
+bool IndexCondition::evaluate(Record* record) const
+{
+	if (!m_request || !m_condition)
+		return true;
+
+	const auto orgRequest = m_tdbb->getRequest();
+	m_tdbb->setRequest(m_request);
+
+	m_request->req_rpb[0].rpb_record = record;
+	m_request->req_flags &= ~req_null;
+
+	FbLocalStatus status;
+	bool result = false;
+
+	try
+	{
+		Jrd::ContextPoolHolder context(m_tdbb, m_request->req_pool);
+
+		result = m_condition->execute(m_tdbb, m_request);
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(&status);
+	}
+
+	m_tdbb->setRequest(orgRequest);
+
+	status.check();
+
+	return result;
+}
+
+TriState IndexCondition::check(Record* record, idx_e* errCode)
+{
+	TriState result;
+
+	try
+	{
+		result = evaluate(record);
+
+		if (errCode)
+			*errCode = idx_e_ok;
+	}
+	catch (const Exception& ex)
+	{
+		if (errCode)
+		{
+			*errCode = idx_e_conversion;
+			ex.stuffException(m_tdbb->tdbb_status_vector);
+		}
+	}
+
+	return result;
+}
+
+
+// IndexExpression class
+
+IndexExpression::IndexExpression(thread_db* tdbb, index_desc* idx)
+	: m_tdbb(tdbb)
+{
+	if (!(idx->idx_flags & idx_expression))
+		return;
+
+	fb_assert(idx->idx_expression);
+	m_expression = idx->idx_expression;
+
+	fb_assert(idx->idx_expression_statement);
+	const auto orgRequest = tdbb->getRequest();
+	m_request = idx->idx_expression_statement->findRequest(tdbb, true);
+
+	if (!m_request)
+		ERR_post(Arg::Gds(isc_random) << "Attempt to evaluate index expression recursively");
+
+	fb_assert(m_request != orgRequest);
+
+	fb_assert(!m_request->req_caller);
+	m_request->req_caller = orgRequest;
+
+	m_request->req_flags &= req_in_use;
+	m_request->req_flags |= req_active;
+
+	TRA_attach_request(tdbb->getTransaction(), m_request);
+	fb_assert(m_request->req_transaction);
+	TRA_setup_request_snapshot(tdbb, m_request);
+
+	if (orgRequest)
+		m_request->setGmtTimeStamp(orgRequest->getGmtTimeStamp());
+	else
+		m_request->validateTimeStamp();
+
+	m_request->req_rpb[0].rpb_number.setValue(BOF_NUMBER);
+	m_request->req_rpb[0].rpb_number.setValid(true);
+}
+
+IndexExpression::~IndexExpression()
+{
+	if (m_request)
+	{
+		EXE_unwind(m_tdbb, m_request);
+
+		m_request->req_flags &= ~req_in_use;
+		m_request->req_attachment = nullptr;
+	}
+}
+
+dsc* IndexExpression::evaluate(Record* record) const
+{
+	if (!m_request || !m_expression)
+		return nullptr;
+
+	const auto orgRequest = m_tdbb->getRequest();
+	m_tdbb->setRequest(m_request);
+
+	m_request->req_rpb[0].rpb_record = record;
+	m_request->req_flags &= ~req_null;
+
+	FbLocalStatus status;
+	dsc* result = nullptr;
+
+	try
+	{
+		Jrd::ContextPoolHolder context(m_tdbb, m_request->req_pool);
+
+		result = EVL_expr(m_tdbb, m_request, m_expression);
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(&status);
+	}
+
+	m_tdbb->setRequest(orgRequest);
+
+	status.check();
+
+	return result;
+}
+
+// IndexKey class
+
+idx_e IndexKey::compose(Record* record)
+{
+	// Compute a key from a record and an index descriptor.
+	// Note that compound keys are expanded by 25%.
+	// If this changes, both BTR_key_length and GDEF exe.e have to change.
+
+	const auto dbb = m_tdbb->getDatabase();
+	const auto maxKeyLength = dbb->getMaxIndexKeyLength();
+
+	temporary_key temp;
+	temp.key_flags = 0;
+	temp.key_length = 0;
+
+	dsc desc;
+	dsc* desc_ptr;
+
+	auto tail = m_index->idx_rpt;
+	m_key.key_flags = 0;
+	m_key.key_nulls = 0;
+
+	const bool descending = (m_index->idx_flags & idx_descending);
+
+	try
+	{
+		if (m_index->idx_count == 1)
+		{
+			// For expression indices, compute the value of the expression
+
+			if (m_index->idx_flags & idx_expression)
+			{
+				if (!m_expression)
+					m_expression = FB_NEW_POOL(*m_tdbb->getDefaultPool()) IndexExpression(m_tdbb, m_index);
+
+				desc_ptr = m_expression->evaluate(record);
+				// Multi-byte text descriptor is returned already adjusted.
+			}
+			else
+			{
+				// In order to "map a null to a default" value (in EVL_field()),
+				// the relation block is referenced.
+				// Reference: Bug 10116, 10424
+
+				if (EVL_field(m_relation, record, tail->idx_field, &desc))
+				{
+					desc_ptr = &desc;
+
+					if (desc_ptr->dsc_dtype == dtype_text &&
+						tail->idx_field < record->getFormat()->fmt_desc.getCount())
+					{
+						// That's necessary for NO-PAD collations.
+						INTL_adjust_text_descriptor(m_tdbb, desc_ptr);
+					}
+				}
+				else
+				{
+					desc_ptr = nullptr;
+				}
+			}
+
+			if (!desc_ptr)
+				m_key.key_nulls = 1;
+
+			m_key.key_flags |= key_empty;
+
+			compress(m_tdbb, desc_ptr, 0, &m_key, tail->idx_itype, descending, m_keyType, nullptr);
+		}
+		else
+		{
+			UCHAR* p = m_key.key_data;
+			SSHORT stuff_count = 0;
+			temp.key_flags |= key_empty;
+
+			for (USHORT n = 0; n < m_segments; n++, tail++)
+			{
+				for (; stuff_count; --stuff_count)
+				{
+					*p++ = 0;
+
+					if (p - m_key.key_data >= maxKeyLength)
+						return idx_e_keytoobig;
+				}
+
+				// In order to "map a null to a default" value (in EVL_field()),
+				// the relation block is referenced.
+				// Reference: Bug 10116, 10424
+
+				if (EVL_field(m_relation, record, tail->idx_field, &desc))
+				{
+					desc_ptr = &desc;
+
+					if (desc_ptr->dsc_dtype == dtype_text &&
+						tail->idx_field < record->getFormat()->fmt_desc.getCount())
+					{
+						// That's necessary for NO-PAD collations.
+						INTL_adjust_text_descriptor(m_tdbb, desc_ptr);
+					}
+				}
+				else
+				{
+					desc_ptr = nullptr;
+					m_key.key_nulls |= 1 << n;
+				}
+
+				compress(m_tdbb, desc_ptr, 0, &temp, tail->idx_itype, descending, m_keyType, nullptr);
+
+				const UCHAR* q = temp.key_data;
+				for (USHORT l = temp.key_length; l; --l, --stuff_count)
+				{
+					if (stuff_count == 0)
+					{
+						*p++ = m_index->idx_count - n;
+						stuff_count = STUFF_COUNT;
+
+						if (p - m_key.key_data >= maxKeyLength)
+							return idx_e_keytoobig;
+					}
+
+					*p++ = *q++;
+
+					if (p - m_key.key_data >= maxKeyLength)
+						return idx_e_keytoobig;
+				}
+			}
+
+			m_key.key_length = (p - m_key.key_data);
+
+			if (temp.key_flags & key_empty)
+				m_key.key_flags |= key_empty;
+		}
+
+		if (m_key.key_length >= maxKeyLength)
+			return idx_e_keytoobig;
+
+		if (descending)
+			BTR_complement_key(&m_key);
+	}
+	catch (const Exception& ex)
+	{
+		if (!(m_tdbb->tdbb_flags & TDBB_sys_error))
+		{
+			Arg::StatusVector error(ex);
+
+			if (!(error.length() > 1 &&
+				  error.value()[0] == isc_arg_gds &&
+				  error.value()[1] == isc_expression_eval_index))
+			{
+				QualifiedName indexName;
+				MET_lookup_index(m_tdbb, indexName, m_relation->rel_name, m_index->idx_id + 1);
+
+				if (indexName.object.isEmpty())
+					indexName.object = "***unknown***";
+
+				error.prepend(Arg::Gds(isc_expression_eval_index) <<
+					indexName.toQuotedString() <<
+					m_relation->rel_name.toQuotedString());
+			}
+
+			error.copyTo(m_tdbb->tdbb_status_vector);
+		}
+		else
+			ex.stuffException(m_tdbb->tdbb_status_vector);
+
+		m_key.key_length = 0;
+
+		return (m_tdbb->tdbb_flags & TDBB_sys_error) ? idx_e_interrupt : idx_e_conversion;
+	}
+
+	return idx_e_ok;
+}
+
+
+// IndexScanListIterator class
+
+IndexScanListIterator::IndexScanListIterator(thread_db* tdbb, const IndexRetrieval* retrieval)
+	: m_retrieval(retrieval),
+	  m_listValues(*tdbb->getDefaultPool(), retrieval->irb_list->getCount()),
+	  m_lowerValues(*tdbb->getDefaultPool()), m_upperValues(*tdbb->getDefaultPool()),
+	  m_iterator(m_listValues.begin())
+{
+	// Find and store the position of the variable key segment
+
+	const auto count = MIN(retrieval->irb_lower_count, retrieval->irb_upper_count);
+	fb_assert(count);
+
+	for (unsigned i = 0; i < count; i++)
+	{
+		if (!retrieval->irb_value[i])
+		{
+			m_segno = i;
+			break;
+		}
+	}
+
+	fb_assert(m_segno < count);
+
+	// Copy the sorted values, skipping NULLs and duplicates
+
+	const auto sortedList = retrieval->irb_list->init(tdbb, tdbb->getRequest());
+	fb_assert(sortedList);
+
+	const SortValueItem* prior = nullptr;
+	for (const auto& item : *sortedList)
+	{
+		if (item.desc && (!prior || *prior != item))
+			m_listValues.add(item.value);
+		prior = &item;
+	}
+
+	if (m_listValues.hasData())
+	{
+		// Reverse the list if index is descending
+
+		if (retrieval->irb_generic & irb_descending)
+			std::reverse(m_listValues.begin(), m_listValues.end());
+
+		// Prepare the lower/upper key expressions for evaluation
+
+		auto values = m_retrieval->irb_value;
+		m_lowerValues.assign(values, m_retrieval->irb_lower_count);
+		fb_assert(!m_lowerValues[m_segno]);
+		m_lowerValues[m_segno] = *m_iterator;
+
+		values += m_retrieval->irb_desc.idx_count;
+		m_upperValues.assign(values, m_retrieval->irb_upper_count);
+		fb_assert(!m_upperValues[m_segno]);
+		m_upperValues[m_segno] = *m_iterator;
+	}
+}
+
+void IndexScanListIterator::makeKeys(thread_db* tdbb, temporary_key* lower, temporary_key* upper)
+{
+	m_lowerValues[m_segno] = *m_iterator;
+	m_upperValues[m_segno] = *m_iterator;
+
+	const auto keyType =
+		(m_retrieval->irb_generic & irb_multi_starting) ? INTL_KEY_MULTI_STARTING :
+		(m_retrieval->irb_generic & irb_starting) ? INTL_KEY_PARTIAL :
+		(m_retrieval->irb_desc.idx_flags & idx_unique) ? INTL_KEY_UNIQUE :
+		INTL_KEY_SORT;
+
+	// Make the lower bound key
+
+	idx_e errorCode = BTR_make_key(tdbb, m_retrieval->irb_lower_count, getLowerValues(),
+		getScale(), &m_retrieval->irb_desc, lower, keyType, nullptr);
+
+	if (errorCode == idx_e_ok)
+	{
+		if (m_retrieval->irb_generic & irb_equality)
+		{
+			// If we have an equality search, lower/upper bounds are actually the same key
+			copy_key(lower, upper);
+		}
+		else
+		{
+			// Make the upper bound key
+
+			errorCode = BTR_make_key(tdbb, m_retrieval->irb_upper_count, getUpperValues(),
+				getScale(), &m_retrieval->irb_desc, upper, keyType, nullptr);
+		}
+	}
+
+	if (errorCode != idx_e_ok)
+	{
+		index_desc temp_idx = m_retrieval->irb_desc;
+		IndexErrorContext context(m_retrieval->irb_relation, &temp_idx);
+		context.raise(tdbb, errorCode);
+	}
 }
 
 
@@ -366,14 +826,16 @@ void BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescList& idxList, Relatio
 	if (!root)
 		return;
 
+	Cleanup release_root([&] {
+		CCH_RELEASE(tdbb, &window);
+	});
+
 	for (USHORT i = 0; i < root->irt_count; i++)
 	{
 		index_desc idx;
 		if (BTR_description(tdbb, relation, root, &idx, i))
 			idxList.add(idx);
 	}
-
-	CCH_RELEASE(tdbb, &window);
 }
 
 
@@ -394,7 +856,7 @@ void BTR_complement_key(temporary_key* key)
 		UCHAR* p = key->key_data;
 		for (const UCHAR* const end = p + key->key_length; p < end; p++)
 			*p ^= -1;
-	} while (key = key->key_next.get());
+	} while ((key = key->key_next.get()));
 }
 
 
@@ -463,12 +925,12 @@ bool BTR_delete_index(thread_db* tdbb, WIN* window, USHORT id)
 	{
 		index_root_page::irt_repeat* irt_desc = root->irt_rpt + id;
 		CCH_MARK(tdbb, window);
-		const PageNumber next(window->win_page.getPageSpaceID(), irt_desc->getRoot());
-		tree_exists = (irt_desc->getRoot() != 0);
+		const ULONG rootPage = irt_desc->getRoot();
+		const PageNumber next(window->win_page.getPageSpaceID(), rootPage);
+		tree_exists = (rootPage != 0);
 
 		// remove the pointer to the top-level index page before we delete it
-		irt_desc->setRoot(0);
-		irt_desc->irt_flags = 0;
+		irt_desc->setEmpty();
 		const PageNumber prior = window->win_page;
 		const USHORT relation_id = root->irt_relation;
 
@@ -501,21 +963,25 @@ bool BTR_description(thread_db* tdbb, jrd_rel* relation, index_root_page* root, 
 
 	const index_root_page::irt_repeat* irt_desc = &root->irt_rpt[id];
 
-	if (irt_desc->getRoot() == 0)
+	const ULONG rootPage = irt_desc->getRoot();
+	if (!rootPage)
 		return false;
 
 	idx->idx_id = id;
-	idx->idx_root = irt_desc->getRoot();
+	idx->idx_root = rootPage;
 	idx->idx_count = irt_desc->irt_keys;
 	idx->idx_flags = irt_desc->irt_flags;
 	idx->idx_runtime_flags = 0;
-	idx->idx_foreign_primaries = NULL;
-	idx->idx_foreign_relations = NULL;
-	idx->idx_foreign_indexes = NULL;
+	idx->idx_foreign_primaries = nullptr;
+	idx->idx_foreign_relations = nullptr;
+	idx->idx_foreign_indexes = nullptr;
 	idx->idx_primary_relation = 0;
 	idx->idx_primary_index = 0;
-	idx->idx_expression = NULL;
-	idx->idx_expression_statement = NULL;
+	idx->idx_expression = nullptr;
+	idx->idx_expression_statement = nullptr;
+	idx->idx_condition = nullptr;
+	idx->idx_condition_statement = nullptr;
+	idx->idx_fraction = 1.0;
 
 	// pick up field ids and type descriptions for each of the fields
 	const UCHAR* ptr = (UCHAR*) root + irt_desc->irt_desc;
@@ -528,86 +994,61 @@ bool BTR_description(thread_db* tdbb, jrd_rel* relation, index_root_page* root, 
 		idx_desc->idx_selectivity = key_descriptor->irtd_selectivity;
 		ptr += sizeof(irtd);
 	}
-	idx->idx_selectivity = idx_desc->idx_selectivity;
+	idx->idx_selectivity = idx->idx_rpt[idx->idx_count - 1].idx_selectivity;
 
-	if (idx->idx_flags & idx_expressn)
+	ISC_STATUS error = 0;
+	if (idx->idx_flags & idx_expression)
 	{
 		MET_lookup_index_expression(tdbb, relation, idx);
-		fb_assert(idx->idx_expression != NULL);
+
+		if (!idx->idx_expression)
+		{
+			if (tdbb->tdbb_flags & TDBB_sweeper)
+				return false;
+
+			// Definition of index expression is not found for index @1
+			error = isc_idx_expr_not_found;
+		}
+	}
+
+	if (!error && idx->idx_flags & idx_condition)
+	{
+		MET_lookup_index_condition(tdbb, relation, idx);
+
+		if (!idx->idx_condition)
+		{
+			if (tdbb->tdbb_flags & TDBB_sweeper)
+				return false;
+
+			// Definition of index condition is not found for index @1
+			error = isc_idx_cond_not_found;
+		}
+	}
+
+	if (error)
+	{
+		QualifiedName indexName;
+		MET_lookup_index(tdbb, indexName, relation->rel_name, idx->idx_id + 1);
+
+		Arg::StatusVector status;
+
+		if (indexName.object.hasData())
+			status.assign(Arg::Gds(error) << indexName.toQuotedString());
+		else
+			// there is no index in table @1 with id @2
+			status.assign(Arg::Gds(isc_indexnotdefined) << relation->rel_name.toQuotedString() << Arg::Num(idx->idx_id));
+
+		ERR_post_nothrow(status);
+		CCH_unwind(tdbb, true);
 	}
 
 	return true;
 }
 
 
-DSC* BTR_eval_expression(thread_db* tdbb, index_desc* idx, Record* record, bool& notNull)
+dsc* BTR_eval_expression(thread_db* tdbb, index_desc* idx, Record* record)
 {
-	SET_TDBB(tdbb);
-	fb_assert(idx->idx_expression != NULL);
-
-	// check for resursive expression evaluation
-	Request* const org_request = tdbb->getRequest();
-	Request* const expr_request = idx->idx_expression_statement->findRequest(tdbb, true);
-
-	if (expr_request == NULL)
-		ERR_post(Arg::Gds(isc_random) << "Attempt to evaluate index expression recursively");
-
-	fb_assert(expr_request != org_request);
-
-	fb_assert(expr_request->req_caller == NULL);
-	expr_request->req_caller = org_request;
-
-	expr_request->req_flags &= req_in_use;
-	expr_request->req_flags |= req_active;
-	TRA_attach_request(tdbb->getTransaction(), expr_request);
-	TRA_setup_request_snapshot(tdbb, expr_request);
-	tdbb->setRequest(expr_request);
-
-	fb_assert(expr_request->req_transaction);
-
-	expr_request->req_rpb[0].rpb_record = record;
-	expr_request->req_rpb[0].rpb_number.setValue(BOF_NUMBER);
-	expr_request->req_rpb[0].rpb_number.setValid(true);
-	expr_request->req_flags &= ~req_null;
-
-	DSC* result = NULL;
-
-	try
-	{
-		Jrd::ContextPoolHolder context(tdbb, expr_request->req_pool);
-
-		if (org_request)
-			expr_request->setGmtTimeStamp(org_request->getGmtTimeStamp());
-		else
-			expr_request->validateTimeStamp();
-
-		if (!(result = EVL_expr(tdbb, expr_request, idx->idx_expression)))
-			result = &idx->idx_expression_desc;
-
-		notNull = !(expr_request->req_flags & req_null);
-	}
-	catch (const Exception&)
-	{
-		EXE_unwind(tdbb, expr_request);
-		tdbb->setRequest(org_request);
-
-		expr_request->req_caller = NULL;
-		expr_request->req_flags &= ~req_in_use;
-		expr_request->req_attachment = NULL;
-		expr_request->invalidateTimeStamp();
-
-		throw;
-	}
-
-	EXE_unwind(tdbb, expr_request);
-	tdbb->setRequest(org_request);
-
-	expr_request->req_caller = NULL;
-	expr_request->req_flags &= ~req_in_use;
-	expr_request->req_attachment = NULL;
-	expr_request->invalidateTimeStamp();
-
-	return result;
+	return IndexExpression(tdbb, idx).evaluate(record);
 }
 
 
@@ -650,32 +1091,39 @@ static void checkForLowerKeySkip(bool& skipLowerKey,
 	}
 	else
 	{
-		// Check if we have a duplicate node (for the same page)
-		if (node.prefix < lower.key_length)
+		if ((lower.key_length == node.prefix + node.length) ||
+			((lower.key_length <= node.prefix + node.length) && partLower))
 		{
-			if (node.prefix + node.length == lower.key_length)
-				skipLowerKey = (memcmp(node.data, lower.key_data + node.prefix, node.length) == 0);
-			else
-				skipLowerKey = false;
-		}
-		else if ((node.prefix == lower.key_length) && node.length)
-		{
-			// In case of multi-segment check segment-number else
-			// it's a different key
-			if (partLower)
+			const UCHAR* p = node.data, *q = lower.key_data + node.prefix;
+			const UCHAR* const end = lower.key_data + lower.key_length;
+			while (q < end)
 			{
-				const USHORT segnum = idx.idx_count - (UCHAR)((idx.idx_flags & idx_descending) ?
-					(*node.data) ^ -1 : *node.data);
+				if (*p++ != *q++)
+				{
+					skipLowerKey = false;
+					break;
+				}
+			}
+
+			if ((q >= end) && (p < node.data + node.length) && skipLowerKey && partLower)
+			{
+				const bool descending = idx.idx_flags & idx_descending;
+
+				// since key length always is multiplier of (STUFF_COUNT + 1) (for partial
+				// compound keys) and we passed lower key completely then p pointed
+				// us to the next segment number and we can use this fact to calculate
+				// how many segments is equal to lower key
+				const USHORT segnum = idx.idx_count - (UCHAR) (descending ? ((*p) ^ -1) : *p);
 
 				if (segnum < retrieval->irb_lower_count)
 					skipLowerKey = false;
 			}
-			else
-				skipLowerKey = false;
+		}
+		else {
+			skipLowerKey = false;
 		}
 	}
 }
-
 
 void BTR_evaluate(thread_db* tdbb, const IndexRetrieval* retrieval, RecordBitmap** bitmap,
 				  RecordBitmap* bitmap_and)
@@ -693,40 +1141,48 @@ void BTR_evaluate(thread_db* tdbb, const IndexRetrieval* retrieval, RecordBitmap
  **************************************/
 	SET_TDBB(tdbb);
 
-	// Remove ignore_nulls flag for older ODS
-	//const Database* dbb = tdbb->getDatabase();
-
-	index_desc idx;
 	RelationPages* relPages = retrieval->irb_relation->getPages(tdbb);
 	WIN window(relPages->rel_pg_space_id, -1);
+
 	temporary_key lowerKey, upperKey;
 	lowerKey.key_flags = 0;
 	lowerKey.key_length = 0;
 	upperKey.key_flags = 0;
 	upperKey.key_length = 0;
 
+	AutoPtr<IndexScanListIterator> iterator =
+		retrieval->irb_list ? FB_NEW_POOL(*tdbb->getDefaultPool())
+			IndexScanListIterator(tdbb, retrieval) : nullptr;
+
 	temporary_key* lower = &lowerKey;
 	temporary_key* upper = &upperKey;
-	bool first = true;
+	USHORT forceInclFlag = 0;
+
+	if (!BTR_make_bounds(tdbb, retrieval, iterator, lower, upper, forceInclFlag))
+		return;
+
+	index_desc idx;
+	btree_page* page = nullptr;
 
 	do
 	{
-		btree_page* page = BTR_find_page(tdbb, retrieval, &window, &idx, lower, upper, first);
-		first = false;
+		if (!page) // scan from the index root
+			page = BTR_find_page(tdbb, retrieval, &window, &idx, lower, upper);
 
 		const bool descending = (idx.idx_flags & idx_descending);
-		bool skipLowerKey = (retrieval->irb_generic & irb_exclude_lower);
+		bool skipLowerKey = (retrieval->irb_generic & ~forceInclFlag) & irb_exclude_lower;
 		const bool partLower = (retrieval->irb_lower_count < idx.idx_count);
 
 		// If there is a starting descriptor, search down index to starting position.
 		// This may involve sibling buckets if splits are in progress.  If there
 		// isn't a starting descriptor, walk down the left side of the index.
+
 		USHORT prefix;
 		UCHAR* pointer;
 		if (retrieval->irb_lower_count)
 		{
 			while (!(pointer = find_node_start_point(page, lower, 0, &prefix,
-				idx.idx_flags & idx_descending, (retrieval->irb_generic & (irb_starting | irb_partial)))))
+				descending, (retrieval->irb_generic & (irb_starting | irb_partial)))))
 			{
 				page = (btree_page*) CCH_HANDOFF(tdbb, &window, page->btr_sibling, LCK_read, pag_index);
 			}
@@ -735,42 +1191,14 @@ void BTR_evaluate(thread_db* tdbb, const IndexRetrieval* retrieval, RecordBitmap
 			if (retrieval->irb_upper_count)
 			{
 				prefix = IndexNode::computePrefix(upper->key_data, upper->key_length,
-													lower->key_data, lower->key_length);
+												  lower->key_data, lower->key_length);
 			}
 
 			if (skipLowerKey)
 			{
 				IndexNode node;
 				node.readNode(pointer, true);
-
-				if ((lower->key_length == node.prefix + node.length) ||
-					((lower->key_length <= node.prefix + node.length) && partLower))
-				{
-					const UCHAR* p = node.data, *q = lower->key_data + node.prefix;
-					const UCHAR* const end = lower->key_data + lower->key_length;
-					while (q < end)
-					{
-						if (*p++ != *q++)
-						{
-							skipLowerKey = false;
-							break;
-						}
-					}
-
-					if ((q >= end) && (p < node.data + node.length) && skipLowerKey && partLower)
-					{
-						// since key length always is multiplier of (STUFF_COUNT + 1) (for partial
-						// compound keys) and we passed lower key completely then p pointed
-						// us to the next segment number and we can use this fact to calculate
-						// how many segments is equal to lower key
-						const USHORT segnum = idx.idx_count - (UCHAR) (descending ? ((*p) ^ -1) : *p);
-
-						if (segnum < retrieval->irb_lower_count)
-							skipLowerKey = false;
-					}
-				}
-				else
-					skipLowerKey = false;
+				checkForLowerKeySkip(skipLowerKey, partLower, node, *lower, idx, retrieval);
 			}
 		}
 		else
@@ -780,11 +1208,11 @@ void BTR_evaluate(thread_db* tdbb, const IndexRetrieval* retrieval, RecordBitmap
 			skipLowerKey = false;
 		}
 
-		// if there is an upper bound, scan the index pages looking for it
 		if (retrieval->irb_upper_count)
 		{
+			// if there is an upper bound, scan the index pages looking for it
 			while (scan(tdbb, pointer, bitmap, bitmap_and, &idx, retrieval, prefix, upper,
-						skipLowerKey, *lower))
+						skipLowerKey, *lower, forceInclFlag))
 			{
 				page = (btree_page*) CCH_HANDOFF(tdbb, &window, page->btr_sibling, LCK_read, pag_index);
 				pointer = page->btr_nodes + page->btr_jump_size;
@@ -814,8 +1242,8 @@ void BTR_evaluate(thread_db* tdbb, const IndexRetrieval* retrieval, RecordBitmap
 				{
 					// If we're walking in a descending index and we need to ignore NULLs
 					// then stop at the first NULL we see (only for single segment!)
-					if (descending && ignoreNulls && node.prefix == 0 &&
-						node.length >= 1 && node.data[0] == 255)
+					if (descending && ignoreNulls &&
+						node.prefix == 0 && node.length >= 1 && node.data[0] == 255)
 					{
 						break;
 					}
@@ -849,13 +1277,29 @@ void BTR_evaluate(thread_db* tdbb, const IndexRetrieval* retrieval, RecordBitmap
 			}
 		}
 
+		// Switch to the new lookup key and continue scanning
+		// either from the current position or from the root
+
+		if (iterator && iterator->getNext(tdbb, lower, upper))
+		{
+			if (!(retrieval->irb_generic & irb_root_list_scan))
+				continue;
+		}
+		else
+		{
+			lower = lower->key_next.get();
+			upper = upper->key_next.get();
+		}
+
 		CCH_RELEASE(tdbb, &window);
-	} while ((lower = lower->key_next.get()) && (upper = upper->key_next.get()));
+		page = nullptr;
+
+	} while (lower && upper);
 }
 
 
 UCHAR* BTR_find_leaf(btree_page* bucket, temporary_key* key, UCHAR* value,
-					 USHORT* return_value, bool descending, bool retrieval)
+					 USHORT* return_value, bool descending, int retrieval)
 {
 /**************************************
  *
@@ -878,8 +1322,7 @@ btree_page* BTR_find_page(thread_db* tdbb,
 						  WIN* window,
 						  index_desc* idx,
 						  temporary_key* lower,
-						  temporary_key* upper,
-						  bool makeKeys)
+						  temporary_key* upper)
 {
 /**************************************
  *
@@ -893,51 +1336,6 @@ btree_page* BTR_find_page(thread_db* tdbb,
  **************************************/
 
 	SET_TDBB(tdbb);
-
-	// Generate keys before we get any pages locked to avoid unwind
-	// problems --  if we already have a key, assume that we
-	// are looking for an equality
-	if (retrieval->irb_key)
-	{
-		fb_assert(makeKeys);
-		copy_key(retrieval->irb_key, lower);
-		copy_key(retrieval->irb_key, upper);
-	}
-	else if (makeKeys)
-	{
-		idx_e errorCode = idx_e_ok;
-
-		const USHORT keyType =
-			(retrieval->irb_generic & irb_multi_starting) ? INTL_KEY_MULTI_STARTING :
-			(retrieval->irb_generic & irb_starting) ? INTL_KEY_PARTIAL :
-			(retrieval->irb_desc.idx_flags & idx_unique) ? INTL_KEY_UNIQUE :
-			INTL_KEY_SORT;
-
-		if (retrieval->irb_upper_count)
-		{
-			errorCode = BTR_make_key(tdbb, retrieval->irb_upper_count,
-									 retrieval->irb_value + retrieval->irb_desc.idx_count,
-									 &retrieval->irb_desc, upper,
-									 keyType);
-		}
-
-		if (errorCode == idx_e_ok)
-		{
-			if (retrieval->irb_lower_count)
-			{
-				errorCode = BTR_make_key(tdbb, retrieval->irb_lower_count,
-										 retrieval->irb_value, &retrieval->irb_desc, lower,
-										 keyType);
-			}
-		}
-
-		if (errorCode != idx_e_ok)
-		{
-			index_desc temp_idx = retrieval->irb_desc; // to avoid constness issues
-			IndexErrorContext context(retrieval->irb_relation, &temp_idx);
-			context.raise(tdbb, errorCode, NULL);
-		}
-	}
 
 	RelationPages* relPages = retrieval->irb_relation->getPages(tdbb);
 	fb_assert(window->win_page.getPageSpaceID() == relPages->rel_pg_space_id);
@@ -1197,183 +1595,6 @@ void BTR_insert(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 }
 
 
-idx_e BTR_key(thread_db* tdbb, jrd_rel* relation, Record* record, index_desc* idx,
-			  temporary_key* key, const USHORT keyType, USHORT count)
-{
-/**************************************
- *
- *	B T R _ k e y
- *
- **************************************
- *
- * Functional description
- *	Compute a key from a record and an index descriptor.
- *	Note that compound keys are expanded by 25%.  If this
- *	changes, both BTR_key_length and GDEF exe.e have to
- *	change.
- *
- **************************************/
-	temporary_key temp;
-	temp.key_flags = 0;
-	temp.key_length = 0;
-	DSC desc;
-	DSC* desc_ptr;
-
-	SET_TDBB(tdbb);
-	const Database* dbb = tdbb->getDatabase();
-	CHECK_DBB(dbb);
-
-	index_desc::idx_repeat* tail = idx->idx_rpt;
-	key->key_flags = 0;
-	key->key_nulls = 0;
-
-	const bool descending = (idx->idx_flags & idx_descending);
-
-	if (!count)
-		count = idx->idx_count;
-
-	const USHORT maxKeyLength = dbb->getMaxIndexKeyLength();
-
-	try {
-		// Special case single segment indices
-
-		if (idx->idx_count == 1)
-		{
-			bool isNull;
-			// for expression indices, compute the value of the expression
-			if (idx->idx_flags & idx_expressn)
-			{
-				bool notNull;
-				desc_ptr = BTR_eval_expression(tdbb, idx, record, notNull);
-				// Multi-byte text descriptor is returned already adjusted.
-				isNull = !notNull;
-			}
-			else
-			{
-				desc_ptr = &desc;
-				// In order to "map a null to a default" value (in EVL_field()),
-				// the relation block is referenced.
-				// Reference: Bug 10116, 10424
-				//
-				isNull = !EVL_field(relation, record, tail->idx_field, desc_ptr);
-
-				if (!isNull && desc_ptr->dsc_dtype == dtype_text &&
-					tail->idx_field < record->getFormat()->fmt_desc.getCount())
-				{
-					// That's necessary for NO-PAD collations.
-					INTL_adjust_text_descriptor(tdbb, desc_ptr);
-				}
-			}
-
-			if (isNull)
-				key->key_nulls = 1;
-
-			key->key_flags |= key_empty;
-
-			compress(tdbb, desc_ptr, key, tail->idx_itype, isNull, descending, keyType);
-		}
-		else
-		{
-			UCHAR* p = key->key_data;
-			SSHORT stuff_count = 0;
-			temp.key_flags |= key_empty;
-			for (USHORT n = 0; n < count; n++, tail++)
-			{
-				for (; stuff_count; --stuff_count)
-				{
-					*p++ = 0;
-
-					if (p - key->key_data >= maxKeyLength)
-						return idx_e_keytoobig;
-				}
-
-				desc_ptr = &desc;
-				// In order to "map a null to a default" value (in EVL_field()),
-				// the relation block is referenced.
-				// Reference: Bug 10116, 10424
-				const bool isNull = !EVL_field(relation, record, tail->idx_field, desc_ptr);
-
-				if (isNull)
-					key->key_nulls |= 1 << n;
-				else
-				{
-					if (desc_ptr->dsc_dtype == dtype_text &&
-						tail->idx_field < record->getFormat()->fmt_desc.getCount())
-					{
-						// That's necessary for NO-PAD collations.
-						INTL_adjust_text_descriptor(tdbb, desc_ptr);
-					}
-				}
-
-				compress(tdbb, desc_ptr, &temp, tail->idx_itype, isNull, descending, keyType);
-
-				const UCHAR* q = temp.key_data;
-				for (USHORT l = temp.key_length; l; --l, --stuff_count)
-				{
-					if (stuff_count == 0)
-					{
-						*p++ = idx->idx_count - n;
-						stuff_count = STUFF_COUNT;
-
-						if (p - key->key_data >= maxKeyLength)
-							return idx_e_keytoobig;
-					}
-
-					*p++ = *q++;
-
-					if (p - key->key_data >= maxKeyLength)
-						return idx_e_keytoobig;
-				}
-			}
-
-			key->key_length = (p - key->key_data);
-
-			if (temp.key_flags & key_empty)
-				key->key_flags |= key_empty;
-		}
-
-		if (key->key_length >= maxKeyLength)
-			return idx_e_keytoobig;
-
-		if (descending)
-			BTR_complement_key(key);
-
-	}	// try
-	catch (const Exception& ex)
-	{
-		if (!(tdbb->tdbb_flags & TDBB_sys_error))
-		{
-			Arg::StatusVector error(ex);
-
-			if (!(error.length() > 1 &&
-				  error.value()[0] == isc_arg_gds &&
-				  error.value()[1] == isc_expression_eval_index))
-			{
-				MetaName indexName;
-				MET_lookup_index(tdbb, indexName, relation->rel_name, idx->idx_id + 1);
-
-				if (indexName.isEmpty())
-					indexName = "***unknown***";
-
-				error.prepend(Arg::Gds(isc_expression_eval_index) <<
-					Arg::Str(indexName) <<
-					Arg::Str(relation->rel_name));
-			}
-
-			error.copyTo(tdbb->tdbb_status_vector);
-		}
-		else
-			ex.stuffException(tdbb->tdbb_status_vector);
-
-		key->key_length = 0;
-
-		return (tdbb->tdbb_flags & TDBB_sys_error) ? idx_e_interrupt : idx_e_conversion;
-	}
-
-	return idx_e_ok;
-}
-
-
 USHORT BTR_key_length(thread_db* tdbb, jrd_rel* relation, index_desc* idx)
 {
 /**************************************
@@ -1437,9 +1658,9 @@ USHORT BTR_key_length(thread_db* tdbb, jrd_rel* relation, index_desc* idx)
 			break;
 
 		default:
-			if (idx->idx_flags & idx_expressn)
+			if (idx->idx_flags & idx_expression)
 			{
-				fb_assert(idx->idx_expression != NULL);
+				fb_assert(idx->idx_expression);
 				length = idx->idx_expression_desc.dsc_length;
 				if (idx->idx_expression_desc.dsc_dtype == dtype_varying)
 				{
@@ -1539,12 +1760,103 @@ bool BTR_lookup(thread_db* tdbb, jrd_rel* relation, USHORT id, index_desc* buffe
 }
 
 
+bool BTR_make_bounds(thread_db* tdbb, const IndexRetrieval* retrieval,
+					 IndexScanListIterator* iterator,
+					 temporary_key* lower, temporary_key* upper,
+					 USHORT& forceInclFlag)
+{
+/**************************************
+ *
+ *	B T R _ m a k e _ b o u n d s
+ *
+ **************************************
+ *
+ * Functional description
+ *	Construct search keys for lower/upper bounds for the given retrieval.
+ *
+ **************************************/
+
+	// If we already have a key, assume that we are looking for an equality
+
+	if (retrieval->irb_key)
+	{
+		copy_key(retrieval->irb_key, lower);
+		copy_key(retrieval->irb_key, upper);
+	}
+	else
+	{
+		if (iterator && iterator->isEmpty())
+			return false;
+
+		idx_e errorCode = idx_e_ok;
+		const auto idx = &retrieval->irb_desc;
+		forceInclFlag &= ~(irb_force_lower | irb_force_upper);
+
+		const USHORT keyType =
+			(retrieval->irb_generic & irb_multi_starting) ? INTL_KEY_MULTI_STARTING :
+			(retrieval->irb_generic & irb_starting) ? INTL_KEY_PARTIAL :
+			(retrieval->irb_desc.idx_flags & idx_unique) ? INTL_KEY_UNIQUE :
+			INTL_KEY_SORT;
+
+		bool forceIncludeUpper = false, forceIncludeLower = false;
+
+		if (const auto count = retrieval->irb_upper_count)
+		{
+			const auto values = iterator ? iterator->getUpperValues() :
+				retrieval->irb_value + retrieval->irb_desc.idx_count;
+
+			errorCode = BTR_make_key(tdbb, count, values, retrieval->irb_scale,
+				idx, upper, keyType, &forceIncludeUpper);
+		}
+
+		if (errorCode == idx_e_ok)
+		{
+			if (const auto count = retrieval->irb_lower_count)
+			{
+				const auto values = iterator ? iterator->getLowerValues() :
+					retrieval->irb_value;
+
+				errorCode = BTR_make_key(tdbb, count, values, retrieval->irb_scale,
+					idx, lower, keyType, &forceIncludeLower);
+			}
+		}
+
+		if (errorCode != idx_e_ok)
+		{
+			index_desc temp_idx = *idx; // to avoid constness issues
+			IndexErrorContext context(retrieval->irb_relation, &temp_idx);
+			context.raise(tdbb, errorCode);
+		}
+
+		// If retrieval is flagged to ignore NULLs and any segment of the key
+		// to be matched contains NULL, don't bother with a scan
+
+		if ((retrieval->irb_generic & irb_ignore_null_value_key) &&
+			((retrieval->irb_upper_count && upper->key_nulls) ||
+			(retrieval->irb_lower_count && lower->key_nulls)))
+		{
+			return false;
+		}
+
+		if (forceIncludeUpper)
+			forceInclFlag |= irb_force_upper;
+
+		if (forceIncludeLower)
+			forceInclFlag |= irb_force_lower;
+	}
+
+	return true;
+}
+
+
 idx_e BTR_make_key(thread_db* tdbb,
 				   USHORT count,
 				   const ValueExprNode* const* exprs,
+				   const SSHORT* scale,
 				   const index_desc* idx,
 				   temporary_key* key,
-				   USHORT keyType)
+				   USHORT keyType,
+				   bool* forceInclude)
 {
 /**************************************
  *
@@ -1557,13 +1869,12 @@ idx_e BTR_make_key(thread_db* tdbb,
  *	a vector of value expressions, and a place to put the key.
  *
  **************************************/
-	DSC temp_desc;
+	const auto dbb = tdbb->getDatabase();
+	const auto request = tdbb->getRequest();
+
 	temporary_key temp;
 	temp.key_flags = 0;
 	temp.key_length = 0;
-
-	SET_TDBB(tdbb);
-	const Database* dbb = tdbb->getDatabase();
 
 	fb_assert(count > 0);
 	fb_assert(idx != NULL);
@@ -1583,14 +1894,14 @@ idx_e BTR_make_key(thread_db* tdbb,
 	// If the index is a single segment index, don't sweat the compound stuff
 	if (idx->idx_count == 1)
 	{
-		bool isNull;
-		const dsc* desc = eval(tdbb, *exprs, &temp_desc, &isNull);
-		key->key_flags |= key_empty;
+		const auto desc = EVL_expr(tdbb, request, *exprs);
 
-		if (isNull)
+		if (!desc)
 			key->key_nulls = 1;
 
-		compress(tdbb, desc, key, tail->idx_itype, isNull, descending, keyType);
+		key->key_flags |= key_empty;
+
+		compress(tdbb, desc, scale ? *scale : 0, key, tail->idx_itype, descending, keyType, forceInclude);
 
 		if (fuzzy && (key->key_flags & key_empty))
 		{
@@ -1616,17 +1927,17 @@ idx_e BTR_make_key(thread_db* tdbb,
 					return idx_e_keytoobig;
 			}
 
-			bool isNull;
-			const dsc* desc = eval(tdbb, *exprs++, &temp_desc, &isNull);
+			const auto desc = EVL_expr(tdbb, request, *exprs++);
 
-			if (isNull)
+			if (!desc)
 				key->key_nulls |= 1 << n;
 
 			temp.key_flags |= key_empty;
 
-			compress(tdbb, desc, &temp, tail->idx_itype, isNull, descending,
+			compress(tdbb, desc, scale ? *scale++ : 0, &temp, tail->idx_itype, descending,
 				(n == count - 1 ?
-					keyType : ((idx->idx_flags & idx_unique) ? INTL_KEY_UNIQUE : INTL_KEY_SORT)));
+					keyType : ((idx->idx_flags & idx_unique) ? INTL_KEY_UNIQUE : INTL_KEY_SORT)),
+				forceInclude);
 
 			if (!(temp.key_flags & key_empty))
 				is_key_empty = false;
@@ -1730,15 +2041,6 @@ void BTR_make_null_key(thread_db* tdbb, const index_desc* idx, temporary_key* ke
  *  all null values. This is worked only for ODS11 and later
  *
  **************************************/
-	dsc null_desc;
-	null_desc.dsc_dtype = dtype_text;
-	null_desc.dsc_flags = 0;
-	null_desc.dsc_sub_type = 0;
-	null_desc.dsc_scale = 0;
-	null_desc.dsc_length = 1;
-	null_desc.dsc_ttype() = ttype_ascii;
-	null_desc.dsc_address = (UCHAR*) " ";
-
 	temporary_key temp;
 	temp.key_flags = 0;
 	temp.key_length = 0;
@@ -1756,9 +2058,9 @@ void BTR_make_null_key(thread_db* tdbb, const index_desc* idx, temporary_key* ke
 	const index_desc::idx_repeat* tail = idx->idx_rpt;
 
 	// If the index is a single segment index, don't sweat the compound stuff
-	if ((idx->idx_count == 1) || (idx->idx_flags & idx_expressn))
+	if ((idx->idx_count == 1) || (idx->idx_flags & idx_expression))
 	{
-		compress(tdbb, &null_desc, key, tail->idx_itype, true, descending, INTL_KEY_SORT);
+		compress(tdbb, nullptr, 0, key, tail->idx_itype, descending, INTL_KEY_SORT, nullptr);
 	}
 	else
 	{
@@ -1772,7 +2074,7 @@ void BTR_make_null_key(thread_db* tdbb, const index_desc* idx, temporary_key* ke
 			for (; stuff_count; --stuff_count)
 				*p++ = 0;
 
-			compress(tdbb, &null_desc, &temp, tail->idx_itype, true, descending, INTL_KEY_SORT);
+			compress(tdbb, nullptr, 0, &temp, tail->idx_itype, descending, INTL_KEY_SORT, nullptr);
 
 			const UCHAR* q = temp.key_data;
 			for (USHORT l = temp.key_length; l; --l, --stuff_count)
@@ -1836,18 +2138,18 @@ bool BTR_next_index(thread_db* tdbb, jrd_rel* relation, jrd_tra* transaction, in
 	for (; id < root->irt_count; ++id)
 	{
 		const index_root_page::irt_repeat* irt_desc = root->irt_rpt + id;
-		if (irt_desc->getTransaction() && transaction)
+		const TraNumber inProgressTrans = irt_desc->inProgress();
+		if (inProgressTrans && transaction)
 		{
-			const TraNumber trans = irt_desc->getTransaction();
 			CCH_RELEASE(tdbb, window);
-			const int trans_state = TRA_wait(tdbb, transaction, trans, jrd_tra::tra_wait);
+			const int trans_state = TRA_wait(tdbb, transaction, inProgressTrans, jrd_tra::tra_wait);
 			if ((trans_state == tra_dead) || (trans_state == tra_committed))
 			{
 				// clean up this left-over index
 				root = (index_root_page*) CCH_FETCH(tdbb, window, LCK_write, pag_root);
 				irt_desc = root->irt_rpt + id;
 
-				if (irt_desc->getTransaction() == trans)
+				if (irt_desc->inProgress() == inProgressTrans)
 					BTR_delete_index(tdbb, window, id);
 				else
 					CCH_RELEASE(tdbb, window);
@@ -2071,7 +2373,7 @@ void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation)
 	fb_assert(idx->idx_count <= MAX_UCHAR);
 	slot->irt_keys = (UCHAR) idx->idx_count;
 	slot->irt_flags = idx->idx_flags;
-	slot->setTransaction(transaction->tra_number);
+	slot->setInProgress(transaction->tra_number);
 
 	// Exploit the fact idx_repeat structure matches ODS IRTD one
 	memcpy(desc, idx->idx_rpt, len);
@@ -2105,13 +2407,13 @@ void BTR_selectivity(thread_db* tdbb, jrd_rel* relation, USHORT id, SelectivityL
 	if (!root)
 		return;
 
-	ULONG page;
-	if (id >= root->irt_count || !(page = root->irt_rpt[id].getRoot()))
+	if (id >= root->irt_count || !root->irt_rpt[id].getRoot())
 	{
 		CCH_RELEASE(tdbb, &window);
 		return;
 	}
 
+	ULONG page = root->irt_rpt[id].getRoot();
 	const bool descending = (root->irt_rpt[id].irt_flags & irt_descending);
 	const ULONG segments = root->irt_rpt[id].irt_keys;
 
@@ -2303,26 +2605,32 @@ bool BTR_types_comparable(const dsc& target, const dsc& source)
 	if (source.isNull() || DSC_EQUIV(&source, &target, true))
 		return true;
 
-	if (DTYPE_IS_TEXT(target.dsc_dtype))
+	if (target.isText())
 	{
 		// should we also check for the INTL stuff here?
-		return (DTYPE_IS_TEXT(source.dsc_dtype) || source.dsc_dtype == dtype_dbkey);
+		return source.isText() || source.isDbKey();
 	}
 
-	if (target.dsc_dtype == dtype_int64)
-		return (source.dsc_dtype <= dtype_long || source.dsc_dtype == dtype_int64);
+	if (target.isNumeric())
+		return source.isText() || source.isNumeric();
 
-	if (DTYPE_IS_NUMERIC(target.dsc_dtype))
-		return (source.dsc_dtype <= dtype_double || source.dsc_dtype == dtype_int64);
+	if (target.isDate())
+	{
+		// source.isDate() is already covered above in DSC_EQUIV
+		return source.isText() || source.isTimeStamp();
+	}
 
-	if (target.dsc_dtype == dtype_sql_date)
-		return (source.dsc_dtype <= dtype_sql_date || source.dsc_dtype == dtype_timestamp);
+	if (target.isTime())
+	{
+		// source.isTime() below covers both TZ and non-TZ time
+		return source.isText() || source.isTime() || source.isTimeStamp();
+	}
 
-	if (DTYPE_IS_DATE(target.dsc_dtype))
-		return (source.dsc_dtype <= dtype_timestamp);
+	if (target.isTimeStamp())
+		return source.isText() || source.isDateTime();
 
-	if (target.dsc_dtype == dtype_boolean)
-		return DTYPE_IS_TEXT(source.dsc_dtype) || source.dsc_dtype == dtype_boolean;
+	if (target.isBoolean())
+		return source.isText() || source.isBoolean();
 
 	return false;
 }
@@ -2462,9 +2770,11 @@ static ULONG add_node(thread_db* tdbb,
 
 static void compress(thread_db* tdbb,
 					 const dsc* desc,
+					 const SSHORT matchScale,
 					 temporary_key* key,
 					 USHORT itype,
-					 bool isNull, bool descending, USHORT key_type)
+					 bool descending, USHORT key_type,
+					 bool* forceInclude)
 {
 /**************************************
  *
@@ -2476,7 +2786,7 @@ static void compress(thread_db* tdbb,
  *	Compress a data value into an index key.
  *
  **************************************/
-	if (isNull)
+	if (!desc) // this indicates NULL
 	{
 		const UCHAR pad = 0;
 		key->key_flags &= ~key_empty;
@@ -2500,8 +2810,8 @@ static void compress(thread_db* tdbb,
 	// is needed to make a difference between a NULL state and a VALUE.
 	// Note! By descending index key is complemented after this compression routine.
 	// Further a NULL state is always returned as 1 byte 0xFF (descending index).
-	const UCHAR desc_end_value_prefix = 0x01; // ~0xFE
-	const UCHAR desc_end_value_check = 0x00; // ~0xFF;
+	constexpr UCHAR desc_end_value_prefix = 0x01; // ~0xFE
+	constexpr UCHAR desc_end_value_check = 0x00; // ~0xFF;
 
 	const Database* dbb = tdbb->getDatabase();
 	bool first_key = true;
@@ -2509,6 +2819,7 @@ static void compress(thread_db* tdbb,
 	size_t multiKeyLength;
 	UCHAR* ptr;
 	UCHAR* p = key->key_data;
+	SSHORT scale = matchScale ? matchScale : desc->dsc_scale;
 
 	if (itype == idx_string || itype == idx_byte_array || itype == idx_metadata ||
 		itype == idx_decimal || itype == idx_bcd || itype >= idx_first_intl_string)
@@ -2528,8 +2839,28 @@ static void compress(thread_db* tdbb,
 
 				if (itype == idx_bcd)
 				{
-					Int128 i = MOV_get_int128(tdbb, desc, desc->dsc_scale);
-					length = i.makeIndexKey(&buffer, desc->dsc_scale);
+					Int128 i;
+					try
+					{
+						i = MOV_get_int128(tdbb, desc, scale);
+					}
+					catch (const Exception& ex)
+					{
+						ex.stuffException(tdbb->tdbb_status_vector);
+						const ISC_STATUS* st = tdbb->tdbb_status_vector->getErrors();
+						if (!(fb_utils::containsErrorCode(st, isc_arith_except) ||
+							fb_utils::containsErrorCode(st, isc_decfloat_invalid_operation)))
+						{
+							throw;
+						}
+
+						tdbb->tdbb_status_vector->init();
+						i = MOV_get_dec128(tdbb, desc).sign() < 0 ? MIN_Int128 : MAX_Int128;
+						if (forceInclude)
+							*forceInclude = true;
+					}
+
+					length = i.makeIndexKey(&buffer, scale);
 					ptr = reinterpret_cast<UCHAR*>(buffer.vary_string);
 				}
 				else if (itype == idx_decimal)
@@ -2680,13 +3011,33 @@ static void compress(thread_db* tdbb,
 	else if (itype == idx_numeric2)
 	{
 		int64_key_op = true;
-		temp.temp_int64_key = make_int64_key(MOV_get_int64(tdbb, desc, desc->dsc_scale), desc->dsc_scale);
+		SINT64 v = 0;
+		try
+		{
+			v = MOV_get_int64(tdbb, desc, scale);
+		}
+		catch (const Exception& ex)
+		{
+			ex.stuffException(tdbb->tdbb_status_vector);
+			const ISC_STATUS* st = tdbb->tdbb_status_vector->getErrors();
+			if (!(fb_utils::containsErrorCode(st, isc_arith_except) ||
+				fb_utils::containsErrorCode(st, isc_decfloat_invalid_operation)))
+			{
+				throw;
+			}
+
+			tdbb->tdbb_status_vector->init();
+			v = MOV_get_dec128(tdbb, desc).sign() < 0 ? MIN_SINT64 : MAX_SINT64;
+			if (forceInclude)
+				*forceInclude = true;
+		}
+		temp.temp_int64_key = make_int64_key(v, scale);
 		temp_copy_length = sizeof(temp.temp_int64_key.d_part);
 		temp_is_negative = (temp.temp_int64_key.d_part < 0);
 
 #ifdef DEBUG_INDEXKEY
 		print_int64_key(*(const SINT64*) desc->dsc_address,
-			desc->dsc_scale, temp.temp_int64_key);
+			scale, temp.temp_int64_key);
 #endif
 
 	}
@@ -3389,43 +3740,6 @@ static void delete_tree(thread_db* tdbb,
 }
 
 
-static DSC* eval(thread_db* tdbb, const ValueExprNode* node, DSC* temp, bool* isNull)
-{
-/**************************************
- *
- *	e v a l
- *
- **************************************
- *
- * Functional description
- *	Evaluate an expression returning a descriptor, and
- *	a flag to indicate a null value.
- *
- **************************************/
-	SET_TDBB(tdbb);
-
-	Request* request = tdbb->getRequest();
-
-	dsc* desc = EVL_expr(tdbb, request, node);
-	*isNull = false;
-
-	if (desc && !(request->req_flags & req_null))
-		return desc;
-
-	*isNull = true;
-
-	temp->dsc_dtype = dtype_text;
-	temp->dsc_flags = 0;
-	temp->dsc_sub_type = 0;
-	temp->dsc_scale = 0;
-	temp->dsc_length = 1;
-	temp->dsc_ttype() = ttype_ascii;
-	temp->dsc_address = (UCHAR*) " ";
-
-	return temp;
-}
-
-
 static ULONG fast_load(thread_db* tdbb,
 					   IndexCreation& creation,
 					   SelectivityList& selectivity)
@@ -3523,7 +3837,7 @@ static ULONG fast_load(thread_db* tdbb,
 		bucket->btr_jump_count = 0;
 
 #ifdef DEBUG_BTR_PAGES
-		sprintf(debugtext, "\t new page (%d)", windows[0].win_page);
+		snprintf(debugtext, sizeof(debugtext), "\t new page (%d)", windows[0].win_page);
 		gds__log(debugtext);
 #endif
 
@@ -3658,7 +3972,7 @@ static ULONG fast_load(thread_db* tdbb,
 				split->btr_jump_count = 0;
 
 #ifdef DEBUG_BTR_PAGES
-				sprintf(debugtext, "\t new page (%d), left page (%d)",
+				snprintf(debugtext, sizeof(debugtext), "\t new page (%d), left page (%d)",
 					split_window.win_page, split->btr_left_sibling);
 				gds__log(debugtext);
 #endif
@@ -3682,7 +3996,8 @@ static ULONG fast_load(thread_db* tdbb,
 				CCH_RELEASE(tdbb, &leafLevel->window);
 
 #ifdef DEBUG_BTR_PAGES
-				sprintf(debugtext, "\t release page (%d), left page (%d), right page (%d)",
+				snprintf(debugtext, sizeof(debugtext),
+					"\t release page (%d), left page (%d), right page (%d)",
 					leafLevel->window.win_page,
 					((btr*) leafLevel->window.win_buffer)->btr_left_sibling,
 					((btr*) leafLevel->window.win_buffer)->btr_sibling);
@@ -3878,7 +4193,7 @@ static ULONG fast_load(thread_db* tdbb,
 					bucket->btr_jump_count = 0;
 
 #ifdef DEBUG_BTR_PAGES
-					sprintf(debugtext, "\t new page (%d)", window->win_page);
+					snprintf(debugtext, sizeof(debugtext), "\t new page (%d)", window->win_page);
 					gds__log(debugtext);
 #endif
 
@@ -3973,7 +4288,7 @@ static ULONG fast_load(thread_db* tdbb,
 					split->btr_jump_count = 0;
 
 #ifdef DEBUG_BTR_PAGES
-					sprintf(debugtext, "\t new page (%d), left page (%d)",
+					snprintf(debugtext, sizeof(debugtext), "\t new page (%d), left page (%d)",
 						split_window.win_page, split->btr_left_sibling);
 					gds__log(debugtext);
 #endif
@@ -3997,7 +4312,8 @@ static ULONG fast_load(thread_db* tdbb,
 					CCH_RELEASE(tdbb, window);
 
 #ifdef DEBUG_BTR_PAGES
-					sprintf(debugtext, "\t release page (%d), left page (%d), right page (%d)",
+					snprintf(debugtext, sizeof(debugtext),
+						"\t release page (%d), left page (%d), right page (%d)",
 						window->win_page,
 						((btr*)window->win_buffer)->btr_left_sibling,
 						((btr*)window->win_buffer)->btr_sibling);
@@ -4133,7 +4449,8 @@ static ULONG fast_load(thread_db* tdbb,
 			CCH_RELEASE(tdbb, &currLevel->window);
 
 #ifdef DEBUG_BTR_PAGES
-			sprintf(debugtext, "\t release page (%d), left page (%d), right page (%d)",
+			snprintf(debugtext, sizeof(debugtext),
+				"\t release page (%d), left page (%d), right page (%d)",
 				currLevel->window.win_page,
 				((btr*) currLevel->window.win_buffer)->btr_left_sibling,
 				((btr*) currLevel->window.win_buffer)->btr_sibling);
@@ -4246,7 +4563,7 @@ static index_root_page* fetch_root(thread_db* tdbb, WIN* window, const jrd_rel* 
 static UCHAR* find_node_start_point(btree_page* bucket, temporary_key* key,
 									UCHAR* value,
 									USHORT* return_value, bool descending,
-									bool retrieval, bool pointer_by_marker,
+									int retrieval, bool pointer_by_marker,
 									RecordNumber find_record_number)
 {
 /**************************************
@@ -4322,8 +4639,20 @@ static UCHAR* find_node_start_point(btree_page* bucket, temporary_key* key,
 			{
 				while (true)
 				{
-					if (q == nodeEnd || (retrieval && p == key_end))
+					if (q == nodeEnd)
 						goto done;
+
+					if (retrieval && p == key_end)
+					{
+						if ((retrieval & irb_partial) && !(retrieval & irb_starting))
+						{
+							// check segment
+							const bool sameSegment = ((p - STUFF_COUNT > key->key_data) && p[-(STUFF_COUNT + 1)] == *q);
+							if (sameSegment)
+								break;
+						}
+						goto done;
+					}
 
 					if (p == key_end || *p > *q)
 						break;
@@ -4384,7 +4713,7 @@ done:
 static UCHAR* find_area_start_point(btree_page* bucket, const temporary_key* key,
 									UCHAR* value,
 									USHORT* return_prefix, bool descending,
-									bool retrieval, RecordNumber find_record_number)
+									int retrieval, RecordNumber find_record_number)
 {
 /**************************************
  *
@@ -4490,7 +4819,17 @@ static UCHAR* find_area_start_point(btree_page* bucket, const temporary_key* key
 
 				if (retrieval && keyPointer == keyEnd)
 				{
-					done = true;
+					if ((retrieval & irb_partial) && !(retrieval & irb_starting))
+					{
+						// check segment
+						const bool sameSegment = ((keyPointer - STUFF_COUNT > key->key_data) && keyPointer[-(STUFF_COUNT + 1)] == *q);
+						if (!sameSegment)
+							done = true;
+					}
+					else
+					{
+						done = true;
+					}
 					break;
 				}
 
@@ -4597,7 +4936,7 @@ static UCHAR* find_area_start_point(btree_page* bucket, const temporary_key* key
 
 static ULONG find_page(btree_page* bucket, const temporary_key* key,
 					   const index_desc* idx, RecordNumber find_record_number,
-					   bool retrieval)
+					   int retrieval)
 {
 /**************************************
  *
@@ -6139,16 +6478,15 @@ string print_key(thread_db* tdbb, jrd_rel* relation, index_desc* idx, Record* re
 		MET_scan_relation(tdbb, relation);
 	}
 
-	const FB_SIZE_T MAX_KEY_STRING_LEN = 250;
+	constexpr FB_SIZE_T MAX_KEY_STRING_LEN = 250;
 	string key, value;
 
 	try
 	{
-		if (idx->idx_flags & idx_expressn)
+		if (idx->idx_flags & idx_expression)
 		{
-			bool notNull = false;
-			const dsc* const desc = BTR_eval_expression(tdbb, idx, record, notNull);
-			value = DescPrinter(tdbb, notNull ? desc : NULL, MAX_KEY_STRING_LEN, CS_METADATA).get();
+			const auto desc = BTR_eval_expression(tdbb, idx, record);
+			value = DescPrinter(tdbb, desc, MAX_KEY_STRING_LEN, CS_METADATA).get();
 			key += "<expression> = " + value;
 		}
 		else
@@ -6396,7 +6734,7 @@ static contents remove_leaf_node(thread_db* tdbb, index_insertion* insertion, WI
 static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordBitmap* bitmap_and,
 				 index_desc* idx, const IndexRetrieval* retrieval, USHORT prefix,
 				 temporary_key* key,
-				 bool& skipLowerKey, const temporary_key& lowerKey)
+				 bool& skipLowerKey, const temporary_key& lowerKey, USHORT forceInclFlag)
 {
 /**************************************
  *
@@ -6419,7 +6757,7 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 	// stuff the key to the stuff boundary
 	ULONG count;
 	USHORT flag = retrieval->irb_generic;
-	bool partialEquality = false;
+	flag &= ~forceInclFlag;		// clear exclude bits if needed
 
 	if ((flag & irb_partial) && (flag & irb_equality) &&
 		!(flag & irb_starting) && !(flag & irb_descending))
@@ -6430,7 +6768,6 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 			key->key_data[key->key_length + i] = 0;
 
 		count += key->key_length;
-		partialEquality = true;
 	}
 	else
 		count = key->key_length;
@@ -6440,16 +6777,16 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 	count -= key->key_length;
 
 	const bool descending = (flag & irb_descending);
+	const bool equality = (flag & irb_equality);
 	const bool ignoreNulls = (flag & irb_ignore_null_value_key) && (idx->idx_count == 1);
 	bool done = false;
 	bool ignore = false;
 	const bool skipUpperKey = (flag & irb_exclude_upper);
 	const bool partLower = (retrieval->irb_lower_count < idx->idx_count);
 	const bool partUpper = (retrieval->irb_upper_count < idx->idx_count);
-	USHORT upperPrefix = prefix;
 
-	// reset irb_equality flag passed for optimization
-	flag &= ~(irb_equality | irb_ignore_null_value_key);
+	// Reset flags this routine does not check in the loop below
+	flag &= ~(irb_equality | irb_unique | irb_ignore_null_value_key | irb_root_list_scan);
 	flag &= ~(irb_exclude_lower | irb_exclude_upper);
 
 	IndexNode node;
@@ -6488,7 +6825,7 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 		else if (node.prefix <= prefix)
 		{
 			prefix = node.prefix;
-			upperPrefix = prefix;
+			USHORT byteInSegment = prefix % (STUFF_COUNT + 1);
 			p = key->key_data + prefix;
 			const UCHAR* q = node.data;
 			USHORT l = node.length;
@@ -6496,49 +6833,52 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 			{
 				if (skipUpperKey && partUpper)
 				{
-					if (upperPrefix >= key->key_length)
+					if (p >= end_key && byteInSegment == 0)
 					{
 						const USHORT segnum =
 							idx->idx_count - (UCHAR)(descending ? ((*q) ^ -1) : *q) + 1;
 
-						if (segnum >= retrieval->irb_upper_count)
+						if (segnum > retrieval->irb_upper_count)
+							return false;
+
+						if (segnum == retrieval->irb_upper_count && !descending)
 							return false;
 					}
 
-					if (*p == *q)
-						upperPrefix++;
+					if (++byteInSegment > STUFF_COUNT)
+						byteInSegment = 0;
 				}
 
 				if (p >= end_key)
 				{
 					if (flag)
 					{
-						if (partialEquality)
+						// Check if current node bytes is from the same segment as
+						// last byte of the key. If not, we have equality at that
+						// segment. Else, for ascending index, node is greater than
+						// the key and scan should be stopped.
+						// For descending index, the node is less than the key and
+						// scan should be continued.
+
+						if ((flag & irb_partial) && !(flag & irb_starting))
 						{
-							// node have no more data, it is equality
-							if (q >= node.data + node.length)
-								break;
+							if ((p - STUFF_COUNT > key->key_data) && (p[-(STUFF_COUNT + 1)] == *q))
+							{
+								if (descending)
+									break;
 
-							// node contains more bytes than a key, check numbers
-							// of last key segment and current node segment.
-
-							fb_assert(!descending);
-							fb_assert(p - STUFF_COUNT - 1 >= key->key_data);
-
-							const USHORT keySeg = idx->idx_count - p[-STUFF_COUNT - 1];
-							const USHORT nodeSeg = idx->idx_count - *q;
-
-							fb_assert(keySeg <= nodeSeg);
-
-							// If current segment at node is the same as last segment
-							// of the key then node > key.
-							if (keySeg == nodeSeg)
 								return false;
+							}
 
-							// If node segment belongs to the key segments then key contains
-							// null or empty string and node contains some data.
-							if (nodeSeg < retrieval->irb_upper_count)
-								return false;
+							if (equality)
+							{
+								const USHORT nodeSeg = idx->idx_count - (UCHAR) (descending ? ((*q) ^ -1) : *q);
+
+								// If node segment belongs to the key segments then key contains
+								// null or empty string and node contains some data.
+								if (nodeSeg < retrieval->irb_upper_count)
+									return false;
+							}
 						}
 						break;
 					}
@@ -6582,18 +6922,13 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 			return true;
 		}
 
-		// Ignore NULL-values, this is currently only available for single segment indexes.
+		// Ignore NULL-values, this is currently only available for single segment indexes
 		if (ignoreNulls)
 		{
-			ignore = false;
-			if (descending)
-			{
-				if ((node.prefix == 0) && (node.length >= 1) && (node.data[0] == 255))
-					return false;
-			}
-			else {
-				ignore = (node.prefix + node.length == 0); // Ascending (prefix + length == 0)
-			}
+			if (descending && node.prefix == 0 && node.length >= 1 && node.data[0] == 255)
+				return false;
+
+			ignore = descending ? false : (node.prefix + node.length == 0);
 		}
 
 		if (skipLowerKey)

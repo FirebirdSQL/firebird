@@ -88,7 +88,7 @@ public:
 		value.assign(newValue, len);
 	}
 
-	void clear() throw()
+	void clear() noexcept
 	{
 		e = s = 0;
 		value.erase();		// should not call allocation function - no throw
@@ -142,7 +142,7 @@ public:
 		value = newValue;
 	}
 
-	void clear() throw()
+	void clear() noexcept
 	{
 		e = s = 0;
 		value = 0;
@@ -155,7 +155,7 @@ private:
 
 typedef Firebird::Array<UCHAR> AuthenticationBlock;
 
-class UserData :
+class UserData final :
 	public Firebird::VersionedIface<Firebird::IUserImpl<UserData, Firebird::CheckStatusWrapper> >
 {
 public:
@@ -220,6 +220,7 @@ public:
 	unsigned int op;
 	int trustedAuth;
 	bool silent;
+	bool createIfNotExistsOnly = false;
 	CharField user, pass, first, last, middle, com, attr;
 	IntField adm, act;
 	CharField database, dba, dbaPassword, role;
@@ -230,31 +231,6 @@ public:
 	// deprecated
 	CharField group;
 	IntField u, g;
-};
-
-class StackUserData final : public UserData
-{
-public:
-	void* operator new(size_t, void* memory) throw()
-	{
-		return memory;
-	}
-};
-
-class DynamicUserData final : public UserData
-{
-public:
-#ifdef DEBUG_GDS_ALLOC
-	void* operator new(size_t size, Firebird::MemoryPool& pool, const char* fileName, int line)
-	{
-		return pool.allocate(size, fileName, line);
-	}
-#else	// DEBUG_GDS_ALLOC
-	void* operator new(size_t size, Firebird::MemoryPool& pool)
-	{
-		return pool.allocate(size);
-	}
-#endif	// DEBUG_GDS_ALLOC
 };
 
 class Get : public Firebird::GetPlugins<Firebird::IManagement>

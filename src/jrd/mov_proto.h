@@ -42,6 +42,7 @@ SQUAD	MOV_get_quad(Jrd::thread_db*, const dsc*, SSHORT);
 SINT64	MOV_get_int64(Jrd::thread_db*, const dsc*, SSHORT);
 int		MOV_get_string_ptr(Jrd::thread_db*, const dsc*, USHORT*, UCHAR**, vary*, USHORT);
 int		MOV_get_string(Jrd::thread_db*, const dsc*, UCHAR**, vary*, USHORT);
+void	MOV_get_string(Jrd::thread_db* tdbb, const dsc* desc, Firebird::string& str);
 GDS_DATE	MOV_get_sql_date(const dsc*);
 GDS_TIME	MOV_get_sql_time(const dsc*);
 ISC_TIME_TZ	MOV_get_sql_time_tz(const dsc*);
@@ -51,7 +52,7 @@ USHORT	MOV_make_string(Jrd::thread_db*, const dsc*, USHORT, const char**, vary*,
 ULONG	MOV_make_string2(Jrd::thread_db*, const dsc*, USHORT, UCHAR**, Jrd::MoveBuffer&, bool = true);
 Firebird::string MOV_make_string2(Jrd::thread_db* tdbb, const dsc* desc, USHORT ttype,
 	bool limit = true);
-void	MOV_move(Jrd::thread_db*, /*const*/ dsc*, dsc*);
+void	MOV_move(Jrd::thread_db*, /*const*/ dsc*, dsc*, bool trustedSource = false);
 Firebird::Decimal64 MOV_get_dec64(Jrd::thread_db*, const dsc*);
 Firebird::Decimal128 MOV_get_dec128(Jrd::thread_db*, const dsc*);
 Firebird::Int128 MOV_get_int128(Jrd::thread_db*, const dsc*, SSHORT);

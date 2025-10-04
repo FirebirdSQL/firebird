@@ -62,13 +62,14 @@ bool TipCache::GlobalTpcInitializer::initialize(SharedMemoryBase* sm, bool initF
 	}
 
 	thread_db* tdbb = JRD_get_thread_data();
-	Database* dbb = tdbb->getDatabase();
+	const Database* dbb = tdbb->getDatabase();
 
 	// Initialize the shared data header
 	initHeader(header);
 
 	header->latest_commit_number.store(CN_PREHISTORIC, std::memory_order_relaxed);
 	header->latest_statement_id.store(0, std::memory_order_relaxed);
+	header->monitor_generation.store(0, std::memory_order_relaxed);
 	header->tpc_block_size = dbb->dbb_config->getTipCacheBlockSize();
 
 	m_cache->initTransactionsPerBlock(header->tpc_block_size);
@@ -197,21 +198,18 @@ void TipCache::finalizeTpc(thread_db* tdbb)
 CommitNumber TipCache::cacheState(TraNumber number)
 {
 	fb_assert(m_tpcHeader);
-	GlobalTpcHeader* header = m_tpcHeader->getHeader();
+	const GlobalTpcHeader* header = m_tpcHeader->getHeader();
 
-	TraNumber oldest = header->oldest_transaction.load(std::memory_order_relaxed);
+	const TraNumber oldest = header->oldest_transaction.load(std::memory_order_relaxed);
 
 	if (number < oldest)
 		return CN_PREHISTORIC;
 
-	// It is possible to amortize barrier in getTransactionStatusBlock
-	// over large number of operations, if our callers are made aware of
-	// TransactionStatusBlock granularity and iterate over transactions
-	// directly. But since this function is not really called too frequently,
-	// it should not matter and we leave interface "as is" for now.
-	TpcBlockNumber blockNumber = number / m_transactionsPerBlock;
-	ULONG offset = number % m_transactionsPerBlock;
-	TransactionStatusBlock* block = getTransactionStatusBlock(header, blockNumber);
+	const TpcBlockNumber blockNumber = number / m_transactionsPerBlock;
+	const ULONG offset = number % m_transactionsPerBlock;
+
+	Sync sync(&m_sync_status, FB_FUNCTION);
+	const TransactionStatusBlock* block = getTransactionStatusBlock(header, blockNumber, sync);
 
 	// This should not really happen ever
 	fb_assert(block);
@@ -283,12 +281,12 @@ void TipCache::initializeTpc(thread_db *tdbb)
 	LCK_convert(tdbb, m_lock, LCK_SR, LCK_WAIT);	// never fails
 }
 
-void TipCache::initTransactionsPerBlock(ULONG blockSize)
+void TipCache::initTransactionsPerBlock(ULONG blockSize) noexcept
 {
 	if (m_transactionsPerBlock)
 		return;
 
-	const ULONG dataOffset = static_cast<ULONG>(offsetof(TransactionStatusBlock, data[0]));
+	constexpr ULONG dataOffset = static_cast<ULONG>(offsetof(TransactionStatusBlock, data[0]));
 	m_transactionsPerBlock = (blockSize - dataOffset) / sizeof(CommitNumber);
 }
 
@@ -302,16 +300,16 @@ void TipCache::loadInventoryPages(thread_db* tdbb, GlobalTpcHeader* header)
 	const TraNumber hdr_oldest = dbb->dbb_oldest_transaction;
 #else
 	WIN window(HEADER_PAGE_NUMBER);
-	const Ods::header_page* header_page = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
-	const TraNumber hdr_oldest_transaction = Ods::getOIT(header_page);
-	const TraNumber hdr_next_transaction = Ods::getNT(header_page);
-	const AttNumber hdr_attachment_id = Ods::getAttID(header_page);
+	const auto* header_page = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
+	const TraNumber hdr_next_transaction = header_page->hdr_next_transaction;
+	const TraNumber hdr_oldest_transaction = header_page->hdr_oldest_transaction;
+	const AttNumber hdr_attachment_id = header_page->hdr_attachment_id;
 	CCH_RELEASE(tdbb, &window);
 #endif
 
+	header->latest_transaction_id.store(hdr_next_transaction, std::memory_order_relaxed);
 	header->oldest_transaction.store(hdr_oldest_transaction, std::memory_order_relaxed);
 	header->latest_attachment_id.store(hdr_attachment_id, std::memory_order_relaxed);
-	header->latest_transaction_id.store(hdr_next_transaction, std::memory_order_relaxed);
 
 	// Check if TIP has any interesting transactions.
 	// At database creation time, it doesn't and the code below breaks
@@ -321,7 +319,7 @@ void TipCache::loadInventoryPages(thread_db* tdbb, GlobalTpcHeader* header)
 
 	// Round down the oldest to a multiple of four, which puts the
 	// transaction in temporary buffer on a byte boundary
-	TraNumber base = hdr_oldest_transaction & ~TRA_MASK;
+	const TraNumber base = hdr_oldest_transaction & ~TRA_MASK;
 
 	const FB_SIZE_T buffer_length = (hdr_next_transaction + 1 - base + TRA_MASK) / 4;
 	Array<UCHAR> transactions(buffer_length);
@@ -333,12 +331,14 @@ void TipCache::loadInventoryPages(thread_db* tdbb, GlobalTpcHeader* header)
 
 	TpcBlockNumber blockNumber = hdr_oldest_transaction / m_transactionsPerBlock;
 	ULONG transOffset = hdr_oldest_transaction % m_transactionsPerBlock;
-	TransactionStatusBlock* statusBlock = getTransactionStatusBlock(header, blockNumber);
+
+	SyncLockGuard sync(&m_sync_status, SYNC_EXCLUSIVE, FB_FUNCTION);
+	TransactionStatusBlock* statusBlock = createTransactionStatusBlock(header->tpc_block_size, blockNumber);
 
 	for (TraNumber t = hdr_oldest_transaction; ; )
 	{
-		int state = TRA_state(buffer, base, t);
-		CommitNumber cn = init_state_mapping[state];
+		const int state = TRA_state(buffer, base, t);
+		const CommitNumber cn = init_state_mapping[state];
 
 		// Barrier is not needed as our thread is the only one here.
 		// At the same time, simple write to a volatile variable is not good
@@ -352,25 +352,29 @@ void TipCache::loadInventoryPages(thread_db* tdbb, GlobalTpcHeader* header)
 		{
 			blockNumber++;
 			transOffset = 0;
-			statusBlock = getTransactionStatusBlock(header, blockNumber);
+			statusBlock = createTransactionStatusBlock(header->tpc_block_size, blockNumber);
 		}
 	}
 }
 
-void TipCache::mapInventoryPages(GlobalTpcHeader* header)
+void TipCache::mapInventoryPages(const GlobalTpcHeader* header)
 {
 	TpcBlockNumber blockNumber = header->oldest_transaction / m_transactionsPerBlock;
 	const TpcBlockNumber lastNumber = header->latest_transaction_id / m_transactionsPerBlock;
 
 	for (; blockNumber <= lastNumber; blockNumber++)
-		getTransactionStatusBlock(header, blockNumber);
+	{
+		Sync sync(&m_sync_status, FB_FUNCTION);
+		getTransactionStatusBlock(header, blockNumber, sync);
+	}
 }
 
 TipCache::StatusBlockData::StatusBlockData(thread_db* tdbb, TipCache* tipCache, ULONG blockSize, TpcBlockNumber blkNumber)
 	: blockNumber(blkNumber),
 	  memory(NULL),
 	  existenceLock(tdbb, sizeof(TpcBlockNumber), LCK_tpc_block, this, tpc_block_blocking_ast),
-	  cache(tipCache)
+	  cache(tipCache),
+	  acceptAst(false)
 {
 	Database* dbb = tdbb->getDatabase();
 
@@ -383,6 +387,10 @@ TipCache::StatusBlockData::StatusBlockData(thread_db* tdbb, TipCache* tipCache, 
 
 	try
 	{
+		// Here SharedMemory constructor is called with skipLock parameter set to true.
+		// Appropriate locking is performed by existenceLock using LM.
+		// This should be in sync with SharedMemoryBase::unlinkFile() call
+		// in TipCache::StatusBlockData::clear().
 		memory = FB_NEW_POOL(*dbb->dbb_permanent) SharedMemory<TransactionStatusBlock>(
 			fileName.c_str(), blockSize,
 			&cache->memBlockInitializer, true);
@@ -391,6 +399,7 @@ TipCache::StatusBlockData::StatusBlockData(thread_db* tdbb, TipCache* tipCache, 
 		cache->memBlockInitializer.checkHeader(header);
 
 		LCK_convert(tdbb, &existenceLock, LCK_SR, LCK_WAIT);	// never fails
+		acceptAst = true;
 	}
 	catch (const Exception& ex)
 	{
@@ -427,8 +436,30 @@ void TipCache::StatusBlockData::clear(thread_db* tdbb)
 	if (memory)
 	{
 		// wait for all initializing processes (PR)
-		if (!LCK_convert(tdbb, &existenceLock, LCK_SW, LCK_WAIT))
+		acceptAst = false;
+
+		TraNumber oldest;
+		if (cache->m_tpcHeader)
+			oldest = cache->m_tpcHeader->getHeader()->oldest_transaction.load(std::memory_order_relaxed);
+		else
+		{
+			const Database* dbb = tdbb->getDatabase();
+			if (dbb->dbb_flags & DBB_shared)
+				oldest = dbb->dbb_oldest_transaction;
+			else
+			{
+				WIN window(HEADER_PAGE_NUMBER);
+				const auto* header_page = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
+				oldest = header_page->hdr_oldest_transaction;
+				CCH_RELEASE(tdbb, &window);
+			}
+		}
+
+		if (blockNumber < oldest / cache->m_transactionsPerBlock &&			// old block => send AST
+			!LCK_convert(tdbb, &existenceLock, LCK_SW, LCK_WAIT))
+		{
 			ERR_bugcheck_msg("Unable to convert TPC lock (SW)");
+		}
 
 		fName = memory->getMapFileName();
 		delete memory;
@@ -437,6 +468,11 @@ void TipCache::StatusBlockData::clear(thread_db* tdbb)
 
 	if (fName.hasData())
 	{
+		// Here file is removed from SharedMemory created with skipLock parameter
+		// set to true. That means internal file lock is turned off.
+		// Appropriate locking is performed by existenceLock using LM.
+		// This should be in sync with SharedMemory constructor called
+		// in TipCache::StatusBlockData constructor.
 		if (LCK_lock(tdbb, &existenceLock, LCK_EX, LCK_NO_WAIT))
 			SharedMemoryBase::unlinkFile(fName.c_str());
 		else
@@ -464,29 +500,35 @@ TipCache::TransactionStatusBlock* TipCache::createTransactionStatusBlock(ULONG b
 	return blockData->memory->getHeader();
 }
 
-TipCache::TransactionStatusBlock* TipCache::getTransactionStatusBlock(GlobalTpcHeader* header, TpcBlockNumber blockNumber)
+TipCache::TransactionStatusBlock* TipCache::getTransactionStatusBlock(const GlobalTpcHeader* header, TpcBlockNumber blockNumber, Sync& sync)
 {
+	fb_assert(sync.getState() == SYNC_NONE);
+
 	// This is a double-checked locking pattern. SyncLockGuard uses atomic ops internally and should be cheap
 	TransactionStatusBlock* block = NULL;
 	{
-		SyncLockGuard sync(&m_sync_status, SYNC_SHARED, "TipCache::getTransactionStatusBlock");
+		sync.lock(SYNC_SHARED);
 		BlocksMemoryMap::ConstAccessor acc(&m_blocks_memory);
 		if (acc.locate(blockNumber))
 			block = acc.current()->memory->getHeader();
+		else
+			sync.unlock();
 	}
 
 	if (!block)
 	{
-		SyncLockGuard sync(&m_sync_status, SYNC_EXCLUSIVE, "TipCache::getTransactionStatusBlock");
+		sync.lock(SYNC_EXCLUSIVE);
 		BlocksMemoryMap::ConstAccessor acc(&m_blocks_memory);
 		if (acc.locate(blockNumber))
 			block = acc.current()->memory->getHeader();
 		else
 		{
 			// Check if block might be too old to be created.
-			TraNumber oldest = header->oldest_transaction.load(std::memory_order_relaxed);
+			const TraNumber oldest = header->oldest_transaction.load(std::memory_order_relaxed);
 			if (blockNumber >= oldest / m_transactionsPerBlock)
 				block = createTransactionStatusBlock(header->tpc_block_size, blockNumber);
+			else
+				sync.unlock();
 		}
 	}
 	return block;
@@ -496,31 +538,43 @@ TraNumber TipCache::findStates(TraNumber minNumber, TraNumber maxNumber, ULONG m
 {
 	// Can only be called on initialized TipCache
 	fb_assert(m_tpcHeader);
-	GlobalTpcHeader* header = m_tpcHeader->getHeader();
+	const GlobalTpcHeader* header = m_tpcHeader->getHeader();
 
-	TransactionStatusBlock* statusBlock;
-	TpcBlockNumber blockNumber;
-	ULONG transOffset;
+	TransactionStatusBlock* statusBlock = nullptr;
+	ULONG transOffset = 0;
 
-	do
+	Sync sync(&m_sync_status, FB_FUNCTION);
+	for (TraNumber tran = minNumber; ; tran++, transOffset++)
 	{
-		TraNumber oldest = header->oldest_transaction.load(std::memory_order_relaxed);
+		if (transOffset == m_transactionsPerBlock)
+		{
+			sync.unlock();
+			statusBlock = nullptr;
+		}
 
-		if (minNumber < oldest)
-			minNumber = oldest;
+		while (!statusBlock)
+		{
+			const TraNumber oldest = header->oldest_transaction.load(std::memory_order_relaxed);
 
-		blockNumber = minNumber / m_transactionsPerBlock;
-		transOffset = minNumber % m_transactionsPerBlock;
-		statusBlock = getTransactionStatusBlock(header, blockNumber);
-	} while (!statusBlock);
+			if (tran < oldest)
+				tran = oldest;
 
-	for (TraNumber t = minNumber; ; )
-	{
+			const TpcBlockNumber blockNumber = tran / m_transactionsPerBlock;
+			transOffset = tran % m_transactionsPerBlock;
+			statusBlock = getTransactionStatusBlock(header, blockNumber, sync);
+
+			if (sync.getState() == SYNC_EXCLUSIVE)
+				sync.downgrade(SYNC_SHARED);
+		}
+
+		if (tran >= maxNumber)
+			break;
+
 		// Barrier is not needed here. Slightly out-dated information shall be ok here.
 		// Such transaction shall already be considered active by our caller.
 		// TODO: check if this assumption is indeed correct.
 
-		CommitNumber cn = (statusBlock->data + transOffset)->load(std::memory_order_relaxed);
+		const CommitNumber cn = (statusBlock->data + transOffset)->load(std::memory_order_relaxed);
 		switch (cn)
 		{
 		case CN_ACTIVE:
@@ -536,25 +590,16 @@ TraNumber TipCache::findStates(TraNumber minNumber, TraNumber maxNumber, ULONG m
 			break;
 
 		case CN_MAX_NUMBER:
-			fb_assert(false);	// fall thru
+			fb_assert(false);
+			[[fallthrough]];
 
 		default:
 			state = tra_committed;
 			break;
 		}
 
-		if (((1 << state) & mask) != 0)
-			return t;
-
-		if (++t >= maxNumber)
-			break;
-
-		if (++transOffset == m_transactionsPerBlock)
-		{
-			blockNumber++;
-			transOffset = 0;
-			statusBlock = getTransactionStatusBlock(header, blockNumber);
-		}
+		if (((1UL << state) & mask) != 0)
+			return tran;
 	}
 
 	return 0;
@@ -566,20 +611,18 @@ CommitNumber TipCache::setState(TraNumber number, int state)
 	fb_assert(m_tpcHeader);
 	GlobalTpcHeader* header = m_tpcHeader->getHeader();
 
-	// over large number of operations, if our callers are made aware of
-	// TransactionStatusBlock granularity and iterate over transactions
-	// directly. But since this function is not really called too frequently,
-	// it should not matter and we leave interface "as is" for now.
-	TpcBlockNumber blockNumber = number / m_transactionsPerBlock;
+	const TpcBlockNumber blockNumber = number / m_transactionsPerBlock;
 	ULONG offset = number % m_transactionsPerBlock;
-	TransactionStatusBlock* block = getTransactionStatusBlock(header, blockNumber);
+
+	Sync sync(&m_sync_status, FB_FUNCTION);
+	TransactionStatusBlock* block = getTransactionStatusBlock(header, blockNumber, sync);
 
 	// This should not really happen
 	if (!block)
 		ERR_bugcheck_msg("TPC: Attempt to change state of old transaction");
 
 	std::atomic<CommitNumber>* statePtr = block->data + offset;
-	CommitNumber oldStateCn = statePtr->load(std::memory_order_relaxed);
+	const CommitNumber oldStateCn = statePtr->load(std::memory_order_relaxed);
 	switch (state)
 	{
 		case tra_committed:
@@ -660,7 +703,7 @@ CommitNumber TipCache::snapshotState(thread_db* tdbb, TraNumber number)
 		return CN_ACTIVE;
 
 	// Go to disk, and obtain state of our transaction from TIP
-	int state = TRA_fetch_state(tdbb, number);
+	const int state = TRA_fetch_state(tdbb, number);
 
 	// We already know for sure that this transaction cannot be active, so mark it dead now
 	// to avoid more work in the future
@@ -682,8 +725,8 @@ void TipCache::updateOldestTransaction(thread_db *tdbb, TraNumber oldest, TraNum
 	fb_assert(m_tpcHeader);
 	GlobalTpcHeader* header = m_tpcHeader->getHeader();
 
-	TraNumber oldestNew = MIN(oldest, oldestSnapshot);
-	TraNumber oldestNow = header->oldest_transaction.load(std::memory_order_relaxed);
+	const TraNumber oldestNew = MIN(oldest, oldestSnapshot);
+	const TraNumber oldestNow = header->oldest_transaction.load(std::memory_order_relaxed);
 	if (oldestNew > oldestNow)
 	{
 		header->oldest_transaction.store(oldestNew, std::memory_order_relaxed);
@@ -695,32 +738,33 @@ int TipCache::tpc_block_blocking_ast(void* arg)
 {
 	StatusBlockData* data = static_cast<StatusBlockData*>(arg);
 
-	Database* dbb = data->existenceLock.lck_dbb;
-	AsyncContextHolder tdbb(dbb, FB_FUNCTION);
-
-	// We will never be called with initialization (PR) lock
-	// (it's used only in ctor).
-	// When called with finalization (SW or EX) lock that means resource
-	// is already released or will be released very soon.
-	if (data->existenceLock.lck_logical > LCK_SR)
-		return 0;
-
-	TipCache* cache = data->cache;
-	TraNumber oldest =
-		cache->m_tpcHeader->getHeader()->oldest_transaction.load(std::memory_order_relaxed);
-
-	// Release shared memory
-	if (data->memory)
+	try
 	{
-		delete data->memory;
-		data->memory = NULL;
-	}
-	LCK_release(tdbb, &data->existenceLock);
+		Database* dbb = data->existenceLock.lck_dbb;
+		AsyncContextHolder tdbb(dbb, FB_FUNCTION);
 
-	// Check if there is a bug in cleanup code and we were requested to
-	// release memory that might be in use
-	if (data->blockNumber >= oldest / cache->m_transactionsPerBlock)
-		ERR_bugcheck_msg("Incorrect attempt to release shared memory");
+		// Should we try to process AST?
+		if (!data->acceptAst)
+			return 0;
+
+		TipCache* cache = data->cache;
+		const TraNumber oldest =
+			cache->m_tpcHeader->getHeader()->oldest_transaction.load(std::memory_order_relaxed);
+
+		// Is data block really old?
+		if (data->blockNumber >= oldest / cache->m_transactionsPerBlock)
+			return 0;
+
+		// Release shared memory
+		if (data->memory)
+		{
+			delete data->memory;
+			data->memory = NULL;
+		}
+		LCK_release(tdbb, &data->existenceLock);
+	}
+	catch (const Exception&)
+	{ }
 
 	return 0;
 }
@@ -732,7 +776,7 @@ void TipCache::releaseSharedMemory(thread_db* tdbb, TraNumber oldest_old, TraNum
 {
 	Database* dbb = tdbb->getDatabase();
 
-	TpcBlockNumber lastInterestingBlockNumber = oldest_new / m_transactionsPerBlock;
+	const TpcBlockNumber lastInterestingBlockNumber = oldest_new / m_transactionsPerBlock;
 
 	// If we didn't cross block boundary - there is nothing to do.
 	// Note that due to the fuzziness of our caller's memory access to variables
@@ -744,13 +788,12 @@ void TipCache::releaseSharedMemory(thread_db* tdbb, TraNumber oldest_old, TraNum
 	// Populate array of blocks that might be unmapped and deleted.
 	// We scan for blocks to clean up in descending order, but delete them in
 	// ascending order to ensure for robust operation.
-	PathName fileName;
 	HalfStaticArray<TpcBlockNumber, 16> blocksToCleanup;
 
 	for (TpcBlockNumber cleanupCounter = lastInterestingBlockNumber - SAFETY_GAP_BLOCKS;
 		cleanupCounter; cleanupCounter--)
 	{
-		TpcBlockNumber blockNumber = cleanupCounter - 1;
+		const TpcBlockNumber blockNumber = cleanupCounter - 1;
 		PathName fileName = StatusBlockData::makeSharedMemoryFileName(dbb, blockNumber, true);
 
 		struct stat st;
@@ -764,10 +807,10 @@ void TipCache::releaseSharedMemory(thread_db* tdbb, TraNumber oldest_old, TraNum
 	if (blocksToCleanup.isEmpty())
 		return;
 
-	SyncLockGuard sync(&m_sync_status, SYNC_EXCLUSIVE, "TipCache::releaseSharedMemory");
+	SyncLockGuard sync(&m_sync_status, SYNC_EXCLUSIVE, FB_FUNCTION);
 	while (blocksToCleanup.hasData())
 	{
-		TpcBlockNumber blockNumber = blocksToCleanup.pop();
+		const TpcBlockNumber blockNumber = blocksToCleanup.pop();
 
 		if (m_blocks_memory.locate(blockNumber))
 		{
@@ -802,7 +845,7 @@ SnapshotHandle TipCache::allocateSnapshotSlot()
 	// Scan previously used slots first
 	SnapshotHandle slotNumber;
 
-	ULONG slots_used = snapshots->slots_used.load(std::memory_order_relaxed);
+	const ULONG slots_used = snapshots->slots_used.load(std::memory_order_relaxed);
 	for (slotNumber = snapshots->min_free_slot; slotNumber < slots_used; slotNumber++)
 	{
 		if (!snapshots->slots[slotNumber].attachment_id.load(std::memory_order_relaxed))
@@ -847,7 +890,7 @@ void TipCache::remapSnapshots(bool sync)
 	// Can only be called on initialized TipCache
 	fb_assert(m_tpcHeader);
 
-	SnapshotList* snapshots = m_snapshots->getHeader();
+	const SnapshotList* snapshots = m_snapshots->getHeader();
 
 	if (snapshots->slots_allocated.load(std::memory_order_acquire) !=
 		(m_snapshots->sh_mem_length_mapped - offsetof(SnapshotList, slots[0])) / sizeof(SnapshotData))
@@ -873,7 +916,7 @@ SnapshotHandle TipCache::beginSnapshot(thread_db* tdbb, AttNumber attachmentId, 
 {
 	// Can only be called on initialized TipCache
 	fb_assert(m_tpcHeader);
-	GlobalTpcHeader* header = m_tpcHeader->getHeader();
+	const GlobalTpcHeader* header = m_tpcHeader->getHeader();
 
 	fb_assert(attachmentId);
 
@@ -887,7 +930,7 @@ SnapshotHandle TipCache::beginSnapshot(thread_db* tdbb, AttNumber attachmentId, 
 
 	if (commitNumber != 0)
 	{
-		ULONG slotsUsed = snapshots->slots_used.load(std::memory_order_relaxed);
+		const ULONG slotsUsed = snapshots->slots_used.load(std::memory_order_relaxed);
 		bool found = false;
 
 		for (SnapshotHandle slotNumber = 0; slotNumber < slotsUsed; ++slotNumber)
@@ -967,8 +1010,8 @@ void TipCache::endSnapshot(thread_db* tdbb, SnapshotHandle handle, AttNumber att
 	// deallocation.
 
 	// Perform some sanity checks on a handle
-	SnapshotList* snapshots = m_snapshots->getHeader();
-	SnapshotData* slot = snapshots->slots + handle;
+	const SnapshotList* snapshots = m_snapshots->getHeader();
+	const SnapshotData* slot = snapshots->slots + handle;
 
 	if (handle >= snapshots->slots_used.load(std::memory_order_relaxed))
 		ERR_bugcheck_msg("Incorrect snapshot deallocation - too few slots");
@@ -987,7 +1030,7 @@ void TipCache::updateActiveSnapshots(thread_db* tdbb, ActiveSnapshots* activeSna
 {
 	// Can only be called on initialized TipCache
 	fb_assert(m_tpcHeader);
-	GlobalTpcHeader* header = m_tpcHeader->getHeader();
+	const GlobalTpcHeader* header = m_tpcHeader->getHeader();
 
 	fb_assert(activeSnapshots);
 
@@ -1005,7 +1048,7 @@ void TipCache::updateActiveSnapshots(thread_db* tdbb, ActiveSnapshots* activeSna
 		// If new slots are allocated past this value - we don't care as we preserved
 		// lastCommit and new snapshots will have numbers >= lastCommit and we don't
 		// GC them anyways
-		ULONG slots_used_org = snapshots->slots_used.load(std::memory_order_acquire);
+		const ULONG slots_used_org = snapshots->slots_used.load(std::memory_order_acquire);
 
 		// Remap snapshot list if it has been grown by someone else
 		remapSnapshots(true);
@@ -1020,8 +1063,8 @@ void TipCache::updateActiveSnapshots(thread_db* tdbb, ActiveSnapshots* activeSna
 		activeSnapshots->m_snapshots.clear();
 		for (ULONG slotNumber = 0; slotNumber < slots_used_org; slotNumber++)
 		{
-			SnapshotData* slot = snapshots->slots + slotNumber;
-			AttNumber slot_attachment_id = slot->attachment_id.load(std::memory_order_acquire);
+			const SnapshotData* slot = snapshots->slots + slotNumber;
+			const AttNumber slot_attachment_id = slot->attachment_id.load(std::memory_order_acquire);
 			if (slot_attachment_id)
 			{
 				bool isAttachmentDead;
@@ -1042,7 +1085,7 @@ void TipCache::updateActiveSnapshots(thread_db* tdbb, ActiveSnapshots* activeSna
 						guard.lock();
 
 						// Check if slot was reused while we waited for the mutex
-						AttNumber slot_attachment_id2 = slot->attachment_id.load(std::memory_order_acquire);
+						const AttNumber slot_attachment_id2 = slot->attachment_id.load(std::memory_order_acquire);
 						if (slot_attachment_id != slot_attachment_id2)
 						{
 							slotNumber--;
@@ -1054,7 +1097,7 @@ void TipCache::updateActiveSnapshots(thread_db* tdbb, ActiveSnapshots* activeSna
 				}
 				else
 				{
-					CommitNumber slot_snapshot = slot->snapshot.load(std::memory_order_acquire);
+					const CommitNumber slot_snapshot = slot->snapshot.load(std::memory_order_acquire);
 					if (slot_snapshot)
 						activeSnapshots->m_snapshots.set(slot_snapshot);
 				}
@@ -1075,7 +1118,7 @@ void TipCache::updateActiveSnapshots(thread_db* tdbb, ActiveSnapshots* activeSna
 
 		activeSnapshots->m_lastCommit = header->latest_commit_number.load(std::memory_order_acquire);
 		ULONG slots_used_org = snapshots->slots_used.load(std::memory_order_acquire);
-		ULONG release_count = header->snapshot_release_count.load(std::memory_order_relaxed);
+		const ULONG release_count = header->snapshot_release_count.load(std::memory_order_relaxed);
 
 		// If no snapshots were released since we were last called - do nothing
 		// Do not care about race issues here, because worst-case consequences are benign
@@ -1101,7 +1144,7 @@ void TipCache::updateActiveSnapshots(thread_db* tdbb, ActiveSnapshots* activeSna
 		{
 			if (slot->attachment_id.load(std::memory_order_acquire))
 			{
-				CommitNumber slot_snapshot = slot->snapshot.load(std::memory_order_acquire);
+				const CommitNumber slot_snapshot = slot->snapshot.load(std::memory_order_acquire);
 				if (slot_snapshot)
 					activeSnapshots->m_snapshots.set(slot_snapshot);
 			}
@@ -1163,7 +1206,7 @@ AttNumber TipCache::getLatestAttachmentId() const
 {
 	// Can only be called on initialized TipCache
 	fb_assert(m_tpcHeader);
-	GlobalTpcHeader* header = m_tpcHeader->getHeader();
+	const GlobalTpcHeader* header = m_tpcHeader->getHeader();
 
 	return header->latest_attachment_id;
 }
@@ -1172,7 +1215,7 @@ StmtNumber TipCache::getLatestStatementId() const
 {
 	// Can only be called on initialized TipCache
 	fb_assert(m_tpcHeader);
-	GlobalTpcHeader* header = m_tpcHeader->getHeader();
+	const GlobalTpcHeader* header = m_tpcHeader->getHeader();
 
 	return header->latest_statement_id;
 }
@@ -1186,7 +1229,7 @@ int TPC_snapshot_state(thread_db* tdbb, TraNumber number)
 	if (!cache)
 		return TRA_fetch_state(tdbb, number);
 
-	CommitNumber stateCn = cache->snapshotState(tdbb, number);
+	const CommitNumber stateCn = cache->snapshotState(tdbb, number);
 	switch (stateCn)
 	{
 	case CN_ACTIVE:

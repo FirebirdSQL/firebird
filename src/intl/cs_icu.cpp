@@ -43,7 +43,7 @@ bool CSICU_charset_init(charset* cs,
 						const ASCII* charSetName)
 {
 	UErrorCode status = U_ZERO_ERROR;
-	Jrd::UnicodeUtil::ConversionICU& cIcu(Jrd::UnicodeUtil::getConversionICU());
+	Firebird::UnicodeUtil::ConversionICU& cIcu(Firebird::UnicodeUtil::getConversionICU());
 	UConverter* conv = cIcu.ucnv_open(charSetName, &status);
 
 	if (U_SUCCESS(status))

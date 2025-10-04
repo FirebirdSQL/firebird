@@ -39,6 +39,7 @@
 #include "../jrd/cmp_proto.h"
 #include "../jrd/cvt_proto.h"
 #include "../jrd/evl_proto.h"
+#include "../jrd/exe_proto.h"
 #include "../jrd/intl_proto.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/mov_proto.h"
@@ -48,6 +49,7 @@
 #include "../jrd/SystemPackages.h"
 #include "../common/isc_proto.h"
 #include "../common/classes/auto.h"
+#include "../common/classes/fb_pair.h"
 #include "../common/classes/fb_string.h"
 #include "../common/classes/init.h"
 #include "../common/classes/objects_array.h"
@@ -65,12 +67,63 @@ static EngineCheckout::Type checkoutType(IExternalEngine* engine);
 
 namespace
 {
+	// Compare two formats for equivalence, excluding fmt_defaults field.
+	bool sameFormats(const Format* fmt1, const Format* fmt2)
+	{
+		return fmt1->fmt_length == fmt2->fmt_length &&
+			fmt1->fmt_count == fmt2->fmt_count &&
+			fmt1->fmt_version == fmt2->fmt_version &&
+			fmt1->fmt_desc == fmt2->fmt_desc;
+	}
+
+	// Copy message between different formats.
+	void copyMessage(thread_db* tdbb,
+		const Format* srcFormat, UCHAR* srcMsg,
+		const Format* dstFormat, UCHAR* dstMsg)
+	{
+		fb_assert(srcFormat->fmt_desc.getCount() == dstFormat->fmt_desc.getCount());
+
+		const auto srcDescEnd = srcFormat->fmt_desc.begin() + (srcFormat->fmt_desc.getCount() / 2 * 2);
+		auto srcDescIt = srcFormat->fmt_desc.begin();
+		auto dstDescIt = dstFormat->fmt_desc.begin();
+
+		while (srcDescIt < srcDescEnd)
+		{
+			fb_assert(srcDescIt[1].dsc_dtype == dtype_short);
+			fb_assert(dstDescIt[1].dsc_dtype == dtype_short);
+
+			const auto srcArgOffset = (IPTR) srcDescIt[0].dsc_address;
+			const auto srcNullOffset = (IPTR) srcDescIt[1].dsc_address;
+			const auto srcNullPtr = reinterpret_cast<const SSHORT*>(srcMsg + srcNullOffset);
+
+			const auto dstArgOffset = (IPTR) dstDescIt[0].dsc_address;
+			const auto dstNullOffset = (IPTR) dstDescIt[1].dsc_address;
+			const auto dstNullPtr = reinterpret_cast<SSHORT*>(dstMsg + dstNullOffset);
+
+			if (!*srcNullPtr)
+			{
+				dsc srcDesc = srcDescIt[0];
+				srcDesc.dsc_address = srcMsg + srcArgOffset;
+
+				dsc dstDesc = dstDescIt[0];
+				dstDesc.dsc_address = dstMsg + dstArgOffset;
+
+				MOV_move(tdbb, &srcDesc, &dstDesc);
+			}
+
+			*dstNullPtr = *srcNullPtr;
+
+			srcDescIt += 2;
+			dstDescIt += 2;
+		}
+	}
+
 	// Internal message node.
 	class IntMessageNode : public MessageNode
 	{
 	public:
 		IntMessageNode(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, USHORT message,
-				Array<NestConst<Parameter> >& aParameters, const Format* aFormat)
+				Array<NestConst<Parameter>>& aParameters, const Format* aFormat)
 			: MessageNode(pool),
 			  parameters(aParameters),
 			  format(aFormat)
@@ -78,8 +131,8 @@ namespace
 			setup(tdbb, csb, message, format->fmt_count);
 		}
 
-		virtual USHORT setupDesc(thread_db* tdbb, CompilerScratch* csb, USHORT index,
-			dsc* desc, ItemInfo* itemInfo)
+		USHORT setupDesc(thread_db* tdbb, CompilerScratch* csb, USHORT index,
+			dsc* desc, ItemInfo* itemInfo) override
 		{
 			*desc = format->fmt_desc[index];
 
@@ -88,19 +141,19 @@ namespace
 				const Parameter* param = parameters[index / 2];
 
 				if (param->prm_mechanism != prm_mech_type_of &&
-					!fb_utils::implicit_domain(param->prm_field_source.c_str()))
+					!fb_utils::implicit_domain(param->prm_field_source.object.c_str()))
 				{
-					MetaNamePair namePair(param->prm_field_source, "");
+					QualifiedNameMetaNamePair entry(param->prm_field_source, {});
 
 					FieldInfo fieldInfo;
-					bool exist = csb->csb_map_field_info.get(namePair, fieldInfo);
+					bool exist = csb->csb_map_field_info.get(entry, fieldInfo);
 					MET_get_domain(tdbb, csb->csb_pool, param->prm_field_source, desc,
 						(exist ? NULL : &fieldInfo));
 
 					if (!exist)
-						csb->csb_map_field_info.put(namePair, fieldInfo);
+						csb->csb_map_field_info.put(entry, fieldInfo);
 
-					itemInfo->field = namePair;
+					itemInfo->field = entry;
 					itemInfo->nullable = fieldInfo.nullable;
 					itemInfo->fullDomain = true;
 				}
@@ -115,8 +168,8 @@ namespace
 		}
 
 	public:
-		Array<NestConst<Parameter> >& parameters;
-		const Format* format;
+		Array<NestConst<Parameter>>& parameters;
+		const Format* const format;
 	};
 
 	// External message node.
@@ -130,19 +183,20 @@ namespace
 			setup(tdbb, csb, message, format->fmt_count);
 		}
 
-		virtual USHORT setupDesc(thread_db* tdbb, CompilerScratch* csb, USHORT index,
-			dsc* desc, ItemInfo* itemInfo)
+		USHORT setupDesc(thread_db* tdbb, CompilerScratch* csb, USHORT index,
+			dsc* desc, ItemInfo* itemInfo) override
 		{
 			*desc = format->fmt_desc[index];
 			return type_alignments[desc->dsc_dtype];
 		}
 
-		virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const
+		const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override
 		{
 			if (request->req_operation == Request::req_evaluate)
 			{
 				// Clear the message. This is important for external routines.
-				UCHAR* msg = request->getImpure<UCHAR>(impureOffset);
+				fb_assert(MessageNode::getFormat(request)->fmt_length == format->fmt_length);
+				UCHAR* msg = getBuffer(request);
 				memset(msg, 0, format->fmt_length);
 			}
 
@@ -150,99 +204,98 @@ namespace
 		}
 
 	public:
-		const Format* format;
+		const Format* const format;
 	};
 
 	// Initialize output parameters with their domains default value or NULL.
 	// Kind of blr_init_variable, but for parameters.
-	class InitParameterNode final : public TypedNode<StmtNode, StmtNode::TYPE_EXT_INIT_PARAMETER>
+	class InitParametersNode final : public TypedNode<StmtNode, StmtNode::TYPE_EXT_INIT_PARAMETERS>
 	{
 	public:
-		InitParameterNode(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
-				Array<NestConst<Parameter> >& parameters, MessageNode* aMessage, USHORT aArgNumber)
-			: TypedNode<StmtNode, StmtNode::TYPE_EXT_INIT_PARAMETER>(pool),
-			  message(aMessage),
-			  argNumber(aArgNumber)
+		InitParametersNode(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
+				Array<NestConst<Parameter>>& parameters, ExtMessageNode* aMessage)
+			: TypedNode<StmtNode, StmtNode::TYPE_EXT_INIT_PARAMETERS>(pool),
+			  message(aMessage)
 		{
-			Parameter* parameter = parameters[argNumber / 2];
-			defaultValueNode = NULL;
+			// Iterate over the format items, except the EOF item.
+			const unsigned paramCount = message->format->fmt_count / 2;
 
-			if (parameter->prm_mechanism != prm_mech_type_of &&
-				!fb_utils::implicit_domain(parameter->prm_field_source.c_str()))
+			defaultValuesNode = FB_NEW_POOL(pool) ValueListNode(pool, paramCount);
+
+			for (unsigned paramIndex = 0; paramIndex < paramCount; ++paramIndex)
 			{
-				MetaNamePair namePair(parameter->prm_field_source, "");
+				const auto parameter = parameters[paramIndex];
 
-				FieldInfo fieldInfo;
-				bool exist = csb->csb_map_field_info.get(namePair, fieldInfo);
+				if (parameter->prm_mechanism != prm_mech_type_of &&
+					!fb_utils::implicit_domain(parameter->prm_field_source.object.c_str()))
+				{
+					QualifiedNameMetaNamePair entry(parameter->prm_field_source, {});
 
-				if (exist && fieldInfo.defaultValue)
-					defaultValueNode = CMP_clone_node(tdbb, csb, fieldInfo.defaultValue);
+					FieldInfo fieldInfo;
+					bool exist = csb->csb_map_field_info.get(entry, fieldInfo);
+
+					if (exist && fieldInfo.defaultValue)
+						defaultValuesNode->items[paramIndex] = CMP_clone_node(tdbb, csb, fieldInfo.defaultValue);
+				}
 			}
 		}
 
-		string internalPrint(NodePrinter& printer) const
+		string internalPrint(NodePrinter& printer) const override
 		{
 			StmtNode::internalPrint(printer);
 
 			NODE_PRINT(printer, message);
-			NODE_PRINT(printer, argNumber);
-			NODE_PRINT(printer, defaultValueNode);
+			NODE_PRINT(printer, defaultValuesNode);
 
-			return "InitParameterNode";
+			return "InitParametersNode";
 		}
 
-		void genBlr(DsqlCompilerScratch* /*dsqlScratch*/)
+		void genBlr(DsqlCompilerScratch* /*dsqlScratch*/) override
 		{
 		}
 
-		InitParameterNode* pass1(thread_db* tdbb, CompilerScratch* csb)
+		InitParametersNode* pass1(thread_db* tdbb, CompilerScratch* csb) override
 		{
-			doPass1(tdbb, csb, &defaultValueNode);
+			doPass1(tdbb, csb, &defaultValuesNode);
 			return this;
 		}
 
-		InitParameterNode* pass2(thread_db* tdbb, CompilerScratch* csb)
+		InitParametersNode* pass2(thread_db* tdbb, CompilerScratch* csb) override
 		{
-			ExprNode::doPass2(tdbb, csb, &defaultValueNode);
+			ExprNode::doPass2(tdbb, csb, &defaultValuesNode);
 			return this;
 		}
 
-		const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* /*exeState*/) const
+		const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* /*exeState*/) const override
 		{
 			if (request->req_operation == Request::req_evaluate)
 			{
-				dsc* defaultDesc = NULL;
+				const auto msg = message->getBuffer(request);
+				const auto paramCount = defaultValuesNode->items.getCount();
 
-				if (defaultValueNode)
+				for (unsigned paramIndex = 0; paramIndex < paramCount; ++paramIndex)
 				{
-					defaultDesc = EVL_expr(tdbb, request, defaultValueNode);
+					const auto defaultValueNode = defaultValuesNode->items[paramIndex];
+					dsc* defaultDesc = nullptr;
 
-					if (request->req_flags & req_null)
-						defaultDesc = NULL;
-				}
+					if (defaultValueNode)
+						defaultDesc = EVL_expr(tdbb, request, defaultValueNode);
 
-				if (defaultDesc)
-				{
-					// Initialize the value. The null flag is already initialized to not-null
-					// by the ExtMessageNode.
+					const auto formatIndex = paramIndex * 2;
+					const auto& nullDesc = message->format->fmt_desc[formatIndex + 1];
+					fb_assert(nullDesc.dsc_dtype == dtype_short);
 
-					dsc desc = message->format->fmt_desc[argNumber];
-					desc.dsc_address = request->getImpure<UCHAR>(
-						message->impureOffset + (IPTR) desc.dsc_address);
+					if (defaultDesc)
+					{
+						// Initialize the value. The null flag is already initialized to not-null.
+						fb_assert(!*(SSHORT*) (msg + (IPTR) nullDesc.dsc_address));
 
-					MOV_move(tdbb, defaultDesc, &desc);
-				}
-				else
-				{
-					SSHORT tempValue = -1;
-					dsc temp;
-					temp.makeShort(0, &tempValue);
-
-					dsc desc = message->format->fmt_desc[argNumber + 1];
-					desc.dsc_address = request->getImpure<UCHAR>(
-						message->impureOffset + (IPTR) desc.dsc_address);
-
-					MOV_move(tdbb, &temp, &desc);
+						dsc desc = message->format->fmt_desc[formatIndex];
+						desc.dsc_address = msg + (IPTR) desc.dsc_address;
+						MOV_move(tdbb, defaultDesc, &desc);
+					}
+					else
+						*(SSHORT*) (msg + (IPTR) nullDesc.dsc_address) = FB_TRUE;
 				}
 
 				request->req_operation = Request::req_return;
@@ -252,45 +305,29 @@ namespace
 		}
 
 		private:
-			MessageNode* message;
-			USHORT argNumber;
-			ValueExprNode* defaultValueNode;
-	};
-
-	// Output parameters initialization.
-	class InitOutputNode : public CompoundStmtNode
-	{
-	public:
-		InitOutputNode(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
-				Array<NestConst<Parameter> >& parameters, MessageNode* message)
-			: CompoundStmtNode(pool)
-		{
-			// Iterate over the format items, except the EOF item.
-			for (USHORT i = 0; i < (message->format->fmt_count / 2) * 2; i += 2)
-			{
-				InitParameterNode* init = FB_NEW_POOL(pool) InitParameterNode(
-					tdbb, pool, csb, parameters, message, i);
-				statements.add(init);
-			}
-		}
+			ExtMessageNode* const message;
+			ValueListNode* defaultValuesNode;
 	};
 
 	// Move parameters from a message to another, validating theirs values.
 	class MessageMoverNode : public CompoundStmtNode
 	{
 	public:
-		MessageMoverNode(MemoryPool& pool, MessageNode* fromMessage, MessageNode* toMessage)
-			: CompoundStmtNode(pool)
+		MessageMoverNode(MemoryPool& pool, MessageNode* fromMessage, MessageNode* toMessage,
+					MessageNode* aCheckMessageEof = nullptr)
+			: CompoundStmtNode(pool),
+			  checkMessageEof(aCheckMessageEof)
 		{
+			const Format* format = fromMessage->getFormat(nullptr);
 			// Iterate over the format items, except the EOF item.
-			for (USHORT i = 0; i < (fromMessage->format->fmt_count / 2) * 2; i += 2)
+			for (unsigned i = 0; i < (format->fmt_count / 2u) * 2u; i += 2)
 			{
-				ParameterNode* flag = FB_NEW_POOL(pool) ParameterNode(pool);
+				auto flag = FB_NEW_POOL(pool) ParameterNode(pool);
 				flag->messageNumber = fromMessage->messageNumber;
 				flag->message = fromMessage;
 				flag->argNumber = i + 1;
 
-				ParameterNode* param = FB_NEW_POOL(pool) ParameterNode(pool);
+				auto param = FB_NEW_POOL(pool) ParameterNode(pool);
 				param->messageNumber = fromMessage->messageNumber;
 				param->message = fromMessage;
 				param->argNumber = i;
@@ -314,38 +351,25 @@ namespace
 				assign->asgnTo = param;
 			}
 		}
-	};
 
-	// External function node.
-	class ExtFunctionNode : public SuspendNode
-	{
-	public:
-		ExtFunctionNode(MemoryPool& pool, const MessageNode* aExtInMessageNode, const MessageNode* aExtOutMessageNode,
-				const ExtEngineManager::Function* aFunction)
-			: SuspendNode(pool),
-			  extInMessageNode(aExtInMessageNode),
-			  extOutMessageNode(aExtOutMessageNode),
-			  function(aFunction)
+		const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override
 		{
-		}
-
-		virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const
-		{
-			if (request->req_operation == Request::req_evaluate)
+			if (checkMessageEof &&
+				request->req_operation == Request::req_evaluate &&
+				(request->req_flags & req_proc_select))
 			{
-				UCHAR* inMsg = extInMessageNode ? request->getImpure<UCHAR>(extInMessageNode->impureOffset) : NULL;
-				UCHAR* outMsg = request->getImpure<UCHAR>(extOutMessageNode->impureOffset);
+				const auto msg = checkMessageEof->getBuffer(request);
+				const auto eof = (SSHORT*) (msg + (IPTR) checkMessageEof->getFormat(request)->fmt_desc.back().dsc_address);
 
-				function->execute(tdbb, inMsg, outMsg);
+				if (!*eof)
+					request->req_operation = Request::req_return;
 			}
 
-			return SuspendNode::execute(tdbb, request, exeState);
+			return CompoundStmtNode::execute(tdbb, request, exeState);
 		}
 
 	private:
-		const MessageNode* extInMessageNode;
-		const MessageNode* extOutMessageNode;
-		const ExtEngineManager::Function* function;
+		MessageNode* checkMessageEof;
 	};
 
 	// External procedure node.
@@ -362,53 +386,57 @@ namespace
 		{
 			SuspendNode* suspend = FB_NEW_POOL(pool) SuspendNode(pool);
 			suspend->message = intOutMessageNode;
-			suspend->statement = FB_NEW_POOL(pool) MessageMoverNode(pool, extOutMessageNode, intOutMessageNode);
+			suspend->statement = FB_NEW_POOL(pool) MessageMoverNode(pool,
+				extOutMessageNode, intOutMessageNode, intOutMessageNode);
 
 			statements.add(suspend);
 			statements.add(FB_NEW_POOL(pool) StallNode(pool));
 		}
 
-		virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const
+		const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override
 		{
 			impure_state* const impure = request->getImpure<impure_state>(impureOffset);
 			ExtEngineManager::ResultSet*& resultSet = request->req_ext_resultset;
-			UCHAR* extInMsg = extInMessageNode ? request->getImpure<UCHAR>(extInMessageNode->impureOffset) : NULL;
-			UCHAR* extOutMsg = extOutMessageNode ? request->getImpure<UCHAR>(extOutMessageNode->impureOffset) : NULL;
-			UCHAR* intOutMsg = intOutMessageNode ? request->getImpure<UCHAR>(intOutMessageNode->impureOffset) : NULL;
+			UCHAR* extInMsg = extInMessageNode ? extInMessageNode->getBuffer(request) : NULL;
+			UCHAR* extOutMsg = extOutMessageNode ? extOutMessageNode->getBuffer(request) : NULL;
+			UCHAR* intOutMsg = intOutMessageNode ? intOutMessageNode->getBuffer(request) : NULL;
 			SSHORT* eof = intOutMsg ?
-				(SSHORT*) (intOutMsg + (IPTR) intOutMessageNode->format->fmt_desc.back().dsc_address) : NULL;
+				(SSHORT*) (intOutMsg + (IPTR) intOutMessageNode->getFormat(request)->fmt_desc.back().dsc_address) : NULL;
 
 			switch (request->req_operation)
 			{
 				case Request::req_evaluate:
+					impure->sta_state = 0;
+					*eof = 0;
+
 					fb_assert(!resultSet);
 					resultSet = procedure->open(tdbb, extInMsg, extOutMsg);
 
 					if (!resultSet)
-					{
-						*eof = 0;
 						break;
-					}
-					else
-						*eof = -1;
 					// fall into
 
 				case Request::req_proceed:
 				case Request::req_sync:
+					*eof = 0;
 					if (resultSet)
 					{
 						if (resultSet->fetch(tdbb) && (request->req_flags & req_proc_fetch))
 							*eof = -1;
 						else
 						{
-							*eof = 0;
 							delete resultSet;
 							resultSet = NULL;
 						}
 					}
 
 					impure->sta_state = 0;	// suspend node
-					request->req_operation = Request::req_sync;
+
+					if (!*eof)
+						request->req_operation = Request::req_return;
+					else
+						request->req_operation = Request::req_sync;
+
 					break;
 
 				case Request::req_unwind:
@@ -437,27 +465,27 @@ namespace
 		{
 		}
 
-		string internalPrint(NodePrinter& printer) const
+		string internalPrint(NodePrinter& printer) const override
 		{
 			StmtNode::internalPrint(printer);
 			return "ExtTriggerNode";
 		}
 
-		void genBlr(DsqlCompilerScratch* /*dsqlScratch*/)
+		void genBlr(DsqlCompilerScratch* /*dsqlScratch*/) override
 		{
 		}
 
-		ExtTriggerNode* pass1(thread_db* /*tdbb*/, CompilerScratch* /*csb*/)
-		{
-			return this;
-		}
-
-		ExtTriggerNode* pass2(thread_db* /*tdbb*/, CompilerScratch* /*csb*/)
+		ExtTriggerNode* pass1(thread_db* /*tdbb*/, CompilerScratch* /*csb*/) override
 		{
 			return this;
 		}
 
-		const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* /*exeState*/) const
+		ExtTriggerNode* pass2(thread_db* /*tdbb*/, CompilerScratch* /*csb*/) override
+		{
+			return this;
+		}
+
+		const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* /*exeState*/) const override
 		{
 			if (request->req_operation == Request::req_evaluate)
 			{
@@ -476,7 +504,6 @@ namespace
 			return request->req_rpb.getCount() > n && request->req_rpb[n].rpb_number.isValid() ?
 				&request->req_rpb[n] : NULL;
 		}
-
 
 	private:
 		const ExtEngineManager::Trigger* trigger;
@@ -558,24 +585,29 @@ private:
 		if (!obj)
 			return;
 
-		char charSetName[MAX_SQL_IDENTIFIER_SIZE];
+		char charSetNameBuffer[MAX_QUALIFIED_NAME_TO_STRING_LEN];
 
 		{	// scope
 			EngineCheckout cout(tdbb, FB_FUNCTION, checkoutType(attInfo->engine));
 
 			FbLocalStatus status;
-			obj->getCharSet(&status, attInfo->context, charSetName, MAX_SQL_IDENTIFIER_LEN);
+			obj->getCharSet(&status, attInfo->context, charSetNameBuffer, sizeof(charSetNameBuffer));
 			status.check();
-			charSetName[MAX_SQL_IDENTIFIER_LEN] = '\0';
+		}
+
+		charSetNameBuffer[sizeof(charSetNameBuffer) - 1] = '\0';
+		QualifiedName charSetName;
+
+		if (charSetNameBuffer[0])
+		{
+			charSetName = QualifiedName::parseSchemaObject(charSetNameBuffer);
+			attachment->qualifyExistingName(tdbb, charSetName, {obj_charset});
 		}
 
 		USHORT charSetId;
 
-		if (!MET_get_char_coll_subtype(tdbb, &charSetId,
-				reinterpret_cast<const UCHAR*>(charSetName), static_cast<USHORT>(strlen(charSetName))))
-		{
-			status_exception::raise(Arg::Gds(isc_charset_not_found) << Arg::Str(charSetName));
-		}
+		if (!MET_get_char_coll_subtype(tdbb, &charSetId, charSetName))
+			status_exception::raise(Arg::Gds(isc_charset_not_found) << charSetName.toQuotedString());
 
 		attachment->att_charset = charSetId;
 	}
@@ -712,16 +744,153 @@ void* ExtEngineManager::ExternalContextImpl::setInfo(int code, void* value)
 //---------------------
 
 
-ExtEngineManager::Function::Function(thread_db* tdbb, ExtEngineManager* aExtManager,
-		IExternalEngine* aEngine, RoutineMetadata* aMetadata, IExternalFunction* aFunction,
-		const Jrd::Function* aUdf)
+ExtEngineManager::ExtRoutine::ExtRoutine(thread_db* tdbb, ExtEngineManager* aExtManager,
+		IExternalEngine* aEngine, RoutineMetadata* aMetadata)
 	: extManager(aExtManager),
 	  engine(aEngine),
 	  metadata(aMetadata),
-	  function(aFunction),
-	  udf(aUdf),
 	  database(tdbb->getDatabase())
 {
+	engine->addRef();
+}
+
+void ExtEngineManager::ExtRoutine::PluginDeleter::operator()(IPluginBase* ptr)
+{
+	if (ptr)
+		PluginManagerInterfacePtr()->releasePlugin(ptr);
+}
+
+
+//---------------------
+
+
+struct ExtEngineManager::Function::Impl final
+{
+	Impl(MemoryPool& pool)
+		: inValidations(pool),
+		  outValidations(pool),
+		  outDefaults(pool)
+	{
+	}
+
+	Array<NonPooledPair<Item, ItemInfo*>> inValidations;
+	Array<NonPooledPair<Item, ItemInfo*>> outValidations;
+	Array<unsigned> outDefaults;
+};
+
+
+ExtEngineManager::Function::Function(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
+		ExtEngineManager* aExtManager, IExternalEngine* aEngine,
+		RoutineMetadata* aMetadata, IExternalFunction* aFunction,
+		RefPtr<IMessageMetadata> extInputParameters, RefPtr<IMessageMetadata> extOutputParameters,
+		const Jrd::Function* aUdf)
+	: ExtRoutine(tdbb, aExtManager, aEngine, aMetadata),
+	  function(aFunction),
+	  udf(aUdf),
+	  impl(FB_NEW_POOL(pool) Impl(pool))
+{
+	extInputFormat.reset(Routine::createFormat(pool, extInputParameters, false));
+	extOutputFormat.reset(Routine::createFormat(pool, extOutputParameters, true));
+
+	const bool useExtInMessage = udf->getInputFields().hasData() &&
+		!sameFormats(extInputFormat, udf->getInputFormat());
+
+	if (useExtInMessage)
+		extInputImpureOffset = csb->allocImpure(FB_ALIGNMENT, extInputFormat->fmt_length);
+	else
+		extInputFormat.reset();
+
+	const bool useExtOutMessage = udf->getOutputFields().hasData() &&
+		!sameFormats(extOutputFormat, udf->getOutputFormat());
+
+	if (useExtOutMessage)
+		extOutputImpureOffset = csb->allocImpure(FB_ALIGNMENT, extOutputFormat->fmt_length);
+	else
+		extOutputFormat.reset();
+
+	// Get input parameters that have validation expressions.
+	for (const auto param : udf->getInputFields())
+	{
+		FieldInfo fieldInfo;
+		ItemInfo itemInfo;
+
+		if (param->prm_mechanism != prm_mech_type_of &&
+			!fb_utils::implicit_domain(param->prm_field_source.object.c_str()))
+		{
+			const QualifiedNameMetaNamePair entry(param->prm_field_source, {});
+			const bool exist = csb->csb_map_field_info.get(entry, fieldInfo);
+
+			if (!exist)
+			{
+				dsc dummyDesc;
+				MET_get_domain(tdbb, csb->csb_pool, param->prm_field_source, &dummyDesc, &fieldInfo);
+				csb->csb_map_field_info.put(entry, fieldInfo);
+			}
+
+			itemInfo.field = entry;
+			itemInfo.nullable = fieldInfo.nullable;
+			itemInfo.fullDomain = true;
+		}
+
+		itemInfo.name = param->prm_name;
+
+		if (!param->prm_nullable)
+			itemInfo.nullable = false;
+
+		if (itemInfo.isSpecial())
+		{
+			Item item(Item::TYPE_PARAMETER, 0, (param->prm_number - 1) * 2);
+			csb->csb_map_item_info.put(item, itemInfo);
+
+			impl->inValidations.ensureCapacity(udf->getInputFields().getCount() - (param->prm_number - 1));
+			impl->inValidations.push({item, CMP_pass2_validation(tdbb, csb, item)});
+		}
+	}
+
+	// Get output parameters that have default or validation expressions.
+	for (const auto param : udf->getOutputFields())
+	{
+		FieldInfo fieldInfo;
+		ItemInfo itemInfo;
+
+		if (param->prm_mechanism != prm_mech_type_of &&
+			!fb_utils::implicit_domain(param->prm_field_source.object.c_str()))
+		{
+			const QualifiedNameMetaNamePair entry(param->prm_field_source, {});
+			const bool exist = csb->csb_map_field_info.get(entry, fieldInfo);
+
+			if (!exist)
+			{
+				dsc dummyDesc;
+				MET_get_domain(tdbb, csb->csb_pool, param->prm_field_source, &dummyDesc, &fieldInfo);
+				csb->csb_map_field_info.put(entry, fieldInfo);
+			}
+
+			if (fieldInfo.defaultValue)
+			{
+				impl->outDefaults.ensureCapacity(udf->getOutputFields().getCount() - param->prm_number);
+				impl->outDefaults.push(param->prm_number);
+			}
+
+			itemInfo.field = entry;
+			itemInfo.nullable = fieldInfo.nullable;
+			itemInfo.fullDomain = true;
+		}
+
+		itemInfo.name = param->prm_name;
+
+		if (!param->prm_nullable)
+			itemInfo.nullable = false;
+
+		if (itemInfo.isSpecial())
+		{
+			Item item(Item::TYPE_PARAMETER, 1, param->prm_number * 2);
+			csb->csb_map_item_info.put(item, itemInfo);
+
+			impl->outValidations.ensureCapacity(udf->getOutputFields().getCount());
+			impl->outValidations.push({item, CMP_pass2_validation(tdbb, csb, item)});
+		}
+	}
 }
 
 
@@ -732,20 +901,114 @@ ExtEngineManager::Function::~Function()
 }
 
 
-void ExtEngineManager::Function::execute(thread_db* tdbb, UCHAR* inMsg, UCHAR* outMsg) const
+// Execute an external function starting with an inactive request and ending with an active one.
+void ExtEngineManager::Function::execute(thread_db* tdbb, Request* request, jrd_tra* transaction,
+	unsigned inMsgLength, UCHAR* inMsg, unsigned outMsgLength, UCHAR* outMsg) const
 {
-	EngineAttachmentInfo* attInfo = extManager->getEngineAttachment(tdbb, engine);
-	const MetaString& userName = udf->invoker ? udf->invoker->getUserName() : "";
-	ContextManager<IExternalFunction> ctxManager(tdbb, attInfo, function,
-		(udf->getName().package.isEmpty() ?
-			CallerName(obj_udf, udf->getName().identifier, userName) :
-			CallerName(obj_package_header, udf->getName().package, userName)));
+	fb_assert(inMsgLength == udf->getInputFormat()->fmt_length);
+	fb_assert(outMsgLength == udf->getOutputFormat()->fmt_length);
 
-	EngineCheckout cout(tdbb, FB_FUNCTION, checkoutType(attInfo->engine));
+	// Validate input parameters (internal message).
+	validateParameters(tdbb, inMsg, true);
 
-	FbLocalStatus status;
-	function->execute(&status, attInfo->context, inMsg, outMsg);
-	status.check();
+	// If there is a need for an external input message, copy the internal message to it and switch the message.
+	if (extInputImpureOffset.has_value())
+	{
+		const auto extInMsg = request->getImpure<UCHAR>(extInputImpureOffset.value());
+		copyMessage(tdbb, udf->getInputFormat(), inMsg, extInputFormat, extInMsg);
+		inMsg = extInMsg;
+		///inMsgLength = extInputFormat->fmt_length;
+	}
+
+	// Initialize outputs in the internal message.
+	{
+		fb_assert(udf->getOutputFormat()->fmt_desc.getCount() / 2 == udf->getOutputFields().getCount());
+
+		// Initialize everything to NULL (FB_TRUE).
+		memset(outMsg, FB_TRUE, udf->getOutputFormat()->fmt_length);
+
+		for (const auto paramNumber : impl->outDefaults)
+		{
+			const auto param = udf->getOutputFields()[paramNumber];
+			const QualifiedNameMetaNamePair entry(param->prm_field_source, {});
+			FieldInfo fieldInfo;
+
+			dsc* defaultValue = nullptr;
+
+			if (request->getStatement()->mapFieldInfo.get(entry, fieldInfo) && fieldInfo.defaultValue)
+				defaultValue = EVL_expr(tdbb, request, fieldInfo.defaultValue);
+
+			const auto& paramDesc = udf->getOutputFormat()->fmt_desc[paramNumber * 2];
+			const auto& nullDesc = udf->getOutputFormat()->fmt_desc[paramNumber * 2 + 1];
+
+			fb_assert(nullDesc.dsc_dtype == dtype_short);
+
+			if (defaultValue)
+			{
+				dsc desc = paramDesc;
+				desc.dsc_address = outMsg + (IPTR) desc.dsc_address;
+				MOV_move(tdbb, defaultValue, &desc);
+
+				*(SSHORT*) (outMsg + (IPTR) nullDesc.dsc_address) = FB_FALSE;
+			}
+			else
+				*(SSHORT*) (outMsg + (IPTR) nullDesc.dsc_address) = FB_TRUE;
+		}
+	}
+
+	const auto extOutMsg = extOutputImpureOffset.has_value() ?
+		request->getImpure<UCHAR>(extOutputImpureOffset.value()) : nullptr;
+
+	// If there is a need for an external output message, copy the internal message to it.
+	if (extOutMsg)
+		copyMessage(tdbb, udf->getOutputFormat(), outMsg, extOutputFormat, extOutMsg);
+
+	// Call external.
+	{	// scope
+		EngineAttachmentInfo* attInfo = extManager->getEngineAttachment(tdbb, engine.get());
+		const MetaString& userName = udf->invoker ? udf->invoker->getUserName() : "";
+		ContextManager<IExternalFunction> ctxManager(tdbb, attInfo, function,
+			(udf->getName().package.isEmpty() ?
+				CallerName(obj_udf, udf->getName(), userName) :
+				CallerName(obj_package_header,
+					QualifiedName(udf->getName().package, udf->getName().schema), userName)));
+
+		EngineCheckout cout(tdbb, FB_FUNCTION, checkoutType(attInfo->engine));
+
+		FbLocalStatus status;
+		function->execute(&status, attInfo->context, inMsg, (extOutMsg ? extOutMsg : outMsg));
+		status.check();
+	}
+
+	// If there is an external output message, copy it to the internal message.
+	if (extOutMsg)
+		copyMessage(tdbb, extOutputFormat, extOutMsg, udf->getOutputFormat(), outMsg);
+
+	// Validate output parameters (internal message).
+	validateParameters(tdbb, outMsg, false);
+}
+
+void ExtEngineManager::Function::validateParameters(thread_db* tdbb, UCHAR* msg, bool input) const
+{
+	const auto format = input ? udf->getInputFormat() : udf->getOutputFormat();
+	const auto& validations = input ? impl->inValidations : impl->outValidations;
+	const UCHAR messageNumber = input ? 0 : 1;
+
+	for (const auto& [item, itemInfo] : validations)
+	{
+		const unsigned paramNumber = item.index / 2;
+		const auto& paramDesc = format->fmt_desc[paramNumber * 2];
+		const auto& nullDesc = format->fmt_desc[paramNumber * 2 + 1];
+
+		fb_assert(nullDesc.dsc_dtype == dtype_short);
+
+		dsc value = paramDesc;
+		value.dsc_address = msg + (IPTR) value.dsc_address;
+
+		const bool isNull = *(SSHORT*) (msg + (IPTR) nullDesc.dsc_address);
+
+		EVL_validate(tdbb, Item(Item::TYPE_PARAMETER, messageNumber, paramNumber), itemInfo, &value, isNull);
+	}
 }
 
 
@@ -755,12 +1018,9 @@ void ExtEngineManager::Function::execute(thread_db* tdbb, UCHAR* inMsg, UCHAR* o
 ExtEngineManager::Procedure::Procedure(thread_db* tdbb, ExtEngineManager* aExtManager,
 	    IExternalEngine* aEngine, RoutineMetadata* aMetadata, IExternalProcedure* aProcedure,
 		const jrd_prc* aPrc)
-	: extManager(aExtManager),
-	  engine(aEngine),
-	  metadata(aMetadata),
+	: ExtRoutine(tdbb, aExtManager, aEngine, aMetadata),
 	  procedure(aProcedure),
-	  prc(aPrc),
-	  database(tdbb->getDatabase())
+	  prc(aPrc)
 {
 }
 
@@ -788,12 +1048,13 @@ ExtEngineManager::ResultSet::ResultSet(thread_db* tdbb, UCHAR* inMsg, UCHAR* out
 	  attachment(tdbb->getAttachment()),
 	  firstFetch(true)
 {
-	attInfo = procedure->extManager->getEngineAttachment(tdbb, procedure->engine);
+	attInfo = procedure->extManager->getEngineAttachment(tdbb, procedure->engine.get());
 	const MetaString& userName = procedure->prc->invoker ? procedure->prc->invoker->getUserName() : "";
 	ContextManager<IExternalProcedure> ctxManager(tdbb, attInfo, procedure->procedure,
 		(procedure->prc->getName().package.isEmpty() ?
-			CallerName(obj_procedure, procedure->prc->getName().identifier, userName) :
-			CallerName(obj_package_header, procedure->prc->getName().package, userName)));
+			CallerName(obj_procedure, procedure->prc->getName(), userName) :
+			CallerName(obj_package_header,
+				QualifiedName(procedure->prc->getName().package, procedure->prc->getName().schema), userName)));
 
 	charSet = attachment->att_charset;
 
@@ -826,8 +1087,9 @@ bool ExtEngineManager::ResultSet::fetch(thread_db* tdbb)
 	const MetaString& userName = procedure->prc->invoker ? procedure->prc->invoker->getUserName() : "";
 	ContextManager<IExternalProcedure> ctxManager(tdbb, attInfo, charSet,
 		(procedure->prc->getName().package.isEmpty() ?
-			CallerName(obj_procedure, procedure->prc->getName().identifier, userName) :
-			CallerName(obj_package_header, procedure->prc->getName().package, userName)));
+			CallerName(obj_procedure, procedure->prc->getName(), userName) :
+			CallerName(obj_package_header,
+				QualifiedName(procedure->prc->getName().package, procedure->prc->getName().schema), userName)));
 
 	EngineCheckout cout(tdbb, FB_FUNCTION, checkoutType(attInfo->engine));
 
@@ -845,15 +1107,12 @@ bool ExtEngineManager::ResultSet::fetch(thread_db* tdbb)
 ExtEngineManager::Trigger::Trigger(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
 			ExtEngineManager* aExtManager, IExternalEngine* aEngine, RoutineMetadata* aMetadata,
 			IExternalTrigger* aTrigger, const Jrd::Trigger* aTrg)
-	: computedStatements(pool),
-	  extManager(aExtManager),
-	  engine(aEngine),
-	  metadata(aMetadata),
+	: ExtRoutine(tdbb, aExtManager, aEngine, aMetadata),
+	  computedStatements(pool),
 	  trigger(aTrigger),
 	  trg(aTrg),
 	  fieldsPos(pool),
 	  varDecls(pool),
-	  database(tdbb->getDatabase()),
 	  computedCount(0)
 {
 	jrd_rel* relation = trg->relation;
@@ -901,10 +1160,8 @@ ExtEngineManager::Trigger::~Trigger()
 void ExtEngineManager::Trigger::execute(thread_db* tdbb, Request* request, unsigned action,
 	record_param* oldRpb, record_param* newRpb) const
 {
-	EngineAttachmentInfo* attInfo = extManager->getEngineAttachment(tdbb, engine);
-	const Nullable<bool>& ssDefiner = trg->ssDefiner.specified ? trg->ssDefiner :
-		(trg->relation && trg->relation->rel_ss_definer.specified ? trg->relation->rel_ss_definer : Nullable<bool>() );
-	const MetaString& userName = ssDefiner.specified && ssDefiner.value ? trg->relation->rel_owner_name.c_str() : "";
+	EngineAttachmentInfo* attInfo = extManager->getEngineAttachment(tdbb, engine.get());
+	const MetaString& userName = trg->ssDefiner.asBool() ? trg->owner.c_str() : "";
 	ContextManager<IExternalTrigger> ctxManager(tdbb, attInfo, trigger,
 		CallerName(obj_trigger, trg->name, userName));
 
@@ -1074,9 +1331,9 @@ void ExtEngineManager::Trigger::setValues(thread_db* tdbb, Request* request, Arr
 			const DeclareVariableNode* varDecl = varDecls[computedVarId++];
 			impure_value* varImpure = request->getImpure<impure_value>(varDecl->impureOffset);
 
-			*nullTarget = (varImpure->vlu_desc.dsc_flags & DSC_null) != 0 ? -1 : 0;
+			*nullTarget = (varImpure->vlu_desc.dsc_flags & DSC_null) ? FB_TRUE : FB_FALSE;
 
-			if (*nullTarget == 0)
+			if (!*nullTarget)
 				MOV_move(tdbb, &varImpure->vlu_desc, &target);
 		}
 		else
@@ -1084,9 +1341,9 @@ void ExtEngineManager::Trigger::setValues(thread_db* tdbb, Request* request, Arr
 			if (!EVL_field(rpb->rpb_relation, rpb->rpb_record, fieldPos, &source))
 				source.dsc_flags |= DSC_null;
 
-			*nullTarget = (source.dsc_flags & DSC_null) != 0 ? -1 : 0;
+			*nullTarget = (source.dsc_flags & DSC_null) ? FB_TRUE : FB_FALSE;
 
-			if (*nullTarget == 0)
+			if (!*nullTarget)
 				MOV_move(tdbb, &source, &target);
 		}
 	}
@@ -1135,6 +1392,12 @@ namespace
 		}
 
 	public:
+		int release() override
+		{
+			// Never delete static instance of SystemEngine
+			return 1;
+		}
+
 		void open(ThrowStatusExceptionWrapper* status, IExternalContext* context,
 			char* name, unsigned nameSize) override
 		{
@@ -1252,25 +1515,28 @@ void ExtEngineManager::closeAttachment(thread_db* tdbb, Attachment* attachment)
 				FbLocalStatus status;
 				engine->closeAttachment(&status, attInfo->context);	//// FIXME: log status
 
-				// Check whether the engine is used by other attachments.
+				// Check whether a non-SYSTEM engine is used by other attachments.
 				// If no one uses, release it.
-				bool close = true;
-				WriteLockGuard writeGuard(enginesLock, FB_FUNCTION);
-
-				EnginesAttachmentsMap::Accessor ea_accessor(&enginesAttachments);
-				for (bool ea_found = ea_accessor.getFirst(); ea_found; ea_found = ea_accessor.getNext())
+				if (engine != SystemEngine::INSTANCE)
 				{
-					if (ea_accessor.current()->first.engine == engine)
+					bool close = true;
+					WriteLockGuard writeGuard(enginesLock, FB_FUNCTION);
+
+					EnginesAttachmentsMap::Accessor ea_accessor(&enginesAttachments);
+					for (bool ea_found = ea_accessor.getFirst(); ea_found; ea_found = ea_accessor.getNext())
 					{
-						close = false; // engine is in use, no need to release
-						break;
+						if (ea_accessor.current()->first.engine == engine)
+						{
+							close = false; // engine is in use, no need to release
+							break;
+						}
 					}
-				}
 
-				if (close)
-				{
-					if (engines.remove(accessor.current()->first)) // If engine has already been deleted - nothing to do
-						PluginManagerInterfacePtr()->releasePlugin(engine);
+					if (close)
+					{
+						if (engines.remove(accessor.current()->first)) // If engine has already been deleted - nothing to do
+							PluginManagerInterfacePtr()->releasePlugin(engine);
+					}
 				}
 			}
 
@@ -1290,14 +1556,13 @@ void ExtEngineManager::makeFunction(thread_db* tdbb, CompilerScratch* csb, Jrd::
 	const MetaString& userName = udf->invoker ? udf->invoker->getUserName() : "";
 	ContextManager<IExternalFunction> ctxManager(tdbb, attInfo, attInfo->adminCharSet,
 		(udf->getName().package.isEmpty() ?
-			CallerName(obj_udf, udf->getName().identifier, userName) :
-			CallerName(obj_package_header, udf->getName().package, userName)));
+			CallerName(obj_udf, udf->getName(), userName) :
+			CallerName(obj_package_header, QualifiedName(udf->getName().package, udf->getName().schema), userName)));
 
 	MemoryPool& pool = *tdbb->getAttachment()->att_pool;
 
 	AutoPtr<RoutineMetadata> metadata(FB_NEW_POOL(pool) RoutineMetadata(pool));
-	metadata->package = udf->getName().package;
-	metadata->name = udf->getName().identifier;
+	metadata->name = udf->getName();
 	metadata->entryPoint = entryPointTrimmed;
 	metadata->body = body;
 	metadata->inputParameters.assignRefNoIncr(Routine::createMetadata(udf->getInputFields(), true));
@@ -1330,7 +1595,7 @@ void ExtEngineManager::makeFunction(thread_db* tdbb, CompilerScratch* csb, Jrd::
 			if (!externalFunction)
 			{
 				status_exception::raise(
-					Arg::Gds(isc_eem_func_not_returned) << udf->getName().toString() << engine);
+					Arg::Gds(isc_eem_func_not_returned) << udf->getName().toQuotedString() << engine);
 			}
 		}
 		catch (const Exception&)
@@ -1348,63 +1613,16 @@ void ExtEngineManager::makeFunction(thread_db* tdbb, CompilerScratch* csb, Jrd::
 		status.check();
 	}
 
-	const Format* extInputFormat = Routine::createFormat(pool, extInputParameters, false);
-	const Format* extOutputFormat = Routine::createFormat(pool, extOutputParameters, true);
-
 	try
 	{
-		udf->fun_external = FB_NEW_POOL(pool) Function(tdbb, this, attInfo->engine,
-			metadata.release(), externalFunction, udf);
+		udf->fun_external = FB_NEW_POOL(pool) Function(tdbb, pool, csb, this, attInfo->engine,
+			metadata.release(), externalFunction, extInputParameters, extOutputParameters, udf);
 
-		MemoryPool& csbPool = csb->csb_pool;
+		// This is necessary for compilation, but will never be executed.
+		const auto dummyNode = FB_NEW_POOL(csb->csb_pool) CompoundStmtNode(csb->csb_pool);
 
-		CompoundStmtNode* mainNode = FB_NEW_POOL(csbPool) CompoundStmtNode(csbPool);
-
-		IntMessageNode* intInMessageNode = udf->getInputFields().hasData() ?
-			FB_NEW_POOL(csbPool) IntMessageNode(tdbb, csbPool, csb, 0,
-				udf->getInputFields(), udf->getInputFormat()) :
-			NULL;
-		ExtMessageNode* extInMessageNode = NULL;
-
-		if (intInMessageNode)
-		{
-			mainNode->statements.add(intInMessageNode);
-
-			extInMessageNode = FB_NEW_POOL(csbPool) ExtMessageNode(tdbb, csbPool, csb, 2, extInputFormat);
-			mainNode->statements.add(extInMessageNode);
-		}
-
-		IntMessageNode* intOutMessageNode = FB_NEW_POOL(csbPool) IntMessageNode(tdbb, csbPool, csb, 1,
-			udf->getOutputFields(), udf->getOutputFormat());
-		mainNode->statements.add(intOutMessageNode);
-
-		ExtMessageNode* extOutMessageNode = FB_NEW_POOL(csbPool) ExtMessageNode(tdbb, csbPool, csb, 3,
-			extOutputFormat);
-		mainNode->statements.add(extOutMessageNode);
-
-		// Initialize the output fields into the external message.
-		InitOutputNode* initOutputNode = FB_NEW_POOL(csbPool) InitOutputNode(
-			tdbb, csbPool, csb, udf->getOutputFields(), extOutMessageNode);
-		mainNode->statements.add(initOutputNode);
-
-		if (intInMessageNode)
-		{
-			ReceiveNode* receiveNode = intInMessageNode ? FB_NEW_POOL(csbPool) ReceiveNode(csbPool) : NULL;
-			receiveNode->message = intInMessageNode;
-			receiveNode->statement = FB_NEW_POOL(csbPool) MessageMoverNode(
-				csbPool, intInMessageNode, extInMessageNode);
-			mainNode->statements.add(receiveNode);
-		}
-
-		ExtFunctionNode* extFunctionNode = FB_NEW_POOL(csbPool) ExtFunctionNode(csbPool,
-			extInMessageNode, extOutMessageNode, udf->fun_external);
-		mainNode->statements.add(extFunctionNode);
-		extFunctionNode->message = intOutMessageNode;
-		extFunctionNode->statement = FB_NEW_POOL(csbPool) MessageMoverNode(
-			csbPool, extOutMessageNode, intOutMessageNode);
-
-		Statement* statement = udf->getStatement();
-		PAR_preparsed_node(tdbb, NULL, mainNode, NULL, &csb, &statement, false, 0);
+		auto statement = udf->getStatement();
+		PAR_preparsed_node(tdbb, nullptr, dummyNode, nullptr, &csb, &statement, false, 0);
 		udf->setStatement(statement);
 	}
 	catch (...)
@@ -1426,14 +1644,14 @@ void ExtEngineManager::makeProcedure(thread_db* tdbb, CompilerScratch* csb, jrd_
 	const MetaString& userName = prc->invoker ? prc->invoker->getUserName() : "";
 	ContextManager<IExternalProcedure> ctxManager(tdbb, attInfo, attInfo->adminCharSet,
 		(prc->getName().package.isEmpty() ?
-			CallerName(obj_procedure, prc->getName().identifier, userName) :
-			CallerName(obj_package_header, prc->getName().package, userName)));
+			CallerName(obj_procedure, prc->getName(), userName) :
+			CallerName(obj_package_header,
+				QualifiedName(prc->getName().package, prc->getName().schema), userName)));
 
 	MemoryPool& pool = *tdbb->getAttachment()->att_pool;
 
 	AutoPtr<RoutineMetadata> metadata(FB_NEW_POOL(pool) RoutineMetadata(pool));
-	metadata->package = prc->getName().package;
-	metadata->name = prc->getName().identifier;
+	metadata->name = prc->getName();
 	metadata->entryPoint = entryPointTrimmed;
 	metadata->body = body;
 	metadata->inputParameters.assignRefNoIncr(Routine::createMetadata(prc->getInputFields(), true));
@@ -1467,7 +1685,7 @@ void ExtEngineManager::makeProcedure(thread_db* tdbb, CompilerScratch* csb, jrd_
 			{
 				status_exception::raise(
 					Arg::Gds(isc_eem_proc_not_returned) <<
-						prc->getName().toString() << engine);
+						prc->getName().toQuotedString() << engine);
 			}
 		}
 		catch (const Exception&)
@@ -1520,9 +1738,9 @@ void ExtEngineManager::makeProcedure(thread_db* tdbb, CompilerScratch* csb, jrd_
 		mainNode->statements.add(extOutMessageNode);
 
 		// Initialize the output fields into the external message.
-		InitOutputNode* initOutputNode = FB_NEW_POOL(csbPool) InitOutputNode(
+		InitParametersNode* initParametersNode = FB_NEW_POOL(csbPool) InitParametersNode(
 			tdbb, csbPool, csb, prc->getOutputFields(), extOutMessageNode);
-		mainNode->statements.add(initOutputNode);
+		mainNode->statements.add(initParametersNode);
 
 		ReceiveNode* receiveNode = intInMessageNode ?
 			FB_NEW_POOL(csbPool) ReceiveNode(csbPool) : NULL;
@@ -1567,7 +1785,7 @@ void ExtEngineManager::makeTrigger(thread_db* tdbb, CompilerScratch* csb, Jrd::T
 	entryPointTrimmed.trim();
 
 	EngineAttachmentInfo* attInfo = getEngineAttachment(tdbb, engine);
-	const MetaString& userName = trg->ssDefiner.specified && trg->ssDefiner.value ? trg->owner.c_str() : "";
+	const MetaString& userName = trg->ssDefiner.asBool() ? trg->owner.c_str() : "";
 	ContextManager<IExternalTrigger> ctxManager(tdbb, attInfo, attInfo->adminCharSet,
 		CallerName(obj_trigger, trg->name, userName));
 
@@ -1623,7 +1841,7 @@ void ExtEngineManager::makeTrigger(thread_db* tdbb, CompilerScratch* csb, Jrd::T
 		if (!externalTrigger)
 		{
 			status_exception::raise(
-				Arg::Gds(isc_eem_trig_not_returned) << trg->name << engine);
+				Arg::Gds(isc_eem_trig_not_returned) << trg->name.toQuotedString() << engine);
 		}
 
 		if (relation)
@@ -1635,16 +1853,17 @@ void ExtEngineManager::makeTrigger(thread_db* tdbb, CompilerScratch* csb, Jrd::T
 
 	try
 	{
-		trg->extTrigger = FB_NEW_POOL(pool) Trigger(tdbb, pool, csb, this, attInfo->engine,
+		const auto extTrigger = FB_NEW_POOL(pool) Trigger(tdbb, pool, csb, this, attInfo->engine,
 			metadata.release(), externalTrigger, trg);
+
+		trg->extTrigger.reset(extTrigger);
 
 		MemoryPool& csbPool = csb->csb_pool;
 
 		CompoundStmtNode* mainNode = FB_NEW_POOL(csbPool) CompoundStmtNode(csbPool);
-		mainNode->statements.append(trg->extTrigger->computedStatements);
+		mainNode->statements.append(extTrigger->computedStatements);
 
-		ExtTriggerNode* extTriggerNode = FB_NEW_POOL(csbPool) ExtTriggerNode(csbPool,
-			trg->extTrigger);
+		const auto extTriggerNode = FB_NEW_POOL(csbPool) ExtTriggerNode(csbPool, extTrigger);
 		mainNode->statements.add(extTriggerNode);
 
 		PAR_preparsed_node(tdbb, trg->relation, mainNode, NULL, &csb, &trg->statement, true, 0);
@@ -1784,22 +2003,23 @@ void ExtEngineManager::setupAdminCharSet(thread_db* tdbb, IExternalEngine* engin
 {
 	ContextManager<IExternalFunction> ctxManager(tdbb, attInfo, CS_UTF8);
 
-	char charSetName[MAX_SQL_IDENTIFIER_SIZE] = "NONE";
+	QualifiedName charSetName;
+	char charSetNameBuffer[MAX_QUALIFIED_NAME_TO_STRING_LEN] = DEFAULT_DB_CHARACTER_SET_NAME;
 
 	FbLocalStatus status;
-	engine->open(&status, attInfo->context, charSetName, MAX_SQL_IDENTIFIER_LEN);
+	engine->open(&status, attInfo->context, charSetNameBuffer, sizeof(charSetNameBuffer));
 	status.check();
 
-	charSetName[MAX_SQL_IDENTIFIER_LEN] = '\0';
+	charSetNameBuffer[sizeof(charSetNameBuffer) - 1] = '\0';
 
-	if (!MET_get_char_coll_subtype(tdbb, &attInfo->adminCharSet,
-			reinterpret_cast<const UCHAR*>(charSetName),
-			static_cast<USHORT>(strlen(charSetName))))
+	if (charSetNameBuffer[0])
 	{
-		status_exception::raise(
-			Arg::Gds(isc_charset_not_found) <<
-			Arg::Str(charSetName));
+		charSetName = QualifiedName::parseSchemaObject(charSetNameBuffer);
+		tdbb->getAttachment()->qualifyExistingName(tdbb, charSetName, {obj_charset});
 	}
+
+	if (!MET_get_char_coll_subtype(tdbb, &attInfo->adminCharSet, charSetName))
+		status_exception::raise(Arg::Gds(isc_charset_not_found) << charSetName.toQuotedString());
 }
 
 

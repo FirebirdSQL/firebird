@@ -27,6 +27,7 @@
 #include "../common/classes/init.h"
 #include "../common/dllinst.h"
 #include "../common/os/fbsyslog.h"
+#include "../common/os/path_utils.h"
 #include "../common/utils_proto.h"
 #include "../jrd/constants.h"
 #include "firebird/Interface.h"
@@ -60,25 +61,23 @@ public:
 	explicit ConfigImpl(Firebird::MemoryPool& p)
 		: Firebird::PermanentStorage(p), missConf(false)
 	{
-		try
-		{
-			ConfigFile file(fb_utils::getPrefix(Firebird::IConfigManager::DIR_CONF, Firebird::CONFIG_FILE),
-				ConfigFile::ERROR_WHEN_MISS);
-			defaultConfig = FB_NEW Firebird::Config(file);
-		}
-		catch (const Firebird::status_exception& ex)
-		{
-			if (ex.value()[1] != isc_miss_config)
-			{
-				throw;
-			}
+		const auto fullName = fb_utils::getPrefix(Firebird::IConfigManager::DIR_CONF, Firebird::CONFIG_FILE);
+		missConf = !PathUtils::canAccess(fullName, 0);
 
-			missConf = true;
-
+		if (missConf)
+		{
 			ConfigFile file(ConfigFile::USE_TEXT, "");
 			defaultConfig = FB_NEW Firebird::Config(file);
 		}
+		else
+		{
+			ConfigFile file(fullName, ConfigFile::ERROR_WHEN_MISS);
+			defaultConfig = FB_NEW Firebird::Config(file);
+		}
 	}
+
+	ConfigImpl(const ConfigImpl&) = delete;
+	void operator=(const ConfigImpl&) = delete;
 
 	/***
 	It was a kind of getting ready for changing config remotely...
@@ -89,12 +88,12 @@ public:
 	}
 	***/
 
-	Firebird::RefPtr<const Firebird::Config>& getDefaultConfig()
+	Firebird::RefPtr<const Firebird::Config>& getDefaultConfig() noexcept
 	{
 		return defaultConfig;
 	}
 
-	bool missFirebirdConf() const
+	bool missFirebirdConf() const noexcept
 	{
 		return missConf;
 	}
@@ -108,9 +107,6 @@ public:
 
 private:
 	Firebird::RefPtr<const Firebird::Config> defaultConfig;
-
-    ConfigImpl(const ConfigImpl&);
-    void operator=(const ConfigImpl&);
 
 	bool missConf;
 };
@@ -152,9 +148,8 @@ Config::Config(const ConfigFile& file)
 	: valuesSource(*getDefaultMemoryPool()),
 	notifyDatabase(*getDefaultMemoryPool()),
 	serverMode(-1),
-	defaultConfig(false)
+	defaultConfig(true)
 {
-	memset(sourceIdx, 0, sizeof(sourceIdx));
 	valuesSource.add(NULL);
 
 	setupDefaultConfig();
@@ -180,6 +175,7 @@ Config::Config(const ConfigFile& file)
 	}
 
 	loadValues(file, CONFIG_FILE);
+	fixDefaults();
 }
 
 Config::Config(const ConfigFile& file, const char* srcName, const Config& base, const PathName& notify)
@@ -188,7 +184,6 @@ Config::Config(const ConfigFile& file, const char* srcName, const Config& base, 
 	serverMode(-1),
 	defaultConfig(false)
 {
-	memset(sourceIdx, 0, sizeof(sourceIdx));
 	valuesSource.add(NULL);
 
 	for (FB_SIZE_T i = 1; i < base.valuesSource.getCount(); i++)
@@ -242,7 +237,7 @@ void Config::loadValues(const ConfigFile& file, const char* srcName)
 		const ConfigFile::Parameter* par = file.findParameter(entry.key);
 
 		// Don't assign values to the global keys at non-default config
-		if (par && (defaultConfig || !entry.is_global))
+		if (par && (defaultConfig || !entry.is_global) && (par->hasValue || par->sub))
 		{
 			// Assign the actual value
 
@@ -285,7 +280,7 @@ void Config::loadValues(const ConfigFile& file, const char* srcName)
 	checkValues();
 }
 
-static const char* txtServerModes[6] =
+static constexpr const char* txtServerModes[6] =
 {
 	"Super", "ThreadedDedicated",
 	"SuperClassic", "ThreadedShared",
@@ -294,7 +289,7 @@ static const char* txtServerModes[6] =
 
 void Config::setupDefaultConfig()
 {
-	defaultConfig = true;
+	fb_assert(defaultConfig);
 
 	for (unsigned i = 0; i < MAX_CONFIG_KEY; i++)
 		defaults[i] = entries[i].default_value;
@@ -305,26 +300,45 @@ void Config::setupDefaultConfig()
 	serverMode = bootBuild ? MODE_CLASSIC : MODE_SUPER;
 	pDefault->strVal = txtServerModes[2 * serverMode];
 
-	pDefault = &defaults[KEY_TEMP_CACHE_LIMIT];
-	if (pDefault->intVal < 0)
-		pDefault->intVal = (serverMode != MODE_SUPER) ? 8388608 : 67108864;	// bytes
-
 	defaults[KEY_REMOTE_FILE_OPEN_ABILITY].boolVal = bootBuild;
-
-	pDefault = &defaults[KEY_DEFAULT_DB_CACHE_PAGES];
-	if (pDefault->intVal < 0)
-		pDefault->intVal = (serverMode != MODE_SUPER) ? 256 : 2048;	// pages
-
-	pDefault = &defaults[KEY_GC_POLICY];
-	if (!pDefault->strVal)
-	{
-		pDefault->strVal = (serverMode == MODE_SUPER) ? GCPolicyCombined : GCPolicyCooperative;
-	}
 
 	//pDefault = &entries[KEY_WIRE_CRYPT].default_value;
 //	if (!*pDefault)
 //		*pDefault == (ConfigValue) (xxx == WC_CLIENT) ? WIRE_CRYPT_ENABLED : WIRE_CRYPT_REQUIRED;
 
+}
+
+void Config::fixDefaults()
+{
+	fb_assert(defaultConfig);
+
+	ConfigValue* pDefault = &defaults[KEY_TEMP_CACHE_LIMIT];
+	ConfigValue* pValue = &values[KEY_TEMP_CACHE_LIMIT];
+	if (pDefault->intVal < 0)
+		pDefault->intVal = (serverMode != MODE_SUPER) ? 8388608 : 67108864;	// bytes
+
+	if (pValue->intVal < 0)
+		pValue->intVal = pDefault->intVal;
+
+
+	pDefault = &defaults[KEY_DEFAULT_DB_CACHE_PAGES];
+	pValue = &values[KEY_DEFAULT_DB_CACHE_PAGES];
+	if (pDefault->intVal < 0)
+		pDefault->intVal = (serverMode != MODE_SUPER) ? 256 : 2048;	// pages
+
+	if (pValue->intVal < 0)
+		pValue->intVal = pDefault->intVal;
+
+
+	pDefault = &defaults[KEY_GC_POLICY];
+	pValue = &values[KEY_GC_POLICY];
+	if (!pDefault->strVal)
+	{
+		pDefault->strVal = (serverMode == MODE_SUPER) ? GCPolicyCombined : GCPolicyCooperative;
+	}
+
+	if (!pValue->strVal)
+		pValue->strVal = pDefault->strVal;
 }
 
 void Config::checkIntForLoBound(ConfigKey key, SINT64 loBound, bool setDefault)
@@ -350,7 +364,7 @@ void Config::checkValues()
 
 	checkIntForLoBound(KEY_DEFAULT_DB_CACHE_PAGES, 0, true);
 
-	checkIntForLoBound(KEY_LOCK_MEM_SIZE, 64 * 1024, false);
+	checkIntForLoBound(KEY_LOCK_MEM_SIZE, 256 * 1024, false);
 
 	const char* strVal = values[KEY_GC_POLICY].strVal;
 	if (strVal)
@@ -395,14 +409,6 @@ void Config::checkValues()
 			values[KEY_SERVER_MODE] = defaults[KEY_SERVER_MODE];
 	}
 
-	checkIntForLoBound(KEY_FILESYSTEM_CACHE_THRESHOLD, 0, true);
-
-	checkIntForLoBound(KEY_MAX_IDENTIFIER_BYTE_LENGTH, 1, true);
-	checkIntForHiBound(KEY_MAX_IDENTIFIER_BYTE_LENGTH, MAX_SQL_IDENTIFIER_LEN, true);
-
-	checkIntForLoBound(KEY_MAX_IDENTIFIER_CHAR_LENGTH, 1, true);
-	checkIntForHiBound(KEY_MAX_IDENTIFIER_CHAR_LENGTH, METADATA_IDENTIFIER_CHAR_LEN, true);
-
 	checkIntForLoBound(KEY_SNAPSHOTS_MEM_SIZE, 1, true);
 	checkIntForHiBound(KEY_SNAPSHOTS_MEM_SIZE, MAX_ULONG, true);
 
@@ -417,7 +423,7 @@ void Config::checkValues()
 	checkIntForHiBound(KEY_MAX_PARALLEL_WORKERS, 64, false);	// todo: detect number of available cores
 
 	checkIntForLoBound(KEY_PARALLEL_WORKERS, 1, true);
-	checkIntForHiBound(KEY_MAX_PARALLEL_WORKERS, values[KEY_MAX_PARALLEL_WORKERS].intVal, false);
+	checkIntForHiBound(KEY_PARALLEL_WORKERS, values[KEY_MAX_PARALLEL_WORKERS].intVal, false);
 }
 
 
@@ -437,6 +443,9 @@ Config::~Config()
 			break;
 		//case TYPE_STRING_VECTOR:
 		//	break;
+		default:
+			// nothing to free
+			break;
 		}
 	}
 
@@ -474,7 +483,7 @@ void Config::setRootDirectoryFromCommandLine(const PathName& newRoot)
 		PathName(*getDefaultMemoryPool(), newRoot);
 }
 
-const PathName* Config::getCommandLineRootDirectory()
+const PathName* Config::getCommandLineRootDirectory() noexcept
 {
 	return rootFromCommandLine;
 }
@@ -552,7 +561,7 @@ bool Config::valueAsString(ConfigValue val, ConfigType type, string& str)
 	return true;
 }
 
-const char* Config::getKeyName(unsigned int key)
+const char* Config::getKeyName(unsigned int key) noexcept
 {
 	if (key >= MAX_CONFIG_KEY)
 		return nullptr;
@@ -572,6 +581,9 @@ ConfigValue Config::specialProcessing(ConfigKey key, ConfigValue val)
 			if (!val.strVal)
 				val.strVal = "security.db";
 		}
+		break;
+	default:
+		// no special processing
 		break;
 	}
 
@@ -712,34 +724,28 @@ int Config::getWireCrypt(WireCryptMode wcMode) const
 	return wcMode == WC_CLIENT ? WIRE_CRYPT_ENABLED : WIRE_CRYPT_REQUIRED;
 }
 
-bool Config::getUseFileSystemCache(bool* pPresent) const
-{
-	DECLARE_PER_DB_KEY(KEY_USE_FILESYSTEM_CACHE);
-	return getBool(key, pPresent);
-}
-
 
 ///	class FirebirdConf
 
 // array format: major, minor, release, build
-static unsigned short fileVerNumber[4] = {FILE_VER_NUMBER};
+static constexpr unsigned short fileVerNumber[4] = {FILE_VER_NUMBER};
 
-static inline unsigned int getPartialVersion()
+static inline constexpr unsigned int getPartialVersion() noexcept
 {
 			// major				   // minor
 	return (fileVerNumber[0] << 24) | (fileVerNumber[1] << 16);
 }
 
-static inline unsigned int getFullVersion()
+static inline constexpr unsigned int getFullVersion() noexcept
 {
 								 // build_no
 	return getPartialVersion() | fileVerNumber[3];
 }
 
-static unsigned int PARTIAL_MASK = 0xFFFF0000;
-static unsigned int KEY_MASK = 0xFFFF;
+static constexpr unsigned int PARTIAL_MASK = 0xFFFF0000;
+static constexpr unsigned int KEY_MASK = 0xFFFF;
 
-static inline void checkKey(unsigned int& key)
+static inline void checkKey(unsigned int& key) noexcept
 {
 	if ((key & PARTIAL_MASK) != getPartialVersion())
 		key = KEY_MASK;
@@ -747,7 +753,7 @@ static inline void checkKey(unsigned int& key)
 		key &= KEY_MASK;
 }
 
-unsigned int FirebirdConf::getVersion(CheckStatusWrapper* status)
+unsigned int FirebirdConf::getVersion(CheckStatusWrapper* status) noexcept
 {
 	return getFullVersion();
 }

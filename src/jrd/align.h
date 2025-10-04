@@ -42,7 +42,7 @@ Maximum alignments for corresponding data types are defined in dsc.h
  *  value is greater than blr_blob_id, be sure to change the next define,
  *  and also add the required entries to all of the arrays below.
  */
-const unsigned char DTYPE_BLR_MAX	= blr_blob_id;
+inline constexpr unsigned char DTYPE_BLR_MAX = blr_blob_id;
 
 /*
  the blr types are defined in blr.h
@@ -54,7 +54,7 @@ No need to worry about blr_blob or ?blr_blob_id
 #include "../common/dsc.h"
 #include "../jrd/RecordNumber.h"
 
-static const USHORT gds_cvt_blr_dtype[DTYPE_BLR_MAX + 1] =
+static inline constexpr USHORT gds_cvt_blr_dtype[DTYPE_BLR_MAX + 1] =
 {
 	0, 0, 0, 0, 0, 0, 0,
 	dtype_short,				/* blr_short == 7 */
@@ -84,11 +84,11 @@ static const USHORT gds_cvt_blr_dtype[DTYPE_BLR_MAX + 1] =
 	dtype_varying,				/* blr_varying2 == 38 */
 	0,
 	dtype_cstring,				/* blr_cstring == 40 */
-	dtype_cstring,				/* blr_cstring == 41 */
+	dtype_cstring,				/* blr_cstring2 == 41 */
 	0, 0, 0, 0
 };
 
-static const USHORT type_alignments[DTYPE_TYPE_MAX] =
+static inline constexpr USHORT type_alignments[DTYPE_TYPE_MAX] =
 {
 	0,
 	0,							/* dtype_text */
@@ -121,7 +121,7 @@ static const USHORT type_alignments[DTYPE_TYPE_MAX] =
 	sizeof(GDS_DATE)			/* dtype_ex_timestamp_tz */
 };
 
-static const USHORT type_lengths[DTYPE_TYPE_MAX] =
+static inline constexpr USHORT type_lengths[DTYPE_TYPE_MAX] =
 {
 	0,
 	0,								/* dtype_text */
@@ -157,7 +157,7 @@ static const USHORT type_lengths[DTYPE_TYPE_MAX] =
 
 // This table is only used by gpre's cme.cpp.
 // float, double are numbers from IEEE floating-point standard (IEEE 754)
-static const USHORT type_significant_bits[DTYPE_TYPE_MAX] =
+static inline constexpr USHORT type_significant_bits[DTYPE_TYPE_MAX] =
 {
 	0,
 	0,							/* dtype_text */

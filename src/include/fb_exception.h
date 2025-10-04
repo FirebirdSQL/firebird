@@ -48,59 +48,61 @@ typedef SimpleStatusVector<> StaticStatusVector;
 class Exception
 {
 protected:
-	Exception() throw() { }
-	static void processUnexpectedException(ISC_STATUS* vector) throw();
+	Exception() noexcept { }
+	static void processUnexpectedException(ISC_STATUS* vector) noexcept;
 
 public:
-	void stuffException(StaticStatusVector& status_vector) const throw()
+	void stuffException(StaticStatusVector& status_vector) const noexcept
 	{
 		stuffByException(status_vector);
 	}
 
-	void stuffException(DynamicStatusVector& status_vector) const throw();
-	void stuffException(CheckStatusWrapper* status_vector) const throw();
-	virtual ~Exception() throw();
+	void stuffException(DynamicStatusVector& status_vector) const noexcept;
+	void stuffException(Firebird::IStatus* status_vector) const noexcept;
+	virtual ~Exception() noexcept;
 
 private:
-	virtual void stuffByException(StaticStatusVector& status_vector) const throw() = 0;
+	virtual void stuffByException(StaticStatusVector& status_vector) const noexcept = 0;
 
 public:
-	virtual const char* what() const throw() = 0;
+	virtual const char* what() const noexcept = 0;
 };
 
 // Used as jmpbuf to unwind when needed
 class LongJump : public Exception
 {
 public:
-	virtual void stuffByException(StaticStatusVector& status_vector) const throw();
-	virtual const char* what() const throw();
-	static void raise();
-	LongJump() throw() : Exception() { }
+	virtual void stuffByException(StaticStatusVector& status_vector) const noexcept;
+	virtual const char* what() const noexcept;
+	[[noreturn]] static void raise();
+	LongJump() noexcept : Exception() { }
 };
 
 // Used in MemoryPool
 class BadAlloc : public std::bad_alloc, public Exception
 {
 public:
-	BadAlloc() throw() : std::bad_alloc(), Exception() { }
-	virtual void stuffByException(StaticStatusVector& status_vector) const throw();
-	virtual const char* what() const throw();
-	static void raise();
+	BadAlloc() noexcept : std::bad_alloc(), Exception() { }
+	virtual void stuffByException(StaticStatusVector& status_vector) const noexcept;
+	virtual const char* what() const noexcept;
+	[[noreturn]] static void raise();
 };
 
 // Main exception class in firebird
 class status_exception : public Exception
 {
 public:
-	explicit status_exception(const ISC_STATUS *status_vector) throw();
-	status_exception(const status_exception&) throw();
+	explicit status_exception(const ISC_STATUS *status_vector) noexcept;
+	status_exception(const status_exception&) noexcept;
 
-	virtual ~status_exception() throw();
+	virtual ~status_exception() noexcept;
 
-	virtual void stuffByException(StaticStatusVector& status_vector) const throw();
-	virtual const char* what() const throw();
+	status_exception& operator=(const status_exception&) = delete;
 
-	const ISC_STATUS* value() const throw() { return m_status_vector; }
+	virtual void stuffByException(StaticStatusVector& status_vector) const noexcept;
+	virtual const char* what() const noexcept;
+
+	const ISC_STATUS* value() const noexcept { return m_status_vector; }
 
 	[[noreturn]] static void raise(const ISC_STATUS* status_vector);
 	[[noreturn]] static void raise(const Arg::StatusVector& statusVector);
@@ -109,15 +111,13 @@ public:
 protected:
 	// Create exception with undefined status vector, this constructor allows
 	// derived classes create empty exception ...
-	status_exception() throw();
+	status_exception() noexcept;
 	// .. and adjust it later using somehow created status vector.
-	void set_status(const ISC_STATUS *new_vector) throw();
+	void set_status(const ISC_STATUS *new_vector) noexcept;
 
 private:
 	ISC_STATUS* m_status_vector;
 	ISC_STATUS_ARRAY m_buffer;
-
-	status_exception& operator=(const status_exception&);
 };
 
 // Parameter syscall later in both system_error & system_call_failed
@@ -131,18 +131,18 @@ private:
 	int errorCode;
 
 protected:
-	system_error(const char* syscall, const char* arg, int error_code);
+	system_error(const char* syscall, const char* arg, int error_code) noexcept;
 
 public:
-	static void raise(const char* syscall, int error_code);
-	static void raise(const char* syscall);
+	[[noreturn]] static void raise(const char* syscall, int error_code);
+	[[noreturn]] static void raise(const char* syscall);
 
-	int getErrorCode() const
+	int getErrorCode() const noexcept
 	{
 		return errorCode;
 	}
 
-	static int getSystemError();
+	static int getSystemError() noexcept;
 };
 
 // use this class if exception can't be handled
@@ -153,19 +153,19 @@ protected:
 	system_call_failed(const char* syscall, const char* arg, int error_code);
 
 public:
-	static void raise(const char* syscall, int error_code);
-	static void raise(const char* syscall);
-	static void raise(const char* syscall, const char* arg, int error_code);
-	static void raise(const char* syscall, const char* arg);
+	[[noreturn]] static void raise(const char* syscall, int error_code);
+	[[noreturn]] static void raise(const char* syscall);
+	[[noreturn]] static void raise(const char* syscall, const char* arg, int error_code);
+	[[noreturn]] static void raise(const char* syscall, const char* arg);
 };
 
 class fatal_exception : public status_exception
 {
 public:
-	explicit fatal_exception(const char* message);
-	static void raiseFmt(const char* format, ...);
-	const char* what() const throw();
-	static void raise(const char* message);
+	explicit fatal_exception(const char* message) noexcept;
+	[[noreturn]] static void raiseFmt(const char* format, ...);
+	const char* what() const noexcept;
+	[[noreturn]] static void raise(const char* message);
 };
 
 
