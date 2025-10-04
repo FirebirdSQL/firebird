@@ -1248,7 +1248,7 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 		const auto dbb = tdbb->getDatabase();
 		const auto threshold = dbb->dbb_config->getInlineSortThreshold();
 
-		refetchFlag = (totalLength > threshold);
+		refetchFlag = (totalLength > MIN(threshold, MAX_SORT_RECORD / 2));
 	}
 
 	// Check for persistent fields to be excluded from the sort.
