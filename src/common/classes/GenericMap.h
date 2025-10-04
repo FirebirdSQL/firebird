@@ -299,6 +299,10 @@ public:
 
 	size_t count() const { return mCount; }
 
+	bool hasData() const { return mCount != 0; }
+
+	bool isEmpty() const { return mCount == 0; }
+
 	Accessor accessor()
 	{
 		return Accessor(this);

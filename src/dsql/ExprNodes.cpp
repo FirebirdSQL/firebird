@@ -4944,7 +4944,7 @@ dsc* DecodeNode::execute(thread_db* tdbb, Request* request) const
 //--------------------
 
 
-static RegisterNode<DefaultNode> regDefaultNode({blr_default});
+static RegisterNode<DefaultNode> regDefaultNode({blr_default, blr_default2});
 
 DefaultNode::DefaultNode(MemoryPool& pool, const MetaName& aRelationName,
 		const MetaName& aFieldName)
@@ -4955,8 +4955,11 @@ DefaultNode::DefaultNode(MemoryPool& pool, const MetaName& aRelationName,
 {
 }
 
-DmlNode* DefaultNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR /*blrOp*/)
+DmlNode* DefaultNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp)
 {
+	if (blrOp == blr_default2)
+		csb->csb_blr_reader.skipMetaName();
+
 	MetaName relationName, fieldName;
 	csb->csb_blr_reader.getMetaName(relationName);
 	csb->csb_blr_reader.getMetaName(fieldName);
@@ -7002,7 +7005,7 @@ dsc* FieldNode::execute(thread_db* tdbb, Request* request) const
 //--------------------
 
 
-static RegisterNode<GenIdNode> regGenIdNode({blr_gen_id, blr_gen_id2});
+static RegisterNode<GenIdNode> regGenIdNode({blr_gen_id, blr_gen_id2, blr_gen_id3});
 
 GenIdNode::GenIdNode(MemoryPool& pool, bool aDialect1,
 					 const MetaName& name,
@@ -7021,13 +7024,16 @@ GenIdNode::GenIdNode(MemoryPool& pool, bool aDialect1,
 
 DmlNode* GenIdNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp)
 {
+	if (blrOp == blr_gen_id3)
+		csb->csb_blr_reader.skipMetaName();
+
 	MetaName name;
 	csb->csb_blr_reader.getMetaName(name);
 
-	ValueExprNode* explicitStep = (blrOp == blr_gen_id2) ? NULL : PAR_parse_value(tdbb, csb);
-	GenIdNode* const node =
-		FB_NEW_POOL(pool) GenIdNode(pool, (csb->blrVersion == 4), name, explicitStep,
-								(blrOp == blr_gen_id2), false);
+	const bool useExplicitStep = blrOp == blr_gen_id || (blrOp == blr_gen_id3 && csb->csb_blr_reader.getByte() != 0);
+	const auto explicitStep = useExplicitStep ? PAR_parse_value(tdbb, csb) : nullptr;
+	const auto node = FB_NEW_POOL(pool) GenIdNode(pool, (csb->blrVersion == 4), name, explicitStep,
+		!useExplicitStep, false);
 
 	// This check seems faster than ==, but assumes the special generator is named ""
 	if (name.length() == 0) //(name == MASTER_GENERATOR)
@@ -12301,7 +12307,7 @@ DmlNode* SysFuncCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScrat
 		// Special handling for system function MAKE_DBKEY:
 		// convert constant relation name into ID at the parsing time
 
-		auto literal = node->args->items.getCount() ? 
+		auto literal = node->args->items.getCount() ?
 			nodeAs<LiteralNode>(node->args->items[0]) : nullptr;
 
 		if (literal && literal->litDesc.isText())
@@ -12842,7 +12848,7 @@ dsc* TrimNode::execute(thread_db* tdbb, Request* request) const
 //--------------------
 
 
-static RegisterNode<UdfCallNode> regUdfCallNode({blr_function, blr_function2, blr_subfunc});
+static RegisterNode<UdfCallNode> regUdfCallNode({blr_function, blr_function2, blr_subfunc, blr_invoke_function});
 
 UdfCallNode::UdfCallNode(MemoryPool& pool, const QualifiedName& aName, ValueListNode* aArgs)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_UDF_CALL>(pool),
@@ -12857,86 +12863,228 @@ UdfCallNode::UdfCallNode(MemoryPool& pool, const QualifiedName& aName, ValueList
 DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
 	const UCHAR blrOp)
 {
-	const UCHAR* savePos = csb->csb_blr_reader.getPos();
+	const auto predateCheck = [&](bool condition, const char* preVerb, const char* postVerb)
+	{
+		if (!condition)
+		{
+			string str;
+			str.printf("%s should predate %s", preVerb, postVerb);
+			PAR_error(csb, Arg::Gds(isc_random) << str);
+		}
+	};
 
+	auto& blrReader = csb->csb_blr_reader;
+	const UCHAR* startPos = csb->csb_blr_reader.getPos();
+
+	USHORT argCount = 0;
 	QualifiedName name;
 
-	if (blrOp == blr_function2)
-		csb->csb_blr_reader.getMetaName(name.package);
+	const auto node = FB_NEW_POOL(pool) UdfCallNode(pool);
 
-	csb->csb_blr_reader.getMetaName(name.identifier);
-
-	const USHORT count = name.package.length() + name.identifier.length();
-
-	UdfCallNode* node = FB_NEW_POOL(pool) UdfCallNode(pool, name);
-
-	if (blrOp == blr_function &&
-		(name.identifier == "RDB$GET_CONTEXT" || name.identifier == "RDB$SET_CONTEXT"))
+	if (blrOp == blr_invoke_function)
 	{
-		csb->csb_blr_reader.setPos(savePos);
-		return SysFuncCallNode::parse(tdbb, pool, csb, blr_sys_function);
-	}
+		UCHAR subCode;
 
-	if (blrOp == blr_subfunc)
-	{
-		DeclareSubFuncNode* declareNode;
-
-		for (auto curCsb = csb; curCsb && !node->function; curCsb = curCsb->mainCsb)
+		while ((subCode = blrReader.getByte()) != blr_end)
 		{
-			if (curCsb->subFunctions.get(name.identifier, declareNode))
-				node->function = declareNode->routine;
-		}
-	}
-
-	Function* function = node->function;
-
-	if (!function)
-		function = node->function = Function::lookup(tdbb, name, false);
-
-	if (function)
-	{
-		if (function->isImplemented() && !function->isDefined())
-		{
-			if (tdbb->getAttachment()->isGbak() || (tdbb->tdbb_flags & TDBB_replicator))
+			switch (subCode)
 			{
-				PAR_warning(Arg::Warning(isc_funnotdef) << Arg::Str(name.toString()) <<
-							Arg::Warning(isc_modnotfound));
-			}
-			else
-			{
-				csb->csb_blr_reader.seekBackward(count);
-				PAR_error(csb, Arg::Gds(isc_funnotdef) << Arg::Str(name.toString()) <<
-						   Arg::Gds(isc_modnotfound));
+				case blr_invoke_function_id:
+				{
+					UCHAR functionIdCode;
+
+					while ((functionIdCode = blrReader.getByte()) != blr_end)
+					{
+						switch (functionIdCode)
+						{
+							case blr_invoke_function_id_schema:
+								blrReader.skipMetaName();
+								break;
+
+							case blr_invoke_function_id_package:
+								blrReader.getMetaName(name.package);
+								break;
+
+							case blr_invoke_function_id_name:
+								blrReader.getMetaName(name.identifier);
+								break;
+
+							case blr_invoke_function_id_sub:
+								PAR_error(csb, Arg::Gds(isc_random) <<
+									"blr_invoke_function_id_sub is not supported in this version");
+								break;
+
+							default:
+								PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_invoke_function_id");
+								break;
+						}
+					}
+
+					if (!node->function)
+						node->function = Function::lookup(tdbb, name, false);
+
+					if (!node->function)
+					{
+						blrReader.setPos(startPos);
+						PAR_error(csb, Arg::Gds(isc_funnotdef) << name.toString());
+					}
+
+					break;
+				}
+
+				case blr_invoke_function_arg_names:
+					PAR_error(csb, Arg::Gds(isc_random) <<
+						"blr_invoke_function_arg_names is not supported in this version");
+					break;
+
+				case blr_invoke_function_args:
+					predateCheck(node->function, "blr_invoke_function_id", "blr_invoke_function_args");
+
+					argCount = blrReader.getWord();
+					node->args = PAR_args(tdbb, csb, argCount, MAX(argCount, node->function->fun_inputs));
+					break;
+
+				default:
+					PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_invoke_function sub code");
 			}
 		}
 	}
 	else
 	{
-		csb->csb_blr_reader.seekBackward(count);
-		PAR_error(csb, Arg::Gds(isc_funnotdef) << Arg::Str(name.toString()));
+		if (blrOp == blr_function2)
+			blrReader.getMetaName(name.package);
+
+		blrReader.getMetaName(name.identifier);
+
+		if (blrOp == blr_function &&
+			(name.identifier == "RDB$GET_CONTEXT" || name.identifier == "RDB$SET_CONTEXT"))
+		{
+			blrReader.setPos(startPos);
+			return SysFuncCallNode::parse(tdbb, pool, csb, blr_sys_function);
+		}
+
+		if (blrOp == blr_subfunc)
+		{
+			for (auto curCsb = csb; curCsb && !node->function; curCsb = curCsb->mainCsb)
+			{
+				if (DeclareSubFuncNode* declareNode; curCsb->subFunctions.get(name.identifier, declareNode))
+					node->function = declareNode->routine;
+			}
+		}
+		else if (!node->function)
+			node->function = Function::lookup(tdbb, name, false);
+
+		if (!node->function)
+		{
+			blrReader.setPos(startPos);
+			PAR_error(csb, Arg::Gds(isc_funnotdef) << name.toString());
+		}
+
+		argCount = blrReader.getByte();
+		node->args = PAR_args(tdbb, csb, argCount, MAX(argCount, node->function->fun_inputs));
 	}
 
-	node->isSubRoutine = function->isSubRoutine();
+	fb_assert(node->function);
 
-	const UCHAR argCount = csb->csb_blr_reader.getByte();
-
-	// Check to see if the argument count matches.
-	if (argCount < function->fun_inputs - function->getDefaultCount() || argCount > function->fun_inputs)
-		PAR_error(csb, Arg::Gds(isc_funmismat) << name.toString());
-
-	node->args = PAR_args(tdbb, csb, argCount, function->fun_inputs);
-
-	for (USHORT i = argCount; i < function->fun_inputs; ++i)
+	if (node->function->isImplemented() && !node->function->isDefined())
 	{
-		Parameter* const parameter = function->getInputFields()[i];
-		node->args->items[i] = CMP_clone_node(tdbb, csb, parameter->prm_default_value);
+		if (tdbb->getAttachment()->isGbak() || (tdbb->tdbb_flags & TDBB_replicator))
+		{
+			PAR_warning(Arg::Warning(isc_funnotdef) << name.toString() <<
+						Arg::Warning(isc_modnotfound));
+		}
+		else
+		{
+			blrReader.setPos(startPos);
+			PAR_error(csb, Arg::Gds(isc_funnotdef) << name.toString() <<
+						Arg::Gds(isc_modnotfound));
+		}
 	}
+
+	node->name = name;
+	node->isSubRoutine = node->function->isSubRoutine();
+
+	Arg::StatusVector mismatchStatus;
+
+	if (argCount > node->function->fun_inputs)
+		mismatchStatus << Arg::Gds(isc_wronumarg);
+
+	if (!node->args)
+		node->args = FB_NEW_POOL(pool) ValueListNode(pool);
+
+	auto argIt = node->args->items.begin();
+	LeftPooledMap<MetaName, NestConst<ValueExprNode>> argsByName;
+
+	if (argCount)
+	{
+		if (argCount > node->function->fun_inputs)
+			mismatchStatus << Arg::Gds(isc_wronumarg);
+
+		for (auto pos = 0u; pos < argCount; ++pos)
+		{
+			if (pos < node->function->fun_inputs)
+			{
+				const auto& parameter = node->function->getInputFields()[pos];
+
+				if (parameter->prm_name.hasData() && argsByName.put(parameter->prm_name, *argIt))
+				{
+					fb_assert(false);
+					status_exception::raise(
+						Arg::Gds(isc_random) <<
+							"Invalid BLR arguments for this version in UdfCallNode::parse");
+				}
+			}
+
+			++argIt;
+		}
+	}
+
+	node->args->items.resize(node->function->getInputFields().getCount());
+	argIt = node->args->items.begin();
+
+	for (auto& parameter : node->function->getInputFields())
+	{
+		NestConst<Jrd::ValueExprNode>* argValue;
+		bool argExists = false;
+
+		if (parameter->prm_name.hasData())
+		{
+			argExists = argsByName.exist(parameter->prm_name);
+			argValue = argsByName.get(parameter->prm_name);
+
+			if (argValue)
+			{
+				*argIt = *argValue;
+				argsByName.remove(parameter->prm_name);
+			}
+		}
+		else	// no parameter name in UDFs
+			argValue = argIt;
+
+		if (!argValue || !*argValue)
+		{
+			if (parameter->prm_default_value)
+				*argIt = CMP_clone_node(tdbb, csb, parameter->prm_default_value);
+			else
+			{
+				fb_assert(false);
+				status_exception::raise(
+					Arg::Gds(isc_random) <<
+						"Invalid BLR arguments for this version in UdfCallNode::parse");
+			}
+		}
+
+		++argIt;
+	}
+
+	if (mismatchStatus.hasData())
+		status_exception::raise(Arg::Gds(isc_fun_param_mismatch) << name.toString() << mismatchStatus);
 
 	// CVC: I will track ufds only if a function is not being dropped.
-	if (!function->isSubRoutine() && csb->collectingDependencies())
+	if (!node->function->isSubRoutine() && csb->collectingDependencies())
 	{
 		CompilerScratch::Dependency dependency(obj_udf);
-		dependency.function = function;
+		dependency.function = node->function;
 		csb->addDependency(dependency);
 	}
 
