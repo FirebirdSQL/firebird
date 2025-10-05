@@ -181,7 +181,6 @@ int CLIB_ROUTINE main( int argc, char **argv)
 	divorce_terminal(mask);
 
 	time_t timer = 0;
-	int ret_code = NORMAL_EXIT;
 
 	do {
 
@@ -226,6 +225,7 @@ int CLIB_ROUTINE main( int argc, char **argv)
 		}
 
 		// wait for child to die, and evaluate exit status
+       int ret_code = NORMAL_EXIT;
 		bool shutdown_child = true;
 		if (!shutting_down)
 		{
