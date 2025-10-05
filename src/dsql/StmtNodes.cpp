@@ -5067,8 +5067,6 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	// Sub routine doesn't need ports and should generate BLR as declared in its metadata.
 	const bool subRoutine = dsqlScratch->flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE;
 
-	unsigned returnsPos = 0;
-
 	if (!subRoutine)
 	{
 		// Now do the input parameters.
@@ -5079,8 +5077,6 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			dsqlScratch->makeVariable(parameter->type, parameter->name.c_str(),
 				dsql_var::TYPE_INPUT, 0, (USHORT) (2 * i), i);
 		}
-
-		returnsPos = dsqlScratch->variables.getCount();
 
 		// Now do the output parameters.
 		for (FB_SIZE_T i = 0; i < returns.getCount(); ++i)
@@ -5130,7 +5126,6 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	if (subRoutine)
 	{
 		dsqlScratch->genParameters(parameters, returns);
-		returnsPos = dsqlScratch->variables.getCount() - dsqlScratch->outputVariables.getCount();
 	}
 
 	if (parameters.hasData())
@@ -5145,6 +5140,8 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	{
 		// This validation is needed only for subroutines. Standard EXECUTE BLOCK moves input
 		// parameters to variables and are then validated.
+		// Number of input parameters to validate (total variables minus output variables)
+		const unsigned returnsPos = dsqlScratch->variables.getCount() - dsqlScratch->outputVariables.getCount();
 
 		for (unsigned i = 0; i < returnsPos; ++i)
 		{
