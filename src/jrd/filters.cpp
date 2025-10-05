@@ -1046,6 +1046,8 @@ ISC_STATUS filter_transliterate_text(USHORT action, BlobControl* control)
 
 	bool can_use_more = true;
 	USHORT length = aux->ctlaux_buffer1_unused;
+	// Always keep a minimal count of bytes in the input buffer
+	// to prevent the case of truncated characters.
 	if (length >= 4 && control->ctl_buffer_length < (length * aux->ctlaux_expansion_factor / EXP_SCALE))
 	{
 		// No need to fetch more bytes, we have enough pending
@@ -1061,7 +1063,6 @@ ISC_STATUS filter_transliterate_text(USHORT action, BlobControl* control)
 
 	USHORT bytes_read_from_source = 0;
 
-	///if (!length || (can_use_more && (aux->ctlaux_source_blob_status == isc_segment)))
 	if (can_use_more)
 	{
 		// Get a segment, or partial segment, from the source
