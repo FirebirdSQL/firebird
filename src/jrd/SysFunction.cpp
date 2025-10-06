@@ -611,24 +611,27 @@ void setParamsInt64(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** 
 
 void setParamsSecondInteger(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
 {
-	if (argsCount >= 2)
-	{
-		if (args[1]->isUnknown())
-			args[1]->makeLong(0);
-	}
+	fb_assert(argsCount >= 2);
+
+	if (args[1]->isUnknown())
+		args[1]->makeLong(0);
 }
 
 
 void setParamsAsciiVal(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
 {
-	if (argsCount >= 1 && args[0]->isUnknown())
+	fb_assert(argsCount >= 1);
+
+	if (args[0]->isUnknown())
 		args[0]->makeText(1, CS_ASCII);
 }
 
 
 void setParamsBlobAppend(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
 {
-	if (argsCount >= 1 && args[0]->isUnknown())
+	fb_assert(argsCount >= 1);
+
+	if (args[0]->isUnknown())
 		args[0]->makeBlob(isc_blob_text, CS_dynamic);
 
 	for (int i = 1; i < argsCount; ++i)
@@ -641,14 +644,18 @@ void setParamsBlobAppend(DataTypeUtilBase*, const SysFunction*, int argsCount, d
 
 void setParamsCharToUuid(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
 {
-	if (argsCount >= 1 && args[0]->isUnknown())
+	fb_assert(argsCount >= 1);
+
+	if (args[0]->isUnknown())
 		args[0]->makeText(Uuid::STR_LEN, ttype_ascii);
 }
 
 
 void setParamsDateAdd(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
 {
-	if (argsCount >= 1 && args[0]->isUnknown())
+	fb_assert(argsCount >= 3);
+
+	if (args[0]->isUnknown())
 	{
 		if (args[1]->dsc_address &&	// constant
 			CVT_get_long(args[1], 0, JRD_get_thread_data()->getAttachment()->att_dec_status, ERR_post) == blr_extract_millisecond)
@@ -659,31 +666,32 @@ void setParamsDateAdd(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc*
 			args[0]->makeInt64(0);
 	}
 
-	if (argsCount >= 3 && args[2]->isUnknown())
+	if (args[2]->isUnknown())
 		args[2]->makeTimestamp();
 }
 
 
 void setParamsDateDiff(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
 {
-	if (argsCount >= 3)
+	fb_assert(argsCount >= 3);
+
+	if (args[1]->isUnknown() && args[2]->isUnknown())
 	{
-		if (args[1]->isUnknown() && args[2]->isUnknown())
-		{
-			args[1]->makeTimestamp();
-			args[2]->makeTimestamp();
-		}
-		else if (args[1]->isUnknown())
-			*args[1] = *args[2];
-		else if (args[2]->isUnknown())
-			*args[2] = *args[1];
+		args[1]->makeTimestamp();
+		args[2]->makeTimestamp();
 	}
+	else if (args[1]->isUnknown())
+		*args[1] = *args[2];
+	else if (args[2]->isUnknown())
+		*args[2] = *args[1];
 }
 
 
 void setParamsUnicodeVal(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
 {
-	if (argsCount >= 1 && args[0]->isUnknown())
+	fb_assert(argsCount >= 1);
+
+	if (args[0]->isUnknown())
 		args[0]->makeText(4, CS_UTF8);
 }
 
@@ -819,23 +827,24 @@ void setParamsRsaPublic(DataTypeUtilBase*, const SysFunction*, int argsCount, ds
 
 void setParamsFirstLastDay(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
 {
-	if (argsCount >= 2)
-	{
-		if (args[1]->isUnknown())
-			args[1]->makeTimestamp();
-	}
+	fb_assert(argsCount >= 2);
+
+	if (args[1]->isUnknown())
+		args[1]->makeTimestamp();
 }
 
 
 void setParamsGetSetContext(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
 {
-	if (argsCount >= 1 && args[0]->isUnknown())
+	fb_assert(argsCount >= 2);
+
+	if (args[0]->isUnknown())
 	{
 		args[0]->makeVarying(80, ttype_none);
 		args[0]->setNullable(true);
 	}
 
-	if (argsCount >= 2 && args[1]->isUnknown())
+	if (args[1]->isUnknown())
 	{
 		args[1]->makeVarying(80, ttype_none);
 		args[1]->setNullable(true);
@@ -861,86 +870,84 @@ void setParamsMakeDbkey(DataTypeUtilBase*, const SysFunction*, int argsCount, ds
 {
 	// MAKE_DBKEY ( REL_NAME | REL_ID, RECNUM [, DPNUM [, PPNUM] ] )
 
-	if (argsCount > 1)
-	{
-		if (args[0]->isUnknown())
-			args[0]->makeLong(0);
+	fb_assert(argsCount >= 2);
 
-		if (args[1]->isUnknown())
-			args[1]->makeInt64(0);
-	}
+	if (args[0]->isUnknown())
+		args[0]->makeLong(0);
 
-	if (argsCount > 2 && args[2]->isUnknown())
+	if (args[1]->isUnknown())
+		args[1]->makeInt64(0);
+
+	if (argsCount >= 3 && args[2]->isUnknown())
 		args[2]->makeInt64(0);
 
-	if (argsCount > 3 && args[3]->isUnknown())
+	if (argsCount >= 4 && args[3]->isUnknown())
 		args[3]->makeInt64(0);
 }
 
 
 void setParamsOverlay(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
 {
-	if (argsCount >= 3)
+	fb_assert(argsCount >= 3);
+
+	if (!(args[0]->isUnknown() && args[1]->isUnknown()))
 	{
-		if (!(args[0]->isUnknown() && args[1]->isUnknown()))
-		{
-			if (args[1]->isUnknown())
-				*args[1] = *args[0];
-			else if (args[0]->isUnknown())
-				*args[0] = *args[1];
-		}
-
-		if (argsCount >= 4)
-		{
-			if (args[2]->isUnknown() && args[3]->isUnknown())
-			{
-				args[2]->makeLong(0);
-				args[3]->makeLong(0);
-			}
-			else if (args[2]->isUnknown())
-				*args[2] = *args[3];
-			else if (args[3]->isUnknown())
-				*args[3] = *args[2];
-		}
-
-		if (args[2]->isUnknown())
-			args[2]->makeLong(0);
+		if (args[1]->isUnknown())
+			*args[1] = *args[0];
+		else if (args[0]->isUnknown())
+			*args[0] = *args[1];
 	}
+
+	if (argsCount >= 4)
+	{
+		if (args[2]->isUnknown() && args[3]->isUnknown())
+		{
+			args[2]->makeLong(0);
+			args[3]->makeLong(0);
+		}
+		else if (args[2]->isUnknown())
+			*args[2] = *args[3];
+		else if (args[3]->isUnknown())
+			*args[3] = *args[2];
+	}
+
+	if (args[2]->isUnknown())
+		args[2]->makeLong(0);
 }
 
 
 void setParamsPosition(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
 {
-	if (argsCount >= 2)
-	{
-		if (args[0]->isUnknown())
-			*args[0] = *args[1];
+	fb_assert(argsCount >= 2);
 
-		if (args[1]->isUnknown())
-			*args[1] = *args[0];
-	}
+	if (args[0]->isUnknown())
+		*args[0] = *args[1];
+
+	if (args[1]->isUnknown())
+		*args[1] = *args[0];
 }
 
 
 void setParamsRoundTrunc(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
 {
-	if (argsCount >= 1)
-	{
-		if (args[0]->isUnknown())
-			args[0]->makeDouble();
+	fb_assert(argsCount >= 1);
 
-		if (argsCount >= 2)
-		{
-			if (args[1]->isUnknown())
-				args[1]->makeLong(0);
-		}
+	if (args[0]->isUnknown())
+		args[0]->makeDouble();
+
+	if (argsCount >= 2)
+	{
+		if (args[1]->isUnknown())
+			args[1]->makeLong(0);
 	}
 }
 
 
 void setParamsUuidToChar(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
 {
-	if (argsCount >= 1 && args[0]->isUnknown())
+	fb_assert(argsCount >= 1);
+
+	if (args[0]->isUnknown())
 		args[0]->makeText(16, ttype_binary);
 }
 
@@ -1304,23 +1311,20 @@ void makeBlobAppend(DataTypeUtilBase* dataTypeUtil, const SysFunction* function,
 	result->makeBlob(isc_blob_untyped, ttype_binary);
 	result->setNullable(true);
 
-	if (argsCount > 0)
+	for (int i = 0; i < argsCount; ++i)
 	{
-		for (int i = 0; i < argsCount; ++i)
-		{
-			if (makeBlobAppendBlob(result, args[i]))
-				break;
-		}
+		if (makeBlobAppendBlob(result, args[i]))
+			break;
+	}
 
-		result->setNullable(true);
+	result->setNullable(true);
 
-		for (int i = 0; i < argsCount; ++i)
+	for (int i = 0; i < argsCount; ++i)
+	{
+		if (!args[i]->isNullable())
 		{
-			if (!args[i]->isNullable())
-			{
-				result->setNullable(false);
-				break;
-			}
+			result->setNullable(false);
+			break;
 		}
 	}
 }
@@ -1417,13 +1421,12 @@ void makeFirstLastDayResult(DataTypeUtilBase*, const SysFunction*, dsc* result,
 
 	result->makeDate();
 
-	if (argsCount >= 2)
-	{
-		if (args[1]->dsc_dtype == dtype_timestamp)
-			result->makeTimestamp();
-		else if (args[1]->dsc_dtype == dtype_timestamp_tz)
-			result->makeTimestampTz();
-	}
+	fb_assert(argsCount >= 2);
+
+	if (args[1]->dsc_dtype == dtype_timestamp)
+		result->makeTimestamp();
+	else if (args[1]->dsc_dtype == dtype_timestamp_tz)
+		result->makeTimestampTz();
 
 	result->setNullable(isNullable);
 }

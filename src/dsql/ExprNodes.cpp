@@ -12321,6 +12321,8 @@ DmlNode* SysFuncCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScrat
 
 	node->args = PAR_args(tdbb, csb);
 
+	node->function->checkArgsMismatch(node->args->items.getCount());
+
 	if (name == "MAKE_DBKEY")
 	{
 		// Special handling for system function MAKE_DBKEY:
@@ -12446,8 +12448,6 @@ bool SysFuncCallNode::sameAs(const ExprNode* other, bool ignoreStreams) const
 ValueExprNode* SysFuncCallNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
 	ValueExprNode::pass2(tdbb, csb);
-
-	function->checkArgsMismatch(args->items.getCount());
 
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
