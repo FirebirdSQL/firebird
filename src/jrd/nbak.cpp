@@ -389,10 +389,12 @@ bool BackupManager::extendDatabase(thread_db* tdbb)
 	if (maxAllocPage >= maxPage)
 		return true;
 
-	const auto allocatedPages = pgSpace->extend(tdbb, maxPage, true);
-	maxAllocPage = pgSpace->maxAlloc();
-	if (allocatedPages.has_value() && maxAllocPage > maxPage)
-		return true;
+	if (pgSpace->extend(tdbb, maxPage, true))
+	{
+		maxAllocPage = pgSpace->maxAlloc();
+		if (maxAllocPage >= maxPage)
+			return true;
+	}
 
 	// Fast file extension not succeeded for some reason, try file extension via direct file writes.
 	while (maxAllocPage < maxPage)

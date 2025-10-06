@@ -312,9 +312,8 @@ namespace
 		const ULONG usedPages = sequence * pageMgr.pagesPerPIP + pipUsed;
 
 		const bool allocateExactNumberOfPages = dbb->dbb_flags & DBB_no_reserve;
-		const auto allocatedPages = pageSpace->extend(tdbb, usedPages + initPages, allocateExactNumberOfPages);
-		if (allocatedPages.has_value())
-			initPages = allocatedPages.value();
+		if (const auto allocatedPages = pageSpace->extend(tdbb, usedPages + initPages, allocateExactNumberOfPages))
+			initPages = allocatedPages;
 		else
 		{
 			// For some reason fast file extension failed, maybe it is not supported by filesystem, or
@@ -1938,7 +1937,7 @@ ULONG PageSpace::usedPages(const Database* dbb)
 	return pgSpace->usedPages();
 }
 
-std::optional<ULONG> PageSpace::extend(thread_db* tdbb, const ULONG pageNum, bool forceSize)
+ULONG PageSpace::extend(thread_db* tdbb, const ULONG pageNum, bool forceSize)
 {
 /**************************************
  *
@@ -1958,7 +1957,7 @@ std::optional<ULONG> PageSpace::extend(thread_db* tdbb, const ULONG pageNum, boo
 	fb_assert(dbb == tdbb->getDatabase());
 
 	if (!PIO_fast_extension_is_supported(*file))
-		return std::nullopt;
+		return 0;
 
 	// First, check it with the cached `maxPageNumber` value.
 	if (pageNum < maxPageNumber || pageNum < maxAlloc())
@@ -1989,10 +1988,9 @@ std::optional<ULONG> PageSpace::extend(thread_db* tdbb, const ULONG pageNum, boo
 		try
 		{
 			if (!PIO_extend(tdbb, file, extPages, dbb->dbb_page_size))
-				return std::nullopt;
+				return 0;
 
-			// File was extended, reset cached value
-			maxPageNumber = 0;
+			maxPageNumber += extPages;
 
 			return extPages;
 		}
@@ -2013,7 +2011,7 @@ std::optional<ULONG> PageSpace::extend(thread_db* tdbb, const ULONG pageNum, boo
 			{
 				gds__log("Error extending file \"%s\" by %lu page(s).\nCurrently allocated %lu pages, requested page number %lu",
 					file->fil_string, extPages, maxPageNumber, pageNum);
-				return std::nullopt;
+				return 0;
 			}
 		}
 	}
