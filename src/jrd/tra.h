@@ -520,6 +520,7 @@ enum dfw_t {
 	dfw_store_view_context_type,
 	dfw_set_generator,
 	dfw_change_repl_state,
+	dfw_delete_foreign_server,
 
 	// deferred works argument types
 	dfw_arg_index_name,		// index name for dfw_delete_index, mandatory

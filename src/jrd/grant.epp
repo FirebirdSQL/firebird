@@ -549,6 +549,21 @@ static void get_object_info(thread_db* tdbb,
 		}
 		END_FOR
 	}
+	else if (obj_type == obj_foreign_server)
+	{
+		AutoCacheRequest request(tdbb, irq_grant20, IRQ_REQUESTS);
+
+		FOR(REQUEST_HANDLE request)
+			X IN RDB$FOREIGN_SERVERS WITH
+				X.RDB$FOREIGN_SERVER_NAME EQ object_name.object.c_str()
+		{
+			s_class = X.RDB$SECURITY_CLASS;
+			default_class = "";
+			owner = X.RDB$OWNER_NAME;
+			view = false;
+		}
+		END_FOR
+	}
 	else
 	{
 		s_class = SCL_getDdlSecurityClassName(obj_type, object_name.schema);

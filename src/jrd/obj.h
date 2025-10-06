@@ -79,7 +79,10 @@ inline constexpr ObjectType obj_index_condition = 37;
 inline constexpr ObjectType obj_schema = 38;
 inline constexpr ObjectType obj_schemas = 39;
 
-inline constexpr ObjectType obj_type_MAX = 40;
+inline constexpr ObjectType obj_foreign_server = 40;
+inline constexpr ObjectType obj_foreign_servers = 41;
+
+inline constexpr ObjectType obj_type_MAX = 42;
 
 // used in the parser only / no relation with obj_type_MAX (should be greater)
 inline constexpr ObjectType obj_user_or_role = 100;
@@ -141,6 +144,7 @@ inline bool isDdlObject(ObjectType objectType, bool* useSchema = nullptr) noexce
 		case obj_jobs:
 		case obj_tablespaces:
 		case obj_schemas:
+		case obj_foreign_servers:
 			return true;
 
 		default:
@@ -185,6 +189,8 @@ inline constexpr const char* getDdlSecurityName(ObjectType object_type) noexcept
 			return "SQL$TABLESPACES";
 		case obj_schemas:
 			return "SQL$SCHEMAS";
+		case obj_foreign_servers:
+			return "SQL$FOREIGN_SERVERS";
 		default:
 			return "";
 	}
@@ -229,6 +235,8 @@ inline const char* getDdlObjectName(ObjectType object_type)
 			return "TABLESPACE";
 		case obj_schemas:
 			return "SCHEMA";
+		case obj_foreign_servers:
+			return "FOREIGN SERVER";
 		default:
 			fb_assert(false);
 			return "<unknown object type>";

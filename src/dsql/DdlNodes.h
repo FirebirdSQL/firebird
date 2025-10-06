@@ -38,6 +38,7 @@
 #include "../common/classes/TriState.h"
 #include "../jrd/Savepoint.h"
 #include "../dsql/errd_proto.h"
+#include "../jrd/ForeignServer.h"
 
 namespace Jrd {
 
@@ -1316,6 +1317,17 @@ public:
 		MetaName baseField;
 	};
 
+	class Option
+	{
+	public:
+		explicit Option(MemoryPool& p)
+			: value(p)
+		{}
+
+		MetaName name;
+		Firebird::string value;
+	};
+
 	struct IndexConstraintClause
 	{
 		explicit IndexConstraintClause(MemoryPool& p)
@@ -1405,10 +1417,12 @@ public:
 			TYPE_ALTER_COL_NULL,
 			TYPE_ALTER_COL_POS,
 			TYPE_ALTER_COL_TYPE,
+			TYPE_ALTER_FOREIGN_COL,
 			TYPE_DROP_COLUMN,
 			TYPE_DROP_CONSTRAINT,
 			TYPE_ALTER_SQL_SECURITY,
-			TYPE_ALTER_PUBLICATION
+			TYPE_ALTER_PUBLICATION,
+			TYPE_ALTER_OPTIONS
 		};
 
 		explicit Clause(MemoryPool& p, Type aType) noexcept
@@ -1500,8 +1514,21 @@ public:
 			  collate(p),
 			  computed(NULL),
 			  identityOptions(NULL),
-			  notNullSpecified(false)
+			  notNullSpecified(false),
+			  options(p)
 		{
+		}
+
+		void addOption(MetaName* name, Firebird::string* value = NULL)
+		{
+			fb_assert(name);
+
+			Option& option = options.add();
+			option.name = *name;
+			if (value)
+			{
+				option.value = *value;
+			}
 		}
 
 		dsql_fld* field;
@@ -1512,6 +1539,32 @@ public:
 		NestConst<IdentityOptions> identityOptions;
 		bool notNullSpecified;
 		bool createIfNotExistsOnly = false;
+		Firebird::ObjectsArray<Option> options;
+	};
+
+	struct AlterForeignColumnClause : public Clause
+	{
+		explicit AlterForeignColumnClause(MemoryPool& p)
+			: Clause(p, TYPE_ALTER_FOREIGN_COL),
+			name(p),
+			options(p)
+		{
+		}
+
+		void addOption(MetaName* name, Firebird::string* value = NULL)
+		{
+			fb_assert(name);
+
+			Option& option = options.add();
+			option.name = *name;
+			if (value)
+			{
+				option.value = *value;
+			}
+		}
+
+		MetaName name;
+		Firebird::ObjectsArray<Option> options;
 	};
 
 	struct AlterColNameClause : public Clause
@@ -1599,7 +1652,7 @@ public:
 		bool silent = false;
 	};
 
-	RelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode);
+	RelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode, bool aForeign = false);
 
 	static bool deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 		const QualifiedName& relationName, const MetaName& fieldName, bool silent,
@@ -1650,23 +1703,40 @@ protected:
 	void stuffDefaultBlr(const Firebird::ByteChunk& defaultBlr, BlrDebugWriter& blrWriter);
 	void stuffMatchingBlr(Constraint& constraint, BlrDebugWriter& blrWriter);
 	void stuffTriggerFiringCondition(const Constraint& constraint, BlrDebugWriter& blrWriter);
+	void storeOption(thread_db* tdbb, jrd_tra* transaction, Option* option);
 
 public:
+	void addOption(MetaName* name, Firebird::string* value = NULL)
+	{
+		fb_assert(name);
+
+		Option& option = options.add();
+		option.name = *name;
+		if (value)
+		{
+			option.value = *value;
+		}
+	}
+
 	NestConst<RelationSourceNode> dsqlNode;
 	QualifiedName name;
 	Firebird::Array<NestConst<Clause> > clauses;
 	Firebird::TriState ssDefiner;
 	Firebird::TriState replicationState;
+	Firebird::ObjectsArray<Option> options;
+	bool foreign;
 };
 
 
-class CreateRelationNode final : public RelationNode
+class CreateRelationNode : public RelationNode
 {
 public:
 	CreateRelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode,
-				const Firebird::string* aExternalFile = NULL)
-		: RelationNode(p, aDsqlNode),
-		  externalFile(aExternalFile)
+				const Firebird::string* aExternalFile = NULL,
+				bool aForeign = false)
+		: RelationNode(p, aDsqlNode, aForeign),
+		  externalFile(aExternalFile),
+		  foreignServer(p)
 	{
 	}
 
@@ -1695,6 +1765,7 @@ private:
 
 public:
 	const Firebird::string* externalFile;
+	MetaName foreignServer;
 	std::optional<rel_t> relationType = rel_persistent;
 	bool preserveRowsOpt = false;
 	bool deleteRowsOpt = false;
@@ -1702,11 +1773,27 @@ public:
 };
 
 
-class AlterRelationNode final : public RelationNode
+class CreateForeignRelationNode final : public CreateRelationNode
 {
 public:
-	AlterRelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode)
-		: RelationNode(p, aDsqlNode)
+	CreateForeignRelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode)
+		: CreateRelationNode(p, aDsqlNode, NULL, true)
+	{
+	}
+
+protected:
+	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	{
+		statusVector << Firebird::Arg::Gds(isc_dsql_create_foreign_table_failed) << name.toQuotedString();
+	}
+};
+
+
+class AlterRelationNode : public RelationNode
+{
+public:
+	AlterRelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode, bool aForeign = false)
+		: RelationNode(p, aDsqlNode, aForeign)
 	{
 	}
 
@@ -1736,18 +1823,38 @@ private:
 };
 
 
-class DropRelationNode final : public DdlNode
+class AlterForeignRelationNode final : public AlterRelationNode
 {
 public:
-	DropRelationNode(MemoryPool& p, const QualifiedName& aName, bool aView = false)
+	AlterForeignRelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode)
+		: AlterRelationNode(p, aDsqlNode, true)
+	{
+	}
+
+protected:
+	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	{
+		statusVector << Firebird::Arg::Gds(isc_dsql_alter_foreign_table_failed) << name.toQuotedString();
+	}
+};
+
+
+class DropRelationNode : public DdlNode
+{
+public:
+	DropRelationNode(MemoryPool& p, const QualifiedName& aName, bool aView = false, bool aForeign = false)
 		: DdlNode(p),
 		  name(p, aName),
 		  view(aView),
-		  silent(false)
+		  silent(false),
+		  foreign(aForeign)
 	{
 	}
 
 	static void deleteGlobalField(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& globalName);
+
+	static bool dropOption(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& relation,
+		const MetaName& optionName);
 
 public:
 	Firebird::string internalPrint(NodePrinter& printer) const override;
@@ -1779,11 +1886,42 @@ public:
 	bool view;
 	bool silent;
 	bool recreate = false;
+	bool foreign;
+};
+
+
+class DropForeignRelationNode final : public DropRelationNode
+{
+public:
+	DropForeignRelationNode(MemoryPool& p, const QualifiedName& aName)
+		: DropRelationNode(p, aName, false, true)
+	{
+	}
+
+protected:
+	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	{
+		statusVector << Firebird::Arg::Gds(isc_dsql_drop_foreign_table_failed) << name.toQuotedString();
+	}
 };
 
 
 typedef RecreateNode<CreateRelationNode, DropRelationNode, isc_dsql_recreate_table_failed>
 	RecreateTableNode;
+
+template <>
+inline RecreateNode<CreateRelationNode, DropForeignRelationNode, isc_dsql_recreate_foreign_table_failed>::
+	RecreateNode(MemoryPool& p, CreateRelationNode* aCreateNode)
+		: DdlNode(p),
+			createNode(aCreateNode),
+			dropNode(p, createNode->name)
+	{
+		createNode->foreign = true;
+		dropNode.silent = true;
+	}
+
+typedef RecreateNode<CreateRelationNode, DropForeignRelationNode, isc_dsql_recreate_foreign_table_failed>
+	RecreateForeignTableNode;
 
 
 class CreateAlterViewNode final : public RelationNode
@@ -2449,6 +2587,235 @@ inline RecreateNode<CreateAlterUserNode, DropUserNode, isc_dsql_recreate_user_fa
 
 typedef RecreateNode<CreateAlterUserNode, DropUserNode, isc_dsql_recreate_user_failed>
 	RecreateUserNode;
+
+
+class Option
+{
+public:
+	explicit Option(MemoryPool& p)
+		: value(p), type(ExternalValueType::TYPE_STRING)
+	{}
+
+	MetaName name;
+	Firebird::string value;
+	SSHORT type;
+};
+
+
+class CreateAlterForeignServerNode : public DdlNode
+{
+public:
+
+	CreateAlterForeignServerNode(MemoryPool& p, const MetaName& aName)
+		: DdlNode(p),
+		  name(p, aName),
+		  create(true),
+		  alter(false),
+		  plugin(p),
+		  options(p),
+		  dropType(false),
+		  dropVersion(false),
+		  dropPlugin(false)
+	{ }
+
+public:
+	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
+	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+
+protected:
+	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	{
+		statusVector <<
+			Firebird::Arg::Gds(createAlterCode(create, alter,
+					isc_dsql_create_foreign_server_failed, isc_dsql_alter_foreign_server_failed,
+					isc_dsql_create_alter_foreign_server_failed)) <<
+				name.toQuotedString();
+	}
+
+public:
+	const MetaName name;
+	bool create;
+	bool alter;
+	bool createIfNotExistsOnly = false;
+	MetaName plugin;
+	Firebird::ObjectsArray<Option> options;
+	bool dropType;
+	bool dropVersion;
+	bool dropPlugin;
+
+	void addOption(MetaName* name, Firebird::string* value = NULL,
+		SSHORT type = ExternalValueType::TYPE_STRING)
+	{
+		fb_assert(name);
+
+		Option& option = options.add();
+		option.name = *name;
+		option.type = type;
+		if (value)
+		{
+			option.value = *value;
+		}
+	}
+
+private:
+	void executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	bool executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+
+	void storeOption(thread_db* tdbb, jrd_tra* transaction, Option* option);
+};
+
+
+class DropForeignServerNode : public DdlNode
+{
+public:
+	DropForeignServerNode(MemoryPool& p, const MetaName& aName, const MetaName* aPlugin = NULL)
+		: DdlNode(p),
+		  name(p, aName),
+		  plugin(p),
+		  silent(false),
+		  recreate(false)
+
+	{
+		if (aPlugin)
+			plugin = *aPlugin;
+	}
+
+public:
+	static bool dropOption(thread_db* tdbb, jrd_tra* transaction, const MetaName& serverName,
+		const MetaName& optionName);
+
+public:
+	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
+	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+
+	void dropOptions(thread_db* tdbb, jrd_tra* transaction, const MetaName& serverName);
+
+protected:
+	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	{
+		statusVector << Firebird::Arg::Gds(isc_dsql_drop_foreign_server_failed) << name;
+	}
+
+public:
+	const MetaName name;
+	MetaName plugin;
+	bool silent;
+	bool recreate;
+};
+
+
+typedef RecreateNode<CreateAlterForeignServerNode, DropForeignServerNode, isc_dsql_recreate_foreign_server_failed>
+	RecreateForeignServerNode;
+
+
+class CreateAlterUserMappingNode : public DdlNode
+{
+public:
+
+	CreateAlterUserMappingNode(MemoryPool& p, const MetaName& aUser, const MetaName& aServer)
+		: DdlNode(p),
+		  user(p, aUser),
+		  server(p, aServer),
+		  create(true),
+		  alter(false),
+		  options(p)
+	{ }
+
+public:
+	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
+	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+
+protected:
+	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	{
+		statusVector <<
+			Firebird::Arg::Gds(createAlterCode(create, alter,
+					isc_dsql_create_user_mapping_failed, isc_dsql_alter_user_mapping_failed,
+					isc_dsql_create_alter_user_mapping_failed)) <<
+				user << server;
+	}
+
+public:
+	const MetaName user;
+	const MetaName server;
+	bool create;
+	bool alter;
+	Firebird::ObjectsArray<Option> options;
+
+	void addOption(MetaName* name, Firebird::string* value = NULL,
+		SSHORT type = ExternalValueType::TYPE_STRING)
+	{
+		fb_assert(name);
+
+		Option& option = options.add();
+		option.name = *name;
+		option.type = type;
+		if (value)
+		{
+			option.value = *value;
+		}
+	}
+
+private:
+	void executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	bool executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+
+	void storeOption(thread_db* tdbb, jrd_tra* transaction, Option* option);
+
+	const MetaName getUniqueName() const
+	{
+		MetaName s;
+		s.printf("%s%s", user.c_str(), server.c_str());
+		return s;
+	};
+};
+
+
+class DropUserMappingNode : public DdlNode
+{
+public:
+	DropUserMappingNode(MemoryPool& p, const MetaName& aUser, const MetaName& aServer)
+		: DdlNode(p),
+		  user(p, aUser),
+		  server(p, aServer),
+		  silent(false)
+
+	{ }
+
+public:
+	static bool dropOption(thread_db* tdbb, jrd_tra* transaction, const MetaName& user, const MetaName& server,
+		const MetaName& optionName);
+
+public:
+	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
+	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+
+	void dropOptions(thread_db* tdbb, jrd_tra* transaction, const MetaName& user, const MetaName& server);
+
+protected:
+	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	{
+		statusVector << Firebird::Arg::Gds(isc_dsql_drop_user_mapping_failed) << user << server;
+	}
+
+public:
+	const MetaName user;
+	const MetaName server;
+	bool silent;
+
+private:
+	const Firebird::string getUniqueName() const
+	{
+		Firebird::string s;
+		s.append(user.c_str());
+		s.append(server.c_str());
+		return s;
+	};
+};
 
 
 typedef Firebird::NonPooledPair<char, Firebird::ObjectsArray<MetaName>*> PrivilegeClause;

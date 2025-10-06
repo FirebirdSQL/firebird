@@ -355,6 +355,39 @@ static inline constexpr struct ini_idx_t indices[] =
 	INDEX(58, rel_schemas, idx_unique, 1, ODS_14_0)
 		SEGMENT(f_sch_schema, idx_metadata)		// schema name
 	}},
+	// define index RDB$INDEX_59 for RDB$FOREIGN_SERVERS RDB$FOREIGN_SERVER_NAME;
+	INDEX(59, rel_foreign_servers, idx_unique, 1, ODS_14_0)
+		SEGMENT(f_fs_name, idx_metadata),	// foreign server name
+	}},
+	// define index RDB$INDEX_60 for RDB$FOREIGN_SERVERS_OPTIONS RDB$FOREIGN_SERVER_NAME, RDB$FOREIGN_OPTION_NAME;
+	INDEX(60, rel_foreign_server_options, idx_unique, 2, ODS_14_0)
+		SEGMENT(f_fso_server_name, idx_metadata),	// foreign server name
+		SEGMENT(f_fso_name, idx_metadata),	// foreign server option name
+	}},
+	// define index RDB$INDEX_61 for RDB$FOREIGN_TABLE_OPTIONS RDB$TABLE_NAME, RDB$FOREIGN_TABLE_OPTION;
+	INDEX(61, rel_foreign_tbl_options, idx_unique, 3, ODS_14_0)
+		SEGMENT(f_fto_sch_name, idx_metadata),	// foreign table schema
+		SEGMENT(f_fto_tbl_name, idx_metadata),	// foreign table name
+		SEGMENT(f_fto_name, idx_metadata),	// foreign table option name
+	}},
+	// define index RDB$INDEX_62 for RDB$FOREIGN_USER_MAPPINGS RDB$USER, RDB$FOREIGN_SERVER_NAME;
+	INDEX(62, rel_foreign_user_mappings, idx_unique, 2, ODS_14_0)
+		SEGMENT(f_fum_user, idx_metadata),	// user
+		SEGMENT(f_fum_server_name, idx_metadata),	// foreign server name
+	}},
+	// define index RDB$INDEX_63 for RDB$FOREIGN_MAPPING_OPTIONS RDB$USER, RDB$FOREIGN_SERVER_NAME, RDB$FOREIGN_OPTION_NAME;
+	INDEX(63, rel_foreign_mapping_options, idx_unique, 3, ODS_14_0)
+		SEGMENT(f_fmo_user, idx_metadata),	// user
+		SEGMENT(f_fmo_server_name, idx_metadata),	// foreign server name
+		SEGMENT(f_fmo_name, idx_metadata),	// user mapping option name
+	}},
+	// define index RDB$INDEX_64 for RDB$FOREIGN_TABLE_FIELD_OPTIONS RDB$TABLE_NAME, RDB$FIELD_NAME, RDB$FOREIGN_OPTION_NAME;
+	INDEX(64, rel_foreign_tbl_f_options, idx_unique, 4, ODS_14_0)
+		SEGMENT(f_ftfo_sch_name, idx_metadata),	// foreign table schema
+		SEGMENT(f_ftfo_tbl_name, idx_metadata),	// foreign table name
+		SEGMENT(f_ftfo_fld_name, idx_metadata),	// foreign table field name
+		SEGMENT(f_ftfo_name, idx_metadata),	// foreign option name
+	}}
 };
 
 #define SYSTEM_INDEX_COUNT FB_NELEM(indices)

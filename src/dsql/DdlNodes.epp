@@ -64,6 +64,7 @@
 #include "../auth/SecureRemotePassword/Message.h"
 #include "../jrd/Mapping.h"
 #include "../jrd/extds/ExtDS.h"
+#include "../jrd/ForeignServer.h"
 
 namespace Jrd {
 
@@ -109,6 +110,8 @@ static void updateRdbFields(const TypeClause* type,
 	SSHORT& fieldPrecisionNull, SSHORT& fieldPrecision,
 	SSHORT& collationIdNull, SSHORT& collationId,
 	SSHORT& segmentLengthNull, SSHORT& segmentLength);
+
+static bool checkObjectExist(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& name, int type);
 
 static constexpr const char* CHECK_CONSTRAINT_EXCEPTION = "check_constraint";
 
@@ -609,6 +612,8 @@ static const char* getRelationScopeName(const rel_t type)
 		return REL_SCOPE_VIEW;
 	case rel_virtual:
 		return REL_SCOPE_VIRTUAL;
+	case rel_foreign:
+		return REL_SCOPE_FOREIGN;
 	case rel_persistent:
 		return REL_SCOPE_PERSISTENT;
 	default:
@@ -1500,6 +1505,10 @@ void CommentOnNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 
 		case obj_package_header:
 			SCL_check_package(tdbb, name, SCL_alter);
+			break;
+
+		case obj_foreign_server:
+			SCL_check_foreign_server(tdbb, name.object, SCL_alter);
 			break;
 
 		default:
@@ -6219,11 +6228,13 @@ void DropSequenceNode::deleteIdentity(thread_db* tdbb, jrd_tra* transaction, con
 //----------------------
 
 
-RelationNode::RelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode)
+RelationNode::RelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode, bool aForeign)
 	: DdlNode(p),
 	  dsqlNode(aDsqlNode),
 	  name(p, dsqlNode->dsqlName),
-	  clauses(p)
+	  clauses(p),
+	  options(p),
+	  foreign(aForeign)
 {
 }
 
@@ -6448,6 +6459,8 @@ DdlNode* RelationNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			case Clause::TYPE_DROP_CONSTRAINT:
 			case Clause::TYPE_ALTER_SQL_SECURITY:
 			case Clause::TYPE_ALTER_PUBLICATION:
+			case Clause::TYPE_ALTER_FOREIGN_COL:
+			case Clause::TYPE_ALTER_OPTIONS:
 				break;
 
 			default:
@@ -6651,6 +6664,17 @@ bool RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 	}
 	END_FOR
 
+	request.reset(tdbb, drq_drop_f_tbl_opt, DYN_REQUESTS);
+
+	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		FTFOPT IN RDB$FOREIGN_TABLE_FIELD_OPTIONS
+		WITH FTFOPT.RDB$TABLE_NAME EQ relationName.object.c_str() AND
+			FTFOPT.RDB$FIELD_NAME EQ fieldName.c_str()
+	{
+		ERASE FTFOPT;
+	}
+	END_FOR
+
 	if (!found && !silent)
 	{
 		// msg 176: "column %s does not exist in table/view %s"
@@ -6839,6 +6863,36 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 			if (constraint->create->type != Constraint::TYPE_FK)
 				constraint->create->columns.add(field->fld_name);
 			defineConstraint(tdbb, dsqlScratch, transaction, constraint->name, *constraint->create);
+		}
+
+		// Store foreign field options
+		for (unsigned cnt = 0; cnt < clause->options.getCount(); ++cnt)
+		{
+			const Option* option = &clause->options[cnt];
+			if (option->value.hasData())
+			{
+				AutoCacheRequest request(tdbb, drq_s_f_tbl_f_opt, DYN_REQUESTS);
+
+				STORE (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+					FTFOPT IN RDB$FOREIGN_TABLE_FIELD_OPTIONS
+				{
+					FTFOPT.RDB$SCHEMA_NAME.NULL = FALSE;
+					strcpy(FTFOPT.RDB$SCHEMA_NAME, relation->rel_name.schema.c_str());
+
+					FTFOPT.RDB$TABLE_NAME.NULL = FALSE;
+					strcpy(FTFOPT.RDB$TABLE_NAME, relation->rel_name.object.c_str());
+
+					FTFOPT.RDB$FIELD_NAME.NULL = FALSE;
+					strcpy(FTFOPT.RDB$FIELD_NAME, field->fld_name.c_str());
+
+					FTFOPT.RDB$FOREIGN_OPTION_NAME.NULL = FALSE;
+					strcpy(FTFOPT.RDB$FOREIGN_OPTION_NAME, option->name.c_str());
+
+					FTFOPT.RDB$FOREIGN_OPTION_VALUE.NULL = FALSE;
+					strcpy(FTFOPT.RDB$FOREIGN_OPTION_VALUE, option->value.c_str());
+				}
+				END_STORE
+			}
 		}
 	}
 	catch (const Exception&)
@@ -7804,6 +7858,31 @@ void RelationNode::dropFromPublication(thread_db* tdbb,
 }
 
 
+void RelationNode::storeOption(thread_db* tdbb, jrd_tra* transaction, Option* option)
+{
+	Attachment* const attachment = transaction->getAttachment();
+
+	AutoCacheRequest requestHandle(tdbb, drq_s_f_tbl_opt, DYN_REQUESTS);
+
+	STORE (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FTOPT IN RDB$FOREIGN_TABLE_OPTIONS
+	{
+		FTOPT.RDB$SCHEMA_NAME.NULL = FALSE;
+		strcpy(FTOPT.RDB$SCHEMA_NAME, name.schema.c_str());
+
+		FTOPT.RDB$TABLE_NAME.NULL = FALSE;
+		strcpy(FTOPT.RDB$TABLE_NAME, name.object.c_str());
+
+		FTOPT.RDB$FOREIGN_OPTION_NAME.NULL = FALSE;
+		strcpy(FTOPT.RDB$FOREIGN_OPTION_NAME, option->name.c_str());
+
+		FTOPT.RDB$FOREIGN_OPTION_VALUE.NULL = FALSE;
+		strcpy(FTOPT.RDB$FOREIGN_OPTION_VALUE, option->value.c_str());
+	}
+	END_STORE
+}
+
+
 //----------------------
 
 
@@ -7813,6 +7892,7 @@ string CreateRelationNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, externalFile);
 	NODE_PRINT(printer, relationType);
+	NODE_PRINT(printer, foreignServer);
 
 	return "CreateRelationNode";
 }
@@ -7834,6 +7914,12 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 	{
 		fb_assert(dsqlScratch->relation);
 		dsqlScratch->relation->rel_flags |= REL_external;
+	}
+
+	if (foreignServer.hasData())
+	{
+		fb_assert(dsqlScratch->relation);
+		dsqlScratch->relation->rel_flags |= REL_foreign;
 	}
 
 	// run all statements under savepoint control
@@ -7885,8 +7971,29 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 			strcpy(REL.RDB$EXTERNAL_FILE, externalFile->c_str());
 			REL.RDB$RELATION_TYPE = rel_external;
 		}
+
+		if (foreignServer.hasData())
+		{
+			if (!checkObjectExist(tdbb, transaction, QualifiedName(foreignServer), obj_foreign_servers))
+				status_exception::raise(Arg::Gds(isc_dyn_foreign_server_not_found) << foreignServer.c_str());
+
+			REL.RDB$FOREIGN_SERVER_NAME.NULL = FALSE;
+			strcpy(REL.RDB$FOREIGN_SERVER_NAME, foreignServer.c_str());
+			REL.RDB$RELATION_TYPE = rel_foreign;
+		}
+		else
+			REL.RDB$FOREIGN_SERVER_NAME.NULL = TRUE;
 	}
 	END_STORE
+
+	// Store foreign table options
+	for (unsigned cnt = 0; cnt < options.getCount(); ++cnt)
+	{
+		if (options[cnt].value.hasData())
+		{
+			storeOption(tdbb, transaction, &options[cnt]);
+		}
+	}
 
 	bool replicationEnabled = false;
 
@@ -7999,12 +8106,24 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 	dsql_rel* relation;
 	relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, name);
 
-	if (!relation || (relation->rel_flags & REL_view))
+	ISC_STATUS dsqlError = 0;
+	if (foreign)
+	{
+		if (!relation || !(relation->rel_flags & REL_foreign))
+			dsqlError = isc_dsql_foreign_table_not_found;
+	}
+	else
+	{
+		if (!relation || (relation->rel_flags & (REL_view | REL_foreign)))
+			dsqlError = isc_dsql_table_not_found;
+	}
+
+	if (dsqlError)
 	{
 		status_exception::raise(
 			Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
 			Arg::Gds(isc_dsql_command_err) <<
-			Arg::Gds(isc_dsql_table_not_found) << name.toQuotedString());
+			Arg::Gds(dsqlError) << name.toQuotedString());
 	}
 
 	if (!dsqlScratch->relation)
@@ -8142,6 +8261,21 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 					}
 					END_FOR
 
+					// if it's a column of the foreign table, update its name in the column options
+					AutoRequest request3;
+
+					FOR(REQUEST_HANDLE request3 TRANSACTION_HANDLE transaction)
+						FTFOPT IN RDB$FOREIGN_TABLE_FIELD_OPTIONS
+							WITH FTFOPT.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+								FTFOPT.RDB$TABLE_NAME EQ name.object.c_str() AND
+								FTFOPT.RDB$FIELD_NAME EQ clause->fromName.c_str()
+					{
+						MODIFY FTFOPT
+							strcpy(FTFOPT.RDB$FIELD_NAME, clause->toName.c_str());
+						END_MODIFY
+					}
+					END_FOR
+
 					break;
 				}
 
@@ -8230,6 +8364,55 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 					modifyLocalFieldPosition(tdbb, transaction, name, clause->name, pos);
 
+					break;
+				}
+
+				case Clause::TYPE_ALTER_FOREIGN_COL:
+				{
+					const AlterForeignColumnClause* clause =
+						static_cast<const AlterForeignColumnClause*>(i->getObject());
+
+					// Drop old options and insert the new ones
+					for (unsigned cnt = 0; cnt < clause->options.getCount(); ++cnt)
+					{
+						const Option* option = &clause->options[cnt];
+						AutoCacheRequest request(tdbb, drq_drop_f_tbl_opt, DYN_REQUESTS);
+
+						FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+							FTFOPT IN RDB$FOREIGN_TABLE_FIELD_OPTIONS
+							WITH FTFOPT.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+								FTFOPT.RDB$TABLE_NAME EQ name.object.c_str() AND
+								FTFOPT.RDB$FIELD_NAME EQ clause->name.c_str() AND
+								FTFOPT.RDB$FOREIGN_OPTION_NAME EQ option->name.c_str()
+						{
+							ERASE FTFOPT;
+						}
+						END_FOR
+
+						if (option->value.hasData())
+						{
+							request.reset(tdbb, drq_s_f_tbl_f_opt, DYN_REQUESTS);
+							STORE (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+								FTFOPT IN RDB$FOREIGN_TABLE_FIELD_OPTIONS
+							{
+								FTFOPT.RDB$SCHEMA_NAME.NULL = FALSE;
+								strcpy(FTFOPT.RDB$SCHEMA_NAME, name.schema.c_str());
+
+								FTFOPT.RDB$TABLE_NAME.NULL = FALSE;
+								strcpy(FTFOPT.RDB$TABLE_NAME, name.object.c_str());
+
+								FTFOPT.RDB$FIELD_NAME.NULL = FALSE;
+								strcpy(FTFOPT.RDB$FIELD_NAME, clause->name.c_str());
+
+								FTFOPT.RDB$FOREIGN_OPTION_NAME.NULL = FALSE;
+								strcpy(FTFOPT.RDB$FOREIGN_OPTION_NAME, option->name.c_str());
+
+								FTFOPT.RDB$FOREIGN_OPTION_VALUE.NULL = FALSE;
+								strcpy(FTFOPT.RDB$FOREIGN_OPTION_VALUE, option->value.c_str());
+							}
+							END_STORE
+						}
+					}
 					break;
 				}
 
@@ -8363,6 +8546,19 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 														  name, DEFAULT_PUBLICATION);
 					}
 
+					break;
+				}
+
+				case Clause::TYPE_ALTER_OPTIONS:
+				{
+					// Drop old options and insert the new ones
+					for (unsigned cnt = 0; cnt < options.getCount(); ++cnt)
+					{
+						DropRelationNode::dropOption(tdbb, transaction, name, options[cnt].name);
+
+						if (options[cnt].value.hasData())
+							storeOption(tdbb, transaction, &options[cnt]);
+					}
 					break;
 				}
 
@@ -8978,26 +9174,34 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	if (!relation && silent)
 		return;
 
-	// Check that DROP TABLE is dropping a table and that DROP VIEW is dropping a view.
+	// Check that DROP TABLE is dropping a table, that DROP FOREIGN TABLE is dropping a foreign table
+	// and that DROP VIEW is dropping a view.
+	ISC_STATUS dsqlError = 0;
 	if (view)
 	{
-		if (!relation || (relation && !(relation->rel_flags & REL_view)))
-		{
-			status_exception::raise(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-				Arg::Gds(isc_dsql_command_err) <<
-				Arg::Gds(isc_dsql_view_not_found) << name.toQuotedString());
-		}
+		if (!relation || !(relation->rel_flags & REL_view))
+			dsqlError = isc_dsql_view_not_found;
+	}
+	else if (foreign)
+	{
+		if (!relation || !(relation->rel_flags & REL_foreign))
+			dsqlError = isc_dsql_foreign_table_not_found;
 	}
 	else
 	{
-		if (!relation || (relation && (relation->rel_flags & REL_view)))
-		{
-			status_exception::raise(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-				Arg::Gds(isc_dsql_command_err) <<
-				Arg::Gds(isc_dsql_table_not_found) << name.toQuotedString());
-		}
+		if (!relation || (relation->rel_flags & (REL_view | REL_foreign)))
+			dsqlError = isc_dsql_table_not_found;
+	}
+
+	if (dsqlError)
+	{
+		if (silent)
+			return;
+
+		status_exception::raise(
+			Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+			Arg::Gds(isc_dsql_command_err) <<
+			Arg::Gds(dsqlError) << name.toQuotedString());
 	}
 
 	const int ddlTriggerAction = (view ? DDL_TRIGGER_DROP_VIEW : DDL_TRIGGER_DROP_TABLE);
@@ -9189,6 +9393,32 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	}
 	END_FOR
 
+	// Drop foreign table options
+
+	request.reset(tdbb, drq_drop_f_tbl_opts, DYN_REQUESTS);
+
+	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		FTOPT IN RDB$FOREIGN_TABLE_OPTIONS
+		WITH FTOPT.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			FTOPT.RDB$TABLE_NAME EQ name.object.c_str()
+	{
+		ERASE FTOPT;
+	}
+	END_FOR
+
+	// Drop foreign field options
+
+	request.reset(tdbb, drq_drop_f_tbl_f_opt, DYN_REQUESTS);
+
+	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		FTFOPT IN RDB$FOREIGN_TABLE_FIELD_OPTIONS
+		WITH FTFOPT.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			FTFOPT.RDB$TABLE_NAME EQ name.object.c_str()
+	{
+		ERASE FTFOPT;
+	}
+	END_FOR
+
 	if (found)
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, ddlTriggerAction, name, {});
 	else
@@ -9201,6 +9431,28 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 
 	METD_drop_relation(transaction, name);
 	MET_dsql_cache_release(tdbb, SYM_relation, name);
+}
+
+
+bool DropRelationNode::dropOption(thread_db* tdbb, jrd_tra* transaction,
+	const QualifiedName& relation, const MetaName& optionName)
+{
+	AutoCacheRequest requestHandle(tdbb, drq_drop_f_tbl_opt, DYN_REQUESTS);
+	bool found = false;
+
+	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FTOPT IN RDB$FOREIGN_TABLE_OPTIONS
+		WITH FTOPT.RDB$SCHEMA_NAME EQ relation.schema.c_str() AND
+			FTOPT.RDB$TABLE_NAME EQ relation.object.c_str() AND
+			FTOPT.RDB$FOREIGN_OPTION_NAME EQ optionName.c_str()
+	{
+		found = true;
+
+		ERASE FTOPT;
+	}
+	END_FOR
+
+	return found;
 }
 
 
@@ -11916,6 +12168,574 @@ void DropUserNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jr
 //----------------------
 
 
+string CreateAlterForeignServerNode::internalPrint(NodePrinter& printer) const
+{
+	DdlNode::internalPrint(printer);
+
+	NODE_PRINT(printer, name);
+	NODE_PRINT(printer, create);
+	NODE_PRINT(printer, alter);
+	NODE_PRINT(printer, plugin);
+	// NODE_PRINT(printer, options);
+
+	return "CreateAlterForeignServerNode";
+}
+
+
+void CreateAlterForeignServerNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+{
+	if (alter)
+	{
+		if (SCL_check_foreign_server(tdbb, name, SCL_alter) || !create)
+			return;
+	}
+
+	SCL_check_create_access(tdbb, obj_foreign_servers, {});
+}
+
+
+void CreateAlterForeignServerNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
+{
+	fb_assert(create || alter);
+
+	// run all statements under savepoint control
+	AutoSavePoint savePoint(tdbb, transaction);
+
+	if (alter)
+	{
+		if (!executeAlter(tdbb, dsqlScratch, transaction))
+		{
+			if (create)	// create or alter
+				executeCreate(tdbb, dsqlScratch, transaction);
+			else
+				status_exception::raise(Arg::Gds(isc_dyn_foreign_server_not_found) << Arg::Str(name));
+		}
+	}
+	else
+		executeCreate(tdbb, dsqlScratch, transaction);
+
+	savePoint.release();	// everything is ok
+}
+
+
+void CreateAlterForeignServerNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+	jrd_tra* transaction)
+{
+	Attachment* const attachment = transaction->getAttachment();
+	const MetaString& ownerName = attachment->getEffectiveUserName();
+	const QualifiedName qualifiedName(name);
+
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, qualifiedName,
+		obj_foreign_server))
+		return;
+
+	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
+		DDL_TRIGGER_CREATE_FOREIGN_SERVER, qualifiedName, {});
+
+	DYN_UTIL_check_unique_name(tdbb, transaction, qualifiedName, obj_foreign_server);
+
+	AutoCacheRequest requestHandle(tdbb, drq_s_f_server, DYN_REQUESTS);
+
+	STORE (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FSERV IN RDB$FOREIGN_SERVERS
+	{
+		strcpy(FSERV.RDB$FOREIGN_SERVER_NAME, name.c_str());
+
+		if (plugin.hasData())
+		{
+			FSERV.RDB$FOREIGN_SERVER_WRAPPER.NULL = FALSE;
+			strcpy(FSERV.RDB$FOREIGN_SERVER_WRAPPER, plugin.c_str());
+		}
+		else
+		{
+			FSERV.RDB$FOREIGN_SERVER_WRAPPER.NULL = TRUE;
+		}
+
+		FSERV.RDB$OWNER_NAME.NULL = FALSE;
+		strcpy(FSERV.RDB$OWNER_NAME, ownerName.c_str());
+	}
+	END_STORE
+
+	if (options.hasData())
+	{
+		for (unsigned cnt = 0; cnt < options.getCount(); ++cnt)
+		{
+			if (options[cnt].value.hasData())
+			{
+				storeOption(tdbb, transaction, &options[cnt]);
+			}
+		}
+
+	}
+
+	storePrivileges(tdbb, transaction, qualifiedName, obj_foreign_server, USAGE_PRIVILEGES);
+
+	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_CREATE_FOREIGN_SERVER,
+		qualifiedName, {});
+}
+
+
+bool CreateAlterForeignServerNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+	jrd_tra* transaction)
+{
+	Attachment* const attachment = transaction->getAttachment();
+	QualifiedName qualifiedName(name);
+
+	bool found = false;
+
+	AutoCacheRequest requestHandle(tdbb, drq_m_f_server, DYN_REQUESTS);
+
+	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FSERV IN RDB$FOREIGN_SERVERS
+		WITH FSERV.RDB$FOREIGN_SERVER_NAME EQ name.c_str()
+	{
+		found = true;
+
+		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
+			DDL_TRIGGER_ALTER_FOREIGN_SERVER, qualifiedName, {});
+
+		MODIFY FSERV
+
+			if (plugin.hasData())
+			{
+				FSERV.RDB$FOREIGN_SERVER_WRAPPER.NULL = FALSE;
+				strcpy(FSERV.RDB$FOREIGN_SERVER_WRAPPER, plugin.c_str());
+			}
+
+			if (dropPlugin)
+				FSERV.RDB$FOREIGN_SERVER_WRAPPER.NULL = TRUE;
+
+		END_MODIFY
+	}
+	END_FOR
+
+
+	if (!found)
+		return found;
+
+	// Drop old options and insert the new ones
+	for (unsigned cnt = 0; cnt < options.getCount(); ++cnt)
+	{
+		DropForeignServerNode::dropOption(tdbb, transaction, name, options[cnt].name);
+
+		if (options[cnt].value.hasData())
+			storeOption(tdbb, transaction, &options[cnt]);
+	}
+
+	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_ALTER_FOREIGN_SERVER,
+		qualifiedName, {});
+
+	return found;
+}
+
+
+void CreateAlterForeignServerNode::storeOption(thread_db* tdbb, jrd_tra* transaction, Option* option)
+{
+	Attachment* const attachment = transaction->getAttachment();
+
+	AutoCacheRequest requestHandle(tdbb, drq_s_f_server_opt, DYN_REQUESTS);
+
+	STORE (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FSOPT IN RDB$FOREIGN_SERVER_OPTIONS
+	{
+		FSOPT.RDB$FOREIGN_SERVER_NAME.NULL = FALSE;
+		strcpy(FSOPT.RDB$FOREIGN_SERVER_NAME, name.c_str());
+
+		FSOPT.RDB$FOREIGN_OPTION_NAME.NULL = FALSE;
+		strcpy(FSOPT.RDB$FOREIGN_OPTION_NAME, option->name.c_str());
+
+		FSOPT.RDB$FOREIGN_OPTION_VALUE.NULL = FALSE;
+		strcpy(FSOPT.RDB$FOREIGN_OPTION_VALUE, option->value.c_str());
+
+		if (option->type == ExternalValueType::TYPE_STRING)
+			FSOPT.RDB$FOREIGN_OPTION_TYPE.NULL = TRUE;
+		else
+		{
+			FSOPT.RDB$FOREIGN_OPTION_TYPE.NULL = FALSE;
+			FSOPT.RDB$FOREIGN_OPTION_TYPE = option->type;
+		}
+	}
+	END_STORE
+}
+
+//----------------------
+
+
+string DropForeignServerNode::internalPrint(NodePrinter& printer) const
+{
+	DdlNode::internalPrint(printer);
+
+	NODE_PRINT(printer, name);
+	NODE_PRINT(printer, plugin);
+	NODE_PRINT(printer, silent);
+
+	return "DropForeignServerNode";
+}
+
+void DropForeignServerNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+{
+	SCL_check_foreign_server(tdbb, name, SCL_drop);
+}
+
+void DropForeignServerNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
+{
+	// run all statements under savepoint control
+	AutoSavePoint savePoint(tdbb, transaction);
+	bool found = false;
+	QualifiedName qualifiedName(name);
+
+	dropOptions(tdbb, transaction, name);
+
+	AutoCacheRequest requestHandle(tdbb, drq_drop_f_server, DYN_REQUESTS);
+
+	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FSERV IN RDB$FOREIGN_SERVERS
+		WITH FSERV.RDB$FOREIGN_SERVER_NAME EQ name.c_str()
+	{
+		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
+			DDL_TRIGGER_DROP_FOREIGN_SERVER, qualifiedName, {});
+
+		ERASE FSERV;
+
+		if (!FSERV.RDB$SECURITY_CLASS.NULL)
+			deleteSecurityClass(tdbb, transaction, FSERV.RDB$SECURITY_CLASS);
+
+		found = true;
+	}
+	END_FOR
+
+	if (found)
+	{
+		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_DROP_FOREIGN_SERVER,
+			qualifiedName, {});
+	}
+	else if (!silent)
+		status_exception::raise(Arg::Gds(isc_dyn_foreign_server_not_found) << Arg::Str(name));
+
+	savePoint.release();	// everything is ok
+}
+
+
+bool DropForeignServerNode::dropOption(thread_db* tdbb, jrd_tra* transaction,
+	const MetaName& serverName, const MetaName& optionName)
+{
+	AutoCacheRequest requestHandle(tdbb, drq_drop_f_server_opt, DYN_REQUESTS);
+	bool found = false;
+
+	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FSOPT IN RDB$FOREIGN_SERVER_OPTIONS
+		WITH FSOPT.RDB$FOREIGN_SERVER_NAME EQ serverName.c_str() AND
+			FSOPT.RDB$FOREIGN_OPTION_NAME EQ optionName.c_str()
+	{
+		found = true;
+
+		ERASE FSOPT;
+	}
+	END_FOR
+
+	return found;
+}
+
+
+void DropForeignServerNode::dropOptions(thread_db* tdbb, jrd_tra* transaction,
+	const MetaName& serverName)
+{
+	AutoCacheRequest requestHandle(tdbb, drq_drop_f_server_opts, DYN_REQUESTS);
+
+	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FSOPT IN RDB$FOREIGN_SERVER_OPTIONS
+		WITH FSOPT.RDB$FOREIGN_SERVER_NAME EQ serverName.c_str()
+	{
+		ERASE FSOPT;
+	}
+	END_FOR
+}
+
+
+//----------------------
+
+
+string CreateAlterUserMappingNode::internalPrint(NodePrinter& printer) const
+{
+	DdlNode::internalPrint(printer);
+
+	NODE_PRINT(printer, user);
+	NODE_PRINT(printer, server);
+	NODE_PRINT(printer, create);
+	NODE_PRINT(printer, alter);
+	// NODE_PRINT(printer, options);
+
+	return "CreateAlterUserMappingNode";
+}
+
+
+void CreateAlterUserMappingNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+{
+	if (!(tdbb->getAttachment()->locksmith(tdbb, CHANGE_MAPPING_RULES)))
+		(Arg::Gds(isc_adm_task_denied) << Arg::Gds(isc_miss_prvlg) << "CHANGE_MAPPING_RULES").raise();
+}
+
+
+void CreateAlterUserMappingNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
+{
+	fb_assert(create || alter);
+
+	// run all statements under savepoint control
+	AutoSavePoint savePoint(tdbb, transaction);
+
+	if (alter)
+	{
+		if (!executeAlter(tdbb, dsqlScratch, transaction))
+		{
+			if (create)	// create or alter
+				executeCreate(tdbb, dsqlScratch, transaction);
+			else
+				status_exception::raise(Arg::Gds(isc_dyn_user_mapping_not_found) << Arg::Str(user) << Arg::Str(server));
+		}
+	}
+	else
+		executeCreate(tdbb, dsqlScratch, transaction);
+
+	savePoint.release();	// everything is ok
+}
+
+
+void CreateAlterUserMappingNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+	jrd_tra* transaction)
+{
+	Attachment* const attachment = transaction->getAttachment();
+	const MetaString& ownerName = attachment->getEffectiveUserName();
+
+	// User mapping to external servers by MED specification does not have a name,
+	// make a unique name from the user and server.
+	const QualifiedName name(getUniqueName());
+
+	if (!checkObjectExist(tdbb, transaction, QualifiedName(server), obj_foreign_servers))
+		status_exception::raise(Arg::Gds(isc_dyn_foreign_server_not_found) << server.c_str());
+
+	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_CREATE_USER_MAPPING,
+		name, {});
+
+	AutoCacheRequest requestHandle(tdbb, drq_s_u_mapping, DYN_REQUESTS);
+
+	STORE (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		UM IN RDB$FOREIGN_USER_MAPPINGS
+	{
+		strcpy(UM.RDB$USER, user.c_str());
+		strcpy(UM.RDB$FOREIGN_SERVER_NAME, server.c_str());
+	}
+	END_STORE
+
+	if (options.hasData())
+	{
+		for (unsigned cnt = 0; cnt < options.getCount(); ++cnt)
+		{
+			if (options[cnt].value.hasData())
+			{
+				storeOption(tdbb, transaction, &options[cnt]);
+			}
+		}
+	}
+
+	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_CREATE_USER_MAPPING,
+		name, {});
+
+	DFW_post_work(transaction, dfw_clear_cache, {}, {}, Mapping::SYSTEM_PRIVILEGES_CACHE);
+}
+
+
+bool CreateAlterUserMappingNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+	jrd_tra* transaction)
+{
+	Attachment* const attachment = transaction->getAttachment();
+
+	// User mapping to external servers by MED specification does not have a name,
+	// make a unique name from the user and server.
+	const QualifiedName name(getUniqueName());
+
+	bool found = false;
+	bool modified = false;
+
+	AutoCacheRequest requestHandle(tdbb, drq_m_u_mapping, DYN_REQUESTS);
+
+	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FUM IN RDB$FOREIGN_USER_MAPPINGS
+		WITH FUM.RDB$USER EQ user.c_str() AND
+		FUM.RDB$FOREIGN_SERVER_NAME EQ server.c_str()
+	{
+		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_ALTER_USER_MAPPING,
+			name, {});
+
+		found = true;
+	}
+	END_FOR
+
+	if (!found)
+		return found;
+
+	// Drop old options and insert the new ones
+	for (unsigned cnt = 0; cnt < options.getCount(); ++cnt)
+	{
+		if (DropUserMappingNode::dropOption(tdbb, transaction, user, server, options[cnt].name))
+			modified = true;
+
+		if (options[cnt].value.hasData())
+		{
+			storeOption(tdbb, transaction, &options[cnt]);
+
+			modified = true;
+		}
+	}
+
+	if (modified)
+	{
+		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_ALTER_USER_MAPPING,
+			name, {});
+
+		DFW_post_work(transaction, dfw_clear_cache, {}, {}, Mapping::SYSTEM_PRIVILEGES_CACHE);
+	}
+
+	return found;
+}
+
+
+void CreateAlterUserMappingNode::storeOption(thread_db* tdbb, jrd_tra* transaction, Option* option)
+{
+	Attachment* const attachment = transaction->getAttachment();
+
+	AutoCacheRequest requestHandle(tdbb, drq_s_u_mapping_opt, DYN_REQUESTS);
+
+	STORE (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FMO IN RDB$FOREIGN_MAPPING_OPTIONS
+	{
+		FMO.RDB$USER.NULL = FALSE;
+		strcpy(FMO.RDB$USER, user.c_str());
+
+		FMO.RDB$FOREIGN_SERVER_NAME.NULL = FALSE;
+		strcpy(FMO.RDB$FOREIGN_SERVER_NAME, server.c_str());
+
+		FMO.RDB$FOREIGN_OPTION_NAME.NULL = FALSE;
+		strcpy(FMO.RDB$FOREIGN_OPTION_NAME, option->name.c_str());
+
+		FMO.RDB$FOREIGN_OPTION_VALUE.NULL = FALSE;
+		strcpy(FMO.RDB$FOREIGN_OPTION_VALUE, option->value.c_str());
+
+		if (option->type == ExternalValueType::TYPE_STRING)
+			FMO.RDB$FOREIGN_OPTION_TYPE.NULL = TRUE;
+		else
+		{
+			FMO.RDB$FOREIGN_OPTION_TYPE.NULL = FALSE;
+			FMO.RDB$FOREIGN_OPTION_TYPE = option->type;
+		}
+	}
+	END_STORE
+}
+
+//----------------------
+
+
+string DropUserMappingNode::internalPrint(NodePrinter& printer) const
+{
+	DdlNode::internalPrint(printer);
+
+	NODE_PRINT(printer, user);
+	NODE_PRINT(printer, server);
+	NODE_PRINT(printer, silent);
+
+	return "DropUserMappingNode";
+}
+
+void DropUserMappingNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+{
+	if (!(tdbb->getAttachment() && tdbb->getAttachment()->locksmith(tdbb, CHANGE_MAPPING_RULES)))
+		(Arg::Gds(isc_adm_task_denied) << Arg::Gds(isc_miss_prvlg) << "CHANGE_MAPPING_RULES").raise();
+}
+
+void DropUserMappingNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
+{
+	// run all statements under savepoint control
+	AutoSavePoint savePoint(tdbb, transaction);
+	bool found = false;
+
+	// User mapping to external servers by MED specification does not have a name,
+	// make a unique name from the user and server.
+	const QualifiedName name(getUniqueName());
+
+	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_DROP_USER_MAPPING,
+		name, {});
+
+	dropOptions(tdbb, transaction, user, server);
+
+	AutoCacheRequest requestHandle(tdbb, drq_drop_u_mapping, DYN_REQUESTS);
+
+	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FUM IN RDB$FOREIGN_USER_MAPPINGS
+		WITH FUM.RDB$USER EQ user.c_str() AND
+		FUM.RDB$FOREIGN_SERVER_NAME EQ server.c_str()
+	{
+
+		ERASE FUM;
+
+		found = true;
+	}
+	END_FOR
+
+	if (found)
+	{
+	 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_DROP_USER_MAPPING,
+			QualifiedName(user), {});
+	}
+
+	if (!found && !silent)
+		status_exception::raise(Arg::Gds(isc_dyn_user_mapping_not_found) << Arg::Str(user) << Arg::Str(server));
+
+	DFW_post_work(transaction, dfw_clear_cache, {}, {}, Mapping::SYSTEM_PRIVILEGES_CACHE);
+
+	savePoint.release();	// everything is ok
+}
+
+
+bool DropUserMappingNode::dropOption(thread_db* tdbb, jrd_tra* transaction, const MetaName& user,
+	const MetaName& server, const MetaName& optionName)
+{
+	AutoCacheRequest requestHandle(tdbb, drq_drop_u_mapping_opt, DYN_REQUESTS);
+	bool found = false;
+
+	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FMO IN RDB$FOREIGN_MAPPING_OPTIONS
+		WITH FMO.RDB$USER EQ user.c_str() AND
+		FMO.RDB$FOREIGN_SERVER_NAME EQ server.c_str() AND
+		FMO.RDB$FOREIGN_OPTION_NAME EQ optionName.c_str()
+	{
+		found = true;
+
+		ERASE FMO;
+	}
+	END_FOR
+
+	return found;
+}
+
+
+void DropUserMappingNode::dropOptions(thread_db* tdbb, jrd_tra* transaction, const MetaName& user,
+	const MetaName& server)
+{
+	AutoCacheRequest requestHandle(tdbb, drq_drop_u_m_opts, DYN_REQUESTS);
+
+	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FMO IN RDB$FOREIGN_MAPPING_OPTIONS
+		WITH FMO.RDB$USER EQ user.c_str() AND
+		FMO.RDB$FOREIGN_SERVER_NAME EQ server.c_str()
+	{
+		ERASE FMO;
+	}
+	END_FOR
+}
+
+
+//----------------------
+
+
 string GrantRevokeNode::internalPrint(NodePrinter& printer) const
 {
 	DdlNode::internalPrint(printer);
@@ -12225,6 +13045,19 @@ static bool checkObjectExist(thread_db* tdbb, jrd_tra* transaction, const Qualif
 				X IN RDB$GENERATORS
 				WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 					 X.RDB$GENERATOR_NAME EQ name.object.c_str()
+			{
+				rc = true;
+			}
+			END_FOR
+			break;
+		}
+
+		case obj_foreign_servers:
+		{
+			AutoCacheRequest request(tdbb, drq_f_server_exist, DYN_REQUESTS);
+			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+				X IN RDB$FOREIGN_SERVERS
+				WITH X.RDB$FOREIGN_SERVER_NAME EQ name.object.c_str()
 			{
 				rc = true;
 			}

@@ -68,6 +68,9 @@ public:
 	SortNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 	SortNode* pass1(thread_db* tdbb, CompilerScratch* csb);
 	SortNode* pass2(thread_db* tdbb, CompilerScratch* csb);
+
+	void collectStreams(SortedStreamList& streamList) const;
+	bool containsStream(StreamType stream, bool only = false) const;
 	bool computable(CompilerScratch* csb, StreamType stream, bool allowOnlyCurrentStream);
 	void findDependentFromStreams(const CompilerScratch* csb,
 		StreamType currentStream, SortedStreamList* streamList);

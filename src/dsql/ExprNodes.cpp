@@ -10661,7 +10661,8 @@ dsc* RecordKeyNode::execute(thread_db* /*tdbb*/, Request* request) const
 		const jrd_rel* relation = rpb->rpb_relation;
 
 		// If it doesn't point to a valid record, return NULL.
-		if (!rpb->rpb_number.isValid() || !relation || relation->isVirtual() || relation->rel_file)
+		if (!rpb->rpb_number.isValid() || !relation || relation->isVirtual() || relation->rel_file
+			|| relation->rel_foreign_adapter)
 		{
 			request->req_flags |= req_null;
 			return NULL;

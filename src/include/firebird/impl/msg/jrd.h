@@ -998,3 +998,5 @@ FB_IMPL_MSG(JRD, 995, missing_value_for_format_pattern, -901, "HY", "000", "Cann
 FB_IMPL_MSG(JRD, 996, invalid_name, -901, "HY", "000", "Invalid name: @1")
 FB_IMPL_MSG(JRD, 997, invalid_unqualified_name_list, -901, "HY", "000", "Invalid list of unqualified names: @1")
 FB_IMPL_MSG(JRD, 998, no_user_att_while_restore, -901, "HY", "000", "User attachments are not allowed for the database being restored")
+FB_IMPL_MSG(JRD, 999, foreign_server, -901, "42", "000", "foreign server @1")
+FB_IMPL_MSG(JRD, 1000, foreign_provider_not_found, -901, "42", "000", "Foreign provider '@1' for server '@2' not found")
