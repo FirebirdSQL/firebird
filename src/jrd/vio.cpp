@@ -7298,6 +7298,7 @@ void VIO_update_in_place(thread_db* tdbb,
 	}
 	else // we apply update to delete stub
 	{
+	    fb_assert(org_rpb->rpb_record);
 		stack = &org_rpb->rpb_record->getPrecedence();
 	}
 	// According to DS on firebird-devel: it is not possible update non-existing record so stack is
