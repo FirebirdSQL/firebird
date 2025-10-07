@@ -1263,6 +1263,10 @@ version:	// 5.0 => 6.0 Alpha1
 		uint stmtLength, const string creatDBstatement, uint dialect,
 		uint dpbLength, const uchar* dpb,
 		boolean* stmtIsCreateDb);
+
+version:	// 5.0 => 6.0 Alpha1
+	void convert(Status status, uint sourceType, uint sourceScale, uint sourceLength, const void* source,
+		uint targetType, uint targetScale, uint targetLength, void* target);
 }
 
 interface OffsetsCallback : Versioned

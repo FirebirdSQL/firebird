@@ -4815,7 +4815,7 @@ namespace Firebird
 		}
 	};
 
-#define FIREBIRD_IUTIL_VERSION 5u
+#define FIREBIRD_IUTIL_VERSION 6u
 
 	class IUtil : public IVersioned
 	{
@@ -4845,6 +4845,7 @@ namespace Firebird
 			void (CLOOP_CARG *decodeTimeTzEx)(IUtil* self, IStatus* status, const ISC_TIME_TZ_EX* timeTz, unsigned* hours, unsigned* minutes, unsigned* seconds, unsigned* fractions, unsigned timeZoneBufferLength, char* timeZoneBuffer) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *decodeTimeStampTzEx)(IUtil* self, IStatus* status, const ISC_TIMESTAMP_TZ_EX* timeStampTz, unsigned* year, unsigned* month, unsigned* day, unsigned* hours, unsigned* minutes, unsigned* seconds, unsigned* fractions, unsigned timeZoneBufferLength, char* timeZoneBuffer) CLOOP_NOEXCEPT;
 			IAttachment* (CLOOP_CARG *executeCreateDatabase2)(IUtil* self, IStatus* status, unsigned stmtLength, const char* creatDBstatement, unsigned dialect, unsigned dpbLength, const unsigned char* dpb, FB_BOOLEAN* stmtIsCreateDb) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *convert)(IUtil* self, IStatus* status, unsigned sourceType, unsigned sourceScale, unsigned sourceLength, const void* source, unsigned targetType, unsigned targetScale, unsigned targetLength, void* target) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -5078,6 +5079,19 @@ namespace Firebird
 			IAttachment* ret = static_cast<VTable*>(this->cloopVTable)->executeCreateDatabase2(this, status, stmtLength, creatDBstatement, dialect, dpbLength, dpb, stmtIsCreateDb);
 			StatusType::checkException(status);
 			return ret;
+		}
+
+		template <typename StatusType> void convert(StatusType* status, unsigned sourceType, unsigned sourceScale, unsigned sourceLength, const void* source, unsigned targetType, unsigned targetScale, unsigned targetLength, void* target)
+		{
+			if (cloopVTable->version < 6)
+			{
+				StatusType::setVersionError(status, "IUtil", cloopVTable->version, 6);
+				StatusType::checkException(status);
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->convert(this, status, sourceType, sourceScale, sourceLength, source, targetType, targetScale, targetLength, target);
+			StatusType::checkException(status);
 		}
 	};
 
@@ -16430,6 +16444,7 @@ namespace Firebird
 					this->decodeTimeTzEx = &Name::cloopdecodeTimeTzExDispatcher;
 					this->decodeTimeStampTzEx = &Name::cloopdecodeTimeStampTzExDispatcher;
 					this->executeCreateDatabase2 = &Name::cloopexecuteCreateDatabase2Dispatcher;
+					this->convert = &Name::cloopconvertDispatcher;
 				}
 			} vTable;
 
@@ -16756,6 +16771,20 @@ namespace Firebird
 				return static_cast<IAttachment*>(0);
 			}
 		}
+
+		static void CLOOP_CARG cloopconvertDispatcher(IUtil* self, IStatus* status, unsigned sourceType, unsigned sourceScale, unsigned sourceLength, const void* source, unsigned targetType, unsigned targetScale, unsigned targetLength, void* target) CLOOP_NOEXCEPT
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::convert(&status2, sourceType, sourceScale, sourceLength, source, targetType, targetScale, targetLength, target);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
 	};
 
 	template <typename Name, typename StatusType, typename Base = IVersionedImpl<Name, StatusType, Inherit<IUtil> > >
@@ -16794,6 +16823,7 @@ namespace Firebird
 		virtual void decodeTimeTzEx(StatusType* status, const ISC_TIME_TZ_EX* timeTz, unsigned* hours, unsigned* minutes, unsigned* seconds, unsigned* fractions, unsigned timeZoneBufferLength, char* timeZoneBuffer) = 0;
 		virtual void decodeTimeStampTzEx(StatusType* status, const ISC_TIMESTAMP_TZ_EX* timeStampTz, unsigned* year, unsigned* month, unsigned* day, unsigned* hours, unsigned* minutes, unsigned* seconds, unsigned* fractions, unsigned timeZoneBufferLength, char* timeZoneBuffer) = 0;
 		virtual IAttachment* executeCreateDatabase2(StatusType* status, unsigned stmtLength, const char* creatDBstatement, unsigned dialect, unsigned dpbLength, const unsigned char* dpb, FB_BOOLEAN* stmtIsCreateDb) = 0;
+		virtual void convert(StatusType* status, unsigned sourceType, unsigned sourceScale, unsigned sourceLength, const void* source, unsigned targetType, unsigned targetScale, unsigned targetLength, void* target) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
