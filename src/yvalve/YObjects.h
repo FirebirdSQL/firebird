@@ -708,6 +708,10 @@ public:
 	void decodeTimeStampTzEx(Firebird::CheckStatusWrapper* status, const ISC_TIMESTAMP_TZ_EX* timeStampEx,
 		unsigned* year, unsigned* month, unsigned* day, unsigned* hours, unsigned* minutes, unsigned* seconds,
 		unsigned* fractions, unsigned timeZoneBufferLength, char* timeZoneBuffer);
+
+	void convert(Firebird::CheckStatusWrapper* status,
+		unsigned sourceType, unsigned sourceScale, unsigned sourceLength, const void* source,
+		unsigned targetType, unsigned targetScale, unsigned targetLength, void* target);
 };
 
 }	// namespace Why
