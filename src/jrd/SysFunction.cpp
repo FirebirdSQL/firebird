@@ -5572,6 +5572,8 @@ dsc* evlMaxMinValue(thread_db* tdbb, const SysFunction* function, const NestValu
 	HalfStaticArray<const dsc*, 2> argTypes(args.getCount());
 	dsc* result = nullptr;
 
+	SequenceComparisonResult sequentialComparisonResult;
+
 	for (FB_SIZE_T i = 0; i < args.getCount(); ++i)
 	{
 		const auto value = EVL_expr(tdbb, request, args[i]);
@@ -5581,30 +5583,26 @@ dsc* evlMaxMinValue(thread_db* tdbb, const SysFunction* function, const NestValu
 		argTypes.add(value);
 
 		if (i == 0)
+		{
 			result = value;
+		}
 		else
 		{
-			switch ((Function)(IPTR) function->misc)
-			{
-				case funMaxValue:
-					if (MOV_compare(tdbb, value, result) > 0)
-						result = value;
-					break;
+			fb_assert((Function)(IPTR) function->misc == funMaxValue || (Function)(IPTR) function->misc == funMinValue);
 
-				case funMinValue:
-					if (MOV_compare(tdbb, value, result) < 0)
-						result = value;
-					break;
-
-				default:
-					fb_assert(false);
-			}
+			auto comparisonResult = MOV_recursive_sequence_compare(tdbb, sequentialComparisonResult, value, result);
+			if (comparisonResult == ((Function)(IPTR) function->misc == funMaxValue ? GREATER : LESS))
+				result = value;
 		}
 	}
+
+	if (sequentialComparisonResult.result == UNKNOWN)
+		return nullptr;
 
 	DataTypeUtil(tdbb).makeFromList(&impure->vlu_desc, function->name, argTypes.getCount(), argTypes.begin());
 
 	impure->makeValueAddress(*tdbb->getDefaultPool());
+	impure->vlu_desc.setAddress(impure->vlu_desc.dsc_address);
 	MOV_move(tdbb, result, &impure->vlu_desc);
 
 	if (impure->vlu_desc.dsc_dtype == dtype_text)

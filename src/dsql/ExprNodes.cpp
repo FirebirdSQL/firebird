@@ -12669,7 +12669,8 @@ SysFuncCallNode::SysFuncCallNode(MemoryPool& pool, const MetaName& aName, ValueL
 	  name(pool, aName),
 	  args(aArgs),
 	  function(NULL),
-	  dsqlSpecialSyntax(false)
+	  dsqlSpecialSyntax(false),
+	  compositeField(nullptr)
 {
 }
 
@@ -12737,6 +12738,14 @@ void SysFuncCallNode::setParameterName(dsql_par* parameter) const
 	parameter->par_name = parameter->par_alias = name;
 }
 
+void SysFuncCallNode::setParameterCompositeDescriptor(dsql_msg* message, dsql_par* parameter) const
+{
+	if (compositeField)
+	{
+		Jrd::generate_sub_parameters(message, *compositeField, *parameter);
+	}
+}
+
 void SysFuncCallNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	if (args->items.getCount() > MAX_UCHAR)
@@ -12765,6 +12774,50 @@ void SysFuncCallNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 
 	DSqlDataTypeUtil dataTypeUtil(dsqlScratch);
 	function->makeFunc(&dataTypeUtil, function, desc, argsArray.getCount(), argsArray.begin());
+
+	if (desc->dsc_dtype == dtype_rowtype)
+	{
+		makeCompositeField(dsqlScratch, desc);
+	}
+}
+
+void SysFuncCallNode::makeCompositeField(DsqlCompilerScratch* dsqlScratch, dsc* resultDesc)
+{
+	compositeField = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
+	compositeField->dtype = dtype_rowtype;
+	compositeField->scale = 0;
+	compositeField->fld_name = name;
+	compositeField->fld_sub_count = resultDesc->dsc_sub_count;
+	compositeField->length = NULL_BYTES(resultDesc->dsc_sub_count);
+
+	auto nextDsc = &resultDesc->dsc_sub_first;
+	auto nextFld = &compositeField->fld_sub_first;
+	auto subfieldSerialNumber = 0;
+
+	while (*nextDsc)
+	{
+		*nextFld = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
+
+		(*nextFld)->dtype = (*nextDsc)->dsc_dtype;
+		(*nextFld)->scale = (*nextDsc)->dsc_scale;
+		(*nextFld)->subType = (*nextDsc)->dsc_sub_type;
+		(*nextFld)->charSetId = (*nextDsc)->getCharSet();
+
+		dsql_par dummyPar(dsqlScratch->getPool());
+		(*nextFld)->length = (*nextDsc)->dsc_length;
+		(*nextFld)->fld_name = dummyPar.par_alias;
+		(*nextFld)->resolve(dsqlScratch);
+
+		if ((*nextDsc)->dsc_dtype >= dtype_aligned)
+			compositeField->length = FB_ALIGN(compositeField->length, type_alignments[(*nextDsc)->dsc_dtype]);
+
+		compositeField->length += (*nextFld)->length;
+
+		nextFld = &(*nextFld)->fld_next;
+		nextDsc = &(*nextDsc)->dsc_next;
+
+		subfieldSerialNumber++;
+	}
 }
 
 bool SysFuncCallNode::deterministic(thread_db* tdbb) const
@@ -12807,6 +12860,7 @@ ValueExprNode* SysFuncCallNode::copy(thread_db* tdbb, NodeCopier& copier) const
 		*tdbb->getDefaultPool(), name);
 	node->args = copier.copy(tdbb, args);
 	node->function = function;
+	node->compositeField = compositeField;
 	return node;
 }
 
@@ -12894,6 +12948,9 @@ ValueExprNode* SysFuncCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 					[&] (dsc* desc) { *desc = item->getDsqlDesc(); },
 					false);
 			}
+
+			// AAM: we have to make the descriptor here to be able to generate request output subparameters if they are composite
+			node->make(dsqlScratch, &node->dsqlDesc);
 		}
 	}
 

@@ -238,6 +238,10 @@ void DataTypeUtilBase::makeFromList(dsc* result, const char* expressionName, int
 		if (anyVarying)
 			result->dsc_length += sizeof(USHORT);
 	}
+
+	// we have to recalculate the composite length because it could change after figuring out common descriptor
+	if (result->isRowType())
+		result->recalculateCompositeLength();
 }
 
 

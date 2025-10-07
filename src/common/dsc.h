@@ -238,6 +238,38 @@ typedef struct dsc
 		}
 	}
 
+	ULONG recalculateCompositeLength() noexcept
+	{
+		if (!dsc_sub_first)
+			return dsc_length;
+
+		auto curDesc = dsc_sub_first;
+
+		// recollect subfields number
+		dsc_sub_count = 0;
+		while (curDesc)
+		{
+			dsc_sub_count++;
+			curDesc = curDesc->dsc_next;
+		}
+
+		ULONG length = NULL_BYTES(dsc_sub_count);
+
+		curDesc = dsc_sub_first;
+		do
+		{
+			if (curDesc->dsc_dtype >= dtype_aligned)
+				length = FB_ALIGN(length, type_alignments[curDesc->dsc_dtype]);
+
+			length += curDesc->dsc_length;
+			curDesc = curDesc->dsc_next;
+		}
+		while (curDesc);
+
+		dsc_length = length;
+		return length;
+	}
+
 	UCHAR	dsc_dtype = 0;
 	SCHAR	dsc_scale = 0;
 	USHORT	dsc_length = 0;

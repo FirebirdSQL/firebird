@@ -2221,6 +2221,7 @@ public:
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
+	void setParameterCompositeDescriptor(dsql_msg* message, dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 
@@ -2234,11 +2235,14 @@ public:
 	ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
 	dsc* execute(thread_db* tdbb, Request* request) const override;
 
+	void makeCompositeField(DsqlCompilerScratch* dsqlScratch, dsc* resultDesc);
+
 public:
 	MetaName name;
 	NestConst<ValueListNode> args;
 	const SysFunction* function;
 	bool dsqlSpecialSyntax;
+	dsql_fld* compositeField;
 };
 
 

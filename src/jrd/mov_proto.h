@@ -39,8 +39,20 @@ typedef enum
 	UNKNOWN = 2
 } ComparisonResult;
 
+struct SequenceComparisonResult
+{
+	static constexpr ULONG NOT_SET = MAX_ULONG;
+
+	ComparisonResult result = EQUAL;
+	ULONG compareSignificantIndex = NOT_SET;
+	ULONG unknownIndex = NOT_SET;
+	ULONG lowestUnknownIndex = NOT_SET;
+	ULONG lowestCompareSignificantIndex = NOT_SET;
+};
+
 int		MOV_compare(Jrd::thread_db*, const dsc*, const dsc*);
 int		MOV_recursive_compare(Jrd::thread_db* tdbb, dsc* desc1, dsc* desc2, bool use_null_equility = false);
+ComparisonResult MOV_recursive_sequence_compare(Jrd::thread_db* tdbb, SequenceComparisonResult& intermediateResult, dsc* desc1, dsc* desc2, bool use_null_equility = false);
 double	MOV_date_to_double(const dsc*);
 void	MOV_double_to_date(double, SLONG[2]);
 bool	MOV_get_boolean(const dsc*);
