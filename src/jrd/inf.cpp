@@ -177,7 +177,7 @@ void INF_blob_info(const blb* blob,
 	CHECK_INPUT("INF_blob_info");
 
 	UCHAR buffer[BUFFER_TINY];
-	USHORT length;
+	USHORT length = 0;
 
 	const UCHAR* const end_items = items + item_length;
 	const UCHAR* const end = info + output_length;
@@ -289,7 +289,7 @@ void INF_database_info(thread_db* tdbb,
 
 	CountsBuffer counts_buffer;
 	UCHAR* buffer = counts_buffer.getBuffer(BUFFER_SMALL, false);
-	ULONG length, err_val;
+	ULONG length = 0, err_val = 0;
 	bool header_refreshed = false;
 
 	Database* const dbb = tdbb->getDatabase();
@@ -778,7 +778,7 @@ void INF_database_info(thread_db* tdbb,
 		case fb_info_page_contents:
 			{
 				bool validArgs = false;
-				ULONG pageNum;
+				ULONG pageNum = 0;
 
 				if (end_items - items >= 2)
 				{
@@ -1196,7 +1196,7 @@ void INF_transaction_info(const jrd_tra* transaction,
 	CHECK_INPUT("INF_transaction_info");
 
 	UCHAR buffer[MAXPATHLEN];
-	ULONG length;
+	ULONG length = 0;
 
 	const UCHAR* const end_items = items + item_length;
 	const UCHAR* const end = info + output_length;
