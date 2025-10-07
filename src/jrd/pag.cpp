@@ -1990,7 +1990,8 @@ ULONG PageSpace::extend(thread_db* tdbb, const ULONG pageNum, bool forceSize)
 			if (!PIO_extend(tdbb, file, extPages, dbb->dbb_page_size))
 				return 0;
 
-			maxPageNumber += extPages;
+			// File was extended, reset the cached value
+			maxPageNumber = 0;
 
 			return extPages;
 		}
