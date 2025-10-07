@@ -7220,6 +7220,8 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 				if (value == 0)
 				{
 					[[maybe_unused]] auto res = snprintf(p, bufSize, "% #*.*g ", length, (int) MIN(8, (length - 6)) - 1, value);
+					fb_assert(res >= 0);
+					
 					if (setValues.List) {
 						isqlGlob.printf("%.*g%s", FLOAT_LEN - 6 -1, value, NEWLINE);
 					}
@@ -7227,12 +7229,16 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 				else
 				{
 					[[maybe_unused]] auto res = snprintf(p, bufSize, "% #*.*g ", length, (int) MIN(8, (length - 6)), value);
+					fb_assert(res >= 0);
+					
 					if (setValues.List) {
 						isqlGlob.printf("%.*g%s", FLOAT_LEN - 6, value, NEWLINE);
 					}
 				}
 #else
 				[[maybe_unused]] auto res = snprintf(p, bufSize, "% #*.*g ", length, (int) MIN(8, (length - 6)), value);
+			    fb_assert(res >= 0);
+					
 				if (setValues.List) {
 					isqlGlob.printf("%.*g%s", FLOAT_LEN - 6, value, NEWLINE);
 				}
