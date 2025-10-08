@@ -83,10 +83,10 @@
 :: Run vsvarsall just once during the build...
 @if DEFINED FB_VSCOMNTOOLS (
   @if not defined VCToolsVersion (
-    call "%FB_VSCOMNTOOLS%\..\..\VC\Auxiliary\Build\vcvarsall.bat" %PROCESSOR_ARCHITECTURE%
+    call "%FB_VSCOMNTOOLS%\..\..\VC\Auxiliary\Build\vcvarsall.bat" %FB_PROCESSOR_ARCHITECTURE%
   ) else (
     @echo    The file:
-    @echo      "%FB_VSCOMNTOOLS%\..\..\VC\Auxiliary\Build\vcvarsall.bat" %PROCESSOR_ARCHITECTURE%
+    @echo      "%FB_VSCOMNTOOLS%\..\..\VC\Auxiliary\Build\vcvarsall.bat" %FB_PROCESSOR_ARCHITECTURE%
     @echo    has already been executed.
   )
 )
