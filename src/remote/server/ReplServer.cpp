@@ -770,7 +770,22 @@ namespace
 				const FB_UINT64 db_sequence = target->initReplica();
 				const FB_UINT64 last_db_sequence = control.getDbSequence();
 
-				if (db_sequence != last_db_sequence)
+				if (db_sequence < last_db_sequence)
+				{
+					if (db_sequence)
+					{
+						raiseError("Replica database was replaced but found to be older (sequence = %" UQUADFORMAT ") "
+									"than the one priorly processed (sequence = %" UQUADFORMAT ")",
+									db_sequence, last_db_sequence);
+					}
+					else
+					{
+						raiseError("Replica database was replaced but found to have zero sequence number,"
+								   "\n\tprobably after improper fixup/restore process (e.g. without -seq[uence] switch)");
+					}
+				}
+
+				if (db_sequence > last_db_sequence)
 				{
 					if (sequence == db_sequence + 1)
 					{
