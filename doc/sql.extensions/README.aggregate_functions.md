@@ -25,7 +25,7 @@ select department,
 
 ## Bitwise aggregates (Firebird 6.0)
 
-The `BIN_AND_AGG`, `BIT_XOR`, and `BIT_XOR` aggregate functions perform bit operations.
+The `BIN_AND_AGG`, `BIN_XO_AGG`, and `BIN_XOR_AGG` aggregate functions perform bit operations.
 
 `NULLs` are ignored. It's returned only in the case of none evaluated records having a non-null value.
 
