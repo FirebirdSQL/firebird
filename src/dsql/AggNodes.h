@@ -219,6 +219,41 @@ public:
 	const MaxMinType type;
 };
 
+class BinAggNode final : public AggNode
+{
+public:
+    enum BinType
+	{
+        TYPE_BIN_AND,
+		TYPE_BIN_OR,
+		TYPE_BIN_XOR,
+		TYPE_BIN_XOR_DISTINCT
+	};
+
+	explicit BinAggNode(MemoryPool& pool, BinType aType, ValueExprNode* aArg = nullptr);
+
+	virtual void parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned count);
+
+	virtual unsigned getCapabilities() const
+	{
+		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
+	}
+
+	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
+	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
+	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
+
+	virtual void aggInit(thread_db* tdbb, Request* request) const;
+	virtual void aggPass(thread_db* tdbb, Request* request, dsc* desc) const;
+	virtual dsc* aggExecute(thread_db* tdbb, Request* request) const;
+
+protected:
+	virtual AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/;
+public:
+	const BinType type;
+};
+
 class StdDevAggNode final : public AggNode
 {
 public:

@@ -1467,6 +1467,178 @@ AggNode* MaxMinAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 		type, doDsqlPass(dsqlScratch, arg));
 }
 
+//--------------------
+
+static AggNode::RegisterFactory1<BinAggNode, BinAggNode::BinType> binAndAggInfo(
+	"BIN_AND_AGG", BinAggNode::TYPE_BIN_AND);
+static AggNode::RegisterFactory1<BinAggNode, BinAggNode::BinType> binOrAggInfo(
+	"BIN_OR_AGG", BinAggNode::TYPE_BIN_OR);
+static AggNode::RegisterFactory1<BinAggNode, BinAggNode::BinType> binXorAggInfo(
+	"BIN_XOR_AGG", BinAggNode::TYPE_BIN_XOR);
+static AggNode::RegisterFactory1<BinAggNode, BinAggNode::BinType> binXorDistinctAggInfo(
+	"BIN_XOR_DISTINCT_AGG", BinAggNode::TYPE_BIN_XOR_DISTINCT);
+
+BinAggNode::BinAggNode(MemoryPool& pool, BinType aType, ValueExprNode* aArg)
+	: AggNode(pool,
+		(aType == BinAggNode::TYPE_BIN_AND ? binAndAggInfo :
+			aType == BinAggNode::TYPE_BIN_OR ? binOrAggInfo :
+			aType == BinAggNode::TYPE_BIN_XOR ? binXorAggInfo : binXorDistinctAggInfo),
+		(aType == BinAggNode::TYPE_BIN_XOR_DISTINCT), false, aArg),
+	  type(aType)
+{
+}
+
+void BinAggNode::parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned /*count*/)
+{
+	arg = PAR_parse_value(tdbb, csb);
+}
+
+void BinAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
+{
+	DsqlDescMaker::fromNode(dsqlScratch, desc, arg, true);
+
+	if (desc->isNull())
+		return;
+
+	if (!DTYPE_IS_EXACT(desc->dsc_dtype))
+	{
+		switch(type) {
+			case TYPE_BIN_AND:
+				ERRD_post(Arg::Gds(isc_expression_eval_err) <<
+						Arg::Gds(isc_dsql_agg2_wrongarg) << Arg::Str("BIN_AND_AGG"));
+			break;
+			case TYPE_BIN_OR:
+				ERRD_post(Arg::Gds(isc_expression_eval_err) <<
+						Arg::Gds(isc_dsql_agg2_wrongarg) << Arg::Str("BIN_OR_AGG"));
+			break;
+			case TYPE_BIN_XOR:
+			case TYPE_BIN_XOR_DISTINCT:
+				ERRD_post(Arg::Gds(isc_expression_eval_err) <<
+						Arg::Gds(isc_dsql_agg2_wrongarg) << Arg::Str("BIN_XOR_AGG"));
+			break;
+			default:
+				ERRD_post(Arg::Gds(isc_expression_eval_err) <<
+						Arg::Gds(isc_dsql_agg2_wrongarg) << Arg::Str("BIN_XXX_AGG"));
+			break;
+		}
+	}
+}
+
+void BinAggNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
+{
+	arg->getDesc(tdbb, csb, desc);
+
+	if (desc->is128()) {
+		nodFlags |= FLAG_INT128;
+		desc->makeInt128(0);
+	}
+	else {
+		desc->makeInt64(0);
+	}
+}
+
+ValueExprNode* BinAggNode::copy(thread_db* tdbb, NodeCopier& copier) const
+{
+	BinAggNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) BinAggNode(*tdbb->getDefaultPool(), type);
+	node->arg = copier.copy(tdbb, arg);
+	return node;
+}
+
+string BinAggNode::internalPrint(NodePrinter& printer) const
+{
+	AggNode::internalPrint(printer);
+
+	NODE_PRINT(printer, type);
+
+	return "BinAggNode";
+}
+
+void BinAggNode::aggInit(thread_db* tdbb, Request* request) const
+{
+	AggNode::aggInit(tdbb, request);
+
+	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+	if (nodFlags & FLAG_INT128) {
+		Firebird::Int128 i128;
+		impure->make_decimal_fixed(i128, 0);
+		switch(type) {
+			case TYPE_BIN_AND:
+			    impure->vlu_misc.vlu_int128 = -1;
+				break;
+			case TYPE_BIN_OR:
+			case TYPE_BIN_XOR:
+			case TYPE_BIN_XOR_DISTINCT:
+			default:
+				impure->vlu_misc.vlu_int128 = 0;
+				break;
+		}
+	}
+	else {
+		switch(type) {
+			case TYPE_BIN_AND:
+			    impure->make_int64(-1);
+				break;
+			case TYPE_BIN_OR:
+			case TYPE_BIN_XOR:
+			case TYPE_BIN_XOR_DISTINCT:
+			default:
+				impure->make_int64(0);
+				break;
+		}
+    }
+}
+
+void BinAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) const
+{
+	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+	++impure->vlux_count;
+	if (nodFlags & FLAG_INT128) {
+		const auto x = MOV_get_int128(tdbb, desc, 0);
+		switch(type) {
+			case TYPE_BIN_AND:
+				impure->vlu_misc.vlu_int128 &= x;
+				break;
+			case TYPE_BIN_OR:
+				impure->vlu_misc.vlu_int128 |= x;
+				break;
+			case TYPE_BIN_XOR:
+			case TYPE_BIN_XOR_DISTINCT:
+				impure->vlu_misc.vlu_int128 ^= x;
+				break;
+		}
+	}
+	else {
+		const SINT64 x = MOV_get_int64(tdbb, desc, 0);
+		switch(type) {
+			case TYPE_BIN_AND:
+				impure->vlu_misc.vlu_int64 &= x;
+				break;
+			case TYPE_BIN_OR:
+				impure->vlu_misc.vlu_int64 |= x;
+				break;
+			case TYPE_BIN_XOR:
+			case TYPE_BIN_XOR_DISTINCT:
+				impure->vlu_misc.vlu_int64 ^= x;
+				break;
+		}
+    }
+}
+
+dsc* BinAggNode::aggExecute(thread_db* tdbb, Request* request) const
+{
+	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+
+	if (!impure->vlux_count)
+		return nullptr;
+
+	return &impure->vlu_desc;
+}
+
+AggNode* BinAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
+{
+	return FB_NEW_POOL(dsqlScratch->getPool()) BinAggNode(dsqlScratch->getPool(),
+		type, doDsqlPass(dsqlScratch, arg));
+}
 
 //--------------------
 
