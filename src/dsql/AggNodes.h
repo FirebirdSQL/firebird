@@ -222,7 +222,7 @@ public:
 class BinAggNode final : public AggNode
 {
 public:
-    enum BinType
+    enum BinType : UCHAR
 	{
         TYPE_BIN_AND,
 		TYPE_BIN_OR,
@@ -232,24 +232,25 @@ public:
 
 	explicit BinAggNode(MemoryPool& pool, BinType aType, ValueExprNode* aArg = nullptr);
 
-	virtual void parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned count);
+	void parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned count) override;
 
-	virtual unsigned getCapabilities() const
+	unsigned getCapabilities() const override
 	{
 		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
-	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
-	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
+	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 
-	virtual void aggInit(thread_db* tdbb, Request* request) const;
-	virtual void aggPass(thread_db* tdbb, Request* request, dsc* desc) const;
-	virtual dsc* aggExecute(thread_db* tdbb, Request* request) const;
+	void aggInit(thread_db* tdbb, Request* request) const override;
+	void aggPass(thread_db* tdbb, Request* request, dsc* desc) const override;
+	dsc* aggExecute(thread_db* tdbb, Request* request) const override;
 
 protected:
-	virtual AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/;
+	AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/ override;
+
 public:
 	const BinType type;
 };

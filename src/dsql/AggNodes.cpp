@@ -1502,23 +1502,26 @@ void BinAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 
 	if (!DTYPE_IS_EXACT(desc->dsc_dtype))
 	{
-		switch(type) {
+		switch (type)
+		{
 			case TYPE_BIN_AND:
 				ERRD_post(Arg::Gds(isc_expression_eval_err) <<
 						Arg::Gds(isc_dsql_agg2_wrongarg) << Arg::Str("BIN_AND_AGG"));
 			break;
+
 			case TYPE_BIN_OR:
 				ERRD_post(Arg::Gds(isc_expression_eval_err) <<
 						Arg::Gds(isc_dsql_agg2_wrongarg) << Arg::Str("BIN_OR_AGG"));
 			break;
+
 			case TYPE_BIN_XOR:
 			case TYPE_BIN_XOR_DISTINCT:
 				ERRD_post(Arg::Gds(isc_expression_eval_err) <<
 						Arg::Gds(isc_dsql_agg2_wrongarg) << Arg::Str("BIN_XOR_AGG"));
 			break;
+
 			default:
-				ERRD_post(Arg::Gds(isc_expression_eval_err) <<
-						Arg::Gds(isc_dsql_agg2_wrongarg) << Arg::Str("BIN_XXX_AGG"));
+				fb_assert(false);
 			break;
 		}
 	}
@@ -1528,13 +1531,13 @@ void BinAggNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 {
 	arg->getDesc(tdbb, csb, desc);
 
-	if (desc->is128()) {
+	if (desc->is128())
+	{
 		nodFlags |= FLAG_INT128;
 		desc->makeInt128(0);
 	}
-	else {
+	else
 		desc->makeInt64(0);
-	}
 }
 
 ValueExprNode* BinAggNode::copy(thread_db* tdbb, NodeCopier& copier) const
@@ -1557,68 +1560,60 @@ void BinAggNode::aggInit(thread_db* tdbb, Request* request) const
 {
 	AggNode::aggInit(tdbb, request);
 
+	SINT64 initValue = 0;
+	if (type == TYPE_BIN_AND)
+		initValue = -1;
+
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-	if (nodFlags & FLAG_INT128) {
+	if (nodFlags & FLAG_INT128)
+	{
 		Firebird::Int128 i128;
 		impure->make_decimal_fixed(i128, 0);
-		switch(type) {
-			case TYPE_BIN_AND:
-			    impure->vlu_misc.vlu_int128 = -1;
-				break;
-			case TYPE_BIN_OR:
-			case TYPE_BIN_XOR:
-			case TYPE_BIN_XOR_DISTINCT:
-			default:
-				impure->vlu_misc.vlu_int128 = 0;
-				break;
-		}
+		impure->vlu_misc.vlu_int128 = initValue;
 	}
-	else {
-		switch(type) {
-			case TYPE_BIN_AND:
-			    impure->make_int64(-1);
-				break;
-			case TYPE_BIN_OR:
-			case TYPE_BIN_XOR:
-			case TYPE_BIN_XOR_DISTINCT:
-			default:
-				impure->make_int64(0);
-				break;
-		}
-    }
+	else
+		impure->make_int64(initValue);
 }
 
 void BinAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	++impure->vlux_count;
-	if (nodFlags & FLAG_INT128) {
-		const auto x = MOV_get_int128(tdbb, desc, 0);
-		switch(type) {
+	if (nodFlags & FLAG_INT128)
+	{
+		const auto value = MOV_get_int128(tdbb, desc, 0);
+		switch (type)
+		{
 			case TYPE_BIN_AND:
-				impure->vlu_misc.vlu_int128 &= x;
+				impure->vlu_misc.vlu_int128 &= value;
 				break;
+
 			case TYPE_BIN_OR:
-				impure->vlu_misc.vlu_int128 |= x;
+				impure->vlu_misc.vlu_int128 |= value;
 				break;
+
 			case TYPE_BIN_XOR:
 			case TYPE_BIN_XOR_DISTINCT:
-				impure->vlu_misc.vlu_int128 ^= x;
+				impure->vlu_misc.vlu_int128 ^= value;
 				break;
 		}
 	}
-	else {
-		const SINT64 x = MOV_get_int64(tdbb, desc, 0);
-		switch(type) {
+	else
+	{
+		const auto value = MOV_get_int64(tdbb, desc, 0);
+		switch (type)
+		{
 			case TYPE_BIN_AND:
-				impure->vlu_misc.vlu_int64 &= x;
+				impure->vlu_misc.vlu_int64 &= value;
 				break;
+
 			case TYPE_BIN_OR:
-				impure->vlu_misc.vlu_int64 |= x;
+				impure->vlu_misc.vlu_int64 |= value;
 				break;
+
 			case TYPE_BIN_XOR:
 			case TYPE_BIN_XOR_DISTINCT:
-				impure->vlu_misc.vlu_int64 ^= x;
+				impure->vlu_misc.vlu_int64 ^= value;
 				break;
 		}
     }
