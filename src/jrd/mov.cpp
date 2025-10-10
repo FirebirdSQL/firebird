@@ -111,8 +111,13 @@ int MOV_recursive_compare(Jrd::thread_db* tdbb, dsc* desc1, dsc* desc2, bool use
  **************************************
  *
  * Functional description
- *	Compare two descriptors even if it is a composite type.
- *  Return (-1, 0, 1, 2) if a<b, a=b, a>b or unknown respectively.
+ *	Compare two descriptors even if it is a composite type, but also updates the intermediate result
+ *	to be used in sequential comparison of lists of values. Composite types in such cases need more
+ *	information than simple types about intermediate results.
+ *  TODO: sequential compare is valid only for types without nested composite types.
+ *
+ *  Return (-1, 0, 1, 2) if a<b, a=b, a>b or unknown respectively in binary comparison of two descriptors,
+ *  and sequential comparison result via intermediateResult argument.
  *
  **************************************/
 ComparisonResult MOV_recursive_sequence_compare(Jrd::thread_db* tdbb, SequenceComparisonResult& intermediateResult,
@@ -122,94 +127,56 @@ ComparisonResult MOV_recursive_sequence_compare(Jrd::thread_db* tdbb, SequenceCo
 
 	if (desc1->dsc_dtype == dtype_rowtype || desc2->dsc_dtype == dtype_rowtype)
 	{
-		if (desc1->dsc_dtype != desc2->dsc_dtype
-			|| desc1->dsc_sub_count != desc2->dsc_sub_count)
+		if (desc1->dsc_dtype != desc2->dsc_dtype || desc1->dsc_sub_count != desc2->dsc_sub_count)
 			CVT_conversion_error(desc1, ERR_post);
 
-		comparison = MOV_recursive_sequence_compare(tdbb, intermediateResult, desc1->dsc_sub_first, desc2->dsc_sub_first, use_null_equility);
-
-		if (intermediateResult.unknownIndex != SequenceComparisonResult::NOT_SET
-			&& intermediateResult.unknownIndex < intermediateResult.lowestUnknownIndex)
-		{
-			intermediateResult.lowestUnknownIndex = intermediateResult.unknownIndex;
-		}
-
-		if (intermediateResult.compareSignificantIndex < intermediateResult.lowestCompareSignificantIndex
-			&& intermediateResult.compareSignificantIndex != SequenceComparisonResult::NOT_SET)
-		{
-			intermediateResult.lowestCompareSignificantIndex = intermediateResult.compareSignificantIndex;
-		}
-
-		if (intermediateResult.result == UNKNOWN)
-			intermediateResult.lowestCompareSignificantIndex = intermediateResult.unknownIndex;
-
-		if (intermediateResult.lowestUnknownIndex != SequenceComparisonResult::NOT_SET
-			&& intermediateResult.lowestUnknownIndex <= intermediateResult.lowestCompareSignificantIndex)
-			intermediateResult.result = UNKNOWN;
-
-		return comparison;
+		return MOV_recursive_sequence_compare(tdbb, intermediateResult, desc1->dsc_sub_first, desc2->dsc_sub_first, use_null_equility);
 	}
 
-	int significantIndexOffset = SequenceComparisonResult::NOT_SET;
-	int unknownIndexOffset = SequenceComparisonResult::NOT_SET;
-
+	ULONG indexOffset = 0;
 	auto next1 = desc1->dsc_sub_first ? &desc1->dsc_next : &desc1;
 	auto next2 = desc2->dsc_sub_first ? &desc2->dsc_next : &desc2;
+
 	while (*next1 && *next2)
 	{
-		significantIndexOffset++;
-		unknownIndexOffset++;
+		indexOffset++;
 
-		if (use_null_equility)
+		if (use_null_equility && ((*next1)->dsc_flags & DSC_null) && ((*next2)->dsc_flags & DSC_null))
 		{
-			if ((*next1)->dsc_flags & DSC_null && (*next2)->dsc_flags & DSC_null)
-			{
-				intermediateResult.result = EQUAL;
-				intermediateResult.compareSignificantIndex = significantIndexOffset;
-				intermediateResult.unknownIndex = unknownIndexOffset;
-				return comparison;
-			}
+			next1 = &(*next1)->dsc_next;
+			next2 = &(*next2)->dsc_next;
+			continue;
 		}
 
 		if (((*next1)->dsc_flags | (*next2)->dsc_flags) & DSC_null)
 		{
 			intermediateResult.result = UNKNOWN;
-			intermediateResult.compareSignificantIndex = significantIndexOffset;
-			intermediateResult.unknownIndex = unknownIndexOffset;
-			return comparison;
+			intermediateResult.unknownIndex = indexOffset;
+			return UNKNOWN;
 		}
 
 		if ((*next1)->dsc_sub_first && (*next2)->dsc_sub_first)
-		{
 			comparison = static_cast<ComparisonResult>(MOV_recursive_compare(tdbb, *next1, *next2, use_null_equility));
-			if (comparison != EQUAL)
-			{
-				intermediateResult.result = comparison;
-				intermediateResult.compareSignificantIndex = significantIndexOffset;
-				intermediateResult.unknownIndex = SequenceComparisonResult::NOT_SET;
-				return comparison;
-			}
-		}
 		else
-		{
 			comparison = static_cast<ComparisonResult>(MOV_compare(tdbb, *next1, *next2));
-			if (comparison != EQUAL)
-			{
-				intermediateResult.result = comparison;
-				intermediateResult.compareSignificantIndex = significantIndexOffset;
-				intermediateResult.unknownIndex = SequenceComparisonResult::NOT_SET;
-				return comparison;
-			}
+
+		if (comparison != EQUAL)
+		{
+			intermediateResult.result = comparison;
+			intermediateResult.compareSignificantIndex = indexOffset;
+			return comparison;
 		}
 
 		next1 = &(*next1)->dsc_next;
 		next2 = &(*next2)->dsc_next;
 	}
+
 	if ((*next1 || *next2) && !(*next1 && *next2))
 		CVT_conversion_error(*next1, ERR_post);
 
-	return comparison;
-};
+	intermediateResult.result = EQUAL;
+	return EQUAL;
+}
 
 int MOV_compare(Jrd::thread_db* tdbb, const dsc* arg1, const dsc* arg2)
 {

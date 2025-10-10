@@ -46,8 +46,6 @@ struct SequenceComparisonResult
 	ComparisonResult result = EQUAL;
 	ULONG compareSignificantIndex = NOT_SET;
 	ULONG unknownIndex = NOT_SET;
-	ULONG lowestUnknownIndex = NOT_SET;
-	ULONG lowestCompareSignificantIndex = NOT_SET;
 };
 
 int		MOV_compare(Jrd::thread_db*, const dsc*, const dsc*);
