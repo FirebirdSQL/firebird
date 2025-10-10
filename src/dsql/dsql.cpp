@@ -1420,6 +1420,10 @@ static UCHAR* describe_parameter(thread_db* tdbb,
 						UCHAR* subEnd = subInfo + bufferSize;
 						currentPos = subInfo;
 
+						length = put_vax_long(buf, (SLONG) param->par_desc.dsc_sub_count);
+						if (!(currentPos = put_item(isc_info_sql_describe_vars, length, buf, subInfo, subEnd)))
+							return nullptr;
+
 						// traverse all subfields recursively
 						for (const dsql_par* subParam = param->par_sub_first;
 							 subParam;

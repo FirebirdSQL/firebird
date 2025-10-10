@@ -256,6 +256,11 @@ void StatementMetadata::parseSubfields(const UCHAR*& buffer, const UCHAR* buffer
 
 		switch ((c = *buffer++))
 		{
+			case isc_info_sql_describe_vars:
+				getNumericInfo(&buffer, bufferEnd);	// skip the number of composite subfields
+
+				break;
+
 			case isc_info_sql_describe_end:
 				param->finished = true;
 
