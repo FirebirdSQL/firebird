@@ -702,6 +702,9 @@ using namespace Firebird;
 // tokens added for Firebird 6.0
 
 %token <metaNamePtr> ANY_VALUE
+%token <metaNamePtr> BIN_AND_AGG
+%token <metaNamePtr> BIN_OR_AGG
+%token <metaNamePtr> BIN_XOR_AGG
 %token <metaNamePtr> BTRIM
 %token <metaNamePtr> CALL
 %token <metaNamePtr> CURRENT_SCHEMA
@@ -8584,6 +8587,14 @@ aggregate_function_prefix
 		{ $$ = newNode<RegrAggNode>(RegrAggNode::TYPE_REGR_SYY, $3, $5); }
 	| ANY_VALUE '(' distinct_noise value ')'
 		{ $$ = newNode<AnyValueAggNode>($4); }
+	| BIN_AND_AGG '(' value ')'
+		{ $$ = newNode<BinAggNode>(BinAggNode::TYPE_BIN_AND, $3); }
+	| BIN_OR_AGG '(' value ')'
+		{ $$ = newNode<BinAggNode>(BinAggNode::TYPE_BIN_OR, $3); }
+	| BIN_XOR_AGG '(' all_noise value ')'
+		{ $$ = newNode<BinAggNode>(BinAggNode::TYPE_BIN_XOR, $4); }
+	| BIN_XOR_AGG '(' DISTINCT value ')'
+		{ $$ = newNode<BinAggNode>(BinAggNode::TYPE_BIN_XOR_DISTINCT, $4); }
 	;
 
 %type <aggNode> window_function
@@ -9951,6 +9962,9 @@ non_reserved_word
 	| UNICODE_VAL
 	// added in FB 6.0
 	| ANY_VALUE
+	| BIN_AND_AGG
+	| BIN_OR_AGG
+	| BIN_XOR_AGG
 	| DOWNTO
 	| FORMAT
 	| OWNER
