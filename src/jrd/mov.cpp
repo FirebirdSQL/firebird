@@ -152,6 +152,7 @@ ComparisonResult MOV_recursive_sequence_compare(Jrd::thread_db* tdbb, SequenceCo
 		{
 			intermediateResult.result = UNKNOWN;
 			intermediateResult.unknownIndex = indexOffset;
+			intermediateResult.compareSignificantIndex = indexOffset;
 			return UNKNOWN;
 		}
 
@@ -162,9 +163,9 @@ ComparisonResult MOV_recursive_sequence_compare(Jrd::thread_db* tdbb, SequenceCo
 
 		if (comparison != EQUAL)
 		{
-			intermediateResult.result = comparison;
 			intermediateResult.compareSignificantIndex = indexOffset;
-			return comparison;
+			intermediateResult.result = intermediateResult.compareSignificantIndex < intermediateResult.unknownIndex ? comparison : UNKNOWN;
+			return intermediateResult.result;
 		}
 
 		next1 = &(*next1)->dsc_next;
