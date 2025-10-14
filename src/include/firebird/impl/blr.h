@@ -80,7 +80,7 @@
 
 // rowtype subparameter codes
 #define blr_rt_full				(unsigned char)0	// fully described type
-#define blr_rt_pagacked_type	(unsigned char)1	// package type
+#define blr_rt_packaged_type	(unsigned char)1	// package type
 #define blr_rt_type_of_table	(unsigned char)2	// type of table
 #define blr_rt_local_type		(unsigned char)3	// local type
 

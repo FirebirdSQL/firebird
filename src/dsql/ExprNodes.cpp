@@ -3631,7 +3631,7 @@ void CastNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		}
 		else if (dsqlField->fieldSource.object.hasData())
 		{
-			dsqlScratch->appendUChar(blr_rt_pagacked_type);
+			dsqlScratch->appendUChar(blr_rt_packaged_type);
 			dsqlScratch->appendUShort(dummyContextNum);
 			dsqlScratch->appendMetaString(dsqlField->fieldSource.object.c_str());
 		}

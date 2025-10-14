@@ -497,7 +497,7 @@ void DsqlCompilerScratch::putLocalVariableDecl(dsql_var* variable, DeclareVariab
 		}
 		else if (field->fieldSource.object.hasData())
 		{
-			appendUChar(blr_rt_pagacked_type);
+			appendUChar(blr_rt_packaged_type);
 			appendUShort(variable->contextNum);
 			appendMetaString(field->fieldSource.object.c_str());
 		}
@@ -1098,7 +1098,7 @@ dsql_var* DsqlCompilerScratch::genRowtypeParameter(dsql_fld* field,
 	appendUChar(blr_rowtype);
 	if (field->fieldSource.object.hasData())
 	{
-		appendUChar(blr_rt_pagacked_type);
+		appendUChar(blr_rt_packaged_type);
 		appendUShort(variable->contextNum);
 		appendMetaString(field->fieldSource.object.c_str());
 	}

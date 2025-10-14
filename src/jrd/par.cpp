@@ -606,7 +606,7 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 					}
 					break;
 				}
-				case blr_rt_pagacked_type:
+				case blr_rt_packaged_type:
 				// package type
 				{
 					if (itemInfo)
