@@ -326,6 +326,14 @@ void AggNode::setParameterName(dsql_par* parameter) const
 	parameter->par_name = parameter->par_alias = aggInfo.name;
 }
 
+void AggNode::setParameterCompositeDescriptor(dsql_msg* message, dsql_par* parameter) const
+{
+	if (compositeField)
+	{
+		Jrd::generate_sub_parameters(message, *compositeField, *parameter);
+	}
+}
+
 void AggNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	NodeRefsHolder holder(dsqlScratch->getPool());
@@ -3220,6 +3228,11 @@ DmlNode* MaxMinAggNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch
 void MaxMinAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 {
 	DsqlDescMaker::fromNode(dsqlScratch, desc, arg, true);
+
+	if (desc->dsc_dtype == dtype_rowtype)
+	{
+		compositeField = MAKE_composite_field(dsqlScratch, "name", desc);
+	}
 }
 
 void MaxMinAggNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
@@ -3249,6 +3262,8 @@ void MaxMinAggNode::aggInit(thread_db* tdbb, Request* request) const
 {
 	AggNode::aggInit(tdbb, request);
 
+	sequentialComparisonResult.reset();
+
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	impure->vlu_desc.dsc_dtype = 0;
 }
@@ -3264,9 +3279,9 @@ void MaxMinAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) const
 		return;
 	}
 
-	const int result = MOV_compare(tdbb, desc, &impure->vlu_desc);
+	const auto result = MOV_recursive_compare(tdbb, desc, &impure->vlu_desc);
 
-	if ((type == TYPE_MAX && result > 0) || (type == TYPE_MIN && result < 0))
+	if ((type == TYPE_MAX && result == GREATER) || (type == TYPE_MIN && result == LESS))
 		EVL_make_value(tdbb, desc, impure);
 }
 

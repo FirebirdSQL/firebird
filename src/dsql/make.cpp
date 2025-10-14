@@ -732,6 +732,58 @@ void MAKE_parameter_composite(dsql_msg* message, dsql_par* parameter, const Valu
 	item->setParameterCompositeDescriptor(message, parameter);
 }
 
+/**
+
+	MAKE_composite_field
+
+	@brief  Make a composite field from descriptor
+
+	@param dsqlScratch
+	@param resultDesc
+	@return compositeField
+
+**/
+dsql_fld* MAKE_composite_field(DsqlCompilerScratch* dsqlScratch, const char* name, const dsc* resultDesc)
+{
+	auto compositeField = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
+	compositeField->dtype = dtype_rowtype;
+	compositeField->scale = 0;
+	compositeField->fld_name = name;
+	compositeField->fld_sub_count = resultDesc->dsc_sub_count;
+	compositeField->length = NULL_BYTES(resultDesc->dsc_sub_count);
+
+	auto nextDsc = &resultDesc->dsc_sub_first;
+	auto nextFld = &compositeField->fld_sub_first;
+	auto subfieldSerialNumber = 0;
+
+	while (*nextDsc)
+	{
+		*nextFld = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
+
+		(*nextFld)->dtype = (*nextDsc)->dsc_dtype;
+		(*nextFld)->scale = (*nextDsc)->dsc_scale;
+		(*nextFld)->subType = (*nextDsc)->dsc_sub_type;
+		(*nextFld)->charSetId = (*nextDsc)->getCharSet();
+
+		dsql_par dummyPar(dsqlScratch->getPool());
+		(*nextFld)->length = (*nextDsc)->dsc_length;
+		(*nextFld)->fld_name = dummyPar.par_alias;
+		(*nextFld)->resolve(dsqlScratch);
+
+		if ((*nextDsc)->dsc_dtype >= dtype_aligned)
+			compositeField->length = FB_ALIGN(compositeField->length, type_alignments[(*nextDsc)->dsc_dtype]);
+
+		compositeField->length += (*nextFld)->length;
+
+		nextFld = &(*nextFld)->fld_next;
+		nextDsc = &(*nextDsc)->dsc_next;
+
+		subfieldSerialNumber++;
+	}
+
+	return compositeField;
+}
+
 
 LiteralNode* MAKE_system_privilege(const char* privilege)
 {

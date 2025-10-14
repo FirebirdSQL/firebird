@@ -1144,6 +1144,7 @@ public:
 	ValueExprNode* dsqlFieldRemapper(FieldRemapper& visitor) override;
 
 	void setParameterName(dsql_par* parameter) const override;
+	void setParameterCompositeDescriptor(dsql_msg* message, dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
@@ -2234,8 +2235,6 @@ public:
 	bool sameAs(const ExprNode* other, bool ignoreStreams) const override;
 	ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
 	dsc* execute(thread_db* tdbb, Request* request) const override;
-
-	void makeCompositeField(DsqlCompilerScratch* dsqlScratch, dsc* resultDesc);
 
 public:
 	MetaName name;

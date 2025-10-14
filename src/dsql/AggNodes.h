@@ -26,6 +26,7 @@
 #include "firebird/impl/blr.h"
 #include "../dsql/Nodes.h"
 #include "../dsql/NodePrinter.h"
+#include "../jrd/mov_proto.h"
 
 namespace Jrd {
 
@@ -436,6 +437,9 @@ protected:
 
 public:
 	const MaxMinType type;
+
+private:
+	mutable SequenceComparisonResult sequentialComparisonResult;
 };
 
 class BinAggNode final : public AggNode

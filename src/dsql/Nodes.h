@@ -859,7 +859,8 @@ class ValueExprNode : public ExprNode
 public:
 	ValueExprNode(Type aType, MemoryPool& pool)
 		: ExprNode(aType, pool),
-		  dsqlDesc(pool)
+		  dsqlDesc(pool),
+		  compositeField(nullptr)
 	{
 	}
 
@@ -939,6 +940,7 @@ public:
 	SCHAR nodScale = 0;
 
 protected:
+	dsql_fld* compositeField;
 	dsc dsqlDesc;
 };
 
@@ -1126,6 +1128,7 @@ public:
 
 	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
 	void setParameterName(dsql_par* parameter) const override;
+	void setParameterCompositeDescriptor(dsql_msg* message, dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
 	AggNode* pass1(thread_db* tdbb, CompilerScratch* csb) override

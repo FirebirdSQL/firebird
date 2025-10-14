@@ -11793,9 +11793,12 @@ SelectNode* SelectNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	// Set up parameter for things in the select list.
 	for (auto item : node->rse->dsqlSelectList->items)
 	{
+		// in some nodes (sysfunctions for example) we need to make a descriptor before making a parameter
+		dsc tmpDesc;
+		DsqlDescMaker::fromNode(dsqlScratch, &tmpDesc, item);
 		const auto parameter = MAKE_parameter(statement->getReceiveMsg(), true, true, 0, item);
 		parameter->par_node = item;
-		DsqlDescMaker::fromNode(dsqlScratch, &parameter->par_desc, item);
+		parameter->par_desc = tmpDesc;
 	}
 
 	return node;

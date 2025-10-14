@@ -46,6 +46,13 @@ struct SequenceComparisonResult
 	ComparisonResult result = EQUAL;
 	ULONG compareSignificantIndex = NOT_SET;
 	ULONG unknownIndex = NOT_SET;
+
+	inline void reset()
+	{
+		result = EQUAL;
+		compareSignificantIndex = NOT_SET;
+		unknownIndex = NOT_SET;
+	}
 };
 
 int		MOV_compare(Jrd::thread_db*, const dsc*, const dsc*);
