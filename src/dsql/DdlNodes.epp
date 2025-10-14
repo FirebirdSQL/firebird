@@ -3735,7 +3735,6 @@ void CreateAlterProcedureNode::storeParameter(thread_db* tdbb, DsqlCompilerScrat
 				storeGlobalField(tdbb, transaction, fieldName, type);
 				strcpy(PRM.RDB$FIELD_SOURCE_SCHEMA_NAME, fieldName.schema.c_str());
 				strcpy(PRM.RDB$FIELD_SOURCE, fieldName.object.c_str());
-				type->fieldSource = std::move(fieldName);
 			}
 
 			if (type->typeOfTable.object.hasData())
