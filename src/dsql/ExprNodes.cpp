@@ -12922,9 +12922,6 @@ ValueExprNode* SysFuncCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 					[&] (dsc* desc) { *desc = item->getDsqlDesc(); },
 					false);
 			}
-
-			// AAM: we have to make the descriptor here to be able to generate request output subparameters if they are composite
-			node->make(dsqlScratch, &node->dsqlDesc);
 		}
 	}
 
