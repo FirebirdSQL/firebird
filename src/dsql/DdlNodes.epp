@@ -388,6 +388,38 @@ static void checkViewDependency(thread_db* tdbb, jrd_tra* transaction,
 	END_FOR
 }
 
+static void checkPackagedTypesFieldUsage(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& relationName, const MetaName& fieldName)
+{
+	// check if there are any fields used by the packaged types
+	AutoRequest handle,handle1;
+	handle.reset();
+	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
+		RFL IN RDB$RELATION_FIELDS
+		WITH RFL.RDB$RELATION_NAME EQ relationName.object.c_str()
+		AND RFL.RDB$SCHEMA_NAME EQ relationName.schema.c_str()
+		AND RFL.RDB$FIELD_NAME EQ fieldName.c_str()
+	{
+		FOR(REQUEST_HANDLE handle1 TRANSACTION_HANDLE transaction)
+			PKG IN RDB$PACKAGED_TYPES
+			CROSS F IN RDB$FIELDS
+			CROSS RFL2 IN RDB$RELATION_FIELDS
+			WITH PKG.RDB$FIELD_SOURCE EQ F.RDB$FIELD_NAME
+			AND F.RDB$RELATION_NAME NOT EQ RFL.RDB$RELATION_NAME
+			AND RFL2.RDB$RELATION_NAME NOT EQ RFL.RDB$RELATION_NAME
+			AND RFL2.RDB$FIELD_SOURCE EQ RFL.RDB$FIELD_SOURCE
+		{
+			QualifiedName packageName = QualifiedName(PKG.RDB$TYPE_NAME, PKG.RDB$PACKAGE_NAME);
+			status_exception::raise(
+				Arg::PrivateDyn(206) <<
+				fieldName.toQuotedString() <<
+				relationName.toQuotedString() <<
+				packageName.toQuotedString());
+		}
+		END_FOR
+	}
+	END_FOR
+}
+
 // Removes temporary pool pointers from field, stored in permanent cache.
 static void clearPermanentField(dsql_rel* relation, bool permanent)
 {
@@ -11175,6 +11207,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 						MODIFY RFL
 							checkViewDependency(tdbb, transaction, name, clause->fromName);
 							checkSpTrigDependency(tdbb, name, clause->fromName);
+							checkPackagedTypesFieldUsage(tdbb, transaction, relation->rel_name, clause->fromName);
 
 							if (!fieldExists(tdbb, name, clause->toName))
 							{
@@ -11329,30 +11362,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 							Arg::Gds(isc_dsql_construct_err));
 					}
 
-					// check if there are any fields used by the packaged types, but breaks the cascade TODO!
-					AutoRequest handle,handle1;
-					handle.reset();
-					FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
-						RFL IN RDB$RELATION_FIELDS
-						WITH RFL.RDB$RELATION_NAME NOT EQ relation->rel_name.object.c_str()
-					{
-						MetaName f = RFL.RDB$FIELD_NAME;
-
-						FOR(REQUEST_HANDLE handle1 TRANSACTION_HANDLE transaction)
-							PKG IN RDB$PACKAGED_TYPES
-							CROSS F IN RDB$FIELDS
-							WITH PKG.RDB$FIELD_SOURCE EQ F.RDB$FIELD_NAME
-							AND F.RDB$RELATION_NAME EQ RFL.RDB$RELATION_NAME
-						{
-							QualifiedName f3 = QualifiedName(PKG.RDB$TYPE_NAME, PKG.RDB$PACKAGE_NAME);
-							ERR_post(Arg::Gds(isc_no_meta_update) <<
-							Arg::Gds(isc_no_delete) <<	// Msg353: can not delete
-							Arg::Gds(isc_field_name) << f.toQuotedString() <<
-							Arg::Gds(isc_random) << Arg::Str("composite type " + f3.toQuotedString() + " depends on it"));
-						}
-						END_FOR
-					}
-					END_FOR
+					checkPackagedTypesFieldUsage(tdbb, transaction, relation->rel_name, clause->name);
 
 					deleteLocalField(tdbb, transaction, name, clause->name, clause->silent, executeBeforeTrigger);
 					break;
