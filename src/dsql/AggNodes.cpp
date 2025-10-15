@@ -1500,7 +1500,7 @@ void BinAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 	if (desc->isNull())
 		return;
 
-	if (!DTYPE_IS_EXACT(desc->dsc_dtype))
+	if (!DTYPE_IS_EXACT(desc->dsc_dtype) || (desc->dsc_scale != 0))
 	{
 		switch (type)
 		{
