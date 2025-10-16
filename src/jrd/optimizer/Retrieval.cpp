@@ -162,7 +162,7 @@ Retrieval::Retrieval(thread_db* aTdbb, Optimizer* opt, StreamType streamNumber,
 	if (!tail->csb_idx)
 		return;
 
-	MatchedBooleanList matches;
+	BooleanList matches;
 
 	for (auto& index : *tail->csb_idx)
 	{
@@ -346,6 +346,12 @@ InversionCandidate* Retrieval::getInversion()
 			{
 				selectivity *= Optimizer::getSelectivity(*iter);
 			}
+
+			if (iter->computable(csb, INVALID_STREAM, false) &&
+				iter->containsStream(stream))
+			{
+				invCandidate->conjuncts.add(*iter);
+			}
 		}
 	}
 
@@ -357,6 +363,8 @@ InversionCandidate* Retrieval::getInversion()
 		match->findDependentFromStreams(csb, stream,
 			&invCandidate->dependentFromStreams);
 	}
+
+	invCandidate->dependencies = invCandidate->dependentFromStreams.getCount();
 
 #ifdef OPT_DEBUG_RETRIEVAL
 	// Debug
@@ -724,7 +732,7 @@ bool Retrieval::betterInversion(const InversionCandidate* inv1,
 	{
 		if (inv1->dependencies > inv2->dependencies)
 		{
-			// Index used for a relationship must be always prefered to
+			// Index used for a relationship must be always preferred to
 			// the filtering ones, otherwise the nested loop join has
 			// no chances to be better than a sort merge.
 			// An alternative (simplified) condition might be:
@@ -800,7 +808,7 @@ bool Retrieval::betterInversion(const InversionCandidate* inv1,
 	return false;
 }
 
-bool Retrieval::checkIndexCondition(index_desc& idx, MatchedBooleanList& matches) const
+bool Retrieval::checkIndexCondition(index_desc& idx, BooleanList& matches) const
 {
 	fb_assert(idx.idx_condition);
 
@@ -911,7 +919,7 @@ void Retrieval::getInversionCandidates(InversionCandidateList& inversions,
 	const double minSelectivity = MIN(MAXIMUM_SELECTIVITY / cardinality, DEFAULT_SELECTIVITY);
 
 	// Walk through indexes to calculate selectivity / candidate
-	MatchedBooleanList matches;
+	BooleanList matches;
 
 	for (auto& scratch : fromIndexScratches)
 	{
@@ -1219,7 +1227,7 @@ InversionNode* Retrieval::makeIndexScanNode(IndexScratch* indexScratch) const
 	}
 
 	// For external requests, determine index name (to be reported in plans)
-	MetaName indexName;
+	QualifiedName indexName;
 	if (!(csb->csb_g_flags & csb_internal))
 		MET_lookup_index(tdbb, indexName, relation->rel_name, idx->idx_id + 1);
 
@@ -1414,21 +1422,41 @@ InversionCandidate* Retrieval::makeInversion(InversionCandidateList& inversions)
 
 	for (auto inversion : inversions)
 	{
-		const auto indexScratch = inversion->scratch;
-
-		// If the explicit plan doesn't mention this index, fake it as used
-		// thus excluding it from the cost-based algorithm. Otherwise,
-		// given this index is suitable for navigation, also mark it as used.
-
-		if ((indexScratch &&
-			(indexScratch->index->idx_runtime_flags & idx_plan_dont_use)) ||
-			(!customPlan && inversion == navigationCandidate))
+		if (const auto indexScratch = inversion->scratch)
 		{
-			inversion->used = true;
+			const auto idx = indexScratch->index;
+
+			// If the explicit plan doesn't mention this index, fake it as used
+			// thus excluding it from the cost-based algorithm. Otherwise,
+			// given this index is suitable for navigation, also mark it as used.
+
+			if (((idx->idx_runtime_flags & idx_plan_dont_use)) ||
+				(!customPlan && inversion == navigationCandidate))
+			{
+				inversion->used = true;
+			}
+
+			// If the index is conditional and its condition is also present in
+			// some other inversion as a boolean (it represents the OR operation),
+			// fake these other inversions as used, so that the full index scan would
+			// be preferred to multiple range scans. The cost-based algorithm below
+			// cannot handle it currently.
+
+			if (idx->idx_flags & idx_condition)
+			{
+				for (auto otherInversion : inversions)
+				{
+					if (otherInversion->boolean &&
+						idx->idx_condition->sameAs(otherInversion->boolean, true))
+					{
+						otherInversion->used = true;
+					}
+				}
+			}
 		}
 	}
 
-	MatchedBooleanList matches;
+	BooleanList matches;
 
 	if (navigationCandidate)
 	{
@@ -1460,11 +1488,9 @@ InversionCandidate* Retrieval::makeInversion(InversionCandidateList& inversions)
 					if (!invCandidate)
 						invCandidate = FB_NEW_POOL(getPool()) InversionCandidate(getPool());
 
-					if (!currentInv->inversion && currentInv->scratch)
-						invCandidate->inversion = makeIndexScanNode(currentInv->scratch);
-					else
-						invCandidate->inversion = currentInv->inversion;
-
+					const auto inversionNode = (!currentInv->inversion && currentInv->scratch) ?
+						makeIndexScanNode(currentInv->scratch) : currentInv->inversion;
+					invCandidate->inversion = inversionNode;
 					invCandidate->dbkeyRanges.assign(currentInv->dbkeyRanges);
 					invCandidate->unique = currentInv->unique;
 					invCandidate->selectivity = currentInv->selectivity;
@@ -1473,44 +1499,32 @@ InversionCandidate* Retrieval::makeInversion(InversionCandidateList& inversions)
 					invCandidate->nonFullMatchedSegments = 0;
 					invCandidate->matchedSegments = currentInv->matchedSegments;
 					invCandidate->dependencies = currentInv->dependencies;
-					matches.clear();
 
 					for (const auto currentMatch : currentInv->matches)
 					{
-						if (!matches.exist(currentMatch))
-							matches.add(currentMatch);
+						if (!invCandidate->matches.exist(currentMatch))
+							invCandidate->matches.add(currentMatch);
 					}
 
-					if (currentInv->boolean)
+					if (const auto currentMatch = currentInv->boolean)
 					{
-						if (!matches.exist(currentInv->boolean))
-							matches.add(currentInv->boolean);
+						if (!invCandidate->matches.exist(currentMatch))
+							invCandidate->matches.add(currentMatch);
 					}
 
-					invCandidate->matches.join(matches);
+					matches.assign(invCandidate->matches);
+
 					if (customPlan)
 						continue;
 
 					return invCandidate;
 				}
 
-				// Look if a match is already used by previous matches.
-				bool anyMatchAlreadyUsed = false, matchUsedByNavigation = false;
-				if (currentInv->boolean)
+				if (!customPlan)
 				{
-					if (matches.exist(currentInv->boolean))
-					{
-						anyMatchAlreadyUsed = true;
+					// Look if a match is already used by previous matches
+					bool anyMatchAlreadyUsed = false, matchUsedByNavigation = false;
 
-						if (navigationCandidate &&
-							navigationCandidate->matches.exist(currentInv->boolean))
-						{
-							matchUsedByNavigation = true;
-						}
-					}
-				}
-				else
-				{
 					for (const auto currentMatch : currentInv->matches)
 					{
 						if (matches.exist(currentMatch))
@@ -1526,29 +1540,49 @@ InversionCandidate* Retrieval::makeInversion(InversionCandidateList& inversions)
 							break;
 						}
 					}
-				}
 
-				if (currentInv->boolean && matches.exist(currentInv->boolean))
-					anyMatchAlreadyUsed = true;
-
-				if (anyMatchAlreadyUsed && !customPlan)
-				{
-					currentInv->used = true;
-
-					if (matchUsedByNavigation)
-						continue;
-
-					// If a match on this index was already used by another
-					// index, add also the other matches from this index.
-					for (const auto currentMatch : currentInv->matches)
+					if (const auto currentMatch = currentInv->boolean)
 					{
-						if (!matches.exist(currentMatch))
-							matches.add(currentMatch);
+						if (matches.exist(currentMatch))
+						{
+							anyMatchAlreadyUsed = true;
+
+							if (navigationCandidate &&
+								navigationCandidate->matches.exist(currentMatch))
+							{
+								matchUsedByNavigation = true;
+							}
+						}
+						else if (matchUsedByNavigation)
+							anyMatchAlreadyUsed = false;
 					}
 
-					// Restart loop, because other indexes could also be excluded now.
-					restartLoop = true;
-					break;
+					// If some match was already used by another index, skip this index
+
+					if (anyMatchAlreadyUsed)
+					{
+						if (!matchUsedByNavigation)
+						{
+							// Add the other matches from this index
+
+							for (const auto currentMatch : currentInv->matches)
+							{
+								if (!matches.exist(currentMatch))
+									matches.add(currentMatch);
+							}
+
+							if (const auto currentMatch = currentInv->boolean)
+							{
+								if (!matches.exist(currentMatch))
+									matches.add(currentMatch);
+							}
+						}
+
+						// Restart loop, because other indexes could also be excluded now
+						currentInv->used = true;
+						restartLoop = true;
+						break;
+					}
 				}
 
 				if (!bestCandidate)
@@ -1645,12 +1679,9 @@ InversionCandidate* Retrieval::makeInversion(InversionCandidateList& inversions)
 				if (!invCandidate)
 				{
 					invCandidate = FB_NEW_POOL(getPool()) InversionCandidate(getPool());
-					if (!bestCandidate->inversion && bestCandidate->scratch) {
-						invCandidate->inversion = makeIndexScanNode(bestCandidate->scratch);
-					}
-					else {
-						invCandidate->inversion = bestCandidate->inversion;
-					}
+					const auto inversionNode = (!bestCandidate->inversion && bestCandidate->scratch) ?
+						makeIndexScanNode(bestCandidate->scratch) : bestCandidate->inversion;
+					invCandidate->inversion = inversionNode;
 					invCandidate->dbkeyRanges.assign(bestCandidate->dbkeyRanges);
 					invCandidate->unique = bestCandidate->unique;
 					invCandidate->selectivity = bestCandidate->selectivity;
@@ -1661,30 +1692,26 @@ InversionCandidate* Retrieval::makeInversion(InversionCandidateList& inversions)
 					invCandidate->dependencies = bestCandidate->dependencies;
 					invCandidate->condition = bestCandidate->condition;
 
-					for (FB_SIZE_T j = 0; j < bestCandidate->matches.getCount(); j++)
+					for (const auto bestMatch : bestCandidate->matches)
 					{
-						if (!matches.exist(bestCandidate->matches[j]))
-							matches.add(bestCandidate->matches[j]);
+						if (!invCandidate->matches.exist(bestMatch))
+							invCandidate->matches.add(bestMatch);
 					}
-					if (bestCandidate->boolean)
+
+					if (const auto bestMatch = bestCandidate->boolean)
 					{
-						if (!matches.exist(bestCandidate->boolean))
-							matches.add(bestCandidate->boolean);
+						if (!invCandidate->matches.exist(bestMatch))
+							invCandidate->matches.add(bestMatch);
 					}
+
+					matches.join(invCandidate->matches);
 				}
 				else if (!bestCandidate->condition)
 				{
-					if (!bestCandidate->inversion && bestCandidate->scratch)
-					{
-						invCandidate->inversion = composeInversion(invCandidate->inversion,
-							makeIndexScanNode(bestCandidate->scratch), InversionNode::TYPE_AND);
-					}
-					else
-					{
-						invCandidate->inversion = composeInversion(invCandidate->inversion,
-							bestCandidate->inversion, InversionNode::TYPE_AND);
-					}
-
+					const auto inversionNode = (!bestCandidate->inversion && bestCandidate->scratch) ?
+						makeIndexScanNode(bestCandidate->scratch) : bestCandidate->inversion;
+					invCandidate->inversion = composeInversion(invCandidate->inversion,
+						inversionNode, InversionNode::TYPE_AND);
 					invCandidate->dbkeyRanges.join(bestCandidate->dbkeyRanges);
 					invCandidate->unique = (invCandidate->unique || bestCandidate->unique);
 					invCandidate->selectivity = totalSelectivity;
@@ -1697,15 +1724,17 @@ InversionCandidate* Retrieval::makeInversion(InversionCandidateList& inversions)
 
 					for (const auto bestMatch : bestCandidate->matches)
 					{
-						if (!matches.exist(bestMatch))
-	                        matches.add(bestMatch);
+						if (!invCandidate->matches.exist(bestMatch))
+							invCandidate->matches.add(bestMatch);
 					}
 
-					if (bestCandidate->boolean)
+					if (const auto bestMatch = bestCandidate->boolean)
 					{
-						if (!matches.exist(bestCandidate->boolean))
-							matches.add(bestCandidate->boolean);
+						if (!invCandidate->matches.exist(bestMatch))
+							invCandidate->matches.add(bestMatch);
 					}
+
+					matches.join(invCandidate->matches);
 				}
 
 				if (invCandidate->unique)
@@ -1739,10 +1768,13 @@ InversionCandidate* Retrieval::makeInversion(InversionCandidateList& inversions)
 		invCandidate->cost += navigationCandidate->cost;
 		++invCandidate->indexes;
 		invCandidate->navigated = true;
-	}
 
-	if (invCandidate)
-		invCandidate->matches.join(matches);
+		for (const auto navMatch : navigationCandidate->matches)
+		{
+			if (!invCandidate->matches.exist(navMatch))
+				invCandidate->matches.add(navMatch);
+		}
+	}
 
 	return invCandidate;
 }
@@ -1753,6 +1785,16 @@ bool Retrieval::matchBoolean(IndexScratch* indexScratch,
 {
 	if (boolean->nodFlags & ExprNode::FLAG_DEOPTIMIZE)
 		return false;
+
+	const auto idx = indexScratch->index;
+
+	if (idx->idx_flags & idx_condition)
+	{
+		// If index condition matches the boolean, this should not be
+		// considered a match. Full index scan will be used instead.
+		if (idx->idx_condition->sameAs(boolean, true))
+			return false;
+	}
 
 	const auto cmpNode = nodeAs<ComparativeBoolNode>(boolean);
 	const auto missingNode = nodeAs<MissingBoolNode>(boolean);
@@ -1787,16 +1829,6 @@ bool Retrieval::matchBoolean(IndexScratch* indexScratch,
 
 	ValueExprNode* value2 = (cmpNode && cmpNode->blrOp == blr_between) ?
 		cmpNode->arg3 : nullptr;
-
-	const auto idx = indexScratch->index;
-
-	if (idx->idx_flags & idx_condition)
-	{
-		// If index condition matches the boolean, this should not be
-		// considered a match. Full index scan will be used instead.
-		if (idx->idx_condition->sameAs(boolean, true))
-			return false;
-	}
 
 	if (idx->idx_flags & idx_expression)
 	{

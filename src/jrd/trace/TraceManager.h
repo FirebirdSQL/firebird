@@ -67,9 +67,6 @@ public:
 	static ConfigStorage* getStorage()
 	{ return storageInstance->getStorage(); }
 
-	static size_t pluginsCount()
-	{ return factories->getCount(); }
-
 	void event_attach(Firebird::ITraceDatabaseConnection* connection, bool create_db,
 		ntrace_result_t att_result);
 
@@ -137,7 +134,7 @@ public:
 
 	inline bool needs(unsigned e)
 	{
-		if (!active || !init_factories)
+		if (!active)
 			return false;
 
 		if (changeNumber != getStorage()->getChangeNumber())
@@ -179,7 +176,7 @@ public:
 	static void event_dsql_execute(Attachment* att, jrd_tra* transaction, Firebird::ITraceSQLStatement* statement,
 		bool started, ntrace_result_t req_result);
 
-	static void event_dsql_restart(Attachment* att, jrd_tra* transaction, DsqlRequest* statement,
+	static void event_dsql_restart(Attachment* att, jrd_tra* transaction, DsqlRequest* statement, const UCHAR* data,
 		int number);
 
 	static void shutdown();
@@ -192,43 +189,28 @@ private:
 	NotificationNeeds trace_needs, new_needs;
 
 	// This structure should be POD-like to be stored in Array
-	struct FactoryInfo
-	{
-		FactoryInfo() : factory(NULL)
-		{
-			memset(name, 0, sizeof(name));
-		}
-
-		Firebird::ITraceFactory* factory;
-		char name[MAXPATHLEN];
-	};
-
-	class Factories : public Firebird::Array<FactoryInfo>
-	{
-	public:
-		explicit Factories(Firebird::MemoryPool& p)
-			: Firebird::Array<FactoryInfo>(p)
-		{ }
-
-		~Factories()
-		{
-			Firebird::PluginManagerInterfacePtr pi;
-
-			for (unsigned int i = 0; i < getCount(); ++i)
-				pi->releasePlugin(getElement(i).factory);
-		}
-	};
-
-	static Factories* factories;
-	static Firebird::GlobalPtr<Firebird::RWLock> init_factories_lock;
-	static volatile bool init_factories;
 
 	struct SessionInfo
 	{
-		FactoryInfo* factory_info;
+		char pluginName[MAXPATHLEN] = {};
+
 		Firebird::ITracePlugin* plugin;
+		Firebird::ITraceFactory* factory;
 		ULONG ses_id;
 
+		inline void release(Firebird::PluginManagerInterfacePtr& pi)
+		{
+			plugin->release();
+			pi->releasePlugin(factory);
+		}
+
+		inline void release()
+		{
+			Firebird::PluginManagerInterfacePtr pi;
+			release(pi);
+		}
+
+		// Used for SortedArray::find
 		static ULONG generate(const SessionInfo& item)
 		{ return item.ses_id; }
 	};
@@ -241,16 +223,17 @@ private:
 
 		~Sessions()
 		{
+			Firebird::PluginManagerInterfacePtr pi;
+
 			for (unsigned int i = 0; i < getCount(); ++i)
 			{
-				getElement(i).plugin->release();
+				getElement(i).release(pi);
 			}
 		}
 	};
 	Sessions trace_sessions;
 
 	void init();
-	void load_plugins();
 	void update_sessions();
 	void update_session(const Firebird::TraceSession& session);
 

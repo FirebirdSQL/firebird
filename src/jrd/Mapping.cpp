@@ -27,6 +27,7 @@
  */
 
 #include "firebird.h"
+#include <utility>
 #include "firebird/Interface.h"
 #include "../auth/SecureRemotePassword/Message.h"
 #include "iberror.h"
@@ -61,20 +62,20 @@ using namespace Jrd;
 namespace {
 
 // internalFlags bits
-const ULONG FLAG_DB =		1;
-const ULONG FLAG_SEC =		2;
-const ULONG FLAG_DOWN_DB =	4;
-const ULONG FLAG_DOWN_SEC =	8;
+constexpr ULONG FLAG_DB			= 1;
+constexpr ULONG FLAG_SEC		= 2;
+constexpr ULONG FLAG_DOWN_DB	= 4;
+constexpr ULONG FLAG_DOWN_SEC	= 8;
 
 // flagRolUsr values
-const ULONG FLAG_USER = 1;
-const ULONG FLAG_ROLE = 2;
+constexpr ULONG FLAG_USER = 1;
+constexpr ULONG FLAG_ROLE = 2;
 
-const char* NM_ROLE = "Role";
-const char* NM_USER = "User";
-const char* TYPE_SEEN = "Seen";
+constexpr const char* NM_ROLE = "Role";
+constexpr const char* NM_USER = "User";
+constexpr const char* TYPE_SEEN = "Seen";
 
-void check(const char* s, IStatus* st)
+void check(const char* s, const IStatus* st)
 {
 	if (!(st->getState() & IStatus::STATE_ERRORS))
 		return;
@@ -154,7 +155,7 @@ private:
 } // namespace Jrd
 
 
-Mapping::DbHandle::DbHandle()
+Mapping::DbHandle::DbHandle() noexcept
 { }
 
 void Mapping::DbHandle::setAttachment(IAttachment* att)
@@ -204,7 +205,7 @@ bool Mapping::DbHandle::attach(const char* aliasDb, ICryptKeyCallback* cryptCb)
 	{
 		const ISC_STATUS* s = st->getErrors();
 		MAP_DEBUG(isc_print_status(s));
-		bool missing = fb_utils::containsErrorCode(s, isc_io_error);
+		const bool missing = fb_utils::containsErrorCode(s, isc_io_error);
 		down = fb_utils::containsErrorCode(s, isc_shutdown);
 		if (!(missing || down))
 			check("IProvider::attachDatabase", &st);
@@ -347,7 +348,7 @@ bool Mapping::Cache::populate(IAttachment *att)
 		curs = att->openCursor(&st, tra, 0,
 			"SELECT RDB$MAP_USING, RDB$MAP_PLUGIN, RDB$MAP_DB, RDB$MAP_FROM_TYPE, "
 			"	RDB$MAP_FROM, RDB$MAP_TO_TYPE, RDB$MAP_TO "
-			"FROM RDB$AUTH_MAPPING",
+			"FROM SYSTEM.RDB$AUTH_MAPPING",
 			3, nullptr, nullptr, mMap.getMetadata(), nullptr, 0);
 		if (st->getState() & IStatus::STATE_ERRORS)
 		{
@@ -440,7 +441,7 @@ void Mapping::Cache::search(ExtInfo& info, const Map& from, AuthWriter& newBlock
 	for (Map* to = lookup(from); to; to = to->next(from))
 	{
 		MAP_DEBUG(fprintf(stderr, "Match!!\n"));
-		unsigned flagRolUsr = to->toRole ? FLAG_ROLE : FLAG_USER;
+		const unsigned flagRolUsr = to->toRole ? FLAG_ROLE : FLAG_USER;
 		if (info.found & flagRolUsr)
 			continue;
 
@@ -536,11 +537,11 @@ bool Mapping::Cache::map4(bool flagWild, unsigned flagSet, AuthReader& rdr, ExtI
 		newBlock.append(workBlock);
 	}
 
-	unsigned mapMask = FLAG_USER | FLAG_ROLE;
+	constexpr unsigned mapMask = FLAG_USER | FLAG_ROLE;
 	return (info.found & mapMask) == mapMask;
 }
 
-void Mapping::Cache::eraseEntry(Map* m)
+void Mapping::Cache::eraseEntry(Map* m) noexcept
 {
 	delete m;
 }
@@ -575,7 +576,7 @@ class Found
 public:
 	enum What {FND_NOTHING, FND_PLUG, FND_SEC, FND_DB};
 
-	Found()
+	Found() noexcept
 		: found(FND_NOTHING)
 	{ }
 
@@ -615,7 +616,7 @@ void resetMap(const char* securityDb, ULONG index);
 
 // ----------------------------------------------------
 
-class MappingHeader : public Firebird::MemoryHeader
+class MappingHeader final : public Firebird::MemoryHeader
 {
 public:
 	SLONG currentProcess;
@@ -632,14 +633,14 @@ public:
 	};
 	Process process[1];
 
-	static const ULONG FLAG_ACTIVE = 0x1;
-	static const ULONG FLAG_DELIVER = 0x2;
+	static constexpr ULONG FLAG_ACTIVE = 0x1;
+	static constexpr ULONG FLAG_DELIVER = 0x2;
 };
 
 class MappingIpc final : public Firebird::IpcObject
 {
-	static const USHORT MAPPING_VERSION = 1;
-	static const size_t DEFAULT_SIZE = 1024 * 1024;
+	static constexpr USHORT MAPPING_VERSION = 1;
+	static constexpr size_t DEFAULT_SIZE = 1024 * 1024;
 
 public:
 	explicit MappingIpc(MemoryPool&)
@@ -651,6 +652,10 @@ public:
 	{
 		shutdown();
 	}
+
+	// copying is prohibited
+	MappingIpc(const MappingIpc&) = delete;
+	MappingIpc& operator =(const MappingIpc&) = delete;
 
 	void shutdown()
 	{
@@ -667,8 +672,7 @@ public:
 			fb_assert(sMem->process[process].id);
 			sMem->process[process].flags &= ~MappingHeader::FLAG_ACTIVE;
 
-			(void)  // Ignore errors in cleanup
-				sharedMemory->eventPost(&sMem->process[process].notifyEvent);
+			std::ignore = sharedMemory->eventPost(&sMem->process[process].notifyEvent);
 
 			cleanupSync.waitForCompletion();
 
@@ -707,7 +711,7 @@ public:
 		sMem->currentProcess = -1;
 		for (unsigned n = 0; n < sMem->processes; ++n)
 		{
-			MappingHeader::Process* p = &sMem->process[n];
+			const MappingHeader::Process* p = &sMem->process[n];
 			if (!(p->flags & MappingHeader::FLAG_ACTIVE))
 				continue;
 
@@ -741,7 +745,7 @@ public:
 				continue;
 			}
 
-			SLONG value = sharedMemory->eventClear(&current->callbackEvent);
+			const SLONG value = sharedMemory->eventClear(&current->callbackEvent);
 			p->flags |= MappingHeader::FLAG_DELIVER;
 
 			if (sharedMemory->eventPost(&p->notifyEvent) != FB_SUCCESS)
@@ -876,7 +880,7 @@ private:
 			MappingHeader::Process* p = &sharedMemory->getHeader()->process[process];
 			while (p->flags & MappingHeader::FLAG_ACTIVE)
 			{
-				SLONG value = sharedMemory->eventClear(&p->notifyEvent);
+				const SLONG value = sharedMemory->eventClear(&p->notifyEvent);
 
 				if (p->flags & MappingHeader::FLAG_DELIVER)
 				{
@@ -938,10 +942,6 @@ private:
 	USHORT getVersion() const override { return MAPPING_VERSION; }
 	const char* getName() const override { return "MappingIpc"; }
 
-	// copying is prohibited
-	MappingIpc(const MappingIpc&);
-	MappingIpc& operator =(const MappingIpc&);
-
 	class Guard;
 	friend class Guard;
 	typedef SharedMemory<MappingHeader> MappingSharedMemory;
@@ -969,10 +969,10 @@ private:
 			data->mutexUnlock();
 		}
 
-	private:
-		Guard(const Guard&);
-		Guard& operator=(const Guard&);
+		Guard(const Guard&) = delete;
+		Guard& operator=(const Guard&) = delete;
 
+	private:
 		MappingSharedMemory* const data;
 	};
 
@@ -984,7 +984,7 @@ private:
 	AutoSharedMemory sharedMemory;
 	Mutex initMutex;
 	const SLONG processId;
-	unsigned process;
+	unsigned process = 0;
 	Semaphore startupSemaphore;
 	ThreadFinishSync<MappingIpc*> cleanupSync;
 };
@@ -996,28 +996,28 @@ void setupIpc()
 	mappingIpc->setup();
 }
 
-const char* roleSql =
+constexpr const char* roleSql =
 "with recursive role_tree as ( "
-"   select rdb$role_name as nm from rdb$roles "
+"   select rdb$role_name as nm from system.rdb$roles "
 "       where rdb$role_name = ? "
 "   union all "
-"   select p.rdb$relation_name as nm from rdb$user_privileges p "
+"   select p.rdb$relation_name as nm from system.rdb$user_privileges p "
 "       join role_tree t on t.nm = p.rdb$user "
 "       where p.rdb$privilege = 'M') "
 "select r.rdb$system_privileges from role_tree t "
-"   join rdb$roles r on t.nm = r.rdb$role_name "
+"   join system.rdb$roles r on t.nm = r.rdb$role_name "
 	;
 
-const char* userSql =
+constexpr const char* userSql =
 "with recursive role_tree as ( "
-"   select rdb$relation_name as nm from rdb$user_privileges "
+"   select rdb$relation_name as nm from system.rdb$user_privileges "
 "       where rdb$privilege = 'M' and rdb$field_name = 'D' and rdb$user = ? and rdb$user_type = 8 "
 "   union all "
-"   select p.rdb$relation_name as nm from rdb$user_privileges p "
+"   select p.rdb$relation_name as nm from system.rdb$user_privileges p "
 "       join role_tree t on t.nm = p.rdb$user "
 "       where p.rdb$privilege = 'M' and p.rdb$field_name = 'D') "
 "select r.rdb$system_privileges from role_tree t "
-"   join rdb$roles r on t.nm = r.rdb$role_name "
+"   join system.rdb$roles r on t.nm = r.rdb$role_name "
 	;
 
 class SysPrivCache : public PermanentStorage
@@ -1028,7 +1028,7 @@ public:
 		  databases(getPool())
 	{ }
 
-	SyncObject* getSync()
+	SyncObject* getSync() noexcept
 	{
 		return &sync;
 	}
@@ -1112,7 +1112,7 @@ private:
 		}
 
 	private:
-		class NameCache : private GenericMap<Pair<Left<string, UserId::Privileges> > >
+		class NameCache final : private GenericMap<Pair<Left<string, UserId::Privileges> > >
 		{
 		public:
 			NameCache(MemoryPool& p, const char* s)
@@ -1153,7 +1153,7 @@ private:
 
 				RefPtr<IMessageMetadata> meta(curs->getMetadata(&st));
 				AutoPtr<UCHAR, ArrayDelete> buffer(FB_NEW UCHAR[meta->getMessageLength(&st)]);
-				UCHAR* bits = buffer + meta->getOffset(&st, 0);
+				const UCHAR* bits = buffer + meta->getOffset(&st, 0);
 				UserId::Privileges g, l;
 
 				while(curs->fetchNext(&st, buffer) == IStatus::RESULT_OK)
@@ -1180,9 +1180,9 @@ private:
 			const char* sql;
 		};
 
-		class RoleCache : private GenericMap<Pair<Full<string, string> > >
+		class RoleCache final : private GenericMap<Pair<Full<string, string> > >
 		{
-			static const char ROLESEP = '\1';
+			static constexpr char ROLESEP = '\1';
 
 		public:
 			RoleCache(MemoryPool& p)
@@ -1197,7 +1197,7 @@ private:
 					return true;
 				}
 
-				string* r = get(name);
+				const string* r = get(name);
 				if (!r)
 					return false;
 
@@ -1228,7 +1228,7 @@ private:
 				Message cols;
 				Field<Varying> role(cols, MAX_SQL_IDENTIFIER_SIZE);
 
-				const char* sql = "select RDB$RELATION_NAME from RDB$USER_PRIVILEGES "
+				constexpr const char* sql = "select RDB$RELATION_NAME from SYSTEM.RDB$USER_PRIVILEGES "
 					"where RDB$USER = ? and RDB$PRIVILEGE = 'M' and RDB$USER_TYPE = 8 and RDB$OBJECT_TYPE = 13";
 
 				RefPtr<IResultSet> curs(REF_NO_INCR, iDb->openCursor(&st, tra, 0, sql, 3,
@@ -1335,25 +1335,25 @@ bool Mapping::ensureCachePresence(RefPtr<Mapping::Cache>& cache, const char* ali
 }
 
 
-void Mapping::needAuthMethod(Firebird::string& method)
+void Mapping::needAuthMethod(Firebird::string& method) noexcept
 {
 	fb_assert(!authMethod);
 	authMethod = &method;
 }
 
-void Mapping::needAuthBlock(Firebird::AuthReader::AuthBlock& block)
+void Mapping::needAuthBlock(Firebird::AuthReader::AuthBlock& block) noexcept
 {
 	fb_assert(!newAuthBlock);
 	newAuthBlock = &block;
 }
 
-void Mapping::needSystemPrivileges(UserId::Privileges& privileges)
+void Mapping::needSystemPrivileges(UserId::Privileges& privileges) noexcept
 {
 	fb_assert(!systemPrivileges);
 	systemPrivileges = &privileges;
 }
 
-void Mapping::setAuthBlock(const Firebird::AuthReader::AuthBlock& block)
+void Mapping::setAuthBlock(const Firebird::AuthReader::AuthBlock& block) noexcept
 {
 	fb_assert(!authBlock);
 	authBlock = &block;
@@ -1389,7 +1389,7 @@ void Mapping::setInternalFlags()
 	}
 }
 
-void Mapping::setSqlRole(const Firebird::string& role)
+void Mapping::setSqlRole(const Firebird::string& role) noexcept
 {
 	fb_assert(!sqlRole);
 	sqlRole = &role;
@@ -1445,7 +1445,7 @@ void Mapping::setSecurityDbAlias(const char* a, const char* mainExpandedName)
 	}
 }
 
-void Mapping::setErrorMessagesContextName(const char* context)
+void Mapping::setErrorMessagesContextName(const char* context) noexcept
 {
 	errorMessagesContext = context;
 }
@@ -1527,7 +1527,8 @@ ULONG Mapping::mapUser(string& name, string& trustedRole)
 		newBlock.add(info);
 	}
 
-	newBlock.append(*authBlock);
+	if (authBlock)
+		newBlock.append(*authBlock);
 
 	Found fName, fRole;
 	MAP_DEBUG(fprintf(stderr, "Starting newblock scan\n"));
@@ -1536,7 +1537,7 @@ ULONG Mapping::mapUser(string& name, string& trustedRole)
 		MAP_DEBUG(fprintf(stderr, "Newblock info: secDb=%s plugin=%s type=%s name=%s origPlug=%s\n",
 			info.secDb.c_str(), info.plugin.c_str(), info.type.c_str(), info.name.c_str(), info.origPlug.c_str()));
 
-		Found::What recordWeight =
+		const Found::What recordWeight =
 			(mainDb && info.secDb == mainDb) ? Found::FND_DB :
 			(securityAlias && info.secDb == secExpanded.c_str()) ? Found::FND_SEC :
 			Found::FND_NOTHING;
@@ -1683,7 +1684,7 @@ RecordBuffer* MappingList::makeBuffer(thread_db* tdbb)
 	return getData(rel_global_auth_mapping);
 }
 
-RecordBuffer* MappingList::getList(thread_db* tdbb, jrd_rel* relation)
+RecordBuffer* MappingList::getList(thread_db* tdbb, const jrd_rel* relation)
 {
 	fb_assert(relation);
 	fb_assert(relation->rel_id == rel_global_auth_mapping);
@@ -1744,7 +1745,7 @@ RecordBuffer* MappingList::getList(thread_db* tdbb, jrd_rel* relation)
 		curs = att->openCursor(&st, tra, 0,
 			"SELECT RDB$MAP_NAME, RDB$MAP_USING, RDB$MAP_PLUGIN, RDB$MAP_DB, "
 			"	RDB$MAP_FROM_TYPE, RDB$MAP_FROM, RDB$MAP_TO_TYPE, RDB$MAP_TO, RDB$DESCRIPTION "
-			"FROM RDB$AUTH_MAPPING",
+			"FROM SYSTEM.RDB$AUTH_MAPPING",
 			3, nullptr, nullptr, mMap.getMetadata(), nullptr, 0);
 		if (st->getState() & IStatus::STATE_ERRORS)
 		{
@@ -1802,7 +1803,7 @@ RecordBuffer* MappingList::getList(thread_db* tdbb, jrd_rel* relation)
 
 			if (!role.null)
 			{
-				SINT64 v = role;
+				const SINT64 v = role;
 				putField(tdbb, record,
 						 DumpField(f_sec_map_to_type, VALUE_INTEGER, sizeof(v), &v));
 			}
@@ -1818,7 +1819,7 @@ RecordBuffer* MappingList::getList(thread_db* tdbb, jrd_rel* relation)
 				RefPtr<IBlob> blb(REF_NO_INCR, att->openBlob(&st, tra, &desc, 0, nullptr));
 				check("IAttachment::openBlob", &st);
 				string buf;
-				const FB_SIZE_T FLD_LIMIT = MAX_COLUMN_SIZE;
+				constexpr FB_SIZE_T FLD_LIMIT = MAX_COLUMN_SIZE;
 				unsigned length = 0;
 				blb->getSegment(&st, FLD_LIMIT, buf.getBuffer(FLD_LIMIT), &length);
 				check("IBlob::getSegment", &st);

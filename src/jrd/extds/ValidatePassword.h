@@ -34,7 +34,7 @@ namespace Jrd
 
 namespace EDS {
 
-void validatePassword(Jrd::thread_db* tdbb, const Firebird::PathName& file,
+bool validatePassword(Jrd::thread_db* tdbb, const Firebird::PathName& file,
 	Firebird::ClumpletWriter& dpb);
 
 } // namespace EDS

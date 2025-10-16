@@ -70,7 +70,7 @@ private:
 			return item.pageno;
 		}
 	};
-	typedef Firebird::BePlusTree<PageTran, ULONG, MemoryPool, PageTran> PageTranMap;
+	typedef Firebird::BePlusTree<PageTran, ULONG, PageTran> PageTranMap;
 
 
 	class RelationData

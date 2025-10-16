@@ -132,7 +132,7 @@ using namespace Firebird;
 
 static const mode_t MASK = 0660;
 
-static jrd_file* seek_file(jrd_file*, BufferDesc*, FB_UINT64*, FbStatusVector*);
+static bool seek_file(jrd_file*, BufferDesc*, FB_UINT64*, FbStatusVector*);
 static jrd_file* setup_file(Database*, const PathName&, int, USHORT);
 static void lockDatabaseFile(int& desc, const bool shareMode, const bool temporary,
 							 const char* fileName, ISC_STATUS operation);
@@ -149,42 +149,8 @@ static int  raw_devices_unlink_database (const PathName&);
 static int	openFile(const Firebird::PathName&, const bool, const bool, const bool);
 static void	maybeCloseFile(int&);
 
-int PIO_add_file(thread_db* tdbb, jrd_file* main_file, const PathName& file_name, SLONG start)
-{
-/**************************************
- *
- *	P I O _ a d d _ f i l e
- *
- **************************************
- *
- * Functional description
- *	Add a file to an existing database.  Return the sequence
- *	number of the new file.  If anything goes wrong, return a
- *	sequence of 0.
- *	NOTE:  This routine does not lock any mutexes on
- *	its own behalf.  It is assumed that mutexes will
- *	have been locked before entry.
- *
- **************************************/
-	jrd_file* new_file = PIO_create(tdbb, file_name, false, false);
-	if (!new_file)
-		return 0;
 
-	new_file->fil_min_page = start;
-	USHORT sequence = 1;
-
-	jrd_file* file;
-	for (file = main_file; file->fil_next; file = file->fil_next)
-		++sequence;
-
-	file->fil_max_page = start - 1;
-	file->fil_next = new_file;
-
-	return sequence;
-}
-
-
-void PIO_close(jrd_file* main_file)
+void PIO_close(jrd_file* file)
 {
 /**************************************
  *
@@ -199,13 +165,10 @@ void PIO_close(jrd_file* main_file)
  *
  **************************************/
 
-	for (jrd_file* file = main_file; file; file = file->fil_next)
+	if (file->fil_desc && file->fil_desc != -1)
 	{
-		if (file->fil_desc && file->fil_desc != -1)
-		{
-			close(file->fil_desc);
-			file->fil_desc = -1;
-		}
+		close(file->fil_desc);
+		file->fil_desc = -1;
 	}
 }
 
@@ -336,7 +299,17 @@ bool PIO_expand(const TEXT* file_name, USHORT file_length, TEXT* expanded_name, 
 }
 
 
-void PIO_extend(thread_db* tdbb, jrd_file* main_file, const ULONG extPages, const USHORT pageSize)
+bool PIO_fast_extension_is_supported(const Jrd::jrd_file& file) noexcept
+{
+#if defined(HAVE_LINUX_FALLOC_H) && defined(HAVE_FALLOCATE)
+	return !(file.fil_flags & FIL_no_fast_extend);
+#else
+	return false;
+#endif
+}
+
+
+bool PIO_extend(thread_db* tdbb, jrd_file* file, const ULONG extPages, const USHORT pageSize)
 {
 /**************************************
  *
@@ -348,64 +321,57 @@ void PIO_extend(thread_db* tdbb, jrd_file* main_file, const ULONG extPages, cons
  *	Extend file by extPages pages of pageSize size.
  *
  **************************************/
+	fb_assert(extPages);
 
 #if defined(HAVE_LINUX_FALLOC_H) && defined(HAVE_FALLOCATE)
 
 	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 
-	ULONG leftPages = extPages;
-	for (jrd_file* file = main_file; file && leftPages; file = file->fil_next)
+	if (!PIO_fast_extension_is_supported(*file))
+		return false;
+
+	const ULONG filePages = PIO_get_number_of_pages(file, pageSize);
+	const ULONG extendBy = MIN(MAX_ULONG - filePages, extPages);
+
+	const off_t offset = static_cast<off_t>(filePages) * pageSize;
+	const off_t length = static_cast<off_t>(extendBy) * pageSize;
+
+	int r;
+	for (r = 0; r < IO_RETRY; r++)
 	{
-		const ULONG filePages = PIO_get_number_of_pages(file, pageSize);
-		const ULONG fileMaxPages = (file->fil_max_page == MAX_ULONG) ?
-									MAX_ULONG : file->fil_max_page - file->fil_min_page + 1;
-		if (filePages < fileMaxPages)
-		{
-			if (file->fil_flags & FIL_no_fast_extend)
-				return;
+		int err = fallocate(file->fil_desc, 0, offset, length);
+		if (err == 0)
+			break;
 
-			const ULONG extendBy = MIN(fileMaxPages - filePages + file->fil_fudge, leftPages);
+		err = errno;
+		if (SYSCALL_INTERRUPTED(err))
+			continue;
 
-			int r;
-			for (r = 0; r < IO_RETRY; r++)
-			{
-				int err = fallocate(file->fil_desc, 0, filePages * pageSize, extendBy * pageSize);
-				if (err == 0)
-					break;
+		if (err != EOPNOTSUPP && err != ENOSYS)
+			unix_error("fallocate", file, isc_io_write_err);
 
-				err = errno;
-				if (SYSCALL_INTERRUPTED(err))
-					continue;
-
-				if (err != EOPNOTSUPP && err != ENOSYS)
-					unix_error("fallocate", file, isc_io_write_err);
-
-				file->fil_flags |= FIL_no_fast_extend;
-				return;
-			}
-
-			if (r == IO_RETRY)
-			{
-#ifdef DEV_BUILD
-				fprintf(stderr, "PIO_extend: retry count exceeded\n");
-				fflush(stderr);
-#endif
-				unix_error("fallocate_retry", file, isc_io_write_err);
-			}
-
-			leftPages -= extendBy;
-		}
+		file->fil_flags |= FIL_no_fast_extend;
+		return false;
 	}
-#else
-	main_file->fil_flags |= FIL_no_fast_extend;
-#endif // fallocate present
 
-	// not implemented
-	return;
+	if (r == IO_RETRY)
+	{
+#ifdef DEV_BUILD
+		fprintf(stderr, "PIO_extend: retry count exceeded\n");
+		fflush(stderr);
+#endif
+		unix_error("fallocate_retry", file, isc_io_write_err);
+	}
+
+	return true;
+#else
+	file->fil_flags |= FIL_no_fast_extend;
+	return false;
+#endif // fallocate present
 }
 
 
-void PIO_flush(thread_db* tdbb, jrd_file* main_file)
+void PIO_flush(thread_db* tdbb, jrd_file* file)
 {
 /**************************************
  *
@@ -422,15 +388,12 @@ void PIO_flush(thread_db* tdbb, jrd_file* main_file)
 #ifndef SUPERSERVER_V2
 
 	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
-	MutexLockGuard guard(main_file->fil_mutex, FB_FUNCTION);
+	MutexLockGuard guard(file->fil_mutex, FB_FUNCTION);
 
-	for (jrd_file* file = main_file; file; file = file->fil_next)
+	if (file->fil_desc != -1)
 	{
-		if (file->fil_desc != -1)
-		{
-			// This really should be an error
-			fsync(file->fil_desc);
-		}
+		// This really should be an error
+		fsync(file->fil_desc);
 	}
 #endif
 }
@@ -557,7 +520,7 @@ error: Raw device support for your OS is missing. Fix it or turn off raw device 
 }
 
 
-void PIO_header(thread_db* tdbb, UCHAR* address, int length)
+bool PIO_header(thread_db* tdbb, UCHAR* address, unsigned length)
 {
 /**************************************
  *
@@ -569,13 +532,13 @@ void PIO_header(thread_db* tdbb, UCHAR* address, int length)
  *	Read the page header.
  *
  **************************************/
-	Database* const dbb = tdbb->getDatabase();
+	const auto dbb = tdbb->getDatabase();
 
-	int i;
+	unsigned i;
 	SINT64 bytes;
 
-	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
-	jrd_file* file = pageSpace->file;
+	PageSpace* const pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+	jrd_file* const file = pageSpace->file;
 
 	if (file->fil_desc == -1)
 		unix_error("PIO_header", file, isc_io_read_err);
@@ -587,7 +550,11 @@ void PIO_header(thread_db* tdbb, UCHAR* address, int length)
 		if (bytes < 0 && !SYSCALL_INTERRUPTED(errno))
 			unix_error("read", file, isc_io_read_err);
 		if (bytes >= 0)
-			block_size_error(file, bytes);
+		{
+			FbLocalStatus tempStatus;
+			if (!block_size_error(file, bytes, &tempStatus))
+				return false;
+		}
 	}
 
 	if (i == IO_RETRY)
@@ -608,6 +575,8 @@ void PIO_header(thread_db* tdbb, UCHAR* address, int length)
 			unix_error("read_retry", file, isc_io_read_err);
 		}
 	}
+
+	return true;
 }
 
 // we need a class here only to return memory on shutdown and avoid
@@ -615,7 +584,7 @@ void PIO_header(thread_db* tdbb, UCHAR* address, int length)
 static Firebird::InitInstance<ZeroBuffer> zeros;
 
 
-USHORT PIO_init_data(thread_db* tdbb, jrd_file* main_file, FbStatusVector* status_vector,
+USHORT PIO_init_data(thread_db* tdbb, jrd_file* file, FbStatusVector* status_vector,
 					 ULONG startPage, USHORT initPages)
 {
 /**************************************
@@ -642,16 +611,14 @@ USHORT PIO_init_data(thread_db* tdbb, jrd_file* main_file, FbStatusVector* statu
 
 	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 
-	jrd_file* file = seek_file(main_file, &bdb, &offset, status_vector);
-
-	if (!file)
+	if (!seek_file(file, &bdb, &offset, status_vector))
 		return 0;
 
-	if (file->fil_min_page + 8 > startPage)
+	if (startPage < 8)
 		return 0;
 
 	USHORT leftPages = initPages;
-	const ULONG initBy = MIN(file->fil_max_page - startPage, leftPages);
+	const ULONG initBy = MIN(MAX_ULONG - startPage, leftPages);
 	if (initBy < leftPages)
 		leftPages = initBy;
 
@@ -667,14 +634,15 @@ USHORT PIO_init_data(thread_db* tdbb, jrd_file* main_file, FbStatusVector* statu
 
 		for (int r = 0; r < IO_RETRY; r++)
 		{
-			if (!(file = seek_file(file, &bdb, &offset, status_vector)))
-				return false;
+			if (!seek_file(file, &bdb, &offset, status_vector))
+				return 0;
+
 			if ((written = os_utils::pwrite(file->fil_desc, zero_buff, to_write, LSEEK_OFFSET_CAST offset)) == to_write)
 				break;
+
 			if (written < 0 && !SYSCALL_INTERRUPTED(errno))
 				return unix_error("write", file, isc_io_write_err, status_vector);
 		}
-
 
 		leftPages -= write_pages;
 		i += write_pages;
@@ -812,7 +780,7 @@ bool PIO_read(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page, 
 
 	for (i = 0; i < IO_RETRY; i++)
 	{
-		if (!(file = seek_file(file, bdb, &offset, status_vector)))
+		if (!seek_file(file, bdb, &offset, status_vector))
 			return false;
 
 		if ((bytes = os_utils::pread(file->fil_desc, page, size, LSEEK_OFFSET_CAST offset)) == size)
@@ -864,7 +832,7 @@ bool PIO_write(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page,
 
 	for (i = 0; i < IO_RETRY; i++)
 	{
-		if (!(file = seek_file(file, bdb, &offset, status_vector)))
+		if (!seek_file(file, bdb, &offset, status_vector))
 			return false;
 
 		if ((bytes = os_utils::pwrite(file->fil_desc, page, size, LSEEK_OFFSET_CAST offset)) == size)
@@ -881,8 +849,8 @@ bool PIO_write(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page,
 }
 
 
-static jrd_file* seek_file(jrd_file* file, BufferDesc* bdb, FB_UINT64* offset,
-	FbStatusVector* status_vector)
+static bool seek_file(jrd_file* file, BufferDesc* bdb, FB_UINT64* offset,
+					  FbStatusVector* status_vector)
 {
 /**************************************
  *
@@ -891,43 +859,29 @@ static jrd_file* seek_file(jrd_file* file, BufferDesc* bdb, FB_UINT64* offset,
  **************************************
  *
  * Functional description
- *	Given a buffer descriptor block, find the appropriate
- *	file block and seek to the proper page in that file.
+ *	Given a buffer descriptor block, seek to the proper page in that file.
  *
  **************************************/
-	BufferControl* bcb = bdb->bdb_bcb;
-	Database* dbb = bcb->bcb_database;
-	ULONG page = bdb->bdb_page.getPageNum();
-
-	for (;; file = file->fil_next)
-	{
-		if (!file) {
-			CORRUPT(158);		// msg 158 database file not available
-		}
-		else if (page >= file->fil_min_page && page <= file->fil_max_page)
-			break;
-	}
+	BufferControl* const bcb = bdb->bdb_bcb;
+	const ULONG page = bdb->bdb_page.getPageNum();
 
 	if (file->fil_desc == -1)
 	{
 		unix_error("lseek", file, isc_io_access_err, status_vector);
-		return 0;
+		return false;
 	}
 
-	page -= file->fil_min_page - file->fil_fudge;
-
     FB_UINT64 lseek_offset = page;
-    lseek_offset *= dbb->dbb_page_size;
+    lseek_offset *= bcb->bcb_page_size;
 
     if (lseek_offset != (FB_UINT64) LSEEK_OFFSET_CAST lseek_offset)
 	{
 		unix_error("lseek", file, isc_io_32bit_exceeded_err, status_vector);
-		return 0;
+		return false;
     }
 
 	*offset = lseek_offset;
-
-	return file;
+	return true;
 }
 
 
@@ -999,7 +953,6 @@ static jrd_file* setup_file(Database* dbb, const PathName& file_name, int desc, 
 	{
 		file = FB_NEW_RPT(*dbb->dbb_permanent, file_name.length() + 1) jrd_file();
 		file->fil_desc = desc;
-		file->fil_max_page = MAX_ULONG;
 		file->fil_flags = flags;
 		strcpy(file->fil_string, file_name.c_str());
 	}
@@ -1302,7 +1255,7 @@ static bool raw_devices_validate_database(int desc, const PathName& file_name)
 	}
 
 	// Validate database header. Code lifted from PAG_header.
-	if (hp->hdr_header.pag_type != pag_header /*|| hp->hdr_sequence*/)
+	if (hp->hdr_header.pag_type != pag_header)
 		goto quit;
 
 	if (!Ods::isSupported(hp))
@@ -1317,10 +1270,8 @@ static bool raw_devices_validate_database(int desc, const PathName& file_name)
 
   quit:
 #ifdef DEV_BUILD
-	gds__log ("raw_devices_validate_database: %s -> %s%s\n",
-		 file_name.c_str(),
-		 retval ? "true" : "false",
-		 retval && hp->hdr_sequence != 0 ? " (continuation file)" : "");
+	gds__log ("raw_devices_validate_database: %s -> %s\n",
+			  file_name.c_str(), retval ? "true" : "false");
 #endif
 	return retval;
 }

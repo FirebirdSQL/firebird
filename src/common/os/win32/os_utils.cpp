@@ -391,7 +391,7 @@ bool getCurrentModulePath(char* buffer, size_t bufferSize)
 
 	if (hmod)
 	{
-		GetModuleFileName(hmod, buffer, bufferSize);
+		GetModuleFileName(hmod, buffer, static_cast<DWORD>(bufferSize));
 		return true;
 	}
 

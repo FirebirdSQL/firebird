@@ -207,7 +207,7 @@ bool AggNode::dsqlAggregate2Finder(Aggregate2Finder& visitor)
 	if (!fieldFinder.getField())
 	{
 		// For example COUNT(*) is always same scope_level (node->nod_count = 0)
-		// Normaly COUNT(*) is the only way to come here but something stupid
+		// Normally COUNT(*) is the only way to come here but something stupid
 		// as SUM(5) is also possible.
 		// If currentScopeLevelEqual is false scopeLevel is always higher
 		switch (visitor.matchType)
@@ -800,10 +800,7 @@ void AvgAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) const
 		outputDesc(&impureTemp->vlu_desc);
 	}
 
-	if (dialect1)
-		ArithmeticNode::add(tdbb, desc, impure, this, blr_add);
-	else
-		ArithmeticNode::add2(tdbb, desc, impure, this, blr_add);
+	ArithmeticNode::add(tdbb, desc, &impure->vlu_desc, impure, blr_add, dialect1, nodScale, nodFlags);
 }
 
 dsc* AvgAggNode::aggExecute(thread_db* tdbb, Request* request) const
@@ -905,8 +902,9 @@ void ListAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 bool ListAggNode::setParameterType(DsqlCompilerScratch* dsqlScratch,
 	std::function<void (dsc*)> makeDesc, bool forceVarChar)
 {
-	return PASS1_set_parameter_type(dsqlScratch, arg, makeDesc, forceVarChar) |
-		PASS1_set_parameter_type(dsqlScratch, delimiter, makeDesc, forceVarChar);
+	const bool argType = PASS1_set_parameter_type(dsqlScratch, arg, makeDesc, forceVarChar);
+	const bool delimiterType = PASS1_set_parameter_type(dsqlScratch, delimiter, makeDesc, forceVarChar);
+	return argType || delimiterType;
 }
 
 void ListAggNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
@@ -1360,10 +1358,7 @@ void SumAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) const
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	++impure->vlux_count;
 
-	if (dialect1)
-		ArithmeticNode::add(tdbb, desc, impure, this, blr_add);
-	else
-		ArithmeticNode::add2(tdbb, desc, impure, this, blr_add);
+	ArithmeticNode::add(tdbb, desc, &impure->vlu_desc, impure, blr_add, dialect1, nodScale, nodFlags);
 }
 
 dsc* SumAggNode::aggExecute(thread_db* /*tdbb*/, Request* request) const
@@ -1472,6 +1467,173 @@ AggNode* MaxMinAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 		type, doDsqlPass(dsqlScratch, arg));
 }
 
+//--------------------
+
+static AggNode::RegisterFactory1<BinAggNode, BinAggNode::BinType> binAndAggInfo(
+	"BIN_AND_AGG", BinAggNode::TYPE_BIN_AND);
+static AggNode::RegisterFactory1<BinAggNode, BinAggNode::BinType> binOrAggInfo(
+	"BIN_OR_AGG", BinAggNode::TYPE_BIN_OR);
+static AggNode::RegisterFactory1<BinAggNode, BinAggNode::BinType> binXorAggInfo(
+	"BIN_XOR_AGG", BinAggNode::TYPE_BIN_XOR);
+static AggNode::RegisterFactory1<BinAggNode, BinAggNode::BinType> binXorDistinctAggInfo(
+	"BIN_XOR_DISTINCT_AGG", BinAggNode::TYPE_BIN_XOR_DISTINCT);
+
+BinAggNode::BinAggNode(MemoryPool& pool, BinType aType, ValueExprNode* aArg)
+	: AggNode(pool,
+		(aType == BinAggNode::TYPE_BIN_AND ? binAndAggInfo :
+			aType == BinAggNode::TYPE_BIN_OR ? binOrAggInfo :
+			aType == BinAggNode::TYPE_BIN_XOR ? binXorAggInfo : binXorDistinctAggInfo),
+		(aType == BinAggNode::TYPE_BIN_XOR_DISTINCT), false, aArg),
+	  type(aType)
+{
+}
+
+void BinAggNode::parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned /*count*/)
+{
+	arg = PAR_parse_value(tdbb, csb);
+}
+
+void BinAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
+{
+	DsqlDescMaker::fromNode(dsqlScratch, desc, arg, true);
+
+	if (desc->isNull())
+		return;
+
+	if (!DTYPE_IS_EXACT(desc->dsc_dtype) || (desc->dsc_scale != 0))
+	{
+		switch (type)
+		{
+			case TYPE_BIN_AND:
+				ERRD_post(Arg::Gds(isc_expression_eval_err) <<
+						Arg::Gds(isc_dsql_agg2_wrongarg) << Arg::Str("BIN_AND_AGG"));
+			break;
+
+			case TYPE_BIN_OR:
+				ERRD_post(Arg::Gds(isc_expression_eval_err) <<
+						Arg::Gds(isc_dsql_agg2_wrongarg) << Arg::Str("BIN_OR_AGG"));
+			break;
+
+			case TYPE_BIN_XOR:
+			case TYPE_BIN_XOR_DISTINCT:
+				ERRD_post(Arg::Gds(isc_expression_eval_err) <<
+						Arg::Gds(isc_dsql_agg2_wrongarg) << Arg::Str("BIN_XOR_AGG"));
+			break;
+
+			default:
+				fb_assert(false);
+			break;
+		}
+	}
+}
+
+void BinAggNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
+{
+	arg->getDesc(tdbb, csb, desc);
+
+	if (desc->is128())
+	{
+		nodFlags |= FLAG_INT128;
+		desc->makeInt128(0);
+	}
+	else
+		desc->makeInt64(0);
+}
+
+ValueExprNode* BinAggNode::copy(thread_db* tdbb, NodeCopier& copier) const
+{
+	BinAggNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) BinAggNode(*tdbb->getDefaultPool(), type);
+	node->arg = copier.copy(tdbb, arg);
+	return node;
+}
+
+string BinAggNode::internalPrint(NodePrinter& printer) const
+{
+	AggNode::internalPrint(printer);
+
+	NODE_PRINT(printer, type);
+
+	return "BinAggNode";
+}
+
+void BinAggNode::aggInit(thread_db* tdbb, Request* request) const
+{
+	AggNode::aggInit(tdbb, request);
+
+	SINT64 initValue = 0;
+	if (type == TYPE_BIN_AND)
+		initValue = -1;
+
+	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+	if (nodFlags & FLAG_INT128)
+	{
+		Firebird::Int128 i128;
+		impure->make_decimal_fixed(i128, 0);
+		impure->vlu_misc.vlu_int128 = initValue;
+	}
+	else
+		impure->make_int64(initValue);
+}
+
+void BinAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) const
+{
+	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+	++impure->vlux_count;
+	if (nodFlags & FLAG_INT128)
+	{
+		const auto value = MOV_get_int128(tdbb, desc, 0);
+		switch (type)
+		{
+			case TYPE_BIN_AND:
+				impure->vlu_misc.vlu_int128 &= value;
+				break;
+
+			case TYPE_BIN_OR:
+				impure->vlu_misc.vlu_int128 |= value;
+				break;
+
+			case TYPE_BIN_XOR:
+			case TYPE_BIN_XOR_DISTINCT:
+				impure->vlu_misc.vlu_int128 ^= value;
+				break;
+		}
+	}
+	else
+	{
+		const auto value = MOV_get_int64(tdbb, desc, 0);
+		switch (type)
+		{
+			case TYPE_BIN_AND:
+				impure->vlu_misc.vlu_int64 &= value;
+				break;
+
+			case TYPE_BIN_OR:
+				impure->vlu_misc.vlu_int64 |= value;
+				break;
+
+			case TYPE_BIN_XOR:
+			case TYPE_BIN_XOR_DISTINCT:
+				impure->vlu_misc.vlu_int64 ^= value;
+				break;
+		}
+    }
+}
+
+dsc* BinAggNode::aggExecute(thread_db* tdbb, Request* request) const
+{
+	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+
+	if (!impure->vlux_count)
+		return nullptr;
+
+	return &impure->vlu_desc;
+}
+
+AggNode* BinAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
+{
+	return FB_NEW_POOL(dsqlScratch->getPool()) BinAggNode(dsqlScratch->getPool(),
+		type, doDsqlPass(dsqlScratch, arg));
+}
 
 //--------------------
 

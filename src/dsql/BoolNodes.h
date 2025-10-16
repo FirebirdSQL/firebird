@@ -39,7 +39,7 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
+	void getChildren(NodeRefsHolder& holder, bool dsql) const override
 	{
 		BoolExprNode::getChildren(holder, dsql);
 
@@ -47,25 +47,25 @@ public:
 		holder.add(arg2);
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
-	virtual bool ignoreNulls(const StreamList& streams) const
+	bool ignoreNulls(const StreamList& streams) const override
 	{
 		return (blrOp == blr_or) ?
 			arg1->ignoreNulls(streams) && arg2->ignoreNulls(streams) :
 			BoolExprNode::ignoreNulls(streams);
 	}
 
-	virtual BoolExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
-	virtual bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const;
-	virtual bool sameAs(const ExprNode* other, bool ignoreStreams) const;
-	virtual bool execute(thread_db* tdbb, Request* request) const;
+	BoolExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
+	bool sameAs(const ExprNode* other, bool ignoreStreams) const override;
+	bool execute(thread_db* tdbb, Request* request) const override;
 
 private:
-	virtual bool executeAnd(thread_db* tdbb, Request* request) const;
-	virtual bool executeOr(thread_db* tdbb, Request* request) const;
+	bool executeAnd(thread_db* tdbb, Request* request) const;
+	bool executeOr(thread_db* tdbb, Request* request) const;
 
 public:
 	UCHAR blrOp;
@@ -92,7 +92,7 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
+	void getChildren(NodeRefsHolder& holder, bool dsql) const override
 	{
 		BoolExprNode::getChildren(holder, dsql);
 
@@ -102,26 +102,26 @@ public:
 		holder.add(dsqlSpecialArg);
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
-	virtual bool possiblyUnknown() const
+	bool possiblyUnknown() const override
 	{
 		return (blrOp == blr_equiv) ? true : BoolExprNode::possiblyUnknown();
 	}
 
-	virtual bool ignoreNulls(const StreamList& streams) const
+	bool ignoreNulls(const StreamList& streams) const override
 	{
 		return (blrOp == blr_equiv) ? false : BoolExprNode::ignoreNulls(streams);
 	}
 
-	virtual BoolExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
-	virtual bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const;
-	virtual bool sameAs(const ExprNode* other, bool ignoreStreams) const;
-	virtual BoolExprNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual void pass2Boolean(thread_db* tdbb, CompilerScratch* csb, std::function<void ()> process);
-	virtual bool execute(thread_db* tdbb, Request* request) const;
+	BoolExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
+	bool sameAs(const ExprNode* other, bool ignoreStreams) const override;
+	BoolExprNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	void pass2Boolean(thread_db* tdbb, CompilerScratch* csb, std::function<void ()> process) override;
+	bool execute(thread_db* tdbb, Request* request) const override;
 
 private:
 	bool stringBoolean(thread_db* tdbb, Request* request, dsc* desc1, dsc* desc2,
@@ -141,7 +141,7 @@ public:
 };
 
 
-class InListBoolNode : public TypedNode<BoolExprNode, ExprNode::TYPE_IN_LIST_BOOL>
+class InListBoolNode final : public TypedNode<BoolExprNode, ExprNode::TYPE_IN_LIST_BOOL>
 {
 	const static UCHAR blrOp = blr_in_list;
 
@@ -187,6 +187,9 @@ public:
 	void pass2Boolean(thread_db* tdbb, CompilerScratch* csb, std::function<void ()> process) override;
 	bool execute(thread_db* tdbb, Request* request) const override;
 
+private:
+	BoolExprNode* decompose(CompilerScratch* csb);
+
 public:
 	NestConst<ValueExprNode> arg;
 	NestConst<ValueListNode> list;
@@ -201,30 +204,30 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
+	void getChildren(NodeRefsHolder& holder, bool dsql) const override
 	{
 		BoolExprNode::getChildren(holder, dsql);
 		holder.add(arg);
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
-	virtual bool possiblyUnknown() const
+	bool possiblyUnknown() const override
 	{
 		return true;
 	}
 
-	virtual bool ignoreNulls(const StreamList& /*streams*/) const
+	bool ignoreNulls(const StreamList& /*streams*/) const override
 	{
 		return false;
 	}
 
-	virtual BoolExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
-	virtual BoolExprNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual void pass2Boolean(thread_db* tdbb, CompilerScratch* csb, std::function<void ()> process);
-	virtual bool execute(thread_db* tdbb, Request* request) const;
+	BoolExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	BoolExprNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	void pass2Boolean(thread_db* tdbb, CompilerScratch* csb, std::function<void ()> process) override;
+	bool execute(thread_db* tdbb, Request* request) const override;
 
 public:
 	bool dsqlUnknown;
@@ -239,19 +242,19 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
+	void getChildren(NodeRefsHolder& holder, bool dsql) const override
 	{
 		BoolExprNode::getChildren(holder, dsql);
 		holder.add(arg);
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
-	virtual BoolExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
-	virtual BoolExprNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual bool execute(thread_db* tdbb, Request* request) const;
+	BoolExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	BoolExprNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	bool execute(thread_db* tdbb, Request* request) const override;
 
 private:
 	BoolExprNode* process(DsqlCompilerScratch* dsqlScratch, bool invert);
@@ -268,7 +271,7 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
+	void getChildren(NodeRefsHolder& holder, bool dsql) const override
 	{
 		BoolExprNode::getChildren(holder, dsql);
 
@@ -278,36 +281,36 @@ public:
 			holder.add(rse);
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
-	virtual bool dsqlAggregateFinder(AggregateFinder& visitor)
+	bool dsqlAggregateFinder(AggregateFinder& visitor) override
 	{
 		return visitor.ignoreSubSelects ? false : BoolExprNode::dsqlAggregateFinder(visitor);
 	}
 
-	virtual bool dsqlSubSelectFinder(SubSelectFinder& /*visitor*/)
+	bool dsqlSubSelectFinder(SubSelectFinder& /*visitor*/) override
 	{
 		return true;
 	}
 
-	virtual bool possiblyUnknown() const
+	bool possiblyUnknown() const override
 	{
 		return true;
 	}
 
-	virtual bool ignoreNulls(const StreamList& /*streams*/) const
+	bool ignoreNulls(const StreamList& /*streams*/) const override
 	{
 		return false;
 	}
 
-	virtual BoolExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
-	virtual bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const;
-	virtual bool sameAs(const ExprNode* other, bool ignoreStreams) const;
-	virtual BoolExprNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual void pass2Boolean(thread_db* tdbb, CompilerScratch* csb, std::function<void ()> process);
-	virtual bool execute(thread_db* tdbb, Request* request) const;
+	BoolExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
+	bool sameAs(const ExprNode* other, bool ignoreStreams) const override;
+	BoolExprNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	void pass2Boolean(thread_db* tdbb, CompilerScratch* csb, std::function<void ()> process) override;
+	bool execute(thread_db* tdbb, Request* request) const override;
 
 private:
 	BoolExprNode* convertNeqAllToNotAny(thread_db* tdbb, CompilerScratch* csb);

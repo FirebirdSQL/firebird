@@ -37,6 +37,7 @@
 #include "../common/utils_proto.h"
 #include <stdarg.h>
 
+using namespace Firebird;
 using MsgFormat::SafeArg;
 
 
@@ -147,6 +148,55 @@ void IUTILS_msg_get(USHORT number, USHORT size, TEXT* msg, const SafeArg& args)
 
 	fb_msg_format(NULL, ISQL_MSG_FAC, number, size, msg, args);
 }
+
+
+string IUTILS_name_to_string(const MetaString& name)
+{
+	if (name.isEmpty())
+		return "";
+
+	const auto p = name.c_str();
+
+	// These are not exact rules of necessary quoting in the engine lexer.
+	bool needQuotes = *p < 'A' || *p > 'Z';
+
+	for (const TEXT* p1 = p; *p1 && !needQuotes; ++p1)
+	{
+		if ((*p1 < 'A' || *p1 > 'Z') && (*p1 < '0' || *p1 > '9') && *p1 != '_' && *p1 != '$')
+		{
+			needQuotes = true;
+			break;
+		}
+	}
+
+	if (!needQuotes && !KEYWORD_stringIsAToken(p))
+		return name.c_str();
+
+	return name.toQuotedString();
+}
+
+
+string IUTILS_name_to_string(const QualifiedMetaString& name)
+{
+	auto str = IUTILS_name_to_string(name.schema);
+
+	if (name.package.hasData())
+	{
+		if (str.hasData())
+			str += ".";
+		str += IUTILS_name_to_string(name.package);
+	}
+
+	if (name.object.hasData())
+	{
+		if (str.hasData())
+			str += ".";
+		str += IUTILS_name_to_string(name.object);
+	}
+
+	return str;
+}
+
 
 void IUTILS_printf(FILE* fp, const char* buffer)
 {

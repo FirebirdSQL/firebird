@@ -299,14 +299,14 @@
 /* Define to 1 if you have the `pthread_mutexattr_setprotocol' function. */
 /* undef HAVE_PTHREAD_MUTEXATTR_SETPROTOCOL */
 
-/* Define to 1 if you have the `pthread_mutexattr_setrobust_np' function. */
-/* #undef HAVE_PTHREAD_MUTEXATTR_SETROBUST_NP */
+/* Define to 1 if you have the `pthread_mutexattr_setrobust' function. */
+/* #undef HAVE_PTHREAD_MUTEXATTR_SETROBUST */
 
-/* Define to 1 if you have the `pthread_mutex_consistent_np' function. */
-/* #undef HAVE_PTHREAD_MUTEX_CONSISTENT_NP */
+/* Define to 1 if you have the `pthread_mutex_consistent' function. */
+/* #undef HAVE_PTHREAD_MUTEX_CONSISTENT */
 
-/* Define to 1 if you have the `pthread_rwlockattr_setkind_np' function. */
-/* #undef HAVE_PTHREAD_RWLOCKATTR_SETKIND_NP */
+/* Define to 1 if you have the `pthread_rwlockattr_setkind' function. */
+/* #undef HAVE_PTHREAD_RWLOCKATTR_SETKIND */
 
 /* Define to 1 if you have the <pwd.h> header file. */
 #define HAVE_PWD_H 1

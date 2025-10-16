@@ -170,6 +170,11 @@ void SortedStream::findUsedStreams(StreamList& streams, bool expandAll) const
 	m_next->findUsedStreams(streams, expandAll);
 }
 
+bool SortedStream::isDependent(const StreamList& streams) const
+{
+	return m_next->isDependent(streams);
+}
+
 void SortedStream::invalidateRecords(Request* request) const
 {
 	m_next->invalidateRecords(request);
@@ -273,7 +278,7 @@ Sort* SortedStream::init(thread_db* tdbb) const
 				}
 				else
 				{
-					MOV_move(tdbb, from, &to);
+					MOV_move(tdbb, from, &to, true);
 				}
 			}
 		}
@@ -433,7 +438,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 		else
 		{
 			EVL_field(relation, record, id, &to);
-			MOV_move(tdbb, &from, &to);
+			MOV_move(tdbb, &from, &to, true);
 			record->clearNull(id);
 		}
 	}
@@ -482,7 +487,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 		if (!DPM_get(tdbb, &temp, LCK_read))
 			Arg::Gds(isc_no_cur_rec).raise();
 
-		tdbb->bumpRelStats(RuntimeStatistics::RECORD_RPT_READS, relation->rel_id);
+		tdbb->bumpStats(RecordStatType::RPT_READS, relation->rel_id);
 
 		if (VIO_chase_record_version(tdbb, &temp, transaction, tdbb->getDefaultPool(), false, false))
 		{
@@ -586,8 +591,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 		// We have to find the original record version, sigh.
 		// Scan version chain backwards until it's done.
 
-		RuntimeStatistics::Accumulator backversions(tdbb, relation,
-													RuntimeStatistics::RECORD_BACKVERSION_READS);
+		RuntimeStatistics::Accumulator backversions(tdbb, relation, RecordStatType::BACK_READS);
 
 		while (temp.rpb_transaction_nr != orgTraNum)
 		{

@@ -95,6 +95,24 @@ namespace
 }
 #endif
 
+
+ISC_STATUS LockManagerEngineCallbacks::getCancelState() const
+{
+	return tdbb->getCancelState();
+}
+
+ULONG LockManagerEngineCallbacks::adjustWait(ULONG wait) const
+{
+	return tdbb->adjustWait(wait);
+}
+
+void LockManagerEngineCallbacks::checkoutRun(std::function<void()> func) const
+{
+	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
+	func();
+}
+
+
 // globals and macros
 
 inline LOCK_OWNER_T LCK_OWNER_ID_DBB(thread_db* tdbb)
@@ -155,8 +173,8 @@ inline bool CONVERT(thread_db* tdbb, CheckStatusWrapper* statusVector, Lock* loc
 
 	return lock->lck_compatible ?
 		internal_enqueue(tdbb, statusVector, lock, level, wait, true) :
-		dbb->lockManager()->convert(tdbb, statusVector, lock->lck_id, level, wait, lock->lck_ast,
-			lock->lck_object);
+		dbb->lockManager()->convert(LockManagerEngineCallbacks(tdbb), statusVector, lock->lck_id, level,
+			wait, lock->lck_ast, lock->lck_object);
 }
 
 inline void DEQUEUE(thread_db* tdbb, Lock* lock)
@@ -177,7 +195,7 @@ inline USHORT DOWNGRADE(thread_db* tdbb, Lock* lock)
 
 	USHORT ret = lock->lck_compatible ?
 		internal_downgrade(tdbb, &statusVector, lock) :
-		dbb->lockManager()->downgrade(tdbb, &statusVector, lock->lck_id);
+		dbb->lockManager()->downgrade(LockManagerEngineCallbacks(tdbb), &statusVector, lock->lck_id);
 
 	fb_assert(statusVector.isEmpty());
 
@@ -499,7 +517,7 @@ void LCK_fini(thread_db* tdbb, enum lck_owner_t owner_type)
 	}
 
 	if (*owner_handle_ptr)
-		dbb->lockManager()->shutdownOwner(tdbb, owner_handle_ptr);
+		dbb->lockManager()->shutdownOwner(LockManagerEngineCallbacks(tdbb), owner_handle_ptr);
 }
 
 
@@ -842,7 +860,8 @@ void LCK_re_post(thread_db* tdbb, Lock* lock)
 		return;
 	}
 
-	dbb->lockManager()->repost(tdbb, lock->lck_ast, lock->lck_object, lock->lck_owner_handle);
+	dbb->lockManager()->repost(LockManagerEngineCallbacks(tdbb),
+		lock->lck_ast, lock->lck_object, lock->lck_owner_handle);
 
 	fb_assert(LCK_CHECK_LOCK(lock));
 }
@@ -885,9 +904,8 @@ static void bug_lck(const TEXT* string)
  *	and get out.
  *
  **************************************/
-	TEXT s[128];
-
-	sprintf(s, "Fatal lock interface error: %.96s", string);
+	TEXT s[BUFFER_TINY];
+	snprintf(s, sizeof(s), "Fatal lock interface error: %s", string);
 	gds__log(s);
 	ERR_post(Arg::Gds(isc_db_corrupt) << Arg::Str(string));
 }
@@ -947,7 +965,7 @@ static void enqueue(thread_db* tdbb, CheckStatusWrapper* statusVector, Lock* loc
 
 	fb_assert(LCK_CHECK_LOCK(lock));
 
-	lock->lck_id = dbb->lockManager()->enqueue(tdbb, statusVector, lock->lck_id,
+	lock->lck_id = dbb->lockManager()->enqueue(LockManagerEngineCallbacks(tdbb), statusVector, lock->lck_id,
 		lock->lck_type, lock->getKeyPtr(), lock->lck_length,
 		level, lock->lck_ast, lock->lck_object, lock->lck_data, wait,
 		lock->lck_owner_handle);
@@ -1337,8 +1355,8 @@ static USHORT internal_downgrade(thread_db* tdbb, CheckStatusWrapper* statusVect
 
 	if (level < first->lck_physical)
 	{
-		if (dbb->lockManager()->convert(tdbb, statusVector, first->lck_id, level, LCK_NO_WAIT,
-				external_ast, first))
+		if (dbb->lockManager()->convert(LockManagerEngineCallbacks(tdbb), statusVector,
+				first->lck_id, level, LCK_NO_WAIT, external_ast, first))
 		{
 			for (Lock* lock = first; lock; lock = lock->lck_identical)
 			{
@@ -1404,8 +1422,8 @@ static bool internal_enqueue(thread_db* tdbb, CheckStatusWrapper* statusVector, 
 
 			if (level > match->lck_physical)
 			{
-				if (!dbb->lockManager()->convert(tdbb, statusVector, match->lck_id, level, wait,
-						external_ast, lock))
+				if (!dbb->lockManager()->convert(LockManagerEngineCallbacks(tdbb), statusVector,
+						match->lck_id, level, wait, external_ast, lock))
 				{
 					return false;
 				}
@@ -1433,7 +1451,7 @@ static bool internal_enqueue(thread_db* tdbb, CheckStatusWrapper* statusVector, 
 	// enqueue the lock, but swap out the ast and the ast argument
 	// with the local ast handler, passing it the lock block itself
 
-	lock->lck_id = dbb->lockManager()->enqueue(tdbb, statusVector, lock->lck_id,
+	lock->lck_id = dbb->lockManager()->enqueue(LockManagerEngineCallbacks(tdbb), statusVector, lock->lck_id,
 		lock->lck_type, lock->getKeyPtr(), lock->lck_length,
 		level, external_ast, lock, lock->lck_data, wait, lock->lck_owner_handle);
 

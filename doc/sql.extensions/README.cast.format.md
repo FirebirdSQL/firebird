@@ -1,6 +1,7 @@
 ## 1. DATETIME TO STRING
 
 The following patterns are currently implemented for datetime to string conversion:
+
 | Format Pattern | Description |
 | -------------- | ----------- |
 | YEAR | Year (1 - 9999) |
@@ -21,19 +22,20 @@ The following patterns are currently implemented for datetime to string conversi
 | DDD | Day of the Year (001 - 366) |
 | DY | Short name of the Day (Mon) |
 | J | Julian Day (number of days since January 1, 4712 BC) |
-| HH / HH12 | Hour of the Day (01 - 12) without Period (for Period use A.M or P.M.)  |
+| HH / HH12 | Hour of the Day (01 - 12) without Period (for Period use A.M. or P.M.)  |
 | HH24 | Hour of the Day (00 - 23) |
 | MI | Minutes (00 - 59) |
 | SS | Seconds (00 - 59) |
 | SSSSS | Seconds after midnight (0 - 86399) |
 | FF1 - FF9 | Fractional seconds with the specified accuracy |
 | A.M. / P.M. | Period for 12 hours time (it doesn't matter which one is used, period will be inserted based on time) |
-| TZH | Time zone in Hours  (-14 - 14) |
+| TZH | Time zone in Hours (-14 - 14) |
 | TZM | Time zone in Minutes (00 - 59) |
 | TZR | Time zone Name |
 
-The dividers are:
-| Dividers |
+The separators are:
+
+| Separator |
 | ------------- |
 | . |
 | / |
@@ -43,7 +45,7 @@ The dividers are:
 | 'space' |
 | - |
 
-Patterns can be used without any dividers:
+Patterns can be used without any separators:
 ```
 SELECT CAST(CURRENT_TIMESTAMP AS VARCHAR(50) FORMAT 'YEARMMDD HH24MISS') FROM RDB$DATABASE;
 =========================
@@ -53,16 +55,18 @@ However, be careful with patterns like `DDDDD`, it will be interpreted as `DDD` 
 
 It is possible to insert raw text into a format string with `""`: `... FORMAT '"Today is" DAY'` - Today is MONDAY. To add `"` in output raw string use `\"` (to print `\` use `\\`).
 Also the format is case-insensitive, so `YYYY-MM` == `yyyy-mm`.
+
 Example:
 ```
 SELECT CAST(CURRENT_TIMESTAMP AS VARCHAR(45) FORMAT 'DD.MM.YEAR HH24:MI:SS "is" J "Julian day"') FROM RDB$DATABASE;
 =========================
-14.6.2023 15:41:29 is 2460110 Julian day
+14.06.2023 15:41:29 is 2460110 Julian day
 ```
 
 ## 2. STRING TO DATETIME
 
 The following patterns are currently implemented for string to datetime conversion:
+
 | Format Pattern | Description |
 | ------------- | ------------- |
 | YEAR | Year |
@@ -86,9 +90,9 @@ The following patterns are currently implemented for string to datetime conversi
 | A.M. / P.M. | Period for 12 hours time (it doesn't matter which one is used, period will be taken from input string) |
 | TZH | Time zone in Hours  (-14 - 14) |
 | TZM | Time zone in Minutes (0 - 59) |
-| TZR | Time zone Name |
+| TZR | Time zone Name or Time zone Displacement (same as TZH:TZM) |
 
-Dividers are the same as for datetime to string conversion and can also be omitted.
+Separators are the same as for datetime to string conversion and can also be omitted.
 
 Year, month and day will be taken from current date if these components are not used in pattern (this applies only to data types that contain a date component).
 

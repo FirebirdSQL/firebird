@@ -14,6 +14,11 @@ static constexpr char lbl[] = "0123456789";
 #define validate(A, B) BOOST_TEST(std::string_view(A.c_str(), A.length()) == std::string_view(B))
 #define check(A, B) BOOST_TEST(A == B)
 
+static constexpr string::size_type length(std::string_view str) noexcept
+{
+	return static_cast<string::size_type>(str.length());
+}
+
 BOOST_AUTO_TEST_CASE(StringInitializeTest)
 {
 	string a;
@@ -418,47 +423,47 @@ BOOST_AUTO_TEST_CASE(FindTest)
 					//	 9
 	string b = "345";
 
-	check(a.find(b), 3);
-	check(a.find("45"), 4);
-	check(a.find('5'), 5);
+	check(a.find(b), 3u);
+	check(a.find("45"), 4u);
+	check(a.find('5'), 5u);
 	check(a.find("ZZ"), string::npos);
 
-	check(a.rfind(b), 9);
-	check(a.rfind("45"), 10);
-	check(a.rfind('5'), 11);
+	check(a.rfind(b), 9u);
+	check(a.rfind("45"), 10u);
+	check(a.rfind('5'), 11u);
 	check(a.rfind("ZZ"), string::npos);
 
-	check(a.find("45", 8), 10);
+	check(a.find("45", 8), 10u);
 
-	check(a.find_first_of("aub"), 6);
-	check(a.find_first_of(b), 3);
-	check(a.find_first_of("54"), 4);
-	check(a.find_first_of('5'), 5);
+	check(a.find_first_of("aub"), 6u);
+	check(a.find_first_of(b), 3u);
+	check(a.find_first_of("54"), 4u);
+	check(a.find_first_of('5'), 5u);
 	check(a.find_first_of("ZZ"), string::npos);
 
-	check(a.find_last_of("aub"), 8);
-	check(a.find_last_of(b), 11);
-	check(a.find_last_of("54"), 11);
-	check(a.find_last_of('5'), 11);
+	check(a.find_last_of("aub"), 8u);
+	check(a.find_last_of(b), 11u);
+	check(a.find_last_of("54"), 11u);
+	check(a.find_last_of('5'), 11u);
 	check(a.find_last_of("ZZ"), string::npos);
 
-	check(a.find_first_of("45", 8), 10);
+	check(a.find_first_of("45", 8u), 10u);
 
 	b = "010";
-	check(a.find_first_not_of("aub"), 0);
-	check(a.find_first_not_of(b), 2);
-	check(a.find_first_not_of("0102"), 3);
-	check(a.find_first_not_of('0'), 1);
+	check(a.find_first_not_of("aub"), 0u);
+	check(a.find_first_not_of(b), 2u);
+	check(a.find_first_not_of("0102"), 3u);
+	check(a.find_first_not_of('0'), 1u);
 	check(a.find_first_not_of(a), string::npos);
 
 	b = "878";
-	check(a.find_last_not_of("aub"), 14);
-	check(a.find_last_not_of(b), 12);
-	check(a.find_last_not_of("78"), 12);
-	check(a.find_last_not_of('8'), 13);
+	check(a.find_last_not_of("aub"), 14u);
+	check(a.find_last_not_of(b), 12u);
+	check(a.find_last_not_of("78"), 12u);
+	check(a.find_last_not_of('8'), 13u);
 	check(a.find_last_not_of(a), string::npos);
 
-	check(a.find_first_not_of("u345", 8), 12);
+	check(a.find_first_not_of("u345", 8u), 12u);
 }
 
 BOOST_AUTO_TEST_CASE(SubstrTest)
@@ -466,13 +471,13 @@ BOOST_AUTO_TEST_CASE(SubstrTest)
 	string a = lbl;
 	string b;
 
-	b = a.substr(3, 4);
+	b = a.substr(3u, 4u);
 	validate(b, "3456");
 
-	b = a.substr(5, 20);
+	b = a.substr(5u, 20u);
 	validate(b, "56789");
 
-	b = a.substr(50, 20);
+	b = a.substr(50u, 20u);
 	validate(b, "");
 }
 
@@ -614,7 +619,7 @@ BOOST_AUTO_TEST_SUITE(MoveSematicsTests)
 // Move only big strings in the same pool
 BOOST_AUTO_TEST_CASE(DefaultPoolMoveTest)
 {
-	string sourceString(BigStringValue.data(), BigStringValue.length());
+	string sourceString(BigStringValue.data(), length(BigStringValue));
 
 	// Move c'tor
 	string newString(std::move(sourceString));
@@ -622,7 +627,7 @@ BOOST_AUTO_TEST_CASE(DefaultPoolMoveTest)
 	testBigString(newString);
 
 	// Reuse
-	sourceString.assign(BigStringValue.data(), BigStringValue.length());
+	sourceString.assign(BigStringValue.data(), length(BigStringValue));
 	testBigString(sourceString);
 
 	// Move assignment
@@ -634,7 +639,7 @@ BOOST_AUTO_TEST_CASE(DefaultPoolMoveTest)
 BOOST_AUTO_TEST_CASE(NewPoolMoveTest)
 {
 	AutoMemoryPool pool(MemoryPool::createPool());
-	string sourceString(*pool, BigStringValue.data(), BigStringValue.length());
+	string sourceString(*pool, BigStringValue.data(), length(BigStringValue));
 
 	// Move c'tor
 	string newString(*pool, std::move(sourceString));
@@ -642,7 +647,7 @@ BOOST_AUTO_TEST_CASE(NewPoolMoveTest)
 	testBigString(newString);
 
 	// Reuse
-	sourceString.assign(BigStringValue.data(), BigStringValue.length());
+	sourceString.assign(BigStringValue.data(), length(BigStringValue));
 	testBigString(sourceString);
 
 	// Move assignment
@@ -660,7 +665,7 @@ BOOST_AUTO_TEST_SUITE(CannotMoveTests)
 BOOST_AUTO_TEST_CASE(DifferentVsDefaultPoolMove)
 {
 	AutoMemoryPool pool(MemoryPool::createPool());
-	string sourceString(*pool, BigStringValue.data(), BigStringValue.length());
+	string sourceString(*pool, BigStringValue.data(), length(BigStringValue));
 
 	// Move c'tor
 	string newString(std::move(sourceString));
@@ -668,7 +673,7 @@ BOOST_AUTO_TEST_CASE(DifferentVsDefaultPoolMove)
 	testBigString(newString);
 
 	// Reuse
-	sourceString.assign(BigStringValue.data(), BigStringValue.length());
+	sourceString.assign(BigStringValue.data(), length(BigStringValue));
 	testBigString(sourceString);
 
 	// Move assignment
@@ -682,7 +687,7 @@ BOOST_AUTO_TEST_CASE(DifferentPoolsMove)
 {
 	AutoMemoryPool pool1(MemoryPool::createPool());
 	AutoMemoryPool pool2(MemoryPool::createPool());
-	string sourceString(*pool1, BigStringValue.data(), BigStringValue.length());
+	string sourceString(*pool1, BigStringValue.data(), length(BigStringValue));
 
 	// Move c'tor
 	string newString(*pool2, std::move(sourceString));
@@ -690,7 +695,7 @@ BOOST_AUTO_TEST_CASE(DifferentPoolsMove)
 	testBigString(newString);
 
 	// Reuse
-	sourceString.assign(BigStringValue.data(), BigStringValue.length());
+	sourceString.assign(BigStringValue.data(), length(BigStringValue));
 	testBigString(sourceString);
 
 	// Move assignment
@@ -702,7 +707,7 @@ BOOST_AUTO_TEST_CASE(DifferentPoolsMove)
 // Do not move
 BOOST_AUTO_TEST_CASE(SmallStringMove)
 {
-	string sourceString(SmallStringValue.data(), SmallStringValue.length());
+	string sourceString(SmallStringValue.data(), length(SmallStringValue));
 
 	// Move c'tor
 	string newString(std::move(sourceString));
@@ -710,7 +715,7 @@ BOOST_AUTO_TEST_CASE(SmallStringMove)
 	testSmallString(newString);
 
 	// Reuse
-	sourceString.assign(SmallStringValue.data(), SmallStringValue.length());
+	sourceString.assign(SmallStringValue.data(), length(SmallStringValue));
 	testSmallString(sourceString);
 
 	// Move assign

@@ -25,6 +25,7 @@
 #define JRD_SCL_H
 
 #include "../jrd/MetaName.h"
+#include "../jrd/QualifiedName.h"
 #include "../common/classes/tree.h"
 #include "../common/security.h"
 #include "../jrd/obj.h"
@@ -38,7 +39,7 @@ namespace Jrd {
 
 class thread_db;
 
-const size_t ACL_BLOB_BUFFER_SIZE = MAX_USHORT; // used to read/write acl blob
+inline constexpr size_t ACL_BLOB_BUFFER_SIZE = MAX_USHORT; // used to read/write acl blob
 
 // Security class definition
 
@@ -48,8 +49,8 @@ public:
 	typedef ULONG flags_t;
 	enum BlobAccessCheck { BA_UNKNOWN, BA_SUCCESS, BA_FAILURE };
 
-	SecurityClass(Firebird::MemoryPool &pool, const MetaName& name, const MetaName& userName)
-		: scl_flags(0), sclClassUser(pool, MetaNamePair(name, userName)), scl_blb_access(BA_UNKNOWN)
+	SecurityClass(Firebird::MemoryPool& pool, const MetaName& name, const MetaName& userName)
+		: scl_flags(0), sclClassUser(pool, {name, userName}), scl_blb_access(BA_UNKNOWN)
 	{}
 
 	flags_t scl_flags;			// Access permissions
@@ -62,39 +63,34 @@ public:
 	}
 };
 
-typedef Firebird::BePlusTree<
-	SecurityClass*,
-	MetaNamePair,
-	Firebird::MemoryPool,
-	SecurityClass
-> SecurityClassList;
+typedef Firebird::BePlusTree<SecurityClass*, MetaNamePair, SecurityClass> SecurityClassList;
 
 
-const SecurityClass::flags_t SCL_select			= 1;		// SELECT access
-const SecurityClass::flags_t SCL_drop			= 2;		// DROP access
-const SecurityClass::flags_t SCL_control		= 4;		// Control access
-const SecurityClass::flags_t SCL_exists			= 8;		// At least ACL exists
-const SecurityClass::flags_t SCL_alter			= 16;		// ALTER access
-const SecurityClass::flags_t SCL_corrupt		= 32;		// ACL does look too good
-const SecurityClass::flags_t SCL_insert			= 64;		// INSERT access
-const SecurityClass::flags_t SCL_delete			= 128;		// DELETE access
-const SecurityClass::flags_t SCL_update			= 256;		// UPDATE access
-const SecurityClass::flags_t SCL_references		= 512;		// REFERENCES access
-const SecurityClass::flags_t SCL_execute		= 1024;		// EXECUTE access
-const SecurityClass::flags_t SCL_usage			= 2048;		// USAGE access
-const SecurityClass::flags_t SCL_create			= 4096;
+inline constexpr SecurityClass::flags_t SCL_select		= 1;		// SELECT access
+inline constexpr SecurityClass::flags_t SCL_drop		= 2;		// DROP access
+inline constexpr SecurityClass::flags_t SCL_control		= 4;		// Control access
+inline constexpr SecurityClass::flags_t SCL_exists		= 8;		// At least ACL exists
+inline constexpr SecurityClass::flags_t SCL_alter		= 16;		// ALTER access
+inline constexpr SecurityClass::flags_t SCL_corrupt		= 32;		// ACL does look too good
+inline constexpr SecurityClass::flags_t SCL_insert		= 64;		// INSERT access
+inline constexpr SecurityClass::flags_t SCL_delete		= 128;		// DELETE access
+inline constexpr SecurityClass::flags_t SCL_update		= 256;		// UPDATE access
+inline constexpr SecurityClass::flags_t SCL_references	= 512;		// REFERENCES access
+inline constexpr SecurityClass::flags_t SCL_execute		= 1024;		// EXECUTE access
+inline constexpr SecurityClass::flags_t SCL_usage		= 2048;		// USAGE access
+inline constexpr SecurityClass::flags_t SCL_create		= 4096;
 
-const SecurityClass::flags_t SCL_SELECT_ANY	= SCL_select | SCL_references;
-const SecurityClass::flags_t SCL_ACCESS_ANY	= SCL_insert | SCL_update | SCL_delete |
+inline constexpr SecurityClass::flags_t SCL_SELECT_ANY	= SCL_select | SCL_references;
+inline constexpr SecurityClass::flags_t SCL_ACCESS_ANY	= SCL_insert | SCL_update | SCL_delete |
 											  SCL_execute | SCL_usage | SCL_SELECT_ANY;
-const SecurityClass::flags_t SCL_MODIFY_ANY	= SCL_create | SCL_alter | SCL_control | SCL_drop;
+inline constexpr SecurityClass::flags_t SCL_MODIFY_ANY	= SCL_create | SCL_alter | SCL_control | SCL_drop;
 
 
 // information about the user
 
-const USHORT USR_mapdown	= 1;		// Mapping failed when getting context
-const USHORT USR_newrole	= 2;		// usr_granted_roles array needs refresh
-const USHORT USR_sysdba		= 4;		// User detected as SYSDBA
+inline constexpr USHORT USR_mapdown	= 1;		// Mapping failed when getting context
+inline constexpr USHORT USR_newrole	= 2;		// usr_granted_roles array needs refresh
+inline constexpr USHORT USR_sysdba	= 4;		// User detected as SYSDBA
 
 class UserId
 {
@@ -103,13 +99,13 @@ public:
 	template <unsigned N>
 	class Bits
 	{
-		static const unsigned shift = 3;
-		static const unsigned bitmask = (1 << shift) - 1;
+		static inline constexpr unsigned shift = 3;
+		static inline constexpr unsigned bitmask = (1 << shift) - 1;
 
-		static const unsigned L = (N >> shift) + (N & bitmask ? 1 : 0);
+		static inline constexpr unsigned L = (N >> shift) + (N & bitmask ? 1 : 0);
 
 	public:
-		static const unsigned BYTES_COUNT = L;
+		static inline constexpr unsigned BYTES_COUNT = L;
 
 		Bits()
 		{
@@ -258,7 +254,10 @@ public:
 		  usr_project_name(p),
 		  usr_org_name(p),
 		  usr_auth_method(p),
-		  usr_auth_block(p)
+		  usr_auth_block(p),
+		  usr_user_id(0),
+		  usr_group_id(0),
+		  usr_flags(0)
 	{
 	}
 

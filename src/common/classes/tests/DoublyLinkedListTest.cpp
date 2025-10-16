@@ -17,7 +17,7 @@ BOOST_AUTO_TEST_CASE(ConstructionWithStdInitializerTest)
 {
 	DoublyLinkedList<int> list(*getDefaultMemoryPool(), {1, 2, 3, 4});
 
-	BOOST_TEST(list.getCount() == 4);
+	BOOST_TEST(list.getCount() == 4u);
 	BOOST_TEST(list.front() == 1);
 	BOOST_TEST(list.back() == 4);
 }
@@ -26,10 +26,10 @@ BOOST_AUTO_TEST_CASE(ClearTest)
 {
 	DoublyLinkedList<int> list(*getDefaultMemoryPool(), {1, 2, 3, 4});
 
-	BOOST_TEST(list.getCount() == 4);
+	BOOST_TEST(list.getCount() == 4u);
 
 	list.clear();
-	BOOST_TEST(list.getCount() == 0);
+	BOOST_TEST(list.getCount() == 0u);
 }
 
 BOOST_AUTO_TEST_CASE(SpliceTest)

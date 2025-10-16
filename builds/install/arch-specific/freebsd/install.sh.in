@@ -133,7 +133,7 @@ makeDirs() {
 # This function copies all the files into the installation directory(ies).
 
 copyFiles() {
-# The guts of the tranfer of files and other directories
+# The guts of the transfer of files and other directories
 
 	#directories
     makeDirs "@FB_BINDIR@ @FB_SBINDIR@ @FB_CONFDIR@ @FB_LIBDIR@ @FB_INCDIR@ @FB_DOCDIR@/sql.extensions @FB_SAMPLEDIR@ \

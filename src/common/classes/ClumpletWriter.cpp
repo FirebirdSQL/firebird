@@ -24,7 +24,6 @@
  *  Contributor(s): ______________________________________.
  *
  *
-
  */
 
 #include "firebird.h"
@@ -73,11 +72,11 @@ void ClumpletWriter::initNewBuffer(UCHAR tag)
 	switch (kind)
 	{
 		case SpbAttach:
-			if (tag != isc_spb_version1)
+			if (tag == isc_spb_version)
 			{
 				dynamic_buffer.push(isc_spb_version);
 			}
-			// fall down ....
+			[[fallthrough]];
 		case Tagged:
 		case Tpb:
 		case WideTagged:
@@ -175,6 +174,7 @@ ClumpletWriter::ClumpletWriter(MemoryPool& given_pool, Kind k, FB_SIZE_T limit,
 							   const UCHAR* buffer, FB_SIZE_T buffLen, UCHAR tag)
 	: ClumpletReader(given_pool, k, NULL, 0),
 	  sizeLimit(limit),
+	  kindList(NULL),
 	  dynamic_buffer(getPool()),
 	  flag_overflow(false)
 {
@@ -214,13 +214,13 @@ void ClumpletWriter::reset(UCHAR tag)
 
 void ClumpletWriter::reset(const UCHAR* buffer, const FB_SIZE_T buffLen)
 {
+	const UCHAR tag = isTagged() ? getBufferTag() : 0;
 	dynamic_buffer.clear();
 	if (buffer && buffLen) {
 		dynamic_buffer.push(buffer, buffLen);
 	}
 	else
 	{
-		UCHAR tag = (kind == SpbStart || kind == UnTagged || kind == WideUnTagged) ? 0 : getBufferTag();
 		initNewBuffer(tag);
 	}
 	rewind();
@@ -296,12 +296,12 @@ void ClumpletWriter::insertTimeStamp(UCHAR tag, const ISC_TIMESTAMP value)
 
 void ClumpletWriter::insertString(UCHAR tag, const char* str)
 {
-	insertString(tag, str, strlen(str));
+	insertString(tag, str, fb_strlen(str));
 }
 
 void ClumpletWriter::insertString(UCHAR tag, char* str)
 {
-	insertString(tag, str, strlen(str));
+	insertString(tag, str, fb_strlen(str));
 }
 
 void ClumpletWriter::insertString(UCHAR tag, const char* str, FB_SIZE_T length)
@@ -418,6 +418,8 @@ void ClumpletWriter::insertBytesLengthCheck(UCHAR tag, const void* bytes, const 
 	dynamic_buffer.insert(cur_offset++, tag);
 	switch (lenSize)
 	{
+	case 0:
+		break;
 	case 1:
 		dynamic_buffer.insert(cur_offset++, static_cast<UCHAR>(length));
 		break;
@@ -437,6 +439,9 @@ void ClumpletWriter::insertBytesLengthCheck(UCHAR tag, const void* bytes, const 
 			cur_offset += 4;
 		}
 		break;
+	default:
+		fb_assert(lenSize >= 0 && lenSize <= 2 || lenSize == 4);
+		return;
 	}
 	dynamic_buffer.insert(cur_offset, static_cast<const UCHAR*>(bytes), length);
 	const FB_SIZE_T new_offset = cur_offset + length;

@@ -77,32 +77,32 @@
 			return desc.getMetadata();	\
 		}	\
 		\
-		void clear()	\
+		void clear() noexcept	\
 		{	\
 			memset(&data, 0, sizeof(data));	\
 		}	\
 		\
-		Type* getData()	\
+		Type* getData() noexcept	\
 		{	\
 			return &data;	\
 		}	\
 		\
-		const Type* getData() const	\
+		const Type* getData() const noexcept	\
 		{	\
 			return &data;	\
 		}	\
 		\
-		Type* operator ->()	\
+		Type* operator ->() noexcept	\
 		{	\
 			return getData();	\
 		}	\
 		\
-		const Type* operator ->() const	\
+		const Type* operator ->() const noexcept	\
 		{	\
 			return getData();	\
 		}	\
 		\
-		Type data;	\
+		Type data{};	\
 		::Firebird::MessageDesc desc;	\
 	}
 

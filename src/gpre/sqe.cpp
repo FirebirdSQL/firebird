@@ -128,7 +128,7 @@ struct ops
 	nod_t rel_negation;
 };
 
-static const ops rel_ops[] =
+static constexpr ops rel_ops[] =
 {
 	{ nod_eq, KW_EQ, nod_ne },
 	{ nod_eq, KW_EQUALS, nod_ne },
@@ -146,7 +146,7 @@ static const ops rel_ops[] =
 };
 
 #ifdef NOT_USED_OR_REPLACED
-static const ops scalar_stat_ops[] =
+static constexpr ops scalar_stat_ops[] =
 {
 	{ nod_count, KW_COUNT, nod_any },
 	{ nod_max, KW_MAX, nod_any },
@@ -158,7 +158,7 @@ static const ops scalar_stat_ops[] =
 };
 #endif
 
-static const ops stat_ops[] =
+static constexpr ops stat_ops[] =
 {
 	{ nod_agg_count, KW_COUNT, nod_any },
 	{ nod_agg_max, KW_MAX, nod_any },
@@ -171,7 +171,7 @@ static const ops stat_ops[] =
 	{ nod_ansi_all, KW_none, nod_ansi_all }
 };
 
-static const nod_t relationals[] =
+static constexpr nod_t relationals[] =
 {
 	nod_eq, nod_ne, nod_gt, nod_ge, nod_le, nod_lt, nod_containing,
 	nod_starting, nod_matches, nod_any, nod_missing, nod_equiv, nod_between, nod_like,
@@ -220,7 +220,6 @@ gpre_nod* SQE_boolean( gpre_req* request, USHORT* paren_count)
 gpre_ctx* SQE_context(gpre_req* request)
 {
 	SCHAR r_name[NAME_SIZE], db_name[NAME_SIZE], owner_name[NAME_SIZE];
-	SCHAR s[ERROR_LENGTH];
 
 	assert_IS_REQ(request);
 
@@ -255,10 +254,11 @@ gpre_ctx* SQE_context(gpre_req* request)
 		}
 		else
 		{
+			SCHAR s[ERROR_LENGTH];
 			if (owner_name[0])
-				sprintf(s, "table %s.%s not defined", owner_name, r_name);
+				snprintf(s, sizeof(s), "table %s.%s not defined", owner_name, r_name);
 			else
-				sprintf(s, "table %s not defined", r_name);
+				snprintf(s, sizeof(s), "table %s not defined", r_name);
 			PAR_error(s);
 		}
 
@@ -306,8 +306,10 @@ gpre_ctx* SQE_context(gpre_req* request)
 			break;
 		default:
 			error_type = "context";
+			break;
 		}
 
+		SCHAR s[ERROR_LENGTH];
 		fb_utils::snprintf(s, sizeof(s), "context %s conflicts with a %s in the same statement",
 				gpreGlob.token_global.tok_string, error_type);
 		PAR_error(s);
@@ -638,7 +640,7 @@ gpre_nod* SQE_field(gpre_req* request, bool aster_ok)
 	SQL_resolve_identifier("<Column Name>", NULL, NAME_SIZE);
 	for (context = request->req_contexts; context; context = context->ctx_next)
 	{
-		if (reference->ref_field = MET_context_field(context, gpreGlob.token_global.tok_string))
+		if ((reference->ref_field = MET_context_field(context, gpreGlob.token_global.tok_string)))
 		{
 			if (SQL_DIALECT_V5 == gpreGlob.sw_sql_dialect)
 			{
@@ -1044,7 +1046,7 @@ bool SQE_resolve(gpre_nod** node_ptr, gpre_req* request, gpre_rse* selection)
 	{
 		for (SSHORT i = 0; i < selection->rse_count; i++)
 		{
-			if (field = resolve(node, selection->rse_context[i], &context, &slice_action))
+			if ((field = resolve(node, selection->rse_context[i], &context, &slice_action)))
 				break;
 		}
 	}
@@ -1443,7 +1445,7 @@ static gpre_fld* get_ref( gpre_nod* expr)
 			gpre_nod** ptr = expr->nod_arg;
 			for (const gpre_nod* const* const end = ptr + expr->nod_count; ptr < end; ptr++)
 			{
-				if (field = get_ref(*ptr))
+				if ((field = get_ref(*ptr)))
 					return field;
 			}
 			break;
@@ -1451,7 +1453,7 @@ static gpre_fld* get_ref( gpre_nod* expr)
 
 	// Begin date/time/timestamp support
 	case nod_extract:
-		if (field = get_ref(expr->nod_arg[1]))
+		if ((field = get_ref(expr->nod_arg[1])))
 			return field;
 		break;
 	// End date/time/timestamp support
@@ -1461,6 +1463,9 @@ static gpre_fld* get_ref( gpre_nod* expr)
 			gpre_nod* node = element->mel_expr;
 			return get_ref(node);
 		}
+	default:
+		// no specific handling
+		break;
 	}
 
 	return 0;
@@ -1728,7 +1733,7 @@ static gpre_ctx* par_alias_list( gpre_req* request, gpre_nod* alias_list)
 				continue;
 			if (!context->ctx_relation)
 				continue;
-			if (relation = par_base_table(request, context->ctx_relation, (const TEXT*) *arg))
+			if ((relation = par_base_table(request, context->ctx_relation, (const TEXT*) *arg)))
 			{
 				break;
 			}
@@ -2398,6 +2403,8 @@ static gpre_nod* par_plan_item(gpre_req* request, bool /*aster_ok*/, USHORT* /*p
 	case KW_MERGE:
 	case KW_LEFT_PAREN:
 		return par_plan(request);
+	default:
+		break;
 	}
 
 	// parse the list of one or more table names or
@@ -2875,7 +2882,7 @@ static gpre_rse* par_rse(gpre_req* request, gpre_nod* fields, bool distinct)
 	int count = 0;
 	gpre_ctx* context;
 	do {
-		if (context = par_joined_relation(request))
+		if ((context = par_joined_relation(request)))
 		{
 			MSC_push((gpre_nod*) context, &stack);
 			count++;
@@ -3207,6 +3214,7 @@ static gpre_nod* par_udf( gpre_req* request)
 		{
 			udf* tmp_udf = MET_get_udf(db, gpreGlob.token_global.tok_string);
 			if (tmp_udf)
+			{
 				if (an_udf)
 				{
 					// udf was found in more than one database
@@ -3219,6 +3227,7 @@ static gpre_nod* par_udf( gpre_req* request)
 					an_udf = tmp_udf;
 					request->req_database = db;
 				}
+			}
 		}
 	}
 
@@ -3550,6 +3559,8 @@ static gpre_nod* post_fields( gpre_nod* node, map* to_map)
 		node->nod_arg[1] = post_fields(node->nod_arg[1], to_map);
 		break;
 	// End date/time/timestamp support
+	default:
+		break;
 	}
 
 	return node;
@@ -3764,6 +3775,8 @@ static gpre_fld* resolve(gpre_nod* node,
 			if (symbol->sym_object == context)
 				field = MET_context_field(context, f_token->tok_string);
 			break;
+		default:
+			break;
 		}
 	}
 
@@ -3892,6 +3905,8 @@ static void set_ref( gpre_nod* expr, gpre_fld* field_ref)
 		set_ref(expr->nod_arg[1], field_ref);
 		break;
 	// End date/time/timestamp support
+	default:
+		break;
 	}
 }
 
@@ -3967,6 +3982,8 @@ static bool validate_references(const gpre_nod* fields, const gpre_nod* group_by
 	case nod_agg_average:
 	case nod_aggregate:
 		return false;
+	default:
+		break;
 	}
 
 	if (fields->nod_type == nod_any || fields->nod_type == nod_ansi_any ||
@@ -4023,6 +4040,8 @@ static bool validate_references(const gpre_nod* fields, const gpre_nod* group_by
 		case nod_concatenate:
 		case nod_cast:
 			invalid |= validate_references(*ptr, group_by);
+			break;
+		default:
 			break;
 		}
 	}

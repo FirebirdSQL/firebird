@@ -72,7 +72,7 @@ namespace Jrd
 		CachedRequestId& operator=(const CachedRequestId&) = delete;
 
 	public:
-		USHORT getId() const
+		USHORT getId() const noexcept
 		{
 			return id;
 		}
@@ -101,7 +101,7 @@ namespace Jrd
 		{
 		}
 
-		AutoCacheRequest()
+		AutoCacheRequest() noexcept
 			: id(0),
 			  which(0),
 			  request(NULL)
@@ -141,17 +141,17 @@ namespace Jrd
 			cacheRequest();
 		}
 
-		Request* operator ->()
+		Request* operator ->() noexcept
 		{
 			return request;
 		}
 
-		operator Request*()
+		operator Request*() noexcept
 		{
 			return request;
 		}
 
-		bool operator !() const
+		bool operator !() const noexcept
 		{
 			return !request;
 		}
@@ -177,7 +177,7 @@ namespace Jrd
 	class AutoRequest
 	{
 	public:
-		AutoRequest()
+		AutoRequest() noexcept
 			: request(NULL)
 		{
 		}
@@ -201,17 +201,17 @@ namespace Jrd
 			request = CMP_compile_request(tdbb, blr, blrLength, true);
 		}
 
-		Request* operator ->()
+		Request* operator ->() noexcept
 		{
 			return request;
 		}
 
-		operator Request*()
+		operator Request*() noexcept
 		{
 			return request;
 		}
 
-		bool operator !() const
+		bool operator !() const noexcept
 		{
 			return !request;
 		}

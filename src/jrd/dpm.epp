@@ -101,6 +101,11 @@ namespace
 
 		return lock.release();
 	}
+
+	inline bool swept_at_restore(thread_db* tdbb, const jrd_rel* relation)
+	{
+		return tdbb->getDatabase()->isRestoring() && !relation->isSystem();
+	}
 }
 
 
@@ -435,7 +440,7 @@ bool DPM_chain( thread_db* tdbb, record_param* org_rpb, record_param* new_rpb)
 	if (fill < 0)
 		fill = 0;
 
-	// Accomodate max record size i.e. 64K
+	// Accommodate max record size i.e. 64K
 	const SLONG length = ROUNDUP(header_size + size + fill, ODS_ALIGNMENT);
 
 	// Find space on page and open slot
@@ -2279,7 +2284,7 @@ void DPM_store( thread_db* tdbb, record_param* rpb, PageStack& stack, const Jrd:
 	if (fill < 0)
 		fill = 0;
 
-	// Accomodate max record size i.e. 64K
+	// Accommodate max record size i.e. 64K
 	const SLONG length = header_size + size + fill;
 	rhd* header = locate_space(tdbb, rpb, (SSHORT) length, stack, NULL, type);
 
@@ -2312,7 +2317,14 @@ void DPM_store( thread_db* tdbb, record_param* rpb, PageStack& stack, const Jrd:
 		 memset(data + size, 0, fill);
 
 	Ods::pag* page = rpb->getWindow(tdbb).win_buffer;
-	if (page->pag_flags & dpg_swept)
+
+	// When restoring, mark primary data page as swept, pointer page already marked by locate_space()
+	if (swept_at_restore(tdbb, rpb->rpb_relation) && (type == DPM_primary))
+	{
+		page->pag_flags |= dpg_swept;
+		CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
+	}
+	else if (page->pag_flags & dpg_swept)
 	{
 		page->pag_flags &= ~dpg_swept;
 		mark_full(tdbb, rpb);
@@ -2508,7 +2520,7 @@ void DPM_update( thread_db* tdbb, record_param* rpb, PageStack* stack, const jrd
 	if (fill < 0)
 		fill = 0;
 
-	// Accomodate max record size i.e. 64K
+	// Accommodate max record size i.e. 64K
 	const SLONG length = ROUNDUP(header_size + size + fill, ODS_ALIGNMENT);
 	const USHORT slot = rpb->rpb_line;
 
@@ -3163,7 +3175,13 @@ static void extend_relation(thread_db* tdbb, jrd_rel* relation, WIN* window, con
 	UCHAR* bits = (UCHAR*) (ppage->ppg_page + dbb->dbb_dp_per_pp);
 	PPG_DP_BIT_CLEAR(bits, slot, PPG_DP_ALL_BITS);
 
-	if (type != DPM_primary)
+	if (type == DPM_primary)
+	{
+		// When restoring, mark slot as swept, data page will be marked by our caller
+		if (swept_at_restore(tdbb, relation))
+			PPG_DP_BIT_SET(bits, slot, ppg_dp_swept);
+	}
+	else
 		PPG_DP_BIT_SET(bits, slot, ppg_dp_secondary);
 
 	for (unsigned i = 1; i < cntAlloc; i++)
@@ -3655,7 +3673,13 @@ static rhd* locate_space(thread_db* tdbb,
 
 				PPG_DP_BIT_CLEAR(bits, slot, ppg_dp_empty);
 				if (type == DPM_primary)
+				{
 					PPG_DP_BIT_CLEAR(bits, slot, ppg_dp_secondary);
+
+					// When restoring, mark slot as swept, data page will be marked by our caller
+					if (swept_at_restore(tdbb, relation))
+						PPG_DP_BIT_SET(bits, slot, ppg_dp_swept);
+				}
 				else
 					PPG_DP_BIT_SET(bits, slot, ppg_dp_secondary);
 
@@ -4037,11 +4061,28 @@ static void store_big_record(thread_db* tdbb,
 		header->rhdf_b_page, header->rhdf_b_line);
 #endif
 
+
+	bool markPP = false;
+
+	// When restoring, mark primary data page as swept, pointer page already marked by locate_space()
+	if (swept_at_restore(tdbb, rpb->rpb_relation) && (type == DPM_primary))
+	{
+		page->dpg_header.pag_flags |= dpg_swept;
+	}
+	else if (page->dpg_header.pag_flags & dpg_swept)
+	{
+		page->dpg_header.pag_flags &= ~dpg_swept;
+		markPP = true;
+	}
+
 	if (!(page->dpg_header.pag_flags & dpg_large))
 	{
 		page->dpg_header.pag_flags |= dpg_large;
-		mark_full(tdbb, rpb);
+		markPP = true;
 	}
+
+	if (markPP)
+		mark_full(tdbb, rpb);
 	else
 		CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 }

@@ -8,7 +8,7 @@
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
-      <AdditionalOptions>/EHsc- %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/EHsc- /Zc:__cplusplus %(AdditionalOptions)</AdditionalOptions>
       <OmitFramePointers>true</OmitFramePointers>
       <AdditionalIncludeDirectories>../../../src/include;../../../src/include/gen;../../../extern/libtomcrypt/src/headers;../../../extern/libtommath;../../../extern/icu/include;../../../extern/zlib;../../../extern/re2;../../../extern/boost;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ExceptionHandling>
@@ -23,11 +23,12 @@
       <WarningLevel>Level3</WarningLevel>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
       <CompileAs>Default</CompileAs>
       <UseFullPaths>false</UseFullPaths>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0601;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <TreatSpecificWarningsAsErrors>4715</TreatSpecificWarningsAsErrors>
     </ClCompile>
     <Link>
       <SuppressStartupBanner>true</SuppressStartupBanner>
@@ -43,5 +44,8 @@
     <ResourceCompile>
       <PreprocessorDefinitions>RC_ARH_$(Platform);RC_TARGET_$(TargetName);RC_TARGET_NAME=$(TargetName);RC_TARGET_FILENAME=$(TargetFileName);%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ResourceCompile>
+    <Manifest>
+      <AdditionalManifestFiles>..\defs\compatibility.manifest %(AdditionalManifestFiles)</AdditionalManifestFiles>
+    </Manifest>
   </ItemDefinitionGroup>
 </Project>

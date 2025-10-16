@@ -67,12 +67,10 @@ string CreateAlterTablespaceNode::internalPrint(NodePrinter& printer) const
 
 void CreateAlterTablespaceNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 {
-	dsc dscName;
-	dscName.makeText(name.length(), ttype_metadata, (UCHAR*) name.c_str());
 	if (alter)
-		SCL_check_tablespace(tdbb, &dscName, SCL_alter);
+		SCL_check_tablespace(tdbb, name, SCL_alter);
 	else
-		SCL_check_create_access(tdbb, obj_tablespaces);
+		SCL_check_create_access(tdbb, obj_tablespaces, {});
 }
 
 
@@ -126,13 +124,13 @@ void CreateAlterTablespaceNode::executeCreate(thread_db* tdbb, DsqlCompilerScrat
 
 	const MetaName& userName = attachment->att_user->getUserName();
 
-	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_tablespace))
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, QualifiedName(name), obj_tablespace))
 		return;
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
-		DDL_TRIGGER_CREATE_TABLESPACE, name, NULL);
+		DDL_TRIGGER_CREATE_TABLESPACE, QualifiedName(name), {});
 
-	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_tablespace);
+	DYN_UTIL_check_unique_name(tdbb, transaction, QualifiedName(name), obj_tablespace);
 
 	AutoCacheRequest requestHandle(tdbb, drq_s_tablespace, DYN_REQUESTS);
 
@@ -188,7 +186,7 @@ void CreateAlterTablespaceNode::executeCreate(thread_db* tdbb, DsqlCompilerScrat
 	}
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_CREATE_TABLESPACE,
-		name, NULL);
+		QualifiedName(name), {});
 }
 
 
@@ -228,7 +226,7 @@ bool CreateAlterTablespaceNode::executeAlter(thread_db* tdbb, DsqlCompilerScratc
 		}
 
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
-			DDL_TRIGGER_ALTER_TABLESPACE, name, NULL);
+			DDL_TRIGGER_ALTER_TABLESPACE, QualifiedName(name), {});
 
 		MODIFY X
 			if (fileName.hasData())
@@ -253,10 +251,10 @@ bool CreateAlterTablespaceNode::executeAlter(thread_db* tdbb, DsqlCompilerScratc
 
 	if (modified)
 	{
-		DFW_post_work(transaction, dfw_modify_tablespace, NULL, tableSpaceId);
+		DFW_post_work(transaction, dfw_modify_tablespace, {}, {}, tableSpaceId);
 
 		executeDdlTrigger(tdbb, dsqlScratch, transaction,
-			DTW_AFTER, DDL_TRIGGER_ALTER_TABLESPACE, name, NULL);
+			DTW_AFTER, DDL_TRIGGER_ALTER_TABLESPACE, QualifiedName(name), {});
 	}
 
 	return modified;
@@ -279,9 +277,7 @@ string DropTablespaceNode::internalPrint(NodePrinter& printer) const
 
 void DropTablespaceNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 {
-	dsc dscName;
-	dscName.makeText(name.length(), ttype_metadata, (UCHAR*) name.c_str());
-	SCL_check_tablespace(tdbb, &dscName, SCL_drop);
+	SCL_check_tablespace(tdbb, name, SCL_drop);
 }
 
 void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
@@ -313,7 +309,7 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 		MET_tablespace_id(tdbb, tableSpaceId);
 
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
-			DDL_TRIGGER_DROP_TABLESPACE, name, NULL);
+			DDL_TRIGGER_DROP_TABLESPACE, QualifiedName(name), {});
 
 		ERASE X;
 
@@ -333,12 +329,12 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 	{
 		if (dropDependencies)
 		{
-			MetaName relationName(X.RDB$RELATION_NAME);
-			jrd_rel* rel_drop = MET_lookup_relation(tdbb, relationName);
-			if (rel_drop)
-				MET_scan_relation(tdbb, rel_drop);
-
-			DropRelationNode::dropRelation(tdbb, transaction, false, rel_drop, relationName);
+			const QualifiedName relationName(X.RDB$RELATION_NAME, X.RDB$SCHEMA_NAME);
+			if (const auto relation = MET_lookup_relation(tdbb, relationName))
+			{
+				MET_scan_relation(tdbb, relation);
+				DropRelationNode::dropRelation(tdbb, transaction, false, relation, relationName);
+			}
 		}
 		else
 		{
@@ -356,7 +352,8 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 	{
 		if (dropDependencies)
 		{
-			if (X.RDB$EXPRESSION_BLR.NULL && !DropIndexNode::deleteSegmentRecords(tdbb, transaction, X.RDB$INDEX_NAME))
+			if (X.RDB$EXPRESSION_BLR.NULL &&
+				!DropIndexNode::deleteSegmentRecords(tdbb, transaction, QualifiedName(X.RDB$INDEX_NAME, X.RDB$SCHEMA_NAME)))
 			{
 				// msg 50: "No segments found for index"
 				status_exception::raise(Arg::PrivateDyn(50));
@@ -388,10 +385,10 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 
 	if (found)
 	{
-		DFW_post_work(transaction, dfw_drop_tablespace, tableSpaceFileName, tableSpaceId);
+		DFW_post_work(transaction, dfw_drop_tablespace, tableSpaceFileName, {}, tableSpaceId);
 
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_DROP_TABLESPACE,
-			name, NULL);
+			QualifiedName(name), {});
 	}
 
 	savePoint.release();	// everything is ok

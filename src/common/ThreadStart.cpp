@@ -73,11 +73,11 @@ private:
 	Routine routine;
 	Arg arg;
 public:
-	ThreadArgs(Routine r, Arg a) : routine(r), arg(a) { }
-	ThreadArgs(const ThreadArgs& t) : routine(t.routine), arg(t.arg) { }
+	ThreadArgs(Routine r, Arg a) noexcept : routine(r), arg(a) { }
+	ThreadArgs(const ThreadArgs& t) noexcept : routine(t.routine), arg(t.arg) { }
+	ThreadArgs& operator=(const ThreadArgs&) = delete;
+
 	void run() { routine(arg); }
-private:
-	ThreadArgs& operator=(const ThreadArgs&);
 };
 
 #ifdef __cplusplus
@@ -217,6 +217,12 @@ ThreadId Thread::getId()
 #else
 	return pthread_self();
 #endif
+}
+
+bool Thread::isCurrent(Handle threadHandle)
+{
+	static_assert(std::is_same<Handle, InternalId>().value, "type mismatch");
+	return pthread_equal(threadHandle, pthread_self());
 }
 
 bool Thread::isCurrent()
@@ -361,6 +367,11 @@ void Thread::kill(Handle& handle)
 ThreadId Thread::getId()
 {
 	return GetCurrentThreadId();
+}
+
+bool Thread::isCurrent(Handle threadHandle)
+{
+	return GetCurrentThreadId() == GetThreadId(threadHandle);
 }
 
 bool Thread::isCurrent()

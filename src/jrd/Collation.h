@@ -31,6 +31,7 @@
 #define JRD_COLLATION_H
 
 #include "../common/TextType.h"
+#include "../jrd/intl_classes.h"
 
 
 namespace Jrd {

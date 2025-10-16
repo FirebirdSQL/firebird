@@ -58,7 +58,7 @@ public:
 	}
 
 	void stuffException(DynamicStatusVector& status_vector) const noexcept;
-	void stuffException(CheckStatusWrapper* status_vector) const noexcept;
+	void stuffException(Firebird::IStatus* status_vector) const noexcept;
 	virtual ~Exception() noexcept;
 
 private:
@@ -74,7 +74,7 @@ class LongJump : public Exception
 public:
 	virtual void stuffByException(StaticStatusVector& status_vector) const noexcept;
 	virtual const char* what() const noexcept;
-	static void raise();
+	[[noreturn]] static void raise();
 	LongJump() noexcept : Exception() { }
 };
 
@@ -85,7 +85,7 @@ public:
 	BadAlloc() noexcept : std::bad_alloc(), Exception() { }
 	virtual void stuffByException(StaticStatusVector& status_vector) const noexcept;
 	virtual const char* what() const noexcept;
-	static void raise();
+	[[noreturn]] static void raise();
 };
 
 // Main exception class in firebird
@@ -96,6 +96,8 @@ public:
 	status_exception(const status_exception&) noexcept;
 
 	virtual ~status_exception() noexcept;
+
+	status_exception& operator=(const status_exception&) = delete;
 
 	virtual void stuffByException(StaticStatusVector& status_vector) const noexcept;
 	virtual const char* what() const noexcept;
@@ -116,8 +118,6 @@ protected:
 private:
 	ISC_STATUS* m_status_vector;
 	ISC_STATUS_ARRAY m_buffer;
-
-	status_exception& operator=(const status_exception&);
 };
 
 // Parameter syscall later in both system_error & system_call_failed
@@ -131,18 +131,18 @@ private:
 	int errorCode;
 
 protected:
-	system_error(const char* syscall, const char* arg, int error_code);
+	system_error(const char* syscall, const char* arg, int error_code) noexcept;
 
 public:
-	static void raise(const char* syscall, int error_code);
-	static void raise(const char* syscall);
+	[[noreturn]] static void raise(const char* syscall, int error_code);
+	[[noreturn]] static void raise(const char* syscall);
 
-	int getErrorCode() const
+	int getErrorCode() const noexcept
 	{
 		return errorCode;
 	}
 
-	static int getSystemError();
+	static int getSystemError() noexcept;
 };
 
 // use this class if exception can't be handled
@@ -153,19 +153,19 @@ protected:
 	system_call_failed(const char* syscall, const char* arg, int error_code);
 
 public:
-	static void raise(const char* syscall, int error_code);
-	static void raise(const char* syscall);
-	static void raise(const char* syscall, const char* arg, int error_code);
-	static void raise(const char* syscall, const char* arg);
+	[[noreturn]] static void raise(const char* syscall, int error_code);
+	[[noreturn]] static void raise(const char* syscall);
+	[[noreturn]] static void raise(const char* syscall, const char* arg, int error_code);
+	[[noreturn]] static void raise(const char* syscall, const char* arg);
 };
 
 class fatal_exception : public status_exception
 {
 public:
-	explicit fatal_exception(const char* message);
-	static void raiseFmt(const char* format, ...);
+	explicit fatal_exception(const char* message) noexcept;
+	[[noreturn]] static void raiseFmt(const char* format, ...);
 	const char* what() const noexcept;
-	static void raise(const char* message);
+	[[noreturn]] static void raise(const char* message);
 };
 
 

@@ -276,7 +276,7 @@ int Parser::yylex()
 
 	// Lets skip spaces before store lastLine/lastColumn. This is necessary to avoid yyReducePosn
 	// produce invalid line/column information - CORE-4381.
-	bool spacesSkipped = yylexSkipSpaces();
+	const bool spacesSkipped = yylexSkipSpaces();
 
 	yyposn.lastLine = lex.lines;
 	yyposn.lastColumn = lex.ptr - lex.line_start;
@@ -399,7 +399,7 @@ int Parser::yylexAux()
 	MemoryPool& pool = *tdbb->getDefaultPool();
 
 	SSHORT c = lex.ptr[-1];
-	UCHAR tok_class = classes(c);
+	const UCHAR tok_class = classes(c);
 	char string[MAX_TOKEN_LEN];
 
 	// Depending on tok_class of token, parse token
@@ -408,28 +408,13 @@ int Parser::yylexAux()
 
 	if (tok_class & CHR_INTRODUCER)
 	{
-		// The Introducer (_) is skipped, all other idents are copied
-		// to become the name of the character set.
-		char* p = string;
-		for (; lex.ptr < lex.end && (classes(*lex.ptr) & CHR_IDENT); lex.ptr++)
-		{
-			if (lex.ptr >= lex.end)
-				return -1;
+		if (lex.ptr >= lex.end)
+			return -1;
 
-			check_copy_incr(p, UPPER7(*lex.ptr), string);
-		}
+		if (classes(*lex.ptr) & (CHR_IDENT | CHR_QUOTE))
+			return TOK_INTRODUCER;
 
-		check_bound(p, string);
-
-		if (p > string + MAX_SQL_IDENTIFIER_LEN || p > string + METADATA_IDENTIFIER_CHAR_LEN)
-			yyabandon(yyposn, -104, isc_dyn_name_longer);
-
-		*p = 0;
-
-		// make a string value to hold the name, the name is resolved in pass1_constant.
-		yylval.metaNamePtr = FB_NEW_POOL(pool) MetaName(pool, string, p - string);
-
-		return TOK_INTRODUCER;
+		return (UCHAR) c;
 	}
 
 	// parse a quoted string, being sure to look for double quotes
@@ -545,7 +530,10 @@ int Parser::yylexAux()
 				Attachment* const attachment = tdbb->getAttachment();
 				const MetaName name(attachment->nameToMetaCharSet(tdbb, MetaName(buffer, p - buffer)));
 				const unsigned charLength = metadataCharSet->length(
-					name.length(), (const UCHAR*) name.c_str(), true);
+					name.length(), (const UCHAR*) name.c_str(), false);
+
+				if (charLength == 0)
+					yyabandon(yyposn, -104, isc_dyn_zero_len_id);
 
 				if (name.length() > MAX_SQL_IDENTIFIER_LEN || charLength > METADATA_IDENTIFIER_CHAR_LEN)
 					yyabandon(yyposn, -104, isc_dyn_name_longer);
@@ -614,7 +602,6 @@ int Parser::yylexAux()
 
 		bool hexerror = false;
 		Firebird::string temp;
-		int leadNibble = -1;
 
 		// Scan over the hex string converting adjacent bytes into nibble values.
 		// Every other nibble, write the saved byte to the temp space.
@@ -711,15 +698,14 @@ int Parser::yylexAux()
 
 		if (introducerCharSetName)
 		{
-			const auto symbol = METD_get_charset(scratch->getTransaction(),
-				introducerCharSetName->length(), introducerCharSetName->c_str());
+			const auto symbol = METD_get_charset(scratch->getTransaction(), *introducerCharSetName);
 
 			if (!symbol)
 			{
 				// character set name is not defined
 				ERRD_post(
 					Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
-					Arg::Gds(isc_charset_not_found) << *introducerCharSetName);
+					Arg::Gds(isc_charset_not_found) << introducerCharSetName->toQuotedString());
 			}
 
 			currentCharSet = INTL_charset_lookup(tdbb, symbol->intlsym_ttype);
@@ -766,7 +752,7 @@ int Parser::yylexAux()
 				memcmp(lex.ptr, endChar, endCharSize) == 0 &&
 				lex.ptr[endCharSize] == '\'')
 			{
-				size_t len = lex.ptr - start;
+				const FB_SIZE_T len = lex.ptr - start;
 
 				if (len > MAX_STR_SIZE)
 				{
@@ -979,7 +965,7 @@ int Parser::yylexAux()
 		FB_UINT64 number = 0;
 		Int128 num128;
 		int expVal = 0;
-		FB_UINT64 limit_by_10 = MAX_SINT64 / 10;
+		constexpr FB_UINT64 limit_by_10 = MAX_SINT64 / 10;
 		int scale = 0;
 		int expSign = 1;
 

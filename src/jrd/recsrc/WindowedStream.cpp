@@ -63,6 +63,7 @@ namespace
 		void invalidateRecords(Request* request) const override;
 
 		void findUsedStreams(StreamList& streams, bool expandAll) const override;
+		bool isDependent(const StreamList& streams) const override;
 		void nullRecords(thread_db* tdbb) const override;
 
 		void locate(thread_db* tdbb, FB_UINT64 position) const override
@@ -175,6 +176,11 @@ namespace
 	void BufferedStreamWindow::findUsedStreams(StreamList& streams, bool expandAll) const
 	{
 		m_next->findUsedStreams(streams, expandAll);
+	}
+
+	bool BufferedStreamWindow::isDependent(const StreamList& streams) const
+	{
+		return m_next->isDependent(streams);
 	}
 
 	void BufferedStreamWindow::invalidateRecords(Request* request) const
@@ -441,6 +447,11 @@ void WindowedStream::findUsedStreams(StreamList& streams, bool expandAll) const
 	m_joinedStream->findUsedStreams(streams, expandAll);
 }
 
+bool WindowedStream::isDependent(const StreamList& streams) const
+{
+	return m_joinedStream->isDependent(streams);
+}
+
 void WindowedStream::nullRecords(thread_db* tdbb) const
 {
 	m_joinedStream->nullRecords(tdbb);
@@ -563,6 +574,9 @@ void WindowedStream::WindowStream::internalOpen(thread_db* tdbb) const
 
 	if (m_invariantOffsets & 0x2)
 		getFrameValue(tdbb, request, m_frameExtent->frame2, &impure->endOffset);
+
+	// Make initial values for partitioning fields clean.
+	request->req_rpb[m_stream].rpb_record->nullify();
 }
 
 void WindowedStream::WindowStream::close(thread_db* tdbb) const
@@ -875,7 +889,7 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 				record->setNull(id);
 			else
 			{
-				MOV_move(tdbb, desc, EVL_assign_to(tdbb, *target));
+				MOV_move(tdbb, desc, EVL_assign_to(tdbb, *target), true);
 				record->clearNull(id);
 			}
 
@@ -929,6 +943,11 @@ void WindowedStream::WindowStream::findUsedStreams(StreamList& streams, bool exp
 	BaseAggWinStream::findUsedStreams(streams);
 
 	m_next->findUsedStreams(streams, expandAll);
+}
+
+bool WindowedStream::WindowStream::isDependent(const StreamList& streams) const
+{
+	return m_next->isDependent(streams);
 }
 
 void WindowedStream::WindowStream::nullRecords(thread_db* tdbb) const

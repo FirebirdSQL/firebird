@@ -127,11 +127,15 @@ public:
 
 public:
 	virtual void generate();
+	static std::string escapeName(std::string name);
 
 private:
 	std::string convertParameter(const Parameter& parameter);
 	std::string convertType(const TypeRef& typeRef);
-	std::string escapeName(std::string name, bool interfaceName = false);
+	std::string escapeIfaceName(std::string name)
+	{
+		return prefix + name;
+	}
 
 	void insertFile(const std::string& filename);
 

@@ -2,7 +2,7 @@
  *	PROGRAM:	Server Code
  *	MODULE:		rpb_chain.h
  *	DESCRIPTION:	Keeps track of record_param's, updated_in_place by
- *	        		single transcation
+ *	        		single transaction
  *
  * The contents of this file are subject to the Interbase Public
  * License Version 1.0 (the "License"); you may not use this file

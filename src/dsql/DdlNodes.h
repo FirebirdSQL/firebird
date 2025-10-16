@@ -63,7 +63,7 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	Firebird::string internalPrint(NodePrinter& printer) const override
 	{
 		NODE_PRINT(printer, value);
 		NODE_PRINT(printer, source);
@@ -77,7 +77,7 @@ public:
 };
 
 
-class ValueSourceClause : public Printable
+class ValueSourceClause final : public Printable
 {
 public:
 	explicit ValueSourceClause(MemoryPool& p)
@@ -87,7 +87,7 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	Firebird::string internalPrint(NodePrinter& printer) const override
 	{
 		NODE_PRINT(printer, value);
 		NODE_PRINT(printer, source);
@@ -101,41 +101,7 @@ public:
 };
 
 
-class DbFileClause : public Printable
-{
-public:
-	DbFileClause(MemoryPool& p, const DbFileClause& o)
-		: name(p, o.name),
-		  start(o.start),
-		  length(o.length)
-	{
-	}
-
-	explicit DbFileClause(MemoryPool& p, const Firebird::string& aName)
-		: name(p, aName),
-		  start(0),
-		  length(0)
-	{
-	}
-
-public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const
-	{
-		NODE_PRINT(printer, name);
-		NODE_PRINT(printer, start);
-		NODE_PRINT(printer, length);
-
-		return "DbFileClause";
-	}
-
-public:
-	Firebird::string name;	// File name
-	SLONG start;			// Starting page
-	SLONG length;			// File length in pages
-};
-
-
-class ExternalClause : public Printable
+class ExternalClause final : public Printable
 {
 public:
 	ExternalClause(MemoryPool& p, const ExternalClause& o)
@@ -153,7 +119,7 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	Firebird::string internalPrint(NodePrinter& printer) const override
 	{
 		NODE_PRINT(printer, name);
 		NODE_PRINT(printer, engine);
@@ -169,14 +135,14 @@ public:
 };
 
 
-class ParameterClause : public Printable
+class ParameterClause final : public Printable
 {
 public:
 	ParameterClause(MemoryPool& pool, dsql_fld* field,
 		ValueSourceClause* aDefaultClause = NULL, ValueExprNode* aParameterExpr = NULL);
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
 
 public:
 	MetaName name;
@@ -201,9 +167,7 @@ struct CollectedParameter
 	bid defaultValue;
 };
 
-typedef Firebird::GenericMap<
-			Firebird::Pair<Firebird::Left<MetaName, CollectedParameter> > >
-	CollectedParameterMap;
+typedef Firebird::LeftPooledMap<MetaName, CollectedParameter> CollectedParameterMap;
 
 
 class ExecInSecurityDb
@@ -228,10 +192,11 @@ public:
 		  dropNode(p, createNode->name)
 	{
 		dropNode.silent = true;
+		dropNode.recreate = true;
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	Firebird::string internalPrint(NodePrinter& printer) const override
 	{
 		Node::internalPrint(printer);
 
@@ -241,13 +206,13 @@ public:
 		return "RecreateNode";
 	}
 
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction)
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override
 	{
 		dropNode.checkPermission(tdbb, transaction);
 		createNode->checkPermission(tdbb, transaction);
 	}
 
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override
 	{
 		// run all statements under savepoint control
 		AutoSavePoint savePoint(tdbb, transaction);
@@ -258,7 +223,7 @@ public:
 		savePoint.release();	// everything is ok
 	}
 
-	virtual DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
 	{
 		createNode->dsqlPass(dsqlScratch);
 		dropNode.dsqlPass(dsqlScratch);
@@ -266,9 +231,9 @@ public:
 	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(ERROR_CODE) << createNode->name;
+		statusVector << Firebird::Arg::Gds(ERROR_CODE) << createNode->name.toQuotedString();
 	}
 
 protected:
@@ -277,11 +242,10 @@ protected:
 };
 
 
-class AlterCharSetNode : public DdlNode
+class AlterCharSetNode final : public DdlNode
 {
 public:
-	AlterCharSetNode(MemoryPool& pool, const MetaName& aCharSet,
-				const MetaName& aDefaultCollation)
+	AlterCharSetNode(MemoryPool& pool, const QualifiedName& aCharSet, const QualifiedName& aDefaultCollation)
 		: DdlNode(pool),
 		  charSet(pool, aCharSet),
 		  defaultCollation(pool, aDefaultCollation)
@@ -289,23 +253,33 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
+
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
+	{
+		dsqlScratch->qualifyExistingName(charSet, obj_charset);
+		dsqlScratch->ddlSchema = charSet.schema;
+
+		dsqlScratch->qualifyExistingName(defaultCollation, obj_collation);
+
+		return DdlNode::dsqlPass(dsqlScratch);
+	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_alter_charset_failed) << charSet;
+		statusVector << Firebird::Arg::Gds(isc_dsql_alter_charset_failed) << charSet.toQuotedString();
 	}
 
 private:
-	MetaName charSet;
-	MetaName defaultCollation;
+	QualifiedName charSet;
+	QualifiedName defaultCollation;
 };
 
 
-class AlterEDSPoolSetNode : public DdlNode
+class AlterEDSPoolSetNode final : public DdlNode
 {
 public:
 	enum PARAM { POOL_SIZE, POOL_LIFETIME };
@@ -318,17 +292,17 @@ public:
 	}
 
 public:
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
-	virtual bool mustBeReplicated() const
+	bool mustBeReplicated() const override
 	{
 		return false;
 	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
 		// TODO: statusVector << Firebird::Arg::Gds(??);
 	}
@@ -339,7 +313,7 @@ private:
 };
 
 
-class AlterEDSPoolClearNode : public DdlNode
+class AlterEDSPoolClearNode final : public DdlNode
 {
 public:
 	enum PARAM { POOL_ALL, POOL_OLDEST, POOL_DB };
@@ -353,17 +327,17 @@ public:
 	}
 
 public:
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
-	virtual bool mustBeReplicated() const
+	bool mustBeReplicated() const override
 	{
 		return false;
 	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
 		// TODO: statusVector << Firebird::Arg::Gds(??);
 	}
@@ -374,15 +348,15 @@ private:
 };
 
 
-class CommentOnNode : public DdlNode
+class CommentOnNode final : public DdlNode
 {
 public:
-	CommentOnNode(MemoryPool& pool, int aObjType,
-				const QualifiedName& aObjName, const MetaName& aSubName,
+	CommentOnNode(MemoryPool& pool, ObjectType aObjType,
+				const QualifiedName& aName, const MetaName& aSubName,
 				const Firebird::string aText)
 		: DdlNode(pool),
 		  objType(aObjType),
-		  objName(pool, aObjName),
+		  name(pool, aName),
 		  subName(pool, aSubName),
 		  text(pool, aText),
 		  str(pool)
@@ -390,14 +364,15 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
-		str = objName.toString();
+		str = name.toQuotedString();
 
 		if (subName.hasData())
 			str.append(".").append(subName.c_str());
@@ -406,17 +381,17 @@ protected:
 	}
 
 private:
-	int objType;
-	QualifiedName objName;
+	ObjectType objType;
+	QualifiedName name;
 	MetaName subName;
 	Firebird::string text, str;
 };
 
 
-class CreateAlterFunctionNode : public DdlNode
+class CreateAlterFunctionNode final : public DdlNode
 {
 public:
-	CreateAlterFunctionNode(MemoryPool& pool, const MetaName& aName)
+	CreateAlterFunctionNode(MemoryPool& pool, const QualifiedName& aName)
 		: DdlNode(pool),
 		  name(pool, aName),
 		  create(true),
@@ -429,7 +404,6 @@ public:
 		  body(NULL),
 		  compiled(false),
 		  invalid(false),
-		  package(pool),
 		  packageOwner(pool),
 		  privateScope(false),
 		  preserveDefaults(false),
@@ -438,19 +412,19 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
 		statusVector <<
 			Firebird::Arg::Gds(createAlterCode(create, alter,
 					isc_dsql_create_func_failed, isc_dsql_alter_func_failed,
 					isc_dsql_create_alter_func_failed)) <<
-				name;
+				name.toQuotedString();
 	}
 
 private:
@@ -472,20 +446,19 @@ private:
 	void collectParameters(thread_db* tdbb, jrd_tra* transaction, CollectedParameterMap& items);
 
 public:
-	MetaName name;
+	QualifiedName name;
 	bool create;
 	bool alter;
 	bool createIfNotExistsOnly = false;
 	NestConst<ExternalClause> external;
 	Firebird::TriState deterministic;
-	Firebird::Array<NestConst<ParameterClause> > parameters;
+	Firebird::Array<NestConst<ParameterClause>> parameters;
 	NestConst<ParameterClause> returnType;
 	NestConst<LocalDeclarationsNode> localDeclList;
 	Firebird::string source;
 	NestConst<StmtNode> body;
 	bool compiled;
 	bool invalid;
-	MetaName package;
 	MetaName packageOwner;
 	bool privateScope;
 	bool preserveDefaults;
@@ -494,10 +467,10 @@ public:
 };
 
 
-class AlterExternalFunctionNode : public DdlNode
+class AlterExternalFunctionNode final : public DdlNode
 {
 public:
-	AlterExternalFunctionNode(MemoryPool& p, const MetaName& aName)
+	AlterExternalFunctionNode(MemoryPool& p, const QualifiedName& aName)
 		: DdlNode(p),
 		  name(p, aName),
 		  clauses(p)
@@ -505,53 +478,60 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
+
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
+	{
+		dsqlScratch->qualifyExistingName(name, obj_udf);
+		protectSystemSchema(name.schema, obj_udf);
+		dsqlScratch->ddlSchema = name.schema;
+
+		return DdlNode::dsqlPass(dsqlScratch);
+	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_alter_func_failed) << name;
+		statusVector << Firebird::Arg::Gds(isc_dsql_alter_func_failed) << name.toQuotedString();
 	}
 
 public:
-	MetaName name;
+	QualifiedName name;
 	ExternalClause clauses;
 };
 
 
-class DropFunctionNode : public DdlNode
+class DropFunctionNode final : public DdlNode
 {
 public:
-	DropFunctionNode(MemoryPool& pool, const MetaName& aName)
+	DropFunctionNode(MemoryPool& pool, const QualifiedName& aName)
 		: DdlNode(pool),
 		  name(pool, aName),
-		  silent(false),
-		  package(pool)
+		  silent(false)
 	{
 	}
 
 public:
-	static void dropArguments(thread_db* tdbb, jrd_tra* transaction,
-		const MetaName& functionName, const MetaName& packageName);
+	static void dropArguments(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& functionName);
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_func_failed) << name;
+		statusVector << Firebird::Arg::Gds(isc_dsql_drop_func_failed) << name.toQuotedString();
 	}
 
 public:
-	MetaName name;
+	QualifiedName name;
 	bool silent;
-	MetaName package;
+	bool recreate = false;
 };
 
 
@@ -559,10 +539,10 @@ typedef RecreateNode<CreateAlterFunctionNode, DropFunctionNode, isc_dsql_recreat
 	RecreateFunctionNode;
 
 
-class CreateAlterProcedureNode : public DdlNode
+class CreateAlterProcedureNode final : public DdlNode
 {
 public:
-	CreateAlterProcedureNode(MemoryPool& pool, const MetaName& aName)
+	CreateAlterProcedureNode(MemoryPool& pool, const QualifiedName& aName)
 		: DdlNode(pool),
 		  name(pool, aName),
 		  create(true),
@@ -575,7 +555,6 @@ public:
 		  body(NULL),
 		  compiled(false),
 		  invalid(false),
-		  package(pool),
 		  packageOwner(pool),
 		  privateScope(false),
 		  preserveDefaults(false)
@@ -583,19 +562,19 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
 		statusVector <<
 			Firebird::Arg::Gds(createAlterCode(create, alter,
 					isc_dsql_create_proc_failed, isc_dsql_alter_proc_failed,
 					isc_dsql_create_alter_proc_failed)) <<
-				name;
+				name.toQuotedString();
 	}
 
 private:
@@ -612,7 +591,7 @@ private:
 	void collectParameters(thread_db* tdbb, jrd_tra* transaction, CollectedParameterMap& items);
 
 public:
-	MetaName name;
+	QualifiedName name;
 	bool create;
 	bool alter;
 	bool createIfNotExistsOnly = false;
@@ -624,7 +603,6 @@ public:
 	NestConst<StmtNode> body;
 	bool compiled;
 	bool invalid;
-	MetaName package;
 	MetaName packageOwner;
 	bool privateScope;
 	bool preserveDefaults;
@@ -632,37 +610,35 @@ public:
 };
 
 
-class DropProcedureNode : public DdlNode
+class DropProcedureNode final : public DdlNode
 {
 public:
-	DropProcedureNode(MemoryPool& pool, const MetaName& aName)
+	DropProcedureNode(MemoryPool& pool, const QualifiedName& aName)
 		: DdlNode(pool),
 		  name(pool, aName),
-		  silent(false),
-		  package(pool)
+		  silent(false)
 	{
 	}
 
 public:
-	static void dropParameters(thread_db* tdbb, jrd_tra* transaction,
-		const MetaName& procedureName, const MetaName& packageName);
+	static void dropParameters(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& procedureName);
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_proc_failed) << name;
+		statusVector << Firebird::Arg::Gds(isc_dsql_drop_proc_failed) << name.toQuotedString();
 	}
 
 public:
-	MetaName name;
+	QualifiedName name;
 	bool silent;
-	MetaName package;
+	bool recreate = false;
 };
 
 
@@ -673,7 +649,6 @@ typedef RecreateNode<CreateAlterProcedureNode, DropProcedureNode, isc_dsql_recre
 class TriggerDefinition
 {
 public:
-
 	explicit TriggerDefinition(MemoryPool& p)
 		: name(p),
 		  relationName(p),
@@ -703,8 +678,8 @@ protected:
 	}
 
 public:
-	MetaName name;
-	MetaName relationName;
+	QualifiedName name;
+	QualifiedName relationName;
 	std::optional<FB_UINT64> type;
 	Firebird::TriState active;
 	std::optional<int> position;
@@ -718,10 +693,10 @@ public:
 };
 
 
-class CreateAlterTriggerNode : public DdlNode, public TriggerDefinition
+class CreateAlterTriggerNode final : public DdlNode, public TriggerDefinition
 {
 public:
-	CreateAlterTriggerNode(MemoryPool& p, const MetaName& aName)
+	CreateAlterTriggerNode(MemoryPool& p, const QualifiedName& aName)
 		: DdlNode(p),
 		  TriggerDefinition(p),
 		  create(true),
@@ -735,36 +710,36 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
 		statusVector <<
 			Firebird::Arg::Gds(createAlterCode(create, alter,
 					isc_dsql_create_trigger_failed, isc_dsql_alter_trigger_failed,
 					isc_dsql_create_alter_trigger_failed)) <<
-				name;
+				name.toQuotedString();
 	}
 
-	virtual void preModify(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
+	void preModify(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override
 	{
 		if (alter)
 		{
 			executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
-				DDL_TRIGGER_ALTER_TRIGGER, name, NULL);
+				DDL_TRIGGER_ALTER_TRIGGER, name, {});
 		}
 	}
 
-	virtual void postModify(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
+	void postModify(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override
 	{
 		if (alter)
 		{
 			executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER,
-				DDL_TRIGGER_ALTER_TRIGGER, name, NULL);
+				DDL_TRIGGER_ALTER_TRIGGER, name, {});
 		}
 	}
 
@@ -772,7 +747,7 @@ private:
 	void executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 	void compile(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch);
 
-	static inline bool hasOldContext(const unsigned value)
+	static inline bool hasOldContext(const unsigned value) noexcept
 	{
 		const unsigned val1 = ((value + 1) >> 1) & 3;
 		const unsigned val2 = ((value + 1) >> 3) & 3;
@@ -780,7 +755,7 @@ private:
 		return (val1 && val1 != 1) || (val2 && val2 != 1) || (val3 && val3 != 1);
 	}
 
-	static inline bool hasNewContext(const unsigned value)
+	static inline bool hasNewContext(const unsigned value) noexcept
 	{
 		const unsigned val1 = ((value + 1) >> 1) & 3;
 		const unsigned val2 = ((value + 1) >> 3) & 3;
@@ -799,10 +774,10 @@ public:
 };
 
 
-class DropTriggerNode : public DdlNode
+class DropTriggerNode final : public DdlNode
 {
 public:
-	DropTriggerNode(MemoryPool& p, const MetaName& aName)
+	DropTriggerNode(MemoryPool& p, const QualifiedName& aName)
 		: DdlNode(p),
 		  name(p, aName),
 		  silent(false)
@@ -810,32 +785,49 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_trigger_failed) << name;
+		statusVector << Firebird::Arg::Gds(isc_dsql_drop_trigger_failed) << name.toQuotedString();
 	}
 
 public:
-	MetaName name;
+	QualifiedName name;
 	bool silent;
+	bool recreate = false;
 };
 
 
-typedef RecreateNode<CreateAlterTriggerNode, DropTriggerNode, isc_dsql_recreate_trigger_failed>
-	RecreateTriggerNode;
-
-
-class CreateCollationNode : public DdlNode
+class RecreateTriggerNode final :
+	public RecreateNode<CreateAlterTriggerNode, DropTriggerNode, isc_dsql_recreate_trigger_failed>
 {
 public:
-	CreateCollationNode(MemoryPool& p, const MetaName& aName,
-				const MetaName& aForCharSet)
+	using RecreateNode::RecreateNode;
+
+public:
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
+	{
+		createNode->dsqlPass(dsqlScratch);
+
+		if (dropNode.name.schema.isEmpty())
+			dropNode.name.schema = createNode->name.schema;
+
+		dropNode.dsqlPass(dsqlScratch);
+
+		return DdlNode::dsqlPass(dsqlScratch);
+	}
+};
+
+
+class CreateCollationNode final : public DdlNode
+{
+public:
+	CreateCollationNode(MemoryPool& p, const QualifiedName& aName, const QualifiedName& aForCharSet)
 		: DdlNode(p),
 		  name(p, aName),
 		  forCharSet(p, aForCharSet),
@@ -850,10 +842,10 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 	void setAttribute(USHORT attribute)
 	{
@@ -880,15 +872,15 @@ public:
 	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_create_collation_failed) << name;
+		statusVector << Firebird::Arg::Gds(isc_dsql_create_collation_failed) << name.toQuotedString();
 	}
 
 public:
-	MetaName name;
-	MetaName forCharSet;
-	MetaName fromName;
+	QualifiedName name;
+	QualifiedName forCharSet;
+	QualifiedName fromName;
 	Firebird::string fromExternal;
 	Firebird::UCharBuffer specificAttributes;
 	bool createIfNotExistsOnly = false;
@@ -901,145 +893,184 @@ private:
 };
 
 
-class DropCollationNode : public DdlNode
+class DropCollationNode final : public DdlNode
 {
 public:
-	DropCollationNode(MemoryPool& p, const MetaName& aName)
+	DropCollationNode(MemoryPool& p, const QualifiedName& aName)
 		: DdlNode(p),
 		  name(p, aName)
 	{
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
+
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
+	{
+		dsqlScratch->qualifyExistingName(name, obj_collation);
+		protectSystemSchema(name.schema, obj_collation);
+		dsqlScratch->ddlSchema = name.schema;
+
+		return DdlNode::dsqlPass(dsqlScratch);
+	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_collation_failed) << name;
+		statusVector << Firebird::Arg::Gds(isc_dsql_drop_collation_failed) << name.toQuotedString();
 	}
 
 public:
-	MetaName name;
+	QualifiedName name;
 	bool silent = false;
 };
 
 
-class CreateDomainNode : public DdlNode
+class CreateDomainNode final : public DdlNode
 {
 public:
-	CreateDomainNode(MemoryPool& p, ParameterClause* aNameType)
+	CreateDomainNode(MemoryPool& p, const QualifiedName& aName, dsql_fld* aType, ValueSourceClause* aDefaultClause)
 		: DdlNode(p),
-		  nameType(aNameType),
-		  notNull(false),
-		  check(NULL)
+		  name(aName),
+		  type(aType),
+		  defaultClause(aDefaultClause)
 	{
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
+
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
+	{
+		dsqlScratch->qualifyNewName(name);
+		protectSystemSchema(name.schema, obj_collation);
+		dsqlScratch->ddlSchema = name.schema;
+
+		type->resolve(dsqlScratch);
+
+		return DdlNode::dsqlPass(dsqlScratch);
+	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_create_domain_failed) << nameType->name;
+		statusVector << Firebird::Arg::Gds(isc_dsql_create_domain_failed) << name.toQuotedString();
 	}
 
 public:
-	NestConst<ParameterClause> nameType;
-	bool notNull;
+	QualifiedName name;
+	NestConst<dsql_fld> type;
+	NestConst<ValueSourceClause> defaultClause;
 	NestConst<BoolSourceClause> check;
+	bool notNull = false;
 	bool createIfNotExistsOnly = false;
 };
 
 
-class AlterDomainNode : public DdlNode
+class AlterDomainNode final : public DdlNode
 {
 public:
-	AlterDomainNode(MemoryPool& p, const MetaName& aName)
+	AlterDomainNode(MemoryPool& p, const QualifiedName& aName)
 		: DdlNode(p),
 		  name(p, aName),
-		  dropConstraint(false),
-		  dropDefault(false),
-		  setConstraint(NULL),
-		  setDefault(NULL),
 		  renameTo(p)
 	{
 	}
 
 public:
 	static void checkUpdate(const dyn_fld& origFld, const dyn_fld& newFld);
-	static ULONG checkUpdateNumericType(const dyn_fld& origFld, const dyn_fld& newFld);
+	static ULONG checkUpdateNumericType(const dyn_fld& origFld, const dyn_fld& newFld) noexcept;
 	static void getDomainType(thread_db* tdbb, jrd_tra* transaction, dyn_fld& dynFld);
 	static void modifyLocalFieldIndex(thread_db* tdbb, jrd_tra* transaction,
-		const MetaName& relationName, const MetaName& fieldName,
+		const QualifiedName& relationName, const MetaName& fieldName,
 		const MetaName& newFieldName);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
+
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
+	{
+		dsqlScratch->qualifyExistingName(name, obj_field);
+		protectSystemSchema(name.schema, obj_field);
+		dsqlScratch->ddlSchema = name.schema;
+
+		if (type)
+			type->resolve(dsqlScratch);
+
+		return DdlNode::dsqlPass(dsqlScratch);
+	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_alter_domain_failed) << name;
+		statusVector << Firebird::Arg::Gds(isc_dsql_alter_domain_failed) << name.toQuotedString();
 	}
 
 private:
 	void rename(thread_db* tdbb, jrd_tra* transaction, SSHORT dimensions);
 
 public:
-	MetaName name;
-	bool dropConstraint;
-	bool dropDefault;
+	QualifiedName name;
 	NestConst<BoolSourceClause> setConstraint;
 	NestConst<ValueSourceClause> setDefault;
 	MetaName renameTo;
 	Firebird::AutoPtr<dsql_fld> type;
 	Firebird::TriState notNullFlag;	// true = NOT NULL / false = NULL
+	bool dropConstraint = false;
+	bool dropDefault = false;
 };
 
 
-class DropDomainNode : public DdlNode
+class DropDomainNode final : public DdlNode
 {
 public:
-	DropDomainNode(MemoryPool& p, const MetaName& aName)
+	DropDomainNode(MemoryPool& p, const QualifiedName& aName)
 		: DdlNode(p),
 		  name(p, aName)
 	{
 	}
 
 	static bool deleteDimensionRecords(thread_db* tdbb, jrd_tra* transaction,
-		const MetaName& name);
+		const QualifiedName& name);
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
+
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
+	{
+		dsqlScratch->qualifyExistingName(name, obj_field);
+		protectSystemSchema(name.schema, obj_field);
+		dsqlScratch->ddlSchema = name.schema;
+
+		return DdlNode::dsqlPass(dsqlScratch);
+	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_domain_failed) << name;
+		statusVector << Firebird::Arg::Gds(isc_dsql_drop_domain_failed) << name.toQuotedString();
 	}
 
 private:
 	void check(thread_db* tdbb, jrd_tra* transaction);
 
 public:
-	MetaName name;
+	QualifiedName name;
 	bool silent = false;
 };
 
 
-class CreateAlterExceptionNode : public DdlNode
+class CreateAlterExceptionNode final : public DdlNode
 {
 public:
-	CreateAlterExceptionNode(MemoryPool& p, const MetaName& aName,
+	CreateAlterExceptionNode(MemoryPool& p, const QualifiedName& aName,
 				const Firebird::string& aMessage)
 		: DdlNode(p),
 		  name(p, aName),
@@ -1050,18 +1081,31 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
+
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
+	{
+		if (create)
+			dsqlScratch->qualifyNewName(name);
+		else
+			dsqlScratch->qualifyExistingName(name, obj_exception);
+
+		protectSystemSchema(name.schema, obj_exception);
+		dsqlScratch->ddlSchema = name.schema;
+
+		return DdlNode::dsqlPass(dsqlScratch);
+	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
 		statusVector <<
 			Firebird::Arg::Gds(createAlterCode(create, alter,
 					isc_dsql_create_except_failed, isc_dsql_alter_except_failed,
 					isc_dsql_create_alter_except_failed)) <<
-				name;
+				name.toQuotedString();
 	}
 
 private:
@@ -1069,7 +1113,7 @@ private:
 	bool executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 
 public:
-	MetaName name;
+	QualifiedName name;
 	Firebird::string message;
 	bool create;
 	bool alter;
@@ -1077,10 +1121,10 @@ public:
 };
 
 
-class DropExceptionNode : public DdlNode
+class DropExceptionNode final : public DdlNode
 {
 public:
-	DropExceptionNode(MemoryPool& p, const MetaName& aName)
+	DropExceptionNode(MemoryPool& p, const QualifiedName& aName)
 		: DdlNode(p),
 		  name(p, aName),
 		  silent(false)
@@ -1088,19 +1132,33 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
+
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
+	{
+		if (recreate)
+			dsqlScratch->qualifyNewName(name);
+		else
+			dsqlScratch->qualifyExistingName(name, obj_exception);
+
+		protectSystemSchema(name.schema, obj_exception);
+		dsqlScratch->ddlSchema = name.schema;
+
+		return DdlNode::dsqlPass(dsqlScratch);
+	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_except_failed) << name;
+		statusVector << Firebird::Arg::Gds(isc_dsql_drop_except_failed) << name.toQuotedString();
 	}
 
 public:
-	MetaName name;
+	QualifiedName name;
 	bool silent;
+	bool recreate = false;
 };
 
 
@@ -1108,10 +1166,10 @@ typedef RecreateNode<CreateAlterExceptionNode, DropExceptionNode, isc_dsql_recre
 	RecreateExceptionNode;
 
 
-class CreateAlterSequenceNode : public DdlNode
+class CreateAlterSequenceNode final : public DdlNode
 {
 public:
-	CreateAlterSequenceNode(MemoryPool& pool, const MetaName& aName)
+	CreateAlterSequenceNode(MemoryPool& pool, const QualifiedName& aName)
 		: DdlNode(pool),
 		  create(true),
 		  alter(false),
@@ -1133,23 +1191,33 @@ public:
 		*/
 	}
 
-	static SSHORT store(thread_db* tdbb, jrd_tra* transaction, const MetaName& name,
+	static SSHORT store(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& name,
 		fb_sysflag sysFlag, SINT64 value, SLONG step);
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
-	virtual DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
 	{
-		dsqlScratch->getDsqlStatement()->setType(
-			legacy ? DsqlStatement::TYPE_SET_GENERATOR : DsqlStatement::TYPE_DDL);
+		if (create)
+			dsqlScratch->qualifyNewName(name);
+		else
+			dsqlScratch->qualifyExistingName(name, obj_generator);
+
+		if (!restartSpecified)
+			protectSystemSchema(name.schema, obj_generator);
+
+		dsqlScratch->ddlSchema = name.schema;
+
+		dsqlScratch->getDsqlStatement()->setType(legacy ? DsqlStatement::TYPE_SET_GENERATOR : DsqlStatement::TYPE_DDL);
+
 		return this;
 	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector);
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override;
 
 private:
 	void executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
@@ -1161,39 +1229,52 @@ public:
 	bool createIfNotExistsOnly = false;
 	bool legacy;
 	bool restartSpecified;
-	const MetaName name;
+	QualifiedName name;
 	std::optional<SINT64> value;
 	std::optional<SLONG> step;
 };
 
 
-class DropSequenceNode : public DdlNode
+class DropSequenceNode final : public DdlNode
 {
 public:
-	DropSequenceNode(MemoryPool& pool, const MetaName& aName)
+	DropSequenceNode(MemoryPool& pool, const QualifiedName& aName)
 		: DdlNode(pool),
 		  name(pool, aName),
 		  silent(false)
 	{
 	}
 
-	static void deleteIdentity(thread_db* tdbb, jrd_tra* transaction,
-		const MetaName& name);
+	static void deleteIdentity(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& name);
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
+
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
+	{
+		if (recreate)
+			dsqlScratch->qualifyNewName(name);
+		else
+			dsqlScratch->qualifyExistingName(name, obj_generator);
+
+		protectSystemSchema(name.schema, obj_generator);
+		dsqlScratch->ddlSchema = name.schema;
+
+		return DdlNode::dsqlPass(dsqlScratch);
+	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_sequence_failed) << name;
+		statusVector << Firebird::Arg::Gds(isc_dsql_drop_sequence_failed) << name.toQuotedString();
 	}
 
 public:
-	MetaName name;
+	QualifiedName name;
 	bool silent;
+	bool recreate = false;
 };
 
 
@@ -1223,9 +1304,9 @@ public:
 
 	public:
 		MetaName name;
-		MetaName relationName;
-		MetaName fieldSource;
-		MetaName identitySequence;
+		QualifiedName relationName;
+		QualifiedName fieldSource;
+		QualifiedName identitySequence;
 		std::optional<IdentityType> identityType;
 		std::optional<USHORT> collationId;
 		Firebird::TriState notNullFlag;	// true = NOT NULL / false = NULL
@@ -1254,7 +1335,7 @@ public:
 		enum Type { TYPE_CHECK, TYPE_NOT_NULL, TYPE_PK, TYPE_UNIQUE, TYPE_FK };
 
 		// Specialized BlrWriter for constraints.
-		class BlrWriter : public Jrd::BlrDebugWriter
+		class BlrWriter final : public Jrd::BlrDebugWriter
 		{
 		public:
 			explicit BlrWriter(MemoryPool& p)
@@ -1271,7 +1352,7 @@ public:
 				appendUChar(isVersion4() ? blr_version4 : blr_version5);
 			}
 
-			virtual bool isVersion4()
+			bool isVersion4() override
 			{
 				return dsqlScratch->isVersion4();
 			}
@@ -1297,7 +1378,7 @@ public:
 		Constraint::Type type;
 		Firebird::ObjectsArray<MetaName> columns;
 		NestConst<IndexConstraintClause> index;
-		MetaName refRelation;
+		QualifiedName refRelation;
 		Firebird::ObjectsArray<MetaName> refColumns;
 		const char* refUpdateAction;
 		const char* refDeleteAction;
@@ -1335,7 +1416,7 @@ public:
 			TYPE_SET_TABLESPACE
 		};
 
-		explicit Clause(MemoryPool& p, Type aType)
+		explicit Clause(MemoryPool& p, Type aType) noexcept
 			: type(aType)
 		{
 		}
@@ -1345,12 +1426,12 @@ public:
 
 	struct RefActionClause
 	{
-		static const unsigned ACTION_CASCADE		= 1;
-		static const unsigned ACTION_SET_DEFAULT	= 2;
-		static const unsigned ACTION_SET_NULL		= 3;
-		static const unsigned ACTION_NONE			= 4;
+		static constexpr unsigned ACTION_CASCADE		= 1;
+		static constexpr unsigned ACTION_SET_DEFAULT	= 2;
+		static constexpr unsigned ACTION_SET_NULL		= 3;
+		static constexpr unsigned ACTION_NONE			= 4;
 
-		RefActionClause(MemoryPool& p, unsigned aUpdateAction, unsigned aDeleteAction)
+		RefActionClause(MemoryPool& p, unsigned aUpdateAction, unsigned aDeleteAction) noexcept
 			: updateAction(aUpdateAction),
 			  deleteAction(aDeleteAction)
 		{
@@ -1389,7 +1470,7 @@ public:
 		ConstraintType constraintType;
 		Firebird::ObjectsArray<MetaName> columns;
 		NestConst<IndexConstraintClause> index;
-		MetaName refRelation;
+		QualifiedName refRelation;
 		Firebird::ObjectsArray<MetaName> refColumns;
 		NestConst<RefActionClause> refAction;
 		NestConst<BoolSourceClause> check;
@@ -1399,13 +1480,13 @@ public:
 
 	struct IdentityOptions
 	{
-		IdentityOptions(MemoryPool&, IdentityType aType)
+		IdentityOptions(MemoryPool&, IdentityType aType) noexcept
 			: type(aType),
 			  restart(false)
 		{
 		}
 
-		IdentityOptions(MemoryPool&)
+		IdentityOptions(MemoryPool&) noexcept
 			: restart(false)
 		{
 		}
@@ -1433,7 +1514,7 @@ public:
 		dsql_fld* field;
 		NestConst<ValueSourceClause> defaultValue;
 		Firebird::ObjectsArray<AddConstraintClause> constraints;
-		MetaName collate;
+		QualifiedName collate;
 		NestConst<ValueSourceClause> computed;
 		NestConst<IdentityOptions> identityOptions;
 		bool notNullSpecified;
@@ -1528,16 +1609,19 @@ public:
 	RelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode);
 
 	static bool deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
-		const MetaName& relationName, const MetaName& fieldName, bool silent,
+		const QualifiedName& relationName, const MetaName& fieldName, bool silent,
 		std::function<void()> preChangeHandler = {});
 
 	static void addToPublication(thread_db* tdbb, jrd_tra* transaction,
-		const MetaName& tableName, const MetaName& pubTame);
+		const QualifiedName& tableName, const MetaName& pubName);
 	static void dropFromPublication(thread_db* tdbb, jrd_tra* transaction,
-		const MetaName& tableName, const MetaName& pubTame);
+		const QualifiedName& tableName, const MetaName& pubName);
+
+public:
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
 protected:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	Firebird::string internalPrint(NodePrinter& printer) const override
 	{
 		DdlNode::internalPrint(printer);
 
@@ -1576,7 +1660,7 @@ protected:
 
 public:
 	NestConst<RelationSourceNode> dsqlNode;
-	MetaName name;
+	QualifiedName name;
 	Firebird::Array<NestConst<Clause> > clauses;
 	Firebird::TriState ssDefiner;
 	Firebird::TriState replicationState;
@@ -1584,7 +1668,7 @@ public:
 };
 
 
-class CreateRelationNode : public RelationNode
+class CreateRelationNode final : public RelationNode
 {
 public:
 	CreateRelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode,
@@ -1595,14 +1679,23 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
+
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
+	{
+		dsqlScratch->qualifyNewName(name);
+		protectSystemSchema(name.schema, obj_relation);
+		dsqlScratch->ddlSchema = name.schema;
+
+		return RelationNode::dsqlPass(dsqlScratch);
+	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_create_table_failed) << name;
+		statusVector << Firebird::Arg::Gds(isc_dsql_create_table_failed) << name.toQuotedString();
 	}
 
 private:
@@ -1611,13 +1704,13 @@ private:
 public:
 	const Firebird::string* externalFile;
 	std::optional<rel_t> relationType = rel_persistent;
-	bool preserveRowsOpt;
-	bool deleteRowsOpt;
+	bool preserveRowsOpt = false;
+	bool deleteRowsOpt = false;
 	bool createIfNotExistsOnly = false;
 };
 
 
-class AlterRelationNode : public RelationNode
+class AlterRelationNode final : public RelationNode
 {
 public:
 	AlterRelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode)
@@ -1625,15 +1718,24 @@ public:
 	{
 	}
 
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
+	{
+		dsqlScratch->qualifyExistingName(name, obj_relation);
+		protectSystemSchema(name.schema, obj_relation);
+		dsqlScratch->ddlSchema = name.schema;
+
+		return RelationNode::dsqlPass(dsqlScratch);
+	}
+
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_alter_table_failed) << name;
+		statusVector << Firebird::Arg::Gds(isc_dsql_alter_table_failed) << name.toQuotedString();
 	}
 
 private:
@@ -1642,10 +1744,10 @@ private:
 };
 
 
-class DropRelationNode : public DdlNode
+class DropRelationNode final : public DdlNode
 {
 public:
-	DropRelationNode(MemoryPool& p, const MetaName& aName, bool aView = false)
+	DropRelationNode(MemoryPool& p, const QualifiedName& aName, bool aView = false)
 		: DdlNode(p),
 		  name(p, aName),
 		  view(aView),
@@ -1653,27 +1755,40 @@ public:
 	{
 	}
 
-	static void deleteGlobalField(thread_db* tdbb, jrd_tra* transaction,
-		const MetaName& globalName);
+	static void deleteGlobalField(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& globalName);
 
-	static void dropRelation(thread_db* tdbb, jrd_tra* transaction, bool view, jrd_rel* rel_drop, const MetaName& name);
+	static void dropRelation(thread_db* tdbb, jrd_tra* transaction, bool view, jrd_rel* rel_drop, const QualifiedName& name);
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
+
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
+	{
+		if (recreate)
+			dsqlScratch->qualifyNewName(name);
+		else
+			dsqlScratch->qualifyExistingName(name, (view ? obj_view : obj_relation));
+
+		protectSystemSchema(name.schema, (view ? obj_view : obj_relation));
+		dsqlScratch->ddlSchema = name.schema;
+
+		return DdlNode::dsqlPass(dsqlScratch);
+	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(view ? isc_dsql_drop_view_failed :
-			isc_dsql_drop_table_failed) << name;
+		statusVector << Firebird::Arg::Gds(view ? isc_dsql_drop_view_failed : isc_dsql_drop_table_failed) <<
+			name.toQuotedString();
 	}
 
 public:
-	MetaName name;
+	QualifiedName name;
 	bool view;
 	bool silent;
+	bool recreate = false;
 };
 
 
@@ -1681,7 +1796,7 @@ typedef RecreateNode<CreateRelationNode, DropRelationNode, isc_dsql_recreate_tab
 	RecreateTableNode;
 
 
-class CreateAlterViewNode : public RelationNode
+class CreateAlterViewNode final : public RelationNode
 {
 public:
 	CreateAlterViewNode(MemoryPool& p, RelationSourceNode* aDsqlNode, ValueListNode* aViewFields,
@@ -1697,19 +1812,19 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
 		statusVector <<
 			Firebird::Arg::Gds(createAlterCode(create, alter,
 					isc_dsql_create_view_failed, isc_dsql_alter_view_failed,
 					isc_dsql_create_alter_view_failed)) <<
-				name;
+				name.toQuotedString();
 	}
 
 private:
@@ -1727,7 +1842,7 @@ public:
 };
 
 
-class RecreateViewNode :
+class RecreateViewNode final :
 	public RecreateNode<CreateAlterViewNode, DropRelationNode, isc_dsql_recreate_view_failed>
 {
 public:
@@ -1740,7 +1855,7 @@ public:
 };
 
 
-class CreateIndexNode : public DdlNode
+class CreateIndexNode final : public DdlNode
 {
 public:
 	struct Definition
@@ -1754,7 +1869,7 @@ public:
 			conditionSource.clear();
 		}
 
-		MetaName relation;
+		QualifiedName relation;
 		Firebird::ObjectsArray<MetaName> columns;
 		Firebird::TriState unique;
 		Firebird::TriState descending;
@@ -1764,35 +1879,36 @@ public:
 		bid expressionSource;
 		bid conditionBlr;
 		bid conditionSource;
-		MetaName refRelation;
+		QualifiedName refRelation;
 		Firebird::ObjectsArray<MetaName> refColumns;
 		MetaName tableSpace;
 	};
 
 public:
-	CreateIndexNode(MemoryPool& p, const MetaName& aName)
+	CreateIndexNode(MemoryPool& p, const QualifiedName& aName)
 		: DdlNode(p),
 		  name(p, aName)
 	{
 	}
 
 public:
-	static void store(thread_db* tdbb, jrd_tra* transaction, MetaName& name,
-		const Definition& definition, MetaName* referredIndexName = nullptr);
+	static void store(thread_db* tdbb, jrd_tra* transaction, QualifiedName& name,
+		const Definition& definition, QualifiedName* referredIndexName = nullptr);
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_create_index_failed) << name;
+		statusVector << Firebird::Arg::Gds(isc_dsql_create_index_failed) << name.toQuotedString();
 	}
 
 public:
-	MetaName name;
+	QualifiedName name;
 	bool unique = false;
 	bool descending = false;
 	bool active = true;
@@ -1805,92 +1921,115 @@ public:
 };
 
 
-class AlterIndexNode : public DdlNode
+class AlterIndexNode final : public DdlNode
 {
 public:
 	enum OP {OP_ACTIVE, OP_INACTIVE, OP_SET_TABLESPACE};
 
-	AlterIndexNode(MemoryPool& p, const MetaName& aName, OP aOp)
+	AlterIndexNode(MemoryPool& p, const QualifiedName& aName, OP anOp)
 		: DdlNode(p),
 		  name(p, aName),
-		  op(aOp)
+		  op(anOp)
 	{
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
+
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
+	{
+		dsqlScratch->qualifyExistingName(name, obj_index);
+		dsqlScratch->ddlSchema = name.schema;
+
+		return DdlNode::dsqlPass(dsqlScratch);
+	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_alter_index_failed) << name;
+		statusVector << Firebird::Arg::Gds(isc_dsql_alter_index_failed) << name.toQuotedString();
 	}
 
 public:
-	MetaName name;
-	OP op;
+	QualifiedName name;
 	MetaName tableSpace;
+	OP op;
 };
 
 
-class SetStatisticsNode : public DdlNode
+class SetStatisticsNode final : public DdlNode
 {
 public:
-	SetStatisticsNode(MemoryPool& p, const MetaName& aName)
+	SetStatisticsNode(MemoryPool& p, const QualifiedName& aName)
 		: DdlNode(p),
 		  name(p, aName)
 	{
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
+
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
+	{
+		dsqlScratch->qualifyExistingName(name, obj_index);
+		dsqlScratch->ddlSchema = name.schema;
+
+		return DdlNode::dsqlPass(dsqlScratch);
+	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
 		// ASF: using ALTER INDEX's code.
-		statusVector << Firebird::Arg::Gds(isc_dsql_alter_index_failed) << name;
+		statusVector << Firebird::Arg::Gds(isc_dsql_alter_index_failed) << name.toQuotedString();
 	}
 
 public:
-	MetaName name;
+	QualifiedName name;
 };
 
 
-class DropIndexNode : public DdlNode
+class DropIndexNode final : public DdlNode
 {
 public:
-	DropIndexNode(MemoryPool& p, const MetaName& aName)
+	DropIndexNode(MemoryPool& p, const QualifiedName& aName)
 		: DdlNode(p),
 		  name(p, aName)
 	{
 	}
 
-	static bool deleteSegmentRecords(thread_db* tdbb, jrd_tra* transaction,
-		const MetaName& name);
+	static bool deleteSegmentRecords(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& name);
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
+
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
+	{
+		dsqlScratch->qualifyExistingName(name, obj_index);
+		dsqlScratch->ddlSchema = name.schema;
+
+		return DdlNode::dsqlPass(dsqlScratch);
+	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_index_failed) << name;
+		statusVector << Firebird::Arg::Gds(isc_dsql_drop_index_failed) << name.toQuotedString();
 	}
 
 public:
-	MetaName name;
+	QualifiedName name;
 	bool silent = false;
 };
 
 
-class CreateFilterNode : public DdlNode
+class CreateFilterNode final : public DdlNode
 {
 public:
 	class NameNumber : public Printable
@@ -1909,7 +2048,7 @@ public:
 		}
 
 	public:
-		virtual Firebird::string internalPrint(NodePrinter& printer) const
+		Firebird::string internalPrint(NodePrinter& printer) const override
 		{
 			NODE_PRINT(printer, name);
 			NODE_PRINT(printer, number);
@@ -1926,20 +2065,18 @@ public:
 	CreateFilterNode(MemoryPool& p, const MetaName& aName)
 		: DdlNode(p),
 		  name(p, aName),
-		  inputFilter(NULL),
-		  outputFilter(NULL),
 		  entryPoint(p),
 		  moduleName(p)
 	{
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
 		statusVector << Firebird::Arg::Gds(isc_dsql_create_filter_failed) << name;
 	}
@@ -1950,10 +2087,11 @@ public:
 	NestConst<NameNumber> outputFilter;
 	Firebird::string entryPoint;
 	Firebird::string moduleName;
+	bool createIfNotExistsOnly = false;
 };
 
 
-class DropFilterNode : public DdlNode
+class DropFilterNode final : public DdlNode
 {
 public:
 	DropFilterNode(MemoryPool& p, const MetaName& aName)
@@ -1963,12 +2101,12 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
 		statusVector << Firebird::Arg::Gds(isc_dsql_drop_filter_failed) << name;
 	}
@@ -1979,30 +2117,31 @@ public:
 };
 
 
-class CreateShadowNode : public DdlNode
+class CreateShadowNode final : public DdlNode
 {
 public:
-	CreateShadowNode(MemoryPool& p, const SSHORT aNumber)
+	CreateShadowNode(MemoryPool& p, SSHORT aNumber, bool aManual, bool aConditional,
+					 const Firebird::string& aFileName)
 		: DdlNode(p),
 		  number(aNumber),
-		  manual(false),
-		  conditional(false),
-		  files(p)
+		  manual(aManual),
+		  conditional(aConditional),
+		  fileName(p, aFileName)
 	{
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
-	virtual bool mustBeReplicated() const
+	bool mustBeReplicated() const override
 	{
 		return false;
 	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
 		statusVector << Firebird::Arg::Gds(isc_dsql_create_shadow_failed) << Firebird::Arg::Num(number);
 	}
@@ -2011,12 +2150,12 @@ public:
 	SSHORT number;
 	bool manual;
 	bool conditional;
-	Firebird::Array<NestConst<DbFileClause> > files;
+	Firebird::string fileName;
 	bool createIfNotExistsOnly = false;
 };
 
 
-class DropShadowNode : public DdlNode
+class DropShadowNode final : public DdlNode
 {
 public:
 	DropShadowNode(MemoryPool& p, const SSHORT aNumber, const bool aNodelete)
@@ -2027,17 +2166,17 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
-	virtual bool mustBeReplicated() const
+	bool mustBeReplicated() const override
 	{
 		return false;
 	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
 		statusVector << Firebird::Arg::Gds(isc_dsql_drop_shadow_failed) << Firebird::Arg::Num(number);
 	}
@@ -2061,7 +2200,7 @@ protected:
 		MetaName privilege);
 };
 
-class CreateAlterRoleNode : public PrivilegesNode
+class CreateAlterRoleNode final : public PrivilegesNode
 {
 public:
 	CreateAlterRoleNode(MemoryPool& p, const MetaName& aName)
@@ -2074,12 +2213,12 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
 		statusVector << Firebird::Arg::Gds(createFlag ? isc_dsql_create_role_failed :
 			isc_dsql_alter_role_failed) << name;
@@ -2105,7 +2244,7 @@ private:
 };
 
 
-class MappingNode : public DdlNode, private ExecInSecurityDb
+class MappingNode final : public DdlNode, private ExecInSecurityDb
 {
 public:
 	enum OP {MAP_ADD, MAP_MOD, MAP_RPL, MAP_DROP, MAP_COMMENT};
@@ -2121,19 +2260,27 @@ public:
 	void validateAdmin();
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
+	{
+		if (from)
+			from->dsqlPass(dsqlScratch);
+
+		return DdlNode::dsqlPass(dsqlScratch);
+	}
+
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
 		statusVector << Firebird::Arg::Gds(isc_dsql_mapping_failed) << name <<
 			(op == MAP_ADD ? "CREATE" : op == MAP_MOD ?
 			 "ALTER" : op == MAP_RPL ? "CREATE OR ALTER" : op == MAP_DROP ?
 			 "DROP" : "COMMENT ON");
 	}
-	void runInSecurityDb(SecDbContext* secDbContext);
+	void runInSecurityDb(SecDbContext* secDbContext) override;
 
 private:
 	void addItem(Firebird::string& ddl, const char* text, char quote = '"');
@@ -2156,7 +2303,7 @@ public:
 };
 
 
-class DropRoleNode : public DdlNode
+class DropRoleNode final : public DdlNode
 {
 public:
 	DropRoleNode(MemoryPool& p, const MetaName& aName)
@@ -2166,12 +2313,12 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
 		statusVector << Firebird::Arg::Gds(isc_dsql_drop_role_failed) << name;
 	}
@@ -2194,7 +2341,7 @@ protected:
 };
 
 
-class CreateAlterUserNode : public UserNode
+class CreateAlterUserNode final : public UserNode
 {
 public:
 	enum Mode {USER_ADD, USER_MOD, USER_RPL};
@@ -2213,17 +2360,17 @@ public:
 	{ }
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
-	virtual bool mustBeReplicated() const
+	bool mustBeReplicated() const override
 	{
 		return false;
 	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
 		statusVector << Firebird::Arg::Gds(mode == USER_ADD ?
 			isc_dsql_create_user_failed : isc_dsql_alter_user_failed) << name;
@@ -2268,7 +2415,7 @@ public:
 };
 
 
-class DropUserNode : public UserNode
+class DropUserNode final : public UserNode
 {
 public:
 	DropUserNode(MemoryPool& p, const MetaName& aName, const MetaName* aPlugin = NULL)
@@ -2282,17 +2429,17 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
-	virtual bool mustBeReplicated() const
+	bool mustBeReplicated() const override
 	{
 		return false;
 	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
 		statusVector << Firebird::Arg::Gds(isc_dsql_drop_user_failed) << name;
 	}
@@ -2301,6 +2448,7 @@ public:
 	const MetaName name;
 	MetaName plugin;
 	bool silent;
+	bool recreate = false;
 };
 
 
@@ -2318,10 +2466,10 @@ typedef RecreateNode<CreateAlterUserNode, DropUserNode, isc_dsql_recreate_user_f
 	RecreateUserNode;
 
 
-typedef Firebird::Pair<Firebird::NonPooled<char, ValueListNode*> > PrivilegeClause;
-typedef Firebird::Pair<Firebird::NonPooled<ObjectType, MetaName> > GranteeClause;
+typedef Firebird::NonPooledPair<char, Firebird::ObjectsArray<MetaName>*> PrivilegeClause;
+typedef Firebird::NonPooledPair<ObjectType, QualifiedName> GranteeClause;
 
-class GrantRevokeNode : public PrivilegesNode, private ExecInSecurityDb
+class GrantRevokeNode final : public PrivilegesNode, private ExecInSecurityDb
 {
 public:
 	GrantRevokeNode(MemoryPool& p, bool aIsGrant)
@@ -2340,40 +2488,115 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
+
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
+	{
+		Firebird::Array<GranteeClause*> grantees;
+
+		if (object)
+			grantees.add(object);
+
+		for (auto& user : users)
+			grantees.add(&user);
+
+		for (auto grantee : grantees)
+		{
+			switch (grantee->first)
+			{
+				case obj_charset:
+				case obj_collation:
+				case obj_exception:
+				case obj_field:
+				case obj_generator:
+				case obj_index:
+				case obj_package_header:
+				case obj_procedure:
+				case obj_relation:
+				case obj_view:
+				case obj_trigger:
+				case obj_udf:
+					dsqlScratch->qualifyExistingName(grantee->second, grantee->first);
+					break;
+
+				case obj_database:
+				case obj_schema:
+				case obj_user:
+				case obj_user_or_role:
+				case obj_sql_role:
+				case obj_privilege:
+				case obj_roles:
+				case obj_filters:
+				case obj_jobs:
+				case obj_tablespaces:
+				case obj_schemas:
+					break;
+
+				case obj_relations:
+				case obj_views:
+				case obj_procedures:
+				case obj_functions:
+				case obj_packages:
+				case obj_generators:
+				case obj_domains:
+				case obj_exceptions:
+				case obj_charsets:
+				case obj_collations:
+					fb_assert(grantee->second.object.hasData());
+
+					if (grantee->second.schema.isEmpty())
+					{
+						fb_assert(grantee->second.object.hasData());
+						dsqlScratch->qualifyNewName(grantee->second);
+					}
+
+					break;
+
+				default:
+					fb_assert(false);
+					break;
+			}
+
+			if (grantee == object)
+				dsqlScratch->ddlSchema = object->second.schema;
+		}
+
+		return PrivilegesNode::dsqlPass(dsqlScratch);
+	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
 		statusVector <<
 			Firebird::Arg::Gds(isGrant ? isc_dsql_grant_failed : isc_dsql_revoke_failed);
 	}
-	void runInSecurityDb(SecDbContext* secDbContext);
+
+	void runInSecurityDb(SecDbContext* secDbContext) override;
 
 private:
 	void modifyPrivileges(thread_db* tdbb, jrd_tra* transaction, SSHORT option, const GranteeClause* user);
 	void grantRevoke(thread_db* tdbb, jrd_tra* transaction, const GranteeClause* object,
 		const GranteeClause* userNod, const char* privs, MetaName field, int options);
 	static void checkGrantorCanGrantRelation(thread_db* tdbb, jrd_tra* transaction, const char* grantor,
-		const char* privilege, const MetaName& relationName,
+		const char* privilege, const QualifiedName& relationName,
 		const MetaName& fieldName, bool topLevel);
 	static void checkGrantorCanGrantRole(thread_db* tdbb, jrd_tra* transaction,
 			const MetaName& grantor, const MetaName& roleName);
 	static void checkGrantorCanGrantDdl(thread_db* tdbb, jrd_tra* transaction,
-			const MetaName& grantor, const char* privilege, const MetaName& objName);
+			const MetaName& grantor, const char* privilege, const QualifiedName& objName);
 	static void checkGrantorCanGrantObject(thread_db* tdbb, jrd_tra* transaction, const char* grantor,
-		const char* privilege, const MetaName& objName, SSHORT objType);
+		const char* privilege, const QualifiedName& objName, SSHORT objType);
 	static void storePrivilege(thread_db* tdbb, jrd_tra* transaction,
-		const MetaName& object, const MetaName& user,
+		const QualifiedName& object, const QualifiedName& user,
 		const MetaName& field, const TEXT* privilege, SSHORT userType,
 		SSHORT objType, int option, const MetaName& grantor);
 	static void setFieldClassName(thread_db* tdbb, jrd_tra* transaction,
-		const MetaName& relation, const MetaName& field);
+		const QualifiedName& relation, const MetaName& field);
 
 	// Diagnostics print helper.
-	static const char* privilegeName(char symbol)
+	static constexpr const char* privilegeName(char symbol) noexcept
 	{
 		switch (UPPER7(symbol))
 		{
@@ -2390,9 +2613,8 @@ private:
 			case 'C': return "CREATE";
 			case 'L': return "ALTER";
 			case 'O': return "DROP";
+			default: return "<Unknown>";
 		}
-
-		return "<Unknown>";
 	}
 
 	struct CreateDbJob
@@ -2422,32 +2644,27 @@ public:
 };
 
 
-class AlterDatabaseNode : public DdlNode
+class AlterDatabaseNode final : public DdlNode
 {
 public:
-	static const unsigned CLAUSE_BEGIN_BACKUP		= 0x01;
-	static const unsigned CLAUSE_END_BACKUP			= 0x02;
-	static const unsigned CLAUSE_DROP_DIFFERENCE	= 0x04;
-	static const unsigned CLAUSE_CRYPT				= 0x08;
-	static const unsigned CLAUSE_ENABLE_PUB			= 0x10;
-	static const unsigned CLAUSE_DISABLE_PUB		= 0x20;
-	static const unsigned CLAUSE_PUB_INCL_TABLE		= 0x40;
-	static const unsigned CLAUSE_PUB_EXCL_TABLE		= 0x80;
+	static constexpr unsigned CLAUSE_BEGIN_BACKUP		= 0x01;
+	static constexpr unsigned CLAUSE_END_BACKUP			= 0x02;
+	static constexpr unsigned CLAUSE_DROP_DIFFERENCE	= 0x04;
+	static constexpr unsigned CLAUSE_CRYPT				= 0x08;
+	static constexpr unsigned CLAUSE_ENABLE_PUB			= 0x10;
+	static constexpr unsigned CLAUSE_DISABLE_PUB		= 0x20;
+	static constexpr unsigned CLAUSE_PUB_INCL_TABLE		= 0x40;
+	static constexpr unsigned CLAUSE_PUB_EXCL_TABLE		= 0x80;
 
-	static const unsigned RDB_DATABASE_MASK =
+	static constexpr unsigned RDB_DATABASE_MASK =
 		CLAUSE_BEGIN_BACKUP | CLAUSE_END_BACKUP | CLAUSE_DROP_DIFFERENCE;
 
 public:
 	AlterDatabaseNode(MemoryPool& p)
 		: DdlNode(p),
-		  create(false),
-		  createLength(0),
-		  linger(-1),
-		  clauses(0),
 		  differenceFile(p),
 		  setDefaultCharSet(p),
 		  setDefaultCollation(p),
-		  files(p),
 		  cryptPlugin(p),
 		  keyName(p),
 		  pubTables(p)
@@ -2455,24 +2672,30 @@ public:
 	}
 
 public:
-	virtual DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
 	{
+		dsqlScratch->qualifyExistingName(setDefaultCharSet, obj_charset);
+		dsqlScratch->qualifyExistingName(setDefaultCollation, obj_collation);
+
+		for (auto& pubTable : pubTables)
+			dsqlScratch->qualifyExistingName(pubTable, obj_relation);
+
 		dsqlScratch->getDsqlStatement()->setType(
 			create ? DsqlStatement::TYPE_CREATE_DB : DsqlStatement::TYPE_DDL);
 		return this;
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
-	virtual bool mustBeReplicated() const
+	bool mustBeReplicated() const override
 	{
 		return false;
 	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
 		statusVector << Firebird::Arg::Gds(isc_dsql_alter_database_failed);
 	}
@@ -2483,18 +2706,90 @@ private:
 	void checkClauses(thread_db* tdbb);
 
 public:
-	bool create;	// Is the node created with a CREATE DATABASE command?
-	SLONG createLength, linger;
-	unsigned clauses;
+	bool create = false;	// Is the node created with a CREATE DATABASE command?
+	SLONG linger = -1;
+	unsigned clauses = 0;
 	Firebird::string differenceFile;
-	MetaName setDefaultCharSet;
-	MetaName setDefaultCollation;
-	Firebird::Array<NestConst<DbFileClause> > files;
+	QualifiedName setDefaultCharSet;
+	QualifiedName setDefaultCollation;
 	MetaName cryptPlugin;
 	MetaName keyName;
 	Firebird::TriState ssDefiner;
-	Firebird::Array<MetaName> pubTables;
+	Firebird::Array<QualifiedName> pubTables;
 };
+
+
+class CreateAlterSchemaNode final : public DdlNode
+{
+public:
+	CreateAlterSchemaNode(MemoryPool& pool, const MetaName& aName)
+		: DdlNode(pool),
+		  name(pool, aName)
+	{
+	}
+
+public:
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
+
+protected:
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	{
+		statusVector <<
+			Firebird::Arg::Gds(createAlterCode(create, alter,
+					isc_dsql_create_schema_failed, isc_dsql_alter_schema_failed,
+					isc_dsql_create_alter_schema_failed)) <<
+				name.toQuotedString();
+	}
+
+private:
+	void executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	bool executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+
+public:
+	MetaName name;
+	std::optional<QualifiedName> setDefaultCharSet;	// use empty QualifiedName with DROP DEFAULT CHARACTER SET
+	std::optional<SqlSecurity> setDefaultSqlSecurity;
+	bool create = true;
+	bool alter = false;
+	bool createIfNotExistsOnly = false;
+};
+
+
+class DropSchemaNode final : public DdlNode
+{
+public:
+	DropSchemaNode(MemoryPool& pool, const MetaName& aName)
+		: DdlNode(pool),
+		  name(pool, aName)
+	{
+	}
+
+public:
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
+
+protected:
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	{
+		statusVector << Firebird::Arg::Gds(isc_dsql_drop_schema_failed) << name.toQuotedString();
+	}
+
+private:
+	bool collectObjects(thread_db* tdbb, jrd_tra* transaction,
+		Firebird::Array<Firebird::RightPooledPair<ObjectType, MetaName>>* objects = nullptr);
+
+public:
+	MetaName name;
+	bool silent = false;
+	bool recreate = false;
+};
+
+
+using RecreateSchemaNode = RecreateNode<CreateAlterSchemaNode, DropSchemaNode, isc_dsql_recreate_schema_failed>;
 
 
 } // namespace

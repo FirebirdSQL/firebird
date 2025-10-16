@@ -35,9 +35,9 @@
 #include "../jrd/met_proto.h"
 #include "../jrd/mov_proto.h"
 #include "../common/isc_proto.h"
-
 #include "Publisher.h"
 #include "Replicator.h"
+#include <numeric>
 
 using namespace Firebird;
 using namespace Jrd;
@@ -129,7 +129,7 @@ namespace
 			{
 				auto& pool = *attachment->att_pool;
 				const auto manager = dbb->replManager(true);
-				const auto& guid = dbb->dbb_guid.value();
+				const auto& guid = dbb->dbb_guid;
 				const auto& userName = attachment->getUserName();
 
 				attachment->att_replicator = FB_NEW Replicator(pool, manager, guid, userName);
@@ -226,7 +226,7 @@ namespace
 		{
 			const auto savepoint = *iter;
 
-			if (savepoint->isReplicated() || savepoint->isRoot())
+			if (savepoint->isReplicated())
 				break;
 
 			transaction->tra_replicator->startSavepoint(&status);
@@ -403,8 +403,9 @@ void REPL_attach(thread_db* tdbb, bool cleanupTransactions)
 
 	fb_assert(!attachment->att_repl_matcher);
 	auto& pool = *attachment->att_pool;
-	attachment->att_repl_matcher = FB_NEW_POOL(pool)
-		TableMatcher(pool, replConfig->includeFilter, replConfig->excludeFilter);
+	attachment->att_repl_matcher = FB_NEW_POOL(pool) TableMatcher(pool,
+		replConfig->includeSchemaFilter, replConfig->excludeSchemaFilter,
+		replConfig->includeFilter, replConfig->excludeFilter);
 
 	fb_assert(!attachment->att_replicator);
 	attachment->att_flags |= ATT_replicating;
@@ -527,9 +528,10 @@ void REPL_store(thread_db* tdbb, const record_param* rpb, jrd_tra* transaction)
 
 	ReplicatedRecordImpl replRecord(tdbb, relation, record);
 
-	replicator->insertRecord(&status,
-							 relation->rel_name.c_str(),
-							 &replRecord);
+	replicator->insertRecord2(&status,
+							  relation->rel_name.schema.c_str(),
+							  relation->rel_name.object.c_str(),
+							  &replRecord);
 
 	checkStatus(tdbb, status, transaction);
 }
@@ -577,9 +579,10 @@ void REPL_modify(thread_db* tdbb, const record_param* orgRpb,
 	ReplicatedRecordImpl replOrgRecord(tdbb, relation, orgRecord);
 	ReplicatedRecordImpl replNewRecord(tdbb, relation, newRecord);
 
-	replicator->updateRecord(&status,
-							 relation->rel_name.c_str(),
-							 &replOrgRecord, &replNewRecord);
+	replicator->updateRecord2(&status,
+							  relation->rel_name.schema.c_str(),
+							  relation->rel_name.object.c_str(),
+							  &replOrgRecord, &replNewRecord);
 
 	checkStatus(tdbb, status, transaction);
 }
@@ -611,9 +614,10 @@ void REPL_erase(thread_db* tdbb, const record_param* rpb, jrd_tra* transaction)
 
 	ReplicatedRecordImpl replRecord(tdbb, relation, record);
 
-	replicator->deleteRecord(&status,
-							 relation->rel_name.c_str(),
-							 &replRecord);
+	replicator->deleteRecord2(&status,
+							  relation->rel_name.schema.c_str(),
+							  relation->rel_name.object.c_str(),
+							  &replRecord);
 
 	checkStatus(tdbb, status, transaction);
 }
@@ -639,24 +643,25 @@ void REPL_gen_id(thread_db* tdbb, SLONG genId, SINT64 value)
 
 	const auto attachment = tdbb->getAttachment();
 
-	MetaName genName;
+	QualifiedName genName;
 	if (!attachment->att_generators.lookup(genId, genName))
 	{
 		MET_lookup_generator_id(tdbb, genId, genName, nullptr);
 		attachment->att_generators.store(genId, genName);
 	}
 
-	fb_assert(genName.hasData());
+	fb_assert(genName.object.hasData());
 
 	AutoSetRestoreFlag<ULONG> noRecursion(&tdbb->tdbb_flags, TDBB_repl_in_progress, true);
 
 	FbLocalStatus status;
-	replicator->setSequence(&status, genName.c_str(), value);
+	replicator->setSequence2(&status, genName.schema.c_str(), genName.object.c_str(), value);
 
 	checkStatus(tdbb, status);
 }
 
-void REPL_exec_sql(thread_db* tdbb, jrd_tra* transaction, const string& sql)
+void REPL_exec_sql(thread_db* tdbb, jrd_tra* transaction, const string& sql,
+	const ObjectsArray<MetaString>& schemaSearchPath)
 {
 	fb_assert(tdbb->tdbb_flags & TDBB_repl_in_progress);
 
@@ -673,7 +678,21 @@ void REPL_exec_sql(thread_db* tdbb, jrd_tra* transaction, const string& sql)
 
 	// This place is already protected from recursion in calling code
 
-	replicator->executeSqlIntl(&status, charset, sql.c_str());
+	string schemaSearchPathStr;
+
+	if (schemaSearchPath.hasData())
+	{
+		schemaSearchPathStr = std::accumulate(
+			std::next(schemaSearchPath.begin()),
+			schemaSearchPath.end(),
+			schemaSearchPath[0].toQuotedString(),
+			[](const auto& a, const auto& b) {
+				return a + ", " + b.toQuotedString();
+			}
+		);
+	}
+
+	replicator->executeSqlIntl2(&status, charset, schemaSearchPathStr.c_str(), sql.c_str());
 
 	checkStatus(tdbb, status, transaction);
 }
@@ -687,4 +706,10 @@ void REPL_journal_switch(thread_db* tdbb)
 		return;
 
 	replMgr->forceJournalSwitch();
+}
+
+void REPL_journal_cleanup(Database* dbb)
+{
+	if (const auto replMgr = dbb->replManager(true))
+		replMgr->journalCleanup();
 }

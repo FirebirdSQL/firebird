@@ -49,7 +49,7 @@ class TimerImpl :
 	public RefCntIface<ITimerImpl<TimerImpl, CheckStatusWrapper> >
 {
 public:
-	TimerImpl() :
+	TimerImpl() noexcept :
 		m_fireTime(0),
 		m_expTime(0),
 		m_handlerTid(0)
@@ -75,7 +75,7 @@ public:
 	void reset(unsigned int timeout);
 	void stop();
 
-	SINT64 getExpireClock() const
+	SINT64 getExpireClock() const noexcept
 	{
 		return m_expTime;
 	}
@@ -94,7 +94,7 @@ template <typename T>
 class TimerWithRef : public TimerImpl
 {
 public:
-	TimerWithRef(T* obj) :
+	TimerWithRef(T* obj) noexcept :
 		TimerImpl(),
 		m_ref(obj)
 	{}

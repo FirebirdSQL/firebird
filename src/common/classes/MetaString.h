@@ -31,7 +31,11 @@
 
 #include "../common/classes/fb_string.h"
 #include "../common/classes/fb_pair.h"
+#include "../common/classes/objects_array.h"
+#include "../common/StatusArg.h"
 #include "../jrd/constants.h"
+#include <algorithm>
+#include <cctype>
 
 #ifdef SFIO
 #include <stdio.h>
@@ -39,17 +43,42 @@
 
 namespace Firebird {
 
+template <typename T>
+string toQuotedString(const T& name)
+{
+	string s;
+
+	if (name.hasData())
+	{
+		s.reserve(name.length() + 2);
+
+		s.append("\"");
+
+		for (const auto c : name)
+		{
+			if (c == '"')
+				s.append("\"");
+
+			s.append(&c, 1);
+		}
+
+		s.append("\"");
+	}
+
+	return s;
+}
+
 class MetaString
 {
 private:
 	char data[MAX_SQL_IDENTIFIER_SIZE];
 	unsigned int count;
 
-	void init()
+	void init() noexcept
 	{
 		memset(data, 0, MAX_SQL_IDENTIFIER_SIZE);
 	}
-	MetaString& set(const MetaString& m)
+	MetaString& set(const MetaString& m) noexcept
 	{
 		memcpy(data, m.data, MAX_SQL_IDENTIFIER_SIZE);
 		count = m.count;
@@ -57,58 +86,179 @@ private:
 	}
 
 public:
-	MetaString() { init(); count = 0; }
-	MetaString(const char* s) { assign(s); }
-	MetaString(const char* s, FB_SIZE_T l) { assign(s, l); }
-	MetaString(const MetaString& m) { set(m); }
-	MetaString(const AbstractString& s) { assign(s.c_str(), s.length()); }
-	explicit MetaString(MemoryPool&) { init(); count = 0; }
-	MetaString(MemoryPool&, const char* s) { assign(s); }
-	MetaString(MemoryPool&, const char* s, FB_SIZE_T l) { assign(s, l); }
-	MetaString(MemoryPool&, const MetaString& m) { set(m); }
-	MetaString(MemoryPool&, const AbstractString& s) { assign(s.c_str(), s.length()); }
+	MetaString() noexcept { init(); count = 0; }
+	MetaString(const char* s) noexcept { assign(s); }
+	MetaString(const char* s, FB_SIZE_T l) noexcept { assign(s, l); }
+	MetaString(const MetaString& m) noexcept { set(m); }
+	MetaString(const AbstractString& s) noexcept { assign(s.c_str(), s.length()); }
+	explicit MetaString(MemoryPool&) noexcept { init(); count = 0; }
+	MetaString(MemoryPool&, const char* s) noexcept { assign(s); }
+	MetaString(MemoryPool&, const char* s, FB_SIZE_T l) noexcept { assign(s, l); }
+	MetaString(MemoryPool&, const MetaString& m) noexcept { set(m); }
+	MetaString(MemoryPool&, const AbstractString& s) noexcept { assign(s.c_str(), s.length()); }
 
-	MetaString& assign(const char* s, FB_SIZE_T l);
-	MetaString& assign(const char* s) { return assign(s, s ? fb_strlen(s) : 0); }
-	MetaString& clear() { return assign(nullptr, 0); }
-	MetaString& operator=(const char* s) { return assign(s); }
-	MetaString& operator=(const AbstractString& s) { return assign(s.c_str(), s.length()); }
-	MetaString& operator=(const MetaString& m) { return set(m); }
-	char* getBuffer(const FB_SIZE_T l);
+public:
+	static void parseList(const string& str, ObjectsArray<MetaString>& list)
+	{
+		auto pos = str.begin();
 
-	FB_SIZE_T length() const { return count; }
-	const char* c_str() const { return data; }
-	const char* nullStr() const { return (count == 0 ? NULL : data); }
-	bool isEmpty() const { return count == 0; }
-	bool hasData() const { return count != 0; }
+		const auto skipSpaces = [&pos, &str]() noexcept
+		{
+			while (pos != str.end() && (*pos == ' ' || *pos == '\t' || *pos == '\f' || *pos == '\r' || *pos == '\n'))
+				++pos;
 
-	char& operator[](unsigned n) { return data[n]; }
-	char operator[](unsigned n) const { return data[n]; }
+			return pos != str.end();
+		};
 
-	const char* begin() const { return data; }
-	const char* end() const { return data + count; }
+		const auto isQuoted = [](const string& name) -> bool
+		{
+			return name.length() >= 2 && name[0] == '"' && name[name.length() - 1] == '"';
+		};
 
-	int compare(const char* s, FB_SIZE_T l) const;
-	int compare(const char* s) const { return compare(s, s ? fb_strlen(s) : 0); }
-	int compare(const AbstractString& s) const { return compare(s.c_str(), s.length()); }
-	int compare(const MetaString& m) const { return memcmp(data, m.data, MAX_SQL_IDENTIFIER_SIZE); }
+		const auto unquote = [&](const string& name) -> string
+		{
+			if (!isQuoted(name))
+				return name;
 
-	bool operator==(const char* s) const { return compare(s) == 0; }
-	bool operator!=(const char* s) const { return compare(s) != 0; }
-	bool operator==(const AbstractString& s) const { return compare(s) == 0; }
-	bool operator!=(const AbstractString& s) const { return compare(s) != 0; }
-	bool operator==(const MetaString& m) const { return compare(m) == 0; }
-	bool operator!=(const MetaString& m) const { return compare(m) != 0; }
-	bool operator<=(const MetaString& m) const { return compare(m) <= 0; }
-	bool operator>=(const MetaString& m) const { return compare(m) >= 0; }
-	bool operator< (const MetaString& m) const { return compare(m) <  0; }
-	bool operator> (const MetaString& m) const { return compare(m) >  0; }
+			string result;
+
+			for (FB_SIZE_T i = 1; i < name.length() - 1; ++i)
+			{
+				if (name[i] == '"')
+				{
+					if (i + 1 < name.length() - 1 && name[i + 1] == '"')
+						++i;
+					else
+						(Arg::Gds(isc_invalid_unqualified_name_list) << str).raise();
+				}
+
+				result += name[i];
+			}
+
+			return result;
+		};
+
+		const auto validateUnquotedIdentifier = [&](const string& name)
+		{
+			if (name.length() > MAX_SQL_IDENTIFIER_LEN)
+				(Arg::Gds(isc_invalid_name) << str).raise();
+
+			bool first = true;
+
+			for (const auto c : name)
+			{
+				if (!((c >= 'A' && c <= 'Z') ||
+					  (c >= 'a' && c <= 'z') ||
+					  c == '{' ||
+					  c == '}' ||
+					  (!first && c >= '0' && c <= '9') ||
+					  (!first && c == '$') ||
+					  (!first && c == '_')))
+				{
+					(Arg::Gds(isc_invalid_unqualified_name_list) << str).raise();
+				}
+
+				first = false;
+			}
+
+			return true;
+		};
+
+		list.clear();
+
+		if (!skipSpaces())
+			return;
+
+		do
+		{
+			const auto nameStart = pos;
+			auto nameEnd = pos;
+			bool inQuotes = false;
+
+			while (pos != str.end())
+			{
+				if (*pos == '"')
+					inQuotes = !inQuotes;
+				else if (*pos == ',' && !inQuotes)
+					break;
+
+				nameEnd = ++pos;
+				skipSpaces();
+			}
+
+			string name(nameStart, nameEnd);
+
+			if (isQuoted(name))
+				name = unquote(name);
+			else
+			{
+				validateUnquotedIdentifier(name);
+				std::transform(name.begin(), name.end(), name.begin(), ::toupper);
+			}
+
+			if (name.isEmpty())
+				(Arg::Gds(isc_invalid_unqualified_name_list) << str).raise();
+
+			list.add(name);
+
+			if (pos == str.end())
+				break;
+
+			if (*pos == ',')
+			{
+				++pos;
+				skipSpaces();
+			}
+		} while(true);
+	}
+
+public:
+	MetaString& assign(const char* s, FB_SIZE_T l) noexcept;
+	MetaString& assign(const char* s) noexcept { return assign(s, s ? fb_strlen(s) : 0); }
+	MetaString& clear() noexcept { return assign(nullptr, 0); }
+	MetaString& operator=(const char* s) noexcept { return assign(s); }
+	MetaString& operator=(const AbstractString& s) noexcept { return assign(s.c_str(), s.length()); }
+	MetaString& operator=(const MetaString& m) noexcept { return set(m); }
+	char* getBuffer(const FB_SIZE_T l) noexcept;
+
+	FB_SIZE_T length() const noexcept { return count; }
+	const char* c_str() const noexcept { return data; }
+	const char* nullStr() const noexcept { return (count == 0 ? NULL : data); }
+	bool isEmpty() const noexcept { return count == 0; }
+	bool hasData() const noexcept { return count != 0; }
+
+	char& operator[](unsigned n) noexcept { return data[n]; }
+	char operator[](unsigned n) const noexcept { return data[n]; }
+
+	const char* begin() const noexcept { return data; }
+	const char* end() const noexcept { return data + count; }
+
+	int compare(const char* s, FB_SIZE_T l) const noexcept;
+	int compare(const char* s) const noexcept { return compare(s, s ? fb_strlen(s) : 0); }
+	int compare(const AbstractString& s) const noexcept { return compare(s.c_str(), s.length()); }
+	int compare(const MetaString& m) const noexcept { return memcmp(data, m.data, MAX_SQL_IDENTIFIER_SIZE); }
+
+	string toQuotedString() const
+	{
+		return Firebird::toQuotedString(*this);
+	}
+
+	bool operator==(const char* s) const noexcept { return compare(s) == 0; }
+	bool operator!=(const char* s) const noexcept { return compare(s) != 0; }
+	bool operator==(const AbstractString& s) const noexcept { return compare(s) == 0; }
+	bool operator!=(const AbstractString& s) const noexcept { return compare(s) != 0; }
+	bool operator==(const MetaString& m) const noexcept { return compare(m) == 0; }
+	bool operator!=(const MetaString& m) const noexcept { return compare(m) != 0; }
+	bool operator<=(const MetaString& m) const noexcept { return compare(m) <= 0; }
+	bool operator>=(const MetaString& m) const noexcept { return compare(m) >= 0; }
+	bool operator< (const MetaString& m) const noexcept { return compare(m) <  0; }
+	bool operator> (const MetaString& m) const noexcept { return compare(m) >  0; }
 
 	void printf(const char*, ...);
 	FB_SIZE_T copyTo(char* to, FB_SIZE_T toSize) const;
 
 protected:
-	static void adjustLength(const char* const s, FB_SIZE_T& l);
+	static void adjustLength(const char* const s, FB_SIZE_T& l) noexcept;
 };
 
 } // namespace Firebird

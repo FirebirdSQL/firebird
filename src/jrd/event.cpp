@@ -267,7 +267,7 @@ SLONG EventManager::queEvents(SLONG session_id,
 		const SLONG event_offset = SRQ_REL_PTR(event);
 
 		req_int* interest, *prior;
-		if (interest = historical_interest(session, event_offset))
+		if ((interest = historical_interest(session, event_offset)))
 		{
 			for (SRQ_PTR* ptr2 = &session->ses_interests;
 				 *ptr2 && (prior = (req_int*) SRQ_ABS_PTR(*ptr2));
@@ -1109,8 +1109,7 @@ void EventManager::mutex_bugcheck(const TEXT* string, int mutex_state)
  *
  **************************************/
 	TEXT msg[BUFFER_TINY];
-
-	sprintf(msg, "EVENT: %s error, status = %d", string, mutex_state);
+	snprintf(msg, sizeof(msg), "EVENT: %s error, status = %d", string, mutex_state);
 	fb_utils::logAndDie(msg);
 }
 

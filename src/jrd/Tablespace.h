@@ -36,36 +36,31 @@ namespace Jrd
 	class Format;
 	class Parameter;
 
-	class Tablespace : public Firebird::PermanentStorage
+	class Tablespace
 	{
 	friend class Attachment;
 	public:
-		explicit Tablespace(MemoryPool& p)
-			: PermanentStorage(p),
-			  id(INVALID_PAGE_SPACE),
-			  name(p),
-			  existenceLock(NULL),
-			  modified(false),
-			  useCount(0)
-		{
-		}
+		explicit Tablespace(MemoryPool& p, ULONG tsId, const MetaName& tsName)
+			: id(tsId), name(p, tsName)
+		{}
 
 		~Tablespace();
 
-		ULONG id;					// tablespace id = pagespace id
-		MetaName name;	// tablespace name
-		Lock* existenceLock;	// existence lock, if any
-		bool modified;
+		ULONG id;						// tablespace id = pagespace id
+		MetaName name;					// tablespace name
+		Lock* existenceLock = nullptr;	// existence lock, if any
+		bool modified = false;
 
 	private:
-		int useCount;
+		int useCount = 0;
 
 	public:
 		void addRef(thread_db* tdbb);
 		void release(thread_db* tdbb);
+
 		bool isUsed() const
 		{
-			return useCount > 0;
+			return (useCount > 0);
 		}
 
 	};

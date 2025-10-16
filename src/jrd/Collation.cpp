@@ -98,7 +98,6 @@
 #include "../jrd/evl_string.h"
 #include "../jrd/intl_classes.h"
 #include "../jrd/lck_proto.h"
-#include "../jrd/intl_classes.h"
 #include "../jrd/intl_proto.h"
 #include "../jrd/Collation.h"
 #include "../common/TextType.h"
@@ -110,7 +109,7 @@ using namespace Jrd;
 
 namespace {
 
-class Re2SimilarMatcher : public PatternMatcher
+class Re2SimilarMatcher final : public PatternMatcher
 {
 public:
 	Re2SimilarMatcher(thread_db* tdbb, MemoryPool& pool, TextType* textType,
@@ -175,19 +174,19 @@ public:
 	}
 
 public:
-	virtual void reset()
+	void reset() override
 	{
 		buffer.shrink(0);
 	}
 
-	virtual bool process(const UCHAR* data, SLONG dataLen)
+	bool process(const UCHAR* data, SLONG dataLen) override
 	{
 		const FB_SIZE_T pos = buffer.getCount();
 		memcpy(buffer.getBuffer(pos + dataLen) + pos, data, dataLen);
 		return true;
 	}
 
-	virtual bool result()
+	bool result() override
 	{
 		UCharBuffer utfBuffer;
 		const auto charSetId = textType->getCharSet()->getId();
@@ -211,7 +210,7 @@ private:
 	UCharBuffer buffer;
 };
 
-class Re2SubstringSimilarMatcher : public BaseSubstringSimilarMatcher
+class Re2SubstringSimilarMatcher final : public BaseSubstringSimilarMatcher
 {
 public:
 	Re2SubstringSimilarMatcher(thread_db* tdbb, MemoryPool& pool, TextType* textType,
@@ -283,20 +282,20 @@ public:
 	}
 
 public:
-	virtual void reset()
+	void reset() override
 	{
 		buffer.shrink(0);
 		resultStart = resultLength = 0;
 	}
 
-	virtual bool process(const UCHAR* data, SLONG dataLen)
+	bool process(const UCHAR* data, SLONG dataLen) override
 	{
 		const FB_SIZE_T pos = buffer.getCount();
 		memcpy(buffer.getBuffer(pos + dataLen) + pos, data, dataLen);
 		return true;
 	}
 
-	virtual bool result()
+	bool result() override
 	{
 		UCharBuffer utfBuffer;
 		const auto charSetId = textType->getCharSet()->getId();
@@ -317,7 +316,7 @@ public:
 		if (charSetId != CS_NONE && charSetId != CS_BINARY)
 		{
 			// Get the character positions in the utf-8 string.
-			auto utf8CharSet = IntlUtil::getUtf8CharSet();
+			const auto* utf8CharSet = IntlUtil::getUtf8CharSet();
 			resultLength = utf8CharSet->length(resultLength, bufferPtr->begin() + resultStart, true);
 			resultStart = utf8CharSet->length(resultStart, bufferPtr->begin(), true);
 		}
@@ -325,7 +324,7 @@ public:
 		return true;
 	}
 
-	virtual void getResultInfo(unsigned* start, unsigned* length)
+	void getResultInfo(unsigned* start, unsigned* length) override
 	{
 		*start = resultStart;
 		*length = resultLength;
@@ -339,21 +338,21 @@ private:
 };
 
 // constants used in matches and sleuth
-const int CHAR_GDML_MATCH_ONE	= TextType::CHAR_QUESTION_MARK;
-const int CHAR_GDML_MATCH_ANY	= TextType::CHAR_ASTERISK;
-const int CHAR_GDML_QUOTE		= TextType::CHAR_AT;
-const int CHAR_GDML_NOT			= TextType::CHAR_TILDE;
-const int CHAR_GDML_RANGE		= TextType::CHAR_MINUS;
-const int CHAR_GDML_CLASS_START	= TextType::CHAR_OPEN_BRACKET;
-const int CHAR_GDML_CLASS_END	= TextType::CHAR_CLOSE_BRACKET;
-const int CHAR_GDML_SUBSTITUTE	= TextType::CHAR_EQUAL;
-const int CHAR_GDML_FLAG_SET	= TextType::CHAR_PLUS;
-const int CHAR_GDML_FLAG_CLEAR	= TextType::CHAR_MINUS;
-const int CHAR_GDML_COMMA		= TextType::CHAR_COMMA;
-const int CHAR_GDML_LPAREN		= TextType::CHAR_OPEN_PAREN;
-const int CHAR_GDML_RPAREN		= TextType::CHAR_CLOSE_PAREN;
+constexpr int CHAR_GDML_MATCH_ONE	= TextType::CHAR_QUESTION_MARK;
+constexpr int CHAR_GDML_MATCH_ANY	= TextType::CHAR_ASTERISK;
+constexpr int CHAR_GDML_QUOTE		= TextType::CHAR_AT;
+constexpr int CHAR_GDML_NOT			= TextType::CHAR_TILDE;
+constexpr int CHAR_GDML_RANGE		= TextType::CHAR_MINUS;
+constexpr int CHAR_GDML_CLASS_START	= TextType::CHAR_OPEN_BRACKET;
+constexpr int CHAR_GDML_CLASS_END	= TextType::CHAR_CLOSE_BRACKET;
+constexpr int CHAR_GDML_SUBSTITUTE	= TextType::CHAR_EQUAL;
+constexpr int CHAR_GDML_FLAG_SET	= TextType::CHAR_PLUS;
+constexpr int CHAR_GDML_FLAG_CLEAR	= TextType::CHAR_MINUS;
+constexpr int CHAR_GDML_COMMA		= TextType::CHAR_COMMA;
+constexpr int CHAR_GDML_LPAREN		= TextType::CHAR_OPEN_PAREN;
+constexpr int CHAR_GDML_RPAREN		= TextType::CHAR_CLOSE_PAREN;
 
-static const UCHAR SLEUTH_SPECIAL[128] =
+static constexpr UCHAR SLEUTH_SPECIAL[128] =
 {
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -368,7 +367,7 @@ static const UCHAR SLEUTH_SPECIAL[128] =
 // Below are templates for functions used in Collation implementation
 
 template <typename CharType, typename StrConverter = CanonicalConverter<> >
-class LikeMatcher : public PatternMatcher
+class LikeMatcher final : public PatternMatcher
 {
 public:
 	LikeMatcher(MemoryPool& pool, TextType* ttype, const CharType* str, SLONG str_len,
@@ -378,17 +377,17 @@ public:
 	{
 	}
 
-	void reset()
+	void reset() override
 	{
 		evaluator.reset();
 	}
 
-	bool result()
+	bool result() override
 	{
 		return evaluator.getResult();
 	}
 
-	bool process(const UCHAR* str, SLONG length)
+	bool process(const UCHAR* str, SLONG length) override
 	{
 		StrConverter cvt(pool, textType, str, length);
 		fb_assert(length % sizeof(CharType) == 0);
@@ -441,32 +440,32 @@ private:
 };
 
 template <typename CharType, typename StrConverter>
-class StartsMatcher : public PatternMatcher
+class StartsMatcher final : public PatternMatcher
 {
 public:
 	StartsMatcher(MemoryPool& pool, TextType* ttype, const CharType* str, SLONG str_len, SLONG aByteLengthLimit)
 		: PatternMatcher(pool, ttype),
 		  evaluator(pool, str, str_len)
 	{
-		auto charSet = ttype->getCharSet();
+		const auto* charSet = ttype->getCharSet();
 
 		byteLengthLimit = charSet->isMultiByte() ?
 			aByteLengthLimit / charSet->minBytesPerChar() * charSet->maxBytesPerChar() :
 			aByteLengthLimit;
 	}
 
-	void reset()
+	void reset() override
 	{
 		evaluator.reset();
 		processedByteLength = 0;
 	}
 
-	bool result()
+	bool result() override
 	{
 		return evaluator.getResult();
 	}
 
-	bool process(const UCHAR* str, SLONG length)
+	bool process(const UCHAR* str, SLONG length) override
 	{
 		if (processedByteLength + length > byteLengthLimit)
 			length = byteLengthLimit - processedByteLength;
@@ -497,7 +496,7 @@ public:
 	{
 		if (sl > pl)
 		{
-			auto charSet = ttype->getCharSet();
+			const auto* charSet = ttype->getCharSet();
 
 			sl = charSet->isMultiByte() ?
 				MIN(sl, pl / charSet->minBytesPerChar() * charSet->maxBytesPerChar()) :
@@ -525,7 +524,7 @@ private:
 };
 
 template <typename CharType, typename StrConverter = CanonicalConverter<UpcaseConverter<> > >
-class ContainsMatcher : public PatternMatcher
+class ContainsMatcher final : public PatternMatcher
 {
 public:
 	ContainsMatcher(MemoryPool& pool, TextType* ttype, const CharType* str, SLONG str_len)
@@ -534,17 +533,17 @@ public:
 	{
 	}
 
-	void reset()
+	void reset() override
 	{
 		evaluator.reset();
 	}
 
-	bool result()
+	bool result() override
 	{
 		return evaluator.getResult();
 	}
 
-	bool process(const UCHAR* str, SLONG length)
+	bool process(const UCHAR* str, SLONG length) override
 	{
 		StrConverter cvt(pool, textType, str, length);
 		fb_assert(length % sizeof(CharType) == 0);
@@ -595,7 +594,7 @@ public:
 private:
 	 // Return true if a string (p1, l1) matches a given pattern (p2, l2).
 	 // The character '?' in the pattern may match any single character
-	 // in the the string, and the character '*' may match any sequence
+	 // in the string, and the character '*' may match any sequence
 	 // of characters.
 	 //
 	 // Wide SCHAR version operates on short-based buffer,
@@ -898,7 +897,7 @@ private:
 			if (*control == *(CharType*) obj->getCanonicalChar(CHAR_GDML_SUBSTITUTE))
 			{
 				// Note: don't allow substitution characters larger than vector
-				CharType** const end_vector = vector + (((int) c < FB_NELEM(vector)) ? c : 0);
+				CharType** const end_vector = vector + ((static_cast<FB_SSIZE_T>(c) < static_cast<FB_SSIZE_T>(FB_NELEM(vector))) ? c : 0);
 				while (v <= end_vector)
 					*v++ = 0;
 				*end_vector = t;
@@ -1119,10 +1118,11 @@ Collation* Collation::createInstance(MemoryPool& pool, TTYPE_ID id, texttype* tt
 
 		case 4:
 			return newCollation<ULONG>(pool, id, tt, attributes, cs);
-	}
 
-	fb_assert(false);
-	return NULL;	// compiler silencer
+		default:
+			fb_assert(false);
+			return NULL;	// compiler silencer
+	}
 }
 
 void Collation::release(thread_db* tdbb)

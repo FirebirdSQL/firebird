@@ -260,6 +260,10 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider
 	  att_dest_bind(&att_bindings),
 	  att_original_timezone(TimeZoneUtil::getSystemTimeZone()),
 	  att_current_timezone(att_original_timezone),
+	  att_schema_search_path(FB_NEW_POOL(*pool) AnyRef<ObjectsArray<MetaString>>(*pool)),
+	  att_system_schema_search_path(FB_NEW_POOL(*pool) AnyRef<ObjectsArray<MetaString>>(*pool)),
+	  att_unqualified_charset_resolved_cache_search_path(att_schema_search_path),
+	  att_unqualified_charset_resolved_cache(*pool),
 	  att_parallel_workers(0),
 	  att_repl_appliers(*pool),
 	  att_utility(UTIL_NONE),
@@ -282,9 +286,10 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider
 	att_internal.grow(irq_MAX);
 	att_dyn_req.grow(drq_MAX);
 
-	Tablespace* dbTableSpace = FB_NEW_POOL(*pool) Tablespace(*pool);
-	dbTableSpace->id = DB_PAGE_SPACE;
+	const auto dbTableSpace = FB_NEW_POOL(*pool) Tablespace(*pool, DB_PAGE_SPACE, PRIMARY_TABLESPACE_NAME);
 	att_tablespaces.add(dbTableSpace);
+
+	att_system_schema_search_path->push(SYSTEM_SCHEMA);
 }
 
 
@@ -374,38 +379,13 @@ MetaName Jrd::Attachment::nameToUserCharSet(thread_db* tdbb, const MetaName& nam
 }
 
 
-string Jrd::Attachment::stringToMetaCharSet(thread_db* tdbb, const string& str,
-	const char* charSet)
-{
-	USHORT charSetId = att_charset;
-
-	if (charSet)
-	{
-		if (!MET_get_char_coll_subtype(tdbb, &charSetId, (const UCHAR*) charSet,
-				static_cast<USHORT>(strlen(charSet))))
-		{
-			(Arg::Gds(isc_charset_not_found) << Arg::Str(charSet)).raise();
-		}
-	}
-
-	if (charSetId == CS_METADATA || charSetId == CS_NONE)
-		return str;
-
-	HalfStaticArray<UCHAR, BUFFER_MEDIUM> buffer(str.length() * sizeof(ULONG));
-	ULONG len = INTL_convert_bytes(tdbb, CS_METADATA, buffer.begin(), buffer.getCapacity(),
-		charSetId, (const BYTE*) str.c_str(), str.length(), ERR_post);
-
-	return string((char*) buffer.begin(), len);
-}
-
-
 string Jrd::Attachment::stringToUserCharSet(thread_db* tdbb, const string& str)
 {
 	if (att_charset == CS_METADATA || att_charset == CS_NONE)
 		return str;
 
 	HalfStaticArray<UCHAR, BUFFER_MEDIUM> buffer(str.length() * sizeof(ULONG));
-	ULONG len = INTL_convert_bytes(tdbb, att_charset, buffer.begin(), buffer.getCapacity(),
+	const ULONG len = INTL_convert_bytes(tdbb, att_charset, buffer.begin(), buffer.getCapacity(),
 		CS_METADATA, (const BYTE*) str.c_str(), str.length(), ERR_post);
 
 	return string((char*) buffer.begin(), len);
@@ -479,8 +459,8 @@ static void runDBTriggers(thread_db* tdbb, TriggerAction action)
 {
 	fb_assert(action == TRIGGER_CONNECT || action == TRIGGER_DISCONNECT);
 
-	Database* dbb = tdbb->getDatabase();
-	Attachment* att = tdbb->getAttachment();
+	const Database* dbb = tdbb->getDatabase();
+	const Attachment* att = tdbb->getAttachment();
 	fb_assert(dbb);
 	fb_assert(att);
 
@@ -657,16 +637,18 @@ void Jrd::Attachment::signalShutdown(ISC_STATUS code)
 void Jrd::Attachment::mergeStats(bool pageStatsOnly)
 {
 	MutexLockGuard guard(att_database->dbb_stats_mutex, FB_FUNCTION);
-	att_database->dbb_stats.adjustPageStats(att_base_stats, att_stats);
-	if (!pageStatsOnly)
+
+	if (pageStatsOnly)
+		att_database->dbb_stats.adjustPageStats(att_base_stats, att_stats);
+	else
 	{
-		att_database->dbb_stats.adjust(att_base_stats, att_stats, true);
+		att_database->dbb_stats.adjust(att_base_stats, att_stats);
 		att_base_stats.assign(att_stats);
 	}
 }
 
 
-bool Attachment::hasActiveRequests() const
+bool Attachment::hasActiveRequests() const noexcept
 {
 	for (const jrd_tra* transaction = att_transactions;
 		transaction; transaction = transaction->tra_next)
@@ -686,7 +668,7 @@ bool Attachment::hasActiveRequests() const
 // Find an inactive incarnation of a system request. If necessary, clone it.
 Request* Jrd::Attachment::findSystemRequest(thread_db* tdbb, USHORT id, USHORT which)
 {
-	static const int MAX_RECURSION = 100;
+	constexpr int MAX_RECURSION = 100;
 
 	// If the request hasn't been compiled or isn't active, there're nothing to do.
 
@@ -1122,7 +1104,7 @@ unsigned int Attachment::getActualIdleTimeout() const
 
 void Attachment::setupIdleTimer(bool clear)
 {
-	unsigned int timeout = clear ? 0 : getActualIdleTimeout();
+	const unsigned int timeout = clear ? 0 : getActualIdleTimeout();
 	if (!timeout || hasActiveRequests())
 	{
 		if (att_idle_timer)
@@ -1225,7 +1207,7 @@ ProfilerManager* Attachment::getProfilerManager(thread_db* tdbb)
 
 ProfilerManager* Attachment::getActiveProfilerManagerForNonInternalStatement(thread_db* tdbb)
 {
-	const auto request = tdbb->getRequest();
+	const auto* request = tdbb->getRequest();
 
 	return isProfilerActive() && !request->hasInternalStatement() ?
 		getProfilerManager(tdbb) :
@@ -1249,4 +1231,37 @@ void Attachment::releaseProfilerManager(thread_db* tdbb)
 	}
 	else
 		att_profiler_manager.reset();
+}
+
+bool Attachment::qualifyNewName(thread_db* tdbb, QualifiedName& name, const ObjectsArray<MetaString>* schemaSearchPath)
+{
+	if (!schemaSearchPath)
+		schemaSearchPath = att_schema_search_path;
+
+	if (name.schema.isEmpty() && schemaSearchPath->hasData())
+	{
+		for (const auto& searchSchema : *schemaSearchPath)
+		{
+			if (MET_check_schema_exists(tdbb, searchSchema))
+			{
+				name.schema = searchSchema;
+				return true;
+			}
+		}
+	}
+
+	return MET_check_schema_exists(tdbb, name.schema);
+}
+
+void Attachment::qualifyExistingName(thread_db* tdbb, QualifiedName& name,
+	std::initializer_list<ObjectType> objTypes, const ObjectsArray<MetaString>* schemaSearchPath)
+{
+	if (name.object.hasData())
+	{
+		if (name.schema.isEmpty())
+		{
+			if (!MET_qualify_existing_name(tdbb, name, objTypes, schemaSearchPath))
+				qualifyNewName(tdbb, name, schemaSearchPath);
+		}
+	}
 }

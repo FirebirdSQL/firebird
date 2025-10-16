@@ -438,7 +438,7 @@ Firebird::string MOV_make_string2(Jrd::thread_db* tdbb, const dsc* desc, USHORT 
 }
 
 
-void MOV_move(Jrd::thread_db* tdbb, /*const*/ dsc* from, dsc* to)
+void MOV_move(Jrd::thread_db* tdbb, /*const*/ dsc* from, dsc* to, bool trustedSource)
 {
 /**************************************
  *
@@ -454,7 +454,7 @@ void MOV_move(Jrd::thread_db* tdbb, /*const*/ dsc* from, dsc* to)
 	if (DTYPE_IS_BLOB_OR_QUAD(from->dsc_dtype) || DTYPE_IS_BLOB_OR_QUAD(to->dsc_dtype))
 		Jrd::blb::move(tdbb, from, to);
 	else
-		CVT_move(from, to, tdbb->getAttachment()->att_dec_status);
+		CVT_move_common(from, to, tdbb->getAttachment()->att_dec_status, &Jrd::EngineCallbacks::instance, trustedSource);
 }
 
 
@@ -525,19 +525,19 @@ DescPrinter::DescPrinter(thread_db* tdbb, const dsc* desc, FB_SIZE_T mLen, USHOR
 
 		if (isBinary)
 		{
-			string hex;
-
 			FB_SIZE_T len = value.length();
 			const bool cut = (len > (maxLen - 3) / 2);	// 3 is a length of enclosing symbols: x' and '
 			if (cut)
 				len = (maxLen - 5) / 2;					// 5 is a length of enclosing symbols: x' and ...
 
-			char* s = hex.getBuffer(2 * len);			// each raw byte represented by 2 chars in string
+			string hex;
+			hex.reserve(2 * len);						// each raw byte represented by 2 chars in string
 
+			char s[3];
 			for (FB_SIZE_T i = 0; i < len; i++)
 			{
-				sprintf(s, "%02X", (int)(unsigned char) str[i]);
-				s += 2;
+				snprintf(s, sizeof(s), "%02X", (int)(unsigned char) str[i]);
+				hex.append(s);
 			}
 			value = "x'" + hex + (cut ? "..." : "'");
 		}

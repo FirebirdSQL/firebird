@@ -77,10 +77,13 @@ void IfThenElseAction::generate(const ActionParametersBlock& apb, unsigned ident
 void CallAction::generate(const ActionParametersBlock& apb, unsigned ident)
 {
 	identify(apb, ident);
-	fprintf(apb.out, "%s(", name.c_str());
+	fprintf(apb.out, "%s(", (apb.language == LANGUAGE_PASCAL ? PascalGenerator::escapeName(name) : name).c_str());
 	for (auto itr = parameters.begin(); itr != parameters.end(); ++itr)
 	{
-		fprintf(apb.out, "%s%s", itr == parameters.begin() ? "" : ", ", itr->c_str());
+		string parname = *itr;
+		if (apb.language == LANGUAGE_PASCAL)
+			parname = PascalGenerator::escapeName(parname);
+		fprintf(apb.out, "%s%s", itr == parameters.begin() ? "" : ", ", parname.c_str());
 	}
 	fprintf(apb.out, ");\n");
 }

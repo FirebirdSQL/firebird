@@ -63,7 +63,7 @@
 using MsgFormat::SafeArg;
 
 
-static const USHORT val_err_table[] =
+static constexpr USHORT val_err_table[] =
 {
 	0,
 	55,				// msg 55: \n\tNumber of record level errors\t: %ld
@@ -85,9 +85,9 @@ static const USHORT val_err_table[] =
 };
 
 
-const int ALICE_MSG_FAC = 3;
+constexpr int ALICE_MSG_FAC = FB_IMPL_MSG_FACILITY_GFIX;
 
-void ALICE_exit(int code, AliceGlobals* tdgbl)
+[[noreturn]] void ALICE_exit(int code, AliceGlobals* tdgbl)
 {
 	tdgbl->exit_code = code;
     Firebird::LongJump::raise();
@@ -622,7 +622,7 @@ int alice(Firebird::UtilSvc* uSvc)
 //		Copy a string, uppercasing as we go.
 //
 
-void ALICE_upper_case(const TEXT* in, TEXT* out, const size_t buf_size)
+void ALICE_upper_case(const TEXT* in, TEXT* out, const size_t buf_size) noexcept
 {
 	const TEXT* const end = out + buf_size - 1;
 	for (TEXT c = *in++; c && out < end; c = *in++) {
@@ -692,7 +692,7 @@ void ALICE_print_status(bool error, const ISC_STATUS* status_vector)
 //		Format and print an error message, then punt.
 //
 
-void ALICE_error(USHORT	number, const SafeArg& arg)
+[[noreturn]] void ALICE_error(USHORT number, const SafeArg& arg)
 {
 	AliceGlobals* tdgbl = AliceGlobals::getSpecific();
 	TEXT buffer[256];

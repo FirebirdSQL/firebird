@@ -40,12 +40,12 @@
 
 // Thread priorities (may be ignored)
 
-const int THREAD_high			= 1;
-const int THREAD_medium_high	= 2;
-const int THREAD_medium			= 3;
-const int THREAD_medium_low		= 4;
-const int THREAD_low			= 5;
-const int THREAD_critical		= 6;
+inline constexpr int THREAD_high		= 1;
+inline constexpr int THREAD_medium_high	= 2;
+inline constexpr int THREAD_medium		= 3;
+inline constexpr int THREAD_medium_low	= 4;
+inline constexpr int THREAD_low			= 5;
+inline constexpr int THREAD_critical	= 6;
 
 
 // Thread startup
@@ -87,19 +87,17 @@ public:
 	static void sleep(unsigned milliseconds);
 	static void yield();
 
+	static bool isCurrent(Handle threadHandle);
 	bool isCurrent();
 
-	Thread()
-	{
-		memset(&internalId, 0, sizeof(internalId));
-	}
+	Thread() noexcept { }
 
 private:
-	Thread(InternalId iid)
+	Thread(InternalId iid) noexcept
 		: internalId(iid)
 	{ }
 
-	InternalId internalId;
+	InternalId internalId{};
 };
 
 inline ThreadId getThreadId()
@@ -170,7 +168,7 @@ private:
 			threadArg->exceptionHandler(ex, threadRoutine);
 		}
 
-		if (cleanup)
+		if (cleanup != nullptr)
 			cleanup(threadArg);
 		closing = true;
 	}

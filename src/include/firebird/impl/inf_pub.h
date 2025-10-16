@@ -189,6 +189,9 @@ enum db_info_types
 	fb_info_wire_rcv_bytes = 157,
 	fb_info_wire_roundtrips = 158,
 
+	fb_info_max_blob_cache_size = 159,
+	fb_info_max_inline_blob_size = 160,
+
 	isc_info_db_last_value   /* Leave this LAST! */
 };
 
@@ -500,6 +503,7 @@ enum info_db_provider
 #define isc_info_sql_stmt_blob_align	30
 #define isc_info_sql_exec_path_blr_bytes	31
 #define isc_info_sql_exec_path_blr_text		32
+#define isc_info_sql_relation_schema		33
 
 /*********************************/
 /* SQL information return values */

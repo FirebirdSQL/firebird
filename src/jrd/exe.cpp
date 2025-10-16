@@ -121,9 +121,9 @@ using namespace Firebird;
 string Item::getDescription(Request* request, const ItemInfo* itemInfo) const
 {
 	if (itemInfo && itemInfo->name.hasData())
-		return itemInfo->name.c_str();
+		return itemInfo->name.toQuotedString();
 
-	int oneBasedIndex = index + 1;
+	const int oneBasedIndex = index + 1;
 	string s;
 
 	if (type == Item::TYPE_VARIABLE)
@@ -156,23 +156,23 @@ string Item::getDescription(Request* request, const ItemInfo* itemInfo) const
 
 // AffectedRows class implementation
 
-AffectedRows::AffectedRows()
+AffectedRows::AffectedRows() noexcept
 {
 	clear();
 }
 
-void AffectedRows::clear()
+void AffectedRows::clear() noexcept
 {
 	writeFlag = false;
 	fetchedRows = modifiedRows = 0;
 }
 
-void AffectedRows::bumpFetched()
+void AffectedRows::bumpFetched() noexcept
 {
 	fetchedRows++;
 }
 
-void AffectedRows::bumpModified(bool increment)
+void AffectedRows::bumpModified(bool increment) noexcept
 {
 	if (increment) {
 		modifiedRows++;
@@ -182,7 +182,7 @@ void AffectedRows::bumpModified(bool increment)
 	}
 }
 
-int AffectedRows::getCount() const
+int AffectedRows::getCount() const noexcept
 {
 	return writeFlag ? modifiedRows : fetchedRows;
 }
@@ -200,12 +200,12 @@ void StatusXcp::clear()
 	status->init();
 }
 
-void StatusXcp::init(const FbStatusVector* vector)
+void StatusXcp::init(const FbStatusVector* vector) noexcept
 {
 	fb_utils::copyStatus(&status, vector);
 }
 
-void StatusXcp::copyTo(FbStatusVector* vector) const
+void StatusXcp::copyTo(FbStatusVector* vector) const noexcept
 {
 	fb_utils::copyStatus(vector, &status);
 }
@@ -261,7 +261,7 @@ static void release_blobs(thread_db*, Request*);
 static void trigger_failure(thread_db*, Request*);
 static void stuff_stack_trace(const Request*);
 
-const size_t MAX_STACK_TRACE = 2048;
+constexpr size_t MAX_STACK_TRACE = 2048;
 
 
 namespace
@@ -462,7 +462,14 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 			}
 		}
 
-		if (DTYPE_IS_BLOB_OR_QUAD(from_desc->dsc_dtype) || DTYPE_IS_BLOB_OR_QUAD(to_desc->dsc_dtype))
+		// Strings will be validated in CVT_move()
+
+		if (DSC_EQUIV(from_desc, to_desc, false) && from_desc->dsc_address == to_desc->dsc_address)
+		{
+			// Self-assignment. No need to do anything.
+			return;
+		}
+		else if (DTYPE_IS_BLOB_OR_QUAD(from_desc->dsc_dtype) || DTYPE_IS_BLOB_OR_QUAD(to_desc->dsc_dtype))
 		{
 			// ASF: Don't let MOV_move call blb::move because MOV
 			// will not pass the destination field to blb::move.
@@ -491,6 +498,11 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 		}
 		else if (!DSC_EQUIV(from_desc, to_desc, false))
 		{
+			MOV_move(tdbb, from_desc, to_desc);
+		}
+		else if (DTYPE_IS_TEXT(from_desc->dsc_dtype))
+		{
+			// Force slow move to properly handle the case when source string is provided with real length instead of padded length
 			MOV_move(tdbb, from_desc, to_desc);
 		}
 		else if (from_desc->dsc_dtype == dtype_short)
@@ -679,7 +691,9 @@ void EXE_receive(thread_db* tdbb,
 	jrd_tra* transaction = request->req_transaction;
 
 	if (!(request->req_flags & req_active))
-		ERR_post(Arg::Gds(isc_req_sync));
+	{
+		ERR_post(Arg::Gds(isc_req_sync) << Arg::Gds(isc_random) << Arg::Str("Receive from inactive request"));
+	}
 
 	SavNumber savNumber = 0;
 
@@ -710,63 +724,87 @@ void EXE_receive(thread_db* tdbb,
 
 	try
 	{
-		if (nodeIs<StallNode>(request->req_message))
-			execute_looper(tdbb, request, transaction, request->req_next, Request::req_sync);
-
-		if (!(request->req_flags & req_active) || request->req_operation != Request::req_send)
-			ERR_post(Arg::Gds(isc_req_sync));
-
-		const MessageNode* message = nodeAs<MessageNode>(request->req_message);
-		const Format* format = message->format;
-
-		if (msg != message->messageNumber)
-			ERR_post(Arg::Gds(isc_req_sync));
-
-		if (length != format->fmt_length)
-			ERR_post(Arg::Gds(isc_port_len) << Arg::Num(length) << Arg::Num(format->fmt_length));
-
-		memcpy(buffer, request->getImpure<UCHAR>(message->impureOffset), length);
-
-		// ASF: temporary blobs returned to the client should not be released
-		// with the request, but in the transaction end.
-		if (top_level || transaction->tra_temp_blobs_count)
+		while ((request->req_flags & req_active) && request->req_operation != Request::req_send)
 		{
-			for (int i = 0; i < format->fmt_count; ++i)
+			// Several reasons to get here:
+			// 1) Execution flow didn't advance since last req_send
+			// 2) StallNode has been encountered
+			// 3) Request needs to receive
+			// Just run execution skipping all StallNodes until the end, get needed state or encounter req_receive
+
+			// This is obvious problem in blr logic
+			if (request->req_operation == Request::req_receive)
 			{
-				const DSC* desc = &format->fmt_desc[i];
+				ERR_post(Arg::Gds(isc_req_sync) << Arg::Gds(isc_random) << Arg::Str("Request expected to send but need to receive"));
+			}
 
-				if (desc->isBlob())
+			execute_looper(tdbb, request, transaction, request->req_next, Request::req_sync);
+		}
+
+		if (request->req_flags & req_active)
+		{
+			const MessageNode* message = nodeAs<MessageNode>(request->req_message);
+
+			// Sanity checks first
+			if (message == nullptr || msg != message->messageNumber)
+				ERR_post(Arg::Gds(isc_req_sync) << Arg::Gds(isc_random) << Arg::Str("Request got wrong message"));
+
+			const Format* format = message->getFormat(request);
+			if (length != format->fmt_length)
+				ERR_post(Arg::Gds(isc_port_len) << Arg::Num(length) << Arg::Num(format->fmt_length));
+
+			// To make sure that the buffer is allocated get it before calling of the looper
+			UCHAR* msgBuffer = message->getBuffer(request);
+
+			// Proceed assignments then
+			execute_looper(tdbb, request, transaction, request->req_next, Request::req_proceed);
+
+			// Make "dummy receive" simpler to allow pass nullptr as the output buffer
+			if (buffer != nullptr)
+			{
+				// Copy data
+				memcpy(buffer, msgBuffer, length);
+
+				// ASF: temporary blobs returned to the client should not be released
+				// with the request, but in the transaction end.
+				if (top_level || transaction->tra_temp_blobs_count)
 				{
-					const bid* id = (bid*) (static_cast<UCHAR*>(buffer) + (ULONG)(IPTR) desc->dsc_address);
-
-					if (transaction->tra_blobs->locate(id->bid_temp_id()))
+					for (int i = 0; i < format->fmt_count; ++i)
 					{
-						BlobIndex* current = &transaction->tra_blobs->current();
+						const DSC* desc = &format->fmt_desc[i];
 
-						if (top_level &&
-							current->bli_request &&
-							current->bli_request->req_blobs.locate(id->bid_temp_id()))
+						if (desc->isBlob())
 						{
-							current->bli_request->req_blobs.fastRemove();
-							current->bli_request = NULL;
-						}
+							const bid* id = (bid*) (static_cast<UCHAR*>(buffer) + (ULONG)(IPTR) desc->dsc_address);
 
-						if (!current->bli_materialized &&
-							(current->bli_blob_object->blb_flags & (BLB_close_on_read | BLB_stream)) ==
-								(BLB_close_on_read | BLB_stream))
-						{
-							current->bli_blob_object->BLB_close(tdbb);
+							if (transaction->tra_blobs->locate(id->bid_temp_id()))
+							{
+								BlobIndex* current = &transaction->tra_blobs->current();
+
+								if (top_level &&
+									current->bli_request &&
+									current->bli_request->req_blobs.locate(id->bid_temp_id()))
+								{
+									current->bli_request->req_blobs.fastRemove();
+									current->bli_request = NULL;
+								}
+
+								if (!current->bli_materialized &&
+									(current->bli_blob_object->blb_flags & (BLB_close_on_read | BLB_stream)) ==
+										(BLB_close_on_read | BLB_stream))
+								{
+									current->bli_blob_object->BLB_close(tdbb);
+								}
+							}
+							else if (top_level)
+							{
+								transaction->checkBlob(tdbb, id, NULL, false);
+							}
 						}
-					}
-					else if (top_level)
-					{
-						transaction->checkBlob(tdbb, id, NULL, false);
 					}
 				}
 			}
 		}
-
-		execute_looper(tdbb, request, transaction, request->req_next, Request::req_proceed);
 	}
 	catch (const Exception&)
 	{
@@ -865,11 +903,22 @@ void EXE_send(thread_db* tdbb, Request* request, USHORT msg, ULONG length, const
 
 	JRD_reschedule(tdbb);
 
-	if (!(request->req_flags & req_active))
-		ERR_post(Arg::Gds(isc_req_sync));
+	while ((request->req_flags & req_active) && request->req_operation != Request::req_receive)
+	{
+		// Several reasons to get here:
+		// 1) Execution flow didn't advance since last req_send
+		// 2) StallNode has been encountered
+		// Just run execution skipping all StallNodes until the end, get needed state or encounter req_send
 
-	if (request->req_operation != Request::req_receive)
-		ERR_post(Arg::Gds(isc_req_sync));
+		// This is obvious problem in blr logic
+		if (request->req_operation == Request::req_send)
+			ERR_post(Arg::Gds(isc_req_sync) << Arg::Gds(isc_random) << Arg::Str("Request expected to receive but need to send"));
+
+		execute_looper(tdbb, request, request->req_transaction, request->req_next, Request::req_sync);
+	}
+
+	if (!(request->req_flags & req_active))
+		ERR_post(Arg::Gds(isc_req_sync) << Arg::Gds(isc_random) << Arg::Str("Send data to inactive request"));
 
 	const auto node = request->req_message;
 	const StmtNode* message = nullptr;
@@ -893,16 +942,20 @@ void EXE_send(thread_db* tdbb, Request* request, USHORT msg, ULONG length, const
 	else
 		BUGCHECK(167);	// msg 167 invalid SEND request
 
-	const auto format = nodeAs<MessageNode>(message)->format;
+	const auto messageNode = nodeAs<MessageNode>(message);
+	const auto format = messageNode->getFormat(request);
 
-	if (msg != nodeAs<MessageNode>(message)->messageNumber)
+	if (msg != messageNode->messageNumber)
 		ERR_post(Arg::Gds(isc_req_sync));
 
 	if (length != format->fmt_length)
 		ERR_post(Arg::Gds(isc_port_len) << Arg::Num(length) << Arg::Num(format->fmt_length));
 
-	memcpy(request->getImpure<UCHAR>(message->impureOffset), buffer, length);
+	// Set data buffer to read parameters from
+	UCHAR* const msgBuffer = messageNode->getBuffer(request);
+	memcpy(msgBuffer, buffer, length);
 
+	// Process received data
 	execute_looper(tdbb, request, request->req_transaction, request->req_next, Request::req_proceed);
 }
 
@@ -916,7 +969,11 @@ static void activate_request(thread_db* tdbb, Request* request, jrd_tra* transac
 	BLKCHK(transaction, type_tra);
 
 	if (request->req_flags & req_active)
-		ERR_post(Arg::Gds(isc_req_sync) << Arg::Gds(isc_reqinuse));
+	{
+		// Nothing special for old-style BLR which does EOS signalling by hand instead of checking request's activity
+		// Just kill previous incarnation for them.
+		EXE_unwind(tdbb, request);
+	}
 
 	if (transaction->tra_flags & TRA_prepared)
 		ERR_post(Arg::Gds(isc_req_no_trans));
@@ -1323,6 +1380,10 @@ void EXE_execute_triggers(thread_db* tdbb,
 						case TriggerAction::TRIGGER_INSERT:
 							SystemTriggers::executeBeforeInsertTriggers(tdbb, relation, new_rec);
 							break;
+
+						default:
+							// other trigger actions not relevant here
+							break;
 					}
 					break;
 				}
@@ -1333,7 +1394,15 @@ void EXE_execute_triggers(thread_db* tdbb,
 						case TriggerAction::TRIGGER_DELETE:
 							SystemTriggers::executeAfterDeleteTriggers(tdbb, relation, old_rec);
 							break;
+
+						default:
+							// other trigger actions not relevant here
+							break;
 					}
+					break;
+
+				default:
+					// other trigger types not relevant here
 					break;
 			}
 		}
@@ -1374,6 +1443,17 @@ void EXE_execute_triggers(thread_db* tdbb,
 	{
 		for (TrigVector::iterator ptr = vector->begin(); ptr != vector->end(); ++ptr)
 		{
+			// The system trigger that implement cascading action can be skipped if
+			// no PK/UK field have been changed by UPDATE.
+
+			if ((which_trig == StmtNode::POST_TRIG) && (trigger_action == TRIGGER_UPDATE) &&
+				(ptr->sysTrigger == fb_sysflag_referential_constraint))
+			{
+				fb_assert(new_rpb);
+				if (!(new_rpb->rpb_runtime_flags & RPB_uk_updated))
+					continue;
+			}
+
 			if (trigger_action == TRIGGER_DDL && ddl_action)
 			{
 				// Skip triggers not matching our action
@@ -1502,20 +1582,20 @@ bool EXE_get_stack_trace(const Request* request, string& sTrace)
 
 		string context, name;
 
-		if (statement->triggerName.length())
+		if (statement->triggerName.object.length())
 		{
 			context = "At trigger";
-			name = statement->triggerName.c_str();
+			name = statement->triggerName.toQuotedString();
 		}
 		else if (statement->procedure)
 		{
 			context = statement->parentStatement ? "At sub procedure" : "At procedure";
-			name = statement->procedure->getName().toString();
+			name = statement->procedure->getName().toQuotedString();
 		}
 		else if (statement->function)
 		{
 			context = statement->parentStatement ? "At sub function" : "At function";
-			name = statement->function->getName().toString();
+			name = statement->function->getName().toQuotedString();
 		}
 		else if (req->req_src_line)
 		{
@@ -1527,7 +1607,7 @@ bool EXE_get_stack_trace(const Request* request, string& sTrace)
 			name.trim();
 
 			if (name.hasData())
-				context += string(" '") + name + string("'");
+				context += string(" ") + name;
 
 			if (sTrace.length() + context.length() > MAX_STACK_TRACE)
 				break;
@@ -1659,12 +1739,14 @@ const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* no
 
 					if (node->hasLineColumn &&
 						node->isProfileAware() &&
-						(!profileNode ||
+						(exeState.forceProfileNextEvaluate ||
+						 !profileNode ||
 						 !(node->line == profileNode->line && node->column == profileNode->column)))
 					{
 						profilerLastTicks = profilerCallAfterPsqlLineColumn();
 						profilerLastAccumulatedOverhead = profilerManager->getAccumulatedOverhead();
 						profileNode = node;
+						exeState.forceProfileNextEvaluate = false;
 
 						profilerManager->beforePsqlLineColumn(request, profileNode->line, profileNode->column);
 					}

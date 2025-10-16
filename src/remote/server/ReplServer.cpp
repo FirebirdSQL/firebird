@@ -70,10 +70,10 @@ using namespace Replication;
 
 namespace
 {
-	const char CTL_SIGNATURE[] = "FBREPLCTL";
+	inline constexpr const char* CTL_SIGNATURE = "FBREPLCTL";
 
-	const USHORT CTL_VERSION1 = 1;
-	const USHORT CTL_CURRENT_VERSION = CTL_VERSION1;
+	inline constexpr USHORT CTL_VERSION1 = 1;
+	inline constexpr USHORT CTL_CURRENT_VERSION = CTL_VERSION1;
 
 	volatile bool shutdownFlag = false;
 	AtomicCounter activeThreads;
@@ -95,15 +95,15 @@ namespace
 
 	struct ActiveTransaction
 	{
-		ActiveTransaction()
+		ActiveTransaction() noexcept
 			: tra_id(0), sequence(0)
 		{}
 
-		ActiveTransaction(TraNumber id, FB_UINT64 seq)
+		ActiveTransaction(TraNumber id, FB_UINT64 seq) noexcept
 			: tra_id(id), sequence(seq)
 		{}
 
-	    static const TraNumber& generate(const ActiveTransaction& item)
+	    static const TraNumber& generate(const ActiveTransaction& item) noexcept
 		{
 			return item.tra_id;
 	    }
@@ -224,17 +224,17 @@ namespace
 #endif
 		}
 
-		FB_UINT64 getSequence() const
+		FB_UINT64 getSequence() const noexcept
 		{
 			return m_data.sequence;
 		}
 
-		ULONG getOffset() const
+		ULONG getOffset() const noexcept
 		{
 			return m_data.offset;
 		}
 
-		FB_UINT64 getDbSequence() const
+		FB_UINT64 getDbSequence() const noexcept
 		{
 			return m_data.db_sequence;
 		}
@@ -305,9 +305,9 @@ namespace
 		static int init(const PathName& directory, const Guid& guid)
 		{
 #ifdef WIN_NT
-			const mode_t ACCESS_MODE = DEFAULT_OPEN_MODE;
+			constexpr mode_t ACCESS_MODE = DEFAULT_OPEN_MODE;
 #else
-			const mode_t ACCESS_MODE = 0664;
+			constexpr mode_t ACCESS_MODE = 0664;
 #endif
 			const PathName filename = directory + guid.toPathName();
 
@@ -373,6 +373,9 @@ namespace
 			dpb.insertString(isc_dpb_user_name, DBA_USER_NAME);
 			dpb.insertString(isc_dpb_config, ParsedList::getNonLoopbackProviders(m_config->dbName));
 
+			if (m_config->schemaSearchPath.hasData())
+				dpb.insertString(isc_dpb_search_path, m_config->schemaSearchPath.c_str());
+
 #ifndef NO_DATABASE
 			DispatcherPtr provider;
 			FbLocalStatus localStatus;
@@ -381,11 +384,11 @@ namespace
 				provider->attachDatabase(&localStatus, m_config->dbName.c_str(),
 										 dpb.getBufferLength(), dpb.getBuffer());
 			localStatus.check();
-			m_attachment.assignRefNoIncr(att);
+			m_attachment = att;
 
 			const auto repl = m_attachment->createReplicator(&localStatus);
 			localStatus.check();
-			m_replicator.assignRefNoIncr(repl);
+			m_replicator = repl;
 
 			fb_assert(!m_sequence);
 
@@ -394,7 +397,7 @@ namespace
 			localStatus.check();
 
 			const char* sql =
-				"select rdb$get_context('SYSTEM', 'REPLICATION_SEQUENCE') from rdb$database";
+				"select rdb$get_context('SYSTEM', 'REPLICATION_SEQUENCE') from system.rdb$database";
 
 			FB_MESSAGE(Result, CheckStatusWrapper,
 				(FB_BIGINT, sequence)
@@ -413,8 +416,17 @@ namespace
 
 		void shutdown()
 		{
-			m_replicator = nullptr;
-			m_attachment = nullptr;
+			FbLocalStatus localStatus;
+			if (m_replicator)
+			{
+				m_replicator->close(&localStatus);
+				m_replicator = nullptr;
+			}
+			if (m_attachment)
+			{
+				m_attachment->detach(&localStatus);
+				m_attachment = nullptr;
+			}
 			m_sequence = 0;
 			m_connected = false;
 		}
@@ -434,7 +446,7 @@ namespace
 
 		bool isShutdown() const
 		{
-			return (m_attachment == NULL);
+			return (m_attachment == nullptr);
 		}
 
 		const PathName& getDirectory() const
@@ -492,8 +504,8 @@ namespace
 
 	private:
 		AutoPtr<const Replication::Config> m_config;
-		RefPtr<IAttachment> m_attachment;
-		RefPtr<IReplicator> m_replicator;
+		IAttachment* m_attachment;
+		IReplicator* m_replicator;
 		FB_UINT64 m_sequence;
 		bool m_connected;
 		string m_lastError;
@@ -526,7 +538,7 @@ namespace
 #endif
 		}
 
-		static const FB_UINT64& generate(const Segment* item)
+		static const FB_UINT64& generate(const Segment* item) noexcept
 		{
 			return item->header.hdr_sequence;
 		}
@@ -539,7 +551,7 @@ namespace
 
 	string formatInterval(const TimeStamp& start, const TimeStamp& finish)
 	{
-		static const SINT64 MSEC_PER_DAY = 24 * 60 * 60 * 1000;
+		static constexpr SINT64 MSEC_PER_DAY = 24 * 60 * 60 * 1000;
 
 		const SINT64 startMsec = ((SINT64) start.value().timestamp_date) * MSEC_PER_DAY +
 			(SINT64) start.value().timestamp_time / 10;
@@ -752,13 +764,28 @@ namespace
 
 				ControlFile control(target->getDirectory(), guid, sequence, transactions);
 
-				FB_UINT64 last_sequence = control.getSequence();
-				ULONG last_offset = control.getOffset();
+				const FB_UINT64 last_sequence = control.getSequence();
+				const ULONG last_offset = control.getOffset();
 
 				const FB_UINT64 db_sequence = target->initReplica();
 				const FB_UINT64 last_db_sequence = control.getDbSequence();
 
-				if (db_sequence != last_db_sequence)
+				if (db_sequence < last_db_sequence)
+				{
+					if (db_sequence)
+					{
+						raiseError("Replica database was replaced but found to be older (sequence = %" UQUADFORMAT ") "
+									"than the one priorly processed (sequence = %" UQUADFORMAT ")",
+									db_sequence, last_db_sequence);
+					}
+					else
+					{
+						raiseError("Replica database was replaced but found to have zero sequence number,"
+								   "\n\tprobably after improper fixup/restore process (e.g. without -seq[uence] switch)");
+					}
+				}
+
+				if (db_sequence > last_db_sequence)
 				{
 					if (sequence == db_sequence + 1)
 					{
@@ -870,7 +897,7 @@ namespace
 						raiseError("Journal file %s read failed (error %d)", segment->filename.c_str(), ERRNO);
 
 					const auto blockLength = header.length;
-					const auto length = sizeof(Block) + blockLength;
+					const ULONG length = static_cast<ULONG>(sizeof(Block) + blockLength);
 
 					if (blockLength)
 					{

@@ -63,6 +63,10 @@ fbit {PARAM [...]]
                                                  If -password is not passed on the command-line and
                                                  ISC_PASSWORD is set then ISC_PASSWORD will be used.
  -legacy_auth    EnableLegacyClientAuth          Adds support for legacy authentication
+ -msilogdir      /MSILOGDIR="path to store logs" Generate msiexec logs to aid debugging of ms runtime
+                                                 installation.
+ -nomsvcrt       /NOMSVCRT                       Do not install the MS VCRT runtimes                                                  
+                                                                                                 
 
  Installation Tasks
  ==================
@@ -186,11 +190,14 @@ param(
   [string]$components = "",
   [switch]$copygdslib,
   [switch]$dev_install,
+  [switch]$legacy_auth,
+  [string]$msilogdir = "",
   [switch]$noarchive,
   [switch]$noautostart,
   [switch]$nocancel,
   [switch]$nocopyfblib,
   [switch]$nomsg,
+  [switch]$nomsvcrt,
   [string]$password = "masterkey",
   [switch]$server_install,
   [switch]$silent,
@@ -307,7 +314,8 @@ function LoadConfig( [string] $_conffile ) {
           { $_ -eq "0" } {
             Write-Debug "Setting $local:akey to false"
             Set-Variable -Scope Global -Name $local:akey -Value $false
-            Set-Variable -Scope Script -Name $local:akey -Value $false          }
+            Set-Variable -Scope Script -Name $local:akey -Value $false
+          }
           { $_ -eq $null } {
             Write-Debug "Setting $local:akey to true"
             Set-Variable -Scope Global -Name $local:akey -Value $true
@@ -324,9 +332,9 @@ function LoadConfig( [string] $_conffile ) {
       }
     }
   }
-#  Set-PSDebug -Off
-#  Get-ChildItem Variable:
-#  Pause "In $($MyInvocation.MyCommand.Name)  called from line $($MyInvocation.ScriptLineNumber)"
+  #  Set-PSDebug -Off
+  #  Get-ChildItem Variable:
+  #  Pause "In $($MyInvocation.MyCommand.Name)  called from line $($MyInvocation.ScriptLineNumber)"
   Write-Debug "Leaving function $($MyInvocation.MyCommand.Name)"
 }
 
@@ -339,31 +347,31 @@ function print_vars( [string]$_action ) {
     Get-ChildItem Variable:
     Pause "In $($MyInvocation.MyCommand.Name)  called from line $($MyInvocation.ScriptLineNumber)"
   }
-  if ( $script:IsVerbose ) {
-    spacer > $local:varfile
-    if ( check_file_exists "fb_build_vars_${env:PROCESSOR_ARCHITECTURE}.txt" ) {
-      spacer "Firebird Build Environment" >> $local:varfile
-      Get-Content fb_build_vars_${env:PROCESSOR_ARCHITECTURE}.txt >> $local:varfile
-      spacer "Firebird Build Environment END" >> $local:varfile
-      spacer >> $local:varfile
-    }
-    spacer 'Global Vars' >> $local:varfile
-    Get-Variable -Scope global >> $local:varfile
-    spacer 'Global Vars END' >> $local:varfile
-    spacer >> $local:varfile
-    spacer 'Env Vars' >> $local:varfile
-    env | grep '^FB' >> $local:varfile
-    env | grep '^ISC' >> $local:varfile
-    spacer 'Env Vars END' >> $local:varfile
-    spacer 'Script Vars' >> $local:varfile
-    Get-Variable -Scope script | Format-Table -AutoSize -Wrap >> $local:varfile
-    spacer 'Script Vars END' >> $local:varfile
-    spacer >> $local:varfile
-    spacer 'Local Vars' >> $local:varfile
-    Get-Variable -Scope local >> $local:varfile
-    spacer 'Local Vars END' >> $local:varfile
+  #  if ( $script:IsVerbose ) {
+  spacer > $local:varfile
+  if ( check_file_exists "fb_build_vars_${env:PROCESSOR_ARCHITECTURE}.txt" ) {
+    spacer "Firebird Build Environment" >> $local:varfile
+    Get-Content fb_build_vars_${env:PROCESSOR_ARCHITECTURE}.txt >> $local:varfile
+    spacer "Firebird Build Environment END" >> $local:varfile
     spacer >> $local:varfile
   }
+  spacer 'Global Vars' >> $local:varfile
+  Get-Variable -Scope global >> $local:varfile
+  spacer 'Global Vars END' >> $local:varfile
+  spacer >> $local:varfile
+  spacer 'Env Vars' >> $local:varfile
+  env | grep '^FB' >> $local:varfile
+  env | grep '^ISC' >> $local:varfile
+  spacer 'Env Vars END' >> $local:varfile
+  spacer 'Script Vars' >> $local:varfile
+  Get-Variable -Scope script | Format-Table -AutoSize -Wrap >> $local:varfile
+  spacer 'Script Vars END' >> $local:varfile
+  spacer >> $local:varfile
+  spacer 'Local Vars' >> $local:varfile
+  Get-Variable -Scope local >> $local:varfile
+  spacer 'Local Vars END' >> $local:varfile
+  spacer >> $local:varfile
+  #  }
   Write-Debug "Leaving $($MyInvocation.MyCommand.Name)"
 
 }
@@ -386,7 +394,7 @@ function check_params() {
     $script:IsVerbose = $script:MyInvocation.BoundParameters['Verbose'].IsPresent
   }
 
-  if ( $(Test-Path variable:$script:MyInvocation.BoundParameters['Debug'] ) ){
+  if ( $(Test-Path variable:$script:MyInvocation.BoundParameters['Debug'] ) ) {
     $script:IsDebug = $script:MyInvocation.BoundParameters['Debug'].IsPresent
   }
 
@@ -617,10 +625,10 @@ function check_service_installed( [string]$_servicename ) {
   $local:ActualServiceName = Get-Service -ErrorAction ignore -Name $local:ExpectedServiceName | Select-Object -ExpandProperty Name
   if (check_result $local:ExpectedServiceName $local:ActualServiceName $true ) {
     $script:fgcol = ( $script:action -eq "check_install" ) ?  $script:fggreen : $script:fgred
-    Write-Host  -ForegroundColor $script:fgcol "${TAB}$local:ExpectedServiceName is installed. "
+    Write-Host -ForegroundColor $script:fgcol "${TAB}$local:ExpectedServiceName is installed. "
   } else {
     $script:fgcol = ( $script:action -eq "check_uninstall" ) ?  $script:fggreen : $script:fgred
-    Write-Host  -ForegroundColor $script:fgcol "${TAB}$local:ExpectedServiceName is NOT installed. "
+    Write-Host -ForegroundColor $script:fgcol "${TAB}$local:ExpectedServiceName is NOT installed. "
   }
 }
 
@@ -632,7 +640,7 @@ function load_fb_build_env() {
   $local:fbbuild_vars_file = Get-Content "fb_build_vars_${env:PROCESSOR_ARCHITECTURE}.txt"
 
   $script:fbbuild_vars = @{}
-#  $local:fbbuild_vars_file | Sort-Object -Property key | ForEach-Object {
+  #  $local:fbbuild_vars_file | Sort-Object -Property key | ForEach-Object {
   $local:fbbuild_vars_file | ForEach-Object {
     $s = $_ -split "="
     $s[1] = $s[1].Trim()
@@ -647,7 +655,7 @@ function load_fb_build_env() {
   # Normally this should not happen if we have just built firebird
   if ( ! $script:fbbuild_vars.ContainsKey('FB_MAJOR_VER') ) {
     # Try to locate build_no.h
-    $local:fb_root_path= $script:fbbuild_vars.'FB_ROOT_PATH'
+    $local:fb_root_path = $script:fbbuild_vars.'FB_ROOT_PATH'
     if ( Test-Path "${local:fb_root_path}\src\jrd\build_no.h" -PathType Leaf ) {
 
       foreach ($aline in $(Get-Content ${local:fb_root_path}\src\jrd\build_no.h | grep "#define FB_")) {
@@ -688,7 +696,7 @@ function check_environment() {
   # If passed via command line
   if ( $script:fbinst_exec -ne "" ) {
     Write-Debug "Determine build env from $script:fbinst_exec"
-#    Set-PSDebug -Trace 2
+    #    Set-PSDebug -Trace 2
     $path_file = @{}
     $path_file = $script:fbinst_exec -split "\\", -2
     $path_file = $path_file[1] -split ".exe" , 2
@@ -696,7 +704,7 @@ function check_environment() {
     $_astr = $script:FirebirdInstallVer -split "\."
     $_astr = $_astr[0] -split "-"
     $script:fbmajver = $_astr[1]
-#    Set-PSDebug -Trace 0
+    #    Set-PSDebug -Trace 0
   } else {
     Write-Debug "Determine build env dynamically"
     load_fb_build_env
@@ -722,7 +730,7 @@ function check_environment() {
     Pause "In $($MyInvocation.MyCommand.Name) called from line $($MyInvocation.ScriptLineNumber)"
   }
 
-#  Set-PSDebug -Trace 2
+  #  Set-PSDebug -Trace 2
   $script:fbinstalllogdir = "$env:userprofile\fbit-tests\logs"
   $script:fbinstallcopydir = "$env:userprofile\fbit-tests\install_archive"
 
@@ -774,6 +782,11 @@ function check_innosetup_params() {
     $script:inno_verysilent = " /VERYSILENT "
     $script:inno_sp = " /SP- "
     $script:inno_nomsg = " /SUPPRESSMSGBOXES "
+  } else {
+# FIXME declare correctly	
+    $script:inno_verysilent = ""
+    $script:inno_sp = ""
+    $script:inno_nomsg = ""
   }
 
 
@@ -866,6 +879,19 @@ function check_innosetup_params() {
       }
     }
 
+    if ( $script:msilogdir -ne "" ) {
+      $script:inno_msilogdir = " /MSILOGDIR=`"$script:msilogdir`" "
+    } else {
+      $script:inno_msilogdir = ""
+    }
+
+    if ( $($script:nomsvcrt) ) {
+      $script:inno_nomsvcrt = " /NOMSVCRT "
+    } else {
+      $script:inno_nomsvcrt = ""  
+    }
+      
+
   } # End check innosetup params for install
 
   spacer
@@ -926,8 +952,8 @@ function build_inno_cmd() {
   if ( $script:install ) {
     # Setting PASSWORD is only relevant for a server install
     if ( $script:password -ne "masterkey" ) {
-        $script:inno_params_from_cmdline += " $script:inno_sysdbapassword "
-        $script:inno_installtype = "CustomInstall"
+      $script:inno_params_from_cmdline += " $script:inno_sysdbapassword "
+      $script:inno_installtype = "CustomInstall"
     }
 
     if ( $script:inno_installtype -eq "CustomInstall" ) {
@@ -940,11 +966,16 @@ function build_inno_cmd() {
       $script:inno_components = "ServerComponent,DevAdminComponent,ClientComponent"
     }
 
+    $script:inno_params_from_cmdline += " $script:inno_msilogdir "
+
+    $script:inno_params_from_cmdline += " $script:inno_nomsvcrt "
+  
     if ( $script:TASK_LIST ) {
       $script:full_cmdline = " /TYPE=`"$script:inno_installtype`" /TASKS=`"$script:task_list`" /COMPONENTS=`"$script:inno_components`" $script:inno_params_from_cmdline "
     } else {
       $script:full_cmdline = "/TYPE=`"$script:inno_installtype`" /COMPONENTS=`"$script:inno_components`" $script:inno_params_from_cmdline "
     }
+
   }
 
   # Always add on the boiler plate log and inf output to the command
@@ -965,7 +996,7 @@ function dry_run( [string]$_action, [string]$_exec ) {
 function run_check_install() {
 
 
-  if ( $script:action |  Select-String -Pattern "un" -SimpleMatch -Quiet ) {
+  if ( $script:action | Select-String -Pattern "un" -SimpleMatch -Quiet ) {
     $script:action = "check_uninstall"
     Write-Output "Checking uninstallation..."
   } else {
@@ -989,8 +1020,8 @@ function run_installer() {
     $local:retval = 0
   }
 
-# We use BEGIN..PROCESS..END here so that we can mask the output of copyinstall and
-# allow the function to return an integer instean of an object.
+  # We use BEGIN..PROCESS..END here so that we can mask the output of copyinstall and
+  # allow the function to return an integer instead of an object.
   process {
     build_inno_cmd
     print_vars "$script:action"
@@ -1100,8 +1131,8 @@ function run_cleanup() {
       Write-Verbose "Clean up listing of Shared DLLs in registry"
       $RegKey = "SOFTWARE\Microsoft\Windows\CurrentVersion\SharedDLLs"
       foreach ( $avalue in "C:\Program\*.*", "${script:firebirdrootdir}\${script:firebird_base_ver}\*.*", `
-        "*\fbclient.dll", "*\gds32.dll", "*GDS32.DLL" ) {
-          Remove-ItemProperty HKLM:$RegKey -Name $avalue -Confirm
+          "*\fbclient.dll", "*\gds32.dll", "*GDS32.DLL" ) {
+        Remove-ItemProperty HKLM:$RegKey -Name $avalue -Confirm
       }
     }
     Write-Verbose "Completed cleanup  of Firebird installation"
@@ -1149,9 +1180,9 @@ function iss_error( [Int32]$_err_code = 0 ) {
 }
 
 function main() {
-  begin{
-#    $script:DebugPreference = 'Continue'
-#    $script:VerbosePreference = 'Continue'
+  begin {
+    #    $script:DebugPreference = 'Continue'
+    #    $script:VerbosePreference = 'Continue'
 
     Set-StrictMode -Version 3.0
   }
@@ -1186,7 +1217,7 @@ function main() {
     }
   }
 
-  end{
+  end {
     spacer " Finished "
 
     # this attempt to 'reset' the prompt fails :-(

@@ -74,7 +74,7 @@ namespace Firebird {
 // Alignment for all memory blocks
 #define ALLOC_ALIGNMENT 16
 
-static inline size_t MEM_ALIGN(size_t value)
+static inline constexpr size_t MEM_ALIGN(size_t value)
 {
 	return FB_ALIGN(value, ALLOC_ALIGNMENT);
 }
@@ -85,12 +85,16 @@ class MemPool;
 class MemoryStats
 {
 public:
-	explicit MemoryStats(MemoryStats* parent = NULL)
+	explicit MemoryStats(MemoryStats* parent = NULL) noexcept
 		: mst_parent(parent), mst_usage(0), mst_mapped(0), mst_max_usage(0), mst_max_mapped(0)
 	{}
 
 	~MemoryStats()
 	{}
+
+	// Forbid copying/assignment
+	MemoryStats(const MemoryStats&) = delete;
+	MemoryStats& operator=(const MemoryStats&) = delete;
 
 	size_t getCurrentUsage() const noexcept { return mst_usage.value(); }
 	size_t getMaximumUsage() const noexcept { return mst_max_usage; }
@@ -98,10 +102,6 @@ public:
 	size_t getMaximumMapping() const noexcept { return mst_max_mapped; }
 
 private:
-	// Forbid copying/assignment
-	MemoryStats(const MemoryStats&);
-	MemoryStats& operator=(const MemoryStats&);
-
 	MemoryStats* mst_parent;
 
 	// Currently allocated memory (without allocator overhead)
@@ -164,7 +164,7 @@ friend class ExternalMemoryHandler;
 private:
 	MemPool* pool;
 
-	MemoryPool(MemPool* p)
+	MemoryPool(MemPool* p) noexcept
 		: pool(p)
 	{ }
 
@@ -226,18 +226,18 @@ public:
 	static void contextPoolInit();
 
 	// Print out pool contents. This is debugging routine
-	static const unsigned PRINT_USED_ONLY = 0x01;
-	static const unsigned PRINT_RECURSIVE = 0x02;
+	static constexpr unsigned PRINT_USED_ONLY = 0x01;
+	static constexpr unsigned PRINT_RECURSIVE = 0x02;
 	void print_contents(FILE*, unsigned flags = 0, const char* filter_path = 0) noexcept;
 	// The same routine, but more easily callable from the debugger
 	void print_contents(const char* filename, unsigned flags = 0, const char* filter_path = 0) noexcept;
 
-	inline bool operator==(const MemoryPool& rhs) const
+	inline bool operator==(const MemoryPool& rhs) const noexcept
 	{
 		return pool == rhs.pool;
 	}
 
-	inline bool operator!=(const MemoryPool& rhs) const
+	inline bool operator!=(const MemoryPool& rhs) const noexcept
 	{
 		return !operator==(rhs);
 	}
@@ -387,22 +387,15 @@ inline void operator delete[](void* mem, Firebird::MemoryPool& pool ALLOC_PARAMS
 	MemoryPool::globalFree(mem);
 }
 
-#if __cplusplus >= 201402L
-inline void operator delete(void* mem, std::size_t s ALLOC_PARAMS) noexcept
-{
-	MemoryPool::globalFree(mem);
-}
-
-inline void operator delete[](void* mem, std::size_t s ALLOC_PARAMS) noexcept
-{
-	MemoryPool::globalFree(mem);
-}
-#endif
-
 #ifdef DEBUG_GDS_ALLOC
 
 extern void operator delete(void* mem) noexcept;
 extern void operator delete[](void* mem) noexcept;
+
+#if __cplusplus >= 201402L
+extern void operator delete(void* mem, std::size_t s) noexcept;
+extern void operator delete[](void* mem, std::size_t s) noexcept;
+#endif
 
 #endif // DEBUG_GDS_ALLOC
 
@@ -413,7 +406,7 @@ namespace Firebird
 	class GlobalStorage
 	{
 	public:
-		MemoryPool& getPool() const
+		MemoryPool& getPool() const noexcept
 		{
 			return *getDefaultMemoryPool();
 		}
@@ -428,10 +421,10 @@ namespace Firebird
 	class PermanentStorage
 	{
 	protected:
-		explicit PermanentStorage(MemoryPool& p) : pool(p) { }
+		explicit PermanentStorage(MemoryPool& p) noexcept : pool(p) { }
 
 	public:
-		MemoryPool& getPool() const { return pool; }
+		MemoryPool& getPool() const noexcept { return pool; }
 
 	private:
 		MemoryPool& pool;
@@ -446,7 +439,7 @@ namespace Firebird
 	{
 	private:
 #if defined(DEV_BUILD)
-		void ProbeStack() const;
+		void ProbeStack() const noexcept;
 #endif
 	public:
 		static MemoryPool& getAutoMemoryPool();
@@ -458,7 +451,7 @@ namespace Firebird
 			ProbeStack();
 #endif
 		}
-		explicit AutoStorage(MemoryPool& p) : PermanentStorage(p) { }
+		explicit AutoStorage(MemoryPool& p) noexcept : PermanentStorage(p) { }
 	};
 
 	template <>

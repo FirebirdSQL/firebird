@@ -53,21 +53,23 @@ public:
 	{
 		VALUE_UNKNOWN,
 		VALUE_GLOBAL_ID,
-		VALUE_TABLE_ID,
+		VALUE_TABLE_ID_OBJECT_NAME,
 		VALUE_INTEGER,
 		VALUE_TIMESTAMP,
 		VALUE_TIMESTAMP_TZ,
 		VALUE_STRING,
-		VALUE_BOOLEAN
+		VALUE_BOOLEAN,
+		VALUE_TABLE_ID_SCHEMA_NAME,
+		VALUE_LAST_MARKER	// Should be last item
 	};
 
 	struct DumpField
 	{
-		DumpField(USHORT p_id, ValueType p_type, ULONG p_length, const void* p_data)
+		DumpField(USHORT p_id, ValueType p_type, ULONG p_length, const void* p_data) noexcept
 			: id(p_id), type(p_type), length(p_length), data(p_data)
 		{}
 
-		DumpField()
+		DumpField() noexcept
 			: id(0), type(VALUE_UNKNOWN), length(0), data(NULL)
 		{}
 
@@ -107,12 +109,12 @@ public:
 			buffer.assign(ptr, length);
 		}
 
-		ULONG getLength() const
+		ULONG getLength() const noexcept
 		{
 			return offset;
 		}
 
-		const UCHAR* getData() const
+		const UCHAR* getData() const noexcept
 		{
 			return buffer.begin();
 		}
@@ -122,9 +124,14 @@ public:
 			storeField(field_id, VALUE_GLOBAL_ID, sizeof(SINT64), &value);
 		}
 
-		void storeTableId(int field_id, SLONG value)
+		void storeTableIdObjectName(int field_id, SLONG value)
 		{
-			storeField(field_id, VALUE_TABLE_ID, sizeof(SLONG), &value);
+			storeField(field_id, VALUE_TABLE_ID_OBJECT_NAME, sizeof(SLONG), &value);
+		}
+
+		void storeTableIdSchemaName(int field_id, SLONG value)
+		{
+			storeField(field_id, VALUE_TABLE_ID_SCHEMA_NAME, sizeof(SLONG), &value);
 		}
 
 		void storeInteger(int field_id, SINT64 value)
@@ -161,13 +168,13 @@ public:
 			storeField(field_id, VALUE_BOOLEAN, sizeof(UCHAR), &boolean);
 		}
 
-		int getRelationId()
+		int getRelationId() noexcept
 		{
 			fb_assert(!offset);
 			return (ULONG) buffer[offset++];
 		}
 
-		bool getField(DumpField& field)
+		bool getField(DumpField& field) noexcept
 		{
 			fb_assert(offset);
 
@@ -175,7 +182,7 @@ public:
 			{
 				field.id = (USHORT) buffer[offset++];
 				field.type = (ValueType) buffer[offset++];
-				fb_assert(field.type >= VALUE_GLOBAL_ID && field.type <= VALUE_BOOLEAN);
+				fb_assert(field.type >= VALUE_GLOBAL_ID && field.type < VALUE_LAST_MARKER);
 				memcpy(&field.length, &buffer[offset], sizeof(ULONG));
 				offset += sizeof(ULONG);
 				field.data = &buffer[offset];
@@ -226,9 +233,9 @@ public:
 	void putField(thread_db*, Record*, const DumpField&);
 
 	RecordBuffer* allocBuffer(thread_db*, MemoryPool&, int);
-	RecordBuffer* getData(const jrd_rel*) const;
-	RecordBuffer* getData(int) const;
-	void clearSnapshot();
+	RecordBuffer* getData(const jrd_rel*) const noexcept;
+	RecordBuffer* getData(int) const noexcept;
+	void clearSnapshot() noexcept;
 
 private:
 	Firebird::Array<RelationData> m_snapshot;
@@ -246,8 +253,8 @@ struct MonitoringHeader : public Firebird::MemoryHeader
 
 class MonitoringData final : public Firebird::PermanentStorage, public Firebird::IpcObject
 {
-	static const USHORT MONITOR_VERSION = 6;
-	static const ULONG DEFAULT_SIZE = 1048576;
+	static constexpr USHORT MONITOR_VERSION = 6;
+	static constexpr ULONG DEFAULT_SIZE = 1048576;
 
 	typedef MonitoringHeader Header;
 
@@ -279,10 +286,10 @@ public:
 			data->release();
 		}
 
-	private:
-		Guard(const Guard&);
-		Guard& operator=(const Guard&);
+		Guard(const Guard&) = delete;
+		Guard& operator=(const Guard&) = delete;
 
+	private:
 		MonitoringData* const data;
 	};
 
@@ -323,6 +330,10 @@ public:
 	explicit MonitoringData(Database*);
 	~MonitoringData();
 
+	// copying is prohibited
+	MonitoringData(const MonitoringData&) = delete;
+	MonitoringData& operator =(const MonitoringData&) = delete;
+
 	bool initialize(Firebird::SharedMemoryBase*, bool) override;
 	void mutexBug(int osErrorCode, const char* text) override;
 
@@ -343,10 +354,6 @@ public:
 	void cleanup(AttNumber);
 
 private:
-	// copying is prohibited
-	MonitoringData(const MonitoringData&);
-	MonitoringData& operator =(const MonitoringData&);
-
 	void ensureSpace(ULONG);
 
 	const Firebird::string& m_dbId;
@@ -355,7 +362,7 @@ private:
 };
 
 
-class MonitoringTableScan: public VirtualTableScan
+class MonitoringTableScan final : public VirtualTableScan
 {
 public:
 	MonitoringTableScan(CompilerScratch* csb, const Firebird::string& alias,
@@ -370,7 +377,7 @@ protected:
 };
 
 
-class MonitoringSnapshot : public SnapshotData
+class MonitoringSnapshot final : public SnapshotData
 {
 public:
 	static MonitoringSnapshot* create(thread_db* tdbb);
@@ -396,7 +403,6 @@ public:
 	}
 
 	static void checkState(thread_db* tdbb);
-	static SnapshotData* getSnapshot(thread_db* tdbb);
 
 	static void dumpAttachment(thread_db* tdbb, Attachment* attachment, ULONG generation);
 
@@ -405,7 +411,7 @@ public:
 
 	static void putDatabase(thread_db* tdbb, SnapshotData::DumpRecord&);
 private:
-	static SINT64 getGlobalId(int);
+	static SINT64 getGlobalId(int) noexcept;
 
 	static void putAttachment(SnapshotData::DumpRecord&, const Attachment*);
 	static void putTransaction(SnapshotData::DumpRecord&, const jrd_tra*);

@@ -30,7 +30,7 @@
 #include "../common/sdl_proto.h"
 #include "../common/StatusArg.h"
 
-const int COMPILE_SIZE	= 256;
+constexpr int COMPILE_SIZE = 256;
 
 using namespace Jrd;
 using namespace Firebird;
@@ -66,7 +66,7 @@ static ISC_STATUS error(CheckStatusWrapper* status_vector, const Arg::StatusVect
 static bool execute(sdl_arg*);
 static const UCHAR* get_range(const UCHAR*, array_range*, SLONG*, SLONG*);
 
-inline SSHORT get_word(const UCHAR*& ptr)
+inline SSHORT get_word(const UCHAR*& ptr) noexcept
 {
 /**************************************
  *
@@ -89,18 +89,18 @@ static const UCHAR* sdl_desc(const UCHAR*, DSC*);
 static IPTR* stuff(IPTR, sdl_arg*);
 
 
-const int op_literal	= 1;
-const int op_variable	= 2;
-const int op_add		= 3;
-const int op_subtract	= 4;
-const int op_multiply	= 5;
-const int op_divide		= 6;
-const int op_iterate	= 7;
-const int op_goto		= 8;
-const int op_element	= 9;
-const int op_loop		= 10;
-const int op_exit		= 11;
-const int op_scalar		= 12;
+constexpr int op_literal	= 1;
+constexpr int op_variable	= 2;
+constexpr int op_add		= 3;
+constexpr int op_subtract	= 4;
+constexpr int op_multiply	= 5;
+constexpr int op_divide		= 6;
+constexpr int op_iterate	= 7;
+constexpr int op_goto		= 8;
+constexpr int op_element	= 9;
+constexpr int op_loop		= 10;
+constexpr int op_exit		= 11;
+constexpr int op_scalar		= 12;
 
 /*
    The structure for a loop is:
@@ -157,7 +157,7 @@ SLONG SDL_compute_subscript(CheckStatusWrapper* status_vector,
 
 
 ISC_STATUS SDL_info(CheckStatusWrapper* status_vector,
-					const UCHAR* sdl, sdl_info* info, SLONG* vector)
+					const UCHAR* sdl, sdl_info* info, const SLONG* vector)
 {
 /**************************************
  *
@@ -175,7 +175,8 @@ ISC_STATUS SDL_info(CheckStatusWrapper* status_vector,
 
 	const UCHAR* p = sdl;
 	info->sdl_info_fid = info->sdl_info_rid = 0;
-	info->sdl_info_relation = info->sdl_info_field = "";
+	info->sdl_info_relation.clear();
+	info->sdl_info_field.clear();
 
 	if (*p++ != isc_sdl_version1)
 		return error(status_vector, Arg::Gds(isc_invalid_sdl) << Arg::Num(0));
@@ -207,9 +208,15 @@ ISC_STATUS SDL_info(CheckStatusWrapper* status_vector,
 			p += n;
 			break;
 
+		case isc_sdl_schema:
+			n = *p++;
+			info->sdl_info_relation.schema.assign(reinterpret_cast<const char*>(p), n);
+			p += n;
+			break;
+
 		case isc_sdl_relation:
 			n = *p++;
-			info->sdl_info_relation.assign(reinterpret_cast<const char*>(p), n);
+			info->sdl_info_relation.object.assign(reinterpret_cast<const char*>(p), n);
 			p += n;
 			break;
 
@@ -281,6 +288,7 @@ int	SDL_walk(CheckStatusWrapper* status_vector,
 			break;
 
 		case isc_sdl_field:
+		case isc_sdl_schema:
 		case isc_sdl_relation:
 			n = *p++;
 			p += n;
@@ -399,12 +407,15 @@ static const UCHAR* compile(const UCHAR* sdl, sdl_arg* arg)
 
 	case isc_sdl_add:
 		sdl_operator = op_add;
+		[[fallthrough]];
 	case isc_sdl_subtract:
 		if (!sdl_operator)
 			sdl_operator = op_subtract;
+		[[fallthrough]];
 	case isc_sdl_multiply:
 		if (!sdl_operator)
 			sdl_operator = op_multiply;
+		[[fallthrough]];
 	case isc_sdl_divide:
 		if (!sdl_operator)
 			sdl_operator = op_divide;

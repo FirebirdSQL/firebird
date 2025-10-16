@@ -73,21 +73,21 @@ using namespace Firebird;
 
 namespace
 {
-	const unsigned MAX_LEVELS = 16;
+	constexpr unsigned MAX_LEVELS = 16;
 
-	const size_t OVERSIZE = (MAX_PAGE_SIZE + BTN_PAGE_SIZE + MAX_KEY + sizeof(SLONG) - 1) / sizeof(SLONG);
+	constexpr size_t OVERSIZE = (MAX_PAGE_SIZE + BTN_PAGE_SIZE + MAX_KEY + sizeof(SLONG) - 1) / sizeof(SLONG);
 
 	// END_LEVEL (~0) is choosen here as a unknown/none value, because it's
 	// already reserved as END_LEVEL marker for page number and record number.
 	//
 	// NO_VALUE_PAGE and NO_VALUE are the same constant, but with different size
 	// Sign-extension mechanizm guaranties that they may be compared to each other safely
-	const ULONG NO_VALUE_PAGE = END_LEVEL;
+	constexpr ULONG NO_VALUE_PAGE = END_LEVEL;
 	const RecordNumber NO_VALUE(END_LEVEL);
 
 	// A split page will never have the number 0, because that's the value
 	// of the main page.
-	const ULONG NO_SPLIT	= 0;
+	inline constexpr ULONG NO_SPLIT = 0;
 
 	// Thresholds for determing of a page should be garbage collected
 	// Garbage collect if page size is below GARBAGE_COLLECTION_THRESHOLD
@@ -105,9 +105,9 @@ namespace
 	};
 
 	// I assume this wasn't done sizeof(INT64_KEY) on purpose, since alignment might affect it.
-	const size_t INT64_KEY_LENGTH = sizeof (double) + sizeof (SSHORT);
+	constexpr size_t INT64_KEY_LENGTH = sizeof (double) + sizeof (SSHORT);
 
-	const double pow10_table[] =
+	constexpr double pow10_table[] =
 	{
 		1.e00, 1.e01, 1.e02, 1.e03, 1.e04, 1.e05, 1.e06, 1.e07, 1.e08, 1.e09,
 		1.e10, 1.e11, 1.e12, 1.e13, 1.e14, 1.e15, 1.e16, 1.e17, 1.e18, 1.e19,
@@ -115,12 +115,12 @@ namespace
 		1.e30, 1.e31, 1.e32, 1.e33, 1.e34, 1.e35, 1.e36
 	};
 
-	inline double powerof10(int index)
+	inline double powerof10(int index) noexcept
 	{
 		return (index <= 0) ? pow10_table[-index] : 1.0 / pow10_table[index];
 	}
 
-	const struct	// Used in make_int64_key()
+	constexpr struct	// Used in make_int64_key()
 	{
 		FB_UINT64 limit;
 		SINT64 factor;
@@ -284,18 +284,19 @@ void IndexErrorContext::raise(thread_db* tdbb, idx_e result, Record* record)
 	if (result == idx_e_conversion || result == idx_e_interrupt)
 		ERR_punt();
 
-	const MetaName& relationName = isLocationDefined ? m_location.relation->rel_name : m_relation->rel_name;
+	const auto& relationName = isLocationDefined ? m_location.relation->rel_name : m_relation->rel_name;
 	const USHORT indexId = isLocationDefined ? m_location.indexId : m_index->idx_id;
 
-	MetaName indexName(m_indexName), constraintName;
+	QualifiedName indexName(m_indexName);
+	MetaName constraintName;
 
-	if (indexName.isEmpty())
+	if (indexName.object.isEmpty())
 		MET_lookup_index(tdbb, indexName, relationName, indexId + 1);
 
-	if (indexName.hasData())
+	if (indexName.object.hasData())
 		MET_lookup_cnstrt_for_index(tdbb, constraintName, indexName);
 	else
-		indexName = "***unknown***";
+		indexName.object = "***unknown***";
 
 	const bool haveConstraint = constraintName.hasData();
 
@@ -306,18 +307,18 @@ void IndexErrorContext::raise(thread_db* tdbb, idx_e result, Record* record)
 	{
 	case idx_e_keytoobig:
 		ERR_post_nothrow(Arg::Gds(isc_imp_exc) <<
-						 Arg::Gds(isc_keytoobig) << Arg::Str(indexName));
+						 Arg::Gds(isc_keytoobig) << indexName.toQuotedString());
 		break;
 
 	case idx_e_foreign_target_doesnt_exist:
 		ERR_post_nothrow(Arg::Gds(isc_foreign_key) <<
-						 Arg::Str(constraintName) << Arg::Str(relationName) <<
+						 constraintName.toQuotedString() << relationName.toQuotedString() <<
 						 Arg::Gds(isc_foreign_key_target_doesnt_exist));
 		break;
 
 	case idx_e_foreign_references_present:
 		ERR_post_nothrow(Arg::Gds(isc_foreign_key) <<
-						 Arg::Str(constraintName) << Arg::Str(relationName) <<
+						 constraintName.toQuotedString() << relationName.toQuotedString() <<
 						 Arg::Gds(isc_foreign_key_references_present));
 		break;
 
@@ -325,10 +326,10 @@ void IndexErrorContext::raise(thread_db* tdbb, idx_e result, Record* record)
 		if (haveConstraint)
 		{
 			ERR_post_nothrow(Arg::Gds(isc_unique_key_violation) <<
-							 Arg::Str(constraintName) << Arg::Str(relationName));
+							 constraintName.toQuotedString() << relationName.toQuotedString());
 		}
 		else
-			ERR_post_nothrow(Arg::Gds(isc_no_dup) << Arg::Str(indexName));
+			ERR_post_nothrow(Arg::Gds(isc_no_dup) << indexName.toQuotedString());
 		break;
 
 	default:
@@ -680,15 +681,15 @@ idx_e IndexKey::compose(Record* record)
 				  error.value()[0] == isc_arg_gds &&
 				  error.value()[1] == isc_expression_eval_index))
 			{
-				MetaName indexName;
+				QualifiedName indexName;
 				MET_lookup_index(m_tdbb, indexName, m_relation->rel_name, m_index->idx_id + 1);
 
-				if (indexName.isEmpty())
-					indexName = "***unknown***";
+				if (indexName.object.isEmpty())
+					indexName.object = "***unknown***";
 
 				error.prepend(Arg::Gds(isc_expression_eval_index) <<
-					Arg::Str(indexName) <<
-					Arg::Str(m_relation->rel_name));
+					indexName.toQuotedString() <<
+					m_relation->rel_name.toQuotedString());
 			}
 
 			error.copyTo(m_tdbb->tdbb_status_vector);
@@ -858,7 +859,7 @@ void BTR_complement_key(temporary_key* key)
 		UCHAR* p = key->key_data;
 		for (const UCHAR* const end = p + key->key_length; p < end; p++)
 			*p ^= -1;
-	} while (key = key->key_next.get());
+	} while ((key = key->key_next.get()));
 }
 
 
@@ -930,29 +931,33 @@ bool BTR_delete_index(thread_db* tdbb, WIN* window, USHORT id)
 	else
 	{
 		index_root_page::irt_repeat* irt_desc = root->irt_rpt + id;
+		const ULONG rootPage = irt_desc->getRootPage();
 		const ULONG pg_space_id = irt_desc->getRootPageSpaceId();
 
-		if (PageSpace::isTablespace(pg_space_id))
+		if (rootPage && pg_space_id)
 		{
-			try
+			if (PageSpace::isTablespace(pg_space_id))
 			{
-				MET_tablespace_id(tdbb, pg_space_id);
-			}
-			catch (...)
-			{
-				CCH_RELEASE(tdbb, window);
-				throw;
+				try
+				{
+					MET_tablespace_id(tdbb, pg_space_id);
+				}
+				catch (...)
+				{
+					CCH_RELEASE(tdbb, window);
+					throw;
+				}
 			}
 		}
 
 		CCH_MARK(tdbb, window);
-		// next is on index page space!!!
-		const PageNumber next(pg_space_id, irt_desc->getRootPage());
-		tree_exists = (irt_desc->getRootPage() != 0);
+
+		const PageNumber next(pg_space_id, rootPage);
+		tree_exists = (rootPage != 0);
 
 		// remove the pointer to the top-level index page before we delete it
-		irt_desc->setRoot(0, 0);
-		irt_desc->irt_flags = 0;
+		irt_desc->setEmpty();
+
 		const PageNumber prior = window->win_page;
 		const USHORT relation_id = root->irt_relation;
 
@@ -986,12 +991,13 @@ bool BTR_description(thread_db* tdbb, jrd_rel* relation, index_root_page* root, 
 
 	const index_root_page::irt_repeat* irt_desc = &root->irt_rpt[id];
 
-	if (irt_desc->getRootPage() == 0)
+	const ULONG rootPage = irt_desc->getRootPage();
+	if (!rootPage)
 		return false;
 
 	idx->idx_id = id;
+	idx->idx_root = rootPage;
 	idx->idx_pg_space_id = irt_desc->getRootPageSpaceId();
-	idx->idx_root = irt_desc->getRootPage();
 	idx->idx_count = irt_desc->irt_keys;
 	idx->idx_flags = irt_desc->irt_flags;
 	idx->idx_runtime_flags = 0;
@@ -1050,16 +1056,16 @@ bool BTR_description(thread_db* tdbb, jrd_rel* relation, index_root_page* root, 
 
 	if (error)
 	{
-		MetaName indexName;
+		QualifiedName indexName;
 		MET_lookup_index(tdbb, indexName, relation->rel_name, idx->idx_id + 1);
 
 		Arg::StatusVector status;
 
-		if (indexName.hasData())
-			status.assign(Arg::Gds(error) << indexName);
+		if (indexName.object.hasData())
+			status.assign(Arg::Gds(error) << indexName.toQuotedString());
 		else
 			// there is no index in table @1 with id @2
-			status.assign(Arg::Gds(isc_indexnotdefined) << relation->rel_name << Arg::Num(idx->idx_id));
+			status.assign(Arg::Gds(isc_indexnotdefined) << relation->rel_name.toQuotedString() << Arg::Num(idx->idx_id));
 
 		ERR_post_nothrow(status);
 		CCH_unwind(tdbb, true);
@@ -1272,8 +1278,8 @@ void BTR_evaluate(thread_db* tdbb, const IndexRetrieval* retrieval, RecordBitmap
 				{
 					// If we're walking in a descending index and we need to ignore NULLs
 					// then stop at the first NULL we see (only for single segment!)
-					if (descending && ignoreNulls && node.prefix == 0 &&
-						node.length >= 1 && node.data[0] == 255)
+					if (descending && ignoreNulls &&
+						node.prefix == 0 && node.length >= 1 && node.data[0] == 255)
 					{
 						break;
 					}
@@ -1619,9 +1625,11 @@ void BTR_insert(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 	// it will be written out first--this will make sure that the
 	// root page doesn't point into space
 	CCH_RELEASE(tdbb, &new_window);
-	CCH_precedence(tdbb, root_window, new_window.win_page);
+
+	const auto& newRootPage = new_window.win_page;
+	CCH_precedence(tdbb, root_window, newRootPage);
 	CCH_MARK(tdbb, root_window);
-	root->irt_rpt[idx->idx_id].setRoot(new_window.win_page.getPageSpaceID(), new_window.win_page.getPageNum());
+	root->irt_rpt[idx->idx_id].setRoot(newRootPage.getPageSpaceID(), newRootPage.getPageNum());
 	CCH_RELEASE(tdbb, root_window);
 }
 
@@ -1829,16 +1837,15 @@ bool BTR_make_bounds(thread_db* tdbb, const IndexRetrieval* retrieval,
 			(retrieval->irb_desc.idx_flags & idx_unique) ? INTL_KEY_UNIQUE :
 			INTL_KEY_SORT;
 
+		bool forceIncludeUpper = false, forceIncludeLower = false;
+
 		if (const auto count = retrieval->irb_upper_count)
 		{
 			const auto values = iterator ? iterator->getUpperValues() :
 				retrieval->irb_value + retrieval->irb_desc.idx_count;
 
-			bool forceInclude = false;
 			errorCode = BTR_make_key(tdbb, count, values, retrieval->irb_scale,
-				idx, upper, keyType, &forceInclude);
-			if (forceInclude)
-				forceInclFlag |= irb_force_upper;
+				idx, upper, keyType, &forceIncludeUpper);
 		}
 
 		if (errorCode == idx_e_ok)
@@ -1848,11 +1855,8 @@ bool BTR_make_bounds(thread_db* tdbb, const IndexRetrieval* retrieval,
 				const auto values = iterator ? iterator->getLowerValues() :
 					retrieval->irb_value;
 
-				bool forceInclude = false;
 				errorCode = BTR_make_key(tdbb, count, values, retrieval->irb_scale,
-					idx, lower, keyType, &forceInclude);
-				if (forceInclude)
-					forceInclFlag |= irb_force_lower;
+					idx, lower, keyType, &forceIncludeLower);
 			}
 		}
 
@@ -1862,6 +1866,22 @@ bool BTR_make_bounds(thread_db* tdbb, const IndexRetrieval* retrieval,
 			IndexErrorContext context(retrieval->irb_relation, &temp_idx);
 			context.raise(tdbb, errorCode);
 		}
+
+		// If retrieval is flagged to ignore NULLs and any segment of the key
+		// to be matched contains NULL, don't bother with a scan
+
+		if ((retrieval->irb_generic & irb_ignore_null_value_key) &&
+			((retrieval->irb_upper_count && upper->key_nulls) ||
+			(retrieval->irb_lower_count && lower->key_nulls)))
+		{
+			return false;
+		}
+
+		if (forceIncludeUpper)
+			forceInclFlag |= irb_force_upper;
+
+		if (forceIncludeLower)
+			forceInclFlag |= irb_force_lower;
 	}
 
 	return true;
@@ -2157,18 +2177,18 @@ bool BTR_next_index(thread_db* tdbb, jrd_rel* relation, jrd_tra* transaction, in
 	for (; id < root->irt_count; ++id)
 	{
 		const index_root_page::irt_repeat* irt_desc = root->irt_rpt + id;
-		if (irt_desc->getTransaction() && transaction)
+		const TraNumber inProgressTrans = irt_desc->inProgress();
+		if (inProgressTrans && transaction)
 		{
-			const TraNumber trans = irt_desc->getTransaction();
 			CCH_RELEASE(tdbb, window);
-			const int trans_state = TRA_wait(tdbb, transaction, trans, jrd_tra::tra_wait);
+			const int trans_state = TRA_wait(tdbb, transaction, inProgressTrans, jrd_tra::tra_wait);
 			if ((trans_state == tra_dead) || (trans_state == tra_committed))
 			{
 				// clean up this left-over index
 				root = (index_root_page*) CCH_FETCH(tdbb, window, LCK_write, pag_root);
 				irt_desc = root->irt_rpt + id;
 
-				if (irt_desc->getTransaction() == trans)
+				if (irt_desc->inProgress() == inProgressTrans)
 					BTR_delete_index(tdbb, window, id);
 				else
 					CCH_RELEASE(tdbb, window);
@@ -2391,7 +2411,7 @@ void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation)
 	fb_assert(idx->idx_count <= MAX_UCHAR);
 	slot->irt_keys = (UCHAR) idx->idx_count;
 	slot->irt_flags = idx->idx_flags;
-	slot->setTransaction(transaction->tra_number);
+	slot->setInProgress(transaction->tra_number);
 
 	// Exploit the fact idx_repeat structure matches ODS IRTD one
 	memcpy(desc, idx->idx_rpt, len);
@@ -2425,26 +2445,20 @@ void BTR_selectivity(thread_db* tdbb, jrd_rel* relation, USHORT id, SelectivityL
 	if (!root)
 		return;
 
-	ULONG page;
-	if (id >= root->irt_count || !(page = root->irt_rpt[id].getRootPage()))
+	if (id >= root->irt_count || !root->irt_rpt[id].getRootPage())
 	{
 		CCH_RELEASE(tdbb, &window);
 		return;
 	}
 
-	index_desc idx;
-	if (!BTR_description(tdbb, relation, root, &idx, id))
-	{
-		CCH_RELEASE(tdbb, &window);
-		return;
-	}
-
+	ULONG page = root->irt_rpt[id].getRootPage();
+	const ULONG pageSpaceId = root->irt_rpt[id].getRootPageSpaceId();
 	const bool descending = (root->irt_rpt[id].irt_flags & irt_descending);
 	const ULONG segments = root->irt_rpt[id].irt_keys;
 
 	window.win_flags = WIN_large_scan;
 	window.win_scans = 1;
-	btree_page* bucket = (btree_page*) CCH_HANDOFF(tdbb, &window, PageNumber(idx.idx_pg_space_id, page), LCK_read, pag_index);
+	btree_page* bucket = (btree_page*) CCH_HANDOFF(tdbb, &window, PageNumber(pageSpaceId, page), LCK_read, pag_index);
 
 	// go down the left side of the index to leaf level
 	UCHAR* pointer = bucket->btr_nodes + bucket->btr_jump_size;
@@ -2974,8 +2988,8 @@ static void compress(thread_db* tdbb,
 	// is needed to make a difference between a NULL state and a VALUE.
 	// Note! By descending index key is complemented after this compression routine.
 	// Further a NULL state is always returned as 1 byte 0xFF (descending index).
-	const UCHAR desc_end_value_prefix = 0x01; // ~0xFE
-	const UCHAR desc_end_value_check = 0x00; // ~0xFF;
+	constexpr UCHAR desc_end_value_prefix = 0x01; // ~0xFE
+	constexpr UCHAR desc_end_value_check = 0x00; // ~0xFF;
 
 	const Database* dbb = tdbb->getDatabase();
 	bool first_key = true;
@@ -3512,7 +3526,7 @@ static USHORT compress_root(thread_db* tdbb, index_root_page* page)
 	for (const index_root_page::irt_repeat* const end = root_idx + page->irt_count;
 		 root_idx < end; root_idx++)
 	{
-		if (root_idx->getRootPage())
+		if (root_idx->isUsed())
 		{
 			const USHORT len = root_idx->irt_keys * sizeof(irtd);
 			p -= len;
@@ -4003,7 +4017,7 @@ static ULONG fast_load(thread_db* tdbb,
 		bucket->btr_jump_count = 0;
 
 #ifdef DEBUG_BTR_PAGES
-		sprintf(debugtext, "\t new page (%d)", windows[0].win_page);
+		snprintf(debugtext, sizeof(debugtext), "\t new page (%d)", windows[0].win_page);
 		gds__log(debugtext);
 #endif
 
@@ -4138,7 +4152,7 @@ static ULONG fast_load(thread_db* tdbb,
 				split->btr_jump_count = 0;
 
 #ifdef DEBUG_BTR_PAGES
-				sprintf(debugtext, "\t new page (%d), left page (%d)",
+				snprintf(debugtext, sizeof(debugtext), "\t new page (%d), left page (%d)",
 					split_window.win_page, split->btr_left_sibling);
 				gds__log(debugtext);
 #endif
@@ -4162,7 +4176,8 @@ static ULONG fast_load(thread_db* tdbb,
 				CCH_RELEASE(tdbb, &leafLevel->window);
 
 #ifdef DEBUG_BTR_PAGES
-				sprintf(debugtext, "\t release page (%d), left page (%d), right page (%d)",
+				snprintf(debugtext, sizeof(debugtext),
+					"\t release page (%d), left page (%d), right page (%d)",
 					leafLevel->window.win_page,
 					((btr*) leafLevel->window.win_buffer)->btr_left_sibling,
 					((btr*) leafLevel->window.win_buffer)->btr_sibling);
@@ -4358,7 +4373,7 @@ static ULONG fast_load(thread_db* tdbb,
 					bucket->btr_jump_count = 0;
 
 #ifdef DEBUG_BTR_PAGES
-					sprintf(debugtext, "\t new page (%d)", window->win_page);
+					snprintf(debugtext, sizeof(debugtext), "\t new page (%d)", window->win_page);
 					gds__log(debugtext);
 #endif
 
@@ -4453,7 +4468,7 @@ static ULONG fast_load(thread_db* tdbb,
 					split->btr_jump_count = 0;
 
 #ifdef DEBUG_BTR_PAGES
-					sprintf(debugtext, "\t new page (%d), left page (%d)",
+					snprintf(debugtext, sizeof(debugtext), "\t new page (%d), left page (%d)",
 						split_window.win_page, split->btr_left_sibling);
 					gds__log(debugtext);
 #endif
@@ -4477,7 +4492,8 @@ static ULONG fast_load(thread_db* tdbb,
 					CCH_RELEASE(tdbb, window);
 
 #ifdef DEBUG_BTR_PAGES
-					sprintf(debugtext, "\t release page (%d), left page (%d), right page (%d)",
+					snprintf(debugtext, sizeof(debugtext),
+						"\t release page (%d), left page (%d), right page (%d)",
 						window->win_page,
 						((btr*)window->win_buffer)->btr_left_sibling,
 						((btr*)window->win_buffer)->btr_sibling);
@@ -4613,7 +4629,8 @@ static ULONG fast_load(thread_db* tdbb,
 			CCH_RELEASE(tdbb, &currLevel->window);
 
 #ifdef DEBUG_BTR_PAGES
-			sprintf(debugtext, "\t release page (%d), left page (%d), right page (%d)",
+			snprintf(debugtext, sizeof(debugtext),
+				"\t release page (%d), left page (%d), right page (%d)",
 				currLevel->window.win_page,
 				((btr*) currLevel->window.win_buffer)->btr_left_sibling,
 				((btr*) currLevel->window.win_buffer)->btr_sibling);
@@ -6642,7 +6659,7 @@ string print_key(thread_db* tdbb, jrd_rel* relation, index_desc* idx, Record* re
 		MET_scan_relation(tdbb, relation);
 	}
 
-	const FB_SIZE_T MAX_KEY_STRING_LEN = 250;
+	constexpr FB_SIZE_T MAX_KEY_STRING_LEN = 250;
 	string key, value;
 
 	try
@@ -7086,18 +7103,13 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 			return true;
 		}
 
-		// Ignore NULL-values, this is currently only available for single segment indexes.
+		// Ignore NULL-values, this is currently only available for single segment indexes
 		if (ignoreNulls)
 		{
-			ignore = false;
-			if (descending)
-			{
-				if ((node.prefix == 0) && (node.length >= 1) && (node.data[0] == 255))
-					return false;
-			}
-			else {
-				ignore = (node.prefix + node.length == 0); // Ascending (prefix + length == 0)
-			}
+			if (descending && node.prefix == 0 && node.length >= 1 && node.data[0] == 255)
+				return false;
+
+			ignore = descending ? false : (node.prefix + node.length == 0);
 		}
 
 		if (skipLowerKey)

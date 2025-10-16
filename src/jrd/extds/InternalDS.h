@@ -56,40 +56,38 @@ protected:
 
 	explicit InternalConnection(InternalProvider& prov) :
 	  Connection(prov),
-	  m_attachment(0),
-	  m_isCurrent(false)
+	  m_attachment(0)
 	{}
 
 	virtual ~InternalConnection();
 
 public:
-	virtual void attach(Jrd::thread_db* tdbb);
+	void attach(Jrd::thread_db* tdbb) override;
 
-	virtual bool cancelExecution(bool forced);
-	virtual bool resetSession(Jrd::thread_db* tdbb);
+	bool cancelExecution(bool forced) override;
+	bool resetSession(Jrd::thread_db* tdbb) override;
 
-	virtual bool isAvailable(Jrd::thread_db* tdbb, TraScope traScope) const;
+	bool isAvailable(Jrd::thread_db* tdbb, TraScope traScope) const override;
 
-	virtual bool isConnected() const { return (m_attachment != 0); }
-	virtual bool validate(Jrd::thread_db* tdbb);
+	bool isConnected() const override { return (m_attachment != 0); }
+	bool validate(Jrd::thread_db* tdbb) override;
 
-	virtual bool isSameDatabase(const Firebird::PathName& dbName,
-		Firebird::ClumpletReader& dpb) const;
+	bool isSameDatabase(const Firebird::PathName& dbName,
+		Firebird::ClumpletReader& dpb, const CryptHash& ch) const override;
 
-	virtual bool isCurrent() const { return m_isCurrent; }
+	bool isCurrent() const override { return m_dpb.isEmpty(); }
 
 	Jrd::JAttachment* getJrdAtt() { return m_attachment; }
 
-	virtual Blob* createBlob();
+	Blob* createBlob() override;
 
 protected:
-	virtual Transaction* doCreateTransaction();
-	virtual Statement* doCreateStatement();
-	virtual void doDetach(Jrd::thread_db* tdbb);
+	Transaction* doCreateTransaction() override;
+	Statement* doCreateStatement() override;
+	void doDetach(Jrd::thread_db* tdbb) override;
 
 	Firebird::AutoPlugin<Jrd::JProvider> m_provider;
 	Firebird::RefPtr<Jrd::JAttachment> m_attachment;
-	bool m_isCurrent;
 };
 
 

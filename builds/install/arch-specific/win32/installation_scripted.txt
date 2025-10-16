@@ -41,6 +41,8 @@ HELP
 /MERGETASKS="comma separated list of task names"
 /SYSDBAPASSWORD="masterkey"
 /FORCE
+/MSILOGDIR="Path to log output from installation of VC runtimes."
+/NOMSVCRT
 
 Setup parameters specific to the Firebird Uninstaller
 /CLEAN
@@ -72,7 +74,7 @@ HELP
 
   would be required for a client only install.
 
-  NOTE - If a full server install is required there is no need to 
+  NOTE - If a full server install is required there is no need to
   specify /COMPONENTS. All three are chosen by default.
 
 
@@ -136,6 +138,29 @@ HELP
   users by breaking a perfectly good working install of Firebird or InterBase.
   Its your choice.
 
+
+/MSILOGDIR="Path to log output from installation of the redistributable
+  VC runtime libraries."
+
+  This is to help debug problems arising from running the vc runtime
+  installer. There is no need to set this unless installation of the
+  runtimes causes the installation of Firebird to trigger a reboot of
+  Windows. The log may help debug the problem.
+
+
+/NOMSVCRT
+
+  Set this to disable installation of the redistributable MS VCRT
+  runtime libraries that are included in the Firebird binary installer.
+  Firebird comes with a stripped down set of the redistributable runtime
+  libraries. If you wish to deploy the libraries via another means then
+  you may use this switch to exclude installation of the MSI runtime
+  libraries that are provided by the Firebird project.
+
+  In general use of this switch is not recommended unless you have
+  problems with installation of the runtimes requiring a reboot of
+  Windows. Excluding their installation may prevent Firebird from
+  running if the required libraries are not available.
 
 
 Parameters specific to Firebird uninstalls

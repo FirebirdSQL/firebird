@@ -120,7 +120,7 @@ struct tdr : public pool_alloc<alice_type_tdr>
 };
 
 // CVC: This information should match Transaction Description Record constants in acl.h
-const int TDR_VERSION		= 1;
+inline constexpr int TDR_VERSION = 1;
 enum tdr_vals {
 	TDR_HOST_SITE		= 1,
 	TDR_DATABASE_PATH	= 2,

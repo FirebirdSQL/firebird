@@ -36,6 +36,15 @@ using namespace Jrd;
 
 // Class DsqlStatement
 
+DsqlStatement::DsqlStatement(MemoryPool& pool, dsql_dbb* aDsqlAttachment)
+	: PermanentStorage(pool),
+	  dsqlAttachment(aDsqlAttachment)
+{
+	pool.setStatsGroup(memoryStats);
+
+	schemaSearchPath = dsqlAttachment->dbb_attachment->att_schema_search_path;
+}
+
 // Rethrow an exception with isc_no_meta_update and prefix codes.
 void DsqlStatement::rethrowDdlException(status_exception& ex, bool metadataUpdate, DdlNode* node)
 {
@@ -56,17 +65,15 @@ void DsqlStatement::rethrowDdlException(status_exception& ex, bool metadataUpdat
 	status_exception::raise(newVector);
 }
 
-int DsqlStatement::release()
+void DsqlStatement::release()
 {
 	fb_assert(refCounter.value() > 0);
-	int refCnt = --refCounter;
 
-	if (!refCnt)
+	if (!--refCounter)
 	{
 		if (cacheKey)
 		{
 			dsqlAttachment->dbb_statement_cache->statementGoingInactive(cacheKey);
-			refCnt = refCounter;
 		}
 		else
 		{
@@ -74,12 +81,11 @@ int DsqlStatement::release()
 			dsqlAttachment->deletePool(&getPool());
 		}
 	}
-
-	return refCnt;
 }
 
 void DsqlStatement::doRelease()
 {
+	fb_assert(!cacheKey.hasData());
 	setSqlText(nullptr);
 	setOrgText(nullptr, 0);
 
@@ -108,13 +114,6 @@ void DsqlStatement::setOrgText(const char* ptr, ULONG len)
 
 void DsqlDmlStatement::doRelease()
 {
-	if (auto parent = getParentRequest())
-	{
-		FB_SIZE_T pos;
-		if (parent->cursors.find(this, pos))
-			parent->cursors.remove(pos);
-	}
-
 	if (statement)
 	{
 		thread_db* tdbb = JRD_get_thread_data();
@@ -151,9 +150,6 @@ void DsqlDmlStatement::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, n
 	GEN_statement(scratch, node);
 
 	unsigned messageNumber = 0;
-
-	for (auto message : ports)
-		message->msg_buffer_number = messageNumber++;
 
 	// have the access method compile the statement
 
@@ -223,7 +219,8 @@ void DsqlDmlStatement::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, n
 	if (status)
 		status_exception::raise(tdbb->tdbb_status_vector);
 
-	node = NULL;
+	node = nullptr;
+	scratch = nullptr;
 }
 
 DsqlDmlRequest* DsqlDmlStatement::createRequest(thread_db* tdbb, dsql_dbb* dbb)

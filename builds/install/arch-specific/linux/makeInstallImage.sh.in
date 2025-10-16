@@ -61,7 +61,7 @@ addLibs() {
 	[ "$LIB" ] && echo "export LIBTOMMATH=$LIB" >>$libTarget
 	LIB=`$OBJDUMP -p $libSdir/firebird|grep NEEDED|grep tomcrypt|awk '{print $2;}'`
 	[ "$LIB" ] && echo "export LIBTOMCRYPT=$LIB" >>$libTarget
-	LIB=$(echo `$OBJDUMP -p $libSdir/isql|grep NEEDED|egrep "(curses|termcap|tinfo)"|awk '{print $2;}'`)
+	LIB=$(echo `$OBJDUMP -p $libSdir/isql|grep NEEDED|grep -E "(curses|termcap|tinfo)"|awk '{print $2;}'`)
 	[ "$LIB" ] && echo "export LIBCURSES='$LIB'" >>$libTarget
 	echo >>$libTarget
 
@@ -152,10 +152,10 @@ ReadOnlyTree() {
 #------------------------------------------------------------------------
 #  copyFiles
 # This function copies all the files for a distribution into a
-# directory heirachy mirroring the installation.
+# directory hierarchy mirroring the installation.
 
 copyFiles() {
-# The guts of the tranfer of files and other directories
+# The guts of the transfer of files and other directories
 
 #cleanup
     if [ -d $TargetDir ]

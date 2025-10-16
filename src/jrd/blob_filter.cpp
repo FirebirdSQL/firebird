@@ -239,7 +239,7 @@ BlobFilter* BLF_lookup_internal_filter(thread_db* tdbb, SSHORT from, SSHORT to)
 
 	// Check for system defined filter
 
-	if (to == isc_blob_text && from >= 0 && from < FB_NELEM(filters))
+	if (to == isc_blob_text && from >= 0 && static_cast<FB_SIZE_T>(from) < FB_NELEM(filters))
 	{
 		BlobFilter* result = FB_NEW_POOL(*dbb->dbb_permanent) BlobFilter(*dbb->dbb_permanent);
 		result->blf_next = NULL;
@@ -413,7 +413,7 @@ static void open_blob(thread_db* tdbb,
 	control->ctl_status = localStatus;
 	control->ctl_exception_message = filter->blf_exception_message;
 
-	// Two types of filtering can be occuring; either between totally
+	// Two types of filtering can be occurring; either between totally
 	// different BLOb sub_types, or between two different
 	// character sets (both source & destination subtype must be TEXT in that case).
 	// For the character set filter we use the to & from_sub_type fields

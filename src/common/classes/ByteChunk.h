@@ -32,7 +32,7 @@ namespace Firebird {
 struct ByteChunk
 {
 	// Separate pointer/length buffer.
-	ByteChunk(const UCHAR* aData, FB_SIZE_T aLength)
+	ByteChunk(const UCHAR* aData, FB_SIZE_T aLength) noexcept
 		: data(aData),
 		  length(aLength)
 	{
@@ -48,14 +48,14 @@ struct ByteChunk
 	}
 
 	// String buffer.
-	ByteChunk(string& str)
+	ByteChunk(string& str) noexcept
 		: data((UCHAR*) str.c_str()),
 		  length(str.length())
 	{
 	}
 
 	// Empty.
-	ByteChunk()
+	ByteChunk() noexcept
 		: data(NULL),
 		  length(0)
 	{

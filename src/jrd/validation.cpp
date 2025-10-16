@@ -600,7 +600,7 @@ static SimilarToRegex* createPatternMatcher(thread_db* tdbb, const char* pattern
 	{
 		if (pattern)
 		{
-			const int len = strlen(pattern);
+			const FB_SIZE_T len = fb_strlen(pattern);
 
 			//// TODO: Should this be different than trace and replication
 			//// and use case sensitive matcher?
@@ -914,6 +914,8 @@ void Validation::parse_args(thread_db* tdbb)
 
 		switch (sw->in_sw)
 		{
+		case IN_SW_VAL_SCH_INCL:
+		case IN_SW_VAL_SCH_EXCL:
 		case IN_SW_VAL_TAB_INCL:
 		case IN_SW_VAL_TAB_EXCL:
 		case IN_SW_VAL_IDX_INCL:
@@ -935,6 +937,14 @@ void Validation::parse_args(thread_db* tdbb)
 
 		switch (sw->in_sw)
 		{
+		case IN_SW_VAL_SCH_INCL:
+			vdr_sch_incl = createPatternMatcher(tdbb, *argv);
+			break;
+
+		case IN_SW_VAL_SCH_EXCL:
+			vdr_sch_excl = createPatternMatcher(tdbb, *argv);
+			break;
+
 		case IN_SW_VAL_TAB_INCL:
 			vdr_tab_incl = createPatternMatcher(tdbb, *argv);
 			break;
@@ -1149,7 +1159,7 @@ Validation::RTN Validation::corrupt(int err_code, const jrd_rel* relation, ...)
 			fprintf(stdout, "LOG:\tDatabase: %s\n\t%s\n", fn, s.c_str());
 	}
 #endif
-	if (vdr_msg_table[err_code].error)
+	if (err_code >= VAL_MAX_ERROR || vdr_msg_table[err_code].error)
 	{
 		++vdr_errors;
 		s.insert(0, "Error: ");
@@ -1163,7 +1173,7 @@ Validation::RTN Validation::corrupt(int err_code, const jrd_rel* relation, ...)
 	if (relation)
 	{
 		gds__log("Database: %s\n\t%s in table %s (%d)",
-			fn, s.c_str(), relation->rel_name.c_str(), relation->rel_id);
+			fn, s.c_str(), relation->rel_name.toQuotedString().c_str(), relation->rel_id);
 	}
 	else
 		gds__log("Database: %s\n\t%s", fn, s.c_str());
@@ -1636,11 +1646,10 @@ void Validation::walk_database()
 	WIN window(DB_PAGE_SPACE, -1);
 	header_page* page = 0;
 	fetch_page(true, PageNumber(DB_PAGE_SPACE, HEADER_PAGE), pag_header, &window, &page);
- 	TraNumber next = vdr_max_transaction = Ods::getNT(page);
+	const TraNumber next = vdr_max_transaction = page->hdr_next_transaction;
 
-	if (vdr_flags & VDR_online) {
+	if (vdr_flags & VDR_online)
 		release_page(&window);
-	}
 
 	if (!(vdr_flags & VDR_partial))
 	{
@@ -1682,15 +1691,27 @@ void Validation::walk_database()
 			if ((vdr_flags & VDR_online) && relation->isSystem())
 				continue;
 
+			if (vdr_sch_incl)
+			{
+				if (!vdr_sch_incl->matches(relation->rel_name.schema.c_str(), relation->rel_name.schema.length()))
+					continue;
+			}
+
+			if (vdr_sch_excl)
+			{
+				if (vdr_sch_excl->matches(relation->rel_name.schema.c_str(), relation->rel_name.schema.length()))
+					continue;
+			}
+
 			if (vdr_tab_incl)
 			{
-				if (!vdr_tab_incl->matches(relation->rel_name.c_str(), relation->rel_name.length()))
+				if (!vdr_tab_incl->matches(relation->rel_name.object.c_str(), relation->rel_name.object.length()))
 					continue;
 			}
 
 			if (vdr_tab_excl)
 			{
-				if (vdr_tab_excl->matches(relation->rel_name.c_str(), relation->rel_name.length()))
+				if (vdr_tab_excl->matches(relation->rel_name.object.c_str(), relation->rel_name.object.length()))
 					continue;
 			}
 
@@ -1700,7 +1721,7 @@ void Validation::walk_database()
 				vdr_page_bitmap[relation->getBasePages()->rel_pg_space_id]->clear();	// Should all array be cleared?
 
 			string relName;
-			relName.printf("Relation %d (%s)", relation->rel_id, relation->rel_name.c_str());
+			relName.printf("Relation %d (%s)", relation->rel_id, relation->rel_name.toQuotedString().c_str());
 			output("%s\n", relName.c_str());
 
 			int errs = vdr_errors;
@@ -1815,7 +1836,7 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 				PBM_SET(pool, &vdr_backversion_pages, page_number);
 			}
 
-			// Record the existance of a primary version of a record
+			// Record the existence of a primary version of a record
 
 			if ((vdr_flags & VDR_records) &&
 				!(header->rhd_flags & (rhd_chain | rhd_fragment | rhd_blob)))
@@ -1991,7 +2012,7 @@ void Validation::walk_generators()
 	}
 }
 
-Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_page, USHORT id)
+Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page* root_page, USHORT id)
 {
 /**************************************
  *
@@ -2011,44 +2032,35 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
  **************************************/
 	Database* dbb = vdr_tdbb->getDatabase();
 
-	const ULONG page_number = root_page.irt_rpt[id].getRootPage();
-	if (!page_number) {
+	const ULONG pageNumber = root_page->irt_rpt[id].getRootPage();
+	if (!pageNumber)
 		return rtn_ok;
-	}
 
-	const bool unique = (root_page.irt_rpt[id].irt_flags & (irt_unique | idx_primary));
-	const bool descending = (root_page.irt_rpt[id].irt_flags & irt_descending);
-	const bool condition = (root_page.irt_rpt[id].irt_flags & irt_condition);
+	const ULONG pageSpaceId = root_page->irt_rpt[id].getRootPageSpaceId();
 
-	temporary_key nullKey, *null_key = 0;
+	const bool unique = (root_page->irt_rpt[id].irt_flags & (irt_unique | idx_primary));
+	const bool descending = (root_page->irt_rpt[id].irt_flags & irt_descending);
+	const bool condition = (root_page->irt_rpt[id].irt_flags & irt_condition);
 
-	// We need to have index description to get index page space
-	const bool isExpression = root_page.irt_rpt[id].irt_flags & irt_expression;
-	if (isExpression)
-		root_page.irt_rpt[id].irt_flags &= ~irt_expression;
-
-	index_desc idx;
-	BTR_description(vdr_tdbb, relation, &root_page, &idx, id);
-	if (isExpression)
-		root_page.irt_rpt[id].irt_flags |= irt_expression;
+	temporary_key nullKey, *null_key = nullptr;
 
 	if (unique)
 	{
 		index_desc idx;
 		{
 			// No need to evaluate index expression and/or condition
-			AutoSetRestoreFlag<UCHAR> flags(&root_page.irt_rpt[id].irt_flags,
+			AutoSetRestoreFlag<USHORT> flags(&root_page->irt_rpt[id].irt_flags,
 				irt_expression | irt_condition, false);
 
-			BTR_description(vdr_tdbb, relation, &root_page, &idx, id);
+			BTR_description(vdr_tdbb, relation, root_page, &idx, id);
 		}
 
 		null_key = &nullKey;
 		BTR_make_null_key(vdr_tdbb, &idx, null_key);
 	}
 
-	ULONG next = page_number;
-	ULONG down = page_number;
+	ULONG next = pageNumber;
+	ULONG down = pageNumber;
 	temporary_key key;
 	key.key_length = 0;
 	ULONG previous_number = 0;
@@ -2065,20 +2077,20 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 
 	while (next)
 	{
-		WIN window(idx.idx_pg_space_id, -1);
+		WIN window(pageSpaceId, -1);
 		window.win_flags = WIN_garbage_collector;
 
 		btree_page* page = 0;
-		fetch_page(true, PageNumber(idx.idx_pg_space_id, next), pag_index, &window, &page);
+		fetch_page(true, PageNumber(pageSpaceId, next), pag_index, &window, &page);
 
 		// remember each page for circular reference detection
 		visited_pages.set(next);
 
-		//if ((next != page_number) &&
+		//if ((next != pageNumber) &&
 		//	(page->btr_header.pag_flags & BTR_FLAG_COPY_MASK) != (flags & BTR_FLAG_COPY_MASK))
 		//{
 		//	corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
-		//			id + 1, idx.idx_pg_space_id, next, page->btr_level, 0, __FILE__, __LINE__);
+		//			id + 1, pageSpaceId, next, page->btr_level, 0, __FILE__, __LINE__);
 		//}
 
 		if (level == 255) {
@@ -2087,14 +2099,14 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 		else if (level != page->btr_level)
 		{
 			corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
-				id + 1, idx.idx_pg_space_id, next, page->btr_level, 0, __FILE__, __LINE__);
+				id + 1, pageSpaceId, next, page->btr_level, 0, __FILE__, __LINE__);
 		}
 
 		const bool leafPage = (page->btr_level == 0);
 
 		if (page->btr_relation != relation->rel_id || page->btr_id != (UCHAR) (id % 256))
 		{
-			corrupt(VAL_INDEX_PAGE_CORRUPT, relation, id + 1, idx.idx_pg_space_id,
+			corrupt(VAL_INDEX_PAGE_CORRUPT, relation, id + 1, pageSpaceId,
 					next, page->btr_level, 0, __FILE__, __LINE__);
 			release_page(&window);
 			return rtn_corrupt;
@@ -2105,7 +2117,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 		if (BTR_SIZE + page->btr_jump_size > page->btr_length)
 		{
 			corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
-					id + 1, idx.idx_pg_space_id, next, page->btr_level, (ULONG) (pointer - (UCHAR*) page),
+					id + 1, pageSpaceId, next, page->btr_level, (ULONG) (pointer - (UCHAR*) page),
 					__FILE__, __LINE__);
 		}
 
@@ -2122,7 +2134,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 				(jumpNode.offset > page->btr_length))
 			{
 				corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
-						id + 1, idx.idx_pg_space_id, next, page->btr_level, (ULONG) (pointer - (UCHAR*) page),
+						id + 1, pageSpaceId, next, page->btr_level, (ULONG) (pointer - (UCHAR*) page),
 						__FILE__, __LINE__);
 			}
 			else
@@ -2132,7 +2144,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 				if ((jumpNode.prefix + jumpNode.length) != checknode.prefix)
 				{
 					corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
-							id + 1, idx.idx_pg_space_id, next, page->btr_level, (ULONG) jumpNode.offset,
+							id + 1, pageSpaceId, next, page->btr_level, (ULONG) jumpNode.offset,
 							__FILE__, __LINE__);
 				}
 
@@ -2140,7 +2152,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 				if (n == page->btr_jump_count && jumpNode.prefix)
 				{
 					corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
-						id + 1, idx.idx_pg_space_id, next, page->btr_level, (ULONG) jumpNode.offset,
+						id + 1, pageSpaceId, next, page->btr_level, (ULONG) jumpNode.offset,
 						__FILE__, __LINE__);
 				}
 
@@ -2148,7 +2160,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 				if (n != page->btr_jump_count && jumpNode.prefix > jumpDataLen)
 				{
 					corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
-						id + 1, idx.idx_pg_space_id, next, page->btr_level, (ULONG) jumpNode.offset,
+						id + 1, pageSpaceId, next, page->btr_level, (ULONG) jumpNode.offset,
 						__FILE__, __LINE__);
 				}
 
@@ -2160,7 +2172,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 		if (jumpersSize > page->btr_jump_size)
 		{
 			corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
-				id + 1, idx.idx_pg_space_id, next, page->btr_level, (ULONG) page->btr_jump_size + BTR_SIZE,
+				id + 1, pageSpaceId, next, page->btr_level, (ULONG) page->btr_jump_size + BTR_SIZE,
 				__FILE__, __LINE__);
 		}
 
@@ -2180,7 +2192,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 			if (node.prefix > key.key_length)
 			{
 				corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
-						id + 1, idx.idx_pg_space_id, next, page->btr_level, node.nodePointer - (UCHAR*) page, __FILE__, __LINE__);
+						id + 1, pageSpaceId, next, page->btr_level, node.nodePointer - (UCHAR*) page, __FILE__, __LINE__);
 				release_page(&window);
 				return rtn_corrupt;
 			}
@@ -2201,7 +2213,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 				{
 					duplicateNode = false;
 					corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
-							id + 1, idx.idx_pg_space_id, next, page->btr_level, (ULONG) (q - (UCHAR*) page),
+							id + 1, pageSpaceId, next, page->btr_level, (ULONG) (q - (UCHAR*) page),
 							__FILE__, __LINE__);
 				}
 				else if (*p < *q)
@@ -2223,7 +2235,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 			{
 				duplicateNode = false;
 				corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
-						id + 1, idx.idx_pg_space_id, next, page->btr_level, (ULONG) (node.nodePointer - (UCHAR*) page),
+						id + 1, pageSpaceId, next, page->btr_level, (ULONG) (node.nodePointer - (UCHAR*) page),
 						__FILE__, __LINE__);
 			}
 
@@ -2247,7 +2259,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 				{
 					duplicateNode = false;
 					corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
-							id + 1, idx.idx_pg_space_id, next, page->btr_level, (ULONG) (node.nodePointer - (UCHAR*) page),
+							id + 1, pageSpaceId, next, page->btr_level, (ULONG) (node.nodePointer - (UCHAR*) page),
 							__FILE__, __LINE__);
 				}
 			}
@@ -2268,7 +2280,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 						(node.recordNumber < lastNode.recordNumber))
 					{
 						corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
-							id + 1, idx.idx_pg_space_id, next, page->btr_level, (ULONG) (node.nodePointer - (UCHAR*) page),
+							id + 1, pageSpaceId, next, page->btr_level, (ULONG) (node.nodePointer - (UCHAR*) page),
 							__FILE__, __LINE__);
 					}
 				}
@@ -2294,7 +2306,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 			if (node.isEndBucket || node.isEndLevel)
 				break;
 
-			// Record the existance of a primary version of a record
+			// Record the existence of a primary version of a record
 			if (leafPage && (vdr_flags & VDR_records))
 				RBM_SET(vdr_tdbb->getDefaultPool(), &vdr_idx_records, node.recordNumber.getValue());
 
@@ -2307,11 +2319,11 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 				// Note: mark == false for the fetch_page() call here
 				// as we don't want to mark the page as visited yet - we'll
 				// mark it when we visit it for real later on
-				WIN down_window(idx.idx_pg_space_id, -1);
+				WIN down_window(pageSpaceId, -1);
 				down_window.win_flags = WIN_garbage_collector;
 
 				btree_page* down_page = 0;
-				fetch_page(false, PageNumber(idx.idx_pg_space_id, down_number), pag_index, &down_window, &down_page);
+				fetch_page(false, PageNumber(pageSpaceId, down_number), pag_index, &down_window, &down_page);
 				const bool downLeafPage = (down_page->btr_level == 0);
 
 				// make sure the initial key is greater than the pointer key
@@ -2328,7 +2340,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 					if (*p < *q)
 					{
 						corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
-								id + 1, idx.idx_pg_space_id, next, page->btr_level, (ULONG) (node.nodePointer - (UCHAR*) page),
+								id + 1, pageSpaceId, next, page->btr_level, (ULONG) (node.nodePointer - (UCHAR*) page),
 								__FILE__, __LINE__);
 					}
 					else if (*p > *q)
@@ -2349,7 +2361,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 						(downNode.recordNumber < down_record_number))
 					{
 						corrupt(VAL_INDEX_PAGE_CORRUPT, relation,
-								id + 1, idx.idx_pg_space_id, next, page->btr_level, (ULONG) (node.nodePointer - (UCHAR*) page),
+								id + 1, pageSpaceId, next, page->btr_level, (ULONG) (node.nodePointer - (UCHAR*) page),
 								__FILE__, __LINE__);
 					}
 				}
@@ -2358,7 +2370,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 				if (previous_number != down_page->btr_left_sibling)
 				{
 					corrupt(VAL_INDEX_BAD_LEFT_SIBLING, relation,
-							id + 1, idx.idx_pg_space_id, next, page->btr_level, (ULONG) (node.nodePointer - (UCHAR*) page));
+							id + 1, pageSpaceId, next, page->btr_level, (ULONG) (node.nodePointer - (UCHAR*) page));
 				}
 
 				downNode.readNode(pointer, leafPage);
@@ -2368,11 +2380,11 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 					(next_number != down_page->btr_sibling))
 				{
 					corrupt(VAL_INDEX_MISSES_NODE, relation,
-							id + 1, idx.idx_pg_space_id, next, page->btr_level, (ULONG) (node.nodePointer - (UCHAR*) page));
+							id + 1, pageSpaceId, next, page->btr_level, (ULONG) (node.nodePointer - (UCHAR*) page));
 				}
 
 				if (downNode.isEndLevel && down_page->btr_sibling) {
-					corrupt(VAL_INDEX_ORPHAN_CHILD, relation, id + 1, idx.idx_pg_space_id, next);
+					corrupt(VAL_INDEX_ORPHAN_CHILD, relation, id + 1, pageSpaceId, next);
 				}
 				previous_number = down_number;
 
@@ -2382,7 +2394,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 
 		if (pointer != endPointer || page->btr_length > dbb->dbb_page_size)
 		{
-			corrupt(VAL_INDEX_PAGE_CORRUPT, relation, id + 1, idx.idx_pg_space_id,
+			corrupt(VAL_INDEX_PAGE_CORRUPT, relation, id + 1, pageSpaceId,
 					next, page->btr_level, (ULONG) (pointer - (UCHAR*) page), __FILE__, __LINE__);
 		}
 
@@ -2413,7 +2425,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page& root_
 		// check for circular referenes
 		if (next && visited_pages.test(next))
 		{
-			corrupt(VAL_INDEX_CYCLE, relation, id + 1, idx.idx_pg_space_id, next);
+			corrupt(VAL_INDEX_CYCLE, relation, id + 1, pageSpaceId, next);
 			next = 0;
 		}
 		release_page(&window);
@@ -3131,7 +3143,7 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 		WIN window(DB_PAGE_SPACE, -1);
 		header_page* page = NULL;
 		fetch_page(false, PageNumber(DB_PAGE_SPACE, HEADER_PAGE), pag_header, &window, &page);
-		vdr_max_transaction = Ods::getNT(page);
+		vdr_max_transaction = page->hdr_next_transaction;
 		release_page(&window);
 	}
 
@@ -3283,10 +3295,13 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 	{
 		if (!(vdr_flags & VDR_online))
 		{
-			const char* msg = relation->rel_name.length() > 0 ?
-				"bugcheck during scan of table %d (%s)" :
-				"bugcheck during scan of table %d";
-			gds__log(msg, relation->rel_id, relation->rel_name.c_str());
+			if (relation->rel_name.object.hasData())
+			{
+				gds__log("bugcheck during scan of table %d (%s)",
+					relation->rel_id, relation->rel_name.toQuotedString().c_str());
+			}
+			else
+				gds__log("bugcheck during scan of table %d", relation->rel_id);
 		}
 #ifdef DEBUG_VAL_VERBOSE
 		if (VAL_debug_level)
@@ -3324,30 +3339,42 @@ Validation::RTN Validation::walk_root(jrd_rel* relation, bool getInfo)
 		return corrupt(VAL_INDEX_ROOT_MISSING, relation);
 
 	const ULONG pageSpaceId = relPages->rel_pg_space_id;
-	index_root_page* page = 0;
+	index_root_page* page = nullptr;
 	WIN window(pageSpaceId, -1);
 	fetch_page(!getInfo, PageNumber(pageSpaceId, relPages->rel_index_root), pag_root, &window, &page);
 
 	for (USHORT i = 0; i < page->irt_count; i++)
 	{
-		if (page->irt_rpt[i].getRootPage() == 0)
+		if (!page->irt_rpt[i].isUsed())
 			continue;
 
-		MetaName index;
+		QualifiedName index;
 
 		release_page(&window);
 		MET_lookup_index(vdr_tdbb, index, relation->rel_name, i + 1);
 		fetch_page(false, PageNumber(pageSpaceId, relPages->rel_index_root), pag_root, &window, &page);
 
+		if (vdr_sch_incl)
+		{
+			if (!vdr_sch_incl->matches(index.schema.c_str(), index.schema.length()))
+				continue;
+		}
+
+		if (vdr_sch_excl)
+		{
+			if (vdr_sch_excl->matches(index.schema.c_str(), index.schema.length()))
+				continue;
+		}
+
 		if (vdr_idx_incl)
 		{
-			if (!vdr_idx_incl->matches(index.c_str(), index.length()))
+			if (!vdr_idx_incl->matches(index.object.c_str(), index.object.length()))
 				continue;
 		}
 
 		if (vdr_idx_excl)
 		{
-			if (vdr_idx_excl->matches(index.c_str(), index.length()))
+			if (vdr_idx_excl->matches(index.object.c_str(), index.object.length()))
 				continue;
 		}
 
@@ -3356,7 +3383,7 @@ Validation::RTN Validation::walk_root(jrd_rel* relation, bool getInfo)
 			if (page->irt_rpt[i].irt_flags & irt_condition)
 			{
 				// No need to evaluate index expression
-				AutoSetRestoreFlag<UCHAR> flag(&page->irt_rpt[i].irt_flags, irt_expression, false);
+				AutoSetRestoreFlag<USHORT> flag(&page->irt_rpt[i].irt_flags, irt_expression, false);
 
 				IdxInfo info;
 				if (BTR_description(vdr_tdbb, relation, page, &info.m_desc, i))
@@ -3365,8 +3392,8 @@ Validation::RTN Validation::walk_root(jrd_rel* relation, bool getInfo)
 			continue;
 		}
 
-		output("Index %d (%s)\n", i + 1, index.c_str());
-		walk_index(relation, *page, i);
+		output("Index %d (%s)\n", i + 1, index.toQuotedString().c_str());
+		walk_index(relation, page, i);
 	}
 
 	release_page(&window);

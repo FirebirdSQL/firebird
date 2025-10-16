@@ -32,18 +32,17 @@
 
 using namespace Firebird;
 
-const FB_SIZE_T SERVICE_SIZE = 256;
-const FB_SIZE_T SERVER_PART = 200;
-const FB_SIZE_T RESULT_BUF_SIZE = 512;
+constexpr FB_SIZE_T SERVICE_SIZE = 256;
+constexpr FB_SIZE_T SERVER_PART = 200;
+constexpr FB_SIZE_T RESULT_BUF_SIZE = 512;
 
 /**
 
  	isValidServer
 
     @brief	Validates server name for non-local protocol.
-	Replaces the original ugly macro.
-	Now the function that calls isValidServer is responsible
-	for returning NULL to its invoker in turn. It simply makes
+	The function that calls isValidServer is responsible
+	for returning NULL to its invoker in turn. It makes
 	sure there's something in the string containing the	server's name;
 	otherwise it fills the status vector with an error.
 
@@ -52,7 +51,7 @@ const FB_SIZE_T RESULT_BUF_SIZE = 512;
     @param server
 
  **/
-static bool isValidServer(ISC_STATUS* status, const TEXT* server)
+static bool isValidServer(ISC_STATUS* status, const TEXT* server) noexcept
 {
 	if (!server || !*server)
 	{
@@ -101,22 +100,22 @@ static int typeBuffer(ISC_STATUS*, char*, int, Auth::UserData&, Firebird::IListU
 // all this spb-writing functions should be gone
 // as soon as we create SvcClumpletWriter
 
-inline void stuffSpbByte(char*& spb, char data)
+inline void stuffSpbByte(char*& spb, char data) noexcept
 {
 	*spb++ = data;
 }
 
-inline void stuffSpbShort(char*& spb, short data)
+inline void stuffSpbShort(char*& spb, short data) noexcept
 {
 	ADD_SPB_LENGTH(spb, data);
 }
 
-inline void stuffSpbLong(char*& spb, SLONG data)
+inline void stuffSpbLong(char*& spb, SLONG data) noexcept
 {
 	ADD_SPB_NUMERIC(spb, data);
 }
 
-static void stuffSpb(char*& spb, char param, const TEXT* value)
+static void stuffSpb(char*& spb, char param, const TEXT* value) noexcept
 {
 	stuffSpbByte(spb, param);
 	int l = static_cast<int>(strlen(value));
@@ -126,7 +125,7 @@ static void stuffSpb(char*& spb, char param, const TEXT* value)
 	spb += l;
 }
 
-static void stuffSpb2(char*& spb, char param, const TEXT* value)
+static void stuffSpb2(char*& spb, char param, const TEXT* value) noexcept
 {
 	stuffSpbByte(spb, param);
 	int l = static_cast<int>(strlen(value));
@@ -465,7 +464,7 @@ void callRemoteServiceManager(ISC_STATUS* status,
 	{
 		const char request[] = {isc_info_svc_get_users};
 		int startQuery = 0;
-		Auth::StackUserData uData;
+		Auth::UserData uData;
 
 		for (;;)
 		{
@@ -496,7 +495,7 @@ void callRemoteServiceManager(ISC_STATUS* status,
 	}
 	else
 	{
-		const char request = isc_info_svc_line;
+		constexpr char request = isc_info_svc_line;
 		for (;;)
 		{
 			isc_resv_handle reserved = 0;
@@ -591,7 +590,7 @@ static void parseLong(const char*& p, Auth::IntField& f, FB_SIZE_T& loop)
 	f.setEntered(&statusWrapper, 1);
 	check(&statusWrapper);
 
-	const FB_SIZE_T len2 = sizeof(ULONG) + 1;
+	constexpr FB_SIZE_T len2 = sizeof(ULONG) + 1;
 	if (len2 > loop)
 	{
 		throw loop;
@@ -705,7 +704,7 @@ static int typeBuffer(ISC_STATUS* status, char* buf, int offset,
 				return -1;
 			}
 		}
-		catch (FB_SIZE_T newOffset)
+		catch (const FB_SIZE_T newOffset)
 		{
 			memmove(buf, --p, newOffset);
 			return newOffset;
@@ -747,7 +746,7 @@ static void checkServerUsersVersion(isc_svc_handle svc_handle, char& server_user
 		{
 		case isc_info_svc_server_version:
 			{
-				USHORT length = (USHORT) isc_vax_integer(p, sizeof(USHORT));
+				const USHORT length = (USHORT) isc_vax_integer(p, sizeof(USHORT));
 				p += sizeof(length);
 				version.assign(p, length);
 				p += length;
@@ -770,7 +769,7 @@ static void checkServerUsersVersion(isc_svc_handle svc_handle, char& server_user
 		if (isdigit(version[pos]))
 		{
 			version.erase(0, pos);
-			double f = atof(version.c_str());
+			const double f = atof(version.c_str());
 			if (f > 2.45)	// need 2.5, but take into an account it's float
 			{
 				server_users = isc_action_svc_display_user_adm;

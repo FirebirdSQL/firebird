@@ -186,7 +186,7 @@ type
 		pin_records_fetched	: Int64;
 	end;
 
-	Dsc = Record
+	ParamDsc = Record
 		dsc_dtype, dsc_scale: Byte;
 		dsc_length, dsc_sub_type, dsc_flags: Int16;
 		dsc_address: ^Byte;
@@ -207,7 +207,7 @@ type
 	IntegerPtr = ^Integer;
 	NativeIntPtr = ^NativeInt;
 	PerformanceInfoPtr = ^PerformanceInfo;
-	dscPtr = ^dsc;
+	paramdscPtr = ^paramdsc;
 
 	IReferenceCounted_addRefPtr = procedure(this: IReferenceCounted); cdecl;
 	IReferenceCounted_releasePtr = function(this: IReferenceCounted): Integer; cdecl;
@@ -316,6 +316,7 @@ type
 	IMessageMetadata_getMessageLengthPtr = function(this: IMessageMetadata; status: IStatus): Cardinal; cdecl;
 	IMessageMetadata_getAlignmentPtr = function(this: IMessageMetadata; status: IStatus): Cardinal; cdecl;
 	IMessageMetadata_getAlignedLengthPtr = function(this: IMessageMetadata; status: IStatus): Cardinal; cdecl;
+	IMessageMetadata_getSchemaPtr = function(this: IMessageMetadata; status: IStatus; index: Cardinal): PAnsiChar; cdecl;
 	IMetadataBuilder_setTypePtr = procedure(this: IMetadataBuilder; status: IStatus; index: Cardinal; type_: Cardinal); cdecl;
 	IMetadataBuilder_setSubTypePtr = procedure(this: IMetadataBuilder; status: IStatus; index: Cardinal; subType: Integer); cdecl;
 	IMetadataBuilder_setLengthPtr = procedure(this: IMetadataBuilder; status: IStatus; index: Cardinal; length: Cardinal); cdecl;
@@ -330,6 +331,7 @@ type
 	IMetadataBuilder_setRelationPtr = procedure(this: IMetadataBuilder; status: IStatus; index: Cardinal; relation: PAnsiChar); cdecl;
 	IMetadataBuilder_setOwnerPtr = procedure(this: IMetadataBuilder; status: IStatus; index: Cardinal; owner: PAnsiChar); cdecl;
 	IMetadataBuilder_setAliasPtr = procedure(this: IMetadataBuilder; status: IStatus; index: Cardinal; alias: PAnsiChar); cdecl;
+	IMetadataBuilder_setSchemaPtr = procedure(this: IMetadataBuilder; status: IStatus; index: Cardinal; schema: PAnsiChar); cdecl;
 	IResultSet_fetchNextPtr = function(this: IResultSet; status: IStatus; message: Pointer): Integer; cdecl;
 	IResultSet_fetchPriorPtr = function(this: IResultSet; status: IStatus; message: Pointer): Integer; cdecl;
 	IResultSet_fetchFirstPtr = function(this: IResultSet; status: IStatus; message: Pointer): Integer; cdecl;
@@ -358,6 +360,8 @@ type
 	IStatement_setTimeoutPtr = procedure(this: IStatement; status: IStatus; timeOut: Cardinal); cdecl;
 	IStatement_createBatchPtr = function(this: IStatement; status: IStatus; inMetadata: IMessageMetadata; parLength: Cardinal; par: BytePtr): IBatch; cdecl;
 	IStatement_freePtr = procedure(this: IStatement; status: IStatus); cdecl;
+	IStatement_getMaxInlineBlobSizePtr = function(this: IStatement; status: IStatus): Cardinal; cdecl;
+	IStatement_setMaxInlineBlobSizePtr = procedure(this: IStatement; status: IStatus; size: Cardinal); cdecl;
 	IBatch_addPtr = procedure(this: IBatch; status: IStatus; count: Cardinal; inBuffer: Pointer); cdecl;
 	IBatch_addBlobPtr = procedure(this: IBatch; status: IStatus; length: Cardinal; inBuffer: Pointer; blobId: ISC_QUADPtr; parLength: Cardinal; par: BytePtr); cdecl;
 	IBatch_appendBlobDataPtr = procedure(this: IBatch; status: IStatus; length: Cardinal; inBuffer: Pointer); cdecl;
@@ -414,6 +418,10 @@ type
 	IAttachment_createReplicatorPtr = function(this: IAttachment; status: IStatus): IReplicator; cdecl;
 	IAttachment_detachPtr = procedure(this: IAttachment; status: IStatus); cdecl;
 	IAttachment_dropDatabasePtr = procedure(this: IAttachment; status: IStatus); cdecl;
+	IAttachment_getMaxBlobCacheSizePtr = function(this: IAttachment; status: IStatus): Cardinal; cdecl;
+	IAttachment_setMaxBlobCacheSizePtr = procedure(this: IAttachment; status: IStatus; size: Cardinal); cdecl;
+	IAttachment_getMaxInlineBlobSizePtr = function(this: IAttachment; status: IStatus): Cardinal; cdecl;
+	IAttachment_setMaxInlineBlobSizePtr = procedure(this: IAttachment; status: IStatus; size: Cardinal); cdecl;
 	IService_deprecatedDetachPtr = procedure(this: IService; status: IStatus); cdecl;
 	IService_queryPtr = procedure(this: IService; status: IStatus; sendLength: Cardinal; sendItems: BytePtr; receiveLength: Cardinal; receiveItems: BytePtr; bufferLength: Cardinal; buffer: BytePtr); cdecl;
 	IService_startPtr = procedure(this: IService; status: IStatus; spbLength: Cardinal; spb: BytePtr); cdecl;
@@ -492,6 +500,8 @@ type
 	ICryptKeyCallback_callbackPtr = function(this: ICryptKeyCallback; dataLength: Cardinal; data: Pointer; bufferLength: Cardinal; buffer: Pointer): Cardinal; cdecl;
 	ICryptKeyCallback_afterAttachPtr = function(this: ICryptKeyCallback; status: IStatus; dbName: PAnsiChar; attStatus: IStatus): Cardinal; cdecl;
 	ICryptKeyCallback_disposePtr = procedure(this: ICryptKeyCallback); cdecl;
+	ICryptKeyCallback_getHashLengthPtr = function(this: ICryptKeyCallback; status: IStatus): Integer; cdecl;
+	ICryptKeyCallback_getHashDataPtr = procedure(this: ICryptKeyCallback; status: IStatus; hash: Pointer); cdecl;
 	IKeyHolderPlugin_keyCallbackPtr = function(this: IKeyHolderPlugin; status: IStatus; callback: ICryptKeyCallback): Integer; cdecl;
 	IKeyHolderPlugin_keyHandlePtr = function(this: IKeyHolderPlugin; status: IStatus; keyName: PAnsiChar): ICryptKeyCallback; cdecl;
 	IKeyHolderPlugin_useOnlyOwnKeysPtr = function(this: IKeyHolderPlugin; status: IStatus): Boolean; cdecl;
@@ -527,6 +537,7 @@ type
 	IRoutineMetadata_getTriggerMetadataPtr = function(this: IRoutineMetadata; status: IStatus): IMessageMetadata; cdecl;
 	IRoutineMetadata_getTriggerTablePtr = function(this: IRoutineMetadata; status: IStatus): PAnsiChar; cdecl;
 	IRoutineMetadata_getTriggerTypePtr = function(this: IRoutineMetadata; status: IStatus): Cardinal; cdecl;
+	IRoutineMetadata_getSchemaPtr = function(this: IRoutineMetadata; status: IStatus): PAnsiChar; cdecl;
 	IExternalEngine_openPtr = procedure(this: IExternalEngine; status: IStatus; context: IExternalContext; charSet: PAnsiChar; charSetSize: Cardinal); cdecl;
 	IExternalEngine_openAttachmentPtr = procedure(this: IExternalEngine; status: IStatus; context: IExternalContext); cdecl;
 	IExternalEngine_closeAttachmentPtr = procedure(this: IExternalEngine; status: IStatus; context: IExternalContext); cdecl;
@@ -559,6 +570,8 @@ type
 	IUtil_getInt128Ptr = function(this: IUtil; status: IStatus): IInt128; cdecl;
 	IUtil_decodeTimeTzExPtr = procedure(this: IUtil; status: IStatus; timeTz: ISC_TIME_TZ_EXPtr; hours: CardinalPtr; minutes: CardinalPtr; seconds: CardinalPtr; fractions: CardinalPtr; timeZoneBufferLength: Cardinal; timeZoneBuffer: PAnsiChar); cdecl;
 	IUtil_decodeTimeStampTzExPtr = procedure(this: IUtil; status: IStatus; timeStampTz: ISC_TIMESTAMP_TZ_EXPtr; year: CardinalPtr; month: CardinalPtr; day: CardinalPtr; hours: CardinalPtr; minutes: CardinalPtr; seconds: CardinalPtr; fractions: CardinalPtr; timeZoneBufferLength: Cardinal; timeZoneBuffer: PAnsiChar); cdecl;
+	IUtil_executeCreateDatabase2Ptr = function(this: IUtil; status: IStatus; stmtLength: Cardinal; creatDBstatement: PAnsiChar; dialect: Cardinal; dpbLength: Cardinal; dpb: BytePtr; stmtIsCreateDb: BooleanPtr): IAttachment; cdecl;
+	IUtil_convertPtr = procedure(this: IUtil; status: IStatus; sourceType: Cardinal; sourceScale: Cardinal; sourceLength: Cardinal; source: Pointer; targetType: Cardinal; targetScale: Cardinal; targetLength: Cardinal; target: Pointer); cdecl;
 	IOffsetsCallback_setOffsetPtr = procedure(this: IOffsetsCallback; status: IStatus; index: Cardinal; offset: Cardinal; nullOffset: Cardinal); cdecl;
 	IXpbBuilder_clearPtr = procedure(this: IXpbBuilder; status: IStatus); cdecl;
 	IXpbBuilder_removeCurrentPtr = procedure(this: IXpbBuilder; status: IStatus); cdecl;
@@ -599,7 +612,7 @@ type
 	ITraceTransaction_getInitialIDPtr = function(this: ITraceTransaction): Int64; cdecl;
 	ITraceTransaction_getPreviousIDPtr = function(this: ITraceTransaction): Int64; cdecl;
 	ITraceParams_getCountPtr = function(this: ITraceParams): Cardinal; cdecl;
-	ITraceParams_getParamPtr = function(this: ITraceParams; idx: Cardinal): dscPtr; cdecl;
+	ITraceParams_getParamPtr = function(this: ITraceParams; idx: Cardinal): paramdscPtr; cdecl;
 	ITraceParams_getTextUTF8Ptr = function(this: ITraceParams; status: IStatus; idx: Cardinal): PAnsiChar; cdecl;
 	ITraceStatement_getStmtIDPtr = function(this: ITraceStatement): Int64; cdecl;
 	ITraceStatement_getPerfPtr = function(this: ITraceStatement): PerformanceInfoPtr; cdecl;
@@ -723,15 +736,20 @@ type
 	IReplicatedTransaction_startSavepointPtr = procedure(this: IReplicatedTransaction; status: IStatus); cdecl;
 	IReplicatedTransaction_releaseSavepointPtr = procedure(this: IReplicatedTransaction; status: IStatus); cdecl;
 	IReplicatedTransaction_rollbackSavepointPtr = procedure(this: IReplicatedTransaction; status: IStatus); cdecl;
-	IReplicatedTransaction_insertRecordPtr = procedure(this: IReplicatedTransaction; status: IStatus; name: PAnsiChar; record_: IReplicatedRecord); cdecl;
-	IReplicatedTransaction_updateRecordPtr = procedure(this: IReplicatedTransaction; status: IStatus; name: PAnsiChar; orgRecord: IReplicatedRecord; newRecord: IReplicatedRecord); cdecl;
-	IReplicatedTransaction_deleteRecordPtr = procedure(this: IReplicatedTransaction; status: IStatus; name: PAnsiChar; record_: IReplicatedRecord); cdecl;
-	IReplicatedTransaction_executeSqlPtr = procedure(this: IReplicatedTransaction; status: IStatus; sql: PAnsiChar); cdecl;
-	IReplicatedTransaction_executeSqlIntlPtr = procedure(this: IReplicatedTransaction; status: IStatus; charset: Cardinal; sql: PAnsiChar); cdecl;
+	IReplicatedTransaction_deprecatedInsertRecordPtr = procedure(this: IReplicatedTransaction; status: IStatus; name: PAnsiChar; record_: IReplicatedRecord); cdecl;
+	IReplicatedTransaction_deprecatedUpdateRecordPtr = procedure(this: IReplicatedTransaction; status: IStatus; name: PAnsiChar; orgRecord: IReplicatedRecord; newRecord: IReplicatedRecord); cdecl;
+	IReplicatedTransaction_deprecatedDeleteRecordPtr = procedure(this: IReplicatedTransaction; status: IStatus; name: PAnsiChar; record_: IReplicatedRecord); cdecl;
+	IReplicatedTransaction_deprecatedExecuteSqlPtr = procedure(this: IReplicatedTransaction; status: IStatus; sql: PAnsiChar); cdecl;
+	IReplicatedTransaction_deprecatedExecuteSqlIntlPtr = procedure(this: IReplicatedTransaction; status: IStatus; charset: Cardinal; sql: PAnsiChar); cdecl;
+	IReplicatedTransaction_insertRecord2Ptr = procedure(this: IReplicatedTransaction; status: IStatus; schemaName: PAnsiChar; tableName: PAnsiChar; record_: IReplicatedRecord); cdecl;
+	IReplicatedTransaction_updateRecord2Ptr = procedure(this: IReplicatedTransaction; status: IStatus; schemaName: PAnsiChar; tableName: PAnsiChar; orgRecord: IReplicatedRecord; newRecord: IReplicatedRecord); cdecl;
+	IReplicatedTransaction_deleteRecord2Ptr = procedure(this: IReplicatedTransaction; status: IStatus; schemaName: PAnsiChar; tableName: PAnsiChar; record_: IReplicatedRecord); cdecl;
+	IReplicatedTransaction_executeSqlIntl2Ptr = procedure(this: IReplicatedTransaction; status: IStatus; charset: Cardinal; schemaSearchPath: PAnsiChar; sql: PAnsiChar); cdecl;
 	IReplicatedSession_initPtr = function(this: IReplicatedSession; status: IStatus; attachment: IAttachment): Boolean; cdecl;
 	IReplicatedSession_startTransactionPtr = function(this: IReplicatedSession; status: IStatus; transaction: ITransaction; number: Int64): IReplicatedTransaction; cdecl;
 	IReplicatedSession_cleanupTransactionPtr = procedure(this: IReplicatedSession; status: IStatus; number: Int64); cdecl;
-	IReplicatedSession_setSequencePtr = procedure(this: IReplicatedSession; status: IStatus; name: PAnsiChar; value: Int64); cdecl;
+	IReplicatedSession_deprecatedSetSequencePtr = procedure(this: IReplicatedSession; status: IStatus; name: PAnsiChar; value: Int64); cdecl;
+	IReplicatedSession_setSequence2Ptr = procedure(this: IReplicatedSession; status: IStatus; schemaName: PAnsiChar; genName: PAnsiChar; value: Int64); cdecl;
 	IProfilerPlugin_initPtr = procedure(this: IProfilerPlugin; status: IStatus; attachment: IAttachment; ticksFrequency: QWord); cdecl;
 	IProfilerPlugin_startSessionPtr = function(this: IProfilerPlugin; status: IStatus; description: PAnsiChar; options: PAnsiChar; timestamp: ISC_TIMESTAMP_TZ): IProfilerSession; cdecl;
 	IProfilerPlugin_flushPtr = procedure(this: IProfilerPlugin; status: IStatus); cdecl;
@@ -739,7 +757,7 @@ type
 	IProfilerSession_getFlagsPtr = function(this: IProfilerSession): Cardinal; cdecl;
 	IProfilerSession_cancelPtr = procedure(this: IProfilerSession; status: IStatus); cdecl;
 	IProfilerSession_finishPtr = procedure(this: IProfilerSession; status: IStatus; timestamp: ISC_TIMESTAMP_TZ); cdecl;
-	IProfilerSession_defineStatementPtr = procedure(this: IProfilerSession; status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar); cdecl;
+	IProfilerSession_deprecatedDefineStatementPtr = procedure(this: IProfilerSession; status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar); cdecl;
 	IProfilerSession_defineCursorPtr = procedure(this: IProfilerSession; statementId: Int64; cursorId: Cardinal; name: PAnsiChar; line: Cardinal; column: Cardinal); cdecl;
 	IProfilerSession_defineRecordSourcePtr = procedure(this: IProfilerSession; statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; level: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal); cdecl;
 	IProfilerSession_onRequestStartPtr = procedure(this: IProfilerSession; status: IStatus; statementId: Int64; requestId: Int64; callerStatementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ); cdecl;
@@ -750,6 +768,7 @@ type
 	IProfilerSession_afterRecordSourceOpenPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
 	IProfilerSession_beforeRecordSourceGetRecordPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
 	IProfilerSession_afterRecordSourceGetRecordPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
+	IProfilerSession_defineStatement2Ptr = procedure(this: IProfilerSession; status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; schemaName: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar); cdecl;
 	IProfilerStats_getElapsedTicksPtr = function(this: IProfilerStats): QWord; cdecl;
 
 	VersionedVTable = class
@@ -1347,10 +1366,11 @@ type
 		getMessageLength: IMessageMetadata_getMessageLengthPtr;
 		getAlignment: IMessageMetadata_getAlignmentPtr;
 		getAlignedLength: IMessageMetadata_getAlignedLengthPtr;
+		getSchema: IMessageMetadata_getSchemaPtr;
 	end;
 
 	IMessageMetadata = class(IReferenceCounted)
-		const VERSION = 4;
+		const VERSION = 5;
 
 		function getCount(status: IStatus): Cardinal;
 		function getField(status: IStatus; index: Cardinal): PAnsiChar;
@@ -1369,6 +1389,7 @@ type
 		function getMessageLength(status: IStatus): Cardinal;
 		function getAlignment(status: IStatus): Cardinal;
 		function getAlignedLength(status: IStatus): Cardinal;
+		function getSchema(status: IStatus; index: Cardinal): PAnsiChar;
 	end;
 
 	IMessageMetadataImpl = class(IMessageMetadata)
@@ -1393,6 +1414,7 @@ type
 		function getMessageLength(status: IStatus): Cardinal; virtual; abstract;
 		function getAlignment(status: IStatus): Cardinal; virtual; abstract;
 		function getAlignedLength(status: IStatus): Cardinal; virtual; abstract;
+		function getSchema(status: IStatus; index: Cardinal): PAnsiChar; virtual; abstract;
 	end;
 
 	MetadataBuilderVTable = class(ReferenceCountedVTable)
@@ -1410,10 +1432,11 @@ type
 		setRelation: IMetadataBuilder_setRelationPtr;
 		setOwner: IMetadataBuilder_setOwnerPtr;
 		setAlias: IMetadataBuilder_setAliasPtr;
+		setSchema: IMetadataBuilder_setSchemaPtr;
 	end;
 
 	IMetadataBuilder = class(IReferenceCounted)
-		const VERSION = 4;
+		const VERSION = 5;
 
 		procedure setType(status: IStatus; index: Cardinal; type_: Cardinal);
 		procedure setSubType(status: IStatus; index: Cardinal; subType: Integer);
@@ -1429,6 +1452,7 @@ type
 		procedure setRelation(status: IStatus; index: Cardinal; relation: PAnsiChar);
 		procedure setOwner(status: IStatus; index: Cardinal; owner: PAnsiChar);
 		procedure setAlias(status: IStatus; index: Cardinal; alias: PAnsiChar);
+		procedure setSchema(status: IStatus; index: Cardinal; schema: PAnsiChar);
 	end;
 
 	IMetadataBuilderImpl = class(IMetadataBuilder)
@@ -1450,6 +1474,7 @@ type
 		procedure setRelation(status: IStatus; index: Cardinal; relation: PAnsiChar); virtual; abstract;
 		procedure setOwner(status: IStatus; index: Cardinal; owner: PAnsiChar); virtual; abstract;
 		procedure setAlias(status: IStatus; index: Cardinal; alias: PAnsiChar); virtual; abstract;
+		procedure setSchema(status: IStatus; index: Cardinal; schema: PAnsiChar); virtual; abstract;
 	end;
 
 	ResultSetVTable = class(ReferenceCountedVTable)
@@ -1523,10 +1548,12 @@ type
 		setTimeout: IStatement_setTimeoutPtr;
 		createBatch: IStatement_createBatchPtr;
 		free: IStatement_freePtr;
+		getMaxInlineBlobSize: IStatement_getMaxInlineBlobSizePtr;
+		setMaxInlineBlobSize: IStatement_setMaxInlineBlobSizePtr;
 	end;
 
 	IStatement = class(IReferenceCounted)
-		const VERSION = 5;
+		const VERSION = 6;
 		const PREPARE_PREFETCH_NONE = Cardinal($0);
 		const PREPARE_PREFETCH_TYPE = Cardinal($1);
 		const PREPARE_PREFETCH_INPUT_PARAMETERS = Cardinal($2);
@@ -1557,6 +1584,8 @@ type
 		procedure setTimeout(status: IStatus; timeOut: Cardinal);
 		function createBatch(status: IStatus; inMetadata: IMessageMetadata; parLength: Cardinal; par: BytePtr): IBatch;
 		procedure free(status: IStatus);
+		function getMaxInlineBlobSize(status: IStatus): Cardinal;
+		procedure setMaxInlineBlobSize(status: IStatus; size: Cardinal);
 	end;
 
 	IStatementImpl = class(IStatement)
@@ -1579,6 +1608,8 @@ type
 		procedure setTimeout(status: IStatus; timeOut: Cardinal); virtual; abstract;
 		function createBatch(status: IStatus; inMetadata: IMessageMetadata; parLength: Cardinal; par: BytePtr): IBatch; virtual; abstract;
 		procedure free(status: IStatus); virtual; abstract;
+		function getMaxInlineBlobSize(status: IStatus): Cardinal; virtual; abstract;
+		procedure setMaxInlineBlobSize(status: IStatus; size: Cardinal); virtual; abstract;
 	end;
 
 	BatchVTable = class(ReferenceCountedVTable)
@@ -1792,10 +1823,14 @@ type
 		createReplicator: IAttachment_createReplicatorPtr;
 		detach: IAttachment_detachPtr;
 		dropDatabase: IAttachment_dropDatabasePtr;
+		getMaxBlobCacheSize: IAttachment_getMaxBlobCacheSizePtr;
+		setMaxBlobCacheSize: IAttachment_setMaxBlobCacheSizePtr;
+		getMaxInlineBlobSize: IAttachment_getMaxInlineBlobSizePtr;
+		setMaxInlineBlobSize: IAttachment_setMaxInlineBlobSizePtr;
 	end;
 
 	IAttachment = class(IReferenceCounted)
-		const VERSION = 5;
+		const VERSION = 6;
 
 		procedure getInfo(status: IStatus; itemsLength: Cardinal; items: BytePtr; bufferLength: Cardinal; buffer: BytePtr);
 		function startTransaction(status: IStatus; tpbLength: Cardinal; tpb: BytePtr): ITransaction;
@@ -1823,6 +1858,10 @@ type
 		function createReplicator(status: IStatus): IReplicator;
 		procedure detach(status: IStatus);
 		procedure dropDatabase(status: IStatus);
+		function getMaxBlobCacheSize(status: IStatus): Cardinal;
+		procedure setMaxBlobCacheSize(status: IStatus; size: Cardinal);
+		function getMaxInlineBlobSize(status: IStatus): Cardinal;
+		procedure setMaxInlineBlobSize(status: IStatus; size: Cardinal);
 	end;
 
 	IAttachmentImpl = class(IAttachment)
@@ -1856,6 +1895,10 @@ type
 		function createReplicator(status: IStatus): IReplicator; virtual; abstract;
 		procedure detach(status: IStatus); virtual; abstract;
 		procedure dropDatabase(status: IStatus); virtual; abstract;
+		function getMaxBlobCacheSize(status: IStatus): Cardinal; virtual; abstract;
+		procedure setMaxBlobCacheSize(status: IStatus; size: Cardinal); virtual; abstract;
+		function getMaxInlineBlobSize(status: IStatus): Cardinal; virtual; abstract;
+		procedure setMaxInlineBlobSize(status: IStatus; size: Cardinal); virtual; abstract;
 	end;
 
 	ServiceVTable = class(ReferenceCountedVTable)
@@ -2380,16 +2423,20 @@ type
 		callback: ICryptKeyCallback_callbackPtr;
 		afterAttach: ICryptKeyCallback_afterAttachPtr;
 		dispose: ICryptKeyCallback_disposePtr;
+		getHashLength: ICryptKeyCallback_getHashLengthPtr;
+		getHashData: ICryptKeyCallback_getHashDataPtr;
 	end;
 
 	ICryptKeyCallback = class(IVersioned)
-		const VERSION = 3;
+		const VERSION = 4;
 		const NO_RETRY = Cardinal(0);
 		const DO_RETRY = Cardinal(1);
 
 		function callback(dataLength: Cardinal; data: Pointer; bufferLength: Cardinal; buffer: Pointer): Cardinal;
 		function afterAttach(status: IStatus; dbName: PAnsiChar; attStatus: IStatus): Cardinal;
 		procedure dispose();
+		function getHashLength(status: IStatus): Integer;
+		procedure getHashData(status: IStatus; hash: Pointer);
 	end;
 
 	ICryptKeyCallbackImpl = class(ICryptKeyCallback)
@@ -2398,6 +2445,8 @@ type
 		function callback(dataLength: Cardinal; data: Pointer; bufferLength: Cardinal; buffer: Pointer): Cardinal; virtual; abstract;
 		function afterAttach(status: IStatus; dbName: PAnsiChar; attStatus: IStatus): Cardinal; virtual;
 		procedure dispose(); virtual;
+		function getHashLength(status: IStatus): Integer; virtual; abstract;
+		procedure getHashData(status: IStatus; hash: Pointer); virtual; abstract;
 	end;
 
 	KeyHolderPluginVTable = class(PluginBaseVTable)
@@ -2618,10 +2667,11 @@ type
 		getTriggerMetadata: IRoutineMetadata_getTriggerMetadataPtr;
 		getTriggerTable: IRoutineMetadata_getTriggerTablePtr;
 		getTriggerType: IRoutineMetadata_getTriggerTypePtr;
+		getSchema: IRoutineMetadata_getSchemaPtr;
 	end;
 
 	IRoutineMetadata = class(IVersioned)
-		const VERSION = 2;
+		const VERSION = 3;
 
 		function getPackage(status: IStatus): PAnsiChar;
 		function getName(status: IStatus): PAnsiChar;
@@ -2632,6 +2682,7 @@ type
 		function getTriggerMetadata(status: IStatus): IMessageMetadata;
 		function getTriggerTable(status: IStatus): PAnsiChar;
 		function getTriggerType(status: IStatus): Cardinal;
+		function getSchema(status: IStatus): PAnsiChar;
 	end;
 
 	IRoutineMetadataImpl = class(IRoutineMetadata)
@@ -2646,6 +2697,7 @@ type
 		function getTriggerMetadata(status: IStatus): IMessageMetadata; virtual; abstract;
 		function getTriggerTable(status: IStatus): PAnsiChar; virtual; abstract;
 		function getTriggerType(status: IStatus): Cardinal; virtual; abstract;
+		function getSchema(status: IStatus): PAnsiChar; virtual; abstract;
 	end;
 
 	ExternalEngineVTable = class(PluginBaseVTable)
@@ -2759,10 +2811,12 @@ type
 		getInt128: IUtil_getInt128Ptr;
 		decodeTimeTzEx: IUtil_decodeTimeTzExPtr;
 		decodeTimeStampTzEx: IUtil_decodeTimeStampTzExPtr;
+		executeCreateDatabase2: IUtil_executeCreateDatabase2Ptr;
+		convert: IUtil_convertPtr;
 	end;
 
 	IUtil = class(IVersioned)
-		const VERSION = 4;
+		const VERSION = 6;
 
 		procedure getFbVersion(status: IStatus; att: IAttachment; callback: IVersionCallback);
 		procedure loadBlob(status: IStatus; blobId: ISC_QUADPtr; att: IAttachment; tra: ITransaction; file_: PAnsiChar; txt: Boolean);
@@ -2786,6 +2840,8 @@ type
 		function getInt128(status: IStatus): IInt128;
 		procedure decodeTimeTzEx(status: IStatus; timeTz: ISC_TIME_TZ_EXPtr; hours: CardinalPtr; minutes: CardinalPtr; seconds: CardinalPtr; fractions: CardinalPtr; timeZoneBufferLength: Cardinal; timeZoneBuffer: PAnsiChar);
 		procedure decodeTimeStampTzEx(status: IStatus; timeStampTz: ISC_TIMESTAMP_TZ_EXPtr; year: CardinalPtr; month: CardinalPtr; day: CardinalPtr; hours: CardinalPtr; minutes: CardinalPtr; seconds: CardinalPtr; fractions: CardinalPtr; timeZoneBufferLength: Cardinal; timeZoneBuffer: PAnsiChar);
+		function executeCreateDatabase2(status: IStatus; stmtLength: Cardinal; creatDBstatement: PAnsiChar; dialect: Cardinal; dpbLength: Cardinal; dpb: BytePtr; stmtIsCreateDb: BooleanPtr): IAttachment;
+		procedure convert(status: IStatus; sourceType: Cardinal; sourceScale: Cardinal; sourceLength: Cardinal; source: Pointer; targetType: Cardinal; targetScale: Cardinal; targetLength: Cardinal; target: Pointer);
 	end;
 
 	IUtilImpl = class(IUtil)
@@ -2813,6 +2869,8 @@ type
 		function getInt128(status: IStatus): IInt128; virtual; abstract;
 		procedure decodeTimeTzEx(status: IStatus; timeTz: ISC_TIME_TZ_EXPtr; hours: CardinalPtr; minutes: CardinalPtr; seconds: CardinalPtr; fractions: CardinalPtr; timeZoneBufferLength: Cardinal; timeZoneBuffer: PAnsiChar); virtual; abstract;
 		procedure decodeTimeStampTzEx(status: IStatus; timeStampTz: ISC_TIMESTAMP_TZ_EXPtr; year: CardinalPtr; month: CardinalPtr; day: CardinalPtr; hours: CardinalPtr; minutes: CardinalPtr; seconds: CardinalPtr; fractions: CardinalPtr; timeZoneBufferLength: Cardinal; timeZoneBuffer: PAnsiChar); virtual; abstract;
+		function executeCreateDatabase2(status: IStatus; stmtLength: Cardinal; creatDBstatement: PAnsiChar; dialect: Cardinal; dpbLength: Cardinal; dpb: BytePtr; stmtIsCreateDb: BooleanPtr): IAttachment; virtual; abstract;
+		procedure convert(status: IStatus; sourceType: Cardinal; sourceScale: Cardinal; sourceLength: Cardinal; source: Pointer; targetType: Cardinal; targetScale: Cardinal; targetLength: Cardinal; target: Pointer); virtual; abstract;
 	end;
 
 	OffsetsCallbackVTable = class(VersionedVTable)
@@ -3035,7 +3093,7 @@ type
 		const VERSION = 3;
 
 		function getCount(): Cardinal;
-		function getParam(idx: Cardinal): dscPtr;
+		function getParam(idx: Cardinal): paramdscPtr;
 		function getTextUTF8(status: IStatus; idx: Cardinal): PAnsiChar;
 	end;
 
@@ -3043,7 +3101,7 @@ type
 		constructor create;
 
 		function getCount(): Cardinal; virtual; abstract;
-		function getParam(idx: Cardinal): dscPtr; virtual; abstract;
+		function getParam(idx: Cardinal): paramdscPtr; virtual; abstract;
 		function getTextUTF8(status: IStatus; idx: Cardinal): PAnsiChar; virtual; abstract;
 	end;
 
@@ -3777,15 +3835,19 @@ type
 		startSavepoint: IReplicatedTransaction_startSavepointPtr;
 		releaseSavepoint: IReplicatedTransaction_releaseSavepointPtr;
 		rollbackSavepoint: IReplicatedTransaction_rollbackSavepointPtr;
-		insertRecord: IReplicatedTransaction_insertRecordPtr;
-		updateRecord: IReplicatedTransaction_updateRecordPtr;
-		deleteRecord: IReplicatedTransaction_deleteRecordPtr;
-		executeSql: IReplicatedTransaction_executeSqlPtr;
-		executeSqlIntl: IReplicatedTransaction_executeSqlIntlPtr;
+		deprecatedInsertRecord: IReplicatedTransaction_deprecatedInsertRecordPtr;
+		deprecatedUpdateRecord: IReplicatedTransaction_deprecatedUpdateRecordPtr;
+		deprecatedDeleteRecord: IReplicatedTransaction_deprecatedDeleteRecordPtr;
+		deprecatedExecuteSql: IReplicatedTransaction_deprecatedExecuteSqlPtr;
+		deprecatedExecuteSqlIntl: IReplicatedTransaction_deprecatedExecuteSqlIntlPtr;
+		insertRecord2: IReplicatedTransaction_insertRecord2Ptr;
+		updateRecord2: IReplicatedTransaction_updateRecord2Ptr;
+		deleteRecord2: IReplicatedTransaction_deleteRecord2Ptr;
+		executeSqlIntl2: IReplicatedTransaction_executeSqlIntl2Ptr;
 	end;
 
 	IReplicatedTransaction = class(IDisposable)
-		const VERSION = 3;
+		const VERSION = 4;
 
 		procedure prepare(status: IStatus);
 		procedure commit(status: IStatus);
@@ -3793,11 +3855,15 @@ type
 		procedure startSavepoint(status: IStatus);
 		procedure releaseSavepoint(status: IStatus);
 		procedure rollbackSavepoint(status: IStatus);
-		procedure insertRecord(status: IStatus; name: PAnsiChar; record_: IReplicatedRecord);
-		procedure updateRecord(status: IStatus; name: PAnsiChar; orgRecord: IReplicatedRecord; newRecord: IReplicatedRecord);
-		procedure deleteRecord(status: IStatus; name: PAnsiChar; record_: IReplicatedRecord);
-		procedure executeSql(status: IStatus; sql: PAnsiChar);
-		procedure executeSqlIntl(status: IStatus; charset: Cardinal; sql: PAnsiChar);
+		procedure deprecatedInsertRecord(status: IStatus; name: PAnsiChar; record_: IReplicatedRecord);
+		procedure deprecatedUpdateRecord(status: IStatus; name: PAnsiChar; orgRecord: IReplicatedRecord; newRecord: IReplicatedRecord);
+		procedure deprecatedDeleteRecord(status: IStatus; name: PAnsiChar; record_: IReplicatedRecord);
+		procedure deprecatedExecuteSql(status: IStatus; sql: PAnsiChar);
+		procedure deprecatedExecuteSqlIntl(status: IStatus; charset: Cardinal; sql: PAnsiChar);
+		procedure insertRecord2(status: IStatus; schemaName: PAnsiChar; tableName: PAnsiChar; record_: IReplicatedRecord);
+		procedure updateRecord2(status: IStatus; schemaName: PAnsiChar; tableName: PAnsiChar; orgRecord: IReplicatedRecord; newRecord: IReplicatedRecord);
+		procedure deleteRecord2(status: IStatus; schemaName: PAnsiChar; tableName: PAnsiChar; record_: IReplicatedRecord);
+		procedure executeSqlIntl2(status: IStatus; charset: Cardinal; schemaSearchPath: PAnsiChar; sql: PAnsiChar);
 	end;
 
 	IReplicatedTransactionImpl = class(IReplicatedTransaction)
@@ -3810,27 +3876,33 @@ type
 		procedure startSavepoint(status: IStatus); virtual; abstract;
 		procedure releaseSavepoint(status: IStatus); virtual; abstract;
 		procedure rollbackSavepoint(status: IStatus); virtual; abstract;
-		procedure insertRecord(status: IStatus; name: PAnsiChar; record_: IReplicatedRecord); virtual; abstract;
-		procedure updateRecord(status: IStatus; name: PAnsiChar; orgRecord: IReplicatedRecord; newRecord: IReplicatedRecord); virtual; abstract;
-		procedure deleteRecord(status: IStatus; name: PAnsiChar; record_: IReplicatedRecord); virtual; abstract;
-		procedure executeSql(status: IStatus; sql: PAnsiChar); virtual; abstract;
-		procedure executeSqlIntl(status: IStatus; charset: Cardinal; sql: PAnsiChar); virtual; abstract;
+		procedure deprecatedInsertRecord(status: IStatus; name: PAnsiChar; record_: IReplicatedRecord); virtual; abstract;
+		procedure deprecatedUpdateRecord(status: IStatus; name: PAnsiChar; orgRecord: IReplicatedRecord; newRecord: IReplicatedRecord); virtual; abstract;
+		procedure deprecatedDeleteRecord(status: IStatus; name: PAnsiChar; record_: IReplicatedRecord); virtual; abstract;
+		procedure deprecatedExecuteSql(status: IStatus; sql: PAnsiChar); virtual; abstract;
+		procedure deprecatedExecuteSqlIntl(status: IStatus; charset: Cardinal; sql: PAnsiChar); virtual; abstract;
+		procedure insertRecord2(status: IStatus; schemaName: PAnsiChar; tableName: PAnsiChar; record_: IReplicatedRecord); virtual; abstract;
+		procedure updateRecord2(status: IStatus; schemaName: PAnsiChar; tableName: PAnsiChar; orgRecord: IReplicatedRecord; newRecord: IReplicatedRecord); virtual; abstract;
+		procedure deleteRecord2(status: IStatus; schemaName: PAnsiChar; tableName: PAnsiChar; record_: IReplicatedRecord); virtual; abstract;
+		procedure executeSqlIntl2(status: IStatus; charset: Cardinal; schemaSearchPath: PAnsiChar; sql: PAnsiChar); virtual; abstract;
 	end;
 
 	ReplicatedSessionVTable = class(PluginBaseVTable)
 		init: IReplicatedSession_initPtr;
 		startTransaction: IReplicatedSession_startTransactionPtr;
 		cleanupTransaction: IReplicatedSession_cleanupTransactionPtr;
-		setSequence: IReplicatedSession_setSequencePtr;
+		deprecatedSetSequence: IReplicatedSession_deprecatedSetSequencePtr;
+		setSequence2: IReplicatedSession_setSequence2Ptr;
 	end;
 
 	IReplicatedSession = class(IPluginBase)
-		const VERSION = 4;
+		const VERSION = 5;
 
 		function init(status: IStatus; attachment: IAttachment): Boolean;
 		function startTransaction(status: IStatus; transaction: ITransaction; number: Int64): IReplicatedTransaction;
 		procedure cleanupTransaction(status: IStatus; number: Int64);
-		procedure setSequence(status: IStatus; name: PAnsiChar; value: Int64);
+		procedure deprecatedSetSequence(status: IStatus; name: PAnsiChar; value: Int64);
+		procedure setSequence2(status: IStatus; schemaName: PAnsiChar; genName: PAnsiChar; value: Int64);
 	end;
 
 	IReplicatedSessionImpl = class(IReplicatedSession)
@@ -3843,7 +3915,8 @@ type
 		function init(status: IStatus; attachment: IAttachment): Boolean; virtual; abstract;
 		function startTransaction(status: IStatus; transaction: ITransaction; number: Int64): IReplicatedTransaction; virtual; abstract;
 		procedure cleanupTransaction(status: IStatus; number: Int64); virtual; abstract;
-		procedure setSequence(status: IStatus; name: PAnsiChar; value: Int64); virtual; abstract;
+		procedure deprecatedSetSequence(status: IStatus; name: PAnsiChar; value: Int64); virtual; abstract;
+		procedure setSequence2(status: IStatus; schemaName: PAnsiChar; genName: PAnsiChar; value: Int64); virtual; abstract;
 	end;
 
 	ProfilerPluginVTable = class(PluginBaseVTable)
@@ -3877,7 +3950,7 @@ type
 		getFlags: IProfilerSession_getFlagsPtr;
 		cancel: IProfilerSession_cancelPtr;
 		finish: IProfilerSession_finishPtr;
-		defineStatement: IProfilerSession_defineStatementPtr;
+		deprecatedDefineStatement: IProfilerSession_deprecatedDefineStatementPtr;
 		defineCursor: IProfilerSession_defineCursorPtr;
 		defineRecordSource: IProfilerSession_defineRecordSourcePtr;
 		onRequestStart: IProfilerSession_onRequestStartPtr;
@@ -3888,10 +3961,11 @@ type
 		afterRecordSourceOpen: IProfilerSession_afterRecordSourceOpenPtr;
 		beforeRecordSourceGetRecord: IProfilerSession_beforeRecordSourceGetRecordPtr;
 		afterRecordSourceGetRecord: IProfilerSession_afterRecordSourceGetRecordPtr;
+		defineStatement2: IProfilerSession_defineStatement2Ptr;
 	end;
 
 	IProfilerSession = class(IDisposable)
-		const VERSION = 3;
+		const VERSION = 4;
 		const FLAG_BEFORE_EVENTS = Cardinal($1);
 		const FLAG_AFTER_EVENTS = Cardinal($2);
 
@@ -3899,7 +3973,7 @@ type
 		function getFlags(): Cardinal;
 		procedure cancel(status: IStatus);
 		procedure finish(status: IStatus; timestamp: ISC_TIMESTAMP_TZ);
-		procedure defineStatement(status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar);
+		procedure deprecatedDefineStatement(status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar);
 		procedure defineCursor(statementId: Int64; cursorId: Cardinal; name: PAnsiChar; line: Cardinal; column: Cardinal);
 		procedure defineRecordSource(statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; level: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal);
 		procedure onRequestStart(status: IStatus; statementId: Int64; requestId: Int64; callerStatementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ);
@@ -3910,6 +3984,7 @@ type
 		procedure afterRecordSourceOpen(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
 		procedure beforeRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
 		procedure afterRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
+		procedure defineStatement2(status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; schemaName: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar);
 	end;
 
 	IProfilerSessionImpl = class(IProfilerSession)
@@ -3920,7 +3995,7 @@ type
 		function getFlags(): Cardinal; virtual; abstract;
 		procedure cancel(status: IStatus); virtual; abstract;
 		procedure finish(status: IStatus; timestamp: ISC_TIMESTAMP_TZ); virtual; abstract;
-		procedure defineStatement(status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar); virtual; abstract;
+		procedure deprecatedDefineStatement(status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar); virtual; abstract;
 		procedure defineCursor(statementId: Int64; cursorId: Cardinal; name: PAnsiChar; line: Cardinal; column: Cardinal); virtual; abstract;
 		procedure defineRecordSource(statementId: Int64; cursorId: Cardinal; recSourceId: Cardinal; level: Cardinal; accessPath: PAnsiChar; parentRecSourceId: Cardinal); virtual; abstract;
 		procedure onRequestStart(status: IStatus; statementId: Int64; requestId: Int64; callerStatementId: Int64; callerRequestId: Int64; timestamp: ISC_TIMESTAMP_TZ); virtual; abstract;
@@ -3931,6 +4006,7 @@ type
 		procedure afterRecordSourceOpen(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); virtual; abstract;
 		procedure beforeRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); virtual; abstract;
 		procedure afterRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); virtual; abstract;
+		procedure defineStatement2(status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; schemaName: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar); virtual; abstract;
 	end;
 
 	ProfilerStatsVTable = class(VersionedVTable)
@@ -4057,6 +4133,11 @@ const
 	isc_dpb_parallel_workers = byte(100);
 	isc_dpb_worker_attach = byte(101);
 	isc_dpb_owner = byte(102);
+	isc_dpb_max_blob_cache_size = byte(103);
+	isc_dpb_max_inline_blob_size = byte(104);
+	isc_dpb_search_path = byte(105);
+	isc_dpb_blr_request_search_path = byte(106);
+	isc_dpb_gbak_restore_has_schema = byte(107);
 	isc_dpb_address = byte(1);
 	isc_dpb_addr_protocol = byte(1);
 	isc_dpb_addr_endpoint = byte(2);
@@ -4112,6 +4193,7 @@ const
 	isc_tpb_read_consistency = byte(22);
 	isc_tpb_at_snapshot_number = byte(23);
 	isc_tpb_auto_release_temp_blobid = byte(24);
+	isc_tpb_lock_table_schema = byte(25);
 	isc_bpb_version1 = byte(1);
 	isc_bpb_source_type = byte(1);
 	isc_bpb_target_type = byte(2);
@@ -4215,6 +4297,8 @@ const
 	isc_spb_bkp_crypt = byte(18);
 	isc_spb_bkp_include_data = byte(19);
 	isc_spb_bkp_parallel_workers = byte(21);
+	isc_spb_bkp_skip_schema_data = byte(22);
+	isc_spb_bkp_include_schema_data = byte(23);
 	isc_spb_bkp_ignore_checksums = $01;
 	isc_spb_bkp_ignore_limbo = $02;
 	isc_spb_bkp_metadata_only = $04;
@@ -4311,9 +4395,12 @@ const
 	isc_spb_val_idx_incl = byte(3);
 	isc_spb_val_idx_excl = byte(4);
 	isc_spb_val_lock_timeout = byte(5);
+	isc_spb_val_sch_incl = byte(6);
+	isc_spb_val_sch_excl = byte(7);
 	isc_spb_num_att = byte(5);
 	isc_spb_num_db = byte(6);
 	isc_spb_sts_table = byte(64);
+	isc_spb_sts_schema = byte(65);
 	isc_spb_sts_data_pages = $01;
 	isc_spb_sts_db_log = $02;
 	isc_spb_sts_hdr_pages = $04;
@@ -4335,6 +4422,7 @@ const
 	isc_spb_trc_id = byte(1);
 	isc_spb_trc_name = byte(2);
 	isc_spb_trc_cfg = byte(3);
+	isc_spb_trc_plugins = byte(4);
 	isc_sdl_version1 = byte(1);
 	isc_sdl_eoc = byte(255);
 	isc_sdl_relation = byte(2);
@@ -4358,6 +4446,7 @@ const
 	isc_sdl_do2 = byte(34);
 	isc_sdl_do1 = byte(35);
 	isc_sdl_element = byte(36);
+	isc_sdl_schema = byte(37);
 	isc_blob_untyped = byte(0);
 	isc_blob_text = byte(1);
 	isc_blob_blr = byte(2);
@@ -4517,6 +4606,8 @@ const
 	fb_info_wire_snd_bytes = byte(156);
 	fb_info_wire_rcv_bytes = byte(157);
 	fb_info_wire_roundtrips = byte(158);
+	fb_info_max_blob_cache_size = byte(159);
+	fb_info_max_inline_blob_size = byte(160);
 	fb_info_crypt_encrypted = $01;
 	fb_info_crypt_process = $02;
 	fb_feature_multi_statements = byte(1);
@@ -4727,6 +4818,7 @@ const
 	isc_info_sql_stmt_blob_align = byte(30);
 	isc_info_sql_exec_path_blr_bytes = byte(31);
 	isc_info_sql_exec_path_blr_text = byte(32);
+	isc_info_sql_relation_schema = byte(33);
 	isc_info_sql_stmt_select = byte(1);
 	isc_info_sql_stmt_insert = byte(2);
 	isc_info_sql_stmt_update = byte(3);
@@ -5741,9 +5833,20 @@ const
 	 isc_only_one_pattern_can_be_used = 335545305;
 	 isc_can_not_use_same_pattern_twice = 335545306;
 	 isc_sysf_invalid_gen_uuid_version = 335545307;
-	 isc_ts_file_exists = 335545308;
-	 isc_tablespace_name = 335545309;
-	 isc_ts_file_not_exists = 335545310;
+	 isc_sweep_unable_to_run = 335545308;
+	 isc_sweep_concurrent_instance = 335545309;
+	 isc_sweep_read_only = 335545310;
+	 isc_sweep_attach_no_cleanup = 335545311;
+	 isc_invalid_timezone_region_or_displacement = 335545312;
+	 isc_argmustbe_exact_range_for = 335545313;
+	 isc_range_for_by_should_be_positive = 335545314;
+	 isc_missing_value_for_format_pattern = 335545315;
+	 isc_invalid_name = 335545316;
+	 isc_invalid_unqualified_name_list = 335545317;
+	 isc_no_user_att_while_restore = 335545318;
+	 isc_ts_file_exists = 335545319;
+	 isc_tablespace_name = 335545320;
+	 isc_ts_file_not_exists = 335545321;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;
@@ -5900,11 +6003,18 @@ const
 	 isc_dyn_exc_not_exist = 336068915;
 	 isc_dyn_gen_not_exist = 336068916;
 	 isc_dyn_fld_not_exist = 336068917;
-	 isc_dyn_ts_not_found = 336068922;
-	 isc_dyn_cant_set_ts_table = 336068923;
-	 isc_dyn_cant_set_ts_index = 336068924;
-	 isc_dyn_ts_already_exists = 336068925;
-	 isc_dyn_cannot_mod_sys_ts = 336068926;
+	 isc_dyn_index_schema_must_match_table = 336068922;
+	 isc_dyn_trig_schema_must_match_table = 336068923;
+	 isc_dyn_cannot_mod_system_schema = 336068925;
+	 isc_dyn_cannot_drop_non_emptyschema = 336068926;
+	 isc_dyn_cannot_mod_obj_sys_schema = 336068927;
+	 isc_dyn_cannot_create_reserved_schema = 336068928;
+	 isc_dyn_cannot_infer_schema = 336068929;
+	 isc_dyn_ts_not_found = 336068931;
+	 isc_dyn_cant_set_ts_table = 336068932;
+	 isc_dyn_cant_set_ts_index = 336068933;
+	 isc_dyn_dup_tablespace = 336068934;
+	 isc_dyn_cannot_mod_sys_ts = 336068935;
 	 isc_gbak_unknown_switch = 336330753;
 	 isc_gbak_page_size_missing = 336330754;
 	 isc_gbak_page_size_toobig = 336330755;
@@ -6133,11 +6243,17 @@ const
 	 isc_dsql_string_char_length = 336397332;
 	 isc_dsql_max_nesting = 336397333;
 	 isc_dsql_recreate_user_failed = 336397334;
-	 isc_dsql_create_ts_failed = 336397335;
-	 isc_dsql_alter_ts_failed = 336397336;
-	 isc_dsql_create_alter_ts_failed = 336397337;
-	 isc_dsql_drop_ts_failed = 336397338;
-	 isc_dsql_recreate_ts_failed = 336397339;
+	 isc_dsql_table_value_many_columns = 336397335;
+	 isc_dsql_create_schema_failed = 336397336;
+	 isc_dsql_drop_schema_failed = 336397337;
+	 isc_dsql_recreate_schema_failed = 336397338;
+	 isc_dsql_alter_schema_failed = 336397339;
+	 isc_dsql_create_alter_schema_failed = 336397340;
+	 isc_dsql_create_ts_failed = 336397341;
+	 isc_dsql_alter_ts_failed = 336397342;
+	 isc_dsql_create_alter_ts_failed = 336397343;
+	 isc_dsql_drop_ts_failed = 336397344;
+	 isc_dsql_recreate_ts_failed = 336397345;
 	 isc_gsec_cant_open_db = 336723983;
 	 isc_gsec_switches_error = 336723984;
 	 isc_gsec_no_op_spec = 336723985;
@@ -6920,6 +7036,18 @@ begin
 	FbException.checkException(status);
 end;
 
+function IMessageMetadata.getSchema(status: IStatus; index: Cardinal): PAnsiChar;
+begin
+	if (vTable.version < 5) then begin
+		FbException.setVersionError(status, 'IMessageMetadata', vTable.version, 5);
+		Result := nil;
+	end
+	else begin
+		Result := MessageMetadataVTable(vTable).getSchema(Self, status, index);
+	end;
+	FbException.checkException(status);
+end;
+
 procedure IMetadataBuilder.setType(status: IStatus; index: Cardinal; type_: Cardinal);
 begin
 	MetadataBuilderVTable(vTable).setType(Self, status, index, type_);
@@ -7020,6 +7148,17 @@ begin
 	end
 	else begin
 		MetadataBuilderVTable(vTable).setAlias(Self, status, index, alias);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure IMetadataBuilder.setSchema(status: IStatus; index: Cardinal; schema: PAnsiChar);
+begin
+	if (vTable.version < 5) then begin
+		FbException.setVersionError(status, 'IMetadataBuilder', vTable.version, 5);
+	end
+	else begin
+		MetadataBuilderVTable(vTable).setSchema(Self, status, index, schema);
 	end;
 	FbException.checkException(status);
 end;
@@ -7230,6 +7369,29 @@ begin
 	end
 	else begin
 		StatementVTable(vTable).free(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
+function IStatement.getMaxInlineBlobSize(status: IStatus): Cardinal;
+begin
+	if (vTable.version < 6) then begin
+		FbException.setVersionError(status, 'IStatement', vTable.version, 6);
+		Result := 0;
+	end
+	else begin
+		Result := StatementVTable(vTable).getMaxInlineBlobSize(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure IStatement.setMaxInlineBlobSize(status: IStatus; size: Cardinal);
+begin
+	if (vTable.version < 6) then begin
+		FbException.setVersionError(status, 'IStatement', vTable.version, 6);
+	end
+	else begin
+		StatementVTable(vTable).setMaxInlineBlobSize(Self, status, size);
 	end;
 	FbException.checkException(status);
 end;
@@ -7665,6 +7827,52 @@ begin
 	end
 	else begin
 		AttachmentVTable(vTable).dropDatabase(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
+function IAttachment.getMaxBlobCacheSize(status: IStatus): Cardinal;
+begin
+	if (vTable.version < 6) then begin
+		FbException.setVersionError(status, 'IAttachment', vTable.version, 6);
+		Result := 0;
+	end
+	else begin
+		Result := AttachmentVTable(vTable).getMaxBlobCacheSize(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure IAttachment.setMaxBlobCacheSize(status: IStatus; size: Cardinal);
+begin
+	if (vTable.version < 6) then begin
+		FbException.setVersionError(status, 'IAttachment', vTable.version, 6);
+	end
+	else begin
+		AttachmentVTable(vTable).setMaxBlobCacheSize(Self, status, size);
+	end;
+	FbException.checkException(status);
+end;
+
+function IAttachment.getMaxInlineBlobSize(status: IStatus): Cardinal;
+begin
+	if (vTable.version < 6) then begin
+		FbException.setVersionError(status, 'IAttachment', vTable.version, 6);
+		Result := 0;
+	end
+	else begin
+		Result := AttachmentVTable(vTable).getMaxInlineBlobSize(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure IAttachment.setMaxInlineBlobSize(status: IStatus; size: Cardinal);
+begin
+	if (vTable.version < 6) then begin
+		FbException.setVersionError(status, 'IAttachment', vTable.version, 6);
+	end
+	else begin
+		AttachmentVTable(vTable).setMaxInlineBlobSize(Self, status, size);
 	end;
 	FbException.checkException(status);
 end;
@@ -8164,6 +8372,29 @@ begin
 	end;
 end;
 
+function ICryptKeyCallback.getHashLength(status: IStatus): Integer;
+begin
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'ICryptKeyCallback', vTable.version, 4);
+		Result := -1;
+	end
+	else begin
+		Result := CryptKeyCallbackVTable(vTable).getHashLength(Self, status);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure ICryptKeyCallback.getHashData(status: IStatus; hash: Pointer);
+begin
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'ICryptKeyCallback', vTable.version, 4);
+	end
+	else begin
+		CryptKeyCallbackVTable(vTable).getHashData(Self, status, hash);
+	end;
+	FbException.checkException(status);
+end;
+
 function IKeyHolderPlugin.keyCallback(status: IStatus; callback: ICryptKeyCallback): Integer;
 begin
 	Result := KeyHolderPluginVTable(vTable).keyCallback(Self, status, callback);
@@ -8381,6 +8612,18 @@ end;
 function IRoutineMetadata.getTriggerType(status: IStatus): Cardinal;
 begin
 	Result := RoutineMetadataVTable(vTable).getTriggerType(Self, status);
+	FbException.checkException(status);
+end;
+
+function IRoutineMetadata.getSchema(status: IStatus): PAnsiChar;
+begin
+	if (vTable.version < 3) then begin
+		FbException.setVersionError(status, 'IRoutineMetadata', vTable.version, 3);
+		Result := nil;
+	end
+	else begin
+		Result := RoutineMetadataVTable(vTable).getSchema(Self, status);
+	end;
 	FbException.checkException(status);
 end;
 
@@ -8617,6 +8860,29 @@ begin
 	FbException.checkException(status);
 end;
 
+function IUtil.executeCreateDatabase2(status: IStatus; stmtLength: Cardinal; creatDBstatement: PAnsiChar; dialect: Cardinal; dpbLength: Cardinal; dpb: BytePtr; stmtIsCreateDb: BooleanPtr): IAttachment;
+begin
+	if (vTable.version < 5) then begin
+		FbException.setVersionError(status, 'IUtil', vTable.version, 5);
+		Result := nil;
+	end
+	else begin
+		Result := UtilVTable(vTable).executeCreateDatabase2(Self, status, stmtLength, creatDBstatement, dialect, dpbLength, dpb, stmtIsCreateDb);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure IUtil.convert(status: IStatus; sourceType: Cardinal; sourceScale: Cardinal; sourceLength: Cardinal; source: Pointer; targetType: Cardinal; targetScale: Cardinal; targetLength: Cardinal; target: Pointer);
+begin
+	if (vTable.version < 6) then begin
+		FbException.setVersionError(status, 'IUtil', vTable.version, 6);
+	end
+	else begin
+		UtilVTable(vTable).convert(Self, status, sourceType, sourceScale, sourceLength, source, targetType, targetScale, targetLength, target);
+	end;
+	FbException.checkException(status);
+end;
+
 procedure IOffsetsCallback.setOffset(status: IStatus; index: Cardinal; offset: Cardinal; nullOffset: Cardinal);
 begin
 	OffsetsCallbackVTable(vTable).setOffset(Self, status, index, offset, nullOffset);
@@ -8848,7 +9114,7 @@ begin
 	Result := TraceParamsVTable(vTable).getCount(Self);
 end;
 
-function ITraceParams.getParam(idx: Cardinal): dscPtr;
+function ITraceParams.getParam(idx: Cardinal): paramdscPtr;
 begin
 	Result := TraceParamsVTable(vTable).getParam(Self, idx);
 end;
@@ -9569,33 +9835,77 @@ begin
 	FbException.checkException(status);
 end;
 
-procedure IReplicatedTransaction.insertRecord(status: IStatus; name: PAnsiChar; record_: IReplicatedRecord);
+procedure IReplicatedTransaction.deprecatedInsertRecord(status: IStatus; name: PAnsiChar; record_: IReplicatedRecord);
 begin
-	ReplicatedTransactionVTable(vTable).insertRecord(Self, status, name, record_);
+	ReplicatedTransactionVTable(vTable).deprecatedInsertRecord(Self, status, name, record_);
 	FbException.checkException(status);
 end;
 
-procedure IReplicatedTransaction.updateRecord(status: IStatus; name: PAnsiChar; orgRecord: IReplicatedRecord; newRecord: IReplicatedRecord);
+procedure IReplicatedTransaction.deprecatedUpdateRecord(status: IStatus; name: PAnsiChar; orgRecord: IReplicatedRecord; newRecord: IReplicatedRecord);
 begin
-	ReplicatedTransactionVTable(vTable).updateRecord(Self, status, name, orgRecord, newRecord);
+	ReplicatedTransactionVTable(vTable).deprecatedUpdateRecord(Self, status, name, orgRecord, newRecord);
 	FbException.checkException(status);
 end;
 
-procedure IReplicatedTransaction.deleteRecord(status: IStatus; name: PAnsiChar; record_: IReplicatedRecord);
+procedure IReplicatedTransaction.deprecatedDeleteRecord(status: IStatus; name: PAnsiChar; record_: IReplicatedRecord);
 begin
-	ReplicatedTransactionVTable(vTable).deleteRecord(Self, status, name, record_);
+	ReplicatedTransactionVTable(vTable).deprecatedDeleteRecord(Self, status, name, record_);
 	FbException.checkException(status);
 end;
 
-procedure IReplicatedTransaction.executeSql(status: IStatus; sql: PAnsiChar);
+procedure IReplicatedTransaction.deprecatedExecuteSql(status: IStatus; sql: PAnsiChar);
 begin
-	ReplicatedTransactionVTable(vTable).executeSql(Self, status, sql);
+	ReplicatedTransactionVTable(vTable).deprecatedExecuteSql(Self, status, sql);
 	FbException.checkException(status);
 end;
 
-procedure IReplicatedTransaction.executeSqlIntl(status: IStatus; charset: Cardinal; sql: PAnsiChar);
+procedure IReplicatedTransaction.deprecatedExecuteSqlIntl(status: IStatus; charset: Cardinal; sql: PAnsiChar);
 begin
-	ReplicatedTransactionVTable(vTable).executeSqlIntl(Self, status, charset, sql);
+	ReplicatedTransactionVTable(vTable).deprecatedExecuteSqlIntl(Self, status, charset, sql);
+	FbException.checkException(status);
+end;
+
+procedure IReplicatedTransaction.insertRecord2(status: IStatus; schemaName: PAnsiChar; tableName: PAnsiChar; record_: IReplicatedRecord);
+begin
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IReplicatedTransaction', vTable.version, 4);
+	end
+	else begin
+		ReplicatedTransactionVTable(vTable).insertRecord2(Self, status, schemaName, tableName, record_);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure IReplicatedTransaction.updateRecord2(status: IStatus; schemaName: PAnsiChar; tableName: PAnsiChar; orgRecord: IReplicatedRecord; newRecord: IReplicatedRecord);
+begin
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IReplicatedTransaction', vTable.version, 4);
+	end
+	else begin
+		ReplicatedTransactionVTable(vTable).updateRecord2(Self, status, schemaName, tableName, orgRecord, newRecord);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure IReplicatedTransaction.deleteRecord2(status: IStatus; schemaName: PAnsiChar; tableName: PAnsiChar; record_: IReplicatedRecord);
+begin
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IReplicatedTransaction', vTable.version, 4);
+	end
+	else begin
+		ReplicatedTransactionVTable(vTable).deleteRecord2(Self, status, schemaName, tableName, record_);
+	end;
+	FbException.checkException(status);
+end;
+
+procedure IReplicatedTransaction.executeSqlIntl2(status: IStatus; charset: Cardinal; schemaSearchPath: PAnsiChar; sql: PAnsiChar);
+begin
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'IReplicatedTransaction', vTable.version, 4);
+	end
+	else begin
+		ReplicatedTransactionVTable(vTable).executeSqlIntl2(Self, status, charset, schemaSearchPath, sql);
+	end;
 	FbException.checkException(status);
 end;
 
@@ -9617,9 +9927,20 @@ begin
 	FbException.checkException(status);
 end;
 
-procedure IReplicatedSession.setSequence(status: IStatus; name: PAnsiChar; value: Int64);
+procedure IReplicatedSession.deprecatedSetSequence(status: IStatus; name: PAnsiChar; value: Int64);
 begin
-	ReplicatedSessionVTable(vTable).setSequence(Self, status, name, value);
+	ReplicatedSessionVTable(vTable).deprecatedSetSequence(Self, status, name, value);
+	FbException.checkException(status);
+end;
+
+procedure IReplicatedSession.setSequence2(status: IStatus; schemaName: PAnsiChar; genName: PAnsiChar; value: Int64);
+begin
+	if (vTable.version < 5) then begin
+		FbException.setVersionError(status, 'IReplicatedSession', vTable.version, 5);
+	end
+	else begin
+		ReplicatedSessionVTable(vTable).setSequence2(Self, status, schemaName, genName, value);
+	end;
 	FbException.checkException(status);
 end;
 
@@ -9663,9 +9984,9 @@ begin
 	FbException.checkException(status);
 end;
 
-procedure IProfilerSession.defineStatement(status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar);
+procedure IProfilerSession.deprecatedDefineStatement(status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar);
 begin
-	ProfilerSessionVTable(vTable).defineStatement(Self, status, statementId, parentStatementId, type_, packageName, routineName, sqlText);
+	ProfilerSessionVTable(vTable).deprecatedDefineStatement(Self, status, statementId, parentStatementId, type_, packageName, routineName, sqlText);
 	FbException.checkException(status);
 end;
 
@@ -9719,6 +10040,17 @@ end;
 procedure IProfilerSession.afterRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
 begin
 	ProfilerSessionVTable(vTable).afterRecordSourceGetRecord(Self, statementId, requestId, cursorId, recSourceId, stats);
+end;
+
+procedure IProfilerSession.defineStatement2(status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; schemaName: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar);
+begin
+	if (vTable.version < 4) then begin
+		deprecatedDefineStatement(status, statementId, parentStatementId, type_, packageName, routineName, sqlText);
+	end
+	else begin
+		ProfilerSessionVTable(vTable).defineStatement2(Self, status, statementId, parentStatementId, type_, schemaName, packageName, routineName, sqlText);
+	end;
+	FbException.checkException(status);
 end;
 
 function IProfilerStats.getElapsedTicks(): QWord;
@@ -11111,6 +11443,16 @@ begin
 	end
 end;
 
+function IMessageMetadataImpl_getSchemaDispatcher(this: IMessageMetadata; status: IStatus; index: Cardinal): PAnsiChar; cdecl;
+begin
+	Result := nil;
+	try
+		Result := IMessageMetadataImpl(this).getSchema(status, index);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
 var
 	IMessageMetadataImpl_vTable: MessageMetadataVTable;
 
@@ -11261,6 +11603,15 @@ procedure IMetadataBuilderImpl_setAliasDispatcher(this: IMetadataBuilder; status
 begin
 	try
 		IMetadataBuilderImpl(this).setAlias(status, index, alias);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IMetadataBuilderImpl_setSchemaDispatcher(this: IMetadataBuilder; status: IStatus; index: Cardinal; schema: PAnsiChar); cdecl;
+begin
+	try
+		IMetadataBuilderImpl(this).setSchema(status, index, schema);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -11586,6 +11937,25 @@ procedure IStatementImpl_freeDispatcher(this: IStatement; status: IStatus); cdec
 begin
 	try
 		IStatementImpl(this).free(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+function IStatementImpl_getMaxInlineBlobSizeDispatcher(this: IStatement; status: IStatus): Cardinal; cdecl;
+begin
+	Result := 0;
+	try
+		Result := IStatementImpl(this).getMaxInlineBlobSize(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IStatementImpl_setMaxInlineBlobSizeDispatcher(this: IStatement; status: IStatus; size: Cardinal); cdecl;
+begin
+	try
+		IStatementImpl(this).setMaxInlineBlobSize(status, size);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -12262,6 +12632,44 @@ procedure IAttachmentImpl_dropDatabaseDispatcher(this: IAttachment; status: ISta
 begin
 	try
 		IAttachmentImpl(this).dropDatabase(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+function IAttachmentImpl_getMaxBlobCacheSizeDispatcher(this: IAttachment; status: IStatus): Cardinal; cdecl;
+begin
+	Result := 0;
+	try
+		Result := IAttachmentImpl(this).getMaxBlobCacheSize(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IAttachmentImpl_setMaxBlobCacheSizeDispatcher(this: IAttachment; status: IStatus; size: Cardinal); cdecl;
+begin
+	try
+		IAttachmentImpl(this).setMaxBlobCacheSize(status, size);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+function IAttachmentImpl_getMaxInlineBlobSizeDispatcher(this: IAttachment; status: IStatus): Cardinal; cdecl;
+begin
+	Result := 0;
+	try
+		Result := IAttachmentImpl(this).getMaxInlineBlobSize(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IAttachmentImpl_setMaxInlineBlobSizeDispatcher(this: IAttachment; status: IStatus; size: Cardinal); cdecl;
+begin
+	try
+		IAttachmentImpl(this).setMaxInlineBlobSize(status, size);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -13520,6 +13928,25 @@ procedure ICryptKeyCallbackImpl.dispose();
 begin
 end;
 
+function ICryptKeyCallbackImpl_getHashLengthDispatcher(this: ICryptKeyCallback; status: IStatus): Integer; cdecl;
+begin
+	Result := 0;
+	try
+		Result := ICryptKeyCallbackImpl(this).getHashLength(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure ICryptKeyCallbackImpl_getHashDataDispatcher(this: ICryptKeyCallback; status: IStatus; hash: Pointer); cdecl;
+begin
+	try
+		ICryptKeyCallbackImpl(this).getHashData(status, hash);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
 var
 	ICryptKeyCallbackImpl_vTable: CryptKeyCallbackVTable;
 
@@ -14064,6 +14491,16 @@ begin
 	end
 end;
 
+function IRoutineMetadataImpl_getSchemaDispatcher(this: IRoutineMetadata; status: IStatus): PAnsiChar; cdecl;
+begin
+	Result := nil;
+	try
+		Result := IRoutineMetadataImpl(this).getSchema(status);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
 var
 	IRoutineMetadataImpl_vTable: RoutineMetadataVTable;
 
@@ -14457,6 +14894,25 @@ procedure IUtilImpl_decodeTimeStampTzExDispatcher(this: IUtil; status: IStatus; 
 begin
 	try
 		IUtilImpl(this).decodeTimeStampTzEx(status, timeStampTz, year, month, day, hours, minutes, seconds, fractions, timeZoneBufferLength, timeZoneBuffer);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+function IUtilImpl_executeCreateDatabase2Dispatcher(this: IUtil; status: IStatus; stmtLength: Cardinal; creatDBstatement: PAnsiChar; dialect: Cardinal; dpbLength: Cardinal; dpb: BytePtr; stmtIsCreateDb: BooleanPtr): IAttachment; cdecl;
+begin
+	Result := nil;
+	try
+		Result := IUtilImpl(this).executeCreateDatabase2(status, stmtLength, creatDBstatement, dialect, dpbLength, dpb, stmtIsCreateDb);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IUtilImpl_convertDispatcher(this: IUtil; status: IStatus; sourceType: Cardinal; sourceScale: Cardinal; sourceLength: Cardinal; source: Pointer; targetType: Cardinal; targetScale: Cardinal; targetLength: Cardinal; target: Pointer); cdecl;
+begin
+	try
+		IUtilImpl(this).convert(status, sourceType, sourceScale, sourceLength, source, targetType, targetScale, targetLength, target);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -14999,7 +15455,7 @@ begin
 	end
 end;
 
-function ITraceParamsImpl_getParamDispatcher(this: ITraceParams; idx: Cardinal): dscPtr; cdecl;
+function ITraceParamsImpl_getParamDispatcher(this: ITraceParams; idx: Cardinal): paramdscPtr; cdecl;
 begin
 	Result := nil;
 	try
@@ -16659,46 +17115,82 @@ begin
 	end
 end;
 
-procedure IReplicatedTransactionImpl_insertRecordDispatcher(this: IReplicatedTransaction; status: IStatus; name: PAnsiChar; record_: IReplicatedRecord); cdecl;
+procedure IReplicatedTransactionImpl_deprecatedInsertRecordDispatcher(this: IReplicatedTransaction; status: IStatus; name: PAnsiChar; record_: IReplicatedRecord); cdecl;
 begin
 	try
-		IReplicatedTransactionImpl(this).insertRecord(status, name, record_);
+		IReplicatedTransactionImpl(this).deprecatedInsertRecord(status, name, record_);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
 end;
 
-procedure IReplicatedTransactionImpl_updateRecordDispatcher(this: IReplicatedTransaction; status: IStatus; name: PAnsiChar; orgRecord: IReplicatedRecord; newRecord: IReplicatedRecord); cdecl;
+procedure IReplicatedTransactionImpl_deprecatedUpdateRecordDispatcher(this: IReplicatedTransaction; status: IStatus; name: PAnsiChar; orgRecord: IReplicatedRecord; newRecord: IReplicatedRecord); cdecl;
 begin
 	try
-		IReplicatedTransactionImpl(this).updateRecord(status, name, orgRecord, newRecord);
+		IReplicatedTransactionImpl(this).deprecatedUpdateRecord(status, name, orgRecord, newRecord);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
 end;
 
-procedure IReplicatedTransactionImpl_deleteRecordDispatcher(this: IReplicatedTransaction; status: IStatus; name: PAnsiChar; record_: IReplicatedRecord); cdecl;
+procedure IReplicatedTransactionImpl_deprecatedDeleteRecordDispatcher(this: IReplicatedTransaction; status: IStatus; name: PAnsiChar; record_: IReplicatedRecord); cdecl;
 begin
 	try
-		IReplicatedTransactionImpl(this).deleteRecord(status, name, record_);
+		IReplicatedTransactionImpl(this).deprecatedDeleteRecord(status, name, record_);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
 end;
 
-procedure IReplicatedTransactionImpl_executeSqlDispatcher(this: IReplicatedTransaction; status: IStatus; sql: PAnsiChar); cdecl;
+procedure IReplicatedTransactionImpl_deprecatedExecuteSqlDispatcher(this: IReplicatedTransaction; status: IStatus; sql: PAnsiChar); cdecl;
 begin
 	try
-		IReplicatedTransactionImpl(this).executeSql(status, sql);
+		IReplicatedTransactionImpl(this).deprecatedExecuteSql(status, sql);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
 end;
 
-procedure IReplicatedTransactionImpl_executeSqlIntlDispatcher(this: IReplicatedTransaction; status: IStatus; charset: Cardinal; sql: PAnsiChar); cdecl;
+procedure IReplicatedTransactionImpl_deprecatedExecuteSqlIntlDispatcher(this: IReplicatedTransaction; status: IStatus; charset: Cardinal; sql: PAnsiChar); cdecl;
 begin
 	try
-		IReplicatedTransactionImpl(this).executeSqlIntl(status, charset, sql);
+		IReplicatedTransactionImpl(this).deprecatedExecuteSqlIntl(status, charset, sql);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IReplicatedTransactionImpl_insertRecord2Dispatcher(this: IReplicatedTransaction; status: IStatus; schemaName: PAnsiChar; tableName: PAnsiChar; record_: IReplicatedRecord); cdecl;
+begin
+	try
+		IReplicatedTransactionImpl(this).insertRecord2(status, schemaName, tableName, record_);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IReplicatedTransactionImpl_updateRecord2Dispatcher(this: IReplicatedTransaction; status: IStatus; schemaName: PAnsiChar; tableName: PAnsiChar; orgRecord: IReplicatedRecord; newRecord: IReplicatedRecord); cdecl;
+begin
+	try
+		IReplicatedTransactionImpl(this).updateRecord2(status, schemaName, tableName, orgRecord, newRecord);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IReplicatedTransactionImpl_deleteRecord2Dispatcher(this: IReplicatedTransaction; status: IStatus; schemaName: PAnsiChar; tableName: PAnsiChar; record_: IReplicatedRecord); cdecl;
+begin
+	try
+		IReplicatedTransactionImpl(this).deleteRecord2(status, schemaName, tableName, record_);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IReplicatedTransactionImpl_executeSqlIntl2Dispatcher(this: IReplicatedTransaction; status: IStatus; charset: Cardinal; schemaSearchPath: PAnsiChar; sql: PAnsiChar); cdecl;
+begin
+	try
+		IReplicatedTransactionImpl(this).executeSqlIntl2(status, charset, schemaSearchPath, sql);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -16779,10 +17271,19 @@ begin
 	end
 end;
 
-procedure IReplicatedSessionImpl_setSequenceDispatcher(this: IReplicatedSession; status: IStatus; name: PAnsiChar; value: Int64); cdecl;
+procedure IReplicatedSessionImpl_deprecatedSetSequenceDispatcher(this: IReplicatedSession; status: IStatus; name: PAnsiChar; value: Int64); cdecl;
 begin
 	try
-		IReplicatedSessionImpl(this).setSequence(status, name, value);
+		IReplicatedSessionImpl(this).deprecatedSetSequence(status, name, value);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IReplicatedSessionImpl_setSequence2Dispatcher(this: IReplicatedSession; status: IStatus; schemaName: PAnsiChar; genName: PAnsiChar; value: Int64); cdecl;
+begin
+	try
+		IReplicatedSessionImpl(this).setSequence2(status, schemaName, genName, value);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -16917,10 +17418,10 @@ begin
 	end
 end;
 
-procedure IProfilerSessionImpl_defineStatementDispatcher(this: IProfilerSession; status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar); cdecl;
+procedure IProfilerSessionImpl_deprecatedDefineStatementDispatcher(this: IProfilerSession; status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar); cdecl;
 begin
 	try
-		IProfilerSessionImpl(this).defineStatement(status, statementId, parentStatementId, type_, packageName, routineName, sqlText);
+		IProfilerSessionImpl(this).deprecatedDefineStatement(status, statementId, parentStatementId, type_, packageName, routineName, sqlText);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -17013,6 +17514,15 @@ begin
 		IProfilerSessionImpl(this).afterRecordSourceGetRecord(statementId, requestId, cursorId, recSourceId, stats);
 	except
 		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+procedure IProfilerSessionImpl_defineStatement2Dispatcher(this: IProfilerSession; status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; schemaName: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar); cdecl;
+begin
+	try
+		IProfilerSessionImpl(this).defineStatement2(status, statementId, parentStatementId, type_, schemaName, packageName, routineName, sqlText);
+	except
+		on e: Exception do FbException.catchException(status, e);
 	end
 end;
 
@@ -17274,7 +17784,7 @@ initialization
 	ITransactionImpl_vTable.disconnect := @ITransactionImpl_disconnectDispatcher;
 
 	IMessageMetadataImpl_vTable := MessageMetadataVTable.create;
-	IMessageMetadataImpl_vTable.version := 4;
+	IMessageMetadataImpl_vTable.version := 5;
 	IMessageMetadataImpl_vTable.addRef := @IMessageMetadataImpl_addRefDispatcher;
 	IMessageMetadataImpl_vTable.release := @IMessageMetadataImpl_releaseDispatcher;
 	IMessageMetadataImpl_vTable.getCount := @IMessageMetadataImpl_getCountDispatcher;
@@ -17294,9 +17804,10 @@ initialization
 	IMessageMetadataImpl_vTable.getMessageLength := @IMessageMetadataImpl_getMessageLengthDispatcher;
 	IMessageMetadataImpl_vTable.getAlignment := @IMessageMetadataImpl_getAlignmentDispatcher;
 	IMessageMetadataImpl_vTable.getAlignedLength := @IMessageMetadataImpl_getAlignedLengthDispatcher;
+	IMessageMetadataImpl_vTable.getSchema := @IMessageMetadataImpl_getSchemaDispatcher;
 
 	IMetadataBuilderImpl_vTable := MetadataBuilderVTable.create;
-	IMetadataBuilderImpl_vTable.version := 4;
+	IMetadataBuilderImpl_vTable.version := 5;
 	IMetadataBuilderImpl_vTable.addRef := @IMetadataBuilderImpl_addRefDispatcher;
 	IMetadataBuilderImpl_vTable.release := @IMetadataBuilderImpl_releaseDispatcher;
 	IMetadataBuilderImpl_vTable.setType := @IMetadataBuilderImpl_setTypeDispatcher;
@@ -17313,6 +17824,7 @@ initialization
 	IMetadataBuilderImpl_vTable.setRelation := @IMetadataBuilderImpl_setRelationDispatcher;
 	IMetadataBuilderImpl_vTable.setOwner := @IMetadataBuilderImpl_setOwnerDispatcher;
 	IMetadataBuilderImpl_vTable.setAlias := @IMetadataBuilderImpl_setAliasDispatcher;
+	IMetadataBuilderImpl_vTable.setSchema := @IMetadataBuilderImpl_setSchemaDispatcher;
 
 	IResultSetImpl_vTable := ResultSetVTable.create;
 	IResultSetImpl_vTable.version := 5;
@@ -17333,7 +17845,7 @@ initialization
 	IResultSetImpl_vTable.getInfo := @IResultSetImpl_getInfoDispatcher;
 
 	IStatementImpl_vTable := StatementVTable.create;
-	IStatementImpl_vTable.version := 5;
+	IStatementImpl_vTable.version := 6;
 	IStatementImpl_vTable.addRef := @IStatementImpl_addRefDispatcher;
 	IStatementImpl_vTable.release := @IStatementImpl_releaseDispatcher;
 	IStatementImpl_vTable.getInfo := @IStatementImpl_getInfoDispatcher;
@@ -17351,6 +17863,8 @@ initialization
 	IStatementImpl_vTable.setTimeout := @IStatementImpl_setTimeoutDispatcher;
 	IStatementImpl_vTable.createBatch := @IStatementImpl_createBatchDispatcher;
 	IStatementImpl_vTable.free := @IStatementImpl_freeDispatcher;
+	IStatementImpl_vTable.getMaxInlineBlobSize := @IStatementImpl_getMaxInlineBlobSizeDispatcher;
+	IStatementImpl_vTable.setMaxInlineBlobSize := @IStatementImpl_setMaxInlineBlobSizeDispatcher;
 
 	IBatchImpl_vTable := BatchVTable.create;
 	IBatchImpl_vTable.version := 4;
@@ -17407,7 +17921,7 @@ initialization
 	IEventsImpl_vTable.cancel := @IEventsImpl_cancelDispatcher;
 
 	IAttachmentImpl_vTable := AttachmentVTable.create;
-	IAttachmentImpl_vTable.version := 5;
+	IAttachmentImpl_vTable.version := 6;
 	IAttachmentImpl_vTable.addRef := @IAttachmentImpl_addRefDispatcher;
 	IAttachmentImpl_vTable.release := @IAttachmentImpl_releaseDispatcher;
 	IAttachmentImpl_vTable.getInfo := @IAttachmentImpl_getInfoDispatcher;
@@ -17436,6 +17950,10 @@ initialization
 	IAttachmentImpl_vTable.createReplicator := @IAttachmentImpl_createReplicatorDispatcher;
 	IAttachmentImpl_vTable.detach := @IAttachmentImpl_detachDispatcher;
 	IAttachmentImpl_vTable.dropDatabase := @IAttachmentImpl_dropDatabaseDispatcher;
+	IAttachmentImpl_vTable.getMaxBlobCacheSize := @IAttachmentImpl_getMaxBlobCacheSizeDispatcher;
+	IAttachmentImpl_vTable.setMaxBlobCacheSize := @IAttachmentImpl_setMaxBlobCacheSizeDispatcher;
+	IAttachmentImpl_vTable.getMaxInlineBlobSize := @IAttachmentImpl_getMaxInlineBlobSizeDispatcher;
+	IAttachmentImpl_vTable.setMaxInlineBlobSize := @IAttachmentImpl_setMaxInlineBlobSizeDispatcher;
 
 	IServiceImpl_vTable := ServiceVTable.create;
 	IServiceImpl_vTable.version := 5;
@@ -17605,10 +18123,12 @@ initialization
 	IWireCryptPluginImpl_vTable.setSpecificData := @IWireCryptPluginImpl_setSpecificDataDispatcher;
 
 	ICryptKeyCallbackImpl_vTable := CryptKeyCallbackVTable.create;
-	ICryptKeyCallbackImpl_vTable.version := 3;
+	ICryptKeyCallbackImpl_vTable.version := 4;
 	ICryptKeyCallbackImpl_vTable.callback := @ICryptKeyCallbackImpl_callbackDispatcher;
 	ICryptKeyCallbackImpl_vTable.afterAttach := @ICryptKeyCallbackImpl_afterAttachDispatcher;
 	ICryptKeyCallbackImpl_vTable.dispose := @ICryptKeyCallbackImpl_disposeDispatcher;
+	ICryptKeyCallbackImpl_vTable.getHashLength := @ICryptKeyCallbackImpl_getHashLengthDispatcher;
+	ICryptKeyCallbackImpl_vTable.getHashData := @ICryptKeyCallbackImpl_getHashDataDispatcher;
 
 	IKeyHolderPluginImpl_vTable := KeyHolderPluginVTable.create;
 	IKeyHolderPluginImpl_vTable.version := 5;
@@ -17675,7 +18195,7 @@ initialization
 	IExternalTriggerImpl_vTable.execute := @IExternalTriggerImpl_executeDispatcher;
 
 	IRoutineMetadataImpl_vTable := RoutineMetadataVTable.create;
-	IRoutineMetadataImpl_vTable.version := 2;
+	IRoutineMetadataImpl_vTable.version := 3;
 	IRoutineMetadataImpl_vTable.getPackage := @IRoutineMetadataImpl_getPackageDispatcher;
 	IRoutineMetadataImpl_vTable.getName := @IRoutineMetadataImpl_getNameDispatcher;
 	IRoutineMetadataImpl_vTable.getEntryPoint := @IRoutineMetadataImpl_getEntryPointDispatcher;
@@ -17685,6 +18205,7 @@ initialization
 	IRoutineMetadataImpl_vTable.getTriggerMetadata := @IRoutineMetadataImpl_getTriggerMetadataDispatcher;
 	IRoutineMetadataImpl_vTable.getTriggerTable := @IRoutineMetadataImpl_getTriggerTableDispatcher;
 	IRoutineMetadataImpl_vTable.getTriggerType := @IRoutineMetadataImpl_getTriggerTypeDispatcher;
+	IRoutineMetadataImpl_vTable.getSchema := @IRoutineMetadataImpl_getSchemaDispatcher;
 
 	IExternalEngineImpl_vTable := ExternalEngineVTable.create;
 	IExternalEngineImpl_vTable.version := 4;
@@ -17715,7 +18236,7 @@ initialization
 	IVersionCallbackImpl_vTable.callback := @IVersionCallbackImpl_callbackDispatcher;
 
 	IUtilImpl_vTable := UtilVTable.create;
-	IUtilImpl_vTable.version := 4;
+	IUtilImpl_vTable.version := 6;
 	IUtilImpl_vTable.getFbVersion := @IUtilImpl_getFbVersionDispatcher;
 	IUtilImpl_vTable.loadBlob := @IUtilImpl_loadBlobDispatcher;
 	IUtilImpl_vTable.dumpBlob := @IUtilImpl_dumpBlobDispatcher;
@@ -17738,6 +18259,8 @@ initialization
 	IUtilImpl_vTable.getInt128 := @IUtilImpl_getInt128Dispatcher;
 	IUtilImpl_vTable.decodeTimeTzEx := @IUtilImpl_decodeTimeTzExDispatcher;
 	IUtilImpl_vTable.decodeTimeStampTzEx := @IUtilImpl_decodeTimeStampTzExDispatcher;
+	IUtilImpl_vTable.executeCreateDatabase2 := @IUtilImpl_executeCreateDatabase2Dispatcher;
+	IUtilImpl_vTable.convert := @IUtilImpl_convertDispatcher;
 
 	IOffsetsCallbackImpl_vTable := OffsetsCallbackVTable.create;
 	IOffsetsCallbackImpl_vTable.version := 2;
@@ -18022,7 +18545,7 @@ initialization
 	IReplicatedRecordImpl_vTable.getRawData := @IReplicatedRecordImpl_getRawDataDispatcher;
 
 	IReplicatedTransactionImpl_vTable := ReplicatedTransactionVTable.create;
-	IReplicatedTransactionImpl_vTable.version := 3;
+	IReplicatedTransactionImpl_vTable.version := 4;
 	IReplicatedTransactionImpl_vTable.dispose := @IReplicatedTransactionImpl_disposeDispatcher;
 	IReplicatedTransactionImpl_vTable.prepare := @IReplicatedTransactionImpl_prepareDispatcher;
 	IReplicatedTransactionImpl_vTable.commit := @IReplicatedTransactionImpl_commitDispatcher;
@@ -18030,14 +18553,18 @@ initialization
 	IReplicatedTransactionImpl_vTable.startSavepoint := @IReplicatedTransactionImpl_startSavepointDispatcher;
 	IReplicatedTransactionImpl_vTable.releaseSavepoint := @IReplicatedTransactionImpl_releaseSavepointDispatcher;
 	IReplicatedTransactionImpl_vTable.rollbackSavepoint := @IReplicatedTransactionImpl_rollbackSavepointDispatcher;
-	IReplicatedTransactionImpl_vTable.insertRecord := @IReplicatedTransactionImpl_insertRecordDispatcher;
-	IReplicatedTransactionImpl_vTable.updateRecord := @IReplicatedTransactionImpl_updateRecordDispatcher;
-	IReplicatedTransactionImpl_vTable.deleteRecord := @IReplicatedTransactionImpl_deleteRecordDispatcher;
-	IReplicatedTransactionImpl_vTable.executeSql := @IReplicatedTransactionImpl_executeSqlDispatcher;
-	IReplicatedTransactionImpl_vTable.executeSqlIntl := @IReplicatedTransactionImpl_executeSqlIntlDispatcher;
+	IReplicatedTransactionImpl_vTable.deprecatedInsertRecord := @IReplicatedTransactionImpl_deprecatedInsertRecordDispatcher;
+	IReplicatedTransactionImpl_vTable.deprecatedUpdateRecord := @IReplicatedTransactionImpl_deprecatedUpdateRecordDispatcher;
+	IReplicatedTransactionImpl_vTable.deprecatedDeleteRecord := @IReplicatedTransactionImpl_deprecatedDeleteRecordDispatcher;
+	IReplicatedTransactionImpl_vTable.deprecatedExecuteSql := @IReplicatedTransactionImpl_deprecatedExecuteSqlDispatcher;
+	IReplicatedTransactionImpl_vTable.deprecatedExecuteSqlIntl := @IReplicatedTransactionImpl_deprecatedExecuteSqlIntlDispatcher;
+	IReplicatedTransactionImpl_vTable.insertRecord2 := @IReplicatedTransactionImpl_insertRecord2Dispatcher;
+	IReplicatedTransactionImpl_vTable.updateRecord2 := @IReplicatedTransactionImpl_updateRecord2Dispatcher;
+	IReplicatedTransactionImpl_vTable.deleteRecord2 := @IReplicatedTransactionImpl_deleteRecord2Dispatcher;
+	IReplicatedTransactionImpl_vTable.executeSqlIntl2 := @IReplicatedTransactionImpl_executeSqlIntl2Dispatcher;
 
 	IReplicatedSessionImpl_vTable := ReplicatedSessionVTable.create;
-	IReplicatedSessionImpl_vTable.version := 4;
+	IReplicatedSessionImpl_vTable.version := 5;
 	IReplicatedSessionImpl_vTable.addRef := @IReplicatedSessionImpl_addRefDispatcher;
 	IReplicatedSessionImpl_vTable.release := @IReplicatedSessionImpl_releaseDispatcher;
 	IReplicatedSessionImpl_vTable.setOwner := @IReplicatedSessionImpl_setOwnerDispatcher;
@@ -18045,7 +18572,8 @@ initialization
 	IReplicatedSessionImpl_vTable.init := @IReplicatedSessionImpl_initDispatcher;
 	IReplicatedSessionImpl_vTable.startTransaction := @IReplicatedSessionImpl_startTransactionDispatcher;
 	IReplicatedSessionImpl_vTable.cleanupTransaction := @IReplicatedSessionImpl_cleanupTransactionDispatcher;
-	IReplicatedSessionImpl_vTable.setSequence := @IReplicatedSessionImpl_setSequenceDispatcher;
+	IReplicatedSessionImpl_vTable.deprecatedSetSequence := @IReplicatedSessionImpl_deprecatedSetSequenceDispatcher;
+	IReplicatedSessionImpl_vTable.setSequence2 := @IReplicatedSessionImpl_setSequence2Dispatcher;
 
 	IProfilerPluginImpl_vTable := ProfilerPluginVTable.create;
 	IProfilerPluginImpl_vTable.version := 4;
@@ -18058,13 +18586,13 @@ initialization
 	IProfilerPluginImpl_vTable.flush := @IProfilerPluginImpl_flushDispatcher;
 
 	IProfilerSessionImpl_vTable := ProfilerSessionVTable.create;
-	IProfilerSessionImpl_vTable.version := 3;
+	IProfilerSessionImpl_vTable.version := 4;
 	IProfilerSessionImpl_vTable.dispose := @IProfilerSessionImpl_disposeDispatcher;
 	IProfilerSessionImpl_vTable.getId := @IProfilerSessionImpl_getIdDispatcher;
 	IProfilerSessionImpl_vTable.getFlags := @IProfilerSessionImpl_getFlagsDispatcher;
 	IProfilerSessionImpl_vTable.cancel := @IProfilerSessionImpl_cancelDispatcher;
 	IProfilerSessionImpl_vTable.finish := @IProfilerSessionImpl_finishDispatcher;
-	IProfilerSessionImpl_vTable.defineStatement := @IProfilerSessionImpl_defineStatementDispatcher;
+	IProfilerSessionImpl_vTable.deprecatedDefineStatement := @IProfilerSessionImpl_deprecatedDefineStatementDispatcher;
 	IProfilerSessionImpl_vTable.defineCursor := @IProfilerSessionImpl_defineCursorDispatcher;
 	IProfilerSessionImpl_vTable.defineRecordSource := @IProfilerSessionImpl_defineRecordSourceDispatcher;
 	IProfilerSessionImpl_vTable.onRequestStart := @IProfilerSessionImpl_onRequestStartDispatcher;
@@ -18075,6 +18603,7 @@ initialization
 	IProfilerSessionImpl_vTable.afterRecordSourceOpen := @IProfilerSessionImpl_afterRecordSourceOpenDispatcher;
 	IProfilerSessionImpl_vTable.beforeRecordSourceGetRecord := @IProfilerSessionImpl_beforeRecordSourceGetRecordDispatcher;
 	IProfilerSessionImpl_vTable.afterRecordSourceGetRecord := @IProfilerSessionImpl_afterRecordSourceGetRecordDispatcher;
+	IProfilerSessionImpl_vTable.defineStatement2 := @IProfilerSessionImpl_defineStatement2Dispatcher;
 
 	IProfilerStatsImpl_vTable := ProfilerStatsVTable.create;
 	IProfilerStatsImpl_vTable.version := 2;

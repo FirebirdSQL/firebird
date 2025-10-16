@@ -36,18 +36,18 @@
 namespace Jrd {
 
 // Flags (3-bits) used for index node
-const int BTN_NORMAL_FLAG					= 0;
-const int BTN_END_LEVEL_FLAG				= 1;
-const int BTN_END_BUCKET_FLAG				= 2;
-const int BTN_ZERO_PREFIX_ZERO_LENGTH_FLAG	= 3;
-const int BTN_ZERO_LENGTH_FLAG				= 4;
-const int BTN_ONE_LENGTH_FLAG				= 5;
-//const int BTN_ZERO_PREFIX_ONE_LENGTH_FLAG	= 6;
-//const int BTN_GET_MORE_FLAGS	= 7;
+inline constexpr int BTN_NORMAL_FLAG					= 0;
+inline constexpr int BTN_END_LEVEL_FLAG					= 1;
+inline constexpr int BTN_END_BUCKET_FLAG				= 2;
+inline constexpr int BTN_ZERO_PREFIX_ZERO_LENGTH_FLAG	= 3;
+inline constexpr int BTN_ZERO_LENGTH_FLAG				= 4;
+inline constexpr int BTN_ONE_LENGTH_FLAG				= 5;
+//inline constexpr int BTN_ZERO_PREFIX_ONE_LENGTH_FLAG	= 6;
+//inline constexpr int BTN_GET_MORE_FLAGS	= 7;
 
 // Firebird B-tree nodes
-const USHORT BTN_LEAF_SIZE	= 6;
-const USHORT BTN_PAGE_SIZE	= 10;
+inline constexpr USHORT BTN_LEAF_SIZE	= 6;
+inline constexpr USHORT BTN_PAGE_SIZE	= 10;
 
 struct IndexNode
 {

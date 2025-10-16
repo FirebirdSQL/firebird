@@ -51,17 +51,17 @@ using namespace Replication;
 
 namespace
 {
-	const char* REPLICATION_CFGFILE = "replication.conf";
+	constexpr const char* REPLICATION_CFGFILE = "replication.conf";
 	constexpr const char* KEY_SUFFIX_ENV = "env";
 	constexpr const char* KEY_SUFFIX_FILE = "file";
 
-	const ULONG DEFAULT_BUFFER_SIZE = 1024 * 1024; 				// 1 MB
-	const ULONG DEFAULT_SEGMENT_SIZE = 16 * 1024 * 1024;	// 16 MB
-	const ULONG DEFAULT_SEGMENT_COUNT = 8;
-	const ULONG DEFAULT_ARCHIVE_TIMEOUT = 60;				// seconds
-	const ULONG DEFAULT_GROUP_FLUSH_DELAY = 0;
-	const ULONG DEFAULT_APPLY_IDLE_TIMEOUT = 10;				// seconds
-	const ULONG DEFAULT_APPLY_ERROR_TIMEOUT = 60;				// seconds
+	constexpr ULONG DEFAULT_BUFFER_SIZE = 1024 * 1024; 			// 1 MB
+	constexpr ULONG DEFAULT_SEGMENT_SIZE = 16 * 1024 * 1024;	// 16 MB
+	constexpr ULONG DEFAULT_SEGMENT_COUNT = 8;
+	constexpr ULONG DEFAULT_ARCHIVE_TIMEOUT = 60;				// seconds
+	constexpr ULONG DEFAULT_GROUP_FLUSH_DELAY = 0;
+	constexpr ULONG DEFAULT_APPLY_IDLE_TIMEOUT = 10;			// seconds
+	constexpr ULONG DEFAULT_APPLY_ERROR_TIMEOUT = 60;			// seconds
 
 	void parseLong(const string& input, ULONG& output)
 	{
@@ -81,9 +81,7 @@ namespace
 
 	void configError(const string& type, const string& key, const string& value)
 	{
-		string msg;
-		msg.printf("%s specifies %s: %s", key.c_str(), type.c_str(), value.c_str());
-		raiseError(msg.c_str());
+		raiseError("%s specifies %s: %s", key.c_str(), type.c_str(), value.c_str());
 	}
 
 	void checkAccess(const PathName& path, const string& key)
@@ -133,20 +131,11 @@ namespace
 			if (!file)
 				configError("missing or inaccessible file", key, filename.c_str());
 
-			// skip first empty lines
-			do
-			{
-				if (feof(file))
-					break;
-
-				if (!temp.LoadFromFile(file))
-					break;
-
-				temp.alltrim(" \t\r");
-			} while (temp.isEmpty());
+			if (temp.LoadFromFile(file))
+				temp.alltrim("\r");
 
 			if (temp.isEmpty())
-				configError("empty file", key, filename.c_str());
+				configError("first empty line of file", key, filename.c_str());
 		}
 
 		output = temp.c_str();
@@ -167,6 +156,7 @@ namespace
 				if (output.username.hasData())
 					configError("multiple values", output.database, "username");
 				parseExternalValue(key, value, output.username);
+				output.username.rtrim(" ");
 			}
 			else if (key.find("password") == 0)
 			{
@@ -186,6 +176,8 @@ namespace
 Config::Config()
 	: dbName(getPool()),
 	  bufferSize(DEFAULT_BUFFER_SIZE),
+	  includeSchemaFilter(getPool()),
+	  excludeSchemaFilter(getPool()),
 	  includeFilter(getPool()),
 	  excludeFilter(getPool()),
 	  segmentSize(DEFAULT_SEGMENT_SIZE),
@@ -201,6 +193,7 @@ Config::Config()
 	  verboseLogging(false),
 	  applyIdleTimeout(DEFAULT_APPLY_IDLE_TIMEOUT),
 	  applyErrorTimeout(DEFAULT_APPLY_ERROR_TIMEOUT),
+	  schemaSearchPath(getPool()),
 	  pluginName(getPool()),
 	  logErrors(true),
 	  reportErrors(false),
@@ -213,6 +206,8 @@ Config::Config()
 Config::Config(const Config& other)
 	: dbName(getPool(), other.dbName),
 	  bufferSize(other.bufferSize),
+	  includeSchemaFilter(getPool(), other.includeSchemaFilter),
+	  excludeSchemaFilter(getPool(), other.excludeSchemaFilter),
 	  includeFilter(getPool(), other.includeFilter),
 	  excludeFilter(getPool(), other.excludeFilter),
 	  segmentSize(other.segmentSize),
@@ -228,6 +223,7 @@ Config::Config(const Config& other)
 	  verboseLogging(other.verboseLogging),
 	  applyIdleTimeout(other.applyIdleTimeout),
 	  applyErrorTimeout(other.applyErrorTimeout),
+	  schemaSearchPath(getPool(), other.schemaSearchPath),
 	  pluginName(getPool(), other.pluginName),
 	  logErrors(other.logErrors),
 	  reportErrors(other.reportErrors),
@@ -311,6 +307,16 @@ Config* Config::get(const PathName& lookupName)
 				else if (key == "buffer_size")
 				{
 					parseLong(value, config->bufferSize);
+				}
+				else if (key == "include_schema_filter")
+				{
+					ISC_systemToUtf8(value);
+					config->includeSchemaFilter = value;
+				}
+				else if (key == "exclude_schema_filter")
+				{
+					ISC_systemToUtf8(value);
+					config->excludeSchemaFilter = value;
 				}
 				else if (key == "include_filter")
 				{
@@ -503,6 +509,8 @@ void Config::enumerate(ReplicaList& replicas)
 				{
 					parseBoolean(value, config->applyTablespacesDdl);
 				}
+				else if (key == "schema_search_path")
+					config->schemaSearchPath = value;
 			}
 
 			if (dbName.hasData() && config->sourceDirectory.hasData())

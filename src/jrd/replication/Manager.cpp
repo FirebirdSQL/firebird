@@ -25,6 +25,7 @@
 #include "../common/isc_proto.h"
 #include "../common/isc_s_proto.h"
 #include "../jrd/jrd.h"
+#include "../jrd/cch_proto.h"
 
 #include "Manager.h"
 #include "Protocol.h"
@@ -36,17 +37,35 @@ using namespace Replication;
 
 namespace Replication
 {
-	const size_t MAX_BG_WRITER_LAG = 10 * 1024 * 1024;	// 10 MB
+	constexpr size_t MAX_BG_WRITER_LAG = 10 * 1024 * 1024;	// 10 MB
 }
 
 
 // Table matcher
 
 TableMatcher::TableMatcher(MemoryPool& pool,
+						   const string& includeSchemaFilter,
+						   const string& excludeSchemaFilter,
 						   const string& includeFilter,
 						   const string& excludeFilter)
 	: m_tables(pool)
 {
+	if (includeSchemaFilter.hasData())
+	{
+		m_includeSchemaMatcher.reset(FB_NEW_POOL(pool) SimilarToRegex(
+			pool, SimilarToFlag::CASE_INSENSITIVE,
+			includeSchemaFilter.c_str(), includeSchemaFilter.length(),
+			"\\", 1));
+	}
+
+	if (excludeSchemaFilter.hasData())
+	{
+		m_excludeSchemaMatcher.reset(FB_NEW_POOL(pool) SimilarToRegex(
+			pool, SimilarToFlag::CASE_INSENSITIVE,
+			excludeSchemaFilter.c_str(), excludeSchemaFilter.length(),
+			"\\", 1));
+	}
+
 	if (includeFilter.hasData())
 	{
 		m_includeMatcher.reset(FB_NEW_POOL(pool) SimilarToRegex(
@@ -64,7 +83,7 @@ TableMatcher::TableMatcher(MemoryPool& pool,
 	}
 }
 
-bool TableMatcher::matchTable(const MetaName& tableName)
+bool TableMatcher::matchTable(const QualifiedName& tableName)
 {
 	try
 	{
@@ -73,11 +92,17 @@ bool TableMatcher::matchTable(const MetaName& tableName)
 		{
 			enabled = true;
 
-			if (m_includeMatcher)
-				enabled = m_includeMatcher->matches(tableName.c_str(), tableName.length());
+			if (m_includeSchemaMatcher)
+				enabled = m_includeSchemaMatcher->matches(tableName.schema.c_str(), tableName.schema.length());
+
+			if (enabled && m_excludeSchemaMatcher)
+				enabled = !m_excludeSchemaMatcher->matches(tableName.schema.c_str(), tableName.schema.length());
+
+			if (enabled && m_includeMatcher)
+				enabled = m_includeMatcher->matches(tableName.object.c_str(), tableName.object.length());
 
 			if (enabled && m_excludeMatcher)
-				enabled = !m_excludeMatcher->matches(tableName.c_str(), tableName.length());
+				enabled = !m_excludeMatcher->matches(tableName.object.c_str(), tableName.object.length());
 
 			m_tables.put(tableName, enabled);
 		}
@@ -102,6 +127,7 @@ Manager::Manager(const string& dbId,
 	  m_buffers(getPool()),
 	  m_queue(getPool()),
 	  m_queueSize(0),
+	  m_sequence(0),
 	  m_shutdown(false),
 	  m_signalled(false)
 {
@@ -110,11 +136,25 @@ Manager::Manager(const string& dbId,
 	const auto tdbb = JRD_get_thread_data();
 	const auto dbb = tdbb->getDatabase();
 
-	const auto& guid = dbb->dbb_guid.value();
-	m_sequence = dbb->dbb_repl_sequence;
+	const auto& guid = dbb->dbb_guid;
 
 	if (config->journalDirectory.hasData())
 	{
+		// At this point it is unknown if change log shared memory exists or not.
+		// To avoid race condition with concurrent changing of current replication
+		// sequence, take and hold shared lock on header page while creating
+		// ChangeLog instance.
+
+		WIN window(HEADER_PAGE_NUMBER);
+		CCH_FETCH(tdbb, &window, LCK_read, pag_header);
+
+		Cleanup releaseHeader([&] {
+			CCH_RELEASE(tdbb, &window);
+		});
+
+		// Call below will fetch header page with LCK_read lock, it is allowed and OK.
+		m_sequence = dbb->getReplSequence(tdbb);
+
 		m_changeLog = FB_NEW_POOL(getPool())
 			ChangeLog(getPool(), dbId, guid, m_sequence, config);
 	}
@@ -234,7 +274,7 @@ void Manager::flush(UCharBuffer* buffer, bool sync, bool prepare)
 	fb_assert(!m_shutdown);
 	fb_assert(buffer && buffer->hasData());
 
-	const auto prepareBuffer = prepare ? buffer : nullptr;
+	const auto* prepareBuffer = prepare ? buffer : nullptr;
 
 	MutexLockGuard guard(m_queueMutex, FB_FUNCTION);
 

@@ -209,40 +209,38 @@ typedef vec<TraNumber> TransactionsVector;
 //
 // bit values for dbb_flags
 //
-const ULONG DBB_damaged					= 0x1L;
-const ULONG DBB_exclusive				= 0x2L;			// Database is accessed in exclusive mode
-const ULONG DBB_bugcheck				= 0x4L;			// Bugcheck has occurred
-const ULONG DBB_garbage_collector		= 0x8L;			// garbage collector thread exists
-const ULONG DBB_gc_active				= 0x10L;		// ... and is actively working.
-const ULONG DBB_gc_pending				= 0x20L;		// garbage collection requested
-const ULONG DBB_force_write				= 0x40L;		// Database is forced write
-const ULONG DBB_no_reserve				= 0x80L;		// No reserve space for versions
-const ULONG DBB_DB_SQL_dialect_3		= 0x100L;		// database SQL dialect 3
-const ULONG DBB_read_only				= 0x200L;		// DB is ReadOnly (RO). If not set, DB is RW
-const ULONG DBB_being_opened_read_only	= 0x400L;		// DB is being opened RO. If unset, opened as RW
-const ULONG DBB_no_ast					= 0x800L;		// AST delivery is prohibited
-const ULONG DBB_sweep_in_progress		= 0x1000L;		// A database sweep operation is in progress
-const ULONG DBB_gc_starting				= 0x2000L;		// garbage collector thread is starting
-const ULONG DBB_suspend_bgio			= 0x4000L;		// Suspend I/O by background threads
-const ULONG DBB_new						= 0x8000L;		// Database object is just created
-const ULONG DBB_gc_cooperative			= 0x10000L;		// cooperative garbage collection
-const ULONG DBB_gc_background			= 0x20000L;		// background garbage collection by gc_thread
-const ULONG DBB_sweep_starting			= 0x40000L;		// Auto-sweep is starting
-const ULONG DBB_creating				= 0x80000L;	// Database creation is in progress
-const ULONG DBB_shared					= 0x100000L;	// Database object is shared among connections
+inline constexpr ULONG DBB_damaged					= 0x1L;
+inline constexpr ULONG DBB_exclusive				= 0x2L;			// Database is accessed in exclusive mode
+inline constexpr ULONG DBB_bugcheck					= 0x4L;			// Bugcheck has occurred
+inline constexpr ULONG DBB_garbage_collector		= 0x8L;			// garbage collector thread exists
+inline constexpr ULONG DBB_gc_active				= 0x10L;		// ... and is actively working.
+inline constexpr ULONG DBB_gc_pending				= 0x20L;		// garbage collection requested
+inline constexpr ULONG DBB_force_write				= 0x40L;		// Database is forced write
+inline constexpr ULONG DBB_no_reserve				= 0x80L;		// No reserve space for versions
+inline constexpr ULONG DBB_DB_SQL_dialect_3			= 0x100L;		// database SQL dialect 3
+inline constexpr ULONG DBB_read_only				= 0x200L;		// DB is ReadOnly (RO). If not set, DB is RW
+inline constexpr ULONG DBB_being_opened_read_only	= 0x400L;		// DB is being opened RO. If unset, opened as RW
+inline constexpr ULONG DBB_no_ast					= 0x800L;		// AST delivery is prohibited
+inline constexpr ULONG DBB_sweep_in_progress		= 0x1000L;		// A database sweep operation is in progress
+inline constexpr ULONG DBB_gc_starting				= 0x2000L;		// garbage collector thread is starting
+inline constexpr ULONG DBB_suspend_bgio				= 0x4000L;		// Suspend I/O by background threads
+inline constexpr ULONG DBB_new						= 0x8000L;		// Database object is just created
+inline constexpr ULONG DBB_gc_cooperative			= 0x10000L;		// cooperative garbage collection
+inline constexpr ULONG DBB_gc_background			= 0x20000L;		// background garbage collection by gc_thread
+inline constexpr ULONG DBB_sweep_starting			= 0x40000L;		// Auto-sweep is starting
+inline constexpr ULONG DBB_creating					= 0x80000L;		// Database creation is in progress
+inline constexpr ULONG DBB_shared					= 0x100000L;	// Database object is shared among connections
+inline constexpr ULONG DBB_restoring				= 0x200000L;	// Database restore is in progress
 
 //
 // dbb_ast_flags
 //
-const ULONG DBB_blocking			= 0x1L;		// Exclusive mode is blocking
-const ULONG DBB_get_shadows			= 0x2L;		// Signal received to check for new shadows
-const ULONG DBB_assert_locks		= 0x4L;		// Locks are to be asserted
-const ULONG DBB_shutdown			= 0x8L;		// Database is shutdown
-const ULONG DBB_shut_attach			= 0x10L;	// no new attachments accepted
-const ULONG DBB_shut_tran			= 0x20L;	// no new transactions accepted
-const ULONG DBB_shut_force			= 0x40L;	// forced shutdown in progress
-const ULONG DBB_shutdown_full		= 0x80L;	// Database fully shut down
-const ULONG DBB_shutdown_single		= 0x100L;	// Database is in single-user maintenance mode
+inline constexpr ULONG DBB_blocking		= 0x1L;		// Exclusive mode is blocking
+inline constexpr ULONG DBB_get_shadows	= 0x2L;		// Signal received to check for new shadows
+inline constexpr ULONG DBB_assert_locks	= 0x4L;		// Locks are to be asserted
+inline constexpr ULONG DBB_shut_attach	= 0x8L;		// No new attachments accepted
+inline constexpr ULONG DBB_shut_tran	= 0x10L;	// No new transactions accepted
+inline constexpr ULONG DBB_shut_force	= 0x20L;	// Forced shutdown in progress
 
 class Database : public pool_alloc<type_dbb>
 {
@@ -258,7 +256,7 @@ class Database : public pool_alloc<type_dbb>
 		typedef Firebird::HashTable<DbId, Firebird::DEFAULT_HASH_SIZE,
 			Firebird::string, DbId, DbId > DbIdHash;
 
-		struct DbId : public DbIdHash::Entry, public Firebird::GlobalStorage
+		struct DbId : public DbIdHash::Entry, public Firebird::GlobalStorage, public Firebird::RefCounted
 		{
 			DbId(const Firebird::string& x, GlobalObjectHolder* h)
 				: id(getPool(), x), holder(h)
@@ -287,7 +285,9 @@ class Database : public pool_alloc<type_dbb>
 			}
 
 			const Firebird::string id;
-			GlobalObjectHolder* const holder;
+			GlobalObjectHolder* holder;
+			// This mutex is working very tight with `g_mutex`, so use it carefully to avoid possible deadlocks.
+			Firebird::Mutex shutdownMutex;
 		};
 
 		static Firebird::GlobalPtr<DbIdHash> g_hashTable;
@@ -430,7 +430,7 @@ public:
 
 	MemoryPool* dbb_permanent;
 
-	std::optional<Firebird::Guid>	dbb_guid;		// database GUID
+	Firebird::Guid	dbb_guid;			// database GUID
 
 	Firebird::SyncObject	dbb_sync;
 	Firebird::SyncObject	dbb_sys_attach;		// synchronize operations with dbb_sys_attachments
@@ -472,6 +472,7 @@ public:
 	Firebird::RWLock		dbb_ast_lock;		// avoids delivering AST to going away database
 	Firebird::AtomicCounter dbb_ast_flags;		// flags modified at AST level
 	Firebird::AtomicCounter dbb_flags;
+	std::atomic<shut_mode_t> dbb_shutdown_mode;		// shutdown mode
 	USHORT dbb_ods_version;				// major ODS version number
 	USHORT dbb_minor_version;			// minor ODS version number
 	USHORT dbb_page_size;				// page size
@@ -540,7 +541,7 @@ public:
 	Lock* dbb_repl_lock;				// replication state lock
 	Firebird::SyncObject dbb_repl_sync;
 	FB_UINT64 dbb_repl_sequence;		// replication sequence
-	ReplicaMode dbb_replica_mode;		// replica access mode
+	std::atomic<ReplicaMode> dbb_replica_mode;		// replica access mode
 
 	unsigned dbb_compatibility_index;	// datatype backward compatibility level
 	Dictionary dbb_dic;					// metanames dictionary
@@ -576,14 +577,24 @@ public:
 
 	void registerModule(Module&);
 
+	bool isShutdown() const
+	{
+		return (dbb_shutdown_mode.load(std::memory_order_relaxed) != shut_mode_online);
+	}
+
+	bool isShutdown(shut_mode_t mode) const
+	{
+		return (dbb_shutdown_mode.load(std::memory_order_relaxed) == mode);
+	}
+
 	bool isReplica() const
 	{
-		return (dbb_replica_mode != REPLICA_NONE);
+		return (dbb_replica_mode.load(std::memory_order_relaxed) != REPLICA_NONE);
 	}
 
 	bool isReplica(ReplicaMode mode) const
 	{
-		return (dbb_replica_mode == mode);
+		return (dbb_replica_mode.load(std::memory_order_relaxed) == mode);
 	}
 
 	USHORT getEncodedOdsVersion() const
@@ -600,11 +611,13 @@ public:
 private:
 	Database(MemoryPool* p, Firebird::IPluginConfig* pConf, bool shared)
 	:	dbb_permanent(p),
+		dbb_guid(Firebird::Guid::empty()),
 		dbb_page_manager(this, *p),
 		dbb_file_id(*p),
 		dbb_modules(*p),
 		dbb_extManager(nullptr),
 		dbb_flags(shared ? DBB_shared : 0),
+		dbb_shutdown_mode(shut_mode_online),
 		dbb_filename(*p),
 		dbb_database_name(*p),
 #ifdef HAVE_ID_BY_NAME
@@ -657,8 +670,8 @@ public:
 
 	// returns true if sweeper thread could start
 	bool allowSweepThread(thread_db* tdbb);
-	// returns true if sweep could run
-	bool allowSweepRun(thread_db* tdbb);
+	// Throw an exception if sweep cannot be run
+	void initiateSweepRun(thread_db* tdbb);
 	// reset sweep flag and release sweep lock
 	void clearSweepFlags(thread_db* tdbb);
 	// reset sweep starting flag, release thread starting mutex
@@ -706,6 +719,19 @@ public:
 	void decTempCacheUsage(FB_SIZE_T size)
 	{
 		dbb_gblobj_holder->decTempCacheUsage(size);
+	}
+
+	bool isRestoring() const
+	{
+		return dbb_flags & DBB_restoring;
+	}
+
+	void setRestoring(bool value)
+	{
+		if (value)
+			dbb_flags |= DBB_restoring;
+		else
+			dbb_flags &= ~DBB_restoring;
 	}
 
 private:

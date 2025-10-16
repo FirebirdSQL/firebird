@@ -56,6 +56,67 @@
 
 using namespace Firebird;
 
+namespace
+{
+
+// Convert text descriptor into UTF8 string.
+// Binary data converted into HEX representation.
+bool descToUTF8(const paramdsc* param, string& result)
+{
+	UCHAR* address;
+	USHORT length;
+
+	switch (param->dsc_dtype)
+	{
+	case dtype_text:
+		address = param->dsc_address;
+		length = param->dsc_length;
+		break;
+
+	case dtype_varying:
+		address = param->dsc_address + sizeof(USHORT);
+		length = *(USHORT*) param->dsc_address;
+		fb_assert(length <= param->dsc_length - 2);
+		break;
+
+	default:
+		return false;
+	}
+
+	if (param->dsc_sub_type == CS_BINARY)
+	{
+		// Convert OCTETS and [VAR]BINARY to HEX string
+
+		char* hex = result.getBuffer(length * 2);
+
+		for (const UCHAR* p = address; p < address + length; p++)
+		{
+			UCHAR c = (*p & 0xF0) >> 4;
+			*hex++ = c + (c < 10 ? '0' : 'A' - 10);
+
+			c = (*p & 0x0F);
+			*hex++ = c + (c < 10 ? '0' : 'A' - 10);
+		}
+		return result.c_str();
+	}
+
+	string src(address, length);
+
+	try
+	{
+		if (!Jrd::DataTypeUtil::convertToUTF8(src, result, param->dsc_sub_type, status_exception::raise))
+			result = src;
+	}
+	catch (const Firebird::Exception&)
+	{
+		result = src;
+	}
+
+	return true;
+}
+
+} // namespace
+
 namespace Jrd {
 
 const char* StatementHolder::ensurePlan(bool explained)
@@ -149,27 +210,21 @@ int TraceTransactionImpl::getWait()
 
 unsigned TraceTransactionImpl::getIsolation()
 {
-	switch (m_tran->tra_flags & (TRA_read_committed | TRA_rec_version | TRA_degree3 | TRA_read_consistency))
-	{
-	case TRA_degree3:
+	if (m_tran->tra_flags & TRA_degree3)
 		return ISOLATION_CONSISTENCY;
 
-	case TRA_read_committed:
+	if (m_tran->tra_flags & TRA_read_committed)
+	{
+		if (m_tran->tra_flags & TRA_read_consistency)
+			return ISOLATION_READ_COMMITTED_READ_CONSISTENCY;
+
+		if (m_tran->tra_flags & TRA_rec_version)
+			return ISOLATION_READ_COMMITTED_RECVER;
+
 		return ISOLATION_READ_COMMITTED_NORECVER;
-
-	case TRA_read_committed | TRA_rec_version:
-		return ISOLATION_READ_COMMITTED_RECVER;
-
-	case TRA_read_committed | TRA_rec_version | TRA_read_consistency:
-		return ISOLATION_READ_COMMITTED_READ_CONSISTENCY;
-
-	case 0:
-		return ISOLATION_CONCURRENCY;
-
-	default:
-		fb_assert(false);
-		return ISOLATION_CONCURRENCY;
 	}
+
+	return ISOLATION_CONCURRENCY;
 }
 
 ISC_INT64 TraceTransactionImpl::getInitialID()
@@ -221,48 +276,53 @@ ITraceParams* TraceSQLStatementImpl::getInputs()
 
 void TraceSQLStatementImpl::DSQLParamsImpl::fillParams()
 {
-	if (m_descs.getCount() || !m_params || m_params->getCount() == 0)
+	if (m_descs.getCount() || !m_buffer)
 		return;
 
-	if (!m_stmt->getDsqlStatement()->isDml())
+	auto stmt = m_stmt->getDsqlStatement();
+	if (!stmt->isDml())
 	{
-		fb_assert(false);
 		return;
 	}
 
-	const auto dmlRequest = (DsqlDmlRequest*) m_stmt;
+	dsql_msg* msg = stmt->getSendMsg();
+	if (!msg)
+		return;
 
-	USHORT first_index = 0;
-	for (FB_SIZE_T i = 0 ; i < m_params->getCount(); ++i)
+	const auto params = msg->msg_parameters;
+	if (params.getCount() == 0)
+		return;
+
+	const Request* req = m_stmt->getRequest();
+	const Format* fmt = stmt->getStatement()->getMessage(msg->msg_number)->getFormat(req);
+
+	for (FB_SIZE_T i = 0 ; i < params.getCount(); ++i)
 	{
-		const dsql_par* parameter = (*m_params)[i];
+		const dsql_par* parameter = params[i];
 
 		if (parameter->par_index)
 		{
-			// Use descriptor for nulls signaling
-			USHORT null_flag = 0;
-			if (parameter->par_null)
-			{
-				const UCHAR* msgBuffer =
-					dmlRequest->req_msg_buffers[parameter->par_null->par_message->msg_buffer_number];
-
-				if (*(SSHORT*) (msgBuffer + (IPTR) parameter->par_null->par_desc.dsc_address))
-					null_flag = DSC_null;
-			}
-
-			dsc* desc = NULL;
-
 			const FB_SIZE_T idx = parameter->par_index - 1;
 			if (idx >= m_descs.getCount())
 				m_descs.getBuffer(idx + 1);
 
-			desc = &m_descs[idx];
+			auto& desc = m_descs[idx];
 
-			*desc = parameter->par_desc;
-			desc->dsc_flags |= null_flag;
+			desc = fmt->fmt_desc[parameter->par_parameter];
 
-			UCHAR* msgBuffer = dmlRequest->req_msg_buffers[parameter->par_message->msg_buffer_number];
-			desc->dsc_address = msgBuffer + (IPTR) desc->dsc_address;
+			// Use descriptor for nulls signaling
+			if (const auto nullParam = parameter->par_null)
+			{
+				const auto& nullDesc = fmt->fmt_desc[nullParam->par_parameter];
+
+				if (*(SSHORT*) (m_buffer + (IPTR) nullDesc.dsc_address))
+					desc.dsc_flags |= DSC_null;
+			}
+
+			// Even if plugin try to change data in buffer (which is pointless)
+			// most likely it is safe because client buffer is writeble though
+			// in EXE_send() it is declared as const.
+			desc.dsc_address = const_cast<UCHAR*>(m_buffer) + (IPTR) desc.dsc_address;
 		}
 	}
 }
@@ -274,11 +334,11 @@ FB_SIZE_T TraceSQLStatementImpl::DSQLParamsImpl::getCount()
 	return m_descs.getCount();
 }
 
-const dsc* TraceSQLStatementImpl::DSQLParamsImpl::getParam(FB_SIZE_T idx)
+const paramdsc* TraceSQLStatementImpl::DSQLParamsImpl::getParam(FB_SIZE_T idx)
 {
 	fillParams();
 
-	if (idx >= 0 && idx < m_descs.getCount())
+	if (idx < m_descs.getCount())
 		return &m_descs[idx];
 
 	return NULL;
@@ -286,39 +346,12 @@ const dsc* TraceSQLStatementImpl::DSQLParamsImpl::getParam(FB_SIZE_T idx)
 
 const char* TraceSQLStatementImpl::DSQLParamsImpl::getTextUTF8(CheckStatusWrapper* status, FB_SIZE_T idx)
 {
-	const dsc* param = getParam(idx);
-	UCHAR* address;
-	USHORT length;
+	const paramdsc* const param = getParam(idx);
 
-	switch (param->dsc_dtype)
-	{
-	case dtype_text:
-		address = param->dsc_address;
-		length = param->dsc_length;
-		break;
+	if (descToUTF8(param, m_tempUTF8))
+		return m_tempUTF8.c_str();
 
-	case dtype_varying:
-		address = param->dsc_address + sizeof(USHORT);
-		length = *(USHORT*) param->dsc_address;
-		break;
-
-	default:
-		return NULL;
-	}
-
-	string src(address, length);
-
-	try
-	{
-		if (!DataTypeUtil::convertToUTF8(src, temp_utf8_text, param->dsc_sub_type, status_exception::raise))
-			temp_utf8_text = src;
-	}
-	catch (const Firebird::Exception&)
-	{
-		temp_utf8_text = src;
-	}
-
-	return temp_utf8_text.c_str();
+	return nullptr;
 }
 
 
@@ -343,46 +376,19 @@ FB_SIZE_T TraceParamsImpl::getCount()
 	return m_descs->getCount();
 }
 
-const dsc* TraceParamsImpl::getParam(FB_SIZE_T idx)
+const paramdsc* TraceParamsImpl::getParam(FB_SIZE_T idx)
 {
 	return m_descs->getParam(idx);
 }
 
 const char* TraceParamsImpl::getTextUTF8(CheckStatusWrapper* status, FB_SIZE_T idx)
 {
-	const dsc* param = getParam(idx);
-	UCHAR* address;
-	USHORT length;
+	const paramdsc* const param = getParam(idx);
 
-	switch (param->dsc_dtype)
-	{
-	case dtype_text:
-		address = param->dsc_address;
-		length = param->dsc_length;
-		break;
+	if (descToUTF8(param, m_tempUTF8))
+		return m_tempUTF8.c_str();
 
-	case dtype_varying:
-		address = param->dsc_address + sizeof(USHORT);
-		length = *(USHORT*) param->dsc_address;
-		break;
-
-	default:
-		return NULL;
-	}
-
-	string src(address, length);
-
-	try
-	{
-		if (!DataTypeUtil::convertToUTF8(src, temp_utf8_text, param->dsc_sub_type, status_exception::raise))
-			temp_utf8_text = src;
-	}
-	catch (const Firebird::Exception&)
-	{
-		temp_utf8_text = src;
-	}
-
-	return temp_utf8_text.c_str();
+	return nullptr;
 }
 
 
@@ -412,13 +418,12 @@ void TraceDscFromValues::fillParams()
 		{
 			//const impure_value* impure = m_request->getImpure<impure_value>(param->impureOffset)
 			const MessageNode* message = param->message;
-			const Format* format = message->format;
+			const Format* format = message->getFormat(m_request);
 			const int arg_number = param->argNumber;
 
 			desc = format->fmt_desc[arg_number];
 			from_desc = &desc;
-			desc.dsc_address = m_request->getImpure<UCHAR>(
-				message->impureOffset + (IPTR) desc.dsc_address);
+			desc.dsc_address = message->getBuffer(m_request) + (IPTR) desc.dsc_address;
 
 			// handle null flag if present
 			if (param->argFlag)
@@ -458,7 +463,7 @@ void TraceDscFromMsg::fillParams()
 	const dsc* fmtDesc = m_format->fmt_desc.begin();
 	const dsc* const fmtEnd = m_format->fmt_desc.end();
 
-	dsc* desc = m_descs.getBuffer(m_format->fmt_count / 2);
+	paramdsc* desc = m_descs.getBuffer(m_format->fmt_count / 2);
 
 	for (; fmtDesc < fmtEnd; fmtDesc += 2, desc++)
 	{
@@ -470,7 +475,7 @@ void TraceDscFromMsg::fillParams()
 		const ULONG nullOffset = (IPTR) fmtDesc[1].dsc_address;
 		const SSHORT* const nullPtr = (const SSHORT*) (m_inMsg + nullOffset);
 		if (*nullPtr == -1)
-			desc->setNull();
+			desc->dsc_flags |= DSC_null;
 	}
 }
 
@@ -635,7 +640,7 @@ TraceRuntimeStats::TraceRuntimeStats(Attachment* att, RuntimeStatistics* baselin
 	m_info.pin_records_fetched = records_fetched;
 
 	if (baseline && stats)
-		baseline->computeDifference(att, *stats, m_info, m_counts);
+		baseline->computeDifference(att, *stats, m_info, m_counts, m_tempNames);
 	else
 	{
 		// Report all zero counts for the moment.
@@ -644,7 +649,7 @@ TraceRuntimeStats::TraceRuntimeStats(Attachment* att, RuntimeStatistics* baselin
 	}
 }
 
-SINT64 TraceRuntimeStats::m_dummy_counts[RuntimeStatistics::TOTAL_ITEMS] = {0};
+SINT64 TraceRuntimeStats::m_dummy_counts[RuntimeStatistics::GLOBAL_ITEMS] = {0};
 
 
 /// TraceStatusVectorImpl

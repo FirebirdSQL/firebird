@@ -47,6 +47,14 @@
 
 using namespace Firebird;
 
+namespace
+{
+	void unableToRunSweepException(ISC_STATUS reason)
+	{
+		ERR_post(Arg::Gds(isc_sweep_unable_to_run) << Arg::Gds(reason));
+	}
+}
+
 namespace Jrd
 {
 	bool Database::onRawDevice() const
@@ -135,11 +143,12 @@ namespace Jrd
 			UCharBuffer buffer;
 			os_utils::getUniqueFileId(pageSpace->file->fil_desc, buffer);
 
-			auto ptr = dbb_file_id.getBuffer(2 * buffer.getCount());
+			dbb_file_id.reserve(2 * static_cast<size_t>(buffer.getCount()));
+			char hex[3];
 			for (const auto val : buffer)
 			{
-				sprintf(ptr, "%02x", (int) val);
-				ptr += 2;
+				snprintf(hex, sizeof(hex), "%02x", static_cast<unsigned>(val));
+				dbb_file_id.append(hex);
 			}
 		}
 
@@ -252,7 +261,7 @@ namespace Jrd
 		while (true)
 		{
 			AtomicCounter::counter_type old = dbb_flags;
-			if ((old & (DBB_sweep_in_progress | DBB_sweep_starting)) || (dbb_ast_flags & DBB_shutdown))
+			if ((old & (DBB_sweep_in_progress | DBB_sweep_starting)) || isShutdown())
 			{
 				dbb_thread_mutex.leave();
 				return false;
@@ -299,16 +308,16 @@ namespace Jrd
 		}
 	}
 
-	bool Database::allowSweepRun(thread_db* tdbb)
+	void Database::initiateSweepRun(thread_db* tdbb)
 	{
-		SPTHR_DEBUG(fprintf(stderr, "allowSweepRun %p\n", this));
+		SPTHR_DEBUG(fprintf(stderr, FB_FUNCTION " %p\n", this));
 
 		if (readOnly())
-			return false;
+			unableToRunSweepException(isc_sweep_read_only);
 
 		Jrd::Attachment* const attachment = tdbb->getAttachment();
 		if (attachment->att_flags & ATT_no_cleanup)
-			return false;
+			unableToRunSweepException(isc_sweep_attach_no_cleanup);
 
 		while (true)
 		{
@@ -316,18 +325,18 @@ namespace Jrd
 			if (old & DBB_sweep_in_progress)
 			{
 				clearSweepStarting();
-				return false;
+				unableToRunSweepException(isc_sweep_concurrent_instance);
 			}
 
 			if (dbb_flags.compareExchange(old, old | DBB_sweep_in_progress))
 				break;
 		}
 
-		SPTHR_DEBUG(fprintf(stderr, "allowSweepRun - set DBB_sweep_in_progress\n"));
+		SPTHR_DEBUG(fprintf(stderr, FB_FUNCTION " - set DBB_sweep_in_progress\n"));
 
 		if (!(dbb_flags & DBB_sweep_starting))
 		{
-			SPTHR_DEBUG(fprintf(stderr, "allowSweepRun - createSweepLock\n"));
+			SPTHR_DEBUG(fprintf(stderr, FB_FUNCTION " - createSweepLock\n"));
 
 			createSweepLock(tdbb);
 			if (!LCK_lock(tdbb, dbb_sweep_lock, LCK_EX, -1))
@@ -336,17 +345,15 @@ namespace Jrd
 				fb_utils::init_status(tdbb->tdbb_status_vector);
 
 				dbb_flags &= ~DBB_sweep_in_progress;
-				return false;
+				unableToRunSweepException(isc_sweep_concurrent_instance);
 			}
 		}
 		else
 		{
-			SPTHR_DEBUG(fprintf(stderr, "allowSweepRun - clearSweepStarting\n"));
+			SPTHR_DEBUG(fprintf(stderr, FB_FUNCTION " - clearSweepStarting\n"));
 			attachment->att_flags |= ATT_from_thread;
 			clearSweepStarting();
 		}
-
-		return true;
 	}
 
 	void Database::clearSweepFlags(thread_db* tdbb)
@@ -414,7 +421,7 @@ namespace Jrd
 						Lock(tdbb, 0, LCK_repl_state, this, replStateAst);
 				}
 
-				dbb_repl_state = MET_get_repl_state(tdbb, "");
+				dbb_repl_state = MET_get_repl_state(tdbb, {});
 
 				fb_assert(dbb_repl_lock->lck_logical == LCK_none);
 				LCK_lock(tdbb, dbb_repl_lock, LCK_SR, LCK_WAIT);
@@ -581,12 +588,39 @@ namespace Jrd
 	{
 		MutexLockGuard guard(g_mutex, FB_FUNCTION);
 
-		Database::GlobalObjectHolder::DbId* entry = g_hashTable->lookup(id);
+		// Get entry with incrementing ref counter, so if someone is currently destroying it, the object itself
+		// will remain alive.
+		RefPtr<Database::GlobalObjectHolder::DbId> entry(g_hashTable->lookup(id));
+		if (entry)
+		{
+			auto& shutdownMutex = entry->shutdownMutex;
+			// Check if someone else currently destroying GlobalObject.
+			if (shutdownMutex.tryEnter(FB_FUNCTION))
+			{
+				// No one is destroying GlobalObject, continue init routine.
+				shutdownMutex.leave();
+			}
+			else
+			{
+				// Someone is currently destroying GlobalObject, wait until he finish it to eliminate potential
+				// race conditions.
+				{
+					MutexUnlockGuard unlockGuard(g_mutex, FB_FUNCTION);
+
+					MutexLockGuard guard(shutdownMutex, FB_FUNCTION);
+				}
+				// Now we are the one who owned DbId object.
+				// It also was removed from hash table, so simply delete it and recreate it next.
+				fb_assert(entry->holder == nullptr);
+				entry = nullptr;
+			}
+		}
 		if (!entry)
 		{
 			const auto holder = FB_NEW Database::GlobalObjectHolder(id, filename, config);
-			entry = FB_NEW Database::GlobalObjectHolder::DbId(id, holder);
+			entry = makeRef(FB_NEW Database::GlobalObjectHolder::DbId(id, holder));
 			g_hashTable->add(entry);
+			entry->addRef();
 		}
 
 		entry->holder->addRef();
@@ -596,9 +630,18 @@ namespace Jrd
 	Database::GlobalObjectHolder::~GlobalObjectHolder()
 	{
 		// dtor is executed under g_mutex protection
-		Database::GlobalObjectHolder::DbId* entry = g_hashTable->lookup(m_id);
-		if (!g_hashTable->remove(m_id))
-			fb_assert(false);
+
+		// Stole the object from the hash table without incrementing ref counter, so we will be the one who will delete the object
+		// at the end of this function.
+		RefPtr<Database::GlobalObjectHolder::DbId> entry(REF_NO_INCR, g_hashTable->lookup(m_id));
+		fb_assert(entry);
+		fb_assert(entry->holder == this);
+		// We need to unlock the global mutex to safely shutdown some managers, so lock shutdown mutex to make sure that
+		// other threads will wait until we done our shutdown routine.
+		// This is done to eliminate potential race conditions involving global objects, such as shared memory.
+		//! Be careful with order of mutex locking: first - `g_mutex`, second - `shutdownMutex`, but after `MutexUnlockGuard`
+		//! this order will be reversed, so potentially a deadlock situation may occur here.
+		MutexLockGuard guard(entry->shutdownMutex, FB_FUNCTION);
 
 		{ // scope
 			// here we cleanup what should not be globally protected
@@ -611,7 +654,10 @@ namespace Jrd
 		m_eventMgr = nullptr;
 		m_replMgr = nullptr;
 
-		delete entry;
+		if (!g_hashTable->remove(m_id))
+			fb_assert(false);
+
+		entry->holder = nullptr;
 
 		fb_assert(m_tempCacheUsage == 0);
 	}

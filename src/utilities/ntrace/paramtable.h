@@ -32,6 +32,8 @@
 // DATABASE_PARAMS, SERVICE_PARAMS
 
 
+STR_PARAMETER(include_schema_filter, "")
+STR_PARAMETER(exclude_schema_filter, "")
 STR_PARAMETER(include_filter, "")
 STR_PARAMETER(exclude_filter, "")
 PATH_PARAMETER(log_filename, "")

@@ -72,6 +72,8 @@ namespace Why
 	void shutdownTimers();
 
 	Firebird::Mutex& pauseTimer();
+
+	bool timerThreadStopped();
 } // namespace Why
 
 #endif // YVALVE_MASTER_IMPLEMENTATION_H

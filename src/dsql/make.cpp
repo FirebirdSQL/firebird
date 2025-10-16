@@ -282,6 +282,10 @@ ValueExprNode* MAKE_constant(const char* str, dsql_constant_type numeric_flag, S
 				case CONSTANT_TIMESTAMP:
 					literal->litDesc.dsc_dtype = tz ? dtype_timestamp_tz : dtype_timestamp;
 					break;
+
+				default:
+					fb_assert(false);
+					return NULL;
 			}
 
 			literal->litDesc.dsc_sub_type = 0;
@@ -312,6 +316,10 @@ ValueExprNode* MAKE_constant(const char* str, dsql_constant_type numeric_flag, S
 					else
 						*(ISC_TIMESTAMP*) literal->litDesc.dsc_address = ts.utc_timestamp;
 					break;
+
+				default:
+					fb_assert(false);
+					return NULL;
 			}
 
 			break;
@@ -342,7 +350,7 @@ ValueExprNode* MAKE_constant(const char* str, dsql_constant_type numeric_flag, S
     @param character_set
 
  **/
-LiteralNode* MAKE_str_constant(const IntlString* constant, SSHORT character_set)
+LiteralNode* MAKE_str_constant(IntlString* constant, SSHORT character_set)
 {
 	thread_db* tdbb = JRD_get_thread_data();
 
@@ -425,6 +433,42 @@ FieldNode* MAKE_field(dsql_ctx* context, dsql_fld* field, ValueListNode* indices
 
 /**
 
+	MAKE_field
+
+	@brief	Make up a dsql_fld from descriptor.
+
+
+	@param field
+	@param desc
+
+ **/
+void MAKE_field(dsql_fld* field, const dsc* desc)
+{
+	DEV_BLKCHK(field, dsql_type_fld);
+
+	field->dtype = desc->dsc_dtype;
+	field->scale = desc->dsc_scale;
+	field->subType = desc->dsc_sub_type;
+	field->length = desc->dsc_length;
+
+	if (desc->dsc_dtype <= dtype_any_text)
+	{
+		field->collationId = DSC_GET_COLLATE(desc);
+		field->charSetId = DSC_GET_CHARSET(desc);
+	}
+	else if (desc->dsc_dtype == dtype_blob)
+	{
+		field->charSetId = desc->dsc_scale;
+		field->collationId = desc->dsc_flags >> 8;
+	}
+
+	if (desc->dsc_flags & DSC_nullable)
+		field->flags |= FLD_nullable;
+}
+
+
+/**
+
  	MAKE_field_name
 
     @brief	Make up a field name node.
@@ -495,9 +539,9 @@ dsql_par* MAKE_parameter(dsql_msg* message, bool sqlda_flag, bool null_flag,
 	message->msg_parameters.insert(0, parameter);
 	parameter->par_parameter = message->msg_parameter++;
 
-	parameter->par_rel_name = NULL;
-	parameter->par_owner_name = NULL;
-	parameter->par_rel_alias = NULL;
+	parameter->par_rel_name.clear();
+	parameter->par_owner_name = nullptr;
+	parameter->par_rel_alias = nullptr;
 
 	if (node)
 		MAKE_parameter_names(parameter, node);

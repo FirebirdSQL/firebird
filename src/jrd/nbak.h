@@ -82,7 +82,7 @@ public:
 	}
 };
 
-typedef Firebird::BePlusTree<AllocItem, ULONG, MemoryPool, AllocItem> AllocItemTree;
+typedef Firebird::BePlusTree<AllocItem, ULONG, AllocItem> AllocItemTree;
 
 // Class to synchronize access to backup state
 
@@ -362,12 +362,12 @@ public:
 	void setDifference(thread_db* tdbb, const char* filename);
 
 	// Return current backup state
-	USHORT getState() const
+	UCHAR getState() const
 	{
 		return backup_state;
 	}
 
-	void setState(const USHORT newState)
+	void setState(const UCHAR newState)
 	{
 		backup_state = newState;
 	}
@@ -499,7 +499,7 @@ private:
 	Database* database;
 	jrd_file* diff_file;
 	AllocItemTree* alloc_table; // Cached allocation table of pages in difference file
-	USHORT backup_state;
+	UCHAR backup_state;
 	ULONG last_allocated_page; // Last physical page allocated in the difference file
 	Firebird::Array<UCHAR> temp_buffers_space;
 	ULONG *alloc_buffer, *empty_buffer, *spare_buffer;

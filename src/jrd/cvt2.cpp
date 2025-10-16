@@ -220,12 +220,12 @@ static int cmp_numeric_string(const dsc* arg1, const dsc* arg2, Firebird::Decima
 
 	Decimal128 buffer;		// enough to fit any required data
 	SSHORT scale = 0;
-	UCHAR* text = arg2->dsc_address;
-	if (arg2->dsc_dtype == dtype_varying)
-		text += sizeof(USHORT);
+	UCHAR* text;
+	USHORT ttype;
+	USHORT textLen = CVT_get_string_ptr(arg2, &ttype, &text, nullptr, 0, 0);
 
 	dsc num2;
-	num2.dsc_dtype = CVT_get_numeric(text, TEXT_LEN(arg2), &scale, &buffer);
+	num2.dsc_dtype = CVT_get_numeric(text, textLen, &scale, &buffer);
 	num2.dsc_address = (UCHAR*)&buffer;
 	num2.dsc_scale = scale;
 	num2.dsc_length = type_lengths[num2.dsc_dtype];
@@ -251,7 +251,7 @@ int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt
 	thread_db* tdbb = NULL;
 
 	// AB: Maybe we need a other error-message, but at least throw
-	// a message when 1 or both input paramters are empty.
+	// a message when 1 or both input parameters are empty.
 	if (!arg1 || !arg2) {
 		BUGCHECK(189);	// msg 189 comparison not supported for specified data types.
 	}
@@ -490,6 +490,17 @@ int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt
 	switch (arg1->dsc_dtype)
 	{
 	case dtype_ex_timestamp_tz:
+		{
+			DSC desc;
+			MOVE_CLEAR(&desc, sizeof(desc));
+			desc.dsc_dtype = dtype_ex_timestamp_tz;
+			ISC_TIMESTAMP_TZ_EX datetime;
+			desc.dsc_length = sizeof(datetime);
+			desc.dsc_address = (UCHAR*) &datetime;
+			CVT_move(arg2, &desc, 0);
+			return CVT2_compare(arg1, &desc, 0);
+		}
+
 	case dtype_timestamp_tz:
 		{
 			DSC desc;
@@ -515,6 +526,17 @@ int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt
 		}
 
 	case dtype_ex_time_tz:
+		{
+			DSC desc;
+			MOVE_CLEAR(&desc, sizeof(desc));
+			desc.dsc_dtype = dtype_ex_time_tz;
+			ISC_TIME_TZ_EX atime;
+			desc.dsc_length = sizeof(atime);
+			desc.dsc_address = (UCHAR*) &atime;
+			CVT_move(arg2, &desc, 0);
+			return CVT2_compare(arg1, &desc, 0);
+		}
+
 	case dtype_sql_time_tz:
 		{
 			DSC desc;

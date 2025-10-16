@@ -64,8 +64,10 @@
 #include "../common/utils_proto.h"
 #include "../jrd/PageToBufferMap.h"
 
+#ifndef CDS_UNAVAILABLE
 // Use lock-free lists in hash table implementation
 #define HASH_USE_CDS_LIST
+#endif
 
 
 #ifdef HASH_USE_CDS_LIST
@@ -195,15 +197,15 @@ static void recentlyUsed(BufferDesc* bdb);
 static void requeueRecentlyUsed(BufferControl* bcb);
 
 
-const ULONG MIN_BUFFER_SEGMENT = 65536;
+constexpr ULONG MIN_BUFFER_SEGMENT = 65536;
 
 // Given pointer a field in the block, find the block
 
 #define BLOCK(fld_ptr, type, fld) (type*)((SCHAR*) fld_ptr - offsetof(type, fld))
 
-const int PRE_SEARCH_LIMIT	= 256;
-const int PRE_EXISTS		= -1;
-const int PRE_UNKNOWN		= -2;
+constexpr int PRE_SEARCH_LIMIT	= 256;
+constexpr int PRE_EXISTS		= -1;
+constexpr int PRE_UNKNOWN		= -2;
 
 namespace Jrd
 {
@@ -414,7 +416,7 @@ int CCH_down_grade_dbb(void* ast_object)
 
 		// If we are supposed to be exclusive, stay exclusive
 
-		if ((dbb->dbb_flags & DBB_exclusive) || (dbb->dbb_ast_flags & DBB_shutdown_single))
+		if ((dbb->dbb_flags & DBB_exclusive) || dbb->isShutdown(shut_mode_single))
 			return 0;
 
 		// Assert any page locks that have been requested, but not asserted
@@ -544,7 +546,7 @@ bool CCH_exclusive_attachment(thread_db* tdbb, USHORT level, SSHORT wait_flag, S
  *	return false.
  *
  **************************************/
-	const int CCH_EXCLUSIVE_RETRY_INTERVAL = 10;	// retry interval in millseconds
+	constexpr int CCH_EXCLUSIVE_RETRY_INTERVAL = 10;	// retry interval in milliseconds
 
 	SET_TDBB(tdbb);
 	Database* const dbb = tdbb->getDatabase();
@@ -602,9 +604,9 @@ bool CCH_exclusive_attachment(thread_db* tdbb, USHORT level, SSHORT wait_flag, S
 						found = true;
 						break;
 					}
+
 					// Forbid multiple attachments in single-user maintenance mode
-					if (other_attachment != attachment &&
-						(dbb->dbb_ast_flags & DBB_shutdown_single))
+					if (other_attachment != attachment && dbb->isShutdown(shut_mode_single))
 					{
 						found = true;
 						break;
@@ -622,6 +624,7 @@ bool CCH_exclusive_attachment(thread_db* tdbb, USHORT level, SSHORT wait_flag, S
 						attachment->att_flags &= ~ATT_exclusive_pending;
 						return false;
 					}
+
 					break;
 				}
 			}
@@ -804,6 +807,9 @@ pag* CCH_fetch(thread_db* tdbb, WIN* window, int lock_type, SCHAR page_type, int
 
 	switch (lockState)
 	{
+	case lsLockedHavePage:
+		// page available
+		break;
 	case lsLocked:
 		CCH_TRACE(("FE PAGE %d:%06d", window->win_page.getPageSpaceID(), window->win_page.getPageNum()));
 		CCH_fetch_page(tdbb, window, read_shadow);	// must read page from disk
@@ -814,6 +820,9 @@ pag* CCH_fetch(thread_db* tdbb, WIN* window, int lock_type, SCHAR page_type, int
 	case lsLatchTimeout:
 	case lsLockTimeout:
 		return NULL;			// latch or lock timeout
+	case lsError:
+		fb_assert(false);
+		break;
 	}
 
 	adjust_scan_count(window, lockState == lsLocked);
@@ -921,7 +930,7 @@ void CCH_fetch_page(thread_db* tdbb, WIN* window, const bool read_shadow)
 	pag* page = bdb->bdb_buffer;
 	bdb->bdb_incarnation = ++bcb->bcb_page_incarnation;
 
-	tdbb->bumpStats(RuntimeStatistics::PAGE_READS);
+	tdbb->bumpStats(PageStatType::READS);
 
 	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(bdb->bdb_page.getPageSpaceID());
 	fb_assert(pageSpace);
@@ -992,27 +1001,27 @@ void CCH_fetch_page(thread_db* tdbb, WIN* window, const bool read_shadow)
 		PageSpace* pageSpace;
 	};
 
-	BackupManager* bm = dbb->dbb_backup_manager;
+	const auto bm = dbb->dbb_backup_manager;
 	BackupManager::StateReadGuard stateGuard(tdbb);
-	const int bak_state = bm->getState();
-	fb_assert(bak_state != Ods::hdr_nbak_unknown);
+	const auto backupState = bm->getState();
+	fb_assert(backupState != Ods::hdr_nbak_unknown);
 
 	ULONG diff_page = 0;
-	if (!isTempPage && bak_state != Ods::hdr_nbak_normal)
+	if (!isTempPage && backupState != Ods::hdr_nbak_normal)
 	{
 		diff_page = bm->getPageIndex(tdbb, bdb->bdb_page.getPageNum());
 		NBAK_TRACE(("Reading page %d:%06d, state=%d, diff page=%d",
-			bdb->bdb_page.getPageSpaceID(), bdb->bdb_page.getPageNum(), bak_state, diff_page));
+			bdb->bdb_page.getPageSpaceID(), bdb->bdb_page.getPageNum(), (int) backupState, diff_page));
 	}
 
 	// In merge mode, if we are reading past beyond old end of file and page is in .delta file
 	// then we maintain actual page in difference file. Always read it from there.
-	if (isTempPage || bak_state == Ods::hdr_nbak_normal || !diff_page)
+	if (isTempPage || backupState == Ods::hdr_nbak_normal || !diff_page)
 	{
 		fb_assert(bdb->bdb_page == window->win_page);
 
 		NBAK_TRACE(("Reading page %d:%06d, state=%d, diff page=%d from DISK",
-			bdb->bdb_page.getPageSpaceID(), bdb->bdb_page.getPageNum(), bak_state, diff_page));
+			bdb->bdb_page.getPageSpaceID(), bdb->bdb_page.getPageNum(), (int) backupState, diff_page));
 
 		// Read page from disk as normal
 		Pio io(file, bdb, isTempPage, read_shadow, pageSpace);
@@ -1049,7 +1058,7 @@ void CCH_fetch_page(thread_db* tdbb, WIN* window, const bool read_shadow)
 			// Engine is not supposed to read a page which was never written unless
 			// this is a merge process.
 			NBAK_TRACE(("Re-reading page %d, state=%d, diff page=%d from DISK",
-				bdb->bdb_page, bak_state, diff_page));
+				bdb->bdb_page, (int) backupState, diff_page));
 
 			Pio io(file, bdb, false, read_shadow, pageSpace);
 			if (!dbb->dbb_crypto_manager->read(tdbb, status, page, &io))
@@ -1239,8 +1248,7 @@ void CCH_flush(thread_db* tdbb, USHORT flush_flag, TraNumber tra_number, ULONG p
 
 	const Jrd::Attachment* att = tdbb->getAttachment();
 	const bool dontFlush = (dbb->dbb_flags & DBB_creating) ||
-		((dbb->dbb_ast_flags & DBB_shutdown) &&
-			att && (att->att_flags & (ATT_creator | ATT_system)));
+		(dbb->isShutdown() && att && (att->att_flags & (ATT_creator | ATT_system)));
 
 	if (!(main_file->fil_flags & FIL_force_write) && (max_num || max_time) && !dontFlush)
 	{
@@ -1281,8 +1289,8 @@ void CCH_flush(thread_db* tdbb, USHORT flush_flag, TraNumber tra_number, ULONG p
 		if (bm && !bm->isShutDown())
 		{
 			BackupManager::StateReadGuard stateGuard(tdbb);
-			const int backup_state = bm->getState();
-			if (backup_state == Ods::hdr_nbak_stalled || backup_state == Ods::hdr_nbak_merge)
+			const auto backupState = bm->getState();
+			if (backupState == Ods::hdr_nbak_stalled || backupState == Ods::hdr_nbak_merge)
 				bm->flushDifference(tdbb);
 		}
 	}
@@ -1694,7 +1702,7 @@ void CCH_mark(thread_db* tdbb, WIN* window, bool mark_system, bool must_write)
 
 	SET_TDBB(tdbb);
 	Database* dbb = tdbb->getDatabase();
-	tdbb->bumpStats(RuntimeStatistics::PAGE_MARKS);
+	tdbb->bumpStats(PageStatType::MARKS);
 
 	BufferControl* bcb = dbb->dbb_bcb;
 
@@ -1977,21 +1985,20 @@ bool set_diff_page(thread_db* tdbb, BufferDesc* bdb)
 	// Determine location of the page in difference file and write destination
 	// so BufferDesc AST handlers and write_page routine can safely use this information
 
-	const int backup_state = bm->getState();
+	const auto backupState = bm->getState();
 
-	if (backup_state == Ods::hdr_nbak_normal)
+	if (backupState == Ods::hdr_nbak_normal)
 		return true;
 
-	switch (backup_state)
+	switch (backupState)
 	{
 	case Ods::hdr_nbak_stalled:
 		bdb->bdb_difference_page = bm->getPageIndex(tdbb, bdb->bdb_page.getPageNum());
 		if (!bdb->bdb_difference_page)
 		{
 			bdb->bdb_difference_page = bm->allocateDifferencePage(tdbb, bdb->bdb_page.getPageNum());
-			if (!bdb->bdb_difference_page) {
+			if (!bdb->bdb_difference_page)
 				return false;
-			}
 			NBAK_TRACE(("Allocate difference page %d for database page %d",
 				bdb->bdb_difference_page, bdb->bdb_page));
 		}
@@ -2487,15 +2494,6 @@ bool CCH_write_all_shadows(thread_db* tdbb, Shadow* shadow, BufferDesc* bdb, Ods
 
 			PAG_add_header_entry(tdbb, header, HDR_root_file_name,
 								 (USHORT) strlen((const char*) q), q);
-
-			jrd_file* next_file = shadow_file->fil_next;
-			if (next_file)
-			{
-				q = (UCHAR *) next_file->fil_string;
-				const SLONG last = next_file->fil_min_page - 1;
-				PAG_add_header_entry(tdbb, header, HDR_file, (USHORT) strlen((const char*) q), q);
-				PAG_add_header_entry(tdbb, header, HDR_last_page, sizeof(last), (const UCHAR*) &last);
-			}
 
 			header->hdr_flags |= hdr_active_shadow;
 			header->hdr_header.pag_pageno = bdb->bdb_page.getPageNum();
@@ -3092,7 +3090,10 @@ void BufferControl::cache_writer(BufferControl* bcb)
 				{
 					BufferDesc* const bdb = get_dirty_buffer(tdbb);
 					if (bdb)
+					{
 						write_buffer(tdbb, bdb, bdb->bdb_page, true, &status_vector, true);
+						attachment->mergeStats();
+					}
 				}
 
 				// If there's more work to do voluntarily ask to be rescheduled.
@@ -3647,7 +3648,7 @@ static BufferDesc* get_dirty_buffer(thread_db* tdbb)
 
 		if (bdb->bdb_flags & BDB_db_dirty)
 		{
-			//tdbb->bumpStats(RuntimeStatistics::PAGE_FETCHES); shouldn't it be here?
+			//tdbb->bumpStats(PageStatType::FETCHES); shouldn't it be here?
 			return bdb;
 		}
 
@@ -3821,7 +3822,7 @@ static BufferDesc* get_buffer(thread_db* tdbb, const PageNumber page, SyncType s
 				if (bdb->bdb_page == page)
 				{
 					recentlyUsed(bdb);
-					tdbb->bumpStats(RuntimeStatistics::PAGE_FETCHES);
+					tdbb->bumpStats(PageStatType::FETCHES);
 					return bdb;
 				}
 
@@ -3864,7 +3865,7 @@ static BufferDesc* get_buffer(thread_db* tdbb, const PageNumber page, SyncType s
 				if (bdb->bdb_page == page)
 				{
 					recentlyUsed(bdb);
-					tdbb->bumpStats(RuntimeStatistics::PAGE_FETCHES);
+					tdbb->bumpStats(PageStatType::FETCHES);
 					cacheBuffer(att, bdb);
 					return bdb;
 				}
@@ -3904,7 +3905,7 @@ static BufferDesc* get_buffer(thread_db* tdbb, const PageNumber page, SyncType s
 				{
 					bdb->downgrade(syncType);
 					recentlyUsed(bdb);
-					tdbb->bumpStats(RuntimeStatistics::PAGE_FETCHES);
+					tdbb->bumpStats(PageStatType::FETCHES);
 					cacheBuffer(att, bdb);
 					return bdb;
 				}
@@ -3948,7 +3949,7 @@ static BufferDesc* get_buffer(thread_db* tdbb, const PageNumber page, SyncType s
 						else
 							recentlyUsed(bdb);
 					}
-					tdbb->bumpStats(RuntimeStatistics::PAGE_FETCHES);
+					tdbb->bumpStats(PageStatType::FETCHES);
 					cacheBuffer(att, bdb);
 					return bdb;
 				}
@@ -3966,7 +3967,7 @@ static BufferDesc* get_buffer(thread_db* tdbb, const PageNumber page, SyncType s
 					continue;
 				}
 				recentlyUsed(bdb2);
-				tdbb->bumpStats(RuntimeStatistics::PAGE_FETCHES);
+				tdbb->bumpStats(PageStatType::FETCHES);
 				cacheBuffer(att, bdb2);
 			}
 			else
@@ -4256,7 +4257,7 @@ static ULONG memory_init(thread_db* tdbb, BufferControl* bcb, ULONG number)
 	{
 		if (!memory)
 		{
-			// Allocate memory block big enough to accomodate BufferDesc's, Lock's and page buffers.
+			// Allocate memory block big enough to accommodate BufferDesc's, Lock's and page buffers.
 
 			ULONG to_alloc = number;
 
@@ -4897,19 +4898,19 @@ static bool write_page(thread_db* tdbb, BufferDesc* bdb, FbStatusVector* const s
 	// the next_transaction > oldest_active transaction
 	if (bdb->bdb_page == HEADER_PAGE_NUMBER)
 	{
-		const header_page* const header = (header_page*) page;
+		const auto header = (const header_page*) page;
 
-		const TraNumber next_transaction = Ods::getNT(header);
-		const TraNumber oldest_active = Ods::getOAT(header);
-		const TraNumber oldest_transaction = Ods::getOIT(header);
+		const TraNumber next_transaction = header->hdr_next_transaction;
+		const TraNumber oldest_transaction = header->hdr_oldest_transaction;
+		const TraNumber oldest_active = header->hdr_oldest_active;
 
 		if (next_transaction)
 		{
-			if (oldest_active > next_transaction)
-				BUGCHECK(266);	// next transaction older than oldest active
-
 			if (oldest_transaction > next_transaction)
 				BUGCHECK(267);	// next transaction older than oldest transaction
+
+			if (oldest_active > next_transaction)
+				BUGCHECK(266);	// next transaction older than oldest active
 		}
 	}
 
@@ -4921,16 +4922,16 @@ static bool write_page(thread_db* tdbb, BufferDesc* bdb, FbStatusVector* const s
 	// I won't wipe out the if() itself to allow my changes be verified easily by others
 	if (true)
 	{
-		tdbb->bumpStats(RuntimeStatistics::PAGE_WRITES);
+		tdbb->bumpStats(PageStatType::WRITES);
 
 		// write out page to main database file, and to any
 		// shadows, making a special case of the header page
 		BackupManager* bm = dbb->dbb_backup_manager;
-		const int backup_state = bm->getState();
+		const auto backupState = bm->getState();
 
 		/// ASF: Always true: if (bdb->bdb_page.getPageNum() >= 0)
 		{
-			fb_assert(backup_state != Ods::hdr_nbak_unknown);
+			fb_assert(backupState != Ods::hdr_nbak_unknown);
 			page->pag_pageno = bdb->bdb_page.getPageNum();
 
 #ifdef NBAK_DEBUG
@@ -4944,7 +4945,7 @@ static bool write_page(thread_db* tdbb, BufferDesc* bdb, FbStatusVector* const s
 
 			strcpy(ptr, ", backup_state=");
 			ptr += strlen(ptr);
-			gds__ulstr(ptr, backup_state, 0, 0);
+			gds__ulstr(ptr, backupState, 0, 0);
 			ptr += strlen(ptr);
 
 			strcpy(ptr, ", diff=");
@@ -4965,8 +4966,8 @@ static bool write_page(thread_db* tdbb, BufferDesc* bdb, FbStatusVector* const s
 			const bool isTempPage = pageSpace->isTemporary();
 
 			if (!isTempPage &&
-				(backup_state == Ods::hdr_nbak_stalled ||
-					(backup_state == Ods::hdr_nbak_merge && bdb->bdb_difference_page)))
+				(backupState == Ods::hdr_nbak_stalled ||
+					(backupState == Ods::hdr_nbak_merge && bdb->bdb_difference_page)))
 			{
 				if (!dbb->dbb_backup_manager->writeDifference(tdbb, status,
 						bdb->bdb_difference_page, bdb->bdb_buffer))
@@ -4977,11 +4978,14 @@ static bool write_page(thread_db* tdbb, BufferDesc* bdb, FbStatusVector* const s
 				}
 			}
 
-			if (!isTempPage && backup_state == Ods::hdr_nbak_stalled)
+			if (!isTempPage && backupState == Ods::hdr_nbak_stalled)
 			{
 				// We finished. Adjust transaction accounting and get ready for exit
 				if (bdb->bdb_page == HEADER_PAGE_NUMBER)
-					dbb->dbb_last_header_write = Ods::getNT((header_page*) page);
+				{
+					const auto header = (const header_page*) page;
+					dbb->dbb_last_header_write = header->hdr_next_transaction;
+				}
 			}
 			else
 			{
@@ -5011,7 +5015,10 @@ static bool write_page(thread_db* tdbb, BufferDesc* bdb, FbStatusVector* const s
 						}
 
 						if (bdb->bdb_page == HEADER_PAGE_NUMBER)
-							dbb->dbb_last_header_write = Ods::getNT((header_page*) page);
+						{
+							const auto header = (const header_page*) page;
+							dbb->dbb_last_header_write = header->hdr_next_transaction;
+						}
 
 						if (dbb->dbb_shadow && !isTempPage)
 							return CCH_write_all_shadows(tdbb, 0, bdb, page, status, inAst);
@@ -5523,7 +5530,8 @@ public:
 
 #ifdef DEBUG_CDS_MEMORY
 		char str[256];
-		sprintf(str, "CCH list's common pool stats:\n"
+		snprintf(str, sizeof(str),
+			"CCH list's common pool stats:\n"
 			"  usage         = %llu\n"
 			"  mapping       = %llu\n"
 			"  max usage     = %llu\n"

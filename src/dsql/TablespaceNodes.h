@@ -77,10 +77,7 @@ class DropTablespaceNode : public DdlNode
 {
 public:
 	DropTablespaceNode(MemoryPool& pool, const MetaName& aName)
-		: DdlNode(pool),
-		  name(pool, aName),
-		  silent(false),
-		  dropDependencies(false)
+		: DdlNode(pool), name(pool, aName)
 	{
 	}
 
@@ -97,12 +94,22 @@ protected:
 
 public:
 	MetaName name;
-	bool silent;
-	bool dropDependencies;
+	bool silent = false;
+	bool dropDependencies = false;
 };
 
+template <>
+inline RecreateNode<CreateAlterTablespaceNode, DropTablespaceNode, isc_dsql_recreate_ts_failed>::
+	RecreateNode(MemoryPool& p, CreateAlterTablespaceNode* aCreateNode)
+		: DdlNode(p),
+		  createNode(aCreateNode),
+		  dropNode(p, createNode->name)
+	{
+		dropNode.silent = true;
+	}
+
 typedef RecreateNode<CreateAlterTablespaceNode, DropTablespaceNode, isc_dsql_recreate_ts_failed>
-RecreateTablespaceNode;
+	RecreateTablespaceNode;
 
 } // namespace
 

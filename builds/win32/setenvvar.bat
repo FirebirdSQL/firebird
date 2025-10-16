@@ -9,9 +9,9 @@
 
 @echo off
 
-set FB_CLEAN=
+@set FB_CLEAN=
 
-for %%v in ( %* )  do (
+@for %%v in ( %* )  do (
   ( if /I "%%v"=="DEBUG" ( (set FB_DBG=TRUE) && (set FB_CONFIG=debug) ) )
   ( if /I "%%v"=="CLEAN" (set FB_CLEAN=:rebuild) )
   ( if /I "%%v"=="RELEASE" ( (set FB_DBG=) && (set FB_CONFIG=release) ) )
@@ -122,10 +122,10 @@ rem NOTE 2 This code is likely to break again in the future !!!!
   @setlocal EnableDelayedExpansion
 
   if not exist "!VCToolsRedistDir!!VSCMD_ARG_TGT_ARCH!\Microsoft.VC!MSVC_RUNTIME_MAJOR_VERSION!!MSVC_RUNTIME_MINOR_VERSION!.CRT" (
-    @endlocal  
+    @endlocal
     set MSVC_RUNTIME_MINOR_VERSION=3
   ) else (
-    @endlocal  
+    @endlocal
   )
   set MSVC_RUNTIME_LIBRARY_VERSION=%MSVC_RUNTIME_MAJOR_VERSION%%MSVC_RUNTIME_MINOR_VERSION%
 
@@ -148,6 +148,7 @@ rem NOTE 2 This code is likely to break again in the future !!!!
 @set FB_TARGET_PLATFORM=Win32
 @if "%FB_PROCESSOR_ARCHITECTURE%"=="x86" (set FB_TARGET_PLATFORM=Win32)
 @if "%FB_PROCESSOR_ARCHITECTURE%"=="AMD64" (set FB_TARGET_PLATFORM=x64)
+@if "%FB_PROCESSOR_ARCHITECTURE%"=="ARM64" (set FB_TARGET_PLATFORM=arm64)
 
 
 @set FB_OUTPUT_DIR=%FB_ROOT_PATH%\output_%FB_TARGET_PLATFORM%_%FB_CONFIG%

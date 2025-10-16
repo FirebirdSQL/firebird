@@ -53,7 +53,7 @@ struct BurpXdr : public xdr_t
 	virtual bool_t x_getbytes(SCHAR *, unsigned);		// get some bytes from "
 	virtual bool_t x_putbytes(const SCHAR*, unsigned);	// put some bytes to "
 
-	BurpXdr()
+	BurpXdr() noexcept
 		: x_public(nullptr)
 	{ }
 
@@ -63,7 +63,7 @@ static bool_t expand_buffer(BurpXdr*);
 static int xdr_init(BurpXdr*, lstring*, enum xdr_op);
 static bool_t xdr_slice(BurpXdr*, lstring*, /*USHORT,*/ const UCHAR*);
 
-const unsigned increment = 1024;
+constexpr unsigned increment = 1024;
 
 
 ULONG CAN_encode_decode(burp_rel* relation, lstring* buffer, UCHAR* data, bool direction, bool useMissingOffset)
@@ -471,7 +471,7 @@ static bool_t xdr_slice(BurpXdr* xdrs, lstring* slice, /*USHORT sdl_length,*/ co
 	const ULONG n = slice->lstr_length / desc->dsc_length;
 	UCHAR* p = slice->lstr_address;
 
-	for (UCHAR* const end = p + n * desc->dsc_length; p < end; p += desc->dsc_length)
+	for (const UCHAR* const end = p + n * desc->dsc_length; p < end; p += desc->dsc_length)
 	{
 		if (!xdr_datum(xdrs, desc, p)) {
 			return FALSE;

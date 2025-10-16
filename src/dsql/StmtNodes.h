@@ -46,7 +46,7 @@ class SelectNode;
 class GeneratorItem;
 
 
-class ExceptionItem : public Firebird::PermanentStorage, public Printable
+class ExceptionItem final : public Firebird::PermanentStorage, public Printable
 {
 public:
 	enum Type : UCHAR
@@ -84,7 +84,7 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	Firebird::string internalPrint(NodePrinter& printer) const override
 	{
 		NODE_PRINT(printer, type);
 		NODE_PRINT(printer, code);
@@ -97,11 +97,8 @@ public:
 public:
 	Type type;
 	SLONG code;
-	// ASF: There are some inconsistencies in the type of 'name'. Metanames have maximum of 31 chars,
-	// while there are system exceptions with 32 chars. The parser always expects metanames, but
-	// I'm following the legacy code and making this a string.
-	Firebird::string name;
-	MetaName secName;
+	QualifiedName name;
+	QualifiedName secName;
 };
 
 typedef Firebird::ObjectsArray<ExceptionItem> ExceptionArray;
@@ -139,13 +136,13 @@ public:
 	static void validateTarget(CompilerScratch* csb, const ValueExprNode* target);
 	static void dsqlValidateTarget(const ValueExprNode* target);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual AssignmentNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual AssignmentNode* copy(thread_db* tdbb, NodeCopier& copier) const;
-	virtual AssignmentNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual AssignmentNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	AssignmentNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	AssignmentNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	AssignmentNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	AssignmentNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 public:
 	NestConst<ValueExprNode> asgnFrom;
@@ -168,12 +165,12 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual StmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual BlockNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual BlockNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	StmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	BlockNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	BlockNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 private:
 	static bool testAndFixupError(thread_db* tdbb, Request* request, const ExceptionArray& conditions);
@@ -197,18 +194,18 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual bool isProfileAware() const
+	bool isProfileAware() const override
 	{
 		return false;
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual CompoundStmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual CompoundStmtNode* copy(thread_db* tdbb, NodeCopier& copier) const;
-	virtual CompoundStmtNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual CompoundStmtNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	CompoundStmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	CompoundStmtNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	CompoundStmtNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	CompoundStmtNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 public:
 	Firebird::Array<NestConst<StmtNode> > statements;
@@ -231,21 +228,21 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual ContinueLeaveNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	ContinueLeaveNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
-	virtual ContinueLeaveNode* pass1(thread_db* /*tdbb*/, CompilerScratch* /*csb*/)
+	ContinueLeaveNode* pass1(thread_db* /*tdbb*/, CompilerScratch* /*csb*/) override
 	{
 		return this;
 	}
 
-	virtual ContinueLeaveNode* pass2(thread_db* /*tdbb*/, CompilerScratch* /*csb*/)
+	ContinueLeaveNode* pass2(thread_db* /*tdbb*/, CompilerScratch* /*csb*/) override
 	{
 		return this;
 	}
 
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 public:
 	UCHAR blrOp;
@@ -273,12 +270,12 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual CursorStmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual CursorStmtNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual CursorStmtNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	CursorStmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	CursorStmtNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	CursorStmtNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 public:
 	MetaName dsqlName;
@@ -316,12 +313,12 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual DeclareCursorNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual DeclareCursorNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual DeclareCursorNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	DeclareCursorNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	DeclareCursorNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	DeclareCursorNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 public:
 	MetaName dsqlName;
@@ -387,26 +384,26 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual bool isProfileAware() const
+	bool isProfileAware() const override
 	{
 		return false;
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual DeclareSubFuncNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	DeclareSubFuncNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
-	virtual DeclareSubFuncNode* pass1(thread_db* tdbb, CompilerScratch* csb)
+	DeclareSubFuncNode* pass1(thread_db* tdbb, CompilerScratch* csb) override
 	{
 		return this;
 	}
 
-	virtual DeclareSubFuncNode* pass2(thread_db* tdbb, CompilerScratch* csb)
+	DeclareSubFuncNode* pass2(thread_db* tdbb, CompilerScratch* csb) override
 	{
 		return this;
 	}
 
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 public:
 	bool isForwardDecl() const;
@@ -445,26 +442,26 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual bool isProfileAware() const
+	bool isProfileAware() const override
 	{
 		return false;
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual DeclareSubProcNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	DeclareSubProcNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
-	virtual DeclareSubProcNode* pass1(thread_db* tdbb, CompilerScratch* csb)
+	DeclareSubProcNode* pass1(thread_db* tdbb, CompilerScratch* csb) override
 	{
 		return this;
 	}
 
-	virtual DeclareSubProcNode* pass2(thread_db* tdbb, CompilerScratch* csb)
+	DeclareSubProcNode* pass2(thread_db* tdbb, CompilerScratch* csb) override
 	{
 		return this;
 	}
 
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 public:
 	bool isForwardDecl() const;
@@ -500,13 +497,13 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual DeclareVariableNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual DeclareVariableNode* copy(thread_db* tdbb, NodeCopier& copier) const;
-	virtual DeclareVariableNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual DeclareVariableNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	DeclareVariableNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	DeclareVariableNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	DeclareVariableNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	DeclareVariableNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 public:
 	NestConst<ParameterClause> dsqlDef;
@@ -528,12 +525,12 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual StmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual EraseNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual EraseNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	StmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	EraseNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	EraseNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 private:
 	static void pass1Erase(thread_db* tdbb, CompilerScratch* csb, EraseNode* node);
@@ -572,12 +569,12 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual ErrorHandlerNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual ErrorHandlerNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual ErrorHandlerNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	ErrorHandlerNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	ErrorHandlerNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	ErrorHandlerNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 public:
 	NestConst<StmtNode> action;
@@ -589,7 +586,7 @@ class ExecProcedureNode final : public TypedNode<StmtNode, StmtNode::TYPE_EXEC_P
 {
 public:
 	explicit ExecProcedureNode(MemoryPool& pool,
-				const QualifiedName& aDsqlName = QualifiedName(),
+				const QualifiedName& aDsqlName = {},
 				ValueListNode* aInputs = nullptr, ValueListNode* aOutputs = nullptr,
 				Firebird::ObjectsArray<MetaName>* aDsqlInputArgNames = nullptr)
 		: TypedNode<StmtNode, StmtNode::TYPE_EXEC_PROCEDURE>(pool),
@@ -604,12 +601,12 @@ public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual ExecProcedureNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual ExecProcedureNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual ExecProcedureNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	ExecProcedureNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	ExecProcedureNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	ExecProcedureNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 private:
 	ValueListNode* explodeOutputs(DsqlCompilerScratch* dsqlScratch, const dsql_prc* procedure);
@@ -656,12 +653,12 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual StmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual ExecStatementNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual ExecStatementNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	StmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	ExecStatementNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	ExecStatementNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 private:
 	static void genOptionalExpr(DsqlCompilerScratch* dsqlScratch, const UCHAR code, ValueExprNode* node);
@@ -701,12 +698,12 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual IfNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual IfNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual IfNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	IfNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	IfNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	IfNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 public:
 	NestConst<BoolExprNode> condition;
@@ -733,12 +730,12 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual InAutonomousTransactionNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual InAutonomousTransactionNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual InAutonomousTransactionNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	InAutonomousTransactionNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	InAutonomousTransactionNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	InAutonomousTransactionNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 public:
 	NestConst<StmtNode> action;
@@ -759,13 +756,13 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual InitVariableNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual InitVariableNode* copy(thread_db* tdbb, NodeCopier& copier) const;
-	virtual InitVariableNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual InitVariableNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	InitVariableNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	InitVariableNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	InitVariableNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	InitVariableNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 public:
 	USHORT varId;
@@ -784,9 +781,9 @@ public:
 	{
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual ExecBlockNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	ExecBlockNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
 private:
 	static void revertParametersOrder(Firebird::Array<dsql_par*>& parameters);
@@ -802,7 +799,7 @@ public:
 class ExceptionNode final : public TypedNode<StmtNode, StmtNode::TYPE_EXCEPTION>
 {
 public:
-	ExceptionNode(MemoryPool& pool, const MetaName& name,
+	ExceptionNode(MemoryPool& pool, const QualifiedName& name,
 				ValueExprNode* aMessageExpr = NULL, ValueListNode* aParameters = NULL)
 		: TypedNode<StmtNode, StmtNode::TYPE_EXCEPTION>(pool),
 		  messageExpr(aMessageExpr),
@@ -810,7 +807,7 @@ public:
 	{
 		exception = FB_NEW_POOL(pool) ExceptionItem(pool);
 		exception->type = ExceptionItem::XCP_CODE;
-		exception->name = name.c_str();
+		exception->name = name;
 	}
 
 	explicit ExceptionNode(MemoryPool& pool)
@@ -824,12 +821,12 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual StmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual ExceptionNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual ExceptionNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	StmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	ExceptionNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	ExceptionNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 private:
 	void setError(thread_db* tdbb) const;
@@ -850,8 +847,8 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 };
 
 
@@ -879,12 +876,12 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual ForNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual StmtNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual StmtNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	ForNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	StmtNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	StmtNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 	bool isWriteLockMode(Request* request) const;
 	void setWriteLockMode(Request* request) const;
@@ -921,6 +918,51 @@ public:
 };
 
 
+class ForRangeNode final : public TypedNode<StmtNode, StmtNode::TYPE_FOR_RANGE>
+{
+public:
+	enum class Direction : UCHAR
+	{
+		TO = blr_for_range_direction_to,
+		DOWNTO = blr_for_range_direction_downto
+	};
+
+	struct Impure
+	{
+		impure_value finalValue;
+		impure_value byValue;
+	};
+
+public:
+	explicit ForRangeNode(MemoryPool& pool)
+		: TypedNode<StmtNode, StmtNode::TYPE_FOR_RANGE>(pool)
+	{
+	}
+
+public:
+	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
+
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	StmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	ForRangeNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	ForRangeNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
+
+public:
+	NestConst<ValueExprNode> variable;
+	NestConst<ValueExprNode> initialExpr;
+	NestConst<ValueExprNode> finalExpr;
+	NestConst<ValueExprNode> byExpr;
+	NestConst<StmtNode> statement;
+	MetaName* dsqlLabelName = nullptr;
+	USHORT dsqlLabelNumber = 0;
+	Direction direction = Direction::TO;
+	SCHAR incDecScale = 0;
+	USHORT incDecFlags = 0;
+};
+
+
 class HandlerNode final : public TypedNode<StmtNode, StmtNode::TYPE_HANDLER>
 {
 public:
@@ -933,12 +975,12 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual HandlerNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual HandlerNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual HandlerNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	HandlerNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	HandlerNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	HandlerNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 public:
 	NestConst<StmtNode> statement;
@@ -958,12 +1000,12 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual LabelNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual LabelNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual LabelNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	LabelNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	LabelNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	LabelNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 public:
 	NestConst<StmtNode> statement;
@@ -983,9 +1025,9 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual LineColumnNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	LineColumnNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
 private:
 	NestConst<StmtNode> statement;
@@ -1029,12 +1071,12 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual LoopNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual LoopNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual LoopNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	LoopNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	LoopNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	LoopNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 public:
 	MetaName* dsqlLabelName;
@@ -1091,9 +1133,9 @@ public:
 	{
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual StmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	StmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
 public:
 	NestConst<RelationSourceNode> relation;
@@ -1114,11 +1156,24 @@ public:
 
 class MessageNode : public TypedNode<StmtNode, StmtNode::TYPE_MESSAGE>
 {
+	struct MessageBuffer
+	{
+		const Format* format; // Message format derived from user MessageMetadata. Overrides default format.
+		UCHAR* buffer = nullptr;
+	};
+
 public:
 	explicit MessageNode(MemoryPool& pool)
-		: TypedNode<StmtNode, StmtNode::TYPE_MESSAGE>(pool),
-		  itemsUsedInSubroutines(pool)
+		: TypedNode<StmtNode, StmtNode::TYPE_MESSAGE>(pool)
 	{
+	}
+	// This constructor is temporary workaround for copying of existing format.
+	// For details look at comment in CMP_procedure_arguments()
+	explicit MessageNode(MemoryPool& pool, const Format& oldFormat)
+		: TypedNode<StmtNode, StmtNode::TYPE_MESSAGE>(pool)
+	{
+		format = Format::newFormat(pool, oldFormat.fmt_count);
+		*format = oldFormat;
 	}
 
 public:
@@ -1129,19 +1184,25 @@ public:
 	virtual USHORT setupDesc(thread_db* tdbb, CompilerScratch* csb, USHORT index,
 		dsc* desc, ItemInfo* itemInfo);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual MessageNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual MessageNode* copy(thread_db* tdbb, NodeCopier& copier) const;
-	virtual MessageNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual MessageNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	MessageNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	MessageNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	MessageNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	MessageNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
+
+	UCHAR* getBuffer(Request* request) const;
+	const Format* getFormat(const Request* request) const;
+	void setFormat(Request* request, Format* newFormat);
 
 public:
-	Firebird::SortedArray<USHORT> itemsUsedInSubroutines;
-	NestConst<Format> format;
 	ULONG impureFlags = 0;
 	USHORT messageNumber = 0;
+
+private:
+	using StmtNode::impureOffset; // Made private to incapsulate it's interpretation logic
+	NestConst<Format> format;
 };
 
 
@@ -1158,13 +1219,13 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
 	StmtNode* internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool updateOrInsert);
-	virtual StmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual ModifyNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual ModifyNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	StmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	ModifyNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	ModifyNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 private:
 	static void pass1Modify(thread_db* tdbb, CompilerScratch* csb, ModifyNode* node);
@@ -1239,12 +1300,12 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual PostEventNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual PostEventNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual PostEventNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	PostEventNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	PostEventNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	PostEventNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 public:
 	NestConst<ValueExprNode> event;
@@ -1266,12 +1327,12 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual ReceiveNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual ReceiveNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual ReceiveNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	ReceiveNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	ReceiveNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	ReceiveNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 public:
 	NestConst<StmtNode> statement;
@@ -1294,13 +1355,13 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
 	StmtNode* internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool updateOrInsert, bool& needSavePoint);
-	virtual StmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual StoreNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual StoreNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	StmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	StoreNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	StoreNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 private:
 	static bool pass1Store(thread_db* tdbb, CompilerScratch* csb, StoreNode* node);
@@ -1386,7 +1447,7 @@ public:
 class SetGeneratorNode final : public TypedNode<StmtNode, StmtNode::TYPE_SET_GENERATOR>
 {
 public:
-	SetGeneratorNode(MemoryPool& pool, const MetaName& name, ValueExprNode* aValue = NULL)
+	SetGeneratorNode(MemoryPool& pool, const QualifiedName& name, ValueExprNode* aValue = NULL)
 		: TypedNode<StmtNode, StmtNode::TYPE_SET_GENERATOR>(pool),
 		  generator(pool, name), value(aValue)
 	{
@@ -1395,17 +1456,17 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
 
 	// DSQL support is implemented in CreateAlterSequenceNode.
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch)
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override
 	{
 		fb_assert(false);
 	}
 
-	virtual SetGeneratorNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual SetGeneratorNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	SetGeneratorNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	SetGeneratorNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 public:
 	GeneratorItem generator;
@@ -1424,16 +1485,16 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual StallNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual StallNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual StallNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	StallNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	StallNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	StallNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 };
 
 
-class SuspendNode : public TypedNode<StmtNode, StmtNode::TYPE_SUSPEND>
+class SuspendNode final : public TypedNode<StmtNode, StmtNode::TYPE_SUSPEND>
 {
 public:
 	explicit SuspendNode(MemoryPool& pool)
@@ -1446,12 +1507,12 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual SuspendNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual SuspendNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual SuspendNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	SuspendNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	SuspendNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	SuspendNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 public:
 	NestConst<MessageNode> message;
@@ -1468,9 +1529,9 @@ public:
 	{
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual ReturnNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	ReturnNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
 public:
 	NestConst<ValueExprNode> value;
@@ -1484,14 +1545,14 @@ public:
 
 	static StmtNode* make(MemoryPool& pool, DsqlCompilerScratch* dsqlScratch, StmtNode* node, bool force = false);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual SavepointEncloseNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	SavepointEncloseNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
-	virtual SavepointEncloseNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual SavepointEncloseNode* pass2(thread_db* tdbb, CompilerScratch* csb);
+	SavepointEncloseNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	SavepointEncloseNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
 
-	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 private:
 	explicit SavepointEncloseNode(MemoryPool& pool, StmtNode* stmt)
@@ -1516,7 +1577,7 @@ public:
 	}
 
 public:
-	virtual SessionManagementWrapperNode* dsqlPass(DsqlCompilerScratch* dsqlScratch)
+	SessionManagementWrapperNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
 	{
 		Node::dsqlPass(dsqlScratch);
 
@@ -1530,7 +1591,7 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	Firebird::string internalPrint(NodePrinter& printer) const override
 	{
 		DsqlOnlyStmtNode::internalPrint(printer);
 
@@ -1540,7 +1601,7 @@ public:
 		return "SessionManagementWrapperNode";
 	}
 
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch)
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override
 	{
 		dsqlScratch->appendUChar(blr_exec_sql);
 		dsqlScratch->appendUChar(blr_literal);
@@ -1556,12 +1617,12 @@ public:
 };
 
 
-class SetTransactionNode : public TransactionNode
+class SetTransactionNode final : public TransactionNode
 {
 public:
 	struct RestrictionOption : Firebird::PermanentStorage
 	{
-		RestrictionOption(MemoryPool& p, Firebird::ObjectsArray<MetaName>* aTables,
+		RestrictionOption(MemoryPool& p, Firebird::ObjectsArray<QualifiedName>* aTables,
 					unsigned aLockMode)
 			: PermanentStorage(p),
 			  tables(aTables),
@@ -1569,7 +1630,7 @@ public:
 		{
 		}
 
-		Firebird::ObjectsArray<MetaName>* tables;
+		Firebird::ObjectsArray<QualifiedName>* tables;
 		unsigned lockMode;
 	};
 
@@ -1596,7 +1657,7 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	Firebird::string internalPrint(NodePrinter& printer) const override
 	{
 		TransactionNode::internalPrint(printer);
 
@@ -1615,8 +1676,8 @@ public:
 		return "SetTransactionNode";
 	}
 
-	virtual SetTransactionNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** transaction) const;
+	SetTransactionNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** transaction) const override;
 
 private:
 	void genTableLock(DsqlCompilerScratch* dsqlScratch, const RestrictionOption& tblLock,
@@ -1638,7 +1699,7 @@ public:
 };
 
 
-class CommitRollbackNode : public TransactionNode
+class CommitRollbackNode final : public TransactionNode
 {
 public:
 	enum Command : UCHAR
@@ -1656,9 +1717,9 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual CommitRollbackNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** transaction) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	CommitRollbackNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** transaction) const override;
 
 private:
 	const Command command;
@@ -1666,7 +1727,7 @@ private:
 };
 
 
-class UserSavepointNode : public TransactionNode
+class UserSavepointNode final : public TransactionNode
 {
 public:
 	enum Command : UCHAR
@@ -1686,9 +1747,9 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual UserSavepointNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** transaction) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	UserSavepointNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** transaction) const override;
 
 public:
 	const Command command;
@@ -1696,7 +1757,7 @@ public:
 };
 
 
-class SessionResetNode : public SessionManagementNode
+class SessionResetNode final : public SessionManagementNode
 {
 public:
 	explicit SessionResetNode(MemoryPool& pool)
@@ -1705,18 +1766,18 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	Firebird::string internalPrint(NodePrinter& printer) const override
 	{
 		SessionManagementNode::internalPrint(printer);
 
 		return "SessionResetNode";
 	}
 
-	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const;
+	void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const override;
 };
 
 
-class SetRoleNode : public SessionManagementNode
+class SetRoleNode final : public SessionManagementNode
 {
 public:
 	explicit SetRoleNode(MemoryPool& pool)
@@ -1734,7 +1795,7 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	Firebird::string internalPrint(NodePrinter& printer) const override
 	{
 		SessionManagementNode::internalPrint(printer);
 
@@ -1744,7 +1805,7 @@ public:
 		return "SetRoleNode";
 	}
 
-	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const;
+	void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const override;
 
 public:
 	bool trusted;
@@ -1752,7 +1813,7 @@ public:
 };
 
 
-class SetSessionNode : public SessionManagementNode
+class SetSessionNode final : public SessionManagementNode
 {
 public:
 	enum Type : UCHAR
@@ -1764,8 +1825,8 @@ public:
 	SetSessionNode(MemoryPool& pool, Type aType, ULONG aVal, UCHAR blr_timepart);
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const override;
 
 private:
 	Type m_type;
@@ -1773,13 +1834,13 @@ private:
 };
 
 
-class SetDebugOptionNode : public SessionManagementNode
+class SetDebugOptionNode final : public SessionManagementNode
 {
 public:
 	SetDebugOptionNode(MemoryPool& pool, MetaName* aName, ExprNode* aValue);
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	Firebird::string internalPrint(NodePrinter& printer) const override
 	{
 		SessionManagementNode::internalPrint(printer);
 
@@ -1789,7 +1850,7 @@ public:
 		return "SetDebugOptionNode";
 	}
 
-	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const;
+	void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const override;
 
 private:
 	MetaName name;
@@ -1797,13 +1858,13 @@ private:
 };
 
 
-class SetDecFloatRoundNode : public SessionManagementNode
+class SetDecFloatRoundNode final : public SessionManagementNode
 {
 public:
 	SetDecFloatRoundNode(MemoryPool& pool, MetaName* name);
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	Firebird::string internalPrint(NodePrinter& printer) const override
 	{
 		SessionManagementNode::internalPrint(printer);
 
@@ -1812,24 +1873,24 @@ public:
 		return "SetDecFloatRoundNode";
 	}
 
-	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const;
+	void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const override;
 
 public:
 	USHORT rndMode;
 };
 
 
-class SetDecFloatTrapsNode : public SessionManagementNode
+class SetDecFloatTrapsNode final : public SessionManagementNode
 {
 public:
-	SetDecFloatTrapsNode(MemoryPool& pool)
+	explicit SetDecFloatTrapsNode(MemoryPool& pool)
 		: SessionManagementNode(pool),
 		  traps(0u)
 	{
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	Firebird::string internalPrint(NodePrinter& printer) const override
 	{
 		SessionManagementNode::internalPrint(printer);
 
@@ -1838,7 +1899,7 @@ public:
 		return "SetDecFloatTrapsNode";
 	}
 
-	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const;
+	void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const override;
 
 	void trap(MetaName* name);
 
@@ -1847,10 +1908,10 @@ public:
 };
 
 
-class SetBindNode : public SessionManagementNode
+class SetBindNode final : public SessionManagementNode
 {
 public:
-	SetBindNode(MemoryPool& pool)
+	explicit SetBindNode(MemoryPool& pool)
 		: SessionManagementNode(pool),
 		  from(nullptr),
 		  to(nullptr)
@@ -1858,7 +1919,7 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	Firebird::string internalPrint(NodePrinter& printer) const override
 	{
 		SessionManagementNode::internalPrint(printer);
 
@@ -1868,8 +1929,8 @@ public:
 		return "SetBindNode";
 	}
 
-	virtual SessionManagementNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const;
+	SessionManagementNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const override;
 
 public:
 	dsql_fld* from;
@@ -1877,7 +1938,7 @@ public:
 };
 
 
-class SetOptimizeNode : public SessionManagementNode
+class SetOptimizeNode final : public SessionManagementNode
 {
 public:
 	explicit SetOptimizeNode(MemoryPool& pool)
@@ -1892,7 +1953,7 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	Firebird::string internalPrint(NodePrinter& printer) const override
 	{
 		SessionManagementNode::internalPrint(printer);
 
@@ -1901,14 +1962,40 @@ public:
 		return "SetOptimizeNode";
 	}
 
-	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const;
+	void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const override;
 
 public:
 	Firebird::TriState optimizeMode;
 };
 
 
-class SetTimeZoneNode : public SessionManagementNode
+class SetSearchPathNode final : public SessionManagementNode
+{
+public:
+	SetSearchPathNode(MemoryPool& pool, Firebird::ObjectsArray<MetaName>* aSchemas)
+		: SessionManagementNode(pool),
+		  schemas(aSchemas)
+	{
+	}
+
+public:
+	Firebird::string internalPrint(NodePrinter& printer) const override
+	{
+		SessionManagementNode::internalPrint(printer);
+
+		NODE_PRINT(printer, schemas);
+
+		return "SetSearchPathNode";
+	}
+
+	void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const override;
+
+public:
+	NestConst<Firebird::ObjectsArray<MetaName>> schemas;
+};
+
+
+class SetTimeZoneNode final : public SessionManagementNode
 {
 public:
 	explicit SetTimeZoneNode(MemoryPool& pool, const Firebird::string& aStr)
@@ -1926,7 +2013,7 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	Firebird::string internalPrint(NodePrinter& printer) const override
 	{
 		SessionManagementNode::internalPrint(printer);
 
@@ -1936,7 +2023,7 @@ public:
 		return "SetTimeZoneNode";
 	}
 
-	virtual void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const;
+	void execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** traHandle) const override;
 
 public:
 	Firebird::string str;
@@ -1993,9 +2080,9 @@ public:
 	{
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual StmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	StmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
 public:
 	NestConst<RelationSourceNode> relation;

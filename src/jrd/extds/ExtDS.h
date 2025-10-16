@@ -30,6 +30,8 @@
 #include "../../common/classes/locks.h"
 #include "../../common/utils_proto.h"
 
+#include <limits>
+
 
 namespace Jrd
 {
@@ -62,6 +64,81 @@ enum TraScope {
 	traCommon,
 	traTwoPhase
 };
+
+
+// helper to work with ICryptKeyCallback
+class CryptHash
+{
+public:
+	explicit CryptHash(Firebird::ICryptKeyCallback* callback);
+	CryptHash();
+
+	void assign(Firebird::ICryptKeyCallback* callback);
+
+	bool isValid() const noexcept
+	{
+		return m_valid;
+	}
+
+	const UCHAR* getValue() const
+	{
+		fb_assert(isValid());
+
+		return m_value.begin();
+	}
+
+	int getLength() const noexcept
+	{
+		return isValid() ? m_value.getCount() : -1;
+	}
+
+	bool operator==(const CryptHash& h) const;
+
+private:
+	Firebird::UCharBuffer m_value;
+	bool m_valid = false;
+};
+
+
+class CryptCallbackRedirector :
+	public Firebird::VersionedIface<Firebird::ICryptKeyCallbackImpl<CryptCallbackRedirector, Firebird::CheckStatusWrapper>>
+{
+	public:
+		CryptCallbackRedirector() = default;
+
+		void setRedirect(Firebird::ICryptKeyCallback* originalCallback);
+		void resetRedirect(Firebird::ICryptKeyCallback* newCallback);
+		bool operator==(const CryptHash& h) const;
+
+		bool isValid() const noexcept
+		{
+			return m_hash.isValid();
+		}
+
+		// ICryptKeyCallback implementation
+		unsigned int callback(unsigned int dataLength, const void* data,
+			unsigned int bufferLength, void* buffer) override
+		{
+			return m_keyCallback ? m_keyCallback->callback(dataLength, data, bufferLength, buffer) : 0;
+		}
+
+		int getHashLength(Firebird::CheckStatusWrapper* status) override
+		{
+			return m_hash.getLength();
+		}
+
+		void getHashData(Firebird::CheckStatusWrapper* status, void* h) override
+		{
+			fb_assert(m_hash.isValid());
+			if (m_hash.isValid())
+				memcpy(h, m_hash.getValue(), m_hash.getLength());
+		}
+
+	private:
+		ICryptKeyCallback* m_keyCallback = nullptr;
+		CryptHash m_hash;
+	};
+
 
 // Known built-in provider's names
 extern const char* FIREBIRD_PROVIDER_NAME;
@@ -117,7 +194,7 @@ public:
 	// get available connection already bound to the current attachment
 	Connection* getBoundConnection(Jrd::thread_db* tdbb,
 		const Firebird::PathName& dbName, Firebird::ClumpletReader& dpb,
-		TraScope tra_scope);
+		TraScope tra_scope, bool isCurrent);
 
 	// Connection gets unused, release it into pool or delete it immediately
 	virtual void releaseConnection(Jrd::thread_db* tdbb, Connection& conn, bool inPool = true);
@@ -128,17 +205,17 @@ public:
 	// cancel execution of every connection
 	void cancelConnections();
 
-	const Firebird::string& getName() const { return m_name; }
+	const Firebird::string& getName() const noexcept { return m_name; }
 
 	virtual void initialize() = 0;
 
 	// Provider properties
-	int getFlags() const { return m_flags; }
+	int getFlags() const noexcept { return m_flags; }
 
 	// Interprete status and put error description into passed string
 	virtual void getRemoteError(const Jrd::FbStatusVector* status, Firebird::string& err) const = 0;
 
-	static const Firebird::string* generate(const Provider* item)
+	static const Firebird::string* generate(const Provider* item) noexcept
 	{
 		return &item->m_name;
 	}
@@ -153,11 +230,11 @@ protected:
 		const Firebird::string& role) const;
 
 	// Protection against simultaneous attach database calls. Not sure we still
-	// need it, but i believe it will not harm
-	Firebird::Mutex m_mutex;
+	// need it, but I believe it will not harm
+	mutable Firebird::Mutex m_mutex;
 
 	Firebird::string m_name;
-	Provider* m_next;
+	Provider* m_next = nullptr;
 
 	class AttToConn
 	{
@@ -165,38 +242,37 @@ protected:
 		Jrd::Attachment* m_att;
 		Connection* m_conn;
 
-		AttToConn()
+		AttToConn() noexcept
 			: m_att(NULL),
 			  m_conn(NULL)
 		{}
 
-		AttToConn(Jrd::Attachment* att, Connection* conn)
+		AttToConn(Jrd::Attachment* att, Connection* conn) noexcept
 			: m_att(att),
 			  m_conn(conn)
 		{}
 
-		static const AttToConn& generate(const void*, const AttToConn& item)
+		static const AttToConn& generate(const void*, const AttToConn& item) noexcept
 		{
 			return item;
 		}
 
-		static bool greaterThan(const AttToConn& i1, const AttToConn& i2)
+		static bool greaterThan(const AttToConn& i1, const AttToConn& i2) noexcept
 		{
 			return (i1.m_att > i2.m_att) ||
 				(i1.m_att == i2.m_att && i1.m_conn > i2.m_conn);
 		}
 	};
 
-	typedef Firebird::BePlusTree<AttToConn, AttToConn, Firebird::MemoryPool,
-								 AttToConn, AttToConn>
+	typedef Firebird::BePlusTree<AttToConn, AttToConn, AttToConn, AttToConn>
 		AttToConnMap;
 
 	AttToConnMap m_connections;
-	int m_flags;
+	int m_flags = 0;
 };
 
 // Provider flags
-const int prvTrustedAuth	= 0x0001;	// supports trusted authentication
+inline constexpr int prvTrustedAuth = 0x0001;	// supports trusted authentication
 
 
 class ConnectionsPool
@@ -207,7 +283,7 @@ public:
 
 	// find and return cached connection or NULL
 	Connection* getConnection(Jrd::thread_db* tdbb, Provider* prv, ULONG hash, const Firebird::PathName& dbName,
-		Firebird::ClumpletReader& dpb);
+		Firebird::ClumpletReader& dpb, const CryptHash& ch);
 
 	// put unused connection into pool or destroy it
 	void putConnection(Jrd::thread_db* tdbb, Connection* conn);
@@ -218,13 +294,13 @@ public:
 	// clear connection relation with pool
 	void delConnection(Jrd::thread_db* tdbb, Connection* conn, bool destroy);
 
-	ULONG getIdleCount() const { return m_idleArray.getCount(); }
-	ULONG getAllCount() const { return m_allCount; } ;
+	ULONG getIdleCount() const noexcept { return m_idleArray.getCount(); }
+	ULONG getAllCount() const noexcept { return m_allCount; }
 
-	ULONG getMaxCount() const { return m_maxCount; }
+	ULONG getMaxCount() const noexcept { return m_maxCount; }
 	void setMaxCount(ULONG val);
 
-	ULONG getLifeTime() const	{ return m_lifeTime; }
+	ULONG getLifeTime() const noexcept { return m_lifeTime; }
 	void setLifeTime(ULONG val);
 
 	// delete idle connections: all or older than lifetime
@@ -245,20 +321,23 @@ public:
 	{
 	public:
 		// constructor for embedded into Connection instance
-		explicit Data(Connection* conn)
+		explicit Data(Connection* conn) noexcept
 		{
 			clear();
 			m_conn = conn;
 		}
 
-		ConnectionsPool* getConnPool() const { return m_connPool; }
+		Data(const Data&) = delete;
+		Data& operator=(const Data&) = delete;
 
-		static const Data& generate(const Data* item)
+		ConnectionsPool* getConnPool() const noexcept { return m_connPool; }
+
+		static const Data& generate(const Data* item) noexcept
 		{
 			return *item;
 		}
 
-		static bool greaterThan(const Data& i1, const Data& i2)
+		static bool greaterThan(const Data& i1, const Data& i2) noexcept
 		{
 			if (i1.m_hash == i2.m_hash)
 			{
@@ -283,19 +362,16 @@ public:
 		Data* m_next;
 		Data* m_prev;
 
-		Data(const Data&);
-		Data& operator=(const Data&);
-
 		// create instance used to search for recently used connection by hash
-		explicit Data(ULONG hash)
+		explicit Data(ULONG hash) noexcept
 		{
 			clear();
 			m_conn = NULL;
 			m_hash = hash;
-			m_lastUsed = MAX_SINT64;
+			m_lastUsed = std::numeric_limits<time_t>::max();
 		}
 
-		void clear()
+		void clear() noexcept
 		{
 			m_connPool = NULL;
 			// m_conn = NULL;
@@ -418,15 +494,20 @@ protected:
 	static void deleteConnection(Jrd::thread_db* tdbb, Connection* conn);
 	void setup(const Firebird::PathName& dbName, const Firebird::ClumpletReader& dpb);
 
-	void setBoundAtt(Jrd::Attachment* att) { m_boundAtt = att; }
+	void setCallbackRedirect(Firebird::ICryptKeyCallback* attCallback)
+	{
+		m_cryptCallbackRedir.setRedirect(attCallback);
+	}
+
+	void setBoundAtt(Jrd::Attachment* att) noexcept { m_boundAtt = att; }
 
 public:
-	Provider* getProvider() { return &m_provider; }
+	Provider* getProvider() noexcept { return &m_provider; }
 
-	Jrd::Attachment* getBoundAtt() const { return m_boundAtt; }
+	Jrd::Attachment* getBoundAtt() const noexcept { return m_boundAtt; }
 
-	ConnectionsPool* getConnPool() { return m_poolData.getConnPool(); }
-	ConnectionsPool::Data* getPoolData() { return &m_poolData; }
+	ConnectionsPool* getConnPool() noexcept { return m_poolData.getConnPool(); }
+	ConnectionsPool::Data* getPoolData() noexcept { return &m_poolData; }
 
 	virtual void attach(Jrd::thread_db* tdbb) = 0;
 	virtual void detach(Jrd::thread_db* tdbb);
@@ -436,7 +517,7 @@ public:
 	// Try to reset connection, return true if it can be pooled
 	virtual bool resetSession(Jrd::thread_db* tdbb) = 0;
 
-	int getSqlDialect() const { return m_sqlDialect; }
+	int getSqlDialect() const noexcept { return m_sqlDialect; }
 
 	// Is this connections can be used by current needs ? Not every DBMS
 	// allows to use same connection in more than one transaction and\or
@@ -448,12 +529,12 @@ public:
 	virtual bool validate(Jrd::thread_db* tdbb) = 0;
 
 	virtual bool isSameDatabase(const Firebird::PathName& dbName,
-		Firebird::ClumpletReader& dpb) const;
+		Firebird::ClumpletReader& dpb, const CryptHash& ch) const;
 
 	// only Internal provider is able to create "current" connections
 	virtual bool isCurrent() const { return false; }
 
-	bool isBroken() const
+	bool isBroken() const noexcept
 	{
 		return m_broken;
 	}
@@ -471,8 +552,8 @@ public:
 	void raise(const Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, const char* sWhere);
 
 	// will we wrap external errors into our ones (isc_eds_xxx) or pass them as is
-	bool getWrapErrors(const ISC_STATUS* status);
-	void setWrapErrors(bool val) { m_wrapErrors = val; }
+	bool getWrapErrors(const ISC_STATUS* status) noexcept;
+	void setWrapErrors(bool val) noexcept { m_wrapErrors = val; }
 
 	// Transactions management within connection scope : put newly created
 	// transaction into m_transactions array and delete not needed transaction
@@ -490,11 +571,21 @@ public:
 	virtual Blob* createBlob() = 0;
 
 	// Test specified feature flag
-	bool testFeature(info_features value) const { return m_features[value]; }
+	bool testFeature(info_features value) const noexcept { return m_features[value]; }
 	// Set specified flag
-	void setFeature(info_features value) { m_features[value] = true; }
+	void setFeature(info_features value) noexcept { m_features[value] = true; }
 	// Clear specified flag
-	void clearFeature(info_features value) { m_features[value] = false; }
+	void clearFeature(info_features value) noexcept { m_features[value] = false; }
+
+	void resetRedirect(Firebird::ICryptKeyCallback* originalCallback)
+	{
+		m_cryptCallbackRedir.resetRedirect(originalCallback);
+	}
+
+	bool hasValidCryptCallback() const noexcept
+	{
+		return m_cryptCallbackRedir.isValid();
+	}
 
 protected:
 	virtual Transaction* doCreateTransaction() = 0;
@@ -519,7 +610,7 @@ protected:
 
 	ConnectionsPool::Data m_poolData;
 
-	static const int MAX_CACHED_STMTS = 16;
+	static inline constexpr int MAX_CACHED_STMTS = 16;
 	int	m_used_stmts;
 	int	m_free_stmts;
 	bool m_deleting;
@@ -527,6 +618,8 @@ protected:
 	bool m_wrapErrors;
 	bool m_broken;
 	bool m_features[fb_feature_max];
+
+	CryptCallbackRedirector m_cryptCallbackRedir;
 };
 
 class Transaction : public Firebird::PermanentStorage
@@ -540,11 +633,11 @@ protected:
 
 public:
 
-	Provider* getProvider() { return &m_provider; }
+	Provider* getProvider() noexcept { return &m_provider; }
 
-	Connection* getConnection() { return &m_connection; }
+	Connection* getConnection() noexcept { return &m_connection; }
 
-	TraScope getScope() const { return m_scope; }
+	TraScope getScope() const noexcept { return m_scope; }
 
 	virtual void start(Jrd::thread_db* tdbb, TraScope traScope, TraModes traMode,
 		bool readOnly, bool wait, int lockTimeout);
@@ -593,11 +686,11 @@ protected:
 public:
 	static void deleteStatement(Jrd::thread_db* tdbb, Statement* stmt);
 
-	Provider* getProvider() { return &m_provider; }
+	Provider* getProvider() noexcept { return &m_provider; }
 
-	Connection* getConnection() { return &m_connection; }
+	Connection* getConnection() noexcept { return &m_connection; }
 
-	Transaction* getTransaction() { return m_transaction; }
+	Transaction* getTransaction() noexcept { return m_transaction; }
 
 	void prepare(Jrd::thread_db* tdbb, Transaction* tran, const Firebird::string& sql, bool named);
 	void setTimeout(Jrd::thread_db* tdbb, unsigned int timeout);
@@ -611,19 +704,19 @@ public:
 	void close(Jrd::thread_db* tdbb, bool invalidTran = false);
 	void deallocate(Jrd::thread_db* tdbb);
 
-	const Firebird::string& getSql() const { return m_sql; }
+	const Firebird::string& getSql() const noexcept { return m_sql; }
 
-	void setCallerPrivileges(bool use) { m_callerPrivileges = use; }
+	void setCallerPrivileges(bool use) noexcept { m_callerPrivileges = use; }
 
-	bool isActive() const { return m_active; }
+	bool isActive() const noexcept { return m_active; }
 
-	bool isAllocated() const { return m_allocated; }
+	bool isAllocated() const noexcept { return m_allocated; }
 
-	bool isSelectable() const { return m_stmt_selectable; }
+	bool isSelectable() const noexcept { return m_stmt_selectable; }
 
-	unsigned int getInputs() const { return m_inputs; }
+	unsigned int getInputs() const noexcept { return m_inputs; }
 
-	unsigned int getOutputs() const { return m_outputs; }
+	unsigned int getOutputs() const noexcept { return m_outputs; }
 
 	// Get error description from provider and put it with additional contex
 	// info into locally raised exception

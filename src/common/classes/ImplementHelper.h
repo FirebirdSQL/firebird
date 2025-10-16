@@ -53,9 +53,8 @@ class VersionedIface : public C
 public:
 	VersionedIface() { }
 
-private:
-	VersionedIface(const VersionedIface&);
-	VersionedIface& operator=(const VersionedIface&);
+	VersionedIface(const VersionedIface&) = delete;
+	VersionedIface& operator=(const VersionedIface&) = delete;
 };
 
 // Helps to implement versioned interfaces on stack or static
@@ -123,7 +122,7 @@ public:
 	}
 
 protected:
-	void refCntDPrt(char f)
+	void refCntDPrt(char f) noexcept
 	{
 #ifdef DEV_BUILD
 		if (mark)
@@ -194,10 +193,10 @@ class SimpleFactory : public Static<SimpleFactoryBase<P> >
 class CachedMasterInterface
 {
 public:
-	static void set(IMaster* master);
+	static void set(IMaster* master) noexcept;
 
 protected:
-	static IMaster* getMasterInterface();
+	static IMaster* getMasterInterface() noexcept;
 };
 
 // Base for interface type independent accessors
@@ -205,16 +204,16 @@ template <typename C>
 class AccessAutoInterface : public CachedMasterInterface
 {
 public:
-	explicit AccessAutoInterface(C* aPtr)
+	explicit AccessAutoInterface(C* aPtr) noexcept
 		: ptr(aPtr)
 	{ }
 
-	operator C*()
+	operator C*() noexcept
 	{
 		return ptr;
 	}
 
-	C* operator->()
+	C* operator->() noexcept
 	{
 		return ptr;
 	}
@@ -224,17 +223,17 @@ private:
 };
 
 // Master interface access
-class MasterInterfacePtr : public AccessAutoInterface<IMaster>
+class MasterInterfacePtr final : public AccessAutoInterface<IMaster>
 {
 public:
-	MasterInterfacePtr()
+	MasterInterfacePtr() noexcept
 		: AccessAutoInterface<IMaster>(getMasterInterface())
 	{ }
 };
 
 
 // Generic plugins interface access
-class PluginManagerInterfacePtr : public AccessAutoInterface<IPluginManager>
+class PluginManagerInterfacePtr final : public AccessAutoInterface<IPluginManager>
 {
 public:
 	PluginManagerInterfacePtr()
@@ -244,7 +243,7 @@ public:
 
 
 // Control timer interface access
-class TimerInterfacePtr : public AccessAutoInterface<ITimerControl>
+class TimerInterfacePtr final : public AccessAutoInterface<ITimerControl>
 {
 public:
 	TimerInterfacePtr()
@@ -254,7 +253,7 @@ public:
 
 
 // Distributed transactions coordinator access
-class DtcInterfacePtr : public AccessAutoInterface<IDtc>
+class DtcInterfacePtr final : public AccessAutoInterface<IDtc>
 {
 public:
 	DtcInterfacePtr()
@@ -264,7 +263,7 @@ public:
 
 
 // Dispatcher access
-class DispatcherPtr : public AccessAutoInterface<IProvider>
+class DispatcherPtr final : public AccessAutoInterface<IProvider>
 {
 public:
 	DispatcherPtr()
@@ -279,7 +278,7 @@ public:
 
 
 // Misc utl access
-class UtilInterfacePtr : public AccessAutoInterface<IUtil>
+class UtilInterfacePtr final : public AccessAutoInterface<IUtil>
 {
 public:
 	UtilInterfacePtr()
@@ -325,22 +324,22 @@ public:
 		}
 	}
 
-	bool unloadStarted()
+	bool unloadStarted() const noexcept
 	{
 		return !flagOsUnload;
 	}
 
-	void setCleanup(VoidNoParam* function)
+	void setCleanup(VoidNoParam* function) noexcept
 	{
 		cleanup = function;
 	}
 
-	void setThreadDetach(VoidNoParam* function)
+	void setThreadDetach(VoidNoParam* function) noexcept
 	{
 		thdDetach = function;
 	}
 
-	void doClean()
+	void doClean() override
 	{
 		flagOsUnload = false;
 
@@ -351,7 +350,7 @@ public:
 		}
 	}
 
-	void threadDetach()
+	void threadDetach() override
 	{
 		if (thdDetach)
 			thdDetach();
@@ -364,10 +363,10 @@ private:
 };
 
 typedef GlobalPtr<UnloadDetectorHelper, InstanceControl::PRIORITY_DETECT_UNLOAD> UnloadDetector;
-UnloadDetectorHelper* getUnloadDetector();
+UnloadDetectorHelper* getUnloadDetector() noexcept;
 
 // Generic status checker
-inline void check(IStatus* status, ISC_STATUS exclude = 0)
+inline void check(const IStatus* status, ISC_STATUS exclude = 0)
 {
 	if (status->getState() & IStatus::STATE_ERRORS)
 	{
@@ -377,14 +376,14 @@ inline void check(IStatus* status, ISC_STATUS exclude = 0)
 }
 
 // Config keys cache
-class ConfigKeys : private HalfStaticArray<unsigned int, 8>
+class ConfigKeys final : private HalfStaticArray<unsigned int, 8>
 {
 public:
 	ConfigKeys(MemoryPool& p)
 		: HalfStaticArray<unsigned int, 8>(p)
 	{ }
 
-	const static unsigned int INVALID_KEY = ~0u;
+	static constexpr unsigned int INVALID_KEY = ~0u;
 
 	unsigned int getKey(IFirebirdConf* config, const char* keyName);
 };

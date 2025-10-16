@@ -1,7 +1,7 @@
 /*
  *    Program type:  API Interface
  *
- *    Desription:
+ *    Description:
  *        This program demonstrates the reallocation of SQLDA
  *        and the 'isc_dsql_describe' statement.  After a query
  *        is examined with 'isc_dsql_describe', an SQLDA of correct

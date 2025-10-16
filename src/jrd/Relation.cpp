@@ -133,12 +133,12 @@ RelationPages* jrd_rel::getPagesInternal(thread_db* tdbb, TraNumber tran, bool a
 
 		for (auto& idx : indices)
 		{
-			MetaName idx_name;
+			QualifiedName idx_name;
 			MET_lookup_index(tdbb, idx_name, this->rel_name, idx.idx_id + 1);
 
 			idx.idx_root = 0;
 			SelectivityList selectivity(*pool);
-			IDX_create_index(tdbb, this, &idx, idx_name.c_str(), NULL, idxTran, selectivity);
+			IDX_create_index(tdbb, this, &idx, idx_name, NULL, idxTran, selectivity);
 
 #ifdef VIO_DEBUG
 			VIO_trace(DEBUG_WRITES,
@@ -214,7 +214,7 @@ void jrd_rel::retainPages(thread_db* tdbb, TraNumber oldNumber, TraNumber newNum
 	if (!rel_pages_inst)
 		return;
 
-	SINT64 inst_id = oldNumber;
+	const SINT64 inst_id = oldNumber;
 	FB_SIZE_T pos;
 	if (!rel_pages_inst->find(oldNumber, pos))
 		return;
@@ -238,12 +238,12 @@ void jrd_rel::getRelLockKey(thread_db* tdbb, UCHAR* key)
 	memcpy(key, &inst_id, sizeof(inst_id));
 }
 
-USHORT jrd_rel::getRelLockKeyLength() const
+USHORT jrd_rel::getRelLockKeyLength() const noexcept
 {
 	return sizeof(ULONG) + sizeof(SINT64);
 }
 
-void jrd_rel::cleanUp()
+void jrd_rel::cleanUp() noexcept
 {
 	delete rel_pages_inst;
 	rel_pages_inst = NULL;
@@ -306,7 +306,7 @@ void jrd_rel::RelPagesSnapshot::clear()
 	inherited::clear();
 }
 
-bool jrd_rel::hasTriggers() const
+bool jrd_rel::hasTriggers() const noexcept
 {
 	typedef const TrigVector* ctv;
 	ctv trigs[6] = // non-const array, don't want optimization tricks by the compiler.
@@ -510,7 +510,7 @@ int jrd_rel::blocking_ast_gcLock(void* ast_object)
 
 /// jrd_rel::GCExclusive
 
-jrd_rel::GCExclusive::GCExclusive(thread_db* tdbb, jrd_rel* relation) :
+jrd_rel::GCExclusive::GCExclusive(thread_db* tdbb, jrd_rel* relation) noexcept :
 	m_tdbb(tdbb),
 	m_relation(relation),
 	m_lock(NULL)

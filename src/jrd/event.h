@@ -33,7 +33,7 @@
 
 // Global section header
 
-const USHORT EVENT_VERSION = 4;
+inline constexpr USHORT EVENT_VERSION = 4;
 
 class evh : public Firebird::MemoryHeader
 {
@@ -48,14 +48,14 @@ public:
 
 // Common block header
 
-//const int type_hdr	= 1;		// Event header
-const int type_frb	= 2;			// Free block
-const int type_prb	= 3;			// Process block
-const int type_rint	= 4;			// Request interest block
-const int type_reqb	= 5;			// Request block previously req_type also used in blk.h
-const int type_evnt	= 6;			// Event
-const int type_ses	= 7;			// Session
-const int type_max	= 8;
+//inline constexpr int type_hdr	= 1;	// Event header
+inline constexpr int type_frb	= 2;	// Free block
+inline constexpr int type_prb	= 3;	// Process block
+inline constexpr int type_rint	= 4;	// Request interest block
+inline constexpr int type_reqb	= 5;	// Request block previously req_type also used in blk.h
+inline constexpr int type_evnt	= 6;	// Event
+inline constexpr int type_ses	= 7;	// Session
+inline constexpr int type_max	= 8;
 
 struct event_hdr // CVC: previous clash with ods.h's hdr
 {
@@ -83,8 +83,8 @@ struct prb
 	USHORT prb_flags;
 };
 
-const int PRB_wakeup	= 1;		// Schedule a wakeup for process
-const int PRB_pending	= 2;		// Wakeup has been requested, and is dangling
+inline constexpr int PRB_wakeup		= 1;	// Schedule a wakeup for process
+inline constexpr int PRB_pending	= 2;	// Wakeup has been requested, and is dangling
 
 // Session block
 
@@ -97,8 +97,8 @@ struct ses
 	USHORT ses_flags;
 };
 
-const int SES_delivering	= 1;	// Watcher thread is delivering an event
-const int SES_purge			= 2;	// delete session after delivering an event
+inline constexpr int SES_delivering	= 1;	// Watcher thread is delivering an event
+inline constexpr int SES_purge		= 2;	// delete session after delivering an event
 
 // Event block
 
@@ -137,7 +137,7 @@ struct req_int
 	SLONG rint_count;				// Threshold count
 };
 
-const int EPB_version1 = 1;
+inline constexpr int EPB_version1 = 1;
 
 #endif // JRD_EVENT_H
 

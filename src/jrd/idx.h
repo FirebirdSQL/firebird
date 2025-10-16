@@ -29,14 +29,14 @@
 
 /* Indices to be created */
 
-/* Maxinum number of segments in any existing system index */
-const int  INI_IDX_MAX_SEGMENTS		= 3;
+/* Maximum number of segments in any existing system index */
+inline constexpr int INI_IDX_MAX_SEGMENTS = 4;
 
 struct ini_idx_t
 {
 	UCHAR ini_idx_index_id;
 	UCHAR ini_idx_relid;
-	UCHAR ini_idx_flags;
+	USHORT ini_idx_flags;
 	UCHAR ini_idx_segment_count;
 	USHORT ini_idx_ods;
 	struct ini_idx_segment_t
@@ -58,18 +58,18 @@ using Jrd::idx_timestamp_tz;
 #define INDEX(id, rel, unique, count, ods) {(id), (UCHAR) (rel), (unique), (count), (ods), {
 #define SEGMENT(fld, type) {(fld), (type)}
 
-static const struct ini_idx_t indices[] =
+static inline constexpr struct ini_idx_t indices[] =
 {
-	// define index RDB$INDEX_0 for RDB$RELATIONS unique RDB$RELATION_NAME;
-	INDEX(0, rel_relations, idx_unique, 1, ODS_13_0)
+	// define index RDB$INDEX_0 for RDB$RELATIONS RDB$RELATION_NAME;
+	INDEX(0, rel_relations, 0, 1, ODS_13_0)
 		SEGMENT(f_rel_name, idx_metadata)		// relation name
 	}},
 	// define index RDB$INDEX_1 for RDB$RELATIONS RDB$RELATION_ID;
 	INDEX(1, rel_relations, 0, 1, ODS_13_0)
 		SEGMENT(f_rel_id, idx_numeric)			// relation id
 	}},
-	// define index RDB$INDEX_2 for RDB$FIELDS unique RDB$FIELD_NAME;
-	INDEX(2, rel_fields, idx_unique, 1, ODS_13_0)
+	// define index RDB$INDEX_2 for RDB$FIELDS RDB$FIELD_NAME;
+	INDEX(2, rel_fields, 0, 1, ODS_13_0)
 		SEGMENT(f_fld_name, idx_metadata)		// field name
 	}},
 	// define index RDB$INDEX_3 for RDB$RELATION_FIELDS RDB$FIELD_SOURCE;
@@ -80,8 +80,8 @@ static const struct ini_idx_t indices[] =
 	INDEX(4, rel_rfr, 0, 1, ODS_13_0)
 		SEGMENT(f_rfr_rname, idx_metadata)		// relation name in RFR
 	}},
-	// define index RDB$INDEX_5 for RDB$INDICES unique RDB$INDEX_NAME;
-	INDEX(5, rel_indices, idx_unique, 1, ODS_13_0)
+	// define index RDB$INDEX_5 for RDB$INDICES RDB$INDEX_NAME;
+	INDEX(5, rel_indices, 0, 1, ODS_13_0)
 		SEGMENT(f_idx_name, idx_metadata)		// index name
 	}},
 	// define index RDB$INDEX_6 for RDB$INDEX_SEGMENTS RDB$INDEX_NAME;
@@ -92,12 +92,12 @@ static const struct ini_idx_t indices[] =
 	INDEX(7, rel_classes, idx_unique, 1, ODS_13_0)
 		SEGMENT(f_cls_class, idx_metadata)		// security class
 	}},
-	// define index RDB$INDEX_8 for RDB$TRIGGERS unique RDB$TRIGGER_NAME;
-	INDEX(8, rel_triggers, idx_unique, 1, ODS_13_0)
+	// define index RDB$INDEX_8 for RDB$TRIGGERS RDB$TRIGGER_NAME;
+	INDEX(8, rel_triggers, 0, 1, ODS_13_0)
 		SEGMENT(f_trg_name, idx_metadata)		// trigger name
 	}},
-	// define index RDB$INDEX_9 for RDB$FUNCTIONS unique RDB$PACKAGE_NAME, RDB$FUNCTION_NAME;
-	INDEX(9, rel_funs, idx_unique, 2, ODS_13_0)
+	// define index RDB$INDEX_9 for RDB$FUNCTIONS RDB$PACKAGE_NAME, RDB$FUNCTION_NAME;
+	INDEX(9, rel_funs, 0, 2, ODS_13_0)
 		SEGMENT(f_fun_pkg_name, idx_metadata),	// package name
 		SEGMENT(f_fun_name, idx_metadata)		// function name
 	}},
@@ -106,24 +106,24 @@ static const struct ini_idx_t indices[] =
 		SEGMENT(f_arg_pkg_name, idx_metadata),	// package name
 		SEGMENT(f_arg_fun_name, idx_metadata)	// function name
 	}},
-	// define index RDB$INDEX_11 for RDB$GENERATORS unique RDB$GENERATOR_NAME;
-	INDEX(11, rel_gens, idx_unique, 1, ODS_13_0)
+	// define index RDB$INDEX_11 for RDB$GENERATORS RDB$GENERATOR_NAME;
+	INDEX(11, rel_gens, 0, 1, ODS_13_0)
 		SEGMENT(f_gen_name, idx_metadata)		// Generator name
 	}},
-	// define index RDB$INDEX_12 for RDB$RELATION_CONSTRAINTS unique RDB$CONSTRAINT_NAME;
-	INDEX(12, rel_rcon, idx_unique, 1, ODS_13_0)
+	// define index RDB$INDEX_12 for RDB$RELATION_CONSTRAINTS RDB$CONSTRAINT_NAME;
+	INDEX(12, rel_rcon, 0, 1, ODS_13_0)
 		SEGMENT(f_rcon_cname, idx_metadata)		// constraint name
 	}},
-	// define index RDB$INDEX_13 for RDB$REF_CONSTRAINTS unique RDB$CONSTRAINT_NAME;
-	INDEX(13, rel_refc, idx_unique, 1, ODS_13_0)
+	// define index RDB$INDEX_13 for RDB$REF_CONSTRAINTS RDB$CONSTRAINT_NAME;
+	INDEX(13, rel_refc, 0, 1, ODS_13_0)
 		SEGMENT(f_refc_cname, idx_metadata)		// constraint name
 	}},
 	// define index RDB$INDEX_14 for RDB$CHECK_CONSTRAINTS RDB$CONSTRAINT_NAME;
 	INDEX(14, rel_ccon, 0, 1, ODS_13_0)
 		SEGMENT(f_ccon_cname, idx_metadata)		// constraint name
 	}},
-	// define index RDB$INDEX_15 for RDB$RELATION_FIELDS unique RDB$FIELD_NAME, RDB$RELATION_NAME;
-	INDEX(15, rel_rfr, idx_unique, 2, ODS_13_0)
+	// define index RDB$INDEX_15 for RDB$RELATION_FIELDS RDB$FIELD_NAME, RDB$RELATION_NAME;
+	INDEX(15, rel_rfr, 0, 2, ODS_13_0)
 		SEGMENT(f_rfr_fname, idx_metadata),		// field name
 		SEGMENT(f_rfr_rname, idx_metadata)		// relation name
 	}},
@@ -137,23 +137,23 @@ static const struct ini_idx_t indices[] =
 		SEGMENT(f_flt_input, idx_numeric),		// input subtype
 		SEGMENT(f_flt_output, idx_numeric)		// output subtype
 	}},
-	// define index RDB$INDEX_18 for RDB$PROCEDURE_PARAMETERS unique RDB$PACKAGE_NAME,
+	// define index RDB$INDEX_18 for RDB$PROCEDURE_PARAMETERS RDB$PACKAGE_NAME,
 	// RDB$PROCEDURE_NAME, RDB$PARAMETER_NAME;
-	INDEX(18, rel_prc_prms, idx_unique, 3, ODS_13_0)
+	INDEX(18, rel_prc_prms, 0, 3, ODS_13_0)
 		SEGMENT(f_prm_pkg_name, idx_metadata),	// package name
 		SEGMENT(f_prm_procedure, idx_metadata),	// procedure name
 		SEGMENT(f_prm_name, idx_metadata)		// parameter name
 	}},
-	// define index RDB$INDEX_19 for RDB$CHARACTER_SETS unique RDB$CHARACTER_SET_NAME;
-	INDEX(19, rel_charsets, idx_unique, 1, ODS_13_0)
+	// define index RDB$INDEX_19 for RDB$CHARACTER_SETS RDB$CHARACTER_SET_NAME;
+	INDEX(19, rel_charsets, 0, 1, ODS_13_0)
 		SEGMENT(f_cs_cs_name, idx_metadata)		// character set name
 	}},
-	// define index RDB$INDEX_20 for RDB$COLLATIONS unique RDB$COLLATION_NAME;
-	INDEX(20, rel_collations, idx_unique, 1, ODS_13_0)
+	// define index RDB$INDEX_20 for RDB$COLLATIONS RDB$COLLATION_NAME;
+	INDEX(20, rel_collations, 0, 1, ODS_13_0)
 		SEGMENT(f_coll_name, idx_metadata)		// collation name
 	}},
-	// define index RDB$INDEX_21 for RDB$PROCEDURES unique RDB$PACKAGE_NAME, RDB$PROCEDURE_NAME;
-	INDEX(21, rel_procedures, idx_unique, 2, ODS_13_0)
+	// define index RDB$INDEX_21 for RDB$PROCEDURES RDB$PACKAGE_NAME, RDB$PROCEDURE_NAME;
+	INDEX(21, rel_procedures, 0, 2, ODS_13_0)
 		SEGMENT(f_prc_pkg_name, idx_metadata),	// package name
 		SEGMENT(f_prc_name, idx_metadata)		// procedure name
 	}},
@@ -161,8 +161,8 @@ static const struct ini_idx_t indices[] =
 	INDEX(22, rel_procedures, idx_unique, 1, ODS_13_0)
 		SEGMENT(f_prc_id, idx_numeric)			// procedure id
 	}},
-	// define index RDB$INDEX_23 for RDB$EXCEPTIONS unique RDB$EXCEPTION_NAME;
-	INDEX(23, rel_exceptions, idx_unique, 1, ODS_13_0)
+	// define index RDB$INDEX_23 for RDB$EXCEPTIONS RDB$EXCEPTION_NAME;
+	INDEX(23, rel_exceptions, 0, 1, ODS_13_0)
 		SEGMENT(f_xcp_name, idx_metadata)		// exception name
 	}},
 	// define index RDB$INDEX_24 for RDB$EXCEPTIONS unique RDB$EXCEPTION_NUMBER;
@@ -256,15 +256,15 @@ static const struct ini_idx_t indices[] =
 		SEGMENT(f_backup_id, idx_numeric)		// backup id
 	}},
 	// define index RDB$INDEX_45 for RDB$FILTERS RDB$FUNCTION_NAME;
-	INDEX(45, rel_filters, idx_unique, 1, ODS_13_0)
+	INDEX(45, rel_filters, 0, 1, ODS_13_0)
 		SEGMENT(f_flt_name, idx_metadata)		// function name
 	}},
 	//	define index RDB$INDEX_46 for RDB$GENERATORS unique RDB$GENERATOR_ID;
 	INDEX(46, rel_gens, idx_unique, 1, ODS_13_0)
 		SEGMENT(f_gen_id, idx_numeric)			// generator id
 	}},
-	// define index RDB$INDEX_47 for RDB$PACKAGES unique RDB$PACKAGE_NAME;
-	INDEX(47, rel_packages, idx_unique, 1, ODS_13_0)
+	// define index RDB$INDEX_47 for RDB$PACKAGES RDB$PACKAGE_NAME;
+	INDEX(47, rel_packages, 0, 1, ODS_13_0)
 		SEGMENT(f_pkg_name, idx_metadata)		// package name
 	}},
 	//	define index RDB$INDEX_48 for RDB$PROCEDURE_PARAMETERS RDB$FIELD_SOURCE;
@@ -301,8 +301,8 @@ static const struct ini_idx_t indices[] =
 	INDEX(55, rel_pubs, idx_unique, 1, ODS_13_0)
 		SEGMENT(f_pub_name, idx_string)		// publication name
 	}},
-	// define index RDB$INDEX_56 for RDB$PUBLICATION_TABLES unique RDB$TABLE_NAME, RDB$PUBLICATION_NAME;
-	INDEX(56, rel_pub_tables, idx_unique, 2, ODS_13_0)
+	// define index RDB$INDEX_56 for RDB$PUBLICATION_TABLES RDB$TABLE_NAME, RDB$PUBLICATION_NAME;
+	INDEX(56, rel_pub_tables, 0, 2, ODS_13_0)
 		SEGMENT(f_pubtab_tab_name, idx_string),		// table name
 		SEGMENT(f_pubtab_pub_name, idx_string)		// publication name
 	}},
@@ -310,16 +310,231 @@ static const struct ini_idx_t indices[] =
 	INDEX(57, rel_backup_history, idx_descending, 1, ODS_13_1)
 		SEGMENT(f_backup_time, idx_timestamp_tz)		// backup timestamp
 	}},
-	// define index RDB$INDEX_58 for RDB$TABLESPACES unique RDB$TABLESPACE_NAME;
-	INDEX(58, rel_tablespaces, idx_unique, 1, ODS_13_0)
+	// define index RDB$INDEX_58 for RDB$SCHEMAS unique RDB$SCHEMA_NAME;
+	INDEX(58, rel_schemas, idx_unique, 1, ODS_14_0)
+		SEGMENT(f_sch_schema, idx_metadata)		// schema name
+	}},
+	// define index RDB$INDEX_59 for RDB$RELATIONS unique RDB$SCHEMA_NAME, RDB$RELATION_NAME;
+	INDEX(59, rel_relations, idx_unique, 2, ODS_14_0)
+		SEGMENT(f_rel_schema, idx_metadata),	// schema name
+		SEGMENT(f_rel_name, idx_metadata)		// relation name
+	}},
+	// define index RDB$INDEX_60 for RDB$FIELDS unique RDB$SCHEMA_NAME, RDB$FIELD_NAME;
+	INDEX(60, rel_fields, idx_unique, 2, ODS_14_0)
+		SEGMENT(f_fld_schema, idx_metadata),	// schema name
+		SEGMENT(f_fld_name, idx_metadata)		// field name
+	}},
+	// define index RDB$INDEX_61 for RDB$RELATION_FIELDS RDB$FIELD_SOURCE_SCHEMA_NAME, RDB$FIELD_SOURCE;
+	INDEX(61, rel_rfr, 0, 2, ODS_14_0)
+		SEGMENT(f_rfr_field_source_schema, idx_metadata),	// field source schema name
+		SEGMENT(f_rfr_sname, idx_metadata)		// field source name
+	}},
+	// define index RDB$INDEX_62 for RDB$RELATION_FIELDS RDB$SCHEMA_NAME, RDB$RELATION_NAME;
+	INDEX(62, rel_rfr, 0, 2, ODS_14_0)
+		SEGMENT(f_rfr_schema, idx_metadata),	// schema name
+		SEGMENT(f_rfr_rname, idx_metadata)		// relation name in RFR
+	}},
+	// define index RDB$INDEX_63 for RDB$INDICES unique RDB$SCHEMA_NAME, RDB$INDEX_NAME;
+	INDEX(63, rel_indices, idx_unique, 2, ODS_14_0)
+		SEGMENT(f_idx_schema, idx_metadata),	// schema name
+		SEGMENT(f_idx_name, idx_metadata)		// index name
+	}},
+	// define index RDB$INDEX_64 for RDB$INDEX_SEGMENTS RDB$SCHEMA_NAME, RDB$INDEX_NAME;
+	INDEX(64, rel_segments, 0, 2, ODS_14_0)
+		SEGMENT(f_seg_schema, idx_metadata),	// schema name
+		SEGMENT(f_seg_name, idx_metadata)		// index name in seg
+	}},
+	// define index RDB$INDEX_65 for RDB$TRIGGERS unique RDB$SCHEMA_NAME, RDB$TRIGGER_NAME;
+	INDEX(65, rel_triggers, idx_unique, 2, ODS_14_0)
+		SEGMENT(f_trg_schema, idx_metadata),	// schema name
+		SEGMENT(f_trg_name, idx_metadata)		// trigger name
+	}},
+	// define index RDB$INDEX_66 for RDB$FUNCTIONS unique RDB$SCHEMA_NAME, RDB$PACKAGE_NAME, RDB$FUNCTION_NAME;
+	INDEX(66, rel_funs, idx_unique, 3, ODS_14_0)
+		SEGMENT(f_fun_schema, idx_metadata),	// schema name
+		SEGMENT(f_fun_pkg_name, idx_metadata),	// package name
+		SEGMENT(f_fun_name, idx_metadata)		// function name
+	}},
+	// define index RDB$INDEX_67 for RDB$FUNCTION_ARGUMENTS RDB$SCHEMA_NAME, RDB$PACKAGE_NAME, RDB$FUNCTION_NAME;
+	INDEX(67, rel_args, 0, 3, ODS_14_0)
+		SEGMENT(f_arg_schema, idx_metadata),	// schema name
+		SEGMENT(f_arg_pkg_name, idx_metadata),	// package name
+		SEGMENT(f_arg_fun_name, idx_metadata)	// function name
+	}},
+	// define index RDB$INDEX_68 for RDB$GENERATORS unique RDB$SCHEMA_NAME, RDB$GENERATOR_NAME;
+	INDEX(68, rel_gens, idx_unique, 2, ODS_14_0)
+		SEGMENT(f_gen_schema, idx_metadata),	// schema name
+		SEGMENT(f_gen_name, idx_metadata)		// Generator name
+	}},
+	// define index RDB$INDEX_69 for RDB$RELATION_CONSTRAINTS unique RDB$SCHEMA_NAME, RDB$CONSTRAINT_NAME;
+	INDEX(69, rel_rcon, idx_unique, 2, ODS_14_0)
+		SEGMENT(f_rcon_schema, idx_metadata),	// schema name
+		SEGMENT(f_rcon_cname, idx_metadata)		// constraint name
+	}},
+	// define index RDB$INDEX_70 for RDB$REF_CONSTRAINTS unique RDB$SCHEMA_NAME, RDB$CONSTRAINT_NAME;
+	INDEX(70, rel_refc, idx_unique, 2, ODS_14_0)
+		SEGMENT(f_refc_schema, idx_metadata),	// schema name
+		SEGMENT(f_refc_cname, idx_metadata)		// constraint name
+	}},
+	// define index RDB$INDEX_71 for RDB$CHECK_CONSTRAINTS RDB$SCHEMA_NAME, RDB$CONSTRAINT_NAME;
+	INDEX(71, rel_ccon, 0, 2, ODS_14_0)
+		SEGMENT(f_ccon_schema, idx_metadata),	// schema name
+		SEGMENT(f_ccon_cname, idx_metadata)		// constraint name
+	}},
+	// define index RDB$INDEX_72 for RDB$RELATION_FIELDS unique RDB$FIELD_NAME, RDB$SCHEMA_NAME, RDB$RELATION_NAME;
+	INDEX(72, rel_rfr, idx_unique, 3, ODS_14_0)
+		SEGMENT(f_rfr_fname, idx_metadata),		// field name
+		SEGMENT(f_rfr_schema, idx_metadata),	// schema name
+		SEGMENT(f_rfr_rname, idx_metadata)		// relation name
+	}},
+	// define index RDB$INDEX_73 for RDB$PROCEDURE_PARAMETERS unique RDB$SCHEMA_NAME, RDB$PACKAGE_NAME,
+	// RDB$PROCEDURE_NAME, RDB$PARAMETER_NAME;
+	INDEX(73, rel_prc_prms, idx_unique, 4, ODS_14_0)
+		SEGMENT(f_prm_schema, idx_metadata),	// schema name
+		SEGMENT(f_prm_pkg_name, idx_metadata),	// package name
+		SEGMENT(f_prm_procedure, idx_metadata),	// procedure name
+		SEGMENT(f_prm_name, idx_metadata)		// parameter name
+	}},
+	// define index RDB$INDEX_74 for RDB$CHARACTER_SETS unique RDB$SCHEMA_NAME, RDB$CHARACTER_SET_NAME;
+	INDEX(74, rel_charsets, idx_unique, 2, ODS_14_0)
+		SEGMENT(f_cs_schema, idx_metadata),	// schema name
+		SEGMENT(f_cs_cs_name, idx_metadata)		// character set name
+	}},
+	// define index RDB$INDEX_75 for RDB$COLLATIONS unique RDB$SCHEMA_NAME, RDB$COLLATION_NAME;
+	INDEX(75, rel_collations, idx_unique, 2, ODS_14_0)
+		SEGMENT(f_coll_schema, idx_metadata),	// schema name
+		SEGMENT(f_coll_name, idx_metadata)		// collation name
+	}},
+	// define index RDB$INDEX_76 for RDB$PROCEDURES unique RDB$SCHEMA_NAME, RDB$PACKAGE_NAME, RDB$PROCEDURE_NAME;
+	INDEX(76, rel_procedures, idx_unique, 3, ODS_14_0)
+		SEGMENT(f_prc_schema, idx_metadata),	// schema name
+		SEGMENT(f_prc_pkg_name, idx_metadata),	// package name
+		SEGMENT(f_prc_name, idx_metadata)		// procedure name
+	}},
+	// define index RDB$INDEX_77 for RDB$EXCEPTIONS unique RDB$SCHEMA_NAME, RDB$EXCEPTION_NAME;
+	INDEX(77, rel_exceptions, idx_unique, 2, ODS_14_0)
+		SEGMENT(f_xcp_schema, idx_metadata),	// schema name
+		SEGMENT(f_xcp_name, idx_metadata)		// exception name
+	}},
+	// define index RDB$INDEX_78 for RDB$DEPENDENCIES RDB$DEPENDENT_SCHEMA_NAME, RDB$DEPENDENT_NAME, RDB$DEPENDENT_TYPE;
+	INDEX(78, rel_dpds, 0, 3, ODS_14_0)
+		SEGMENT(f_dpd_schema, idx_metadata),	// dependent schema name
+		SEGMENT(f_dpd_name, idx_metadata),		// dependent name
+		SEGMENT(f_dpd_type, idx_numeric)		// dependent type
+	}},
+	// define index RDB$INDEX_79 for RDB$DEPENDENCIES RDB$DEPENDED_ON_SCHEMA_NAME, RDB$DEPENDED_ON_NAME,
+	// RDB$DEPENDED_ON_TYPE, RDB$FIELD_NAME;
+	INDEX(79, rel_dpds, 0, 4, ODS_14_0)
+		SEGMENT(f_dpd_o_schema, idx_metadata),	// dependent on schema name
+		SEGMENT(f_dpd_o_name, idx_metadata),	// dependent on name
+		SEGMENT(f_dpd_o_type, idx_numeric),		// dependent on type
+		SEGMENT(f_dpd_f_name, idx_metadata)		// field name
+	}},
+	// define index RDB$INDEX_80 for RDB$USER_PRIVILEGES RDB$RELATION_SCHEMA_NAME, RDB$RELATION_NAME;
+	INDEX(80, rel_priv, 0, 2, ODS_14_0)
+		SEGMENT(f_prv_rel_schema, idx_metadata),	// relation schema name
+		SEGMENT(f_prv_rname, idx_metadata)			// relation name
+	}},
+	// define index RDB$INDEX_81 for RDB$USER_PRIVILEGES RDB$USER_SCHEMA_NAME, RDB$USER;
+	INDEX(81, rel_priv, 0, 2, ODS_14_0)
+		SEGMENT(f_prv_user_schema, idx_metadata),	// granted user schema name
+		SEGMENT(f_prv_user, idx_metadata)			// granted user
+	}},
+	// define index RDB$INDEX_82 for RDB$INDICES RDB$SCHEMA_NAME, RDB$RELATION_NAME;
+	INDEX(82, rel_indices, 0, 2, ODS_14_0)
+		SEGMENT(f_idx_schema, idx_metadata),	// schema name
+		SEGMENT(f_idx_relation, idx_metadata)	// indexed relation
+	}},
+	// define index RDB$INDEX_83 for RDB$VIEW_RELATIONS RDB$SCHEMA_NAME, RDB$VIEW_NAME;
+	INDEX(83, rel_vrel, 0, 2, ODS_14_0)
+		SEGMENT(f_vrl_schema, idx_metadata),	// schema name
+		SEGMENT(f_vrl_vname, idx_metadata)		// view name
+	}},
+	// define index RDB$INDEX_84 for RDB$VIEW_RELATIONS RDB$RELATION_SCHEMA_NAME, RDB$RELATION_NAME;
+	INDEX(84, rel_vrel, 0, 2, ODS_14_0)
+		SEGMENT(f_vrl_rname_schema, idx_metadata),	// schema name
+		SEGMENT(f_vrl_rname, idx_metadata)		// base relation name
+	}},
+	// define index RDB$INDEX_85 for RDB$TRIGGER_MESSAGES RDB$SCHEMA_NAME, RDB$TRIGGER_NAME;
+	INDEX(85, rel_msgs, 0, 2, ODS_14_0)
+		SEGMENT(f_msg_schema, idx_metadata),	// schema name
+		SEGMENT(f_msg_trigger, idx_metadata)	// trigger name
+	}},
+	// define index RDB$INDEX_86 for RDB$FIELD_DIMENSIONS RDB$SCHEMA_NAME, RDB$FIELD_NAME;
+	INDEX(86, rel_dims, 0, 2, ODS_14_0)
+		SEGMENT(f_dims_schema, idx_metadata),	// schema name
+		SEGMENT(f_dims_fname, idx_metadata)		// array name
+	}},
+	// define index RDB$INDEX_87 for RDB$TRIGGERS RDB$SCHEMA_NAME, RDB$RELATION_NAME;
+	INDEX(87, rel_triggers, 0, 2, ODS_14_0)
+		SEGMENT(f_trg_schema, idx_metadata),	// schema name
+		SEGMENT(f_trg_rname, idx_metadata)		// triggered relation
+	}},
+	// define index RDB$INDEX_88 for RDB$CHECK_CONSTRAINTS RDB$SCHEMA_NAME, RDB$TRIGGER_NAME;
+	INDEX(88, rel_ccon, 0, 2, ODS_14_0)
+		SEGMENT(f_ccon_schema, idx_metadata),	// schema name
+		SEGMENT(f_ccon_tname, idx_metadata)		// trigger name
+	}},
+	// define index RDB$INDEX_89 for RDB$INDICES RDB$FOREIGN_KEY_SCHEMA_NAME, RDB$FOREIGN_KEY;
+	INDEX(89, rel_indices, 0, 2, ODS_14_0)
+		SEGMENT(f_idx_foreign_schema, idx_metadata),	// foreign key schema name
+		SEGMENT(f_idx_foreign, idx_metadata)			// foreign key name
+	}},
+	// define index RDB$INDEX_90 for RDB$RELATION_CONSTRAINTS RDB$SCHEMA_NAME, RDB$RELATION_NAME, RDB$CONSTRAINT_TYPE;
+	INDEX(90, rel_rcon, 0, 3, ODS_14_0)
+		SEGMENT(f_rcon_schema, idx_metadata),	// schema name
+		SEGMENT(f_rcon_rname, idx_metadata),	// relation name
+		SEGMENT(f_rcon_ctype, idx_metadata)     // constraint type
+	}},
+	// define index RDB$INDEX_91 for RDB$RELATION_CONSTRAINTS RDB$SCHEMA_NAME, RDB$INDEX_NAME;
+	INDEX(91, rel_rcon, 0, 2, ODS_14_0)
+		SEGMENT(f_rcon_schema, idx_metadata),	// schema name
+		SEGMENT(f_rcon_iname, idx_metadata),	// index name
+	}},
+	// define index RDB$INDEX_92 for RDB$PACKAGES unique RDB$SCHEMA_NAME, RDB$PACKAGE_NAME;
+	INDEX(92, rel_packages, idx_unique, 2, ODS_14_0)
+		SEGMENT(f_pkg_schema, idx_metadata),	// schema name
+		SEGMENT(f_pkg_name, idx_metadata)		// package name
+	}},
+	//	define index RDB$INDEX_93 for RDB$PROCEDURE_PARAMETERS RDB$FIELD_SOURCE_SCHEMA_NAME, RDB$FIELD_SOURCE;
+	INDEX(93, rel_prc_prms, 0, 2, ODS_14_0)
+		SEGMENT(f_prm_field_source_schema, idx_metadata),	// field source schema name
+		SEGMENT(f_prm_sname, idx_metadata)					// field source name
+	}},
+	//	define index RDB$INDEX_94 for RDB$FUNCTION_ARGUMENTS RDB$FIELD_SOURCE_SCHEMA_NAME, RDB$FIELD_SOURCE;
+	INDEX(94, rel_args, 0, 2, ODS_14_0)
+		SEGMENT(f_arg_field_source_schema, idx_metadata),	// field source schema name
+		SEGMENT(f_arg_sname, idx_metadata)					// field source name
+	}},
+	//	define index RDB$INDEX_95 for RDB$PROCEDURE_PARAMETERS RDB$SCHEMA_NAME, RDB$RELATION_NAME, RDB$FIELD_NAME;
+	INDEX(95, rel_prc_prms, 0, 3, ODS_14_0)
+		SEGMENT(f_prm_rel_schema, idx_metadata),	// relation schema name
+		SEGMENT(f_prm_rname, idx_metadata),			// relation name
+		SEGMENT(f_prm_fname, idx_metadata)			// field name
+	}},
+	//	define index RDB$INDEX_96 for RDB$FUNCTION_ARGUMENTS RDB$SCHEMA_NAME, RDB$RELATION_NAME, RDB$FIELD_NAME;
+	INDEX(96, rel_args, 0, 3, ODS_14_0)
+		SEGMENT(f_arg_rel_schema, idx_metadata),	// relation schema name
+		SEGMENT(f_arg_rname, idx_metadata),			// relation name
+		SEGMENT(f_arg_fname, idx_metadata)			// field name
+	}},
+	// define index RDB$INDEX_97 for RDB$PUBLICATION_TABLES unique RDB$TABLE_SCHEMA_NAME,
+	// RDB$TABLE_NAME, RDB$PUBLICATION_NAME;
+	INDEX(97, rel_pub_tables, idx_unique, 3, ODS_14_0)
+		SEGMENT(f_pubtab_tab_schema, idx_metadata),	// table schema name
+		SEGMENT(f_pubtab_tab_name, idx_metadata),	// table name
+		SEGMENT(f_pubtab_pub_name, idx_metadata)	// publication name
+	}},
+	// define index RDB$INDEX_98 for RDB$TABLESPACES unique RDB$TABLESPACE_NAME;
+	INDEX(98, rel_tablespaces, idx_unique, 1, ODS_14_0)
 		SEGMENT(f_ts_name, idx_metadata)		// tablespace name
 	}},
-	// define index RDB$INDEX_59 for RDB$TABLESPACES unique RDB$TABLESPACE_ID;
-	INDEX(59, rel_tablespaces, idx_unique, 1, ODS_13_0)
+	// define index RDB$INDEX_99 for RDB$TABLESPACES unique RDB$TABLESPACE_ID;
+	INDEX(99, rel_tablespaces, idx_unique, 1, ODS_14_0)
 		SEGMENT(f_ts_id, idx_numeric)		// tablespace id
 	}},
-	// define index RDB$INDEX_60 for RDB$PAGES RDB$PAGE_TYPE, RDB$RELATION_ID;
-	INDEX(60, rel_pages, 0, 2, ODS_13_0)
+	// define index RDB$INDEX_100 for RDB$PAGES RDB$PAGE_TYPE, RDB$RELATION_ID;
+	INDEX(100, rel_pages, 0, 2, ODS_14_0)
 		SEGMENT(f_pag_type, idx_numeric),	// page type
 		SEGMENT(f_pag_id, idx_numeric),		// relation id
 	}}

@@ -41,7 +41,7 @@ using namespace Firebird;
 // When converting non-text values to text, how many bytes to allocate
 // for holding the text image of the value.
 
-static const USHORT _DSC_convert_to_text_length[DTYPE_TYPE_MAX] =
+static constexpr USHORT _DSC_convert_to_text_length[DTYPE_TYPE_MAX] =
 {
 	0,							// dtype_unknown
 	0,							// dtype_text
@@ -77,7 +77,7 @@ static const USHORT _DSC_convert_to_text_length[DTYPE_TYPE_MAX] =
 
 // Unimplemented names are in lowercase & <brackets>
 // Datatypes that represent a range of SQL datatypes are in lowercase
-static const TEXT* const DSC_dtype_names[] =
+static constexpr const TEXT* DSC_dtype_names[] =
 {
 	"<dtype_unknown>",
 	"CHAR",
@@ -1351,12 +1351,12 @@ const BYTE DSC_multiply_blr4_result[DTYPE_TYPE_MAX][DTYPE_TYPE_MAX] =
 };
 
 #ifdef DEV_BUILD
-static bool validate_dsc_tables();
+static bool validate_dsc_tables() noexcept;
 #endif
 
 
 
-int dsc::getStringLength() const
+USHORT dsc::getStringLength() const noexcept
 {
 	return DSC_string_length(this);
 }
@@ -1533,7 +1533,7 @@ bool DSC_make_descriptor(DSC* desc,
 }
 
 
-int DSC_string_length(const dsc* desc)
+USHORT DSC_string_length(const dsc* desc) noexcept
 {
 /**************************************
  *
@@ -1561,15 +1561,15 @@ int DSC_string_length(const dsc* desc)
 		return desc->dsc_length - sizeof(USHORT);
 	default:
  		if (!DTYPE_IS_EXACT(desc->dsc_dtype) || desc->dsc_scale == 0)
- 			return (int) _DSC_convert_to_text_length[desc->dsc_dtype];
+ 			return _DSC_convert_to_text_length[desc->dsc_dtype];
  		if (desc->dsc_scale < 0)
-			return (int) _DSC_convert_to_text_length[desc->dsc_dtype] + 1;
-		return (int) _DSC_convert_to_text_length[desc->dsc_dtype] + desc->dsc_scale;
+			return _DSC_convert_to_text_length[desc->dsc_dtype] + 1;
+		return _DSC_convert_to_text_length[desc->dsc_dtype] + desc->dsc_scale;
 	}
 }
 
 
-const TEXT *DSC_dtype_tostring(UCHAR dtype)
+const TEXT* DSC_dtype_tostring(UCHAR dtype) noexcept
 {
 /**************************************
  *
@@ -1604,7 +1604,7 @@ void DSC_get_dtype_name(const dsc* desc, TEXT * buffer, USHORT len)
 }
 
 
-const char* dsc::typeToText() const
+const char* dsc::typeToText() const noexcept
 {
 	switch (dsc_dtype)
 	{
@@ -1805,13 +1805,13 @@ void dsc::address32bit() const
  *
  **************************************/
 #if SIZEOF_VOID_P > 4
-	FB_UINT64 addr = (FB_UINT64)(IPTR) dsc_address;
+	const FB_UINT64 addr = (FB_UINT64)(IPTR) dsc_address;
 	fb_assert(addr == (addr & 0xFFFFFFFF));
 #endif
 }
 
 
-static bool validate_dsc_tables()
+static bool validate_dsc_tables() noexcept
 {
 /**************************************
  *

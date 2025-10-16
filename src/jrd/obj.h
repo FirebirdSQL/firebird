@@ -24,93 +24,132 @@
 #ifndef JRD_OBJ_H
 #define JRD_OBJ_H
 
+#include "../common/gdsassert.h"
+
 // Object types used in RDB$DEPENDENCIES and RDB$USER_PRIVILEGES and stored in backup.
 // Note: some values are hard coded in grant.gdl
 // Keep existing constants unchanged.
 
 typedef SSHORT ObjectType;
 
-const ObjectType obj_relation = 0;
-const ObjectType obj_view = 1;
-const ObjectType obj_trigger = 2;
-const ObjectType obj_computed = 3;
-const ObjectType obj_validation = 4;
-const ObjectType obj_procedure = 5;
-const ObjectType obj_index_expression = 6;
-const ObjectType obj_exception = 7;
-const ObjectType obj_user = 8;
-const ObjectType obj_field = 9;
-const ObjectType obj_index = 10;
-const ObjectType obj_charset = 11;
-const ObjectType obj_user_group = 12;
-const ObjectType obj_sql_role = 13;
-const ObjectType obj_generator = 14;
-const ObjectType obj_udf = 15;
-const ObjectType obj_blob_filter = 16;
-const ObjectType obj_collation = 17;
-const ObjectType obj_package_header = 18;
-const ObjectType obj_package_body = 19;
-const ObjectType obj_privilege = 20;
+inline constexpr ObjectType obj_relation = 0;
+inline constexpr ObjectType obj_view = 1;
+inline constexpr ObjectType obj_trigger = 2;
+inline constexpr ObjectType obj_computed = 3;
+inline constexpr ObjectType obj_validation = 4;
+inline constexpr ObjectType obj_procedure = 5;
+inline constexpr ObjectType obj_index_expression = 6;
+inline constexpr ObjectType obj_exception = 7;
+inline constexpr ObjectType obj_user = 8;
+inline constexpr ObjectType obj_field = 9;
+inline constexpr ObjectType obj_index = 10;
+inline constexpr ObjectType obj_charset = 11;
+inline constexpr ObjectType obj_user_group = 12;
+inline constexpr ObjectType obj_sql_role = 13;
+inline constexpr ObjectType obj_generator = 14;
+inline constexpr ObjectType obj_udf = 15;
+inline constexpr ObjectType obj_blob_filter = 16;
+inline constexpr ObjectType obj_collation = 17;
+inline constexpr ObjectType obj_package_header = 18;
+inline constexpr ObjectType obj_package_body = 19;
+inline constexpr ObjectType obj_privilege = 20;
 
 // objects types for ddl operations
-const ObjectType obj_database = 21;
-const ObjectType obj_relations = 22;
-const ObjectType obj_views = 23;
-const ObjectType obj_procedures = 24;
-const ObjectType obj_functions = 25;
-const ObjectType obj_packages = 26;
-const ObjectType obj_generators = 27;
-const ObjectType obj_domains = 28;
-const ObjectType obj_exceptions = 29;
-const ObjectType obj_roles = 30;
-const ObjectType obj_charsets = 31;
-const ObjectType obj_collations = 32;
-const ObjectType obj_filters = 33;
+inline constexpr ObjectType obj_database = 21;
+inline constexpr ObjectType obj_relations = 22;
+inline constexpr ObjectType obj_views = 23;
+inline constexpr ObjectType obj_procedures = 24;
+inline constexpr ObjectType obj_functions = 25;
+inline constexpr ObjectType obj_packages = 26;
+inline constexpr ObjectType obj_generators = 27;
+inline constexpr ObjectType obj_domains = 28;
+inline constexpr ObjectType obj_exceptions = 29;
+inline constexpr ObjectType obj_roles = 30;
+inline constexpr ObjectType obj_charsets = 31;
+inline constexpr ObjectType obj_collations = 32;
+inline constexpr ObjectType obj_filters = 33;
 
 // Add new codes here if they are used in RDB$DEPENDENCIES or RDB$USER_PRIVILEGES or stored in backup
 // Codes for DDL operations add in isDdlObject function as well (find it below).
-const ObjectType obj_jobs = 34;
-const ObjectType obj_tablespace = 35;
-const ObjectType obj_tablespaces = 36;
-const ObjectType obj_index_condition = 37;
+inline constexpr ObjectType obj_jobs = 34;
+inline constexpr ObjectType obj_tablespace = 35;
+inline constexpr ObjectType obj_tablespaces = 36;
+inline constexpr ObjectType obj_index_condition = 37;
 
-const ObjectType obj_type_MAX = 38;
+inline constexpr ObjectType obj_schema = 38;
+inline constexpr ObjectType obj_schemas = 39;
+
+inline constexpr ObjectType obj_type_MAX = 40;
 
 // used in the parser only / no relation with obj_type_MAX (should be greater)
-const ObjectType obj_user_or_role= 100;
-const ObjectType obj_parameter = 101;
-const ObjectType obj_column = 102;
+inline constexpr ObjectType obj_user_or_role = 100;
+inline constexpr ObjectType obj_parameter = 101;
+inline constexpr ObjectType obj_column = 102;
+inline constexpr ObjectType obj_publication = 103;
 
-const ObjectType obj_any = 255;
+inline constexpr ObjectType obj_any = 255;
 
 
-inline bool isDdlObject(ObjectType object_type)
+inline bool isSchemaBoundObject(ObjectType objectType) noexcept
 {
-	switch (object_type)
+	switch (objectType)
 	{
-		case obj_database:
-		case obj_relations:
-		case obj_views:
-		case obj_procedures:
-		case obj_functions:
-		case obj_packages:
-		case obj_generators:
-		case obj_filters:
-		case obj_domains:
-		case obj_exceptions:
-		case obj_roles:
-		case obj_charsets:
-		case obj_collations:
-		case obj_jobs:
-		case obj_tablespaces:
+		case obj_relation:
+		case obj_view:
+		case obj_trigger:
+		case obj_procedure:
+		case obj_exception:
+		case obj_field:
+		case obj_index:
+		case obj_charset:
+		case obj_generator:
+		case obj_udf:
+		case obj_collation:
+		case obj_package_header:
 			return true;
+
 		default:
 			return false;
 	}
 }
 
 
-inline const char* getSecurityClassName(ObjectType object_type)
+inline bool isDdlObject(ObjectType objectType, bool* useSchema = nullptr) noexcept
+{
+	if (useSchema)
+		*useSchema = false;
+
+	switch (objectType)
+	{
+		case obj_relations:
+		case obj_views:
+		case obj_procedures:
+		case obj_functions:
+		case obj_packages:
+		case obj_generators:
+		case obj_domains:
+		case obj_exceptions:
+		case obj_charsets:
+		case obj_collations:
+			if (useSchema)
+				*useSchema = true;
+			[[fallthrough]];
+
+		case obj_database:
+		case obj_filters:
+		case obj_roles:
+		case obj_jobs:
+		case obj_tablespaces:
+		case obj_schemas:
+			return true;
+
+		default:
+			return false;
+	}
+}
+
+
+inline constexpr const char* getDdlSecurityName(ObjectType object_type) noexcept
 {
 	switch (object_type)
 	{
@@ -140,10 +179,12 @@ inline const char* getSecurityClassName(ObjectType object_type)
 			return "SQL$CHARSETS";
 		case obj_collations:
 			return "SQL$COLLATIONS";
-		case obj_tablespaces:
-			return "SQL$TABLESPACES";
 		case obj_jobs:
 			return "SQL$JOBS";
+		case obj_tablespaces:
+			return "SQL$TABLESPACES";
+		case obj_schemas:
+			return "SQL$SCHEMAS";
 		default:
 			return "";
 	}
@@ -182,10 +223,53 @@ inline const char* getDdlObjectName(ObjectType object_type)
 			return "ROLE";
 		case obj_filters:
 			return "FILTER";
-		case obj_tablespaces:
-			return "TABLESPACE";
 		case obj_jobs:
 			return "JOB";
+		case obj_tablespaces:
+			return "TABLESPACE";
+		case obj_schemas:
+			return "SCHEMA";
+		default:
+			fb_assert(false);
+			return "<unknown object type>";
+	}
+}
+
+
+inline const char* getObjectName(ObjectType objType)
+{
+	switch (objType)
+	{
+		case obj_relation:
+			return "TABLE";
+		case obj_trigger:
+			return "TRIGGER";
+		case obj_package_header:
+			return "PACKAGE";
+		case obj_procedure:
+			return "PROCEDURE";
+		case obj_udf:
+			return "FUNCTION";
+		case obj_column:
+			return "COLUMN";
+		case obj_charset:
+			return "CHARACTER SET";
+		case obj_collation:
+			return "COLLATION";
+		case obj_field:
+			return "DOMAIN";
+		case obj_exception:
+			return "EXCEPTION";
+		case obj_generator:
+			return "GENERATOR";
+		case obj_view:
+			return "VIEW";
+		case obj_sql_role:
+			return "ROLE";
+		case obj_blob_filter:
+			return "FILTER";
+		case obj_schema:
+			return "SCHEMA";
 		default:
 			fb_assert(false);
 			return "<unknown object type>";

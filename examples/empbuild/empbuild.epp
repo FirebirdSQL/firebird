@@ -74,7 +74,7 @@ else
 /* Create the database */
 
 printf ("creating database %s\n", Db_name);
-sprintf (cmd, "CREATE DATABASE \"%s\"", Db_name);
+snprintf(cmd, sizeof(cmd), "CREATE DATABASE \"%s\"", Db_name);
 gds_trans = 0;
 
 EXEC SQL EXECUTE IMMEDIATE :cmd;
@@ -94,7 +94,7 @@ if (SQLCODE)
     }
 
 printf ("Turning forced writes off\n");
-sprintf (cmd, "gfix -write async %s", Db_name);
+snprintf(cmd, sizeof(cmd), "gfix -write async %s", Db_name);
 if (system (cmd))
     {
     printf ("Couldn't turn forced writes off\n");
@@ -102,7 +102,7 @@ if (system (cmd))
     }
 
 printf ("Creating tables\n");
-sprintf (cmd, "isql %s -q -i empddl.sql", Db_name);
+snprintf(cmd, sizeof(cmd), "isql %s -q -i empddl.sql", Db_name);
 if (system (cmd))
     {
     printf ("Couldn't create tables \n");
@@ -110,7 +110,7 @@ if (system (cmd))
     }
 
 printf ("Turning  off indices and triggers \n");
-sprintf (cmd, "isql %s -i indexoff.sql", Db_name);
+snprintf(cmd, sizeof(cmd), "isql %s -i indexoff.sql", Db_name);
 if (system (cmd))
     {
     printf ("Couldn't turn off indices and triggers \n");
@@ -118,7 +118,7 @@ if (system (cmd))
     }
 
 printf ("Loading  column data\n");
-sprintf (cmd, "isql %s -i empdml.sql", Db_name);
+snprintf(cmd, sizeof(cmd), "isql %s -i empdml.sql", Db_name);
 if (system (cmd))
     {
     printf ("Couldn't load column data \n");
@@ -126,7 +126,7 @@ if (system (cmd))
     }
 
 printf ("Turning  on indices and triggers \n");
-sprintf (cmd, "isql %s -i indexon.sql", Db_name);
+snprintf(cmd, sizeof(cmd), "isql %s -i indexon.sql", Db_name);
 if (system (cmd))
     {
     printf ("Couldn't turn on indices and triggers \n");
@@ -287,7 +287,7 @@ while (fgets (line, 100, Fp) != NULL)
 	if (*line == '\n')
 	    break;
 
-	len = strlen (line);
+	len = static_cast<int>(strlen(line));
 	EXEC SQL INSERT CURSOR be VALUES (:line INDICATOR :len);
 	}
 
@@ -365,7 +365,7 @@ while (fgets (line, 100, Fp) != NULL)
 	if (*line == '\n')
 	    break;
 
-	len = strlen (line);
+	len = static_cast<int>(strlen(line));
 	EXEC SQL INSERT CURSOR bd VALUES (:line INDICATOR :len);
 	}
 

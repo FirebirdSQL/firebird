@@ -173,7 +173,7 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 	class ParamCmp
 	{
 	public:
-		static int greaterThan(const Jrd::dsql_par* p1, const Jrd::dsql_par* p2)
+		static int greaterThan(const Jrd::dsql_par* p1, const Jrd::dsql_par* p2) noexcept
 		{
 			return p1->par_index > p2->par_index;
 		}
@@ -232,8 +232,9 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 			// But we flag it to describe as text.
 			parameter->par_is_text = true;
 			parameter->par_desc.dsc_dtype = dtype_varying;
-			parameter->par_desc.dsc_length = dataTypeUtil.fixLength(
-				&parameter->par_desc, parameter->par_desc.dsc_length) + sizeof(USHORT);
+			parameter->par_desc.dsc_length = static_cast<USHORT>(
+				dataTypeUtil.fixLength(&parameter->par_desc, parameter->par_desc.dsc_length)
+				+ sizeof(USHORT));
 		}
 
 		const USHORT align = type_alignments[parameter->par_desc.dsc_dtype];
@@ -245,8 +246,6 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 	}
 
 	message->msg_length = offset;
-
-	dsqlScratch->getDsqlStatement()->getPorts().add(message);
 
 	// Remove gaps in par_index due to output parameters using question-marks (CALL syntax).
 
@@ -505,9 +504,20 @@ static void gen_plan(DsqlCompilerScratch* dsqlScratch, const PlanNode* planNode)
 
 		// now stuff the access method for this stream
 
-		ObjectsArray<PlanNode::AccessItem>::const_iterator idx_iter =
-			node->accessType->items.begin();
+		auto idx_iter = node->accessType->items.begin();
 		FB_SIZE_T idx_count = node->accessType->items.getCount();
+
+		const auto checkIndexSchema = [&]()
+		{
+			if (node->recordSourceNode &&
+				node->recordSourceNode->dsqlContext &&
+				node->recordSourceNode->dsqlContext->ctx_relation &&
+				idx_iter->indexName.schema.hasData() &&
+				idx_iter->indexName.schema != node->recordSourceNode->dsqlContext->ctx_relation->rel_name.schema)
+			{
+				ERRD_post(Arg::Gds(isc_index_unused) << idx_iter->indexName.toQuotedString());
+			}
+		};
 
 		switch (node->accessType->type)
 		{
@@ -516,14 +526,16 @@ static void gen_plan(DsqlCompilerScratch* dsqlScratch, const PlanNode* planNode)
 				break;
 
 			case PlanNode::AccessType::TYPE_NAVIGATIONAL:
+				checkIndexSchema();
 				dsqlScratch->appendUChar(blr_navigational);
-				dsqlScratch->appendNullString(idx_iter->indexName.c_str());
+				dsqlScratch->appendNullString(idx_iter->indexName.object.c_str());
 				if (idx_count == 1)
 					break;
 				// dimitr: FALL INTO, if the plan item is ORDER ... INDEX (...)
 				// ASF: The first item of a TYPE_NAVIGATIONAL is not for blr_indices.
 				++idx_iter;
 				--idx_count;
+				[[fallthrough]];
 
 			case PlanNode::AccessType::TYPE_INDICES:
 			{
@@ -532,7 +544,10 @@ static void gen_plan(DsqlCompilerScratch* dsqlScratch, const PlanNode* planNode)
 				dsqlScratch->appendUChar(idx_count);
 
 				for (; idx_iter != node->accessType->items.end(); ++idx_iter)
-					dsqlScratch->appendNullString(idx_iter->indexName.c_str());
+				{
+					checkIndexSchema();
+					dsqlScratch->appendNullString(idx_iter->indexName.object.c_str());
+				}
 
 				break;
 			}
@@ -669,6 +684,9 @@ void GEN_sort(DsqlCompilerScratch* dsqlScratch, UCHAR blrVerb, ValueListNode* li
 					break;
 				case OrderNode::NULLS_LAST:
 					dsqlScratch->appendUChar(blr_nullslast);
+					break;
+				case OrderNode::NULLS_DEFAULT:
+					// Nothing to do for default placement
 					break;
 			}
 

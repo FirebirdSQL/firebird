@@ -58,8 +58,7 @@ using namespace Auth;
 #include <io.h>
 #endif
 
-//const int MAXARGS	= 20;		// max number of args allowed on command line
-const int MAXSTUFF	= 1000;		// longest interactive command line
+constexpr int MAXSTUFF = 1000;	// longest interactive command line
 
 static void util_output(bool error, const SCHAR*, ...);
 
@@ -166,38 +165,38 @@ namespace {
 		{ }
 
 		// ILogonInfo implementation
-		const char* name()
+		const char* name() noexcept
 		{
 			return dba;
 		}
 
-		const char* role()
+		const char* role() noexcept
 		{
 			return sqlRole;
 		}
 
-		const char* networkProtocol()
+		const char* networkProtocol() noexcept
 		{
 			return protocol;
 		}
 
-		const char* remoteAddress()
+		const char* remoteAddress() noexcept
 		{
 			return address;
 		}
 
-		const unsigned char* authBlock(unsigned* length)
+		const unsigned char* authBlock(unsigned* length) noexcept
 		{
 			*length = authLength;
 			return authBytes;
 		}
 
-		Firebird::IAttachment* attachment(Firebird::CheckStatusWrapper* status)
+		Firebird::IAttachment* attachment(Firebird::CheckStatusWrapper* status) noexcept
 		{
 			return nullptr;
 		}
 
-		Firebird::ITransaction* transaction(Firebird::CheckStatusWrapper* status)
+		Firebird::ITransaction* transaction(Firebird::CheckStatusWrapper* status) noexcept
 		{
 			return nullptr;
 		}
@@ -308,7 +307,7 @@ namespace {
 		public Firebird::AutoIface<Firebird::IListUsersImpl<Callback, Firebird::CheckStatusWrapper> >
 	{
 	public:
-		explicit Callback(StackUserData* pu)
+		explicit Callback(UserData* pu)
 			: u(pu)
 		{ }
 
@@ -329,7 +328,7 @@ namespace {
 		}
 
 	private:
-		StackUserData* u;
+		UserData* u;
 	};
 } // anonymous namespace
 
@@ -356,14 +355,14 @@ int gsec(Firebird::UtilSvc* uSvc)
 	tsec* tdsec = &tsecInstance;
 	tsec::putSpecific(tdsec);
 
-	StackUserData u;
+	UserData u;
 	tdsec->tsec_user_data = &u;
 
 	Firebird::LocalStatus lsManager;
 	Firebird::CheckStatusWrapper statusManager(&lsManager);
 
 	const unsigned char* block;
-	unsigned int bs = uSvc->getAuthBlock(&block);
+	const unsigned int bs = uSvc->getAuthBlock(&block);
 	if (bs)
 	{
 		u.authenticationBlock.add(block, bs);
@@ -412,7 +411,7 @@ int gsec(Firebird::UtilSvc* uSvc)
 	check(&statusWrapper);
 
 	Firebird::AutoPlugin<Firebird::IManagement> manager;
-	ISC_STATUS_ARRAY status;
+	ISC_STATUS_ARRAY status{};
 
 	if (!useServices)
 	{
@@ -549,7 +548,7 @@ int gsec(Firebird::UtilSvc* uSvc)
 				if (user_data->operation() == MOD_OPER && user_data->userName()->entered() &&
 					(fieldSet(&user_data->u) || fieldSet(&user_data->g) || fieldSet(&user_data->group)))
 				{
-					StackUserData u;
+					UserData u;
 					u.op = DIS_OPER;
 					u.user.set(&statusWrapper, user_data->userName()->get());
 					check(&statusWrapper);

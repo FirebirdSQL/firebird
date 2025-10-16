@@ -25,24 +25,24 @@
 #define SVC_UNDOC_H
 
 // Service Action Flags
-const int isc_action_svc_lock_stats		= 13;	// Retrieves lock manager statistics
-const int isc_action_svc_set_config		= 14;	// Sets configuration file values
-const int isc_action_svc_default_config	= 15;	// Sets the configuration options to their default values
-const int isc_action_svc_set_env		= 16;	// Sets the value for $FIREBIRD
-const int isc_action_svc_set_env_lock	= 17;	// Sets the value for $FIREBIRD_LOCK
-const int isc_action_svc_set_env_msg	= 18;	// Sets the value for $FIREBIRD_MSG
+inline constexpr int isc_action_svc_lock_stats		= 13;	// Retrieves lock manager statistics
+inline constexpr int isc_action_svc_set_config		= 14;	// Sets configuration file values
+inline constexpr int isc_action_svc_default_config	= 15;	// Sets the configuration options to their default values
+inline constexpr int isc_action_svc_set_env			= 16;	// Sets the value for $FIREBIRD
+inline constexpr int isc_action_svc_set_env_lock	= 17;	// Sets the value for $FIREBIRD_LOCK
+inline constexpr int isc_action_svc_set_env_msg		= 18;	// Sets the value for $FIREBIRD_MSG
 
 
 // Service Info Flags
-const int isc_info_svc_total_length		= 69;
-const int isc_info_svc_response			= 70;
-const int isc_info_svc_response_more	= 71;
-const int isc_info_svc_message			= 72;
-const int isc_info_svc_svr_online		= 73;
-const int isc_info_svc_svr_offline		= 74;
-const int isc_info_svc_set_config		= 75;
-const int isc_info_svc_default_config	= 76;
-const int isc_info_svc_dump_pool_info	= 77;
+inline constexpr int isc_info_svc_total_length		= 69;
+inline constexpr int isc_info_svc_response			= 70;
+inline constexpr int isc_info_svc_response_more		= 71;
+inline constexpr int isc_info_svc_message			= 72;
+inline constexpr int isc_info_svc_svr_online		= 73;
+inline constexpr int isc_info_svc_svr_offline		= 74;
+inline constexpr int isc_info_svc_set_config		= 75;
+inline constexpr int isc_info_svc_default_config	= 76;
+inline constexpr int isc_info_svc_dump_pool_info	= 77;
 
 // BRS: Is not strange the following parameters are undocumented
 // it are also unused in the code

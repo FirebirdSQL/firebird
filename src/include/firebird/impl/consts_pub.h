@@ -133,6 +133,11 @@
 #define isc_dpb_parallel_workers		 100
 #define isc_dpb_worker_attach			 101
 #define isc_dpb_owner					 102
+#define isc_dpb_max_blob_cache_size		 103
+#define isc_dpb_max_inline_blob_size	 104
+#define isc_dpb_search_path				 105
+#define isc_dpb_blr_request_search_path	 106
+#define isc_dpb_gbak_restore_has_schema	 107
 
 
 /**************************************************/
@@ -269,6 +274,7 @@
 #define isc_tpb_read_consistency          22
 #define isc_tpb_at_snapshot_number        23
 #define isc_tpb_auto_release_temp_blobid  24
+#define isc_tpb_lock_table_schema         25
 
 
 /************************/
@@ -426,6 +432,8 @@
 #define isc_spb_bkp_crypt				 18
 #define isc_spb_bkp_include_data         19
 #define isc_spb_bkp_parallel_workers	 21
+#define isc_spb_bkp_skip_schema_data     22
+#define isc_spb_bkp_include_schema_data  23
 #define isc_spb_bkp_ignore_checksums     0x01
 #define isc_spb_bkp_ignore_limbo         0x02
 #define isc_spb_bkp_metadata_only        0x04
@@ -552,6 +560,8 @@
 #define isc_spb_res_access_mode			12
 #define isc_spb_res_fix_fss_data		13
 #define isc_spb_res_fix_fss_metadata	14
+#define isc_spb_res_skip_schema_data	isc_spb_bkp_skip_schema_data
+#define isc_spb_res_include_schema_data	isc_spb_bkp_include_schema_data
 #define isc_spb_res_keyholder			isc_spb_bkp_keyholder
 #define isc_spb_res_keyname				isc_spb_bkp_keyname
 #define isc_spb_res_crypt				isc_spb_bkp_crypt
@@ -577,6 +587,8 @@
 #define isc_spb_val_idx_incl		3	// regexp of indices to validate
 #define isc_spb_val_idx_excl		4	// regexp of indices to NOT validate
 #define isc_spb_val_lock_timeout	5	// how long to wait for table lock
+#define isc_spb_val_sch_incl		6	// include schema filter based on regular expression
+#define isc_spb_val_sch_excl		7	// exclude schema filter based on regular expression
 
 /******************************************
  * Parameters for isc_spb_res_access_mode  *
@@ -605,6 +617,7 @@
  *****************************************/
 
 #define isc_spb_sts_table			64
+#define isc_spb_sts_schema			65
 
 #define isc_spb_sts_data_pages		0x01
 #define isc_spb_sts_db_log			0x02
@@ -644,6 +657,7 @@
 #define isc_spb_trc_id				1
 #define isc_spb_trc_name			2
 #define isc_spb_trc_cfg				3
+#define isc_spb_trc_plugins			4
 
 /******************************************/
 /* Array slice description language (SDL) */
@@ -686,6 +700,7 @@
 #define isc_sdl_do2                       34
 #define isc_sdl_do1                       35
 #define isc_sdl_element                   36
+#define isc_sdl_schema                    37
 
 /********************************************/
 /* International text interpretation values */

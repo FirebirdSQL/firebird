@@ -149,14 +149,12 @@ enum irq_type_t
 	irq_domain,				// DSQL/METD: lookup a domain
 	irq_type,				// DSQL/METD: lookup a symbolic name in RDB$TYPES
 	irq_cs_name,			// DSQL/METD: lookup a charset name
-	irq_default_cs,			// DSQL/METD: lookup the default charset
 	irq_rel_ids,			// DSQL/METD: check relation/field ids
 	irq_comp_circ_dpd,		// check computed circular dependencies
 	irq_grant10,			// process grant option (packages)
 	irq_l_procedure_pkg_class,	// lookup security class of a packaged procedure
 	irq_l_fun_id,			// lookup function by its ID
 	irq_l_fun_name,			// lookup function by its name
-	irq_f_security,			// verify security for function
 	irq_l_arg_fld,			// lookup argument's domain
 	irq_func_ret_fld,		// lookup argument's domain
 	irq_fun_validate,		// function blr validate
@@ -189,6 +187,7 @@ enum irq_type_t
 	irq_proc_param_dep,		// check procedure parameter dependency
 	irq_func_param_dep,		// check function parameter dependency
 	irq_l_pub_tab_state,	// lookup publication state for a table
+	irq_l_index_cnstrt,     // lookup index for constraint
 	irq_list_ts_files,		// list tablespace files
 	irq_find_ts_dfw,		// find tablespace options by name in dfw
 	irq_find_ts_dfw0,		// find tablespace options by name in dfw for cleanup

@@ -61,29 +61,29 @@ struct serv_entry
 	ServiceEntry*		serv_thd;			// thread to execute
 };
 
-const ULONG SERVICE_VERSION			= 2;
+inline constexpr ULONG SERVICE_VERSION		= 2;
 
-const int SVC_STDOUT_BUFFER_SIZE	= 1024;
+inline constexpr int SVC_STDOUT_BUFFER_SIZE	= 1024;
 
 // Flag of capabilities supported by the server
-//const ULONG WAL_SUPPORT				= 0x1L;		// Write Ahead Log
-const ULONG MULTI_CLIENT_SUPPORT		= 0x2L;		// SuperServer model (vs. multi-inet)
-const ULONG REMOTE_HOP_SUPPORT			= 0x4L;		// Server can connect to other server
-//const ULONG NO_SVR_STATS_SUPPORT		= 0x8L;		// Does not support statistics
+//inline constexpr ULONG WAL_SUPPORT				= 0x1L;		// Write Ahead Log
+inline constexpr ULONG MULTI_CLIENT_SUPPORT			= 0x2L;		// SuperServer model (vs. multi-inet)
+inline constexpr ULONG REMOTE_HOP_SUPPORT			= 0x4L;		// Server can connect to other server
+//inline constexpr ULONG NO_SVR_STATS_SUPPORT		= 0x8L;		// Does not support statistics
 
-//const ULONG NO_DB_STATS_SUPPORT		= 0x10L;	// Does not support statistics
+//inline constexpr ULONG NO_DB_STATS_SUPPORT		= 0x10L;	// Does not support statistics
 // Really the 16 bit LIBS here?
-//const ULONG LOCAL_ENGINE_SUPPORT		= 0x20L;	// The local 16 bit engine
-//const ULONG NO_FORCED_WRITE_SUPPORT	= 0x40L;	// Can not configure sync writes
-//const ULONG NO_SHUTDOWN_SUPPORT		= 0x80L;	// Can not shutdown/restart databases
-const ULONG NO_SERVER_SHUTDOWN_SUPPORT	= 0x100L;	// Can not shutdown server
-//const ULONG SERVER_CONFIG_SUPPORT		= 0x200L;	// Can configure server
-const ULONG QUOTED_FILENAME_SUPPORT		= 0x400L;	// Can pass quoted filenames in
+//inline constexpr ULONG LOCAL_ENGINE_SUPPORT		= 0x20L;	// The local 16 bit engine
+//inline constexpr ULONG NO_FORCED_WRITE_SUPPORT	= 0x40L;	// Can not configure sync writes
+//inline constexpr ULONG NO_SHUTDOWN_SUPPORT		= 0x80L;	// Can not shutdown/restart databases
+inline constexpr ULONG NO_SERVER_SHUTDOWN_SUPPORT	= 0x100L;	// Can not shutdown server
+//inline constexpr ULONG SERVER_CONFIG_SUPPORT		= 0x200L;	// Can configure server
+inline constexpr ULONG QUOTED_FILENAME_SUPPORT		= 0x400L;	// Can pass quoted filenames in
 
 // Range definitions for service actions.  Any action outside of
 // this range is not supported
-const USHORT isc_action_min				= 1;
-const USHORT isc_action_max				= isc_action_svc_last;
+inline constexpr USHORT isc_action_min	= 1;
+inline constexpr USHORT isc_action_max	= isc_action_svc_last;
 
 // Range definitions for service actions.  Any action outside of
 // this range is not supported
@@ -91,14 +91,15 @@ const USHORT isc_action_max				= isc_action_svc_last;
 //define isc_info_max                  67
 
 // Bitmask values for the svc_flags variable
-//const int SVC_shutdown	= 0x1;
-//const int SVC_timeout		= 0x2;
-//const int SVC_forked		= 0x4;
-const int SVC_detached		= 0x8;
-const int SVC_finished		= 0x10;
-//const int SVC_thd_running	= 0x20;
-const int SVC_evnt_fired	= 0x40;
-const int SVC_cmd_line		= 0x80;
+//inline constexpr int SVC_shutdown		= 0x1;
+//inline constexpr int SVC_timeout		= 0x2;
+//inline constexpr int SVC_forked		= 0x4;
+inline constexpr int SVC_detached		= 0x8;
+inline constexpr int SVC_finished		= 0x10;
+//inline constexpr int SVC_thd_running	= 0x20;
+inline constexpr int SVC_evnt_fired		= 0x40;
+inline constexpr int SVC_cmd_line		= 0x80;
+inline constexpr int SVC_failed_start	= 0x100;
 
 // forward decl.
 class thread_db;
@@ -151,7 +152,7 @@ public:
 	Firebird::ICryptKeyCallback* getCryptCallback() override;
 	int getParallelWorkers() override { return svc_parallel_workers; }
 
-	TraceManager* getTraceManager()
+	TraceManager* getTraceManager() noexcept
 	{
 		return svc_trace_manager;
 	}
@@ -181,7 +182,7 @@ public:		// external interface with service
 	// Detach from service
 	void detach();
 	// get service version
-	USHORT getVersion() const
+	USHORT getVersion() const noexcept
 	{
 		return svc_spb_version;
 	}
@@ -194,28 +195,28 @@ public:		// external interface with service
 	// Total number of service attachments
 	static ULONG totalCount();
 
-	const char* getServiceMgr() const;
-	const char* getServiceName() const;
+	const char* getServiceMgr() const noexcept;
+	const char* getServiceName() const noexcept;
 
-	const Firebird::string&	getUserName() const
+	const Firebird::string&	getUserName() const noexcept
 	{
 		return svc_username;
 	}
 
-	const Firebird::string&	getRoleName() const
+	const Firebird::string&	getRoleName() const noexcept
 	{
 		return svc_sql_role;
 	}
 
 	// return true if user have admin privileges in security database used
 	// for service user authentication
-	bool getUserAdminFlag() const;
+	bool getUserAdminFlag() const noexcept;
 
-	const Firebird::string&	getNetworkProtocol() const	{ return svc_network_protocol; }
-	const Firebird::string&	getRemoteAddress() const	{ return svc_remote_address; }
-	const Firebird::string&	getRemoteProcess() const	{ return svc_remote_process; }
-	int	getRemotePID() const { return svc_remote_pid; }
-	const Firebird::PathName& getExpectedDb() const		{ return svc_expected_db; }
+	const Firebird::string&	getNetworkProtocol() const noexcept	{ return svc_network_protocol; }
+	const Firebird::string&	getRemoteAddress() const noexcept	{ return svc_remote_address; }
+	const Firebird::string&	getRemoteProcess() const noexcept	{ return svc_remote_process; }
+	int	getRemotePID() const noexcept { return svc_remote_pid; }
+	const Firebird::PathName& getExpectedDb() const noexcept	{ return svc_expected_db; }
 
 private:
 	// Service must have private destructor, called from finish
@@ -230,13 +231,13 @@ private:
 	// Create argv, argc and svc_parsed_sw
 	void	parseSwitches();
 	// Check does this action need arg or not
-	static bool actionNeedsArg(UCHAR action);
+	static bool actionNeedsArg(UCHAR action) noexcept;
 	// Put data into stdout buffer
 	void	enqueue(const UCHAR* s, ULONG len);
 	// true if there is no data in stdout buffer
-	bool	empty(ULONG head) const;
+	bool	empty(ULONG head) const noexcept;
 	// true if no more space in stdout buffer
-	bool	full() const;
+	bool	full() const noexcept;
 	// start service thread
 	void	start(const serv_entry* service_run);
 	// Set the flag (either SVC_finished for the main service thread or SVC_detached for the client thread).
@@ -245,6 +246,8 @@ private:
 	void	finish(USHORT flag);
 	// Throws shutdown exception if global flag is set for it
 	bool	checkForShutdown();
+	// Check for the existence of errors in the service that has not started
+	bool	checkForFailedStart() noexcept;
 	// Transfer data from svc_stdout into buffer
 	void	get(UCHAR* buffer, USHORT length, USHORT flags, USHORT timeout, USHORT* return_length);
 	// Sends stdin for a service
@@ -254,8 +257,8 @@ private:
 	void put_status_arg(Firebird::Arg::StatusVector& status, const MsgFormat::safe_cell& value);
 
 	// Increment circular buffer pointer
-	static ULONG		add_one(ULONG i);
-	static ULONG		add_val(ULONG i, ULONG val);
+	static ULONG		add_one(ULONG i) noexcept;
+	static ULONG		add_val(ULONG i, ULONG val) noexcept;
 	// Convert spb flags to utility switches
 #ifndef DEV_BUILD
 	static
@@ -285,9 +288,9 @@ private:
 	static bool get_action_svc_parameter(UCHAR tag, const Switches::in_sw_tab_t* table,
 										 Firebird::string&);
 	// Create 'SYSDBA needed' error in status vector
-	static void need_admin_privs(Firebird::Arg::StatusVector& status, const char* message);
+	static void need_admin_privs(Firebird::Arg::StatusVector& status, const char* message) noexcept;
 	// Does info buffer have enough space for SLONG?
-	static bool ck_space_for_numeric(UCHAR*& info, const UCHAR* const end);
+	static bool ck_space_for_numeric(UCHAR*& info, const UCHAR* const end) noexcept;
 	// Make status vector permamnent, if one present in worker thread's space
 	void makePermanentStatusVector() noexcept;
 	// Read SPB on attach
@@ -416,7 +419,7 @@ private:
 	ULONG svc_stdin_preload_requested;
 	// Size of data, placed into svc_stdin_buffer (set in put)
 	ULONG svc_stdin_user_size;
-	static const ULONG PRELOAD_BUFFER_SIZE = SVC_IO_BUFFER_SIZE;
+	static inline constexpr ULONG PRELOAD_BUFFER_SIZE = SVC_IO_BUFFER_SIZE;
 	// Handle of a thread to wait for when closing
 	Thread::Handle svc_thread;
 

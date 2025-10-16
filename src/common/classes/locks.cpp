@@ -25,10 +25,6 @@
  *  Contributor(s): ______________________________________.
  */
 
-#ifndef __MINGW32__
-#define _WIN32_WINNT 0x0403
-#endif
-
 #include "firebird.h"
 
 #include "../../common/classes/locks.h"
@@ -38,14 +34,7 @@
 
 namespace Firebird {
 
-#if defined(WIN_NT)
-
-void Spinlock::init()
-{
-	SetCriticalSectionSpinCount(&spinlock, 4000);
-}
-
-#else //posix mutex
+#if !defined(WIN_NT)
 
 pthread_mutexattr_t Mutex::attr;
 

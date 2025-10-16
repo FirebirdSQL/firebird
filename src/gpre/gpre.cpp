@@ -76,16 +76,16 @@
 // Globals
 GpreGlobals gpreGlob;
 
-const char* const SCRATCH = "fb_query_";
+constexpr const char* SCRATCH = "fb_query_";
 
-const char* const FOPEN_READ_TYPE = "r";
-const char* const FOPEN_WRITE_TYPE = "w";
+constexpr const char* FOPEN_READ_TYPE = "r";
+constexpr const char* FOPEN_WRITE_TYPE = "w";
 
-static bool			all_digits(const char*);
+static bool			all_digits(const char*) noexcept;
 static bool			arg_is_string(SLONG, TEXT**, const TEXT*);
-static SSHORT		compare_ASCII7z(const char*, const char*);
+static SSHORT		compare_ASCII7z(const char*, const char*) noexcept;
 static SLONG		compile_module(SLONG, const TEXT*);
-static bool			file_rename(TEXT*, const TEXT*, const TEXT*);
+static bool			file_rename(TEXT*, const TEXT*, const TEXT*) noexcept;
 #ifdef GPRE_FORTRAN
 static void			finish_based(act*);
 #endif
@@ -101,8 +101,7 @@ static void			print_switches();
 static void			remember_label(const TEXT*);
 #endif
 
-//static FILE*		reposition_file(FILE *, SLONG);
-static void			return_char(SSHORT);
+static void			return_char(SSHORT) noexcept;
 static SSHORT		skip_white();
 
 // Program wide globals
@@ -121,22 +120,22 @@ static act* global_last_action;
 static act* global_first_action;
 static UCHAR classes_array[256];
 
-inline UCHAR get_classes(int idx)
+inline UCHAR get_classes(int idx) noexcept
 {
 	return classes_array[(UCHAR) idx];
 }
 
-inline UCHAR get_classes(UCHAR idx)
+inline UCHAR get_classes(UCHAR idx) noexcept
 {
 	return classes_array[idx];
 }
 
-inline void set_classes(int idx, UCHAR v)
+inline void set_classes(int idx, UCHAR v) noexcept
 {
 	classes_array[(UCHAR) idx] = v;
 }
 
-inline void set_classes(UCHAR idx, UCHAR v)
+inline void set_classes(UCHAR idx, UCHAR v) noexcept
 {
 	classes_array[idx] = v;
 }
@@ -167,14 +166,14 @@ static SLONG traced_position = 0;
 //___________________________________________________________________
 // Test if input language is cpp based.
 //
-bool isLangCpp(lang_t lang)
+bool isLangCpp(lang_t lang) noexcept
 {
     return (lang == lang_cxx || lang == lang_internal);
 }
 
 // Test if input language is an ANSI-85 Cobol variant
 #ifdef GPRE_COBOL
-bool isAnsiCobol(cob_t dialect)
+bool isAnsiCobol(cob_t dialect) noexcept
 {
 	return (dialect == cob_ansi) || (dialect == cob_rmc);
 }
@@ -193,7 +192,7 @@ struct ext_table_t
 };
 
 
-static const ext_table_t dml_ext_table[] =
+static constexpr ext_table_t dml_ext_table[] =
 {
 	{ lang_c, IN_SW_GPRE_C, ".e", ".c" },
 
@@ -234,13 +233,13 @@ static const ext_table_t dml_ext_table[] =
 	{ lang_undef, IN_SW_GPRE_0, NULL, NULL }
 };
 
-const UCHAR CHR_LETTER	= 1;
-const UCHAR	CHR_DIGIT	= 2;
-const UCHAR CHR_IDENT	= 4;
-const UCHAR CHR_QUOTE	= 8;
-const UCHAR CHR_WHITE	= 16;
-const UCHAR CHR_INTRODUCER	= 32;
-const UCHAR CHR_DBLQUOTE	= 64;
+constexpr UCHAR CHR_LETTER	= 1;
+constexpr UCHAR	CHR_DIGIT	= 2;
+constexpr UCHAR CHR_IDENT	= 4;
+constexpr UCHAR CHR_QUOTE	= 8;
+constexpr UCHAR CHR_WHITE	= 16;
+constexpr UCHAR CHR_INTRODUCER	= 32;
+constexpr UCHAR CHR_DBLQUOTE	= 64;
 
 
 static void atexit_fb_shutdown()
@@ -891,7 +890,7 @@ int main(int argc, char* argv[])
 //		Abort this silly program.
 //
 
-void CPR_abort()
+[[noreturn]] void CPR_abort()
 {
 	++fatals_global;
 	//throw Firebird::Exception();
@@ -905,11 +904,11 @@ void CPR_abort()
 //		Report an assertion failure and abort this silly program.
 //
 
-void CPR_assert(const TEXT* file, int line)
+[[noreturn]] void CPR_assert(const TEXT* file, int line)
 {
 	TEXT buffer[MAXPATHLEN << 1];
 
-	fb_utils::snprintf(buffer, sizeof(buffer),
+	snprintf(buffer, sizeof(buffer),
 		"GPRE assertion failure file '%s' line '%d'", file, line);
 	CPR_bugcheck(buffer);
 }
@@ -921,7 +920,7 @@ void CPR_assert(const TEXT* file, int line)
 //		Issue an error message.
 //
 
-void CPR_bugcheck(const TEXT* string)
+[[noreturn]] void CPR_bugcheck(const TEXT* string)
 {
 	fprintf(stderr, "*** INTERNAL BUGCHECK: %s ***\n", string);
 	MET_fini(0);
@@ -934,7 +933,7 @@ void CPR_bugcheck(const TEXT* string)
 //       Mark end of a text description.
 //
 
-void CPR_end_text(gpre_txt* text)
+void CPR_end_text(gpre_txt* text) noexcept
 {
 	text->txt_length = (USHORT) (gpreGlob.token_global.tok_position - text->txt_position - 1);
 }
@@ -959,7 +958,7 @@ int CPR_error(const TEXT* string)
 //		Exit with status.
 //
 
-void CPR_exit( int stat)
+[[noreturn]] void CPR_exit( int stat)
 {
 #ifdef LINUX
 
@@ -1137,12 +1136,12 @@ void CPR_get_text( TEXT* buffer, const gpre_txt* text)
 //		Generate a syntax error.
 //
 
-void CPR_s_error(const TEXT* string)
+[[noreturn]] void CPR_s_error(const TEXT* string)
 {
 	TEXT s[512];
 
-	fb_utils::snprintf(s, sizeof(s),
-					   "expected %s, encountered \"%s\"", string, gpreGlob.token_global.tok_string);
+	snprintf(s, sizeof(s),
+		"expected %s, encountered \"%s\"", string, gpreGlob.token_global.tok_string);
 	CPR_error(s);
 	PAR_unwind();
 }
@@ -1181,9 +1180,8 @@ tok* CPR_token()
 		gpre_sym* symbol = MSC_find_symbol(HSH_lookup(token->tok_string + 1), SYM_charset);
 		if (!symbol)
 		{
-			TEXT err_buffer[100];
-
-			sprintf(err_buffer, "Character set not recognized: '%.50s'", token->tok_string);
+			TEXT err_buffer[BUFFER_MEDIUM];
+			snprintf(err_buffer, sizeof(err_buffer), "Character set not recognized: '%s'", token->tok_string);
 			CPR_error(err_buffer);
 		}
 		token = get_token();
@@ -1237,7 +1235,7 @@ tok* CPR_token()
 //		Return true if the string consists entirely of digits.
 //
 
-static bool all_digits(const char* str1)
+static bool all_digits(const char* str1) noexcept
 {
 	for (; *str1; str1++)
 	{
@@ -1280,7 +1278,7 @@ static bool arg_is_string(SLONG argc, TEXT** argvstring, const TEXT* errstring)
 //		(positive) if str1 > str2
 //
 
-static SSHORT compare_ASCII7z(const char* str1, const char* str2)
+static SSHORT compare_ASCII7z(const char* str1, const char* str2) noexcept
 {
 
 	for (; *str1; str1++, str2++)
@@ -1372,7 +1370,7 @@ static SLONG compile_module( SLONG start_position, const TEXT* base_directory)
 //		new extension is given, use it.
 //
 
-static bool file_rename(TEXT* file_nameL, const TEXT* extension, const TEXT* new_extension)
+static bool file_rename(TEXT* file_nameL, const TEXT* extension, const TEXT* new_extension) noexcept
 {
 	TEXT* p = file_nameL;
 
@@ -1397,7 +1395,7 @@ static bool file_rename(TEXT* file_nameL, const TEXT* extension, const TEXT* new
 
 	if (*p != '.')
 	{
-		while (*terminator++ = *extension++)
+		while ((*terminator++ = *extension++))
 			;
 		return true;
 	}
@@ -1413,7 +1411,7 @@ static bool file_rename(TEXT* file_nameL, const TEXT* extension, const TEXT* new
 		{
 			if (new_extension)
 			{
-				while (*ext++ = *new_extension++)
+				while ((*ext++ = *new_extension++))
 					;
 			}
 			return false;
@@ -1421,7 +1419,7 @@ static bool file_rename(TEXT* file_nameL, const TEXT* extension, const TEXT* new
 	}
 
 	// Didn't match extension, so add the extension
-	while (*terminator++ = *extension++)
+	while ((*terminator++ = *extension++))
 		;
 
 	return true;
@@ -1448,7 +1446,6 @@ static void finish_based( act* action)
 {
 	gpre_rel* relation = NULL;
 	gpre_fld* field = NULL;
-	TEXT s[MAXPATHLEN << 1];
 
 	for (; action; action = action->act_rest)
 	{
@@ -1484,6 +1481,7 @@ static void finish_based( act* action)
 				relation = MET_get_relation(db, based_on->bas_rel_name->str_string, "");
 				if (!relation)
 				{
+					TEXT s[BUFFER_LARGE];
 					fb_utils::snprintf(s, sizeof(s), "relation %s is not defined in database %s",
 							based_on->bas_rel_name->str_string, based_on->bas_db_name->str_string);
 					CPR_error(s);
@@ -1506,6 +1504,7 @@ static void finish_based( act* action)
 				}
 				else
 				{
+					TEXT s[MAXPATHLEN << 1];
 					fb_utils::snprintf(s, sizeof(s), "database %s is not defined",
 							based_on->bas_db_name->str_string);
 					CPR_error(s);
@@ -1524,7 +1523,7 @@ static void finish_based( act* action)
 					{
 						// The field reference is ambiguous.  It exists in more
 						// than one database.
-
+						TEXT s[BUFFER_LARGE];
 						fb_utils::snprintf(s, sizeof(s), "field %s in relation %s ambiguous",
 								based_on->bas_fld_name->str_string, based_on->bas_rel_name->str_string);
 						CPR_error(s);
@@ -1537,7 +1536,8 @@ static void finish_based( act* action)
 				continue;
 			if (!relation && !field)
 			{
-				sprintf(s, "relation %s is not defined", based_on->bas_rel_name->str_string);
+				TEXT s[BUFFER_MEDIUM];
+				snprintf(s, sizeof(s), "relation %s is not defined", based_on->bas_rel_name->str_string);
 				CPR_error(s);
 				continue;
 			}
@@ -1545,7 +1545,8 @@ static void finish_based( act* action)
 
 		if (!field)
 		{
-			sprintf(s, "field %s is not defined in relation %s",
+			TEXT s[BUFFER_LARGE];
+			snprintf(s, sizeof(s), "field %s is not defined in relation %s",
 					based_on->bas_fld_name->str_string, based_on->bas_rel_name->str_string);
 			CPR_error(s);
 			continue;
@@ -1553,7 +1554,8 @@ static void finish_based( act* action)
 
 		if ((based_on->bas_flags & BAS_segment) && !(field->fld_flags & FLD_blob))
 		{
-			sprintf(s, "field %s is not a blob", field->fld_symbol->sym_string);
+			TEXT s[BUFFER_MEDIUM];
+			snprintf(s, sizeof(s), "field %s is not a blob", field->fld_symbol->sym_string);
 			CPR_error(s);
 			continue;
 		}
@@ -1646,7 +1648,7 @@ static bool get_switches(int			argc,
 				sw_table_iterator->sw_in_sw = IN_SW_GPRE_0;
 				const TEXT* q;
 				for (const Switches::in_sw_tab_t* in_sw_table_iterator = in_sw_table;
-					 q = in_sw_table_iterator->in_sw_name;
+					 (q = in_sw_table_iterator->in_sw_name);
 					 in_sw_table_iterator++)
 				{
 					const TEXT* p = string + 1;
@@ -2101,7 +2103,9 @@ static tok* get_token()
 			}
 			else
 #endif
-			if (next == EOF || (next == '\n' && (p[-1] != '\\' || gpreGlob.sw_sql)))
+			// ASF: Allow multi-line C++ strings
+			if (next == EOF ||
+				(!isLangCpp(gpreGlob.sw_language) && next == '\n' && (p[-1] != '\\' || gpreGlob.sw_sql)))
 			{
 				return_char(*p);
 
@@ -2375,7 +2379,7 @@ static SLONG pass1(const TEXT* base_directory)
 				do
 				{
 					global_last_action = action;
-					if (action = action->act_rest)
+					if ((action = action->act_rest))
 					{
 						if (action->act_type == ACT_database)
 						{
@@ -2440,7 +2444,7 @@ static void pass2( SLONG start_position)
 	const bool sw_block_comments = gpreGlob.sw_language == lang_c ||
 		isLangCpp(gpreGlob.sw_language) || gpreGlob.sw_language == lang_pascal;
 
-	// Put out a distintive module header
+	// Put out a distinctive module header
 
 	if (!sw_first)
 	{
@@ -2465,9 +2469,9 @@ static void pass2( SLONG start_position)
 #endif
 
 	// Let's prepare for worst case: a lot of small dirs, many "\" to duplicate.
-	char backlash_fixed_file_name[MAXPATHLEN + MAXPATHLEN];
+	char backslash_fixed_file_name[MAXPATHLEN + MAXPATHLEN]{ 0 };
 	{ // scope
-		char* p = backlash_fixed_file_name;
+		char* p = backslash_fixed_file_name;
 		for (const char* q = file_name; *q;)
 		{
 			if ((*p++ = *q++) == '\\')
@@ -2477,14 +2481,14 @@ static void pass2( SLONG start_position)
 	} // scope
 
 	//if (sw_lines)
-	//	fprintf (gpreGlob.out_file, "#line 1 \"%s\"\n", backlash_fixed_file_name);
+	//	fprintf (gpreGlob.out_file, "#line 1 \"%s\"\n", backslash_fixed_file_name);
 
 	SLONG line = 0;
 	bool line_pending = sw_lines;
 	SLONG current = 1 + start_position;
 	SLONG column = 0;
 
-	SSHORT comment_start_len = static_cast<SSHORT>(strlen(comment_start));
+	const SSHORT comment_start_len = static_cast<SSHORT>(strlen(comment_start));
 #if defined(GPRE_COBOL)
 	SSHORT to_skip = 0;
 #endif
@@ -2510,9 +2514,9 @@ static void pass2( SLONG start_position)
 				if (line_pending)
 				{
 					if (line == 1)
-						fprintf(gpreGlob.out_file, "#line %" SLONGFORMAT" \"%s\"\n", line, backlash_fixed_file_name);
+						fprintf(gpreGlob.out_file, "#line %" SLONGFORMAT" \"%s\"\n", line, backslash_fixed_file_name);
 					else
-						fprintf(gpreGlob.out_file, "\n#line %" SLONGFORMAT" \"%s\"", line, backlash_fixed_file_name);
+						fprintf(gpreGlob.out_file, "\n#line %" SLONGFORMAT" \"%s\"", line, backslash_fixed_file_name);
 
 					line_pending = false;
 				}
@@ -2650,7 +2654,7 @@ static void pass2( SLONG start_position)
 
 	if (!line && line_pending)
 	{
-		fprintf(gpreGlob.out_file, "#line 1 \"%s\"\n", backlash_fixed_file_name);
+		fprintf(gpreGlob.out_file, "#line 1 \"%s\"\n", backslash_fixed_file_name);
 		line_pending = false;
 	}
 
@@ -2659,7 +2663,7 @@ static void pass2( SLONG start_position)
 	{
 		if (c == '\n' && line_pending)
 		{
-			fprintf(gpreGlob.out_file, "\n#line %" SLONGFORMAT" \"%s\"", line + 1, backlash_fixed_file_name);
+			fprintf(gpreGlob.out_file, "\n#line %" SLONGFORMAT" \"%s\"", line + 1, backslash_fixed_file_name);
 			line_pending = false;
 		}
 		if (c == EOF)
@@ -2733,7 +2737,7 @@ static void remember_label(const TEXT* label_string)
 //		Return a character to the input stream.
 //
 
-static void return_char( SSHORT c)
+static void return_char(SSHORT c) noexcept
 {
 
 	--position;

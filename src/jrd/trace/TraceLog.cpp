@@ -52,8 +52,8 @@ using namespace Firebird;
 
 namespace Jrd {
 
-const unsigned int INIT_LOG_SIZE = 1024*1024;	// 1MB
-const unsigned int FREE_SPACE_THRESHOLD = INIT_LOG_SIZE / 4;
+constexpr unsigned int INIT_LOG_SIZE = 1024*1024;	// 1MB
+constexpr unsigned int FREE_SPACE_THRESHOLD = INIT_LOG_SIZE / 4;
 
 TraceLog::TraceLog(MemoryPool& pool, const PathName& fileName, bool reader) :
 	m_reader(reader),
@@ -268,7 +268,7 @@ void TraceLog::extend(FB_SIZE_T size)
 
 FB_SIZE_T TraceLog::getUsed()
 {
-	TraceLogHeader* header = m_sharedMemory->getHeader();
+	const TraceLogHeader* header = m_sharedMemory->getHeader();
 
 	if (header->readPos < header->writePos)
 		return (header->writePos - header->readPos);
@@ -280,14 +280,14 @@ FB_SIZE_T TraceLog::getUsed()
 
 FB_SIZE_T TraceLog::getFree(bool useMax)
 {
-	TraceLogHeader* header = m_sharedMemory->getHeader();
+	const TraceLogHeader* header = m_sharedMemory->getHeader();
 	return (useMax ? header->maxSize : header->allocated) - sizeof(TraceLogHeader) - getUsed() - 1;
 }
 
 bool TraceLog::isFull()
 {
 	TraceLogGuard guard(this);
-	TraceLogHeader* header = m_sharedMemory->getHeader();
+	const TraceLogHeader* header = m_sharedMemory->getHeader();
 	return header->flags & FLAG_FULL;
 }
 
@@ -299,9 +299,7 @@ void TraceLog::setFullMsg(const char* str)
 void TraceLog::mutexBug(int state, const char* string)
 {
 	TEXT msg[BUFFER_TINY];
-
-	// While string is kept below length 70, all is well.
-	sprintf(msg, "TraceLog: mutex %s error, status = %d", string, state);
+	snprintf(msg, sizeof(msg), "TraceLog: mutex %s error, status = %d", string, state);
 	fb_utils::logAndDie(msg);
 }
 

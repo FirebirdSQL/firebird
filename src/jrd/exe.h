@@ -95,32 +95,33 @@ enum SortDirection { ORDER_ANY, ORDER_ASC, ORDER_DESC };
 enum NullsPlacement { NULLS_DEFAULT, NULLS_FIRST, NULLS_LAST };
 
 // CompilerScratch.csb_g_flags' values.
-const int csb_internal			= 1;	// "csb_g_flag" switch
-const int csb_get_dependencies	= 2;	// we are retrieving dependencies
-const int csb_ignore_perm		= 4;	// ignore permissions checks
-//const int csb_blr_version4		= 8;	// the BLR is of version 4
-const int csb_pre_trigger		= 16;	// this is a BEFORE trigger
-const int csb_post_trigger		= 32;	// this is an AFTER trigger
-const int csb_validation		= 64;	// we're in a validation expression (RDB hack)
-const int csb_reuse_context		= 128;	// allow context reusage
-const int csb_subroutine		= 256;	// sub routine
-const int csb_reload			= 512;	// request's BLR should be loaded and parsed again
-const int csb_computed_field	= 1024;	// computed field expression
+inline constexpr int csb_internal			= 1;	// "csb_g_flag" switch
+inline constexpr int csb_get_dependencies	= 2;	// we are retrieving dependencies
+inline constexpr int csb_ignore_perm		= 4;	// ignore permissions checks
+//inline constexpr int csb_blr_version4		= 8;	// the BLR is of version 4
+inline constexpr int csb_pre_trigger		= 16;	// this is a BEFORE trigger
+inline constexpr int csb_post_trigger		= 32;	// this is an AFTER trigger
+inline constexpr int csb_validation			= 64;	// we're in a validation expression (RDB hack)
+inline constexpr int csb_reuse_context		= 128;	// allow context reusage
+inline constexpr int csb_subroutine			= 256;	// sub routine
+inline constexpr int csb_reload				= 512;	// request's BLR should be loaded and parsed again
+inline constexpr int csb_computed_field		= 1024;	// computed field expression
+inline constexpr int csb_search_system_schema = 2048;	// search system schema
 
 // CompilerScratch.csb_rpt[].csb_flags's values.
-const int csb_active		= 1;		// stream is active
-const int csb_used			= 2;		// context has already been defined (BLR parsing only)
-const int csb_view_update	= 4;		// view update w/wo trigger is in progress
-const int csb_trigger		= 8;		// NEW or OLD context in trigger
-//const int csb_no_dbkey		= 16;		// unused
-const int csb_store			= 32;		// we are processing a store statement
-const int csb_modify		= 64;		// we are processing a modify
-const int csb_sub_stream	= 128;		// a sub-stream of the RSE being processed
-const int csb_erase			= 256;		// we are processing an erase
-const int csb_unmatched		= 512;		// stream has conjuncts unmatched by any index
-const int csb_update		= 1024;		// erase or modify for relation
-const int csb_unstable		= 2048;		// unstable explicit cursor
-const int csb_skip_locked	= 4096;		// skip locked record
+inline constexpr int csb_active			= 1;		// stream is active
+inline constexpr int csb_used			= 2;		// context has already been defined (BLR parsing only)
+inline constexpr int csb_view_update	= 4;		// view update w/wo trigger is in progress
+inline constexpr int csb_trigger		= 8;		// NEW or OLD context in trigger
+//inline constexpr int csb_no_dbkey		= 16;		// unused
+inline constexpr int csb_store			= 32;		// we are processing a store statement
+inline constexpr int csb_modify			= 64;		// we are processing a modify
+inline constexpr int csb_sub_stream		= 128;		// a sub-stream of the RSE being processed
+inline constexpr int csb_erase			= 256;		// we are processing an erase
+inline constexpr int csb_unmatched		= 512;		// stream has conjuncts unmatched by any index
+inline constexpr int csb_update			= 1024;		// erase or modify for relation
+inline constexpr int csb_unstable		= 2048;		// unstable explicit cursor
+inline constexpr int csb_skip_locked	= 4096;		// skip locked record
 
 
 // Aggregate Sort Block (for DISTINCT aggregates)
@@ -184,7 +185,7 @@ struct Resource
 	Routine*	rsc_routine;	// Routine block
 	Collation*	rsc_coll;		// Collation block
 
-	static bool greaterThan(const Resource& i1, const Resource& i2)
+	static bool greaterThan(const Resource& i1, const Resource& i2) noexcept
 	{
 		// A few places of the engine depend on fact that rsc_type
 		// is the first field in ResourceList ordering
@@ -199,7 +200,7 @@ struct Resource
 		return i1.rsc_id > i2.rsc_id;
 	}
 
-	Resource(rsc_s type, USHORT id, jrd_rel* rel, Routine* routine, Collation* coll)
+	Resource(rsc_s type, USHORT id, jrd_rel* rel, Routine* routine, Collation* coll) noexcept
 		: rsc_type(type), rsc_id(id), rsc_rel(rel), rsc_routine(routine), rsc_coll(coll)
 	{ }
 };
@@ -216,8 +217,8 @@ struct AccessItem
 {
 	MetaName		acc_security_name;
 	SLONG			acc_ss_rel_id;	// Relation Id which owner will be used to check permissions
-	MetaName		acc_name;
-	MetaName		acc_r_name;
+	QualifiedName	acc_name;
+	MetaName		acc_col_name;
 	ObjectType		acc_type;
 	SecurityClass::flags_t	acc_mask;
 
@@ -243,20 +244,20 @@ struct AccessItem
 		if (i1.acc_mask != i2.acc_mask)
 			return i1.acc_mask > i2.acc_mask;
 
-		if ((v = i1.acc_name.compare(i2.acc_name)) != 0)
-			return v > 0;
+		if (i1.acc_name != i2.acc_name)
+			return i1.acc_name > i2.acc_name;
 
-		if ((v = i1.acc_r_name.compare(i2.acc_r_name)) != 0)
-			return v > 0;
+		if (i1.acc_col_name != i2.acc_col_name)
+			return i1.acc_col_name > i2.acc_col_name;
 
 		return false; // Equal
 	}
 
 	AccessItem(const MetaName& security_name, SLONG view_id,
-		const MetaName& name, ObjectType type,
-		SecurityClass::flags_t mask, const MetaName& relName)
+		const QualifiedName& name, ObjectType type,
+		SecurityClass::flags_t mask, const MetaName& columnName)
 		: acc_security_name(security_name), acc_ss_rel_id(view_id), acc_name(name),
-			acc_r_name(relName), acc_type(type), acc_mask(mask)
+			acc_col_name(columnName), acc_type(type), acc_mask(mask)
 	{}
 };
 
@@ -326,14 +327,14 @@ struct Item
 		TYPE_CAST
 	};
 
-	Item(Type aType, UCHAR aSubType, USHORT aIndex)
+	Item(Type aType, UCHAR aSubType, USHORT aIndex) noexcept
 		: type(aType),
 		  subType(aSubType),
 		  index(aIndex)
 	{
 	}
 
-	Item(Type aType, USHORT aIndex = 0)
+	Item(Type aType, USHORT aIndex = 0) noexcept
 		: type(aType),
 		  subType(0),
 		  index(aIndex)
@@ -344,7 +345,7 @@ struct Item
 	UCHAR subType;
 	USHORT index;
 
-	bool operator >(const Item& x) const
+	bool operator >(const Item& x) const noexcept
 	{
 		if (type == x.type)
 		{
@@ -362,7 +363,7 @@ struct Item
 
 struct FieldInfo
 {
-	FieldInfo()
+	FieldInfo() noexcept
 		: nullable(false), defaultValue(NULL), validationExpr(NULL)
 	{}
 
@@ -392,7 +393,7 @@ public:
 	{
 	}
 
-	ItemInfo()
+	ItemInfo() noexcept
 		: name(),
 		  field(),
 		  nullable(true),
@@ -402,7 +403,7 @@ public:
 	}
 
 public:
-	bool isSpecial() const
+	bool isSpecial() const noexcept
 	{
 		return !nullable || fullDomain;
 	}
@@ -422,14 +423,36 @@ public:
 
 public:
 	MetaName name;
-	MetaNamePair field;
+	QualifiedNameMetaNamePair field;
 	bool nullable;
 	bool explicitCollation;
 	bool fullDomain;
 };
 
-typedef Firebird::LeftPooledMap<MetaNamePair, FieldInfo> MapFieldInfo;
+typedef Firebird::LeftPooledMap<QualifiedNameMetaNamePair, FieldInfo> MapFieldInfo;
 typedef Firebird::RightPooledMap<Item, ItemInfo> MapItemInfo;
+
+// Table value function block
+
+class jrd_table_value_fun
+{
+public:
+	explicit jrd_table_value_fun(MemoryPool& p) : recordFormat(nullptr), fields(p), funcId(0)
+	{
+	}
+
+	SSHORT getId(const MetaName& fieldName) const
+	{
+		const SSHORT* const id = fields.get(fieldName);
+		fb_assert(id);
+		return *id;
+	}
+
+	const Format* recordFormat;
+	Firebird::LeftPooledMap<MetaName, SSHORT> fields;
+	MetaName name;
+	USHORT funcId;
+};
 
 // Compile scratch block
 
@@ -451,7 +474,7 @@ public:
 			jrd_rel* relation;
 			const Function* function;
 			const jrd_prc* procedure;
-			const MetaName* name;
+			const QualifiedName* name;
 			SLONG number;
 		};
 
@@ -493,6 +516,7 @@ public:
 		subProcedures(p),
 		outerMessagesMap(p),
 		outerVarsMap(p),
+		csb_schema(p),
 		csb_currentForNode(NULL),
 		csb_currentDMLNode(NULL),
 		csb_currentAssignTarget(NULL),
@@ -519,7 +543,7 @@ public:
 		return csb_n_stream++;
 	}
 
-	bool collectingDependencies() const
+	bool collectingDependencies() const noexcept
 	{
 		return (mainCsb ? mainCsb : this)->csb_g_flags & csb_get_dependencies;
 	}
@@ -528,6 +552,28 @@ public:
 	{
 		auto& dependencies = mainCsb ? mainCsb->csb_dependencies : csb_dependencies;
 		dependencies.add(dependency);
+	}
+
+	void qualifyExistingName(thread_db* tdbb, QualifiedName& name, ObjectType objType)
+	{
+		if (!(name.schema.isEmpty() && name.object.hasData()))
+			return;
+
+		const auto attachment = tdbb->getAttachment();
+
+		if (csb_schema.hasData())
+		{
+			Firebird::ObjectsArray<Firebird::MetaString> schemaSearchPath;
+
+			if (csb_g_flags & csb_search_system_schema)
+				schemaSearchPath.push(SYSTEM_SCHEMA);
+
+			schemaSearchPath.push(csb_schema);
+
+			attachment->qualifyExistingName(tdbb, name, {objType}, &schemaSearchPath);
+		}
+		else
+			attachment->qualifyExistingName(tdbb, name, {objType});
 	}
 
 #ifdef CMP_DEBUG
@@ -577,7 +623,7 @@ public:
 	// Map of message number to field number to pad for external routines.
 	Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<USHORT, USHORT> > > csb_message_pad;
 
-	MetaName	csb_domain_validation;	// Parsing domain constraint in PSQL
+	QualifiedName	csb_domain_validation;	// Parsing domain constraint in PSQL
 
 	// used in cmp.cpp/pass1
 	jrd_rel*	csb_view;
@@ -594,6 +640,8 @@ public:
 	Firebird::NonPooledMap<USHORT, USHORT> outerMessagesMap;	// <inner, outer>
 	Firebird::NonPooledMap<USHORT, USHORT> outerVarsMap;		// <inner, outer>
 
+	MetaName csb_schema;
+
 	ForNode*	csb_currentForNode;
 	StmtNode*	csb_currentDMLNode;		// could be StoreNode or ModifyNode
 	ExprNode*	csb_currentAssignTarget;
@@ -606,10 +654,11 @@ public:
 	struct csb_repeat
 	{
 		// We must zero-initialize this one
-		csb_repeat();
+		csb_repeat() noexcept;
 
-		void activate(bool subStream = false);
-		void deactivate();
+		void activate() noexcept;
+		void deactivate() noexcept;
+		QualifiedName getName(bool allowEmpty = true) const;
 
 		std::optional<USHORT> csb_cursor_number;	// Cursor number for this stream
 		StreamType csb_stream;			// Map user context to internal stream
@@ -630,6 +679,7 @@ public:
 		PlanNode* csb_plan;				// user-specified plan for this relation
 		StreamType* csb_map;			// Stream map for views
 		RecordSource** csb_rsb_ptr;		// point to rsb for nod_stream
+		jrd_table_value_fun* csb_table_value_fun;  // Table value function
 	};
 
 	typedef csb_repeat* rpt_itr;
@@ -638,7 +688,7 @@ public:
 };
 
 	// We must zero-initialize this one
-inline CompilerScratch::csb_repeat::csb_repeat()
+inline CompilerScratch::csb_repeat::csb_repeat() noexcept
 	: csb_stream(0),
 	  csb_view_stream(0),
 	  csb_flags(0),
@@ -654,21 +704,36 @@ inline CompilerScratch::csb_repeat::csb_repeat()
 	  csb_cardinality(0.0),	// TMN: Non-natural cardinality?!
 	  csb_plan(0),
 	  csb_map(0),
-	  csb_rsb_ptr(0)
+	  csb_rsb_ptr(0),
+	  csb_table_value_fun(0)
 {
 }
 
-inline void CompilerScratch::csb_repeat::activate(bool subStream)
+inline void CompilerScratch::csb_repeat::activate() noexcept
 {
 	csb_flags |= csb_active;
-
-	if (subStream)
-		csb_flags |= csb_sub_stream;
 }
 
-inline void CompilerScratch::csb_repeat::deactivate()
+inline void CompilerScratch::csb_repeat::deactivate() noexcept
 {
 	csb_flags &= ~csb_active;
+}
+
+inline QualifiedName CompilerScratch::csb_repeat::getName(bool allowEmpty) const
+{
+	if (csb_relation)
+		return csb_relation->rel_name;
+	else if (csb_procedure)
+		return csb_procedure->getName();
+	else if (csb_table_value_fun)
+		return QualifiedName(csb_table_value_fun->name);
+	//// TODO: LocalTableSourceNode
+	//// TODO: JsonTableSourceNode
+	else
+	{
+		fb_assert(allowEmpty);
+		return {};
+	}
 }
 
 
@@ -691,8 +756,8 @@ public:
 	StatusXcp();
 
 	void clear();
-	void init(const Jrd::FbStatusVector*);
-	void copyTo(Jrd::FbStatusVector*) const;
+	void init(const Jrd::FbStatusVector*) noexcept;
+	void copyTo(Jrd::FbStatusVector*) const noexcept;
 	bool success() const;
 	SLONG as_gdscode() const;
 	SLONG as_sqlcode() const;
@@ -702,7 +767,7 @@ public:
 };
 
 // must correspond to the declared size of RDB$EXCEPTIONS.RDB$MESSAGE
-const unsigned XCP_MESSAGE_LENGTH = 1023;
+inline constexpr unsigned XCP_MESSAGE_LENGTH = 1023;
 
 // Array which stores relative pointers to impure areas of invariant nodes
 typedef Firebird::SortedArray<ULONG> VarInvariantArray;

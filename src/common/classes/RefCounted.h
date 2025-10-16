@@ -48,13 +48,13 @@ namespace Firebird
 			return refCnt;
 		}
 
-		void assertNonZero()
+		void assertNonZero() noexcept
 		{
 			fb_assert(m_refCnt.value() > 0);
 		}
 
 	protected:
-		RefCounted() : m_refCnt(0) {}
+		RefCounted() noexcept : m_refCnt(0) {}
 
 		virtual ~RefCounted()
 		{
@@ -97,7 +97,7 @@ namespace Firebird
 	class RefPtr
 	{
 	public:
-		RefPtr() : ptr(NULL)
+		RefPtr() noexcept : ptr(NULL)
 		{ }
 
 		explicit RefPtr(T* p) : ptr(p)
@@ -110,7 +110,7 @@ namespace Firebird
 
 		// This special form of ctor is used to create refcounted ptr from interface,
 		// returned by a function (which increments counter on return)
-		RefPtr(NoIncrement x, T* p) : ptr(p)
+		RefPtr(NoIncrement x, T* p) noexcept : ptr(p)
 		{ }
 
 		RefPtr(const RefPtr& r) : ptr(r.ptr)
@@ -158,7 +158,7 @@ namespace Firebird
 			}
 		}
 
-		T* clear()		// nullify pointer w/o calling release
+		T* clear() noexcept	// nullify pointer w/o calling release
 		{
 			T* rc = ptr;
 			ptr = NULL;
@@ -181,22 +181,22 @@ namespace Firebird
 			return ptr;
 		}
 
-		operator T*() const
+		operator T*() const noexcept
 		{
 			return ptr;
 		}
 
-		T* operator->() const
+		T* operator->() const noexcept
 		{
 			return ptr;
 		}
 
-		bool hasData() const
+		bool hasData() const noexcept
 		{
 			return ptr ? true : false;
 		}
 
-		bool operator !() const
+		bool operator !() const noexcept
 		{
 			return !ptr;
 		}
@@ -211,12 +211,12 @@ namespace Firebird
 			return ptr != r.ptr;
 		}
 
-		T* getPtr()
+		T* getPtr() noexcept
 		{
 			return ptr;
 		}
 
-		const T* getPtr() const
+		const T* getPtr() const noexcept
 		{
 			return ptr;
 		}
@@ -254,7 +254,7 @@ namespace Firebird
 	}
 
 	template <typename T>
-	RefPtr<T> makeNoIncRef(T* arg)
+	RefPtr<T> makeNoIncRef(T* arg) noexcept
 	{
 		return RefPtr<T>(REF_NO_INCR, arg);
 	}

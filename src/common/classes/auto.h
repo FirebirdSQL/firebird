@@ -117,6 +117,10 @@ public:
 		Clear<Where>::clear(ptr);
 	}
 
+	// copying is prohibited
+	AutoPtr(AutoPtr&) = delete;
+	void operator=(AutoPtr&) = delete;
+
 	AutoPtr& operator= (Where* v)
 	{
 		Clear<Where>::clear(ptr);
@@ -135,42 +139,42 @@ public:
 		return *this;
 	}
 
-	const Where* get() const
+	const Where* get() const noexcept
 	{
 		return ptr;
 	}
 
-	operator const Where*() const
+	operator const Where*() const noexcept
 	{
 		return ptr;
 	}
 
-	Where* get()
+	Where* get() noexcept
 	{
 		return ptr;
 	}
 
-	operator Where*()
+	operator Where*() noexcept
 	{
 		return ptr;
 	}
 
-	bool operator !() const
+	bool operator !() const noexcept
 	{
 		return !ptr;
 	}
 
-	bool hasData() const
+	bool hasData() const noexcept
 	{
 		return ptr != NULL;
 	}
 
-	Where* operator->() const
+	Where* operator->() const noexcept
 	{
 		return ptr;
 	}
 
-	Where* release()
+	Where* release() noexcept
 	{
 		Where* tmp = ptr;
 		ptr = NULL;
@@ -186,9 +190,6 @@ public:
 		}
 	}
 
-private:
-	AutoPtr(AutoPtr&);
-	void operator=(AutoPtr&);
 };
 
 template <typename T>
@@ -212,11 +213,11 @@ public:
 		*value = oldValue;
 	}
 
-private:
 	// copying is prohibited
-	AutoSaveRestore(const AutoSaveRestore&);
-	AutoSaveRestore& operator =(const AutoSaveRestore&);
+	AutoSaveRestore(const AutoSaveRestore&) = delete;
+	AutoSaveRestore& operator =(const AutoSaveRestore&) = delete;
 
+private:
 	T* value;
 	T oldValue;
 };
@@ -260,11 +261,11 @@ public:
 		oldValue &= ~cleanBit;
 	}
 
-private:
 	// copying is prohibited
-	AutoSetRestoreFlag(const AutoSetRestoreFlag&);
-	AutoSetRestoreFlag& operator =(const AutoSetRestoreFlag&);
+	AutoSetRestoreFlag(const AutoSetRestoreFlag&) = delete;
+	AutoSetRestoreFlag& operator =(const AutoSetRestoreFlag&) = delete;
 
+private:
 	T* value;
 	T bit;
 	T oldValue;
@@ -292,10 +293,9 @@ public:
 		(pointer->*setter)(oldValue);
 	}
 
-private:
 	// copying is prohibited
-	AutoSetRestore2(const AutoSetRestore2&);
-	AutoSetRestore2& operator =(const AutoSetRestore2&);
+	AutoSetRestore2(const AutoSetRestore2&) = delete;
+	AutoSetRestore2& operator =(const AutoSetRestore2&) = delete;
 
 private:
 	T2* pointer;
@@ -325,7 +325,7 @@ class CleanupFunction
 	typedef void Func();
 
 public:
-	CleanupFunction(Func* clFunc)
+	CleanupFunction(Func* clFunc) noexcept
 		: clean(clFunc)
 	{ }
 

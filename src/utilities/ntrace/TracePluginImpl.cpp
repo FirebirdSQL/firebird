@@ -94,10 +94,10 @@ TracePluginImpl::TracePluginImpl(IPluginBase* plugin,
 	logWriter(initInfo->getLogWriter()),
 	config(configuration),
 	record(*getDefaultMemoryPool()),
-	connections(getDefaultMemoryPool()),
-	transactions(getDefaultMemoryPool()),
-	statements(getDefaultMemoryPool()),
-	services(getDefaultMemoryPool()),
+	connections(*getDefaultMemoryPool()),
+	transactions(*getDefaultMemoryPool()),
+	statements(*getDefaultMemoryPool()),
+	services(*getDefaultMemoryPool()),
 	routines(*getDefaultMemoryPool()),
 	include_codes(*getDefaultMemoryPool()),
 	exclude_codes(*getDefaultMemoryPool())
@@ -471,7 +471,7 @@ void TracePluginImpl::logRecordTrig(const char* action, ITraceDatabaseConnection
 			extras += "TRANSACTION_COMMIT";
 			break;
 		case TRIGGER_TRANS_ROLLBACK:
-			extras + "TRANSACTION_ROLLBACK";
+			extras += "TRANSACTION_ROLLBACK";
 			break;
 		case TRIGGER_DDL:
 			extras += "DDL";
@@ -525,6 +525,8 @@ void TracePluginImpl::logRecordStmt(const char* action, ITraceDatabaseConnection
 
 		if (reg)
 		{
+			fb_assert(false);
+
 			string temp;
 			temp.printf(NEWLINE "Statement %" SQUADFORMAT", <unknown, bug?>:" NEWLINE, stmt_id);
 			record.insert(0, temp);
@@ -815,7 +817,7 @@ void TracePluginImpl::appendParams(ITraceParams* params)
 
 	for (FB_SIZE_T i = 0; i < paramcount; i++)
 	{
-		const struct dsc* parameters = params->getParam(i);
+		const paramdsc* const parameters = params->getParam(i);
 
 		// See if we need to print any more arguments
 		if (config.max_arg_count && i >= config.max_arg_count)
@@ -829,13 +831,19 @@ void TracePluginImpl::appendParams(ITraceParams* params)
 		switch (parameters->dsc_dtype)
 		{
 			case dtype_text:
-				paramtype.printf("char(%d)", parameters->dsc_length);
+				if (parameters->dsc_sub_type == fb_text_subtype_binary)
+					paramtype.printf("binary(%d)", parameters->dsc_length);
+				else
+					paramtype.printf("char(%d)", parameters->dsc_length);
 				break;
 			case dtype_cstring:
 				paramtype.printf("cstring(%d)", parameters->dsc_length - 1);
 				break;
 			case dtype_varying:
-				paramtype.printf("varchar(%d)", parameters->dsc_length - 2);
+				if (parameters->dsc_sub_type == fb_text_subtype_binary)
+					paramtype.printf("varbinary(%d)", parameters->dsc_length - 2);
+				else
+					paramtype.printf("varchar(%d)", parameters->dsc_length - 2);
 				break;
 			case dtype_blob:
 				paramtype = "blob";
@@ -1803,7 +1811,7 @@ void TracePluginImpl::register_sql_statement(ITraceSQLStatement* statement)
 	if (!sql)
 		return;
 
-	size_t sql_length = strlen(sql);
+	FB_SIZE_T sql_length = fb_strlen(sql);
 	if (!sql_length)
 		return;
 

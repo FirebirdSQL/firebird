@@ -36,6 +36,7 @@
 #include <time.h>
 
 #include <optional>
+#include <utility>
 
 #include "../common/db_alias.h"
 #include "../jrd/ods.h"
@@ -85,14 +86,14 @@
 // Sector alignment of memory is necessary to use unbuffered IO on Windows.
 // Actually, sectors may be bigger than 1K, but let's be consistent with
 // JRD regarding the matter for the moment.
-const FB_SIZE_T SECTOR_ALIGNMENT = PAGE_ALIGNMENT;
+constexpr FB_SIZE_T SECTOR_ALIGNMENT = PAGE_ALIGNMENT;
 
 using namespace Firebird;
 
 namespace
 {
 	using MsgFormat::SafeArg;
-	const USHORT nbackup_msg_fac = 24;
+	constexpr USHORT nbackup_msg_fac = FB_IMPL_MSG_FACILITY_NBACKUP;
 
 	void printMsg(USHORT number, const SafeArg& arg, bool newLine = true)
 	{
@@ -136,7 +137,7 @@ namespace
 		{
 			printMsg(1, false); // ERROR:
 			USHORT dummy;
-			USHORT number = (USHORT) gds__decode(code, &dummy, &dummy);
+			const USHORT number = (USHORT) gds__decode(code, &dummy, &dummy);
 			fb_assert(number);
 			if (message)
 				printMsg(number, SafeArg() << message);
@@ -222,7 +223,7 @@ namespace
 
 	bool flShutdown = false;
 
-	int nbackupShutdown(const int reason, const int, void*)
+	int nbackupShutdown(const int reason, const int, void*) noexcept
 	{
 		if (reason == fb_shutrsn_signal)
 		{
@@ -251,10 +252,10 @@ static void checkCtrlC(UtilSvc* /*uSvc*/)
 #endif
 
 
-const char localhost[] = "localhost";
+constexpr char localhost[] = "localhost";
 
-const char backup_signature[4] = {'N','B','A','K'};
-const SSHORT BACKUP_VERSION = 2;
+constexpr char backup_signature[4] = {'N','B','A','K'};
+constexpr SSHORT BACKUP_VERSION = 2;
 
 struct inc_header
 {
@@ -298,6 +299,8 @@ public:
 				pr_error(status, "nbackup needs local access to database file");
 		}
 
+		toSystem(decompress);
+		toSystem(db);
 		expandDatabaseName(db, dbname, NULL);
 
 		if (!uSvc->isService())
@@ -319,7 +322,7 @@ public:
 	void backup_database(int level, const string& guidStr, const PathName& fname);
 	void restore_database(const BackupFiles& files, bool repl_seq, bool inc_rest);
 
-	bool printed() const
+	bool printed() const noexcept
 	{
 		return m_printed;
 	}
@@ -368,7 +371,7 @@ private:
 	void internal_unlock_database();
 	void attach_database();
 	void detach_database();
-	string to_system(const PathName& from);
+	void toSystem(AbstractString& from);
 	void cleanHistory();
 
 	// Create/open database and backup
@@ -382,7 +385,6 @@ private:
 	void create_backup();
 	void close_backup();
 };
-
 
 FB_SIZE_T NBackup::read_file(FILE_HANDLE &file, void *buffer, FB_SIZE_T bufsize)
 {
@@ -597,12 +599,10 @@ void NBackup::close_database()
 	dbase = INVALID_HANDLE_VALUE;
 }
 
-string NBackup::to_system(const PathName& from)
+void NBackup::toSystem(AbstractString& from)
 {
-	string to = from.ToString();
 	if (uSvc->utf8FileNames())
-		ISC_utf8ToSystem(to);
-	return to;
+		ISC_utf8ToSystem(from);
 }
 
 
@@ -614,14 +614,13 @@ void NBackup::open_backup_scan()
 		return;
 	}
 
-	string nm = to_system(bakname);
 #ifdef WIN_NT
-	backup = CreateFile(nm.c_str(), GENERIC_READ, 0,
+	backup = CreateFile(bakname.c_str(), GENERIC_READ, 0,
 		NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL);
 	if (backup != INVALID_HANDLE_VALUE)
 		return;
 #else
-	backup = os_utils::open(nm.c_str(), O_RDONLY | O_LARGEFILE);
+	backup = os_utils::open(bakname.c_str(), O_RDONLY | O_LARGEFILE);
 	if (backup >= 0)
 		return;
 #endif
@@ -769,7 +768,6 @@ void NBackup::open_backup_decompress()
 
 void NBackup::create_backup()
 {
-	string nm = to_system(bakname);
 #ifdef WIN_NT
 	if (bakname == "stdout") {
 		backup = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -784,7 +782,7 @@ void NBackup::create_backup()
 		// avoids an issue where writing to a file across a network can occasionally
 		// return ERROR_ACCESS_DENIED.
 
-		backup = CreateFile(nm.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_DELETE,
+		backup = CreateFile(bakname.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_DELETE,
 			NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL);
 	}
 	if (backup != INVALID_HANDLE_VALUE)
@@ -795,7 +793,7 @@ void NBackup::create_backup()
 		backup = 1; // Posix file handle for stdout
 		return;
 	}
-	backup = os_utils::open(nm.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_LARGEFILE, 0660);
+	backup = os_utils::open(bakname.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_LARGEFILE, 0660);
 	if (backup >= 0)
 		return;
 #endif
@@ -849,11 +847,9 @@ void NBackup::fixup_database(bool repl_seq, bool set_readonly)
 	if (read_file(dbase, header, size) != size)
 		status_exception::raise(Arg::Gds(isc_nbackup_err_eofdb) << dbname.c_str());
 
-	const auto org_flags = header->hdr_flags;
 	const auto page_size = header->hdr_page_size;
 
-	const int backup_state = org_flags & Ods::hdr_backup_mask;
-	if (backup_state != Ods::hdr_nbak_stalled)
+	if (header->hdr_backup_mode != Ods::hdr_nbak_stalled)
 	{
 		status_exception::raise(Arg::Gds(isc_nbackup_fixup_wrongstate) << dbname.c_str() <<
 			Arg::Num(Ods::hdr_nbak_stalled));
@@ -869,35 +865,32 @@ void NBackup::fixup_database(bool repl_seq, bool set_readonly)
 		if (read_file(dbase, header, size) != size)
 			status_exception::raise(Arg::Gds(isc_nbackup_err_eofdb) << dbname.c_str());
 
+		// Replace existing database GUID with a regenerated one
+		Guid::generate().copyTo(header->hdr_guid);
+
 		auto p = header->hdr_data;
-		const auto end = (UCHAR*) header + header->hdr_page_size;
+		const auto* end = (UCHAR*) header + header->hdr_page_size;
 		while (p < end && *p != Ods::HDR_end)
 		{
-			if (*p == Ods::HDR_db_guid)
-			{
-				// Replace existing database GUID with a regenerated one
-				fb_assert(p[1] == Guid::SIZE);
-				Guid::generate().copyTo(p + 2);
-			}
-			else if (*p == Ods::HDR_repl_seq)
+			if (*p == Ods::HDR_repl_seq)
 			{
 				// Reset the sequence counter
-				const FB_UINT64 sequence = 0;
+				constexpr FB_UINT64 sequence = 0;
 				fb_assert(p[1] == sizeof(sequence));
 				memcpy(p + 2, &sequence, sizeof(sequence));
+				break;
 			}
 
 			p += p[1] + 2;
 		}
 	}
 
-	// Update the flags and write the header page back
+	// Update the backup mode and flags, write the header page back
 
-	const auto new_flags =
-		(org_flags & ~Ods::hdr_backup_mask) | Ods::hdr_nbak_normal |
-		(set_readonly ? Ods::hdr_read_only : 0);
+	header->hdr_backup_mode = Ods::hdr_nbak_normal;
 
-	header->hdr_flags = new_flags;
+	if (set_readonly)
+		header->hdr_flags |= Ods::hdr_read_only;
 
 	seek_file(dbase, 0);
 	write_file(dbase, header, size);
@@ -931,7 +924,7 @@ void NBackup::print_child_stderr()
 	// Prepend each line by prefix DE> to let user distinguish nbackup's output
 	// from decompressor's one.
 
-	const int BUFF_SIZE = 8192;
+	constexpr int BUFF_SIZE = 8192;
 	char buff[BUFF_SIZE];
 	const char* end = buff + BUFF_SIZE - 1;
 	static bool atNewLine = true;
@@ -944,7 +937,7 @@ void NBackup::print_child_stderr()
 		// in this case and it is enough for our usage.
 		const BOOL ret = PeekNamedPipe(childStdErr, NULL, 1, NULL, &bytesRead, NULL);
 		if (ret && bytesRead)
-			ReadFile(childStdErr, buff, end - buff, &bytesRead, NULL);
+			std::ignore = ReadFile(childStdErr, buff, end - buff, &bytesRead, NULL);
 		else
 			bytesRead = 0;
 
@@ -1004,9 +997,10 @@ void NBackup::attach_database()
 	}
 
 	ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
+	uSvc->fillDpb(dpb);
 
 	const unsigned char* authBlock;
-	unsigned int authBlockSize = uSvc->getAuthBlock(&authBlock);
+	const unsigned int authBlockSize = uSvc->getAuthBlock(&authBlock);
 	if (authBlockSize)
 	{
 		dpb.insertBytes(isc_dpb_auth_block, authBlock, authBlockSize);
@@ -1109,15 +1103,15 @@ void NBackup::get_database_size()
 	}
 	else if (res[0] == isc_info_db_file_size)
 	{
-		USHORT len = isc_vax_integer (&res[1], 2);
-		db_size_pages = isc_vax_integer (&res[3], len);
+		const USHORT len = isc_vax_integer(&res[1], 2);
+		db_size_pages = isc_vax_integer(&res[3], len);
 	}
 }
 
 void NBackup::get_ods()
 {
 	m_odsNumber = 0;
-	const char db_version_info[] = { isc_info_ods_version };
+	constexpr char db_version_info[] = { isc_info_ods_version };
 	char res[128];
 	if (isc_database_info(status, &newdb, sizeof(db_version_info), db_version_info, sizeof(res), res))
 	{
@@ -1125,8 +1119,8 @@ void NBackup::get_ods()
 	}
 	else if (res[0] == isc_info_ods_version)
 	{
-		USHORT len = isc_vax_integer (&res[1], 2);
-		m_odsNumber = isc_vax_integer (&res[3], len);
+		const USHORT len = isc_vax_integer(&res[1], 2);
+		m_odsNumber = isc_vax_integer(&res[3], len);
 	}
 }
 
@@ -1164,7 +1158,7 @@ void NBackup::lock_database(bool get_size)
 		{
 			get_database_size();
 			if (db_size_pages && (!uSvc->isService()))
-				printf("%d\n", db_size_pages);
+				printf("%u\n", db_size_pages);
 		}
 	}
 	catch (const Exception&)
@@ -1198,11 +1192,10 @@ void NBackup::backup_database(int level, const string& guidStr, const PathName& 
 	bool delete_backup = false;
 	ULONG prev_scn = 0;
 	std::optional<Guid> prev_guid;
-	Ods::pag* page_buff = NULL;
 	attach_database();
 	ULONG page_writes = 0, page_reads = 0;
 
-	time_t start = time(NULL);
+	const time_t start = time(NULL);
 	struct tm today;
 #ifdef HAVE_LOCALTIME_R
 	if (!localtime_r(&start, &today))
@@ -1238,14 +1231,16 @@ void NBackup::backup_database(int level, const string& guidStr, const PathName& 
 			char str[200];
 			if (level > 0)
 			{
-				sprintf(str, "SELECT RDB$GUID, RDB$SCN FROM RDB$BACKUP_HISTORY "
+				snprintf(str, sizeof(str),
+					"SELECT RDB$GUID, RDB$SCN FROM RDB$BACKUP_HISTORY "
 					"WHERE RDB$BACKUP_ID = "
 					"(SELECT MAX(RDB$BACKUP_ID) FROM RDB$BACKUP_HISTORY "
 					"WHERE RDB$BACKUP_LEVEL = %d)", level - 1);
 			}
 			else
 			{
-				sprintf(str, "SELECT RDB$GUID, RDB$SCN FROM RDB$BACKUP_HISTORY "
+				snprintf(str, sizeof(str),
+					"SELECT RDB$GUID, RDB$SCN FROM RDB$BACKUP_HISTORY "
 					"WHERE RDB$GUID = '%s'", guidStr.c_str());
 			}
 			if (isc_dsql_prepare(status, &trans, &stmt, 0, str, 1, NULL))
@@ -1302,7 +1297,10 @@ void NBackup::backup_database(int level, const string& guidStr, const PathName& 
 		detach_database();
 
 		if (fname.hasData())
+		{
 			bakname = fname;
+			toSystem(bakname);
+		}
 		else
 		{
 			// Let's generate nice new filename
@@ -1364,7 +1362,7 @@ void NBackup::backup_database(int level, const string& guidStr, const PathName& 
 									Arg::Num(ODS_CURRENT));
 		}
 
-		if ((header->hdr_flags & Ods::hdr_backup_mask) != Ods::hdr_nbak_stalled)
+		if (header->hdr_backup_mode != Ods::hdr_nbak_stalled)
 			status_exception::raise(Arg::Gds(isc_nbackup_db_notlock) << Arg::Num(header->hdr_flags));
 
 		Array<UCHAR> page_buffer;
@@ -1381,7 +1379,7 @@ void NBackup::backup_database(int level, const string& guidStr, const PathName& 
 
 		std::optional<Guid> backup_guid;
 		auto p = reinterpret_cast<Ods::header_page*>(page_buff)->hdr_data;
-		const auto end = reinterpret_cast<UCHAR*>(page_buff) + header->hdr_page_size;
+		const auto* end = reinterpret_cast<UCHAR*>(page_buff) + header->hdr_page_size;
 		while (p < end && *p != Ods::HDR_end)
 		{
 			if (*p == Ods::HDR_backup_guid)
@@ -1458,7 +1456,7 @@ void NBackup::backup_database(int level, const string& guidStr, const PathName& 
 				fb_assert(scns && scns->scn_sequence * pagesPerSCN + scnsSlot == curPage ||
 						 !scns && curPage % pagesPerSCN == scnsSlot);
 
-				ULONG nextSCN = scns ? (scns->scn_sequence + 1) * pagesPerSCN : FIRST_SCN_PAGE;
+				const ULONG nextSCN = scns ? (scns->scn_sequence + 1) * pagesPerSCN : FIRST_SCN_PAGE;
 
 				while (true)
 				{
@@ -1641,8 +1639,8 @@ void NBackup::backup_database(int level, const string& guidStr, const PathName& 
 	internal_unlock_database();
 	detach_database();
 
-	time_t finish = time(NULL);
-	double elapsed = difftime(finish, start);
+	const time_t finish = time(NULL);
+	const double elapsed = difftime(finish, start);
 	if (bakname != "stdout")
 	{
 		uSvc->printf(false, "time elapsed\t%.0f sec \npage reads\t%u \npage writes\t%u\n",
@@ -1681,7 +1679,7 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 						//Enter name of the backup file of level %d (\".\" - do not restore further):\n
 						printMsg(69, SafeArg() << curLevel);
 						char temp[256];
-						FB_UNUSED(scanf("%255s", temp));
+						std::ignore = scanf("%255s", temp);
 						bakname = temp;
 					}
 					if (bakname == ".")
@@ -1695,6 +1693,8 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 						fixup_database(repl_seq);
 						return;
 					}
+					toSystem(bakname);
+
 					// Never reaches this point when run as service
 					try {
 						fb_assert(!uSvc->isService());
@@ -1728,7 +1728,10 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 					return;
 				}
 				if (!inc_rest || curLevel)
+				{
 					bakname = files[curLevel - (inc_rest ? 1 : 0)];
+					toSystem(bakname);
+				}
 				if (!inc_rest || curLevel)
 					open_backup_scan();
 			}
@@ -1760,7 +1763,7 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 				while (left)
 				{
 					char char_buf[1024];
-					FB_SIZE_T step = left > sizeof(char_buf) ? sizeof(char_buf) : left;
+					const FB_SIZE_T step = left > sizeof(char_buf) ? sizeof(char_buf) : left;
 					if (read_file(backup, &char_buf, step) != step)
 						status_exception::raise(Arg::Gds(isc_nbackup_err_eofhdrbk) << bakname.c_str());
 					left -= step;

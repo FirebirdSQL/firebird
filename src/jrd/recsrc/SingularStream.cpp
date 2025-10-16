@@ -175,6 +175,11 @@ void SingularStream::findUsedStreams(StreamList& streams, bool expandAll) const
 	m_next->findUsedStreams(streams, expandAll);
 }
 
+bool SingularStream::isDependent(const StreamList& streams) const
+{
+	return m_next->isDependent(streams);
+}
+
 void SingularStream::invalidateRecords(Request* request) const
 {
 	m_next->invalidateRecords(request);

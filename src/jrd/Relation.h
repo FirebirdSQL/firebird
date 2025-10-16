@@ -44,7 +44,7 @@ class ViewContext
 {
 public:
 	explicit ViewContext(MemoryPool& p, const TEXT* context_name,
-						 const TEXT* relation_name, USHORT context,
+						 const QualifiedName& relation_name, USHORT context,
 						 ViewContextType type)
 	: vcx_context_name(p, context_name, fb_strlen(context_name)),
 	  vcx_relation_name(relation_name),
@@ -53,13 +53,13 @@ public:
 	{
 	}
 
-	static USHORT generate(const ViewContext* vc)
+	static USHORT generate(const ViewContext* vc) noexcept
 	{
 		return vc->vcx_context;
 	}
 
 	const Firebird::string vcx_context_name;
-	const MetaName vcx_relation_name;
+	const QualifiedName vcx_relation_name;
 	const USHORT vcx_context;
 	const ViewContextType vcx_type;
 };
@@ -100,14 +100,14 @@ public:
 		  dpMapMark(0)
 	{}
 
-	inline SLONG addRef()
+	inline SLONG addRef() noexcept
 	{
 		return useCount++;
 	}
 
 	void free(RelationPages*& nextFree);
 
-	static inline InstanceId generate(const RelationPages* item)
+	static inline InstanceId generate(const RelationPages* item) noexcept
 	{
 		return item->rel_instance_id;
 	}
@@ -147,7 +147,7 @@ public:
 		}
 	}
 
-	void freeOldestMapItems()
+	void freeOldestMapItems() noexcept
 	{
 		ULONG minMark = MAX_ULONG;
 		FB_SIZE_T i;
@@ -176,7 +176,7 @@ private:
 	RelationPages*	rel_next_free;
 	SLONG	useCount;
 
-	static const ULONG MAX_DPMAP_ITEMS = 64;
+	static constexpr ULONG MAX_DPMAP_ITEMS = 64;
 
 	struct DPItem
 	{
@@ -184,7 +184,7 @@ private:
 		ULONG physNum;
 		ULONG mark;
 
-		static ULONG generate(const DPItem& item)
+		static ULONG generate(const DPItem& item) noexcept
 		{
 			return item.seqNum;
 		}
@@ -232,9 +232,9 @@ public:
 	ULONG			rel_flags;
 	Format*			rel_current_format;	// Current record format
 
-	MetaName	rel_name;		// ascii relation name
+	QualifiedName	rel_name;		// ascii relation name
 	MetaName	rel_owner_name;	// ascii owner
-	MetaName	rel_security_name;	// security class name for relation
+	QualifiedName	rel_security_name;	// security class name for relation
 
 	vec<Format*>*	rel_formats;		// Known record formats
 	vec<jrd_fld*>*	rel_fields;			// vector of field blocks
@@ -270,12 +270,12 @@ public:
 
 	Firebird::Mutex rel_drop_mutex;
 
-	bool isSystem() const;
-	bool isTemporary() const;
-	bool isVirtual() const;
-	bool isView() const;
+	bool isSystem() const noexcept;
+	bool isTemporary() const noexcept;
+	bool isVirtual() const noexcept ;
+	bool isView() const noexcept;
 
-	ObjectType getObjectType() const
+	ObjectType getObjectType() const noexcept
 	{
 		return isView() ? obj_view : obj_relation;
 	}
@@ -285,7 +285,7 @@ public:
 	// global temporary relations attributes
 	RelationPages* getPages(thread_db* tdbb, TraNumber tran = MAX_TRA_NUMBER, bool allocPages = true);
 
-	RelationPages* getBasePages()
+	RelationPages* getBasePages() noexcept
 	{
 		return &rel_pages_base;
 	}
@@ -304,9 +304,9 @@ public:
 	void	retainPages(thread_db* tdbb, TraNumber oldNumber, TraNumber newNumber);
 
 	void	getRelLockKey(thread_db* tdbb, UCHAR* key);
-	USHORT	getRelLockKeyLength() const;
+	USHORT	getRelLockKeyLength() const noexcept;
 
-	void	cleanUp();
+	void	cleanUp() noexcept;
 
 	class RelPagesSnapshot : public Firebird::Array<RelationPages*>
 	{
@@ -349,7 +349,7 @@ private:
 public:
 	explicit jrd_rel(MemoryPool& p);
 
-	bool hasTriggers() const;
+	bool hasTriggers() const noexcept;
 	void releaseTriggers(thread_db* tdbb, bool destroy);
 	void replaceTriggers(thread_db* tdbb, TrigVector** triggers);
 
@@ -369,7 +369,7 @@ public:
 		GCShared(thread_db* tdbb, jrd_rel* relation);
 		~GCShared();
 
-		bool gcEnabled() const
+		bool gcEnabled() const noexcept
 		{
 			return m_gcEnabled;
 		}
@@ -385,7 +385,7 @@ public:
 	class GCExclusive
 	{
 	public:
-		GCExclusive(thread_db* tdbb, jrd_rel* relation);
+		GCExclusive(thread_db* tdbb, jrd_rel* relation) noexcept;
 		~GCExclusive();
 
 		bool acquire(int wait);
@@ -400,23 +400,23 @@ public:
 
 // rel_flags
 
-const ULONG REL_scanned					= 0x0001;	// Field expressions scanned (or being scanned)
-const ULONG REL_system					= 0x0002;
-const ULONG REL_deleted					= 0x0004;	// Relation known gonzo
-const ULONG REL_get_dependencies		= 0x0008;	// New relation needs dependencies during scan
-const ULONG REL_check_existence			= 0x0010;	// Existence lock released pending drop of relation
-const ULONG REL_blocking				= 0x0020;	// Blocking someone from dropping relation
-const ULONG REL_sql_relation			= 0x0080;	// Relation defined as sql table
-const ULONG REL_check_partners			= 0x0100;	// Rescan primary dependencies and foreign references
-const ULONG REL_being_scanned			= 0x0200;	// relation scan in progress
-const ULONG REL_deleting				= 0x0800;	// relation delete in progress
-const ULONG REL_temp_tran				= 0x1000;	// relation is a GTT delete rows
-const ULONG REL_temp_conn				= 0x2000;	// relation is a GTT preserve rows
-const ULONG REL_virtual					= 0x4000;	// relation is virtual
-const ULONG REL_jrd_view				= 0x8000;	// relation is VIEW
-const ULONG REL_gc_blocking				= 0x10000;	// request to downgrade\release gc lock
-const ULONG REL_gc_disabled				= 0x20000;	// gc is disabled temporarily
-const ULONG REL_gc_lockneed				= 0x40000;	// gc lock should be acquired
+inline constexpr ULONG REL_scanned			= 0x0001;	// Field expressions scanned (or being scanned)
+inline constexpr ULONG REL_system			= 0x0002;
+inline constexpr ULONG REL_deleted			= 0x0004;	// Relation known gonzo
+inline constexpr ULONG REL_get_dependencies	= 0x0008;	// New relation needs dependencies during scan
+inline constexpr ULONG REL_check_existence	= 0x0010;	// Existence lock released pending drop of relation
+inline constexpr ULONG REL_blocking			= 0x0020;	// Blocking someone from dropping relation
+inline constexpr ULONG REL_sql_relation		= 0x0080;	// Relation defined as sql table
+inline constexpr ULONG REL_check_partners	= 0x0100;	// Rescan primary dependencies and foreign references
+inline constexpr ULONG REL_being_scanned	= 0x0200;	// relation scan in progress
+inline constexpr ULONG REL_deleting			= 0x0800;	// relation delete in progress
+inline constexpr ULONG REL_temp_tran		= 0x1000;	// relation is a GTT delete rows
+inline constexpr ULONG REL_temp_conn		= 0x2000;	// relation is a GTT preserve rows
+inline constexpr ULONG REL_virtual			= 0x4000;	// relation is virtual
+inline constexpr ULONG REL_jrd_view			= 0x8000;	// relation is VIEW
+inline constexpr ULONG REL_gc_blocking		= 0x10000;	// request to downgrade\release gc lock
+inline constexpr ULONG REL_gc_disabled		= 0x20000;	// gc is disabled temporarily
+inline constexpr ULONG REL_gc_lockneed		= 0x40000;	// gc lock should be acquired
 
 
 /// class jrd_rel
@@ -429,22 +429,22 @@ inline jrd_rel::jrd_rel(MemoryPool& p)
 {
 }
 
-inline bool jrd_rel::isSystem() const
+inline bool jrd_rel::isSystem() const noexcept
 {
 	return rel_flags & REL_system;
 }
 
-inline bool jrd_rel::isTemporary() const
+inline bool jrd_rel::isTemporary() const noexcept
 {
 	return (rel_flags & (REL_temp_tran | REL_temp_conn));
 }
 
-inline bool jrd_rel::isVirtual() const
+inline bool jrd_rel::isVirtual() const noexcept
 {
 	return (rel_flags & REL_virtual);
 }
 
-inline bool jrd_rel::isView() const
+inline bool jrd_rel::isView() const noexcept
 {
 	return (rel_flags & REL_jrd_view);
 }
@@ -492,7 +492,7 @@ inline jrd_rel::GCShared::~GCShared()
 
 // Field block, one for each field in a scanned relation
 
-const USHORT FLD_parse_computed = 0x0001;		// computed expression is being parsed
+inline constexpr USHORT FLD_parse_computed = 0x0001;	// computed expression is being parsed
 
 class jrd_fld : public pool_alloc<type_fld>
 {
@@ -506,8 +506,8 @@ public:
 	ArrayField*	fld_array;			// array description, if array
 	MetaName	fld_name;	// Field name
 	MetaName	fld_security_name;	// security class name for field
-	MetaName	fld_generator_name;	// identity generator name
-	MetaNamePair	fld_source_rel_field;	// Relation/field source name
+	QualifiedName	fld_generator_name;	// identity generator name
+	QualifiedNameMetaNamePair	fld_source_rel_field;	// Relation/field source name
 	std::optional<IdentityType> fld_identity_type;
 	USHORT fld_flags;
 

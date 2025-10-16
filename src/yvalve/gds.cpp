@@ -131,7 +131,7 @@ static char* fb_prefix_msg = NULL;
 #define FB_IMPL_MSG(facility, number, symbol, sqlCode, sqlClass, sqlSubClass, text) \
 	{ENCODE_ISC_MSG(number, FB_IMPL_MSG_FACILITY_##facility), text},
 
-static const struct {
+static constexpr struct {
 	SLONG code_number;
 	const SCHAR *code_text;
 } messages[] = {
@@ -150,7 +150,7 @@ static const struct {
 #define FB_IMPL_MSG(facility, number, symbol, sqlCode, sqlClass, sqlSubClass, text) \
 	{ENCODE_ISC_MSG(number, FB_IMPL_MSG_FACILITY_##facility), sqlClass sqlSubClass},
 
-static const struct {
+static constexpr struct {
 	SLONG gds_code;
 	const char* sql_state;
 } sql_states[] = {
@@ -169,7 +169,7 @@ static const struct {
 #define FB_IMPL_MSG(facility, number, symbol, sqlCode, sqlClass, sqlSubClass, text) \
 	{ENCODE_ISC_MSG(number, FB_IMPL_MSG_FACILITY_##facility), sqlCode},
 
-static const struct {
+static constexpr struct {
 	SLONG gds_code;
 	SSHORT sql_code;
 } sql_codes[] = {
@@ -181,7 +181,7 @@ static const struct {
 #undef FB_IMPL_MSG_SYMBOL
 #undef FB_IMPL_MSG
 
-const SLONG GENERIC_SQLCODE		= -999;
+constexpr SLONG GENERIC_SQLCODE = -999;
 
 #include "fb_types.h"
 #include "../common/utils_proto.h"
@@ -244,7 +244,7 @@ static void		sanitize(Firebird::string& locale);
 // New functions that try to be safe.
 static SLONG safe_interpret(char* const s, const FB_SIZE_T bufsize,
 	const ISC_STATUS** const vector, bool legacy = false);
-static void safe_strncpy(char* target, const char* source, size_t bs);
+static void safe_strncpy(char* target, const char* source, size_t bs) noexcept;
 
 // Useful only in Windows. The hardcoded definition for the English-only version
 // is too crude.
@@ -293,41 +293,42 @@ static SLONG gds_pid = 0;
 
 // BLR Pretty print stuff
 
-const int op_line		= 1;
-const int op_verb		= 2;
-const int op_byte		= 3;
-const int op_word		= 4;
-const int op_pad		= 5;
-const int op_dtype		= 6;
-const int op_message	= 7;
-const int op_literal	= 8;
-const int op_begin		= 9;
-const int op_map		= 10;
-const int op_args		= 11;
-const int op_union		= 12;
-const int op_indent		= 13;
-const int op_join		= 14;
-const int op_parameters	= 15;
-const int op_error_handler	= 16;
-const int op_set_error	= 17;
-const int op_literals	= 18;
-const int op_relation	= 20;
-const int op_exec_into	= 21;
-const int op_cursor_stmt	= 22;
-const int op_byte_opt_verb	= 23;
-const int op_exec_stmt		= 24;
-const int op_derived_expr	= 25;
-const int op_partition_args	= 26;
-const int op_subproc_decl	= 27;
-const int op_subfunc_decl	= 28;
-const int op_window_win		= 29;
-const int op_erase			= 30;	// special due to optional blr_marks after blr_erase
-const int op_dcl_local_table	= 31;
-const int op_outer_map		= 32;
-const int op_invoke_function	= 33;
-const int op_invsel_procedure	= 34;
+constexpr int op_line		= 1;
+constexpr int op_verb		= 2;
+constexpr int op_byte		= 3;
+constexpr int op_word		= 4;
+constexpr int op_pad		= 5;
+constexpr int op_dtype		= 6;
+constexpr int op_message	= 7;
+constexpr int op_literal	= 8;
+constexpr int op_begin		= 9;
+constexpr int op_map		= 10;
+constexpr int op_args		= 11;
+constexpr int op_union		= 12;
+constexpr int op_indent		= 13;
+constexpr int op_join		= 14;
+constexpr int op_parameters	= 15;
+constexpr int op_error_handler	= 16;
+constexpr int op_set_error	= 17;
+constexpr int op_literals	= 18;
+constexpr int op_exec_into	= 21;
+constexpr int op_cursor_stmt	= 22;
+constexpr int op_byte_opt_verb	= 23;
+constexpr int op_exec_stmt		= 24;
+constexpr int op_derived_expr	= 25;
+constexpr int op_partition_args	= 26;
+constexpr int op_subproc_decl	= 27;
+constexpr int op_subfunc_decl	= 28;
+constexpr int op_window_win		= 29;
+constexpr int op_erase			= 30;	// special due to optional blr_marks after blr_erase
+constexpr int op_dcl_local_table	= 31;
+constexpr int op_outer_map		= 32;
+constexpr int op_invoke_function	= 33;
+constexpr int op_invsel_procedure	= 34;
+constexpr int op_table_value_fun	= 35;
+constexpr int op_for_range		= 36;
 
-static const UCHAR
+static constexpr UCHAR
 	// generic print formats
 	zero[]		= { op_line, 0 },
 	one[]		= { op_line, op_verb, 0},
@@ -353,6 +354,10 @@ static const UCHAR
 	relation[]	= { op_byte, op_literal, op_pad, op_byte, op_line, 0},
 	relation2[] = { op_byte, op_literal, op_line, op_indent, op_byte,
 					op_literal, op_pad, op_byte, op_line, 0},
+	relation3[] = { op_line, op_indent, op_byte, op_literal,
+					op_line, op_indent, op_byte, op_literal,
+					op_line, op_indent, op_byte, op_literal,
+					op_line, op_indent, op_byte, op_line, 0},
 	aggregate[] = { op_byte, op_line, op_verb, op_verb, op_verb, 0},
 	rid[]		= { op_word, op_byte, op_line, 0},
 	rid2[]		= { op_word, op_byte, op_literal, op_pad, op_byte, op_line, 0},
@@ -363,6 +368,8 @@ static const UCHAR
 					op_args, 0},
 	gen_id[]	= { op_byte, op_literal, op_line, op_verb, 0},
 	gen_id2[]	= { op_byte, op_literal, op_line, 0},
+	gen_id3[]	= { op_line, op_indent, op_byte, op_literal, op_line, op_indent, op_byte, op_literal,
+					op_line, op_indent, op_byte_opt_verb, 0},
 	declare[]	= { op_word, op_dtype, op_line, 0},
 	one_word[]	= { op_word, op_line, 0},
 	indx[]		= { op_line, op_verb, op_indent, op_byte, op_line, op_args, 0},
@@ -420,14 +427,20 @@ static const UCHAR
 	in_list[] = { op_line, op_verb, op_indent, op_word, op_line, op_args, 0},
 	invoke_function[] = { op_invoke_function, 0 },
 	invsel_procedure[] = { op_invsel_procedure, 0 },
-	cast_format[] = { op_line, op_indent, op_byte, op_literal, op_line, op_indent, op_dtype, op_line, op_verb, 0 };
+	cast_format[] = { op_line, op_indent, op_byte, op_literal, op_line, op_indent, op_dtype, op_line, op_verb, 0 },
+	table_value_fun[] = { op_table_value_fun, 0 },
+	for_range[] = { op_for_range, 0 },
+	default2[] = { op_line, op_indent, op_byte, op_literal,
+				   op_line, op_indent, op_byte, op_literal,
+				   op_line, op_indent, op_byte, op_literal,
+				   op_pad, op_line, 0};
 
 
 #include "../jrd/blp.h"
 
-const char* const FB_LOCK_ENV		= "FIREBIRD_LOCK";
-const char* const FB_MSG_ENV		= "FIREBIRD_MSG";
-const char* const FB_TMP_ENV		= "FIREBIRD_TMP";
+constexpr const char* FB_LOCK_ENV	= "FIREBIRD_LOCK";
+constexpr const char* FB_MSG_ENV	= "FIREBIRD_MSG";
+constexpr const char* FB_TMP_ENV	= "FIREBIRD_TMP";
 
 #ifdef WIN_NT
 #define EXPAND_PATH(relative, absolute)		_fullpath(absolute, relative, MAXPATHLEN)
@@ -512,7 +525,7 @@ void API_ROUTINE isc_decode_date(const ISC_QUAD* date, void* times_arg)
  * Functional description
  *	Convert from internal timestamp format to UNIX time structure.
  *
- *	Note: this API is historical - the prefered entrypoint is
+ *	Note: this API is historical - the preferred entrypoint is
  *	isc_decode_timestamp
  *
  **************************************/
@@ -603,7 +616,7 @@ void API_ROUTINE isc_encode_date(const void* times_arg, ISC_QUAD* date)
  * Functional description
  *	Convert from UNIX time structure to internal timestamp format.
  *
- *	Note: This API is historical -- the prefered entrypoint is
+ *	Note: This API is historical -- the preferred entrypoint is
  *	isc_encode_timestamp
  *
  **************************************/
@@ -964,8 +977,8 @@ static SLONG safe_interpret(char* const s, const FB_SIZE_T bufsize,
 					{
 						if (legacy && strchr(messages[i].code_text, '%'))
 						{
-							sprintf(s, messages[i].code_text,
-									args[0], args[1], args[2], args[3], args[4]);
+							snprintf(s, bufsize, messages[i].code_text,
+								args[0], args[1], args[2], args[3], args[4]);
 						}
 						else
 							MsgFormat::MsgPrint(s, bufsize, messages[i].code_text, safe);
@@ -975,7 +988,7 @@ static SLONG safe_interpret(char* const s, const FB_SIZE_T bufsize,
 				}
 
 				if (!found) {
-					sprintf(s, "unknown ISC error %ld", (SLONG) code);	// TXNN
+					snprintf(s, bufsize, "unknown ISC error %" SLONGFORMAT, (SLONG) code);	// TXNN
 				}
 			}
 		}
@@ -1000,11 +1013,11 @@ static SLONG safe_interpret(char* const s, const FB_SIZE_T bufsize,
 		break;
 
 	case isc_arg_dos:
-		sprintf(s, "unknown dos error %ld", (SLONG) code);	// TXNN
+		snprintf(s, bufsize, "unknown dos error %" SLONGFORMAT, (SLONG) code);	// TXNN
 		break;
 
 	case isc_arg_next_mach:
-		sprintf(s, "next/mach error %ld", (SLONG) code);	// AP
+		snprintf(s, bufsize, "next/mach error %" SLONGFORMAT, (SLONG) code);	// AP
 		break;
 
 	case isc_arg_win32:
@@ -1016,7 +1029,7 @@ static SLONG safe_interpret(char* const s, const FB_SIZE_T bufsize,
 						   s, bufsize, NULL))
 #endif
 		{
-			sprintf(s, "unknown Win32 error %ld", (SLONG) code);	// TXNN
+			snprintf(s, bufsize, "unknown Win32 error %" SLONGFORMAT, (SLONG) code);	// TXNN
 		}
 		break;
 
@@ -1044,7 +1057,7 @@ static SLONG safe_interpret(char* const s, const FB_SIZE_T bufsize,
 // ***********************
 // Done exclusively because in legacy mode, safe_interpret cannot fill the
 // string up to the end by calling strncpy.
-static void safe_strncpy(char* target, const char* source, size_t bs)
+static void safe_strncpy(char* target, const char* source, size_t bs) noexcept
 {
 	if (!bs)
 		return;
@@ -1080,8 +1093,8 @@ void API_ROUTINE gds__interprete_a(SCHAR* s, SSHORT* length, ISC_STATUS* vector,
 }
 
 
-const int SECS_PER_HOUR	= 60 * 60;
-const int SECS_PER_DAY	= SECS_PER_HOUR * 24;
+constexpr int SECS_PER_HOUR	= 60 * 60;
+constexpr int SECS_PER_DAY	= SECS_PER_HOUR * 24;
 
 #ifdef WIN_NT
 
@@ -2168,6 +2181,57 @@ int API_ROUTINE fb_print_blr(const UCHAR* blr, ULONG blr_length,
 		SSHORT level = 0;
 		SLONG offset = 0;
 		blr_print_line(control, (SSHORT) offset);
+
+		if (control->ctl_blr_reader.getByte() == blr_flags)
+		{
+			blr_format(control, "blr_flags,");
+			++level;
+
+			static const char* subCodes[] =
+			{
+				nullptr,
+				"search_system_schema"
+			};
+
+			UCHAR code;
+
+			while ((code = control->ctl_blr_reader.getByte()) != blr_end)
+			{
+				offset = blr_print_line(control, offset);
+				blr_indent(control, level);
+
+				if (code == 0 || code >= FB_NELEM(subCodes))
+				{
+					control->ctl_blr_reader.seekBackward(1);
+					blr_print_byte(control);
+				}
+				else
+					blr_format(control, "blr_flags_%s, ", subCodes[code]);
+
+				auto len = blr_print_word(control);
+
+				if (len > 0)
+				{
+					offset = blr_print_line(control, offset);
+					blr_indent(control, level + 1);
+
+					while (len > 0)
+					{
+						blr_print_byte(control);
+						--len;
+					}
+				}
+			}
+
+			// print blr_end
+			offset = blr_print_line(control, offset);
+			control->ctl_blr_reader.seekBackward(1);
+			blr_print_verb(control, level);
+			--level;
+		}
+		else
+			control->ctl_blr_reader.seekBackward(1);
+
 		blr_print_verb(control, level);
 
 		offset = control->ctl_blr_reader.getOffset();
@@ -2593,7 +2657,7 @@ void API_ROUTINE gds__unregister_cleanup(FPTR_VOID_PTR routine, void *arg)
 	Firebird::MutexLockGuard guard(cleanup_handlers_mutex, "gds__unregister_cleanup");
 
 	clean_t* clean;
-	for (clean_t** clean_ptr = &cleanup_handlers; clean = *clean_ptr; clean_ptr = &clean->clean_next)
+	for (clean_t** clean_ptr = &cleanup_handlers; (clean = *clean_ptr); clean_ptr = &clean->clean_next)
 	{
         if (clean->clean_routine == routine && clean->clean_arg == arg)
 		{
@@ -2779,7 +2843,7 @@ void API_ROUTINE isc_print_sqlerror(SSHORT sqlcode, const ISC_STATUS* status)
  **************************************/
 	TEXT error_buffer[192];
 
-	sprintf(error_buffer, "SQLCODE: %d\nSQL ERROR:\n", sqlcode);
+	snprintf(error_buffer, sizeof(error_buffer), "SQLCODE: %d\nSQL ERROR:\n", sqlcode);
 	TEXT* p = error_buffer;
 	while (*p)
 		p++;
@@ -3010,6 +3074,46 @@ static void blr_print_cond(gds_ctl* control, SSHORT level)
 			blr_print_char(control);
 		break;
 
+	case blr_exception2:
+		blr_format(control, "blr_exception2, ");
+		blr_print_line(control, (SSHORT) offset);
+		blr_indent(control, level);
+		n = blr_print_byte(control);
+		while (--n >= 0)
+			blr_print_char(control);
+		blr_print_line(control, (SSHORT) offset);
+		blr_indent(control, level);
+		n = blr_print_byte(control);
+		while (--n >= 0)
+			blr_print_char(control);
+		break;
+
+	case blr_exception3:
+		blr_format(control, "blr_exception3, ");
+		blr_print_line(control, (SSHORT) offset);
+		blr_indent(control, level);
+		n = blr_print_byte(control);
+		while (--n >= 0)
+			blr_print_char(control);
+		blr_print_line(control, (SSHORT) offset);
+		blr_indent(control, level);
+		n = blr_print_byte(control);
+		while (--n >= 0)
+			blr_print_char(control);
+		blr_print_line(control, (SSHORT) offset);
+		blr_indent(control, level);
+		n = blr_print_byte(control);
+		if (n == 0)
+			blr_print_line(control, (SSHORT) offset);
+		else
+			blr_print_verb(control, 0);
+		blr_indent(control, level);
+		n = blr_print_word(control);
+		blr_print_line(control, (SSHORT) offset);
+		while (--n >= 0)
+			blr_print_verb(control, level);
+		break;
+
 	case blr_exception_msg:
 		blr_format(control, "blr_exception_msg, ");
 		n = blr_print_byte(control);
@@ -3205,6 +3309,13 @@ static int blr_print_dtype(gds_ctl* control)
 		length = 0;
 		break;
 
+	case blr_domain_name3:
+		string = "domain_name3";
+		// Don't bother with this length.
+		// It will not be used for blr_domain_name3.
+		length = 0;
+		break;
+
 	case blr_column_name:
 		string = "column_name";
 		// Don't bother with this length.
@@ -3216,6 +3327,13 @@ static int blr_print_dtype(gds_ctl* control)
 		string = "column_name2";
 		// Don't bother with this length.
 		// It will not be used for blr_column_name2.
+		length = 0;
+		break;
+
+	case blr_column_name3:
+		string = "column_name3";
+		// Don't bother with this length.
+		// It will not be used for blr_column_name3.
 		length = 0;
 		break;
 
@@ -3278,13 +3396,23 @@ static int blr_print_dtype(gds_ctl* control)
 
 	case blr_domain_name:
 	case blr_domain_name2:
+	case blr_domain_name3:
 	case blr_column_name:
 	case blr_column_name2:
+	case blr_column_name3:
 		{
 			// 0 = blr_domain_type_of; 1 = blr_domain_full
 			blr_print_byte(control);
 
-			if (dtype == blr_column_name || dtype == blr_column_name2)
+			if (dtype == blr_domain_name3 || dtype == blr_column_name3)
+			{
+				for (UCHAR n = blr_print_byte(control); n > 0; --n)
+					blr_print_char(control);
+
+				blr_format(control, " ");
+			}
+
+			if (dtype == blr_column_name || dtype == blr_column_name2 || dtype == blr_column_name3)
 			{
 				for (UCHAR n = blr_print_byte(control); n > 0; --n)
 					blr_print_char(control);
@@ -3295,7 +3423,12 @@ static int blr_print_dtype(gds_ctl* control)
 			for (UCHAR n = blr_print_byte(control); n > 0; --n)
 				blr_print_char(control);
 
-			if (dtype == blr_domain_name2 || dtype == blr_column_name2)
+			bool hasTextType = dtype == blr_domain_name2 || dtype == blr_column_name2;
+
+			if (dtype == blr_domain_name3 || dtype == blr_column_name3)
+				hasTextType = blr_print_byte(control) != 0;
+
+			if (hasTextType)
 				blr_print_word(control);
 
 			break;
@@ -3528,27 +3661,6 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 				blr_print_verb(control, level);
 				blr_print_verb(control, level);
 			}
-			break;
-
-		case op_relation:
-			blr_operator = control->ctl_blr_reader.getByte();
-			blr_print_blr(control, blr_operator);
-			// Strange message. Notice that blr_lock_relation was part of PC_ENGINE.
-			if (blr_operator != blr_relation && blr_operator != blr_rid)
-			{
-				blr_error(control,
-						  "*** blr_relation or blr_rid must be object of blr_lock_relation, %d found ***",
-						  (int) blr_operator);
-			}
-
-			if (blr_operator == blr_relation)
-			{
-				n = blr_print_byte(control);
-				while (--n >= 0)
-					blr_print_char(control);
-			}
-			else
-				blr_print_word(control);
 			break;
 
 		case op_exec_into:
@@ -4003,11 +4115,12 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 				"args"
 			};
 
-			static const char* typeSubCodes[] =
+			static const char* idSubCodes[] =
 			{
 				nullptr,
-				"standalone",
-				"packaged",
+				"schema",
+				"package",
+				"name",
 				"sub"
 			};
 
@@ -4022,26 +4135,28 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 
 				switch (blr_operator)
 				{
-					case blr_invoke_function_type:
-						n = control->ctl_blr_reader.getByte();
+					case blr_invoke_function_id:
+						++level;
 
-						if (n == 0 || n >= FB_NELEM(typeSubCodes))
-							blr_error(control, "*** invalid blr_invoke_function_type sub code ***");
-
-						blr_format(control, "blr_invoke_function_type_%s,", typeSubCodes[n]);
-						offset = blr_print_line(control, (SSHORT) offset);
-
-						blr_indent(control, level + 1);
-						blr_print_name(control);
-						offset = blr_print_line(control, (SSHORT) offset);
-
-						if (n == blr_invoke_function_type_packaged)
+						while ((n = control->ctl_blr_reader.getByte()) != blr_end)
 						{
-							blr_indent(control, level + 1);
-							blr_print_name(control);
+							if (n == 0 || n >= static_cast<FB_SSIZE_T>(FB_NELEM(idSubCodes)))
+								blr_error(control, "*** invalid blr_invoke_function_id sub code ***");
+
 							offset = blr_print_line(control, (SSHORT) offset);
+							blr_indent(control, level + 1);
+							blr_format(control, "blr_invoke_function_id_%s, ", idSubCodes[n]);
+
+							if (n == blr_invoke_function_id_schema ||
+								n == blr_invoke_function_id_package ||
+								n == blr_invoke_function_id_name)
+							{
+								blr_print_name(control);
+							}
 						}
 
+						offset = blr_print_line(control, (SSHORT) offset);
+						--level;
 						break;
 
 					case blr_invoke_function_arg_names:
@@ -4090,7 +4205,7 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 			static const char* subCodes[] =
 			{
 				nullptr,
-				"type",
+				"id",
 				"in_arg_names",
 				"in_args",
 				"out_arg_names",
@@ -4101,11 +4216,12 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 				"alias"
 			};
 
-			static const char* typeSubCodes[] =
+			static const char* idSubCodes[] =
 			{
 				nullptr,
-				"standalone",
-				"packaged",
+				"schema",
+				"package",
+				"name",
 				"sub"
 			};
 
@@ -4120,26 +4236,28 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 
 				switch (blr_operator)
 				{
-					case blr_invsel_procedure_type:
-						n = control->ctl_blr_reader.getByte();
+					case blr_invsel_procedure_id:
+						++level;
 
-						if (n == 0 || n >= FB_NELEM(typeSubCodes))
-							blr_error(control, "*** invalid blr_invsel_procedure_type sub code ***");
-
-						blr_format(control, "blr_invsel_procedure_type_%s,", typeSubCodes[n]);
-						offset = blr_print_line(control, (SSHORT) offset);
-
-						blr_indent(control, level + 1);
-						blr_print_name(control);
-						offset = blr_print_line(control, (SSHORT) offset);
-
-						if (n == blr_invsel_procedure_type_packaged)
+						while ((n = control->ctl_blr_reader.getByte()) != blr_end)
 						{
-							blr_indent(control, level + 1);
-							blr_print_name(control);
+							if (n == 0 || n >= static_cast<FB_SSIZE_T>(FB_NELEM(idSubCodes)))
+								blr_error(control, "*** invalid blr_invsel_procedure_id sub code ***");
+
 							offset = blr_print_line(control, (SSHORT) offset);
+							blr_indent(control, level + 1);
+							blr_format(control, "blr_invsel_procedure_id_%s, ", idSubCodes[n]);
+
+							if (n == blr_invsel_procedure_id_schema ||
+								n == blr_invsel_procedure_id_package ||
+								n == blr_invsel_procedure_id_name)
+							{
+								blr_print_name(control);
+							}
 						}
 
+						offset = blr_print_line(control, (SSHORT) offset);
+						--level;
 						break;
 
 					case blr_invsel_procedure_in_arg_names:
@@ -4182,6 +4300,125 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 					case blr_invsel_procedure_alias:
 						blr_print_name(control);
 						offset = blr_print_line(control, offset);
+						break;
+
+					default:
+						fb_assert(false);
+				}
+			}
+
+			// print blr_end
+			control->ctl_blr_reader.seekBackward(1);
+			blr_print_verb(control, level);
+			break;
+		}
+
+		case op_table_value_fun:
+		{
+			offset = blr_print_line(control, static_cast<SSHORT>(offset));
+
+			static const char* subCodes[] =
+			{
+				nullptr,
+				"unlist",
+			};
+
+			blr_indent(control, level);
+
+			blr_operator = control->ctl_blr_reader.getByte();
+
+			if (blr_operator == 0 || blr_operator >= FB_NELEM(subCodes))
+				blr_error(control, "*** invalid blr_table_value_fun sub code ***");
+
+			blr_format(control, "blr_table_value_fun_%s, ", subCodes[blr_operator]);
+
+			switch (blr_operator)
+			{
+				case blr_table_value_fun_unlist:
+
+					blr_print_byte(control);
+
+					blr_print_name(control);
+
+					n = blr_print_word(control);
+					offset = blr_print_line(control, static_cast<SSHORT>(offset));
+
+					++level;
+					while (n-- > 0)
+						blr_print_verb(control, level);
+
+					blr_indent(control, level);
+					n = blr_print_word(control);
+
+					while (n-- > 0)
+					{
+						offset = blr_print_line(control, static_cast<SSHORT>(offset));
+						blr_indent(control, level);
+						blr_print_dtype(control);
+						blr_print_name(control);
+					}
+					--level;
+
+					offset = blr_print_line(control, static_cast<SSHORT>(offset));
+					break;
+
+				default:
+					fb_assert(false);
+			}
+
+			break;
+		}
+
+		case op_for_range:
+		{
+			offset = blr_print_line(control, offset);
+
+			static const char* subCodes[] =
+			{
+				nullptr,
+				"variable",
+				"initial_value",
+				"final_value",
+				"by_value",
+				"statement",
+				"direction"
+			};
+
+			static const char* directionSubCodes[] =
+			{
+				nullptr,
+				"to",
+				"downto"
+			};
+
+			while ((blr_operator = control->ctl_blr_reader.getByte()) != blr_end)
+			{
+				blr_indent(control, level);
+
+				if (blr_operator == 0 || blr_operator >= FB_NELEM(subCodes))
+					blr_error(control, "*** invalid blr_for_range sub code ***");
+
+				blr_format(control, "blr_for_range_%s, ", subCodes[blr_operator]);
+
+				switch (blr_operator)
+				{
+					case blr_for_range_variable:
+					case blr_for_range_initial_value:
+					case blr_for_range_final_value:
+					case blr_for_range_by_value:
+					case blr_for_range_statement:
+						offset = blr_print_line(control, offset);
+						blr_print_verb(control, level + 1);
+						break;
+
+					case blr_for_range_direction:
+						n = control->ctl_blr_reader.getByte();
+
+						if (n == 0 || n >= static_cast<FB_SSIZE_T>(FB_NELEM(directionSubCodes)))
+							blr_error(control, "*** invalid blr_for_range_direction sub code ***");
+
+						blr_format(control, "blr_for_range_direction_%s,", directionSubCodes[n]);
+						offset = blr_print_line(control, (SSHORT) offset);
 						break;
 
 					default:
@@ -4347,7 +4584,7 @@ public:
 		prefix.copyTo(fb_prefix_val, sizeof(fb_prefix_val));
 		fb_prefix = fb_prefix_val;
 
-		// Find appropiate temp directory
+		// Find appropriate temp directory
 		Firebird::PathName tempDir;
 		if (!fb_utils::readenv(FB_TMP_ENV, tempDir))
 		{

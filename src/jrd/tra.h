@@ -71,7 +71,7 @@ class thread_db;
 class SecDbContext
 {
 public:
-	SecDbContext(Firebird::IAttachment* a, Firebird::ITransaction* t);
+	SecDbContext(Firebird::IAttachment* a, Firebird::ITransaction* t) noexcept;
 	~SecDbContext();
 
 	Firebird::IAttachment* att;
@@ -84,40 +84,39 @@ public:
 struct BlobIndex
 {
 	ULONG bli_temp_id;
-	bool bli_materialized;
-	Request* bli_request;
+	bool bli_materialized = false;
+	Request* bli_request = nullptr;
 	union
 	{
 		bid bli_blob_id;		// ID of materialized blob
 		blb* bli_blob_object;	// Blob object
 	};
-    static const ULONG& generate(const void* /*sender*/, const BlobIndex& item)
+    static const ULONG& generate(const void* /*sender*/, const BlobIndex& item) noexcept
 	{
 		return item.bli_temp_id;
     }
 	// Empty default constructor to make it behave like POD structure
-	BlobIndex() {}
-	BlobIndex(ULONG temp_id, blb* blob_object) :
-		bli_temp_id(temp_id), bli_materialized(false), bli_request(NULL),
-		bli_blob_object(blob_object)
+	BlobIndex() noexcept : bli_temp_id(0), bli_blob_object(nullptr) {}
+	BlobIndex(ULONG temp_id, blb* blob_object) noexcept :
+		bli_temp_id(temp_id), bli_blob_object(blob_object)
 	{ }
 };
 
-typedef Firebird::BePlusTree<BlobIndex, ULONG, MemoryPool, BlobIndex> BlobIndexTree;
-typedef Firebird::BePlusTree<bid, bid, MemoryPool> FetchedBlobIdTree;
+typedef Firebird::BePlusTree<BlobIndex, ULONG, BlobIndex> BlobIndexTree;
+typedef Firebird::BePlusTree<bid, bid> FetchedBlobIdTree;
 
 // Transaction block
 
 struct CallerName
 {
-	CallerName(int aType, const MetaName& aName, const Firebird::MetaString& aUserName)
+	CallerName(int aType, const QualifiedName& aName, const Firebird::MetaString& aUserName)
 		: type(aType),
 		  name(aName),
 		  userName(aUserName)
 	{
 	}
 
-	CallerName()
+	CallerName() noexcept
 		: type(obj_type_MAX)
 	{
 	}
@@ -140,23 +139,23 @@ struct CallerName
 	}
 
 	int type;
-	MetaName name;
+	QualifiedName name;
 	Firebird::MetaString userName;
 };
 
 typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<SINT64, ULONG> > > ReplBlobMap;
 typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<SLONG, blb*> > > BlobUtilMap;
 
-const int DEFAULT_LOCK_TIMEOUT = -1; // infinite
-const char* const TRA_BLOB_SPACE = "fb_blob_";
-const char* const TRA_UNDO_SPACE = "fb_undo_";
-const int MAX_TEMP_BLOBS = 1000;
+inline constexpr int DEFAULT_LOCK_TIMEOUT = -1; // infinite
+inline constexpr const char* TRA_BLOB_SPACE = "fb_blob_";
+inline constexpr const char* TRA_UNDO_SPACE = "fb_undo_";
+inline constexpr ULONG MAX_TEMP_BLOBS = 1000;
 
-class jrd_tra : public pool_alloc<type_tra>
+class jrd_tra final : public pool_alloc<type_tra>
 {
 	typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<USHORT, SINT64> > > GenIdCache;
 
-	static const size_t MAX_UNDO_RECORDS = 2;
+	static constexpr size_t MAX_UNDO_RECORDS = 2;
 	typedef Firebird::HalfStaticArray<Record*, MAX_UNDO_RECORDS> UndoRecordList;
 
 public:
@@ -171,9 +170,9 @@ public:
 	:	tra_attachment(attachment),
 		tra_pool(p),
 		tra_memory_stats(parent_stats),
-		tra_blobs_tree(p),
+		tra_blobs_tree(*p),
 		tra_blobs(outer ? outer->tra_blobs : &tra_blobs_tree),
-		tra_fetched_blobs(p),
+		tra_fetched_blobs(*p),
 		tra_repl_blobs(*p),
 		tra_blob_util_map(*p),
 		tra_arrays(NULL),
@@ -243,18 +242,18 @@ public:
 		}
 	}
 
-	Attachment* getAttachment()
+	Attachment* getAttachment() noexcept
 	{
 		return tra_attachment;
 	}
 
-	dsql_dbb* getDsqlAttachment()
+	dsql_dbb* getDsqlAttachment() noexcept
 	{
 		return tra_attachment->att_dsql_instance;
 	}
 
 	JTransaction* getInterface(bool create);
-	void setInterface(JTransaction* jt);
+	void setInterface(JTransaction* jt) noexcept;
 
 	FB_API_HANDLE tra_public_handle;	// Public handle
 	Attachment* tra_attachment;			// database attachment
@@ -322,14 +321,14 @@ private:
 	DbCreatorsList* tra_dbcreators_list;
 	MemoryPool* tra_autonomous_pool;
 	USHORT tra_autonomous_cnt;
-	static const USHORT TRA_AUTONOMOUS_PER_POOL = 64;
+	static constexpr USHORT TRA_AUTONOMOUS_PER_POOL = 64;
 
 public:
 	MemoryPool* getAutonomousPool();
 	void releaseAutonomousPool(MemoryPool* toRelease);
-	jrd_tra* getOuter();
+	jrd_tra* getOuter() noexcept;
 
-	SSHORT getLockWait() const
+	SSHORT getLockWait() const noexcept
 	{
 		return -tra_lock_timeout;
 	}
@@ -381,14 +380,14 @@ public:
 	}
 
 	void unlinkFromAttachment();
-	void linkToAttachment(Attachment* attachment);
+	void linkToAttachment(Attachment* attachment) noexcept;
 	static void tra_abort(const char* reason);
 
 	TimeZoneSnapshot* getTimeZoneSnapshot(thread_db* tdbb);
 	UserManagement* getUserManagement();
-	SecDbContext* getSecDbContext();
+	SecDbContext* getSecDbContext() noexcept;
 	SecDbContext* setSecDbContext(Firebird::IAttachment* att, Firebird::ITransaction* tra);
-	void eraseSecDbContext();
+	void eraseSecDbContext() noexcept;
 	MappingList* getMappingList();
 	Record* findNextUndo(VerbAction* before_this, jrd_rel* relation, SINT64 number);
 	void listStayingUndo(jrd_rel* relation, SINT64 number, RecordStack &staying);
@@ -409,42 +408,42 @@ public:
 };
 
 // System transaction is always transaction 0.
-const TraNumber TRA_system_transaction = 0;
+inline constexpr TraNumber TRA_system_transaction = 0;
 
 // Flag definitions for tra_flags.
 
-const ULONG TRA_system				= 0x1L;			// system transaction
-const ULONG TRA_prepared			= 0x2L;			// transaction is in limbo
-const ULONG TRA_reconnected			= 0x4L;			// reconnect in progress
-const ULONG TRA_degree3				= 0x8L;			// serializeable transaction
-const ULONG TRA_write				= 0x10L;		// transaction has written
-const ULONG TRA_readonly			= 0x20L;		// transaction is readonly
-const ULONG TRA_prepare2			= 0x40L;		// transaction has updated RDB$TRANSACTIONS
-const ULONG TRA_ignore_limbo		= 0x80L;		// ignore transactions in limbo
-const ULONG TRA_invalidated 		= 0x100L;		// transaction invalidated by failed write
-const ULONG TRA_deferred_meta 		= 0x200L;		// deferred meta work posted
-const ULONG TRA_read_committed		= 0x400L;		// can see latest committed records
-const ULONG TRA_autocommit			= 0x800L;		// autocommits all updates
-const ULONG TRA_perform_autocommit	= 0x1000L;		// indicates autocommit is necessary
-const ULONG TRA_rec_version			= 0x2000L;		// don't wait for uncommitted versions
-const ULONG TRA_restart_requests	= 0x4000L;		// restart all requests in attachment
-const ULONG TRA_no_auto_undo		= 0x8000L;		// don't start a savepoint in TRA_start
-const ULONG TRA_precommitted		= 0x10000L;		// transaction committed at startup
-const ULONG TRA_own_interface		= 0x20000L;		// tra_interface was created for internal needs
-const ULONG TRA_read_consistency	= 0x40000L; 	// ensure read consistency in this transaction
-const ULONG TRA_ex_restart			= 0x80000L; 	// Exception was raised to restart request
-const ULONG TRA_replicating			= 0x100000L;	// transaction is allowed to be replicated
-const ULONG TRA_no_blob_check		= 0x200000L;	// disable blob access checking
-const ULONG TRA_auto_release_temp_blobid	= 0x400000L;	// remove temp ids of materialized user blobs from tra_blobs
+inline constexpr ULONG TRA_system				= 0x1L;			// system transaction
+inline constexpr ULONG TRA_prepared				= 0x2L;			// transaction is in limbo
+inline constexpr ULONG TRA_reconnected			= 0x4L;			// reconnect in progress
+inline constexpr ULONG TRA_degree3				= 0x8L;			// serializeable transaction
+inline constexpr ULONG TRA_write				= 0x10L;		// transaction has written
+inline constexpr ULONG TRA_readonly				= 0x20L;		// transaction is readonly
+inline constexpr ULONG TRA_prepare2				= 0x40L;		// transaction has updated RDB$TRANSACTIONS
+inline constexpr ULONG TRA_ignore_limbo			= 0x80L;		// ignore transactions in limbo
+inline constexpr ULONG TRA_invalidated 			= 0x100L;		// transaction invalidated by failed write
+inline constexpr ULONG TRA_deferred_meta 		= 0x200L;		// deferred meta work posted
+inline constexpr ULONG TRA_read_committed		= 0x400L;		// can see latest committed records
+inline constexpr ULONG TRA_autocommit			= 0x800L;		// autocommits all updates
+inline constexpr ULONG TRA_perform_autocommit	= 0x1000L;		// indicates autocommit is necessary
+inline constexpr ULONG TRA_rec_version			= 0x2000L;		// don't wait for uncommitted versions
+inline constexpr ULONG TRA_restart_requests		= 0x4000L;		// restart all requests in attachment
+inline constexpr ULONG TRA_no_auto_undo			= 0x8000L;		// don't start a savepoint in TRA_start
+inline constexpr ULONG TRA_precommitted			= 0x10000L;		// transaction committed at startup
+inline constexpr ULONG TRA_own_interface		= 0x20000L;		// tra_interface was created for internal needs
+inline constexpr ULONG TRA_read_consistency		= 0x40000L; 	// ensure read consistency in this transaction
+inline constexpr ULONG TRA_ex_restart			= 0x80000L; 	// Exception was raised to restart request
+inline constexpr ULONG TRA_replicating			= 0x100000L;	// transaction is allowed to be replicated
+inline constexpr ULONG TRA_no_blob_check		= 0x200000L;	// disable blob access checking
+inline constexpr ULONG TRA_auto_release_temp_blobid = 0x400000L;// remove temp ids of materialized user blobs from tra_blobs
 
 // flags derived from TPB, see also transaction_options() at tra.cpp
-const ULONG TRA_OPTIONS_MASK = (TRA_degree3 | TRA_readonly | TRA_ignore_limbo | TRA_read_committed |
+inline constexpr ULONG TRA_OPTIONS_MASK = (TRA_degree3 | TRA_readonly | TRA_ignore_limbo | TRA_read_committed |
 	TRA_autocommit | TRA_rec_version | TRA_read_consistency | TRA_no_auto_undo | TRA_restart_requests | TRA_auto_release_temp_blobid);
 
-const int TRA_MASK				= 3;
-//const int TRA_BITS_PER_TRANS	= 2;
-//const int TRA_TRANS_PER_BYTE	= 4;
-const int TRA_SHIFT				= 2;
+inline constexpr int TRA_MASK				= 3;
+//inline constexpr int TRA_BITS_PER_TRANS	= 2;
+//inline constexpr int TRA_TRANS_PER_BYTE	= 4;
+inline constexpr int TRA_SHIFT				= 2;
 
 #define TRANS_SHIFT(number)	(((number) & TRA_MASK) << 1)
 #define TRANS_OFFSET(number)	((number) >> TRA_SHIFT)
@@ -453,18 +452,18 @@ const int TRA_SHIFT				= 2;
 // for "dead" active transactions every so often at transaction
 // startup
 
-const int TRA_ACTIVE_CLEANUP	= 100;
+inline constexpr int TRA_ACTIVE_CLEANUP = 100;
 
 // Transaction states.  The first four are states found
 // in the transaction inventory page; the last two are
 // returned internally
 
-const int tra_active		= 0;	// Transaction is active
-const int tra_limbo			= 1;
-const int tra_dead			= 2;
-const int tra_committed		= 3;
-const int tra_us			= 4;	// Transaction is us
-const int tra_precommitted	= 5;	// Transaction is precommitted
+inline constexpr int tra_active			= 0;	// Transaction is active
+inline constexpr int tra_limbo			= 1;
+inline constexpr int tra_dead			= 2;
+inline constexpr int tra_committed		= 3;
+inline constexpr int tra_us				= 4;	// Transaction is us
+inline constexpr int tra_precommitted	= 5;	// Transaction is precommitted
 
 // Deferred work blocks are used by the meta data handler to keep track
 // of work deferred to commit time.  This are usually used to perform
@@ -478,7 +477,6 @@ enum dfw_t {
 	dfw_create_index,
 	dfw_delete_index,
 	dfw_compute_security,
-	dfw_add_file,
 	dfw_add_shadow,
 	dfw_delete_shadow,
 	dfw_delete_shadow_nodelete,

@@ -278,8 +278,10 @@ blb* blb::create2(thread_db* tdbb,
 	Database* dbb = tdbb->getDatabase();
 	CHECK_DBB(dbb);
 
-	const int maxTempBlobs = MAX_TEMP_BLOBS;
-	if (maxTempBlobs > 0 && transaction->tra_temp_blobs_count >= maxTempBlobs)
+	if constexpr (MAX_TEMP_BLOBS == 0) {
+		// unlimited temp blobs
+	}
+	else if (transaction->tra_temp_blobs_count >= MAX_TEMP_BLOBS)
 	{
 		const Request* request = tdbb->getRequest();
 		string info;
@@ -307,7 +309,7 @@ blb* blb::create2(thread_db* tdbb,
 			}
 		}
 
-		gds__log("Too many temporary blobs (%i allowed)\n%s", maxTempBlobs, info.c_str());
+		gds__log("Too many temporary blobs (%u allowed)\n%s", MAX_TEMP_BLOBS, info.c_str());
 
 		ERR_post(Arg::Gds(isc_random) << Arg::Str("Too many temporary blobs"));
 	}
@@ -648,7 +650,7 @@ ULONG blb::BLB_get_data(thread_db* tdbb, UCHAR* buffer, SLONG length, bool close
 		n = BLB_get_segment(tdbb, p, n);
 		p += n;
 		length -= n;
-		if (blb_flags & BLB_eof)
+		if ((blb_flags & BLB_eof) || (n == 0))
 			break;
 	}
 
@@ -976,22 +978,23 @@ SLONG blb::BLB_lseek(USHORT mode, SLONG offset)
 	if (!(blb_flags & BLB_stream))
 		ERR_post(Arg::Gds(isc_bad_segstr_type));
 
+	SINT64 position = offset;
+
 	if (mode == 1)
-		offset += blb_seek;
+		position += blb_seek;
 	else if (mode == 2)
-		offset = blb_length + offset;
+		position += blb_length;
 
-	if (offset < 0)
-		offset = 0;
-
-	if (offset > (SLONG) blb_length)
-		offset = blb_length;
-
-	blb_seek = offset;
+	if (position <= 0)
+		blb_seek = 0;
+	else if (static_cast<FB_UINT64>(position) > blb_length)
+		blb_seek = blb_length;
+	else
+		blb_seek = static_cast<FB_UINT64>(position);
 	blb_flags |= BLB_seek;
 	blb_flags &= ~BLB_eof;
 
-	return offset;
+	return blb_seek;
 }
 
 
@@ -1502,8 +1505,11 @@ blb* blb::open2(thread_db* tdbb,
 		{
 			if (!to_type_specified)
 				to = isc_blob_text;
+			// Source is either a temporary BLOB already created by data coercion logic
+			// or a permanent blob which ID was delivered to client "as is" i.e. data coercion is not needed.
+			// In either case it is already in needed character set and further filtering is not needed
 			if (!to_charset_specified)
-				to_charset = CS_dynamic;
+				to_charset = blob->blb_charset;
 		}
 
 		BLB_gen_bpb(from, to, from_charset, to_charset, new_bpb);
@@ -1753,8 +1759,12 @@ void blb::put_slice(thread_db*	tdbb,
 		ERR_punt();
 
 	jrd_rel* relation;
-	if (info.sdl_info_relation.length()) {
-		relation = MET_lookup_relation(tdbb, info.sdl_info_relation);
+	if (info.sdl_info_relation.object.hasData())
+	{
+		QualifiedName infoRelationName(info.sdl_info_relation);
+		tdbb->getAttachment()->qualifyExistingName(tdbb, infoRelationName, {obj_relation});
+
+		relation = MET_lookup_relation(tdbb, infoRelationName);
 	}
 	else {
 		relation = MET_relation(tdbb, info.sdl_info_rid);
@@ -2117,7 +2127,7 @@ static ISC_STATUS blob_filter(USHORT action, BlobControl* control)
 
 	case isc_blob_filter_seek:
 		fb_assert(false);
-		// fail through ...
+		[[fallthrough]];
 
 	default:
 		ERR_post(Arg::Gds(isc_uns_ext));
@@ -2920,7 +2930,7 @@ static blb* store_array(thread_db* tdbb, jrd_tra* transaction, bid* blob_id)
 					array->arr_desc.iad_length);
 
 	// Write out actual array
-	const USHORT seg_limit = 32768;
+	constexpr USHORT seg_limit = 32768;
 	const BLOB_PTR* p = array->arr_data;
 	SLONG length = array->arr_effective_length;
 	while (length > seg_limit)

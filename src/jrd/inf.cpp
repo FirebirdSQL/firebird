@@ -125,23 +125,20 @@ namespace
 
 	typedef HalfStaticArray<UCHAR, BUFFER_SMALL> CountsBuffer;
 
-	ULONG getCounts(thread_db* tdbb, RuntimeStatistics::StatType type, CountsBuffer& buffer)
+	ULONG getCounts(thread_db* tdbb, RecordStatType type, CountsBuffer& buffer)
 	{
-		const Attachment* const attachment = tdbb->getAttachment();
-		const RuntimeStatistics& stats = attachment->att_stats;
+		const auto attachment = tdbb->getAttachment();
 
 		UCHAR num_buffer[BUFFER_TINY];
 
 		buffer.clear();
 		FB_SIZE_T buffer_length = 0;
 
-		for (RuntimeStatistics::Iterator iter = stats.begin(); iter != stats.end(); ++iter)
+		for (auto iter(attachment->att_stats.getRelCounters()); iter; ++iter)
 		{
-			const USHORT relation_id = (*iter).getRelationId();
-			const SINT64 n = (*iter).getCounter(type);
-
-			if (n)
+			if (const SINT64 n = (*iter)[type])
 			{
+				const USHORT relation_id = (*iter).getRelationId();
 				const USHORT length = INF_convert(n, num_buffer);
 				const FB_SIZE_T new_buffer_length = buffer_length + length + sizeof(USHORT);
 				buffer.grow(new_buffer_length);
@@ -313,19 +310,19 @@ void INF_database_info(thread_db* tdbb,
 			break;
 
 		case isc_info_reads:
-			length = INF_convert(dbb->dbb_stats.getValue(RuntimeStatistics::PAGE_READS), buffer);
+			length = INF_convert(dbb->dbb_stats[PageStatType::READS], buffer);
 			break;
 
 		case isc_info_writes:
-			length = INF_convert(dbb->dbb_stats.getValue(RuntimeStatistics::PAGE_WRITES), buffer);
+			length = INF_convert(dbb->dbb_stats[PageStatType::WRITES], buffer);
 			break;
 
 		case isc_info_fetches:
-			length = INF_convert(dbb->dbb_stats.getValue(RuntimeStatistics::PAGE_FETCHES), buffer);
+			length = INF_convert(dbb->dbb_stats[PageStatType::FETCHES], buffer);
 			break;
 
 		case isc_info_marks:
-			length = INF_convert(dbb->dbb_stats.getValue(RuntimeStatistics::PAGE_MARKS), buffer);
+			length = INF_convert(dbb->dbb_stats[PageStatType::MARKS], buffer);
 			break;
 
 		case isc_info_page_size:
@@ -407,42 +404,42 @@ void INF_database_info(thread_db* tdbb,
 			break;
 
 		case isc_info_read_seq_count:
-			length = getCounts(tdbb, RuntimeStatistics::RECORD_SEQ_READS, counts_buffer);
+			length = getCounts(tdbb, RecordStatType::SEQ_READS, counts_buffer);
 			buffer = counts_buffer.begin();
 			break;
 
 		case isc_info_read_idx_count:
-			length = getCounts(tdbb, RuntimeStatistics::RECORD_IDX_READS, counts_buffer);
+			length = getCounts(tdbb, RecordStatType::IDX_READS, counts_buffer);
 			buffer = counts_buffer.begin();
 			break;
 
 		case isc_info_update_count:
-			length = getCounts(tdbb, RuntimeStatistics::RECORD_UPDATES, counts_buffer);
+			length = getCounts(tdbb, RecordStatType::UPDATES, counts_buffer);
 			buffer = counts_buffer.begin();
 			break;
 
 		case isc_info_insert_count:
-			length = getCounts(tdbb, RuntimeStatistics::RECORD_INSERTS, counts_buffer);
+			length = getCounts(tdbb, RecordStatType::INSERTS, counts_buffer);
 			buffer = counts_buffer.begin();
 			break;
 
 		case isc_info_delete_count:
-			length = getCounts(tdbb, RuntimeStatistics::RECORD_DELETES, counts_buffer);
+			length = getCounts(tdbb, RecordStatType::DELETES, counts_buffer);
 			buffer = counts_buffer.begin();
 			break;
 
 		case isc_info_backout_count:
-			length = getCounts(tdbb, RuntimeStatistics::RECORD_BACKOUTS, counts_buffer);
+			length = getCounts(tdbb, RecordStatType::BACKOUTS, counts_buffer);
 			buffer = counts_buffer.begin();
 			break;
 
 		case isc_info_purge_count:
-			length = getCounts(tdbb, RuntimeStatistics::RECORD_PURGES, counts_buffer);
+			length = getCounts(tdbb, RecordStatType::PURGES, counts_buffer);
 			buffer = counts_buffer.begin();
 			break;
 
 		case isc_info_expunge_count:
-			length = getCounts(tdbb, RuntimeStatistics::RECORD_EXPUNGES, counts_buffer);
+			length = getCounts(tdbb, RecordStatType::EXPUNGES, counts_buffer);
 			buffer = counts_buffer.begin();
 			break;
 
@@ -528,7 +525,7 @@ void INF_database_info(thread_db* tdbb,
 
 				TEXT site[256];
 				ISC_get_host(site, sizeof(site));
-				const ULONG siteLen = MIN(strlen(site), MAX_UCHAR);
+				const ULONG siteLen = MIN(fb_strlen(site), MAX_UCHAR);
 				counts_buffer.push(static_cast<UCHAR>(siteLen));
 				counts_buffer.push(reinterpret_cast<UCHAR*>(site), siteLen);
 
@@ -622,7 +619,7 @@ void INF_database_info(thread_db* tdbb,
 			{
 				const auto attachment = tdbb->getAttachment();
 				const char* userName = attachment->getUserName("<Unknown>").c_str();
-				const ULONG len = MIN(strlen(userName), MAX_UCHAR);
+				const ULONG len = MIN(fb_strlen(userName), MAX_UCHAR);
 				*p++ = static_cast<UCHAR>(len);
 				memcpy(p, userName, len);
 
@@ -653,7 +650,7 @@ void INF_database_info(thread_db* tdbb,
 						names.insert(pos, userName);
 
 						p = buffer;
-						const ULONG len = MIN(strlen(userName), MAX_UCHAR);
+						const ULONG len = MIN(fb_strlen(userName), MAX_UCHAR);
 						*p++ = static_cast<UCHAR>(len);
 						memcpy(p, userName, len);
 
@@ -785,7 +782,7 @@ void INF_database_info(thread_db* tdbb,
 					length = gds__vax_integer(items, 2);
 					items += 2;
 
-					if (end_items - items >= length)
+					if (static_cast<ULONG>(end_items - items) >= length)
 					{
 						pageNum = gds__vax_integer(items, length);
 						items += length;
@@ -838,7 +835,7 @@ void INF_database_info(thread_db* tdbb,
 			if (tdbb->getAttachment()->locksmith(tdbb, GET_DBCRYPT_INFO))
 			{
 				const char* key = dbb->dbb_crypto_manager->getKeyName();
-				if (!(info = INF_put_item(item, strlen(key), key, info, end)))
+				if (!(info = INF_put_item(item, fb_strlen(key), key, info, end)))
 					return;
 
 				continue;
@@ -853,7 +850,7 @@ void INF_database_info(thread_db* tdbb,
 			if (tdbb->getAttachment()->locksmith(tdbb, GET_DBCRYPT_INFO))
 			{
 				const char* key = dbb->dbb_crypto_manager->getPluginName();
-				if (!(info = INF_put_item(item, strlen(key), key, info, end)))
+				if (!(info = INF_put_item(item, fb_strlen(key), key, info, end)))
 					return;
 
 				continue;
@@ -919,7 +916,7 @@ void INF_database_info(thread_db* tdbb,
 
 		case fb_info_db_guid:
 			{
-				const auto guidStr = dbb->dbb_guid.value().toString();
+				const auto guidStr = dbb->dbb_guid.toString();
 				if (!(info = INF_put_item(item, guidStr.length(), guidStr.c_str(), info, end)))
 					return;
 			}
@@ -1141,7 +1138,7 @@ ULONG INF_request_info(const Request* request,
 					if (item == isc_info_message_number)
 						length = INF_convert(node->messageNumber, buffer_ptr);
 					else
-						length = INF_convert(node->format->fmt_length, buffer_ptr);
+						length = INF_convert(node->getFormat(request)->fmt_length, buffer_ptr);
 				}
 				else
 					length = 0;

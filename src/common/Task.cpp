@@ -240,7 +240,7 @@ void Coordinator::runSync(Task* task)
 	syncWorker->setTask(task);
 	syncWorker->work(NULL);
 
-	// wait for all workes
+	// wait for all workers
 	for (int i = 0; i < cntWorkers; i++)
 	{
 		WorkerAndThd& wt = taskWorkers[i];

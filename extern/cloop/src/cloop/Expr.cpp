@@ -38,9 +38,9 @@ string IntLiteralExpr::generate(Language language, const string& prefix)
 {
 	char buffer[64];
 	if (hex)
-		sprintf(buffer, "%s%x", language == LANGUAGE_PASCAL ? "$" : "0x", value);
+		snprintf(buffer, sizeof(buffer), "%s%x", language == LANGUAGE_PASCAL ? "$" : "0x", value);
 	else
-		sprintf(buffer, "%d", value);
+		snprintf(buffer, sizeof(buffer), "%d", value);
 	return buffer;
 }
 

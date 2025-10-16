@@ -42,7 +42,7 @@ namespace
 {
 	struct TextTypeImpl
 	{
-		TextTypeImpl(charset* a_cs, UnicodeUtil::Utf16Collation* a_collation)
+		TextTypeImpl(charset* a_cs, UnicodeUtil::Utf16Collation* a_collation) noexcept
 			: cs(a_cs),
 			  collation(a_collation)
 		{
@@ -65,8 +65,8 @@ namespace
 namespace Firebird {
 
 
-static void unicodeDestroy(texttype* tt);
-static USHORT unicodeKeyLength(texttype* tt, USHORT len);
+static void unicodeDestroy(texttype* tt) noexcept;
+static USHORT unicodeKeyLength(texttype* tt, USHORT len) noexcept;
 static USHORT unicodeStrToKey(texttype* tt, USHORT srcLen, const UCHAR* src,
 	USHORT dstLen, UCHAR* dst, USHORT keyType);
 static SSHORT unicodeCompare(texttype* tt, ULONG len1, const UCHAR* str1,
@@ -96,11 +96,11 @@ string IntlUtil::generateSpecificAttributes(Firebird::CharSet* cs, SpecificAttri
 		UCHAR c[sizeof(ULONG)];
 		ULONG size;
 
-		SpecificAttribute* attribute = accessor.current();
+		const SpecificAttribute* attribute = accessor.current();
 
 		s += escapeAttribute(cs, attribute->first);
 
-		const USHORT equalChar = '=';
+		constexpr USHORT equalChar = '=';
 
 		size = cs->getConvFromUnicode().convert(
 			sizeof(equalChar), (const UCHAR*) &equalChar, sizeof(c), c);
@@ -113,7 +113,7 @@ string IntlUtil::generateSpecificAttributes(Firebird::CharSet* cs, SpecificAttri
 
 		if (found)
 		{
-			const USHORT semiColonChar = ';';
+			constexpr USHORT semiColonChar = ';';
 			size = cs->getConvFromUnicode().convert(
 				sizeof(semiColonChar), (const UCHAR*) &semiColonChar, sizeof(c), c);
 
@@ -240,7 +240,7 @@ string IntlUtil::convertAsciiToUtf16(const string& ascii)
 
 	for (const char* p = ascii.c_str(); p < end; ++p)
 	{
-		USHORT c = *(UCHAR*) p;
+		const USHORT c = *(UCHAR*) p;
 		s.append((char*) &c, sizeof(c));
 	}
 
@@ -388,7 +388,7 @@ ULONG IntlUtil::cvtUtf16ToUtf8(csconvert* obj, ULONG nSrc, const UCHAR* ppSrc,
 }
 
 
-INTL_BOOL IntlUtil::asciiWellFormed(charset* cs, ULONG len, const UCHAR* str, ULONG* offendingPos)
+INTL_BOOL IntlUtil::asciiWellFormed(charset* cs, ULONG len, const UCHAR* str, ULONG* offendingPos) noexcept
 {
 	fb_assert(cs != NULL);
 	fb_assert(str != NULL);
@@ -446,7 +446,7 @@ ULONG IntlUtil::utf8SubString(charset* cs, ULONG srcLen, const UCHAR* src, ULONG
 		++currentPos;
 	}
 
-	unsigned size = src + pos - copyStart;
+	const unsigned size = src + pos - copyStart;
 
 	fb_assert(size <= dstLen);
 	if (size > dstLen)
@@ -725,7 +725,7 @@ string IntlUtil::escapeAttribute(Firebird::CharSet* cs, const string& s)
 				*(USHORT*) uc = '\\';
 				UCHAR bytes[sizeof(ULONG)];
 
-				ULONG bytesSize = cs->getConvFromUnicode().convert(
+				const ULONG bytesSize = cs->getConvFromUnicode().convert(
 					sizeof(USHORT), uc, sizeof(bytes), bytes);
 
 				ret.append(string((const char*)bytes, bytesSize));
@@ -790,16 +790,16 @@ bool IntlUtil::readAttributeChar(Firebird::CharSet* cs, const UCHAR** s, const U
 }
 
 
-static void unicodeDestroy(texttype* tt)
+static void unicodeDestroy(texttype* tt) noexcept
 {
 	delete[] const_cast<ASCII*>(tt->texttype_name);
 	delete static_cast<TextTypeImpl*>(tt->texttype_impl);
 }
 
 
-static USHORT unicodeKeyLength(texttype* tt, USHORT len)
+static USHORT unicodeKeyLength(texttype* tt, USHORT len) noexcept
 {
-	TextTypeImpl* impl = static_cast<TextTypeImpl*>(tt->texttype_impl);
+	const TextTypeImpl* impl = static_cast<TextTypeImpl*>(tt->texttype_impl);
 	return impl->collation->keyLength(len / impl->cs->charset_max_bytes_per_char * 4);
 }
 
@@ -827,7 +827,7 @@ static USHORT unicodeStrToKey(texttype* tt, USHORT srcLen, const UCHAR* src,
 				&errorCode,
 				&offendingPos));
 
-		ULONG utf16Len = cs->charset_to_unicode.csconvert_fn_convert(
+		const ULONG utf16Len = cs->charset_to_unicode.csconvert_fn_convert(
 			&cs->charset_to_unicode,
 			srcLen,
 			src,

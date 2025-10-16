@@ -62,8 +62,8 @@
 #include <io.h> // lseek, read, write, close
 #endif
 
-const USHORT RUN_GROUP			= 8;
-const USHORT MAX_MERGE_LEVEL	= 2;
+constexpr USHORT RUN_GROUP			= 8;
+constexpr USHORT MAX_MERGE_LEVEL	= 2;
 
 using namespace Jrd;
 using namespace Firebird;
@@ -76,8 +76,8 @@ using namespace Firebird;
 // dimitr:	this comment is outdated since FB 1.5, where max buffer size
 //			of (128KB - overhead) has been replaced with exact 128KB.
 
-const ULONG MAX_SORT_BUFFER_SIZE = 1024 * 128;	// 128KB
-const ULONG MIN_RECORDS_TO_ALLOC = 8;
+constexpr ULONG MAX_SORT_BUFFER_SIZE = 1024 * 128;	// 128KB
+constexpr ULONG MIN_RECORDS_TO_ALLOC = 8;
 
 // the size of sr_bckptr (everything before sort_record) in bytes
 #define SIZEOF_SR_BCKPTR offsetof(sr, sr_sort_record)
@@ -123,15 +123,15 @@ static ULONG high_key[] =
 
 namespace
 {
-	static const char* const SCRATCH = "fb_sort_";
+	static constexpr const char* SCRATCH = "fb_sort_";
 
 	class RunSort
 	{
 	public:
-		explicit RunSort(run_control* irun) : run(irun) {}
-		RunSort() : run(NULL) {}
+		explicit RunSort(run_control* irun) noexcept : run(irun) {}
+		RunSort() noexcept : run(NULL) {}
 
-		static FB_UINT64 generate(const RunSort& item)
+		static FB_UINT64 generate(const RunSort& item) noexcept
 		{
 			return item.run->run_seek;
 		}
@@ -139,7 +139,7 @@ namespace
 		run_control* run;
 	};
 
-	inline void swap(SORTP** a, SORTP** b)
+	inline void swap(SORTP** a, SORTP** b) noexcept
 	{
 		((SORTP***) (*a))[BACK_OFFSET] = b;
 		((SORTP***) (*b))[BACK_OFFSET] = a;
@@ -552,8 +552,8 @@ void Sort::sort(thread_db* tdbb)
 		// itself allocated memory by at least TempSpace::getMinBlockSize chunks.
 		// As we need contiguous memory don't ask for bigger parts
 		const ULONG rec_size = m_longs << SHIFTLONG;
-		ULONG allocSize = m_max_alloc_size * RUN_GROUP;
-		ULONG allocated = allocate(run_count, allocSize, true);
+		const ULONG allocSize = m_max_alloc_size * RUN_GROUP;
+		const ULONG allocated = allocate(run_count, allocSize, true);
 
 		if (allocated < run_count)
 		{
@@ -1486,7 +1486,8 @@ ULONG Sort::allocate(ULONG n, ULONG chunkSize, bool useFreeSpace)
 
 	if (segments.getCount())
 	{
-		TempSpace::SegmentInMemory *seg = segments.begin(), *lastSeg = segments.end();
+		auto seg = segments.begin();
+		const auto* lastSeg = segments.end();
 		for (run = m_runs, count = 0; count < n; run = run->run_next, count++)
 		{
 			if (!run->run_buffer)
@@ -1525,7 +1526,7 @@ void Sort::mergeRuns(USHORT n)
 	// and there n < RUN_GROUP * MAX_MERGE_LEVEL
 	merge_control blks[RUN_GROUP * MAX_MERGE_LEVEL];
 
-	fb_assert((n - 1) <= FB_NELEM(blks));	// stack var big enough?
+	fb_assert(static_cast<FB_SIZE_T>(n - 1) <= FB_NELEM(blks));	// stack var big enough?
 
 	m_longs -= SIZEOF_SR_BCKPTR_IN_LONGS;
 
@@ -1720,7 +1721,7 @@ void Sort::mergeRuns(USHORT n)
 }
 
 
-void Sort::quick(SLONG size, SORTP** pointers, ULONG length)
+void Sort::quick(SLONG size, SORTP** pointers, ULONG length) noexcept
 {
 /**************************************
  *
@@ -2197,7 +2198,7 @@ void SortOwner::unlinkAll()
 	{
 		// Move cached buffers to the database level cache to be reused later by other attachments
 
-		const size_t MAX_CACHED_SORT_BUFFERS = 8; // 1MB
+		constexpr size_t MAX_CACHED_SORT_BUFFERS = 8; // 1MB
 
 		SyncLockGuard guard(&dbb->dbb_sortbuf_sync, SYNC_EXCLUSIVE, FB_FUNCTION);
 
@@ -2398,7 +2399,7 @@ sort_record* PartitionedSort::getMerge()
 		if (l == 0 && aSort->m_dup_callback)
 		{
 			UCHAR* rec_a = (UCHAR*)merge->mrg_record_a;
-			UCHAR* rec_b = (UCHAR*)merge->mrg_record_a;
+			UCHAR* rec_b = (UCHAR*)merge->mrg_record_b;
 
 			aSort->diddleKey(rec_a, false, true);
 			aSort->diddleKey(rec_b, false, true);

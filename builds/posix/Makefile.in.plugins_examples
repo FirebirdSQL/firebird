@@ -7,7 +7,7 @@
 #
 # As a special exception this file can also be included in modules
 # with other source code as long as that source code has been
-# released under an Open Source Initiative certificed licence.
+# released under an Open Source Initiative certified licence.
 # More information about OSI certification can be found at:
 # http://www.opensource.org
 #
@@ -36,7 +36,7 @@ else
   DefaultTarget := Release
 endif
 
-CPPFLAGS += -std=c++17 -I$(FB_BUILD)/include
+CPPFLAGS += -std=c++20 -I$(FB_BUILD)/include
 
 include     $(ROOT)/gen/make.defaults
 

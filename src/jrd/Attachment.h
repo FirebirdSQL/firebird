@@ -52,8 +52,9 @@
 #include "../jrd/Tablespace.h"
 
 #include <atomic>
+#include <initializer_list>
 
-#define DEBUG_LCK_LIST
+//#define DEBUG_LCK_LIST
 
 namespace EDS {
 	class Connection;
@@ -118,7 +119,7 @@ struct DSqlCacheItem
 	}
 
 	Firebird::string key;
-	Firebird::GenericMap<Firebird::Pair<Firebird::Left<QualifiedName, bool> > > obsoleteMap;
+	Firebird::LeftPooledMap<QualifiedName, bool> obsoleteMap;
 	Lock* lock;
 	bool locked;
 };
@@ -141,42 +142,43 @@ struct DdlTriggerContext
 
 	Firebird::string eventType;
 	Firebird::string objectType;
-	MetaName objectName;
-	MetaName oldObjectName;
-	MetaName newObjectName;
+	QualifiedName objectName;
+	QualifiedName oldObjectName;
+	QualifiedName newObjectName;
 	Firebird::string sqlText;
 };
 
 
 // Attachment flags
 
-const ULONG ATT_no_cleanup			= 0x00001L;	// Don't expunge, purge, or garbage collect
-const ULONG ATT_shutdown			= 0x00002L;	// attachment has been shutdown
-const ULONG ATT_shutdown_manager	= 0x00004L;	// attachment requesting shutdown
-const ULONG ATT_exclusive			= 0x00008L;	// attachment wants exclusive database access
-const ULONG ATT_attach_pending		= 0x00010L;	// Indicate attachment is only pending
-const ULONG ATT_exclusive_pending	= 0x00020L;	// Indicate exclusive attachment pending
-const ULONG ATT_notify_gc			= 0x00040L;	// Notify garbage collector to expunge, purge ..
-const ULONG ATT_garbage_collector	= 0x00080L;	// I'm a garbage collector
-const ULONG ATT_cancel_raise		= 0x00100L;	// Cancel currently running operation
-const ULONG ATT_cancel_disable		= 0x00200L;	// Disable cancel operations
-const ULONG ATT_no_db_triggers		= 0x00400L;	// Don't execute database triggers
-const ULONG ATT_manual_lock			= 0x00800L;	// Was locked manually
-const ULONG ATT_async_manual_lock	= 0x01000L;	// Async mutex was locked manually
-const ULONG ATT_overwrite_check		= 0x02000L;	// Attachment checks is it possible to overwrite DB
-const ULONG ATT_system				= 0x04000L; // Special system attachment
-const ULONG ATT_creator				= 0x08000L; // This attachment created the DB
-const ULONG ATT_monitor_disabled	= 0x10000L; // Monitoring lock is downgraded
-const ULONG ATT_security_db			= 0x20000L; // Attachment used for security purposes
-const ULONG ATT_mapping				= 0x40000L; // Attachment used for mapping auth block
-const ULONG ATT_from_thread			= 0x80000L; // Attachment from internal special thread (sweep, crypt)
-const ULONG ATT_monitor_init		= 0x100000L; // Attachment is registered in monitoring
-const ULONG ATT_repl_reset			= 0x200000L; // Replication set has been reset
-const ULONG ATT_replicating			= 0x400000L; // Replication is active
-const ULONG ATT_resetting			= 0x800000L; // Session reset is in progress
-const ULONG ATT_worker				= 0x1000000L; // Worker attachment, managed by the engine
+inline constexpr ULONG ATT_no_cleanup			= 0x00001L;	// Don't expunge, purge, or garbage collect
+inline constexpr ULONG ATT_shutdown				= 0x00002L;	// attachment has been shutdown
+inline constexpr ULONG ATT_shutdown_manager		= 0x00004L;	// attachment requesting shutdown
+inline constexpr ULONG ATT_exclusive			= 0x00008L;	// attachment wants exclusive database access
+inline constexpr ULONG ATT_attach_pending		= 0x00010L;	// Indicate attachment is only pending
+inline constexpr ULONG ATT_exclusive_pending	= 0x00020L;	// Indicate exclusive attachment pending
+inline constexpr ULONG ATT_notify_gc			= 0x00040L;	// Notify garbage collector to expunge, purge ..
+inline constexpr ULONG ATT_garbage_collector	= 0x00080L;	// I'm a garbage collector
+inline constexpr ULONG ATT_cancel_raise			= 0x00100L;	// Cancel currently running operation
+inline constexpr ULONG ATT_cancel_disable		= 0x00200L;	// Disable cancel operations
+inline constexpr ULONG ATT_no_db_triggers		= 0x00400L;	// Don't execute database triggers
+inline constexpr ULONG ATT_manual_lock			= 0x00800L;	// Was locked manually
+inline constexpr ULONG ATT_async_manual_lock	= 0x01000L;	// Async mutex was locked manually
+inline constexpr ULONG ATT_overwrite_check		= 0x02000L;	// Attachment checks is it possible to overwrite DB
+inline constexpr ULONG ATT_system				= 0x04000L; // Special system attachment
+inline constexpr ULONG ATT_creator				= 0x08000L; // This attachment created the DB
+inline constexpr ULONG ATT_monitor_disabled		= 0x10000L; // Monitoring lock is downgraded
+inline constexpr ULONG ATT_security_db			= 0x20000L; // Attachment used for security purposes
+inline constexpr ULONG ATT_mapping				= 0x40000L; // Attachment used for mapping auth block
+inline constexpr ULONG ATT_from_thread			= 0x80000L; // Attachment from internal special thread (sweep, crypt)
+inline constexpr ULONG ATT_monitor_init			= 0x100000L; // Attachment is registered in monitoring
+inline constexpr ULONG ATT_repl_reset			= 0x200000L; // Replication set has been reset
+inline constexpr ULONG ATT_replicating			= 0x400000L; // Replication is active
+inline constexpr ULONG ATT_resetting			= 0x800000L; // Session reset is in progress
+inline constexpr ULONG ATT_worker				= 0x1000000L; // Worker attachment, managed by the engine
+inline constexpr ULONG ATT_gbak_restore_has_schema = 0x2000000L;
 
-const ULONG ATT_NO_CLEANUP			= (ATT_no_cleanup | ATT_notify_gc);
+inline constexpr ULONG ATT_NO_CLEANUP			= (ATT_no_cleanup | ATT_notify_gc);
 
 class Attachment;
 class DatabaseOptions;
@@ -215,13 +217,17 @@ public:
 	class Sync
 	{
 	public:
-		Sync()
+		Sync() noexcept
 			: waiters(0), threadId(0), totalLocksCounter(0), currentLocksCounter(0)
 		{ }
 
+		// copying is prohibited
+		Sync(const Sync&) = delete;
+		Sync& operator=(const Sync&) = delete;
+
 		void enter(const char* aReason)
 		{
-			ThreadId curTid = getThreadId();
+			const ThreadId curTid = getThreadId();
 
 			if (threadId == curTid)
 			{
@@ -245,7 +251,7 @@ public:
 
 		bool tryEnter(const char* aReason)
 		{
-			ThreadId curTid = getThreadId();
+			const ThreadId curTid = getThreadId();
 
 			if (threadId == curTid)
 			{
@@ -274,12 +280,12 @@ public:
 			}
 		}
 
-		bool hasContention() const
+		bool hasContention() const noexcept
 		{
 			return (waiters.load(std::memory_order_relaxed) > 0);
 		}
 
-		FB_UINT64 getLockCounter() const
+		FB_UINT64 getLockCounter() const noexcept
 		{
 			return totalLocksCounter;
 		}
@@ -298,14 +304,10 @@ public:
 		}
 
 	private:
-		// copying is prohibited
-		Sync(const Sync&);
-		Sync& operator=(const Sync&);
-
 		Firebird::Mutex syncMutex;
 		std::atomic<int> waiters;
 		ThreadId threadId;
-		volatile FB_UINT64 totalLocksCounter;
+		std::atomic<FB_UINT64> totalLocksCounter;
 		int currentLocksCounter;
 	};
 
@@ -318,7 +320,7 @@ public:
 		return att;
 	}
 
-	JAttachment* getInterface()
+	JAttachment* getInterface() noexcept
 	{
 		return jAtt;
 	}
@@ -341,7 +343,7 @@ public:
 		return useAsync ? &async : &mainSync;
 	}
 
-	Firebird::Mutex* getBlockingMutex()
+	Firebird::Mutex* getBlockingMutex() noexcept
 	{
 		return &blockingMutex;
 	}
@@ -367,13 +369,13 @@ public:
 	void manualUnlock(ULONG& flags);
 	void manualAsyncUnlock(ULONG& flags);
 
-	void setShutError(ISC_STATUS code)
+	void setShutError(ISC_STATUS code) noexcept
 	{
 		if (!shutError)
 			shutError = code;
 	}
 
-	ISC_STATUS getShutError() const
+	ISC_STATUS getShutError() const noexcept
 	{
 		return shutError;
 	}
@@ -428,11 +430,11 @@ public:
 				jStable->getSync()->leave();
 		}
 
-	private:
 		// copying is prohibited
-		SyncGuard(const SyncGuard&);
-		SyncGuard& operator=(const SyncGuard&);
+		SyncGuard(const SyncGuard&) = delete;
+		SyncGuard& operator=(const SyncGuard&) = delete;
 
+	private:
 		void init(const char* f, bool optional);
 
 		Firebird::RefPtr<StableAttachmentPart> jStable;
@@ -445,14 +447,14 @@ public:
 			: m_objects(pool)
 		{}
 
-		void store(SLONG id, const MetaName& name)
+		void store(SLONG id, const QualifiedName& name)
 		{
 			fb_assert(id >= 0);
-			fb_assert(name.hasData());
+			fb_assert(name.object.hasData());
 
 			if (id < (int) m_objects.getCount())
 			{
-				fb_assert(m_objects[id].isEmpty());
+				fb_assert(m_objects[id].object.isEmpty());
 				m_objects[id] = name;
 			}
 			else
@@ -462,9 +464,9 @@ public:
 			}
 		}
 
-		bool lookup(SLONG id, MetaName& name)
+		bool lookup(SLONG id, QualifiedName& name)
 		{
-			if (id < (int) m_objects.getCount() && m_objects[id].hasData())
+			if (id < (int) m_objects.getCount() && m_objects[id].object.hasData())
 			{
 				name = m_objects[id];
 				return true;
@@ -473,7 +475,7 @@ public:
 			return false;
 		}
 
-		SLONG lookup(const MetaName& name)
+		SLONG lookup(const QualifiedName& name)
 		{
 			FB_SIZE_T pos;
 
@@ -484,14 +486,17 @@ public:
 		}
 
 	private:
-		Firebird::Array<MetaName> m_objects;
+		Firebird::Array<QualifiedName> m_objects;
 	};
 
 	class InitialOptions
 	{
 	public:
-		InitialOptions(MemoryPool& p)
-			: bindings(p)
+		InitialOptions(MemoryPool& pool)
+			: bindings(pool),
+			  schemaSearchPath(FB_NEW_POOL(pool) Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>(pool)),
+			  blrRequestSchemaSearchPath(
+				FB_NEW_POOL(pool) Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>(pool))
 		{
 		}
 
@@ -499,12 +504,12 @@ public:
 		void setInitialOptions(thread_db* tdbb, const DatabaseOptions& options);
 		void resetAttachment(Attachment* attachment) const;
 
-		CoercionArray *getBindings()
+		CoercionArray *getBindings() noexcept
 		{
 			return &bindings;
 		}
 
-		const CoercionArray *getBindings() const
+		const CoercionArray *getBindings() const noexcept
 		{
 			return &bindings;
 		}
@@ -512,19 +517,20 @@ public:
 	private:
 		Firebird::DecimalStatus decFloatStatus = Firebird::DecimalStatus::DEFAULT;
 		CoercionArray bindings;
-
+		Firebird::RefPtr<Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>> schemaSearchPath;
+		Firebird::RefPtr<Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>> blrRequestSchemaSearchPath;
 		USHORT originalTimeZone = Firebird::TimeZoneUtil::GMT_ZONE;
 	};
 
 	class DebugOptions
 	{
 	public:
-		bool getDsqlKeepBlr() const
+		bool getDsqlKeepBlr() const noexcept
 		{
 			return dsqlKeepBlr;
 		}
 
-		void setDsqlKeepBlr(bool value)
+		void setDsqlKeepBlr(bool value) noexcept
 		{
 			dsqlKeepBlr = value;
 		}
@@ -536,7 +542,7 @@ public:
 	class UseCountHolder
 	{
 	public:
-		explicit UseCountHolder(Attachment* a)
+		explicit UseCountHolder(Attachment* a) noexcept
 			: att(a)
 		{
 			if (att)
@@ -645,6 +651,14 @@ public:
 	CoercionArray* att_dest_bind;
 	USHORT att_original_timezone;
 	USHORT att_current_timezone;
+	Firebird::RefPtr<Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>> att_schema_search_path;
+	Firebird::RefPtr<Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>> att_blr_request_schema_search_path;
+	Firebird::RefPtr<Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>> att_system_schema_search_path;
+
+	Firebird::RefPtr<Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>>
+		att_unqualified_charset_resolved_cache_search_path;
+	Firebird::NonPooledMap<MetaName, QualifiedName> att_unqualified_charset_resolved_cache;
+
 	int att_parallel_workers;
 	Firebird::TriState att_opt_first_rows;
 
@@ -676,8 +690,7 @@ public:
 	Request* findSystemRequest(thread_db* tdbb, USHORT id, USHORT which);
 
 	Firebird::Array<CharSetContainer*>	att_charsets;		// intl character set descriptions
-	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
-		MetaName, USHORT> > > att_charset_ids;	// Character set ids
+	Firebird::GenericMap<Firebird::Pair<Firebird::Left<QualifiedName, USHORT>>> att_charset_ids;	// Character set ids
 
 	void releaseIntlObjects(thread_db* tdbb);			// defined in intl.cpp
 	void destroyIntlObjects(thread_db* tdbb);			// defined in intl.cpp
@@ -701,22 +714,22 @@ public:
 	/// former Database members - end
 
 	bool locksmith(thread_db* tdbb, SystemPrivilege sp) const;
-	jrd_tra* getSysTransaction();
-	void setSysTransaction(jrd_tra* trans);	// used only by TRA_init
+	jrd_tra* getSysTransaction() noexcept;
+	void setSysTransaction(jrd_tra* trans) noexcept;	// used only by TRA_init
 
-	bool isSystem() const
+	inline bool isSystem() const noexcept
 	{
 		return (att_flags & ATT_system);
 	}
 
-	bool isWorker() const
+	inline bool isWorker() const noexcept
 	{
 		return (att_flags & ATT_worker);
 	}
 
-	bool isGbak() const;
-	bool isRWGbak() const;
-	bool isUtility() const; // gbak, gfix and gstat.
+	bool isGbak() const noexcept;
+	bool isRWGbak() const noexcept;
+	bool isUtility() const noexcept; // gbak, gfix and gstat.
 
 	PreparedStatement* prepareStatement(thread_db* tdbb, jrd_tra* transaction,
 		const Firebird::string& text, Firebird::MemoryPool* pool = NULL);
@@ -728,8 +741,6 @@ public:
 
 	MetaName nameToMetaCharSet(thread_db* tdbb, const MetaName& name);
 	MetaName nameToUserCharSet(thread_db* tdbb, const MetaName& name);
-	Firebird::string stringToMetaCharSet(thread_db* tdbb, const Firebird::string& str,
-		const char* charSet = NULL);
 	Firebird::string stringToUserCharSet(thread_db* tdbb, const Firebird::string& str);
 
 	void storeMetaDataBlob(thread_db* tdbb, jrd_tra* transaction,
@@ -745,7 +756,7 @@ public:
 	void signalShutdown(ISC_STATUS code);
 
 	void mergeStats(bool pageStatsOnly = false);
-	bool hasActiveRequests() const;
+	bool hasActiveRequests() const noexcept;
 
 	bool backupStateWriteLock(thread_db* tdbb, SSHORT wait);
 	void backupStateWriteUnLock(thread_db* tdbb);
@@ -764,24 +775,24 @@ public:
 
 	JAttachment* getInterface() noexcept;
 
-	unsigned int getIdleTimeout() const
+	unsigned int getIdleTimeout() const noexcept
 	{
 		return att_idle_timeout;
 	}
 
-	void setIdleTimeout(unsigned int timeOut)
+	void setIdleTimeout(unsigned int timeOut) noexcept
 	{
 		att_idle_timeout = timeOut;
 	}
 
 	unsigned int getActualIdleTimeout() const;
 
-	unsigned int getStatementTimeout() const
+	unsigned int getStatementTimeout() const noexcept
 	{
 		return att_stmt_timeout;
 	}
 
-	void setStatementTimeout(unsigned int timeOut)
+	void setStatementTimeout(unsigned int timeOut) noexcept
 	{
 		att_stmt_timeout = timeOut;
 	}
@@ -866,7 +877,7 @@ public:
 		return att_user ? att_user->getSqlRole() : emptyName;
 	}
 
-	const UserId* getEffectiveUserId() const
+	const UserId* getEffectiveUserId() const noexcept
 	{
 		if (att_ss_user)
 			return att_ss_user;
@@ -879,13 +890,14 @@ public:
 		return user ? user->getUserName() : emptyName;
 	}
 
-	void setInitialOptions(thread_db* tdbb, DatabaseOptions& options, bool newDb);
-	const CoercionArray* getInitialBindings() const
+	void setInitialOptions(thread_db* tdbb, const DatabaseOptions& options, bool newDb);
+
+	const CoercionArray* getInitialBindings() const noexcept
 	{
 		return att_initial_options.getBindings();
 	}
 
-	DebugOptions& getDebugOptions()
+	DebugOptions& getDebugOptions() noexcept
 	{
 		return att_debug_options;
 	}
@@ -898,11 +910,18 @@ public:
 	bool isProfilerActive();
 	void releaseProfilerManager(thread_db* tdbb);
 
-	JProvider* getProvider()
+	JProvider* getProvider() noexcept
 	{
 		fb_assert(att_provider);
 		return att_provider;
 	}
+
+	bool qualifyNewName(thread_db* tdbb, QualifiedName& name,
+		const Firebird::ObjectsArray<Firebird::MetaString>* schemaSearchPath = nullptr);
+
+	void qualifyExistingName(thread_db* tdbb, QualifiedName& name,
+		std::initializer_list<ObjectType> objTypes,
+		const Firebird::ObjectsArray<Firebird::MetaString>* schemaSearchPath = nullptr);
 
 private:
 	Attachment(MemoryPool* pool, Database* dbb, JProvider* provider);
@@ -928,18 +947,18 @@ inline bool Attachment::locksmith(thread_db* tdbb, SystemPrivilege sp) const
 	return (user && user->locksmith(tdbb, sp));
 }
 
-inline jrd_tra* Attachment::getSysTransaction()
+inline jrd_tra* Attachment::getSysTransaction() noexcept
 {
 	return att_sys_transaction;
 }
 
-inline void Attachment::setSysTransaction(jrd_tra* trans)
+inline void Attachment::setSysTransaction(jrd_tra* trans) noexcept
 {
 	att_sys_transaction = trans;
 }
 
 // Connection is from GBAK
-inline bool Attachment::isGbak() const
+inline bool Attachment::isGbak() const noexcept
 {
 	return (att_utility == UTIL_GBAK);
 }
@@ -947,13 +966,13 @@ inline bool Attachment::isGbak() const
 // Gbak changes objects when it's restoring (creating) a db.
 // Other attempts are fake. Gbak reconnects to change R/O status and other db-wide settings,
 // but it doesn't modify generators or tables that seconds time.
-inline bool Attachment::isRWGbak() const
+inline bool Attachment::isRWGbak() const noexcept
 {
 	return (isGbak() && (att_flags & ATT_creator));
 }
 
 // Any of the three original utilities: gbak, gfix or gstat.
-inline bool Attachment::isUtility() const
+inline bool Attachment::isUtility() const noexcept
 {
 	return (att_utility != UTIL_NONE);
 }
@@ -968,11 +987,15 @@ public:
 	class Iterator
 	{
 	public:
-		explicit Iterator(AttachmentsRefHolder& list)
+		explicit Iterator(AttachmentsRefHolder& list) noexcept
 			: m_list(list), m_index(0)
 		{}
 
-		StableAttachmentPart* operator*()
+		// copying is prohibited
+		Iterator(const Iterator&) = delete;
+		Iterator& operator=(const Iterator&) = delete;
+
+		StableAttachmentPart* operator*() noexcept
 		{
 			if (m_index < m_list.m_attachments.getCount())
 				return m_list.m_attachments[m_index];
@@ -980,7 +1003,7 @@ public:
 			return NULL;
 		}
 
-		void operator++()
+		void operator++() noexcept
 		{
 			m_index++;
 		}
@@ -995,10 +1018,6 @@ public:
 		}
 
 	private:
-		// copying is prohibited
-		Iterator(const Iterator&);
-		Iterator& operator=(const Iterator&);
-
 		AttachmentsRefHolder& m_list;
 		FB_SIZE_T m_index;
 	};
@@ -1043,7 +1062,7 @@ public:
 		}
 	}
 
-	bool hasData() const
+	bool hasData() const noexcept
 	{
 		return m_attachments.hasData();
 	}

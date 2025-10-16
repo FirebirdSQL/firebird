@@ -11,7 +11,7 @@
 #
 #  As a special exception this file can also be included in modules
 #  with other source code as long as that source code has been
-#  released under an Open Source Initiative certificed licence.
+#  released under an Open Source Initiative certified licence.
 #  More information about OSI certification can be found at:
 #  http://www.opensource.org
 #
@@ -130,7 +130,7 @@ BuildRootDir=..
 BuiltFBDir=./firebird  # Location of the just-built fb.
 DestDir=@prefix@
 
-# The guts of the tranfer of files and other directories
+# The guts of the transfer of files and other directories
 # (mkdir -p <dirname> does not elicit an error message if the <dirname> exists.)
 echo Installing binaries
 for D in "bin examples include intl doc/sql.extensions UDF"
