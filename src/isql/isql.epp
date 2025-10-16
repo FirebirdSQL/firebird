@@ -6480,9 +6480,9 @@ static processing_state help(const TEXT* what)
 		HLP_SET_ROOT,			// SET	  <option>			-- (use HELP SET for list)
 		HLP_SHELL,				// SHELL	<command>		-- execute Operating System command in sub-shell
 		HLP_SHOW,				// SHOW	 <object> [<name>]	-- display system information
-		HLP_OBJTYPE,			//	<object> = CHECK, DATABASE, DOMAIN, EXCEPTION, FILTER, FUNCTION, GENERATOR,
-		HLP_OBJTYPE2,			//			   GRANT, INDEX, PROCEDURE, ROLE, SQL DIALECT, SYSTEM, TABLE,
-		HLP_OBJTYPE3,			//			   TRIGGER, VERSION, VIEW
+		HLP_OBJTYPE,			//     <object> = CHECK, COLLATION, DATABASE, DOMAIN, EXCEPTION, FILTER, FUNCTION,
+		HLP_OBJTYPE2,			//                GENERATOR, GRANT, INDEX, PACKAGE, PROCEDURE, ROLE, SQL DIALECT,
+		HLP_OBJTYPE3,			//                SYSTEM, TABLE, TRIGGER, VERSION, USERS, VIEW, WIRE_STATISTICS
 		HLP_EXIT,				// EXIT					   -- exit and commit changes
 		HLP_QUIT,				// QUIT					   -- exit and roll back changes
 		0,
@@ -6515,6 +6515,7 @@ static processing_state help(const TEXT* what)
 		HLP_SETTIME,			//	SET TIME				-- toggle display of timestamp with DATE values
 		HLP_SETTERM,			//	SET TERM <string>		-- change statement terminator string
 		HLP_SETWIDTH,			//	SET WIDTH <col> [<n>]	-- set/unset print width to <n> for column <col>
+		HLP_SETWIRESTATS,		//	SET WIRE_stats			-- toggle display of wire (network) statistics
 		0,
 		HLP_ALL,				// All commands may be abbreviated to letters in CAPitals
 		-1						// end of list

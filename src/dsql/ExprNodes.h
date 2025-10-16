@@ -799,6 +799,11 @@ public:
 		dsqlDesc = desc;
 	}
 
+	virtual bool deterministic() const override
+	{
+		return true;
+	}
+
 	virtual bool possiblyUnknown() const
 	{
 		return false;
@@ -874,6 +879,11 @@ public:
 		std::function<void (dsc*)> makeDesc, bool forceVarChar);
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
+
+	virtual bool deterministic() const override
+	{
+		return false;
+	}
 
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
@@ -1634,6 +1644,11 @@ public:
 
 	Request* getParamRequest(Request* request) const;
 
+	virtual bool deterministic() const override
+	{
+		return true;
+	}
+
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ParameterNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 	virtual ParameterNode* pass1(thread_db* tdbb, CompilerScratch* csb);
@@ -1680,6 +1695,11 @@ public:
 	virtual void setParameterName(dsql_par* parameter) const;
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
+
+	virtual bool deterministic() const override
+	{
+		return true;
+	}
 
 	virtual bool possiblyUnknown() const
 	{
@@ -2083,6 +2103,8 @@ public:
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
+	virtual bool deterministic() const override;
+
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 	virtual bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const;
@@ -2164,6 +2186,8 @@ public:
 	virtual void setParameterName(dsql_par* parameter) const;
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
+
+	virtual bool deterministic() const override;
 
 	virtual bool possiblyUnknown() const
 	{
@@ -2264,6 +2288,11 @@ public:
 	}
 
 	Request* getVarRequest(Request* request) const;
+
+	virtual bool deterministic() const override
+	{
+		return false;
+	}
 
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;

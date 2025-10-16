@@ -150,7 +150,7 @@ typedef ULONG StreamType;
 
 // Alignment rule
 template <typename T>
-inline T FB_ALIGN(T n, uintptr_t b)
+constexpr T FB_ALIGN(T n, uintptr_t b)
 {
 	return (T) ((((uintptr_t) n) + b - 1) & ~(b - 1));
 }

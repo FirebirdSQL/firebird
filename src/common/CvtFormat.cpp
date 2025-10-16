@@ -249,6 +249,9 @@ namespace
 
 	constexpr Format::Patterns mapFormatStrToFormatPattern(std::string_view pattern)
 	{
+		if (pattern.empty())
+			return Format::NONE;
+
 		switch (pattern[0])
 		{
 			case 'Y':

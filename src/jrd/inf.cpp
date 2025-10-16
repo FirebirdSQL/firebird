@@ -633,6 +633,8 @@ void INF_database_info(thread_db* tdbb,
 			}
 
 			{
+				StrArray names;
+
 				SyncLockGuard sync(&dbb->dbb_sync, SYNC_SHARED, "INF_database_info");
 
 				for (const Jrd::Attachment* att = dbb->dbb_attachments; att; att = att->att_next)
@@ -643,6 +645,13 @@ void INF_database_info(thread_db* tdbb,
 					{
 						const char* userName = user->getUserName().hasData() ?
 							user->getUserName().c_str() : "(Firebird Worker Thread)";
+
+						FB_SIZE_T pos;
+						if (names.find(userName, pos))
+							continue;
+
+						names.insert(pos, userName);
+
 						p = buffer;
 						const ULONG len = MIN(strlen(userName), MAX_UCHAR);
 						*p++ = static_cast<UCHAR>(len);

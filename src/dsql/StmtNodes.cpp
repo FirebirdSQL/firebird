@@ -9720,6 +9720,9 @@ SetTransactionNode* SetTransactionNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 	if (autoCommit.isAssigned())
 		dsqlScratch->appendUChar(isc_tpb_autocommit);
 
+	if (autoReleaseTempBlobID.isAssigned())
+		dsqlScratch->appendUChar(isc_tpb_auto_release_temp_blobid);
+
 	if (lockTimeout.has_value())
 	{
 		dsqlScratch->appendUChar(isc_tpb_lock_timeout);

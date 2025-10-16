@@ -186,6 +186,7 @@ void	update_ownership(BurpGlobals* tdgbl);
 void	update_view_dbkey_lengths(BurpGlobals* tdgbl);
 void	fix_missing_privileges(BurpGlobals* tdgbl);
 void	fix_system_generators(BurpGlobals* tdgbl);
+void	set_transaction(BurpGlobals* tdgbl);
 void	general_on_error();
 #ifdef DEBUG
 UCHAR	debug_on = 0;   // able to turn this on in the debugger
@@ -748,9 +749,7 @@ void add_files(BurpGlobals* tdgbl, const char* file_name)
 			END_ERROR;
 		END_ERROR;
 
-		EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
-		if (gds_status->hasData())
-			EXEC SQL SET TRANSACTION;
+		set_transaction(tdgbl);
 	}
 }
 
@@ -3169,9 +3168,7 @@ static void commit_relation_data(BurpGlobals* tdgbl, burp_rel* relation)
 		} // end of while
 	END_ERROR;
 
-	EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
-	if (gds_status->hasData())
-		EXEC SQL SET TRANSACTION;
+	set_transaction(tdgbl);
 }
 
 // We have a corrupt backup, save the restore process from becoming useless.
@@ -7995,9 +7992,7 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 			general_on_error ();
 		END_ERROR;
 
-		EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
-		if (gds_status->hasData())
-			EXEC SQL SET TRANSACTION;
+		set_transaction(tdgbl);
 	}
 
 	// Pick up relation attributes
@@ -8243,9 +8238,8 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 						general_on_error ();
 					END_ERROR;
 				END_ERROR;
-				EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
-				if (gds_status->hasData())
-					EXEC SQL SET TRANSACTION;
+
+				set_transaction(tdgbl);
 			}
 			return true;
 
@@ -8280,9 +8274,7 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 		general_on_error ();
 	END_ERROR;
 
-	EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
-	if (gds_status->hasData())
-		EXEC SQL SET TRANSACTION;
+	set_transaction(tdgbl);
 
 	// If we're only doing meta-data, ignore data records
 
@@ -9324,9 +9316,8 @@ bool get_trigger_old (BurpGlobals* tdgbl, burp_rel* relation)
 				general_on_error ();
 			END_ERROR;
 		END_ERROR;
-		EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
-		if (gds_status->hasData())
-			EXEC SQL SET TRANSACTION;
+
+		set_transaction(tdgbl);
 	}
 
 	return true;
@@ -9680,9 +9671,8 @@ bool get_trigger(BurpGlobals* tdgbl)
 				general_on_error ();
 			END_ERROR;
 		END_ERROR;
-		EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
-		if (gds_status->hasData())
-			EXEC SQL SET TRANSACTION;
+
+		set_transaction(tdgbl);
 	}
 
 	return true;
@@ -9776,9 +9766,8 @@ bool get_trigger_message(BurpGlobals* tdgbl)
 				general_on_error ();
 			END_ERROR;
 		END_ERROR;
-		EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
-		if (gds_status->hasData())
-			EXEC SQL SET TRANSACTION;
+
+		set_transaction(tdgbl);
 	}
 
 	return true;
@@ -10630,9 +10619,7 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 
 	create_database(tdgbl, provider, database_name);
 
-	EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
-	if (gds_status->hasData())
-		EXEC SQL SET TRANSACTION;
+	set_transaction(tdgbl);
 
 	// For V4.0, start a read commited transaction.  This will be used
 	// to create blobs for global fields and update the record in the
@@ -11020,9 +11007,8 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 				ON_ERROR
 					general_on_error ();
 				END_ERROR;
-				EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
-				if (gds_status->hasData())
-					EXEC SQL SET TRANSACTION;
+
+				set_transaction(tdgbl);
 				flag = false;
 			}
 			if (!get_relation_data(tdgbl, &coord, &task))
@@ -11144,9 +11130,8 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 		ON_ERROR
 			general_on_error ();
 		END_ERROR;
-		EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
-		if (gds_status->hasData())
-			EXEC SQL SET TRANSACTION;
+
+		set_transaction(tdgbl);
 	}
 
 	// put validation clauses for global fields
@@ -11891,6 +11876,52 @@ void fix_system_generators(BurpGlobals* tdgbl)
 	{
 		if (tdgbl->runtimeODS >= g->ods)
 			fix_generator(tdgbl, g);
+	}
+}
+
+void set_transaction(BurpGlobals* tdgbl)
+{
+/**************************************
+ *
+ *	s e t _ t r a n s a c t i o n
+ *
+ **************************************
+ *
+ * Functional description
+ *	Start a transaction with options
+ *	supported by the target server.
+ *
+ **************************************/
+
+	while (true)
+	{
+		if (tdgbl->gbl_use_auto_release_temp_blobid && tdgbl->gbl_use_no_auto_undo)
+		{
+			EXEC SQL SET TRANSACTION NO_AUTO_UNDO AUTO_RELEASE_TEMP_BLOBID;
+			if (gds_status->hasData() && fb_utils::containsErrorCode(gds_status->getErrors(), isc_bad_tpb_form))
+			{
+				// First try to disable AUTO_RELEASE_TEMP_BLOBID transaction
+				// option because it was implemented later than NO_AUTO_UNDO
+				tdgbl->gbl_use_auto_release_temp_blobid = false;
+				continue;
+			}
+		}
+		else if (tdgbl->gbl_use_no_auto_undo)
+		{
+			EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
+			if (gds_status->hasData() && fb_utils::containsErrorCode(gds_status->getErrors(), isc_bad_tpb_form))
+			{
+				tdgbl->gbl_use_no_auto_undo = false;
+				continue;
+			}
+		}
+		else
+		{
+			fb_assert(!tdgbl->gbl_use_auto_release_temp_blobid);
+			EXEC SQL SET TRANSACTION;
+		}
+
+		break;
 	}
 }
 

@@ -49,6 +49,8 @@
 
 #include "../jrd/optimizer/Optimizer.h"
 
+#include <cmath>
+
 using namespace Firebird;
 using namespace Jrd;
 
@@ -366,25 +368,103 @@ InversionCandidate* Retrieval::getInversion()
 	return invCandidate;
 }
 
-IndexTableScan* Retrieval::getNavigation()
+IndexTableScan* Retrieval::getNavigation(const InversionCandidate* candidate)
 {
 	if (!navigationCandidate)
 		return nullptr;
 
-	IndexScratch* const scratch = navigationCandidate->scratch;
+	const auto scratch = navigationCandidate->scratch;
+
+	const auto streamCardinality = csb->csb_rpt[stream].csb_cardinality;
+
+	// If the table looks like empty during preparation time, we cannot be sure about
+	// its real cardinality during execution. So, unless we have some index-based
+	// filtering applied, let's better be pessimistic and avoid external sorting
+	// due to likely cardinality under-estimation.
+	const bool avoidSorting = (streamCardinality <= MINIMUM_CARDINALITY && !candidate->inversion);
+
+	if (!(scratch->index->idx_runtime_flags & idx_plan_navigate) && !avoidSorting)
+	{
+		// Check whether the navigational index scan is cheaper than the external sort
+		// and give up if it's not worth the efforts.
+		//
+		// We ignore candidate->cost in the calculations below as it belongs
+		// to both parts being compared.
+
+		fb_assert(candidate);
+
+		// Restore the original selectivity of the inversion,
+		// i.e. before the navigation candidate was accounted
+		auto selectivity = candidate->selectivity / navigationCandidate->selectivity;
+
+		// Non-indexed booleans are checked before sorting, so they improve the selectivity
+
+		double factor = MAXIMUM_SELECTIVITY;
+		for (auto iter = optimizer->getConjuncts(outerFlag, innerFlag); iter.hasData(); ++iter)
+		{
+			if (!(iter & Optimizer::CONJUNCT_USED) &&
+				!candidate->matches.exist(iter) &&
+				iter->computable(csb, stream, true) &&
+				iter->containsStream(stream))
+			{
+				factor *= Optimizer::getSelectivity(*iter);
+			}
+		}
+
+		Optimizer::adjustSelectivity(selectivity, factor, streamCardinality);
+
+		// Don't consider external sorting if optimization for first rows is requested
+		// and we have no local filtering applied
+
+		if (!optimizer->favorFirstRows() || selectivity < MAXIMUM_SELECTIVITY)
+		{
+			// Estimate amount of records to be sorted
+			const auto cardinality = streamCardinality * selectivity;
+
+			// We optimistically assume that records will be cached during sorting
+			const auto sortCost =
+				// record copying (to the sort buffer and back)
+				cardinality * COST_FACTOR_MEMCOPY * 2 +
+				// quicksort algorithm is O(n*log(n)) in average
+				cardinality * log2(cardinality) * COST_FACTOR_QUICKSORT;
+
+			// During navigation we fetch an index leaf page per every record being returned,
+			// thus add the estimated cardinality to the cost
+			auto navigationCost = navigationCandidate->cost +
+				streamCardinality * candidate->selectivity;
+
+			if (optimizer->favorFirstRows())
+			{
+				// Reset the cost to represent a single record retrieval
+				navigationCost = DEFAULT_INDEX_COST;
+
+				// We know that some local filtering is applied, so we need
+				// to adjust the cost as we need to walk the index
+				// until the first matching record is found
+				const auto fullIndexCost = navigationCandidate->scratch->cardinality;
+				const auto ratio = MAXIMUM_SELECTIVITY / selectivity;
+				const auto fraction = ratio / streamCardinality;
+				const auto walkCost = fullIndexCost * fraction * navigationCandidate->selectivity;
+				navigationCost += walkCost;
+			}
+
+			if (sortCost < navigationCost)
+				return nullptr;
+		}
+	}
 
 	// Looks like we can do a navigational walk.  Flag that
 	// we have used this index for navigation, and allocate
 	// a navigational rsb for it.
 	scratch->index->idx_runtime_flags |= idx_navigate;
 
-	const USHORT key_length =
+	const auto indexNode = makeIndexScanNode(scratch);
+
+	const USHORT keyLength =
 		ROUNDUP(BTR_key_length(tdbb, relation, scratch->index), sizeof(SLONG));
 
-	InversionNode* const index_node = makeIndexScanNode(scratch);
-
 	return FB_NEW_POOL(getPool())
-		IndexTableScan(csb, getAlias(), stream, relation, index_node, key_length,
+		IndexTableScan(csb, getAlias(), stream, relation, indexNode, keyLength,
 					   navigationCandidate->selectivity);
 }
 

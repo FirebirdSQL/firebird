@@ -1138,6 +1138,9 @@ void Monitoring::putTransaction(SnapshotData::DumpRecord& record, const jrd_tra*
 	// statistics
 	const int stat_id = fb_utils::genUniqueId();
 	record.storeGlobalId(f_mon_tra_stat_id, getGlobalId(stat_id));
+	// auto release temp blobid flag
+	temp = (transaction->tra_flags & TRA_auto_release_temp_blobid) ? 1 : 0;
+	record.storeInteger(f_mon_tra_auto_release_temp_blobid, temp);
 
 	record.write();
 

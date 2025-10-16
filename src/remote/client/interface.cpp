@@ -7728,7 +7728,7 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 		{
 #ifdef TRUSTED_AUTH
 			const char* const pluginName = cBlock.plugins.name();
-			if (legacySSP || fb_utils::stricmp(pluginName, "WIN_SSPI") != 0)
+			if (legacySSP || !pluginName || fb_utils::stricmp(pluginName, "WIN_SSPI") != 0)
 				throw;
 
 			// Retry connect with failed plugin only and using legacy security package

@@ -46,29 +46,30 @@ namespace Jrd {
 
 // AB: 2005-11-05
 // Constants below needs some discussions and ideas
-const double REDUCE_SELECTIVITY_FACTOR_EQUALITY = 0.001;
-const double REDUCE_SELECTIVITY_FACTOR_BETWEEN = 0.0025;
-const double REDUCE_SELECTIVITY_FACTOR_LESS = 0.05;
-const double REDUCE_SELECTIVITY_FACTOR_GREATER = 0.05;
-const double REDUCE_SELECTIVITY_FACTOR_STARTING = 0.01;
-const double REDUCE_SELECTIVITY_FACTOR_OTHER = 0.01;
+inline constexpr double REDUCE_SELECTIVITY_FACTOR_EQUALITY = 0.001;
+inline constexpr double REDUCE_SELECTIVITY_FACTOR_BETWEEN = 0.0025;
+inline constexpr double REDUCE_SELECTIVITY_FACTOR_LESS = 0.05;
+inline constexpr double REDUCE_SELECTIVITY_FACTOR_GREATER = 0.05;
+inline constexpr double REDUCE_SELECTIVITY_FACTOR_STARTING = 0.01;
+inline constexpr double REDUCE_SELECTIVITY_FACTOR_OTHER = 0.01;
 
 // Cost of simple (CPU bound) operations is less than the page access cost
-const double COST_FACTOR_MEMCOPY = 0.5;
-const double COST_FACTOR_HASHING = 0.5;
+inline constexpr double COST_FACTOR_MEMCOPY = 0.5;
+inline constexpr double COST_FACTOR_HASHING = 0.5;
+inline constexpr double COST_FACTOR_QUICKSORT = 0.1;
 
-const double MAXIMUM_SELECTIVITY = 1.0;
-const double DEFAULT_SELECTIVITY = 0.1;
+inline constexpr double MAXIMUM_SELECTIVITY = 1.0;
+inline constexpr double DEFAULT_SELECTIVITY = 0.1;
 
-const double MINIMUM_CARDINALITY = 1.0;
-const double THRESHOLD_CARDINALITY = 5.0;
-const double DEFAULT_CARDINALITY = 1000.0;
+inline constexpr double MINIMUM_CARDINALITY = 1.0;
+inline constexpr double THRESHOLD_CARDINALITY = 5.0;
+inline constexpr double DEFAULT_CARDINALITY = 1000.0;
 
 // Default depth of an index tree (including one leaf page),
 // also representing the minimal cost of the index scan.
 // We assume that the root page would be always cached,
 // so it's not included here.
-const double DEFAULT_INDEX_COST = 3.0;
+inline const double DEFAULT_INDEX_COST = 3.0;
 
 
 struct index_desc;
@@ -684,7 +685,7 @@ public:
 	}
 
 	InversionCandidate* getInversion();
-	IndexTableScan* getNavigation();
+	IndexTableScan* getNavigation(const InversionCandidate* candidate);
 
 protected:
 	void analyzeNavigation(const InversionCandidateList& inversions);

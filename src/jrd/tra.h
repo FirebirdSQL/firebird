@@ -435,10 +435,11 @@ const ULONG TRA_read_consistency	= 0x40000L; 	// ensure read consistency in this
 const ULONG TRA_ex_restart			= 0x80000L; 	// Exception was raised to restart request
 const ULONG TRA_replicating			= 0x100000L;	// transaction is allowed to be replicated
 const ULONG TRA_no_blob_check		= 0x200000L;	// disable blob access checking
+const ULONG TRA_auto_release_temp_blobid	= 0x400000L;	// remove temp ids of materialized user blobs from tra_blobs
 
 // flags derived from TPB, see also transaction_options() at tra.cpp
 const ULONG TRA_OPTIONS_MASK = (TRA_degree3 | TRA_readonly | TRA_ignore_limbo | TRA_read_committed |
-	TRA_autocommit | TRA_rec_version | TRA_read_consistency | TRA_no_auto_undo | TRA_restart_requests);
+	TRA_autocommit | TRA_rec_version | TRA_read_consistency | TRA_no_auto_undo | TRA_restart_requests | TRA_auto_release_temp_blobid);
 
 const int TRA_MASK				= 3;
 //const int TRA_BITS_PER_TRANS	= 2;

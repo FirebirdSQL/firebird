@@ -2293,7 +2293,10 @@ static void gen_for( const act* action, int column)
 	const gpre_req* request = action->act_request;
 
 	if (action->act_error || (action->act_flags & ACT_sql))
-		success(column, true, global_status_name, " {");
+	{
+		printa(column, "if (%s && !(%s->getState() & Firebird::IStatus::STATE_ERRORS)) {",
+				request->req_handle, global_status_name);
+	}
 
 	printa(column, "while (1)");
 	column += INDENT;
@@ -3075,11 +3078,10 @@ static void gen_s_start( const act* action, int column)
 	if (action->act_error || (action->act_flags & ACT_sql))
 	{
 		make_ok_test(action, request, column);
+		printa(column, "{");
 		column += INDENT;
 	}
 	gen_start(action, port, column, false);
-	if (action->act_error || (action->act_flags & ACT_sql))
-		column -= INDENT;
 
 	const TEXT* pattern1 = "if (%V1->getErrors()[1] == isc_bad_req_handle) { %RH->release(); %RH = NULL; }";
 	PAT args;
@@ -3087,6 +3089,12 @@ static void gen_s_start( const act* action, int column)
 	args.pat_vector1 = status_vector(action);
 	PATTERN_expand((USHORT) column, pattern1, &args);
 	printa(column, "else break;");
+
+	if (action->act_error || (action->act_flags & ACT_sql))
+	{
+		column -= INDENT;
+		printa(column, "}");
+	}
 
 	if (action->act_type == ACT_open)
 	{
