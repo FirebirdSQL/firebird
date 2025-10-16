@@ -220,9 +220,15 @@ or by a user with `DROP ANY SCHEMA` permission. If restoring a Firebird 6 or lat
 ### CREATE SCHEMA
 
 ```sql
-{CREATE [IF NOT EXISTS] | CREATE OR ALTER | RECREATE} SCHEMA <schema name>
-    [DEFAULT CHARACTER SET <character set name>]
-    [DEFAULT SQL SECURITY {DEFINER | INVOKER}]
+CREATE SCHEMA [IF NOT EXISTS] <schema name>
+  [<create schema option>...]
+
+{CREATE OR ALTER | RECREATE} SCHEMA <schema name>
+  [<create schema option>...]
+
+<create schema option> ::=
+    DEFAULT CHARACTER SET <character set name>
+  | DEFAULT SQL SECURITY {DEFINER | INVOKER}
 ```
 
 Schemas may have optional default character set and SQL security settings, which serve as the defaults for objects 

@@ -753,7 +753,7 @@ public:
 	void signalShutdown(ISC_STATUS code);
 
 	void mergeStats(bool pageStatsOnly = false);
-	bool hasActiveRequests() const;
+	bool hasActiveRequests() const noexcept;
 
 	bool backupStateWriteLock(thread_db* tdbb, SSHORT wait);
 	void backupStateWriteUnLock(thread_db* tdbb);
@@ -843,7 +843,7 @@ public:
 		return user ? user->getUserName() : emptyName;
 	}
 
-	void setInitialOptions(thread_db* tdbb, DatabaseOptions& options, bool newDb);
+	void setInitialOptions(thread_db* tdbb, const DatabaseOptions& options, bool newDb);
 
 	const CoercionArray* getInitialBindings() const noexcept
 	{
@@ -863,7 +863,7 @@ public:
 	bool isProfilerActive();
 	void releaseProfilerManager(thread_db* tdbb);
 
-	JProvider* getProvider()
+	JProvider* getProvider() noexcept
 	{
 		fb_assert(att_provider);
 		return att_provider;
@@ -1015,7 +1015,7 @@ public:
 		}
 	}
 
-	bool hasData() const
+	bool hasData() const noexcept
 	{
 		return m_attachments.hasData();
 	}

@@ -299,7 +299,17 @@ bool PIO_expand(const TEXT* file_name, USHORT file_length, TEXT* expanded_name, 
 }
 
 
-void PIO_extend(thread_db* tdbb, jrd_file* file, const ULONG extPages, const USHORT pageSize)
+bool PIO_fast_extension_is_supported(const Jrd::jrd_file& file) noexcept
+{
+#if defined(HAVE_LINUX_FALLOC_H) && defined(HAVE_FALLOCATE)
+	return !(file.fil_flags & FIL_no_fast_extend);
+#else
+	return false;
+#endif
+}
+
+
+bool PIO_extend(thread_db* tdbb, jrd_file* file, const ULONG extPages, const USHORT pageSize)
 {
 /**************************************
  *
@@ -317,16 +327,19 @@ void PIO_extend(thread_db* tdbb, jrd_file* file, const ULONG extPages, const USH
 
 	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 
-	if (file->fil_flags & FIL_no_fast_extend)
-		return;
+	if (!PIO_fast_extension_is_supported(*file))
+		return false;
 
 	const ULONG filePages = PIO_get_number_of_pages(file, pageSize);
 	const ULONG extendBy = MIN(MAX_ULONG - filePages, extPages);
 
+	const off_t offset = static_cast<off_t>(filePages) * pageSize;
+	const off_t length = static_cast<off_t>(extendBy) * pageSize;
+
 	int r;
 	for (r = 0; r < IO_RETRY; r++)
 	{
-		int err = fallocate(file->fil_desc, 0, filePages * pageSize, extendBy * pageSize);
+		int err = fallocate(file->fil_desc, 0, offset, length);
 		if (err == 0)
 			break;
 
@@ -338,7 +351,7 @@ void PIO_extend(thread_db* tdbb, jrd_file* file, const ULONG extPages, const USH
 			unix_error("fallocate", file, isc_io_write_err);
 
 		file->fil_flags |= FIL_no_fast_extend;
-		return;
+		return false;
 	}
 
 	if (r == IO_RETRY)
@@ -349,12 +362,12 @@ void PIO_extend(thread_db* tdbb, jrd_file* file, const ULONG extPages, const USH
 #endif
 		unix_error("fallocate_retry", file, isc_io_write_err);
 	}
+
+	return true;
 #else
 	file->fil_flags |= FIL_no_fast_extend;
+	return false;
 #endif // fallocate present
-
-	// not implemented
-	return;
 }
 
 

@@ -79,7 +79,7 @@ static SINT64 get_parameter(const T** ptr)
 static void times(struct tms*);
 #endif
 
-static const SCHAR items[] =
+static constexpr SCHAR items[] =
 {
 	isc_info_reads,
 	isc_info_writes,
@@ -89,7 +89,7 @@ static const SCHAR items[] =
 	isc_info_current_memory, isc_info_max_memory
 };
 
-static const SCHAR* report = "elapsed = !e cpu = !u reads = !r writes = !w fetches = !f marks = !m$";
+static constexpr const SCHAR* report = "elapsed = !e cpu = !u reads = !r writes = !w fetches = !f marks = !m$";
 
 #if defined(WIN_NT) && !defined(CLOCKS_PER_SEC)
 #define TICK	100
@@ -306,8 +306,8 @@ void API_ROUTINE perf64_report(const PERF64* before, const PERF64* after, SCHAR*
 
 namespace {
 
-static const unsigned CNT_DB_INFO = 1;
-static const unsigned CNT_TIMER = 2;
+static constexpr unsigned CNT_DB_INFO = 1;
+static constexpr unsigned CNT_TIMER = 2;
 enum CntTimer {CNT_TIME_REAL, CNT_TIME_USER, CNT_TIME_SYSTEM};
 
 struct KnownCounters
@@ -320,7 +320,7 @@ struct KnownCounters
 #define TOTAL_COUNTERS 11
 
 // we use case-insensitive names, here they are written with capital letters for human readability
-KnownCounters knownCounters[TOTAL_COUNTERS] = {
+constexpr KnownCounters knownCounters[TOTAL_COUNTERS] = {
 	{"RealTime", CNT_TIMER, CNT_TIME_REAL},
 	{"UserTime", CNT_TIMER, CNT_TIME_USER},
 	{"SystemTime", CNT_TIMER, CNT_TIME_SYSTEM},
@@ -347,7 +347,7 @@ void Why::UtilInterface::getPerfCounters(Firebird::CheckStatusWrapper* status,
 		Firebird::string dupSet(countersSet);
 		char* set = dupSet.begin();
 		char* save = NULL;
-		const char* delim = " \t,;";
+		constexpr const char* delim = " \t,;";
 		unsigned typeMask = 0;
 		unsigned n = 0;
 		UCHAR info[TOTAL_COUNTERS];		// will never use all, but do not care about few bytes
@@ -391,7 +391,7 @@ found:		;
 		// Fill time counters
 		if (typeMask & CNT_TIMER)
 		{
-			SINT64 tr = fb_utils::query_performance_counter() * 1000 / fb_utils::query_performance_frequency();
+			const SINT64 tr = fb_utils::query_performance_counter() * 1000 / fb_utils::query_performance_frequency();
 			SINT64 uTime, sTime;
 			fb_utils::get_process_times(uTime, sTime);
 
@@ -438,7 +438,7 @@ found:		;
 			while (true)
 			{
 				SINT64 v = 0;
-				UCHAR ipb = *p++;
+				const UCHAR ipb = *p++;
 
 				switch (ipb)
 				{

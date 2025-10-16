@@ -85,11 +85,11 @@ public:
 		}
 	}
 
-private:
 	// copying is prohibited
-	FileExtendLockGuard(const FileExtendLockGuard&);
-	FileExtendLockGuard& operator=(const FileExtendLockGuard&);
+	FileExtendLockGuard(const FileExtendLockGuard&) = delete;
+	FileExtendLockGuard& operator=(const FileExtendLockGuard&) = delete;
 
+private:
 	Firebird::RWLock* const m_lock;
 	const bool m_exclusive;
 };
@@ -106,19 +106,18 @@ using namespace Firebird;
 #define TEXT		SCHAR
 
 static bool	maybeCloseFile(HANDLE&);
-static bool seek_file(jrd_file*, BufferDesc*, OVERLAPPED*);
+static bool seek_file(jrd_file*, const BufferDesc*, OVERLAPPED*);
 static jrd_file* setup_file(Database*, const Firebird::PathName&, HANDLE, USHORT);
 static bool nt_error(const TEXT*, const jrd_file*, ISC_STATUS, FbStatusVector* const);
 
-inline static DWORD getShareFlags(const bool shared_access, bool temporary = false)
+inline static DWORD getShareFlags(const bool shared_access, bool temporary = false) noexcept
 {
 	return FILE_SHARE_READ | ((!temporary && shared_access) ? FILE_SHARE_WRITE : 0);
 }
 
-static const DWORD g_dwExtraFlags = FILE_FLAG_OVERLAPPED;
+static constexpr DWORD g_dwExtraFlags = FILE_FLAG_OVERLAPPED;
 
-static const DWORD g_dwExtraTempFlags = FILE_ATTRIBUTE_TEMPORARY |
-										FILE_FLAG_DELETE_ON_CLOSE;
+static constexpr DWORD g_dwExtraTempFlags = FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE;
 
 
 void PIO_close(jrd_file* file)
@@ -216,7 +215,13 @@ bool PIO_expand(const TEXT* file_name, USHORT file_length, TEXT* expanded_name, 
 }
 
 
-void PIO_extend(thread_db* tdbb, jrd_file* file, const ULONG extPages, const USHORT pageSize)
+bool PIO_fast_extension_is_supported(const Jrd::jrd_file& file) noexcept
+{
+	return true;
+}
+
+
+bool PIO_extend(thread_db* tdbb, jrd_file* file, const ULONG extPages, const USHORT pageSize)
 {
 /**************************************
  *
@@ -239,7 +244,7 @@ void PIO_extend(thread_db* tdbb, jrd_file* file, const ULONG extPages, const USH
 
 	// if file have no extend lock it is better to not extend file than corrupt it
 	if (!file->fil_ext_lock)
-		return;
+		return false;
 
 	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 	FileExtendLockGuard extLock(file->fil_ext_lock, true);
@@ -258,6 +263,8 @@ void PIO_extend(thread_db* tdbb, jrd_file* file, const ULONG extPages, const USH
 
 	if (!SetEndOfFile(hFile))
 		nt_error("SetEndOfFile", file, isc_io_write_err, NULL);
+
+	return true;
 }
 
 
@@ -345,7 +352,7 @@ bool PIO_header(thread_db* tdbb, UCHAR* address, unsigned length)
  *  callers should not rely on this behavior
  *
  **************************************/
-	const auto dbb = tdbb->getDatabase();
+	const auto* dbb = tdbb->getDatabase();
 
 	PageSpace* const pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 	jrd_file* const file = pageSpace->file;
@@ -507,7 +514,7 @@ jrd_file* PIO_open(thread_db* tdbb,
 			// being opened ReadOnly. This flag will be used later to compare with
 			// the Header Page flag setting to make sure that the database is set ReadOnly.
 			readOnly = true;
-			PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+			const PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 			if (!pageSpace->file)
 				dbb->dbb_flags |= DBB_being_opened_read_only;
 		}
@@ -537,7 +544,7 @@ bool PIO_read(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page, 
  *	Read a data page.
  *
  **************************************/
-	Database* const dbb = tdbb->getDatabase();
+	const Database* const dbb = tdbb->getDatabase();
 
 	const DWORD size = dbb->dbb_page_size;
 
@@ -696,8 +703,7 @@ bool PIO_write(thread_db* tdbb, jrd_file* file, BufferDesc* bdb, Ods::pag* page,
  *	Write a data page.
  *
  **************************************/
-
-	Database* const dbb = tdbb->getDatabase();
+	const Database* const dbb = tdbb->getDatabase();
 
 	const DWORD size = dbb->dbb_page_size;
 
@@ -750,7 +756,7 @@ ULONG PIO_get_number_of_pages(const jrd_file* file, const USHORT pagesize)
 }
 
 
-static bool seek_file(jrd_file*	file, BufferDesc* bdb, OVERLAPPED* overlapped)
+static bool seek_file(jrd_file*	file, const BufferDesc* bdb, OVERLAPPED* overlapped)
 {
 /**************************************
  *
@@ -762,7 +768,7 @@ static bool seek_file(jrd_file*	file, BufferDesc* bdb, OVERLAPPED* overlapped)
  *	Given a buffer descriptor block, seek to the proper page in that file.
  *
  **************************************/
-	BufferControl* const bcb = bdb->bdb_bcb;
+	const BufferControl* const bcb = bdb->bdb_bcb;
 	const ULONG page = bdb->bdb_page.getPageNum();
 
     LARGE_INTEGER liOffset;
@@ -773,7 +779,7 @@ static bool seek_file(jrd_file*	file, BufferDesc* bdb, OVERLAPPED* overlapped)
 	overlapped->Internal = 0;
 	overlapped->InternalHigh = 0;
 
-	ThreadSync* thd = ThreadSync::getThread(FB_FUNCTION);
+	const ThreadSync* thd = ThreadSync::getThread(FB_FUNCTION);
 	overlapped->hEvent = thd->getIOEvent();
 
 	return true;
@@ -803,7 +809,7 @@ static jrd_file* setup_file(Database* dbb, const Firebird::PathName& file_name, 
 
 		// If this isn't the primary file, we're done
 
-		const auto pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+		const auto* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 		if (pageSpace && pageSpace->file)
 			return file;
 

@@ -26,6 +26,8 @@
 
 #include "firebird.h"
 
+#include <algorithm>
+
 #include "../common/classes/ImplementHelper.h"
 #include "../common/classes/ClumpletWriter.h"
 #include "../common/StatusHolder.h"
@@ -40,8 +42,6 @@
 
 namespace {
 
-const unsigned int SZ_LOGIN = 31;
-const unsigned int SZ_NAME = 31;
 typedef Field<Varying> Varfield;
 typedef Field<ISC_QUAD> Blob;
 typedef Field<FB_BOOLEAN> Boolean;
@@ -173,7 +173,7 @@ private:
 				selGrantor.c_str(), SQL_DIALECT_V6, NULL, NULL, out.getMetadata(), NULL, 0);
 			check(&statusWrapper);
 
-			bool hasGrant = curs->fetchNext(&statusWrapper, out.getBuffer()) == Firebird::IStatus::RESULT_OK;
+			const bool hasGrant = curs->fetchNext(&statusWrapper, out.getBuffer()) == Firebird::IStatus::RESULT_OK;
 			curs->close(&statusWrapper);
 			check(&statusWrapper);
 
@@ -244,7 +244,7 @@ public:
 				(Firebird::Arg::Gds(isc_random) << "Database is already attached in SRP user management").raise();
 			}
 
-			unsigned int secDbKey = keys->getKey(config, "SecurityDatabase");
+			const unsigned int secDbKey = keys->getKey(config, "SecurityDatabase");
 			const char* secDbName = config->asString(secDbKey);
 			if (!(secDbName && secDbName[0]))
 			{
@@ -753,7 +753,7 @@ private:
 		return 0;
 	}
 
-	static void check(Firebird::CheckStatusWrapper* status)
+	static void check(const Firebird::CheckStatusWrapper* status)
 	{
 		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
 		{
@@ -911,7 +911,7 @@ private:
 				unsigned len;
 				for (;;)
 				{
-					int cc = blob->getSegment(&statusWrapper, sizeof(segbuf), segbuf, &len);
+					const int cc = blob->getSegment(&statusWrapper, sizeof(segbuf), segbuf, &len);
 					check(&statusWrapper);
 					if (cc == Firebird::IStatus::RESULT_NO_DATA)
 						break;
@@ -947,7 +947,7 @@ private:
 
 			while (len)
 			{
-				unsigned seg = len > MAX_USHORT ? MAX_USHORT : len;
+				const unsigned seg = std::min(len, unsigned{ MAX_USHORT });
 				blob->putSegment(st, seg, ptr);
 				check(st);
 				len -= seg;

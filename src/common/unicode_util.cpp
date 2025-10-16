@@ -57,38 +57,37 @@ using namespace Firebird;
 
 namespace {
 #if defined(WIN_NT)
-const char* const inTemplate = "icuin%s.dll";
-const char* const ucTemplate = "icuuc%s.dll";
+constexpr const char* inTemplate = "icuin%s.dll";
+constexpr const char* ucTemplate = "icuuc%s.dll";
 #elif defined(DARWIN)
-const char* const inTemplate = "lib/libicui18n.%s.dylib";
-const char* const ucTemplate = "lib/libicuuc.%s.dylib";
+constexpr const char* inTemplate = "lib/libicui18n.%s.dylib";
+constexpr const char* ucTemplate = "lib/libicuuc.%s.dylib";
 #elif defined(HPUX)
-const char* const inTemplate = "libicui18n.sl.%s";
-const char* const ucTemplate = "libicuuc.sl.%s";
+constexpr const char* inTemplate = "libicui18n.sl.%s";
+constexpr const char* ucTemplate = "libicuuc.sl.%s";
 #elif defined(ANDROID)
-const char* const inTemplate = "libicui18n.%s.so";
-const char* const ucTemplate = "libicuuc.%s.so";
+constexpr const char* inTemplate = "libicui18n.%s.so";
+constexpr const char* ucTemplate = "libicuuc.%s.so";
 // In Android we need to load this library before others.
-const char* const dataTemplate = "libicudata.%s.so";
+constexpr const char* dataTemplate = "libicudata.%s.so";
 #else
-const char* const inTemplate = "libicui18n.so.%s";
-const char* const ucTemplate = "libicuuc.so.%s";
+constexpr const char* inTemplate = "libicui18n.so.%s";
+constexpr const char* ucTemplate = "libicuuc.so.%s";
 #endif
 
 // encapsulate ICU library
 struct BaseICU
 {
-private:
-	BaseICU(const BaseICU&);				// not implemented
-	BaseICU& operator =(const BaseICU&);	// not implemented
-
 public:
-	BaseICU(int aMajorVersion, int aMinorVersion)
+	BaseICU(int aMajorVersion, int aMinorVersion) noexcept
 		: majorVersion(aMajorVersion),
 		  minorVersion(aMinorVersion),
 		  isSystem(aMajorVersion == 0)
 	{
 	}
+
+	BaseICU(const BaseICU&) = delete;
+	BaseICU& operator =(const BaseICU&) = delete;
 
 	ModuleLoader::Module* formatAndLoad(const char* templateName);
 	void initialize(ModuleLoader::Module* module);
@@ -105,7 +104,7 @@ public:
 		else
 		{
 			// ICU has several schemas for entries names
-			const char* const patterns[] =
+			constexpr const char* patterns[] =
 			{
 				"%s_%d", "%s_%d_%d", "%s_%d%d", "%s"
 			};
@@ -550,7 +549,7 @@ static void getVersions(const string& configInfo, ObjectsArray<string>& versions
 
 
 // BOCU-1
-USHORT UnicodeUtil::utf16KeyLength(USHORT len)
+USHORT UnicodeUtil::utf16KeyLength(USHORT len) noexcept
 {
 	return (len / 2) * 4;
 }
@@ -718,7 +717,7 @@ ULONG UnicodeUtil::utf16UpperCase(ULONG srcLen, const USHORT* src, ULONG dstLen,
 
 
 ULONG UnicodeUtil::utf16ToUtf8(ULONG srcLen, const USHORT* src, ULONG dstLen, UCHAR* dst,
-							   USHORT* err_code, ULONG* err_position)
+							   USHORT* err_code, ULONG* err_position) noexcept
 {
 	fb_assert(srcLen % sizeof(*src) == 0);
 	fb_assert(src != NULL || dst == NULL);
@@ -849,7 +848,7 @@ ULONG UnicodeUtil::utf8ToUtf16(ULONG srcLen, const UCHAR* src, ULONG dstLen, USH
 
 
 ULONG UnicodeUtil::utf16ToUtf32(ULONG srcLen, const USHORT* src, ULONG dstLen, ULONG* dst,
-								USHORT* err_code, ULONG* err_position)
+								USHORT* err_code, ULONG* err_position) noexcept
 {
 	fb_assert(srcLen % sizeof(*src) == 0);
 	fb_assert(src != NULL || dst == NULL);
@@ -900,7 +899,7 @@ ULONG UnicodeUtil::utf16ToUtf32(ULONG srcLen, const USHORT* src, ULONG dstLen, U
 
 
 ULONG UnicodeUtil::utf32ToUtf16(ULONG srcLen, const ULONG* src, ULONG dstLen, USHORT* dst,
-								USHORT* err_code, ULONG* err_position)
+								USHORT* err_code, ULONG* err_position) noexcept
 {
 	fb_assert(srcLen % sizeof(*src) == 0);
 	fb_assert(src != NULL || dst == NULL);
@@ -966,8 +965,8 @@ SSHORT UnicodeUtil::utf16Compare(ULONG len1, const USHORT* str1, ULONG len2, con
 	*error_flag = false;
 
 	// safe casts - alignment not changed
-	int32_t cmp = getConversionICU().u_strCompare(reinterpret_cast<const UChar*>(str1), len1 / sizeof(*str1),
-		reinterpret_cast<const UChar*>(str2), len2 / sizeof(*str2), true);
+	const int32_t cmp = getConversionICU().u_strCompare(reinterpret_cast<const UChar*>(str1),
+		len1 / sizeof(*str1), reinterpret_cast<const UChar*>(str2), len2 / sizeof(*str2), true);
 
 	return (cmp < 0 ? -1 : (cmp > 0 ? 1 : 0));
 }
@@ -982,7 +981,7 @@ ULONG UnicodeUtil::utf16Length(ULONG len, const USHORT* str)
 
 
 ULONG UnicodeUtil::utf16Substring(ULONG srcLen, const USHORT* src, ULONG dstLen, USHORT* dst,
-								  ULONG startPos, ULONG length)
+								  ULONG startPos, ULONG length) noexcept
 {
 	fb_assert(srcLen % sizeof(*src) == 0);
 	fb_assert(src != NULL && dst != NULL);
@@ -1059,7 +1058,7 @@ INTL_BOOL UnicodeUtil::utf8WellFormed(ULONG len, const UCHAR* str, ULONG* offend
 }
 
 
-INTL_BOOL UnicodeUtil::utf16WellFormed(ULONG len, const USHORT* str, ULONG* offending_position)
+INTL_BOOL UnicodeUtil::utf16WellFormed(ULONG len, const USHORT* str, ULONG* offending_position) noexcept
 {
 	fb_assert(str != NULL);
 	fb_assert(len % sizeof(*str) == 0);
@@ -1085,7 +1084,7 @@ INTL_BOOL UnicodeUtil::utf16WellFormed(ULONG len, const USHORT* str, ULONG* offe
 }
 
 
-INTL_BOOL UnicodeUtil::utf32WellFormed(ULONG len, const ULONG* str, ULONG* offending_position)
+INTL_BOOL UnicodeUtil::utf32WellFormed(ULONG len, const ULONG* str, ULONG* offending_position) noexcept
 {
 	fb_assert(str != NULL);
 	fb_assert(len % sizeof(*str) == 0);
@@ -1115,7 +1114,7 @@ void UnicodeUtil::utf8Normalize(UCharBuffer& data)
 	HalfStaticArray<USHORT, BUFFER_MEDIUM> utf16Buffer(data.getCount());
 	USHORT errCode;
 	ULONG errPosition;
-	ULONG utf16BufferLen = utf8ToUtf16(data.getCount(), data.begin(), data.getCount() * sizeof(USHORT),
+	const ULONG utf16BufferLen = utf8ToUtf16(data.getCount(), data.begin(), data.getCount() * sizeof(USHORT),
 		utf16Buffer.getBuffer(data.getCount()), &errCode, &errPosition);
 
 	UTransliterator* trans = icu->getCiAiTransliterator();
@@ -1154,7 +1153,7 @@ UnicodeUtil::ICU* UnicodeUtil::loadICU(const string& icuVersion, const string& c
 	for (ObjectsArray<string>::const_iterator i(versions.begin()); i != versions.end(); ++i)
 	{
 		int majorVersion, minorVersion;
-		int n = sscanf((*i == "default" ? version : *i).c_str(), "%d.%d",
+		const int n = sscanf((*i == "default" ? version : *i).c_str(), "%d.%d",
 			&majorVersion, &minorVersion);
 
 		if (n == 1)
@@ -1273,7 +1272,7 @@ UnicodeUtil::ICU* UnicodeUtil::loadICU(const string& icuVersion, const string& c
 }
 
 
-void UnicodeUtil::getICUVersion(ICU* icu, int& majorVersion, int& minorVersion)
+void UnicodeUtil::getICUVersion(ICU* icu, int& majorVersion, int& minorVersion) noexcept
 {
 	majorVersion = icu->majorVersion;
 	minorVersion = icu->minorVersion;
@@ -1294,9 +1293,9 @@ UnicodeUtil::ConversionICU& UnicodeUtil::getConversionICU()
 		return *convIcu;
 	}
 
-	// Try "favorite" (distributed on windows) version first
-	const int favMaj = 77;
-	const int favMin = 1;
+	// Try "favorite" (distributed on Windows) version first
+	constexpr int favMaj = 77;
+	constexpr int favMin = 1;
 	try
 	{
 		if ((convIcu = ImplementConversionICU::create(favMaj, favMin)))
@@ -1382,7 +1381,7 @@ UnicodeUtil::ConversionICU& UnicodeUtil::getConversionICU()
 string UnicodeUtil::getDefaultIcuVersion()
 {
 	string rc;
-	UnicodeUtil::ConversionICU& icu(UnicodeUtil::getConversionICU());
+	const UnicodeUtil::ConversionICU& icu(UnicodeUtil::getConversionICU());
 
 	if (icu.vMajor >= 10 && icu.vMinor == 0)
 		rc.printf("%d", icu.vMajor);
@@ -1603,7 +1602,7 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 	// status not verified here.
 	icu->ucolGetContractionsAndExpansions(partialCollator, contractions, nullptr, false, &status);
 
-	int contractionsCount = icu->usetGetItemCount(contractions);
+	const int contractionsCount = icu->usetGetItemCount(contractions);
 
 	for (int contractionIndex = 0; contractionIndex < contractionsCount; ++contractionIndex)
 	{
@@ -1611,7 +1610,8 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 		UChar32 start, end;
 
 		status = U_ZERO_ERROR;
-		int len = icu->usetGetItem(contractions, contractionIndex, &start, &end, strChars, sizeof(strChars), &status);
+		const int len = icu->usetGetItem(contractions, contractionIndex, &start, &end, strChars,
+			sizeof(strChars), &status);
 
 		if (len >= 2)
 		{
@@ -1619,7 +1619,7 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 				len - 1 : obj->maxContractionsPrefixLength;
 
 			UCHAR key[100];
-			int keyLen = icu->ucolGetSortKey(partialCollator, strChars, len, key, sizeof(key));
+			const int keyLen = icu->ucolGetSortKey(partialCollator, strChars, len, key, sizeof(key));
 
 			for (int prefixLen = 1; prefixLen < len; ++prefixLen)
 			{
@@ -1631,7 +1631,7 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 					keySet = obj->contractionsPrefix.put(str);
 
 					UCHAR prefixKey[100];
-					int prefixKeyLen = icu->ucolGetSortKey(partialCollator,
+					const int prefixKeyLen = icu->ucolGetSortKey(partialCollator,
 						strChars, prefixLen, prefixKey, sizeof(prefixKey));
 
 					keySet->add(Array<UCHAR>(prefixKey, prefixKeyLen));
@@ -1654,8 +1654,8 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 			continue;
 
 		fb_assert(accessor.current()->first.hasData());
-		USHORT firstCh = accessor.current()->first.front();
-		USHORT lastCh = accessor.current()->first.back();
+		const USHORT firstCh = accessor.current()->first.front();
+		const USHORT lastCh = accessor.current()->first.back();
 
 		if ((firstCh >= 0xFDD0 && firstCh <= 0xFDEF) || UTF_IS_SURROGATE(lastCh))
 		{
@@ -1707,7 +1707,7 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 					++secondKeyDataIt;
 				}
 
-				unsigned backSize = commonKeys.back().getCount();
+				const unsigned backSize = commonKeys.back().getCount();
 
 				if (common > backSize)
 					commonKeys.back().append(secondKeyIt->begin() + backSize, common - backSize);
@@ -1755,7 +1755,7 @@ UnicodeUtil::Utf16Collation::~Utf16Collation()
 }
 
 
-USHORT UnicodeUtil::Utf16Collation::keyLength(USHORT len) const
+USHORT UnicodeUtil::Utf16Collation::keyLength(USHORT len) const noexcept
 {
 	return (len / 4) * 6;
 }
@@ -1842,7 +1842,7 @@ USHORT UnicodeUtil::Utf16Collation::stringToKey(USHORT srcLen, const USHORT* src
 		}
 
 		auto originalDst = dst;
-		auto originalDstLen = dstLen;
+		const auto originalDstLen = dstLen;
 
 		if (!trailingNumbersRemoved)
 		{

@@ -110,7 +110,7 @@ int SrpClient::authenticate(CheckStatusWrapper* status, IClientBlock* cb)
 		{
 			Arg::Gds(isc_auth_data).raise();
 		}
-		const unsigned expectedLength =
+		constexpr unsigned expectedLength =
 			(RemotePassword::SRP_SALT_SIZE + RemotePassword::SRP_KEY_SIZE + 2) * 2;
 		if (length > expectedLength)
 		{

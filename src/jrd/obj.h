@@ -149,7 +149,7 @@ inline bool isDdlObject(ObjectType objectType, bool* useSchema = nullptr) noexce
 }
 
 
-inline constexpr const char* getDllSecurityName(ObjectType object_type) noexcept
+inline constexpr const char* getDdlSecurityName(ObjectType object_type) noexcept
 {
 	switch (object_type)
 	{

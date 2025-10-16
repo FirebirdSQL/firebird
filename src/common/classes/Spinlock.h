@@ -34,7 +34,7 @@ namespace Firebird {
 // Compatible with std::lock_guard, std::scoped_lock and std::unique_lock.
 class SpinLock
 {
-	std::atomic_flag atomicFlag = ATOMIC_FLAG_INIT;
+	std::atomic_flag atomicFlag{};
 
 public:
 	void lock() noexcept

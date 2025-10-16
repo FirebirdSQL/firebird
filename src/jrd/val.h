@@ -49,7 +49,7 @@ public:
 	UCHAR str_data[2];			// one byte for ALLOC and one for the NULL
 };
 
-inline constexpr ULONG MAX_RECORD_SIZE = 65535;
+inline constexpr ULONG MAX_RECORD_SIZE	= 1048576; // 1 MB -- just to protect from possible misuse
 
 namespace Jrd {
 

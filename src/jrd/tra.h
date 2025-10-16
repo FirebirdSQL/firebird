@@ -71,7 +71,7 @@ class thread_db;
 class SecDbContext
 {
 public:
-	SecDbContext(Firebird::IAttachment* a, Firebird::ITransaction* t);
+	SecDbContext(Firebird::IAttachment* a, Firebird::ITransaction* t) noexcept;
 	~SecDbContext();
 
 	Firebird::IAttachment* att;
@@ -116,7 +116,7 @@ struct CallerName
 	{
 	}
 
-	CallerName()
+	CallerName() noexcept
 		: type(obj_type_MAX)
 	{
 	}
@@ -151,11 +151,11 @@ inline constexpr const char* TRA_BLOB_SPACE = "fb_blob_";
 inline constexpr const char* TRA_UNDO_SPACE = "fb_undo_";
 inline constexpr ULONG MAX_TEMP_BLOBS = 1000;
 
-class jrd_tra : public pool_alloc<type_tra>
+class jrd_tra final : public pool_alloc<type_tra>
 {
 	typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<USHORT, SINT64> > > GenIdCache;
 
-	static const size_t MAX_UNDO_RECORDS = 2;
+	static constexpr size_t MAX_UNDO_RECORDS = 2;
 	typedef Firebird::HalfStaticArray<Record*, MAX_UNDO_RECORDS> UndoRecordList;
 
 public:
@@ -253,7 +253,7 @@ public:
 	}
 
 	JTransaction* getInterface(bool create);
-	void setInterface(JTransaction* jt);
+	void setInterface(JTransaction* jt) noexcept;
 
 	FB_API_HANDLE tra_public_handle;	// Public handle
 	Attachment* tra_attachment;			// database attachment
@@ -321,12 +321,12 @@ private:
 	DbCreatorsList* tra_dbcreators_list;
 	MemoryPool* tra_autonomous_pool;
 	USHORT tra_autonomous_cnt;
-	static const USHORT TRA_AUTONOMOUS_PER_POOL = 64;
+	static constexpr USHORT TRA_AUTONOMOUS_PER_POOL = 64;
 
 public:
 	MemoryPool* getAutonomousPool();
 	void releaseAutonomousPool(MemoryPool* toRelease);
-	jrd_tra* getOuter();
+	jrd_tra* getOuter() noexcept;
 
 	SSHORT getLockWait() const noexcept
 	{
@@ -380,14 +380,14 @@ public:
 	}
 
 	void unlinkFromAttachment();
-	void linkToAttachment(Attachment* attachment);
+	void linkToAttachment(Attachment* attachment) noexcept;
 	static void tra_abort(const char* reason);
 
 	TimeZoneSnapshot* getTimeZoneSnapshot(thread_db* tdbb);
 	UserManagement* getUserManagement();
-	SecDbContext* getSecDbContext();
+	SecDbContext* getSecDbContext() noexcept;
 	SecDbContext* setSecDbContext(Firebird::IAttachment* att, Firebird::ITransaction* tra);
-	void eraseSecDbContext();
+	void eraseSecDbContext() noexcept;
 	MappingList* getMappingList();
 	Record* findNextUndo(VerbAction* before_this, jrd_rel* relation, SINT64 number);
 	void listStayingUndo(jrd_rel* relation, SINT64 number, RecordStack &staying);

@@ -269,6 +269,10 @@
     <ClCompile Include="..\..\..\src\auth\SecDbCache.cpp" />
     <ClCompile Include="..\..\..\src\auth\SecurityDatabase\LegacyServer.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\..\src\auth\SecurityDatabase\LegacyHash.h" />
+    <ClInclude Include="..\..\..\src\auth\SecurityDatabase\LegacyServer.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

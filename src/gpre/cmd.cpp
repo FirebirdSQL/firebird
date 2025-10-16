@@ -49,8 +49,8 @@ static void create_check_constraint(gpre_req*, const act*, cnstrt*);
 static void create_constraint(gpre_req*, const act*, cnstrt*);
 static void create_database(gpre_req*, const act*);
 static void create_database_modify_dyn(gpre_req*, act*);
-static void create_default_blr(gpre_req*, const TEXT*, const USHORT);
-static void create_del_cascade_trg(gpre_req*, const act*, cnstrt*);
+static void create_default_blr(gpre_req*, const TEXT*, const USHORT) noexcept;
+static void create_del_cascade_trg(gpre_req*, const act*, const cnstrt*);
 static void create_domain(gpre_req*, const act*);
 static void create_domain_constraint(gpre_req*, const cnstrt*);
 static void create_generator(gpre_req*, const act*);
@@ -69,15 +69,15 @@ static void declare_filter(gpre_req*, const act*);
 static void declare_udf(gpre_req*, const act*);
 static void get_referred_fields(const act*, cnstrt*);
 static void grant_revoke_privileges(gpre_req*, const act*);
-static void init_field_struct(gpre_fld*);
-static void put_array_info(gpre_req*, const gpre_fld*);
-static void put_blr(gpre_req*, USHORT, gpre_nod*, pfn_local_trigger_cb);
+static void init_field_struct(gpre_fld*) noexcept;
+static void put_array_info(gpre_req*, const gpre_fld*) noexcept;
+static void put_blr(gpre_req*, USHORT, gpre_nod*, pfn_local_trigger_cb) noexcept;
 static void put_computed_blr(gpre_req*, const gpre_fld*);
 static void put_computed_source(gpre_req*, const gpre_fld*);
 static void put_cstring(gpre_req*, USHORT, const TEXT*);
 static void put_dtype(gpre_req*, const gpre_fld*);
 static void put_field_attributes(gpre_req*, const gpre_fld*);
-static void put_numeric(gpre_req*, USHORT, SSHORT);
+static void put_numeric(gpre_req*, USHORT, SSHORT) noexcept;
 static void put_short_cstring(gpre_req*, USHORT, const TEXT*);
 static void put_string(gpre_req*, USHORT, const TEXT*, USHORT);
 static void put_symbol(gpre_req*, int, const gpre_sym*);
@@ -95,7 +95,7 @@ static inline void STUFF_CHECK(gpre_req* request, int n)
 }
 
 
-const int BLOB_BUFFER_SIZE = 4096;	// to read in blr blob for default values
+constexpr int BLOB_BUFFER_SIZE = 4096;	// to read in blr blob for default values
 
 
 //____________________________________________________________
@@ -584,7 +584,7 @@ static void create_matching_blr(gpre_req* request, const cnstrt* constraint)
 //
 
 static void create_default_blr(gpre_req* request,
-							   const TEXT* default_buff, const USHORT buff_size)
+							   const TEXT* default_buff, const USHORT buff_size) noexcept
 {
 	int i;
 
@@ -604,12 +604,12 @@ static void create_default_blr(gpre_req* request,
 //		integrity) along with the trigger blr.
 //
 
-static void create_upd_cascade_trg( gpre_req* request, const act* action,
+static void create_upd_cascade_trg(gpre_req* request, const act* action,
 								   cnstrt* constraint)
 {
 	gpre_lls* for_key_fld = constraint->cnstrt_fields;
 	gpre_lls* prim_key_fld = constraint->cnstrt_referred_fields;
-	gpre_rel* relation = (gpre_rel*) action->act_object;
+	const gpre_rel* relation = (gpre_rel*) action->act_object;
 
 	// no trigger name is generated here. Let the engine make one up
 	put_string(request, isc_dyn_def_trigger, "", (USHORT) 0);
@@ -693,8 +693,8 @@ static void create_upd_cascade_trg( gpre_req* request, const act* action,
 //		integrity) along with the trigger blr.
 //
 
-static void create_del_cascade_trg( gpre_req* request, const act* action,
-								   cnstrt* constraint)
+static void create_del_cascade_trg(gpre_req* request, const act* action,
+								   const cnstrt* constraint)
 {
 	const gpre_rel* relation = (gpre_rel*) action->act_object;
 
@@ -2219,7 +2219,7 @@ static void grant_revoke_privileges( gpre_req* request, const act* action)
 //
 //
 
-static void init_field_struct( gpre_fld* field)
+static void init_field_struct(gpre_fld* field) noexcept
 {
 	field->fld_dtype = 0;
 	field->fld_length = 0;
@@ -2254,7 +2254,7 @@ static void init_field_struct( gpre_fld* field)
 //		Put dimensions for the array field.
 //
 
-static void put_array_info( gpre_req* request, const gpre_fld* field)
+static void put_array_info(gpre_req* request, const gpre_fld* field) noexcept
 {
 	const ary* array_info = field->fld_array_info;
 	const SSHORT dims = (SSHORT) array_info->ary_dimension_count;
@@ -2281,7 +2281,7 @@ static void put_array_info( gpre_req* request, const gpre_fld* field)
 //
 
 static void put_blr(gpre_req* request,
-					USHORT blr_operator, gpre_nod* node, pfn_local_trigger_cb routine)
+					USHORT blr_operator, gpre_nod* node, pfn_local_trigger_cb routine) noexcept
 {
 	request->add_byte(blr_operator);
 	const USHORT offset = request->req_blr - request->req_base;
@@ -2378,8 +2378,6 @@ static void put_dtype( gpre_req* request, const gpre_fld* field)
 	USHORT dtype = 0;
 
 	USHORT length = field->fld_length;
-	//const USHORT precision = field->fld_precision;
-	//const USHORT sub_type = field->fld_sub_type;
 	switch (field->fld_dtype)
 	{
 	case dtype_cstring:
@@ -2398,11 +2396,12 @@ static void put_dtype( gpre_req* request, const gpre_fld* field)
 				length--;
 			dtype = blr_text;
 		}
+		[[fallthrough]];
 
 	case dtype_text:
 		if (field->fld_dtype == dtype_text)
 			dtype = blr_text;
-		// Fall into
+		[[fallthrough]];
 
 	case dtype_varying:
 		fb_assert(length);
@@ -2561,9 +2560,8 @@ static void put_field_attributes( gpre_req* request, const gpre_fld* field)
 //		Put a numeric valued attributed to the output string.
 //
 
-static void put_numeric( gpre_req* request, USHORT blr_operator, SSHORT number)
+static void put_numeric(gpre_req* request, USHORT blr_operator, SSHORT number) noexcept
 {
-
 	request->add_byte(blr_operator);
 	request->add_word(2);
 	request->add_word(number);
@@ -2780,7 +2778,7 @@ static void replace_field_names(gpre_nod* const input,
 		if ((*ptr)->nod_type == nod_field)
 		{
 			ref* reference = (ref*) (*ptr)->nod_arg[0];
-			gpre_fld* rse_field = reference->ref_field;
+			const gpre_fld* rse_field = reference->ref_field;
 			if (null_them)
 			{
 				if (reference->ref_context == contexts[2]) {

@@ -2748,7 +2748,6 @@ void write_exceptions()
  *	each exception.
  *
  **************************************/
-	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -2759,6 +2758,8 @@ void write_exceptions()
 			X IN RDB$EXCEPTIONS
 			WITH X.RDB$SYSTEM_FLAG NE 1
 		{
+			QualifiedMetaString name;
+
 			put(tdgbl, rec_exception);
 
 			if (!X.RDB$SCHEMA_NAME.NULL)
@@ -2793,6 +2794,8 @@ void write_exceptions()
 			X IN RDB$EXCEPTIONS
 			WITH X.RDB$SYSTEM_FLAG MISSING OR X.RDB$SYSTEM_FLAG NE 1
 		{
+			QualifiedMetaString name;
+
 			put(tdgbl, rec_exception);
 
 			PUT_TEXT(att_exception_name, X.RDB$EXCEPTION_NAME);
@@ -2908,7 +2911,6 @@ void write_functions()
  *	each function.
  *
  **************************************/
-	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -2918,6 +2920,8 @@ void write_functions()
 		FOR (REQUEST_HANDLE req_handle1)
 			X IN RDB$FUNCTIONS WITH X.RDB$SYSTEM_FLAG NE 1
 		{
+			QualifiedMetaString name;
+
 			put(tdgbl, rec_function);
 
 			if (!X.RDB$SCHEMA_NAME.NULL)
@@ -2989,6 +2993,8 @@ void write_functions()
 		FOR (REQUEST_HANDLE req_handle1)
 			X IN RDB$FUNCTIONS WITH X.RDB$SYSTEM_FLAG MISSING OR X.RDB$SYSTEM_FLAG NE 1
 		{
+			QualifiedMetaString name;
+
 			put(tdgbl, rec_function);
 
 			PUT_TEXT(att_function_name, X.RDB$FUNCTION_NAME);
@@ -3189,7 +3195,6 @@ void write_generators()
  *
  **************************************/
 	Firebird::IRequest* req_handle1 = nullptr;
-	QualifiedMetaString name;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -3199,6 +3204,8 @@ void write_generators()
 			X IN RDB$GENERATORS
 			WITH X.RDB$SYSTEM_FLAG NE 1
 		{
+			QualifiedMetaString name;
+
 			put(tdgbl, rec_generator);
 
 			if (!X.RDB$SCHEMA_NAME.NULL)
@@ -3251,6 +3258,8 @@ void write_generators()
 			X IN RDB$GENERATORS
 			WITH X.RDB$SYSTEM_FLAG MISSING OR X.RDB$SYSTEM_FLAG NE 1
 		{
+			QualifiedMetaString name;
+
 			put(tdgbl, rec_generator);
 			PUT_TEXT(att_gen_generator, X.RDB$GENERATOR_NAME);
 			name.object = X.RDB$GENERATOR_NAME;
@@ -3280,6 +3289,8 @@ void write_generators()
 			X IN RDB$GENERATORS
 			WITH X.RDB$SYSTEM_FLAG MISSING OR X.RDB$SYSTEM_FLAG NE 1
 		{
+			QualifiedMetaString name;
+
 			put(tdgbl, rec_generator);
 			PUT_TEXT(att_gen_generator, X.RDB$GENERATOR_NAME);
 			name.object = X.RDB$GENERATOR_NAME;
@@ -3318,7 +3329,6 @@ void write_global_fields()
  *	each global field.
  *
  **************************************/
-	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -3335,6 +3345,8 @@ void write_global_fields()
 			X IN RDB$FIELDS WITH
 			X.RDB$SYSTEM_FLAG NE 1
 		{
+			QualifiedMetaString name;
+
 			put(tdgbl, rec_global_field);
 
 			if (!X.RDB$SCHEMA_NAME.NULL)
@@ -3415,6 +3427,8 @@ void write_global_fields()
 			X IN RDB$FIELDS WITH
 			X.RDB$SYSTEM_FLAG NE 1 OR
 			X.RDB$SYSTEM_FLAG MISSING
+		{
+			QualifiedMetaString name;
 
 			put(tdgbl, rec_global_field);
 
@@ -3474,7 +3488,7 @@ void write_global_fields()
 				put_int32 (att_field_precision, X.RDB$FIELD_PRECISION);
 
 			put(tdgbl, att_end);
-
+		}
 		END_FOR;
 		ON_ERROR
 			general_on_error();
@@ -3486,6 +3500,8 @@ void write_global_fields()
 			X IN RDB$FIELDS WITH
 			X.RDB$SYSTEM_FLAG NE 1 OR
 			X.RDB$SYSTEM_FLAG MISSING
+		{
+			QualifiedMetaString name;
 
 			put(tdgbl, rec_global_field);
 
@@ -3541,6 +3557,7 @@ void write_global_fields()
 				put_int32 (att_field_collation_id, X.RDB$COLLATION_ID);
 
 			put(tdgbl, att_end);
+		}
 		END_FOR;
 		ON_ERROR
 			general_on_error();
@@ -3564,7 +3581,6 @@ void write_packages()
  *	each package.
  *
  **************************************/
-	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -3574,6 +3590,8 @@ void write_packages()
 		X IN RDB$PACKAGES
 		WITH X.RDB$SYSTEM_FLAG NE 1
 	{
+		QualifiedMetaString name;
+
 		put(tdgbl, rec_package);
 
 		if (!X.RDB$SCHEMA_NAME.NULL)
@@ -3637,7 +3655,6 @@ void write_procedures()
  *	each stored procedure.
  *
  **************************************/
-	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -3648,6 +3665,8 @@ void write_procedures()
 			X IN RDB$PROCEDURES
 			WITH X.RDB$SYSTEM_FLAG MISSING OR X.RDB$SYSTEM_FLAG NE 1
 		{
+			QualifiedMetaString name;
+
 			put(tdgbl, rec_procedure);
 
 			if (!X.RDB$SCHEMA_NAME.NULL)
@@ -3715,6 +3734,8 @@ void write_procedures()
 			X IN RDB$PROCEDURES
 			WITH X.RDB$SYSTEM_FLAG MISSING OR X.RDB$SYSTEM_FLAG NE 1
 		{
+			QualifiedMetaString name;
+
 			put(tdgbl, rec_procedure);
 
 			PUT_TEXT(att_procedure_name, X.RDB$PROCEDURE_NAME);
@@ -3991,7 +4012,6 @@ void write_rel_constraints()
  *	each relation constraint.
  *
  **************************************/
-	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -4003,6 +4023,8 @@ void write_rel_constraints()
 			 REL.RDB$RELATION_NAME EQ X.RDB$RELATION_NAME AND
 			 (REL.RDB$SYSTEM_FLAG MISSING OR REL.RDB$SYSTEM_FLAG NE 1)
 	{
+		QualifiedMetaString name;
+
 		put(tdgbl, rec_rel_constraint);
 
 		if (!X.RDB$SCHEMA_NAME.NULL)
@@ -4046,7 +4068,6 @@ void write_relations()
  *	each relation.
  *
  **************************************/
-	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -4063,6 +4084,8 @@ void write_relations()
 			X IN RDB$RELATIONS WITH X.RDB$SYSTEM_FLAG NE 1 OR
 			X.RDB$SYSTEM_FLAG MISSING
 		{
+			QualifiedMetaString name;
+
 			SSHORT flags = 0;
 			put(tdgbl, rec_relation);
 
@@ -4141,6 +4164,8 @@ void write_relations()
 			X IN RDB$RELATIONS WITH X.RDB$SYSTEM_FLAG NE 1 OR
 			X.RDB$SYSTEM_FLAG MISSING
 		{
+			QualifiedMetaString name;
+
 			SSHORT flags = 0;
 			put(tdgbl, rec_relation);
 			PUT_TEXT(att_relation_name, X.RDB$RELATION_NAME);
@@ -4523,7 +4548,6 @@ void write_triggers()
  * 	write the triggers in rdb$triggers
  *
  **************************************/
-	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -4541,6 +4565,8 @@ void write_triggers()
 			X.RDB$SYSTEM_FLAG NE 1 OR
 			X.RDB$SYSTEM_FLAG MISSING
 		{
+			QualifiedMetaString name;
+
 			put(tdgbl, rec_trigger);
 
 			if (!X.RDB$SCHEMA_NAME.NULL)
@@ -4602,6 +4628,8 @@ void write_triggers()
 			X.RDB$SYSTEM_FLAG NE 1 OR
 			X.RDB$SYSTEM_FLAG MISSING
 		{
+			QualifiedMetaString name;
+
 			put(tdgbl, rec_trigger);
 
 			PUT_TEXT(att_trig_name, X.RDB$TRIGGER_NAME);
@@ -4648,7 +4676,6 @@ void write_trigger_messages()
  *	each trigger message.
  *
  **************************************/
-	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -4660,6 +4687,8 @@ void write_trigger_messages()
 			 X.RDB$TRIGGER_NAME EQ T.RDB$TRIGGER_NAME AND
 			 T.RDB$SYSTEM_FLAG NE 1 OR T.RDB$SYSTEM_FLAG MISSING
 	{
+		QualifiedMetaString name;
+
 		put(tdgbl, rec_trigger_message);
 
 		if (!X.RDB$SCHEMA_NAME.NULL)

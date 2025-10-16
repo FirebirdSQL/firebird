@@ -28,6 +28,7 @@
  */
 
 #include "firebird.h"
+#include <utility>
 
 #define FB_UsedInYValve true
 #include "firebird/Interface.h"
@@ -84,11 +85,11 @@ using namespace Firebird;
 using namespace Why;
 
 
-static void badHandle(ISC_STATUS code);
+[[noreturn]] static void badHandle(ISC_STATUS code);
 static bool isNetworkError(const IStatus* status);
 static void nullCheck(const FB_API_HANDLE* ptr, ISC_STATUS code);
-static void badSqldaVersion(const short version);
-static int sqldaTruncateString(char* buffer, FB_SIZE_T size, const char* s);
+[[noreturn]] static void badSqldaVersion(const short version);
+static int sqldaTruncateString(char* buffer, FB_SIZE_T size, const char* s) noexcept;
 static void sqldaDescribeParameters(XSQLDA* sqlda, IMessageMetadata* parameters);
 static ISC_STATUS openOrCreateBlob(ISC_STATUS* userStatus, isc_db_handle* dbHandle,
 	isc_tr_handle* traHandle, isc_blob_handle* blobHandle, ISC_QUAD* blobId,
@@ -98,8 +99,8 @@ static ISC_STATUS openOrCreateBlob(ISC_STATUS* userStatus, isc_db_handle* dbHand
 //-------------------------------------
 
 
-static const USHORT PREPARE_BUFFER_SIZE = 32768;	// size of buffer used in isc_dsql_prepare call
-static const USHORT DESCRIBE_BUFFER_SIZE = 1024;	// size of buffer used in isc_dsql_describe_xxx call
+static constexpr USHORT PREPARE_BUFFER_SIZE = 32768;	// size of buffer used in isc_dsql_prepare call
+static constexpr USHORT DESCRIBE_BUFFER_SIZE = 1024;	// size of buffer used in isc_dsql_describe_xxx call
 
 namespace Why {
 	class StatusVector;
@@ -108,7 +109,7 @@ namespace Why {
 
 namespace {
 
-static const struct {
+static constexpr struct {
 	int fac_code;
 	const char* facility;
 } facilities[] = {
@@ -148,25 +149,25 @@ public:
 	SQLDAMetadata(const XSQLDA* aSqlda);
 	~SQLDAMetadata() { delete[] offsets; }
 
-	unsigned getCount(CheckStatusWrapper* status);
-	const char* getField(CheckStatusWrapper* status, unsigned index);
-	const char* getSchema(CheckStatusWrapper* status, unsigned index);
-	const char* getRelation(CheckStatusWrapper* status, unsigned index);
-	const char* getOwner(CheckStatusWrapper* status, unsigned index);
-	const char* getAlias(CheckStatusWrapper* status, unsigned index);
-	unsigned getType(CheckStatusWrapper* status, unsigned index);
-	FB_BOOLEAN isNullable(CheckStatusWrapper* status, unsigned index);
-	int getSubType(CheckStatusWrapper* status, unsigned index);
-	unsigned getLength(CheckStatusWrapper* status, unsigned index);
-	int getScale(CheckStatusWrapper* status, unsigned index);
-	unsigned getCharSet(CheckStatusWrapper* status, unsigned index);
-	unsigned getOffset(CheckStatusWrapper* status, unsigned index);
-	unsigned getNullOffset(CheckStatusWrapper* status, unsigned index);
+	unsigned getCount(CheckStatusWrapper* status) override;
+	const char* getField(CheckStatusWrapper* status, unsigned index) override;
+	const char* getSchema(CheckStatusWrapper* status, unsigned index) override;
+	const char* getRelation(CheckStatusWrapper* status, unsigned index) override;
+	const char* getOwner(CheckStatusWrapper* status, unsigned index) override;
+	const char* getAlias(CheckStatusWrapper* status, unsigned index) override;
+	unsigned getType(CheckStatusWrapper* status, unsigned index) override;
+	FB_BOOLEAN isNullable(CheckStatusWrapper* status, unsigned index) override;
+	int getSubType(CheckStatusWrapper* status, unsigned index) override;
+	unsigned getLength(CheckStatusWrapper* status, unsigned index) override;
+	int getScale(CheckStatusWrapper* status, unsigned index) override;
+	unsigned getCharSet(CheckStatusWrapper* status, unsigned index) override;
+	unsigned getOffset(CheckStatusWrapper* status, unsigned index) override;
+	unsigned getNullOffset(CheckStatusWrapper* status, unsigned index) override;
 
-	IMetadataBuilder* getBuilder(CheckStatusWrapper* status);
-	unsigned getMessageLength(CheckStatusWrapper* status);
-	unsigned getAlignment(CheckStatusWrapper* status);
-	unsigned getAlignedLength(CheckStatusWrapper* status);
+	IMetadataBuilder* getBuilder(CheckStatusWrapper* status) override;
+	unsigned getMessageLength(CheckStatusWrapper* status) override;
+	unsigned getAlignment(CheckStatusWrapper* status) override;
+	unsigned getAlignedLength(CheckStatusWrapper* status) override;
 
 	void gatherData(DataBuffer& to);	// Copy data from SQLDA into target buffer.
 	void scatterData(DataBuffer& from);
@@ -352,7 +353,7 @@ int SQLDAMetadata::getSubType(CheckStatusWrapper* status, unsigned index)
 	if (sqlda)
 	{
 		fb_assert(sqlda->sqld > (int) index);
-		ISC_SHORT sqltype = sqlda->sqlvar[index].sqltype & ~1;
+		const ISC_SHORT sqltype = sqlda->sqlvar[index].sqltype & ~1;
 		if (sqltype == SQL_VARYING || sqltype == SQL_TEXT)
 			return sqlda->sqlvar[index].sqlsubtype == CS_BINARY ? fb_text_subtype_binary : fb_text_subtype_text;
 		return sqlda->sqlvar[index].sqlsubtype;
@@ -453,7 +454,7 @@ void SQLDAMetadata::assign()
 
 	count = (USHORT) sqlda->sqld;
 	speedHackEnabled = true; // May be we are lucky...
-	ISC_SCHAR* const base = sqlda->sqlvar[0].sqldata;
+	const ISC_SCHAR* const base = sqlda->sqlvar[0].sqldata;
 
 	offsets = FB_NEW OffsetItem[count];
 	for (unsigned i = 0; i < count; i++)
@@ -629,7 +630,7 @@ UCHAR* SQLDAMetadataLauncher::getBuffer()
 	if (metadata)
 	{
 		// ASF: It's important to call getMessageLength before check speedHackEnabled.
-		unsigned length = metadata->getMessageLength(NULL);
+		const unsigned length = metadata->getMessageLength(NULL);
 
 		if (metadata->speedHackEnabled)
 			return reinterpret_cast<UCHAR*>(metadata->sqlda->sqlvar[0].sqldata);
@@ -682,11 +683,11 @@ bool shutdownStarted = false;
 
 // CVC: I'm following types_pub.h here. If there's a better solution, commit it, please.
 #if defined(_LP64) || defined(__LP64__) || defined(__arch64__) || defined(_WIN64)
-inline FB_API_HANDLE ULONG_TO_FB_API_HANDLE(ULONG h) { return static_cast<FB_API_HANDLE>(h); }
-inline ULONG FB_API_HANDLE_TO_ULONG(FB_API_HANDLE h) { return h; }
+inline FB_API_HANDLE ULONG_TO_FB_API_HANDLE(ULONG h) noexcept { return static_cast<FB_API_HANDLE>(h); }
+inline ULONG FB_API_HANDLE_TO_ULONG(FB_API_HANDLE h) noexcept { return h; }
 #else
-inline FB_API_HANDLE ULONG_TO_FB_API_HANDLE(ULONG h) { return reinterpret_cast<FB_API_HANDLE>(h); }
-inline ULONG FB_API_HANDLE_TO_ULONG(FB_API_HANDLE h) { return reinterpret_cast<ULONG>(h); }
+inline FB_API_HANDLE ULONG_TO_FB_API_HANDLE(ULONG h) noexcept { return reinterpret_cast<FB_API_HANDLE>(h); }
+inline ULONG FB_API_HANDLE_TO_ULONG(FB_API_HANDLE h) noexcept { return reinterpret_cast<ULONG>(h); }
 #endif
 
 
@@ -723,10 +724,10 @@ void removeHandle(GenericMap<Pair<NonPooled<FB_API_HANDLE, T*> > >* map, FB_API_
 	if (handle)
 	{
 		WriteLockGuard sync(handleMappingLock, FB_FUNCTION);
-		bool removed = map->remove(handle);
+		const bool removed = map->remove(handle);
 
 		fb_assert(removed);
-		(void) removed;	// avoid warning in prod build
+		std::ignore = removed;	// avoid warning in prod build
 		handle = 0;
 	}
 }
@@ -750,7 +751,7 @@ RefPtr<T> translateHandle(GlobalPtr<GenericMap<Pair<NonPooled<FB_API_HANDLE, T*>
 
 //-------------------------------------
 
-const int SHUTDOWN_TIMEOUT = 10000;	// 10 sec
+constexpr int SHUTDOWN_TIMEOUT = 10000;	// 10 sec
 
 class ShutdownInit
 {
@@ -879,14 +880,14 @@ private:
 namespace Why
 {
 	// StatusVector:	Provides correct status vector for operation and init() it.
-	class StatusVector : public AutoIface<BaseStatus<StatusVector> >
+	class StatusVector final : public AutoIface<BaseStatus<StatusVector> >
 	{
 	public:
 		explicit StatusVector(ISC_STATUS* v = NULL) noexcept
 			: localVector(v ? v : localStatus)
 		{ }
 
-		operator const ISC_STATUS*()
+		operator const ISC_STATUS*() noexcept
 		{
 			merge();
 			return localVector;
@@ -901,12 +902,12 @@ namespace Why
 		}
 
 		// IStatus implementation
-		void dispose()
+		void dispose() override
 		{ }
 
 #ifdef DEV_BUILD
 		// Validate that a status vector looks valid.
-		static void checkStatusVector(const ISC_STATUS* status)
+		static void checkStatusVector(const ISC_STATUS* status) noexcept
 		{
 #define SV_MSG(x)	\
 	do {	\
@@ -1031,20 +1032,20 @@ namespace Why
 #endif
 
 	private:
-		void merge()
+		void merge() noexcept
 		{
 			fb_utils::mergeStatus(localVector, FB_NELEM(localStatus), this);
 			makePermanentVector(localVector);
 		}
 
-		ISC_STATUS_ARRAY localStatus;
+		ISC_STATUS_ARRAY localStatus{};
 		ISC_STATUS* localVector;
 	};
 
-	class ShutChain : public GlobalStorage
+	class ShutChain final : public GlobalStorage
 	{
 	private:
-		ShutChain(ShutChain* link, FB_SHUTDOWN_CALLBACK cb, const int m, void* a)
+		ShutChain(ShutChain* link, FB_SHUTDOWN_CALLBACK cb, const int m, void* a) noexcept
 			: next(link),
 			  callBack(cb),
 			  mask(m),
@@ -1101,10 +1102,10 @@ namespace Why
 	GlobalPtr<Mutex> ShutChain::shutdownCallbackMutex;
 
 	template <typename T, typename CleanupRoutine>	// T = YAttachment or YTransaction
-	class CleanupCallbackImpl : public CleanupCallback
+	class CleanupCallbackImpl final : public CleanupCallback
 	{
 	public:
-		CleanupCallbackImpl(T* aObject, CleanupRoutine* aRoutine, void* aArg)
+		CleanupCallbackImpl(T* aObject, CleanupRoutine* aRoutine, void* aArg) noexcept
 			: object(aObject),
 			  routine(aRoutine),
 			  arg(aArg)
@@ -1139,7 +1140,7 @@ namespace Why
 	enum CHECK_ENTRY { CHECK_NONE, CHECK_ALL, CHECK_WARN_ZERO_HANDLE };
 
 	template <typename Y>
-	class YEntry : public FpeControl	//// TODO: move FpeControl to the engine
+	class YEntry final : public FpeControl	//// TODO: move FpeControl to the engine
 	{
 	public:
 		YEntry(CheckStatusWrapper* aStatus, Y* object, CHECK_ENTRY checkAttachment = CHECK_ALL)
@@ -1163,6 +1164,9 @@ namespace Why
 		{
 			fini();
 		}
+
+		// prohibit copy constructor
+		YEntry(const YEntry&) = delete;
 
 		void init(typename Y::NextInterface* nxt)
 		{
@@ -1202,14 +1206,12 @@ namespace Why
 			}
 		}
 
-		typename Y::NextInterface* next()
+		typename Y::NextInterface* next() noexcept
 		{
 			return nextRef;
 		}
 
 	private:
-		YEntry(const YEntry&);	// prohibit copy constructor
-
 		void nextIsEmpty(CheckStatusWrapper* aStatus, CHECK_ENTRY check)
 		{
 			if (check == CHECK_WARN_ZERO_HANDLE)
@@ -1226,12 +1228,12 @@ namespace Why
 		RefPtr<typename Y::NextInterface> nextRef;
 	};
 
-	class IscStatement : public RefCounted, public GlobalStorage, public YObject
+	class IscStatement final : public RefCounted, public GlobalStorage, public YObject
 	{
 	public:
-		static const ISC_STATUS ERROR_CODE = isc_bad_stmt_handle;
+		static constexpr ISC_STATUS ERROR_CODE = isc_bad_stmt_handle;
 
-		explicit IscStatement(YAttachment* aAttachment)
+		explicit IscStatement(YAttachment* aAttachment) noexcept
 			: attachment(aAttachment),
 			  cursorName(getPool()),
 			  statement(NULL),
@@ -1319,7 +1321,7 @@ namespace Why
 			nextIsEmpty(aStatus, checkService);
 	}
 
-	class DispatcherEntry : public FpeControl	//// TODO: move FpeControl to the engine
+	class DispatcherEntry final : public FpeControl	//// TODO: move FpeControl to the engine
 	{
 	public:
 		explicit DispatcherEntry(CheckStatusWrapper* aStatus, bool p_shutdownMode = false)
@@ -1386,14 +1388,14 @@ struct TEB
 //-------------------------------------
 
 
-static void badHandle(ISC_STATUS code)
+[[noreturn]] static void badHandle(ISC_STATUS code)
 {
 	status_exception::raise(Arg::Gds(code));
 }
 
 static bool isNetworkError(const IStatus* status)
 {
-	ISC_STATUS code = status->getErrors()[1];
+	const ISC_STATUS code = status->getErrors()[1];
 	return fb_utils::isNetworkError(code);
 }
 
@@ -1404,7 +1406,7 @@ static void nullCheck(const FB_API_HANDLE* ptr, ISC_STATUS code)
 		badHandle(code);
 }
 
-static void badSqldaVersion(const short version)
+[[noreturn]] static void badSqldaVersion(const short version)
 {
 	(Arg::Gds(isc_dsql_sqlda_value_err) <<
 		Arg::Gds(isc_dsql_invalid_sqlda_version) <<
@@ -1413,7 +1415,7 @@ static void badSqldaVersion(const short version)
 }
 
 // Set charset info in SQLVAR according to legacy rules
-static void setTextType(XSQLVAR* var, unsigned charSet)
+static void setTextType(XSQLVAR* var, unsigned charSet) noexcept
 {
 	switch(var->sqltype & ~1)
 	{
@@ -1427,9 +1429,9 @@ static void setTextType(XSQLVAR* var, unsigned charSet)
 	}
 }
 
-static int sqldaTruncateString(char* buffer, FB_SIZE_T size, const char* s)
+static int sqldaTruncateString(char* buffer, FB_SIZE_T size, const char* s) noexcept
 {
-	int ret = fb_utils::snprintf(buffer, size, "%s", s);
+	int ret = snprintf(buffer, size, "%s", s);
 	return MIN(ret, static_cast<int>(size - 1));
 }
 
@@ -1445,7 +1447,7 @@ static void sqldaDescribeParameters(XSQLDA* sqlda, IMessageMetadata* parameters)
 	StatusVector status(NULL);
 	CheckStatusWrapper statusWrapper(&status);
 
-	unsigned parametersCount = parameters->getCount(&statusWrapper);
+	const unsigned parametersCount = parameters->getCount(&statusWrapper);
 	status.check();
 	sqlda->sqld = (USHORT) parametersCount;
 
@@ -1473,7 +1475,7 @@ static void sqldaDescribeParameters(XSQLDA* sqlda, IMessageMetadata* parameters)
 		var->sqlscale = parameters->getScale(&statusWrapper, i);
 		status.check();
 
-		unsigned charSet = parameters->getCharSet(&statusWrapper, i);
+		const unsigned charSet = parameters->getCharSet(&statusWrapper, i);
 		status.check();
 		setTextType(var, charSet);
 
@@ -2740,7 +2742,7 @@ ISC_STATUS API_ROUTINE isc_dsql_prepare_m(ISC_STATUS* userStatus, isc_tr_handle*
 		if (traHandle && *traHandle)
 			transaction = translateHandle(transactions, traHandle);
 
-		unsigned flags = StatementMetadata::buildInfoFlags(
+		const unsigned flags = StatementMetadata::buildInfoFlags(
 			itemLength, reinterpret_cast<const UCHAR*>(items));
 
 		statement->statement = statement->attachment.get()->prepare(&statusWrapper, transaction,
@@ -3043,7 +3045,8 @@ ISC_STATUS API_ROUTINE isc_get_segment(ISC_STATUS* userStatus, isc_blob_handle* 
 	{
 		RefPtr<YBlob> blob(translateHandle(blobs, blobHandle));
 		unsigned int length;
-		int cc = blob->getSegment(&statusWrapper, bufferLength, reinterpret_cast<UCHAR*>(buffer), &length);
+		const int cc = blob->getSegment(&statusWrapper, bufferLength,
+			reinterpret_cast<UCHAR*>(buffer), &length);
 
 		if (!(status.getState() & IStatus::STATE_ERRORS))
 			*returnLength = length;
@@ -3082,7 +3085,7 @@ ISC_STATUS API_ROUTINE isc_get_slice(ISC_STATUS* userStatus, isc_db_handle* dbHa
 		RefPtr<YTransaction> transaction(translateHandle(transactions, traHandle));
 
 		int length = attachment->getSlice(&statusWrapper, transaction, arrayId, sdlLength, sdl,
-			paramLength, reinterpret_cast<const UCHAR*>(param), sliceLength, reinterpret_cast<UCHAR*>(slice));
+			paramLength, reinterpret_cast<const UCHAR*>(param), sliceLength, static_cast<UCHAR*>(slice));
 
 		if (!(status.getState() & IStatus::STATE_ERRORS) && returnLength)
 			*returnLength = length;
@@ -3221,7 +3224,7 @@ ISC_STATUS API_ROUTINE isc_receive(ISC_STATUS* userStatus, isc_req_handle* reqHa
 	try
 	{
 		RefPtr<YRequest> request(translateHandle(requests, reqHandle));
-		request->receive(&statusWrapper, level, msgType, msgLength, reinterpret_cast<UCHAR*>(msg));
+		request->receive(&statusWrapper, level, msgType, msgLength, static_cast<UCHAR*>(msg));
 	}
 	catch (const Exception& e)
 	{
@@ -3550,7 +3553,7 @@ ISC_STATUS API_ROUTINE isc_start_and_send(ISC_STATUS* userStatus, isc_req_handle
 		RefPtr<YTransaction> transaction(translateHandle(transactions, traHandle));
 
 		request->startAndSend(&statusWrapper, transaction, level, msgType,
-			msgLength, reinterpret_cast<const UCHAR*>(msg));
+			msgLength, static_cast<const UCHAR*>(msg));
 	}
 	catch (const Exception& e)
 	{
@@ -3620,8 +3623,7 @@ ISC_STATUS API_ROUTINE isc_start_multiple(ISC_STATUS* userStatus, isc_tr_handle*
 		for (SSHORT i = 0; i < count; ++i, ++vector)
 		{
 			RefPtr<YAttachment> attachment(translateHandle(attachments, vector->teb_database));
-			ds->addWithTpb(&statusWrapper, attachment, vector->teb_tpb_length,
-				reinterpret_cast<const unsigned char*>(vector->teb_tpb));
+			ds->addWithTpb(&statusWrapper, attachment, vector->teb_tpb_length, vector->teb_tpb);
 
 			if (statusWrapper.getState() & IStatus::STATE_ERRORS)
 			{
@@ -5580,7 +5582,7 @@ YAttachment::YAttachment(IProvider* aProvider, IAttachment* aNext, const PathNam
 	makeHandle(&attachments, this, handle);
 }
 
-isc_db_handle& YAttachment::getHandle()
+isc_db_handle& YAttachment::getHandle() noexcept
 {
 	fb_assert(handle);
 	return handle;
@@ -5626,7 +5628,7 @@ void YAttachment::destroy(unsigned dstrFlags)
 
 	cleanupHandlers.clear();
 
-	unsigned childFlags = dstrFlags & ~(DF_KEEP_NEXT | DF_RELEASE);
+	const unsigned childFlags = dstrFlags & ~(DF_KEEP_NEXT | DF_RELEASE);
 	childRequests.destroy(childFlags);
 	childStatements.destroy(childFlags);
 	childIscStatements.destroy(childFlags);
@@ -6351,7 +6353,7 @@ YService::YService(IProvider* aProvider, IService* aNext, bool utf8, Dispatcher*
 	makeHandle(&services, this, handle);
 }
 
-isc_svc_handle& YService::getHandle()
+isc_svc_handle& YService::getHandle() noexcept
 {
 	fb_assert(handle);
 	return handle;
@@ -6515,7 +6517,7 @@ YAttachment* Dispatcher::attachOrCreateDatabase(CheckStatusWrapper* status, bool
 			status_exception::raise(Arg::Gds(isc_bad_dpb_form));
 
 		ClumpletWriter newDpb(ClumpletReader::dpbList, MAX_DPB_SIZE, dpb, dpbLength);
-		bool utfData = newDpb.find(isc_dpb_utf8_filename);
+		const bool utfData = newDpb.find(isc_dpb_utf8_filename);
 
 		// Take care about DPB
 		setLogin(newDpb, false);
@@ -6618,7 +6620,7 @@ YAttachment* Dispatcher::attachOrCreateDatabase(CheckStatusWrapper* status, bool
 			case isc_wrong_ods:
 			case isc_wrong_shmem_ver:
 				currentStatus = &tempCheckStatusWrapper;
-				// fall down...
+				break;
 			case isc_unavailable:
 				break;
 
@@ -6662,7 +6664,7 @@ YService* Dispatcher::attachServiceManager(CheckStatusWrapper* status, const cha
 		svcName.trim();
 
 		ClumpletWriter spbWriter(ClumpletReader::spbList, MAX_DPB_SIZE, spb, spbLength);
-		bool utfData = spbWriter.find(isc_spb_utf8_filename);
+		const bool utfData = spbWriter.find(isc_spb_utf8_filename);
 
 		// Take care about SPB
 		setLogin(spbWriter, true);
@@ -6755,7 +6757,7 @@ IService* Dispatcher::internalServiceAttach(CheckStatusWrapper* status, const Pa
 		{
 			case isc_service_att_err:
 				currentStatus = &temp2;
-				// fall down...
+				break;
 			case isc_unavailable:
 			case isc_wrong_ods:
 			case isc_badodsver:
@@ -6781,8 +6783,8 @@ IService* Dispatcher::internalServiceAttach(CheckStatusWrapper* status, const Pa
 }
 
 static std::atomic<SLONG> shutdownWaiters = 0;
-static const SLONG SHUTDOWN_COMPLETE = 1;
-static const SLONG SHUTDOWN_STEP = 2;
+static constexpr SLONG SHUTDOWN_COMPLETE = 1;
+static constexpr SLONG SHUTDOWN_STEP = 2;
 
 void Dispatcher::shutdown(CheckStatusWrapper* userStatus, unsigned int timeout, const int reason)
 {
@@ -6803,7 +6805,7 @@ void Dispatcher::shutdown(CheckStatusWrapper* userStatus, unsigned int timeout, 
 	});
 
 	// atomically increase shutdownWaiters & check for SHUTDOWN_STARTED
-	SLONG state = (shutdownWaiters += SHUTDOWN_STEP);
+	const SLONG state = (shutdownWaiters += SHUTDOWN_STEP);
 	if (state & SHUTDOWN_COMPLETE)
 		return;
 

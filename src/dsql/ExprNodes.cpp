@@ -8061,14 +8061,17 @@ ValueExprNode* LiteralNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			constant->litDesc.setTextType(sym->intlsym_ttype);
 	}
 
+	// dsqlDesc needs dsc_length to be adjusted to maximum length for given charset,
+	// while litDesc must reflect the real literal length to prevent buffer overrun.
+
+	constant->dsqlDesc = constant->litDesc;
+
 	USHORT adjust = 0;
 
 	if (constant->litDesc.dsc_dtype == dtype_varying)
 		adjust = sizeof(USHORT);
 	else if (constant->litDesc.dsc_dtype == dtype_cstring)
 		adjust = 1;
-
-	constant->litDesc.dsc_length -= adjust;
 
 	CharSet* charSet = INTL_charset_lookup(tdbb, INTL_GET_CHARSET(&constant->litDesc));
 
@@ -8091,10 +8094,8 @@ ValueExprNode* LiteralNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 					  METD_get_charset_name(dsqlScratch->getTransaction(), constant->litDesc.getCharSet()).toQuotedString());
 		}
 		else
-			constant->litDesc.dsc_length = charLength * charSet->maxBytesPerChar();
+			constant->dsqlDesc.dsc_length = charLength * charSet->maxBytesPerChar() + adjust;
 	}
-
-	constant->litDesc.dsc_length += adjust;
 
 	return constant;
 }
@@ -12480,6 +12481,8 @@ DmlNode* SysFuncCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScrat
 
 	node->args = PAR_args(tdbb, csb);
 
+	node->function->checkArgsMismatch(node->args->items.getCount());
+
 	if (name == "MAKE_DBKEY")
 	{
 		// Special handling for system function MAKE_DBKEY:
@@ -12550,7 +12553,6 @@ void SysFuncCallNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 	}
 
 	DSqlDataTypeUtil dataTypeUtil(dsqlScratch);
-	function->checkArgsMismatch(argsArray.getCount());
 	function->makeFunc(&dataTypeUtil, function, desc, argsArray.getCount(), argsArray.begin());
 }
 
@@ -12617,8 +12619,6 @@ ValueExprNode* SysFuncCallNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
 	ValueExprNode::pass2(tdbb, csb);
 
-	function->checkArgsMismatch(args->items.getCount());
-
 	dsc desc;
 	getDesc(tdbb, csb, &desc);
 	impureOffset = csb->allocImpure<impure_value>();
@@ -12642,14 +12642,18 @@ ValueExprNode* SysFuncCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	if (node->function)
 	{
+		auto& items = node->args->items;
+
+		node->function->checkArgsMismatch(items.getCount());
+
 		if (node->function->setParamsFunc)
 		{
-			Array<dsc> tempDescs(node->args->items.getCount());
-			tempDescs.resize(node->args->items.getCount());
+			Array<dsc> tempDescs(items.getCount());
+			tempDescs.resize(items.getCount());
 
-			Array<dsc*> argsArray(node->args->items.getCount());
+			Array<dsc*> argsArray(items.getCount());
 
-			for (auto& item : node->args->items)
+			for (auto& item : items)
 			{
 				DsqlDescMaker::fromNode(dsqlScratch, item);
 
@@ -12668,7 +12672,7 @@ ValueExprNode* SysFuncCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			node->function->setParamsFunc(&dataTypeUtil, node->function,
 				argsArray.getCount(), argsArray.begin());
 
-			for (auto& item : node->args->items)
+			for (auto& item : items)
 			{
 				PASS1_set_parameter_type(dsqlScratch, item,
 					[&] (dsc* desc) { *desc = item->getDsqlDesc(); },

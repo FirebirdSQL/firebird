@@ -31,6 +31,8 @@
 #include "../../jrd/trace/TraceManager.h"
 #include "../../jrd/trace/TraceObjects.h"
 
+#include <string_view>
+
 namespace Jrd {
 
 using Firebird::ITracePlugin;
@@ -53,11 +55,13 @@ public:
 
 		m_start_clock = fb_utils::query_performance_counter();
 
-		static const char empty_string[] = "";
-		if (!m_string_len || !string)
+		if (m_string == nullptr)
+			traceEmptyStatement();
+		else if (m_string_len == 0)
 		{
-			m_string = empty_string;
-			m_string_len = 0;
+			m_string_len = fb_strlen(m_string);
+			if (m_string_len == 0)
+				traceEmptyStatement();
 		}
 	}
 
@@ -103,6 +107,13 @@ public:
 	}
 
 private:
+	void traceEmptyStatement()
+	{
+		static constexpr std::string_view empty_string = "<empty statement>";
+		m_string = empty_string.data();
+		m_string_len = empty_string.length();
+	}
+
 	bool m_need_trace;
 	Attachment* m_attachment;
 	jrd_tra* const m_transaction;

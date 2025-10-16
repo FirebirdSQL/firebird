@@ -46,7 +46,7 @@ class Decimal64;
 class Decimal128;
 struct DecimalStatus;
 
-class Int128 //: public Decimal128Base
+class Int128
 {
 public:
 #if SIZEOF_LONG < 8
@@ -305,17 +305,17 @@ public:
 
 	void setScale(int scale);
 
-	UCHAR* getBytes()
+	UCHAR* getBytes() noexcept
 	{
 		return (UCHAR*)(&v);
 	}
 
-	static const unsigned BIAS = 128;
-	static const unsigned PMAX = 38;
+	static constexpr unsigned BIAS = 128;
+	static constexpr unsigned PMAX = 38;
 
 	ULONG makeIndexKey(vary* buf, int scale);
 
-	static ULONG getIndexKeyLength()
+	static ULONG getIndexKeyLength() noexcept
 	{
 		return 19;
 	}
@@ -323,8 +323,8 @@ public:
 protected:
 	absl::int128 v;
 
-	static void overflow();
-	static void zerodivide();
+	[[noreturn]] static void overflow();
+	[[noreturn]] static void zerodivide();
 
 	Int128 set(const char* value);
 };
@@ -368,7 +368,7 @@ class Decimal64;
 class Decimal128;
 struct DecimalStatus;
 
-class Int128 //: public Decimal128Base
+class Int128
 {
 public:
 #if SIZEOF_LONG < 8
@@ -556,21 +556,21 @@ public:
 		*remainder = rem;
 	}
 
-	void getTable32(unsigned* dwords) const;		// internal data in per-32bit form
-	void setTable32(const unsigned* dwords);
+	void getTable32(unsigned* dwords) const noexcept;	// internal data in per-32bit form
+	void setTable32(const unsigned* dwords) noexcept;
 	void setScale(int scale);
 
-	UCHAR* getBytes()
+	UCHAR* getBytes() noexcept
 	{
 		return (UCHAR*)(v.table);
 	}
 
-	static const unsigned BIAS = 128;
-	static const unsigned PMAX = 39;
+	static constexpr unsigned BIAS = 128;
+	static constexpr unsigned PMAX = 39;
 
 	ULONG makeIndexKey(vary* buf, int scale);
 
-	static ULONG getIndexKeyLength()
+	static ULONG getIndexKeyLength() noexcept
 	{
 		return 19;
 	}
@@ -578,8 +578,8 @@ public:
 protected:
 	ttmath::Int<TTMATH_BITS(128)> v;
 
-	static void overflow();
-	static void zerodivide();
+	[[noreturn]] static void overflow();
+	[[noreturn]] static void zerodivide();
 
 	Int128 set(const char* value);
 };

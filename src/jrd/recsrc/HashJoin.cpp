@@ -44,10 +44,10 @@ using namespace Jrd;
 // ----------------------
 
 // NS: FIXME - Why use static hash table here??? Hash table shall support dynamic resizing
-static const ULONG HASH_SIZE = 1009;
-static const ULONG BUCKET_PREALLOCATE_SIZE = 32;	// 256 bytes per bucket
+static constexpr ULONG HASH_SIZE = 1009;
+static constexpr ULONG BUCKET_PREALLOCATE_SIZE = 32;	// 256 bytes per bucket
 
-unsigned HashJoin::maxCapacity()
+unsigned HashJoin::maxCapacity() noexcept
 {
 	// Binary search across 1000 collisions is computationally similar to
 	// linear search across 10 collisions. We use this number as a rough
@@ -56,23 +56,23 @@ unsigned HashJoin::maxCapacity()
 }
 
 
-class HashJoin::HashTable : public PermanentStorage
+class HashJoin::HashTable final : public PermanentStorage
 {
 	class CollisionList
 	{
-		static const FB_SIZE_T INVALID_ITERATOR = FB_SIZE_T(~0);
+		static constexpr FB_SIZE_T INVALID_ITERATOR = FB_SIZE_T(~0);
 
 		struct Entry
 		{
-			Entry()
+			Entry() noexcept
 				: hash(0), position(0)
 			{}
 
-			Entry(ULONG h, ULONG pos)
+			Entry(ULONG h, ULONG pos) noexcept
 				: hash(h), position(pos)
 			{}
 
-			static const ULONG generate(const Entry& item)
+			static const ULONG generate(const Entry& item) noexcept
 			{
 				return item.hash;
 			}
@@ -94,7 +94,7 @@ class HashJoin::HashTable : public PermanentStorage
 			m_collisions.sort();
 		}
 
-		ULONG getCount() const
+		ULONG getCount() const noexcept
 		{
 			return (ULONG) m_collisions.getCount();
 		}
@@ -113,7 +113,7 @@ class HashJoin::HashTable : public PermanentStorage
 			return false;
 		}
 
-		bool iterate(ULONG hash, ULONG& position)
+		bool iterate(ULONG hash, ULONG& position) noexcept
 		{
 			if (m_iterator >= m_collisions.getCount())
 				return false;
@@ -197,7 +197,7 @@ public:
 		collisions->locate(hash);
 	}
 
-	bool iterate(ULONG stream, ULONG hash, ULONG& position)
+	bool iterate(ULONG stream, ULONG hash, ULONG& position) noexcept
 	{
 		fb_assert(stream < m_streamCount);
 
@@ -404,7 +404,7 @@ bool HashJoin::internalGetRecord(thread_db* tdbb) const
 	if (!(impure->irsb_flags & irsb_open))
 		return false;
 
-	const auto inner = m_subs.front().source;
+	const auto* const inner = m_subs.front().source;
 
 	while (true)
 	{
@@ -589,7 +589,7 @@ ULONG HashJoin::computeHash(thread_db* tdbb,
 			}
 			else
 			{
-				const auto data = desc->dsc_address;
+				const auto* const data = desc->dsc_address;
 
 				if (desc->isDecFloat())
 				{

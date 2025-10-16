@@ -69,7 +69,7 @@ inline constexpr double DEFAULT_CARDINALITY = 1000.0;
 // also representing the minimal cost of the index scan.
 // We assume that the root page would be always cached,
 // so it's not included here.
-inline const double DEFAULT_INDEX_COST = 3.0;
+inline constexpr double DEFAULT_INDEX_COST = 3.0;
 
 
 struct index_desc;
@@ -120,13 +120,13 @@ public:
 		}
 	}
 
-	void activate()
+	void activate() noexcept
 	{
 		for (const auto stream : m_streams)
 			m_csb->csb_rpt[stream].activate();
 	}
 
-	void deactivate()
+	void deactivate() noexcept
 	{
 		for (const auto stream : m_streams)
 			m_csb->csb_rpt[stream].deactivate();
@@ -178,23 +178,23 @@ public:
 		}
 	}
 
-	RecordSource* getRecordSource() const
+	RecordSource* getRecordSource() const noexcept
 	{
 		return m_rsb;
 	}
 
-	const StreamList& getStreams() const
+	const StreamList& getStreams() const noexcept
 	{
 		return m_streams;
 	}
 
-	void activate(CompilerScratch* csb) const
+	void activate(CompilerScratch* csb) const noexcept
 	{
 		for (const auto stream : m_streams)
 			csb->csb_rpt[stream].activate();
 	}
 
-	void deactivate(CompilerScratch* csb) const
+	void deactivate(CompilerScratch* csb) const noexcept
 	{
 		for (const auto stream : m_streams)
 			csb->csb_rpt[stream].deactivate();
@@ -244,7 +244,7 @@ protected:
 // Optimizer
 //
 
-class Optimizer : public Firebird::PermanentStorage
+class Optimizer final : public Firebird::PermanentStorage
 {
 public:
 	struct Conjunct
@@ -254,9 +254,9 @@ public:
 		unsigned flags;
 	};
 
-	static const unsigned CONJUNCT_USED		= 1;	// conjunct is used
-	static const unsigned CONJUNCT_MATCHED	= 2;	// conjunct matches an index segment
-	static const unsigned CONJUNCT_JOINED	= 4;	// conjunct used for equi-join
+	static constexpr unsigned CONJUNCT_USED		= 1;	// conjunct is used
+	static constexpr unsigned CONJUNCT_MATCHED	= 2;	// conjunct matches an index segment
+	static constexpr unsigned CONJUNCT_JOINED	= 4;	// conjunct used for equi-join
 
 	typedef Firebird::HalfStaticArray<Conjunct, OPT_STATIC_ITEMS> ConjunctList;
 
@@ -265,52 +265,52 @@ public:
 		friend class Optimizer;
 
 	public:
-		operator BoolExprNode*() const
+		operator BoolExprNode*() const noexcept
 		{
 			return iter->node;
 		}
 
-		BoolExprNode* operator->() const
+		BoolExprNode* operator->() const noexcept
 		{
 			return iter->node;
 		}
 
-		BoolExprNode* operator*() const
+		BoolExprNode* operator*() const noexcept
 		{
 			return iter->node;
 		}
 
-		unsigned operator&(unsigned flags) const
+		unsigned operator&(unsigned flags) const noexcept
 		{
 			return (iter->flags & flags);
 		}
 
-		void operator|=(unsigned flags)
+		void operator|=(unsigned flags) noexcept
 		{
 			iter->flags |= flags;
 		}
 
-		void operator++()
+		void operator++() noexcept
 		{
 			iter++;
 		}
 
-		bool hasData() const
+		bool hasData() const noexcept
 		{
 			return (iter < end);
 		}
 
-		unsigned getFlags() const
+		unsigned getFlags() const noexcept
 		{
 			return iter->flags;
 		}
 
-		void rewind()
+		void rewind() noexcept
 		{
 			iter = begin;
 		}
 
-		void reset(BoolExprNode* node)
+		void reset(BoolExprNode* node) noexcept
 		{
 			iter->node = node;
 			iter->flags = 0;
@@ -325,33 +325,33 @@ public:
 		const Conjunct* const end;
 		Conjunct* iter;
 
-		ConjunctIterator(Conjunct* _begin, const Conjunct* _end)
+		ConjunctIterator(Conjunct* _begin, const Conjunct* _end) noexcept
 			: begin(_begin), end(_end)
 		{
 			rewind();
 		}
 	};
 
-	ConjunctIterator getBaseConjuncts()
+	ConjunctIterator getBaseConjuncts() noexcept
 	{
 		const auto begin = conjuncts.begin();
-		const auto end = begin + baseConjuncts;
+		const auto* end = begin + baseConjuncts;
 
 		return ConjunctIterator(begin, end);
 	}
 
-	ConjunctIterator getParentConjuncts()
+	ConjunctIterator getParentConjuncts() noexcept
 	{
 		const auto begin = conjuncts.begin() + baseParentConjuncts;
-		const auto end = conjuncts.end();
+		const auto* end = conjuncts.end();
 
 		return ConjunctIterator(begin, end);
 	}
 
-	ConjunctIterator getConjuncts(bool outer = false, bool inner = false)
+	ConjunctIterator getConjuncts(bool outer = false, bool inner = false) noexcept
 	{
 		const auto begin = conjuncts.begin() + (outer ? baseParentConjuncts : 0);
-		const auto end = inner ? begin + baseMissingConjuncts : conjuncts.end();
+		const auto* end = inner ? begin + baseMissingConjuncts : conjuncts.end();
 
 		return ConjunctIterator(begin, end);
 	}
@@ -421,13 +421,13 @@ public:
 		// This estimation is quite pessimistic but it seems to work better in practice,
 		// especially when multiple unmatchable booleans are used.
 
-		const auto adjustment = DEFAULT_SELECTIVITY / REDUCE_SELECTIVITY_FACTOR_EQUALITY;
+		constexpr auto adjustment = DEFAULT_SELECTIVITY / REDUCE_SELECTIVITY_FACTOR_EQUALITY;
 		const auto selectivity = factor * adjustment;
 
 		return MIN(selectivity, MAXIMUM_SELECTIVITY / 2);
 	}
 
-	static void adjustSelectivity(double& selectivity, double factor, double cardinality)
+	static void adjustSelectivity(double& selectivity, double factor, double cardinality) noexcept
 	{
 		if (!cardinality)
 			cardinality = DEFAULT_CARDINALITY;
@@ -438,7 +438,7 @@ public:
 		selectivity = minSelectivity + diffSelectivity * factor;
 	}
 
-	bool deliverJoinConjuncts(const BoolExprNodeStack& conjuncts)
+	bool deliverJoinConjuncts(const BoolExprNodeStack& conjuncts) const
 	{
 		fb_assert(conjuncts.hasData());
 
@@ -462,10 +462,10 @@ public:
 		// System requests should not be affected by user-specified settings
 		if (!(csb->csb_g_flags & csb_internal))
 		{
-			const auto dbb = tdbb->getDatabase();
+			const auto* dbb = tdbb->getDatabase();
 			const auto defaultFirstRows = dbb->dbb_config->getOptimizeForFirstRows();
 
-			const auto attachment = tdbb->getAttachment();
+			const auto* attachment = tdbb->getAttachment();
 			firstRows = attachment->att_opt_first_rows.valueOr(defaultFirstRows);
 		}
 
@@ -489,7 +489,7 @@ public:
 							   RecordSource* rsb, SortNode* sort,
 							   bool refetchFlag, bool projectFlag);
 
-	CompilerScratch* getCompilerScratch() const
+	CompilerScratch* getCompilerScratch() const noexcept
 	{
 		return csb;
 	}
@@ -519,12 +519,12 @@ public:
 		return rse->isSpecialJoin();
 	}
 
-	const StreamList& getOuterStreams() const
+	const StreamList& getOuterStreams() const noexcept
 	{
 		return outerStreams;
 	}
 
-	bool favorFirstRows() const
+	bool favorFirstRows() const noexcept
 	{
 		return firstRows;
 	}
@@ -551,7 +551,7 @@ public:
 
 	Firebird::string getStreamName(StreamType stream);
 	Firebird::string makeAlias(StreamType stream);
-	void printf(const char* format, ...);
+	void printf(const char* format, ...) noexcept;
 
 private:
 	Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse,
@@ -580,6 +580,10 @@ private:
 	BoolExprNode* makeInferenceNode(BoolExprNode* boolean,
 									ValueExprNode* arg1,
 									ValueExprNode* arg2);
+	BoolExprNode* makeInferenceNode(BoolExprNode* boolean,
+									ValueExprNode* arg,
+									ValueListNode* list);
+
 	ValueExprNode* optimizeLikeSimilar(ComparativeBoolNode* cmpNode);
 
 	thread_db* const tdbb;
@@ -706,7 +710,7 @@ typedef Firebird::HalfStaticArray<InversionCandidate*, OPT_STATIC_ITEMS> Inversi
 // Retrieval
 //
 
-class Retrieval : private Firebird::PermanentStorage
+class Retrieval final : private Firebird::PermanentStorage
 {
 public:
 	Retrieval(thread_db* tdbb, Optimizer* opt, StreamType streamNumber,
@@ -771,13 +775,13 @@ private:
 // InnerJoin
 //
 
-class InnerJoin : private Firebird::PermanentStorage
+class InnerJoin final : private Firebird::PermanentStorage
 {
 	struct IndexRelationship
 	{
-		static const unsigned MAX_DEP_STREAMS = 8;
+		static constexpr unsigned MAX_DEP_STREAMS = 8;
 
-		static bool cheaperThan(const IndexRelationship& item1, const IndexRelationship& item2)
+		static bool cheaperThan(const IndexRelationship& item1, const IndexRelationship& item2) noexcept
 		{
 			if (item1.cost == 0)
 				return true;
@@ -807,7 +811,7 @@ class InnerJoin : private Firebird::PermanentStorage
 		}
 
 		// Needed for SortedArray
-		bool operator>(const IndexRelationship& other) const
+		bool operator>(const IndexRelationship& other) const noexcept
 		{
 			return !cheaperThan(*this, other);
 		}
@@ -828,7 +832,7 @@ class InnerJoin : private Firebird::PermanentStorage
 			: number(num), baseConjuncts(p), indexedRelationships(p)
 		{}
 
-		bool isIndependent() const
+		bool isIndependent() const noexcept
 		{
 			// Return true if this stream can't be used by other streams
 			// and it can't use index retrieval based on other streams
@@ -836,12 +840,12 @@ class InnerJoin : private Firebird::PermanentStorage
 			return (indexedRelationships.isEmpty() && !previousExpectedStreams);
 		}
 
-		bool isFiltered() const
+		bool isFiltered() const noexcept
 		{
 			return (baseIndexes || baseSelectivity < MAXIMUM_SELECTIVITY);
 		}
 
-		static bool cheaperThan(const StreamInfo* item1, const StreamInfo* item2)
+		static bool cheaperThan(const StreamInfo* item1, const StreamInfo* item2) noexcept
 		{
 			// First those streams which cannot be used by other streams
 			// or cannot depend on a stream
@@ -880,9 +884,9 @@ class InnerJoin : private Firebird::PermanentStorage
 
 	struct JoinedStreamInfo
 	{
-		static const unsigned MAX_EQUI_MATCHES = 8;
+		static constexpr unsigned MAX_EQUI_MATCHES = 8;
 
-		void reset (StreamType num)
+		void reset(StreamType num) noexcept
 		{
 			number = num;
 			selectivity = 0.0;

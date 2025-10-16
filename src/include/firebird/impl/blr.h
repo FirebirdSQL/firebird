@@ -263,7 +263,7 @@
 #define blr_rid2		(unsigned char)147
 #define blr_relation3		(unsigned char)148
 
-// unused codes: 148..149
+// unused codes: 149
 
 #define blr_set_generator       (unsigned char)150
 

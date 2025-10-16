@@ -44,7 +44,7 @@ MsgMetadata* Routine::createMetadata(const Array<NestConst<Parameter> >& paramet
 		 i != parameters.end();
 		 ++i)
 	{
-		dsc d((*i)->prm_desc);
+		const dsc d((*i)->prm_desc);
 		metadata->addItem((*i)->prm_name, (*i)->prm_nullable, d);
 	}
 
@@ -59,7 +59,7 @@ Format* Routine::createFormat(MemoryPool& pool, IMessageMetadata* params, bool a
 {
 	FbLocalStatus status;
 
-	unsigned count = params->getCount(&status);
+	const unsigned count = params->getCount(&status);
 	status.check();
 
 	Format* format = Format::newFormat(pool, count * 2 + (addEof ? 1 : 0));
@@ -71,9 +71,9 @@ Format* Routine::createFormat(MemoryPool& pool, IMessageMetadata* params, bool a
 	{
 		unsigned descOffset, nullOffset, descDtype, descLength;
 
-		unsigned type = params->getType(&status, i);
+		const unsigned type = params->getType(&status, i);
 		status.check();
-		unsigned len = params->getLength(&status, i);
+		const unsigned len = params->getLength(&status, i);
 		status.check();
 		runOffset = fb_utils::sqlTypeToDsc(runOffset, type, len, &descDtype, &descLength,
 			&descOffset, &nullOffset);
@@ -149,7 +149,7 @@ void Routine::checkReload(thread_db* tdbb)
 }
 
 // Parse routine BLR and debug info.
-void Routine::parseBlr(thread_db* tdbb, CompilerScratch* csb, bid* blob_id, bid* blobDbg)
+void Routine::parseBlr(thread_db* tdbb, CompilerScratch* csb, const bid* blob_id, bid* blobDbg)
 {
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 
@@ -199,7 +199,7 @@ void Routine::parseMessages(thread_db* tdbb, CompilerScratch* csb, BlrReader blr
 	while (csb->csb_blr_reader.getByte() == blr_message)
 	{
 		const USHORT msgNumber = csb->csb_blr_reader.getByte();
-		USHORT count = csb->csb_blr_reader.getWord();
+		const USHORT count = csb->csb_blr_reader.getWord();
 		Format* format = Format::newFormat(*tdbb->getDefaultPool(), count);
 
 		USHORT padField;

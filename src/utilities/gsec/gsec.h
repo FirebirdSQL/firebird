@@ -27,6 +27,7 @@
 #include "firebird/Interface.h"
 #include "../common/ThreadData.h"
 #include "../jrd/constants.h"
+#include "firebird/impl/msg_helper.h"
 
 inline constexpr USHORT GSEC_MSG_FAC = FB_IMPL_MSG_FACILITY_GSEC;
 inline constexpr int MSG_LENGTH = 128;

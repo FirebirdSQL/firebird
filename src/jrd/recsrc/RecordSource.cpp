@@ -257,10 +257,13 @@ void RecordSource::printLegacyInversion(thread_db* tdbb, const InversionNode* in
 
 	for (const auto& line : planLines)
 	{
-		if (plan.hasData())
-			plan += ", ";
+		if (line.text.hasData())
+		{
+			if (plan.hasData())
+				plan += ", ";
 
-		plan += line.text;
+			plan += line.text;
+		}
 	}
 }
 

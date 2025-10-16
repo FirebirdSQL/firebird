@@ -124,8 +124,8 @@ const ParametersSet connectParam =
 };
 
 
-const SLONG DUMMY_INTERVAL		= 60;	// seconds
-const int ATTACH_FAILURE_SPACE	= 16 * 1024;	// bytes
+constexpr SLONG DUMMY_INTERVAL		= 60;	// seconds
+constexpr int ATTACH_FAILURE_SPACE	= 16 * 1024;	// bytes
 
 
 void REMOTE_cleanup_transaction( Rtr* transaction)
@@ -172,9 +172,9 @@ void REMOTE_cleanup_transaction( Rtr* transaction)
 }
 
 
-USHORT REMOTE_compute_batch_size(rem_port* port,
+USHORT REMOTE_compute_batch_size(const rem_port* port,
 								 USHORT buffer_used, P_OP op_code,
-								 const rem_fmt* format)
+								 const rem_fmt* format) noexcept
 {
 /**************************************
  *
@@ -231,9 +231,9 @@ USHORT REMOTE_compute_batch_size(rem_port* port,
 #endif
 
 	const ULONG row_size = op_overhead +
-		(port->port_flags & PORT_symmetric) ?
-			ROUNDUP(format->fmt_length, 4) : 	// Same architecture connection
-			ROUNDUP(format->fmt_net_length, 4);	// Using XDR for data transfer
+		((port->port_flags & PORT_symmetric) ?
+			ROUNDUP(format->fmt_length, 4) : 		// Same architecture connection
+			ROUNDUP(format->fmt_net_length, 4));	// Using XDR for data transfer
 
 	ULONG result = (port->port_protocol >= PROTOCOL_VERSION13) ?
 		MAX_ROWS_PER_BATCH : (MAX_PACKETS_PER_BATCH * port->port_buff_size - buffer_used) / row_size;
@@ -309,7 +309,7 @@ Rrq* REMOTE_find_request(Rrq* request, USHORT level)
 }
 
 
-void REMOTE_free_packet( rem_port* port, PACKET * packet, bool partial)
+void REMOTE_free_packet(rem_port* port, PACKET* packet, bool partial)
 {
 /**************************************
  *
@@ -416,7 +416,7 @@ rem_str* REMOTE_make_string(const SCHAR* input)
 }
 
 
-void REMOTE_release_messages( RMessage* messages)
+void REMOTE_release_messages(RMessage* messages) noexcept
 {
 /**************************************
  *
@@ -446,7 +446,7 @@ void REMOTE_release_messages( RMessage* messages)
 }
 
 
-void REMOTE_release_request( Rrq* request)
+void REMOTE_release_request(Rrq* request) noexcept
 {
 /**************************************
  *
@@ -501,7 +501,7 @@ void REMOTE_release_request( Rrq* request)
 }
 
 
-void REMOTE_reset_request( Rrq* request, RMessage* active_message)
+void REMOTE_reset_request(Rrq* request, const RMessage* active_message)
 {
 /**************************************
  *
@@ -537,13 +537,11 @@ void REMOTE_reset_request( Rrq* request, RMessage* active_message)
 	}
 
 	// Initialize the request status to FB_SUCCESS
-
-	//request->rrq_status_vector[1] = 0;
 	request->rrqStatus.clear();
 }
 
 
-void REMOTE_reset_statement( Rsr* statement)
+void REMOTE_reset_statement(Rsr* statement) noexcept
 {
 /**************************************
  *
@@ -613,7 +611,7 @@ RefPtr<const Config> rem_port::getPortConfig()
 	return port_config.hasData() ? port_config : Config::getDefaultConfig();
 }
 
-void rem_port::unlinkParent()
+void rem_port::unlinkParent() noexcept
 {
 	if (this->port_parent == NULL)
 		return;
@@ -647,7 +645,7 @@ void rem_port::unlinkParent()
 	this->port_parent = NULL;
 }
 
-bool rem_port::accept(p_cnct* cnct)
+bool rem_port::accept(const p_cnct* cnct)
 {
 	return (*this->port_accept)(this, cnct);
 }
@@ -984,7 +982,7 @@ Rbl* Rtr::createInlineBlob()
 	return blb;
 };
 
-void Rtr::setupInlineBlob(P_INLINE_BLOB* p_blob)
+void Rtr::setupInlineBlob(const P_INLINE_BLOB* p_blob)
 {
 	fb_assert(p_blob->p_tran_id == this->rtr_id);
 	fb_assert(rtr_inline_blob);
@@ -1004,7 +1002,7 @@ void Rtr::setupInlineBlob(P_INLINE_BLOB* p_blob)
 	}
 
 	blb->rbl_blob_id = p_blob->p_blob_id;
-	if (Rbl* old = rtr_blobs.locate(blb->rbl_blob_id))
+	if (const Rbl* old = rtr_blobs.locate(blb->rbl_blob_id))
 	{
 		// Blob with the same blob id already exists. It could be in use, or it
 		// could be opened by user explicitly with custom BPB - thus delete new one.
@@ -1051,16 +1049,16 @@ string rem_port::getRemoteId() const
 	return id;
 }
 
-LegacyPlugin REMOTE_legacy_auth(const char* nm, int p)
+LegacyPlugin REMOTE_legacy_auth(const char* nm, int p) noexcept
 {
-	const char* legacyTrusted = "WIN_SSPI";
+	constexpr const char* legacyTrusted = "WIN_SSPI";
 	if (fb_utils::stricmp(legacyTrusted, nm) == 0 &&
 		(p == PROTOCOL_VERSION11 || p == PROTOCOL_VERSION12))
 	{
 		return PLUGIN_TRUSTED;
 	}
 
-	const char* legacyAuth = "LEGACY_AUTH";
+	constexpr const char* legacyAuth = "LEGACY_AUTH";
 	if (fb_utils::stricmp(legacyAuth, nm) == 0 && p < PROTOCOL_VERSION13)
 	{
 		return PLUGIN_LEGACY;
@@ -1184,7 +1182,7 @@ void ClntAuthBlock::resetClnt(const CSTRING* listStr)
 	plugins.set(final.c_str());
 }
 
-RefPtr<const Config>* ClntAuthBlock::getConfig()
+RefPtr<const Config>* ClntAuthBlock::getConfig() noexcept
 {
 	return clntConfig.hasData() ? &clntConfig : NULL;
 }
@@ -1213,7 +1211,7 @@ RefPtr<const Config> REMOTE_get_config(const PathName* dbName,
 	return config;
 }
 
-void REMOTE_check_response(IStatus* warning, Rdb* rdb, PACKET* packet, bool checkKeys)
+void REMOTE_check_response(IStatus* warning, Rdb* rdb, const PACKET* packet, bool checkKeys)
 {
 /**************************************
  *
@@ -1229,7 +1227,7 @@ void REMOTE_check_response(IStatus* warning, Rdb* rdb, PACKET* packet, bool chec
 	rdb->rdb_port->checkResponse(warning, packet, checkKeys);
 }
 
-void rem_port::checkResponse(IStatus* warning, PACKET* packet, bool checkKeys)
+void rem_port::checkResponse(IStatus* warning, const PACKET* packet, bool checkKeys)
 {
 /**************************************
  *
@@ -1244,7 +1242,7 @@ void rem_port::checkResponse(IStatus* warning, PACKET* packet, bool checkKeys)
 
 	// Get status vector
 
-	const ISC_STATUS success_vector[] = {isc_arg_gds, FB_SUCCESS, isc_arg_end};
+	constexpr ISC_STATUS success_vector[] = {isc_arg_gds, FB_SUCCESS, isc_arg_end};
 	const ISC_STATUS *vector = success_vector;
 	if (packet->p_resp.p_resp_status_vector)
 	{
@@ -1269,7 +1267,7 @@ void rem_port::checkResponse(IStatus* warning, PACKET* packet, bool checkKeys)
 
 		case isc_arg_cstring:
 			newVector.push(*vector++);
-			// fall down
+			[[fallthrough]];
 
 		default:
 			newVector.push(*vector++);
@@ -1291,16 +1289,16 @@ void rem_port::checkResponse(IStatus* warning, PACKET* packet, bool checkKeys)
 	}
 
 	if ((packet->p_operation == op_response || packet->p_operation == op_response_piggyback) &&
-		!vector[1])
+		!pktErr)
 	{
 		Arg::StatusVector s(vector);
 		s.copyTo(warning);
 		return;
 	}
 
-	HANDSHAKE_DEBUG(fprintf(stderr, "Raising exception %d in checkResponse\n", vector[1] ? vector[1] : isc_net_read_err));
+	HANDSHAKE_DEBUG(fprintf(stderr, "Raising exception %d in checkResponse\n", pktErr ? pktErr : isc_net_read_err));
 
-	if (!vector[1])
+	if (!pktErr)
 	{
 		Arg::Gds(isc_net_read_err).raise();
 	}
@@ -1451,7 +1449,7 @@ bool rem_port::tryKeyType(const KnownServerKey& srvKey, InternalCryptKey* cryptK
 	return false;
 }
 
-const char* SrvAuthBlock::getLogin()
+const char* SrvAuthBlock::getLogin() noexcept
 {
 	return userName.nullStr();
 }
@@ -1823,7 +1821,7 @@ const void* InternalCryptKey::getDecryptKey(unsigned* length)
 }
 
 
-signed char wcCompatible[3][3] = {
+const signed char wcCompatible[3][3] = {
 /*				 DISABLED				ENABLED					REQUIRED */
 /* DISABLED */	{WIRECRYPT_DISABLED,	WIRECRYPT_DISABLED,		WIRECRYPT_BROKEN},
 /* ENABLED  */	{WIRECRYPT_DISABLED,	WIRECRYPT_ENABLED,		WIRECRYPT_REQUIRED},

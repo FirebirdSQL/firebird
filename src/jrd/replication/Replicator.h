@@ -36,7 +36,7 @@
 
 namespace Replication
 {
-	class Replicator :
+	class Replicator final :
 		public Firebird::StdPlugin<Firebird::IReplicatedSessionImpl<Replicator, Firebird::CheckStatusWrapper> >
 	{
 		typedef Firebird::ObjectsArray<Firebird::string> NameCache;
@@ -44,7 +44,7 @@ namespace Replication
 
 		struct BatchBlock
 		{
-			Block header;
+			Block header{};
 			Firebird::UCharBuffer* buffer;
 			NameCache atoms;
 			ULONG lastAtom;
@@ -54,10 +54,9 @@ namespace Replication
 				: buffer(NULL), atoms(pool),
 				  lastAtom(MAX_ULONG), flushes(0)
 			{
-				memset(&header, 0, sizeof(Block));
 			}
 
-			ULONG getSize() const
+			ULONG getSize() const noexcept
 			{
 				return (ULONG) buffer->getCount();
 			}
@@ -138,7 +137,7 @@ namespace Replication
 			}
 		};
 
-		class Transaction :
+		class Transaction final :
 			public Firebird::AutoIface<Firebird::IReplicatedTransactionImpl<Transaction, Firebird::CheckStatusWrapper> >
 		{
 		public:
@@ -146,12 +145,12 @@ namespace Replication
 				: m_replicator(replicator), m_transaction(trans), m_data(replicator->getPool())
 			{}
 
-			BatchBlock& getData()
+			BatchBlock& getData() noexcept
 			{
 				return m_data;
 			}
 
-			Firebird::ITransaction* getInterface()
+			Firebird::ITransaction* getInterface() noexcept
 			{
 				return m_transaction.getPtr();
 			}
@@ -259,7 +258,7 @@ namespace Replication
 		struct GeneratorValue
 		{
 			Jrd::QualifiedName name;
-			SINT64 value;
+			SINT64 value = 0;
 		};
 
 		typedef Firebird::Array<GeneratorValue> GeneratorCache;

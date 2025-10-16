@@ -323,6 +323,8 @@
     <ClInclude Include="..\..\..\src\jrd\ods.h" />
     <ClInclude Include="..\..\..\src\jrd\ods_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\optimizer\Optimizer.h" />
+    <ClInclude Include="..\..\..\src\jrd\os\pio.h" />
+    <ClInclude Include="..\..\..\src\jrd\os\pio_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\pag.h" />
     <ClInclude Include="..\..\..\src\jrd\PageToBufferMap.h" />
     <ClInclude Include="..\..\..\src\jrd\pag_proto.h" />

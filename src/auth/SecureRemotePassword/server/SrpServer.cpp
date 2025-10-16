@@ -45,7 +45,7 @@ namespace {
 
 GlobalPtr<PluginDatabases> instances;
 
-const unsigned int SZ_LOGIN = 63;
+constexpr unsigned int SZ_LOGIN = 63;
 
 struct Metadata
 {
@@ -81,8 +81,8 @@ public:
 	{ }
 
 	// IServer implementation
-	int authenticate(CheckStatusWrapper* status, IServerBlock* sBlock, IWriter* writerInterface);
-	void setDbCryptCallback(CheckStatusWrapper* status, ICryptKeyCallback* callback);
+	int authenticate(CheckStatusWrapper* status, IServerBlock* sBlock, IWriter* writerInterface) override;
+	void setDbCryptCallback(CheckStatusWrapper* status, ICryptKeyCallback* callback) override;
 
 	~SrpServer()
 	{
@@ -106,7 +106,7 @@ protected:
 };
 
 
-class SecurityDatabase : public VSecDb
+class SecurityDatabase final : public VSecDb
 {
 public:
 	// VSecDb implementation
@@ -183,7 +183,7 @@ public:
 			check(&status);
 			HANDSHAKE_DEBUG(fprintf(stderr, "Srv SRP: attached sec db %s\n", instance->secureDbName));
 
-			const UCHAR tpb[] =
+			constexpr UCHAR tpb[] =
 			{
 				isc_tpb_version1,
 				isc_tpb_read,

@@ -568,7 +568,7 @@ namespace
 						if (!attachment->isGbak() || !(attachment->att_flags & ATT_gbak_restore_has_schema))
 						{
 							storeGrant(tdbb, userName.c_str(), obj_user,
-								QualifiedName(getDllSecurityName(obj), PUBLIC_SCHEMA),
+								QualifiedName(getDdlSecurityName(obj), PUBLIC_SCHEMA),
 								obj, ALL_DDL_PRIVILEGES, true);
 
 							addSecurityClass(tdbb, SCL_getDdlSecurityClassName(obj, PUBLIC_SCHEMA));
@@ -579,7 +579,7 @@ namespace
 					else
 					{
 						storeGrant(tdbb, userName.c_str(), obj_user,
-							QualifiedName(getDllSecurityName(obj)),
+							QualifiedName(getDdlSecurityName(obj)),
 							obj, ALL_DDL_PRIVILEGES, false);
 
 						addSecurityClass(tdbb, SCL_getDdlSecurityClassName(obj, {}));

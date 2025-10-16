@@ -1206,7 +1206,7 @@ static bool_t xdr_bytes(RemoteXdr* xdrs, void* bytes, ULONG size)
 }
 
 
-ULONG xdr_protocol_overhead(P_OP op)
+ULONG xdr_protocol_overhead(P_OP op) noexcept
 {
 /**************************************
  *
@@ -1310,7 +1310,7 @@ static bool alloc_cstring(RemoteXdr* xdrs, CSTRING* cstring)
 }
 
 
-void CSTRING::free(RemoteXdr* xdrs)
+void CSTRING::free(RemoteXdr* xdrs) noexcept
 {
 /**************************************
  *
@@ -1335,7 +1335,7 @@ void CSTRING::free(RemoteXdr* xdrs)
 }
 
 
-static bool xdr_is_client(RemoteXdr* xdrs) noexcept
+static bool xdr_is_client(const RemoteXdr* xdrs) noexcept
 {
 	const rem_port* port = xdrs->x_public;
 	return !(port->port_flags & PORT_server);
@@ -1577,7 +1577,7 @@ static bool_t xdr_message( RemoteXdr* xdrs, RMessage* message, const rem_fmt* fo
 	if (xdrs->x_op == XDR_FREE)
 		return TRUE;
 
-	rem_port* port = xdrs->x_public;
+	const rem_port* port = xdrs->x_public;
 
 	if (!message || !format)
 		return FALSE;

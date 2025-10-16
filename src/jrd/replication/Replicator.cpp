@@ -88,7 +88,7 @@ void Replicator::storeBlob(Transaction* transaction, ISC_QUAD blobId)
 		localStatus.raise();
 
 	UCharBuffer buffer;
-	const auto bufferLength = MAX_USHORT;
+	constexpr FB_SIZE_T bufferLength = MAX_USHORT;
 	auto data = buffer.getBuffer(bufferLength);
 
 	auto& txnData = transaction->getData();
@@ -311,10 +311,10 @@ void Replicator::insertRecord(CheckStatusWrapper* status,
 			IReplicatedField* field = record->getField(id);
 			if (field != nullptr)
 			{
-				auto type = field->getType();
+				const auto type = field->getType();
 				if (type == SQL_ARRAY || type == SQL_BLOB)
 				{
-					const auto blobId = (ISC_QUAD*) field->getData();
+					const auto* blobId = (ISC_QUAD*) field->getData();
 
 					if (blobId && !BlobWrapper::blobIsNull(*blobId))
 						storeBlob(transaction, *blobId);
@@ -358,10 +358,10 @@ void Replicator::updateRecord(CheckStatusWrapper* status,
 			IReplicatedField* field = newRecord->getField(id);
 			if (field != nullptr)
 			{
-				auto type = field->getType();
+				const auto type = field->getType();
 				if (type == SQL_ARRAY || type == SQL_BLOB)
 				{
-					const auto blobId = (ISC_QUAD*) field->getData();
+					const auto* blobId = (ISC_QUAD*) field->getData();
 
 					if (blobId && !BlobWrapper::blobIsNull(*blobId))
 						storeBlob(transaction, *blobId);

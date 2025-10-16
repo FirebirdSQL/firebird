@@ -94,7 +94,7 @@ namespace Replication
 				m_changeLog->cleanup();
 		}
 
-		const Replication::Config* getConfig() const
+		const Replication::Config* getConfig() const noexcept
 		{
 			return m_config;
 		}

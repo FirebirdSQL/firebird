@@ -60,12 +60,12 @@ class PageControl : public pool_alloc<type_pgc>
 // TEMP_PAGE_SPACE and page spaces above TEMP_PAGE_SPACE contain temporary pages
 // TRANS_PAGE_SPACE is pseudo space to store transaction numbers in precedence stack
 // INVALID_PAGE_SPACE is to ???
-const USHORT INVALID_PAGE_SPACE	= 0;
-const USHORT DB_PAGE_SPACE		= 1;
-const USHORT TRANS_PAGE_SPACE	= 255;
-const USHORT TEMP_PAGE_SPACE	= 256;
+inline constexpr USHORT INVALID_PAGE_SPACE	= 0;
+inline constexpr USHORT DB_PAGE_SPACE		= 1;
+inline constexpr USHORT TRANS_PAGE_SPACE	= 255;
+inline constexpr USHORT TEMP_PAGE_SPACE	= 256;
 
-const USHORT PAGES_IN_EXTENT	= 8;
+inline constexpr USHORT PAGES_IN_EXTENT	= 8;
 
 class jrd_file;
 class Database;
@@ -98,17 +98,17 @@ public:
 
 	jrd_file*	file;
 
-	static inline bool isTemporary(USHORT aPageSpaceID)
+	static inline bool isTemporary(USHORT aPageSpaceID) noexcept
 	{
 		return (aPageSpaceID >= TEMP_PAGE_SPACE);
 	}
 
-	inline bool isTemporary() const
+	inline bool isTemporary() const noexcept
 	{
 		return isTemporary(pageSpaceID);
 	}
 
-	static inline SLONG generate(const PageSpace* Item)
+	static inline SLONG generate(const PageSpace* Item) noexcept
 	{
 		return Item->pageSpaceID;
 	}
@@ -130,14 +130,14 @@ public:
 	static ULONG usedPages(const Database* dbb);
 
 	// extend page space
-	bool extend(thread_db*, const ULONG, const bool);
+	ULONG extend(thread_db* tdbb, ULONG pageNum, bool forceSize);
 
 	// get SCN's page number
-	ULONG getSCNPageNum(ULONG sequence);
+	ULONG getSCNPageNum(ULONG sequence) noexcept;
 	static ULONG getSCNPageNum(const Database* dbb, ULONG sequence);
 
 	// is pagespace on raw device
-	bool onRawDevice() const;
+	bool onRawDevice() const noexcept;
 
 private:
 	ULONG	maxPageNumber;
@@ -202,7 +202,7 @@ class PageNumber
 {
 public:
 	// CVC: To be completely in sync, the second param would have to be TraNumber
-	inline PageNumber(const USHORT aPageSpace, const ULONG aPageNum)
+	inline PageNumber(const USHORT aPageSpace, const ULONG aPageNum) noexcept
 		: pageNum(aPageNum), pageSpaceID(aPageSpace)
 	{
 		// Some asserts are commented cause 0 was also used as 'does not matter' pagespace
@@ -210,40 +210,40 @@ public:
 	}
 
 	// Required to be able to keep it in Firebird::Stack
-	inline PageNumber()
+	inline PageNumber() noexcept
 		: pageNum(0), pageSpaceID(INVALID_PAGE_SPACE)
 	{ }
 
-	inline PageNumber(const PageNumber& from)
+	inline PageNumber(const PageNumber& from) noexcept
 		: pageNum(from.pageNum), pageSpaceID(from.pageSpaceID)
 	{ }
 
-	inline ULONG getPageNum() const
+	inline ULONG getPageNum() const noexcept
 	{
 		// fb_assert(pageSpaceID != INVALID_PAGE_SPACE);
 		return pageNum;
 	}
 
-	inline USHORT getPageSpaceID() const
+	inline USHORT getPageSpaceID() const noexcept
 	{
 		fb_assert(pageSpaceID != INVALID_PAGE_SPACE);
 		return pageSpaceID;
 	}
 
-	inline USHORT setPageSpaceID(const USHORT aPageSpaceID)
+	inline USHORT setPageSpaceID(const USHORT aPageSpaceID) noexcept
 	{
 		fb_assert(aPageSpaceID != INVALID_PAGE_SPACE);
 		pageSpaceID = aPageSpaceID;
 		return pageSpaceID;
 	}
 
-	inline bool isTemporary() const
+	inline bool isTemporary() const noexcept
 	{
 		fb_assert(pageSpaceID != INVALID_PAGE_SPACE);
 		return PageSpace::isTemporary(pageSpaceID);
 	}
 
-	inline static USHORT getLockLen()
+	static inline constexpr USHORT getLockLen() noexcept
 	{
 		return 2 * sizeof(ULONG);
 	}
@@ -259,7 +259,7 @@ public:
 		memcpy(str, &val, sizeof(ULONG));
 	}
 
-	inline PageNumber& operator=(const PageNumber& from)
+	inline PageNumber& operator=(const PageNumber& from) noexcept
 	{
 		pageSpaceID = from.pageSpaceID;
 		// fb_assert(pageSpaceID != INVALID_PAGE_SPACE);
@@ -267,24 +267,24 @@ public:
 		return *this;
 	}
 
-	inline ULONG operator=(const ULONG from)
+	inline ULONG operator=(const ULONG from) noexcept
 	{
 		// fb_assert(pageSpaceID != INVALID_PAGE_SPACE);
 		pageNum	= from;
 		return pageNum;
 	}
 
-	inline bool operator==(const PageNumber& other) const
+	inline bool operator==(const PageNumber& other) const noexcept
 	{
 		return (pageNum == other.pageNum) && (pageSpaceID == other.pageSpaceID);
 	}
 
-	inline bool operator!=(const PageNumber& other) const
+	inline bool operator!=(const PageNumber& other) const noexcept
 	{
 		return !(*this == other);
 	}
 
-	inline bool operator>(const PageNumber& other) const
+	inline bool operator>(const PageNumber& other) const noexcept
 	{
 		fb_assert(pageSpaceID != INVALID_PAGE_SPACE);
 		fb_assert(other.pageSpaceID != INVALID_PAGE_SPACE);
@@ -292,7 +292,7 @@ public:
 			((pageSpaceID == other.pageSpaceID) && (pageNum > other.pageNum));
 	}
 
-	inline bool operator>=(const PageNumber& other) const
+	inline bool operator>=(const PageNumber& other) const noexcept
 	{
 		fb_assert(pageSpaceID != INVALID_PAGE_SPACE);
 		fb_assert(other.pageSpaceID != INVALID_PAGE_SPACE);
@@ -300,12 +300,12 @@ public:
 			((pageSpaceID == other.pageSpaceID) && (pageNum >= other.pageNum));
 	}
 
-	inline bool operator<(const PageNumber& other) const
+	inline bool operator<(const PageNumber& other) const noexcept
 	{
 		return !(*this >= other);
 	}
 
-	inline bool operator<=(const PageNumber& other) const
+	inline bool operator<=(const PageNumber& other) const noexcept
 	{
 		return !(*this > other);
 	}

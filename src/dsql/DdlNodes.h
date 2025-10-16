@@ -2072,6 +2072,7 @@ public:
 	NestConst<NameNumber> outputFilter;
 	Firebird::string entryPoint;
 	Firebird::string moduleName;
+	bool createIfNotExistsOnly = false;
 };
 
 

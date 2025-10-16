@@ -702,6 +702,9 @@ using namespace Firebird;
 // tokens added for Firebird 6.0
 
 %token <metaNamePtr> ANY_VALUE
+%token <metaNamePtr> BIN_AND_AGG
+%token <metaNamePtr> BIN_OR_AGG
+%token <metaNamePtr> BIN_XOR_AGG
 %token <metaNamePtr> BTRIM
 %token <metaNamePtr> CALL
 %token <metaNamePtr> CURRENT_SCHEMA
@@ -824,6 +827,7 @@ using namespace Firebird;
 	Jrd::CreateAlterExceptionNode* createAlterExceptionNode;
 	Jrd::CreateAlterSequenceNode* createAlterSequenceNode;
 	Jrd::CreateAlterSchemaNode* createAlterSchemaNode;
+	Jrd::CreateFilterNode* createFilterNode;
 	Jrd::CreateShadowNode* createShadowNode;
 	Firebird::Array<Jrd::CreateAlterPackageNode::Item>* packageItems;
 	Jrd::ExceptionArray* exceptionArray;
@@ -1054,7 +1058,7 @@ grant0($node)
 	| ddl_privileges(NOTRIAL(&$node->privileges)) schema_object on_schema_opt
 			TO non_role_grantee_list(NOTRIAL(&$node->users)) grant_option granted_by
 		{
-			$node->object = newNode<GranteeClause>($2, QualifiedName(getDllSecurityName($2), ($3 ? *$3 : "")));
+			$node->object = newNode<GranteeClause>($2, QualifiedName(getDdlSecurityName($2), ($3 ? *$3 : "")));
 			$node->grantAdminOption = $6;
 			$node->grantor = $7;
 			$node->isDdl = true;
@@ -1070,7 +1074,7 @@ grant0($node)
 	| db_ddl_privileges(NOTRIAL(&$node->privileges)) DATABASE
 			TO non_role_grantee_list(NOTRIAL(&$node->users)) grant_option granted_by
 		{
-			$node->object = newNode<GranteeClause>(obj_database, QualifiedName(getDllSecurityName(obj_database)));
+			$node->object = newNode<GranteeClause>(obj_database, QualifiedName(getDdlSecurityName(obj_database)));
 			$node->grantAdminOption = $5;
 			$node->grantor = $6;
 			$node->isDdl = true;
@@ -1107,11 +1111,11 @@ schema_object
 %type <granteeClause> schemaless_object
 schemaless_object
 	: ROLE
-		{ $$ = newNode<GranteeClause>(obj_roles, QualifiedName(getDllSecurityName(obj_roles))); }
+		{ $$ = newNode<GranteeClause>(obj_roles, QualifiedName(getDdlSecurityName(obj_roles))); }
 	| FILTER
-		{ $$ = newNode<GranteeClause>(obj_filters, QualifiedName(getDllSecurityName(obj_filters))); }
+		{ $$ = newNode<GranteeClause>(obj_filters, QualifiedName(getDdlSecurityName(obj_filters))); }
 	| SCHEMA
-		{ $$ = newNode<GranteeClause>(obj_schemas, QualifiedName(getDllSecurityName(obj_schemas))); }
+		{ $$ = newNode<GranteeClause>(obj_schemas, QualifiedName(getDdlSecurityName(obj_schemas))); }
 	;
 
 table_noise
@@ -1348,7 +1352,7 @@ revoke0($node)
 	| rev_grant_option ddl_privileges(NOTRIAL(&$node->privileges)) schema_object on_schema_opt
 			FROM non_role_grantee_list(NOTRIAL(&$node->users)) granted_by
 		{
-			$node->object = newNode<GranteeClause>($3, QualifiedName(getDllSecurityName($3), ($4 ? *$4 : "")));
+			$node->object = newNode<GranteeClause>($3, QualifiedName(getDdlSecurityName($3), ($4 ? *$4 : "")));
 			$node->grantAdminOption = $1;
 			$node->grantor = $7;
 			$node->isDdl = true;
@@ -1364,7 +1368,7 @@ revoke0($node)
 	| rev_grant_option db_ddl_privileges(NOTRIAL(&$node->privileges)) DATABASE
 			FROM non_role_grantee_list(NOTRIAL(&$node->users)) granted_by
 		{
-			$node->object = newNode<GranteeClause>(obj_database, QualifiedName(getDllSecurityName(obj_database)));
+			$node->object = newNode<GranteeClause>(obj_database, QualifiedName(getDdlSecurityName(obj_database)));
 			$node->grantAdminOption = $1;
 			$node->grantor = $6;
 			$node->isDdl = true;
@@ -1471,7 +1475,12 @@ declare
 
 %type <ddlNode> declare_clause
 declare_clause
-	: FILTER filter_decl_clause				{ $$ = $2; }
+	: FILTER if_not_exists_opt filter_decl_clause
+		{
+			const auto node = $3;
+			node->createIfNotExistsOnly = $2;
+			$$ = node;
+		}
 	| EXTERNAL FUNCTION if_not_exists_opt udf_decl_clause
 		{
 			const auto node = $4;
@@ -1572,7 +1581,7 @@ return_mechanism
 	;
 
 
-%type <ddlNode> filter_decl_clause
+%type <createFilterNode> filter_decl_clause
 filter_decl_clause
 	: symbol_filter_name
 		INPUT_TYPE blob_filter_subtype
@@ -4444,14 +4453,19 @@ alter_ops($relationNode)
 	| alter_ops ',' alter_op($relationNode)
 	;
 
+col_noise
+	:
+	| COLUMN
+	;
+
 %type alter_op(<relationNode>)
 alter_op($relationNode)
-	: DROP if_exists_opt symbol_column_name drop_behaviour
+	: DROP col_noise if_exists_opt symbol_column_name drop_behaviour
 		{
 			RelationNode::DropColumnClause* clause = newNode<RelationNode::DropColumnClause>();
-			clause->silent = $2;
-			clause->name = *$3;
-			clause->cascade = $4;
+			clause->silent = $3;
+			clause->name = *$4;
+			clause->cascade = $5;
 			$relationNode->clauses.add(clause);
 		}
 	| DROP CONSTRAINT if_exists_opt symbol_constraint_name
@@ -4461,10 +4475,10 @@ alter_op($relationNode)
 			clause->name = *$4;
 			$relationNode->clauses.add(clause);
 		}
-	| ADD if_not_exists_opt column_def($relationNode)
+	| ADD col_noise if_not_exists_opt column_def($relationNode)
 		{
-			const auto node = $3;
-			node->createIfNotExistsOnly = $2;
+			const auto node = $4;
+			node->createIfNotExistsOnly = $3;
 		}
 	| ADD table_constraint($relationNode)
 	| ADD CONSTRAINT if_not_exists_opt symbol_constraint_name table_constraint($relationNode)
@@ -8574,6 +8588,14 @@ aggregate_function_prefix
 		{ $$ = newNode<RegrAggNode>(RegrAggNode::TYPE_REGR_SYY, $3, $5); }
 	| ANY_VALUE '(' distinct_noise value ')'
 		{ $$ = newNode<AnyValueAggNode>($4); }
+	| BIN_AND_AGG '(' value ')'
+		{ $$ = newNode<BinAggNode>(BinAggNode::TYPE_BIN_AND, $3); }
+	| BIN_OR_AGG '(' value ')'
+		{ $$ = newNode<BinAggNode>(BinAggNode::TYPE_BIN_OR, $3); }
+	| BIN_XOR_AGG '(' all_noise value ')'
+		{ $$ = newNode<BinAggNode>(BinAggNode::TYPE_BIN_XOR, $4); }
+	| BIN_XOR_AGG '(' DISTINCT value ')'
+		{ $$ = newNode<BinAggNode>(BinAggNode::TYPE_BIN_XOR_DISTINCT, $4); }
 	;
 
 %type <aggNode> listagg_set_function
@@ -10013,6 +10035,9 @@ non_reserved_word
 	| UNICODE_VAL
 	// added in FB 6.0
 	| ANY_VALUE
+	| BIN_AND_AGG
+	| BIN_OR_AGG
+	| BIN_XOR_AGG
 	| DOWNTO
 	| FORMAT
 	| OWNER

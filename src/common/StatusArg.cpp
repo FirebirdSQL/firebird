@@ -325,7 +325,7 @@ void StatusVector::ImplStatusVector::shiftLeft(const MetaString& text) noexcept
 	shiftLeft(Str(text));
 }
 
-void StatusVector::raise() const
+[[noreturn]] void StatusVector::raise() const
 {
 	if (hasData())
 	{

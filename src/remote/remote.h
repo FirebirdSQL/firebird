@@ -159,7 +159,7 @@ extern const ParametersSet dpbParam, spbParam, connectParam;
 
 struct Svc : public Firebird::GlobalStorage
 {
-	ServService					svc_iface;		// service interface
+	ServService		svc_iface;				// service interface
 	Svc() :
 		svc_iface(NULL)
 	{ }
@@ -342,7 +342,7 @@ public:
 	static constexpr ISC_STATUS badHandle() noexcept { return isc_bad_trans_handle; }
 
 	Rbl* createInlineBlob();
-	void setupInlineBlob(P_INLINE_BLOB* p_blob);
+	void setupInlineBlob(const P_INLINE_BLOB* p_blob);
 };
 
 
@@ -1155,7 +1155,7 @@ public:
 	Firebird::PathName getPluginName();
 	void tryNewKeys(rem_port*);
 	void releaseKeys(unsigned from);
-	Firebird::RefPtr<const Firebird::Config>* getConfig();
+	Firebird::RefPtr<const Firebird::Config>* getConfig() noexcept;
 	void createCryptCallback(Firebird::ICryptKeyCallback** callback);
 
 	// Firebird::IClientBlock implementation
@@ -1229,7 +1229,7 @@ public:
 	bool hasDataForPlugin();
 
 	// Firebird::IServerBlock implementation
-	const char* getLogin();
+	const char* getLogin() noexcept;
 	const unsigned char* getData(unsigned int* length);
 	void putData(Firebird::CheckStatusWrapper* status, unsigned int length, const void* data);
 	Firebird::ICryptKey* newKey(Firebird::CheckStatusWrapper* status);
@@ -1531,7 +1531,7 @@ public:
 	void initCompression();
 	static bool checkCompression();
 	void linkParent(rem_port* const parent);
-	void unlinkParent();
+	void unlinkParent() noexcept;
 	Firebird::RefPtr<const Firebird::Config> getPortConfig();
 	const Firebird::RefPtr<const Firebird::Config>& getPortConfig() const;
 	void versionInfo(Firebird::string& version) const;
@@ -1621,9 +1621,7 @@ public:
 	}
 
 public:
-	// TMN: Beginning of C++ port
-	// TMN: ugly, but at least a start
-	bool	accept(p_cnct* cnct);
+	bool	accept(const p_cnct* cnct);
 	void	disconnect();
 	void	force_close();
 	rem_port*	receive(PACKET* pckt);
@@ -1743,7 +1741,7 @@ public:
 	const Firebird::UCharBuffer* findSpecificData(const Firebird::PathName& type, const Firebird::PathName& plugin);
 	bool tryNewKey(InternalCryptKey* cryptKey);
 
-	void checkResponse(Firebird::IStatus* warning, PACKET* packet, bool checkKeys = false);
+	void checkResponse(Firebird::IStatus* warning, const PACKET* packet, bool checkKeys = false);
 
 private:
 	bool tryKeyType(const KnownServerKey& srvKey, InternalCryptKey* cryptKey);

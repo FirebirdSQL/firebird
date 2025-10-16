@@ -76,7 +76,7 @@ namespace Firebird
 		}
 	};
 
-	const FB_SIZE_T DEFAULT_HASH_SIZE = 97;			// largest prime number < 100
+	inline constexpr FB_SIZE_T DEFAULT_HASH_SIZE = 97;	// largest prime number < 100
 
 	template <typename C,
 			  FB_SIZE_T HASHSIZE = DEFAULT_HASH_SIZE,
@@ -94,14 +94,14 @@ namespace Firebird
 			Entry* nextElement;
 
 		public:
-			Entry() : previousElement(NULL) { }
+			Entry() noexcept : previousElement(NULL), nextElement(NULL) { }
 
 			virtual ~Entry()
 			{
 				unLink();
 			}
 
-			void link(Entry** where)
+			void link(Entry** where) noexcept
 			{
 				unLink();
 
@@ -119,7 +119,7 @@ namespace Firebird
 				*previousElement = this;
 			}
 
-			void unLink()
+			void unLink() noexcept
 			{
 				// if we are linked
 				if (previousElement)
@@ -136,12 +136,12 @@ namespace Firebird
 				}
 			}
 
-			Entry** nextPtr()
+			Entry** nextPtr() noexcept
 			{
 				return &nextElement;
 			}
 
-			Entry* next() const
+			Entry* next() const noexcept
 			{
 				return nextElement;
 			}
@@ -156,20 +156,13 @@ namespace Firebird
 			virtual C* get() = 0;
 		}; // class Entry
 
-	private:
-		HashTable(const HashTable&);	// not implemented
-
 	public:
-		explicit HashTable(MemoryPool&)
-			: duplicates(false)
+		explicit HashTable(MemoryPool&) noexcept
 		{
-			clean();
 		}
 
-		HashTable()
-			: duplicates(false)
+		HashTable() noexcept
 		{
-			clean();
 		}
 
 		~HashTable()
@@ -177,6 +170,9 @@ namespace Firebird
 			// by default we let hash entries be cleaned by someone else
 			cleanup(NULL);
 		}
+
+		HashTable(const HashTable&) = delete;
+		HashTable& operator= (const HashTable&) = delete;
 
 		typedef void CleanupRoutine(C* toClean);
 		void cleanup(CleanupRoutine* cleanupRoutine)
@@ -193,14 +189,14 @@ namespace Firebird
 			}
 		}
 
-		void enableDuplicates()
+		void enableDuplicates() noexcept
 		{
 			duplicates = true;
 		}
 
 	private:
-		Entry* data[HASHSIZE];
-		bool duplicates;
+		Entry* data[HASHSIZE]{};
+		bool duplicates = false;
 
 		Entry** locate(const K& key, FB_SIZE_T h)
 		{
@@ -219,7 +215,7 @@ namespace Firebird
 
 		Entry** locate(const K& key)
 		{
-			FB_SIZE_T hashValue = F::hash(key, HASHSIZE);
+			const FB_SIZE_T hashValue = F::hash(key, HASHSIZE);
 			fb_assert(hashValue < HASHSIZE);
 			return locate(key, hashValue % HASHSIZE);
 		}
@@ -252,15 +248,6 @@ namespace Firebird
 				return entry->get();
 			}
 			return NULL;
-		}
-
-	private:
-		// disable use of default operator=
-		HashTable& operator= (const HashTable&);
-
-		void clean()
-		{
-			memset(data, 0, sizeof data);
 		}
 
 	public:
@@ -335,9 +322,9 @@ namespace Firebird
 	class InternalHash
 	{
 	public:
-		static unsigned int hash(unsigned int length, const UCHAR* value);
+		static unsigned int hash(unsigned int length, const UCHAR* value) noexcept;
 
-		static unsigned int hash(unsigned int length, const UCHAR* value, unsigned int hashSize)
+		static unsigned int hash(unsigned int length, const UCHAR* value, unsigned int hashSize) noexcept
 		{
 			return hash(length, value) % hashSize;
 		}
@@ -358,8 +345,8 @@ namespace Firebird
 	class WeakHashContext final : public HashContext
 	{
 	public:
-		virtual void update(const void* data, FB_SIZE_T length);
-		virtual void finish(dsc& result);
+		void update(const void* data, FB_SIZE_T length) override;
+		void finish(dsc& result) override;
 
 	private:
 		SINT64 hashNumber = 0;

@@ -51,6 +51,7 @@
   <ItemGroup>
     <ClInclude Include="..\..\..\src\auth\SecureRemotePassword\client\SrpClient.h" />
     <ClInclude Include="..\..\..\src\auth\SecurityDatabase\LegacyClient.h" />
+    <ClInclude Include="..\..\..\src\auth\SecurityDatabase\LegacyHash.h" />
     <ClInclude Include="..\..\..\src\auth\trusted\AuthSspi.h" />
     <ClInclude Include="..\..\..\src\plugins\crypt\arc4\Arc4.h" />
     <ClInclude Include="..\..\..\src\remote\client\BlrFromMessage.h" />

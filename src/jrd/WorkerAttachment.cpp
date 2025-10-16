@@ -45,7 +45,7 @@ using namespace Firebird;
 namespace Jrd {
 
 
-const unsigned WORKER_IDLE_TIMEOUT = 60;	// 1 minute
+constexpr unsigned WORKER_IDLE_TIMEOUT = 60;	// 1 minute
 
 /// class WorkerStableAttachment
 
@@ -440,7 +440,7 @@ bool WorkerAttachment::detachIdle(StableAttachmentPart* sAtt)
 	{	// scope
 		AttSyncLockGuard attGuard(sAtt->getSync(), FB_FUNCTION);
 
-		Attachment* att = sAtt->getHandle();
+		const Attachment* att = sAtt->getHandle();
 		if (!att || att->att_use_count > 0)
 			return false;
 

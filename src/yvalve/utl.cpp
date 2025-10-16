@@ -798,6 +798,43 @@ void UtilInterface::encodeTimeStampTz(CheckStatusWrapper* status, ISC_TIMESTAMP_
 	}
 }
 
+void UtilInterface::convert(Firebird::CheckStatusWrapper* status,
+	unsigned sourceType, unsigned sourceScale, unsigned sourceLength, const void* source,
+	unsigned targetType, unsigned targetScale, unsigned targetLength, void* target)
+{
+	dsc sourceDesc;
+	memset(&sourceDesc, 0, sizeof(sourceDesc));
+	sourceDesc.dsc_dtype = fb_utils::sqlTypeToDscType(sourceType);
+	sourceDesc.dsc_scale = sourceScale;
+	sourceDesc.dsc_length = sourceLength;
+	if (sourceDesc.isText())
+		sourceDesc.setTextType(CS_dynamic);
+	sourceDesc.dsc_address = (UCHAR*) source;
+
+	dsc targetDesc;
+	memset(&targetDesc, 0, sizeof(targetDesc));
+	targetDesc.dsc_dtype = fb_utils::sqlTypeToDscType(targetType);
+	targetDesc.dsc_scale = targetScale;
+	targetDesc.dsc_length = targetLength;
+	if (targetDesc.isText())
+		targetDesc.setTextType(CS_dynamic);
+	targetDesc.dsc_address = static_cast<UCHAR*>(target);
+
+	try
+	{
+		CVT_move(&sourceDesc, &targetDesc, 0,
+			[](const Arg::StatusVector& status)
+			{
+				status.raise();
+			}
+		);
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+	}
+}
+
 ISC_DATE UtilInterface::encodeDate(unsigned year, unsigned month, unsigned day)
 {
 	tm times;

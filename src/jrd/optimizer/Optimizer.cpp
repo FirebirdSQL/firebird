@@ -106,21 +106,21 @@ using namespace Firebird;
 
 namespace
 {
-	inline void SET_DEP_BIT(ULONG* array, const SLONG bit)
+	inline void SET_DEP_BIT(ULONG* array, const SLONG bit) noexcept
 	{
 		array[bit / BITS_PER_LONG] |= (1L << (bit % BITS_PER_LONG));
 	}
 
-	inline bool TEST_DEP_BIT(const ULONG* array, const ULONG bit)
+	inline bool TEST_DEP_BIT(const ULONG* array, const ULONG bit) noexcept
 	{
 		return (array[bit / BITS_PER_LONG] & (1L << (bit % BITS_PER_LONG))) != 0;
 	}
 
-	const int CACHE_PAGES_PER_STREAM			= 15;
+	constexpr int CACHE_PAGES_PER_STREAM = 15;
 
 	// enumeration of sort datatypes
 
-	static const UCHAR sort_dtypes[] =
+	static constexpr UCHAR sort_dtypes[] =
 	{
 		0,							// dtype_unknown
 		SKD_text,					// dtype_text
@@ -153,10 +153,10 @@ namespace
 
 	struct SortField
 	{
-		SortField() : stream(INVALID_STREAM), id(0), desc(nullptr)
+		SortField() noexcept : stream(INVALID_STREAM), id(0), desc(nullptr)
 		{}
 
-		SortField(StreamType _stream, ULONG _id, const dsc* _desc)
+		SortField(StreamType _stream, ULONG _id, const dsc* _desc) noexcept
 			: stream(_stream), id(_id), desc(_desc)
 		{}
 
@@ -165,7 +165,7 @@ namespace
 		const dsc* desc;
 	};
 
-	class CrossJoin : public River
+	class CrossJoin final : public River
 	{
 	public:
 		CrossJoin(Optimizer* opt, RiverList& rivers, JoinType joinType)
@@ -295,7 +295,7 @@ namespace
 		}
 	}
 
-	unsigned getRiverCount(unsigned count, const ValueExprNode* const* eq_class)
+	unsigned getRiverCount(unsigned count, const ValueExprNode* const* eq_class) noexcept
 	{
 		// Given an sort/merge join equivalence class (vector of node pointers
 		// of representative values for rivers), return the count of rivers with values
@@ -437,7 +437,7 @@ namespace
 
 		// If there were none indices, this is a sequential retrieval.
 
-		const auto relation = tail->csb_relation;
+		const auto* relation = tail->csb_relation;
 		if (!relation)
 			return;
 
@@ -527,7 +527,7 @@ namespace
 		return false;
 	}
 
-	void setDirection(SortNode* fromClause, SortNode* toClause)
+	void setDirection(SortNode* fromClause, SortNode* toClause) noexcept
 	{
 		// Update the direction of a GROUP BY, DISTINCT, or ORDER BY
 		// clause to the same direction as another clause. Do the same
@@ -568,7 +568,7 @@ namespace
 		for (const auto from_end = from_ptr + count; from_ptr != from_end; ++from_ptr)
 		{
 			NestConst<ValueExprNode>* to_ptr = to_clause->expressions.begin();
-			for (const auto to_end = to_ptr + count; to_ptr != to_end; ++to_ptr)
+			for (const auto* to_end = to_ptr + count; to_ptr != to_end; ++to_ptr)
 			{
 				if ((map && mapEqual(*to_ptr, *from_ptr, map)) ||
 					(!map && fieldEqual(*to_ptr, *from_ptr)))
@@ -1618,10 +1618,10 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 
 	if (!refetchFlag)
 	{
-		const auto dbb = tdbb->getDatabase();
+		const auto* dbb = tdbb->getDatabase();
 		const auto threshold = dbb->dbb_config->getInlineSortThreshold();
 
-		refetchFlag = (totalLength > threshold);
+		refetchFlag = (totalLength > MIN(threshold, MAX_SORT_RECORD / 2));
 	}
 
 	// Check for persistent fields to be excluded from the sort.
@@ -1631,7 +1631,7 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 	{
 		for (auto& item : fields)
 		{
-			const auto relation = csb->csb_rpt[item.stream].csb_relation;
+			const auto* relation = csb->csb_rpt[item.stream].csb_relation;
 
 			if (relation &&
 				!relation->rel_file &&
@@ -1866,7 +1866,7 @@ void Optimizer::checkIndices()
 		if (plan->type != PlanNode::TYPE_RETRIEVE)
 			continue;
 
-		const auto relation = tail->csb_relation;
+		const auto* relation = tail->csb_relation;
 		if (!relation)
 			return;
 
@@ -2290,62 +2290,94 @@ unsigned Optimizer::distributeEqualities(BoolExprNodeStack& orgStack, unsigned b
 	{
 		const auto boolean = iter.object();
 		const auto cmpNode = nodeAs<ComparativeBoolNode>(boolean);
-		ValueExprNode* node1;
-		ValueExprNode* node2;
+		const auto listNode = nodeAs<InListBoolNode>(boolean);
 
-		if (cmpNode &&
-			(cmpNode->blrOp == blr_eql ||
-			 cmpNode->blrOp == blr_gtr || cmpNode->blrOp == blr_geq ||
-			 cmpNode->blrOp == blr_leq || cmpNode->blrOp == blr_lss ||
-			 cmpNode->blrOp == blr_matching || cmpNode->blrOp == blr_containing ||
-			 cmpNode->blrOp == blr_like || cmpNode->blrOp == blr_similar))
-		{
-			node1 = cmpNode->arg1;
-			node2 = cmpNode->arg2;
-		}
-		else
+		if (!cmpNode && !listNode)
 			continue;
 
+		ValueExprNode* fieldNode;
 		bool reverse = false;
 
-		if (!nodeIs<FieldNode>(node1))
+		if (cmpNode)
 		{
-			ValueExprNode* swap_node = node1;
-			node1 = node2;
-			node2 = swap_node;
-			reverse = true;
+			if (cmpNode->blrOp != blr_eql &&
+				cmpNode->blrOp != blr_gtr && cmpNode->blrOp != blr_geq &&
+				cmpNode->blrOp != blr_leq && cmpNode->blrOp != blr_lss &&
+				cmpNode->blrOp != blr_matching && cmpNode->blrOp != blr_containing &&
+				cmpNode->blrOp != blr_like && cmpNode->blrOp != blr_similar)
+			{
+				continue;
+			}
+
+			fieldNode = cmpNode->arg1;
+			ValueExprNode* otherNode = cmpNode->arg2;
+
+			if (!nodeIs<FieldNode>(fieldNode))
+			{
+				std::swap(fieldNode, otherNode);
+				reverse = true;
+			}
+
+			if (!nodeIs<FieldNode>(fieldNode))
+				continue;
+
+			if (!nodeIs<LiteralNode>(otherNode) &&
+				!nodeIs<ParameterNode>(otherNode) &&
+				!nodeIs<VariableNode>(otherNode))
+			{
+				continue;
+			}
+		}
+		else // listNode != nullptr
+		{
+			fieldNode = listNode->arg;
+
+			if (!nodeIs<FieldNode>(fieldNode))
+				continue;
+
+			bool accept = true;
+
+			for (const auto item : listNode->list->items)
+			{
+				if (!nodeIs<LiteralNode>(item) &&
+					!nodeIs<ParameterNode>(item) &&
+					!nodeIs<VariableNode>(item))
+				{
+					accept = false;
+					break;
+				}
+			}
+
+			if (!accept)
+				continue;
 		}
 
-		if (!nodeIs<FieldNode>(node1))
-			continue;
-
-		if (!nodeIs<LiteralNode>(node2) && !nodeIs<ParameterNode>(node2) && !nodeIs<VariableNode>(node2))
-			continue;
+		fb_assert(nodeIs<FieldNode>(fieldNode));
 
 		for (eq_class = classes.begin(); eq_class != classes.end(); ++eq_class)
 		{
-			if (searchStack(node1, *eq_class))
+			if (searchStack(fieldNode, *eq_class))
 			{
 				for (ValueExprNodeStack::iterator temp(*eq_class); temp.hasData(); ++temp)
 				{
-					if (!fieldEqual(node1, temp.object()) && count < MAX_CONJUNCTS_TO_INJECT)
+					if (!fieldEqual(fieldNode, temp.object()) && count < MAX_CONJUNCTS_TO_INJECT)
 					{
-						ValueExprNode* arg1;
-						ValueExprNode* arg2;
-
-						if (reverse)
-						{
-							arg1 = cmpNode->arg1;
-							arg2 = temp.object();
-						}
-						else
-						{
-							arg1 = temp.object();
-							arg2 = cmpNode->arg2;
-						}
-
 						// From the conjuncts X(A,B) and A=C, infer the conjunct X(C,B)
-						AutoPtr<BoolExprNode> newNode(makeInferenceNode(boolean, arg1, arg2));
+
+						AutoPtr<BoolExprNode> newNode;
+
+						if (cmpNode)
+						{
+							newNode = reverse ?
+								makeInferenceNode(boolean, cmpNode->arg1, temp.object()) :
+								makeInferenceNode(boolean, temp.object(), cmpNode->arg2);
+						}
+						else // listNode != nullptr
+						{
+							newNode = makeInferenceNode(boolean, temp.object(), listNode->list);
+						}
+
+						fb_assert(newNode);
 
 						if (augmentStack(newNode, orgStack))
 						{
@@ -2395,7 +2427,7 @@ void Optimizer::findDependentStreams(const StreamList& streams,
 			// SORT/MERGE.
 
 			Retrieval retrieval(tdbb, this, stream, false, false, nullptr, true);
-			const auto candidate = retrieval.getInversion();
+			const auto* candidate = retrieval.getInversion();
 
 			if (candidate->dependentFromStreams.hasData())
 				indexed_relationship = true;
@@ -2494,7 +2526,7 @@ bool Optimizer::generateEquiJoin(RiverList& rivers, JoinType joinType)
 
 	for (River** iter = orgRivers.begin(); iter < orgRivers.end();)
 	{
-		const auto river = *iter;
+		const auto* river = *iter;
 
 		StreamStateHolder stateHolder2(csb, river->getStreams());
 		stateHolder2.activate();
@@ -2641,7 +2673,7 @@ bool Optimizer::generateEquiJoin(RiverList& rivers, JoinType joinType)
 
 		// Find position of the river with maximum cardinality
 
-		const auto rsb = river->getRecordSource();
+		const auto* rsb = river->getRecordSource();
 		const auto cardinality = rsb->getCardinality();
 
 		if (cardinality > maxCardinality1)
@@ -3123,9 +3155,9 @@ bool Optimizer::getEquiJoinKeys(NestConst<ValueExprNode>& node1,
 string Optimizer::getStreamName(StreamType stream)
 {
 	const auto tail = &csb->csb_rpt[stream];
-	const auto relation = tail->csb_relation;
-	const auto procedure = tail->csb_procedure;
-	const auto alias = tail->csb_alias;
+	const auto* relation = tail->csb_relation;
+	const auto* procedure = tail->csb_procedure;
+	const auto* alias = tail->csb_alias;
 
 	string name = tail->getName().toQuotedString();
 
@@ -3240,6 +3272,37 @@ BoolExprNode* Optimizer::makeInferenceNode(BoolExprNode* boolean,
 }
 
 
+BoolExprNode* Optimizer::makeInferenceNode(BoolExprNode* boolean,
+										   ValueExprNode* arg,
+										   ValueListNode* list)
+{
+	const auto listNode = nodeAs<InListBoolNode>(boolean);
+	fb_assert(listNode);	// see our caller
+
+	// Clone the input predicate
+	const auto newListNode =
+		FB_NEW_POOL(getPool()) InListBoolNode(getPool());
+
+	// But substitute new values for some of the predicate arguments
+	SubExprNodeCopier copier(csb->csb_pool, csb);
+	newListNode->arg = copier.copy(tdbb, arg);
+	newListNode->list = copier.copy(tdbb, list);
+
+	// We may safely copy invariantness flag because:
+	// (1) we only distribute field equalities
+	// (2) invariantness of second argument of STARTING WITH or LIKE is solely
+	//    determined by its dependency on any of the fields
+	// If provisions above change the line below will have to be modified.
+	newListNode->nodFlags = listNode->nodFlags;
+
+	// We cannot safely share the impure area because the original/new data types
+	// for the substituted field could be different, thus affecting the lookup table.
+	// Thus perform the second pass to properly set up the boolean for execution.
+
+	return newListNode->pass2(tdbb, csb);
+}
+
+
 //
 // Optimize a LIKE/SIMILAR expression, if possible, into a "STARTING WITH" AND a "LIKE/SIMILAR".
 // This will allow us to use the index for the starting with, and the LIKE/SIMILAR can just tag
@@ -3277,8 +3340,8 @@ ValueExprNode* Optimizer::optimizeLikeSimilar(ComparativeBoolNode* cmpNode)
 
 	TextType* matchTextType = INTL_texttype_lookup(tdbb, INTL_TTYPE(&matchDesc));
 	CharSet* matchCharset = matchTextType->getCharSet();
-	TextType* patternTextType = INTL_texttype_lookup(tdbb, INTL_TTYPE(patternDesc));
-	CharSet* patternCharset = patternTextType->getCharSet();
+	const TextType* patternTextType = INTL_texttype_lookup(tdbb, INTL_TTYPE(patternDesc));
+	const CharSet* patternCharset = patternTextType->getCharSet();
 
 	if (cmpNode->blrOp == blr_like)
 	{
@@ -3385,8 +3448,8 @@ ValueExprNode* Optimizer::optimizeLikeSimilar(ComparativeBoolNode* cmpNode)
 
 		MoveBuffer patternBuffer;
 		UCHAR* patternStart;
-		ULONG patternLen = MOV_make_string2(tdbb, patternDesc, INTL_TTYPE(&matchDesc), &patternStart, patternBuffer);
-		const auto patternEnd = patternStart + patternLen;
+		const ULONG patternLen = MOV_make_string2(tdbb, patternDesc, INTL_TTYPE(&matchDesc), &patternStart, patternBuffer);
+		const auto* patternEnd = patternStart + patternLen;
 		const UCHAR* patternPtr = patternStart;
 
 		MoveBuffer prefixBuffer;
@@ -3454,7 +3517,7 @@ ValueExprNode* Optimizer::optimizeLikeSimilar(ComparativeBoolNode* cmpNode)
 	}
 }
 
-void Optimizer::printf(const char* format, ...)
+void Optimizer::printf(const char* format, ...) noexcept
 {
 #ifndef OPT_DEBUG_SYS_REQUESTS
 	if (csb->csb_g_flags & csb_internal)

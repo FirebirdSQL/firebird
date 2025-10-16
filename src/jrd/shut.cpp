@@ -40,7 +40,7 @@
 using namespace Jrd;
 using namespace Firebird;
 
-const SSHORT SHUT_WAIT_TIME	= 5;
+constexpr SSHORT SHUT_WAIT_TIME	= 5;
 
 // Shutdown lock data
 union shutdown_data
@@ -55,20 +55,20 @@ union shutdown_data
 // Low byte of shutdown_data::flag used by shutdown modes, see isc_dpb_shut_XXX
 // High byte used for additional flags
 
-const SSHORT SHUT_flag_restoring = 0x0100;		// database restore is in progress
+constexpr SSHORT SHUT_flag_restoring = 0x0100;		// database restore is in progress
 
 // Define this to true if you need to allow no-op behavior when requested shutdown mode
 // matches current. Logic of jrd8_create_database may need attention in this case too
-const bool IGNORE_SAME_MODE = false;
+constexpr bool IGNORE_SAME_MODE = false;
 
-static void bad_mode(Database* dbb)
+[[noreturn]] static void bad_mode(const Database* dbb)
 {
 	ERR_post(Arg::Gds(isc_bad_shutdown_mode) << Arg::Str(dbb->dbb_database_name));
 }
 
-static void same_mode(Database* dbb)
+static void same_mode(const Database* dbb)
 {
-	if (!IGNORE_SAME_MODE)
+	if constexpr (!IGNORE_SAME_MODE)
 		bad_mode(dbb);
 }
 
@@ -344,8 +344,8 @@ void SHUT_online(thread_db* tdbb, SSHORT flag, Sync* guard)
  *
  **************************************/
 	SET_TDBB(tdbb);
-	Database* const dbb = tdbb->getDatabase();
-	Jrd::Attachment* const attachment = tdbb->getAttachment();
+	const Database* const dbb = tdbb->getDatabase();
+	const Jrd::Attachment* const attachment = tdbb->getAttachment();
 
 	// Only platform's user locksmith can shutdown or bring online a database
 
@@ -447,7 +447,7 @@ void SHUT_online(thread_db* tdbb, SSHORT flag, Sync* guard)
 
 static void check_backup_state(thread_db* tdbb)
 {
-	const auto dbb = tdbb->getDatabase();
+	const auto* dbb = tdbb->getDatabase();
 
 	BackupManager::StateReadGuard stateGuard(tdbb);
 

@@ -55,7 +55,7 @@ class Dispatcher;
 class YObject
 {
 public:
-	YObject()
+	YObject() noexcept
 		: handle(0)
 	{
 	}
@@ -131,8 +131,8 @@ public:
 	typedef typename Intf::Declaration NextInterface;
 	typedef YAttachment YRef;
 
-	static const unsigned DF_RELEASE =		0x1;
-	static const unsigned DF_KEEP_NEXT =	0x2;
+	static constexpr unsigned DF_RELEASE =		0x1;
+	static constexpr unsigned DF_KEEP_NEXT =	0x2;
 
 	explicit YHelper(NextInterface* aNext, const char* m = NULL)
 		:
@@ -178,12 +178,12 @@ template <class YT>
 class AtomicYPtr
 {
 public:
-	AtomicYPtr(YT* v)
+	AtomicYPtr(YT* v) noexcept
 	{
 		atmPtr.store(v, std::memory_order_relaxed);
 	}
 
-	YT* get()
+	YT* get() noexcept
 	{
 		return atmPtr.load(std::memory_order_relaxed);
 	}
@@ -207,7 +207,7 @@ class YEvents final :
 	public YHelper<YEvents, Firebird::IEventsImpl<YEvents, Firebird::CheckStatusWrapper> >
 {
 public:
-	static const ISC_STATUS ERROR_CODE = isc_bad_events_handle;
+	static constexpr ISC_STATUS ERROR_CODE = isc_bad_events_handle;
 
 	YEvents(YAttachment* aAttachment, Firebird::IEvents* aNext, Firebird::IEventCallback* aCallback);
 
@@ -230,7 +230,7 @@ class YRequest final :
 	public YHelper<YRequest, Firebird::IRequestImpl<YRequest, Firebird::CheckStatusWrapper> >
 {
 public:
-	static const ISC_STATUS ERROR_CODE = isc_bad_req_handle;
+	static constexpr ISC_STATUS ERROR_CODE = isc_bad_req_handle;
 
 	YRequest(YAttachment* aAttachment, Firebird::IRequest* aNext);
 
@@ -260,7 +260,7 @@ class YTransaction final :
 	public YHelper<YTransaction, Firebird::ITransactionImpl<YTransaction, Firebird::CheckStatusWrapper> >
 {
 public:
-	static const ISC_STATUS ERROR_CODE = isc_bad_trans_handle;
+	static constexpr ISC_STATUS ERROR_CODE = isc_bad_trans_handle;
 
 	YTransaction(YAttachment* aAttachment, Firebird::ITransaction* aNext);
 
@@ -316,7 +316,7 @@ class YBlob final :
 	public YHelper<YBlob, Firebird::IBlobImpl<YBlob, Firebird::CheckStatusWrapper> >
 {
 public:
-	static const ISC_STATUS ERROR_CODE = isc_bad_segstr_handle;
+	static constexpr ISC_STATUS ERROR_CODE = isc_bad_segstr_handle;
 
 	YBlob(YAttachment* aAttachment, YTransaction* aTransaction, Firebird::IBlob* aNext);
 
@@ -344,7 +344,7 @@ class YResultSet final :
 	public YHelper<YResultSet, Firebird::IResultSetImpl<YResultSet, Firebird::CheckStatusWrapper> >
 {
 public:
-	static const ISC_STATUS ERROR_CODE = isc_bad_result_set;
+	static constexpr ISC_STATUS ERROR_CODE = isc_bad_result_set;
 
 	YResultSet(YAttachment* anAttachment, YTransaction* aTransaction, Firebird::IResultSet* aNext);
 	YResultSet(YAttachment* anAttachment, YTransaction* aTransaction, YStatement* aStatement,
@@ -379,7 +379,7 @@ class YBatch final :
 	public YHelper<YBatch, Firebird::IBatchImpl<YBatch, Firebird::CheckStatusWrapper> >
 {
 public:
-	static const ISC_STATUS ERROR_CODE = isc_bad_result_set;	// isc_bad_batch
+	static constexpr ISC_STATUS ERROR_CODE = isc_bad_result_set;	// isc_bad_batch
 
 	YBatch(YAttachment* anAttachment, Firebird::IBatch* aNext);
 
@@ -411,7 +411,7 @@ class YReplicator final :
 	public YHelper<YReplicator, Firebird::IReplicatorImpl<YReplicator, Firebird::CheckStatusWrapper> >
 {
 public:
-	static const ISC_STATUS ERROR_CODE = isc_bad_repl_handle;
+	static constexpr ISC_STATUS ERROR_CODE = isc_bad_repl_handle;
 
 	YReplicator(YAttachment* anAttachment, Firebird::IReplicator* aNext);
 
@@ -430,7 +430,7 @@ public:
 class YMetadata
 {
 public:
-	explicit YMetadata(bool in)
+	explicit YMetadata(bool in) noexcept
 		: flag(false), input(in)
 	{ }
 
@@ -446,7 +446,7 @@ class YStatement final :
 	public YHelper<YStatement, Firebird::IStatementImpl<YStatement, Firebird::CheckStatusWrapper> >
 {
 public:
-	static const ISC_STATUS ERROR_CODE = isc_bad_stmt_handle;
+	static constexpr ISC_STATUS ERROR_CODE = isc_bad_stmt_handle;
 
 	YStatement(YAttachment* aAttachment, Firebird::IStatement* aNext);
 
@@ -494,7 +494,7 @@ private:
 class EnterCount
 {
 public:
-	EnterCount()
+	EnterCount() noexcept
 		: enterCount(0)
 	{}
 
@@ -512,7 +512,7 @@ class YAttachment final :
 	public EnterCount
 {
 public:
-	static const ISC_STATUS ERROR_CODE = isc_bad_db_handle;
+	static constexpr ISC_STATUS ERROR_CODE = isc_bad_db_handle;
 
 	YAttachment(Firebird::IProvider* aProvider, Firebird::IAttachment* aNext,
 		const Firebird::PathName& aDbPath);
@@ -520,7 +520,7 @@ public:
 
 	void destroy(unsigned dstrFlags) override;
 	void shutdown();
-	isc_db_handle& getHandle();
+	isc_db_handle& getHandle() noexcept;
 	void getOdsVersion(USHORT* majorVersion, USHORT* minorVersion);
 
 	// IAttachment implementation
@@ -610,14 +610,14 @@ class YService final :
 	public EnterCount
 {
 public:
-	static const ISC_STATUS ERROR_CODE = isc_bad_svc_handle;
+	static constexpr ISC_STATUS ERROR_CODE = isc_bad_svc_handle;
 
 	YService(Firebird::IProvider* aProvider, Firebird::IService* aNext, bool utf8, Dispatcher* yProvider);
 	~YService();
 
 	void shutdown();
 	void destroy(unsigned dstrFlags) override;
-	isc_svc_handle& getHandle();
+	isc_svc_handle& getHandle() noexcept;
 
 	// IService implementation
 	void detach(Firebird::CheckStatusWrapper* status) override;
@@ -648,7 +648,7 @@ class Dispatcher final :
 	public Firebird::StdPlugin<Firebird::IProviderImpl<Dispatcher, Firebird::CheckStatusWrapper> >
 {
 public:
-	Dispatcher()
+	Dispatcher() noexcept
 		: cryptCallback(NULL)
 	{ }
 
@@ -663,7 +663,7 @@ public:
 	void setDbCryptCallback(Firebird::CheckStatusWrapper* status,
 		Firebird::ICryptKeyCallback* cryptCallback) override;
 
-	void destroy(unsigned)
+	void destroy(unsigned) noexcept
 	{ }
 
 public:
@@ -737,6 +737,11 @@ public:
 	void decodeTimeStampTzEx(Firebird::CheckStatusWrapper* status, const ISC_TIMESTAMP_TZ_EX* timeStampEx,
 		unsigned* year, unsigned* month, unsigned* day, unsigned* hours, unsigned* minutes, unsigned* seconds,
 		unsigned* fractions, unsigned timeZoneBufferLength, char* timeZoneBuffer) override;
+
+	void convert(Firebird::CheckStatusWrapper* status,
+		unsigned sourceType, unsigned sourceScale, unsigned sourceLength, const void* source,
+		unsigned targetType, unsigned targetScale, unsigned targetLength, void* target) override;
+
 };
 
 }	// namespace Why

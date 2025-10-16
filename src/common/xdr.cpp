@@ -45,19 +45,19 @@ inline void XDR_FREEA(void* block)
 }
 
 #ifdef DEBUG_XDR_MEMORY
-inline void DEBUG_XDR_ALLOC(xdr_t* xdrs, const void* xdrvar, const void* addr, ULONG len)
+inline void DEBUG_XDR_ALLOC(xdr_t* xdrs, const void* xdrvar, const void* addr, ULONG len) noexcept
 {
 	xdr_debug_memory(xdrs, XDR_DECODE, xdrvar, addr, len)
 }
-inline void DEBUG_XDR_FREE(xdr_t* xdrs, const void* xdrvar, const void* addr, ULONG len)
+inline void DEBUG_XDR_FREE(xdr_t* xdrs, const void* xdrvar, const void* addr, ULONG len) noexcept
 {
-	xdr_debug_memory (xdrs, XDR_FREE, xdrvar, addr, (ULONG) len);
+	xdr_debug_memory(xdrs, XDR_FREE, xdrvar, addr, (ULONG) len);
 }
 #else
-inline void DEBUG_XDR_ALLOC(xdr_t*, const void*, const void*, ULONG)
+inline void DEBUG_XDR_ALLOC(xdr_t*, const void*, const void*, ULONG) noexcept
 {
 }
-inline void DEBUG_XDR_FREE(xdr_t*, const void*, const void*, ULONG)
+inline void DEBUG_XDR_FREE(xdr_t*, const void*, const void*, ULONG) noexcept
 {
 }
 #endif // DEBUG_XDR_MEMORY
@@ -67,7 +67,7 @@ inline void DEBUG_XDR_FREE(xdr_t*, const void*, const void*, ULONG)
 // sufficient.
 // This setting may be related to our max DSQL statement size.
 
-const unsigned MAXSTRING_FOR_WRAPSTRING	= 65535;
+constexpr unsigned MAXSTRING_FOR_WRAPSTRING = 65535;
 
 
 #define GETBYTES	 xdrs->x_getbytes
@@ -175,7 +175,7 @@ bool_t xdr_datum( xdr_t* xdrs, const dsc* desc, UCHAR* buffer)
 	case dtype_dbkey:
 		fb_assert(false);	// dbkey should not get outside jrd,
 		// but in case it happenned in production server treat it as text
-		// Fall through ...
+		[[fallthrough]];
 
 	case dtype_text:
 	case dtype_boolean:
@@ -869,7 +869,7 @@ bool_t xdr_wrapstring(xdr_t* xdrs, SCHAR** strp)
 }
 
 
-int xdr_t::create(SCHAR* addr, unsigned len, xdr_op op)
+int xdr_t::create(SCHAR* addr, unsigned len, xdr_op op) noexcept
 {
 /**************************************
  *

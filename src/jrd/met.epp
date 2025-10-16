@@ -93,6 +93,7 @@
 #include "../common/classes/MsgPrint.h"
 #include "../jrd/Function.h"
 #include "../jrd/trace/TraceJrdHelpers.h"
+#include "firebird/impl/msg_helper.h"
 
 
 #ifdef HAVE_CTYPE_H

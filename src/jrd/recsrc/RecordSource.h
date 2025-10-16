@@ -1305,7 +1305,7 @@ namespace Jrd
 		const StreamList m_checkStreams;
 	};
 
-	class HashJoin : public Join<RecordSource>
+	class HashJoin final : public Join<RecordSource>
 	{
 		class HashTable;
 
@@ -1341,7 +1341,7 @@ namespace Jrd
 		void close(thread_db* tdbb) const override;
 		void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override;
 
-		static unsigned maxCapacity();
+		static unsigned maxCapacity() noexcept;
 
 	protected:
 		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;

@@ -103,6 +103,7 @@ enum literal_string_type
 
 #if defined(WIN_NT)
 #include <windows.h>
+#include <VersionHelpers.h>
 #endif
 #include "ibase.h"
 #include "../isql/isql.h"
@@ -339,14 +340,21 @@ static int win32ReadConsole(FILE* file, CharBuffer& mbBuffer)
 			SetConsoleMode(handle, oldMode);
 	});
 
-	const size_t MAX_LINE_LENGTH = MAX_USHORT;
-	WCHAR* wideBuf = wideBuffer->getBuffer(MAX_LINE_LENGTH, false);
+	// Before Windows 10, ReadConsole() can't work with relatively large input
+	// buffers and set ERROR_NOT_ENOUGH_MEMORY error. Thus, use initial buffer size
+	// twice less than for Windows 10 and handle error by reducing the buffer size.
+
+	static DWORD maxLineLength = IsWindows10OrGreater() ? MAX_USHORT : MAX_SSHORT;
+	WCHAR* wideBuf = wideBuffer->getBuffer(maxLineLength, false);
 
 	DWORD charsRead;
-	if (!ReadConsoleW(handle, wideBuf, MAX_LINE_LENGTH, &charsRead, NULL))
+	while (!ReadConsoleW(handle, wideBuf, maxLineLength, &charsRead, NULL))
 	{
-		fb_assert(false);
-		return -1;
+		const DWORD error = GetLastError();
+		if (error == ERROR_NOT_ENOUGH_MEMORY && maxLineLength > 256)
+			maxLineLength -= 256;
+		else
+			Firebird::system_error::raise("ReadConsoleW", error);
 	}
 
 	if (!charsRead)
