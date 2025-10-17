@@ -503,7 +503,7 @@ static bool clear_cache(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool change_repl_state(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static string remove_icu_info_from_attributes(const QualifiedName&, const string&);
 static bool create_tablespace(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
-static bool drop_tablespace(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
+static bool delete_tablespace(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool modify_tablespace(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool move_relation(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool move_index(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
@@ -1341,7 +1341,7 @@ static inline constexpr deferred_task task_table[] =
 	{ dfw_clear_cache, clear_cache },
 	{ dfw_change_repl_state, change_repl_state },
 	{ dfw_create_tablespace, create_tablespace },
-	{ dfw_drop_tablespace, drop_tablespace },
+	{ dfw_delete_tablespace, delete_tablespace },
 	{ dfw_modify_tablespace, modify_tablespace },
 	{ dfw_move_relation, move_relation },
 	{ dfw_move_index, move_index },
@@ -1654,7 +1654,7 @@ void DFW_perform_work(thread_db* tdbb, jrd_tra* transaction)
 		case dfw_delete_shadow:
 		case dfw_clear_datapages:
 		case dfw_clear_indexpages:
-		case dfw_drop_tablespace:
+		case dfw_delete_tablespace:
 			break;
 
 		default:
@@ -1713,7 +1713,7 @@ void DFW_perform_post_commit_work(thread_db* tdbb, jrd_tra* transaction)
 
 			pending_events = true;
 			break;
-		case dfw_drop_tablespace:
+		case dfw_delete_tablespace:
 		case dfw_delete_shadow:
 			if (work->dfw_name.hasData())
 				unlink(work->dfw_name.c_str());
@@ -6656,7 +6656,7 @@ static bool create_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work,
  **************************************
  *
  * Functional description
- *	Create tablespace file and format it when restoring
+ *	Create tablespace file and format it.
  *
  **************************************/
 
@@ -6724,16 +6724,16 @@ static bool create_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work,
 }
 
 
-static bool drop_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+static bool delete_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
 {
 /**************************************
  *
- *	d r o p _ t a b l e s p a c e
+ *	d e l e t e _ t a b l e s p a c e
  *
  **************************************
  *
  * Functional description
- *	Drop tablespace and its file at post commit stage
+ *	Drop tablespace and remove its file at the post-commit stage.
  *
  **************************************/
 
@@ -6791,7 +6791,7 @@ static bool modify_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work,
  **************************************
  *
  * Functional description
- *	Modify tablespace
+ *	Modify tablespace.
  *
  **************************************/
 

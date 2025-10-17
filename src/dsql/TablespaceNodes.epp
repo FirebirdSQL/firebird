@@ -251,8 +251,6 @@ bool CreateAlterTablespaceNode::executeAlter(thread_db* tdbb, DsqlCompilerScratc
 
 	if (modified)
 	{
-		DFW_post_work(transaction, dfw_modify_tablespace, {}, {}, tableSpaceId);
-
 		executeDdlTrigger(tdbb, dsqlScratch, transaction,
 			DTW_AFTER, DDL_TRIGGER_ALTER_TABLESPACE, QualifiedName(name), {});
 	}
@@ -290,8 +288,6 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 	AutoSavePoint savePoint(tdbb, transaction);
 
 	bool found = false;
-	ULONG tableSpaceId = 0;
-	string tableSpaceFileName;
 	AutoCacheRequest requestHandle(tdbb, drq_e_tablespace, DYN_REQUESTS);
 
 	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
@@ -302,11 +298,9 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 			ERR_post(Arg::Gds(isc_dyn_cannot_mod_sys_ts) << Arg::Str(name));
 
 		found = true;
-		tableSpaceId = X.RDB$TABLESPACE_ID;
-		tableSpaceFileName = X.RDB$FILE_NAME;
 
-		// cache it for DFW stage
-		MET_tablespace_id(tdbb, tableSpaceId);
+		// Ensure it's cached to be used in the DFW stage later
+		MET_tablespace_id(tdbb, X.RDB$TABLESPACE_ID);
 
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 			DDL_TRIGGER_DROP_TABLESPACE, QualifiedName(name), {});
@@ -368,13 +362,6 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 	}
 	END_FOR
 
-	if (!found && !silent)
-	{
-		status_exception::raise(
-			Arg::Gds(isc_no_meta_update) <<
-			Arg::Gds(isc_dyn_ts_not_found) << Arg::Str(name));
-	}
-
 	if (total)
 	{
 		status_exception::raise(Arg::Gds(isc_no_meta_update) <<
@@ -385,10 +372,14 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 
 	if (found)
 	{
-		DFW_post_work(transaction, dfw_drop_tablespace, tableSpaceFileName, {}, tableSpaceId);
-
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_DROP_TABLESPACE,
 			QualifiedName(name), {});
+	}
+	else if (!silent)
+	{
+		status_exception::raise(
+			Arg::Gds(isc_no_meta_update) <<
+			Arg::Gds(isc_dyn_ts_not_found) << Arg::Str(name));
 	}
 
 	savePoint.release();	// everything is ok

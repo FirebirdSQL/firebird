@@ -521,7 +521,7 @@ enum dfw_t {
 	dfw_set_generator,
 	dfw_change_repl_state,
 	dfw_create_tablespace,
-	dfw_drop_tablespace,
+	dfw_delete_tablespace,
 	dfw_modify_tablespace,
 	dfw_move_relation,
 	dfw_move_index,

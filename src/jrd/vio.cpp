@@ -2405,6 +2405,10 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 		case rel_tablespaces:
 			protect_system_table_delupd(tdbb, relation, "DELETE");
+			EVL_field(0, rpb->rpb_record, f_ts_file, &desc);
+			EVL_field(0, rpb->rpb_record, f_ts_id, &desc2);
+			id = MOV_get_long(tdbb, &desc2, 0);
+			DFW_post_work(transaction, dfw_delete_tablespace, &desc, nullptr, id);
 			break;
 
 		default:    // Shut up compiler warnings
@@ -3797,6 +3801,19 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 			protect_system_table_delupd(tdbb, relation, "UPDATE");
 			check_owner(tdbb, transaction, org_rpb, new_rpb, f_pub_owner);
 			check_repl_state(tdbb, transaction, org_rpb, new_rpb, f_pub_active_flag);
+			break;
+
+		case rel_tablespaces:
+			protect_system_table_delupd(tdbb, relation, "UPDATE");
+			check_class(tdbb, transaction, org_rpb, new_rpb, f_ts_class);
+			check_owner(tdbb, transaction, org_rpb, new_rpb, f_ts_owner);
+
+			if (dfw_should_know(tdbb, org_rpb, new_rpb, f_ts_desc, true))
+			{
+				EVL_field(0, new_rpb->rpb_record, f_ts_id, &desc1);
+				const ULONG id = MOV_get_long(tdbb, &desc1, 0);
+				DFW_post_work(transaction, dfw_modify_tablespace, {}, {}, id);
+			}
 			break;
 
 		default:
