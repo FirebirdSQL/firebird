@@ -5371,7 +5371,7 @@ void DeclarePackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 			if (overloadDomainConstraints)
 			{
 				updateRelationFieldDefaultAndValidation(tdbb, dsqlScratch, transaction, field->relationName, type->fld_name,
-					typeClause->defaultClause, typeClause->checkClause, &type->notNull, fullDomain);
+					typeClause->defaultClause, typeClause->checkClause, type->notNull ? &type->notNull : nullptr, fullDomain);
 			}
 			else
 			{
@@ -5394,6 +5394,15 @@ void DeclarePackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 			auto pool = *tdbb->getDefaultPool();
 			RowValueExpressionNode* rowValue = FB_NEW_POOL(pool) RowValueExpressionNode(pool);
 			rowValue->rowValueExpressionList = FB_NEW_POOL(pool) ValueListNode(pool, fieldDeclarations.getCount());
+
+			// if field is full domain or has default clause, we need to generate default value for it
+			// initialize with NULL otherwise
+			for (auto i = 0; i < fieldDeclarations.getCount(); i++)
+			{
+				rowValue->rowValueExpressionList->items[i] =
+					(fieldDeclarations[i]->type->fullDomain || fieldDeclarations[i]->defaultClause)
+					? nullptr : NullNode::instance();
+			}
 
 			rowValue->setDefaultSource(field);
 			typeClause->defaultClause = FB_NEW_POOL(pool) ValueSourceClause(pool);
