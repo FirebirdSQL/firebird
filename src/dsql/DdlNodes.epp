@@ -89,7 +89,7 @@ static int getGrantorOption(thread_db* tdbb, jrd_tra* transaction, const MetaNam
 static QualifiedName getIndexRelationName(thread_db* tdbb, jrd_tra* transaction,
 	const QualifiedName& indexName, bool& systemIndex, bool silent = false);
 static const char* getRelationScopeName(const rel_t type);
-static void makeRelationScopeName(string& to, const QualifiedName& name, const rel_t type);
+static string makeRelationScopeName(const QualifiedName& name, const rel_t type);
 static void checkRelationType(const rel_t type, const QualifiedName& name);
 static void checkFkPairTypes(const rel_t masterType, const QualifiedName& masterName,
 	const rel_t childType, const QualifiedName& childName);
@@ -544,10 +544,11 @@ static bool isItSqlRole(thread_db* tdbb, jrd_tra* transaction, const MetaName& i
 }
 
 // Make string with relation name and type of its temporary scope.
-static void makeRelationScopeName(string& to, const QualifiedName& name, const rel_t type)
+static string makeRelationScopeName(const QualifiedName& name, const rel_t type)
 {
-	const char* scope = getRelationScopeName(type);
-	to.printf(scope, name.toQuotedString().c_str());
+	string result;
+	result.printf(getRelationScopeName(type), name.toQuotedString().c_str());
+	return result;
 }
 
 // Get relation name of an index.
@@ -628,8 +629,7 @@ static void checkRelationType(const rel_t type, const QualifiedName& name)
 		return;
 	}
 
-	string scope;
-	makeRelationScopeName(scope, name, type);
+	const string scope = makeRelationScopeName(name, type);
 	(Arg::PrivateDyn(289) << scope).raise();
 }
 
@@ -640,9 +640,8 @@ static void checkFkPairTypes(const rel_t masterType, const QualifiedName& master
 	if (masterType != childType &&
 		!(masterType == rel_global_temp_preserve && childType == rel_global_temp_delete))
 	{
-		string master, child;
-		makeRelationScopeName(master, masterName, masterType);
-		makeRelationScopeName(child, childName, childType);
+		const string master = makeRelationScopeName(masterName, masterType);
+		const string child = makeRelationScopeName(childName, childType);
 		// Msg 232 : "%s can't reference %s"
 		status_exception::raise(Arg::PrivateDyn(232) << child << master);
 	}
@@ -1399,6 +1398,7 @@ DdlNode* CommentOnNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		case obj_schema:
 		case obj_blob_filter:
 		case obj_sql_role:
+		case obj_tablespace:
 			fb_assert(name.schema.isEmpty());
 			break;
 
@@ -6474,6 +6474,7 @@ DdlNode* RelationNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			case Clause::TYPE_DROP_CONSTRAINT:
 			case Clause::TYPE_ALTER_SQL_SECURITY:
 			case Clause::TYPE_ALTER_PUBLICATION:
+			case Clause::TYPE_SET_TABLESPACE:
 				break;
 
 			default:
@@ -7879,6 +7880,9 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 
 	fb_assert(relationType.has_value());
 
+	if (externalFile)
+		relationType = rel_external;
+
 	checkRelationTempScope(tdbb, transaction, name, relationType.value());
 
 	AutoCacheRequest request(tdbb, drq_s_rels2, DYN_REQUESTS);
@@ -7915,13 +7919,19 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 				status_exception::raise(Arg::PrivateDyn(163));
 			}
 
+			if (tableSpace.hasData())
+			{
+				const string scope = makeRelationScopeName(name, relationType.value());
+				status_exception::raise(Arg::Gds(isc_dyn_cant_set_ts_table) << scope);
+			}
+
 			REL.RDB$EXTERNAL_FILE.NULL = FALSE;
 			strcpy(REL.RDB$EXTERNAL_FILE, externalFile->c_str());
 			REL.RDB$RELATION_TYPE = rel_external;
 		}
 
-		const bool nullTsName = !fb_utils::hasTablespaceName(rel_t(REL.RDB$RELATION_TYPE));
-		REL.RDB$TABLESPACE_NAME.NULL = nullTsName;
+		const bool nullTsName = !fb_utils::hasTablespaceName(relationType.value());
+		REL.RDB$TABLESPACE_NAME.NULL = nullTsName ? TRUE : FALSE;
 
 		if (!nullTsName)
 		{
@@ -8439,12 +8449,13 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 						WITH REL.RDB$SCHEMA_NAME EQ name.schema.c_str()
 							AND REL.RDB$RELATION_NAME EQ name.object.c_str()
 					{
-						if (!REL.RDB$RELATION_TYPE.NULL)
-						{
-							ULONG flags = MET_get_rel_flags_from_TYPE(REL.RDB$RELATION_TYPE);
+						fb_assert(!REL.RDB$RELATION_TYPE.NULL);
+						const rel_t relType = (rel_t) REL.RDB$RELATION_TYPE;
 
-							if (flags & (REL_temp_tran | REL_temp_conn))
-								status_exception::raise(Arg::Gds(isc_dyn_cant_set_ts_table) << name.toQuotedString());
+						if (!fb_utils::hasTablespaceName(relType))
+						{
+							const string scope = makeRelationScopeName(name, relType);
+							status_exception::raise(Arg::Gds(isc_dyn_cant_set_ts_table) << scope);
 						}
 
 						fb_assert(!REL.RDB$TABLESPACE_NAME.NULL);

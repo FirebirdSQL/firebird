@@ -4724,6 +4724,7 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			object_id = set_metadata_id(tdbb, rpb->rpb_record,
 										f_ts_id, drq_g_nxt_ts_id, "RDB$TABLESPACES", 1);
 			DFW_post_work(transaction, dfw_create_tablespace, &desc, nullptr, object_id);
+			set_system_flag(tdbb, rpb->rpb_record, f_ts_sys_flag);
 			set_owner_name(tdbb, rpb->rpb_record, f_ts_owner);
 			if (set_security_class(tdbb, rpb->rpb_record, f_ts_class))
 				DFW_post_work(transaction, dfw_grant, &desc, nullptr, obj_tablespace);

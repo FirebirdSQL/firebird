@@ -493,7 +493,7 @@ inline ULONG index_root_page::irt_repeat::getRootPageSpaceId() const
 inline void index_root_page::irt_repeat::setRoot(ULONG pagespaceId, ULONG pageNum)
 {
 	fb_assert(irt_state == irt_in_progress || irt_state == irt_normal);
-	fb_assert(pageNum != 0 && pagespaceId != INVALID_PAGE_SPACE);
+	fb_assert(pageNum != 0 && pagespaceId != 0);
 
 	irt_transaction = 0;
 	irt_page_num = pageNum;

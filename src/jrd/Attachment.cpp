@@ -286,7 +286,7 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider
 	att_internal.grow(irq_MAX);
 	att_dyn_req.grow(drq_MAX);
 
-	const auto dbTableSpace = FB_NEW_POOL(*pool) Tablespace(*pool, DB_PAGE_SPACE, PRIMARY_TABLESPACE_NAME);
+	const auto dbTableSpace = FB_NEW_POOL(*pool) Tablespace(*pool);
 	att_tablespaces.add(dbTableSpace);
 
 	att_system_schema_search_path->push(SYSTEM_SCHEMA);

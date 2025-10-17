@@ -1976,8 +1976,13 @@ static void store_relation(thread_db* tdbb,
 		X.RDB$SYSTEM_FLAG = RDB_system;
 		X.RDB$DBKEY_LENGTH = 8;
 
-		PAD(PRIMARY_TABLESPACE_NAME, X.RDB$TABLESPACE_NAME);
-		X.RDB$TABLESPACE_NAME.NULL = !fb_utils::hasTablespaceName(rel_t(relType));
+		if (fb_utils::hasTablespaceName(rel_t(relType)))
+		{
+			PAD(PRIMARY_TABLESPACE_NAME, X.RDB$TABLESPACE_NAME);
+			X.RDB$TABLESPACE_NAME.NULL = FALSE;
+		}
+		else
+			X.RDB$TABLESPACE_NAME.NULL = TRUE;
 	}
 	END_STORE;
 

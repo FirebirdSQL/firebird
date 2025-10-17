@@ -40,7 +40,11 @@ namespace Jrd
 	{
 	friend class Attachment;
 	public:
-		explicit Tablespace(MemoryPool& p, ULONG tsId, const MetaName& tsName)
+		explicit Tablespace(MemoryPool& p)
+			: id(DB_PAGE_SPACE), name(p)
+		{}
+
+		Tablespace(MemoryPool& p, ULONG tsId, const MetaName& tsName)
 			: id(tsId), name(p, tsName)
 		{}
 
