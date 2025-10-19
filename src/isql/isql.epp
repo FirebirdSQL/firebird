@@ -5532,10 +5532,10 @@ void ISQL_get_version(bool call_by_create_db)
 		switch (item)
 		{
 		case isc_info_ods_version:
-			isqlGlob.major_ods = p.getInt();
+			isqlGlob.major_ods = static_cast<USHORT>(p.getInt());
 			break;
 		case isc_info_ods_minor_version:
-			isqlGlob.minor_ods = p.getInt();
+			isqlGlob.minor_ods = static_cast<USHORT>(p.getInt());
 			break;
 		case isc_info_db_sql_dialect:
 			global_dialect_spoken = p.getInt();
@@ -5648,7 +5648,7 @@ void ISQL_get_version(bool call_by_create_db)
 			break;
 
 		case frb_info_att_charset:
-			isqlGlob.att_charset = p.getInt();
+			isqlGlob.att_charset = static_cast<USHORT>(p.getInt());
 			break;
 
 		default:
@@ -6976,7 +6976,7 @@ static processing_state parse_arg(int argc, SCHAR** argv, QualifiedMetaString& t
 					break;
 
 				case IN_SW_ISQL_SQLDIALECT:
-					requested_SQL_dialect = swarg_int;
+					requested_SQL_dialect = static_cast<USHORT>(swarg_int);
 					if (requested_SQL_dialect < SQL_DIALECT_V5 ||
 						requested_SQL_dialect > SQL_DIALECT_CURRENT)
 					{
@@ -7171,7 +7171,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 				blobid = var->value.blobid;
 				[[maybe_unused]] auto result = snprintf(blobbuf, sizeof(blobbuf), "%" xLONGFORMAT":%" xLONGFORMAT,
-					blobid->gds_quad_high, blobid->gds_quad_low);
+					static_cast<ISC_ULONG>(blobid->gds_quad_high), blobid->gds_quad_low);
 				fb_assert(result >= 0);
 				result = snprintf(p, bufSize, "%*s ", MAX(17, length), blobbuf);
 				fb_assert(result >= 0);
@@ -7185,7 +7185,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 				blobid = var->value.blobid;
 				[[maybe_unused]] auto result = snprintf(blobbuf, sizeof(blobbuf), "%" xLONGFORMAT":%" xLONGFORMAT,
-					blobid->gds_quad_high, blobid->gds_quad_low);
+					static_cast<ISC_ULONG>(blobid->gds_quad_high), blobid->gds_quad_low);
 				fb_assert(result >= 0);
 				result = snprintf(p, bufSize, "%*s ", MAX(17, length), blobbuf);
 				fb_assert(result >= 0);
@@ -7247,20 +7247,26 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 #if defined(MINGW)
 				if (value == 0)
 				{
-					snprintf(p, bufSize, "% #*.*g ", length, (int) MIN(8, (length - 6)) - 1, value);
+					[[maybe_unused]] auto res = snprintf(p, bufSize, "% #*.*g ", length, (int) MIN(8, (length - 6)) - 1, value);
+					fb_assert(res >= 0);
+					
 					if (setValues.List) {
 						isqlGlob.printf("%.*g%s", FLOAT_LEN - 6 -1, value, NEWLINE);
 					}
 				}
 				else
 				{
-					snprintf(p, bufSize, "% #*.*g ", length, (int) MIN(8, (length - 6)), value);
+					[[maybe_unused]] auto res = snprintf(p, bufSize, "% #*.*g ", length, (int) MIN(8, (length - 6)), value);
+					fb_assert(res >= 0);
+					
 					if (setValues.List) {
 						isqlGlob.printf("%.*g%s", FLOAT_LEN - 6, value, NEWLINE);
 					}
 				}
 #else
-				snprintf(p, bufSize, "% #*.*g ", length, (int) MIN(8, (length - 6)), value);
+				[[maybe_unused]] auto res = snprintf(p, bufSize, "% #*.*g ", length, (int) MIN(8, (length - 6)), value);
+			    fb_assert(res >= 0);
+					
 				if (setValues.List) {
 					isqlGlob.printf("%.*g%s", FLOAT_LEN - 6, value, NEWLINE);
 				}

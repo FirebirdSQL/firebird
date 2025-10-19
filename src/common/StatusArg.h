@@ -70,8 +70,8 @@ protected:
 		virtual void clear() noexcept { }
 		virtual void append(const StatusVector&) noexcept { }
 		virtual void prepend(const StatusVector&) noexcept { }
-		virtual void assign(const StatusVector& ex) noexcept { }
-		virtual void assign(const Exception& ex) noexcept { }
+		virtual void assign(const StatusVector&) noexcept { }
+		virtual void assign(const Exception&) noexcept { }
 		virtual ISC_STATUS copyTo(ISC_STATUS*) const noexcept { return 0; }
 		virtual void copyTo(IStatus*) const noexcept { }
 		virtual void appendTo(IStatus*) const noexcept { }
@@ -145,7 +145,7 @@ protected:
 			  m_status_vector(*getDefaultMemoryPool()),
 			  m_strings(*getDefaultMemoryPool())
 		{
-			clear();
+			ImplStatusVector::clear();
 		}
 
 		explicit ImplStatusVector(const ISC_STATUS* s) noexcept;

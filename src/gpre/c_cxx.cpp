@@ -2668,6 +2668,8 @@ static void gen_put_segment( const act* action, int column)
 	args.pat_ident1 = blob->blb_len_ident;
 	args.pat_ident2 = blob->blb_buff_ident;
 	args.pat_string1 = global_status_name;
+	args.pat_long1 = NULL;
+	args.pat_long2 = NULL;
 	PATTERN_expand((USHORT) column, pattern1, &args);
 
 	set_sqlcode(action, column);
