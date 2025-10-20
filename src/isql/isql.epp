@@ -6151,6 +6151,7 @@ static bool printUser(const char* dbName)
 			txt.assign(v.value.asVary->vary_string, v.value.asVary->vary_length);
 			break;
 		default:
+			fb_assert(false);
 			break;
 		}
 
@@ -7191,6 +7192,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 					value = *var->value.asBigint;
 					break;
 				default:
+					fb_assert(false);
 					break;
 				}
 
