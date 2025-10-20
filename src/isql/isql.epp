@@ -6636,7 +6636,7 @@ static processing_state newtrans(const TEXT* statement)
 }
 
 
-static processing_state parse_arg(int argc, SCHAR** argv, QualifiedMetaString& tabname)
+static processing_state parse_arg(int argc, SCHAR** argv, [[maybe_unused]] QualifiedMetaString& tabname)
 //	, FILE** sess) Last param was for wisql
 {
 /**************************************
@@ -6654,10 +6654,6 @@ static processing_state parse_arg(int argc, SCHAR** argv, QualifiedMetaString& t
 	processing_state ret = SKIP;
 
 	TEXT errbuf[MSG_LENGTH];
-
-#ifndef DEV_BUILD
-	(void) tabname;
-#endif
 
 	// Initialize database name
 
