@@ -308,7 +308,7 @@ bool AggNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other,
 	// ASF: We compare name address. That should be ok, as we have only one AggInfo instance
 	// per function.
 	return aggInfo.blr == o->aggInfo.blr && aggInfo.name == o->aggInfo.name &&
-		distinct == o->distinct && dialect1 == o->dialect1 && sort == o->sort;;
+		distinct == o->distinct && dialect1 == o->dialect1;
 }
 
 void AggNode::setParameterName(dsql_par* parameter) const
@@ -448,12 +448,14 @@ bool AggNode::aggPass(thread_db* tdbb, Request* request) const
 			for (auto& nodeOrder : sort->expressions)
 			{
 				dsc toDesc = *(descOrder++);
-				toDesc.dsc_address = data + (IPTR)toDesc.dsc_address;
+				toDesc.dsc_address = data + (IPTR) toDesc.dsc_address;
 				if (const auto fromDsc = EVL_expr(tdbb, request, nodeOrder))
 				{
 					if (IS_INTL_DATA(fromDsc))
+					{
 						INTL_string_to_key(tdbb, INTL_TEXT_TO_INDEX(fromDsc->getTextType()),
 							fromDsc, &toDesc, INTL_KEY_UNIQUE);
+					}
 					else
 						MOV_move(tdbb, fromDsc, &toDesc);
 				}
@@ -465,7 +467,7 @@ bool AggNode::aggPass(thread_db* tdbb, Request* request) const
 			}
 
 			dsc toDesc = asb->desc;
-			toDesc.dsc_address = data + (IPTR)toDesc.dsc_address;
+			toDesc.dsc_address = data + (IPTR) toDesc.dsc_address;
 			MOV_move(tdbb, desc, &toDesc);
 
 			return true;
@@ -522,7 +524,7 @@ dsc* AggNode::execute(thread_db* tdbb, Request* request) const
 			if (distinct)
 				desc.dsc_address = data + (asb->intl ? asb->keyItems[1].getSkdOffset() : 0);
 			else
-				desc.dsc_address = data + (IPTR)asb->desc.dsc_address;
+				desc.dsc_address = data + (IPTR) asb->desc.dsc_address;
 
 			aggPass(tdbb, request, &desc);
 		}
@@ -937,6 +939,20 @@ DmlNode* ListAggNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 	return node;
 }
 
+bool ListAggNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const
+{
+	if (!AggNode::dsqlMatch(dsqlScratch, other, ignoreMapCast))
+		return false;
+
+	const ListAggNode* o = nodeAs<ListAggNode>(other);
+	fb_assert(o);
+
+	if (dsqlOrderClause || o->dsqlOrderClause)
+		return PASS1_node_match(dsqlScratch, dsqlOrderClause, o->dsqlOrderClause, ignoreMapCast);
+
+	return true;
+}
+
 void ListAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 {
 	DsqlDescMaker::fromNode(dsqlScratch, desc, arg);
@@ -948,20 +964,6 @@ void ListAggNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	AggNode::genBlr(dsqlScratch);
 	GEN_sort(dsqlScratch, blr_sort, dsqlOrderClause);
-}
-
-AggNode* ListAggNode::pass1(thread_db* tdbb, CompilerScratch* csb)
-{
-	if (sort && distinct)
-	{
-		ValueExprNode* const sortNode = *sort->expressions.begin();
-		if (!arg->sameAs(sortNode, false) || sort->expressions.getCount() > 1)
-		{
-			ERR_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) << Arg::Gds(isc_dsql_command_err)
-										  << Arg::Gds(isc_distinct_order_by_err));
-		}
-	}
-	return AggNode::pass1(tdbb, csb);
 }
 
 bool ListAggNode::setParameterType(DsqlCompilerScratch* dsqlScratch,

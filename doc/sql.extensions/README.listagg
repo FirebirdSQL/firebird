@@ -10,7 +10,7 @@ Authors:
 
 Format:
 	<listagg set function> ::=
-		LISTAGG <left paren> [ <set quantifier> ] <character value expression> <comma> <listagg separator> [ <listagg overflow clause> ] <right paren> <within group specification>
+		LISTAGG <left paren> [ <set quantifier> ] <character value expression> <comma> <listagg separator> [ <listagg overflow clause> ] <right paren> [ <within group specification> ]
 
 	<listagg separator> ::=
 		<character string literal>
@@ -36,14 +36,8 @@ Syntax Rules:
 
 	There is a <listagg overflow clause> rule in the standard, which is intended to output an error
 	when the output value overflows. Since the LIST function always returns a BLOB, it was decided
-	that this rule would be meaningless. It was not implemented and silently ignored if specified.
-
-	If DISTINCT is specified for LISTAGG, then ORDER BY <sort specification list> must fully match
-	<character value expression>
-
-Notes:
-	If DISTINCT is specified, the presence of WITHIN GROUP must obey the restriction and will not
-	affect the subsequent code execution.
+	that this rule would be meaningless. So the OVERFLOW clause is syntactically supported but
+	silently ignored if specified.
 
 Examples:
 CREATE TABLE TEST_T
@@ -65,6 +59,22 @@ SELECT LISTAGG (DISTINCT COL4, ':') FROM TEST_T;
 I:J:K:L
 
 SELECT LISTAGG (DISTINCT COL3, ':') FROM TEST_T;
+====
+A:B
+
+SELECT LISTAGG (DISTINCT COL3, ':') WITHIN GROUP (ORDER BY COL3 ASCENDING) FROM TEST_T;
+====
+A:B
+
+SELECT LISTAGG (DISTINCT COL3, ':') WITHIN GROUP (ORDER BY COL3 DESCENDING) FROM TEST_T;
+====
+B:A
+
+SELECT LISTAGG (DISTINCT COL3, ':') WITHIN GROUP (ORDER BY COL3 DESCENDING, COL4, COL5) FROM TEST_T;
+====
+B:A
+
+SELECT LISTAGG (DISTINCT COL3, ':') WITHIN GROUP (ORDER BY COL4, COL3 DESCENDING, COL5) FROM TEST_T;
 ====
 A:B
 
@@ -108,7 +118,7 @@ SELECT LISTAGG (COL2, ':') WITHIN GROUP (ORDER BY COL3 ASC, COL4 DESC) FROM TEST
 =======
 C:A:D:B
 
-SELECT LISTAGG (ALL COL6, ':')FROM TEST_T;
+SELECT LISTAGG (ALL COL6, ':') FROM TEST_T;
 =======
 П:Д:Ж:Й
 
@@ -119,6 +129,18 @@ SELECT LISTAGG (ALL COL6, ':') WITHIN GROUP (ORDER BY COL2 DESC) FROM TEST_T;
 SELECT LISTAGG (ALL COL2, ':') WITHIN GROUP (ORDER BY COL6) FROM TEST_T;
 =======
 B:C:D:A
+
+SELECT LISTAGG (COL4, ':' ON OVERFLOW TRUNCATE '...' WITHOUT COUNT) WITHIN GROUP (ORDER BY COL3 ASC) FROM TEST_T;
+=======
+J:L:I:K
+
+SELECT LISTAGG (COL4, ':' ON OVERFLOW TRUNCATE '...' WITH COUNT) WITHIN GROUP (ORDER BY COL3 DESC) FROM TEST_T;
+======
+I:K:J:L
+
+SELECT LISTAGG (DISTINCT COL3, ':' ON OVERFLOW ERROR) WITHIN GROUP (ORDER BY COL3) FROM TEST_T;
+===
+A:B
 
 INSERT INTO TEST_T values(5, 'E', NULL, NULL, NULL, NULL);
 INSERT INTO TEST_T values(6, 'F', 'C', 'N', true, 'К');
@@ -134,11 +156,4 @@ A:C:B:D:F:E
 SELECT LISTAGG (ALL COL2, ':') WITHIN GROUP (ORDER BY COL6 NULLS FIRST) FROM TEST_T;
 ===========
 E:B:C:D:F:A
-
-SELECT LISTAGG (DISTINCT COL3, ':') WITHIN GROUP (ORDER BY COL2) FROM TEST_T;
-========
-Statement failed, SQLSTATE = 42000
-SQL error code = -104
--Invalid command
--Sort-key of the ORDER BY specification must match the argument list
 

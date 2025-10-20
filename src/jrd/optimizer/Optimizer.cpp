@@ -1378,13 +1378,22 @@ void Optimizer::generateAggregateDistincts(MapNode* map)
 			sort_key_def* sort_key = asb->keyItems.getBuffer(asb->intl ? 2 : 1);
 			sort_key->setSkdOffset();
 
+			UCHAR direction = SKD_ascending;
+			if (aggNode->sort)
+			{
+				ValueExprNode* const node = aggNode->sort->expressions.front();
+				const SortDirection sortDir = aggNode->sort->direction.front();
+				if (aggNode->arg->sameAs(node, false) && sortDir == ORDER_DESC)
+					direction = SKD_descending;
+			}
+
 			if (asb->intl)
 			{
 				const USHORT key_length = ROUNDUP(INTL_key_length(tdbb,
 					INTL_TEXT_TO_INDEX(desc->getTextType()), desc->getStringLength()), sizeof(SINT64));
 
 				sort_key->setSkdLength(SKD_bytes, key_length);
-				sort_key->skd_flags = SKD_ascending;
+				sort_key->skd_flags = direction;
 				sort_key->skd_vary_offset = 0;
 
 				++sort_key;
@@ -1412,7 +1421,7 @@ void Optimizer::generateAggregateDistincts(MapNode* map)
 			// 			see AggNode::aggPass() for details; the length remains rounded properly
 			asb->length += sizeof(ULONG);
 
-			sort_key->skd_flags = SKD_ascending;
+			sort_key->skd_flags = direction;
 			asb->impure = csb->allocImpure<impure_agg_sort>();
 			asb->desc = *desc;
 
@@ -1437,8 +1446,8 @@ void Optimizer::generateAggregateSort(AggNode* aggNode)
 	const auto keyCount = aggNode->sort->expressions.getCount() * 2;
 	sort_key_def* sortKey = asb->keyItems.getBuffer(keyCount);
 
-	auto const* direction = aggNode->sort->direction.begin();
-	auto const* nullOrder = aggNode->sort->nullOrder.begin();
+	const auto* direction = aggNode->sort->direction.begin();
+	const auto* nullOrder = aggNode->sort->nullOrder.begin();
 
 	for (auto& node : aggNode->sort->expressions)
 	{

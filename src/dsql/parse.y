@@ -4723,6 +4723,8 @@ keyword_or_column
 	| GREATEST
 	| LEAST
 	| WITHIN
+	| LISTAGG
+	| TRUNCATE
 	;
 
 col_opt
@@ -10044,7 +10046,7 @@ non_reserved_word
 	| SEARCH_PATH
 	| SCHEMA
 	| UNLIST
-	| LISTAGG
+	| ERROR
 	;
 
 %%

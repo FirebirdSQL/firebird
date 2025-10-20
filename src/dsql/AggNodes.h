@@ -111,10 +111,11 @@ public:
 		holder.add(delimiter);
 	}
 
+	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
+
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
-	AggNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
 	
 	bool setParameterType(DsqlCompilerScratch* dsqlScratch,
 		std::function<void (dsc*)> makeDesc, bool forceVarChar) override;
