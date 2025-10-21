@@ -936,13 +936,13 @@ void INF_database_info(thread_db* tdbb,
 			length = INF_convert(attachment->att_parallel_workers, buffer);
 			break;
 
-		case fb_info_counts_scope_local:
+		case fb_info_counts_scope_att:
 			pageStats = recordStats = &attachment->att_stats;
 			memoryStats = &attachment->att_memory_stats;
 			*info++ = item;
 			continue;
 
-		case fb_info_counts_scope_global:
+		case fb_info_counts_scope_db:
 			pageStats = recordStats = &dbb->dbb_stats;
 			memoryStats = &dbb->dbb_memory_stats;
 			*info++ = item;
