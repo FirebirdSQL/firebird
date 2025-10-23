@@ -7049,7 +7049,6 @@ static bool checkSpecial(TEXT* const p, const int length, const double value)
  *
  * Functional description
  *	Special case - Nan and Infinity.
- *	Some libraries (SFIO) work wrong with them.
  *
  **************************************/
 	const TEXT* t = NULL;

@@ -55,13 +55,7 @@
 #include <fcntl.h>
 #endif
 
-#ifdef AIX_PPC
-#define _UNIX95
-#endif
 #include <grp.h>
-#ifdef AIX_PPC
-#undef _UNIX95
-#endif
 
 #ifdef HAVE_PWD_H
 #include <pwd.h>
