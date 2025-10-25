@@ -53,5 +53,6 @@ void	BTR_remove(Jrd::thread_db*, Jrd::win*, Jrd::index_insertion*);
 void	BTR_reserve_slot(Jrd::thread_db*, Jrd::IndexCreation&);
 void	BTR_selectivity(Jrd::thread_db*, Jrd::jrd_rel*, USHORT, Jrd::SelectivityList&);
 bool	BTR_types_comparable(const dsc& target, const dsc& source);
+bool	BTR_move_index(Jrd::thread_db*, Jrd::jrd_rel*, SLONG, ULONG, Jrd::PageNumber&);
 
 #endif // JRD_BTR_PROTO_H

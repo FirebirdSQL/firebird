@@ -201,7 +201,7 @@ bool IndexTableScan::internalGetRecord(thread_db* tdbb) const
 	const bool descending = (idx->idx_flags & idx_descending);
 
 	// find the last fetched position from the index
-	const USHORT pageSpaceID = m_relation->getPages(tdbb)->rel_pg_space_id;
+	const ULONG pageSpaceID = idx->idx_pg_space_id;
 	win window(pageSpaceID, impure->irsb_nav_page);
 
 	const IndexRetrieval* const retrieval = m_index->retrieval;
