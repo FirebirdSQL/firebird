@@ -37,10 +37,6 @@
 #include <algorithm>
 #include <cctype>
 
-#ifdef SFIO
-#include <stdio.h>
-#endif
-
 namespace Firebird {
 
 template <typename T>
