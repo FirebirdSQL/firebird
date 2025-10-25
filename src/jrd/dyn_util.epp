@@ -302,6 +302,7 @@ bool DYN_UTIL_check_unique_name_nothrow(thread_db* tdbb, jrd_tra* transaction,
 		}
 
 		case obj_tablespace:
+		{
 			fb_assert(object_name.schema.isEmpty());
 
 			static const CachedRequestId tablespaceHandleId;
@@ -316,6 +317,7 @@ bool DYN_UTIL_check_unique_name_nothrow(thread_db* tdbb, jrd_tra* transaction,
 			END_FOR
 
 			break;
+		}
 
 		default:
 			fb_assert(false);
