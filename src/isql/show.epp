@@ -4741,10 +4741,11 @@ static void show_index(const QualifiedMetaString& relationName,
 		"%s%s%s INDEX ON %s",
 		IUTILS_name_to_string(indexName).c_str(),
 		(unique_flag ? " UNIQUE" : ""),
-		(index_type == 1 ? " DESCENDING" : ""), IUTILS_name_to_string(relationName.object).c_str());
+		(index_type == 1 ? " DESCENDING" : ""),
+		IUTILS_name_to_string(relationName.object).c_str());
 
-	if (tablespaceName != PRIMARY_TABLESPACE_NAME)
-		isqlGlob.printf(" TABLESPACE %s", tablespaceName);
+	if (tablespaceName.hasData() && tablespaceName != PRIMARY_TABLESPACE_NAME)
+		isqlGlob.printf(" TABLESPACE %s", IUTILS_name_to_string(tablespaceName).c_str());
 
 	// Get column names
 
@@ -4788,7 +4789,10 @@ static processing_state show_indices(const std::optional<QualifiedMetaString>& n
 				continue;
 
 			const QualifiedMetaString relationName(IDX.RDB$RELATION_NAME, IDX.RDB$SCHEMA_NAME);
-			const MetaString tablespaceName(IDX.RDB$TABLESPACE_NAME);
+
+			MetaString tablespaceName;
+			if (!IDX.RDB$TABLESPACE_NAME.NULL)
+				tablespaceName = IDX.RDB$TABLESPACE_NAME;
 
 			if (IDX.RDB$INDEX_INACTIVE.NULL)
 				IDX.RDB$INDEX_INACTIVE = 0;
@@ -4835,9 +4839,12 @@ static processing_state show_indices(const std::optional<QualifiedMetaString>& n
 		{
 			const QualifiedMetaString indexName(IDX.RDB$INDEX_NAME, IDX.RDB$SCHEMA_NAME);
 			const QualifiedMetaString relationName(IDX.RDB$RELATION_NAME, IDX.RDB$SCHEMA_NAME);
-			const MetaString tablespaceName(IDX.RDB$TABLESPACE_NAME);
 
 			first = false;
+
+			MetaString tablespaceName;
+			if (!IDX.RDB$TABLESPACE_NAME.NULL)
+				tablespaceName = IDX.RDB$TABLESPACE_NAME;
 
 			show_index(relationName, indexName, tablespaceName,
 					   IDX.RDB$UNIQUE_FLAG, IDX.RDB$INDEX_TYPE, IDX.RDB$INDEX_INACTIVE);
@@ -4992,12 +4999,13 @@ static processing_state show_tablespaces(const std::optional<MetaString>& name)
 	if (!name)
 	{
 		//  List all tablespace names in columns
-		FOR X IN RDB$TABLESPACES WITH
-			(X.RDB$SYSTEM_FLAG NE 1 OR X.RDB$SYSTEM_FLAG MISSING)
+		FOR X IN RDB$TABLESPACES WITH X.RDB$SYSTEM_FLAG EQ 0
 			SORTED BY X.RDB$TABLESPACE_NAME
 		{
 			first = false;
-			isqlGlob.printf("%s%s", fb_utils::exact_name(X.RDB$TABLESPACE_NAME), NEWLINE);
+
+			const MetaString tablespaceName(X.RDB$TABLESPACE_NAME);
+			isqlGlob.printf("%s%s", IUTILS_name_to_string(tablespaceName).c_str(), NEWLINE);
 		}
 		END_FOR
 		ON_ERROR
@@ -5016,8 +5024,8 @@ static processing_state show_tablespaces(const std::optional<MetaString>& name)
 
 			first = false;
 
-			fb_utils::exact_name(X.RDB$TABLESPACE_NAME);
-			isqlGlob.printf("%s", X.RDB$TABLESPACE_NAME);
+			const MetaString tablespaceName(X.RDB$TABLESPACE_NAME);
+			isqlGlob.printf("%s", IUTILS_name_to_string(tablespaceName).c_str());
 
 			if (!X.RDB$FILE_NAME.NULL)
 			{
@@ -6160,9 +6168,12 @@ static processing_state show_table(const QualifiedMetaString& name, bool isView)
 		if (!REL.RDB$EXTERNAL_FILE.NULL)
 			isqlGlob.printf("External file: %s%s", REL.RDB$EXTERNAL_FILE, NEWLINE);
 
-		fb_utils::exact_name(REL.RDB$TABLESPACE_NAME);
-		if (!REL.RDB$TABLESPACE_NAME.NULL && strcmp(REL.RDB$TABLESPACE_NAME, PRIMARY_TABLESPACE_NAME))
-			isqlGlob.printf("TABLESPACE: %s%s", REL.RDB$TABLESPACE_NAME, NEWLINE);
+		if (!REL.RDB$TABLESPACE_NAME.NULL)
+		{
+			const MetaString tablespaceName(REL.RDB$TABLESPACE_NAME);
+			if (tablespaceName != PRIMARY_TABLESPACE_NAME)
+				isqlGlob.printf("TABLESPACE: %s%s", IUTILS_name_to_string(tablespaceName).c_str(), NEWLINE);
+		}
 
 	// TODO: indent
 
