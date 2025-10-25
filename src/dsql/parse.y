@@ -751,10 +751,10 @@ using namespace Firebird;
 	YYSTYPE()
 	{}
 
-	std::optional<int> nullableIntVal;
+	Firebird::PodOptional<int> nullableIntVal;
 	Firebird::TriState triState;
-	std::optional<Jrd::SqlSecurity> nullableSqlSecurityVal;
-	std::optional<Jrd::OverrideClause> nullableOverrideClause;
+	Firebird::PodOptional<Jrd::SqlSecurity> nullableSqlSecurityVal;
+	Firebird::PodOptional<Jrd::OverrideClause> nullableOverrideClause;
 	struct { bool first; bool second; } boolPair;
 	bool boolVal;
 	int intVal;
@@ -762,8 +762,8 @@ using namespace Firebird;
 	SLONG int32Val;
 	SINT64 int64Val;
 	FB_UINT64 uint64Val;
-	std::optional<SINT64> nullableInt64Val;
-	std::optional<FB_UINT64> nullableUint64Val;
+	Firebird::PodOptional<SINT64> nullableInt64Val;
+	Firebird::PodOptional<FB_UINT64> nullableUint64Val;
 	Jrd::ScaledNumber scaledNumber;
 	UCHAR blrOp;
 	Jrd::OrderNode::NullsPlacement nullsPlacement;
@@ -1539,16 +1539,16 @@ arg_desc($parameters)
 	: udf_data_type param_mechanism
 		{
 			$parameters->add(newNode<ParameterClause>($1));
-			$parameters->back()->udfMechanism = $2;
+			$parameters->back()->udfMechanism = $2.toOptional();
 		}
 	;
 
 %type <nullableIntVal> param_mechanism
 param_mechanism
 	: /* nothing */		{ $$ = std::nullopt; }	// Beware: This means FUN_reference or FUN_blob_struct.
-	| BY DESCRIPTOR		{ $$ = FUN_descriptor; }
-	| BY SCALAR_ARRAY	{ $$ = FUN_scalar_array; }
-	| NULL				{ $$ = FUN_ref_with_null; }
+	| BY DESCRIPTOR		{ $$ = PodOptional<int>(FUN_descriptor); }
+	| BY SCALAR_ARRAY	{ $$ = PodOptional<int>(FUN_scalar_array); }
+	| NULL				{ $$ = PodOptional<int>(FUN_ref_with_null); }
 	;
 
 %type return_value1(<createAlterFunctionNode>)
@@ -2084,13 +2084,13 @@ restart_option($seqNode)
 	: RESTART with_opt
 		{
 			setClause($seqNode->restartSpecified, "RESTART", true);
-			setClause($seqNode->value, "RESTART WITH", $2);
+			setClause($seqNode->value, "RESTART WITH", $2.toOptional());
 		}
 
 %type <nullableInt64Val> with_opt
 with_opt
 	: /* Nothign */			{ $$ = std::nullopt; }
-	| WITH sequence_value	{ $$ = $2; }
+	| WITH sequence_value	{ $$ = PodOptional($2); }
 	;
 
 %type <createAlterSequenceNode> set_generator_clause
@@ -2824,7 +2824,7 @@ psql_procedure_clause
 	: procedure_clause_start optional_sql_security_full_alter_clause AS local_declarations_opt full_proc_block
 		{
 			$$ = $1;
-			$$->ssDefiner = $2;
+			$$->ssDefiner = $2.toOptional();
 			$$->source = makeParseStr(YYPOSNARG(4), YYPOSNARG(5));
 			$$->localDeclList = $4;
 			$$->body = $5;
@@ -2857,7 +2857,7 @@ partial_alter_procedure_clause
 		optional_sql_security_partial_alter_clause
 			{
 				$$ = $2;
-				$$->ssDefiner = $3;
+				$$->ssDefiner = $3.toOptional();
 			}
 	;
 
@@ -2972,7 +2972,7 @@ psql_function_clause
 	: function_clause_start optional_sql_security_full_alter_clause AS local_declarations_opt full_proc_block
 		{
 			$$ = $1;
-			$$->ssDefiner = $2;
+			$$->ssDefiner = $2.toOptional();
 			$$->source = makeParseStr(YYPOSNARG(4), YYPOSNARG(5));
 			$$->localDeclList = $4;
 			$$->body = $5;
@@ -3023,7 +3023,7 @@ alter_individual_op($createAlterFunctionNode)
 	: deterministic_clause
 		{ setClause($createAlterFunctionNode->deterministic, "DETERMINISTIC", $1); }
 	| optional_sql_security_partial_alter_clause
-		{ setClause($createAlterFunctionNode->ssDefiner, "SQL SECURITY", $1); }
+		{ setClause($createAlterFunctionNode->ssDefiner, "SQL SECURITY", $1.toOptional()); }
 	;
 
 %type <boolVal> deterministic_clause
@@ -3092,7 +3092,7 @@ package_clause
 	: symbol_package_name optional_sql_security_full_alter_clause AS BEGIN package_items_opt END
 		{
 			CreateAlterPackageNode* node = newNode<CreateAlterPackageNode>(*$1);
-			node->ssDefiner = $2;
+			node->ssDefiner = $2.toOptional();
 			node->source = makeParseStr(YYPOSNARG(4), YYPOSNARG(6));
 			node->items = $5;
 			$$ = node;
@@ -3104,7 +3104,7 @@ partial_alter_package_clause
 	: symbol_package_name optional_sql_security_partial_alter_clause
 		{
 			CreateAlterPackageNode* node = newNode<CreateAlterPackageNode>(*$1);
-			node->ssDefiner = $2;
+			node->ssDefiner = $2.toOptional();
 			$$ = node;
 		}
 	;
@@ -3258,7 +3258,7 @@ schema_clause_option($createAlterSchemaNode)
 	: DEFAULT CHARACTER SET symbol_character_set_name
 		{ setClause($createAlterSchemaNode->setDefaultCharSet, "DEFAULT CHARACTER SET", *$4); }
 	| DEFAULT optional_sql_security_clause
-		{ setClause($createAlterSchemaNode->setDefaultSqlSecurity, "DEFAULT SQL SECURITY", *$2); }
+		{ setClause($createAlterSchemaNode->setDefaultSqlSecurity, "DEFAULT SQL SECURITY", $2.toOptional()); }
 	;
 
 %type <createAlterSchemaNode> alter_schema_clause
@@ -3285,7 +3285,7 @@ alter_schema_option($alterSchemaNode)
 	: SET DEFAULT CHARACTER SET symbol_character_set_name
 		{ setClause($alterSchemaNode->setDefaultCharSet, "DEFAULT CHARACTER SET", *$5); }
 	| SET DEFAULT optional_sql_security_clause
-		{ setClause($alterSchemaNode->setDefaultSqlSecurity, "DEFAULT SQL SECURITY", *$3); }
+		{ setClause($alterSchemaNode->setDefaultSqlSecurity, "DEFAULT SQL SECURITY", $3.toOptional()); }
 	| DROP DEFAULT CHARACTER SET
 		{ setClause($alterSchemaNode->setDefaultCharSet, "DEFAULT CHARACTER SET", QualifiedName()); }
 	| DROP DEFAULT SQL SECURITY
@@ -4187,7 +4187,7 @@ trigger_clause
 	: create_trigger_start trg_sql_security_clause AS local_declarations_opt full_proc_block
 		{
 			$$ = $1;
-			$$->ssDefiner = $2;
+			$$->ssDefiner = $2.toOptional();
 			$$->source = makeParseStr(YYPOSNARG(3), YYPOSNARG(5));
 			$$->localDeclList = $4;
 			$$->body = $5;
@@ -4215,14 +4215,14 @@ create_trigger_common($trigger)
 		{
 			$trigger->active = $1;
 			$trigger->type = $2;
-			setClause($trigger->position, "POSITION", $3);
+			setClause($trigger->position, "POSITION", $3.toOptional());
 		}
 	| FOR symbol_table_name trigger_active table_trigger_type trigger_position
 		{
 			$trigger->relationName = *$2;
 			$trigger->active = $3;
 			$trigger->type = $4;
-			setClause($trigger->position, "POSITION", $5);
+			setClause($trigger->position, "POSITION", $5.toOptional());
 		}
 	;
 
@@ -4250,7 +4250,7 @@ trigger_type($trigger)
 	: table_trigger_type trigger_position ON symbol_table_name
 		{
 			$$ = $1;
-			setClause($trigger->position, "POSITION", $2);
+			setClause($trigger->position, "POSITION", $2.toOptional());
 			$trigger->relationName = *$4;
 		}
 	| ON trigger_db_type
@@ -4360,7 +4360,7 @@ trigger_type_suffix
 %type <nullableIntVal> trigger_position
 trigger_position
 	: /* nothing */					{ $$ = std::nullopt; }
-	| POSITION nonneg_short_integer	{ $$ = $2; }
+	| POSITION nonneg_short_integer	{ $$ = PodOptional((int) $2); }
 	;
 
 // ALTER statement
@@ -4766,7 +4766,7 @@ alter_identity_clause_option($identityOptions)
 	: RESTART with_opt
 		{
 			setClause($identityOptions->restart, "RESTART");
-			$identityOptions->startValue = $2;
+			$identityOptions->startValue = $2.toOptional();
 		}
 	| SET INCREMENT by_noise signed_long_integer
 		{ setClause($identityOptions->increment, "SET INCREMENT BY", $4); }
@@ -4926,9 +4926,9 @@ alter_trigger_clause
 			$$->alter = true;
 			$$->create = false;
 			$$->active = $2;
-			$$->type = $3;
-			$$->position = $4;
-			$$->ssDefiner = $5;
+			$$->type = $3.toOptional();
+			$$->position = $4.toOptional();
+			$$->ssDefiner = $5.toOptional();
 			$$->source = makeParseStr(YYPOSNARG(6), YYPOSNARG(8));
 			$$->localDeclList = $7;
 			$$->body = $8;
@@ -4940,8 +4940,8 @@ alter_trigger_clause
 			$$->alter = true;
 			$$->create = false;
 			$$->active = $2;
-			$$->type = $3;
-			$$->position = $4;
+			$$->type = $3.toOptional();
+			$$->position = $4.toOptional();
 			$$->external = $5;
 			if ($6)
 				$$->source = *$6;
@@ -4952,52 +4952,41 @@ alter_trigger_clause
 			$$->alter = true;
 			$$->create = false;
 			$$->active = $2;
-			$$->type = $3;
-			$$->position = $4;
-			$$->ssDefiner = $5;
+			$$->type = $3.toOptional();
+			$$->position = $4.toOptional();
+			$$->ssDefiner = $5.toOptional();
 		}
 	;
 
 %type <nullableUint64Val> trigger_type_opt
 trigger_type_opt	// we do not allow alter database triggers, hence we do not use trigger_type here
-	: trigger_type_prefix trigger_type_suffix
-		{ $$ = $1 + $2 - 1; }
-	|
-		{ $$ = std::nullopt; }
+	: trigger_type_prefix trigger_type_suffix	{ $$ = PodOptional($1 + $2 - 1); }
+	| /* nothing */								{ $$ = std::nullopt; }
 	;
 
 %type <nullableSqlSecurityVal> optional_sql_security_clause
 optional_sql_security_clause
-	: SQL SECURITY DEFINER
-		{ $$ = SS_DEFINER; }
-	| SQL SECURITY INVOKER
-		{ $$ = SS_INVOKER; }
+	: SQL SECURITY DEFINER	{ $$ = PodOptional(SS_DEFINER); }
+	| SQL SECURITY INVOKER	{ $$ = PodOptional(SS_INVOKER); }
 	;
 
 %type <nullableSqlSecurityVal> optional_sql_security_full_alter_clause
 optional_sql_security_full_alter_clause
-	: optional_sql_security_clause
-		{ $$ = $1; }
-	| // nothing
-		{ $$ = std::nullopt; }
+	: optional_sql_security_clause	{ $$ = $1; }
+	| /* nothing */					{ $$ = std::nullopt; }
 	;
 
 %type <nullableSqlSecurityVal> optional_sql_security_partial_alter_clause
 optional_sql_security_partial_alter_clause
-	: optional_sql_security_clause
-		{ $$ = $1; }
-	| DROP SQL SECURITY
-		{ $$ = SS_DROP; }
+	: optional_sql_security_clause	{ $$ = $1; }
+	| DROP SQL SECURITY				{ $$ = PodOptional(SS_DROP); }
 	;
 
 %type <nullableSqlSecurityVal> trg_sql_security_clause
 trg_sql_security_clause
-	: // nothing
-		{ $$ = std::nullopt; }
-	| optional_sql_security_clause
-		{ $$ = $1; }
-	| DROP SQL SECURITY
-		{ $$ = SS_DROP; }
+	: /* nothing */					{ $$ = std::nullopt; }
+	| optional_sql_security_clause	{ $$ = $1; }
+	| DROP SQL SECURITY				{ $$ = PodOptional(SS_DROP); }
 	;
 
 // DROP metadata operations
@@ -7107,14 +7096,14 @@ insert
 			returning_clause
 		{
 			StoreNode* node = $$ = $1;
-			node->overrideClause = $3;
+			node->overrideClause = $3.toOptional();
 			node->dsqlValues = $6;
 			node->dsqlReturning = $8;
 		}
 	| insert_start ins_column_parens_opt(NOTRIAL(&$1->dsqlFields)) override_opt select_expr returning_clause
 		{
 			StoreNode* node = $$ = $1;
-			node->overrideClause = $3;
+			node->overrideClause = $3.toOptional();
 			node->dsqlRse = $4;
 			node->dsqlReturning = $5;
 			$$ = node;
@@ -7140,8 +7129,8 @@ insert_start
 %type <nullableOverrideClause> override_opt
 override_opt
 	: /* nothing */				{ $$ = std::nullopt; }
-	| OVERRIDING USER VALUE		{ $$ = OverrideClause::USER_VALUE; }
-	| OVERRIDING SYSTEM VALUE	{ $$ = OverrideClause::SYSTEM_VALUE; }
+	| OVERRIDING USER VALUE		{ $$ = PodOptional(OverrideClause::USER_VALUE); }
+	| OVERRIDING SYSTEM VALUE	{ $$ = PodOptional(OverrideClause::SYSTEM_VALUE); }
 	;
 
 %type <valueListNode> value_or_default_list
@@ -7226,13 +7215,13 @@ merge_insert_specification($mergeNotMatchedClause)
 	: THEN INSERT ins_column_parens_opt(NOTRIAL(&$mergeNotMatchedClause->fields)) override_opt
 			VALUES '(' value_or_default_list ')'
 		{
-			$mergeNotMatchedClause->overrideClause = $4;
+			$mergeNotMatchedClause->overrideClause = $4.toOptional();
 			$mergeNotMatchedClause->values = $7;
 		}
 	| AND search_condition THEN INSERT ins_column_parens_opt(NOTRIAL(&$mergeNotMatchedClause->fields)) override_opt
 			VALUES '(' value_or_default_list ')'
 		{
-			$mergeNotMatchedClause->overrideClause = $6;
+			$mergeNotMatchedClause->overrideClause = $6.toOptional();
 			$mergeNotMatchedClause->values = $9;
 			$mergeNotMatchedClause->condition = $2;
 		}
@@ -7342,7 +7331,7 @@ update_or_insert
 				plan_clause order_clause_opt rows_clause_optional returning_clause
 			{
 				UpdateOrInsertNode* node = $$ = $6;
-				node->overrideClause = $8;
+				node->overrideClause = $8.toOptional();
 				node->values = $11;
 				node->plan = $14;
 				node->order = $15;
