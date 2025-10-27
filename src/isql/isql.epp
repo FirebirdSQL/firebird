@@ -6142,13 +6142,16 @@ static bool printUser(const char* dbName)
 			continue;
 
 		string txt;
-		switch(v.type & ~1)
+		switch (v.type & ~1)
 		{
 		case SQL_TEXT:
 			txt.assign(v.value.asChar, v.length);
 			break;
 		case SQL_VARYING:
 			txt.assign(v.value.asVary->vary_string, v.value.asVary->vary_length);
+			break;
+		default:
+			fb_assert(false);
 			break;
 		}
 
@@ -6634,7 +6637,7 @@ static processing_state newtrans(const TEXT* statement)
 }
 
 
-static processing_state parse_arg(int argc, SCHAR** argv, QualifiedMetaString& tabname)
+static processing_state parse_arg(int argc, SCHAR** argv, [[maybe_unused]] QualifiedMetaString& tabname)
 //	, FILE** sess) Last param was for wisql
 {
 /**************************************
@@ -7187,6 +7190,9 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 					break;
 				case SQL_INT64:
 					value = *var->value.asBigint;
+					break;
+				default:
+					fb_assert(false);
 					break;
 				}
 
