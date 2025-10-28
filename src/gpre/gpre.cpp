@@ -577,11 +577,7 @@ int main(int argc, char* argv[])
 			sw_lines = false;
 			gpreGlob.sw_cstring = false;
 			gen_routine = FTN_action;
-#ifdef __sun
-			comment_start = "*      ";
-#else
 			comment_start = "C      ";
-#endif
 			comment_stop = " ";
 
 			// Change the patterns for v4.0

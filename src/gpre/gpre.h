@@ -68,12 +68,6 @@
 #include "../jrd/constants.h"
 #include "../common/utils_proto.h"
 
-#ifdef GPRE_FORTRAN
-#if defined AIX || defined AIX_PPC || defined __sun
-#define FTN_BLK_DATA
-#endif
-#endif
-
 
 static inline constexpr const char* CONST_STR = "const ";
 

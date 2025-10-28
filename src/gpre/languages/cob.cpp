@@ -60,7 +60,7 @@
 static const char* const COMMIT			= "commit";
 static const char* const ROLLBACK		= "rollback";
 
-#if defined AIX || defined AIX_PPC || defined SOLARIS || defined HP11 || defined LINUX || defined DARWIN || defined FREEBSD || defined NETBSD || defined WIN_NT
+#if defined LINUX || defined DARWIN || defined FREEBSD || defined NETBSD || defined WIN_NT
 static const char* const OMITTED 		= "BY VALUE 0";
 static const char* const BY_VALUE		= "BY VALUE ";
 static const char* const END_VALUE		= "";
@@ -155,11 +155,7 @@ static const char* const PUT_SEG_CALL_TEMPLATE	= "%sCALL \"%s\" USING %s, %s%s%d
 static const char* const SQLCODE_CALL_TEMPLATE	= "CALL \"%s\" USING %s, BY REFERENCE SQLCODE";
 #endif // GIVING_SUPPORTED
 
-#if defined AIX || defined AIX_PPC || defined SOLARIS || defined HP11
 static const char* const USAGE_COMP			= " USAGE IS COMP";
-#else
-static const char* const USAGE_COMP			= " USAGE IS COMP";
-#endif
 
 #ifndef FLOATS_COMPS_DECLARED
 static const char* const DCL_FLOAT			= "USAGE IS COMP-1";
@@ -2699,7 +2695,11 @@ static void gen_get_segment( const act* action)
 		names[isc_a_pos], blob->blb_ident,
 		names[isc_a_pos], blob->blb_len_ident,
 		BY_VALUE, blob->blb_seg_length, END_VALUE,
-		BY_REF, names[isc_a_pos], blob->blb_buff_ident, names[isc_status_pos]);
+		BY_REF, names[isc_a_pos], blob->blb_buff_ident
+#ifdef GIVING_SUPPORTED
+		, names[isc_status_pos]
+#endif
+	);
 
 	COB_print_buffer(output_buffer, true);
 
@@ -2872,7 +2872,11 @@ static void gen_put_segment( const act* action)
 		status_vector(action),
 		BY_REF, names[isc_a_pos], blob->blb_ident,
 		BY_VALUE, names[isc_a_pos], blob->blb_len_ident, END_VALUE,
-		BY_REF, names[isc_a_pos], blob->blb_buff_ident, names[isc_status_pos]);
+		BY_REF, names[isc_a_pos], blob->blb_buff_ident
+#ifdef GIVING_SUPPORTED
+		, names[isc_status_pos]
+#endif
+	);
 	COB_print_buffer(output_buffer, true);
 
 	set_sqlcode(action);
@@ -4283,4 +4287,3 @@ static void t_start_auto(const gpre_req* request,
 
 	set_sqlcode(action);
 }
-

@@ -33,6 +33,7 @@
 #include "../dsql/PackageNodes.h"
 #include "../dsql/StmtNodes.h"
 #include "../jrd/RecordSourceNodes.h"
+#include "../common/classes/PodOptional.h"
 #include "../common/classes/TriState.h"
 #include "../common/classes/stack.h"
 

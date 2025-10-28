@@ -4608,6 +4608,8 @@ const
 	fb_info_wire_roundtrips = byte(158);
 	fb_info_max_blob_cache_size = byte(159);
 	fb_info_max_inline_blob_size = byte(160);
+	fb_info_counts_scope_att = byte(161);
+	fb_info_counts_scope_db = byte(162);
 	fb_info_crypt_encrypted = $01;
 	fb_info_crypt_process = $02;
 	fb_feature_multi_statements = byte(1);

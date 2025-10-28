@@ -114,11 +114,10 @@ inline constexpr int idx_offset_intl_range	= (0x7FFF + idx_first_intl_string);
 
 inline constexpr int idx_unique			= 1;
 inline constexpr int idx_descending		= 2;
-inline constexpr int idx_in_progress	= 4;
-inline constexpr int idx_foreign		= 8;
-inline constexpr int idx_primary		= 16;
-inline constexpr int idx_expression		= 32;
-inline constexpr int idx_condition		= 64;
+inline constexpr int idx_foreign		= 4;
+inline constexpr int idx_primary		= 8;
+inline constexpr int idx_expression		= 16;
+inline constexpr int idx_condition		= 32;
 
 // these flags are for idx_runtime_flags
 
