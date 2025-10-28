@@ -341,44 +341,36 @@ int NoThrowTimeStamp::convertGregorianDateToWeekDate(const struct tm& times) noe
 {
 	// Algorithm for Converting Gregorian Dates to ISO 8601 Week Date by Rick McCarty, 1999
 	// http://personal.ecu.edu/mccartyr/ISOwdALG.txt
-
 	const int y = times.tm_year + 1900;
-	const int dayOfYearNumber = times.tm_yday + 1;
+	const int dayOfYear = times.tm_yday + 1;
 
 	// Find the jan1Weekday for y (Monday=1, Sunday=7)
-	const int yy = (y - 1) % 100;
-	const int c = (y - 1) - yy;
-	const int g = yy + yy / 4;
-	const int jan1Weekday = 1 + (((((c / 100) % 4) * 5) + g) % 7);
+	const int y_1 = y - 1;
+	const int yy = y_1 % 100;
+	const int c = y_1 - yy;
+	const int g = yy + (yy >> 2);
+	const int jan1Weekday = 1 + (((((c / 100) & 3) * 5) + g) % 7);
 
-	// Find the weekday for y m d
-	const int h = dayOfYearNumber + (jan1Weekday - 1);
-	const int weekday = 1 + ((h - 1) % 7);
-
-	int weekNumber = (dayOfYearNumber + (7 - weekday) + (jan1Weekday - 1)) / 7;
-	if (jan1Weekday > 4)
-		weekNumber--;
+	const int weekday = 1 + ((dayOfYear + jan1Weekday - 2) % 7);
 
 	// Find if y m d falls in yearNumber y-1, weekNumber 52 or 53
-	int yearNumber = y;
-
-	if ((dayOfYearNumber <= (8 - jan1Weekday)) && (jan1Weekday > 4))
+	if ((dayOfYear <= (8 - jan1Weekday)) & (jan1Weekday > 4))
 	{
-		yearNumber = y - 1;
-		weekNumber = ((jan1Weekday == 5) || ((jan1Weekday == 6) &&
-			isLeapYear(yearNumber))) ? 53 : 52;
+		const int prevYearLeap = (!(y_1 & 3) && ((y_1 % 100) || !(y_1 % 400)));
+		const int is53 = (jan1Weekday == 5) | ((jan1Weekday == 6) & prevYearLeap);
+		return 52 + is53;
 	}
-	else
-	{
-		// Find if y m d falls in yearNumber y+1, weekNumber 1
-		const int i = isLeapYear(y) ? 366 : 365;
 
-		if ((i - dayOfYearNumber) < (4 - weekday))
-		{
-			yearNumber = y + 1;
-			weekNumber = 1;
-		}
+	// Find if y m d falls in yearNumber y+1, weekNumber 1
+	const int daysInYear = 365 + (!(y & 3) && ((y % 100) || !(y % 400)));
+	if ((daysInYear - dayOfYear) < (4 - weekday))
+	{
+		return 1;
 	}
+
+	// Find if y m d falls in yearNumber y, weekNumber 1 through 53
+	const int j = dayOfYear + (7 - weekday) + (jan1Weekday - 1);
+	const int weekNumber = (j / 7) - (jan1Weekday > 4); // Subtract 1 if jan1Weekday > 4
 
 	return weekNumber;
 }
