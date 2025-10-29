@@ -1713,7 +1713,7 @@ static void put_asciz(SCHAR attribute, const TEXT* str)
 	USHORT l = static_cast<USHORT>(strlen(str));
 	if (l > MAX_UCHAR)
 	{
-		BURP_print(false, 343, SafeArg() << int(attribute) << "put_asciz()" << USHORT(MAX_UCHAR));
+		BURP_print(true, 343, SafeArg() << int(attribute) << "put_asciz()" << USHORT(MAX_UCHAR));
 		// msg 343: text for attribute @1 is too large in @2, truncating to @3 bytes
 		l = MAX_UCHAR;
 	}
