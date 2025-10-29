@@ -299,7 +299,7 @@ The following system tables have been added:
 | RDB$FOREIGN_SERVER_NAME    | CHAR \(63\)          | The foreign server name                                    |
 | RDB$FOREIGN_OPTION_NAME    | CHAR \(63\)          | Option name                                                |
 | RDB$FOREIGN_OPTION_VALUE   | VARCHAR \(32765\)    | Option value                                               |
-| RDB$OWNER_NAME             | SHORT                | Option type                                                |
+| RDB$FOREIGN_OPTION_TYPE    | SHORT                | Option type                                                |
 
 This table completely absorbs table `RDB$FOREIGN_USER_MAPPINGS`, but the ISO/IEC 9075\-9:2023\(E\) \(SQL/MED\) standard requires a separate table for user mappings and user mapping options.
 
