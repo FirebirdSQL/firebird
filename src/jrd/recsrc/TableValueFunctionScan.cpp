@@ -118,6 +118,8 @@ void TableValueFunctionScan::assignParameter(thread_db* tdbb, dsc* fromDesc, con
 	memcpy(toDescValue.dsc_address, fromDesc->dsc_address, fromDesc->dsc_length);
 }
 
+//--------------------
+
 UnlistFunctionScan::UnlistFunctionScan(CompilerScratch* csb, StreamType stream, const string& alias,
 									   ValueListNode* list)
 	: TableValueFunctionScan(csb, stream, alias), m_inputList(list)
@@ -342,6 +344,153 @@ bool UnlistFunctionScan::nextBuffer(thread_db* tdbb) const
 				return true;
 			}
 		}
+	}
+
+	return false;
+}
+
+//--------------------
+
+GenSeriesFunctionScan::GenSeriesFunctionScan(CompilerScratch* csb, StreamType stream, const string& alias,
+									   ValueListNode* list)
+	: TableValueFunctionScan(csb, stream, alias), m_inputList(list)
+{
+	m_impure = csb->allocImpure<Impure>();
+}
+
+void GenSeriesFunctionScan::close(thread_db* tdbb) const
+{
+	const auto request = tdbb->getRequest();
+
+	invalidateRecords(request);
+
+	const auto impure = request->getImpure<Impure>(m_impure);
+
+	if (impure->irsb_flags & irsb_open)
+	{
+		impure->irsb_flags &= ~irsb_open;
+
+		if (impure->m_recordBuffer)
+		{
+			delete impure->m_recordBuffer;
+			impure->m_recordBuffer = nullptr;
+		}
+	}
+}
+
+
+void GenSeriesFunctionScan::internalOpen(thread_db* tdbb) const
+{
+	const auto request = tdbb->getRequest();
+	const auto rpb = &request->req_rpb[m_stream];
+	MemoryPool& pool = *tdbb->getDefaultPool();
+
+	rpb->rpb_number.setValue(BOF_NUMBER);
+
+	fb_assert(m_inputList->items.getCount() >= GEN_SERIES_INDEX_LAST);
+
+	auto startItem = m_inputList->items[GEN_SERIES_INDEX_START];
+	const auto startDesc = EVL_expr(tdbb, request, startItem);
+	if (startDesc == nullptr)
+	{
+		rpb->rpb_number.setValid(false);
+		return;
+	}
+
+	auto finishItem = m_inputList->items[GEN_SERIES_INDEX_FINISH];
+	const auto finishDesc = EVL_expr(tdbb, request, finishItem);
+	if (finishDesc == nullptr)
+	{
+		rpb->rpb_number.setValid(false);
+		return;
+	}
+
+	auto stepItem = m_inputList->items[GEN_SERIES_INDEX_STEP];
+	const auto stepDesc = EVL_expr(tdbb, request, stepItem);
+	if (stepDesc == nullptr)
+	{
+		rpb->rpb_number.setValid(false);
+		return;
+	}
+
+	// common scale
+	const auto scale = MIN(MIN(startDesc->dsc_scale, finishDesc->dsc_scale), stepDesc->dsc_scale);
+
+	const auto start = MOV_get_int64(tdbb, startDesc, scale); 
+	const auto finish = MOV_get_int64(tdbb, finishDesc, scale); 
+	const auto step = MOV_get_int64(tdbb, stepDesc, scale); 
+
+    // validate parameter value
+	if (((step > 0) && (start > finish)) ||
+       ((step < 0) && (start < finish)))
+	{
+		rpb->rpb_number.setValid(false);
+		return;
+	}
+
+	if (step == 0)
+		status_exception::raise(Arg::Gds(isc_genseq_stepmustbe_nonzero) << Arg::Str(m_name));
+
+
+	const auto impure = request->getImpure<Impure>(m_impure);
+	impure->irsb_flags |= irsb_open;
+	impure->m_recordBuffer = FB_NEW_POOL(pool) RecordBuffer(pool, m_format);
+	impure->m_start = start;
+	impure->m_finish = finish;
+	impure->m_step = step;
+    impure->m_result = start;
+	impure->m_scale = scale;
+
+
+    Record* const record = VIO_record(tdbb, rpb, m_format, &pool);
+
+	auto toDesc = m_format->fmt_desc.begin();
+
+	dsc fromDesc;
+	fromDesc.makeInt64(scale, &impure->m_result);
+
+	assignParameter(tdbb, &fromDesc, toDesc, 0, record);
+	impure->m_recordBuffer->store(record);
+}
+
+void GenSeriesFunctionScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned /*level*/,
+										 bool /*recurse*/) const
+{
+	planEntry.className = "FunctionScan";
+
+	planEntry.lines.add().text = "Function " +
+		printName(tdbb, m_name.toQuotedString(), m_alias) + " Scan";
+
+	printOptInfo(planEntry.lines);
+
+	if (m_alias.hasData())
+		planEntry.alias = m_alias;
+}
+
+bool GenSeriesFunctionScan::nextBuffer(thread_db* tdbb) const
+{
+	const auto request = tdbb->getRequest();
+	const auto impure = request->getImpure<Impure>(m_impure);
+
+	auto setIntToRecord = [&](SINT64 i)
+	{
+		Record* const record = request->req_rpb[m_stream].rpb_record;
+
+		auto toDesc = m_format->fmt_desc.begin();
+
+		dsc fromDesc;
+		fromDesc.makeInt64(impure->m_scale, &i);
+		assignParameter(tdbb, &fromDesc, toDesc, 0, record);
+		impure->m_recordBuffer->store(record);
+	};
+
+	impure->m_result += impure->m_step;
+
+	if (((impure->m_step > 0) && (impure->m_result <= impure->m_finish)) ||
+        ((impure->m_step < 0) && (impure->m_result >= impure->m_finish)))
+	{
+		setIntToRecord(impure->m_result);
+		return true;
 	}
 
 	return false;

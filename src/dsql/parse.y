@@ -710,6 +710,7 @@ using namespace Firebird;
 %token <metaNamePtr> CURRENT_SCHEMA
 %token <metaNamePtr> DOWNTO
 %token <metaNamePtr> FORMAT
+%token <metaNamePtr> GENERATE_SERIES
 %token <metaNamePtr> GREATEST
 %token <metaNamePtr> LEAST
 %token <metaNamePtr> LTRIM
@@ -6798,6 +6799,8 @@ table_value_function
 table_value_function_clause
 	: table_value_function_unlist
 		{ $$ = $1; }
+	| table_value_function_gen_series
+	    { $$ = $1; }
 	;
 
 %type <recSourceNode> table_value_function_unlist
@@ -6833,6 +6836,34 @@ table_value_function_correlation_name
 	: as_noise symbol_item_alias_name	{ $$ = $2; }
 	;
 
+%type <recSourceNode> table_value_function_gen_series
+table_value_function_gen_series
+	: GENERATE_SERIES '(' table_value_function_gen_series_arg_list ')'
+		{
+			auto node = newNode<GenSeriesFunctionSourceNode>();
+			node->dsqlFlags |= RecordSourceNode::DFLAG_VALUE;
+			node->dsqlName = *$1;
+			node->inputList = $3;
+			node->dsqlField = nullptr;
+			$$ = node;
+		}
+	;
+
+%type <valueListNode> table_value_function_gen_series_arg_list
+table_value_function_gen_series_arg_list
+	: value ',' value step_opt
+		{
+			$$ = newNode<ValueListNode>($1);
+			$$->add($3);
+			$$->add($4);
+		}
+	;
+
+%type <valueExprNode> step_opt
+step_opt
+	: /* nothing */		{ $$ = MAKE_const_sint64(1, 0); }
+	| ',' value			{ $$ = $2; }
+	;
 
 // other clauses in the select expression
 
@@ -9967,6 +9998,7 @@ non_reserved_word
 	| BIN_XOR_AGG
 	| DOWNTO
 	| FORMAT
+	| GENERATE_SERIES
 	| OWNER
 	| SEARCH_PATH
 	| SCHEMA

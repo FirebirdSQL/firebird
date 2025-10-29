@@ -1615,6 +1615,41 @@ namespace Jrd
 		NestConst<ValueListNode> m_inputList;
 	};
 
+	class GenSeriesFunctionScan final : public TableValueFunctionScan
+	{
+		enum GenSeriesTypeItemIndex : unsigned
+		{
+			GEN_SERIES_INDEX_START = 0,
+			GEN_SERIES_INDEX_FINISH = 1,
+			GEN_SERIES_INDEX_STEP = 2,
+			GEN_SERIES_INDEX_LAST = 3
+		};
+
+		struct Impure : public TableValueFunctionScan::Impure
+		{
+			SINT64 m_start;
+			SINT64 m_finish;
+			SINT64 m_step;
+			SINT64 m_result;
+			SCHAR m_scale;
+		};
+
+	public:
+		GenSeriesFunctionScan(CompilerScratch* csb, StreamType stream, const Firebird::string& alias,
+						   ValueListNode* list);
+
+	protected:
+		void close(thread_db* tdbb) const final;
+		void internalOpen(thread_db* tdbb) const final;
+		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level,
+							 bool recurse) const final;
+
+		bool nextBuffer(thread_db* tdbb) const final;
+
+	private:
+		NestConst<ValueListNode> m_inputList;
+	};
+
 } // namespace
 
 #endif // JRD_RECORD_SOURCE_H
