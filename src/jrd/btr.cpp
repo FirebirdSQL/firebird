@@ -2315,7 +2315,7 @@ void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation)
 	}
 
 	UCHAR* desc = 0;
-	USHORT len = idx->idx_count * sizeof(irtd);
+	const USHORT len = idx->idx_count * sizeof(irtd);
 	USHORT space = dbb->dbb_page_size;
 	index_root_page::irt_repeat* slot = NULL;
 	index_root_page::irt_repeat* end = NULL;
@@ -2357,7 +2357,6 @@ void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation)
 		else
 			break;
 
-		len = idx->idx_count * sizeof(irtd);
 		space = dbb->dbb_page_size;
 	}
 
