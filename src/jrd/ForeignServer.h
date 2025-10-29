@@ -94,8 +94,9 @@ namespace Jrd
 	class ForeignServer
 	{
 	public:
-		explicit ForeignServer(MemoryPool& p, const MetaName& aName, const MetaName& aPlugin)
-			: name(p, aName), plugin(p, aPlugin), options(p)
+		explicit ForeignServer(MemoryPool& p, const MetaName& aName, const MetaName& aPlugin,
+			const MetaName& aSecurityClass)
+			: name(p, aName), plugin(p, aPlugin), securityClass(p, aSecurityClass), options(p)
 		{}
 
 		void addOption(const MetaName& name, const Firebird::string& value, const ExternalValueType type);
@@ -111,9 +112,15 @@ namespace Jrd
 			return plugin;
 		}
 
+		const MetaName& getSecurityClass() const
+		{
+			return securityClass;
+		}
+
 	private:
 		const MetaName name;
 		const MetaName plugin;
+		const MetaName securityClass;
 		Firebird::GenericMap<MetaStringOptionPair> options;
 	};
 

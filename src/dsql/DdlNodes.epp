@@ -7900,6 +7900,9 @@ string CreateRelationNode::internalPrint(NodePrinter& printer) const
 void CreateRelationNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 {
 	SCL_check_create_access(tdbb, obj_relations, name.schema);
+
+	if (foreignServer.hasData())
+		SCL_check_foreign_server(tdbb, foreignServer, SCL_usage);
 }
 
 void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
@@ -7974,7 +7977,7 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 
 		if (foreignServer.hasData())
 		{
-			if (!checkObjectExist(tdbb, transaction, QualifiedName(foreignServer), obj_foreign_servers))
+			if (!checkObjectExist(tdbb, transaction, QualifiedName(foreignServer), obj_foreign_server))
 				status_exception::raise(Arg::Gds(isc_dyn_foreign_server_not_found) << foreignServer.c_str());
 
 			REL.RDB$FOREIGN_SERVER_NAME.NULL = FALSE;
@@ -12471,8 +12474,7 @@ string CreateAlterUserMappingNode::internalPrint(NodePrinter& printer) const
 
 void CreateAlterUserMappingNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 {
-	if (!(tdbb->getAttachment()->locksmith(tdbb, CHANGE_MAPPING_RULES)))
-		(Arg::Gds(isc_adm_task_denied) << Arg::Gds(isc_miss_prvlg) << "CHANGE_MAPPING_RULES").raise();
+	SCL_check_foreign_server(tdbb, server, SCL_usage);
 }
 
 
@@ -12510,7 +12512,7 @@ void CreateAlterUserMappingNode::executeCreate(thread_db* tdbb, DsqlCompilerScra
 	// make a unique name from the user and server.
 	const QualifiedName name(getUniqueName());
 
-	if (!checkObjectExist(tdbb, transaction, QualifiedName(server), obj_foreign_servers))
+	if (!checkObjectExist(tdbb, transaction, QualifiedName(server), obj_foreign_server))
 		status_exception::raise(Arg::Gds(isc_dyn_foreign_server_not_found) << server.c_str());
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_CREATE_USER_MAPPING,
@@ -12647,8 +12649,7 @@ string DropUserMappingNode::internalPrint(NodePrinter& printer) const
 
 void DropUserMappingNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 {
-	if (!(tdbb->getAttachment() && tdbb->getAttachment()->locksmith(tdbb, CHANGE_MAPPING_RULES)))
-		(Arg::Gds(isc_adm_task_denied) << Arg::Gds(isc_miss_prvlg) << "CHANGE_MAPPING_RULES").raise();
+	SCL_check_foreign_server(tdbb, server, SCL_usage);
 }
 
 void DropUserMappingNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
@@ -13052,7 +13053,7 @@ static bool checkObjectExist(thread_db* tdbb, jrd_tra* transaction, const Qualif
 			break;
 		}
 
-		case obj_foreign_servers:
+		case obj_foreign_server:
 		{
 			AutoCacheRequest request(tdbb, drq_f_server_exist, DYN_REQUESTS);
 			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
@@ -13254,6 +13255,11 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 		case obj_sql_role:
 			if (!isItSqlRole(tdbb, transaction, objName.object, dummyName))
 				status_exception::raise(Arg::PrivateDyn(188) << objName.toQuotedString());	// Role doesn't exist.
+			break;
+
+		case obj_foreign_server:
+			if (!checkObjectExist(tdbb, transaction, objName, objType))
+				status_exception::raise(Arg::PrivateDyn(326) << objName.toQuotedString());	// Foreign server @1 does not exist
 			break;
 
 		case obj_relations:
@@ -13476,6 +13482,7 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 					case obj_generator:
 					case obj_package_header:
 					case obj_schema:
+					case obj_foreign_server:
 					{
 						checkGrantorCanGrantObject(tdbb, transaction, currentUser.c_str(), priv, objName, objType);
 						break;

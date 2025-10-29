@@ -2884,6 +2884,8 @@ public:
 				case obj_jobs:
 				case obj_tablespaces:
 				case obj_schemas:
+				case obj_foreign_server:
+				case obj_foreign_servers:
 					break;
 
 				case obj_relations:

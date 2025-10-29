@@ -5961,12 +5961,14 @@ ForeignServer* MET_get_foreign_server(thread_db* tdbb, const MetaName& foreignSe
 
 	bool found = false;
 	MetaName foreignServerPlugin;
+	MetaName securityClass;
 
 	FOR(REQUEST_HANDLE reqFS)
 		FSER IN RDB$FOREIGN_SERVERS
 		WITH FSER.RDB$FOREIGN_SERVER_NAME EQ foreignServerName.c_str()
 	{
 		foreignServerPlugin = FSER.RDB$FOREIGN_SERVER_WRAPPER;
+		securityClass = FSER.RDB$SECURITY_CLASS;
 
 		found = true;
 	}
@@ -5976,7 +5978,8 @@ ForeignServer* MET_get_foreign_server(thread_db* tdbb, const MetaName& foreignSe
 		status_exception::raise(Arg::Gds(isc_dyn_foreign_server_not_found) << Arg::Str(foreignServerName));
 
 	MemoryPool& pool = *tdbb->getDefaultPool();
-	ForeignServer* foreignServer = FB_NEW_POOL(pool) ForeignServer(pool, foreignServerName, foreignServerPlugin);
+	ForeignServer* foreignServer = FB_NEW_POOL(pool) ForeignServer(pool, foreignServerName, foreignServerPlugin,
+		securityClass);
 
 	// Find foreign server options in system table
 	AutoCacheRequest reqFSOpt(tdbb, irq_find_f_s_opt, IRQ_REQUESTS);

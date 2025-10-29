@@ -315,3 +315,4 @@ FB_IMPL_MSG_SYMBOL(DYN, 322, dyn_dup_blob_filter, "Blob filter @1 already exists
 FB_IMPL_MSG(DYN, 323, dyn_foreign_server_not_found, -901, "42", "000", "Foreign server @1 not found")
 FB_IMPL_MSG(DYN, 324, dyn_user_mapping_not_found, -901, "42", "000", "User mapping for user @1 and server @2 not found")
 FB_IMPL_MSG(DYN, 325, dyn_foreign_server_already_exists, -901, "42", "000", "Foreign server @1 already exists")
+FB_IMPL_MSG(DYN, 326, dyn_foreign_server_not_exist, -901, "42", "000", "Foreign server @1 does not exist")

@@ -1035,6 +1035,13 @@ grant0($node)
 			$node->grantAdminOption = $7;
 			$node->grantor = $8;
 		}
+	| usage_privilege(NOTRIAL(&$node->privileges)) ON FOREIGN SERVER symbol_foreign_server_name
+			TO non_role_grantee_list(NOTRIAL(&$node->users)) grant_option granted_by
+		{
+			$node->object = newNode<GranteeClause>(obj_foreign_server, QualifiedName(*$5));
+			$node->grantAdminOption = $8;
+			$node->grantor = $9;
+		}
 	/***
 	| usage_privilege(NOTRIAL(&$node->privileges)) ON DOMAIN symbol_domain_name
 			TO non_role_grantee_list(NOTRIAL(&$node->users)) grant_option granted_by
@@ -1330,6 +1337,13 @@ revoke0($node)
 			$node->object = newNode<GranteeClause>(obj_schema, QualifiedName(*$5));
 			$node->grantAdminOption = $1;
 			$node->grantor = $8;
+		}
+	| rev_grant_option usage_privilege(NOTRIAL(&$node->privileges)) ON FOREIGN SERVER symbol_foreign_server_name
+			FROM non_role_grantee_list(NOTRIAL(&$node->users)) granted_by
+		{
+			$node->object = newNode<GranteeClause>(obj_foreign_server, QualifiedName(*$6));
+			$node->grantAdminOption = $1;
+			$node->grantor = $9;
 		}
 	/***
 	| rev_grant_option usage_privilege(NOTRIAL(&$node->privileges)) ON DOMAIN symbol_domain_name

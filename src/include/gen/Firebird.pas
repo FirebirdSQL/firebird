@@ -6014,6 +6014,7 @@ const
 	 isc_dyn_foreign_server_not_found = 336068931;
 	 isc_dyn_user_mapping_not_found = 336068932;
 	 isc_dyn_foreign_server_already_exists = 336068933;
+	 isc_dyn_foreign_server_not_exist = 336068934;
 	 isc_gbak_unknown_switch = 336330753;
 	 isc_gbak_page_size_missing = 336330754;
 	 isc_gbak_page_size_toobig = 336330755;

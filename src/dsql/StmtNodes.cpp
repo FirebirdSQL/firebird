@@ -4463,6 +4463,14 @@ ExecStatementNode* ExecStatementNode::pass1(thread_db* tdbb, CompilerScratch* cs
 	doPass1(tdbb, csb, innerStmt.getAddress());
 	doPass1(tdbb, csb, inputs.getAddress());
 	doPass1(tdbb, csb, outputs.getAddress());
+
+	if (server.hasData())
+	{
+		AutoPtr<ForeignServer> foreignServer = MET_get_foreign_server(tdbb, server);
+		CMP_post_access(tdbb, csb, foreignServer->getSecurityClass(), 0, SCL_usage, obj_foreign_servers,
+			QualifiedName(server));
+	}
+
 	return this;
 }
 
