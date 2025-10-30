@@ -642,8 +642,8 @@ void ALICE_print(USHORT	number, const SafeArg& arg)
 	AliceGlobals* tdgbl = AliceGlobals::getSpecific();
 	if (tdgbl->uSvc->isService())
 	{
-		tdgbl->uSvc->getStatusAccessor().setServiceStatus(ALICE_MSG_FAC, number, arg);
 		tdgbl->uSvc->started();
+		tdgbl->uSvc->getStatusAccessor().setServiceStatus(ALICE_MSG_FAC, number, arg);
 		return;
 	}
 
