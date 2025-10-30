@@ -337,9 +337,6 @@ constexpr KnownCounters knownCounters[TOTAL_COUNTERS] = {
 
 } // anonymous namespace
 
-static Firebird::IAttachment* lastAttachment = nullptr;
-static bool scopeTagsSupported = false;
-
 void Why::UtilInterface::getPerfCounters(Firebird::CheckStatusWrapper* status,
 	Firebird::IAttachment* att, const char* countersSet, ISC_INT64* counters)
 {
@@ -358,31 +355,6 @@ void Why::UtilInterface::getPerfCounters(Firebird::CheckStatusWrapper* status,
 		UCHAR info[TOTAL_COUNTERS * 2];		// will never use all, but do not care about few bytes
 		UCHAR* pinfo = info;
 		unsigned lastScope = 0;
-
-		if (lastAttachment != att)
-		{
-			lastAttachment = att;
-			scopeTagsSupported = true;
-
-			const UCHAR tags[] =
-			{
-				fb_info_counts_scope_att,
-				fb_info_counts_scope_db,
-				isc_info_end
-			};
-
-			UCHAR buffer[BUFFER_TINY];
-			att->getInfo(status, sizeof(tags), tags, sizeof(buffer), buffer);
-
-			for (UCHAR* p = buffer; *p != isc_info_end; p++)
-			{
-				if (*p == isc_info_error)
-				{
-					scopeTagsSupported = false;
-					break;
-				}
-			}
-		}
 
 #ifdef WIN_NT
 #define strtok_r strtok_s
@@ -407,7 +379,7 @@ void Why::UtilInterface::getPerfCounters(Firebird::CheckStatusWrapper* status,
 						const UCHAR tag = knownCounters[i].code;
 						const unsigned scope = knownCounters[i].scope;
 
-						if (scopeTagsSupported && scope && lastScope != scope) *pinfo++ = lastScope = scope;
+						if (scope && lastScope != scope) *pinfo++ = lastScope = scope;
 
 						*pinfo++ = tag;
 					}
