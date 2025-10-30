@@ -14,6 +14,12 @@ ifndef LIBTOOL
 LIBTOOL=libtool
 endif
 
+PLATFORM := $(shell uname | sed -e 's/_.*//')
+
+ifeq ($(PLATFORM), Darwin)
+   NO_UNDEFINED:=-no-undefined
+endif
+
 CC = $(LIBTOOL) --mode=compile --tag=CC $(GCC)
 
 CFLAGS  +=  -I./ -Wall -W -Wshadow -Wsign-compare
@@ -94,7 +100,7 @@ bn_mp_to_signed_bin_n.o bn_mp_to_unsigned_bin_n.o
 objs: $(OBJECTS)
 
 $(LIBNAME):  $(OBJECTS)
-	$(LIBTOOL) --mode=link --tag=CC $(GCC) *.lo -o $(LIBNAME) -rpath $(LIBPATH) -version-info $(VERSION)
+	$(LIBTOOL) --mode=link --tag=CC $(GCC) *.lo -o $(LIBNAME) -rpath $(LIBPATH) -version-info $(VERSION) $(NO_UNDEFINED)
 
 install: $(LIBNAME)
 	install -d -g $(GROUP) -o $(USER) $(DESTDIR)$(LIBPATH)

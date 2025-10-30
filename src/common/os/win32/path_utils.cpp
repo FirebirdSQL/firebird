@@ -55,7 +55,8 @@ void Win32DirIterator::init()
 
 	if (dir == INVALID_HANDLE_VALUE)
 	{
-		if (GetLastError() != ERROR_FILE_NOT_FOUND)
+		auto const last_error = GetLastError();
+		if (last_error != ERROR_FILE_NOT_FOUND && last_error != ERROR_PATH_NOT_FOUND)
 			system_call_failed::raise("FindFirstFile");
 
 		dir = 0;

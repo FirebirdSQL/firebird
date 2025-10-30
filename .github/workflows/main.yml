@@ -325,6 +325,7 @@ jobs:
           export LIBTOOLIZE=glibtoolize
           export LIBTOOL=glibtool
           export PATH="$(brew --prefix python@3.11)/bin:$PATH"
+          export SDKROOT=$(xcrun --show-sdk-path)
 
           ./autogen.sh --with-builtin-tommath --with-builtin-tomcrypt
           make -j4
