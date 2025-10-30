@@ -13,18 +13,20 @@ The interval and the step between series values ​​are defined by the user.
 ## Arguments
 
 * `start` - The first value in the interval. `start` is specified as a variable, a literal, or a scalar expression of type 
-`smallint`, `integer` or `bigint`.
+`smallint`, `integer`, `bigint` or `numeric(18, x)`.
 
 * `finish` - The last value in the interval. `finish` is specified as a variable, a literal, or a scalar expression of 
-type `smallint`, `integer` or `bigint`. The series stops once the last generated step value exceeds the `finish` value.
+type `smallint`, `integer`, `bigint` or `numeric(18, x)`. The series stops once the last generated step value exceeds 
+the `finish` value.
 
 * `step` - Indicates the number of values to increment or decrement between steps in the series. `step` is an expression 
-of type `smallint`, `integer` or `bigint`. `step` can be either negative or positive, but can't be zero (0). This 
+of type `smallint`, `integer`, `bigint` or `numeric(18, x)`. `step` can be either negative or positive, but can't be zero (0). This 
 argument is optional. The default value for `step` is 1.
 
 ## Returning type
 
-The function `GENERATE_SERIES` returns a set with a `BIGINT` column.
+The function `GENERATE_SERIES` returns a set with `BIGINT` or `NUMERIC(18, x)` column, where the scale is 
+determined by the maximum of the scales of the function arguments.
 
 ## Rules
 
@@ -41,7 +43,10 @@ SELECT n
 FROM GENERATE_SERIES(1, 3) AS S(n);
 
 SELECT n
-FROM GENERATE_SERIES(3, 1, 1) AS S(n);
+FROM GENERATE_SERIES(3, 1, -1) AS S(n);
+
+SELECT n
+FROM GENERATE_SERIES(0, 9.9, 0.1) AS S(n);
 
 SELECT 
   DATEADD(n MINUTE TO timestamp '2025-01-01 12:00') AS START_TIME,

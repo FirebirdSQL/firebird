@@ -367,15 +367,7 @@ void GenSeriesFunctionScan::close(thread_db* tdbb) const
 	const auto impure = request->getImpure<Impure>(m_impure);
 
 	if (impure->irsb_flags & irsb_open)
-	{
 		impure->irsb_flags &= ~irsb_open;
-
-		if (impure->m_recordBuffer)
-		{
-			delete impure->m_recordBuffer;
-			impure->m_recordBuffer = nullptr;
-		}
-	}
 }
 
 
@@ -431,16 +423,15 @@ void GenSeriesFunctionScan::internalOpen(thread_db* tdbb) const
 	if (step == 0)
 		status_exception::raise(Arg::Gds(isc_genseq_stepmustbe_nonzero) << Arg::Str(m_name));
 
-
 	const auto impure = request->getImpure<Impure>(m_impure);
 	impure->irsb_flags |= irsb_open;
-	impure->m_recordBuffer = FB_NEW_POOL(pool) RecordBuffer(pool, m_format);
+	impure->m_recordBuffer = nullptr;
 	impure->m_start = start;
 	impure->m_finish = finish;
 	impure->m_step = step;
     impure->m_result = start;
 	impure->m_scale = scale;
-
+	impure->m_recordExists = true;
 
     Record* const record = VIO_record(tdbb, rpb, m_format, &pool);
 
@@ -450,7 +441,6 @@ void GenSeriesFunctionScan::internalOpen(thread_db* tdbb) const
 	fromDesc.makeInt64(scale, &impure->m_result);
 
 	assignParameter(tdbb, &fromDesc, toDesc, 0, record);
-	impure->m_recordBuffer->store(record);
 }
 
 void GenSeriesFunctionScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned /*level*/,
@@ -467,6 +457,36 @@ void GenSeriesFunctionScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntr
 		planEntry.alias = m_alias;
 }
 
+bool GenSeriesFunctionScan::internalGetRecord(thread_db* tdbb) const
+{
+	JRD_reschedule(tdbb);
+
+	const auto request = tdbb->getRequest();
+	const auto impure = request->getImpure<Impure>(m_impure);
+	const auto rpb = &request->req_rpb[m_stream];
+
+	if (!(impure->irsb_flags & irsb_open))
+	{
+		rpb->rpb_number.setValid(false);
+		return false;
+	}
+
+	rpb->rpb_number.increment();
+
+	do
+	{
+		if (impure->m_recordExists)
+		{
+			impure->m_recordExists = false;
+			rpb->rpb_number.setValid(true);
+			return true;
+		}
+	} while (nextBuffer(tdbb));
+
+	rpb->rpb_number.setValid(false);
+	return false;
+}
+
 bool GenSeriesFunctionScan::nextBuffer(thread_db* tdbb) const
 {
 	const auto request = tdbb->getRequest();
@@ -481,7 +501,7 @@ bool GenSeriesFunctionScan::nextBuffer(thread_db* tdbb) const
 		dsc fromDesc;
 		fromDesc.makeInt64(impure->m_scale, &i);
 		assignParameter(tdbb, &fromDesc, toDesc, 0, record);
-		impure->m_recordBuffer->store(record);
+		impure->m_recordExists = true;
 	};
 
 	impure->m_result += impure->m_step;

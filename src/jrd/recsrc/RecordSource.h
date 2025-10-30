@@ -1632,6 +1632,7 @@ namespace Jrd
 			SINT64 m_step;
 			SINT64 m_result;
 			SCHAR m_scale;
+			bool m_recordExists;
 		};
 
 	public:
@@ -1643,6 +1644,7 @@ namespace Jrd
 		void internalOpen(thread_db* tdbb) const final;
 		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level,
 							 bool recurse) const final;
+		bool internalGetRecord(thread_db* tdbb) const final;
 
 		bool nextBuffer(thread_db* tdbb) const final;
 
