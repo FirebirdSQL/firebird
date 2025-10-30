@@ -557,7 +557,7 @@ int alice(Firebird::UtilSvc* uSvc)
 
 			if (any_error)
 			{
-				ALICE_print(24, SafeArg(), false);	// msg 24: Summary of validation errors\n
+				ALICE_print(24);	// msg 24: Summary of validation errors\n
 
 				for (int i = 0; i < MAX_VAL_ERRORS; ++i)
 				{
@@ -637,19 +637,13 @@ void ALICE_upper_case(const TEXT* in, TEXT* out, const size_t buf_size)
 //		Display a formatted error message
 //
 
-void ALICE_print(USHORT	number, const SafeArg& arg, const bool isError)
+void ALICE_print(USHORT	number, const SafeArg& arg)
 {
 	AliceGlobals* tdgbl = AliceGlobals::getSpecific();
 	if (tdgbl->uSvc->isService())
 	{
-		if (!isError)
-			tdgbl->uSvc->started();
-
 		tdgbl->uSvc->getStatusAccessor().setServiceStatus(ALICE_MSG_FAC, number, arg);
-
-		if (isError)
-			tdgbl->uSvc->started();
-
+		tdgbl->uSvc->started();
 		return;
 	}
 
