@@ -4444,7 +4444,7 @@ dsql_fld* GenSeriesFunctionSourceNode::makeField(DsqlCompilerScratch* dsqlScratc
 		{
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) << Arg::Gds(isc_dsql_command_err)
 										   << Arg::Gds(isc_dsql_table_value_many_columns)
-										   << Arg::Str(GenSeriesFunctionSourceNode::FUNC_NAME)
+										   << Arg::Str(getName())
 										   << Arg::Num(1) << Arg::Num(dsqlNameColumns.getCount()));
 		}
 

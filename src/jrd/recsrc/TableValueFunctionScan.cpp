@@ -492,24 +492,20 @@ bool GenSeriesFunctionScan::nextBuffer(thread_db* tdbb) const
 	const auto request = tdbb->getRequest();
 	const auto impure = request->getImpure<Impure>(m_impure);
 
-	auto setIntToRecord = [&](SINT64 i)
+	impure->m_result += impure->m_step;
+
+	if (((impure->m_step > 0) && (impure->m_result <= impure->m_finish)) ||
+        ((impure->m_step < 0) && (impure->m_result >= impure->m_finish)))
 	{
 		Record* const record = request->req_rpb[m_stream].rpb_record;
 
 		auto toDesc = m_format->fmt_desc.begin();
 
 		dsc fromDesc;
-		fromDesc.makeInt64(impure->m_scale, &i);
+		fromDesc.makeInt64(impure->m_scale, &impure->m_result);
 		assignParameter(tdbb, &fromDesc, toDesc, 0, record);
 		impure->m_recordExists = true;
-	};
 
-	impure->m_result += impure->m_step;
-
-	if (((impure->m_step > 0) && (impure->m_result <= impure->m_finish)) ||
-        ((impure->m_step < 0) && (impure->m_result >= impure->m_finish)))
-	{
-		setIntToRecord(impure->m_result);
 		return true;
 	}
 

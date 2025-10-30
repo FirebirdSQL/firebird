@@ -1093,7 +1093,7 @@ public:
 
 	static constexpr char const* FUNC_NAME = "GENERATE_SERIES";
 
-	const char* getName() const override
+	const char* getName() const final
 	{
 		return FUNC_NAME;
 	}
