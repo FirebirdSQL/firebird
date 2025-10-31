@@ -49,6 +49,7 @@ class RseNode;
 class SlidingWindow;
 class TypeClause;
 class ValueExprNode;
+class SortNode;
 
 
 // Must be less then MAX_SSHORT. Not used for static arrays.
@@ -1113,6 +1114,7 @@ public:
 	const AggInfo& aggInfo;
 	NestConst<ValueExprNode> arg;
 	const AggregateSort* asb;
+	NestConst<SortNode> sort;
 	bool distinct;
 	bool dialect1;
 	bool indexed;

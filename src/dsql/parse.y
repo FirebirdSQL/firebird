@@ -718,6 +718,8 @@ using namespace Firebird;
 %token <metaNamePtr> SCHEMA
 %token <metaNamePtr> SEARCH_PATH
 %token <metaNamePtr> UNLIST
+%token <metaNamePtr> LISTAGG
+%token <metaNamePtr> WITHIN
 
 // precedence declarations for expression evaluation
 
@@ -4720,6 +4722,9 @@ keyword_or_column
 	| RTRIM
 	| GREATEST
 	| LEAST
+	| WITHIN
+	| LISTAGG
+	| TRUNCATE
 	;
 
 col_opt
@@ -8538,10 +8543,8 @@ aggregate_function_prefix
 		{ $$ = newNode<MaxMinAggNode>(MaxMinAggNode::TYPE_MAX, $4); }
 	| MAXIMUM '(' DISTINCT value ')'
 		{ $$ = newNode<MaxMinAggNode>(MaxMinAggNode::TYPE_MAX, $4); }
-	| LIST '(' all_noise value delimiter_opt ')'
-		{ $$ = newNode<ListAggNode>(false, $4, $5); }
-	| LIST '(' DISTINCT value delimiter_opt ')'
-		{ $$ = newNode<ListAggNode>(true, $4, $5); }
+	| listagg_set_function
+		{ $$ = $1; }
 	| STDDEV_SAMP '(' value ')'
 		{ $$ = newNode<StdDevAggNode>(StdDevAggNode::TYPE_STDDEV_SAMP, $3); }
 	| STDDEV_POP '(' value ')'
@@ -8584,6 +8587,78 @@ aggregate_function_prefix
 		{ $$ = newNode<BinAggNode>(BinAggNode::TYPE_BIN_XOR, $4); }
 	| BIN_XOR_AGG '(' DISTINCT value ')'
 		{ $$ = newNode<BinAggNode>(BinAggNode::TYPE_BIN_XOR_DISTINCT, $4); }
+	;
+
+%type <aggNode> listagg_set_function
+listagg_set_function
+	: listagg_function '(' quantifier_opt value delimiter_opt listagg_overflow_clause_opt ')'
+		within_group_specification_opt
+		{
+			$$ = newNode<ListAggNode>($3, $4, $5, $8);
+		}
+	;
+
+%type <metaNamePtr> listagg_function
+listagg_function
+	: LIST
+	| LISTAGG
+	;
+
+%type <boolVal> quantifier_opt
+quantifier_opt
+	: all_noise { $$ = false; }
+	| DISTINCT  { $$ = true; }
+	;
+
+%type <valueListNode> listagg_overflow_clause_opt
+listagg_overflow_clause_opt
+	: /* nothing */ { $$ = newNode<ValueListNode>(0); }
+	| listagg_overflow_clause
+	;
+
+%type <valueListNode> listagg_overflow_clause
+listagg_overflow_clause
+	: ON OVERFLOW overflow_behavior { $$ = $3; }
+
+%type <valueListNode> overflow_behavior
+overflow_behavior
+	: ERROR
+		{
+			$$ = newNode<ValueListNode>(0);
+		}
+	| TRUNCATE listagg_truncation_filler_opt listagg_count_indication
+		{
+			$$ = newNode<ValueListNode>(0);
+			$$->add($2);
+		}
+	;
+
+%type <valueExprNode> listagg_truncation_filler_opt
+listagg_truncation_filler_opt
+	: /*nothing*/ { $$ = MAKE_str_constant(newIntlString("..."), lex.charSetId); }
+	| listagg_truncation_filler { $$ = $1; }
+	;
+
+%type <valueExprNode>listagg_truncation_filler
+listagg_truncation_filler
+	: sql_string
+	;
+
+%type <boolVal> listagg_count_indication
+listagg_count_indication
+	: WITH COUNT { $$ = true; }
+	| WITHOUT COUNT { $$ = false; }
+	;
+
+%type <valueListNode> within_group_specification_opt
+within_group_specification_opt
+	: /* nothing */ { $$ = newNode<ValueListNode>(0); }
+	| within_group_specification { $$ = $1; }
+	;
+
+%type <valueListNode> within_group_specification
+within_group_specification
+	: WITHIN GROUP '(' order_clause ')'	{ $$ = $4; }
 	;
 
 %type <aggNode> window_function
@@ -9960,6 +10035,7 @@ non_reserved_word
 	| SEARCH_PATH
 	| SCHEMA
 	| UNLIST
+	| ERROR
 	;
 
 %%
