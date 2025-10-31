@@ -1617,7 +1617,7 @@ namespace Jrd
 
 	class GenSeriesFunctionScan final : public TableValueFunctionScan
 	{
-		enum GenSeriesTypeItemIndex : unsigned
+		enum GenSeriesTypeItemIndex : UCHAR
 		{
 			GEN_SERIES_INDEX_START = 0,
 			GEN_SERIES_INDEX_FINISH = 1,
@@ -1632,7 +1632,6 @@ namespace Jrd
 			SINT64 m_step;
 			SINT64 m_result;
 			SCHAR m_scale;
-			bool m_recordExists;
 		};
 
 	public:
@@ -1640,13 +1639,13 @@ namespace Jrd
 						   ValueListNode* list);
 
 	protected:
-		void close(thread_db* tdbb) const final;
-		void internalOpen(thread_db* tdbb) const final;
+		void close(thread_db* tdbb) const override;
+		void internalOpen(thread_db* tdbb) const override;
 		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level,
-							 bool recurse) const final;
-		bool internalGetRecord(thread_db* tdbb) const final;
+							 bool recurse) const override;
+		bool internalGetRecord(thread_db* tdbb) const override;
 
-		bool nextBuffer(thread_db* tdbb) const final;
+		bool nextBuffer(thread_db* tdbb) const override;
 
 	private:
 		NestConst<ValueListNode> m_inputList;

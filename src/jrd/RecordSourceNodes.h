@@ -1081,19 +1081,20 @@ public:
 	}
 };
 
-class GenSeriesFunctionSourceNode : public TableValueFunctionSourceNode
+class GenSeriesFunctionSourceNode final : public TableValueFunctionSourceNode
 {
 public:
-	explicit GenSeriesFunctionSourceNode(MemoryPool& pool) : TableValueFunctionSourceNode(pool)
+	explicit GenSeriesFunctionSourceNode(MemoryPool& pool) 
+		: TableValueFunctionSourceNode(pool)
 	{
 	}
 
-	RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream) final;
-	dsql_fld* makeField(DsqlCompilerScratch* dsqlScratch) final;
+	RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream) override;
+	dsql_fld* makeField(DsqlCompilerScratch* dsqlScratch) override;
 
 	static constexpr char const* FUNC_NAME = "GENERATE_SERIES";
 
-	const char* getName() const final
+	const char* getName() const override
 	{
 		return FUNC_NAME;
 	}

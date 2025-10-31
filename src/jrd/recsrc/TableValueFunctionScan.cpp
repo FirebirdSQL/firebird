@@ -431,16 +431,8 @@ void GenSeriesFunctionScan::internalOpen(thread_db* tdbb) const
 	impure->m_step = step;
     impure->m_result = start;
 	impure->m_scale = scale;
-	impure->m_recordExists = true;
 
-    Record* const record = VIO_record(tdbb, rpb, m_format, &pool);
-
-	auto toDesc = m_format->fmt_desc.begin();
-
-	dsc fromDesc;
-	fromDesc.makeInt64(scale, &impure->m_result);
-
-	assignParameter(tdbb, &fromDesc, toDesc, 0, record);
+	VIO_record(tdbb, rpb, m_format, &pool);
 }
 
 void GenSeriesFunctionScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned /*level*/,
@@ -473,15 +465,10 @@ bool GenSeriesFunctionScan::internalGetRecord(thread_db* tdbb) const
 
 	rpb->rpb_number.increment();
 
-	do
-	{
-		if (impure->m_recordExists)
-		{
-			impure->m_recordExists = false;
-			rpb->rpb_number.setValid(true);
-			return true;
-		}
-	} while (nextBuffer(tdbb));
+	if (nextBuffer(tdbb)) {
+		rpb->rpb_number.setValid(true);
+		return true;
+	}
 
 	rpb->rpb_number.setValid(false);
 	return false;
@@ -491,8 +478,6 @@ bool GenSeriesFunctionScan::nextBuffer(thread_db* tdbb) const
 {
 	const auto request = tdbb->getRequest();
 	const auto impure = request->getImpure<Impure>(m_impure);
-
-	impure->m_result += impure->m_step;
 
 	if (((impure->m_step > 0) && (impure->m_result <= impure->m_finish)) ||
         ((impure->m_step < 0) && (impure->m_result >= impure->m_finish)))
@@ -504,7 +489,8 @@ bool GenSeriesFunctionScan::nextBuffer(thread_db* tdbb) const
 		dsc fromDesc;
 		fromDesc.makeInt64(impure->m_scale, &impure->m_result);
 		assignParameter(tdbb, &fromDesc, toDesc, 0, record);
-		impure->m_recordExists = true;
+
+		impure->m_result += impure->m_step;
 
 		return true;
 	}

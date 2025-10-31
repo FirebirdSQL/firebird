@@ -4429,13 +4429,12 @@ dsql_fld* GenSeriesFunctionSourceNode::makeField(DsqlCompilerScratch* dsqlScratc
 
 	if (!field)
 	{
-		const auto newField = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
-		field = newField;
+		field = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
 
 		dsc desc;
 		desc.makeInt64(scale);
-		MAKE_field(newField, &desc);
-		newField->fld_id = 0;
+		MAKE_field(field, &desc);
+		field->fld_id = 0;
 	}
 
 	if (dsqlNameColumns.hasData())
