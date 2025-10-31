@@ -13,20 +13,20 @@ The interval and the step between series values ​​are defined by the user.
 ## Arguments
 
 * `start` - The first value in the interval. `start` is specified as a variable, a literal, or a scalar expression of type 
-`smallint`, `integer`, `bigint` or `numeric(18, x)`.
+`SMALLINT`, `INTEGER`, `BIGINT`, `INT128` or `NUMERIC/DECIMAL`.
 
 * `finish` - The last value in the interval. `finish` is specified as a variable, a literal, or a scalar expression of 
-type `smallint`, `integer`, `bigint` or `numeric(18, x)`. The series stops once the last generated step value exceeds 
-the `finish` value.
+type `SMALLINT`, `INTEGER`, `BIGINT`, `INT128` or `NUMERIC/DECIMAL`. The series stops once the last generated step value 
+exceeds the `finish` value.
 
 * `step` - Indicates the number of values to increment or decrement between steps in the series. `step` is an expression 
-of type `smallint`, `integer`, `bigint` or `numeric(18, x)`. `step` can be either negative or positive, but can't be zero (0). This 
-argument is optional. The default value for `step` is 1.
+of type `SMALLINT`, `INTEGER`, `BIGINT`, `INT128` or `NUMERIC/DECIMAL`. 
+`step` can be either negative or positive, but can't be zero (0). This argument is optional. The default value for `step` is 1.
 
 ## Returning type
 
-The function `GENERATE_SERIES` returns a set with `BIGINT` or `NUMERIC(18, x)` column, where the scale is 
-determined by the maximum of the scales of the function arguments.
+The function `GENERATE_SERIES` returns a set with `BIGINT`, `INT128` or `NUMERIC(18, x)/NUMERIC(38, x)` column, 
+where the scale is determined by the maximum of the scales of the function arguments.
 
 ## Rules
 

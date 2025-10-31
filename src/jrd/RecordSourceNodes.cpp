@@ -4415,15 +4415,26 @@ dsql_fld* GenSeriesFunctionSourceNode::makeField(DsqlCompilerScratch* dsqlScratc
 
 	dsc startDesc;
 	DsqlDescMaker::fromNode(dsqlScratch, &startDesc, startItem, true);
+	if (!startDesc.isExact() && !startDesc.isNull()) {	
+		status_exception::raise(Arg::Gds(isc_argmustbe_exact_function) << Arg::Str(getName()));
+	}
 
 	dsc finishDesc;
 	DsqlDescMaker::fromNode(dsqlScratch, &finishDesc, finishItem, true);
+	if (!finishDesc.isExact() && !finishDesc.isNull()) {
+		status_exception::raise(Arg::Gds(isc_argmustbe_exact_function) << Arg::Str(getName()));
+	}
 
 	dsc stepDesc;
 	DsqlDescMaker::fromNode(dsqlScratch, &stepDesc, stepItem, true);
+	if (!stepDesc.isExact() && !stepDesc.isNull()) {
+		status_exception::raise(Arg::Gds(isc_argmustbe_exact_function) << Arg::Str(getName()));
+	}
 
 	// common scale
 	const auto scale = MIN(MIN(startDesc.dsc_scale, finishDesc.dsc_scale), stepDesc.dsc_scale);
+	// common type
+	const auto dtype = MAX(MAX(startDesc.dsc_dtype, finishDesc.dsc_dtype), stepDesc.dsc_dtype);
 
 	dsql_fld* field = dsqlField;
 
@@ -4432,7 +4443,12 @@ dsql_fld* GenSeriesFunctionSourceNode::makeField(DsqlCompilerScratch* dsqlScratc
 		field = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
 
 		dsc desc;
-		desc.makeInt64(scale);
+		if (dtype == dtype_int128) {
+			desc.makeInt128(scale);
+		}
+		else {
+			desc.makeInt64(scale);
+		}
 		MAKE_field(field, &desc);
 		field->fld_id = 0;
 	}

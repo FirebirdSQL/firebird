@@ -24,6 +24,7 @@
 #define JRD_RECORD_SOURCE_H
 
 #include <optional>
+#include <variant>
 #include "../common/classes/array.h"
 #include "../common/classes/objects_array.h"
 #include "../common/classes/NestConst.h"
@@ -1627,10 +1628,11 @@ namespace Jrd
 
 		struct Impure : public TableValueFunctionScan::Impure
 		{
-			SINT64 m_start;
-			SINT64 m_finish;
-			SINT64 m_step;
-			SINT64 m_result;
+			std::variant<SINT64, Firebird::Int128> m_start;
+			std::variant<SINT64, Firebird::Int128> m_finish;
+			std::variant<SINT64, Firebird::Int128> m_step;
+			std::variant<SINT64, Firebird::Int128> m_result;
+			UCHAR m_dtype;
 			SCHAR m_scale;
 		};
 

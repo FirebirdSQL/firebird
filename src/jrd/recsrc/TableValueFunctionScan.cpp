@@ -405,32 +405,60 @@ void GenSeriesFunctionScan::internalOpen(thread_db* tdbb) const
 		return;
 	}
 
+	const auto impure = request->getImpure<Impure>(m_impure);
+	impure->m_recordBuffer = nullptr;
+
 	// common scale
-	const auto scale = MIN(MIN(startDesc->dsc_scale, finishDesc->dsc_scale), stepDesc->dsc_scale);
+	impure->m_scale = MIN(MIN(startDesc->dsc_scale, finishDesc->dsc_scale), stepDesc->dsc_scale);
+	// common type
+	impure->m_dtype = MAX(MAX(startDesc->dsc_dtype, finishDesc->dsc_dtype), stepDesc->dsc_dtype);
 
-	const auto start = MOV_get_int64(tdbb, startDesc, scale); 
-	const auto finish = MOV_get_int64(tdbb, finishDesc, scale); 
-	const auto step = MOV_get_int64(tdbb, stepDesc, scale); 
-
-    // validate parameter value
-	if (((step > 0) && (start > finish)) ||
-       ((step < 0) && (start < finish)))
+	if (impure->m_dtype != dtype_int128) 
 	{
-		rpb->rpb_number.setValid(false);
-		return;
+		const auto start = MOV_get_int64(tdbb, startDesc, impure->m_scale);
+		const auto finish = MOV_get_int64(tdbb, finishDesc, impure->m_scale);
+		const auto step = MOV_get_int64(tdbb, stepDesc, impure->m_scale);
+
+		if (step == 0)
+			status_exception::raise(Arg::Gds(isc_genseq_stepmustbe_nonzero) << Arg::Str(m_name));
+
+		// validate parameter value
+		if (((step > 0) && (start > finish)) ||
+			((step < 0) && (start < finish)))
+		{
+			rpb->rpb_number.setValid(false);
+			return;
+		}
+
+		impure->m_start = start;
+		impure->m_finish = finish;
+		impure->m_step = step;
+	}
+	else {
+		const auto start = MOV_get_int128(tdbb, startDesc, impure->m_scale);
+		const auto finish = MOV_get_int128(tdbb, finishDesc, impure->m_scale);
+		const auto step = MOV_get_int128(tdbb, stepDesc, impure->m_scale);
+
+		if (step.sign() == 0)
+			status_exception::raise(Arg::Gds(isc_genseq_stepmustbe_nonzero) << Arg::Str(m_name));
+
+		// validate parameter value
+		if (((step.sign() > 0) && (start.compare(finish) > 0)) ||
+			((step.sign() < 0) && (start.compare(finish) < 0)))
+		{
+			rpb->rpb_number.setValid(false);
+			return;
+		}
+
+		impure->m_start = start;
+		impure->m_finish = finish;
+		impure->m_step = step;
 	}
 
-	if (step == 0)
-		status_exception::raise(Arg::Gds(isc_genseq_stepmustbe_nonzero) << Arg::Str(m_name));
-
-	const auto impure = request->getImpure<Impure>(m_impure);
+	
 	impure->irsb_flags |= irsb_open;
-	impure->m_recordBuffer = nullptr;
-	impure->m_start = start;
-	impure->m_finish = finish;
-	impure->m_step = step;
-    impure->m_result = start;
-	impure->m_scale = scale;
+    impure->m_result = impure->m_start;
+
 
 	VIO_record(tdbb, rpb, m_format, &pool);
 }
@@ -465,7 +493,8 @@ bool GenSeriesFunctionScan::internalGetRecord(thread_db* tdbb) const
 
 	rpb->rpb_number.increment();
 
-	if (nextBuffer(tdbb)) {
+	if (nextBuffer(tdbb)) 
+	{
 		rpb->rpb_number.setValid(true);
 		return true;
 	}
@@ -479,20 +508,50 @@ bool GenSeriesFunctionScan::nextBuffer(thread_db* tdbb) const
 	const auto request = tdbb->getRequest();
 	const auto impure = request->getImpure<Impure>(m_impure);
 
-	if (((impure->m_step > 0) && (impure->m_result <= impure->m_finish)) ||
-        ((impure->m_step < 0) && (impure->m_result >= impure->m_finish)))
+	if (impure->m_dtype != dtype_int128)
 	{
-		Record* const record = request->req_rpb[m_stream].rpb_record;
+		auto result = std::get<SINT64>(impure->m_result);
+		const auto finish = std::get<SINT64>(impure->m_finish);
+		const auto step = std::get<SINT64>(impure->m_step);
 
-		auto toDesc = m_format->fmt_desc.begin();
+		if (((step > 0) && (result <= finish)) ||
+			((step < 0) && (result >= finish)))
+		{
+			Record* const record = request->req_rpb[m_stream].rpb_record;
 
-		dsc fromDesc;
-		fromDesc.makeInt64(impure->m_scale, &impure->m_result);
-		assignParameter(tdbb, &fromDesc, toDesc, 0, record);
+			auto toDesc = m_format->fmt_desc.begin();
 
-		impure->m_result += impure->m_step;
+			dsc fromDesc;
+			fromDesc.makeInt64(impure->m_scale, &result);
+			assignParameter(tdbb, &fromDesc, toDesc, 0, record);
 
-		return true;
+			result += step;
+			impure->m_result = result;
+
+			return true;
+		}
+	}
+	else {
+		auto result = std::get<Firebird::Int128>(impure->m_result);
+		const auto finish = std::get<Firebird::Int128>(impure->m_finish);
+		const auto step = std::get<Firebird::Int128>(impure->m_step);
+
+		if (((step.sign() > 0) && (result.compare(finish) <= 0)) ||
+			((step.sign() < 0) && (result.compare(finish) >= 0)))
+		{
+			Record* const record = request->req_rpb[m_stream].rpb_record;
+
+			auto toDesc = m_format->fmt_desc.begin();
+
+			dsc fromDesc;
+			fromDesc.makeInt128(impure->m_scale, &result);
+			assignParameter(tdbb, &fromDesc, toDesc, 0, record);
+
+			result = result.add(step);
+			impure->m_result = result;
+
+			return true;
+		}
 	}
 
 	return false;
