@@ -1057,7 +1057,7 @@ bool Applier::lookupKey(thread_db* tdbb, jrd_rel* relation, index_desc& key)
 	auto page = relPages->rel_index_root;
 	if (!page)
 	{
-		DPM_scan_pages(tdbb);
+		DPM_scan_pages(tdbb, pag_root, relation->rel_id);
 		page = relPages->rel_index_root;
 	}
 

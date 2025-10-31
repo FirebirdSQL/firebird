@@ -595,6 +595,11 @@ BOOST_AUTO_TEST_CASE(ParseShowTest)
 	BOOST_TEST((std::get<FrontendParser::ShowTablesNode>(parseShow(
 		"show tables name")).name == QualifiedMetaString("NAME")));
 
+	BOOST_TEST(!std::get<FrontendParser::ShowTablespacesNode>(parseShow(
+		"show tablespace")).name);
+	BOOST_TEST((std::get<FrontendParser::ShowTablespacesNode>(parseShow(
+		"show tablespaces name")).name == MetaString("NAME")));
+
 	BOOST_TEST(!std::get<FrontendParser::ShowTriggersNode>(parseShow(
 		"show trig")).name);
 	BOOST_TEST((std::get<FrontendParser::ShowTriggersNode>(parseShow(

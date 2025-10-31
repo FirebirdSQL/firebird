@@ -289,3 +289,8 @@ FB_IMPL_MSG(SQLERR, 1049, dsql_drop_schema_failed, -901, "42", "000", "DROP SCHE
 FB_IMPL_MSG(SQLERR, 1050, dsql_recreate_schema_failed, -901, "42", "000", "RECREATE SCHEMA @1 failed")
 FB_IMPL_MSG(SQLERR, 1051, dsql_alter_schema_failed, -901, "42", "000", "ALTER SCHEMA @1 failed")
 FB_IMPL_MSG(SQLERR, 1052, dsql_create_alter_schema_failed, -901, "42", "000", "CREATE OR ALTER SCHEMA @1 failed")
+FB_IMPL_MSG(SQLERR, 1053, dsql_create_ts_failed, -901, "42", "000", "CREATE TABLESPACE @1 failed")
+FB_IMPL_MSG(SQLERR, 1054, dsql_alter_ts_failed, -901, "42", "000", "ALTER TABLESPACE @1 failed")
+FB_IMPL_MSG(SQLERR, 1055, dsql_create_alter_ts_failed, -901, "42", "000", "CREATE OR ALTER TABLESPACE @1 failed")
+FB_IMPL_MSG(SQLERR, 1056, dsql_drop_ts_failed, -901, "42", "000", "DROP TABLESPACE @1 failed")
+FB_IMPL_MSG(SQLERR, 1057, dsql_recreate_ts_failed, -901, "42", "000", "RECREATE TABLESPACE @1 failed")

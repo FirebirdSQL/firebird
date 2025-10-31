@@ -465,6 +465,9 @@
     <ClCompile Include="..\..\..\gen\dsql\PackageNodes.cpp">
       <Filter>DSQL\preprocesed</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\gen\dsql\TablespaceNodes.cpp">
+      <Filter>DSQL\preprocesed</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\gen\utilities\gstat\dba.cpp">
       <Filter>Services</Filter>
     </ClCompile>
@@ -481,6 +484,9 @@
       <Filter>DSQL</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\Routine.cpp">
+      <Filter>JRD files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\Tablespace.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\Mapping.cpp">
@@ -1103,6 +1109,12 @@
     <ClInclude Include="..\..\..\src\jrd\QualifiedName.h">
       <Filter>Header files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\dsql\TablespaceNodes.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\Tablespace.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\InitCDSLib.h">
       <Filter>Header files</Filter>
     </ClInclude>
@@ -1155,6 +1167,9 @@
       <Filter>DSQL\GPRE files</Filter>
     </None>
     <None Include="..\..\..\src\dsql\PackageNodes.epp">
+      <Filter>DSQL\GPRE files</Filter>
+    </None>
+    <None Include="..\..\..\src\dsql\TablespaceNodes.epp">
       <Filter>DSQL\GPRE files</Filter>
     </None>
     <None Include="..\..\..\src\jrd\dfw.epp">

@@ -38,6 +38,7 @@
 #include "iberror.h"
 #include "firebird/Interface.h"
 #include "memory_routines.h"
+#include "../jrd/constants.h"
 
 namespace fb_utils
 {
@@ -333,6 +334,13 @@ namespace fb_utils
 	private:
 		int reason;
 	};
+
+	// Determines whether the table type has a non-null parameter in the system table in the field RDB$TABLESPACE_NAME
+	inline bool hasTablespaceName(rel_t rel_type)
+	{
+		return rel_type == rel_persistent;
+	}
+
 } // namespace fb_utils
 
 #endif // INCLUDE_UTILS_PROTO_H
