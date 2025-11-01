@@ -508,6 +508,7 @@
 // Table value function
 #define blr_table_value_fun				(unsigned char) 229
 #define blr_table_value_fun_unlist		(unsigned char) 1
+#define blr_table_value_fun_gen_series	(unsigned char) 2
 
 #define blr_for_range								(unsigned char) 230
 #define blr_for_range_variable						(unsigned char) 1

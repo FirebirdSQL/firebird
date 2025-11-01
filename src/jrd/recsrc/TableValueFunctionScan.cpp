@@ -118,6 +118,8 @@ void TableValueFunctionScan::assignParameter(thread_db* tdbb, dsc* fromDesc, con
 	memcpy(toDescValue.dsc_address, fromDesc->dsc_address, fromDesc->dsc_length);
 }
 
+//--------------------
+
 UnlistFunctionScan::UnlistFunctionScan(CompilerScratch* csb, StreamType stream, const string& alias,
 									   ValueListNode* list)
 	: TableValueFunctionScan(csb, stream, alias), m_inputList(list)
@@ -341,6 +343,214 @@ bool UnlistFunctionScan::nextBuffer(thread_db* tdbb) const
 				impure->m_resultStr->erase();
 				return true;
 			}
+		}
+	}
+
+	return false;
+}
+
+//--------------------
+
+GenSeriesFunctionScan::GenSeriesFunctionScan(CompilerScratch* csb, StreamType stream, const string& alias,
+									   ValueListNode* list)
+	: TableValueFunctionScan(csb, stream, alias), m_inputList(list)
+{
+	m_impure = csb->allocImpure<Impure>();
+}
+
+void GenSeriesFunctionScan::close(thread_db* tdbb) const
+{
+	const auto request = tdbb->getRequest();
+
+	invalidateRecords(request);
+
+	const auto impure = request->getImpure<Impure>(m_impure);
+
+	if (impure->irsb_flags & irsb_open)
+		impure->irsb_flags &= ~irsb_open;
+}
+
+
+void GenSeriesFunctionScan::internalOpen(thread_db* tdbb) const
+{
+	const auto request = tdbb->getRequest();
+	const auto rpb = &request->req_rpb[m_stream];
+	MemoryPool& pool = *tdbb->getDefaultPool();
+
+	rpb->rpb_number.setValue(BOF_NUMBER);
+
+	fb_assert(m_inputList->items.getCount() >= GEN_SERIES_INDEX_LAST);
+
+	auto startItem = m_inputList->items[GEN_SERIES_INDEX_START];
+	const auto startDesc = EVL_expr(tdbb, request, startItem);
+	if (startDesc == nullptr)
+	{
+		rpb->rpb_number.setValid(false);
+		return;
+	}
+
+	auto finishItem = m_inputList->items[GEN_SERIES_INDEX_FINISH];
+	const auto finishDesc = EVL_expr(tdbb, request, finishItem);
+	if (finishDesc == nullptr)
+	{
+		rpb->rpb_number.setValid(false);
+		return;
+	}
+
+	auto stepItem = m_inputList->items[GEN_SERIES_INDEX_STEP];
+	const auto stepDesc = EVL_expr(tdbb, request, stepItem);
+	if (stepDesc == nullptr)
+	{
+		rpb->rpb_number.setValid(false);
+		return;
+	}
+
+	const auto impure = request->getImpure<Impure>(m_impure);
+	impure->m_recordBuffer = nullptr;
+
+	// common scale
+	impure->m_scale = MIN(MIN(startDesc->dsc_scale, finishDesc->dsc_scale), stepDesc->dsc_scale);
+	// common type
+	impure->m_dtype = MAX(MAX(startDesc->dsc_dtype, finishDesc->dsc_dtype), stepDesc->dsc_dtype);
+
+	if (impure->m_dtype != dtype_int128) 
+	{
+		const auto start = MOV_get_int64(tdbb, startDesc, impure->m_scale);
+		const auto finish = MOV_get_int64(tdbb, finishDesc, impure->m_scale);
+		const auto step = MOV_get_int64(tdbb, stepDesc, impure->m_scale);
+
+		if (step == 0)
+			status_exception::raise(Arg::Gds(isc_genseq_stepmustbe_nonzero) << Arg::Str(m_name));
+
+		// validate parameter value
+		if (((step > 0) && (start > finish)) ||
+			((step < 0) && (start < finish)))
+		{
+			rpb->rpb_number.setValid(false);
+			return;
+		}
+
+		impure->m_start = start;
+		impure->m_finish = finish;
+		impure->m_step = step;
+	}
+	else {
+		const auto start = MOV_get_int128(tdbb, startDesc, impure->m_scale);
+		const auto finish = MOV_get_int128(tdbb, finishDesc, impure->m_scale);
+		const auto step = MOV_get_int128(tdbb, stepDesc, impure->m_scale);
+
+		if (step.sign() == 0)
+			status_exception::raise(Arg::Gds(isc_genseq_stepmustbe_nonzero) << Arg::Str(m_name));
+
+		// validate parameter value
+		if (((step.sign() > 0) && (start.compare(finish) > 0)) ||
+			((step.sign() < 0) && (start.compare(finish) < 0)))
+		{
+			rpb->rpb_number.setValid(false);
+			return;
+		}
+
+		impure->m_start = start;
+		impure->m_finish = finish;
+		impure->m_step = step;
+	}
+
+	
+	impure->irsb_flags |= irsb_open;
+    impure->m_result = impure->m_start;
+
+
+	VIO_record(tdbb, rpb, m_format, &pool);
+}
+
+void GenSeriesFunctionScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned /*level*/,
+										 bool /*recurse*/) const
+{
+	planEntry.className = "FunctionScan";
+
+	planEntry.lines.add().text = "Function " +
+		printName(tdbb, m_name.toQuotedString(), m_alias) + " Scan";
+
+	printOptInfo(planEntry.lines);
+
+	if (m_alias.hasData())
+		planEntry.alias = m_alias;
+}
+
+bool GenSeriesFunctionScan::internalGetRecord(thread_db* tdbb) const
+{
+	JRD_reschedule(tdbb);
+
+	const auto request = tdbb->getRequest();
+	const auto impure = request->getImpure<Impure>(m_impure);
+	const auto rpb = &request->req_rpb[m_stream];
+
+	if (!(impure->irsb_flags & irsb_open))
+	{
+		rpb->rpb_number.setValid(false);
+		return false;
+	}
+
+	rpb->rpb_number.increment();
+
+	if (nextBuffer(tdbb)) 
+	{
+		rpb->rpb_number.setValid(true);
+		return true;
+	}
+
+	rpb->rpb_number.setValid(false);
+	return false;
+}
+
+bool GenSeriesFunctionScan::nextBuffer(thread_db* tdbb) const
+{
+	const auto request = tdbb->getRequest();
+	const auto impure = request->getImpure<Impure>(m_impure);
+
+	if (impure->m_dtype != dtype_int128)
+	{
+		auto result = std::get<SINT64>(impure->m_result);
+		const auto finish = std::get<SINT64>(impure->m_finish);
+		const auto step = std::get<SINT64>(impure->m_step);
+
+		if (((step > 0) && (result <= finish)) ||
+			((step < 0) && (result >= finish)))
+		{
+			Record* const record = request->req_rpb[m_stream].rpb_record;
+
+			auto toDesc = m_format->fmt_desc.begin();
+
+			dsc fromDesc;
+			fromDesc.makeInt64(impure->m_scale, &result);
+			assignParameter(tdbb, &fromDesc, toDesc, 0, record);
+
+			result += step;
+			impure->m_result = result;
+
+			return true;
+		}
+	}
+	else {
+		auto result = std::get<Firebird::Int128>(impure->m_result);
+		const auto finish = std::get<Firebird::Int128>(impure->m_finish);
+		const auto step = std::get<Firebird::Int128>(impure->m_step);
+
+		if (((step.sign() > 0) && (result.compare(finish) <= 0)) ||
+			((step.sign() < 0) && (result.compare(finish) >= 0)))
+		{
+			Record* const record = request->req_rpb[m_stream].rpb_record;
+
+			auto toDesc = m_format->fmt_desc.begin();
+
+			dsc fromDesc;
+			fromDesc.makeInt128(impure->m_scale, &result);
+			assignParameter(tdbb, &fromDesc, toDesc, 0, record);
+
+			result = result.add(step);
+			impure->m_result = result;
+
+			return true;
 		}
 	}
 
