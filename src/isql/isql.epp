@@ -8475,7 +8475,10 @@ static unsigned process_message_display(Firebird::IMessageMetadata* message, uns
 		// Process all subvariables
 		for (const auto& subvar : var.subvars)
 		{
-			disp_length += calculateDisplayLength(subvar);
+			auto subdisp_length = calculateDisplayLength(subvar);
+
+			// minimum display length for subvariables is 6 as "<null>" length + 1 for comma separator
+			disp_length += subdisp_length < 6 ? 6 : subdisp_length;
 		}
 
 		const unsigned type = var.type;
