@@ -1,2 +1,0 @@
-y.y:6864: $$ is untyped
-y.y:6865: $$ is untyped

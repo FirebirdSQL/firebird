@@ -6860,7 +6860,7 @@ table_value_function_gen_series_arg_list
 	;
 
 %type <valueExprNode> gen_series_step_opt
-step_opt
+gen_series_step_opt
 	: /* nothing */		{ $$ = MAKE_const_sint64(1, 0); }
 	| ',' value			{ $$ = $2; }
 	;
