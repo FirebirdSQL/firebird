@@ -133,7 +133,7 @@ public:
 private:
 	static blb* allocate_blob(thread_db*, jrd_tra*);
 	static blb* copy_blob(thread_db* tdbb, const bid* source, bid* destination,
-					USHORT bpb_length, const UCHAR* bpb, USHORT destPageSpaceID);
+					USHORT bpb_length, const UCHAR* bpb, ULONG destPageSpaceID);
 	void delete_blob(thread_db*, ULONG);
 	Ods::blob_page* get_next_page(thread_db*, win*);
 	void insert_page(thread_db*);
@@ -162,7 +162,7 @@ private:
 	USHORT blb_space_remaining = 0;	// Data space left
 	USHORT blb_max_pages = 0;		// Max pages in vector
 	USHORT blb_level = 0;			// Storage type
-	USHORT blb_pg_space_id = 0;		// page space
+	ULONG blb_pg_space_id = 0;		// page space
 	USHORT blb_fragment_size = 0;	// Residual fragment size
 	USHORT blb_max_segment = 0;		// Longest segment
 #ifdef CHECK_BLOB_FIELD_ACCESS_FOR_SELECT

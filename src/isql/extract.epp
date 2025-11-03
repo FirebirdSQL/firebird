@@ -99,6 +99,7 @@ static void list_procedure_bodies(GetDefaultCharSetForSchemaFunc getDefaultCharS
 static void list_procedure_headers(GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc);
 static void list_schemas();
 static void list_views();
+static void list_tablespaces();
 
 static const char* const Procterm = "^";	// TXNN: script use only
 
@@ -208,6 +209,7 @@ int EXTRACT_ddl(LegacyTables flag, const QualifiedMetaString& tabname)
 		list_collations();
 		list_generators();
 		list_domains(getDefaultCharSetForSchema);
+		list_tablespaces();
 		list_all_tables(flag, getDefaultCharSetForSchema);
 		list_functions_legacy();
 		list_functions_ods12_headers(getDefaultCharSetForSchema);
@@ -333,7 +335,8 @@ int EXTRACT_list_table(const QualifiedMetaString& relation_name,
 	bool first = true;
 	string char_sets;
 	rel_t rel_type = rel_persistent;
-	char ss[28] = "";
+	const char* security = nullptr;
+	MetaString tablespaceName;
 
 	// Query to obtain relation detail information
 
@@ -378,12 +381,15 @@ int EXTRACT_list_table(const QualifiedMetaString& relation_name,
 
 			isqlGlob.printf("%s ", IUTILS_name_to_string(new_name.object.hasData() ? new_name : relation_name).c_str());
 
+			if (!REL.RDB$TABLESPACE_NAME.NULL)
+				tablespaceName = REL.RDB$TABLESPACE_NAME;
+
 			if (!REL.RDB$SQL_SECURITY.NULL)
 			{
 				if (REL.RDB$SQL_SECURITY)
-					strcpy(ss, "SQL SECURITY DEFINER");
+					security = "SQL SECURITY DEFINER";
 				else
-					strcpy(ss, "SQL SECURITY INVOKER");
+					security = "SQL SECURITY INVOKER";
 			}
 
 			if (!REL.RDB$EXTERNAL_FILE.NULL)
@@ -618,15 +624,20 @@ int EXTRACT_list_table(const QualifiedMetaString& relation_name,
 	if (first) // we extracted nothing
 		return FINI_ERROR;
 
-	const char* gtt_scope = (rel_type == rel_global_temp_preserve) ? "ON COMMIT PRESERVE ROWS" :
-							((rel_type == rel_global_temp_delete) ? "ON COMMIT DELETE ROWS" : "");
+	isqlGlob.printf(")");
 
-	const char* opt_delim = *gtt_scope && *ss ? ", " : "";
+	if (tablespaceName.hasData() && tablespaceName != PRIMARY_TABLESPACE_NAME)
+		isqlGlob.printf(" TABLESPACE %s", IUTILS_name_to_string(tablespaceName).c_str());
 
-	if (*gtt_scope || *ss)
-		isqlGlob.printf(")%s%s%s%s", NEWLINE, gtt_scope, opt_delim , ss);
-	else
-		isqlGlob.printf(")");
+	const char* gttScope = (rel_type == rel_global_temp_preserve) ? "ON COMMIT PRESERVE ROWS" :
+							((rel_type == rel_global_temp_delete) ? "ON COMMIT DELETE ROWS" : nullptr);
+
+	if (gttScope && security)
+		isqlGlob.printf(" %s%s, %s", NEWLINE, gttScope, security);
+	else if (gttScope)
+		isqlGlob.printf(" %s%s", NEWLINE, gttScope);
+	else if (security)
+		isqlGlob.printf(" %s%s", NEWLINE, security);
 
 	isqlGlob.printf("%s%s", isqlGlob.global_Term, NEWLINE);
 	return FINI_OK;
@@ -1316,7 +1327,8 @@ static processing_state list_all_grants(bool extract, const SCHAR* terminator)
 static void print_proc_prefix(int obj_type, bool headerOnly)
 {
 	if (obj_type == obj_procedure || obj_type == obj_udf ||
-		obj_type == obj_package_header || obj_type == obj_package_body)
+		obj_type == obj_package_header || obj_type == obj_package_body ||
+		obj_type == obj_tablespace)
 	{
 		isqlGlob.printf("%sCOMMIT WORK%s%s", NEWLINE, isqlGlob.global_Term, NEWLINE);
 	}
@@ -1343,6 +1355,9 @@ static void print_proc_prefix(int obj_type, bool headerOnly)
 		break;
 	case obj_package_body:
 		legend = "Package bodies";
+		break;
+	case obj_tablespace:
+		legend = "Tablespaces";
 		break;
 	}
 	if (legend)
@@ -3156,6 +3171,13 @@ static void list_indexes()
 			SHOW_print_metadata_text_blob(isqlGlob.Out, &IDX.RDB$CONDITION_SOURCE, false, true);
 		}
 
+		if (!IDX.RDB$TABLESPACE_NAME.NULL)
+		{
+			const MetaString tablespaceName(IDX.RDB$TABLESPACE_NAME);
+			if (tablespaceName != PRIMARY_TABLESPACE_NAME)
+				isqlGlob.printf(" TABLESPACE %s", IUTILS_name_to_string(tablespaceName).c_str());
+		}
+
 		isqlGlob.printf("%s%s", isqlGlob.global_Term, NEWLINE);
 	}
 	END_FOR
@@ -3413,4 +3435,57 @@ static void list_views()
 		ISQL_errmsg(fbStatus);
 		return;
 	END_ERROR
+}
+
+static void list_tablespaces()
+{
+/**************************************
+ *
+ *	l i s t _ t a b l e s p a c e s
+ *
+ **************************************
+ *
+ * Functional description
+ *	Show tablespaces
+ *	Use a SQL query to get the info and print it.
+ *
+ **************************************/
+
+	if (isqlGlob.major_ods < ODS_VERSION14)
+		return;
+
+	bool first = true;
+
+	FOR X IN RDB$TABLESPACES WITH X.RDB$SYSTEM_FLAG EQ 0
+		SORTED BY X.RDB$TABLESPACE_NAME
+
+		if (first)
+		{
+			isqlGlob.printf("%s/*  Tablespaces */%s", NEWLINE, NEWLINE);
+			first = false;
+		}
+
+		const MetaString tablespaceName(X.RDB$TABLESPACE_NAME);
+		const MetaString ownerName(X.RDB$OWNER_NAME);
+
+		isqlGlob.printf("%s/* Tablespace: %s, Owner: %s */%s",
+				 NEWLINE,
+				 IUTILS_name_to_string(tablespaceName).c_str(),
+				 IUTILS_name_to_string(ownerName).c_str(),
+				 NEWLINE);
+
+		const char* offline = X.RDB$OFFLINE.NULL || !X.RDB$OFFLINE ? "ONLINE" : "OFFLINE";
+		const char* readonly = X.RDB$READ_ONLY.NULL || !X.RDB$READ_ONLY ? "READ WRITE" : "READ ONLY";
+
+		fb_utils::exact_name(X.RDB$FILE_NAME);
+		isqlGlob.printf("CREATE TABLESPACE %s FILE '%s' %s %s",
+			IUTILS_name_to_string(tablespaceName).c_str(), X.RDB$FILE_NAME, offline, readonly);
+
+		isqlGlob.printf("%s%s", Procterm, NEWLINE);
+
+	END_FOR
+	ON_ERROR
+		ISQL_errmsg(fbStatus);
+		return;
+	END_ERROR;
 }

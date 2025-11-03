@@ -1149,6 +1149,17 @@ static SLONG pwrite(int fd, SCHAR* buf, SLONG nbytes, SLONG offset)
 #endif // !(HAVE_PREAD && HAVE_PWRITE)
 
 
+bool PIO_file_exists(const Firebird::PathName& fileName)
+{
+	const int fd = openFile(fileName.c_str(), false, false, true);
+	if (fd == -1)
+		return false;
+
+	close(fd);
+	return true;
+}
+
+
 #ifdef SUPPORT_RAW_DEVICES
 int PIO_unlink(const PathName& file_name)
 {

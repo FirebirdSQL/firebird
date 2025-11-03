@@ -49,6 +49,8 @@
 #include "../jrd/EngineInterface.h"
 #include "../jrd/sbm.h"
 
+#include "../jrd/Tablespace.h"
+
 #include <atomic>
 #include <initializer_list>
 
@@ -578,6 +580,7 @@ public:
 private:
 	jrd_tra*	att_sys_transaction;		// system transaction
 	StableAttachmentPart* att_stable;
+	Firebird::Array<Tablespace*>	att_tablespaces;	// Tablespaces cache ([0] element is DB_PAGE_SPACE)
 
 public:
 	Firebird::SortedArray<Statement*> att_statements;	// Statements belonging to attachment
@@ -816,6 +819,50 @@ public:
 	void deregisterBatch(DsqlBatch* b)
 	{
 		att_batches.findAndRemove(b);
+	}
+
+	Tablespace* getTablespace(ULONG id)
+	{
+		// tablespace id is started from 1
+		if (id <= att_tablespaces.getCount())
+			return att_tablespaces[id - 1];
+
+		return NULL;
+	}
+
+	Tablespace* getTablespaceByName(const MetaName name)
+	{
+		Tablespace** iter = att_tablespaces.begin();
+		++iter; // skip DB_PAGE_SPACE
+
+		for (; iter < att_tablespaces.end(); ++iter)
+		{
+			Tablespace* const tablespace = *iter;
+
+			if (tablespace && tablespace->name == name)
+				return tablespace;
+		}
+
+		return NULL;
+	}
+
+	void setTablespace(ULONG id, Tablespace* value)
+	{
+		if (id > att_tablespaces.getCount())
+			att_tablespaces.grow(id);
+
+		fb_assert(!att_tablespaces[id - 1]);
+		att_tablespaces[id - 1] = value;
+	}
+
+	void delTablespace(ULONG id)
+	{
+		if (id <= att_tablespaces.getCount())
+		{
+			Tablespace* tablespaceToDelete = att_tablespaces[id - 1];
+			att_tablespaces[id - 1] = NULL;
+			delete tablespaceToDelete;
+		}
 	}
 
 	UserId* getUserId(const Firebird::MetaString& userName);
