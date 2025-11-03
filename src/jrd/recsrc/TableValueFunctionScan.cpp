@@ -384,26 +384,17 @@ void GenSeriesFunctionScan::internalOpen(thread_db* tdbb) const
 	auto startItem = m_inputList->items[GEN_SERIES_INDEX_START];
 	const auto startDesc = EVL_expr(tdbb, request, startItem);
 	if (startDesc == nullptr)
-	{
-		rpb->rpb_number.setValid(false);
 		return;
-	}
 
 	auto finishItem = m_inputList->items[GEN_SERIES_INDEX_FINISH];
 	const auto finishDesc = EVL_expr(tdbb, request, finishItem);
 	if (finishDesc == nullptr)
-	{
-		rpb->rpb_number.setValid(false);
 		return;
-	}
 
 	auto stepItem = m_inputList->items[GEN_SERIES_INDEX_STEP];
 	const auto stepDesc = EVL_expr(tdbb, request, stepItem);
 	if (stepDesc == nullptr)
-	{
-		rpb->rpb_number.setValid(false);
 		return;
-	}
 
 	const auto impure = request->getImpure<Impure>(m_impure);
 	impure->m_recordBuffer = nullptr;
@@ -425,10 +416,7 @@ void GenSeriesFunctionScan::internalOpen(thread_db* tdbb) const
 		// validate parameter value
 		if (((step > 0) && (start > finish)) ||
 			((step < 0) && (start < finish)))
-		{
-			rpb->rpb_number.setValid(false);
 			return;
-		}
 
 		impure->m_start.vlu_int64 = start;
 		impure->m_finish.vlu_int64 = finish;
@@ -447,10 +435,7 @@ void GenSeriesFunctionScan::internalOpen(thread_db* tdbb) const
 		// validate parameter value
 		if (((step.sign() > 0) && (start.compare(finish) > 0)) ||
 			((step.sign() < 0) && (start.compare(finish) < 0)))
-		{
-			rpb->rpb_number.setValid(false);
 			return;
-		}
 
 		impure->m_start.vlu_int128 = start;
 		impure->m_finish.vlu_int128 = finish;

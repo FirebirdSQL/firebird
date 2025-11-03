@@ -6851,7 +6851,7 @@ table_value_function_gen_series
 
 %type <valueListNode> table_value_function_gen_series_arg_list
 table_value_function_gen_series_arg_list
-	: value ',' value step_opt
+	: value ',' value gen_series_step_opt
 		{
 			$$ = newNode<ValueListNode>($1);
 			$$->add($3);
@@ -6859,7 +6859,7 @@ table_value_function_gen_series_arg_list
 		}
 	;
 
-%type <valueExprNode> step_opt
+%type <valueExprNode> gen_series_step_opt
 step_opt
 	: /* nothing */		{ $$ = MAKE_const_sint64(1, 0); }
 	| ',' value			{ $$ = $2; }
