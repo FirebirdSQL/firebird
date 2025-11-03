@@ -430,11 +430,13 @@ void GenSeriesFunctionScan::internalOpen(thread_db* tdbb) const
 			return;
 		}
 
-		impure->m_start = start;
-		impure->m_finish = finish;
-		impure->m_step = step;
+		impure->m_start.vlu_int64 = start;
+		impure->m_finish.vlu_int64 = finish;
+		impure->m_step.vlu_int64 = step;
+		impure->m_result.vlu_int64 = start;
 	}
-	else {
+	else 
+	{
 		const auto start = MOV_get_int128(tdbb, startDesc, impure->m_scale);
 		const auto finish = MOV_get_int128(tdbb, finishDesc, impure->m_scale);
 		const auto step = MOV_get_int128(tdbb, stepDesc, impure->m_scale);
@@ -450,16 +452,14 @@ void GenSeriesFunctionScan::internalOpen(thread_db* tdbb) const
 			return;
 		}
 
-		impure->m_start = start;
-		impure->m_finish = finish;
-		impure->m_step = step;
+		impure->m_start.vlu_int128 = start;
+		impure->m_finish.vlu_int128 = finish;
+		impure->m_step.vlu_int128 = step;
+		impure->m_result.vlu_int128 = start;
 	}
 
-	
 	impure->irsb_flags |= irsb_open;
-    impure->m_result = impure->m_start;
-
-
+   
 	VIO_record(tdbb, rpb, m_format, &pool);
 }
 
@@ -510,9 +510,9 @@ bool GenSeriesFunctionScan::nextBuffer(thread_db* tdbb) const
 
 	if (impure->m_dtype != dtype_int128)
 	{
-		auto result = std::get<SINT64>(impure->m_result);
-		const auto finish = std::get<SINT64>(impure->m_finish);
-		const auto step = std::get<SINT64>(impure->m_step);
+		auto result = impure->m_result.vlu_int64;
+		const auto finish = impure->m_finish.vlu_int64;
+		const auto step = impure->m_step.vlu_int64;
 
 		if (((step > 0) && (result <= finish)) ||
 			((step < 0) && (result >= finish)))
@@ -526,15 +526,15 @@ bool GenSeriesFunctionScan::nextBuffer(thread_db* tdbb) const
 			assignParameter(tdbb, &fromDesc, toDesc, 0, record);
 
 			result += step;
-			impure->m_result = result;
+			impure->m_result.vlu_int64 = result;
 
 			return true;
 		}
 	}
 	else {
-		auto result = std::get<Firebird::Int128>(impure->m_result);
-		const auto finish = std::get<Firebird::Int128>(impure->m_finish);
-		const auto step = std::get<Firebird::Int128>(impure->m_step);
+		auto result = impure->m_result.vlu_int128;
+		const auto finish = impure->m_finish.vlu_int128;
+		const auto step = impure->m_step.vlu_int128;
 
 		if (((step.sign() > 0) && (result.compare(finish) <= 0)) ||
 			((step.sign() < 0) && (result.compare(finish) >= 0)))
@@ -548,7 +548,7 @@ bool GenSeriesFunctionScan::nextBuffer(thread_db* tdbb) const
 			assignParameter(tdbb, &fromDesc, toDesc, 0, record);
 
 			result = result.add(step);
-			impure->m_result = result;
+			impure->m_result.vlu_int128 = result;
 
 			return true;
 		}
