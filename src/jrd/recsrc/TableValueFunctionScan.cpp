@@ -416,7 +416,9 @@ void GenSeriesFunctionScan::internalOpen(thread_db* tdbb) const
 		// validate parameter value
 		if (((step > 0) && (start > finish)) ||
 			((step < 0) && (start < finish)))
+		{
 			return;
+		}
 
 		impure->m_start.vlu_int64 = start;
 		impure->m_finish.vlu_int64 = finish;
@@ -435,7 +437,9 @@ void GenSeriesFunctionScan::internalOpen(thread_db* tdbb) const
 		// validate parameter value
 		if (((step.sign() > 0) && (start.compare(finish) > 0)) ||
 			((step.sign() < 0) && (start.compare(finish) < 0)))
+		{
 			return;
+		}
 
 		impure->m_start.vlu_int128 = start;
 		impure->m_finish.vlu_int128 = finish;
