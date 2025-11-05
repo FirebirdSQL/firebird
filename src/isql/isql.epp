@@ -173,6 +173,9 @@ constexpr int ISQL_COUNTERS = 8;
 
 constexpr const char* UNKNOWN = "*unknown*";
 
+// minimum display length for subvariables is 8 as "<null>" length + 1 for comma separator + 1 for space
+constexpr unsigned SUBFIELD_PRINT_MIN_LENGTH = 8;
+
 namespace IcuUtil
 {
 	// Duplicate from ICU to not need to link ISQL with it. It's used by U8_NEXT_UNSAFE.
@@ -8476,9 +8479,7 @@ static unsigned process_message_display(Firebird::IMessageMetadata* message, uns
 		for (const auto& subvar : var.subvars)
 		{
 			auto subdisp_length = calculateDisplayLength(subvar);
-
-			// minimum display length for subvariables is 6 as "<null>" length + 1 for comma separator
-			disp_length += subdisp_length < 6 ? 6 : subdisp_length;
+			disp_length += subdisp_length < SUBFIELD_PRINT_MIN_LENGTH ? SUBFIELD_PRINT_MIN_LENGTH : subdisp_length;
 		}
 
 		const unsigned type = var.type;
