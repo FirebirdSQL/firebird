@@ -4223,7 +4223,9 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			}},
 		};
 
-		ObjectsArray<MetaString> schemaSearchPath({SYSTEM_SCHEMA, PUBLIC_SCHEMA});
+		static const NonLazyInitInstance<ObjectsArray<MetaString>> schemaSearchPath(
+			*getDefaultMemoryPool(), std::initializer_list<MetaString>{SYSTEM_SCHEMA, PUBLIC_SCHEMA}
+		);
 
 		if (const auto relSchemaFields = schemaFields.find(relation->rel_id); relSchemaFields != schemaFields.end())
 		{
@@ -4242,7 +4244,7 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 					{
 						MOV_get_metaname(tdbb, &desc, depName.object);
 
-						if (MET_qualify_existing_name(tdbb, depName, {dependency->objType}, &schemaSearchPath))
+						if (MET_qualify_existing_name(tdbb, depName, {dependency->objType}, schemaSearchPath.get()))
 							schemaName = depName.schema.c_str();
 					}
 
