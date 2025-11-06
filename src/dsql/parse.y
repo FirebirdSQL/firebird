@@ -2395,7 +2395,7 @@ sql_security_clause
 
 %type <triState> sql_security_clause_opt
 sql_security_clause_opt
-	: /* nothing */				{ $$ = TriState(); }
+	: /* nothing */				{ $$ = TriState::empty(); }
 	| sql_security_clause		{ $$ = $1; }
 	;
 
@@ -4244,7 +4244,7 @@ trigger_active
 	| INACTIVE
 		{ $$ = TriState(false); }
 	| // nothing
-		{ $$ = TriState(); }
+		{ $$ = TriState::empty(); }
 	;
 
 %type <uint64Val> trigger_type(<createAlterTriggerNode>)
@@ -4590,7 +4590,7 @@ alter_op($relationNode)
 		}
 	| DROP SQL SECURITY
 		{
-			setClause($relationNode->ssDefiner, "SQL SECURITY", TriState());
+			setClause($relationNode->ssDefiner, "SQL SECURITY", TriState::empty());
 			RelationNode::Clause* clause =
 				newNode<RelationNode::Clause>(RelationNode::Clause::TYPE_ALTER_SQL_SECURITY);
 			$relationNode->clauses.add(clause);
@@ -6321,7 +6321,7 @@ optimize_clause
 	: OPTIMIZE optimize_mode
 		{ $$ = TriState($2); }
 	| // nothing
-		{ $$ = TriState(); }
+		{ $$ = TriState::empty(); }
 	;
 
 %type <boolVal> optimize_mode
