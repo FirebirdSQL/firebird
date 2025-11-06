@@ -303,6 +303,64 @@ public:
 	}
 };
 
+template <typename T>
+class DefaultNonLazyInstanceAllocator
+{
+public:
+	template <typename... TArgs>
+	static T* create(TArgs&&... args)
+	{
+		return FB_NEW_POOL(*getDefaultMemoryPool()) T(std::forward<TArgs>(args)...);
+	}
+
+	static void destroy(T* inst) noexcept
+	{
+		delete inst;
+	}
+};
+
+// Best use case is for static local variable
+template <typename T, class TAllocator = DefaultNonLazyInstanceAllocator<T>, template <class I> class DestroyControl = DeleteInstance >
+class NonLazyInitInstance : private DestroyControl<NonLazyInitInstance<T, TAllocator, DestroyControl> >
+{
+public:
+	template <typename... TArgs>
+	NonLazyInitInstance(TArgs&&... args)
+	{
+		MutexLockGuard guard(*StaticMutex::mutex, "NonLazyInitInstance");
+		m_instance = TAllocator::create(std::forward<TArgs>(args)...);
+		DestroyControl<std::remove_cvref_t<decltype(*this)>>::registerInstance(this);
+	}
+
+	T& operator()() noexcept
+	{
+		return *m_instance;
+	}
+	const T& operator()() const noexcept
+	{
+		return *m_instance;
+	}
+
+	T* get() noexcept
+	{
+		return m_instance;
+	}
+	const T* get() const noexcept
+	{
+		return m_instance;
+	}
+
+	void dtor()
+	{
+		MutexLockGuard guard(*StaticMutex::mutex, "NonLazyInitInstance - dtor");
+		TAllocator::destroy(m_instance);
+		m_instance = nullptr;
+	}
+
+private:
+	T* m_instance = nullptr;
+};
+
 // Static - create instance of some class in static char[] buffer. Never destroy it.
 
 template <typename T>
