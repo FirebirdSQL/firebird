@@ -392,25 +392,24 @@ IndexCondition::~IndexCondition()
 	}
 }
 
-bool IndexCondition::evaluate(Record* record) const
+TriState IndexCondition::evaluate(Record* record) const
 {
 	if (!m_request || !m_condition)
-		return true;
+		return TriState(true);
 
 	const auto orgRequest = m_tdbb->getRequest();
 	m_tdbb->setRequest(m_request);
 
 	m_request->req_rpb[0].rpb_record = record;
-	m_request->req_flags &= ~req_null;
 
 	FbLocalStatus status;
-	bool result = false;
+	TriState result(false);
 
 	try
 	{
 		Jrd::ContextPoolHolder context(m_tdbb, m_request->req_pool);
 
-		result = m_condition->execute(m_tdbb, m_request);
+		result = m_condition->execute(m_tdbb, m_request).asBool();
 	}
 	catch (const Exception& ex)
 	{
@@ -507,7 +506,6 @@ dsc* IndexExpression::evaluate(Record* record) const
 	m_tdbb->setRequest(m_request);
 
 	m_request->req_rpb[0].rpb_record = record;
-	m_request->req_flags &= ~req_null;
 
 	FbLocalStatus status;
 	dsc* result = nullptr;

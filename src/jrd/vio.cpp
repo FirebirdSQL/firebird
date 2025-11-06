@@ -1712,14 +1712,6 @@ void VIO_copy_record(thread_db* tdbb, jrd_rel* relation, Record* orgRecord, Reco
  *	Copy the given record to a new destination,
  *	taking care about possible format differences.
  **************************************/
-	// dimitr:	Clear the req_null flag that may stay active after the last
-	//			boolean evaluation. Here we use only EVL_field() calls that
-	//			do not touch this flag and data copying is done only for
-	//			non-NULL fields, so req_null should never be seen inside blb::move().
-	//			See CORE-6090 for details.
-
-	const auto request = tdbb->getRequest();
-	request->req_flags &= ~req_null;
 
 	const auto orgFormat = orgRecord->getFormat();
 	const auto newFormat = newRecord->getFormat();

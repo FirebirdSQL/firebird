@@ -35,7 +35,7 @@ namespace Jrd {
 
 void EXE_assignment(Jrd::thread_db*, const Jrd::AssignmentNode*);
 void EXE_assignment(Jrd::thread_db*, const Jrd::ValueExprNode*, const Jrd::ValueExprNode*);
-void EXE_assignment(Jrd::thread_db* tdbb, const Jrd::ValueExprNode* to, dsc* from_desc, bool from_null,
+void EXE_assignment(Jrd::thread_db* tdbb, const Jrd::ValueExprNode* to, dsc* from_desc,
 	const Jrd::ValueExprNode* missing_node, const Jrd::ValueExprNode* missing2_node);
 
 void EXE_execute_db_triggers(Jrd::thread_db*, Jrd::jrd_tra*, enum TriggerAction);

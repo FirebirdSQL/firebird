@@ -356,7 +356,7 @@ private:
 	BoolExprNode* m_condition = nullptr;
 	Request* m_request = nullptr;
 
-	bool evaluate(Record* record) const;
+	Firebird::TriState evaluate(Record* record) const;
 };
 
 class IndexExpression

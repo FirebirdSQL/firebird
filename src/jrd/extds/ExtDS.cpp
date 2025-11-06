@@ -2331,12 +2331,7 @@ void Statement::doSetInParams(thread_db* tdbb, unsigned int count, const MetaStr
 			paramDescs.put(*jrdVar, src);
 
 			if (src)
-			{
-				if (request->req_flags & req_null)
-					src->setNull();
-				else
-					src->clearNull();
-			}
+				src->clearNull();
 		}
 
 		const bool srcNull = !src || src->isNull();
@@ -2419,7 +2414,7 @@ void Statement::getOutParams(thread_db* tdbb, const ValueListNode* params)
 		}
 
 		// and assign to the target
-		EXE_assignment(tdbb, *jrdVar, local, srcNull, NULL, NULL);
+		EXE_assignment(tdbb, *jrdVar, (srcNull ? nullptr : local), nullptr, nullptr);
 	}
 }
 

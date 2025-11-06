@@ -1967,7 +1967,7 @@ dsc* evlStdMath(thread_db* tdbb, const SysFunction* function, const NestValueArr
 	Request* request = tdbb->getRequest();
 
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value)	// return NULL if value is NULL
 		return NULL;
 
 	const double v = MOV_get_double(tdbb, value);
@@ -2067,7 +2067,7 @@ dsc* evlAbs(thread_db* tdbb, const SysFunction*, const NestValueArray& args, imp
 	Request* request = tdbb->getRequest();
 
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value)	// return NULL if value is NULL
 		return NULL;
 
 	EVL_make_value(tdbb, value, impure);
@@ -2125,7 +2125,7 @@ dsc* evlAsciiChar(thread_db* tdbb, const SysFunction*, const NestValueArray& arg
 	Request* request = tdbb->getRequest();
 
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value)	// return NULL if value is NULL
 		return NULL;
 
 	const SLONG code = MOV_get_long(tdbb, value, 0);
@@ -2147,7 +2147,7 @@ dsc* evlAsciiVal(thread_db* tdbb, const SysFunction*, const NestValueArray& args
 	Request* request = tdbb->getRequest();
 
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value)	// return NULL if value is NULL
 		return NULL;
 
 	const CharSet* cs = INTL_charset_lookup(tdbb, value->getCharSet());
@@ -2182,11 +2182,11 @@ dsc* evlAtan2(thread_db* tdbb, const SysFunction* function, const NestValueArray
 	Request* request = tdbb->getRequest();
 
 	const dsc* desc1 = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if desc1 is NULL
+	if (!desc1)	// return NULL if desc1 is NULL
 		return NULL;
 
 	const dsc* desc2 = EVL_expr(tdbb, request, args[1]);
-	if (request->req_flags & req_null)	// return NULL if desc2 is NULL
+	if (!desc2)	// return NULL if desc2 is NULL
 		return NULL;
 
 	const double value1 = MOV_get_double(tdbb, desc1);
@@ -2254,7 +2254,7 @@ dsc* evlBin(thread_db* tdbb, const SysFunction* function, const NestValueArray& 
 	for (unsigned i = 0; i < args.getCount(); ++i)
 	{
 		const dsc* value = EVL_expr(tdbb, request, args[i]);
-		if (request->req_flags & req_null)	// return nullptr if value is null
+		if (!value)	// return nullptr if value is null
 			return nullptr;
 
 		if (value->dsc_dtype == dtype_int128)
@@ -2317,11 +2317,11 @@ dsc* evlBinShift(thread_db* tdbb, const SysFunction* function, const NestValueAr
 	Request* request = tdbb->getRequest();
 
 	const dsc* value1 = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value1 is NULL
+	if (!value1)	// return NULL if value1 is NULL
 		return NULL;
 
 	const dsc* value2 = EVL_expr(tdbb, request, args[1]);
-	if (request->req_flags & req_null)	// return NULL if value2 is NULL
+	if (!value2)	// return NULL if value2 is NULL
 		return NULL;
 
 	const SINT64 shift = MOV_get_int64(tdbb, value2, 0);
@@ -2408,7 +2408,7 @@ dsc* evlBlobAppend(thread_db* tdbb, const SysFunction* function, const NestValue
 	dsc blobDsc;
 
 	const dsc* argDsc = EVL_expr(tdbb, request, args[0]);
-	const bool arg0_null = (request->req_flags & req_null) || (argDsc == NULL);
+	const bool arg0_null = !argDsc;
 
 	if (!arg0_null && argDsc->isBlob())
 	{
@@ -2452,7 +2452,7 @@ dsc* evlBlobAppend(thread_db* tdbb, const SysFunction* function, const NestValue
 		else
 		{
 			argDsc = EVL_expr(tdbb, request, args[i]);
-			if ((request->req_flags & req_null) || !argDsc)
+			if (!argDsc)
 				continue;
 		}
 
@@ -2510,7 +2510,7 @@ dsc* evlCeil(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	Request* request = tdbb->getRequest();
 
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value)	// return NULL if value is NULL
 		return NULL;
 
 	EVL_make_value(tdbb, value, impure);
@@ -2595,7 +2595,7 @@ dsc* evlCharToUuid(thread_db* tdbb, const SysFunction* function, const NestValue
 	Request* request = tdbb->getRequest();
 
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value)	// return NULL if value is NULL
 		return NULL;
 
 	if (!value->isText())
@@ -2732,15 +2732,15 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 	Request* request = tdbb->getRequest();
 
 	const dsc* quantityDsc = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if quantityDsc is NULL
+	if (!quantityDsc)	// return NULL if quantityDsc is NULL
 		return NULL;
 
 	const dsc* partDsc = EVL_expr(tdbb, request, args[1]);
-	if (request->req_flags & req_null)	// return NULL if partDsc is NULL
+	if (!partDsc)	// return NULL if partDsc is NULL
 		return NULL;
 
 	const dsc* valueDsc = EVL_expr(tdbb, request, args[2]);
-	if (request->req_flags & req_null)	// return NULL if valueDsc is NULL
+	if (!valueDsc)	// return NULL if valueDsc is NULL
 		return NULL;
 
 	const SLONG part = MOV_get_long(tdbb, partDsc, 0);
@@ -3854,7 +3854,7 @@ dsc* evlRsaPrivate(thread_db* tdbb, const SysFunction* function, const NestValue
 	Request* request = tdbb->getRequest();
 
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value)	// return NULL if value is NULL
 		return NULL;
 
 	const SLONG length = MOV_get_long(tdbb, value, 0);
@@ -3885,7 +3885,7 @@ dsc* evlRsaPublic(thread_db* tdbb, const SysFunction* function, const NestValueA
 	Request* request = tdbb->getRequest();
 
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value)	// return NULL if value is NULL
 		return NULL;
 
 	DscValue data(tdbb, value, "private key");
@@ -4052,15 +4052,15 @@ dsc* evlDateDiff(thread_db* tdbb, const SysFunction* function, const NestValueAr
 	Request* request = tdbb->getRequest();
 
 	const dsc* partDsc = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if partDsc is NULL
+	if (!partDsc)	// return NULL if partDsc is NULL
 		return NULL;
 
 	const dsc* value1Dsc = EVL_expr(tdbb, request, args[1]);
-	if (request->req_flags & req_null)	// return NULL if value1Dsc is NULL
+	if (!value1Dsc)	// return NULL if value1Dsc is NULL
 		return NULL;
 
 	const dsc* value2Dsc = EVL_expr(tdbb, request, args[2]);
-	if (request->req_flags & req_null)	// return NULL if value2Dsc is NULL
+	if (!value2Dsc)	// return NULL if value2Dsc is NULL
 		return NULL;
 
 	TimeStamp timestamp1;
@@ -4283,7 +4283,7 @@ dsc* evlExp(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	Request* request = tdbb->getRequest();
 
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value)	// return NULL if value is NULL
 		return NULL;
 
 	if (value->isDecOrInt128())
@@ -4320,11 +4320,11 @@ dsc* evlFirstLastDay(thread_db* tdbb, const SysFunction* function, const NestVal
 	Request* request = tdbb->getRequest();
 
 	const dsc* partDsc = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if partDsc is NULL
+	if (!partDsc)	// return NULL if partDsc is NULL
 		return NULL;
 
 	const dsc* valueDsc = EVL_expr(tdbb, request, args[1]);
-	if (request->req_flags & req_null)	// return NULL if valueDsc is NULL
+	if (!valueDsc)	// return NULL if valueDsc is NULL
 		return NULL;
 
 	TimeStamp timestamp;
@@ -4456,7 +4456,7 @@ dsc* evlFloor(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	Request* request = tdbb->getRequest();
 
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value)	// return NULL if value is NULL
 		return NULL;
 
 	EVL_make_value(tdbb, value, impure);
@@ -4540,7 +4540,7 @@ dsc* evlGenUuid(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	{
 		const auto* const versionDsc = EVL_expr(tdbb, request, args[0]);
 
-		if (request->req_flags & req_null)
+		if (!versionDsc)
 			return nullptr;
 
 		version = MOV_get_long(tdbb, versionDsc, 0);
@@ -4576,13 +4576,12 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 	jrd_tra* transaction = tdbb->getTransaction();
 	Request* request = tdbb->getRequest();
 
-	request->req_flags &= ~req_null;
 	const dsc* nameSpace = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// Complain if namespace is null
+	if (!nameSpace)	// Complain if namespace is null
 		ERR_post(Arg::Gds(isc_ctx_bad_argument) << Arg::Str(RDB_GET_CONTEXT));
 
 	const dsc* name = EVL_expr(tdbb, request, args[1]);
-	if (request->req_flags & req_null)	// Complain if variable name is null
+	if (!name)	// Complain if variable name is null
 		ERR_post(Arg::Gds(isc_ctx_bad_argument) << Arg::Str(RDB_GET_CONTEXT));
 
 	const string nameSpaceStr(MOV_make_string2(tdbb, nameSpace, ttype_none));
@@ -4590,7 +4589,6 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 
 	string resultStr;
 	USHORT resultType = ttype_none;
-	request->req_flags |= req_null;
 
 	if (nameSpaceStr == SYSTEM_NAMESPACE)	// Handle system variables
 	{
@@ -4872,7 +4870,6 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 			result.makeBlob(isc_blob_text, ttype_metadata, (ISC_QUAD*) &impure->vlu_misc.vlu_bid);
 			EVL_make_value(tdbb, &result, impure);
 
-			request->req_flags &= ~req_null;
 			return &impure->vlu_desc;
 		}
 		else
@@ -4904,7 +4901,6 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 		(UCHAR*) const_cast<char*>(resultStr.c_str()));	// safe const_cast
 	EVL_make_value(tdbb, &result, impure);
 
-	request->req_flags &= ~req_null;
 	return &impure->vlu_desc;
 }
 
@@ -4918,13 +4914,12 @@ dsc* evlSetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 	jrd_tra* transaction = tdbb->getTransaction();
 	Request* request = tdbb->getRequest();
 
-	request->req_flags &= ~req_null;
 	const dsc* nameSpace = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// Complain if namespace is null
+	if (!nameSpace)	// Complain if namespace is null
 		ERR_post(Arg::Gds(isc_ctx_bad_argument) << Arg::Str(RDB_SET_CONTEXT));
 
 	const dsc* name = EVL_expr(tdbb, request, args[1]);
-	if (request->req_flags & req_null)	// Complain if variable name is null
+	if (!name)	// Complain if variable name is null
 		ERR_post(Arg::Gds(isc_ctx_bad_argument) << Arg::Str(RDB_SET_CONTEXT));
 
 	const dsc* value = EVL_expr(tdbb, request, args[2]);
@@ -5005,7 +5000,6 @@ dsc* evlSetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 		attachment->att_trace_manager->event_set_context(&conn, &tran, &ctxvar);
 	}
 
-	request->req_flags &= ~req_null;
 	return &impure->vlu_desc;
 }
 
@@ -5018,9 +5012,8 @@ dsc* evlGetTranCN(thread_db* tdbb, const SysFunction* function, const NestValueA
 	Database* dbb = tdbb->getDatabase();
 	Request* request = tdbb->getRequest();
 
-	request->req_flags &= ~req_null;
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)
+	if (!value)
 		return NULL;
 
 	const TraNumber traNum = MOV_get_int64(tdbb, value, 0);
@@ -5035,10 +5028,7 @@ dsc* evlGetTranCN(thread_db* tdbb, const SysFunction* function, const NestValueA
 	}
 
 	if (traNum > traMax)
-	{
-		request->req_flags |= req_null;
 		return NULL;
-	}
 
 	CommitNumber cn = dbb->dbb_tip_cache->snapshotState(tdbb, traNum);
 
@@ -5047,7 +5037,6 @@ dsc* evlGetTranCN(thread_db* tdbb, const SysFunction* function, const NestValueA
 
 	EVL_make_value(tdbb, &result, impure);
 
-	request->req_flags &= ~req_null;
 	return &impure->vlu_desc;
 }
 
@@ -5060,7 +5049,7 @@ dsc* evlHash(thread_db* tdbb, const SysFunction* function, const NestValueArray&
 	Request* request = tdbb->getRequest();
 
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value)	// return NULL if value is NULL
 		return NULL;
 
 	AutoPtr<HashContext> hashContext;
@@ -5069,7 +5058,7 @@ dsc* evlHash(thread_db* tdbb, const SysFunction* function, const NestValueArray&
 	if (args.getCount() >= 2)
 	{
 		const dsc* algorithmDesc = EVL_expr(tdbb, request, args[1]);
-		if (request->req_flags & req_null)	// return NULL if algorithm is NULL
+		if (!algorithmDesc)	// return NULL if algorithm is NULL
 			return NULL;
 
 		const HashAlgorithmDescriptor* d = getHashAlgorithmDesc(tdbb, function, algorithmDesc);
@@ -5119,11 +5108,11 @@ dsc* evlLeft(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	Request* request = tdbb->getRequest();
 
 	const dsc* str = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if str is NULL
+	if (!str)	// return NULL if str is NULL
 		return NULL;
 
 	const dsc* len = EVL_expr(tdbb, request, args[1]);
-	if (request->req_flags & req_null)	// return NULL if len is NULL
+	if (!len)	// return NULL if len is NULL
 		return NULL;
 
 	SLONG start = 0;
@@ -5143,7 +5132,7 @@ dsc* evlLnLog10(thread_db* tdbb, const SysFunction* function, const NestValueArr
 	Request* request = tdbb->getRequest();
 
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value)	// return NULL if value is NULL
 		return NULL;
 
 	if (value->isDecOrInt128())
@@ -5217,11 +5206,11 @@ dsc* evlLog(thread_db* tdbb, const SysFunction* function, const NestValueArray& 
 
 	const dsc* value[2];
 	value[0] = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value[0])	// return NULL if value is NULL
 		return NULL;
 
 	value[1] = EVL_expr(tdbb, request, args[1]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value[1])	// return NULL if value is NULL
 		return NULL;
 
 	if (!areParamsDouble(2, value))
@@ -5283,11 +5272,11 @@ dsc* evlQuantize(thread_db* tdbb, const SysFunction* function, const NestValueAr
 
 	const dsc* value[2];
 	value[0] = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value[0])	// return NULL if value is NULL
 		return NULL;
 
 	value[1] = EVL_expr(tdbb, request, args[1]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value[1])	// return NULL if value is NULL
 		return NULL;
 
 	const DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
@@ -5322,11 +5311,11 @@ dsc* evlCompare(thread_db* tdbb, const SysFunction* function, const NestValueArr
 
 	const dsc* value[2];
 	value[0] = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value[0])	// return NULL if value is NULL
 		return NULL;
 
 	value[1] = EVL_expr(tdbb, request, args[1]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value[1])	// return NULL if value is NULL
 		return NULL;
 
 	if (value[0]->dsc_dtype == dtype_dec64)
@@ -5378,7 +5367,7 @@ dsc* evlNormDec(thread_db* tdbb, const SysFunction* function, const NestValueArr
 
 	const dsc* value;
 	value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value)	// return NULL if value is NULL
 		return NULL;
 
 	const DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
@@ -5413,7 +5402,7 @@ dsc* evlMakeDbkey(Jrd::thread_db* tdbb, const SysFunction* function, const NestV
 	fb_assert(args.getCount() >= 2 && args.getCount() <= 4);
 
 	dsc* argDsc = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if relation is NULL
+	if (!argDsc)	// return NULL if relation is NULL
 		return NULL;
 
 	USHORT relId;
@@ -5441,7 +5430,7 @@ dsc* evlMakeDbkey(Jrd::thread_db* tdbb, const SysFunction* function, const NestV
 	}
 
 	argDsc = EVL_expr(tdbb, request, args[1]);
-	if (request->req_flags & req_null)
+	if (!argDsc)
 		return NULL;
 
 	SINT64 recNo = MOV_get_int64(tdbb, argDsc, 0);
@@ -5451,7 +5440,7 @@ dsc* evlMakeDbkey(Jrd::thread_db* tdbb, const SysFunction* function, const NestV
 	if (args.getCount() > 2)
 	{
 		argDsc = EVL_expr(tdbb, request, args[2]);
-		if (request->req_flags & req_null)
+		if (!argDsc)
 			return NULL;
 
 		dpNum = MOV_get_int64(tdbb, argDsc, 0);
@@ -5462,7 +5451,7 @@ dsc* evlMakeDbkey(Jrd::thread_db* tdbb, const SysFunction* function, const NestV
 	if (args.getCount() > 3)
 	{
 		argDsc = EVL_expr(tdbb, request, args[3]);
-		if (request->req_flags & req_null)
+		if (!argDsc)
 			return NULL;
 
 		ppNum = MOV_get_int64(tdbb, argDsc, 0);
@@ -5518,7 +5507,7 @@ dsc* evlMaxMinValue(thread_db* tdbb, const SysFunction* function, const NestValu
 	for (FB_SIZE_T i = 0; i < args.getCount(); ++i)
 	{
 		const auto value = EVL_expr(tdbb, request, args[i]);
-		if (request->req_flags & req_null)	// return NULL if value is NULL
+		if (!value)	// return NULL if value is NULL
 			return nullptr;
 
 		argTypes.add(value);
@@ -5565,11 +5554,11 @@ dsc* evlMod(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	Request* request = tdbb->getRequest();
 
 	const dsc* value1 = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value1 is NULL
+	if (!value1)	// return NULL if value1 is NULL
 		return NULL;
 
 	const dsc* value2 = EVL_expr(tdbb, request, args[1]);
-	if (request->req_flags & req_null)	// return NULL if value2 is NULL
+	if (!value2)	// return NULL if value2 is NULL
 		return NULL;
 
 	EVL_make_value(tdbb, value1, impure);
@@ -5628,15 +5617,15 @@ dsc* evlOverlay(thread_db* tdbb, const SysFunction* function, const NestValueArr
 	Request* request = tdbb->getRequest();
 
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value)	// return NULL if value is NULL
 		return NULL;
 
 	const dsc* placing = EVL_expr(tdbb, request, args[1]);
-	if (request->req_flags & req_null)	// return NULL if placing is NULL
+	if (!placing)	// return NULL if placing is NULL
 		return NULL;
 
 	const dsc* fromDsc = EVL_expr(tdbb, request, args[2]);
-	if (request->req_flags & req_null)	// return NULL if fromDsc is NULL
+	if (!fromDsc)	// return NULL if fromDsc is NULL
 		return NULL;
 
 	const dsc* lengthDsc = NULL;
@@ -5645,7 +5634,7 @@ dsc* evlOverlay(thread_db* tdbb, const SysFunction* function, const NestValueArr
 	if (args.getCount() >= 4)
 	{
 		lengthDsc = EVL_expr(tdbb, request, args[3]);
-		if (request->req_flags & req_null)	// return NULL if lengthDsc is NULL
+		if (!lengthDsc)	// return NULL if lengthDsc is NULL
 			return NULL;
 
 		const SLONG auxlen = MOV_get_long(tdbb, lengthDsc, 0);
@@ -5812,11 +5801,11 @@ dsc* evlPad(thread_db* tdbb, const SysFunction* function, const NestValueArray& 
 	Request* request = tdbb->getRequest();
 
 	const dsc* value1 = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value1 is NULL
+	if (!value1)	// return NULL if value1 is NULL
 		return NULL;
 
 	const dsc* padLenDsc = EVL_expr(tdbb, request, args[1]);
-	if (request->req_flags & req_null)	// return NULL if padLenDsc is NULL
+	if (!padLenDsc)	// return NULL if padLenDsc is NULL
 		return NULL;
 
 	const SLONG padLenArg = MOV_get_long(tdbb, padLenDsc, 0);
@@ -5834,7 +5823,7 @@ dsc* evlPad(thread_db* tdbb, const SysFunction* function, const NestValueArray& 
 	if (args.getCount() >= 3)
 	{
 		value2 = EVL_expr(tdbb, request, args[2]);
-		if (request->req_flags & req_null)	// return NULL if value2 is NULL
+		if (!value2)	// return NULL if value2 is NULL
 			return NULL;
 	}
 
@@ -5987,11 +5976,11 @@ dsc* evlPosition(thread_db* tdbb, const SysFunction* function, const NestValueAr
 	Request* request = tdbb->getRequest();
 
 	const dsc* value1 = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value1 is NULL
+	if (!value1)	// return NULL if value1 is NULL
 		return NULL;
 
 	const dsc* value2 = EVL_expr(tdbb, request, args[1]);
-	if (request->req_flags & req_null)	// return NULL if value2 is NULL
+	if (!value2)	// return NULL if value2 is NULL
 		return NULL;
 
 	SLONG start = 1;
@@ -5999,7 +5988,7 @@ dsc* evlPosition(thread_db* tdbb, const SysFunction* function, const NestValueAr
 	if (args.getCount() >= 3)
 	{
 		const dsc* value3 = EVL_expr(tdbb, request, args[2]);
-		if (request->req_flags & req_null)	// return NULL if value3 is NULL
+		if (!value3)	// return NULL if value3 is NULL
 			return NULL;
 
 		start = MOV_get_long(tdbb, value3, 0);
@@ -6114,11 +6103,11 @@ dsc* evlPower(thread_db* tdbb, const SysFunction* function, const NestValueArray
 
 	const dsc* value[2];
 	value[0] = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value[0])	// return NULL if value is NULL
 		return NULL;
 
 	value[1] = EVL_expr(tdbb, request, args[1]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value[1])	// return NULL if value is NULL
 		return NULL;
 
 	if (!areParamsDouble(2, value))
@@ -6193,7 +6182,7 @@ dsc* evlReplace(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	for (int i = 0; i < 3; ++i)
 	{
 		values[i] = EVL_expr(tdbb, request, args[i]);
-		if (request->req_flags & req_null)	// return NULL if values[i] is NULL
+		if (!values[i])	// return NULL if values[i] is NULL
 			return NULL;
 
 		if (!firstBlob && values[i]->isBlob())
@@ -6347,7 +6336,7 @@ dsc* evlReverse(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	Request* request = tdbb->getRequest();
 
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value)	// return NULL if value is NULL
 		return NULL;
 
 	CharSet* cs = INTL_charset_lookup(tdbb, value->getCharSet());
@@ -6450,11 +6439,11 @@ dsc* evlRight(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	Request* request = tdbb->getRequest();
 
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value)	// return NULL if value is NULL
 		return NULL;
 
 	const dsc* len = EVL_expr(tdbb, request, args[1]);
-	if (request->req_flags & req_null)	// return NULL if len is NULL
+	if (!len)	// return NULL if len is NULL
 		return NULL;
 
 	const CharSet* charSet = INTL_charset_lookup(tdbb, value->getCharSet());
@@ -6503,7 +6492,7 @@ dsc* evlRound(thread_db* tdbb, const SysFunction* function, const NestValueArray
 	Request* request = tdbb->getRequest();
 
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value)	// return NULL if value is NULL
 		return NULL;
 
 	SLONG scale = 0;
@@ -6511,7 +6500,7 @@ dsc* evlRound(thread_db* tdbb, const SysFunction* function, const NestValueArray
 	if (args.getCount() > 1)
 	{
 		const dsc* scaleDsc = EVL_expr(tdbb, request, args[1]);
-		if (request->req_flags & req_null)	// return NULL if scaleDsc is NULL
+		if (!scaleDsc)	// return NULL if scaleDsc is NULL
 			return NULL;
 
 		scale = MOV_get_long(tdbb, scaleDsc, 0);
@@ -6551,7 +6540,7 @@ dsc* evlSign(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	Request* request = tdbb->getRequest();
 
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value)	// return NULL if value is NULL
 		return NULL;
 
 	if (value->isDecFloat())
@@ -6582,7 +6571,7 @@ dsc* evlSqrt(thread_db* tdbb, const SysFunction* function, const NestValueArray&
 	Request* request = tdbb->getRequest();
 
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value)	// return NULL if value is NULL
 		return NULL;
 
 	if (value->isDecOrInt128())
@@ -6625,14 +6614,14 @@ dsc* evlTrunc(thread_db* tdbb, const SysFunction* function, const NestValueArray
 	Request* request = tdbb->getRequest();
 
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value)	// return NULL if value is NULL
 		return NULL;
 
 	SLONG resultScale = 0;
 	if (args.getCount() > 1)
 	{
 		const dsc* scaleDsc = EVL_expr(tdbb, request, args[1]);
-		if (request->req_flags & req_null)	// return NULL if scaleDsc is NULL
+		if (!scaleDsc)	// return NULL if scaleDsc is NULL
 			return NULL;
 
 		resultScale = MOV_get_long(tdbb, scaleDsc, 0);
@@ -6758,7 +6747,7 @@ dsc* evlUuidToChar(thread_db* tdbb, const SysFunction* function, const NestValue
 	Request* request = tdbb->getRequest();
 
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value)	// return NULL if value is NULL
 		return NULL;
 
 	if (!value->isText())
@@ -6801,7 +6790,7 @@ dsc* evlRoleInUse(thread_db* tdbb, const SysFunction*, const NestValueArray& arg
 	const Jrd::Attachment* attachment = tdbb->getAttachment();
 
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value)	// return NULL if value is NULL
 		return NULL;
 
 	string roleStr(MOV_make_string2(tdbb, value, ttype_none));
@@ -6826,7 +6815,7 @@ dsc* evlSystemPrivilege(thread_db* tdbb, const SysFunction*, const NestValueArra
 
 	Request* request = tdbb->getRequest();
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value)	// return NULL if value is NULL
 		return NULL;
 
 	fb_assert(value->dsc_dtype == dtype_short);
@@ -6849,7 +6838,7 @@ dsc* evlUnicodeChar(thread_db* tdbb, const SysFunction* function, const NestValu
 	Request* request = tdbb->getRequest();
 
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value)	// return NULL if value is NULL
 		return NULL;
 
 	const UChar32 code = MOV_get_long(tdbb, value, 0);
@@ -6884,7 +6873,7 @@ dsc* evlUnicodeVal(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 	Request* request = tdbb->getRequest();
 
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
-	if (request->req_flags & req_null)	// return NULL if value is NULL
+	if (!value)	// return NULL if value is NULL
 		return NULL;
 
 	MoveBuffer buffer;

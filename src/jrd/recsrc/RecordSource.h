@@ -618,7 +618,7 @@ namespace Jrd
 		bool m_invariant = false;
 
 	private:
-		bool evaluateBoolean(thread_db* tdbb) const;
+		Firebird::TriState evaluateBoolean(thread_db* tdbb) const;
 
 		NestConst<RecordSource> m_next;
 		NestConst<BoolExprNode> const m_boolean;
@@ -912,8 +912,8 @@ namespace Jrd
 
 				dsc* desc = EVL_expr(tdbb, request, from);
 
-				if (request->req_flags & req_null)
-					target->vlu_desc.dsc_address = NULL;
+				if (!desc)
+					target->vlu_desc.dsc_address = nullptr;
 				else
 				{
 					EVL_make_value(tdbb, desc, target);
