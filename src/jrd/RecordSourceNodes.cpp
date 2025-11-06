@@ -4313,7 +4313,8 @@ void TableValueFunctionSourceNode::setDefaultNameField(DsqlCompilerScratch* /*ds
 
 		auto i = 0U;
 
-		if (nameFunc == UnlistFunctionSourceNode::FUNC_NAME)
+		if ((nameFunc == UnlistFunctionSourceNode::FUNC_NAME) ||
+			(nameFunc == GenSeriesFunctionSourceNode::FUNC_NAME))
 		{
 			dsql_fld* field = tableValueFunctionContext->outputField;
 			if (field->fld_name.isEmpty())
@@ -4415,7 +4416,7 @@ dsql_fld* GenSeriesFunctionSourceNode::makeField(DsqlCompilerScratch* dsqlScratc
 
 	dsc startDesc;
 	DsqlDescMaker::fromNode(dsqlScratch, &startDesc, startItem, true);
-	if (!startDesc.isExact() && !startDesc.isNull())	
+	if (!startDesc.isExact() && !startDesc.isNull())
 		status_exception::raise(Arg::Gds(isc_argmustbe_exact_function) << Arg::Str(getName()));
 
 	dsc finishDesc;
