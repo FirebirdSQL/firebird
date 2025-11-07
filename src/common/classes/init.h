@@ -147,10 +147,11 @@ public:
 		FB_NEW InstanceControl::InstanceLink<GlobalPtr, P>(this);
 	}
 
-	template <std::invocable TFunc>
+	template <typename TFunc>
+		requires(std::invocable<TFunc, MemoryPool&>)
 	GlobalPtr(TFunc initializationFunc)
 	{
-		instance = initializationFunc();
+		instance = initializationFunc(*getDefaultMemoryPool());
 		FB_NEW InstanceControl::InstanceLink<GlobalPtr, P>(this);
 	}
 
@@ -171,6 +172,7 @@ public:
 	{
 		return instance;
 	}
+
 	const T* get() const noexcept
 	{
 		return instance;

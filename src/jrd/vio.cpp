@@ -4223,9 +4223,9 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			}},
 		};
 
-		static const GlobalPtr<ObjectsArray<MetaString>> schemaSearchPath([]()
+		static const GlobalPtr<ObjectsArray<MetaString>> schemaSearchPath([](MemoryPool& pool)
 		{
-			return FB_NEW_POOL(*getDefaultMemoryPool()) ObjectsArray<MetaString>(*getDefaultMemoryPool(), {SYSTEM_SCHEMA, PUBLIC_SCHEMA});
+			return FB_NEW_POOL(pool) ObjectsArray<MetaString>(pool, {SYSTEM_SCHEMA, PUBLIC_SCHEMA});
 		});
 
 		if (const auto relSchemaFields = schemaFields.find(relation->rel_id); relSchemaFields != schemaFields.end())
