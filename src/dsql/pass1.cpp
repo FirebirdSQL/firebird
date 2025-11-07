@@ -1525,15 +1525,17 @@ void PASS1_expand_select_node(DsqlCompilerScratch* dsqlScratch, ExprNode* node, 
 	}
 	else if ((fieldNode = nodeAs<FieldNode>(node)))
 	{
-		// TODO: refactor this, kinda temporary hack for ora2rdb
 		RecordSourceNode* recSource = NULL;
 		ValueExprNode* value = fieldNode->internalDsqlPass(dsqlScratch, &recSource);
 
-		auto field = nodeAs<FieldNode>(value);
 		if (recSource)
 			PASS1_expand_select_node(dsqlScratch, recSource, list, false);
 		else
 			list->add(value);
+	}
+	else if (auto rowValueExpressionNode = nodeAs<RowValueExpressionNode>(node))
+	{
+		list->add(rowValueExpressionNode->dsqlPass(dsqlScratch));
 	}
 	else if (auto tableValueFunctionNode = nodeAs<TableValueFunctionSourceNode>(node))
 	{

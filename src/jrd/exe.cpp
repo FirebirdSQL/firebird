@@ -525,6 +525,11 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 				else
 					blb::move(tdbb, from_desc, to_desc, relation, record, fieldId);
 			}
+			else if (from_desc->dsc_dtype == dtype_rowtype)
+			{
+				// assign null mask bytes, the actual data will be assigned in the following iterations
+				memcpy(to_desc->dsc_address, from_desc->dsc_address, NULL_BYTES(from_desc->dsc_sub_count));
+			}
 			else if (!DSC_EQUIV(from_desc, to_desc, false))
 			{
 				MOV_move(tdbb, from_desc, to_desc);
@@ -545,11 +550,6 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 			else if (from_desc->dsc_dtype == dtype_int64)
 			{
 				*((SINT64*) to_desc->dsc_address) = *((SINT64*) from_desc->dsc_address);
-			}
-			else if (from_desc->dsc_dtype == dtype_rowtype)
-			{
-				// assign null mask bytes, the actual data will be assigned in the following iterations
-				memcpy(to_desc->dsc_address, from_desc->dsc_address, NULL_BYTES(from_desc->dsc_sub_count));
 			}
 			else
 			{

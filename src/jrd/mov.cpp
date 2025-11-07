@@ -54,7 +54,7 @@ using namespace Firebird;
  *  Return (-1, 0, 1, 2) if a<b, a=b, a>b or unknown respectively.
  *
  **************************************/
-int MOV_recursive_compare(Jrd::thread_db* tdbb, dsc* desc1, dsc* desc2, bool use_null_equility)
+int MOV_recursive_compare(Jrd::thread_db* tdbb, const dsc* desc1, const dsc* desc2, bool use_null_equility)
 {
 	int comparison = EQUAL;
 

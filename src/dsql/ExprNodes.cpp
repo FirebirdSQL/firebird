@@ -234,7 +234,7 @@ int SortValueItem::compare(const dsc* desc1, const dsc* desc2)
 	if (!desc2)
 		return 1;
 
-	return MOV_compare(JRD_get_thread_data(), desc1, desc2);
+	return MOV_recursive_compare(JRD_get_thread_data(), desc1, desc2);
 }
 
 LookupValueList::LookupValueList(MemoryPool& pool, ValueListNode* values, ULONG impure)
@@ -14899,7 +14899,8 @@ RowValueExpressionNode::RowValueExpressionNode(MemoryPool& pool)
 	  compositeRecord(nullptr),
 	  subFieldsNumber(0),
 	  defaultSource(nullptr),
-	  rowDesc(pool)
+	  rowDesc(pool),
+	  rowField(nullptr)
 {
 }
 
@@ -14930,13 +14931,18 @@ string RowValueExpressionNode::internalPrint(NodePrinter& printer) const
 
 ValueExprNode* RowValueExpressionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
+	if (rowField)
+	{
+		// AB: This is an already processed node. This could be done in expand_select_list.
+		return this;
+	}
 	// TODO: refactor this method, it's ugly
 	auto& pool = dsqlScratch->getPool();
 
 	RowValueExpressionNode* node = FB_NEW_POOL(pool) RowValueExpressionNode(pool);
 	node->rowValueExpressionList = rowValueExpressionList;
 
-	if (subquery)
+	if (subquery && nodeAs<SubQueryNode>(subquery))
 	{
 		node->subquery = doDsqlPass(dsqlScratch, subquery);
 		node->rowValueExpressionList = nodeAs<SubQueryNode>(node->subquery)->rse->dsqlSelectList;
@@ -14955,6 +14961,8 @@ ValueExprNode* RowValueExpressionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch
 	node->rowField->length = NULL_BYTES(rowDesc.dsc_sub_count);
 
 	// TODO: implement dsc generating via fromField() for rowtype fields
+	delete rowDesc.dsc_sub_first;
+	rowDesc.clear();
 	rowDesc.dsc_dtype = dtype_rowtype;
 	rowDesc.dsc_sub_count = node->rowValueExpressionList->items.getCount();
 	rowDesc.dsc_length += NULL_BYTES(rowDesc.dsc_sub_count);
@@ -15063,7 +15071,7 @@ ValueExprNode* RowValueExpressionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch
 		subfieldSerialNumber++;
 	}
 
-	node->rowDesc = rowDesc;
+	node->dsqlDesc = node->rowDesc = rowDesc;
 	return node;
 }
 

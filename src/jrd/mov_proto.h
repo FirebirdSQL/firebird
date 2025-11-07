@@ -56,7 +56,7 @@ struct SequenceComparisonResult
 };
 
 int		MOV_compare(Jrd::thread_db*, const dsc*, const dsc*);
-int		MOV_recursive_compare(Jrd::thread_db* tdbb, dsc* desc1, dsc* desc2, bool use_null_equility = false);
+int		MOV_recursive_compare(Jrd::thread_db* tdbb, const dsc* desc1, const dsc* desc2, bool use_null_equility = false);
 ComparisonResult MOV_recursive_sequence_compare(Jrd::thread_db* tdbb, SequenceComparisonResult& intermediateResult, dsc* desc1, dsc* desc2, bool use_null_equility = false);
 double	MOV_date_to_double(const dsc*);
 void	MOV_double_to_date(double, SLONG[2]);

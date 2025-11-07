@@ -832,8 +832,27 @@ inline bool DSC_EQUIV(const dsc* d1, const dsc* d2, bool check_collate) noexcept
 
 	if (d1->dsc_dtype >= dtype_rowtype && d2->dsc_dtype <= dtype_rowtype)
 	{
-		if (d1->dsc_sub_count == d2->dsc_sub_count)
-			return true;
+		if (d1->dsc_sub_count != d2->dsc_sub_count)
+			return false;
+
+		// Recursively check each sub-field of the composite type
+		const dsc* sub1 = d1->dsc_sub_first;
+		const dsc* sub2 = d2->dsc_sub_first;
+
+		while (sub1 && sub2)
+		{
+			if (!DSC_EQUIV(sub1, sub2, check_collate))
+				return false;
+
+			sub1 = sub1->dsc_next;
+			sub2 = sub2->dsc_next;
+		}
+
+		// Both should reach the end at the same time
+		if (sub1 || sub2)
+			return false;
+
+		return true;
 	}
 
 	return false;
