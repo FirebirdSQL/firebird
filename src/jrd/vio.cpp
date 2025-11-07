@@ -4223,9 +4223,10 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			}},
 		};
 
-		static const NonLazyInitInstance<ObjectsArray<MetaString>> schemaSearchPath(
-			*getDefaultMemoryPool(), std::initializer_list<MetaString>{SYSTEM_SCHEMA, PUBLIC_SCHEMA}
-		);
+		static const GlobalPtr<ObjectsArray<MetaString>> schemaSearchPath([]()
+		{
+			return FB_NEW_POOL(*getDefaultMemoryPool()) ObjectsArray<MetaString>(*getDefaultMemoryPool(), {SYSTEM_SCHEMA, PUBLIC_SCHEMA});
+		});
 
 		if (const auto relSchemaFields = schemaFields.find(relation->rel_id); relSchemaFields != schemaFields.end())
 		{

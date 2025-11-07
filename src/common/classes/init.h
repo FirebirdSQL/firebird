@@ -147,6 +147,13 @@ public:
 		FB_NEW InstanceControl::InstanceLink<GlobalPtr, P>(this);
 	}
 
+	template <std::invocable TFunc>
+	GlobalPtr(TFunc initializationFunc)
+	{
+		instance = initializationFunc();
+		FB_NEW InstanceControl::InstanceLink<GlobalPtr, P>(this);
+	}
+
 	T* operator->() noexcept
 	{
 		return instance;
@@ -156,6 +163,15 @@ public:
 		return *instance;
 	}
 	T* operator&() noexcept
+	{
+		return instance;
+	}
+
+	T* get() noexcept
+	{
+		return instance;
+	}
+	const T* get() const noexcept
 	{
 		return instance;
 	}
