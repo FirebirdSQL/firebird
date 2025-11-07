@@ -98,7 +98,7 @@ bool FilteredStream::internalGetRecord(thread_db* tdbb) const
 	if (!(impure->irsb_flags & irsb_open))
 		return false;
 
-	if (!evaluateBoolean(tdbb).asBool())
+	if (evaluateBoolean(tdbb) != TriState(true))
 	{
 		invalidateRecords(request);
 		return false;
@@ -246,11 +246,9 @@ Firebird::TriState FilteredStream::evaluateBoolean(thread_db* tdbb) const
 				else
 				{
 					// select for ANY/ALL processing
-					const bool select_value = select_node->execute(tdbb, request).asBool();
-
 					// see if any record in select stream
 
-					if (select_value)
+					if (select_node->execute(tdbb, request).asBool())
 					{
 						// see if any record is null
 
@@ -301,8 +299,7 @@ Firebird::TriState FilteredStream::evaluateBoolean(thread_db* tdbb) const
 					if (select_node)
 					{
 						// select for ANY/ALL processing
-						const bool select_value = select_node->execute(tdbb, request).asBool();
-						if (select_value)
+						if (select_node->execute(tdbb, request).asBool())
 						{
 							any_false = true;
 							break;
@@ -338,8 +335,7 @@ Firebird::TriState FilteredStream::evaluateBoolean(thread_db* tdbb) const
 				if (select_node)
 				{
 					// select for ANY/ALL processing
-					const bool select_value = select_node->execute(tdbb, request).asBool();
-					if (select_value)
+					if (select_node->execute(tdbb, request).asBool())
 					{
 						any_false = true;
 						break;

@@ -281,7 +281,7 @@ TriState BinaryBoolNode::executeAnd(thread_db* tdbb, Request* request) const
 
 	if (value1.isAssigned())
 	{
-		if (!value1.asBool())
+		if (value1 != TriState(true))
 			return TriState(false);
 
 		return arg2->execute(tdbb, request);
@@ -863,12 +863,12 @@ TriState ComparativeBoolNode::execute(thread_db* tdbb, Request* request) const
 		case blr_between:
 			desc[1] = EVL_expr(tdbb, request, arg3);
 			if (!desc[1])
-				return !null2 && comparison < 0 ? TriState(false) : TriState::empty();
+				return (!null2 && comparison < 0) ? TriState(false) : TriState::empty();
 
 			{
 				// arg1 <= arg3
 				const bool cmp1_3 = (MOV_compare(tdbb, desc[0], desc[1]) <= 0);
-				return null2 && cmp1_3 ? TriState::empty() : TriState(cmp1_3);
+				return (null2 && cmp1_3) ? TriState::empty() : TriState(cmp1_3);
 			}
 
 		case blr_containing:
@@ -1050,24 +1050,21 @@ TriState ComparativeBoolNode::stringBoolean(thread_db* tdbb, Request* request,
 		else
 		{
 			if (blrOp == blr_containing)
-				return TriState(obj->contains(*tdbb->getDefaultPool(),
-					str, strLen, patternStr, patternLen));
+				return TriState(obj->contains(*tdbb->getDefaultPool(), str, strLen, patternStr, patternLen));
 			else if (blrOp == blr_starting)
-				return TriState(obj->starts(*tdbb->getDefaultPool(),
-					str, strLen, patternStr, patternLen));
+				return TriState(obj->starts(*tdbb->getDefaultPool(), str, strLen, patternStr, patternLen));
 			else if (blrOp == blr_like)
+			{
 				return TriState(obj->like(*tdbb->getDefaultPool(), str, strLen,
 					patternStr, patternLen, escapeStr, escapeLen));
+			}
 			else if (blrOp == blr_similar)
 			{
 				return TriState(obj->similarTo(tdbb, *tdbb->getDefaultPool(),
 					str, strLen, patternStr, patternLen, escapeStr, escapeLen));
 			}
 			else	// blr_matching
-			{
-				return TriState(obj->matches(*tdbb->getDefaultPool(),
-					str, strLen, patternStr, patternLen));
-			}
+				return TriState(obj->matches(*tdbb->getDefaultPool(), str, strLen, patternStr, patternLen));
 		}
 	}
 

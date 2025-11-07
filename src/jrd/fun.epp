@@ -419,11 +419,7 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 			// doesn't carry the null flag in the descriptor. Why Borland didn't
 			// set on such flag is maybe because it only has local meaning.
 			// This closes SF Bug #728839.
-			if (!(input && (input->dsc_flags & DSC_null)))
-				*arg_ptr++ = nullptr;
-			else
-				*arg_ptr++ = input;
-
+			*arg_ptr++ = (input && !input->isNull()) ? input : nullptr;
 			continue;
 		}
 
