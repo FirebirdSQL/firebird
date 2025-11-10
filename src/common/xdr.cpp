@@ -179,6 +179,8 @@ bool_t xdr_datum( xdr_t* xdrs, const dsc* desc, UCHAR* buffer)
 	case dtype_boolean:
 		if (!xdr_opaque(xdrs, reinterpret_cast<SCHAR*>(p), desc->dsc_length))
 			return FALSE;
+		break;
+
 	case dtype_rowtype:
 		{
 			if (!xdr_opaque(xdrs, reinterpret_cast<SCHAR*>(p), NULL_BYTES(desc->dsc_sub_count)))
