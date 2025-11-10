@@ -177,9 +177,22 @@ bool_t xdr_datum( xdr_t* xdrs, const dsc* desc, UCHAR* buffer)
 
 	case dtype_text:
 	case dtype_boolean:
-	case dtype_rowtype:
 		if (!xdr_opaque(xdrs, reinterpret_cast<SCHAR*>(p), desc->dsc_length))
 			return FALSE;
+	case dtype_rowtype:
+		{
+			if (!xdr_opaque(xdrs, reinterpret_cast<SCHAR*>(p), NULL_BYTES(desc->dsc_sub_count)))
+				return FALSE;
+
+			dsc* sub_desc = desc->dsc_sub_first;
+			while (sub_desc)
+			{
+				if (!xdr_datum(xdrs, sub_desc, buffer + (IPTR) desc->dsc_address))
+					return FALSE;
+				sub_desc = sub_desc->dsc_next;
+			}
+		}
+
 		break;
 
 	case dtype_varying:
