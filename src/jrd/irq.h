@@ -195,6 +195,7 @@ enum irq_type_t
 	irq_ts_security,		// verify security for tablespace
 	irq_r_pages2,
 	irq_s_first_pp,
+	irq_chk_ts_filename,
 
 	irq_MAX
 };

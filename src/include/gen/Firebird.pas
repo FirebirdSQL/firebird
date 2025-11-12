@@ -5847,6 +5847,7 @@ const
 	 isc_ts_file_exists = 335545319;
 	 isc_tablespace_name = 335545320;
 	 isc_ts_file_not_exists = 335545321;
+	 isc_ts_file_dup = 335545322;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;

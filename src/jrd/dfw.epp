@@ -6814,6 +6814,29 @@ static bool modify_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work,
 
 	case 1:
 		{
+			PathName newFileName(work->dfw_name);
+			ISC_expand_filename(newFileName, true);
+
+			AutoCacheRequest requestHandle(tdbb, irq_chk_ts_filename, IRQ_REQUESTS);
+
+			FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+				X IN RDB$TABLESPACES
+				WITH X.RDB$SYSTEM_FLAG NE 1
+					AND X.RDB$TABLESPACE_NAME NE tablespace->name.c_str()
+			{
+				PathName fileName(X.RDB$FILE_NAME);
+				ISC_expand_filename(fileName, true);
+
+				if (fileName == newFileName)
+				{
+					const MetaName tablespaceName(X.RDB$TABLESPACE_NAME);
+
+					ERR_post(Arg::Gds(isc_ts_file_dup) <<
+						Arg::Str(fileName) << Arg::Str(tablespaceName));
+				}
+			}
+			END_FOR
+
 			// Make sure that nobody uses the tablespace
 			if (tablespace->isUsed() ||
 				!LCK_convert(tdbb, tablespace->existenceLock, LCK_EX, transaction->getLockWait()))

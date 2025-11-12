@@ -313,7 +313,7 @@ FB_IMPL_MSG(DYN, 320, dyn_cannot_create_reserved_schema, -607, "HY", "000", "Sch
 FB_IMPL_MSG(DYN, 321, dyn_cannot_infer_schema, -901, "42", "000", "Cannot infer schema name as there is no valid schema in the search path")
 FB_IMPL_MSG_SYMBOL(DYN, 322, dyn_dup_blob_filter, "Blob filter @1 already exists")
 FB_IMPL_MSG(DYN, 323, dyn_ts_not_found, -901, "42", "000", "Tablespace @1 not found")
-FB_IMPL_MSG(DYN, 324, dyn_cant_set_ts_table, -901, "42", "000", "Cannot set tablespace for temporary table @1")
+FB_IMPL_MSG(DYN, 324, dyn_cant_set_ts_table, -901, "42", "000", "Cannot set tablespace for @1")
 FB_IMPL_MSG(DYN, 325, dyn_cant_set_ts_index, -901, "42", "000", "Cannot set tablespace for temporary index @1")
 FB_IMPL_MSG(DYN, 326, dyn_dup_tablespace, -901, "42", "000", "Tablespace @1 already exists")
 FB_IMPL_MSG(DYN, 327, dyn_cannot_mod_sys_ts, -901, "42", "000", "Cannot ALTER or DROP system tablespace @1")

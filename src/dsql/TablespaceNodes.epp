@@ -119,18 +119,26 @@ void CreateAlterTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* ds
 void CreateAlterTablespaceNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
-	Attachment* attachment = transaction->getAttachment();
-	Database* dbb = tdbb->getDatabase();
+	const auto dbb = tdbb->getDatabase();
+	const auto attachment = transaction->getAttachment();
 
 	const MetaName& userName = attachment->att_user->getUserName();
 
-	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, QualifiedName(name), obj_tablespace))
+	if (createIfNotExistsOnly &&
+		!DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, QualifiedName(name), obj_tablespace))
+	{
 		return;
+	}
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 		DDL_TRIGGER_CREATE_TABLESPACE, QualifiedName(name), {});
 
 	DYN_UTIL_check_unique_name(tdbb, transaction, QualifiedName(name), obj_tablespace);
+
+	// File with tablespace should not exist. Checking it in DFW is silent and causes
+	// cleanup of existing files at phase 0. Early checking preserves existing files.
+	if (PIO_file_exists(fileName.c_str()))
+		ERR_post(Arg::Gds(isc_ts_file_exists) << Arg::Str(fileName));
 
 	AutoCacheRequest requestHandle(tdbb, drq_s_tablespace, DYN_REQUESTS);
 
@@ -236,7 +244,8 @@ bool CreateAlterTablespaceNode::executeAlter(thread_db* tdbb, DsqlCompilerScratc
 
 				fb_assert(X.RDB$FILE_NAME.NULL == FALSE);
 				if (!PIO_file_exists(fileName.c_str()))
-					ERR_post(Arg::Gds(isc_ts_file_not_exists) << Arg::Str(name) << Arg::Str(fileName));
+					ERR_post(Arg::Gds(isc_ts_file_not_exists) << Arg::Str(fileName));
+
 				strcpy(X.RDB$FILE_NAME, fileName.c_str());
 			}
 

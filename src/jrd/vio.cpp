@@ -2405,9 +2405,9 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 		case rel_tablespaces:
 			protect_system_table_delupd(tdbb, relation, "DELETE");
+			EVL_field(0, rpb->rpb_record, f_ts_id, &desc);
+			id = MOV_get_long(tdbb, &desc, 0);
 			EVL_field(0, rpb->rpb_record, f_ts_file, &desc);
-			EVL_field(0, rpb->rpb_record, f_ts_id, &desc2);
-			id = MOV_get_long(tdbb, &desc2, 0);
 			DFW_post_work(transaction, dfw_delete_tablespace, &desc, nullptr, id);
 			break;
 
@@ -3812,7 +3812,8 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 			{
 				EVL_field(0, new_rpb->rpb_record, f_ts_id, &desc1);
 				const ULONG id = MOV_get_long(tdbb, &desc1, 0);
-				DFW_post_work(transaction, dfw_modify_tablespace, {}, {}, id);
+				EVL_field(0, new_rpb->rpb_record, f_ts_file, &desc1);
+				DFW_post_work(transaction, dfw_modify_tablespace, &desc1, nullptr, id);
 			}
 			break;
 
@@ -4709,18 +4710,6 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		{
 			protect_system_table_insert(tdbb, request, relation);
 			EVL_field(0, rpb->rpb_record, f_ts_name, &desc);
-			EVL_field(0, rpb->rpb_record, f_ts_file, &desc2);
-
-			// File with tablespace should not exist. Check it in DFW is silent and cause to
-			// clean up of existing files at phase 0. Early checking preserve existing files.
-			const PathName fileName = MOV_make_string2(tdbb, &desc2, ttype_metadata).ToPathName();
-			if (PIO_file_exists(fileName))
-			{
-				string tableSpace = MOV_make_string2(tdbb, &desc, ttype_metadata);
-				tableSpace.trim();
-				ERR_post(Arg::Gds(isc_ts_file_exists) << Arg::Str(tableSpace) << Arg::Str(fileName));
-			}
-
 			object_id = set_metadata_id(tdbb, rpb->rpb_record,
 										f_ts_id, drq_g_nxt_ts_id, "RDB$TABLESPACES", 1);
 			DFW_post_work(transaction, dfw_create_tablespace, &desc, nullptr, object_id);
