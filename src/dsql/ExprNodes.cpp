@@ -9925,6 +9925,21 @@ bool ParameterNode::setParameterType(DsqlCompilerScratch* dsqlScratch,
 	{
 		makeDesc(&dsqlParameter->par_desc);
 
+		// generate subparameters from descriptor for rowtype parameters
+		if (dsqlParameter->par_desc.dsc_dtype == dtype_rowtype)
+		{
+			dsql_par** nextSubParameterPtr = &dsqlParameter->par_sub_first;
+			auto subDesc = dsqlParameter->par_desc.dsc_sub_first;
+			while (subDesc)
+			{
+				*nextSubParameterPtr = FB_NEW_POOL(dsqlParameter->par_message->getPool()) dsql_par(dsqlParameter->par_message->getPool());
+				(*nextSubParameterPtr)->par_message = dsqlParameter->par_message;
+				(*nextSubParameterPtr)->par_desc = *subDesc;
+				nextSubParameterPtr = &(*nextSubParameterPtr)->par_next;
+				subDesc = subDesc->dsc_next;
+			}
+		}
+
 		if (tdbb->getCharSet() != CS_NONE && tdbb->getCharSet() != CS_BINARY)
 		{
 			const auto fromCharSet = dsqlParameter->par_desc.getCharSet();
