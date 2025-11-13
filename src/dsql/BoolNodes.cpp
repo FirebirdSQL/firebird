@@ -848,8 +848,14 @@ TriState ComparativeBoolNode::execute(thread_db* tdbb, Request* request) const
 
 	switch (blrOp)
 	{
-		case blr_eql:
 		case blr_equiv:
+			comparison = MOV_recursive_compare(tdbb, desc[0], desc[1], true);
+			// AAM: according to the SQL 2023, if the comparison of rowtypes is UNKNOWN, but DISTINCT FROM allow only
+			// TRUE or FALSE, it's implementation dependent which one to use. So just replace UNKNOWN with something
+			if ((desc[0]->dsc_dtype == dtype_rowtype || desc[1]->dsc_dtype == dtype_rowtype) && comparison == UNKNOWN)
+				comparison = GREATER;
+			break;
+		case blr_eql:
 		case blr_gtr:
 		case blr_geq:
 		case blr_lss:
