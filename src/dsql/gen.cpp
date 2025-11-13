@@ -485,8 +485,9 @@ void GEN_descriptor( DsqlCompilerScratch* dsqlScratch, const dsc* desc, bool tex
 	case dtype_rowtype:
 		{
 			dsqlScratch->appendUChar(blr_rowtype);
-			dsqlScratch->appendUChar(1);
+			dsqlScratch->appendUChar(blr_rt_full);
 			dsqlScratch->appendUShort(desc->dsc_sub_count);
+			dsqlScratch->appendUShort(0);
 			auto subDescriptor = desc->dsc_sub_first;
 			while (subDescriptor)
 			{

@@ -14459,6 +14459,11 @@ void ValueIfNode::setParameterName(dsql_par* parameter) const
 	parameter->par_name = parameter->par_alias = "CASE";
 }
 
+void ValueIfNode::setParameterCompositeDescriptor(dsql_msg* message, dsql_par* parameter) const
+{
+	falseValue->setParameterCompositeDescriptor(message, parameter);
+}
+
 bool ValueIfNode::setParameterType(DsqlCompilerScratch* dsqlScratch,
 	std::function<void (dsc*)> makeDesc, bool forceVarChar)
 {
