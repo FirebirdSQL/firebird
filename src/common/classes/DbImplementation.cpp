@@ -95,7 +95,8 @@ const char* hardware[] = {
 	"M68k",
 	"RiscV64",
 	"MIPS64EL",
-	"LOONGARCH"
+	"LOONGARCH",
+	"sw_64"
 };
 
 const char* operatingSystem[] = {
@@ -122,9 +123,9 @@ const char* compiler[] = {
 // This table lists pre-fb3 implementation codes
 constexpr UCHAR backwardTable[FB_NELEM(hardware) * FB_NELEM(operatingSystem)] =
 {
-//				Intel	AMD		Sparc	PPC		PPC64	MIPSEL	MIPS	ARM		IA64	s390	s390x	SH		SHEB	HPPA	Alpha	ARM64	PPC64el	M68k	RiscV64 MIPS64EL LoongArch
+//				Intel	AMD		Sparc	PPC		PPC64	MIPSEL	MIPS	ARM		IA64	s390	s390x	SH		SHEB	HPPA	Alpha	ARM64	PPC64el	M68k	RiscV64 MIPS64EL LoongArch sw_64
 /* Windows */	50,		68,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,
-/* Linux */		60,		66,		65,		69,		86,		71,		72,		75, 	76,		79, 	78,		80,		81,		82,		83,		84,		85,		87,		88,		90,		93,
+/* Linux */		60,		66,		65,		69,		86,		71,		72,		75, 	76,		79, 	78,		80,		81,		82,		83,		84,		85,		87,		88,		90,		93,          94,
 /* Darwin */	70,		73,		0,		63,		77,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,
 /* Solaris */	0,		0,		30,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,
 /* HPUX */		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		31,		0,		0,		0,		0,		0,		0,		0,
@@ -137,7 +138,7 @@ constexpr UCHAR backwardTable[FB_NELEM(hardware) * FB_NELEM(operatingSystem)] =
 
 constexpr UCHAR backEndianess[FB_NELEM(hardware)] =
 {
-//	Intel	AMD		Sparc	PPC		PPC64	MIPSEL	MIPS	ARM		IA64	s390	s390x	SH		SHEB	HPPA	Alpha	ARM64	PPC64el	M68k	RiscV64 MIPS64EL LoongArch
+//	Intel	AMD		Sparc	PPC		PPC64	MIPSEL	MIPS	ARM		IA64	s390	s390x	SH		SHEB	HPPA	Alpha	ARM64	PPC64el	M68k	RiscV64 MIPS64EL LoongArch  sw_64
 	0,		0,		1,		1,		1,		0,		1,		0,		0,		1,		1,		0,		1,		1,		0,		0,		0,		1,		0,		0,		0,
 };
 
