@@ -2238,19 +2238,8 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 			}
 
 		case dtype_rowtype:
-			{
-				char* text = "ROWTYPE";
-
-				dsc intermediate;
-				intermediate.dsc_dtype = dtype_text;
-				intermediate.dsc_ttype() = ttype_ascii;
-				intermediate.makeText(static_cast<USHORT>(strlen(text)), CS_ASCII,
-					reinterpret_cast<UCHAR*>(text));
-
-				CVT_move_common(&intermediate, to, decSt, cb);
-
-				return;
-			}
+			cb->err(Arg::Gds(isc_rowtype_not_allowed_as_text));
+			return;
 
 		default:
 			fb_assert(false);

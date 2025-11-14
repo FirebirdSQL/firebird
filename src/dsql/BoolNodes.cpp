@@ -551,7 +551,7 @@ BoolExprNode* ComparativeBoolNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				if (desc.dsc_dtype == dtype_rowtype || desc2.dsc_dtype == dtype_rowtype)
 				{
 					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-						Arg::Gds(isc_rowtype_not_allowed_in_character_based_comparison));
+						Arg::Gds(isc_rowtype_not_allowed_as_text));
 				}
 			}
 

@@ -6090,7 +6090,7 @@ const
 	 isc_cursor_notdef = 335545322;
 	 isc_rowtype_bad_conversion = 335545323;
 	 isc_simple_types_not_allowed_in_packaged_types = 335545324;
-	 isc_rowtype_not_allowed_in_character_based_comparison = 335545325;
+	 isc_rowtype_not_allowed_as_text = 335545325;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;
