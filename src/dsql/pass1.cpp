@@ -2669,7 +2669,7 @@ static RseNode* pass1_union(DsqlCompilerScratch* dsqlScratch, UnionSourceNode* i
 	ValueListNode* tmp_list = FB_NEW_POOL(pool) ValueListNode(
 		pool, unionSource->dsqlClauses->items.getCount());
 
-	Array<dsc> descs(unionSource->dsqlClauses->items.getCount());
+	ObjectsArray<dsc> descs(pool);
 
 	for (FB_SIZE_T j = 0; j < items->items.getCount(); ++j)
 	{
@@ -2683,7 +2683,7 @@ static RseNode* pass1_union(DsqlCompilerScratch* dsqlScratch, UnionSourceNode* i
 		dsc desc;
 		DsqlDescMaker::fromList(dsqlScratch, &desc, tmp_list, "UNION");
 
-		descs.push(desc);
+		descs.add(desc);
 
 		pass1_union_auto_cast(dsqlScratch, unionSource->dsqlClauses, desc, j);
 	}
