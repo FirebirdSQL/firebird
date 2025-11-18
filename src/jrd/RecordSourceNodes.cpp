@@ -780,12 +780,16 @@ RelationSourceNode* RelationSourceNode::parse(thread_db* tdbb, CompilerScratch* 
 			break;
 		}
 
+		case blr_relation3:
+			csb->csb_blr_reader.skipMetaName();
+			[[fallthrough]];
+
 		case blr_relation:
 		case blr_relation2:
 		{
 			csb->csb_blr_reader.getMetaName(name);
 
-			if (blrOp == blr_relation2)
+			if (blrOp == blr_relation2 || blrOp == blr_relation3)
 			{
 				aliasString = FB_NEW_POOL(csb->csb_pool) string(csb->csb_pool);
 				csb->csb_blr_reader.getString(*aliasString);
@@ -1085,27 +1089,131 @@ RecordSource* RelationSourceNode::compile(thread_db* tdbb, Optimizer* opt, bool 
 ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch* csb,
 	const SSHORT blrOp, bool parseContext)
 {
+	const auto predateCheck = [&](bool condition, const char* preVerb, const char* postVerb)
+	{
+		if (!condition)
+		{
+			string str;
+			str.printf("%s should predate %s", preVerb, postVerb);
+			PAR_error(csb, Arg::Gds(isc_random) << str);
+		}
+	};
+
 	SET_TDBB(tdbb);
 
-	const auto blrStartPos = csb->csb_blr_reader.getPos();
-	jrd_prc* procedure = nullptr;
-	AutoPtr<string> aliasString;
+	auto& pool = *tdbb->getDefaultPool();
+	auto& blrReader = csb->csb_blr_reader;
+	const auto blrStartPos = blrReader.getPos();
+	USHORT inArgCount = 0;
 	QualifiedName name;
+
+	const auto node = FB_NEW_POOL(pool) ProcedureSourceNode(pool);
 
 	switch (blrOp)
 	{
+		case blr_select_procedure:
+		{
+			CompilerScratch::csb_repeat* csbTail = nullptr;
+			UCHAR subCode;
+
+			while ((subCode = blrReader.getByte()) != blr_end)
+			{
+				switch (subCode)
+				{
+					case blr_invsel_procedure_id:
+					{
+						UCHAR procedureIdCode;
+
+						while ((procedureIdCode = blrReader.getByte()) != blr_end)
+						{
+							switch (procedureIdCode)
+							{
+								case blr_invsel_procedure_id_schema:
+									blrReader.skipMetaName();
+									break;
+
+								case blr_invsel_procedure_id_package:
+									blrReader.getMetaName(name.package);
+									break;
+
+								case blr_invsel_procedure_id_name:
+									blrReader.getMetaName(name.identifier);
+									break;
+
+								case blr_invsel_procedure_id_sub:
+									PAR_error(csb, Arg::Gds(isc_random) <<
+										"blr_invsel_procedure_id_sub is not supported in this version");
+									break;
+
+								default:
+									PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_invsel_procedure_id");
+									break;
+							}
+						}
+
+						if (!node->procedure)
+							node->procedure = MET_lookup_procedure(tdbb, name, false);
+
+						break;
+					}
+
+					case blr_invsel_procedure_in_arg_names:
+						PAR_error(csb, Arg::Gds(isc_random) <<
+							"blr_invsel_procedure_in_arg_names is not supported in this version");
+						break;
+
+					case blr_invsel_procedure_in_args:
+						predateCheck(node->procedure, "blr_invsel_procedure_id", "blr_invsel_procedure_in_args");
+
+						inArgCount = blrReader.getWord();
+						node->sourceList = PAR_args(tdbb, csb, inArgCount,
+							MAX(inArgCount, node->procedure->getInputFields().getCount()));
+						break;
+
+					case blr_invsel_procedure_context:
+						if (!parseContext)
+						{
+							PAR_error(csb,
+								Arg::Gds(isc_random) <<
+								"blr_invsel_procedure_context not expected inside plan clauses");
+						}
+
+						predateCheck(node->procedure, "blr_invsel_procedure_id", "blr_invsel_procedure_context");
+						node->stream = PAR_context2(csb, &node->context);
+						csbTail = &csb->csb_rpt[node->stream];
+						csbTail->csb_procedure = node->procedure;
+
+						if (node->alias.hasData())
+							csbTail->csb_alias = &node->alias;
+
+						if (csb->collectingDependencies())
+							PAR_dependency(tdbb, csb, node->stream, (SSHORT) -1, "");
+
+						break;
+
+					case blr_invsel_procedure_alias:
+						blrReader.getString(node->alias);
+						if (csbTail && node->alias.hasData())
+							csbTail->csb_alias = &node->alias;
+						break;
+
+					default:
+						PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_select_procedure sub code");
+				}
+			}
+
+			break;
+		}
+
 		case blr_pid:
 		case blr_pid2:
 		{
-			const SSHORT pid = csb->csb_blr_reader.getWord();
+			const SSHORT pid = blrReader.getWord();
 
 			if (blrOp == blr_pid2)
-			{
-				aliasString = FB_NEW_POOL(csb->csb_pool) string(csb->csb_pool);
-				csb->csb_blr_reader.getString(*aliasString);
-			}
+				blrReader.getString(node->alias);
 
-			if (!(procedure = MET_lookup_procedure_id(tdbb, pid, false, false, 0)))
+			if (!(node->procedure = MET_lookup_procedure_id(tdbb, pid, false, false, 0)))
 				name.identifier.printf("id %d", pid);
 
 			break;
@@ -1117,31 +1225,23 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 		case blr_procedure4:
 		case blr_subproc:
 			if (blrOp == blr_procedure3 || blrOp == blr_procedure4)
-				csb->csb_blr_reader.getMetaName(name.package);
+				blrReader.getMetaName(name.package);
 
-			csb->csb_blr_reader.getMetaName(name.identifier);
+			blrReader.getMetaName(name.identifier);
 
 			if (blrOp == blr_procedure2 || blrOp == blr_procedure4 || blrOp == blr_subproc)
-			{
-				aliasString = FB_NEW_POOL(csb->csb_pool) string(csb->csb_pool);
-				csb->csb_blr_reader.getString(*aliasString);
-
-				if (blrOp == blr_subproc && aliasString->isEmpty())
-					aliasString.reset();
-			}
+				blrReader.getString(node->alias);
 
 			if (blrOp == blr_subproc)
 			{
-				DeclareSubProcNode* declareNode;
-
-				for (auto curCsb = csb; curCsb && !procedure; curCsb = curCsb->mainCsb)
+				for (auto curCsb = csb; curCsb && !node->procedure; curCsb = curCsb->mainCsb)
 				{
-					if (curCsb->subProcedures.get(name.identifier, declareNode))
-						procedure = declareNode->routine;
+					if (const auto declareNode = curCsb->subProcedures.get(name.identifier))
+						node->procedure = (*declareNode)->routine;
 				}
 			}
 			else
-				procedure = MET_lookup_procedure(tdbb, name, false);
+				node->procedure = MET_lookup_procedure(tdbb, name, false);
 
 			break;
 
@@ -1149,60 +1249,91 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 			fb_assert(false);
 	}
 
-	if (!procedure)
-		PAR_error(csb, Arg::Gds(isc_prcnotdef) << Arg::Str(name.toString()));
-	else
+	if (!node->procedure)
 	{
-		if (procedure->isImplemented() && !procedure->isDefined())
+		blrReader.setPos(blrStartPos);
+		PAR_error(csb, Arg::Gds(isc_prcnotdef) << name.toString());
+	}
+
+	if (node->procedure->prc_type == prc_executable)
+	{
+		if (tdbb->getAttachment()->isGbak())
+			PAR_warning(Arg::Warning(isc_illegal_prc_type) << node->procedure->getName().toString());
+		else
+			PAR_error(csb, Arg::Gds(isc_illegal_prc_type) << node->procedure->getName().toString());
+	}
+
+	node->isSubRoutine = node->procedure->isSubRoutine();
+	node->procedureId = node->isSubRoutine ? 0 : node->procedure->getId();
+
+	if (node->procedure->isImplemented() && !node->procedure->isDefined())
+	{
+		if (tdbb->getAttachment()->isGbak() || (tdbb->tdbb_flags & TDBB_replicator))
 		{
-			if (tdbb->getAttachment()->isGbak() || (tdbb->tdbb_flags & TDBB_replicator))
-			{
-				PAR_warning(
-					Arg::Warning(isc_prcnotdef) << Arg::Str(name.toString()) <<
-					Arg::Warning(isc_modnotfound));
-			}
-			else
-			{
-				csb->csb_blr_reader.setPos(blrStartPos);
-				PAR_error(csb,
-					Arg::Gds(isc_prcnotdef) << Arg::Str(name.toString()) <<
-					Arg::Gds(isc_modnotfound));
-			}
+			PAR_warning(
+				Arg::Warning(isc_prcnotdef) << name.toString() <<
+				Arg::Warning(isc_modnotfound));
+		}
+		else
+		{
+			blrReader.setPos(blrStartPos);
+			PAR_error(csb,
+				Arg::Gds(isc_prcnotdef) << name.toString() <<
+				Arg::Gds(isc_modnotfound));
 		}
 	}
 
-	if (procedure->prc_type == prc_executable)
-	{
-		const string name = procedure->getName().toString();
-
-		if (tdbb->getAttachment()->isGbak())
-			PAR_warning(Arg::Warning(isc_illegal_prc_type) << Arg::Str(name));
-		else
-			PAR_error(csb, Arg::Gds(isc_illegal_prc_type) << Arg::Str(name));
-	}
-
-	ProcedureSourceNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) ProcedureSourceNode(
-		*tdbb->getDefaultPool());
-
-	node->procedure = procedure;
-	node->isSubRoutine = procedure->isSubRoutine();
-	node->procedureId = node->isSubRoutine ? 0 : procedure->getId();
-
-	if (aliasString)
-		node->alias = *aliasString;
-
 	if (parseContext)
 	{
-		node->stream = PAR_context(csb, &node->context);
+		if (blrOp != blr_select_procedure)
+		{
+			node->stream = PAR_context(csb, &node->context);
 
-		csb->csb_rpt[node->stream].csb_procedure = procedure;
-		csb->csb_rpt[node->stream].csb_alias = aliasString.release();
+			csb->csb_rpt[node->stream].csb_procedure = node->procedure;
+			if (node->alias.hasData())
+				csb->csb_rpt[node->stream].csb_alias = &node->alias;
 
-		PAR_procedure_parms(tdbb, csb, procedure, node->in_msg.getAddress(),
-			node->sourceList.getAddress(), node->targetList.getAddress(), true);
+			inArgCount = blrReader.getWord();
+			node->sourceList = PAR_args(tdbb, csb, inArgCount, inArgCount);
+		}
 
-		if (csb->collectingDependencies())
-			PAR_dependency(tdbb, csb, node->stream, (SSHORT) -1, "");
+		if (!node->sourceList)
+			node->sourceList = FB_NEW_POOL(pool) ValueListNode(pool);
+
+		node->targetList = FB_NEW_POOL(pool) ValueListNode(pool, node->procedure->getInputFields().getCount());
+
+		Arg::StatusVector mismatchStatus;
+
+		if (!CMP_procedure_arguments(
+			tdbb,
+			csb,
+			node->procedure,
+			true,
+			inArgCount,
+			node->sourceList,
+			node->targetList,
+			node->in_msg,
+			mismatchStatus))
+		{
+			status_exception::raise(Arg::Gds(isc_prcmismat) <<
+				node->procedure->getName().toString() << mismatchStatus);
+		}
+
+		if (csb->collectingDependencies() && !node->procedure->isSubRoutine())
+		{
+			CompilerScratch::Dependency dependency(obj_procedure);
+			dependency.procedure = node->procedure;
+			csb->addDependency(dependency);
+		}
+	}
+
+	if (node->sourceList && node->sourceList->items.isEmpty())
+	{
+		delete node->sourceList.getObject();
+		node->sourceList = nullptr;
+
+		delete node->targetList.getObject();
+		node->targetList = nullptr;
 	}
 
 	return node;
