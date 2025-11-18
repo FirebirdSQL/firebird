@@ -1451,36 +1451,39 @@ void Monitoring::putStatistics(SnapshotData::DumpRecord& record, const RuntimeSt
 
 	// logical I/O statistics (table wise)
 
-	for (auto iter(statistics.getRelCounters()); iter; ++iter)
+	for (const auto& counts : statistics.getRelationCounters())
 	{
+		if (counts.isEmpty())
+			continue;
+
 		const auto rec_stat_id = getGlobalId(fb_utils::genUniqueId());
 
 		record.reset(rel_mon_tab_stats);
 		record.storeGlobalId(f_mon_tab_stat_id, id);
 		record.storeInteger(f_mon_tab_stat_group, stat_group);
-		record.storeTableIdSchemaName(f_mon_tab_sch_name, (*iter).getRelationId());
-		record.storeTableIdObjectName(f_mon_tab_name, (*iter).getRelationId());
+		record.storeTableIdSchemaName(f_mon_tab_sch_name, counts.getGroupKey());
+		record.storeTableIdObjectName(f_mon_tab_name, counts.getGroupKey());
 		record.storeGlobalId(f_mon_tab_rec_stat_id, rec_stat_id);
 		record.write();
 
 		record.reset(rel_mon_rec_stats);
 		record.storeGlobalId(f_mon_rec_stat_id, rec_stat_id);
 		record.storeInteger(f_mon_rec_stat_group, stat_group);
-		record.storeInteger(f_mon_rec_seq_reads, (*iter)[RecordStatType::SEQ_READS]);
-		record.storeInteger(f_mon_rec_idx_reads, (*iter)[RecordStatType::IDX_READS]);
-		record.storeInteger(f_mon_rec_inserts, (*iter)[RecordStatType::INSERTS]);
-		record.storeInteger(f_mon_rec_updates, (*iter)[RecordStatType::UPDATES]);
-		record.storeInteger(f_mon_rec_deletes, (*iter)[RecordStatType::DELETES]);
-		record.storeInteger(f_mon_rec_backouts, (*iter)[RecordStatType::BACKOUTS]);
-		record.storeInteger(f_mon_rec_purges, (*iter)[RecordStatType::PURGES]);
-		record.storeInteger(f_mon_rec_expunges, (*iter)[RecordStatType::EXPUNGES]);
-		record.storeInteger(f_mon_rec_locks, (*iter)[RecordStatType::LOCKS]);
-		record.storeInteger(f_mon_rec_waits, (*iter)[RecordStatType::WAITS]);
-		record.storeInteger(f_mon_rec_conflicts, (*iter)[RecordStatType::CONFLICTS]);
-		record.storeInteger(f_mon_rec_bkver_reads, (*iter)[RecordStatType::BACK_READS]);
-		record.storeInteger(f_mon_rec_frg_reads, (*iter)[RecordStatType::FRAGMENT_READS]);
-		record.storeInteger(f_mon_rec_rpt_reads, (*iter)[RecordStatType::RPT_READS]);
-		record.storeInteger(f_mon_rec_imgc, (*iter)[RecordStatType::IMGC]);
+		record.storeInteger(f_mon_rec_seq_reads, counts[RecordStatType::SEQ_READS]);
+		record.storeInteger(f_mon_rec_idx_reads, counts[RecordStatType::IDX_READS]);
+		record.storeInteger(f_mon_rec_inserts, counts[RecordStatType::INSERTS]);
+		record.storeInteger(f_mon_rec_updates, counts[RecordStatType::UPDATES]);
+		record.storeInteger(f_mon_rec_deletes, counts[RecordStatType::DELETES]);
+		record.storeInteger(f_mon_rec_backouts, counts[RecordStatType::BACKOUTS]);
+		record.storeInteger(f_mon_rec_purges, counts[RecordStatType::PURGES]);
+		record.storeInteger(f_mon_rec_expunges, counts[RecordStatType::EXPUNGES]);
+		record.storeInteger(f_mon_rec_locks, counts[RecordStatType::LOCKS]);
+		record.storeInteger(f_mon_rec_waits, counts[RecordStatType::WAITS]);
+		record.storeInteger(f_mon_rec_conflicts, counts[RecordStatType::CONFLICTS]);
+		record.storeInteger(f_mon_rec_bkver_reads, counts[RecordStatType::BACK_READS]);
+		record.storeInteger(f_mon_rec_frg_reads, counts[RecordStatType::FRAGMENT_READS]);
+		record.storeInteger(f_mon_rec_rpt_reads, counts[RecordStatType::RPT_READS]);
+		record.storeInteger(f_mon_rec_imgc, counts[RecordStatType::IMGC]);
 		record.write();
 	}
 }

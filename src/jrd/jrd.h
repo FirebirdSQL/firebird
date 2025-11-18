@@ -612,44 +612,35 @@ public:
 		tdbb_flags |= TDBB_sweeper;
 	}
 
-	void bumpStats(const PageStatType type, SINT64 delta = 1)
+	void bumpStats(const PageStatType type, ULONG pageSpaceId, SINT64 delta = 1)
 	{
-		reqStat->bumpValue(type, delta);
-		traStat->bumpValue(type, delta);
-		attStat->bumpValue(type, delta);
+		fb_assert(pageSpaceId != INVALID_PAGE_SPACE);
+
+		// [0] element stores statistics for temporary page spaces
+		if (PageSpace::isTemporary(pageSpaceId))
+			pageSpaceId = 0;
+
+		reqStat->bumpValue(type, pageSpaceId, delta);
+		traStat->bumpValue(type, pageSpaceId, delta);
+		attStat->bumpValue(type, pageSpaceId, delta);
 
 		if ((tdbb_flags & TDBB_async) && !attachment)
-			dbbStat->bumpValue(type, delta);
+			dbbStat->bumpValue(type, pageSpaceId, delta);
 
-		// else dbbStat is adjusted from attStat, see Attachment::mergeAsyncStats()
+		// else dbbStat is adjusted from attStat, see Attachment::mergeStats()
 	}
 
-	void bumpStats(const RecordStatType type, SLONG relation_id, SINT64 delta = 1)
+	void bumpStats(const RecordStatType type, SLONG relationId, SINT64 delta = 1)
 	{
-		// We don't bump counters for dbbStat here, they're merged from attStats on demand
-
-		reqStat->bumpValue(type, delta);
-		traStat->bumpValue(type, delta);
-		attStat->bumpValue(type, delta);
-
-		const RuntimeStatistics* const dummyStat = RuntimeStatistics::getDummy();
-
 		// We expect that at least attStat is present (not a dummy object)
 
-		fb_assert(attStat != dummyStat);
+		fb_assert(attStat != RuntimeStatistics::getDummy());
 
-		// Relation statistics is a quite complex beast, so a conditional check
-		// does not hurt. It also allows to avoid races while accessing the static
-		// dummy object concurrently.
+		reqStat->bumpValue(type, relationId, delta);
+		traStat->bumpValue(type, relationId, delta);
+		attStat->bumpValue(type, relationId, delta);
 
-		if (reqStat != dummyStat)
-			reqStat->bumpValue(type, relation_id, delta);
-
-		if (traStat != dummyStat)
-			traStat->bumpValue(type, relation_id, delta);
-
-		if (attStat != dummyStat)
-			attStat->bumpValue(type, relation_id, delta);
+		// We don't bump counters for dbbStat here, they're merged from attStats on demand
 	}
 
 	ISC_STATUS getCancelState(ISC_STATUS* secondary = NULL);
