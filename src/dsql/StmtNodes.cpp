@@ -9426,7 +9426,8 @@ UCHAR* MessageNode::getBuffer(Request* request) const
 	MessageBuffer* data = request->getImpure<MessageBuffer>(impureOffset);
 	if (data->buffer == nullptr)
 	{
-		const ULONG length = (flattened || data->format == nullptr) ? format->fmt_length : data->format->fmt_length;
+		const ULONG length = (data->format == nullptr || (flattened && format->fmt_length > data->format->fmt_length))
+								? format->fmt_length : data->format->fmt_length;
 		data->buffer = reinterpret_cast<UCHAR*>(request->req_pool->calloc(length));
 	}
 	return data->buffer;
@@ -9448,7 +9449,8 @@ const Format* MessageNode::getFormat(const Request* request) const
 void MessageNode::mapInOutFlattenedRowtypes(thread_db* tdbb, Request* request, UCHAR* msgBuffer)
 {
 	MessageBuffer* data = request->getImpure<MessageBuffer>(impureOffset);
-	flattenedBuffer.ensureCapacity(flattened ? format->fmt_length : data->format->fmt_length);
+	flattenedBuffer.ensureCapacity((data->format == nullptr || (flattened && format->fmt_length > data->format->fmt_length))
+									? format->fmt_length : data->format->fmt_length);
 
 	// Copy data from msgBuffer to flattenedBuffer according to the old format in data->format
 	ULONG clientFormatOffset = 0;
