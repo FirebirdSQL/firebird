@@ -359,6 +359,11 @@ AggNode* AggNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	return this;
 }
 
+void AggNode::makeSortDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
+{
+	arg->getDesc(tdbb, csb, desc);
+}
+
 void AggNode::aggInit(thread_db* tdbb, Request* request) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
@@ -1094,6 +1099,332 @@ AggNode* ListAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 	node->setParameterType(dsqlScratch,
 		[&] (dsc* desc) { desc->makeText(charSet->maxBytesPerChar(), argDesc.getCharSet()); },
 		false);
+
+	return node;
+}
+
+//--------------------
+
+
+static AggNode::RegisterFactory1<PercentileAggNode, PercentileAggNode::PercentileType> percentileContAggInfo(
+	"PERCENTILE_CONT", PercentileAggNode::TYPE_PERCENTILE_CONT);
+static AggNode::RegisterFactory1<PercentileAggNode, PercentileAggNode::PercentileType> percentileDiscAggInfo(
+	"PERCENTILE_DISC", PercentileAggNode::TYPE_PERCENTILE_DISC);
+
+PercentileAggNode::PercentileAggNode(MemoryPool& pool, PercentileType aType, ValueExprNode* aArg,
+	ValueListNode* aOrderClause)
+	: AggNode(pool, 
+		(aType == PercentileAggNode::TYPE_PERCENTILE_CONT ? percentileContAggInfo : percentileDiscAggInfo),
+		false, false, aArg),
+	type(aType),
+	valueArg(nullptr),
+	dsqlOrderClause(aOrderClause)
+{
+	if (dsqlOrderClause)
+		valueArg = nodeAs<OrderNode>(dsqlOrderClause->items[0])->value;
+}
+
+void PercentileAggNode::parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned /*count*/)
+{
+	arg = PAR_parse_value(tdbb, csb);
+	if (csb->csb_blr_reader.peekByte() == blr_sort)
+	{
+		sort = PAR_sort(tdbb, csb, blr_sort, true);
+		valueArg = sort->expressions[0];
+	}
+}
+
+bool PercentileAggNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const
+{
+	if (!AggNode::dsqlMatch(dsqlScratch, other, ignoreMapCast))
+		return false;
+
+	const PercentileAggNode* o = nodeAs<PercentileAggNode>(other);
+	fb_assert(o);
+	return PASS1_node_match(dsqlScratch, dsqlOrderClause, o->dsqlOrderClause, ignoreMapCast);
+}
+
+void PercentileAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
+{
+	fb_assert(dsqlOrderClause);
+	if (dsqlOrderClause->items.getCount() != 1)
+	{
+		ERR_post(Arg::Gds(isc_wronumarg)); // WITHIN GROUP should only 1 ORDER item
+	}
+
+
+	if (type == TYPE_PERCENTILE_DISC)
+	{
+		// same type as order by argument
+		DsqlDescMaker::fromNode(dsqlScratch, desc, valueArg, true);
+	}
+	else
+	{
+		DsqlDescMaker::fromNode(dsqlScratch, desc, valueArg, true);
+		if (desc->isDecOrInt128())
+		{
+			desc->makeDecimal128();
+			desc->setNullable(true);
+		}
+		else
+		{
+			desc->makeDouble();
+			desc->setNullable(true);
+		}
+	}
+}
+
+void PercentileAggNode::genBlr(DsqlCompilerScratch* dsqlScratch)
+{
+	AggNode::genBlr(dsqlScratch);
+	GEN_sort(dsqlScratch, blr_sort, dsqlOrderClause);
+}
+
+void PercentileAggNode::makeSortDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
+{
+	valueArg->getDesc(tdbb, csb, desc);
+}
+
+void PercentileAggNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
+{
+	arg->getDesc(tdbb, csb, desc);
+	desc->makeDouble();
+}
+
+ValueExprNode* PercentileAggNode::copy(thread_db* tdbb, NodeCopier& copier) const
+{
+	PercentileAggNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) PercentileAggNode(*tdbb->getDefaultPool(), type);
+
+	node->nodScale = nodScale;
+	node->arg = copier.copy(tdbb, arg);
+	node->valueArg = copier.copy(tdbb, valueArg);
+	node->sort = sort->copy(tdbb, copier);
+
+	return node;
+}
+
+AggNode* PercentileAggNode::pass2(thread_db* tdbb, CompilerScratch* csb)
+{
+	AggNode::pass2(tdbb, csb);
+
+	// We need a second descriptor in the impure area for PERCENTILE.
+	impure2Offset = csb->allocImpure<impure_value_ex>();
+
+	return this;
+}
+
+string PercentileAggNode::internalPrint(NodePrinter& printer) const
+{
+	AggNode::internalPrint(printer);
+
+	NODE_PRINT(printer, type);
+
+	return "PercentileAggNode";
+}
+
+
+void PercentileAggNode::aggInit(thread_db* tdbb, Request* request) const
+{
+	AggNode::aggInit(tdbb, request);
+
+	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);	
+	impure->vlu_desc.dsc_dtype = 0;
+	impure->vlux_count = 0;
+
+	impure_value_ex* impure2 = request->getImpure<impure_value_ex>(impure2Offset);
+	impure2->vlu_desc.dsc_dtype = 0;
+	impure2->vlux_count = 0;
+}
+
+bool PercentileAggNode::aggPass(thread_db* tdbb, Request* request) const
+{	
+	dsc* percenteDesc = nullptr;
+	percenteDesc = EVL_expr(tdbb, request, arg);
+	if (!percenteDesc)
+		return false;
+
+	dsc* desc = nullptr;
+	desc = EVL_expr(tdbb, request, valueArg);
+	if (!desc)
+		return false;
+
+	if (desc->isNull())
+		return false;
+
+	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+	if (impure->vlux_count++ == 0)		// first call to aggPass()
+	{
+		if ((type == TYPE_PERCENTILE_CONT) && !desc->isNumeric())	
+			ERRD_post(Arg::Gds(isc_argmustbe_numeric_function) << Arg::Str("PERCENTILE_CONT"));
+
+		if (desc->isBlob())
+			ERRD_post(Arg::Gds(isc_blobnotsup) << Arg::Str("ORDER BY"));		
+		
+		const auto percentile_value = MOV_get_double(tdbb, percenteDesc);
+		if ((percentile_value < 0) || (percentile_value > 1))
+		{
+			if (type == TYPE_PERCENTILE_DISC)
+				ERRD_post(Arg::Gds(isc_sysf_argmustbe_range_inc0_1) << Arg::Str("PERCENTILE_DISC"));
+			else
+				ERRD_post(Arg::Gds(isc_sysf_argmustbe_range_inc0_1) << Arg::Str("PERCENTILE_CONT"));
+		}
+
+		impure->vlu_misc.vlu_double = percentile_value;
+	}
+
+	if (sort)
+	{
+		fb_assert(asb);
+		// "Put" the value to sort.
+		impure_agg_sort* asbImpure = request->getImpure<impure_agg_sort>(asb->impure);
+		UCHAR* data;
+		asbImpure->iasb_sort->put(tdbb, reinterpret_cast<ULONG**>(&data));
+
+		MOVE_CLEAR(data, asb->length);
+
+		auto descOrder = asb->descOrder.begin();
+		auto keyItem = asb->keyItems.begin();
+
+		for (auto& nodeOrder : sort->expressions)
+		{
+			dsc toDesc = *(descOrder++);
+			toDesc.dsc_address = data + (IPTR)toDesc.dsc_address;
+			if (const auto fromDsc = EVL_expr(tdbb, request, nodeOrder))
+			{
+				if (IS_INTL_DATA(fromDsc))
+				{
+					INTL_string_to_key(tdbb, INTL_TEXT_TO_INDEX(fromDsc->getTextType()),
+						fromDsc, &toDesc, INTL_KEY_UNIQUE);
+				}
+				else
+					MOV_move(tdbb, fromDsc, &toDesc);
+			}
+			else
+				*(data + keyItem->getSkdOffset()) = TRUE;
+
+			// The first key for NULLS FIRST/LAST, the second key for the sorter
+			keyItem += 2;
+		}
+
+		dsc toDesc = asb->desc;
+		toDesc.dsc_address = data + (IPTR)toDesc.dsc_address;
+		MOV_move(tdbb, desc, &toDesc);
+
+		return true;
+	}
+
+	return true;
+}
+
+void PercentileAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) const
+{
+	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+	impure_value_ex* impure2 = request->getImpure<impure_value_ex>(impure2Offset);
+
+	if (type == TYPE_PERCENTILE_DISC)
+	{
+		// TODO: calculate only ones
+		const double rn = impure->vlu_misc.vlu_double * impure->vlux_count;
+		const auto crn = static_cast<SINT64>(ceil(rn));
+
+		impure2->vlux_count++;
+
+		if (impure2->vlux_count == crn)
+		{
+			EVL_make_value(tdbb, desc, impure2);
+		}
+	}
+	else {
+		// TODO: calculate only ones
+		const double rn = 1 + impure->vlu_misc.vlu_double * (impure->vlux_count - 1);
+		const auto crn = static_cast<SINT64>(ceil(rn));
+		const auto frn = static_cast<SINT64>(floor(rn));
+
+		if (impure2->vlux_count++ == 0)
+		{
+			if (desc->isDecOrInt128())
+			{
+				DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
+				Firebird::Decimal128 d128;
+				d128.set(0, decSt, 0);
+				impure2->make_decimal128(d128);
+			}
+			else
+				impure2->make_double(0);
+		}
+
+		if (crn == frn)
+		{
+			if (impure2->vlux_count == frn)
+			{
+				if (desc->isDecOrInt128())
+				{
+					const auto value = MOV_get_dec128(tdbb, desc);
+					impure2->make_decimal128(value);
+				}
+				else
+				{
+					const auto value = MOV_get_double(tdbb, desc);
+					impure2->make_double(value);
+				}
+			}
+		}
+		else
+		{
+			if (impure2->vlux_count == frn)
+			{
+				if (desc->isDecOrInt128())
+				{
+					DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
+					const auto value = MOV_get_dec128(tdbb, desc);
+					Firebird::Decimal128 d128;
+					d128.set(crn - rn, decSt);
+					const auto part = impure2->vlu_misc.vlu_dec128.add(decSt, value.mul(decSt, d128));
+					impure2->make_decimal128(part);
+				}
+				else
+				{
+					const auto value = MOV_get_double(tdbb, desc);
+					impure2->vlu_misc.vlu_double += value * (crn - rn);
+				}
+			}
+			if (impure2->vlux_count == crn)
+			{
+				if (desc->isDecOrInt128())
+				{
+					DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
+					const auto value = MOV_get_dec128(tdbb, desc);
+					Firebird::Decimal128 d128;
+					d128.set(rn - frn, decSt);
+					const auto part = impure2->vlu_misc.vlu_dec128.add(decSt, value.mul(decSt, d128));
+					impure2->make_decimal128(part);
+				}
+				else
+				{
+					const auto value = MOV_get_double(tdbb, desc);
+					impure2->vlu_misc.vlu_double += value * (rn - frn);
+				}
+			}
+		}
+	}
+}
+
+dsc* PercentileAggNode::aggExecute(thread_db* tdbb, Request* request) const
+{
+	impure_value_ex* impure2 = request->getImpure<impure_value_ex>(impure2Offset);
+
+	if (!impure2->vlux_count || !impure2->vlu_desc.dsc_dtype)
+		return nullptr;
+
+
+	return &impure2->vlu_desc;
+}
+
+AggNode* PercentileAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
+{
+	AggNode* node = FB_NEW_POOL(dsqlScratch->getPool()) PercentileAggNode(dsqlScratch->getPool(), type,
+		doDsqlPass(dsqlScratch, arg), 
+		doDsqlPass(dsqlScratch, dsqlOrderClause) );
 
 	return node;
 }
