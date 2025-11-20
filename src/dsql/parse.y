@@ -715,6 +715,8 @@ using namespace Firebird;
 %token <metaNamePtr> LEAST
 %token <metaNamePtr> LTRIM
 %token <metaNamePtr> NAMED_ARG_ASSIGN
+%token <metaNamePtr> PERCENTILE_CONT
+%token <metaNamePtr> PERCENTILE_DISC
 %token <metaNamePtr> RTRIM
 %token <metaNamePtr> SCHEMA
 %token <metaNamePtr> SEARCH_PATH
@@ -4726,6 +4728,8 @@ keyword_or_column
 	| WITHIN
 	| LISTAGG
 	| TRUNCATE
+	| PERCENTILE_CONT
+	| PERCENTILE_DISC
 	;
 
 col_opt
@@ -8618,6 +8622,10 @@ aggregate_function_prefix
 		{ $$ = newNode<BinAggNode>(BinAggNode::TYPE_BIN_XOR, $4); }
 	| BIN_XOR_AGG '(' DISTINCT value ')'
 		{ $$ = newNode<BinAggNode>(BinAggNode::TYPE_BIN_XOR_DISTINCT, $4); }
+    | PERCENTILE_CONT '(' percentile_arg ')' within_group_specification
+	    { $$ = newNode<PercentileAggNode>(PercentileAggNode::TYPE_PERCENTILE_CONT, $3, $5); }
+    | PERCENTILE_DISC '(' percentile_arg ')' within_group_specification
+	    { $$ = newNode<PercentileAggNode>(PercentileAggNode::TYPE_PERCENTILE_DISC, $3, $5); }
 	;
 
 %type <aggNode> listagg_set_function
@@ -8690,6 +8698,13 @@ within_group_specification_opt
 %type <valueListNode> within_group_specification
 within_group_specification
 	: WITHIN GROUP '(' order_clause ')'	{ $$ = $4; }
+	;
+
+%type <valueExprNode> percentile_arg
+percentile_arg
+	: u_numeric_constant
+	| variable
+	| parameter
 	;
 
 %type <aggNode> window_function
@@ -10064,6 +10079,8 @@ non_reserved_word
 	| FORMAT
 	| GENERATE_SERIES
 	| OWNER
+	| PERCENTILE_CONT
+	| PERCENTILE_DISC
 	| SEARCH_PATH
 	| SCHEMA
 	| UNLIST

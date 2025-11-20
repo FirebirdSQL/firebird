@@ -1525,7 +1525,7 @@ void Optimizer::generateAggregateSort(AggNode* aggNode)
 	fb_assert(prevKey);
 	ULONG length = prevKey ? ROUNDUP(prevKey->getSkdOffset() + prevKey->getSkdLength(), sizeof(SLONG)) : 0;
 
-	aggNode->arg->getDesc(tdbb, csb, desc);
+	aggNode->makeSortDesc(tdbb, csb, desc);
 
 	if (desc->dsc_dtype >= dtype_aligned)
 		length = FB_ALIGN(length, type_alignments[desc->dsc_dtype]);

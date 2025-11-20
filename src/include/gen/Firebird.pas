@@ -5848,6 +5848,8 @@ const
 	 isc_no_user_att_while_restore = 335545318;
 	 isc_genseq_stepmustbe_nonzero = 335545319;
 	 isc_argmustbe_exact_function = 335545320;
+	 isc_sysf_argmustbe_range_inc0_1 = 335545321;
+	 isc_argmustbe_numeric_function = 335545322;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;
