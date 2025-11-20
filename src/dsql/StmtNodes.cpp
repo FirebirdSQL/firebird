@@ -9426,7 +9426,7 @@ UCHAR* MessageNode::getBuffer(Request* request) const
 	MessageBuffer* data = request->getImpure<MessageBuffer>(impureOffset);
 	if (data->buffer == nullptr)
 	{
-		const ULONG length = data->format == nullptr ? format->fmt_length : data->format->fmt_length;
+		const ULONG length = (flattened || data->format == nullptr) ? format->fmt_length : data->format->fmt_length;
 		data->buffer = reinterpret_cast<UCHAR*>(request->req_pool->calloc(length));
 	}
 	return data->buffer;
@@ -9448,7 +9448,7 @@ const Format* MessageNode::getFormat(const Request* request) const
 void MessageNode::mapInOutFlattenedRowtypes(thread_db* tdbb, Request* request, UCHAR* msgBuffer)
 {
 	MessageBuffer* data = request->getImpure<MessageBuffer>(impureOffset);
-	flattenedBuffer.ensureCapacity(data->format->fmt_length);
+	flattenedBuffer.ensureCapacity(flattened ? format->fmt_length : data->format->fmt_length);
 
 	// Copy data from msgBuffer to flattenedBuffer according to the old format in data->format
 	ULONG clientFormatOffset = 0;
@@ -9480,7 +9480,7 @@ void MessageNode::mapInOutFlattenedRowtypes(thread_db* tdbb, Request* request, U
 
 				// Copy field data
 				memcpy(flattenedBuffer.begin() + clientFormatOffset,
-					   msgBuffer + internalFormatOffset,
+					   flatteningBuffer.begin() + internalFormatOffset,
 					   currentDesc->dsc_length);
 
 				++newFormatDescIter;
@@ -9490,7 +9490,7 @@ void MessageNode::mapInOutFlattenedRowtypes(thread_db* tdbb, Request* request, U
 				// Align and copy null indicator
 				clientFormatOffset = FB_ALIGN(clientFormatOffset, type_alignments[dtype_short]);
 				memcpy(flattenedBuffer.begin() + clientFormatOffset,
-					   msgBuffer + rowValueBeginningOffset + sizeof(USHORT) * subfieldSequentialIndex,
+					   flatteningBuffer.begin() + rowValueBeginningOffset + sizeof(USHORT) * subfieldSequentialIndex,
 					   sizeof(USHORT));
 
 				++newFormatDescIter;
@@ -9527,7 +9527,7 @@ void MessageNode::mapInOutFlattenedRowtypes(thread_db* tdbb, Request* request, U
 
 			// Copy field data
 			memcpy(flattenedBuffer.begin() + clientFormatOffset,
-				   msgBuffer + internalFormatOffset + varcharToTextTransformingAdditionalOffset,
+				   flatteningBuffer.begin() + internalFormatOffset + varcharToTextTransformingAdditionalOffset,
 				   newFormatDescIter->dsc_length);
 
 			clientFormatOffset += newFormatDescIter->dsc_length;
@@ -11794,7 +11794,7 @@ SelectNode* SelectNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	for (auto item : node->rse->dsqlSelectList->items)
 	{
 		// in some nodes (sysfunctions for example) we need to make a descriptor before making a parameter
-		dsc tmpDesc;
+		dsc tmpDesc(dsqlScratch->getPool());
 		DsqlDescMaker::fromNode(dsqlScratch, &tmpDesc, item);
 		const auto parameter = MAKE_parameter(statement->getReceiveMsg(), true, true, 0, item);
 		parameter->par_node = item;

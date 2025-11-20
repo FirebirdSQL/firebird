@@ -1299,14 +1299,16 @@ class MessageNode : public TypedNode<StmtNode, StmtNode::TYPE_MESSAGE>
 public:
 	explicit MessageNode(MemoryPool& pool)
 		: TypedNode<StmtNode, StmtNode::TYPE_MESSAGE>(pool),
-		  flattenedBuffer(pool)
+		  flattenedBuffer(pool),
+		  flatteningBuffer(pool)
 	{
 	}
 	// This constructor is temporary workaround for copying of existing format.
 	// For details look at comment in CMP_procedure_arguments()
 	explicit MessageNode(MemoryPool& pool, const Format& oldFormat)
 		: TypedNode<StmtNode, StmtNode::TYPE_MESSAGE>(pool),
-		flattenedBuffer(pool)
+		flattenedBuffer(pool),
+		flatteningBuffer(pool)
 	{
 		format = Format::newFormat(pool, oldFormat.fmt_count);
 		*format = oldFormat;
@@ -1339,7 +1341,7 @@ public:
 	USHORT messageNumber = 0;
 	bool flattened = false;
 	Firebird::HalfStaticArray<UCHAR, BUFFER_SMALL> flattenedBuffer;
-
+	Firebird::HalfStaticArray<UCHAR, BUFFER_SMALL> flatteningBuffer;
 private:
 	using StmtNode::impureOffset; // Made private to incapsulate it's interpretation logic
 	NestConst<Format> format;

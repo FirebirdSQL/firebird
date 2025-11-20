@@ -404,10 +404,17 @@ bool DsqlDmlRequest::fetch(thread_db* tdbb, UCHAR* msgBuffer)
 		MessageNode* msg = dsqlStatement->getStatement()->getMessage(dsqlStatement->getReceiveMsg()->msg_number);
 		const Format* fmt = msg->getFormat(request);
 
-		JRD_receive(tdbb, request, msg->messageNumber, fmt->fmt_length, msgBuffer);
 
 		if (msg->flattened)
+		{
+			msg->flatteningBuffer.ensureCapacity(fmt->fmt_length);
+			JRD_receive(tdbb, request, msg->messageNumber, fmt->fmt_length, msg->flatteningBuffer.begin());
 			msg->mapInOutFlattenedRowtypes(tdbb, request, msgBuffer);
+		}
+		else
+		{
+			JRD_receive(tdbb, request, msg->messageNumber, fmt->fmt_length, msgBuffer);
+		}
 	}
 
 	firstRowFetched = true;
