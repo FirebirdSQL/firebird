@@ -1205,6 +1205,8 @@ AggNode* PercentileAggNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	// We need a second descriptor in the impure area for PERCENTILE.
 	impure2Offset = csb->allocImpure<impure_value_ex>();
+	// impure area for calculate border
+	percentileImpureOffset = csb->allocImpure<PercentileImpure>();
 
 	return this;
 }
@@ -1230,6 +1232,11 @@ void PercentileAggNode::aggInit(thread_db* tdbb, Request* request) const
 	impure_value_ex* impure2 = request->getImpure<impure_value_ex>(impure2Offset);
 	impure2->vlu_desc.dsc_dtype = 0;
 	impure2->vlux_count = 0;
+
+	PercentileImpure* percentileImpure = request->getImpure<PercentileImpure>(percentileImpureOffset);
+	percentileImpure->rn = 0;
+	percentileImpure->crn = 0;
+	percentileImpure->frn = 0;
 }
 
 bool PercentileAggNode::aggPass(thread_db* tdbb, Request* request) const
@@ -1316,28 +1323,30 @@ void PercentileAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) co
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	impure_value_ex* impure2 = request->getImpure<impure_value_ex>(impure2Offset);
+	PercentileImpure* percentileImpure = request->getImpure<PercentileImpure>(percentileImpureOffset);
 
 	if (type == TYPE_PERCENTILE_DISC)
 	{
-		// TODO: calculate only ones
-		const double rn = impure->vlu_misc.vlu_double * impure->vlux_count;
-		const auto crn = static_cast<SINT64>(ceil(rn));
+		if (impure2->vlux_count++ == 0)
+		{
+			// calculate only ones
+			percentileImpure->rn = impure->vlu_misc.vlu_double * impure->vlux_count;
+			percentileImpure->crn = static_cast<SINT64>(ceil(percentileImpure->rn));
+		}
 
-		impure2->vlux_count++;
-
-		if (impure2->vlux_count == crn)
+		if (impure2->vlux_count == percentileImpure->crn)
 		{
 			EVL_make_value(tdbb, desc, impure2);
 		}
 	}
 	else {
-		// TODO: calculate only ones
-		const double rn = 1 + impure->vlu_misc.vlu_double * (impure->vlux_count - 1);
-		const auto crn = static_cast<SINT64>(ceil(rn));
-		const auto frn = static_cast<SINT64>(floor(rn));
-
 		if (impure2->vlux_count++ == 0)
 		{
+			// calculate only ones
+			percentileImpure->rn = 1 + impure->vlu_misc.vlu_double * (impure->vlux_count - 1);
+			percentileImpure->crn = static_cast<SINT64>(ceil(percentileImpure->rn));
+			percentileImpure->frn = static_cast<SINT64>(floor(percentileImpure->rn));
+			
 			if (desc->isDecOrInt128())
 			{
 				DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
@@ -1349,9 +1358,9 @@ void PercentileAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) co
 				impure2->make_double(0);
 		}
 
-		if (crn == frn)
+		if (percentileImpure->crn == percentileImpure->frn)
 		{
-			if (impure2->vlux_count == frn)
+			if (impure2->vlux_count == percentileImpure->frn)
 			{
 				if (desc->isDecOrInt128())
 				{
@@ -1367,38 +1376,38 @@ void PercentileAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) co
 		}
 		else
 		{
-			if (impure2->vlux_count == frn)
+			if (impure2->vlux_count == percentileImpure->frn)
 			{
 				if (desc->isDecOrInt128())
 				{
 					DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
 					const auto value = MOV_get_dec128(tdbb, desc);
 					Firebird::Decimal128 d128;
-					d128.set(crn - rn, decSt);
+					d128.set(percentileImpure->crn - percentileImpure->rn, decSt);
 					const auto part = impure2->vlu_misc.vlu_dec128.add(decSt, value.mul(decSt, d128));
 					impure2->make_decimal128(part);
 				}
 				else
 				{
 					const auto value = MOV_get_double(tdbb, desc);
-					impure2->vlu_misc.vlu_double += value * (crn - rn);
+					impure2->vlu_misc.vlu_double += value * (percentileImpure->crn - percentileImpure->rn);
 				}
 			}
-			if (impure2->vlux_count == crn)
+			if (impure2->vlux_count == percentileImpure->crn)
 			{
 				if (desc->isDecOrInt128())
 				{
 					DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
 					const auto value = MOV_get_dec128(tdbb, desc);
 					Firebird::Decimal128 d128;
-					d128.set(rn - frn, decSt);
+					d128.set(percentileImpure->rn - percentileImpure->frn, decSt);
 					const auto part = impure2->vlu_misc.vlu_dec128.add(decSt, value.mul(decSt, d128));
 					impure2->make_decimal128(part);
 				}
 				else
 				{
 					const auto value = MOV_get_double(tdbb, desc);
-					impure2->vlu_misc.vlu_double += value * (rn - frn);
+					impure2->vlu_misc.vlu_double += value * (percentileImpure->rn - percentileImpure->frn);
 				}
 			}
 		}
