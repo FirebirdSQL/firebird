@@ -3786,7 +3786,16 @@ dsc* CastNode::perform(thread_db* tdbb, impure_value* impure, dsc* value,
 		return value;
 
 	EVL_put_desc(tdbb, castDesc, impure);
-	impure->vlu_desc.setAddress((UCHAR*) &impure->vlu_misc);
+	if (castDesc->dsc_dtype == dtype_rowtype)
+	{
+		if (!impure->vlu_rowvalue)
+			impure->vlu_rowvalue = FB_NEW_POOL(*tdbb->getDefaultPool()) UCHAR[impure->vlu_desc.dsc_length];
+		impure->vlu_desc.setAddress(impure->vlu_rowvalue);
+	}
+	else
+	{
+		impure->vlu_desc.setAddress((UCHAR*) &impure->vlu_misc);
+	}
 
 	if (DTYPE_IS_TEXT(impure->vlu_desc.dsc_dtype))
 	{
