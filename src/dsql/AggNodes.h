@@ -143,6 +143,13 @@ public:
 		TYPE_PERCENTILE_DISC
 	};
 
+	struct PercentileImpure
+	{
+		double rn;
+		SINT64 crn;
+		SINT64 frn;
+	};
+
 	explicit PercentileAggNode(MemoryPool& pool, PercentileType aType, ValueExprNode* aArg = nullptr,
 		ValueListNode* aOrderClause = nullptr);
 
@@ -178,6 +185,7 @@ private:
 	NestConst<ValueExprNode> valueArg;
 	NestConst<ValueListNode> dsqlOrderClause;
 	ULONG impure2Offset = 0;
+	ULONG percentileImpureOffset = 0;
 };
 
 class CountAggNode final : public AggNode
