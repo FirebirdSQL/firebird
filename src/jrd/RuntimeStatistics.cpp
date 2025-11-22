@@ -111,54 +111,24 @@ void RuntimeStatistics::GroupedCountsArray<Counts, Key>::adjust(const GroupedCou
 	}
 }
 
-PerformanceInfo* RuntimeStatistics::computeDifference(Attachment* att,
-													  const RuntimeStatistics& newStats,
-													  PerformanceInfo& dest,
-													  TraceCountsArray& relStatsTemp,
-													  ObjectsArray<string>& tempNames)
+void RuntimeStatistics::setToDiff(const RuntimeStatistics& newStats)
 {
-	// NOTE: we do not initialize dest.pin_time. This must be done by the caller
-
-	// Calculate database-level statistics
-
 	for (size_t i = 0; i < GLOBAL_ITEMS; i++)
 		values[i] = newStats.values[i] - values[i];
 
-	// Calculate relation-level statistics
-
-	relStatsTemp.clear();
+	for (const auto& newCounts : newStats.page_counts)
+	{
+		const auto pageSpaceId = newCounts.getGroupKey();
+		if (!page_counts[pageSpaceId].setToDiff(newCounts))
+			page_counts.remove(pageSpaceId);
+	}
 
 	for (const auto& newCounts : newStats.rel_counts)
 	{
 		const auto relationId = newCounts.getGroupKey();
-		auto& counts = rel_counts[relationId];
-
-		if (counts.setToDiff(newCounts))
-		{
-			const char* relationName = nullptr;
-
-			if (relationId < static_cast<SLONG>(att->att_relations->count()))
-			{
-				if (const auto relation = (*att->att_relations)[relationId])
-				{
-					auto& tempName = tempNames.add();
-					tempName = relation->rel_name.toQuotedString();
-					relationName = tempName.c_str();
-				}
-			}
-
-			TraceCounts traceCounts;
-			traceCounts.trc_relation_id = relationId;
-			traceCounts.trc_relation_name = relationName;
-			traceCounts.trc_counters = counts.getCounterVector();
-			relStatsTemp.add(traceCounts);
-		}
+		if (!rel_counts[relationId].setToDiff(newCounts))
+			rel_counts.remove(relationId);
 	}
-
-	dest.pin_count = relStatsTemp.getCount();
-	dest.pin_tables = relStatsTemp.begin();
-
-	return &dest;
 }
 
 RuntimeStatistics::Accumulator::Accumulator(thread_db* tdbb, const jrd_rel* relation,

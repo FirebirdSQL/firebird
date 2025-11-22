@@ -1364,6 +1364,9 @@ interface TraceTransaction : Versioned
 version: // 3.0.4 -> 3.0.5
 	int64 getInitialID();
 	int64 getPreviousID();
+
+version: // 5.0 -> 6.0
+	PerformanceStats getPerfStats();
 }
 
 interface TraceParams : Versioned
@@ -1379,6 +1382,9 @@ interface TraceStatement : Versioned
 {
 	int64 getStmtID();
 	PerformanceInfo* getPerf();
+
+version: // 5.0 -> 6.0
+	PerformanceStats getPerfStats();
 }
 
 interface TraceSQLStatement : TraceStatement
@@ -1421,6 +1427,9 @@ version: // 4.0 -> 5.0
 	int64 getStmtID();
 	const string getPlan();
 	const string getExplainedPlan();
+
+version: // 5.0 -> 6.0
+	PerformanceStats getPerfStats();
 }
 
 interface TraceFunction : Versioned
@@ -1434,6 +1443,9 @@ version: // 4.0 -> 5.0
 	int64 getStmtID();
 	const string getPlan();
 	const string getExplainedPlan();
+
+version: // 5.0 -> 6.0
+	PerformanceStats getPerfStats();
 }
 
 interface TraceTrigger : Versioned
@@ -1456,6 +1468,9 @@ version: // 4.0 -> 5.0
 	int64 getStmtID();
 	const string getPlan();
 	const string getExplainedPlan();
+
+version: // 5.0 -> 6.0
+	PerformanceStats getPerfStats();
 }
 
 interface TraceServiceConnection : TraceConnection
@@ -1480,6 +1495,9 @@ interface TraceSweepInfo : Versioned
 	int64 getOAT();
 	int64 getNext();
 	PerformanceInfo* getPerf();
+
+version: // 5.0 -> 6.0
+	PerformanceStats getPerfStats();
 }
 
 interface TraceLogWriter : ReferenceCounted
@@ -1876,3 +1894,26 @@ interface ProfilerStats : Versioned
 {
 	uint64 getElapsedTicks();
 }
+
+// Extendable replacement for struct PerformanceInfo
+
+interface PerformanceCounters : Versioned
+{
+	uint getCount();
+	uint getVectorCapacity();
+
+	uint getId(uint index);
+	const string getName(uint index);
+	const int64* getCounterVector(uint index);
+}
+
+interface PerformanceStats : Versioned
+{
+	uint64 getElapsedTime();	// in milliseconds
+	uint64 getFetchedRecords();
+
+	PerformanceCounters getGlobalCounters();
+	PerformanceCounters getPageCounters();
+	PerformanceCounters getRelationCounters();
+}
+

@@ -173,7 +173,7 @@ public:
 			fb_utils::query_performance_counter() - m_start_clock,
 			m_dsqlRequest->req_fetch_rowcount);
 
-		TraceSQLStatementImpl stmt(m_dsqlRequest, stats.getPerf(), m_data);
+		TraceSQLStatementImpl stmt(m_dsqlRequest, &stats, m_data);
 		TraceManager::event_dsql_execute(m_attachment, m_dsqlRequest->req_transaction, &stmt, false, result);
 
 		m_dsqlRequest->req_fetch_baseline = NULL;
@@ -233,7 +233,7 @@ public:
 			&m_dsqlRequest->getRequest()->req_stats, m_dsqlRequest->req_fetch_elapsed,
 			m_dsqlRequest->req_fetch_rowcount);
 
-		TraceSQLStatementImpl stmt(m_dsqlRequest, stats.getPerf(), nullptr);
+		TraceSQLStatementImpl stmt(m_dsqlRequest, &stats, nullptr);
 
 		TraceManager::event_dsql_execute(m_attachment, m_dsqlRequest->req_transaction,
 			&stmt, false, result);

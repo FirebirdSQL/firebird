@@ -34,24 +34,12 @@
 
 #include <algorithm>
 
-namespace Firebird
-{
-
-// declared in firebird/Interface.h
-struct TraceCounts;
-struct PerformanceInfo;
-
-} // namespace Firebird
-
-
 namespace Jrd {
 
 class Attachment;
 class Database;
 class thread_db;
 class jrd_rel;
-
-typedef Firebird::HalfStaticArray<Firebird::TraceCounts, 5> TraceCountsArray;
 
 
 // Runtime statistics
@@ -151,6 +139,11 @@ private:
 			return ret;
 		}
 
+		static unsigned getVectorCapacity()
+		{
+			return (unsigned) SIZE;
+		}
+
 		const SINT64* getCounterVector() const
 		{
 			return m_counters.data();
@@ -244,6 +237,27 @@ private:
 			return m_counts[m_lastPos];
 		}
 
+		unsigned getCount() const
+		{
+			return m_counts.getCount();
+		}
+
+		static unsigned getVectorCapacity()
+		{
+			return Counts::getVectorCapacity();
+		}
+
+		void remove(Key key)
+		{
+			if ((m_lastPos != (FB_SIZE_T) ~0 && m_counts[m_lastPos].getGroupKey() == key) ||
+				// if m_lastPos is mispositioned
+				m_counts.find(key, m_lastPos))
+			{
+				m_counts.remove(m_lastPos);
+				m_lastPos = (FB_SIZE_T) ~0;
+			}
+		}
+
 		void reset()
 		{
 			m_counts.clear();
@@ -267,17 +281,13 @@ private:
 		FB_SIZE_T m_lastPos = (FB_SIZE_T) ~0;
 	};
 
-	// Performance counters for individual pagespace
-
 	typedef CountsGroup<PageStatType, ULONG> PageCounts;
-	typedef GroupedCountsArray<PageCounts, ULONG> PageCounters;
-
-	// Performance counters for individual table
-
 	typedef CountsGroup<RecordStatType, SLONG> RelationCounts;
-	typedef GroupedCountsArray<RelationCounts, SLONG> RelationCounters;
 
 public:
+	typedef GroupedCountsArray<PageCounts, ULONG> PageCounters;
+	typedef GroupedCountsArray<RelationCounts, SLONG> RelationCounters;
+
 	RuntimeStatistics()
 		: Firebird::AutoStorage(),
 		  page_counts(getPool(), DB_PAGE_SPACE + 1),
@@ -388,10 +398,7 @@ public:
 
 	// Calculate difference between counts stored in this object and current
 	// counts of given request. Counts stored in object are destroyed.
-	Firebird::PerformanceInfo* computeDifference(Attachment* att,
-		const RuntimeStatistics& newStats, Firebird::PerformanceInfo& dest,
-		TraceCountsArray& relStatsTemp,
-		Firebird::ObjectsArray<Firebird::string>& tempNames);
+	void setToDiff(const RuntimeStatistics& newStats);
 
 	// Add difference between newStats and baseStats to our counters
 	// (newStats and baseStats must be "in-sync")
@@ -452,6 +459,11 @@ public:
 		SINT64 m_counter = 0;
 	};
 
+	const SINT64* getGlobalCounterVector() const
+	{
+		return values;
+	}
+
 	const PageCounters& getPageCounters() const
 	{
 		return page_counts;
@@ -463,8 +475,6 @@ public:
 	}
 
 private:
-	void adjustRelStats(const RuntimeStatistics& baseStats, const RuntimeStatistics& newStats);
-
 	SINT64 values[GLOBAL_ITEMS];
 	PageCounters page_counts;
 	RelationCounters rel_counts;

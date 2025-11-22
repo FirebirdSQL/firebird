@@ -143,6 +143,8 @@ namespace Firebird
 	class IProfilerPlugin;
 	class IProfilerSession;
 	class IProfilerStats;
+	class IPerformanceCounters;
+	class IPerformanceStats;
 
 	// Interfaces declarations
 
@@ -5458,7 +5460,7 @@ namespace Firebird
 		}
 	};
 
-#define FIREBIRD_ITRACE_TRANSACTION_VERSION 3u
+#define FIREBIRD_ITRACE_TRANSACTION_VERSION 4u
 
 	class ITraceTransaction : public IVersioned
 	{
@@ -5472,6 +5474,7 @@ namespace Firebird
 			PerformanceInfo* (CLOOP_CARG *getPerf)(ITraceTransaction* self) CLOOP_NOEXCEPT;
 			ISC_INT64 (CLOOP_CARG *getInitialID)(ITraceTransaction* self) CLOOP_NOEXCEPT;
 			ISC_INT64 (CLOOP_CARG *getPreviousID)(ITraceTransaction* self) CLOOP_NOEXCEPT;
+			IPerformanceStats* (CLOOP_CARG *getPerfStats)(ITraceTransaction* self) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -5542,6 +5545,16 @@ namespace Firebird
 			ISC_INT64 ret = static_cast<VTable*>(this->cloopVTable)->getPreviousID(this);
 			return ret;
 		}
+
+		IPerformanceStats* getPerfStats()
+		{
+			if (cloopVTable->version < 4)
+			{
+				return 0;
+			}
+			IPerformanceStats* ret = static_cast<VTable*>(this->cloopVTable)->getPerfStats(this);
+			return ret;
+		}
 	};
 
 #define FIREBIRD_ITRACE_PARAMS_VERSION 3u
@@ -5596,7 +5609,7 @@ namespace Firebird
 		}
 	};
 
-#define FIREBIRD_ITRACE_STATEMENT_VERSION 2u
+#define FIREBIRD_ITRACE_STATEMENT_VERSION 3u
 
 	class ITraceStatement : public IVersioned
 	{
@@ -5605,6 +5618,7 @@ namespace Firebird
 		{
 			ISC_INT64 (CLOOP_CARG *getStmtID)(ITraceStatement* self) CLOOP_NOEXCEPT;
 			PerformanceInfo* (CLOOP_CARG *getPerf)(ITraceStatement* self) CLOOP_NOEXCEPT;
+			IPerformanceStats* (CLOOP_CARG *getPerfStats)(ITraceStatement* self) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -5631,9 +5645,19 @@ namespace Firebird
 			PerformanceInfo* ret = static_cast<VTable*>(this->cloopVTable)->getPerf(this);
 			return ret;
 		}
+
+		IPerformanceStats* getPerfStats()
+		{
+			if (cloopVTable->version < 3)
+			{
+				return 0;
+			}
+			IPerformanceStats* ret = static_cast<VTable*>(this->cloopVTable)->getPerfStats(this);
+			return ret;
+		}
 	};
 
-#define FIREBIRD_ITRACE_SQLSTATEMENT_VERSION 3u
+#define FIREBIRD_ITRACE_SQLSTATEMENT_VERSION 4u
 
 	class ITraceSQLStatement : public ITraceStatement
 	{
@@ -5691,7 +5715,7 @@ namespace Firebird
 		}
 	};
 
-#define FIREBIRD_ITRACE_BLRSTATEMENT_VERSION 3u
+#define FIREBIRD_ITRACE_BLRSTATEMENT_VERSION 4u
 
 	class ITraceBLRStatement : public ITraceStatement
 	{
@@ -5823,7 +5847,7 @@ namespace Firebird
 		}
 	};
 
-#define FIREBIRD_ITRACE_PROCEDURE_VERSION 3u
+#define FIREBIRD_ITRACE_PROCEDURE_VERSION 4u
 
 	class ITraceProcedure : public IVersioned
 	{
@@ -5836,6 +5860,7 @@ namespace Firebird
 			ISC_INT64 (CLOOP_CARG *getStmtID)(ITraceProcedure* self) CLOOP_NOEXCEPT;
 			const char* (CLOOP_CARG *getPlan)(ITraceProcedure* self) CLOOP_NOEXCEPT;
 			const char* (CLOOP_CARG *getExplainedPlan)(ITraceProcedure* self) CLOOP_NOEXCEPT;
+			IPerformanceStats* (CLOOP_CARG *getPerfStats)(ITraceProcedure* self) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -5898,9 +5923,19 @@ namespace Firebird
 			const char* ret = static_cast<VTable*>(this->cloopVTable)->getExplainedPlan(this);
 			return ret;
 		}
+
+		IPerformanceStats* getPerfStats()
+		{
+			if (cloopVTable->version < 4)
+			{
+				return 0;
+			}
+			IPerformanceStats* ret = static_cast<VTable*>(this->cloopVTable)->getPerfStats(this);
+			return ret;
+		}
 	};
 
-#define FIREBIRD_ITRACE_FUNCTION_VERSION 3u
+#define FIREBIRD_ITRACE_FUNCTION_VERSION 4u
 
 	class ITraceFunction : public IVersioned
 	{
@@ -5914,6 +5949,7 @@ namespace Firebird
 			ISC_INT64 (CLOOP_CARG *getStmtID)(ITraceFunction* self) CLOOP_NOEXCEPT;
 			const char* (CLOOP_CARG *getPlan)(ITraceFunction* self) CLOOP_NOEXCEPT;
 			const char* (CLOOP_CARG *getExplainedPlan)(ITraceFunction* self) CLOOP_NOEXCEPT;
+			IPerformanceStats* (CLOOP_CARG *getPerfStats)(ITraceFunction* self) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -5982,9 +6018,19 @@ namespace Firebird
 			const char* ret = static_cast<VTable*>(this->cloopVTable)->getExplainedPlan(this);
 			return ret;
 		}
+
+		IPerformanceStats* getPerfStats()
+		{
+			if (cloopVTable->version < 4)
+			{
+				return 0;
+			}
+			IPerformanceStats* ret = static_cast<VTable*>(this->cloopVTable)->getPerfStats(this);
+			return ret;
+		}
 	};
 
-#define FIREBIRD_ITRACE_TRIGGER_VERSION 3u
+#define FIREBIRD_ITRACE_TRIGGER_VERSION 4u
 
 	class ITraceTrigger : public IVersioned
 	{
@@ -5999,6 +6045,7 @@ namespace Firebird
 			ISC_INT64 (CLOOP_CARG *getStmtID)(ITraceTrigger* self) CLOOP_NOEXCEPT;
 			const char* (CLOOP_CARG *getPlan)(ITraceTrigger* self) CLOOP_NOEXCEPT;
 			const char* (CLOOP_CARG *getExplainedPlan)(ITraceTrigger* self) CLOOP_NOEXCEPT;
+			IPerformanceStats* (CLOOP_CARG *getPerfStats)(ITraceTrigger* self) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -6075,6 +6122,16 @@ namespace Firebird
 				return 0;
 			}
 			const char* ret = static_cast<VTable*>(this->cloopVTable)->getExplainedPlan(this);
+			return ret;
+		}
+
+		IPerformanceStats* getPerfStats()
+		{
+			if (cloopVTable->version < 4)
+			{
+				return 0;
+			}
+			IPerformanceStats* ret = static_cast<VTable*>(this->cloopVTable)->getPerfStats(this);
 			return ret;
 		}
 	};
@@ -6174,7 +6231,7 @@ namespace Firebird
 		}
 	};
 
-#define FIREBIRD_ITRACE_SWEEP_INFO_VERSION 2u
+#define FIREBIRD_ITRACE_SWEEP_INFO_VERSION 3u
 
 	class ITraceSweepInfo : public IVersioned
 	{
@@ -6186,6 +6243,7 @@ namespace Firebird
 			ISC_INT64 (CLOOP_CARG *getOAT)(ITraceSweepInfo* self) CLOOP_NOEXCEPT;
 			ISC_INT64 (CLOOP_CARG *getNext)(ITraceSweepInfo* self) CLOOP_NOEXCEPT;
 			PerformanceInfo* (CLOOP_CARG *getPerf)(ITraceSweepInfo* self) CLOOP_NOEXCEPT;
+			IPerformanceStats* (CLOOP_CARG *getPerfStats)(ITraceSweepInfo* self) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -6228,6 +6286,16 @@ namespace Firebird
 		PerformanceInfo* getPerf()
 		{
 			PerformanceInfo* ret = static_cast<VTable*>(this->cloopVTable)->getPerf(this);
+			return ret;
+		}
+
+		IPerformanceStats* getPerfStats()
+		{
+			if (cloopVTable->version < 3)
+			{
+				return 0;
+			}
+			IPerformanceStats* ret = static_cast<VTable*>(this->cloopVTable)->getPerfStats(this);
 			return ret;
 		}
 	};
@@ -7534,6 +7602,122 @@ namespace Firebird
 		ISC_UINT64 getElapsedTicks()
 		{
 			ISC_UINT64 ret = static_cast<VTable*>(this->cloopVTable)->getElapsedTicks(this);
+			return ret;
+		}
+	};
+
+#define FIREBIRD_IPERFORMANCE_COUNTERS_VERSION 2u
+
+	class IPerformanceCounters : public IVersioned
+	{
+	public:
+		struct VTable : public IVersioned::VTable
+		{
+			unsigned (CLOOP_CARG *getCount)(IPerformanceCounters* self) CLOOP_NOEXCEPT;
+			unsigned (CLOOP_CARG *getVectorCapacity)(IPerformanceCounters* self) CLOOP_NOEXCEPT;
+			unsigned (CLOOP_CARG *getId)(IPerformanceCounters* self, unsigned index) CLOOP_NOEXCEPT;
+			const char* (CLOOP_CARG *getName)(IPerformanceCounters* self, unsigned index) CLOOP_NOEXCEPT;
+			const ISC_INT64* (CLOOP_CARG *getCounterVector)(IPerformanceCounters* self, unsigned index) CLOOP_NOEXCEPT;
+		};
+
+	protected:
+		IPerformanceCounters(DoNotInherit)
+			: IVersioned(DoNotInherit())
+		{
+		}
+
+		~IPerformanceCounters()
+		{
+		}
+
+	public:
+		static CLOOP_CONSTEXPR unsigned VERSION = FIREBIRD_IPERFORMANCE_COUNTERS_VERSION;
+
+		unsigned getCount()
+		{
+			unsigned ret = static_cast<VTable*>(this->cloopVTable)->getCount(this);
+			return ret;
+		}
+
+		unsigned getVectorCapacity()
+		{
+			unsigned ret = static_cast<VTable*>(this->cloopVTable)->getVectorCapacity(this);
+			return ret;
+		}
+
+		unsigned getId(unsigned index)
+		{
+			unsigned ret = static_cast<VTable*>(this->cloopVTable)->getId(this, index);
+			return ret;
+		}
+
+		const char* getName(unsigned index)
+		{
+			const char* ret = static_cast<VTable*>(this->cloopVTable)->getName(this, index);
+			return ret;
+		}
+
+		const ISC_INT64* getCounterVector(unsigned index)
+		{
+			const ISC_INT64* ret = static_cast<VTable*>(this->cloopVTable)->getCounterVector(this, index);
+			return ret;
+		}
+	};
+
+#define FIREBIRD_IPERFORMANCE_STATS_VERSION 2u
+
+	class IPerformanceStats : public IVersioned
+	{
+	public:
+		struct VTable : public IVersioned::VTable
+		{
+			ISC_UINT64 (CLOOP_CARG *getElapsedTime)(IPerformanceStats* self) CLOOP_NOEXCEPT;
+			ISC_UINT64 (CLOOP_CARG *getFetchedRecords)(IPerformanceStats* self) CLOOP_NOEXCEPT;
+			IPerformanceCounters* (CLOOP_CARG *getGlobalCounters)(IPerformanceStats* self) CLOOP_NOEXCEPT;
+			IPerformanceCounters* (CLOOP_CARG *getPageCounters)(IPerformanceStats* self) CLOOP_NOEXCEPT;
+			IPerformanceCounters* (CLOOP_CARG *getRelationCounters)(IPerformanceStats* self) CLOOP_NOEXCEPT;
+		};
+
+	protected:
+		IPerformanceStats(DoNotInherit)
+			: IVersioned(DoNotInherit())
+		{
+		}
+
+		~IPerformanceStats()
+		{
+		}
+
+	public:
+		static CLOOP_CONSTEXPR unsigned VERSION = FIREBIRD_IPERFORMANCE_STATS_VERSION;
+
+		ISC_UINT64 getElapsedTime()
+		{
+			ISC_UINT64 ret = static_cast<VTable*>(this->cloopVTable)->getElapsedTime(this);
+			return ret;
+		}
+
+		ISC_UINT64 getFetchedRecords()
+		{
+			ISC_UINT64 ret = static_cast<VTable*>(this->cloopVTable)->getFetchedRecords(this);
+			return ret;
+		}
+
+		IPerformanceCounters* getGlobalCounters()
+		{
+			IPerformanceCounters* ret = static_cast<VTable*>(this->cloopVTable)->getGlobalCounters(this);
+			return ret;
+		}
+
+		IPerformanceCounters* getPageCounters()
+		{
+			IPerformanceCounters* ret = static_cast<VTable*>(this->cloopVTable)->getPageCounters(this);
+			return ret;
+		}
+
+		IPerformanceCounters* getRelationCounters()
+		{
+			IPerformanceCounters* ret = static_cast<VTable*>(this->cloopVTable)->getRelationCounters(this);
 			return ret;
 		}
 	};
@@ -17637,6 +17821,7 @@ namespace Firebird
 					this->getPerf = &Name::cloopgetPerfDispatcher;
 					this->getInitialID = &Name::cloopgetInitialIDDispatcher;
 					this->getPreviousID = &Name::cloopgetPreviousIDDispatcher;
+					this->getPerfStats = &Name::cloopgetPerfStatsDispatcher;
 				}
 			} vTable;
 
@@ -17733,6 +17918,19 @@ namespace Firebird
 				return static_cast<ISC_INT64>(0);
 			}
 		}
+
+		static IPerformanceStats* CLOOP_CARG cloopgetPerfStatsDispatcher(ITraceTransaction* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getPerfStats();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<IPerformanceStats*>(0);
+			}
+		}
 	};
 
 	template <typename Name, typename StatusType, typename Base = IVersionedImpl<Name, StatusType, Inherit<ITraceTransaction> > >
@@ -17755,6 +17953,7 @@ namespace Firebird
 		virtual PerformanceInfo* getPerf() = 0;
 		virtual ISC_INT64 getInitialID() = 0;
 		virtual ISC_INT64 getPreviousID() = 0;
+		virtual IPerformanceStats* getPerfStats() = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -17854,6 +18053,7 @@ namespace Firebird
 					this->version = Base::VERSION;
 					this->getStmtID = &Name::cloopgetStmtIDDispatcher;
 					this->getPerf = &Name::cloopgetPerfDispatcher;
+					this->getPerfStats = &Name::cloopgetPerfStatsDispatcher;
 				}
 			} vTable;
 
@@ -17885,6 +18085,19 @@ namespace Firebird
 				return static_cast<PerformanceInfo*>(0);
 			}
 		}
+
+		static IPerformanceStats* CLOOP_CARG cloopgetPerfStatsDispatcher(ITraceStatement* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getPerfStats();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<IPerformanceStats*>(0);
+			}
+		}
 	};
 
 	template <typename Name, typename StatusType, typename Base = IVersionedImpl<Name, StatusType, Inherit<ITraceStatement> > >
@@ -17902,6 +18115,7 @@ namespace Firebird
 
 		virtual ISC_INT64 getStmtID() = 0;
 		virtual PerformanceInfo* getPerf() = 0;
+		virtual IPerformanceStats* getPerfStats() = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -17919,6 +18133,7 @@ namespace Firebird
 					this->version = Base::VERSION;
 					this->getStmtID = &Name::cloopgetStmtIDDispatcher;
 					this->getPerf = &Name::cloopgetPerfDispatcher;
+					this->getPerfStats = &Name::cloopgetPerfStatsDispatcher;
 					this->getText = &Name::cloopgetTextDispatcher;
 					this->getPlan = &Name::cloopgetPlanDispatcher;
 					this->getInputs = &Name::cloopgetInputsDispatcher;
@@ -18020,6 +18235,19 @@ namespace Firebird
 				return static_cast<PerformanceInfo*>(0);
 			}
 		}
+
+		static IPerformanceStats* CLOOP_CARG cloopgetPerfStatsDispatcher(ITraceStatement* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getPerfStats();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<IPerformanceStats*>(0);
+			}
+		}
 	};
 
 	template <typename Name, typename StatusType, typename Base = ITraceStatementImpl<Name, StatusType, Inherit<IVersionedImpl<Name, StatusType, Inherit<ITraceSQLStatement> > > > >
@@ -18057,6 +18285,7 @@ namespace Firebird
 					this->version = Base::VERSION;
 					this->getStmtID = &Name::cloopgetStmtIDDispatcher;
 					this->getPerf = &Name::cloopgetPerfDispatcher;
+					this->getPerfStats = &Name::cloopgetPerfStatsDispatcher;
 					this->getData = &Name::cloopgetDataDispatcher;
 					this->getDataLength = &Name::cloopgetDataLengthDispatcher;
 					this->getText = &Name::cloopgetTextDispatcher;
@@ -18128,6 +18357,19 @@ namespace Firebird
 			{
 				StatusType::catchException(0);
 				return static_cast<PerformanceInfo*>(0);
+			}
+		}
+
+		static IPerformanceStats* CLOOP_CARG cloopgetPerfStatsDispatcher(ITraceStatement* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getPerfStats();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<IPerformanceStats*>(0);
 			}
 		}
 	};
@@ -18329,6 +18571,7 @@ namespace Firebird
 					this->getStmtID = &Name::cloopgetStmtIDDispatcher;
 					this->getPlan = &Name::cloopgetPlanDispatcher;
 					this->getExplainedPlan = &Name::cloopgetExplainedPlanDispatcher;
+					this->getPerfStats = &Name::cloopgetPerfStatsDispatcher;
 				}
 			} vTable;
 
@@ -18412,6 +18655,19 @@ namespace Firebird
 				return static_cast<const char*>(0);
 			}
 		}
+
+		static IPerformanceStats* CLOOP_CARG cloopgetPerfStatsDispatcher(ITraceProcedure* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getPerfStats();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<IPerformanceStats*>(0);
+			}
+		}
 	};
 
 	template <typename Name, typename StatusType, typename Base = IVersionedImpl<Name, StatusType, Inherit<ITraceProcedure> > >
@@ -18433,6 +18689,7 @@ namespace Firebird
 		virtual ISC_INT64 getStmtID() = 0;
 		virtual const char* getPlan() = 0;
 		virtual const char* getExplainedPlan() = 0;
+		virtual IPerformanceStats* getPerfStats() = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -18455,6 +18712,7 @@ namespace Firebird
 					this->getStmtID = &Name::cloopgetStmtIDDispatcher;
 					this->getPlan = &Name::cloopgetPlanDispatcher;
 					this->getExplainedPlan = &Name::cloopgetExplainedPlanDispatcher;
+					this->getPerfStats = &Name::cloopgetPerfStatsDispatcher;
 				}
 			} vTable;
 
@@ -18551,6 +18809,19 @@ namespace Firebird
 				return static_cast<const char*>(0);
 			}
 		}
+
+		static IPerformanceStats* CLOOP_CARG cloopgetPerfStatsDispatcher(ITraceFunction* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getPerfStats();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<IPerformanceStats*>(0);
+			}
+		}
 	};
 
 	template <typename Name, typename StatusType, typename Base = IVersionedImpl<Name, StatusType, Inherit<ITraceFunction> > >
@@ -18573,6 +18844,7 @@ namespace Firebird
 		virtual ISC_INT64 getStmtID() = 0;
 		virtual const char* getPlan() = 0;
 		virtual const char* getExplainedPlan() = 0;
+		virtual IPerformanceStats* getPerfStats() = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -18596,6 +18868,7 @@ namespace Firebird
 					this->getStmtID = &Name::cloopgetStmtIDDispatcher;
 					this->getPlan = &Name::cloopgetPlanDispatcher;
 					this->getExplainedPlan = &Name::cloopgetExplainedPlanDispatcher;
+					this->getPerfStats = &Name::cloopgetPerfStatsDispatcher;
 				}
 			} vTable;
 
@@ -18705,6 +18978,19 @@ namespace Firebird
 				return static_cast<const char*>(0);
 			}
 		}
+
+		static IPerformanceStats* CLOOP_CARG cloopgetPerfStatsDispatcher(ITraceTrigger* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getPerfStats();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<IPerformanceStats*>(0);
+			}
+		}
 	};
 
 	template <typename Name, typename StatusType, typename Base = IVersionedImpl<Name, StatusType, Inherit<ITraceTrigger> > >
@@ -18728,6 +19014,7 @@ namespace Firebird
 		virtual ISC_INT64 getStmtID() = 0;
 		virtual const char* getPlan() = 0;
 		virtual const char* getExplainedPlan() = 0;
+		virtual IPerformanceStats* getPerfStats() = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -19049,6 +19336,7 @@ namespace Firebird
 					this->getOAT = &Name::cloopgetOATDispatcher;
 					this->getNext = &Name::cloopgetNextDispatcher;
 					this->getPerf = &Name::cloopgetPerfDispatcher;
+					this->getPerfStats = &Name::cloopgetPerfStatsDispatcher;
 				}
 			} vTable;
 
@@ -19119,6 +19407,19 @@ namespace Firebird
 				return static_cast<PerformanceInfo*>(0);
 			}
 		}
+
+		static IPerformanceStats* CLOOP_CARG cloopgetPerfStatsDispatcher(ITraceSweepInfo* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getPerfStats();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<IPerformanceStats*>(0);
+			}
+		}
 	};
 
 	template <typename Name, typename StatusType, typename Base = IVersionedImpl<Name, StatusType, Inherit<ITraceSweepInfo> > >
@@ -19139,6 +19440,7 @@ namespace Firebird
 		virtual ISC_INT64 getOAT() = 0;
 		virtual ISC_INT64 getNext() = 0;
 		virtual PerformanceInfo* getPerf() = 0;
+		virtual IPerformanceStats* getPerfStats() = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -21697,6 +21999,226 @@ namespace Firebird
 		}
 
 		virtual ISC_UINT64 getElapsedTicks() = 0;
+	};
+
+	template <typename Name, typename StatusType, typename Base>
+	class IPerformanceCountersBaseImpl : public Base
+	{
+	public:
+		typedef IPerformanceCounters Declaration;
+
+		IPerformanceCountersBaseImpl(DoNotInherit = DoNotInherit())
+		{
+			static struct VTableImpl : Base::VTable
+			{
+				VTableImpl()
+				{
+					this->version = Base::VERSION;
+					this->getCount = &Name::cloopgetCountDispatcher;
+					this->getVectorCapacity = &Name::cloopgetVectorCapacityDispatcher;
+					this->getId = &Name::cloopgetIdDispatcher;
+					this->getName = &Name::cloopgetNameDispatcher;
+					this->getCounterVector = &Name::cloopgetCounterVectorDispatcher;
+				}
+			} vTable;
+
+			this->cloopVTable = &vTable;
+		}
+
+		static unsigned CLOOP_CARG cloopgetCountDispatcher(IPerformanceCounters* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getCount();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<unsigned>(0);
+			}
+		}
+
+		static unsigned CLOOP_CARG cloopgetVectorCapacityDispatcher(IPerformanceCounters* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getVectorCapacity();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<unsigned>(0);
+			}
+		}
+
+		static unsigned CLOOP_CARG cloopgetIdDispatcher(IPerformanceCounters* self, unsigned index) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getId(index);
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<unsigned>(0);
+			}
+		}
+
+		static const char* CLOOP_CARG cloopgetNameDispatcher(IPerformanceCounters* self, unsigned index) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getName(index);
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<const char*>(0);
+			}
+		}
+
+		static const ISC_INT64* CLOOP_CARG cloopgetCounterVectorDispatcher(IPerformanceCounters* self, unsigned index) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getCounterVector(index);
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<const ISC_INT64*>(0);
+			}
+		}
+	};
+
+	template <typename Name, typename StatusType, typename Base = IVersionedImpl<Name, StatusType, Inherit<IPerformanceCounters> > >
+	class IPerformanceCountersImpl : public IPerformanceCountersBaseImpl<Name, StatusType, Base>
+	{
+	protected:
+		IPerformanceCountersImpl(DoNotInherit = DoNotInherit())
+		{
+		}
+
+	public:
+		virtual ~IPerformanceCountersImpl()
+		{
+		}
+
+		virtual unsigned getCount() = 0;
+		virtual unsigned getVectorCapacity() = 0;
+		virtual unsigned getId(unsigned index) = 0;
+		virtual const char* getName(unsigned index) = 0;
+		virtual const ISC_INT64* getCounterVector(unsigned index) = 0;
+	};
+
+	template <typename Name, typename StatusType, typename Base>
+	class IPerformanceStatsBaseImpl : public Base
+	{
+	public:
+		typedef IPerformanceStats Declaration;
+
+		IPerformanceStatsBaseImpl(DoNotInherit = DoNotInherit())
+		{
+			static struct VTableImpl : Base::VTable
+			{
+				VTableImpl()
+				{
+					this->version = Base::VERSION;
+					this->getElapsedTime = &Name::cloopgetElapsedTimeDispatcher;
+					this->getFetchedRecords = &Name::cloopgetFetchedRecordsDispatcher;
+					this->getGlobalCounters = &Name::cloopgetGlobalCountersDispatcher;
+					this->getPageCounters = &Name::cloopgetPageCountersDispatcher;
+					this->getRelationCounters = &Name::cloopgetRelationCountersDispatcher;
+				}
+			} vTable;
+
+			this->cloopVTable = &vTable;
+		}
+
+		static ISC_UINT64 CLOOP_CARG cloopgetElapsedTimeDispatcher(IPerformanceStats* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getElapsedTime();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<ISC_UINT64>(0);
+			}
+		}
+
+		static ISC_UINT64 CLOOP_CARG cloopgetFetchedRecordsDispatcher(IPerformanceStats* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getFetchedRecords();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<ISC_UINT64>(0);
+			}
+		}
+
+		static IPerformanceCounters* CLOOP_CARG cloopgetGlobalCountersDispatcher(IPerformanceStats* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getGlobalCounters();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<IPerformanceCounters*>(0);
+			}
+		}
+
+		static IPerformanceCounters* CLOOP_CARG cloopgetPageCountersDispatcher(IPerformanceStats* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getPageCounters();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<IPerformanceCounters*>(0);
+			}
+		}
+
+		static IPerformanceCounters* CLOOP_CARG cloopgetRelationCountersDispatcher(IPerformanceStats* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getRelationCounters();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<IPerformanceCounters*>(0);
+			}
+		}
+	};
+
+	template <typename Name, typename StatusType, typename Base = IVersionedImpl<Name, StatusType, Inherit<IPerformanceStats> > >
+	class IPerformanceStatsImpl : public IPerformanceStatsBaseImpl<Name, StatusType, Base>
+	{
+	protected:
+		IPerformanceStatsImpl(DoNotInherit = DoNotInherit())
+		{
+		}
+
+	public:
+		virtual ~IPerformanceStatsImpl()
+		{
+		}
+
+		virtual ISC_UINT64 getElapsedTime() = 0;
+		virtual ISC_UINT64 getFetchedRecords() = 0;
+		virtual IPerformanceCounters* getGlobalCounters() = 0;
+		virtual IPerformanceCounters* getPageCounters() = 0;
+		virtual IPerformanceCounters* getRelationCounters() = 0;
 	};
 };
 
