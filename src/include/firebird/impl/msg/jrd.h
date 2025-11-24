@@ -1029,3 +1029,4 @@ FB_IMPL_MSG(JRD, 1026, cursor_notdef, -219, "42", "S02", "cursor @1 is not defin
 FB_IMPL_MSG(JRD, 1027, rowtype_bad_conversion, -104, "HY", "000", "The degree of the operand descriptors does not match")
 FB_IMPL_MSG(JRD, 1028, simple_types_not_allowed_in_packaged_types, -901, "HY", "000", "Only composite types may be declared in packages")
 FB_IMPL_MSG(JRD, 1029, rowtype_not_allowed_as_text, -901, "HY", "000", "A row type cannot be converted to a character-based type.")
+FB_IMPL_MSG(JRD, 1030, subfield_buffer_exhausted, -901, "HY", "000", "Composite parameter metadata buffer exhausted")

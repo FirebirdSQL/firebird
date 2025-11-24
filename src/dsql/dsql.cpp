@@ -84,6 +84,7 @@
 using namespace Jrd;
 using namespace Firebird;
 
+constexpr ULONG SUBFIELDS_METADATA_BUFFER_MAX_SIZE = 32768;
 
 static ULONG	get_request_info(thread_db*, DsqlRequest*, ULONG, UCHAR*);
 static dsql_dbb*	init(Jrd::thread_db*, Jrd::Attachment*);
@@ -1257,7 +1258,7 @@ static UCHAR* describe_parameter(thread_db* tdbb,
 	// Create temp buffer for subfield tags
 	UCharBuffer subFieldsBuffer;
 
-	dsc desc = param->par_desc;
+	dsc& desc = const_cast<dsc&>(param->par_desc);
 
 	// Scan sources of coercion rules in reverse order to observe
 	// 'last entered in use' rule. Start with dynamic binding rules ...
@@ -1438,11 +1439,8 @@ static UCHAR* describe_parameter(thread_db* tdbb,
 							if (!currentPos || (currentPos + 1 >= subEnd))
 							{
 								const ULONG newSize = bufferSize * 2;
-								if (newSize > 16384)  // 16KB limit
-								{
-									*info = isc_info_truncated;
-									return nullptr;
-								}
+								if (newSize > (SUBFIELDS_METADATA_BUFFER_MAX_SIZE))
+									Firebird::status_exception::raise(Firebird::Arg::Gds(isc_subfield_buffer_exhausted));
 
 								bufferSize = newSize;
 								subEnd = subInfo + bufferSize;
@@ -1542,7 +1540,8 @@ static UCHAR* var_info(const dsql_msg* message,
 									items, end_describe,
 									info, end,
 									input_message);
-
+			if (info == nullptr)
+				return nullptr;
 		} // if()
 	} // for()
 
