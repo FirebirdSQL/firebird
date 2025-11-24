@@ -1130,7 +1130,7 @@ void put_array( burp_fld* field, burp_rel* relation, ISC_QUAD* blob_id)
 	if (!status_vector.isSuccess())
 	{
 		BurpMaster master;
-		BURP_print(false, 81, field->fld_name);
+		BURP_print(true, 81, field->fld_name);
 		// msg 81 error accessing blob field %s -- continuing
 		BURP_print_status(false, &status_vector);
 #ifdef DEBUG
@@ -1235,7 +1235,7 @@ void put_asciz( const att_type attribute, const TEXT* string)
 	// We can't honor operating systems that allow longer file names.
 	if (len >= MAX_FILE_NAME_SIZE)
 	{
-		BURP_print(false, 343, SafeArg() << int(attribute) << "put_asciz()" << (MAX_FILE_NAME_SIZE - 1));
+		BURP_print(true, 343, SafeArg() << int(attribute) << "put_asciz()" << (MAX_FILE_NAME_SIZE - 1));
 		// msg 343: text for attribute @1 is too large in @2, truncating to @3 bytes
 		len = MAX_FILE_NAME_SIZE - 1;
 	}
@@ -1276,7 +1276,7 @@ void put_blob( burp_fld* field, ISC_QUAD& blob_id)
 	if (!blob.open(DB, gds_trans, blob_id))
 	{
 		BurpMaster master;
-		BURP_print(false, 81, field->fld_name);
+		BURP_print(true, 81, field->fld_name);
 		// msg 81 error accessing blob field %s -- continuing
 		BURP_print_status(false, &status_vector);
 		return;
