@@ -1183,8 +1183,25 @@ void PercentileAggNode::makeSortDesc(thread_db* tdbb, CompilerScratch* csb, dsc*
 
 void PercentileAggNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 {
-	arg->getDesc(tdbb, csb, desc);
-	desc->makeDouble();
+	if (type == TYPE_PERCENTILE_DISC)
+	{
+		// same type as order by argument
+		valueArg->getDesc(tdbb, csb, desc);
+	}
+	else
+	{
+		valueArg->getDesc(tdbb, csb, desc);
+		if (desc->isDecOrInt128())
+		{
+			desc->makeDecimal128();
+			desc->setNullable(true);
+		}
+		else
+		{
+			desc->makeDouble();
+			desc->setNullable(true);
+		}
+	}
 }
 
 ValueExprNode* PercentileAggNode::copy(thread_db* tdbb, NodeCopier& copier) const
@@ -1331,7 +1348,7 @@ void PercentileAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) co
 		{
 			// calculate only ones
 			percentileImpure->rn = impure->vlu_misc.vlu_double * impure->vlux_count;
-			percentileImpure->crn = static_cast<SINT64>(ceil(percentileImpure->rn));
+			percentileImpure->crn = MAX(static_cast<SINT64>(ceil(percentileImpure->rn)), 1);
 		}
 
 		if (impure2->vlux_count == percentileImpure->crn)
@@ -1420,7 +1437,6 @@ dsc* PercentileAggNode::aggExecute(thread_db* tdbb, Request* request) const
 
 	if (!impure2->vlux_count || !impure2->vlu_desc.dsc_dtype)
 		return nullptr;
-
 
 	return &impure2->vlu_desc;
 }
