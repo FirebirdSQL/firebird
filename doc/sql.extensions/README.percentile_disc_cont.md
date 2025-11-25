@@ -13,8 +13,6 @@ Syntax for the `PERCENTILE_DISC` function as an aggregate function.
 
 ```
 PERCENTILE_DISC(<percent>) WITHIN GROUP (ORDER BY <expr> [ASC | DESC])
-
-<percent> ::= numeric_literal | <parameter> | <variable>
 ```
 
 Syntax for the `PERCENTILE_DISC` function as an window function.
@@ -22,8 +20,6 @@ Syntax for the `PERCENTILE_DISC` function as an window function.
 ```
 PERCENTILE_DISC(<percent>) WITHIN GROUP (ORDER BY <expr> [ASC | DESC])
   OVER (PARTITION BY <part_expr>)
-
-<percent> ::= numeric_literal | <parameter> | <variable>
 ```
 
 The first argument `<percent>` must evaluate to a numeric value between 0 and 1, because it is a percentile value. 
@@ -84,8 +80,6 @@ Syntax for the `PERCENTILE_CONT` function as an aggregate function.
 
 ```
 PERCENTILE_CONT(<percent>) WITHIN GROUP (ORDER BY <expr> [ASC | DESC])
-
-<percent> ::= numeric_literal | <parameter> | <variable>
 ```
 
 Syntax for the `PERCENTILE_CONT` function as an window function.
@@ -93,8 +87,6 @@ Syntax for the `PERCENTILE_CONT` function as an window function.
 ```
 PERCENTILE_CONT(<percent>) WITHIN GROUP (ORDER BY <expr> [ASC | DESC])
   OVER (PARTITION BY <part_expr>)
-
-<percent> ::= numeric_literal | <parameter> | <variable>
 ```
 
 The first argument `<percent>` must evaluate to a numeric value between 0 and 1, because it is a percentile value. 
