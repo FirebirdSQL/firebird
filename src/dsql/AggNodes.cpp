@@ -1451,6 +1451,10 @@ AggNode* PercentileAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 		doDsqlPass(dsqlScratch, arg), 
 		doDsqlPass(dsqlScratch, dsqlOrderClause) );
 
+	PASS1_set_parameter_type(dsqlScratch, node->arg,
+		[&](dsc* desc) { desc->makeDouble(); },
+		false);
+
 	return node;
 }
 

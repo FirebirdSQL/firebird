@@ -8623,9 +8623,9 @@ aggregate_function_prefix
 		{ $$ = newNode<BinAggNode>(BinAggNode::TYPE_BIN_XOR, $4); }
 	| BIN_XOR_AGG '(' DISTINCT value ')'
 		{ $$ = newNode<BinAggNode>(BinAggNode::TYPE_BIN_XOR_DISTINCT, $4); }
-    | PERCENTILE_CONT '(' percentile_arg ')' within_group_specification
+    | PERCENTILE_CONT '(' value ')' within_group_specification
 	    { $$ = newNode<PercentileAggNode>(PercentileAggNode::TYPE_PERCENTILE_CONT, $3, $5); }
-    | PERCENTILE_DISC '(' percentile_arg ')' within_group_specification
+    | PERCENTILE_DISC '(' value ')' within_group_specification
 	    { $$ = newNode<PercentileAggNode>(PercentileAggNode::TYPE_PERCENTILE_DISC, $3, $5); }
 	;
 
@@ -8699,13 +8699,6 @@ within_group_specification_opt
 %type <valueListNode> within_group_specification
 within_group_specification
 	: WITHIN GROUP '(' order_clause ')'	{ $$ = $4; }
-	;
-
-%type <valueExprNode> percentile_arg
-percentile_arg
-	: u_numeric_constant
-	| variable
-	| parameter
 	;
 
 %type <aggNode> window_function
