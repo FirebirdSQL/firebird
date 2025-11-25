@@ -522,7 +522,13 @@ bool GenSeriesFunctionScan::nextBuffer(thread_db* tdbb) const
 			fromDesc.makeInt64(impure->m_scale, &result);
 			assignParameter(tdbb, &fromDesc, toDesc, 0, record);
 
-			result += step;
+			// Fixes freezing at boundary values.
+			if (((step < 0) && (result == MIN_SINT64)) || 
+				((step > 0) && (result == MAX_SINT64)))
+				impure->m_step.vlu_int64 = 0;
+			else
+			    result += step;
+
 			impure->m_result.vlu_int64 = result;
 
 			return true;
@@ -545,7 +551,12 @@ bool GenSeriesFunctionScan::nextBuffer(thread_db* tdbb) const
 			fromDesc.makeInt128(impure->m_scale, &result);
 			assignParameter(tdbb, &fromDesc, toDesc, 0, record);
 
-			result = result.add(step);
+			// Fixes freezing at boundary values.
+			if (((step.sign() < 0) && (result.compare(MIN_Int128) == 0)) ||
+				((step.sign() > 0) && (result.compare(MAX_Int128) == 0)))
+				impure->m_step.vlu_int128.set(0, 0);
+			else
+				result = result.add(step);
 			impure->m_result.vlu_int128 = result;
 
 			return true;
