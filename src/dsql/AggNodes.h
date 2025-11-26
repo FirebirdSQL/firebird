@@ -145,6 +145,8 @@ public:
 
 	struct PercentileImpure
 	{
+		SINT64 vlux_count;
+		double percentile;
 		double rn;
 		SINT64 crn;
 		SINT64 frn;
@@ -161,6 +163,12 @@ public:
 	}
 
 	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
+
+	void getChildren(NodeRefsHolder& holder, bool dsql) const override
+	{
+		AggNode::getChildren(holder, dsql);
+		holder.add(valueArg);
+	}
 
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
@@ -184,7 +192,6 @@ private:
 	const PercentileType type;
 	NestConst<ValueExprNode> valueArg;
 	NestConst<ValueListNode> dsqlOrderClause;
-	ULONG impure2Offset = 0;
 	ULONG percentileImpureOffset = 0;
 };
 
