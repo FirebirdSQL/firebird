@@ -99,49 +99,7 @@ private:
 class TraceRuntimeStats :
 	public Firebird::AutoIface<Firebird::IPerformanceStatsImpl<TraceRuntimeStats, Firebird::CheckStatusWrapper> >
 {
-	class GlobalCounters :
-		public Firebird::AutoIface<Firebird::IPerformanceCountersImpl<GlobalCounters, Firebird::CheckStatusWrapper> >
-	{
-		static constexpr unsigned COUNT = 1;
-
-	public:
-		GlobalCounters() = default;
-		~GlobalCounters() = default;
-
-		void reset(const SINT64* counters)
-		{
-			m_counters = counters;
-		}
-
-		// PerformanceCounts implementation
-		unsigned getCount()
-		{
-			return COUNT;
-		}
-
-		unsigned getVectorCapacity()
-		{
-			return RuntimeStatistics::GLOBAL_ITEMS;
-		}
-
-		unsigned getId(unsigned index)
-		{
-			return 0;
-		}
-
-		const char* getName(unsigned index)
-		{
-			return nullptr;
-		}
-
-		const SINT64* getCounterVector(unsigned index)
-		{
-			return (index < COUNT) ? m_counters : nullptr;
-		}
-
-	private:
-		const SINT64* m_counters = nullptr;
-	};
+	static constexpr unsigned GLOBAL_COUNTERS = 4; // PerformanceInfo::{FETCHES|READS|MARKS|WRITES}
 
 	template <class T>
 	class GenericCounters :
@@ -157,32 +115,32 @@ class TraceRuntimeStats :
 			m_names.clear();
 
 			for (const auto& counts : *m_counts)
-				m_names.add(getName(counts.getGroupKey()));
+				m_names.add(getName(counts.getGroupId()));
 		}
 
 		// PerformanceCounts implementation
-		unsigned getCount()
+		unsigned getObjectCount()
 		{
 			return m_counts ? m_counts->getCount() : 0;
 		}
 
-		unsigned getVectorCapacity()
+		unsigned getCountersCapacity()
 		{
 			return T::getVectorCapacity();
 		}
 
-		unsigned getId(unsigned index)
+		unsigned getObjectId(unsigned index)
 		{
 			if (m_counts && index < m_counts->getCount())
 			{
 				const auto iter = m_counts->begin() + index;
-				return iter->getGroupKey();
+				return iter->getGroupId();
 			}
 
 			return 0;
 		}
 
-		const char* getName(unsigned index)
+		const char* getObjectName(unsigned index)
 		{
 			if (index < m_names.getCount())
 				return m_names[index].c_str();
@@ -190,7 +148,7 @@ class TraceRuntimeStats :
 			return nullptr;
 		}
 
-		const SINT64* getCounterVector(unsigned index)
+		const SINT64* getObjectCounters(unsigned index)
 		{
 			if (m_counts && index < m_counts->getCount())
 			{
@@ -207,7 +165,7 @@ class TraceRuntimeStats :
 	};
 
 	typedef GenericCounters<RuntimeStatistics::PageCounters> PageCounters;
-	typedef GenericCounters<RuntimeStatistics::RelationCounters> RelationCounters;
+	typedef GenericCounters<RuntimeStatistics::TableCounters> TableCounters;
 
 public:
 	TraceRuntimeStats(Attachment* att, RuntimeStatistics* baseline, RuntimeStatistics* stats,
@@ -224,19 +182,14 @@ public:
 		return m_info.pin_records_fetched;
 	}
 
-	Firebird::IPerformanceCounters* getGlobalCounters()
-	{
-		return &m_globalCounters;
-	}
-
 	Firebird::IPerformanceCounters* getPageCounters()
 	{
 		return &m_pageCounters;
 	}
 
-	Firebird::IPerformanceCounters* getRelationCounters()
+	Firebird::IPerformanceCounters* getTableCounters()
 	{
-		return &m_relCounters;
+		return &m_tableCounters;
 	}
 
 	Firebird::PerformanceInfo* getInfo()
@@ -246,11 +199,10 @@ public:
 
 private:
 	Firebird::PerformanceInfo m_info;
-	GlobalCounters m_globalCounters;
 	PageCounters m_pageCounters;
-	RelationCounters m_relCounters;
+	TableCounters m_tableCounters;
+	SINT64 m_globalCounters[GLOBAL_COUNTERS];
 	Firebird::HalfStaticArray<Firebird::TraceCounts, 16> m_legacyCounts;
-	static SINT64 m_dummy_counts[RuntimeStatistics::GLOBAL_ITEMS];	// Zero-initialized array with zero counts
 };
 
 

@@ -45,13 +45,13 @@ void RuntimeStatistics::adjust(const RuntimeStatistics& baseStats, const Runtime
 	if (baseStats.pageChgNumber != newStats.pageChgNumber)
 	{
 		pageChgNumber++;
-		page_counts.adjust(baseStats.page_counts, newStats.page_counts);
+		pageCounters.adjust(baseStats.pageCounters, newStats.pageCounters);
 	}
 
-	if (baseStats.relChgNumber != newStats.relChgNumber)
+	if (baseStats.tabChgNumber != newStats.tabChgNumber)
 	{
-		relChgNumber++;
-		rel_counts.adjust(baseStats.rel_counts, newStats.rel_counts);
+		tabChgNumber++;
+		tableCounters.adjust(baseStats.tableCounters, newStats.tableCounters);
 	}
 }
 
@@ -70,8 +70,8 @@ void RuntimeStatistics::adjustPageStats(RuntimeStatistics& baseStats, const Runt
 	}
 }
 
-template <class Counts, typename Key>
-void RuntimeStatistics::GroupedCountsArray<Counts, Key>::adjust(const GroupedCountsArray& baseStats, const GroupedCountsArray& newStats)
+template <class Counts>
+void RuntimeStatistics::GroupedCountsArray<Counts>::adjust(const GroupedCountsArray& baseStats, const GroupedCountsArray& newStats)
 {
 	auto baseIter = baseStats.m_counts.begin(), newIter = newStats.m_counts.begin();
 	const auto baseEnd = baseStats.m_counts.end(), newEnd = newStats.m_counts.end();
@@ -84,24 +84,24 @@ void RuntimeStatistics::GroupedCountsArray<Counts, Key>::adjust(const GroupedCou
 		if (baseIter == baseEnd)
 		{
 			// Object exists in newStats but missing in baseStats
-			const auto newKey = newIter->getGroupKey();
-			(*this)[newKey] += *newIter++;
+			const auto newId = newIter->getGroupId();
+			(*this)[newId] += *newIter++;
 		}
 		else if (newIter != newEnd)
 		{
-			const auto baseKey = baseIter->getGroupKey();
-			const auto newKey = newIter->getGroupKey();
+			const auto baseId = baseIter->getGroupId();
+			const auto newId = newIter->getGroupId();
 
-			if (newKey == baseKey)
+			if (newId == baseId)
 			{
 				// Object exists in both newStats and baseStats
-				(*this)[newKey] += *newIter++;
-				(*this)[newKey] -= *baseIter++;
+				(*this)[newId] += *newIter++;
+				(*this)[newId] -= *baseIter++;
 			}
-			else if (newKey < baseKey)
+			else if (newId < baseId)
 			{
 				// Object exists in newStats but missing in baseStats
-				(*this)[newKey] += *newIter++;
+				(*this)[newId] += *newIter++;
 			}
 			else
 				fb_assert(false); // should never happen
@@ -116,18 +116,18 @@ void RuntimeStatistics::setToDiff(const RuntimeStatistics& newStats)
 	for (size_t i = 0; i < GLOBAL_ITEMS; i++)
 		values[i] = newStats.values[i] - values[i];
 
-	for (const auto& newCounts : newStats.page_counts)
+	for (const auto& newCounts : newStats.pageCounters)
 	{
-		const auto pageSpaceId = newCounts.getGroupKey();
-		if (!page_counts[pageSpaceId].setToDiff(newCounts))
-			page_counts.remove(pageSpaceId);
+		const auto pageSpaceId = newCounts.getGroupId();
+		if (!pageCounters[pageSpaceId].setToDiff(newCounts))
+			pageCounters.remove(pageSpaceId);
 	}
 
-	for (const auto& newCounts : newStats.rel_counts)
+	for (const auto& newCounts : newStats.tableCounters)
 	{
-		const auto relationId = newCounts.getGroupKey();
-		if (!rel_counts[relationId].setToDiff(newCounts))
-			rel_counts.remove(relationId);
+		const auto relationId = newCounts.getGroupId();
+		if (!tableCounters[relationId].setToDiff(newCounts))
+			tableCounters.remove(relationId);
 	}
 }
 

@@ -1451,7 +1451,7 @@ void Monitoring::putStatistics(SnapshotData::DumpRecord& record, const RuntimeSt
 
 	// logical I/O statistics (table wise)
 
-	for (const auto& counts : statistics.getRelationCounters())
+	for (const auto& counts : statistics.getTableCounters())
 	{
 		if (counts.isEmpty())
 			continue;
@@ -1461,8 +1461,8 @@ void Monitoring::putStatistics(SnapshotData::DumpRecord& record, const RuntimeSt
 		record.reset(rel_mon_tab_stats);
 		record.storeGlobalId(f_mon_tab_stat_id, id);
 		record.storeInteger(f_mon_tab_stat_group, stat_group);
-		record.storeTableIdSchemaName(f_mon_tab_sch_name, counts.getGroupKey());
-		record.storeTableIdObjectName(f_mon_tab_name, counts.getGroupKey());
+		record.storeTableIdSchemaName(f_mon_tab_sch_name, counts.getGroupId());
+		record.storeTableIdObjectName(f_mon_tab_name, counts.getGroupId());
 		record.storeGlobalId(f_mon_tab_rec_stat_id, rec_stat_id);
 		record.write();
 

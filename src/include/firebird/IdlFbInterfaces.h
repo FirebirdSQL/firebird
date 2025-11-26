@@ -7613,11 +7613,11 @@ namespace Firebird
 	public:
 		struct VTable : public IVersioned::VTable
 		{
-			unsigned (CLOOP_CARG *getCount)(IPerformanceCounters* self) CLOOP_NOEXCEPT;
-			unsigned (CLOOP_CARG *getVectorCapacity)(IPerformanceCounters* self) CLOOP_NOEXCEPT;
-			unsigned (CLOOP_CARG *getId)(IPerformanceCounters* self, unsigned index) CLOOP_NOEXCEPT;
-			const char* (CLOOP_CARG *getName)(IPerformanceCounters* self, unsigned index) CLOOP_NOEXCEPT;
-			const ISC_INT64* (CLOOP_CARG *getCounterVector)(IPerformanceCounters* self, unsigned index) CLOOP_NOEXCEPT;
+			unsigned (CLOOP_CARG *getObjectCount)(IPerformanceCounters* self) CLOOP_NOEXCEPT;
+			unsigned (CLOOP_CARG *getCountersCapacity)(IPerformanceCounters* self) CLOOP_NOEXCEPT;
+			unsigned (CLOOP_CARG *getObjectId)(IPerformanceCounters* self, unsigned index) CLOOP_NOEXCEPT;
+			const char* (CLOOP_CARG *getObjectName)(IPerformanceCounters* self, unsigned index) CLOOP_NOEXCEPT;
+			const ISC_INT64* (CLOOP_CARG *getObjectCounters)(IPerformanceCounters* self, unsigned index) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -7633,33 +7633,53 @@ namespace Firebird
 	public:
 		static CLOOP_CONSTEXPR unsigned VERSION = FIREBIRD_IPERFORMANCE_COUNTERS_VERSION;
 
-		unsigned getCount()
+		static CLOOP_CONSTEXPR unsigned PAGE_FETCHES = 0;
+		static CLOOP_CONSTEXPR unsigned PAGE_READS = 1;
+		static CLOOP_CONSTEXPR unsigned PAGE_MARKS = 2;
+		static CLOOP_CONSTEXPR unsigned PAGE_WRITES = 3;
+		static CLOOP_CONSTEXPR unsigned RECORD_SEQ_READS = 0;
+		static CLOOP_CONSTEXPR unsigned RECORD_IDX_READS = 1;
+		static CLOOP_CONSTEXPR unsigned RECORD_UPDATES = 2;
+		static CLOOP_CONSTEXPR unsigned RECORD_INSERTS = 3;
+		static CLOOP_CONSTEXPR unsigned RECORD_DELETES = 4;
+		static CLOOP_CONSTEXPR unsigned RECORD_BACKOUTS = 5;
+		static CLOOP_CONSTEXPR unsigned RECORD_PURGES = 6;
+		static CLOOP_CONSTEXPR unsigned RECORD_EXPUNGES = 7;
+		static CLOOP_CONSTEXPR unsigned RECORD_LOCKS = 8;
+		static CLOOP_CONSTEXPR unsigned RECORD_WAITS = 9;
+		static CLOOP_CONSTEXPR unsigned RECORD_CONFLICTS = 10;
+		static CLOOP_CONSTEXPR unsigned RECORD_BACK_READS = 11;
+		static CLOOP_CONSTEXPR unsigned RECORD_FRAGMENT_READS = 12;
+		static CLOOP_CONSTEXPR unsigned RECORD_RPT_READS = 13;
+		static CLOOP_CONSTEXPR unsigned RECORD_IMGC = 14;
+
+		unsigned getObjectCount()
 		{
-			unsigned ret = static_cast<VTable*>(this->cloopVTable)->getCount(this);
+			unsigned ret = static_cast<VTable*>(this->cloopVTable)->getObjectCount(this);
 			return ret;
 		}
 
-		unsigned getVectorCapacity()
+		unsigned getCountersCapacity()
 		{
-			unsigned ret = static_cast<VTable*>(this->cloopVTable)->getVectorCapacity(this);
+			unsigned ret = static_cast<VTable*>(this->cloopVTable)->getCountersCapacity(this);
 			return ret;
 		}
 
-		unsigned getId(unsigned index)
+		unsigned getObjectId(unsigned index)
 		{
-			unsigned ret = static_cast<VTable*>(this->cloopVTable)->getId(this, index);
+			unsigned ret = static_cast<VTable*>(this->cloopVTable)->getObjectId(this, index);
 			return ret;
 		}
 
-		const char* getName(unsigned index)
+		const char* getObjectName(unsigned index)
 		{
-			const char* ret = static_cast<VTable*>(this->cloopVTable)->getName(this, index);
+			const char* ret = static_cast<VTable*>(this->cloopVTable)->getObjectName(this, index);
 			return ret;
 		}
 
-		const ISC_INT64* getCounterVector(unsigned index)
+		const ISC_INT64* getObjectCounters(unsigned index)
 		{
-			const ISC_INT64* ret = static_cast<VTable*>(this->cloopVTable)->getCounterVector(this, index);
+			const ISC_INT64* ret = static_cast<VTable*>(this->cloopVTable)->getObjectCounters(this, index);
 			return ret;
 		}
 	};
@@ -7673,9 +7693,8 @@ namespace Firebird
 		{
 			ISC_UINT64 (CLOOP_CARG *getElapsedTime)(IPerformanceStats* self) CLOOP_NOEXCEPT;
 			ISC_UINT64 (CLOOP_CARG *getFetchedRecords)(IPerformanceStats* self) CLOOP_NOEXCEPT;
-			IPerformanceCounters* (CLOOP_CARG *getGlobalCounters)(IPerformanceStats* self) CLOOP_NOEXCEPT;
 			IPerformanceCounters* (CLOOP_CARG *getPageCounters)(IPerformanceStats* self) CLOOP_NOEXCEPT;
-			IPerformanceCounters* (CLOOP_CARG *getRelationCounters)(IPerformanceStats* self) CLOOP_NOEXCEPT;
+			IPerformanceCounters* (CLOOP_CARG *getTableCounters)(IPerformanceStats* self) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -7703,21 +7722,15 @@ namespace Firebird
 			return ret;
 		}
 
-		IPerformanceCounters* getGlobalCounters()
-		{
-			IPerformanceCounters* ret = static_cast<VTable*>(this->cloopVTable)->getGlobalCounters(this);
-			return ret;
-		}
-
 		IPerformanceCounters* getPageCounters()
 		{
 			IPerformanceCounters* ret = static_cast<VTable*>(this->cloopVTable)->getPageCounters(this);
 			return ret;
 		}
 
-		IPerformanceCounters* getRelationCounters()
+		IPerformanceCounters* getTableCounters()
 		{
-			IPerformanceCounters* ret = static_cast<VTable*>(this->cloopVTable)->getRelationCounters(this);
+			IPerformanceCounters* ret = static_cast<VTable*>(this->cloopVTable)->getTableCounters(this);
 			return ret;
 		}
 	};
@@ -22014,22 +22027,22 @@ namespace Firebird
 				VTableImpl()
 				{
 					this->version = Base::VERSION;
-					this->getCount = &Name::cloopgetCountDispatcher;
-					this->getVectorCapacity = &Name::cloopgetVectorCapacityDispatcher;
-					this->getId = &Name::cloopgetIdDispatcher;
-					this->getName = &Name::cloopgetNameDispatcher;
-					this->getCounterVector = &Name::cloopgetCounterVectorDispatcher;
+					this->getObjectCount = &Name::cloopgetObjectCountDispatcher;
+					this->getCountersCapacity = &Name::cloopgetCountersCapacityDispatcher;
+					this->getObjectId = &Name::cloopgetObjectIdDispatcher;
+					this->getObjectName = &Name::cloopgetObjectNameDispatcher;
+					this->getObjectCounters = &Name::cloopgetObjectCountersDispatcher;
 				}
 			} vTable;
 
 			this->cloopVTable = &vTable;
 		}
 
-		static unsigned CLOOP_CARG cloopgetCountDispatcher(IPerformanceCounters* self) CLOOP_NOEXCEPT
+		static unsigned CLOOP_CARG cloopgetObjectCountDispatcher(IPerformanceCounters* self) CLOOP_NOEXCEPT
 		{
 			try
 			{
-				return static_cast<Name*>(self)->Name::getCount();
+				return static_cast<Name*>(self)->Name::getObjectCount();
 			}
 			catch (...)
 			{
@@ -22038,11 +22051,11 @@ namespace Firebird
 			}
 		}
 
-		static unsigned CLOOP_CARG cloopgetVectorCapacityDispatcher(IPerformanceCounters* self) CLOOP_NOEXCEPT
+		static unsigned CLOOP_CARG cloopgetCountersCapacityDispatcher(IPerformanceCounters* self) CLOOP_NOEXCEPT
 		{
 			try
 			{
-				return static_cast<Name*>(self)->Name::getVectorCapacity();
+				return static_cast<Name*>(self)->Name::getCountersCapacity();
 			}
 			catch (...)
 			{
@@ -22051,11 +22064,11 @@ namespace Firebird
 			}
 		}
 
-		static unsigned CLOOP_CARG cloopgetIdDispatcher(IPerformanceCounters* self, unsigned index) CLOOP_NOEXCEPT
+		static unsigned CLOOP_CARG cloopgetObjectIdDispatcher(IPerformanceCounters* self, unsigned index) CLOOP_NOEXCEPT
 		{
 			try
 			{
-				return static_cast<Name*>(self)->Name::getId(index);
+				return static_cast<Name*>(self)->Name::getObjectId(index);
 			}
 			catch (...)
 			{
@@ -22064,11 +22077,11 @@ namespace Firebird
 			}
 		}
 
-		static const char* CLOOP_CARG cloopgetNameDispatcher(IPerformanceCounters* self, unsigned index) CLOOP_NOEXCEPT
+		static const char* CLOOP_CARG cloopgetObjectNameDispatcher(IPerformanceCounters* self, unsigned index) CLOOP_NOEXCEPT
 		{
 			try
 			{
-				return static_cast<Name*>(self)->Name::getName(index);
+				return static_cast<Name*>(self)->Name::getObjectName(index);
 			}
 			catch (...)
 			{
@@ -22077,11 +22090,11 @@ namespace Firebird
 			}
 		}
 
-		static const ISC_INT64* CLOOP_CARG cloopgetCounterVectorDispatcher(IPerformanceCounters* self, unsigned index) CLOOP_NOEXCEPT
+		static const ISC_INT64* CLOOP_CARG cloopgetObjectCountersDispatcher(IPerformanceCounters* self, unsigned index) CLOOP_NOEXCEPT
 		{
 			try
 			{
-				return static_cast<Name*>(self)->Name::getCounterVector(index);
+				return static_cast<Name*>(self)->Name::getObjectCounters(index);
 			}
 			catch (...)
 			{
@@ -22104,11 +22117,11 @@ namespace Firebird
 		{
 		}
 
-		virtual unsigned getCount() = 0;
-		virtual unsigned getVectorCapacity() = 0;
-		virtual unsigned getId(unsigned index) = 0;
-		virtual const char* getName(unsigned index) = 0;
-		virtual const ISC_INT64* getCounterVector(unsigned index) = 0;
+		virtual unsigned getObjectCount() = 0;
+		virtual unsigned getCountersCapacity() = 0;
+		virtual unsigned getObjectId(unsigned index) = 0;
+		virtual const char* getObjectName(unsigned index) = 0;
+		virtual const ISC_INT64* getObjectCounters(unsigned index) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
@@ -22126,9 +22139,8 @@ namespace Firebird
 					this->version = Base::VERSION;
 					this->getElapsedTime = &Name::cloopgetElapsedTimeDispatcher;
 					this->getFetchedRecords = &Name::cloopgetFetchedRecordsDispatcher;
-					this->getGlobalCounters = &Name::cloopgetGlobalCountersDispatcher;
 					this->getPageCounters = &Name::cloopgetPageCountersDispatcher;
-					this->getRelationCounters = &Name::cloopgetRelationCountersDispatcher;
+					this->getTableCounters = &Name::cloopgetTableCountersDispatcher;
 				}
 			} vTable;
 
@@ -22161,19 +22173,6 @@ namespace Firebird
 			}
 		}
 
-		static IPerformanceCounters* CLOOP_CARG cloopgetGlobalCountersDispatcher(IPerformanceStats* self) CLOOP_NOEXCEPT
-		{
-			try
-			{
-				return static_cast<Name*>(self)->Name::getGlobalCounters();
-			}
-			catch (...)
-			{
-				StatusType::catchException(0);
-				return static_cast<IPerformanceCounters*>(0);
-			}
-		}
-
 		static IPerformanceCounters* CLOOP_CARG cloopgetPageCountersDispatcher(IPerformanceStats* self) CLOOP_NOEXCEPT
 		{
 			try
@@ -22187,11 +22186,11 @@ namespace Firebird
 			}
 		}
 
-		static IPerformanceCounters* CLOOP_CARG cloopgetRelationCountersDispatcher(IPerformanceStats* self) CLOOP_NOEXCEPT
+		static IPerformanceCounters* CLOOP_CARG cloopgetTableCountersDispatcher(IPerformanceStats* self) CLOOP_NOEXCEPT
 		{
 			try
 			{
-				return static_cast<Name*>(self)->Name::getRelationCounters();
+				return static_cast<Name*>(self)->Name::getTableCounters();
 			}
 			catch (...)
 			{
@@ -22216,9 +22215,8 @@ namespace Firebird
 
 		virtual ISC_UINT64 getElapsedTime() = 0;
 		virtual ISC_UINT64 getFetchedRecords() = 0;
-		virtual IPerformanceCounters* getGlobalCounters() = 0;
 		virtual IPerformanceCounters* getPageCounters() = 0;
-		virtual IPerformanceCounters* getRelationCounters() = 0;
+		virtual IPerformanceCounters* getTableCounters() = 0;
 	};
 };
 

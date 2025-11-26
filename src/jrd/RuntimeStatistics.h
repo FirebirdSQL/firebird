@@ -83,7 +83,7 @@ public:
 	//
 	// dimitr:	Currently, they include page-level and record-level counters.
 	// 			However, this is not strictly required to maintain global record-level counters,
-	//			as they may be aggregated from the rel_counts array on demand. This would slow down
+	//			as they may be aggregated from the tableCounters array on demand. This would slow down
 	//			the retrieval of counters but save some CPU cycles inside tdbb->bumpStats().
 	//			As long as public struct PerformanceInfo don't include record-level counters,
 	//			this is not going to affect any existing applications/plugins.
@@ -169,49 +169,52 @@ private:
 	class CountsGroup : public CountsVector<T>
 	{
 	public:
-		explicit CountsGroup(Key key)
-			: m_key(key)
+		typedef Key ID;
+
+		explicit CountsGroup(ID id)
+			: m_id(id)
 		{}
 
-		Key getGroupKey() const
+		ID getGroupId() const
 		{
-			return m_key;
+			return m_id;
 		}
 
 		CountsGroup& operator+=(const CountsGroup& other)
 		{
-			fb_assert(m_key == other.m_key);
+			fb_assert(m_id == other.m_id);
 			CountsVector<T>::operator+=(other);
 			return *this;
 		}
 
 		CountsGroup& operator-=(const CountsGroup& other)
 		{
-			fb_assert(m_key == other.m_key);
+			fb_assert(m_id == other.m_id);
 			CountsVector<T>::operator-=(other);
 			return *this;
 		}
 
 		bool setToDiff(const CountsGroup& other)
 		{
-			fb_assert(m_key == other.m_key);
+			fb_assert(m_id == other.m_id);
 			return CountsVector<T>::setToDiff(other);
 		}
 
-		inline static const Key& generate(const CountsGroup& item)
+		inline static const ID& generate(const CountsGroup& item)
 		{
-			return item.m_key;
+			return item.m_id;
 		}
 
 	private:
-		Key m_key;
+		ID m_id;
 	};
 
-	template <class Counts, typename Key>
+	template <class Counts>
 	class GroupedCountsArray
 	{
+		typedef typename Counts::ID ID;
 		typedef Firebird::SortedArray<
-			Counts, Firebird::EmptyStorage<Counts>, Key, Counts> SortedCountsArray;
+			Counts, Firebird::EmptyStorage<Counts>, ID, Counts> SortedCountsArray;
 		typedef typename SortedCountsArray::const_iterator ConstIterator;
 
 	public:
@@ -223,16 +226,16 @@ private:
 			: m_counts(pool, other.m_counts.getCapacity())
 		{}
 
-		Counts& operator[](Key key)
+		Counts& operator[](ID id)
 		{
-			if ((m_lastPos != (FB_SIZE_T) ~0 && m_counts[m_lastPos].getGroupKey() == key) ||
+			if ((m_lastPos != (FB_SIZE_T) ~0 && m_counts[m_lastPos].getGroupId() == id) ||
 				// if m_lastPos is mispositioned
-				m_counts.find(key, m_lastPos))
+				m_counts.find(id, m_lastPos))
 			{
 				return m_counts[m_lastPos];
 			}
 
-			Counts counts(key);
+			Counts counts(id);
 			m_counts.insert(m_lastPos, counts);
 			return m_counts[m_lastPos];
 		}
@@ -247,11 +250,11 @@ private:
 			return Counts::getVectorCapacity();
 		}
 
-		void remove(Key key)
+		void remove(ID id)
 		{
-			if ((m_lastPos != (FB_SIZE_T) ~0 && m_counts[m_lastPos].getGroupKey() == key) ||
+			if ((m_lastPos != (FB_SIZE_T) ~0 && m_counts[m_lastPos].getGroupId() == id) ||
 				// if m_lastPos is mispositioned
-				m_counts.find(key, m_lastPos))
+				m_counts.find(id, m_lastPos))
 			{
 				m_counts.remove(m_lastPos);
 				m_lastPos = (FB_SIZE_T) ~0;
@@ -281,71 +284,68 @@ private:
 		FB_SIZE_T m_lastPos = (FB_SIZE_T) ~0;
 	};
 
-	typedef CountsGroup<PageStatType, ULONG> PageCounts;
-	typedef CountsGroup<RecordStatType, SLONG> RelationCounts;
-
 public:
-	typedef GroupedCountsArray<PageCounts, ULONG> PageCounters;
-	typedef GroupedCountsArray<RelationCounts, SLONG> RelationCounters;
+	typedef GroupedCountsArray<CountsGroup<PageStatType, ULONG> > PageCounters;
+	typedef GroupedCountsArray<CountsGroup<RecordStatType, SLONG> > TableCounters;
 
 	RuntimeStatistics()
 		: Firebird::AutoStorage(),
-		  page_counts(getPool(), DB_PAGE_SPACE + 1),
-		  rel_counts(getPool(), rel_MAX)
+		  pageCounters(getPool(), DB_PAGE_SPACE + 1),
+		  tableCounters(getPool(), rel_MAX)
 	{
 		reset();
 	}
 
 	explicit RuntimeStatistics(MemoryPool& pool)
 		: Firebird::AutoStorage(pool),
-		  page_counts(getPool(), DB_PAGE_SPACE + 1),
-		  rel_counts(getPool(), rel_MAX)
+		  pageCounters(getPool(), DB_PAGE_SPACE + 1),
+		  tableCounters(getPool(), rel_MAX)
 	{
 		reset();
 	}
 
 	RuntimeStatistics(const RuntimeStatistics& other)
 		: Firebird::AutoStorage(),
-		  page_counts(getPool(), other.page_counts),
-		  rel_counts(getPool(), other.rel_counts)
+		  pageCounters(getPool(), other.pageCounters),
+		  tableCounters(getPool(), other.tableCounters)
 	{
 		memcpy(values, other.values, sizeof(values));
 
-		page_counts = other.page_counts;
-		rel_counts = other.rel_counts;
+		pageCounters = other.pageCounters;
+		tableCounters = other.tableCounters;
 
 		allChgNumber = other.allChgNumber;
 		pageChgNumber = other.pageChgNumber;
-		relChgNumber = other.relChgNumber;
+		tabChgNumber = other.tabChgNumber;
 	}
 
 	RuntimeStatistics(MemoryPool& pool, const RuntimeStatistics& other)
 		: Firebird::AutoStorage(pool),
-		  page_counts(getPool(), other.page_counts),
-		  rel_counts(getPool(), other.rel_counts)
+		  pageCounters(getPool(), other.pageCounters),
+		  tableCounters(getPool(), other.tableCounters)
 	{
 		memcpy(values, other.values, sizeof(values));
 
-		page_counts = other.page_counts;
-		rel_counts = other.rel_counts;
+		pageCounters = other.pageCounters;
+		tableCounters = other.tableCounters;
 
 		allChgNumber = other.allChgNumber;
 		pageChgNumber = other.pageChgNumber;
-		relChgNumber = other.relChgNumber;
+		tabChgNumber = other.tabChgNumber;
 	}
 
 	~RuntimeStatistics() = default;
 
 	void reset()
 	{
-		memset(values, 0, sizeof values);
+		memset(values, 0, sizeof(values));
 
-		page_counts.reset();
-		rel_counts.reset();
+		pageCounters.reset();
+		tableCounters.reset();
 
 		allChgNumber = 0;
 		pageChgNumber = 0;
-		relChgNumber = 0;
+		tabChgNumber = 0;
 	}
 
 	const SINT64& operator[](const PageStatType type) const
@@ -363,7 +363,7 @@ public:
 		if (isValid()) // optimization for non-trivial data access
 		{
 			++pageChgNumber;
-			page_counts[pageSpaceId][type] += delta;
+			pageCounters[pageSpaceId][type] += delta;
 		}
 	}
 
@@ -377,7 +377,7 @@ public:
 	{
 		SINT64 value = 0;
 
-		for (const auto& counts : rel_counts)
+		for (const auto& counts : tableCounters)
 			value += counts[type];
 
 		return value;
@@ -391,8 +391,8 @@ public:
 
 		if (isValid()) // optimization for non-trivial data access
 		{
-			++relChgNumber;
-			rel_counts[relationId][type] += delta;
+			++tabChgNumber;
+			tableCounters[relationId][type] += delta;
 		}
 	}
 
@@ -417,14 +417,14 @@ public:
 
 			if (pageChgNumber != other.pageChgNumber)
 			{
-				page_counts = other.page_counts;
+				pageCounters = other.pageCounters;
 				pageChgNumber = other.pageChgNumber;
 			}
 
-			if (relChgNumber != other.relChgNumber)
+			if (tabChgNumber != other.tabChgNumber)
 			{
-				rel_counts = other.rel_counts;
-				relChgNumber = other.relChgNumber;
+				tableCounters = other.tableCounters;
+				tabChgNumber = other.tabChgNumber;
 			}
 		}
 
@@ -459,25 +459,20 @@ public:
 		SINT64 m_counter = 0;
 	};
 
-	const SINT64* getGlobalCounterVector() const
-	{
-		return values;
-	}
-
 	const PageCounters& getPageCounters() const
 	{
-		return page_counts;
+		return pageCounters;
 	}
 
-	const RelationCounters& getRelationCounters() const
+	const TableCounters& getTableCounters() const
 	{
-		return rel_counts;
+		return tableCounters;
 	}
 
 private:
 	SINT64 values[GLOBAL_ITEMS];
-	PageCounters page_counts;
-	RelationCounters rel_counts;
+	PageCounters pageCounters;
+	TableCounters tableCounters;
 
 	// These numbers are used in adjust() and assign() methods as "generation"
 	// values in order to avoid costly operations when two instances of RuntimeStatistics
@@ -485,7 +480,7 @@ private:
 	// same pair of class instances, as in Request.
 	ULONG allChgNumber;		// incremented when any counter changes
 	ULONG pageChgNumber;	// incremented when page counter changes
-	ULONG relChgNumber;		// incremented when relation counter changes
+	ULONG tabChgNumber;		// incremented when table counter changes
 
 	// This dummy RuntimeStatistics is used instead of missing elements in tdbb,
 	// helping us to avoid conditional checks in time-critical places of code.

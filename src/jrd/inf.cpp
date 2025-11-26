@@ -273,11 +273,11 @@ void INF_database_info(thread_db* tdbb,
 		resultBuffer.clear();
 		FB_SIZE_T bufferLength = 0;
 
-		for (const auto& counts : recordStats->getRelationCounters())
+		for (const auto& counts : recordStats->getTableCounters())
 		{
 			if (const SINT64 n = counts[type])
 			{
-				const USHORT relationId = counts.getGroupKey();
+				const USHORT relationId = counts.getGroupId();
 				const USHORT length = INF_convert(n, numBuffer);
 				const FB_SIZE_T newBufferLength = bufferLength + length + sizeof(USHORT);
 				resultBuffer.grow(newBufferLength);

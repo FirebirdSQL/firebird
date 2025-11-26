@@ -636,31 +636,44 @@ void TracePluginImpl::appendGlobalCounts(IPerformanceStats* stats)
 	temp.printf("%7" QUADFORMAT"d ms", stats->getElapsedTime());
 	record.append(temp);
 
-	const auto globalCounters = stats->getGlobalCounters();
-	const auto counterVector = globalCounters->getCounterVector(0);
+	const auto pageCounters = stats->getPageCounters();
 
-	if (const auto cnt = counterVector ? counterVector[PerformanceInfo::READS] : 0)
+	if (const auto count = pageCounters->getObjectCount())
 	{
-		temp.printf(", %" QUADFORMAT"d read(s)", cnt);
-		record.append(temp);
-	}
+		// Holds counters: IPerformanceCounters::PAGE_{FETCHES|READS|MARKS|WRITES}
+		static constexpr unsigned GLOBAL_COUNTERS = 4;
+		SINT64 globalCounters[GLOBAL_COUNTERS] = {0};
 
-	if (const auto cnt = counterVector ? counterVector[PerformanceInfo::WRITES] : 0)
-	{
-		temp.printf(", %" QUADFORMAT"d write(s)", cnt);
-		record.append(temp);
-	}
+		for (unsigned i = 0; i < count; i++)
+		{
+			const auto counters = pageCounters->getObjectCounters(i);
+			for (unsigned j = 0; j < GLOBAL_COUNTERS; j++)
+				globalCounters[j] += counters[j];
+		}
 
-	if (const auto cnt = counterVector ? counterVector[PerformanceInfo::FETCHES] : 0)
-	{
-		temp.printf(", %" QUADFORMAT"d fetch(es)", cnt);
-		record.append(temp);
-	}
+		if (const auto cnt = globalCounters[IPerformanceCounters::PAGE_READS])
+		{
+			temp.printf(", %" QUADFORMAT"d read(s)", cnt);
+			record.append(temp);
+		}
 
-	if (const auto cnt = counterVector ? counterVector[PerformanceInfo::MARKS] : 0)
-	{
-		temp.printf(", %" QUADFORMAT"d mark(s)", cnt);
-		record.append(temp);
+		if (const auto cnt = globalCounters[IPerformanceCounters::PAGE_WRITES])
+		{
+			temp.printf(", %" QUADFORMAT"d write(s)", cnt);
+			record.append(temp);
+		}
+
+		if (const auto cnt = globalCounters[IPerformanceCounters::PAGE_FETCHES])
+		{
+			temp.printf(", %" QUADFORMAT"d fetch(es)", cnt);
+			record.append(temp);
+		}
+
+		if (const auto cnt = globalCounters[IPerformanceCounters::PAGE_MARKS])
+		{
+			temp.printf(", %" QUADFORMAT"d mark(s)", cnt);
+			record.append(temp);
+		}
 	}
 
 	record.append(NEWLINE);
@@ -668,8 +681,8 @@ void TracePluginImpl::appendGlobalCounts(IPerformanceStats* stats)
 
 void TracePluginImpl::appendTableCounts(IPerformanceStats* stats)
 {
-	const auto relCounters = stats->getRelationCounters();
-	const auto count = relCounters->getCount();
+	const auto tableCounters = stats->getTableCounters();
+	const auto count = tableCounters->getObjectCount();
 
 	if (!config.print_perf || !count)
 		return;
@@ -677,7 +690,7 @@ void TracePluginImpl::appendTableCounts(IPerformanceStats* stats)
 	FB_SIZE_T max_len = 0;
 	for (unsigned i = 0; i < count; i++)
 	{
-		if (const auto relName = relCounters->getName(i))
+		if (const auto relName = tableCounters->getObjectName(i))
 		{
 			const FB_SIZE_T len = fb_strlen(relName);
 			if (max_len < len)
@@ -697,7 +710,7 @@ void TracePluginImpl::appendTableCounts(IPerformanceStats* stats)
 	string temp;
 	for (unsigned i = 0; i < count; i++)
 	{
-		const auto relName = relCounters->getName(i);
+		const auto relName = tableCounters->getObjectName(i);
 		if (relName && *relName)
 		{
 			record.append(relName);
@@ -705,19 +718,19 @@ void TracePluginImpl::appendTableCounts(IPerformanceStats* stats)
 		}
 		else
 		{
-			temp.printf("Table id <%u>", relCounters->getId(i));
+			temp.printf("Table id <%u>", tableCounters->getObjectId(i));
 			record.append(temp);
 			record.append(max_len - temp.length(), ' ');
 		}
 
-		const auto counterVector = relCounters->getCounterVector(i);
-		fb_assert(TraceCounts::EXPUNGES < relCounters->getVectorCapacity());
+		const auto counters = tableCounters->getObjectCounters(i);
 
 		string line;
 		bool nonZero = false;
-		for (unsigned j = 0; j <= TraceCounts::EXPUNGES; j++)
+		for (unsigned j = IPerformanceCounters::RECORD_SEQ_READS;
+			j <= IPerformanceCounters::RECORD_EXPUNGES; j++)
 		{
-			if (counterVector[j] == 0)
+			if (counters[j] == 0)
 			{
 				line.append(10, ' ');
 			}
@@ -725,7 +738,7 @@ void TracePluginImpl::appendTableCounts(IPerformanceStats* stats)
 			{
 				//fb_utils::exactNumericToStr(counterVector[j], 0, temp);
 				//record.append(' ', 10 - temp.length());
-				temp.printf("%10" QUADFORMAT"d", counterVector[j]);
+				temp.printf("%10" QUADFORMAT"d", counters[j]);
 				line.append(temp);
 				nonZero = true;
 			}

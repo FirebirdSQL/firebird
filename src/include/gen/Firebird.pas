@@ -778,16 +778,15 @@ type
 	IProfilerSession_afterRecordSourceGetRecordPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
 	IProfilerSession_defineStatement2Ptr = procedure(this: IProfilerSession; status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; schemaName: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar); cdecl;
 	IProfilerStats_getElapsedTicksPtr = function(this: IProfilerStats): QWord; cdecl;
-	IPerformanceCounters_getCountPtr = function(this: IPerformanceCounters): Cardinal; cdecl;
-	IPerformanceCounters_getVectorCapacityPtr = function(this: IPerformanceCounters): Cardinal; cdecl;
-	IPerformanceCounters_getIdPtr = function(this: IPerformanceCounters; index: Cardinal): Cardinal; cdecl;
-	IPerformanceCounters_getNamePtr = function(this: IPerformanceCounters; index: Cardinal): PAnsiChar; cdecl;
-	IPerformanceCounters_getCounterVectorPtr = function(this: IPerformanceCounters; index: Cardinal): Int64Ptr; cdecl;
+	IPerformanceCounters_getObjectCountPtr = function(this: IPerformanceCounters): Cardinal; cdecl;
+	IPerformanceCounters_getCountersCapacityPtr = function(this: IPerformanceCounters): Cardinal; cdecl;
+	IPerformanceCounters_getObjectIdPtr = function(this: IPerformanceCounters; index: Cardinal): Cardinal; cdecl;
+	IPerformanceCounters_getObjectNamePtr = function(this: IPerformanceCounters; index: Cardinal): PAnsiChar; cdecl;
+	IPerformanceCounters_getObjectCountersPtr = function(this: IPerformanceCounters; index: Cardinal): Int64Ptr; cdecl;
 	IPerformanceStats_getElapsedTimePtr = function(this: IPerformanceStats): QWord; cdecl;
 	IPerformanceStats_getFetchedRecordsPtr = function(this: IPerformanceStats): QWord; cdecl;
-	IPerformanceStats_getGlobalCountersPtr = function(this: IPerformanceStats): IPerformanceCounters; cdecl;
 	IPerformanceStats_getPageCountersPtr = function(this: IPerformanceStats): IPerformanceCounters; cdecl;
-	IPerformanceStats_getRelationCountersPtr = function(this: IPerformanceStats): IPerformanceCounters; cdecl;
+	IPerformanceStats_getTableCountersPtr = function(this: IPerformanceStats): IPerformanceCounters; cdecl;
 
 	VersionedVTable = class
 		version: NativeInt;
@@ -4064,39 +4063,57 @@ type
 	end;
 
 	PerformanceCountersVTable = class(VersionedVTable)
-		getCount: IPerformanceCounters_getCountPtr;
-		getVectorCapacity: IPerformanceCounters_getVectorCapacityPtr;
-		getId: IPerformanceCounters_getIdPtr;
-		getName: IPerformanceCounters_getNamePtr;
-		getCounterVector: IPerformanceCounters_getCounterVectorPtr;
+		getObjectCount: IPerformanceCounters_getObjectCountPtr;
+		getCountersCapacity: IPerformanceCounters_getCountersCapacityPtr;
+		getObjectId: IPerformanceCounters_getObjectIdPtr;
+		getObjectName: IPerformanceCounters_getObjectNamePtr;
+		getObjectCounters: IPerformanceCounters_getObjectCountersPtr;
 	end;
 
 	IPerformanceCounters = class(IVersioned)
 		const VERSION = 2;
+		const PAGE_FETCHES = Cardinal(0);
+		const PAGE_READS = Cardinal(1);
+		const PAGE_MARKS = Cardinal(2);
+		const PAGE_WRITES = Cardinal(3);
+		const RECORD_SEQ_READS = Cardinal(0);
+		const RECORD_IDX_READS = Cardinal(1);
+		const RECORD_UPDATES = Cardinal(2);
+		const RECORD_INSERTS = Cardinal(3);
+		const RECORD_DELETES = Cardinal(4);
+		const RECORD_BACKOUTS = Cardinal(5);
+		const RECORD_PURGES = Cardinal(6);
+		const RECORD_EXPUNGES = Cardinal(7);
+		const RECORD_LOCKS = Cardinal(8);
+		const RECORD_WAITS = Cardinal(9);
+		const RECORD_CONFLICTS = Cardinal(10);
+		const RECORD_BACK_READS = Cardinal(11);
+		const RECORD_FRAGMENT_READS = Cardinal(12);
+		const RECORD_RPT_READS = Cardinal(13);
+		const RECORD_IMGC = Cardinal(14);
 
-		function getCount(): Cardinal;
-		function getVectorCapacity(): Cardinal;
-		function getId(index: Cardinal): Cardinal;
-		function getName(index: Cardinal): PAnsiChar;
-		function getCounterVector(index: Cardinal): Int64Ptr;
+		function getObjectCount(): Cardinal;
+		function getCountersCapacity(): Cardinal;
+		function getObjectId(index: Cardinal): Cardinal;
+		function getObjectName(index: Cardinal): PAnsiChar;
+		function getObjectCounters(index: Cardinal): Int64Ptr;
 	end;
 
 	IPerformanceCountersImpl = class(IPerformanceCounters)
 		constructor create;
 
-		function getCount(): Cardinal; virtual; abstract;
-		function getVectorCapacity(): Cardinal; virtual; abstract;
-		function getId(index: Cardinal): Cardinal; virtual; abstract;
-		function getName(index: Cardinal): PAnsiChar; virtual; abstract;
-		function getCounterVector(index: Cardinal): Int64Ptr; virtual; abstract;
+		function getObjectCount(): Cardinal; virtual; abstract;
+		function getCountersCapacity(): Cardinal; virtual; abstract;
+		function getObjectId(index: Cardinal): Cardinal; virtual; abstract;
+		function getObjectName(index: Cardinal): PAnsiChar; virtual; abstract;
+		function getObjectCounters(index: Cardinal): Int64Ptr; virtual; abstract;
 	end;
 
 	PerformanceStatsVTable = class(VersionedVTable)
 		getElapsedTime: IPerformanceStats_getElapsedTimePtr;
 		getFetchedRecords: IPerformanceStats_getFetchedRecordsPtr;
-		getGlobalCounters: IPerformanceStats_getGlobalCountersPtr;
 		getPageCounters: IPerformanceStats_getPageCountersPtr;
-		getRelationCounters: IPerformanceStats_getRelationCountersPtr;
+		getTableCounters: IPerformanceStats_getTableCountersPtr;
 	end;
 
 	IPerformanceStats = class(IVersioned)
@@ -4104,9 +4121,8 @@ type
 
 		function getElapsedTime(): QWord;
 		function getFetchedRecords(): QWord;
-		function getGlobalCounters(): IPerformanceCounters;
 		function getPageCounters(): IPerformanceCounters;
-		function getRelationCounters(): IPerformanceCounters;
+		function getTableCounters(): IPerformanceCounters;
 	end;
 
 	IPerformanceStatsImpl = class(IPerformanceStats)
@@ -4114,9 +4130,8 @@ type
 
 		function getElapsedTime(): QWord; virtual; abstract;
 		function getFetchedRecords(): QWord; virtual; abstract;
-		function getGlobalCounters(): IPerformanceCounters; virtual; abstract;
 		function getPageCounters(): IPerformanceCounters; virtual; abstract;
-		function getRelationCounters(): IPerformanceCounters; virtual; abstract;
+		function getTableCounters(): IPerformanceCounters; virtual; abstract;
 	end;
 
 {$IFNDEF NO_FBCLIENT}
@@ -10203,29 +10218,29 @@ begin
 	Result := ProfilerStatsVTable(vTable).getElapsedTicks(Self);
 end;
 
-function IPerformanceCounters.getCount(): Cardinal;
+function IPerformanceCounters.getObjectCount(): Cardinal;
 begin
-	Result := PerformanceCountersVTable(vTable).getCount(Self);
+	Result := PerformanceCountersVTable(vTable).getObjectCount(Self);
 end;
 
-function IPerformanceCounters.getVectorCapacity(): Cardinal;
+function IPerformanceCounters.getCountersCapacity(): Cardinal;
 begin
-	Result := PerformanceCountersVTable(vTable).getVectorCapacity(Self);
+	Result := PerformanceCountersVTable(vTable).getCountersCapacity(Self);
 end;
 
-function IPerformanceCounters.getId(index: Cardinal): Cardinal;
+function IPerformanceCounters.getObjectId(index: Cardinal): Cardinal;
 begin
-	Result := PerformanceCountersVTable(vTable).getId(Self, index);
+	Result := PerformanceCountersVTable(vTable).getObjectId(Self, index);
 end;
 
-function IPerformanceCounters.getName(index: Cardinal): PAnsiChar;
+function IPerformanceCounters.getObjectName(index: Cardinal): PAnsiChar;
 begin
-	Result := PerformanceCountersVTable(vTable).getName(Self, index);
+	Result := PerformanceCountersVTable(vTable).getObjectName(Self, index);
 end;
 
-function IPerformanceCounters.getCounterVector(index: Cardinal): Int64Ptr;
+function IPerformanceCounters.getObjectCounters(index: Cardinal): Int64Ptr;
 begin
-	Result := PerformanceCountersVTable(vTable).getCounterVector(Self, index);
+	Result := PerformanceCountersVTable(vTable).getObjectCounters(Self, index);
 end;
 
 function IPerformanceStats.getElapsedTime(): QWord;
@@ -10238,19 +10253,14 @@ begin
 	Result := PerformanceStatsVTable(vTable).getFetchedRecords(Self);
 end;
 
-function IPerformanceStats.getGlobalCounters(): IPerformanceCounters;
-begin
-	Result := PerformanceStatsVTable(vTable).getGlobalCounters(Self);
-end;
-
 function IPerformanceStats.getPageCounters(): IPerformanceCounters;
 begin
 	Result := PerformanceStatsVTable(vTable).getPageCounters(Self);
 end;
 
-function IPerformanceStats.getRelationCounters(): IPerformanceCounters;
+function IPerformanceStats.getTableCounters(): IPerformanceCounters;
 begin
-	Result := PerformanceStatsVTable(vTable).getRelationCounters(Self);
+	Result := PerformanceStatsVTable(vTable).getTableCounters(Self);
 end;
 
 var
@@ -17827,51 +17837,51 @@ begin
 	vTable := IProfilerStatsImpl_vTable;
 end;
 
-function IPerformanceCountersImpl_getCountDispatcher(this: IPerformanceCounters): Cardinal; cdecl;
+function IPerformanceCountersImpl_getObjectCountDispatcher(this: IPerformanceCounters): Cardinal; cdecl;
 begin
 	Result := 0;
 	try
-		Result := IPerformanceCountersImpl(this).getCount();
+		Result := IPerformanceCountersImpl(this).getObjectCount();
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
 end;
 
-function IPerformanceCountersImpl_getVectorCapacityDispatcher(this: IPerformanceCounters): Cardinal; cdecl;
+function IPerformanceCountersImpl_getCountersCapacityDispatcher(this: IPerformanceCounters): Cardinal; cdecl;
 begin
 	Result := 0;
 	try
-		Result := IPerformanceCountersImpl(this).getVectorCapacity();
+		Result := IPerformanceCountersImpl(this).getCountersCapacity();
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
 end;
 
-function IPerformanceCountersImpl_getIdDispatcher(this: IPerformanceCounters; index: Cardinal): Cardinal; cdecl;
+function IPerformanceCountersImpl_getObjectIdDispatcher(this: IPerformanceCounters; index: Cardinal): Cardinal; cdecl;
 begin
 	Result := 0;
 	try
-		Result := IPerformanceCountersImpl(this).getId(index);
+		Result := IPerformanceCountersImpl(this).getObjectId(index);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
 end;
 
-function IPerformanceCountersImpl_getNameDispatcher(this: IPerformanceCounters; index: Cardinal): PAnsiChar; cdecl;
+function IPerformanceCountersImpl_getObjectNameDispatcher(this: IPerformanceCounters; index: Cardinal): PAnsiChar; cdecl;
 begin
 	Result := nil;
 	try
-		Result := IPerformanceCountersImpl(this).getName(index);
+		Result := IPerformanceCountersImpl(this).getObjectName(index);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
 end;
 
-function IPerformanceCountersImpl_getCounterVectorDispatcher(this: IPerformanceCounters; index: Cardinal): Int64Ptr; cdecl;
+function IPerformanceCountersImpl_getObjectCountersDispatcher(this: IPerformanceCounters; index: Cardinal): Int64Ptr; cdecl;
 begin
 	Result := nil;
 	try
-		Result := IPerformanceCountersImpl(this).getCounterVector(index);
+		Result := IPerformanceCountersImpl(this).getObjectCounters(index);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
@@ -17905,16 +17915,6 @@ begin
 	end
 end;
 
-function IPerformanceStatsImpl_getGlobalCountersDispatcher(this: IPerformanceStats): IPerformanceCounters; cdecl;
-begin
-	Result := nil;
-	try
-		Result := IPerformanceStatsImpl(this).getGlobalCounters();
-	except
-		on e: Exception do FbException.catchException(nil, e);
-	end
-end;
-
 function IPerformanceStatsImpl_getPageCountersDispatcher(this: IPerformanceStats): IPerformanceCounters; cdecl;
 begin
 	Result := nil;
@@ -17925,11 +17925,11 @@ begin
 	end
 end;
 
-function IPerformanceStatsImpl_getRelationCountersDispatcher(this: IPerformanceStats): IPerformanceCounters; cdecl;
+function IPerformanceStatsImpl_getTableCountersDispatcher(this: IPerformanceStats): IPerformanceCounters; cdecl;
 begin
 	Result := nil;
 	try
-		Result := IPerformanceStatsImpl(this).getRelationCounters();
+		Result := IPerformanceStatsImpl(this).getTableCounters();
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
@@ -19010,19 +19010,18 @@ initialization
 
 	IPerformanceCountersImpl_vTable := PerformanceCountersVTable.create;
 	IPerformanceCountersImpl_vTable.version := 2;
-	IPerformanceCountersImpl_vTable.getCount := @IPerformanceCountersImpl_getCountDispatcher;
-	IPerformanceCountersImpl_vTable.getVectorCapacity := @IPerformanceCountersImpl_getVectorCapacityDispatcher;
-	IPerformanceCountersImpl_vTable.getId := @IPerformanceCountersImpl_getIdDispatcher;
-	IPerformanceCountersImpl_vTable.getName := @IPerformanceCountersImpl_getNameDispatcher;
-	IPerformanceCountersImpl_vTable.getCounterVector := @IPerformanceCountersImpl_getCounterVectorDispatcher;
+	IPerformanceCountersImpl_vTable.getObjectCount := @IPerformanceCountersImpl_getObjectCountDispatcher;
+	IPerformanceCountersImpl_vTable.getCountersCapacity := @IPerformanceCountersImpl_getCountersCapacityDispatcher;
+	IPerformanceCountersImpl_vTable.getObjectId := @IPerformanceCountersImpl_getObjectIdDispatcher;
+	IPerformanceCountersImpl_vTable.getObjectName := @IPerformanceCountersImpl_getObjectNameDispatcher;
+	IPerformanceCountersImpl_vTable.getObjectCounters := @IPerformanceCountersImpl_getObjectCountersDispatcher;
 
 	IPerformanceStatsImpl_vTable := PerformanceStatsVTable.create;
 	IPerformanceStatsImpl_vTable.version := 2;
 	IPerformanceStatsImpl_vTable.getElapsedTime := @IPerformanceStatsImpl_getElapsedTimeDispatcher;
 	IPerformanceStatsImpl_vTable.getFetchedRecords := @IPerformanceStatsImpl_getFetchedRecordsDispatcher;
-	IPerformanceStatsImpl_vTable.getGlobalCounters := @IPerformanceStatsImpl_getGlobalCountersDispatcher;
 	IPerformanceStatsImpl_vTable.getPageCounters := @IPerformanceStatsImpl_getPageCountersDispatcher;
-	IPerformanceStatsImpl_vTable.getRelationCounters := @IPerformanceStatsImpl_getRelationCountersDispatcher;
+	IPerformanceStatsImpl_vTable.getTableCounters := @IPerformanceStatsImpl_getTableCountersDispatcher;
 
 finalization
 	IVersionedImpl_vTable.destroy;

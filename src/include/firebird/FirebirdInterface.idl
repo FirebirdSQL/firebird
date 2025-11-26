@@ -1899,12 +1899,35 @@ interface ProfilerStats : Versioned
 
 interface PerformanceCounters : Versioned
 {
-	uint getCount();
-	uint getVectorCapacity();
+	// Page-level performance counters (grouped per tablespace)
+	const uint PAGE_FETCHES = 0;
+	const uint PAGE_READS = 1;
+	const uint PAGE_MARKS = 2;
+	const uint PAGE_WRITES = 3;
 
-	uint getId(uint index);
-	const string getName(uint index);
-	const int64* getCounterVector(uint index);
+	// Record-level performance counters (grouped per table)
+	const uint RECORD_SEQ_READS = 0;
+	const uint RECORD_IDX_READS = 1;
+	const uint RECORD_UPDATES = 2;
+	const uint RECORD_INSERTS = 3;
+	const uint RECORD_DELETES = 4;
+	const uint RECORD_BACKOUTS = 5;
+	const uint RECORD_PURGES = 6;
+	const uint RECORD_EXPUNGES = 7;
+	const uint RECORD_LOCKS = 8;
+	const uint RECORD_WAITS = 9;
+	const uint RECORD_CONFLICTS = 10;
+	const uint RECORD_BACK_READS = 11;
+	const uint RECORD_FRAGMENT_READS = 12;
+	const uint RECORD_RPT_READS = 13;
+	const uint RECORD_IMGC = 14;
+
+	uint getObjectCount();
+	uint getCountersCapacity();
+
+	uint getObjectId(uint index);
+	const string getObjectName(uint index);
+	const int64* getObjectCounters(uint index);
 }
 
 interface PerformanceStats : Versioned
@@ -1912,8 +1935,7 @@ interface PerformanceStats : Versioned
 	uint64 getElapsedTime();	// in milliseconds
 	uint64 getFetchedRecords();
 
-	PerformanceCounters getGlobalCounters();
 	PerformanceCounters getPageCounters();
-	PerformanceCounters getRelationCounters();
+	PerformanceCounters getTableCounters();
 }
 
