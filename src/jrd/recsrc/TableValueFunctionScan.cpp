@@ -522,12 +522,25 @@ bool GenSeriesFunctionScan::nextBuffer(thread_db* tdbb) const
 			fromDesc.makeInt64(impure->m_scale, &result);
 			assignParameter(tdbb, &fromDesc, toDesc, 0, record);
 
-			// Prevent freezing at boundary values
-			if (((step < 0) && (result == MIN_SINT64)) ||
-				((step > 0) && (result == MAX_SINT64)))
+			// Prevents overflows for SINT64 type at boundary values
+			bool reachedBoundary = false;
+			if (step > 0)
 			{
-				impure->m_step.vlu_int64 = 0;
+				if (result > MAX_SINT64 - step)
+					reachedBoundary = true;
+				else
+					reachedBoundary = (result + step > finish);
 			}
+			else if (step < 0)
+			{
+				if (result < MIN_SINT64 - step)
+					reachedBoundary = true;
+				else
+					reachedBoundary = (result + step < finish);
+			}
+
+			if ((result == finish) || reachedBoundary)
+				impure->m_step.vlu_int64 = 0;
 			else
 			    result += step;
 
@@ -553,14 +566,28 @@ bool GenSeriesFunctionScan::nextBuffer(thread_db* tdbb) const
 			fromDesc.makeInt128(impure->m_scale, &result);
 			assignParameter(tdbb, &fromDesc, toDesc, 0, record);
 
-			// Prevent freezing at boundary values
-			if (((step.sign() < 0) && (result.compare(MIN_Int128) == 0)) ||
-				((step.sign() > 0) && (result.compare(MAX_Int128) == 0)))
+			// Prevents overflows for INT128 type at boundary values
+			bool reachedBoundary = false;
+			if (step.sign() > 0)
 			{
-				impure->m_step.vlu_int128.set(0, 0);
+				if (result.compare(MAX_Int128.sub(step)) > 0)
+					reachedBoundary = true;
+				else
+					reachedBoundary = (result.add(step).compare(finish) > 0);
 			}
+			else if (step.sign() < 0)
+			{
+				if (result.compare(MIN_Int128.sub(step)) < 0)
+					reachedBoundary = true;
+				else
+					reachedBoundary = (result.add(step).compare(finish) < 0);
+			}
+
+			if (reachedBoundary || (result.compare(finish) == 0))
+				impure->m_step.vlu_int128.set(0, 0);
 			else
 				result = result.add(step);
+
 			impure->m_result.vlu_int128 = result;
 
 			return true;
