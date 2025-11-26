@@ -1123,11 +1123,9 @@ PercentileAggNode::PercentileAggNode(MemoryPool& pool, PercentileType aType, Val
 void PercentileAggNode::parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned /*count*/)
 {
 	arg = PAR_parse_value(tdbb, csb);
+	valueArg = PAR_parse_value(tdbb, csb);
 	if (csb->csb_blr_reader.peekByte() == blr_sort)
-	{
 		sort = PAR_sort(tdbb, csb, blr_sort, true);
-		valueArg = sort->expressions[0];
-	}
 }
 
 bool PercentileAggNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const
@@ -1145,9 +1143,8 @@ void PercentileAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 	fb_assert(dsqlOrderClause);
 	if (dsqlOrderClause->items.getCount() != 1)
 	{
-		ERR_post(Arg::Gds(isc_wronumarg)); // WITHIN GROUP should only 1 ORDER item
+		ERR_post(Arg::Gds(isc_percetile_only_one_sort_item)); 
 	}
-
 
 	if (type == TYPE_PERCENTILE_DISC)
 	{
@@ -1220,8 +1217,6 @@ AggNode* PercentileAggNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
 	AggNode::pass2(tdbb, csb);
 
-	// We need a second descriptor in the impure area for PERCENTILE.
-	impure2Offset = csb->allocImpure<impure_value_ex>();
 	// impure area for calculate border
 	percentileImpureOffset = csb->allocImpure<PercentileImpure>();
 
@@ -1246,11 +1241,8 @@ void PercentileAggNode::aggInit(thread_db* tdbb, Request* request) const
 	impure->vlu_desc.dsc_dtype = 0;
 	impure->vlux_count = 0;
 
-	impure_value_ex* impure2 = request->getImpure<impure_value_ex>(impure2Offset);
-	impure2->vlu_desc.dsc_dtype = 0;
-	impure2->vlux_count = 0;
-
 	PercentileImpure* percentileImpure = request->getImpure<PercentileImpure>(percentileImpureOffset);
+	percentileImpure->vlux_count = 0;
 	percentileImpure->rn = 0;
 	percentileImpure->crn = 0;
 	percentileImpure->frn = 0;
@@ -1268,11 +1260,8 @@ bool PercentileAggNode::aggPass(thread_db* tdbb, Request* request) const
 	if (!desc)
 		return false;
 
-	if (desc->isNull())
-		return false;
-
-	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-	if (impure->vlux_count++ == 0)		// first call to aggPass()
+	PercentileImpure* percentileImpure = request->getImpure<PercentileImpure>(percentileImpureOffset);
+	if (percentileImpure->vlux_count++ == 0)		// first call to aggPass()
 	{
 		if ((type == TYPE_PERCENTILE_CONT) && !desc->isNumeric())	
 			ERRD_post(Arg::Gds(isc_argmustbe_numeric_function) << Arg::Str("PERCENTILE_CONT"));
@@ -1280,8 +1269,8 @@ bool PercentileAggNode::aggPass(thread_db* tdbb, Request* request) const
 		if (desc->isBlob())
 			ERRD_post(Arg::Gds(isc_blobnotsup) << Arg::Str("ORDER BY"));		
 		
-		const auto percentile_value = MOV_get_double(tdbb, percenteDesc);
-		if ((percentile_value < 0) || (percentile_value > 1))
+		const auto percentileValue = MOV_get_double(tdbb, percenteDesc);
+		if ((percentileValue < 0) || (percentileValue > 1))
 		{
 			if (type == TYPE_PERCENTILE_DISC)
 				ERRD_post(Arg::Gds(isc_sysf_argmustbe_range_inc0_1) << Arg::Str("PERCENTILE_DISC"));
@@ -1289,7 +1278,7 @@ bool PercentileAggNode::aggPass(thread_db* tdbb, Request* request) const
 				ERRD_post(Arg::Gds(isc_sysf_argmustbe_range_inc0_1) << Arg::Str("PERCENTILE_CONT"));
 		}
 
-		impure->vlu_misc.vlu_double = percentile_value;
+		percentileImpure->percentile = percentileValue;
 	}
 
 	if (sort)
@@ -1308,7 +1297,7 @@ bool PercentileAggNode::aggPass(thread_db* tdbb, Request* request) const
 		for (auto& nodeOrder : sort->expressions)
 		{
 			dsc toDesc = *(descOrder++);
-			toDesc.dsc_address = data + (IPTR)toDesc.dsc_address;
+			toDesc.dsc_address = data + (IPTR) toDesc.dsc_address;
 			if (const auto fromDsc = EVL_expr(tdbb, request, nodeOrder))
 			{
 				if (IS_INTL_DATA(fromDsc))
@@ -1327,7 +1316,7 @@ bool PercentileAggNode::aggPass(thread_db* tdbb, Request* request) const
 		}
 
 		dsc toDesc = asb->desc;
-		toDesc.dsc_address = data + (IPTR)toDesc.dsc_address;
+		toDesc.dsc_address = data + (IPTR) toDesc.dsc_address;
 		MOV_move(tdbb, desc, &toDesc);
 
 		return true;
@@ -1339,28 +1328,27 @@ bool PercentileAggNode::aggPass(thread_db* tdbb, Request* request) const
 void PercentileAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
-	impure_value_ex* impure2 = request->getImpure<impure_value_ex>(impure2Offset);
 	PercentileImpure* percentileImpure = request->getImpure<PercentileImpure>(percentileImpureOffset);
 
 	if (type == TYPE_PERCENTILE_DISC)
 	{
-		if (impure2->vlux_count++ == 0)
+		if (impure->vlux_count++ == 0)
 		{
 			// calculate only ones
-			percentileImpure->rn = impure->vlu_misc.vlu_double * impure->vlux_count;
+			percentileImpure->rn = percentileImpure->percentile * percentileImpure->vlux_count;
 			percentileImpure->crn = MAX(static_cast<SINT64>(ceil(percentileImpure->rn)), 1);
 		}
 
-		if (impure2->vlux_count == percentileImpure->crn)
-		{
-			EVL_make_value(tdbb, desc, impure2);
-		}
+		if (impure->vlux_count == percentileImpure->crn)
+			EVL_make_value(tdbb, desc, impure);
+
 	}
-	else {
-		if (impure2->vlux_count++ == 0)
+	else 
+	{
+		if (impure->vlux_count++ == 0)
 		{
 			// calculate only ones
-			percentileImpure->rn = 1 + impure->vlu_misc.vlu_double * (impure->vlux_count - 1);
+			percentileImpure->rn = 1 + percentileImpure->percentile * (percentileImpure->vlux_count - 1);
 			percentileImpure->crn = static_cast<SINT64>(ceil(percentileImpure->rn));
 			percentileImpure->frn = static_cast<SINT64>(floor(percentileImpure->rn));
 			
@@ -1369,31 +1357,31 @@ void PercentileAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) co
 				DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
 				Firebird::Decimal128 d128;
 				d128.set(0, decSt, 0);
-				impure2->make_decimal128(d128);
+				impure->make_decimal128(d128);
 			}
 			else
-				impure2->make_double(0);
+				impure->make_double(0);
 		}
 
 		if (percentileImpure->crn == percentileImpure->frn)
 		{
-			if (impure2->vlux_count == percentileImpure->frn)
+			if (impure->vlux_count == percentileImpure->frn)
 			{
 				if (desc->isDecOrInt128())
 				{
 					const auto value = MOV_get_dec128(tdbb, desc);
-					impure2->make_decimal128(value);
+					impure->make_decimal128(value);
 				}
 				else
 				{
 					const auto value = MOV_get_double(tdbb, desc);
-					impure2->make_double(value);
+					impure->make_double(value);
 				}
 			}
 		}
 		else
 		{
-			if (impure2->vlux_count == percentileImpure->frn)
+			if (impure->vlux_count == percentileImpure->frn)
 			{
 				if (desc->isDecOrInt128())
 				{
@@ -1401,16 +1389,17 @@ void PercentileAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) co
 					const auto value = MOV_get_dec128(tdbb, desc);
 					Firebird::Decimal128 d128;
 					d128.set(percentileImpure->crn - percentileImpure->rn, decSt);
-					const auto part = impure2->vlu_misc.vlu_dec128.add(decSt, value.mul(decSt, d128));
-					impure2->make_decimal128(part);
+					const auto part = impure->vlu_misc.vlu_dec128.add(decSt, value.mul(decSt, d128));
+					impure->make_decimal128(part);
 				}
 				else
 				{
 					const auto value = MOV_get_double(tdbb, desc);
-					impure2->vlu_misc.vlu_double += value * (percentileImpure->crn - percentileImpure->rn);
+					impure->vlu_misc.vlu_double += value * (percentileImpure->crn - percentileImpure->rn);
 				}
 			}
-			if (impure2->vlux_count == percentileImpure->crn)
+
+			if (impure->vlux_count == percentileImpure->crn)
 			{
 				if (desc->isDecOrInt128())
 				{
@@ -1418,13 +1407,13 @@ void PercentileAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) co
 					const auto value = MOV_get_dec128(tdbb, desc);
 					Firebird::Decimal128 d128;
 					d128.set(percentileImpure->rn - percentileImpure->frn, decSt);
-					const auto part = impure2->vlu_misc.vlu_dec128.add(decSt, value.mul(decSt, d128));
-					impure2->make_decimal128(part);
+					const auto part = impure->vlu_misc.vlu_dec128.add(decSt, value.mul(decSt, d128));
+					impure->make_decimal128(part);
 				}
 				else
 				{
 					const auto value = MOV_get_double(tdbb, desc);
-					impure2->vlu_misc.vlu_double += value * (percentileImpure->rn - percentileImpure->frn);
+					impure->vlu_misc.vlu_double += value * (percentileImpure->rn - percentileImpure->frn);
 				}
 			}
 		}
@@ -1433,12 +1422,12 @@ void PercentileAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) co
 
 dsc* PercentileAggNode::aggExecute(thread_db* tdbb, Request* request) const
 {
-	impure_value_ex* impure2 = request->getImpure<impure_value_ex>(impure2Offset);
+	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 
-	if (!impure2->vlux_count || !impure2->vlu_desc.dsc_dtype)
+	if (!impure->vlux_count || !impure->vlu_desc.dsc_dtype)
 		return nullptr;
 
-	return &impure2->vlu_desc;
+	return &impure->vlu_desc;
 }
 
 AggNode* PercentileAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
