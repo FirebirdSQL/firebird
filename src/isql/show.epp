@@ -4290,11 +4290,13 @@ static processing_state show_foreign_user_mappings(const std::optional<MetaStrin
 		SORTED BY FM.RDB$USER
 		{
 			const MetaString userName(FM.RDB$USER);
-				if (first && msg)
-					isqlGlob.printf("%s%s", msg, NEWLINE);
+			const MetaString serverName(FM.RDB$FOREIGN_SERVER_NAME);
+			if (first && msg)
+				isqlGlob.printf("%s%s", msg, NEWLINE);
 
-				first = false;
-				isqlGlob.printf("User mapping for %s%s", IUTILS_name_to_string(userName).c_str(), NEWLINE);
+			first = false;
+			isqlGlob.printf("User mapping for %s server %s%s", IUTILS_name_to_string(userName).c_str(),
+				IUTILS_name_to_string(serverName).c_str(), NEWLINE);
 		}
 		END_FOR
 		ON_ERROR
