@@ -407,54 +407,41 @@ void GenSeriesFunctionScan::internalOpen(thread_db* tdbb) const
 	const auto impure = request->getImpure<Impure>(m_impure);
 	impure->m_recordBuffer = nullptr;
 
-	// common scale
-	impure->m_scale = MIN(MIN(startDesc->dsc_scale, finishDesc->dsc_scale), stepDesc->dsc_scale);
-	// common type
-	impure->m_dtype = MAX(MAX(startDesc->dsc_dtype, finishDesc->dsc_dtype), stepDesc->dsc_dtype);
+	ArithmeticNode::getDescDialect3(tdbb, &impure->m_result.vlu_desc, *startDesc, *stepDesc, blr_add, &impure->m_scale, &impure->m_flags);
 
-	if (impure->m_dtype != dtype_int128)
+	SLONG zero = 0;
+	dsc zeroDesc;
+	zeroDesc.makeLong(0, &zero);
+	impure->m_stepSign = MOV_compare(tdbb, stepDesc, &zeroDesc);
+
+	if (impure->m_stepSign == 0)
+		status_exception::raise(Arg::Gds(isc_genseq_stepmustbe_nonzero) << Arg::Str(m_name));
+
+	const auto boundaryComparison = MOV_compare(tdbb, startDesc, finishDesc);
+	// validate parameter value
+	if (((impure->m_stepSign > 0) && (boundaryComparison > 0)) ||
+		((impure->m_stepSign < 0) && (boundaryComparison < 0)))
 	{
-		const auto start = MOV_get_int64(tdbb, startDesc, impure->m_scale);
-		const auto finish = MOV_get_int64(tdbb, finishDesc, impure->m_scale);
-		const auto step = MOV_get_int64(tdbb, stepDesc, impure->m_scale);
-
-		if (step == 0)
-			status_exception::raise(Arg::Gds(isc_genseq_stepmustbe_nonzero) << Arg::Str(m_name));
-
-		// validate parameter value
-		if (((step > 0) && (start > finish)) ||
-			((step < 0) && (start < finish)))
-		{
-			return;
-		}
-
-		impure->m_start.vlu_int64 = start;
-		impure->m_finish.vlu_int64 = finish;
-		impure->m_step.vlu_int64 = step;
-		impure->m_result.vlu_int64 = start;
-	}
-	else
-	{
-		const auto start = MOV_get_int128(tdbb, startDesc, impure->m_scale);
-		const auto finish = MOV_get_int128(tdbb, finishDesc, impure->m_scale);
-		const auto step = MOV_get_int128(tdbb, stepDesc, impure->m_scale);
-
-		if (step.sign() == 0)
-			status_exception::raise(Arg::Gds(isc_genseq_stepmustbe_nonzero) << Arg::Str(m_name));
-
-		// validate parameter value
-		if (((step.sign() > 0) && (start.compare(finish) > 0)) ||
-			((step.sign() < 0) && (start.compare(finish) < 0)))
-		{
-			return;
-		}
-
-		impure->m_start.vlu_int128 = start;
-		impure->m_finish.vlu_int128 = finish;
-		impure->m_step.vlu_int128 = step;
-		impure->m_result.vlu_int128 = start;
+		return;
 	}
 
+	EVL_make_value(tdbb, startDesc, &impure->m_start);
+	EVL_make_value(tdbb, finishDesc, &impure->m_finish);
+	EVL_make_value(tdbb, stepDesc, &impure->m_step);
+
+	switch (impure->m_result.vlu_desc.dsc_dtype) {
+	case dtype_int64:
+		impure->m_result.vlu_desc.dsc_address = reinterpret_cast<UCHAR*>(&impure->m_result.vlu_misc.vlu_int64);
+		break;
+	case dtype_int128:
+		impure->m_result.vlu_desc.dsc_address = reinterpret_cast<UCHAR*>(&impure->m_result.vlu_misc.vlu_int128);
+		break;
+	default:
+		fb_assert(false);
+	}
+	// result = start
+	MOV_move(tdbb, startDesc, &impure->m_result.vlu_desc);
+	
 	impure->irsb_flags |= irsb_open;
 
 	VIO_record(tdbb, rpb, m_format, &pool);
@@ -505,93 +492,40 @@ bool GenSeriesFunctionScan::nextBuffer(thread_db* tdbb) const
 	const auto request = tdbb->getRequest();
 	const auto impure = request->getImpure<Impure>(m_impure);
 
-	if (impure->m_dtype != dtype_int128)
+
+	const auto ñomparison = MOV_compare(tdbb, &impure->m_result.vlu_desc, &impure->m_finish.vlu_desc);
+	if (((impure->m_stepSign > 0) && (ñomparison <= 0)) ||
+		((impure->m_stepSign < 0) && (ñomparison >= 0)))
 	{
-		auto result = impure->m_result.vlu_int64;
-		const auto finish = impure->m_finish.vlu_int64;
-		const auto step = impure->m_step.vlu_int64;
+		Record* const record = request->req_rpb[m_stream].rpb_record;
 
-		if (((step > 0) && (result <= finish)) ||
-			((step < 0) && (result >= finish)))
+		auto toDesc = m_format->fmt_desc.begin();
+
+		assignParameter(tdbb, &impure->m_result.vlu_desc, toDesc, 0, record);
+
+		// evaluate next result
+		try 
 		{
-			Record* const record = request->req_rpb[m_stream].rpb_record;
+			impure_value nextValue;
 
-			auto toDesc = m_format->fmt_desc.begin();
+			ArithmeticNode::add(tdbb,
+				&impure->m_step.vlu_desc,
+				&impure->m_result.vlu_desc,
+				&nextValue,
+				blr_add,
+				false,
+				impure->m_scale,
+				impure->m_flags);
 
-			dsc fromDesc;
-			fromDesc.makeInt64(impure->m_scale, &result);
-			assignParameter(tdbb, &fromDesc, toDesc, 0, record);
-
-			// Prevents overflows for SINT64 type at boundary values
-			bool reachedBoundary = false;
-			if (step > 0)
-			{
-				if (result > MAX_SINT64 - step)
-					reachedBoundary = true;
-				else
-					reachedBoundary = (result + step > finish);
-			}
-			else if (step < 0)
-			{
-				if (result < MIN_SINT64 - step)
-					reachedBoundary = true;
-				else
-					reachedBoundary = (result + step < finish);
-			}
-
-			if ((result == finish) || reachedBoundary)
-				impure->m_step.vlu_int64 = 0;
-			else
-			    result += step;
-
-			impure->m_result.vlu_int64 = result;
-
-			return true;
+			MOV_move(tdbb, &nextValue.vlu_desc, &impure->m_result.vlu_desc);
 		}
-	}
-	else
-	{
-		auto result = impure->m_result.vlu_int128;
-		const auto finish = impure->m_finish.vlu_int128;
-		const auto step = impure->m_step.vlu_int128;
-
-		if (((step.sign() > 0) && (result.compare(finish) <= 0)) ||
-			((step.sign() < 0) && (result.compare(finish) >= 0)))
+		catch (const status_exception&)
 		{
-			Record* const record = request->req_rpb[m_stream].rpb_record;
-
-			auto toDesc = m_format->fmt_desc.begin();
-
-			dsc fromDesc;
-			fromDesc.makeInt128(impure->m_scale, &result);
-			assignParameter(tdbb, &fromDesc, toDesc, 0, record);
-
-			// Prevents overflows for INT128 type at boundary values
-			bool reachedBoundary = false;
-			if (step.sign() > 0)
-			{
-				if (result.compare(MAX_Int128.sub(step)) > 0)
-					reachedBoundary = true;
-				else
-					reachedBoundary = (result.add(step).compare(finish) > 0);
-			}
-			else if (step.sign() < 0)
-			{
-				if (result.compare(MIN_Int128.sub(step)) < 0)
-					reachedBoundary = true;
-				else
-					reachedBoundary = (result.add(step).compare(finish) < 0);
-			}
-
-			if (reachedBoundary || (result.compare(finish) == 0))
-				impure->m_step.vlu_int128.set(0, 0);
-			else
-				result = result.add(step);
-
-			impure->m_result.vlu_int128 = result;
-
-			return true;
+			tdbb->tdbb_status_vector->clearException();
+			// stop evaluate next result
+			impure->m_stepSign = 0;
 		}
+		return true;
 	}
 
 	return false;
