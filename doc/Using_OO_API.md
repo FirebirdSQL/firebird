@@ -2101,3 +2101,38 @@ struct FbVarChar
 
 This document is currently missing 2 types of plugins – ExternalEngine and Trace. Information about them will be made
 available in next release of it.
+
+# Trace plugin
+
+_TODO_
+
+# Trace objects
+
+_TODO_
+
+# Trace performance statistics
+
+Trace plugin may retrieve various performance statistics available using the `getPerfStats()` method of the trace object, which returns a pointer to the `IPerformanceStats` interface.
+
+```cpp
+IPerformanceStats* stats = statement->getPerfStats();
+```
+
+The returned pointer may be `nullptr` if the corresponding trace object is not in the terminate state yet (i.e. still active / being executed).
+
+<a name="PerformanceStats"></a> PerformanceStats interface:
+
+- ISC_UINT64 getElapsedTime() - returns the elapsed time, in milliseconds
+- ISC_UINT64 getFetchedRecords() - returns number of records fetched during execution
+- IPerformanceCounters* getPageCounters() - returns per-pagespace performance counters
+- IPerformanceCounters* getTableCounters() - returns per-table performance counters
+
+<a name="PerformanceCounters"></a> PerformanceCounters interface:
+
+- unsigned getObjectCount() - returns number of objects (e.g. tables) containing non-zero performance counters
+- unsigned getCountersCapacity() - returns total number of performance counters supported by the implementation (it's the same for all objects of the same type)
+- unsigned getObjectId(unsigned index) - returns ID of the specified object
+- const char* getObjectName(unsigned index) - returns name of the specified object
+- const ISC_INT64* getObjectCounters(unsigned index) - returns pointer to the vector of performance counters (containing getCountersCapacity() elements) of the specified object
+
+The returned pointer to the vector (as well as the whole instance of `PerformanceStats`) is valid until the object used to obtain the statistics (using the `getPerfStats()` method) is destroyed.
