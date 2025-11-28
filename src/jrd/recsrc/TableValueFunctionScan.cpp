@@ -441,7 +441,7 @@ void GenSeriesFunctionScan::internalOpen(thread_db* tdbb) const
 	}
 	// result = start
 	MOV_move(tdbb, startDesc, &impure->m_result.vlu_desc);
-	
+
 	impure->irsb_flags |= irsb_open;
 
 	VIO_record(tdbb, rpb, m_format, &pool);
@@ -493,9 +493,9 @@ bool GenSeriesFunctionScan::nextBuffer(thread_db* tdbb) const
 	const auto impure = request->getImpure<Impure>(m_impure);
 
 
-	const auto ñomparison = MOV_compare(tdbb, &impure->m_result.vlu_desc, &impure->m_finish.vlu_desc);
-	if (((impure->m_stepSign > 0) && (ñomparison <= 0)) ||
-		((impure->m_stepSign < 0) && (ñomparison >= 0)))
+	const auto comparison = MOV_compare(tdbb, &impure->m_result.vlu_desc, &impure->m_finish.vlu_desc);
+	if (((impure->m_stepSign > 0) && (comparison <= 0)) ||
+		((impure->m_stepSign < 0) && (comparison >= 0)))
 	{
 		Record* const record = request->req_rpb[m_stream].rpb_record;
 
@@ -504,7 +504,7 @@ bool GenSeriesFunctionScan::nextBuffer(thread_db* tdbb) const
 		assignParameter(tdbb, &impure->m_result.vlu_desc, toDesc, 0, record);
 
 		// evaluate next result
-		try 
+		try
 		{
 			impure_value nextValue;
 
