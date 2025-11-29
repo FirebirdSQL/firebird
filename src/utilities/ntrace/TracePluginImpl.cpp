@@ -636,7 +636,8 @@ void TracePluginImpl::appendGlobalCounts(IPerformanceStats* stats)
 	temp.printf("%7" QUADFORMAT"d ms", stats->getElapsedTime());
 	record.append(temp);
 
-	const auto pageCounters = stats->getPageCounters();
+	const auto pageCounters = stats->getCounters(IPerformanceStats::COUNTER_GROUP_PAGES);
+	fb_assert(pageCounters);
 
 	if (const auto count = pageCounters->getObjectCount())
 	{
@@ -681,10 +682,14 @@ void TracePluginImpl::appendGlobalCounts(IPerformanceStats* stats)
 
 void TracePluginImpl::appendTableCounts(IPerformanceStats* stats)
 {
-	const auto tableCounters = stats->getTableCounters();
-	const auto count = tableCounters->getObjectCount();
+	if (!config.print_perf)
+		return;
 
-	if (!config.print_perf || !count)
+	const auto tableCounters = stats->getCounters(IPerformanceStats::COUNTER_GROUP_TABLES);
+	fb_assert(tableCounters);
+
+	const auto count = tableCounters->getObjectCount();
+	if (!count)
 		return;
 
 	FB_SIZE_T max_len = 0;

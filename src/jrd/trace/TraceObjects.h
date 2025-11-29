@@ -182,14 +182,25 @@ public:
 		return m_info.pin_records_fetched;
 	}
 
-	Firebird::IPerformanceCounters* getPageCounters()
+	Firebird::IPerformanceCounters* getCounters(unsigned group)
 	{
-		return &m_pageCounters;
-	}
+		Firebird::IPerformanceCounters* counters = nullptr;
 
-	Firebird::IPerformanceCounters* getTableCounters()
-	{
-		return &m_tableCounters;
+		switch (group)
+		{
+			case IPerformanceStats::COUNTER_GROUP_PAGES:
+				counters = &m_pageCounters;
+				break;
+
+			case IPerformanceStats::COUNTER_GROUP_TABLES:
+				counters = &m_tableCounters;
+				break;
+
+			default:
+				fb_assert(false);
+		}
+
+		return counters;
 	}
 
 	Firebird::PerformanceInfo* getInfo()

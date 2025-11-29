@@ -1932,10 +1932,12 @@ interface PerformanceCounters : Versioned
 
 interface PerformanceStats : Versioned
 {
+	const uint COUNTER_GROUP_PAGES = 0;
+	const uint COUNTER_GROUP_TABLES = 1;
+
 	uint64 getElapsedTime();	// in milliseconds
 	uint64 getFetchedRecords();
 
-	PerformanceCounters getPageCounters();
-	PerformanceCounters getTableCounters();
+	PerformanceCounters getCounters(uint group);
 }
 

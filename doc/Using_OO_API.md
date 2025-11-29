@@ -2124,8 +2124,14 @@ The returned pointer may be `nullptr` if the corresponding trace object is not i
 
 - ISC_UINT64 getElapsedTime() - returns the elapsed time, in milliseconds
 - ISC_UINT64 getFetchedRecords() - returns number of records fetched during execution
-- IPerformanceCounters* getPageCounters() - returns per-pagespace performance counters
-- IPerformanceCounters* getTableCounters() - returns per-table performance counters
+- IPerformanceCounters* getCounters(unsigned group) - returns the requested performance counters group
+
+The following groups of performance counters are currently supported:
+
+- COUNTER_GROUP_PAGES - per-pagespace counters
+- COUNTER_GROUP_TABLES - per-table counters
+
+If `getCounters()` is called with a counter group not supported by the implementation, `nullptr` is returned.
 
 <a name="PerformanceCounters"></a> PerformanceCounters interface:
 

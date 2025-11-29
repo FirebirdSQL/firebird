@@ -7693,8 +7693,7 @@ namespace Firebird
 		{
 			ISC_UINT64 (CLOOP_CARG *getElapsedTime)(IPerformanceStats* self) CLOOP_NOEXCEPT;
 			ISC_UINT64 (CLOOP_CARG *getFetchedRecords)(IPerformanceStats* self) CLOOP_NOEXCEPT;
-			IPerformanceCounters* (CLOOP_CARG *getPageCounters)(IPerformanceStats* self) CLOOP_NOEXCEPT;
-			IPerformanceCounters* (CLOOP_CARG *getTableCounters)(IPerformanceStats* self) CLOOP_NOEXCEPT;
+			IPerformanceCounters* (CLOOP_CARG *getCounters)(IPerformanceStats* self, unsigned group) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -7710,6 +7709,9 @@ namespace Firebird
 	public:
 		static CLOOP_CONSTEXPR unsigned VERSION = FIREBIRD_IPERFORMANCE_STATS_VERSION;
 
+		static CLOOP_CONSTEXPR unsigned COUNTER_GROUP_PAGES = 0;
+		static CLOOP_CONSTEXPR unsigned COUNTER_GROUP_TABLES = 1;
+
 		ISC_UINT64 getElapsedTime()
 		{
 			ISC_UINT64 ret = static_cast<VTable*>(this->cloopVTable)->getElapsedTime(this);
@@ -7722,15 +7724,9 @@ namespace Firebird
 			return ret;
 		}
 
-		IPerformanceCounters* getPageCounters()
+		IPerformanceCounters* getCounters(unsigned group)
 		{
-			IPerformanceCounters* ret = static_cast<VTable*>(this->cloopVTable)->getPageCounters(this);
-			return ret;
-		}
-
-		IPerformanceCounters* getTableCounters()
-		{
-			IPerformanceCounters* ret = static_cast<VTable*>(this->cloopVTable)->getTableCounters(this);
+			IPerformanceCounters* ret = static_cast<VTable*>(this->cloopVTable)->getCounters(this, group);
 			return ret;
 		}
 	};
@@ -22139,8 +22135,7 @@ namespace Firebird
 					this->version = Base::VERSION;
 					this->getElapsedTime = &Name::cloopgetElapsedTimeDispatcher;
 					this->getFetchedRecords = &Name::cloopgetFetchedRecordsDispatcher;
-					this->getPageCounters = &Name::cloopgetPageCountersDispatcher;
-					this->getTableCounters = &Name::cloopgetTableCountersDispatcher;
+					this->getCounters = &Name::cloopgetCountersDispatcher;
 				}
 			} vTable;
 
@@ -22173,24 +22168,11 @@ namespace Firebird
 			}
 		}
 
-		static IPerformanceCounters* CLOOP_CARG cloopgetPageCountersDispatcher(IPerformanceStats* self) CLOOP_NOEXCEPT
+		static IPerformanceCounters* CLOOP_CARG cloopgetCountersDispatcher(IPerformanceStats* self, unsigned group) CLOOP_NOEXCEPT
 		{
 			try
 			{
-				return static_cast<Name*>(self)->Name::getPageCounters();
-			}
-			catch (...)
-			{
-				StatusType::catchException(0);
-				return static_cast<IPerformanceCounters*>(0);
-			}
-		}
-
-		static IPerformanceCounters* CLOOP_CARG cloopgetTableCountersDispatcher(IPerformanceStats* self) CLOOP_NOEXCEPT
-		{
-			try
-			{
-				return static_cast<Name*>(self)->Name::getTableCounters();
+				return static_cast<Name*>(self)->Name::getCounters(group);
 			}
 			catch (...)
 			{
@@ -22215,8 +22197,7 @@ namespace Firebird
 
 		virtual ISC_UINT64 getElapsedTime() = 0;
 		virtual ISC_UINT64 getFetchedRecords() = 0;
-		virtual IPerformanceCounters* getPageCounters() = 0;
-		virtual IPerformanceCounters* getTableCounters() = 0;
+		virtual IPerformanceCounters* getCounters(unsigned group) = 0;
 	};
 };
 

@@ -785,8 +785,7 @@ type
 	IPerformanceCounters_getObjectCountersPtr = function(this: IPerformanceCounters; index: Cardinal): Int64Ptr; cdecl;
 	IPerformanceStats_getElapsedTimePtr = function(this: IPerformanceStats): QWord; cdecl;
 	IPerformanceStats_getFetchedRecordsPtr = function(this: IPerformanceStats): QWord; cdecl;
-	IPerformanceStats_getPageCountersPtr = function(this: IPerformanceStats): IPerformanceCounters; cdecl;
-	IPerformanceStats_getTableCountersPtr = function(this: IPerformanceStats): IPerformanceCounters; cdecl;
+	IPerformanceStats_getCountersPtr = function(this: IPerformanceStats; group: Cardinal): IPerformanceCounters; cdecl;
 
 	VersionedVTable = class
 		version: NativeInt;
@@ -4112,17 +4111,17 @@ type
 	PerformanceStatsVTable = class(VersionedVTable)
 		getElapsedTime: IPerformanceStats_getElapsedTimePtr;
 		getFetchedRecords: IPerformanceStats_getFetchedRecordsPtr;
-		getPageCounters: IPerformanceStats_getPageCountersPtr;
-		getTableCounters: IPerformanceStats_getTableCountersPtr;
+		getCounters: IPerformanceStats_getCountersPtr;
 	end;
 
 	IPerformanceStats = class(IVersioned)
 		const VERSION = 2;
+		const COUNTER_GROUP_PAGES = Cardinal(0);
+		const COUNTER_GROUP_TABLES = Cardinal(1);
 
 		function getElapsedTime(): QWord;
 		function getFetchedRecords(): QWord;
-		function getPageCounters(): IPerformanceCounters;
-		function getTableCounters(): IPerformanceCounters;
+		function getCounters(group: Cardinal): IPerformanceCounters;
 	end;
 
 	IPerformanceStatsImpl = class(IPerformanceStats)
@@ -4130,8 +4129,7 @@ type
 
 		function getElapsedTime(): QWord; virtual; abstract;
 		function getFetchedRecords(): QWord; virtual; abstract;
-		function getPageCounters(): IPerformanceCounters; virtual; abstract;
-		function getTableCounters(): IPerformanceCounters; virtual; abstract;
+		function getCounters(group: Cardinal): IPerformanceCounters; virtual; abstract;
 	end;
 
 {$IFNDEF NO_FBCLIENT}
@@ -10253,14 +10251,9 @@ begin
 	Result := PerformanceStatsVTable(vTable).getFetchedRecords(Self);
 end;
 
-function IPerformanceStats.getPageCounters(): IPerformanceCounters;
+function IPerformanceStats.getCounters(group: Cardinal): IPerformanceCounters;
 begin
-	Result := PerformanceStatsVTable(vTable).getPageCounters(Self);
-end;
-
-function IPerformanceStats.getTableCounters(): IPerformanceCounters;
-begin
-	Result := PerformanceStatsVTable(vTable).getTableCounters(Self);
+	Result := PerformanceStatsVTable(vTable).getCounters(Self, group);
 end;
 
 var
@@ -17915,21 +17908,11 @@ begin
 	end
 end;
 
-function IPerformanceStatsImpl_getPageCountersDispatcher(this: IPerformanceStats): IPerformanceCounters; cdecl;
+function IPerformanceStatsImpl_getCountersDispatcher(this: IPerformanceStats; group: Cardinal): IPerformanceCounters; cdecl;
 begin
 	Result := nil;
 	try
-		Result := IPerformanceStatsImpl(this).getPageCounters();
-	except
-		on e: Exception do FbException.catchException(nil, e);
-	end
-end;
-
-function IPerformanceStatsImpl_getTableCountersDispatcher(this: IPerformanceStats): IPerformanceCounters; cdecl;
-begin
-	Result := nil;
-	try
-		Result := IPerformanceStatsImpl(this).getTableCounters();
+		Result := IPerformanceStatsImpl(this).getCounters(group);
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
@@ -19020,8 +19003,7 @@ initialization
 	IPerformanceStatsImpl_vTable.version := 2;
 	IPerformanceStatsImpl_vTable.getElapsedTime := @IPerformanceStatsImpl_getElapsedTimeDispatcher;
 	IPerformanceStatsImpl_vTable.getFetchedRecords := @IPerformanceStatsImpl_getFetchedRecordsDispatcher;
-	IPerformanceStatsImpl_vTable.getPageCounters := @IPerformanceStatsImpl_getPageCountersDispatcher;
-	IPerformanceStatsImpl_vTable.getTableCounters := @IPerformanceStatsImpl_getTableCountersDispatcher;
+	IPerformanceStatsImpl_vTable.getCounters := @IPerformanceStatsImpl_getCountersDispatcher;
 
 finalization
 	IVersionedImpl_vTable.destroy;
