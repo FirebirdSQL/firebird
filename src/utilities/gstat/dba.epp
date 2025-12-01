@@ -1434,7 +1434,7 @@ static bool analyze_data_page( dba_rel* relation, const data_page* page, bool sw
 	{
 		if (tail->dpg_offset && tail->dpg_length)
 		{
-			space += FB_ALIGN(tail->dpg_length, FB_ALIGNMENT);
+			space += FB_ALIGN(tail->dpg_length, ODS_ALIGNMENT);
 
 			if (sw_record)
 			{
