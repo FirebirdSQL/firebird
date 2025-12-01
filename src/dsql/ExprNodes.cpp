@@ -14102,53 +14102,22 @@ dsc* UdfCallNode::execute(thread_db* tdbb, Request* request) const
 			throw;
 		}
 
-		auto outfieldsNum = function->getOutputFields().getCount();
-		if (outfieldsNum > 1) // does it still needed?
+		auto fmtDesc = function->getOutputFormat()->fmt_desc.begin();
+		const ULONG nullOffset = (IPTR) fmtDesc[1].dsc_address;
+		SSHORT* const nullPtr = reinterpret_cast<SSHORT*>(outMsg + nullOffset);
+
+		if (*nullPtr)
 		{
-			auto fmtDesc = function->getOutputFormat()->fmt_desc.begin();
-			auto curdesc = &value->vlu_desc;
-			while(outfieldsNum > 0)
-			{
-				const ULONG argOffset = (IPTR) fmtDesc[0].dsc_address;
-				const ULONG nullOffset = (IPTR) fmtDesc[1].dsc_address;
-
-				*curdesc = *fmtDesc;
-				SSHORT* const nullPtr = reinterpret_cast<SSHORT*>(outMsg + nullOffset);
-				if (*nullPtr)
-					curdesc->dsc_flags |= DSC_null;
-					// curdesc->dsc_flags |= DSC_nullable | DSC_null;
-				else
-					request->req_flags &= ~req_null;
-				curdesc->dsc_address = outMsg + argOffset;
-				fmtDesc += 2;
-				outfieldsNum--;
-				if (outfieldsNum > 0)
-				{
-					curdesc->dsc_next = FB_NEW_POOL(*tdbb->getDefaultPool()) dsc;
-					curdesc = curdesc->dsc_next;
-				}
-			}
-
+			value = nullptr;
+			trace.finish(ITracePlugin::RESULT_SUCCESS);
 		}
 		else
 		{
-			auto fmtDesc = function->getOutputFormat()->fmt_desc.begin();
-			const ULONG nullOffset = (IPTR) fmtDesc[1].dsc_address;
-			SSHORT* const nullPtr = reinterpret_cast<SSHORT*>(outMsg + nullOffset);
+			EVL_put_desc(tdbb, &(*fmtDesc), value);
+			value->vlu_desc.rebaseAddress(outMsg);
+			value->vlu_desc.propagateNullMask();
 
-			if (*nullPtr)
-			{
-				value = nullptr;
-				trace.finish(ITracePlugin::RESULT_SUCCESS);
-			}
-			else
-			{
-
-				EVL_put_desc(tdbb, &(*fmtDesc), value);
-				value->vlu_desc.rebaseAddress(outMsg);
-
-				trace.finish(ITracePlugin::RESULT_SUCCESS, &value->vlu_desc);
-			}
+			trace.finish(ITracePlugin::RESULT_SUCCESS, &value->vlu_desc);
 		}
 
 
