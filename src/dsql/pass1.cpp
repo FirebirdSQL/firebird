@@ -2957,6 +2957,33 @@ static void pass1_union_auto_cast(DsqlCompilerScratch* dsqlScratch, ExprNode* in
 						field->collationId = desc.getCollation();
 					}
 
+					// Generate internal fields if descriptor describes a composite type
+					if (desc.dsc_dtype == dtype_rowtype)
+					{
+						dsql_fld** nextSubField = &field->fld_sub_first;
+						auto subDesc = desc.dsc_sub_first;
+						while (subDesc)
+						{
+							*nextSubField = FB_NEW_POOL(*tdbb->getDefaultPool()) dsql_fld(*tdbb->getDefaultPool());
+							(*nextSubField)->dtype = subDesc->dsc_dtype;
+							(*nextSubField)->scale = subDesc->dsc_scale;
+							(*nextSubField)->subType = subDesc->dsc_sub_type;
+							(*nextSubField)->length = subDesc->dsc_length;
+							(*nextSubField)->flags = (subDesc->dsc_flags & DSC_nullable) ? FLD_nullable : 0;
+
+							if (subDesc->isText() || subDesc->isBlob())
+							{
+								(*nextSubField)->textType = subDesc->getTextType();
+								(*nextSubField)->charSetId = subDesc->getCharSet();
+								(*nextSubField)->collationId = subDesc->getCollation();
+							}
+
+							field->fld_sub_count++;
+							nextSubField = &(*nextSubField)->fld_next;
+							subDesc = subDesc->dsc_next;
+						}
+					}
+
 					// Finally copy the descriptors to the root nodes and swap
 					// the necessary nodes.
 					castNode->setDsqlDesc(desc);

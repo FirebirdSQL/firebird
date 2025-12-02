@@ -3641,19 +3641,18 @@ void CastNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			dsqlScratch->appendUShort(dummyContextNum);
 			dsqlScratch->appendMetaString(dsqlField->typeOfName.object.c_str());
 		}
-		// TODO: add fully described rowtype cast generation
-		// else
-		// {
-		// 	dsqlScratch->appendUChar(blr_rt_full);
-		// 	dsqlScratch->appendUShort(dsqlField->fld_sub_count);
-		// 	dsqlScratch->appendUShort(dummyContextNum);
-		// 	auto next = dsqlField->fld_sub_first;
-		// 	while (next)
-		// 	{
-		// 		dsqlScratch->putType(next, true);
-		// 		next = next->fld_next;
-		// 	}
-		// }
+		else
+		{
+			dsqlScratch->appendUChar(blr_rt_full);
+			dsqlScratch->appendUShort(dsqlField->fld_sub_count);
+			dsqlScratch->appendUShort(dummyContextNum);
+			auto next = dsqlField->fld_sub_first;
+			while (next)
+			{
+				dsqlScratch->putType(next, true);
+				next = next->fld_next;
+			}
+		}
 	}
 	else
 		dsqlScratch->putType(dsqlField, true);

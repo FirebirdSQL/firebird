@@ -131,7 +131,7 @@ void DsqlDescMaker::fromNode(DsqlCompilerScratch* scratch, dsc* desc,
 	DEV_BLKCHK(node, dsql_type_nod);
 
 	// If we already know the datatype, don't worry about anything.
-	if (node->getDsqlDesc().dsc_dtype && node->getDsqlDesc().dsc_dtype != dtype_rowtype)
+	if (node->getDsqlDesc().dsc_dtype)
 		*desc = node->getDsqlDesc();
 	else
 		node->make(scratch, desc);
