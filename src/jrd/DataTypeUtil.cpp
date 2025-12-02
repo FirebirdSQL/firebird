@@ -178,7 +178,7 @@ void DataTypeUtilBase::makeFromList(dsc* result, const char* expressionName, int
 		{
 			if (result->isUnknown())
 				*result = *arg;
-			else if (result->dsc_sub_count != arg->dsc_sub_count)
+			else if (result->dsc_sub_count != arg->dsc_sub_count && !(arg->dsc_flags & DSC_null))
 			{
 				// Datatypes @1are not comparable in expression @2
 				status_exception::raise(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<

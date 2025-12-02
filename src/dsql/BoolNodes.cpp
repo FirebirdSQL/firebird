@@ -1365,6 +1365,33 @@ BoolExprNode* InListBoolNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				field->collationId = listDesc.getCollation();
 			}
 
+			// Generate internal fields if descriptor describes a composite type
+			if (listDesc.dsc_dtype == dtype_rowtype)
+			{
+				dsql_fld** nextSubField = &field->fld_sub_first;
+				auto subDesc = listDesc.dsc_sub_first;
+				while (subDesc)
+				{
+					*nextSubField = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
+					(*nextSubField)->dtype = subDesc->dsc_dtype;
+					(*nextSubField)->scale = subDesc->dsc_scale;
+					(*nextSubField)->subType = subDesc->dsc_sub_type;
+					(*nextSubField)->length = subDesc->dsc_length;
+					(*nextSubField)->flags = (subDesc->dsc_flags & DSC_nullable) ? FLD_nullable : 0;
+
+					if (subDesc->isText() || subDesc->isBlob())
+					{
+						(*nextSubField)->textType = subDesc->getTextType();
+						(*nextSubField)->charSetId = subDesc->getCharSet();
+						(*nextSubField)->collationId = subDesc->getCollation();
+					}
+
+					field->fld_sub_count++;
+					nextSubField = &(*nextSubField)->fld_next;
+					subDesc = subDesc->dsc_next;
+				}
+			}
+
 			const auto castNode = FB_NEW_POOL(dsqlScratch->getPool())
 				CastNode(dsqlScratch->getPool(), item, field);
 			item = castNode;
@@ -1581,7 +1608,8 @@ TriState InListBoolNode::execute(thread_db* tdbb, Request* request) const
 			{
 				if (const auto valueDesc = EVL_expr(tdbb, request, value))
 				{
-					if (!MOV_compare(tdbb, argDesc, valueDesc))
+					if (!MOV_recursive_compare(tdbb, argDesc, valueDesc))
+					// if (!MOV_compare(tdbb, argDesc, valueDesc))
 					{
 						anyMatch = true;
 						break;
