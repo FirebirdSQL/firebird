@@ -384,16 +384,13 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 		from = item.desc;
 		from.rebaseAddress(data);
 
-		// If we are dealing with a row type, then we need to set skip counter to the number of fields in
-		// the rowvalue. Dew to the fact that rowvalue itself has a node which will be skipped on next if,
-		// then first skip of a subfield will accure on next item.
+		// If we are dealing with a row type, then we need to set skip counter to the number of subfields
 		if (from.dsc_dtype == dtype_rowtype)
 			subfieldsSkipCounter = from.dsc_sub_count;
-
-		if (item.node && !nodeIs<FieldNode>(item.node))
+		else if (subfieldsSkipCounter != 0 && subfieldsSkipCounter--)
 			continue;
 
-		if (subfieldsSkipCounter != 0 && subfieldsSkipCounter--)
+		if (item.node && !nodeIs<FieldNode>(item.node))
 			continue;
 
 		// Some fields may have volatile keys, so that their value
