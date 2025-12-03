@@ -54,10 +54,14 @@ The `CREATE SERVER` statement can be executed by administrators or users with th
 
 ```sql
 ALTER SERVER <foreign server name>
-        [[DROP] FOREIGN DATA WRAPPER | [DROP] USING PLUGIN <provider(plugin)>] [OPTIONS(<option> [, <option> ...] )]
-    <option> ::= {
-        [DROP] <option name> [= 'value']
-        | [DROP] <option name> [{FILE | ENV}] ['value'] }
+        [[DROP] {FOREIGN DATA WRAPPER | USING PLUGIN} <provider(plugin)>]
+        [OPTIONS (<option> [, <option> ...] )]
+
+<option> ::= {
+          <option name> = 'value'
+        | <option name> [{FILE | ENV}] 'value'
+        | DROP <option name>
+}
 ```
 If existing server options are specified, they will be updated and the others will not be affected.
 The `ALTER SERVER` statement can be executed by administrators, owner or users with the `ALTER SERVER` privilege.
