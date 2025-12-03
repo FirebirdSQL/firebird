@@ -76,7 +76,12 @@ int MOV_recursive_compare(Jrd::thread_db* tdbb, const dsc* desc1, const dsc* des
 		if (use_null_equility)
 		{
 			if ((*next1)->dsc_flags & DSC_null && (*next2)->dsc_flags & DSC_null)
-				return EQUAL;
+			{
+				comparison = EQUAL;
+				next1 = &(*next1)->dsc_next;
+				next2 = &(*next2)->dsc_next;
+				continue;
+			}
 		}
 
 		if (((*next1)->dsc_flags | (*next2)->dsc_flags) & DSC_null)
