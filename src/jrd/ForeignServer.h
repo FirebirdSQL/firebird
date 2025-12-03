@@ -153,7 +153,6 @@ namespace Jrd
 	class ForeignTableStatement : public EDS::IscStatement
 	{
 	public:
-		void setSql(const Firebird::string& sql);
 		void openInternal(thread_db* tdbb, EDS::IscTransaction* transaction);
 		void executeInternal(thread_db* tdbb, EDS::IscTransaction* transaction, record_param* org_rpb,
 			record_param* new_rpb, const Firebird::Array<int>* skippedOrgRpb = nullptr,
@@ -220,6 +219,7 @@ namespace Jrd
 			const ExternalValueType type);
 		void addTableField(const MetaName& fieldName, const MetaName& optionName, const Firebird::string& value,
 			const ExternalValueType type);
+		const Firebird::string getOriginalTableName() const;
 		const Firebird::string getOriginalFieldName(const MetaName& name) const;
 
 		const ForeignServer* getServer() { return m_server; }

@@ -218,11 +218,6 @@ bool ForeignTableProvider::isGenericOption(const MetaName& option)
 	return false;
 }
 
-void ForeignTableStatement::setSql(const string& foreignSql)
-{
-	m_sql = foreignSql;
-}
-
 void ForeignTableConnection::getProviderInfo(thread_db* tdbb)
 {
 	info_db_provider dbProvider = info_db_provider::isc_info_db_code_last_value;
@@ -543,7 +538,7 @@ EDS::Statement* ForeignTableAdapter::createStatement(thread_db* tdbb, record_par
 
 	// Create a statement and return it for later use
 	ForeignTableStatement* statement = static_cast<ForeignTableStatement*>(m_connection->createStatement(sql));
-	statement->setSql(sql);
+	statement->setRawSql(sql);
 	return statement;
 }
 
@@ -553,10 +548,10 @@ void ForeignTableAdapter::execute(thread_db* tdbb, EDS::Statement* statement, re
 	EDS::IscTransaction* transaction = static_cast<EDS::IscTransaction*>(
 		EDS::Transaction::getTransaction(tdbb, m_connection, EDS::TraScope::traCommon));
 
-	ForeignTableStatement* ftStatement = (ForeignTableStatement*)statement;
-	const string sql = ftStatement->getSql();
+	ForeignTableStatement* ftStatement = (ForeignTableStatement*) statement;
+	const string rawSql = ftStatement->getRawSql();
 
-	ftStatement->prepare(tdbb, transaction, sql, false);
+	ftStatement->prepare(tdbb, transaction, rawSql, false);
 
 	const TimeoutTimer* timer = tdbb->getTimeoutTimer();
 	if (timer)
@@ -570,7 +565,7 @@ void ForeignTableAdapter::execute(thread_db* tdbb, EDS::Statement* statement, re
 
 bool ForeignTableAdapter::fetch(thread_db* tdbb, EDS::Statement* statement, Record* record)
 {
-	ForeignTableStatement* ftStatement = (ForeignTableStatement*)statement;
+	ForeignTableStatement* ftStatement = (ForeignTableStatement*) statement;
 
 	return ftStatement->fetchInternal(tdbb, record);
 }
@@ -588,22 +583,7 @@ void ForeignTableAdapter::getSql(string& sql, const string& filter, const string
 	vec<jrd_fld*>::iterator fieldIter = vector->begin();
 	SSHORT id;
 
-	string schemaQualifiedName = "";
-
-	if (m_tableOptions.exist(MetaName(FOREIGN_TABLE_SCHEMA_NAME)))
-	{
-		schemaQualifiedName += m_tableOptions.get(MetaName(FOREIGN_TABLE_SCHEMA_NAME))->m_value;
-		schemaQualifiedName += ".";
-	}
-
-	if (m_tableOptions.exist(MetaName(FOREIGN_TABLE_NAME)))
-	{
-		schemaQualifiedName += m_tableOptions.get(MetaName(FOREIGN_TABLE_NAME))->m_value;
-	}
-	else
-	{
-		schemaQualifiedName += m_relation->rel_name.toQuotedString();
-	}
+	const string schemaQualifiedName = getOriginalTableName();
 
 	if (!org_rpb && !new_rpb)
 	{
@@ -792,6 +772,24 @@ void ForeignTableAdapter::addTableField(const MetaName& fieldName, const MetaNam
 		m_foreignPKNames.add(fieldName);
 	else if (optionName == FOREIGN_TABLE_COLUMN_READONLY && getBooleanValue(value))
 		m_readOnlyNames.add(fieldName);
+}
+
+const string ForeignTableAdapter::getOriginalTableName() const
+{
+	string schemaQualifiedName = "";
+
+	if (m_tableOptions.exist(MetaName(FOREIGN_TABLE_SCHEMA_NAME)))
+	{
+		schemaQualifiedName += m_tableOptions.get(MetaName(FOREIGN_TABLE_SCHEMA_NAME))->m_value;
+		schemaQualifiedName += ".";
+	}
+
+	if (m_tableOptions.exist(MetaName(FOREIGN_TABLE_NAME)))
+		schemaQualifiedName += m_tableOptions.get(MetaName(FOREIGN_TABLE_NAME))->m_value;
+	else
+		schemaQualifiedName += m_relation->rel_name.toQuotedString();
+
+	return schemaQualifiedName;
 }
 
 const string ForeignTableAdapter::getOriginalFieldName(const MetaName& name) const

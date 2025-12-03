@@ -1777,6 +1777,7 @@ Statement::Statement(Connection& conn) :
 	m_nextInReq(NULL),
 	m_prevInReq(NULL),
 	m_sql(getPool()),
+	m_rawSql(getPool()),
 	m_singleton(false),
 	m_active(false),
 	m_fetched(false),

@@ -432,7 +432,9 @@ void ForeignTableScan::processArgument(thread_db* tdbb, string& conjunctSql, con
 	else if (const auto fieldNode = nodeAs<FieldNode>(node))
 	{
 		const jrd_fld* field = MET_get_field(m_relation, fieldNode->fieldId);
-		const string value = m_relation->rel_foreign_adapter->getOriginalFieldName(field->fld_name.c_str());
+		string value = m_relation->rel_foreign_adapter->getOriginalTableName();
+		value += ".";
+		value += m_relation->rel_foreign_adapter->getOriginalFieldName(field->fld_name.c_str());
 		appendFilterValue(value, conjunctSql);
 	}
 	else if (const auto literalNode = nodeAs<LiteralNode>(node))
