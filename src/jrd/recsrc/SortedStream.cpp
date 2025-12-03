@@ -295,6 +295,7 @@ Sort* SortedStream::init(thread_db* tdbb) const
 
 				if (item->desc.dsc_dtype == dtype_rowtype)
 				{
+					memcpy(to.dsc_address, from->dsc_address, NULL_BYTES(from->dsc_sub_count));
 					auto next = item->desc.dsc_sub_first;
 					auto fromNext = from->dsc_sub_first;
 					auto toNext = to.dsc_sub_first;
