@@ -73,6 +73,22 @@ DROP SERVER <foreign server name>
 ```
 The `DROP SERVER` statement can be executed by administrators, owner or users with the `DROP SERVER` privilege. If the server has dependencies, the `DROP SERVER` statement will fail with an execution error.
 
+#### The USAGE Privilege
+To be able to use `SERVER` object it is necessary to grant the USAGE privilege on `SERVER` object:
+```sql
+GRANT USAGE ON FOREIGN SERVER <server_name>
+TO <grantee_list> [WITH GRANT OPTION]
+[{GRANTED BY | AS} [USER] <grantor>];
+```
+
+Revoking the USAGE privilege on the `SERVER` object:
+```sql
+REVOKE [GRANT OPTION FOR]
+USAGE ON FOREIGN SERVER <server_name>
+FROM <grantee_list>
+[{GRANTED BY | AS} [USER] <grantor>];
+```
+
 ### User mappings
 
 User mappings for foreign connections define the connection parameters to be used by the specified user when accessing a foreign server. The user mapping provides security and access control by specifying the credentials to connect to the foreign server. User mapping maps local user accounts to remote server credentials and defines the login and password for the connection.
