@@ -755,6 +755,7 @@ dsql_fld* MAKE_composite_field(DsqlCompilerScratch* dsqlScratch, const char* nam
 	auto nextDsc = &resultDesc->dsc_sub_first;
 	auto nextFld = &compositeField->fld_sub_first;
 	auto subfieldSerialNumber = 0;
+	string s;
 
 	while (*nextDsc)
 	{
@@ -766,6 +767,8 @@ dsql_fld* MAKE_composite_field(DsqlCompilerScratch* dsqlScratch, const char* nam
 		(*nextFld)->charSetId = (*nextDsc)->getCharSet();
 
 		dsql_par dummyPar(dsqlScratch->getPool());
+		s.printf("SUBFIELD_%d", subfieldSerialNumber);
+		dummyPar.par_alias = dummyPar.par_name = s;
 		(*nextFld)->length = (*nextDsc)->dsc_length;
 		(*nextFld)->fld_name = dummyPar.par_alias;
 		(*nextFld)->resolve(dsqlScratch);
