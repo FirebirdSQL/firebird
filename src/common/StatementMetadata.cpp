@@ -427,13 +427,6 @@ void StatementMetadata::parse(unsigned bufferLength, const UCHAR* buffer)
 				Parameters::Item* param = &temp;
 				bool finishDescribe = false;
 
-				auto& alignedLength = parameters->alignedLength;
-				alignedLength = 0;
-				auto& length = parameters->length;
-				length = 0;
-				auto& alignment = parameters->alignment;
-				alignment = type_alignments[dtype_short];	// NULL indicator
-
 				// Loop over the variables being described.
 				while (!finishDescribe)
 				{
