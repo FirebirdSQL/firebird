@@ -787,7 +787,7 @@ const string ForeignTableAdapter::getOriginalTableName() const
 	if (m_tableOptions.exist(MetaName(FOREIGN_TABLE_NAME)))
 		schemaQualifiedName += m_tableOptions.get(MetaName(FOREIGN_TABLE_NAME))->m_value;
 	else
-		schemaQualifiedName += m_relation->rel_name.toQuotedString();
+		schemaQualifiedName += m_relation->rel_name.object.toQuotedString();
 
 	return schemaQualifiedName;
 }
