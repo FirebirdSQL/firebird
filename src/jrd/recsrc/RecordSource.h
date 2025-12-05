@@ -1626,32 +1626,14 @@ namespace Jrd
 
 		struct Impure final : public TableValueFunctionScan::Impure
 		{
-			union
-			{
-				SINT64 vlu_int64;
-				Firebird::Int128 vlu_int128;
-			} m_start;
+			impure_value m_start;
+			impure_value m_finish;
+			impure_value m_step;
+			impure_value m_result;
 
-			union
-			{
-				SINT64 vlu_int64;
-				Firebird::Int128 vlu_int128;
-			} m_finish;
-
-			union
-			{
-				SINT64 vlu_int64;
-				Firebird::Int128 vlu_int128;
-			} m_step;
-
-			union
-			{
-				SINT64 vlu_int64;
-				Firebird::Int128 vlu_int128;
-			} m_result;
-
-			UCHAR m_dtype;
+			USHORT m_flags;
 			SCHAR m_scale;
+			SCHAR m_stepSign;
 		};
 
 	public:
