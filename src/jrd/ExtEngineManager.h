@@ -214,7 +214,7 @@ private:
 
 		Firebird::IExternalEngine* engine;
 		Firebird::AutoPtr<ExternalContextImpl> context;
-		USHORT adminCharSet;
+		TTypeId adminCharSet;
 	};
 
 public:
@@ -305,7 +305,7 @@ public:
 		bool firstFetch;
 		EngineAttachmentInfo* attInfo;
 		Firebird::IExternalResultSet* resultSet;
-		USHORT charSet;
+		CSetId charSet;
 	};
 
 	class Trigger final : public ExtRoutine

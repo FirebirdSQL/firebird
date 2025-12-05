@@ -30,6 +30,7 @@
 #define COMMON_CVT_H
 
 #include "../common/DecFloat.h"
+#include "../jrd/intl.h"
 
 namespace Firebird {
 
@@ -54,11 +55,11 @@ public:
 	}
 
 public:
-	virtual bool transliterate(const dsc* from, dsc* to, CHARSET_ID&) = 0;
-	virtual CHARSET_ID getChid(const dsc* d) = 0;
-	virtual CharSet* getToCharset(CHARSET_ID charset2) = 0;
-	virtual void validateData(CharSet* toCharset, SLONG length, const UCHAR* q) = 0;
-	virtual ULONG validateLength(CharSet* charSet, CHARSET_ID charSetId, ULONG length, const UCHAR* start,
+	virtual bool transliterate(const dsc* from, dsc* to, CSetId&) = 0;
+	virtual CSetId getChid(const dsc* d) = 0;
+	virtual Firebird::CharSet* getToCharset(CSetId charset2) = 0;
+	virtual void validateData(Firebird::CharSet* toCharset, SLONG length, const UCHAR* q) = 0;
+	virtual ULONG validateLength(Firebird::CharSet* charSet, CSetId charSetId, ULONG length, const UCHAR* start,
 		const USHORT size) = 0;
 	virtual SLONG getLocalDate() = 0;
 	virtual ISC_TIMESTAMP getCurrentGmtTimeStamp() = 0;
@@ -94,12 +95,12 @@ Firebird::Decimal64 CVT_get_dec64(const dsc*, Firebird::DecimalStatus, ErrorFunc
 Firebird::Decimal128 CVT_get_dec128(const dsc*, Firebird::DecimalStatus, ErrorFunction);
 Firebird::Int128 CVT_get_int128(const dsc*, SSHORT, Firebird::DecimalStatus, ErrorFunction);
 Firebird::Int128 CVT_hex_to_int128(const char* str, USHORT len);
-USHORT CVT_make_string(const dsc*, USHORT, const char**, vary*, USHORT, Firebird::DecimalStatus, ErrorFunction);
+USHORT CVT_make_string(const dsc*, TTypeId, const char**, vary*, USHORT, Firebird::DecimalStatus, ErrorFunction);
 void CVT_move_common(const dsc*, dsc*, Firebird::DecimalStatus, Firebird::Callbacks*, bool trustedSource = false);
 void CVT_move(const dsc*, dsc*, Firebird::DecimalStatus, ErrorFunction, bool trustedSource = false);
 SSHORT CVT_decompose(const char*, USHORT, Firebird::Int128*, ErrorFunction);
-USHORT CVT_get_string_ptr(const dsc*, USHORT*, UCHAR**, vary*, USHORT, Firebird::DecimalStatus, ErrorFunction);
-USHORT CVT_get_string_ptr_common(const dsc*, USHORT*, UCHAR**, vary*, USHORT, Firebird::DecimalStatus, Firebird::Callbacks*);
+USHORT CVT_get_string_ptr(const dsc*, TTypeId*, UCHAR**, vary*, USHORT, Firebird::DecimalStatus, ErrorFunction);
+USHORT CVT_get_string_ptr_common(const dsc*, TTypeId*, UCHAR**, vary*, USHORT, Firebird::DecimalStatus, Firebird::Callbacks*);
 SINT64 CVT_get_int64(const dsc*, SSHORT, Firebird::DecimalStatus, ErrorFunction);
 SQUAD CVT_get_quad(const dsc*, SSHORT, Firebird::DecimalStatus, ErrorFunction);
 void CVT_string_to_datetime(const dsc*, ISC_TIMESTAMP_TZ*, bool*, const Firebird::EXPECT_DATETIME,

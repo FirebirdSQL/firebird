@@ -37,7 +37,7 @@ void	DYN_UTIL_generate_field_position(Jrd::thread_db*, const Jrd::QualifiedName&
 void	DYN_UTIL_generate_field_name(Jrd::thread_db*, Jrd::QualifiedName&);
 void	DYN_UTIL_generate_constraint_name(Jrd::thread_db*, Jrd::QualifiedName&);
 bool DYN_UTIL_check_unique_name_nothrow(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction,
-	const Jrd::QualifiedName& object_name, int object_type, USHORT* errorCode = nullptr);
+	const Jrd::QualifiedName& object_name, int object_type, USHORT* errorCode = nullptr, bool freeWhenPossible = false);
 void	DYN_UTIL_check_unique_name(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction,
 								   const Jrd::QualifiedName& object_name, int object_type);
 SINT64	DYN_UTIL_gen_unique_id(Jrd::thread_db*, SSHORT, const char*);

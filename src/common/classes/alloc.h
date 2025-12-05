@@ -178,21 +178,38 @@ public:
 	static MemoryPool* defaultMemoryManager;
 	static MemoryPool* externalMemoryManager;
 
-public:
-	// Create memory pool instance
-	static MemoryPool* createPool(MemoryPool* parent = NULL, MemoryStats& stats = *default_stats_group);
-	// Delete memory pool instance
-	static void deletePool(MemoryPool* pool);
+	const void* mp() const
+	{
+		return pool;
+	}
 
+public:
 #ifdef DEBUG_GDS_ALLOC
 #define ALLOC_ARGS , __FILE__, __LINE__
+#define ALLOC_ARGS1 __FILE__, __LINE__,
+#define ALLOC_ARGS0 __FILE__, __LINE__
 #define ALLOC_PARAMS , const char* file, int line
+#define ALLOC_PARAMS1 const char* file, int line,
+#define ALLOC_PARAMS0 const char* file, int line
 #define ALLOC_PASS_ARGS , file, line
+#define ALLOC_PASS_ARGS1 file, line,
+#define ALLOC_PASS_ARGS0 file, line
 #else
 #define ALLOC_ARGS
 #define ALLOC_PARAMS
 #define ALLOC_PASS_ARGS
+#define ALLOC_ARGS1
+#define ALLOC_PARAMS1
+#define ALLOC_PASS_ARGS1
+#define ALLOC_ARGS0
+#define ALLOC_PARAMS0
+#define ALLOC_PASS_ARGS0
 #endif // DEBUG_GDS_ALLOC
+
+	// Create memory pool instance
+	static MemoryPool* createPool(ALLOC_PARAMS1 MemoryPool* parent = NULL, MemoryStats& stats = *default_stats_group);
+	// Delete memory pool instance
+	static void deletePool(MemoryPool* pool);
 
 	void* calloc(size_t size ALLOC_PARAMS);
 
@@ -348,6 +365,7 @@ public:
 		savedThreadData(subThreadData),
 		savedPool(savedThreadData->getDefaultPool())
 	{
+		fb_assert(newPool);
 		savedThreadData->setDefaultPool(newPool);
 	}
 

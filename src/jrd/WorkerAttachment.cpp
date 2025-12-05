@@ -34,10 +34,11 @@
 #include "../common/classes/ClumpletWriter.h"
 #include "../jrd/jrd.h"
 #include "../jrd/ini_proto.h"
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "../jrd/pag_proto.h"
 #include "../jrd/tra_proto.h"
 #include "../jrd/status.h"
+#include "../jrd/Monitoring.h"
 
 
 using namespace Firebird;
@@ -128,8 +129,6 @@ void WorkerStableAttachment::fini()
 
 		attachment->releaseLocks(tdbb);
 		LCK_fini(tdbb, LCK_OWNER_attachment);
-
-		attachment->releaseRelations(tdbb);
 	}
 
 	destroy(attachment);

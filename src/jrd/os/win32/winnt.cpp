@@ -46,7 +46,7 @@
 #include "../common/isc_proto.h"
 #include "../common/isc_f_proto.h"
 
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "../jrd/mov_proto.h"
 #include "../jrd/os/pio_proto.h"
 #include "../common/classes/init.h"

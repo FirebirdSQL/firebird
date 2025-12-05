@@ -31,6 +31,8 @@ namespace Jrd {
 	class Request;
 	class jrd_tra;
 	class AssignmentNode;
+
+	enum InternalRequest : USHORT;
 }
 
 void EXE_assignment(Jrd::thread_db*, const Jrd::AssignmentNode*);
@@ -41,16 +43,14 @@ void EXE_assignment(Jrd::thread_db* tdbb, const Jrd::ValueExprNode* to, dsc* fro
 void EXE_execute_db_triggers(Jrd::thread_db*, Jrd::jrd_tra*, enum TriggerAction);
 void EXE_execute_ddl_triggers(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction,
 	bool preTriggers, int action);
+void EXE_execute_triggers(Jrd::thread_db*, const Jrd::Triggers&, Jrd::record_param*, Jrd::record_param*,
+	enum TriggerAction, Jrd::StmtNode::WhichTrigger, int = 0);
 void EXE_execute_function(Jrd::thread_db* tdbb, Jrd::Request* request, Jrd::jrd_tra* transaction,
 	ULONG inMsgLength, UCHAR* inMsg, ULONG outMsgLength, UCHAR* outMsg);
 bool EXE_get_stack_trace(const Jrd::Request* request, Firebird::string& sTrace);
 
 const Jrd::StmtNode* EXE_looper(Jrd::thread_db* tdbb, Jrd::Request* request,
 	const Jrd::StmtNode* in_node);
-
-void EXE_execute_triggers(Jrd::thread_db*, Jrd::TrigVector**, Jrd::record_param*, Jrd::record_param*,
-	enum TriggerAction, Jrd::StmtNode::WhichTrigger, int = 0);
-
 void EXE_receive(Jrd::thread_db*, Jrd::Request*, USHORT, ULONG, void*, bool = false);
 void EXE_release(Jrd::thread_db*, Jrd::Request*);
 void EXE_send(Jrd::thread_db*, Jrd::Request*, USHORT, ULONG, const void*);
@@ -87,23 +87,23 @@ namespace Jrd
 	class AutoCacheRequest
 	{
 	public:
-		AutoCacheRequest(thread_db* tdbb, USHORT aId, USHORT aWhich)
+		AutoCacheRequest(thread_db* tdbb, USHORT aId, InternalRequest aWhich)
 			: id(aId),
 			  which(aWhich),
-			  request(tdbb->getAttachment()->findSystemRequest(tdbb, id, which))
+			  request(tdbb->getDatabase()->findSystemRequest(tdbb, id, which))
 		{
 		}
 
 		AutoCacheRequest(thread_db* tdbb, const CachedRequestId& cachedRequestId)
 			: id(cachedRequestId.getId()),
 			  which(CACHED_REQUESTS),
-			  request(tdbb->getAttachment()->findSystemRequest(tdbb, id, which))
+			  request(tdbb->getDatabase()->findSystemRequest(tdbb, id, which))
 		{
 		}
 
 		AutoCacheRequest() noexcept
 			: id(0),
-			  which(0),
+			  which(NOT_REQUEST),
 			  request(NULL)
 		{
 		}
@@ -114,13 +114,13 @@ namespace Jrd
 		}
 
 	public:
-		void reset(thread_db* tdbb, USHORT aId, USHORT aWhich)
+		void reset(thread_db* tdbb, USHORT aId, InternalRequest aWhich)
 		{
 			release();
 
 			id = aId;
 			which = aWhich;
-			request = tdbb->getAttachment()->findSystemRequest(tdbb, id, which);
+			request = tdbb->getDatabase()->findSystemRequest(tdbb, id, which);
 		}
 
 		void reset(thread_db* tdbb, const CachedRequestId& cachedRequestId)
@@ -129,7 +129,7 @@ namespace Jrd
 
 			id = cachedRequestId.getId();
 			which = CACHED_REQUESTS;
-			request = tdbb->getAttachment()->findSystemRequest(tdbb, id, which);
+			request = tdbb->getDatabase()->findSystemRequest(tdbb, id, which);
 		}
 
 		void compile(thread_db* tdbb, const UCHAR* blr, ULONG blrLength)
@@ -137,8 +137,7 @@ namespace Jrd
 			if (request)
 				return;
 
-			request = CMP_compile_request(tdbb, blr, blrLength, true);
-			cacheRequest();
+			cacheRequest(CMP_compile_request(tdbb, blr, blrLength, true));
 		}
 
 		Request* operator ->() noexcept
@@ -157,22 +156,18 @@ namespace Jrd
 		}
 
 	private:
-		inline void release()
-		{
-			if (request)
-			{
-				EXE_unwind(JRD_get_thread_data(), request);
-				request = NULL;
-			}
-		}
-
-		void cacheRequest();
+		void release();
+		void cacheRequest(Request* req);
 
 	private:
 		USHORT id;
-		USHORT which;
+		InternalRequest which;
 		Request* request;
 	};
+
+#define TOKENPASTE(x, y) x ## y
+#define TOKENPASTE2(x, y) TOKENPASTE(x, y)
+#define AUTO_HANDLE(rq) static CachedRequestId TOKENPASTE2(cachedRq, __LINE__); AutoCacheRequest rq(tdbb, TOKENPASTE2(cachedRq, __LINE__))
 
 	class AutoRequest
 	{
@@ -199,6 +194,7 @@ namespace Jrd
 				return;
 
 			request = CMP_compile_request(tdbb, blr, blrLength, true);
+			request->setUsed();
 		}
 
 		Request* operator ->() noexcept
@@ -217,14 +213,7 @@ namespace Jrd
 		}
 
 	private:
-		inline void release()
-		{
-			if (request)
-			{
-				CMP_release(JRD_get_thread_data(), request);
-				request = NULL;
-			}
-		}
+		void release();
 
 	private:
 		Request* request;

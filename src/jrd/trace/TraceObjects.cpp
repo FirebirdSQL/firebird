@@ -36,6 +36,7 @@
 #include "../../common/isc_s_proto.h"
 #include "../../jrd/jrd.h"
 #include "../../jrd/tra.h"
+#include "../../jrd/met.h"
 #include "../../jrd/DataTypeUtil.h"
 #include "../../dsql/ExprNodes.h"
 #include "../../dsql/StmtNodes.h"
@@ -104,7 +105,7 @@ bool descToUTF8(const paramdsc* param, string& result)
 
 	try
 	{
-		if (!Jrd::DataTypeUtil::convertToUTF8(src, result, param->dsc_sub_type, status_exception::raise))
+		if (!Jrd::DataTypeUtil::convertToUTF8(src, result, CSetId(param->dsc_sub_type), status_exception::raise))
 			result = src;
 	}
 	catch (const Firebird::Exception&)
@@ -128,6 +129,26 @@ const char* StatementHolder::ensurePlan(bool explained)
 	}
 
 	return m_plan.c_str();
+}
+
+
+/// StatementHolder
+
+Firebird::string StatementHolder::getName() const
+{
+	if (m_statement)
+	{
+		if (m_statement->procedure)
+			return m_statement->procedure->getName().toQuotedString();
+
+		if (m_statement->function)
+			return m_statement->function->getName().toQuotedString();
+
+		if (m_statement->triggerName.hasData())
+			return m_statement->triggerName.toQuotedString();
+	}
+
+	return "";
 }
 
 

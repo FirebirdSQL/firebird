@@ -26,6 +26,7 @@
 
 #include "../jrd/RuntimeStatistics.h"
 #include "../jrd/ntrace.h"
+#include "../jrd/met.h"
 
 using namespace Firebird;
 
@@ -119,18 +120,15 @@ PerformanceInfo* RuntimeStatistics::computeDifference(Attachment* att,
 			// Point TraceCounts to counts array from baseline object
 			if (base_cnts->setToDiff(new_cnts))
 			{
-				jrd_rel* const relation =
-					rel_id < static_cast<SLONG>(att->att_relations->count()) ?
-					(*att->att_relations)[rel_id] : NULL;
-
 				TraceCounts traceCounts;
 				traceCounts.trc_relation_id = rel_id;
 				traceCounts.trc_counters = base_cnts->getCounterVector();
 
+				auto relation = att->att_database->dbb_mdc->lookupRelationNoChecks(rel_id);
 				if (relation)
 				{
 					auto& tempName = tempNames.add();
-					tempName = relation->rel_name.toQuotedString();
+					tempName = relation->getName().toQuotedString();
 					traceCounts.trc_relation_name = tempName.c_str();
 				}
 				else
@@ -144,19 +142,16 @@ PerformanceInfo* RuntimeStatistics::computeDifference(Attachment* att,
 		}
 		else
 		{
-			jrd_rel* const relation =
-				rel_id < static_cast<SLONG>(att->att_relations->count()) ?
-				(*att->att_relations)[rel_id] : NULL;
-
 			// Point TraceCounts to counts array from object with updated counters
 			TraceCounts traceCounts;
 			traceCounts.trc_relation_id = rel_id;
+			auto relation = att->att_database->dbb_mdc->lookupRelationNoChecks(rel_id);
 			traceCounts.trc_counters = new_cnts.getCounterVector();
 
 			if (relation)
 			{
 				auto& tempName = tempNames.add();
-				tempName = relation->rel_name.toQuotedString();
+				tempName = relation->getName().toQuotedString();
 				traceCounts.trc_relation_name = tempName.c_str();
 			}
 			else
@@ -199,9 +194,8 @@ void RuntimeStatistics::adjustPageStats(RuntimeStatistics& baseStats, const Runt
 	}
 }
 
-RuntimeStatistics::Accumulator::Accumulator(thread_db* tdbb, const jrd_rel* relation,
-											const RecordStatType type)
-	: m_tdbb(tdbb), m_type(type), m_id(relation->rel_id)
+RuntimeStatistics::Accumulator::Accumulator(thread_db* tdbb, const jrd_rel* relation, const RecordStatType type)
+	: m_tdbb(tdbb), m_type(type), m_id(relation->getId()), m_counter(0)
 {}
 
 RuntimeStatistics::Accumulator::~Accumulator()

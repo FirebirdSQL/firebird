@@ -66,13 +66,7 @@ public:
 	{
 	}
 
-	BaseQualifiedName(const BaseQualifiedName& src)
-		: object(src.object),
-		  schema(src.schema),
-		  package(src.package),
-		  unambiguous(src.isUnambiguous())
-	{
-	}
+	BaseQualifiedName(const BaseQualifiedName& src) = default;
 
 	template <typename TT>
 	BaseQualifiedName(const BaseQualifiedName<TT>& src)
@@ -334,6 +328,16 @@ public:
 		object = {};
 		schema = {};
 		package = {};
+	}
+
+	bool hasData() const
+	{
+		return object.hasData();
+	}
+
+	bool isEmpty() const
+	{
+		return object.isEmpty();
 	}
 
 	Firebird::string toQuotedString() const

@@ -66,6 +66,7 @@
 #include "dyn_consts.h"
 #include "ibase.h"
 #include "../jrd/constants.h"
+#include "../jrd/intl.h"
 #include "../common/utils_proto.h"
 
 
@@ -1009,9 +1010,9 @@ struct intlsym
 	intlsym* intlsym_next;
 	USHORT intlsym_type;		// what type of name
 	USHORT intlsym_flags;
-	SSHORT intlsym_ttype;		// id of implementation
-	SSHORT intlsym_charset_id;
-	SSHORT intlsym_collate_id;
+	TTypeId intlsym_ttype;		// id of implementation
+	CSetId intlsym_charset_id;
+	CollId intlsym_collate_id;
 	USHORT intlsym_bytes_per_char;
 	TEXT intlsym_name[2];
 };
@@ -1054,9 +1055,9 @@ struct gpre_fld
 	intlsym* fld_collate;		// collation clause for SQL declared field
 	cmpf* fld_computed;			// computed field definition
 	USHORT fld_char_length;		// field length in CHARACTERS
-	SSHORT fld_charset_id;		// Field character set id for text
-	SSHORT fld_collate_id;		// Field collation id for text
-	SSHORT fld_ttype;			// ID of text type's implementation
+	CSetId fld_charset_id;		// Field character set id for text
+	CollId fld_collate_id;		// Field collation id for text
+	TTypeId fld_ttype;			// ID of text type's implementation
 };
 
 inline constexpr size_t FLD_LEN = sizeof(gpre_fld);
@@ -1293,7 +1294,7 @@ public:
 	USHORT ref_offset;			// offset of field in port
 #endif
 	USHORT ref_flags;
-	SSHORT ref_ttype;			// Character set type for literals
+	TTypeId ref_ttype;			// Text type for literals
 
 	inline void add_byte(const int byte) noexcept
 	{
@@ -1472,8 +1473,8 @@ struct udf {
 	SSHORT udf_scale;			// Return scale
 	USHORT udf_length;			// Return length
 	USHORT udf_sub_type;		// Return sub-type
-	USHORT udf_charset_id;		// Return character set
-	USHORT udf_ttype;			// Return text type
+	CSetId udf_charset_id;		// Return character set
+	TTypeId udf_ttype;			// Return text type
 	USHORT udf_type;			// Function type
 	gpre_fld* udf_inputs;		// List of udf input arguments
 	TEXT udf_function[1];		// Function name

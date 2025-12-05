@@ -40,7 +40,7 @@ namespace Jrd {
 		}
 
 	public:
-		virtual UCHAR maxBytesPerChar(UCHAR charSet);
+		virtual UCHAR maxBytesPerChar(CSetId charSet);
 		virtual USHORT getDialect() const;
 
 	private:

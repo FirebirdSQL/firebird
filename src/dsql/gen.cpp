@@ -191,8 +191,8 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 
 		parameter->par_parameter = (USHORT) i;
 
-		const USHORT fromCharSet = parameter->par_desc.getCharSet();
-		const USHORT toCharSet = (fromCharSet == CS_NONE || fromCharSet == CS_BINARY) ?
+		const auto fromCharSet = parameter->par_desc.getCharSet();
+		const auto toCharSet = (fromCharSet == CS_NONE || fromCharSet == CS_BINARY) ?
 			fromCharSet : tdbb->getCharSet();
 
 		if (parameter->par_desc.dsc_dtype <= dtype_any_text &&
@@ -209,8 +209,8 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 			const USHORT fromCharSetBPC = METD_get_charset_bpc(dsqlScratch->getTransaction(), fromCharSet);
 			const USHORT toCharSetBPC = METD_get_charset_bpc(dsqlScratch->getTransaction(), toCharSet);
 
-			parameter->par_desc.setTextType(INTL_CS_COLL_TO_TTYPE(toCharSet,
-				(fromCharSet == toCharSet ? INTL_GET_COLLATE(&parameter->par_desc) : 0)));
+			parameter->par_desc.setTextType(TTypeId(toCharSet,
+				(fromCharSet == toCharSet ? INTL_GET_COLLATE(&parameter->par_desc) : CollId(0))));
 
 			parameter->par_desc.dsc_length = UTLD_char_length_to_byte_length(
 				parameter->par_desc.dsc_length / fromCharSetBPC, toCharSetBPC, adjust);
@@ -331,10 +331,10 @@ void GEN_descriptor( DsqlCompilerScratch* dsqlScratch, const dsc* desc, bool tex
 	switch (desc->dsc_dtype)
 	{
 	case dtype_text:
-		if (texttype || desc->dsc_ttype() == ttype_binary || desc->dsc_ttype() == ttype_none)
+		if (texttype || desc->getTextType() == ttype_binary || desc->getTextType() == ttype_none)
 		{
 			dsqlScratch->appendUChar(blr_text2);
-			dsqlScratch->appendUShort(desc->dsc_ttype());
+			dsqlScratch->appendUShort(desc->getTextType());
 		}
 		else
 		{
@@ -346,10 +346,10 @@ void GEN_descriptor( DsqlCompilerScratch* dsqlScratch, const dsc* desc, bool tex
 		break;
 
 	case dtype_varying:
-		if (texttype || desc->dsc_ttype() == ttype_binary || desc->dsc_ttype() == ttype_none)
+		if (texttype || desc->getTextType() == ttype_binary || desc->getTextType() == ttype_none)
 		{
 			dsqlScratch->appendUChar(blr_varying2);
-			dsqlScratch->appendUShort(desc->dsc_ttype());
+			dsqlScratch->appendUShort(desc->getTextType());
 		}
 		else
 		{

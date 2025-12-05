@@ -36,7 +36,7 @@
 #include "../common/isc_f_proto.h"
 #include "../common/isc_s_proto.h"
 #include "../common/db_alias.h"
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/mov_proto.h"
 #include "../jrd/pag_proto.h"
@@ -46,6 +46,8 @@
 #include "../jrd/RecordBuffer.h"
 #include "../jrd/Monitoring.h"
 #include "../jrd/Function.h"
+#include "../jrd/met.h"
+#include "../jrd/Statement.h"
 #include "../jrd/optimizer/Optimizer.h"
 #include <numeric>
 
@@ -107,7 +109,7 @@ namespace
 } // namespace
 
 
-const Format* MonitoringTableScan::getFormat(thread_db* tdbb, jrd_rel* relation) const
+const Format* MonitoringTableScan::getFormat(thread_db* tdbb, RelationPermanent* relation) const
 {
 	const auto* const snapshot = MonitoringSnapshot::create(tdbb);
 	return snapshot->getData(relation)->getFormat();
@@ -118,12 +120,12 @@ bool MonitoringTableScan::retrieveRecord(thread_db* tdbb, jrd_rel* relation,
 										 FB_UINT64 position, Record* record) const
 {
 	const auto* const snapshot = MonitoringSnapshot::create(tdbb);
-	if (!snapshot->getData(relation)->fetch(position, record))
+	if (!snapshot->getData(getPermanent(relation))->fetch(position, record))
 		return false;
 
-	if (relation->rel_id == rel_mon_attachments || relation->rel_id == rel_mon_statements)
+	if (relation->getId() == rel_mon_attachments || relation->getId() == rel_mon_statements)
 	{
-		const USHORT fieldId = (relation->rel_id == rel_mon_attachments) ?
+		const USHORT fieldId = (relation->getId() == rel_mon_attachments) ?
 			(USHORT) f_mon_att_idle_timer : (USHORT) f_mon_stmt_timer;
 
 		dsc desc;
@@ -135,7 +137,7 @@ bool MonitoringTableScan::retrieveRecord(thread_db* tdbb, jrd_rel* relation,
 			ISC_TIMESTAMP_TZ* ts = reinterpret_cast<ISC_TIMESTAMP_TZ*> (desc.dsc_address);
 			ts->utc_timestamp = TimeZoneUtil::getCurrentGmtTimeStamp().utc_timestamp;
 
-			if (relation->rel_id == rel_mon_attachments)
+			if (relation->getId() == rel_mon_attachments)
 			{
 				const SINT64 currClock = fb_utils::query_performance_counter() / fb_utils::query_performance_frequency();
 				NoThrowTimeStamp::add10msec(&ts->utc_timestamp, clock - currClock, ISC_TIME_SECONDS_PRECISION);
@@ -702,11 +704,11 @@ void SnapshotData::clearSnapshot() noexcept
 }
 
 
-RecordBuffer* SnapshotData::getData(const jrd_rel* relation) const noexcept
+RecordBuffer* SnapshotData::getData(const RelationPermanent* relation) const noexcept
 {
 	fb_assert(relation);
 
-	return getData(relation->rel_id);
+	return getData(relation->getId());
 }
 
 
@@ -724,16 +726,15 @@ RecordBuffer* SnapshotData::getData(int id) const noexcept
 
 RecordBuffer* SnapshotData::allocBuffer(thread_db* tdbb, MemoryPool& pool, int rel_id)
 {
-	jrd_rel* const relation = MET_lookup_relation_id(tdbb, rel_id, false);
+	jrd_rel* relation = MetadataCache::lookup_relation_id(tdbb, rel_id, 0);
 	fb_assert(relation);
-	MET_scan_relation(tdbb, relation);
 	fb_assert(relation->isVirtual());
 
-	const Format* const format = MET_current(tdbb, relation);
+	const Format* const format = relation->currentFormat(tdbb);
 	fb_assert(format);
 
 	RecordBuffer* const buffer = FB_NEW_POOL(pool) RecordBuffer(pool, format);
-	const RelationData data = {relation->rel_id, buffer};
+	const RelationData data = {relation->getId(), buffer};
 	m_snapshot.add(data);
 
 	return buffer;
@@ -784,7 +785,7 @@ void SnapshotData::putField(thread_db* tdbb, Record* record, const DumpField& fi
 		SLONG rel_id;
 		memcpy(&rel_id, field.data, field.length);
 
-		const jrd_rel* const relation = MET_lookup_relation_id(tdbb, rel_id, false);
+		RelationPermanent* relation = MetadataCache::lookupRelation(tdbb, rel_id, 0);
 		if (!relation || relation->rel_name.object.isEmpty())
 			return;
 
@@ -1607,8 +1608,10 @@ void Monitoring::dumpAttachment(thread_db* tdbb, Attachment* attachment, ULONG g
 	{
 		// Statement information, must be put into dump before requests
 
-		for (const auto statement : attachment->att_statements)
+		for (const auto request : attachment->att_requests)
 		{
+			const auto* statement = request->getStatement();
+
 			if (!(statement->flags & (Statement::FLAG_INTERNAL | Statement::FLAG_SYS_TRIGGER)))
 			{
 				const string plan = Optimizer::getPlan(tdbb, statement, true);

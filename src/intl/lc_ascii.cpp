@@ -490,7 +490,6 @@ TEXTTYPE_ENTRY2(WIN1258_c0_init)
 
 
 const USHORT LANGASCII_MAX_KEY	= MAX_KEY;
-const BYTE ASCII_SPACE			= 32;			// ASCII code for space
 
 /*
  * key_length (in_len)
