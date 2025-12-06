@@ -779,7 +779,7 @@ type
 	IProfilerSession_defineStatement2Ptr = procedure(this: IProfilerSession; status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; schemaName: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar); cdecl;
 	IProfilerStats_getElapsedTicksPtr = function(this: IProfilerStats): QWord; cdecl;
 	IPerformanceCounters_getObjectCountPtr = function(this: IPerformanceCounters): Cardinal; cdecl;
-	IPerformanceCounters_getCountersCapacityPtr = function(this: IPerformanceCounters): Cardinal; cdecl;
+	IPerformanceCounters_getMaxCounterIndexPtr = function(this: IPerformanceCounters): Cardinal; cdecl;
 	IPerformanceCounters_getObjectIdPtr = function(this: IPerformanceCounters; index: Cardinal): Cardinal; cdecl;
 	IPerformanceCounters_getObjectNamePtr = function(this: IPerformanceCounters; index: Cardinal): PAnsiChar; cdecl;
 	IPerformanceCounters_getObjectCountersPtr = function(this: IPerformanceCounters; index: Cardinal): Int64Ptr; cdecl;
@@ -4063,7 +4063,7 @@ type
 
 	PerformanceCountersVTable = class(VersionedVTable)
 		getObjectCount: IPerformanceCounters_getObjectCountPtr;
-		getCountersCapacity: IPerformanceCounters_getCountersCapacityPtr;
+		getMaxCounterIndex: IPerformanceCounters_getMaxCounterIndexPtr;
 		getObjectId: IPerformanceCounters_getObjectIdPtr;
 		getObjectName: IPerformanceCounters_getObjectNamePtr;
 		getObjectCounters: IPerformanceCounters_getObjectCountersPtr;
@@ -4092,7 +4092,7 @@ type
 		const RECORD_IMGC = Cardinal(14);
 
 		function getObjectCount(): Cardinal;
-		function getCountersCapacity(): Cardinal;
+		function getMaxCounterIndex(): Cardinal;
 		function getObjectId(index: Cardinal): Cardinal;
 		function getObjectName(index: Cardinal): PAnsiChar;
 		function getObjectCounters(index: Cardinal): Int64Ptr;
@@ -4102,7 +4102,7 @@ type
 		constructor create;
 
 		function getObjectCount(): Cardinal; virtual; abstract;
-		function getCountersCapacity(): Cardinal; virtual; abstract;
+		function getMaxCounterIndex(): Cardinal; virtual; abstract;
 		function getObjectId(index: Cardinal): Cardinal; virtual; abstract;
 		function getObjectName(index: Cardinal): PAnsiChar; virtual; abstract;
 		function getObjectCounters(index: Cardinal): Int64Ptr; virtual; abstract;
@@ -10221,9 +10221,9 @@ begin
 	Result := PerformanceCountersVTable(vTable).getObjectCount(Self);
 end;
 
-function IPerformanceCounters.getCountersCapacity(): Cardinal;
+function IPerformanceCounters.getMaxCounterIndex(): Cardinal;
 begin
-	Result := PerformanceCountersVTable(vTable).getCountersCapacity(Self);
+	Result := PerformanceCountersVTable(vTable).getMaxCounterIndex(Self);
 end;
 
 function IPerformanceCounters.getObjectId(index: Cardinal): Cardinal;
@@ -17840,11 +17840,11 @@ begin
 	end
 end;
 
-function IPerformanceCountersImpl_getCountersCapacityDispatcher(this: IPerformanceCounters): Cardinal; cdecl;
+function IPerformanceCountersImpl_getMaxCounterIndexDispatcher(this: IPerformanceCounters): Cardinal; cdecl;
 begin
 	Result := 0;
 	try
-		Result := IPerformanceCountersImpl(this).getCountersCapacity();
+		Result := IPerformanceCountersImpl(this).getMaxCounterIndex();
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
@@ -18994,7 +18994,7 @@ initialization
 	IPerformanceCountersImpl_vTable := PerformanceCountersVTable.create;
 	IPerformanceCountersImpl_vTable.version := 2;
 	IPerformanceCountersImpl_vTable.getObjectCount := @IPerformanceCountersImpl_getObjectCountDispatcher;
-	IPerformanceCountersImpl_vTable.getCountersCapacity := @IPerformanceCountersImpl_getCountersCapacityDispatcher;
+	IPerformanceCountersImpl_vTable.getMaxCounterIndex := @IPerformanceCountersImpl_getMaxCounterIndexDispatcher;
 	IPerformanceCountersImpl_vTable.getObjectId := @IPerformanceCountersImpl_getObjectIdDispatcher;
 	IPerformanceCountersImpl_vTable.getObjectName := @IPerformanceCountersImpl_getObjectNameDispatcher;
 	IPerformanceCountersImpl_vTable.getObjectCounters := @IPerformanceCountersImpl_getObjectCountersDispatcher;

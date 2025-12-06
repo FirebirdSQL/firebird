@@ -7614,7 +7614,7 @@ namespace Firebird
 		struct VTable : public IVersioned::VTable
 		{
 			unsigned (CLOOP_CARG *getObjectCount)(IPerformanceCounters* self) CLOOP_NOEXCEPT;
-			unsigned (CLOOP_CARG *getCountersCapacity)(IPerformanceCounters* self) CLOOP_NOEXCEPT;
+			unsigned (CLOOP_CARG *getMaxCounterIndex)(IPerformanceCounters* self) CLOOP_NOEXCEPT;
 			unsigned (CLOOP_CARG *getObjectId)(IPerformanceCounters* self, unsigned index) CLOOP_NOEXCEPT;
 			const char* (CLOOP_CARG *getObjectName)(IPerformanceCounters* self, unsigned index) CLOOP_NOEXCEPT;
 			const ISC_INT64* (CLOOP_CARG *getObjectCounters)(IPerformanceCounters* self, unsigned index) CLOOP_NOEXCEPT;
@@ -7659,9 +7659,9 @@ namespace Firebird
 			return ret;
 		}
 
-		unsigned getCountersCapacity()
+		unsigned getMaxCounterIndex()
 		{
-			unsigned ret = static_cast<VTable*>(this->cloopVTable)->getCountersCapacity(this);
+			unsigned ret = static_cast<VTable*>(this->cloopVTable)->getMaxCounterIndex(this);
 			return ret;
 		}
 
@@ -22024,7 +22024,7 @@ namespace Firebird
 				{
 					this->version = Base::VERSION;
 					this->getObjectCount = &Name::cloopgetObjectCountDispatcher;
-					this->getCountersCapacity = &Name::cloopgetCountersCapacityDispatcher;
+					this->getMaxCounterIndex = &Name::cloopgetMaxCounterIndexDispatcher;
 					this->getObjectId = &Name::cloopgetObjectIdDispatcher;
 					this->getObjectName = &Name::cloopgetObjectNameDispatcher;
 					this->getObjectCounters = &Name::cloopgetObjectCountersDispatcher;
@@ -22047,11 +22047,11 @@ namespace Firebird
 			}
 		}
 
-		static unsigned CLOOP_CARG cloopgetCountersCapacityDispatcher(IPerformanceCounters* self) CLOOP_NOEXCEPT
+		static unsigned CLOOP_CARG cloopgetMaxCounterIndexDispatcher(IPerformanceCounters* self) CLOOP_NOEXCEPT
 		{
 			try
 			{
-				return static_cast<Name*>(self)->Name::getCountersCapacity();
+				return static_cast<Name*>(self)->Name::getMaxCounterIndex();
 			}
 			catch (...)
 			{
@@ -22114,7 +22114,7 @@ namespace Firebird
 		}
 
 		virtual unsigned getObjectCount() = 0;
-		virtual unsigned getCountersCapacity() = 0;
+		virtual unsigned getMaxCounterIndex() = 0;
 		virtual unsigned getObjectId(unsigned index) = 0;
 		virtual const char* getObjectName(unsigned index) = 0;
 		virtual const ISC_INT64* getObjectCounters(unsigned index) = 0;

@@ -1923,7 +1923,7 @@ interface PerformanceCounters : Versioned
 	const uint RECORD_IMGC = 14;
 
 	uint getObjectCount();
-	uint getCountersCapacity();
+	uint getMaxCounterIndex();
 
 	uint getObjectId(uint index);
 	const string getObjectName(uint index);

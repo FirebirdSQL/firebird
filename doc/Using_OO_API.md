@@ -2136,9 +2136,9 @@ If `getCounters()` is called with a counter group not supported by the implement
 <a name="PerformanceCounters"></a> PerformanceCounters interface:
 
 - unsigned getObjectCount() - returns number of objects (e.g. tables) containing non-zero performance counters
-- unsigned getCountersCapacity() - returns total number of performance counters supported by the implementation (it's the same for all objects of the same type)
+- unsigned getMaxCounterIndex() - returns maximum index number of the performance counters supported by the implementation (it's the same for all objects of the same group)
 - unsigned getObjectId(unsigned index) - returns ID of the specified object
 - const char* getObjectName(unsigned index) - returns name of the specified object
-- const ISC_INT64* getObjectCounters(unsigned index) - returns pointer to the vector of performance counters (containing getCountersCapacity() elements) of the specified object
+- const ISC_INT64* getObjectCounters(unsigned index) - returns pointer to the vector of performance counters (containing getMaxCounterIndex() + 1 elements) of the specified object
 
 The returned pointer to the vector (as well as the whole instance of `PerformanceStats`) is valid until the object used to obtain the statistics (using the `getPerfStats()` method) is destroyed.

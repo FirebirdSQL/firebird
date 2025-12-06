@@ -124,9 +124,9 @@ class TraceRuntimeStats :
 			return m_counts ? m_counts->getCount() : 0;
 		}
 
-		unsigned getCountersCapacity()
+		unsigned getMaxCounterIndex()
 		{
-			return T::getVectorCapacity();
+			return T::getVectorCapacity() - 1;
 		}
 
 		unsigned getObjectId(unsigned index)
