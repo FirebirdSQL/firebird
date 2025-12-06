@@ -33,145 +33,6 @@ namespace Jrd {
 
 GlobalPtr<RuntimeStatistics> RuntimeStatistics::dummy;
 
-void RuntimeStatistics::adjustRelStats(const RuntimeStatistics& baseStats, const RuntimeStatistics& newStats)
-{
-	if (baseStats.relChgNumber == newStats.relChgNumber)
-		return;
-
-	relChgNumber++;
-
-	auto locate = [this](SLONG relId) -> FB_SIZE_T
-	{
-		FB_SIZE_T pos;
-		if (!rel_counts.find(relId, pos))
-			rel_counts.insert(pos, RelationCounts(relId));
-		return pos;
-	};
-
-	auto baseIter = baseStats.rel_counts.begin(), newIter = newStats.rel_counts.begin();
-	const auto baseEnd = baseStats.rel_counts.end(), newEnd = newStats.rel_counts.end();
-
-	// The loop below assumes that newStats cannot miss relations existing in baseStats,
-	// this must be always the case as long as newStats is an incremented version of baseStats
-
-	while (newIter != newEnd || baseIter != baseEnd)
-	{
-		if (baseIter == baseEnd)
-		{
-			// Relation exists in newStats but missing in baseStats
-			const auto newRelId = newIter->getRelationId();
-			rel_counts[locate(newRelId)] += *newIter++;
-		}
-		else if (newIter != newEnd)
-		{
-			const auto baseRelId = baseIter->getRelationId();
-			const auto newRelId = newIter->getRelationId();
-
-			if (newRelId == baseRelId)
-			{
-				// Relation exists in both newStats and baseStats
-				fb_assert(baseRelId == newRelId);
-				const auto pos = locate(baseRelId);
-				rel_counts[pos] -= *baseIter++;
-				rel_counts[pos] += *newIter++;
-			}
-			else if (newRelId < baseRelId)
-			{
-				// Relation exists in newStats but missing in baseStats
-				rel_counts[locate(newRelId)] += *newIter++;
-			}
-			else
-				fb_assert(false); // should never happen
-		}
-		else
-			fb_assert(false); // should never happen
-	}
-}
-
-PerformanceInfo* RuntimeStatistics::computeDifference(Attachment* att,
-													  const RuntimeStatistics& new_stat,
-													  PerformanceInfo& dest,
-													  TraceCountsArray& temp,
-													  ObjectsArray<string>& tempNames)
-{
-	// NOTE: we do not initialize dest.pin_time. This must be done by the caller
-
-	// Calculate database-level statistics
-	for (size_t i = 0; i < GLOBAL_ITEMS; i++)
-		values[i] = new_stat.values[i] - values[i];
-
-	dest.pin_counters = values;
-
-	// Calculate relation-level statistics
-	temp.clear();
-	tempNames.clear();
-
-	// This loop assumes that base array is smaller than new one
-	RelCounters::iterator base_cnts = rel_counts.begin();
-	bool base_found = (base_cnts != rel_counts.end());
-
-	for (const auto& new_cnts : new_stat.rel_counts)
-	{
-		const SLONG rel_id = new_cnts.getRelationId();
-
-		if (base_found && base_cnts->getRelationId() == rel_id)
-		{
-			// Point TraceCounts to counts array from baseline object
-			if (base_cnts->setToDiff(new_cnts))
-			{
-				jrd_rel* const relation =
-					rel_id < static_cast<SLONG>(att->att_relations->count()) ?
-					(*att->att_relations)[rel_id] : NULL;
-
-				TraceCounts traceCounts;
-				traceCounts.trc_relation_id = rel_id;
-				traceCounts.trc_counters = base_cnts->getCounterVector();
-
-				if (relation)
-				{
-					auto& tempName = tempNames.add();
-					tempName = relation->rel_name.toQuotedString();
-					traceCounts.trc_relation_name = tempName.c_str();
-				}
-				else
-					traceCounts.trc_relation_name = nullptr;
-
-				temp.add(traceCounts);
-			}
-
-			++base_cnts;
-			base_found = (base_cnts != rel_counts.end());
-		}
-		else
-		{
-			jrd_rel* const relation =
-				rel_id < static_cast<SLONG>(att->att_relations->count()) ?
-				(*att->att_relations)[rel_id] : NULL;
-
-			// Point TraceCounts to counts array from object with updated counters
-			TraceCounts traceCounts;
-			traceCounts.trc_relation_id = rel_id;
-			traceCounts.trc_counters = new_cnts.getCounterVector();
-
-			if (relation)
-			{
-				auto& tempName = tempNames.add();
-				tempName = relation->rel_name.toQuotedString();
-				traceCounts.trc_relation_name = tempName.c_str();
-			}
-			else
-				traceCounts.trc_relation_name = nullptr;
-
-			temp.add(traceCounts);
-		}
-	};
-
-	dest.pin_count = temp.getCount();
-	dest.pin_tables = temp.begin();
-
-	return &dest;
-}
-
 void RuntimeStatistics::adjust(const RuntimeStatistics& baseStats, const RuntimeStatistics& newStats)
 {
 	if (baseStats.allChgNumber == newStats.allChgNumber)
@@ -181,7 +42,17 @@ void RuntimeStatistics::adjust(const RuntimeStatistics& baseStats, const Runtime
 	for (size_t i = 0; i < GLOBAL_ITEMS; ++i)
 		values[i] += newStats.values[i] - baseStats.values[i];
 
-	adjustRelStats(baseStats, newStats);
+	if (baseStats.pageChgNumber != newStats.pageChgNumber)
+	{
+		pageChgNumber++;
+		pageCounters.adjust(baseStats.pageCounters, newStats.pageCounters);
+	}
+
+	if (baseStats.tabChgNumber != newStats.tabChgNumber)
+	{
+		tabChgNumber++;
+		tableCounters.adjust(baseStats.tableCounters, newStats.tableCounters);
+	}
 }
 
 void RuntimeStatistics::adjustPageStats(RuntimeStatistics& baseStats, const RuntimeStatistics& newStats)
@@ -196,6 +67,67 @@ void RuntimeStatistics::adjustPageStats(RuntimeStatistics& baseStats, const Runt
 
 		values[i] += delta;
 		baseStats.values[i] += delta;
+	}
+}
+
+template <class Counts>
+void RuntimeStatistics::GroupedCountsArray<Counts>::adjust(const GroupedCountsArray& baseStats, const GroupedCountsArray& newStats)
+{
+	auto baseIter = baseStats.m_counts.begin(), newIter = newStats.m_counts.begin();
+	const auto baseEnd = baseStats.m_counts.end(), newEnd = newStats.m_counts.end();
+
+	// The loop below assumes that newStats cannot miss objects existing in baseStats,
+	// this must be always the case as long as newStats is an incremented version of baseStats
+
+	while (newIter != newEnd || baseIter != baseEnd)
+	{
+		if (baseIter == baseEnd)
+		{
+			// Object exists in newStats but missing in baseStats
+			const auto newId = newIter->getGroupId();
+			(*this)[newId] += *newIter++;
+		}
+		else if (newIter != newEnd)
+		{
+			const auto baseId = baseIter->getGroupId();
+			const auto newId = newIter->getGroupId();
+
+			if (newId == baseId)
+			{
+				// Object exists in both newStats and baseStats
+				(*this)[newId] += *newIter++;
+				(*this)[newId] -= *baseIter++;
+			}
+			else if (newId < baseId)
+			{
+				// Object exists in newStats but missing in baseStats
+				(*this)[newId] += *newIter++;
+			}
+			else
+				fb_assert(false); // should never happen
+		}
+		else
+			fb_assert(false); // should never happen
+	}
+}
+
+void RuntimeStatistics::setToDiff(const RuntimeStatistics& newStats)
+{
+	for (size_t i = 0; i < GLOBAL_ITEMS; i++)
+		values[i] = newStats.values[i] - values[i];
+
+	for (const auto& newCounts : newStats.pageCounters)
+	{
+		const auto pageSpaceId = newCounts.getGroupId();
+		if (!pageCounters[pageSpaceId].setToDiff(newCounts))
+			pageCounters.remove(pageSpaceId);
+	}
+
+	for (const auto& newCounts : newStats.tableCounters)
+	{
+		const auto relationId = newCounts.getGroupId();
+		if (!tableCounters[relationId].setToDiff(newCounts))
+			tableCounters.remove(relationId);
 	}
 }
 

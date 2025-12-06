@@ -930,9 +930,10 @@ void CCH_fetch_page(thread_db* tdbb, WIN* window, const bool read_shadow)
 	pag* page = bdb->bdb_buffer;
 	bdb->bdb_incarnation = ++bcb->bcb_page_incarnation;
 
-	tdbb->bumpStats(PageStatType::READS);
+	const ULONG pageSpaceId = bdb->bdb_page.getPageSpaceID();
+	tdbb->bumpStats(PageStatType::READS, pageSpaceId);
 
-	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(bdb->bdb_page.getPageSpaceID());
+	const auto pageSpace = dbb->dbb_page_manager.findPageSpace(pageSpaceId);
 	fb_assert(pageSpace);
 
 	jrd_file* file = pageSpace->file;
@@ -1011,7 +1012,7 @@ void CCH_fetch_page(thread_db* tdbb, WIN* window, const bool read_shadow)
 	{
 		diff_page = bm->getPageIndex(tdbb, bdb->bdb_page.getPageNum());
 		NBAK_TRACE(("Reading page %d:%06d, state=%d, diff page=%d",
-			bdb->bdb_page.getPageSpaceID(), bdb->bdb_page.getPageNum(), (int) backupState, diff_page));
+			pageSpaceId, bdb->bdb_page.getPageNum(), (int) backupState, diff_page));
 	}
 
 	// In merge mode, if we are reading past beyond old end of file and page is in .delta file
@@ -1021,7 +1022,7 @@ void CCH_fetch_page(thread_db* tdbb, WIN* window, const bool read_shadow)
 		fb_assert(bdb->bdb_page == window->win_page);
 
 		NBAK_TRACE(("Reading page %d:%06d, state=%d, diff page=%d from DISK",
-			bdb->bdb_page.getPageSpaceID(), bdb->bdb_page.getPageNum(), (int) backupState, diff_page));
+			pageSpaceId, bdb->bdb_page.getPageNum(), (int) backupState, diff_page));
 
 		// Read page from disk as normal
 		Pio io(file, bdb, isTempPage, read_shadow, pageSpace);
@@ -1701,14 +1702,16 @@ void CCH_mark(thread_db* tdbb, WIN* window, bool mark_system, bool must_write)
 
 	SET_TDBB(tdbb);
 	Database* dbb = tdbb->getDatabase();
-	tdbb->bumpStats(PageStatType::MARKS);
+
+	const ULONG pageSpaceId = window->win_page.getPageSpaceID();
+	tdbb->bumpStats(PageStatType::MARKS, pageSpaceId);
 
 	BufferControl* bcb = dbb->dbb_bcb;
 
 	if (!(bdb->bdb_flags & BDB_writer))
 		BUGCHECK(208);			// msg 208 page not accessed for write
 
-	CCH_TRACE(("MARK    %d:%06d", window->win_page.getPageSpaceID(), window->win_page.getPageNum()));
+	CCH_TRACE(("MARK    %d:%06d", pageSpaceId, window->win_page.getPageNum()));
 
 	// A LATCH_mark is needed before the BufferDesc can be marked.
 	// This prevents a write while the page is being modified.
@@ -3805,6 +3808,8 @@ static BufferDesc* get_buffer(thread_db* tdbb, const PageNumber page, SyncType s
 	BufferControl* bcb = dbb->dbb_bcb;
 	Attachment* att = tdbb->getAttachment();
 
+	const ULONG pageSpaceId = page.getPageSpaceID();
+
 	if (att && att->att_bdb_cache)
 	{
 		if (BufferDesc* bdb = att->att_bdb_cache->get(page))
@@ -3814,7 +3819,7 @@ static BufferDesc* get_buffer(thread_db* tdbb, const PageNumber page, SyncType s
 				if (bdb->bdb_page == page)
 				{
 					recentlyUsed(bdb);
-					tdbb->bumpStats(PageStatType::FETCHES);
+					tdbb->bumpStats(PageStatType::FETCHES, pageSpaceId);
 					return bdb;
 				}
 
@@ -3857,7 +3862,7 @@ static BufferDesc* get_buffer(thread_db* tdbb, const PageNumber page, SyncType s
 				if (bdb->bdb_page == page)
 				{
 					recentlyUsed(bdb);
-					tdbb->bumpStats(PageStatType::FETCHES);
+					tdbb->bumpStats(PageStatType::FETCHES, pageSpaceId);
 					cacheBuffer(att, bdb);
 					return bdb;
 				}
@@ -3897,7 +3902,7 @@ static BufferDesc* get_buffer(thread_db* tdbb, const PageNumber page, SyncType s
 				{
 					bdb->downgrade(syncType);
 					recentlyUsed(bdb);
-					tdbb->bumpStats(PageStatType::FETCHES);
+					tdbb->bumpStats(PageStatType::FETCHES, pageSpaceId);
 					cacheBuffer(att, bdb);
 					return bdb;
 				}
@@ -3941,7 +3946,7 @@ static BufferDesc* get_buffer(thread_db* tdbb, const PageNumber page, SyncType s
 						else
 							recentlyUsed(bdb);
 					}
-					tdbb->bumpStats(PageStatType::FETCHES);
+					tdbb->bumpStats(PageStatType::FETCHES, pageSpaceId);
 					cacheBuffer(att, bdb);
 					return bdb;
 				}
@@ -3959,7 +3964,7 @@ static BufferDesc* get_buffer(thread_db* tdbb, const PageNumber page, SyncType s
 					continue;
 				}
 				recentlyUsed(bdb2);
-				tdbb->bumpStats(PageStatType::FETCHES);
+				tdbb->bumpStats(PageStatType::FETCHES, pageSpaceId);
 				cacheBuffer(att, bdb2);
 			}
 			else
@@ -4914,7 +4919,8 @@ static bool write_page(thread_db* tdbb, BufferDesc* bdb, FbStatusVector* const s
 	// I won't wipe out the if() itself to allow my changes be verified easily by others
 	if (true)
 	{
-		tdbb->bumpStats(PageStatType::WRITES);
+		const ULONG pageSpaceId = bdb->bdb_page.getPageSpaceID();
+		tdbb->bumpStats(PageStatType::WRITES, pageSpaceId);
 
 		// write out page to main database file, and to any
 		// shadows, making a special case of the header page
@@ -4952,8 +4958,7 @@ static bool write_page(thread_db* tdbb, BufferDesc* bdb, FbStatusVector* const s
 
 			gds__trace(buffer);
 #endif
-			PageSpace* pageSpace =
-				dbb->dbb_page_manager.findPageSpace(bdb->bdb_page.getPageSpaceID());
+			const auto pageSpace = dbb->dbb_page_manager.findPageSpace(pageSpaceId);
 			fb_assert(pageSpace);
 			const bool isTempPage = pageSpace->isTemporary();
 
