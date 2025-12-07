@@ -36,6 +36,7 @@
 #include "../jrd/dflt.h"
 #include "../jrd/constants.h"
 #include "../jrd/ods.h"
+#include "../common/dsc.h"
 
 //******************************
 // names.h

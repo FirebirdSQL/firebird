@@ -38,7 +38,7 @@ public:
 	ConfigTable(MemoryPool& pool, const Firebird::Config* conf);
 
 	// return data for RDB$CONFIG
-	RecordBuffer* getRecords(thread_db* tdbb, jrd_rel* relation);
+	RecordBuffer* getRecords(thread_db* tdbb, RelationPermanent* relation);
 
 private:
 	const Firebird::Config* m_conf;
@@ -49,7 +49,7 @@ class ConfigTableScan final : public VirtualTableScan
 {
 public:
 	ConfigTableScan(CompilerScratch* csb, const Firebird::string& alias,
-					  StreamType stream, jrd_rel* relation)
+					  StreamType stream, Rsc::Rel relation)
 		: VirtualTableScan(csb, alias, stream, relation)
 	{
 		m_impure = csb->allocImpure<Impure>();
@@ -58,7 +58,7 @@ public:
 	void close(thread_db* tdbb) const override;
 
 protected:
-	const Format* getFormat(thread_db* tdbb, jrd_rel* relation) const override;
+	const Format* getFormat(thread_db* tdbb, RelationPermanent* relation) const override;
 
 	bool retrieveRecord(thread_db* tdbb, jrd_rel* relation, FB_UINT64 position,
 		Record* record) const override;
@@ -69,7 +69,7 @@ private:
 		ConfigTable* table;
 	};
 
-	RecordBuffer* getRecords(thread_db* tdbb, jrd_rel* relation) const;
+	RecordBuffer* getRecords(thread_db* tdbb, RelationPermanent* relation) const;
 
 	ULONG m_impure;
 };

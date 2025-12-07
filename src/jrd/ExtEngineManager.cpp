@@ -47,6 +47,8 @@
 #include "../jrd/Function.h"
 #include "../jrd/TimeZone.h"
 #include "../jrd/SystemPackages.h"
+#include "../jrd/Statement.h"
+#include "../jrd/met.h"
 #include "../common/isc_proto.h"
 #include "../common/classes/auto.h"
 #include "../common/classes/fb_pair.h"
@@ -539,7 +541,7 @@ public:
 		setCharSet(tdbb, attInfo, obj);
 	}
 
-	ContextManager(thread_db* tdbb, EngineAttachmentInfo* aAttInfo, USHORT aCharSet,
+	ContextManager(thread_db* tdbb, EngineAttachmentInfo* aAttInfo, CSetId aCharSet,
 				CallerName aCallerName = CallerName())
 		: attInfo(aAttInfo),
 		  attachment(tdbb->getAttachment()),
@@ -604,9 +606,9 @@ private:
 			attachment->qualifyExistingName(tdbb, charSetName, {obj_charset});
 		}
 
-		USHORT charSetId;
+		TTypeId charSetId;
 
-		if (!MET_get_char_coll_subtype(tdbb, &charSetId, charSetName))
+		if (!MetadataCache::get_char_coll_subtype(tdbb, &charSetId, charSetName))
 			status_exception::raise(Arg::Gds(isc_charset_not_found) << charSetName.toQuotedString());
 
 		attachment->att_charset = charSetId;
@@ -617,7 +619,7 @@ private:
 	Jrd::Attachment* attachment;
 	jrd_tra* transaction;
 	// These data members are to restore the original information.
-	const USHORT charSet;
+	const CSetId charSet;
 	const bool attInUse;
 	const bool traInUse;
 	CallerName callerName;
@@ -1559,7 +1561,7 @@ void ExtEngineManager::makeFunction(thread_db* tdbb, CompilerScratch* csb, Jrd::
 			CallerName(obj_udf, udf->getName(), userName) :
 			CallerName(obj_package_header, QualifiedName(udf->getName().package, udf->getName().schema), userName)));
 
-	MemoryPool& pool = *tdbb->getAttachment()->att_pool;
+	MemoryPool& pool = *tdbb->getDatabase()->dbb_permanent;
 
 	AutoPtr<RoutineMetadata> metadata(FB_NEW_POOL(pool) RoutineMetadata(pool));
 	metadata->name = udf->getName();
@@ -1648,7 +1650,7 @@ void ExtEngineManager::makeProcedure(thread_db* tdbb, CompilerScratch* csb, jrd_
 			CallerName(obj_package_header,
 				QualifiedName(prc->getName().package, prc->getName().schema), userName)));
 
-	MemoryPool& pool = *tdbb->getAttachment()->att_pool;
+	MemoryPool& pool = *tdbb->getDatabase()->dbb_permanent;
 
 	AutoPtr<RoutineMetadata> metadata(FB_NEW_POOL(pool) RoutineMetadata(pool));
 	metadata->name = prc->getName();
@@ -1765,7 +1767,7 @@ void ExtEngineManager::makeProcedure(thread_db* tdbb, CompilerScratch* csb, jrd_
 		mainNode->statements.add(extProcedureNode);
 
 		Statement* statement = prc->getStatement();
-		PAR_preparsed_node(tdbb, NULL, mainNode, NULL, &csb, &statement, false, 0);
+		PAR_preparsed_node(tdbb, nullptr, mainNode, NULL, &csb, &statement, false, 0);
 		prc->setStatement(statement);
 	}
 	catch (...)
@@ -1789,7 +1791,7 @@ void ExtEngineManager::makeTrigger(thread_db* tdbb, CompilerScratch* csb, Jrd::T
 	ContextManager<IExternalTrigger> ctxManager(tdbb, attInfo, attInfo->adminCharSet,
 		CallerName(obj_trigger, trg->name, userName));
 
-	MemoryPool& pool = *tdbb->getAttachment()->att_pool;
+	MemoryPool& pool = *tdbb->getDatabase()->dbb_permanent;
 
 	AutoPtr<RoutineMetadata> metadata(FB_NEW_POOL(pool) RoutineMetadata(pool));
 	metadata->name = trg->name;
@@ -1801,7 +1803,7 @@ void ExtEngineManager::makeTrigger(thread_db* tdbb, CompilerScratch* csb, Jrd::T
 
 	if (relation)
 	{
-		metadata->triggerTable = relation->rel_name;
+		metadata->triggerTable = relation->getName();
 
 		MsgMetadata* fieldsMsg = FB_NEW MsgMetadata;
 		metadata->triggerFields = fieldsMsg;
@@ -1866,7 +1868,7 @@ void ExtEngineManager::makeTrigger(thread_db* tdbb, CompilerScratch* csb, Jrd::T
 		const auto extTriggerNode = FB_NEW_POOL(csbPool) ExtTriggerNode(csbPool, extTrigger);
 		mainNode->statements.add(extTriggerNode);
 
-		PAR_preparsed_node(tdbb, trg->relation, mainNode, NULL, &csb, &trg->statement, true, 0);
+		PAR_preparsed_node(tdbb, trg->relation->getPermanent(), mainNode, NULL, &csb, &trg->statement, true, 0);
 	}
 	catch (...)
 	{
@@ -2018,7 +2020,7 @@ void ExtEngineManager::setupAdminCharSet(thread_db* tdbb, IExternalEngine* engin
 		tdbb->getAttachment()->qualifyExistingName(tdbb, charSetName, {obj_charset});
 	}
 
-	if (!MET_get_char_coll_subtype(tdbb, &attInfo->adminCharSet, charSetName))
+	if (!MetadataCache::get_char_coll_subtype(tdbb, &attInfo->adminCharSet, charSetName))
 		status_exception::raise(Arg::Gds(isc_charset_not_found) << charSetName.toQuotedString());
 }
 

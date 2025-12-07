@@ -437,8 +437,8 @@ public:
 		if (!m_need_trace)
 			return;
 
-		m_name = trigger->name.toQuotedString();
-		m_relationName = trigger->relation ? trigger->relation->rel_name.toQuotedString() : "";
+		m_name = trigger->getName().toQuotedString();
+		m_relationName = trigger->relation ? trigger->relation->getName().toQuotedString() : "";
 
 		const auto type = (trigger->type & ~TRIGGER_TYPE_MASK);
 
@@ -458,7 +458,7 @@ public:
 
 			case TRIGGER_TYPE_DB:
 				{
-					m_action = type + DB_TRIGGER_MAX - 1;
+					m_action = type + TRIGGER_CONNECT;
 
 					fb_assert(m_action == TRIGGER_CONNECT ||
 							  m_action == TRIGGER_DISCONNECT ||
@@ -722,8 +722,8 @@ public:
 		m_sweep_info.update(header);
 	}
 
-	void beginSweepRelation(jrd_rel* relation);
-	void endSweepRelation(jrd_rel* relation);
+	void beginSweepRelation(const jrd_rel* relation);
+	void endSweepRelation();
 
 	void finish()
 	{

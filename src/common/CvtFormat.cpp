@@ -1849,7 +1849,7 @@ ISC_TIMESTAMP_TZ CVT_format_string_to_datetime(const dsc* desc, const Firebird::
 	if (format.isEmpty())
 		cb->err(Arg::Gds(isc_sysf_invalid_null_empty) << Arg::Str(STRINGIZE(format)));
 
-	USHORT dtype;
+	TTypeId dtype;
 	UCHAR* sourceString;
 	const USHORT stringLength = CVT_get_string_ptr_common(desc, &dtype, &sourceString, nullptr, 0, 0, cb);
 

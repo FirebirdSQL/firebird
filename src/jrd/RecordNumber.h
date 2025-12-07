@@ -109,18 +109,13 @@ public:
 	inline RecordNumber() noexcept : value(0), valid(false) {}
 
 	// Copy constructor
-	inline RecordNumber(const RecordNumber& from) noexcept : value(from.value), valid(from.valid) {}
+	inline RecordNumber(const RecordNumber& from) = default;
 
 	// Explicit constructor from 64-bit record number value
 	inline explicit RecordNumber(SINT64 number) noexcept : value(number), valid(true) {}
 
 	// Assignment operator
-	inline RecordNumber& operator =(const RecordNumber& from) noexcept
-	{
-		value = from.value;
-		valid = from.valid;
-		return *this;
-	}
+	inline RecordNumber& operator =(const RecordNumber& from) = default;
 
 	inline bool operator ==(const RecordNumber& other) const noexcept
 	{
@@ -250,6 +245,11 @@ struct bid
 	bool isEmpty() const noexcept
 	{
 		return bid_quad.bid_quad_high == 0 && bid_quad.bid_quad_low == 0;
+	}
+
+	bool hasData() const noexcept
+	{
+		return !isEmpty();
 	}
 
 	void clear() noexcept
