@@ -8480,6 +8480,8 @@ static unsigned process_message_display(Firebird::IMessageMetadata* message, uns
 		{
 			auto subdisp_length = calculateDisplayLength(subvar);
 			disp_length += subdisp_length < SUBFIELD_PRINT_MIN_LENGTH ? SUBFIELD_PRINT_MIN_LENGTH : subdisp_length;
+			// Add 2 characters for every subvariable for comma and space separators
+			disp_length += 2;
 		}
 
 		const unsigned type = var.type;
