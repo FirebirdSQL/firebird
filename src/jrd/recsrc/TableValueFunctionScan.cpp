@@ -429,16 +429,18 @@ void GenSeriesFunctionScan::internalOpen(thread_db* tdbb) const
 	EVL_make_value(tdbb, finishDesc, &impure->m_finish);
 	EVL_make_value(tdbb, stepDesc, &impure->m_step);
 
-	switch (impure->m_result.vlu_desc.dsc_dtype) {
-	case dtype_int64:
-		impure->m_result.vlu_desc.dsc_address = reinterpret_cast<UCHAR*>(&impure->m_result.vlu_misc.vlu_int64);
-		break;
-	case dtype_int128:
-		impure->m_result.vlu_desc.dsc_address = reinterpret_cast<UCHAR*>(&impure->m_result.vlu_misc.vlu_int128);
-		break;
-	default:
-		fb_assert(false);
+	switch (impure->m_result.vlu_desc.dsc_dtype)
+	{
+		case dtype_int64:
+			impure->m_result.vlu_desc.dsc_address = reinterpret_cast<UCHAR*>(&impure->m_result.vlu_misc.vlu_int64);
+			break;
+		case dtype_int128:
+			impure->m_result.vlu_desc.dsc_address = reinterpret_cast<UCHAR*>(&impure->m_result.vlu_misc.vlu_int128);
+			break;
+		default:
+			fb_assert(false);
 	}
+
 	// result = start
 	MOV_move(tdbb, startDesc, &impure->m_result.vlu_desc);
 
@@ -492,7 +494,6 @@ bool GenSeriesFunctionScan::nextBuffer(thread_db* tdbb) const
 	const auto request = tdbb->getRequest();
 	const auto impure = request->getImpure<Impure>(m_impure);
 
-
 	const auto comparison = MOV_compare(tdbb, &impure->m_result.vlu_desc, &impure->m_finish.vlu_desc);
 	if (((impure->m_stepSign > 0) && (comparison <= 0)) ||
 		((impure->m_stepSign < 0) && (comparison >= 0)))
@@ -525,6 +526,7 @@ bool GenSeriesFunctionScan::nextBuffer(thread_db* tdbb) const
 			// stop evaluate next result
 			impure->m_stepSign = 0;
 		}
+
 		return true;
 	}
 
