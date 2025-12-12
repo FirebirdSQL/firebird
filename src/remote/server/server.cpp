@@ -6129,10 +6129,10 @@ bool rem_port::sendInlineBlob(PACKET* sendL, Rtr* rtr, SQUAD blobId, ULONG maxSi
 	if (status.getState() & IStatus::STATE_ERRORS)
 		return false;
 
-	bool segmented;
+	bool segmented = false;
 	ULONG num_segments = 0;
 	ULONG max_segment = 0;
-	FB_UINT64 total_length;
+	FB_UINT64 total_length = 0u;
 
 	ClumpletReader p(ClumpletReader::InfoResponse, info, sizeof(info));
 	for (; !p.isEof(); p.moveNext())

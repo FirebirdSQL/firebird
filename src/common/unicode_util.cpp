@@ -1853,7 +1853,7 @@ USHORT UnicodeUtil::Utf16Collation::stringToKey(USHORT srcLen, const USHORT* src
 				if (keys)
 				{
 					UCHAR lastCharKey[BUFFER_TINY];	// sort key for a single character
-					ULONG prefixLen, lastCharKeyLen;
+					ULONG prefixLen = 0, lastCharKeyLen = 0;
 
 					srcLenLong -= i;
 
@@ -1877,8 +1877,6 @@ USHORT UnicodeUtil::Utf16Collation::stringToKey(USHORT srcLen, const USHORT* src
 						fb_assert(lastCharKey[lastCharKeyLen - 1] == '\0');
 						--lastCharKeyLen;
 					}
-					else
-						prefixLen = 0;
 
 					bool fallbackToPrefixKey = false;
 

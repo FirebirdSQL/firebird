@@ -2315,15 +2315,13 @@ void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation)
 	}
 
 	UCHAR* desc = 0;
-	USHORT len, space;
+	const USHORT len = idx->idx_count * sizeof(irtd);
+	USHORT space = dbb->dbb_page_size;
 	index_root_page::irt_repeat* slot = NULL;
 	index_root_page::irt_repeat* end = NULL;
 
 	for (int retry = 0; retry < 2; ++retry)
 	{
-		len = idx->idx_count * sizeof(irtd);
-
-		space = dbb->dbb_page_size;
 		slot = NULL;
 
 		end = root->irt_rpt + root->irt_count;
@@ -2358,6 +2356,8 @@ void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation)
 		}
 		else
 			break;
+
+		space = dbb->dbb_page_size;
 	}
 
 	// If we didn't pick up an empty slot, allocate a new one
@@ -2816,8 +2816,8 @@ static void compress(thread_db* tdbb,
 	const Database* dbb = tdbb->getDatabase();
 	bool first_key = true;
 	VaryStr<MAX_KEY * 4> buffer;
-	size_t multiKeyLength;
-	UCHAR* ptr;
+	size_t multiKeyLength = 0;
+	UCHAR* ptr = nullptr;
 	UCHAR* p = key->key_data;
 	SSHORT scale = matchScale ? matchScale : desc->dsc_scale;
 
@@ -2829,7 +2829,7 @@ static void compress(thread_db* tdbb,
 
 		do
 		{
-			size_t length;
+			size_t length = 0;
 
 			has_next = false;
 

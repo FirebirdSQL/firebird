@@ -64,7 +64,7 @@ StatusVector::ImplStatusVector::ImplStatusVector(const ISC_STATUS* s) noexcept
 {
 	fb_assert(s);
 
-	clear();
+	ImplStatusVector::clear();
 
 	// special case - empty initialized status vector, no warnings
 	if (s[0] != isc_arg_gds || s[1] != 0 || s[2] != 0)
@@ -78,7 +78,7 @@ StatusVector::ImplStatusVector::ImplStatusVector(const IStatus* s) noexcept
 {
 	fb_assert(s);
 
-	clear();
+	ImplStatusVector::clear();
 
 	if (s->getState() & IStatus::STATE_ERRORS)
 		append(s->getErrors());
@@ -91,9 +91,9 @@ StatusVector::ImplStatusVector::ImplStatusVector(const Exception& ex) noexcept
 	  m_status_vector(*getDefaultMemoryPool()),
 	  m_strings(*getDefaultMemoryPool())
 {
-	clear();
+	ImplStatusVector::clear();
 
-	assign(ex);
+	ImplStatusVector::assign(ex);
 }
 
 StatusVector::StatusVector(ISC_STATUS k, ISC_STATUS c) :
@@ -143,7 +143,7 @@ void StatusVector::ImplStatusVector::assign(const StatusVector& v) noexcept
 
 void StatusVector::ImplStatusVector::assign(const Exception& ex) noexcept
 {
-	clear();
+	ImplStatusVector::clear();
 	ex.stuffException(m_status_vector);
 	putStrArg(0);
 }
@@ -263,7 +263,7 @@ bool StatusVector::ImplStatusVector::append(const ISC_STATUS* const from, const 
 	if (!count)
 		return true; // not sure it's the best option here
 
-	unsigned lenBefore = length();
+	unsigned lenBefore = ImplStatusVector::length();
 	ISC_STATUS* s = m_status_vector.getBuffer(lenBefore + count + 1);
 	unsigned int copied =
 		fb_utils::copyStatus(&s[lenBefore], count + 1, from, count);
@@ -273,7 +273,7 @@ bool StatusVector::ImplStatusVector::append(const ISC_STATUS* const from, const 
 
 	if (!m_warning)
 	{
-		for (unsigned n = 0; n < length(); )
+		for (unsigned n = 0; n < ImplStatusVector::length(); )
 		{
 			if (m_status_vector[n] == isc_arg_warning)
 			{
@@ -407,19 +407,25 @@ Num::Num(ISC_STATUS s) noexcept :
 Int64::Int64(SINT64 val) noexcept :
 	Str(text)
 {
-	snprintf(text, sizeof(text), "%" SQUADFORMAT, val);
+	[[maybe_unused]] auto result = snprintf(text, sizeof(text), "%" SQUADFORMAT, val);
+	fb_assert(result >= 0);
 }
 
 Int64::Int64(FB_UINT64 val) noexcept :
 	Str(text)
 {
-	snprintf(text, sizeof(text), "%" UQUADFORMAT, val);
+	[[maybe_unused]] auto result = snprintf(text, sizeof(text), "%" UQUADFORMAT, val);
+	fb_assert(result >= 0);
 }
 
 Quad::Quad(const ISC_QUAD* quad) noexcept :
 	Str(text)
 {
-	snprintf(text, sizeof(text), "%x:%x", quad->gds_quad_high, quad->gds_quad_low);
+	[[maybe_unused]] auto result = snprintf(text, sizeof(text), "%x:%x",
+		static_cast<unsigned int>(quad->gds_quad_high),
+		quad->gds_quad_low
+	);
+	fb_assert(result >= 0);
 }
 
 Interpreted::Interpreted(const char* text) noexcept :
