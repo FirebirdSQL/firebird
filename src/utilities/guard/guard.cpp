@@ -183,7 +183,6 @@ int CLIB_ROUTINE main( int argc, char **argv)
 	time_t timer = 0;
 
 	do {
-		int ret_code;
 
 		if (shutting_down)
 		{
@@ -226,6 +225,7 @@ int CLIB_ROUTINE main( int argc, char **argv)
 		}
 
 		// wait for child to die, and evaluate exit status
+		int ret_code = NORMAL_EXIT;
 		bool shutdown_child = true;
 		if (!shutting_down)
 		{
