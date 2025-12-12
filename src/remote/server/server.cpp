@@ -4652,7 +4652,7 @@ void rem_port::info(P_OP op, P_INFO* stuff, PACKET* sendL)
 
 	HalfStaticArray<UCHAR, 1024> info;
 	UCHAR* info_buffer = NULL;
-	ULONG info_len;
+	ULONG info_len = 0;
 	HalfStaticArray<UCHAR, 1024> temp;
 	UCHAR* temp_buffer = NULL;
 
@@ -6130,8 +6130,8 @@ bool rem_port::sendInlineBlob(PACKET* sendL, Rtr* rtr, SQUAD blobId, ULONG maxSi
 		return false;
 
 	bool segmented = false;
-	ULONG num_segments;
-	ULONG max_segment;
+	ULONG num_segments = 0;
+	ULONG max_segment = 0;
 	FB_UINT64 total_length = 0u;
 
 	ClumpletReader p(ClumpletReader::InfoResponse, info, sizeof(info));
