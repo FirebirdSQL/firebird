@@ -152,10 +152,10 @@ inline constexpr int key_empty		= 1;	// Key contains empty data / empty string
 
 struct temporary_key
 {
-	USHORT key_length;
+	USHORT key_length = 0;
 	UCHAR key_data[MAX_KEY + 1];
-	UCHAR key_flags;
-	USHORT key_nulls;	// bitmap of encountered null segments,
+	UCHAR key_flags = 0;
+	USHORT key_nulls = 0;	// bitmap of encountered null segments,
 						// USHORT is enough to store MAX_INDEX_SEGMENTS bits
 	Firebird::AutoPtr<temporary_key> key_next;	// next key (INTL_KEY_MULTI_STARTING)
 };
