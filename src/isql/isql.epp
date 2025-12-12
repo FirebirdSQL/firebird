@@ -7243,7 +7243,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 				// one digit more than the specified precision when the value is 0
 				// The bug appears in TCS DSQL_DOMAIN_12 and 13
 				//
-				const double value = *var->value.asFloat;
+				const double value = static_cast<double>(*var->value.asFloat);
 
 				if (checkSpecial(p, length, value))
 				{
@@ -7292,7 +7292,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 				// Don't let numeric/decimal doubles overflow print length
 				// Special handling for 0 -- don't test log for length
 				unsigned rounded = 0;
-				if (dscale && (!value ||
+				if (dscale && (value == 0 ||
 					(rounded = static_cast<unsigned int>(ceil(fabs(log10(fabs(value)))))) < length - 10))
 				{
 					unsigned precision = 0;
