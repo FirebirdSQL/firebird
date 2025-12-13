@@ -707,6 +707,7 @@ enum att_type {
 // Trigger types
 
 enum trig_t {
+	trig_none = 0,
 	trig_pre_store = 1,   // default
 	trig_pre_modify,	  // default
 	trig_post_erase	   // default

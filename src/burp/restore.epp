@@ -9389,7 +9389,7 @@ bool get_trigger_old (BurpGlobals* tdgbl, burp_rel* relation)
  *	Get a trigger definition for a relation.
  *
  **************************************/
-	enum trig_t	type = trig_pre_store;
+	enum trig_t	type = trig_none;
 	att_type	attribute;
 	TEXT		name[GDS_NAME_LEN];
 	scan_attr_t		scan_next_attr;
