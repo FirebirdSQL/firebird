@@ -3952,9 +3952,13 @@ static void scan_relation(thread_db* tdbb, jrd_rel* relation)
 	AutoCacheRequest request(tdbb, irq_r_fields, IRQ_REQUESTS);
 	CompilerScratch* csb = NULL;
 
+	bool found = false;
+
 	FOR(REQUEST_HANDLE request)
 		REL IN RDB$RELATIONS WITH REL.RDB$RELATION_ID EQ relation->rel_id
 	{
+		found = true;
+
 		// Pick up relation level stuff
 		relation->rel_current_fmt = REL.RDB$FORMAT;
 		vec<jrd_fld*>* vector = relation->rel_fields =
@@ -4227,6 +4231,27 @@ static void scan_relation(thread_db* tdbb, jrd_rel* relation)
 	END_FOR
 
 	delete csb;
+
+	if (!found && !(relation->rel_flags & REL_scanned))
+	{
+		// Relation was not found in RDB$RELATIONS. It could be system virtual relation
+		// defined in INI.
+
+		if (relation->isSystem() && relation->isVirtual())
+		{
+			relation->rel_flags |= REL_scanned;
+		}
+		else
+		{
+			fb_assert(false);
+
+			string name(relation->rel_name);
+			if (name.isEmpty())
+				name.printf("<ID = %u>", relation->rel_id);
+
+			ERR_post(Arg::Gds(isc_relnotdef) << Arg::Str(name));
+		}
+	}
 
 	// We have just loaded the triggers onto the local vector triggers.
 	// It's now time to place them at their rightful place inside the relation block.
