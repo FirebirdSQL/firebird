@@ -2835,7 +2835,7 @@ jrd_prc* MET_lookup_procedure_id(thread_db* tdbb, USHORT id,
 }
 
 
-jrd_rel* MET_lookup_relation(thread_db* tdbb, const MetaName& name)
+jrd_rel* MET_lookup_relation(thread_db* tdbb, const MetaName& name, bool return_deleting)
 {
 /**************************************
  *
@@ -2864,7 +2864,12 @@ jrd_rel* MET_lookup_relation(thread_db* tdbb, const MetaName& name)
 		if (relation)
 		{
 			if (relation->rel_flags & REL_deleting)
+			{
+				if (!return_deleting)
+					continue;
+
 				CheckoutLockGuard guard(tdbb, relation->rel_drop_mutex, FB_FUNCTION);
+			}
 
 			if (!(relation->rel_flags & REL_deleted))
 			{
@@ -2936,7 +2941,7 @@ jrd_rel* MET_lookup_relation(thread_db* tdbb, const MetaName& name)
 }
 
 
-jrd_rel* MET_lookup_relation_id(thread_db* tdbb, SLONG id, bool return_deleted)
+jrd_rel* MET_lookup_relation_id(thread_db* tdbb, SLONG id, bool return_deleted, bool return_deleting)
 {
 /**************************************
  *
@@ -2965,7 +2970,12 @@ jrd_rel* MET_lookup_relation_id(thread_db* tdbb, SLONG id, bool return_deleted)
 	if (vector && (id < (SLONG) vector->count()) && (relation = (*vector)[id]))
 	{
 		if (relation->rel_flags & REL_deleting)
+		{
+			if (!return_deleting)
+				return NULL;
+
 			CheckoutLockGuard guard(tdbb, relation->rel_drop_mutex, FB_FUNCTION);
+		}
 
 		if (relation->rel_flags & REL_deleted)
 			return return_deleted ? relation : NULL;
