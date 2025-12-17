@@ -1003,3 +1003,4 @@ FB_IMPL_MSG(JRD, 1000, argmustbe_exact_function, -833, "42", "000", "Arguments f
 FB_IMPL_MSG(JRD, 1001, sysf_argmustbe_range_inc0_1, -833, "42", "000", "Argument for @1 must be in the range [0, 1]")
 FB_IMPL_MSG(JRD, 1002, argmustbe_numeric_function, -833, "42", "000", "Argument for @1 function must be numeric types")
 FB_IMPL_MSG(JRD, 1003, percetile_only_one_sort_item, -833, "42", "000", "The PERCENTILE_DISC and PERENTILE_CONT functions support only one sort item in WITHIN GROUP")
+FB_IMPL_MSG(JRD, 1004, argmustbe_const_within_group, -833, "42", "000", "Argument for @1 function must be constant within each group")
