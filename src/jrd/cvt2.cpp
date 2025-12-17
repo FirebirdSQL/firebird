@@ -974,7 +974,7 @@ USHORT CVT2_make_string2(const dsc* desc, USHORT to_interp, UCHAR** address, Mov
  **************************************/
 	UCHAR* from_buf;
 	USHORT from_len;
-	USHORT from_interp;
+	USHORT from_interp = 0;
 
 	fb_assert(desc != NULL);
 	fb_assert(address != NULL);

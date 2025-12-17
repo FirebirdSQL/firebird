@@ -2011,7 +2011,7 @@ unsigned char* Attachment::getLocalInfo(UCharBuffer& info, unsigned int buffer_l
 			break;
 		}
 
-		FB_UINT64 value;
+		FB_UINT64 value = 0;
 		bool skip = false;
 
 		switch (*item)
