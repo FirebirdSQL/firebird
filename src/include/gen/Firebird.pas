@@ -5958,6 +5958,7 @@ const
 	 isc_sysf_argmustbe_range_inc0_1 = 335545321;
 	 isc_argmustbe_numeric_function = 335545322;
 	 isc_percetile_only_one_sort_item = 335545323;
+	 isc_argmustbe_const_within_group = 335545324;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;

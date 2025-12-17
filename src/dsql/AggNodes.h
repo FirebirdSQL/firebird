@@ -170,6 +170,8 @@ public:
 		holder.add(valueArg);
 	}
 
+	bool dsqlInvalidReferenceFinder(InvalidReferenceFinder& visitor) override;
+
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;

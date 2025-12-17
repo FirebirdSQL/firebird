@@ -1227,6 +1227,49 @@ AggNode* PercentileAggNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	return this;
 }
 
+bool PercentileAggNode::dsqlInvalidReferenceFinder(InvalidReferenceFinder& visitor)
+{
+	bool invalid = false;
+
+	if (!visitor.insideOwnMap)
+	{
+		// We are not in an aggregate from the same scope_level so
+		// check for valid fields inside this aggregate
+		invalid |= ExprNode::dsqlInvalidReferenceFinder(visitor);
+	}
+
+	if (!visitor.insideHigherMap)
+	{
+		NodeRefsHolder holder(visitor.dsqlScratch->getPool());
+		getChildren(holder, true);
+
+		for (auto i : holder.refs)
+		{
+			// If there's another aggregate with the same scope_level or
+			// an higher one then it's a invalid aggregate, because
+			// aggregate-functions from the same context can't
+			// be part of each other.
+			if (Aggregate2Finder::find(visitor.dsqlScratch->getPool(), visitor.context->ctx_scope_level,
+				FIELD_MATCH_TYPE_EQUAL, false, *i))
+			{
+				// Nested aggregate functions are not allowed
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					Arg::Gds(isc_dsql_agg_nested_err));
+			}
+		}
+
+		if (visitor.visit(**holder.refs.begin()))
+		{
+			// The percent argument must be constant within group
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				Arg::Gds(isc_argmustbe_const_within_group) <<
+				((type == TYPE_PERCENTILE_CONT) ? Arg::Str("PERCENTILE_CONT") : Arg::Str("PERCENTILE_DISC")));
+		}
+	}
+
+	return invalid;
+}
+
 string PercentileAggNode::internalPrint(NodePrinter& printer) const
 {
 	AggNode::internalPrint(printer);
@@ -1437,7 +1480,7 @@ dsc* PercentileAggNode::aggExecute(thread_db* tdbb, Request* request) const
 AggNode* PercentileAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 {
 	AggNode* node = FB_NEW_POOL(dsqlScratch->getPool()) PercentileAggNode(dsqlScratch->getPool(), type,
-		doDsqlPass(dsqlScratch, arg), 
+		doDsqlPass(dsqlScratch, arg),
 		doDsqlPass(dsqlScratch, dsqlOrderClause) );
 
 	PASS1_set_parameter_type(dsqlScratch, node->arg,
