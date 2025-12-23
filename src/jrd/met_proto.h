@@ -144,7 +144,7 @@ void		MET_trigger_msg(Jrd::thread_db*, Firebird::string&, const Jrd::QualifiedNa
 void		MET_update_shadow(Jrd::thread_db*, Jrd::Shadow*, USHORT);
 void		MET_update_transaction(Jrd::thread_db*, Jrd::jrd_tra*, const bool);
 void		MET_get_domain(Jrd::thread_db*, MemoryPool& csbPool, const Jrd::QualifiedName&, dsc*, Jrd::FieldInfo*);
-Jrd::MetaName MET_get_relation_field(Jrd::thread_db*, MemoryPool& csbPool,
+void		MET_get_relation_field(Jrd::thread_db*, MemoryPool& csbPool,
 	const Jrd::QualifiedName&, const Jrd::MetaName&, dsc*, Jrd::FieldInfo*);
 void		MET_update_partners(Jrd::thread_db*);
 

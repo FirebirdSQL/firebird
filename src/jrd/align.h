@@ -143,11 +143,11 @@ static inline constexpr USHORT type_lengths[DTYPE_TYPE_MAX] =
 	sizeof(ISC_QUAD),				/* dtype_blob */
 	sizeof(ISC_QUAD),				/* dtype_array */
 	sizeof(SINT64),					/* dtype_int64 */
-	sizeof(RecordNumber::Packed),	/*dtype_dbkey */
+	sizeof(RecordNumber::Packed),	/* dtype_dbkey */
 	sizeof(UCHAR),					/* dtype_boolean */
 	sizeof(Firebird::Decimal64),	/* dtype_dec64 */
-	sizeof(Firebird::Decimal128),	/*dtype_dec128 */
-	sizeof(Firebird::Int128),		/*	dtype_int128 */
+	sizeof(Firebird::Decimal128),	/* dtype_dec128 */
+	sizeof(Firebird::Int128),		/* dtype_int128 */
 	sizeof(ISC_TIME_TZ),			/* dtype_sql_time_tz */
 	sizeof(ISC_TIMESTAMP_TZ),		/* dtype_timestamp_tz */
 	sizeof(ISC_TIME_TZ_EX),			/* dtype_ex_time_tz */

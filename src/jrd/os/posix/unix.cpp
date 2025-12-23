@@ -470,7 +470,7 @@ ULONG PIO_get_number_of_pages(const jrd_file* file, const USHORT pagesize)
  **************************************
  *
  * Functional description
- *	Compute number of pages in file, based only on file size.
+ *	Compute number of full-size pages in file, based only on file size.
  *
  **************************************/
 

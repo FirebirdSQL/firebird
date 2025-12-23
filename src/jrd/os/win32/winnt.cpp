@@ -740,7 +740,7 @@ ULONG PIO_get_number_of_pages(const jrd_file* file, const USHORT pagesize)
  **************************************
  *
  * Functional description
- *	Compute number of pages in file, based only on file size.
+ *	Compute number of full-size pages in file, based only on file size.
  *
  **************************************/
 	HANDLE hFile = file->fil_desc;
@@ -752,7 +752,7 @@ ULONG PIO_get_number_of_pages(const jrd_file* file, const USHORT pagesize)
 		nt_error("GetFileSize", file, isc_io_access_err, 0);
 
     const ULONGLONG ullFileSize = (((ULONGLONG) dwFileSizeHigh) << 32) + dwFileSizeLow;
-	return (ULONG) ((ullFileSize + pagesize - 1) / pagesize);
+	return ullFileSize / pagesize;
 }
 
 

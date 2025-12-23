@@ -3165,8 +3165,6 @@ bool Optimizer::getEquiJoinKeys(NestConst<ValueExprNode>& node1,
 string Optimizer::getStreamName(StreamType stream)
 {
 	const auto tail = &csb->csb_rpt[stream];
-	const auto* relation = tail->csb_relation;
-	const auto* procedure = tail->csb_procedure;
 	const auto* alias = tail->csb_alias;
 
 	string name = tail->getName().toQuotedString();

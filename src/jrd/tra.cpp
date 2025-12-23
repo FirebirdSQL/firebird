@@ -4358,7 +4358,7 @@ void TraceSweepEvent::endSweepRelation(jrd_rel* relation)
 		fb_utils::query_performance_counter() - m_relation_clock,
 		0);
 
-	m_sweep_info.setPerf(stats.getPerf());
+	m_sweep_info.setStats(&stats);
 
 	TraceConnectionImpl conn(att);
 	TraceManager* trace_mgr = att->att_trace_manager;
@@ -4405,7 +4405,7 @@ void TraceSweepEvent::report(ntrace_process_state_t state)
 
 	TraceRuntimeStats stats(att, &m_base_stats, &att->att_stats, finiTime, 0);
 
-	m_sweep_info.setPerf(stats.getPerf());
+	m_sweep_info.setStats(&stats);
 	trace_mgr->event_sweep(&conn, &m_sweep_info, state);
 
 	if (state == ITracePlugin::SWEEP_STATE_FAILED || state == ITracePlugin::SWEEP_STATE_FINISHED)

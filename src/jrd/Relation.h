@@ -417,6 +417,7 @@ inline constexpr ULONG REL_jrd_view			= 0x8000;	// relation is VIEW
 inline constexpr ULONG REL_gc_blocking		= 0x10000;	// request to downgrade\release gc lock
 inline constexpr ULONG REL_gc_disabled		= 0x20000;	// gc is disabled temporarily
 inline constexpr ULONG REL_gc_lockneed		= 0x40000;	// gc lock should be acquired
+inline constexpr ULONG REL_rescan			= 0x100000;	// rescan request was submitted while relation being scanning
 
 
 /// class jrd_rel

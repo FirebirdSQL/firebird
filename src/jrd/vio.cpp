@@ -3608,13 +3608,16 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 
 				if ((!rc1 || MOV_get_long(tdbb, &desc1, 0) == 0))
 				{
-					dsc desc3, desc4;
+					dsc desc3, desc4, desc5, desc6;
 					bool rc2 = EVL_field(NULL, new_rpb->rpb_record, f_rfr_null_flag, &desc2);
 					bool rc3 = EVL_field(NULL, org_rpb->rpb_record, f_rfr_sname, &desc3);
 					bool rc4 = EVL_field(NULL, new_rpb->rpb_record, f_rfr_sname, &desc4);
+					bool rc5 = EVL_field(NULL, org_rpb->rpb_record, f_rfr_field_source_schema, &desc5);
+					bool rc6 = EVL_field(NULL, new_rpb->rpb_record, f_rfr_field_source_schema, &desc6);
 
 					if ((rc2 && MOV_get_long(tdbb, &desc2, 0) != 0) ||
-						(rc3 && rc4 && MOV_compare(tdbb, &desc3, &desc4)))
+						(rc3 && rc4 && MOV_compare(tdbb, &desc3, &desc4)) ||
+						(rc5 && rc6 && MOV_compare(tdbb, &desc5, &desc6)))
 					{
 						EVL_field(0, new_rpb->rpb_record, f_rfr_schema, &schemaDesc);
 						EVL_field(0, new_rpb->rpb_record, f_rfr_rname, &desc1);

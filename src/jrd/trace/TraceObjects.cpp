@@ -261,16 +261,6 @@ const char* TraceSQLStatementImpl::getTextUTF8()
 	return m_textUTF8.c_str();
 }
 
-PerformanceInfo* TraceSQLStatementImpl::getPerf()
-{
-	return m_perf;
-}
-
-ITraceParams* TraceSQLStatementImpl::getInputs()
-{
-	return &m_inputs;
-}
-
 
 /// TraceSQLStatementImpl::DSQLParamsImpl
 
@@ -633,23 +623,60 @@ const char* TraceServiceImpl::getRemoteProcessName()
 
 /// TraceRuntimeStats
 
-TraceRuntimeStats::TraceRuntimeStats(Attachment* att, RuntimeStatistics* baseline, RuntimeStatistics* stats,
-	SINT64 clock, SINT64 records_fetched)
+TraceRuntimeStats::TraceRuntimeStats(Attachment* attachment,
+									 RuntimeStatistics* baseline, RuntimeStatistics* stats,
+									 SINT64 clock, SINT64 recordsFetched)
 {
+	memset(&m_info, 0, sizeof(m_info));
 	m_info.pin_time = clock * 1000 / fb_utils::query_performance_frequency();
-	m_info.pin_records_fetched = records_fetched;
+	m_info.pin_records_fetched = recordsFetched;
+	m_info.pin_counters = m_globalCounters;
 
 	if (baseline && stats)
-		baseline->computeDifference(att, *stats, m_info, m_counts, m_tempNames);
+	{
+		baseline->setToDiff(*stats);
+
+		m_globalCounters[PerformanceInfo::FETCHES] = (*baseline)[PageStatType::FETCHES];
+		m_globalCounters[PerformanceInfo::READS] = (*baseline)[PageStatType::READS];
+		m_globalCounters[PerformanceInfo::MARKS] = (*baseline)[PageStatType::MARKS];
+		m_globalCounters[PerformanceInfo::WRITES] = (*baseline)[PageStatType::WRITES];
+
+		auto getTablespaceName = [&](unsigned id) -> Firebird::string
+		{
+			return ""; // TODO
+		};
+
+		m_pageCounters.reset(&baseline->getPageCounters(), getTablespaceName);
+
+		auto getTableName = [&](unsigned id) -> Firebird::string
+		{
+			if (attachment->att_relations && id < attachment->att_relations->count())
+			{
+				if (const auto relation = (*attachment->att_relations)[id])
+					return relation->rel_name.toQuotedString();
+			}
+
+			return "";
+		};
+
+		m_tableCounters.reset(&baseline->getTableCounters(), getTableName);
+
+		m_info.pin_count = m_tableCounters.getObjectCount();
+		m_legacyCounts.resize(m_info.pin_count);
+		m_info.pin_tables = m_legacyCounts.begin();
+
+		for (unsigned i = 0; i < m_info.pin_count; i++)
+		{
+			m_info.pin_tables[i].trc_relation_id = m_tableCounters.getObjectId(i);
+			m_info.pin_tables[i].trc_relation_name = m_tableCounters.getObjectName(i);
+			m_info.pin_tables[i].trc_counters = m_tableCounters.getObjectCounters(i);
+		}
+	}
 	else
 	{
-		// Report all zero counts for the moment.
-		memset(&m_info, 0, sizeof(m_info));
-		m_info.pin_counters = m_dummy_counts;
+		memset(m_globalCounters, 0, sizeof(m_globalCounters));
 	}
 }
-
-SINT64 TraceRuntimeStats::m_dummy_counts[RuntimeStatistics::GLOBAL_ITEMS] = {0};
 
 
 /// TraceStatusVectorImpl

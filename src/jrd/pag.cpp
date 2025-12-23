@@ -1151,6 +1151,16 @@ void PAG_header_init(thread_db* tdbb)
 	if (header->hdr_page_size < MIN_PAGE_SIZE || header->hdr_page_size > MAX_PAGE_SIZE)
 		ERR_post(Arg::Gds(isc_bad_db_format) << Arg::Str(attachment->att_filename));
 
+	if (header->hdr_page_size % MIN_PAGE_SIZE != 0)
+		ERR_post(Arg::Gds(isc_bad_db_format) << Arg::Str(attachment->att_filename));
+
+	// Pagespace is already created at this point, so validate the database file
+	// to contain at least one full page
+	const auto pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+	fb_assert(pageSpace && pageSpace->file);
+	if (!PIO_get_number_of_pages(pageSpace->file, header->hdr_page_size))
+		ERR_post(Arg::Gds(isc_bad_db_format) << Arg::Str(attachment->att_filename));
+
 	dbb->dbb_ods_version = ods_version;
 	dbb->dbb_minor_version = header->hdr_ods_minor;
 

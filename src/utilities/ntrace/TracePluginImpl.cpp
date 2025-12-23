@@ -629,56 +629,78 @@ void TracePluginImpl::logRecordError(const char* action, ITraceConnection* conne
 		logRecord(action);
 }
 
-void TracePluginImpl::appendGlobalCounts(const PerformanceInfo* info)
+void TracePluginImpl::appendGlobalCounts(IPerformanceStats* stats)
 {
 	string temp;
 
-	temp.printf("%7" QUADFORMAT"d ms", info->pin_time);
+	temp.printf("%7" QUADFORMAT"d ms", stats->getElapsedTime());
 	record.append(temp);
 
-	ntrace_counter_t cnt;
+	const auto pageCounters = stats->getCounters(IPerformanceStats::COUNTER_GROUP_PAGES);
+	fb_assert(pageCounters);
 
-	if ((cnt = info->pin_counters[PerformanceInfo::READS]) != 0)
+	if (const auto count = pageCounters->getObjectCount())
 	{
-		temp.printf(", %" QUADFORMAT"d read(s)", cnt);
-		record.append(temp);
-	}
+		// Holds counters: IPerformanceCounters::PAGE_{FETCHES|READS|MARKS|WRITES}
+		static constexpr unsigned GLOBAL_COUNTERS = 4;
+		SINT64 globalCounters[GLOBAL_COUNTERS] = {0};
 
-	if ((cnt = info->pin_counters[PerformanceInfo::WRITES]) != 0)
-	{
-		temp.printf(", %" QUADFORMAT"d write(s)", cnt);
-		record.append(temp);
-	}
+		for (unsigned i = 0; i < count; i++)
+		{
+			const auto counters = pageCounters->getObjectCounters(i);
+			for (unsigned j = 0; j < GLOBAL_COUNTERS; j++)
+				globalCounters[j] += counters[j];
+		}
 
-	if ((cnt = info->pin_counters[PerformanceInfo::FETCHES]) != 0)
-	{
-		temp.printf(", %" QUADFORMAT"d fetch(es)", cnt);
-		record.append(temp);
-	}
+		if (const auto cnt = globalCounters[IPerformanceCounters::PAGE_READS])
+		{
+			temp.printf(", %" QUADFORMAT"d read(s)", cnt);
+			record.append(temp);
+		}
 
-	if ((cnt = info->pin_counters[PerformanceInfo::MARKS]) != 0)
-	{
-		temp.printf(", %" QUADFORMAT"d mark(s)", cnt);
-		record.append(temp);
+		if (const auto cnt = globalCounters[IPerformanceCounters::PAGE_WRITES])
+		{
+			temp.printf(", %" QUADFORMAT"d write(s)", cnt);
+			record.append(temp);
+		}
+
+		if (const auto cnt = globalCounters[IPerformanceCounters::PAGE_FETCHES])
+		{
+			temp.printf(", %" QUADFORMAT"d fetch(es)", cnt);
+			record.append(temp);
+		}
+
+		if (const auto cnt = globalCounters[IPerformanceCounters::PAGE_MARKS])
+		{
+			temp.printf(", %" QUADFORMAT"d mark(s)", cnt);
+			record.append(temp);
+		}
 	}
 
 	record.append(NEWLINE);
 }
 
-void TracePluginImpl::appendTableCounts(const PerformanceInfo *info)
+void TracePluginImpl::appendTableCounts(IPerformanceStats* stats)
 {
-	if (!config.print_perf || info->pin_count == 0)
+	if (!config.print_perf)
 		return;
 
-	const TraceCounts* trc = info->pin_tables;
-	const TraceCounts* trc_end = trc + info->pin_count;
+	const auto tableCounters = stats->getCounters(IPerformanceStats::COUNTER_GROUP_TABLES);
+	fb_assert(tableCounters);
+
+	const auto count = tableCounters->getObjectCount();
+	if (!count)
+		return;
 
 	FB_SIZE_T max_len = 0;
-	for (; trc < trc_end; trc++)
+	for (unsigned i = 0; i < count; i++)
 	{
-		FB_SIZE_T len = fb_strlen(trc->trc_relation_name);
-		if (max_len < len)
-			max_len = len;
+		if (const auto relName = tableCounters->getObjectName(i))
+		{
+			const FB_SIZE_T len = fb_strlen(relName);
+			if (max_len < len)
+				max_len = len;
+		}
 	}
 
 	if (max_len < 32)
@@ -691,24 +713,45 @@ void TracePluginImpl::appendTableCounts(const PerformanceInfo *info)
 	record.append(NEWLINE);
 
 	string temp;
-	for (trc = info->pin_tables; trc < trc_end; trc++)
+	for (unsigned i = 0; i < count; i++)
 	{
-		record.append(trc->trc_relation_name);
-		record.append(max_len - fb_strlen(trc->trc_relation_name), ' ');
-		for (int j = 0; j <= TraceCounts::EXPUNGES; j++)
+		const auto relName = tableCounters->getObjectName(i);
+		if (relName && *relName)
 		{
-			if (trc->trc_counters[j] == 0)
+			record.append(relName);
+			record.append(max_len - fb_strlen(relName), ' ');
+		}
+		else
+		{
+			temp.printf("Table id <%u>", tableCounters->getObjectId(i));
+			record.append(temp);
+			record.append(max_len - temp.length(), ' ');
+		}
+
+		const auto counters = tableCounters->getObjectCounters(i);
+
+		string line;
+		bool nonZero = false;
+		for (unsigned j = IPerformanceCounters::RECORD_SEQ_READS;
+			j <= IPerformanceCounters::RECORD_EXPUNGES; j++)
+		{
+			if (counters[j] == 0)
 			{
-				record.append(10, ' ');
+				line.append(10, ' ');
 			}
 			else
 			{
-				//fb_utils::exactNumericToStr(trc->trc_counters[j], 0, temp);
+				//fb_utils::exactNumericToStr(counterVector[j], 0, temp);
 				//record.append(' ', 10 - temp.length());
-				temp.printf("%10" QUADFORMAT"d", trc->trc_counters[j]);
-				record.append(temp);
+				temp.printf("%10" QUADFORMAT"d", counters[j]);
+				line.append(temp);
+				nonZero = true;
 			}
 		}
+
+		if (nonZero)
+			record.append(line);
+
 		record.append(NEWLINE);
 	}
 }
@@ -1494,11 +1537,10 @@ void TracePluginImpl::log_event_transaction_end(ITraceDatabaseConnection* connec
 			}
 		}
 
-		PerformanceInfo* info = transaction->getPerf();
-		if (info)
+		if (const auto stats = transaction->getPerfStats())
 		{
-			appendGlobalCounts(info);
-			appendTableCounts(info);
+			appendGlobalCounts(stats);
+			appendTableCounts(stats);
 		}
 
 		const char* event_type;
@@ -1596,8 +1638,8 @@ void TracePluginImpl::log_event_proc_execute(ITraceDatabaseConnection* connectio
 		return;
 
 	// Do not log operation if it is below time threshold
-	const PerformanceInfo* info = started ? NULL : procedure->getPerf();
-	if (config.time_threshold && info && info->pin_time < config.time_threshold)
+	IPerformanceStats* const stats = started ? nullptr : procedure->getPerfStats();
+	if (config.time_threshold && stats && stats->getElapsedTime() < config.time_threshold)
 		return;
 
 	ITraceParams* params = procedure->getInputs();
@@ -1608,16 +1650,17 @@ void TracePluginImpl::log_event_proc_execute(ITraceDatabaseConnection* connectio
 		record.append(NEWLINE);
 	}
 
-	if (info)
+	if (stats)
 	{
-		if (info->pin_records_fetched)
+		if (const auto cnt = stats->getFetchedRecords())
 		{
 			string temp;
-			temp.printf("%" QUADFORMAT"d records fetched" NEWLINE, info->pin_records_fetched);
+			temp.printf("%" QUADFORMAT"d records fetched" NEWLINE, cnt);
 			record.append(temp);
 		}
-		appendGlobalCounts(info);
-		appendTableCounts(info);
+
+		appendGlobalCounts(stats);
+		appendTableCounts(stats);
 	}
 
 	const char* event_type;
@@ -1677,8 +1720,8 @@ void TracePluginImpl::log_event_func_execute(ITraceDatabaseConnection* connectio
 		return;
 
 	// Do not log operation if it is below time threshold
-	const PerformanceInfo* info = started ? NULL : function->getPerf();
-	if (config.time_threshold && info && info->pin_time < config.time_threshold)
+	IPerformanceStats* const stats = started ? nullptr : function->getPerfStats();
+	if (config.time_threshold && stats && stats->getElapsedTime() < config.time_threshold)
 		return;
 
 	ITraceParams* params = function->getInputs();
@@ -1699,16 +1742,17 @@ void TracePluginImpl::log_event_func_execute(ITraceDatabaseConnection* connectio
 		}
 	}
 
-	if (info)
+	if (stats)
 	{
-		if (info->pin_records_fetched)
+		if (const auto cnt = stats->getFetchedRecords())
 		{
 			string temp;
-			temp.printf("%" QUADFORMAT"d records fetched" NEWLINE, info->pin_records_fetched);
+			temp.printf("%" QUADFORMAT"d records fetched" NEWLINE, cnt);
 			record.append(temp);
 		}
-		appendGlobalCounts(info);
-		appendTableCounts(info);
+
+		appendGlobalCounts(stats);
+		appendTableCounts(stats);
 	}
 
 	const char* event_type;
@@ -1767,14 +1811,14 @@ void TracePluginImpl::log_event_trigger_execute(ITraceDatabaseConnection* connec
 		return;
 
 	// Do not log operation if it is below time threshold
-	const PerformanceInfo* info = started ? NULL : trigger->getPerf();
-	if (config.time_threshold && info && info->pin_time < config.time_threshold)
+	IPerformanceStats* const stats = started ? nullptr : trigger->getPerfStats();
+	if (config.time_threshold && stats && stats->getElapsedTime() < config.time_threshold)
 		return;
 
-	if (info)
+	if (stats)
 	{
-		appendGlobalCounts(info);
-		appendTableCounts(info);
+		appendGlobalCounts(stats);
+		appendTableCounts(stats);
 	}
 
 	const char* event_type;
@@ -1920,8 +1964,8 @@ void TracePluginImpl::log_event_dsql_execute(ITraceDatabaseConnection* connectio
 		return;
 
 	// Do not log operation if it is below time threshold
-	const PerformanceInfo* info = started ? NULL : statement->getPerf();
-	if (config.time_threshold && info && info->pin_time < config.time_threshold)
+	IPerformanceStats* const stats = started ? nullptr : statement->getPerfStats();
+	if (config.time_threshold && stats && stats->getElapsedTime() < config.time_threshold)
 		return;
 
 	if (restart)
@@ -1939,14 +1983,14 @@ void TracePluginImpl::log_event_dsql_execute(ITraceDatabaseConnection* connectio
 		record.append(NEWLINE);
 	}
 
-	if (info)
+	if (stats)
 	{
 		string temp;
-		temp.printf("%" QUADFORMAT"d records fetched" NEWLINE, info->pin_records_fetched);
+		temp.printf("%" QUADFORMAT"d records fetched" NEWLINE, stats->getFetchedRecords());
 		record.append(temp);
 
-		appendGlobalCounts(info);
-		appendTableCounts(info);
+		appendGlobalCounts(stats);
+		appendTableCounts(stats);
 	}
 
 	string event_type;
@@ -2058,16 +2102,19 @@ void TracePluginImpl::log_event_blr_execute(ITraceDatabaseConnection* connection
 		ITraceTransaction* transaction, ITraceBLRStatement* statement,
 		ntrace_result_t req_result)
 {
-	PerformanceInfo *info = statement->getPerf();
+	const auto stats = statement->getPerfStats();
 
 	// Do not log operation if it is below time threshold
-	if (config.time_threshold && info->pin_time < config.time_threshold)
+	if (config.time_threshold && stats && stats->getElapsedTime() < config.time_threshold)
 		return;
 
 	if (config.log_blr_requests)
 	{
-		appendGlobalCounts(info);
-		appendTableCounts(info);
+		if (stats)
+		{
+			appendGlobalCounts(stats);
+			appendTableCounts(stats);
+		}
 
 		const char* event_type;
 		switch (req_result)
@@ -2440,11 +2487,10 @@ void TracePluginImpl::log_event_sweep(ITraceDatabaseConnection* connection, ITra
 			);
 	}
 
-	PerformanceInfo* info = sweep->getPerf();
-	if (info)
+	if (const auto stats = sweep->getPerfStats())
 	{
-		appendGlobalCounts(info);
-		appendTableCounts(info);
+		appendGlobalCounts(stats);
+		appendTableCounts(stats);
 	}
 
 	const char* event_type = NULL;

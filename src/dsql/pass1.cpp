@@ -279,8 +279,6 @@ bool InvalidReferenceFinder::visit(ExprNode* node)
 	if (!node)
 		return false;
 
-	bool invalid = false;
-
 	// ASF: What we do in this function is the verification of all fields/dbkeys (or any parent
 	// expression involving them) are present in the passed node list.
 	// That makes valid:
@@ -732,7 +730,7 @@ void PASS1_ambiguity_check(DsqlCompilerScratch* dsqlScratch,
 
 bool PASS1_compare_alias(const QualifiedName& contextAlias, const QualifiedName& lookupAlias)
 {
-	return lookupAlias == contextAlias || lookupAlias.schema.isEmpty() && lookupAlias.object == contextAlias.object;
+	return lookupAlias == contextAlias || (lookupAlias.schema.isEmpty() && lookupAlias.object == contextAlias.object);
 }
 
 
@@ -1443,8 +1441,6 @@ void PASS1_expand_select_node(DsqlCompilerScratch* dsqlScratch, ExprNode* node, 
 
 		if (context->ctx_relation)
 		{
-			thread_db* const tdbb = JRD_get_thread_data();
-
 			for (dsql_fld* field = context->ctx_relation->rel_fields; field; field = field->fld_next)
 			{
 				DEV_BLKCHK(field, dsql_type_fld);

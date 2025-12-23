@@ -709,17 +709,19 @@ using namespace Firebird;
 %token <metaNamePtr> CALL
 %token <metaNamePtr> CURRENT_SCHEMA
 %token <metaNamePtr> DOWNTO
+%token <metaNamePtr> ERROR
 %token <metaNamePtr> FORMAT
 %token <metaNamePtr> GENERATE_SERIES
 %token <metaNamePtr> GREATEST
 %token <metaNamePtr> LEAST
+%token <metaNamePtr> LISTAGG
 %token <metaNamePtr> LTRIM
 %token <metaNamePtr> NAMED_ARG_ASSIGN
 %token <metaNamePtr> RTRIM
 %token <metaNamePtr> SCHEMA
 %token <metaNamePtr> SEARCH_PATH
+%token <metaNamePtr> TRUNCATE
 %token <metaNamePtr> UNLIST
-%token <metaNamePtr> LISTAGG
 %token <metaNamePtr> WITHIN
 
 // tablespaces
@@ -8839,25 +8841,25 @@ overflow_behavior
 
 %type <valueExprNode> listagg_truncation_filler_opt
 listagg_truncation_filler_opt
-	: /*nothing*/ { $$ = MAKE_str_constant(newIntlString("..."), lex.charSetId); }
+	: /* nothing */				{ $$ = MAKE_str_constant(newIntlString("..."), lex.charSetId); }
 	| listagg_truncation_filler { $$ = $1; }
 	;
 
-%type <valueExprNode>listagg_truncation_filler
+%type <valueExprNode> listagg_truncation_filler
 listagg_truncation_filler
-	: sql_string
+	: sql_string			{ $$ = MAKE_str_constant($1, lex.charSetId); }
 	;
 
 %type <boolVal> listagg_count_indication
 listagg_count_indication
-	: WITH COUNT { $$ = true; }
+	: WITH COUNT	{ $$ = true; }
 	| WITHOUT COUNT { $$ = false; }
 	;
 
 %type <valueListNode> within_group_specification_opt
 within_group_specification_opt
-	: /* nothing */ { $$ = newNode<ValueListNode>(0); }
-	| within_group_specification { $$ = $1; }
+	: /* nothing */					{ $$ = newNode<ValueListNode>(0); }
+	| within_group_specification	{ $$ = $1; }
 	;
 
 %type <valueListNode> within_group_specification

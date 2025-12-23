@@ -50,7 +50,7 @@ INSERT INTO TEST_T values(3, 'C', 'A', 'L', true,  'Ж');
 INSERT INTO TEST_T values(4, 'D', 'B', 'K', true,  'Й');
 COMMIT;
 
-SELECT LISTAGG (ALL COL4, ':') AS FROM TEST_T;
+SELECT LISTAGG (ALL COL4, ':') FROM TEST_T;
 =======
 J:I:L:K
 
