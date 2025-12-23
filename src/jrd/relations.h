@@ -829,3 +829,11 @@ RELATION(nam_tablespaces, rel_tablespaces, ODS_14_0, rel_persistent)
 	FIELD(f_ts_offline, nam_ts_offline, fld_bool, 1, ODS_14_0)
 	FIELD(f_ts_readonly, nam_ts_readonly, fld_bool, 1, ODS_14_0)
 END_RELATION
+
+// Relation 57 (MON$TABLESPACE_STATS)
+RELATION(nam_mon_ts_stats, rel_mon_ts_stats, ODS_14_0, rel_virtual)
+	FIELD(f_mon_ts_stat_id, nam_mon_stat_id, fld_stat_id, 0, ODS_14_0)
+	FIELD(f_mon_ts_stat_group, nam_mon_stat_group, fld_stat_group, 0, ODS_14_0)
+	FIELD(f_mon_ts_name, nam_mon_ts_name, fld_ts_name, 0, ODS_14_0)
+	FIELD(f_mon_tab_io_stat_id, nam_mon_io_stat_id, fld_stat_id, 0, ODS_14_0)
+END_RELATION

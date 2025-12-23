@@ -513,5 +513,6 @@ inline constexpr USHORT MAX_ERROR_MSG_LENGTH = 1024 * METADATA_BYTES_PER_CHAR; /
 
 // Tablespaces
 const char* const PRIMARY_TABLESPACE_NAME = "PRIMARY";
+const char* const TEMP_TABLESPACE_NAME = "TEMPORARY";
 
 #endif // JRD_CONSTANTS_H
