@@ -765,7 +765,7 @@ bool IndexTableScan::setupBitmaps(thread_db* tdbb, Impure* impure) const
 	// view of the database when the stream is opened
 	if (m_inversion)
 	{
-		if (!m_condition || !m_condition->execute(tdbb, tdbb->getRequest()))
+		if (!m_condition || m_condition->execute(tdbb, tdbb->getRequest()) != TriState(true))
 		{
 			impure->irsb_flags &= ~irsb_mustread;
 			// There is no need to reset or release the bitmap, it is

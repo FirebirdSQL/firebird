@@ -21,12 +21,16 @@
 
 #include "Parser.h"
 #include "Expr.h"
+#include <format>
+#include <cstdint>
+#include <memory>
+#include <utility>
 #include <stdexcept>
 #include <stdlib.h>
 #include <string.h>
 
+using std::format;
 using std::map;
-using std::pair;
 using std::runtime_error;
 using std::string;
 using std::vector;
@@ -36,26 +40,24 @@ using std::vector;
 
 
 Parser::Parser(Lexer* lexer)
-	: exceptionInterface(NULL),
-	  lexer(lexer),
-	  interface(NULL)
+	: lexer(lexer)
 {
 }
 
 void Parser::parse()
 {
-	interface = NULL;
+	interface = nullptr;
 
 	while (true)
 	{
 		bool exception = false;
 		lexer->getToken(token);
 
-		if (token.type == Token::TYPE_EOF)
+		if (token.type == Token::Type::END_OF_FILE)
 			break;
 		else if (token.type == TOKEN('['))
 		{
-			getToken(token, Token::TYPE_EXCEPTION);	// This is the only attribute we allow now.
+			getToken(token, Token::Type::EXCEPTION);  // This is the only attribute we allow now.
 			exception = true;
 			getToken(token, TOKEN(']'));
 		}
@@ -66,23 +68,23 @@ void Parser::parse()
 
 		switch (token.type)
 		{
-			case Token::TYPE_INTERFACE:
+			case Token::Type::INTERFACE:
 				parseInterface(exception);
 				break;
 
-			case Token::TYPE_STRUCT:
+			case Token::Type::STRUCT:
 				if (exception)
 					error(token, "Cannot use attribute exception in struct.");
 				parseStruct();
 				break;
 
-			case Token::TYPE_TYPEDEF:
+			case Token::Type::TYPEDEF:
 				if (exception)
 					error(token, "Cannot use attribute exception in typedef.");
 				parseTypedef();
 				break;
 
-			case Token::TYPE_BOOLEAN:
+			case Token::Type::BOOLEAN:
 				if (exception)
 					error(token, "Cannot use attribute exception in boolean.");
 				parseBoolean();
@@ -96,28 +98,16 @@ void Parser::parse()
 
 	// Check types, assign statusName to methods.
 
-	for (vector<Interface*>::iterator i = interfaces.begin(); i != interfaces.end(); ++i)
+	for (const auto& interface : interfaces)
 	{
-		Interface* interface = *i;
-
-		for (vector<Method*>::iterator j = interface->methods.begin();
-			 j != interface->methods.end();
-			 ++j)
+		for (const auto& method : interface->methods)
 		{
-			Method* method = *j;
-
 			checkType(method->returnTypeRef);
 
-			for (vector<Parameter*>::iterator k = method->parameters.begin();
-				 k != method->parameters.end();
-				 ++k)
-			{
-				Parameter* parameter = *k;
-				checkType(parameter->typeRef);
-			}
+			for (const auto& parameterPtr : method->parameters)
+				checkType(parameterPtr->typeRef);
 
-			if (!method->parameters.empty() &&
-				exceptionInterface &&
+			if (!method->parameters.empty() && exceptionInterface &&
 				method->parameters.front()->typeRef.token.text == exceptionInterface->name)
 			{
 				method->statusName = method->parameters.front()->name;
@@ -128,24 +118,28 @@ void Parser::parse()
 
 void Parser::parseInterface(bool exception)
 {
-	interface = new Interface();
-	interfaces.push_back(interface);
+	auto newInterface = std::make_shared<Interface>();
+	newInterface->name = getToken(token, Token::Type::IDENTIFIER).text;
 
-	interface->name = getToken(token, Token::TYPE_IDENTIFIER).text;
-	typesByName.insert(pair<string, BaseType*>(interface->name, interface));
+	if (typesByName.find(newInterface->name) != typesByName.end())
+		error(token, string("Type '") + newInterface->name + "' already defined.");
+
+	typesByName.emplace(newInterface->name, newInterface);
+	interface = newInterface.get();
+	interfaces.push_back(newInterface);
 
 	if (exception)
 		exceptionInterface = interface;
 
 	if (lexer->getToken(token).type == TOKEN(':'))
 	{
-		string superName = getToken(token, Token::TYPE_IDENTIFIER).text;
-		map<string, BaseType*>::iterator it = typesByName.find(superName);
+		string superName = getToken(token, Token::Type::IDENTIFIER).text;
+		auto superIt = typesByName.find(superName);
 
-		if (it == typesByName.end() || it->second->type != BaseType::TYPE_INTERFACE)
+		if (superIt == typesByName.end() || superIt->second->type != BaseType::Type::INTERFACE)
 			error(token, string("Super interface '") + superName + "' not found.");
 
-		interface->super = static_cast<Interface*>(it->second);
+		interface->super = static_cast<Interface*>(superIt->second.get());
 		interface->version = interface->super->version + 1;
 	}
 	else
@@ -155,7 +149,7 @@ void Parser::parseInterface(bool exception)
 
 	while (lexer->getToken(token).type != TOKEN('}'))
 	{
-		if (token.type == Token::TYPE_VERSION)
+		if (token.type == Token::Type::VERSION)
 		{
 			getToken(token, TOKEN(':'));
 			++interface->version;
@@ -169,39 +163,48 @@ void Parser::parseInterface(bool exception)
 
 void Parser::parseStruct()
 {
-	Struct* ztruct = new Struct();
+	auto ztruct = std::make_shared<Struct>();
+	ztruct->name = getToken(token, Token::Type::IDENTIFIER).text;
 
-	ztruct->name = getToken(token, Token::TYPE_IDENTIFIER).text;
-	typesByName.insert(pair<string, BaseType*>(ztruct->name, ztruct));
+	if (typesByName.find(ztruct->name) != typesByName.end())
+		error(token, string("Type '") + ztruct->name + "' already defined.");
+
+	typesByName.emplace(ztruct->name, std::move(ztruct));
 
 	getToken(token, TOKEN(';'));
 }
 
 void Parser::parseBoolean()
 {
-	Boolean* b = new Boolean();
+	auto b = std::make_shared<Boolean>();
+	b->name = getToken(token, Token::Type::IDENTIFIER).text;
 
-	b->name = getToken(token, Token::TYPE_IDENTIFIER).text;
-	typesByName.insert(pair<string, BaseType*>(b->name, b));
+	if (typesByName.find(b->name) != typesByName.end())
+		error(token, string("Type '") + b->name + "' already defined.");
+
+	typesByName.emplace(b->name, std::move(b));
 
 	getToken(token, TOKEN(';'));
 }
 
 void Parser::parseTypedef()
 {
-	Typedef* typeDef = new Typedef();
+	auto typeDef = std::make_shared<Typedef>();
+	typeDef->name = getToken(token, Token::Type::IDENTIFIER).text;
 
-	typeDef->name = getToken(token, Token::TYPE_IDENTIFIER).text;
-	typesByName.insert(pair<string, BaseType*>(typeDef->name, typeDef));
+	if (typesByName.find(typeDef->name) != typesByName.end())
+		error(token, string("Type '") + typeDef->name + "' already defined.");
+
+	typesByName.emplace(typeDef->name, std::move(typeDef));
 
 	getToken(token, TOKEN(';'));
 }
 
 void Parser::parseItem()
 {
-	Expr* notImplementedExpr = nullptr;
-	Action* notImplementedAction = nullptr;
-	Action* stubAction = nullptr;
+	std::unique_ptr<Expr> notImplementedExpr;
+	std::unique_ptr<Action> notImplementedAction;
+	std::unique_ptr<Action> stubAction;
 	std::string onError;
 
 	while (lexer->getToken(token).type == TOKEN('['))
@@ -209,7 +212,7 @@ void Parser::parseItem()
 		lexer->getToken(token);
 		switch (token.type)
 		{
-			case Token::TYPE_NOT_IMPLEMENTED:
+			case Token::Type::NOT_IMPLEMENTED:
 				if (notImplementedExpr)
 					syntaxError(token);
 				getToken(token, TOKEN('('));
@@ -217,25 +220,25 @@ void Parser::parseItem()
 				getToken(token, TOKEN(')'));
 				break;
 
-			case Token::TYPE_ON_ERROR:
+			case Token::Type::ON_ERROR:
 				if (onError.length())
 					syntaxError(token);
 				lexer->getToken(token);
-				if (token.type != Token::TYPE_IDENTIFIER)
+				if (token.type != Token::Type::IDENTIFIER)
 					syntaxError(token);
 				onError = token.text;
 				break;
 
-			case Token::TYPE_NOT_IMPLEMENTED_ACTION:
+			case Token::Type::NOT_IMPLEMENTED_ACTION:
 				if (notImplementedAction)
 					syntaxError(token);
-				notImplementedAction = parseAction(DefAction::DEF_NOT_IMPLEMENTED);
+				notImplementedAction = parseAction(DefAction::DefType::NOT_IMPLEMENTED);
 				break;
 
-			case Token::TYPE_STUB:
+			case Token::Type::STUB:
 				if (stubAction)
 					syntaxError(token);
-				stubAction = parseAction(DefAction::DEF_IGNORE);
+				stubAction = parseAction(DefAction::DefType::IGNORE);
 				break;
 
 			default:
@@ -247,7 +250,7 @@ void Parser::parseItem()
 	lexer->pushToken(token);
 
 	TypeRef typeRef(parseTypeRef());
-	string name(getToken(token, Token::TYPE_IDENTIFIER).text);
+	string name(getToken(token, Token::Type::IDENTIFIER).text);
 
 	if ((!(notImplementedExpr || onError.length())) && typeRef.isConst)
 	{
@@ -262,96 +265,98 @@ void Parser::parseItem()
 	}
 
 	getToken(token, TOKEN('('));
-	parseMethod(typeRef, name, notImplementedExpr, onError, notImplementedAction, stubAction);
+	parseMethod(
+		typeRef, name, std::move(notImplementedExpr), onError, std::move(notImplementedAction), std::move(stubAction));
 }
 
 void Parser::parseConstant(const TypeRef& typeRef, const string& name)
 {
-	Constant* constant = new Constant();
-	interface->constants.push_back(constant);
-
+	auto constant = std::make_unique<Constant>();
 	constant->typeRef = typeRef;
 	constant->name = name;
 	constant->expr = parseExpr();
+	interface->constants.push_back(std::move(constant));
 
 	getToken(token, TOKEN(';'));
 }
 
-Action* Parser::parseAction(DefAction::DefType dt)
+std::unique_ptr<Action> Parser::parseAction(DefAction::DefType dt)
 {
 	switch (lexer->getToken(token).type)
 	{
-	case Token::TYPE_IF:
-		return parseIfThenElseAction(dt);
+		case Token::Type::IF:
+			return parseIfThenElseAction(dt);
 
-	case Token::TYPE_CALL:
-		return parseCallAction();
+		case Token::Type::CALL:
+			return parseCallAction();
 
-	case Token::TYPE_DEFAULT_ACTION:
-		return parseDefAction(dt);
+		case Token::Type::DEFAULT_ACTION:
+			return parseDefAction(dt);
 
-	default:
-		break;
+		default:
+			break;
 	}
 
 	syntaxError(token);
+	return nullptr;
 }
 
-Action* Parser::parseIfThenElseAction(DefAction::DefType dt)
+std::unique_ptr<Action> Parser::parseIfThenElseAction(DefAction::DefType dt)
 {
-	IfThenElseAction act;
+	auto act = std::make_unique<IfThenElseAction>();
 
-	act.exprIf = parseLogicalExpr();
+	act->exprIf = parseLogicalExpr();
 
-	getToken(token, Token::TYPE_THEN);
-	act.actThen = parseAction(dt);
+	getToken(token, Token::Type::THEN);
+	act->actThen = parseAction(dt);
 
 	lexer->getToken(token);
-	if (token.type == Token::TYPE_ELSE)
-		act.actElse = parseAction(dt);
+	if (token.type == Token::Type::ELSE)
+		act->actElse = parseAction(dt);
 	else
 		lexer->pushToken(token);
 
-	getToken(token, Token::TYPE_ENDIF);
-	return new IfThenElseAction(act);
+	getToken(token, Token::Type::ENDIF);
+
+	return act;
 }
 
-Action* Parser::parseCallAction()
+std::unique_ptr<Action> Parser::parseCallAction()
 {
-	CallAction act;
+	auto act = std::make_unique<CallAction>();
 
-	act.name = getToken(token, Token::TYPE_IDENTIFIER).text;
+	act->name = getToken(token, Token::Type::IDENTIFIER).text;
 
 	getToken(token, TOKEN('('));
 	do
 	{
-		act.addParam(getToken(token, Token::TYPE_IDENTIFIER).text);
-	} while(lexer->getToken(token).type == ',');
+		act->addParam(getToken(token, Token::Type::IDENTIFIER).text);
+	} while (static_cast<int>(lexer->getToken(token).type) == ',');
 
-	if (token.type == ')')
-		return new CallAction(act);
+	if (static_cast<int>(token.type) == ')')
+		return act;
 
 	syntaxError(token);
+	return nullptr;
 }
 
-Action* Parser::parseDefAction(DefAction::DefType dt)
+std::unique_ptr<Action> Parser::parseDefAction(DefAction::DefType dt)
 {
-	return new DefAction(dt);
+	return std::make_unique<DefAction>(dt);
 }
 
-void Parser::parseMethod(const TypeRef& returnTypeRef, const string& name, Expr* notImplementedExpr,
-	const string& onError, Action* notImplementedAction, Action* stubAction)
+void Parser::parseMethod(const TypeRef& returnTypeRef, const string& name, std::unique_ptr<Expr> notImplementedExpr,
+	const string& onError, std::unique_ptr<Action> notImplementedAction, std::unique_ptr<Action> stubAction)
 {
-	Method* method = new Method();
-	interface->methods.push_back(method);
-
-	method->returnTypeRef = returnTypeRef;
-	method->name = name;
-	method->version = interface->version;
-	method->notImplementedExpr = notImplementedExpr;
-	method->notImplementedAction = notImplementedAction;
-	method->stubAction = stubAction;
-	method->onErrorFunction = onError;
+	auto method = std::make_unique<Method>();
+	Method* methodPtr = method.get();
+	methodPtr->returnTypeRef = returnTypeRef;
+	methodPtr->name = name;
+	methodPtr->version = interface->version;
+	methodPtr->notImplementedExpr = std::move(notImplementedExpr);
+	methodPtr->notImplementedAction = std::move(notImplementedAction);
+	methodPtr->stubAction = std::move(stubAction);
+	methodPtr->onErrorFunction = onError;
 
 	if (lexer->getToken(token).type != TOKEN(')'))
 	{
@@ -359,11 +364,11 @@ void Parser::parseMethod(const TypeRef& returnTypeRef, const string& name, Expr*
 
 		while (true)
 		{
-			Parameter* parameter = new Parameter();
-			method->parameters.push_back(parameter);
-
-			parameter->typeRef = parseTypeRef();
-			parameter->name = getToken(token, Token::TYPE_IDENTIFIER).text;
+			auto parameter = std::make_unique<Parameter>();
+			Parameter* parameterPtr = parameter.get();
+			parameterPtr->typeRef = parseTypeRef();
+			parameterPtr->name = getToken(token, Token::Type::IDENTIFIER).text;
+			methodPtr->parameters.push_back(std::move(parameter));
 
 			lexer->getToken(token);
 			lexer->pushToken(token);
@@ -377,37 +382,42 @@ void Parser::parseMethod(const TypeRef& returnTypeRef, const string& name, Expr*
 		getToken(token, TOKEN(')'));
 	}
 
-	if (lexer->getToken(token).type == Token::TYPE_CONST)
-		method->isConst = true;
+	if (lexer->getToken(token).type == Token::Type::CONST)
+		methodPtr->isConst = true;
 	else
 		lexer->pushToken(token);
 
 	getToken(token, TOKEN(';'));
+
+	interface->methods.push_back(std::move(method));
 }
 
-Expr* Parser::parseExpr()
+std::unique_ptr<Expr> Parser::parseExpr()
 {
 	return parseLogicalExpr();
 }
 
-Expr* Parser::parseLogicalExpr()
+std::unique_ptr<Expr> Parser::parseLogicalExpr()
 {
-	Expr* expr = parseUnaryExpr();
+	auto expr = parseUnaryExpr();
 
 	if (lexer->getToken(token).type == TOKEN('|'))
-		expr = new BitwiseOrExpr(expr, parseExpr());
+	{
+		auto rhs = parseExpr();
+		expr = std::make_unique<BitwiseOrExpr>(std::move(expr), std::move(rhs));
+	}
 	else
 		lexer->pushToken(token);
 
 	return expr;
 }
 
-Expr* Parser::parseUnaryExpr()
+std::unique_ptr<Expr> Parser::parseUnaryExpr()
 {
 	lexer->getToken(token);
 
 	if (token.type == TOKEN('-'))
-		return new NegateExpr(parsePrimaryExpr());
+		return std::make_unique<NegateExpr>(parsePrimaryExpr());
 	else
 	{
 		lexer->pushToken(token);
@@ -415,61 +425,60 @@ Expr* Parser::parseUnaryExpr()
 	}
 }
 
-Expr* Parser::parsePrimaryExpr()
+std::unique_ptr<Expr> Parser::parsePrimaryExpr()
 {
 	lexer->getToken(token);
 
 	switch (token.type)
 	{
-		case Token::TYPE_BOOLEAN_LITERAL:
-			return new BooleanLiteralExpr(token.text == "true");
+		case Token::Type::BOOLEAN_LITERAL:
+			return std::make_unique<BooleanLiteralExpr>(token.text == "true");
 
-		case Token::TYPE_INT_LITERAL:
+		case Token::Type::INT_LITERAL:
 		{
 			const char* p = token.text.c_str();
 			size_t len = strlen(p);
 			int base = len > 2 && tolower(p[1]) == 'x' ? 16 : 10;
-			long long val = strtoll(p, NULL, base);
+			std::int64_t val = static_cast<std::int64_t>(strtoll(p, NULL, base));
 
-			return new IntLiteralExpr((int) val, base == 16);
+			return std::make_unique<IntLiteralExpr>(val, base == 16);
 		}
 
-		case Token::TYPE_IDENTIFIER:
+		case Token::Type::IDENTIFIER:
 		{
 			string text = token.text;
 
-			if (lexer->getToken(token).type == Token::TYPE_DOUBLE_COLON)
+			if (lexer->getToken(token).type == Token::Type::DOUBLE_COLON)
 			{
-				getToken(token, Token::TYPE_IDENTIFIER);
-				map<string, BaseType*>::iterator it = typesByName.find(text);
+				getToken(token, Token::Type::IDENTIFIER);
+				const auto it = typesByName.find(text);
 
-				if (it == typesByName.end() || it->second->type != BaseType::TYPE_INTERFACE)
+				if (it == typesByName.end() || it->second->type != BaseType::Type::INTERFACE)
 					error(token, string("Interface '") + text + "' not found.");
 
-				return new ConstantExpr(static_cast<Interface*>(it->second), token.text);
+				return std::make_unique<ConstantExpr>(static_cast<Interface*>(it->second.get()), token.text);
 			}
 			else
 			{
 				lexer->pushToken(token);
-				return new ConstantExpr(interface, text);
+				return std::make_unique<ConstantExpr>(interface, text);
 			}
 		}
 
-		case Token::TYPE_DOUBLE_COLON:
-			getToken(token, Token::TYPE_IDENTIFIER);
-			return new ConstantExpr(nullptr, token.text);
+		case Token::Type::DOUBLE_COLON:
+			getToken(token, Token::Type::IDENTIFIER);
+			return std::make_unique<ConstantExpr>(nullptr, token.text);
 
 		default:
 			syntaxError(token);
-			return NULL;	// warning
 	}
 }
 
 void Parser::checkType(TypeRef& typeRef)
 {
-	if (typeRef.token.type == Token::TYPE_IDENTIFIER)
+	if (typeRef.token.type == Token::Type::IDENTIFIER)
 	{
-		map<string, BaseType*>::iterator it = typesByName.find(typeRef.token.text);
+		const auto it = typesByName.find(typeRef.token.text);
 
 		if (it != typesByName.end())
 			typeRef.type = it->second->type;
@@ -482,7 +491,7 @@ Token& Parser::getToken(Token& token, Token::Type expected, bool allowEof)
 {
 	lexer->getToken(token);
 
-	if (token.type != expected && !(allowEof && token.type == Token::TYPE_EOF))
+	if (token.type != expected && !(allowEof && token.type == Token::Type::END_OF_FILE))
 		syntaxError(token);
 
 	return token;
@@ -493,7 +502,7 @@ TypeRef Parser::parseTypeRef()
 	TypeRef typeRef;
 	lexer->getToken(typeRef.token);
 
-	if (typeRef.token.type == Token::TYPE_CONST)
+	if (typeRef.token.type == Token::Type::CONST)
 	{
 		typeRef.isConst = true;
 		lexer->getToken(typeRef.token);
@@ -501,21 +510,20 @@ TypeRef Parser::parseTypeRef()
 
 	switch (typeRef.token.type)
 	{
-		case Token::TYPE_VOID:
-		case Token::TYPE_BOOLEAN:
-		case Token::TYPE_INT:
-		case Token::TYPE_INT64:
-		case Token::TYPE_INTPTR:
-		case Token::TYPE_STRING:
-		case Token::TYPE_UCHAR:
-		case Token::TYPE_UINT:
-		case Token::TYPE_UINT64:
-		case Token::TYPE_IDENTIFIER:
+		case Token::Type::VOID:
+		case Token::Type::BOOLEAN:
+		case Token::Type::INT:
+		case Token::Type::INT64:
+		case Token::Type::INTPTR:
+		case Token::Type::STRING:
+		case Token::Type::UCHAR:
+		case Token::Type::UINT:
+		case Token::Type::UINT64:
+		case Token::Type::IDENTIFIER:
 			break;
 
 		default:
-			error(typeRef.token, string("Syntax error at '") +
-				typeRef.token.text + "'. Expected a type.");
+			error(typeRef.token, string("Syntax error at '") + typeRef.token.text + "'. Expected a type.");
 			break;
 	}
 
@@ -536,10 +544,7 @@ TypeRef Parser::parseTypeRef()
 
 [[noreturn]] void Parser::error(const Token& token, const string& msg)
 {
-	char buffer[1024];
-	snprintf(buffer, sizeof(buffer), "%s:%i:%i: error: %s",
-		lexer->filename.c_str(), token.line, token.column, msg.c_str());
-	throw runtime_error(buffer);
+	throw runtime_error(format("{}:{}:{}: error: {}", lexer->filename, token.line, token.column, msg));
 }
 
 bool TypeRef::valueIsPointer()
@@ -549,11 +554,11 @@ bool TypeRef::valueIsPointer()
 
 	switch (token.type)
 	{
-		case Token::TYPE_STRING:
+		case Token::Type::STRING:
 			return true;
 
-		case Token::TYPE_IDENTIFIER:
-			if (type == BaseType::TYPE_INTERFACE)
+		case Token::Type::IDENTIFIER:
+			if (type == BaseType::Type::INTERFACE)
 				return true;
 			break;
 
@@ -563,4 +568,3 @@ bool TypeRef::valueIsPointer()
 
 	return false;
 }
-

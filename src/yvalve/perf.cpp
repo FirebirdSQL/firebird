@@ -315,6 +315,7 @@ struct KnownCounters
 	const char* name;
 	unsigned type;
 	unsigned code;
+	unsigned scope = 0;
 };
 
 #define TOTAL_COUNTERS 11
@@ -324,12 +325,12 @@ constexpr KnownCounters knownCounters[TOTAL_COUNTERS] = {
 	{"RealTime", CNT_TIMER, CNT_TIME_REAL},
 	{"UserTime", CNT_TIMER, CNT_TIME_USER},
 	{"SystemTime", CNT_TIMER, CNT_TIME_SYSTEM},
-	{"Fetches", CNT_DB_INFO, isc_info_fetches},
-	{"Marks", CNT_DB_INFO, isc_info_marks},
-	{"Reads", CNT_DB_INFO, isc_info_reads},
-	{"Writes", CNT_DB_INFO, isc_info_writes},
-	{"CurrentMemory", CNT_DB_INFO, isc_info_current_memory},
-	{"MaxMemory", CNT_DB_INFO, isc_info_max_memory},
+	{"Fetches", CNT_DB_INFO, isc_info_fetches, fb_info_counts_scope_att},
+	{"Marks", CNT_DB_INFO, isc_info_marks, fb_info_counts_scope_att},
+	{"Reads", CNT_DB_INFO, isc_info_reads, fb_info_counts_scope_att},
+	{"Writes", CNT_DB_INFO, isc_info_writes, fb_info_counts_scope_att},
+	{"CurrentMemory", CNT_DB_INFO, isc_info_current_memory, fb_info_counts_scope_db},
+	{"MaxMemory", CNT_DB_INFO, isc_info_max_memory, fb_info_counts_scope_db},
 	{"Buffers", CNT_DB_INFO, isc_info_num_buffers},
 	{"PageSize", CNT_DB_INFO, isc_info_page_size}
 };
@@ -350,8 +351,10 @@ void Why::UtilInterface::getPerfCounters(Firebird::CheckStatusWrapper* status,
 		constexpr const char* delim = " \t,;";
 		unsigned typeMask = 0;
 		unsigned n = 0;
-		UCHAR info[TOTAL_COUNTERS];		// will never use all, but do not care about few bytes
+		// We multiply by two because tags are in random order and we need to store their scope before process
+		UCHAR info[TOTAL_COUNTERS * 2];		// will never use all, but do not care about few bytes
 		UCHAR* pinfo = info;
+		unsigned lastScope = 0;
 
 #ifdef WIN_NT
 #define strtok_r strtok_s
@@ -372,7 +375,14 @@ void Why::UtilInterface::getPerfCounters(Firebird::CheckStatusWrapper* status,
 					typeMask |= knownCounters[i].type;
 
 					if (knownCounters[i].type == CNT_DB_INFO)
-						*pinfo++ = knownCounters[i].code;
+					{
+						const UCHAR tag = knownCounters[i].code;
+						const unsigned scope = knownCounters[i].scope;
+
+						if (scope && lastScope != scope) *pinfo++ = lastScope = scope;
+
+						*pinfo++ = tag;
+					}
 
 					goto found;
 				}
@@ -442,6 +452,10 @@ found:		;
 
 				switch (ipb)
 				{
+				case fb_info_counts_scope_att:
+				case fb_info_counts_scope_db:
+					continue;
+
 				case isc_info_reads:
 				case isc_info_writes:
 				case isc_info_marks:

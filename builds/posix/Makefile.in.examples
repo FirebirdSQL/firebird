@@ -45,11 +45,7 @@ CFLAGS := $(CFLAGS) -I$(FB_BUILD)/include
 
 
 include     $(ROOT)/gen/make.defaults
-ifdef SFIO_EXAMPLES
-include     $(ROOT)/gen/make.platform.solaris.examples
-else
 include     $(ROOT)/gen/make.platform
-endif
 include     $(ROOT)/gen/make.rules
 include     $(ROOT)/gen/make.shared.variables
 

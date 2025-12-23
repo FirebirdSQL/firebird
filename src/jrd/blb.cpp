@@ -1055,7 +1055,7 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 	// Use local copy of source blob id to not change contents of from_desc in
 	// a case when it points to materialized temporary blob (see below for
 	// assignment to *source).
-	bid srcBlobID = *(bid*)from_desc->dsc_address;
+	bid srcBlobID = *(bid*) from_desc->dsc_address;
 	bid* source = &srcBlobID;
 	bid* destination = (bid*) to_desc->dsc_address;
 
@@ -1116,7 +1116,7 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 	// If either the source value is null or the blob id itself is null
 	// (all zeros), then the blob is null.
 
-	if ((request->req_flags & req_null) || source->isEmpty())
+	if (source->isEmpty())
 	{
 		record->setNull(fieldId);
 		destination->clear();

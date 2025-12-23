@@ -28,6 +28,7 @@
 #include "../dsql/Visitors.h"
 #include "../common/classes/array.h"
 #include "../common/classes/NestConst.h"
+#include "../common/classes/TriState.h"
 #include <functional>
 #include <initializer_list>
 #include <type_traits>
@@ -49,6 +50,7 @@ class RseNode;
 class SlidingWindow;
 class TypeClause;
 class ValueExprNode;
+class SortNode;
 
 
 // Must be less then MAX_SSHORT. Not used for static arrays.
@@ -791,7 +793,7 @@ public:
 	}
 
 	BoolExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override = 0;
-	virtual bool execute(thread_db* tdbb, Request* request) const = 0;
+	virtual Firebird::TriState execute(thread_db* tdbb, Request* request) const = 0;
 };
 
 class ValueExprNode : public ExprNode
@@ -1119,6 +1121,7 @@ public:
 	const AggInfo& aggInfo;
 	NestConst<ValueExprNode> arg;
 	const AggregateSort* asb;
+	NestConst<SortNode> sort;
 	bool distinct;
 	bool dialect1;
 	bool indexed;

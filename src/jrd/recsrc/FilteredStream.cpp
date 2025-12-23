@@ -64,7 +64,7 @@ void FilteredStream::internalOpen(thread_db* tdbb) const
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
-	if (!m_invariant || m_boolean->execute(tdbb, request))
+	if (!m_invariant || m_boolean->execute(tdbb, request).asBool())
 	{
 		impure->irsb_flags = irsb_open;
 
@@ -98,7 +98,7 @@ bool FilteredStream::internalGetRecord(thread_db* tdbb) const
 	if (!(impure->irsb_flags & irsb_open))
 		return false;
 
-	if (!evaluateBoolean(tdbb))
+	if (evaluateBoolean(tdbb) != TriState(true))
 	{
 		invalidateRecords(request);
 		return false;
@@ -112,7 +112,7 @@ bool FilteredStream::refetchRecord(thread_db* tdbb) const
 	Request* const request = tdbb->getRequest();
 
 	return m_next->refetchRecord(tdbb) &&
-		m_boolean->execute(tdbb, request);
+		m_boolean->execute(tdbb, request).asBool();
 }
 
 WriteLockResult FilteredStream::lockRecord(thread_db* tdbb) const
@@ -168,7 +168,7 @@ void FilteredStream::nullRecords(thread_db* tdbb) const
 	m_next->nullRecords(tdbb);
 }
 
-bool FilteredStream::evaluateBoolean(thread_db* tdbb) const
+Firebird::TriState FilteredStream::evaluateBoolean(thread_db* tdbb) const
 {
 	Request* const request = tdbb->getRequest();
 
@@ -223,7 +223,9 @@ bool FilteredStream::evaluateBoolean(thread_db* tdbb) const
 
 			while (m_next->getRecord(tdbb))
 			{
-				if (m_boolean->execute(tdbb, request))
+				const auto booleanState = m_boolean->execute(tdbb, request);
+
+				if (booleanState.asBool())
 				{
 					// found a TRUE value
 
@@ -235,7 +237,7 @@ bool FilteredStream::evaluateBoolean(thread_db* tdbb) const
 
 				if (!select_node)
 				{
-					if (request->req_flags & req_null)
+					if (booleanState.isUnknown())
 					{
 						any_null = true;
 						break;
@@ -243,23 +245,14 @@ bool FilteredStream::evaluateBoolean(thread_db* tdbb) const
 				}
 				else
 				{
-					request->req_flags &= ~req_null;
-
 					// select for ANY/ALL processing
-					const bool select_value = select_node->execute(tdbb, request);
-
 					// see if any record in select stream
 
-					if (select_value)
+					if (select_node->execute(tdbb, request).asBool())
 					{
-						// see if any nulls
-
-						request->req_flags &= ~req_null;
-						column_node->execute(tdbb, request);
-
 						// see if any record is null
 
-						if (request->req_flags & req_null)
+						if (column_node->execute(tdbb, request).isUnknown())
 						{
 							any_null = true;
 							break;
@@ -268,9 +261,7 @@ bool FilteredStream::evaluateBoolean(thread_db* tdbb) const
 				}
 			}
 
-			request->req_flags &= ~req_null;
-
-			return any_null || any_true;
+			return TriState(any_null || any_true);
 		}
 
 		// do ANY
@@ -279,15 +270,14 @@ bool FilteredStream::evaluateBoolean(thread_db* tdbb) const
 		bool result = false;
 		while (m_next->getRecord(tdbb))
 		{
-			if (m_boolean->execute(tdbb, request))
+			if (m_boolean->execute(tdbb, request).asBool())
 			{
 				result = true;
 				break;
 			}
 		}
-		request->req_flags &= ~req_null;
 
-		return result;
+		return TriState(result);
 	}
 
 	if (column_node && m_ansiAll)
@@ -300,21 +290,16 @@ bool FilteredStream::evaluateBoolean(thread_db* tdbb) const
 			bool any_false = false;	// some records false for ANY/ALL
 			while (m_next->getRecord(tdbb))
 			{
-				request->req_flags &= ~req_null;
-
 				// look for a FALSE (and not null either)
 
-				if (!m_boolean->execute(tdbb, request) && !(request->req_flags & req_null))
+				if (m_boolean->execute(tdbb, request) == TriState(false))
 				{
 					// make sure it wasn't FALSE because there's no select stream record
 
 					if (select_node)
 					{
-						request->req_flags &= ~req_null;
-
 						// select for ANY/ALL processing
-						const bool select_value = select_node->execute(tdbb, request);
-						if (select_value)
+						if (select_node->execute(tdbb, request).asBool())
 						{
 							any_false = true;
 							break;
@@ -328,9 +313,7 @@ bool FilteredStream::evaluateBoolean(thread_db* tdbb) const
 				}
 			}
 
-			request->req_flags &= ~req_null;
-
-			return !any_false;
+			return TriState(!any_false);
 		}
 
 		// do ALL
@@ -343,21 +326,16 @@ bool FilteredStream::evaluateBoolean(thread_db* tdbb) const
 		bool any_false = false;	// some records false for ANY/ALL
 		while (m_next->getRecord(tdbb))
 		{
-			request->req_flags &= ~req_null;
-
 			// look for a FALSE or null
 
-			if (!m_boolean->execute(tdbb, request))
+			if (m_boolean->execute(tdbb, request) != TriState(true))
 			{
 				// make sure it wasn't FALSE because there's no select stream record
 
 				if (select_node)
 				{
-					request->req_flags &= ~req_null;
-
 					// select for ANY/ALL processing
-					const bool select_value = select_node->execute(tdbb, request);
-					if (select_value)
+					if (select_node->execute(tdbb, request).asBool())
 					{
 						any_false = true;
 						break;
@@ -371,27 +349,24 @@ bool FilteredStream::evaluateBoolean(thread_db* tdbb) const
 			}
 		}
 
-		request->req_flags &= ~req_null;
-
-		return !any_false;
+		return TriState(!any_false);
 	}
 
 	bool nullFlag = false;
 	bool result = false;
 	while (m_next->getRecord(tdbb))
 	{
-		if (m_boolean->execute(tdbb, request))
+		const auto booleanState = m_boolean->execute(tdbb, request);
+
+		if (booleanState.asBool())
 		{
 			result = true;
 			break;
 		}
 
-		if (request->req_flags & req_null)
+		if (booleanState.isUnknown())
 			nullFlag = true;
 	}
 
-	if (nullFlag)
-		request->req_flags |= req_null;
-
-	return result;
+	return nullFlag && !result ? TriState::empty() : TriState(result);
 }

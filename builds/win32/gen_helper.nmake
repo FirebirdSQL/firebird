@@ -1,9 +1,7 @@
 
 all: updateCloopInterfaces
 
-CLOOP=$(FB_GEN_DIR)\cloop.exe
-CLOOP_DIR=$(FB_ROOT_PATH)\extern\cloop\src\cloop
-CLOOP_SRC=$(CLOOP_DIR)\*.cpp
+CLOOP=$(FB_GEN_DIR)\$(FB_TARGET_PLATFORM)\cloop\bin\$(FB_CONFIG)\cloop
 
 IDL_ROOT=$(FB_ROOT_PATH)\src\include\firebird
 IDL_FILE=$(IDL_ROOT)\FirebirdInterface.idl
@@ -21,22 +19,9 @@ RPL_AWK_SRC=$(MISC)\def_awk.c
 RPL_GREP=$(FB_GEN_DIR)\isc_grep.exe
 RPL_GREP_SRC=$(MISC)\isc_grep.c
 # These utils are platform and build independent, use fixed temporary dir.
-UTL_TMP_DIR=$(FB_TEMP_DIR)\Release\misc
-
-CPPFLAGS = /MD /EHsc /O2 /D "_CRT_SECURE_NO_WARNINGS" /D "WIN32" /D "NDEBUG" /D "_CONSOLE"
 
 updateCloopInterfaces: $(API_H_FILE) $(API_PAS_FILE)
 
-
-$(CLOOP) $(RPL_AWK) $(RPL_GREP): $(UTL_TMP_DIR)
-
-$(UTL_TMP_DIR):
-	-mkdir $@ 2>nul
-
-$(CLOOP): $(CLOOP_SRC)
-	$(CPP) $(CPPFLAGS) /Fe$@ /Fo$(UTL_TMP_DIR)\ $(CLOOP_SRC)
-
-$(API_H_FILE) $(API_PAS_FILE): $(CLOOP)
 
 $(API_H_FILE): $(IDL_FILE)
 	$(CLOOP) $(IDL_FILE) c++ $@ IDL_FB_INTERFACES_H Firebird I

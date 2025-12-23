@@ -40,10 +40,6 @@
 #include "memory_routines.h"
 #include "../jrd/constants.h"
 
-#ifdef SFIO
-#include <stdio.h>
-#endif
-
 namespace fb_utils
 {
 	char* copy_terminate(char* dest, const char* src, size_t bufsize) noexcept;

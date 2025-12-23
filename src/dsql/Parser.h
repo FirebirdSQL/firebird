@@ -34,6 +34,7 @@
 #include "../dsql/TablespaceNodes.h"
 #include "../dsql/StmtNodes.h"
 #include "../jrd/RecordSourceNodes.h"
+#include "../common/classes/PodOptional.h"
 #include "../common/classes/TriState.h"
 #include "../common/classes/stack.h"
 

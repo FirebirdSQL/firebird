@@ -27,16 +27,14 @@
 #include <string>
 
 
-#define DUMMY_VTABLE	1
-#define DUMMY_INSTANCE	1
+inline constexpr int DUMMY_VTABLE = 1;
+inline constexpr int DUMMY_INSTANCE = 1;
 
 
 class Generator
 {
 public:
-	virtual ~Generator()
-	{
-	}
+	virtual ~Generator() = default;
 
 	virtual void generate() = 0;
 
@@ -48,8 +46,8 @@ protected:
 class FileGenerator : public Generator
 {
 public:
-	FileGenerator(const std::string& filename, const std::string& prefix);
-	virtual ~FileGenerator();
+	explicit FileGenerator(const std::string& filename, const std::string& prefix);
+	~FileGenerator() override;
 
 protected:
 	FILE* out;
@@ -60,7 +58,7 @@ protected:
 class CBasedGenerator : public FileGenerator
 {
 protected:
-	CBasedGenerator(const std::string& filename, const std::string& prefix, bool cPlusPlus);
+	explicit CBasedGenerator(const std::string& filename, const std::string& prefix, bool cPlusPlus);
 
 protected:
 	std::string convertType(const TypeRef& typeRef);
@@ -70,14 +68,14 @@ protected:
 };
 
 
-class CppGenerator : public CBasedGenerator
+class CppGenerator final : public CBasedGenerator
 {
 public:
-	CppGenerator(const std::string& filename, const std::string& prefix, Parser* parser,
+	explicit CppGenerator(const std::string& filename, const std::string& prefix, Parser* parser,
 		const std::string& headerGuard, const std::string& nameSpace);
 
 public:
-	virtual void generate();
+	void generate() override;
 
 private:
 	Parser* parser;
@@ -86,14 +84,14 @@ private:
 };
 
 
-class CHeaderGenerator : public CBasedGenerator
+class CHeaderGenerator final : public CBasedGenerator
 {
 public:
-	CHeaderGenerator(const std::string& filename, const std::string& prefix, Parser* parser,
+	explicit CHeaderGenerator(const std::string& filename, const std::string& prefix, Parser* parser,
 		const std::string& headerGuard, const std::string& macro);
 
 public:
-	virtual void generate();
+	void generate() override;
 
 private:
 	Parser* parser;
@@ -102,14 +100,14 @@ private:
 };
 
 
-class CImplGenerator : public CBasedGenerator
+class CImplGenerator final : public CBasedGenerator
 {
 public:
-	CImplGenerator(const std::string& filename, const std::string& prefix, Parser* parser,
-		const std::string& includeFilename);
+	explicit CImplGenerator(
+		const std::string& filename, const std::string& prefix, Parser* parser, const std::string& includeFilename);
 
 public:
-	virtual void generate();
+	void generate() override;
 
 private:
 	Parser* parser;
@@ -117,24 +115,24 @@ private:
 };
 
 
-class PascalGenerator : public FileGenerator
+class PascalGenerator final : public FileGenerator
 {
 public:
-	PascalGenerator(const std::string& filename, const std::string& prefix, Parser* parser,
-		const std::string& unitName, const std::string& additionalUses,
-		const std::string& interfaceFile, const std::string& implementationFile,
-		const std::string& exceptionClass, const std::string& functionsFile);
+	explicit PascalGenerator(const std::string& filename, const std::string& prefix, Parser* parser,
+		const std::string& unitName, const std::string& additionalUses, const std::string& interfaceFile,
+		const std::string& implementationFile, const std::string& exceptionClass, const std::string& functionsFile);
 
 public:
-	virtual void generate();
+	void generate() override;
 	static std::string escapeName(std::string name);
 
 private:
 	std::string convertParameter(const Parameter& parameter);
 	std::string convertType(const TypeRef& typeRef);
+
 	std::string escapeIfaceName(std::string name)
 	{
-		return prefix + name;
+		return prefix + escapeName(name);
 	}
 
 	void insertFile(const std::string& filename);
@@ -151,7 +149,44 @@ private:
 };
 
 
+class JnaGenerator final : public FileGenerator
+{
+public:
+	explicit JnaGenerator(const std::string& filename, const std::string& prefix, Parser* parser,
+		const std::string& className, const std::string& exceptionClass);
+
+public:
+	void generate() override;
+
+private:
+	std::string convertType(const TypeRef& typeRef, bool forReturn);
+	std::string literalForError(const TypeRef& typeRef);
+	std::string escapeName(const std::string& name);
+
+private:
+	Parser* parser;
+	std::string className;
+	std::string exceptionClass;
+};
+
+
+class JsonGenerator final : public FileGenerator
+{
+public:
+	explicit JsonGenerator(const std::string& filename, Parser* parser);
+
+public:
+	void generate() override;
+
+private:
+	std::string convertType(const TypeRef& typeRef);
+
+private:
+	Parser* parser;
+};
+
+
 void identify(FILE* out, unsigned ident);
 
 
-#endif	// CLOOP_GENERATOR_H
+#endif  // CLOOP_GENERATOR_H

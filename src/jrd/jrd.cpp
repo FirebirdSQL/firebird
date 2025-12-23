@@ -1861,7 +1861,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				// The actual FW mode (if different) will be fixed afterwards by PIO_header().
 
 				const TriState newForceWrite = options.dpb_set_force_write ?
-					TriState(options.dpb_force_write) : TriState();
+					TriState(options.dpb_force_write) : TriState::empty();
 
 				// Set the FW flag inside the database block to be considered by PIO routines
 				if (newForceWrite.valueOr(true))

@@ -196,19 +196,19 @@ BOOST_AUTO_TEST_CASE(LockUnlockNoWaitTest)
 
 BOOST_AUTO_TEST_CASE(LockUnlockAstTest)
 {
-	struct Lock;
+	struct LocalLock;
 
 	struct ThreadData
 	{
 		std::thread::id threadId;
 		LockManager* lockManager = nullptr;
 		std::mutex localMutex;
-		std::unordered_map<SLONG, std::unique_ptr<Lock>> locks;
+		std::unordered_map<SLONG, std::unique_ptr<LocalLock>> locks;
 		SLONG ownerHandle = 0;
 		bool shutdown = false;
 	};
 
-	struct Lock
+	struct LocalLock
 	{
 		ThreadData* threadData = nullptr;
 		unsigned key = 0;
@@ -232,7 +232,7 @@ BOOST_AUTO_TEST_CASE(LockUnlockAstTest)
 	std::latch latch(THREAD_COUNT);
 
 	static const auto ast = [](void* astArg) -> int {
-		const auto lock = static_cast<Lock*>(astArg);
+		const auto lock = static_cast<LocalLock*>(astArg);
 		const auto threadData = lock->threadData;
 
 		std::lock_guard localMutexGuard(threadData->localMutex);
@@ -273,7 +273,7 @@ BOOST_AUTO_TEST_CASE(LockUnlockAstTest)
 
 			for (unsigned i = 0; i < ITERATION_COUNT; ++i)
 			{
-				auto lock = std::make_unique<Lock>();
+				auto lock = std::make_unique<LocalLock>();
 				lock->threadData = &threadData;
 				lock->key = i;
 

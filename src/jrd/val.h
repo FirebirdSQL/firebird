@@ -31,6 +31,7 @@
 
 #include "../include/fb_blk.h"
 #include "../common/classes/array.h"
+#include "../common/classes/TriState.h"
 #include "../jrd/intl_classes.h"
 #include "../jrd/MetaName.h"
 #include "../jrd/RecordNumber.h"
@@ -101,9 +102,7 @@ public:
 	ValueExprNode** end() { return m_values.end(); }
 
 	const SortedValueList* init(thread_db* tdbb, Request* request) const;
-
-	bool find(thread_db* tdbb, Request* request,
-			  const ValueExprNode* value, const dsc* desc) const;
+	Firebird::TriState find(thread_db* tdbb, Request* request, const ValueExprNode* value, const dsc* desc) const;
 
 private:
 	Firebird::HalfStaticArray<ValueExprNode*, 4> m_values;

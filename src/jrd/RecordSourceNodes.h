@@ -1081,6 +1081,25 @@ public:
 	}
 };
 
+class GenSeriesFunctionSourceNode final : public TableValueFunctionSourceNode
+{
+public:
+	explicit GenSeriesFunctionSourceNode(MemoryPool& pool)
+		: TableValueFunctionSourceNode(pool)
+	{
+	}
+
+	RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream) override;
+	dsql_fld* makeField(DsqlCompilerScratch* dsqlScratch) override;
+
+	static constexpr char const* FUNC_NAME = "GENERATE_SERIES";
+
+	const char* getName() const override
+	{
+		return FUNC_NAME;
+	}
+};
+
 } // namespace Jrd
 
 #endif	// JRD_RECORD_SOURCE_NODES_H

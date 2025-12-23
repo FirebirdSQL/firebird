@@ -468,7 +468,6 @@ private:
 	typedef Firebird::SortedArray<Data*, Firebird::EmptyStorage<Data*>, Data, Data, Data>
 		IdleArray;
 
-	Firebird::MemoryPool& m_pool;
 	Firebird::Mutex m_mutex;
 	IdleArray m_idleArray;
 	Data* m_idleList;

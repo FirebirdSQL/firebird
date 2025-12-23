@@ -29,7 +29,7 @@
 #define DLL_EXPORT __declspec(dllexport)
 #else
 #include <dlfcn.h>
-#define DLL_EXPORT
+#define DLL_EXPORT __attribute__((visibility("default")))
 #endif
 
 
@@ -298,7 +298,7 @@ public:
 
 	virtual calc::IStatus* createStatus()
 	{
-		return new StatusImpl();
+		return statusFactory ? statusFactory->createStatus() : new StatusImpl();
 	}
 
 	virtual calc::ICalculator* createCalculator(StatusWrapper* /*status*/)
@@ -315,6 +315,14 @@ public:
 	{
 		return new BrokenCalculatorImpl();
 	}
+
+	virtual void setStatusFactory(calc::IStatusFactory* statusFactory)
+	{
+		this->statusFactory = statusFactory;
+	}
+
+private:
+	calc::IStatusFactory* statusFactory;
 };
 
 

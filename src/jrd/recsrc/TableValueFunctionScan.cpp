@@ -118,6 +118,8 @@ void TableValueFunctionScan::assignParameter(thread_db* tdbb, dsc* fromDesc, con
 	memcpy(toDescValue.dsc_address, fromDesc->dsc_address, fromDesc->dsc_length);
 }
 
+//--------------------
+
 UnlistFunctionScan::UnlistFunctionScan(CompilerScratch* csb, StreamType stream, const string& alias,
 									   ValueListNode* list)
 	: TableValueFunctionScan(csb, stream, alias), m_inputList(list)
@@ -232,10 +234,10 @@ void UnlistFunctionScan::internalOpen(thread_db* tdbb) const
 			auto size = end = valueView.find(separatorView);
 			if (end == std::string_view::npos)
 			{
-				if (!valueView.empty())
-					size = valueView.length();
-				else
+				if (valueView.empty())
 					break;
+
+				size = valueView.length();
 			}
 
 			if (size > 0)
@@ -247,7 +249,10 @@ void UnlistFunctionScan::internalOpen(thread_db* tdbb) const
 				impure->m_recordBuffer->store(record);
 			}
 
-			valueView.remove_prefix(size + separatorView.length());
+			if (end != std::string_view::npos)
+				size += separatorView.length();
+
+			valueView.remove_prefix(size);
 
 		} while (end != std::string_view::npos);
 	}
@@ -305,21 +310,26 @@ bool UnlistFunctionScan::nextBuffer(thread_db* tdbb) const
 			std::string_view valueView(bufferString.data(), blobLength + resultLength);
 			auto end = std::string_view::npos;
 			impure->m_resultStr->erase();
+
 			do
 			{
 				const auto size = end = valueView.find(separatorView);
 				if (end == std::string_view::npos)
 				{
 					if (!valueView.empty())
+					{
 						impure->m_resultStr->append(valueView.data(),
 							static_cast<string::size_type>(valueView.length()));
+					}
 
 					break;
 				}
 
 				if (size > 0)
+				{
 					impure->m_resultStr->append(valueView.data(),
 						static_cast<string::size_type>(size));
+				}
 
 				valueView.remove_prefix(size + separatorView.length());
 
@@ -341,6 +351,204 @@ bool UnlistFunctionScan::nextBuffer(thread_db* tdbb) const
 				impure->m_resultStr->erase();
 				return true;
 			}
+		}
+	}
+
+	return false;
+}
+
+//--------------------
+
+GenSeriesFunctionScan::GenSeriesFunctionScan(CompilerScratch* csb, StreamType stream, const string& alias,
+									   ValueListNode* list)
+	: TableValueFunctionScan(csb, stream, alias), m_inputList(list)
+{
+	m_impure = csb->allocImpure<Impure>();
+}
+
+void GenSeriesFunctionScan::close(thread_db* tdbb) const
+{
+	const auto request = tdbb->getRequest();
+
+	invalidateRecords(request);
+
+	const auto impure = request->getImpure<Impure>(m_impure);
+
+	if (impure->irsb_flags & irsb_open)
+		impure->irsb_flags &= ~irsb_open;
+}
+
+
+void GenSeriesFunctionScan::internalOpen(thread_db* tdbb) const
+{
+	const auto request = tdbb->getRequest();
+	const auto rpb = &request->req_rpb[m_stream];
+	MemoryPool& pool = *tdbb->getDefaultPool();
+
+	rpb->rpb_number.setValue(BOF_NUMBER);
+
+	fb_assert(m_inputList->items.getCount() >= GEN_SERIES_INDEX_LAST);
+
+	auto startItem = m_inputList->items[GEN_SERIES_INDEX_START];
+	const auto startDesc = EVL_expr(tdbb, request, startItem);
+	if (startDesc == nullptr)
+		return;
+
+	auto finishItem = m_inputList->items[GEN_SERIES_INDEX_FINISH];
+	const auto finishDesc = EVL_expr(tdbb, request, finishItem);
+	if (finishDesc == nullptr)
+		return;
+
+	auto stepItem = m_inputList->items[GEN_SERIES_INDEX_STEP];
+	const auto stepDesc = EVL_expr(tdbb, request, stepItem);
+	if (stepDesc == nullptr)
+		return;
+
+	const auto impure = request->getImpure<Impure>(m_impure);
+	impure->m_recordBuffer = nullptr;
+
+	// common scale
+	impure->m_scale = MIN(MIN(startDesc->dsc_scale, finishDesc->dsc_scale), stepDesc->dsc_scale);
+	// common type
+	impure->m_dtype = MAX(MAX(startDesc->dsc_dtype, finishDesc->dsc_dtype), stepDesc->dsc_dtype);
+
+	if (impure->m_dtype != dtype_int128)
+	{
+		const auto start = MOV_get_int64(tdbb, startDesc, impure->m_scale);
+		const auto finish = MOV_get_int64(tdbb, finishDesc, impure->m_scale);
+		const auto step = MOV_get_int64(tdbb, stepDesc, impure->m_scale);
+
+		if (step == 0)
+			status_exception::raise(Arg::Gds(isc_genseq_stepmustbe_nonzero) << Arg::Str(m_name));
+
+		// validate parameter value
+		if (((step > 0) && (start > finish)) ||
+			((step < 0) && (start < finish)))
+		{
+			return;
+		}
+
+		impure->m_start.vlu_int64 = start;
+		impure->m_finish.vlu_int64 = finish;
+		impure->m_step.vlu_int64 = step;
+		impure->m_result.vlu_int64 = start;
+	}
+	else
+	{
+		const auto start = MOV_get_int128(tdbb, startDesc, impure->m_scale);
+		const auto finish = MOV_get_int128(tdbb, finishDesc, impure->m_scale);
+		const auto step = MOV_get_int128(tdbb, stepDesc, impure->m_scale);
+
+		if (step.sign() == 0)
+			status_exception::raise(Arg::Gds(isc_genseq_stepmustbe_nonzero) << Arg::Str(m_name));
+
+		// validate parameter value
+		if (((step.sign() > 0) && (start.compare(finish) > 0)) ||
+			((step.sign() < 0) && (start.compare(finish) < 0)))
+		{
+			return;
+		}
+
+		impure->m_start.vlu_int128 = start;
+		impure->m_finish.vlu_int128 = finish;
+		impure->m_step.vlu_int128 = step;
+		impure->m_result.vlu_int128 = start;
+	}
+
+	impure->irsb_flags |= irsb_open;
+
+	VIO_record(tdbb, rpb, m_format, &pool);
+}
+
+void GenSeriesFunctionScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned /*level*/,
+										 bool /*recurse*/) const
+{
+	planEntry.className = "FunctionScan";
+
+	planEntry.lines.add().text = "Function " +
+		printName(tdbb, m_name.toQuotedString(), m_alias) + " Scan";
+
+	printOptInfo(planEntry.lines);
+
+	if (m_alias.hasData())
+		planEntry.alias = m_alias;
+}
+
+bool GenSeriesFunctionScan::internalGetRecord(thread_db* tdbb) const
+{
+	JRD_reschedule(tdbb);
+
+	const auto request = tdbb->getRequest();
+	const auto impure = request->getImpure<Impure>(m_impure);
+	const auto rpb = &request->req_rpb[m_stream];
+
+	if (!(impure->irsb_flags & irsb_open))
+	{
+		rpb->rpb_number.setValid(false);
+		return false;
+	}
+
+	rpb->rpb_number.increment();
+
+	if (nextBuffer(tdbb))
+	{
+		rpb->rpb_number.setValid(true);
+		return true;
+	}
+
+	rpb->rpb_number.setValid(false);
+	return false;
+}
+
+bool GenSeriesFunctionScan::nextBuffer(thread_db* tdbb) const
+{
+	const auto request = tdbb->getRequest();
+	const auto impure = request->getImpure<Impure>(m_impure);
+
+	if (impure->m_dtype != dtype_int128)
+	{
+		auto result = impure->m_result.vlu_int64;
+		const auto finish = impure->m_finish.vlu_int64;
+		const auto step = impure->m_step.vlu_int64;
+
+		if (((step > 0) && (result <= finish)) ||
+			((step < 0) && (result >= finish)))
+		{
+			Record* const record = request->req_rpb[m_stream].rpb_record;
+
+			auto toDesc = m_format->fmt_desc.begin();
+
+			dsc fromDesc;
+			fromDesc.makeInt64(impure->m_scale, &result);
+			assignParameter(tdbb, &fromDesc, toDesc, 0, record);
+
+			result += step;
+			impure->m_result.vlu_int64 = result;
+
+			return true;
+		}
+	}
+	else
+	{
+		auto result = impure->m_result.vlu_int128;
+		const auto finish = impure->m_finish.vlu_int128;
+		const auto step = impure->m_step.vlu_int128;
+
+		if (((step.sign() > 0) && (result.compare(finish) <= 0)) ||
+			((step.sign() < 0) && (result.compare(finish) >= 0)))
+		{
+			Record* const record = request->req_rpb[m_stream].rpb_record;
+
+			auto toDesc = m_format->fmt_desc.begin();
+
+			dsc fromDesc;
+			fromDesc.makeInt128(impure->m_scale, &result);
+			assignParameter(tdbb, &fromDesc, toDesc, 0, record);
+
+			result = result.add(step);
+			impure->m_result.vlu_int128 = result;
+
+			return true;
 		}
 	}
 

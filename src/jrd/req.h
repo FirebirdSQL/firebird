@@ -551,18 +551,17 @@ public:
 inline constexpr ULONG req_active			= 0x1L;
 inline constexpr ULONG req_stall			= 0x2L;
 inline constexpr ULONG req_leave			= 0x4L;
-inline constexpr ULONG req_null			= 0x8L;
-inline constexpr ULONG req_abort			= 0x10L;
-inline constexpr ULONG req_error_handler	= 0x20L;		// looper is called to handle error
-inline constexpr ULONG req_warning			= 0x40L;
-inline constexpr ULONG req_in_use			= 0x80L;
-inline constexpr ULONG req_continue_loop	= 0x100L;		// PSQL continue statement
-inline constexpr ULONG req_proc_fetch		= 0x200L;		// Fetch from procedure in progress
-inline constexpr ULONG req_proc_select		= 0x400L;		// Select from procedure in progress
-inline constexpr ULONG req_same_tx_upd		= 0x800L;		// record was updated by same transaction
-inline constexpr ULONG req_reserved		= 0x1000L;		// Request reserved for client
-inline constexpr ULONG req_update_conflict	= 0x2000L;		// We need to restart request due to update conflict
-inline constexpr ULONG req_restart_ready	= 0x4000L;		// Request is ready to restart in case of update conflict
+inline constexpr ULONG req_abort			= 0x8L;
+inline constexpr ULONG req_error_handler	= 0x10L;		// looper is called to handle error
+inline constexpr ULONG req_warning			= 0x20L;
+inline constexpr ULONG req_in_use			= 0x40L;
+inline constexpr ULONG req_continue_loop	= 0x80L;		// PSQL continue statement
+inline constexpr ULONG req_proc_fetch		= 0x100L;		// Fetch from procedure in progress
+inline constexpr ULONG req_proc_select		= 0x200L;		// Select from procedure in progress
+inline constexpr ULONG req_same_tx_upd		= 0x400L;		// record was updated by same transaction
+inline constexpr ULONG req_reserved			= 0x800L;		// Request reserved for client
+inline constexpr ULONG req_update_conflict	= 0x1000L;		// We need to restart request due to update conflict
+inline constexpr ULONG req_restart_ready	= 0x2000L;		// Request is ready to restart in case of update conflict
 
 
 // Index lock block

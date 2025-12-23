@@ -618,7 +618,7 @@ namespace Jrd
 		bool m_invariant = false;
 
 	private:
-		bool evaluateBoolean(thread_db* tdbb) const;
+		Firebird::TriState evaluateBoolean(thread_db* tdbb) const;
 
 		NestConst<RecordSource> m_next;
 		NestConst<BoolExprNode> const m_boolean;
@@ -912,8 +912,8 @@ namespace Jrd
 
 				dsc* desc = EVL_expr(tdbb, request, from);
 
-				if (request->req_flags & req_null)
-					target->vlu_desc.dsc_address = NULL;
+				if (!desc)
+					target->vlu_desc.dsc_address = nullptr;
 				else
 				{
 					EVL_make_value(tdbb, desc, target);
@@ -1592,7 +1592,7 @@ namespace Jrd
 			UNLIST_INDEX_LAST = 2
 		};
 
-		struct Impure : public TableValueFunctionScan::Impure
+		struct Impure final : public TableValueFunctionScan::Impure
 		{
 			blb* m_blob;
 			Firebird::string* m_separatorStr;
@@ -1606,10 +1606,65 @@ namespace Jrd
 	protected:
 		void close(thread_db* tdbb) const final;
 		void internalOpen(thread_db* tdbb) const final;
-		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level,
-							 bool recurse) const final;
+		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const final;
 
 		bool nextBuffer(thread_db* tdbb) const final;
+
+	private:
+		NestConst<ValueListNode> m_inputList;
+	};
+
+	class GenSeriesFunctionScan final : public TableValueFunctionScan
+	{
+		enum GenSeriesTypeItemIndex : UCHAR
+		{
+			GEN_SERIES_INDEX_START = 0,
+			GEN_SERIES_INDEX_FINISH = 1,
+			GEN_SERIES_INDEX_STEP = 2,
+			GEN_SERIES_INDEX_LAST = 3
+		};
+
+		struct Impure final : public TableValueFunctionScan::Impure
+		{
+			union
+			{
+				SINT64 vlu_int64;
+				Firebird::Int128 vlu_int128;
+			} m_start;
+
+			union
+			{
+				SINT64 vlu_int64;
+				Firebird::Int128 vlu_int128;
+			} m_finish;
+
+			union
+			{
+				SINT64 vlu_int64;
+				Firebird::Int128 vlu_int128;
+			} m_step;
+
+			union
+			{
+				SINT64 vlu_int64;
+				Firebird::Int128 vlu_int128;
+			} m_result;
+
+			UCHAR m_dtype;
+			SCHAR m_scale;
+		};
+
+	public:
+		GenSeriesFunctionScan(CompilerScratch* csb, StreamType stream, const Firebird::string& alias,
+						   ValueListNode* list);
+
+	protected:
+		void close(thread_db* tdbb) const override;
+		void internalOpen(thread_db* tdbb) const override;
+		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
+		bool internalGetRecord(thread_db* tdbb) const override;
+
+		bool nextBuffer(thread_db* tdbb) const override;
 
 	private:
 		NestConst<ValueListNode> m_inputList;

@@ -229,7 +229,7 @@ namespace Firebird
 		}
 
 		static void setVersionError(IStatus* status, const char* interfaceName,
-			unsigned currentVersion, unsigned expectedVersion)
+			uintptr_t currentVersion, unsigned expectedVersion)
 		{
 			intptr_t codes[] = {
 				isc_arg_gds,

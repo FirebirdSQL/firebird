@@ -446,6 +446,9 @@
     <ClInclude Include="..\..\..\src\common\classes\objects_array.h">
       <Filter>headers</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\common\classes\PodOptional.h">
+      <Filter>headers</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\RefCounted.h">
       <Filter>headers</Filter>
     </ClInclude>

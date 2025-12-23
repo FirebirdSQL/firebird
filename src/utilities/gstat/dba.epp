@@ -2150,7 +2150,7 @@ static void dba_print(bool err, USHORT number, const SafeArg& arg)
  *      Retrieve a message from the error file, format it, and print it.
  *
  **************************************/
-	TEXT buffer[256];
+	TEXT buffer[BUFFER_LARGE];
 	tdba* tddba = tdba::getSpecific();
 
 	fb_msg_format(NULL, GSTAT_MSG_FAC, number, sizeof(buffer), buffer, arg);

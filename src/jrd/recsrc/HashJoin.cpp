@@ -415,7 +415,7 @@ bool HashJoin::internalGetRecord(thread_db* tdbb) const
 			if (!m_leader.source->getRecord(tdbb))
 				return false;
 
-			if (m_boolean && !m_boolean->execute(tdbb, request))
+			if (m_boolean && m_boolean->execute(tdbb, request) != TriState(true))
 			{
 				// The boolean pertaining to the left sub-stream is false
 				// so just join sub-stream to a null valued right sub-stream
@@ -568,7 +568,7 @@ ULONG HashJoin::computeHash(thread_db* tdbb,
 		dsc* const desc = EVL_expr(tdbb, request, (*sub.keys)[i]);
 		const USHORT keyLength = sub.keyLengths[i];
 
-		if (desc && !(request->req_flags & req_null))
+		if (desc)
 		{
 			if (desc->isText())
 			{

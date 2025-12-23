@@ -4109,6 +4109,10 @@ TableValueFunctionSourceNode* TableValueFunctionSourceNode::parseFunction(thread
 			node = FB_NEW_POOL(pool) UnlistFunctionSourceNode(pool);
 			break;
 
+		case blr_table_value_fun_gen_series:
+			node = FB_NEW_POOL(pool) GenSeriesFunctionSourceNode(pool);
+			break;
+
 		default:
 			PAR_syntax_error(csb, "blr_table_value_fun");
 	}
@@ -4161,6 +4165,8 @@ void TableValueFunctionSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	if (tableValueFunctionContext->funName == UnlistFunctionSourceNode::FUNC_NAME)
 		dsqlScratch->appendUChar(blr_table_value_fun_unlist);
+	else if (tableValueFunctionContext->funName == GenSeriesFunctionSourceNode::FUNC_NAME)
+		dsqlScratch->appendUChar(blr_table_value_fun_gen_series);
 	else
 		fb_assert(false);
 
@@ -4307,7 +4313,8 @@ void TableValueFunctionSourceNode::setDefaultNameField(DsqlCompilerScratch* /*ds
 
 		auto i = 0U;
 
-		if (nameFunc == UnlistFunctionSourceNode::FUNC_NAME)
+		if ((nameFunc == UnlistFunctionSourceNode::FUNC_NAME) ||
+			(nameFunc == GenSeriesFunctionSourceNode::FUNC_NAME))
 		{
 			dsql_fld* field = tableValueFunctionContext->outputField;
 			if (field->fld_name.isEmpty())
@@ -4319,6 +4326,8 @@ void TableValueFunctionSourceNode::setDefaultNameField(DsqlCompilerScratch* /*ds
 	else
 		fb_assert(false);
 }
+
+//--------------------
 
 RecordSource* UnlistFunctionSourceNode::compile(thread_db* tdbb, Optimizer* opt,
 												bool /*innerSubStream*/)
@@ -4366,6 +4375,88 @@ dsql_fld* UnlistFunctionSourceNode::makeField(DsqlCompilerScratch* dsqlScratch)
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) << Arg::Gds(isc_dsql_command_err)
 										   << Arg::Gds(isc_dsql_table_value_many_columns)
 										   << Arg::Str(UnlistFunctionSourceNode::FUNC_NAME)
+										   << Arg::Num(1) << Arg::Num(dsqlNameColumns.getCount()));
+		}
+
+		field->fld_name = dsqlNameColumns[0];
+	}
+
+	field->resolve(dsqlScratch);
+	return field;
+}
+
+//--------------------
+
+RecordSource* GenSeriesFunctionSourceNode::compile(thread_db* tdbb, Optimizer* opt,
+												bool /*innerSubStream*/)
+{
+	MemoryPool& pool = *tdbb->getDefaultPool();
+	const auto csb = opt->getCompilerScratch();
+	const auto alias = opt->makeAlias(stream);
+
+	return FB_NEW_POOL(pool) GenSeriesFunctionScan(csb, stream, alias, inputList);
+}
+
+dsql_fld* GenSeriesFunctionSourceNode::makeField(DsqlCompilerScratch* dsqlScratch)
+{
+	if (inputList)
+		inputList = Node::doDsqlPass(dsqlScratch, inputList, false);
+
+	const auto startItem = inputList->items[0].getObject();
+	startItem->setParameterType(
+		dsqlScratch, [](dsc* desc) { desc->makeInt64(0); }, false);
+
+	const auto finishItem = inputList->items[1].getObject();
+	finishItem->setParameterType(
+		dsqlScratch, [](dsc* desc) { desc->makeInt64(0); }, false);
+
+	const auto stepItem = inputList->items[2].getObject();
+	stepItem->setParameterType(
+		dsqlScratch, [](dsc* desc) { desc->makeInt64(0); }, false);
+
+	dsc startDesc;
+	DsqlDescMaker::fromNode(dsqlScratch, &startDesc, startItem, true);
+	if (!startDesc.isExact() && !startDesc.isNull())
+		status_exception::raise(Arg::Gds(isc_argmustbe_exact_function) << Arg::Str(getName()));
+
+	dsc finishDesc;
+	DsqlDescMaker::fromNode(dsqlScratch, &finishDesc, finishItem, true);
+	if (!finishDesc.isExact() && !finishDesc.isNull())
+		status_exception::raise(Arg::Gds(isc_argmustbe_exact_function) << Arg::Str(getName()));
+
+	dsc stepDesc;
+	DsqlDescMaker::fromNode(dsqlScratch, &stepDesc, stepItem, true);
+	if (!stepDesc.isExact() && !stepDesc.isNull())
+		status_exception::raise(Arg::Gds(isc_argmustbe_exact_function) << Arg::Str(getName()));
+
+	// common scale
+	const auto scale = MIN(MIN(startDesc.dsc_scale, finishDesc.dsc_scale), stepDesc.dsc_scale);
+	// common type
+	const auto dtype = MAX(MAX(startDesc.dsc_dtype, finishDesc.dsc_dtype), stepDesc.dsc_dtype);
+
+	dsql_fld* field = dsqlField;
+
+	if (!field)
+	{
+		field = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
+
+		dsc desc;
+		if (dtype == dtype_int128)
+			desc.makeInt128(scale);
+		else
+			desc.makeInt64(scale);
+
+		MAKE_field(field, &desc);
+		field->fld_id = 0;
+	}
+
+	if (dsqlNameColumns.hasData())
+	{
+		if (dsqlNameColumns.getCount() > 1)
+		{
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) << Arg::Gds(isc_dsql_command_err)
+										   << Arg::Gds(isc_dsql_table_value_many_columns)
+										   << Arg::Str(getName())
 										   << Arg::Num(1) << Arg::Num(dsqlNameColumns.getCount()));
 		}
 

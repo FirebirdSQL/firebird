@@ -1191,8 +1191,7 @@ const StmtNode* CursorStmtNode::execute(thread_db* tdbb, Request* request, ExeSt
 						fb_assert(cursorOp == blr_cursor_fetch_scroll);
 
 						const dsc* desc = EVL_expr(tdbb, request, scrollExpr);
-						const bool unknown = !desc || (request->req_flags & req_null);
-						const SINT64 offset = unknown ? 0 : MOV_get_int64(tdbb, desc, 0);
+						const SINT64 offset = desc ? MOV_get_int64(tdbb, desc, 0) : 0;
 
 						switch (scrollOp)
 						{
@@ -1209,10 +1208,10 @@ const StmtNode* CursorStmtNode::execute(thread_db* tdbb, Request* request, ExeSt
 								fetched = cursor->fetchLast(tdbb);
 								break;
 							case blr_scroll_absolute:
-								fetched = unknown ? false : cursor->fetchAbsolute(tdbb, offset);
+								fetched = desc ? cursor->fetchAbsolute(tdbb, offset) : false;
 								break;
 							case blr_scroll_relative:
-								fetched = unknown ? false : cursor->fetchRelative(tdbb, offset);
+								fetched = desc ? cursor->fetchRelative(tdbb, offset) : false;
 								break;
 							default:
 								fb_assert(false);
@@ -2604,6 +2603,8 @@ EraseNode* EraseNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	csb->csb_rpt[stream].csb_flags |= csb_update;
 
+	impureOffset = csb->allocImpure<impure_state>();
+
 	return this;
 }
 
@@ -2664,6 +2665,8 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 	{
 		case Request::req_evaluate:
 		{
+			impure->sta_state = 0;
+
 			if (!(marks & MARK_AVOID_COUNTERS))
 				request->req_records_affected.bumpModified(false);
 
@@ -4547,7 +4550,7 @@ void ExecStatementNode::getString(thread_db* tdbb, Request* request, const Value
 	int len = 0;
 	const dsc* dsc = node ? EVL_expr(tdbb, request, node) : NULL;
 
-	if (dsc && !(request->req_flags & req_null))
+	if (dsc)
 	{
 		const Jrd::Attachment* att = tdbb->getAttachment();
 		len = MOV_make_string2(tdbb, dsc, (useAttCS ? att->att_charset : dsc->getTextType()),
@@ -4632,7 +4635,7 @@ const StmtNode* IfNode::execute(thread_db* tdbb, Request* request, ExeState* /*e
 {
 	if (request->req_operation == Request::req_evaluate)
 	{
-		if (condition->execute(tdbb, request))
+		if (condition->execute(tdbb, request).asBool())
 		{
 			request->req_operation = Request::req_evaluate;
 			return trueAction;
@@ -4957,7 +4960,7 @@ const StmtNode* InitVariableNode::execute(thread_db* tdbb, Request* request, Exe
 			{
 				dsc* value = EVL_expr(tdbb, request, fieldInfo.defaultValue);
 
-				if (value && !(request->req_flags & req_null))
+				if (value)
 				{
 					toDesc->dsc_flags &= ~DSC_null;
 					MOV_move(tdbb, value, toDesc);
@@ -5483,7 +5486,7 @@ void ExceptionNode::setError(thread_db* tdbb) const
 		// Evaluate exception message and convert it to string.
 		const dsc* const desc = EVL_expr(tdbb, request, messageExpr);
 
-		if (desc && !(request->req_flags & req_null))
+		if (desc)
 		{
 			MoveBuffer temp;
 			UCHAR* string = NULL;
@@ -5554,7 +5557,7 @@ void ExceptionNode::setError(thread_db* tdbb) const
 				{
 					const dsc* value = EVL_expr(tdbb, request, *parameter);
 
-					if (!value || (request->req_flags & req_null))
+					if (!value)
 						paramsStr.push(NULL_STRING_MARK);
 					else
 					{
@@ -6184,7 +6187,7 @@ const StmtNode* ForRangeNode::execute(thread_db* tdbb, Request* request, ExeStat
 		case Request::req_evaluate:
 		{
 			const auto initialDesc = EVL_expr(tdbb, request, initialExpr);
-			EXE_assignment(tdbb, variable, initialDesc, !initialDesc, nullptr, nullptr);
+			EXE_assignment(tdbb, variable, initialDesc, nullptr, nullptr);
 
 			if (!initialDesc)
 			{
@@ -6253,7 +6256,7 @@ const StmtNode* ForRangeNode::execute(thread_db* tdbb, Request* request, ExeStat
 					incDecScale,
 					incDecFlags);
 
-				EXE_assignment(tdbb, variable, &nextValue.vlu_desc, false, nullptr, nullptr);
+				EXE_assignment(tdbb, variable, &nextValue.vlu_desc, nullptr, nullptr);
 			}
 
 			const auto comparison = MOV_compare(tdbb, variableDesc, &impure->finalValue.vlu_desc);
@@ -12192,17 +12195,17 @@ static void validateExpressions(thread_db* tdbb, const Array<ValidateInfo>& vali
 	{
 		Request* request = tdbb->getRequest();
 
-		if (!i->boolean->execute(tdbb, request) && !(request->req_flags & req_null))
+		if (i->boolean->execute(tdbb, request) == TriState(false))
 		{
 			// Validation error -- report result
 			const char* value;
 			VaryStr<TEMP_STR_LENGTH> temp;
 
 			const dsc* desc = EVL_expr(tdbb, request, i->value);
-			const USHORT length = (desc && !(request->req_flags & req_null)) ?
+			const USHORT length = desc ?
 				MOV_make_string(tdbb, desc, ttype_dynamic, &value, &temp, sizeof(temp) - 1) : 0;
 
-			if (!desc || (request->req_flags & req_null))
+			if (!desc)
 				value = NULL_STRING_MARK;
 			else if (!length)
 				value = "";

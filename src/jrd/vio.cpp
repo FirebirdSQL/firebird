@@ -1715,14 +1715,6 @@ void VIO_copy_record(thread_db* tdbb, jrd_rel* relation, Record* orgRecord, Reco
  *	Copy the given record to a new destination,
  *	taking care about possible format differences.
  **************************************/
-	// dimitr:	Clear the req_null flag that may stay active after the last
-	//			boolean evaluation. Here we use only EVL_field() calls that
-	//			do not touch this flag and data copying is done only for
-	//			non-NULL fields, so req_null should never be seen inside blb::move().
-	//			See CORE-6090 for details.
-
-	const auto request = tdbb->getRequest();
-	request->req_flags &= ~req_null;
 
 	const auto orgFormat = orgRecord->getFormat();
 	const auto newFormat = newRecord->getFormat();
@@ -4257,7 +4249,10 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			}},
 		};
 
-		ObjectsArray<MetaString> schemaSearchPath({SYSTEM_SCHEMA, PUBLIC_SCHEMA});
+		static const GlobalPtr<ObjectsArray<MetaString>> schemaSearchPath([](MemoryPool& pool)
+		{
+			return FB_NEW_POOL(pool) ObjectsArray<MetaString>(pool, {SYSTEM_SCHEMA, PUBLIC_SCHEMA});
+		});
 
 		if (const auto relSchemaFields = schemaFields.find(relation->rel_id); relSchemaFields != schemaFields.end())
 		{
@@ -4276,7 +4271,7 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 					{
 						MOV_get_metaname(tdbb, &desc, depName.object);
 
-						if (MET_qualify_existing_name(tdbb, depName, {dependency->objType}, &schemaSearchPath))
+						if (MET_qualify_existing_name(tdbb, depName, {dependency->objType}, schemaSearchPath.get()))
 							schemaName = depName.schema.c_str();
 					}
 
@@ -4537,6 +4532,7 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			break;
 
 		case rel_fields:
+			protect_system_table_insert(tdbb, request, relation);
 			EVL_field(0, rpb->rpb_record, f_fld_schema, &schemaDesc);
 			MOV_get_metaname(tdbb, &schemaDesc, object_name.schema);
 			EVL_field(0, rpb->rpb_record, f_fld_name, &desc);
@@ -4588,6 +4584,7 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			break;
 
 		case rel_triggers:
+			protect_system_table_insert(tdbb, request, relation);
 			EVL_field(0, rpb->rpb_record, f_trg_schema, &schemaDesc);
 			EVL_field(0, rpb->rpb_record, f_trg_rname, &desc);
 
@@ -6608,6 +6605,8 @@ static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNu
 
 	if (new_rpb)
 	{
+		new_rpb->rpb_flags &= ~rpb_delta;
+
 		// If both descriptors share the same record, there cannot be any difference.
 		// This trick is used by VIO_writelock(), but can be a regular practice as well.
 		if (new_rpb->rpb_address == temp->rpb_address)

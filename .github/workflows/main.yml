@@ -178,8 +178,7 @@ jobs:
         shell: cmd
         run: |
           for /r %%i in (*.bat) do unix2dos "%%i"
-          choco uninstall --no-progress --yes innosetup
-          choco install --no-progress --yes innosetup --version=6.4.0
+          choco install --no-progress --yes innosetup --version=6.4.0 --allow-downgrade
 
       - name: Build
         shell: cmd
@@ -230,8 +229,7 @@ jobs:
         shell: cmd
         run: |
           for /r %%i in (*.bat) do unix2dos "%%i"
-          REM choco uninstall --no-progress --yes innosetup
-          choco install --no-progress --yes innosetup --version=6.4.0
+          choco install --no-progress --yes innosetup --version=6.4.0 --allow-downgrade
 
       - name: Build
         shell: cmd
@@ -360,7 +358,7 @@ jobs:
 
   build-macos:
     name: build-macos-${{ matrix.arch }}
-    runs-on: ${{ (matrix.arch == 'arm64' && 'macos-14') || 'macos-13' }}
+    runs-on: ${{ (matrix.arch == 'arm64' && 'macos-15') || 'macos-15-intel' }}
 
     strategy:
       fail-fast: false

@@ -197,7 +197,7 @@ bool NestedLoopJoin::internalGetRecord(thread_db* tdbb) const
 				if (!outer->getRecord(tdbb))
 					return false;
 
-				if (m_boolean && !m_boolean->execute(tdbb, request))
+				if (m_boolean && m_boolean->execute(tdbb, request) != TriState(true))
 				{
 					// The boolean pertaining to the left sub-stream is false
 					// so just join sub-stream to a null valued right sub-stream

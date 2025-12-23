@@ -166,6 +166,10 @@ USHORT MERGE_database_info(const UCHAR* const in,
 			--out;
 			break;
 
+		case fb_info_counts_scope_att:
+		case fb_info_counts_scope_db:
+			break;
+
 		default:
 			{
 				USHORT length = input.getClumpLength();

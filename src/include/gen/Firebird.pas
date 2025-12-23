@@ -4608,6 +4608,8 @@ const
 	fb_info_wire_roundtrips = byte(158);
 	fb_info_max_blob_cache_size = byte(159);
 	fb_info_max_inline_blob_size = byte(160);
+	fb_info_counts_scope_att = byte(161);
+	fb_info_counts_scope_db = byte(162);
 	fb_info_crypt_encrypted = $01;
 	fb_info_crypt_process = $02;
 	fb_feature_multi_statements = byte(1);
@@ -5844,10 +5846,12 @@ const
 	 isc_invalid_name = 335545316;
 	 isc_invalid_unqualified_name_list = 335545317;
 	 isc_no_user_att_while_restore = 335545318;
-	 isc_ts_file_exists = 335545319;
-	 isc_tablespace_name = 335545320;
-	 isc_ts_file_not_exists = 335545321;
-	 isc_ts_file_dup = 335545322;
+	 isc_genseq_stepmustbe_nonzero = 335545319;
+	 isc_argmustbe_exact_function = 335545320;
+	 isc_ts_file_exists = 335545321;
+	 isc_tablespace_name = 335545322;
+	 isc_ts_file_not_exists = 335545323;
+	 isc_ts_file_dup = 335545324;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;

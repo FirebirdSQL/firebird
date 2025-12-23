@@ -560,6 +560,8 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 		case isc_info_end:
 		case isc_info_truncated:
 		case isc_info_flag_end:
+		case fb_info_counts_scope_att:
+		case fb_info_counts_scope_db:
 			return SingleTpb;
 		default:
 			break;
