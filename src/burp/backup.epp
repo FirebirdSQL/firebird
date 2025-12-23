@@ -152,6 +152,7 @@ void write_relations();
 void write_schemas();
 void write_secclasses();
 void write_shadow_files();
+void write_tablespaces();
 void write_triggers();
 void write_trigger_messages();
 void write_types();
@@ -409,6 +410,13 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 		// Write packages
 		BURP_verbose(336);	// msg 336 writing packages
 		write_packages();
+	}
+
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
+	{
+		// Write tablespaces
+		BURP_verbose(411);	// msg 411 writing tablespaces
+		write_tablespaces();
 	}
 
 	// Now go back and write all data
@@ -783,6 +791,10 @@ burp_fld* get_fields( burp_rel* relation)
 				COPY(X.RDB$GENERATOR_NAME, field->fld_generator);
 				field->fld_identity_type = X.RDB$IDENTITY_TYPE;
 			}
+
+			// ODS 14
+			if (!X.RDB$TABLESPACE_NAME.NULL) // For older ODS NULL is expected here
+				COPY(X.RDB$TABLESPACE_NAME, field->fld_tablespace);
 
 			field_list.add(field);
 		}
@@ -1711,6 +1723,10 @@ void put_index( burp_rel* relation)
 			if (!X.RDB$FOREIGN_KEY.NULL)
 				PUT_TEXT (att_index_foreign_key, X.RDB$FOREIGN_KEY);
 
+			// ODS 14
+			if (!X.RDB$TABLESPACE_NAME.NULL)
+				PUT_TEXT (att_index_tablespace_name, X.RDB$TABLESPACE_NAME);
+
 			if (!X.RDB$CONDITION_SOURCE.NULL)
 			{
 				put_source_blob(att_index_condition_source, att_index_condition_source,
@@ -1786,6 +1802,10 @@ void put_index( burp_rel* relation)
 
 			if (!X.RDB$FOREIGN_KEY.NULL)
 				PUT_TEXT (att_index_foreign_key, X.RDB$FOREIGN_KEY);
+
+			// ODS 14
+			if (!X.RDB$TABLESPACE_NAME.NULL)	// For old versions I expect it will be NULL here.
+				PUT_TEXT (att_index_tablespace_name, X.RDB$TABLESPACE_NAME);
 
 			put(tdgbl, att_end);
 
@@ -2088,6 +2108,9 @@ void put_relation( burp_rel* relation)
 			PUT_TEXT(att_field_generator_name, field->fld_generator);
 			put_int32(att_field_identity_type, field->fld_identity_type);
 		}
+
+		if (field->fld_tablespace[0])
+			PUT_TEXT(att_field_tablespace_name, field->fld_tablespace);
 
 		put(tdgbl, att_end);
 	}
@@ -4154,6 +4177,10 @@ void write_relations()
 			if (!X.RDB$SQL_SECURITY.NULL)
 				put_boolean(att_relation_sql_security, X.RDB$SQL_SECURITY);
 
+			// ODS 14
+			if (!X.RDB$TABLESPACE_NAME.NULL) // For older ODS NULL is expected here
+				PUT_TEXT(att_relation_tablespace_name, X.RDB$TABLESPACE_NAME);
+
 			put(tdgbl, att_end);
 			burp_rel* relation = (burp_rel*) BURP_alloc_zero (sizeof(burp_rel));
 			relation->rel_next = tdgbl->relations;
@@ -4489,6 +4516,62 @@ void write_mapping()
 	MISC_release_request_silent(req_handle);
 }
 
+void write_tablespaces()
+{
+/**************************************
+ *
+ *	w r i t e _ t a b l e s p a c e s
+ *
+ **************************************
+ *
+ * Functional description
+ * 	write a record in the burp file for
+ *	each tablespace.
+ *
+ **************************************/
+	TEXT temp[GDS_NAME_LEN];
+	Firebird::IRequest* req_handle1 = nullptr;
+
+	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+
+	FOR (REQUEST_HANDLE req_handle1)
+		X IN RDB$TABLESPACES WITH
+		(X.RDB$SYSTEM_FLAG MISSING OR X.RDB$SYSTEM_FLAG NE RDB_system)
+	{
+		put(tdgbl, rec_tablespace);
+
+		const SSHORT l = PUT_TEXT(att_ts_name, X.RDB$TABLESPACE_NAME);
+		MISC_terminate(X.RDB$TABLESPACE_NAME, temp, l, sizeof(temp));
+
+		BURP_verbose(412, temp);	// msg 412 writing tablespace @1
+
+		if (!X.RDB$SECURITY_CLASS.NULL)
+			PUT_TEXT(att_ts_security_class, X.RDB$SECURITY_CLASS);
+
+		if (!X.RDB$DESCRIPTION.NULL)
+			put_source_blob(att_ts_description, att_ts_description, X.RDB$DESCRIPTION);
+
+		if (!X.RDB$OWNER_NAME.NULL)
+			PUT_TEXT(att_ts_owner_name, X.RDB$OWNER_NAME);
+
+		if (!X.RDB$FILE_NAME.NULL)
+			PUT_TEXT(att_ts_file, X.RDB$FILE_NAME);
+
+		if (!X.RDB$OFFLINE.NULL)
+			put_boolean(att_ts_offline, X.RDB$OFFLINE);
+
+		if (!X.RDB$READ_ONLY.NULL)
+			put_boolean(att_ts_readonly, X.RDB$READ_ONLY);
+
+		put(tdgbl, att_end);
+	}
+	END_FOR
+	ON_ERROR
+		general_on_error();
+	END_ERROR
+
+	MISC_release_request_silent(req_handle1);
+}
 
 void write_db_creators()
 {

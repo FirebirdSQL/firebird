@@ -484,6 +484,7 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 	static constexpr std::string_view TOKEN_SQL("SQL");
 	static constexpr std::string_view TOKEN_SYSTEM("SYSTEM");
 	static constexpr std::string_view TOKEN_TABLES("TABLES");
+	static constexpr std::string_view TOKEN_TABLESPACES("TABLESPACES");
 	static constexpr std::string_view TOKEN_TRIGGERS("TRIGGERS");
 	static constexpr std::string_view TOKEN_USERS("USERS");
 	static constexpr std::string_view TOKEN_VER("VER");
@@ -634,6 +635,8 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 				return node;
 			}
 			else if (const auto parsed = parseShowOptQualifiedName<ShowTablesNode>(text, TOKEN_TABLES, 5))
+				return parsed.value();
+			else if (const auto parsed = parseShowOptName<ShowTablespacesNode>(text, TOKEN_TABLESPACES, 10))
 				return parsed.value();
 			else if (const auto parsed = parseShowOptQualifiedName<ShowTriggersNode>(text, TOKEN_TRIGGERS, 4))
 				return parsed.value();

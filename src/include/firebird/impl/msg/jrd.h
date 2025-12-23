@@ -1000,3 +1000,7 @@ FB_IMPL_MSG(JRD, 997, invalid_unqualified_name_list, -901, "HY", "000", "Invalid
 FB_IMPL_MSG(JRD, 998, no_user_att_while_restore, -901, "HY", "000", "User attachments are not allowed for the database being restored")
 FB_IMPL_MSG(JRD, 999, genseq_stepmustbe_nonzero, -833, "42", "000", "Argument STEP must be different than zero for function @1")
 FB_IMPL_MSG(JRD, 1000, argmustbe_exact_function, -833, "42", "000", "Arguments for @1 function must be exact numeric types")
+FB_IMPL_MSG(JRD, 1001, ts_file_exists, -902, "08", "001", "Tablespace file \"@1\" already exists")
+FB_IMPL_MSG(JRD, 1002, tablespace_name, -901, "42", "000", "TABLESPACE @1")
+FB_IMPL_MSG(JRD, 1003, ts_file_not_exists, -902, "08", "001", "Tablespace file \"@1\" does not exist")
+FB_IMPL_MSG(JRD, 1004, ts_file_dup, -902, "08", "001", "Tablespace file \"@1\" is already used by tablespace @2")

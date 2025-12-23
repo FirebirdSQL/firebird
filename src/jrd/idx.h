@@ -524,6 +524,19 @@ static inline constexpr struct ini_idx_t indices[] =
 		SEGMENT(f_pubtab_tab_schema, idx_metadata),	// table schema name
 		SEGMENT(f_pubtab_tab_name, idx_metadata),	// table name
 		SEGMENT(f_pubtab_pub_name, idx_metadata)	// publication name
+	}},
+	// define index RDB$INDEX_98 for RDB$TABLESPACES unique RDB$TABLESPACE_NAME;
+	INDEX(98, rel_tablespaces, idx_unique, 1, ODS_14_0)
+		SEGMENT(f_ts_name, idx_metadata)		// tablespace name
+	}},
+	// define index RDB$INDEX_99 for RDB$TABLESPACES unique RDB$TABLESPACE_ID;
+	INDEX(99, rel_tablespaces, idx_unique, 1, ODS_14_0)
+		SEGMENT(f_ts_id, idx_numeric)		// tablespace id
+	}},
+	// define index RDB$INDEX_100 for RDB$PAGES RDB$PAGE_TYPE, RDB$RELATION_ID;
+	INDEX(100, rel_pages, 0, 2, ODS_14_0)
+		SEGMENT(f_pag_type, idx_numeric),	// page type
+		SEGMENT(f_pag_id, idx_numeric),		// relation id
 	}}
 };
 

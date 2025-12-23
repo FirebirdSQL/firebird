@@ -1294,7 +1294,8 @@ public:
 			  fieldSource(p),
 			  identitySequence(p),
 			  defaultSource(p),
-			  baseField(p)
+			  baseField(p),
+			  tableSpace(p)
 		{
 		}
 
@@ -1314,6 +1315,7 @@ public:
 		Firebird::ByteChunk defaultValue;
 		std::optional<USHORT> viewContext;
 		MetaName baseField;
+		MetaName tableSpace;
 	};
 
 	struct IndexConstraintClause
@@ -1368,7 +1370,8 @@ public:
 			  refUpdateAction(RI_RESTRICT),
 			  refDeleteAction(RI_RESTRICT),
 			  triggers(p),
-			  blrWritersHolder(p)
+			  blrWritersHolder(p),
+			  tableSpace(p)
 		{
 		}
 
@@ -1381,6 +1384,7 @@ public:
 		const char* refDeleteAction;
 		Firebird::ObjectsArray<TriggerDefinition> triggers;
 		Firebird::ObjectsArray<BlrWriter> blrWritersHolder;
+		MetaName tableSpace;
 	};
 
 	struct CreateDropConstraint
@@ -1408,7 +1412,8 @@ public:
 			TYPE_DROP_COLUMN,
 			TYPE_DROP_CONSTRAINT,
 			TYPE_ALTER_SQL_SECURITY,
-			TYPE_ALTER_PUBLICATION
+			TYPE_ALTER_PUBLICATION,
+			TYPE_SET_TABLESPACE
 		};
 
 		explicit Clause(MemoryPool& p, Type aType) noexcept
@@ -1456,7 +1461,8 @@ public:
 			  refRelation(p),
 			  refColumns(p),
 			  refAction(NULL),
-			  check(NULL)
+			  check(NULL),
+			  tableSpace(p)
 		{
 		}
 
@@ -1469,6 +1475,7 @@ public:
 		NestConst<RefActionClause> refAction;
 		NestConst<BoolSourceClause> check;
 		bool createIfNotExistsOnly = false;
+		MetaName tableSpace;
 	};
 
 	struct IdentityOptions
@@ -1657,6 +1664,7 @@ public:
 	Firebird::Array<NestConst<Clause> > clauses;
 	Firebird::TriState ssDefiner;
 	Firebird::TriState replicationState;
+	MetaName tableSpace;
 };
 
 
@@ -1748,6 +1756,8 @@ public:
 	}
 
 	static void deleteGlobalField(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& globalName);
+
+	static void dropRelation(thread_db* tdbb, jrd_tra* transaction, bool view, jrd_rel* rel_drop, const QualifiedName& name);
 
 public:
 	Firebird::string internalPrint(NodePrinter& printer) const override;
@@ -1871,6 +1881,7 @@ public:
 		bid conditionSource;
 		QualifiedName refRelation;
 		Firebird::ObjectsArray<MetaName> refColumns;
+		MetaName tableSpace;
 	};
 
 public:
@@ -1906,16 +1917,19 @@ public:
 	NestConst<ValueSourceClause> computed;
 	NestConst<BoolSourceClause> partial;
 	bool createIfNotExistsOnly = false;
+	MetaName tableSpace;
 };
 
 
 class AlterIndexNode final : public DdlNode
 {
 public:
-	AlterIndexNode(MemoryPool& p, const QualifiedName& aName, bool aActive)
+	enum OP {OP_ACTIVE, OP_INACTIVE, OP_SET_TABLESPACE};
+
+	AlterIndexNode(MemoryPool& p, const QualifiedName& aName, OP anOp)
 		: DdlNode(p),
 		  name(p, aName),
-		  active(aActive)
+		  op(anOp)
 	{
 	}
 
@@ -1940,7 +1954,8 @@ protected:
 
 public:
 	QualifiedName name;
-	bool active;
+	MetaName tableSpace;
+	OP op;
 };
 
 

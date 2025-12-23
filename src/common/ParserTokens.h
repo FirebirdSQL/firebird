@@ -576,3 +576,4 @@ PARSER_TOKEN(TOK_CONCATENATE, "||", false)
 PARSER_TOKEN(TOK_NOT_LSS, "~<", false)	// Alias of !<
 PARSER_TOKEN(TOK_NEQ, "~=", false)				// Alias of !=
 PARSER_TOKEN(TOK_NOT_GTR, "~>", false)			// Alias of !>
+PARSER_TOKEN(TOK_TABLESPACE, "TABLESPACE", true)

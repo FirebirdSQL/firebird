@@ -643,7 +643,19 @@ TraceRuntimeStats::TraceRuntimeStats(Attachment* attachment,
 
 		auto getTablespaceName = [&](unsigned id) -> Firebird::string
 		{
-			return ""; // TODO
+			if (id == 0)
+				return TEMP_TABLESPACE_NAME;
+
+			if (id == DB_PAGE_SPACE)
+				return PRIMARY_TABLESPACE_NAME;
+
+			if (PageSpace::isTablespace(id))
+			{
+				if (const auto tablespace = attachment->getTablespace(id))
+					return tablespace->name.c_str();
+			}
+
+			return "";
 		};
 
 		m_pageCounters.reset(&baseline->getPageCounters(), getTablespaceName);

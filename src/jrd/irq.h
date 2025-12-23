@@ -175,14 +175,27 @@ enum irq_type_t
 	irq_grant17,			// process grant option (database)
 	irq_grant18,			// process grant option (filters)
 	irq_grant19,			// process grant option (roles)
+	irq_grant20,			// process grant option (tablespaces)
 	irq_l_curr_format,		// lookup table's current format
 	irq_c_relation3,		// lookup relation in phase 0 to cleanup
 	irq_linger,				// get database linger value
 	irq_dbb_ss_definer,		// get database sql security value
+	irq_find_rel_ts,		// find tablespace options for relation
+	irq_find_idx_ts,		// find tablespace options for index
+	irq_find_ts,			// find tablespace options by name
+	irq_find_ts_id,			// find tablespace options by id
 	irq_proc_param_dep,		// check procedure parameter dependency
 	irq_func_param_dep,		// check function parameter dependency
 	irq_l_pub_tab_state,	// lookup publication state for a table
 	irq_l_index_cnstrt,     // lookup index for constraint
+	irq_list_ts_files,		// list tablespace files
+	irq_find_ts_dfw,		// find tablespace options by name in dfw
+	irq_find_ts_dfw0,		// find tablespace options by name in dfw for cleanup
+	irq_scan_ts,			// scan tablespaces
+	irq_ts_security,		// verify security for tablespace
+	irq_r_pages2,
+	irq_s_first_pp,
+	irq_chk_ts_filename,
 
 	irq_MAX
 };
