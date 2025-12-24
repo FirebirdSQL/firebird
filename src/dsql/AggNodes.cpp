@@ -597,7 +597,7 @@ void AnyValueAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) cons
 	{
 		const auto argValue = EVL_expr(tdbb, request, arg);
 
-		if (!argValue)
+		if (argValue)
 			EVL_make_value(tdbb, argValue, impure);
 	}
 
