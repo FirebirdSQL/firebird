@@ -717,6 +717,8 @@ using namespace Firebird;
 %token <metaNamePtr> LISTAGG
 %token <metaNamePtr> LTRIM
 %token <metaNamePtr> NAMED_ARG_ASSIGN
+%token <metaNamePtr> PERCENTILE_CONT
+%token <metaNamePtr> PERCENTILE_DISC
 %token <metaNamePtr> RTRIM
 %token <metaNamePtr> SCHEMA
 %token <metaNamePtr> SEARCH_PATH
@@ -4728,6 +4730,8 @@ keyword_or_column
 	| WITHIN
 	| LISTAGG
 	| TRUNCATE
+	| PERCENTILE_CONT
+	| PERCENTILE_DISC
 	;
 
 col_opt
@@ -8620,6 +8624,10 @@ aggregate_function_prefix
 		{ $$ = newNode<BinAggNode>(BinAggNode::TYPE_BIN_XOR, $4); }
 	| BIN_XOR_AGG '(' DISTINCT value ')'
 		{ $$ = newNode<BinAggNode>(BinAggNode::TYPE_BIN_XOR_DISTINCT, $4); }
+    | PERCENTILE_CONT '(' value ')' within_group_specification
+	    { $$ = newNode<PercentileAggNode>(PercentileAggNode::TYPE_PERCENTILE_CONT, $3, $5); }
+    | PERCENTILE_DISC '(' value ')' within_group_specification
+	    { $$ = newNode<PercentileAggNode>(PercentileAggNode::TYPE_PERCENTILE_DISC, $3, $5); }
 	;
 
 %type <aggNode> listagg_set_function
@@ -10066,6 +10074,8 @@ non_reserved_word
 	| FORMAT
 	| GENERATE_SERIES
 	| OWNER
+	| PERCENTILE_CONT
+	| PERCENTILE_DISC
 	| SEARCH_PATH
 	| SCHEMA
 	| UNLIST
