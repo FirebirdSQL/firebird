@@ -935,8 +935,12 @@ DmlNode* ListAggNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 	ListAggNode* node = FB_NEW_POOL(pool) ListAggNode(pool,	(blrOp == blr_agg_list_distinct));
 	node->arg = PAR_parse_value(tdbb, csb);
 	node->delimiter = PAR_parse_value(tdbb, csb);
-	if (csb->csb_blr_reader.peekByte() == blr_sort)
-		node->sort = PAR_sort(tdbb, csb, blr_sort, true);
+	if (csb->csb_blr_reader.peekByte() == blr_within_group_order)
+	{
+		csb->csb_blr_reader.getByte(); // skip blr_within_group_order
+		if (const auto count = csb->csb_blr_reader.getByte())
+			node->sort = PAR_sort_internal(tdbb, csb, true, count);
+	}
 
 	return node;
 }
@@ -966,7 +970,7 @@ void ListAggNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	AggNode::genBlr(dsqlScratch);
 	if (dsqlOrderClause)
-		GEN_sort(dsqlScratch, blr_sort, dsqlOrderClause);
+		GEN_sort(dsqlScratch, blr_within_group_order, dsqlOrderClause);
 }
 
 bool ListAggNode::setParameterType(DsqlCompilerScratch* dsqlScratch,
