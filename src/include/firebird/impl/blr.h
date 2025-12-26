@@ -507,10 +507,12 @@
 
 // Table value function
 #define blr_table_value_fun				(unsigned char) 229
+// subcodes of blr_table_value_fun
 #define blr_table_value_fun_unlist		(unsigned char) 1
 #define blr_table_value_fun_gen_series	(unsigned char) 2
 
 #define blr_for_range								(unsigned char) 230
+// subcodes of blr_for_range
 #define blr_for_range_variable						(unsigned char) 1
 #define blr_for_range_initial_value					(unsigned char) 2
 #define blr_for_range_final_value					(unsigned char) 3
@@ -523,9 +525,11 @@
 #define blr_gen_id3					(unsigned char) 231
 #define blr_default2				(unsigned char) 232
 #define blr_current_schema			(unsigned char) 233
-#define blr_flags					(unsigned char) 234
 
+#define blr_flags						(unsigned char) 234
 // subcodes of blr_flags
 #define blr_flags_search_system_schema	(unsigned char) 1
+
+#define blr_within_group_order		(unsigned char) 235
 
 #endif // FIREBIRD_IMPL_BLR_H

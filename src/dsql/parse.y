@@ -8685,7 +8685,7 @@ listagg_count_indication
 
 %type <valueListNode> within_group_specification_opt
 within_group_specification_opt
-	: /* nothing */					{ $$ = newNode<ValueListNode>(0); }
+	: /* nothing */					{ $$ = nullptr; }
 	| within_group_specification	{ $$ = $1; }
 	;
 
