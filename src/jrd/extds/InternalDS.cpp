@@ -39,6 +39,7 @@
 #include "../mov_proto.h"
 #include "../PreparedStatement.h"
 #include "../Function.h"
+#include "../Statement.h"
 
 #include "InternalDS.h"
 #include "ValidatePassword.h"

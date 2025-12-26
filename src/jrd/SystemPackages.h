@@ -25,6 +25,7 @@
 
 #include "firebird.h"
 #include "../common/status.h"
+#include "../common/dsc.h"
 #include "../common/classes/init.h"
 #include "../common/classes/array.h"
 #include "../common/classes/objects_array.h"

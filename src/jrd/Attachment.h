@@ -25,6 +25,8 @@
 #ifndef JRD_ATTACHMENT_H
 #define JRD_ATTACHMENT_H
 
+#define DEBUG_LCK_LIST
+
 #include "firebird.h"
 // Definition of block types for data allocation in JRD
 #include "../include/fb_blk.h"
@@ -52,7 +54,6 @@
 #include <atomic>
 #include <initializer_list>
 
-//#define DEBUG_LCK_LIST
 
 namespace EDS {
 	class Connection;
@@ -62,12 +63,6 @@ namespace Replication
 {
 	class TableMatcher;
 }
-
-namespace Firebird {
-	class TextType;
-}
-
-class CharSetContainer;
 
 namespace Jrd
 {
@@ -84,8 +79,6 @@ namespace Jrd
 	class jrd_rel;
 	class ExternalFile;
 	class ViewContext;
-	class IndexBlock;
-	class IndexLock;
 	class ArrayField;
 	struct sort_context;
 	class vcl;
@@ -98,12 +91,13 @@ namespace Jrd
 	class jrd_rel;
 	class jrd_prc;
 	class Trigger;
-	class TrigVector;
+	class Triggers;
 	class Function;
 	class Statement;
 	class ProfilerManager;
 	class Validation;
 	class Applier;
+	enum InternalRequest : USHORT;
 
 
 struct DSqlCacheItem
@@ -438,55 +432,6 @@ public:
 		Firebird::RefPtr<StableAttachmentPart> jStable;
 	};
 
-	class GeneratorFinder
-	{
-	public:
-		explicit GeneratorFinder(MemoryPool& pool)
-			: m_objects(pool)
-		{}
-
-		void store(SLONG id, const QualifiedName& name)
-		{
-			fb_assert(id >= 0);
-			fb_assert(name.object.hasData());
-
-			if (id < (int) m_objects.getCount())
-			{
-				fb_assert(m_objects[id].object.isEmpty());
-				m_objects[id] = name;
-			}
-			else
-			{
-				m_objects.resize(id + 1);
-				m_objects[id] = name;
-			}
-		}
-
-		bool lookup(SLONG id, QualifiedName& name)
-		{
-			if (id < (int) m_objects.getCount() && m_objects[id].object.hasData())
-			{
-				name = m_objects[id];
-				return true;
-			}
-
-			return false;
-		}
-
-		SLONG lookup(const QualifiedName& name)
-		{
-			FB_SIZE_T pos;
-
-			if (m_objects.find(name, pos))
-				return (SLONG) pos;
-
-			return -1;
-		}
-
-	private:
-		Firebird::Array<QualifiedName> m_objects;
-	};
-
 	class InitialOptions
 	{
 	public:
@@ -568,8 +513,6 @@ public:
 	Attachment*	att_next;					// Next attachment to database
 	UserId*		att_user;					// User identification
 	UserId*		att_ss_user;				// User identification for SQL SECURITY actual user
-	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
-		Firebird::MetaString, UserId*> > > att_user_ids;	// set of used UserIds
 	jrd_tra*	att_transactions;			// Transactions belonging to attachment
 	jrd_tra*	att_dbkey_trans;			// transaction to control db-key scope
 	TraNumber	att_oldest_snapshot;		// GTT's record versions older than this can be garbage-collected
@@ -577,11 +520,12 @@ public:
 
 private:
 	jrd_tra*	att_sys_transaction;		// system transaction
+	jrd_tra*	att_meta_transaction;		// metadata read transaction
 	StableAttachmentPart* att_stable;
 
 public:
-	Firebird::SortedArray<Statement*> att_statements;	// Statements belonging to attachment
-	Firebird::SortedArray<Request*> att_requests;	// Requests belonging to attachment
+	Firebird::SortedArray<Request*> att_requests;		// Requests belonging to attachment
+
 	Lock*		att_id_lock;				// Attachment lock (if any)
 	AttNumber	att_attachment_id;			// Attachment ID
 	Lock*		att_cancel_lock;			// Lock to cancel the active request
@@ -597,8 +541,8 @@ public:
 	RuntimeStatistics	att_stats;
 	RuntimeStatistics	att_base_stats;
 	ULONG		att_flags;					// Flags describing the state of the attachment
-	SSHORT		att_client_charset;			// user's charset specified in dpb
-	SSHORT		att_charset;				// current (client or external) attachment charset
+	CSetId		att_client_charset;			// user's charset specified in dpb
+	CSetId		att_charset;				// current (client or external) attachment charset
 
 	// ASF: Attention: att_in_system_routine was initially added to support the profiler plugin
 	// writing to system tables. But a modified implementation used non-system tables and
@@ -669,50 +613,25 @@ public:
 
 	UtilType att_utility;
 
-	/// former Database members - start
-
-	vec<jrd_rel*>*					att_relations;			// relation vector
-	Firebird::Array<jrd_prc*>		att_procedures;			// scanned procedures
-	TrigVector*						att_triggers[DB_TRIGGER_MAX];
-	TrigVector*						att_ddl_triggers;
-	Firebird::Array<Function*>		att_functions;			// User defined functions
-	GeneratorFinder					att_generators;
-
-	Firebird::Array<Statement*>	att_internal;			// internal statements
-	Firebird::Array<Statement*>	att_dyn_req;			// internal dyn statements
-	Firebird::Array<Statement*>	att_internal_cached_statements;		// internal cached statements
 	Firebird::ICryptKeyCallback*	att_crypt_callback;		// callback for DB crypt
 	Firebird::DecimalStatus			att_dec_status;			// error handling and rounding
-
-	Request* findSystemRequest(thread_db* tdbb, USHORT id, USHORT which);
-
-	Firebird::Array<CharSetContainer*>	att_charsets;		// intl character set descriptions
-	Firebird::GenericMap<Firebird::Pair<Firebird::Left<QualifiedName, USHORT>>> att_charset_ids;	// Character set ids
-
-	void releaseIntlObjects(thread_db* tdbb);			// defined in intl.cpp
-	void destroyIntlObjects(thread_db* tdbb);			// defined in intl.cpp
 
 	void initLocks(thread_db* tdbb);
 	void releaseLocks(thread_db* tdbb);
 	void detachLocks();
-
-	void releaseRelations(thread_db* tdbb);
 
 	static int blockingAstShutdown(void*);
 	static int blockingAstCancel(void*);
 	static int blockingAstMonitor(void*);
 	static int blockingAstReplSet(void*);
 
-	Firebird::Array<MemoryPool*>	att_pools;		// pools
-
-	MemoryPool* createPool();
-	void deletePool(MemoryPool* pool);
-
-	/// former Database members - end
-
 	bool locksmith(thread_db* tdbb, SystemPrivilege sp) const;
+
 	jrd_tra* getSysTransaction() noexcept;
-	void setSysTransaction(jrd_tra* trans) noexcept;	// used only by TRA_init
+	void setSysTransaction(jrd_tra* trans) noexcept;		// used only by TRA_init
+	jrd_tra* getMetaTransaction(thread_db* tdbb);			// RORC to read metadata
+	void createMetaTransaction(thread_db* tdbb);
+	void rollbackMetaTransaction(thread_db* tdbb);
 
 	inline bool isSystem() const noexcept
 	{
@@ -862,6 +781,7 @@ public:
 	ProfilerManager* getActiveProfilerManagerForNonInternalStatement(thread_db* tdbb);
 	bool isProfilerActive();
 	void releaseProfilerManager(thread_db* tdbb);
+	void purgeTransactions(thread_db* tdbb, const bool force_flag);
 
 	JProvider* getProvider() noexcept
 	{

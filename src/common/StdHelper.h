@@ -30,6 +30,7 @@
 #include <utility>
 #include <variant>
 #include <cstddef>
+#include <stdexcept>
 #include "boost/type_traits/copy_cv.hpp"
 
 namespace Firebird {

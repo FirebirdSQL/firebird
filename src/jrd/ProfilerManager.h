@@ -34,6 +34,7 @@
 #include "../jrd/recsrc/RecordSource.h"
 #include "../jrd/req.h"
 #include "../jrd/SystemPackages.h"
+#include "../jrd/Statement.h"
 
 namespace Jrd {
 

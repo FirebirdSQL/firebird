@@ -133,7 +133,7 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	static void validateTarget(CompilerScratch* csb, const ValueExprNode* target);
+	static void validateTarget(thread_db* tdbb, CompilerScratch* csb, const ValueExprNode* target);
 	static void dsqlValidateTarget(const ValueExprNode* target);
 
 	Firebird::string internalPrint(NodePrinter& printer) const override;
@@ -621,7 +621,7 @@ public:
 	NestConst<ValueListNode> outputSources;
 	NestConst<ValueListNode> outputTargets;
 	NestConst<MessageNode> outputMessage;
-	NestConst<jrd_prc> procedure;
+	SubRoutine<jrd_prc> procedure;
 	NestConst<Firebird::ObjectsArray<MetaName>> dsqlInputArgNames;
 	NestConst<Firebird::ObjectsArray<MetaName>> dsqlOutputArgNames;
 	bool dsqlCallSyntax = false;

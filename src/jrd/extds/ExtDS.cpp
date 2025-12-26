@@ -516,6 +516,7 @@ void Provider::releaseConnection(thread_db* tdbb, Connection& conn, bool inPool)
 				}
 			}
 		}
+		status->init();
 	}
 
 	if (inPool)
