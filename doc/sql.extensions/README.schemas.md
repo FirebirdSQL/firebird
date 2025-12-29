@@ -45,6 +45,7 @@ These objects exist outside schemas and function as before:
 - Blob filters
 - Schemas
 - Mappings and global mappings
+- Tablespaces
 
 ### Schema-bound objects
 

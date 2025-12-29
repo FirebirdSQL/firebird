@@ -47,6 +47,7 @@ set(epp_boot_gds_files
     dsql/metd.epp
     dsql/DdlNodes.epp
     dsql/PackageNodes.epp
+    dsql/TablespaceNodes.epp
     jrd/dfw.epp
     jrd/dpm.epp
     jrd/dyn_util.epp
@@ -469,6 +470,7 @@ set(engine_generated_src
     dsql/DdlNodes.epp
     dsql/metd.epp
     dsql/PackageNodes.epp
+    dsql/TablespaceNodes.epp
     jrd/dfw.epp
     jrd/dpm.epp
     jrd/dyn_util.epp

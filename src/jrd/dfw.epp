@@ -128,6 +128,8 @@
 #include "../jrd/CryptoManager.h"
 #include "../jrd/Mapping.h"
 #include "../jrd/shut_proto.h"
+#include "../jrd/Tablespace.h"
+#include "../jrd/vio_proto.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -500,6 +502,11 @@ static bool set_linger(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool clear_cache(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool change_repl_state(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static string remove_icu_info_from_attributes(const QualifiedName&, const string&);
+static bool create_tablespace(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
+static bool delete_tablespace(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
+static bool modify_tablespace(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
+static bool move_relation(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
+static bool move_index(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 
 // ----------------------------------------------------------------
 
@@ -1333,6 +1340,11 @@ static inline constexpr deferred_task task_table[] =
 	{ dfw_set_linger, set_linger },
 	{ dfw_clear_cache, clear_cache },
 	{ dfw_change_repl_state, change_repl_state },
+	{ dfw_create_tablespace, create_tablespace },
+	{ dfw_delete_tablespace, delete_tablespace },
+	{ dfw_modify_tablespace, modify_tablespace },
+	{ dfw_move_relation, move_relation },
+	{ dfw_move_index, move_index },
 	{ dfw_null, NULL }
 };
 
@@ -1640,6 +1652,9 @@ void DFW_perform_work(thread_db* tdbb, jrd_tra* transaction)
 		{
 		case dfw_post_event:
 		case dfw_delete_shadow:
+		case dfw_clear_datapages:
+		case dfw_clear_indexpages:
+		case dfw_delete_tablespace:
 			break;
 
 		default:
@@ -1655,8 +1670,9 @@ void DFW_perform_work(thread_db* tdbb, jrd_tra* transaction)
 	}
 }
 
+void delete_tree(thread_db* tdbb, USHORT, USHORT, PageNumber, PageNumber);
 
-void DFW_perform_post_commit_work(jrd_tra* transaction)
+void DFW_perform_post_commit_work(thread_db* tdbb, jrd_tra* transaction)
 {
 /**************************************
  *
@@ -1678,7 +1694,8 @@ void DFW_perform_post_commit_work(jrd_tra* transaction)
 
 	bool pending_events = false;
 
-	Database* dbb = GET_DBB();
+	SET_TDBB(tdbb);
+	Database* dbb = tdbb->getDatabase();
 
 	for (DeferredWork* itr = transaction->tra_deferred_job->work; itr;)
 	{
@@ -1694,17 +1711,62 @@ void DFW_perform_post_commit_work(jrd_tra* transaction)
 										   work->dfw_name.c_str(),
 										   work->dfw_count);
 
-			delete work;
 			pending_events = true;
 			break;
+		case dfw_delete_tablespace:
 		case dfw_delete_shadow:
 			if (work->dfw_name.hasData())
 				unlink(work->dfw_name.c_str());
-			delete work;
 			break;
+		case dfw_clear_datapages:
+			{
+				jrd_rel* relation = MET_lookup_relation_id(tdbb, work->dfw_id, false);
+
+				// A relation may already be deleted by dfw_delete_relation in the same transaction
+				if (!relation)
+				{
+					CCH_release_exclusive(tdbb);
+					break;
+				}
+
+				RelationPages* relationPages = relation->getPages(tdbb);
+				DPM_delete_relation_pages(tdbb, relation, relationPages);
+
+				RelationPages* newRelationPages = relation->getReplacedPages();
+				// Regenerate RDB$PAGES for the new relation
+				{
+					AutoRequest handle;
+
+					DPM_pages(tdbb, relation->rel_id, pag_root, 0, newRelationPages->rel_index_root);
+					ULONG* page = &(*newRelationPages->rel_pages)[0];
+					const FB_SIZE_T n = newRelationPages->rel_pages->count();
+					for (FB_SIZE_T seq = 0; seq < n; seq++, page++)
+						DPM_pages(tdbb, relation->rel_id, pag_pointer, seq, *page);
+				}
+
+				CCH_flush(tdbb, FLUSH_SYSTEM, 0);
+
+				*relationPages = *newRelationPages;
+
+				CCH_release_exclusive(tdbb);
+			}
+			break;
+		case dfw_clear_indexpages:
+			{
+				SortedArray<int>& ids = DFW_get_ids(work);
+				fb_assert(ids.getCount() == 3);
+				const SLONG indexId = ids[0];
+				const PageNumber oldRootPage(ids[1], ids[2]);
+				delete_tree(tdbb, work->dfw_id, indexId, oldRootPage, PageNumber());
+			}
+
+			break;
+
 		default:
 			break;
 		}
+
+		delete work;
 	}
 
 	if (pending_events)
@@ -2591,6 +2653,8 @@ static bool create_expression_index(thread_db* tdbb, SSHORT phase, DeferredWork*
 			jrd_rel* relation = nullptr;
 			CompilerScratch* csb = nullptr;
 
+			ULONG tableSpaceId = DB_PAGE_SPACE;
+
 			const auto dbb = tdbb->getDatabase();
 			const auto attachment = tdbb->getAttachment();
 
@@ -2611,6 +2675,9 @@ static bool create_expression_index(thread_db* tdbb, SSHORT phase, DeferredWork*
 					relation = MET_relation(tdbb, REL.RDB$RELATION_ID);
 					if (relation->rel_name.object.isEmpty())
 						relation->rel_name = QualifiedName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME);
+
+					if (!IDX.RDB$TABLESPACE_NAME.NULL)
+						tableSpaceId = MET_tablespace(tdbb, IDX.RDB$TABLESPACE_NAME)->id;
 
 					if (IDX.RDB$INDEX_ID && IDX.RDB$STATISTICS < 0.0)
 					{
@@ -2731,6 +2798,7 @@ static bool create_expression_index(thread_db* tdbb, SSHORT phase, DeferredWork*
 			{
 				fb_assert(work->dfw_id <= dbb->dbb_max_idx);
 				idx.idx_id = work->dfw_id;
+				idx.idx_pg_space_id = tableSpaceId;
 				IDX_create_index(tdbb, relation, &idx, work->getQualifiedName(), &work->dfw_id,
 					transaction, selectivity);
 
@@ -3278,6 +3346,8 @@ static bool create_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 		relation = NULL;
 		idx.idx_flags = 0;
 
+		ULONG tableSpaceId = DB_PAGE_SPACE;
+
 		// Fetch the information necessary to create the index.  On the first
 		// time thru, check to see if the index already exists.  If so, delete
 		// it.  If the index inactive flag is set, don't create the index
@@ -3297,6 +3367,9 @@ static bool create_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 						 Arg::Gds(isc_idx_create_err) << work->getQualifiedName().toQuotedString());
 				// Msg308: can't create index %s
 			}
+
+			if (!IDX.RDB$TABLESPACE_NAME.NULL)
+				tableSpaceId = MET_tablespace(tdbb, IDX.RDB$TABLESPACE_NAME)->id;
 
 			if (IDX.RDB$INDEX_ID && IDX.RDB$STATISTICS < 0.0)
 			{
@@ -3573,6 +3646,7 @@ static bool create_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 
 		fb_assert(work->dfw_id <= dbb->dbb_max_idx);
 		idx.idx_id = work->dfw_id;
+		idx.idx_pg_space_id = tableSpaceId;
 		SelectivityList selectivity(*tdbb->getDefaultPool());
 		IDX_create_index(tdbb, relation, &idx, work->getQualifiedName(),
 						&work->dfw_id, transaction, selectivity);
@@ -4767,7 +4841,16 @@ static bool delete_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 		index = CMP_get_index_lock(tdbb, relation, id);
 		if (isTempIndex && index)
 			index->idl_count++;
-		IDX_delete_index(tdbb, relation, id);
+
+		try
+		{
+			IDX_delete_index(tdbb, relation, id);
+		}
+		catch (...)
+		{
+			index->idl_count = 0;
+			throw;
+		}
 
 		if (isTempIndex)
 			return false;
@@ -6564,6 +6647,411 @@ static bool change_repl_state(thread_db* tdbb, SSHORT phase, DeferredWork* work,
 			// replication set is changed
 			attachment->invalidateReplSet(tdbb, true);
 		}
+		break;
+	}
+
+	return false;
+}
+
+
+static bool create_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+{
+/**************************************
+ *
+ *	c r e a t e _ t a b l e s p a c e
+ *
+ **************************************
+ *
+ * Functional description
+ *	Create tablespace file and format it.
+ *
+ **************************************/
+
+	SET_TDBB(tdbb);
+	Database* dbb = tdbb->getDatabase();
+
+	switch (phase)
+	{
+	case 0:
+		{
+			fb_assert(work->dfw_id > DB_PAGE_SPACE);
+
+			AutoCacheRequest request(tdbb, irq_find_ts_dfw0, IRQ_REQUESTS);
+
+			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+				TS IN RDB$TABLESPACES
+				WITH TS.RDB$TABLESPACE_ID EQ work->dfw_id
+			{
+				if (dbb->dbb_page_manager.findPageSpace(work->dfw_id))
+				{
+					CCH_flush(tdbb, FLUSH_ALL, 0, work->dfw_id);
+					dbb->dbb_page_manager.delPageSpace(work->dfw_id);
+					unlink(TS.RDB$FILE_NAME);
+				}
+
+				Attachment* attachment = tdbb->getAttachment();
+				Tablespace* tablespace = attachment->getTablespace(work->dfw_id);
+
+				if (tablespace)
+				{
+					LCK_release(tdbb, tablespace->existenceLock);
+					attachment->delTablespace(work->dfw_id);
+				}
+			}
+			END_FOR
+		}
+		return false;
+
+	case 1:
+		return true;
+
+	case 2:
+		{
+			fb_assert(work->dfw_id > DB_PAGE_SPACE);
+
+			AutoCacheRequest request(tdbb, irq_find_ts_dfw, IRQ_REQUESTS);
+
+			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+				TS IN RDB$TABLESPACES
+				WITH TS.RDB$TABLESPACE_ID EQ work->dfw_id
+			{
+				PathName file = TS.RDB$FILE_NAME;
+				dbb->dbb_page_manager.allocTableSpace(tdbb, work->dfw_id, true, file);
+			}
+			END_FOR
+		}
+		return true;
+
+	case 3:
+	case 4:
+		break;
+	}
+
+	return false;
+}
+
+
+static bool delete_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+{
+/**************************************
+ *
+ *	d e l e t e _ t a b l e s p a c e
+ *
+ **************************************
+ *
+ * Functional description
+ *	Drop tablespace and remove its file at the post-commit stage.
+ *
+ **************************************/
+
+	SET_TDBB(tdbb);
+	Database* dbb = tdbb->getDatabase();
+	Attachment* attachment = tdbb->getAttachment();
+
+	Tablespace* tablespace = MET_tablespace_id(tdbb, work->dfw_id);
+
+	// We assume the tablespace must exists if dfw with has added
+	fb_assert(tablespace);
+	fb_assert(tablespace->existenceLock);
+	fb_assert(tablespace->existenceLock->lck_logical != LCK_none);
+
+	switch (phase)
+	{
+	case 0:
+		LCK_convert(tdbb, tablespace->existenceLock, LCK_SR, transaction->getLockWait());
+		return false;
+
+	case 1:
+		{
+			// Make sure that nobody uses the tablespace
+			if (tablespace->isUsed() ||
+				!LCK_convert(tdbb, tablespace->existenceLock, LCK_EX, transaction->getLockWait()))
+			{
+				raiseObjectInUseError("TABLESPACE", QualifiedName(tablespace->name));
+			}
+		}
+		return true;
+
+	case 2:
+	case 3:
+		return true;
+	case 4:
+		CCH_flush(tdbb, FLUSH_ALL, 0, work->dfw_id);
+		dbb->dbb_page_manager.delPageSpace(work->dfw_id);
+
+		LCK_release(tdbb, tablespace->existenceLock);
+
+		attachment->delTablespace(work->dfw_id);
+
+		break;
+	}
+
+	return false;
+}
+
+static bool modify_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+{
+/**************************************
+ *
+ *	m o d i f y _ t a b l e s p a c e
+ *
+ **************************************
+ *
+ * Functional description
+ *	Modify tablespace.
+ *
+ **************************************/
+
+	SET_TDBB(tdbb);
+	Database* dbb = tdbb->getDatabase();
+	Attachment* attachment = tdbb->getAttachment();
+
+	Tablespace* tablespace = attachment->getTablespace(work->dfw_id);
+
+	// We assume the tablespace must exists if dfw with has added
+	fb_assert(tablespace);
+	fb_assert(tablespace->existenceLock);
+	fb_assert(tablespace->existenceLock->lck_logical != LCK_none);
+
+	switch (phase)
+	{
+	case 0:
+		LCK_convert(tdbb, tablespace->existenceLock, LCK_SR, transaction->getLockWait());
+		return false;
+
+	case 1:
+		{
+			PathName newFileName(work->dfw_name);
+			ISC_expand_filename(newFileName, true);
+
+			AutoCacheRequest requestHandle(tdbb, irq_chk_ts_filename, IRQ_REQUESTS);
+
+			FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+				X IN RDB$TABLESPACES
+				WITH X.RDB$SYSTEM_FLAG NE 1
+					AND X.RDB$TABLESPACE_NAME NE tablespace->name.c_str()
+			{
+				PathName fileName(X.RDB$FILE_NAME);
+				ISC_expand_filename(fileName, true);
+
+				if (fileName == newFileName)
+				{
+					const MetaName tablespaceName(X.RDB$TABLESPACE_NAME);
+
+					ERR_post(Arg::Gds(isc_ts_file_dup) <<
+						Arg::Str(fileName) << Arg::Str(tablespaceName));
+				}
+			}
+			END_FOR
+
+			// Make sure that nobody uses the tablespace
+			if (tablespace->isUsed() ||
+				!LCK_convert(tdbb, tablespace->existenceLock, LCK_EX, transaction->getLockWait()))
+			{
+				raiseObjectInUseError("TABLESPACE", QualifiedName(tablespace->name));
+			}
+		}
+		return true;
+
+	case 2:
+	case 3:
+		return true;
+	case 4:
+		CCH_flush(tdbb, FLUSH_ALL, 0, work->dfw_id);
+		dbb->dbb_page_manager.delPageSpace(work->dfw_id);
+
+		LCK_release(tdbb, tablespace->existenceLock);
+
+		attachment->delTablespace(work->dfw_id);
+
+		break;
+	}
+
+	return false;
+}
+
+static bool move_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+{
+/**************************************
+ *
+ *	m o v e _ r e l a t i o n
+ *
+ **************************************
+ *
+ * Functional description
+ *	Move relation from its tablespace to new one.
+ *
+ **************************************/
+
+	SET_TDBB(tdbb);
+	Database* dbb = tdbb->getDatabase();
+	Attachment* attachment = tdbb->getAttachment();
+
+	switch (phase)
+	{
+	case 0:
+		// Probably it's good to check here that we have reverted both the first
+		// pointer page and index root or force it.
+		CCH_release_exclusive(tdbb);
+		break;
+
+	case 1:
+		// We ask EX lock on DB to prevent relation changing and keep data consistent.
+		// This is a temporary solution. It's better to migrate data of a tablespace
+		// without locking the whole DB but with locking only relation.
+		if (!CCH_exclusive(tdbb, LCK_EX, WAIT_PERIOD, NULL))
+			raiseDatabaseInUseError(true);
+		return true;
+
+	case 2:
+	{
+		jrd_rel* relation = MET_lookup_relation_id(tdbb, work->dfw_id, false);
+		RelationPages* newRelationPages = FB_NEW_POOL(*relation->rel_pool) RelationPages(*relation->rel_pool);
+
+		// Metadata was changed at Ddl stage and now contains new pagespace id
+		newRelationPages->rel_pg_space_id = MET_rel_pagespace(tdbb, relation->rel_id);
+
+		// Scan pages before cleanup relation. Maybe redundant?
+		// Or maybe to scan starting from the last known sequence?
+		DPM_scan_pages(tdbb, pag_pointer, relation->rel_id);
+		DPM_scan_pages(tdbb, pag_root, relation->rel_id);
+
+		RelationPages* relationPages = relation->getPages(tdbb);
+
+		// Copy index root page to a new relation tablespace
+		// And free previous one
+		WIN oldWindow(relationPages->rel_pg_space_id, relationPages->rel_index_root);
+		Ods::pag* oldPage = CCH_FETCH(tdbb, &oldWindow, LCK_read, pag_root);
+
+		WIN newWindow(newRelationPages->rel_pg_space_id, -1);
+		Ods::pag* newPage = DPM_allocate(tdbb, &newWindow);
+		CCH_MARK_MUST_WRITE(tdbb, &newWindow);
+		memcpy(newPage, oldPage, dbb->dbb_page_size);
+		newPage->pag_pageno = newWindow.win_page.getPageNum();
+		newRelationPages->rel_index_root = newWindow.win_page.getPageNum();
+
+		CCH_RELEASE(tdbb, &newWindow);
+		CCH_RELEASE(tdbb, &oldWindow);
+
+		DPM_move_data_pages(tdbb, relation, newRelationPages);
+
+		relation->setReplacedPages(newRelationPages);
+
+		{	// We delete all from RDB$PAGES about the relation to have an ability to understand that
+			// we need to restore pages if transaction won't be able to finish successfully.
+			AutoRequest handle;
+
+			FOR(REQUEST_HANDLE handle) X IN RDB$PAGES
+					WITH (X.RDB$RELATION_ID EQ relation->rel_id)
+					SORTED BY DESCENDING X.RDB$PAGE_SEQUENCE
+			{
+				ERASE X;
+			}
+			END_FOR
+		}
+
+		// Post commit work will clean up old pages. It must be done exactly after commit
+		// If crash is happend the metadata will point to the old page space and new ones
+		// will be garbage. Right after commit old pages will be garbage.
+		DFW_post_work(transaction, dfw_clear_datapages, {}, {}, relation->rel_id);
+	}
+		break;
+
+	case 3:
+	case 4:
+		break;
+	}
+
+	return false;
+}
+
+
+static bool move_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+{
+/**************************************
+ *
+ *	m o v e _ i n d e x
+ *
+ **************************************
+ *
+ * Functional description
+ *	Move index pages from its tablespace to new one.
+ *
+ **************************************/
+
+	SET_TDBB(tdbb);
+	Database* dbb = tdbb->getDatabase();
+	Attachment* attachment = tdbb->getAttachment();
+
+	switch (phase)
+	{
+	case 0:
+		CCH_release_exclusive(tdbb);
+		break;
+
+	case 1:
+		// We ask EX lock on DB to prevent relation changing and keep data consistent.
+		// This is a temporary solution. It's better to migrate data of a tablespace
+		// without locking the whole DB but with locking only relation.
+		if (!CCH_exclusive(tdbb, LCK_EX, WAIT_PERIOD, NULL))
+			raiseDatabaseInUseError(true);
+		return true;
+
+	case 2:
+		{
+			// Fetch relation and index id by index name
+			PreparedStatement::Builder sql;
+			jrd_rel* relation = NULL;
+			SLONG relationId;
+			SLONG indexId;
+			MetaName tableSpace;
+			sql << "select"
+				<< sql("rel.rdb$relation_id,", relationId)
+				<< sql("idx.rdb$index_id,", indexId)
+				<< sql("idx.rdb$tablespace_name", tableSpace)
+				<< "from rdb$indices idx join rdb$relations rel using (rdb$relation_name)"
+				<< "where idx.rdb$index_name = " << work->dfw_name
+				<< "  and rel.rdb$relation_id is not null";
+			AutoPreparedStatement ps(attachment->prepareStatement(tdbb,
+				attachment->getSysTransaction(), sql));
+			AutoResultSet rs(ps->executeQuery(tdbb, attachment->getSysTransaction()));
+
+			while (rs->fetch(tdbb))
+			{
+				relation = MET_lookup_relation_id(tdbb, relationId, false);
+				indexId--;	// ID of a index starts from 1 in metadata and from 0 in code :)
+				break;
+			}
+
+			// An index may be deleted in the same transaction.
+			// Don't move index pages in this case.
+			if (!relation)
+			{
+				CCH_release_exclusive(tdbb);
+				break;
+			}
+
+			const ULONG newPageSpaceId = MET_tablespace(tdbb, tableSpace)->id;
+
+			PageNumber oldRootPage;
+			if (BTR_move_index(tdbb, relation, indexId, newPageSpaceId, oldRootPage))
+			{
+				// Futher transaction must finish and flush its pages to the disk.
+				// It actually switched pointer. If server crash before it the database file will have the old data.
+				DeferredWork* work = DFW_post_work(transaction, dfw_clear_indexpages, {}, {}, relation->rel_id);
+				SortedArray<int>& ids = DFW_get_ids(work);
+				ids.resize(3);
+				ids[0] = indexId;
+				ids[1] = oldRootPage.getPageSpaceID();
+				ids[2] = oldRootPage.getPageNum();
+			}
+
+			CCH_release_exclusive(tdbb);
+		}
+		break;
+
+	case 3:
+	case 4:
 		break;
 	}
 

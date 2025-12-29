@@ -339,7 +339,7 @@ struct win
 	explicit win(const PageNumber& wp) noexcept
 		: win_page(wp), win_bdb(NULL), win_flags(0)
 	{}
-	win(const USHORT pageSpaceID, const ULONG pageNum) noexcept
+	win(const ULONG pageSpaceID, const ULONG pageNum) noexcept
 		: win_page(pageSpaceID, pageNum), win_bdb(NULL), win_flags(0)
 	{}
 };

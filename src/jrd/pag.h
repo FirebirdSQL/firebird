@@ -37,6 +37,7 @@
 #include "../include/fb_blk.h"
 #include "../common/classes/array.h"
 #include "../common/classes/locks.h"
+#include "../common/classes/rwlock.h"
 #include "../jrd/ods.h"
 #include "../jrd/lls.h"
 
@@ -60,10 +61,11 @@ class PageControl : public pool_alloc<type_pgc>
 // TEMP_PAGE_SPACE and page spaces above TEMP_PAGE_SPACE contain temporary pages
 // TRANS_PAGE_SPACE is pseudo space to store transaction numbers in precedence stack
 // INVALID_PAGE_SPACE is to ???
-inline constexpr USHORT INVALID_PAGE_SPACE	= 0;
-inline constexpr USHORT DB_PAGE_SPACE		= 1;
-inline constexpr USHORT TRANS_PAGE_SPACE	= 255;
-inline constexpr USHORT TEMP_PAGE_SPACE	= 256;
+inline constexpr ULONG INVALID_PAGE_SPACE	= 0;
+inline constexpr ULONG DB_PAGE_SPACE		= 1;
+inline constexpr ULONG TRANS_PAGE_SPACE	= 255;
+inline constexpr ULONG TEMP_PAGE_SPACE	= 256;
+inline constexpr ULONG MAX_PAGE_SPACE_ID	= MAX_ULONG;
 
 inline constexpr USHORT PAGES_IN_EXTENT	= 8;
 
@@ -75,7 +77,7 @@ class PageManager;
 class PageSpace : public pool_alloc<type_PageSpace>
 {
 public:
-	explicit PageSpace(Database* aDbb, USHORT aPageSpaceID)
+	explicit PageSpace(Database* aDbb, ULONG aPageSpaceID)
 	{
 		pageSpaceID = aPageSpaceID;
 		pipHighWater = 0;
@@ -90,7 +92,7 @@ public:
 
 	~PageSpace();
 
-	USHORT pageSpaceID;
+	ULONG pageSpaceID;
 	Firebird::AtomicCounter pipHighWater;		// Lowest PIP with space
 	Firebird::AtomicCounter pipWithExtent;		// Lowest PIP with free extent
 	ULONG pipFirst;								// First pointer page
@@ -98,7 +100,7 @@ public:
 
 	jrd_file*	file;
 
-	static inline bool isTemporary(USHORT aPageSpaceID) noexcept
+	static inline bool isTemporary(ULONG aPageSpaceID) noexcept
 	{
 		return (aPageSpaceID >= TEMP_PAGE_SPACE);
 	}
@@ -108,7 +110,17 @@ public:
 		return isTemporary(pageSpaceID);
 	}
 
-	static inline SLONG generate(const PageSpace* Item) noexcept
+	static inline bool isTablespace(ULONG aPageSpaceID)
+	{
+		return (aPageSpaceID > DB_PAGE_SPACE) && (aPageSpaceID < TRANS_PAGE_SPACE);
+	}
+
+	inline bool isTablespace() const
+	{
+		return isTablespace(pageSpaceID);
+	}
+
+	static inline ULONG generate(const PageSpace* Item) noexcept
 	{
 		return Item->pageSpaceID;
 	}
@@ -133,8 +145,7 @@ public:
 	ULONG extend(thread_db* tdbb, ULONG pageNum, bool forceSize);
 
 	// get SCN's page number
-	ULONG getSCNPageNum(ULONG sequence) noexcept;
-	static ULONG getSCNPageNum(const Database* dbb, ULONG sequence);
+	ULONG getSCNPageNum(ULONG sequence) const noexcept;
 
 	// is pagespace on raw device
 	bool onRawDevice() const noexcept;
@@ -148,32 +159,23 @@ private:
 class PageManager : public pool_alloc<type_PageManager>
 {
 public:
-	explicit PageManager(Database* aDbb, Firebird::MemoryPool& aPool) :
-		dbb(aDbb),
-		pageSpaces(aPool),
-		pool(aPool)
-	{
-		pagesPerPIP = 0;
-		bytesBitPIP = 0;
-		transPerTIP = 0;
-		gensPerPage = 0;
-		pagesPerSCN = 0;
-		tempPageSpaceID = 0;
-		tempFileCreated = false;
-
-		addPageSpace(DB_PAGE_SPACE);
-	}
+	explicit PageManager(Database* aDbb, Firebird::MemoryPool& aPool);
 
 	~PageManager()
 	{
 		while (pageSpaces.hasData())
 			delete pageSpaces.pop();
+
+		delete pageSpacesLock;
 	}
 
-	PageSpace* findPageSpace(const USHORT pageSpaceID) const;
+	PageSpace* findPageSpace(const ULONG pageSpaceID) const;
 
 	void initTempPageSpace(thread_db* tdbb);
-	USHORT getTempPageSpaceID(thread_db* tdbb);
+	ULONG getTempPageSpaceID(thread_db* tdbb);
+
+	void allocTableSpace(thread_db* tdbb, ULONG tableSpaceID, bool create, const Firebird::PathName& fileName);
+	void delPageSpace(const ULONG pageSpaceID);
 
 	void closeAll();
 
@@ -185,13 +187,13 @@ public:
 
 private:
 	typedef Firebird::SortedArray<PageSpace*, Firebird::EmptyStorage<PageSpace*>,
-		USHORT, PageSpace> PageSpaceArray;
+		ULONG, PageSpace> PageSpaceArray;
 
-	PageSpace* addPageSpace(const USHORT pageSpaceID);
-	void delPageSpace(const USHORT pageSpaceID);
+	PageSpace* addPageSpace(const ULONG pageSpaceID);
 
 	Database* dbb;
 	PageSpaceArray pageSpaces;
+	Firebird::RWLock* pageSpacesLock;
 	Firebird::MemoryPool& pool;
 	Firebird::Mutex	initTmpMtx;
 	USHORT tempPageSpaceID;
@@ -202,7 +204,7 @@ class PageNumber
 {
 public:
 	// CVC: To be completely in sync, the second param would have to be TraNumber
-	inline PageNumber(const USHORT aPageSpace, const ULONG aPageNum) noexcept
+	inline PageNumber(const ULONG aPageSpace, const ULONG aPageNum) noexcept
 		: pageNum(aPageNum), pageSpaceID(aPageSpace)
 	{
 		// Some asserts are commented cause 0 was also used as 'does not matter' pagespace
@@ -224,13 +226,12 @@ public:
 		return pageNum;
 	}
 
-	inline USHORT getPageSpaceID() const noexcept
+	inline ULONG getPageSpaceID() const noexcept
 	{
-		fb_assert(pageSpaceID != INVALID_PAGE_SPACE);
 		return pageSpaceID;
 	}
 
-	inline USHORT setPageSpaceID(const USHORT aPageSpaceID) noexcept
+	inline ULONG setPageSpaceID(const ULONG aPageSpaceID) noexcept
 	{
 		fb_assert(aPageSpaceID != INVALID_PAGE_SPACE);
 		pageSpaceID = aPageSpaceID;
@@ -319,7 +320,7 @@ public:
 
 private:
 	ULONG	pageNum;
-	USHORT	pageSpaceID;
+	ULONG	pageSpaceID;
 };
 
 const PageNumber ZERO_PAGE_NUMBER(DB_PAGE_SPACE, 0);

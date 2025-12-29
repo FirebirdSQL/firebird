@@ -208,3 +208,6 @@ FB_IMPL_MSG_SYMBOL(ISQL, 208, HLP_SETAUTOTERM, "    SET AUTOTERM           -- to
 FB_IMPL_MSG_SYMBOL(ISQL, 209, HLP_SETWIRESTATS, "    SET WIRE_stats         -- toggle display of wire (network) statistics")
 FB_IMPL_MSG_SYMBOL(ISQL, 210, USAGE_SEARCH_PATH, "	-(se)arch_path <path>   set schema search path")
 FB_IMPL_MSG_SYMBOL(ISQL, 211, MSG_SCHEMAS, "Schemas:")
+FB_IMPL_MSG_SYMBOL(ISQL, 212, NO_TABLESPACE, "There is no tablespace @1 in this database")
+FB_IMPL_MSG_SYMBOL(ISQL, 213, NO_TABLESPACES, "There are no tablespaces in this database")
+FB_IMPL_MSG_SYMBOL(ISQL, 214, MSG_TABLESPACES, "Tablespaces:")

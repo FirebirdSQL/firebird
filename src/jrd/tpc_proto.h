@@ -159,6 +159,11 @@ public:
 		return m_tpcHeader->getHeader()->monitor_generation++ + 1;
 	}
 
+	bool isInitialized()
+	{
+		return m_tpcHeader;
+	}
+
 private:
 	class GlobalTpcHeader : public Firebird::MemoryHeader
 	{

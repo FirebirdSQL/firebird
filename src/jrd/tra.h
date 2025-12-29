@@ -520,6 +520,13 @@ enum dfw_t {
 	dfw_store_view_context_type,
 	dfw_set_generator,
 	dfw_change_repl_state,
+	dfw_create_tablespace,
+	dfw_delete_tablespace,
+	dfw_modify_tablespace,
+	dfw_move_relation,
+	dfw_move_index,
+	dfw_clear_datapages,
+	dfw_clear_indexpages,
 
 	// deferred works argument types
 	dfw_arg_index_name,		// index name for dfw_delete_index, mandatory

@@ -5955,6 +5955,10 @@ const
 	 isc_no_user_att_while_restore = 335545318;
 	 isc_genseq_stepmustbe_nonzero = 335545319;
 	 isc_argmustbe_exact_function = 335545320;
+	 isc_ts_file_exists = 335545321;
+	 isc_tablespace_name = 335545322;
+	 isc_ts_file_not_exists = 335545323;
+	 isc_ts_file_dup = 335545324;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;
@@ -6118,6 +6122,11 @@ const
 	 isc_dyn_cannot_mod_obj_sys_schema = 336068927;
 	 isc_dyn_cannot_create_reserved_schema = 336068928;
 	 isc_dyn_cannot_infer_schema = 336068929;
+	 isc_dyn_ts_not_found = 336068931;
+	 isc_dyn_cant_set_ts_table = 336068932;
+	 isc_dyn_cant_set_ts_index = 336068933;
+	 isc_dyn_dup_tablespace = 336068934;
+	 isc_dyn_cannot_mod_sys_ts = 336068935;
 	 isc_gbak_unknown_switch = 336330753;
 	 isc_gbak_page_size_missing = 336330754;
 	 isc_gbak_page_size_toobig = 336330755;
@@ -6352,6 +6361,11 @@ const
 	 isc_dsql_recreate_schema_failed = 336397338;
 	 isc_dsql_alter_schema_failed = 336397339;
 	 isc_dsql_create_alter_schema_failed = 336397340;
+	 isc_dsql_create_ts_failed = 336397341;
+	 isc_dsql_alter_ts_failed = 336397342;
+	 isc_dsql_create_alter_ts_failed = 336397343;
+	 isc_dsql_drop_ts_failed = 336397344;
+	 isc_dsql_recreate_ts_failed = 336397345;
 	 isc_gsec_cant_open_db = 336723983;
 	 isc_gsec_switches_error = 336723984;
 	 isc_gsec_no_op_spec = 336723985;

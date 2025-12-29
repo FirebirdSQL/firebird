@@ -72,6 +72,8 @@ struct index_desc
 	BoolExprNode* idx_condition;			// node tree for index condition
 	Statement* idx_condition_statement;		// stored statement for index condition
 	float idx_fraction;						// fraction of keys included in the index
+
+	ULONG	idx_pg_space_id;				// PageSpace of index pages
 	// This structure should exactly match IRTD structure for current ODS
 	struct idx_repeat
 	{

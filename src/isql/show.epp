@@ -104,12 +104,13 @@ static processing_state show_functions(const std::optional<QualifiedMetaString>&
 static processing_state show_func_legacy(const QualifiedMetaString& name);
 static processing_state show_func(const QualifiedMetaString& name);
 static processing_state show_generators(const std::optional<QualifiedMetaString>& name);
-static void show_index(const QualifiedMetaString&, const QualifiedMetaString&, const SSHORT, const SSHORT, const SSHORT);
+static void show_index(const QualifiedMetaString&, const QualifiedMetaString&, const MetaString&, const SSHORT, const SSHORT, const SSHORT);
 static processing_state show_indices(const std::optional<QualifiedMetaString>& name);
 static processing_state show_proc(const std::optional<QualifiedMetaString>& name, bool, const char* msg = nullptr);
 static processing_state show_packages(const std::optional<QualifiedMetaString>& name, bool, const SCHAR* = nullptr);
 static processing_state show_publications(const std::optional<MetaString>& name, bool, const SCHAR* = nullptr);
 static void show_pub_table(const QualifiedMetaString& name);
+static processing_state show_tablespaces(const std::optional<MetaString>& name);
 static processing_state show_role(const std::optional<MetaString>& name, bool, const char* msg = nullptr);
 static processing_state show_schemas(const std::optional<MetaString>& name, bool, const char* msg = nullptr);
 static processing_state show_secclass(const std::optional<QualifiedMetaString>& object, bool detail);
@@ -1851,6 +1852,7 @@ processing_state SHOW_metadata(const FrontendParser::AnyShowNode& node)
 		{0, "SCHEMAS", 4},				// SCHE
 		{0, "MAPPINGS", 3},				// MAP
 		{0, "PUBLICATIONS", 3},			// PUB
+		{0, "TABLESPACES", 10},			// TABLESPACE
 		{0, "WIRE_STATISTICS", 9},		// WIRE_STAT
 		{0, "WIRE_STATS", 10}
 	};
@@ -2497,6 +2499,24 @@ processing_state SHOW_metadata(const FrontendParser::AnyShowNode& node)
 			return ret;
 		},
 
+		[&](const FrontendParser::ShowTablespacesNode& node)
+		{
+			const auto ret = show_tablespaces(node.name);
+
+			if (ret == OBJECT_NOT_FOUND)
+			{
+				if (node.name)
+				{
+					key = NO_TABLESPACE;
+					notFoundName.object = node.name.value();
+				}
+				else
+					key = NO_TABLESPACES;
+			}
+
+			return ret;
+		},
+
 		[&](const FrontendParser::ShowTriggersNode& node)
 		{
 			const auto ret = show_trigger(node.name, true, true);
@@ -2576,6 +2596,7 @@ processing_state SHOW_metadata(const FrontendParser::AnyShowNode& node)
 			static_assert(FrontendParser::AlwaysFalseV<decltype(arg)>,
 				"Add visitor method for that show node type");
 		}
+
 	}, node);
 
 	if (ret == OBJECT_NOT_FOUND)
@@ -3350,6 +3371,22 @@ static processing_state show_comments(const commentMode showextract, const char*
 			const QualifiedMetaString name(SCH.RDB$SCHEMA_NAME);
 
 			show_comment("SCHEMA", name, {}, &SCH.RDB$DESCRIPTION,
+				showextract, first ? banner : 0);
+			first = false;
+		}
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return ps_ERR;
+		END_ERROR
+
+		FOR TS IN RDB$TABLESPACES
+			WITH TS.RDB$DESCRIPTION NOT MISSING
+			SORTED BY TS.RDB$TABLESPACE_NAME
+		{
+			const QualifiedMetaString name(TS.RDB$TABLESPACE_NAME);
+
+			show_comment("TABLESPACE", name, {}, &TS.RDB$DESCRIPTION,
 				showextract, first ? banner : 0);
 			first = false;
 		}
@@ -4682,6 +4719,7 @@ static processing_state show_generators(const std::optional<QualifiedMetaString>
 
 static void show_index(const QualifiedMetaString& relationName,
 					   const QualifiedMetaString& indexName,
+					   const MetaString& tablespaceName,
 					   const SSHORT unique_flag,
 					   const SSHORT index_type,
 					   const SSHORT inactive)
@@ -4703,7 +4741,11 @@ static void show_index(const QualifiedMetaString& relationName,
 		"%s%s%s INDEX ON %s",
 		IUTILS_name_to_string(indexName).c_str(),
 		(unique_flag ? " UNIQUE" : ""),
-		(index_type == 1 ? " DESCENDING" : ""), IUTILS_name_to_string(relationName.object).c_str());
+		(index_type == 1 ? " DESCENDING" : ""),
+		IUTILS_name_to_string(relationName.object).c_str());
+
+	if (tablespaceName.hasData() && tablespaceName != PRIMARY_TABLESPACE_NAME)
+		isqlGlob.printf(" TABLESPACE %s", IUTILS_name_to_string(tablespaceName).c_str());
 
 	// Get column names
 
@@ -4748,10 +4790,14 @@ static processing_state show_indices(const std::optional<QualifiedMetaString>& n
 
 			const QualifiedMetaString relationName(IDX.RDB$RELATION_NAME, IDX.RDB$SCHEMA_NAME);
 
+			MetaString tablespaceName;
+			if (!IDX.RDB$TABLESPACE_NAME.NULL)
+				tablespaceName = IDX.RDB$TABLESPACE_NAME;
+
 			if (IDX.RDB$INDEX_INACTIVE.NULL)
 				IDX.RDB$INDEX_INACTIVE = 0;
 
-			show_index(relationName, indexName,
+			show_index(relationName, indexName, tablespaceName,
 					   IDX.RDB$UNIQUE_FLAG, IDX.RDB$INDEX_TYPE, IDX.RDB$INDEX_INACTIVE);
 
 			if (!IDX.RDB$EXPRESSION_BLR.NULL)
@@ -4796,7 +4842,11 @@ static processing_state show_indices(const std::optional<QualifiedMetaString>& n
 
 			first = false;
 
-			show_index(relationName, indexName,
+			MetaString tablespaceName;
+			if (!IDX.RDB$TABLESPACE_NAME.NULL)
+				tablespaceName = IDX.RDB$TABLESPACE_NAME;
+
+			show_index(relationName, indexName, tablespaceName,
 					   IDX.RDB$UNIQUE_FLAG, IDX.RDB$INDEX_TYPE, IDX.RDB$INDEX_INACTIVE);
 
 			if (!IDX.RDB$EXPRESSION_BLR.NULL)
@@ -4925,6 +4975,81 @@ static processing_state show_packages(const std::optional<QualifiedMetaString>& 
 
 	if (first)
 		return (OBJECT_NOT_FOUND);
+
+	return (SKIP);
+}
+
+
+static processing_state show_tablespaces(const std::optional<MetaString>& name)
+{
+/*************************************
+*
+*	s h o w _ t a b l e s p a c e s
+*
+**************************************
+*
+* Functional description
+*	Show all tablespaces or the named tablespace
+************************************/
+	if (isqlGlob.major_ods < ODS_VERSION14)
+		return OBJECT_NOT_FOUND;
+
+	bool first = true;
+
+	if (!name)
+	{
+		//  List all tablespace names in columns
+		FOR X IN RDB$TABLESPACES WITH X.RDB$SYSTEM_FLAG EQ 0
+			SORTED BY X.RDB$TABLESPACE_NAME
+		{
+			first = false;
+
+			const MetaString tablespaceName(X.RDB$TABLESPACE_NAME);
+			isqlGlob.printf("%s%s", IUTILS_name_to_string(tablespaceName).c_str(), NEWLINE);
+		}
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return ps_ERR;
+		END_ERROR;
+		if (!first)
+			isqlGlob.printf(NEWLINE);
+	}
+	else
+	{
+		// List named tablespace
+
+		FOR X IN RDB$TABLESPACES WITH
+			X.RDB$TABLESPACE_NAME EQ name->c_str()
+
+			first = false;
+
+			const MetaString tablespaceName(X.RDB$TABLESPACE_NAME);
+			isqlGlob.printf("%s", IUTILS_name_to_string(tablespaceName).c_str());
+
+			if (!X.RDB$FILE_NAME.NULL)
+			{
+				fb_utils::exact_name(X.RDB$FILE_NAME);
+				isqlGlob.printf(" FILE %s", X.RDB$FILE_NAME);
+			}
+
+			const char* offline = X.RDB$OFFLINE.NULL || !X.RDB$OFFLINE ? "ONLINE" : "OFFLINE";
+			isqlGlob.printf(" %s", offline);
+
+			const char* readonly = X.RDB$READ_ONLY.NULL || !X.RDB$READ_ONLY ? "READ WRITE" : "READ ONLY";
+			isqlGlob.printf(" %s", readonly);
+
+			isqlGlob.printf(NEWLINE);
+
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return ps_ERR;
+		END_ERROR;
+	}
+
+	if (first)
+		return OBJECT_NOT_FOUND;
 
 	return (SKIP);
 }
@@ -6042,6 +6167,13 @@ static processing_state show_table(const QualifiedMetaString& name, bool isView)
 
 		if (!REL.RDB$EXTERNAL_FILE.NULL)
 			isqlGlob.printf("External file: %s%s", REL.RDB$EXTERNAL_FILE, NEWLINE);
+
+		if (!REL.RDB$TABLESPACE_NAME.NULL)
+		{
+			const MetaString tablespaceName(REL.RDB$TABLESPACE_NAME);
+			if (tablespaceName != PRIMARY_TABLESPACE_NAME)
+				isqlGlob.printf("TABLESPACE: %s%s", IUTILS_name_to_string(tablespaceName).c_str(), NEWLINE);
+		}
 
 	// TODO: indent
 

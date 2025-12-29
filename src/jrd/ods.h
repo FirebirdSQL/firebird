@@ -392,8 +392,12 @@ struct index_root_page
 		TraNumber inProgress() const;
 		void setInProgress(TraNumber traNumber);
 
-		ULONG getRoot() const;
-		void setRoot(ULONG rootPage);
+		TraNumber getTransaction() const;
+		void setTransaction(TraNumber traNumber);
+
+		ULONG getRootPage() const;
+		ULONG getRootPageSpaceId() const;
+		void setRoot(ULONG pageSpaceId, ULONG pageNum);
 
 		bool isUsed() const;
 		void setEmpty();
@@ -476,19 +480,24 @@ inline void index_root_page::irt_repeat::setInProgress(TraNumber traNumber)
 	irt_state = irt_in_progress;
 }
 
-inline ULONG index_root_page::irt_repeat::getRoot() const
+inline ULONG index_root_page::irt_repeat::getRootPage() const
 {
 	return (irt_state == irt_unused) ? 0 : irt_page_num;
 }
 
-inline void index_root_page::irt_repeat::setRoot(ULONG rootPage)
+inline ULONG index_root_page::irt_repeat::getRootPageSpaceId() const
+{
+	return (irt_state == irt_unused) ? 0 : irt_page_space_id;
+}
+
+inline void index_root_page::irt_repeat::setRoot(ULONG pagespaceId, ULONG pageNum)
 {
 	fb_assert(irt_state == irt_in_progress || irt_state == irt_normal);
-	fb_assert(rootPage);
+	fb_assert(pageNum != 0 && pagespaceId != 0);
 
 	irt_transaction = 0;
-	irt_page_num = rootPage;
-	irt_page_space_id = 0;
+	irt_page_num = pageNum;
+	irt_page_space_id = pagespaceId;
 	irt_state = irt_normal;
 }
 

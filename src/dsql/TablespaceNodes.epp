@@ -1,0 +1,398 @@
+/*
+ *  The contents of this file are subject to the Initial
+ *  Developer's Public License Version 1.0 (the "License");
+ *  you may not use this file except in compliance with the
+ *  License. You may obtain a copy of the License at
+ *  http://www.ibphoenix.com/main.nfs?a=ibphoenix&page=ibp_idpl.
+ *
+ *  Software distributed under the License is distributed AS IS,
+ *  WITHOUT WARRANTY OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing rights
+ *  and limitations under the License.
+ *
+ *  The Original Code was created by Roman Simakov
+ *  for the RedDatabase project.
+ *
+ *  Copyright (c) 2018 <roman.simakov@red-soft.ru>
+ *  and all contributors signed below.
+ *
+ *  All Rights Reserved.
+ *  Contributor(s): ______________________________________.
+ */
+
+#include "firebird.h"
+#include "../dsql/TablespaceNodes.h"
+#include "../jrd/dyn.h"
+#include "../jrd/intl.h"
+#include "../jrd/jrd.h"
+#include "../jrd/tra.h"
+#include "../jrd/dfw_proto.h"
+#include "../jrd/exe_proto.h"
+#include "../jrd/met_proto.h"
+#include "../jrd/vio_proto.h"
+#include "../dsql/make_proto.h"
+#include "../dsql/pass1_proto.h"
+#include "../common/StatusArg.h"
+#include "../common/os/path_utils.h"
+#include "../jrd/Attachment.h"
+#include "../jrd/scl_proto.h"
+#include "../jrd/dyn_ut_proto.h"
+#include "../jrd/pag_proto.h"
+#include "../jrd/os/pio_proto.h"
+#include "../jrd/lck_proto.h"
+
+
+using namespace Firebird;
+
+namespace Jrd {
+
+DATABASE DB = STATIC "ODS.RDB";
+
+
+//----------------------
+
+string CreateAlterTablespaceNode::internalPrint(NodePrinter& printer) const
+{
+	DdlNode::internalPrint(printer);
+
+	NODE_PRINT(printer, name);
+	NODE_PRINT(printer, create);
+	NODE_PRINT(printer, alter);
+	NODE_PRINT(printer, offline);
+	NODE_PRINT(printer, readonly);
+
+	return "CreateAlterTablespaceNode";
+}
+
+
+void CreateAlterTablespaceNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+{
+	if (alter)
+		SCL_check_tablespace(tdbb, name, SCL_alter);
+	else
+		SCL_check_create_access(tdbb, obj_tablespaces, {});
+}
+
+
+void CreateAlterTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+	jrd_tra* transaction)
+{
+	fb_assert(create || alter);
+
+	if (!applyTablespacesDdl(tdbb))
+		return;
+
+	PathUtils::fixupSeparators(fileName);
+
+	if (PathUtils::isRelative(fileName))
+	{
+		PathName temp = fileName;
+		PathName db_path, db_file;
+		PathUtils::splitLastComponent(db_path, db_file, tdbb->getDatabase()->dbb_filename);
+		PathUtils::concatPath(fileName, db_path, temp);
+	}
+
+	// run all statements under savepoint control
+	AutoSavePoint savePoint(tdbb, transaction);
+
+	if (alter)
+	{
+		if (!executeAlter(tdbb, dsqlScratch, transaction))
+		{
+			if (create)	// create or alter
+				executeCreate(tdbb, dsqlScratch, transaction);
+			else
+			{
+				status_exception::raise(
+					Arg::Gds(isc_no_meta_update) <<
+					Arg::Gds(isc_dyn_ts_not_found) << Arg::Str(name));
+			}
+		}
+	}
+	else
+		executeCreate(tdbb, dsqlScratch, transaction);
+
+	savePoint.release();	// everything is ok
+}
+
+
+void CreateAlterTablespaceNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+	jrd_tra* transaction)
+{
+	const auto dbb = tdbb->getDatabase();
+	const auto attachment = transaction->getAttachment();
+
+	const MetaName& userName = attachment->att_user->getUserName();
+
+	if (createIfNotExistsOnly &&
+		!DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, QualifiedName(name), obj_tablespace))
+	{
+		return;
+	}
+
+	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
+		DDL_TRIGGER_CREATE_TABLESPACE, QualifiedName(name), {});
+
+	DYN_UTIL_check_unique_name(tdbb, transaction, QualifiedName(name), obj_tablespace);
+
+	// File with tablespace should not exist. Checking it in DFW is silent and causes
+	// cleanup of existing files at phase 0. Early checking preserves existing files.
+	if (PIO_file_exists(fileName.c_str()))
+		ERR_post(Arg::Gds(isc_ts_file_exists) << Arg::Str(fileName));
+
+	AutoCacheRequest requestHandle(tdbb, drq_s_tablespace, DYN_REQUESTS);
+
+	int faults = 0;
+	SINT64 id = INVALID_PAGE_SPACE;
+
+	while (true)
+	{
+		try
+		{
+			id = DYN_UTIL_gen_unique_id(tdbb, drq_g_nxt_ts_id, "RDB$TABLESPACES") + 1;	// +1 to skip DB_PAGE_SPACE
+			id %= TRANS_PAGE_SPACE;
+
+			if (!id || id == 1) // skip DB_PAGE_SPACE
+				continue;
+
+			STORE (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+				X IN RDB$TABLESPACES USING
+			{
+				X.RDB$TABLESPACE_ID = id;
+				strcpy(X.RDB$TABLESPACE_NAME, name.c_str());
+				X.RDB$SYSTEM_FLAG = 0;
+
+				X.RDB$OWNER_NAME.NULL = FALSE;
+				strcpy(X.RDB$OWNER_NAME, userName.c_str());
+
+				if (fileName.length() >= sizeof(X.RDB$FILE_NAME))
+					status_exception::raise(Arg::Gds(isc_dyn_name_longer));
+
+				X.RDB$FILE_NAME.NULL = FALSE;
+				strcpy(X.RDB$FILE_NAME, fileName.c_str());
+
+				X.RDB$OFFLINE.NULL = FALSE;
+				X.RDB$OFFLINE = offline;
+
+				X.RDB$READ_ONLY.NULL = FALSE;
+				X.RDB$READ_ONLY = readonly;
+			}
+			END_STORE
+
+			break;
+		}
+		catch (const status_exception& ex)
+		{
+			if (ex.value()[1] != isc_unique_key_violation)
+				throw;
+
+			if (++faults >= TRANS_PAGE_SPACE)
+				throw;
+
+			fb_utils::init_status(tdbb->tdbb_status_vector);
+		}
+	}
+
+	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_CREATE_TABLESPACE,
+		QualifiedName(name), {});
+}
+
+
+bool CreateAlterTablespaceNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+	jrd_tra* transaction)
+{
+	Attachment* attachment = transaction->getAttachment();
+	AutoCacheRequest requestHandle(tdbb, drq_m_tablespace, DYN_REQUESTS);
+	bool modified = false;
+	ULONG tableSpaceId = 0;
+
+	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		X IN RDB$TABLESPACES
+		WITH X.RDB$TABLESPACE_NAME EQ name.c_str()
+	{
+		if (X.RDB$SYSTEM_FLAG)
+			ERR_post(Arg::Gds(isc_dyn_cannot_mod_sys_ts) << Arg::Str(name));
+
+		modified = true;
+		tableSpaceId = X.RDB$TABLESPACE_ID;
+
+		fb_assert(PageSpace::isTablespace(tableSpaceId));
+
+		Tablespace* tablespace = MET_tablespace_id(tdbb, tableSpaceId, false);
+		tablespace->modified = true;
+
+		// Get the EX lock here to prevent other attachments from using the tablespace.
+		// It's needed because other attachments see uncommitted changes in RDB$TABLESPACES.
+		// I think this solution is temporary and should be reconsidered.
+		if (tablespace->isUsed() ||
+			!LCK_convert(tdbb, tablespace->existenceLock, LCK_EX, transaction->getLockWait()))
+		{
+			string obj_name;
+			obj_name.printf("TABLESPACE \"%s\"", name.c_str());
+
+			ERR_post(Arg::Gds(isc_obj_in_use) << Arg::Str(obj_name));
+		}
+
+		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
+			DDL_TRIGGER_ALTER_TABLESPACE, QualifiedName(name), {});
+
+		MODIFY X
+			if (fileName.hasData())
+			{
+				if (fileName.length() >= sizeof(X.RDB$FILE_NAME))
+					status_exception::raise(Arg::Gds(isc_dyn_name_longer));
+
+				fb_assert(X.RDB$FILE_NAME.NULL == FALSE);
+				if (!PIO_file_exists(fileName.c_str()))
+					ERR_post(Arg::Gds(isc_ts_file_not_exists) << Arg::Str(fileName));
+
+				strcpy(X.RDB$FILE_NAME, fileName.c_str());
+			}
+
+			X.RDB$OFFLINE.NULL = FALSE;
+			X.RDB$OFFLINE = offline;
+
+			X.RDB$READ_ONLY.NULL = FALSE;
+			X.RDB$READ_ONLY = readonly;
+		END_MODIFY
+	}
+	END_FOR
+
+	if (modified)
+	{
+		executeDdlTrigger(tdbb, dsqlScratch, transaction,
+			DTW_AFTER, DDL_TRIGGER_ALTER_TABLESPACE, QualifiedName(name), {});
+	}
+
+	return modified;
+}
+
+
+//----------------------
+
+
+string DropTablespaceNode::internalPrint(NodePrinter& printer) const
+{
+	DdlNode::internalPrint(printer);
+
+	NODE_PRINT(printer, name);
+	NODE_PRINT(printer, silent);
+
+	return "DropTablespaceNode";
+}
+
+
+void DropTablespaceNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+{
+	SCL_check_tablespace(tdbb, name, SCL_drop);
+}
+
+void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+	jrd_tra* transaction)
+{
+	if (!applyTablespacesDdl(tdbb))
+		return;
+
+	// run all statements under savepoint control
+	AutoSavePoint savePoint(tdbb, transaction);
+
+	bool found = false;
+	AutoCacheRequest requestHandle(tdbb, drq_e_tablespace, DYN_REQUESTS);
+
+	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		X IN RDB$TABLESPACES
+		WITH X.RDB$TABLESPACE_NAME EQ name.c_str()
+	{
+		if (X.RDB$SYSTEM_FLAG)
+			ERR_post(Arg::Gds(isc_dyn_cannot_mod_sys_ts) << Arg::Str(name));
+
+		found = true;
+
+		// Ensure it's cached to be used in the DFW stage later
+		MET_tablespace_id(tdbb, X.RDB$TABLESPACE_ID);
+
+		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
+			DDL_TRIGGER_DROP_TABLESPACE, QualifiedName(name), {});
+
+		ERASE X;
+
+		if (!X.RDB$SECURITY_CLASS.NULL)
+			deleteSecurityClass(tdbb, transaction, X.RDB$SECURITY_CLASS);
+	}
+	END_FOR
+
+	SLONG total = 0;
+
+	// Find all tables
+	requestHandle.reset(tdbb, drq_ts_drop_rel_dfw, DYN_REQUESTS);
+
+	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		X IN RDB$RELATIONS
+		WITH X.RDB$TABLESPACE_NAME EQ name.c_str()
+	{
+		if (dropDependencies)
+		{
+			const QualifiedName relationName(X.RDB$RELATION_NAME, X.RDB$SCHEMA_NAME);
+			if (const auto relation = MET_lookup_relation(tdbb, relationName))
+			{
+				MET_scan_relation(tdbb, relation);
+				DropRelationNode::dropRelation(tdbb, transaction, false, relation, relationName);
+			}
+		}
+		else
+		{
+			total++;
+		}
+	}
+	END_FOR
+
+	// Find all indices
+	requestHandle.reset(tdbb, drq_ts_drop_idx_dfw, DYN_REQUESTS);
+
+	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		X IN RDB$INDICES
+		WITH X.RDB$TABLESPACE_NAME EQ name.c_str()
+	{
+		if (dropDependencies)
+		{
+			if (X.RDB$EXPRESSION_BLR.NULL &&
+				!DropIndexNode::deleteSegmentRecords(tdbb, transaction, QualifiedName(X.RDB$INDEX_NAME, X.RDB$SCHEMA_NAME)))
+			{
+				// msg 50: "No segments found for index"
+				status_exception::raise(Arg::PrivateDyn(50));
+			}
+
+			ERASE X;
+		}
+		else
+		{
+			total++;
+		}
+	}
+	END_FOR
+
+	if (total)
+	{
+		status_exception::raise(Arg::Gds(isc_no_meta_update) <<
+				Arg::Gds(isc_no_delete) <<						// Msg353: can not delete
+				Arg::Gds(isc_tablespace_name) << Arg::Str(name) <<
+				Arg::Gds(isc_dependency) << Arg::Num(total));	// Msg310: there are %ld dependencies
+	}
+
+	if (found)
+	{
+		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_DROP_TABLESPACE,
+			QualifiedName(name), {});
+	}
+	else if (!silent)
+	{
+		status_exception::raise(
+			Arg::Gds(isc_no_meta_update) <<
+			Arg::Gds(isc_dyn_ts_not_found) << Arg::Str(name));
+	}
+
+	savePoint.release();	// everything is ok
+}
+
+
+}	// namespace Jrd

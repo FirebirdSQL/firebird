@@ -1600,7 +1600,7 @@ static void analyze_index( const dba_rel* relation, dba_idx* index)
 	if (index_root->irt_count <= index->idx_id)
 		return;
 
-	ULONG page = index_root->irt_rpt[index->idx_id].getRoot();
+	ULONG page = index_root->irt_rpt[index->idx_id].getRootPage();
 	if (!page)
 		return;
 

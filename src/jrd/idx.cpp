@@ -63,6 +63,7 @@
 #include "../jrd/vio_proto.h"
 #include "../jrd/tra_proto.h"
 #include "../jrd/Collation.h"
+#include "../jrd/pag_proto.h"
 #include "../common/Task.h"
 #include "../jrd/WorkerAttachment.h"
 
@@ -2046,7 +2047,7 @@ static PageNumber get_root_page(thread_db* tdbb, jrd_rel* relation)
 	SLONG page = relPages->rel_index_root;
 	if (!page)
 	{
-		DPM_scan_pages(tdbb);
+		DPM_scan_pages(tdbb, pag_root, relation->rel_id);
 		page = relPages->rel_index_root;
 	}
 

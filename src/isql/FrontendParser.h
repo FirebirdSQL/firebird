@@ -114,6 +114,7 @@ public:
 	struct ShowSqlDialectNode {};
 	struct ShowSystemNode { std::optional<ObjectType> objType; };
 	struct ShowTablesNode { std::optional<Firebird::QualifiedMetaString> name; };
+	struct ShowTablespacesNode { std::optional<Firebird::MetaString> name; };
 	struct ShowTriggersNode { std::optional<Firebird::QualifiedMetaString> name; };
 	struct ShowUsersNode {};
 	struct ShowVersionNode {};
@@ -179,6 +180,7 @@ public:
 		ShowSqlDialectNode,
 		ShowSystemNode,
 		ShowTablesNode,
+		ShowTablespacesNode,
 		ShowTriggersNode,
 		ShowUsersNode,
 		ShowVersionNode,
