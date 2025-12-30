@@ -208,3 +208,5 @@ FB_IMPL_MSG_SYMBOL(ISQL, 208, HLP_SETAUTOTERM, "    SET AUTOTERM           -- to
 FB_IMPL_MSG_SYMBOL(ISQL, 209, HLP_SETWIRESTATS, "    SET WIRE_stats         -- toggle display of wire (network) statistics")
 FB_IMPL_MSG_SYMBOL(ISQL, 210, USAGE_SEARCH_PATH, "	-(se)arch_path <path>   set schema search path")
 FB_IMPL_MSG_SYMBOL(ISQL, 211, MSG_SCHEMAS, "Schemas:")
+FB_IMPL_MSG_SYMBOL(ISQL, 212, HLP_SETSQLDADISPLAY, "    SET SQLDA_DISPLAY      -- toggle display of query parameters' info")
+FB_IMPL_MSG_SYMBOL(ISQL, 213, HLP_SETEXECPATHDISPLAY, "    SET EXEC_PATH_DISPLAY <BLR|OFF> -- toggle display of query execution path")
