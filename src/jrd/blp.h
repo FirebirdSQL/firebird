@@ -267,6 +267,6 @@ static inline constexpr struct
 	{"default2", default2},
 	{"current_schema", zero},
 	{NULL, NULL},	// flags - part of header
-	{NULL, NULL},
+	{NULL, NULL},	// blr_within_group_order - part of blr_agg_list[_distinct] and blr_agg_function
 	{0, 0}
 };
