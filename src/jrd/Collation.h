@@ -32,23 +32,32 @@
 
 #include "../common/TextType.h"
 #include "../jrd/intl_classes.h"
+#include "../jrd/CacheVector.h"
+#include "../jrd/Resources.h"
+
+
+namespace Firebird {
+
+class CharSet;
+
+}
 
 
 namespace Jrd {
 
 class Lock;
 class BaseSubstringSimilarMatcher;
+class PatternMatcher;
 
 class Collation : public Firebird::TextType
 {
 public:
-	static Collation* createInstance(MemoryPool& pool, TTYPE_ID id, texttype* tt, USHORT attributes, Firebird::CharSet* cs);
+	static Collation* createInstance(MemoryPool& pool, TTypeId id, texttype* tt,
+		USHORT attributes, Firebird::CharSet* cs);
 
 protected:
-	Collation(TTYPE_ID id, texttype *a_tt, USHORT a_attributes, Firebird::CharSet* a_cs)
-		: Firebird::TextType(id, a_tt, a_attributes, a_cs),
-		  useCount(0),
-		  existenceLock(NULL),
+	Collation(TTypeId id, texttype *a_tt, USHORT a_attributes, Firebird::CharSet* a_cs)
+		: TextType(id, a_tt, a_attributes, a_cs),
 		  obsolete(false)
 	{
 	}
@@ -78,14 +87,11 @@ public:
 	virtual bool contains(MemoryPool& pool, const UCHAR* s, SLONG sl, const UCHAR* p, SLONG pl) = 0;
 	virtual PatternMatcher* createContainsMatcher(MemoryPool& pool, const UCHAR* p, SLONG pl) = 0;
 
-	void release(thread_db* tdbb);
 	void destroy(thread_db* tdbb);
 	void incUseCount(thread_db* tdbb);
 	void decUseCount(thread_db* tdbb);
 
 public:
-	int useCount;
-	Lock* existenceLock;
 	bool obsolete;
 };
 

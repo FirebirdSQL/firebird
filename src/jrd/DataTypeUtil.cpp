@@ -56,13 +56,13 @@ SSHORT DataTypeUtilBase::getResultBlobSubType(const dsc* value1, const dsc* valu
 }
 
 
-USHORT DataTypeUtilBase::getResultTextType(const dsc* value1, const dsc* value2)
+TTypeId DataTypeUtilBase::getResultTextType(const dsc* value1, const dsc* value2)
 {
-	const USHORT cs1 = value1->getCharSet();
-	const USHORT cs2 = value2->getCharSet();
+	const auto cs1 = value1->getCharSet();
+	const auto cs2 = value2->getCharSet();
 
-	const USHORT ttype1 = value1->getTextType();
-	const USHORT ttype2 = value2->getTextType();
+	const auto ttype1 = value1->getTextType();
+	const auto ttype2 = value2->getTextType();
 
 	if (cs1 == CS_NONE || cs2 == CS_BINARY)
 		return ttype2;
@@ -214,7 +214,7 @@ void DataTypeUtilBase::makeFromList(dsc* result, const char* expressionName, int
 }
 
 
-ULONG DataTypeUtilBase::convertLength(ULONG len, USHORT srcCharSet, USHORT dstCharSet)
+ULONG DataTypeUtilBase::convertLength(ULONG len, CSetId srcCharSet, CSetId dstCharSet)
 {
 	if (dstCharSet == CS_NONE || dstCharSet == CS_BINARY)
 		return len;
@@ -307,7 +307,7 @@ void DataTypeUtilBase::makeSubstr(dsc* result, const dsc* value, const dsc* offs
 		result->dsc_dtype = dtype_varying;
 	}
 
-	result->setTextType(value->isText() || value->isBlob() ? value->getTextType() : CS_ASCII);
+	result->setTextType(value->isText() || value->isBlob() ? value->getTextType() : TTypeId(CS_ASCII));
 	result->setNullable(value->isNullable() ||
 		(offset && offset->isNullable()) ||
 		(length && length->isNullable()));
@@ -352,7 +352,7 @@ bool DataTypeUtilBase::makeBlobOrText(dsc* result, const dsc* arg, bool force)
 
 namespace Jrd {
 
-UCHAR DataTypeUtil::maxBytesPerChar(UCHAR charSet)
+UCHAR DataTypeUtil::maxBytesPerChar(CSetId charSet)
 {
 	return INTL_charset_lookup(tdbb, charSet)->maxBytesPerChar();
 }
@@ -363,7 +363,7 @@ USHORT DataTypeUtil::getDialect() const
 }
 
 // Returns false if conversion is not needed.
-bool DataTypeUtil::convertToUTF8(const string& src, string& dst, CHARSET_ID charset, ErrorFunction err)
+bool DataTypeUtil::convertToUTF8(const string& src, string& dst, CSetId charset, ErrorFunction err)
 {
 	thread_db* tdbb = JRD_get_thread_data();
 

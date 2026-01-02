@@ -201,7 +201,7 @@ SQUAD MOV_get_quad(Jrd::thread_db* tdbb, const dsc* desc, SSHORT scale)
 
 int MOV_get_string_ptr(Jrd::thread_db* tdbb,
 					   const dsc* desc,
-					   USHORT* ttype,
+					   TTypeId* ttype,
 					   UCHAR** address, vary* temp, USHORT length)
 {
 /**************************************
@@ -236,7 +236,7 @@ int MOV_get_string(Jrd::thread_db* tdbb, const dsc* desc, UCHAR** address, vary*
  * Functional description
  *
  **************************************/
-	USHORT ttype;
+	TTypeId ttype;
 
 	return MOV_get_string_ptr(tdbb, desc, &ttype, address, temp, length);
 }
@@ -338,7 +338,7 @@ ISC_TIMESTAMP_TZ MOV_get_timestamp_tz(const dsc* desc)
 
 USHORT MOV_make_string(Jrd::thread_db* tdbb,
 					const dsc*	 desc,
-					USHORT	     ttype,
+					TTypeId	     ttype,
 					const char** address,
 					vary*	     temp,
 					USHORT	     length)
@@ -368,7 +368,7 @@ USHORT MOV_make_string(Jrd::thread_db* tdbb,
 
 ULONG MOV_make_string2(Jrd::thread_db* tdbb,
 					 const dsc* desc,
-					 USHORT ttype,
+					 TTypeId ttype,
 					 UCHAR** address,
 					 Jrd::MoveBuffer& buffer,
 					 bool limit)
@@ -428,7 +428,7 @@ ULONG MOV_make_string2(Jrd::thread_db* tdbb,
 }
 
 
-Firebird::string MOV_make_string2(Jrd::thread_db* tdbb, const dsc* desc, USHORT ttype, bool limit)
+Firebird::string MOV_make_string2(Jrd::thread_db* tdbb, const dsc* desc, TTypeId ttype, bool limit)
 {
 	Jrd::MoveBuffer buffer;
 	UCHAR* ptr;
@@ -497,7 +497,7 @@ Int128 MOV_get_int128(Jrd::thread_db* tdbb, const dsc* desc, SSHORT scale)
 namespace Jrd
 {
 
-DescPrinter::DescPrinter(thread_db* tdbb, const dsc* desc, FB_SIZE_T mLen, USHORT charSetId)
+DescPrinter::DescPrinter(thread_db* tdbb, const dsc* desc, FB_SIZE_T mLen, TTypeId charSetId)
 	: maxLen(mLen)
 {
 	const char* const NULL_KEY_STRING = "NULL";
@@ -511,7 +511,7 @@ DescPrinter::DescPrinter(thread_db* tdbb, const dsc* desc, FB_SIZE_T mLen, USHOR
 	fb_assert(!desc->isBlob());
 
 	const bool isBinary = (desc->isText() && desc->getCharSet() == CS_BINARY);
-	value = MOV_make_string2(tdbb, desc, isBinary ? CS_BINARY : charSetId);
+	value = MOV_make_string2(tdbb, desc, isBinary ? TTypeId(CS_BINARY) : charSetId);
 
 	const char* const str = value.c_str();
 

@@ -204,7 +204,7 @@ static void testAllocatorMemoryPool()
 {
 	printf("Test run for Firebird::MemoryPool...\n");
 	start();
-	Firebird::MemoryPool* pool = Firebird::MemoryPool::createPool();
+	Firebird::MemoryPool* pool = Firebird::MemoryPool::createPool(ALLOC_ARGS0);
 	MallocAllocator allocator;
 	BePlusTree<AllocItem, AllocItem, MallocAllocator, DefaultKeyValue<AllocItem>, AllocItem> items(&allocator),
 		bigItems(&allocator);

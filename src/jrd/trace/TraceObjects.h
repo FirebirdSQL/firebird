@@ -42,6 +42,7 @@
 #include "../../jrd/status.h"
 #include "../../jrd/Function.h"
 #include "../../jrd/RuntimeStatistics.h"
+#include "../../jrd/Statement.h"
 #include "../../jrd/trace/TraceSession.h"
 #include "../../common/classes/ImplementHelper.h"
 #include "../../common/prett_proto.h"
@@ -70,23 +71,7 @@ public:
 		return m_statement ? m_statement->getStatementId() : 0;
 	}
 
-	Firebird::string getName() const
-	{
-		if (m_statement)
-		{
-			if (m_statement->procedure)
-				return m_statement->procedure->getName().toQuotedString();
-
-			if (m_statement->function)
-				return m_statement->function->getName().toQuotedString();
-
-			if (m_statement->triggerName.object.hasData())
-				return m_statement->triggerName.toQuotedString();
-		}
-
-		return "";
-	}
-
+	Firebird::string getName() const;
 	const char* ensurePlan(bool explained);
 
 private:
@@ -756,7 +741,7 @@ public:
 		StatementHolder(request),
 		m_name(getName()),
 		m_relationName((request->req_rpb.hasData() && request->req_rpb[0].rpb_relation) ?
-			request->req_rpb[0].rpb_relation->rel_name.toQuotedString() : ""),
+			request->req_rpb[0].rpb_relation->getName().toQuotedString() : ""),
 		m_which(which),
 		m_action(request->req_trigger_action),
 		m_stats(stats)
