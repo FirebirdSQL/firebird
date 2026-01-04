@@ -1113,7 +1113,7 @@ static AggNode::RegisterFactory1<PercentileAggNode, PercentileAggNode::Percentil
 
 PercentileAggNode::PercentileAggNode(MemoryPool& pool, PercentileType aType, ValueExprNode* aArg,
 	ValueListNode* aOrderClause)
-	: AggNode(pool, 
+	: AggNode(pool,
 		(aType == PercentileAggNode::TYPE_PERCENTILE_CONT ? percentileContAggInfo : percentileDiscAggInfo),
 		false, false, aArg),
 	type(aType),
@@ -1128,12 +1128,8 @@ void PercentileAggNode::parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigne
 {
 	arg = PAR_parse_value(tdbb, csb);
 	valueArg = PAR_parse_value(tdbb, csb);
-	if (csb->csb_blr_reader.peekByte() == blr_within_group_order)
-	{
-		csb->csb_blr_reader.getByte(); // skip blr_within_group_order
-		if (const auto count = csb->csb_blr_reader.getByte())
-			sort = PAR_sort_internal(tdbb, csb, true, count);
-	}	
+	if (csb->csb_blr_reader.peekByte() == blr_sort)
+		sort = PAR_sort(tdbb, csb, blr_sort, true);
 }
 
 bool PercentileAggNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const
@@ -1151,7 +1147,7 @@ void PercentileAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 	fb_assert(dsqlOrderClause);
 	if (dsqlOrderClause->items.getCount() != 1)
 	{
-		ERR_post(Arg::Gds(isc_percetile_only_one_sort_item)); 
+		ERR_post(Arg::Gds(isc_percetile_only_one_sort_item));
 	}
 
 	if (type == TYPE_PERCENTILE_DISC)
@@ -1178,7 +1174,7 @@ void PercentileAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 void PercentileAggNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	AggNode::genBlr(dsqlScratch);
-	GEN_sort(dsqlScratch, blr_within_group_order, dsqlOrderClause);
+	GEN_sort(dsqlScratch, blr_sort, dsqlOrderClause);
 }
 
 void PercentileAggNode::makeSortDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
@@ -1288,7 +1284,7 @@ void PercentileAggNode::aggInit(thread_db* tdbb, Request* request) const
 {
 	AggNode::aggInit(tdbb, request);
 
-	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);	
+	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	impure->vlu_desc.dsc_dtype = 0;
 	impure->vlux_count = 0;
 
@@ -1300,7 +1296,7 @@ void PercentileAggNode::aggInit(thread_db* tdbb, Request* request) const
 }
 
 bool PercentileAggNode::aggPass(thread_db* tdbb, Request* request) const
-{	
+{
 	dsc* percenteDesc = nullptr;
 	percenteDesc = EVL_expr(tdbb, request, arg);
 	if (!percenteDesc)
@@ -1314,12 +1310,12 @@ bool PercentileAggNode::aggPass(thread_db* tdbb, Request* request) const
 	PercentileImpure* percentileImpure = request->getImpure<PercentileImpure>(percentileImpureOffset);
 	if (percentileImpure->vlux_count++ == 0)		// first call to aggPass()
 	{
-		if ((type == TYPE_PERCENTILE_CONT) && !desc->isNumeric())	
+		if ((type == TYPE_PERCENTILE_CONT) && !desc->isNumeric())
 			ERRD_post(Arg::Gds(isc_argmustbe_numeric_function) << Arg::Str("PERCENTILE_CONT"));
 
 		if (desc->isBlob())
-			ERRD_post(Arg::Gds(isc_blobnotsup) << Arg::Str("ORDER BY"));		
-		
+			ERRD_post(Arg::Gds(isc_blobnotsup) << Arg::Str("ORDER BY"));
+
 		const auto percentileValue = MOV_get_double(tdbb, percenteDesc);
 		if ((percentileValue < 0) || (percentileValue > 1))
 		{
@@ -1394,7 +1390,7 @@ void PercentileAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) co
 			EVL_make_value(tdbb, desc, impure);
 
 	}
-	else 
+	else
 	{
 		if (impure->vlux_count++ == 0)
 		{
@@ -1402,7 +1398,7 @@ void PercentileAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) co
 			percentileImpure->rn = 1 + percentileImpure->percentile * (percentileImpure->vlux_count - 1);
 			percentileImpure->crn = static_cast<SINT64>(ceil(percentileImpure->rn));
 			percentileImpure->frn = static_cast<SINT64>(floor(percentileImpure->rn));
-			
+
 			if (desc->isDecOrInt128())
 			{
 				DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
