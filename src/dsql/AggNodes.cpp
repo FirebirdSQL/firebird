@@ -1128,8 +1128,12 @@ void PercentileAggNode::parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigne
 {
 	arg = PAR_parse_value(tdbb, csb);
 	valueArg = PAR_parse_value(tdbb, csb);
-	if (csb->csb_blr_reader.peekByte() == blr_sort)
-		sort = PAR_sort(tdbb, csb, blr_sort, true);
+	if (csb->csb_blr_reader.peekByte() == blr_within_group_order)
+	{
+		csb->csb_blr_reader.getByte(); // skip blr_within_group_order
+		if (const auto count = csb->csb_blr_reader.getByte())
+			sort = PAR_sort_internal(tdbb, csb, true, count);
+	}	
 }
 
 bool PercentileAggNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const
@@ -1174,7 +1178,7 @@ void PercentileAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 void PercentileAggNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	AggNode::genBlr(dsqlScratch);
-	GEN_sort(dsqlScratch, blr_sort, dsqlOrderClause);
+	GEN_sort(dsqlScratch, blr_within_group_order, dsqlOrderClause);
 }
 
 void PercentileAggNode::makeSortDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
