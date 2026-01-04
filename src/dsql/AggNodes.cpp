@@ -1132,7 +1132,7 @@ void PercentileAggNode::parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigne
 	{
 		csb->csb_blr_reader.getByte(); // skip blr_within_group_order
 		if (const auto count = csb->csb_blr_reader.getByte())
-			node->sort = PAR_sort_internal(tdbb, csb, true, count);
+			sort = PAR_sort_internal(tdbb, csb, true, count);
 	}
 }
 
