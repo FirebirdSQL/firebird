@@ -1178,7 +1178,8 @@ void PercentileAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 void PercentileAggNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	AggNode::genBlr(dsqlScratch);
-	GEN_sort(dsqlScratch, blr_within_group_order, dsqlOrderClause);
+	if (dsqlOrderClause)
+		GEN_sort(dsqlScratch, blr_within_group_order, dsqlOrderClause);
 }
 
 void PercentileAggNode::makeSortDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
