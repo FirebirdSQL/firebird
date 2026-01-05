@@ -1072,6 +1072,34 @@ static void sql_info(thread_db* tdbb,
 			}
 			break;
 
+		case isc_info_sql_exec_path_nodes:
+			if (const Statement* stmt = dsqlRequest->getStatement())
+			{
+				if (stmt->topNode)
+				{
+					NodePrinter printer;
+					stmt->topNode->print(printer);
+
+					const UCHAR* p = reinterpret_cast<const UCHAR*>(printer.getText().c_str());
+					ULONG length = printer.getText().size();
+
+					while (length)
+					{
+						ULONG bufferLength = end_info - info - 4;
+						ULONG maxLength = MIN(bufferLength, MAX_USHORT);
+						ULONG segmentLength = MIN(length, maxLength);
+
+						info = put_item(item, segmentLength, p, info, end_info);
+						if (!info)
+							return;
+
+						p += segmentLength;
+						length -= segmentLength;
+					}
+				}
+			}
+			break;
+
 		case isc_info_sql_num_variables:
 		case isc_info_sql_describe_vars:
 			if (messageFound)
