@@ -219,11 +219,6 @@ ThreadId Thread::getId()
 #endif
 }
 
-ThreadId Thread::getIdFromHandle(Handle threadHandle)
-{
-	return threadHandle;
-}
-
 bool Thread::isCurrent(InternalId iid)
 {
 	return pthread_equal(iid, pthread_self());
@@ -373,11 +368,6 @@ ThreadId Thread::getId()
 	return GetCurrentThreadId();
 }
 
-ThreadId Thread::getIdFromHandle(Handle threadHandle)
-{
-	return GetThreadId(threadHandle);
-}
-
 bool Thread::isCurrent(InternalId iid)
 {
 	return GetCurrentThreadId() == iid;
@@ -427,10 +417,6 @@ void Thread::kill(Handle&)
 }
 
 Thread::Handle Thread::getId()
-{
-}
-
-Thread::Handle Thread::getIdFromHandle(Handle)
 {
 }
 
