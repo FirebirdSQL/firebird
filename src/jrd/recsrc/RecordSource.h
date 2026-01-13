@@ -137,7 +137,7 @@ namespace Jrd
 
 	protected:
 		const StreamType m_stream;
-		const Format* const m_format;
+		mutable const Format* m_format;
 	};
 
 
