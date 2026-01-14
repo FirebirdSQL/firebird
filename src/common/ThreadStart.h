@@ -82,12 +82,19 @@ public:
 	static void waitForCompletion(Handle& handle);
 	static void kill(Handle& handle);
 
+	// Returns TID of current OS thread
 	static ThreadId getId();
+
+	// Returns internal ID of given thread instance
+	InternalId getInternalId() const
+	{
+		return internalId;
+	}
 
 	static void sleep(unsigned milliseconds);
 	static void yield();
 
-	static bool isCurrent(Handle threadHandle);
+	static bool isCurrent(InternalId iid);
 	bool isCurrent();
 
 	Thread()

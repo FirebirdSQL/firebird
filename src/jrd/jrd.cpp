@@ -7661,8 +7661,7 @@ void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment, XThreadEns
 	XThreadEnsureUnlock* activeThreadGuard = dropGuard;
 	if (!activeThreadGuard)
 	{
-		if (dbb->dbb_crypto_manager &&
-			Thread::isCurrent(dbb->dbb_crypto_manager->getCryptThreadHandle()))
+		if (dbb->dbb_crypto_manager && dbb->dbb_crypto_manager->isCryptThreadCurrent())
 		{
 			activeThreadGuard = &dummyGuard;
 		}
