@@ -302,9 +302,11 @@ public:
 	ULONG getCurrentPage(thread_db* tdbb) const;
 	UCHAR getCurrentState(thread_db* tdbb) const;
 	const char* getKeyName() const;
-	Thread::Handle getCryptThreadHandle() const
+
+	// Return true if crypt thread is running and it is the current thread.
+	bool isCryptThreadCurrent() const
 	{
-		return cryptThreadHandle;
+		return cryptThreadHandle && Thread::isCurrent(cryptThreadId);
 	}
 
 private:
@@ -393,6 +395,7 @@ private:
 	Firebird::string hash;
 	Firebird::RefPtr<DbInfo> dbInfo;
 	Thread::Handle cryptThreadHandle;
+	Thread::InternalId cryptThreadId;
 	Firebird::IDbCryptPlugin* cryptPlugin;
 	Factory* checkFactory;
 	Database& dbb;

@@ -6440,8 +6440,7 @@ static void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment)
 	// avoid races with special threads
 	XThreadEnsureUnlock threadGuard(dbb->dbb_thread_mutex, FB_FUNCTION);
 	XThreadEnsureUnlock* activeThreadGuard = &threadGuard;
-	if (dbb->dbb_crypto_manager
-		&& Thread::isCurrent(Thread::getIdFromHandle(dbb->dbb_crypto_manager->getCryptThreadHandle())))
+	if (dbb->dbb_crypto_manager && dbb->dbb_crypto_manager->isCryptThreadCurrent())
 	{
 		activeThreadGuard = &dummyGuard;
 	}

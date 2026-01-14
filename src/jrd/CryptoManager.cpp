@@ -339,6 +339,8 @@ namespace Jrd {
 		  flDown(false),
 		  run(false)
 	{
+		memset(&cryptThreadId, 0, sizeof(cryptThreadId));
+
 		stateLock = FB_NEW_RPT(getPool(), 0)
 			Lock(tdbb, 0, LCK_crypt_status, this, blockingAstChangeCryptState);
 		threadLock = FB_NEW_RPT(getPool(), 0) Lock(tdbb, 0, LCK_crypt);
@@ -995,7 +997,8 @@ namespace Jrd {
 
 			// ready to go
 			guard.leave();		// release in advance to avoid races with cryptThread()
-			Thread::start(cryptThreadStatic, (THREAD_ENTRY_PARAM) this, THREAD_medium, &cryptThreadHandle);
+			const Thread& thread = Thread::start(cryptThreadStatic, (THREAD_ENTRY_PARAM) this, THREAD_medium, &cryptThreadHandle);
+			cryptThreadId = thread.getInternalId();
 		}
 		catch (const Firebird::Exception&)
 		{
