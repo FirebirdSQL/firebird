@@ -433,7 +433,15 @@ void REPL_trans_commit(thread_db* tdbb, jrd_tra* transaction)
 {
 	const auto replicator = transaction->tra_replicator;
 	if (!replicator)
+	{
+		const auto replicator = getReplicator(tdbb);
+		if (replicator)
+		{
+			FbLocalStatus status;
+			replicator->flushSequences(&status);
+		}
 		return;
+	}
 
 	FbLocalStatus status;
 	replicator->commit(&status);
@@ -452,7 +460,15 @@ void REPL_trans_rollback(thread_db* tdbb, jrd_tra* transaction)
 {
 	const auto replicator = transaction->tra_replicator;
 	if (!replicator)
+	{
+		const auto replicator = getReplicator(tdbb);
+		if (replicator)
+		{
+			FbLocalStatus status;
+			replicator->flushSequences(&status);
+		}
 		return;
+	}
 
 	FbLocalStatus status;
 	replicator->rollback(&status);
