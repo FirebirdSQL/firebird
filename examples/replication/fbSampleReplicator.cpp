@@ -37,6 +37,7 @@ public:
 	FB_BOOLEAN cleanupTransaction(ISC_INT64 number) override;
 	FB_BOOLEAN deprecatedSetSequence(const char* name, ISC_INT64 value) override;
 	FB_BOOLEAN setSequence2(const char* schemaName, const char* genName, ISC_INT64 value) override;
+	FB_BOOLEAN flushSequences() override;
 
 private:
 	friend class ReplTransaction;
@@ -261,6 +262,12 @@ FB_BOOLEAN ReplPlugin::deprecatedSetSequence(const char* name, ISC_INT64 value)
 FB_BOOLEAN ReplPlugin::setSequence2(const char* schemaName, const char* genName, ISC_INT64 value)
 {
 	WriteLog(log, "%p\tsetSequence2(%s.%s, %lld)\n", this, schemaName, genName, value);
+	return FB_TRUE;
+}
+
+FB_BOOLEAN ReplPlugin::flushSequences()
+{
+	WriteLog(log, "%p\tflushSequences()\n");
 	return FB_TRUE;
 }
 

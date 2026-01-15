@@ -207,18 +207,7 @@ void Replicator::commitTransaction(CheckStatusWrapper* status, Transaction* tran
 		const auto dataLength = txnData.buffer->getCount() - sizeof(Block);
 		fb_assert(txnData.flushes || dataLength > sizeof(UCHAR));
 
-		for (const auto& generator : m_generators)
-		{
-			fb_assert(generator.name.object.hasData() && generator.name.schema.hasData());
-
-			const auto [schemaAtom, objectAtom] = txnData.defineQualifiedAtom(generator.name);
-
-			txnData.putTag(opSetSequence);
-			txnData.putInt32(schemaAtom);
-			txnData.putInt32(objectAtom);
-			txnData.putInt64(generator.value);
-		}
-
+		txnData.putGenerators(&m_generators);
 		m_generators.clear();
 
 		txnData.putTag(opCommitTransaction);
@@ -236,9 +225,13 @@ void Replicator::rollbackTransaction(CheckStatusWrapper* status, Transaction* tr
 	{
 		auto& txnData = transaction->getData();
 
-		if (txnData.flushes)
+		if (txnData.flushes || m_generators.hasData())
 		{
-			txnData.putTag(opRollbackTransaction);
+			txnData.putGenerators(&m_generators);
+			m_generators.clear();
+
+			if (txnData.flushes)
+				txnData.putTag(opRollbackTransaction);
 			flush(txnData, FLUSH_SYNC, BLOCK_END_TRANS);
 		}
 	}
@@ -495,6 +488,29 @@ void Replicator::setSequence2(CheckStatusWrapper* status,
 		generator.value = value;
 
 		m_generators.add(generator);
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+	}
+}
+
+void Replicator::flushSequences(CheckStatusWrapper* status)
+{
+	if (m_generators.isEmpty())
+		return;
+
+	try
+	{
+		BatchBlock block(getPool());
+		block.header.traNumber = 0;
+		block.buffer = m_manager->getBuffer();
+		block.header.length = (ULONG)block.buffer->getCount();
+
+		block.putGenerators(&m_generators);
+		m_generators.clear();
+
+		flush(block, FLUSH_SYNC);
 	}
 	catch (const Exception& ex)
 	{
