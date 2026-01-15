@@ -1795,19 +1795,19 @@ void BURP_print_status(bool err, const Firebird::IStatus* status_vector, USHORT 
         SCHAR s[1024];
 		if (fb_interpret(s, sizeof(s), &vector))
 		{
-			BURP_msg_partial(err, 256); // msg 256: gbak: ERROR:
-			burp_output(err, "%s\n", s);
+			BURP_msg_partial(true, 256); // msg 256: gbak: ERROR:
+			burp_output(true, "%s\n", s);
 
 			while (fb_interpret(s, sizeof(s), &vector))
 			{
-				BURP_msg_partial(err, 256); // msg 256: gbak: ERROR:
-				burp_output(err, "    %s\n", s);
+				BURP_msg_partial(true, 256); // msg 256: gbak: ERROR:
+				burp_output(true, "    %s\n", s);
 			}
 		}
 
 		if (secondNumber)
 		{
-			BURP_msg_partial(err, 169);	// msg 169: gbak:
+			BURP_msg_partial(true, 169);	// msg 169: gbak:
 			BURP_msg_put(true, secondNumber, SafeArg());
 		}
 	}
@@ -1849,13 +1849,13 @@ void BURP_print_warning(const Firebird::IStatus* status, bool printErrorAsWarnin
 
 	if (fb_interpret(s, sizeof(s), &vector))
 	{
-		BURP_msg_partial(false, 255); // msg 255: gbak: WARNING:
-		burp_output(false, "%s\n", s);
+		BURP_msg_partial(true, 255); // msg 255: gbak: WARNING:
+		burp_output(true, "%s\n", s);
 
 		while (fb_interpret(s, sizeof(s), &vector))
 		{
-			BURP_msg_partial(false, 255); // msg 255: gbak: WARNING:
-			burp_output(false, "    %s\n", s);
+			BURP_msg_partial(true, 255); // msg 255: gbak: WARNING:
+			burp_output(true, "    %s\n", s);
 		}
 	}
 }
