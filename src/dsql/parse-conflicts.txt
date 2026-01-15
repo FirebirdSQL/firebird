@@ -1,1 +1,1 @@
-134 shift/reduce conflicts, 7 reduce/reduce conflicts.
+134 shift/reduce conflicts, 19 reduce/reduce conflicts.
