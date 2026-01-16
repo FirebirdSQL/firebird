@@ -6117,8 +6117,15 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 		DFW_post_work(transaction, dfw_scan_relation, NULL, relation->rel_id);
 
 		// signal others about new format presence
-		LCK_lock(tdbb, relation->rel_rescan_lock, LCK_EX, LCK_WAIT);
 		LCK_release(tdbb, relation->rel_rescan_lock);
+		{
+			// Use temp lock to avoid AST call
+			Lock tmpLock(tdbb, sizeof(SLONG), LCK_rel_rescan);
+			tmpLock.lck_key.lck_long = relation->rel_id;
+
+			LCK_lock(tdbb, &tmpLock, LCK_EX, LCK_WAIT);
+			LCK_release(tdbb, &tmpLock);
+		}
 
 		break;
 	}

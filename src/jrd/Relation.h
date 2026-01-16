@@ -400,6 +400,7 @@ const ULONG REL_jrd_view				= 0x10000;	// relation is VIEW
 const ULONG REL_gc_blocking				= 0x20000;	// request to downgrade\release gc lock
 const ULONG REL_gc_disabled				= 0x40000;	// gc is disabled temporarily
 const ULONG REL_gc_lockneed				= 0x80000;	// gc lock should be acquired
+const ULONG REL_rescan					= 0x100000;	// rescan request was submitted while relation being scanning
 
 
 /// class jrd_rel
