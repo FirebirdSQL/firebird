@@ -108,7 +108,6 @@ void InnerJoin::calculateStreamInfo()
 		innerStream->baseIndexes = candidate->indexes;
 		innerStream->baseUnique = candidate->unique;
 		innerStream->baseNavigated = candidate->navigated;
-		innerStream->baseConjuncts = candidate->conjuncts;
 
 		csb->csb_rpt[innerStream->number].deactivate();
 	}
