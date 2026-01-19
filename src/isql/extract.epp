@@ -371,7 +371,7 @@ int EXTRACT_list_table(const QualifiedMetaString& relation_name,
 					 IUTILS_name_to_string(ownerName).c_str(),
 					 NEWLINE);
 
-			if (rel_type == rel_global_temp_preserve || rel_type == rel_global_temp_delete)
+			if (rel_type == rel_temp_preserve || rel_type == rel_temp_delete)
 				isqlGlob.printf("CREATE GLOBAL TEMPORARY TABLE ");
 			else
 				isqlGlob.printf("CREATE TABLE ");
@@ -618,8 +618,8 @@ int EXTRACT_list_table(const QualifiedMetaString& relation_name,
 	if (first) // we extracted nothing
 		return FINI_ERROR;
 
-	const char* gtt_scope = (rel_type == rel_global_temp_preserve) ? "ON COMMIT PRESERVE ROWS" :
-							((rel_type == rel_global_temp_delete) ? "ON COMMIT DELETE ROWS" : "");
+	const char* gtt_scope = (rel_type == rel_temp_preserve) ? "ON COMMIT PRESERVE ROWS" :
+							((rel_type == rel_temp_delete) ? "ON COMMIT DELETE ROWS" : "");
 
 	const char* opt_delim = *gtt_scope && *ss ? ", " : "";
 

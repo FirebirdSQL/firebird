@@ -1023,20 +1023,20 @@ void Monitoring::putDatabase(thread_db* tdbb, SnapshotData::DumpRecord& record)
 	if (dbb->dbb_flags & DBB_shared)
 	{
 		MutexLockGuard guard(dbb->dbb_stats_mutex, FB_FUNCTION);
-		putStatistics(record, dbb->dbb_stats, stat_id, stat_database);
+		putStatistics(tdbb, record, dbb->dbb_stats, stat_id, stat_database);
 		putMemoryUsage(record, dbb->dbb_memory_stats, stat_id, stat_database);
 	}
 	else
 	{
 		RuntimeStatistics zero_rt_stats;
 		MemoryStats zero_mem_stats;
-		putStatistics(record, zero_rt_stats, stat_id, stat_database);
+		putStatistics(tdbb, record, zero_rt_stats, stat_id, stat_database);
 		putMemoryUsage(record, zero_mem_stats, stat_id, stat_database);
 	}
 }
 
 
-void Monitoring::putAttachment(SnapshotData::DumpRecord& record, const Jrd::Attachment* attachment)
+void Monitoring::putAttachment(thread_db* tdbb, SnapshotData::DumpRecord& record, const Jrd::Attachment* attachment)
 {
 	fb_assert(attachment);
 	if (!attachment->att_user)
@@ -1141,13 +1141,13 @@ void Monitoring::putAttachment(SnapshotData::DumpRecord& record, const Jrd::Atta
 
 	if (attachment->att_database->dbb_flags & DBB_shared)
 	{
-		putStatistics(record, attachment->att_stats, stat_id, stat_attachment);
+		putStatistics(tdbb, record, attachment->att_stats, stat_id, stat_attachment);
 		putMemoryUsage(record, attachment->att_memory_stats, stat_id, stat_attachment);
 	}
 	else
 	{
 		MutexLockGuard guard(attachment->att_database->dbb_stats_mutex, FB_FUNCTION);
-		putStatistics(record, attachment->att_database->dbb_stats, stat_id, stat_attachment);
+		putStatistics(tdbb, record, attachment->att_database->dbb_stats, stat_id, stat_attachment);
 		putMemoryUsage(record, attachment->att_database->dbb_memory_stats, stat_id, stat_attachment);
 	}
 
@@ -1156,7 +1156,7 @@ void Monitoring::putAttachment(SnapshotData::DumpRecord& record, const Jrd::Atta
 }
 
 
-void Monitoring::putTransaction(SnapshotData::DumpRecord& record, const jrd_tra* transaction)
+void Monitoring::putTransaction(thread_db* tdbb, SnapshotData::DumpRecord& record, const jrd_tra* transaction)
 {
 	fb_assert(transaction);
 
@@ -1220,7 +1220,7 @@ void Monitoring::putTransaction(SnapshotData::DumpRecord& record, const jrd_tra*
 
 	record.write();
 
-	putStatistics(record, transaction->tra_stats, stat_id, stat_transaction);
+	putStatistics(tdbb, record, transaction->tra_stats, stat_id, stat_transaction);
 	putMemoryUsage(record, transaction->tra_memory_stats, stat_id, stat_transaction);
 
 	// context vars
@@ -1274,7 +1274,7 @@ void Monitoring::putStatement(SnapshotData::DumpRecord& record, const Statement*
 }
 
 
-void Monitoring::putRequest(SnapshotData::DumpRecord& record, const Request* request,
+void Monitoring::putRequest(thread_db* tdbb, SnapshotData::DumpRecord& record, const Request* request,
 							const string& plan)
 {
 	fb_assert(request);
@@ -1333,12 +1333,12 @@ void Monitoring::putRequest(SnapshotData::DumpRecord& record, const Request* req
 
 	record.write();
 
-	putStatistics(record, request->req_stats, stat_id, stat_statement);
+	putStatistics(tdbb, record, request->req_stats, stat_id, stat_statement);
 	putMemoryUsage(record, request->req_memory_stats, stat_id, stat_statement);
 }
 
 
-void Monitoring::putCall(SnapshotData::DumpRecord& record, const Request* request)
+void Monitoring::putCall(thread_db* tdbb, SnapshotData::DumpRecord& record, const Request* request)
 {
 	fb_assert(request);
 
@@ -1405,12 +1405,12 @@ void Monitoring::putCall(SnapshotData::DumpRecord& record, const Request* reques
 
 	record.write();
 
-	putStatistics(record, request->req_stats, stat_id, stat_call);
+	putStatistics(tdbb, record, request->req_stats, stat_id, stat_call);
 	putMemoryUsage(record, request->req_memory_stats, stat_id, stat_call);
 }
 
 
-void Monitoring::putStatistics(SnapshotData::DumpRecord& record, const RuntimeStatistics& statistics,
+void Monitoring::putStatistics(thread_db* tdbb, SnapshotData::DumpRecord& record, const RuntimeStatistics& statistics,
 							   int stat_id, int stat_group)
 {
 	// statistics id
@@ -1459,8 +1459,34 @@ void Monitoring::putStatistics(SnapshotData::DumpRecord& record, const RuntimeSt
 		record.reset(rel_mon_tab_stats);
 		record.storeGlobalId(f_mon_tab_stat_id, id);
 		record.storeInteger(f_mon_tab_stat_group, stat_group);
-		record.storeTableIdSchemaName(f_mon_tab_sch_name, counts.getGroupId());
-		record.storeTableIdObjectName(f_mon_tab_name, counts.getGroupId());
+
+		bool lttFound = false;
+		std::string_view tableType = "PERSISTENT";
+
+		if (stat_group != stat_database)
+		{
+			if (const auto relation = MET_lookup_relation_id(tdbb, counts.getGroupId(), false))
+			{
+				if ((relation->rel_flags & REL_temp_ltt))
+				{
+					record.storeString(f_mon_tab_sch_name, relation->rel_name.schema);
+					record.storeString(f_mon_tab_name, relation->rel_name.object);
+					lttFound = true;
+					tableType = "LOCAL TEMPORARY";
+				}
+				else if ((relation->rel_flags & REL_temp_gtt))
+					tableType = "GLOBAL TEMPORARY";
+			}
+		}
+
+		if (!lttFound)
+		{
+			record.storeTableIdSchemaName(f_mon_tab_sch_name, counts.getGroupId());
+			record.storeTableIdObjectName(f_mon_tab_name, counts.getGroupId());
+		}
+
+		record.storeString(f_mon_tab_type, tableType);
+
 		record.storeGlobalId(f_mon_tab_rec_stat_id, rec_stat_id);
 		record.write();
 
@@ -1572,7 +1598,7 @@ void Monitoring::dumpAttachment(thread_db* tdbb, Attachment* attachment, ULONG g
 	DumpWriter writer(dbb->dbb_monitoring_data, attId, userName.c_str(), generation);
 	SnapshotData::DumpRecord record(pool, writer);
 
-	putAttachment(record, attachment);
+	putAttachment(tdbb, record, attachment);
 
 	jrd_tra* transaction = nullptr;
 
@@ -1581,7 +1607,7 @@ void Monitoring::dumpAttachment(thread_db* tdbb, Attachment* attachment, ULONG g
 	for (transaction = attachment->att_transactions; transaction;
 		 transaction = transaction->tra_next)
 	{
-		putTransaction(record, transaction);
+		putTransaction(tdbb, record, transaction);
 	}
 
 	// Call stack information
@@ -1599,7 +1625,7 @@ void Monitoring::dumpAttachment(thread_db* tdbb, Attachment* attachment, ULONG g
 					(Statement::FLAG_INTERNAL | Statement::FLAG_SYS_TRIGGER)) &&
 				request->req_caller)
 			{
-				putCall(record, request);
+				putCall(tdbb, record, request);
 			}
 		}
 	}
@@ -1628,7 +1654,7 @@ void Monitoring::dumpAttachment(thread_db* tdbb, Attachment* attachment, ULONG g
 		{
 			const string plan = (dbb->getEncodedOdsVersion() >= ODS_13_1) ?
 				"" : Optimizer::getPlan(tdbb, statement, true);
-			putRequest(record, request, plan);
+			putRequest(tdbb, record, request, plan);
 		}
 	}
 }

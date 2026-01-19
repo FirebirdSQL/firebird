@@ -64,6 +64,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#include <algorithm>
 
 #include "../common/classes/fb_string.h"
 #include "../common/classes/VaryStr.h"
@@ -108,6 +109,7 @@
 #include "../jrd/lck_proto.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/mov_proto.h"
+#include "../jrd/par_proto.h"
 #include "../jrd/pag_proto.h"
 #include "../jrd/os/pio_proto.h"
 #include "../jrd/rlck_proto.h"
@@ -128,6 +130,7 @@
 #include "../jrd/CryptoManager.h"
 #include "../jrd/Mapping.h"
 #include "../jrd/shut_proto.h"
+#include "../dsql/metd_proto.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -137,11 +140,6 @@
 
 // Pick up system relation ids
 #include "../jrd/ini.h"
-
-// Define range of user relation ids
-
-inline constexpr int MIN_RELATION_ID = rel_MAX;
-inline constexpr int MAX_RELATION_ID = 32767;
 
 inline constexpr int COMPUTED_FLAG = 128;
 inline constexpr int WAIT_PERIOD = -1;
@@ -394,9 +392,12 @@ public:
 
 	void addRelation(jrd_rel* relation)
 	{
-		FB_SIZE_T pos;
-		if (!m_locks.find(relation->rel_id, pos))
-			m_locks.insert(pos, relLock(relation));
+		if (!(relation->rel_flags & REL_temp_ltt))
+		{
+			FB_SIZE_T pos;
+			if (!m_locks.find(relation->rel_id, pos))
+				m_locks.insert(pos, relLock(relation));
+		}
 	}
 
 	bool exists(USHORT rel_id) const
@@ -465,7 +466,10 @@ static bool delete_shadow(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool compute_security(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool modify_index(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool create_index(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
+static bool modify_ltt_index(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool delete_index(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
+static bool create_ltt_index(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
+static bool delete_ltt_index(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool create_relation(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool delete_relation(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool scan_relation(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
@@ -484,6 +488,7 @@ static bool delete_global(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool delete_parameter(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool delete_rfr(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool make_version(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
+static bool make_ltt_version(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool add_difference(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool delete_difference(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool begin_backup(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
@@ -1289,6 +1294,7 @@ static inline constexpr deferred_task task_table[] =
 {
 	{ dfw_add_shadow, add_shadow },
 	{ dfw_delete_index, modify_index },
+	{ dfw_delete_ltt_index, delete_ltt_index },
 	{ dfw_delete_rfr, delete_rfr },
 	{ dfw_delete_relation, delete_relation },
 	{ dfw_delete_shadow, delete_shadow },
@@ -1299,10 +1305,13 @@ static inline constexpr deferred_task task_table[] =
 	{ dfw_delete_global, delete_global },
 	{ dfw_create_relation, create_relation },
 	{ dfw_update_format, make_version },
+	{ dfw_update_ltt_format, make_ltt_version },
 	{ dfw_scan_relation, scan_relation },
 	{ dfw_compute_security, compute_security },
 	{ dfw_create_index, modify_index },
 	{ dfw_create_expression_index, modify_index },
+	{ dfw_create_ltt_index, create_ltt_index },
+	{ dfw_modify_ltt_index, modify_ltt_index },
 	{ dfw_grant, grant_privileges },
 	{ dfw_create_trigger, create_trigger },
 	{ dfw_delete_trigger, delete_trigger },
@@ -2245,29 +2254,54 @@ static bool check_not_null(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 			if (!relation || relation->rel_view_rse || work->dfw_ids.isEmpty())
 				break;
 
+			// This function is not working correctly for GTTs and LTTs
+			if (relation->isTemporary())
+				break;
+
 			// Protect relation from modification
 			ProtectRelations protectRelation(tdbb, transaction, relation);
 
 			SortedArray<int> fields;
 			AutoRequest handle;
 
-			for (SortedArray<int>::iterator itr(work->dfw_ids.begin());
-				 itr != work->dfw_ids.end();
-				 ++itr)
+			if (relation->rel_flags & REL_temp_ltt)	// Not used currently
 			{
-				FOR(REQUEST_HANDLE handle)
-					RFL IN RDB$RELATION_FIELDS CROSS
-					FLD IN RDB$FIELDS
-					WITH RFL.RDB$SCHEMA_NAME EQ work->dfw_schema.c_str() AND
-						 RFL.RDB$RELATION_NAME EQ work->dfw_name.c_str() AND
-						 FLD.RDB$SCHEMA_NAME EQ RFL.RDB$FIELD_SOURCE_SCHEMA_NAME AND
-						 FLD.RDB$FIELD_NAME EQ RFL.RDB$FIELD_SOURCE AND
-						 RFL.RDB$FIELD_ID EQ *itr AND
-						 (RFL.RDB$NULL_FLAG = TRUE OR FLD.RDB$NULL_FLAG = TRUE)
+				if (const auto lttPtr = attachment->att_local_temporary_tables.get(work->getQualifiedName()))
 				{
-					fields.add(RFL.RDB$FIELD_ID);
+					const auto ltt = *lttPtr;
+
+					for (const auto fieldId : work->dfw_ids)
+					{
+						if (std::any_of(ltt->fields.begin(), ltt->fields.end(),
+								[fieldId](const auto& lttField) {
+									return lttField.id == (USHORT) fieldId && lttField.notNullFlag;
+								}))
+						{
+							fields.add(fieldId);
+						}
+					}
 				}
-				END_FOR
+			}
+			else
+			{
+				for (SortedArray<int>::iterator itr(work->dfw_ids.begin());
+					 itr != work->dfw_ids.end();
+					 ++itr)
+				{
+					FOR(REQUEST_HANDLE handle)
+						RFL IN RDB$RELATION_FIELDS CROSS
+						FLD IN RDB$FIELDS
+						WITH RFL.RDB$SCHEMA_NAME EQ work->dfw_schema.c_str() AND
+							 RFL.RDB$RELATION_NAME EQ work->dfw_name.c_str() AND
+							 FLD.RDB$SCHEMA_NAME EQ RFL.RDB$FIELD_SOURCE_SCHEMA_NAME AND
+							 FLD.RDB$FIELD_NAME EQ RFL.RDB$FIELD_SOURCE AND
+							 RFL.RDB$FIELD_ID EQ *itr AND
+							 (RFL.RDB$NULL_FLAG = TRUE OR FLD.RDB$NULL_FLAG = TRUE)
+					{
+						fields.add(RFL.RDB$FIELD_ID);
+					}
+					END_FOR
+				}
 			}
 
 			if (fields.hasData())
@@ -3207,7 +3241,7 @@ static bool modify_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 
 		while (rs->fetch(tdbb))
 		{
-			gtt_preserve = (rdbRelationType == rel_global_temp_preserve);
+			gtt_preserve = (rdbRelationType == rel_temp_preserve);
 			relation = MET_lookup_relation_id(tdbb, rdbRelationID, false);
 		}
 	}
@@ -3604,6 +3638,99 @@ static bool create_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 }
 
 
+// Create an index for a Local Temporary Table.
+static bool create_ltt_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+{
+	switch (phase)
+	{
+		case 1:
+		case 2:
+			return true;
+
+		case 3:
+			break;
+
+		default:
+			return false;
+	}
+
+	const auto attachment = tdbb->getAttachment();
+
+	// Find the LTT by looking up the index
+	LocalTemporaryTable* ltt = nullptr;
+	LocalTemporaryTable::Index* lttIndex = nullptr;
+
+	if (!MET_get_ltt_index(attachment, work->getQualifiedName(), &ltt, &lttIndex))
+		return false;  // LTT or index no longer exists (rolled back?)
+
+	const auto relation = ltt->relation;
+	if (!relation)
+		return false;
+
+	// Skip inactive indexes
+	if (lttIndex->inactive)
+		return false;
+
+	// Build the index descriptor
+	index_desc idx;
+	memset(&idx, 0, sizeof(idx));
+
+	idx.idx_id = lttIndex->id;
+	idx.idx_count = lttIndex->columns.getCount();
+	idx.idx_flags = 0;
+
+	if (lttIndex->unique)
+		idx.idx_flags |= idx_unique;
+	if (lttIndex->descending)
+		idx.idx_flags |= idx_descending;
+
+	// Build the index key descriptors from LTT field info
+	int keyPos = 0;
+
+	for (const auto& colName : lttIndex->columns)
+	{
+		// Find the field in the LTT
+		bool found = false;
+
+		for (const auto& field : ltt->fields)
+		{
+			if (field.name == colName)
+			{
+				idx.idx_rpt[keyPos].idx_field = field.id;
+
+				// Determine index type based on field type
+				const USHORT idxType = DFW_assign_index_type(tdbb, work->getQualifiedName(),
+					field.desc.dsc_dtype,
+					DTYPE_IS_TEXT(field.desc.dsc_dtype) ?
+						INTL_CS_COLL_TO_TTYPE(field.charSetId.value_or(CS_NONE), field.collationId.value_or(COLLATE_NONE)) : 0);
+				idx.idx_rpt[keyPos].idx_itype = idxType;
+
+				found = true;
+				break;
+			}
+		}
+
+		if (!found)
+		{
+			ERR_post(Arg::Gds(isc_no_meta_update) <<
+					 Arg::Gds(isc_idx_seg_err) << work->getQualifiedName().toQuotedString());
+		}
+
+		++keyPos;
+	}
+
+	{	// scope
+		AutoSetRestoreFlag<ULONG> dbPageSpace(&tdbb->tdbb_flags, TDBB_use_db_page_space, true);
+
+		SelectivityList selectivity(*tdbb->getDefaultPool());
+		IDX_create_index(tdbb, relation, &idx, work->getQualifiedName(),
+			&lttIndex->id, transaction, selectivity);
+	}
+
+	return false;
+}
+
+
 static bool create_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
 {
 /**************************************
@@ -3628,8 +3755,6 @@ static bool create_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 	SET_TDBB(tdbb);
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 	Database* dbb = tdbb->getDatabase();
-
-	constexpr USHORT local_min_relation_id = USER_DEF_REL_INIT_ID;
 
 	switch (phase)
 	{
@@ -3704,15 +3829,15 @@ static bool create_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 			MODIFY X USING
 				rel_id = X.RDB$RELATION_ID;
 
-				if (rel_id < local_min_relation_id || rel_id > MAX_RELATION_ID)
-					rel_id = X.RDB$RELATION_ID = local_min_relation_id;
+				if (rel_id < MIN_RELATION_ID || rel_id > MAX_RELATION_ID)
+					rel_id = X.RDB$RELATION_ID = MIN_RELATION_ID;
 
 				// Roman Simakov: We need to return deleted relations to skip them.
 				// This maybe result of cleanup failure after phase 3.
 				while ( (relation = MET_lookup_relation_id(tdbb, rel_id++, true)) )
 				{
-					if (rel_id < local_min_relation_id || rel_id > MAX_RELATION_ID)
-						rel_id = local_min_relation_id;
+					if (rel_id < MIN_RELATION_ID || rel_id > MAX_RELATION_ID)
+						rel_id = MIN_RELATION_ID;
 
 					if (rel_id == X.RDB$RELATION_ID)
 					{
@@ -3722,7 +3847,7 @@ static bool create_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 					}
 				}
 
-				X.RDB$RELATION_ID = (rel_id > MAX_RELATION_ID) ? local_min_relation_id : rel_id;
+				X.RDB$RELATION_ID = (rel_id > MAX_RELATION_ID) ? MIN_RELATION_ID : rel_id;
 
 				MODIFY Y USING
 					Y.RDB$RELATION_ID = --rel_id;
@@ -4845,6 +4970,114 @@ static bool delete_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 }
 
 
+// Delete an index for a Local Temporary Table.
+static bool delete_ltt_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+{
+	switch (phase)
+	{
+		case 1:
+		case 2:
+			return true;
+
+		case 3:
+			break;
+
+		default:
+			return false;
+	}
+
+	// The index ID is passed in dfw_id, and the relation ID is stored in dfw_ids
+	const USHORT indexId = work->dfw_id;
+	const auto& ids = work->dfw_ids;
+
+	if (ids.isEmpty())
+		return false;
+
+	const USHORT relationId = ids.front();
+
+	const auto relation = MET_lookup_relation_id(tdbb, relationId, false);
+	if (!relation)
+		return false;
+
+	{	// scope
+		AutoSetRestoreFlag<ULONG> noDbPageSpace(&tdbb->tdbb_flags, TDBB_use_db_page_space, true);
+
+		// Get the relation pages
+		const auto relPages = relation->getPages(tdbb, MAX_TRA_NUMBER, false);
+		if (!relPages || !relPages->rel_index_root)
+			return false;
+
+		// Delete the index by its ID
+		IDX_delete_index(tdbb, relation, indexId);
+	}
+
+	return false;
+}
+
+
+static bool modify_ltt_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+{
+/**************************************
+ *
+ *	m o d i f y _ l t t _ i n d e x
+ *
+ **************************************
+ *
+ * Functional description
+ *	Recalculate statistics for an index on a Local Temporary Table.
+ *
+ **************************************/
+
+	// Recalculate statistics for an index on a Local Temporary Table.
+	switch (phase)
+	{
+		case 1:
+		case 2:
+			return true;
+
+		case 3:
+			break;
+
+		default:
+			return false;
+	}
+
+	const auto attachment = tdbb->getAttachment();
+
+	// Find the LTT by looking up the index
+	LocalTemporaryTable* ltt = nullptr;
+	LocalTemporaryTable::Index* lttIndex = nullptr;
+
+	if (!MET_get_ltt_index(attachment, work->getQualifiedName(), &ltt, &lttIndex))
+		return false;  // LTT or index no longer exists (rolled back?)
+
+	const auto relation = ltt->relation;
+	if (!relation)
+		return false;
+
+	// Skip inactive indexes
+	if (lttIndex->inactive)
+		return false;
+
+	// Only recalculate statistics if the table has been instantiated
+	if (!ltt->relationId)
+		return false;
+
+	{	// scope
+		AutoSetRestoreFlag<ULONG> dbPageSpace(&tdbb->tdbb_flags, TDBB_use_db_page_space, true);
+
+		// Recalculate index statistics
+		SelectivityList selectivity(*tdbb->getDefaultPool());
+		IDX_statistics(tdbb, relation, lttIndex->id, selectivity);
+
+		// The selectivity is stored directly in the index root page by IDX_statistics,
+		// so we don't need to update any system tables (LTT indexes don't have entries in RDB$INDICES)
+	}
+
+	return false;
+}
+
+
 static bool delete_parameter(thread_db* tdbb, SSHORT phase, DeferredWork*, jrd_tra*)
 {
 /**************************************
@@ -4931,6 +5164,11 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 		return false;
 
 	case 1:
+		relation = MET_lookup_relation_id(tdbb, work->dfw_id, false);
+
+		if (relation && (relation->rel_flags & REL_temp_ltt))
+			return true;
+
 		// check if any views use this as a base relation
 
 		request.reset();
@@ -4957,7 +5195,6 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 					 // Msg310: there are %ld dependencies
 		}
 
-		relation = MET_lookup_relation_id(tdbb, work->dfw_id, false);
 		if (!relation)
 			return false;
 
@@ -4991,8 +5228,9 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 		if (relation->rel_use_count)
 			MET_clear_cache(tdbb);
 
-		if (relation->rel_use_count || (relation->rel_existence_lock &&
-			!LCK_convert(tdbb, relation->rel_existence_lock, LCK_EX, transaction->getLockWait())))
+		if (relation->rel_use_count ||
+			(relation->rel_existence_lock &&
+				!LCK_convert(tdbb, relation->rel_existence_lock, LCK_EX, transaction->getLockWait())))
 		{
 			if (adjusted)
 				++relation->rel_use_count;
@@ -5018,8 +5256,9 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 
 	case 4:
 		relation = MET_lookup_relation_id(tdbb, work->dfw_id, true);
-		if (!relation) {
-			fb_assert(false);
+		if (!relation)
+		{
+			fb_assert(work->dfw_id >= MIN_LTT_ID && work->dfw_id <= MAX_LTT_ID);
 			return false;
 		}
 
@@ -5059,41 +5298,41 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 		}
 
 		RelationPages* const relPages = relation->getBasePages();
-		if (relPages->rel_index_root) {
+		if (relPages && relPages->rel_index_root)
 			IDX_delete_indices(tdbb, relation, relPages);
-		}
 
-		if (relPages->rel_pages) {
+		if (relPages && relPages->rel_pages)
 			DPM_delete_relation(tdbb, relation);
-		}
 
 		// if this is a view (or even if we don't know), delete dependency lists
 
-		if (relation->rel_view_rse || !(relation->rel_flags & REL_scanned)) {
-			MET_delete_dependencies(tdbb, work->getQualifiedName(), obj_view, transaction);
-		}
-
-		// Now that the data, pointer, and index pages are gone,
-		// get rid of the relation itself
-
-		request.reset();
-
-		FOR(REQUEST_HANDLE request) X IN RDB$FORMATS WITH
-			X.RDB$RELATION_ID EQ relation->rel_id
+		if (!(relation->rel_flags & REL_temp_ltt))
 		{
-			ERASE X;
-		}
-		END_FOR
+			if (relation->rel_view_rse || !(relation->rel_flags & REL_scanned)) {
+				MET_delete_dependencies(tdbb, work->getQualifiedName(), obj_view, transaction);
+			}
 
-		// Release relation locks
-		if (relation->rel_existence_lock) {
-			LCK_release(tdbb, relation->rel_existence_lock);
-		}
-		if (relation->rel_partners_lock) {
-			LCK_release(tdbb, relation->rel_partners_lock);
-		}
-		if (relation->rel_rescan_lock) {
-			LCK_release(tdbb, relation->rel_rescan_lock);
+			// Now that the data, pointer, and index pages are gone,
+			// get rid of the relation itself
+
+			request.reset();
+
+			FOR(REQUEST_HANDLE request) X IN RDB$FORMATS WITH
+				X.RDB$RELATION_ID EQ relation->rel_id
+			{
+				ERASE X;
+			}
+			END_FOR
+
+			// Release relation locks
+			if (relation->rel_existence_lock)
+				LCK_release(tdbb, relation->rel_existence_lock);
+
+			if (relation->rel_partners_lock)
+				LCK_release(tdbb, relation->rel_partners_lock);
+
+			if (relation->rel_rescan_lock)
+				LCK_release(tdbb, relation->rel_rescan_lock);
 		}
 
 		// Mark relation in the cache as dropped
@@ -5723,7 +5962,8 @@ static Format* make_format(thread_db* tdbb, jrd_rel* relation, USHORT* version, 
 	format->fmt_length = offset;
 
 	Format* old_format;
-	if (format->fmt_version &&
+	if (!(relation->rel_flags & REL_temp_ltt) &&
+		format->fmt_version &&
 		(old_format = MET_format(tdbb, relation, (format->fmt_version - 1))) &&
 		(formatsAreEqual(old_format, format)))
 	{
@@ -5737,6 +5977,9 @@ static Format* make_format(thread_db* tdbb, jrd_rel* relation, USHORT* version, 
 	vec<Format*>* vector = relation->rel_formats =
 		vec<Format*>::newVector(*relation->rel_pool, relation->rel_formats, format->fmt_version + 1);
 	(*vector)[format->fmt_version] = format;
+
+	if (relation->rel_flags & REL_temp_ltt)
+		return format;
 
 	// Store format in system relation
 
@@ -6287,6 +6530,127 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 
 		break;
 	}
+
+	return false;
+}
+
+
+// Make a new format version for a LTT.
+static bool make_ltt_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+{
+	switch (phase)
+	{
+		case 1:
+		case 2:
+			return true;
+
+		case 3:
+			break;
+
+		default:
+			return false;
+	}
+
+	const auto attachment = tdbb->getAttachment();
+	const auto dbb = tdbb->getDatabase();
+	auto& attPool = *attachment->att_pool;
+
+	const auto lttPtr = attachment->att_local_temporary_tables.get(work->getQualifiedName());
+	if (!lttPtr)
+		return false;
+
+	const auto ltt = *lttPtr;
+
+	if (!ltt->hasPendingChanges)
+		return false;
+
+	fb_assert(ltt->pendingFields.hasData());
+
+	jrd_rel* relation = ltt->relation;
+	const bool isAlter = (relation != nullptr);
+
+	if (!isAlter)
+	{
+		fb_assert(ltt->relationId != 0);
+
+		// CREATE: Create a new relation
+		relation = FB_NEW_POOL(attPool) jrd_rel(attPool);
+		relation->rel_id = ltt->relationId;
+		relation->rel_name = ltt->name;
+		relation->rel_current_fmt = 1;
+		relation->rel_flags = REL_scanned | REL_sql_relation | REL_temp_ltt |
+			(ltt->relationType == rel_temp_preserve ? REL_temp_conn : REL_temp_tran);
+
+		// Initialize base pages for LTT to act as a connection-wide blueprint for indexes.
+		relation->getBasePages()->rel_pg_space_id = dbb->dbb_page_manager.getTempPageSpaceID(tdbb);
+		DPM_create_relation_pages(tdbb, relation, relation->getBasePages());
+
+		// Note: LTTs should NOT be registered in att_relations.
+		// They are stored only in att_local_temporary_tables and accessed via MET_relation.
+	}
+	else
+	{
+		// ALTER: Bump the format version
+		if (relation->rel_current_fmt == MAX_TABLE_VERSIONS)
+			raiseTooManyVersionsError(obj_relation, work->getQualifiedName());
+
+		relation->rel_current_fmt++;
+	}
+
+	// Update the fields vector - extend if needed for new fields
+	relation->rel_fields = vec<jrd_fld*>::newVector(attPool, relation->rel_fields, ltt->pendingFields.getCount());
+
+	TemporaryField* tempFields = nullptr;
+
+	for (FB_SIZE_T i = 0; i < ltt->pendingFields.getCount(); ++i)
+	{
+		const auto& lttField = ltt->pendingFields[i];
+		auto& relField = (*relation->rel_fields)[i];
+
+		if (!relField)
+			relField = FB_NEW_POOL(attPool) jrd_fld(attPool);
+
+		relField->fld_name = lttField.name;
+		relField->fld_not_null = nullptr;
+		relField->fld_validation = nullptr;
+
+		if (lttField.notNullFlag)
+		{
+			Jrd::ContextPoolHolder context(tdbb, &attPool);
+			relField->fld_not_null = PAR_validation_blr(tdbb, &relation->rel_name.schema, relation,
+				nonnull_validation_blr, sizeof(nonnull_validation_blr), NULL, NULL, 0);
+		}
+
+		const auto tempField = FB_NEW_POOL(attPool) TemporaryField();
+		tempField->tfb_next = tempFields;
+		tempFields = tempField;
+
+		tempField->tfb_desc = lttField.desc;
+
+		// For text types, set the text type from charset/collation
+		if (DTYPE_IS_TEXT(lttField.desc.dsc_dtype))
+		{
+			const SSHORT charSetId = lttField.charSetId.value_or(CS_NONE);
+			const SSHORT collationId = lttField.collationId.value_or(COLLATE_NONE);
+			tempField->tfb_desc.setTextType(INTL_CS_COLL_TO_TTYPE(charSetId, collationId));
+		}
+
+		memset(&tempField->tfb_default, 0, sizeof(tempField->tfb_default));
+		tempField->tfb_id = lttField.id;
+	}
+
+	relation->rel_current_format = make_format(tdbb, relation, &relation->rel_current_fmt, tempFields);
+
+	// Store the runtime relation in the LTT (for CREATE case)
+	ltt->relation = relation;
+
+	// Commit the changes: copy pendingFields to fields
+	ltt->fields = ltt->pendingFields;
+	ltt->pendingFields.clear();
+	ltt->hasPendingChanges = false;
+
+	// Now invalidate DSQL cache at commit time
+	METD_drop_relation(transaction, work->getQualifiedName());
 
 	return false;
 }

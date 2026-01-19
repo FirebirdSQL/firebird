@@ -387,24 +387,26 @@ public:
 
 // rel_flags
 
-inline constexpr ULONG REL_scanned			= 0x0001;	// Field expressions scanned (or being scanned)
-inline constexpr ULONG REL_system			= 0x0002;
-inline constexpr ULONG REL_deleted			= 0x0004;	// Relation known gonzo
-inline constexpr ULONG REL_get_dependencies	= 0x0008;	// New relation needs dependencies during scan
-inline constexpr ULONG REL_check_existence	= 0x0010;	// Existence lock released pending drop of relation
-inline constexpr ULONG REL_blocking			= 0x0020;	// Blocking someone from dropping relation
-inline constexpr ULONG REL_sql_relation		= 0x0080;	// Relation defined as sql table
-inline constexpr ULONG REL_check_partners	= 0x0100;	// Rescan primary dependencies and foreign references
-inline constexpr ULONG REL_being_scanned	= 0x0200;	// relation scan in progress
-inline constexpr ULONG REL_deleting			= 0x0800;	// relation delete in progress
-inline constexpr ULONG REL_temp_tran		= 0x1000;	// relation is a GTT delete rows
-inline constexpr ULONG REL_temp_conn		= 0x2000;	// relation is a GTT preserve rows
-inline constexpr ULONG REL_virtual			= 0x4000;	// relation is virtual
-inline constexpr ULONG REL_jrd_view			= 0x8000;	// relation is VIEW
-inline constexpr ULONG REL_gc_blocking		= 0x10000;	// request to downgrade\release gc lock
-inline constexpr ULONG REL_gc_disabled		= 0x20000;	// gc is disabled temporarily
-inline constexpr ULONG REL_gc_lockneed		= 0x40000;	// gc lock should be acquired
-inline constexpr ULONG REL_rescan			= 0x100000;	// rescan request was submitted while relation being scanning
+inline constexpr ULONG REL_scanned				= 0x0001;	// Field expressions scanned (or being scanned)
+inline constexpr ULONG REL_system				= 0x0002;
+inline constexpr ULONG REL_deleted				= 0x0004;	// Relation known gonzo
+inline constexpr ULONG REL_get_dependencies		= 0x0008;	// New relation needs dependencies during scan
+inline constexpr ULONG REL_check_existence		= 0x0010;	// Existence lock released pending drop of relation
+inline constexpr ULONG REL_blocking				= 0x0020;	// Blocking someone from dropping relation
+inline constexpr ULONG REL_sql_relation			= 0x0080;	// Relation defined as sql table
+inline constexpr ULONG REL_check_partners		= 0x0100;	// Rescan primary dependencies and foreign references
+inline constexpr ULONG REL_being_scanned		= 0x0200;	// relation scan in progress
+inline constexpr ULONG REL_deleting				= 0x0800;	// relation delete in progress
+inline constexpr ULONG REL_temp_tran			= 0x1000;	// relation is a GTT delete rows
+inline constexpr ULONG REL_temp_conn			= 0x2000;	// relation is a GTT preserve rows
+inline constexpr ULONG REL_virtual				= 0x4000;	// relation is virtual
+inline constexpr ULONG REL_jrd_view				= 0x8000;	// relation is VIEW
+inline constexpr ULONG REL_gc_blocking			= 0x10000;	// request to downgrade\release gc lock
+inline constexpr ULONG REL_gc_disabled			= 0x20000;	// gc is disabled temporarily
+inline constexpr ULONG REL_gc_lockneed			= 0x40000;	// gc lock should be acquired
+inline constexpr ULONG REL_temp_gtt				= 0x80000;	// relation is a GTT
+inline constexpr ULONG REL_temp_ltt				= 0x100000;	// relation is a LTT
+inline constexpr ULONG REL_rescan				= 0x200000;	// rescan request was submitted while relation being scanning
 
 
 /// class jrd_rel

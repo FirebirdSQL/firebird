@@ -76,6 +76,7 @@ public:
 	static const unsigned FLAG_FETCH				= 0x4000;
 	static const unsigned FLAG_VIEW_WITH_CHECK		= 0x8000;
 	static const unsigned FLAG_EXEC_BLOCK			= 0x010000;
+	static const unsigned FLAG_ALLOW_LTT_REFERENCES	= 0x020000;
 
 	static const unsigned MAX_NESTING = 512;
 

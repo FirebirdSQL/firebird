@@ -2286,7 +2286,7 @@ void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation)
 	// Leave the root pointer null for the time being.
 	// Index id for temporary index instance of global temporary table is
 	// already assigned, use it.
-	const bool use_idx_id = (relPages->rel_instance_id != 0);
+	const bool use_idx_id = relPages->rel_instance_id != 0 || (relation->rel_flags & REL_temp_ltt);
 	if (use_idx_id)
 		fb_assert(idx->idx_id <= dbb->dbb_max_idx);
 

@@ -3191,13 +3191,15 @@ string Optimizer::makeAlias(StreamType stream)
 
 	const CompilerScratch::csb_repeat* csb_tail = &csb->csb_rpt[stream];
 
-	if (csb_tail->csb_view || csb_tail->csb_alias)
+	// Check for view or explicit alias with actual content
+	// (csb_alias can be a non-null pointer to an empty string for blr_relation3)
+	if (csb_tail->csb_view || (csb_tail->csb_alias && csb_tail->csb_alias->hasData()))
 	{
 		ObjectsArray<string> alias_list;
 
 		while (csb_tail)
 		{
-			if (csb_tail->csb_alias)
+			if (csb_tail->csb_alias && csb_tail->csb_alias->hasData())
 				alias_list.push(*csb_tail->csb_alias);
 			else if (csb_tail->csb_relation)
 				alias_list.push(csb_tail->csb_relation->rel_name.toQuotedString());

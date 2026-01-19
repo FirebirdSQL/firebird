@@ -275,6 +275,11 @@ public:
 	{
 		return true;
 	}
+
+	virtual bool disallowedInReadOnlyDatabase() const
+	{
+		return true;
+	}
 };
 
 

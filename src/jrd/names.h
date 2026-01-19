@@ -490,3 +490,5 @@ NAME("RDB$TABLE_SCHEMA_NAME", nam_tab_sch_name)
 NAME("RDB$CONST_SCHEMA_NAME_UQ", nam_con_sch_name_uq)
 NAME("MON$SEARCH_PATH", nam_mon_search_path)
 NAME("RDB$TEXT_MAX", nam_text_max)
+
+NAME("MON$TABLE_TYPE", nam_mon_tab_type)

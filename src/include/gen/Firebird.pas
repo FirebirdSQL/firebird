@@ -6022,6 +6022,7 @@ const
 	 isc_dsql_wrong_param_num = 336003111;
 	 isc_dsql_invalid_drop_ss_clause = 336003112;
 	 isc_upd_ins_cannot_default = 336003113;
+	 isc_dsql_ltt_invalid_reference = 336003114;
 	 isc_dyn_filter_not_found = 336068645;
 	 isc_dyn_func_not_found = 336068649;
 	 isc_dyn_index_not_found = 336068656;
@@ -6118,6 +6119,7 @@ const
 	 isc_dyn_cannot_mod_obj_sys_schema = 336068927;
 	 isc_dyn_cannot_create_reserved_schema = 336068928;
 	 isc_dyn_cannot_infer_schema = 336068929;
+	 isc_dyn_column_name_exists = 336068931;
 	 isc_gbak_unknown_switch = 336330753;
 	 isc_gbak_page_size_missing = 336330754;
 	 isc_gbak_page_size_toobig = 336330755;

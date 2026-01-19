@@ -468,7 +468,7 @@ bool IndexCreateTask::handler(WorkItem& _item)
 	Database* dbb = tdbb->getDatabase();
 	Attachment* attachment = tdbb->getAttachment();
 	jrd_rel* relation = MET_relation(tdbb, m_creation->relation->rel_id);
-	if (!(relation->rel_flags & REL_scanned))
+	if (relation && !(relation->rel_flags & REL_scanned))
 		MET_scan_relation(tdbb, relation);
 
 	index_desc* idx = &item->m_idx;
@@ -1006,14 +1006,17 @@ IndexBlock* IDX_create_index_block(thread_db* tdbb, jrd_rel* relation, USHORT id
 	index_block->idb_next = relation->rel_index_blocks;
 	relation->rel_index_blocks = index_block;
 
-	// create a shared lock for the index, to coordinate
-	// any modification to the index so that the cached information
-	// about the index will be discarded
+	if (!(relation->rel_flags & REL_temp_ltt))
+	{
+		// create a shared lock for the index, to coordinate
+		// any modification to the index so that the cached information
+		// about the index will be discarded
 
-	Lock* lock = FB_NEW_RPT(*relation->rel_pool, 0)
-		Lock(tdbb, sizeof(SLONG), LCK_expression, index_block, index_block_flush);
-	index_block->idb_lock = lock;
-	lock->setKey((relation->rel_id << 16) | index_block->idb_id);
+		Lock* lock = FB_NEW_RPT(*relation->rel_pool, 0)
+			Lock(tdbb, sizeof(SLONG), LCK_expression, index_block, index_block_flush);
+		index_block->idb_lock = lock;
+		lock->setKey((relation->rel_id << 16) | index_block->idb_id);
+	}
 
 	return index_block;
 }
@@ -2167,7 +2170,8 @@ static void release_index_block(thread_db* tdbb, IndexBlock* index_block)
 	}
 	index_block->idb_condition = nullptr;
 
-	LCK_release(tdbb, index_block->idb_lock);
+	if (index_block->idb_lock)
+		LCK_release(tdbb, index_block->idb_lock);
 }
 
 
@@ -2210,13 +2214,14 @@ static void signal_index_deletion(thread_db* tdbb, jrd_rel* relation, USHORT id)
 		lock = index_block->idb_lock;
 	}
 
-	// signal other processes to clear out the index block
+	if (lock)
+	{
+		// signal other processes to clear out the index block
 
-	if (lock->lck_physical == LCK_SR) {
-		LCK_convert(tdbb, lock, LCK_EX, LCK_WAIT);
-	}
-	else {
-		LCK_lock(tdbb, lock, LCK_EX, LCK_WAIT);
+		if (lock->lck_physical == LCK_SR)
+			LCK_convert(tdbb, lock, LCK_EX, LCK_WAIT);
+		else
+			LCK_lock(tdbb, lock, LCK_EX, LCK_WAIT);
 	}
 
 	release_index_block(tdbb, index_block);

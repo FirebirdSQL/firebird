@@ -37,7 +37,9 @@
 #include "../common/os/path_utils.h"
 #include "../jrd/CryptoManager.h"
 #include "../jrd/IntlManager.h"
+#include "../jrd/LocalTemporaryTable.h"
 #include "../jrd/PreparedStatement.h"
+#include "../jrd/Savepoint.h"
 #include "../jrd/ResultSet.h"
 #include "../jrd/UserManagement.h"
 #include "../jrd/blb_proto.h"
@@ -46,6 +48,7 @@
 #include "../jrd/dpm_proto.h"
 #include "../jrd/dyn_ut_proto.h"
 #include "../jrd/exe_proto.h"
+#include "../jrd/idx_proto.h"
 #include "../jrd/intl_proto.h"
 #include "../common/isc_f_proto.h"
 #include "../jrd/lck_proto.h"
@@ -64,6 +67,9 @@
 #include "../auth/SecureRemotePassword/Message.h"
 #include "../jrd/Mapping.h"
 #include "../jrd/extds/ExtDS.h"
+#include <algorithm>
+#include <optional>
+#include <unordered_set>
 
 namespace Jrd {
 
@@ -218,11 +224,11 @@ static void checkForeignKeyTempScope(thread_db* tdbb, jrd_tra* transaction,
 // Check temporary table reference rules between just created child relation and all
 // its master relations.
 static void checkRelationTempScope(thread_db* tdbb, jrd_tra* transaction,
-	const QualifiedName&	childRelName, const rel_t childType)
+	const QualifiedName& childRelName, const rel_t childType)
 {
 	if (childType != rel_persistent &&
-		childType != rel_global_temp_preserve &&
-		childType != rel_global_temp_delete)
+		childType != rel_temp_preserve &&
+		childType != rel_temp_delete)
 	{
 		return;
 	}
@@ -555,6 +561,23 @@ static QualifiedName getIndexRelationName(thread_db* tdbb, jrd_tra* transaction,
 {
 	systemIndex = false;
 
+	// Check LTT indexes first
+	const auto attachment = transaction->getAttachment();
+
+	for (const auto& lttEntry : attachment->att_local_temporary_tables)
+	{
+		const auto ltt = lttEntry.second;
+
+		if (ltt->name.schema != indexName.schema)
+			continue;
+
+		for (const auto& index : ltt->indexes)
+		{
+			if (index.name == indexName)
+				return ltt->name;
+		}
+	}
+
 	AutoCacheRequest request(tdbb, drq_l_index_relname, DYN_REQUESTS);
 
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
@@ -599,9 +622,9 @@ static const char* getRelationScopeName(const rel_t type)
 {
 	switch(type)
 	{
-	case rel_global_temp_preserve:
+	case rel_temp_preserve:
 		return REL_SCOPE_GTT_PRESERVE;
-	case rel_global_temp_delete:
+	case rel_temp_delete:
 		return REL_SCOPE_GTT_DELETE;
 	case rel_external:
 		return REL_SCOPE_EXTERNAL;
@@ -621,8 +644,8 @@ static const char* getRelationScopeName(const rel_t type)
 static void checkRelationType(const rel_t type, const QualifiedName& name)
 {
 	if (type == rel_persistent ||
-		type == rel_global_temp_preserve ||
-		type == rel_global_temp_delete)
+		type == rel_temp_preserve ||
+		type == rel_temp_delete)
 	{
 		return;
 	}
@@ -637,7 +660,7 @@ static void checkFkPairTypes(const rel_t masterType, const QualifiedName& master
 	const rel_t childType, const QualifiedName& childName)
 {
 	if (masterType != childType &&
-		!(masterType == rel_global_temp_preserve && childType == rel_global_temp_delete))
+		!(masterType == rel_temp_preserve && childType == rel_temp_delete))
 	{
 		string master, child;
 		makeRelationScopeName(master, masterName, masterType);
@@ -1554,6 +1577,12 @@ void CommentOnNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 			break;
 
 		case obj_relation:
+			if (attachment->att_local_temporary_tables.exist(name))
+			{
+				status_exception::raise(Arg::Gds(isc_dsql_ltt_invalid_reference) <<
+					name.toQuotedString() << "COMMENT ON");
+			}
+
 			if (subName.hasData())
 			{
 				tableClause = "rdb$relation_fields";
@@ -1858,13 +1887,13 @@ bool CreateAlterFunctionNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch
 
 	if (name.package.isEmpty())
 	{
-		if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_udf))
+		if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, name, obj_udf))
 			return false;
 
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 			DDL_TRIGGER_CREATE_FUNCTION, name, {});
 
-		DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_udf);
+		DYN_UTIL_check_unique_name(tdbb, name, obj_udf);
 	}
 
 	AutoCacheRequest requestHandle(tdbb, drq_s_funcs2, DYN_REQUESTS);
@@ -2897,12 +2926,12 @@ bool CreateAlterProcedureNode::executeCreate(thread_db* tdbb, DsqlCompilerScratc
 
 	if (name.package.isEmpty())
 	{
-		if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_procedure))
+		if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, name, obj_procedure))
 			return false;
 
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_CREATE_PROCEDURE, name, {});
 
-		DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_procedure);
+		DYN_UTIL_check_unique_name(tdbb, name, obj_procedure);
 	}
 
 	AutoCacheRequest requestHandle(tdbb, drq_s_prcs2, DYN_REQUESTS);
@@ -3861,12 +3890,12 @@ void CreateAlterTriggerNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 void CreateAlterTriggerNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
-	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_trigger))
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, name, obj_trigger))
 		return;
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_CREATE_TRIGGER, name, {});
 
-	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_trigger);
+	DYN_UTIL_check_unique_name(tdbb, name, obj_trigger);
 
 	store(tdbb, dsqlScratch, transaction);
 
@@ -4160,12 +4189,12 @@ void CreateCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 
-	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_collation))
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, name, obj_collation))
 		return;
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_CREATE_COLLATION, name, {});
 
-	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_collation);
+	DYN_UTIL_check_unique_name(tdbb, name, obj_collation);
 
 	AutoCacheRequest request(tdbb, drq_s_colls, DYN_REQUESTS);
 
@@ -4572,12 +4601,12 @@ void CreateDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 
-	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_field))
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, name, obj_field))
 		return;
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_CREATE_DOMAIN, name, {});
 
-	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_field);
+	DYN_UTIL_check_unique_name(tdbb, name, obj_field);
 
 	storeGlobalField(tdbb, transaction, name, type);
 
@@ -5726,12 +5755,12 @@ void CreateAlterExceptionNode::executeCreate(thread_db* tdbb, DsqlCompilerScratc
 	Attachment* const attachment = transaction->getAttachment();
 	const MetaString& ownerName = attachment->getEffectiveUserName();
 
-	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_exception))
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, name, obj_exception))
 		return;
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_CREATE_EXCEPTION, name, {});
 
-	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_exception);
+	DYN_UTIL_check_unique_name(tdbb, name, obj_exception);
 
 	AutoCacheRequest request(tdbb, drq_s_xcp, DYN_REQUESTS);
 	int faults = 0;
@@ -5950,12 +5979,12 @@ void CreateAlterSequenceNode::putErrorPrefix(Firebird::Arg::StatusVector& status
 void CreateAlterSequenceNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
-	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_generator))
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, name, obj_generator))
 		return;
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_CREATE_SEQUENCE, name, {});
 
-	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_generator);
+	DYN_UTIL_check_unique_name(tdbb, name, obj_generator);
 
 	const SINT64 val = value.value_or(1);
 	SLONG initialStep = 1;
@@ -6084,7 +6113,7 @@ SSHORT CreateAlterSequenceNode::store(thread_db* tdbb, jrd_tra* transaction, con
 	Attachment* const attachment = transaction->tra_attachment;
 	const MetaString& ownerName = attachment->getEffectiveUserName();
 
-	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_generator);
+	DYN_UTIL_check_unique_name(tdbb, name, obj_generator);
 
 	AutoCacheRequest request(tdbb, drq_s_gens, DYN_REQUESTS);
 	int faults = 0;
@@ -6671,6 +6700,55 @@ bool RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 	return found;
 }
 
+// Validate column clause for local temporary table limitations.
+// Throws exception if unsupported features are used.
+void RelationNode::validateLttColumnClause(const AddColumnClause* addColumnClause)
+{
+	if (addColumnClause->defaultValue)
+	{
+		status_exception::raise(
+			Arg::Gds(isc_random) << "DEFAULT is not allowed for LOCAL TEMPORARY TABLE columns");
+	}
+
+	if (addColumnClause->computed)
+	{
+		status_exception::raise(
+			Arg::Gds(isc_random) << "COMPUTED BY is not allowed for LOCAL TEMPORARY TABLE columns");
+	}
+
+	if (addColumnClause->identityOptions)
+	{
+		status_exception::raise(
+			Arg::Gds(isc_random) << "IDENTITY columns are not allowed for LOCAL TEMPORARY TABLEs");
+	}
+
+	if (addColumnClause->field->dimensions != 0)
+	{
+		status_exception::raise(
+			Arg::Gds(isc_random) << "Array type columns are not allowed for LOCAL TEMPORARY TABLEs");
+	}
+
+	// Only unnamed NOT NULL constraints are supported on LTT columns
+	const bool hasInvalidConstraint = std::any_of(
+		addColumnClause->constraints.begin(),
+		addColumnClause->constraints.end(),
+		[](const auto& constraint)
+		{
+			return constraint.name.hasData() ||
+				constraint.constraintType != AddConstraintClause::CTYPE_NOT_NULL;
+		}
+	);
+
+	if (hasInvalidConstraint)
+	{
+		status_exception::raise(
+			Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+			Arg::Gds(isc_dsql_command_err) <<
+			Arg::Gds(isc_random) <<
+				"Only NOT NULL constraints without names are supported on LOCAL TEMPORARY TABLEs");
+	}
+}
+
 void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction, AddColumnClause* clause, SSHORT position,
 	const ObjectsArray<MetaName>* pkCols)
@@ -6763,13 +6841,16 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 
 			field->resolve(dsqlScratch);
 
-			// Generate a domain.
+			if (tempFlag != REL_temp_ltt)
+			{
+				// Generate a domain.
 
-			if (fieldDefinition.fieldSource.schema.isEmpty())
-				fieldDefinition.fieldSource.schema = name.schema;
+				if (fieldDefinition.fieldSource.schema.isEmpty())
+					fieldDefinition.fieldSource.schema = name.schema;
 
-			storeGlobalField(tdbb, transaction, fieldDefinition.fieldSource, field,
-				computedSource, computedValue);
+				storeGlobalField(tdbb, transaction, fieldDefinition.fieldSource, field,
+					computedSource, computedValue);
+			}
 		}
 		else if (field->collate.object.hasData())
 		{
@@ -6837,16 +6918,20 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		fieldDefinition.defaultValue = defaultValue;
 		if (field->typeOfName.object.isEmpty() || field->collate.object.hasData())
 			fieldDefinition.collationId = field->collationId;
-		fieldDefinition.store(tdbb, transaction);
 
-		// Define the field constraints.
-		for (ObjectsArray<CreateDropConstraint>::iterator constraint(constraints.begin());
-			 constraint != constraints.end();
-			 ++constraint)
+		if (tempFlag != REL_temp_ltt)
 		{
-			if (constraint->create->type != Constraint::TYPE_FK)
-				constraint->create->columns.add(field->fld_name);
-			defineConstraint(tdbb, dsqlScratch, transaction, constraint->name, *constraint->create);
+			fieldDefinition.store(tdbb, transaction);
+
+			// Define the field constraints.
+			for (ObjectsArray<CreateDropConstraint>::iterator constraint(constraints.begin());
+				 constraint != constraints.end();
+				 ++constraint)
+			{
+				if (constraint->create->type != Constraint::TYPE_FK)
+					constraint->create->columns.add(field->fld_name);
+				defineConstraint(tdbb, dsqlScratch, transaction, constraint->name, *constraint->create);
+			}
 		}
 	}
 	catch (const Exception&)
@@ -6886,6 +6971,7 @@ void RelationNode::makeConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 	jrd_tra* transaction, AddConstraintClause* clause,
 	ObjectsArray<CreateDropConstraint>& constraints, bool* notNull)
 {
+	const auto attachment = tdbb->getAttachment();
 	MemoryPool& pool = dsqlScratch->getPool();
 
 	switch (clause->constraintType)
@@ -6926,6 +7012,13 @@ void RelationNode::makeConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 
 		case AddConstraintClause::CTYPE_FK:
 		{
+			// Check if it's a local temporary table, which cannot be referenced in FK
+			if (attachment->att_local_temporary_tables.exist(clause->refRelation))
+			{
+				status_exception::raise(
+					Arg::Gds(isc_dsql_ltt_invalid_reference) << clause->refRelation.toQuotedString() << "FOREIGN KEY");
+			}
+
 			CreateDropConstraint& constraint = constraints.add();
 			constraint.create = FB_NEW_POOL(pool) Constraint(pool);
 			constraint.create->type = Constraint::TYPE_FK;
@@ -7820,7 +7913,8 @@ string CreateRelationNode::internalPrint(NodePrinter& printer) const
 	RelationNode::internalPrint(printer);
 
 	NODE_PRINT(printer, externalFile);
-	NODE_PRINT(printer, relationType);
+	NODE_PRINT(printer, tempFlag);
+	NODE_PRINT(printer, tempRowsFlag);
 
 	return "CreateRelationNode";
 }
@@ -7833,7 +7927,7 @@ void CreateRelationNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
-	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_relation))
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, name, obj_relation))
 		return;
 
 	saveRelation(tdbb, dsqlScratch, name, false, true);
@@ -7847,13 +7941,33 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 
-	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_CREATE_TABLE, name, {});
+	if (tempFlag != REL_temp_ltt)
+		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_CREATE_TABLE, name, {});
 
-	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_relation);
+	DYN_UTIL_check_unique_name(tdbb, name, obj_relation);
 
-	fb_assert(relationType.has_value());
+	if (tempFlag == REL_temp_ltt)
+	{
+		defineLocalTempTable(tdbb, dsqlScratch, transaction);
 
-	checkRelationTempScope(tdbb, transaction, name, relationType.value());
+		dsqlScratch->relation->rel_flags &= ~REL_creating;
+
+		savePoint.release();	// everything is ok
+
+		// Update DSQL cache
+		METD_drop_relation(transaction, name);
+
+		return;
+	}
+
+	const rel_t relationType = tempFlag.has_value() ?
+		(tempRowsFlag.value_or(REL_temp_tran) == REL_temp_tran ?
+			rel_temp_delete :
+			rel_temp_preserve
+		) :
+		rel_persistent;
+
+	checkRelationTempScope(tdbb, transaction, name, relationType);
 
 	AutoCacheRequest request(tdbb, drq_s_rels2, DYN_REQUESTS);
 
@@ -7864,7 +7978,7 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 		strcpy(REL.RDB$RELATION_NAME, name.object.c_str());
 		REL.RDB$SYSTEM_FLAG = 0;
 		REL.RDB$FLAGS = REL_sql;
-		REL.RDB$RELATION_TYPE = relationType.value();
+		REL.RDB$RELATION_TYPE = relationType;
 
 		if (ssDefiner.isAssigned())
 		{
@@ -7963,6 +8077,7 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 
 	// Update DSQL cache
 	METD_drop_relation(transaction, name);
+
 	MET_dsql_cache_release(tdbb, SYM_relation, name);
 }
 
@@ -7984,6 +8099,133 @@ const ObjectsArray<MetaName>* CreateRelationNode::findPkColumns()
 	return NULL;
 }
 
+void CreateRelationNode::defineLocalTempTable(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
+{
+	dsqlScratch->flags |= DsqlCompilerScratch::FLAG_ALLOW_LTT_REFERENCES;
+
+	const auto attachment = tdbb->getAttachment();
+	auto& attPool = *attachment->att_pool;
+
+	// Check for duplicate local temporary table names
+	if (attachment->att_local_temporary_tables.exist(name))
+	{
+		if (createIfNotExistsOnly)
+			return;
+
+		status_exception::raise(Arg::PrivateDyn(132) << name.toQuotedString());
+	}
+
+	// Prevent external file for local temporary tables
+	if (externalFile)
+		status_exception::raise(Arg::Gds(isc_random) << "External file is not allowed for local temporary tables");
+
+	const auto ltt = FB_NEW_POOL(attPool) LocalTemporaryTable(attPool, name);
+	ltt->relationType = tempRowsFlag.value_or(REL_temp_tran) == REL_temp_tran ? rel_temp_delete : rel_temp_preserve;
+
+	USHORT position = 0;
+
+	for (const auto clause : clauses)
+	{
+		if (clause->type == Clause::TYPE_ADD_COLUMN)
+		{
+			const auto addColumnClause = static_cast<const AddColumnClause*>(clause.getObject());
+			const auto field = addColumnClause->field;
+
+			// Check for duplicate field names
+			const bool fieldExists = std::any_of(ltt->pendingFields.begin(), ltt->pendingFields.end(),
+				[&field](const auto& existingField) { return existingField.name == field->fld_name; });
+
+			if (fieldExists)
+			{
+				// msg 323: "Column @1 already exists in table @2"
+				status_exception::raise(
+					Arg::PrivateDyn(323) <<
+					field->fld_name.toQuotedString() <<
+					name.toQuotedString());
+			}
+
+			validateLttColumnClause(addColumnClause);
+
+			field->resolve(dsqlScratch);
+
+			const bool notNullFlag = std::any_of(
+				addColumnClause->constraints.begin(),
+				addColumnClause->constraints.end(),
+				[](const auto& constraint)
+				{
+					return constraint.constraintType == AddConstraintClause::CTYPE_NOT_NULL;
+				}
+			);
+
+			auto& lttField = ltt->pendingFields.add();
+			lttField.id = ltt->nextFieldId++;
+			lttField.position = position++;
+			lttField.name = field->fld_name;
+			lttField.source = field->typeOfName;
+			lttField.notNullFlag = notNullFlag;
+			lttField.collationId = field->collationId != 0 ? std::optional<SSHORT>(field->collationId) : std::nullopt;
+			lttField.charSetId = field->charSetId != 0 ? std::optional<SSHORT>(field->charSetId) : std::nullopt;
+			lttField.segLength = field->segLength;
+			lttField.charLength = field->charLength;
+			lttField.precision = field->precision;
+
+			lttField.desc.dsc_dtype = field->dtype;
+			lttField.desc.dsc_length = field->length;
+			lttField.desc.dsc_scale = field->scale;
+			lttField.desc.dsc_sub_type = field->subType;
+		}
+		else if (clause->type == Clause::TYPE_ADD_CONSTRAINT)
+		{
+			status_exception::raise(
+				Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+				Arg::Gds(isc_dsql_command_err) <<
+				Arg::Gds(isc_random) <<
+					"Only NOT NULL constraints without names are supported on local temporary tables");
+		}
+	}
+
+	attachment->att_local_temporary_tables.put(name, ltt);
+
+	// Assign LTT relation ID
+
+	if (!attachment->att_next_ltt_id.has_value())
+		attachment->att_next_ltt_id = MIN_LTT_ID;
+	else
+	{
+		if (attachment->att_next_ltt_id.value() >= MAX_LTT_ID)
+			attachment->att_next_ltt_id = MIN_LTT_ID;
+		else
+			++attachment->att_next_ltt_id.value();
+	}
+
+	const USHORT initialLttIdProbe = attachment->att_next_ltt_id.value();
+
+	while (MET_lookup_relation_id(tdbb, attachment->att_next_ltt_id.value(), true))
+	{
+		if (attachment->att_next_ltt_id.value() >= MAX_LTT_ID)
+			attachment->att_next_ltt_id = MIN_LTT_ID;
+		else
+			++attachment->att_next_ltt_id.value();
+
+		if (attachment->att_next_ltt_id.value() == initialLttIdProbe)
+		{
+			ERR_post(Arg::Gds(isc_imp_exc) <<
+					 Arg::Gds(isc_random) <<
+					 Arg::Str("Local temporary table limit exceeded"));
+		}
+	}
+
+	ltt->relationId = attachment->att_next_ltt_id.value();
+
+	// Register undo action with the savepoint
+	transaction->tra_save_point->createLttAction(LttUndoItem::LTT_UNDO_CREATE, name);
+
+	// Mark LTT as having uncommitted changes
+	ltt->hasPendingChanges = true;
+
+	DFW_post_work(transaction, dfw_update_ltt_format, string(ltt->name.object.c_str()), ltt->name.schema, 0);
+}
+
 
 //----------------------
 
@@ -8002,10 +8244,16 @@ void AlterRelationNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
+	const auto attachment = tdbb->getAttachment();
+
+	// Check if this is an LTT and set flag before METD_get_relation (called by saveRelation)
+	// to avoid false "LTT cannot be referenced in persistent metadata" error
+	if (attachment->att_local_temporary_tables.exist(name))
+		dsqlScratch->flags |= DsqlCompilerScratch::FLAG_ALLOW_LTT_REFERENCES;
+
 	saveRelation(tdbb, dsqlScratch, name, false, false);
 
-	dsql_rel* relation;
-	relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, name);
+	dsql_rel* relation = dsqlScratch->relation;
 
 	if (!relation || (relation->rel_flags & REL_view))
 	{
@@ -8028,6 +8276,13 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 			Arg::Gds(isc_dsql_relation_err) <<
 			Arg::Gds(isc_random) << name.toQuotedString() /***<<
 			Arg::Gds(isc_random) << linecol***/);
+	}
+
+	// Handle Local Temporary Tables differently
+	if (relation->rel_flags & REL_ltt_created)
+	{
+		alterLocalTempTable(tdbb, dsqlScratch, transaction);
+		return;
 	}
 
 	bool beforeTriggerWasExecuted = false;
@@ -8420,7 +8675,9 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 		// Update DSQL cache
 		METD_drop_relation(transaction, name);
-		MET_dsql_cache_release(tdbb, SYM_relation, name);
+
+		if (!(relation->rel_flags & REL_ltt_created))
+			MET_dsql_cache_release(tdbb, SYM_relation, name);
 	}
 	catch (const Exception&)
 	{
@@ -8922,6 +9179,339 @@ void AlterRelationNode::modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 }
 
 
+// Alter a Local Temporary Table
+void AlterRelationNode::alterLocalTempTable(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+	jrd_tra* transaction)
+{
+	// FLAG_ALLOW_LTT_REFERENCES is already set by execute() before calling this method
+
+	const auto attachment = tdbb->getAttachment();
+	auto& attPool = *attachment->att_pool;
+
+	// Get the LTT
+	const auto lttPtr = attachment->att_local_temporary_tables.get(name);
+	if (!lttPtr)
+	{
+		status_exception::raise(
+			Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+			Arg::Gds(isc_dsql_command_err) <<
+			Arg::Gds(isc_dsql_table_not_found) << name.toQuotedString());
+	}
+
+	const auto ltt = *lttPtr;
+
+	// Run all statements under savepoint control
+	AutoSavePoint savePoint(tdbb, transaction);
+
+	// Register undo action with the savepoint
+	transaction->tra_save_point->createLttAction(
+		LttUndoItem::LTT_UNDO_ALTER, name, FB_NEW_POOL(attPool) LocalTemporaryTable(attPool, *ltt));
+
+	SortedArray<int> checkNotNullFields;
+
+	// On first ALTER: copy committed fields to pending for modification
+	if (!ltt->hasPendingChanges)
+		ltt->pendingFields = ltt->fields;
+
+	// Process each clause (modifying pendingFields)
+	for (const auto& clause : clauses)
+	{
+		switch (clause->type)
+		{
+			case Clause::TYPE_ADD_COLUMN:
+			{
+				const auto addColumnClause = static_cast<const AddColumnClause*>(clause.getObject());
+				const auto field = addColumnClause->field;
+
+				// Check for duplicate field name in pending state
+				if (std::any_of(ltt->pendingFields.begin(), ltt->pendingFields.end(),
+						[&field](const auto& existingField) { return existingField.name == field->fld_name; }))
+				{
+					// msg 323: "Column @1 already exists in table @2"
+					status_exception::raise(
+						Arg::PrivateDyn(323) <<
+						field->fld_name.toQuotedString() <<
+						name.toQuotedString());
+				}
+
+				validateLttColumnClause(addColumnClause);
+
+				field->resolve(dsqlScratch);
+
+				const bool notNullFlag = std::any_of(
+					addColumnClause->constraints.begin(),
+					addColumnClause->constraints.end(),
+					[](const auto& constraint)
+					{
+						return constraint.constraintType == AddConstraintClause::CTYPE_NOT_NULL;
+					}
+				);
+
+				auto& lttField = ltt->pendingFields.add();
+				lttField.id = ltt->nextFieldId++;
+				lttField.position = ltt->pendingFields.getCount() - 1;
+				lttField.name = field->fld_name;
+				lttField.source = field->typeOfName;
+				lttField.notNullFlag = notNullFlag;
+				lttField.collationId = field->collationId != 0 ? std::optional<SSHORT>(field->collationId) : std::nullopt;
+				lttField.charSetId = field->charSetId != 0 ? std::optional<SSHORT>(field->charSetId) : std::nullopt;
+				lttField.segLength = field->segLength;
+				lttField.charLength = field->charLength;
+				lttField.precision = field->precision;
+
+				lttField.desc.dsc_dtype = field->dtype;
+				lttField.desc.dsc_length = field->length;
+				lttField.desc.dsc_scale = field->scale;
+				lttField.desc.dsc_sub_type = field->subType;
+
+				if (notNullFlag)
+					checkNotNullFields.add(lttField.id);
+
+				break;
+			}
+
+			case Clause::TYPE_DROP_COLUMN:
+			{
+				const auto dropClause = static_cast<const DropColumnClause*>(clause.getObject());
+				const auto fieldFoundIt = std::find_if(ltt->pendingFields.begin(), ltt->pendingFields.end(),
+					[&dropClause](const auto& existingField) { return existingField.name == dropClause->name; });
+
+				if (fieldFoundIt != ltt->pendingFields.end())
+				{
+					if (ltt->pendingFields.getCount() == 1)
+					{
+						// Msg354: last column in a table cannot be deleted
+						status_exception::raise(Arg::Gds(isc_no_meta_update) <<
+							Arg::Gds(isc_del_last_field));
+					}
+
+					ltt->pendingFields.remove(fieldFoundIt);
+				}
+				else if (!dropClause->silent)
+				{
+					// msg 176: "column %s does not exist in table/view %s"
+					status_exception::raise(Arg::PrivateDyn(176) << dropClause->name << name.toQuotedString());
+				}
+				break;
+			}
+
+			case Clause::TYPE_ALTER_COL_NAME:
+			{
+				const auto renameClause = static_cast<const AlterColNameClause*>(clause.getObject());
+
+				// Check target name doesn't exist in pending state
+				if (std::any_of(ltt->pendingFields.begin(), ltt->pendingFields.end(),
+						[&renameClause](const auto& existingField) { return existingField.name == renameClause->toName; }))
+				{
+					// msg 205: Cannot rename field %s to %s. A field with that name already exists
+					status_exception::raise(
+						Arg::PrivateDyn(205) << renameClause->fromName << renameClause->toName << name.toQuotedString());
+				}
+
+				auto fieldFoundIt = std::find_if(ltt->pendingFields.begin(), ltt->pendingFields.end(),
+					[&renameClause](const auto& existingField) { return existingField.name == renameClause->fromName; });
+
+				if (fieldFoundIt == ltt->pendingFields.end())
+				{
+					// msg 176: "column %s does not exist in table/view %s"
+					status_exception::raise(Arg::PrivateDyn(176) << renameClause->fromName << name.toQuotedString());
+				}
+				else
+					fieldFoundIt->name = renameClause->toName;
+
+				break;
+			}
+
+			case Clause::TYPE_ALTER_COL_NULL:
+			{
+				const auto nullClause = static_cast<const AlterColNullClause*>(clause.getObject());
+				bool found = false;
+
+				for (auto& lttField : ltt->pendingFields)
+				{
+					if (lttField.name == nullClause->name)
+					{
+						if (nullClause->notNullFlag && !lttField.notNullFlag)
+							checkNotNullFields.add(lttField.id);
+
+						lttField.notNullFlag = nullClause->notNullFlag;
+						found = true;
+						break;
+					}
+				}
+
+				if (!found)
+				{
+					// msg 176: "column %s does not exist in table/view %s"
+					status_exception::raise(Arg::PrivateDyn(176) << nullClause->name << name.toQuotedString());
+				}
+				break;
+			}
+
+			case Clause::TYPE_ALTER_COL_POS:
+			{
+				const auto posClause = static_cast<const AlterColPosClause*>(clause.getObject());
+				const SSHORT newPos = posClause->newPos - 1;  // 1-based to 0-based
+
+				if (newPos < 0 || static_cast<FB_SIZE_T>(newPos) >= ltt->pendingFields.getCount())
+				{
+					status_exception::raise(
+						Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+						Arg::Gds(isc_dsql_command_err) <<
+						Arg::Gds(isc_random) << "Invalid column position");
+				}
+
+				// Find the field and its current position
+				FB_SIZE_T currentPos = ltt->pendingFields.getCount();
+				for (FB_SIZE_T i = 0; i < ltt->pendingFields.getCount(); ++i)
+				{
+					if (ltt->pendingFields[i].name == posClause->name)
+					{
+						currentPos = i;
+						break;
+					}
+				}
+
+				if (currentPos >= ltt->pendingFields.getCount())
+				{
+					// msg 176: "column %s does not exist in table/view %s"
+					status_exception::raise(Arg::PrivateDyn(176) << posClause->name << name.toQuotedString());
+				}
+
+				// Move the field
+				if (currentPos != static_cast<FB_SIZE_T>(newPos))
+				{
+					LocalTemporaryTable::Field tempField = ltt->pendingFields[currentPos];
+					ltt->pendingFields.remove(currentPos);
+					ltt->pendingFields.insert(newPos, tempField);
+
+					// Update positions
+					for (FB_SIZE_T i = 0; i < ltt->pendingFields.getCount(); ++i)
+						ltt->pendingFields[i].position = i;
+				}
+				break;
+			}
+
+			case Clause::TYPE_ALTER_COL_TYPE:
+			{
+				const auto typeClause = static_cast<const AlterColTypeClause*>(clause.getObject());
+				const auto field = typeClause->field;
+				bool found = false;
+
+				field->resolve(dsqlScratch);
+
+				for (auto& lttField : ltt->pendingFields)
+				{
+					if (lttField.name == field->fld_name)
+					{
+						// Validate that the type change is allowed, using the same rules as persistent tables.
+						dyn_fld origDom, newDom;
+
+						DSC_make_descriptor(&origDom.dyn_dsc, blr_dtypes[lttField.desc.dsc_dtype], lttField.desc.dsc_scale,
+							lttField.desc.dsc_length, lttField.desc.dsc_sub_type,
+							lttField.charSetId.value_or(CS_NONE), lttField.collationId.value_or(COLLATE_NONE));
+
+						origDom.dyn_fld_name.object = lttField.name;
+						origDom.dyn_charbytelen = lttField.desc.dsc_length;
+						origDom.dyn_dtype = blr_dtypes[lttField.desc.dsc_dtype];
+						origDom.dyn_precision = lttField.precision;
+						origDom.dyn_sub_type = lttField.desc.dsc_sub_type;
+						origDom.dyn_charlen = lttField.charLength;
+						origDom.dyn_collation = lttField.collationId.value_or(COLLATE_NONE);
+						origDom.dyn_null_flag = lttField.notNullFlag;
+
+						DSC_make_descriptor(&newDom.dyn_dsc, blr_dtypes[field->dtype], field->scale,
+							field->length, field->subType,
+							field->charSetId.value_or(CS_NONE), field->collationId);
+
+						newDom.dyn_fld_name.object = field->fld_name;
+						newDom.dyn_charbytelen = field->length;
+						newDom.dyn_dtype = blr_dtypes[field->dtype];
+						newDom.dyn_precision = field->precision;
+						newDom.dyn_sub_type = field->subType;
+						newDom.dyn_charlen = field->charLength;
+						newDom.dyn_collation = field->collationId;
+						newDom.dyn_null_flag = field->notNull;
+
+						AlterDomainNode::checkUpdate(origDom, newDom);
+
+						lttField.source = field->typeOfName;
+						lttField.collationId = field->collationId != 0 ? std::optional<SSHORT>(field->collationId) : std::nullopt;
+						lttField.charSetId = field->charSetId != 0 ? std::optional<SSHORT>(field->charSetId) : std::nullopt;
+						lttField.segLength = field->segLength;
+						lttField.charLength = field->charLength;
+						lttField.precision = field->precision;
+
+						lttField.desc.dsc_dtype = field->dtype;
+						lttField.desc.dsc_length = field->length;
+						lttField.desc.dsc_scale = field->scale;
+						lttField.desc.dsc_sub_type = field->subType;
+						found = true;
+						break;
+					}
+				}
+
+				if (!found)
+				{
+					// msg 176: "column %s does not exist in table/view %s"
+					status_exception::raise(
+						Arg::PrivateDyn(176) <<
+						field->fld_name.toQuotedString() <<
+						name.toQuotedString());
+				}
+				break;
+			}
+
+			case Clause::TYPE_ADD_CONSTRAINT:
+			case Clause::TYPE_DROP_CONSTRAINT:
+				status_exception::raise(
+					Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+					Arg::Gds(isc_dsql_command_err) <<
+					Arg::Gds(isc_random) <<
+						"Only NOT NULL constraints without names are supported on local temporary tables");
+				break;
+
+			case Clause::TYPE_ALTER_SQL_SECURITY:
+			case Clause::TYPE_ALTER_PUBLICATION:
+				// These don't apply to LTTs
+				status_exception::raise(
+					Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+					Arg::Gds(isc_dsql_command_err) <<
+					Arg::Gds(isc_random) << "Operation not supported for local temporary tables");
+				break;
+
+			default:
+				fb_assert(false);
+				break;
+		}
+	}
+
+	// Validate NOT NULL constraints if needed
+	if (checkNotNullFields.hasData())
+	{
+		dsc schemaDesc, nameDesc;
+		schemaDesc.makeText((USHORT) name.schema.length(), ttype_metadata, (UCHAR*) name.schema.c_str());
+		nameDesc.makeText((USHORT) name.object.length(), ttype_metadata, (UCHAR*) name.object.c_str());
+
+		const auto work = DFW_post_work(transaction, dfw_check_not_null, &nameDesc, &schemaDesc, 0);
+		SortedArray<int>& dfwFieldIds = DFW_get_ids(work);
+
+		for (auto id : checkNotNullFields)
+		{
+			FB_SIZE_T pos;
+			if (!dfwFieldIds.find(id, pos))
+				dfwFieldIds.insert(pos, id);
+		}
+	}
+
+	// Post deferred work to update the LTT format
+	ltt->hasPendingChanges = true;
+	DFW_post_work(transaction, dfw_update_ltt_format, string(ltt->name.object.c_str()), ltt->name.schema, 0);
+
+	savePoint.release();  // everything is ok
+}
+
+
 //----------------------
 
 
@@ -8977,6 +9567,41 @@ void DropRelationNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
+	// run all statements under savepoint control
+	AutoSavePoint savePoint(tdbb, transaction);
+
+	const auto attachment = tdbb->getAttachment();
+
+	if (const auto lttIt = attachment->att_local_temporary_tables.get(name))
+	{
+		if (view)
+		{
+			status_exception::raise(
+				Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+				Arg::Gds(isc_dsql_command_err) <<
+				Arg::Gds(isc_dsql_view_not_found) << name.toQuotedString());
+		}
+
+		const auto ltt = *lttIt;
+
+		// Post deferred work to handle the LTT deletion at commit time
+		DFW_post_work(transaction, dfw_delete_relation,
+			string(ltt->name.object.c_str()), ltt->name.schema, ltt->relationId);
+
+		// Register undo action with the savepoint before removing
+		transaction->tra_save_point->createLttAction(LttUndoItem::LTT_UNDO_DROP, name, ltt);
+
+		// Remove from in-memory storage (without deleting - ownership transferred to undo or already deleted)
+		attachment->att_local_temporary_tables.remove(name);
+
+		savePoint.release();	// everything is ok
+
+		// Update DSQL cache
+		METD_drop_relation(transaction, name);
+
+		return;
+	}
+
 	jrd_rel* rel_drop = MET_lookup_relation(tdbb, name);
 	if (rel_drop)
 		MET_scan_relation(tdbb, rel_drop);
@@ -8985,6 +9610,9 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 
 	if (!relation && silent)
 		return;
+
+	if (tdbb->getDatabase()->readOnly())
+		ERRD_post(Arg::Gds(isc_read_only_database));
 
 	// Check that DROP TABLE is dropping a table and that DROP VIEW is dropping a view.
 	if (view)
@@ -9009,9 +9637,6 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	}
 
 	const int ddlTriggerAction = (view ? DDL_TRIGGER_DROP_VIEW : DDL_TRIGGER_DROP_TABLE);
-
-	// run all statements under savepoint control
-	AutoSavePoint savePoint(tdbb, transaction);
 
 	AutoCacheRequest request(tdbb, drq_l_relation, DYN_REQUESTS);
 	bool found = false;
@@ -9258,7 +9883,7 @@ void CreateAlterViewNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
-	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_relation))
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, name, obj_relation))
 		return;
 
 	Attachment* const attachment = transaction->tra_attachment;
@@ -9284,7 +9909,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, ddlTriggerAction, name, {});
 
 	if (!modifyingView)
-		DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_relation);
+		DYN_UTIL_check_unique_name(tdbb, name, obj_relation);
 
 	// Compile the SELECT statement into a record selection expression, making sure to bump the
 	// context number since view contexts start at 1 (except for computed fields) -- note that
@@ -10077,7 +10702,7 @@ void CreateIndexNode::store(thread_db* tdbb, jrd_tra* transaction, QualifiedName
 
 	fb_assert(name.schema == definition.relation.schema);
 
-	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_index);
+	DYN_UTIL_check_unique_name(tdbb, name, obj_index);
 
 	AutoCacheRequest request(tdbb, drq_s_indices, DYN_REQUESTS);
 
@@ -10472,7 +11097,18 @@ void CreateIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 
-	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_index))
+	// Check if target relation is a Local Temporary Table
+	if (const auto lttPtr = attachment->att_local_temporary_tables.get(relation->dsqlName))
+	{
+		defineLocalTempIndex(tdbb, dsqlScratch, transaction, *lttPtr);
+		savePoint.release();	// everything is ok
+		return;
+	}
+
+	if (tdbb->getDatabase()->readOnly())
+		ERRD_post(Arg::Gds(isc_read_only_database));
+
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, name, obj_index))
 		return;
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_CREATE_INDEX, name, {});
@@ -10529,6 +11165,114 @@ void CreateIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	savePoint.release();	// everything is ok
 }
 
+// Define an index on a Local Temporary Table.
+void CreateIndexNode::defineLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+	jrd_tra* transaction, LocalTemporaryTable* ltt)
+{
+	dsqlScratch->flags |= DsqlCompilerScratch::FLAG_ALLOW_LTT_REFERENCES;
+
+	const auto attachment = transaction->tra_attachment;
+	auto& attPool = *attachment->att_pool;
+
+	if (computed)
+	{
+		status_exception::raise(
+			Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+			Arg::Gds(isc_wish_list) <<
+			Arg::Gds(isc_random) << "Expression-based indexes are not supported for local temporary tables");
+	}
+
+	if (partial)
+	{
+		status_exception::raise(
+			Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+			Arg::Gds(isc_wish_list) <<
+			Arg::Gds(isc_random) << "Partial indexes are not supported for local temporary tables");
+	}
+
+	// Check index name uniqueness within the LTT scope
+	for (const auto& existingIndex : ltt->indexes)
+	{
+		if (existingIndex.name == name)
+		{
+			if (createIfNotExistsOnly)
+				return;
+
+			status_exception::raise(
+				Arg::Gds(isc_no_dup) << name.toQuotedString());
+		}
+	}
+
+	// Also check that the index name doesn't conflict with persistent indexes
+	// in the same schema
+	if (!DYN_UTIL_check_unique_name_nothrow(tdbb, name, obj_index))
+	{
+		if (createIfNotExistsOnly)
+			return;
+
+		status_exception::raise(Arg::Gds(isc_no_dup) << name.toQuotedString());
+	}
+
+	if (columns->items.getCount() > MAX_INDEX_SEGMENTS)
+		status_exception::raise(Arg::Gds(isc_idx_key_err) << name.toQuotedString());
+
+	const auto& fields = ltt->hasPendingChanges ? ltt->pendingFields : ltt->fields;
+
+	for (const auto& col : columns->items)
+	{
+		const auto& colName = nodeAs<FieldNode>(col)->dsqlName;
+
+		auto fieldIt = std::find_if(fields.begin(), fields.end(),
+			[&colName](const auto& field) { return field.name == colName; });
+
+		if (fieldIt == fields.end())
+		{
+			// Column not found in LTT
+			status_exception::raise(
+				Arg::Gds(isc_dyn_column_does_not_exist) << colName.c_str() << ltt->name.toQuotedString());
+		}
+
+		// Check if field type is indexable (no blobs or arrays)
+		if (fieldIt->desc.dsc_dtype == dtype_blob)
+			status_exception::raise(Arg::Gds(isc_blob_idx_err) << colName.c_str());
+	}
+
+	// Register undo action with the savepoint
+	transaction->tra_save_point->createLttAction(LttUndoItem::LTT_UNDO_ALTER, ltt->name,
+		FB_NEW_POOL(attPool) LocalTemporaryTable(attPool, *ltt));
+
+	const USHORT initialIdProbe = ltt->nextIndexId;
+
+	std::unordered_set<USHORT> usedIds;
+	for (const auto& index : ltt->indexes)
+		usedIds.insert(index.id);
+
+	while (true)
+	{
+		if (usedIds.find(ltt->nextIndexId) == usedIds.end())
+			break;
+
+		ltt->nextIndexId++;
+
+		if (ltt->nextIndexId == initialIdProbe)
+			status_exception::raise(Arg::Gds(isc_no_meta_update) << Arg::Gds(isc_max_idx) << Arg::Num(MAX_USHORT));
+	}
+
+	// Add the index to the LTT
+	auto& newIndex = ltt->indexes.add();
+	newIndex.name = name;
+	newIndex.unique = unique;
+	newIndex.descending = descending;
+	newIndex.inactive = !active;
+	newIndex.id = ltt->nextIndexId++;
+
+	for (const auto& col : columns->items)
+		newIndex.columns.add(nodeAs<FieldNode>(col)->dsqlName);
+
+	// Post deferred work to create the actual B-tree structure
+	DFW_post_work(transaction, dfw_create_ltt_index, string(name.object.c_str()), name.schema, 0);
+}
+
 DdlNode* CreateIndexNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	dsqlScratch->qualifyExistingName(relation->dsqlName, obj_relation);
@@ -10576,6 +11320,20 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 
+	// Check if index belongs to a Local Temporary Table
+	LocalTemporaryTable* ltt = nullptr;
+	LocalTemporaryTable::Index* lttIndex = nullptr;
+
+	if (MET_get_ltt_index(transaction->getAttachment(), name, &ltt, &lttIndex))
+	{
+		alterLocalTempIndex(tdbb, dsqlScratch, transaction, ltt, lttIndex);
+		savePoint.release();	// everything is ok
+		return;
+	}
+
+	if (tdbb->getDatabase()->readOnly())
+		ERRD_post(Arg::Gds(isc_read_only_database));
+
 	AutoCacheRequest request(tdbb, drq_m_index, DYN_REQUESTS);
 	bool found = false;
 
@@ -10606,6 +11364,40 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 	savePoint.release();	// everything is ok
 }
 
+// Alter an index on a Local Temporary Table (ACTIVE/INACTIVE).
+void AlterIndexNode::alterLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+	jrd_tra* transaction, LocalTemporaryTable* ltt, LocalTemporaryTable::Index* lttIndex)
+{
+	const auto attachment = transaction->tra_attachment;
+	auto& attPool = *attachment->att_pool;
+
+	// Register undo action with the savepoint
+	transaction->tra_save_point->createLttAction(
+		LttUndoItem::LTT_UNDO_ALTER, ltt->name, FB_NEW_POOL(attPool) LocalTemporaryTable(attPool, *ltt));
+
+	const bool wasInactive = lttIndex->inactive;
+	const bool willBeInactive = !active;
+
+	// Update the inactive flag
+	lttIndex->inactive = willBeInactive;
+
+	// If the index is being activated, post deferred work to create the B-tree
+	// If it's being deactivated, delete the B-tree
+	if (wasInactive && !willBeInactive)
+	{
+		// Index is being activated - create the B-tree
+		DFW_post_work(transaction, dfw_create_ltt_index, string(name.object.c_str()), name.schema, 0);
+	}
+	else if (!wasInactive && willBeInactive && ltt->relationId)
+	{
+		// Index is being deactivated - delete the B-tree
+		// We pass the index ID in dfw_id, and the relation ID in dfw_ids
+		const auto work = DFW_post_work(transaction, dfw_delete_ltt_index,
+			string(name.object.c_str()), name.schema, lttIndex->id);
+		DFW_get_ids(work).add(ltt->relationId);
+	}
+}
+
 
 //----------------------
 
@@ -10631,6 +11423,17 @@ void SetStatisticsNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 {
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
+
+	// Check if index belongs to a Local Temporary Table
+	LocalTemporaryTable* ltt = nullptr;
+	LocalTemporaryTable::Index* lttIndex = nullptr;
+
+	if (MET_get_ltt_index(transaction->getAttachment(), name, &ltt, &lttIndex))
+	{
+		setStatisticsLocalTempIndex(tdbb, dsqlScratch, transaction, ltt, lttIndex);
+		savePoint.release();	// everything is ok
+		return;
+	}
 
 	AutoCacheRequest request(tdbb, drq_m_set_statistics, DYN_REQUESTS);
 	bool found = false;
@@ -10661,6 +11464,23 @@ void SetStatisticsNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 	}
 
 	savePoint.release();	// everything is ok
+}
+
+// Set statistics for an index on a Local Temporary Table.
+void SetStatisticsNode::setStatisticsLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+	jrd_tra* transaction, LocalTemporaryTable* ltt, LocalTemporaryTable::Index* lttIndex)
+{
+	const auto attachment = transaction->tra_attachment;
+
+	// Register undo action with the savepoint
+	transaction->tra_save_point->createLttAction(
+		LttUndoItem::LTT_UNDO_ALTER, ltt->name, FB_NEW_POOL(*attachment->att_pool) LocalTemporaryTable(*attachment->att_pool, *ltt));
+
+	// Post deferred work to recalculate statistics during commit
+	// We pass the index ID in dfw_id and leave dfw_ids empty to signal "set statistics"
+	// (as opposed to delete which has dfw_ids containing the relation ID)
+	DFW_post_work(transaction, dfw_modify_ltt_index,
+		string(name.object.c_str()), name.schema, lttIndex->id);
 }
 
 
@@ -10709,6 +11529,20 @@ void DropIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 
+	// Check if index belongs to a Local Temporary Table
+	LocalTemporaryTable* ltt = nullptr;
+	LocalTemporaryTable::Index* lttIndex = nullptr;
+
+	if (MET_get_ltt_index(transaction->getAttachment(), name, &ltt, &lttIndex))
+	{
+		dropLocalTempIndex(tdbb, dsqlScratch, transaction, ltt, lttIndex);
+		savePoint.release();	// everything is ok
+		return;
+	}
+
+	if (tdbb->getDatabase()->readOnly())
+		ERRD_post(Arg::Gds(isc_read_only_database));
+
 	AutoCacheRequest request(tdbb, drq_e_indices, DYN_REQUESTS);
 	bool found = false;
 
@@ -10742,6 +11576,40 @@ void DropIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 	savePoint.release();	// everything is ok
 }
 
+// Drop an index from a Local Temporary Table.
+void DropIndexNode::dropLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+	jrd_tra* transaction, LocalTemporaryTable* ltt, LocalTemporaryTable::Index* lttIndex)
+{
+	Attachment* const attachment = transaction->tra_attachment;
+	auto& attPool = *attachment->att_pool;
+
+	// Register undo action with the savepoint
+	transaction->tra_save_point->createLttAction(
+		LttUndoItem::LTT_UNDO_ALTER, ltt->name, FB_NEW_POOL(attPool) LocalTemporaryTable(attPool, *ltt));
+
+	// Get the index ID before removing from the LTT
+	const USHORT indexId = lttIndex->id;
+
+	// Remove the index from the LTT
+	for (FB_SIZE_T i = 0; i < ltt->indexes.getCount(); ++i)
+	{
+		if (&ltt->indexes[i] == lttIndex)
+		{
+			ltt->indexes.remove(i);
+			break;
+		}
+	}
+
+	if (ltt->relationId)
+	{
+		// Post deferred work to delete the actual B-tree structure
+		// We pass the index ID in dfw_id, and the relation ID in dfw_ids
+		const auto work = DFW_post_work(transaction, dfw_delete_ltt_index,
+			string(name.object.c_str()), name.schema, indexId);
+		DFW_get_ids(work).add(ltt->relationId);
+	}
+}
+
 
 //----------------------
 
@@ -10771,10 +11639,10 @@ void CreateFilterNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScrat
 	const MetaString& ownerName = attachment->getEffectiveUserName();
 	const QualifiedName qualifiedName(name);
 
-	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, qualifiedName, obj_blob_filter))
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, qualifiedName, obj_blob_filter))
 		return;
 
-	DYN_UTIL_check_unique_name(tdbb, transaction, qualifiedName, obj_blob_filter);
+	DYN_UTIL_check_unique_name(tdbb, qualifiedName, obj_blob_filter);
 
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
@@ -12384,6 +13252,12 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 			break;
 
 		case obj_relation:
+			if (tdbb->getAttachment()->att_local_temporary_tables.exist(objName))
+			{
+				status_exception::raise(Arg::Gds(isc_dsql_ltt_invalid_reference) <<
+					objName.toQuotedString() << (isGrant ? "GRANT" : "REVOKE"));
+			}
+
 			if (!checkObjectExist(tdbb, transaction, objName, objType))
 				status_exception::raise(Arg::PrivateDyn(306) << objName.toQuotedString());	// Table @1 does not exist
 
@@ -13708,12 +14582,12 @@ void CreateAlterSchemaNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch* 
 	const auto attachment = transaction->getAttachment();
 	const auto& ownerName = attachment->getEffectiveUserName();
 
-	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, qualifiedName, obj_schema))
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, qualifiedName, obj_schema))
 		return;
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_CREATE_SCHEMA, qualifiedName, {});
 
-	DYN_UTIL_check_unique_name(tdbb, transaction, qualifiedName, obj_schema);
+	DYN_UTIL_check_unique_name(tdbb, qualifiedName, obj_schema);
 
 	static const CachedRequestId requestHandleId;
 	AutoCacheRequest requestHandle(tdbb, requestHandleId);
@@ -13954,6 +14828,21 @@ bool DropSchemaNode::collectObjects(thread_db* tdbb, jrd_tra* transaction,
 {
 	if (objects)
 		objects->clear();
+
+	const auto attachment = tdbb->getAttachment();
+
+	for (const auto& lttEntry : attachment->att_local_temporary_tables)
+	{
+		const auto& lttName = lttEntry.first;
+
+		if (lttName.schema == name)
+		{
+			if (objects)
+				objects->add({obj_relation, lttName.object});
+			else
+				return true;
+		}
+	}
 
 	{	// fields
 		static const CachedRequestId requestHandleId;

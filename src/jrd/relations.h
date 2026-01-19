@@ -748,6 +748,7 @@ RELATION(nam_mon_tab_stats, rel_mon_tab_stats, ODS_12_0, rel_virtual)
 	FIELD(f_mon_tab_name, nam_mon_tab_name, fld_r_name, 0, ODS_12_0)
 	FIELD(f_mon_tab_rec_stat_id, nam_mon_rec_stat_id, fld_stat_id, 0, ODS_12_0)
 	FIELD(f_mon_tab_sch_name, nam_mon_sch_name, fld_sch_name, 0, ODS_14_0)
+	FIELD(f_mon_tab_type, nam_mon_tab_type, fld_tab_type, 0, ODS_14_0)
 END_RELATION
 
 // Relation 50 (RDB$TIME_ZONES)

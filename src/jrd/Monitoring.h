@@ -31,6 +31,7 @@
 #include "../jrd/val.h"
 #include "../jrd/recsrc/RecordSource.h"
 #include "../jrd/TempSpace.h"
+#include <string_view>
 
 namespace Jrd {
 
@@ -160,6 +161,12 @@ public:
 		{
 			if (value.length())
 				storeField(field_id, VALUE_STRING, value.length(), value.c_str());
+		}
+
+		void storeString(int field_id, const std::string_view value)
+		{
+			if (!value.empty())
+				storeField(field_id, VALUE_STRING, value.length(), value.data());
 		}
 
 		void storeBoolean(int field_id, bool value)
@@ -413,12 +420,12 @@ public:
 private:
 	static SINT64 getGlobalId(int) noexcept;
 
-	static void putAttachment(SnapshotData::DumpRecord&, const Attachment*);
-	static void putTransaction(SnapshotData::DumpRecord&, const jrd_tra*);
+	static void putAttachment(thread_db*, SnapshotData::DumpRecord&, const Attachment*);
+	static void putTransaction(thread_db*, SnapshotData::DumpRecord&, const jrd_tra*);
 	static void putStatement(SnapshotData::DumpRecord&, const Statement*, const Firebird::string&);
-	static void putRequest(SnapshotData::DumpRecord&, const Request*, const Firebird::string&);
-	static void putCall(SnapshotData::DumpRecord&, const Request*);
-	static void putStatistics(SnapshotData::DumpRecord&, const RuntimeStatistics&, int, int);
+	static void putRequest(thread_db*, SnapshotData::DumpRecord&, const Request*, const Firebird::string&);
+	static void putCall(thread_db*, SnapshotData::DumpRecord&, const Request*);
+	static void putStatistics(thread_db*, SnapshotData::DumpRecord&, const RuntimeStatistics&, int, int);
 	static void putContextVars(SnapshotData::DumpRecord&, const Firebird::StringMap&, SINT64, bool);
 	static void putMemoryUsage(SnapshotData::DumpRecord&, const Firebird::MemoryStats&, int, int);
 };

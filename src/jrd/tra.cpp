@@ -2488,10 +2488,13 @@ static void release_temp_tables(thread_db* tdbb, jrd_tra* transaction)
  **************************************
  *
  * Functional description
- *	Release data of temporary tables with transaction lifetime
+ *	Release (delete pages) temporary tables with transaction lifetime (ON COMMIT DELETE ROWS).
+ *	This is called on full commit/rollback, not on commit retaining.
  *
  **************************************/
 	Attachment* att = tdbb->getAttachment();
+
+	// Release GTTs (Global Temporary Tables) with transaction lifetime
 	vec<jrd_rel*>& rels = *att->att_relations;
 
 	for (FB_SIZE_T i = 0; i < rels.count(); i++)
@@ -2500,6 +2503,15 @@ static void release_temp_tables(thread_db* tdbb, jrd_tra* transaction)
 
 		if (relation && (relation->rel_flags & REL_temp_tran))
 			relation->delPages(tdbb, transaction->tra_number);
+	}
+
+	// Release LTTs (Local Temporary Tables) with transaction lifetime
+	for (const auto& lttEntry : att->att_local_temporary_tables)
+	{
+		const auto ltt = lttEntry.second;
+
+		if (ltt && ltt->relation && (ltt->relation->rel_flags & REL_temp_tran))
+			ltt->relation->delPages(tdbb, transaction->tra_number);
 	}
 }
 
@@ -2514,10 +2526,13 @@ static void retain_temp_tables(thread_db* tdbb, jrd_tra* transaction, TraNumber 
  *
  * Functional description
  *	Reassign instance of temporary tables with transaction lifetime to the new
- *  transaction number (see retain_context).
+ *  transaction number (see retain_context). This is called on commit retaining
+ *  to preserve the data in ON COMMIT DELETE ROWS tables.
  *
  **************************************/
 	Attachment* att = tdbb->getAttachment();
+
+	// Retain GTTs (Global Temporary Tables) with transaction lifetime
 	vec<jrd_rel*>& rels = *att->att_relations;
 
 	for (FB_SIZE_T i = 0; i < rels.count(); i++)
@@ -2526,6 +2541,15 @@ static void retain_temp_tables(thread_db* tdbb, jrd_tra* transaction, TraNumber 
 
 		if (relation && (relation->rel_flags & REL_temp_tran))
 			relation->retainPages(tdbb, transaction->tra_number, new_number);
+	}
+
+	// Retain LTTs (Local Temporary Tables) with transaction lifetime
+	for (const auto& lttEntry : att->att_local_temporary_tables)
+	{
+		const auto ltt = lttEntry.second;
+
+		if (ltt && ltt->relation && (ltt->relation->rel_flags & REL_temp_tran))
+			ltt->relation->retainPages(tdbb, transaction->tra_number, new_number);
 	}
 }
 
@@ -4160,11 +4184,9 @@ void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id, jrd_fld* fld, bool 
 	if (!tra_blobs->locate(blob_id->bid_temp_id()) &&
 		!tra_fetched_blobs.locate(*blob_id))
 	{
-		vec<jrd_rel*>* vector = tra_attachment->att_relations;
-		jrd_rel* blb_relation;
+		const auto blb_relation = MET_relation(tdbb, rel_id);
 
-		if ((rel_id < vector->count() && (blb_relation = (*vector)[rel_id])) ||
-			(blb_relation = MET_relation(tdbb, rel_id)))
+		if (blb_relation)
 		{
 			auto security_name = (fld && fld->fld_security_name.hasData()) ?
 				fld->fld_security_name : blb_relation->rel_security_name.object;

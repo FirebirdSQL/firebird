@@ -64,7 +64,7 @@ namespace
 
 	typedef HalfStaticArray<SpecialJoinItem, 4> SpecialJoinList;
 
-  void appendContextAlias(DsqlCompilerScratch* dsqlScratch, const string& alias)
+	void appendContextAlias(DsqlCompilerScratch* dsqlScratch, const string& alias)
 	{
 		const auto len = alias.length();
 		if (len <= MAX_UCHAR)
@@ -888,7 +888,7 @@ void RelationSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	// if this is a trigger or procedure, don't want relation id used
 
-	if (DDL_ids(dsqlScratch))
+	if (DDL_ids(dsqlScratch) && !(relation->rel_flags & REL_ltt_created))
 	{
 		dsqlScratch->appendUChar(dsqlContext->ctx_alias.hasData() ? blr_rid2 : blr_rid);
 		dsqlScratch->appendUShort(relation->rel_id);

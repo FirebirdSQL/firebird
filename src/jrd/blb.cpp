@@ -1454,13 +1454,20 @@ blb* blb::open2(thread_db* tdbb,
 		// know about the relation, the blob id has got to be invalid
 		// anyway.
 
-		vec<jrd_rel*>* vector = tdbb->getAttachment()->att_relations;
+		const auto relationId = blobId.bid_internal.bid_relation_id;
 
-		if (blobId.bid_internal.bid_relation_id >= vector->count() ||
-			!(blob->blb_relation = (*vector)[blobId.bid_internal.bid_relation_id] ) )
+		if (relationId >= MIN_LTT_ID && relationId <= MAX_LTT_ID)
+			blob->blb_relation = MET_relation(tdbb, relationId);
+		else
 		{
-				ERR_post(Arg::Gds(isc_bad_segstr_id));
+			vec<jrd_rel*>* vector = tdbb->getAttachment()->att_relations;
+
+			if (blobId.bid_internal.bid_relation_id < vector->count())
+				blob->blb_relation = (*vector)[relationId];
 		}
+
+		if (!blob->blb_relation)
+			ERR_post(Arg::Gds(isc_bad_segstr_id));
 
 		blob->blb_pg_space_id = blob->blb_relation->getPages(tdbb)->rel_pg_space_id;
 		DPM_get_blob(tdbb, blob, blobId.get_permanent_number(), false, 0);

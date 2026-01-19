@@ -7900,7 +7900,7 @@ void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment, XThreadEns
 	dbb->dbb_extManager->closeAttachment(tdbb, attachment);
 
 	if (dbb->dbb_config->getServerMode() == MODE_SUPER)
-		attachment->releaseGTTs(tdbb);
+		attachment->releaseTempTables(tdbb);
 
 	if (attachment->att_event_session)
 		dbb->eventManager()->deleteSession(attachment->att_event_session);

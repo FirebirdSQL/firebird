@@ -53,6 +53,7 @@
 #include "../yvalve/why_proto.h"
 #include "../common/utils_proto.h"
 #include "../common/classes/init.h"
+#include "../jrd/LocalTemporaryTable.h"
 
 using namespace Jrd;
 using namespace Firebird;
@@ -266,7 +267,9 @@ void METD_drop_relation(jrd_tra* transaction, const QualifiedName& name)
 
 	if (dbb->dbb_relations.get(name, relation))
 	{
-		MET_dsql_cache_use(tdbb, SYM_relation, name);
+		if (!(relation->rel_flags & REL_temp_ltt))
+			MET_dsql_cache_use(tdbb, SYM_relation, name);
+
 		relation->rel_flags |= REL_dropped;
 		dbb->dbb_relations.remove(name);
 	}
@@ -1199,7 +1202,8 @@ dsql_rel* METD_get_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 
 	validateTransaction(transaction);
 
-	dsql_dbb* dbb = transaction->getDsqlAttachment();
+	const auto attachment = transaction->getAttachment();
+	const auto dbb = transaction->getDsqlAttachment();
 
 	// See if the relation is the one currently being defined in this statement
 
@@ -1211,7 +1215,7 @@ dsql_rel* METD_get_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 
 	if (dbb->dbb_relations.get(name, temp) && !(temp->rel_flags & REL_dropped))
 	{
-		if (MET_dsql_cache_use(tdbb, SYM_relation, name))
+		if (!(temp->rel_flags & REL_ltt_created) && MET_dsql_cache_use(tdbb, SYM_relation, name))
 			temp->rel_flags |= REL_dropped;
 		else
 			return temp;
@@ -1221,60 +1225,91 @@ dsql_rel* METD_get_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 	// and this is a type of statement which does not use ids, prepare a
 	// temporary relation block to provide information without caching it
 
-	bool permanent = true;
+	const auto lttPtr = attachment->att_local_temporary_tables.get(name);
+	const auto ltt = lttPtr ? *lttPtr : nullptr;
 
-	AutoCacheRequest handle1(tdbb, irq_rel_ids, IRQ_REQUESTS);
-
-	FOR(REQUEST_HANDLE handle1 TRANSACTION_HANDLE transaction)
-		REL IN RDB$RELATIONS
-		CROSS RFR IN RDB$RELATION_FIELDS OVER RDB$SCHEMA_NAME, RDB$RELATION_NAME
-		WITH REL.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
-			 REL.RDB$RELATION_NAME EQ name.object.c_str() AND
-			 (REL.RDB$RELATION_ID MISSING OR RFR.RDB$FIELD_ID MISSING)
+	// LTTs cannot be referenced in persistent metadata (DDL other than LTT DDL itself)
+	if (ltt &&
+		(dsqlScratch->flags & DsqlCompilerScratch::FLAG_DDL) &&
+		!(dsqlScratch->flags & DsqlCompilerScratch::FLAG_ALLOW_LTT_REFERENCES))
 	{
-		permanent = false;
+		status_exception::raise(Arg::Gds(isc_dsql_ltt_invalid_reference) << name.toQuotedString() << "persistent metadata");
 	}
-	END_FOR
+
+	bool stored = !ltt;
+
+	if (!ltt)
+	{
+		static const CachedRequestId handle1bCacheId;
+		AutoCacheRequest handle1b(tdbb, handle1bCacheId);
+
+		FOR(REQUEST_HANDLE handle1b TRANSACTION_HANDLE transaction)
+			REL IN RDB$RELATIONS
+			CROSS RFR IN RDB$RELATION_FIELDS OVER RDB$SCHEMA_NAME, RDB$RELATION_NAME
+			WITH REL.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+				 REL.RDB$RELATION_NAME EQ name.object.c_str() AND
+				 (REL.RDB$RELATION_ID MISSING OR RFR.RDB$FIELD_ID MISSING)
+		{
+			stored = false;
+		}
+		END_FOR
+	}
 
 	// Now see if it is in the database
 
-	MemoryPool& pool = permanent ? dbb->dbb_pool : *tdbb->getDefaultPool();
+	MemoryPool& pool = stored ? dbb->dbb_pool : *tdbb->getDefaultPool();
 
 	dsql_rel* relation = NULL;
 
-	AutoCacheRequest handle2(tdbb, irq_relation, IRQ_REQUESTS);
-
-	FOR(REQUEST_HANDLE handle2 TRANSACTION_HANDLE transaction)
-		X IN RDB$RELATIONS
-		WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
-			 X.RDB$RELATION_NAME EQ name.object.c_str()
+	if (ltt)
 	{
-		// Allocate from default or permanent pool as appropriate
+		fb_assert(ltt->relationId);
 
-		if (!X.RDB$RELATION_ID.NULL)
-		{
-			relation = FB_NEW_POOL(pool) dsql_rel(pool);
-			relation->rel_id = X.RDB$RELATION_ID;
-		}
-		else if (!DDL_ids(dsqlScratch))
-			relation = FB_NEW_POOL(pool) dsql_rel(pool);
-
-		// fill out the relation information
-
-		if (relation)
-		{
-			relation->rel_name = name;
-			relation->rel_owner = X.RDB$OWNER_NAME;
-			if (!(relation->rel_dbkey_length = X.RDB$DBKEY_LENGTH))
-				relation->rel_dbkey_length = 8;
-			// CVC: let's see if this is a table or a view.
-			if (!X.RDB$VIEW_BLR.NULL)
-				relation->rel_flags |= REL_view;
-			if (!X.RDB$EXTERNAL_FILE.NULL)
-				relation->rel_flags |= REL_external;
-		}
+		relation = FB_NEW_POOL(pool) dsql_rel(pool);
+		relation->rel_id = ltt->relationId;
+		relation->rel_name = name;
+		relation->rel_dbkey_length = 8;
+		relation->rel_flags = REL_ltt_created;
 	}
-	END_FOR
+	else
+	{
+		static const CachedRequestId handle2bCacheId;
+		AutoCacheRequest handle2b(tdbb, handle2bCacheId);
+
+		FOR(REQUEST_HANDLE handle2b TRANSACTION_HANDLE transaction)
+			X IN RDB$RELATIONS
+			WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+				 X.RDB$RELATION_NAME EQ name.object.c_str()
+		{
+			fb_utils::exact_name(X.RDB$OWNER_NAME);
+
+			// Allocate from default or permanent pool as appropriate
+
+			if (!X.RDB$RELATION_ID.NULL)
+			{
+				relation = FB_NEW_POOL(pool) dsql_rel(pool);
+				relation->rel_id = X.RDB$RELATION_ID;
+			}
+			else if (!DDL_ids(dsqlScratch))
+				relation = FB_NEW_POOL(pool) dsql_rel(pool);
+
+			// fill out the relation information
+
+			if (relation)
+			{
+				relation->rel_name = name;
+				relation->rel_owner = X.RDB$OWNER_NAME;
+				if (!(relation->rel_dbkey_length = X.RDB$DBKEY_LENGTH))
+					relation->rel_dbkey_length = 8;
+				// CVC: let's see if this is a table or a view.
+				if (!X.RDB$VIEW_BLR.NULL)
+					relation->rel_flags |= REL_view;
+				if (!X.RDB$EXTERNAL_FILE.NULL)
+					relation->rel_flags |= REL_external;
+			}
+		}
+		END_FOR
+	}
 
 	if (!relation)
 		return NULL;
@@ -1283,80 +1318,120 @@ dsql_rel* METD_get_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 
 	dsql_fld** ptr = &relation->rel_fields;
 
-	AutoCacheRequest handle3(tdbb, irq_fields, IRQ_REQUESTS);
-
-	FOR(REQUEST_HANDLE handle3 TRANSACTION_HANDLE transaction)
-		FLX IN RDB$FIELDS
-		CROSS RFR IN RDB$RELATION_FIELDS
-		WITH RFR.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
-			 RFR.RDB$RELATION_NAME EQ name.object.c_str() AND
-			 FLX.RDB$SCHEMA_NAME EQUIV RFR.RDB$FIELD_SOURCE_SCHEMA_NAME AND
-			 FLX.RDB$FIELD_NAME EQ RFR.RDB$FIELD_SOURCE
-		SORTED BY RFR.RDB$FIELD_POSITION
+	if (ltt)
 	{
-		// Allocate the field block
-		// Allocate from default or permanent pool as appropriate
-
-		dsql_fld* field = NULL;
-
-		if (!RFR.RDB$FIELD_ID.NULL)
+		for (const auto& lttField : ltt->fields)
 		{
-			field = FB_NEW_POOL(pool) dsql_fld(pool);
-			field->fld_id = RFR.RDB$FIELD_ID;
-		}
-		else if (!DDL_ids(dsqlScratch))
-			field = FB_NEW_POOL(pool) dsql_fld(pool);
+			dsql_fld* field = FB_NEW_POOL(pool) dsql_fld(pool);
 
-		if (field)
-		{
 			*ptr = field;
 			ptr = &field->fld_next;
 
-			// get field information
-
-			field->fld_name = RFR.RDB$FIELD_NAME;
-			field->fieldSource = QualifiedName(RFR.RDB$FIELD_SOURCE, RFR.RDB$FIELD_SOURCE_SCHEMA_NAME);
-			field->length = FLX.RDB$FIELD_LENGTH;
-			field->scale = FLX.RDB$FIELD_SCALE;
-			field->subType = FLX.RDB$FIELD_SUB_TYPE;
 			field->fld_relation = relation;
+			field->fld_id = lttField.id;
+			field->fld_name = lttField.name;
+			field->fieldSource = lttField.source;
 
-			if (!FLX.RDB$COMPUTED_BLR.NULL)
-				field->flags |= FLD_computed;
+			field->dtype = lttField.desc.dsc_dtype;
+			field->length = lttField.desc.dsc_length;
+			field->scale = lttField.desc.dsc_scale;
+			field->subType = lttField.desc.dsc_sub_type;
+			field->segLength = lttField.segLength;
+			field->charLength = lttField.charLength;
+			field->precision = lttField.precision;
 
-			convert_dtype(field, FLX.RDB$FIELD_TYPE);
+			if (lttField.charSetId.has_value())
+				field->charSetId = lttField.charSetId.value();
 
-			if (FLX.RDB$FIELD_TYPE == blr_blob) {
-				field->segLength = FLX.RDB$SEGMENT_LENGTH;
-			}
+			if (lttField.collationId.has_value())
+				field->collationId = lttField.collationId.value();
 
-			if (!FLX.RDB$DIMENSIONS.NULL && FLX.RDB$DIMENSIONS)
-			{
-				field->elementDtype = field->dtype;
-				field->elementLength = field->length;
-				field->dtype = dtype_array;
-				field->length = sizeof(ISC_QUAD);
-				field->dimensions = FLX.RDB$DIMENSIONS;
-			}
-
-			if (!FLX.RDB$CHARACTER_SET_ID.NULL)
-				field->charSetId = FLX.RDB$CHARACTER_SET_ID;
-
-			if (!RFR.RDB$COLLATION_ID.NULL)
-				field->collationId = RFR.RDB$COLLATION_ID;
-			else if (!FLX.RDB$COLLATION_ID.NULL)
-				field->collationId = FLX.RDB$COLLATION_ID;
-
-			if (!(RFR.RDB$NULL_FLAG || FLX.RDB$NULL_FLAG) || (relation->rel_flags & REL_view))
-			{
+			if (!lttField.notNullFlag)
 				field->flags |= FLD_nullable;
-			}
-
-			if (RFR.RDB$SYSTEM_FLAG == 1 || FLX.RDB$SYSTEM_FLAG == 1)
-				field->flags |= FLD_system;
 		}
 	}
-	END_FOR
+	else
+	{
+		static const CachedRequestId handle3bCacheId;
+		AutoCacheRequest handle3b(tdbb, handle3bCacheId);
+
+		FOR(REQUEST_HANDLE handle3b TRANSACTION_HANDLE transaction)
+			FLX IN RDB$FIELDS
+			CROSS RFR IN RDB$RELATION_FIELDS
+			WITH RFR.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+				 RFR.RDB$RELATION_NAME EQ name.object.c_str() AND
+				 FLX.RDB$SCHEMA_NAME EQUIV RFR.RDB$FIELD_SOURCE_SCHEMA_NAME AND
+				 FLX.RDB$FIELD_NAME EQ RFR.RDB$FIELD_SOURCE
+			SORTED BY RFR.RDB$FIELD_POSITION
+		{
+			// allocate the field block
+
+			fb_utils::exact_name(RFR.RDB$FIELD_NAME);
+			fb_utils::exact_name(RFR.RDB$FIELD_SOURCE);
+
+			// Allocate from default or permanent pool as appropriate
+
+			dsql_fld* field = NULL;
+
+			if (!RFR.RDB$FIELD_ID.NULL)
+			{
+				field = FB_NEW_POOL(pool) dsql_fld(pool);
+				field->fld_id = RFR.RDB$FIELD_ID;
+			}
+			else if (!DDL_ids(dsqlScratch))
+				field = FB_NEW_POOL(pool) dsql_fld(pool);
+
+			if (field)
+			{
+				*ptr = field;
+				ptr = &field->fld_next;
+
+				// get field information
+
+				field->fld_name = RFR.RDB$FIELD_NAME;
+				field->fieldSource = QualifiedName(RFR.RDB$FIELD_SOURCE, RFR.RDB$FIELD_SOURCE_SCHEMA_NAME);
+				field->length = FLX.RDB$FIELD_LENGTH;
+				field->scale = FLX.RDB$FIELD_SCALE;
+				field->subType = FLX.RDB$FIELD_SUB_TYPE;
+				field->fld_relation = relation;
+
+				if (!FLX.RDB$COMPUTED_BLR.NULL)
+					field->flags |= FLD_computed;
+
+				convert_dtype(field, FLX.RDB$FIELD_TYPE);
+
+				if (FLX.RDB$FIELD_TYPE == blr_blob) {
+					field->segLength = FLX.RDB$SEGMENT_LENGTH;
+				}
+
+				if (!FLX.RDB$DIMENSIONS.NULL && FLX.RDB$DIMENSIONS)
+				{
+					field->elementDtype = field->dtype;
+					field->elementLength = field->length;
+					field->dtype = dtype_array;
+					field->length = sizeof(ISC_QUAD);
+					field->dimensions = FLX.RDB$DIMENSIONS;
+				}
+
+				if (!FLX.RDB$CHARACTER_SET_ID.NULL)
+					field->charSetId = FLX.RDB$CHARACTER_SET_ID;
+
+				if (!RFR.RDB$COLLATION_ID.NULL)
+					field->collationId = RFR.RDB$COLLATION_ID;
+				else if (!FLX.RDB$COLLATION_ID.NULL)
+					field->collationId = FLX.RDB$COLLATION_ID;
+
+				if (!(RFR.RDB$NULL_FLAG || FLX.RDB$NULL_FLAG) || (relation->rel_flags & REL_view))
+				{
+					field->flags |= FLD_nullable;
+				}
+
+				if (RFR.RDB$SYSTEM_FLAG == 1 || FLX.RDB$SYSTEM_FLAG == 1)
+					field->flags |= FLD_system;
+			}
+		}
+		END_FOR
+	}
 
 	if (dbb->dbb_relations.get(name, temp) && !(temp->rel_flags & REL_dropped))
 	{
@@ -1366,10 +1441,12 @@ dsql_rel* METD_get_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 
 	// Add relation to the list
 
-	if (permanent)
+	if (stored)
 	{
 		dbb->dbb_relations.put(relation->rel_name, relation);
-		MET_dsql_cache_use(tdbb, SYM_relation, relation->rel_name);
+
+		if (!ltt)
+			MET_dsql_cache_use(tdbb, SYM_relation, relation->rel_name);
 	}
 	else
 		relation->rel_flags |= REL_new_relation;

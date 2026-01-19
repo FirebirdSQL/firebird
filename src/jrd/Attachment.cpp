@@ -263,6 +263,7 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider
 	  att_unqualified_charset_resolved_cache_search_path(att_schema_search_path),
 	  att_unqualified_charset_resolved_cache(*pool),
 	  att_parallel_workers(0),
+	  att_local_temporary_tables(*pool),
 	  att_repl_appliers(*pool),
 	  att_utility(UTIL_NONE),
 	  att_procedures(*pool),
@@ -434,18 +435,33 @@ void Jrd::Attachment::releaseBatches()
 		delete att_batches.pop();
 }
 
-void Jrd::Attachment::releaseGTTs(thread_db* tdbb)
+void Jrd::Attachment::releaseTempTables(thread_db* tdbb)
 {
-	if (!att_relations)
-		return;
+	Array<jrd_rel*> tempRelations;
 
-	for (FB_SIZE_T i = 1; i < att_relations->count(); i++)
+	if (att_relations)
 	{
-		jrd_rel* relation = (*att_relations)[i];
-		if (relation && (relation->rel_flags & REL_temp_conn) &&
-			!(relation->rel_flags & (REL_deleted | REL_deleting)))
+		for (FB_SIZE_T i = 1; i < att_relations->count(); i++)
 		{
-			relation->delPages(tdbb);
+			const auto relation = (*att_relations)[i];
+			if (relation && (relation->rel_flags & REL_temp_gtt))
+				tempRelations.add(relation);
+		}
+	}
+
+	for (auto& lttEntry : att_local_temporary_tables)
+	{
+		const auto ltt = lttEntry.second;
+		if (ltt->relation)
+			tempRelations.add(ltt->relation);
+	}
+
+	for (const auto tempRelation : tempRelations)
+	{
+		if ((tempRelation->rel_flags & REL_temp_conn) &&
+			!(tempRelation->rel_flags & (REL_deleted | REL_deleting)))
+		{
+			tempRelation->delPages(tdbb);
 		}
 	}
 }
@@ -561,8 +577,8 @@ void Jrd::Attachment::resetSession(thread_db* tdbb, jrd_tra** traHandle)
 		if (att_user->resetRole())
 			SCL_release_all(att_security_classes);
 
-		// reset GTT's
-		releaseGTTs(tdbb);
+		// reset temporary tables (GTTs and LTTs)
+		releaseTempTables(tdbb);
 
 		// Run ON CONNECT trigger after reset
 		if (!(att_flags & ATT_no_db_triggers))
