@@ -76,6 +76,45 @@ namespace
 			ERR_post(Arg::Gds(isc_bad_trans_handle));
 		}
 	}
+
+	void setupRowtypeField(jrd_tra* transaction, DsqlCompilerScratch* dsqlScratch,
+		const QualifiedName& relationName, const MetaName& fieldSource, dsql_fld& field)
+	{
+		int subfieldNum = 0;
+		dsql_rel* relation = METD_get_relation(transaction, dsqlScratch, relationName);
+		dsql_fld* subField = NULL;
+
+		if (relation)
+		{
+			subField = relation->rel_fields;
+			subfieldNum = relation->rel_fields_number;
+		}
+		else
+		{
+			subfieldNum = METD_gen_composite_type_fields(transaction, dsqlScratch, relationName, subField);
+		}
+
+		if (!relation && !subField)
+		{
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+				Arg::Gds(isc_invalid_parameter_decl) <<
+				Arg::Gds(isc_relnotdef) << Arg::Str(fieldSource));
+		}
+
+		// fill the top-level composite field with subfields
+		field.fld_sub_first = subField;
+
+		// calculate the actual length of the composite field
+		// TODO: we have to find a way to update the length of the parameter in system table after
+		// table modification that we are depending on
+		field.length = NULL_BYTES(subfieldNum);
+		for (dsql_fld* next = field.fld_sub_first; next; next = next->fld_next)
+		{
+			if (next->dtype >= dtype_aligned)
+				field.length = FB_ALIGN(field.length, type_alignments[next->dtype]);
+			field.length += next->length;
+		}
+	}
 }
 
 
