@@ -3564,14 +3564,19 @@ ValueExprNode* CastNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	CastNode* node = FB_NEW_POOL(dsqlScratch->getPool()) CastNode(dsqlScratch->getPool());
 	node->dsqlAlias = dsqlAlias;
-	node->source = doDsqlPass(dsqlScratch, source);
+
+	ParameterNode* paramNode = nodeAs<ParameterNode>(source);
+	if (paramNode)
+		paramNode->rowHelper = node;
+
 	node->dsqlField = dsqlField;
 	node->format = format;
-
 	DDL_resolve_intl_type(dsqlScratch, node->dsqlField, node->dsqlField->collate);
+	DsqlDescMaker::fromField(&node->castDesc, node->dsqlField);
+
+	node->source = doDsqlPass(dsqlScratch, source);
 	node->setParameterType(dsqlScratch, NULL, false);
 
-	DsqlDescMaker::fromField(&node->castDesc, node->dsqlField);
 	DsqlDescMaker::fromNode(dsqlScratch, node->source);
 
 	node->castDesc.dsc_flags = node->source->getDsqlDesc().dsc_flags & DSC_nullable;
@@ -9864,7 +9869,7 @@ ValueExprNode* OverNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 static RegisterNode<ParameterNode> regParameterNode({blr_parameter, blr_parameter2});
 
 ParameterNode::ParameterNode(MemoryPool& pool)
-	: TypedNode<ValueExprNode, ExprNode::TYPE_PARAMETER>(pool)
+	: TypedNode<ValueExprNode, ExprNode::TYPE_PARAMETER>(pool), rowHelper(nullptr)
 {
 }
 
@@ -9913,7 +9918,7 @@ ValueExprNode* ParameterNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		dsqlScratch->getDsqlStatement()->getSendMsg();
 
 	auto node = FB_NEW_POOL(dsqlScratch->getPool()) ParameterNode(dsqlScratch->getPool());
-	node->dsqlParameter = MAKE_parameter(msg, true, true, dsqlParameterIndex, nullptr);
+	node->dsqlParameter = MAKE_parameter(msg, true, true, dsqlParameterIndex, rowHelper ? rowHelper : nullptr);
 	node->dsqlParameterIndex = dsqlParameterIndex;
 	node->outerDecl = outerDecl;
 

@@ -1761,6 +1761,7 @@ public:
 	USHORT argNumber = 0;
 	USHORT maxCharLength = 0;
 	bool outerDecl = false;
+	ValueExprNode* rowHelper;
 };
 
 
