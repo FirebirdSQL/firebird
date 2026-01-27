@@ -543,8 +543,11 @@ bool HashJoin::refetchRecord(thread_db* /*tdbb*/) const
 	return true;
 }
 
-WriteLockResult HashJoin::lockRecord(thread_db* /*tdbb*/) const
+WriteLockResult HashJoin::lockRecord(thread_db* tdbb) const
 {
+	if (m_joinType == SEMI_JOIN || m_joinType == ANTI_JOIN)
+		return m_leader.source->lockRecord(tdbb);
+
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
 }
 
