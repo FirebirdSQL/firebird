@@ -2577,7 +2577,10 @@ void CreateAlterFunctionNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* 
 		dsqlScratch->setPsql(true);
 
 		if (localDeclList)
+		{
+			localDeclList = localDeclList->dsqlPass(dsqlScratch);
 			localDeclList->genBlr(dsqlScratch);
+		}
 
 		dsqlScratch->loopLevel = 0;
 		dsqlScratch->cursorNumber = 0;
@@ -3549,7 +3552,10 @@ void CreateAlterProcedureNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch*
 	dsqlScratch->setPsql(true);
 
 	if (localDeclList)
+	{
+		localDeclList = localDeclList->dsqlPass(dsqlScratch);
 		localDeclList->genBlr(dsqlScratch);
+	}
 
 	dsqlScratch->loopLevel = 0;
 	dsqlScratch->cursorNumber = 0;
@@ -4111,7 +4117,10 @@ void CreateAlterTriggerNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* d
 		dsqlScratch->setPsql(true);
 
 		if (localDeclList)
+		{
+			localDeclList = localDeclList->dsqlPass(dsqlScratch);
 			localDeclList->genBlr(dsqlScratch);
+		}
 
 		dsqlScratch->loopLevel = 0;
 		dsqlScratch->cursorNumber = 0;

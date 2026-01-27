@@ -6023,6 +6023,7 @@ const
 	 isc_dsql_invalid_drop_ss_clause = 336003112;
 	 isc_upd_ins_cannot_default = 336003113;
 	 isc_dsql_ltt_invalid_reference = 336003114;
+	 isc_dsql_using_requires_params_subroutines = 336003115;
 	 isc_dyn_filter_not_found = 336068645;
 	 isc_dyn_func_not_found = 336068649;
 	 isc_dyn_index_not_found = 336068656;

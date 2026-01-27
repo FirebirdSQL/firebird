@@ -111,6 +111,7 @@ static void preModifyEraseTriggers(thread_db* tdbb, Triggers& triggers,
 static void preprocessAssignments(thread_db* tdbb, CompilerScratch* csb,
 	StreamType stream, CompoundStmtNode* compoundNode, const std::optional<OverrideClause>* insertOverride);
 static void restartRequest(const Request* request, jrd_tra* transaction);
+static void revertParametersOrder(Array<dsql_par*>& parameters);
 static void validateExpressions(thread_db* tdbb, const Array<ValidateInfo>& validations);
 
 }	// namespace Jrd
@@ -1280,8 +1281,6 @@ DeclareCursorNode* DeclareCursorNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	cursorNumber = dsqlScratch->cursorNumber++;
 	dsqlScratch->cursors.push(this);
 
-	dsqlScratch->putDebugDeclaredCursor(cursorNumber, dsqlName);
-
 	++dsqlScratch->scopeLevel;
 
 	return this;
@@ -1305,6 +1304,8 @@ string DeclareCursorNode::internalPrint(NodePrinter& printer) const
 
 void DeclareCursorNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
+	dsqlScratch->putDebugDeclaredCursor(cursorNumber, dsqlName);
+
 	dsqlScratch->appendUChar(blr_dcl_cursor);
 	dsqlScratch->appendUShort(cursorNumber);
 
@@ -2192,8 +2193,15 @@ DmlNode* DeclareVariableNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerS
 	return node;
 }
 
-DeclareVariableNode* DeclareVariableNode::dsqlPass(DsqlCompilerScratch* /*dsqlScratch*/)
+DeclareVariableNode* DeclareVariableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
+	if (dsqlDef->defaultClause)
+		dsqlDef->defaultClause->value = doDsqlPass(dsqlScratch, dsqlDef->defaultClause->value);
+
+	dsql_fld* field = dsqlDef->type;
+	dsqlVar = dsqlScratch->makeVariable(field, field->fld_name.c_str(), dsql_var::TYPE_LOCAL, 0, 0);
+	dsqlVar->initialized = true;
+
 	return this;
 }
 
@@ -5020,20 +5028,29 @@ ExecBlockNode* ExecBlockNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	ExecBlockNode* node = FB_NEW_POOL(dsqlScratch->getPool()) ExecBlockNode(dsqlScratch->getPool());
 
-	for (NestConst<ParameterClause>* param = parameters.begin(); param != parameters.end(); ++param)
+	node->parameters = parameters;
+
+	for (auto paramIt = node->parameters.begin(); paramIt != node->parameters.end(); ++paramIt)
 	{
+		const USHORT index = static_cast<USHORT>(paramIt - node->parameters.begin());
+		auto newParam = *paramIt;
+
 		PsqlChanger changer(dsqlScratch, false);
 
-		node->parameters.add(*param);
-		ParameterClause* newParam = node->parameters.back();
+		newParam->type->resolve(dsqlScratch);
+		newParam->type->fld_id = paramIt - node->parameters.begin();
+
+		if (!(dsqlScratch->flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE))
+		{
+			dsqlScratch->makeVariable(newParam->type, newParam->name.c_str(),
+				dsql_var::TYPE_INPUT, 0, (USHORT) (2 * index), index);
+		}
 
 		newParam->parameterExpr = doDsqlPass(dsqlScratch, newParam->parameterExpr);
 
 		if (newParam->defaultClause)
 			newParam->defaultClause->value = doDsqlPass(dsqlScratch, newParam->defaultClause->value);
 
-		newParam->type->resolve(dsqlScratch);
-		newParam->type->fld_id = param - parameters.begin();
 
 		{ // scope
 			ValueExprNode* temp = newParam->parameterExpr;
@@ -5048,25 +5065,36 @@ ExecBlockNode* ExecBlockNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				false);
 		} // end scope
 
-		if (param != parameters.begin())
+		if (paramIt != node->parameters.begin())
 			node->parameters.end()[-2]->type->fld_next = newParam->type;
 	}
 
 	node->returns = returns;
 
-	for (FB_SIZE_T i = 0; i < node->returns.getCount(); ++i)
+	for (auto retIt = node->returns.begin(); retIt != node->returns.end(); ++retIt)
 	{
-		node->returns[i]->type->resolve(dsqlScratch);
-		node->returns[i]->type->fld_id = i;
+		const USHORT index = static_cast<USHORT>(retIt - node->returns.begin());
+		auto newRet = *retIt;
 
-		if (i != 0)
-			node->returns[i - 1]->type->fld_next = node->returns[i]->type;
+		newRet->type->resolve(dsqlScratch);
+		newRet->type->fld_id = index;
+
+		if (!(dsqlScratch->flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE))
+		{
+			dsqlScratch->makeVariable(newRet->type, newRet->name.c_str(),
+				dsql_var::TYPE_OUTPUT, 1, (USHORT) (2 * index), parameters.getCount() + index);
+		}
+
+		if (index != 0)
+			node->returns[index - 1]->type->fld_next = newRet->type;
 	}
 
-	node->localDeclList = localDeclList;
-	node->body = body;
+	LocalDeclarationsNode::checkUniqueFieldsNames(localDeclList, &parameters, &returns);
 
-	LocalDeclarationsNode::checkUniqueFieldsNames(node->localDeclList, &parameters, &returns);
+	if (localDeclList)
+		node->localDeclList = localDeclList->dsqlPass(dsqlScratch);
+
+	node->body = body;
 
 	return node;
 }
@@ -5093,31 +5121,6 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	// EXECUTE BLOCK needs "ports", which creates DSQL messages using the client charset.
 	// Sub routine doesn't need ports and should generate BLR as declared in its metadata.
 	const bool subRoutine = dsqlScratch->flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE;
-
-	unsigned returnsPos;
-
-	if (!subRoutine)
-	{
-		// Now do the input parameters.
-		for (FB_SIZE_T i = 0; i < parameters.getCount(); ++i)
-		{
-			ParameterClause* parameter = parameters[i];
-
-			dsqlScratch->makeVariable(parameter->type, parameter->name.c_str(),
-				dsql_var::TYPE_INPUT, 0, (USHORT) (2 * i), i);
-		}
-
-		returnsPos = dsqlScratch->variables.getCount();
-
-		// Now do the output parameters.
-		for (FB_SIZE_T i = 0; i < returns.getCount(); ++i)
-		{
-			ParameterClause* parameter = returns[i];
-
-			dsqlScratch->makeVariable(parameter->type, parameter->name.c_str(),
-				dsql_var::TYPE_OUTPUT, 1, (USHORT) (2 * i), parameters.getCount() + i);
-		}
-	}
 
 	DsqlStatement* const statement = dsqlScratch->getDsqlStatement();
 
@@ -5154,8 +5157,12 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	else
 		statement->setReceiveMsg(nullptr);
 
+	unsigned returnsPos;
+	unsigned inputStart = 0;
+
 	if (subRoutine)
 	{
+		inputStart = dsqlScratch->variables.getCount();
 		dsqlScratch->genParameters(parameters, returns);
 		returnsPos = dsqlScratch->variables.getCount() - dsqlScratch->outputVariables.getCount();
 	}
@@ -5173,7 +5180,7 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		// This validation is needed only for subroutines. Standard EXECUTE BLOCK moves input
 		// parameters to variables and are then validated.
 
-		for (unsigned i = 0; i < returnsPos; ++i)
+		for (unsigned i = inputStart; i < returnsPos; ++i)
 		{
 			const dsql_var* variable = dsqlScratch->variables[i];
 			const TypeClause* field = variable->field;
@@ -5193,7 +5200,10 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	const auto& variables = subRoutine ? dsqlScratch->outputVariables : dsqlScratch->variables;
 
 	for (const auto variable : variables)
-		dsqlScratch->putLocalVariable(variable);
+	{
+		if (variable->type != dsql_var::TYPE_LOCAL)
+			dsqlScratch->putLocalVariable(variable);
+	}
 
 	dsqlScratch->setPsql(true);
 
@@ -5230,22 +5240,6 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	dsqlScratch->appendUChar(blr_end);
 
 	dsqlScratch->endDebug();
-}
-
-// Revert parameters order for EXECUTE BLOCK statement
-void ExecBlockNode::revertParametersOrder(Array<dsql_par*>& parameters)
-{
-	int start = 0;
-	int end = int(parameters.getCount()) - 1;
-
-	while (start < end)
-	{
-		dsql_par* temp = parameters[start];
-		parameters[start] = parameters[end];
-		parameters[end] = temp;
-		++start;
-		--end;
-	}
 }
 
 
@@ -6542,24 +6536,18 @@ void LocalDeclarationsNode::checkUniqueFieldsNames(const LocalDeclarationsNode* 
 	}
 }
 
-void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
+LocalDeclarationsNode* LocalDeclarationsNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	// Sub routine needs a different approach from EXECUTE BLOCK.
-	// EXECUTE BLOCK needs "ports", which creates DSQL messages using the client charset.
-	// Sub routine doesn't need ports and should generate BLR as declared in its metadata.
-	const bool isSubRoutine = dsqlScratch->flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE;
+	PsqlChanger changer(dsqlScratch, true);
 
-	Array<dsql_var*> declaredVariables;
-
+	const auto node = FB_NEW_POOL(dsqlScratch->getPool()) LocalDeclarationsNode(dsqlScratch->getPool());
 	const auto end = statements.end();
 
 	for (auto ptr = statements.begin(); ptr != end; ++ptr)
 	{
-		auto parameter = *ptr;
-
-		if (const auto varNode = nodeAs<DeclareVariableNode>(parameter))
+		if (const auto varNode = nodeAs<DeclareVariableNode>(*ptr))
 		{
-			dsql_fld* field = varNode->dsqlDef->type;
+			const dsql_fld* field = varNode->dsqlDef->type;
 			const NestConst<StmtNode>* rest = ptr;
 
 			while (++rest != end)
@@ -6575,37 +6563,55 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 					}
 				}
 			}
+		}
+	}
 
-			const auto variable = dsqlScratch->makeVariable(field, field->fld_name.c_str(),
-				dsql_var::TYPE_LOCAL, 0, 0);
-			declaredVariables.add(variable);
+	for (auto stmt : statements)
+		node->statements.add(stmt->dsqlPass(dsqlScratch));
+
+	return node;
+}
+
+void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
+{
+	// Sub routine needs a different approach from EXECUTE BLOCK.
+	// EXECUTE BLOCK needs "ports", which creates DSQL messages using the client charset.
+	// Sub routine doesn't need ports and should generate BLR as declared in its metadata.
+	const bool isSubRoutine = dsqlScratch->flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE;
+
+	for (auto parameter : statements)
+	{
+		if (const auto varNode = nodeAs<DeclareVariableNode>(parameter))
+		{
+			dsql_var* variable = varNode->dsqlVar;
+			fb_assert(variable);
 
 			dsqlScratch->putLocalVariableDecl(variable, varNode, varNode->dsqlDef->type->collate);
 
 			// Some field attributes are calculated inside putLocalVariable(), so we reinitialize
 			// the descriptor.
-			DsqlDescMaker::fromField(&variable->desc, field);
+			DsqlDescMaker::fromField(&variable->desc, variable->field);
 		}
 		else if (nodeIs<DeclareCursorNode>(parameter) ||
 			nodeIs<DeclareSubProcNode>(parameter) ||
 			nodeIs<DeclareSubFuncNode>(parameter))
 		{
 			dsqlScratch->putDebugSrcInfo(parameter->line, parameter->column);
-			parameter->dsqlPass(dsqlScratch);
 			parameter->genBlr(dsqlScratch);
 		}
 		else
 			fb_assert(false);
 	}
 
-	auto declVarIt = declaredVariables.begin();
-
 	for (const auto parameter : statements)
 	{
 		if (const auto varNode = nodeAs<DeclareVariableNode>(parameter))
 		{
+			const auto variable = varNode->dsqlVar;
+			fb_assert(variable);
+
 			dsqlScratch->putDebugSrcInfo(parameter->line, parameter->column);
-			dsqlScratch->putLocalVariableInit(*declVarIt++, varNode);
+			dsqlScratch->putLocalVariableInit(variable, varNode);
 		}
 	}
 
@@ -9546,7 +9552,7 @@ void SelectNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	auto message = statement->getSendMsg();
 
-	if (message->msg_parameter)
+	if (message && message->msg_parameter)
 		GEN_port(dsqlScratch, message);
 	else
 		statement->setSendMsg(nullptr);
@@ -10943,6 +10949,171 @@ void UserSavepointNode::execute(thread_db* tdbb, DsqlRequest* request, jrd_tra**
 //--------------------
 
 
+StmtNode* UsingNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
+{
+	// USING without parameters and subroutines is useless
+	if (parameters.isEmpty() && !localDeclList)
+	{
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				  Arg::Gds(isc_dsql_using_requires_params_subroutines));
+	}
+
+	dsqlScratch->flags |= DsqlCompilerScratch::FLAG_USING_STATEMENT;
+
+	const auto statement = dsqlScratch->getDsqlStatement();
+	unsigned index = 0;
+
+	const auto node = FB_NEW_POOL(dsqlScratch->getPool()) UsingNode(dsqlScratch->getPool());
+
+	node->parameters = parameters;
+
+	for (auto newParam : node->parameters)
+	{
+		PsqlChanger changer(dsqlScratch, false);
+
+		newParam->parameterExpr = doDsqlPass(dsqlScratch, newParam->parameterExpr);
+
+		if (newParam->defaultClause)
+			newParam->defaultClause->value = doDsqlPass(dsqlScratch, newParam->defaultClause->value);
+
+		newParam->type->resolve(dsqlScratch);
+		newParam->type->fld_id = index;
+
+		{	// scope
+			auto temp = newParam->parameterExpr;
+
+			// Initialize this stack variable, and make it look like a node
+			dsc descNode;
+
+			newParam->type->flags |= FLD_nullable;
+			DsqlDescMaker::fromField(&descNode, newParam->type);
+			PASS1_set_parameter_type(dsqlScratch, temp,
+				[&] (dsc* desc) { *desc = descNode; },
+				false);
+
+			if (const auto paramNode = nodeAs<ParameterNode>(temp))
+			{
+				if (paramNode->dsqlParameter)
+				{
+					paramNode->dsqlParameter->par_name = newParam->name;
+					paramNode->dsqlParameter->par_alias = newParam->name;
+				}
+			}
+		}
+
+		dsqlScratch->makeVariable(newParam->type, newParam->name.c_str(),
+			dsql_var::TYPE_INPUT, 0, (USHORT) (2 * index), index);
+
+		++index;
+	}
+
+	LocalDeclarationsNode::checkUniqueFieldsNames(localDeclList, &parameters, nullptr);
+
+	if (localDeclList)
+		node->localDeclList = localDeclList->dsqlPass(dsqlScratch);
+
+	if (body)
+		node->body = body->dsqlPass(dsqlScratch);
+
+	if (statement->getSendMsg())
+		revertParametersOrder(statement->getSendMsg()->msg_parameters);
+
+	return node;
+}
+
+string UsingNode::internalPrint(NodePrinter& printer) const
+{
+	StmtNode::internalPrint(printer);
+
+	NODE_PRINT(printer, parameters);
+	NODE_PRINT(printer, localDeclList);
+	NODE_PRINT(printer, body);
+
+	return "UsingNode";
+}
+
+void UsingNode::genBlr(DsqlCompilerScratch* dsqlScratch)
+{
+	const auto statement = dsqlScratch->getDsqlStatement();
+
+	// For SELECT-based statement types, GEN_statement does NOT call GEN_port or generate
+	// blr_receive_batch, so we must handle it here. For other types (INSERT, UPDATE, DELETE),
+	// GEN_statement already handles the message port generation.
+	const bool isSelect = (statement->getType() == DsqlStatement::TYPE_SELECT ||
+		statement->getType() == DsqlStatement::TYPE_SELECT_UPD);
+
+	// For SELECT types, check if we have actual parameters. Clear sendMsg if not
+	// (similar to what GEN_statement does for non-SELECT types).
+	auto sendMsg = statement->getSendMsg();
+	if (isSelect && sendMsg && !sendMsg->msg_parameter)
+	{
+		statement->setSendMsg(nullptr);
+		sendMsg = nullptr;
+	}
+
+	// For SELECT types with parameters, we need to wrap everything in blr_begin
+	// and generate our own message/receive
+	const bool genSelectWrapper = isSelect && sendMsg;
+
+	if (genSelectWrapper)
+		dsqlScratch->appendUChar(blr_begin);
+
+	// Generate the port (message) BLR for input parameters - only for SELECT statements
+	if (genSelectWrapper)
+		GEN_port(dsqlScratch, sendMsg);
+
+	if (dsqlScratch->variables.hasData())
+	{
+		// Generate receive statement to get parameter values - only for SELECT statements
+		if (genSelectWrapper)
+		{
+			dsqlScratch->appendUChar(blr_receive);
+			dsqlScratch->appendUChar(0);
+		}
+
+		dsqlScratch->appendUChar(blr_begin);
+
+		for (const auto var : dsqlScratch->variables)
+			dsqlScratch->putLocalVariable(var);
+	}
+
+	dsqlScratch->appendUChar(blr_begin);
+
+	if (localDeclList)
+		localDeclList->genBlr(dsqlScratch);
+
+	dsqlScratch->loopLevel = 0;
+
+	// Temporarily hide SendMsg so the body (SelectNode) doesn't generate duplicate port/receive
+	if (sendMsg)
+		statement->setSendMsg(nullptr);
+
+	// The body should be generated in DSQL mode (isPsql=false) so that RETURNING
+	// generates the correct local table declarations and cursor handling.
+	PsqlChanger changer(dsqlScratch, false);
+
+	if (body)
+		body->genBlr(dsqlScratch);
+
+	if (sendMsg)
+		statement->setSendMsg(sendMsg);
+
+	dsqlScratch->putOuterMaps();
+	GEN_hidden_variables(dsqlScratch);
+
+	dsqlScratch->appendUChar(blr_end);
+
+	if (dsqlScratch->variables.hasData())
+		dsqlScratch->appendUChar(blr_end);
+
+	if (genSelectWrapper)
+		dsqlScratch->appendUChar(blr_end);
+}
+
+
+//--------------------
+
+
 // Generate a field list that correspond to table fields.
 template <typename T>
 static void dsqlExplodeFields(dsql_rel* relation, Array<NestConst<T> >& fields, bool includeComputed)
@@ -12211,6 +12382,22 @@ static void restartRequest(const Request* request, jrd_tra* transaction)
 	ERR_post(Arg::Gds(isc_deadlock) <<
 		Arg::Gds(isc_update_conflict) <<
 		Arg::Gds(isc_concurrent_transaction) << Arg::Int64(top_request->req_conflict_txn));
+}
+
+// Revert parameters order for EXECUTE BLOCK and USING statements.
+static void revertParametersOrder(Array<dsql_par*>& parameters)
+{
+	int start = 0;
+	int end = int(parameters.getCount()) - 1;
+
+	while (start < end)
+	{
+		const auto temp = parameters[start];
+		parameters[start] = parameters[end];
+		parameters[end] = temp;
+		++start;
+		--end;
+	}
 }
 
 // Execute a list of validation expressions.

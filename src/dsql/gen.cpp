@@ -290,7 +290,7 @@ void GEN_statement(DsqlCompilerScratch* scratch, DmlNode* node)
 	default:
 		{
 			dsql_msg* message = statement->getSendMsg();
-			if (!message->msg_parameter)
+			if (!message || !message->msg_parameter)
 				statement->setSendMsg(NULL);
 			else
 			{

@@ -508,6 +508,7 @@ public:
 public:
 	NestConst<ParameterClause> dsqlDef;
 	dsc varDesc;
+	dsql_var* dsqlVar = nullptr;
 	USHORT varId = 0;
 	bool usedInSubRoutines = false;
 };
@@ -785,9 +786,6 @@ public:
 	ExecBlockNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
-private:
-	static void revertParametersOrder(Firebird::Array<dsql_par*>& parameters);
-
 public:
 	Firebird::Array<NestConst<ParameterClause>> parameters;
 	Firebird::Array<NestConst<ParameterClause>> returns;
@@ -1049,6 +1047,7 @@ public:
 		const Firebird::Array<NestConst<ParameterClause>>* outputParameters);
 
 public:
+	LocalDeclarationsNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
 public:
@@ -2097,6 +2096,26 @@ public:
 	NestConst<StoreNode> storeNode;
 	NestConst<ModifyNode> modifyNode;
 	Firebird::Array<NestConst<AssignmentNode>> varAssignments;
+};
+
+
+class UsingNode final : public TypedNode<DsqlOnlyStmtNode, StmtNode::TYPE_USING>
+{
+public:
+	explicit UsingNode(MemoryPool& pool)
+		: TypedNode<DsqlOnlyStmtNode, StmtNode::TYPE_USING>(pool),
+		  parameters(pool)
+	{
+	}
+
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	StmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+
+public:
+	Firebird::Array<NestConst<ParameterClause>> parameters;
+	NestConst<LocalDeclarationsNode> localDeclList;
+	NestConst<StmtNode> body;
 };
 
 

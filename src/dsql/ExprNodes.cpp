@@ -14166,9 +14166,10 @@ void VariableNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	auto varScratch = outerDecl ? dsqlScratch->mainScratch : dsqlScratch;
 
-	const bool execBlock = (varScratch->flags & DsqlCompilerScratch::FLAG_EXEC_BLOCK);
+	const bool execBlockOrUsing = (varScratch->flags &
+		(DsqlCompilerScratch::FLAG_EXEC_BLOCK | DsqlCompilerScratch::FLAG_USING_STATEMENT));
 
-	if (dsqlVar->type == dsql_var::TYPE_INPUT && !execBlock)
+	if (dsqlVar->type == dsql_var::TYPE_INPUT && !execBlockOrUsing)
 	{
 		dsqlScratch->appendUChar(blr_parameter2);
 
@@ -14186,7 +14187,7 @@ void VariableNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	}
 	else
 	{
-		// If this is an EXECUTE BLOCK input parameter, use the internal variable.
+		// If this is an EXECUTE BLOCK or USING input parameter, use the internal variable.
 		dsqlScratch->appendUChar(blr_variable);
 
 		if (outerDecl)

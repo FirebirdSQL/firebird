@@ -39,3 +39,4 @@ FB_IMPL_MSG(DSQL, 39, dsql_wrong_param_num, -313, "07", "001", "Wrong number of 
 FB_IMPL_MSG(DSQL, 40, dsql_invalid_drop_ss_clause, -817, "42", "000", "Invalid DROP SQL SECURITY clause")
 FB_IMPL_MSG(DSQL, 41, upd_ins_cannot_default, -313, "42", "000", "UPDATE OR INSERT value for field @1, part of the implicit or explicit MATCHING clause, cannot be DEFAULT")
 FB_IMPL_MSG(DSQL, 42, dsql_ltt_invalid_reference, -607, "42", "000", "LOCAL TEMPORARY TABLE @1 cannot be referenced in @2")
+FB_IMPL_MSG(DSQL, 43, dsql_using_requires_params_subroutines, -104, "42", "000", "USING requires parameters or subroutines")

@@ -852,6 +852,7 @@ using namespace Firebird;
 	Jrd::ExecBlockNode* execBlockNode;
 	Jrd::StoreNode* storeNode;
 	Jrd::UpdateOrInsertNode* updInsNode;
+	Jrd::UsingNode* usingNode;
 	Jrd::AggNode* aggNode;
 	Jrd::SysFuncCallNode* sysFuncCallNode;
 	Jrd::ValueIfNode* valueIfNode;
@@ -928,6 +929,7 @@ dml_statement
 	| select									{ $$ = $1; }
 	| update									{ $$ = $1; }
 	| update_or_insert							{ $$ = $1; }
+	| using										{ $$ = $1; }
 	;
 
 %type <ddlNode> ddl_statement
@@ -4173,6 +4175,36 @@ block_parameter($parameters)
 			setCollate($1, $2);
 			$parameters->add(newNode<ParameterClause>($1, (ValueSourceClause*) NULL, $4));
 		}
+	;
+
+// USING
+
+%type <usingNode> using
+using
+	: USING
+			{ $<usingNode>$ = newNode<UsingNode>(); }
+			block_input_params(NOTRIAL(&$2->parameters))
+			local_declarations_opt
+			DO
+			using_dml_statement
+		{
+			const auto node = $2;
+			node->localDeclList = $4;
+			node->body = $6;
+			$$ = node;
+		}
+	;
+
+%type <stmtNode> using_dml_statement
+using_dml_statement
+	: call				{ $$ = $1; }
+	| delete			{ $$ = $1; }
+	| insert			{ $$ = $1; }
+	| merge				{ $$ = $1; }
+	| exec_procedure	{ $$ = $1; }
+	| select			{ $$ = $1; }
+	| update			{ $$ = $1; }
+	| update_or_insert	{ $$ = $1; }
 	;
 
 // CREATE VIEW
