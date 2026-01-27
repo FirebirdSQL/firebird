@@ -94,9 +94,7 @@ namespace Jrd
 		const auto format = record->getFormat();
 		fb_assert(format);
 
-		const auto& formatDesc = format->fmt_desc[id];
-
-		if (id >= format->fmt_count || formatDesc.isUnknown())
+		if (id >= format->fmt_count || format->fmt_desc[id].isUnknown())
 		{
 			// Map a non-existent field to a default value, if available.
 			// This enables automatic format upgrade for data rows.
@@ -138,10 +136,10 @@ namespace Jrd
 
 		// If the offset of the field is 0, the field can't possible exist
 
-		if (!formatDesc.dsc_address)
+		if (!format->fmt_desc[id].dsc_address)
 			return false;
 
-		EVL_put_desc(tdbb, &formatDesc, desc);
+		EVL_put_desc(tdbb, &format->fmt_desc[id], desc);
 
 		desc->setAddress(record->getData() + (IPTR) desc->dsc_address);
 
