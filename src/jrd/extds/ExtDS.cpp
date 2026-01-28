@@ -1825,6 +1825,27 @@ void Statement::prepare(thread_db* tdbb, Transaction* tran, const string& sql, b
 	m_sql = sql;
 	m_sql.trim();
 	m_preparedByReq = m_callerPrivileges ? tdbb->getRequest() : NULL;
+
+	if (m_sqlParamNames.isEmpty() && getInputs() > 0)
+	{
+		fb_assert(m_sqlParamsMap.isEmpty());
+
+		// Populate parameters from metadata if preprocessing was skipped
+
+		const unsigned count = getInputs();
+		const MetaString empty;
+
+		for (unsigned i = 0; i < count; ++i)
+		{
+			const MetaString parameterName(getParameterName(i));
+			FB_SIZE_T n = 0;
+
+			if (!m_sqlParamNames.find(parameterName, n))
+				n = m_sqlParamNames.add(parameterName);
+
+			m_sqlParamsMap.add(&m_sqlParamNames[n]);
+		}
+	}
 }
 
 void Statement::setTimeout(thread_db* tdbb, unsigned int timeout)
@@ -2237,12 +2258,6 @@ void Statement::setInParams(thread_db* tdbb, const MetaName* const* names,
 	const FB_SIZE_T excCount = in_excess ? in_excess->getCount() : 0;
 	const FB_SIZE_T sqlCount = m_sqlParamNames.getCount();
 
-	if ((m_error = (!names && sqlCount)))
-	{
-		// Parameter name expected
-		ERR_post(Arg::Gds(isc_eds_prm_name_expected));
-	}
-
 	// OK : count - excCount <= sqlCount <= count
 
 	// Check if all passed named parameters, not marked as excess, are present in query text
@@ -2267,7 +2282,9 @@ void Statement::setInParams(thread_db* tdbb, const MetaName* const* names,
 		}
 	}
 
-	if (sqlCount || names && count > 0)
+	// When names is provided (named parameters), do named matching
+	// When names is nullptr (unnamed parameters), do positional matching even if SQL has named parameters
+	if (names && count > 0 && sqlCount)
 	{
 		const unsigned int mapCount = m_sqlParamsMap.getCount();
 		// Here NestConst plays against its objective. It temporary unconstifies the values.
