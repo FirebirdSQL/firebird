@@ -310,6 +310,7 @@ Name: fr; MessagesFile: compiler:Languages\French.isl; InfoBeforeFile: {#GenDir}
 ;Name: pt; MessagesFile: compiler:Languages\Portuguese.isl; InfoBeforeFile: {#GenDir}\pt\instalacao_leia-me.txt; InfoAfterFile: {#GenDir}\pt\leia-me.txt
 Name: ru; MessagesFile: compiler:Languages\Russian.isl; InfoBeforeFile: {#GenDir}\ru\installation_readme.txt; InfoAfterFile: {#GenDir}\ru\readme.txt;
 ;Name: si; MessagesFile: compiler:Languages\Slovenian.isl; InfoBeforeFile: {#GenDir}\si\instalacija_precitajMe.txt; InfoAfterFile: {#GenDir}\readme.txt;
+Name: ja; MessagesFile: compiler:Languages\Japanese.isl; InfoBeforeFile: {#GenDir}\ja\installation_readme.txt; InfoAfterFile: {#GenDir}\readme.txt;
 #endif
 
 [CustomMessages]
@@ -326,6 +327,7 @@ Name: ru; MessagesFile: compiler:Languages\Russian.isl; InfoBeforeFile: {#GenDir
 ;#include "pt\custom_messages_pt.inc"
 #include "ru\custom_messages_ru.inc"
 ;#include "si\custom_messages_si.inc"
+#include  "ja\custom_messages_ja.inc"
 #endif
 
 [Types]
@@ -433,6 +435,7 @@ Source: {#GenDir}\fr\*.txt; DestDir: {app}\doc; Components: DevAdminComponent; F
 ;Source: {#GenDir}\pt\*.txt; DestDir: {app}\doc; Components: DevAdminComponent; Flags: ignoreversion; Languages: pt;
 Source: {#GenDir}\ru\*.txt; DestDir: {app}\doc; Components: DevAdminComponent; Flags: ignoreversion; Languages: ru;
 ;Source: {#GenDir}\si\*.txt; DestDir: {app}\doc; Components: DevAdminComponent; Flags: ignoreversion; Languages: si;
+Source: {#GenDir}\ja\*.txt; DestDir: {app}\doc; Components: DevAdminComponent; Flags: ignoreversion; Languages: ja;
 #endif
 Source: {#FilesDir}\firebird.conf; DestDir: {app}; DestName: firebird.conf.default; Components: ServerComponent;
 Source: {#FilesDir}\firebird.conf; DestDir: {app}; DestName: firebird.conf; Components: ServerComponent; Flags: uninsneveruninstall; check: NoFirebirdConfExists
