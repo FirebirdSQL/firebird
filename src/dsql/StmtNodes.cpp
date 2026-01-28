@@ -1668,7 +1668,8 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 	dsqlFunction->udf_name.object = name;
 
 	fb_assert(dsqlBlock->returns.getCount() == 1);
-	const auto returnType = dsqlBlock->returns[0]->type;
+	auto returnType = dsqlBlock->returns[0]->type;
+	returnType->resolve(dsqlScratch);
 
 	dsqlFunction->udf_dtype = returnType->dtype;
 	dsqlFunction->udf_scale = returnType->scale;
@@ -1691,6 +1692,8 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 	{
 		auto param = *i;
 		const unsigned paramIndex = i - dsqlBlock->parameters.begin();
+
+		param->type->resolve(dsqlScratch);
 
 		SignatureParameter sigParam(pool);
 		sigParam.type = 0;
@@ -2008,6 +2011,8 @@ DeclareSubProcNode* DeclareSubProcNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 			auto param = *i;
 			const unsigned paramIndex = i - dsqlBlock->parameters.begin();
 
+			param->type->resolve(dsqlScratch);
+
 			SignatureParameter sigParam(pool);
 			sigParam.type = 0;	// input
 			sigParam.number = (SSHORT) dsqlSignature.parameters.getCount();
@@ -2051,7 +2056,9 @@ DeclareSubProcNode* DeclareSubProcNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 
 		for (NestConst<ParameterClause>* i = dsqlBlock->returns.begin(); i != dsqlBlock->returns.end(); ++i)
 		{
-			const auto param = *i;
+			auto param = *i;
+
+			param->type->resolve(dsqlScratch);
 
 			SignatureParameter sigParam(pool);
 			sigParam.type = 1;	// output
@@ -5037,11 +5044,12 @@ ExecBlockNode* ExecBlockNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 		PsqlChanger changer(dsqlScratch, false);
 
-		newParam->type->resolve(dsqlScratch);
 		newParam->type->fld_id = paramIt - node->parameters.begin();
 
 		if (!(dsqlScratch->flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE))
 		{
+			newParam->type->resolve(dsqlScratch);
+
 			dsqlScratch->makeVariable(newParam->type, newParam->name.c_str(),
 				dsql_var::TYPE_INPUT, 0, (USHORT) (2 * index), index);
 		}
@@ -5076,11 +5084,12 @@ ExecBlockNode* ExecBlockNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		const USHORT index = static_cast<USHORT>(retIt - node->returns.begin());
 		auto newRet = *retIt;
 
-		newRet->type->resolve(dsqlScratch);
 		newRet->type->fld_id = index;
 
 		if (!(dsqlScratch->flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE))
 		{
+			newRet->type->resolve(dsqlScratch);
+
 			dsqlScratch->makeVariable(newRet->type, newRet->name.c_str(),
 				dsql_var::TYPE_OUTPUT, 1, (USHORT) (2 * index), parameters.getCount() + index);
 		}
