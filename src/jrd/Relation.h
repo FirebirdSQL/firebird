@@ -272,6 +272,7 @@ public:
 
 	bool isSystem() const noexcept;
 	bool isTemporary() const noexcept;
+	bool isLTT() const noexcept;
 	bool isVirtual() const noexcept ;
 	bool isView() const noexcept;
 
@@ -427,6 +428,11 @@ inline bool jrd_rel::isSystem() const noexcept
 inline bool jrd_rel::isTemporary() const noexcept
 {
 	return (rel_flags & (REL_temp_tran | REL_temp_conn));
+}
+
+inline bool jrd_rel::isLTT() const noexcept
+{
+	return rel_flags & REL_temp_ltt;
 }
 
 inline bool jrd_rel::isVirtual() const noexcept

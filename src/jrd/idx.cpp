@@ -468,7 +468,8 @@ bool IndexCreateTask::handler(WorkItem& _item)
 	Database* dbb = tdbb->getDatabase();
 	Attachment* attachment = tdbb->getAttachment();
 	jrd_rel* relation = MET_relation(tdbb, m_creation->relation->rel_id);
-	if (relation && !(relation->rel_flags & REL_scanned))
+	fb_assert(relation);
+	if (!(relation->rel_flags & REL_scanned))
 		MET_scan_relation(tdbb, relation);
 
 	index_desc* idx = &item->m_idx;

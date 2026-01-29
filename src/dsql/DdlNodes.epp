@@ -8101,7 +8101,7 @@ const ObjectsArray<MetaName>* CreateRelationNode::findPkColumns()
 
 void CreateRelationNode::defineLocalTempTable(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
 {
-	dsqlScratch->flags |= DsqlCompilerScratch::FLAG_ALLOW_LTT_REFERENCES;
+	AutoSetRestoreFlag autoLttReferences(&dsqlScratch->flags, DsqlCompilerScratch::FLAG_ALLOW_LTT_REFERENCES, true);
 
 	const auto attachment = tdbb->getAttachment();
 	auto& attPool = *attachment->att_pool;
@@ -8211,7 +8211,7 @@ void CreateRelationNode::defineLocalTempTable(thread_db* tdbb, DsqlCompilerScrat
 		{
 			ERR_post(Arg::Gds(isc_imp_exc) <<
 					 Arg::Gds(isc_random) <<
-					 Arg::Str("Local temporary table limit exceeded"));
+					 Arg::Str("Too many local temporary tables exist already"));
 		}
 	}
 
@@ -8248,8 +8248,8 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 	// Check if this is an LTT and set flag before METD_get_relation (called by saveRelation)
 	// to avoid false "LTT cannot be referenced in persistent metadata" error
-	if (attachment->att_local_temporary_tables.exist(name))
-		dsqlScratch->flags |= DsqlCompilerScratch::FLAG_ALLOW_LTT_REFERENCES;
+	AutoSetRestoreFlag autoLttReferences(&dsqlScratch->flags, DsqlCompilerScratch::FLAG_ALLOW_LTT_REFERENCES,
+		attachment->att_local_temporary_tables.exist(name));
 
 	saveRelation(tdbb, dsqlScratch, name, false, false);
 
@@ -8675,9 +8675,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 		// Update DSQL cache
 		METD_drop_relation(transaction, name);
-
-		if (!(relation->rel_flags & REL_ltt_created))
-			MET_dsql_cache_release(tdbb, SYM_relation, name);
+		MET_dsql_cache_release(tdbb, SYM_relation, name);
 	}
 	catch (const Exception&)
 	{
@@ -9183,7 +9181,7 @@ void AlterRelationNode::modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 void AlterRelationNode::alterLocalTempTable(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
-	// FLAG_ALLOW_LTT_REFERENCES is already set by execute() before calling this method
+	fb_assert(dsqlScratch->flags & DsqlCompilerScratch::FLAG_ALLOW_LTT_REFERENCES);
 
 	const auto attachment = tdbb->getAttachment();
 	auto& attPool = *attachment->att_pool;
@@ -11169,7 +11167,7 @@ void CreateIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 void CreateIndexNode::defineLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction, LocalTemporaryTable* ltt)
 {
-	dsqlScratch->flags |= DsqlCompilerScratch::FLAG_ALLOW_LTT_REFERENCES;
+	AutoSetRestoreFlag autoLttReferences(&dsqlScratch->flags, DsqlCompilerScratch::FLAG_ALLOW_LTT_REFERENCES, true);
 
 	const auto attachment = transaction->tra_attachment;
 	auto& attPool = *attachment->att_pool;
@@ -14872,6 +14870,8 @@ bool DropSchemaNode::collectObjects(thread_db* tdbb, jrd_tra* transaction,
 		{
 			if (objects)
 				objects->add({obj_relation, REL.RDB$RELATION_NAME});
+			else
+				return true;
 		}
 		END_FOR
 	}

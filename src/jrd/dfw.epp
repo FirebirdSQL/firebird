@@ -5298,10 +5298,10 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 		}
 
 		RelationPages* const relPages = relation->getBasePages();
-		if (relPages && relPages->rel_index_root)
+		if (relPages->rel_index_root)
 			IDX_delete_indices(tdbb, relation, relPages);
 
-		if (relPages && relPages->rel_pages)
+		if (relPages->rel_pages)
 			DPM_delete_relation(tdbb, relation);
 
 		// if this is a view (or even if we don't know), delete dependency lists

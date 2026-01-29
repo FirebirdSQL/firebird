@@ -1271,6 +1271,8 @@ Format* MET_current(thread_db* tdbb, jrd_rel* relation)
 		return relation->rel_current_format;
 	}
 
+	fb_assert(!(relation->rel_flags & REL_temp_ltt));
+
 	SET_TDBB(tdbb);
 	Attachment* attachment = tdbb->getAttachment();
 
@@ -2302,16 +2304,19 @@ int MET_lookup_field(thread_db* tdbb, jrd_rel* relation, const MetaName& name)
 	if (relation->rel_flags & REL_deleted)
 		return id;
 
-	if (const auto lttPtr = attachment->att_local_temporary_tables.get(relation->rel_name))
+	if (relation->isLTT())
 	{
-		const auto ltt = *lttPtr;
-
-		for (const auto& lttField : ltt->fields)
+		if (const auto lttPtr = attachment->att_local_temporary_tables.get(relation->rel_name))
 		{
-			if (lttField.name == name)
+			const auto ltt = *lttPtr;
+
+			for (const auto& lttField : ltt->fields)
 			{
-				id = lttField.id;
-				break;
+				if (lttField.name == name)
+				{
+					id = lttField.id;
+					break;
+				}
 			}
 		}
 
@@ -3140,12 +3145,7 @@ jrd_rel* MET_lookup_relation(thread_db* tdbb, const QualifiedName& name)
 	// See if we already know the relation by name
 
 	if (const auto lttPtr = attachment->att_local_temporary_tables.get(name))
-	{
-		const auto ltt = *lttPtr;
-
-		if (ltt->relation)
-			return ltt->relation;
-	}
+		return (*lttPtr)->relation;
 
 	vec<jrd_rel*>* relations = attachment->att_relations;
 	jrd_rel* check_relation = NULL;
@@ -3214,19 +3214,16 @@ jrd_rel* MET_lookup_relation(thread_db* tdbb, const QualifiedName& name)
 
 		if (check_relation != relation)
 		{
-			if (!(check_relation->rel_flags & REL_temp_ltt))
+			LCK_release(tdbb, check_relation->rel_existence_lock);
+
+			if (!(check_relation->rel_flags & REL_check_partners))
 			{
-				LCK_release(tdbb, check_relation->rel_existence_lock);
-
-				if (!(check_relation->rel_flags & REL_check_partners))
-				{
-					check_relation->rel_flags |= REL_check_partners;
-					LCK_release(tdbb, check_relation->rel_partners_lock);
-					check_relation->rel_flags &= ~REL_check_partners;
-				}
-
-				LCK_release(tdbb, check_relation->rel_rescan_lock);
+				check_relation->rel_flags |= REL_check_partners;
+				LCK_release(tdbb, check_relation->rel_partners_lock);
+				check_relation->rel_flags &= ~REL_check_partners;
 			}
+
+			LCK_release(tdbb, check_relation->rel_rescan_lock);
 
 			check_relation->rel_flags |= REL_deleted;
 		}
@@ -3285,37 +3282,39 @@ jrd_rel* MET_lookup_relation_id(thread_db* tdbb, SLONG id, bool return_deleted)
 
 	relation = nullptr;
 
-	for (const auto& lttEntry : attachment->att_local_temporary_tables)
+	if (id >= MIN_LTT_ID && id <= MAX_LTT_ID)
 	{
-		const auto ltt = lttEntry.second;
-
-		if (ltt->relationId == (ULONG) id && ltt->relation)
+		for (const auto& lttEntry : attachment->att_local_temporary_tables)
 		{
-			relation = ltt->relation;
-			break;
+			const auto ltt = lttEntry.second;
+
+			if (ltt->relationId == (ULONG) id)
+			{
+				relation = ltt->relation;
+				break;
+			}
 		}
+
+		return relation;
 	}
 
-	if (!relation)
+	static const CachedRequestId request1CacheId;
+	AutoCacheRequest request1(tdbb, request1CacheId);
+
+	FOR(REQUEST_HANDLE request1)
+		X IN RDB$RELATIONS
+		WITH X.RDB$RELATION_ID EQ id
 	{
-		static const CachedRequestId request1CacheId;
-		AutoCacheRequest request1(tdbb, request1CacheId);
+		relation = MET_relation(tdbb, X.RDB$RELATION_ID);
+		if (relation->rel_name.object.isEmpty())
+			relation->rel_name = QualifiedName(X.RDB$RELATION_NAME, X.RDB$SCHEMA_NAME);
 
-		FOR(REQUEST_HANDLE request1)
-			X IN RDB$RELATIONS
-			WITH X.RDB$RELATION_ID EQ id
-		{
-			relation = MET_relation(tdbb, X.RDB$RELATION_ID);
-			if (relation->rel_name.object.isEmpty())
-				relation->rel_name = QualifiedName(X.RDB$RELATION_NAME, X.RDB$SCHEMA_NAME);
+		relation->rel_flags |= get_rel_flags_from_FLAGS(X.RDB$FLAGS);
 
-			relation->rel_flags |= get_rel_flags_from_FLAGS(X.RDB$FLAGS);
-
-			if (!X.RDB$RELATION_TYPE.NULL)
-				relation->rel_flags |= MET_get_rel_flags_from_TYPE(X.RDB$RELATION_TYPE);
-		}
-		END_FOR
+		if (!X.RDB$RELATION_TYPE.NULL)
+			relation->rel_flags |= MET_get_rel_flags_from_TYPE(X.RDB$RELATION_TYPE);
 	}
+	END_FOR
 
 	if (check_relation)
 	{
@@ -3323,19 +3322,16 @@ jrd_rel* MET_lookup_relation_id(thread_db* tdbb, SLONG id, bool return_deleted)
 
 		if (check_relation != relation)
 		{
-			if (!(check_relation->rel_flags & REL_temp_ltt))
+			LCK_release(tdbb, check_relation->rel_existence_lock);
+
+			if (!(check_relation->rel_flags & REL_check_partners))
 			{
-				LCK_release(tdbb, check_relation->rel_existence_lock);
-
-				if (!(check_relation->rel_flags & REL_check_partners))
-				{
-					check_relation->rel_flags |= REL_check_partners;
-					LCK_release(tdbb, check_relation->rel_partners_lock);
-					check_relation->rel_flags &= ~REL_check_partners;
-				}
-
-				LCK_release(tdbb, check_relation->rel_rescan_lock);
+				check_relation->rel_flags |= REL_check_partners;
+				LCK_release(tdbb, check_relation->rel_partners_lock);
+				check_relation->rel_flags &= ~REL_check_partners;
 			}
+
+			LCK_release(tdbb, check_relation->rel_rescan_lock);
 
 			check_relation->rel_flags |= REL_deleted;
 		}
@@ -3883,18 +3879,20 @@ jrd_rel* MET_relation(thread_db* tdbb, USHORT id)
 	Attachment* attachment = tdbb->getAttachment();
 
 	// For LTT IDs, search att_local_temporary_tables
-	if (id >= MIN_LTT_ID)
+	if (id >= MIN_LTT_ID && id <= MAX_LTT_ID)
 	{
 		for (const auto& lttEntry : attachment->att_local_temporary_tables)
 		{
 			const auto ltt = lttEntry.second;
-			if (ltt->relationId == id && ltt->relation)
+			if (ltt->relationId == id)
 				return ltt->relation;
 		}
 
-		// LTT not found - unlike normal relations, LTTs are not auto-created by this function
+		// LTT not found (or not yet fully created)
 		fb_assert(false);
-		status_exception::raise(Arg::PrivateDyn(61));
+		string lttWithIdMsg;
+		lttWithIdMsg.printf("LTT with ID %u not found", unsigned(id));
+		ERR_post(Arg::Gds(isc_relnotdef) << lttWithIdMsg);
 	}
 
 	// For normal relations, use att_relations
@@ -3965,7 +3963,6 @@ void MET_release_existence(thread_db* tdbb, jrd_rel* relation)
 	if (!relation->rel_use_count)
 	{
 		if ((relation->rel_flags & REL_blocking) &&
-			!(relation->rel_flags & REL_temp_ltt) &&
 			relation->rel_existence_lock)
 		{
 			LCK_re_post(tdbb, relation->rel_existence_lock);

@@ -13,8 +13,11 @@ Local Temporary Tables are useful in scenarios where you need temporary storage 
 
 ### Temporary storage in read-only databases
 
-Since LTT definitions are not stored in the database, they can be created and used in read-only databases. This is not
-possible with Global Temporary Tables, which require metadata modifications.
+Since LTT definitions are not stored in the database, they can be created and used even when the database is read-only.
+
+Global Temporary Tables (GTTs), on the other hand, cannot be created in read-only databases because their creation
+requires metadata changes. Regarding usage (DML operations), only ON DELETE ROWS GTTs are allowed in a read-only
+database.
 
 ### Session-private definitions
 
@@ -33,12 +36,15 @@ or other temporary processing needs without leaving any trace in the database af
 | Metadata storage            | System tables (`RDB$RELATIONS`, etc.)| Connection memory only                |
 | Visibility of definition    | All connections                      | Creating connection only              |
 | Persistence of definition   | Permanent (until explicitly dropped) | Until connection ends                 |
-| Read-only database support  | No                                   | Yes                                   |
+| Creation in read-only DB    | No                                   | Yes                                   |
+| Used in read-only DB        | ON DELETE ROWS only                  | ON COMMIT ROWS / ON DELETE ROWS       |
 | Schema support              | Yes                                  | Yes                                   |
 | Indexes                     | Full support                         | Basic support (no expression/partial) |
 | DDL triggers                | Fire on CREATE/DROP/ALTER            | Do not fire                           |
 | DML triggers support        | Yes                                  | Not supported                         |
-| Constraints (PK, FK, CHECK) | Supported                            | Not supported                         |
+| Field level NOT NULL        | Supported                            | Supported                             |
+| PK, FK, CHECK constraints   | Supported                            | Not supported                         |
+| Named constraints           | Supported                            | Not supported                         |
 | Explicit privileges         | Supported                            | Not supported                         |
 
 ## Syntax
