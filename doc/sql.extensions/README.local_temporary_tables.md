@@ -287,6 +287,58 @@ select * from temp_data;
 create local temporary table other_schema.temp_work (x integer);
 ```
 
+## Monitoring
+
+Since Local Temporary Tables are private to the connection and not stored in the system catalogue, they are not visible
+in `RDB$RELATIONS` or `RDB$RELATION_FIELDS`. Instead, two new monitoring tables are provided to inspect LTTs in the
+database.
+
+### MON$LOCAL_TEMPORARY_TABLES
+
+Provides information about active Local Temporary Tables across all connections.
+
+| Column Name         | Data Type    | Description                                              |
+|---------------------|--------------|----------------------------------------------------------|
+| MON$ATTACHMENT_ID   | BIGINT       | Attachment ID                                            |
+| MON$TABLE_ID        | INTEGER      | Internal table ID (unique within the connection)         |
+| MON$TABLE_NAME      | CHAR(63)     | Table name                                               |
+| MON$SCHEMA_NAME     | CHAR(63)     | Schema name                                              |
+| MON$TABLE_TYPE      | VARCHAR(32)  | Table type (`PRESERVE ROWS` or `DELETE ROWS`)            |
+
+### MON$LOCAL_TEMPORARY_TABLE_FIELDS
+
+Provides information about the columns of active Local Temporary Tables across all connections.
+
+| Column Name              | Data Type   | Description                                           |
+|--------------------------|-------------|-------------------------------------------------------|
+| MON$ATTACHMENT_ID        | BIGINT      | Attachment ID                                         |
+| MON$TABLE_ID             | INTEGER     | Internal table ID                                     |
+| MON$TABLE_NAME           | CHAR(63)    | Table name                                            |
+| MON$SCHEMA_NAME          | CHAR(63)    | Schema name                                           |
+| MON$FIELD_NAME           | CHAR(63)    | Field name                                            |
+| MON$FIELD_POSITION       | SMALLINT    | Field position                                        |
+| MON$FIELD_TYPE           | SMALLINT    | Field type                                            |
+| MON$NOT_NULL             | SMALLINT    | Nullability flag (1 for NOT NULL, 0 for NULL)         |
+| MON$CHARACTER_SET_ID     | SMALLINT    | Character set ID                                      |
+| MON$COLLATION_ID         | SMALLINT    | Collation ID                                          |
+| MON$FIELD_LENGTH         | SMALLINT    | Field length                                          |
+| MON$FIELD_SCALE          | SMALLINT    | Field scale                                           |
+| MON$FIELD_PRECISION      | SMALLINT    | Field precision                                       |
+| MON$FIELD_SUB_TYPE       | SMALLINT    | Field sub-type                                        |
+| MON$CHAR_LENGTH          | INTEGER     | Character length                                      |
+
+Example:
+
+```sql
+-- See all LTTs in the database
+select * from MON$LOCAL_TEMPORARY_TABLES;
+
+-- See fields of a specific LTT in the current connection
+select *
+    from MON$LOCAL_TEMPORARY_TABLE_FIELDS
+    where MON$TABLE_NAME = 'TEMP_DATA' and MON$ATTACHMENT_ID = CURRENT_CONNECTION;
+```
+
 ## Implementation Notes
 
 Local Temporary Tables store their data and indexes in temporary files, similar to Global Temporary Tables. Each

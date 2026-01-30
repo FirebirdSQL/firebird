@@ -40,6 +40,7 @@ class jrd_rel;
 class Record;
 class RecordBuffer;
 class RuntimeStatistics;
+class LocalTemporaryTable;
 
 class SnapshotData
 {
@@ -426,6 +427,8 @@ private:
 	static void putRequest(thread_db*, SnapshotData::DumpRecord&, const Request*, const Firebird::string&);
 	static void putCall(thread_db*, SnapshotData::DumpRecord&, const Request*);
 	static void putStatistics(thread_db*, SnapshotData::DumpRecord&, const RuntimeStatistics&, int, int);
+	static void putLocalTempTables(thread_db*, SnapshotData::DumpRecord&, const Attachment*, const LocalTemporaryTable*);
+	static void putLocalTempTableFields(thread_db*, SnapshotData::DumpRecord&, const Attachment*, const LocalTemporaryTable*);
 	static void putContextVars(SnapshotData::DumpRecord&, const Firebird::StringMap&, SINT64, bool);
 	static void putMemoryUsage(SnapshotData::DumpRecord&, const Firebird::MemoryStats&, int, int);
 };

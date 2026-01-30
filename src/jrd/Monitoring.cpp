@@ -45,6 +45,7 @@
 #include "../jrd/Relation.h"
 #include "../jrd/RecordBuffer.h"
 #include "../jrd/Monitoring.h"
+#include "../jrd/LocalTemporaryTable.h"
 #include "../jrd/Function.h"
 #include "../jrd/optimizer/Optimizer.h"
 #include <numeric>
@@ -466,6 +467,8 @@ MonitoringSnapshot::MonitoringSnapshot(thread_db* tdbb, MemoryPool& pool)
 	const auto ctx_var_buffer = allocBuffer(tdbb, pool, rel_mon_ctx_vars);
 	const auto mem_usage_buffer = allocBuffer(tdbb, pool, rel_mon_mem_usage);
 	const auto tab_stat_buffer = allocBuffer(tdbb, pool, rel_mon_tab_stats);
+	const auto local_temp_tables_buffer = allocBuffer(tdbb, pool, rel_mon_local_temp_tables);
+	const auto local_temp_table_fields_buffer = allocBuffer(tdbb, pool, rel_mon_local_temp_table_fields);
 
 	// Increment the global monitor generation
 
@@ -600,6 +603,12 @@ MonitoringSnapshot::MonitoringSnapshot(thread_db* tdbb, MemoryPool& pool)
 			break;
 		case rel_mon_tab_stats:
 			buffer = tab_stat_buffer;
+			break;
+		case rel_mon_local_temp_tables:
+			buffer = local_temp_tables_buffer;
+			break;
+		case rel_mon_local_temp_table_fields:
+			buffer = local_temp_table_fields_buffer;
 			break;
 		default:
 			fb_assert(false);
@@ -1410,6 +1419,83 @@ void Monitoring::putCall(thread_db* tdbb, SnapshotData::DumpRecord& record, cons
 }
 
 
+void Monitoring::putLocalTempTables(thread_db* tdbb, SnapshotData::DumpRecord& record,
+	const Attachment* attachment, const LocalTemporaryTable* table)
+{
+	fb_assert(table);
+
+	record.reset(rel_mon_local_temp_tables);
+
+	// attachment id
+	record.storeInteger(f_mon_ltt_att_id, attachment->att_attachment_id);
+	// table id
+	record.storeInteger(f_mon_ltt_id, table->relationId);
+	// table name
+	record.storeString(f_mon_ltt_name, table->name.object);
+	// schema name
+	record.storeString(f_mon_ltt_schema, table->name.schema);
+	// table type
+	const char* typeStr = "UNKNOWN";
+	switch (table->relationType)
+	{
+		case rel_temp_preserve:
+			typeStr = "PRESERVE ROWS";
+			break;
+		case rel_temp_delete:
+			typeStr = "DELETE ROWS";
+			break;
+	}
+	record.storeString(f_mon_ltt_type, std::string_view(typeStr));
+
+	record.write();
+}
+
+
+void Monitoring::putLocalTempTableFields(thread_db* tdbb, SnapshotData::DumpRecord& record,
+	const Attachment* attachment, const LocalTemporaryTable* table)
+{
+	fb_assert(table);
+
+	for (const auto& field : table->fields)
+	{
+		record.reset(rel_mon_local_temp_table_fields);
+
+		// attachment id
+		record.storeInteger(f_mon_lttf_att_id, attachment->att_attachment_id);
+		// table name
+		record.storeString(f_mon_lttf_name, table->name.object);
+		// schema name
+		record.storeString(f_mon_lttf_schema, table->name.schema);
+		// field name
+		record.storeString(f_mon_lttf_field_name, field.name);
+		// position
+		record.storeInteger(f_mon_lttf_position, field.position);
+		// type
+		record.storeInteger(f_mon_lttf_type, field.desc.dsc_dtype);
+		// not null flag
+		record.storeInteger(f_mon_lttf_not_null, field.notNullFlag ? 1 : 0);
+		// character set id
+		if (field.charSetId)
+			record.storeInteger(f_mon_lttf_charset_id, *field.charSetId);
+		// collation id
+		if (field.collationId)
+			record.storeInteger(f_mon_lttf_collate_id, *field.collationId);
+		// length
+		record.storeInteger(f_mon_lttf_length, field.desc.dsc_length);
+		// scale
+		record.storeInteger(f_mon_lttf_scale, field.desc.dsc_scale);
+		// precision
+		record.storeInteger(f_mon_lttf_precision, field.precision);
+		// sub type
+		record.storeInteger(f_mon_lttf_sub_type, field.desc.isBlob() ? field.segLength : field.desc.dsc_sub_type);
+		// character length
+		record.storeInteger(f_mon_lttf_char_length, field.charLength);
+
+		record.write();
+	}
+}
+
+
 void Monitoring::putStatistics(thread_db* tdbb, SnapshotData::DumpRecord& record, const RuntimeStatistics& statistics,
 							   int stat_id, int stat_group)
 {
@@ -1656,6 +1742,14 @@ void Monitoring::dumpAttachment(thread_db* tdbb, Attachment* attachment, ULONG g
 				"" : Optimizer::getPlan(tdbb, statement, true);
 			putRequest(tdbb, record, request, plan);
 		}
+	}
+
+	// Local temporary tables information
+
+	for (const auto& item : attachment->att_local_temporary_tables)
+	{
+		putLocalTempTables(tdbb, record, attachment, item.second);
+		putLocalTempTableFields(tdbb, record, attachment, item.second);
 	}
 }
 

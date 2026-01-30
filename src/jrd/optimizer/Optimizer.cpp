@@ -2880,6 +2880,10 @@ RecordSource* Optimizer::generateRetrieval(StreamType stream,
 			rsb = FB_NEW_POOL(getPool()) TimeZonesTableScan(csb, alias, stream, relation);
 			break;
 
+		case rel_mon_local_temp_tables:
+			rsb = FB_NEW_POOL(getPool()) MonitoringTableScan(csb, alias, stream, relation);
+			break;
+
 		case rel_config:
 			rsb = FB_NEW_POOL(getPool()) ConfigTableScan(csb, alias, stream, relation);
 			break;
