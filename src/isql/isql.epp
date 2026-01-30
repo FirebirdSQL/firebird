@@ -9267,6 +9267,7 @@ unsigned PerTableStats::loadRelNames(Firebird::IAttachment* att)
 {
 	string sIds;
 
+	size_t lookupCount = 0;
 	unsigned maxLen = 0;
 	USHORT relId = MAX_USHORT;
 	for (StatItem* item = m_stat.begin(); item < m_stat.end(); item++)
@@ -9291,6 +9292,7 @@ unsigned PerTableStats::loadRelNames(Firebird::IAttachment* att)
 		if (!sIds.isEmpty())
 			sIds.append(", ");
 		sIds.append(s);
+		++lookupCount;
 	}
 
 	if (sIds.isEmpty())
@@ -9299,6 +9301,62 @@ unsigned PerTableStats::loadRelNames(Firebird::IAttachment* att)
 	if (!frontendTransaction())
 		return maxLen; // ?
 
+	const size_t initialCount = m_relNames.count();
+
+	const auto fetchNames = [&](const string& sql, bool checkSchema)
+	{
+		IResultSet* rs = att->openCursor(fbStatus, fbTrans,
+			sql.length(), sql.c_str(), SQL_DIALECT_CURRENT,
+			NULL, NULL, NULL, NULL,
+			IStatement::PREPARE_PREFETCH_METADATA);
+
+		IMessageMetadata* outMeta = rs->getMetadata(fbStatus);
+
+		unsigned msgLen = outMeta->getMessageLength(fbStatus);
+		HalfStaticArray<char, 512> buff(msgLen);
+
+		char* msg = buff.getBuffer(msgLen);
+
+		const unsigned idType = outMeta->getType(fbStatus, 0);
+
+		if ((idType != SQL_SHORT && idType != SQL_LONG) ||
+			outMeta->getType(fbStatus, 1) != SQL_TEXT)
+		{
+			fb_assert(false);
+			outMeta->release();
+			rs->release();
+			return;
+		}
+
+		SSHORT* pRelID_Null = (SSHORT*)(msg + outMeta->getNullOffset(fbStatus, 0));
+
+		while (rs->fetchNext(fbStatus, msg) != Firebird::IStatus::RESULT_NO_DATA)
+		{
+			if (*pRelID_Null == FB_TRUE)
+				continue;
+
+			USHORT idVal = static_cast<USHORT>(isc_portable_integer(
+				(UCHAR*) msg + outMeta->getOffset(fbStatus, 0), outMeta->getLength(fbStatus, 0)));
+
+			const MetaString relName(msg + outMeta->getOffset(fbStatus, 1), outMeta->getLength(fbStatus, 1));
+			const MetaString relSchema(
+				(checkSchema ? msg + outMeta->getOffset(fbStatus, 2) : nullptr),
+				(checkSchema ? outMeta->getLength(fbStatus, 2) : 0)
+			);
+
+			const auto nameStr = IUTILS_name_to_string(QualifiedMetaString(relName, relSchema));
+
+			const unsigned len = IcuUtil::charLength(isqlGlob.att_charset, nameStr.length(), nameStr.c_str());
+			if (maxLen < len)
+				maxLen = len;
+
+			m_relNames.put(idVal, nameStr);
+		}
+
+		outMeta->release();
+		rs->release();
+	};
+
 	string sql;
 	sql.printf(
 		"SELECT RDB$RELATION_ID, RDB$RELATION_NAME%s FROM %sRDB$RELATIONS WHERE RDB$RELATION_ID IN (%s)",
@@ -9306,48 +9364,17 @@ unsigned PerTableStats::loadRelNames(Firebird::IAttachment* att)
 		(isqlGlob.major_ods >= ODS_VERSION14 ? "SYSTEM." : ""),
 		sIds.c_str());
 
-	Firebird::IResultSet* rs = att->openCursor(fbStatus, fbTrans,
-		sql.length(), sql.c_str(), SQL_DIALECT_CURRENT,
-		NULL, NULL, NULL, NULL,
-		Firebird::IStatement::PREPARE_PREFETCH_METADATA);
+	fetchNames(sql, isqlGlob.major_ods >= ODS_VERSION14);
 
-	Firebird::IMessageMetadata* outMeta = rs->getMetadata(fbStatus);
-
-	unsigned msgLen = outMeta->getMessageLength(fbStatus);
-	Firebird::HalfStaticArray<char, 512> buff(msgLen);
-
-	char* msg = buff.getBuffer(msgLen);
-
-	if (outMeta->getType(fbStatus, 0) != SQL_SHORT)
-		return maxLen;
-	if (outMeta->getType(fbStatus, 1) != SQL_TEXT)
-		return maxLen;
-
-	SSHORT* pRelID = (SSHORT*) (msg + outMeta->getOffset(fbStatus, 0));
-	SSHORT* pRelID_Null = (SSHORT*)(msg + outMeta->getNullOffset(fbStatus, 0));
-
-	while (rs->fetchNext(fbStatus, msg) != Firebird::IStatus::RESULT_NO_DATA)
+	if (m_relNames.count() < initialCount + lookupCount &&
+		isqlGlob.major_ods >= ODS_VERSION14)
 	{
-		if (*pRelID_Null == FB_TRUE)
-			continue;
-
-		const MetaString relName(msg + outMeta->getOffset(fbStatus, 1), outMeta->getLength(fbStatus, 1));
-		const MetaString relSchema(
-			(isqlGlob.major_ods >= ODS_VERSION14 ? msg + outMeta->getOffset(fbStatus, 2) : nullptr),
-			(isqlGlob.major_ods >= ODS_VERSION14 ? outMeta->getLength(fbStatus, 2) : 0)
-		);
-
-		const auto nameStr = IUTILS_name_to_string(QualifiedMetaString(relName, relSchema));
-
-		const unsigned len = IcuUtil::charLength(isqlGlob.att_charset, nameStr.length(), nameStr.c_str());
-		if (maxLen < len)
-			maxLen = len;
-
-		m_relNames.put(*pRelID, nameStr);
+		sql.printf(
+			"SELECT MON$TABLE_ID, MON$TABLE_NAME, MON$SCHEMA_NAME "
+			"FROM MON$LOCAL_TEMPORARY_TABLES WHERE MON$ATTACHMENT_ID = CURRENT_CONNECTION AND MON$TABLE_ID IN (%s)",
+			sIds.c_str());
+		fetchNames(sql, true);
 	}
-
-	outMeta->release();
-	rs->release();
 
 	return maxLen;
 }
