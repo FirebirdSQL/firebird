@@ -1000,3 +1000,7 @@ FB_IMPL_MSG(JRD, 997, invalid_unqualified_name_list, -901, "HY", "000", "Invalid
 FB_IMPL_MSG(JRD, 998, no_user_att_while_restore, -901, "HY", "000", "User attachments are not allowed for the database being restored")
 FB_IMPL_MSG(JRD, 999, genseq_stepmustbe_nonzero, -833, "42", "000", "Argument STEP must be different than zero for function @1")
 FB_IMPL_MSG(JRD, 1000, argmustbe_exact_function, -833, "42", "000", "Arguments for @1 function must be exact numeric types")
+FB_IMPL_MSG(JRD, 1001, sysf_argmustbe_range_inc0_1, -833, "42", "000", "Argument for @1 must be in the range [0, 1]")
+FB_IMPL_MSG(JRD, 1002, argmustbe_numeric_function, -833, "42", "000", "Argument for @1 function must be numeric types")
+FB_IMPL_MSG(JRD, 1003, percetile_only_one_sort_item, -833, "42", "000", "The PERCENTILE_DISC and PERENTILE_CONT functions support only one sort item in WITHIN GROUP")
+FB_IMPL_MSG(JRD, 1004, argmustbe_const_within_group, -833, "42", "000", "Argument for @1 function must be constant within each group")
