@@ -107,7 +107,7 @@ namespace Firebird {
 
 namespace Jrd {
 
-const unsigned MAX_CALLBACKS	= 50;
+inline constexpr unsigned MAX_CALLBACKS = 50;
 
 // fwd. decl.
 class thread_db;
@@ -208,9 +208,9 @@ private:
 // Flags to indicate normal internal requests vs. dyn internal requests
 //
 // IRQ_REQUESTS and DYN_REQUESTS are deprecated
-const int IRQ_REQUESTS				= 1;
-const int DYN_REQUESTS				= 2;
-const int CACHED_REQUESTS			= 3;
+inline constexpr int IRQ_REQUESTS		= 1;
+inline constexpr int DYN_REQUESTS		= 2;
+inline constexpr int CACHED_REQUESTS	= 3;
 
 
 // Procedure block
@@ -218,31 +218,28 @@ const int CACHED_REQUESTS			= 3;
 class jrd_prc final : public Routine
 {
 public:
-	const Format*	prc_record_format;
-	prc_t			prc_type;					// procedure type
+	const Format*	prc_record_format = nullptr;
+	prc_t			prc_type = prc_legacy;			// procedure type
 
-	const ExtEngineManager::Procedure* getExternal() const { return prc_external; }
-	void setExternal(ExtEngineManager::Procedure* value) { prc_external = value; }
+	const ExtEngineManager::Procedure* getExternal() const noexcept { return prc_external; }
+	void setExternal(const ExtEngineManager::Procedure* value) noexcept { prc_external = value; }
 
 private:
-	const ExtEngineManager::Procedure* prc_external;
+	const ExtEngineManager::Procedure* prc_external = nullptr;
 
 public:
 	explicit jrd_prc(MemoryPool& p)
-		: Routine(p),
-		  prc_record_format(NULL),
-		  prc_type(prc_legacy),
-		  prc_external(NULL)
+		: Routine(p)
 	{
 	}
 
 public:
-	int getObjectType() const override
+	int getObjectType() const noexcept override
 	{
 		return obj_procedure;
 	}
 
-	SLONG getSclType() const override
+	SLONG getSclType() const noexcept override
 	{
 		return obj_procedures;
 	}
@@ -274,7 +271,7 @@ protected:
 
 // Parameter block
 
-class Parameter : public pool_alloc<type_prm>
+class Parameter final : public pool_alloc<type_prm>
 {
 public:
 	USHORT		prm_number;
@@ -301,7 +298,7 @@ public:
 
 // Index block to cache index information
 
-class IndexBlock : public pool_alloc<type_idb>
+class IndexBlock final : public pool_alloc<type_idb>
 {
 public:
 	IndexBlock*	idb_next;
@@ -339,10 +336,10 @@ struct win
 	class BufferDesc* win_bdb;
 	SSHORT win_scans;
 	USHORT win_flags;
-	explicit win(const PageNumber& wp)
+	explicit win(const PageNumber& wp) noexcept
 		: win_page(wp), win_bdb(NULL), win_flags(0)
 	{}
-	win(const USHORT pageSpaceID, const ULONG pageNum)
+	win(const USHORT pageSpaceID, const ULONG pageNum) noexcept
 		: win_page(pageSpaceID, pageNum), win_bdb(NULL), win_flags(0)
 	{}
 };
@@ -356,19 +353,19 @@ typedef win WIN;
 // to the constructor: win my_array[n] = {win(-1), ... (win-1)};
 // When all places are changed, this class can disappear and win's constructor
 // may get the default value of ~0 to "wp".
-struct win_for_array: public win
+struct win_for_array : public win
 {
-	win_for_array()
+	win_for_array() noexcept
 		: win(DB_PAGE_SPACE, ~0)
 	{}
 };
 
 // win_flags
 
-const USHORT WIN_large_scan			= 1;	// large sequential scan
-const USHORT WIN_secondary			= 2;	// secondary stream
-const USHORT WIN_garbage_collector	= 4;	// garbage collector's window
-const USHORT WIN_garbage_collect	= 8;	// scan left a page for garbage collector
+inline constexpr USHORT WIN_large_scan			= 1;	// large sequential scan
+inline constexpr USHORT WIN_secondary			= 2;	// secondary stream
+inline constexpr USHORT WIN_garbage_collector	= 4;	// garbage collector's window
+inline constexpr USHORT WIN_garbage_collect		= 8;	// scan left a page for garbage collector
 
 
 #ifdef USE_ITIMER
@@ -376,7 +373,7 @@ class TimeoutTimer final :
 	public Firebird::RefCntIface<Firebird::ITimerImpl<TimeoutTimer, Firebird::CheckStatusWrapper> >
 {
 public:
-	explicit TimeoutTimer()
+	explicit TimeoutTimer() noexcept
 		: m_started(0),
 		  m_expired(false),
 		  m_value(0),
@@ -384,19 +381,19 @@ public:
 	{ }
 
 	// ITimer implementation
-	void handler();
+	void handler() override;
 
-	bool expired() const
+	bool expired() const noexcept
 	{
 		return m_expired;
 	}
 
-	unsigned int getValue() const
+	unsigned int getValue() const noexcept
 	{
 		return m_value;
 	}
 
-	unsigned int getErrCode() const
+	unsigned int getErrCode() const noexcept
 	{
 		return m_error;
 	}
@@ -408,7 +405,7 @@ public:
 	bool getExpireTimestamp(const ISC_TIMESTAMP_TZ start, ISC_TIMESTAMP_TZ& exp) const;
 
 	// set timeout value in milliseconds and secondary error code
-	void setup(unsigned int value, ISC_STATUS error)
+	void setup(unsigned int value, ISC_STATUS error) noexcept
 	{
 		m_value = value;
 		m_error = error;
@@ -424,10 +421,10 @@ private:
 	ISC_STATUS m_error;
 };
 #else
-class TimeoutTimer : public Firebird::RefCounted
+class TimeoutTimer final : public Firebird::RefCounted
 {
 public:
-	explicit TimeoutTimer()
+	explicit TimeoutTimer() noexcept
 		: m_start(0),
 		  m_value(0),
 		  m_error(0)
@@ -435,12 +432,12 @@ public:
 
 	bool expired() const;
 
-	unsigned int getValue() const
+	unsigned int getValue() const noexcept
 	{
 		return m_value;
 	}
 
-	unsigned int getErrCode() const
+	unsigned int getErrCode() const noexcept
 	{
 		return m_error;
 	}
@@ -449,10 +446,10 @@ public:
 	unsigned int timeToExpire() const;
 
 	// clock value when timer will expire
-	bool getExpireClock(SINT64& clock) const;
+	bool getExpireClock(SINT64& clock) const noexcept;
 
 	// set timeout value in milliseconds and secondary error code
-	void setup(unsigned int value, ISC_STATUS error)
+	void setup(unsigned int value, ISC_STATUS error) noexcept
 	{
 		m_start = 0;
 		m_value = value;
@@ -460,7 +457,7 @@ public:
 	}
 
 	void start();
-	void stop();
+	void stop() noexcept;
 
 private:
 	SINT64 currTime() const
@@ -478,31 +475,31 @@ private:
 
 // tdbb_flags
 
-const ULONG TDBB_sweeper				= 1;		// Thread sweeper or garbage collector
-const ULONG TDBB_no_cache_unwind		= 2;		// Don't unwind page buffer cache
-const ULONG TDBB_backup_write_locked	= 4;    	// BackupManager has write lock on LCK_backup_database
-const ULONG TDBB_stack_trace_done		= 8;		// PSQL stack trace is added into status-vector
-const ULONG TDBB_dont_post_dfw			= 16;		// dont post DFW tasks as deferred work is performed now
-const ULONG TDBB_sys_error				= 32;		// error shouldn't be handled by the looper
-const ULONG TDBB_verb_cleanup			= 64;		// verb cleanup is in progress
-const ULONG TDBB_use_db_page_space		= 128;		// use database (not temporary) page space in GTT operations
-const ULONG TDBB_detaching				= 256;		// detach is in progress
-const ULONG TDBB_wait_cancel_disable	= 512;		// don't cancel current waiting operation
-const ULONG TDBB_cache_unwound			= 1024;		// page cache was unwound
-const ULONG TDBB_reset_stack			= 2048;		// stack should be reset after stack overflow exception
-const ULONG TDBB_dfw_cleanup			= 4096;		// DFW cleanup phase is active
-const ULONG TDBB_repl_in_progress		= 8192;		// Prevent recursion in replication
-const ULONG TDBB_replicator				= 16384;	// Replicator
-const ULONG TDBB_async					= 32768;	// Async context (set in AST)
+inline constexpr ULONG TDBB_sweeper				= 1;		// Thread sweeper or garbage collector
+inline constexpr ULONG TDBB_no_cache_unwind		= 2;		// Don't unwind page buffer cache
+inline constexpr ULONG TDBB_backup_write_locked	= 4;    	// BackupManager has write lock on LCK_backup_database
+inline constexpr ULONG TDBB_stack_trace_done	= 8;		// PSQL stack trace is added into status-vector
+inline constexpr ULONG TDBB_dont_post_dfw		= 16;		// dont post DFW tasks as deferred work is performed now
+inline constexpr ULONG TDBB_sys_error			= 32;		// error shouldn't be handled by the looper
+inline constexpr ULONG TDBB_verb_cleanup		= 64;		// verb cleanup is in progress
+inline constexpr ULONG TDBB_use_db_page_space	= 128;		// use database (not temporary) page space in GTT operations
+inline constexpr ULONG TDBB_detaching			= 256;		// detach is in progress
+inline constexpr ULONG TDBB_wait_cancel_disable	= 512;		// don't cancel current waiting operation
+inline constexpr ULONG TDBB_cache_unwound		= 1024;		// page cache was unwound
+inline constexpr ULONG TDBB_reset_stack			= 2048;		// stack should be reset after stack overflow exception
+inline constexpr ULONG TDBB_dfw_cleanup			= 4096;		// DFW cleanup phase is active
+inline constexpr ULONG TDBB_repl_in_progress	= 8192;		// Prevent recursion in replication
+inline constexpr ULONG TDBB_replicator			= 16384;	// Replicator
+inline constexpr ULONG TDBB_async				= 32768;	// Async context (set in AST)
 
-class thread_db : public Firebird::ThreadData
+class thread_db final : public Firebird::ThreadData
 {
-	const static int QUANTUM		= 100;	// Default quantum
-	const static int SWEEP_QUANTUM	= 10;	// Make sweeps less disruptive
+	static constexpr int QUANTUM		= 100;	// Default quantum
+	static constexpr int SWEEP_QUANTUM	= 10;	// Make sweeps less disruptive
 
 private:
 	MemoryPool*	defaultPool;
-	void setDefaultPool(MemoryPool* p)
+	void setDefaultPool(MemoryPool* p) noexcept
 	{
 		defaultPool = p;
 	}
@@ -554,105 +551,96 @@ public:
 	Firebird::HalfStaticArray<BufferDesc*, 16> tdbb_bdbs;
 	Firebird::ThreadSync* tdbb_thread;
 
-	MemoryPool* getDefaultPool()
+	MemoryPool* getDefaultPool() noexcept
 	{
 		return defaultPool;
 	}
 
-	Database* getDatabase()
+	Database* getDatabase() noexcept
 	{
 		return database;
 	}
 
-	const Database* getDatabase() const
+	const Database* getDatabase() const noexcept
 	{
 		return database;
 	}
 
 	void setDatabase(Database* val);
 
-	Attachment* getAttachment()
+	Attachment* getAttachment() noexcept
 	{
 		return attachment;
 	}
 
-	const Attachment* getAttachment() const
+	const Attachment* getAttachment() const noexcept
 	{
 		return attachment;
 	}
 
 	void setAttachment(Attachment* val);
 
-	jrd_tra* getTransaction()
+	jrd_tra* getTransaction() noexcept
 	{
 		return transaction;
 	}
 
-	const jrd_tra* getTransaction() const
+	const jrd_tra* getTransaction() const noexcept
 	{
 		return transaction;
 	}
 
 	void setTransaction(jrd_tra* val);
 
-	Request* getRequest()
+	Request* getRequest() noexcept
 	{
 		return request;
 	}
 
-	const Request* getRequest() const
+	const Request* getRequest() const noexcept
 	{
 		return request;
 	}
 
 	void setRequest(Request* val);
 
-	SSHORT getCharSet() const;
+	SSHORT getCharSet() const noexcept;
 
-	void markAsSweeper()
+	void markAsSweeper() noexcept
 	{
 		tdbb_quantum = SWEEP_QUANTUM;
 		tdbb_flags |= TDBB_sweeper;
 	}
 
-	void bumpStats(const RuntimeStatistics::StatType index, SINT64 delta = 1)
+	void bumpStats(const PageStatType type, ULONG pageSpaceId, SINT64 delta = 1)
 	{
-		reqStat->bumpValue(index, delta);
-		traStat->bumpValue(index, delta);
-		attStat->bumpValue(index, delta);
+		fb_assert(pageSpaceId != INVALID_PAGE_SPACE);
+
+		// [0] element stores statistics for temporary page spaces
+		if (PageSpace::isTemporary(pageSpaceId))
+			pageSpaceId = 0;
+
+		reqStat->bumpValue(type, pageSpaceId, delta);
+		traStat->bumpValue(type, pageSpaceId, delta);
+		attStat->bumpValue(type, pageSpaceId, delta);
 
 		if ((tdbb_flags & TDBB_async) && !attachment)
-			dbbStat->bumpValue(index, delta);
+			dbbStat->bumpValue(type, pageSpaceId, delta);
 
-		// else dbbStat is adjusted from attStat, see Attachment::mergeAsyncStats()
+		// else dbbStat is adjusted from attStat, see Attachment::mergeStats()
 	}
 
-	void bumpRelStats(const RuntimeStatistics::StatType index, SLONG relation_id, SINT64 delta = 1)
+	void bumpStats(const RecordStatType type, SLONG relationId, SINT64 delta = 1)
 	{
-		// We don't bump counters for dbbStat here, they're merged from attStats on demand
-
-		reqStat->bumpValue(index, delta);
-		traStat->bumpValue(index, delta);
-		attStat->bumpValue(index, delta);
-
-		const RuntimeStatistics* const dummyStat = RuntimeStatistics::getDummy();
-
 		// We expect that at least attStat is present (not a dummy object)
 
-		fb_assert(attStat != dummyStat);
+		fb_assert(attStat != RuntimeStatistics::getDummy());
 
-		// Relation statistics is a quite complex beast, so a conditional check
-		// does not hurt. It also allows to avoid races while accessing the static
-		// dummy object concurrently.
+		reqStat->bumpValue(type, relationId, delta);
+		traStat->bumpValue(type, relationId, delta);
+		attStat->bumpValue(type, relationId, delta);
 
-		if (reqStat != dummyStat)
-			reqStat->bumpRelValue(index, relation_id, delta);
-
-		if (traStat != dummyStat)
-			traStat->bumpRelValue(index, relation_id, delta);
-
-		if (attStat != dummyStat)
-			attStat->bumpRelValue(index, relation_id, delta);
+		// We don't bump counters for dbbStat here, they're merged from attStats on demand
 	}
 
 	ISC_STATUS getCancelState(ISC_STATUS* secondary = NULL);
@@ -799,21 +787,21 @@ public:
 		Firebird::ThreadData::restoreSpecific();
 	}
 
-	thread_db* operator->()
+	// copying is prohibited
+	ThreadContextHolder(const ThreadContextHolder&) = delete;
+	ThreadContextHolder& operator= (const ThreadContextHolder&) = delete;
+
+	thread_db* operator->() noexcept
 	{
 		return &context;
 	}
 
-	operator thread_db*()
+	operator thread_db*() noexcept
 	{
 		return &context;
 	}
 
 private:
-	// copying is prohibited
-	ThreadContextHolder(const ThreadContextHolder&);
-	ThreadContextHolder& operator= (const ThreadContextHolder&);
-
 	Firebird::FbLocalStatus localStatus;
 	thread_db context;
 };
@@ -823,7 +811,7 @@ private:
 class ThreadSweepGuard
 {
 public:
-	explicit ThreadSweepGuard(thread_db* tdbb)
+	explicit ThreadSweepGuard(thread_db* tdbb) noexcept
 		: m_tdbb(tdbb)
 	{
 		m_tdbb->markAsSweeper();
@@ -854,19 +842,23 @@ public:
 		m_tdbb->tdbb_status_vector = m_old_status;
 	}
 
-	FbStatusVector* restore()
+	// copying is prohibited
+	ThreadStatusGuard(const ThreadStatusGuard&) = delete;
+	ThreadStatusGuard& operator=(const ThreadStatusGuard&) = delete;
+
+	FbStatusVector* restore() noexcept
 	{
 		m_tdbb->tdbb_status_vector = m_old_status;
 		return m_old_status;
 	}
 
-	operator FbStatusVector*() { return &m_local_status; }
-	FbStatusVector* operator->() { return &m_local_status; }
+	operator FbStatusVector*() noexcept { return &m_local_status; }
+	FbStatusVector* operator->() noexcept { return &m_local_status; }
 
-	operator const FbStatusVector*() const { return &m_local_status; }
-	const FbStatusVector* operator->() const { return &m_local_status; }
+	operator const FbStatusVector*() const noexcept { return &m_local_status; }
+	const FbStatusVector* operator->() const noexcept { return &m_local_status; }
 
-	void copyToOriginal()
+	void copyToOriginal() noexcept
 	{
 		fb_utils::copyStatus(m_old_status, &m_local_status);
 	}
@@ -875,10 +867,6 @@ private:
 	Firebird::FbLocalStatus m_local_status;
 	thread_db* const m_tdbb;
 	FbStatusVector* const m_old_status;
-
-	// copying is prohibited
-	ThreadStatusGuard(const ThreadStatusGuard&);
-	ThreadStatusGuard& operator=(const ThreadStatusGuard&);
 };
 
 
@@ -1022,10 +1010,9 @@ namespace Jrd {
 			: Jrd::ContextPoolHolder(tdbb, tdbb->getDatabase()->dbb_permanent)
 		{}
 
-	private:
 		// copying is prohibited
-		DatabaseContextHolder(const DatabaseContextHolder&);
-		DatabaseContextHolder& operator=(const DatabaseContextHolder&);
+		DatabaseContextHolder(const DatabaseContextHolder&) = delete;
+		DatabaseContextHolder& operator=(const DatabaseContextHolder&) = delete;
 	};
 
 	class BackgroundContextHolder : public ThreadContextHolder, public DatabaseContextHolder,
@@ -1038,33 +1025,31 @@ namespace Jrd {
 			  Jrd::Attachment::SyncGuard(att, f)
 		{}
 
-	private:
 		// copying is prohibited
-		BackgroundContextHolder(const BackgroundContextHolder&);
-		BackgroundContextHolder& operator=(const BackgroundContextHolder&);
+		BackgroundContextHolder(const BackgroundContextHolder&) = delete;
+		BackgroundContextHolder& operator=(const BackgroundContextHolder&) = delete;
 	};
 
 	class AttachmentHolder
 	{
 	public:
-		static const unsigned ATT_LOCK_ASYNC			= 1;
-		static const unsigned ATT_DONT_LOCK				= 2;
-		static const unsigned ATT_NO_SHUTDOWN_CHECK		= 4;
-		static const unsigned ATT_NON_BLOCKING			= 8;
+		static constexpr unsigned ATT_LOCK_ASYNC		= 1;
+		static constexpr unsigned ATT_DONT_LOCK			= 2;
+		static constexpr unsigned ATT_NO_SHUTDOWN_CHECK	= 4;
+		static constexpr unsigned ATT_NON_BLOCKING		= 8;
 
 		AttachmentHolder(thread_db* tdbb, StableAttachmentPart* sa, unsigned lockFlags, const char* from);
 		~AttachmentHolder();
+
+		// copying is prohibited
+		AttachmentHolder(const AttachmentHolder&) = delete;
+		AttachmentHolder& operator =(const AttachmentHolder&) = delete;
 
 	private:
 		Firebird::RefPtr<StableAttachmentPart> sAtt;
 		bool async;			// async mutex should be locked instead normal
 		bool nolock; 		// if locked manually, no need to take lock recursively
 		bool blocking;		// holder instance is blocking other instances
-
-	private:
-		// copying is prohibited
-		AttachmentHolder(const AttachmentHolder&);
-		AttachmentHolder& operator =(const AttachmentHolder&);
 	};
 
 	class EngineContextHolder final : public ThreadContextHolder, private AttachmentHolder, private DatabaseContextHolder
@@ -1117,10 +1102,9 @@ namespace Jrd {
 			(*this)->tdbb_flags |= TDBB_async;
 		}
 
-	private:
 		// copying is prohibited
-		AsyncContextHolder(const AsyncContextHolder&);
-		AsyncContextHolder& operator=(const AsyncContextHolder&);
+		AsyncContextHolder(const AsyncContextHolder&) = delete;
+		AsyncContextHolder& operator=(const AsyncContextHolder&) = delete;
 	};
 
 	class EngineCheckout
@@ -1177,11 +1161,11 @@ namespace Jrd {
 				m_tdbb->tdbb_quantum = 0;
 		}
 
-	private:
 		// copying is prohibited
-		EngineCheckout(const EngineCheckout&);
-		EngineCheckout& operator=(const EngineCheckout&);
+		EngineCheckout(const EngineCheckout&) = delete;
+		EngineCheckout& operator=(const EngineCheckout&) = delete;
 
+	private:
 		thread_db* const m_tdbb;
 		Firebird::RefPtr<StableAttachmentPart> m_ref;
 		const char* m_from;
@@ -1206,11 +1190,11 @@ namespace Jrd {
 			m_mutex.leave();
 		}
 
-	private:
 		// copying is prohibited
-		CheckoutLockGuard(const CheckoutLockGuard&);
-		CheckoutLockGuard& operator=(const CheckoutLockGuard&);
+		CheckoutLockGuard(const CheckoutLockGuard&) = delete;
+		CheckoutLockGuard& operator=(const CheckoutLockGuard&) = delete;
 
+	private:
 		Firebird::Mutex& m_mutex;
 	};
 
@@ -1229,11 +1213,11 @@ namespace Jrd {
 			}
 		}
 
-	private:
 		// copying is prohibited
-		CheckoutSyncGuard(const CheckoutSyncGuard&);
-		CheckoutSyncGuard& operator=(const CheckoutSyncGuard&);
+		CheckoutSyncGuard(const CheckoutSyncGuard&) = delete;
+		CheckoutSyncGuard& operator=(const CheckoutSyncGuard&) = delete;
 
+	private:
 		Firebird::Sync m_sync;
 	};
 }

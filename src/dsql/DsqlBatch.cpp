@@ -694,7 +694,6 @@ private:
 				continue;
 			}
 
-			const bool start = startRequest;
 			if (startRequest)
 			{
 				EXE_unwind(tdbb, req);

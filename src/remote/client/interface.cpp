@@ -104,7 +104,7 @@ const char* const INET_LOCALHOST = "localhost";
 using namespace Firebird;
 
 namespace {
-	void handle_error(ISC_STATUS code)
+	[[noreturn]] void handle_error(ISC_STATUS code)
 	{
 		Arg::Gds(code).raise();
 	}
@@ -425,7 +425,7 @@ private:
 	{
 		fb_assert(messageStreamBuffer);
 
-		const UCHAR* ptr = reinterpret_cast<const UCHAR*>(p);
+		const UCHAR* ptr = static_cast<const UCHAR*>(p);
 
 		while(count)
 		{
@@ -484,7 +484,7 @@ private:
 	{
 		fb_assert(blobStreamBuffer);
 
-		const UCHAR* ptr = reinterpret_cast<const UCHAR*>(p);
+		const UCHAR* ptr = static_cast<const UCHAR*>(p);
 
 		while(size)
 		{
@@ -886,9 +886,9 @@ public:
 	void executeDyn(CheckStatusWrapper* status, ITransaction* transaction, unsigned int length,
 		const unsigned char* dyn) override;
 	Statement* prepare(CheckStatusWrapper* status, ITransaction* transaction,
-		unsigned int stmtLength, const char* sqlStmt, unsigned dialect, unsigned int flags) override;
+		unsigned int stmtLength, const char* sqlStmt, unsigned int dialect, unsigned int flags) override;
 	ITransaction* execute(CheckStatusWrapper* status, ITransaction* transaction,
-		unsigned int stmtLength, const char* sqlStmt, unsigned dialect,
+		unsigned int stmtLength, const char* sqlStmt, unsigned int dialect,
 		IMessageMetadata* inMetadata, void* inBuffer, IMessageMetadata* outMetadata, void* outBuffer) override;
 	IResultSet* openCursor(CheckStatusWrapper* status, ITransaction* transaction,
 		unsigned int stmtLength, const char* sqlStmt, unsigned dialect,
@@ -1138,7 +1138,7 @@ static bool init(CheckStatusWrapper*, ClntAuthBlock&, rem_port*, P_OP, PathName&
 	ClumpletWriter&, IntlParametersBlock&, ICryptKeyCallback* cryptCallback);
 static Rtr* make_transaction(Rdb*, USHORT);
 static void mov_dsql_message(const UCHAR*, const rem_fmt*, UCHAR*, const rem_fmt*);
-static void move_error(const Arg::StatusVector& v);
+[[noreturn]] static void move_error(const Arg::StatusVector& v);
 static void receive_after_start(Rrq*, USHORT);
 static void receive_packet(rem_port*, PACKET *);
 static void receive_packet_noqueue(rem_port*, PACKET *);
@@ -1167,10 +1167,10 @@ static void authReceiveResponse(bool havePacket, ClntAuthBlock& authItr, rem_por
 
 static AtomicCounter remote_event_id;
 
-static const unsigned ANALYZE_USER_VFY =	0x01;
-static const unsigned ANALYZE_LOOPBACK =	0x02;
-static const unsigned ANALYZE_MOUNTS =		0x04;
-static const unsigned ANALYZE_EMP_NAME =	0x08;
+static constexpr unsigned ANALYZE_USER_VFY	= 0x01;
+static constexpr unsigned ANALYZE_LOOPBACK	= 0x02;
+static constexpr unsigned ANALYZE_MOUNTS	= 0x04;
+static constexpr unsigned ANALYZE_EMP_NAME	= 0x08;
 
 inline static void reset(IStatus* status) noexcept
 {
@@ -1907,8 +1907,7 @@ IAttachment* RProvider::create(CheckStatusWrapper* status, const char* filename,
 	{
 		reset(status);
 
-		ClumpletWriter newDpb(ClumpletReader::dpbList, MAX_DPB_SIZE,
-			reinterpret_cast<const UCHAR*>(dpb), dpb_length);
+		ClumpletWriter newDpb(ClumpletReader::dpbList, MAX_DPB_SIZE, dpb, dpb_length);
 		unsigned flags = ANALYZE_MOUNTS;
 
 		if (get_new_dpb(newDpb, dpbParam, loopback))
@@ -5028,8 +5027,6 @@ bool ResultSet::fetch(CheckStatusWrapper* status, void* buffer, P_FETCH operatio
 
 		if (relative && adjustment)
 		{
-			const bool isAhead = (statement->rsr_fetch_operation == fetch_next);
-
 			PACKET* packet = &rdb->rdb_packet;
 			packet->p_operation = op_fetch_scroll;
 			P_SQLDATA* sqldata = &packet->p_sqldata;
@@ -8687,8 +8684,7 @@ static bool get_new_dpb(ClumpletWriter& dpb, const ParametersSet& par, bool loop
  *	Analyze and prepare dpb for attachment to remote server.
  *
  **************************************/
-	bool redirection = Config::getRedirection();
-    if (((loopback || !redirection) && dpb.find(par.address_path)) || dpb.find(par.map_attach))
+    if (dpb.find(par.address_path) || dpb.find(par.map_attach))
 	{
 		status_exception::raise(Arg::Gds(isc_unavailable));
 	}
@@ -9116,7 +9112,7 @@ static void mov_dsql_message(const UCHAR* from_msg,
 }
 
 
-static void move_error(const Arg::StatusVector& v)
+[[noreturn]] static void move_error(const Arg::StatusVector& v)
 {
 /**************************************
  *
@@ -9385,6 +9381,10 @@ static void receive_packet_noqueue(rem_port* port, PACKET* packet)
 			case op_batch_regblob:
 				stmt_id = p->packet.p_batch_regblob.p_batch_statement;
 				bCheckResponse = true;
+				break;
+
+			default:
+				// no special work needed
 				break;
 			}
 

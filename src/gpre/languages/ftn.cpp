@@ -157,41 +157,7 @@ static TEXT output_buffer[512];
 static bool global_first_flag = false;
 static adl* array_decl_list;
 
-#if (defined AIX || defined AIX_PPC)
-const char* const INCLUDE_ISC_FTN	= "       INCLUDE  \'%s\' \n\n";
-const char* const INCLUDE_FTN_FILE	= "gds.f";
-const char* const DOUBLE_DCL		= "DOUBLE PRECISION";
-const char* const I2CONST_1			= "%VAL(";
-const char* const I2CONST_2			= ")";
-const char* const I2_1				= "";
-const char* const I2_2				= "";
-const char* const VAL_1				= "%VAL(";
-const char* const VAL_2				= ")";
-const char* const REF_1				= "%REF(";
-const char* const REF_2				= ")";
-const char* const I4CONST_1			= "%VAL(";
-const char* const I4CONST_2			= ")";
-const char* const COMMENT			= "C     ";
-const char* const INLINE_COMMENT	= "!";
-const char* const COMMA				= ",";
-#elif defined(__sun)
-const char* const INCLUDE_ISC_FTN	= "       INCLUDE  \'%s\' \n\n";
-const char* const INCLUDE_FTN_FILE	= "gds.f";
-const char* const DOUBLE_DCL		= "DOUBLE PRECISION";
-const char* const I2CONST_1			= "";
-const char* const I2CONST_2			= "";
-const char* const I2_1				= "";
-const char* const I2_2				= "";
-const char* const VAL_1				= "";
-const char* const VAL_2				= "";
-const char* const REF_1				= "";
-const char* const REF_2				= "";
-const char* const I4CONST_1			= "";
-const char* const I4CONST_2			= "";
-const char* const COMMENT			= "*     ";
-const char* const INLINE_COMMENT	= "\n*                ";
-const char* const COMMA				= ",";
-#elif defined(LINUX)
+#if defined(LINUX)
 const char* const INCLUDE_ISC_FTN	= "       INCLUDE  \'%s\' \n\n";
 const char* const INCLUDE_FTN_FILE	= "gds.f";
 const char* const DOUBLE_DCL		= "DOUBLE PRECISION";
@@ -258,23 +224,6 @@ const char* const I4CONST_1			= "";
 const char* const I4CONST_2			= "";
 const char* const COMMENT			= "*     ";
 const char* const INLINE_COMMENT	= "\n*                ";
-const char* const COMMA				= ",";
-#elif defined(HPUX)
-const char* const INCLUDE_ISC_FTN	= "       INCLUDE  '%s\' \n\n";
-const char* const INCLUDE_FTN_FILE	= "gds.f";
-const char* const DOUBLE_DCL		= "DOUBLE PRECISION";
-const char* const I2CONST_1			= "ISC_INT2(";
-const char* const I2CONST_2			= ")";
-const char* const I2_1				= "ISC_INT2(";
-const char* const I2_2				= ")";
-const char* const VAL_1				= "";
-const char* const VAL_2				= "";
-const char* const REF_1				= "";
-const char* const REF_2				= "";
-const char* const I4CONST_1			= "";
-const char* const I4CONST_2			= "";
-const char* const COMMENT			= "*     ";
-const char* const INLINE_COMMENT	= "!";
 const char* const COMMA				= ",";
 #endif
 
@@ -616,14 +565,6 @@ void FTN_print_buffer( TEXT* output_bufferL)
 	for (const TEXT* q = output_bufferL; *q; q++)
 	{
 		*p++ = *q;
-#ifdef __sun
-		if (q[0] == '\n' && q[1] == '\0')
-		{
-			*p = 0;
-			fprintf(gpreGlob.out_file, "%s", s);
-			p = s;
-		}
-#endif
 		if ((p - s) > 71)
 		{
 			for (p--; (*p != ',') && (*p != ' '); p--)
@@ -2118,13 +2059,8 @@ static SSHORT gen_event_block(const act* action)
 
 static void gen_event_init(const act* action)
 {
-#if (!defined AIX && !defined AIX_PPC)
 	const TEXT* pattern1 =
 		"ISC_%N1L = ISC_EVENT_BLOCK_A (%RFISC_%N1A%RE, %RFISC_%N1B%RE, %VF%S3%N2%S4%VE, %RFISC_EVENT_NAMES%RE)";
-#else
-	const TEXT* pattern1 =
-		"CALL ISC_EVENT_BLOCK_S (%RFISC_%N1A%RE, %RFISC_%N1B%RE, %VF%S3%N2%S4%VE, %RFISC_EVENT_NAMES%RE, %RFISC_%N1L%RE)";
-#endif
 	const TEXT* pattern2 =
 		"CALL %S1 (%V1, %RF%DH%RE, %VFISC_%N1L%VE, %VFISC_%N1A%VE, %VFISC_%N1B%VE)";
 	const TEXT* pattern3 =
@@ -2161,13 +2097,8 @@ static void gen_event_init(const act* action)
 		else
 			printa(COLUMN, "ISC_EVENT_NAMES2(%d) = %s", count, node->nod_arg[0]);
 
-#if (!defined AIX && !defined AIX_PPC)
 		printa(COLUMN, "ISC_EVENT_NAMES(%d) = ISC_BADDRESS (%sISC_EVENT_NAMES2(%d)%s)",
 			   count, REF_1, count, REF_2);
-#else
-		printa(COLUMN, "CALL ISC_BADDRESS (%sISC_EVENT_NAMES2(%d)%s, ISC_EVENT_NAMES(%d))",
-			   REF_1, count, REF_2, count);
-#endif
 	}
 
 	const SSHORT column = 6;

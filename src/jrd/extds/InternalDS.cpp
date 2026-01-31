@@ -228,8 +228,6 @@ bool InternalConnection::cancelExecution(bool /*forced*/)
 
 bool InternalConnection::resetSession(thread_db* tdbb)
 {
-	fb_assert(isCurrent());
-
 	if (isCurrent())
 		return true;
 
@@ -578,6 +576,7 @@ void InternalStatement::doPrepare(thread_db* tdbb, const string& sql)
 	case DsqlStatement::TYPE_SET_GENERATOR:
 	case DsqlStatement::TYPE_SAVEPOINT:
 	case DsqlStatement::TYPE_EXEC_BLOCK:
+	case DsqlStatement::TYPE_SESSION_MANAGEMENT:
 		break;
 	}
 }

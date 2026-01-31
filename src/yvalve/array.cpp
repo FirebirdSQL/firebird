@@ -47,7 +47,7 @@
 
 using namespace Firebird;
 
-const int array_desc_column_major = 1;	// Set for FORTRAN
+constexpr int array_desc_column_major = 1;	// Set for FORTRAN
 
 struct gen_t
 {
@@ -59,9 +59,9 @@ struct gen_t
 };
 
 
-static void adjust_length(ISC_ARRAY_DESC*);
-static void copy_exact_name (const char*, char*, SSHORT);
-static ISC_STATUS error(ISC_STATUS* status, const Arg::StatusVector& v);
+static void adjust_length(ISC_ARRAY_DESC*) noexcept;
+static void copy_exact_name (const char*, char*, SSHORT) noexcept;
+static ISC_STATUS error(ISC_STATUS* status, const Arg::StatusVector& v) noexcept;
 static ISC_STATUS gen_sdl(ISC_STATUS*, const ISC_ARRAY_DESC*, SSHORT*, UCHAR**, SSHORT*, bool);
 static ISC_STATUS stuff_args(gen_t*, SSHORT, ...);
 static ISC_STATUS stuff_literal(gen_t*, SLONG);
@@ -459,7 +459,7 @@ ISC_STATUS API_ROUTINE isc_array_set_desc(ISC_STATUS* status,
 }
 
 
-static void adjust_length(ISC_ARRAY_DESC*)
+static void adjust_length(ISC_ARRAY_DESC*) noexcept
 {
 /**************************************
  *
@@ -474,7 +474,7 @@ static void adjust_length(ISC_ARRAY_DESC*)
 }
 
 
-static void copy_exact_name (const char* from, char* to, SSHORT bsize)
+static void copy_exact_name(const char* from, char* to, SSHORT bsize) noexcept
 {
 /**************************************
  *
@@ -499,7 +499,7 @@ static void copy_exact_name (const char* from, char* to, SSHORT bsize)
 }
 
 
-static ISC_STATUS error(ISC_STATUS* status, const Arg::StatusVector& v)
+static ISC_STATUS error(ISC_STATUS* status, const Arg::StatusVector& v) noexcept
 {
 /**************************************
  *
@@ -693,7 +693,7 @@ static ISC_STATUS stuff_literal(gen_t* gen, SLONG literal)
  *	Stuff an SDL literal.
  *
  **************************************/
-	ISC_STATUS*	status = gen->gen_status;
+	const ISC_STATUS* status = gen->gen_status;
 
 	if (literal >= -128 && literal <= 127)
 		return stuff_args(gen, 2, isc_sdl_tiny_integer, literal);
@@ -722,7 +722,7 @@ static ISC_STATUS stuff_string(gen_t* gen, UCHAR sdl, const SCHAR* string)
  *	Stuff a "thing" then a counted string.
  *
  **************************************/
-	ISC_STATUS* status = gen->gen_status;
+	const ISC_STATUS* status = gen->gen_status;
 
 	if (stuff_sdl(gen, sdl))
 		return status[1];

@@ -152,7 +152,7 @@ static SINT64 ISQL_vax_integer(const UCHAR* bytes, USHORT length)
 // Initialize types
 
 // Keep this array in sync with obj.h in jrd.
-static const SCHAR* Object_types[] =
+static constexpr const SCHAR* Object_types[] =
 {
 	"Table",
 	"View",
@@ -171,18 +171,20 @@ static const SCHAR* Object_types[] =
 	"Generator",
 	"User defined function",
 	"Blob filter",	// impossible to have explicit dependencies on it, but...
-	"Collation"
+	"Collation",
+	"Package",
+	"Package body"
 };
 
 
 
-const SCHAR* Trigger_prefix_types[] =
+constexpr const SCHAR* Trigger_prefix_types[] =
 {
 	"BEFORE",			// keyword
 	"AFTER"				// keyword
 };
 
-const SCHAR* Trigger_suffix_types[] =
+constexpr const SCHAR* Trigger_suffix_types[] =
 {
 	"",
 	"INSERT",			// keyword
@@ -190,7 +192,7 @@ const SCHAR* Trigger_suffix_types[] =
 	"DELETE"			// keyword
 };
 
-const SCHAR* Db_trigger_types[] =
+constexpr const SCHAR* Db_trigger_types[] =
 {
 	"CONNECT",				// keyword
 	"DISCONNECT",			// keyword
@@ -214,7 +216,7 @@ enum priv_flag {
 };
 
 
-static const struct
+static constexpr struct
 {
 	USHORT priv_flag;
 	const char* priv_string;
@@ -234,12 +236,12 @@ static const struct
 
 // strlen of each element above, + strlen(", ") for separators
 
-const int MAX_PRIV_LIST = (6 + 2 + 7 + 2 + 6 + 2 + 6 + 2 + 6 + 2 + 10 + 2 + 6 + 2 + 5 + 2 + 4 + 1);
+constexpr int MAX_PRIV_LIST = (6 + 2 + 7 + 2 + 6 + 2 + 6 + 2 + 6 + 2 + 10 + 2 + 6 + 2 + 5 + 2 + 4 + 1);
 
-const int PRIV_UPDATE_POS = 4;
-const int PRIV_REFERENCES_POS = 5;
+constexpr int PRIV_UPDATE_POS = 4;
+constexpr int PRIV_REFERENCES_POS = 5;
 
-const int RELATION_PRIV_ALL = priv_SELECT | priv_INSERT | priv_UPDATE | priv_DELETE | priv_REFERENCES;
+constexpr int RELATION_PRIV_ALL = priv_SELECT | priv_INSERT | priv_UPDATE | priv_DELETE | priv_REFERENCES;
 
 struct PrivilegeFields
 {
@@ -250,7 +252,7 @@ struct PrivilegeFields
 // Added support to display FORCED WRITES status. - PR 27-NOV-2001
 // Added support to display transaction info when next_transaction id is fixed.
 // Added support to display ODS version. CVC 26-Aug-2004.
-static const UCHAR db_items[] =
+static constexpr UCHAR db_items[] =
 {
 	isc_info_page_size,
 	isc_info_db_size_in_pages,
@@ -284,7 +286,7 @@ static const UCHAR db_items[] =
  * This same BPB is safe to use for both V3 & V4 db's - as
  * a V3 db will ignore the source_ & target_interp values.
  */
-static const UCHAR metadata_text_bpb[] =
+static constexpr UCHAR metadata_text_bpb[] =
 {
 	isc_bpb_version1,
 	isc_bpb_source_type, 1, isc_blob_text,
@@ -295,12 +297,12 @@ static const UCHAR metadata_text_bpb[] =
 
 // trigger action helpers
 
-inline int TRIGGER_ACTION_PREFIX(int value)
+inline int TRIGGER_ACTION_PREFIX(int value) noexcept
 {
 	return (value + 1) & 1;
 }
 
-inline int TRIGGER_ACTION_SUFFIX(int value, int slot)
+inline int TRIGGER_ACTION_SUFFIX(int value, int slot) noexcept
 {
 	return ((value + 1) >> (slot * 2 - 1)) & 3;
 }
@@ -312,7 +314,7 @@ const string SHOW_trigger_action(SINT64 type)
 	case TRIGGER_TYPE_DML:
 		{
 			char buffer[256];
-			int prefix = TRIGGER_ACTION_PREFIX(type);
+			const int prefix = TRIGGER_ACTION_PREFIX(type);
 			strcpy(buffer, Trigger_prefix_types[prefix]);
 			int suffix = TRIGGER_ACTION_SUFFIX(type, 1);
 			strcat(buffer, " ");
@@ -384,7 +386,7 @@ void SHOW_comments(bool force)
 	if (isqlGlob.major_ods >= ODS_VERSION11 || force)
 	{
 		char banner[BUFFER_LENGTH128];
-		fb_utils::snprintf(banner, sizeof(banner), "%s/* Comments for database objects. */%s", NEWLINE, NEWLINE);
+		snprintf(banner, sizeof(banner), "%s/* Comments for database objects. */%s", NEWLINE, NEWLINE);
 		show_comments(cmmExtract, banner);
 	}
 }
@@ -424,7 +426,7 @@ void SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 
 	for (Firebird::ClumpletReader p(Firebird::ClumpletReader::InfoResponse, buffer, sizeof(buffer)); !p.isEof(); p.moveNext())
 	{
-		UCHAR item = p.getClumpTag();
+		const UCHAR item = p.getClumpTag();
 		SINT64 value_out = 0;
 
 		/*
@@ -674,7 +676,7 @@ void SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 }
 
 
-void SHOW_read_owner()
+void SHOW_read_owner() noexcept
 {
 /**************************************
  *
@@ -784,7 +786,7 @@ static void set_grantee(int user_type, const QualifiedMetaString& name, string& 
 }
 
 
-static USHORT convert_privilege_to_code(char privilege)
+static USHORT convert_privilege_to_code(char privilege) noexcept
 {
 	switch (privilege)
 	{
@@ -802,9 +804,9 @@ static USHORT convert_privilege_to_code(char privilege)
 	case 'G':
 		// Execute should not be here
 		return 0;
+	default:
+		return priv_UNKNOWN;
 	}
-
-	return priv_UNKNOWN;
 }
 
 
@@ -858,7 +860,7 @@ processing_state SHOW_ddl_grants(const std::optional<QualifiedMetaString>& name,
 				continue;
 
 			if (!isDdlObject(PRV.RDB$OBJECT_TYPE) || (obj_type != obj_any && PRV.RDB$OBJECT_TYPE != obj_type) ||
-				(name && name->object != getDllSecurityName(PRV.RDB$OBJECT_TYPE)))
+				(name && name->object != getDdlSecurityName(PRV.RDB$OBJECT_TYPE)))
 			{
 				continue;
 			}
@@ -937,7 +939,7 @@ processing_state SHOW_ddl_grants(const std::optional<QualifiedMetaString>& name,
 				SORTED BY PRV.RDB$RELATION_SCHEMA_NAME, PRV.RDB$USER, PRV.RDB$GRANT_OPTION
 			{
 				if (!isDdlObject(PRV.RDB$OBJECT_TYPE) || (obj_type != obj_any && PRV.RDB$OBJECT_TYPE != obj_type) ||
-					(name && name->object != getDllSecurityName(PRV.RDB$OBJECT_TYPE)))
+					(name && name->object != getDdlSecurityName(PRV.RDB$OBJECT_TYPE)))
 				{
 					continue;
 				}
@@ -1302,7 +1304,7 @@ processing_state SHOW_grants(const std::optional<QualifiedMetaString>& name,
 					 PRV.RDB$PRIVILEGE EQ 'M'
 				SORTED BY PRV.RDB$USER_SCHEMA_NAME, PRV.RDB$USER
 			{
-				MetaString role_name(PRV.RDB$RELATION_NAME);
+				const MetaString role_name(PRV.RDB$RELATION_NAME);
 
 				user_string = IUTILS_name_to_string(PRV.RDB$USER);
 
@@ -1315,7 +1317,7 @@ processing_state SHOW_grants(const std::optional<QualifiedMetaString>& name,
 				if (!PRV.RDB$FIELD_NAME.NULL && PRV.RDB$FIELD_NAME[0] == 'D')
 					default_option = " DEFAULT";
 
-				fb_utils::snprintf(Print_buffer, sizeof(Print_buffer), "GRANT%s %s TO %s%s%s%s%s",
+				snprintf(Print_buffer, sizeof(Print_buffer), "GRANT%s %s TO %s%s%s%s%s",
 						default_option,
 						IUTILS_name_to_string(role_name).c_str(),
 						user_string.c_str(), with_option, granted_by(PRV.RDB$GRANTOR, PRV.RDB$GRANTOR.NULL).c_str(),
@@ -1731,7 +1733,7 @@ void SHOW_print_metadata_text_blob(FILE* fp, ISC_QUAD* blobid, bool escape_squot
 	while (true)
 	{
 		unsigned int length;
-		int cc = blob->getSegment(fbStatus, sizeof(buffer) - 1, buffer, &length);
+		const int cc = blob->getSegment(fbStatus, sizeof(buffer) - 1, buffer, &length);
 		if (cc == Firebird::IStatus::RESULT_NO_DATA || cc == Firebird::IStatus::RESULT_ERROR)
 			break;
 
@@ -1739,7 +1741,7 @@ void SHOW_print_metadata_text_blob(FILE* fp, ISC_QUAD* blobid, bool escape_squot
 		// If the original string has \r\n, they're printed as \r\r\n, resulting
 		// in mixed/wrong line endings. So here, we filter any \r present just
 		// before \n.
-		bool prevEndedWithCr = endedWithCr;
+		const bool prevEndedWithCr = endedWithCr;
 
 		if ((endedWithCr = length != 0 && buffer[length - 1] == '\r'))
 			--length;
@@ -1951,7 +1953,10 @@ processing_state SHOW_metadata(const FrontendParser::AnyShowNode& node)
 			const auto ret = show_dependencies(node.name);
 
 			if (ret == OBJECT_NOT_FOUND)
+			{
 				key = NO_DEPENDENCIES;
+				notFoundName = node.name.value();
+			}
 
 			return ret;
 		},
@@ -2832,9 +2837,9 @@ static processing_state show_collations(const std::optional<QualifiedMetaString>
 	{
 		const QualifiedMetaString collationName(CL.RDB$COLLATION_NAME, CL.RDB$SCHEMA_NAME);
 
-		if ((!name &&
-			 ((!CL.RDB$SYSTEM_FLAG.NULL && CL.RDB$SYSTEM_FLAG != 0 && sys_flag != 0) ||
-			  (!(!CL.RDB$SYSTEM_FLAG.NULL && CL.RDB$SYSTEM_FLAG != 0) && sys_flag != 1))) ||
+		if (!name ?
+			(!CL.RDB$SYSTEM_FLAG.NULL && CL.RDB$SYSTEM_FLAG != 0 && sys_flag != 0) ||
+			(!(!CL.RDB$SYSTEM_FLAG.NULL && CL.RDB$SYSTEM_FLAG != 0) && sys_flag != 1) :
 			collationName == name ||
 			(name->schema.isEmpty() && name->object == collationName.object))
 		{
@@ -3460,9 +3465,7 @@ static void show_db()
 
 	// First general database parameters
 
-	bool translate = true;
-
-	SHOW_dbb_parameters(DB, db_items, sizeof(db_items), translate, NEWLINE);
+	SHOW_dbb_parameters(DB, db_items, sizeof(db_items), true, NEWLINE);
 
 	FOR DBB IN RDB$DATABASE
 		CROSS CS IN RDB$CHARACTER_SETS
@@ -3560,7 +3563,7 @@ static processing_state show_dependencies(const std::optional<QualifiedMetaStrin
 // - if it's procedure, list parameters that depend on other objects (unlikely for now)
 static processing_state show_dependencies(const QualifiedMetaString& name, int obj_type)
 {
-	Array<QualifiedMetaString> dependsOn;
+	SortedArray<QualifiedMetaString> dependsOn;
 
 	FOR DEP1 IN RDB$DEPENDENCIES
 		WITH DEP1.RDB$DEPENDED_ON_NAME EQ name.object.c_str() AND
@@ -3577,7 +3580,8 @@ static processing_state show_dependencies(const QualifiedMetaString& name, int o
 		if (dependsOn.hasData())
 			isqlGlob.prints(", ");
 
-		dependsOn.add(dependedOnName);
+		if (FB_SIZE_T pos; !dependsOn.find(dependedOnName, pos))
+				dependsOn.insert(pos, dependedOnName);
 
 		const char* type_name = Object_types[DEP1.RDB$DEPENDENT_TYPE];
 		if (DEP1.RDB$FIELD_NAME.NULL)
@@ -4137,7 +4141,7 @@ static processing_state show_functions(const std::optional<QualifiedMetaString>&
  *
  **************************************/
 
-	int systemFlag = system ? 1 : 0;
+	const int systemFlag = system ? 1 : 0;
 
 	// If no function name was given, just list the functions
 	if (!name)
@@ -4301,7 +4305,6 @@ static processing_state show_func(const QualifiedMetaString& name)
 		}
 
 		bool first_param = true;
-		const SSHORT default_charset = ISQL_get_default_char_set_id();
 
 		FOR ARG IN RDB$FUNCTION_ARGUMENTS CROSS
 			FLD IN RDB$FIELDS
@@ -4612,7 +4615,7 @@ static processing_state show_generators(const std::optional<QualifiedMetaString>
 
 	Firebird::AlignedBuffer<20> outBuffer;
 	fb_assert(outMetadata->getMessageLength(fbStatus) <= outBuffer.size());
-	unsigned off = outMetadata->getOffset(fbStatus, 0);
+	const unsigned off = outMetadata->getOffset(fbStatus, 0);
 	if (ISQL_errmsg (fbStatus))
 		return ps_ERR;
 
@@ -4622,7 +4625,7 @@ static processing_state show_generators(const std::optional<QualifiedMetaString>
 	{
 		const QualifiedMetaString genName(GEN.RDB$GENERATOR_NAME, GEN.RDB$SCHEMA_NAME);
 
-		if ((!name && (GEN.RDB$SYSTEM_FLAG.NULL || GEN.RDB$SYSTEM_FLAG == 0)) ||
+		if (!name ? (GEN.RDB$SYSTEM_FLAG.NULL || GEN.RDB$SYSTEM_FLAG == 0) :
 			name == genName ||
 			(name->schema.isEmpty() && name->object == genName.object))
 		{
@@ -4640,7 +4643,7 @@ static processing_state show_generators(const std::optional<QualifiedMetaString>
 				continue;
 
 			found = true;
-			ISC_INT64 val = use64 ? *((ISC_INT64*) &outBuffer[off]) : *((SLONG*) &outBuffer[off]);
+			const ISC_INT64 val = use64 ? *((ISC_INT64*) &outBuffer[off]) : *((SLONG*) &outBuffer[off]);
 
 			isqlGlob.printf("Generator %s, current value: %" SQUADFORMAT,
 				IUTILS_name_to_string(genName).c_str(), val);
@@ -4651,7 +4654,7 @@ static processing_state show_generators(const std::optional<QualifiedMetaString>
 					WITH G2.RDB$SCHEMA_NAME EQUIV NULLIF(genName.schema.c_str(), '') AND
 						 G2.RDB$GENERATOR_NAME = genName.object.c_str()
 				{
-					ISC_INT64 initval = !G2.RDB$INITIAL_VALUE.NULL ? G2.RDB$INITIAL_VALUE : 0;
+					const ISC_INT64 initval = !G2.RDB$INITIAL_VALUE.NULL ? G2.RDB$INITIAL_VALUE : 0;
 					isqlGlob.printf(", initial value: %" SQUADFORMAT ", increment: %" SLONGFORMAT,
 						initval, G2.RDB$GENERATOR_INCREMENT);
 				}
@@ -4849,7 +4852,7 @@ static processing_state show_packages(const std::optional<QualifiedMetaString>& 
 			SORTED BY PACK.RDB$SCHEMA_NAME, PACK.RDB$PACKAGE_NAME
 		{
 			const QualifiedMetaString packageName(PACK.RDB$PACKAGE_NAME, PACK.RDB$SCHEMA_NAME);
-			bool system_flag = !PACK.RDB$SYSTEM_FLAG.NULL && PACK.RDB$SYSTEM_FLAG > 0;
+			const bool system_flag = !PACK.RDB$SYSTEM_FLAG.NULL && PACK.RDB$SYSTEM_FLAG > 0;
 
 			if (system_flag == sys)
 			{
@@ -4928,7 +4931,7 @@ static processing_state show_packages(const std::optional<QualifiedMetaString>& 
 }
 
 
-static void printMap(bool extract, bool global, const MetaString& name, char* usng, const MetaString& plugin,
+static void printMap(bool extract, bool global, const MetaString& name, const char* usng, const MetaString& plugin,
 	const MetaString& db, const MetaString& fromType, const MetaString& from, short toType, const MetaString& to)
 {
 	if (extract)
@@ -4965,7 +4968,7 @@ static void printMap(bool extract, bool global, const MetaString& name, char* us
 	if (db.hasData())
 		isqlGlob.printf("IN %s ", IUTILS_name_to_string(db).c_str());
 
-	bool anyObj = from == "*";
+	const bool anyObj = from == "*";
 	isqlGlob.printf("FROM %s", anyObj ? "ANY " : "");
 	isqlGlob.printf("%s ", IUTILS_name_to_string(fromType).c_str());
 	if (!anyObj)
@@ -5085,7 +5088,7 @@ static processing_state show_proc(const std::optional<QualifiedMetaString>& name
 		FOR PRC IN RDB$PROCEDURES
 			SORTED BY PRC.RDB$SCHEMA_NAME, PRC.RDB$PACKAGE_NAME, PRC.RDB$PROCEDURE_NAME
 		{
-			bool system_flag = !PRC.RDB$SYSTEM_FLAG.NULL && PRC.RDB$SYSTEM_FLAG > 0;
+			const bool system_flag = !PRC.RDB$SYSTEM_FLAG.NULL && PRC.RDB$SYSTEM_FLAG > 0;
 
 			if (system_flag == sys)
 			{
@@ -5495,7 +5498,7 @@ bool SHOW_system_privileges(const MetaString& name, const char* prefix, bool lf)
 		{
 			for (unsigned byte = 0; byte < sizeof(X.RDB$SYSTEM_PRIVILEGES); ++byte)
 			{
-				char b = X.RDB$SYSTEM_PRIVILEGES[byte];
+				const char b = X.RDB$SYSTEM_PRIVILEGES[byte];
 				for (int bit = 0; bit < 8; ++bit)
 				{
 					if (b & (1 << bit))
@@ -5553,7 +5556,7 @@ static processing_state show_role(const std::optional<MetaString>& name, bool sy
 			SORTED BY X.RDB$ROLE_NAME
 		{
 			const MetaString roleName(X.RDB$ROLE_NAME);
-			bool system_flag = !X.RDB$SYSTEM_FLAG.NULL && X.RDB$SYSTEM_FLAG > 0;
+			const bool system_flag = !X.RDB$SYSTEM_FLAG.NULL && X.RDB$SYSTEM_FLAG > 0;
 
 			if (system_flag == system)
 			{
@@ -5655,7 +5658,7 @@ static processing_state show_schemas(const std::optional<MetaString>& name, bool
 		SORTED BY SCH.RDB$SCHEMA_NAME
 	{
 		const MetaString schemaName(SCH.RDB$SCHEMA_NAME);
-		bool systemFlag = !SCH.RDB$SYSTEM_FLAG.NULL && SCH.RDB$SYSTEM_FLAG > 0;
+		const bool systemFlag = !SCH.RDB$SYSTEM_FLAG.NULL && SCH.RDB$SYSTEM_FLAG > 0;
 
 		if ((name && name != schemaName) || (!name && systemFlag != system))
 			continue;
@@ -6593,13 +6596,13 @@ static processing_state show_users12()
 	Firebird::AlignedBuffer<MAX_SQL_IDENTIFIER_SIZE + 32> outBuffer;
 	fb_assert(outMetadata->getMessageLength(fbStatus) <= outBuffer.size());
 
-	char* mark = (char*) &outBuffer[outMetadata->getOffset(fbStatus, 0)];
+	const char* mark = reinterpret_cast<char*>(&outBuffer[outMetadata->getOffset(fbStatus, 0)]);
 	if (ISQL_errmsg (fbStatus))
 		return ps_ERR;
 	vary* username = (vary*) &outBuffer[outMetadata->getOffset(fbStatus, 1)];
 	if (ISQL_errmsg (fbStatus))
 		return ps_ERR;
-	int* cnt = (int*) &outBuffer[outMetadata->getOffset(fbStatus, 2)];
+	const int* cnt = reinterpret_cast<int*>(&outBuffer[outMetadata->getOffset(fbStatus, 2)]);
 	if (ISQL_errmsg (fbStatus))
 		return ps_ERR;
 
@@ -6710,11 +6713,11 @@ static processing_state show_users()
 					rc = SKIP; // We found at least one user.
 				}
 
-				unsigned len = p.getBytes()[0];
+				const unsigned len = p.getBytes()[0];
 				fb_assert(len == p.getClumpLength() - 1);
 				const UCHAR* uname = p.getBytes() + 1;
 				// Let's mark all attachments with our same user with a # prefix.
-				bool same(len == my_user->vary_length && !memcmp(my_user->vary_string, uname, len));
+				const bool same = (len == my_user->vary_length && !memcmp(my_user->vary_string, uname, len));
 				isqlGlob.printf("%c %.*s", same ? '#' : ' ', len, uname);
 				isqlGlob.printf("\n");
 			}

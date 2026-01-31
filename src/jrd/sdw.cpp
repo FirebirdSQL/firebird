@@ -325,14 +325,14 @@ void SDW_dump_pages(thread_db* tdbb)
 
 				CCH_FETCH(tdbb, &window, LCK_read, pag_undefined);
 
-				class Pio : public CryptoManager::IOCallback
+				class Pio final : public CryptoManager::IOCallback
 				{
 				public:
-					Pio(Shadow* s, BufferDesc* b)
+					Pio(Shadow* s, BufferDesc* b) noexcept
 						: shadow(s), bdb(b)
 					{ }
 
-					bool callback(thread_db* tdbb, FbStatusVector* status, Ods::pag* page)
+					bool callback(thread_db* tdbb, FbStatusVector* status, Ods::pag* page) override
 					{
 						return CCH_write_all_shadows(tdbb, shadow, bdb, page, status, false);
 					}
@@ -441,7 +441,7 @@ void SDW_init(thread_db* tdbb, bool activate, bool delete_files)
 	// set up the lock block for synchronizing addition of new shadows
 
 	header_page* header; // for sizeof here, used later
-	const USHORT key_length = sizeof(header->hdr_shadow_count);
+	constexpr USHORT key_length = sizeof(header->hdr_shadow_count);
 	Lock* lock = FB_NEW_RPT(*dbb->dbb_permanent, key_length)
 		Lock(tdbb, key_length, LCK_shadow, dbb, blocking_ast_shadowing);
 	dbb->dbb_shadow_lock = lock;
@@ -573,7 +573,7 @@ void SDW_notify(thread_db* tdbb)
 }
 
 
-bool SDW_rollover_to_shadow(thread_db* tdbb, jrd_file* file, const bool inAst)
+bool SDW_rollover_to_shadow(thread_db* tdbb, const jrd_file* file, const bool inAst)
 {
 /**************************************
  *
@@ -926,7 +926,7 @@ static void activate_shadow(thread_db* tdbb)
  *
  **************************************/
 	SET_TDBB(tdbb);
-	Database* dbb = tdbb->getDatabase();
+	const Database* dbb = tdbb->getDatabase();
 	CHECK_DBB(dbb);
 
 	gds__log("activating shadow file %s", dbb->dbb_filename.c_str());
@@ -1043,7 +1043,6 @@ static bool check_for_file(thread_db* tdbb, const SCHAR* name, USHORT length)
  **************************************/
 
 	SET_TDBB(tdbb);
-	Database* dbb = tdbb->getDatabase();
 	const Firebird::PathName path(name, length);
 
 	try {

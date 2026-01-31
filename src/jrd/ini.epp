@@ -568,7 +568,7 @@ namespace
 						if (!attachment->isGbak() || !(attachment->att_flags & ATT_gbak_restore_has_schema))
 						{
 							storeGrant(tdbb, userName.c_str(), obj_user,
-								QualifiedName(getDllSecurityName(obj), PUBLIC_SCHEMA),
+								QualifiedName(getDdlSecurityName(obj), PUBLIC_SCHEMA),
 								obj, ALL_DDL_PRIVILEGES, true);
 
 							addSecurityClass(tdbb, SCL_getDdlSecurityClassName(obj, PUBLIC_SCHEMA));
@@ -579,7 +579,7 @@ namespace
 					else
 					{
 						storeGrant(tdbb, userName.c_str(), obj_user,
-							QualifiedName(getDllSecurityName(obj)),
+							QualifiedName(getDdlSecurityName(obj)),
 							obj, ALL_DDL_PRIVILEGES, false);
 
 						addSecurityClass(tdbb, SCL_getDdlSecurityClassName(obj, {}));
@@ -732,6 +732,8 @@ void INI_format(thread_db* tdbb, const string& charset)
 	}
 	END_STORE
 
+	HalfStaticArray<QualifiedName, 2> predefinedSchemas;
+
 	// Store SYSTEM schema
 
 	handle.reset();
@@ -749,13 +751,14 @@ void INI_format(thread_db* tdbb, const string& charset)
 	}
 	END_STORE
 
-	storeGrant(tdbb, attachment->getUserName().c_str(), obj_user, QualifiedName(SYSTEM_SCHEMA),
+	const QualifiedName systemSchema(SYSTEM_SCHEMA);
+	predefinedSchemas.add(systemSchema);
+
+	storeGrant(tdbb, ownerName.c_str(), obj_user, systemSchema,
 		obj_schema, USAGE_PRIVILEGES, false);
 
-	storeGrant(tdbb, "PUBLIC", obj_user, QualifiedName(SYSTEM_SCHEMA),
+	storeGrant(tdbb, "PUBLIC", obj_user, systemSchema,
 		obj_schema, USAGE_PRIVILEGES, false);
-
-	GRANT_privileges(tdbb, QualifiedName(SYSTEM_SCHEMA), obj_schema, transaction);
 
 	if (!attachment->isGbak() || !(attachment->att_flags & ATT_gbak_restore_has_schema))
 	{
@@ -774,18 +777,25 @@ void INI_format(thread_db* tdbb, const string& charset)
 		}
 		END_STORE
 
-		storeGrant(tdbb, attachment->getUserName().c_str(), obj_user, QualifiedName(PUBLIC_SCHEMA),
+		const QualifiedName publicSchema(PUBLIC_SCHEMA);
+		predefinedSchemas.add(publicSchema);
+
+		storeGrant(tdbb, ownerName.c_str(), obj_user, publicSchema,
 			obj_schema, USAGE_PRIVILEGES, true);
 
-		storeGrant(tdbb, "PUBLIC", obj_user, QualifiedName(PUBLIC_SCHEMA),
+		storeGrant(tdbb, "PUBLIC", obj_user, publicSchema,
 			obj_schema, USAGE_PRIVILEGES, true);
-
-		GRANT_privileges(tdbb, QualifiedName(PUBLIC_SCHEMA), obj_schema, transaction);
 	}
 
 	// Create indices for system relations
 
 	store_indices(tdbb);
+
+	// Grant schema privileges. This is defered until system indices are created
+	// to avoid some system queries being badly optimized.
+
+	for (const auto& schema : predefinedSchemas)
+		GRANT_privileges(tdbb, schema, obj_schema, transaction);
 
 	// Create parameter types
 

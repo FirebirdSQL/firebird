@@ -43,11 +43,11 @@ public:
 	explicit InlineStorage(MemoryPool& p) : AutoStorage(p) { }
 	InlineStorage() : AutoStorage() { }
 protected:
-	T* getStorage()
+	T* getStorage() noexcept
 	{
 		return buffer;
 	}
-	FB_SIZE_T getStorageSize() const
+	FB_SIZE_T getStorageSize() const noexcept
 	{
 		return Capacity;
 	}
@@ -63,8 +63,8 @@ public:
 	explicit EmptyStorage(MemoryPool& p) : AutoStorage(p) { }
 	EmptyStorage() : AutoStorage() { }
 protected:
-	T* getStorage() { return NULL; }
-	FB_SIZE_T getStorageSize() const { return 0; }
+	T* getStorage() noexcept { return NULL; }
+	FB_SIZE_T getStorageSize() const noexcept { return 0; }
 };
 
 // Dynamic array of simple types
@@ -175,7 +175,7 @@ protected:
   		return data[index];
 	}
 
-	void freeData()
+	void freeData() noexcept
 	{
 		// CVC: Warning, after this call, "data" is an invalid pointer, be sure to reassign it
 		// or make it equal to this->getStorage()
@@ -219,9 +219,9 @@ public:
 		return *(data + count - 1);
 	}
 
-	const T* begin() const { return data; }
+	const T* begin() const noexcept { return data; }
 
-	const T* end() const { return data + count; }
+	const T* end() const noexcept { return data + count; }
 
 	T& front()
 	{
@@ -235,9 +235,9 @@ public:
 		return *(data + count - 1);
 	}
 
-	T* begin() { return data; }
+	T* begin() noexcept { return data; }
 
-	T* end() { return data + count; }
+	T* end() noexcept { return data + count; }
 
 	void insert(const size_type index, const T& item)
 	{
@@ -388,11 +388,11 @@ public:
 
 	size_type getCount() const noexcept { return count; }
 
-	bool isEmpty() const { return count == 0; }
+	bool isEmpty() const noexcept { return count == 0; }
 
-	bool hasData() const { return count != 0; }
+	bool hasData() const noexcept { return count != 0; }
 
-	size_type getCapacity() const { return capacity; }
+	size_type getCapacity() const noexcept { return capacity; }
 
 	void push(const T& item)
 	{
@@ -541,9 +541,8 @@ protected:
 	}
 };
 
-const static int FB_ARRAY_SORT_MANUAL = 0;
-const static int FB_ARRAY_SORT_WHEN_ADD = 1;
-// const static int FB_ARRAY_SORT_ON_FIND
+static inline constexpr int FB_ARRAY_SORT_MANUAL = 0;
+static inline constexpr int FB_ARRAY_SORT_WHEN_ADD = 1;
 
 // Dynamic sorted array of simple objects
 template <typename Value,

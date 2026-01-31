@@ -56,15 +56,14 @@ private:
 	static const char k;
 };
 
-const char CryptKey::k = 0x5a;
+constexpr char CryptKey::k = 0x5a;
 
 class App
 {
 public:
 	App() :
 		master(fb_get_master_interface()),
-		statusWrapper(master->getStatus()), status(&statusWrapper),
-		p(NULL), att(NULL), tra(NULL)
+		statusWrapper(master->getStatus()), status(&statusWrapper)
 	{ }
 
 	~App()
@@ -174,6 +173,9 @@ public:
 			curs = NULL;
 			break;
 		  }
+		case NONE:
+			// nothing to do
+			break;
 		}
 
 		if (tra)
@@ -185,7 +187,7 @@ public:
 		}
 
 		printf("\nProviding key for crypt plugin - press enter to continue ...");
-		getchar();
+		(void) getchar();
 
 		att->detach(status);
 		if (status->getState() & IStatus::STATE_ERRORS)
@@ -206,10 +208,10 @@ private:
 	IMaster* master;
 	CheckStatusWrapper statusWrapper;
 	CheckStatusWrapper* status;
-	IProvider* p;
-	IAttachment* att;
-	ITransaction* tra;
-	IResultSet* curs;
+	IProvider* p = nullptr;
+	IAttachment* att = nullptr;
+	ITransaction* tra = nullptr;
+	IResultSet* curs = nullptr;
 
 	CryptKey key;
 };

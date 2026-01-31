@@ -156,7 +156,7 @@ typedef int (*lock_ast_t)(void*);
 
 // Number of elements in an array
 template <typename T, std::size_t N>
-constexpr FB_SIZE_T FB_NELEM(const T (&)[N])
+constexpr FB_SIZE_T FB_NELEM(const T (&)[N]) noexcept
 {
 	return static_cast<FB_SIZE_T>(N);
 }

@@ -60,19 +60,18 @@ bool TableValueFunctionScan::internalGetRecord(thread_db* tdbb) const
 	}
 
 	rpb->rpb_number.increment();
+
 	do
 	{
-		if (!impure->m_recordBuffer->fetch(rpb->rpb_number.getValue(), rpb->rpb_record))
+		if (impure->m_recordBuffer->fetch(rpb->rpb_number.getValue(), rpb->rpb_record))
 		{
-			if (!nextBuffer(tdbb))
-			{
-				rpb->rpb_number.setValid(false);
-				return false;
-			}
-			continue;
+			rpb->rpb_number.setValid(true);
+			return true;
 		}
-		return true;
-	} while (true);
+	} while (nextBuffer(tdbb));
+
+	rpb->rpb_number.setValid(false);
+	return false;
 }
 
 bool TableValueFunctionScan::refetchRecord(thread_db* /*tdbb*/) const
@@ -118,6 +117,8 @@ void TableValueFunctionScan::assignParameter(thread_db* tdbb, dsc* fromDesc, con
 
 	memcpy(toDescValue.dsc_address, fromDesc->dsc_address, fromDesc->dsc_length);
 }
+
+//--------------------
 
 UnlistFunctionScan::UnlistFunctionScan(CompilerScratch* csb, StreamType stream, const string& alias,
 									   ValueListNode* list)
@@ -233,10 +234,10 @@ void UnlistFunctionScan::internalOpen(thread_db* tdbb) const
 			auto size = end = valueView.find(separatorView);
 			if (end == std::string_view::npos)
 			{
-				if (!valueView.empty())
-					size = valueView.length();
-				else
+				if (valueView.empty())
 					break;
+
+				size = valueView.length();
 			}
 
 			if (size > 0)
@@ -248,7 +249,10 @@ void UnlistFunctionScan::internalOpen(thread_db* tdbb) const
 				impure->m_recordBuffer->store(record);
 			}
 
-			valueView.remove_prefix(size + separatorView.length());
+			if (end != std::string_view::npos)
+				size += separatorView.length();
+
+			valueView.remove_prefix(size);
 
 		} while (end != std::string_view::npos);
 	}
@@ -306,21 +310,26 @@ bool UnlistFunctionScan::nextBuffer(thread_db* tdbb) const
 			std::string_view valueView(bufferString.data(), blobLength + resultLength);
 			auto end = std::string_view::npos;
 			impure->m_resultStr->erase();
+
 			do
 			{
 				const auto size = end = valueView.find(separatorView);
 				if (end == std::string_view::npos)
 				{
 					if (!valueView.empty())
+					{
 						impure->m_resultStr->append(valueView.data(),
 							static_cast<string::size_type>(valueView.length()));
+					}
 
 					break;
 				}
 
 				if (size > 0)
+				{
 					impure->m_resultStr->append(valueView.data(),
 						static_cast<string::size_type>(size));
+				}
 
 				valueView.remove_prefix(size + separatorView.length());
 
@@ -343,6 +352,182 @@ bool UnlistFunctionScan::nextBuffer(thread_db* tdbb) const
 				return true;
 			}
 		}
+	}
+
+	return false;
+}
+
+//--------------------
+
+GenSeriesFunctionScan::GenSeriesFunctionScan(CompilerScratch* csb, StreamType stream, const string& alias,
+									   ValueListNode* list)
+	: TableValueFunctionScan(csb, stream, alias), m_inputList(list)
+{
+	m_impure = csb->allocImpure<Impure>();
+}
+
+void GenSeriesFunctionScan::close(thread_db* tdbb) const
+{
+	const auto request = tdbb->getRequest();
+
+	invalidateRecords(request);
+
+	const auto impure = request->getImpure<Impure>(m_impure);
+
+	if (impure->irsb_flags & irsb_open)
+		impure->irsb_flags &= ~irsb_open;
+}
+
+
+void GenSeriesFunctionScan::internalOpen(thread_db* tdbb) const
+{
+	const auto request = tdbb->getRequest();
+	const auto rpb = &request->req_rpb[m_stream];
+	MemoryPool& pool = *tdbb->getDefaultPool();
+
+	rpb->rpb_number.setValue(BOF_NUMBER);
+
+	fb_assert(m_inputList->items.getCount() >= GEN_SERIES_INDEX_LAST);
+
+	auto startItem = m_inputList->items[GEN_SERIES_INDEX_START];
+	const auto startDesc = EVL_expr(tdbb, request, startItem);
+	if (startDesc == nullptr)
+		return;
+
+	auto finishItem = m_inputList->items[GEN_SERIES_INDEX_FINISH];
+	const auto finishDesc = EVL_expr(tdbb, request, finishItem);
+	if (finishDesc == nullptr)
+		return;
+
+	auto stepItem = m_inputList->items[GEN_SERIES_INDEX_STEP];
+	const auto stepDesc = EVL_expr(tdbb, request, stepItem);
+	if (stepDesc == nullptr)
+		return;
+
+	const auto impure = request->getImpure<Impure>(m_impure);
+	impure->m_recordBuffer = nullptr;
+
+	ArithmeticNode::getDescDialect3(tdbb, &impure->m_result.vlu_desc, *startDesc, *stepDesc, blr_add, &impure->m_scale, &impure->m_flags);
+
+	SLONG zero = 0;
+	dsc zeroDesc;
+	zeroDesc.makeLong(0, &zero);
+	impure->m_stepSign = MOV_compare(tdbb, stepDesc, &zeroDesc);
+
+	if (impure->m_stepSign == 0)
+		status_exception::raise(Arg::Gds(isc_genseq_stepmustbe_nonzero) << Arg::Str(m_name));
+
+	const auto boundaryComparison = MOV_compare(tdbb, startDesc, finishDesc);
+	// validate parameter value
+	if (((impure->m_stepSign > 0) && (boundaryComparison > 0)) ||
+		((impure->m_stepSign < 0) && (boundaryComparison < 0)))
+	{
+		return;
+	}
+
+	EVL_make_value(tdbb, startDesc, &impure->m_start);
+	EVL_make_value(tdbb, finishDesc, &impure->m_finish);
+	EVL_make_value(tdbb, stepDesc, &impure->m_step);
+
+	switch (impure->m_result.vlu_desc.dsc_dtype)
+	{
+		case dtype_int64:
+			impure->m_result.vlu_desc.dsc_address = reinterpret_cast<UCHAR*>(&impure->m_result.vlu_misc.vlu_int64);
+			break;
+		case dtype_int128:
+			impure->m_result.vlu_desc.dsc_address = reinterpret_cast<UCHAR*>(&impure->m_result.vlu_misc.vlu_int128);
+			break;
+		default:
+			fb_assert(false);
+	}
+
+	// result = start
+	MOV_move(tdbb, startDesc, &impure->m_result.vlu_desc);
+
+	impure->irsb_flags |= irsb_open;
+
+	VIO_record(tdbb, rpb, m_format, &pool);
+}
+
+void GenSeriesFunctionScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned /*level*/,
+										 bool /*recurse*/) const
+{
+	planEntry.className = "FunctionScan";
+
+	planEntry.lines.add().text = "Function " +
+		printName(tdbb, m_name.toQuotedString(), m_alias) + " Scan";
+
+	printOptInfo(planEntry.lines);
+
+	if (m_alias.hasData())
+		planEntry.alias = m_alias;
+}
+
+bool GenSeriesFunctionScan::internalGetRecord(thread_db* tdbb) const
+{
+	JRD_reschedule(tdbb);
+
+	const auto request = tdbb->getRequest();
+	const auto impure = request->getImpure<Impure>(m_impure);
+	const auto rpb = &request->req_rpb[m_stream];
+
+	if (!(impure->irsb_flags & irsb_open))
+	{
+		rpb->rpb_number.setValid(false);
+		return false;
+	}
+
+	rpb->rpb_number.increment();
+
+	if (nextBuffer(tdbb))
+	{
+		rpb->rpb_number.setValid(true);
+		return true;
+	}
+
+	rpb->rpb_number.setValid(false);
+	return false;
+}
+
+bool GenSeriesFunctionScan::nextBuffer(thread_db* tdbb) const
+{
+	const auto request = tdbb->getRequest();
+	const auto impure = request->getImpure<Impure>(m_impure);
+
+	const auto comparison = MOV_compare(tdbb, &impure->m_result.vlu_desc, &impure->m_finish.vlu_desc);
+	if (((impure->m_stepSign > 0) && (comparison <= 0)) ||
+		((impure->m_stepSign < 0) && (comparison >= 0)))
+	{
+		Record* const record = request->req_rpb[m_stream].rpb_record;
+
+		auto toDesc = m_format->fmt_desc.begin();
+
+		assignParameter(tdbb, &impure->m_result.vlu_desc, toDesc, 0, record);
+
+		// evaluate next result
+		try
+		{
+			impure_value nextValue;
+
+			ArithmeticNode::add(tdbb,
+				&impure->m_step.vlu_desc,
+				&impure->m_result.vlu_desc,
+				&nextValue,
+				blr_add,
+				false,
+				impure->m_scale,
+				impure->m_flags);
+
+			MOV_move(tdbb, &nextValue.vlu_desc, &impure->m_result.vlu_desc);
+		}
+		catch (const status_exception&)
+		{
+			tdbb->tdbb_status_vector->clearException();
+			// stop evaluate next result
+			impure->m_stepSign = 0;
+		}
+
+		return true;
 	}
 
 	return false;

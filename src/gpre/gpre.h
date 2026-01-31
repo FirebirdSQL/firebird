@@ -68,12 +68,6 @@
 #include "../jrd/constants.h"
 #include "../common/utils_proto.h"
 
-#ifdef GPRE_FORTRAN
-#if defined AIX || defined AIX_PPC || defined __sun
-#define FTN_BLK_DATA
-#endif
-#endif
-
 
 static inline constexpr const char* CONST_STR = "const ";
 
@@ -132,10 +126,10 @@ enum cob_t
 // and lang_internal.
 //
 
-bool isLangCpp(lang_t lang);
+bool isLangCpp(lang_t lang) noexcept;
 
 #ifdef GPRE_COBOL
-bool isAnsiCobol(cob_t dialect);
+bool isAnsiCobol(cob_t dialect) noexcept;
 #endif
 
 

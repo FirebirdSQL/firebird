@@ -77,10 +77,6 @@ private:
 		}
 	}
 
-	// Forbid copying
-	Condition(const Condition&);
-	Condition& operator=(const Condition&);
-
 public:
 	Condition()	{ init(); }
 	explicit Condition(MemoryPool&) { init(); }
@@ -92,6 +88,10 @@ public:
 		if (events[BROADCAST] && !CloseHandle(events[BROADCAST]))
 			system_call_failed::raise("CloseHandle(BROADCAST)");
 	}
+
+	// Forbid copying
+	Condition(const Condition&) = delete;
+	Condition& operator=(const Condition&) = delete;
 
 	void wait(Mutex& m)
 	{
@@ -155,10 +155,6 @@ private:
 		}
 	}
 
-	// Forbid copying
-	Condition(const Condition&);
-	Condition& operator=(const Condition&);
-
 public:
 	Condition() { init(); }
 	explicit Condition(MemoryPool&) { init(); }
@@ -172,6 +168,10 @@ public:
 			//system_call_failed::raise("pthread_cond_destroy", err);
 		}
 	}
+
+	// Forbid copying
+	Condition(const Condition&) = delete;
+	Condition& operator=(const Condition&) = delete;
 
 	void notifyOne()
 	{

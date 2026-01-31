@@ -42,7 +42,7 @@ Maximum alignments for corresponding data types are defined in dsc.h
  *  value is greater than blr_blob_id, be sure to change the next define,
  *  and also add the required entries to all of the arrays below.
  */
-const unsigned char DTYPE_BLR_MAX	= blr_blob_id;
+inline constexpr unsigned char DTYPE_BLR_MAX = blr_blob_id;
 
 /*
  the blr types are defined in blr.h
@@ -54,7 +54,7 @@ No need to worry about blr_blob or ?blr_blob_id
 #include "../common/dsc.h"
 #include "../jrd/RecordNumber.h"
 
-static const USHORT gds_cvt_blr_dtype[DTYPE_BLR_MAX + 1] =
+static inline constexpr USHORT gds_cvt_blr_dtype[DTYPE_BLR_MAX + 1] =
 {
 	0, 0, 0, 0, 0, 0, 0,
 	dtype_short,				/* blr_short == 7 */
@@ -88,7 +88,7 @@ static const USHORT gds_cvt_blr_dtype[DTYPE_BLR_MAX + 1] =
 	0, 0, 0, 0
 };
 
-static const USHORT type_alignments[DTYPE_TYPE_MAX] =
+static inline constexpr USHORT type_alignments[DTYPE_TYPE_MAX] =
 {
 	0,
 	0,							/* dtype_text */
@@ -121,7 +121,7 @@ static const USHORT type_alignments[DTYPE_TYPE_MAX] =
 	sizeof(GDS_DATE)			/* dtype_ex_timestamp_tz */
 };
 
-static const USHORT type_lengths[DTYPE_TYPE_MAX] =
+static inline constexpr USHORT type_lengths[DTYPE_TYPE_MAX] =
 {
 	0,
 	0,								/* dtype_text */
@@ -143,11 +143,11 @@ static const USHORT type_lengths[DTYPE_TYPE_MAX] =
 	sizeof(ISC_QUAD),				/* dtype_blob */
 	sizeof(ISC_QUAD),				/* dtype_array */
 	sizeof(SINT64),					/* dtype_int64 */
-	sizeof(RecordNumber::Packed),	/*dtype_dbkey */
+	sizeof(RecordNumber::Packed),	/* dtype_dbkey */
 	sizeof(UCHAR),					/* dtype_boolean */
 	sizeof(Firebird::Decimal64),	/* dtype_dec64 */
-	sizeof(Firebird::Decimal128),	/*dtype_dec128 */
-	sizeof(Firebird::Int128),		/*	dtype_int128 */
+	sizeof(Firebird::Decimal128),	/* dtype_dec128 */
+	sizeof(Firebird::Int128),		/* dtype_int128 */
 	sizeof(ISC_TIME_TZ),			/* dtype_sql_time_tz */
 	sizeof(ISC_TIMESTAMP_TZ),		/* dtype_timestamp_tz */
 	sizeof(ISC_TIME_TZ_EX),			/* dtype_ex_time_tz */
@@ -157,7 +157,7 @@ static const USHORT type_lengths[DTYPE_TYPE_MAX] =
 
 // This table is only used by gpre's cme.cpp.
 // float, double are numbers from IEEE floating-point standard (IEEE 754)
-static const USHORT type_significant_bits[DTYPE_TYPE_MAX] =
+static inline constexpr USHORT type_significant_bits[DTYPE_TYPE_MAX] =
 {
 	0,
 	0,							/* dtype_text */

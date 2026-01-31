@@ -52,8 +52,7 @@
 #include <stdlib.h>
 
 // SQLDA dialects
-const USHORT DIALECT_sqlda	= 0;
-//const USHORT DIALECT_xsqlda	= 1;	// meaning is same as SQL_DIALECT_V5
+constexpr USHORT DIALECT_sqlda	= 0;
 
 using namespace Firebird;
 
@@ -110,9 +109,9 @@ static dsql_name*		lookup_name(const SCHAR*, dsql_name*);
 static dsql_stmt*		lookup_stmt(const SCHAR*, dsql_name*, name_type);
 static void		init(FB_API_HANDLE*);
 static dsql_name*		insert_name(const SCHAR*, dsql_name**, dsql_stmt*);
-static USHORT	name_length(const SCHAR*);
+static USHORT	name_length(const SCHAR*) noexcept;
 static void		remove_name(dsql_name*, dsql_name**);
-static bool		scompare(const SCHAR*, USHORT, const SCHAR*, USHORT);
+static bool		scompare(const SCHAR*, USHORT, const SCHAR*, USHORT) noexcept;
 
 // declare the private data
 
@@ -125,7 +124,7 @@ static dsql_dbb*		databases		= NULL;
 
 Firebird::GlobalPtr<Firebird::RWLock> global_sync;
 
-static inline void set_global_private_status(ISC_STATUS* user_status, ISC_STATUS* local_status)
+static inline void set_global_private_status(ISC_STATUS* user_status, ISC_STATUS* local_status) noexcept
 {
 	UDSQL_error->dsql_user_status = user_status;
 	UDSQL_error->dsql_status = user_status ? user_status : local_status;
@@ -396,7 +395,7 @@ ISC_STATUS API_ROUTINE isc_embed_dsql_fetch_a(ISC_STATUS*	user_status,
 {
 	*sqlcode = 0;
 
-	ISC_STATUS s = isc_embed_dsql_fetch(user_status, cursor_name, dialect, sqlda);
+	const ISC_STATUS s = isc_embed_dsql_fetch(user_status, cursor_name, dialect, sqlda);
 	if (s == 100) {
 		*sqlcode = 100;
 	}
@@ -1245,7 +1244,7 @@ static dsql_stmt* lookup_stmt(const TEXT* name, dsql_name* list, name_type type)
 }
 
 
-static USHORT name_length(const TEXT* name)
+static USHORT name_length(const SCHAR* name) noexcept
 {
 /**************************************
  *
@@ -1259,7 +1258,7 @@ static USHORT name_length(const TEXT* name)
  **************************************/
 
 	// CVC: Beware, another function that stops at the first blank!!!
-	const TEXT* p = name;
+	const SCHAR* p = name;
 	while (*p && *p != ' ')
 		++p;
 
@@ -1296,7 +1295,7 @@ static void remove_name(dsql_name* name, dsql_name** list_ptr)
 
 
 // CVC: It seems I've read at least three versions of this routine.
-static bool scompare(const SCHAR* string1, USHORT length1, const SCHAR* string2, USHORT length2)
+static bool scompare(const SCHAR* string1, USHORT length1, const SCHAR* string2, USHORT length2) noexcept
 {
 /**************************************
  *

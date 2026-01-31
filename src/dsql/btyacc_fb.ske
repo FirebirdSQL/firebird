@@ -27,6 +27,7 @@
 #include "../dsql/StmtNodes.h"
 #include "../dsql/WinNodes.h"
 #include "../jrd/RecordSourceNodes.h"
+#include "../common/classes/PodOptional.h"
 #include "../common/classes/TriState.h"
 #include "gen/parse.h"
 #include "../dsql/Parser.h"
@@ -191,7 +192,7 @@ void Parser::setNodeLineColumn(Node* node)
 int Parser::parseAux()
 {
   // ASF: yym moved to Parser.h
-  int /*yym, */yyn, yystate, yychar, yynewerrflag;
+  int /*yym, */yyn, yystate, yychar/*, yynewerrflag*/;
   yyparsestate *yyerrctx = NULL;
   int reduce_posn;
 

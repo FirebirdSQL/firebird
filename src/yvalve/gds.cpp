@@ -131,7 +131,7 @@ static char* fb_prefix_msg = NULL;
 #define FB_IMPL_MSG(facility, number, symbol, sqlCode, sqlClass, sqlSubClass, text) \
 	{ENCODE_ISC_MSG(number, FB_IMPL_MSG_FACILITY_##facility), text},
 
-static const struct {
+static constexpr struct {
 	SLONG code_number;
 	const SCHAR *code_text;
 } messages[] = {
@@ -150,7 +150,7 @@ static const struct {
 #define FB_IMPL_MSG(facility, number, symbol, sqlCode, sqlClass, sqlSubClass, text) \
 	{ENCODE_ISC_MSG(number, FB_IMPL_MSG_FACILITY_##facility), sqlClass sqlSubClass},
 
-static const struct {
+static constexpr struct {
 	SLONG gds_code;
 	const char* sql_state;
 } sql_states[] = {
@@ -169,7 +169,7 @@ static const struct {
 #define FB_IMPL_MSG(facility, number, symbol, sqlCode, sqlClass, sqlSubClass, text) \
 	{ENCODE_ISC_MSG(number, FB_IMPL_MSG_FACILITY_##facility), sqlCode},
 
-static const struct {
+static constexpr struct {
 	SLONG gds_code;
 	SSHORT sql_code;
 } sql_codes[] = {
@@ -181,7 +181,7 @@ static const struct {
 #undef FB_IMPL_MSG_SYMBOL
 #undef FB_IMPL_MSG
 
-const SLONG GENERIC_SQLCODE		= -999;
+constexpr SLONG GENERIC_SQLCODE = -999;
 
 #include "fb_types.h"
 #include "../common/utils_proto.h"
@@ -244,7 +244,7 @@ static void		sanitize(Firebird::string& locale);
 // New functions that try to be safe.
 static SLONG safe_interpret(char* const s, const FB_SIZE_T bufsize,
 	const ISC_STATUS** const vector, bool legacy = false);
-static void safe_strncpy(char* target, const char* source, size_t bs);
+static void safe_strncpy(char* target, const char* source, size_t bs) noexcept;
 
 // Useful only in Windows. The hardcoded definition for the English-only version
 // is too crude.
@@ -293,42 +293,43 @@ static SLONG gds_pid = 0;
 
 // BLR Pretty print stuff
 
-const int op_line		= 1;
-const int op_verb		= 2;
-const int op_byte		= 3;
-const int op_word		= 4;
-const int op_pad		= 5;
-const int op_dtype		= 6;
-const int op_message	= 7;
-const int op_literal	= 8;
-const int op_begin		= 9;
-const int op_map		= 10;
-const int op_args		= 11;
-const int op_union		= 12;
-const int op_indent		= 13;
-const int op_join		= 14;
-const int op_parameters	= 15;
-const int op_error_handler	= 16;
-const int op_set_error	= 17;
-const int op_literals	= 18;
-const int op_exec_into	= 21;
-const int op_cursor_stmt	= 22;
-const int op_byte_opt_verb	= 23;
-const int op_exec_stmt		= 24;
-const int op_derived_expr	= 25;
-const int op_partition_args	= 26;
-const int op_subproc_decl	= 27;
-const int op_subfunc_decl	= 28;
-const int op_window_win		= 29;
-const int op_erase			= 30;	// special due to optional blr_marks after blr_erase
-const int op_dcl_local_table	= 31;
-const int op_outer_map		= 32;
-const int op_invoke_function	= 33;
-const int op_invsel_procedure	= 34;
-const int op_table_value_fun	= 35;
-const int op_for_range		= 36;
+constexpr int op_line		= 1;
+constexpr int op_verb		= 2;
+constexpr int op_byte		= 3;
+constexpr int op_word		= 4;
+constexpr int op_pad		= 5;
+constexpr int op_dtype		= 6;
+constexpr int op_message	= 7;
+constexpr int op_literal	= 8;
+constexpr int op_begin		= 9;
+constexpr int op_map		= 10;
+constexpr int op_args		= 11;
+constexpr int op_union		= 12;
+constexpr int op_indent		= 13;
+constexpr int op_join		= 14;
+constexpr int op_parameters	= 15;
+constexpr int op_error_handler	= 16;
+constexpr int op_set_error	= 17;
+constexpr int op_literals	= 18;
+constexpr int op_exec_into	= 21;
+constexpr int op_cursor_stmt	= 22;
+constexpr int op_byte_opt_verb	= 23;
+constexpr int op_exec_stmt		= 24;
+constexpr int op_derived_expr	= 25;
+constexpr int op_partition_args	= 26;
+constexpr int op_subproc_decl	= 27;
+constexpr int op_subfunc_decl	= 28;
+constexpr int op_window_win		= 29;
+constexpr int op_erase			= 30;	// special due to optional blr_marks after blr_erase
+constexpr int op_dcl_local_table	= 31;
+constexpr int op_outer_map		= 32;
+constexpr int op_invoke_function	= 33;
+constexpr int op_invsel_procedure	= 34;
+constexpr int op_table_value_fun	= 35;
+constexpr int op_for_range		= 36;
+constexpr int op_within_group_order	= 37;
 
-static const UCHAR
+static constexpr UCHAR
 	// generic print formats
 	zero[]		= { op_line, 0 },
 	one[]		= { op_line, op_verb, 0},
@@ -433,14 +434,16 @@ static const UCHAR
 	default2[] = { op_line, op_indent, op_byte, op_literal,
 				   op_line, op_indent, op_byte, op_literal,
 				   op_line, op_indent, op_byte, op_literal,
-				   op_pad, op_line, 0};
+				   op_pad, op_line, 0 },
+	list_function[] = { op_line, op_verb, op_verb, op_within_group_order, 0 },
+	agg_function[] = { op_byte, op_literal, op_byte, op_line, op_args, op_within_group_order, 0 };
 
 
 #include "../jrd/blp.h"
 
-const char* const FB_LOCK_ENV		= "FIREBIRD_LOCK";
-const char* const FB_MSG_ENV		= "FIREBIRD_MSG";
-const char* const FB_TMP_ENV		= "FIREBIRD_TMP";
+constexpr const char* FB_LOCK_ENV	= "FIREBIRD_LOCK";
+constexpr const char* FB_MSG_ENV	= "FIREBIRD_MSG";
+constexpr const char* FB_TMP_ENV	= "FIREBIRD_TMP";
 
 #ifdef WIN_NT
 #define EXPAND_PATH(relative, absolute)		_fullpath(absolute, relative, MAXPATHLEN)
@@ -1057,7 +1060,7 @@ static SLONG safe_interpret(char* const s, const FB_SIZE_T bufsize,
 // ***********************
 // Done exclusively because in legacy mode, safe_interpret cannot fill the
 // string up to the end by calling strncpy.
-static void safe_strncpy(char* target, const char* source, size_t bs)
+static void safe_strncpy(char* target, const char* source, size_t bs) noexcept
 {
 	if (!bs)
 		return;
@@ -1093,8 +1096,8 @@ void API_ROUTINE gds__interprete_a(SCHAR* s, SSHORT* length, ISC_STATUS* vector,
 }
 
 
-const int SECS_PER_HOUR	= 60 * 60;
-const int SECS_PER_DAY	= SECS_PER_HOUR * 24;
+constexpr int SECS_PER_HOUR	= 60 * 60;
+constexpr int SECS_PER_DAY	= SECS_PER_HOUR * 24;
 
 #ifdef WIN_NT
 
@@ -2657,7 +2660,7 @@ void API_ROUTINE gds__unregister_cleanup(FPTR_VOID_PTR routine, void *arg)
 	Firebird::MutexLockGuard guard(cleanup_handlers_mutex, "gds__unregister_cleanup");
 
 	clean_t* clean;
-	for (clean_t** clean_ptr = &cleanup_handlers; clean = *clean_ptr; clean_ptr = &clean->clean_next)
+	for (clean_t** clean_ptr = &cleanup_handlers; (clean = *clean_ptr); clean_ptr = &clean->clean_next)
 	{
         if (clean->clean_routine == routine && clean->clean_arg == arg)
 		{
@@ -4429,6 +4432,20 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 			// print blr_end
 			control->ctl_blr_reader.seekBackward(1);
 			blr_print_verb(control, level);
+			break;
+		}
+
+		case op_within_group_order:
+		{
+			if (control->ctl_blr_reader.peekByte() == blr_within_group_order)
+			{
+				blr_indent(control, level);
+				blr_print_blr(control, control->ctl_blr_reader.getByte());
+				n = blr_print_byte(control);
+				blr_print_line(control, (SSHORT) offset);
+				while (--n >= 0)
+					blr_print_verb(control, level + 1);
+			}
 			break;
 		}
 

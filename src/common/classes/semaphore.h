@@ -32,10 +32,6 @@
 #include "../common/gdsassert.h"
 #include "fb_exception.h"
 
-#ifdef _AIX
-#undef HAVE_SEMAPHORE_H
-#endif
-
 #ifdef WIN_NT
 // Note: Windows does not need signal safe version of the class
 
@@ -53,15 +49,15 @@ private:
 	HANDLE hSemaphore;
 	void init();
 
-	// Forbid copying (there is no definition of these methods)
-	Semaphore(const Semaphore&);
-	Semaphore& operator=(const Semaphore&);
-
 public:
 	Semaphore() { init(); }
 	explicit Semaphore(MemoryPool&) { init(); }
 
 	~Semaphore();
+
+	// Forbid copying
+	Semaphore(const Semaphore&) = delete;
+	Semaphore& operator=(const Semaphore&) = delete;
 
 #define CLASSES_SEMAPHORE_H_HAS_TRYENTER 1
 	bool tryEnter(const int seconds = 0, int milliseconds = 0);
@@ -96,15 +92,15 @@ private:
 
 	void init();
 
-	// Forbid copying
-	SignalSafeSemaphore(const SignalSafeSemaphore&);
-	SignalSafeSemaphore& operator=(const SignalSafeSemaphore&);
-
 public:
 	SignalSafeSemaphore() { init(); }
 	explicit SignalSafeSemaphore(MemoryPool&) { init(); }
 
 	~SignalSafeSemaphore();
+
+	// Forbid copying
+	SignalSafeSemaphore(const SignalSafeSemaphore&) = delete;
+	SignalSafeSemaphore& operator=(const SignalSafeSemaphore&) = delete;
 
 	void enter()
 	{
@@ -148,15 +144,16 @@ private:
 
 	void init();
 
-	// Forbid copying
-	SignalSafeSemaphore(const SignalSafeSemaphore&);
-	SignalSafeSemaphore& operator=(const SignalSafeSemaphore&);
-
 public:
 	SignalSafeSemaphore() { init(); }
 	explicit SignalSafeSemaphore(MemoryPool&) { init(); }
 
 	~SignalSafeSemaphore();
+
+	// Forbid copying
+	SignalSafeSemaphore(const SignalSafeSemaphore&) = delete;
+	SignalSafeSemaphore& operator=(const SignalSafeSemaphore&) = delete;
+
 	void enter();
 
 	void release(SLONG count = 1)
@@ -218,15 +215,15 @@ private:
 	void mtxLock();
 	void mtxUnlock();
 
-	// Forbid copying
-	Semaphore(const Semaphore&);
-	Semaphore& operator=(const Semaphore&);
-
 public:
 	Semaphore() { init(); }
 	explicit Semaphore(MemoryPool&) { init(); }
 
 	~Semaphore();
+
+	// Forbid copying
+	Semaphore(const Semaphore&) = delete;
+	Semaphore& operator=(const Semaphore&) = delete;
 
 	bool tryEnter(const int seconds = 0, int milliseconds = 0);
 	void enter();

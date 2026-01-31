@@ -81,7 +81,7 @@ unsigned readHexKey(ThrowStatusWrapper* status, const char* hex, unsigned char* 
 			error(status, "Key format error");
 		*k++ = static_cast<unsigned char>(c);
 	}
-	return k - key;
+	return static_cast<unsigned>(k - key);
 }
 
 void PseudoRandom::init(ThrowStatusWrapper* status)

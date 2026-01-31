@@ -9,9 +9,9 @@
 
 @echo off
 
-set FB_CLEAN=
+@set FB_CLEAN=
 
-for %%v in ( %* )  do (
+@for %%v in ( %* )  do (
   ( if /I "%%v"=="DEBUG" ( (set FB_DBG=TRUE) && (set FB_CONFIG=debug) ) )
   ( if /I "%%v"=="CLEAN" (set FB_CLEAN=:rebuild) )
   ( if /I "%%v"=="RELEASE" ( (set FB_DBG=) && (set FB_CONFIG=release) ) )
@@ -46,16 +46,20 @@ for %%v in ( %* )  do (
 ::
 
 @if not DEFINED FB_VSCOMNTOOLS (
-  if DEFINED VS170COMNTOOLS (
-    set "FB_VSCOMNTOOLS=%VS170COMNTOOLS%"
+  if DEFINED VS180COMNTOOLS (
+    set "FB_VSCOMNTOOLS=%VS180COMNTOOLS%"
   ) else (
-    if DEFINED VS160COMNTOOLS (
-      set "FB_VSCOMNTOOLS=%VS160COMNTOOLS%"
+    if DEFINED VS170COMNTOOLS (
+      set "FB_VSCOMNTOOLS=%VS170COMNTOOLS%"
     ) else (
-      if DEFINED VS150COMNTOOLS (
-        set "FB_VSCOMNTOOLS=%VS150COMNTOOLS%"
+      if DEFINED VS160COMNTOOLS (
+        set "FB_VSCOMNTOOLS=%VS160COMNTOOLS%"
       ) else (
-        goto :HELP
+        if DEFINED VS150COMNTOOLS (
+          set "FB_VSCOMNTOOLS=%VS150COMNTOOLS%"
+        ) else (
+          goto :HELP
+        )
       )
     )
   )
@@ -64,6 +68,10 @@ for %%v in ( %* )  do (
 :: Now set some firebird build specific variables that depend upon the
 :: version of Visual Studio that is being used for the build.
 @if DEFINED FB_VSCOMNTOOLS (
+  if "%FB_VSCOMNTOOLS%" == "%VS180COMNTOOLS%" (
+    set MSVC_VERSION=15
+    set MSVC_CMAKE_GENERATOR=Visual Studio 18 2026
+  )
   if "%FB_VSCOMNTOOLS%" == "%VS170COMNTOOLS%" (
     set MSVC_VERSION=15
     set MSVC_CMAKE_GENERATOR=Visual Studio 17 2022
@@ -83,10 +91,10 @@ for %%v in ( %* )  do (
 :: Run vsvarsall just once during the build...
 @if DEFINED FB_VSCOMNTOOLS (
   @if not defined VCToolsVersion (
-    call "%FB_VSCOMNTOOLS%\..\..\VC\Auxiliary\Build\vcvarsall.bat" %PROCESSOR_ARCHITECTURE%
+    call "%FB_VSCOMNTOOLS%\..\..\VC\Auxiliary\Build\vcvarsall.bat" %FB_PROCESSOR_ARCHITECTURE%
   ) else (
     @echo    The file:
-    @echo      "%FB_VSCOMNTOOLS%\..\..\VC\Auxiliary\Build\vcvarsall.bat" %PROCESSOR_ARCHITECTURE%
+    @echo      "%FB_VSCOMNTOOLS%\..\..\VC\Auxiliary\Build\vcvarsall.bat" %FB_PROCESSOR_ARCHITECTURE%
     @echo    has already been executed.
   )
 )

@@ -32,6 +32,14 @@
 namespace Firebird {
 
 template <typename T>
+concept IsQualifiedName = requires(T t)
+{
+	{ t.schema };
+	{ t.object };
+	{ t.package };
+};
+
+template <typename T>
 class BaseQualifiedName
 {
 public:
@@ -277,26 +285,30 @@ public:
 	}
 
 public:
-	bool operator<(const BaseQualifiedName& m) const
+	template <IsQualifiedName U>
+	bool operator<(const U& m) const
 	{
 		return schema < m.schema ||
 			(schema == m.schema && object < m.object) ||
 			(schema == m.schema && object == m.object && package < m.package);
 	}
 
-	bool operator>(const BaseQualifiedName& m) const
+	template <IsQualifiedName U>
+	bool operator>(const U& m) const
 	{
 		return schema > m.schema ||
 			(schema == m.schema && object > m.object) ||
 			(schema == m.schema && object == m.object && package > m.package);
 	}
 
-	bool operator==(const BaseQualifiedName& m) const
+	template <IsQualifiedName U>
+	bool operator==(const U& m) const
 	{
 		return schema == m.schema && object == m.object && package == m.package;
 	}
 
-	bool operator!=(const BaseQualifiedName& m) const
+	template <IsQualifiedName U>
+	bool operator!=(const U& m) const
 	{
 		return !(*this == m);
 	}

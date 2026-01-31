@@ -63,7 +63,7 @@ public:
 	}
 
 	static unsigned buildInfoItems(Array<UCHAR>& items, unsigned flags);
-	static unsigned buildInfoFlags(unsigned itemsLength, const UCHAR* items);
+	static unsigned buildInfoFlags(unsigned itemsLength, const UCHAR* items) noexcept;
 
 	unsigned getType();
 	unsigned getFlags();

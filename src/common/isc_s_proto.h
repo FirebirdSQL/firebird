@@ -33,6 +33,8 @@
 #include "../common/classes/RefCounted.h"
 #include "../common/classes/fb_string.h"
 #include "../common/classes/timestamp.h"
+#include <chrono>
+#include <optional>
 
 // Firebird platform-specific synchronization data structures
 
@@ -55,7 +57,7 @@
 
 #ifdef UNIX
 
-#if defined(HAVE_PTHREAD_MUTEXATTR_SETROBUST_NP) && defined(HAVE_PTHREAD_MUTEX_CONSISTENT_NP)
+#if defined(HAVE_PTHREAD_MUTEXATTR_SETROBUST) && defined(HAVE_PTHREAD_MUTEX_CONSISTENT)
 #define USE_ROBUST_MUTEX
 #endif // ROBUST mutex
 
@@ -130,10 +132,10 @@ struct event_t
 class MemoryHeader
 {
 public:
-	static const USHORT HEADER_VERSION = 2;
+	static constexpr USHORT HEADER_VERSION = 2;
 
 	// Values for mhb_flags
-	static const USHORT FLAG_DELETED = 1;	// Shared file has been deleted
+	static constexpr USHORT FLAG_DELETED = 1;	// Shared file has been deleted
 
 	void init(USHORT type, USHORT version)
 	{
@@ -149,12 +151,12 @@ public:
 
 	bool check(const char* name, USHORT type, USHORT version, bool raiseError = true) const;
 
-	void markAsDeleted()
+	void markAsDeleted() noexcept
 	{
 		mhb_flags |= FLAG_DELETED;
 	}
 
-	bool isDeleted() const
+	bool isDeleted() const noexcept
 	{
 		return (mhb_flags & FLAG_DELETED);
 	}
@@ -267,8 +269,8 @@ public:
 	static void unlinkFile(const TEXT* expanded_filename) noexcept;
 	Firebird::PathName getMapFileName();
 
-	void mutexLock();
-	bool mutexLockCond();
+	bool mutexLock(std::optional<std::chrono::milliseconds> timeout = std::nullopt);
+	bool mutexTryLock();
 	void mutexUnlock();
 
 	int eventInit(event_t* event);
@@ -329,7 +331,8 @@ public:
 		SRAM_TPC_SNAPSHOTS = 0xF7,
 		SRAM_CHANGELOG_STATE = 0xF6,
 		SRAM_TRACE_AUDIT_MTX = 0xF5,
-		SRAM_PROFILER = 0XF4
+		SRAM_PROFILER = 0XF4,
+		SRAM_CHAT_CLIENT = 0XF3
 	};
 
 protected:
@@ -386,8 +389,11 @@ public:
 			m_locked = false;
 	}
 
-	bool tryLock() {
-		m_locked = m_shmem->mutexLockCond();
+	SharedMutexGuard(const SharedMutexGuard&) = delete;
+	SharedMutexGuard& operator=(const SharedMutexGuard&) = delete;
+
+	bool tryLock(std::optional<std::chrono::milliseconds> timeout) {
+		m_locked = m_shmem->mutexLock(timeout);
 		return m_locked;
 	}
 
@@ -401,7 +407,7 @@ public:
 		m_locked = false;
 	}
 
-	bool isLocked() {
+	bool isLocked() noexcept {
 		return m_locked;
 	}
 
@@ -412,9 +418,6 @@ public:
 	}
 
 private:
-	SharedMutexGuard(const SharedMutexGuard&);
-	SharedMutexGuard& operator=(const SharedMutexGuard&);
-
 	SharedMemoryBase* m_shmem;
 	bool m_locked;
 };

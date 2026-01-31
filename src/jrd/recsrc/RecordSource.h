@@ -223,7 +223,7 @@ namespace Jrd
 
 	protected:
 		const StreamType m_stream;
-		const Format* const m_format;
+		mutable const Format* m_format;
 	};
 
 
@@ -584,7 +584,7 @@ namespace Jrd
 	{
 	public:
 		FilteredStream(CompilerScratch* csb, RecordSource* next,
-					   BoolExprNode* boolean, double selectivity = 0);
+					   BoolExprNode* boolean, double selectivity);
 
 		void close(thread_db* tdbb) const override;
 
@@ -611,21 +611,23 @@ namespace Jrd
 		}
 
 	protected:
+		FilteredStream(CompilerScratch* csb, RecordSource* next, BoolExprNode* boolean);
+
 		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
 		void internalOpen(thread_db* tdbb) const override;
 		bool internalGetRecord(thread_db* tdbb) const override;
 
-		bool m_invariant = false;
+		const bool m_invariant;
 
 	private:
-		bool evaluateBoolean(thread_db* tdbb) const;
+		Firebird::TriState evaluateBoolean(thread_db* tdbb) const;
 
 		NestConst<RecordSource> m_next;
 		NestConst<BoolExprNode> const m_boolean;
 		NestConst<BoolExprNode> m_anyBoolean;
-		bool m_ansiAny;
-		bool m_ansiAll;
-		bool m_ansiNot;
+		bool m_ansiAny = false;
+		bool m_ansiAll = false;
+		bool m_ansiNot = false;
 	};
 
 	class PreFilteredStream : public FilteredStream
@@ -634,9 +636,7 @@ namespace Jrd
 		PreFilteredStream(CompilerScratch* csb, RecordSource* next,
 						  BoolExprNode* boolean)
 			: FilteredStream(csb, next, boolean)
-		{
-			m_invariant = true;
-		}
+		{}
 	};
 
 	class SortedStream : public RecordSource
@@ -912,8 +912,8 @@ namespace Jrd
 
 				dsc* desc = EVL_expr(tdbb, request, from);
 
-				if (request->req_flags & req_null)
-					target->vlu_desc.dsc_address = NULL;
+				if (!desc)
+					target->vlu_desc.dsc_address = nullptr;
 				else
 				{
 					EVL_make_value(tdbb, desc, target);
@@ -1175,8 +1175,11 @@ namespace Jrd
 			return true;
 		}
 
-		WriteLockResult lockRecord(thread_db* /*tdbb*/) const override
+		WriteLockResult lockRecord(thread_db* tdbb) const override
 		{
+			if (m_joinType == JoinType::SEMI || m_joinType == JoinType::ANTI)
+				return m_args.front()->lockRecord(tdbb);
+
 			Firebird::status_exception::raise(Firebird::Arg::Gds(isc_record_lock_not_supp));
 		}
 
@@ -1305,7 +1308,7 @@ namespace Jrd
 		const StreamList m_checkStreams;
 	};
 
-	class HashJoin : public Join<RecordSource>
+	class HashJoin final : public Join<RecordSource>
 	{
 		class HashTable;
 
@@ -1341,7 +1344,7 @@ namespace Jrd
 		void close(thread_db* tdbb) const override;
 		void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override;
 
-		static unsigned maxCapacity();
+		static unsigned maxCapacity() noexcept;
 
 	protected:
 		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
@@ -1592,7 +1595,7 @@ namespace Jrd
 			UNLIST_INDEX_LAST = 2
 		};
 
-		struct Impure : public TableValueFunctionScan::Impure
+		struct Impure final : public TableValueFunctionScan::Impure
 		{
 			blb* m_blob;
 			Firebird::string* m_separatorStr;
@@ -1606,10 +1609,47 @@ namespace Jrd
 	protected:
 		void close(thread_db* tdbb) const final;
 		void internalOpen(thread_db* tdbb) const final;
-		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level,
-							 bool recurse) const final;
+		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const final;
 
 		bool nextBuffer(thread_db* tdbb) const final;
+
+	private:
+		NestConst<ValueListNode> m_inputList;
+	};
+
+	class GenSeriesFunctionScan final : public TableValueFunctionScan
+	{
+		enum GenSeriesTypeItemIndex : UCHAR
+		{
+			GEN_SERIES_INDEX_START = 0,
+			GEN_SERIES_INDEX_FINISH = 1,
+			GEN_SERIES_INDEX_STEP = 2,
+			GEN_SERIES_INDEX_LAST = 3
+		};
+
+		struct Impure final : public TableValueFunctionScan::Impure
+		{
+			impure_value m_start;
+			impure_value m_finish;
+			impure_value m_step;
+			impure_value m_result;
+
+			USHORT m_flags;
+			SCHAR m_scale;
+			SCHAR m_stepSign;
+		};
+
+	public:
+		GenSeriesFunctionScan(CompilerScratch* csb, StreamType stream, const Firebird::string& alias,
+						   ValueListNode* list);
+
+	protected:
+		void close(thread_db* tdbb) const override;
+		void internalOpen(thread_db* tdbb) const override;
+		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
+		bool internalGetRecord(thread_db* tdbb) const override;
+
+		bool nextBuffer(thread_db* tdbb) const override;
 
 	private:
 		NestConst<ValueListNode> m_inputList;

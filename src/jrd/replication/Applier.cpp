@@ -446,8 +446,6 @@ void Applier::process(thread_db* tdbb, ULONG length, const UCHAR* data)
 
 void Applier::startTransaction(thread_db* tdbb, TraNumber traNum)
 {
-	const auto attachment = tdbb->getAttachment();
-
 	if (m_txnMap.exist(traNum))
 		raiseError("Transaction %" SQUADFORMAT" already exists", traNum);
 

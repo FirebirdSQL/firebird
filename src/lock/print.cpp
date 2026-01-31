@@ -123,10 +123,10 @@ enum lck_owner_t {
 
 typedef FILE* OUTFILE;
 
-const USHORT SW_I_ACQUIRE	= 1;
-const USHORT SW_I_OPERATION	= 2;
-const USHORT SW_I_TYPE		= 4;
-const USHORT SW_I_WAIT		= 8;
+constexpr USHORT SW_I_ACQUIRE	= 1;
+constexpr USHORT SW_I_OPERATION	= 2;
+constexpr USHORT SW_I_TYPE		= 4;
+constexpr USHORT SW_I_WAIT		= 8;
 
 #define SRQ_BASE                    ((UCHAR*) LOCK_header)
 
@@ -186,9 +186,9 @@ bool sw_html_format = false;
 static void prt_html_begin(OUTFILE);
 static void prt_html_end(OUTFILE);
 
-static const TEXT preOwn[] = "own";
-static const TEXT preRequest[] = "request";
-static const TEXT preLock[] = "lock";
+static constexpr TEXT preOwn[] = "own";
+static constexpr TEXT preRequest[] = "request";
+static constexpr TEXT preLock[] = "lock";
 
 
 class HtmlLink
@@ -202,17 +202,19 @@ public:
 		else
 			snprintf(strBuffer, sizeof(strBuffer), "%6" SLONGFORMAT, value);
 	}
-	operator const TEXT*()
+
+	HtmlLink(const HtmlLink&) = delete;
+
+	operator const TEXT*() noexcept
 	{
 		return strBuffer;
 	}
 private:
 	TEXT strBuffer[256];
-	HtmlLink(const HtmlLink&) {}
 };
 
 
-static const TEXT history_names[][10] =
+static constexpr TEXT history_names[][10] =
 {
 	"n/a", "ENQ", "DEQ", "CONVERT", "SIGNAL", "POST", "WAIT",
 	"DEL_PROC", "DEL_LOCK", "DEL_REQ", "DENY", "GRANT", "LEAVE",
@@ -220,7 +222,7 @@ static const TEXT history_names[][10] =
 };
 
 
-static const char* usage =
+static constexpr const char* usage =
 	"Firebird lock print utility.\n"
 	"Usage: fb_lock_print (-d | -f) [<parameters>]\n"
 	"\n"
@@ -259,7 +261,7 @@ static const char* usage =
 
 
 // The same table is in lock.cpp, maybe worth moving to a common file?
-static const UCHAR compatibility[LCK_max][LCK_max] =
+static constexpr UCHAR compatibility[LCK_max][LCK_max] =
 {
 
 /*							Shared	Prot	Shared	Prot
@@ -522,7 +524,7 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 									NULL, OPEN_EXISTING, 0, 0);
 		if (h == INVALID_HANDLE_VALUE)
 		{
-			FPRINTF(outfile, "Unable to open the database file (%d).\n", GetLastError());
+			FPRINTF(outfile, "Unable to open the database file (%u).\n", GetLastError());
 			return FINI_OK;
 		}
 		os_utils::getUniqueFileId(h, buffer);
@@ -800,7 +802,7 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 			times.tm_hour, times.tm_min, times.tm_sec);
 
 	FPRINTF(outfile,
-			"\tActive owner: %s, Length: %6" SLONGFORMAT", Used: %6" SLONGFORMAT"\n",
+			"\tActive owner: %s, Length: %6" ULONGFORMAT ", Used: %6" ULONGFORMAT "\n",
 			(const TEXT*)HtmlLink(preOwn, LOCK_header->lhb_active_owner),
 			LOCK_header->lhb_length, LOCK_header->lhb_used);
 
@@ -835,8 +837,8 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 	SLONG hash_max_count = 0;
 	SLONG hash_min_count = 10000000;
 	USHORT i = 0;
-	static const int MAX_MAX_COUNT_STATS = 21;
-	static const int LAST_MAX_COUNT_INDEX = MAX_MAX_COUNT_STATS - 1;
+	static constexpr int MAX_MAX_COUNT_STATS = 21;
+	static constexpr int LAST_MAX_COUNT_INDEX = MAX_MAX_COUNT_STATS - 1;
 	unsigned int distribution[MAX_MAX_COUNT_STATS] = {0}; // C++11 default brace initialization to zero
 	for (const srq* slot = LOCK_header->lhb_hash; i < LOCK_header->lhb_hash_slots; slot++, i++)
 	{
@@ -868,10 +870,10 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 		hash_max_count = LAST_MAX_COUNT_INDEX - 1;
 	for (int i = hash_min_count; i<=hash_max_count; ++i)
 	{
-		FPRINTF(outfile, "\t\t%-2d : %8u\t(%d%%)\n", i, distribution[i], distribution[i] * 100 / LOCK_header->lhb_hash_slots);
+		FPRINTF(outfile, "\t\t%-2d : %8u\t(%u%%)\n", i, distribution[i], distribution[i] * 100 / LOCK_header->lhb_hash_slots);
 	}
 	if (hash_max_count == LAST_MAX_COUNT_INDEX - 1)
-		FPRINTF(outfile, "\t\t>  : %8u\t(%d%%)\n", distribution[LAST_MAX_COUNT_INDEX], distribution[LAST_MAX_COUNT_INDEX] * 100 / LOCK_header->lhb_hash_slots);
+		FPRINTF(outfile, "\t\t>  : %8u\t(%u%%)\n", distribution[LAST_MAX_COUNT_INDEX], distribution[LAST_MAX_COUNT_INDEX] * 100 / LOCK_header->lhb_hash_slots);
 
 	const shb* a_shb = (shb*) SRQ_ABS_PTR(LOCK_header->lhb_secondary);
 	FPRINTF(outfile,
@@ -1391,7 +1393,7 @@ static void prt_owner(OUTFILE outfile,
 		FPRINTF(outfile, "<a name=\"%s%" SLONGFORMAT"\">OWNER BLOCK %6" SLONGFORMAT"</a>\n",
 				preOwn, rel_owner, rel_owner);
 	}
-	FPRINTF(outfile, "\tOwner id: %6" QUADFORMAT"d, Type: %1d\n",
+	FPRINTF(outfile, "\tOwner id: %6" QUADFORMAT "u, Type: %1d\n",
 			owner->own_owner_id, owner->own_owner_type);
 
 	FPRINTF(outfile, "\tProcess id: %6d (%s), Thread id: %6" SIZEFORMAT"\n",

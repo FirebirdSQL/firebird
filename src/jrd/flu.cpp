@@ -64,7 +64,7 @@
 
 #include <string.h>
 
-#if (defined SOLARIS || defined LINUX || defined AIX_PPC || defined FREEBSD || defined NETBSD || defined HPUX)
+#if (defined LINUX || defined DARWIN || defined FREEBSD || defined NETBSD)
 #define DYNAMIC_SHARED_LIBRARIES
 #endif
 
@@ -113,11 +113,6 @@ namespace {
 		{MOD_SUFFIX, "." SHRLIB_EXT, true},
 		{MOD_PREFIX, "lib", true},
 #endif
-/*
-#ifdef DARWIN
-		{MOD_SUFFIX, ".dylib", true},
-#endif
-*/
 	};
 
 	// UDF/BLOB filter verifier

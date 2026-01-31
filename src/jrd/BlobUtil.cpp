@@ -67,7 +67,6 @@ IExternalResultSet* BlobUtilPackage::cancelBlobProcedure(ThrowStatusExceptionWra
 	IExternalContext* context, const BlobMessage::Type* in, void*)
 {
 	const auto tdbb = JRD_get_thread_data();
-	const auto transaction = tdbb->getTransaction();
 
 	const auto blobId = *(bid*) &in->blob;
 
@@ -102,7 +101,6 @@ void BlobUtilPackage::isWritableFunction(ThrowStatusExceptionWrapper* status,
 	IExternalContext* context, const BlobMessage::Type* in, BooleanMessage::Type* out)
 {
 	const auto tdbb = JRD_get_thread_data();
-	const auto transaction = tdbb->getTransaction();
 
 	const auto blobId = *(bid*) &in->blob;
 
@@ -161,7 +159,6 @@ void BlobUtilPackage::seekFunction(ThrowStatusExceptionWrapper* status,
 	IExternalContext* context, const SeekInput::Type* in, SeekOutput::Type* out)
 {
 	const auto tdbb = JRD_get_thread_data();
-	const auto transaction = tdbb->getTransaction();
 	const auto blob = getBlobFromHandle(tdbb, in->handle);
 
 	if (!(in->mode >= 0 && in->mode <= 2))
@@ -185,7 +182,6 @@ void BlobUtilPackage::readDataFunction(ThrowStatusExceptionWrapper* status,
 		status_exception::raise(Arg::Gds(isc_random) << "Length must be NULL or greater than 0");
 
 	const auto tdbb = JRD_get_thread_data();
-	const auto transaction = tdbb->getTransaction();
 	const auto blob = getBlobFromHandle(tdbb, in->handle);
 
 	if (in->lengthNull)

@@ -37,10 +37,6 @@
 #include <algorithm>
 #include <cctype>
 
-#ifdef SFIO
-#include <stdio.h>
-#endif
-
 namespace Firebird {
 
 template <typename T>
@@ -74,11 +70,11 @@ private:
 	char data[MAX_SQL_IDENTIFIER_SIZE];
 	unsigned int count;
 
-	void init()
+	void init() noexcept
 	{
 		memset(data, 0, MAX_SQL_IDENTIFIER_SIZE);
 	}
-	MetaString& set(const MetaString& m)
+	MetaString& set(const MetaString& m) noexcept
 	{
 		memcpy(data, m.data, MAX_SQL_IDENTIFIER_SIZE);
 		count = m.count;
@@ -86,23 +82,23 @@ private:
 	}
 
 public:
-	MetaString() { init(); count = 0; }
-	MetaString(const char* s) { assign(s); }
-	MetaString(const char* s, FB_SIZE_T l) { assign(s, l); }
-	MetaString(const MetaString& m) { set(m); }
-	MetaString(const AbstractString& s) { assign(s.c_str(), s.length()); }
-	explicit MetaString(MemoryPool&) { init(); count = 0; }
-	MetaString(MemoryPool&, const char* s) { assign(s); }
-	MetaString(MemoryPool&, const char* s, FB_SIZE_T l) { assign(s, l); }
-	MetaString(MemoryPool&, const MetaString& m) { set(m); }
-	MetaString(MemoryPool&, const AbstractString& s) { assign(s.c_str(), s.length()); }
+	MetaString() noexcept { init(); count = 0; }
+	MetaString(const char* s) noexcept { assign(s); }
+	MetaString(const char* s, FB_SIZE_T l) noexcept { assign(s, l); }
+	MetaString(const MetaString& m) noexcept { set(m); }
+	MetaString(const AbstractString& s) noexcept { assign(s.c_str(), s.length()); }
+	explicit MetaString(MemoryPool&) noexcept { init(); count = 0; }
+	MetaString(MemoryPool&, const char* s) noexcept { assign(s); }
+	MetaString(MemoryPool&, const char* s, FB_SIZE_T l) noexcept { assign(s, l); }
+	MetaString(MemoryPool&, const MetaString& m) noexcept { set(m); }
+	MetaString(MemoryPool&, const AbstractString& s) noexcept { assign(s.c_str(), s.length()); }
 
 public:
 	static void parseList(const string& str, ObjectsArray<MetaString>& list)
 	{
 		auto pos = str.begin();
 
-		const auto skipSpaces = [&pos, &str]
+		const auto skipSpaces = [&pos, &str]() noexcept
 		{
 			while (pos != str.end() && (*pos == ' ' || *pos == '\t' || *pos == '\f' || *pos == '\r' || *pos == '\n'))
 				++pos;
@@ -213,52 +209,52 @@ public:
 	}
 
 public:
-	MetaString& assign(const char* s, FB_SIZE_T l);
-	MetaString& assign(const char* s) { return assign(s, s ? fb_strlen(s) : 0); }
-	MetaString& clear() { return assign(nullptr, 0); }
-	MetaString& operator=(const char* s) { return assign(s); }
-	MetaString& operator=(const AbstractString& s) { return assign(s.c_str(), s.length()); }
-	MetaString& operator=(const MetaString& m) { return set(m); }
-	char* getBuffer(const FB_SIZE_T l);
+	MetaString& assign(const char* s, FB_SIZE_T l) noexcept;
+	MetaString& assign(const char* s) noexcept { return assign(s, s ? fb_strlen(s) : 0); }
+	MetaString& clear() noexcept { return assign(nullptr, 0); }
+	MetaString& operator=(const char* s) noexcept { return assign(s); }
+	MetaString& operator=(const AbstractString& s) noexcept { return assign(s.c_str(), s.length()); }
+	MetaString& operator=(const MetaString& m) noexcept { return set(m); }
+	char* getBuffer(const FB_SIZE_T l) noexcept;
 
-	FB_SIZE_T length() const { return count; }
-	const char* c_str() const { return data; }
-	const char* nullStr() const { return (count == 0 ? NULL : data); }
-	bool isEmpty() const { return count == 0; }
-	bool hasData() const { return count != 0; }
+	FB_SIZE_T length() const noexcept { return count; }
+	const char* c_str() const noexcept { return data; }
+	const char* nullStr() const noexcept { return (count == 0 ? NULL : data); }
+	bool isEmpty() const noexcept { return count == 0; }
+	bool hasData() const noexcept { return count != 0; }
 
-	char& operator[](unsigned n) { return data[n]; }
-	char operator[](unsigned n) const { return data[n]; }
+	char& operator[](unsigned n) noexcept { return data[n]; }
+	char operator[](unsigned n) const noexcept { return data[n]; }
 
-	const char* begin() const { return data; }
-	const char* end() const { return data + count; }
+	const char* begin() const noexcept { return data; }
+	const char* end() const noexcept { return data + count; }
 
-	int compare(const char* s, FB_SIZE_T l) const;
-	int compare(const char* s) const { return compare(s, s ? fb_strlen(s) : 0); }
-	int compare(const AbstractString& s) const { return compare(s.c_str(), s.length()); }
-	int compare(const MetaString& m) const { return memcmp(data, m.data, MAX_SQL_IDENTIFIER_SIZE); }
+	int compare(const char* s, FB_SIZE_T l) const noexcept;
+	int compare(const char* s) const noexcept { return compare(s, s ? fb_strlen(s) : 0); }
+	int compare(const AbstractString& s) const noexcept { return compare(s.c_str(), s.length()); }
+	int compare(const MetaString& m) const noexcept { return memcmp(data, m.data, MAX_SQL_IDENTIFIER_SIZE); }
 
 	string toQuotedString() const
 	{
 		return Firebird::toQuotedString(*this);
 	}
 
-	bool operator==(const char* s) const { return compare(s) == 0; }
-	bool operator!=(const char* s) const { return compare(s) != 0; }
-	bool operator==(const AbstractString& s) const { return compare(s) == 0; }
-	bool operator!=(const AbstractString& s) const { return compare(s) != 0; }
-	bool operator==(const MetaString& m) const { return compare(m) == 0; }
-	bool operator!=(const MetaString& m) const { return compare(m) != 0; }
-	bool operator<=(const MetaString& m) const { return compare(m) <= 0; }
-	bool operator>=(const MetaString& m) const { return compare(m) >= 0; }
-	bool operator< (const MetaString& m) const { return compare(m) <  0; }
-	bool operator> (const MetaString& m) const { return compare(m) >  0; }
+	bool operator==(const char* s) const noexcept { return compare(s) == 0; }
+	bool operator!=(const char* s) const noexcept { return compare(s) != 0; }
+	bool operator==(const AbstractString& s) const noexcept { return compare(s) == 0; }
+	bool operator!=(const AbstractString& s) const noexcept { return compare(s) != 0; }
+	bool operator==(const MetaString& m) const noexcept { return compare(m) == 0; }
+	bool operator!=(const MetaString& m) const noexcept { return compare(m) != 0; }
+	bool operator<=(const MetaString& m) const noexcept { return compare(m) <= 0; }
+	bool operator>=(const MetaString& m) const noexcept { return compare(m) >= 0; }
+	bool operator< (const MetaString& m) const noexcept { return compare(m) <  0; }
+	bool operator> (const MetaString& m) const noexcept { return compare(m) >  0; }
 
 	void printf(const char*, ...);
 	FB_SIZE_T copyTo(char* to, FB_SIZE_T toSize) const;
 
 protected:
-	static void adjustLength(const char* const s, FB_SIZE_T& l);
+	static void adjustLength(const char* const s, FB_SIZE_T& l) noexcept;
 };
 
 } // namespace Firebird

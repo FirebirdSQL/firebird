@@ -32,7 +32,7 @@
 
 #include "../common/gdsassert.h"
 
-const SINT64 BOF_NUMBER = QUADCONST(-1);
+inline constexpr SINT64 BOF_NUMBER = QUADCONST(-1);
 
 // This class is to be used everywhere you may need to handle record numbers. We
 // deliberately not define implicit conversions to and from integer to allow
@@ -76,12 +76,12 @@ public:
 #endif
 
 	public:
-		ULONG& bid_temp_id()
+		ULONG& bid_temp_id() noexcept
 		{
 			return bid_number;
 		}
 
-		ULONG bid_temp_id() const
+		ULONG bid_temp_id() const noexcept
 		{
 			return bid_number;
 		}
@@ -90,7 +90,7 @@ public:
 		// BLOB ID is stored in database thus we do encode large record numbers
 		// in a manner which preserves backward compatibility with older ODS.
 		// The same applies to bid_decode routine below.
-		inline void bid_encode(SINT64 value)
+		inline void bid_encode(SINT64 value) noexcept
 		{
 			// Use explicit casts to suppress 64-bit truncation warnings
 			// Store lower 32 bits of number
@@ -99,76 +99,76 @@ public:
 			bid_number_up = static_cast<UCHAR>(value >> 32);
 		}
 
-		inline SINT64 bid_decode() const
+		inline SINT64 bid_decode() const noexcept
 		{
 			return bid_number + (static_cast<FB_UINT64>(bid_number_up) << 32);
 		}
 	};
 
 	// Default constructor.
-	inline RecordNumber() : value(0), valid(false) {}
+	inline RecordNumber() noexcept : value(0), valid(false) {}
 
 	// Copy constructor
-	inline RecordNumber(const RecordNumber& from) : value(from.value), valid(from.valid) {}
+	inline RecordNumber(const RecordNumber& from) noexcept : value(from.value), valid(from.valid) {}
 
 	// Explicit constructor from 64-bit record number value
-	inline explicit RecordNumber(SINT64 number) : value(number), valid(true) {}
+	inline explicit RecordNumber(SINT64 number) noexcept : value(number), valid(true) {}
 
 	// Assignment operator
-	inline RecordNumber& operator =(const RecordNumber& from)
+	inline RecordNumber& operator =(const RecordNumber& from) noexcept
 	{
 		value = from.value;
 		valid = from.valid;
 		return *this;
 	}
 
-	inline bool operator ==(const RecordNumber& other) const
+	inline bool operator ==(const RecordNumber& other) const noexcept
 	{
 		return value == other.value;
 	}
 
-	inline bool operator !=(const RecordNumber& other) const
+	inline bool operator !=(const RecordNumber& other) const noexcept
 	{
 		return value != other.value;
 	}
 
-	inline bool operator > (const RecordNumber& other) const
+	inline bool operator > (const RecordNumber& other) const noexcept
 	{
 		return value > other.value;
 	}
 
-	inline bool operator < (const RecordNumber& other) const
+	inline bool operator < (const RecordNumber& other) const noexcept
 	{
 		return value < other.value;
 	}
 
-	inline bool operator >= (const RecordNumber& other) const
+	inline bool operator >= (const RecordNumber& other) const noexcept
 	{
 		return value >= other.value;
 	}
 
-	inline bool operator <= (const RecordNumber& other) const
+	inline bool operator <= (const RecordNumber& other) const noexcept
 	{
 		return value <= other.value;
 	}
 
-	inline void decrement() { value--; }
+	inline void decrement() noexcept { value--; }
 
-	inline void increment() { value++; }
+	inline void increment() noexcept { value++; }
 
-	inline SINT64 getValue() const { return value; }
+	inline SINT64 getValue() const noexcept { return value; }
 
-	inline void setValue(SINT64 avalue) { value = avalue; }
+	inline void setValue(SINT64 avalue) noexcept { value = avalue; }
 
-	bool isBof() const { return value == BOF_NUMBER; }
+	bool isBof() const noexcept { return value == BOF_NUMBER; }
 
-	bool isValid() const { return valid; }
+	bool isValid() const noexcept { return valid; }
 
 	inline void decompose(USHORT records_per_page, // ~400 (8k page)
 						  USHORT data_pages_per_pointer_page,  // ~2000 (8k page)
 						  USHORT& line,
 						  USHORT& slot,
-						  ULONG& pp_sequence) const
+						  ULONG& pp_sequence) const noexcept
 	{
 		// Use explicit casts to suppress 64-bit truncation warnings
 		line = static_cast<USHORT>(value % records_per_page);
@@ -181,23 +181,23 @@ public:
 						USHORT data_pages_per_pointer_page,  // ~2000 (8k page)
 						USHORT line,
 						USHORT slot,
-						ULONG pp_sequence)
+						ULONG pp_sequence) noexcept
 	{
 		value = (((SINT64) pp_sequence) * data_pages_per_pointer_page + slot) * records_per_page + line;
 	}
 
 	// Handle encoding of record number for RDB$DB_KEY and BLOB ID structure.
-	inline void bid_encode(Packed* recno) const
+	inline void bid_encode(Packed* recno) const noexcept
 	{
 		recno->bid_encode(value);
 	}
 
-	inline void bid_decode(const Packed* recno)
+	inline void bid_decode(const Packed* recno) noexcept
 	{
 		value = recno->bid_decode();
 	}
 
-	inline void setValid(bool to_value)
+	inline void setValid(bool to_value) noexcept
 	{
 		valid = to_value;
 	}
@@ -237,59 +237,59 @@ struct bid
 		bid_quad_struct bid_quad;
 	};
 
-	ULONG& bid_temp_id()
+	ULONG& bid_temp_id() noexcept
 	{
 		return bid_internal.bid_temp_id();
 	}
 
-	ULONG bid_temp_id() const
+	ULONG bid_temp_id() const noexcept
 	{
 		return bid_internal.bid_temp_id();
 	}
 
-	bool isEmpty() const
+	bool isEmpty() const noexcept
 	{
 		return bid_quad.bid_quad_high == 0 && bid_quad.bid_quad_low == 0;
 	}
 
-	void clear()
+	void clear() noexcept
 	{
 		bid_quad.bid_quad_high = 0;
 		bid_quad.bid_quad_low = 0;
 	}
 
-	void set_temporary(ULONG temp_id)
+	void set_temporary(ULONG temp_id) noexcept
 	{
 		clear();
 		bid_temp_id() = temp_id;
 	}
 
-	void set_permanent(USHORT relation_id, RecordNumber num)
+	void set_permanent(USHORT relation_id, RecordNumber num) noexcept
 	{
 		clear();
 		bid_internal.bid_relation_id = relation_id;
 		num.bid_encode(&bid_internal);
 	}
 
-	RecordNumber get_permanent_number() const
+	RecordNumber get_permanent_number() const noexcept
 	{
 		RecordNumber temp;
 		temp.bid_decode(&bid_internal);
 		return temp;
 	}
 
-	operator ISC_QUAD() const
+	operator ISC_QUAD() const noexcept
 	{
-		return {ISC_LONG(bid_quad.bid_quad_high), bid_quad.bid_quad_low};
+		return { static_cast<ISC_LONG>(bid_quad.bid_quad_high), bid_quad.bid_quad_low };
 	}
 
-	bool operator == (const bid& other) const
+	bool operator == (const bid& other) const noexcept
 	{
 		return bid_quad.bid_quad_high == other.bid_quad.bid_quad_high &&
 			bid_quad.bid_quad_low == other.bid_quad.bid_quad_low;
 	}
 
-	bool operator > (const bid& other) const
+	bool operator > (const bid& other) const noexcept
 	{
 		return bid_quad.bid_quad_high > other.bid_quad.bid_quad_high ||
 				(bid_quad.bid_quad_high == other.bid_quad.bid_quad_high &&

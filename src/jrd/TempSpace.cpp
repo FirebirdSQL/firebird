@@ -44,12 +44,12 @@ FB_SIZE_T TempSpace::minBlockSize = 0;
 
 namespace
 {
-	const size_t MIN_TEMP_BLOCK_SIZE = 64 * 1024;
+	constexpr size_t MIN_TEMP_BLOCK_SIZE = 64 * 1024;
 
 	class TempCacheLimitGuard
 	{
 	public:
-		explicit TempCacheLimitGuard(Database* dbb) :
+		explicit TempCacheLimitGuard(Database* dbb) noexcept :
 			m_dbb(dbb),
 			m_size(0)
 		{}
@@ -70,7 +70,7 @@ namespace
 			return false;
 		}
 
-		void commit()
+		void commit() noexcept
 		{
 			m_size = 0;
 		}

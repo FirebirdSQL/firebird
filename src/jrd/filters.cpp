@@ -188,7 +188,7 @@ ISC_STATUS filter_acl(USHORT action, BlobControl* control)
 
         bool all_wild;
 		UCHAR c;
-		while (c = *p++)
+		while ((c = *p++))
 		{
 			switch (c)
 			{
@@ -1330,7 +1330,7 @@ static ISC_STATUS string_filter(USHORT action, BlobControl* control)
 	switch (action)
 	{
 	case isc_blob_filter_close:
-		while (string = (filter_tmp*) control->ctl_data[0])
+		while ((string = (filter_tmp*) control->ctl_data[0]))
 		{
 			control->ctl_data[0] = (IPTR) string->tmp_next;
 			gds__free(string);

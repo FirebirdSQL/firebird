@@ -72,6 +72,11 @@ public:
 		/// Destructor
 		virtual ~Module() {}
 
+		/// Copy construction is not supported
+		Module(const Module&) = delete;
+		/// assignment of Modules isn't supported
+		const Module& operator=(const Module&) = delete;
+
 		const Firebird::PathName fileName;
 
 	protected:
@@ -82,11 +87,6 @@ public:
 		{
 		}
 
-	private:
-		/// Copy construction is not supported, hence the copy constructor is private
-		Module(const Module&);		// no impl
-		/// assignment of Modules isn't supported so the assignment operator is private
-		const Module& operator=(const Module&);		// no impl
 	};
 
 	/** loadModule is given as a string the path to the module to load.  It

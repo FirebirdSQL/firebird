@@ -283,6 +283,24 @@ bool DYN_UTIL_check_unique_name_nothrow(thread_db* tdbb, jrd_tra* transaction,
 			break;
 		}
 
+		case obj_blob_filter:
+		{
+			fb_assert(object_name.schema.isEmpty());
+
+			static const CachedRequestId filterHandleId;
+			requestHandle.reset(tdbb, filterHandleId);
+
+			FOR(REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+				FIL IN RDB$FILTERS
+				WITH FIL.RDB$FUNCTION_NAME EQ object_name.object.c_str()
+			{
+				*errorCode = 322;	// isc_dyn_dup_blob_filter
+			}
+			END_FOR
+
+			break;
+		}
+
 		default:
 			fb_assert(false);
 	}

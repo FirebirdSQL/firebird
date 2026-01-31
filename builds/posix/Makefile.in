@@ -197,7 +197,17 @@ ifeq ($(CLIENT_ONLY_FLG),N)
 	CC="$(CC)" CFLAGS="$(CFLAGS)" AR="$(AR)" $(MAKE) -C $(ROOT)/extern/btyacc
 endif
 
-	CXX="$(CXX)" CXXFLAGS="$(CXXFLAGS)" LD_FLAGS="$(WLDFLAGS)" $(MAKE) -C $(ROOT)/extern/cloop TARGET=release WITH_FPC=0 BUILD_DIR=$(TMP_ROOT)/cloop OUT_DIR=$(GEN_ROOT)/$(TARGET)/cloop core
+	mkdir -p $(GEN_ROOT)/$(TARGET)/cloop
+
+ifeq ($(PLATFORM),DARWIN)
+	cd $(GEN_ROOT)/$(TARGET)/cloop && \
+	cmake -DCMAKE_BUILD_TYPE=$(FB_CMAKE_BUILD_TYPE) -DCMAKE_CXX_COMPILER="$(CXX)" -DCLOOP_BUILD_TESTS=OFF $(ROOT)/extern/cloop
+else
+	cd $(GEN_ROOT)/$(TARGET)/cloop && \
+	cmake -DCMAKE_BUILD_TYPE=$(FB_CMAKE_BUILD_TYPE) -DCMAKE_CXX_COMPILER="$(CXX)" -DCLOOP_BUILD_TESTS=OFF -DCMAKE_CXX_FLAGS="-static-libstdc++" -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++" $(ROOT)/extern/cloop
+endif
+	cd $(GEN_ROOT)/$(TARGET)/cloop && \
+	cmake --build .
 
 	CC="$(CC)" CFLAGS="$(CFLAGS)" AR="$(AR)" $(MAKE) -C $(ROOT)/extern/decNumber
 	ln -sf $(ROOT)/extern/decNumber/libdecFloat.a $(STATIC_LIB)

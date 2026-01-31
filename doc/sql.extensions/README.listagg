@@ -1,0 +1,159 @@
+SQL Language Extension: LISTAGG
+
+Function:
+	The current implementation has an aggregate function LIST which concatenates multiple row
+	fields into a blob. The SQL standard has a similar function called LISTAGG. The major
+	difference is that it also supports the ordered concatenation.
+
+Authors:
+	Chudaykin Alex <chudaykinalex@gmail.com>
+
+Format:
+	<listagg set function> ::=
+		LISTAGG <left paren> [ <set quantifier> ] <character value expression> <comma> <listagg separator> [ <listagg overflow clause> ] <right paren> [ <within group specification> ]
+
+	<listagg separator> ::=
+		<character string literal>
+
+	<listagg overflow clause> ::=
+		ON OVERFLOW <overflow behavior>
+
+	<overflow behavior> ::=
+		ERROR | TRUNCATE [ <listagg truncation filler> ] <listagg count indication>
+
+	<listagg truncation filler> ::=
+		<character string literal>
+
+	<listagg count indication> ::=
+		WITH COUNT | WITHOUT COUNT
+
+	<within group specification> ::=
+		WITHIN GROUP <left paren> ORDER BY <sort specification list> <right paren>
+
+Syntax Rules:
+	The legacy LIST syntax is preserved for backward compatibility, LISTAGG is added to cover the
+	standard features.
+
+	There is a <listagg overflow clause> rule in the standard, which is intended to output an error
+	when the output value overflows. Since the LIST function always returns a BLOB, it was decided
+	that this rule would be meaningless. So the OVERFLOW clause is syntactically supported but
+	silently ignored if specified.
+
+Examples:
+CREATE TABLE TEST_T
+	(COL1 INT, COL2 VARCHAR(2), COL3 VARCHAR(2), COL4 VARCHAR(2), COL5 BOOLEAN, COL6 VARCHAR(2)
+	CHARACTER SET WIN1251);
+COMMIT;
+INSERT INTO TEST_T values(1, 'A', 'A', 'J', false, 'П');
+INSERT INTO TEST_T values(2, 'B', 'B', 'I', false, 'Д');
+INSERT INTO TEST_T values(3, 'C', 'A', 'L', true,  'Ж');
+INSERT INTO TEST_T values(4, 'D', 'B', 'K', true,  'Й');
+COMMIT;
+
+SELECT LISTAGG (ALL COL4, ':') FROM TEST_T;
+=======
+J:I:L:K
+
+SELECT LISTAGG (DISTINCT COL4, ':') FROM TEST_T;
+========
+I:J:K:L
+
+SELECT LISTAGG (DISTINCT COL3, ':') FROM TEST_T;
+====
+A:B
+
+SELECT LISTAGG (DISTINCT COL3, ':') WITHIN GROUP (ORDER BY COL3 ASCENDING) FROM TEST_T;
+====
+A:B
+
+SELECT LISTAGG (DISTINCT COL3, ':') WITHIN GROUP (ORDER BY COL3 DESCENDING) FROM TEST_T;
+====
+B:A
+
+SELECT LISTAGG (DISTINCT COL3, ':') WITHIN GROUP (ORDER BY COL3 DESCENDING, COL4, COL5) FROM TEST_T;
+====
+B:A
+
+SELECT LISTAGG (DISTINCT COL3, ':') WITHIN GROUP (ORDER BY COL4, COL3 DESCENDING, COL5) FROM TEST_T;
+====
+A:B
+
+SELECT LISTAGG (DISTINCT COL3, ':') WITHIN GROUP (ORDER BY COL2) FROM TEST_T;
+====
+A:B
+
+SELECT LISTAGG (DISTINCT COL3, ':') WITHIN GROUP (ORDER BY COL2 DESCENDING) FROM TEST_T;
+====
+A:B
+
+SELECT LISTAGG (COL2, ':') WITHIN GROUP (ORDER BY COL2 DESCENDING) FROM TEST_T;
+=======
+D:C:B:A
+
+SELECT LISTAGG (COL4, ':') WITHIN GROUP (ORDER BY COL3 DESC) FROM TEST_T;
+=======
+I:K:J:L
+
+SELECT LISTAGG (COL3, ':') WITHIN GROUP (ORDER BY COL5 ASCENDING) FROM TEST_T;
+=======
+A:B:A:B
+
+SELECT LISTAGG (COL4, ':') WITHIN GROUP (ORDER BY COL3 ASC) FROM TEST_T;
+=======
+J:L:I:K
+
+SELECT LISTAGG (ALL COL2) WITHIN GROUP (ORDER BY COL4) FROM TEST_T;
+=======
+B,A,D,C
+
+SELECT LISTAGG (COL2, ':') WITHIN GROUP (ORDER BY COL3 DESC, COL4 ASC) FROM TEST_T;
+=======
+B:D:A:C
+
+SELECT LISTAGG (COL2, ':') WITHIN GROUP (ORDER BY COL3 DESC, COL4 DESC) FROM TEST_T;
+=======
+D:B:C:A
+
+SELECT LISTAGG (COL2, ':') WITHIN GROUP (ORDER BY COL3 ASC, COL4 DESC) FROM TEST_T;
+=======
+C:A:D:B
+
+SELECT LISTAGG (ALL COL6, ':') FROM TEST_T;
+=======
+П:Д:Ж:Й
+
+SELECT LISTAGG (ALL COL6, ':') WITHIN GROUP (ORDER BY COL2 DESC) FROM TEST_T;
+=======
+Й:Ж:Д:П
+
+SELECT LISTAGG (ALL COL2, ':') WITHIN GROUP (ORDER BY COL6) FROM TEST_T;
+=======
+B:C:D:A
+
+SELECT LISTAGG (COL4, ':' ON OVERFLOW TRUNCATE '...' WITHOUT COUNT) WITHIN GROUP (ORDER BY COL3 ASC) FROM TEST_T;
+=======
+J:L:I:K
+
+SELECT LISTAGG (COL4, ':' ON OVERFLOW TRUNCATE '...' WITH COUNT) WITHIN GROUP (ORDER BY COL3 DESC) FROM TEST_T;
+======
+I:K:J:L
+
+SELECT LISTAGG (DISTINCT COL3, ':' ON OVERFLOW ERROR) WITHIN GROUP (ORDER BY COL3) FROM TEST_T;
+===
+A:B
+
+INSERT INTO TEST_T values(5, 'E', NULL, NULL, NULL, NULL);
+INSERT INTO TEST_T values(6, 'F', 'C', 'N', true, 'К');
+
+SELECT LISTAGG (ALL COL2, ':') WITHIN GROUP (ORDER BY COL3) FROM TEST_T;
+===========
+E:A:C:B:D:F
+
+SELECT LISTAGG (ALL COL2, ':') WITHIN GROUP (ORDER BY COL3 NULLS LAST) FROM TEST_T;
+===========
+A:C:B:D:F:E
+
+SELECT LISTAGG (ALL COL2, ':') WITHIN GROUP (ORDER BY COL6 NULLS FIRST) FROM TEST_T;
+===========
+E:B:C:D:F:A
+

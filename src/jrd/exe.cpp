@@ -123,7 +123,7 @@ string Item::getDescription(Request* request, const ItemInfo* itemInfo) const
 	if (itemInfo && itemInfo->name.hasData())
 		return itemInfo->name.toQuotedString();
 
-	int oneBasedIndex = index + 1;
+	const int oneBasedIndex = index + 1;
 	string s;
 
 	if (type == Item::TYPE_VARIABLE)
@@ -156,23 +156,23 @@ string Item::getDescription(Request* request, const ItemInfo* itemInfo) const
 
 // AffectedRows class implementation
 
-AffectedRows::AffectedRows()
+AffectedRows::AffectedRows() noexcept
 {
 	clear();
 }
 
-void AffectedRows::clear()
+void AffectedRows::clear() noexcept
 {
 	writeFlag = false;
 	fetchedRows = modifiedRows = 0;
 }
 
-void AffectedRows::bumpFetched()
+void AffectedRows::bumpFetched() noexcept
 {
 	fetchedRows++;
 }
 
-void AffectedRows::bumpModified(bool increment)
+void AffectedRows::bumpModified(bool increment) noexcept
 {
 	if (increment) {
 		modifiedRows++;
@@ -182,7 +182,7 @@ void AffectedRows::bumpModified(bool increment)
 	}
 }
 
-int AffectedRows::getCount() const
+int AffectedRows::getCount() const noexcept
 {
 	return writeFlag ? modifiedRows : fetchedRows;
 }
@@ -200,12 +200,12 @@ void StatusXcp::clear()
 	status->init();
 }
 
-void StatusXcp::init(const FbStatusVector* vector)
+void StatusXcp::init(const FbStatusVector* vector) noexcept
 {
 	fb_utils::copyStatus(&status, vector);
 }
 
-void StatusXcp::copyTo(FbStatusVector* vector) const
+void StatusXcp::copyTo(FbStatusVector* vector) const noexcept
 {
 	fb_utils::copyStatus(vector, &status);
 }
@@ -261,7 +261,7 @@ static void release_blobs(thread_db*, Request*);
 static void trigger_failure(thread_db*, Request*);
 static void stuff_stack_trace(const Request*);
 
-const size_t MAX_STACK_TRACE = 2048;
+constexpr size_t MAX_STACK_TRACE = 2048;
 
 
 namespace
@@ -323,11 +323,9 @@ void EXE_assignment(thread_db* tdbb, const AssignmentNode* node)
 	Request* request = tdbb->getRequest();
 
 	// Get descriptors of src field/parameter/variable, etc.
-	request->req_flags &= ~req_null;
 	dsc* from_desc = EVL_expr(tdbb, request, node->asgnFrom);
 
-	EXE_assignment(tdbb, node->asgnTo, from_desc, (request->req_flags & req_null),
-		node->missing, node->missing2);
+	EXE_assignment(tdbb, node->asgnTo, from_desc, node->missing, node->missing2);
 }
 
 // Perform an assignment.
@@ -337,14 +335,13 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* source, const ValueExp
 	Request* request = tdbb->getRequest();
 
 	// Get descriptors of src field/parameter/variable, etc.
-	request->req_flags &= ~req_null;
 	dsc* from_desc = EVL_expr(tdbb, request, source);
 
-	EXE_assignment(tdbb, target, from_desc, (request->req_flags & req_null), NULL, NULL);
+	EXE_assignment(tdbb, target, from_desc, nullptr, nullptr);
 }
 
 // Perform an assignment.
-void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bool from_null,
+void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 	const ValueExprNode* missing_node, const ValueExprNode* missing2_node)
 {
 	SET_TDBB(tdbb);
@@ -365,9 +362,7 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 		missing = EVL_expr(tdbb, request, missing_node);
 
 	// Get descriptor of target field/parameter/variable, etc.
-	DSC* to_desc = EVL_assign_to(tdbb, to);
-
-	request->req_flags &= ~req_null;
+	dsc* to_desc = EVL_assign_to(tdbb, to);
 
 	// NS: If we are assigning to NULL, we finished.
 	// This functionality is currently used to allow calling UDF routines
@@ -375,7 +370,7 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 	if (!to_desc)
 		return;
 
-	SSHORT null = from_null ? -1 : 0;
+	SSHORT null = from_desc ? 0 : -1;
 
 	if (!null && missing && MOV_compare(tdbb, missing, from_desc) == 0)
 		null = -1;
@@ -464,7 +459,12 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc, bo
 
 		// Strings will be validated in CVT_move()
 
-		if (DTYPE_IS_BLOB_OR_QUAD(from_desc->dsc_dtype) || DTYPE_IS_BLOB_OR_QUAD(to_desc->dsc_dtype))
+		if (DSC_EQUIV(from_desc, to_desc, false) && from_desc->dsc_address == to_desc->dsc_address)
+		{
+			// Self-assignment. No need to do anything.
+			return;
+		}
+		else if (DTYPE_IS_BLOB_OR_QUAD(from_desc->dsc_dtype) || DTYPE_IS_BLOB_OR_QUAD(to_desc->dsc_dtype))
 		{
 			// ASF: Don't let MOV_move call blb::move because MOV
 			// will not pass the destination field to blb::move.
@@ -1375,6 +1375,10 @@ void EXE_execute_triggers(thread_db* tdbb,
 						case TriggerAction::TRIGGER_INSERT:
 							SystemTriggers::executeBeforeInsertTriggers(tdbb, relation, new_rec);
 							break;
+
+						default:
+							// other trigger actions not relevant here
+							break;
 					}
 					break;
 				}
@@ -1385,7 +1389,15 @@ void EXE_execute_triggers(thread_db* tdbb,
 						case TriggerAction::TRIGGER_DELETE:
 							SystemTriggers::executeAfterDeleteTriggers(tdbb, relation, old_rec);
 							break;
+
+						default:
+							// other trigger actions not relevant here
+							break;
 					}
+					break;
+
+				default:
+					// other trigger types not relevant here
 					break;
 			}
 		}

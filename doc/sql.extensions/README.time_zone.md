@@ -424,7 +424,7 @@ Returns:
 
 # Updating the time zone database
 
-Firebird uses the [IANA time zone database](http://www.iana.org/time-zones) through the ICU library.
+Firebird uses the [IANA time zone database](https://www.iana.org/time-zones) through the ICU library.
 
 When a Firebird version is released it's released with the most up-to-date time zone database but with the time it may become outdated.
 

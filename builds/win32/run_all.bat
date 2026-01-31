@@ -9,6 +9,7 @@ set FBBUILD_BUILDTYPE=release
 set FBBUILD_INCLUDE_PDB=
 set FBBUILD_MAKE_KITS_ONLY=
 set FBBUILD_BUILD_ONLY=0
+set FBBUILD_KITS=ISX ZIP
 set FBBUILD_TEST_ONLY=
 set FB2_SNAPSHOT=
 
@@ -61,13 +62,13 @@ if "%FBBUILD_BUILD_ONLY%"=="1" goto :END
 :MAKE_KITS
 :: Package everything up
 pushd ..\install\arch-specific\win32
-call BuildExecutableInstall ISX ZIP EMB %FBBUILD_BUILDTYPE%
+call BuildExecutableInstall %FBBUILD_KITS% %FBBUILD_BUILDTYPE%
 if "%ERRLEV%"=="1" (
   @echo Oops - some sort of error during packaging & popd & goto :END
 )
 if defined FBBUILD_INCLUDE_PDB (
   set /A FBBUILD_PACKAGE_NUMBER-=1
-  call BuildExecutableInstall ISX ZIP EMB %FBBUILD_BUILDTYPE% PDB
+  call BuildExecutableInstall %FBBUILD_KITS% %FBBUILD_BUILDTYPE% PDB
 )
 popd
 
@@ -112,12 +113,8 @@ goto :END
 :: Show variables
 @call setenvvar.bat %*
 if "%ERRLEV%"=="1" goto :END
-echo.
-set FB
-set MS
-set VC
-set VS
-echo.
+set > %TEMP%\fb_build_vars_%PROCESSOR_ARCHITECTURE%.txt
+type  %TEMP%\fb_build_vars_%PROCESSOR_ARCHITECTURE%.txt
 goto :END
 ::---------
 

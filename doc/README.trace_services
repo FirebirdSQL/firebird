@@ -1,4 +1,4 @@
-		
+
 		Trace and audit services.
 
 	Firebird 2.5 offers new trace and audit facilities. These new abilities allow
@@ -12,7 +12,7 @@ engine. List of events to trace, which data items to trace and placement of
 trace output is specified by trace configuration when trace session is created.
 
 	There are two kinds of trace sessions : system audit and user trace.
-	
+
 	System audit session is started by the engine itself and obtains configuration
 from the text file. The name of this file is set via new setting in firebird.conf
 ("AuditTraceConfigFile") and by default has empty value, i.e. no system audit
@@ -44,7 +44,7 @@ session. When application reads part of the output so output size stay less than
 
 	When application decides to stop its trace session it just does detach from
 service. Also there is ability to manage trace sessions (suspend\resume\stop).
-Administrators are allowed to manage any trace session while ordinary users are 
+Administrators are allowed to manage any trace session while ordinary users are
 allowed to manage their own trace sessions only.
 
     If user trace session was created by ordinary user it will trace only
@@ -65,9 +65,9 @@ plugin is responsible for logging these events in some form.
 
 	There is "standard" implementation of trace plugin, fbtrace.dll (.so) located
 in \plugins folder.
-	
 
-	There is new specialized standalone utility to work with trace services : 
+
+	There is new specialized standalone utility to work with trace services :
 fbtracemgr. It has the following command line switches :
 
 Action switches :
@@ -81,32 +81,33 @@ Action parameters switches :
   -N[AME]    <string>                   Session name
   -I[D]      <number>                   Session ID
   -C[ONFIG]  <string>                   Trace configuration file name
+  -P[LUGINS] <string list>              Plugins list for use with trace session; valid list separators: '\t', ',', ';'
 
 Connection parameters switches :
   -SE[RVICE]  <string>                  Service name
   -U[SER]     <string>                  User name
   -P[ASSWORD] <string>                  Password
   -FE[TCH]    <string>                  Fetch password from file
-  -T[RUSTED]  <string>                  Force trusted authentication
+  -T[RUSTED]                            Force trusted authentication
 
 Also, it prints usage screen if run without parameters.
 
 
 	Examples
-	
+
 I. Sample configuration files for user trace sessions:
-	
+
 a) Trace prepare, free and execution of all statements within connection 12345
 
 database
 {
-	enabled			true
-	connection_id		12345
-	log_statement_prepare	true
-	log_statement_free	true
-	log_statement_start	true
-	log_statement_finish	true
-	time_threshold		0
+	enabled = true
+	connection_id = 12345
+	log_statement_prepare= true
+	log_statement_free = true
+	log_statement_start = true
+	log_statement_finish = true
+	time_threshold = 0
 }
 
 b) Trace all connections of given user to database mydatabase.fdb
@@ -115,28 +116,28 @@ b) Trace all connections of given user to database mydatabase.fdb
 
 database = %[\\/]mydatabase.fdb
 {
-	enabled			true
-	include_filter		(%)(INSERT|UPDATE|DELETE)(%)
-	log_statement_finish	true
-	log_procedure_finish	true
-	log_trigger_finish	true
-	print_plan		true
-	print_perf		true
-	time_threshold		0
+	enabled = true
+	include_filter = (%)(INSERT|UPDATE|DELETE)(%)
+	log_statement_finish = true
+	log_procedure_finish = true
+	log_trigger_finish = true
+	print_plan = true
+	print_perf = true
+	time_threshold = 0
 }
-	
+
 c) Trace connections and transactions in all databases except of security database
 
 database
 {
-	enabled			true
-	log_connections		true
-	log_transactions	true
+	enabled = true
+	log_connections = true
+	log_transactions = true
 }
 
 database = security.db
 {
-	enabled			false
+	enabled = false
 }
 
 
@@ -147,27 +148,27 @@ a) Start user trace named "My trace" using configuration file fbtrace.conf and r
    its output on the screen :
 
 	fbtracemgr -se service_mgr -start -name "My trace" -config fbtrace.conf
-	
+
 	To stop this trace session press Ctrl+C at fbtracemgr console window. Or, in
-another console : list sessions and look for interesting session ID (b) and stop it 
+another console : list sessions and look for interesting session ID (b) and stop it
 using this found ID (e).
 
 b) List trace sessions
 
 	fbtracemgr -se service_mgr -list
-	
+
 c) Suspend trace session with ID 1
 
 	fbtracemgr -se service_mgr -suspend -id 1
-	
+
 d) Resume trace session with ID 1
 
 	fbtracemgr -se service_mgr -resume -id 1
-	
+
 e) Stop trace session with ID 1
 
 	fbtracemgr -se service_mgr -stop -id 1
-	
+
 
 
     There are three general use cases :

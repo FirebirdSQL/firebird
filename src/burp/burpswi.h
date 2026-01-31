@@ -35,87 +35,87 @@
 
 // Local variables
 
-const int IN_SW_BURP_0			= 0;	// the unknowable switch
-const int IN_SW_BURP_B			= 1;	// backup
-const int IN_SW_BURP_C			= 2;	// create_database
-//const int IN_SW_BURP_F		= 3;	// file names and starting page
-const int IN_SW_BURP_M			= 4;	// backup only metadata
-const int IN_SW_BURP_N			= 5;	// do not restore validity conditions
-const int IN_SW_BURP_P			= 6;	// specify output page size
-const int IN_SW_BURP_R			= 7;	// replace existing database
-//const int IN_SW_BURP_U		= 9;	// don't back up security information
-const int IN_SW_BURP_V			= 10;	// verify actions; verbose with fixed interval (10000)
-const int IN_SW_BURP_Z			= 11;	// print version number
-const int IN_SW_BURP_SKIP_DATA	= 12;	// skip data from table
-const int IN_SW_BURP_E			= 13;	// expand (no compress)
-const int IN_SW_BURP_Y			= 14;	// redirect/suppress status and error output
-const int IN_SW_BURP_L			= 15;	// ignore limbo transactions
-const int IN_SW_BURP_T			= 16;	// build a 'transportable' backup (V4 default)
-const int IN_SW_BURP_O			= 17;	// commit after each relation
-const int IN_SW_BURP_I			= 18;	// deactivate indexes
-const int IN_SW_BURP_K			= 19;	// kill any shadows defined on database
-const int IN_SW_BURP_G			= 20;	// inhibit garbage collection
-const int IN_SW_BURP_IG 		= 21;	// database is largely trash try anyway
-const int IN_SW_BURP_FA 		= 22;	// blocking factor
-const int IN_SW_BURP_US 		= 23;	// use all space on data page
-const int IN_SW_BURP_OL 		= 24;	// write RDB$DESCRIPTIONS & SOURCE in old manner
-//const int IN_SW_BURP_7		= 25;	// force creation of an ODS 7 database
-const int IN_SW_BURP_USER		= 26;	// default user name to use on attach
-const int IN_SW_BURP_PASS		= 27;	// default password to use on attach
-const int IN_SW_BURP_S			= 28;	// skip some number of bytes if find a bad attribute
-const int IN_SW_BURP_NT 		= 29;	// build a "non-transportable" backup (V3 default)
-//const int IN_SW_BURP_BUG8183	= 30;	// use workaround to allow restore database
+inline constexpr int IN_SW_BURP_0			= 0;	// the unknowable switch
+inline constexpr int IN_SW_BURP_B			= 1;	// backup
+inline constexpr int IN_SW_BURP_C			= 2;	// create_database
+//inline constexpr int IN_SW_BURP_F		= 3;	// file names and starting page
+inline constexpr int IN_SW_BURP_M			= 4;	// backup only metadata
+inline constexpr int IN_SW_BURP_N			= 5;	// do not restore validity conditions
+inline constexpr int IN_SW_BURP_P			= 6;	// specify output page size
+inline constexpr int IN_SW_BURP_R			= 7;	// replace existing database
+//inline constexpr int IN_SW_BURP_U			= 9;	// don't back up security information
+inline constexpr int IN_SW_BURP_V			= 10;	// verify actions; verbose with fixed interval (10000)
+inline constexpr int IN_SW_BURP_Z			= 11;	// print version number
+inline constexpr int IN_SW_BURP_SKIP_DATA	= 12;	// skip data from table
+inline constexpr int IN_SW_BURP_E			= 13;	// expand (no compress)
+inline constexpr int IN_SW_BURP_Y			= 14;	// redirect/suppress status and error output
+inline constexpr int IN_SW_BURP_L			= 15;	// ignore limbo transactions
+inline constexpr int IN_SW_BURP_T			= 16;	// build a 'transportable' backup (V4 default)
+inline constexpr int IN_SW_BURP_O			= 17;	// commit after each relation
+inline constexpr int IN_SW_BURP_I			= 18;	// deactivate indexes
+inline constexpr int IN_SW_BURP_K			= 19;	// kill any shadows defined on database
+inline constexpr int IN_SW_BURP_G			= 20;	// inhibit garbage collection
+inline constexpr int IN_SW_BURP_IG 			= 21;	// database is largely trash try anyway
+inline constexpr int IN_SW_BURP_FA 			= 22;	// blocking factor
+inline constexpr int IN_SW_BURP_US 			= 23;	// use all space on data page
+inline constexpr int IN_SW_BURP_OL 			= 24;	// write RDB$DESCRIPTIONS & SOURCE in old manner
+//inline constexpr int IN_SW_BURP_7			= 25;	// force creation of an ODS 7 database
+inline constexpr int IN_SW_BURP_USER		= 26;	// default user name to use on attach
+inline constexpr int IN_SW_BURP_PASS		= 27;	// default password to use on attach
+inline constexpr int IN_SW_BURP_S			= 28;	// skip some number of bytes if find a bad attribute
+inline constexpr int IN_SW_BURP_NT 			= 29;	// build a "non-transportable" backup (V3 default)
+//inline constexpr int IN_SW_BURP_BUG8183	= 30;	// use workaround to allow restore database
 										// v3.3 with comment field inside of index definition
-const int IN_SW_BURP_ROLE		= 31;	// default SQL role to use on attach
-const int IN_SW_BURP_CO 		= 32;	// convert external tables to internal tables during backup
-const int IN_SW_BURP_BU 		= 33;	// specify page buffers for cache
-const int IN_SW_BURP_SE 		= 34;	// use services manager
-const int IN_SW_BURP_MODE		= 35;	// database could be restored ReadOnly
+inline constexpr int IN_SW_BURP_ROLE		= 31;	// default SQL role to use on attach
+inline constexpr int IN_SW_BURP_CO 			= 32;	// convert external tables to internal tables during backup
+inline constexpr int IN_SW_BURP_BU 			= 33;	// specify page buffers for cache
+inline constexpr int IN_SW_BURP_SE 			= 34;	// use services manager
+inline constexpr int IN_SW_BURP_MODE		= 35;	// database could be restored ReadOnly
 /**************************************************************************/
 // The next two 'virtual' switches are hidden from user and are needed
 // for services API
 /**************************************************************************/
-const int IN_SW_BURP_HIDDEN_RDONLY		= 36;
-const int IN_SW_BURP_HIDDEN_RDWRITE		= 37;
+inline constexpr int IN_SW_BURP_HIDDEN_RDONLY		= 36;
+inline constexpr int IN_SW_BURP_HIDDEN_RDWRITE		= 37;
 
-const int IN_SW_BURP_RECREATE			= 38;	// recreate database
-const int IN_SW_BURP_NOD				= 39;	// do not run database triggers
+inline constexpr int IN_SW_BURP_RECREATE			= 38;	// recreate database
+inline constexpr int IN_SW_BURP_NOD					= 39;	// do not run database triggers
 #ifdef TRUSTED_AUTH
-const int IN_SW_BURP_TRUSTED_AUTH		= 40;	// force trusted auth
+inline constexpr int IN_SW_BURP_TRUSTED_AUTH		= 40;	// force trusted auth
 #endif
 
-const int IN_SW_BURP_FIX_FSS_DATA		= 43;	// fix unicode_fss data
-const int IN_SW_BURP_FIX_FSS_METADATA	= 44;	// fix unicode_fss metadata
+inline constexpr int IN_SW_BURP_FIX_FSS_DATA		= 43;	// fix unicode_fss data
+inline constexpr int IN_SW_BURP_FIX_FSS_METADATA	= 44;	// fix unicode_fss metadata
 
-const int IN_SW_BURP_FETCHPASS			= 45;	// fetch default password from file to use on attach
-const int IN_SW_BURP_VERBINT			= 46;	// verbose but with specific interval
-const int IN_SW_BURP_STATS				= 47;	// print statistics
+inline constexpr int IN_SW_BURP_FETCHPASS			= 45;	// fetch default password from file to use on attach
+inline constexpr int IN_SW_BURP_VERBINT				= 46;	// verbose but with specific interval
+inline constexpr int IN_SW_BURP_STATS				= 47;	// print statistics
 
-const int IN_SW_BURP_ZIP				= 48;	// backup file in .zip format
-const int IN_SW_BURP_KEYHOLD			= 49;	// name of KeyHolder plugin
-const int IN_SW_BURP_KEYNAME			= 50;	// name of crypt key
-const int IN_SW_BURP_CRYPT				= 51;	// name of crypt plugin
+inline constexpr int IN_SW_BURP_ZIP					= 48;	// backup file in .zip format
+inline constexpr int IN_SW_BURP_KEYHOLD				= 49;	// name of KeyHolder plugin
+inline constexpr int IN_SW_BURP_KEYNAME				= 50;	// name of crypt key
+inline constexpr int IN_SW_BURP_CRYPT				= 51;	// name of crypt plugin
 
-const int IN_SW_BURP_INCLUDE_DATA		= 52;	// backup data from tables
-const int IN_SW_BURP_REPLICA			= 53;	// replica mode
+inline constexpr int IN_SW_BURP_INCLUDE_DATA		= 52;	// backup data from tables
+inline constexpr int IN_SW_BURP_REPLICA				= 53;	// replica mode
 
-const int IN_SW_BURP_PARALLEL_WORKERS	= 54;	// parallel workers
-const int IN_SW_BURP_DIRECT_IO			= 55;	// direct IO for backup files
+inline constexpr int IN_SW_BURP_PARALLEL_WORKERS	= 54;	// parallel workers
+inline constexpr int IN_SW_BURP_DIRECT_IO			= 55;	// direct IO for backup files
 
-const int IN_SW_BURP_SKIP_SCHEMA_DATA		= 56;	// skip data from schema
-const int IN_SW_BURP_INCLUDE_SCHEMA_DATA	= 57;	// backup data from schemas
+inline constexpr int IN_SW_BURP_SKIP_SCHEMA_DATA	= 56;	// skip data from schema
+inline constexpr int IN_SW_BURP_INCLUDE_SCHEMA_DATA	= 57;	// backup data from schemas
 
 /**************************************************************************/
 
-static const char* const BURP_SW_MODE_NONE = "NONE";
-static const char* const BURP_SW_MODE_RO = "READ_ONLY";
-static const char* const BURP_SW_MODE_RW = "READ_WRITE";
-static const char* const BURP_SW_OVERWRITE = "OVERWRITE"; // recreate with overwrite
+static inline constexpr const char* BURP_SW_MODE_NONE = "NONE";
+static inline constexpr const char* BURP_SW_MODE_RO = "READ_ONLY";
+static inline constexpr const char* BURP_SW_MODE_RW = "READ_WRITE";
+static inline constexpr const char* BURP_SW_OVERWRITE = "OVERWRITE"; // recreate with overwrite
 
 
 enum BurpOptionType { boGeneral, boMain, boBackup, boRestore };
 
-static const Switches::in_sw_tab_t reference_burp_in_sw_table[] =
+static inline constexpr Switches::in_sw_tab_t reference_burp_in_sw_table[] =
 {
 	{IN_SW_BURP_B,	  0,						"BACKUP_DATABASE",	0, 0, 0, false, false,	60, 	1, NULL, boMain},
 				// msg 60: @1BACKUP_DATABASE backup database to file
@@ -241,7 +241,7 @@ static const Switches::in_sw_tab_t reference_burp_in_sw_table[] =
 	{IN_SW_BURP_0,		 0, NULL,			0, 0, 0, false, false,	0, 0, NULL, boGeneral}
 };
 
-static const char* burp_repl_mode_sw_table[] =
+static inline constexpr const char* burp_repl_mode_sw_table[] =
 {
 	BURP_SW_MODE_NONE, BURP_SW_MODE_RO, BURP_SW_MODE_RW
 };

@@ -47,41 +47,36 @@
 
 namespace Firebird {
 
-class TraceSvcUtil : public TraceSvcIntf
+class TraceSvcUtil final : public TraceSvcIntf
 {
 public:
-	TraceSvcUtil();
+	TraceSvcUtil() noexcept {};
 	virtual ~TraceSvcUtil();
 
-	virtual void setAttachInfo(const string& service_name, const string& user, const string& role,
-		const string& pwd, bool trusted);
+	void setAttachInfo(const string& service_name, const string& user, const string& role,
+		const string& pwd, bool trusted) override;
 
-	virtual void startSession(TraceSession& session, bool interactive);
-	virtual void stopSession(ULONG id);
-	virtual void setActive(ULONG id, bool active);
-	virtual void listSessions();
+	void startSession(TraceSession& session, bool interactive) override;
+	void stopSession(ULONG id) override;
+	void setActive(ULONG id, bool active) override;
+	void listSessions() override;
 
 	os_utils::CtrlCHandler ctrlCHandler;
 
 private:
 	void runService(size_t spbSize, const UCHAR* spb);
 
-	isc_svc_handle m_svcHandle;
+	isc_svc_handle m_svcHandle = 0;
 };
 
 
-const int MAXBUF = 16384;
-
-TraceSvcUtil::TraceSvcUtil()
-{
-	m_svcHandle = 0;
-}
+constexpr int MAXBUF = 16384;
 
 TraceSvcUtil::~TraceSvcUtil()
 {
 	if (m_svcHandle)
 	{
-		ISC_STATUS_ARRAY status = {0};
+		ISC_STATUS_ARRAY status{};
 		isc_service_detach(status, &m_svcHandle);
 	}
 }
@@ -89,7 +84,7 @@ TraceSvcUtil::~TraceSvcUtil()
 void TraceSvcUtil::setAttachInfo(const string& service_name, const string& user, const string& role,
 	const string& pwd, bool trusted)
 {
-	ISC_STATUS_ARRAY status = {0};
+	ISC_STATUS_ARRAY status{};
 
 	ClumpletWriter spb(ClumpletWriter::spbList, MAXBUF);
 
@@ -112,6 +107,16 @@ void TraceSvcUtil::setAttachInfo(const string& service_name, const string& user,
 	{
 		status_exception::raise(status);
 	}
+}
+
+static void insertString(UCHAR tag, ClumpletWriter& spb, const string& str)
+{
+	if (str.isEmpty())
+		return;
+
+	spb.insertBytes(tag,
+		reinterpret_cast<const UCHAR*> (str.c_str()),
+		str.length());
 }
 
 void TraceSvcUtil::startSession(TraceSession& session, bool /*interactive*/)
@@ -163,12 +168,8 @@ void TraceSvcUtil::startSession(TraceSession& session, bool /*interactive*/)
 	spb.insertTag(isc_action_svc_trace_start);
 	spb.insertBytes(isc_spb_trc_cfg, p, len);
 
-	if (session.ses_name.hasData())
-	{
-		spb.insertBytes(isc_spb_trc_name,
-			reinterpret_cast<const UCHAR*> (session.ses_name.c_str()),
-			session.ses_name.length());
-	}
+	insertString(isc_spb_trc_name, spb, session.ses_name);
+	insertString(isc_spb_trc_plugins, spb, session.ses_plugins);
 
 	runService(spb.getBufferLength(), spb.getBuffer());
 }
@@ -213,7 +214,7 @@ void TraceSvcUtil::runService(size_t spbSize, const UCHAR* spb)
 		status_exception::raise(status);
 	}
 
-	const char query[] = {isc_info_svc_to_eof, isc_info_end};
+	constexpr char query[] = {isc_info_svc_to_eof, isc_info_end};
 
 	// use one second timeout to poll service
 	char send[16];
@@ -249,6 +250,7 @@ void TraceSvcUtil::runService(size_t spbSize, const UCHAR* spb)
 			{
 			case isc_info_svc_to_eof:
 				ignoreTruncation = true;
+				[[fallthrough]];
 
 			case isc_info_svc_line:
 				{

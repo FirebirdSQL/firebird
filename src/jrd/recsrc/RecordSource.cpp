@@ -196,7 +196,6 @@ void RecordSource::printInversion(thread_db* tdbb, const InversionNode* inversio
 				const index_desc& idx = retrieval->irb_desc;
 				const USHORT segCount = idx.idx_count;
 
-				const USHORT minSegs = MIN(retrieval->irb_lower_count, retrieval->irb_upper_count);
 				const USHORT maxSegs = MAX(retrieval->irb_lower_count, retrieval->irb_upper_count);
 
 				const bool equality = (retrieval->irb_generic & irb_equality);
@@ -257,10 +256,13 @@ void RecordSource::printLegacyInversion(thread_db* tdbb, const InversionNode* in
 
 	for (const auto& line : planLines)
 	{
-		if (plan.hasData())
-			plan += ", ";
+		if (line.text.hasData())
+		{
+			if (plan.hasData())
+				plan += ", ";
 
-		plan += line.text;
+			plan += line.text;
+		}
 	}
 }
 

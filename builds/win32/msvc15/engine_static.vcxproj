@@ -228,6 +228,7 @@
     <ClInclude Include="..\..\..\src\dsql\utld_proto.h" />
     <ClInclude Include="..\..\..\src\dsql\Visitors.h" />
     <ClInclude Include="..\..\..\src\dsql\WinNodes.h" />
+    <ClInclude Include="..\..\..\src\include\firebird\impl\blr.h" />
     <ClInclude Include="..\..\..\src\jrd\acl.h" />
     <ClInclude Include="..\..\..\src\jrd\align.h" />
     <ClInclude Include="..\..\..\src\jrd\Attachment.h" />
@@ -237,7 +238,6 @@
     <ClInclude Include="..\..\..\src\jrd\blob_filter.h" />
     <ClInclude Include="..\..\..\src\jrd\BlobUtil.h" />
     <ClInclude Include="..\..\..\src\jrd\blp.h" />
-    <ClInclude Include="..\..\..\src\jrd\blr.h" />
     <ClInclude Include="..\..\..\src\jrd\btn.h" />
     <ClInclude Include="..\..\..\src\jrd\btr.h" />
     <ClInclude Include="..\..\..\src\jrd\btr_proto.h" />
@@ -323,6 +323,8 @@
     <ClInclude Include="..\..\..\src\jrd\ods.h" />
     <ClInclude Include="..\..\..\src\jrd\ods_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\optimizer\Optimizer.h" />
+    <ClInclude Include="..\..\..\src\jrd\os\pio.h" />
+    <ClInclude Include="..\..\..\src\jrd\os\pio_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\pag.h" />
     <ClInclude Include="..\..\..\src\jrd\PageToBufferMap.h" />
     <ClInclude Include="..\..\..\src\jrd\pag_proto.h" />
@@ -427,6 +429,7 @@
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='16.0'">v142</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='17.0'">v143</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='18.0'">v145</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
@@ -435,6 +438,7 @@
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='16.0'">v142</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='17.0'">v143</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='18.0'">v145</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
@@ -443,6 +447,7 @@
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='16.0'">v142</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='17.0'">v143</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='18.0'">v145</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
@@ -451,6 +456,7 @@
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='16.0'">v142</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='17.0'">v143</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='18.0'">v145</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|arm64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
@@ -459,6 +465,7 @@
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='16.0'">v142</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='17.0'">v143</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='18.0'">v145</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|arm64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
@@ -467,6 +474,7 @@
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='15.0'">v141</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='16.0'">v142</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)'=='17.0'">v143</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)'=='18.0'">v145</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">

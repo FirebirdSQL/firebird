@@ -72,8 +72,8 @@ void TraceCfgReader::readTraceConfiguration(const char* text,
 
 void TraceCfgReader::readConfig()
 {
-	ConfigFile cfgFile(ConfigFile::USE_TEXT, m_text, ConfigFile::HAS_SUB_CONF | ConfigFile::NATIVE_ORDER
-		| ConfigFile::REGEXP_SUPPORT);
+	ConfigFile cfgFile(ConfigFile::USE_TEXT, m_text,
+		ConfigFile::HAS_SUB_CONF | ConfigFile::NATIVE_ORDER | ConfigFile::REGEXP_SUPPORT);
 
 	m_subpatterns[0].start = 0;
 	m_subpatterns[0].end = m_databaseName.length();
@@ -106,7 +106,6 @@ void TraceCfgReader::readConfig()
 				}
 
 				match = !m_databaseName.empty();
-				//match = m_databaseName.empty();
 				defDB = true;
 			}
 			else
@@ -141,9 +140,9 @@ void TraceCfgReader::readConfig()
 				try
 				{
 #ifdef WIN_NT	// !CASE_SENSITIVITY
-					const unsigned regexFlags = SimilarToFlag::CASE_INSENSITIVE;
+					constexpr unsigned regexFlags = SimilarToFlag::CASE_INSENSITIVE;
 #else
-					const unsigned regexFlags = 0;
+					constexpr unsigned regexFlags = 0;
 #endif
 					string utf8Pattern = pattern;
 					ISC_systemToUtf8(utf8Pattern);

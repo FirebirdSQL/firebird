@@ -108,10 +108,8 @@ bool ExternalTableScan::refetchRecord(thread_db* /*tdbb*/) const
 	return true;
 }
 
-WriteLockResult ExternalTableScan::lockRecord(thread_db* tdbb) const
+WriteLockResult ExternalTableScan::lockRecord(thread_db* /*tdbb*/) const
 {
-	SET_TDBB(tdbb);
-
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
 }
 

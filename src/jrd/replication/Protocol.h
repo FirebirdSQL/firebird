@@ -27,13 +27,13 @@
 namespace Replication
 {
 	// Supported protocol versions
-	const USHORT PROTOCOL_VERSION_1 = 1;
-	const USHORT PROTOCOL_VERSION_2 = 2;	// support for schemas
-	const USHORT PROTOCOL_CURRENT_VERSION = PROTOCOL_VERSION_2;
+	inline constexpr USHORT PROTOCOL_VERSION_1 = 1;
+	inline constexpr USHORT PROTOCOL_VERSION_2 = 2;	// support for schemas
+	inline constexpr USHORT PROTOCOL_CURRENT_VERSION = PROTOCOL_VERSION_2;
 
 	// Global (protocol neutral) flags
-	const USHORT BLOCK_BEGIN_TRANS	= 0x0001;
-	const USHORT BLOCK_END_TRANS	= 0x0002;
+	inline constexpr USHORT BLOCK_BEGIN_TRANS	= 0x0001;
+	inline constexpr USHORT BLOCK_END_TRANS		= 0x0002;
 
 	struct Block
 	{

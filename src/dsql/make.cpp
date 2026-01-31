@@ -282,6 +282,10 @@ ValueExprNode* MAKE_constant(const char* str, dsql_constant_type numeric_flag, S
 				case CONSTANT_TIMESTAMP:
 					literal->litDesc.dsc_dtype = tz ? dtype_timestamp_tz : dtype_timestamp;
 					break;
+
+				default:
+					fb_assert(false);
+					return NULL;
 			}
 
 			literal->litDesc.dsc_sub_type = 0;
@@ -312,6 +316,10 @@ ValueExprNode* MAKE_constant(const char* str, dsql_constant_type numeric_flag, S
 					else
 						*(ISC_TIMESTAMP*) literal->litDesc.dsc_address = ts.utc_timestamp;
 					break;
+
+				default:
+					fb_assert(false);
+					return NULL;
 			}
 
 			break;
@@ -513,8 +521,6 @@ dsql_par* MAKE_parameter(dsql_msg* message, bool sqlda_flag, bool null_flag,
 				return temp;
 		}
 	}
-
-	thread_db* tdbb = JRD_get_thread_data();
 
 	if (message->msg_parameter == MAX_USHORT)
 	{

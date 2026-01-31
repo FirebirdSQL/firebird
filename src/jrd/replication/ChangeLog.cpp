@@ -66,14 +66,14 @@ using namespace Replication;
 
 namespace
 {
-	inline constexpr unsigned FLUSH_WAIT_INTERVAL = 1; // milliseconds
+	inline constexpr unsigned FLUSH_WAIT_INTERVAL = 1;	// milliseconds
 
-	inline constexpr unsigned NO_SPACE_TIMEOUT = 10;	// seconds
+	inline constexpr unsigned NO_SPACE_TIMEOUT = 10000;	// milliseconds
 	inline constexpr unsigned NO_SPACE_RETRIES = 6;		// up to one minute
 
 	inline constexpr unsigned COPY_BLOCK_SIZE = 64 * 1024; // 64 KB
 
-	inline constexpr const char* FILENAME_PATTERN = "%s.journal-%09" UQUADFORMAT;
+	inline constexpr const char* FILENAME_PATTERN = "%s_%s.journal-%09" UQUADFORMAT;
 
 	inline constexpr const char* FILENAME_WILDCARD = "$(filename)";
 	inline constexpr const char* PATHNAME_WILDCARD = "$(pathname)";
@@ -273,11 +273,16 @@ void ChangeLog::Segment::truncate()
 
 	const auto hndl = (HANDLE) _get_osfhandle(m_handle);
 	const auto ret = SetFilePointer(hndl, newSize.LowPart, &newSize.HighPart, FILE_BEGIN);
-	if (ret == INVALID_SET_FILE_POINTER || !SetEndOfFile(hndl))
+	if (ret != INVALID_SET_FILE_POINTER)
+		SetEndOfFile(hndl);
 #else
-	if (os_utils::ftruncate(m_handle, length))
+	os_utils::ftruncate(m_handle, length);
 #endif
-		raiseError("Journal file %s truncate failed (error %d)", m_filename.c_str(), ERRNO);
+
+	// Truncation is known to be error-prone in Windows CS, which does not allow to truncate
+	// a file with a mapping open by some other process (ERROR_USER_MAPPED_FILE is returned).
+	// But we may safely ignore the result, because truncation here is just a storage/copying
+	// optimization, it's not critical from the archiving POV.
 
 	mapHeader();
 }
@@ -885,6 +890,26 @@ void ChangeLog::bgArchiver()
 	}
 }
 
+void ChangeLog::cleanup()
+{
+	LockGuard guard(this);
+
+	while (m_segments.hasData())
+	{
+		const auto segment = m_segments.pop();
+
+		if (segment->getState() == SEGMENT_STATE_USED && segment->hasData())
+			segment->setState(SEGMENT_STATE_FULL);
+
+		if (segment->getState() == SEGMENT_STATE_FULL)
+			archiveSegment(segment);
+
+		const PathName filename = segment->getPathName();
+		segment->release();
+		unlink(filename.c_str());
+	}
+}
+
 void ChangeLog::initSegments()
 {
 	clearSegments();
@@ -939,7 +964,7 @@ ChangeLog::Segment* ChangeLog::createSegment()
 	const auto sequence = state->sequence + 1;
 
 	PathName filename;
-	filename.printf(FILENAME_PATTERN, m_config->filePrefix.c_str(), sequence);
+	filename.printf(FILENAME_PATTERN, m_config->filePrefix.c_str(), m_guid.toString(false).c_str(), sequence);
 	filename = m_config->journalDirectory + filename;
 
 	const auto fd = os_utils::openCreateSharedFile(filename.c_str(), O_EXCL | O_BINARY);
@@ -989,7 +1014,7 @@ ChangeLog::Segment* ChangeLog::reuseSegment(ChangeLog::Segment* segment)
 	// Attempt to rename the backing file
 
 	PathName newname;
-	newname.printf(FILENAME_PATTERN, m_config->filePrefix.c_str(), sequence);
+	newname.printf(FILENAME_PATTERN, m_config->filePrefix.c_str(), m_guid.toString(false).c_str(), sequence);
 	newname = m_config->journalDirectory + newname;
 
 	// If renaming fails, then we just create a new file.

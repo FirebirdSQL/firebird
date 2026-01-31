@@ -43,12 +43,12 @@
 #include "../common/classes/ClumpletWriter.h"
 
 
-const char NEED_IB4_AT_LEAST[] = "Databases before IB4 are not supported";
+constexpr char NEED_IB4_AT_LEAST[] = "Databases before IB4 are not supported";
 
 
 DATABASE DB = FILENAME "yachts.lnk" RUNTIME database->dbb_filename;
 
-static const UCHAR blr_bpb[] =
+static constexpr UCHAR blr_bpb[] =
 {
 	isc_bpb_version1,
 	isc_bpb_source_type, 1, isc_blob_blr,
@@ -122,7 +122,7 @@ gpre_fld* MET_context_field( gpre_ctx* context, const char* string)
 
 bool MET_database(gpre_dbb* database, bool print_version)
 {
-	static const UCHAR sql_version_info[] =
+	static constexpr UCHAR sql_version_info[] =
 	{
 		isc_info_base_level,
 		isc_info_ods_version,
@@ -824,9 +824,9 @@ void MET_fini(gpre_dbb* end)
 		 database && database != end;
 		 database = database->dbb_next)
 	{
-		if (DB = database->dbb_handle)
+		if ((DB = database->dbb_handle))
 		{
-			if (gds_trans = database->dbb_transaction)
+			if ((gds_trans = database->dbb_transaction))
 				COMMIT;
 			FINISH;
 			database->dbb_handle = 0;
@@ -1246,8 +1246,8 @@ gpre_rel* MET_get_view_relation(gpre_req* request,
 			return MET_get_relation(database, X.RDB$RELATION_NAME, "");
 		}
 
-		if (relation =
-			MET_get_view_relation(request, X.RDB$RELATION_NAME, relation_or_alias, level + 1))
+		if ((relation =
+			MET_get_view_relation(request, X.RDB$RELATION_NAME, relation_or_alias, level + 1)))
 		{
 			return relation;
 		}
@@ -1432,7 +1432,7 @@ void MET_load_hash_table(gpre_dbb* database)
 		an_udf->udf_database = database;
 		an_udf->udf_type = FUN.RDB$FUNCTION_TYPE;
 
-		if (length = fb_utils::name_length(FUN.RDB$QUERY_NAME))
+		if ((length = fb_utils::name_length(FUN.RDB$QUERY_NAME)))
 		{
 			p = FUN.RDB$QUERY_NAME;
 			p[length] = 0;

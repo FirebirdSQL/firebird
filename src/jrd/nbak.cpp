@@ -162,7 +162,6 @@ BackupManager::StateWriteGuard::StateWriteGuard(thread_db* tdbb, Jrd::WIN* windo
 	: m_tdbb(tdbb), m_window(NULL), m_success(false)
 {
 	Database* const dbb = tdbb->getDatabase();
-	Jrd::Attachment* const att = tdbb->getAttachment();
 
 	dbb->dbb_backup_manager->beginFlush();
 	CCH_flush(tdbb, FLUSH_ALL, 0); // Flush local cache to release all dirty pages
@@ -186,7 +185,6 @@ BackupManager::StateWriteGuard::StateWriteGuard(thread_db* tdbb, Jrd::WIN* windo
 BackupManager::StateWriteGuard::~StateWriteGuard()
 {
 	Database* const dbb = m_tdbb->getDatabase();
-	Jrd::Attachment* const att = m_tdbb->getAttachment();
 
 	// It is important to set state into nbak_state_unknown *before* release of state lock,
 	// otherwise someone could acquire state lock, fetch and modify some page before state will
@@ -389,10 +387,14 @@ bool BackupManager::extendDatabase(thread_db* tdbb)
 	if (maxAllocPage >= maxPage)
 		return true;
 
-	if (!pgSpace->extend(tdbb, maxPage, true))
-		return false;
+	if (pgSpace->extend(tdbb, maxPage, true))
+	{
+		maxAllocPage = pgSpace->maxAlloc();
+		if (maxAllocPage >= maxPage)
+			return true;
+	}
 
-	maxAllocPage = pgSpace->maxAlloc();
+	// Fast file extension not succeeded for some reason, try file extension via direct file writes.
 	while (maxAllocPage < maxPage)
 	{
 		const USHORT ret = PIO_init_data(tdbb, pgSpace->file, tdbb->tdbb_status_vector,

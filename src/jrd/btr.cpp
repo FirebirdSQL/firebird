@@ -73,21 +73,21 @@ using namespace Firebird;
 
 namespace
 {
-	const unsigned MAX_LEVELS = 16;
+	constexpr unsigned MAX_LEVELS = 16;
 
-	const size_t OVERSIZE = (MAX_PAGE_SIZE + BTN_PAGE_SIZE + MAX_KEY + sizeof(SLONG) - 1) / sizeof(SLONG);
+	constexpr size_t OVERSIZE = (MAX_PAGE_SIZE + BTN_PAGE_SIZE + MAX_KEY + sizeof(SLONG) - 1) / sizeof(SLONG);
 
 	// END_LEVEL (~0) is choosen here as a unknown/none value, because it's
 	// already reserved as END_LEVEL marker for page number and record number.
 	//
 	// NO_VALUE_PAGE and NO_VALUE are the same constant, but with different size
 	// Sign-extension mechanizm guaranties that they may be compared to each other safely
-	const ULONG NO_VALUE_PAGE = END_LEVEL;
+	constexpr ULONG NO_VALUE_PAGE = END_LEVEL;
 	const RecordNumber NO_VALUE(END_LEVEL);
 
 	// A split page will never have the number 0, because that's the value
 	// of the main page.
-	const ULONG NO_SPLIT	= 0;
+	inline constexpr ULONG NO_SPLIT = 0;
 
 	// Thresholds for determing of a page should be garbage collected
 	// Garbage collect if page size is below GARBAGE_COLLECTION_THRESHOLD
@@ -105,9 +105,9 @@ namespace
 	};
 
 	// I assume this wasn't done sizeof(INT64_KEY) on purpose, since alignment might affect it.
-	const size_t INT64_KEY_LENGTH = sizeof (double) + sizeof (SSHORT);
+	constexpr size_t INT64_KEY_LENGTH = sizeof (double) + sizeof (SSHORT);
 
-	const double pow10_table[] =
+	constexpr double pow10_table[] =
 	{
 		1.e00, 1.e01, 1.e02, 1.e03, 1.e04, 1.e05, 1.e06, 1.e07, 1.e08, 1.e09,
 		1.e10, 1.e11, 1.e12, 1.e13, 1.e14, 1.e15, 1.e16, 1.e17, 1.e18, 1.e19,
@@ -115,12 +115,12 @@ namespace
 		1.e30, 1.e31, 1.e32, 1.e33, 1.e34, 1.e35, 1.e36
 	};
 
-	inline double powerof10(int index)
+	inline double powerof10(int index) noexcept
 	{
 		return (index <= 0) ? pow10_table[-index] : 1.0 / pow10_table[index];
 	}
 
-	const struct	// Used in make_int64_key()
+	constexpr struct	// Used in make_int64_key()
 	{
 		FB_UINT64 limit;
 		SINT64 factor;
@@ -392,25 +392,24 @@ IndexCondition::~IndexCondition()
 	}
 }
 
-bool IndexCondition::evaluate(Record* record) const
+TriState IndexCondition::evaluate(Record* record) const
 {
 	if (!m_request || !m_condition)
-		return true;
+		return TriState(true);
 
 	const auto orgRequest = m_tdbb->getRequest();
 	m_tdbb->setRequest(m_request);
 
 	m_request->req_rpb[0].rpb_record = record;
-	m_request->req_flags &= ~req_null;
 
 	FbLocalStatus status;
-	bool result = false;
+	TriState result(false);
 
 	try
 	{
 		Jrd::ContextPoolHolder context(m_tdbb, m_request->req_pool);
 
-		result = m_condition->execute(m_tdbb, m_request);
+		result = m_condition->execute(m_tdbb, m_request).asBool();
 	}
 	catch (const Exception& ex)
 	{
@@ -507,7 +506,6 @@ dsc* IndexExpression::evaluate(Record* record) const
 	m_tdbb->setRequest(m_request);
 
 	m_request->req_rpb[0].rpb_record = record;
-	m_request->req_flags &= ~req_null;
 
 	FbLocalStatus status;
 	dsc* result = nullptr;
@@ -856,7 +854,7 @@ void BTR_complement_key(temporary_key* key)
 		UCHAR* p = key->key_data;
 		for (const UCHAR* const end = p + key->key_length; p < end; p++)
 			*p ^= -1;
-	} while (key = key->key_next.get());
+	} while ((key = key->key_next.get()));
 }
 
 
@@ -2810,10 +2808,9 @@ static void compress(thread_db* tdbb,
 	// is needed to make a difference between a NULL state and a VALUE.
 	// Note! By descending index key is complemented after this compression routine.
 	// Further a NULL state is always returned as 1 byte 0xFF (descending index).
-	const UCHAR desc_end_value_prefix = 0x01; // ~0xFE
-	const UCHAR desc_end_value_check = 0x00; // ~0xFF;
+	constexpr UCHAR desc_end_value_prefix = 0x01; // ~0xFE
+	constexpr UCHAR desc_end_value_check = 0x00; // ~0xFF;
 
-	const Database* dbb = tdbb->getDatabase();
 	bool first_key = true;
 	VaryStr<MAX_KEY * 4> buffer;
 	size_t multiKeyLength;
@@ -5672,7 +5669,6 @@ static void generate_jump_nodes(thread_db* tdbb, btree_page* page,
 	const UCHAR* const startpoint = page->btr_nodes + page->btr_jump_size;
 	const UCHAR* const endpoint = (UCHAR*) page + page->btr_length;
 	const UCHAR* halfpoint = (UCHAR*) page + (BTR_SIZE + page->btr_jump_size + page->btr_length) / 2;
-	const UCHAR* const excludePointer = (UCHAR*) page + excludeOffset;
 	IndexJumpNode jumpNode;
 	IndexNode node;
 
@@ -6478,7 +6474,7 @@ string print_key(thread_db* tdbb, jrd_rel* relation, index_desc* idx, Record* re
 		MET_scan_relation(tdbb, relation);
 	}
 
-	const FB_SIZE_T MAX_KEY_STRING_LEN = 250;
+	constexpr FB_SIZE_T MAX_KEY_STRING_LEN = 250;
 	string key, value;
 
 	try

@@ -95,7 +95,7 @@ static void checkFkPairTypes(const rel_t masterType, const QualifiedName& master
 	const rel_t childType, const QualifiedName& childName);
 static void modifyLocalFieldPosition(thread_db* tdbb, jrd_tra* transaction,
 	const QualifiedName& relationName, const MetaName& fieldName, USHORT newPosition);
-static rel_t relationType(SSHORT relationTypeNull, SSHORT relationType);
+static rel_t relationType(SSHORT relationTypeNull, SSHORT relationType) noexcept;
 static void saveField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, const MetaName& fieldName);
 static void saveRelation(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	const QualifiedName& relationName, bool view, bool creating);
@@ -112,7 +112,7 @@ static void updateRdbFields(const TypeClause* type,
 static void modifyIndex(thread_db* tdbb, jrd_tra* transaction,
 	const char* name, bool active);
 
-static const char* const CHECK_CONSTRAINT_EXCEPTION = "check_constraint";
+static constexpr const char* CHECK_CONSTRAINT_EXCEPTION = "check_constraint";
 
 DATABASE DB = STATIC "ODS.RDB";
 
@@ -356,7 +356,7 @@ static void checkViewDependency(thread_db* tdbb, jrd_tra* transaction,
 			 X.RDB$RELATION_NAME EQ Z.RDB$RELATION_NAME AND
 			 Y.RDB$VIEW_CONTEXT EQ Z.RDB$VIEW_CONTEXT
 	{
-		QualifiedName viewName(Z.RDB$VIEW_NAME, Z.RDB$SCHEMA_NAME);
+		const QualifiedName viewName(Z.RDB$VIEW_NAME, Z.RDB$SCHEMA_NAME);
 
 		// msg 206: Column %s from table %s is referenced in  %s.
 		status_exception::raise(
@@ -655,9 +655,12 @@ static const char* getRelationScopeName(const rel_t type)
 		return REL_SCOPE_VIEW;
 	case rel_virtual:
 		return REL_SCOPE_VIRTUAL;
+	case rel_persistent:
+		return REL_SCOPE_PERSISTENT;
+	default:
+		fb_assert(false);
+		return REL_SCOPE_PERSISTENT; // keep compiler happy
 	}
-
-	return REL_SCOPE_PERSISTENT;
 }
 
 // Check, can relation of given type be used in FK?
@@ -754,7 +757,7 @@ static void modifyLocalFieldPosition(thread_db* tdbb, jrd_tra* transaction,
 	}
 
 	// Find the position of the last field in the relation.
-	SLONG maxPosition = SLONG(newPos) - 1;
+	const SLONG maxPosition = SLONG(newPos) - 1;
 
 	// If the existing position of the field is less than the new position of
 	// the field, subtract 1 to move the fields to their new positions otherwise,
@@ -802,7 +805,7 @@ static void modifyLocalFieldPosition(thread_db* tdbb, jrd_tra* transaction,
 }
 
 // Convert RDB$RELATION_TYPE to rel_t type.
-static rel_t relationType(SSHORT relationTypeNull, SSHORT relationType)
+static inline rel_t relationType(SSHORT relationTypeNull, SSHORT relationType) noexcept
 {
 	return relationTypeNull ? rel_persistent : rel_t(relationType);
 }
@@ -1489,10 +1492,6 @@ void CommentOnNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 			SCL_check_view(tdbb, name, SCL_alter);
 			break;
 
-		case obj_procedure:
-			SCL_check_procedure(tdbb, name, SCL_alter);
-			break;
-
 		case obj_trigger:
 		{
 			const auto relationName = getTriggerRelationName(tdbb, transaction, name);
@@ -1504,7 +1503,19 @@ void CommentOnNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 		}
 
 		case obj_udf:
-			SCL_check_function(tdbb, name, SCL_alter);
+		case obj_procedure:
+			if (name.package.hasData())
+			{
+				const auto package = name.getSchemaAndPackage();
+				SCL_check_package(tdbb, package, SCL_alter);
+			}
+			else
+			{
+				if (objType == obj_udf)
+					SCL_check_function(tdbb, name, SCL_alter);
+				else
+					SCL_check_procedure(tdbb, name, SCL_alter);
+			}
 			break;
 
 		case obj_blob_filter:
@@ -1655,6 +1666,7 @@ void CommentOnNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 		case obj_blob_filter:
 			tableClause = "rdb$filters";
 			columnClause = "rdb$function_name";
+			useSchemaClause = false;
 			status << Arg::Gds(isc_dyn_filter_not_found) << Arg::Str(objNameStr);
 			break;
 
@@ -5139,7 +5151,7 @@ void AlterDomainNode::checkUpdate(const dyn_fld& origFld, const dyn_fld& newFld)
 //
 // This function returns an error code if the conversion can not be made. If the conversion can be
 // made, FB_SUCCESS is returned.
-ULONG AlterDomainNode::checkUpdateNumericType(const dyn_fld& origFld, const dyn_fld& newFld)
+ULONG AlterDomainNode::checkUpdateNumericType(const dyn_fld& origFld, const dyn_fld& newFld) noexcept
 {
  	// Since dsc_scale is negative, the sum of precision and scale produces
 	// the width of the integral part.
@@ -6944,7 +6956,8 @@ void RelationNode::makeConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 
 			if (clause->constraintType == AddConstraintClause::CTYPE_NOT_NULL)
 				break;
-			// AddConstraintClause::CTYPE_PK falls into
+
+			[[fallthrough]];
 
 		case AddConstraintClause::CTYPE_UNIQUE:
 		{
@@ -7042,7 +7055,7 @@ void RelationNode::makeConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 
 						default:
 							fb_assert(0);
-							// fall into
+							[[fallthrough]];
 
 						case RefActionClause::ACTION_NONE:
 							constraint.create->refUpdateAction = RI_ACTION_NONE;
@@ -7071,7 +7084,7 @@ void RelationNode::makeConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 
 						default:
 							fb_assert(0);
-							// fall into
+							[[fallthrough]];
 
 						case RefActionClause::ACTION_NONE:
 							constraint.create->refDeleteAction = RI_ACTION_NONE;
@@ -7181,6 +7194,9 @@ void RelationNode::defineConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 
 				break;
 			}
+			default:
+				// no index needed
+				break;
 		}
 	}
 	END_STORE
@@ -7922,8 +7938,11 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 			if (externalFile->length() >= sizeof(REL.RDB$EXTERNAL_FILE))
 				status_exception::raise(Arg::Gds(isc_dyn_name_longer));
 
-			if (ISC_check_if_remote(externalFile->c_str(), false))
+			if (!(tdbb->tdbb_flags & TDBB_replicator) &&
+				ISC_check_if_remote(externalFile->c_str(), false))
+			{
 				status_exception::raise(Arg::PrivateDyn(163));
+			}
 
 			REL.RDB$EXTERNAL_FILE.NULL = FALSE;
 			strcpy(REL.RDB$EXTERNAL_FILE, externalFile->c_str());
@@ -7932,7 +7951,7 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 	}
 	END_STORE
 
-	bool replicationEnabled;
+	bool replicationEnabled = false;
 
 	if (replicationState.isAssigned())
 		replicationEnabled = replicationState.asBool();
@@ -8658,7 +8677,7 @@ void AlterRelationNode::modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 		{
 			found = true;
 
-			bool isView = !REL.RDB$VIEW_BLR.NULL;
+			const bool isView = !REL.RDB$VIEW_BLR.NULL;
 
 			if (!isView && (!FLD.RDB$COMPUTED_BLR.NULL != (clause->computed != NULL)))
 			{
@@ -9608,7 +9627,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 
 			SCL_check_schema(tdbb, PREL.RDB$SCHEMA_NAME, SCL_usage);
 
-			if (auto priv = SCL_get_mask(tdbb, QualifiedName(PREL.RDB$RELATION_NAME, PREL.RDB$SCHEMA_NAME), "");
+			if (const auto priv = SCL_get_mask(tdbb, QualifiedName(PREL.RDB$RELATION_NAME, PREL.RDB$SCHEMA_NAME), "");
 				!(priv & SCL_select)
 			)
 			{
@@ -9809,7 +9828,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 						 FLD.RDB$SCHEMA_NAME EQ RFL.RDB$FIELD_SOURCE_SCHEMA_NAME AND
 						 FLD.RDB$FIELD_NAME EQ RFL.RDB$FIELD_SOURCE
 				{
-					bool wasInternalDomain = fb_utils::implicit_domain(FLD.RDB$FIELD_NAME);
+					const bool wasInternalDomain = fb_utils::implicit_domain(FLD.RDB$FIELD_NAME);
 					fb_assert(wasInternalDomain);
 
 					if (wasInternalDomain)
@@ -9872,7 +9891,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 						 FLD.RDB$SCHEMA_NAME EQ RFL.RDB$FIELD_SOURCE_SCHEMA_NAME AND
 						 FLD.RDB$FIELD_NAME EQ RFL.RDB$FIELD_SOURCE
 				{
-					bool wasInternalDomain = fb_utils::implicit_domain(FLD.RDB$FIELD_NAME);
+					const bool wasInternalDomain = fb_utils::implicit_domain(FLD.RDB$FIELD_NAME);
 					fb_assert(wasInternalDomain);
 
 					if (wasInternalDomain)
@@ -10088,7 +10107,6 @@ void CreateAlterViewNode::createCheckTrigger(thread_db* tdbb, DsqlCompilerScratc
 		const NestConst<ValueExprNode>* const end = fieldsNode->items.end();
 		NestConst<ValueExprNode>* ptr2 = valuesNode->items.begin();
 		const NestConst<ValueExprNode>* const end2 = valuesNode->items.end();
-		int andArg = 0;
 
 		BinaryBoolNode* andNode = FB_NEW_POOL(pool) BinaryBoolNode(pool, blr_and);
 
@@ -10213,6 +10231,7 @@ void CreateAlterViewNode::createCheckTrigger(thread_db* tdbb, DsqlCompilerScratc
 
 	TriggerDefinition trigger(pool);
 	trigger.systemFlag = fb_sysflag_view_check;
+	trigger.name.schema = name.schema;
 	trigger.relationName = name;
 	trigger.type = triggerType;
 	trigger.blrData = dsqlScratch->getBlrData();
@@ -10927,6 +10946,12 @@ void CreateFilterNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScrat
 {
 	Attachment* const attachment = transaction->tra_attachment;
 	const MetaString& ownerName = attachment->getEffectiveUserName();
+	const QualifiedName qualifiedName(name);
+
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, qualifiedName, obj_blob_filter))
+		return;
+
+	DYN_UTIL_check_unique_name(tdbb, transaction, qualifiedName, obj_blob_filter);
 
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
@@ -11572,6 +11597,9 @@ void MappingNode::runInSecurityDb(SecDbContext* secDbContext)
 				sql = "delete from RDBAUTH_MAPPING where RDB$MAP_NAME = ?";
 				msg = &msgCheck;
 				break;
+			default:
+				// handled by assert below
+				break;
 			}
 
 			// Actual modification
@@ -11614,13 +11642,11 @@ void MappingNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd
 
 	fb_assert(op == MAP_DROP || op == MAP_COMMENT || fromType);
 
-	short plugNull = plugin ? FALSE  : TRUE;
-	short dbNull = db ? FALSE : TRUE;
-	short fromNull = from ? FALSE : TRUE;
+	const short plugNull = plugin ? FALSE  : TRUE;
+	const short dbNull = db ? FALSE : TRUE;
+	const short fromNull = from ? FALSE : TRUE;
 
-	char usingText[2];
-	usingText[0] = mode;
-	usingText[1] = '\0';
+	const char usingText[2]{ mode, '\0' };
 
 	AutoCacheRequest request1(tdbb, drq_map_mod, DYN_REQUESTS);
 	bool found = false;
@@ -12253,7 +12279,7 @@ void GrantRevokeNode::modifyPrivileges(thread_db* tdbb, jrd_tra* transaction, SS
 			grantRevoke(tdbb, transaction, object, user, "A", NULL, option);
 		else if (i->second)
 		{
-			char privs0[2] = {i->first, '\0'};
+			const char privs0[2] = {i->first, '\0'};
 
 			for (const auto& field : *i->second)
 				grantRevoke(tdbb, transaction, object, user, privs0, field, option);
@@ -12449,7 +12475,7 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 		}
 
 		crdb = true;
-		size_t len = strlen(cPtr);
+		const size_t len = strlen(cPtr);
 		memmove(cPtr, cPtr + 1, len);
 	}
 
@@ -12520,7 +12546,7 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 
 		case obj_privilege:		// Should convert symbolic privilege name to bit number
 			{
-				USHORT p = convertPrivilegeFromString(tdbb, transaction, user.object);
+				const USHORT p = convertPrivilegeFromString(tdbb, transaction, user.object);
 				user.object.printf("%d", p);
 			}
 			break;
@@ -12697,7 +12723,7 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 
 	if (crdb)
 	{
-		CreateDbJob job(userType, user.object);
+		const CreateDbJob job(userType, user.object);
 		createDbJobs.push(job);
 
 		if (!privileges[0])
@@ -13913,7 +13939,7 @@ void CreateAlterSchemaNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch* 
 					X IN RDB$USER_PRIVILEGES
 				{
 					strcpy(X.RDB$RELATION_SCHEMA_NAME, name.c_str());
-					strcpy(X.RDB$RELATION_NAME, getDllSecurityName(obj));
+					strcpy(X.RDB$RELATION_NAME, getDdlSecurityName(obj));
 
 					strcpy(X.RDB$USER, ownerName.c_str());
 					X.RDB$USER_TYPE = obj_user;

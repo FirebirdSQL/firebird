@@ -50,7 +50,7 @@ static HWND hPSDlg = NULL;
 static HINSTANCE hInstance = NULL;
 static USHORT usServerFlags;
 static HWND hMainWnd = NULL;
-const int SHUTDOWN_TIMEOUT = 5000;	// 5 sec
+constexpr int SHUTDOWN_TIMEOUT = 5000;	// 5 sec
 
 // Static functions to be called from this file only.
 static BOOL CanEndServer(HWND);

@@ -316,17 +316,7 @@ InversionCandidate* Retrieval::getInversion()
 		invCandidate = FB_NEW_POOL(getPool()) InversionCandidate(getPool());
 	}
 
-	if (invCandidate->unique)
-	{
-		// Set up the unique retrieval cost to be fixed and not dependent on
-		// possibly outdated statistics. It includes N index scans plus one data page fetch.
-		invCandidate->cost = DEFAULT_INDEX_COST * invCandidate->indexes + 1;
-	}
-	else
-	{
-		// Add the records retrieval cost to the priorly calculated index scan cost
-		invCandidate->cost += cardinality * invCandidate->selectivity;
-	}
+	invCandidate->matchSelectivity = invCandidate->selectivity;
 
 	// Adjust the effective selectivity by treating computable but unmatched conjunctions
 	// as filters. But consider only those local to our stream.
@@ -336,12 +326,15 @@ InversionCandidate* Retrieval::getInversion()
 	{
 		if (!(iter & Optimizer::CONJUNCT_USED))
 		{
-			const auto matched = invCandidate->matches.exist(iter);
+			const auto matched = invCandidate->matches.exist(iter) ||
+				(navigationCandidate && navigationCandidate->matches.exist(iter));
 
-			if (setConjunctionsMatched && matched)
-				iter |= Optimizer::CONJUNCT_MATCHED;
-			else if (!setConjunctionsMatched && !matched &&
-				iter->computable(csb, stream, true) &&
+			if (matched)
+			{
+				if (setConjunctionsMatched)
+					iter |= Optimizer::CONJUNCT_MATCHED;
+			}
+			else if (iter->computable(csb, stream, true) &&
 				iter->containsStream(stream))
 			{
 				selectivity *= Optimizer::getSelectivity(*iter);
@@ -355,7 +348,19 @@ InversionCandidate* Retrieval::getInversion()
 		}
 	}
 
-	Optimizer::adjustSelectivity(invCandidate->selectivity, selectivity, cardinality);
+	Optimizer::adjustSelectivity(invCandidate->selectivity, selectivity);
+
+	// Apply navigational walk, if meaningful
+	if (navigationCandidate)
+		applyNavigation(invCandidate);
+
+	// Add the records retrieval cost to the priorly calculated index scan cost.
+	// For unique retrievals, set up a fixed cost (independent from a possibly outdated statistics).
+	// It includes DEFAULT_INDEX_COST index scans plus one data page fetch.
+	if (invCandidate->unique)
+		invCandidate->cost = DEFAULT_INDEX_COST * invCandidate->indexes + 1;
+	else
+		invCandidate->cost += cardinality * invCandidate->selectivity;
 
 	// Add the streams where this stream is depending on
 	for (auto match : invCandidate->matches)
@@ -376,94 +381,16 @@ InversionCandidate* Retrieval::getInversion()
 	return invCandidate;
 }
 
-IndexTableScan* Retrieval::getNavigation(const InversionCandidate* candidate)
+IndexTableScan* Retrieval::getNavigation()
 {
 	if (!navigationCandidate)
 		return nullptr;
 
-	const auto scratch = navigationCandidate->scratch;
-
-	const auto streamCardinality = csb->csb_rpt[stream].csb_cardinality;
-
-	// If the table looks like empty during preparation time, we cannot be sure about
-	// its real cardinality during execution. So, unless we have some index-based
-	// filtering applied, let's better be pessimistic and avoid external sorting
-	// due to likely cardinality under-estimation.
-	const bool avoidSorting = (streamCardinality <= MINIMUM_CARDINALITY && !candidate->inversion);
-
-	if (!(scratch->index->idx_runtime_flags & idx_plan_navigate) && !avoidSorting)
-	{
-		// Check whether the navigational index scan is cheaper than the external sort
-		// and give up if it's not worth the efforts.
-		//
-		// We ignore candidate->cost in the calculations below as it belongs
-		// to both parts being compared.
-
-		fb_assert(candidate);
-
-		// Restore the original selectivity of the inversion,
-		// i.e. before the navigation candidate was accounted
-		auto selectivity = candidate->selectivity / navigationCandidate->selectivity;
-
-		// Non-indexed booleans are checked before sorting, so they improve the selectivity
-
-		double factor = MAXIMUM_SELECTIVITY;
-		for (auto iter = optimizer->getConjuncts(outerFlag, innerFlag); iter.hasData(); ++iter)
-		{
-			if (!(iter & Optimizer::CONJUNCT_USED) &&
-				!candidate->matches.exist(iter) &&
-				iter->computable(csb, stream, true) &&
-				iter->containsStream(stream))
-			{
-				factor *= Optimizer::getSelectivity(*iter);
-			}
-		}
-
-		Optimizer::adjustSelectivity(selectivity, factor, streamCardinality);
-
-		// Don't consider external sorting if optimization for first rows is requested
-		// and we have no local filtering applied
-
-		if (!optimizer->favorFirstRows() || selectivity < MAXIMUM_SELECTIVITY)
-		{
-			// Estimate amount of records to be sorted
-			const auto cardinality = streamCardinality * selectivity;
-
-			// We optimistically assume that records will be cached during sorting
-			const auto sortCost =
-				// record copying (to the sort buffer and back)
-				cardinality * COST_FACTOR_MEMCOPY * 2 +
-				// quicksort algorithm is O(n*log(n)) in average
-				cardinality * log2(cardinality) * COST_FACTOR_QUICKSORT;
-
-			// During navigation we fetch an index leaf page per every record being returned,
-			// thus add the estimated cardinality to the cost
-			auto navigationCost = navigationCandidate->cost +
-				streamCardinality * candidate->selectivity;
-
-			if (optimizer->favorFirstRows())
-			{
-				// Reset the cost to represent a single record retrieval
-				navigationCost = DEFAULT_INDEX_COST;
-
-				// We know that some local filtering is applied, so we need
-				// to adjust the cost as we need to walk the index
-				// until the first matching record is found
-				const auto fullIndexCost = navigationCandidate->scratch->cardinality;
-				const auto ratio = MAXIMUM_SELECTIVITY / selectivity;
-				const auto fraction = ratio / streamCardinality;
-				const auto walkCost = fullIndexCost * fraction * navigationCandidate->selectivity;
-				navigationCost += walkCost;
-			}
-
-			if (sortCost < navigationCost)
-				return nullptr;
-		}
-	}
-
 	// Looks like we can do a navigational walk.  Flag that
 	// we have used this index for navigation, and allocate
 	// a navigational rsb for it.
+
+	const auto scratch = navigationCandidate->scratch;
 	scratch->index->idx_runtime_flags |= idx_navigate;
 
 	const auto indexNode = makeIndexScanNode(scratch);
@@ -713,6 +640,103 @@ void Retrieval::analyzeNavigation(const InversionCandidateList& inversions)
 	}
 
 	navigationCandidate = bestCandidate;
+}
+
+void Retrieval::applyNavigation(InversionCandidate* candidate)
+{
+	fb_assert(navigationCandidate && candidate);
+	fb_assert(navigationCandidate != candidate);
+
+	candidate->navigated = true;
+
+	const auto scratch = navigationCandidate->scratch;
+	const auto streamCardinality = csb->csb_rpt[stream].csb_cardinality;
+
+	// If the table looks like empty during preparation time, we cannot be sure about
+	// its real cardinality during execution. So, unless we have some index-based
+	// filtering applied, let's better be pessimistic and avoid external sorting
+	// due to likely cardinality under-estimation.
+	const bool avoidSorting =
+		(streamCardinality <= MINIMUM_CARDINALITY && !candidate->inversion) ||
+		// also don't consider external sorting if optimization for first rows is requested
+		// and we have no local filtering applied
+		(optimizer->favorFirstRows() && candidate->selectivity == MAXIMUM_SELECTIVITY) ||
+		// and finally, skip it if the explicit plan specifies this index as navigated
+		(scratch->index->idx_runtime_flags & idx_plan_navigate);
+
+	if (!avoidSorting)
+	{
+		// Check whether the navigational index scan is cheaper than the external sort
+		// and give up if it's not worth the efforts.
+		//
+		// We ignore candidate->cost in the calculations below as it belongs
+		// to both parts being compared.
+
+		// Estimate amount of records to be sorted
+		const auto cardinality = streamCardinality * candidate->selectivity;
+		const auto matchCardinality = streamCardinality * candidate->matchSelectivity;
+
+		// We optimistically assume that records will be cached during sorting
+		const auto sortCost =
+			// record copying (to the sort buffer and back)
+			cardinality * COST_FACTOR_MEMCOPY * 2 +
+			// quicksort algorithm is O(n*log(n)) in average
+			cardinality * log2(cardinality) * COST_FACTOR_QUICKSORT;
+
+		// During navigation we fetch an index leaf page per every record being returned,
+		// thus add the estimated cardinality to the cost
+		auto navigationCost = navigationCandidate->cost +
+			matchCardinality * navigationCandidate->selectivity;
+
+		if (optimizer->favorFirstRows())
+		{
+			// Reset the cost to represent a single record retrieval
+			navigationCost = DEFAULT_INDEX_COST;
+
+			// We know that some local filtering is applied, so we need
+			// to adjust the cost as we need to walk the index
+			// until the first matching record is found
+			const auto fullIndexCost = navigationCandidate->scratch->cardinality;
+			const auto ratio = MAXIMUM_SELECTIVITY / candidate->selectivity;
+			const auto fraction = ratio / streamCardinality;
+			const auto walkCost = fullIndexCost * fraction * navigationCandidate->selectivity;
+			navigationCost += walkCost;
+		}
+
+		if (sortCost < navigationCost)
+		{
+			candidate->navigated = false;
+			navigationCandidate->cost = 0;
+		}
+	}
+
+	// Update the final inversion candidate
+
+	candidate->unique = candidate->unique || navigationCandidate->unique;
+	candidate->selectivity *= navigationCandidate->selectivity;
+	candidate->cost += navigationCandidate->cost;
+	candidate->indexes += navigationCandidate->indexes;
+
+	for (const auto navMatch : navigationCandidate->matches)
+	{
+		if (!candidate->matches.exist(navMatch))
+			candidate->matches.add(navMatch);
+	}
+
+	if (!candidate->navigated)
+	{
+		// If navigation is undesired, add its possible inversion to the final candidate
+
+		if (navigationCandidate->matches.hasData())
+		{
+			const auto inversionNode = (!navigationCandidate->inversion && navigationCandidate->scratch) ?
+				makeIndexScanNode(navigationCandidate->scratch) : navigationCandidate->inversion;
+			candidate->inversion = composeInversion(candidate->inversion,
+				inversionNode, InversionNode::TYPE_AND);
+		}
+
+		navigationCandidate.reset();
+	}
 }
 
 bool Retrieval::betterInversion(const InversionCandidate* inv1,
@@ -1752,27 +1776,6 @@ InversionCandidate* Retrieval::makeInversion(InversionCandidateList& inversions)
 		}
 		else {
 			break;
-		}
-	}
-
-	// If we have no index used for filtering, but there's a navigational walk,
-	// set up the inversion candidate appropriately.
-
-	if (navigationCandidate)
-	{
-		if (!invCandidate)
-			invCandidate = FB_NEW_POOL(getPool()) InversionCandidate(getPool());
-
-		invCandidate->unique = navigationCandidate->unique;
-		invCandidate->selectivity *= navigationCandidate->selectivity;
-		invCandidate->cost += navigationCandidate->cost;
-		++invCandidate->indexes;
-		invCandidate->navigated = true;
-
-		for (const auto navMatch : navigationCandidate->matches)
-		{
-			if (!invCandidate->matches.exist(navMatch))
-				invCandidate->matches.add(navMatch);
 		}
 	}
 

@@ -260,6 +260,8 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider
 	  att_current_timezone(att_original_timezone),
 	  att_schema_search_path(FB_NEW_POOL(*pool) AnyRef<ObjectsArray<MetaString>>(*pool)),
 	  att_system_schema_search_path(FB_NEW_POOL(*pool) AnyRef<ObjectsArray<MetaString>>(*pool)),
+	  att_unqualified_charset_resolved_cache_search_path(att_schema_search_path),
+	  att_unqualified_charset_resolved_cache(*pool),
 	  att_parallel_workers(0),
 	  att_repl_appliers(*pool),
 	  att_utility(UTIL_NONE),
@@ -378,7 +380,7 @@ string Jrd::Attachment::stringToUserCharSet(thread_db* tdbb, const string& str)
 		return str;
 
 	HalfStaticArray<UCHAR, BUFFER_MEDIUM> buffer(str.length() * sizeof(ULONG));
-	ULONG len = INTL_convert_bytes(tdbb, att_charset, buffer.begin(), buffer.getCapacity(),
+	const ULONG len = INTL_convert_bytes(tdbb, att_charset, buffer.begin(), buffer.getCapacity(),
 		CS_METADATA, (const BYTE*) str.c_str(), str.length(), ERR_post);
 
 	return string((char*) buffer.begin(), len);
@@ -452,8 +454,8 @@ static void runDBTriggers(thread_db* tdbb, TriggerAction action)
 {
 	fb_assert(action == TRIGGER_CONNECT || action == TRIGGER_DISCONNECT);
 
-	Database* dbb = tdbb->getDatabase();
-	Attachment* att = tdbb->getAttachment();
+	const Database* dbb = tdbb->getDatabase();
+	const Attachment* att = tdbb->getAttachment();
 	fb_assert(dbb);
 	fb_assert(att);
 
@@ -630,16 +632,18 @@ void Jrd::Attachment::signalShutdown(ISC_STATUS code)
 void Jrd::Attachment::mergeStats(bool pageStatsOnly)
 {
 	MutexLockGuard guard(att_database->dbb_stats_mutex, FB_FUNCTION);
-	att_database->dbb_stats.adjustPageStats(att_base_stats, att_stats);
-	if (!pageStatsOnly)
+
+	if (pageStatsOnly)
+		att_database->dbb_stats.adjustPageStats(att_base_stats, att_stats);
+	else
 	{
-		att_database->dbb_stats.adjust(att_base_stats, att_stats, true);
+		att_database->dbb_stats.adjust(att_base_stats, att_stats);
 		att_base_stats.assign(att_stats);
 	}
 }
 
 
-bool Attachment::hasActiveRequests() const
+bool Attachment::hasActiveRequests() const noexcept
 {
 	for (const jrd_tra* transaction = att_transactions;
 		transaction; transaction = transaction->tra_next)
@@ -659,7 +663,7 @@ bool Attachment::hasActiveRequests() const
 // Find an inactive incarnation of a system request. If necessary, clone it.
 Request* Jrd::Attachment::findSystemRequest(thread_db* tdbb, USHORT id, USHORT which)
 {
-	static const int MAX_RECURSION = 100;
+	constexpr int MAX_RECURSION = 100;
 
 	// If the request hasn't been compiled or isn't active, there're nothing to do.
 
@@ -1082,7 +1086,7 @@ unsigned int Attachment::getActualIdleTimeout() const
 
 void Attachment::setupIdleTimer(bool clear)
 {
-	unsigned int timeout = clear ? 0 : getActualIdleTimeout();
+	const unsigned int timeout = clear ? 0 : getActualIdleTimeout();
 	if (!timeout || hasActiveRequests())
 	{
 		if (att_idle_timer)
@@ -1185,7 +1189,7 @@ ProfilerManager* Attachment::getProfilerManager(thread_db* tdbb)
 
 ProfilerManager* Attachment::getActiveProfilerManagerForNonInternalStatement(thread_db* tdbb)
 {
-	const auto request = tdbb->getRequest();
+	const auto* request = tdbb->getRequest();
 
 	return isProfilerActive() && !request->hasInternalStatement() ?
 		getProfilerManager(tdbb) :

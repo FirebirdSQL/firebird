@@ -114,6 +114,8 @@ type
 	IProfilerPlugin = class;
 	IProfilerSession = class;
 	IProfilerStats = class;
+	IPerformanceCounters = class;
+	IPerformanceStats = class;
 
 	FbException = class(Exception)
 	public
@@ -571,6 +573,7 @@ type
 	IUtil_decodeTimeTzExPtr = procedure(this: IUtil; status: IStatus; timeTz: ISC_TIME_TZ_EXPtr; hours: CardinalPtr; minutes: CardinalPtr; seconds: CardinalPtr; fractions: CardinalPtr; timeZoneBufferLength: Cardinal; timeZoneBuffer: PAnsiChar); cdecl;
 	IUtil_decodeTimeStampTzExPtr = procedure(this: IUtil; status: IStatus; timeStampTz: ISC_TIMESTAMP_TZ_EXPtr; year: CardinalPtr; month: CardinalPtr; day: CardinalPtr; hours: CardinalPtr; minutes: CardinalPtr; seconds: CardinalPtr; fractions: CardinalPtr; timeZoneBufferLength: Cardinal; timeZoneBuffer: PAnsiChar); cdecl;
 	IUtil_executeCreateDatabase2Ptr = function(this: IUtil; status: IStatus; stmtLength: Cardinal; creatDBstatement: PAnsiChar; dialect: Cardinal; dpbLength: Cardinal; dpb: BytePtr; stmtIsCreateDb: BooleanPtr): IAttachment; cdecl;
+	IUtil_convertPtr = procedure(this: IUtil; status: IStatus; sourceType: Cardinal; sourceScale: Cardinal; sourceLength: Cardinal; source: Pointer; targetType: Cardinal; targetScale: Cardinal; targetLength: Cardinal; target: Pointer); cdecl;
 	IOffsetsCallback_setOffsetPtr = procedure(this: IOffsetsCallback; status: IStatus; index: Cardinal; offset: Cardinal; nullOffset: Cardinal); cdecl;
 	IXpbBuilder_clearPtr = procedure(this: IXpbBuilder; status: IStatus); cdecl;
 	IXpbBuilder_removeCurrentPtr = procedure(this: IXpbBuilder; status: IStatus); cdecl;
@@ -610,11 +613,13 @@ type
 	ITraceTransaction_getPerfPtr = function(this: ITraceTransaction): PerformanceInfoPtr; cdecl;
 	ITraceTransaction_getInitialIDPtr = function(this: ITraceTransaction): Int64; cdecl;
 	ITraceTransaction_getPreviousIDPtr = function(this: ITraceTransaction): Int64; cdecl;
+	ITraceTransaction_getPerfStatsPtr = function(this: ITraceTransaction): IPerformanceStats; cdecl;
 	ITraceParams_getCountPtr = function(this: ITraceParams): Cardinal; cdecl;
 	ITraceParams_getParamPtr = function(this: ITraceParams; idx: Cardinal): paramdscPtr; cdecl;
 	ITraceParams_getTextUTF8Ptr = function(this: ITraceParams; status: IStatus; idx: Cardinal): PAnsiChar; cdecl;
 	ITraceStatement_getStmtIDPtr = function(this: ITraceStatement): Int64; cdecl;
 	ITraceStatement_getPerfPtr = function(this: ITraceStatement): PerformanceInfoPtr; cdecl;
+	ITraceStatement_getPerfStatsPtr = function(this: ITraceStatement): IPerformanceStats; cdecl;
 	ITraceSQLStatement_getTextPtr = function(this: ITraceSQLStatement): PAnsiChar; cdecl;
 	ITraceSQLStatement_getPlanPtr = function(this: ITraceSQLStatement): PAnsiChar; cdecl;
 	ITraceSQLStatement_getInputsPtr = function(this: ITraceSQLStatement): ITraceParams; cdecl;
@@ -635,6 +640,7 @@ type
 	ITraceProcedure_getStmtIDPtr = function(this: ITraceProcedure): Int64; cdecl;
 	ITraceProcedure_getPlanPtr = function(this: ITraceProcedure): PAnsiChar; cdecl;
 	ITraceProcedure_getExplainedPlanPtr = function(this: ITraceProcedure): PAnsiChar; cdecl;
+	ITraceProcedure_getPerfStatsPtr = function(this: ITraceProcedure): IPerformanceStats; cdecl;
 	ITraceFunction_getFuncNamePtr = function(this: ITraceFunction): PAnsiChar; cdecl;
 	ITraceFunction_getInputsPtr = function(this: ITraceFunction): ITraceParams; cdecl;
 	ITraceFunction_getResultPtr = function(this: ITraceFunction): ITraceParams; cdecl;
@@ -642,6 +648,7 @@ type
 	ITraceFunction_getStmtIDPtr = function(this: ITraceFunction): Int64; cdecl;
 	ITraceFunction_getPlanPtr = function(this: ITraceFunction): PAnsiChar; cdecl;
 	ITraceFunction_getExplainedPlanPtr = function(this: ITraceFunction): PAnsiChar; cdecl;
+	ITraceFunction_getPerfStatsPtr = function(this: ITraceFunction): IPerformanceStats; cdecl;
 	ITraceTrigger_getTriggerNamePtr = function(this: ITraceTrigger): PAnsiChar; cdecl;
 	ITraceTrigger_getRelationNamePtr = function(this: ITraceTrigger): PAnsiChar; cdecl;
 	ITraceTrigger_getActionPtr = function(this: ITraceTrigger): Integer; cdecl;
@@ -650,6 +657,7 @@ type
 	ITraceTrigger_getStmtIDPtr = function(this: ITraceTrigger): Int64; cdecl;
 	ITraceTrigger_getPlanPtr = function(this: ITraceTrigger): PAnsiChar; cdecl;
 	ITraceTrigger_getExplainedPlanPtr = function(this: ITraceTrigger): PAnsiChar; cdecl;
+	ITraceTrigger_getPerfStatsPtr = function(this: ITraceTrigger): IPerformanceStats; cdecl;
 	ITraceServiceConnection_getServiceIDPtr = function(this: ITraceServiceConnection): Pointer; cdecl;
 	ITraceServiceConnection_getServiceMgrPtr = function(this: ITraceServiceConnection): PAnsiChar; cdecl;
 	ITraceServiceConnection_getServiceNamePtr = function(this: ITraceServiceConnection): PAnsiChar; cdecl;
@@ -662,6 +670,7 @@ type
 	ITraceSweepInfo_getOATPtr = function(this: ITraceSweepInfo): Int64; cdecl;
 	ITraceSweepInfo_getNextPtr = function(this: ITraceSweepInfo): Int64; cdecl;
 	ITraceSweepInfo_getPerfPtr = function(this: ITraceSweepInfo): PerformanceInfoPtr; cdecl;
+	ITraceSweepInfo_getPerfStatsPtr = function(this: ITraceSweepInfo): IPerformanceStats; cdecl;
 	ITraceLogWriter_writePtr = function(this: ITraceLogWriter; buf: Pointer; size: Cardinal): Cardinal; cdecl;
 	ITraceLogWriter_write_sPtr = function(this: ITraceLogWriter; status: IStatus; buf: Pointer; size: Cardinal): Cardinal; cdecl;
 	ITraceInitInfo_getConfigTextPtr = function(this: ITraceInitInfo): PAnsiChar; cdecl;
@@ -769,6 +778,14 @@ type
 	IProfilerSession_afterRecordSourceGetRecordPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
 	IProfilerSession_defineStatement2Ptr = procedure(this: IProfilerSession; status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; schemaName: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar); cdecl;
 	IProfilerStats_getElapsedTicksPtr = function(this: IProfilerStats): QWord; cdecl;
+	IPerformanceCounters_getObjectCountPtr = function(this: IPerformanceCounters): Cardinal; cdecl;
+	IPerformanceCounters_getMaxCounterIndexPtr = function(this: IPerformanceCounters): Cardinal; cdecl;
+	IPerformanceCounters_getObjectIdPtr = function(this: IPerformanceCounters; index: Cardinal): Cardinal; cdecl;
+	IPerformanceCounters_getObjectNamePtr = function(this: IPerformanceCounters; index: Cardinal): PAnsiChar; cdecl;
+	IPerformanceCounters_getObjectCountersPtr = function(this: IPerformanceCounters; index: Cardinal): Int64Ptr; cdecl;
+	IPerformanceStats_getElapsedTimePtr = function(this: IPerformanceStats): QWord; cdecl;
+	IPerformanceStats_getFetchedRecordsPtr = function(this: IPerformanceStats): QWord; cdecl;
+	IPerformanceStats_getCountersPtr = function(this: IPerformanceStats; group: Cardinal): IPerformanceCounters; cdecl;
 
 	VersionedVTable = class
 		version: NativeInt;
@@ -2811,10 +2828,11 @@ type
 		decodeTimeTzEx: IUtil_decodeTimeTzExPtr;
 		decodeTimeStampTzEx: IUtil_decodeTimeStampTzExPtr;
 		executeCreateDatabase2: IUtil_executeCreateDatabase2Ptr;
+		convert: IUtil_convertPtr;
 	end;
 
 	IUtil = class(IVersioned)
-		const VERSION = 5;
+		const VERSION = 6;
 
 		procedure getFbVersion(status: IStatus; att: IAttachment; callback: IVersionCallback);
 		procedure loadBlob(status: IStatus; blobId: ISC_QUADPtr; att: IAttachment; tra: ITransaction; file_: PAnsiChar; txt: Boolean);
@@ -2839,6 +2857,7 @@ type
 		procedure decodeTimeTzEx(status: IStatus; timeTz: ISC_TIME_TZ_EXPtr; hours: CardinalPtr; minutes: CardinalPtr; seconds: CardinalPtr; fractions: CardinalPtr; timeZoneBufferLength: Cardinal; timeZoneBuffer: PAnsiChar);
 		procedure decodeTimeStampTzEx(status: IStatus; timeStampTz: ISC_TIMESTAMP_TZ_EXPtr; year: CardinalPtr; month: CardinalPtr; day: CardinalPtr; hours: CardinalPtr; minutes: CardinalPtr; seconds: CardinalPtr; fractions: CardinalPtr; timeZoneBufferLength: Cardinal; timeZoneBuffer: PAnsiChar);
 		function executeCreateDatabase2(status: IStatus; stmtLength: Cardinal; creatDBstatement: PAnsiChar; dialect: Cardinal; dpbLength: Cardinal; dpb: BytePtr; stmtIsCreateDb: BooleanPtr): IAttachment;
+		procedure convert(status: IStatus; sourceType: Cardinal; sourceScale: Cardinal; sourceLength: Cardinal; source: Pointer; targetType: Cardinal; targetScale: Cardinal; targetLength: Cardinal; target: Pointer);
 	end;
 
 	IUtilImpl = class(IUtil)
@@ -2867,6 +2886,7 @@ type
 		procedure decodeTimeTzEx(status: IStatus; timeTz: ISC_TIME_TZ_EXPtr; hours: CardinalPtr; minutes: CardinalPtr; seconds: CardinalPtr; fractions: CardinalPtr; timeZoneBufferLength: Cardinal; timeZoneBuffer: PAnsiChar); virtual; abstract;
 		procedure decodeTimeStampTzEx(status: IStatus; timeStampTz: ISC_TIMESTAMP_TZ_EXPtr; year: CardinalPtr; month: CardinalPtr; day: CardinalPtr; hours: CardinalPtr; minutes: CardinalPtr; seconds: CardinalPtr; fractions: CardinalPtr; timeZoneBufferLength: Cardinal; timeZoneBuffer: PAnsiChar); virtual; abstract;
 		function executeCreateDatabase2(status: IStatus; stmtLength: Cardinal; creatDBstatement: PAnsiChar; dialect: Cardinal; dpbLength: Cardinal; dpb: BytePtr; stmtIsCreateDb: BooleanPtr): IAttachment; virtual; abstract;
+		procedure convert(status: IStatus; sourceType: Cardinal; sourceScale: Cardinal; sourceLength: Cardinal; source: Pointer; targetType: Cardinal; targetScale: Cardinal; targetLength: Cardinal; target: Pointer); virtual; abstract;
 	end;
 
 	OffsetsCallbackVTable = class(VersionedVTable)
@@ -3048,10 +3068,11 @@ type
 		getPerf: ITraceTransaction_getPerfPtr;
 		getInitialID: ITraceTransaction_getInitialIDPtr;
 		getPreviousID: ITraceTransaction_getPreviousIDPtr;
+		getPerfStats: ITraceTransaction_getPerfStatsPtr;
 	end;
 
 	ITraceTransaction = class(IVersioned)
-		const VERSION = 3;
+		const VERSION = 4;
 		const ISOLATION_CONSISTENCY = Cardinal(1);
 		const ISOLATION_CONCURRENCY = Cardinal(2);
 		const ISOLATION_READ_COMMITTED_RECVER = Cardinal(3);
@@ -3065,6 +3086,7 @@ type
 		function getPerf(): PerformanceInfoPtr;
 		function getInitialID(): Int64;
 		function getPreviousID(): Int64;
+		function getPerfStats(): IPerformanceStats;
 	end;
 
 	ITraceTransactionImpl = class(ITraceTransaction)
@@ -3077,6 +3099,7 @@ type
 		function getPerf(): PerformanceInfoPtr; virtual; abstract;
 		function getInitialID(): Int64; virtual; abstract;
 		function getPreviousID(): Int64; virtual; abstract;
+		function getPerfStats(): IPerformanceStats; virtual; abstract;
 	end;
 
 	TraceParamsVTable = class(VersionedVTable)
@@ -3104,13 +3127,15 @@ type
 	TraceStatementVTable = class(VersionedVTable)
 		getStmtID: ITraceStatement_getStmtIDPtr;
 		getPerf: ITraceStatement_getPerfPtr;
+		getPerfStats: ITraceStatement_getPerfStatsPtr;
 	end;
 
 	ITraceStatement = class(IVersioned)
-		const VERSION = 2;
+		const VERSION = 3;
 
 		function getStmtID(): Int64;
 		function getPerf(): PerformanceInfoPtr;
+		function getPerfStats(): IPerformanceStats;
 	end;
 
 	ITraceStatementImpl = class(ITraceStatement)
@@ -3118,6 +3143,7 @@ type
 
 		function getStmtID(): Int64; virtual; abstract;
 		function getPerf(): PerformanceInfoPtr; virtual; abstract;
+		function getPerfStats(): IPerformanceStats; virtual; abstract;
 	end;
 
 	TraceSQLStatementVTable = class(TraceStatementVTable)
@@ -3129,7 +3155,7 @@ type
 	end;
 
 	ITraceSQLStatement = class(ITraceStatement)
-		const VERSION = 3;
+		const VERSION = 4;
 
 		function getText(): PAnsiChar;
 		function getPlan(): PAnsiChar;
@@ -3143,6 +3169,7 @@ type
 
 		function getStmtID(): Int64; virtual; abstract;
 		function getPerf(): PerformanceInfoPtr; virtual; abstract;
+		function getPerfStats(): IPerformanceStats; virtual; abstract;
 		function getText(): PAnsiChar; virtual; abstract;
 		function getPlan(): PAnsiChar; virtual; abstract;
 		function getInputs(): ITraceParams; virtual; abstract;
@@ -3157,7 +3184,7 @@ type
 	end;
 
 	ITraceBLRStatement = class(ITraceStatement)
-		const VERSION = 3;
+		const VERSION = 4;
 
 		function getData(): BytePtr;
 		function getDataLength(): Cardinal;
@@ -3169,6 +3196,7 @@ type
 
 		function getStmtID(): Int64; virtual; abstract;
 		function getPerf(): PerformanceInfoPtr; virtual; abstract;
+		function getPerfStats(): IPerformanceStats; virtual; abstract;
 		function getData(): BytePtr; virtual; abstract;
 		function getDataLength(): Cardinal; virtual; abstract;
 		function getText(): PAnsiChar; virtual; abstract;
@@ -3225,10 +3253,11 @@ type
 		getStmtID: ITraceProcedure_getStmtIDPtr;
 		getPlan: ITraceProcedure_getPlanPtr;
 		getExplainedPlan: ITraceProcedure_getExplainedPlanPtr;
+		getPerfStats: ITraceProcedure_getPerfStatsPtr;
 	end;
 
 	ITraceProcedure = class(IVersioned)
-		const VERSION = 3;
+		const VERSION = 4;
 
 		function getProcName(): PAnsiChar;
 		function getInputs(): ITraceParams;
@@ -3236,6 +3265,7 @@ type
 		function getStmtID(): Int64;
 		function getPlan(): PAnsiChar;
 		function getExplainedPlan(): PAnsiChar;
+		function getPerfStats(): IPerformanceStats;
 	end;
 
 	ITraceProcedureImpl = class(ITraceProcedure)
@@ -3247,6 +3277,7 @@ type
 		function getStmtID(): Int64; virtual; abstract;
 		function getPlan(): PAnsiChar; virtual; abstract;
 		function getExplainedPlan(): PAnsiChar; virtual; abstract;
+		function getPerfStats(): IPerformanceStats; virtual; abstract;
 	end;
 
 	TraceFunctionVTable = class(VersionedVTable)
@@ -3257,10 +3288,11 @@ type
 		getStmtID: ITraceFunction_getStmtIDPtr;
 		getPlan: ITraceFunction_getPlanPtr;
 		getExplainedPlan: ITraceFunction_getExplainedPlanPtr;
+		getPerfStats: ITraceFunction_getPerfStatsPtr;
 	end;
 
 	ITraceFunction = class(IVersioned)
-		const VERSION = 3;
+		const VERSION = 4;
 
 		function getFuncName(): PAnsiChar;
 		function getInputs(): ITraceParams;
@@ -3269,6 +3301,7 @@ type
 		function getStmtID(): Int64;
 		function getPlan(): PAnsiChar;
 		function getExplainedPlan(): PAnsiChar;
+		function getPerfStats(): IPerformanceStats;
 	end;
 
 	ITraceFunctionImpl = class(ITraceFunction)
@@ -3281,6 +3314,7 @@ type
 		function getStmtID(): Int64; virtual; abstract;
 		function getPlan(): PAnsiChar; virtual; abstract;
 		function getExplainedPlan(): PAnsiChar; virtual; abstract;
+		function getPerfStats(): IPerformanceStats; virtual; abstract;
 	end;
 
 	TraceTriggerVTable = class(VersionedVTable)
@@ -3292,10 +3326,11 @@ type
 		getStmtID: ITraceTrigger_getStmtIDPtr;
 		getPlan: ITraceTrigger_getPlanPtr;
 		getExplainedPlan: ITraceTrigger_getExplainedPlanPtr;
+		getPerfStats: ITraceTrigger_getPerfStatsPtr;
 	end;
 
 	ITraceTrigger = class(IVersioned)
-		const VERSION = 3;
+		const VERSION = 4;
 		const TYPE_ALL = Cardinal(0);
 		const TYPE_BEFORE = Cardinal(1);
 		const TYPE_AFTER = Cardinal(2);
@@ -3308,6 +3343,7 @@ type
 		function getStmtID(): Int64;
 		function getPlan(): PAnsiChar;
 		function getExplainedPlan(): PAnsiChar;
+		function getPerfStats(): IPerformanceStats;
 	end;
 
 	ITraceTriggerImpl = class(ITraceTrigger)
@@ -3321,6 +3357,7 @@ type
 		function getStmtID(): Int64; virtual; abstract;
 		function getPlan(): PAnsiChar; virtual; abstract;
 		function getExplainedPlan(): PAnsiChar; virtual; abstract;
+		function getPerfStats(): IPerformanceStats; virtual; abstract;
 	end;
 
 	TraceServiceConnectionVTable = class(TraceConnectionVTable)
@@ -3385,16 +3422,18 @@ type
 		getOAT: ITraceSweepInfo_getOATPtr;
 		getNext: ITraceSweepInfo_getNextPtr;
 		getPerf: ITraceSweepInfo_getPerfPtr;
+		getPerfStats: ITraceSweepInfo_getPerfStatsPtr;
 	end;
 
 	ITraceSweepInfo = class(IVersioned)
-		const VERSION = 2;
+		const VERSION = 3;
 
 		function getOIT(): Int64;
 		function getOST(): Int64;
 		function getOAT(): Int64;
 		function getNext(): Int64;
 		function getPerf(): PerformanceInfoPtr;
+		function getPerfStats(): IPerformanceStats;
 	end;
 
 	ITraceSweepInfoImpl = class(ITraceSweepInfo)
@@ -3405,6 +3444,7 @@ type
 		function getOAT(): Int64; virtual; abstract;
 		function getNext(): Int64; virtual; abstract;
 		function getPerf(): PerformanceInfoPtr; virtual; abstract;
+		function getPerfStats(): IPerformanceStats; virtual; abstract;
 	end;
 
 	TraceLogWriterVTable = class(ReferenceCountedVTable)
@@ -4021,6 +4061,77 @@ type
 		function getElapsedTicks(): QWord; virtual; abstract;
 	end;
 
+	PerformanceCountersVTable = class(VersionedVTable)
+		getObjectCount: IPerformanceCounters_getObjectCountPtr;
+		getMaxCounterIndex: IPerformanceCounters_getMaxCounterIndexPtr;
+		getObjectId: IPerformanceCounters_getObjectIdPtr;
+		getObjectName: IPerformanceCounters_getObjectNamePtr;
+		getObjectCounters: IPerformanceCounters_getObjectCountersPtr;
+	end;
+
+	IPerformanceCounters = class(IVersioned)
+		const VERSION = 2;
+		const PAGE_FETCHES = Cardinal(0);
+		const PAGE_READS = Cardinal(1);
+		const PAGE_MARKS = Cardinal(2);
+		const PAGE_WRITES = Cardinal(3);
+		const RECORD_SEQ_READS = Cardinal(0);
+		const RECORD_IDX_READS = Cardinal(1);
+		const RECORD_UPDATES = Cardinal(2);
+		const RECORD_INSERTS = Cardinal(3);
+		const RECORD_DELETES = Cardinal(4);
+		const RECORD_BACKOUTS = Cardinal(5);
+		const RECORD_PURGES = Cardinal(6);
+		const RECORD_EXPUNGES = Cardinal(7);
+		const RECORD_LOCKS = Cardinal(8);
+		const RECORD_WAITS = Cardinal(9);
+		const RECORD_CONFLICTS = Cardinal(10);
+		const RECORD_BACK_READS = Cardinal(11);
+		const RECORD_FRAGMENT_READS = Cardinal(12);
+		const RECORD_RPT_READS = Cardinal(13);
+		const RECORD_IMGC = Cardinal(14);
+
+		function getObjectCount(): Cardinal;
+		function getMaxCounterIndex(): Cardinal;
+		function getObjectId(index: Cardinal): Cardinal;
+		function getObjectName(index: Cardinal): PAnsiChar;
+		function getObjectCounters(index: Cardinal): Int64Ptr;
+	end;
+
+	IPerformanceCountersImpl = class(IPerformanceCounters)
+		constructor create;
+
+		function getObjectCount(): Cardinal; virtual; abstract;
+		function getMaxCounterIndex(): Cardinal; virtual; abstract;
+		function getObjectId(index: Cardinal): Cardinal; virtual; abstract;
+		function getObjectName(index: Cardinal): PAnsiChar; virtual; abstract;
+		function getObjectCounters(index: Cardinal): Int64Ptr; virtual; abstract;
+	end;
+
+	PerformanceStatsVTable = class(VersionedVTable)
+		getElapsedTime: IPerformanceStats_getElapsedTimePtr;
+		getFetchedRecords: IPerformanceStats_getFetchedRecordsPtr;
+		getCounters: IPerformanceStats_getCountersPtr;
+	end;
+
+	IPerformanceStats = class(IVersioned)
+		const VERSION = 2;
+		const COUNTER_GROUP_PAGES = Cardinal(0);
+		const COUNTER_GROUP_TABLES = Cardinal(1);
+
+		function getElapsedTime(): QWord;
+		function getFetchedRecords(): QWord;
+		function getCounters(group: Cardinal): IPerformanceCounters;
+	end;
+
+	IPerformanceStatsImpl = class(IPerformanceStats)
+		constructor create;
+
+		function getElapsedTime(): QWord; virtual; abstract;
+		function getFetchedRecords(): QWord; virtual; abstract;
+		function getCounters(group: Cardinal): IPerformanceCounters; virtual; abstract;
+	end;
+
 {$IFNDEF NO_FBCLIENT}
 	function fb_get_master_interface : IMaster; cdecl; external 'fbclient';
 {$ENDIF}
@@ -4418,6 +4529,7 @@ const
 	isc_spb_trc_id = byte(1);
 	isc_spb_trc_name = byte(2);
 	isc_spb_trc_cfg = byte(3);
+	isc_spb_trc_plugins = byte(4);
 	isc_sdl_version1 = byte(1);
 	isc_sdl_eoc = byte(255);
 	isc_sdl_relation = byte(2);
@@ -4603,6 +4715,8 @@ const
 	fb_info_wire_roundtrips = byte(158);
 	fb_info_max_blob_cache_size = byte(159);
 	fb_info_max_inline_blob_size = byte(160);
+	fb_info_counts_scope_att = byte(161);
+	fb_info_counts_scope_db = byte(162);
 	fb_info_crypt_encrypted = $01;
 	fb_info_crypt_process = $02;
 	fb_feature_multi_statements = byte(1);
@@ -5839,6 +5953,8 @@ const
 	 isc_invalid_name = 335545316;
 	 isc_invalid_unqualified_name_list = 335545317;
 	 isc_no_user_att_while_restore = 335545318;
+	 isc_genseq_stepmustbe_nonzero = 335545319;
+	 isc_argmustbe_exact_function = 335545320;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;
@@ -8854,6 +8970,17 @@ begin
 	FbException.checkException(status);
 end;
 
+procedure IUtil.convert(status: IStatus; sourceType: Cardinal; sourceScale: Cardinal; sourceLength: Cardinal; source: Pointer; targetType: Cardinal; targetScale: Cardinal; targetLength: Cardinal; target: Pointer);
+begin
+	if (vTable.version < 6) then begin
+		FbException.setVersionError(status, 'IUtil', vTable.version, 6);
+	end
+	else begin
+		UtilVTable(vTable).convert(Self, status, sourceType, sourceScale, sourceLength, source, targetType, targetScale, targetLength, target);
+	end;
+	FbException.checkException(status);
+end;
+
 procedure IOffsetsCallback.setOffset(status: IStatus; index: Cardinal; offset: Cardinal; nullOffset: Cardinal);
 begin
 	OffsetsCallbackVTable(vTable).setOffset(Self, status, index, offset, nullOffset);
@@ -9080,6 +9207,16 @@ begin
 	end;
 end;
 
+function ITraceTransaction.getPerfStats(): IPerformanceStats;
+begin
+	if (vTable.version < 4) then begin
+		Result := nil;
+	end
+	else begin
+		Result := TraceTransactionVTable(vTable).getPerfStats(Self);
+	end;
+end;
+
 function ITraceParams.getCount(): Cardinal;
 begin
 	Result := TraceParamsVTable(vTable).getCount(Self);
@@ -9110,6 +9247,16 @@ end;
 function ITraceStatement.getPerf(): PerformanceInfoPtr;
 begin
 	Result := TraceStatementVTable(vTable).getPerf(Self);
+end;
+
+function ITraceStatement.getPerfStats(): IPerformanceStats;
+begin
+	if (vTable.version < 3) then begin
+		Result := nil;
+	end
+	else begin
+		Result := TraceStatementVTable(vTable).getPerfStats(Self);
+	end;
 end;
 
 function ITraceSQLStatement.getText(): PAnsiChar;
@@ -9227,6 +9374,16 @@ begin
 	end;
 end;
 
+function ITraceProcedure.getPerfStats(): IPerformanceStats;
+begin
+	if (vTable.version < 4) then begin
+		Result := nil;
+	end
+	else begin
+		Result := TraceProcedureVTable(vTable).getPerfStats(Self);
+	end;
+end;
+
 function ITraceFunction.getFuncName(): PAnsiChar;
 begin
 	Result := TraceFunctionVTable(vTable).getFuncName(Self);
@@ -9274,6 +9431,16 @@ begin
 	end
 	else begin
 		Result := TraceFunctionVTable(vTable).getExplainedPlan(Self);
+	end;
+end;
+
+function ITraceFunction.getPerfStats(): IPerformanceStats;
+begin
+	if (vTable.version < 4) then begin
+		Result := nil;
+	end
+	else begin
+		Result := TraceFunctionVTable(vTable).getPerfStats(Self);
 	end;
 end;
 
@@ -9329,6 +9496,16 @@ begin
 	end
 	else begin
 		Result := TraceTriggerVTable(vTable).getExplainedPlan(Self);
+	end;
+end;
+
+function ITraceTrigger.getPerfStats(): IPerformanceStats;
+begin
+	if (vTable.version < 4) then begin
+		Result := nil;
+	end
+	else begin
+		Result := TraceTriggerVTable(vTable).getPerfStats(Self);
 	end;
 end;
 
@@ -9390,6 +9567,16 @@ end;
 function ITraceSweepInfo.getPerf(): PerformanceInfoPtr;
 begin
 	Result := TraceSweepInfoVTable(vTable).getPerf(Self);
+end;
+
+function ITraceSweepInfo.getPerfStats(): IPerformanceStats;
+begin
+	if (vTable.version < 3) then begin
+		Result := nil;
+	end
+	else begin
+		Result := TraceSweepInfoVTable(vTable).getPerfStats(Self);
+	end;
 end;
 
 function ITraceLogWriter.write(buf: Pointer; size: Cardinal): Cardinal;
@@ -10027,6 +10214,46 @@ end;
 function IProfilerStats.getElapsedTicks(): QWord;
 begin
 	Result := ProfilerStatsVTable(vTable).getElapsedTicks(Self);
+end;
+
+function IPerformanceCounters.getObjectCount(): Cardinal;
+begin
+	Result := PerformanceCountersVTable(vTable).getObjectCount(Self);
+end;
+
+function IPerformanceCounters.getMaxCounterIndex(): Cardinal;
+begin
+	Result := PerformanceCountersVTable(vTable).getMaxCounterIndex(Self);
+end;
+
+function IPerformanceCounters.getObjectId(index: Cardinal): Cardinal;
+begin
+	Result := PerformanceCountersVTable(vTable).getObjectId(Self, index);
+end;
+
+function IPerformanceCounters.getObjectName(index: Cardinal): PAnsiChar;
+begin
+	Result := PerformanceCountersVTable(vTable).getObjectName(Self, index);
+end;
+
+function IPerformanceCounters.getObjectCounters(index: Cardinal): Int64Ptr;
+begin
+	Result := PerformanceCountersVTable(vTable).getObjectCounters(Self, index);
+end;
+
+function IPerformanceStats.getElapsedTime(): QWord;
+begin
+	Result := PerformanceStatsVTable(vTable).getElapsedTime(Self);
+end;
+
+function IPerformanceStats.getFetchedRecords(): QWord;
+begin
+	Result := PerformanceStatsVTable(vTable).getFetchedRecords(Self);
+end;
+
+function IPerformanceStats.getCounters(group: Cardinal): IPerformanceCounters;
+begin
+	Result := PerformanceStatsVTable(vTable).getCounters(Self, group);
 end;
 
 var
@@ -14880,6 +15107,15 @@ begin
 	end
 end;
 
+procedure IUtilImpl_convertDispatcher(this: IUtil; status: IStatus; sourceType: Cardinal; sourceScale: Cardinal; sourceLength: Cardinal; source: Pointer; targetType: Cardinal; targetScale: Cardinal; targetLength: Cardinal; target: Pointer); cdecl;
+begin
+	try
+		IUtilImpl(this).convert(status, sourceType, sourceScale, sourceLength, source, targetType, targetScale, targetLength, target);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
 var
 	IUtilImpl_vTable: UtilVTable;
 
@@ -15399,6 +15635,16 @@ begin
 	end
 end;
 
+function ITraceTransactionImpl_getPerfStatsDispatcher(this: ITraceTransaction): IPerformanceStats; cdecl;
+begin
+	Result := nil;
+	try
+		Result := ITraceTransactionImpl(this).getPerfStats();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
 var
 	ITraceTransactionImpl_vTable: TraceTransactionVTable;
 
@@ -15465,6 +15711,16 @@ begin
 	end
 end;
 
+function ITraceStatementImpl_getPerfStatsDispatcher(this: ITraceStatement): IPerformanceStats; cdecl;
+begin
+	Result := nil;
+	try
+		Result := ITraceStatementImpl(this).getPerfStats();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
 var
 	ITraceStatementImpl_vTable: TraceStatementVTable;
 
@@ -15488,6 +15744,16 @@ begin
 	Result := nil;
 	try
 		Result := ITraceSQLStatementImpl(this).getPerf();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceSQLStatementImpl_getPerfStatsDispatcher(this: ITraceSQLStatement): IPerformanceStats; cdecl;
+begin
+	Result := nil;
+	try
+		Result := ITraceSQLStatementImpl(this).getPerfStats();
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
@@ -15566,6 +15832,16 @@ begin
 	Result := nil;
 	try
 		Result := ITraceBLRStatementImpl(this).getPerf();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceBLRStatementImpl_getPerfStatsDispatcher(this: ITraceBLRStatement): IPerformanceStats; cdecl;
+begin
+	Result := nil;
+	try
+		Result := ITraceBLRStatementImpl(this).getPerfStats();
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
@@ -15745,6 +16021,16 @@ begin
 	end
 end;
 
+function ITraceProcedureImpl_getPerfStatsDispatcher(this: ITraceProcedure): IPerformanceStats; cdecl;
+begin
+	Result := nil;
+	try
+		Result := ITraceProcedureImpl(this).getPerfStats();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
 var
 	ITraceProcedureImpl_vTable: TraceProcedureVTable;
 
@@ -15818,6 +16104,16 @@ begin
 	Result := nil;
 	try
 		Result := ITraceFunctionImpl(this).getExplainedPlan();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceFunctionImpl_getPerfStatsDispatcher(this: ITraceFunction): IPerformanceStats; cdecl;
+begin
+	Result := nil;
+	try
+		Result := ITraceFunctionImpl(this).getPerfStats();
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
@@ -15906,6 +16202,16 @@ begin
 	Result := nil;
 	try
 		Result := ITraceTriggerImpl(this).getExplainedPlan();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceTriggerImpl_getPerfStatsDispatcher(this: ITraceTrigger): IPerformanceStats; cdecl;
+begin
+	Result := nil;
+	try
+		Result := ITraceTriggerImpl(this).getPerfStats();
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
@@ -16140,6 +16446,16 @@ begin
 	Result := nil;
 	try
 		Result := ITraceSweepInfoImpl(this).getPerf();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceSweepInfoImpl_getPerfStatsDispatcher(this: ITraceSweepInfo): IPerformanceStats; cdecl;
+begin
+	Result := nil;
+	try
+		Result := ITraceSweepInfoImpl(this).getPerfStats();
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
@@ -17514,6 +17830,102 @@ begin
 	vTable := IProfilerStatsImpl_vTable;
 end;
 
+function IPerformanceCountersImpl_getObjectCountDispatcher(this: IPerformanceCounters): Cardinal; cdecl;
+begin
+	Result := 0;
+	try
+		Result := IPerformanceCountersImpl(this).getObjectCount();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function IPerformanceCountersImpl_getMaxCounterIndexDispatcher(this: IPerformanceCounters): Cardinal; cdecl;
+begin
+	Result := 0;
+	try
+		Result := IPerformanceCountersImpl(this).getMaxCounterIndex();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function IPerformanceCountersImpl_getObjectIdDispatcher(this: IPerformanceCounters; index: Cardinal): Cardinal; cdecl;
+begin
+	Result := 0;
+	try
+		Result := IPerformanceCountersImpl(this).getObjectId(index);
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function IPerformanceCountersImpl_getObjectNameDispatcher(this: IPerformanceCounters; index: Cardinal): PAnsiChar; cdecl;
+begin
+	Result := nil;
+	try
+		Result := IPerformanceCountersImpl(this).getObjectName(index);
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function IPerformanceCountersImpl_getObjectCountersDispatcher(this: IPerformanceCounters; index: Cardinal): Int64Ptr; cdecl;
+begin
+	Result := nil;
+	try
+		Result := IPerformanceCountersImpl(this).getObjectCounters(index);
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+var
+	IPerformanceCountersImpl_vTable: PerformanceCountersVTable;
+
+constructor IPerformanceCountersImpl.create;
+begin
+	vTable := IPerformanceCountersImpl_vTable;
+end;
+
+function IPerformanceStatsImpl_getElapsedTimeDispatcher(this: IPerformanceStats): QWord; cdecl;
+begin
+	Result := 0;
+	try
+		Result := IPerformanceStatsImpl(this).getElapsedTime();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function IPerformanceStatsImpl_getFetchedRecordsDispatcher(this: IPerformanceStats): QWord; cdecl;
+begin
+	Result := 0;
+	try
+		Result := IPerformanceStatsImpl(this).getFetchedRecords();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function IPerformanceStatsImpl_getCountersDispatcher(this: IPerformanceStats; group: Cardinal): IPerformanceCounters; cdecl;
+begin
+	Result := nil;
+	try
+		Result := IPerformanceStatsImpl(this).getCounters(group);
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+var
+	IPerformanceStatsImpl_vTable: PerformanceStatsVTable;
+
+constructor IPerformanceStatsImpl.create;
+begin
+	vTable := IPerformanceStatsImpl_vTable;
+end;
+
 constructor FbException.create(status: IStatus);
 begin
 	inherited Create('FbException');
@@ -18198,7 +18610,7 @@ initialization
 	IVersionCallbackImpl_vTable.callback := @IVersionCallbackImpl_callbackDispatcher;
 
 	IUtilImpl_vTable := UtilVTable.create;
-	IUtilImpl_vTable.version := 5;
+	IUtilImpl_vTable.version := 6;
 	IUtilImpl_vTable.getFbVersion := @IUtilImpl_getFbVersionDispatcher;
 	IUtilImpl_vTable.loadBlob := @IUtilImpl_loadBlobDispatcher;
 	IUtilImpl_vTable.dumpBlob := @IUtilImpl_dumpBlobDispatcher;
@@ -18222,6 +18634,7 @@ initialization
 	IUtilImpl_vTable.decodeTimeTzEx := @IUtilImpl_decodeTimeTzExDispatcher;
 	IUtilImpl_vTable.decodeTimeStampTzEx := @IUtilImpl_decodeTimeStampTzExDispatcher;
 	IUtilImpl_vTable.executeCreateDatabase2 := @IUtilImpl_executeCreateDatabase2Dispatcher;
+	IUtilImpl_vTable.convert := @IUtilImpl_convertDispatcher;
 
 	IOffsetsCallbackImpl_vTable := OffsetsCallbackVTable.create;
 	IOffsetsCallbackImpl_vTable.version := 2;
@@ -18278,7 +18691,7 @@ initialization
 	ITraceDatabaseConnectionImpl_vTable.getDatabaseName := @ITraceDatabaseConnectionImpl_getDatabaseNameDispatcher;
 
 	ITraceTransactionImpl_vTable := TraceTransactionVTable.create;
-	ITraceTransactionImpl_vTable.version := 3;
+	ITraceTransactionImpl_vTable.version := 4;
 	ITraceTransactionImpl_vTable.getTransactionID := @ITraceTransactionImpl_getTransactionIDDispatcher;
 	ITraceTransactionImpl_vTable.getReadOnly := @ITraceTransactionImpl_getReadOnlyDispatcher;
 	ITraceTransactionImpl_vTable.getWait := @ITraceTransactionImpl_getWaitDispatcher;
@@ -18286,6 +18699,7 @@ initialization
 	ITraceTransactionImpl_vTable.getPerf := @ITraceTransactionImpl_getPerfDispatcher;
 	ITraceTransactionImpl_vTable.getInitialID := @ITraceTransactionImpl_getInitialIDDispatcher;
 	ITraceTransactionImpl_vTable.getPreviousID := @ITraceTransactionImpl_getPreviousIDDispatcher;
+	ITraceTransactionImpl_vTable.getPerfStats := @ITraceTransactionImpl_getPerfStatsDispatcher;
 
 	ITraceParamsImpl_vTable := TraceParamsVTable.create;
 	ITraceParamsImpl_vTable.version := 3;
@@ -18294,14 +18708,16 @@ initialization
 	ITraceParamsImpl_vTable.getTextUTF8 := @ITraceParamsImpl_getTextUTF8Dispatcher;
 
 	ITraceStatementImpl_vTable := TraceStatementVTable.create;
-	ITraceStatementImpl_vTable.version := 2;
+	ITraceStatementImpl_vTable.version := 3;
 	ITraceStatementImpl_vTable.getStmtID := @ITraceStatementImpl_getStmtIDDispatcher;
 	ITraceStatementImpl_vTable.getPerf := @ITraceStatementImpl_getPerfDispatcher;
+	ITraceStatementImpl_vTable.getPerfStats := @ITraceStatementImpl_getPerfStatsDispatcher;
 
 	ITraceSQLStatementImpl_vTable := TraceSQLStatementVTable.create;
-	ITraceSQLStatementImpl_vTable.version := 3;
+	ITraceSQLStatementImpl_vTable.version := 4;
 	ITraceSQLStatementImpl_vTable.getStmtID := @ITraceSQLStatementImpl_getStmtIDDispatcher;
 	ITraceSQLStatementImpl_vTable.getPerf := @ITraceSQLStatementImpl_getPerfDispatcher;
+	ITraceSQLStatementImpl_vTable.getPerfStats := @ITraceSQLStatementImpl_getPerfStatsDispatcher;
 	ITraceSQLStatementImpl_vTable.getText := @ITraceSQLStatementImpl_getTextDispatcher;
 	ITraceSQLStatementImpl_vTable.getPlan := @ITraceSQLStatementImpl_getPlanDispatcher;
 	ITraceSQLStatementImpl_vTable.getInputs := @ITraceSQLStatementImpl_getInputsDispatcher;
@@ -18309,9 +18725,10 @@ initialization
 	ITraceSQLStatementImpl_vTable.getExplainedPlan := @ITraceSQLStatementImpl_getExplainedPlanDispatcher;
 
 	ITraceBLRStatementImpl_vTable := TraceBLRStatementVTable.create;
-	ITraceBLRStatementImpl_vTable.version := 3;
+	ITraceBLRStatementImpl_vTable.version := 4;
 	ITraceBLRStatementImpl_vTable.getStmtID := @ITraceBLRStatementImpl_getStmtIDDispatcher;
 	ITraceBLRStatementImpl_vTable.getPerf := @ITraceBLRStatementImpl_getPerfDispatcher;
+	ITraceBLRStatementImpl_vTable.getPerfStats := @ITraceBLRStatementImpl_getPerfStatsDispatcher;
 	ITraceBLRStatementImpl_vTable.getData := @ITraceBLRStatementImpl_getDataDispatcher;
 	ITraceBLRStatementImpl_vTable.getDataLength := @ITraceBLRStatementImpl_getDataLengthDispatcher;
 	ITraceBLRStatementImpl_vTable.getText := @ITraceBLRStatementImpl_getTextDispatcher;
@@ -18329,16 +18746,17 @@ initialization
 	ITraceContextVariableImpl_vTable.getVarValue := @ITraceContextVariableImpl_getVarValueDispatcher;
 
 	ITraceProcedureImpl_vTable := TraceProcedureVTable.create;
-	ITraceProcedureImpl_vTable.version := 3;
+	ITraceProcedureImpl_vTable.version := 4;
 	ITraceProcedureImpl_vTable.getProcName := @ITraceProcedureImpl_getProcNameDispatcher;
 	ITraceProcedureImpl_vTable.getInputs := @ITraceProcedureImpl_getInputsDispatcher;
 	ITraceProcedureImpl_vTable.getPerf := @ITraceProcedureImpl_getPerfDispatcher;
 	ITraceProcedureImpl_vTable.getStmtID := @ITraceProcedureImpl_getStmtIDDispatcher;
 	ITraceProcedureImpl_vTable.getPlan := @ITraceProcedureImpl_getPlanDispatcher;
 	ITraceProcedureImpl_vTable.getExplainedPlan := @ITraceProcedureImpl_getExplainedPlanDispatcher;
+	ITraceProcedureImpl_vTable.getPerfStats := @ITraceProcedureImpl_getPerfStatsDispatcher;
 
 	ITraceFunctionImpl_vTable := TraceFunctionVTable.create;
-	ITraceFunctionImpl_vTable.version := 3;
+	ITraceFunctionImpl_vTable.version := 4;
 	ITraceFunctionImpl_vTable.getFuncName := @ITraceFunctionImpl_getFuncNameDispatcher;
 	ITraceFunctionImpl_vTable.getInputs := @ITraceFunctionImpl_getInputsDispatcher;
 	ITraceFunctionImpl_vTable.getResult := @ITraceFunctionImpl_getResultDispatcher;
@@ -18346,9 +18764,10 @@ initialization
 	ITraceFunctionImpl_vTable.getStmtID := @ITraceFunctionImpl_getStmtIDDispatcher;
 	ITraceFunctionImpl_vTable.getPlan := @ITraceFunctionImpl_getPlanDispatcher;
 	ITraceFunctionImpl_vTable.getExplainedPlan := @ITraceFunctionImpl_getExplainedPlanDispatcher;
+	ITraceFunctionImpl_vTable.getPerfStats := @ITraceFunctionImpl_getPerfStatsDispatcher;
 
 	ITraceTriggerImpl_vTable := TraceTriggerVTable.create;
-	ITraceTriggerImpl_vTable.version := 3;
+	ITraceTriggerImpl_vTable.version := 4;
 	ITraceTriggerImpl_vTable.getTriggerName := @ITraceTriggerImpl_getTriggerNameDispatcher;
 	ITraceTriggerImpl_vTable.getRelationName := @ITraceTriggerImpl_getRelationNameDispatcher;
 	ITraceTriggerImpl_vTable.getAction := @ITraceTriggerImpl_getActionDispatcher;
@@ -18357,6 +18776,7 @@ initialization
 	ITraceTriggerImpl_vTable.getStmtID := @ITraceTriggerImpl_getStmtIDDispatcher;
 	ITraceTriggerImpl_vTable.getPlan := @ITraceTriggerImpl_getPlanDispatcher;
 	ITraceTriggerImpl_vTable.getExplainedPlan := @ITraceTriggerImpl_getExplainedPlanDispatcher;
+	ITraceTriggerImpl_vTable.getPerfStats := @ITraceTriggerImpl_getPerfStatsDispatcher;
 
 	ITraceServiceConnectionImpl_vTable := TraceServiceConnectionVTable.create;
 	ITraceServiceConnectionImpl_vTable.version := 3;
@@ -18381,12 +18801,13 @@ initialization
 	ITraceStatusVectorImpl_vTable.getText := @ITraceStatusVectorImpl_getTextDispatcher;
 
 	ITraceSweepInfoImpl_vTable := TraceSweepInfoVTable.create;
-	ITraceSweepInfoImpl_vTable.version := 2;
+	ITraceSweepInfoImpl_vTable.version := 3;
 	ITraceSweepInfoImpl_vTable.getOIT := @ITraceSweepInfoImpl_getOITDispatcher;
 	ITraceSweepInfoImpl_vTable.getOST := @ITraceSweepInfoImpl_getOSTDispatcher;
 	ITraceSweepInfoImpl_vTable.getOAT := @ITraceSweepInfoImpl_getOATDispatcher;
 	ITraceSweepInfoImpl_vTable.getNext := @ITraceSweepInfoImpl_getNextDispatcher;
 	ITraceSweepInfoImpl_vTable.getPerf := @ITraceSweepInfoImpl_getPerfDispatcher;
+	ITraceSweepInfoImpl_vTable.getPerfStats := @ITraceSweepInfoImpl_getPerfStatsDispatcher;
 
 	ITraceLogWriterImpl_vTable := TraceLogWriterVTable.create;
 	ITraceLogWriterImpl_vTable.version := 4;
@@ -18570,6 +18991,20 @@ initialization
 	IProfilerStatsImpl_vTable.version := 2;
 	IProfilerStatsImpl_vTable.getElapsedTicks := @IProfilerStatsImpl_getElapsedTicksDispatcher;
 
+	IPerformanceCountersImpl_vTable := PerformanceCountersVTable.create;
+	IPerformanceCountersImpl_vTable.version := 2;
+	IPerformanceCountersImpl_vTable.getObjectCount := @IPerformanceCountersImpl_getObjectCountDispatcher;
+	IPerformanceCountersImpl_vTable.getMaxCounterIndex := @IPerformanceCountersImpl_getMaxCounterIndexDispatcher;
+	IPerformanceCountersImpl_vTable.getObjectId := @IPerformanceCountersImpl_getObjectIdDispatcher;
+	IPerformanceCountersImpl_vTable.getObjectName := @IPerformanceCountersImpl_getObjectNameDispatcher;
+	IPerformanceCountersImpl_vTable.getObjectCounters := @IPerformanceCountersImpl_getObjectCountersDispatcher;
+
+	IPerformanceStatsImpl_vTable := PerformanceStatsVTable.create;
+	IPerformanceStatsImpl_vTable.version := 2;
+	IPerformanceStatsImpl_vTable.getElapsedTime := @IPerformanceStatsImpl_getElapsedTimeDispatcher;
+	IPerformanceStatsImpl_vTable.getFetchedRecords := @IPerformanceStatsImpl_getFetchedRecordsDispatcher;
+	IPerformanceStatsImpl_vTable.getCounters := @IPerformanceStatsImpl_getCountersDispatcher;
+
 finalization
 	IVersionedImpl_vTable.destroy;
 	IReferenceCountedImpl_vTable.destroy;
@@ -18669,5 +19104,7 @@ finalization
 	IProfilerPluginImpl_vTable.destroy;
 	IProfilerSessionImpl_vTable.destroy;
 	IProfilerStatsImpl_vTable.destroy;
+	IPerformanceCountersImpl_vTable.destroy;
+	IPerformanceStatsImpl_vTable.destroy;
 
 end.

@@ -97,7 +97,7 @@ void TimerImpl::reset(unsigned int timeout)
 	m_fireTime = m_expTime;
 
 	// new ITimer timeout, ms
-	SINT64 tout = (m_expTime - curTime) * (1000 * 1000);
+	const SINT64 tout = (m_expTime - curTime) * (1000 * 1000);
 
 	timerCtrl->start(&s, this, tout);
 	check(&s);

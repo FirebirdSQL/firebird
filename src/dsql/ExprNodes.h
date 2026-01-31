@@ -228,8 +228,9 @@ public:
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
-	void setParameterName(dsql_par* /*parameter*/) const override
+	void setParameterName(dsql_par* parameter) const override
 	{
+		parameter->par_name = parameter->par_alias = "BOOL";
 	}
 
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;

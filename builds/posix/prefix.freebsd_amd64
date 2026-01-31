@@ -26,4 +26,4 @@ DEV_FLAGS=-ggdb -DFREEBSD -DAMD64 -pipe -MMD -p -fPIC -Wall -Wno-non-virtual-dto
 # This file must be compiled with SSE4.2 support
 %/CRC32C.o: CXXFLAGS += -msse4
 
-CXXFLAGS := $(CXXFLAGS) -std=c++17
+CXXFLAGS := $(CXXFLAGS) -std=c++20

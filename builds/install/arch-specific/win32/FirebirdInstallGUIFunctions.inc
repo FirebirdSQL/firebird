@@ -346,3 +346,74 @@ begin
   CloseDebugDlg;
 end;
 
+
+procedure CreateAdminUserPage;
+
+begin
+
+  AdminUserPage := CreateInputQueryPage(wpSelectTasks,
+      ExpandConstant( '{cm:CreateSYSDBAPassword}' )
+    , ExpandConstant( '{cm:ClickThroughPWCreation}' ) + #13#10 +
+      ExpandConstant( '{cm:PasswordNote}' ) , '' );
+  AdminUserPage.Add( ExpandConstant( '{cm:SYSDBAPassword}' ), True);
+  AdminUserPage.Add( ExpandConstant( '{cm:RetypeSYSDBAPassword}' ), True);
+
+  AdminUserPage.Values[0] := SYSDBAPassword;
+  AdminUserPage.Values[1] := SYSDBAPassword;
+
+end;
+
+
+procedure DonateButtonOnClick(Sender: TObject);
+var
+  ErrorCode: Integer;
+begin
+  ShellExecAsOriginalUser('open', 'https://firebirdsql.org/en/donate/', '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
+end;
+
+
+procedure CreateDonorPage;
+var
+  DonorText: AnsiString;
+
+begin
+
+// NOTE - The rtf must be pasted as a single line in the custom_messages.inc for the translated language. When removomg the EOLs pay attention that \par is always followed by a space.
+(*
+{\rtf1\ansi\ansicpg1252\deff0\nouicompat\deflang1033{\fonttbl{\f0\fnil\fcharset0 Calibri;}}{\colortbl ;\red0\green0\blue255;}{\*\generator Riched20 10.0.17763}\viewkind4\uc1\pard\sa200\sl276\slmult1\qj\f0\fs24\lang9 Firebird has empowered users worldwide with its reliable and powerful database capabilities, thanks to years of dedicated development and community collaboration.\par \pard\li568\ri568\sa200\sl240\slmult1\qj\par  \pard\sa200\sl276\slmult1\qj To ensure Firebird\rquote s continued growth and advancement, we invite you to {{\field{\*\fldinst{HYPERLINK "https://firebirdsql.org/en/donate"}}{\fldrslt{\ul\cf1 make a donation}}}}\f0\fs24   through the Firebird Foundation. Your generous contributions help fund ongoing development, maintain critical infrastructure, and expand the features you rely on. Additionally, our affordable subscriptions offer exclusive benefits designed to enhance your Firebird experience.\par \par Every contribution, big or small, plays a vital role in keeping Firebird innovative and robust for everyone.\par \par Visit our {{\field{\*\fldinst{HYPERLINK https://firebirdsql.org/en/firebird-foundation/ }}{\fldrslt{website\ul0\cf0}}}}\f0\fs24  to explore how you can contribute to this mission and help ensure Firebird\rquote s bright future. Thank you for being a valued part of the Firebird community!\par };
+*)
+
+  DonorPage :=  CreateCustomPage( wpInfoAfter, 'Support Firebird Development', '');
+// For testing place it after the welcome page
+//  DonorPage :=  CreateCustomPage( wpWelcome, 'Support Firebird Development', '');
+
+  DonorText := ExpandConstant('{cm:DonorPage}');
+
+  RichEditViewer := TRichEditViewer.Create(DonorPage);
+  RichEditViewer.Width := DonorPage.SurfaceWidth;
+  RichEditViewer.Height := DonorPage.SurfaceHeight;
+  RichEditViewer.Anchors := [akLeft, akTop, akRight, akBottom];
+  RichEditViewer.BevelKind := bkNone;
+  RichEditViewer.BorderStyle := bsNone;
+  RichEditViewer.Parent := DonorPage.Surface;
+  RichEditViewer.ScrollBars := ssNone;
+  RichEditViewer.UseRichEdit := True;
+  RichEditViewer.RTFText := DonorText;
+  RichEditViewer.ReadOnly := True;
+
+  DonateButton := TNewButton.Create(WizardForm);
+  DonateButton.Left := 10;
+  DonateButton.Top := WizardForm.CancelButton.Top;
+  // NOTE - If adding new translations be sure to check that this button is wide enough
+  // for the translation of 'Donate Now'.
+  DonateButton.Width := WizardForm.CancelButton.Width + 40;
+  DonateButton.Height := WizardForm.CancelButton.Height;
+  DonateButton.Anchors := [akLeft, akBottom];
+  DonateButton.Caption := ExpandConstant('{cm:DonateNow}');
+  DonateButton.OnClick := @DonateButtonOnClick;
+  DonateButton.Parent := WizardForm;
+  DonateButton.Visible := False;
+
+end;
+
+

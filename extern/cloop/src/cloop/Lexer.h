@@ -27,47 +27,44 @@
 #include <stdio.h>
 
 
-#define TOKEN(c)	static_cast< ::Token::Type>(c)
-
-
 struct Token
 {
-	enum Type
+	enum class Type
 	{
-		TYPE_EOF = 256,
-		TYPE_IDENTIFIER,
+		END_OF_FILE = 256,
+		IDENTIFIER,
 		// punctuation
-		TYPE_DOUBLE_COLON,
+		DOUBLE_COLON,
 		// literals
-		TYPE_BOOLEAN_LITERAL,
-		TYPE_INT_LITERAL,
+		BOOLEAN_LITERAL,
+		INT_LITERAL,
 		// keywords
-		TYPE_CONST,
-		TYPE_EXCEPTION,
-		TYPE_INTERFACE,
-		TYPE_NOT_IMPLEMENTED,
-		TYPE_NOT_IMPLEMENTED_ACTION,
-		TYPE_STUB,
-		TYPE_STRUCT,
-		TYPE_TYPEDEF,
-		TYPE_VERSION,
-		TYPE_ON_ERROR,
-		TYPE_IF,
-		TYPE_THEN,
-		TYPE_ELSE,
-		TYPE_ENDIF,
-		TYPE_CALL,
-		TYPE_DEFAULT_ACTION,
+		CONST,
+		EXCEPTION,
+		INTERFACE,
+		NOT_IMPLEMENTED,
+		NOT_IMPLEMENTED_ACTION,
+		STUB,
+		STRUCT,
+		TYPEDEF,
+		VERSION,
+		ON_ERROR,
+		IF,
+		THEN,
+		ELSE,
+		ENDIF,
+		CALL,
+		DEFAULT_ACTION,
 		// types
-		TYPE_VOID,
-		TYPE_BOOLEAN,
-		TYPE_INT,
-		TYPE_INT64,
-		TYPE_INTPTR,
-		TYPE_STRING,
-		TYPE_UCHAR,
-		TYPE_UINT,
-		TYPE_UINT64
+		VOID,
+		BOOLEAN,
+		INT,
+		INT64,
+		INTPTR,
+		STRING,
+		UCHAR,
+		UINT,
+		UINT64
 	};
 
 	Type type;
@@ -77,10 +74,10 @@ struct Token
 };
 
 
-class Lexer
+class Lexer final
 {
 private:
-	struct Char
+	struct Char final
 	{
 		int c;
 		unsigned line;
@@ -88,7 +85,7 @@ private:
 	};
 
 public:
-	Lexer(const std::string& filename);
+	explicit Lexer(const std::string& filename);
 	~Lexer();
 
 public:
@@ -105,9 +102,16 @@ public:
 
 private:
 	FILE* in;
-	unsigned line, column;
+	unsigned line = 1;
+	unsigned column = 1;
 	std::stack<Token> tokens;
 };
 
 
-#endif	// CLOOP_LEXER_H
+inline constexpr Token::Type TOKEN(char c)
+{
+	return static_cast<Token::Type>(c);
+}
+
+
+#endif  // CLOOP_LEXER_H

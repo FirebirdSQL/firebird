@@ -155,7 +155,6 @@ enum irq_type_t
 	irq_l_procedure_pkg_class,	// lookup security class of a packaged procedure
 	irq_l_fun_id,			// lookup function by its ID
 	irq_l_fun_name,			// lookup function by its name
-	irq_f_security,			// verify security for function
 	irq_l_arg_fld,			// lookup argument's domain
 	irq_func_ret_fld,		// lookup argument's domain
 	irq_fun_validate,		// function blr validate

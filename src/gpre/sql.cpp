@@ -325,6 +325,11 @@ act* SQL_action(const TEXT* base_directory)
 	case KW_WHENEVER:
 		action = act_whenever();
 		break;
+
+	default:
+		// error was raised in previous switch
+		fb_assert(false);
+		break;
 	}
 
 	MSC_match(KW_END_EXEC);
@@ -1481,7 +1486,7 @@ static act* act_connect()
 	act* action = MSC_action(0, ACT_ready);
 	action->act_whenever = gen_whenever();
 	bool need_handle = false;
-	const USHORT default_buffers = 0; // useless?
+	constexpr USHORT default_buffers = 0; // useless?
 
 	MSC_match(KW_TO);
 
@@ -2250,7 +2255,6 @@ static act* act_declare()
 	{
 	case KW_FILTER:
 		return (act_declare_filter());
-		break;
 
 	case KW_EXTERNAL:
 		PAR_get_token();
@@ -2258,6 +2262,9 @@ static act* act_declare()
 			return (act_declare_udf());
 
 		CPR_s_error("FUNCTION");
+		break;
+
+	default:
 		break;
 	}
 
@@ -5590,6 +5597,9 @@ static void pair( gpre_nod* expr, gpre_nod* field_expr)
 	case nod_field:
 	case nod_literal:
 		return;
+
+	default:
+		break;
 	}
 
 	gpre_nod** ptr = expr->nod_arg;
@@ -5794,7 +5804,7 @@ static dyn* par_dynamic_cursor()
 		else
 			gpreGlob.token_global.tok_keyword = KW_none;
 	}
-	if (symbol = MSC_find_symbol(gpreGlob.token_global.tok_symbol, SYM_dyn_cursor))
+	if ((symbol = MSC_find_symbol(gpreGlob.token_global.tok_symbol, SYM_dyn_cursor)))
 	{
 		PAR_get_token();
 		return (dyn*) symbol->sym_object;
@@ -6776,9 +6786,9 @@ static void to_upcase(const TEXT* p, TEXT* q, int target_size)
 // with the internal buffer. We should provide the correct size if we provide
 // the output variable to put the result in it.
 
-void SQL_resolve_identifier( const TEXT* err_mesg, TEXT* str_in, int in_size)
+void SQL_resolve_identifier(const TEXT* err_mesg, TEXT* str_in, int in_size)
 {
-	static TEXT internal_buffer[MAX_CURSOR_SIZE];
+	TEXT internal_buffer[MAX_CURSOR_SIZE];
 	TEXT* str;
 	int len;
 	if (str_in)
@@ -6795,6 +6805,7 @@ void SQL_resolve_identifier( const TEXT* err_mesg, TEXT* str_in, int in_size)
 		else if (in_size > len + 1)
 		    PAR_error("Provide your own buffer for sizes bigger than 64.");
 	}
+	*str = '\0';
 
 	TEXT* const tk_string = gpreGlob.token_global.tok_string;
 
@@ -6803,7 +6814,7 @@ void SQL_resolve_identifier( const TEXT* err_mesg, TEXT* str_in, int in_size)
 	case 2:
 		if (gpreGlob.token_global.tok_type == tok_dblquoted)
 			PAR_error("Ambiguous use of double quotes in dialect 2");
-			// fall into
+		[[fallthrough]];
 	case 1:
 		if (gpreGlob.token_global.tok_type != tok_ident)
 			CPR_s_error(err_mesg);

@@ -56,10 +56,11 @@
 #include "../common/os/os_utils.h"
 #include "firebird/impl/sqlda_pub.h"
 #include "../common/classes/ClumpletReader.h"
-#include "../common/StatusArg.h"
 #include "../common/TimeZoneUtil.h"
 #include "../common/config/config.h"
 #include "../common/ThreadStart.h"
+
+#include <utility>
 
 #ifdef WIN_NT
 #include <direct.h>
@@ -87,10 +88,10 @@
 namespace fb_utils
 {
 
-bool implicit_name(const char* name, const char* prefix, int prefix_len);
+bool implicit_name(const char* name, const char* prefix, int prefix_len) noexcept;
 
 
-char* copy_terminate(char* dest, const char* src, size_t bufsize)
+char* copy_terminate(char* dest, const char* src, size_t bufsize) noexcept
 {
 /**************************************
  *
@@ -102,7 +103,7 @@ char* copy_terminate(char* dest, const char* src, size_t bufsize)
  *	Do the same as strncpy but ensure the null terminator is written.
  *
  **************************************/
-	if (!bufsize) // Was it a joke?
+	if (!bufsize)
 		return dest;
 
 	--bufsize;
@@ -111,8 +112,10 @@ char* copy_terminate(char* dest, const char* src, size_t bufsize)
 	return dest;
 }
 
+// blank character, ASCII(32)
+static inline constexpr char SPACE = '\x20';
 
-char* exact_name(char* const name)
+char* exact_name(char* const name) noexcept
 {
 /**************************************
  *
@@ -135,14 +138,14 @@ char* exact_name(char* const name)
 	    ++p;
 	// Now, let's go back
 	--p;
-	while (p >= name && *p == '\x20') // blank character, ASCII(32)
+	while (p >= name && *p == SPACE)
 		--p;
 	*(p + 1) = '\0';
 	return name;
 }
 
 
-char* exact_name_limit(char* const name, size_t bufsize)
+char* exact_name_limit(char* const name, size_t bufsize) noexcept
 {
 /**************************************
  *
@@ -168,7 +171,7 @@ char* exact_name_limit(char* const name, size_t bufsize)
 	    ++p;
 	// Now, let's go back
 	--p;
-	while (p >= name && *p == '\x20') // blank character, ASCII(32)
+	while (p >= name && *p == SPACE)
 		--p;
 	*(p + 1) = '\0';
 	return name;
@@ -180,7 +183,7 @@ char* exact_name_limit(char* const name, size_t bufsize)
 // *****************************
 // Determines if a domain or index is of the form RDB$<n[...n]>[<spaces>]
 // This may be true for implicit domains and for unique and non-unique indices except PKs.
-bool implicit_domain(const char* domain_name)
+bool implicit_domain(const char* domain_name) noexcept
 {
 	return implicit_name(domain_name, IMPLICIT_DOMAIN_PREFIX, IMPLICIT_DOMAIN_PREFIX_LEN);
 }
@@ -190,7 +193,7 @@ bool implicit_domain(const char* domain_name)
 // i m p l i c i t _ i n t e g r i t y
 // ***********************************
 // Determines if a table integrity constraint domain is of the form INTEG_<n[...n]>[<spaces>]
-bool implicit_integrity(const char* integ_name)
+bool implicit_integrity(const char* integ_name) noexcept
 {
 	return implicit_name(integ_name, IMPLICIT_INTEGRITY_PREFIX, IMPLICIT_INTEGRITY_PREFIX_LEN);
 }
@@ -200,7 +203,7 @@ bool implicit_integrity(const char* integ_name)
 // i m p l i c i t _ p k
 // ***********************************
 // Determines if an index is of the form RDB$PRIMARY<n[...n]>[<spaces>]
-bool implicit_pk(const char* pk_name)
+bool implicit_pk(const char* pk_name) noexcept
 {
 	return implicit_name(pk_name, IMPLICIT_PK_PREFIX, IMPLICIT_PK_PREFIX_LEN);
 }
@@ -211,7 +214,7 @@ bool implicit_pk(const char* pk_name)
 // ***********************************
 // Determines if a name is of the form prefix<n[...n]>[<spaces>]
 // where prefix has a fixed known length.
-bool implicit_name(const char* name, const char* prefix, int prefix_len)
+bool implicit_name(const char* name, const char* prefix, int prefix_len) noexcept
 {
 	if (strncmp(name, prefix, prefix_len) != 0)
 		return false;
@@ -230,7 +233,7 @@ bool implicit_name(const char* name, const char* prefix, int prefix_len)
 }
 
 
-int name_length(const TEXT* const name)
+int name_length(const TEXT* const name) noexcept
 {
 /**************************************
  *
@@ -247,7 +250,7 @@ int name_length(const TEXT* const name)
 	const TEXT* q = name - 1;
 	for (const TEXT* p = name; *p; p++)
 	{
-		if (*p != ' ') {
+		if (*p != SPACE) {
 			q = p;
 		}
 	}
@@ -260,11 +263,11 @@ int name_length(const TEXT* const name)
 // n a m e _ l e n g t h _ l i m i t
 // *********************************
 // Compute length without trailing blanks. The second parameter is maximum length.
-int name_length_limit(const TEXT* const name, size_t bufsize)
+int name_length_limit(const TEXT* const name, size_t bufsize) noexcept
 {
 	const char* p = name + bufsize - 1;
 	// Now, let's go back
-	while (p >= name && *p == ' ') // blank character, ASCII(32)
+	while (p >= name && *p == SPACE)
 		--p;
 	return (p + 1) - name;
 }
@@ -282,7 +285,7 @@ bool readenv(const char* env_name, Firebird::string& env_value)
 	if (rc)
 	{
 		env_value.reserve(rc - 1);
-		DWORD rc2 = GetEnvironmentVariable(env_name, env_value.begin(), rc);
+		const DWORD rc2 = GetEnvironmentVariable(env_name, env_value.begin(), rc);
 		if (rc2 < rc && rc2 != 0)
 		{
 			env_value.recalculate_length();
@@ -345,23 +348,13 @@ bool setenv(const char* name, const char* value, bool overwrite)
 // s n p r i n t f
 // ***************
 // Provide a single place to deal with vsnprintf and error detection.
-int snprintf(char* buffer, size_t count, const char* format...)
+int snprintf(char* buffer, size_t count, const char* format...) noexcept
 {
 	va_list args;
 	va_start(args, format);
-	const int rc = VSNPRINTF(buffer, count, format, args);
+	const int rc = vsnprintf(buffer, count, format, args);
 	buffer[count - 1] = 0;
 	va_end(args);
-#if defined(DEV_BUILD) && !defined(HAVE_VSNPRINTF)
-	// We don't have the safe functions, then check if we overflowed the buffer.
-	// I would prefer to make this functionality available in prod build, too.
-	// If the docs are right, the null terminator is not counted => rc < count.
-#if defined(fb_assert_continue)
-	fb_assert_continue(rc >= 0 && rc < count);
-#else
-	fb_assert(rc >= 0 && rc < count);
-#endif
-#endif
 	return rc;
 }
 
@@ -375,7 +368,7 @@ int snprintf(char* buffer, size_t count, const char* format...)
 // However, there are several usages through fb_utils::get_passwd(char* arg);
 char* cleanup_passwd(char* arg)
 {
-	if (! arg)
+	if (!arg)
 	{
 		return arg;
 	}
@@ -399,7 +392,7 @@ char* cleanup_passwd(char* arg)
 // With sufficient privileges, we can add 'Global\' prefix for
 // names of all kernel objects we use.
 
-bool prefix_kernel_object_name(char* name, size_t bufsize)
+bool prefix_kernel_object_name(char* name, size_t bufsize) noexcept
 {
 	static bool bGlobalPrefix = false;
 	static bool bInitDone = false;
@@ -415,7 +408,7 @@ bool prefix_kernel_object_name(char* name, size_t bufsize)
 	// recommended in firebird.conf) additional prefix is not added
 	if (bGlobalPrefix && !strchr(name, '\\'))
 	{
-		const char* prefix = "Global\\";
+		constexpr const char* prefix = "Global\\";
 		const size_t len_prefix = strlen(prefix);
 		const size_t len_name = strlen(name) + 1;
 
@@ -431,7 +424,7 @@ bool prefix_kernel_object_name(char* name, size_t bufsize)
 	return true;
 }
 
-bool isGlobalKernelPrefix()
+bool isGlobalKernelPrefix() noexcept
 {
 	// The strategy of this function is as follows: use Global\ kernel namespace
 	// for engine objects if we can.
@@ -499,7 +492,7 @@ public:
 	}
 
 	// Add namespace prefix to the name, returns true on success.
-	bool addPrefix(char* name, size_t bufsize)
+	bool addPrefix(char* name, size_t bufsize) noexcept
 	{
 		if (!isReady())
 			return false;
@@ -518,16 +511,16 @@ public:
 		return true;
 	}
 
-	bool isReady() const
+	bool isReady() const noexcept
 	{
 		return (m_hNamespace != NULL) || (m_hTestEvent != NULL);
 	}
 
 private:
-	const char* sPrivateNameSpace = "FirebirdCommon";
-	const char* sBoundaryName = "FirebirdCommonBoundary";
+	const char* const sPrivateNameSpace = "FirebirdCommon";
+	const char* const sBoundaryName = "FirebirdCommonBoundary";
 
-	void raiseError(const char* apiRoutine)
+	[[noreturn]] void raiseError(const char* apiRoutine)
 	{
 		(Firebird::Arg::Gds(isc_sys_request) << apiRoutine << Firebird::Arg::OsError()).raise();
 	}
@@ -557,7 +550,7 @@ private:
 			LocalFree(strSid);
 		}
 		else
-			strncpy(strSecDesc, "D:(A;;GA;;;WD)", sizeof(strSecDesc));
+			copy_terminate(strSecDesc, "D:(A;;GA;;;WD)", sizeof(strSecDesc));
 
 		if (!ConvertStringSecurityDescriptorToSecurityDescriptor(strSecDesc, SDDL_REVISION_1,
 			&sa.lpSecurityDescriptor, NULL))
@@ -667,7 +660,7 @@ Firebird::PathName get_process_name()
 	return buffer;
 }
 
-SLONG genUniqueId()
+SLONG genUniqueId() noexcept
 {
 	static Firebird::AtomicCounter cnt;
 	return ++cnt;
@@ -677,11 +670,11 @@ void getCwd(Firebird::PathName& pn)
 {
 	char* buffer = pn.getBuffer(MAXPATHLEN);
 #if defined(WIN_NT)
-	_getcwd(buffer, MAXPATHLEN);
+	std::ignore = _getcwd(buffer, MAXPATHLEN);
 #elif defined(HAVE_GETCWD)
-	FB_UNUSED(getcwd(buffer, MAXPATHLEN));
+	std::ignore = getcwd(buffer, MAXPATHLEN);
 #else
-	FB_UNUSED(getwd(buffer));
+	std::ignore = getwd(buffer);
 #endif
 	pn.recalculate_length();
 }
@@ -744,8 +737,8 @@ namespace {
 			}
 		}
 
-		FILE* getStdioFile() { return f; }
-		bool operator!() { return !f; }
+		FILE* getStdioFile() noexcept { return f; }
+		bool operator!() noexcept { return !f; }
 
 	private:
 		FILE* f;
@@ -1166,7 +1159,7 @@ void copyStatus(Firebird::CheckStatusWrapper* to, const Firebird::IStatus* from)
 {
 	to->init();
 
-	unsigned flags = from->getState();
+	const unsigned flags = from->getState();
 	if (flags & Firebird::IStatus::STATE_ERRORS)
 		to->setErrors(from->getErrors());
 	if (flags & Firebird::IStatus::STATE_WARNINGS)
@@ -1404,7 +1397,7 @@ bool isRunningCheck(const UCHAR* items, unsigned int length)
 	return state == S_RUN;
 }
 
-static inline char conv_bin2ascii(ULONG l)
+static inline char conv_bin2ascii(ULONG l) noexcept
 {
 	return "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"[l & 0x3f];
 }
@@ -1445,14 +1438,14 @@ void random64(Firebird::string& randomValue, FB_SIZE_T length)
 	randomValue.resize(length, '$');
 }
 
-void logAndDie(const char* text)
+[[noreturn]] void logAndDie(const char* text)
 {
 	gds__log(text);
 	Firebird::Syslog::Record(Firebird::Syslog::Error, text);
 	abort();
 }
 
-UCHAR sqlTypeToDscType(SSHORT sqlType)
+UCHAR sqlTypeToDscType(SSHORT sqlType) noexcept
 {
 	switch (sqlType)
 	{
@@ -1553,7 +1546,7 @@ const ISC_STATUS* nextCode(const ISC_STATUS* v) noexcept
 	return v;
 }
 
-bool containsErrorCode(const ISC_STATUS* v, ISC_STATUS code)
+bool containsErrorCode(const ISC_STATUS* v, ISC_STATUS code) noexcept
 {
 	for (; v[0] == isc_arg_gds; v = nextCode(v))
 	{
@@ -1635,7 +1628,7 @@ bool isBpbSegmented(unsigned parLength, const unsigned char* par)
 	if (!bpb.find(isc_bpb_type))
 		return true;
 
-	int type = bpb.getInt();
+	const int type = bpb.getInt();
 
 	return type & isc_bpb_type_stream ? false : true;
 }

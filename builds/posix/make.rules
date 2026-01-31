@@ -71,7 +71,8 @@ WCXXFLAGS = $(WFLAGS) $(PLUSPLUS_FLAGS) $(PLATFORM_PLUSPLUS_FLAGS) $(CXXFLAGS) $
 WLDFLAGS = $(LDFLAGS) $(AC_LDFLAGS)
 
 ifneq ($(PLATFORM),DARWIN)
-WLDFLAGS += -static-libstdc++
+PLATFORM_LDFLAGS="-static-libstdc++"
+WLDFLAGS += $(PLATFORM_LDFLAGS)
 endif
 
 # Here we have definitions for using the preprocessor.

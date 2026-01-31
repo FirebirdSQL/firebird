@@ -490,9 +490,9 @@ bool Decimal64::isInf() const
 	case DEC_CLASS_NEG_INF:
 	case DEC_CLASS_POS_INF:
 		return true;
+	default:
+		return false;
 	}
-
-	return false;
 }
 
 bool Decimal64::isNan() const
@@ -502,9 +502,9 @@ bool Decimal64::isNan() const
     case DEC_CLASS_SNAN:
     case DEC_CLASS_QNAN:
 		return true;
+	default:
+		return false;
 	}
-
-	return false;
 }
 
 int Decimal64::sign() const
@@ -833,9 +833,9 @@ bool Decimal128::isInf() const
 	case DEC_CLASS_NEG_INF:
 	case DEC_CLASS_POS_INF:
 		return true;
+	default:
+		return false;
 	}
-
-	return false;
 }
 
 bool Decimal128::isNan() const
@@ -845,9 +845,9 @@ bool Decimal128::isNan() const
     case DEC_CLASS_SNAN:
     case DEC_CLASS_QNAN:
 		return true;
+	default:
+		return false;
 	}
-
-	return false;
 }
 
 int Decimal128::sign() const

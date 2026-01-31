@@ -58,12 +58,12 @@ namespace Jrd
 		static int blockingAst(void*);
 
 	public:
-		int getObjectType() const override
+		int getObjectType() const noexcept override
 		{
 			return obj_udf;
 		}
 
-		SLONG getSclType() const override
+		SLONG getSclType() const noexcept override
 		{
 			return obj_functions;
 		}

@@ -74,10 +74,9 @@ public:
 	{
 	}
 
-private:
 	// copying is prohibited
-	WorkerContextHolder(const WorkerContextHolder&);
-	WorkerContextHolder& operator=(const WorkerContextHolder&);
+	WorkerContextHolder(const WorkerContextHolder&) = delete;
+	WorkerContextHolder& operator=(const WorkerContextHolder&) = delete;
 };
 
 

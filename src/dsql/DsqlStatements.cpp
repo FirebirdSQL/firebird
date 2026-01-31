@@ -149,8 +149,6 @@ void DsqlDmlStatement::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, n
 
 	GEN_statement(scratch, node);
 
-	unsigned messageNumber = 0;
-
 	// have the access method compile the statement
 
 #ifdef DSQL_DEBUG

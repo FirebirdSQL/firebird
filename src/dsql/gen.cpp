@@ -173,7 +173,7 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 	class ParamCmp
 	{
 	public:
-		static int greaterThan(const Jrd::dsql_par* p1, const Jrd::dsql_par* p2)
+		static int greaterThan(const Jrd::dsql_par* p1, const Jrd::dsql_par* p2) noexcept
 		{
 			return p1->par_index > p2->par_index;
 		}
@@ -684,6 +684,9 @@ void GEN_sort(DsqlCompilerScratch* dsqlScratch, UCHAR blrVerb, ValueListNode* li
 					break;
 				case OrderNode::NULLS_LAST:
 					dsqlScratch->appendUChar(blr_nullslast);
+					break;
+				case OrderNode::NULLS_DEFAULT:
+					// Nothing to do for default placement
 					break;
 			}
 

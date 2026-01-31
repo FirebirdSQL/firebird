@@ -5,7 +5,7 @@
 
 
 stopServerIfRunning() {
-    checkString=`ps -ef | egrep "(fbserver|fbguard)" |grep -v grep`
+    checkString=`ps -ef | grep -E "(fbserver|fbguard)" |grep -v grep`
 
     if [ ! -z "$checkString" ] 
       then
@@ -16,7 +16,7 @@ stopServerIfRunning() {
       fi
     fi
 
-    checkString=`ps -ef | egrep "(fbserver|fbguard)" |grep -v grep`
+    checkString=`ps -ef | grep -E "(fbserver|fbguard)" |grep -v grep`
     if [ ! -z "$checkString" ] 
       then
 	  # careful shutdown of server failed :)

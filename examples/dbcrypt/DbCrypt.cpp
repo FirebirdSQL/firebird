@@ -119,7 +119,7 @@ public:
 
 private:
 	IPluginConfig* config;
-	char savedKeyName[32];
+	char savedKeyName[32]{};
 	ISC_UCHAR key;
 
 	std::atomic_int refCounter;
@@ -218,7 +218,7 @@ void DbCrypt::setKey(CheckStatusWrapper* status, unsigned int length, IKeyHolder
 			def->release();
 			if (confEntry)
 			{
-				v = confEntry->getIntValue();
+				v = static_cast<char>(confEntry->getIntValue());
 				confEntry->release();
 				if (v)
 				{

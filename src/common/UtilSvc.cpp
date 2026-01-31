@@ -91,7 +91,7 @@ public:
 	{
 		va_list arglist;
 		va_start(arglist, format);
-		int rc = ::vfprintf((usvcDataMode || err) ? stderr : stdout, format, arglist);
+		const int rc = ::vfprintf((usvcDataMode || err) ? stderr : stdout, format, arglist);
 		va_end(arglist);
 
 		if (rc < 0)

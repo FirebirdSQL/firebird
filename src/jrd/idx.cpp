@@ -573,7 +573,6 @@ bool IndexCreateTask::handler(WorkItem& _item)
 	const bool isPrimary = (idx->idx_flags & idx_primary);
 	const bool isForeign = (idx->idx_flags & idx_foreign);
 	const UCHAR pad = isDescending ? -1 : 0;
-	bool key_is_null = false;
 
 	primary.rpb_number.compose(dbb->dbb_max_records, dbb->dbb_dp_per_pp, 0, 0, item->m_ppSequence);
 	primary.rpb_number.decrement();
@@ -847,7 +846,6 @@ void IDX_create_index(thread_db* tdbb,
  **************************************/
 	SET_TDBB(tdbb);
 	Database* dbb = tdbb->getDatabase();
-	Jrd::Attachment* attachment = tdbb->getAttachment();
 
 	if (relation->rel_file)
 	{
@@ -865,7 +863,6 @@ void IDX_create_index(thread_db* tdbb,
 	fb_assert(transaction);
 
 	const bool isDescending = (idx->idx_flags & idx_descending);
-	const bool isPrimary = (idx->idx_flags & idx_primary);
 	const bool isForeign = (idx->idx_flags & idx_foreign);
 
 	// hvlad: in ODS11 empty string and NULL values can have the same binary
@@ -1687,8 +1684,6 @@ static idx_e check_duplicates(thread_db* tdbb,
  *	a unique index or a foreign key.
  *
  **************************************/
-	DSC desc1, desc2;
-
 	SET_TDBB(tdbb);
 
 	idx_e result = idx_e_ok;

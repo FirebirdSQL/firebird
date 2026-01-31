@@ -18,8 +18,8 @@
  * Adriano dos Santos Fernandes - refactored from pass1.cpp, gen.cpp, cmp.cpp, par.cpp and exe.cpp
  */
 
-#include <algorithm>
 #include "firebird.h"
+#include <algorithm>
 #include "firebird/impl/blr.h"
 #include "../common/TimeZoneUtil.h"
 #include "../common/classes/BaseStream.h"
@@ -697,6 +697,7 @@ const StmtNode* BlockNode::execute(thread_db* tdbb, Request* request, ExeState* 
 					transaction->releaseSavepoint(tdbb);
 				}
 			}
+			return parentStmt;
 
 		default:
 			return parentStmt;
@@ -908,7 +909,7 @@ const StmtNode* CompoundStmtNode::execute(thread_db* tdbb, Request* request, Exe
 	{
 		case Request::req_evaluate:
 			impure->sta_state = 0;
-			// fall into
+			[[fallthrough]];
 
 		case Request::req_return:
 		case Request::req_sync:
@@ -918,7 +919,7 @@ const StmtNode* CompoundStmtNode::execute(thread_db* tdbb, Request* request, Exe
 				return statements[impure->sta_state++];
 			}
 			request->req_operation = Request::req_return;
-			// fall into
+			return parentStmt;
 
 		default:
 			return parentStmt;
@@ -1003,7 +1004,7 @@ DmlNode* CursorStmtNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratc
 		case blr_cursor_fetch_scroll:
 			node->scrollOp = csb->csb_blr_reader.getByte();
 			node->scrollExpr = PAR_parse_value(tdbb, csb);
-			// fall into
+			[[fallthrough]];
 
 		case blr_cursor_fetch:
 			csb->csb_g_flags |= csb_reuse_context;
@@ -1190,8 +1191,7 @@ const StmtNode* CursorStmtNode::execute(thread_db* tdbb, Request* request, ExeSt
 						fb_assert(cursorOp == blr_cursor_fetch_scroll);
 
 						const dsc* desc = EVL_expr(tdbb, request, scrollExpr);
-						const bool unknown = !desc || (request->req_flags & req_null);
-						const SINT64 offset = unknown ? 0 : MOV_get_int64(tdbb, desc, 0);
+						const SINT64 offset = desc ? MOV_get_int64(tdbb, desc, 0) : 0;
 
 						switch (scrollOp)
 						{
@@ -1208,10 +1208,10 @@ const StmtNode* CursorStmtNode::execute(thread_db* tdbb, Request* request, ExeSt
 								fetched = cursor->fetchLast(tdbb);
 								break;
 							case blr_scroll_absolute:
-								fetched = unknown ? false : cursor->fetchAbsolute(tdbb, offset);
+								fetched = desc ? cursor->fetchAbsolute(tdbb, offset) : false;
 								break;
 							case blr_scroll_relative:
-								fetched = unknown ? false : cursor->fetchRelative(tdbb, offset);
+								fetched = desc ? cursor->fetchRelative(tdbb, offset) : false;
 								break;
 							default:
 								fb_assert(false);
@@ -1226,6 +1226,7 @@ const StmtNode* CursorStmtNode::execute(thread_db* tdbb, Request* request, ExeSt
 					}
 
 					request->req_operation = Request::req_return;
+					return parentStmt;
 
 				default:
 					return parentStmt;
@@ -2388,6 +2389,9 @@ string EraseNode::internalPrint(NodePrinter& printer) const
 // RETURNING specified.
 void EraseNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
+	if (dsqlScratch->recordKeyMessage)
+		GEN_port(dsqlScratch, dsqlScratch->recordKeyMessage);
+
 	std::optional<USHORT> tableNumber;
 
 	const bool skipLocked = dsqlRse && dsqlRse->hasSkipLocked();
@@ -2602,6 +2606,8 @@ EraseNode* EraseNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	csb->csb_rpt[stream].csb_flags |= csb_update;
 
+	impureOffset = csb->allocImpure<impure_state>();
+
 	return this;
 }
 
@@ -2662,6 +2668,8 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 	{
 		case Request::req_evaluate:
 		{
+			impure->sta_state = 0;
+
 			if (!(marks & MARK_AVOID_COUNTERS))
 				request->req_records_affected.bumpModified(false);
 
@@ -4545,7 +4553,7 @@ void ExecStatementNode::getString(thread_db* tdbb, Request* request, const Value
 	int len = 0;
 	const dsc* dsc = node ? EVL_expr(tdbb, request, node) : NULL;
 
-	if (dsc && !(request->req_flags & req_null))
+	if (dsc)
 	{
 		const Jrd::Attachment* att = tdbb->getAttachment();
 		len = MOV_make_string2(tdbb, dsc, (useAttCS ? att->att_charset : dsc->getTextType()),
@@ -4630,7 +4638,7 @@ const StmtNode* IfNode::execute(thread_db* tdbb, Request* request, ExeState* /*e
 {
 	if (request->req_operation == Request::req_evaluate)
 	{
-		if (condition->execute(tdbb, request))
+		if (condition->execute(tdbb, request).asBool())
 		{
 			request->req_operation = Request::req_evaluate;
 			return trueAction;
@@ -4955,7 +4963,7 @@ const StmtNode* InitVariableNode::execute(thread_db* tdbb, Request* request, Exe
 			{
 				dsc* value = EVL_expr(tdbb, request, fieldInfo.defaultValue);
 
-				if (value && !(request->req_flags & req_null))
+				if (value)
 				{
 					toDesc->dsc_flags &= ~DSC_null;
 					MOV_move(tdbb, value, toDesc);
@@ -5481,7 +5489,7 @@ void ExceptionNode::setError(thread_db* tdbb) const
 		// Evaluate exception message and convert it to string.
 		const dsc* const desc = EVL_expr(tdbb, request, messageExpr);
 
-		if (desc && !(request->req_flags & req_null))
+		if (desc)
 		{
 			MoveBuffer temp;
 			UCHAR* string = NULL;
@@ -5552,7 +5560,7 @@ void ExceptionNode::setError(thread_db* tdbb) const
 				{
 					const dsc* value = EVL_expr(tdbb, request, *parameter);
 
-					if (!value || (request->req_flags & req_null))
+					if (!value)
 						paramsStr.push(NULL_STRING_MARK);
 					else
 					{
@@ -5854,13 +5862,13 @@ const StmtNode* ForNode::execute(thread_db* tdbb, Request* request, ExeState* /*
 			if (cursor->isUpdateCounters())
 				request->req_records_affected.clear();
 
-			// fall into
+			[[fallthrough]];
 
 		case Request::req_return:
 			if (stall)
 				return stall;
 
-			// fall into
+			[[fallthrough]];
 
 		case Request::req_sync:
 			{
@@ -5907,7 +5915,7 @@ const StmtNode* ForNode::execute(thread_db* tdbb, Request* request, ExeState* /*
 				}
 			}
 
-			// fall into
+			[[fallthrough]];
 
 		default:
 		{
@@ -6182,7 +6190,7 @@ const StmtNode* ForRangeNode::execute(thread_db* tdbb, Request* request, ExeStat
 		case Request::req_evaluate:
 		{
 			const auto initialDesc = EVL_expr(tdbb, request, initialExpr);
-			EXE_assignment(tdbb, variable, initialDesc, !initialDesc, nullptr, nullptr);
+			EXE_assignment(tdbb, variable, initialDesc, nullptr, nullptr);
 
 			if (!initialDesc)
 			{
@@ -6224,9 +6232,8 @@ const StmtNode* ForRangeNode::execute(thread_db* tdbb, Request* request, ExeStat
 				request->req_operation = Request::req_return;
 				return parentStmt;
 			}
-
-			[[fallthrough]];
 		}
+		[[fallthrough]];
 
 		case Request::req_return:
 		case Request::req_sync:
@@ -6252,7 +6259,7 @@ const StmtNode* ForRangeNode::execute(thread_db* tdbb, Request* request, ExeStat
 					incDecScale,
 					incDecFlags);
 
-				EXE_assignment(tdbb, variable, &nextValue.vlu_desc, false, nullptr, nullptr);
+				EXE_assignment(tdbb, variable, &nextValue.vlu_desc, nullptr, nullptr);
 			}
 
 			const auto comparison = MOV_compare(tdbb, variableDesc, &impure->finalValue.vlu_desc);
@@ -6344,6 +6351,7 @@ const StmtNode* HandlerNode::execute(thread_db* /*tdbb*/, Request* request, ExeS
 		case Request::req_unwind:
 			if (!request->req_label)
 				request->req_operation = Request::req_return;
+			return parentStmt;
 
 		default:
 			return parentStmt;
@@ -6411,7 +6419,7 @@ const StmtNode* LabelNode::execute(thread_db* /*tdbb*/, Request* request, ExeSta
 				request->req_flags &= ~req_leave;
 				request->req_operation = Request::req_return;
 			}
-			// fall into
+			return parentStmt;
 
 		default:
 			return parentStmt;
@@ -6519,7 +6527,6 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	// EXECUTE BLOCK needs "ports", which creates DSQL messages using the client charset.
 	// Sub routine doesn't need ports and should generate BLR as declared in its metadata.
 	const bool isSubRoutine = dsqlScratch->flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE;
-	const auto& variables = isSubRoutine ? dsqlScratch->outputVariables : dsqlScratch->variables;
 
 	Array<dsql_var*> declaredVariables;
 
@@ -6700,7 +6707,7 @@ const StmtNode* LoopNode::execute(thread_db* /*tdbb*/, Request* request, ExeStat
 				request->req_operation = Request::req_evaluate;
 				return statement;
 			}
-			// fall into
+			return parentStmt;
 		}
 
 		default:
@@ -8218,9 +8225,9 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 
 			if (impure->sta_state == 0 && forNode && forNode->isWriteLockMode(request))
 				request->req_operation = Request::req_return;
-				// fall thru
 			else
 				break;
+			[[fallthrough]];
 
 		case Request::req_return:
 			if (impure->sta_state == 1)
@@ -8334,6 +8341,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 				orgRpb->rpb_record = newRpb->rpb_record;
 				newRpb->rpb_record = orgRecord;
 			}
+			return parentStmt;
 
 		default:
 			return parentStmt;
@@ -8668,7 +8676,7 @@ const StmtNode* ReceiveNode::execute(thread_db* /*tdbb*/, Request* request, ExeS
 		case Request::req_return:
 			if (!(request->req_batch_mode && batchFlag))
 				break;
-			// fall into
+			[[fallthrough]];
 
 		case Request::req_evaluate:
 			request->req_operation = Request::req_receive;
@@ -9376,7 +9384,7 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 					return statement2;
 				}
 			}
-			// fall into
+			return parentStmt;
 
 		default:
 			return parentStmt;
@@ -10281,7 +10289,7 @@ void SetDecFloatTrapsNode::execute(thread_db* tdbb, DsqlRequest* /*request*/, jr
 
 SessionManagementNode* SetBindNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	static const USHORT NON_FIELD_MASK = FLD_legacy | FLD_native;
+	static constexpr USHORT NON_FIELD_MASK = FLD_legacy | FLD_native;
 
 	from->resolve(dsqlScratch);
 	if (!(to->flags & NON_FIELD_MASK))
@@ -11237,7 +11245,6 @@ static RseNode* dsqlPassCursorReference(DsqlCompilerScratch* dsqlScratch, const 
 {
 	DEV_BLKCHK(dsqlScratch, dsql_type_req);
 
-	thread_db* tdbb = JRD_get_thread_data();
 	// Use scratch pool because none of created object is stored anywhere
 	MemoryPool& pool = dsqlScratch->getPool();
 
@@ -11363,6 +11370,9 @@ static VariableNode* dsqlPassHiddenVariable(DsqlCompilerScratch* dsqlScratch, Va
 		case ExprNode::TYPE_RECORD_KEY:
 		case ExprNode::TYPE_VARIABLE:
 			return NULL;
+		default:
+			// create temporary value below
+			break;
 	}
 
 	VariableNode* varNode = FB_NEW_POOL(*tdbb->getDefaultPool()) VariableNode(*tdbb->getDefaultPool());
@@ -11687,6 +11697,9 @@ static void dsqlSetParameterName(DsqlCompilerScratch* dsqlScratch, ExprNode* exp
 			parameter->par_rel_name = relation->rel_name;
 			break;
 		}
+
+		default:
+			break;
 	}
 }
 
@@ -11853,7 +11866,6 @@ static StmtNode* pass1ExpandView(thread_db* tdbb, CompilerScratch* csb, StreamTy
 	jrd_rel* relation = csb->csb_rpt[orgStream].csb_relation;
 	vec<jrd_fld*>* fields = relation->rel_fields;
 
-	dsc desc;
 	USHORT id = 0, newId = 0;
 	vec<jrd_fld*>::iterator ptr = fields->begin();
 
@@ -12183,17 +12195,17 @@ static void validateExpressions(thread_db* tdbb, const Array<ValidateInfo>& vali
 	{
 		Request* request = tdbb->getRequest();
 
-		if (!i->boolean->execute(tdbb, request) && !(request->req_flags & req_null))
+		if (i->boolean->execute(tdbb, request) == TriState(false))
 		{
 			// Validation error -- report result
 			const char* value;
 			VaryStr<TEMP_STR_LENGTH> temp;
 
 			const dsc* desc = EVL_expr(tdbb, request, i->value);
-			const USHORT length = (desc && !(request->req_flags & req_null)) ?
+			const USHORT length = desc ?
 				MOV_make_string(tdbb, desc, ttype_dynamic, &value, &temp, sizeof(temp) - 1) : 0;
 
-			if (!desc || (request->req_flags & req_null))
+			if (!desc)
 				value = NULL_STRING_MARK;
 			else if (!length)
 				value = "";

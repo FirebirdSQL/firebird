@@ -37,12 +37,12 @@ namespace Jrd
 		Compressor(thread_db* tdbb, ULONG length, const UCHAR* data);
 		Compressor(MemoryPool& pool, bool allowLongRuns, bool allowUnpacked, ULONG length, const UCHAR* data);
 
-		ULONG getPackedLength() const
+		ULONG getPackedLength() const noexcept
 		{
 			return m_length;
 		}
 
-		bool isPacked() const
+		bool isPacked() const noexcept
 		{
 			return m_runs.hasData();
 		}
@@ -69,28 +69,28 @@ namespace Jrd
 	class Difference
 	{
 		// Max length of generated differences string between two records
-		static const unsigned MAX_DIFFERENCES = 1024;
+		static constexpr unsigned MAX_DIFFERENCES = 1024;
 
 	public:
-		UCHAR* getData()
+		UCHAR* getData() noexcept
 		{
 			return m_differences;
 		}
 
-		const UCHAR* getData() const
+		const UCHAR* getData() const noexcept
 		{
 			return m_differences;
 		}
 
-		ULONG getCapacity() const
+		ULONG getCapacity() const noexcept
 		{
 			return MAX_DIFFERENCES;
 		}
 
 		ULONG apply(ULONG diffLength, ULONG outLength, UCHAR* output);
 		ULONG make(ULONG length1, const UCHAR* rec1,
-				   ULONG length2, const UCHAR* rec2);
-		ULONG makeNoDiff(ULONG length);
+				   ULONG length2, const UCHAR* rec2) noexcept;
+		ULONG makeNoDiff(ULONG length) noexcept;
 
 	private:
 		UCHAR m_differences[MAX_DIFFERENCES];

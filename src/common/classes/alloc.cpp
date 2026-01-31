@@ -164,14 +164,13 @@ FailedBlock* failedList = NULL;
 
 void corrupt(const char* text) noexcept
 {
-	bool bcAbort = Firebird::Config::getBugcheckAbort();
+	const bool bcAbort = Firebird::Config::getBugcheckAbort();
 	Firebird::Syslog::Record(bcAbort ? Firebird::Syslog::Error : Firebird::Syslog::Warning, text);
 	if (bcAbort)
 		abort();
 }
 
 Firebird::Mutex* cache_mutex = NULL;
-int dev_zero_fd = 0;
 
 #if defined(WIN_NT)
 size_t get_page_size()
@@ -210,7 +209,7 @@ namespace SemiDoubleLink
 	// push/pop/remove members with very efficient back-link to the head pointer somewhere
 
 	template <class T>
-	void push(T** where, T* e)
+	void push(T** where, T* e) noexcept
 	{
 		// set element `e' pointers
 		e->prev = where;
@@ -225,7 +224,7 @@ namespace SemiDoubleLink
 	}
 
 	template <class T>
-	void remove(T* e)
+	void remove(T* e) noexcept
 	{
 		fb_assert(e);
 		fb_assert(e->prev);
@@ -239,7 +238,7 @@ namespace SemiDoubleLink
 	}
 
 	template <class T>
-	T* pop(T* e)
+	T* pop(T* e) noexcept
 	{
 		if (e)
 			remove(e);
@@ -285,7 +284,7 @@ public:
 
 	union
 	{
-		MemPool*	pool;
+		MemPool*	pool = nullptr;
 		MemBlock*	next;
 	};
 
@@ -294,8 +293,8 @@ private:
 
 public:
 #ifdef DEBUG_GDS_ALLOC
-	INT32		lineNumber;
-	const char	*fileName;
+	INT32		lineNumber = -1;
+	const char	*fileName = nullptr;
 #elif (SIZEOF_VOID_P == 4)
 	FB_UINT64 dummyAlign;
 #endif
@@ -303,17 +302,17 @@ public:
 	char mbk_valgrind_redzone[VALGRIND_REDZONE];
 #endif
 
-	MemHeader(size_t size)
-		: pool(NULL), hdrLength(size)
+	MemHeader(size_t size) noexcept
+		: hdrLength(size)
 	{
 		fb_assert(size < MAX_USHORT);
 		fb_assert(!(size & MEM_MASK));
 	}
 
-	MemHeader(size_t size, MemMediumHunk* hunk)
-		: pool(NULL), hdrLength(size | ((((UCHAR*)this) - ((UCHAR*)hunk)) << OFFSET_SHIFT))
+	MemHeader(size_t size, MemMediumHunk* hunk) noexcept
+		: hdrLength(size | ((((UCHAR*)this) - ((UCHAR*)hunk)) << OFFSET_SHIFT))
 	{
-		off_t fromTheHunk = ((UCHAR*)this) - ((UCHAR*)hunk);	// dup !!!
+		const off_t fromTheHunk = ((UCHAR*)this) - ((UCHAR*)hunk);	// dup !!!
 
 		fb_assert(size < MAX_USHORT);
 		fb_assert(fromTheHunk < MAX_USHORT);
@@ -321,18 +320,18 @@ public:
 		fb_assert(!(size & MEM_MASK));
 	}
 
-	MemHeader(HugeBlock, size_t size)
+	MemHeader(HugeBlock, size_t size) noexcept
 		: hdrLength(size | MEM_HUGE)
 	{
 		fb_assert(!(size & MEM_MASK));
 	}
 
-	size_t getSize()
+	size_t getSize() noexcept
 	{
 		return hdrLength & MEM_HUGE ? hdrLength & (~MEM_MASK) : hdrLength & SIZE_MASK;
 	}
 
-	MemMediumHunk* getHunk()
+	MemMediumHunk* getHunk() noexcept
 	{
 		fb_assert(!(hdrLength & MEM_HUGE));
 		off_t offset = static_cast<off_t>(hdrLength >> OFFSET_SHIFT);
@@ -340,13 +339,13 @@ public:
 		return (MemMediumHunk*)(((UCHAR*)this) - offset);
 	}
 
-	void setRedirect()
+	void setRedirect() noexcept
 	{
 		fb_assert(!redirected());
 		hdrLength |= MEM_REDIRECT;
 	}
 
-	void resetRedirect(MemPool* parent)
+	void resetRedirect(MemPool* parent) noexcept
 	{
 		valgrindInternal();
 
@@ -355,52 +354,52 @@ public:
 		pool = parent;
 	}
 
-	bool redirected() const
+	bool redirected() const noexcept
 	{
 		return hdrLength & MEM_REDIRECT;
 	}
 
-	void setExtent()
+	void setExtent() noexcept
 	{
 		fb_assert(!isExtent());
 		hdrLength |= MEM_EXTENT;
 	}
 
-	void resetExtent()
+	void resetExtent() noexcept
 	{
 		hdrLength &= ~MEM_EXTENT;
 	}
 
-	bool isExtent() const
+	bool isExtent() const noexcept
 	{
 		return hdrLength & MEM_EXTENT;
 	}
 
 #ifdef DELAYED_FREE
-	void setActive()
+	void setActive() noexcept
 	{
 		fb_assert(!isActive());
 		hdrLength |= MEM_ACTIVE;
 	}
 
-	void resetActive()
+	void resetActive() noexcept
 	{
 		fb_assert(isActive());
 		hdrLength &= ~MEM_ACTIVE;
 	}
 
-	bool isActive() const
+	bool isActive() const noexcept
 	{
 		return hdrLength & MEM_ACTIVE;
 	}
 #else
-	bool isActive() const
+	bool isActive() const noexcept
 	{
 		return true;
 	}
 #endif
 
-	void assertBig()
+	void assertBig() noexcept
 	{
 		fb_assert(hdrLength & MEM_HUGE);
 	}
@@ -436,13 +435,13 @@ public:
 	}
 #endif
 
-	void validate(MemPool* p, StatInt& vUse) noexcept
+	void validate(const MemPool* p, StatInt& vUse) noexcept
 	{
 		if (p == pool && !isExtent())
 			vUse += getSize();
 	}
 
-	void valgrindInternal();
+	void valgrindInternal() noexcept;
 };
 
 class MemBlock : public MemHeader
@@ -451,23 +450,23 @@ public:
 	union
 	{
 		UCHAR		body;
-		MemBlock**		prev;
+		MemBlock**	prev = nullptr;
 	};
 
-	MemBlock(size_t size, MemMediumHunk* hunk)
+	MemBlock(size_t size, MemMediumHunk* hunk) noexcept
 		: MemHeader(size, hunk)
 	{ }
 
-	MemBlock(HugeBlock, size_t size)
+	MemBlock(HugeBlock, size_t size) noexcept
 		: MemHeader(HUGE_BLOCK, size)
 	{ }
 
-	MemBlock(size_t size)
+	MemBlock(size_t size) noexcept
 		: MemHeader(size)
 	{ }
 };
 
-inline void MemHeader::valgrindInternal()
+inline void MemHeader::valgrindInternal() noexcept
 {
 #ifdef USE_VALGRIND
 	VALGRIND_MAKE_MEM_DEFINED(this, sizeof(MemBlock));
@@ -479,19 +478,19 @@ template <typename H>
 class MemBaseHunk
 {
 public:
-	H*				next;
+	H*				next = nullptr;
 	UCHAR*			memory;
 	size_t			length;
 	size_t			spaceRemaining;
 
 protected:
-	MemBaseHunk(size_t spaceAllocated, size_t hunkSize)
-		: next(NULL), length(spaceAllocated)
+	MemBaseHunk(size_t spaceAllocated, size_t hunkSize) noexcept
+		: length(spaceAllocated)
 	{
 		init(spaceAllocated, hunkSize);
 	}
 
-	void newBlock(size_t size)
+	void newBlock(size_t size) noexcept
 	{
 		fb_assert(size <= spaceRemaining);
 
@@ -500,7 +499,7 @@ protected:
 	}
 
 public:
-	void validate(MemPool* pool, size_t hdr, StatInt& vMap, StatInt& vUse) noexcept
+	void validate(const MemPool* pool, size_t hdr, StatInt& vMap, StatInt& vUse) noexcept
 	{
 		if (length >= DEFAULT_ALLOCATION)
 		{
@@ -519,7 +518,7 @@ public:
 
 #ifdef MEM_DEBUG
 	void print_memory(UCHAR* m, FILE* file, MemPool* pool, bool used_only,
-		const char* filter_path, const size_t filter_len)
+		const char* filter_path, const size_t filter_len) noexcept
 	{
 		while (m < memory)
 		{
@@ -531,7 +530,7 @@ public:
 #endif
 
 private:
-	void init(size_t spaceAllocated, size_t hunkSize)
+	void init(size_t spaceAllocated, size_t hunkSize) noexcept
 	{
 		memory = ((UCHAR*) this) + hunkSize;
 		spaceRemaining = spaceAllocated - hunkSize;
@@ -548,7 +547,7 @@ public:
 		*top = this;
 	}
 
-	MemBlock* newBlock(size_t size)
+	MemBlock* newBlock(size_t size) noexcept
 	{
 		MemBlock* rc = new(memory) MemBlock(size);
 
@@ -557,7 +556,7 @@ public:
 		return rc;
 	}
 
-	void incrUsage()
+	void incrUsage() noexcept
 	{ }
 
 #ifdef MEM_DEBUG
@@ -594,23 +593,23 @@ public:
 		SemiDoubleLink::push(top, this);
 	}
 
-	void incrUsage()
+	void incrUsage() noexcept
 	{
 		++useCount;
 	}
 
-	bool decrUsage()
+	bool decrUsage() noexcept
 	{
 		fb_assert(useCount > 0);
 		return --useCount == 0;
 	}
 
-	bool isFree()
+	bool isFree() const noexcept
 	{
 		return useCount == 0;
 	}
 
-	MemBlock* newBlock(size_t size)
+	MemBlock* newBlock(size_t size) noexcept
 	{
 		MemBlock* rc = new(memory) MemBlock(size, this);
 
@@ -679,7 +678,7 @@ public:
 		return MEM_ALIGN(sizeof(MemBigHunk));
 	}
 
-	void validate(MemPool* pool, StatInt& vMap, StatInt& vUse)
+	void validate(const MemPool* pool, StatInt& vMap, StatInt& vUse)
 	{
 		SemiDoubleLink::validate(this);
 		block->assertBig();
@@ -825,7 +824,7 @@ public:
 		return slot;
 	}
 
-	static unsigned getSize(unsigned slot)
+	static unsigned getSize(unsigned slot) noexcept
 	{
 		fb_assert(slot < TINY_SLOTS);
 		return lowLimits[slot];
@@ -1408,7 +1407,7 @@ public:
 		return slot;
 	}
 
-	static unsigned getSize(unsigned slot)
+	static unsigned getSize(unsigned slot) noexcept
 	{
 		fb_assert(slot < MEDIUM_SLOTS);
 		return mediumLimits[slot];
@@ -1424,7 +1423,7 @@ public:
 	typedef MemSmallHunk Hunk;
 	static const unsigned MEM_OVERHEAD = offsetof(MemBlock, body);
 
-	static MemBlock* getElement(MemBlock** from)
+	static MemBlock* getElement(MemBlock** from) noexcept
 	{
 		MemBlock* rc = *from;
 		if (rc)
@@ -1432,16 +1431,16 @@ public:
 		return rc;
 	}
 
-	static void putElement(MemBlock** to, MemBlock* block)
+	static void putElement(MemBlock** to, MemBlock* block) noexcept
 	{
 		block->next = *to;
 		*to = block;
 	}
 
-	void decrUsage(MemSmallHunk*, MemPool*)
+	void decrUsage(MemSmallHunk*, MemPool*) noexcept
 	{ }
 
-	static void validate(MemBlock* block, unsigned length)
+	static void validate(MemBlock* block, unsigned length) noexcept
 	{
 		for (; block; block = block->next)
 		{
@@ -1458,13 +1457,12 @@ class DoubleLinkedList
 {
 public:
 	typedef MemMediumHunk Hunk;
-	static const unsigned MEM_OVERHEAD = offsetof(MemBlock, body);
+	static constexpr unsigned MEM_OVERHEAD = offsetof(MemBlock, body);
 
-	DoubleLinkedList()
-		: candidateForFree(NULL)
+	DoubleLinkedList() noexcept
 	{ }
 
-	static MemBlock* getElement(MemBlock** from)
+	static MemBlock* getElement(MemBlock** from) noexcept
 	{
 		MemBlock* rc = SemiDoubleLink::pop(*from);
 		if (rc)
@@ -1490,7 +1488,7 @@ public:
 	void decrUsage(MemMediumHunk* hunk, MemPool* pool);
 
 private:
-	MemMediumHunk* candidateForFree;
+	MemMediumHunk* candidateForFree = nullptr;
 };
 
 
@@ -1504,10 +1502,8 @@ private:
 	typedef typename ListBuilder::Hunk Extent;
 
 public:
-	FreeObjects()
-		: currentExtent(NULL)
+	FreeObjects() noexcept
 	{
-		memset(freeObjects, 0, sizeof(freeObjects));
 	}
 
 	~FreeObjects();
@@ -1549,7 +1545,7 @@ public:
 
 	bool deallocateBlock(FreeObjPtr blk)
 	{
-		size_t size = blk->getSize();
+		const size_t size = blk->getSize();
 
 		if (size > Limits::TOP_LIMIT)
 			return false;		// Not our block
@@ -1568,7 +1564,7 @@ public:
 	}
 #endif
 
-	void validate(MemPool* pool, StatInt& vMap, StatInt& vUse)
+	void validate(const MemPool* pool, StatInt& vMap, StatInt& vUse)
 	{
 		for (unsigned int slot = 0; slot < Limits::TOTAL_ELEMENTS; ++slot)
 			ListBuilder::validate(freeObjects[slot], Limits::getSize(slot));
@@ -1578,9 +1574,9 @@ public:
 	}
 
 private:
-	FreeObjPtr freeObjects[Limits::TOTAL_ELEMENTS];
+	FreeObjPtr freeObjects[Limits::TOTAL_ELEMENTS]{};
 	ListBuilder listBuilder;
-	Extent* currentExtent;
+	Extent* currentExtent = nullptr;
 
 	MemBlock* newBlock(MemPool* pool, unsigned slot);
 };
@@ -1637,7 +1633,7 @@ private:
 	class Validator
 	{
 	public:
-		Validator(MemPool* p) :
+		Validator(MemPool* p) noexcept :
 			m_pool(p)
 		{
 			validate();
@@ -1670,7 +1666,7 @@ private:
 	class Validator
 	{
 	public:
-		Validator(MemPool*) {}
+		Validator(MemPool*) noexcept {}
 	};
 #endif // VALIDATE_POOL
 
@@ -1704,7 +1700,7 @@ private:
 #endif
 
 public:
-	static void deletePool(MemPool* pool);
+	static void deletePool(MemPool* pool) noexcept;
 	static void globalFree(void* block) noexcept;
 
 	static void deallocate(void* block) noexcept;
@@ -1855,7 +1851,7 @@ void DoubleLinkedList::decrUsage(MemMediumHunk* hunk, MemPool* pool)
 template <class ListBuilder, class Limits>
 MemBlock* FreeObjects<ListBuilder, Limits>::newBlock(MemPool* pool, unsigned slot)
 {
-	size_t size = Limits::getSize(slot);
+	const size_t size = Limits::getSize(slot);
 
 	if (currentExtent && currentExtent->spaceRemaining < size)
 	{
@@ -1867,7 +1863,7 @@ MemBlock* FreeObjects<ListBuilder, Limits>::newBlock(MemPool* pool, unsigned slo
 			if (sl1 == ~0u)
 				break;
 
-			unsigned size1 = Limits::getSize(sl1);
+			const unsigned size1 = Limits::getSize(sl1);
 			MemBlock* b = currentExtent->newBlock(size1);
 
 			listBuilder.putElement(&freeObjects[sl1], b);
@@ -2197,7 +2193,7 @@ MemBlock* MemPool::allocateInternal(size_t from, size_t& length, bool flagRedire
 	 *  "length" of a free big block is the length of MemHeader plus body*/
 
 	fb_assert(from == 0);
-	size_t hunkLength = MemBigHunk::hdrSize() + offsetof(MemBlock, body) + length;
+	const size_t hunkLength = MemBigHunk::hdrSize() + offsetof(MemBlock, body) + length;
 
 	// Allocate the new hunk
 
@@ -2205,11 +2201,7 @@ MemBlock* MemPool::allocateInternal(size_t from, size_t& length, bool flagRedire
 	return hunk->block;
 }
 
-MemBlock* MemPool::allocateRange(size_t from, size_t& size
-#ifdef DEBUG_GDS_ALLOC
-	, const char* fileName, int line
-#endif
-)
+MemBlock* MemPool::allocateRange(size_t from, size_t& size ALLOC_PARAMS)
 {
 	size_t length = from ? size : ROUNDUP(size + VALGRIND_REDZONE, roundingSize) + GUARD_BYTES;
 	MemBlock* memory = allocateInternal(from, length, true);
@@ -2221,7 +2213,7 @@ MemBlock* MemPool::allocateRange(size_t from, size_t& size
 #endif
 
 #ifdef DEBUG_GDS_ALLOC
-	memory->fileName = fileName;
+	memory->fileName = file;
 	memory->lineNumber = line;
 #endif
 
@@ -2350,7 +2342,7 @@ void MemPool::releaseBlock(MemBlock* block, bool decrUsage) noexcept
 
 	--blocksActive;
 
-	Validator vld(decrUsage ? this : NULL);
+	const Validator vld(decrUsage ? this : NULL);
 
 	if (decrUsage)
 		decrement_usage(length);
@@ -2610,7 +2602,7 @@ void MemPool::deallocate(void* block) noexcept
 	releaseMemory(block, false);
 }
 
-void MemPool::deletePool(MemPool* pool)
+void MemPool::deletePool(MemPool* pool) noexcept
 {
 	delete pool;
 }
@@ -2629,7 +2621,7 @@ bool MemPool::validate(char* buf, FB_SIZE_T size)
 	// validate blocks redirected to parent
 	for (FB_SIZE_T n = 0; n < parentRedirected.getCount(); ++n)
 	{
-		MemBlock* b = parentRedirected[n];
+		const MemBlock* b = parentRedirected[n];
 		if (!b->isExtent())
 			vUse += parentRedirected[n]->getSize();
 	}
@@ -2660,7 +2652,7 @@ void MemPool::print_contents(const char* filename, unsigned flags, const char* f
 // This member function can't be const because there are calls to the mutex.
 void MemPool::print_contents(FILE* file, unsigned flags, const char* filter_path) noexcept
 {
-	bool used_only = flags & MemoryPool::PRINT_USED_ONLY;
+	const bool used_only = flags & MemoryPool::PRINT_USED_ONLY;
 
 	MutexLockGuard guard(mutex, "MemPool::print_contents");
 
@@ -2940,7 +2932,7 @@ public:
 		MemoryPool::externalMemoryManager = nullptr;
 	}
 
-	inline Objects& objects()
+	inline Objects& objects() noexcept
 	{
 		return *(Objects*) objectsBuffer;
 	}
@@ -2962,7 +2954,7 @@ void initExternalMemoryPool()
 
 void MemoryPool::globalFree(void* block) noexcept
 {
-	auto pool = MemPool::getPoolFromPointer(block);
+	const auto* pool = MemPool::getPoolFromPointer(block);
 
 	MemPool::globalFree(block);
 
@@ -2986,7 +2978,7 @@ void MemoryPool::globalFree(void* block) noexcept
 
 
 #if defined(DEV_BUILD)
-void AutoStorage::ProbeStack() const
+void AutoStorage::ProbeStack() const noexcept
 {
 	//
 	// AutoStorage() default constructor can be used only
@@ -2995,10 +2987,10 @@ void AutoStorage::ProbeStack() const
 	//	1. One and only one stack is used for all kind of variables.
 	//	2. Objects don't grow > 128K.
 	//
-	char probeVar = '\0';
+	const char probeVar = '\0';
 	const char* myStack = &probeVar;
 	const char* thisLocation = (const char*) this;
-	ptrdiff_t distance = thisLocation - myStack;
+	const ptrdiff_t distance = thisLocation - myStack;
 	fb_assert(absVal(distance) < 128 * 1024);
 }
 #endif

@@ -39,14 +39,21 @@ NestedLoopJoin::NestedLoopJoin(CompilerScratch* csb, JoinType joinType,
 							   FB_SIZE_T count, RecordSource* const* args)
 	: Join(csb, count, joinType)
 {
+	fb_assert(joinType != JoinType::OUTER);
+
 	m_impure = csb->allocImpure<Impure>();
 	m_cardinality = MINIMUM_CARDINALITY;
 
 	for (FB_SIZE_T i = 0; i < count; i++)
 	{
 		m_args.add(args[i]);
-		m_cardinality *= args[i]->getCardinality();
+
+		if (i == 0 || joinType == JoinType::INNER)
+			m_cardinality *= args[i]->getCardinality();
 	}
+
+	if (joinType != JoinType::INNER)
+		m_cardinality *= REDUCE_SELECTIVITY_FACTOR_ANY;
 }
 
 NestedLoopJoin::NestedLoopJoin(CompilerScratch* csb,
@@ -57,6 +64,7 @@ NestedLoopJoin::NestedLoopJoin(CompilerScratch* csb,
 	fb_assert(outer && inner);
 
 	m_impure = csb->allocImpure<Impure>();
+
 	m_cardinality = outer->getCardinality() * inner->getCardinality();
 
 	m_args.add(outer);
@@ -197,7 +205,7 @@ bool NestedLoopJoin::internalGetRecord(thread_db* tdbb) const
 				if (!outer->getRecord(tdbb))
 					return false;
 
-				if (m_boolean && !m_boolean->execute(tdbb, request))
+				if (m_boolean && m_boolean->execute(tdbb, request) != TriState(true))
 				{
 					// The boolean pertaining to the left sub-stream is false
 					// so just join sub-stream to a null valued right sub-stream

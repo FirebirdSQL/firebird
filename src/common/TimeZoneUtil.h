@@ -64,14 +64,14 @@ private:
 	static InitInstance<PathName> tzDataPath;
 
 public:
-	static UDate timeStampToIcuDate(ISC_TIMESTAMP ts)
+	static constexpr UDate timeStampToIcuDate(ISC_TIMESTAMP ts) noexcept
 	{
 		return (TimeStamp::timeStampToTicks(ts) -
 			((TimeStamp::UNIX_DATE - TimeStamp::MIN_DATE) * TimeStamp::ISC_TICKS_PER_DAY)) /
 			(ISC_TIME_SECONDS_PRECISION / 1000);
 	}
 
-	static ISC_TIMESTAMP icuDateToTimeStamp(UDate icuDate)
+	static constexpr ISC_TIMESTAMP icuDateToTimeStamp(UDate icuDate) noexcept
 	{
 		return TimeStamp::ticksToTimeStamp(icuDate * (ISC_TIME_SECONDS_PRECISION / 1000) +
 			((TimeStamp::UNIX_DATE - TimeStamp::MIN_DATE) * TimeStamp::ISC_TICKS_PER_DAY));
@@ -92,7 +92,7 @@ public:
 	static unsigned format(char* buffer, size_t bufferSize, USHORT timeZone,
 		bool fallback = false, SLONG offset = NO_OFFSET);
 
-	static bool isValidOffset(int sign, unsigned tzh, unsigned tzm);
+	static bool isValidOffset(int sign, unsigned tzh, unsigned tzm) noexcept;
 
 	static void extractOffset(const ISC_TIMESTAMP_TZ& timeStampTz, int* sign, unsigned* tzh, unsigned* tzm);
 	static void extractOffset(const ISC_TIMESTAMP_TZ& timeStampTz, SSHORT* offset);
@@ -146,12 +146,12 @@ public:
 class IcuCalendarWrapper
 {
 public:
-	IcuCalendarWrapper(UCalendar* aWrapped, std::atomic<UCalendar*>* aCachePtr)
+	IcuCalendarWrapper(UCalendar* aWrapped, std::atomic<UCalendar*>* aCachePtr) noexcept
 		: wrapped(aWrapped),
 		  cachePtr(aCachePtr)
 	{}
 
-	IcuCalendarWrapper(IcuCalendarWrapper&& o)
+	IcuCalendarWrapper(IcuCalendarWrapper&& o) noexcept
 		: wrapped(o.wrapped),
 		  cachePtr(o.cachePtr)
 	{

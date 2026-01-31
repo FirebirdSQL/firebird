@@ -38,12 +38,12 @@ static int hash(const SCHAR*);
 static bool scompare(const SCHAR*, const SCHAR*);
 static bool scompare2(const SCHAR*, const SCHAR*);
 
-const FB_SIZE_T HASH_SIZE = 211;
+constexpr FB_SIZE_T HASH_SIZE = 211;
 
 static gpre_sym* hash_table[HASH_SIZE];
 static gpre_sym* key_symbols;
 
-static struct word
+static constexpr struct word
 {
 	const char* keyword;
 	kwwords_t id;
@@ -234,7 +234,7 @@ static int hash(const SCHAR* string)
 
 	SLONG value = 0;
 
-	while (c = *string++)
+	while ((c = *string++))
 		value = (value << 1) + UPPER(c);
 
 	return ((value >= 0) ? value : -value) % HASH_SIZE;
@@ -260,7 +260,7 @@ static bool scompare2(const SCHAR* string1, const SCHAR* string2)
 {
 	SCHAR c1;
 
-	while (c1 = *string1++)
+	while ((c1 = *string1++))
 	{
 		SCHAR c2;
 		if (!(c2 = *string2++) || (UPPER(c1) != UPPER(c2)))

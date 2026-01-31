@@ -232,7 +232,7 @@ Sort* SortedStream::init(thread_db* tdbb) const
 			if (item->node)
 			{
 				from = EVL_expr(tdbb, request, item->node);
-				if (request->req_flags & req_null)
+				if (!from)
 					flag = true;
 			}
 			else
@@ -487,7 +487,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 		if (!DPM_get(tdbb, &temp, LCK_read))
 			Arg::Gds(isc_no_cur_rec).raise();
 
-		tdbb->bumpRelStats(RuntimeStatistics::RECORD_RPT_READS, relation->rel_id);
+		tdbb->bumpStats(RecordStatType::RPT_READS, relation->rel_id);
 
 		if (VIO_chase_record_version(tdbb, &temp, transaction, tdbb->getDefaultPool(), false, false))
 		{
@@ -591,8 +591,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 		// We have to find the original record version, sigh.
 		// Scan version chain backwards until it's done.
 
-		RuntimeStatistics::Accumulator backversions(tdbb, relation,
-													RuntimeStatistics::RECORD_BACKVERSION_READS);
+		RuntimeStatistics::Accumulator backversions(tdbb, relation, RecordStatType::BACK_READS);
 
 		while (temp.rpb_transaction_nr != orgTraNum)
 		{

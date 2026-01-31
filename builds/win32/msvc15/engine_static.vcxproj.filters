@@ -710,9 +710,6 @@
     <ClInclude Include="..\..\..\src\jrd\blp.h">
       <Filter>Header files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\jrd\blr.h">
-      <Filter>Header files</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\btn.h">
       <Filter>Header files</Filter>
     </ClInclude>
@@ -1138,6 +1135,15 @@
       <Filter>Replication\Headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\validation.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\include\firebird\impl\blr.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\os\pio.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\os\pio_proto.h">
       <Filter>Header files</Filter>
     </ClInclude>
   </ItemGroup>
