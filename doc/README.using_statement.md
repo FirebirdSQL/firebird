@@ -99,6 +99,28 @@ do insert into generic_table (col_a, col_b) values (:val, :val);
 -- Client binds: [100]
 ```
 
+### 3. EXECUTE STATEMENT with Named Parameters
+
+```sql
+execute block returns (ri integer, rs varchar(20))
+as
+begin
+    execute statement ('using(i int = ?, s varchar(20) = ?) do select :i, :s from rdb$database') (s := '2', i := 1) into ri, rs;
+    suspend;
+end
+```
+
+### 4. EXECUTE STATEMENT with Unnamed Parameters
+
+```sql
+execute block returns (ri integer, rs varchar(20))
+as
+begin
+    execute statement ('using(i int = ?, s varchar(20) = ?) do select :i, :s from rdb$database') (1, '2') into ri, rs;
+    suspend;
+end
+```
+
 ## Comparison
 
 | Feature                 | Standard DSQL                   | `EXECUTE BLOCK`                               | `USING`                                       |
