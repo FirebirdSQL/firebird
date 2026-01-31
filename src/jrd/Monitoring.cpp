@@ -468,7 +468,7 @@ MonitoringSnapshot::MonitoringSnapshot(thread_db* tdbb, MemoryPool& pool)
 	const auto mem_usage_buffer = allocBuffer(tdbb, pool, rel_mon_mem_usage);
 	const auto tab_stat_buffer = allocBuffer(tdbb, pool, rel_mon_tab_stats);
 	const auto local_temp_tables_buffer = allocBuffer(tdbb, pool, rel_mon_local_temp_tables);
-	const auto local_temp_table_fields_buffer = allocBuffer(tdbb, pool, rel_mon_local_temp_table_fields);
+	const auto local_temp_table_columns_buffer = allocBuffer(tdbb, pool, rel_mon_local_temp_table_columns);
 
 	// Increment the global monitor generation
 
@@ -607,8 +607,8 @@ MonitoringSnapshot::MonitoringSnapshot(thread_db* tdbb, MemoryPool& pool)
 		case rel_mon_local_temp_tables:
 			buffer = local_temp_tables_buffer;
 			break;
-		case rel_mon_local_temp_table_fields:
-			buffer = local_temp_table_fields_buffer;
+		case rel_mon_local_temp_table_columns:
+			buffer = local_temp_table_columns_buffer;
 			break;
 		default:
 			fb_assert(false);
@@ -1458,38 +1458,38 @@ void Monitoring::putLocalTempTableFields(thread_db* tdbb, SnapshotData::DumpReco
 
 	for (const auto& field : table->fields)
 	{
-		record.reset(rel_mon_local_temp_table_fields);
+		record.reset(rel_mon_local_temp_table_columns);
 
 		// attachment id
-		record.storeInteger(f_mon_lttf_att_id, attachment->att_attachment_id);
+		record.storeInteger(f_mon_lttc_att_id, attachment->att_attachment_id);
 		// table name
-		record.storeString(f_mon_lttf_name, table->name.object);
+		record.storeString(f_mon_lttc_name, table->name.object);
 		// schema name
-		record.storeString(f_mon_lttf_schema, table->name.schema);
+		record.storeString(f_mon_lttc_schema, table->name.schema);
 		// field name
-		record.storeString(f_mon_lttf_field_name, field.name);
+		record.storeString(f_mon_lttc_field_name, field.name);
 		// position
-		record.storeInteger(f_mon_lttf_position, field.position);
+		record.storeInteger(f_mon_lttc_position, field.position);
 		// type
-		record.storeInteger(f_mon_lttf_type, field.desc.dsc_dtype);
+		record.storeInteger(f_mon_lttc_type, field.desc.dsc_dtype);
 		// not null flag
-		record.storeInteger(f_mon_lttf_not_null, field.notNullFlag ? 1 : 0);
+		record.storeInteger(f_mon_lttc_not_null, field.notNullFlag ? 1 : 0);
 		// character set id
 		if (field.charSetId)
-			record.storeInteger(f_mon_lttf_charset_id, *field.charSetId);
+			record.storeInteger(f_mon_lttc_charset_id, *field.charSetId);
 		// collation id
 		if (field.collationId)
-			record.storeInteger(f_mon_lttf_collate_id, *field.collationId);
+			record.storeInteger(f_mon_lttc_collate_id, *field.collationId);
 		// length
-		record.storeInteger(f_mon_lttf_length, field.desc.dsc_length);
+		record.storeInteger(f_mon_lttc_length, field.desc.dsc_length);
 		// scale
-		record.storeInteger(f_mon_lttf_scale, field.desc.dsc_scale);
+		record.storeInteger(f_mon_lttc_scale, field.desc.dsc_scale);
 		// precision
-		record.storeInteger(f_mon_lttf_precision, field.precision);
+		record.storeInteger(f_mon_lttc_precision, field.precision);
 		// sub type
-		record.storeInteger(f_mon_lttf_sub_type, field.desc.isBlob() ? field.segLength : field.desc.dsc_sub_type);
+		record.storeInteger(f_mon_lttc_sub_type, field.desc.isBlob() ? field.segLength : field.desc.dsc_sub_type);
 		// character length
-		record.storeInteger(f_mon_lttf_char_length, field.charLength);
+		record.storeInteger(f_mon_lttc_char_length, field.charLength);
 
 		record.write();
 	}

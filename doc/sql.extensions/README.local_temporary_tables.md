@@ -305,7 +305,7 @@ Provides information about active Local Temporary Tables across all connections.
 | MON$SCHEMA_NAME     | CHAR(63)     | Schema name                                              |
 | MON$TABLE_TYPE      | VARCHAR(32)  | Table type (`PRESERVE ROWS` or `DELETE ROWS`)            |
 
-### MON$LOCAL_TEMPORARY_TABLE_FIELDS
+### MON$LOCAL_TEMPORARY_TABLE_COLUMNS
 
 Provides information about the columns of active Local Temporary Tables across all connections.
 
@@ -335,7 +335,7 @@ select * from MON$LOCAL_TEMPORARY_TABLES;
 
 -- See fields of a specific LTT in the current connection
 select *
-    from MON$LOCAL_TEMPORARY_TABLE_FIELDS
+    from MON$LOCAL_TEMPORARY_TABLE_COLUMNS
     where MON$TABLE_NAME = 'TEMP_DATA' and MON$ATTACHMENT_ID = CURRENT_CONNECTION;
 ```
 
