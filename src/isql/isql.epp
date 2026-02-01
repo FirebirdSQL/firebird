@@ -383,7 +383,7 @@ static Firebird::ITransaction* D__trans = NULL;
 static Firebird::ITransaction* M__trans = NULL;
 static int global_numbufs;	// # of cache buffers on connect
 static Firebird::IStatement* global_Stmt = NULL;
-static SCHAR Password[128];
+static SCHAR Password[PASSWORD_LENGTH];
 static SCHAR Charset[128];
 static bool Merge_stderr;
 
@@ -6176,7 +6176,7 @@ static processing_state newdb(TEXT* dbname,
 	strcpy(dbname, save_database);
 	ISQL_FREE(save_database);
 
-	TEXT local_psw[BUFFER_LENGTH128];
+	TEXT local_psw[PASSWORD_LENGTH];
 	TEXT local_usr[BUFFER_LENGTH128];
 	TEXT local_sql_role[BUFFER_LENGTH256];
 
