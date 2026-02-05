@@ -8116,6 +8116,8 @@ static void process_exec_path()
 				break;
 			else if (tag == isc_info_truncated)
 			{
+				if (!pathString.empty())
+					pathString += '\n';
 				pathString += "* error: overflow *\n";
 				break;
 			}

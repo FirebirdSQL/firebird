@@ -4928,6 +4928,7 @@ const
 	isc_info_sql_exec_path_blr_bytes = byte(31);
 	isc_info_sql_exec_path_blr_text = byte(32);
 	isc_info_sql_relation_schema = byte(33);
+	isc_info_sql_exec_path_nodes = byte(34);
 	isc_info_sql_stmt_select = byte(1);
 	isc_info_sql_stmt_insert = byte(2);
 	isc_info_sql_stmt_update = byte(3);

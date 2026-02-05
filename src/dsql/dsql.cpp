@@ -90,6 +90,7 @@ static DsqlRequest* safePrepareRequest(thread_db*, dsql_dbb*, jrd_tra*, ULONG, c
 static RefPtr<DsqlStatement> prepareStatement(thread_db*, dsql_dbb*, jrd_tra*, ULONG, const TEXT*, USHORT,
 	unsigned, bool, ntrace_result_t* traceResult);
 static UCHAR*	put_item(UCHAR, const USHORT, const UCHAR*, UCHAR*, const UCHAR* const);
+static UCHAR* putLongItem(UCHAR tag, ULONG length, const UCHAR* item, UCHAR* buffer, const UCHAR* endOfBuffer);
 static void		sql_info(thread_db*, DsqlRequest*, ULONG, const UCHAR*, ULONG, UCHAR*);
 static UCHAR*	var_info(const dsql_msg*, const UCHAR*, const UCHAR* const, UCHAR*,
 	const UCHAR* const, USHORT, bool);
@@ -717,6 +718,40 @@ static UCHAR* put_item(	UCHAR	item,
 	return ptr + length;
 }
 
+/**
+
+	putLongItem
+
+	@brief	Put long information item in output buffer, splitting it into
+	several chunks if nesessary and return an updated pointer.
+	If there isn't room for the whole item, indicate truncation and return NULL.
+
+
+	@param item	Tag to prepend data
+	@param length	Full length of data
+	@param string	Data
+	@param ptr	Target buffer
+	@param end	End of target buffer
+
+ **/
+static UCHAR* putLongItem(UCHAR item, ULONG length, const UCHAR* string, UCHAR* buffer, const UCHAR* endOfBuffer)
+{
+	while (length)
+	{
+		// 1-byte item + 2-byte length + isc_info_end/isc_info_truncated == 4
+		ULONG bufferLength = endOfBuffer - buffer - 4;
+		ULONG maxLength = MIN(bufferLength, MAX_USHORT);
+		ULONG segmentLength = MIN(length, maxLength);
+		
+		buffer = put_item(item, segmentLength, string, buffer, endOfBuffer);
+		if (!buffer)
+			return nullptr;
+
+		string += segmentLength;
+		length -= segmentLength;
+	}
+	return buffer;
+}
 
 void IntlString::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
@@ -1054,17 +1089,7 @@ static void sql_info(thread_db* tdbb,
 
 				if (path.hasData())
 				{
-					// 1-byte item + 2-byte length + isc_info_end/isc_info_truncated == 4
-					const ULONG bufferLength = end_info - info - 4;
-					const ULONG maxLength = MIN(bufferLength, MAX_USHORT);
-
-					if (path.getCount() > maxLength)
-					{
-						*info = isc_info_truncated;
-						info = NULL;
-					}
-					else
-						info = put_item(item, path.getCount(), path.begin(), info, end_info);
+					info = putLongItem(item, path.getCount(), path.begin(), info, end_info);
 				}
 
 				if (!info)
@@ -1080,22 +1105,10 @@ static void sql_info(thread_db* tdbb,
 					NodePrinter printer;
 					stmt->topNode->print(printer);
 
-					const UCHAR* p = reinterpret_cast<const UCHAR*>(printer.getText().c_str());
-					ULONG length = printer.getText().size();
-
-					while (length)
-					{
-						ULONG bufferLength = end_info - info - 4;
-						ULONG maxLength = MIN(bufferLength, MAX_USHORT);
-						ULONG segmentLength = MIN(length, maxLength);
-
-						info = put_item(item, segmentLength, p, info, end_info);
-						if (!info)
-							return;
-
-						p += segmentLength;
-						length -= segmentLength;
-					}
+					const string& data = printer.getText();
+					info = putLongItem(item, data.size(), reinterpret_cast<const UCHAR*>(data.c_str()), info, end_info);
+					if (!info)
+						return;
 				}
 			}
 			break;
