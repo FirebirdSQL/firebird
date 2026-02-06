@@ -548,3 +548,4 @@ Retrieves the execution nodes tree of a DML statement formatted as XML.
 It requires server v6 or greater to work.
 
 SET EXEC_PATH_DISPLAY OFF disables both output of BLR and nodes tree.
+SET EXEC_PATH_DISPLAY LIMIT <number> set limit of output to <number> bytes.
