@@ -518,6 +518,7 @@ public:
 		Time_display = false;
 		Sqlda_display = false;
 		ExecPathDisplay = ExecPathOptions::OFF;
+		ExecPathDisplayLimit = 1024 * 1024;
 		Stats = false;
 		Autocommit = true;	// Commit ddl
 		Warnings = true;	// Print warnings
@@ -545,6 +546,7 @@ public:
 	bool Time_display;
 	bool Sqlda_display;
 	unsigned ExecPathDisplay;
+	unsigned ExecPathDisplayLimit;
 	bool Stats;
 	bool Autocommit;	// Commit ddl
 	bool Warnings;		// Print warnings
@@ -5031,6 +5033,10 @@ static processing_state frontend(const std::string& statement)
 					{
 						setValues.ExecPathDisplay |= SetValues::ExecPathOptions::NODES;
 					}
+					else if (node.arg == "LIMIT" && node.value > 0)
+					{
+						setValues.ExecPathDisplayLimit = node.value + 4; // item + length + overflow tag
+					}
 					else
 						return ps_ERR;
 
@@ -8083,8 +8089,7 @@ static void process_exec_path()
 		return;
 
 	Firebird::Array<UCHAR> pathBuffer;
-	// One megabyte is not too much
-	pathBuffer.getBuffer(1024 * 1024, false);
+	pathBuffer.getBuffer(setValues.ExecPathDisplayLimit, false);
 
 	static constexpr UCHAR execPath[] = { isc_info_sql_exec_path_blr_text, isc_info_sql_exec_path_nodes };
 
