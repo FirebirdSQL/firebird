@@ -241,12 +241,17 @@ BOOST_AUTO_TEST_CASE(ParseSetTest)
 	BOOST_TEST(std::holds_alternative<FrontendParser::InvalidNode>(FrontendParser::parse(
 		"set echo off x", parserOptions)));
 
-	BOOST_TEST(std::get<FrontendParser::SetExecPathDisplayNode>(parseSet(
-		"set exec_path_display")).arg.empty());
+	BOOST_TEST(std::holds_alternative<FrontendParser::InvalidNode>(FrontendParser::parse(
+		"set exec_path_display", parserOptions)));
 	BOOST_TEST((std::get<FrontendParser::SetExecPathDisplayNode>(parseSet(
 		"set exec_path_display blr")).arg == "BLR"));
 	BOOST_TEST(std::holds_alternative<FrontendParser::InvalidNode>(FrontendParser::parse(
 		"set exec_path_display off x", parserOptions)));
+	BOOST_TEST(std::holds_alternative<FrontendParser::InvalidNode>(FrontendParser::parse(
+		"set exec_path_display limit", parserOptions)));
+	auto node = std::get<FrontendParser::SetExecPathDisplayNode>(parseSet(
+		"set exec_path_display limit 100"));
+	BOOST_TEST((node.arg == "LIMIT" && node.value == 100));
 
 	BOOST_TEST(std::get<FrontendParser::SetExplainNode>(parseSet(
 		"set explain")).arg.empty());
