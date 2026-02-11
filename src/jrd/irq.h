@@ -186,6 +186,7 @@ enum irq_type_t
 	irq_l_const_id,
 	irq_l_constants,
 	irq_c_const_dpd,			// get constant dependencies
+	irq_l_const_pkg_class,
 
 	irq_MAX
 };

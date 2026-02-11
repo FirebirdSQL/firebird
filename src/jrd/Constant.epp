@@ -34,6 +34,7 @@
 #include "../jrd/met_proto.h"
 #include "../jrd/met.h"
 #include "../jrd/Statement.h" // Jrd::Statement
+#include "../jrd/par_proto.h" // PAR_blr
 
 using namespace Firebird;
 using namespace Jrd;
@@ -86,7 +87,7 @@ ScanResult Constant::scan(thread_db* tdbb, ObjectBase::Flag flags)
 			TriState ssDefiner;
 			if (!CONST.RDB$PACKAGE_NAME.NULL)
 			{
-				AutoCacheRequest requestHandle(tdbb, irq_l_procedure_pkg_class, IRQ_REQUESTS);
+				AutoCacheRequest requestHandle(tdbb, irq_l_const_pkg_class, IRQ_REQUESTS);
 
 				FOR (REQUEST_HANDLE requestHandle)
 					PKG IN RDB$PACKAGES
@@ -282,9 +283,31 @@ void Constant::makeValue(thread_db* tdbb, Attachment* attachment, bid blob_id)
 
 		try
 		{
-			this->parseBlr(tdbb, csb, &blob_id, nullptr);
+			Jrd::Attachment* attachment = tdbb->getAttachment();
 
-			auto routineRequest = getStatement()->makeRootRequest(tdbb);
+			UCharBuffer tmp;
+
+			{
+				blb* blob = blb::open(tdbb, attachment->getSysTransaction(), &blob_id);
+				ULONG length = blob->blb_length + 10;
+				UCHAR* temp = tmp.getBuffer(length);
+				length = blob->BLB_get_data(tdbb, temp, length);
+				// blob->BLB_close(tdbb);
+				tmp.resize(length);
+			}
+
+			Statement* statement = getStatement();
+			flReload = false;
+			CompilerScratch* csbptr = csb.get();
+			PAR_blr(tdbb, &getName().schema, nullptr, tmp.begin(), (ULONG) tmp.getCount(), NULL, &csbptr, &statement, false, 0);
+			setStatement(statement);
+
+			if (csb->csb_g_flags & csb_reload)
+				flReload = true;
+
+			setImplemented(true);
+
+			auto routineRequest = statement->makeRootRequest(tdbb);
 			const dsc* temp = EVL_expr(tdbb, routineRequest, static_cast<LiteralNode*>(csb->csb_node));
 
 			// The m_value has a string that is allocated with the tdbb pool

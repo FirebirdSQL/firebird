@@ -573,6 +573,7 @@ dsc* CreatePackageConstantNode::makeConstantValue(thread_db* tdbb, DsqlCompilerS
 	try
 	{
 		getConstantRequest = CMP_compile_request(tdbb, blr.begin(), blr.getCount(), true);
+		getConstantRequest->setUsed();
 
 		const StmtNode* initNode = getConstantRequest->getStatement()->topNode;
 
@@ -658,8 +659,14 @@ void CreatePackageConstantNode::executeCreate(thread_db* tdbb, DsqlCompilerScrat
 		status_exception::raise(Arg::Gds(isc_dyn_dup_const) << name.toQuotedString());
 	}
 
+	// Generate a new unique field name because constants in different packages may have same name
+	// but names in RDB$FIELDS should be unique in for a SCHEME
+	QualifiedName fieldName = name;
+	fieldName.object = "";
 	// Store description in the RDB$FIELDS relation
-	storeGlobalField(tdbb, tdbb->getTransaction(), name, m_type);
+	storeGlobalField(tdbb, tdbb->getTransaction(), fieldName, m_type);
+	fb_assert(fieldName.schema == name.schema);
+	fb_assert(fieldName.package == name.package);
 
 	int faults = 0;
 	while (true)
@@ -685,7 +692,7 @@ void CreatePackageConstantNode::executeCreate(thread_db* tdbb, DsqlCompilerScrat
 
 				// Description (filed) name
 				CONST.RDB$FIELD_SOURCE.NULL = FALSE;
-				strcpy(CONST.RDB$FIELD_SOURCE, name.object.c_str());
+				strcpy(CONST.RDB$FIELD_SOURCE, fieldName.object.c_str());
 
 				// Gen value blr
 				genOutputConstantBlr(tdbb, dsqlScratch);
