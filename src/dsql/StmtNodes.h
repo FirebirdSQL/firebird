@@ -2100,6 +2100,31 @@ public:
 };
 
 
+class ConstantExprNode final : public TypedNode<StmtNode, StmtNode::TYPE_DECLARE_CONSTANT>
+{
+public:
+	explicit ConstantExprNode(MemoryPool& pool)
+		: TypedNode<StmtNode, StmtNode::TYPE_DECLARE_CONSTANT>(pool)
+	{ }
+
+public:
+	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
+
+	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	virtual ConstantExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
+	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
+	virtual ConstantExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
+	virtual ConstantExprNode* pass1(thread_db* tdbb, CompilerScratch* csb);
+	virtual ConstantExprNode* pass2(thread_db* tdbb, CompilerScratch* csb);
+	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const;
+
+	dsc* getImpureDsc(Request* request) const;
+
+public:
+	NestConst<ValueExprNode> value;
+	ULONG impureOffset;	// Impure offset from request block.
+};
+
 } // namespace
 
 #endif // DSQL_STMT_NODES_H

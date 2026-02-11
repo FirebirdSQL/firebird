@@ -311,4 +311,7 @@ FB_IMPL_MSG(DYN, 318, dyn_cannot_drop_non_emptyschema, -607, "HY", "000", "Canno
 FB_IMPL_MSG(DYN, 319, dyn_cannot_mod_obj_sys_schema, -607, "28", "000", "Cannot CREATE/ALTER/DROP @1 in SYSTEM schema")
 FB_IMPL_MSG(DYN, 320, dyn_cannot_create_reserved_schema, -607, "HY", "000", "Schema name @1 is reserved and cannot be created")
 FB_IMPL_MSG(DYN, 321, dyn_cannot_infer_schema, -901, "42", "000", "Cannot infer schema name as there is no valid schema in the search path")
-FB_IMPL_MSG_SYMBOL(DYN, 322, dyn_dup_blob_filter, "Blob filter @1 already exists")
+FB_IMPL_MSG_SYMBOL(DYN, 323, dyn_dup_blob_filter, "Blob filter @1 already exists")
+FB_IMPL_MSG_SYMBOL(DYN, 334, dyn_const_not_found, "Constant @1 not found")
+FB_IMPL_MSG_SYMBOL(DYN, 335, dyn_dup_const, "Constant @1 already exists")
+FB_IMPL_MSG_SYMBOL(DYN, 336, dyn_non_deterministic_constant, "The expression to initialize constant \"@1\" must be a constant expression")

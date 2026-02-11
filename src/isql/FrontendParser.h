@@ -119,6 +119,7 @@ public:
 	struct ShowVersionNode {};
 	struct ShowViewsNode { std::optional<Firebird::QualifiedMetaString> name; };
 	struct ShowWireStatsNode {};
+	struct ShowConstantsNode { std::optional<Firebird::QualifiedMetaString> name; };
 
 	using AnySetNode = std::variant<
 		SetNode,
@@ -184,6 +185,7 @@ public:
 		ShowVersionNode,
 		ShowViewsNode,
 		ShowWireStatsNode,
+		ShowConstantsNode,
 
 		InvalidNode
 	>;

@@ -584,6 +584,7 @@ static lck_owner_t get_owner_type(enum lck_t lock_type)
 	case LCK_idx_rescan:
 	case LCK_prc_rescan:
 	case LCK_fun_rescan:
+	case LCK_constant_rescan:
 	case LCK_cs_rescan:
 	case LCK_dbwide_triggers:
 		owner_type = LCK_OWNER_database;

@@ -75,6 +75,12 @@
 #include "../jrd/ini.h"
 #include "../jrd/GarbageCollector.h"
 
+#include "../dsql/PackageNodes.h"
+
+#include <algorithm>
+#include <optional>
+#include <unordered_set>
+
 namespace Jrd {
 
 // Define range of user relation ids
@@ -123,7 +129,7 @@ static rel_t relationType(SSHORT relationTypeNull, SSHORT relationType) noexcept
 static void saveField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, const MetaName& fieldName);
 static dsql_rel* saveRelation(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	const QualifiedName& relationName, bool view, bool creating);
-static void updateRdbFields(const TypeClause* type,
+void updateRdbFields(const TypeClause* type,
 	SSHORT& fieldType,
 	SSHORT& fieldLength,
 	SSHORT& fieldSubTypeNull, SSHORT& fieldSubType,
@@ -835,7 +841,7 @@ static dsql_rel* saveRelation(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 }
 
 // Update RDB$FIELDS received by reference.
-static void updateRdbFields(const TypeClause* type,
+void updateRdbFields(const TypeClause* type,
 	SSHORT& fieldType,
 	SSHORT& fieldLength,
 	SSHORT& fieldSubTypeNull, SSHORT& fieldSubType,
@@ -8320,7 +8326,7 @@ void RelationNode::makeVersion(thread_db* tdbb, jrd_tra* transaction, const Qual
 					if (FLD.RDB$CHARACTER_SET_ID.NULL)
 						FLD.RDB$CHARACTER_SET_ID = CS_NONE;
 
-					CollId collation((!FLD.RDB$COLLATION_ID.NULL) ? FLD.RDB$COLLATION_ID : 
+					CollId collation((!FLD.RDB$COLLATION_ID.NULL) ? FLD.RDB$COLLATION_ID :
 						(!RFR.RDB$COLLATION_ID.NULL) ? RFR.RDB$COLLATION_ID : COLLATE_NONE);	// codepoint collation
 
 					if (!DSC_make_descriptor(&tfb->tfb_desc, FLD.RDB$FIELD_TYPE,
@@ -10889,11 +10895,13 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		ValueExprNode* nameNode = fieldNode;
 		const char* aliasName = NULL;
 
-		while (nodeIs<DsqlAliasNode>(nameNode) || nodeIs<DerivedFieldNode>(nameNode) || nodeIs<DsqlMapNode>(nameNode))
+		while (nodeIs<DsqlAliasNode>(nameNode) || nodeIs<DerivedFieldNode>(nameNode) || nodeIs<DsqlMapNode>(nameNode) ||
+			nodeAs<PackageReferenceNode>(nameNode))
 		{
 			DsqlAliasNode* aliasNode;
 			DsqlMapNode* mapNode;
 			DerivedFieldNode* derivedField;
+			PackageReferenceNode* referenceNode;
 
 			if ((aliasNode = nodeAs<DsqlAliasNode>(nameNode)))
 			{
@@ -10908,6 +10916,12 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 				if (!aliasName)
 					aliasName = derivedField->name.c_str();
 				nameNode = derivedField->value;
+			}
+			else if ((referenceNode = nodeAs<PackageReferenceNode>(nameNode)))
+			{
+				if (!aliasName)
+					aliasName = referenceNode->getName();
+				nameNode = nullptr;
 			}
 		}
 
@@ -13054,7 +13068,7 @@ void DropIndexNode::clearFrgn(thread_db* tdbb, MetaId relId, MetaId indexId)
 // Second part of index deletion post-processing.
 //
 // This function is invoked when index is removed from irt page.
-// In some cases (failed DB creation) cleanup, done by clearName, 
+// In some cases (failed DB creation) cleanup, done by clearName,
 // also should take place.
 //
 
