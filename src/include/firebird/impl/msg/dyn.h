@@ -314,4 +314,4 @@ FB_IMPL_MSG(DYN, 321, dyn_cannot_infer_schema, -901, "42", "000", "Cannot infer 
 FB_IMPL_MSG_SYMBOL(DYN, 323, dyn_dup_blob_filter, "Blob filter @1 already exists")
 FB_IMPL_MSG_SYMBOL(DYN, 334, dyn_const_not_found, "Constant @1 not found")
 FB_IMPL_MSG_SYMBOL(DYN, 335, dyn_dup_const, "Constant @1 already exists")
-FB_IMPL_MSG_SYMBOL(DYN, 336, dyn_non_deterministic_constant, "The expression to initialize constant \"@1\" must be a constant expression")
+FB_IMPL_MSG_SYMBOL(DYN, 336, dyn_non_constant_constant, "The constant \"@1\" must be initialized by a constant expression")

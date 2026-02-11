@@ -511,7 +511,7 @@ DdlNode* CreatePackageConstantNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	// TODO: Is value compatible with type?
 	if (!m_value->constant())
 	{
-		status_exception::raise(Arg::Gds(isc_dyn_non_deterministic_constant) << name.toQuotedString());
+		status_exception::raise(Arg::Gds(isc_dyn_non_constant_constant) << name.toQuotedString());
 	}
 	// DsqlDescMaker::fromField(&node->castDesc, type);
 	// node->castDesc.dsc_flags = node->source->getDsqlDesc().dsc_flags & DSC_nullable;
