@@ -684,6 +684,9 @@ public:
 	// Verify if this node is allowed in an unmapped boolean.
 	virtual bool unmappable(const MapNode* mapNode, StreamType shellStream) const;
 
+	// Check if expression returns constant result
+	virtual bool constant() const;
+
 	// Return all streams referenced by the expression.
 	virtual void collectStreams(SortedStreamList& streamList) const;
 
@@ -1219,6 +1222,11 @@ public:
 	}
 
 	bool unmappable(const MapNode* /*mapNode*/, StreamType /*shellStream*/) const override
+	{
+		return false;
+	}
+
+	virtual bool constant() const
 	{
 		return false;
 	}

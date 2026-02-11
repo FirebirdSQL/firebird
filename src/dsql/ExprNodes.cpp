@@ -456,6 +456,23 @@ bool ExprNode::unmappable(const MapNode* mapNode, StreamType shellStream) const
 	return true;
 }
 
+bool ExprNode::constant() const
+{
+	NodeRefsHolder holder;
+	getChildren(holder, false);
+
+	for (auto i : holder.refs)
+	{
+		if (*i == nullptr)
+			continue;
+
+		if (!(*i)->constant())
+			return false;
+	}
+
+	return true;
+}
+
 void ExprNode::collectStreams(SortedStreamList& streamList) const
 {
 	NodeRefsHolder holder;
@@ -12478,7 +12495,12 @@ void SysFuncCallNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 
 bool SysFuncCallNode::deterministic(thread_db* tdbb) const
 {
-	return ExprNode::deterministic(tdbb) && function->deterministic;
+	return ExprNode::deterministic(tdbb) && function->isDeterministic();
+}
+
+bool SysFuncCallNode::constant() const
+{
+	return ExprNode::constant() && function->isConstant();
 }
 
 void SysFuncCallNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)

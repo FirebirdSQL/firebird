@@ -509,7 +509,7 @@ DdlNode* CreatePackageConstantNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	QualifiedName dummyCollationName;
 	DDL_resolve_intl_type(dsqlScratch, m_type, dummyCollationName);
 	// TODO: Is value compatible with type?
-	//if (!m_value->constant())//TODOCONST:FIXME
+	if (!m_value->constant())
 	{
 		status_exception::raise(Arg::Gds(isc_dyn_non_deterministic_constant) << name.toQuotedString());
 	}

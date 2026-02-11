@@ -452,6 +452,11 @@ public:
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 
+	bool constant() const override
+	{
+		return false;
+	}
+
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 	ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
@@ -475,6 +480,11 @@ public:
 	void setParameterName(dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+
+	bool constant() const override
+	{
+		return false;
+	}
 
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -503,6 +513,11 @@ public:
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 
+	bool constant() const override
+	{
+		return false;
+	}
+
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 	ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
@@ -528,6 +543,11 @@ public:
 	void setParameterName(dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+
+	bool constant() const override
+	{
+		return false;
+	}
 
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -574,6 +594,11 @@ public:
 	void setParameterName(dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+
+	bool constant() const override
+	{
+		return false;
+	}
 
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -843,6 +868,11 @@ public:
 		return streams.exist(fieldStream);
 	}
 
+	bool constant() const override
+	{
+		return false;
+	}
+
 	void collectStreams(SortedStreamList& streamList) const override
 	{
 		if (!streamList.exist(fieldStream))
@@ -914,6 +944,11 @@ public:
 		return false;
 	}
 
+	bool constant() const override
+	{
+		return false;
+	}
+
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
@@ -961,6 +996,11 @@ public:
 	void setParameterName(dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+
+	bool constant() const override
+	{
+		return false;
+	}
 
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -1218,6 +1258,11 @@ public:
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 
+	bool constant() const override
+	{
+		return false;
+	}
+
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 	ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
@@ -1244,6 +1289,11 @@ public:
 	void setParameterName(dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+
+	bool constant() const override
+	{
+		return false;
+	}
 
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -1678,6 +1728,11 @@ public:
 		return true;
 	}
 
+	bool constant() const override
+	{
+		return false;
+	}
+
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ParameterNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 	ParameterNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
@@ -1740,6 +1795,11 @@ public:
 	bool ignoreNulls(const StreamList& streams) const override
 	{
 		return streams.exist(recStream);
+	}
+
+	bool constant() const override
+	{
+		return true;
 	}
 
 	void collectStreams(SortedStreamList& streamList) const override
@@ -2018,6 +2078,11 @@ public:
 	void findDependentFromStreams(const CompilerScratch* csb,
 		StreamType currentStream, SortedStreamList* streamList) override;
 
+	bool constant() const override
+	{
+		return false;
+	}
+
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 	bool sameAs(const ExprNode* other, bool ignoreStreams) const override;
@@ -2135,6 +2200,7 @@ public:
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 
 	bool deterministic(thread_db* tdbb) const override;
+	bool constant() const override;
 
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -2230,6 +2296,11 @@ public:
 		return false;
 	}
 
+	bool constant() const override
+	{
+		return false;
+	}
+
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
@@ -2321,6 +2392,11 @@ public:
 	Request* getVarRequest(Request* request) const;
 
 	bool deterministic(thread_db*) const override
+	{
+		return false;
+	}
+
+	bool constant() const override
 	{
 		return false;
 	}
