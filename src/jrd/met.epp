@@ -4218,9 +4218,8 @@ void MET_store_dependencies(thread_db* tdbb,
 			dpdo_name = &name;
 			break;
 		case obj_package_constant:
-			dpdo_name = dependency.name;
-			name.package = *dependency.subName;
-			// TOOD: SCHEMA
+			name = *dependency.name;
+			dpdo_name = &name;
 			break;
 		}
 
@@ -4247,7 +4246,7 @@ void MET_store_dependencies(thread_db* tdbb,
 						field_name = param->prm_name;
 				}
 			}
-			else if (dpdo_type != obj_package_constant)
+			else
 				field_name = *dependency.subName;
 		}
 
