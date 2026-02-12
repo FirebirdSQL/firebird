@@ -71,8 +71,10 @@ public:
 		m_name(pool, fullName)
 	{ }
 
-	void dsqlPass(DsqlCompilerScratch*)
-	{ }
+	void dsqlPass(DsqlCompilerScratch* dsqlScratch)
+	{
+		dsqlScratch->qualifyExistingName(m_name, obj_package_constant);
+	}
 
 	void execute(thread_db* tdbb, DsqlCompilerScratch*, jrd_tra* transaction)
 	{
@@ -326,7 +328,7 @@ static RegisterNode<PackageReferenceNode> regPackageReferenceNode({blr_package_r
 
 PackageReferenceNode::PackageReferenceNode(MemoryPool& pool, const QualifiedName& fullName, const UCHAR itemType)
 		: TypedNode<ValueExprNode, ExprNode::TYPE_REFERENCE>(pool),
-		m_fullName(fullName), m_itemType(itemType)
+		m_fullName(fullName.object, fullName.schema.hasData() ? fullName.schema : PUBLIC_SCHEMA, fullName.package), m_itemType(itemType)
 {}
 
 string PackageReferenceNode::internalPrint(NodePrinter& printer) const
@@ -387,7 +389,26 @@ DmlNode* PackageReferenceNode::parse(thread_db* tdbb, MemoryPool& pool, Compiler
 			dependency.name = FB_NEW_POOL(pool) QualifiedName(pool, fullName);
 			csb->addDependency(dependency);
 		}
-		node->m_constant = Constant::lookup(tdbb, fullName, 0);
+
+		{
+			csb->qualifyExistingName(tdbb, fullName, obj_package_constant);
+			auto* constant = MetadataCache::getPerm<Cached::Constant>(tdbb, fullName, CacheFlag::AUTOCREATE);
+			if (constant)
+				node->m_constant = csb->csb_resources->constants.registerResource(constant);
+		}
+
+		// std::optional<MetaId> id = Constant::getIdByName(tdbb, fullName);
+		// if (id.has_value())
+		// 	status_exception::raise(Arg::Gds(isc_bad_constant_name) <<
+		// 		Arg::Str(fullName.toQuotedString()));
+
+		// node->m_constant = Constant::lookup(tdbb, id.value());
+
+		// node->m_constant = MetadataCache::getPerm<Cached::Constant>(tdbb, fullName, CacheFlag::AUTOCREATE);
+		if (!node->m_constant)
+			status_exception::raise(Arg::Gds(isc_bad_constant_name) <<
+				Arg::Str(fullName.toQuotedString()));
+
 		return node;
 	}
 	// TODO: rowtype
@@ -426,10 +447,12 @@ bool PackageReferenceNode::constantExists(thread_db* tdbb, Jrd::jrd_tra* transac
 	if (fullName.package.isEmpty() || fullName.object.isEmpty())
 		return false;
 
+	// Use default schema if one not specified
+	const char* schemaName = fullName.schema.hasData() ? fullName.schema.c_str() : PUBLIC_SCHEMA;
 	AutoCacheRequest getConstantRequest(tdbb, drq_l_pkg_const_flag, DYN_REQUESTS);
 	FOR (REQUEST_HANDLE getConstantRequest TRANSACTION_HANDLE transaction)
 		CONST IN RDB$CONSTANTS
-		WITH CONST.RDB$SCHEMA_NAME EQ fullName.schema.c_str() AND
+		WITH CONST.RDB$SCHEMA_NAME EQ schemaName AND
 		CONST.RDB$PACKAGE_NAME EQ fullName.package.c_str() AND
 		CONST.RDB$CONSTANT_NAME EQ fullName.object.c_str()
 
@@ -449,11 +472,14 @@ void PackageReferenceNode::getDesc(thread_db* tdbb, CompilerScratch*, dsc* desc)
 	*desc = Constant::getDesc(tdbb, tdbb->getTransaction(), m_fullName);
 }
 
-ValueExprNode* PackageReferenceNode::copy(thread_db* tdbb, NodeCopier&) const
+ValueExprNode* PackageReferenceNode::copy(thread_db* tdbb, NodeCopier& copier) const
 {
 	MemoryPool& pool = *tdbb->getDefaultPool();
 	auto* node = FB_NEW_POOL(pool) PackageReferenceNode(pool, m_fullName, m_itemType);
-	node->m_constant = m_constant;
+
+	auto* constant = MetadataCache::getPerm<Cached::Constant>(tdbb, m_fullName, 0);
+	node->m_constant = copier.csb->csb_resources->constants.registerResource(constant);
+
 	return node;
 }
 
@@ -474,9 +500,10 @@ dsc* PackageReferenceNode::execute(thread_db* tdbb, Request* request) const
 	{
 	case blr_pkg_ref_item_const:
 	{
-		const_cast<Constant*>(m_constant.getObject())->checkReload(tdbb);
-		EVL_make_value(tdbb, &m_constant->getValue(), impure);
+		const Constant* constant = m_constant(request->getResources());
+		constant->checkReload(tdbb);
 
+		EVL_make_value(tdbb, &constant->getValue(), impure);
 		return &impure->vlu_desc;
 	}
 	default:
@@ -504,6 +531,8 @@ string CreatePackageConstantNode::internalPrint(NodePrinter& printer) const
 
 DdlNode* CreatePackageConstantNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
+	dsqlScratch->qualifyNewName(name);
+
 	m_value = m_value->dsqlPass(dsqlScratch);
 
 	QualifiedName dummyCollationName;
@@ -549,7 +578,7 @@ dsc* CreatePackageConstantNode::makeConstantValue(thread_db* tdbb, DsqlCompilerS
 	Attachment* attachment = tdbb->getAttachment();
 	jrd_tra* transaction = tdbb->getTransaction();
 
-	Firebird::MemoryPool& tempPool = *tdbb->getDatabase()->createPool(ALLOC_ARGS0);
+	Firebird::AutoMemoryPool tempPool(MemoryPool::createPool(ALLOC_ARGS0));
 	Firebird::BlrWriter::BlrData& blr = dsqlScratch->getBlrData();
 
 	// We need to execute the constant expresion and get the descriptor with constant value
@@ -557,8 +586,8 @@ dsc* CreatePackageConstantNode::makeConstantValue(thread_db* tdbb, DsqlCompilerS
 
 
 	// Create and setup a proxy stmt node
-	ConstantExprNode proxyStmt(tempPool);
-	CastNode* cast = FB_NEW_POOL(tempPool) CastNode(tempPool, m_value, m_type);
+	ConstantExprNode proxyStmt(*tempPool);
+	CastNode* cast = FB_NEW_POOL(*tempPool) CastNode(*tempPool, m_value, m_type);
 	proxyStmt.value = cast;
 
 	// Get the blr
@@ -585,7 +614,6 @@ dsc* CreatePackageConstantNode::makeConstantValue(thread_db* tdbb, DsqlCompilerS
 	}
 	catch (const Firebird::Exception& ex)
 	{
-		tdbb->getDatabase()->deletePool(&tempPool);
 		ex.stuffException(tdbb->tdbb_status_vector);
 		ERR_punt();
 		return nullptr;
@@ -688,6 +716,7 @@ void CreatePackageConstantNode::executeCreate(thread_db* tdbb, DsqlCompilerScrat
 				CONST.RDB$CONSTANT_NAME.NULL = FALSE;
 				strcpy(CONST.RDB$CONSTANT_NAME, name.object.c_str());
 
+				// Constant unique id
 				CONST.RDB$CONSTANT_ID = id;
 
 				// Description (filed) name
@@ -705,6 +734,10 @@ void CreatePackageConstantNode::executeCreate(thread_db* tdbb, DsqlCompilerScrat
 				// Parent package
 				CONST.RDB$PACKAGE_NAME.NULL = FALSE;
 				strcpy(CONST.RDB$PACKAGE_NAME, name.package.c_str());
+
+				// Schema of the parent package
+				CONST.RDB$SCHEMA_NAME.NULL = FALSE;
+				strcpy(CONST.RDB$SCHEMA_NAME, name.schema.c_str());
 
 				// Type
 				CONST.RDB$PRIVATE_FLAG.NULL = FALSE;

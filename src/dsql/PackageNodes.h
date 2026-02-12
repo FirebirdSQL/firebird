@@ -147,7 +147,7 @@ public:
 	}
 
 private:
-	NestConst<Constant> m_constant;
+	CachedResource<Jrd::Constant, Jrd::RoutinePermanent> m_constant;
 	const QualifiedName m_fullName;
 
 	const UCHAR m_itemType;

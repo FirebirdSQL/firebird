@@ -14188,7 +14188,7 @@ ValueExprNode* VariableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	if (!node->dsqlVar ||
 		(node->dsqlVar->type == dsql_var::TYPE_LOCAL && !node->dsqlVar->initialized && !dsqlScratch->mainScratch))
 	{
-		if (dsqlScratch->package.package.hasData())
+		if (dsqlScratch->package.object.hasData())
 		{
 			thread_db* tdbb = JRD_get_thread_data();
 			QualifiedName consatntFullName(dsqlName, dsqlScratch->package.schema, dsqlScratch->package.object);

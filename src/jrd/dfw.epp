@@ -1141,7 +1141,7 @@ namespace
 	{
 		Jrd::Attachment* attachment = tdbb->getAttachment();
 		AutoCacheRequest handle(tdbb, irq_c_const_dpd, IRQ_REQUESTS);
-		Routine* routine = nullptr;
+		Constant* routine = nullptr;
 
 		FOR(REQUEST_HANDLE handle)
 			X IN RDB$CONSTANTS WITH

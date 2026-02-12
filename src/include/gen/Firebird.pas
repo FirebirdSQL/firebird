@@ -5960,6 +5960,7 @@ const
 	 isc_private_constant = 335545398;
 	 isc_package_alias_help = 335545399;
 	 isc_bad_constant_BLR = 335545400;
+	 isc_bad_constant_name = 335545401;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;

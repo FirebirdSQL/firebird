@@ -72,9 +72,9 @@ ScanResult Constant::scan(thread_db* tdbb, ObjectBase::Flag flags)
 
 	//try
 	{
-		AutoCacheRequest request_fun(tdbb, irq_l_constants, IRQ_REQUESTS);
+		AutoCacheRequest request_const(tdbb, irq_l_constants, IRQ_REQUESTS);
 
-		FOR(REQUEST_HANDLE request_fun)
+		FOR(REQUEST_HANDLE request_const TRANSACTION_HANDLE metaTransaction)
 			CONST IN RDB$CONSTANTS
 			WITH CONST.RDB$CONSTANT_ID EQ this->getId()
 		{
@@ -82,8 +82,8 @@ ScanResult Constant::scan(thread_db* tdbb, ObjectBase::Flag flags)
 
 			getPermanent()->setName(QualifiedName(CONST.RDB$CONSTANT_NAME, CONST.RDB$SCHEMA_NAME,
 				(CONST.RDB$PACKAGE_NAME.NULL ? nullptr : CONST.RDB$PACKAGE_NAME)));
-			// getPermanent()->owner = CONST.RDB$OWNER_NAME;
 
+			MetaName owner;
 			TriState ssDefiner;
 			if (!CONST.RDB$PACKAGE_NAME.NULL)
 			{
@@ -92,13 +92,17 @@ ScanResult Constant::scan(thread_db* tdbb, ObjectBase::Flag flags)
 				FOR (REQUEST_HANDLE requestHandle)
 					PKG IN RDB$PACKAGES
 					CROSS SCH IN RDB$SCHEMAS
-					OVER RDB$SCHEMA_NAME
-					WITH PKG.RDB$PACKAGE_NAME EQ CONST.RDB$PACKAGE_NAME
+					OVER RDB$SCHEMA_NAME WITH
+						PKG.RDB$SCHEMA_NAME EQ CONST.RDB$SCHEMA_NAME AND
+						PKG.RDB$PACKAGE_NAME EQ CONST.RDB$PACKAGE_NAME
 
-					if (!PKG.RDB$SECURITY_CLASS.NULL)
-					{
-						getPermanent()->setSecurityName(QualifiedName(PKG.RDB$SECURITY_CLASS, SCH.RDB$SECURITY_CLASS));
-					}
+
+					owner = PKG.RDB$OWNER_NAME;
+
+					// if (!PKG.RDB$SECURITY_CLASS.NULL)
+					// {
+					// 	getPermanent()->setSecurityName(QualifiedName(PKG.RDB$SECURITY_CLASS, SCH.RDB$SECURITY_CLASS));
+					// }
 
 					// SQL SECURITY of function must be the same if it's defined in package
 					if (!PKG.RDB$SQL_SECURITY.NULL)
@@ -274,6 +278,7 @@ dsc Constant::getDesc(thread_db* tdbb, Jrd::jrd_tra* transaction, const Qualifie
 
 void Constant::makeValue(thread_db* tdbb, Attachment* attachment, bid blob_id)
 {
+	Firebird::AutoMemoryPool tempPool(MemoryPool::createPool(ALLOC_ARGS0));
 	MemoryPool* const csb_pool = attachment->att_database->createPool(ALLOC_ARGS0);
 	Jrd::ContextPoolHolder context(tdbb, csb_pool);
 

@@ -1004,4 +1004,5 @@ FB_IMPL_MSG(JRD, 1076, not_defined_constant, -901, "42", "000", "The constant @1
 FB_IMPL_MSG(JRD, 1077, const_name, -901, "42", "000", "CONSTANT @1")
 FB_IMPL_MSG(JRD, 1078, private_constant, -901, "42", "000", "The constant @1 is private to the package @2")
 FB_IMPL_MSG(JRD, 1079, package_alias_help, -901, "42", "000", "Use an alias to resolve the conflict")
-FB_IMPL_MSG(JRD, 1080, bad_constant_BLR, -901, "2F", "000", "Error while parsing constant @1's BLR")
+FB_IMPL_MSG(JRD, 1080, bad_constant_BLR, -901, "2F", "000", "Error while parsing BLR value of the constant @1")
+FB_IMPL_MSG(JRD, 1081, bad_constant_name, -901, "2F", "000", "Constant @1 cannot be found")
