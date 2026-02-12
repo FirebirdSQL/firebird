@@ -6313,8 +6313,7 @@ IEvents* Attachment::queEvents(CheckStatusWrapper* status, IEventCallback* callb
 			port->connect(packet);
 
 			rem_port* port_async = port->port_async;
-			port_async->port_events_threadId =
-				Thread::start(event_thread, port_async, THREAD_high, &port_async->port_events_thread);
+			Thread::start(event_thread, port_async, THREAD_high, &port_async->port_events_thread);
 
 			port_async->port_context = rdb;
 		}

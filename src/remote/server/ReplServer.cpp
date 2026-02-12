@@ -393,11 +393,11 @@ namespace
 				provider->attachDatabase(&localStatus, m_config->dbName.c_str(),
 										 dpb.getBufferLength(), dpb.getBuffer());
 			localStatus.check();
-			m_attachment.assignRefNoIncr(att);
+			m_attachment = att;
 
 			const auto repl = m_attachment->createReplicator(&localStatus);
 			localStatus.check();
-			m_replicator.assignRefNoIncr(repl);
+			m_replicator = repl;
 
 			fb_assert(!m_sequence);
 
@@ -425,8 +425,17 @@ namespace
 
 		void shutdown()
 		{
-			m_replicator = nullptr;
-			m_attachment = nullptr;
+			FbLocalStatus localStatus;
+			if (m_replicator)
+			{
+				m_replicator->close(&localStatus);
+				m_replicator = nullptr;
+			}
+			if (m_attachment)
+			{
+				m_attachment->detach(&localStatus);
+				m_attachment = nullptr;
+			}
 			m_sequence = 0;
 			m_connected = false;
 		}
@@ -446,7 +455,7 @@ namespace
 
 		bool isShutdown() const
 		{
-			return (m_attachment == NULL);
+			return (m_attachment == nullptr);
 		}
 
 		const PathName& getDirectory() const
@@ -504,8 +513,8 @@ namespace
 
 	private:
 		AutoPtr<const Replication::Config> m_config;
-		RefPtr<IAttachment> m_attachment;
-		RefPtr<IReplicator> m_replicator;
+		IAttachment* m_attachment;
+		IReplicator* m_replicator;
 		FB_UINT64 m_sequence;
 		bool m_connected;
 		string m_lastError;
@@ -772,7 +781,22 @@ namespace
 				const FB_UINT64 db_sequence = target->initReplica();
 				const FB_UINT64 last_db_sequence = control.getDbSequence();
 
-				if (db_sequence != last_db_sequence)
+				if (db_sequence < last_db_sequence)
+				{
+					if (db_sequence)
+					{
+						raiseError("Replica database was replaced but found to be older (sequence = %" UQUADFORMAT ") "
+									"than the one priorly processed (sequence = %" UQUADFORMAT ")",
+									db_sequence, last_db_sequence);
+					}
+					else
+					{
+						raiseError("Replica database was replaced but found to have zero sequence number,"
+								   "\n\tprobably after improper fixup/restore process (e.g. without -seq[uence] switch)");
+					}
+				}
+
+				if (db_sequence > last_db_sequence)
 				{
 					if (sequence == db_sequence + 1)
 					{
@@ -1041,7 +1065,7 @@ bool REPL_server(CheckStatusWrapper* status, const Replication::Config::ReplicaL
 		for (const auto replica : replicas)
 		{
 			const auto target = FB_NEW Target(replica);
-			Thread::start(process_thread, target, THREAD_medium, NULL);
+			Thread::start(process_thread, target, THREAD_medium);
 			++activeThreads;
 		}
 

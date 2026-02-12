@@ -39,12 +39,9 @@ using namespace Jrd;
 FilteredStream::FilteredStream(CompilerScratch* csb, RecordSource* next,
 							   BoolExprNode* boolean, double selectivity)
 	: RecordSource(csb),
+	  m_invariant(false),
 	  m_next(next),
-	  m_boolean(boolean),
-	  m_anyBoolean(NULL),
-	  m_ansiAny(false),
-	  m_ansiAll(false),
-	  m_ansiNot(false)
+	  m_boolean(boolean)
 {
 	fb_assert(m_next && m_boolean);
 
@@ -57,6 +54,19 @@ FilteredStream::FilteredStream(CompilerScratch* csb, RecordSource* next,
 		cardinality *= selectivity;
 	}
 	m_cardinality = cardinality;
+}
+
+FilteredStream::FilteredStream(CompilerScratch* csb, RecordSource* next,
+							   BoolExprNode* boolean)
+	: RecordSource(csb),
+	  m_invariant(true),
+	  m_next(next),
+	  m_boolean(boolean)
+{
+	fb_assert(m_next && m_boolean);
+
+	m_impure = csb->allocImpure<Impure>();
+	m_cardinality = next->getCardinality();
 }
 
 void FilteredStream::internalOpen(thread_db* tdbb) const

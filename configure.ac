@@ -715,7 +715,7 @@ case "$build" in
   *-*-darwin*)
     CFLAGS="$CFLAGS -I${VCPKG_INSTALLED}/include"
     CXXFLAGS="$CXXFLAGS -nostdinc++ -isystem ${VCPKG_INSTALLED}/include/c++/v1 -I${VCPKG_INSTALLED}/include"
-    LDFLAGS="$LDFLAGS -nostdlib++ -stdlib=libc++ -L${VCPKG_INSTALLED}/lib -lc++"
+    LDFLAGS="$LDFLAGS -nostdlib++ -L${VCPKG_INSTALLED}/lib -lc++"
     ;;
 esac
 

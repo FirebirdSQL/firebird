@@ -92,8 +92,10 @@ public:
 
 	HANDLE getEvent(SLONG pid, SLONG signal_number)
 	{
+		Firebird::MutexLockGuard guard(&m_mutex, FB_FUNCTION);
+
 		Item* oldestEvent = NULL;
-		ULONG oldestAge = ~0;
+		FB_UINT64 oldestAge = ~(0ULL);
 
 		Item* evnt = m_events;
 		const Item* const end = evnt + m_count;
@@ -133,18 +135,18 @@ public:
 	}
 
 private:
-	class Item
+	struct Item
 	{
-	public:
 		SLONG pid;
 		SLONG signal;	// pseudo-signal number
 		HANDLE handle;	// local handle to foreign event
-		ULONG age;
+		FB_UINT64 age;
 	};
 
 	Item m_events[MAX_OPN_EVENTS];
 	int m_count;
-	ULONG m_clock;
+	FB_UINT64 m_clock;
+	Firebird::Mutex m_mutex;
 };
 
 }  // namespace

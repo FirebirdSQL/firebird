@@ -72,6 +72,12 @@ void ProcedureScan::internalOpen(thread_db* tdbb) const
 
 	const_cast<jrd_prc*>(m_procedure)->checkReload(tdbb);
 
+	// Procedure could be altered and its record format changed since current instance of
+	// ProcedureScan was created. Here it is not the right place to check if new format is
+	// compatible with caller's expectations, so we just use correct (possible new) format.
+
+	m_format = m_procedure->prc_record_format;
+
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
@@ -228,6 +234,8 @@ bool ProcedureScan::internalGetRecord(thread_db* tdbb) const
 	}
 
 	trace.fetch(false, ITracePlugin::RESULT_SUCCESS);
+
+	fb_assert(m_format == m_procedure->prc_record_format);
 
 	for (USHORT i = 0; i < m_format->fmt_count; i++)
 	{

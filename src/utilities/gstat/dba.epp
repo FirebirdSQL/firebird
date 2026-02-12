@@ -623,6 +623,9 @@ int gstat(Firebird::UtilSvc* uSvc)
 		}
 	}
 
+	if (uSvc->utf8FileNames())
+		ISC_utf8ToSystem(fileName);
+
 	expandDatabaseName(fileName, tempStr, NULL);
 	fileName = tempStr;
 

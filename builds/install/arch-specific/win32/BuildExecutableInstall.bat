@@ -191,7 +191,7 @@ if "%FB2_SNAPSHOT%"=="1" (
   echo   Processing version strings in %%f
   %SED_COMMAND% %%f > %FB_GEN_DIR%\readmes\%%f
 )
-@for %%d in (ba cz de es fr hu it pl pt ru si ) do (
+@for %%d in (ba cz de es fr hu it pl pt ru si ja ) do (
   if not exist %FB_GEN_DIR%\readmes\%%d ( mkdir %FB_GEN_DIR%\readmes\%%d )
   for %%f in ( %%d\*.txt  ) do (
     echo   Processing version strings in %%f

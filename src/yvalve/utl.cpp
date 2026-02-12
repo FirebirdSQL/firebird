@@ -117,7 +117,6 @@ const int BSTR_input	= 0;
 const int BSTR_output	= 1;
 const int BSTR_alloc	= 2;
 
-static void get_ods_version(CheckStatusWrapper*, IAttachment*, USHORT*, USHORT*);
 static void isc_expand_dpb_internal(const UCHAR** dpb, SSHORT* dpb_size, ...);
 
 
@@ -556,7 +555,7 @@ void UtilInterface::getFbVersion(CheckStatusWrapper* status, IAttachment* att,
 		}
 
 		USHORT ods_version, ods_minor_version;
-		get_ods_version(status, att, &ods_version, &ods_minor_version);
+		UTL_get_ods_version(status, att, &ods_version, &ods_minor_version);
 		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
 			return;
 
@@ -2933,7 +2932,14 @@ int API_ROUTINE gds__thread_start(FPTR_INT_VOID_PTR* entrypoint,
 	int rc = 0;
 	try
 	{
-		Thread::start((ThreadEntryPoint*) entrypoint, arg, priority, (Thread::Handle*) thd_id);
+		Thread thread;
+		Thread::start((ThreadEntryPoint*) entrypoint, arg, priority, &thread);
+
+		if (thd_id)
+		{
+			*static_cast<Thread::Handle*>(thd_id) = thread.getHandle();
+			thread.detach(false);
+		}
 	}
 	catch (const status_exception& status)
 	{
@@ -2947,7 +2953,7 @@ int API_ROUTINE gds__thread_start(FPTR_INT_VOID_PTR* entrypoint,
 #endif
 
 
-static void get_ods_version(CheckStatusWrapper* status, IAttachment* att,
+void UTL_get_ods_version(CheckStatusWrapper* status, IAttachment* att,
 	USHORT* ods_version, USHORT* ods_minor_version)
 {
 /**************************************

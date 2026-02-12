@@ -66,9 +66,9 @@ using namespace Replication;
 
 namespace
 {
-	const unsigned FLUSH_WAIT_INTERVAL = 1; // milliseconds
+	const unsigned FLUSH_WAIT_INTERVAL = 1; 	// milliseconds
 
-	const unsigned NO_SPACE_TIMEOUT = 10;	// seconds
+	const unsigned NO_SPACE_TIMEOUT = 10000;	// milliseconds
 	const unsigned NO_SPACE_RETRIES = 6;		// up to one minute
 
 	const unsigned COPY_BLOCK_SIZE = 64 * 1024; // 64 KB
@@ -273,11 +273,16 @@ void ChangeLog::Segment::truncate()
 
 	const auto hndl = (HANDLE) _get_osfhandle(m_handle);
 	const auto ret = SetFilePointer(hndl, newSize.LowPart, &newSize.HighPart, FILE_BEGIN);
-	if (ret == INVALID_SET_FILE_POINTER || !SetEndOfFile(hndl))
+	if (ret != INVALID_SET_FILE_POINTER)
+		SetEndOfFile(hndl);
 #else
-	if (os_utils::ftruncate(m_handle, length))
+	os_utils::ftruncate(m_handle, length);
 #endif
-		raiseError("Journal file %s truncate failed (error %d)", m_filename.c_str(), ERRNO);
+
+	// Truncation is known to be error-prone in Windows CS, which does not allow to truncate
+	// a file with a mapping open by some other process (ERROR_USER_MAPPED_FILE is returned).
+	// But we may safely ignore the result, because truncation here is just a storage/copying
+	// optimization, it's not critical from the archiving POV.
 
 	mapHeader();
 }
@@ -377,7 +382,7 @@ ChangeLog::ChangeLog(MemoryPool& pool,
 		linkSelf();
 	}
 
-	Thread::start(archiver_thread, this, THREAD_medium, 0);
+	Thread::start(archiver_thread, this, THREAD_medium);
 	m_startupSemaphore.enter();
 	m_workingSemaphore.release();
 }

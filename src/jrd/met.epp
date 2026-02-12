@@ -127,6 +127,7 @@ static void save_trigger_data(thread_db*, TrigVector**, jrd_rel*, Statement*, bl
 	const TEXT*, FB_UINT64, SSHORT, USHORT, const MetaName&, const string&,
 	const bid*, Nullable<bool> ssDefiner);
 static void scan_partners(thread_db*, jrd_rel*);
+static void scan_relation(thread_db*, jrd_rel*);
 static bool verify_TRG_ignore_perm(thread_db*, const MetaName&);
 
 
@@ -4036,6 +4037,27 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
  *      expressions, and validation expressions.
  *
  **************************************/
+
+	while (!(relation->rel_flags & (REL_scanned | REL_deleted)))
+	{
+		scan_relation(tdbb, relation);
+	}
+}
+
+
+static void scan_relation(thread_db* tdbb, jrd_rel* relation)
+{
+/**************************************
+ *
+ *      s c a n _ r e l a t i o n
+ *
+ **************************************
+ *
+ * Functional description
+ *      Scan a relation for view RecordSelExpr, computed by expressions, missing
+ *      expressions, and validation expressions.
+ *
+ **************************************/
 	SET_TDBB(tdbb);
 	TrigVector* triggers[TRIGGER_MAX];
 	Attachment* attachment = tdbb->getAttachment();
@@ -4054,10 +4076,13 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
 
 	try {
 
-	if (relation->rel_flags & (REL_scanned | REL_deleted))
-		return;
+	fb_assert(!(relation->rel_flags & (REL_scanned | REL_deleted)));
 
 	relation->rel_flags |= REL_being_scanned;
+
+	LCK_lock(tdbb, relation->rel_rescan_lock, LCK_SR, LCK_WAIT);
+	relation->rel_flags &= ~REL_rescan;
+
 	dependencies = (relation->rel_flags & REL_get_dependencies) ? true : false;
 	sys_triggers = (relation->rel_flags & REL_sys_triggers) ? true : false;
 	relation->rel_flags &= ~(REL_get_dependencies | REL_sys_triggers);
@@ -4070,9 +4095,13 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
 	AutoCacheRequest request(tdbb, irq_r_fields, IRQ_REQUESTS);
 	CompilerScratch* csb = NULL;
 
+	bool found = false;
+
 	FOR(REQUEST_HANDLE request)
 		REL IN RDB$RELATIONS WITH REL.RDB$RELATION_ID EQ relation->rel_id
 	{
+		found = true;
+
 		// Pick up relation level stuff
 		relation->rel_current_fmt = REL.RDB$FORMAT;
 		vec<jrd_fld*>* vector = relation->rel_fields =
@@ -4346,6 +4375,27 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
 
 	delete csb;
 
+	if (!found && !(relation->rel_flags & REL_scanned))
+	{
+		// Relation was not found in RDB$RELATIONS. It could be system virtual relation
+		// defined in INI.
+
+		if (relation->isSystem() && relation->isVirtual())
+		{
+			relation->rel_flags |= REL_scanned;
+		}
+		else
+		{
+			fb_assert(false);
+
+			string name(relation->rel_name);
+			if (name.isEmpty())
+				name.printf("<ID = %u>", relation->rel_id);
+
+			ERR_post(Arg::Gds(isc_relnotdef) << Arg::Str(name));
+		}
+	}
+
 	// We have just loaded the triggers onto the local vector triggers.
 	// It's now time to place them at their rightful place inside the relation block.
 
@@ -4360,8 +4410,13 @@ void MET_scan_relation(thread_db* tdbb, jrd_rel* relation)
 		relation->replaceTriggers(tdbb, triggers);
 	}
 
-	LCK_lock(tdbb, relation->rel_rescan_lock, LCK_SR, LCK_WAIT);
 	relation->rel_flags &= ~REL_being_scanned;
+
+	if (relation->rel_flags & REL_rescan)
+	{
+		LCK_release(tdbb, relation->rel_rescan_lock);
+		relation->rel_flags &= ~(REL_scanned | REL_rescan);
+	}
 
 	relation->rel_current_format = NULL;
 
@@ -4669,8 +4724,13 @@ static int rescan_ast_relation(void* ast_object)
 
 		AsyncContextHolder tdbb(dbb, FB_FUNCTION, relation->rel_rescan_lock);
 
-		LCK_release(tdbb, relation->rel_rescan_lock);
-		relation->rel_flags &= ~REL_scanned;
+		if (relation->rel_flags & REL_being_scanned)
+			relation->rel_flags |= REL_rescan;
+		else
+		{
+			LCK_release(tdbb, relation->rel_rescan_lock);
+			relation->rel_flags &= ~REL_scanned;
+		}
 	}
 	catch (const Firebird::Exception&)
 	{} // no-op

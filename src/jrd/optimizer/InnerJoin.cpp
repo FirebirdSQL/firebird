@@ -199,20 +199,22 @@ void InnerJoin::estimateCost(unsigned position,
 	// likely cardinality under-estimation.
 	const bool avoidHashJoin = (streamCardinality <= MINIMUM_CARDINALITY && !stream->baseIndexes);
 
-	auto currentCardinality = candidate->unique ?
-		MINIMUM_CARDINALITY : streamCardinality * candidate->selectivity;
-	auto currentCost = candidate->cost;
+	auto currentCardinality = streamCardinality * candidate->selectivity;
 
 	// Given the "first-rows" mode specified (or implied)
 	// and unless an external sort is to be applied afterwards,
 	// fake the expected cardinality to look as low as possible
-	// to estimate the cost just for a single row being produced
+	// to estimate the cost just for a single row being produced.
+	// The same rule is used if the retrieval is unique.
 
-	if ((!sort || candidate->navigated) && optimizer->favorFirstRows())
+	const bool firstRows = (optimizer->favorFirstRows() &&
+		(!sortPtr || !*sortPtr || candidate->navigated));
+
+	if ((candidate->unique || firstRows) && currentCardinality > MINIMUM_CARDINALITY)
 		currentCardinality = MINIMUM_CARDINALITY;
 
 	// Calculate the nested loop cost, it's our default option
-	const auto loopCost = currentCost * cardinality;
+	const auto loopCost = candidate->cost * cardinality;
 	cost = loopCost;
 
 	// Consider whether the current stream can be hash-joined to the prior ones.

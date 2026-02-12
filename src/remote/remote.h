@@ -915,7 +915,9 @@ class InternalCryptKey final :
 {
 public:
 	InternalCryptKey()
-		: keyName(getPool())
+		: encrypt(getPool()),
+		  decrypt(getPool()),
+		  keyName(getPool())
 	{ }
 
 	// ICryptKey implementation
@@ -928,8 +930,8 @@ public:
 	class Key : public Firebird::UCharBuffer
 	{
 	public:
-		Key()
-			: Firebird::UCharBuffer(getPool())
+		Key(MemoryPool& pool)
+			: Firebird::UCharBuffer(pool)
 		{ }
 
 		void set(unsigned keyLength, const void* key)
@@ -1267,8 +1269,7 @@ struct rem_port : public Firebird::GlobalStorage, public Firebird::RefCounted
 	SOCKET			port_channel;		// handle for connection (from by OS)
 	struct linger	port_linger;		// linger value as defined by SO_LINGER
 	Rdb*			port_context;
-	Thread::Handle	port_events_thread;	// handle of thread, handling incoming events
-	Thread			port_events_threadId;
+	Thread			port_events_thread;	// thread handling incoming events
 	RemotePortGuard* port_thread_guard;	// will close port_events_thread in safe way
 #ifdef WIN_NT
 	HANDLE			port_pipe;			// port pipe handle
@@ -1432,7 +1433,7 @@ public:
 		port_flags(0), port_partial_data(false), port_z_data(false),
 		port_connect_timeout(0), port_dummy_packet_interval(0),
 		port_dummy_timeout(0), port_handle(INVALID_SOCKET), port_channel(INVALID_SOCKET), port_context(0),
-		port_events_thread(0), port_thread_guard(0),
+		port_thread_guard(0),
 #ifdef WIN_NT
 		port_pipe(INVALID_HANDLE_VALUE), port_event(INVALID_HANDLE_VALUE),
 #endif
@@ -1718,7 +1719,7 @@ private:
 		{
 			if (waitFlag)
 			{
-				Thread::waitForCompletion(waitHandle);
+				thread.waitForCompletion();
 
 				fb_assert(asyncPort);
 
@@ -1730,7 +1731,7 @@ private:
 		}
 
 		rem_port* asyncPort;
-		Thread::Handle waitHandle;
+		Thread thread;
 		bool waitFlag;
 	};
 
@@ -1743,9 +1744,9 @@ public:
 			wThr.asyncPort->port_thread_guard = this;
 	}
 
-	void setWait(Thread::Handle& handle)
+	void setWait(Thread&& handle)
 	{
-		wThr.waitHandle = handle;
+		wThr.thread = std::move(handle);
 		wThr.waitFlag = true;
 		fb_assert(wThr.asyncPort);
 		wThr.asyncPort->port_thread_guard = nullptr;

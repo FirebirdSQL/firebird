@@ -43,7 +43,7 @@
 const int PRINT_BUFFER_LENGTH	= 1024;
 const int MAXTERM_SIZE			= 32;	// SQL termination character
 const int USER_LENGTH 			= 128;
-const int PASSWORD_LENGTH		= 128;
+const int PASSWORD_LENGTH		= 8192;
 const int ROLE_LENGTH			= 128;
 
 /* these constants are purely idiotic; there's no point in having

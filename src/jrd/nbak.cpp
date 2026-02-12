@@ -121,6 +121,7 @@ void NBackupStateLock::blockingAstHandler(thread_db* tdbb)
 	}
 
 	{	// scope
+		backup_manager->stateBlocking = true;
 		Firebird::MutexUnlockGuard counterGuard(counterMutex, FB_FUNCTION);
 		backup_manager->stateBlocking = !backup_manager->localStateLock.tryBeginWrite(FB_FUNCTION);
 		if (backup_manager->stateBlocking)

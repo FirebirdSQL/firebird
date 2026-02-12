@@ -327,7 +327,7 @@ public:
 		else if (!guard.tryEnter())
 			return -1;
 
-		DEB_FLOCK("%d lock %p %c%c\n", Thread::getId(), this, shared ? 's' : 'X', wait ? 'W' : 't');
+		DEB_FLOCK("%d lock %p %c%c\n", Thread::getCurrentThreadId(), this, shared ? 's' : 'X', wait ? 'W' : 't');
 
 		while (counter != 0)	// file lock belongs to our process
 		{
@@ -336,14 +336,14 @@ public:
 			{
 				// one more shared lock
 				++counter;
-				DEB_FLOCK("%d fast %p c=%d\n", Thread::getId(), this, counter);
+				DEB_FLOCK("%d fast %p c=%d\n", Thread::getCurrentThreadId(), this, counter);
 				return 0;
 			}
-			if ((!shared) && counter < 0 && threadId == Thread::getId())
+			if ((!shared) && counter < 0 && threadId == Thread::getCurrentThreadId())
 			{
 				// recursive excl lock
 				--counter;
-				DEB_FLOCK("%d fast %p c=%d\n", Thread::getId(), this, counter);
+				DEB_FLOCK("%d fast %p c=%d\n", Thread::getCurrentThreadId(), this, counter);
 				return 0;
 			}
 
@@ -351,11 +351,11 @@ public:
 			// wait for another thread to release a lock
 			if (!wait)
 			{
-				DEB_FLOCK("%d failed internally %p c=%d rc -1\n", Thread::getId(), this, counter);
+				DEB_FLOCK("%d failed internally %p c=%d rc -1\n", Thread::getCurrentThreadId(), this, counter);
 				return -1;
 			}
 
-			DEB_FLOCK("%d wait %p c=%d\n", Thread::getId(), this, counter);
+			DEB_FLOCK("%d wait %p c=%d\n", Thread::getCurrentThreadId(), this, counter);
 			waitOn.wait(mutex);
 		}
 
@@ -379,13 +379,13 @@ public:
 			if (!wait && (rc == EWOULDBLOCK))
 				rc = -1;
 #endif
-			DEB_FLOCK("%d failed on file %p c=%d rc %d\n", Thread::getId(), this, counter, rc);
+			DEB_FLOCK("%d failed on file %p c=%d rc %d\n", Thread::getCurrentThreadId(), this, counter, rc);
 			return rc;
 		}
 
 		if (!shared)
 		{
-			threadId = Thread::getId();
+			threadId = Thread::getCurrentThreadId();
 
 			// call init() when needed
 			if (init && !shared)
@@ -394,7 +394,7 @@ public:
 
 		// mark lock as taken
 		counter = shared ? 1 : -1;
-		DEB_FLOCK("%d filelock %p c=%d\n", Thread::getId(), this, counter);
+		DEB_FLOCK("%d filelock %p c=%d\n", Thread::getCurrentThreadId(), this, counter);
 		return 0;
 	}
 
@@ -405,7 +405,7 @@ public:
 		MutexEnsureUnlock guard(mutex, FB_FUNCTION);
 		guard.enter();
 
-		DEB_FLOCK("%d UNlock %p c=%d\n", Thread::getId(), this, counter);
+		DEB_FLOCK("%d UNlock %p c=%d\n", Thread::getCurrentThreadId(), this, counter);
 
 		if (counter < 0)
 			++counter;
@@ -414,7 +414,7 @@ public:
 
 		if (counter != 0)
 		{
-			DEB_FLOCK("%d done %p c=%d\n", Thread::getId(), this, counter);
+			DEB_FLOCK("%d done %p c=%d\n", Thread::getCurrentThreadId(), this, counter);
 			return;
 		}
 
@@ -438,7 +438,7 @@ public:
 			iscLogStatus("Unlock error", &local);
 		}
 
-		DEB_FLOCK("%d file-done %p\n", Thread::getId(), this);
+		DEB_FLOCK("%d file-done %p\n", Thread::getCurrentThreadId(), this);
 		waitOn.notifyAll();
 	}
 

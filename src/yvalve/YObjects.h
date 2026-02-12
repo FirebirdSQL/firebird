@@ -519,6 +519,7 @@ public:
 	void destroy(unsigned dstrFlags);
 	void shutdown();
 	isc_db_handle& getHandle();
+	void getOdsVersion(USHORT* majorVersion, USHORT* minorVersion);
 
 	// IAttachment implementation
 	void getInfo(Firebird::CheckStatusWrapper* status, unsigned int itemsLength,
@@ -596,6 +597,10 @@ public:
 	HandleArray<YTransaction> childTransactions;
 	Firebird::Array<CleanupCallback*> cleanupHandlers;
 	Firebird::StatusHolder savedStatus;	// Do not use raise() method of this class in yValve.
+
+private:
+	USHORT cachedOdsMajorVersion = 0;
+	USHORT cachedOdsMinorVersion = 0;
 };
 
 class YService final :

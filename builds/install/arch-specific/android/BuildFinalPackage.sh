@@ -45,6 +45,23 @@ $ANDROID_HOME/platform-tools/adb -s $AndroidDeviceName push gen/$InitialDebugTar
 $ANDROID_HOME/platform-tools/adb -s $AndroidDeviceName shell "(cd $AndroidDir && tar xvf $InitialDebugTar)"
 $ANDROID_HOME/platform-tools/adb -s $AndroidDeviceName shell "(cd $AndroidDir/firebird && ./common_test --log_level=all && ./libEngine13_test --log_level=all)"
 $ANDROID_HOME/platform-tools/adb -s $AndroidDeviceName shell "(cd $AndroidDir/firebird && ./AfterUntar.sh)"
+
+# Verify ICU works
+$ANDROID_HOME/platform-tools/adb -s $AndroidDeviceName shell <<EOF
+set -e
+cd $AndroidDir/firebird
+mkdir -p icu_test
+export FIREBIRD_LOCK=$AndroidDir/firebird/icu_test
+export FIREBIRD_TMP=$AndroidDir/firebird/icu_test
+cat <<'SQL' | ./isql -q
+create database 'icu_test/icu_test.fdb';
+select '1' from rdb\$database;
+select _win1252 '2' from rdb\$database;
+select _utf8 '3' collate unicode from rdb\$database;
+drop database;
+SQL
+EOF
+
 $ANDROID_HOME/platform-tools/adb -s $AndroidDeviceName pull $AndroidDir/firebird/firebird.msg gen/Release/firebird/
 $ANDROID_HOME/platform-tools/adb -s $AndroidDeviceName pull $AndroidDir/firebird/security5.fdb gen/Release/firebird/
 #$ANDROID_HOME/platform-tools/adb -s $AndroidDeviceName pull $AndroidDir/firebird/examples/empbuild/employe2.fdb gen/Release/firebird/examples/empbuild/

@@ -197,7 +197,7 @@ ifeq ($(CLIENT_ONLY_FLG),N)
 	CC="$(CC)" CFLAGS="$(CFLAGS)" AR="$(AR)" $(MAKE) -C $(ROOT)/extern/btyacc
 endif
 
-	CXX="$(CXX)" CXXFLAGS="$(CXXFLAGS)" $(MAKE) -C $(ROOT)/extern/cloop TARGET=release WITH_FPC=0 BUILD_DIR=$(TMP_ROOT)/cloop OUT_DIR=$(GEN_ROOT)/$(TARGET)/cloop core
+	CXX="$(CXX)" $(MAKE) -C $(ROOT)/extern/cloop TARGET=release WITH_FPC=0 BUILD_DIR=$(TMP_ROOT)/cloop OUT_DIR=$(GEN_ROOT)/$(TARGET)/cloop core
 
 	CC="$(CC)" CFLAGS="$(CFLAGS)" AR="$(AR)" $(MAKE) -C $(ROOT)/extern/decNumber
 	ln -sf $(ROOT)/extern/decNumber/libdecFloat.a $(STATIC_LIB)

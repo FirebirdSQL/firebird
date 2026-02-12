@@ -1069,12 +1069,12 @@ static void cleanup_port(rem_port* port)
  *
  **************************************/
 
-	if (port->port_thread_guard && port->port_events_thread && !port->port_events_threadId.isCurrent())
+	if (port->port_thread_guard && port->port_events_thread.isCurrent())
 	{
 		//port->port_thread_guard->setWait(port->port_events_thread);
 
 		// Do not release XNET structures while event's thread working
-		Thread::waitForCompletion(port->port_events_thread);
+		port->port_events_thread.waitForCompletion();
 	}
 
 	if (port->port_xcc)

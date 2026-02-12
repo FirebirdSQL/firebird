@@ -498,7 +498,7 @@ static bool create_expression_index(thread_db* tdbb, SSHORT phase, DeferredWork*
 static void check_computed_dependencies(thread_db* tdbb, jrd_tra* transaction,
 	const MetaName& fieldName);
 static void check_dependencies(thread_db*, const TEXT*, const TEXT*, const TEXT*, int, jrd_tra*);
-static void check_filename(const Firebird::string&, bool);
+static void check_filename(thread_db*, const Firebird::string&, bool);
 static void cleanup_index_creation(thread_db*, DeferredWork*, jrd_tra*);
 static bool formatsAreEqual(const Format*, const Format*);
 static bool	find_depend_in_dfw(thread_db*, TEXT*, USHORT, USHORT, jrd_tra*);
@@ -1883,9 +1883,8 @@ static bool add_file(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra*
 		// Check the file name for node name. This has already
 		// been done for shadows in add_shadow()
 
-		if (work->dfw_type != dfw_add_shadow) {
-			check_filename(work->dfw_name, true);
-		}
+		if (work->dfw_type != dfw_add_shadow)
+			check_filename(tdbb, work->dfw_name, true);
 
 		// User transaction may be safely used instead of system, cause
 		// we requested and got exclusive database access. AP-2008.
@@ -2003,7 +2002,7 @@ static bool add_shadow(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tr
 		return true;
 
 	case 4:
-		check_filename(work->dfw_name, false);
+		check_filename(tdbb, work->dfw_name, false);
 
 		/* could have two cases:
 		   1) this shadow has already been written to, so add this file using
@@ -2155,7 +2154,7 @@ static bool add_difference(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 				ERR_post(Arg::Gds(isc_no_meta_update) <<
 						 Arg::Gds(isc_wrong_backup_state));
 			}
-			check_filename(work->dfw_name, true);
+			check_filename(tdbb, work->dfw_name, true);
 			dbb->dbb_backup_manager->setDifference(tdbb, work->dfw_name.c_str());
 		}
 		break;
@@ -3055,7 +3054,7 @@ static void check_dependencies(thread_db* tdbb,
 }
 
 
-static void check_filename(const Firebird::string& name, bool shareExpand)
+static void check_filename(thread_db* tdbb, const Firebird::string& name, bool shareExpand)
 {
 /**************************************
  *
@@ -3068,6 +3067,9 @@ static void check_filename(const Firebird::string& name, bool shareExpand)
  *	inet node name.
  *
  **************************************/
+	if (tdbb->tdbb_flags & TDBB_replicator)
+		return;
+
 	const Firebird::PathName file_name(name.ToPathName());
 	const bool valid = file_name.find("::") == Firebird::PathName::npos;
 
@@ -6309,8 +6311,15 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 		DFW_post_work(transaction, dfw_scan_relation, NULL, relation->rel_id);
 
 		// signal others about new format presence
-		LCK_lock(tdbb, relation->rel_rescan_lock, LCK_EX, LCK_WAIT);
 		LCK_release(tdbb, relation->rel_rescan_lock);
+		{
+			// Use temp lock to avoid AST call
+			Lock tmpLock(tdbb, sizeof(SLONG), LCK_rel_rescan);
+			tmpLock.setKey(relation->rel_id);
+
+			LCK_lock(tdbb, &tmpLock, LCK_EX, LCK_WAIT);
+			LCK_release(tdbb, &tmpLock);
+		}
 
 		break;
 	}

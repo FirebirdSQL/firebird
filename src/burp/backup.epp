@@ -1915,6 +1915,7 @@ void put_relation( burp_rel* relation)
 	burp_fld* unaligned = NULL;
 	burp_fld* aligned4 = NULL;
 	burp_fld* aligned8 = NULL;
+	burp_fld* aligned16 = NULL;
 
 	burp_fld* fields = get_fields(relation);
 
@@ -1926,7 +1927,13 @@ void put_relation( burp_rel* relation)
 		USHORT l = field->fld_length;
 		if (field->fld_type == blr_varying)
 			l += sizeof(USHORT);
-		if (!(l & 7))
+
+		if (!(l & 15))
+		{
+			field->fld_next = aligned16;
+			aligned16 = field;
+		}
+		else if (!(l & 7))
 		{
 			field->fld_next = aligned8;
 			aligned8 = field;
@@ -1976,6 +1983,13 @@ void put_relation( burp_rel* relation)
 	while (field = aligned8)
 	{
 		aligned8 = field->fld_next;
+		field->fld_next = relation->rel_fields;
+		relation->rel_fields = field;
+	}
+
+	while ((field = aligned16))
+	{
+		aligned16 = field->fld_next;
 		field->fld_next = relation->rel_fields;
 		relation->rel_fields = field;
 	}

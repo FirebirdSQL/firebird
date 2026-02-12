@@ -121,7 +121,8 @@ void WorkerStableAttachment::fini()
 		Database* dbb = attachment->att_database;
 
 		FbLocalStatus status_vector;
-		BackgroundContextHolder tdbb(dbb, attachment, &status_vector, FB_FUNCTION);
+		ThreadContextHolder tdbb(dbb, attachment, &status_vector);
+		DatabaseContextHolder dbHolder(tdbb);
 
 		Monitoring::cleanupAttachment(tdbb);
 		dbb->dbb_extManager->closeAttachment(tdbb, attachment);

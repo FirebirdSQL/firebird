@@ -131,7 +131,7 @@ bool	get_collation(BurpGlobals* tdgbl);
 SLONG	get_compressed(BurpGlobals* tdgbl, UCHAR* buffer, SLONG length);
 void	get_data(BurpGlobals* tdgbl, burp_rel*, WriteRelationReq* req);
 bool	get_exception(BurpGlobals* tdgbl);
-burp_fld*	get_field(BurpGlobals* tdgbl, burp_rel*);
+burp_fld*	get_field(BurpGlobals* tdgbl, burp_rel*, USHORT id);
 bool	get_field_dimensions(BurpGlobals* tdgbl);
 bool	get_files(BurpGlobals* tdgbl);
 bool	get_filter(BurpGlobals* tdgbl);
@@ -3703,7 +3703,7 @@ bool get_exception(BurpGlobals* tdgbl)
 }
 
 
-burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation)
+burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation, USHORT id)
 {
 /**************************************
  *
@@ -3758,6 +3758,9 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation)
 			// ODS 12
 			X.RDB$GENERATOR_NAME.NULL = TRUE;
 			X.RDB$IDENTITY_TYPE.NULL = TRUE;
+
+			X.RDB$FIELD_ID.NULL = FALSE;
+			X.RDB$FIELD_ID = id;
 
 			skip_init(&scan_next_attr);
 			while (get_attribute(&attribute, tdgbl) != att_end)
@@ -3962,6 +3965,9 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation)
 			X.RDB$DEFAULT_VALUE.NULL = TRUE;
 			X.RDB$NULL_FLAG.NULL = TRUE;
 			X.RDB$COLLATION_ID.NULL = TRUE;
+
+			X.RDB$FIELD_ID.NULL = FALSE;
+			X.RDB$FIELD_ID = id;
 
 			skip_init(&scan_next_attr);
 			while (get_attribute(&attribute, tdgbl) != att_end)
@@ -7976,6 +7982,7 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 	// Eat up misc. records
 	burp_fld* field = NULL;
 	burp_fld** ptr = &relation->rel_fields;
+	USHORT id = 0;
 
 	rec_type record;
 	while (get_record(&record, tdgbl) != rec_data)
@@ -8004,7 +8011,7 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 			return true;
 
 		case rec_field:
-			*ptr = field = get_field (tdgbl, relation);
+			*ptr = field = get_field(tdgbl, relation, id++);
 			if (!field)
 				return false;
 			ptr = &field->fld_next;

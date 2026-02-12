@@ -99,6 +99,7 @@ enum literal_string_type
 
 #if defined(WIN_NT)
 #include <windows.h>
+#include <VersionHelpers.h>
 #endif
 #include "ibase.h"
 #include "../isql/isql.h"
@@ -349,14 +350,21 @@ static int win32ReadConsole(FILE* file, CharBuffer& mbBuffer)
 			SetConsoleMode(handle, oldMode);
 	});
 
-	const size_t MAX_LINE_LENGTH = MAX_USHORT;
-	WCHAR* wideBuf = wideBuffer->getBuffer(MAX_LINE_LENGTH, false);
+	// Before Windows 10, ReadConsole() can't work with relatively large input
+	// buffers and set ERROR_NOT_ENOUGH_MEMORY error. Thus, use initial buffer size
+	// twice less than for Windows 10 and handle error by reducing the buffer size.
+
+	static size_t maxLineLength = IsWindows10OrGreater() ? MAX_USHORT : MAX_SSHORT;
+	WCHAR* wideBuf = wideBuffer->getBuffer(maxLineLength, false);
 
 	DWORD charsRead;
-	if (!ReadConsoleW(handle, wideBuf, MAX_LINE_LENGTH, &charsRead, NULL))
+	while (!ReadConsoleW(handle, wideBuf, maxLineLength, &charsRead, NULL))
 	{
-		fb_assert(false);
-		return -1;
+		const DWORD error = GetLastError();
+		if (error == ERROR_NOT_ENOUGH_MEMORY && maxLineLength > 256)
+			maxLineLength -= 256;
+		else
+			Firebird::system_error::raise("ReadConsoleW", error);
 	}
 
 	if (!charsRead)
@@ -494,7 +502,7 @@ static Firebird::ITransaction* D__trans = NULL;
 static Firebird::ITransaction* M__trans = NULL;
 static int global_numbufs;	// # of cache buffers on connect
 static Firebird::IStatement* global_Stmt = NULL;
-static SCHAR Password[128];
+static SCHAR Password[PASSWORD_LENGTH];
 static SCHAR Charset[128];
 static bool Merge_stderr;
 
@@ -764,20 +772,17 @@ static void atexit_fb_shutdown()
 
 int CLIB_ROUTINE main(int argc, char* argv[])
 {
-/**************************************
- *
- *	m a i n
- *
- **************************************
- *
- * Functional description
- *	This calls ISQL_main, and exists to
- *	isolate main which does not exist under
- *	MS Windows.
- *
- **************************************/
-
-	return ISQL_main(argc, argv);
+	try
+	{
+		return ISQL_main(argc, argv);
+	}
+	catch (const Firebird::Exception& ex)
+	{
+		Firebird::StaticStatusVector st;
+		ex.stuffException(st);
+		isc_print_status(st.begin());
+	}
+	return 1;
 }
 
 
@@ -6784,7 +6789,7 @@ static processing_state newdb(TEXT* dbname,
 	strcpy(dbname, save_database);
 	ISQL_FREE(save_database);
 
-	TEXT local_psw[BUFFER_LENGTH256];
+	TEXT local_psw[PASSWORD_LENGTH];
 	TEXT local_usr[BUFFER_LENGTH256];
 	TEXT local_sql_role[BUFFER_LENGTH256];
 

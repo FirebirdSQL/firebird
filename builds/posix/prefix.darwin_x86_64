@@ -28,15 +28,17 @@ export DYLD_LIBRARY_PATH
 DYLD_FALLBACK_LIBRARY_PATH=/opt/local/lib
 export DYLD_FALLBACK_LIBRARY_PATH
 
-MACOSX_DEPLOYMENT_TARGET=10.9
+MACOSX_DEPLOYMENT_TARGET=12.7
 export MACOSX_DEPLOYMENT_TARGET
 
-PROD_FLAGS=-O1 -DDARWIN -pipe -MMD -fPIC -fno-common -mmacosx-version-min=10.7
-DEV_FLAGS=-ggdb -DDARWIN -pipe -MMD -fPIC -fno-omit-frame-pointer -fno-common -Werror=delete-incomplete -Wall -fno-optimize-sibling-calls -mmacosx-version-min=10.7 -Wno-non-virtual-dtor
+PLATFORM_PLUSPLUS_FLAGS=-Wno-invalid-offsetof
+
+PROD_FLAGS=-O1 -DDARWIN -pipe -MMD -fPIC -fno-common -mmacosx-version-min=12.7
+DEV_FLAGS=-ggdb -DDARWIN -pipe -MMD -fPIC -fno-omit-frame-pointer -fno-common -Wall -fno-optimize-sibling-calls -mmacosx-version-min=12.7 -Wno-non-virtual-dtor
 CXXFLAGS:=$(CXXFLAGS) -fvisibility-inlines-hidden -fvisibility=hidden -msse4
 
-LD_FLAGS+=-liconv
-FIREBIRD_LIBRARY_LINK+=-liconv
+#LD_FLAGS+=-liconv
+#FIREBIRD_LIBRARY_LINK+=-liconv
 UNDEF_PLATFORM=
 
 include $(ROOT)/gen/darwin.defaults

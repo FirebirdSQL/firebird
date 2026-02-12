@@ -3862,7 +3862,7 @@ Record* VIO_record(thread_db* tdbb, record_param* rpb, const Format* format, Mem
 	jrd_rel* relation = rpb->rpb_relation;
 	VIO_trace(DEBUG_TRACE,
 		"VIO_record (rel_id %u, record_param %" QUADFORMAT"d, format %d, pool %p)\n",
-		relation->rel_id, rpb->rpb_number.getValue(), format ? format->fmt_version : 0,
+		relation ? relation->rel_id : 0, rpb->rpb_number.getValue(), format ? format->fmt_version : 0,
 		(void*) pool);
 #endif
 
@@ -4996,7 +4996,7 @@ static UCHAR* delete_tail(thread_db* tdbb,
 	jrd_rel* relation = rpb->rpb_relation;
 	VIO_trace(DEBUG_WRITES,
 		"delete_tail (rel_id %u, record_param %" QUADFORMAT"d, prior_page %" SLONGFORMAT", tail %p, length %u)\n",
-		relation->rel_id, rpb->rpb_number.getValue(), prior_page, tail, tail_length);
+		relation->rel_id, rpb->rpb_number.getValue(), prior_page, tail, tail_end - tail);
 
 	VIO_trace(DEBUG_WRITES_INFO,
 		"   tail of record  %" SLONGFORMAT":%d, rpb_trans %" SQUADFORMAT
@@ -6114,6 +6114,8 @@ static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNu
 
 	if (new_rpb)
 	{
+		new_rpb->rpb_flags &= ~rpb_delta;
+
 		// If both descriptors share the same record, there cannot be any difference.
 		// This trick is used by VIO_writelock(), but can be a regular practice as well.
 		if (new_rpb->rpb_address == temp->rpb_address)

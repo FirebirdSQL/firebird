@@ -104,7 +104,7 @@ THREAD_ENTRY_DECLARE threadStart(THREAD_ENTRY_PARAM arg)
 
 #ifdef USE_POSIX_THREADS
 #define START_THREAD
-Thread Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Handle* p_handle)
+void Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Thread* pThread)
 {
 /**************************************
  *
@@ -117,18 +117,19 @@ Thread Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Han
  *	status if not.
  *
  **************************************/
-	pthread_t thread;
-	pthread_t* p_thread = p_handle ? p_handle : &thread;
+	Thread thread;
+	if (!pThread)
+		pThread = &thread;
 	pthread_attr_t pattr;
 	int state;
 
 #if defined (LINUX) || defined (FREEBSD)
-	if ((state = pthread_create(p_thread, NULL, THREAD_ENTRYPOINT, THREAD_ARG)))
+	if ((state = pthread_create(&pThread->m_handle, NULL, THREAD_ENTRYPOINT, THREAD_ARG)))
 		Firebird::system_call_failed::raise("pthread_create", state);
 
-	if (!p_handle)
+	if (pThread == &thread)
 	{
-		if ((state = pthread_detach(*p_thread)))
+		if ((state = pthread_detach(pThread->m_handle)))
 			Firebird::system_call_failed::raise("pthread_detach", state);
 	}
 #else
@@ -162,13 +163,13 @@ Thread Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Han
 	if (state)
 		Firebird::system_call_failed::raise("pthread_attr_setscope", state);
 
-	if (!p_handle)
+	if (pThread == &thread)
 	{
 		state = pthread_attr_setdetachstate(&pattr, PTHREAD_CREATE_DETACHED);
 		if (state)
 			Firebird::system_call_failed::raise("pthread_attr_setdetachstate", state);
 	}
-	state = pthread_create(p_thread, &pattr, THREAD_ENTRYPOINT, THREAD_ARG);
+	state = pthread_create(&pThread->m_handle, &pattr, THREAD_ENTRYPOINT, THREAD_ARG);
 	int state2 = pthread_attr_destroy(&pattr);
 	if (state)
 		Firebird::system_call_failed::raise("pthread_create", state);
@@ -177,37 +178,50 @@ Thread Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Han
 
 #endif
 
-	if (p_handle)
-	{
 #ifdef HAVE_PTHREAD_CANCEL
+	if (pThread != &thread)
+	{
 		int dummy;		// We do not want to know old cancel type
 		state = pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, &dummy);
 		if (state)
 			 Firebird::system_call_failed::raise("pthread_setcanceltype", state);
-#endif
 	}
-
-	return Thread(*p_thread);
+#endif
 }
 
-void Thread::waitForCompletion(Handle& thread)
+void Thread::waitForCompletion()
 {
-	int state = pthread_join(thread, NULL);
-	if (state)
-		Firebird::system_call_failed::raise("pthread_join", state);
+	if (isValid())
+	{
+		fb_assert(!isCurrent());
+
+		int state = pthread_join(m_handle, NULL);
+		if (state)
+			Firebird::system_call_failed::raise("pthread_join", state);
+		m_handle = INVALID_HANDLE;
+	}
 }
 
-void Thread::kill(Handle& thread)
+// ignore errors - this is abnormal completion call
+void Thread::kill() noexcept
 {
 #ifdef HAVE_PTHREAD_CANCEL
-	int state = pthread_cancel(thread);
-	if (state)
-		Firebird::system_call_failed::raise("pthread_cancel", state);
-	waitForCompletion(thread);
+	if (isValid())
+	{
+		fb_assert(!isCurrent());
+
+		pthread_cancel(m_handle);
+		try
+		{
+			waitForCompletion();
+		}
+		catch(...) { }
+		m_handle = INVALID_HANDLE;
+	}
 #endif
 }
 
-ThreadId Thread::getId()
+ThreadId Thread::getCurrentThreadId()
 {
 #ifdef USE_LWP_AS_THREAD_ID
 	static __thread int tid = 0;
@@ -219,15 +233,9 @@ ThreadId Thread::getId()
 #endif
 }
 
-bool Thread::isCurrent(Handle threadHandle)
+bool Thread::isCurrent() const noexcept
 {
-	static_assert(std::is_same<Handle, InternalId>().value, "type mismatch");
-	return pthread_equal(threadHandle, pthread_self());
-}
-
-bool Thread::isCurrent()
-{
-	return pthread_equal(internalId, pthread_self());
+	return isValid() && pthread_equal(m_handle, pthread_self());
 }
 
 void Thread::sleep(unsigned milliseconds)
@@ -274,7 +282,7 @@ void Thread::yield()
 
 #ifdef WIN_NT
 #define START_THREAD
-Thread Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Handle* p_handle)
+void Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Thread* pThread)
 {
 /**************************************
  *
@@ -331,9 +339,9 @@ Thread Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Han
 
 	SetThreadPriority(handle, priority);
 
-	if (p_handle)
+	if (pThread)
 	{
-		*p_handle = handle;
+		*pThread = Thread(handle, thread_id);
 		ResumeThread(handle);
 	}
 	else
@@ -341,42 +349,53 @@ Thread Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Han
 		ResumeThread(handle);
 		CloseHandle(handle);
 	}
-
-	return Thread(thread_id);
 }
 
-void Thread::waitForCompletion(Handle& handle)
+bool Thread::waitFor(unsigned milliseconds) const noexcept
 {
+	if (!isValid())
+		return true;
+
+	fb_assert(!isCurrent());
+
+	return WaitForSingleObject(m_handle, milliseconds) != WAIT_TIMEOUT;
+}
+
+void Thread::waitForCompletion()
+{
+	if (!isValid())
+		return;
+
+	fb_assert(!isCurrent());
+
 	// When current DLL is unloading, OS loader holds loader lock. When thread is
 	// exiting, OS notifies every DLL about it, and acquires loader lock. In such
 	// scenario waiting on thread handle will never succeed.
 	if (!Firebird::dDllUnloadTID) {
-		WaitForSingleObject(handle, 10000);
+		WaitForSingleObject(m_handle, 10000);		// error handler ????????????
 	}
-	CloseHandle(handle);
-	handle = 0;
+	detach();
 }
 
-void Thread::kill(Handle& handle)
+void Thread::kill() noexcept
 {
-	TerminateThread(handle, -1);
-	CloseHandle(handle);
-	handle = 0;
+	if (isValid())
+	{
+		fb_assert(!isCurrent());
+
+		TerminateThread(m_handle, -1);
+		detach();
+	}
 }
 
-ThreadId Thread::getId()
+ThreadId Thread::getCurrentThreadId()
 {
 	return GetCurrentThreadId();
 }
 
-bool Thread::isCurrent(Handle threadHandle)
+bool Thread::isCurrent() const noexcept
 {
-	return GetCurrentThreadId() == GetThreadId(threadHandle);
-}
-
-bool Thread::isCurrent()
-{
-	return GetCurrentThreadId() == internalId;
+	return isValid() && (GetCurrentThreadId() == m_Id);
 }
 
 void Thread::sleep(unsigned milliseconds)
@@ -390,43 +409,3 @@ void Thread::yield()
 }
 
 #endif  // WIN_NT
-
-
-#ifndef START_THREAD
-ThreadId Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Handle* p_handle)
-{
-/**************************************
- *
- *	t h r e a d _ s t a r t		( G e n e r i c )
- *
- **************************************
- *
- * Functional description
- *	Wrong attempt to start a new thread.
- *
- **************************************/
-	fb_assert(false);
-	return 0;
-}
-
-void Thread::waitForCompletion(Handle&)
-{
-}
-
-void Thread::kill(Handle&)
-{
-}
-
-Thread::Handle Thread::getId()
-{
-}
-
-void Thread::sleep(unsigned milliseconds)
-{
-}
-
-void Thread::yield()
-{
-}
-
-#endif  // START_THREAD

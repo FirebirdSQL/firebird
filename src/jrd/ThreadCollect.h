@@ -34,95 +34,130 @@
 #include "../common/classes/array.h"
 #include "../common/classes/locks.h"
 
+#include <vector>
+
 
 namespace Jrd {
 
 	class ThreadCollect
 	{
 	public:
-		ThreadCollect(MemoryPool& p)
+		ThreadCollect(Firebird::MemoryPool& p)
 			: threads(p)
 		{ }
 
 		void join()
 		{
-			if (!threads.hasData())
+			if (threads.empty())
 				return;
 
 			waitFor(threads);
 		}
 
-		void ending(Thread::Handle& h)
+		// put thread into completion wait queue when it finished running
+		void ending(Thread&& thd)
 		{
-			// put thread into completion wait queue when it finished running
 			Firebird::MutexLockGuard g(threadsMutex, FB_FUNCTION);
 
-			for (unsigned n = 0; n < threads.getCount(); ++n)
+			const Thread::Mark mark(thd);
+
+			for (auto& n : threads)
 			{
-				if (threads[n].hndl == h)
+				if (mark == n.thread)
 				{
-					threads[n].ending = true;
+					n.ending = true;
 					return;
 				}
 			}
 
-			Thrd t = {h, true};
-			threads.add(t);
+			threads.push_back(Thrd(std::move(thd), true));
 		}
 
-		void running(Thread::Handle& h)
+		void ending(Thread::Mark& m)
 		{
-			// put thread into completion wait queue when it starts running
 			Firebird::MutexLockGuard g(threadsMutex, FB_FUNCTION);
 
-			Thrd t = {h, false};
-			threads.add(t);
+			for (auto& n : threads)
+			{
+				if (m == n.thread)
+				{
+					n.ending = true;
+					return;
+				}
+			}
+
+			fb_assert(!"Marked thread should be present in threads[]");
+		}
+
+		// put thread into completion wait queue when it starts running
+		void running(Thread&& thd)
+		{
+			Firebird::MutexLockGuard g(threadsMutex, FB_FUNCTION);
+
+			threads.push_back(Thrd(std::move(thd), false));
 		}
 
 		void houseKeeping()
 		{
-			if (!threads.hasData())
+			if (threads.empty())
 				return;
 
 			// join finished threads
-			AllThreads t;
+			AllThreads finished(threads.get_allocator());
 			{ // mutex scope
 				Firebird::MutexLockGuard g(threadsMutex, FB_FUNCTION);
 
-				for (unsigned n = 0; n < threads.getCount(); )
+				for (auto n = threads.begin(); n != threads.end(); )
 				{
-					if (threads[n].ending)
+					if (n->ending)
 					{
-						t.add(threads[n]);
-						threads.remove(n);
+						finished.push_back(std::move(*n));
+						n = threads.erase(n);
 					}
 					else
 						++n;
 				}
 			}
 
-			waitFor(t);
+			waitFor(finished);
 		}
 
 	private:
 		struct Thrd
 		{
-			Thread::Handle hndl;
+			Thrd(Thread&& aThread, bool ending)
+				: thread(std::move(aThread)),
+				ending(ending)
+			{ }
+
+			Thrd(Thrd&& other)
+			  : thread(std::move(other.thread)),
+				ending(other.ending)
+			{ }
+
+			Thrd& operator=(Thrd&& other)
+			{
+				thread = std::move(other.thread);
+				ending = other.ending;
+				return *this;
+			}
+
+			Thread thread;
 			bool ending;
 		};
-		typedef Firebird::HalfStaticArray<Thrd, 4> AllThreads;
+
+		using AllThreads = std::vector<Thrd, Firebird::PoolAllocator<Thrd>>;
 
 		void waitFor(AllThreads& thr)
 		{
 			Firebird::MutexLockGuard g(threadsMutex, FB_FUNCTION);
-			while (thr.hasData())
+			while (!thr.empty())
 			{
-				FB_SIZE_T n = thr.getCount() - 1;
-				Thrd t = thr[n];
-				thr.remove(n);
+				Thrd t = std::move(thr.back());
+				thr.pop_back();
 				{
 					Firebird::MutexUnlockGuard u(threadsMutex, FB_FUNCTION);
-					Thread::waitForCompletion(t.hndl);
+					t.thread.waitForCompletion();
 					fb_assert(t.ending);
 				}
 			}

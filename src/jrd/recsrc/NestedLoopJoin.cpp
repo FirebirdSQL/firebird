@@ -247,8 +247,11 @@ bool NestedLoopJoin::refetchRecord(thread_db* /*tdbb*/) const
 	return true;
 }
 
-WriteLockResult NestedLoopJoin::lockRecord(thread_db* /*tdbb*/) const
+WriteLockResult NestedLoopJoin::lockRecord(thread_db* tdbb) const
 {
+	if (m_joinType == SEMI_JOIN || m_joinType == ANTI_JOIN)
+		return m_args.front()->lockRecord(tdbb);
+
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
 }
 

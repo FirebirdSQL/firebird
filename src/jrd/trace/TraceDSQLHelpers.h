@@ -53,11 +53,13 @@ public:
 
 		m_start_clock = fb_utils::query_performance_counter();
 
-		static const char empty_string[] = "";
-		if (!m_string_len || !string)
+		if (m_string == nullptr)
+			traceEmptyStatement();
+		else if (m_string_len == 0)
 		{
-			m_string = empty_string;
-			m_string_len = 0;
+			m_string_len = fb_strlen(m_string);
+			if (m_string_len == 0)
+				traceEmptyStatement();
 		}
 	}
 
@@ -98,6 +100,15 @@ public:
 	}
 
 private:
+	void traceEmptyStatement()
+	{
+		static constexpr const char* empty_string = "<empty statement>";
+		static FB_SIZE_T empty_string_length = fb_strlen(empty_string);
+
+		m_string = empty_string;
+		m_string_len = empty_string_length;
+	}
+
 	bool m_need_trace;
 	Attachment* m_attachment;
 	jrd_tra* const m_transaction;

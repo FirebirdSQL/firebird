@@ -832,7 +832,7 @@ private:
 			: ShutdownInit(p)
 		{
 			shutdownSemaphore = &semaphore;
-			Thread::start(shutdownThread, 0, 0, &handle);
+			Thread::start(shutdownThread, 0, 0, &thread);
 
 			procInt = ISC_signal(SIGINT, handlerInt, 0);
 			procTerm = ISC_signal(SIGTERM, handlerTerm, 0);
@@ -848,11 +848,11 @@ private:
 				// Must be done to let shutdownThread close.
 				shutdownSemaphore->release();
 				shutdownSemaphore = NULL;
-				Thread::waitForCompletion(handle);
+				thread.waitForCompletion();
 			}
 		}
 	private:
-		Thread::Handle handle;
+		Thread thread;
 	};
 #endif // UNIX
 
@@ -5579,8 +5579,31 @@ isc_db_handle& YAttachment::getHandle()
 	return handle;
 }
 
+void YAttachment::getOdsVersion(USHORT* majorVersion, USHORT* minorVersion)
+{
+	if (cachedOdsMajorVersion == 0)
+	{
+		FbLocalStatus status;
+		return UTL_get_ods_version(&status, this, &cachedOdsMajorVersion, &cachedOdsMinorVersion);
+		status.check();
+	}
+
+	if (majorVersion)
+		*majorVersion = cachedOdsMajorVersion;
+
+	if (minorVersion)
+		*minorVersion = cachedOdsMinorVersion;
+}
+
 YAttachment::~YAttachment()
 {
+	if (handle)
+	{
+		// Currently it may be possible after ping() disconnected from the next
+		fb_assert(!next);
+		removeHandle(&attachments, handle);
+	}
+
 	if (provider)
 		PluginManagerInterfacePtr()->releasePlugin(provider);
 }
@@ -6034,10 +6057,8 @@ void YAttachment::ping(CheckStatusWrapper* status)
 			if (!savedStatus.getError())
 				savedStatus.save(status);
 
-			StatusVector temp(NULL);
-			CheckStatusWrapper tempCheckStatusWrapper(&temp);
-			entry.next()->detach(&tempCheckStatusWrapper);
-			next = NULL;
+			entry.next()->release();
+			next = nullptr;
 
 			status_exception::raise(savedStatus.value());
 		}

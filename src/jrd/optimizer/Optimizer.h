@@ -541,6 +541,10 @@ private:
 	BoolExprNode* makeInferenceNode(BoolExprNode* boolean,
 									ValueExprNode* arg1,
 									ValueExprNode* arg2);
+	BoolExprNode* makeInferenceNode(BoolExprNode* boolean,
+									ValueExprNode* arg,
+									ValueListNode* list);
+
 	ValueExprNode* optimizeLikeSimilar(ComparativeBoolNode* cmpNode);
 
 	thread_db* const tdbb;

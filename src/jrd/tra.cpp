@@ -1714,7 +1714,7 @@ jrd_tra* TRA_start(thread_db* tdbb, ULONG flags, SSHORT lock_timeout, Jrd::jrd_t
 	// are running purge_attachment() because it's needed for
 	// ON DISCONNECT triggers
 	if (dbb->dbb_ast_flags & DBB_shut_tran &&
-		attachment->att_purge_tid != Thread::getId())
+		attachment->att_purge_tid != Thread::getCurrentThreadId())
 	{
 		ERR_post(Arg::Gds(isc_shutinprog) << Arg::Str(attachment->att_filename));
 	}
@@ -1771,7 +1771,7 @@ jrd_tra* TRA_start(thread_db* tdbb, int tpb_length, const UCHAR* tpb, Jrd::jrd_t
 	// are running purge_attachment() because it's needed for
 	// ON DISCONNECT triggers
 	if (dbb->dbb_ast_flags & DBB_shut_tran &&
-		attachment->att_purge_tid != Thread::getId())
+		attachment->att_purge_tid != Thread::getCurrentThreadId())
 	{
 		ERR_post(Arg::Gds(isc_shutinprog) << Arg::Str(attachment->att_filename));
 	}
@@ -2935,39 +2935,63 @@ static void transaction_options(thread_db* tdbb,
 		{
 		case isc_tpb_consistency:
 			if (!isolation.assignOnce(true))
+			{
 				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
 						 Arg::Gds(isc_tpb_multiple_txn_isolation));
+			}
+
+			if (read_consistency.isAssigned())
+			{
+				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
+					// 'Option @1 is not valid if @2 was used previously in TPB'
+					Arg::Gds(isc_tpb_conflicting_options) <<
+					Arg::Str("isc_tpb_consistency") << Arg::Str("isc_tpb_read_consistency"));
+			}
 
 			if (shared_snapshot)
 			{
 				ERR_post(
 					Arg::Gds(isc_bad_tpb_content) <<
+					// 'Option @1 is not valid if @2 was used previously in TPB'
 					Arg::Gds(isc_tpb_conflicting_options) <<
 						Arg::Str("isc_tpb_consistency") << Arg::Str("isc_tpb_at_snapshot_number"));
 			}
 
 			transaction->tra_flags |= TRA_degree3;
-			transaction->tra_flags &= ~TRA_read_committed;
+			transaction->tra_flags &= ~(TRA_read_committed | TRA_read_consistency | TRA_rec_version);
 			break;
 
 		case isc_tpb_concurrency:
 			if (!isolation.assignOnce(true))
+			{
 				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
 						 Arg::Gds(isc_tpb_multiple_txn_isolation));
+			}
+
+			if (read_consistency.isAssigned())
+			{
+				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
+					// 'Option @1 is not valid if @2 was used previously in TPB'
+					Arg::Gds(isc_tpb_conflicting_options) <<
+					Arg::Str("isc_tpb_concurrency") << Arg::Str("isc_tpb_read_consistency"));
+			}
 
 			transaction->tra_flags &= ~TRA_degree3;
-			transaction->tra_flags &= ~TRA_read_committed;
+			transaction->tra_flags &= ~(TRA_read_committed | TRA_read_consistency | TRA_rec_version);
 			break;
 
 		case isc_tpb_read_committed:
 			if (!isolation.assignOnce(true))
+			{
 				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
 						 Arg::Gds(isc_tpb_multiple_txn_isolation));
+			}
 
 			if (shared_snapshot)
 			{
 				ERR_post(
 					Arg::Gds(isc_bad_tpb_content) <<
+					// 'Option @1 is not valid if @2 was used previously in TPB'
 					Arg::Gds(isc_tpb_conflicting_options) <<
 						Arg::Str("isc_tpb_read_committed") << Arg::Str("isc_tpb_at_snapshot_number"));
 			}
@@ -3072,14 +3096,16 @@ static void transaction_options(thread_db* tdbb,
 
 			if (rec_version.isAssigned())
 			{
+				const auto tpbStr = rec_version.value ?
+					"isc_tpb_rec_version" : "isc_tpb_no_rec_version";
+
 				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
 					// 'Option @1 is not valid if @2 was used previously in TPB'
 					Arg::Gds(isc_tpb_conflicting_options) <<
-					Arg::Str("isc_tpb_read_consistency") << (rec_version.value ?
-						Arg::Str("isc_tpb_rec_version") : Arg::Str("isc_tpb_no_rec_version")) );
+					Arg::Str("isc_tpb_read_consistency") << Arg::Str(tpbStr) );
 			}
 
-			transaction->tra_flags |= TRA_read_consistency | TRA_rec_version;
+			transaction->tra_flags |= TRA_read_committed | TRA_read_consistency | TRA_rec_version;
 			break;
 
 		case isc_tpb_nowait:
@@ -3427,22 +3453,19 @@ static void transaction_options(thread_db* tdbb,
 
 	if (rec_version.isAssigned() && !(transaction->tra_flags & TRA_read_committed))
 	{
-		if (rec_version.value)
-		{
-			ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-					 Arg::Gds(isc_tpb_option_without_rc) << Arg::Str("isc_tpb_rec_version"));
-		}
-		else
-		{
-			ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-					 Arg::Gds(isc_tpb_option_without_rc) << Arg::Str("isc_tpb_no_rec_version"));
-		}
+		const auto tpbStr = rec_version.value ?
+			"isc_tpb_rec_version" : "isc_tpb_no_rec_version";
+
+		ERR_post(Arg::Gds(isc_bad_tpb_content) <<
+				 Arg::Gds(isc_tpb_option_without_rc) << Arg::Str(tpbStr));
 	}
 
-	if ((transaction->tra_flags & TRA_read_committed) && !(tdbb->tdbb_flags & TDBB_sweeper))
+	if ((transaction->tra_flags & TRA_read_committed) &&
+		!(transaction->tra_flags & TRA_read_consistency) &&
+		!(tdbb->tdbb_flags & TDBB_sweeper) &&
+		tdbb->getDatabase()->dbb_config->getReadConsistency())
 	{
-		if (tdbb->getDatabase()->dbb_config->getReadConsistency())
-			transaction->tra_flags |= TRA_read_consistency | TRA_rec_version;
+		transaction->tra_flags |= TRA_read_consistency | TRA_rec_version;
 	}
 
 	if (transaction->tra_attachment->isGbak())
