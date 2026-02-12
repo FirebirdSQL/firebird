@@ -300,6 +300,12 @@ public:
 	RscArray<DbTriggers, DbTriggersHeader> triggers;
 	RscArray<IndexVersion, IndexPermanent> indices;
 	RscArray<Constant, RoutinePermanent> constants;
+
+	inline FB_SIZE_T countVersionedObjects() const noexcept
+	{
+		return charSets.getCount() + relations.getCount() + procedures.getCount() +
+				functions.getCount() + triggers.getCount() + constants.getCount(); //? + indices.getCount() ?
+	}
 };
 
 // specialization
