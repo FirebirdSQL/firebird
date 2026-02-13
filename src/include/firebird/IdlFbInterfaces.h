@@ -4764,7 +4764,7 @@ namespace Firebird
 		}
 	};
 
-#define FIREBIRD_IUTIL_VERSION 4u
+#define FIREBIRD_IUTIL_VERSION 5u
 
 	class IUtil : public IVersioned
 	{
@@ -4793,6 +4793,7 @@ namespace Firebird
 			IInt128* (CLOOP_CARG *getInt128)(IUtil* self, IStatus* status) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *decodeTimeTzEx)(IUtil* self, IStatus* status, const ISC_TIME_TZ_EX* timeTz, unsigned* hours, unsigned* minutes, unsigned* seconds, unsigned* fractions, unsigned timeZoneBufferLength, char* timeZoneBuffer) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *decodeTimeStampTzEx)(IUtil* self, IStatus* status, const ISC_TIMESTAMP_TZ_EX* timeStampTz, unsigned* year, unsigned* month, unsigned* day, unsigned* hours, unsigned* minutes, unsigned* seconds, unsigned* fractions, unsigned timeZoneBufferLength, char* timeZoneBuffer) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *convert)(IUtil* self, IStatus* status, unsigned sourceType, unsigned sourceScale, unsigned sourceLength, const void* source, unsigned targetType, unsigned targetScale, unsigned targetLength, void* target) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -5011,6 +5012,19 @@ namespace Firebird
 			}
 			StatusType::clearException(status);
 			static_cast<VTable*>(this->cloopVTable)->decodeTimeStampTzEx(this, status, timeStampTz, year, month, day, hours, minutes, seconds, fractions, timeZoneBufferLength, timeZoneBuffer);
+			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> void convert(StatusType* status, unsigned sourceType, unsigned sourceScale, unsigned sourceLength, const void* source, unsigned targetType, unsigned targetScale, unsigned targetLength, void* target)
+		{
+			if (cloopVTable->version < 5)
+			{
+				StatusType::setVersionError(status, "IUtil", cloopVTable->version, 5);
+				StatusType::checkException(status);
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->convert(this, status, sourceType, sourceScale, sourceLength, source, targetType, targetScale, targetLength, target);
 			StatusType::checkException(status);
 		}
 	};
@@ -16228,6 +16242,7 @@ namespace Firebird
 					this->getInt128 = &Name::cloopgetInt128Dispatcher;
 					this->decodeTimeTzEx = &Name::cloopdecodeTimeTzExDispatcher;
 					this->decodeTimeStampTzEx = &Name::cloopdecodeTimeStampTzExDispatcher;
+					this->convert = &Name::cloopconvertDispatcher;
 				}
 			} vTable;
 
@@ -16539,6 +16554,20 @@ namespace Firebird
 				StatusType::catchException(&status2);
 			}
 		}
+
+		static void CLOOP_CARG cloopconvertDispatcher(IUtil* self, IStatus* status, unsigned sourceType, unsigned sourceScale, unsigned sourceLength, const void* source, unsigned targetType, unsigned targetScale, unsigned targetLength, void* target) CLOOP_NOEXCEPT
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::convert(&status2, sourceType, sourceScale, sourceLength, source, targetType, targetScale, targetLength, target);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
 	};
 
 	template <typename Name, typename StatusType, typename Base = IVersionedImpl<Name, StatusType, Inherit<IUtil> > >
@@ -16576,6 +16605,7 @@ namespace Firebird
 		virtual IInt128* getInt128(StatusType* status) = 0;
 		virtual void decodeTimeTzEx(StatusType* status, const ISC_TIME_TZ_EX* timeTz, unsigned* hours, unsigned* minutes, unsigned* seconds, unsigned* fractions, unsigned timeZoneBufferLength, char* timeZoneBuffer) = 0;
 		virtual void decodeTimeStampTzEx(StatusType* status, const ISC_TIMESTAMP_TZ_EX* timeStampTz, unsigned* year, unsigned* month, unsigned* day, unsigned* hours, unsigned* minutes, unsigned* seconds, unsigned* fractions, unsigned timeZoneBufferLength, char* timeZoneBuffer) = 0;
+		virtual void convert(StatusType* status, unsigned sourceType, unsigned sourceScale, unsigned sourceLength, const void* source, unsigned targetType, unsigned targetScale, unsigned targetLength, void* target) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
