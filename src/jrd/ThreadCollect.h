@@ -153,7 +153,7 @@ namespace Jrd {
 #ifndef ANDROID
 		using AllThreads = std::vector<Thrd, Firebird::PoolAllocator<Thrd>>;
 #else
-		using AllThreads = std::vector<Thrd>
+		using AllThreads = std::vector<Thrd>;
 #endif
 
 		void waitFor(AllThreads& thr)
