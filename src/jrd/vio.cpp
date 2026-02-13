@@ -2349,6 +2349,7 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 		case rel_constants:
 			protect_system_table_delupd(tdbb, relation, "DELETE");
+
 			EVL_field(0, rpb->rpb_record, f_const_name, &desc);
 			EVL_field(0, rpb->rpb_record, f_const_package_schema, &schemaDesc);
 

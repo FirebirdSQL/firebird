@@ -311,6 +311,20 @@ void PackageItemsHolder::collectPackagedItems(thread_db* tdbb, jrd_tra* transact
 		procedures.add(procedure);
 	}
 	END_FOR
+
+
+	if (collectConstants)
+	{
+		AutoCacheRequest getConstantsRequest(tdbb, drq_l_pkg_consts, DYN_REQUESTS);
+		FOR(REQUEST_HANDLE getConstantsRequest TRANSACTION_HANDLE transaction)
+			CONST IN RDB$CONSTANTS WITH
+				CONST.RDB$SCHEMA_NAME EQ packageName.schema.c_str() AND
+				CONST.RDB$PACKAGE_NAME EQ packageName.object.c_str()
+
+			Signature constant(CONST.RDB$CONSTANT_NAME);
+			constants.add(constant);
+		END_FOR
+	}
 }
 
 void PackageItemsHolder::clear()
@@ -607,11 +621,13 @@ dsc* CreatePackageConstantNode::makeConstantValue(thread_db* tdbb, DsqlCompilerS
 
 		Statement* statement = nullptr;
 		CompilerScratch* csb = nullptr;
-		Cleanup cc([&csb, &statement, &tdbb]()
+		Request* requestToRestore = tdbb->getRequest();
+		Cleanup cc([&csb, &statement, &tdbb, requestToRestore]()
 			{
 				if (statement)
 					statement->release(tdbb);
 
+				tdbb->setRequest(requestToRestore);
 				// delete csb;
 			});
 
@@ -625,8 +641,15 @@ dsc* CreatePackageConstantNode::makeConstantValue(thread_db* tdbb, DsqlCompilerS
 		statement = Statement::makeStatement(tdbb, csb, true);
 
 		auto request = statement->makeRootRequest(tdbb);
+		tdbb->setRequest(request);
+		request->req_transaction = tdbb->getTransaction();
+
 		ValueExprNode* valueNode = static_cast<ValueExprNode*>(csb->csb_node); // csb_node is the same as MET_parse_blob output
-		return valueNode->execute(tdbb, request);
+		auto output = valueNode->execute(tdbb, request);
+
+		request->req_transaction = nullptr;
+
+		return output;
 	}
 	catch (const Firebird::Exception& ex)
 	{
@@ -670,8 +693,25 @@ void CreatePackageConstantNode::genOutputConstantBlr(thread_db* tdbb, DsqlCompil
 		{
 			double newValue = *(float*)scalar->dsc_address;
 
-			dsc descForDouble;
+			dsc descForDouble{};
 			descForDouble.makeDouble();
+
+			UCHAR* ptr;
+			VaryStr<TEMP_STR_LENGTH> temp;
+			TTypeId ttype;
+			ULONG len = MOV_get_string_ptr(tdbb, scalar, &ttype, &ptr, &temp, sizeof(temp));
+
+			descForDouble.dsc_address = ptr;
+
+			LiteralNode::genConstant(dsqlScratch, &descForDouble, false, len);
+			break;
+		}
+		case dtype_dec64:
+		{
+			double newValue = *(float*)scalar->dsc_address;
+
+			dsc descForDouble{};
+			descForDouble.makeDecimal128();
 
 			UCHAR* ptr;
 			VaryStr<TEMP_STR_LENGTH> temp;
