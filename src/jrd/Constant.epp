@@ -65,7 +65,6 @@ ScanResult Constant::scan(thread_db* tdbb, ObjectBase::Flag flags)
 	Attachment* attachment = tdbb->getAttachment();
 	jrd_tra* metaTransaction = attachment->getMetaTransaction(tdbb);
 	Database* dbb = tdbb->getDatabase();
-	MetadataCache* mdc = dbb->dbb_mdc;
 
 	MemoryPool& pool = getPermanent()->getPool();
 	bool found = false;
@@ -323,50 +322,44 @@ dsc Constant::getDesc(thread_db* tdbb, Jrd::jrd_tra* transaction, const Qualifie
 
 void Constant::makeValue(thread_db* tdbb, Attachment* attachment, bid blob_id)
 {
-	MemoryPool* const csb_pool = attachment->att_database->createPool(ALLOC_ARGS0);
-	Jrd::ContextPoolHolder context(tdbb, csb_pool);
+	// The m_value has a string that is allocated with the tdbb pool
+	// The constant cache lives longer than the tdbb pool
+	// so we must clear the value to prevent invalid deletions
+	m_value = {};
 
+	MemoryPool* csb_pool = nullptr;
 	try
 	{
-		AutoPtr<CompilerScratch> csb(FB_NEW_POOL(*csb_pool) CompilerScratch(*csb_pool));
+		csb_pool = attachment->att_database->createPool(ALLOC_ARGS0);
+		Jrd::ContextPoolHolder context(tdbb, csb_pool);
 
 		try
 		{
-			Jrd::Attachment* attachment = tdbb->getAttachment();
+			CompilerScratch* csb = nullptr;
+			Cleanup cc([csb]() {delete csb;});
 
-			UCharBuffer tmp;
+			{ // blr
+				flReload = false;
+				MET_parse_blob(tdbb, &getName().schema, nullptr, &blob_id, &csb, nullptr, false, false);
 
-			{
-				blb* blob = blb::open(tdbb, attachment->getSysTransaction(), &blob_id);
-				ULONG length = blob->blb_length + 10;
-				UCHAR* temp = tmp.getBuffer(length);
-				length = blob->BLB_get_data(tdbb, temp, length);
-				// blob->BLB_close(tdbb);
-				tmp.resize(length);
+				fb_assert(csb != nullptr);
+				if (csb->csb_g_flags & csb_reload)
+					flReload = true;
 			}
 
-			Statement* statement = getStatement();
-			flReload = false;
-			CompilerScratch* csbptr = csb.get();
-			PAR_blr(tdbb, &getName().schema, nullptr, tmp.begin(), (ULONG) tmp.getCount(), NULL, &csbptr, &statement, false, 0);
-			setStatement(statement);
+			{ // Value
+				dsc constantDsc{};
+				ValueExprNode* valueNode = static_cast<ValueExprNode*>(csb->csb_node); // csb_node is the same as MET_parse_blob output
 
-			if (csb->csb_g_flags & csb_reload)
-				flReload = true;
+				Statement* statement = nullptr;
+				//Cleanup cc([&statement, &tdbb]() { if (statement) statement->release(tdbb); });
+				statement = Statement::makeValueExpression(tdbb, valueNode, constantDsc, csb, true);
 
-			setImplemented(true);
-
-			auto routineRequest = statement->makeRootRequest(tdbb);
-			const dsc* temp = EVL_expr(tdbb, routineRequest, static_cast<LiteralNode*>(csb->csb_node));
-
-			// The m_value has a string that is allocated with the tdbb pool
-			// The constant cache lives longer than the tdbb pool
-			// so we clear the value to prevent invalid deletions
-			m_value = {};
-			if (temp)
-				EVL_make_value(tdbb, temp, &m_value);
-			else
-				m_value.vlu_desc.setNull();
+				auto routineRequest = statement->makeRootRequest(tdbb);
+				const dsc* temp = EVL_expr(tdbb, routineRequest, static_cast<LiteralNode*>(csb->csb_node));
+				EVL_make_value(tdbb, &constantDsc, &m_value);
+				statement->release(tdbb);
+			}
 		}
 		catch (const Exception& ex)
 		{
@@ -374,7 +367,7 @@ void Constant::makeValue(thread_db* tdbb, Attachment* attachment, bid blob_id)
 			ex.stuffException(temp_status);
 
 			const string name = this->getName().toQuotedString();
-			(Arg::Gds(isc_bad_constant_blr_error) << Arg::Str(name)  << Arg::Str(name)
+			(Arg::Gds(isc_bad_constant_blr_error) << Arg::Str(name)
 				<< Arg::StatusVector(temp_status.begin())).raise();
 		}
 	}

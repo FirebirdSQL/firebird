@@ -106,7 +106,8 @@ void dropMissingItems(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, const Q
 	{
 		if (!newNames.exist(i->name))
 		{
-			dropItem<TDropNode>(tdbb, dsqlScratch, QualifiedName(i->name, packageAndSchema.schema, packageAndSchema.package));
+			dropItem<TDropNode>(tdbb, dsqlScratch,
+				QualifiedName(i->name, packageAndSchema.schema, packageAndSchema.object));
 		}
 	}
 }
@@ -117,7 +118,8 @@ void dropItems(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, const Qualifie
 {
 	for (auto i = items.begin(); i != items.end(); ++i)
 	{
-		dropItem<TDropNode>(tdbb, dsqlScratch, QualifiedName(i->name, packageAndSchema.schema, packageAndSchema.package));
+		dropItem<TDropNode>(tdbb, dsqlScratch,
+			QualifiedName(i->name, packageAndSchema.schema, packageAndSchema.object));
 	}
 }
 
@@ -387,6 +389,7 @@ DmlNode* PackageReferenceNode::parse(thread_db* tdbb, MemoryPool& pool, Compiler
 		{
 			Dependency dependency(obj_package_constant);
 			dependency.name = FB_NEW_POOL(pool) QualifiedName(pool, fullName);
+			// dependency.subName = &dependency.name->object;
 			csb->addDependency(dependency);
 		}
 
@@ -594,23 +597,36 @@ dsc* CreatePackageConstantNode::makeConstantValue(thread_db* tdbb, DsqlCompilerS
 	blr.clear();
 	dsqlScratch->getDebugData().clear();
 	dsqlScratch->appendUChar(dsqlScratch->isVersion4() ? blr_version4 : blr_version5);
-	proxyStmt.genBlr(dsqlScratch);
+	cast->genBlr(dsqlScratch);
 	dsqlScratch->appendUChar(blr_eoc);
 
-	// Compile the blr
-	Request* getConstantRequest = nullptr;
 	try
 	{
-		getConstantRequest = CMP_compile_request(tdbb, blr.begin(), blr.getCount(), true);
-		getConstantRequest->setUsed();
+		MemoryPool* csb_pool = attachment->att_database->createPool(ALLOC_ARGS0);
+		Jrd::ContextPoolHolder context(tdbb, csb_pool);
 
-		const StmtNode* initNode = getConstantRequest->getStatement()->topNode;
+		Statement* statement = nullptr;
+		CompilerScratch* csb = nullptr;
+		Cleanup cc([&csb, &statement, &tdbb]()
+			{
+				if (statement)
+					statement->release(tdbb);
 
-		// Execute the statement.
-		// The ConstantExprNode node will prepare the value and will write it into the impure
-		EXE_start(tdbb, getConstantRequest, transaction);
-		fb_assert(nodeIs<ConstantExprNode>(initNode));
-		return static_cast<const ConstantExprNode*>(initNode)->getImpureDsc(getConstantRequest);
+				// delete csb;
+			});
+
+		{ // blr
+			PAR_blr(tdbb, &name.schema, nullptr,
+				dsqlScratch->getBlrData().begin(), dsqlScratch->getBlrData().getCount(),
+				nullptr, &csb,
+				nullptr, false, 0);
+		}
+
+		statement = Statement::makeStatement(tdbb, csb, true);
+
+		auto request = statement->makeRootRequest(tdbb);
+		ValueExprNode* valueNode = static_cast<ValueExprNode*>(csb->csb_node); // csb_node is the same as MET_parse_blob output
+		return valueNode->execute(tdbb, request);
 	}
 	catch (const Firebird::Exception& ex)
 	{
