@@ -43,7 +43,11 @@ namespace Jrd {
 	{
 	public:
 		ThreadCollect(Firebird::MemoryPool& p)
+#ifndef ANDROID
 			: threads(p)
+#else
+			: threads()
+#endif
 		{ }
 
 		void join()
@@ -146,7 +150,11 @@ namespace Jrd {
 			bool ending;
 		};
 
+#ifndef ANDROID
 		using AllThreads = std::vector<Thrd, Firebird::PoolAllocator<Thrd>>;
+#else
+		using AllThreads = std::vector<Thrd>
+#endif
 
 		void waitFor(AllThreads& thr)
 		{
