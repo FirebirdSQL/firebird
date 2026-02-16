@@ -2330,7 +2330,7 @@ db_initial_desc($alterDatabaseNode)
 	| db_initial_desc db_initial_option($alterDatabaseNode)
 	;
 
-// With the exception of LENGTH, all clauses here are handled only at the client.
+// All clauses here are handled only at the client.
 %type db_initial_option(<alterDatabaseNode>)
 db_initial_option($alterDatabaseNode)
 	: PAGE_SIZE equals u_numeric_constant

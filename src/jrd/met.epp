@@ -3735,8 +3735,8 @@ jrd_prc* MET_procedure(thread_db* tdbb, USHORT id, bool noscan, USHORT flags)
 						{
 							StaticStatusVector temp_status;
 							ex.stuffException(temp_status);
-							(Arg::Gds(isc_bad_proc_BLR) << name <<
-								Arg::StatusVector(temp_status.begin())).raise();
+							(Arg::StatusVector(temp_status.begin()) <<
+								Arg::Gds(isc_bad_proc_BLR) << name).raise();
 						}
 					}
 				}
@@ -3845,8 +3845,8 @@ bool jrd_prc::reload(thread_db* tdbb)
 				StaticStatusVector temp_status;
 				ex.stuffException(temp_status);
 
-				(Arg::Gds(isc_bad_proc_BLR) << this->getName().toQuotedString()
-					<< Arg::StatusVector(temp_status.begin())).raise();
+				(Arg::StatusVector(temp_status.begin()) <<
+					Arg::Gds(isc_bad_proc_BLR) << this->getName().toQuotedString()).raise();
 			}
 		}
 		catch (const Exception&)

@@ -29,6 +29,7 @@
 #
 #
 ROOT=$(shell cd ../..; pwd)
+SRCDIR=@abs_top_srcdir@
 
 
 %.cpp: %.epp
@@ -68,7 +69,7 @@ LINK_DARWIN_RPATH = -Wl,-rpath,@loader_path/../$(TARGET)/firebird
 LIB_LINK_MAPFILE =
 
 EXAMPLES_DEST=	$(GEN_ROOT)/examples
-EXAMPLES_SRC=	$(ROOT)/examples
+EXAMPLES_SRC=	$(SRCDIR)/examples
 EXAMPLES_FB=	$(FIREBIRD)/examples
 
 EMPBLD_Objects=	$(EXAMPLES_DEST)/empbuild.o
@@ -97,35 +98,36 @@ all: examples
 examples:	$(FINAL_EMPDB) $(EXAMPLES_FB)/README $(EXTAUTH_PLUGIN)
 
 $(EXTAUTH_PLUGIN):	$(EXAMPLES_FB)/extauth/Makefile
+	mkdir -p $(TMP_ROOT)/examples/extauth $(EXAMPLES_FB)/prebuilt
 	CXX="$(CXX)" CXXFLAGS="$(CXXFLAGS)" $(MAKE) -C $(EXAMPLES_FB)/extauth OUT=$(EXAMPLES_FB)/prebuilt INTERMED=$(TMP_ROOT)/examples/extauth
 
 $(EXAMPLES_FB)/extauth/Makefile:
 ifeq ($(TOMCRYPT_BUILD_FLG),Y)
 	mkdir -p $(EXAMPLES_FB)/extauth/tomcrypt.include
-	$(CP) $(ROOT)/extern/libtomcrypt/src/headers/* $(EXAMPLES_FB)/extauth/tomcrypt.include
+	$(CP) $(SRCDIR)/extern/libtomcrypt/src/headers/* $(EXAMPLES_FB)/extauth/tomcrypt.include
 endif
-	tar cf - -C $(ROOT)/examples/extauth . | tar xf - -C $(EXAMPLES_FB)/extauth/
+	tar cf - -C $(SRCDIR)/examples/extauth . | tar xf - -C $(EXAMPLES_FB)/extauth/
 
 $(FINAL_EMPDB):	$(EMPLOYEE_DB)
 	$(RM) $(FINAL_EMPDB)
 	$(CP) $(EMPLOYEE_DB) $(FINAL_EMPDB)
 
 $(EXAMPLES_FB)/README:
-	$(CP) $(ROOT)/examples/*.* $(EXAMPLES_FB)/
-	$(CP) $(ROOT)/examples/api/*.* $(EXAMPLES_FB)/api/
-	$(CP) $(ROOT)/examples/dbcrypt/*.* $(EXAMPLES_FB)/dbcrypt/
-	$(CP) $(ROOT)/examples/include/*.* $(EXAMPLES_FB)/include/
-	$(CP) $(ROOT)/examples/interfaces/*.* $(EXAMPLES_FB)/interfaces/
-	$(CP) $(ROOT)/examples/package/*.* $(EXAMPLES_FB)/package/
-	$(CP) $(ROOT)/examples/stat/*.* $(EXAMPLES_FB)/stat/
-	$(CP) $(ROOT)/examples/udf/*.* $(EXAMPLES_FB)/udf/
-	$(CP) $(ROOT)/examples/udr/*.* $(EXAMPLES_FB)/udr/
-	$(CP) $(ROOT)/examples/object_pascal/*.* $(EXAMPLES_FB)/object_pascal/
-	$(CP) $(ROOT)/examples/object_pascal/[mM]ake* $(EXAMPLES_FB)/object_pascal/
-	$(CP) $(ROOT)/examples/object_pascal/common/*.* $(EXAMPLES_FB)/object_pascal/common/
+	$(CP) $(SRCDIR)/examples/*.* $(EXAMPLES_FB)/
+	$(CP) $(SRCDIR)/examples/api/*.* $(EXAMPLES_FB)/api/
+	$(CP) $(SRCDIR)/examples/dbcrypt/*.* $(EXAMPLES_FB)/dbcrypt/
+	$(CP) $(SRCDIR)/examples/include/*.* $(EXAMPLES_FB)/include/
+	$(CP) $(SRCDIR)/examples/interfaces/*.* $(EXAMPLES_FB)/interfaces/
+	$(CP) $(SRCDIR)/examples/package/*.* $(EXAMPLES_FB)/package/
+	$(CP) $(SRCDIR)/examples/stat/*.* $(EXAMPLES_FB)/stat/
+	$(CP) $(SRCDIR)/examples/udf/*.* $(EXAMPLES_FB)/udf/
+	$(CP) $(SRCDIR)/examples/udr/*.* $(EXAMPLES_FB)/udr/
+	$(CP) $(SRCDIR)/examples/object_pascal/*.* $(EXAMPLES_FB)/object_pascal/
+	$(CP) $(SRCDIR)/examples/object_pascal/[mM]ake* $(EXAMPLES_FB)/object_pascal/
+	$(CP) $(SRCDIR)/examples/object_pascal/common/*.* $(EXAMPLES_FB)/object_pascal/common/
 #	$(CP) intlemp.fdb $(EXAMPLES_FB)/empbuild/
-	$(CP) $(ROOT)/examples/readme $(EXAMPLES_FB)/README
-	$(CP) $(ROOT)/examples/empbuild/employe2.sql $(EXAMPLES_FB)/empbuild/
+	$(CP) $(SRCDIR)/examples/readme $(EXAMPLES_FB)/README
+	$(CP) $(SRCDIR)/examples/empbuild/employe2.sql $(EXAMPLES_FB)/empbuild/
 
 $(EXAMPLES_DEST)% : $(EXAMPLES_SRC)%
 	$(CP) $^ $@

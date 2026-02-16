@@ -28,5 +28,4 @@ extern/ttmath/release/
 /src/include/gen/parse.h
 /src/include/gen/autoconfig.auto
 /src/include/gen/autoconfig.h
-extern/libcds/lib/
 /vcpkg_installed/

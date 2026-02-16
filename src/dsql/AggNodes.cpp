@@ -1647,8 +1647,8 @@ void BinAggNode::aggInit(thread_db* tdbb, Request* request) const
 	if (nodFlags & FLAG_INT128)
 	{
 		Firebird::Int128 i128;
+		i128.set(initValue, 0);
 		impure->make_decimal_fixed(i128, 0);
-		impure->vlu_misc.vlu_int128 = initValue;
 	}
 	else
 		impure->make_int64(initValue);

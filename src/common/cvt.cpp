@@ -37,6 +37,7 @@
 
 #include "firebird.h"
 #include <cmath>
+#include <cstddef>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -290,6 +291,32 @@ static void timeStampToUtc(ISC_TIMESTAMP_TZ& timestampTZ, USHORT sessionTimeZone
 		else if (expectedType == expect_timestamp)
 			*(ISC_TIMESTAMP*) &timestampTZ = TimeZoneUtil::timeStampTzToTimeStamp(timestampTZ, sessionTimeZone);
 	}
+}
+
+
+static void zeroTzPadding(dsc* to)
+{
+	if (!to || !to->dsc_address)
+		return;
+
+	size_t logicalLength = 0;
+
+	switch (to->dsc_dtype)
+	{
+		case dtype_sql_time_tz:
+			logicalLength = offsetof(ISC_TIME_TZ, time_zone) + sizeof(ISC_USHORT);
+			break;
+
+		case dtype_timestamp_tz:
+			logicalLength = offsetof(ISC_TIMESTAMP_TZ, time_zone) + sizeof(ISC_USHORT);
+			break;
+
+		default:
+			return;
+	}
+
+	if (to->dsc_length > logicalLength)
+		memset(to->dsc_address + logicalLength, 0, to->dsc_length - logicalLength);
 }
 
 
@@ -1680,6 +1707,7 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 		if (length) {
 			memcpy(p, q, length);
 		}
+		zeroTzPadding(to);
 		return;
 	}
 
@@ -1770,31 +1798,37 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 				CVT_string_to_datetime(from, &date, NULL, expect_timestamp_tz, true, cb);
 				*((ISC_TIMESTAMP_TZ*) to->dsc_address) = date;
 			}
+			zeroTzPadding(to);
 			return;
 
 		case dtype_sql_time:
 			*(ISC_TIMESTAMP_TZ*) to->dsc_address =
 				TimeZoneUtil::timeToTimeStampTz(*(ISC_TIME*) from->dsc_address, cb);
+			zeroTzPadding(to);
 			return;
 
 		case dtype_ex_time_tz:
 		case dtype_sql_time_tz:
 			*((ISC_TIMESTAMP_TZ*) to->dsc_address) =
 				TimeZoneUtil::timeTzToTimeStampTz(*(ISC_TIME_TZ*) from->dsc_address, cb);
+			zeroTzPadding(to);
 			return;
 
 		case dtype_ex_timestamp_tz:
 			*((ISC_TIMESTAMP_TZ*) to->dsc_address) = *((ISC_TIMESTAMP_TZ*) from->dsc_address);
+			zeroTzPadding(to);
 			return;
 
 		case dtype_sql_date:
 			*(ISC_TIMESTAMP_TZ*) to->dsc_address =
 				TimeZoneUtil::dateToTimeStampTz(*(GDS_DATE*) from->dsc_address, cb);
+			zeroTzPadding(to);
 			return;
 
 		case dtype_timestamp:
 			*(ISC_TIMESTAMP_TZ*) to->dsc_address =
 				TimeZoneUtil::timeStampToTimeStampTz(*(ISC_TIMESTAMP*) from->dsc_address, cb);
+			zeroTzPadding(to);
 			return;
 
 		default:
@@ -1878,26 +1912,31 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 				((ISC_TIME_TZ*) to->dsc_address)->utc_time = date.utc_timestamp.timestamp_time;
 				((ISC_TIME_TZ*) to->dsc_address)->time_zone = date.time_zone;
 			}
+			zeroTzPadding(to);
 			return;
 
 		case dtype_sql_time:
 			*(ISC_TIME_TZ*) to->dsc_address = TimeZoneUtil::timeToTimeTz(*(ISC_TIME*) from->dsc_address, cb);
+			zeroTzPadding(to);
 			return;
 
 		case dtype_timestamp:
 			*(ISC_TIME_TZ*) to->dsc_address =
 				TimeZoneUtil::timeStampToTimeTz(*(ISC_TIMESTAMP*) from->dsc_address, cb);
+			zeroTzPadding(to);
 			return;
 
 		case dtype_timestamp_tz:
 		case dtype_ex_timestamp_tz:
 			*(ISC_TIME_TZ*) to->dsc_address =
 				TimeZoneUtil::timeStampTzToTimeTz(*(ISC_TIMESTAMP_TZ*) from->dsc_address);
+			zeroTzPadding(to);
 			return;
 
 		case dtype_ex_time_tz:
 			*(ISC_TIME_TZ*) to->dsc_address = *(ISC_TIME_TZ*) from->dsc_address;
-			 return;
+			zeroTzPadding(to);
+			return;
 
 		default:
 			CVT_conversion_error(from, cb->err);

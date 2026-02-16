@@ -472,8 +472,8 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 						{
 							StaticStatusVector temp_status;
 							ex.stuffException(temp_status);
-							(Arg::Gds(isc_bad_fun_BLR) << Arg::Str(name)
-								<< Arg::StatusVector(temp_status.begin())).raise();
+							(Arg::StatusVector(temp_status.begin()) <<
+								Arg::Gds(isc_bad_fun_BLR) << Arg::Str(name)).raise();
 						}
 					}
 				}
@@ -611,8 +611,8 @@ bool Function::reload(thread_db* tdbb)
 				ex.stuffException(temp_status);
 
 				const string name = this->getName().toQuotedString();
-				(Arg::Gds(isc_bad_fun_BLR) << Arg::Str(name)
-					<< Arg::StatusVector(temp_status.begin())).raise();
+				(Arg::StatusVector(temp_status.begin()) <<
+					Arg::Gds(isc_bad_fun_BLR) << Arg::Str(name)).raise();
 			}
 		}
 		catch (const Exception&)

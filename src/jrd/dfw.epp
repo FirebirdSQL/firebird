@@ -3727,6 +3727,20 @@ static bool create_ltt_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 			&lttIndex->id, transaction, selectivity);
 	}
 
+	// Update index on the current instance if it exists
+	if (relation->rel_flags & REL_temp_conn)
+	{
+		AutoSetRestoreFlag<ULONG> dbPageSpace(&tdbb->tdbb_flags, TDBB_use_db_page_space, false);
+
+		if (relation->getPages(tdbb, 0, false))
+		{
+			SelectivityList selectivity(*tdbb->getDefaultPool());
+			idx.idx_root = 0;
+			IDX_create_index(tdbb, relation, &idx, work->getQualifiedName(),
+				&lttIndex->id, transaction, selectivity);
+		}
+	}
+
 	return false;
 }
 

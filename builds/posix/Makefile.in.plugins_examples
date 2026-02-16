@@ -29,6 +29,8 @@
 #
 
 ROOT=$(shell cd ..; pwd)
+SRCDIR=@abs_top_srcdir@
+SRC_ROOT=$(SRCDIR)
 
 ifeq ($(IsDeveloper), Y)
   DefaultTarget := Debug

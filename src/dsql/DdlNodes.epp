@@ -77,6 +77,7 @@ using namespace Firebird;
 
 static void checkForeignKeyTempScope(thread_db* tdbb, jrd_tra* transaction,
 	const QualifiedName&	childRelName, const QualifiedName& masterIndexName);
+static void checkLttNotInUse(thread_db* tdbb, jrd_tra* transaction, const LocalTemporaryTable* ltt);
 static void checkSpTrigDependency(thread_db* tdbb, jrd_tra* transaction,
 	const QualifiedName& relationName, const MetaName& fieldName);
 static void checkViewDependency(thread_db* tdbb, jrd_tra* transaction,
@@ -218,6 +219,32 @@ static void checkForeignKeyTempScope(thread_db* tdbb, jrd_tra* transaction,
 		checkRelationType(masterType, masterRelName);
 		checkRelationType(childType, childRelName);
 		checkFkPairTypes(masterType, masterRelName, childType, childRelName);
+	}
+}
+
+static void checkLttNotInUse(thread_db* tdbb, jrd_tra* transaction, const LocalTemporaryTable* ltt)
+{
+	if (!ltt || !ltt->relation)
+		return;
+
+	const auto attachment = transaction->tra_attachment;
+	const Resource resource(Resource::rsc_relation, ltt->relation->rel_id,
+		ltt->relation, nullptr, nullptr);
+
+	for (const auto* otherTransaction = attachment->att_transactions;
+		 otherTransaction;
+		 otherTransaction = otherTransaction->tra_next)
+	{
+		if (otherTransaction == transaction)
+			continue;
+
+		if (otherTransaction->tra_resources.exist(resource))
+		{
+			string obj;
+			obj.printf("TABLE %s", ltt->name.toQuotedString().c_str());
+
+			status_exception::raise(Arg::Gds(isc_no_meta_update) << Arg::Gds(isc_obj_in_use) << obj);
+		}
 	}
 }
 
@@ -9197,6 +9224,7 @@ void AlterRelationNode::alterLocalTempTable(thread_db* tdbb, DsqlCompilerScratch
 	}
 
 	const auto ltt = *lttPtr;
+	checkLttNotInUse(tdbb, transaction, ltt);
 
 	// Run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
@@ -9581,6 +9609,7 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		}
 
 		const auto ltt = *lttIt;
+		checkLttNotInUse(tdbb, transaction, ltt);
 
 		// Post deferred work to handle the LTT deletion at commit time
 		DFW_post_work(transaction, dfw_delete_relation,
@@ -11172,6 +11201,8 @@ void CreateIndexNode::defineLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch*
 	const auto attachment = transaction->tra_attachment;
 	auto& attPool = *attachment->att_pool;
 
+	checkLttNotInUse(tdbb, transaction, ltt);
+
 	if (computed)
 	{
 		status_exception::raise(
@@ -11369,6 +11400,8 @@ void AlterIndexNode::alterLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* d
 	const auto attachment = transaction->tra_attachment;
 	auto& attPool = *attachment->att_pool;
 
+	checkLttNotInUse(tdbb, transaction, ltt);
+
 	// Register undo action with the savepoint
 	transaction->tra_save_point->createLttAction(
 		LttUndoItem::LTT_UNDO_ALTER, ltt->name, FB_NEW_POOL(attPool) LocalTemporaryTable(attPool, *ltt));
@@ -11469,6 +11502,8 @@ void SetStatisticsNode::setStatisticsLocalTempIndex(thread_db* tdbb, DsqlCompile
 	jrd_tra* transaction, LocalTemporaryTable* ltt, LocalTemporaryTable::Index* lttIndex)
 {
 	const auto attachment = transaction->tra_attachment;
+
+	checkLttNotInUse(tdbb, transaction, ltt);
 
 	// Register undo action with the savepoint
 	transaction->tra_save_point->createLttAction(
@@ -11580,6 +11615,8 @@ void DropIndexNode::dropLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* dsq
 {
 	Attachment* const attachment = transaction->tra_attachment;
 	auto& attPool = *attachment->att_pool;
+
+	checkLttNotInUse(tdbb, transaction, ltt);
 
 	// Register undo action with the savepoint
 	transaction->tra_save_point->createLttAction(

@@ -1,8 +1,11 @@
 #include "boost/test/unit_test.hpp"
+#include <cstddef>
+#include <cstring>
 #include "../common/tests/CvtTestUtils.h"
 
 #include "../common/StatusArg.h"
 #include "../common/CvtFormat.h"
+#include "../jrd/intl.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -216,6 +219,55 @@ BOOST_AUTO_TEST_CASE(CVTDatetimeToFormatStringTest_TIME_TZ)
 	testCVTDatetimeToFormatString(createTimeTZ(0, 0, 0, 160), "TZM:TZH", "+40:02", cb);
 	testCVTDatetimeToFormatString(createTimeTZ(0, 0, 0, 160), "TZH MI TZM", "+02 00 +40", cb);
 	testCVTDatetimeToFormatString(createTimeTZ(0, 0, 0, -160), "TZH MI TZM", "-02 00 -40", cb);
+}
+
+BOOST_AUTO_TEST_CASE(CVTMoveCommonZeroPadding_TZ)
+{
+	const char* tsText = "2026-02-08 14:32 +00:00";
+	UCHAR tsBuffer[sizeof(ISC_TIMESTAMP_TZ)];
+	memset(tsBuffer, 0xA5, sizeof(tsBuffer));
+
+	dsc fromTs;
+	fromTs.dsc_dtype = dtype_text;
+	fromTs.dsc_length = strlen(tsText);
+	fromTs.dsc_scale = 0;
+	fromTs.dsc_address = (UCHAR*) tsText;
+	fromTs.dsc_ttype() = ttype_ascii;
+
+	dsc toTs;
+	toTs.dsc_dtype = dtype_timestamp_tz;
+	toTs.dsc_length = sizeof(tsBuffer);
+	toTs.dsc_scale = 0;
+	toTs.dsc_address = tsBuffer;
+
+	CVT_move_common(&fromTs, &toTs, 0, &cb);
+
+	const size_t tsLogical = offsetof(ISC_TIMESTAMP_TZ, time_zone) + sizeof(ISC_USHORT);
+	for (size_t i = tsLogical; i < sizeof(tsBuffer); ++i)
+		BOOST_TEST(tsBuffer[i] == 0);
+
+	const char* timeText = "14:32 +00:00";
+	UCHAR timeBuffer[sizeof(ISC_TIME_TZ)];
+	memset(timeBuffer, 0xA5, sizeof(timeBuffer));
+
+	dsc fromTime;
+	fromTime.dsc_dtype = dtype_text;
+	fromTime.dsc_length = strlen(timeText);
+	fromTime.dsc_scale = 0;
+	fromTime.dsc_address = (UCHAR*) timeText;
+	fromTime.dsc_ttype() = ttype_ascii;
+
+	dsc toTime;
+	toTime.dsc_dtype = dtype_sql_time_tz;
+	toTime.dsc_length = sizeof(timeBuffer);
+	toTime.dsc_scale = 0;
+	toTime.dsc_address = timeBuffer;
+
+	CVT_move_common(&fromTime, &toTime, 0, &cb);
+
+	const size_t timeLogical = offsetof(ISC_TIME_TZ, time_zone) + sizeof(ISC_USHORT);
+	for (size_t i = timeLogical; i < sizeof(timeBuffer); ++i)
+		BOOST_TEST(timeBuffer[i] == 0);
 }
 
 BOOST_AUTO_TEST_CASE(CVTDatetimeToFormatStringTest_TIMESTAMP_TZ)
