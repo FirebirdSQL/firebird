@@ -673,6 +673,7 @@ void PASS1_ambiguity_check(DsqlCompilerScratch* dsqlScratch,
 
 	string buffers[2];
 	string* bufferPtr = &buffers[0];
+	bool printAliasHelp = false;
 
 	for (DsqlContextStack::const_iterator stack(ambiguous_contexts); stack.hasData(); ++stack)
 	{
@@ -701,6 +702,14 @@ void PASS1_ambiguity_check(DsqlCompilerScratch* dsqlScratch,
 			buffer += "procedure ";
 			buffer += procedure->prc_name.toQuotedString();
 		}
+		else if (context->ctx_flags & CTX_package)
+		{
+			// Package constant or variable
+			printAliasHelp = true;
+			buffer += "package ";
+			if (context->ctx_alias.hasData())
+				buffer += context->getConcatenatedAlias();
+		}
 		else
 		{
 			const auto contextAliases = context->getConcatenatedAlias();
@@ -717,9 +726,15 @@ void PASS1_ambiguity_check(DsqlCompilerScratch* dsqlScratch,
 
 	if (dsqlScratch->clientDialect >= SQL_DIALECT_V6)
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
+		Arg::StatusVector status;
+		status.assign(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
 				  Arg::Gds(isc_dsql_ambiguous_field_name) << buffers[0] << buffers[1] <<
 				  Arg::Gds(isc_random) << name);
+
+		if (printAliasHelp)
+			status.append(Arg::Gds(isc_package_alias_help));
+
+		ERR_post(status);
 	}
 
 	ERRD_post_warning(Arg::Warning(isc_sqlwarn) << Arg::Num(204) <<

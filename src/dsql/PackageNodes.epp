@@ -624,11 +624,11 @@ dsc* CreatePackageConstantNode::makeConstantValue(thread_db* tdbb, DsqlCompilerS
 		Request* requestToRestore = tdbb->getRequest();
 		Cleanup cc([&csb, &statement, &tdbb, requestToRestore]()
 			{
-				if (statement)
-					statement->release(tdbb);
+				// if (statement)
+				// 	statement->release(tdbb);
 
+				delete csb;
 				tdbb->setRequest(requestToRestore);
-				// delete csb;
 			});
 
 		{ // blr
@@ -640,14 +640,21 @@ dsc* CreatePackageConstantNode::makeConstantValue(thread_db* tdbb, DsqlCompilerS
 
 		statement = Statement::makeStatement(tdbb, csb, true);
 
+
 		auto request = statement->makeRootRequest(tdbb);
 		tdbb->setRequest(request);
-		request->req_transaction = tdbb->getTransaction();
+		request->setUsed();
+		auto* attachment = tdbb->getAttachment();
+		request->setAttachment(attachment);
+		attachment->att_requests.add(request);
+
+		TRA_attach_request(transaction, request);
 
 		ValueExprNode* valueNode = static_cast<ValueExprNode*>(csb->csb_node); // csb_node is the same as MET_parse_blob output
 		auto output = valueNode->execute(tdbb, request);
-
-		request->req_transaction = nullptr;
+		// request->setUnused();
+		// statement->release(tdbb);
+		// statement = nullptr;
 
 		return output;
 	}
@@ -1027,7 +1034,6 @@ DdlNode* CreateAlterPackageNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				CreateAlterProcedureNode* const proc = (*items)[i].procedure;
 				ddlNode = proc;
 
-
 				procedureNames.addName<PackageItemType::PROCEDURE>(proc->name);
 
 				proc->alter = true;
@@ -1050,6 +1056,7 @@ DdlNode* CreateAlterPackageNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			}
 
 			default:
+				ddlNode = nullptr; // Warning
 				fb_assert(false);
 		}
 

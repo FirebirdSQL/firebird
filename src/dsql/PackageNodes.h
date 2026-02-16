@@ -82,10 +82,11 @@ public:
 			"CONSTANT",
 		};
 
+		 // Print just the object name because the full path is present n the parent error message
 		Firebird::status_exception::raise(
 			Firebird::Arg::Gds(isc_no_meta_update) <<
 			Firebird::Arg::Gds(isc_dyn_duplicate_package_item) <<
-				Firebird::Arg::Str(names[size_t(IValue)]) << Firebird::Arg::Str(newName.toQuotedString()));
+				Firebird::Arg::Str(names[size_t(IValue)]) << Firebird::Arg::Str(newName.object.toQuotedString()));
 	}
 };
 

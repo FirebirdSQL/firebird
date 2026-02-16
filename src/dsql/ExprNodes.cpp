@@ -6245,7 +6245,7 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 
 	// AB: Loop through the scope_levels starting by its own.
 	bool done = false;
-	bool sourceIsFound = false;
+
 	USHORT currentScopeLevel = dsqlScratch->scopeLevel + 1;
 	for (; currentScopeLevel > 0 && !done; --currentScopeLevel)
 	{
@@ -6272,8 +6272,6 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 
 			if (field)
 			{
-				sourceIsFound = true;
-
 				// If there's no name then we have most probable an asterisk that
 				// needs to be exploded. This should be handled by the caller and
 				// when the caller can handle this, list is not nullptr.
@@ -6470,14 +6468,25 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 		}
 	}
 
-	const QualifiedName consatntName(dsqlName,
-		dsqlQualifier.schema.hasData() ? dsqlQualifier.schema : dsqlScratch->package.schema,
-		dsqlQualifier.object.hasData() ? dsqlQualifier.object : dsqlScratch->package.object);
-	if (node == nullptr && !sourceIsFound
-		&& PackageReferenceNode::constantExists(tdbb, dsqlScratch->getTransaction(), consatntName))
-	{
-		MemoryPool& pool = dsqlScratch->getPool();
-		node = FB_NEW_POOL(pool) PackageReferenceNode(pool, consatntName);
+	dsql_ctx packageContext(dsqlScratch->getPool());
+	{ // Consatnts
+
+		const QualifiedName consatntName(dsqlName,
+			dsqlQualifier.schema.hasData() ? dsqlQualifier.schema : (dsqlScratch->package.schema.hasData() ? dsqlScratch->package.schema : PUBLIC_SCHEMA),
+			dsqlQualifier.object.hasData() ? dsqlQualifier.object : dsqlScratch->package.object);
+
+		if (PackageReferenceNode::constantExists(tdbb, dsqlScratch->getTransaction(), consatntName))
+		{
+			packageContext.ctx_relation = nullptr;
+			packageContext.ctx_procedure = nullptr;
+			// Alias is a package name, not a constant
+			packageContext.ctx_alias.push(QualifiedName(consatntName.package, consatntName.schema));
+			packageContext.ctx_flags |= CTX_package;
+			ambiguousCtxStack.push(&packageContext);
+
+			MemoryPool& pool = dsqlScratch->getPool();
+			node = FB_NEW_POOL(pool) PackageReferenceNode(pool, consatntName);
+		}
 	}
 
 	// CVC: We can't return blindly if this is a check constraint, because there's
