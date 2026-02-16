@@ -5962,6 +5962,7 @@ const
 	 isc_bad_constant_blr_error = 335545400;
 	 isc_bad_constant_type_error = 335545401;
 	 isc_bad_constant_name = 335545402;
+	 isc_bad_constant_type = 335545403;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;

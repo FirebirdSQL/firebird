@@ -183,7 +183,7 @@ public:
 	}
 
 private:
-	dsc* makeConstantValue(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch);
+	dsc* makeConstantValue(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, CompilerScratch*& nodeContext);
 	void genOutputConstantBlr(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch);
 	void executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 	bool executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);

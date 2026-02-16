@@ -589,7 +589,7 @@ void CreatePackageConstantNode::execute(thread_db* tdbb, DsqlCompilerScratch* ds
 	MetadataCache::newVersion<Cached::Constant>(tdbb, m_id);
 }
 
-dsc* CreatePackageConstantNode::makeConstantValue(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch)
+dsc* CreatePackageConstantNode::makeConstantValue(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, CompilerScratch*& nodeContext)
 {
 	// Prepare variables
 	Attachment* attachment = tdbb->getAttachment();
@@ -597,10 +597,6 @@ dsc* CreatePackageConstantNode::makeConstantValue(thread_db* tdbb, DsqlCompilerS
 
 	Firebird::AutoMemoryPool tempPool(MemoryPool::createPool(ALLOC_ARGS0));
 	Firebird::BlrWriter::BlrData& blr = dsqlScratch->getBlrData();
-
-	// We need to execute the constant expresion and get the descriptor with constant value
-	// We need a request. To get it, we need to compile the blr. To compile the blr, wrap a ValueExpr in a StmtExpr
-
 
 	// Create and setup a proxy stmt node
 	ConstantExprNode proxyStmt(*tempPool);
@@ -620,25 +616,22 @@ dsc* CreatePackageConstantNode::makeConstantValue(thread_db* tdbb, DsqlCompilerS
 		Jrd::ContextPoolHolder context(tdbb, csb_pool);
 
 		Statement* statement = nullptr;
-		CompilerScratch* csb = nullptr;
 		Request* requestToRestore = tdbb->getRequest();
-		Cleanup cc([&csb, &statement, &tdbb, requestToRestore]()
+		Cleanup cc([&tdbb, requestToRestore]()
 			{
 				// if (statement)
 				// 	statement->release(tdbb);
-
-				delete csb;
 				tdbb->setRequest(requestToRestore);
 			});
 
 		{ // blr
 			PAR_blr(tdbb, &name.schema, nullptr,
 				dsqlScratch->getBlrData().begin(), dsqlScratch->getBlrData().getCount(),
-				nullptr, &csb,
+				nullptr, &nodeContext,
 				nullptr, false, 0);
 		}
 
-		statement = Statement::makeStatement(tdbb, csb, true);
+		statement = Statement::makeStatement(tdbb, nodeContext, true);
 
 
 		auto request = statement->makeRootRequest(tdbb);
@@ -650,7 +643,7 @@ dsc* CreatePackageConstantNode::makeConstantValue(thread_db* tdbb, DsqlCompilerS
 
 		TRA_attach_request(transaction, request);
 
-		ValueExprNode* valueNode = static_cast<ValueExprNode*>(csb->csb_node); // csb_node is the same as MET_parse_blob output
+		ValueExprNode* valueNode = static_cast<ValueExprNode*>(nodeContext->csb_node); // csb_node is the same as MET_parse_blob output
 		auto output = valueNode->execute(tdbb, request);
 		// request->setUnused();
 		// statement->release(tdbb);
@@ -670,7 +663,15 @@ void CreatePackageConstantNode::genOutputConstantBlr(thread_db* tdbb, DsqlCompil
 {
 	// Compile the constant
 	dsc* scalar = nullptr;
-	if ((scalar = makeConstantValue(tdbb, dsqlScratch)) == nullptr)
+
+	// Delay csb deletion to keep dsc storage alive
+	CompilerScratch* csb = nullptr;
+	Cleanup cc([&csb]()
+	{
+		delete csb;
+	});
+
+	if ((scalar = makeConstantValue(tdbb, dsqlScratch, csb)) == nullptr)
 		return; // Something went wrong
 
 	// Make the blr with only the LiteralNode
@@ -713,10 +714,10 @@ void CreatePackageConstantNode::genOutputConstantBlr(thread_db* tdbb, DsqlCompil
 			LiteralNode::genConstant(dsqlScratch, &descForDouble, false, len);
 			break;
 		}
-		case dtype_dec64:
+		case dtype_dec64: // dtype_dec64 is not present in LiteralNode::genConstant
+		case dtype_double: // MOV_move stores double in scalar->dsc_address. Convert it to string to use genConstant
+		case dtype_dec128:
 		{
-			double newValue = *(float*)scalar->dsc_address;
-
 			dsc descForDouble{};
 			descForDouble.makeDecimal128();
 
@@ -730,6 +731,24 @@ void CreatePackageConstantNode::genOutputConstantBlr(thread_db* tdbb, DsqlCompil
 			LiteralNode::genConstant(dsqlScratch, &descForDouble, false, len);
 			break;
 		}
+		case dtype_int128:
+		{
+			dsc descForInt128{};
+			descForInt128.makeInt128(scalar->dsc_scale);
+
+			UCHAR* ptr;
+			VaryStr<TEMP_STR_LENGTH> temp;
+			TTypeId ttype;
+			ULONG len = MOV_get_string_ptr(tdbb, scalar, &ttype, &ptr, &temp, sizeof(temp));
+
+			descForInt128.dsc_address = ptr;
+
+			LiteralNode::genConstant(dsqlScratch, &descForInt128, false, len);
+			break;
+		}
+		case dtype_blob: // Blob ID will be lost
+			status_exception::raise(Arg::Gds(isc_bad_constant_type) << scalar->typeToText());
+			break;
 		default:
 			LiteralNode::genConstant(dsqlScratch, scalar, false);
 			break;
@@ -739,8 +758,6 @@ void CreatePackageConstantNode::genOutputConstantBlr(thread_db* tdbb, DsqlCompil
 
 void CreatePackageConstantNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
 {
-	// DYN_UTIL_check_unique_name(tdbb, transaction, itemName, obj_package_constant);
-
 	FbLocalStatus status;
 	AutoCacheRequest storeConstantRequest(tdbb, drq_s_pkg_const, DYN_REQUESTS);
 
@@ -1213,11 +1230,13 @@ bool CreateAlterPackageNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* 
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_ALTER_PACKAGE, name, {});
 
 		PackageItemsHolder existingItems(pool);
-		existingItems.collectPackagedItems(tdbb, transaction, name, false, true);
+		existingItems.collectPackagedItems(tdbb, transaction, name, false, false);
 
 		dropMissingItems<DropFunctionNode>(tdbb, dsqlScratch, name, existingItems.functions, functionNames);
 		dropMissingItems<DropProcedureNode>(tdbb, dsqlScratch, name, existingItems.procedures, procedureNames);
-		dropMissingItems<DropConstantNode>(tdbb, dsqlScratch, name, existingItems.constants, constantNames);
+
+		// To admit type/value change, all the constants should be recreated
+		Constant::dropAllFromPackage(tdbb, transaction, name, false);
 
 		MODIFY PKG
 			PKG.RDB$PACKAGE_HEADER_SOURCE.NULL = FALSE;
