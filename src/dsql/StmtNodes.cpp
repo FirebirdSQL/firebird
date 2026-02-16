@@ -7247,6 +7247,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 	{
 		const Format* const orgFormat = newFormat;
 		orgRecord = VIO_record(tdbb, orgRpb, orgFormat, tdbb->getDefaultPool());
+		orgRecord->setTransactionNumber(orgRpb->rpb_transaction_nr);
 		orgRpb->rpb_address = orgRecord->getData();
 		orgRpb->rpb_length = orgFormat->fmt_length;
 		orgRpb->rpb_format_number = orgFormat->fmt_version;
@@ -7258,6 +7259,10 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 
 	newRpb->rpb_number = orgRpb->rpb_number;
 	newRpb->rpb_number.setValid(true);
+
+	// This allows to use NEW.RDB$RECORD_VERSION in triggers and indices.
+	// Value for OLD context is already set in VIO_data().
+	newRpb->rpb_record->setTransactionNumber(transaction->tra_number);
 
 	if (mapView)
 	{
@@ -8277,6 +8282,9 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 	// dimitr:	fake an invalid record number so that it could be evaluated to NULL
 	// 			even if the valid stream marker is present for OLD/NEW trigger contexts
 	rpb->rpb_number.setValue(BOF_NUMBER);
+
+	// This allows to use NEW.RDB$RECORD_VERSION in triggers and indices
+	rpb->rpb_record->setTransactionNumber(transaction->tra_number);
 
 	// CVC: This small block added by Ann Harrison to
 	// start with a clean empty buffer and so avoid getting

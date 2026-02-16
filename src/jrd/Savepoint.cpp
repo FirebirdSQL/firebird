@@ -39,8 +39,15 @@ UndoItem::UndoItem(jrd_tra* transaction, RecordNumber recordNumber, const Record
 	: m_number(recordNumber.getValue()), m_format(record->getFormat())
 {
 	fb_assert(m_format);
-	m_offset = transaction->getUndoSpace()->allocateSpace(m_format->fmt_length);
-	transaction->getUndoSpace()->write(m_offset, record->getData(), record->getLength());
+
+	// If assert below became wrong at some day, than tx number should be put
+	// into (and read from) undo space also.
+	fb_assert(transaction->tra_number == record->getTransactionNumber());
+
+	auto undoSpace = transaction->getUndoSpace();
+
+	m_offset = undoSpace->allocateSpace(m_format->fmt_length);
+	undoSpace->write(m_offset, record->getData(), record->getLength());
 }
 
 Record* UndoItem::setupRecord(jrd_tra* transaction) const
@@ -48,7 +55,11 @@ Record* UndoItem::setupRecord(jrd_tra* transaction) const
 	if (m_format)
 	{
 		Record* const record = transaction->getUndoRecord(m_format);
-		transaction->getUndoSpace()->read(m_offset, record->getData(), record->getLength());
+
+		auto undoSpace = transaction->getUndoSpace();
+		undoSpace->read(m_offset, record->getData(), record->getLength());
+
+		record->setTransactionNumber(transaction->tra_number);
 		return record;
 	}
 
