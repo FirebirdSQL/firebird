@@ -5462,6 +5462,13 @@ national_character_type
 			$$->charLength = (USHORT) $4;
 			$$->flags |= (FLD_national | FLD_has_len);
 		}
+	| national_character_keyword VARYING
+		{
+			$$ = newNode<dsql_fld>();
+			$$->dtype = dtype_varying;
+			$$->charLength = 255;
+			$$->flags |= FLD_national;
+		}
 	;
 
 %type <legacyField> binary_character_type
@@ -5499,6 +5506,17 @@ binary_character_type
 			$$->subType = fb_text_subtype_binary;
 			$$->flags |= (FLD_has_len | FLD_has_chset);
 		}
+	| varbinary_character_keyword
+		{
+			$$ = newNode<dsql_fld>();
+			$$->dtype = dtype_varying;
+			$$->charLength = 255;
+			$$->length = 255 + sizeof(USHORT);
+			$$->textType = ttype_binary;
+			$$->charSetId = CS_BINARY;
+			$$->subType = fb_text_subtype_binary;
+			$$->flags |= FLD_has_chset;
+		}
 	;
 
 %type <legacyField> character_type
@@ -5522,6 +5540,12 @@ character_type
 			$$->dtype = dtype_varying;
 			$$->charLength = (USHORT) $3;
 			$$->flags |= FLD_has_len;
+		}
+	| varying_keyword
+		{
+			$$ = newNode<dsql_fld>();
+			$$->dtype = dtype_varying;
+			$$->charLength = 255;
 		}
 	;
 
@@ -5902,7 +5926,7 @@ set_bind
 
 %type <legacyField> set_bind_from
 set_bind_from
-	: bind_type
+	: non_array_type
 	| TIME ZONE
 		{
 			$$ = newNode<dsql_fld>();
@@ -5911,20 +5935,9 @@ set_bind_from
 		}
 	;
 
-%type <legacyField> bind_type
-bind_type
-	: non_array_type
-	| varying_keyword
-		{
-			$$ = newNode<dsql_fld>();
-			$$->dtype = dtype_varying;
-			$$->charLength = 0;
-		}
-	;
-
 %type <legacyField> set_bind_to
 set_bind_to
-	: bind_type
+	: non_array_type
 		{
 			$$ = $1;
 		}
