@@ -206,13 +206,13 @@ namespace
 
 						for (auto& subRiver : rivers)
 						{
-							auto subRsb = subRiver->getRecordSource();
-
 							subRiver->activate(csb);
-							subRsb = opt->applyBoolean(subRsb, iter);
 
 							if (subRiver->isComputable(csb))
 							{
+								auto subRsb = subRiver->getRecordSource();
+								subRsb = opt->applyBoolean(subRsb, iter);
+
 								rsbs.add(subRsb);
 								rivers.remove(&subRiver);
 								break;
@@ -231,13 +231,12 @@ namespace
 
 						for (auto& subRiver : rivers)
 						{
-							auto subRsb = subRiver->getRecordSource();
-
 							subRiver->activate(csb);
+
+							auto subRsb = subRiver->getRecordSource();
 							subRsb = opt->applyBoolean(subRsb, iter);
 
-							const auto pos = &subRiver - rivers.begin();
-							rsbs.insert(pos, subRsb);
+							rsbs.add(subRsb);
 						}
 
 						rivers.clear();
@@ -1047,6 +1046,9 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 				if (dependentRivers.hasData())
 				{
 					fb_assert(joinType == INNER_JOIN);
+
+					for (const auto depRiver : dependentRivers)
+						depRiver->activate(csb);
 
 					rivers.join(dependentRivers);
 					dependentRivers.clear();
