@@ -790,7 +790,7 @@ dsql_udf* METD_get_function(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 						defaults++;
 					}
 
-					userFunc->udf_arguments.add(d);
+					userFunc->udf_arguments.add(dsql_udf_arg(dbb->dbb_pool, d, X.RDB$ARGUMENT_NAME));
 				}
 			}
 			END_FOR
@@ -875,7 +875,7 @@ dsql_udf* METD_get_function(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 					defaults++;
 				}
 
-				userFunc->udf_arguments.add(d);
+				userFunc->udf_arguments.add(dsql_udf_arg(dbb->dbb_pool, d, X.RDB$ARGUMENT_NAME));
 			}
 		}
 	}

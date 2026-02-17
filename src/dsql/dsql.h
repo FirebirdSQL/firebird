@@ -358,6 +358,18 @@ enum prc_flags_vals {
 	PRC_subproc			= 4		// Sub procedure
 };
 
+//! User defined function argument
+struct dsql_udf_arg
+{
+	dsc		desc;
+	MetaName name;
+
+	dsql_udf_arg(MemoryPool& p, const dsc& d, const char* n)
+		:desc(d), name(p, n)
+	{
+	}
+};
+
 //! User defined function block
 class dsql_udf : public pool_alloc<dsql_type_udf>
 {
@@ -375,7 +387,7 @@ public:
 	//USHORT		udf_character_length;
     USHORT      udf_flags;
 	QualifiedName udf_name;
-	Firebird::Array<dsc> udf_arguments;
+	Firebird::Array<dsql_udf_arg> udf_arguments;
 	bool		udf_private;	// Packaged private function
 	SSHORT		udf_def_count;	// number of inputs with default values
 };
