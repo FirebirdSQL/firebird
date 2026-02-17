@@ -196,122 +196,6 @@ void beforeDeleteIndex(thread_db* tdbb, Record* record)
 	END_FOR
 }
 
-void beforeUpdateIndex(thread_db* tdbb, Record* orgRecord, Record* newRecord)
-{
-	const auto transaction = tdbb->getTransaction();
-	dsc desc;
-
-	MetaName oldSchemaName;
-	if (EVL_field(nullptr, orgRecord, f_idx_schema, &desc))
-		MOV_get_metaname(tdbb, &desc, oldSchemaName);
-
-	MetaName oldIndexName;
-	if (EVL_field(nullptr, orgRecord, f_idx_name, &desc))
-		MOV_get_metaname(tdbb, &desc, oldIndexName);
-
-	static const CachedRequestId request1CacheId;
-	AutoCacheRequest request1(tdbb, request1CacheId);
-
-	FOR (REQUEST_HANDLE request1 TRANSACTION_HANDLE transaction)
-		RLC IN RDB$RELATION_CONSTRAINTS
-		WITH RLC.RDB$SCHEMA_NAME EQ oldSchemaName.c_str() AND
-			 RLC.RDB$INDEX_NAME EQ oldIndexName.c_str()
-	{
-		dsc descNewSchemaName;
-		MetaName newSchemaName;
-		dsc descNewIndexName;
-		MetaName newIndexName;
-		dsc descOldRelationName, descNewRelationName;
-		MetaName oldRelationName, newRelationName;
-		dsc descOldIndexId, descNewIndexId;
-		SLONG oldIndexId, newIndexId;
-		dsc descOldSegmentCount, descNewSegmentCount;
-		SLONG oldSegmentCount, newSegmentCount;
-		dsc descOldForeignKey, descNewForeignKey;
-		MetaName oldForeignKey, newForeignKey;
-
-		if (EVL_field(nullptr, newRecord, f_idx_schema, &descNewSchemaName) &&
-			EVL_field(nullptr, newRecord, f_idx_name, &descNewIndexName) &&
-			EVL_field(nullptr, orgRecord, f_idx_relation, &descOldRelationName) &&
-			EVL_field(nullptr, newRecord, f_idx_relation, &descNewRelationName) &&
-			EVL_field(nullptr, orgRecord, f_idx_id, &descOldIndexId) &&
-			EVL_field(nullptr, newRecord, f_idx_id, &descNewIndexId) &&
-			EVL_field(nullptr, orgRecord, f_idx_count, &descOldSegmentCount) &&
-			EVL_field(nullptr, newRecord, f_idx_count, &descNewSegmentCount) &&
-			EVL_field(nullptr, orgRecord, f_idx_foreign, &descOldForeignKey) &&
-			EVL_field(nullptr, newRecord, f_idx_foreign, &descNewForeignKey))
-		{
-			MOV_get_metaname(tdbb, &descNewSchemaName, newSchemaName);
-			MOV_get_metaname(tdbb, &descNewIndexName, newIndexName);
-			MOV_get_metaname(tdbb, &descOldRelationName, oldRelationName);
-			MOV_get_metaname(tdbb, &descNewRelationName, newRelationName);
-			oldIndexId = MOV_get_long(tdbb, &descOldIndexId, 0);
-			newIndexId = MOV_get_long(tdbb, &descNewIndexId, 0);
-			oldSegmentCount = MOV_get_long(tdbb, &descOldSegmentCount, 0);
-			newSegmentCount = MOV_get_long(tdbb, &descNewSegmentCount, 0);
-			MOV_get_metaname(tdbb, &descOldForeignKey, oldForeignKey);
-			MOV_get_metaname(tdbb, &descNewForeignKey, newForeignKey);
-
-			if (oldSchemaName != newSchemaName ||
-				oldIndexName != newIndexName ||
-				oldRelationName != newRelationName ||
-				oldIndexId != newIndexId ||
-				oldSegmentCount != newSegmentCount ||
-				oldForeignKey != newForeignKey)
-			{
-				ERR_post(Arg::Gds(isc_integ_index_mod));
-			}
-		}
-	}
-	END_FOR
-
-	dsc descOldIndexInactive, descNewIndexInactive;
-
-	if (EVL_field(nullptr, newRecord, f_idx_inactive, &descNewIndexInactive) &&
-		MOV_get_long(tdbb, &descNewIndexInactive, 0) == 1 &&
-		(!EVL_field(nullptr, orgRecord, f_idx_inactive, &descOldIndexInactive) ||
-			MOV_get_long(tdbb, &descOldIndexInactive, 0) == 0))
-	{
-		static const CachedRequestId request2CacheId;
-		AutoCacheRequest request2(tdbb, request2CacheId);
-
-		FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
-			RCL IN RDB$RELATION_CONSTRAINTS
-			CROSS IND1 IN RDB$INDICES
-			CROSS IND2 IN RDB$INDICES
-			WITH RCL.RDB$SCHEMA_NAME = oldSchemaName.c_str() AND
-				 RCL.RDB$INDEX_NAME = oldIndexName.c_str() AND
-				 IND1.RDB$SCHEMA_NAME = RCL.RDB$SCHEMA_NAME AND
-				 IND1.RDB$INDEX_NAME = RCL.RDB$INDEX_NAME AND
-				 IND2.RDB$FOREIGN_KEY_SCHEMA_NAME = IND1.RDB$SCHEMA_NAME AND
-				 IND2.RDB$FOREIGN_KEY = IND1.RDB$INDEX_NAME
-		{
-			ERR_post(Arg::Gds(isc_integ_index_deactivate));
-		}
-		END_FOR
-
-		static const CachedRequestId request3CacheId;
-		AutoCacheRequest request3(tdbb, request3CacheId);
-
-		FOR (REQUEST_HANDLE request3 TRANSACTION_HANDLE transaction)
-			RCL IN RDB$RELATION_CONSTRAINTS
-			WITH RCL.RDB$SCHEMA_NAME = oldSchemaName.c_str() AND
-				 RCL.RDB$INDEX_NAME = oldIndexName.c_str() AND
-				 (RCL.RDB$CONSTRAINT_TYPE = PRIMARY_KEY OR
-				  RCL.RDB$CONSTRAINT_TYPE = UNIQUE_CNSTRT OR
-				  RCL.RDB$CONSTRAINT_TYPE = FOREIGN_KEY)
-		{
-			fb_utils::exact_name_limit(RCL.RDB$CONSTRAINT_TYPE, sizeof(RCL.RDB$CONSTRAINT_TYPE));
-
-			if (strcmp(RCL.RDB$CONSTRAINT_TYPE, FOREIGN_KEY) == 0)
-				ERR_post(Arg::Gds(isc_integ_index_deactivate));
-			else
-				ERR_post(Arg::Gds(isc_integ_deactivate_primary));
-		}
-		END_FOR
-	}
-}
-
 void beforeDeleteIndexSegment(thread_db* tdbb, Record* record)
 {
 	const auto transaction = tdbb->getTransaction();
@@ -1059,88 +943,6 @@ void beforeDeleteTrigger(thread_db* tdbb, Record* record)
 	END_FOR
 }
 
-void beforeUpdateTrigger(thread_db* tdbb, Record* orgRecord, Record* newRecord)
-{
-	const auto transaction = tdbb->getTransaction();
-	dsc desc;
-
-	if (EVL_field(nullptr, orgRecord, f_trg_sys_flag, &desc) && MOV_get_long(tdbb, &desc, 0) == 1)
-		ERR_post(Arg::Gds(isc_systrig_update));
-
-	MetaName oldSchemaName, newSchemaName;
-	if (EVL_field(nullptr, orgRecord, f_trg_schema, &desc))
-		MOV_get_metaname(tdbb, &desc, oldSchemaName);
-	if (EVL_field(nullptr, newRecord, f_trg_schema, &desc))
-		MOV_get_metaname(tdbb, &desc, newSchemaName);
-
-	MetaName oldTriggerName, newTriggerName;
-	if (EVL_field(nullptr, orgRecord, f_trg_name, &desc))
-		MOV_get_metaname(tdbb, &desc, oldTriggerName);
-	if (EVL_field(nullptr, newRecord, f_trg_name, &desc))
-		MOV_get_metaname(tdbb, &desc, newTriggerName);
-
-	MetaName oldRelationName, newRelationName;
-	if (EVL_field(nullptr, orgRecord, f_trg_rname, &desc))
-		MOV_get_metaname(tdbb, &desc, oldRelationName);
-	if (EVL_field(nullptr, newRecord, f_trg_rname, &desc))
-		MOV_get_metaname(tdbb, &desc, newRelationName);
-
-	std::optional<SLONG> oldTriggerSequence, newTriggerSequence;
-	if (EVL_field(nullptr, orgRecord, f_trg_seq, &desc))
-		oldTriggerSequence = MOV_get_long(tdbb, &desc, 0);
-	if (EVL_field(nullptr, newRecord, f_trg_seq, &desc))
-		newTriggerSequence = MOV_get_long(tdbb, &desc, 0);
-
-	std::optional<bid> oldTriggerBlr, newTriggerBlr;
-	if (EVL_field(nullptr, orgRecord, f_trg_blr, &desc))
-		oldTriggerBlr = *(bid*) desc.dsc_address;
-	if (EVL_field(nullptr, newRecord, f_trg_blr, &desc))
-		newTriggerBlr = *(bid*) desc.dsc_address;
-
-	std::optional<SLONG> oldTriggerInactive, newTriggerInactive;
-	if (EVL_field(nullptr, orgRecord, f_trg_inactive, &desc))
-		oldTriggerInactive = MOV_get_long(tdbb, &desc, 0);
-	if (EVL_field(nullptr, newRecord, f_trg_inactive, &desc))
-		newTriggerInactive = MOV_get_long(tdbb, &desc, 0);
-
-	std::optional<SLONG> oldFlags, newFlags;
-	if (EVL_field(nullptr, orgRecord, f_trg_flags, &desc))
-		oldFlags = MOV_get_long(tdbb, &desc, 0);
-	if (EVL_field(nullptr, newRecord, f_trg_flags, &desc))
-		newFlags = MOV_get_long(tdbb, &desc, 0);
-
-	std::optional<bid> oldDebugInfo, newDebugInfo;
-	if (EVL_field(nullptr, orgRecord, f_trg_debug_info, &desc))
-		oldDebugInfo = *(bid*) desc.dsc_address;
-	if (EVL_field(nullptr, newRecord, f_trg_debug_info, &desc))
-		newDebugInfo = *(bid*) desc.dsc_address;
-
-	static const CachedRequestId requestCacheId;
-	AutoCacheRequest request(tdbb, requestCacheId);
-
-	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		CHK IN RDB$CHECK_CONSTRAINTS
-		CROSS RCL IN RDB$RELATION_CONSTRAINTS
-		WITH CHK.RDB$SCHEMA_NAME = oldSchemaName.c_str() AND
-			 CHK.RDB$TRIGGER_NAME = oldTriggerName.c_str() AND
-			 RCL.RDB$CONSTRAINT_NAME = CHK.RDB$CONSTRAINT_NAME AND
-			 RCL.RDB$CONSTRAINT_TYPE = CHECK_CNSTRT
-	{
-		if (!(oldSchemaName == newSchemaName &&
-			  oldTriggerName == newTriggerName &&
-			  oldRelationName == newRelationName &&
-			  oldTriggerSequence == newTriggerSequence &&
-			  oldTriggerBlr == newTriggerBlr &&
-			  oldTriggerInactive == newTriggerInactive &&
-			  oldFlags == newFlags &&
-			  oldDebugInfo == newDebugInfo))
-		{
-			ERR_post(Arg::Gds(isc_check_trig_update));
-		}
-	}
-	END_FOR
-}
-
 void beforeDeleteUserPrivilege(thread_db* tdbb, Record* record)
 {
 	const auto transaction = tdbb->getTransaction();
@@ -1619,20 +1421,12 @@ void SystemTriggers::executeBeforeUpdateTriggers(thread_db* tdbb, jrd_rel* relat
 			beforeUpdateField(tdbb, orgRecord, newRecord);
 			break;
 
-		case rel_indices:
-			beforeUpdateIndex(tdbb, orgRecord, newRecord);
-			break;
-
 		case rel_rfr:
 			beforeUpdateRelationField(tdbb, orgRecord, newRecord);
 			break;
 
 		case rel_segments:
 			beforeUpdateIndexSegment(tdbb, orgRecord, newRecord);
-			break;
-
-		case rel_triggers:
-			beforeUpdateTrigger(tdbb, orgRecord, newRecord);
 			break;
 	}
 }
