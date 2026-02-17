@@ -2151,8 +2151,8 @@ private:
 	};
 
 public:
-	explicit UdfCallNode(MemoryPool& pool, const QualifiedName& aName,
-		ValueListNode* aArgs = NULL);
+	explicit UdfCallNode(MemoryPool& pool, const QualifiedName& aName = {},
+		ValueListNode* aArgs = nullptr);
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 

@@ -97,6 +97,10 @@
 #define blr_exception_params	(unsigned char)7
 #define blr_sql_state			(unsigned char)8
 
+// v6 downgrade support
+#define blr_exception2			(unsigned char)9
+#define blr_exception3			(unsigned char)10
+
 #define blr_version4		(unsigned char)4
 #define blr_version5		(unsigned char)5
 //#define blr_version6		(unsigned char)6
@@ -258,7 +262,10 @@
 #define blr_relation2		(unsigned char)146
 #define blr_rid2		(unsigned char)147
 
-// unused codes: 148..149
+// v6 downgrade support
+#define blr_relation3	(unsigned char)148
+
+// unused codes: 149
 
 #define blr_set_generator       (unsigned char)150
 
@@ -465,5 +472,38 @@
 #define blr_json_function			(unsigned char) 222
 
 #define blr_skip_locked				(unsigned char) 223
+
+// v6 downgrade support
+
+#define blr_invoke_function							(unsigned char) 224
+#define blr_invoke_function_id						(unsigned char) 1
+#define blr_invoke_function_id_schema				(unsigned char) 1
+#define blr_invoke_function_id_package				(unsigned char) 2
+#define blr_invoke_function_id_name					(unsigned char) 3
+#define blr_invoke_function_id_sub					(unsigned char) 4
+#define blr_invoke_function_arg_names				(unsigned char) 2
+#define blr_invoke_function_args					(unsigned char) 3
+
+#define blr_invoke_procedure						(unsigned char) 225
+#define blr_select_procedure						(unsigned char) 226
+
+// subcodes of blr_invoke_procedure and blr_select_procedure
+#define blr_invsel_procedure_id						(unsigned char) 1
+#define blr_invsel_procedure_id_schema				(unsigned char) 1
+#define blr_invsel_procedure_id_package				(unsigned char) 2
+#define blr_invsel_procedure_id_name				(unsigned char) 3
+#define blr_invsel_procedure_id_sub					(unsigned char) 4
+#define blr_invsel_procedure_in_arg_names			(unsigned char) 2
+#define blr_invsel_procedure_in_args				(unsigned char) 3
+#define blr_invsel_procedure_out_arg_names			(unsigned char) 4
+#define blr_invsel_procedure_out_args				(unsigned char) 5
+#define blr_invsel_procedure_inout_arg_names		(unsigned char) 6
+#define blr_invsel_procedure_inout_args				(unsigned char) 7
+#define blr_invsel_procedure_context				(unsigned char) 8
+#define blr_invsel_procedure_alias					(unsigned char) 9
+
+#define blr_gen_id3					(unsigned char) 231
+#define blr_default2				(unsigned char) 232
+#define blr_flags					(unsigned char) 234
 
 #endif // FIREBIRD_IMPL_BLR_H
