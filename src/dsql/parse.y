@@ -5452,7 +5452,7 @@ national_character_type
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_text;
-			$$->charLength = 1;
+			$$->charLength = DEFAULT_CHAR_LENGTH;
 			$$->flags |= FLD_national;
 		}
 	| national_character_keyword VARYING '(' pos_short_integer ')'
@@ -5466,7 +5466,7 @@ national_character_type
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_varying;
-			$$->charLength = 255;
+			$$->charLength = DEFAULT_VARCHAR_LENGTH;
 			$$->flags |= FLD_national;
 		}
 	;
@@ -5488,8 +5488,8 @@ binary_character_type
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_text;
-			$$->charLength = 1;
-			$$->length = 1;
+			$$->charLength = DEFAULT_BINARY_LENGTH;
+			$$->length = DEFAULT_BINARY_LENGTH;
 			$$->textType = ttype_binary;
 			$$->charSetId = CS_BINARY;
 			$$->subType = fb_text_subtype_binary;
@@ -5510,8 +5510,8 @@ binary_character_type
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_varying;
-			$$->charLength = 255;
-			$$->length = 255 + sizeof(USHORT);
+			$$->charLength = DEFAULT_VARBINARY_LENGTH;
+			$$->length = DEFAULT_VARBINARY_LENGTH + sizeof(USHORT);
 			$$->textType = ttype_binary;
 			$$->charSetId = CS_BINARY;
 			$$->subType = fb_text_subtype_binary;
@@ -5532,7 +5532,7 @@ character_type
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_text;
-			$$->charLength = 1;
+			$$->charLength = DEFAULT_CHAR_LENGTH;
 		}
 	| varying_keyword '(' pos_short_integer ')'
 		{
@@ -5545,7 +5545,7 @@ character_type
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_varying;
-			$$->charLength = 255;
+			$$->charLength = DEFAULT_VARCHAR_LENGTH;
 		}
 	;
 
