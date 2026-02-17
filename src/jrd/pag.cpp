@@ -1834,7 +1834,7 @@ ULONG PageSpace::lastUsedPage()
 
 	const page_inv_page* pip = (page_inv_page*) window.win_buffer;
 
-	int last_bit = pip->pip_used;
+	int last_bit = pip->pip_used > 0 ? pip->pip_used - 1 : 0;
 	int byte_num = last_bit / 8;
 	UCHAR mask = 1 << (last_bit % 8);
 	while (last_bit >= 0 && (pip->pip_bits[byte_num] & mask))
