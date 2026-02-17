@@ -1226,7 +1226,7 @@ public:
 		return false;
 	}
 
-	virtual bool constant() const
+	virtual bool constant() const override
 	{
 		return false;
 	}
@@ -1501,8 +1501,7 @@ public:
 		TYPE_UPDATE_OR_INSERT,
 
 		TYPE_EXT_INIT_PARAMETERS,
-		TYPE_EXT_TRIGGER,
-		TYPE_DECLARE_CONSTANT
+		TYPE_EXT_TRIGGER
 	};
 
 	enum WhichTrigger : UCHAR

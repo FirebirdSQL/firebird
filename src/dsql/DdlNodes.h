@@ -41,7 +41,6 @@
 
 namespace Jrd {
 
-
 // Update RDB$FIELDS received by reference.
 void updateRdbFields(const Jrd::TypeClause* type,
 	SSHORT& fieldType,

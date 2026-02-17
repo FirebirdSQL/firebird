@@ -812,7 +812,6 @@ RELATION(nam_schemas, rel_schemas, ODS_14_0, rel_persistent)
 	FIELD(f_sch_desc, nam_description, fld_description, 1, ODS_14_0)
 END_RELATION
 
-
 // Relation 59 (RDB$CONSTANTS)
 RELATION(nam_constants, rel_constants, ODS_13_1, rel_persistent)
 	FIELD(f_const_name, nam_const_name, fld_f_name, 0, ODS_13_1)

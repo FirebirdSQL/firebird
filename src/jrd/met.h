@@ -283,7 +283,6 @@ public:
 		return mdc_constants.getVersioned(tdbb, id, CacheFlag::AUTOCREATE);
 	}
 
-
 	static Cached::CharSet* getCharSet(thread_db* tdbb, CSetId id, ObjectBase::Flag flags);
 
 	void cleanup(Jrd::thread_db*);

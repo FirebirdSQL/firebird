@@ -6245,7 +6245,6 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 
 	// AB: Loop through the scope_levels starting by its own.
 	bool done = false;
-
 	USHORT currentScopeLevel = dsqlScratch->scopeLevel + 1;
 	for (; currentScopeLevel > 0 && !done; --currentScopeLevel)
 	{

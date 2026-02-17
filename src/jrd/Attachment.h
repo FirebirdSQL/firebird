@@ -98,7 +98,6 @@ namespace Jrd
 	class Validation;
 	class Applier;
 	enum InternalRequest : USHORT;
-	class Constant;
 
 
 struct DSqlCacheItem

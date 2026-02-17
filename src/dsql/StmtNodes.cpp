@@ -12261,4 +12261,5 @@ static void validateExpressions(thread_db* tdbb, const Array<ValidateInfo>& vali
 	}
 }
 
+
 }	// namespace Jrd
