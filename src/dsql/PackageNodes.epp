@@ -39,7 +39,6 @@
 #include "../jrd/scl_proto.h"
 
 #include "../common/dsc_proto.h" // DSC_make_descriptor
-#include "../dsql/StmtNodes.h" // ConstantExprNode
 #include "../jrd/Constant.h" // Constant
 #include "../jrd/cvt_proto.h" // CVT_get_string_ptr
 #include "../jrd/mov_proto.h" // MOV_get_string_ptr
@@ -596,60 +595,57 @@ dsc* CreatePackageConstantNode::makeConstantValue(thread_db* tdbb, DsqlCompilerS
 	jrd_tra* transaction = tdbb->getTransaction();
 
 	Firebird::AutoMemoryPool tempPool(MemoryPool::createPool(ALLOC_ARGS0));
-	Firebird::BlrWriter::BlrData& blr = dsqlScratch->getBlrData();
 
-	// Create and setup a proxy stmt node
-	ConstantExprNode proxyStmt(*tempPool);
-	CastNode* cast = FB_NEW_POOL(*tempPool) CastNode(*tempPool, m_value, m_type);
-	proxyStmt.value = cast;
+	{ // Prepare BLR writer
+		Firebird::BlrWriter::BlrData& blr = dsqlScratch->getBlrData();
+		blr.clear();
+		dsqlScratch->getDebugData().clear();
+	}
 
-	// Get the blr
-	blr.clear();
-	dsqlScratch->getDebugData().clear();
-	dsqlScratch->appendUChar(dsqlScratch->isVersion4() ? blr_version4 : blr_version5);
-	cast->genBlr(dsqlScratch);
-	dsqlScratch->appendUChar(blr_eoc);
+	// Gen blr
+	CastNode cast(*tempPool, m_value, m_type);
+	{
+		dsqlScratch->appendUChar(dsqlScratch->isVersion4() ? blr_version4 : blr_version5);
+		cast.genBlr(dsqlScratch);
+		dsqlScratch->appendUChar(blr_eoc);
+	}
 
 	try
 	{
 		MemoryPool* csb_pool = attachment->att_database->createPool(ALLOC_ARGS0);
 		Jrd::ContextPoolHolder context(tdbb, csb_pool);
 
-		Statement* statement = nullptr;
-		Request* requestToRestore = tdbb->getRequest();
-		Cleanup cc([&tdbb, requestToRestore]()
+		Cleanup cc([&tdbb, requestToRestore = tdbb->getRequest()]()
 			{
 				// if (statement)
 				// 	statement->release(tdbb);
 				tdbb->setRequest(requestToRestore);
 			});
 
-		{ // blr
-			PAR_blr(tdbb, &name.schema, nullptr,
-				dsqlScratch->getBlrData().begin(), dsqlScratch->getBlrData().getCount(),
-				nullptr, &nodeContext,
-				nullptr, false, 0);
+		// Parse BLR
+		PAR_blr(tdbb, &name.schema, nullptr,
+			dsqlScratch->getBlrData().begin(), dsqlScratch->getBlrData().getCount(),
+			nullptr, &nodeContext,
+			nullptr, false, 0);
+
+		Request* request = nullptr;
+		{ // Make statement and request
+			Statement* statement = Statement::makeStatement(tdbb, nodeContext, true);
+
+			request = statement->makeRootRequest(tdbb);
+			tdbb->setRequest(request);
+			request->setUsed();
+			request->setAttachment(attachment);
+			attachment->att_requests.add(request);
+
+			TRA_attach_request(transaction, request);
 		}
 
-		statement = Statement::makeStatement(tdbb, nodeContext, true);
-
-
-		auto request = statement->makeRootRequest(tdbb);
-		tdbb->setRequest(request);
-		request->setUsed();
-		auto* attachment = tdbb->getAttachment();
-		request->setAttachment(attachment);
-		attachment->att_requests.add(request);
-
-		TRA_attach_request(transaction, request);
-
-		ValueExprNode* valueNode = static_cast<ValueExprNode*>(nodeContext->csb_node); // csb_node is the same as MET_parse_blob output
-		auto output = valueNode->execute(tdbb, request);
-		// request->setUnused();
-		// statement->release(tdbb);
-		// statement = nullptr;
-
-		return output;
+		{ // Execute constant expr
+			ValueExprNode* valueNode = static_cast<ValueExprNode*>(nodeContext->csb_node); // csb_node is the same as MET_parse_blob output
+			auto output = valueNode->execute(tdbb, request);
+			return output;
+		}
 	}
 	catch (const Firebird::Exception& ex)
 	{
@@ -675,11 +671,13 @@ void CreatePackageConstantNode::genOutputConstantBlr(thread_db* tdbb, DsqlCompil
 		return; // Something went wrong
 
 	// Make the blr with only the LiteralNode
-	Firebird::BlrWriter::BlrData& blr = dsqlScratch->getBlrData();
-	blr.clear();
-	dsqlScratch->getDebugData().clear();
-	dsqlScratch->appendUChar(dsqlScratch->isVersion4() ? blr_version4 : blr_version5);
+	{
+		Firebird::BlrWriter::BlrData& blr = dsqlScratch->getBlrData();
+		blr.clear();
+		dsqlScratch->getDebugData().clear();
+	}
 
+	dsqlScratch->appendUChar(dsqlScratch->isVersion4() ? blr_version4 : blr_version5);
 	// Convert a literalNode-unsupported constant type to a supported one if necessary
 	switch (scalar->dsc_dtype)
 	{

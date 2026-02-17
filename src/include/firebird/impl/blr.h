@@ -534,7 +534,6 @@
 
 // Package const
 #define blr_package_reference			(unsigned char) 236
-#define blr_init_constant				(unsigned char) 237
 
 // Subcodes of blr_package_reference
 #define blr_pkg_ref_item_const			(unsigned char) 1

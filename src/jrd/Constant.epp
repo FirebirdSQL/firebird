@@ -98,10 +98,10 @@ ScanResult Constant::scan(thread_db* tdbb, ObjectBase::Flag flags)
 
 					owner = PKG.RDB$OWNER_NAME;
 
-					// if (!PKG.RDB$SECURITY_CLASS.NULL)
-					// {
-					// 	getPermanent()->setSecurityName(QualifiedName(PKG.RDB$SECURITY_CLASS, SCH.RDB$SECURITY_CLASS));
-					// }
+					if (!PKG.RDB$SECURITY_CLASS.NULL)
+					{
+						getPermanent()->setSecurityName(QualifiedName(PKG.RDB$SECURITY_CLASS, SCH.RDB$SECURITY_CLASS));
+					}
 
 					// SQL SECURITY of function must be the same if it's defined in package
 					if (!PKG.RDB$SQL_SECURITY.NULL)
@@ -348,16 +348,12 @@ void Constant::makeValue(thread_db* tdbb, Attachment* attachment, bid blob_id)
 			}
 
 			{ // Value
-				dsc constantDsc{};
-				ValueExprNode* valueNode = static_cast<ValueExprNode*>(csb->csb_node); // csb_node is the same as MET_parse_blob output
-
-				Statement* statement = nullptr;
 				//Cleanup cc([&statement, &tdbb]() { if (statement) statement->release(tdbb); });
-				statement = Statement::makeValueExpression(tdbb, valueNode, constantDsc, csb, true);
+				Statement* statement = Statement::makeStatement(tdbb, csb, true);
 
 				auto routineRequest = statement->makeRootRequest(tdbb);
 				const dsc* temp = EVL_expr(tdbb, routineRequest, static_cast<LiteralNode*>(csb->csb_node));
-				EVL_make_value(tdbb, &constantDsc, &m_value);
+				EVL_make_value(tdbb, temp, &m_value);
 				statement->release(tdbb);
 			}
 		}
