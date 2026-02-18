@@ -40,11 +40,10 @@
 
 #include "../common/dsc_proto.h" // DSC_make_descriptor
 #include "../jrd/Constant.h" // Constant
-#include "../jrd/cvt_proto.h" // CVT_get_string_ptr
-#include "../jrd/mov_proto.h" // MOV_get_string_ptr
+
 #include "../dsql/metd_proto.h" // METD_get_domain
 #include "../common/classes/VaryStr.h" // METD_get_domain
-#include "../jrd/par_proto.h" // PARc_proto in Nodes.h (dependency hell)
+#include "../jrd/par_proto.h" // PAR_proto in Nodes.h (dependency hell)
 #include "../jrd/met.h" // Metacache
 #include "../jrd/Statement.h" // Jrd::Statement
 
@@ -402,7 +401,7 @@ DmlNode* PackageReferenceNode::parse(thread_db* tdbb, MemoryPool& pool, Compiler
 		{
 			Dependency dependency(obj_package_constant);
 			dependency.name = FB_NEW_POOL(pool) QualifiedName(pool, fullName);
-			// dependency.subName = &dependency.name->object;
+
 			csb->addDependency(dependency);
 		}
 
@@ -413,14 +412,6 @@ DmlNode* PackageReferenceNode::parse(thread_db* tdbb, MemoryPool& pool, Compiler
 				node->m_constant = csb->csb_resources->constants.registerResource(constant);
 		}
 
-		// std::optional<MetaId> id = Constant::getIdByName(tdbb, fullName);
-		// if (id.has_value())
-		// 	status_exception::raise(Arg::Gds(isc_bad_constant_name) <<
-		// 		Arg::Str(fullName.toQuotedString()));
-
-		// node->m_constant = Constant::lookup(tdbb, id.value());
-
-		// node->m_constant = MetadataCache::getPerm<Cached::Constant>(tdbb, fullName, CacheFlag::AUTOCREATE);
 		if (!node->m_constant)
 			status_exception::raise(Arg::Gds(isc_bad_constant_name) <<
 				Arg::Str(fullName.toQuotedString()));
@@ -539,7 +530,7 @@ string CreatePackageConstantNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, name);
 	NODE_PRINT(printer, m_type);
-	NODE_PRINT(printer, m_value);
+	NODE_PRINT(printer, m_expr);
 	NODE_PRINT(printer, m_isPrivate);
 
 	return "PackageReferenceNode";
@@ -549,12 +540,12 @@ DdlNode* CreatePackageConstantNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	dsqlScratch->qualifyNewName(name);
 
-	m_value = m_value->dsqlPass(dsqlScratch);
+	m_expr = m_expr->dsqlPass(dsqlScratch);
 
 	QualifiedName dummyCollationName;
 	DDL_resolve_intl_type(dsqlScratch, m_type, dummyCollationName);
-	// TODO: Is value compatible with type?
-	if (!m_value->constant())
+
+	if (!m_expr->constant())
 	{
 		status_exception::raise(Arg::Gds(isc_dyn_non_constant_constant) << name.toQuotedString());
 	}
@@ -586,172 +577,6 @@ void CreatePackageConstantNode::execute(thread_db* tdbb, DsqlCompilerScratch* ds
 
 	fb_assert(m_id);
 	MetadataCache::newVersion<Cached::Constant>(tdbb, m_id);
-}
-
-dsc* CreatePackageConstantNode::makeConstantValue(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, CompilerScratch*& nodeContext)
-{
-	// Prepare variables
-	Attachment* attachment = tdbb->getAttachment();
-	jrd_tra* transaction = tdbb->getTransaction();
-
-	Firebird::AutoMemoryPool tempPool(MemoryPool::createPool(ALLOC_ARGS0));
-
-	{ // Prepare BLR writer
-		Firebird::BlrWriter::BlrData& blr = dsqlScratch->getBlrData();
-		blr.clear();
-		dsqlScratch->getDebugData().clear();
-	}
-
-	// Gen blr
-	CastNode cast(*tempPool, m_value, m_type);
-	{
-		dsqlScratch->appendUChar(dsqlScratch->isVersion4() ? blr_version4 : blr_version5);
-		cast.genBlr(dsqlScratch);
-		dsqlScratch->appendUChar(blr_eoc);
-	}
-
-	try
-	{
-		MemoryPool* csb_pool = attachment->att_database->createPool(ALLOC_ARGS0);
-		Jrd::ContextPoolHolder context(tdbb, csb_pool);
-
-		Cleanup cc([&tdbb, requestToRestore = tdbb->getRequest()]()
-			{
-				// if (statement)
-				// 	statement->release(tdbb);
-				tdbb->setRequest(requestToRestore);
-			});
-
-		// Parse BLR
-		PAR_blr(tdbb, &name.schema, nullptr,
-			dsqlScratch->getBlrData().begin(), dsqlScratch->getBlrData().getCount(),
-			nullptr, &nodeContext,
-			nullptr, false, 0);
-
-		Request* request = nullptr;
-		{ // Make statement and request
-			Statement* statement = Statement::makeStatement(tdbb, nodeContext, true);
-
-			request = statement->makeRootRequest(tdbb);
-			tdbb->setRequest(request);
-			request->setUsed();
-			request->setAttachment(attachment);
-			attachment->att_requests.add(request);
-
-			TRA_attach_request(transaction, request);
-		}
-
-		{ // Execute constant expr
-			ValueExprNode* valueNode = static_cast<ValueExprNode*>(nodeContext->csb_node); // csb_node is the same as MET_parse_blob output
-			auto output = valueNode->execute(tdbb, request);
-			return output;
-		}
-	}
-	catch (const Firebird::Exception& ex)
-	{
-		ex.stuffException(tdbb->tdbb_status_vector);
-		ERR_punt();
-		return nullptr;
-	}
-}
-
-void CreatePackageConstantNode::genOutputConstantBlr(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch)
-{
-	// Compile the constant
-	dsc* scalar = nullptr;
-
-	// Delay csb deletion to keep dsc storage alive
-	CompilerScratch* csb = nullptr;
-	Cleanup cc([&csb]()
-	{
-		delete csb;
-	});
-
-	if ((scalar = makeConstantValue(tdbb, dsqlScratch, csb)) == nullptr)
-		return; // Something went wrong
-
-	// Make the blr with only the LiteralNode
-	{
-		Firebird::BlrWriter::BlrData& blr = dsqlScratch->getBlrData();
-		blr.clear();
-		dsqlScratch->getDebugData().clear();
-	}
-
-	dsqlScratch->appendUChar(dsqlScratch->isVersion4() ? blr_version4 : blr_version5);
-	// Convert a literalNode-unsupported constant type to a supported one if necessary
-	switch (scalar->dsc_dtype)
-	{
-		case dtype_varying:
-		case dtype_cstring:
-		{
-			// Convert to dtype_text
-			TTypeId ttype;
-			UCHAR* ptr;
-			auto& status = tdbb->getAttachment()->att_dec_status;
-			const USHORT len = CVT_get_string_ptr(scalar, &ttype, &ptr, nullptr, 0, status);
-
-			dsc text;
-			text.makeText(len, ttype, ptr);
-			LiteralNode::genConstant(dsqlScratch, &text, false);
-			break;
-		}
-		case dtype_real:
-		{
-			double newValue = *(float*)scalar->dsc_address;
-
-			dsc descForDouble{};
-			descForDouble.makeDouble();
-
-			UCHAR* ptr;
-			VaryStr<TEMP_STR_LENGTH> temp;
-			TTypeId ttype;
-			ULONG len = MOV_get_string_ptr(tdbb, scalar, &ttype, &ptr, &temp, sizeof(temp));
-
-			descForDouble.dsc_address = ptr;
-
-			LiteralNode::genConstant(dsqlScratch, &descForDouble, false, len);
-			break;
-		}
-		case dtype_dec64: // dtype_dec64 is not present in LiteralNode::genConstant
-		case dtype_double: // MOV_move stores double in scalar->dsc_address. Convert it to string to use genConstant
-		case dtype_dec128:
-		{
-			dsc descForDouble{};
-			descForDouble.makeDecimal128();
-
-			UCHAR* ptr;
-			VaryStr<TEMP_STR_LENGTH> temp;
-			TTypeId ttype;
-			ULONG len = MOV_get_string_ptr(tdbb, scalar, &ttype, &ptr, &temp, sizeof(temp));
-
-			descForDouble.dsc_address = ptr;
-
-			LiteralNode::genConstant(dsqlScratch, &descForDouble, false, len);
-			break;
-		}
-		case dtype_int128:
-		{
-			dsc descForInt128{};
-			descForInt128.makeInt128(scalar->dsc_scale);
-
-			UCHAR* ptr;
-			VaryStr<TEMP_STR_LENGTH> temp;
-			TTypeId ttype;
-			ULONG len = MOV_get_string_ptr(tdbb, scalar, &ttype, &ptr, &temp, sizeof(temp));
-
-			descForInt128.dsc_address = ptr;
-
-			LiteralNode::genConstant(dsqlScratch, &descForInt128, false, len);
-			break;
-		}
-		case dtype_blob: // Blob ID will be lost
-			status_exception::raise(Arg::Gds(isc_bad_constant_type) << scalar->typeToText());
-			break;
-		default:
-			LiteralNode::genConstant(dsqlScratch, scalar, false);
-			break;
-	}
-	dsqlScratch->appendUChar(blr_eoc);
 }
 
 void CreatePackageConstantNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
@@ -802,7 +627,7 @@ void CreatePackageConstantNode::executeCreate(thread_db* tdbb, DsqlCompilerScrat
 				strcpy(CONST.RDB$FIELD_SOURCE, fieldName.object.c_str());
 
 				// Gen value blr
-				genOutputConstantBlr(tdbb, dsqlScratch);
+				Constant::genConstantBlr(tdbb, dsqlScratch, m_expr, m_type, name.schema);
 
 				// Put the blr
 				blb* blob = blb::create(tdbb, transaction, &CONST.RDB$CONSTANT_BLR);
@@ -885,15 +710,6 @@ bool CreatePackageConstantNode::executeAlter(thread_db* tdbb, DsqlCompilerScratc
 
 		const bool wasInternalDomain = fb_utils::implicit_domain(origDom.dyn_fld_source.object.c_str());
 
-		// ERASE FLD;
-
-		// Should it be here?
-		// if (!FLD.RDB$SECURITY_CLASS.NULL)
-			// deleteSecurityClass(tdbb, transaction, FLD.RDB$SECURITY_CLASS);
-
-		// Should it be here?
-		// deletePrivilegesByRelName(tdbb, transaction, FLD.RDB$FIELD_NAME, obj_field);
-
 		QualifiedName newDomainName;
 
 		// We have the type. Default and type/domain are exclusive for now.
@@ -970,7 +786,7 @@ bool CreatePackageConstantNode::executeAlter(thread_db* tdbb, DsqlCompilerScratc
 			newDom.dyn_sub_type = m_type->subType;
 
 		// Gen the new constant value as blr
-		genOutputConstantBlr(tdbb, dsqlScratch);
+		Constant::genConstantBlr(tdbb, dsqlScratch, m_expr, m_type, name.schema);
 
 		// And write
 		blb* blob = blb::create(tdbb, transaction, &blobId);

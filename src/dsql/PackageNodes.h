@@ -164,7 +164,7 @@ public:
 		: DdlNode(pool),
 		  name(pool, name),
 		  m_type(type),
-		  m_value(value),
+		  m_expr(value),
 		  m_isPrivate(isPrivate)
 	{ }
 
@@ -184,7 +184,6 @@ public:
 
 private:
 	dsc* makeConstantValue(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, CompilerScratch*& nodeContext);
-	void genOutputConstantBlr(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch);
 	void executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 	bool executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 
@@ -206,7 +205,7 @@ public:
 
 private:
 	NestConst<dsql_fld> m_type;
-	NestConst<ValueExprNode> m_value;
+	NestConst<ValueExprNode> m_expr;
 	MetaId m_id = 0;
 	bool m_isPrivate = false;
 };

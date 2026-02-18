@@ -36,8 +36,8 @@
 
 namespace Jrd
 {
-
-class ValueListNode;
+class DsqlCompilerScratch;
+class dsql_fld;
 
 class Constant : public Routine
 {
@@ -85,21 +85,21 @@ public:
 	static int objectType();
 
 public:
-	void makeValue(thread_db* tdbb, Attachment* attachment, bid blob_id);
-
 	inline const dsc& getValue() const
 	{
 		return m_value.vlu_desc;
 	}
 
-	static dsc getDesc(thread_db* tdbb, Jrd::jrd_tra* transaction, const QualifiedName& name);
 	static void drop(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& name);
 	static void dropAllFromPackage(thread_db* tdbb, Jrd::jrd_tra* transaction, const QualifiedName& parent, bool privateFlag);
-	// static dsc* makeConstantValue(thread_db* tdbb, UCHAR* blr, ULONG blrLength);
-	static dsc* readValue(thread_db* tdbb, Request* request, const QualifiedName& name);
-	// static dsc* readConstantValue2(thread_db* tdbb, Request* request, const MetaName& packageName, const MetaName& itemName);
+	static dsc getDesc(thread_db* tdbb, Jrd::jrd_tra* transaction, const QualifiedName& name);
+
+	static void genConstantBlr(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+		ValueExprNode* constExpr, dsql_fld* type, const MetaName& schema);
 
 private:
+	void makeValue(thread_db* tdbb, Attachment* attachment, bid blob_id);
+
 	virtual ~Constant() override
 	{
 		// The string is allocated via tdbb pool and it is dead by now

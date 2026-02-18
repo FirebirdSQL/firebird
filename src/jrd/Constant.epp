@@ -36,6 +36,10 @@
 #include "../jrd/Statement.h" // Jrd::Statement
 #include "../jrd/par_proto.h" // PAR_blr
 
+#include "../jrd/cvt_proto.h" // CVT_get_string_ptr
+#include "../jrd/mov_proto.h" // MOV_get_string_ptr
+#include "../common/classes/VaryStr.h"
+
 using namespace Firebird;
 using namespace Jrd;
 
@@ -160,20 +164,16 @@ ScanResult Constant::reload(thread_db* tdbb, ObjectBase::Flag)
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		CONST IN RDB$CONSTANTS
 		WITH CONST.RDB$CONSTANT_ID EQ this->getId()
-	// FOR (REQUEST_HANDLE request)
-	// 	CONST IN RDB$CONSTANTS
-	// 	WITH CONST.RDB$SCHEMA_NAME EQ this->getName().schema.c_str() AND
-	// 		CONST.RDB$PACKAGE_NAME EQ this->getName().package.c_str() AND
-	// 		CONST.RDB$CONSTANT_NAME EQ this->getName().object.c_str()
 	{
 
 		if (compiling)
+		{
+			fb_assert(false);
 			return ScanResult::REPEAT;
+		}
 
 		found = true;
 		makeValue(tdbb, attachment, CONST.RDB$CONSTANT_BLR);
-
-		// parseBlr() in makeValue could set FLAG_RELOAD again
 	}
 	END_FOR
 
@@ -252,25 +252,6 @@ void Constant::drop(thread_db* tdbb, Jrd::jrd_tra* transaction, const QualifiedN
 	savePoint.release();	// everything is ok
 }
 
-// void Constant::drop(thread_db* tdbb, Jrd::jrd_tra* transaction, const QualifiedName& name, const MetaId id)
-// {
-// 	// Run all statements under savepoint control
-// 	DropSavepoint savePoint(tdbb, transaction, name);
-
-// 	AutoCacheRequest request(tdbb, drq_e_pkg_const_name, DYN_REQUESTS);
-// 	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-// 		CONST IN RDB$CONSTANTS
-// 		WITH CONST.RDB$CONSTANT_ID EQ id
-// 	{
-// 		savePoint.setFound(id);
-
-// 		ERASE CONST;
-// 	}
-// 	END_FOR
-
-// 	savePoint.release();	// everything is ok
-// }
-
 void Constant::dropAllFromPackage(thread_db* tdbb, Jrd::jrd_tra* transaction, const QualifiedName& parent, bool privateFlag)
 {
 	AutoCacheRequest eraseConstantRequest(tdbb, drq_e_pkg_consts_by_flag, DYN_REQUESTS);
@@ -319,12 +300,175 @@ dsc Constant::getDesc(thread_db* tdbb, Jrd::jrd_tra* transaction, const Qualifie
 	return desc;
 }
 
+static dsc* executeConstantExpressionFull(thread_db* tdbb, CompilerScratch* csb)
+{
+	Statement* statement = Statement::makeStatement(tdbb, csb, true);
+
+	Request* request = statement->makeRootRequest(tdbb);
+	{
+		Attachment* attachment = tdbb->getAttachment();
+		jrd_tra* transaction = tdbb->getTransaction();
+
+		tdbb->setRequest(request);
+		request->setUsed();
+		request->setAttachment(attachment);
+		attachment->att_requests.add(request);
+
+		TRA_attach_request(transaction, request);
+	}
+
+
+	{ // Execute constant expr
+		ValueExprNode* valueNode = static_cast<ValueExprNode*>(csb->csb_node); // csb_node is the same as MET_parse_blob output
+		return EVL_expr(tdbb, request, valueNode);
+	}
+}
+
+static void executeConstantExpression(thread_db* tdbb, CompilerScratch* csb, MemoryPool& pool, impure_value& value)
+{
+	Statement* statement = Statement::makeStatement(tdbb, csb, true);
+	//Cleanup cc([&statement, &tdbb]() { if (statement) statement->release(tdbb); });
+
+	Request* request = statement->makeRootRequest(tdbb);
+
+	const dsc* temp = EVL_expr(tdbb, request, static_cast<LiteralNode*>(csb->csb_node));
+
+	EVL_make_value(tdbb, temp, &value, &pool);
+	statement->release(tdbb);
+}
+
+
+static void genConstantCompatibleBlr(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, const dsc& scalar)
+{
+	// Make the blr with only the LiteralNode
+	{
+		Firebird::BlrWriter::BlrData& blr = dsqlScratch->getBlrData();
+		blr.clear();
+		dsqlScratch->getDebugData().clear();
+	}
+
+	dsqlScratch->appendUChar(dsqlScratch->isVersion4() ? blr_version4 : blr_version5);
+	// Convert a literalNode-unsupported constant type to a supported one if necessary
+	switch (scalar.dsc_dtype)
+	{
+		case dtype_varying:
+		case dtype_cstring:
+		{
+			// Convert to dtype_text
+			TTypeId ttype;
+			UCHAR* ptr;
+			auto& status = tdbb->getAttachment()->att_dec_status;
+			const USHORT len = CVT_get_string_ptr(&scalar, &ttype, &ptr, nullptr, 0, status);
+
+			dsc text;
+			text.makeText(len, ttype, ptr);
+			LiteralNode::genConstant(dsqlScratch, &text, false);
+			break;
+		}
+		case dtype_real:
+		{
+			double newValue = *(float*)scalar.dsc_address;
+
+			dsc descForDouble{};
+			descForDouble.makeDouble();
+
+			UCHAR* ptr;
+			VaryStr<TEMP_STR_LENGTH> temp;
+			TTypeId ttype;
+			ULONG len = MOV_get_string_ptr(tdbb, &scalar, &ttype, &ptr, &temp, sizeof(temp));
+
+			descForDouble.dsc_address = ptr;
+
+			LiteralNode::genConstant(dsqlScratch, &descForDouble, false, len);
+			break;
+		}
+		case dtype_dec64: // dtype_dec64 is not present in LiteralNode::genConstant
+		case dtype_double: // MOV_move stores double in scalar->dsc_address. Convert it to string to use genConstant
+		case dtype_dec128:
+		{
+			dsc descForDouble{};
+			descForDouble.makeDecimal128();
+
+			UCHAR* ptr;
+			VaryStr<TEMP_STR_LENGTH> temp;
+			TTypeId ttype;
+			ULONG len = MOV_get_string_ptr(tdbb, &scalar, &ttype, &ptr, &temp, sizeof(temp));
+
+			descForDouble.dsc_address = ptr;
+
+			LiteralNode::genConstant(dsqlScratch, &descForDouble, false, len);
+			break;
+		}
+		case dtype_int128:
+		{
+			dsc descForInt128{};
+			descForInt128.makeInt128(scalar.dsc_scale);
+
+			UCHAR* ptr;
+			VaryStr<TEMP_STR_LENGTH> temp;
+			TTypeId ttype;
+			ULONG len = MOV_get_string_ptr(tdbb, &scalar, &ttype, &ptr, &temp, sizeof(temp));
+
+			descForInt128.dsc_address = ptr;
+
+			LiteralNode::genConstant(dsqlScratch, &descForInt128, false, len);
+			break;
+		}
+		case dtype_blob: // Blob ID will be lost
+			status_exception::raise(Arg::Gds(isc_bad_constant_type) << scalar.typeToText());
+			break;
+		default:
+			LiteralNode::genConstant(dsqlScratch, &scalar, false);
+			break;
+	}
+	dsqlScratch->appendUChar(blr_eoc);
+}
+
+void Constant::genConstantBlr(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+	ValueExprNode* constExpr, dsql_fld* type, const MetaName& schema)
+{
+	{ // Prepare BLR writer
+		Firebird::BlrWriter::BlrData& blr = dsqlScratch->getBlrData();
+		blr.clear();
+		dsqlScratch->getDebugData().clear();
+	}
+
+	// Gen blr into dsqlScratch
+	Firebird::AutoMemoryPool tempPool(MemoryPool::createPool(ALLOC_ARGS0));
+	CastNode cast(*tempPool, constExpr, type);
+	{
+		dsqlScratch->appendUChar(dsqlScratch->isVersion4() ? blr_version4 : blr_version5);
+		cast.genBlr(dsqlScratch);
+		dsqlScratch->appendUChar(blr_eoc);
+	}
+
+	Attachment* attachment = tdbb->getAttachment();
+	MemoryPool* csb_pool = attachment->att_database->createPool(ALLOC_ARGS0);
+	Jrd::ContextPoolHolder context(tdbb, csb_pool);
+
+	CompilerScratch* csb = nullptr;
+	Cleanup cc([&tdbb, requestToRestore = tdbb->getRequest(), &csb]()
+		{
+			// if (statement)
+			// 	statement->release(tdbb);
+			delete csb;
+			tdbb->setRequest(requestToRestore);
+		});
+
+	// Parse BLR for constant expression
+	PAR_blr(tdbb, &schema, nullptr,
+		dsqlScratch->getBlrData().begin(), dsqlScratch->getBlrData().getCount(),
+		nullptr, &csb,
+		nullptr, false, 0);
+
+	// Execute node from BLR
+	auto output = executeConstantExpressionFull(tdbb, csb);
+	if (output != nullptr)
+		genConstantCompatibleBlr(tdbb, dsqlScratch, *output);
+}
 
 void Constant::makeValue(thread_db* tdbb, Attachment* attachment, bid blob_id)
 {
-	// The m_value has a string that is allocated with the tdbb pool
-	// The constant cache lives longer than the tdbb pool
-	// so we must clear the value to prevent invalid deletions
 	m_value = {};
 
 	MemoryPool* csb_pool = nullptr;
@@ -343,19 +487,10 @@ void Constant::makeValue(thread_db* tdbb, Attachment* attachment, bid blob_id)
 				MET_parse_blob(tdbb, &getName().schema, nullptr, &blob_id, &csb, nullptr, false, false);
 
 				fb_assert(csb != nullptr);
-				if (csb->csb_g_flags & csb_reload)
-					flReload = true;
+				flReload = (csb->csb_g_flags & csb_reload);
 			}
 
-			{ // Value
-				//Cleanup cc([&statement, &tdbb]() { if (statement) statement->release(tdbb); });
-				Statement* statement = Statement::makeStatement(tdbb, csb, true);
-
-				auto routineRequest = statement->makeRootRequest(tdbb);
-				const dsc* temp = EVL_expr(tdbb, routineRequest, static_cast<LiteralNode*>(csb->csb_node));
-				EVL_make_value(tdbb, temp, &m_value);
-				statement->release(tdbb);
-			}
+			executeConstantExpression(tdbb, csb, getPermanent()->getPool(), m_value);
 		}
 		catch (const Exception& ex)
 		{
