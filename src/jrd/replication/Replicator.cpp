@@ -306,21 +306,7 @@ void Replicator::insertRecord(CheckStatusWrapper* status,
 {
 	try
 	{
-		for (unsigned id = 0; id < record->getCount(); id++)
-		{
-			IReplicatedField* field = record->getField(id);
-			if (field != nullptr)
-			{
-				const auto type = field->getType();
-				if (type == SQL_ARRAY || type == SQL_BLOB)
-				{
-					const auto* blobId = (ISC_QUAD*) field->getData();
-
-					if (blobId && !BlobWrapper::blobIsNull(*blobId))
-						storeBlob(transaction, *blobId);
-				}
-			}
-		}
+		storeBlobs(transaction, record);
 
 		const auto length = record->getRawLength();
 		const auto data = record->getRawData();
@@ -353,21 +339,7 @@ void Replicator::updateRecord(CheckStatusWrapper* status,
 {
 	try
 	{
-		for (unsigned id = 0; id < newRecord->getCount(); id++)
-		{
-			IReplicatedField* field = newRecord->getField(id);
-			if (field != nullptr)
-			{
-				const auto type = field->getType();
-				if (type == SQL_ARRAY || type == SQL_BLOB)
-				{
-					const auto* blobId = (ISC_QUAD*) field->getData();
-
-					if (blobId && !BlobWrapper::blobIsNull(*blobId))
-						storeBlob(transaction, *blobId);
-				}
-			}
-		}
+		storeBlobs(transaction, newRecord);
 
 		const auto orgLength = orgRecord->getRawLength();
 		const auto orgData = orgRecord->getRawData();
@@ -451,6 +423,25 @@ void Replicator::executeSqlIntl(CheckStatusWrapper* status,
 	catch (const Exception& ex)
 	{
 		ex.stuffException(status);
+	}
+}
+
+void Replicator::storeBlobs(Transaction* transaction, Firebird::IReplicatedRecord* record)
+{
+	for (unsigned id = 0; id < record->getCount(); id++)
+	{
+		IReplicatedField* field = record->getField(id);
+		if (field == nullptr)
+			continue;
+
+		const auto type = field->getType();
+		if (type == SQL_ARRAY || type == SQL_BLOB)
+		{
+			const auto* blobId = (ISC_QUAD*) field->getData();
+
+			if (blobId && !BlobWrapper::blobIsNull(*blobId))
+				storeBlob(transaction, *blobId);
+		}
 	}
 }
 
