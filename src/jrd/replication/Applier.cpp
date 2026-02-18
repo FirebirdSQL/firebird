@@ -1289,6 +1289,9 @@ void Applier::doInsert(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 	Savepoint::ChangeMarker marker(transaction->tra_save_point);
 
+	// This allows to use RDB$RECORD_VERSION in indices.
+	rpb->rpb_record->setTransactionNumber(transaction->tra_number);
+
 	VIO_store(tdbb, rpb, transaction);
 	IDX_store(tdbb, rpb, transaction);
 	if (m_enableCascade)
@@ -1385,6 +1388,9 @@ void Applier::doUpdate(thread_db* tdbb, record_param* orgRpb, record_param* newR
 	transaction->tra_repl_blobs.clear();
 
 	Savepoint::ChangeMarker marker(transaction->tra_save_point);
+
+	// This allows to use NEW.RDB$RECORD_VERSION in indices.
+	newRpb->rpb_record->setTransactionNumber(transaction->tra_number);
 
 	VIO_modify(tdbb, orgRpb, newRpb, transaction);
 	IDX_modify(tdbb, orgRpb, newRpb, transaction);
