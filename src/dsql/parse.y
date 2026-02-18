@@ -5452,7 +5452,7 @@ national_character_type
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_text;
-			$$->charLength = 1;
+			$$->charLength = DEFAULT_CHAR_LENGTH;
 			$$->flags |= FLD_national;
 		}
 	| national_character_keyword VARYING '(' pos_short_integer ')'
@@ -5461,6 +5461,13 @@ national_character_type
 			$$->dtype = dtype_varying;
 			$$->charLength = (USHORT) $4;
 			$$->flags |= (FLD_national | FLD_has_len);
+		}
+	| national_character_keyword VARYING
+		{
+			$$ = newNode<dsql_fld>();
+			$$->dtype = dtype_varying;
+			$$->charLength = DEFAULT_VARCHAR_LENGTH;
+			$$->flags |= FLD_national;
 		}
 	;
 
@@ -5481,8 +5488,8 @@ binary_character_type
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_text;
-			$$->charLength = 1;
-			$$->length = 1;
+			$$->charLength = DEFAULT_BINARY_LENGTH;
+			$$->length = DEFAULT_BINARY_LENGTH;
 			$$->textType = ttype_binary;
 			$$->charSetId = CS_BINARY;
 			$$->subType = fb_text_subtype_binary;
@@ -5499,6 +5506,17 @@ binary_character_type
 			$$->subType = fb_text_subtype_binary;
 			$$->flags |= (FLD_has_len | FLD_has_chset);
 		}
+	| varbinary_character_keyword
+		{
+			$$ = newNode<dsql_fld>();
+			$$->dtype = dtype_varying;
+			$$->charLength = DEFAULT_VARBINARY_LENGTH;
+			$$->length = DEFAULT_VARBINARY_LENGTH + sizeof(USHORT);
+			$$->textType = ttype_binary;
+			$$->charSetId = CS_BINARY;
+			$$->subType = fb_text_subtype_binary;
+			$$->flags |= FLD_has_chset;
+		}
 	;
 
 %type <legacyField> character_type
@@ -5514,7 +5532,7 @@ character_type
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_text;
-			$$->charLength = 1;
+			$$->charLength = DEFAULT_CHAR_LENGTH;
 		}
 	| varying_keyword '(' pos_short_integer ')'
 		{
@@ -5522,6 +5540,12 @@ character_type
 			$$->dtype = dtype_varying;
 			$$->charLength = (USHORT) $3;
 			$$->flags |= FLD_has_len;
+		}
+	| varying_keyword
+		{
+			$$ = newNode<dsql_fld>();
+			$$->dtype = dtype_varying;
+			$$->charLength = DEFAULT_VARCHAR_LENGTH;
 		}
 	;
 
@@ -5902,7 +5926,7 @@ set_bind
 
 %type <legacyField> set_bind_from
 set_bind_from
-	: bind_type
+	: non_array_type
 	| TIME ZONE
 		{
 			$$ = newNode<dsql_fld>();
@@ -5911,20 +5935,9 @@ set_bind_from
 		}
 	;
 
-%type <legacyField> bind_type
-bind_type
-	: non_array_type
-	| varying_keyword
-		{
-			$$ = newNode<dsql_fld>();
-			$$->dtype = dtype_varying;
-			$$->charLength = 0;
-		}
-	;
-
 %type <legacyField> set_bind_to
 set_bind_to
-	: bind_type
+	: non_array_type
 		{
 			$$ = $1;
 		}

@@ -220,6 +220,14 @@ inline constexpr size_t DEFAULT_TIME_PRECISION		= 0;
 // Should be 6 as per SQL spec
 inline constexpr size_t DEFAULT_TIMESTAMP_PRECISION	= 3;
 
+// SQL spec requires an implementation-specific default (6.1 <data type>, syntax rules 6 (VARBINARY) and 7 (VARCHAR))
+inline constexpr size_t DEFAULT_VARCHAR_LENGTH = 255;
+inline constexpr size_t DEFAULT_VARBINARY_LENGTH = 255;
+
+// SQL spec requires a default length of 1 (6.1 <data type>, syntax rule 5)
+inline constexpr size_t DEFAULT_CHAR_LENGTH = 1;
+inline constexpr size_t DEFAULT_BINARY_LENGTH = 1;
+
 inline constexpr size_t MAX_ARRAY_DIMENSIONS = 16;
 
 inline constexpr size_t MAX_SORT_ITEMS = 255; // ORDER BY f1,...,f255
