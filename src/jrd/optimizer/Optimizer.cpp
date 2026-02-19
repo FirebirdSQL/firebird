@@ -844,7 +844,8 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 	// Go through the record selection expression generating
 	// record source blocks for all streams
 
-	RiverList rivers, dependentRivers, specialRivers;
+	RiverList rivers, dependentRivers;
+	RseNode* specialRse = nullptr;
 
 	bool innerSubStream = false;
 
@@ -852,11 +853,18 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 	{
 		fb_assert(sort == rse->rse_sorted);
 		fb_assert(aggregate == rse->rse_aggregate);
+		fb_assert(!specialRse);
 
 		const auto subRse = nodeAs<RseNode>(node);
-
 		const bool semiJoin = (subRse && subRse->isSemiJoined());
-		fb_assert(!semiJoin || rse->rse_jointype == blr_inner);
+
+		if (semiJoin)
+		{
+			fb_assert(rse->rse_jointype == blr_inner);
+			specialRse = subRse;
+			fb_assert(specialRse);
+			continue;
+		}
 
 		// Find the stream number and place it at the end of the bedStreams array
 		// (if this is really a stream and not another RseNode)
@@ -896,11 +904,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 			if (computable)
 			{
 				outerStreams.join(localStreams);
-
-				if (semiJoin)
-					specialRivers.add(river);
-				else
-					rivers.add(river);
+				rivers.add(river);
 			}
 			else
 			{
@@ -909,7 +913,6 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 		}
 		else
 		{
-			fb_assert(!semiJoin);
 			// We have a relation, just add its stream
 			fb_assert(bedStreams.hasData());
 			outerStreams.add(bedStreams.back());
@@ -1058,14 +1061,24 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 				fb_assert(rivers.isEmpty());
 				rsb = finalRiver->getRecordSource();
 
-				if (specialRivers.hasData())
+				if (specialRse)
 				{
 					fb_assert(joinType == INNER_JOIN);
 					joinType = SEMI_JOIN;
 
 					rivers.add(finalRiver);
-					rivers.join(specialRivers);
-					specialRivers.clear();
+
+					const auto sub = specialRse->compile(tdbb, this, true);
+					fb_assert(sub);
+
+					StreamList localStreams;
+					sub->findUsedStreams(localStreams);
+
+					const auto subRiver = FB_NEW_POOL(getPool()) River(csb, sub, specialRse, localStreams);
+					auto& list = subRiver->isDependent(*finalRiver) ? dependentRivers : rivers;
+					list.add(subRiver);
+
+					specialRse = nullptr;
 				}
 			}
 		}

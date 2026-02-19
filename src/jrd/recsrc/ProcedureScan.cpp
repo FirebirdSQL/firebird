@@ -257,6 +257,12 @@ WriteLockResult ProcedureScan::lockRecord(thread_db* /*tdbb*/) const
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
 }
 
+bool ProcedureScan::isDependent(const StreamList& streams) const
+{
+	return (m_sourceList && m_sourceList->containsAnyStream(streams)) ||
+		(m_targetList && m_targetList->containsAnyStream(streams));
+}
+
 void ProcedureScan::getChildren(Array<const RecordSource*>& children) const
 {
 }

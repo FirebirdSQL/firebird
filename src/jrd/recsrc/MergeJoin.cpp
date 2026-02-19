@@ -391,6 +391,17 @@ void MergeJoin::findUsedStreams(StreamList& streams, bool expandAll) const
 		m_args[i]->findUsedStreams(streams, expandAll);
 }
 
+bool MergeJoin::isDependent(const StreamList& streams) const
+{
+	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
+	{
+		if (m_args[i]->isDependent(streams))
+			return true;
+	}
+
+	return false;
+}
+
 void MergeJoin::invalidateRecords(Request* request) const
 {
 	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)

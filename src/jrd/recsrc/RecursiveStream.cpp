@@ -299,6 +299,11 @@ void RecursiveStream::findUsedStreams(StreamList& streams, bool expandAll) const
 	}
 }
 
+bool RecursiveStream::isDependent(const StreamList& streams) const
+{
+	return m_root->isDependent(streams) || m_inner->isDependent(streams);
+}
+
 void RecursiveStream::cleanupLevel(Request* request, Impure* impure) const
 {
 	Impure* const saveImpure = request->getImpure<Impure>(m_saveOffset);

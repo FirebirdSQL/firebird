@@ -630,6 +630,20 @@ void HashJoin::findUsedStreams(StreamList& streams, bool expandAll) const
 		m_args[i].source->findUsedStreams(streams, expandAll);
 }
 
+bool HashJoin::isDependent(const StreamList& streams) const
+{
+	if (m_leader.source->isDependent(streams))
+		return true;
+
+	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
+	{
+		if (m_args[i].source->isDependent(streams))
+			return true;
+	}
+
+	return (m_boolean && m_boolean->containsAnyStream(streams));
+}
+
 void HashJoin::invalidateRecords(Request* request) const
 {
 	m_leader.source->invalidateRecords(request);

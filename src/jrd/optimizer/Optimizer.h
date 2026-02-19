@@ -227,6 +227,11 @@ public:
 		return true;
 	}
 
+	bool isDependent(const River& river) const
+	{
+		return m_rsb->isDependent(river.getStreams());
+	}
+
 protected:
 	RecordSource* m_rsb;
 	Firebird::HalfStaticArray<RecordSourceNode*, OPT_STATIC_ITEMS> m_nodes;
