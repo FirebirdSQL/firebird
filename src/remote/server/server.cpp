@@ -483,6 +483,7 @@ void loginSuccess(const string& login, const string& remId)
 	remoteFailedLogins->loginSuccess(remId);
 }
 
+static constexpr unsigned SEGMENT_DATA_SIZE = 254;
 
 template <typename T>
 static void getMultiPartConnectParameter(T& putTo, ClumpletReader& id, UCHAR param)
@@ -512,9 +513,10 @@ static void getMultiPartConnectParameter(T& putTo, ClumpletReader& id, UCHAR par
 				}
 				checkBytes[offset] = 1;
 
-				offset *= 254;
+				offset *= SEGMENT_DATA_SIZE;
 				++specData;
-				putTo.grow(offset + len);
+				if (offset + len > putTo.getCount())
+					putTo.grow(offset + len);
 				memcpy(&putTo[offset], specData, len);
 			}
 		}
