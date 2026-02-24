@@ -915,14 +915,14 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 			bool computable = false;
 
 			// AB: Save all outer-part streams
-			if (isInnerJoin() || ((isLeftJoin() || isSpecialJoin()) && !innerSubStream))
+			if (isInnerJoin() || !innerSubStream)
 			{
 				if (node->computable(csb, INVALID_STREAM, false))
 					computable = true;
 
 				// Apply local booleans, if any. Note that it's done
 				// only for inner joins and outer streams of left joins.
-				auto iter = getConjuncts(isLeftJoin(), false);
+				auto iter = getConjuncts(isOuterJoin(), false);
 				rsb = applyLocalBoolean(rsb, localStreams, iter);
 			}
 
@@ -985,6 +985,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 	{
 		rivers.join(dependentRivers);
 		dependentRivers.clear();
+
 		rsb = OuterJoin(tdbb, this, rse, rivers, &sort).generate();
 	}
 	else

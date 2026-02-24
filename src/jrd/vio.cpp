@@ -2493,6 +2493,9 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		}
 	}
 
+	// Restore transaction number that can be used for OLD.RDB$RECORD_VERSION evaluation later.
+	rpb->rpb_transaction_nr = tid_fetch;
+
 	if (transaction->tra_save_point && transaction->tra_save_point->isChanging())
 		verb_post(tdbb, transaction, rpb, 0);
 
@@ -3834,6 +3837,8 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 
 	// Old record was restored and re-fetched for write.  Now replace it.
 
+	const auto orgTranum = org_rpb->rpb_transaction_nr;
+
 	org_rpb->rpb_transaction_nr = new_rpb->rpb_transaction_nr;
 	org_rpb->rpb_format_number = new_rpb->rpb_format_number;
 	org_rpb->rpb_b_page = temp.rpb_page;
@@ -3846,6 +3851,9 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 	stack.merge(new_rpb->rpb_record->getPrecedence());
 
 	replace_record(tdbb, org_rpb, &stack, transaction);
+
+	// Restore transaction number that can be used for OLD.RDB$RECORD_VERSION evaluation later.
+	org_rpb->rpb_transaction_nr = orgTranum;
 
 	if (!(transaction->tra_flags & TRA_system) &&
 		transaction->tra_save_point && transaction->tra_save_point->isChanging())
@@ -5574,7 +5582,10 @@ static void garbage_collect(thread_db* tdbb, record_param* rpb, ULONG prior_page
 		delete_record(tdbb, rpb, prior_page, tdbb->getDefaultPool());
 
 		if (rpb->rpb_record)
+		{
+			rpb->rpb_record->setTransactionNumber(rpb->rpb_transaction_nr);
 			going.push(rpb->rpb_record);
+		}
 
 		++backversions;
 
@@ -6067,6 +6078,7 @@ static UndoDataRet get_undo_data(thread_db* tdbb, jrd_tra* transaction,
 		record->copyFrom(undoRecord);
 
 		rpb->rpb_flags &= ~rpb_deleted;
+		rpb->rpb_transaction_nr = undoRecord->getTransactionNumber();
 		return udExists;
 	}
 

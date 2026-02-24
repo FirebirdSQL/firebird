@@ -1477,6 +1477,9 @@ void EXE_execute_triggers(thread_db* tdbb,
 					{
 						trigger->req_rpb[0].rpb_number = old_rpb->rpb_number;
 						trigger->req_rpb[0].rpb_number.setValid(true);
+
+						// This allows to use OLD.RDB$RECORD_VERSION in triggers
+						trigger->req_rpb[0].rpb_transaction_nr = old_rec->getTransactionNumber();
 					}
 					else
 						trigger->req_rpb[0].rpb_number.setValid(false);
@@ -1495,6 +1498,9 @@ void EXE_execute_triggers(thread_db* tdbb,
 					{
 						trigger->req_rpb[1].rpb_number = new_rpb->rpb_number;
 						trigger->req_rpb[1].rpb_number.setValid(true);
+
+						// This allows to use NEW.RDB$RECORD_VERSION in triggers
+						trigger->req_rpb[1].rpb_transaction_nr = new_rec->getTransactionNumber();
 					}
 					else
 						trigger->req_rpb[1].rpb_number.setValid(false);

@@ -505,7 +505,11 @@ dsc* IndexExpression::evaluate(Record* record) const
 	const auto orgRequest = m_tdbb->getRequest();
 	m_tdbb->setRequest(m_request);
 
-	m_request->req_rpb[0].rpb_record = record;
+	auto& rpb = m_request->req_rpb[0];
+	rpb.rpb_record = record;
+	// Necessary for evaluation of expressions with RDB$RECORD_VERSION
+	rpb.rpb_transaction_nr = record->getTransactionNumber();
+
 
 	FbLocalStatus status;
 	dsc* result = nullptr;

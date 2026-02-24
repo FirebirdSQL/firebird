@@ -743,11 +743,6 @@ public:
 		return (rse_jointype == INNER_JOIN);
 	}
 
-	bool isLeftJoin() const
-	{
-		return (rse_jointype == LEFT_JOIN);
-	}
-
 	bool isOuterJoin() const
 	{
 		return (rse_jointype == LEFT_JOIN || rse_jointype == RIGHT_JOIN || rse_jointype == FULL_JOIN);

@@ -13507,26 +13507,26 @@ void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 
 		// arrays are of various fld_types but are really blobs
 
-		SSHORT dtype = field->fld_type;
+		auto blrType = field->fld_type;
 		length = field->fld_length;
 		SSHORT alignment = 4;
 
 		if (field->fld_flags & FLD_array)
-			dtype = blr_blob;
+			blrType = blr_blob;
 
-		if (dtype <= DTYPE_BLR_MAX)
+		if (blrType <= DTYPE_BLR_MAX)
 		{
-			USHORT l = gds_cvt_blr_dtype[dtype];
-			alignment = type_alignments[l];
-			if ((l = type_lengths[l]) != 0)
-				length = l;
+			const auto dtype = gds_cvt_blr_dtype[blrType];
+			alignment = type_alignments[dtype];
+			if (const auto len = type_lengths[dtype])
+				length = len;
 		}
 
-		switch (dtype)
+		switch (blrType)
 		{
 		case blr_text:
 		case blr_varying:
-			if (dtype == blr_text)
+			if (blrType == blr_text)
 				add_byte(blr, blr_text2);
 			else
 				add_byte(blr, blr_varying2);
@@ -13537,7 +13537,7 @@ void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 				add_word(blr, field->fld_character_set_id);
 
 			add_word(blr, field->fld_length);
-			if (dtype == blr_varying)
+			if (blrType == blr_varying)
 				length += sizeof(USHORT);
 			break;
 
@@ -13557,6 +13557,7 @@ void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 		case blr_sql_time:
 		case blr_sql_time_tz:
 		case blr_sql_date:
+		case blr_bool:
 		case blr_dec64:
 		case blr_dec128:
 			add_byte(blr, field->fld_type);
@@ -13578,11 +13579,6 @@ void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 				add_byte(blr, blr_quad);
 				add_byte(blr, 0);
 			}
-
-			break;
-
-		case blr_bool:
-			add_byte(blr, field->fld_type);
 			break;
 
 		default:
@@ -13590,8 +13586,10 @@ void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 			// msg 26 datatype %ld not understood
 			break;
 		}
+
 		if (alignment)
 			offset = FB_ALIGN(offset, alignment);
+
 		field->fld_offset = offset;
 		field->fld_parameter = count++;
 		offset += length;

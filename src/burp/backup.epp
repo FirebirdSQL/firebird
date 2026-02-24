@@ -4899,109 +4899,57 @@ void ReadRelationMeta::setRelation(const burp_rel* relation, bool partition)
 	{
 		if (field->fld_flags & FLD_computed)
 			continue;
+
 		SSHORT alignment = 4;
 		FLD_LENGTH length = field->fld_length;
-		SSHORT dtype = field->fld_type;
+		auto blrType = field->fld_type;
+
 		if (field->fld_flags & FLD_array)
+			blrType = blr_blob;
+
+		if (blrType <= DTYPE_BLR_MAX)
 		{
-			dtype = blr_blob;
-			length = 8;
+			const auto dtype = gds_cvt_blr_dtype[blrType];
+			alignment = type_alignments[dtype];
 		}
-		switch (dtype)
+
+		switch (blrType)
 		{
 		case blr_text:
-			alignment = type_alignments[dtype_text];
-			add_byte(blr, field->fld_type);
-			add_word(blr, field->fld_length);
-			break;
-
 		case blr_varying:
-			alignment = type_alignments[dtype_varying];
 			add_byte(blr, field->fld_type);
 			add_word(blr, field->fld_length);
-			length += sizeof(USHORT);
+			if (blrType == blr_varying)
+				length += sizeof(USHORT);
 			break;
 
 		case blr_short:
-			alignment = type_alignments[dtype_short];
-			add_byte(blr, field->fld_type);
-			add_byte(blr, field->fld_scale);
-			break;
-
 		case blr_long:
-			alignment = type_alignments[dtype_long];
-			add_byte(blr, field->fld_type);
-			add_byte(blr, field->fld_scale);
-			break;
-
 		case blr_quad:
-			alignment = type_alignments[dtype_quad];
-			add_byte(blr, field->fld_type);
-			add_byte(blr, field->fld_scale);
-			break;
-
 		case blr_int64:
-			alignment = type_alignments[dtype_int64];
-			add_byte(blr, field->fld_type);
-			add_byte(blr, field->fld_scale);
-			break;
-
 		case blr_int128:
-			alignment = type_alignments[dtype_int128];
 			add_byte(blr, field->fld_type);
 			add_byte(blr, field->fld_scale);
-			break;
-
-		case blr_double:
-			alignment = type_alignments[dtype_double];
-			add_byte(blr, field->fld_type);
-			break;
-
-		case blr_timestamp:
-			alignment = type_alignments[dtype_timestamp];
-			add_byte(blr, field->fld_type);
-			break;
-
-		case blr_timestamp_tz:
-			alignment = type_alignments[dtype_timestamp_tz];
-			add_byte(blr, field->fld_type);
-			break;
-
-		case blr_sql_time:
-			alignment = type_alignments[dtype_sql_time];
-			add_byte(blr, field->fld_type);
-			break;
-
-		case blr_sql_time_tz:
-			alignment = type_alignments[dtype_sql_time_tz];
-			add_byte(blr, field->fld_type);
-			break;
-
-		case blr_sql_date:
-			alignment = type_alignments[dtype_sql_date];
-			add_byte(blr, field->fld_type);
 			break;
 
 		case blr_float:
-			alignment = type_alignments[dtype_real];
+		case blr_double:
+		case blr_timestamp:
+		case blr_timestamp_tz:
+		case blr_sql_time:
+		case blr_sql_time_tz:
+		case blr_sql_date:
+		case blr_bool:
+		case blr_dec64:
+		case blr_dec128:
 			add_byte(blr, field->fld_type);
 			break;
 
 		case blr_blob:
 			alignment = type_alignments[dtype_blob];
+			length = type_lengths[dtype_blob];
 			add_byte(blr, blr_quad);
 			add_byte(blr, 0);
-			break;
-
-		case blr_bool:
-			alignment = type_alignments[dtype_boolean];
-			add_byte(blr, field->fld_type);
-			break;
-
-		case blr_dec64:
-		case blr_dec128:
-			alignment = type_alignments[dtype];
-			add_byte(blr, field->fld_type);
 			break;
 
 		default:
@@ -5009,8 +4957,10 @@ void ReadRelationMeta::setRelation(const burp_rel* relation, bool partition)
 			// msg 26 datatype %ld not understood
 			break;
 		}
+
 		if (alignment)
 			offset = FB_ALIGN(offset, alignment);
+
 		field->fld_offset = offset;
 		field->fld_parameter = count++;
 		offset += length;
