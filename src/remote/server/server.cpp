@@ -429,6 +429,7 @@ void loginSuccess(const string& login, const string& remId)
 	remoteFailedLogins->loginSuccess(remId);
 }
 
+static const unsigned SEGMENT_DATA_SIZE = 254;
 
 template <typename T>
 static void getMultiPartConnectParameter(T& putTo, Firebird::ClumpletReader& id, UCHAR param)
@@ -458,9 +459,10 @@ static void getMultiPartConnectParameter(T& putTo, Firebird::ClumpletReader& id,
 				}
 				checkBytes[offset] = 1;
 
-				offset *= 254;
+				offset *= SEGMENT_DATA_SIZE;
 				++specData;
-				putTo.grow(offset + len);
+				if (offset + len > putTo.getCount())
+					putTo.grow(offset + len);
 				memcpy(&putTo[offset], specData, len);
 			}
 		}
