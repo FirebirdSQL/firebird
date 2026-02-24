@@ -494,26 +494,3 @@ void Replicator::setSequence2(CheckStatusWrapper* status,
 		ex.stuffException(status);
 	}
 }
-
-void Replicator::flushSequences(CheckStatusWrapper* status)
-{
-	if (m_generators.isEmpty())
-		return;
-
-	try
-	{
-		BatchBlock block(getPool());
-		block.header.traNumber = 0;
-		block.buffer = m_manager->getBuffer();
-		block.header.length = (ULONG)block.buffer->getCount();
-
-		block.putGenerators(&m_generators);
-		m_generators.clear();
-
-		flush(block, FLUSH_SYNC);
-	}
-	catch (const Exception& ex)
-	{
-		ex.stuffException(status);
-	}
-}

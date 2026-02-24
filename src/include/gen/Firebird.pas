@@ -758,7 +758,6 @@ type
 	IReplicatedSession_cleanupTransactionPtr = procedure(this: IReplicatedSession; status: IStatus; number: Int64); cdecl;
 	IReplicatedSession_deprecatedSetSequencePtr = procedure(this: IReplicatedSession; status: IStatus; name: PAnsiChar; value: Int64); cdecl;
 	IReplicatedSession_setSequence2Ptr = procedure(this: IReplicatedSession; status: IStatus; schemaName: PAnsiChar; genName: PAnsiChar; value: Int64); cdecl;
-	IReplicatedSession_flushSequencesPtr = procedure(this: IReplicatedSession; status: IStatus); cdecl;
 	IProfilerPlugin_initPtr = procedure(this: IProfilerPlugin; status: IStatus; attachment: IAttachment; ticksFrequency: QWord); cdecl;
 	IProfilerPlugin_startSessionPtr = function(this: IProfilerPlugin; status: IStatus; description: PAnsiChar; options: PAnsiChar; timestamp: ISC_TIMESTAMP_TZ): IProfilerSession; cdecl;
 	IProfilerPlugin_flushPtr = procedure(this: IProfilerPlugin; status: IStatus); cdecl;
@@ -3930,7 +3929,6 @@ type
 		cleanupTransaction: IReplicatedSession_cleanupTransactionPtr;
 		deprecatedSetSequence: IReplicatedSession_deprecatedSetSequencePtr;
 		setSequence2: IReplicatedSession_setSequence2Ptr;
-		flushSequences: IReplicatedSession_flushSequencesPtr;
 	end;
 
 	IReplicatedSession = class(IPluginBase)
@@ -3941,7 +3939,6 @@ type
 		procedure cleanupTransaction(status: IStatus; number: Int64);
 		procedure deprecatedSetSequence(status: IStatus; name: PAnsiChar; value: Int64);
 		procedure setSequence2(status: IStatus; schemaName: PAnsiChar; genName: PAnsiChar; value: Int64);
-		procedure flushSequences(status: IStatus);
 	end;
 
 	IReplicatedSessionImpl = class(IReplicatedSession)
@@ -3956,7 +3953,6 @@ type
 		procedure cleanupTransaction(status: IStatus; number: Int64); virtual; abstract;
 		procedure deprecatedSetSequence(status: IStatus; name: PAnsiChar; value: Int64); virtual; abstract;
 		procedure setSequence2(status: IStatus; schemaName: PAnsiChar; genName: PAnsiChar; value: Int64); virtual; abstract;
-		procedure flushSequences(status: IStatus); virtual; abstract;
 	end;
 
 	ProfilerPluginVTable = class(PluginBaseVTable)
@@ -10102,17 +10098,6 @@ begin
 	end
 	else begin
 		ReplicatedSessionVTable(vTable).setSequence2(Self, status, schemaName, genName, value);
-	end;
-	FbException.checkException(status);
-end;
-
-procedure IReplicatedSession.flushSequences(status: IStatus);
-begin
-	if (vTable.version < 5) then begin
-		FbException.setVersionError(status, 'IReplicatedSession', vTable.version, 5);
-	end
-	else begin
-		ReplicatedSessionVTable(vTable).flushSequences(Self, status);
 	end;
 	FbException.checkException(status);
 end;
@@ -17582,15 +17567,6 @@ begin
 	end
 end;
 
-procedure IReplicatedSessionImpl_flushSequencesDispatcher(this: IReplicatedSession; status: IStatus); cdecl;
-begin
-	try
-		IReplicatedSessionImpl(this).flushSequences(status);
-	except
-		on e: Exception do FbException.catchException(status, e);
-	end
-end;
-
 var
 	IReplicatedSessionImpl_vTable: ReplicatedSessionVTable;
 
@@ -18980,7 +18956,6 @@ initialization
 	IReplicatedSessionImpl_vTable.cleanupTransaction := @IReplicatedSessionImpl_cleanupTransactionDispatcher;
 	IReplicatedSessionImpl_vTable.deprecatedSetSequence := @IReplicatedSessionImpl_deprecatedSetSequenceDispatcher;
 	IReplicatedSessionImpl_vTable.setSequence2 := @IReplicatedSessionImpl_setSequence2Dispatcher;
-	IReplicatedSessionImpl_vTable.flushSequences := @IReplicatedSessionImpl_flushSequencesDispatcher;
 
 	IProfilerPluginImpl_vTable := ProfilerPluginVTable.create;
 	IProfilerPluginImpl_vTable.version := 4;

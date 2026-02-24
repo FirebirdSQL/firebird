@@ -310,8 +310,6 @@ namespace Replication
 		void setSequence2(Firebird::CheckStatusWrapper* status, const char* schemaName, const char* genName,
 			SINT64 value) override;
 
-		void flushSequences(Firebird::CheckStatusWrapper* status) override;
-
 	private:
 		Manager* const m_manager;
 		const Config* const m_config;

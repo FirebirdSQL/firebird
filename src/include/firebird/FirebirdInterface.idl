@@ -1830,7 +1830,6 @@ interface ReplicatedSession : PluginBase
 
 version:	// 5.0 => 6.0 Alpha1
 	void setSequence2(Status status, const string schemaName, const string genName, int64 value);
-	void flushSequences(Status status);
 }
 
 // Profiler interfaces

@@ -7328,7 +7328,6 @@ namespace Firebird
 			void (CLOOP_CARG *cleanupTransaction)(IReplicatedSession* self, IStatus* status, ISC_INT64 number) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *deprecatedSetSequence)(IReplicatedSession* self, IStatus* status, const char* name, ISC_INT64 value) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *setSequence2)(IReplicatedSession* self, IStatus* status, const char* schemaName, const char* genName, ISC_INT64 value) CLOOP_NOEXCEPT;
-			void (CLOOP_CARG *flushSequences)(IReplicatedSession* self, IStatus* status) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -7384,19 +7383,6 @@ namespace Firebird
 			}
 			StatusType::clearException(status);
 			static_cast<VTable*>(this->cloopVTable)->setSequence2(this, status, schemaName, genName, value);
-			StatusType::checkException(status);
-		}
-
-		template <typename StatusType> void flushSequences(StatusType* status)
-		{
-			if (cloopVTable->version < 5)
-			{
-				StatusType::setVersionError(status, "IReplicatedSession", cloopVTable->version, 5);
-				StatusType::checkException(status);
-				return;
-			}
-			StatusType::clearException(status);
-			static_cast<VTable*>(this->cloopVTable)->flushSequences(this, status);
 			StatusType::checkException(status);
 		}
 	};
@@ -21401,7 +21387,6 @@ namespace Firebird
 					this->cleanupTransaction = &Name::cloopcleanupTransactionDispatcher;
 					this->deprecatedSetSequence = &Name::cloopdeprecatedSetSequenceDispatcher;
 					this->setSequence2 = &Name::cloopsetSequence2Dispatcher;
-					this->flushSequences = &Name::cloopflushSequencesDispatcher;
 				}
 			} vTable;
 
@@ -21480,20 +21465,6 @@ namespace Firebird
 			}
 		}
 
-		static void CLOOP_CARG cloopflushSequencesDispatcher(IReplicatedSession* self, IStatus* status) CLOOP_NOEXCEPT
-		{
-			StatusType status2(status);
-
-			try
-			{
-				static_cast<Name*>(self)->Name::flushSequences(&status2);
-			}
-			catch (...)
-			{
-				StatusType::catchException(&status2);
-			}
-		}
-
 		static void CLOOP_CARG cloopsetOwnerDispatcher(IPluginBase* self, IReferenceCounted* r) CLOOP_NOEXCEPT
 		{
 			try
@@ -21563,7 +21534,6 @@ namespace Firebird
 		virtual void cleanupTransaction(StatusType* status, ISC_INT64 number) = 0;
 		virtual void deprecatedSetSequence(StatusType* status, const char* name, ISC_INT64 value) = 0;
 		virtual void setSequence2(StatusType* status, const char* schemaName, const char* genName, ISC_INT64 value) = 0;
-		virtual void flushSequences(StatusType* status) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>
