@@ -268,22 +268,10 @@ public:
 		return mdc_relations.getCount();
 	}
 
-	Function* getFunction(thread_db* tdbb, MetaId id, ObjectBase::Flag flags)
-	{
-		return mdc_functions.getVersioned(tdbb, id, flags);
-	}
-
-	jrd_prc* getProcedure(thread_db* tdbb, MetaId id)
-	{
-		return mdc_procedures.getVersioned(tdbb, id, CacheFlag::AUTOCREATE);
-	}
-
 	Constant* getConstant(thread_db* tdbb, MetaId id)
 	{
 		return mdc_constants.getVersioned(tdbb, id, CacheFlag::AUTOCREATE);
 	}
-
-	static Cached::CharSet* getCharSet(thread_db* tdbb, CSetId id, ObjectBase::Flag flags);
 
 	void cleanup(Jrd::thread_db*);
 

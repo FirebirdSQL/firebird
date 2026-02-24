@@ -141,6 +141,36 @@ void METD_drop_collation(jrd_tra* transaction, const QualifiedName& name)
 }
 
 
+void METD_drop_relation(jrd_tra* transaction, const QualifiedName& name)
+{
+/**************************************
+ *
+ *  M E T D _ d r o p _ r e l a t i o n
+ *
+ **************************************
+ *
+ * Functional description
+ *  Drop a relation from our metadata, and
+ *  rely on the next guy who wants it to
+ *  look up the new version.
+ *
+ *      Dropping will be achieved by marking the relation
+ *      as dropped.  Anyone with current access can continue
+ *      accessing it.
+ *
+ **************************************/
+	thread_db* tdbb = JRD_get_thread_data();
+
+	dsql_rel* relation;
+
+	if (transaction->tra_cache_rels.get(name, relation))
+	{
+		relation->rel_flags |= REL_dropped;
+		transaction->tra_cache_rels.remove(name);
+	}
+}
+
+
 dsql_intlsym* METD_get_collation(jrd_tra* transaction, const QualifiedName& name, CSetId charset_id)
 {
 /**************************************
@@ -664,7 +694,7 @@ dsql_rel* METD_get_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 
 	validateTransaction(transaction);
 
-	// See if the relation is the one currently being defined in this statement
+	// see if the relation is the one currently being defined in this statement
 
 	auto* relation = dsqlScratch->relation;
 	if (relation != NULL && relation->rel_name == name)
@@ -674,26 +704,92 @@ dsql_rel* METD_get_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 
 	// check is regular cache still valid
 
-	if (dsqlScratch->rels.get(name, relation))
+	if (!dsqlScratch->regularCacheValid)
+	{
+		auto* mdc = MetadataCache::get(tdbb);
+		if (transaction->tra_mdc_version != mdc->getFrontVersion())
+		{
+			transaction->tra_cache_rels.clear();
+			transaction->tra_mdc_version = mdc->getBackVersion();
+		}
+		dsqlScratch->regularCacheValid = true;
+	}
+
+	// see if it is in the regular cache
+
+	if (transaction->tra_cache_rels.get(name, relation))
 	{
 		return relation;
 	}
 
-	// now see if it is in the transaction cache
+	// Is it LTT?
 
-	if (transaction->tra_dsql_rels.get(name, relation))
+	const auto lttPtr = tdbb->getAttachment()->att_local_temporary_tables.get(name);
+	const auto ltt = lttPtr ? *lttPtr : nullptr;
+
+	if (ltt)
 	{
-		return relation;
+		if ((dsqlScratch->flags & DsqlCompilerScratch::FLAG_DDL) &&
+			!(dsqlScratch->flags & DsqlCompilerScratch::FLAG_ALLOW_LTT_REFERENCES))
+		{
+			// LTTs cannot be referenced in persistent metadata (DDL other than LTT DDL itself)
+			status_exception::raise(Arg::Gds(isc_dsql_ltt_invalid_reference)
+				<< name.toQuotedString()
+				<< "persistent metadata");
+		}
+
+		fb_assert(ltt->relationId);
+
+		relation = FB_NEW_POOL(transaction->getPool()) dsql_rel(transaction->getPool());
+		relation->rel_id = ltt->relationId;
+		relation->rel_name = name;
+		relation->rel_dbkey_length = 8;
+		relation->rel_flags = REL_ltt_created;
+
+		dsql_fld** ptr = &relation->rel_fields;
+
+		for (const auto& lttField : ltt->fields)
+		{
+			dsql_fld* field = FB_NEW_POOL(transaction->getPool()) dsql_fld(transaction->getPool());
+
+			*ptr = field;
+			ptr = &field->fld_next;
+
+			field->fld_relation = relation;
+			field->fld_id = lttField.id;
+			field->fld_name = lttField.name;
+			field->fieldSource = lttField.source;
+
+			field->dtype = lttField.desc.dsc_dtype;
+			field->length = lttField.desc.dsc_length;
+			field->scale = lttField.desc.dsc_scale;
+			field->subType = lttField.desc.dsc_sub_type;
+			field->segLength = lttField.segLength;
+			field->charLength = lttField.charLength;
+			field->precision = lttField.precision;
+
+			if (lttField.charSetId.has_value())
+				field->charSetId = lttField.charSetId.value();
+
+			if (lttField.collationId.has_value())
+				field->collationId = lttField.collationId.value();
+
+			if (!lttField.notNullFlag)
+				field->flags |= FLD_nullable;
+		}
+	}
+	else
+	{
+		// now see if it is in the metadata cache
+
+		auto* jrel = MetadataCache::getVersioned<Cached::Relation>(tdbb, name, CacheFlag::AUTOCREATE);
+		if (!jrel)
+			return nullptr;
+
+		relation = FB_NEW_POOL(transaction->getPool()) dsql_rel(transaction->getPool(), jrel);
 	}
 
-	// now see if it is in the metadata cache
-
-	auto* jrel = MetadataCache::getVersioned<Cached::Relation>(tdbb, name, CacheFlag::AUTOCREATE);
-	if (!jrel)
-		return nullptr;
-
-	relation = FB_NEW_POOL(dsqlScratch->getPool()) dsql_rel(dsqlScratch->getPool(), jrel);
-	dsqlScratch->rels.put(relation->rel_name, relation);
+	transaction->tra_cache_rels.put(relation->rel_name, relation);
 
 	return relation;
 }

@@ -31,8 +31,6 @@ enum irq_type_t
 {
 	irq_s_pages,			// store PAGES
 	irq_r_pages,			// read PAGES
-	irq_l_field,			// lookup field name
-	irq_c_relation,			// create new relation
 	irq_format1,			// make a new format for a record
 	irq_format2,			// make a new format for a record
 	irq_format3,			// make a new format for a record
@@ -85,7 +83,6 @@ enum irq_type_t
 	irq_l_exp_index_blr,	// lookup expression index BLR
 	irq_l_cond_index,		// lookup condition index
 
-	irq_l_procedure,		// lookup procedure name
 	irq_l_proc_id,			// lookup procedure id
 	irq_r_params,			// scan procedure parameters
 
@@ -173,8 +170,6 @@ enum irq_type_t
 	irq_grant17,			// process grant option (database)
 	irq_grant18,			// process grant option (filters)
 	irq_grant19,			// process grant option (roles)
-	irq_l_curr_format,		// lookup table's current format
-	irq_c_relation3,		// lookup relation in phase 0 to cleanup
 	irq_linger,				// get database linger value
 	irq_dbb_ss_definer,		// get database sql security value
 	irq_proc_param_dep,		// check procedure parameter dependency
@@ -184,6 +179,7 @@ enum irq_type_t
 	irq_index_id_erase,		// cleanup index ID
 	irq_get_index_by_name,	// find appropriate index
 	irq_l_index_cnstrt,     // lookup index for constraint
+
 	irq_l_const_name,
 	irq_l_const_id,
 	irq_l_constants,

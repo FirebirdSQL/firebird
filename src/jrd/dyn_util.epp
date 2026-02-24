@@ -83,7 +83,7 @@ static const UCHAR gen_id_blr2[] =
 };
 
 // Check if an object already exists. If yes, return false.
-bool DYN_UTIL_check_unique_name_nothrow(thread_db* tdbb, jrd_tra* transaction,
+bool DYN_UTIL_check_unique_name_nothrow(thread_db* tdbb,
 	const QualifiedName& object_name, int object_type, USHORT* errorCode, bool freeWhenPossible)
 {
 	SET_TDBB(tdbb);
@@ -357,7 +357,7 @@ void DYN_UTIL_check_unique_name(thread_db* tdbb, const QualifiedName& object_nam
 {
 	USHORT errorCode;
 
-	if (!DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, object_name, object_type, &errorCode, true))
+	if (!DYN_UTIL_check_unique_name_nothrow(tdbb, object_name, object_type, &errorCode, true))
 		status_exception::raise(Arg::PrivateDyn(errorCode) << object_name.toQuotedString());
 }
 

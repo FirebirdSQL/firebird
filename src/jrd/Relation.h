@@ -608,7 +608,7 @@ public:
 	bool isSystem() const noexcept;
 	bool isTemporary() const noexcept;
 	bool isLTT() const noexcept;
-	bool isVirtual() const noexcept ;
+	bool isVirtual() const noexcept;
 	bool isView() const noexcept;
 	bool isReplicating(thread_db* tdbb);
 

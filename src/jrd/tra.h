@@ -489,7 +489,6 @@ enum dfw_t : int {
 	dfw_commit_relation,
 	dfw_create_relation,
 	dfw_delete_relation,
-	dfw_update_format,
 	dfw_update_ltt_format,
 	dfw_create_index,
 	dfw_create_ltt_index,

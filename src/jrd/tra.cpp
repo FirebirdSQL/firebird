@@ -2446,6 +2446,7 @@ void MetadataCache::release_temp_tables(thread_db* tdbb, jrd_tra* transaction)
  *	This is called on full commit/rollback, not on commit retaining.
  *
  **************************************/
+	// Release GTTs (Global Temporary Tables) with transaction lifetime
 	for (auto* relation : MetadataCache::get(tdbb)->mdc_relations)
 	{
 		if (relation->rel_flags & REL_temp_tran)
@@ -2483,6 +2484,8 @@ void MetadataCache::retain_temp_tables(thread_db* tdbb, jrd_tra* transaction, Tr
  *  to preserve the data in ON COMMIT DELETE ROWS tables.
  *
  **************************************/
+
+	// Retain GTTs (Global Temporary Tables) with transaction lifetime
 	for (auto* relation : MetadataCache::get(tdbb)->mdc_relations)
 	{
 		if (relation->rel_flags & REL_temp_tran)

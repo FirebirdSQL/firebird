@@ -374,6 +374,24 @@ void Jrd::Attachment::releaseBatches()
 		delete att_batches.pop();
 }
 
+void Jrd::Attachment::releaseLocalTempTables(thread_db* tdbb)
+{
+	HalfStaticArray<Cached::Relation*, 8> tempRelations;
+
+	for (auto& lttEntry : att_local_temporary_tables)
+	{
+		const auto ltt = lttEntry.second;
+		if (ltt->relation)
+			tempRelations.add(ltt->relation->getPermanent());
+	}
+
+	for (const auto tempRelation : tempRelations)
+	{
+		if (tempRelation->rel_flags & REL_temp_conn)
+			tempRelation->delPages(tdbb);
+	}
+}
+
 void Jrd::Attachment::resetSession(thread_db* tdbb, jrd_tra** traHandle)
 {
 	jrd_tra* oldTran = traHandle ? *traHandle : nullptr;
@@ -443,6 +461,9 @@ void Jrd::Attachment::resetSession(thread_db* tdbb, jrd_tra** traHandle)
 		// reset role
 		if (att_user->resetRole())
 			SCL_release_all(att_security_classes);
+
+		// reset local temporary tables
+		releaseLocalTempTables(tdbb);
 
 		// reset GTT's
 		att_database->dbb_mdc->releaseGTTs(tdbb);

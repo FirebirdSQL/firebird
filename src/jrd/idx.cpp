@@ -2053,5 +2053,3 @@ static idx_e insert_key(thread_db* tdbb,
 
 	return result;
 }
-
-

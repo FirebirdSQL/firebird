@@ -62,7 +62,7 @@ enum SqlSecurity
 };
 
 class LocalDeclarationsNode;
-class CompoundStmtNode;
+class LocalTemporaryTable;
 class RelationSourceNode;
 class ValueListNode;
 class SecDbContext;
@@ -2093,6 +2093,14 @@ public:
 		return DdlNode::dsqlPass(dsqlScratch);
 	}
 
+	bool disallowedInReadOnlyDatabase() const override
+	{
+		return false;  // Deferred to execute() - LTT status unknown at parse time
+	}
+
+private:
+	void alterLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+		jrd_tra* transaction, LocalTemporaryTable* ltt, LocalTemporaryTable::Index* lttIndex);
 	bool exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) override;
 
 protected:
@@ -2168,6 +2176,14 @@ public:
 		return DdlNode::dsqlPass(dsqlScratch);
 	}
 
+	bool disallowedInReadOnlyDatabase() const override
+	{
+		return false;  // Deferred to execute() - LTT status unknown at parse time
+	}
+
+private:
+	void dropLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+		jrd_tra* transaction, LocalTemporaryTable* ltt, LocalTemporaryTable::Index* lttIndex);
 	bool exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) override;
 
 protected:

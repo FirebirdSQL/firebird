@@ -383,6 +383,8 @@ static bool compute_security(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool create_index(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool modify_ltt_index(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool delete_index(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
+static bool create_ltt_index(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
+static bool delete_ltt_index(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool commit_relation(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool create_relation(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool delete_relation(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
@@ -950,11 +952,6 @@ namespace
 			return "constant";
 		}
 
-		// static void clearId(Jrd::Attachment* attachment, USHORT id)
-		// {
-		// 	attachment->att_constants[id] = nullptr;
-		// }
-
 		static Routine* lookupBlobId(thread_db* tdbb, DeferredWork* work, bid& blobId, bool compile);
 		static void validate(thread_db* tdbb, jrd_tra* transaction, DeferredWork* work,
 			SSHORT validBlr);
@@ -1174,6 +1171,7 @@ namespace
 static inline constexpr deferred_task task_table[] =
 {
 	{ dfw_add_shadow, add_shadow },
+	{ dfw_delete_ltt_index, delete_ltt_index },
 	{ dfw_delete_index, delete_index },
 	{ dfw_commit_relation, commit_relation },
 	{ dfw_delete_rfr, delete_rfr },
@@ -1188,6 +1186,8 @@ static inline constexpr deferred_task task_table[] =
 	{ dfw_update_ltt_format, make_ltt_version },
 	{ dfw_compute_security, compute_security },
 	{ dfw_create_index, create_index },
+	{ dfw_create_ltt_index, create_ltt_index },
+	{ dfw_modify_ltt_index, modify_ltt_index },
 	{ dfw_grant, grant_privileges },
 	{ dfw_create_trigger, create_trigger },
 	{ dfw_modify_trigger, modify_trigger },
@@ -4691,3 +4691,366 @@ static void check_dependencies(thread_db* tdbb,
 				 Arg::Gds(isc_dependency) << Arg::Num(total));	// there are %ld dependencies
 	}
 }
+
+
+// Create an index for a Local Temporary Table.
+static bool create_ltt_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+{
+	switch (phase)
+	{
+		case 1:
+		case 2:
+			return true;
+
+		case 3:
+			break;
+
+		default:
+			return false;
+	}
+
+	const auto attachment = tdbb->getAttachment();
+
+	// Find the LTT by looking up the index
+	LocalTemporaryTable* ltt = nullptr;
+	LocalTemporaryTable::Index* lttIndex = nullptr;
+
+	if (!MET_get_ltt_index(attachment, work->getQualifiedName(), &ltt, &lttIndex))
+		return false;  // LTT or index no longer exists (rolled back?)
+
+	const auto relation = ltt->relation;
+	if (!relation)
+		return false;
+
+	// Skip inactive indexes
+	if (lttIndex->inactive)
+		return false;
+
+	// Build the index descriptor
+	index_desc idx;
+	memset(&idx, 0, sizeof(idx));
+
+	idx.idx_id = lttIndex->id;
+	idx.idx_count = lttIndex->columns.getCount();
+	idx.idx_flags = 0;
+
+	if (lttIndex->unique)
+		idx.idx_flags |= idx_unique;
+	if (lttIndex->descending)
+		idx.idx_flags |= idx_descending;
+
+	// Build the index key descriptors from LTT field info
+	int keyPos = 0;
+
+	for (const auto& colName : lttIndex->columns)
+	{
+		// Find the field in the LTT
+		bool found = false;
+
+		for (const auto& field : ltt->fields)
+		{
+			if (field.name == colName)
+			{
+				idx.idx_rpt[keyPos].idx_field = field.id;
+
+				// Determine index type based on field type
+				const auto idxType = DFW_assign_index_type(tdbb, work->getQualifiedName(),
+					field.desc.dsc_dtype,
+					DTYPE_IS_TEXT(field.desc.dsc_dtype) ?
+						TTypeId(field.charSetId.value_or(CS_NONE), field.collationId.value_or(COLLATE_NONE)) :
+						ttype_none);
+				idx.idx_rpt[keyPos].idx_itype = idxType;
+
+				found = true;
+				break;
+			}
+		}
+
+		if (!found)
+		{
+			ERR_post(Arg::Gds(isc_no_meta_update) <<
+					 Arg::Gds(isc_idx_seg_err) << work->getQualifiedName().toQuotedString());
+		}
+
+		++keyPos;
+	}
+
+	{	// scope
+		AutoSetRestoreFlag<ULONG> dbPageSpace(&tdbb->tdbb_flags, TDBB_use_db_page_space, true);
+
+		SelectivityList selectivity(*tdbb->getDefaultPool());
+		IDX_create_index(tdbb, IdxCreate::AtOnce, relation, &idx, work->getQualifiedName(),
+			&lttIndex->id, transaction, selectivity);
+	}
+
+	// Update index on the current instance if it exists
+	if (relation->getPermanent()->rel_flags & REL_temp_conn)
+	{
+		AutoSetRestoreFlag<ULONG> dbPageSpace(&tdbb->tdbb_flags, TDBB_use_db_page_space, false);
+
+		if (relation->getPages(tdbb, 0, false))
+		{
+			SelectivityList selectivity(*tdbb->getDefaultPool());
+			idx.idx_root = 0;
+			IDX_create_index(tdbb, IdxCreate::AtOnce, relation, &idx, work->getQualifiedName(),
+				&lttIndex->id, transaction, selectivity);
+		}
+	}
+
+	// Create index description in relation
+	auto* idp = relation->getPermanent()->rel_indices.ensurePermanent(tdbb, lttIndex->id);
+
+	// create versioned part
+	auto& attPool = *attachment->att_pool;
+	AutoPtr<IndexVersion> idv = FB_NEW_POOL(attPool) IndexVersion(attPool, idp);
+	idv->setLtt(tdbb, lttIndex);
+
+	idp->storeObject(tdbb, idv, 0);
+	idv.release();
+
+	return false;
+}
+
+
+// Delete an index for a Local Temporary Table.
+static bool delete_ltt_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+{
+	switch (phase)
+	{
+		case 1:
+		case 2:
+			return true;
+
+		case 3:
+			break;
+
+		default:
+			return false;
+	}
+
+	// The index ID is passed in dfw_id, and the relation ID is stored in dfw_ids
+	const USHORT indexId = work->dfw_id;
+	const auto& ids = work->dfw_ids;
+
+	if (ids.isEmpty())
+		return false;
+
+	const USHORT relationId = ids.front();
+
+	const auto relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, relationId, 0);
+	if (!relation)
+		return false;
+
+	{	// scope
+		AutoSetRestoreFlag<ULONG> noDbPageSpace(&tdbb->tdbb_flags, TDBB_use_db_page_space, true);
+
+		// Get the relation pages
+		const auto relPages = relation->getPages(tdbb, MAX_TRA_NUMBER, false);
+		if (!relPages || !relPages->rel_index_root)
+			return false;
+
+		// Delete the index by its ID
+		WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
+		CCH_FETCH(tdbb, &window, LCK_write, pag_root);
+
+		BTR_delete_index(tdbb, &window, indexId, false);
+	}
+
+	auto* idp = relation->getPermanent()->eraseIndex(tdbb, indexId);
+	idp->commit(tdbb);
+
+	return false;
+}
+
+
+static bool modify_ltt_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+{
+/**************************************
+ *
+ *	m o d i f y _ l t t _ i n d e x
+ *
+ **************************************
+ *
+ * Functional description
+ *	Recalculate statistics for an index on a Local Temporary Table.
+ *
+ **************************************/
+
+	// Recalculate statistics for an index on a Local Temporary Table.
+	switch (phase)
+	{
+		case 1:
+		case 2:
+			return true;
+
+		case 3:
+			break;
+
+		default:
+			return false;
+	}
+
+	const auto attachment = tdbb->getAttachment();
+
+	// Find the LTT by looking up the index
+	LocalTemporaryTable* ltt = nullptr;
+	LocalTemporaryTable::Index* lttIndex = nullptr;
+
+	if (!MET_get_ltt_index(attachment, work->getQualifiedName(), &ltt, &lttIndex))
+		return false;  // LTT or index no longer exists (rolled back?)
+
+	const auto relation = ltt->relation;
+	if (!relation)
+		return false;
+
+	// Skip inactive indexes
+	if (lttIndex->inactive)
+		return false;
+
+	// Only recalculate statistics if the table has been instantiated
+	if (!ltt->relationId)
+		return false;
+
+	{	// scope
+		AutoSetRestoreFlag<ULONG> dbPageSpace(&tdbb->tdbb_flags, TDBB_use_db_page_space, true);
+
+		// Recalculate index statistics
+		SelectivityList selectivity(*tdbb->getDefaultPool());
+		IDX_statistics(tdbb, relation->getPermanent(), lttIndex->id, selectivity);
+
+		// The selectivity is stored directly in the index root page by IDX_statistics,
+		// so we don't need to update any system tables (LTT indexes don't have entries in RDB$INDICES)
+	}
+
+	return false;
+}
+
+
+// Make a new format version for a LTT.
+static bool make_ltt_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+{
+	switch (phase)
+	{
+		case 1:
+		case 2:
+			return true;
+
+		case 3:
+			break;
+
+		default:
+			return false;
+	}
+
+	const auto attachment = tdbb->getAttachment();
+	const auto dbb = tdbb->getDatabase();
+	auto& attPool = *attachment->att_pool;
+
+	const auto lttPtr = attachment->att_local_temporary_tables.get(work->getQualifiedName());
+	if (!lttPtr)
+		return false;
+
+	const auto ltt = *lttPtr;
+
+	if (!ltt->hasPendingChanges)
+		return false;
+
+	fb_assert(ltt->pendingFields.hasData());
+
+	jrd_rel* relation = ltt->relation;
+	const bool isAlter = (relation != nullptr);
+
+	if (!isAlter)
+	{
+		fb_assert(ltt->relationId != 0);
+
+		// CREATE: Create a new relation
+		AutoPtr<Cached::Relation> permRel = FB_NEW_POOL(attPool) Cached::Relation(tdbb, attPool, ltt->relationId);
+		permRel->rel_name = ltt->name;
+		permRel->rel_flags = REL_sql_relation | REL_temp_ltt |
+			(ltt->relationType == rel_temp_preserve ? REL_temp_conn : REL_temp_tran);
+
+		// Initialize base pages for LTT to act as a connection-wide blueprint for indexes.
+		permRel->getBasePages()->rel_pg_space_id = dbb->dbb_page_manager.getTempPageSpaceID(tdbb);
+		DPM_create_relation_pages(tdbb, permRel, permRel->getBasePages());
+
+		// create versioned part
+		AutoPtr<jrd_rel> versRel = FB_NEW_POOL(attPool) jrd_rel(attPool, permRel);
+		permRel->storeObject(tdbb, versRel, 0);
+		permRel.release();
+		relation = versRel.release();
+
+		relation->rel_current_fmt = 1;
+
+		// Note: LTTs should NOT be registered in mdc_relations.
+		// They are stored only in att_local_temporary_tables and accessed via getXxx<Cached::Relation>.
+	}
+	else
+	{
+		// ALTER: Bump the format version
+		if (relation->rel_current_fmt == MAX_TABLE_VERSIONS)
+			RelationNode::raiseTooManyVersionsError(obj_relation, work->getQualifiedName());
+
+		relation->rel_current_fmt++;
+	}
+
+	// Update the fields vector - extend if needed for new fields
+	relation->rel_fields = vec<jrd_fld*>::newVector(attPool, relation->rel_fields, ltt->pendingFields.getCount());
+
+	TemporaryField* tempFields = nullptr;
+
+	for (FB_SIZE_T i = 0; i < ltt->pendingFields.getCount(); ++i)
+	{
+		const auto& lttField = ltt->pendingFields[i];
+		auto& relField = (*relation->rel_fields)[i];
+
+		if (!relField)
+			relField = FB_NEW_POOL(attPool) jrd_fld(attPool);
+
+		relField->fld_name = lttField.name;
+		relField->fld_not_null = nullptr;
+		relField->fld_validation = nullptr;
+
+		if (lttField.notNullFlag)
+		{
+			Jrd::ContextPoolHolder context(tdbb, &attPool);
+			relField->fld_not_null = PAR_validation_blr(tdbb, &relation->getName().schema, relation->getPermanent(),
+				nonnull_validation_blr, sizeof(nonnull_validation_blr), NULL, NULL, 0);
+		}
+
+		const auto tempField = FB_NEW_POOL(attPool) TemporaryField();
+		tempField->tfb_next = tempFields;
+		tempFields = tempField;
+
+		tempField->tfb_desc = lttField.desc;
+
+		// For text types, set the text type from charset/collation
+		if (DTYPE_IS_TEXT(lttField.desc.dsc_dtype))
+		{
+			const auto charSetId = lttField.charSetId.value_or(CS_NONE);
+			const auto collationId = lttField.collationId.value_or(COLLATE_NONE);
+			tempField->tfb_desc.setTextType(TTypeId(charSetId, collationId));
+		}
+
+		memset(&tempField->tfb_default, 0, sizeof(tempField->tfb_default));
+		tempField->tfb_id = lttField.id;
+	}
+
+	relation->rel_current_format = RelationNode::makeFormat(tdbb, transaction,
+		relation->getPermanent(), &relation->rel_current_fmt, tempFields);
+
+	// Store the runtime relation in the LTT (for CREATE case)
+	ltt->relation = relation;
+
+	// Commit the changes: copy pendingFields to fields
+	ltt->fields = ltt->pendingFields;
+	ltt->pendingFields.clear();
+	ltt->hasPendingChanges = false;
+
+	// Now invalidate DSQL cache at commit time
+	// METD_drop_relation(transaction, work->getQualifiedName());
+
+	return false;
+}
+
+

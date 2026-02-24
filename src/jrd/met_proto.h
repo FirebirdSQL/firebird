@@ -58,12 +58,12 @@ namespace Jrd
 	class DeferredWork;
 	struct FieldInfo;
 	class ExceptionItem;
+	class LocalTemporaryTable;
 	class GeneratorItem;
 	class BlobFilter;
 	class RelationPermanent;
 	class Triggers;
 	class TrigArray;
-	class LocalTemporaryTable;
 
 	typedef Firebird::HalfStaticArray<QualifiedName, 4> CharsetVariants;
 

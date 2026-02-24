@@ -1449,12 +1449,12 @@ blb* blb::open2(thread_db* tdbb,
 		// know about the relation, the blob id has got to be invalid
 		// anyway.
 
-		jrd_rel* relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, blobId.bid_internal.bid_relation_id, 0);
-		if (!relation)
-				ERR_post(Arg::Gds(isc_bad_segstr_id));
+		blob->blb_relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, blobId.bid_internal.bid_relation_id, 0);
+		if (!blob->blb_relation)
+			ERR_post(Arg::Gds(isc_bad_segstr_id));
 
-		blob->blb_pg_space_id = relation->getPages(tdbb)->rel_pg_space_id;
-		DPM_get_blob(tdbb, blob, relation, blobId.get_permanent_number(), false, 0);
+		blob->blb_pg_space_id = blob->blb_relation->getPages(tdbb)->rel_pg_space_id;
+		DPM_get_blob(tdbb, blob, blob->blb_relation, blobId.get_permanent_number(), false, 0);
 
 #ifdef CHECK_BLOB_FIELD_ACCESS_FOR_SELECT
 		if (!relation->isSystem() && blob->blb_fld_id < relation->rel_fields->count())

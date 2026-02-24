@@ -2418,8 +2418,6 @@ std::optional<MetaId> jrd_rel::getIdByName(thread_db* tdbb, const QualifiedName&
 	Attachment* attachment = tdbb->getAttachment();
 	std::optional<MetaId> id;
 
-	relation = nullptr;
-
 	// We need to look up the relation name in RDB$RELATIONS
 
 	AUTO_HANDLE(request);
@@ -2435,14 +2433,6 @@ std::optional<MetaId> jrd_rel::getIdByName(thread_db* tdbb, const QualifiedName&
 	END_FOR
 
 	return id;
-}
-
-
-CharSetVers* MetadataCache::lookup_charset(thread_db* tdbb, CSetId id, ObjectBase::Flag flags)
-{
-	SET_TDBB(tdbb);
-
-	return MetadataCache::get(tdbb)->mdc_charsets.getVersioned(tdbb, id, flags);
 }
 
 
@@ -3140,20 +3130,13 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 					fb_assert(rel_perm->rel_flags & REL_virtual);
 					rel_perm->rel_flags |= REL_virtual;
 					break;
-				case rel_global_temp_preserve:
-					fb_assert(rel_perm->rel_flags & REL_temp_conn);
-					rel_perm->rel_flags |= REL_temp_conn;
-					break;
-				case rel_global_temp_delete:
-					fb_assert(rel_perm->rel_flags & REL_temp_tran);
-					rel_perm->rel_flags |= REL_temp_tran;
 				case rel_temp_preserve:
 					fb_assert((rel_perm->rel_flags & (REL_temp_conn | REL_temp_gtt)) == (REL_temp_conn | REL_temp_gtt));
 					rel_perm->rel_flags |= REL_temp_conn | REL_temp_gtt;
 					break;
 				case rel_temp_delete:
-					fb_assert((relation->rel_flags & (REL_temp_tran | REL_temp_gtt)) == (REL_temp_tran | REL_temp_gtt));
-					relation->rel_flags |= REL_temp_tran | REL_temp_gtt;
+					fb_assert((rel_perm->rel_flags & (REL_temp_tran | REL_temp_gtt)) == (REL_temp_tran | REL_temp_gtt));
+					rel_perm->rel_flags |= REL_temp_tran | REL_temp_gtt;
 					break;
 				default:
 					fb_assert(false);
@@ -4212,7 +4195,9 @@ void MET_store_dependencies(thread_db* tdbb,
 
 	SET_TDBB(tdbb);
 
-	const Trigger* t;
+	fb_assert(!dep_rel || !(dep_rel->getPermanent()->rel_flags & REL_temp_ltt));
+
+	const Trigger* t = nullptr;
 	const bool checkTableScope =
 		(dependency_type == obj_computed) ||
 		(dependency_type == obj_trigger) && dep_rel && (t = dep_rel->findTrigger(object_name)) && (t->sysTrigger);

@@ -70,17 +70,17 @@
 #include "../auth/SecureRemotePassword/Message.h"
 #include "../jrd/Mapping.h"
 #include "../jrd/extds/ExtDS.h"
+#include <algorithm>
+#include <optional>
+#include <unordered_set>
 #include "../jrd/cch_proto.h"
 #include "../jrd/btr_proto.h"
 #include "../jrd/tra_proto.h"
 #include "../jrd/mov_proto.h"
 #include "../jrd/ini.h"
 #include "../jrd/GarbageCollector.h"
+#include "../jrd/ProtectRelations.h"
 #include "../dsql/PackageNodes.h"
-
-#include <algorithm>
-#include <optional>
-#include <unordered_set>
 
 namespace Jrd {
 
@@ -131,16 +131,6 @@ static rel_t relationType(SSHORT relationTypeNull, SSHORT relationType) noexcept
 static void saveField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, const MetaName& fieldName);
 static dsql_rel* saveRelation(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	const QualifiedName& relationName, bool view, bool creating);
-void updateRdbFields(const TypeClause* type,
-	SSHORT& fieldType,
-	SSHORT& fieldLength,
-	SSHORT& fieldSubTypeNull, SSHORT& fieldSubType,
-	SSHORT& fieldScaleNull, SSHORT& fieldScale,
-	SSHORT& characterSetIdNull, SSHORT& characterSetId,
-	SSHORT& characterLengthNull, SSHORT& characterLength,
-	SSHORT& fieldPrecisionNull, SSHORT& fieldPrecision,
-	SSHORT& collationIdNull, SSHORT& collationId,
-	SSHORT& segmentLengthNull, SSHORT& segmentLength);
 static ISC_STATUS getErrorCodeByObjectType(int obj_type);
 
 static constexpr const char* CHECK_CONSTRAINT_EXCEPTION = "check_constraint";
@@ -8443,7 +8433,7 @@ void RelationNode::makeVersion(thread_db* tdbb, jrd_tra* transaction, const Qual
 					if (FLD.RDB$CHARACTER_SET_ID.NULL)
 						FLD.RDB$CHARACTER_SET_ID = CS_NONE;
 
-					CollId collation((!FLD.RDB$COLLATION_ID.NULL) ? FLD.RDB$COLLATION_ID :
+					CollId collation((!FLD.RDB$COLLATION_ID.NULL) ? FLD.RDB$COLLATION_ID : 
 						(!RFR.RDB$COLLATION_ID.NULL) ? RFR.RDB$COLLATION_ID : COLLATE_NONE);	// codepoint collation
 
 					if (!DSC_make_descriptor(&tfb->tfb_desc, FLD.RDB$FIELD_TYPE,
@@ -9187,6 +9177,14 @@ void CreateRelationNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
+	SET_TDBB(tdbb);
+	Attachment* attachment = tdbb->getAttachment();
+	Database* dbb = tdbb->getDatabase();
+	Cached::Relation* relation = nullptr;
+	bool extFile = false;
+
+	AutoSetRestoreFlag dfwFlags(&tdbb->tdbb_flags, TDBB_use_db_page_space, true);
+
 	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, name, obj_relation))
 		return;
 
@@ -9206,8 +9204,28 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 
 	DYN_UTIL_check_unique_name(tdbb, name, obj_relation);
 
-	fb_assert(relationType.has_value());
-	checkRelationTempScope(tdbb, transaction, name, relationType.value());
+	if (tempFlag == REL_temp_ltt)
+	{
+		defineLocalTempTable(tdbb, dsqlScratch, transaction);
+
+		dsqlScratch->relation->rel_flags &= ~REL_creating;
+
+		savePoint.release();	// everything is ok
+
+		// Update DSQL cache
+		METD_drop_relation(transaction, name);
+
+		return;
+	}
+
+	const rel_t relationType = tempFlag.has_value() ?
+		(tempRowsFlag.value_or(REL_temp_tran) == REL_temp_tran ?
+			rel_temp_delete :
+			rel_temp_preserve
+		) :
+		rel_persistent;
+
+	checkRelationTempScope(tdbb, transaction, name, relationType);
 
 	try
 	{
@@ -9363,6 +9381,9 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 
 		throw;
 	}
+
+	// Update DSQL cache
+	METD_drop_relation(transaction, name);
 
 	savePoint.release();	// everything is ok
 }
@@ -9531,6 +9552,13 @@ void AlterRelationNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
+	const auto attachment = tdbb->getAttachment();
+
+	// Check if this is an LTT and set flag before METD_get_relation (called by saveRelation)
+	// to avoid false "LTT cannot be referenced in persistent metadata" error
+	AutoSetRestoreFlag autoLttReferences(&dsqlScratch->flags, DsqlCompilerScratch::FLAG_ALLOW_LTT_REFERENCES,
+		attachment->att_local_temporary_tables.exist(name));
+
 	AutoSetRestoreFlag dfwFlags(&tdbb->tdbb_flags, TDBB_use_db_page_space, true);
 
 	// ensures oldVersion is present in cache
@@ -10868,7 +10896,42 @@ void DropRelationNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
-	Attachment* attachment = tdbb->getAttachment();
+	// run all statements under savepoint control
+	AutoSavePoint savePoint(tdbb, transaction);
+
+	const auto attachment = tdbb->getAttachment();
+
+	if (const auto lttIt = attachment->att_local_temporary_tables.get(name))
+	{
+		if (view)
+		{
+			status_exception::raise(
+				Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+				Arg::Gds(isc_dsql_command_err) <<
+				Arg::Gds(isc_dsql_view_not_found) << name.toQuotedString());
+		}
+
+		const auto ltt = *lttIt;
+		checkLttNotInUse(tdbb, transaction, ltt);
+
+		// Post deferred work to handle the LTT deletion at commit time
+		DFW_post_work(transaction, dfw_delete_relation,
+			string(ltt->name.object.c_str()), ltt->name.schema, ltt->relationId);
+
+		// Register undo action with the savepoint before removing
+		transaction->tra_save_point->createLttAction(LttUndoItem::LTT_UNDO_DROP, name, ltt);
+
+		// Remove from in-memory storage (without deleting - ownership transferred to undo or already deleted)
+		attachment->att_local_temporary_tables.remove(name);
+
+		savePoint.release();	// everything is ok
+
+		// Update DSQL cache
+		METD_drop_relation(transaction, name);
+
+		return;
+	}
+
 	Database* dbb = tdbb->getDatabase();
 
 	AutoSetRestoreFlag dfwFlags(&tdbb->tdbb_flags, TDBB_use_db_page_space, true);
@@ -10876,6 +10939,9 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	auto* rel = MetadataCache::getVersioned<Cached::Relation>(tdbb, name, CacheFlag::AUTOCREATE);
 	if (!rel && silent)
 		return;
+
+	if (tdbb->getDatabase()->readOnly())
+		ERRD_post(Arg::Gds(isc_read_only_database));
 
 	auto* relation = getPermanent(rel);
 
@@ -12694,6 +12760,8 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, Cached::Relation* rel, 
 ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra* transaction,
 	QualifiedName& idxName, Definition& definition, QualifiedName* referredIndexName)
 {
+	fb_assert(idxName.schema == definition.relation.schema);
+
 	if (idxName.isEmpty())
 		DYN_UTIL_generate_index_name(tdbb, transaction, idxName, definition.type);
 	DYN_UTIL_check_unique_name(tdbb, idxName, obj_index);
@@ -13327,6 +13395,20 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 
+	// Check if index belongs to a Local Temporary Table
+	LocalTemporaryTable* ltt = nullptr;
+	LocalTemporaryTable::Index* lttIndex = nullptr;
+
+	if (MET_get_ltt_index(transaction->getAttachment(), indexName, &ltt, &lttIndex))
+	{
+		alterLocalTempIndex(tdbb, dsqlScratch, transaction, ltt, lttIndex);
+		savePoint.release();	// everything is ok
+		return;
+	}
+
+	if (tdbb->getDatabase()->readOnly())
+		ERRD_post(Arg::Gds(isc_read_only_database));
+
 	Cached::Relation* relation = nullptr;
 	bool expressionIndex = false;
 
@@ -13629,6 +13711,20 @@ void DropIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 
+	// Check if index belongs to a Local Temporary Table
+	LocalTemporaryTable* ltt = nullptr;
+	LocalTemporaryTable::Index* lttIndex = nullptr;
+
+	if (MET_get_ltt_index(transaction->getAttachment(), indexName, &ltt, &lttIndex))
+	{
+		dropLocalTempIndex(tdbb, dsqlScratch, transaction, ltt, lttIndex);
+		savePoint.release();	// everything is ok
+		return;
+	}
+
+	if (tdbb->getDatabase()->readOnly())
+		ERRD_post(Arg::Gds(isc_read_only_database));
+
 	ModifyIndexList oneItemList(*MemoryPool::getContextPool());
 	Cached::Relation* rel = drop(tdbb, dsqlScratch, transaction, oneItemList, true);
 	oneItemList.exec(tdbb, rel, transaction);
@@ -13847,7 +13943,7 @@ void DropIndexNode::clearFrgn(thread_db* tdbb, MetaId relId, MetaId indexId)
 // Second part of index deletion post-processing.
 //
 // This function is invoked when index is removed from irt page.
-// In some cases (failed DB creation) cleanup, done by clearName,
+// In some cases (failed DB creation) cleanup, done by clearName, 
 // also should take place.
 //
 

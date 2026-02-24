@@ -2879,8 +2879,10 @@ void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation, IndexCreateLock&
 	// Leave the root pointer null for the time being.
 	// Index id for temporary index instance of global temporary table is
 	// already assigned, use it.
-	const bool use_idx_id = (relPages->rel_instance_id != 0);
-	fb_assert((!use_idx_id) || (idx->idx_id <= dbb->dbb_max_idx));
+	const bool use_idx_id = (relPages->rel_instance_id != 0) ||
+							(relation->getPermanent()->rel_flags & REL_temp_ltt);
+	if (use_idx_id)
+		fb_assert(idx->idx_id <= dbb->dbb_max_idx);
 
 	WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
 	index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
