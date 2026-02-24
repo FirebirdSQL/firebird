@@ -1663,6 +1663,12 @@ create_clause
 			node->createIfNotExistsOnly = $4;
 			$$ = node;
 		}
+	| LOCAL TEMPORARY TABLE if_not_exists_opt ltt_table_clause
+		{
+			const auto node = $5;
+			node->createIfNotExistsOnly = $4;
+			$$ = node;
+		}
 	| TRIGGER if_not_exists_opt trigger_clause
 		{
 			const auto node = $3;
@@ -1766,6 +1772,8 @@ recreate_clause
 	| TABLE table_clause
 		{ $$ = newNode<RecreateTableNode>($2); }
 	| GLOBAL TEMPORARY TABLE gtt_table_clause
+		{ $$ = newNode<RecreateTableNode>($4); }
+	| LOCAL TEMPORARY TABLE ltt_table_clause
 		{ $$ = newNode<RecreateTableNode>($4); }
 	| VIEW view_clause
 		{ $$ = newNode<RecreateViewNode>($2); }
@@ -2324,7 +2332,7 @@ db_initial_desc($alterDatabaseNode)
 	| db_initial_desc db_initial_option($alterDatabaseNode)
 	;
 
-// With the exception of LENGTH, all clauses here are handled only at the client.
+// All clauses here are handled only at the client.
 %type db_initial_option(<alterDatabaseNode>)
 db_initial_option($alterDatabaseNode)
 	: PAGE_SIZE equals u_numeric_constant
@@ -2409,13 +2417,11 @@ gtt_table_clause
 	: simple_table_name
 			{
 				$<createRelationNode>$ = newNode<CreateRelationNode>($1);
-				$<createRelationNode>$->relationType = std::nullopt;
+				$<createRelationNode>$->tempFlag = REL_temp_gtt;
 			}
 		'(' table_elements($2) ')' gtt_subclauses_opt($2)
 			{
 				$$ = $2;
-				if (!$$->relationType.has_value())
-					$$->relationType = rel_global_temp_delete;
 			}
 	;
 
@@ -2435,10 +2441,34 @@ gtt_subclauses($createRelationNode)
 gtt_subclause($createRelationNode)
 	: sql_security_clause
 		{ setClause($createRelationNode->ssDefiner, "SQL SECURITY", $1); }
-	| ON COMMIT DELETE ROWS
-		{ setClause($createRelationNode->relationType, "ON COMMIT DELETE ROWS", rel_global_temp_delete); }
+	| temp_table_rows_type($createRelationNode)
+	;
+
+%type temp_table_rows_type(<createRelationNode>)
+temp_table_rows_type($createRelationNode)
+	: ON COMMIT DELETE ROWS
+		{ setClause($createRelationNode->tempRowsFlag, "ON COMMIT DELETE ROWS", REL_temp_tran); }
 	| ON COMMIT PRESERVE ROWS
-		{ setClause($createRelationNode->relationType, "ON COMMIT PRESERVE ROWS", rel_global_temp_preserve); }
+		{ setClause($createRelationNode->tempRowsFlag, "ON COMMIT PRESERVE ROWS", REL_temp_conn); }
+	;
+
+%type <createRelationNode> ltt_table_clause
+ltt_table_clause
+	: simple_table_name
+			{
+				$<createRelationNode>$ = newNode<CreateRelationNode>($1);
+				$<createRelationNode>$->tempFlag = REL_temp_ltt;
+			}
+		'(' table_elements($2) ')' ltt_subclause_opt($2)
+			{
+				$$ = $2;
+			}
+	;
+
+%type ltt_subclause_opt(<createRelationNode>)
+ltt_subclause_opt($createRelationNode)
+	: // nothing by default. Will be set "on commit delete rows" in dsqlPass
+	| temp_table_rows_type($createRelationNode)
 	;
 
 %type <stringPtr> external_file

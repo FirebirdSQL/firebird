@@ -607,7 +607,8 @@ public:
 	RelationPages* getPages(thread_db* tdbb, TraNumber tran = MAX_TRA_NUMBER, bool allocPages = true);
 	bool isSystem() const noexcept;
 	bool isTemporary() const noexcept;
-	bool isVirtual() const noexcept;
+	bool isLTT() const noexcept;
+	bool isVirtual() const noexcept ;
 	bool isView() const noexcept;
 	bool isReplicating(thread_db* tdbb);
 
@@ -1011,6 +1012,11 @@ inline RelationPages* jrd_rel::getPages(thread_db* tdbb, TraNumber tran, bool al
 inline bool jrd_rel::isTemporary() const noexcept
 {
 	return rel_perm->isTemporary();
+}
+
+inline bool jrd_rel::isLTT() const noexcept
+{
+	return rel_flags & REL_temp_ltt;
 }
 
 inline bool jrd_rel::isVirtual() const noexcept

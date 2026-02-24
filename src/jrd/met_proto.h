@@ -62,6 +62,7 @@ namespace Jrd
 	class RelationPermanent;
 	class Triggers;
 	class TrigArray;
+	class LocalTemporaryTable;
 
 	typedef Firebird::HalfStaticArray<QualifiedName, 4> CharsetVariants;
 
@@ -137,5 +138,7 @@ std::optional<ObjectType> MET_qualify_existing_name(Jrd::thread_db* tdbb, Jrd::Q
 	std::initializer_list<ObjectType> objTypes,
 	const Firebird::ObjectsArray<Firebird::MetaString>* schemaSearchPath = nullptr);
 bool MET_check_schema_exists(Jrd::thread_db* tdbb, const Jrd::MetaName& name);
+bool MET_get_ltt_index(Jrd::Attachment* attachment, const Jrd::QualifiedName& indexName,
+	Jrd::LocalTemporaryTable** outLtt = nullptr, Jrd::LocalTemporaryTable::Index** outIndex = nullptr);
 
 #endif // JRD_MET_PROTO_H

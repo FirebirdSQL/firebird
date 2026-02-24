@@ -508,7 +508,7 @@ namespace
 	struct AttShutParams
 	{
 		Semaphore thdStartedSem, startCallCompleteSem;
-		Thread::Handle thrHandle;
+		Thread thread;
 		AttachmentsRefHolder* attachments;
 	};
 
@@ -4700,13 +4700,13 @@ void JProvider::shutdown(CheckStatusWrapper* status, unsigned int timeout, const
 			{
 				Semaphore shutdown_semaphore;
 
-				Thread::Handle h;
-				Thread::start(shutdown_thread, &shutdown_semaphore, THREAD_medium, &h);
+				Thread shutThd;
+				Thread::start(shutdown_thread, &shutdown_semaphore, THREAD_medium, &shutThd);
 
 				if (!shutdown_semaphore.tryEnter(0, timeout))
 					waitForShutdown(shutdown_semaphore);
 
-				Thread::waitForCompletion(h);
+				shutThd.waitForCompletion();
 			}
 			else
 			{
@@ -6814,7 +6814,7 @@ static void check_database(thread_db* tdbb, bool async)
 	}
 
 	if ((attachment->att_flags & ATT_shutdown) &&
-		(attachment->att_purge_tid != Thread::getId()) ||
+		(attachment->att_purge_tid != Thread::getCurrentThreadId()) ||
 			(dbb->isShutdown() &&
 				(dbb->isShutdown(shut_mode_full) ||
 				!attachment->locksmith(tdbb, ACCESS_SHUTDOWN_DATABASE))))
@@ -7886,15 +7886,11 @@ void release_attachment(thread_db* tdbb, Jrd::Attachment* attachment, XThreadEns
 	XThreadEnsureUnlock* activeThreadGuard = dropGuard;
 	if (!activeThreadGuard)
 	{
-		if (dbb->dbb_crypto_manager &&
-			Thread::isCurrent(dbb->dbb_crypto_manager->getCryptThreadHandle()))
-		{
+		if (dbb->dbb_crypto_manager && dbb->dbb_crypto_manager->isCryptThreadCurrent())
 			activeThreadGuard = &dummyGuard;
-		}
 		else
-		{
 			activeThreadGuard = &threadGuard;
-		}
+
 		activeThreadGuard->enter();
 	}
 
@@ -8418,7 +8414,7 @@ static void purge_attachment(thread_db* tdbb, StableAttachmentPart* sAtt, unsign
 
 	Jrd::Attachment* attachment = sAtt->getHandle();
 
-	if (attachment && attachment->att_purge_tid == Thread::getId())
+	if (attachment && attachment->att_purge_tid == Thread::getCurrentThreadId())
 	{
 //		fb_assert(false); // recursive call - impossible ?
 		return;
@@ -8447,7 +8443,7 @@ static void purge_attachment(thread_db* tdbb, StableAttachmentPart* sAtt, unsign
 		return;
 
 	fb_assert(attachment->att_flags & ATT_shutdown);
-	attachment->att_purge_tid = Thread::getId();
+	attachment->att_purge_tid = Thread::getCurrentThreadId();
 
 	fb_assert(attachment->att_use_count > 0);
 	attachment = sAtt->getHandle();
@@ -9026,12 +9022,12 @@ namespace
 			return 0;
 		}
 
-		Thread::Handle th = params->thrHandle;
-		fb_assert(th);
+		fb_assert(params->thread.isCurrent());
+		Thread::Mark mark(params->thread);
 
 		try
 		{
-			shutThreadCollect->running(th);
+			shutThreadCollect->running(std::move(params->thread));
 			params->thdStartedSem.release();
 
 			MutexLockGuard guard(shutdownMutex, FB_FUNCTION);
@@ -9043,7 +9039,7 @@ namespace
 			iscLogException("attachmentShutdownThread", ex);
 		}
 
-		shutThreadCollect->ending(th);
+		shutThreadCollect->ending(mark);
 		return 0;
 	}
 } // anonymous namespace
@@ -9328,7 +9324,7 @@ ISC_STATUS thread_db::getCancelState(ISC_STATUS* secondary)
 	if (tdbb_flags & (TDBB_verb_cleanup | TDBB_dfw_cleanup | TDBB_detaching | TDBB_wait_cancel_disable))
 		return FB_SUCCESS;
 
-	if (attachment && attachment->att_purge_tid != Thread::getId())
+	if (attachment && attachment->att_purge_tid != Thread::getCurrentThreadId())
 	{
 		if (attachment->att_flags & ATT_shutdown)
 		{
@@ -9845,7 +9841,7 @@ void JRD_shutdown_attachment(Attachment* attachment)
 
 		AttShutParams params;
 		params.attachments = queue;
-		Thread::start(attachmentShutdownThread, &params, THREAD_high, &params.thrHandle);
+		Thread::start(attachmentShutdownThread, &params, THREAD_high, &params.thread);
 		params.startCallCompleteSem.release();
 
 		queue.release();
@@ -9902,7 +9898,7 @@ void JRD_shutdown_attachments(Database* dbb)
 		{
 			AttShutParams params;
 			params.attachments = queue;
-			Thread::start(attachmentShutdownThread, &params, THREAD_high, &params.thrHandle);
+			Thread::start(attachmentShutdownThread, &params, THREAD_high, &params.thread);
 			params.startCallCompleteSem.release();
 
 			queue.release();

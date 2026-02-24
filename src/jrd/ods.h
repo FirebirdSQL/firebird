@@ -190,6 +190,14 @@ inline constexpr USHORT ODS_CURRENT_VERSION = ODS_14_0;		// Current ODS version 
 //const USHORT USER_REL_INIT_ID_ODS8	= 31;	// ODS < 9 ( <= 8.2)
 inline constexpr USHORT USER_DEF_REL_INIT_ID = 128;	// ODS >= 9
 
+// Define range of user relation and LTT ids
+inline constexpr USHORT MIN_RELATION_ID = USER_DEF_REL_INIT_ID;
+inline constexpr USHORT MAX_RELATION_ID = 32767;
+inline constexpr USHORT MAX_LTT_COUNT = 1024;
+inline constexpr USHORT MAX_LTT_ID = MAX_USHORT;
+inline constexpr USHORT MIN_LTT_ID = MAX_LTT_ID - MAX_LTT_COUNT + 1;
+static_assert(MIN_LTT_ID > MAX_RELATION_ID);
+
 
 // Page types
 

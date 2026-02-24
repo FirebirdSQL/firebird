@@ -1663,7 +1663,7 @@ jrd_tra* TRA_start(thread_db* tdbb, ULONG flags, SSHORT lock_timeout, Jrd::jrd_t
 	// are running purge_attachment() because it's needed for
 	// ON DISCONNECT triggers
 	if (dbb->dbb_ast_flags & DBB_shut_tran &&
-		attachment->att_purge_tid != Thread::getId())
+		attachment->att_purge_tid != Thread::getCurrentThreadId())
 	{
 		ERR_post(Arg::Gds(isc_shutinprog) << Arg::Str(attachment->att_filename));
 	}
@@ -1720,7 +1720,7 @@ jrd_tra* TRA_start(thread_db* tdbb, int tpb_length, const UCHAR* tpb, Jrd::jrd_t
 	// are running purge_attachment() because it's needed for
 	// ON DISCONNECT triggers
 	if (dbb->dbb_ast_flags & DBB_shut_tran &&
-		attachment->att_purge_tid != Thread::getId())
+		attachment->att_purge_tid != Thread::getCurrentThreadId())
 	{
 		ERR_post(Arg::Gds(isc_shutinprog) << Arg::Str(attachment->att_filename));
 	}
@@ -2435,13 +2435,23 @@ void MetadataCache::release_temp_tables(thread_db* tdbb, jrd_tra* transaction)
  **************************************
  *
  * Functional description
- *	Release data of temporary tables with transaction lifetime
+ *	Release (delete pages) temporary tables with transaction lifetime (ON COMMIT DELETE ROWS).
+ *	This is called on full commit/rollback, not on commit retaining.
  *
  **************************************/
 	for (auto* relation : MetadataCache::get(tdbb)->mdc_relations)
 	{
 		if (relation->rel_flags & REL_temp_tran)
 			relation->delPages(tdbb, transaction->tra_number);
+	}
+
+	// Release LTTs (Local Temporary Tables) with transaction lifetime
+	for (const auto& lttEntry : att->att_local_temporary_tables)
+	{
+		const auto ltt = lttEntry.second;
+
+		if (ltt && ltt->relation && (ltt->relation->rel_flags & REL_temp_tran))
+			ltt->relation->delPages(tdbb, transaction->tra_number);
 	}
 }
 
@@ -2456,13 +2466,23 @@ void MetadataCache::retain_temp_tables(thread_db* tdbb, jrd_tra* transaction, Tr
  *
  * Functional description
  *	Reassign instance of temporary tables with transaction lifetime to the new
- *  transaction number (see retain_context).
+ *  transaction number (see retain_context). This is called on commit retaining
+ *  to preserve the data in ON COMMIT DELETE ROWS tables.
  *
  **************************************/
 	for (auto* relation : MetadataCache::get(tdbb)->mdc_relations)
 	{
 		if (relation->rel_flags & REL_temp_tran)
 			relation->retainPages(tdbb, transaction->tra_number, new_number);
+	}
+
+	// Retain LTTs (Local Temporary Tables) with transaction lifetime
+	for (const auto& lttEntry : att->att_local_temporary_tables)
+	{
+		const auto ltt = lttEntry.second;
+
+		if (ltt && ltt->relation && (ltt->relation->rel_flags & REL_temp_tran))
+			ltt->relation->retainPages(tdbb, transaction->tra_number, new_number);
 	}
 }
 

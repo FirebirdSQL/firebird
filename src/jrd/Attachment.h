@@ -35,6 +35,7 @@
 #include "../jrd/RandomGenerator.h"
 #include "../jrd/RuntimeStatistics.h"
 #include "../jrd/Coercion.h"
+#include "../jrd/LocalTemporaryTable.h"
 
 #include "../common/classes/ByteChunk.h"
 #include "../common/classes/GenericMap.h"
@@ -53,6 +54,7 @@
 
 #include <atomic>
 #include <initializer_list>
+#include <optional>
 
 
 namespace EDS {
@@ -605,6 +607,9 @@ public:
 
 	PageToBufferMap* att_bdb_cache;			// managed in CCH, created in att_pool, freed with it
 
+	Firebird::LeftPooledMap<QualifiedName, LocalTemporaryTable*> att_local_temporary_tables;
+	std::optional<USHORT> att_next_ltt_id;		// Next available LTT relation ID
+
 	Firebird::RefPtr<Firebird::IReplicatedSession> att_replicator;
 	Firebird::AutoPtr<Replication::TableMatcher> att_repl_matcher;
 	Firebird::Array<Applier*> att_repl_appliers;
@@ -665,7 +670,7 @@ public:
 		const Firebird::ByteChunk& chunk);
 
 	void releaseBatches();
-	void releaseGTTs(thread_db* tdbb);
+	void releaseTempTables(thread_db* tdbb);
 	void resetSession(thread_db* tdbb, jrd_tra** traHandle);
 
 	void signalCancel();

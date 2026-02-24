@@ -63,6 +63,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#include <algorithm>
 
 #include "../common/classes/fb_string.h"
 #include "../common/classes/VaryStr.h"
@@ -108,6 +109,7 @@
 #include "../jrd/lck.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/mov_proto.h"
+#include "../jrd/par_proto.h"
 #include "../jrd/pag_proto.h"
 #include "../jrd/os/pio_proto.h"
 #include "../jrd/rlck_proto.h"
@@ -131,6 +133,7 @@
 #include "../jrd/ProtectRelations.h"
 
 #include "../jrd/Constant.h"
+#include "../dsql/metd_proto.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -377,6 +380,7 @@ static bool add_shadow(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool delete_shadow(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool compute_security(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool create_index(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
+static bool modify_ltt_index(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool delete_index(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool commit_relation(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool create_relation(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
@@ -4399,29 +4403,54 @@ static bool check_not_null(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 			if ((!relation) || relation->isView())
 				break;
 
+			// This function is not working correctly for GTTs and LTTs
+			if (relation->isTemporary())
+				break;
+
 			// Protect relation from modification
 			ProtectRelations protectRelation(tdbb, transaction, relation->getPermanent());
 
 			SortedArray<int> fields;
 			AutoRequest handle;
 
-			for (SortedArray<int>::iterator itr(work->dfw_ids.begin());
-				 itr != work->dfw_ids.end();
-				 ++itr)
+			if (relation->rel_flags & REL_temp_ltt)	// Not used currently
 			{
-				FOR(REQUEST_HANDLE handle)
-					RFL IN RDB$RELATION_FIELDS CROSS
-					FLD IN RDB$FIELDS
-					WITH RFL.RDB$SCHEMA_NAME EQ work->dfw_schema.c_str() AND
-						 RFL.RDB$RELATION_NAME EQ work->dfw_name.c_str() AND
-						 FLD.RDB$SCHEMA_NAME EQ RFL.RDB$FIELD_SOURCE_SCHEMA_NAME AND
-						 FLD.RDB$FIELD_NAME EQ RFL.RDB$FIELD_SOURCE AND
-						 RFL.RDB$FIELD_ID EQ *itr AND
-						 (RFL.RDB$NULL_FLAG = TRUE OR FLD.RDB$NULL_FLAG = TRUE)
+				if (const auto lttPtr = attachment->att_local_temporary_tables.get(work->getQualifiedName()))
 				{
-					fields.add(RFL.RDB$FIELD_ID);
+					const auto ltt = *lttPtr;
+
+					for (const auto fieldId : work->dfw_ids)
+					{
+						if (std::any_of(ltt->fields.begin(), ltt->fields.end(),
+								[fieldId](const auto& lttField) {
+									return lttField.id == (USHORT) fieldId && lttField.notNullFlag;
+								}))
+						{
+							fields.add(fieldId);
+						}
+					}
 				}
-				END_FOR
+			}
+			else
+			{
+				for (SortedArray<int>::iterator itr(work->dfw_ids.begin());
+					 itr != work->dfw_ids.end();
+					 ++itr)
+				{
+					FOR(REQUEST_HANDLE handle)
+						RFL IN RDB$RELATION_FIELDS CROSS
+						FLD IN RDB$FIELDS
+						WITH RFL.RDB$SCHEMA_NAME EQ work->dfw_schema.c_str() AND
+							 RFL.RDB$RELATION_NAME EQ work->dfw_name.c_str() AND
+							 FLD.RDB$SCHEMA_NAME EQ RFL.RDB$FIELD_SOURCE_SCHEMA_NAME AND
+							 FLD.RDB$FIELD_NAME EQ RFL.RDB$FIELD_SOURCE AND
+							 RFL.RDB$FIELD_ID EQ *itr AND
+							 (RFL.RDB$NULL_FLAG = TRUE OR FLD.RDB$NULL_FLAG = TRUE)
+					{
+						fields.add(RFL.RDB$FIELD_ID);
+					}
+					END_FOR
+				}
 			}
 
 			if (fields.hasData())

@@ -292,7 +292,7 @@ public:
 	bool read(thread_db* tdbb, FbStatusVector* sv, Ods::pag* page, IOCallback* io);
 	bool write(thread_db* tdbb, FbStatusVector* sv, Ods::pag* page, IOCallback* io);
 
-	void cryptThread();
+	void cryptThreadRoutine();
 
 	bool checkValidation(Firebird::IDbCryptPlugin* crypt);
 	void setDbInfo(Firebird::IDbCryptPlugin* cp);
@@ -301,9 +301,10 @@ public:
 	UCHAR getCurrentState(thread_db* tdbb) const;
 	const char* getKeyName() const;
 	const char* getPluginName() const;
-	Thread::Handle getCryptThreadHandle() const
+
+	bool isCryptThreadCurrent()
 	{
-		return cryptThreadHandle;
+		return cryptThread.isCurrent();
 	}
 
 private:
@@ -382,7 +383,7 @@ private:
 	AttachmentsRefHolder keyProviders, keyConsumers;
 	Firebird::string hash;
 	Firebird::RefPtr<DbInfo> dbInfo;
-	Thread::Handle cryptThreadHandle;
+	Thread cryptThread;
 	Firebird::IDbCryptPlugin* cryptPlugin;
 	Factory* checkFactory;
 	Database& dbb;

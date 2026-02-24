@@ -1092,6 +1092,8 @@ void DPM_delete_relation( thread_db* tdbb, RelationPermanent* relation)
  *	Get rid of an unloved, unwanted relation.
  *
  **************************************/
+	fb_assert(!(relation->rel_flags & REL_ltt_created));
+
 	SET_TDBB(tdbb);
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 

@@ -54,6 +54,7 @@
 #include "../yvalve/why_proto.h"
 #include "../common/utils_proto.h"
 #include "../common/classes/init.h"
+#include "../jrd/LocalTemporaryTable.h"
 
 using namespace Jrd;
 using namespace Firebird;

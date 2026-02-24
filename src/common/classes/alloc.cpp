@@ -2786,9 +2786,9 @@ void MemoryPool::deallocate(void* block) noexcept
 
 void MemoryPool::deletePool(MemoryPool* pool)
 {
-#ifdef DEBUG_LOST_POOLS
-	Jrd::checkPool(pool);
-#endif
+// #ifdef DEBUG_LOST_POOLS
+// 	checkPool(pool);
+// #endif
 
 	while (pool->finalizers)
 	{

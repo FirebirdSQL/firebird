@@ -59,7 +59,7 @@ namespace
 	THREAD_ENTRY_DECLARE cryptThreadStatic(THREAD_ENTRY_PARAM p)
 	{
 		const auto cryptoManager = (Jrd::CryptoManager*) p;
-		cryptoManager->cryptThread();
+		cryptoManager->cryptThreadRoutine();
 
 		return 0;
 	}
@@ -320,7 +320,6 @@ namespace Jrd
 		  keyConsumers(getPool()),
 		  hash(getPool()),
 		  dbInfo(FB_NEW DbInfo(this)),
-		  cryptThreadHandle(0),
 		  cryptPlugin(NULL),
 		  checkFactory(NULL),
 		  dbb(*tdbb->getDatabase()),
@@ -338,8 +337,7 @@ namespace Jrd
 
 	CryptoManager::~CryptoManager()
 	{
-		if (cryptThreadHandle)
-			Thread::waitForCompletion(cryptThreadHandle);
+		cryptThread.waitForCompletion();
 
 		delete stateLock;
 		delete threadLock;
@@ -926,11 +924,8 @@ namespace Jrd
 	void CryptoManager::terminateCryptThread(thread_db*, bool wait)
 	{
 		flDown = true;
-		if (wait && cryptThreadHandle)
-		{
-			Thread::waitForCompletion(cryptThreadHandle);
-			cryptThreadHandle = 0;
-		}
+		if (wait)
+			cryptThread.waitForCompletion();
 	}
 
 	void CryptoManager::stopThreadUsing(thread_db* tdbb, Attachment* att)
@@ -988,7 +983,7 @@ namespace Jrd
 
 			// ready to go
 			guard.leave();		// release in advance to avoid races with cryptThread()
-			Thread::start(cryptThreadStatic, (THREAD_ENTRY_PARAM) this, THREAD_medium, &cryptThreadHandle);
+			Thread::start(cryptThreadStatic, (THREAD_ENTRY_PARAM) this, THREAD_medium, &cryptThread);
 		}
 		catch (const Firebird::Exception&)
 		{
@@ -1006,7 +1001,7 @@ namespace Jrd
 		}
 	}
 
-	void CryptoManager::cryptThread()
+	void CryptoManager::cryptThreadRoutine()
 	{
 		FbLocalStatus status_vector;
 		bool lckRelease = false;

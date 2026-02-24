@@ -242,6 +242,10 @@ Monitoring tables
           4: call
       - MON$TABLE_NAME (table name)
       - MON$RECORD_STAT_ID (record-level statistics ID, refers to MON$RECORD_STATS)
+      - MON$TABLE_TYPE (table type)
+          PERSISTENT: Regular persistent table
+          GLOBAL TEMPORARY: Global temporary table
+          LOCAL TEMPORARY: Local temporary table
 
     MON$COMPILED_STATEMENTS (compiled statements)
       - MON$COMPILED_STATEMENT_ID (compiled statement ID)

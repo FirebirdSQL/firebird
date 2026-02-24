@@ -302,7 +302,7 @@ RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tr
 	if (!rel_pages_inst->find(inst_id, pos))
 	{
 		if (!allocPages)
-			return 0;
+			return nullptr;
 
 		RelationPages* newPages = rel_pages_free;
 		if (!newPages) {

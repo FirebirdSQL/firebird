@@ -836,7 +836,7 @@ private:
 			: ShutdownInit(p)
 		{
 			shutdownSemaphore = &semaphore;
-			Thread::start(shutdownThread, 0, 0, &handle);
+			Thread::start(shutdownThread, 0, 0, &thread);
 
 			procInt = ISC_signal(SIGINT, handlerInt, 0);
 			procTerm = ISC_signal(SIGTERM, handlerTerm, 0);
@@ -852,11 +852,11 @@ private:
 				// Must be done to let shutdownThread close.
 				shutdownSemaphore->release();
 				shutdownSemaphore = NULL;
-				Thread::waitForCompletion(handle);
+				thread.waitForCompletion();
 			}
 		}
 	private:
-		Thread::Handle handle;
+		Thread thread;
 	};
 #endif // UNIX
 

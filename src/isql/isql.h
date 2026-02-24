@@ -46,7 +46,7 @@
 inline constexpr int PRINT_BUFFER_LENGTH	= 1024;
 inline constexpr int MAXTERM_SIZE			= 32;	// SQL termination character
 inline constexpr int USER_LENGTH 			= 128;
-inline constexpr int PASSWORD_LENGTH		= 128;
+inline constexpr int PASSWORD_LENGTH		= 8192;
 inline constexpr int ROLE_LENGTH			= 128;
 
 /* these constants are purely idiotic; there's no point in having

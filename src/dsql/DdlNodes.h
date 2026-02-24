@@ -36,6 +36,7 @@
 #include "../common/classes/array.h"
 #include "../common/classes/ByteChunk.h"
 #include "../common/classes/TriState.h"
+#include "../jrd/Relation.h"
 #include "../jrd/Savepoint.h"
 #include "../dsql/errd_proto.h"
 
@@ -61,7 +62,11 @@ enum SqlSecurity
 };
 
 class LocalDeclarationsNode;
+<<<<<<< HEAD
 class CompoundStmtNode;
+=======
+class LocalTemporaryTable;
+>>>>>>> upstream/master
 class RelationSourceNode;
 class ValueListNode;
 class SecDbContext;
@@ -241,6 +246,11 @@ public:
 		createNode->dsqlPass(dsqlScratch);
 		dropNode.dsqlPass(dsqlScratch);
 		return DdlNode::dsqlPass(dsqlScratch);
+	}
+
+	bool disallowedInReadOnlyDatabase() const override
+	{
+		return createNode->disallowedInReadOnlyDatabase();
 	}
 
 protected:
@@ -1671,6 +1681,8 @@ public:
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
 protected:
+	static void validateLttColumnClause(const AddColumnClause* addColumnClause);
+
 	Firebird::string internalPrint(NodePrinter& printer) const override
 	{
 		DdlNode::internalPrint(printer);
@@ -1729,6 +1741,8 @@ public:
 	NestConst<RelationSourceNode> dsqlNode;
 	QualifiedName name;
 	Firebird::Array<NestConst<Clause> > clauses;
+	std::optional<ULONG> tempFlag;	// REL_temp_gtt, REL_temp_ltt
+	std::optional<ULONG> tempRowsFlag;	// REL_temp_tran, REL_temp_conn
 	Firebird::TriState ssDefiner;
 	Firebird::TriState replicationState;
 	ModifyIndexList indexList;
@@ -1759,6 +1773,11 @@ public:
 		return RelationNode::dsqlPass(dsqlScratch);
 	}
 
+	bool disallowedInReadOnlyDatabase() const override
+	{
+		return tempFlag != REL_temp_ltt;
+	}
+
 protected:
 	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
@@ -1767,12 +1786,10 @@ protected:
 
 private:
 	const Firebird::ObjectsArray<MetaName>* findPkColumns();
+	void defineLocalTempTable(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 
 public:
 	const Firebird::string* externalFile;
-	std::optional<rel_t> relationType = rel_persistent;
-	bool preserveRowsOpt = false;
-	bool deleteRowsOpt = false;
 	bool createIfNotExistsOnly = false;
 };
 
@@ -1794,6 +1811,11 @@ public:
 		return RelationNode::dsqlPass(dsqlScratch);
 	}
 
+	bool disallowedInReadOnlyDatabase() const override
+	{
+		return false;  // Deferred to execute() - LTT status unknown at parse time
+	}
+
 public:
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
@@ -1808,6 +1830,7 @@ protected:
 private:
 	void modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		AlterColTypeClause* clause);
+	void alterLocalTempTable(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 };
 
 
@@ -1840,6 +1863,11 @@ public:
 		dsqlScratch->ddlSchema = name.schema;
 
 		return DdlNode::dsqlPass(dsqlScratch);
+	}
+
+	bool disallowedInReadOnlyDatabase() const override
+	{
+		return false;  // Deferred to execute() - LTT status unknown at parse time
 	}
 
 protected:
@@ -2000,6 +2028,15 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
+	bool disallowedInReadOnlyDatabase() const override
+	{
+		return false;  // Deferred to execute() - LTT status unknown at parse time
+	}
+
+private:
+	void defineLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+		jrd_tra* transaction, LocalTemporaryTable* ltt);
+
 protected:
 	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
@@ -2094,6 +2131,10 @@ public:
 
 		return DdlNode::dsqlPass(dsqlScratch);
 	}
+
+private:
+	void setStatisticsLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+		jrd_tra* transaction, LocalTemporaryTable* ltt, LocalTemporaryTable::Index* lttIndex);
 
 protected:
 	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override

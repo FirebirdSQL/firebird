@@ -97,6 +97,7 @@
 #include "../jrd/Function.h"
 #include "../jrd/trace/TraceJrdHelpers.h"
 #include "firebird/impl/msg_helper.h"
+#include "../jrd/LocalTemporaryTable.h"
 #include "../jrd/Constant.h"
 
 
@@ -206,9 +207,48 @@ void MET_get_relation_field(thread_db* tdbb, MemoryPool& csbPool, const Qualifie
 	bool found = false;
 	MetaName sourceName;
 
-	AutoCacheRequest handle(tdbb, irq_l_relfield, IRQ_REQUESTS);
+	if (const auto lttPtr = attachment->att_local_temporary_tables.get(relationName))
+	{
+		const auto ltt = *lttPtr;
 
-	FOR(REQUEST_HANDLE handle)
+		for (const auto& lttField : ltt->fields)
+		{
+			if (lttField.name == fieldName)
+			{
+				// Copy descriptor from LTT field
+				*desc = lttField.desc;
+
+				// Set text type for text fields
+				if (DTYPE_IS_TEXT(lttField.desc.dsc_dtype))
+				{
+					const SSHORT charSetId = lttField.charSetId.value_or(CS_NONE);
+					const SSHORT collationId = lttField.collationId.value_or(COLLATE_NONE);
+					desc->setTextType(INTL_CS_COLL_TO_TTYPE(charSetId, collationId));
+				}
+
+				sourceName = lttField.source.object;
+				found = true;
+
+				if (fieldInfo)
+				{
+					fieldInfo->nullable = !lttField.notNullFlag;
+					fieldInfo->defaultValue = nullptr;  // LTTs don't support defaults yet
+					fieldInfo->validationExpr = nullptr;
+				}
+
+				return;
+			}
+		}
+
+		ERR_post(Arg::Gds(isc_dyn_column_does_not_exist) <<
+			fieldName.toQuotedString() <<
+			relationName.toQuotedString());
+	}
+
+	static const CachedRequestId handle1CacheId;
+	AutoCacheRequest handle1(tdbb, handle1CacheId);
+
+	FOR(REQUEST_HANDLE handle1)
 		RFL IN RDB$RELATION_FIELDS CROSS
 		FLD IN RDB$FIELDS WITH
 			RFL.RDB$SCHEMA_NAME EQ relationName.schema.c_str() AND
@@ -963,6 +1003,7 @@ Format* MET_format(thread_db* tdbb, RelationPermanent* relation, USHORT number)
 	// System relations don't have their formats stored inside RDB$FORMATS,
 	// so it's absolutely pointless trying to find one there
 	fb_assert(!relation->isSystem());
+	fb_assert(!(relation->rel_flags & REL_temp_ltt));
 
 	format = NULL;
 	AutoCacheRequest request(tdbb, irq_r_format, IRQ_REQUESTS);
@@ -1790,9 +1831,29 @@ ElementBase::ReturnedId MET_lookup_field(thread_db* tdbb, jrd_rel* relation, con
 
 	ElementBase::ReturnedId id = -1;
 
-	AutoCacheRequest request(tdbb, irq_l_field, IRQ_REQUESTS);
+	if (relation->isLTT())
+	{
+		if (const auto lttPtr = attachment->att_local_temporary_tables.get(relation->rel_name))
+		{
+			const auto ltt = *lttPtr;
 
-	FOR(REQUEST_HANDLE request)
+			for (const auto& lttField : ltt->fields)
+			{
+				if (lttField.name == name)
+				{
+					id = lttField.id;
+					break;
+				}
+			}
+		}
+
+		return id;
+	}
+
+	static const CachedRequestId request1CacheId;
+	AutoCacheRequest request1(tdbb, request1CacheId);
+
+	FOR(REQUEST_HANDLE request1)
 		X IN RDB$RELATION_FIELDS
 		WITH X.RDB$SCHEMA_NAME EQ relation->getName().schema.c_str() AND
 			 X.RDB$RELATION_NAME EQ relation->getName().object.c_str() AND
@@ -2068,6 +2129,22 @@ ElementBase::ReturnedId MetadataCache::lookup_index_name(thread_db* tdbb, const 
 	SET_TDBB(tdbb);
 	Attachment* attachment = tdbb->getAttachment();
 
+	for (const auto& lttEntry : attachment->att_local_temporary_tables)
+	{
+		for (const auto& lttIndex : lttEntry.second->indexes)
+		{
+			if (lttIndex.name == index_name)
+			{
+				fb_assert(lttEntry.second->relationId != 0);
+				*relation_id = lttEntry.second->relationId;
+				*status = lttIndex.inactive ? MET_object_inactive : MET_object_active;
+				return lttIndex.id;
+			}
+		}
+
+		return -1;
+	}
+
 	AutoCacheRequest request(tdbb, irq_l_index_name, IRQ_REQUESTS);
 
 	*status = MET_index_state_unknown;
@@ -2340,6 +2417,8 @@ std::optional<MetaId> jrd_rel::getIdByName(thread_db* tdbb, const QualifiedName&
 	SET_TDBB(tdbb);
 	Attachment* attachment = tdbb->getAttachment();
 	std::optional<MetaId> id;
+
+	relation = nullptr;
 
 	// We need to look up the relation name in RDB$RELATIONS
 
@@ -3062,6 +3141,13 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 				case rel_global_temp_delete:
 					fb_assert(rel_perm->rel_flags & REL_temp_tran);
 					rel_perm->rel_flags |= REL_temp_tran;
+				case rel_temp_preserve:
+					fb_assert((relation->rel_flags & (REL_temp_conn | REL_temp_gtt)) == (REL_temp_conn | REL_temp_gtt));
+					relation->rel_flags |= REL_temp_conn | REL_temp_gtt;
+					break;
+				case rel_temp_delete:
+					fb_assert((relation->rel_flags & (REL_temp_tran | REL_temp_gtt)) == (REL_temp_tran | REL_temp_gtt));
+					relation->rel_flags |= REL_temp_tran | REL_temp_gtt;
 					break;
 				default:
 					fb_assert(false);
@@ -3514,11 +3600,11 @@ ULONG MET_get_rel_flags_from_TYPE(USHORT type)
 		case rel_virtual:
 			ret |= REL_virtual;
 			break;
-		case rel_global_temp_preserve:
-			ret |= REL_temp_conn;
+		case rel_temp_preserve:
+			ret |= REL_temp_conn | REL_temp_gtt;
 			break;
-		case rel_global_temp_delete:
-			ret |= REL_temp_tran;
+		case rel_temp_delete:
+			ret |= REL_temp_tran | REL_temp_gtt;
 			break;
 		default:
 			fb_assert(false);
@@ -3992,6 +4078,9 @@ void RelationPermanent::scanPartners(thread_db* tdbb)
  *      scan of primary dependencies on relation's primary key.
  *
  **************************************/
+	if (relation->rel_flags & REL_temp_ltt)
+		return;
+
 	Attachment* attachment = tdbb->getAttachment();
 
 	if (rel_flags & REL_check_partners)
@@ -5103,18 +5192,42 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 				{
 					fb_assert(name.package.isEmpty());
 
-					static const CachedRequestId indexHandleId;
-					handle.reset(tdbb, indexHandleId);
-
-					FOR (REQUEST_HANDLE handle)
-						IDX IN RDB$INDICES
-						WITH IDX.RDB$SCHEMA_NAME EQ searchSchema.c_str() AND
-							 IDX.RDB$INDEX_NAME EQ name.object.c_str()
+					// Check LTT indexes first
+					for (const auto& lttEntry : attachment->att_local_temporary_tables)
 					{
-						found = true;
-						break;
+						const auto ltt = lttEntry.second;
+
+						if (ltt->name.schema != searchSchema)
+							continue;
+
+						for (const auto& index : ltt->indexes)
+						{
+							if (index.name.object == name.object)
+							{
+								found = true;
+								break;
+							}
+						}
+
+						if (found)
+							break;
 					}
-					END_FOR
+
+					if (!found)
+					{
+						static const CachedRequestId indexHandleId;
+						handle.reset(tdbb, indexHandleId);
+
+						FOR (REQUEST_HANDLE handle)
+							IDX IN RDB$INDICES
+							WITH IDX.RDB$SCHEMA_NAME EQ searchSchema.c_str() AND
+								 IDX.RDB$INDEX_NAME EQ name.object.c_str()
+						{
+							found = true;
+							break;
+						}
+						END_FOR
+					}
 
 					break;
 				}
@@ -5162,18 +5275,33 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 				case obj_view:
 					if (name.package.isEmpty())
 					{
-						static const CachedRequestId relationHandleId;
-						handle.reset(tdbb, relationHandleId);
-
-						FOR (REQUEST_HANDLE handle)
-							REL IN RDB$RELATIONS
-							WITH REL.RDB$SCHEMA_NAME EQ searchSchema.c_str() AND
-								REL.RDB$RELATION_NAME EQ name.object.c_str()
+						// Check LTT first
+						for (const auto& lttEntry : attachment->att_local_temporary_tables)
 						{
-							found = true;
-							break;
+							const auto ltt = lttEntry.second;
+
+							if (ltt->name.schema == searchSchema && ltt->name.object == name.object)
+							{
+								found = true;
+								break;
+							}
 						}
-						END_FOR
+
+						if (!found)
+						{
+							static const CachedRequestId relationHandleId;
+							handle.reset(tdbb, relationHandleId);
+
+							FOR (REQUEST_HANDLE handle)
+								REL IN RDB$RELATIONS
+								WITH REL.RDB$SCHEMA_NAME EQ searchSchema.c_str() AND
+									 REL.RDB$RELATION_NAME EQ name.object.c_str()
+							{
+								found = true;
+								break;
+							}
+							END_FOR
+						}
 					}
 
 					break;
@@ -5250,6 +5378,53 @@ bool MET_check_schema_exists(thread_db* tdbb, const MetaName& name)
 		return true;
 	}
 	END_FOR
+
+	return false;
+}
+
+bool MET_get_ltt_index(Attachment* attachment, const QualifiedName& indexName,
+	LocalTemporaryTable** outLtt, LocalTemporaryTable::Index** outIndex)
+{
+/**************************************
+ *
+ *  M E T _ g e t _ l t t _ i n d e x
+ *
+ **************************************
+ *
+ * Functional description
+ *  Look up an index by name in all LTTs of the current attachment.
+ *  If found, returns true and sets outLtt to the owning LocalTemporaryTable
+ *  and outIndex to point to the index. If not found, returns false.
+ *
+ **************************************/
+
+	if (outLtt)
+		*outLtt = nullptr;
+
+	if (outIndex)
+		*outIndex = nullptr;
+
+	// Search through all LTTs for an index with the given name
+	for (auto& lttEntry : attachment->att_local_temporary_tables)
+	{
+		const auto ltt = lttEntry.second;
+
+		// Only search in LTTs with matching schema
+		if (ltt->name.schema != indexName.schema)
+			continue;
+
+		for (auto& index : ltt->indexes)
+		{
+			if (index.name == indexName)
+			{
+				if (outLtt)
+					*outLtt = ltt;
+				if (outIndex)
+					*outIndex = &index;
+				return true;
+			}
+		}
+	}
 
 	return false;
 }

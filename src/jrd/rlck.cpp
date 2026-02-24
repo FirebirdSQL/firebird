@@ -51,8 +51,11 @@ Lock* RLCK_reserve_relation(thread_db* tdbb, jrd_tra* transaction, Cached::Relat
 	SET_TDBB(tdbb);
 	Database* const dbb = tdbb->getDatabase();
 
-	if (transaction->tra_flags & TRA_system)
-		return NULL;
+	if ((transaction->tra_flags & TRA_system) ||
+		(relation->rel_flags & REL_temp_ltt))
+	{
+		return nullptr;
+	}
 
 	// hvlad: virtual relations are always writable, see below for the other rules
 

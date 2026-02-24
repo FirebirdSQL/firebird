@@ -198,7 +198,7 @@ Manager::Manager(const string& dbId,
 		m_replicas.add(FB_NEW_POOL(getPool()) SyncReplica(getPool(), attachment, replicator));
 	}
 
-	Thread::start(writer_thread, this, THREAD_medium, 0);
+	Thread::start(writer_thread, this, THREAD_medium);
 	m_startupSemaphore.enter();
 }
 

@@ -231,6 +231,7 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider
 	  att_unqualified_charset_resolved_cache_search_path(att_schema_search_path),
 	  att_unqualified_charset_resolved_cache(*pool),
 	  att_parallel_workers(0),
+	  att_local_temporary_tables(*pool),
 	  att_repl_appliers(*pool),
 	  att_utility(UTIL_NONE),
 	  att_dec_status(DecimalStatus::DEFAULT),

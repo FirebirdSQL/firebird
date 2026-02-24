@@ -166,7 +166,8 @@ enum rel_flags_vals {
 	REL_dropped			= 2, // relation has been dropped
 	REL_view			= 4, // relation is a view
 	REL_external		= 8, // relation is an external table
-	REL_creating		= 16 // we are creating the bare relation in memory
+	REL_creating		= 16,	// we are creating the bare relation in memory
+	REL_ltt_created		= 32	// relation is created local temporary table
 };
 
 class TypeClause

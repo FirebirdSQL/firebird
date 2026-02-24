@@ -87,6 +87,7 @@
 	static_assert(f_sec_crt_u_type == 1, "Wrong field id");
 	static_assert(f_mon_tab_rec_stat_id == 3, "Wrong field id");
 	static_assert(f_tz_name == 1, "Wrong field id");
+	static_assert(f_mon_ltt_type == 4, "Wrong field id");
 	static_assert(f_const_name == 0, "Wrong field id");
 	static_assert(f_const_id == 1, "Wrong field id");
 	static_assert(f_const_package == 2, "Wrong field id");
