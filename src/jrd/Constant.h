@@ -102,8 +102,7 @@ private:
 
 	virtual ~Constant() override
 	{
-		// The string is allocated via tdbb pool and it is dead by now
-		// delete m_value.vlu_string;
+		delete m_value.vlu_string;
 	}
 
 public:
