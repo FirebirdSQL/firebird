@@ -221,9 +221,9 @@ void MET_get_relation_field(thread_db* tdbb, MemoryPool& csbPool, const Qualifie
 				// Set text type for text fields
 				if (DTYPE_IS_TEXT(lttField.desc.dsc_dtype))
 				{
-					const SSHORT charSetId = lttField.charSetId.value_or(CS_NONE);
-					const SSHORT collationId = lttField.collationId.value_or(COLLATE_NONE);
-					desc->setTextType(INTL_CS_COLL_TO_TTYPE(charSetId, collationId));
+					const auto charSetId = lttField.charSetId.value_or(CS_NONE);
+					const auto collationId = lttField.collationId.value_or(COLLATE_NONE);
+					desc->setTextType(TTypeId(charSetId, collationId));
 				}
 
 				sourceName = lttField.source.object;
@@ -1827,13 +1827,11 @@ ElementBase::ReturnedId MET_lookup_field(thread_db* tdbb, jrd_rel* relation, con
 		}
 	}
 
-	// Not found.  Next, try system relations directly
-
 	ElementBase::ReturnedId id = -1;
 
 	if (relation->isLTT())
 	{
-		if (const auto lttPtr = attachment->att_local_temporary_tables.get(relation->rel_name))
+		if (const auto lttPtr = attachment->att_local_temporary_tables.get(relation->getName()))
 		{
 			const auto ltt = *lttPtr;
 
@@ -1849,6 +1847,8 @@ ElementBase::ReturnedId MET_lookup_field(thread_db* tdbb, jrd_rel* relation, con
 
 		return id;
 	}
+
+	// Not found.  Next, try system relations directly
 
 	static const CachedRequestId request1CacheId;
 	AutoCacheRequest request1(tdbb, request1CacheId);
@@ -2136,12 +2136,14 @@ ElementBase::ReturnedId MetadataCache::lookup_index_name(thread_db* tdbb, const 
 			if (lttIndex.name == index_name)
 			{
 				fb_assert(lttEntry.second->relationId != 0);
-				*relation_id = lttEntry.second->relationId;
-				*status = lttIndex.inactive ? MET_object_inactive : MET_object_active;
+				if (relationId)
+					*relationId = lttEntry.second->relationId;
+				*status = lttIndex.inactive ? MET_index_inactive : MET_index_active;
 				return lttIndex.id;
 			}
 		}
 
+		// WHY Search for index only in first LTT ???????????
 		return -1;
 	}
 
@@ -2198,8 +2200,6 @@ void MET_lookup_index_code(thread_db* tdbb, Cached::Relation* relation, index_de
 		idx->idx_expression_node = idv->idv_expression;
 		idx->idx_expression_statement = idv->idv_expression_statement;
 		memcpy(&idx->idx_expression_desc, &idv->idv_expression_desc, sizeof(struct dsc));
-
-		return;
 	}
 }
 
@@ -2772,8 +2772,8 @@ ScanResult jrd_prc::scan(thread_db* tdbb, ObjectBase::Flag flags)
 							StaticStatusVector temp_status;
 							ex.stuffException(temp_status);
 							flReload = true;
-							(Arg::Gds(isc_bad_proc_BLR) << name <<
-								Arg::StatusVector(temp_status.begin())).raise();
+							(Arg::StatusVector(temp_status.begin()) <<
+								Arg::Gds(isc_bad_proc_BLR) << name).raise();
 						}
 					}
 				}
@@ -2870,11 +2870,10 @@ ScanResult jrd_prc::reload(thread_db* tdbb, ObjectBase::Flag /*unused*/)
 			{
 				StaticStatusVector temp_status;
 				ex.stuffException(temp_status);
-
 				flReload = true;
 
-				(Arg::Gds(isc_bad_proc_BLR) << this->getName().toQuotedString()
-					<< Arg::StatusVector(temp_status.begin())).raise();
+				(Arg::StatusVector(temp_status.begin()) <<
+					Arg::Gds(isc_bad_proc_BLR) << this->getName().toQuotedString()).raise();
 			}
 		}
 		catch (const Exception&)
@@ -2957,13 +2956,17 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
  *
  **************************************/
 	SET_TDBB(tdbb);
+
+	if (rel_perm->rel_flags & REL_temp_ltt)
+		return ScanResult::COMPLETE;
+
 	Attachment* attachment = tdbb->getAttachment();
 	Database* dbb = tdbb->getDatabase();
 	Jrd::ContextPoolHolder context(tdbb, dbb->dbb_permanent);
 	blb* blob = NULL;
 	jrd_tra* trans = attachment->getMetaTransaction(tdbb);
 
-	if (flags & CacheFlag::MINISCAN)
+	if ((flags & CacheFlag::MINISCAN) || getName().isEmpty())
 	{
 		// New version of relation is created currently.
 		// Perform only very basic scan - may be more changes to come.
@@ -2993,18 +2996,21 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 			END_FOR
 		}
 
-		if (found)
+		if (flags & CacheFlag::MINISCAN)
 		{
-			fb_assert(getName().hasData());		// i.e. correct record in RDB$RELATIONS exists
-			if (getName().hasData())
+			if (found)
 			{
-				// Next time reload() will be called
-				return ScanResult::REPEAT;
+				fb_assert(getName().hasData());		// i.e. correct record in RDB$RELATIONS exists
+				if (getName().hasData())
+				{
+					// Next time reload() will be called
+					return ScanResult::REPEAT;
+				}
 			}
-		}
 
-		// something gone wrong
-		return ScanResult::MISS;
+			// something gone wrong
+			return ScanResult::MISS;
+		}
 	}
 
 	bool dependencies = (rel_perm->rel_flags & REL_get_dependencies) ? true : false;
@@ -3142,8 +3148,8 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 					fb_assert(rel_perm->rel_flags & REL_temp_tran);
 					rel_perm->rel_flags |= REL_temp_tran;
 				case rel_temp_preserve:
-					fb_assert((relation->rel_flags & (REL_temp_conn | REL_temp_gtt)) == (REL_temp_conn | REL_temp_gtt));
-					relation->rel_flags |= REL_temp_conn | REL_temp_gtt;
+					fb_assert((rel_perm->rel_flags & (REL_temp_conn | REL_temp_gtt)) == (REL_temp_conn | REL_temp_gtt));
+					rel_perm->rel_flags |= REL_temp_conn | REL_temp_gtt;
 					break;
 				case rel_temp_delete:
 					fb_assert((relation->rel_flags & (REL_temp_tran | REL_temp_gtt)) == (REL_temp_tran | REL_temp_gtt));
@@ -4078,7 +4084,7 @@ void RelationPermanent::scanPartners(thread_db* tdbb)
  *      scan of primary dependencies on relation's primary key.
  *
  **************************************/
-	if (relation->rel_flags & REL_temp_ltt)
+	if (rel_flags & REL_temp_ltt)
 		return;
 
 	Attachment* attachment = tdbb->getAttachment();
@@ -4796,16 +4802,6 @@ Cached::Relation* MetadataCache::ensureRelation(thread_db* tdbb, MetaId id)
 	return mdc->mdc_relations.ensurePermanent(tdbb, id);
 }
 
-Cached::CharSet* MetadataCache::getCharSet(thread_db* tdbb, CSetId id, ObjectBase::Flag flags)
-{
-	SET_TDBB(tdbb);
-
-	MetadataCache* mdc = MetadataCache::get(tdbb);
-	auto* rc = mdc->mdc_charsets.getData(tdbb, id, flags);
-
-	return rc;
-}
-
 MetadataCache* MetadataCache::getCache(thread_db* tdbb) noexcept
 {
 	return tdbb->getDatabase()->dbb_mdc;
@@ -4873,9 +4869,13 @@ void MetadataCache::objectCleanup(TraNumber traNum, ElementBase* toClean)
 ScanResult IndexVersion::scan(thread_db* tdbb, ObjectBase::Flag flags)
 {
 	SET_TDBB(tdbb);
+
+	if (getPermanent()->getRelation()->rel_flags & REL_temp_ltt)
+		return ScanResult::COMPLETE;
+
 	Attachment* attachment = tdbb->getAttachment();
 	Database* dbb = tdbb->getDatabase();
-	jrd_tra* transaction = tdbb->getTransaction() ? tdbb->getTransaction() : attachment->getSysTransaction();
+	jrd_tra* transaction = attachment->getMetaTransaction(tdbb);
 
 	bid expression, condition;
 	expression.clear();
@@ -4958,6 +4958,19 @@ ScanResult IndexVersion::scan(thread_db* tdbb, ObjectBase::Flag flags)
 	}
 
 	return found ? ScanResult::COMPLETE : ScanResult::MISS;
+}
+
+void IndexVersion::setLtt(thread_db* tdbb, LocalTemporaryTable::Index* lttIndex)
+{
+	SET_TDBB(tdbb);
+
+	fb_assert(getPermanent()->getRelation()->rel_flags & REL_temp_ltt);
+
+	idv_name = lttIndex->name;
+	idv_uniqFlag = lttIndex->unique;
+	idv_segmentCount = lttIndex->columns.getCount();
+	idv_type = lttIndex->descending;
+	idv_active = lttIndex->inactive ? MET_index_inactive : MET_index_active;
 }
 
 IndexVersion* RelationPermanent::lookup_index(thread_db* tdbb, const QualifiedName& name, ObjectBase::Flag flags)
@@ -5428,3 +5441,28 @@ bool MET_get_ltt_index(Attachment* attachment, const QualifiedName& indexName,
 
 	return false;
 }
+
+jrd_rel* MetadataCache::getLtt(thread_db* tdbb, MetaId id)
+{
+	Attachment* attachment = tdbb->getAttachment();
+
+	for (const auto& lttEntry : attachment->att_local_temporary_tables)
+	{
+		const auto ltt = lttEntry.second;
+		if (ltt->relationId == id)
+			return ltt->relation;
+	}
+
+	return nullptr;
+}
+
+jrd_rel* MetadataCache::getLtt(thread_db* tdbb, const QualifiedName& name)
+{
+	Attachment* attachment = tdbb->getAttachment();
+
+	if (const auto lttPtr = attachment->att_local_temporary_tables.get(name))
+		return (*lttPtr)->relation;
+
+	return nullptr;
+}
+

@@ -174,6 +174,7 @@ public:
 		tra_arrays(NULL),
 		tra_deferred_job(NULL),
 		traExtRel(*p),
+		traLttRel(*p),
 		tra_context_vars(*p),
 		tra_lock_timeout(DEFAULT_LOCK_TIMEOUT),
 		tra_timestamp(Firebird::TimeZoneUtil::getCurrentSystemTimeStamp()),
@@ -185,7 +186,7 @@ public:
 		tra_sorts(*p, attachment->att_database),
 		tra_gen_ids(NULL),
 		tra_replicator(NULL),
-		tra_dsql_rels(*p),
+		tra_cache_rels(*p),
 		tra_interface(NULL),
 		tra_blob_space(NULL),
 		tra_undo_space(NULL),
@@ -201,6 +202,12 @@ public:
 	}
 
 	~jrd_tra();
+
+	MemoryPool& getPool() const
+	{
+		fb_assert(tra_pool);
+		return *tra_pool;
+	}
 
 	static jrd_tra* create(MemoryPool* pool, Attachment* attachment, jrd_tra* outer)
 	{
@@ -279,7 +286,8 @@ public:
 	SavNumber tra_save_point_number;	// next save point number to use
 	ULONG tra_flags;
 	DeferredJob*	tra_deferred_job;	// work deferred to commit time
-	Firebird::SortedArray<Jrd::ExternalFile*>	traExtRel;	// extfile access list
+	Firebird::SortedArray<ExternalFile*>		traExtRel;	// extfile access list
+	Firebird::SortedArray<Cached::Relation*>	traLttRel;	// LTT access list
 	Firebird::StringMap tra_context_vars;	// Context variables for the transaction
 	traRpbList* tra_rpblist;			// active record_param's of given transaction
 	UCHAR tra_use_count;				// use count for safe AST delivery
@@ -304,7 +312,8 @@ public:
 	//Transaction *tra_ext_two_phase;
 	GenIdCache* tra_gen_ids;
 	Firebird::IReplicatedTransaction* tra_replicator;
-	Firebird::LeftPooledMap<QualifiedName, class dsql_rel*> tra_dsql_rels;	// created/modified DSQL relations
+	Firebird::LeftPooledMap<QualifiedName, class dsql_rel*> tra_cache_rels;	// accessed DSQL relations
+	MdcVersion tra_mdc_version = 0;
 
 private:
 	JTransaction* tra_interface;

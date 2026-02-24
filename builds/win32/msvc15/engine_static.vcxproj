@@ -187,6 +187,7 @@
     <ClCompile Include="..\..\..\src\jrd\trace\TraceService.cpp" />
     <ClCompile Include="..\..\..\src\jrd\UserManagement.cpp" />
     <ClCompile Include="..\..\..\src\jrd\validation.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\vec.cpp" />
     <ClCompile Include="..\..\..\src\jrd\vio.cpp" />
     <ClCompile Include="..\..\..\src\jrd\VirtualTable.cpp" />
     <ClCompile Include="..\..\..\src\jrd\WorkerAttachment.cpp" />

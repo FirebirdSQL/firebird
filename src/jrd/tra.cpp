@@ -973,6 +973,13 @@ void jrd_tra::postResources(thread_db* tdbb, const Resources* resources)
 				traExtRel.insert(pos, ext);
 			}
 		}
+
+		if (rel()->rel_flags & REL_temp_ltt)
+		{
+			FB_SIZE_T pos;
+			if (!traLttRel.find(rel(), pos))
+				traLttRel.insert(pos, rel());
+		}
 	}
 }
 
@@ -2446,12 +2453,18 @@ void MetadataCache::release_temp_tables(thread_db* tdbb, jrd_tra* transaction)
 	}
 
 	// Release LTTs (Local Temporary Tables) with transaction lifetime
+	Attachment* att = tdbb->getAttachment();
+
 	for (const auto& lttEntry : att->att_local_temporary_tables)
 	{
 		const auto ltt = lttEntry.second;
 
-		if (ltt && ltt->relation && (ltt->relation->rel_flags & REL_temp_tran))
-			ltt->relation->delPages(tdbb, transaction->tra_number);
+		if (ltt && ltt->relation)
+		{
+			auto *rel = ltt->relation->getPermanent();
+			if (rel->rel_flags & REL_temp_tran)
+				rel->delPages(tdbb, transaction->tra_number);
+		}
 	}
 }
 
@@ -2477,12 +2490,14 @@ void MetadataCache::retain_temp_tables(thread_db* tdbb, jrd_tra* transaction, Tr
 	}
 
 	// Retain LTTs (Local Temporary Tables) with transaction lifetime
+	Attachment* att = tdbb->getAttachment();
+
 	for (const auto& lttEntry : att->att_local_temporary_tables)
 	{
 		const auto ltt = lttEntry.second;
 
-		if (ltt && ltt->relation && (ltt->relation->rel_flags & REL_temp_tran))
-			ltt->relation->retainPages(tdbb, transaction->tra_number, new_number);
+		if (ltt && ltt->relation && (ltt->relation->getPermanent()->rel_flags & REL_temp_tran))
+			ltt->relation->getPermanent()->retainPages(tdbb, transaction->tra_number, new_number);
 	}
 }
 

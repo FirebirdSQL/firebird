@@ -34,6 +34,7 @@
 #
 
 ROOT=$(shell cd ..; pwd)
+SRCDIR=@abs_top_srcdir@
 
 ifeq ($(CROSS_OUT), Y)
 export CROSS:=CrossBuild
@@ -117,6 +118,7 @@ IDL_ROOT=$(INCLD_ROOT)/firebird
 IDL_FILE=$(IDL_ROOT)/FirebirdInterface.idl
 API_H_FILE=$(IDL_ROOT)/IdlFbInterfaces.h
 API_PAS_FILE=$(INCLD_ROOT)/gen/Firebird.pas
+API_PAS_TMP_FILE=$(TMP_ROOT)/include/gen/Firebird.pas
 API_C_HEADER=fb_c_api.h
 API_C_H_FILE=$(FIREBIRD)/include/firebird/$(API_C_HEADER)
 API_C_TMP_FILE=$(TMP_ROOT)/fb_c_api.tmp
@@ -172,17 +174,22 @@ $(TMP_FUNCS_PAS): $(PASCAL_SOURCES) $(XPB_CONSTS) $(INF_CONSTS) $(TMP_ROOT)/iber
 	$(RPL_GREP) <$(TMP_ROOT)/iberror.pas >>$(TMP_FUNCS_PAS)
 
 $(API_PAS_FILE): $(IDL_FILE) $(PASCAL_SOURCES) $(TMP_FUNCS_PAS)
-	$(CLOOP) $(IDL_FILE) pascal $@ Firebird --uses SysUtils \
+	$(CLOOP) $(IDL_FILE) pascal $(API_PAS_TMP_FILE) Firebird --uses SysUtils \
 		--interfaceFile $(PAS_ROOT)/Pascal.interface.pas \
     	--implementationFile $(PAS_ROOT)/Pascal.implementation.pas \
     	--exceptionClass FbException \
     	--functionsFile $(TMP_FUNCS_PAS) \
     	--prefix I
+	if [ ! -f $@ ] || ! cmp -s $(API_PAS_TMP_FILE) $@; then \
+		mv -f $(API_PAS_TMP_FILE) $@; \
+	else \
+		rm -f $(API_PAS_TMP_FILE); \
+	fi
 
 updateBuildNum : $(SRC_ROOT)/jrd/build_no.h $(GEN_ROOT)/Make.Version
 
 $(SRC_ROOT)/jrd/build_no.h : $(SRC_ROOT)/misc/writeBuildNum.sh
-	(cd $(ROOT); ./src/misc/writeBuildNum.sh rebuildHeader)
+	$(SRCDIR)/src/misc/writeBuildNum.sh rebuildHeader
 
 $(GEN_ROOT)/Make.Version : $(SRC_ROOT)/misc/writeBuildNum.sh
 	$(SRC_ROOT)/misc/writeBuildNum.sh createMakeVersion $@
@@ -194,44 +201,51 @@ $(GEN_ROOT)/Make.Version : $(SRC_ROOT)/misc/writeBuildNum.sh
 
 external:
 ifeq ($(CLIENT_ONLY_FLG),N)
-	CC="$(CC)" CFLAGS="$(CFLAGS)" AR="$(AR)" $(MAKE) -C $(ROOT)/extern/btyacc
+	CC="$(CC)" CFLAGS="$(CFLAGS)" AR="$(AR)" $(MAKE) -C $(SRCDIR)/extern/btyacc \
+		PROGRAM=$(GEN_ROOT)/extern/btyacc/btyacc OBJ_DIR=$(ROOT)/temp/extern/btyacc
 endif
 
 	mkdir -p $(GEN_ROOT)/$(TARGET)/cloop
 
 ifeq ($(PLATFORM),DARWIN)
 	cd $(GEN_ROOT)/$(TARGET)/cloop && \
-	cmake -DCMAKE_BUILD_TYPE=$(FB_CMAKE_BUILD_TYPE) -DCMAKE_CXX_COMPILER="$(CXX)" -DCLOOP_BUILD_TESTS=OFF $(ROOT)/extern/cloop
+	cmake -DCMAKE_BUILD_TYPE=$(FB_CMAKE_BUILD_TYPE) -DCMAKE_CXX_COMPILER="$(CXX)" -DCLOOP_BUILD_TESTS=OFF $(SRCDIR)/extern/cloop
 else
 	cd $(GEN_ROOT)/$(TARGET)/cloop && \
-	cmake -DCMAKE_BUILD_TYPE=$(FB_CMAKE_BUILD_TYPE) -DCMAKE_CXX_COMPILER="$(CXX)" -DCLOOP_BUILD_TESTS=OFF -DCMAKE_CXX_FLAGS="-static-libstdc++" -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++" $(ROOT)/extern/cloop
+	cmake -DCMAKE_BUILD_TYPE=$(FB_CMAKE_BUILD_TYPE) -DCMAKE_CXX_COMPILER="$(CXX)" -DCLOOP_BUILD_TESTS=OFF -DCMAKE_CXX_FLAGS="-static-libstdc++" -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++" $(SRCDIR)/extern/cloop
 endif
 	cd $(GEN_ROOT)/$(TARGET)/cloop && \
 	cmake --build .
 
-	CC="$(CC)" CFLAGS="$(CFLAGS)" AR="$(AR)" $(MAKE) -C $(ROOT)/extern/decNumber
-	ln -sf $(ROOT)/extern/decNumber/libdecFloat.a $(STATIC_LIB)
+	mkdir -p $(ROOT)/temp/extern/decNumber $(GEN_ROOT)/extern/decNumber
+	CC="$(CC)" CFLAGS="$(CFLAGS)" AR="$(AR)" $(MAKE) -C $(SRCDIR)/extern/decNumber \
+		SRCDIR=$(SRCDIR)/extern/decNumber \
+		OBJ_DIR=$(ROOT)/temp/extern/decNumber \
+		LIBRARY=$(GEN_ROOT)/extern/decNumber/libdecFloat.a
+	ln -sf $(GEN_ROOT)/extern/decNumber/libdecFloat.a $(STATIC_LIB)
 
 ifeq ($(ABSEIL_BUILD_FLG),Y)
-	CXX="$(CXX)" CXXFLAGS="$(CXXFLAGS)" $(MAKE) -C $(ROOT)/extern/int128/absl/numeric
-	ln -sf $(ROOT)/extern/int128/absl/numeric/libi128.a $(STATIC_LIB)
+	CXX="$(CXX)" CXXFLAGS="$(CXXFLAGS)" $(MAKE) -C $(SRCDIR)/extern/int128/absl/numeric
+	ln -sf $(SRCDIR)/extern/int128/absl/numeric/libi128.a $(STATIC_LIB)
 endif
 
 ifeq ($(CLIENT_ONLY_FLG),N)
 ifeq ($(RE2_BUILD_FLG),Y)
-	CXX="$(CXX)" CXXFLAGS="$(CXXFLAGS) -O3 -g -fPIC" AR="$(AR)" $(MAKE) -C $(ROOT)/extern/re2
-	ln -sf $(ROOT)/extern/re2/obj/libre2.a $(STATIC_LIB)
+	@mkdir -p $(RE2_BUILD_DIR)
+	CXX="$(CXX)" CXXFLAGS="$(CXXFLAGS) -O3 -g -fPIC" AR="$(AR)" $(MAKE) -C $(SRCDIR)/extern/re2 OBJ_DIR=$(RE2_BUILD_DIR)
+	ln -sf $(RE2_BUILD_DIR)/libre2.a $(STATIC_LIB)
 endif
 
 	$(MAKE) libcds
 endif
 
 ifeq ($(TOMMATH_BUILD_FLG),Y)
-	CC="$(CC)" CFLAGS="$(CFLAGS)" AR="$(AR)" $(MAKE) -C $(ROOT)/extern/libtommath -f makefile.shared GCC="$(CC)"
+	@mkdir -p $(TOMMATH_BUILD_DIR)
+	CC="$(CC)" CFLAGS="$(CFLAGS)" AR="$(AR)" $(MAKE) -C $(SRCDIR)/extern/libtommath -f makefile.shared GCC="$(CC)" OBJDIR=$(TOMMATH_BUILD_DIR) LIBNAME=$(TOMMATH_BUILD_DIR)/libtommath.la
 
 ifeq ($(PLATFORM),DARWIN)
-	install_name_tool -id "@rpath/lib/libtommath.dylib" $(TOMMATH)/.libs/libtommath.0.dylib
-	cp $(TOMMATH)/.libs/libtommath.0.dylib $(LIB)/libtommath.dylib
+	install_name_tool -id "@rpath/lib/libtommath.dylib" $(TOMMATH_BUILD_DIR)/.libs/libtommath.0.dylib
+	cp $(TOMMATH_BUILD_DIR)/.libs/libtommath.0.dylib $(LIB)/libtommath.dylib
 else
 	ln -sf $(TOMMATH_SO).$(TOMMATH_VER) $(LIB)
 	ln -sf $(TOMMATH_SO) $(LIB)
@@ -239,11 +253,12 @@ endif
 endif
 
 ifeq ($(TOMCRYPT_BUILD_FLG),Y)
-	CC="$(CC)" CFLAGS="$(CFLAGS) $(TOM2TOM_CFLAGS)" $(MAKE) -C $(ROOT)/extern/libtomcrypt -f makefile.shared GCC="$(CC)" LTC_LDFLAGS=$(LTC_LDFLAGS)
+	@mkdir -p $(TOMCRYPT_BUILD_DIR)
+	CC="$(CC)" CFLAGS="$(CFLAGS) $(TOM2TOM_CFLAGS)" $(MAKE) -C $(SRCDIR)/extern/libtomcrypt -f makefile.shared GCC="$(CC)" LTC_LDFLAGS=$(LTC_LDFLAGS) OBJDIR=$(TOMCRYPT_BUILD_DIR) LIBNAME=$(TOMCRYPT_BUILD_DIR)/libtomcrypt.la
 
 ifeq ($(PLATFORM),DARWIN)
-	install_name_tool -id "@rpath/lib/libtomcrypt.dylib" $(TOMCRYPT)/.libs/libtomcrypt.1.dylib
-	cp $(TOMCRYPT)/.libs/libtomcrypt.1.dylib $(LIB)/libtomcrypt.dylib
+	install_name_tool -id "@rpath/lib/libtomcrypt.dylib" $(TOMCRYPT_BUILD_DIR)/.libs/libtomcrypt.1.dylib
+	cp $(TOMCRYPT_BUILD_DIR)/.libs/libtomcrypt.1.dylib $(LIB)/libtomcrypt.dylib
 else
 	ln -sf $(TOMCRYPT_SO).$(TOMCRYPT_VER) $(LIB)
 	ln -sf $(TOMCRYPT_SO) $(LIB)
@@ -263,7 +278,7 @@ endif
 # create platform-specific export lists (version scripts) in gen
 #
 
-%.vers: $(ROOT)/builds/posix/%.vers
+%.vers: $(SRCDIR)/builds/posix/%.vers
 	sh vers.sh $(firstword $@)
 
 export_lists: $(ALLVERS)
@@ -274,7 +289,8 @@ export_lists: $(ALLVERS)
 
 .PHONY:	tommath
 TOMMATH_LIB=$(STATIC_LIB)/libtommath.a
-TOM_Objs=$(addprefix ../extern/libtommath/,$(call doObjects,$(call dirFiles,../extern/libtommath)))
+TOM_Src:=$(wildcard $(SRCDIR)/extern/libtommath/*.c)
+TOM_Objs=$(call doObjects,$(TOM_Src))
 
 tommath:	$(TOMMATH_LIB)
 
@@ -289,7 +305,7 @@ $(TOMMATH_LIB):	$(TOM_Objs)
 .PHONY:	tomcrypt
 TOMCRYPT_LIB=$(STATIC_LIB)/libtomcrypt.a
 
-TOM_Src:=$(shell find ../extern/libtomcrypt/src -name '*.c' -print)
+TOM_Src:=$(shell find $(SRCDIR)/extern/libtomcrypt/src -name '*.c' -print)
 TOM_Objs=$(call doObjects,$(TOM_Src))
 
 tomcrypt:	$(TOMCRYPT_LIB)
@@ -304,7 +320,7 @@ $(TOMCRYPT_LIB):	$(TOM_Objs)
 
 .PHONY:	re2
 RE2_LIB:=$(STATIC_LIB)/libre2.a
-RE2_DIR:=../extern/re2/
+RE2_DIR:=$(SRCDIR)/extern/re2/
 
 RE2_Util:=rune.cc strutil.cc
 RE2_Util:=$(addprefix $(RE2_DIR)util/, $(RE2_Util))
@@ -321,17 +337,20 @@ $(RE2_LIB):	$(RE2_Objs)
 # libcds
 #
 
-.PHONY:	libcds
+.PHONY:	libcds libcds_process
 libcds:
-	mkdir -p $(LIBCDS)/lib/$(TARGET)
-	cd $(LIBCDS)/lib/$(TARGET); \
+	$(MAKE) TARGET?=$(DefaultTarget) libcds_process
+
+libcds_process:
+	mkdir -p $(LIBCDS_BUILD_DIR)
+	cd $(LIBCDS_BUILD_DIR); \
 	cmake -DCMAKE_BUILD_TYPE=$(FB_CMAKE_BUILD_TYPE) -DCMAKE_CXX_COMPILER="$(CXX)" -DCMAKE_CXX_FLAGS=-fPIC $(LIBCDS)
-	AR="$(AR)" $(MAKE) -C $(LIBCDS)/lib/$(TARGET)
+	AR="$(AR)" $(MAKE) -C $(LIBCDS_BUILD_DIR)
 
 ifeq ($(TARGET),Debug)
-	ln -sf $(LIBCDS)/lib/$(TARGET)/bin/libcds-s_d.a $(STATIC_LIB)/libcds.a
+	ln -sf $(LIBCDS_BUILD_DIR)/bin/libcds-s_d.a $(STATIC_LIB)/libcds.a
 else
-	ln -sf $(LIBCDS)/lib/$(TARGET)/bin/libcds-s.a $(STATIC_LIB)/libcds.a
+	ln -sf $(LIBCDS_BUILD_DIR)/bin/libcds-s.a $(STATIC_LIB)/libcds.a
 endif
 
 #___________________________________________________________________________
@@ -341,7 +360,8 @@ endif
 .PHONY:	cross1 cross2 boot yvalve engine fbintl gpre utilities plugins rest examples cross_rest
 
 master_process:
-	ln -sf $(SRC_ROOT)/include/gen/autoconfig.auto $(SRC_ROOT)/include/gen/autoconfig.h
+	mkdir -p $(ROOT)/src/include/gen
+	ln -sf $(ROOT)/gen/autoconfig.auto $(ROOT)/src/include/gen/autoconfig.h
 	$(MAKE) updateBuildNum
 	$(MAKE) export_lists
 	$(MAKE) external
@@ -376,7 +396,8 @@ cross_process:
 	$(MAKE) CROSS_OUT=Y cross2
 
 cross1:
-	ln -sf $(SRC_ROOT)/include/gen/autoconfig.auto $(SRC_ROOT)/include/gen/autoconfig.h
+	mkdir -p $(ROOT)/src/include/gen
+	ln -sf $(ROOT)/gen/autoconfig.auto $(ROOT)/src/include/gen/autoconfig.h
 	$(MAKE) updateBuildNum
 	$(MAKE) export_lists
 	$(MAKE) external
@@ -399,7 +420,8 @@ ifeq ($(CLIENT_ONLY_FLG),N)
 endif
 
 cross2:
-	ln -sf $(SRC_ROOT)/include/cross/$(CROSS_CONFIG) $(SRC_ROOT)/include/gen/autoconfig.h
+	mkdir -p $(ROOT)/src/include/gen
+	ln -sf $(SRC_ROOT)/include/cross/$(CROSS_CONFIG) $(ROOT)/src/include/gen/autoconfig.h
 	$(MAKE) prerequisites
 	$(MAKE) tommath
 ifeq ($(WITH_TOMCRYPT),Y)
@@ -409,10 +431,14 @@ ifeq ($(CLIENT_ONLY_FLG),N)
 	$(MAKE) re2
 	$(MAKE) libcds
 endif
-	CC="$(CC)" CFLAGS="$(CFLAGS)" AR="$(AR)" $(MAKE) -C $(ROOT)/extern/decNumber
-	ln -sf $(ROOT)/extern/decNumber/libdecFloat$(CROSS).a $(STATIC_LIB)
-	CXX="$(CXX)" CXXFLAGS="$(CXXFLAGS)" $(MAKE) -C $(ROOT)/extern/int128/absl/numeric
-	ln -sf $(ROOT)/extern/int128/absl/numeric/libi128$(CROSS).a $(STATIC_LIB)
+	mkdir -p $(ROOT)/temp/extern/decNumber $(GEN_ROOT)/extern/decNumber
+	CC="$(CC)" CFLAGS="$(CFLAGS)" AR="$(AR)" $(MAKE) -C $(SRCDIR)/extern/decNumber \
+		SRCDIR=$(SRCDIR)/extern/decNumber \
+		OBJ_DIR=$(ROOT)/temp/extern/decNumber \
+		LIBRARY=$(GEN_ROOT)/extern/decNumber/libdecFloat$(CROSS).a
+	ln -sf $(GEN_ROOT)/extern/decNumber/libdecFloat$(CROSS).a $(STATIC_LIB)
+	CXX="$(CXX)" CXXFLAGS="$(CXXFLAGS)" $(MAKE) -C $(SRCDIR)/extern/int128/absl/numeric
+	ln -sf $(SRCDIR)/extern/int128/absl/numeric/libi128$(CROSS).a $(STATIC_LIB)
 	$(MAKE) cross_rest
 	$(MAKE) yvalve
 ifeq ($(CLIENT_ONLY_FLG),Y)
@@ -650,7 +676,7 @@ plugins: udr legacy_user_management legacy_auth_server srp_user_management trace
 
 udr:	$(UDR_PLUGIN) $(PLUGINS)/udr_engine.conf
 
-$(PLUGINS)/udr_engine.conf: $(ROOT)/src/plugins/udr_engine/udr_engine.conf
+$(PLUGINS)/udr_engine.conf: $(SRC_ROOT)/plugins/udr_engine/udr_engine.conf
 	cp $^ $@
 
 $(UDR_PLUGIN):	$(UDRENG_Objects) $(COMMON_LIB)
@@ -734,8 +760,8 @@ $(FIREBIRD_MSG) $(FIREBIRD)/include/firebird/impl/iberror_c.h:	$(BUILD_FILE)
 
 tzdata: $(TZDATA)/ids.dat
 
-$(TZDATA)/ids.dat: $(ROOT)/extern/icu/tzdata/$(TZDATA_ZIP)
-	unzip -o $(ROOT)/extern/icu/tzdata/$(TZDATA_ZIP) -d $(TZDATA)
+$(TZDATA)/ids.dat: $(SRCDIR)/extern/icu/tzdata/$(TZDATA_ZIP)
+	unzip -o $(SRCDIR)/extern/icu/tzdata/$(TZDATA_ZIP) -d $(TZDATA)
 	touch $(TZDATA)/ids.dat
 
 $(BUILD_FILE):	$(BUILD_Objects)
@@ -836,7 +862,7 @@ clean:
 	$(MAKE) TARGET?=$(DefaultTarget) clean_process
 
 clean_process: clean_objects clean_dependencies clean_extern_objects clean_build \
-		clean_yacc_gen clean_gpre_gen clean_dbs clean_examples clean_cds clean_tommath \
+		clean_yacc_gen clean_gpre_gen clean_dbs clean_examples clean_cds clean_re2 clean_tommath \
 		clean_tomcrypt clean_decfloat clean_int128 clean_vers clean_misc
 
 clean_vers:
@@ -861,9 +887,10 @@ clean_config clean_all: clean clean_makefiles
 	$(RM) $(ROOT)/config.status
 	$(RM) $(ROOT)/libtool
 	$(RM_R) $(ROOT)/autom4te.cache
-	-$(MAKE) -C $(ROOT)/extern/editline distclean
+	-if [ -d "$(ROOT)/temp/extern/editline" ]; then $(MAKE) -C $(ROOT)/temp/extern/editline distclean; fi
+	-$(RM_R) $(ROOT)/temp/extern/editline
 #	-$(MAKE) -C $(ROOT)/extern/icu/source distclean
-	-$(MAKE) -C $(ROOT)/extern/btyacc distclean
+	-$(MAKE) -C $(SRCDIR)/extern/btyacc distclean
 
 clean_dbs:
 	$(RM) *.fdb *.FDB
@@ -878,25 +905,35 @@ clean_examples:
 	$(RM) `find $(GEN_ROOT)/examples/ -type f ! -name 'Make*'`
 
 clean_editline:
-	-$(MAKE) -C $(ROOT)/extern/editline clean
+	-if [ -d "$(ROOT)/temp/extern/editline" ]; then $(MAKE) -C $(ROOT)/temp/extern/editline clean; fi
 
 #clean_icu:
 #	-$(MAKE) -C $(ROOT)/extern/icu/source clean
 
+.PHONY: clean_cds clean_cds_process
 clean_cds:
-	-$(RM_R) $(LIBCDS)/lib/$(TARGET)
+	$(MAKE) TARGET?=$(DefaultTarget) clean_cds_process
+
+clean_cds_process:
+	-$(RM_R) $(LIBCDS_BUILD_DIR)
 
 clean_tommath:
-	-$(MAKE) -C $(ROOT)/extern/libtommath clean
+	-$(RM_R) $(TOMMATH_BUILD_DIR)
+
+clean_re2:
+	-$(RM_R) $(RE2_BUILD_DIR)
+
 
 clean_tomcrypt:
-	-$(MAKE) -C $(ROOT)/extern/libtomcrypt clean
+	-$(MAKE) -C $(SRCDIR)/extern/libtomcrypt clean
+	-$(RM_R) $(TOMCRYPT_BUILD_DIR)
 
 clean_decfloat:
-	-$(MAKE) -C $(ROOT)/extern/decNumber clean
+	-$(MAKE) -C $(SRCDIR)/extern/decNumber clean SRCDIR=$(SRCDIR)/extern/decNumber OBJ_DIR=$(ROOT)/temp/extern/decNumber LIBRARY=$(GEN_ROOT)/extern/decNumber/libdecFloat.a
+	-$(RM_R) $(ROOT)/temp/extern/decNumber
 
 clean_int128:
-	-$(MAKE) -C $(ROOT)/extern/int128/absl/numeric clean
+	-$(MAKE) -C $(SRCDIR)/extern/int128/absl/numeric clean
 
 clean_objects:
 	$(RM) `find $(TMP_ROOT)/ -type f -name '*.o' -print`
@@ -905,8 +942,8 @@ clean_objects:
 	$(RM) `find $(TMP_ROOT)/ -type f -name '*.pas' -print`
 
 clean_extern_objects:
-	$(RM) `find $(ROOT)/extern/ -type f -name '*.lo' -print`
-	$(RM) `find $(ROOT)/extern/ -type f -name '*.o' -print`
+	$(RM) `find $(SRCDIR)/extern/ -type f -name '*.lo' -print`
+	$(RM) `find $(SRCDIR)/extern/ -type f -name '*.o' -print`
 
 # Clear out dependencies files created by the gcc compiler
 # since when .o and other files are deleted the dependant
@@ -929,13 +966,13 @@ clean_makefiles:
 	$(RM) `find $(GEN_ROOT)/install \( -type f -o -type l \) -print`
 	-$(RM) $(GEN_ROOT)/examples/Make*
 	$(RM) $(ROOT)/Makefile
-	$(RM) $(SRC_ROOT)/include/gen/autoconfig.h
+	$(RM) $(ROOT)/src/include/gen/autoconfig.h
 
 clean_gpre_gen:
 	-$(RM) -f `find $(TMP_ROOT)/ -type f -name '*.cpp' -print`
 
 clean_yacc_gen:
-	$(RM) $(ROOT)/src/dsql/parse.cpp $(ROOT)/src/dsql/dsql.tab.h types.y y.* $(OBJ)/.parse-gen-sentinel
+	$(RM) $(ROOT)/src/dsql/parse.cpp $(ROOT)/src/dsql/dsql.tab.h $(TMP_ROOT)/include/gen/parse.h types.y y.* $(OBJ)/.parse-gen-sentinel
 
 #___________________________________________________________________________
 # Extra platform specific targets

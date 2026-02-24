@@ -475,12 +475,6 @@ public:
 		return idp_id;
 	}
 
-	static FB_UINT64 makeLockId(MetaId relId, MetaId indexId)
-	{
-		const int REL_ID_KEY_OFFSET = 16;
-		return (FB_UINT64(relId) << REL_ID_KEY_OFFSET) + indexId;
-	}
-
 	void releaseLock(thread_db*) { }
 
 	RelationPermanent* getRelation()
@@ -488,6 +482,7 @@ public:
 		return idp_relation;
 	}
 
+	static FB_UINT64 makeLockId(MetaId relId, MetaId indexId);
 	const QualifiedName& getName();
 
 private:
@@ -554,6 +549,8 @@ public:
 		return true;
 	}
 
+	void setLtt(thread_db* tdbb, LocalTemporaryTable::Index* ltt);
+
 	static const enum lck_t LOCKTYPE = LCK_idx_rescan;
 
 private:
@@ -580,6 +577,9 @@ public:
 
 class jrd_rel final : public ObjectBase
 {
+	jrd_rel(const jrd_rel&) = delete;
+	jrd_rel(const jrd_rel&&) = delete;
+
 public:
 	jrd_rel(MemoryPool& p, Cached::Relation* r);
 
@@ -654,14 +654,16 @@ public:
 
 // rel_flags
 
-const ULONG REL_system					= 0x0001;
-const ULONG REL_get_dependencies		= 0x0002;	// New relation needs dependencies during scan
-const ULONG REL_sql_relation			= 0x0004;	// Relation defined as sql table
-const ULONG REL_check_partners			= 0x0008;	// Rescan primary dependencies and foreign references
-const ULONG REL_temp_tran				= 0x0010;	// relation is a GTT delete rows
-const ULONG REL_temp_conn				= 0x0020;	// relation is a GTT preserve rows
-const ULONG REL_virtual					= 0x0040;	// relation is virtual
-const ULONG REL_jrd_view				= 0x0080;	// relation is VIEW
+inline constexpr ULONG REL_system				= 0x0001;
+inline constexpr ULONG REL_get_dependencies		= 0x0002;	// New relation needs dependencies during scan
+inline constexpr ULONG REL_sql_relation			= 0x0004;	// Relation defined as sql table
+inline constexpr ULONG REL_check_partners		= 0x0008;	// Rescan primary dependencies and foreign references
+inline constexpr ULONG REL_temp_tran			= 0x0010;	// relation is a GTT delete rows
+inline constexpr ULONG REL_temp_conn			= 0x0020;	// relation is a GTT preserve rows
+inline constexpr ULONG REL_virtual				= 0x0040;	// relation is virtual
+inline constexpr ULONG REL_jrd_view				= 0x0080;	// relation is VIEW
+inline constexpr ULONG REL_temp_gtt				= 0x0100;	// relation is a GTT
+inline constexpr ULONG REL_temp_ltt				= 0x0200;	// relation is a LTT
 
 class GCLock
 {
@@ -894,6 +896,7 @@ public:
 
 	bool isSystem() const noexcept;
 	bool isTemporary() const noexcept;
+	bool isLTT() const noexcept;
 	bool isVirtual() const noexcept;
 	bool isView() const noexcept;
 	bool isReplicating(thread_db* tdbb);
@@ -1016,7 +1019,7 @@ inline bool jrd_rel::isTemporary() const noexcept
 
 inline bool jrd_rel::isLTT() const noexcept
 {
-	return rel_flags & REL_temp_ltt;
+	return rel_perm->isLTT();
 }
 
 inline bool jrd_rel::isVirtual() const noexcept
@@ -1063,6 +1066,11 @@ inline bool RelationPermanent::isVirtual() const noexcept
 inline bool RelationPermanent::isView() const noexcept
 {
 	return (rel_flags & REL_jrd_view);
+}
+
+inline bool RelationPermanent::isLTT() const noexcept
+{
+	return (rel_flags & REL_temp_ltt);
 }
 
 inline RelationPages* RelationPermanent::getPages(thread_db* tdbb, TraNumber tran, bool allocPages)

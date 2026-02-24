@@ -125,8 +125,7 @@ int ElementBase::blockingAst(void* ast_object)
 
 	try
 	{
-		fb_assert(cacheElement->lock);
-		if (cacheElement->locked)
+		if (cacheElement->lock && cacheElement->locked)
 		{
 			Database* const dbb = cacheElement->lock->lck_dbb;
 
@@ -148,26 +147,32 @@ int ElementBase::blockingAst(void* ast_object)
 }
 
 ElementBase::ElementBase(thread_db* tdbb, MemoryPool& p, lck_t locktype, SINT64 key)
-	: lock(FB_NEW_RPT(p, 0) Lock(tdbb, sizeof(SLONG), locktype, this, blockingAst))
 {
-	lock->setKey(key);
+	if (key != NO_METALOCK)
+	{
+		lock = FB_NEW_RPT(p, 0) Lock(tdbb, sizeof(SLONG), locktype, this, blockingAst);
+		lock->setKey(key);
+	}
 }
 
 void ElementBase::pingLock(thread_db* tdbb, ObjectBase::Flag flags, MetaId id, const char* family)
 {
-	if (!LCK_lock(tdbb, lock, (flags & CacheFlag::ERASED) ? LCK_EX : LCK_PW, LCK_WAIT))
+	if (lock)
 	{
-		Firebird::fatal_exception::raiseFmt("Unable to obtain WRITE rescan lock for %s %d",
-			family, id);
-	}
+		if (!LCK_lock(tdbb, lock, (flags & CacheFlag::ERASED) ? LCK_EX : LCK_PW, LCK_WAIT))
+		{
+			Firebird::fatal_exception::raiseFmt("Unable to obtain WRITE rescan lock for %s %d",
+				family, id);
+		}
 
-	LCK_convert(tdbb, lock, LCK_PR, LCK_WAIT);	// never fails
+		LCK_convert(tdbb, lock, LCK_PR, LCK_WAIT);	// never fails
+	}
 }
 
 void ElementBase::setLock(thread_db* tdbb, MetaId id, const char* family)
 {
 	bool f = false;
-	if (locked.compare_exchange_strong(f,true))
+	if (lock && locked.compare_exchange_strong(f,true))
 	{
 		if (!LCK_lock(tdbb, lock, LCK_PR, LCK_WAIT))
 		{
@@ -180,7 +185,7 @@ void ElementBase::setLock(thread_db* tdbb, MetaId id, const char* family)
 void ElementBase::releaseLock(thread_db* tdbb)
 {
 	bool t = true;
-	if (locked.compare_exchange_strong(t,false))
+	if (lock && locked.compare_exchange_strong(t,false))
 		LCK_release(tdbb, lock);
 }
 

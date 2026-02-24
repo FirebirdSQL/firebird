@@ -1250,12 +1250,38 @@ void SharedMemoryBase::internalUnmap()
 	}
 }
 
+
+ULONG SharedMemoryBase::getSystemPageSize(CheckStatusWrapper* statusVector)
+{
+	// Get system page size as this is the unit of mapping.
+
+#ifdef SOLARIS
+	const long ps = sysconf(_SC_PAGESIZE);
+	if (ps == -1)
+	{
+		error(statusVector, "sysconf", errno);
+		return 0;
+	}
+#else
+	const int ps = getpagesize();
+	if (ps == -1)
+	{
+		error(statusVector, "getpagesize", errno);
+		return 0;
+	}
+#endif
+	return ps;
+}
+
+
 SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject* callback, bool skipLock)
 	:
 #ifdef HAVE_SHARED_MUTEX_SECTION
 	sh_mem_mutex(0),
 #endif
-	sh_mem_length_mapped(0), sh_mem_header(NULL),
+	sh_mem_length_mapped(0),
+	sh_mem_increment(0),
+	sh_mem_header(NULL),
 	sh_mem_callback(callback)
 {
 /**************************************
@@ -1285,6 +1311,14 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 
 	TEXT init_filename[MAXPATHLEN];
 	iscPrefixLock(init_filename, INIT_FILE, true);
+
+	if (length)
+	{
+		sh_mem_increment = length = FB_ALIGN(length, getSystemPageSize(&statusVector));
+
+		if (statusVector.hasData())
+			status_exception::raise(&statusVector);
+	}
 
 	const bool trunc_flag = (length != 0);
 
@@ -1569,8 +1603,17 @@ void SharedMemoryBase::internalUnmap()
 		unlinkFile();
 }
 
+
+ULONG SharedMemoryBase::getSystemPageSize(CheckStatusWrapper* /*statusVector*/)
+{
+	SYSTEM_INFO sys_info;
+	GetSystemInfo(&sys_info);
+	return sys_info.dwAllocationGranularity;
+}
+
+
 SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject* cb, bool /*skipLock*/)
-  :	sh_mem_mutex(0), sh_mem_length_mapped(0),
+  :	sh_mem_mutex(0), sh_mem_length_mapped(0), sh_mem_increment(0),
 	sh_mem_handle(INVALID_HANDLE_VALUE), sh_mem_object(0), sh_mem_interest(0), sh_mem_hdr_object(0),
 	sh_mem_hdr_address(0), sh_mem_header(NULL), sh_mem_callback(cb), sh_mem_unlink(false)
 {
@@ -1597,6 +1640,17 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 
 	bool init_flag = false;
 	DWORD err = 0;
+
+	if (length)
+	{
+		LocalStatus ls;
+		CheckStatusWrapper statusVector(&ls);
+
+		sh_mem_increment = length = FB_ALIGN(length, getSystemPageSize(&statusVector));
+
+		if (statusVector.hasData())
+			status_exception::raise(&statusVector);
+	}
 
 	// retry to attach to mmapped file if the process initializing dies during initialization.
 
@@ -1925,24 +1979,9 @@ UCHAR* SharedMemoryBase::mapObject(CheckStatusWrapper* statusVector, ULONG objec
  *
  **************************************/
 
-	// Get system page size as this is the unit of mapping.
-
-#ifdef SOLARIS
-	const long ps = sysconf(_SC_PAGESIZE);
-	if (ps == -1)
-	{
-		error(statusVector, "sysconf", errno);
+	const ULONG page_size = getSystemPageSize(statusVector);
+	if (!page_size)
 		return NULL;
-	}
-#else
-	const int ps = getpagesize();
-	if (ps == -1)
-	{
-		error(statusVector, "getpagesize", errno);
-		return NULL;
-	}
-#endif
-	const ULONG page_size = (ULONG) ps;
 
 	// Compute the start and end page-aligned offsets which contain the object being mapped.
 
@@ -1980,24 +2019,9 @@ void SharedMemoryBase::unmapObject(CheckStatusWrapper* statusVector, UCHAR** obj
  *	Zero the object pointer after a successful unmap.
  *
  **************************************/
-	// Get system page size as this is the unit of mapping.
-
-#ifdef SOLARIS
-	const long ps = sysconf(_SC_PAGESIZE);
-	if (ps == -1)
-	{
-		error(statusVector, "sysconf", errno);
+	const size_t page_size = getSystemPageSize(statusVector);
+	if (!page_size)
 		return;
-	}
-#else
-	const int ps = getpagesize();
-	if (ps == -1)
-	{
-		error(statusVector, "getpagesize", errno);
-		return;
-	}
-#endif
-	const size_t page_size = (ULONG) ps;
 
 	// Compute the start and end page-aligned addresses which contain the mapped object.
 
@@ -2035,9 +2059,7 @@ UCHAR* SharedMemoryBase::mapObject(CheckStatusWrapper* statusVector,
  *
  **************************************/
 
-	SYSTEM_INFO sys_info;
-	GetSystemInfo(&sys_info);
-	const ULONG page_size = sys_info.dwAllocationGranularity;
+	const ULONG page_size = getSystemPageSize(statusVector);
 
 	// Compute the start and end page-aligned offsets which
 	// contain the object being mapped.
@@ -2046,6 +2068,8 @@ UCHAR* SharedMemoryBase::mapObject(CheckStatusWrapper* statusVector,
 	const ULONG end = FB_ALIGN(object_offset + object_length, page_size);
 	const ULONG length = end - start;
 	const HANDLE handle = sh_mem_object;
+
+	fb_assert(end <= sh_mem_length_mapped);
 
 	UCHAR* address = (UCHAR*) MapViewOfFile(handle, FILE_MAP_WRITE, 0, start, length);
 
@@ -2075,9 +2099,7 @@ void SharedMemoryBase::unmapObject(CheckStatusWrapper* statusVector,
  *	Zero the object pointer after a successful unmap.
  *
  **************************************/
-	SYSTEM_INFO sys_info;
-	GetSystemInfo(&sys_info);
-	const size_t page_size = sys_info.dwAllocationGranularity;
+	const size_t page_size = getSystemPageSize(statusVector);
 
 	// Compute the start and end page-aligned offsets which
 	// contain the object being mapped.
@@ -2497,6 +2519,8 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector, ULONG new_len
 
 	if (flag)
 	{
+		new_length = FB_ALIGN(new_length, getSystemPageSize(statusVector));
+
 		FB_UNUSED(os_utils::ftruncate(mainLock->getFd(), new_length));
 
 		if (new_length > sh_mem_length_mapped)
@@ -2553,6 +2577,8 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector,
 
 	if (flag)
 	{
+		new_length = FB_ALIGN(new_length, getSystemPageSize(statusVector));
+
 		LARGE_INTEGER offset;
 		offset.QuadPart = new_length;
 

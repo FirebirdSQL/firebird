@@ -977,8 +977,7 @@ void INI_init(thread_db* tdbb)
             CacheFlag::AUTOCREATE | CacheFlag::NOSCAN);
 		auto* relation = getPermanent(relVers);
 
-		relation->rel_flags |= REL_system;
-		relation->rel_flags |= MET_get_rel_flags_from_TYPE(relfld[RFLD_R_TYPE]);
+		relation->rel_flags |= (MET_get_rel_flags_from_TYPE(relfld[RFLD_R_TYPE]) | REL_system);
 		relation->rel_name = QualifiedName(names[relfld[RFLD_R_NAME]], SYSTEM_SCHEMA);
 
 		struct Field
@@ -1877,7 +1876,7 @@ static void store_intlnames(thread_db* tdbb, NonRelationSecurity& security)
 	for (const IntlManager::CharSetDefinition* charSet = IntlManager::defaultCharSets;
 		 charSet->name; ++charSet)
 	{
-		MetadataCache::lookup_charset(tdbb, charSet->id, CacheFlag::UPGRADE | CacheFlag::NOCOMMIT);
+		MetadataCache::getVersioned<Cached::CharSet>(tdbb, charSet->id, CacheFlag::UPGRADE | CacheFlag::NOCOMMIT);
 	}
 }
 

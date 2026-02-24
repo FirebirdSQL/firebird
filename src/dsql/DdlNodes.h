@@ -62,11 +62,7 @@ enum SqlSecurity
 };
 
 class LocalDeclarationsNode;
-<<<<<<< HEAD
 class CompoundStmtNode;
-=======
-class LocalTemporaryTable;
->>>>>>> upstream/master
 class RelationSourceNode;
 class ValueListNode;
 class SecDbContext;
@@ -1722,6 +1718,9 @@ protected:
 
 public:
 	static void makeVersion(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& relName);
+	static void raiseTooManyVersionsError(const int obj_type, const QualifiedName& obj_name);
+	static Format* makeFormat(thread_db* tdbb, jrd_tra* transaction, Cached::Relation* relation,
+		USHORT* version, TemporaryField* stack);
 
 private:
 	static blb* setupTriggers(thread_db* tdbb, jrd_rel* relation, bool null_view,
@@ -1733,9 +1732,6 @@ private:
 	static bool validateTextType(thread_db* tdbb, const TemporaryField* tfb);
 	static void setupArray(thread_db* tdbb, blb* blob, const TEXT* field_name, USHORT n, TemporaryField* tfb);
 	static void getArrayDesc(thread_db* tdbb, const TEXT* field_name, Ods::InternalArrayDesc* desc);
-	static Format* makeFormat(thread_db* tdbb, jrd_tra* transaction, Cached::Relation* relation,
-		USHORT* version, TemporaryField* stack);
-	static void raiseTooManyVersionsError(const int obj_type, const QualifiedName& obj_name);
 
 public:
 	NestConst<RelationSourceNode> dsqlNode;
@@ -2115,7 +2111,7 @@ class SetStatisticsNode final : public DdlNode
 public:
 	SetStatisticsNode(MemoryPool& p, const QualifiedName& aName)
 		: DdlNode(p),
-		  name(p, aName)
+		  indexName(p, aName)
 	{
 	}
 
@@ -2126,8 +2122,8 @@ public:
 
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
 	{
-		dsqlScratch->qualifyExistingName(name, obj_index);
-		dsqlScratch->ddlSchema = name.schema;
+		dsqlScratch->qualifyExistingName(indexName, obj_index);
+		dsqlScratch->ddlSchema = indexName.schema;
 
 		return DdlNode::dsqlPass(dsqlScratch);
 	}
@@ -2140,11 +2136,11 @@ protected:
 	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
 		// ASF: using ALTER INDEX's code.
-		statusVector << Firebird::Arg::Gds(isc_dsql_alter_index_failed) << name.toQuotedString();
+		statusVector << Firebird::Arg::Gds(isc_dsql_alter_index_failed) << indexName.toQuotedString();
 	}
 
 public:
-	QualifiedName name;
+	QualifiedName indexName;
 };
 
 

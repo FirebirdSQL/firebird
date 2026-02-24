@@ -25,18 +25,107 @@
 
 #include "firebird.h"
 
-#include "../jrd/jrd.h"
-#include "../jrd/Relation.h"
+#include "../jrd/Resources.h"
 #include "../common/classes/array.h"
 
 
 #if (!defined(FB_JRD_PROTECT_RELATIONS))
-
 #define FB_JRD_PROTECT_RELATIONS
 
-using namespace Firebird;
-
 namespace Jrd {
+
+class thread_db;
+class jrd_tra;
+
+// Lock relation with protected_read level or raise existing relation lock
+// to this level to ensure nobody can write to this relation.
+// Used when new index is built.
+// releaseLock set to true if there was no existing lock before
+class ProtectRelations
+{
+public:
+	ProtectRelations(thread_db* tdbb, jrd_tra* transaction) :
+		m_tdbb(tdbb),
+		m_transaction(transaction),
+		m_locks()
+	{
+	}
+
+	ProtectRelations(thread_db* tdbb, jrd_tra* transaction, Cached::Relation* relation) :
+		m_tdbb(tdbb),
+		m_transaction(transaction),
+		m_locks()
+	{
+		addRelation(relation);
+		lock();
+	}
+
+	~ProtectRelations()
+	{
+		unlock();
+	}
+
+	void addRelation(Cached::Relation* relation)
+	{
+		if (!(relation->rel_flags & REL_temp_ltt))
+		{
+			FB_SIZE_T pos;
+			if (!m_locks.find(relation->rel_id, pos))
+				m_locks.insert(pos, relLock(relation));
+		}
+	}
+
+	bool exists(USHORT rel_id) const
+	{
+		FB_SIZE_T pos;
+		return m_locks.find(rel_id, pos);
+	}
+
+	void lock()
+	{
+		relLock* item = m_locks.begin();
+		const relLock* const end = m_locks.end();
+		for (; item < end; item++)
+			item->takeLock(m_tdbb, m_transaction);
+	}
+
+	void unlock()
+	{
+		relLock* item = m_locks.begin();
+		const relLock* const end = m_locks.end();
+		for (; item < end; item++)
+			item->releaseLock(m_tdbb, m_transaction);
+	}
+
+private:
+	struct relLock
+	{
+		relLock(Cached::Relation* relation = NULL) :
+			m_relation(relation),
+			m_lock(NULL),
+			m_release(false)
+		{
+		}
+
+		void takeLock(thread_db* tdbb, jrd_tra* transaction);
+		void releaseLock(thread_db* tdbb, jrd_tra* transaction);
+
+		static const USHORT generate(const relLock& item)
+		{
+			return item.m_relation->rel_id;
+		}
+
+		Cached::Relation* m_relation;
+		Lock* m_lock;
+		bool m_release;
+	};
+
+	thread_db* m_tdbb;
+	jrd_tra* m_transaction;
+	Firebird::SortedArray<relLock, Firebird::InlineStorage<relLock, 2>, USHORT, relLock> m_locks;
+};
+
+/*
 // Lock relation with protected_read level or raise existing relation lock
 // to this level to ensure nobody can write to this relation.
 // Used when new index is built.
@@ -125,6 +214,7 @@ private:
 	jrd_tra* m_transaction;
 	SortedArray<relLock, InlineStorage<relLock, 2>, USHORT, relLock> m_locks;
 };
+*/
 
 } // namespace Jrd
 

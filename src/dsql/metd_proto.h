@@ -47,6 +47,7 @@ namespace Jrd {
 
 void METD_drop_charset(Jrd::jrd_tra*, const Jrd::QualifiedName&);
 void METD_drop_collation(Jrd::jrd_tra*, const Jrd::QualifiedName&);
+void METD_drop_relation(Jrd::jrd_tra*, const Jrd::QualifiedName&);
 
 Jrd::dsql_intlsym* METD_get_charset(Jrd::jrd_tra*, const Jrd::QualifiedName& name);
 USHORT METD_get_charset_bpc(Jrd::jrd_tra*, CSetId);

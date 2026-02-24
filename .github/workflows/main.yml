@@ -39,7 +39,7 @@ jobs:
 
   build-linux-docker:
     name: build-linux-docker-${{ matrix.arch }}
-    runs-on: ubuntu-24.04
+    runs-on: ${{ (startsWith(matrix.arch, 'arm') && 'ubuntu-24.04-arm') || 'ubuntu-24.04' }}
     env:
       FB_DOCKER_PATH: ${{ (startsWith(matrix.arch, 'arm') && 'arm32-arm64') || 'x86-x64' }}
 

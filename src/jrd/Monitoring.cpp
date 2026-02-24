@@ -1046,7 +1046,7 @@ void Monitoring::putDatabase(thread_db* tdbb, SnapshotData::DumpRecord& record)
 }
 
 
-void Monitoring::putAttachment(thread_db* tdbb, SnapshotData::DumpRecord& record, const Jrd::Attachment* attachment)
+void Monitoring::putAttachment(thread_db* tdbb, SnapshotData::DumpRecord& record, Jrd::Attachment* attachment)
 {
 	fb_assert(attachment);
 	if (!attachment->att_user)
@@ -1552,7 +1552,8 @@ void Monitoring::putStatistics(thread_db* tdbb, SnapshotData::DumpRecord& record
 
 		if (stat_group != stat_database)
 		{
-			if (const auto relation = MET_lookup_relation_id(tdbb, counts.getGroupId(), false))
+			if (const auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, counts.getGroupId(),
+				CacheFlag::AUTOCREATE))
 			{
 				if ((relation->rel_flags & REL_temp_ltt))
 				{

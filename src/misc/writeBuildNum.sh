@@ -9,7 +9,7 @@ BuildType=T
 MajorVer=6
 MinorVer=0
 RevNo=0
-BuildNum=1419
+BuildNum=1465
 
 NowAt=`pwd`
 cd `dirname $0`
@@ -45,8 +45,9 @@ then
  headerFile=$2
  tempfile=$3;
 else
- tempfile=gen/test.header.txt
- headerFile=src/jrd/build_no.h;
+ TmpDir="${TMPDIR:-/tmp}"
+ tempfile=$TmpDir/test.header.txt
+ headerFile=$Root/src/jrd/build_no.h;
 fi
 
 #______________________________________________________________________________

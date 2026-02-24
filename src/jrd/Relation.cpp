@@ -978,6 +978,15 @@ const QualifiedName& IndexPermanent::getName()
 	return v ? v->getName() : empty;
 }
 
+FB_UINT64 IndexPermanent::makeLockId(MetaId relId, MetaId indexId)
+{
+	if (MetadataCache::isLtt(relId))
+		return ElementBase::NO_METALOCK;
+
+	const int REL_ID_KEY_OFFSET = 16;
+	return (FB_UINT64(relId) << REL_ID_KEY_OFFSET) + indexId;
+}
+
 
 /// jrd_rel
 

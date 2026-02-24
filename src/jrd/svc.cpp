@@ -1946,11 +1946,13 @@ THREAD_ENTRY_DECLARE Service::run(THREAD_ENTRY_PARAM arg)
 		RefPtr<SvcMutex> ref(svc->svc_existence);
 		exit_code = svc->svc_service_run->serv_thd(svc);
 
+		Thread svcThread(std::move(svc->svc_thread));
+
 		svc->started();
 		svc->unblockQueryGet();
 		svc->finish(SVC_finished);
 
-		threadCollect->ending(std::move(svc->svc_thread));
+		threadCollect->ending(std::move(svcThread));
 	}
 	catch (const Exception& ex)
 	{

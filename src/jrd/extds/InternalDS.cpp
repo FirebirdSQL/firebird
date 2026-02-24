@@ -269,7 +269,7 @@ bool InternalConnection::isSameDatabase(const PathName& dbName, ClumpletReader& 
 {
 	if (isCurrent())
 	{
-		const Attachment* att = m_attachment->getHandle();
+		Attachment* att = m_attachment->getHandle();
 		const MetaString& attUser = att->getUserName();
 		const MetaString& attRole = att->getSqlRole();
 

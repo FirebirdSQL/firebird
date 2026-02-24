@@ -978,23 +978,6 @@ void DsqlDdlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 
 			node->executeDdl(tdbb, internalScratch, req_transaction);
 
-			// Did request created/modified DSQL relation?
-			// If yes copy it into transaction block for future use.
-
-			if (internalScratch->relation && req_transaction && req_transaction->tra_number)
-			{
-				dsql_rel* existingRel = nullptr;
-				auto* rel = internalScratch->relation;
-				req_transaction->tra_dsql_rels.get(rel->rel_name, existingRel);
-				if (rel != existingRel)
-				{
-					auto traPool = *(req_transaction->tra_pool);
-					AutoPtr<dsql_rel> traRel = FB_NEW_POOL(traPool) dsql_rel(traPool, rel);
-					req_transaction->tra_dsql_rels.put(traRel->rel_name, traRel);
-					traRel.release();
-				}
-			}
-
 			const bool isInternalRequest =
 				(internalScratch->flags & DsqlCompilerScratch::FLAG_INTERNAL_REQUEST);
 

@@ -672,7 +672,7 @@ dsql_rel* METD_get_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 		return relation;
 	}
 
-	// now see if it is in the statement cache
+	// check is regular cache still valid
 
 	if (dsqlScratch->rels.get(name, relation))
 	{

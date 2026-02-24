@@ -88,6 +88,7 @@
 #include "../intl/charsets.h"
 #include "../jrd/align.h"
 #include "../dsql/DsqlStatementCache.h"
+#include "../dsql/DdlNodes.h"
 #include "../common/gdsassert.h"
 #include "../jrd/blb_proto.h"
 #include "../jrd/btr_proto.h"
@@ -1184,6 +1185,7 @@ static inline constexpr deferred_task task_table[] =
 	{ dfw_delete_global, delete_global },
 	{ dfw_create_relation, create_relation },
 	{ dfw_delete_relation, delete_relation },
+	{ dfw_update_ltt_format, make_ltt_version },
 	{ dfw_compute_security, compute_security },
 	{ dfw_create_index, create_index },
 	{ dfw_grant, grant_privileges },
@@ -3257,7 +3259,7 @@ static bool create_collation(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 
 	case 7:
 		{
-			auto* cs = MetadataCache::getCharSet(tdbb, id, 0);
+			auto* cs = MetadataCache::getPerm<Cached::CharSet>(tdbb, id, 0);
 			// fb_assert(cs);	--------------	breaks INI_ini()
 			if (cs)
 				cs->commit(tdbb);
@@ -3266,7 +3268,7 @@ static bool create_collation(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 
 	case 0:
 		{
-			auto* cs = MetadataCache::getCharSet(tdbb, id, CacheFlag::NOSCAN);
+			auto* cs = MetadataCache::getPerm<Cached::CharSet>(tdbb, id, CacheFlag::NOSCAN);
 			if (cs)
 				cs->rollback(tdbb);
 		}
@@ -3976,15 +3978,20 @@ static bool compute_security(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 
 	case 3:
 		{
+			fb_assert(work->dfw_schema.isEmpty());
+
 			// Get security class.  This may return NULL if it doesn't exist
 
 			SCL_clear_classes(tdbb, work->dfw_name);
 
-			AutoRequest handle;
-			FOR(REQUEST_HANDLE handle) X IN RDB$DATABASE
+			static const CachedRequestId requestHandleId;
+			AutoCacheRequest requestHandle(tdbb, requestHandleId);
+
+			FOR(REQUEST_HANDLE requestHandle)
+				X IN RDB$DATABASE
 				WITH X.RDB$SECURITY_CLASS EQ work->dfw_name.c_str()
 			{
-				attachment->att_security_class = SCL_get_class(tdbb, work->dfw_name.c_str());
+				attachment->att_security_class = SCL_get_class(tdbb, work->dfw_name);
 			}
 			END_FOR
 		}
@@ -4413,7 +4420,7 @@ static bool check_not_null(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 			SortedArray<int> fields;
 			AutoRequest handle;
 
-			if (relation->rel_flags & REL_temp_ltt)	// Not used currently
+			if (relation->getPermanent()->rel_flags & REL_temp_ltt)	// Not used currently
 			{
 				if (const auto lttPtr = attachment->att_local_temporary_tables.get(work->getQualifiedName()))
 				{

@@ -352,7 +352,8 @@ bool DYN_UTIL_check_unique_name_nothrow(thread_db* tdbb, jrd_tra* transaction,
 }
 
 // Check if an object already exists. If yes, throw error.
-void DYN_UTIL_check_unique_name(thread_db* tdbb, const QualifiedName& object_name, int object_type)
+void DYN_UTIL_check_unique_name(thread_db* tdbb, const QualifiedName& object_name,
+	int object_type)
 {
 	USHORT errorCode;
 

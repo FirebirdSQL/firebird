@@ -63,8 +63,7 @@ const char* const Function::EXCEPTION_MESSAGE = "The user defined function: \t%s
 
 Function* Function::lookup(thread_db* tdbb, MetaId id, ObjectBase::Flag flags)
 {
-	Function* function = MetadataCache::get(tdbb)->getFunction(tdbb, id, flags);
-	return function;
+	return MetadataCache::getVersioned<Cached::Function>(tdbb, id, flags);
 }
 
 
@@ -356,8 +355,8 @@ ScanResult Function::scan(thread_db* tdbb, ObjectBase::Flag flags)
 						{
 							StaticStatusVector temp_status;
 							ex.stuffException(temp_status);
-							(Arg::Gds(isc_bad_fun_BLR) << Arg::Str(name)
-								<< Arg::StatusVector(temp_status.begin())).raise();
+							(Arg::StatusVector(temp_status.begin()) <<
+								Arg::Gds(isc_bad_fun_BLR) << Arg::Str(name)).raise();
 						}
 					}
 				}
@@ -437,8 +436,8 @@ ScanResult Function::reload(thread_db* tdbb, ObjectBase::Flag /*unused*/)
 				ex.stuffException(temp_status);
 
 				const string name = this->getName().toQuotedString();
-				(Arg::Gds(isc_bad_fun_BLR) << Arg::Str(name)
-					<< Arg::StatusVector(temp_status.begin())).raise();
+				(Arg::StatusVector(temp_status.begin()) <<
+					Arg::Gds(isc_bad_fun_BLR) << Arg::Str(name)).raise();
 			}
 		}
 		catch (const Exception&)

@@ -1459,7 +1459,7 @@ blb* blb::open2(thread_db* tdbb,
 #ifdef CHECK_BLOB_FIELD_ACCESS_FOR_SELECT
 		if (!relation->isSystem() && blob->blb_fld_id < relation->rel_fields->count())
 		{
-			jrd_fld* fld = (*relation->rel_fields)[blob->blb_fld_id];
+			jrd_fld* fld = (*blob->blb_relation->rel_fields)[blob->blb_fld_id];
 			transaction->checkBlob(tdbb, &blobId, fld, true);
 		}
 #endif

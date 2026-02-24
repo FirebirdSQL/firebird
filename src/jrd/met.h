@@ -287,7 +287,6 @@ public:
 
 	void cleanup(Jrd::thread_db*);
 
-	// former met_proto.h
 #ifdef NEVERDEF
 	static void verify_cache(thread_db* tdbb);
 #else
@@ -330,8 +329,6 @@ public:
 	static void dsql_cache_release(thread_db* tdbb, sym_type type, const QualifiedName& name);
 	static bool dsql_cache_use(thread_db* tdbb, sym_type type, const QualifiedName& name);
 	// end of former met_proto.h
-
-	static CharSetVers* lookup_charset(thread_db* tdbb, CSetId id, ObjectBase::Flag flags);
 
 	static void release_temp_tables(thread_db* tdbb, jrd_tra* transaction);
 	static void retain_temp_tables(thread_db* tdbb, jrd_tra* transaction, TraNumber new_number);
@@ -450,8 +447,16 @@ public:
 		return rc;
 	}
 
+	static bool isLtt(MetaId id)
+	{
+		return (id >= MIN_LTT_ID && id <= MAX_LTT_ID);
+	}
+
 
 private:
+	static jrd_rel* getLtt(thread_db* tdbb, MetaId id);
+	static jrd_rel* getLtt(thread_db* tdbb, const QualifiedName& name);
+
 	// Hack with "typename Dummy" is needed to avoid incomplete support of c++ standard in gcc14.
 	// Hack changes explicit specialization to partial.
 	// When in-class explicit specializations are implemented - to be cleaned up.
@@ -627,6 +632,54 @@ private:
 	std::atomic<MdcVersion>				mdc_front = 0, mdc_back = 0;
 	CleanupQueue						mdc_cleanup_queue;
 };
+
+template <>
+inline jrd_rel* MetadataCache::getVersioned<Cached::Relation, jrd_rel>(thread_db* tdbb,
+	MetaId id, ObjectBase::Flag flags)
+{
+	if (isLtt(id))
+		return getLtt(tdbb, id);
+
+	auto& vector = getCache(tdbb)->mdc_relations;
+	return vector.getVersioned(tdbb, id, flags);
+}
+
+template <>
+inline jrd_rel* MetadataCache::getVersioned<Cached::Relation, jrd_rel>(thread_db* tdbb,
+	const QualifiedName& name, ObjectBase::Flag flags)
+{
+	auto* rc = getLtt(tdbb, name);
+	if (!rc)
+	{
+		auto& vector = getCache(tdbb)->mdc_relations;
+		vector.lookup(tdbb, name, flags, nullptr, &rc);
+	}
+	return rc;
+}
+
+template <>
+inline Cached::Relation* MetadataCache::getPerm<Cached::Relation>(thread_db* tdbb,
+	MetaId id, ObjectBase::Flag flags)
+{
+	if (isLtt(id))
+		return getPermanent(getLtt(tdbb, id));
+
+	auto& vector = getCache(tdbb)->mdc_relations;
+	return vector.getData(tdbb, id, flags);;
+}
+
+template <>
+inline Cached::Relation* MetadataCache::getPerm<Cached::Relation>(thread_db* tdbb,
+	const QualifiedName& name, ObjectBase::Flag flags)
+{
+	auto* rc = getPermanent(getLtt(tdbb, name));
+	if (!rc)
+	{
+		auto& vector = getCache(tdbb)->mdc_relations;
+		vector.lookup(tdbb, name, flags, &rc, nullptr);
+	}
+	return rc;
+}
 
 } // namespace Jrd
 

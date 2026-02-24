@@ -421,7 +421,7 @@ public:
 private:
 	static SINT64 getGlobalId(int) noexcept;
 
-	static void putAttachment(thread_db*, SnapshotData::DumpRecord&, const Attachment*);
+	static void putAttachment(thread_db*, SnapshotData::DumpRecord&, Attachment*);
 	static void putTransaction(thread_db*, SnapshotData::DumpRecord&, const jrd_tra*);
 	static void putStatement(SnapshotData::DumpRecord&, const Statement*, const Firebird::string&);
 	static void putRequest(thread_db*, SnapshotData::DumpRecord&, const Request*, const Firebird::string&);

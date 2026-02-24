@@ -1763,7 +1763,8 @@ static idx_e check_foreign_key(thread_db* tdbb,
 
 	idx_e result = idx_e_ok;
 
-	if (!MET_lookup_partner(tdbb, getPermanent(relation), idx, {}))
+	fb_assert(relation);
+	if (!MET_lookup_partner(tdbb, relation->getPermanent(), idx, {}))
 		return result;
 
 	jrd_rel* partner_relation = nullptr;
@@ -1772,6 +1773,7 @@ static idx_e check_foreign_key(thread_db* tdbb,
 	if (idx->idx_flags & idx_foreign)
 	{
 		partner_relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, idx->idx_primary_relation, CacheFlag::AUTOCREATE);
+		fb_assert(partner_relation);
 		index_id = idx->idx_primary_index;
 		result = check_partner_index(tdbb, relation, record, transaction, idx,
 									 partner_relation, index_id);
@@ -1781,13 +1783,15 @@ static idx_e check_foreign_key(thread_db* tdbb,
 		const auto& frgn = idx->idx_foreign_dep;
 
 		partner_relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, frgn.dep_relation, CacheFlag::AUTOCREATE);
+		fb_assert(partner_relation);
+		auto* partnerRelation = partner_relation->getPermanent();
 		index_id = frgn.dep_index;
 
-		if ((getPermanent(relation)->rel_flags & REL_temp_conn) &&
-			(getPermanent(partner_relation)->rel_flags & REL_temp_tran))
+		if ((relation->getPermanent()->rel_flags & REL_temp_conn) &&
+			(partnerRelation->rel_flags & REL_temp_tran))
 		{
-			RelationPermanent::RelPagesSnapshot pagesSnapshot(tdbb, getPermanent(partner_relation));
-			getPermanent(partner_relation)->fillPagesSnapshot(pagesSnapshot, true);
+			RelationPermanent::RelPagesSnapshot pagesSnapshot(tdbb, partnerRelation);
+			partnerRelation->fillPagesSnapshot(pagesSnapshot, true);
 
 			for (FB_SIZE_T i = 0; i < pagesSnapshot.getCount(); i++)
 			{

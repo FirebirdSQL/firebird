@@ -29,6 +29,7 @@
 #
 #
 ROOT=..
+SRCDIR=@abs_top_srcdir@
 #ObjModuleType=std
 
 ##  Set your options:
@@ -63,9 +64,15 @@ libeditline : $(STATIC_LIB)/libedit.a
 
 $(STATIC_LIB)/libedit.a:
 	AR=ar
-	cd $(ROOT)/extern/editline; chmod +x configure; ./configure --enable-static --disable-shared --enable-widec
-	$(MAKE) -C $(ROOT)/extern/editline
-	cp $(ROOT)/extern/editline/src/libedit.a $(STATIC_LIB)
+	mkdir -p $(ROOT)/temp/extern/editline
+	cd $(ROOT)/temp/extern/editline; $(abspath $(SRCDIR))/extern/editline/configure --enable-static --disable-shared --enable-widec
+	$(MAKE) -C $(ROOT)/temp/extern/editline/src editlinelibrary \
+		srcdir=$(abspath $(SRCDIR))/extern/editline/src \
+		VPATH=$(abspath $(SRCDIR))/extern/editline/src \
+		INCLUDES=-I$(abspath $(SRCDIR))/extern/editline/src \
+		OBJ_DIR=$(abspath $(ROOT)/temp/extern/editline) \
+		LIBRARY=$(abspath $(GEN_ROOT)/extern/editline/libedit.a)
+	cp $(GEN_ROOT)/extern/editline/libedit.a $(STATIC_LIB)
 
 
 include $(ROOT)/gen/make.shared.targets

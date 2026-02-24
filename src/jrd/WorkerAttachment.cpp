@@ -128,6 +128,8 @@ void WorkerStableAttachment::fini()
 		Monitoring::cleanupAttachment(tdbb);
 		dbb->dbb_extManager->closeAttachment(tdbb, attachment);
 
+		attachment->rollbackMetaTransaction(tdbb);
+
 		attachment->releaseLocks(tdbb);
 		LCK_fini(tdbb, LCK_OWNER_attachment);
 	}

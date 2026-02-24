@@ -206,7 +206,7 @@ class TraceConnectionImpl :
 	public Firebird::AutoIface<Firebird::ITraceDatabaseConnectionImpl<TraceConnectionImpl, Firebird::CheckStatusWrapper> >
 {
 public:
-	TraceConnectionImpl(const Attachment* att) :
+	TraceConnectionImpl(Attachment* att) :
 		m_att(att)
 	{}
 
@@ -225,7 +225,7 @@ public:
 	ISC_INT64 getConnectionID();
 	const char* getDatabaseName();
 private:
-	const Attachment* const m_att;
+	Attachment* const m_att;
 };
 
 
@@ -834,7 +834,7 @@ class TraceInitInfoImpl :
 	public Firebird::AutoIface<Firebird::ITraceInitInfoImpl<TraceInitInfoImpl, Firebird::CheckStatusWrapper> >
 {
 public:
-	TraceInitInfoImpl(const Firebird::TraceSession& session, const Attachment* att,
+	TraceInitInfoImpl(const Firebird::TraceSession& session, Attachment* att,
 					const char* filename) :
 		m_session(session),
 		m_trace_conn(att),

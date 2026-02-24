@@ -175,7 +175,7 @@ namespace
 			if (parm1 == ttype_dynamic)
 				parm1 = tdbb->getCharSet();
 
-			auto* vers = MetadataCache::lookup_charset(tdbb, parm1, CacheFlag::AUTOCREATE);
+			auto* vers = MetadataCache::getVersioned<Cached::CharSet>(tdbb, parm1, CacheFlag::AUTOCREATE);
 			if (vers)
 			{
 				CollId coll(parm1);

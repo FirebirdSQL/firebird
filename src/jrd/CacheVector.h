@@ -66,12 +66,14 @@ class ElementBase
 public:
 	ElementBase(thread_db* tdbb, MemoryPool& p, lck_t locktype, SINT64 key);
 	ElementBase()
-		: lock(nullptr)
 	{ }
 
 private:
 	virtual void reset(thread_db* tdbb, bool erase) = 0;
 	static int blockingAst(void* ast_object);
+
+public:
+	static constexpr FB_UINT64 NO_METALOCK = ~0u;
 
 public:
 	void pingLock(thread_db* tdbb, ObjectBase::Flag flags, MetaId id, const char* family);
@@ -97,7 +99,7 @@ public:
 	}
 
 private:
-	Lock* lock;
+	Lock* lock = nullptr;
 	std::atomic<bool> locked = false;
 };
 
@@ -442,7 +444,7 @@ public:
 
 		// enable recursive no-action pass by scanning thread
 		// if thd is current thread state is not going to be changed - current thread holds mutex
-		if ((thd == Thread::getId()) && (state == SCANNING))
+		if ((thd == Thread::getCurrentThreadId()) && (state == SCANNING))
 			return ScanResult::COMPLETE;
 
 		permanent->setLock(tdbb, permanent->getId(), Versioned::objectFamily(permanent));
@@ -469,7 +471,7 @@ public:
 				// fall through...
 
 			case RELOAD:
-				thd = Thread::getId();		// Our thread becomes scanning thread
+				thd = Thread::getCurrentThreadId();		// Our thread becomes scanning thread
 				state = SCANNING;
 
 				try
@@ -532,7 +534,7 @@ public:
 
 	bool isReady()
 	{
-		return (state == READY) || ((thd == Thread::getId()) && (state == SCANNING));
+		return (state == READY) || ((thd == Thread::getCurrentThreadId()) && (state == SCANNING));
 	}
 
 	bool isAvailable()
@@ -542,7 +544,7 @@ public:
 
 	bool scanInProgress() const
 	{
-		return state == READY ? false : (thd == Thread::getId()) && (state == SCANNING);
+		return state == READY ? false : (thd == Thread::getCurrentThreadId()) && (state == SCANNING);
 	}
 
 private:
@@ -585,6 +587,11 @@ public:
 	CacheElement(thread_db* tdbb, MemoryPool& p, MetaId id, EXTEND extend) :
 		ElementBase(tdbb, p, Versioned::LOCKTYPE, makeId(id, extend)),
 		Permanent(tdbb, p, id, extend)
+	{ }
+
+	CacheElement(thread_db* tdbb, MemoryPool& p, MetaId id) :
+		ElementBase(),
+		Permanent(tdbb, p, id, {})
 	{ }
 
 	CacheElement(MemoryPool& p) :
@@ -723,7 +730,8 @@ public:
 			ListEntry<Versioned>* newEntry = nullptr;
 			try
 			{
-				newEntry = FB_NEW_POOL(*getDefaultMemoryPool()) ListEntry<Versioned>(obj, traNum, fl & ~CacheFlag::ERASED);
+				newEntry = FB_NEW_POOL(*getDefaultMemoryPool())
+					ListEntry<Versioned>(obj, traNum, fl & ~CacheFlag::ERASED);
 			}
 			catch (const Firebird::Exception&)
 			{
@@ -1115,8 +1123,7 @@ public:
 		StoredElement* data = ptr->load(atomics::memory_order_acquire);
 		if (!data)
 		{
-			StoredElement* newData = FB_NEW_POOL(getPool())
-				StoredElement(tdbb, getPool(), id, m_extend);
+			StoredElement* newData = FB_NEW_POOL(getPool()) StoredElement(tdbb, getPool(), id, m_extend);
 			if (ptr->compare_exchange_strong(data, newData,
 				atomics::memory_order_release, atomics::memory_order_acquire))
 			{

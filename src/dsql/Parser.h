@@ -38,7 +38,7 @@
 #include "../common/classes/stack.h"
 #include "../jrd/intl.h"
 
-#include "gen/parse.h"
+#include "parse.h"
 
 namespace Firebird {
 class CharSet;

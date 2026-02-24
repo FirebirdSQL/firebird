@@ -167,7 +167,7 @@ CharSetContainer* CharSetContainer::lookupCharset(thread_db* tdbb, TTypeId ttype
 	if (id == CS_dynamic)
 		id = tdbb->getCharSet();
 
-	return MetadataCache::getCharSet(tdbb, id, CacheFlag::AUTOCREATE);
+	return MetadataCache::getPerm<Cached::CharSet>(tdbb, id, CacheFlag::AUTOCREATE);
 }
 
 
@@ -726,7 +726,7 @@ bool INTL_defined_type(thread_db* tdbb, TTypeId t_type)
  **************************************/
 	SET_TDBB(tdbb);
 
-	auto* vers = MetadataCache::lookup_charset(tdbb, t_type, CacheFlag::AUTOCREATE);
+	auto* vers = MetadataCache::getVersioned<Cached::CharSet>(tdbb, t_type, CacheFlag::AUTOCREATE);
 	if (vers)
 	{
 		CollId coll(t_type);
@@ -833,7 +833,7 @@ Collation* INTL_texttype_lookup(thread_db* tdbb, TTypeId parm1)
 	if (parm1 == ttype_dynamic)
 		parm1 = tdbb->getCharSet();
 
-	auto* vers = MetadataCache::lookup_charset(tdbb, parm1, CacheFlag::AUTOCREATE);
+	auto* vers = MetadataCache::getVersioned<Cached::CharSet>(tdbb, parm1, CacheFlag::AUTOCREATE);
 
 	if (vers)
 	{

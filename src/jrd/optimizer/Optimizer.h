@@ -512,11 +512,6 @@ public:
 		return rse->isOuterJoin();
 	}
 
-	bool isLeftJoin() const
-	{
-		return rse->isLeftJoin();
-	}
-
 	bool isFullJoin() const
 	{
 		return rse->isFullJoin();
@@ -556,6 +551,11 @@ public:
 	bool getEquiJoinKeys(BoolExprNode* boolean,
 						 NestConst<ValueExprNode>* node1,
 						 NestConst<ValueExprNode>* node2);
+
+	void setOuterStreams(const StreamList& streams)
+	{
+		outerStreams.assign(streams);
+	}
 
 	Firebird::string getStreamName(StreamType stream);
 	Firebird::string makeAlias(StreamType stream);
@@ -961,8 +961,19 @@ class OuterJoin : private Firebird::PermanentStorage
 {
 	struct OuterJoinStream
 	{
-		RecordSource* rsb = nullptr;
+		RecordSourceNode* node = nullptr;
+		River* river = nullptr;
 		StreamType number = INVALID_STREAM;
+
+		void getStreams(StreamList& streams)
+		{
+			if (number != INVALID_STREAM)
+				streams.add(number);
+			else if (river)
+				streams.assign(river->getStreams());
+			else
+				fb_assert(false);
+		}
 	};
 
 public:
@@ -973,7 +984,7 @@ public:
 	RecordSource* generate();
 
 private:
-	RecordSource* process(StreamList* outerStreams = nullptr);
+	RecordSource* process();
 
 	thread_db* const tdbb;
 	Optimizer* const optimizer;

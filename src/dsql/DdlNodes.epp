@@ -44,7 +44,6 @@
 #include "../jrd/ResultSet.h"
 #include "../jrd/UserManagement.h"
 #include "../jrd/Statement.h"
-#include "../jrd/ProtectRelations.h"
 #include "../jrd/blb_proto.h"
 #include "../jrd/cmp_proto.h"
 #include "../jrd/dfw_proto.h"
@@ -71,7 +70,6 @@
 #include "../auth/SecureRemotePassword/Message.h"
 #include "../jrd/Mapping.h"
 #include "../jrd/extds/ExtDS.h"
-
 #include "../jrd/cch_proto.h"
 #include "../jrd/btr_proto.h"
 #include "../jrd/tra_proto.h"
@@ -104,6 +102,7 @@ static const UCHAR nonnull_validation_blr[] =
 
 static void checkForeignKeyTempScope(thread_db* tdbb, jrd_tra* transaction,
 	const QualifiedName&	childRelName, const QualifiedName& masterIndexName);
+static void checkLttNotInUse(thread_db* tdbb, jrd_tra* transaction, const LocalTemporaryTable* ltt);
 static void checkSpTrigDependency(thread_db* tdbb, jrd_tra* transaction,
 	const QualifiedName& relationName, const MetaName& fieldName);
 static void checkViewDependency(thread_db* tdbb, jrd_tra* transaction,
@@ -246,6 +245,31 @@ static void checkForeignKeyTempScope(thread_db* tdbb, jrd_tra* transaction,
 		checkRelationType(masterType, masterRelName);
 		checkRelationType(childType, childRelName);
 		checkFkPairTypes(masterType, masterRelName, childType, childRelName);
+	}
+}
+
+static void checkLttNotInUse(thread_db* tdbb, jrd_tra* transaction, const LocalTemporaryTable* ltt)
+{
+	if (!ltt || !ltt->relation)
+		return;
+
+	const auto attachment = transaction->tra_attachment;
+	auto* relation = ltt->relation->getPermanent();
+
+	for (const auto* otherTransaction = attachment->att_transactions;
+		 otherTransaction;
+		 otherTransaction = otherTransaction->tra_next)
+	{
+		if (otherTransaction == transaction)
+			continue;
+
+		if (otherTransaction->traLttRel.exist(relation))
+		{
+			string obj;
+			obj.printf("TABLE %s", ltt->name.toQuotedString().c_str());
+
+			status_exception::raise(Arg::Gds(isc_no_meta_update) << Arg::Gds(isc_obj_in_use) << obj);
+		}
 	}
 }
 
@@ -838,7 +862,10 @@ static dsql_rel* saveRelation(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	const QualifiedName& relationName, bool view, bool creating)
 {
 	if (dsqlScratch->flags & DsqlCompilerScratch::FLAG_METADATA_SAVED)
+	{
+		fb_assert(dsqlScratch->relation->rel_name == relationName);
 		return dsqlScratch->relation;
+	}
 
 	dsqlScratch->flags |= DsqlCompilerScratch::FLAG_METADATA_SAVED;
 
@@ -9060,7 +9087,8 @@ Format* RelationNode::makeFormat(thread_db* tdbb, jrd_tra* transaction, Cached::
 	format->fmt_length = offset;
 
 	Format* old_format;
-	if (format->fmt_version &&
+	if (!(relation->rel_flags & REL_temp_ltt) &&
+		format->fmt_version &&
 		(old_format = MET_format(tdbb, relation, (format->fmt_version - 1))) &&
 		(*old_format == *format))
 	{
@@ -9159,7 +9187,6 @@ void CreateRelationNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
-
 	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, name, obj_relation))
 		return;
 
@@ -9190,7 +9217,6 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 		lock->setKey(-1);
 		LCK_lock(tdbb, lock, LCK_EX, LCK_WAIT);
 
-
 		AutoCacheRequest requestStore(tdbb, drq_s_rels2, DYN_REQUESTS);
 
 		STORE(REQUEST_HANDLE requestStore TRANSACTION_HANDLE transaction)
@@ -9200,7 +9226,7 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 			strcpy(REL.RDB$RELATION_NAME, name.object.c_str());
 			REL.RDB$SYSTEM_FLAG = 0;
 			REL.RDB$FLAGS = REL_sql;
-			REL.RDB$RELATION_TYPE = relationType.value();
+			REL.RDB$RELATION_TYPE = relationType;
 
 			if (ssDefiner.isAssigned())
 			{
@@ -9332,6 +9358,9 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 			relation->rollback(tdbb);
 		}
 
+		// Update DSQL cache
+		METD_drop_relation(transaction, name);
+
 		throw;
 	}
 
@@ -9420,8 +9449,9 @@ void CreateRelationNode::defineLocalTempTable(thread_db* tdbb, DsqlCompilerScrat
 			lttField.name = field->fld_name;
 			lttField.source = field->typeOfName;
 			lttField.notNullFlag = notNullFlag;
-			lttField.collationId = field->collationId != 0 ? std::optional<SSHORT>(field->collationId) : std::nullopt;
-			lttField.charSetId = field->charSetId != 0 ? std::optional<SSHORT>(field->charSetId) : std::nullopt;
+			lttField.collationId = field->collationId != COLLATE_NONE ? std::optional<CollId>(field->collationId) :
+																		std::nullopt;
+			lttField.charSetId = field->charSetId != CS_NONE ? std::optional<CSetId>(field->charSetId) : std::nullopt;
 			lttField.segLength = field->segLength;
 			lttField.charLength = field->charLength;
 			lttField.precision = field->precision;
@@ -9457,7 +9487,7 @@ void CreateRelationNode::defineLocalTempTable(thread_db* tdbb, DsqlCompilerScrat
 
 	const USHORT initialLttIdProbe = attachment->att_next_ltt_id.value();
 
-	while (MET_lookup_relation_id(tdbb, attachment->att_next_ltt_id.value(), true))
+	while (MetadataCache::getVersioned<Cached::Relation>(tdbb, attachment->att_next_ltt_id.value(), CacheFlag::ERASED))
 	{
 		if (attachment->att_next_ltt_id.value() >= MAX_LTT_ID)
 			attachment->att_next_ltt_id = MIN_LTT_ID;
@@ -9937,11 +9967,18 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 		if (beforeTriggerWasExecuted)
 			executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_ALTER_TABLE, name, {});
 
+		// Update DSQL cache
+		METD_drop_relation(transaction, name);
+
 		savePoint.release();	// everything is ok
 	}
 	catch (const Exception&)
 	{
 		dsqlScratch->relation = NULL;
+
+		// Update DSQL cache
+		METD_drop_relation(transaction, name);
+
 		throw;
 	}
 }
@@ -10458,6 +10495,7 @@ void AlterRelationNode::alterLocalTempTable(thread_db* tdbb, DsqlCompilerScratch
 	}
 
 	const auto ltt = *lttPtr;
+	checkLttNotInUse(tdbb, transaction, ltt);
 
 	// Run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
@@ -10512,8 +10550,10 @@ void AlterRelationNode::alterLocalTempTable(thread_db* tdbb, DsqlCompilerScratch
 				lttField.name = field->fld_name;
 				lttField.source = field->typeOfName;
 				lttField.notNullFlag = notNullFlag;
-				lttField.collationId = field->collationId != 0 ? std::optional<SSHORT>(field->collationId) : std::nullopt;
-				lttField.charSetId = field->charSetId != 0 ? std::optional<SSHORT>(field->charSetId) : std::nullopt;
+				lttField.collationId = field->collationId != COLLATE_NONE ? std::optional<CollId>(field->collationId) :
+																			std::nullopt;
+				lttField.charSetId = field->charSetId != CS_NONE ? std::optional<CSetId>(field->charSetId) :
+																   std::nullopt;
 				lttField.segLength = field->segLength;
 				lttField.charLength = field->charLength;
 				lttField.precision = field->precision;
@@ -10695,8 +10735,10 @@ void AlterRelationNode::alterLocalTempTable(thread_db* tdbb, DsqlCompilerScratch
 						AlterDomainNode::checkUpdate(origDom, newDom);
 
 						lttField.source = field->typeOfName;
-						lttField.collationId = field->collationId != 0 ? std::optional<SSHORT>(field->collationId) : std::nullopt;
-						lttField.charSetId = field->charSetId != 0 ? std::optional<SSHORT>(field->charSetId) : std::nullopt;
+						lttField.collationId = field->collationId != COLLATE_NONE ?
+							std::optional<CollId>(field->collationId) : std::nullopt;
+						lttField.charSetId = field->charSetId != CS_NONE ?
+							std::optional<CSetId>(field->charSetId) : std::nullopt;
 						lttField.segLength = field->segLength;
 						lttField.charLength = field->charLength;
 						lttField.precision = field->precision;
@@ -10901,18 +10943,15 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 
 	request.reset(tdbb, drq_e_rel_idxs, DYN_REQUESTS);
 
-//			 IDX.RDB$INDEX_INACTIVE NE MET_index_deferred_drop
 
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		IDX IN RDB$INDICES
 		WITH IDX.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
-			 IDX.RDB$RELATION_NAME EQ name.object.c_str()// AND
+			 IDX.RDB$RELATION_NAME EQ name.object.c_str() AND
+			 IDX.RDB$INDEX_INACTIVE NE MET_index_deferred_drop
 	{
-		if (IDX.RDB$INDEX_INACTIVE != MET_index_deferred_drop)
-		{
-			auto* node = FB_NEW_POOL(p) DropIndexNode(p, QualifiedName(IDX.RDB$INDEX_NAME, name.schema));
-			node->drop(tdbb, dsqlScratch, transaction, indexList, false);
-		}
+		auto* node = FB_NEW_POOL(p) DropIndexNode(p, QualifiedName(IDX.RDB$INDEX_NAME, name.schema));
+		node->drop(tdbb, dsqlScratch, transaction, indexList, false);
 	}
 	END_FOR
 
@@ -11146,6 +11185,9 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	}
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, ddlTriggerAction, name, {});
+
+	// Update DSQL cache
+	METD_drop_relation(transaction, name);
 
 	savePoint.release();	// everything is ok
 }
@@ -12654,9 +12696,9 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 {
 	if (idxName.isEmpty())
 		DYN_UTIL_generate_index_name(tdbb, transaction, idxName, definition.type);
-	DYN_UTIL_check_unique_name(tdbb, transaction, idxName, obj_index);
-	definition.index = idxName;
+	DYN_UTIL_check_unique_name(tdbb, idxName, obj_index);
 
+	definition.index = idxName;
 	ULONG keyLength = 0;
 
 	AutoCacheRequest request(tdbb, drq_s_indices, DYN_REQUESTS);
@@ -13135,6 +13177,8 @@ void CreateIndexNode::defineLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch*
 	const auto attachment = transaction->tra_attachment;
 	auto& attPool = *attachment->att_pool;
 
+	checkLttNotInUse(tdbb, transaction, ltt);
+
 	if (computed)
 	{
 		status_exception::raise(
@@ -13411,12 +13455,14 @@ void AlterIndexNode::alterLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* d
 	const auto attachment = transaction->tra_attachment;
 	auto& attPool = *attachment->att_pool;
 
+	checkLttNotInUse(tdbb, transaction, ltt);
+
 	// Register undo action with the savepoint
 	transaction->tra_save_point->createLttAction(
 		LttUndoItem::LTT_UNDO_ALTER, ltt->name, FB_NEW_POOL(attPool) LocalTemporaryTable(attPool, *ltt));
 
 	const bool wasInactive = lttIndex->inactive;
-	const bool willBeInactive = !active;
+	const bool willBeInactive = !create;
 
 	// Update the inactive flag
 	lttIndex->inactive = willBeInactive;
@@ -13426,14 +13472,14 @@ void AlterIndexNode::alterLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* d
 	if (wasInactive && !willBeInactive)
 	{
 		// Index is being activated - create the B-tree
-		DFW_post_work(transaction, dfw_create_ltt_index, string(name.object.c_str()), name.schema, 0);
+		DFW_post_work(transaction, dfw_create_ltt_index, string(indexName.object.c_str()), indexName.schema, 0);
 	}
 	else if (!wasInactive && willBeInactive && ltt->relationId)
 	{
 		// Index is being deactivated - delete the B-tree
 		// We pass the index ID in dfw_id, and the relation ID in dfw_ids
 		const auto work = DFW_post_work(transaction, dfw_delete_ltt_index,
-			string(name.object.c_str()), name.schema, lttIndex->id);
+			string(indexName.object.c_str()), indexName.schema, lttIndex->id);
 		DFW_get_ids(work).add(ltt->relationId);
 	}
 }
@@ -13446,7 +13492,7 @@ string SetStatisticsNode::internalPrint(NodePrinter& printer) const
 {
 	DdlNode::internalPrint(printer);
 
-	NODE_PRINT(printer, name);
+	NODE_PRINT(printer, indexName);
 
 	return "SetStatisticsNode";
 }
@@ -13454,7 +13500,7 @@ string SetStatisticsNode::internalPrint(NodePrinter& printer) const
 void SetStatisticsNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 {
 	bool systemIndex;
-	const auto relationName = getIndexRelationName(tdbb, transaction, name, systemIndex);
+	const auto relationName = getIndexRelationName(tdbb, transaction, indexName, systemIndex);
 
 	SCL_check_relation(tdbb, relationName, SCL_alter, false);
 }
@@ -13470,7 +13516,7 @@ void SetStatisticsNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 	LocalTemporaryTable* ltt = nullptr;
 	LocalTemporaryTable::Index* lttIndex = nullptr;
 
-	if (MET_get_ltt_index(transaction->getAttachment(), name, &ltt, &lttIndex))
+	if (MET_get_ltt_index(transaction->getAttachment(), indexName, &ltt, &lttIndex))
 	{
 		setStatisticsLocalTempIndex(tdbb, dsqlScratch, transaction, ltt, lttIndex);
 		savePoint.release();	// everything is ok
@@ -13482,12 +13528,12 @@ void SetStatisticsNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		IDX IN RDB$INDICES
-		WITH IDX.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
-			 IDX.RDB$INDEX_NAME EQ name.object.c_str()
+		WITH IDX.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
+			 IDX.RDB$INDEX_NAME EQ indexName.object.c_str()
 	{
 		found = true;
 
-		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_ALTER_INDEX, name, {});
+		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_ALTER_INDEX, indexName, {});
 
 		MODIFY IDX
 			// For V4 index selectivity can be set only to -1.
@@ -13498,7 +13544,7 @@ void SetStatisticsNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 	END_FOR
 
 	if (found)
-		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_ALTER_INDEX, name, {});
+		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_ALTER_INDEX, indexName, {});
 	else
 	{
 		// msg 48: "Index not found"
@@ -13514,6 +13560,8 @@ void SetStatisticsNode::setStatisticsLocalTempIndex(thread_db* tdbb, DsqlCompile
 {
 	const auto attachment = transaction->tra_attachment;
 
+	checkLttNotInUse(tdbb, transaction, ltt);
+
 	// Register undo action with the savepoint
 	transaction->tra_save_point->createLttAction(
 		LttUndoItem::LTT_UNDO_ALTER, ltt->name, FB_NEW_POOL(*attachment->att_pool) LocalTemporaryTable(*attachment->att_pool, *ltt));
@@ -13522,7 +13570,7 @@ void SetStatisticsNode::setStatisticsLocalTempIndex(thread_db* tdbb, DsqlCompile
 	// We pass the index ID in dfw_id and leave dfw_ids empty to signal "set statistics"
 	// (as opposed to delete which has dfw_ids containing the relation ID)
 	DFW_post_work(transaction, dfw_modify_ltt_index,
-		string(name.object.c_str()), name.schema, lttIndex->id);
+		string(indexName.object.c_str()), indexName.schema, lttIndex->id);
 }
 
 
@@ -13880,6 +13928,8 @@ void DropIndexNode::dropLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* dsq
 	Attachment* const attachment = transaction->tra_attachment;
 	auto& attPool = *attachment->att_pool;
 
+	checkLttNotInUse(tdbb, transaction, ltt);
+
 	// Register undo action with the savepoint
 	transaction->tra_save_point->createLttAction(
 		LttUndoItem::LTT_UNDO_ALTER, ltt->name, FB_NEW_POOL(attPool) LocalTemporaryTable(attPool, *ltt));
@@ -13902,7 +13952,7 @@ void DropIndexNode::dropLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* dsq
 		// Post deferred work to delete the actual B-tree structure
 		// We pass the index ID in dfw_id, and the relation ID in dfw_ids
 		const auto work = DFW_post_work(transaction, dfw_delete_ltt_index,
-			string(name.object.c_str()), name.schema, indexId);
+			string(indexName.object), indexName.schema, indexId);
 		DFW_get_ids(work).add(ltt->relationId);
 	}
 }

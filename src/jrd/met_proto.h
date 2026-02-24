@@ -31,6 +31,7 @@
 #include "../jrd/QualifiedName.h"
 #include "../jrd/obj.h"
 #include "../jrd/CacheVector.h"
+#include "../jrd/LocalTemporaryTable.h"
 
 #include <functional>
 #include <initializer_list>
