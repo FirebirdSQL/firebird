@@ -28,8 +28,8 @@
 #ifndef JRD_CONSTANT_H
 #define JRD_CONSTANT_H
 
-#include "../jrd/Routine.h"
 #include "firebird.h"
+#include "../jrd/Routine.h"
 #include "../jrd/obj.h"
 #include "../jrd/val.h"
 #include "../jrd/lck.h"
@@ -39,7 +39,7 @@ namespace Jrd
 class DsqlCompilerScratch;
 class dsql_fld;
 
-class Constant : public Routine
+class Constant final : public Routine
 {
 public:
 	static Constant* lookup(thread_db* tdbb, MetaId id);

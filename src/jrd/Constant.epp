@@ -327,7 +327,6 @@ static dsc* executeConstantExpressionFull(thread_db* tdbb, CompilerScratch* csb)
 static void executeConstantExpression(thread_db* tdbb, CompilerScratch* csb, MemoryPool& pool, impure_value& value)
 {
 	Statement* statement = Statement::makeStatement(tdbb, csb, true);
-	//Cleanup cc([&statement, &tdbb]() { if (statement) statement->release(tdbb); });
 
 	Request* request = statement->makeRootRequest(tdbb);
 
