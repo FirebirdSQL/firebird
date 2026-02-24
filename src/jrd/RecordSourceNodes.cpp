@@ -986,6 +986,7 @@ void RelationSourceNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseN
 	// 2) If it's part of an outer join.
 
 	if (rse->rse_jointype != blr_inner || // viewRse->rse_jointype != blr_inner || ???
+		rse->isSpecialJoin() || // viewRse->isSpecialJoin() || ???
 		viewRse->rse_sorted || viewRse->rse_projection || viewRse->rse_first ||
 		viewRse->rse_skip || viewRse->rse_plan)
 	{
@@ -3166,9 +3167,9 @@ void RseNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 	// where we are just trying to inner join more than 2 streams. If possible,
 	// try to flatten the tree out before we go any further.
 
-	if (!isLateral() && !isSemiJoined() &&
-		rse->rse_jointype == blr_inner &&
-		rse_jointype == blr_inner &&
+	if (!isLateral() &&
+		rse->rse_jointype == blr_inner && !rse->isSpecialJoin() &&
+		rse_jointype == blr_inner && !isSpecialJoin() &&
 		!rse_sorted && !rse_projection &&
 		!rse_first && !rse_skip && !rse_plan)
 	{

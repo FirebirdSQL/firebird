@@ -775,6 +775,23 @@ public:
 		return (flags & FLAG_SKIP_LOCKED) != 0;
 	}
 
+	bool isSpecialJoin() const
+	{
+		if (rse_jointype == blr_inner)
+		{
+			for (const auto sub : rse_relations)
+			{
+				if (const auto rse = nodeAs<RseNode>(sub))
+				{
+					if (rse->isSemiJoined())
+						return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
 	explicit RseNode(MemoryPool& pool)
 		: TypedNode<RecordSourceNode, RecordSourceNode::TYPE_RSE>(pool),
 		  rse_relations(pool)

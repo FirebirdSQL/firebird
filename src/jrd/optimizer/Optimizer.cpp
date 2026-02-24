@@ -860,7 +860,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 
 		if (semiJoin)
 		{
-			fb_assert(rse->rse_jointype == blr_inner);
+			fb_assert(rse->isSpecialJoin());
 			specialRse = subRse;
 			fb_assert(specialRse);
 			continue;
