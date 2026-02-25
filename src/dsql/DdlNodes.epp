@@ -8442,7 +8442,7 @@ void RelationNode::makeVersion(thread_db* tdbb, jrd_tra* transaction, const Qual
 					if (FLD.RDB$CHARACTER_SET_ID.NULL)
 						FLD.RDB$CHARACTER_SET_ID = CS_NONE;
 
-					CollId collation((!FLD.RDB$COLLATION_ID.NULL) ? FLD.RDB$COLLATION_ID : 
+					CollId collation((!FLD.RDB$COLLATION_ID.NULL) ? FLD.RDB$COLLATION_ID :
 						(!RFR.RDB$COLLATION_ID.NULL) ? RFR.RDB$COLLATION_ID : COLLATE_NONE);	// codepoint collation
 
 					if (!DSC_make_descriptor(&tfb->tfb_desc, FLD.RDB$FIELD_TYPE,
@@ -13944,7 +13944,7 @@ void DropIndexNode::clearFrgn(thread_db* tdbb, MetaId relId, MetaId indexId)
 // Second part of index deletion post-processing.
 //
 // This function is invoked when index is removed from irt page.
-// In some cases (failed DB creation) cleanup, done by clearName, 
+// In some cases (failed DB creation) cleanup, done by clearName,
 // also should take place.
 //
 
