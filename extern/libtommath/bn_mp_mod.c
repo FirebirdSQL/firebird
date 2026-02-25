@@ -1,48 +1,31 @@
-#include <tommath.h>
+#include "tommath_private.h"
 #ifdef BN_MP_MOD_C
-/* LibTomMath, multiple-precision integer library -- Tom St Denis
- *
- * LibTomMath is a library that provides multiple-precision
- * integer arithmetic as well as number theoretic functionality.
- *
- * The library was designed directly after the MPI library by
- * Michael Fromberger but has been written from scratch with
- * additional optimizations in place.
- *
- * The library is free for all purposes without any express
- * guarantee it works.
- *
- * Tom St Denis, tomstdenis@gmail.com, http://libtom.org
- */
+/* LibTomMath, multiple-precision integer library -- Tom St Denis */
+/* SPDX-License-Identifier: Unlicense */
 
-/* c = a mod b, 0 <= c < b */
-int
-mp_mod (mp_int * a, mp_int * b, mp_int * c)
+/* c = a mod b, 0 <= c < b if b > 0, b < c <= 0 if b < 0 */
+mp_err mp_mod(const mp_int *a, const mp_int *b, mp_int *c)
 {
-  mp_int  t;
-  int     res;
+   mp_int  t;
+   mp_err  err;
 
-  if ((res = mp_init (&t)) != MP_OKAY) {
-    return res;
-  }
+   if ((err = mp_init_size(&t, b->used)) != MP_OKAY) {
+      return err;
+   }
 
-  if ((res = mp_div (a, b, NULL, &t)) != MP_OKAY) {
-    mp_clear (&t);
-    return res;
-  }
+   if ((err = mp_div(a, b, NULL, &t)) != MP_OKAY) {
+      goto LBL_ERR;
+   }
 
-  if (t.sign != b->sign) {
-    res = mp_add (b, &t, c);
-  } else {
-    res = MP_OKAY;
-    mp_exch (&t, c);
-  }
+   if (MP_IS_ZERO(&t) || (t.sign == b->sign)) {
+      err = MP_OKAY;
+      mp_exch(&t, c);
+   } else {
+      err = mp_add(b, &t, c);
+   }
 
-  mp_clear (&t);
-  return res;
+LBL_ERR:
+   mp_clear(&t);
+   return err;
 }
 #endif
-
-/* $Source$ */
-/* $Revision: 0.41 $ */
-/* $Date: 2007-04-18 09:58:18 +0000 $ */
