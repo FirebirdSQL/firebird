@@ -207,17 +207,7 @@ void Replicator::commitTransaction(CheckStatusWrapper* status, Transaction* tran
 		const auto dataLength = txnData.buffer->getCount() - sizeof(Block);
 		fb_assert(txnData.flushes || dataLength > sizeof(UCHAR));
 
-		for (const auto& generator : m_generators)
-		{
-			fb_assert(generator.name.hasData());
-
-			const auto atom = txnData.defineAtom(generator.name);
-
-			txnData.putTag(opSetSequence);
-			txnData.putInt32(atom);
-			txnData.putInt64(generator.value);
-		}
-
+		txnData.putGenerators(m_generators);
 		m_generators.clear();
 
 		txnData.putTag(opCommitTransaction);
@@ -235,9 +225,14 @@ void Replicator::rollbackTransaction(CheckStatusWrapper* status, Transaction* tr
 	{
 		auto& txnData = transaction->getData();
 
-		if (txnData.flushes)
+		if (txnData.flushes || m_generators.hasData())
 		{
-			txnData.putTag(opRollbackTransaction);
+			txnData.putGenerators(m_generators);
+			m_generators.clear();
+
+			if (txnData.flushes)
+				txnData.putTag(opRollbackTransaction);
+
 			flush(txnData, FLUSH_SYNC, BLOCK_END_TRANS);
 		}
 	}

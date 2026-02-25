@@ -1440,7 +1440,7 @@ SINT64 DPM_gen_id(thread_db* tdbb, SLONG generator, bool initialize, SINT64 val)
 	if (transaction)
 		transaction->tra_flags |= TRA_write;
 
-	REPL_gen_id(tdbb, generator, value);
+	REPL_gen_id(tdbb, generator, value, transaction);
 
 	return value;
 }

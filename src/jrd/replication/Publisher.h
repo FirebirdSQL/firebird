@@ -43,7 +43,7 @@ void REPL_store(Jrd::thread_db* tdbb, const Jrd::record_param* rpb,
 void REPL_modify(Jrd::thread_db* tdbb, const Jrd::record_param* orgRpb,
 				 const Jrd::record_param* newRpb, Jrd::jrd_tra* transaction);
 void REPL_erase(Jrd::thread_db* tdbb, const Jrd::record_param* rpb, Jrd::jrd_tra* transaction);
-void REPL_gen_id(Jrd::thread_db* tdbb, SLONG genId, SINT64 value);
+void REPL_gen_id(Jrd::thread_db* tdbb, SLONG genId, SINT64 value, Jrd::jrd_tra* transaction);
 void REPL_exec_sql(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction, const Firebird::string& sql);
 void REPL_journal_switch(Jrd::thread_db* tdbb);
 

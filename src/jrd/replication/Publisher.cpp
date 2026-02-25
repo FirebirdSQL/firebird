@@ -618,7 +618,7 @@ void REPL_erase(thread_db* tdbb, const record_param* rpb, jrd_tra* transaction)
 	checkStatus(tdbb, status, transaction);
 }
 
-void REPL_gen_id(thread_db* tdbb, SLONG genId, SINT64 value)
+void REPL_gen_id(thread_db* tdbb, SLONG genId, SINT64 value, jrd_tra* transaction)
 {
 	if (tdbb->tdbb_flags & (TDBB_dont_post_dfw | TDBB_repl_in_progress))
 		return;
@@ -637,6 +637,14 @@ void REPL_gen_id(thread_db* tdbb, SLONG genId, SINT64 value)
 	if (!replicator)
 		return;
 
+	FbLocalStatus status;
+
+	// Create IReplicatedTransaction object for current transaction
+	// without any operations before changing generator
+
+	if (transaction && !transaction->tra_replicator)
+		getReplicator(tdbb, status, transaction);
+
 	const auto attachment = tdbb->getAttachment();
 
 	MetaName genName;
@@ -650,7 +658,6 @@ void REPL_gen_id(thread_db* tdbb, SLONG genId, SINT64 value)
 
 	AutoSetRestoreFlag<ULONG> noRecursion(&tdbb->tdbb_flags, TDBB_repl_in_progress, true);
 
-	FbLocalStatus status;
 	replicator->setSequence(&status, genName.c_str(), value);
 
 	checkStatus(tdbb, status);
