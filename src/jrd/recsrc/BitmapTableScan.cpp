@@ -36,7 +36,7 @@ using namespace Jrd;
 // ---------------------------------------------
 
 BitmapTableScan::BitmapTableScan(CompilerScratch* csb, const string& alias,
-								 StreamType stream, jrd_rel* relation,
+								 StreamType stream, Rsc::Rel relation,
 								 InversionNode* inversion, double selectivity)
 	: RecordStream(csb, stream),
 	  m_alias(csb->csb_pool, alias), m_relation(relation), m_inversion(inversion)
@@ -56,7 +56,7 @@ void BitmapTableScan::internalOpen(thread_db* tdbb) const
 	impure->irsb_bitmap = EVL_bitmap(tdbb, m_inversion, NULL);
 
 	record_param* const rpb = &request->req_rpb[m_stream];
-	RLCK_reserve_relation(tdbb, request->req_transaction, m_relation, false);
+	RLCK_reserve_relation(tdbb, request->req_transaction, m_relation(), false);
 
 	rpb->rpb_number.setValue(BOF_NUMBER);
 }
@@ -141,14 +141,14 @@ void BitmapTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, uns
 	planEntry.className = "BitmapTableScan";
 
 	planEntry.lines.add().text = "Table " +
-		printName(tdbb, m_relation->rel_name.toQuotedString(), m_alias) + " Access By ID";
+		printName(tdbb, m_relation()->getName().toQuotedString(), m_alias) + " Access By ID";
 	printOptInfo(planEntry.lines);
 
 	printInversion(tdbb, m_inversion, planEntry.lines, true, 1, false);
 
-	planEntry.objectType = m_relation->getObjectType();
-	planEntry.objectName = m_relation->rel_name;
+	planEntry.objectType = m_relation()->getObjectType();
+	planEntry.objectName = m_relation()->getName();
 
-	if (m_alias.hasData() && m_alias != string(m_relation->rel_name.object))
+	if (m_alias.hasData() && m_alias != string(m_relation()->getName().object))
 		planEntry.alias = m_alias;
 }

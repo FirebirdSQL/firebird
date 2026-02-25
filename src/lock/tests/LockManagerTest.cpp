@@ -110,7 +110,7 @@ BOOST_AUTO_TEST_CASE(LockUnlockWaitTest)
 			for (unsigned i = 0; i < ITERATION_COUNT; ++i)
 			{
 				const auto lockId = lockManager->enqueue(callbacks, &statusVector, 0,
-					LCK_expression, LOCK_KEY, sizeof(LOCK_KEY), LCK_EX, nullptr, nullptr, 0, LCK_WAIT, ownerHandle);
+					LCK_tra, LOCK_KEY, sizeof(LOCK_KEY), LCK_EX, nullptr, nullptr, 0, LCK_WAIT, ownerHandle);
 
 				if (lockId)
 				{
@@ -168,7 +168,7 @@ BOOST_AUTO_TEST_CASE(LockUnlockNoWaitTest)
 			for (unsigned i = 0; i < ITERATION_COUNT; ++i)
 			{
 				const auto lockId = lockManager->enqueue(callbacks, &statusVector, 0,
-					LCK_expression, LOCK_KEY, sizeof(LOCK_KEY), LCK_EX, nullptr, nullptr, 0, LCK_NO_WAIT, ownerHandle);
+					LCK_tra, LOCK_KEY, sizeof(LOCK_KEY), LCK_EX, nullptr, nullptr, 0, LCK_NO_WAIT, ownerHandle);
 
 				if (lockId)
 				{
@@ -280,7 +280,7 @@ BOOST_AUTO_TEST_CASE(LockUnlockAstTest)
 				std::lock_guard localMutexGuard(threadData.localMutex);
 
 				const auto lockId = lockManager->enqueue(callbacks, &statusVector, 0,
-					LCK_expression, (const UCHAR*) &lock->key, sizeof(lock->key), LCK_EX,
+					LCK_tra, (const UCHAR*) &lock->key, sizeof(lock->key), LCK_EX,
 					ast, lock.get(), 0, LCK_WAIT, threadData.ownerHandle);
 
 				if (lockId)

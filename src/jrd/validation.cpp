@@ -553,6 +553,7 @@ VI. ADDITIONAL NOTES
 #include "../jrd/tra.h"
 #include "../jrd/sqz.h"
 #include "../jrd/svc.h"
+#include "../jrd/met.h"
 #include "../jrd/btr_proto.h"
 #include "../jrd/cch_proto.h"
 #include "../jrd/dpm_proto.h"
@@ -569,7 +570,7 @@ VI. ADDITIONAL NOTES
 #include "../common/classes/ClumpletWriter.h"
 #include "../common/db_alias.h"
 #include "../jrd/intl_proto.h"
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 
 #ifdef DEBUG_VAL_VERBOSE
 #include "../jrd/dmp_proto.h"
@@ -758,7 +759,7 @@ static int validate(Firebird::UtilSvc* svc)
 
 		att->att_use_count++;
 
-		val_pool = dbb->createPool();
+		val_pool = dbb->createPool(ALLOC_ARGS1 false);
 		Jrd::ContextPoolHolder context(tdbb, val_pool);
 
 		Validation control(tdbb, svc);
@@ -1026,7 +1027,7 @@ bool Validation::run(thread_db* tdbb, USHORT flags)
 
 	try
 	{
-		val_pool = dbb->createPool();
+		val_pool = dbb->createPool(ALLOC_ARGS1 false);
 		Jrd::ContextPoolHolder context(tdbb, val_pool);
 
 		vdr_flags = flags;
@@ -1146,7 +1147,7 @@ Validation::RTN Validation::corrupt(int err_code, const jrd_rel* relation, ...)
 		if (relation)
 		{
 			fprintf(stdout, "LOG:\tDatabase: %s\n\t%s in table %s (%d)\n",
-				fn, s.c_str(), relation->rel_name.c_str(), relation->rel_id);
+				fn, s.c_str(), relation->getName().c_str(), relation->getId());
 		}
 		else
 			fprintf(stdout, "LOG:\tDatabase: %s\n\t%s\n", fn, s.c_str());
@@ -1166,7 +1167,7 @@ Validation::RTN Validation::corrupt(int err_code, const jrd_rel* relation, ...)
 	if (relation)
 	{
 		gds__log("Database: %s\n\t%s in table %s (%d)",
-			fn, s.c_str(), relation->rel_name.toQuotedString().c_str(), relation->rel_id);
+			fn, s.c_str(), relation->getName().toQuotedString().c_str(), relation->getId());
 	}
 	else
 		gds__log("Database: %s\n\t%s", fn, s.c_str());
@@ -1570,7 +1571,7 @@ Validation::RTN Validation::walk_chain(jrd_rel* relation, const rhd* header,
 		data_page* page = 0;
 		fetch_page(true, page_number, pag_data, &window, &page);
 
-		if (page->dpg_relation != relation->rel_id)
+		if (page->dpg_relation != relation->getId())
 		{
 			release_page(&window);
 			return corrupt(VAL_DATA_PAGE_CONFUSED, relation, page_number, page->dpg_sequence);
@@ -1609,7 +1610,7 @@ void Validation::walk_database()
  * Functional description
  *
  **************************************/
-	Jrd::Attachment* attachment = vdr_tdbb->getAttachment();
+	Jrd::Database* const dbb = vdr_tdbb->getDatabase();
 
 #ifdef DEBUG_VAL_VERBOSE
 	if (VAL_debug_level)
@@ -1630,6 +1631,11 @@ void Validation::walk_database()
 	if (vdr_flags & VDR_online)
 		release_page(&window);
 
+	Firebird::Cleanup hdrPage([&] {
+		if (!(vdr_flags & VDR_online))
+			release_page(&window);
+	});
+
 	if (!(vdr_flags & VDR_partial))
 	{
 		walk_pip();
@@ -1638,19 +1644,16 @@ void Validation::walk_database()
 		walk_generators();
 	}
 
-	vec<jrd_rel*>* vector;
-	for (USHORT i = 0; (vector = attachment->att_relations) && i < vector->count(); i++)
+	MetadataCache* mdc = dbb->dbb_mdc;
+	for (USHORT i = 0; i < mdc->relCount(); i++)
 	{
 #ifdef DEBUG_VAL_VERBOSE
 		if (i > dbb->dbb_max_sys_rel) // Why not system flag instead?
 			VAL_debug_level = 2;
 #endif
-		jrd_rel* relation = (*vector)[i];
+		auto* relation = mdc->getVersioned<Cached::Relation>(vdr_tdbb, i, CacheFlag::AUTOCREATE | CacheFlag::MINISCAN);
 
-		if (relation && relation->rel_flags & REL_check_existence)
-			relation = MET_lookup_relation_id(vdr_tdbb, i, false);
-
-		if (relation)
+		if (relation && relation->hasData() && (!relation->isView()))
 		{
 			// Can't validate system relations online as they could be modified
 			// by system transaction which not acquires relation locks
@@ -1659,25 +1662,25 @@ void Validation::walk_database()
 
 			if (vdr_sch_incl)
 			{
-				if (!vdr_sch_incl->matches(relation->rel_name.schema.c_str(), relation->rel_name.schema.length()))
+				if (!vdr_sch_incl->matches(relation->getName().schema.c_str(), relation->getName().schema.length()))
 					continue;
 			}
 
 			if (vdr_sch_excl)
 			{
-				if (vdr_sch_excl->matches(relation->rel_name.schema.c_str(), relation->rel_name.schema.length()))
+				if (vdr_sch_excl->matches(relation->getName().schema.c_str(), relation->getName().schema.length()))
 					continue;
 			}
 
 			if (vdr_tab_incl)
 			{
-				if (!vdr_tab_incl->matches(relation->rel_name.object.c_str(), relation->rel_name.object.length()))
+				if (!vdr_tab_incl->matches(relation->getName().object.c_str(), relation->getName().object.length()))
 					continue;
 			}
 
 			if (vdr_tab_excl)
 			{
-				if (vdr_tab_excl->matches(relation->rel_name.object.c_str(), relation->rel_name.object.length()))
+				if (vdr_tab_excl->matches(relation->getName().object.c_str(), relation->getName().object.length()))
 					continue;
 			}
 
@@ -1687,7 +1690,7 @@ void Validation::walk_database()
 				vdr_page_bitmap->clear();
 
 			string relName;
-			relName.printf("Relation %d (%s)", relation->rel_id, relation->rel_name.toQuotedString().c_str());
+			relName.printf("Relation %d (%s)", relation->getId(), relation->getName().toQuotedString().c_str());
 			output("%s\n", relName.c_str());
 
 			int errs = vdr_errors;
@@ -1699,10 +1702,6 @@ void Validation::walk_database()
 			else
 				output("%s : %d ERRORS found\n\n", relName.c_str(), errs);
 		}
-	}
-
-	if (!(vdr_flags & VDR_online)) {
-		release_page(&window);
 	}
 }
 
@@ -1737,7 +1736,7 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 	}
 #endif
 
-	if (page->dpg_relation != relation->rel_id || page->dpg_sequence != sequence)
+	if (page->dpg_relation != relation->getId() || page->dpg_sequence != sequence)
 	{
 		release_page(&window);
 		return corrupt(VAL_DATA_PAGE_CONFUSED, relation, page_number, sequence);
@@ -2011,10 +2010,10 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page* root_
 		index_desc idx;
 		{
 			// No need to evaluate index expression and/or condition
-			AutoSetRestoreFlag<USHORT> flags(&root_page->irt_rpt[id].irt_flags,
+			AutoSetRestoreFlag flags(&root_page->irt_rpt[id].irt_flags,
 				irt_expression | irt_condition, false);
 
-			BTR_description(vdr_tdbb, relation, root_page, &idx, id);
+			BTR_description(vdr_tdbb, getPermanent(relation), root_page, &idx, id);
 		}
 
 		null_key = &nullKey;
@@ -2066,7 +2065,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page* root_
 
 		const bool leafPage = (page->btr_level == 0);
 
-		if (page->btr_relation != relation->rel_id || page->btr_id != (UCHAR) (id % 256))
+		if (page->btr_relation != relation->getId() || page->btr_id != (UCHAR) (id % 256))
 		{
 			corrupt(VAL_INDEX_PAGE_CORRUPT, relation, id + 1,
 					next, page->btr_level, 0, __FILE__, __LINE__);
@@ -2570,7 +2569,7 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
  **************************************/
 	Database* dbb = vdr_tdbb->getDatabase();
 
-	const vcl* vector = relation->getBasePages()->rel_pages;
+	const vcl* vector = getPermanent(relation)->getBasePages()->rel_pages;
 
 	if (!vector || sequence >= vector->count())
 		return corrupt(VAL_P_PAGE_LOST, relation, sequence);
@@ -2585,13 +2584,13 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 	if (VAL_debug_level)
 	{
 		fprintf(stdout, "walk_pointer_page: page %d relation %d sequence %d\n",
-				   (*vector)[sequence], relation->rel_id, sequence);
+				   (*vector)[sequence], relation->getId(), sequence);
 	}
 #endif
 
 	// Give the page a quick once over
 
-	if (page->ppg_relation != relation->rel_id || page->ppg_sequence != sequence)
+	if (page->ppg_relation != relation->getId() || page->ppg_sequence != sequence)
 	{
 		release_page(&window);
 		return corrupt(VAL_P_PAGE_INCONSISTENT, relation, (*vector)[sequence], sequence);
@@ -2689,7 +2688,7 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 
 			DPM_scan_pages(vdr_tdbb);
 
-			vector = relation->getBasePages()->rel_pages;
+			vector = getPermanent(relation)->getBasePages()->rel_pages;
 
 			--sequence;
 			if (!vector || sequence >= vector->count()) {
@@ -2792,7 +2791,7 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 		length -= RHD_SIZE;
 	}
 
-	const auto format = MET_format(vdr_tdbb, relation, header->rhd_format);
+	const auto format = MET_format(vdr_tdbb, getPermanent(relation), header->rhd_format);
 	auto remainingLength = format->fmt_length;
 
 	auto calculateLength = [remainingLength](ULONG length, const UCHAR* data, bool notPacked)
@@ -2835,7 +2834,7 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 
 		const data_page::dpg_repeat* line = &page->dpg_rpt[line_number];
 
-		if (page->dpg_relation != relation->rel_id ||
+		if (page->dpg_relation != relation->getId() ||
 			line_number >= page->dpg_count || !(length = line->dpg_length))
 		{
 			corrupt(VAL_REC_FRAGMENT_CORRUPT, relation, number.getValue());
@@ -2944,7 +2943,7 @@ void Validation::checkDPinPP(jrd_rel* relation, ULONG page_number)
 	Database* dbb = vdr_tdbb->getDatabase();
 	DECOMPOSE(sequence, dbb->dbb_dp_per_pp, pp_sequence, slot);
 
-	const vcl* vector = relation->getBasePages()->rel_pages;
+	const vcl* vector = getPermanent(relation)->getBasePages()->rel_pages;
 	pointer_page* ppage = 0;
 	if (pp_sequence < vector->count())
 	{
@@ -3044,36 +3043,29 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 
 	try {
 
-	// If relation hasn't been scanned, do so now
-
-	if (!(relation->rel_flags & REL_scanned) || (relation->rel_flags & REL_being_scanned))
-	{
-		MET_scan_relation(vdr_tdbb, relation);
-	}
-
 	// skip deleted relations
-	if (relation->rel_flags & (REL_deleted | REL_deleting)) {
+	if (getPermanent(relation)->isDropped()) {
 		return rtn_ok;
 	}
 
 #ifdef DEBUG_VAL_VERBOSE
 	if (VAL_debug_level)
 		fprintf(stdout, "walk_relation: id %d Format %d %s %s\n",
-				   relation->rel_id, relation->rel_current_fmt,
-				   relation->rel_name.c_str(), relation->rel_owner_name.c_str());
+				   relation->getId(), relation->rel_current_fmt,
+				   relation->getName().c_str(), relation->rel_owner_name.c_str());
 #endif
 
 	// If it's a view, external file or virtual table, skip this
 
-	if (relation->rel_view_rse || relation->rel_file || relation->isVirtual()) {
+	if (relation->isView() || relation->getExtFile() || relation->isVirtual()) {
 		return rtn_ok;
 	}
 
 	AutoLock lckRead(vdr_tdbb);
-	jrd_rel::GCExclusive lckGC(vdr_tdbb, relation);
+	GCLock::Exclusive lckGC(vdr_tdbb, getPermanent(relation));
 	if (vdr_flags & VDR_online)
 	{
-		lckRead = jrd_rel::createLock(vdr_tdbb, NULL, relation, LCK_relation, false);
+		lckRead = getPermanent(relation)->createLock(vdr_tdbb, LCK_relation, false);
 		if (!LCK_lock(vdr_tdbb, lckRead, LCK_PR, vdr_lock_tout))
 		{
 			output("Acquire relation lock failed\n");
@@ -3119,7 +3111,7 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 
 	for (ULONG sequence = 0; true; sequence++)
 	{
-		const vcl* vector = relation->getBasePages()->rel_pages;
+		const vcl* vector = getPermanent(relation)->getBasePages()->rel_pages;
 		const int ppCnt = vector ? vector->count() : 0;
 
 		output("  process pointer page %4d of %4d\n", sequence, ppCnt);
@@ -3190,19 +3182,19 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 	{
 		if (!(vdr_flags & VDR_online))
 		{
-			if (relation->rel_name.object.hasData())
+			if (relation->getName().hasData())
 			{
 				gds__log("bugcheck during scan of table %d (%s)",
-					relation->rel_id, relation->rel_name.toQuotedString().c_str());
+					relation->getId(), relation->getName().toQuotedString().c_str());
 			}
 			else
-				gds__log("bugcheck during scan of table %d", relation->rel_id);
+				gds__log("bugcheck during scan of table %d", relation->getId());
 		}
 #ifdef DEBUG_VAL_VERBOSE
 		if (VAL_debug_level)
 		{
 			char s[256];
-			SNPRINTF(s, sizeof(s), msg, relation->rel_id, relation->rel_name.c_str());
+			SNPRINTF(s, sizeof(s), msg, relation->getId(), relation->getName().c_str());
 			fprintf(stdout, "LOG:\t%s\n", s);
 		}
 #endif
@@ -3228,7 +3220,7 @@ Validation::RTN Validation::walk_root(jrd_rel* relation, bool getInfo)
  **************************************/
 
 	// If the relation has an index root, walk it
-	RelationPages* relPages = relation->getBasePages();
+	RelationPages* relPages = getPermanent(relation)->getBasePages();
 
 	if (!relPages->rel_index_root)
 		return corrupt(VAL_INDEX_ROOT_MISSING, relation);
@@ -3242,10 +3234,12 @@ Validation::RTN Validation::walk_root(jrd_rel* relation, bool getInfo)
 		if (!page->irt_rpt[i].getRoot())
 			continue;
 
-		QualifiedName index;
-
 		release_page(&window);
-		MET_lookup_index(vdr_tdbb, index, relation->rel_name, i + 1);
+
+		auto* idx = getPermanent(relation)->lookupIndex(vdr_tdbb, i, CacheFlag::AUTOCREATE);
+		QualifiedName index;
+		if (idx)
+			index = idx->getName();
 		fetch_page(false, relPages->rel_index_root, pag_root, &window, &page);
 
 		if (vdr_sch_incl)
@@ -3277,10 +3271,10 @@ Validation::RTN Validation::walk_root(jrd_rel* relation, bool getInfo)
 			if (page->irt_rpt[i].irt_flags & irt_condition)
 			{
 				// No need to evaluate index expression
-				AutoSetRestoreFlag<USHORT> flag(&page->irt_rpt[i].irt_flags, irt_expression, false);
+				AutoSetRestoreFlag flag(&page->irt_rpt[i].irt_flags, irt_expression, false);
 
 				IdxInfo info;
-				if (BTR_description(vdr_tdbb, relation, page, &info.m_desc, i))
+				if (BTR_description(vdr_tdbb, getPermanent(relation), page, &info.m_desc, i))
 					vdr_cond_idx.add(info);
 			}
 			continue;

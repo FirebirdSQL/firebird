@@ -50,6 +50,7 @@
 #include "../jrd/btr.h"
 #include "../jrd/sort.h"
 #include "../jrd/ini.h"
+#include "../jrd/met.h"
 #include "../jrd/intl.h"
 #include "../jrd/Collation.h"
 #include "../common/gdsassert.h"
@@ -62,7 +63,7 @@
 #include "../jrd/err_proto.h"
 #include "../jrd/ext_proto.h"
 #include "../jrd/intl_proto.h"
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/mov_proto.h"
 #include "../jrd/par_proto.h"
@@ -402,20 +403,16 @@ namespace
 		return false;
 	}
 
-	double getCardinality(thread_db* tdbb, jrd_rel* relation, const Format* format)
+	double getCardinality(thread_db* tdbb, const Rsc::Rel& relation, const Format* format)
 	{
 		// Return the estimated cardinality for the given relation
 
 		double cardinality = DEFAULT_CARDINALITY;
 
-		if (relation->rel_file)
-			cardinality = EXT_cardinality(tdbb, relation);
-		else if (!relation->isVirtual())
-		{
-			MET_post_existence(tdbb, relation);
-			cardinality = DPM_cardinality(tdbb, relation, format);
-			MET_release_existence(tdbb, relation);
-		}
+		if (auto* extFile = relation()->getExtFile())
+			cardinality = extFile->getCardinality(tdbb, relation(tdbb));
+		else if (!relation()->isVirtual())
+			cardinality = DPM_cardinality(tdbb, relation(tdbb), format);
 
 		return MAX(cardinality, MINIMUM_CARDINALITY);
 	}
@@ -436,8 +433,7 @@ namespace
 
 		// If there were none indices, this is a sequential retrieval.
 
-		const auto* relation = tail->csb_relation;
-		if (!relation)
+		if (!tail->csb_relation)
 			return;
 
 		if (!tail->csb_idx)
@@ -865,7 +861,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 		{
 			if (!(iter & CONJUNCT_USED) &&
 				!(iter->nodFlags & ExprNode::FLAG_RESIDUAL) &&
-				iter->deterministic() &&
+				iter->deterministic(tdbb) &&
 				iter->computable(csb, INVALID_STREAM, false))
 			{
 				compose(getPool(), &invariantBoolean, iter);
@@ -1186,13 +1182,13 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 
 			fb_assert(tail->csb_relation);
 
-			const SLONG ssRelationId = tail->csb_view ? tail->csb_view->rel_id : 0;
+			const SLONG ssRelationId = tail->csb_view ? tail->csb_view()->rel_id : 0;
 
-			CMP_post_access(tdbb, csb, tail->csb_relation->rel_security_name.schema, ssRelationId,
-				SCL_usage, obj_schemas, QualifiedName(tail->csb_relation->rel_name.schema));
+			CMP_post_access(tdbb, csb, tail->csb_relation()->getSecurityName().schema, ssRelationId,
+				SCL_usage, obj_schemas, QualifiedName(tail->csb_relation()->getName().schema));
 
-			CMP_post_access(tdbb, csb, tail->csb_relation->rel_security_name.object, ssRelationId,
-				SCL_update, obj_relations, tail->csb_relation->rel_name);
+			CMP_post_access(tdbb, csb, tail->csb_relation()->getSecurityName().object, ssRelationId,
+				SCL_update, obj_relations, tail->csb_relation()->getName());
 		}
 
 		rsb = FB_NEW_POOL(getPool()) LockedStream(csb, rsb);
@@ -1263,15 +1259,26 @@ void Optimizer::compileRelation(StreamType stream)
 
 	tail->csb_idx = nullptr;
 
-	if (needIndices && !relation->rel_file && !relation->isVirtual())
+	if (needIndices && !relation()->getExtFile() && !relation()->isVirtual())
 	{
-		const auto relPages = relation->getPages(tdbb);
+		const auto relPages = relation()->getPages(tdbb);
 		IndexDescList idxList;
-		BTR_all(tdbb, relation, idxList, relPages);
+		BTR_all(tdbb, relation(), idxList, relPages);
+
+		MetaId n = idxList.getCount();
+		while (n--)
+		{
+			auto id = idxList[n].idx_id;
+			auto* idv = relation()->lookup_index(tdbb, id, CacheFlag::AUTOCREATE);
+			if (idv && idv->getActive() != MET_index_active)
+				idv = nullptr;
+			if (!idv)
+				idxList.remove(n);
+		}
 
 		// if index stats is empty, update it for non-empty and not too big system relations
 
-		const bool updateStats = (relation->isSystem() && idxList.hasData() &&
+		const bool updateStats = (relation()->isSystem() && idxList.hasData() &&
 			!tdbb->getDatabase()->readOnly() &&
 			(relPages->rel_data_pages > 0) && (relPages->rel_data_pages < 100));
 
@@ -1283,7 +1290,7 @@ void Optimizer::compileRelation(StreamType stream)
 				if (idx.idx_selectivity <= 0.0f)
 				{
 					SelectivityList	selectivity;
-					BTR_selectivity(tdbb, relation, idx.idx_id, selectivity);
+					BTR_selectivity(tdbb, relation(), idx.idx_id, selectivity);
 					if (selectivity[0] > 0.0f)
 						updated = true;
 				}
@@ -1292,7 +1299,7 @@ void Optimizer::compileRelation(StreamType stream)
 			if (updated)
 			{
 				idxList.clear();
-				BTR_all(tdbb, relation, idxList, relPages);
+				BTR_all(tdbb, relation(), idxList, relPages);
 			}
 		}
 
@@ -1300,7 +1307,7 @@ void Optimizer::compileRelation(StreamType stream)
 			tail->csb_idx = FB_NEW_POOL(getPool()) IndexDescList(getPool(), idxList);
 
 		if (tail->csb_plan)
-			markIndices(tail, relation->rel_id);
+			markIndices(tail, relation()->getId());
 	}
 }
 
@@ -1558,7 +1565,7 @@ void Optimizer::generateAggregateSort(AggNode* aggNode)
 
 		if (sortKey->skd_dtype == SKD_varying || sortKey->skd_dtype == SKD_cstring)
 		{
-			if (desc->dsc_ttype() == ttype_binary)
+			if (desc->getTextType() == ttype_binary)
 				sortKey->skd_flags |= SKD_binary;
 		}
 
@@ -1698,11 +1705,11 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 	{
 		for (auto& item : fields)
 		{
-			const auto* relation = csb->csb_rpt[item.stream].csb_relation;
+			const auto* relation = csb->csb_rpt[item.stream].csb_relation();
 
 			if (relation &&
-				!relation->rel_file &&
-				!relation->rel_view_rse &&
+				!relation->getExtFile() &&
+				!relation->isView() &&
 				!relation->isVirtual())
 			{
 				item.desc = nullptr;
@@ -1795,7 +1802,7 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 
 		if (sort_key->skd_dtype == SKD_varying || sort_key->skd_dtype == SKD_cstring)
 		{
-			if (desc->dsc_ttype() == ttype_binary)
+			if (desc->getTextType() == ttype_binary)
 				sort_key->skd_flags |= SKD_binary;
 		}
 
@@ -1933,7 +1940,7 @@ void Optimizer::checkIndices()
 		if (plan->type != PlanNode::TYPE_RETRIEVE)
 			continue;
 
-		const auto* relation = tail->csb_relation;
+		auto* const relation = tail->csb_relation();
 		if (!relation)
 			return;
 
@@ -1956,17 +1963,18 @@ void Optimizer::checkIndices()
 
 		// Check to make sure that all indices are either used or marked not to be used,
 		// and that there are no unused navigational indices
-		QualifiedName index_name;
-
 		for (const auto& idx : *tail->csb_idx)
 		{
 			if (!(idx.idx_runtime_flags & (idx_plan_dont_use | idx_used)) ||
 				((idx.idx_runtime_flags & idx_plan_navigate) && !(idx.idx_runtime_flags & idx_navigate)))
 			{
-				if (relation)
-					MET_lookup_index(tdbb, index_name, relation->rel_name, (USHORT) (idx.idx_id + 1));
-				else
-					index_name.clear();
+				QualifiedName index_name;
+				auto* idp = relation->lookupIndex(tdbb, idx.idx_id, CacheFlag::AUTOCREATE);
+				if (idp)
+					index_name = idp->getName();
+
+				if (!index_name.hasData())
+					index_name = QualifiedName("***unknown***");
 
 				// index %s cannot be used in the specified plan
 				if (isGbak)
@@ -2910,15 +2918,15 @@ RecordSource* Optimizer::generateRetrieval(StreamType stream,
 	Array<DbKeyRangeNode*> dbkeyRanges;
 	double scanSelectivity = MAXIMUM_SELECTIVITY;
 
-	if (relation->rel_file)
+	if (relation()->getExtFile())
 	{
 		// External table
 		rsb = FB_NEW_POOL(getPool()) ExternalTableScan(csb, alias, stream, relation);
 	}
-	else if (relation->isVirtual())
+	else if (relation()->isVirtual())
 	{
 		// Virtual table: monitoring or security
-		switch (relation->rel_id)
+		switch (relation()->getId())
 		{
 		case rel_global_auth_mapping:
 			rsb = FB_NEW_POOL(getPool()) GlobalMappingScan(csb, alias, stream, relation);
@@ -3261,7 +3269,7 @@ string Optimizer::makeAlias(StreamType stream)
 			if (csb_tail->csb_alias && csb_tail->csb_alias->hasData())
 				alias_list.push(*csb_tail->csb_alias);
 			else if (csb_tail->csb_relation)
-				alias_list.push(csb_tail->csb_relation->rel_name.toQuotedString());
+				alias_list.push(csb_tail->csb_relation()->getName().toQuotedString());
 
 			if (!csb_tail->csb_view)
 				break;

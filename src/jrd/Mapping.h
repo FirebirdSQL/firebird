@@ -173,12 +173,12 @@ class GlobalMappingScan final : public VirtualTableScan
 {
 public:
 	GlobalMappingScan(CompilerScratch* csb, const Firebird::string& alias,
-					  StreamType stream, jrd_rel* relation)
+					  StreamType stream, Rsc::Rel relation)
 		: VirtualTableScan(csb, alias, stream, relation)
 	{}
 
 protected:
-	const Format* getFormat(thread_db* tdbb, jrd_rel* relation) const override;
+	const Format* getFormat(thread_db* tdbb, RelationPermanent* relation) const override;
 	bool retrieveRecord(thread_db* tdbb, jrd_rel* relation, FB_UINT64 position,
 		Record* record) const override;
 };
@@ -188,7 +188,7 @@ class MappingList final : public SnapshotData
 public:
 	explicit MappingList(jrd_tra* tra);
 
-	RecordBuffer* getList(thread_db* tdbb, const jrd_rel* relation);
+	RecordBuffer* getList(thread_db* tdbb, const RelationPermanent* relation);
 
 private:
 	RecordBuffer* makeBuffer(thread_db* tdbb);

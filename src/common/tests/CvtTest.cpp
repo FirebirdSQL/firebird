@@ -232,7 +232,7 @@ BOOST_AUTO_TEST_CASE(CVTMoveCommonZeroPadding_TZ)
 	fromTs.dsc_length = strlen(tsText);
 	fromTs.dsc_scale = 0;
 	fromTs.dsc_address = (UCHAR*) tsText;
-	fromTs.dsc_ttype() = ttype_ascii;
+	fromTs.setTextType(ttype_ascii);
 
 	dsc toTs;
 	toTs.dsc_dtype = dtype_timestamp_tz;
@@ -255,7 +255,7 @@ BOOST_AUTO_TEST_CASE(CVTMoveCommonZeroPadding_TZ)
 	fromTime.dsc_length = strlen(timeText);
 	fromTime.dsc_scale = 0;
 	fromTime.dsc_address = (UCHAR*) timeText;
-	fromTime.dsc_ttype() = ttype_ascii;
+	fromTime.setTextType(ttype_ascii);
 
 	dsc toTime;
 	toTime.dsc_dtype = dtype_sql_time_tz;

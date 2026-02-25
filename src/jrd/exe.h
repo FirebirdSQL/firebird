@@ -35,6 +35,7 @@
 #include <optional>
 #include "../jrd/blb.h"
 #include "../jrd/Relation.h"
+#include "../jrd/CharSetContainer.h"
 #include "../common/classes/array.h"
 #include "../jrd/MetaName.h"
 #include "../common/classes/auto.h"
@@ -46,6 +47,7 @@
 #include "../common/dsc.h"
 
 #include "../jrd/err_proto.h"
+#include "../jrd/met_proto.h"
 #include "../jrd/scl.h"
 #include "../jrd/sbm.h"
 #include "../jrd/sort.h"
@@ -54,6 +56,8 @@
 #include "../common/classes/BlrReader.h"
 #include "../dsql/Nodes.h"
 #include "../dsql/Visitors.h"
+
+#include "../jrd/Resources.h"
 
 // This macro enables DSQL tracing code
 //#define CMP_DEBUG
@@ -167,48 +171,6 @@ struct impure_agg_sort
 	ULONG iasb_dummy;
 };
 
-
-// Request resources
-
-struct Resource
-{
-	enum rsc_s
-	{
-		rsc_relation,
-		rsc_procedure,
-		rsc_index,
-		rsc_collation,
-		rsc_function
-	};
-
-	rsc_s		rsc_type;
-	USHORT		rsc_id;			// Id of the resource
-	jrd_rel*	rsc_rel;		// Relation block
-	Routine*	rsc_routine;	// Routine block
-	Collation*	rsc_coll;		// Collation block
-
-	static bool greaterThan(const Resource& i1, const Resource& i2) noexcept
-	{
-		// A few places of the engine depend on fact that rsc_type
-		// is the first field in ResourceList ordering
-		if (i1.rsc_type != i2.rsc_type)
-			return i1.rsc_type > i2.rsc_type;
-		if (i1.rsc_type == rsc_index)
-		{
-			// Sort by relation ID for now
-			if (i1.rsc_rel->rel_id != i2.rsc_rel->rel_id)
-				return i1.rsc_rel->rel_id > i2.rsc_rel->rel_id;
-		}
-		return i1.rsc_id > i2.rsc_id;
-	}
-
-	Resource(rsc_s type, USHORT id, jrd_rel* rel, Routine* routine, Collation* coll) noexcept
-		: rsc_type(type), rsc_id(id), rsc_rel(rel), rsc_routine(routine), rsc_coll(coll)
-	{ }
-};
-
-typedef Firebird::SortedArray<Resource, Firebird::EmptyStorage<Resource>,
-	Resource, Firebird::DefaultKeyValue<Resource>, Resource> ResourceList;
 
 // Access items
 // In case we start to use MetaName with required pool parameter,
@@ -458,32 +420,32 @@ public:
 
 // Compile scratch block
 
+struct Dependency
+{
+	explicit Dependency(int aObjType)
+	{
+		memset(this, 0, sizeof(*this));
+		objType = aObjType;
+	}
+
+	int objType;
+
+	union
+	{
+		Cached::Relation* relation;
+		Cached::Function* function;
+		Cached::Procedure* procedure;
+		const QualifiedName* name;
+		SLONG number;
+	};
+
+	const MetaName* subName;
+	SLONG subNumber;
+};
+
 class CompilerScratch : public pool_alloc<type_csb>
 {
 public:
-	struct Dependency
-	{
-		explicit Dependency(int aObjType)
-		{
-			memset(this, 0, sizeof(*this));
-			objType = aObjType;
-		}
-
-		int objType;
-
-		union
-		{
-			jrd_rel* relation;
-			const Function* function;
-			const jrd_prc* procedure;
-			const QualifiedName* name;
-			SLONG number;
-		};
-
-		const MetaName* subName;
-		SLONG subNumber;
-	};
-
 	explicit CompilerScratch(MemoryPool& p, CompilerScratch* aMainCsb = NULL)
 	:	/*csb_node(0),
 		csb_variables(0),
@@ -499,7 +461,7 @@ public:
 		mainCsb(aMainCsb),
 		csb_external(p),
 		csb_access(p),
-		csb_resources(p),
+		csb_resources(FB_NEW_POOL(p) Resources(p)),
 		csb_dependencies(p),
 		csb_fors(p),
 		csb_localTables(p),
@@ -601,7 +563,7 @@ public:
 	ExternalAccessList csb_external;			// Access to outside procedures/triggers to be checked
 	AccessItemList	csb_access;					// Access items to be checked
 	vec<DeclareVariableNode*>*	csb_variables;	// Vector of variables, if any
-	ResourceList	csb_resources;				// Resources (relations and indexes)
+	Resources*	csb_resources;					// Resources (relations, indexes, routines, etc.)
 	Firebird::Array<Dependency>	csb_dependencies;	// objects that this statement depends upon
 	Firebird::Array<const Select*> csb_fors;	// select expressions
 	Firebird::Array<const DeclareLocalTableNode*> csb_localTables;	// local tables
@@ -628,9 +590,9 @@ public:
 	QualifiedName	csb_domain_validation;	// Parsing domain constraint in PSQL
 
 	// used in cmp.cpp/pass1
-	jrd_rel*	csb_view;
+	Rsc::Rel	csb_view;
 	StreamType	csb_view_stream;
-	jrd_rel*	csb_parent_relation;
+	Rsc::Rel	csb_parent_relation;
 	unsigned	blrVersion;
 	USHORT		csb_remap_variable;
 	bool		csb_validate_expr;
@@ -667,10 +629,10 @@ public:
 		StreamType csb_view_stream;		// stream number for view relation, below
 		USHORT csb_flags;
 
-		jrd_rel* csb_relation;
+		Rsc::Rel csb_relation;
 		Firebird::string* csb_alias;	// SQL alias name for this instance of relation
-		jrd_prc* csb_procedure;
-		jrd_rel* csb_view;				// parent view
+		SubRoutine<jrd_prc> csb_procedure;
+		Rsc::Rel csb_view;				// parent view
 
 		IndexDescList* csb_idx;			// Packed description of indices
 		MessageNode* csb_message;		// Msg for send/receive
@@ -694,10 +656,9 @@ inline CompilerScratch::csb_repeat::csb_repeat() noexcept
 	: csb_stream(0),
 	  csb_view_stream(0),
 	  csb_flags(0),
-	  csb_relation(0),
+	  csb_relation(),
 	  csb_alias(0),
-	  csb_procedure(0),
-	  csb_view(0),
+	  csb_view(),
 	  csb_idx(0),
 	  csb_message(0),
 	  csb_format(0),
@@ -720,24 +681,6 @@ inline void CompilerScratch::csb_repeat::deactivate() noexcept
 {
 	csb_flags &= ~csb_active;
 }
-
-inline QualifiedName CompilerScratch::csb_repeat::getName(bool allowEmpty) const
-{
-	if (csb_relation)
-		return csb_relation->rel_name;
-	else if (csb_procedure)
-		return csb_procedure->getName();
-	else if (csb_table_value_fun)
-		return QualifiedName(csb_table_value_fun->name);
-	//// TODO: LocalTableSourceNode
-	//// TODO: JsonTableSourceNode
-	else
-	{
-		fb_assert(allowEmpty);
-		return {};
-	}
-}
-
 
 class AutoSetCurrentCursorId : private Firebird::AutoSetRestore<ULONG>
 {

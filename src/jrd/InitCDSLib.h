@@ -65,6 +65,46 @@ private:
 	static Firebird::MemoryStats m_stats;
 };
 
+class InitPool
+{
+public:
+	explicit InitPool(MemoryPool&)
+		: m_pool(InitCDS::createPool()),
+		  m_stats(m_pool->getStatsGroup())
+	{ }
+
+	~InitPool()
+	{
+		// m_pool will be deleted by InitCDS dtor after cds termination
+		// some memory could still be not freed until that moment
+
+#ifdef DEBUG_CDS_MEMORY
+		char str[256];
+		sprintf(str, "CCH list's common pool stats:\n"
+			"  usage         = %llu\n"
+			"  mapping       = %llu\n"
+			"  max usage     = %llu\n"
+			"  max mapping   = %llu\n"
+			"\n",
+			m_stats.getCurrentUsage(),
+			m_stats.getCurrentMapping(),
+			m_stats.getMaximumUsage(),
+			m_stats.getMaximumMapping()
+		);
+		gds__log(str);
+#endif
+	}
+
+	void* alloc(size_t size)
+	{
+		return m_pool->allocate(size ALLOC_ARGS);
+	}
+
+private:
+	Firebird::MemoryPool* m_pool;
+	Firebird::MemoryStats& m_stats;
+};
+
 } // namespace Jrd
 
 #endif	// FB_INIT_CDSLIB_H

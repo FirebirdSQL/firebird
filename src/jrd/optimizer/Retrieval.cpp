@@ -31,6 +31,7 @@
 #include "../jrd/intl.h"
 #include "../jrd/Collation.h"
 #include "../jrd/ods.h"
+#include "../jrd/met.h"
 #include "../jrd/RecordSourceNodes.h"
 #include "../jrd/recsrc/RecordSource.h"
 #include "../dsql/BoolNodes.h"
@@ -157,7 +158,6 @@ Retrieval::Retrieval(thread_db* aTdbb, Optimizer* opt, StreamType streamNumber,
 
 	const auto tail = &csb->csb_rpt[stream];
 	relation = tail->csb_relation;
-	fb_assert(relation);
 
 	if (!tail->csb_idx)
 		return;
@@ -173,7 +173,7 @@ Retrieval::Retrieval(thread_db* aTdbb, Optimizer* opt, StreamType streamNumber,
 		if ((index.idx_flags & idx_condition) && !checkIndexCondition(index, matches))
 			continue;
 
-		const auto length = ROUNDUP(BTR_key_length(tdbb, relation, &index), sizeof(SLONG));
+		const auto length = ROUNDUP(BTR_key_length(tdbb, relation(tdbb), &index), sizeof(SLONG));
 
 		// AB: Calculate the cardinality which should reflect the total number
 		// of index pages for this index.
@@ -249,7 +249,7 @@ InversionCandidate* Retrieval::getInversion()
 
 	InversionCandidate* invCandidate = nullptr;
 
-	if (relation && !relation->rel_file && !relation->isVirtual())
+	if (relation && !relation()->getExtFile() && !relation()->isVirtual())
 	{
 		InversionCandidateList inversions;
 
@@ -396,7 +396,7 @@ IndexTableScan* Retrieval::getNavigation()
 	const auto indexNode = makeIndexScanNode(scratch);
 
 	const USHORT keyLength =
-		ROUNDUP(BTR_key_length(tdbb, relation, scratch->index), sizeof(SLONG));
+		ROUNDUP(BTR_key_length(tdbb, relation(tdbb), scratch->index), sizeof(SLONG));
 
 	return FB_NEW_POOL(getPool())
 		IndexTableScan(csb, getAlias(), stream, relation, indexNode, keyLength,
@@ -529,12 +529,12 @@ void Retrieval::analyzeNavigation(const InversionCandidateList& inversions)
 				dsc desc;
 				node->getDesc(tdbb, csb, &desc);
 
-				// ASF: "desc.dsc_ttype() > ttype_last_internal" is to avoid recursion
+				// ASF: "desc.getTextType() > ttype_last_internal" is to avoid recursion
 				// when looking for charsets/collations
 
-				if (DTYPE_IS_TEXT(desc.dsc_dtype) && desc.dsc_ttype() > ttype_last_internal)
+				if (DTYPE_IS_TEXT(desc.dsc_dtype) && desc.getTextType() > ttype_last_internal)
 				{
-					const TextType* const tt = INTL_texttype_lookup(tdbb, desc.dsc_ttype());
+					auto tt = INTL_texttype_lookup(tdbb, desc.getTextType());
 
 					if (idx->idx_flags & idx_unique)
 					{
@@ -834,9 +834,9 @@ bool Retrieval::betterInversion(const InversionCandidate* inv1,
 
 bool Retrieval::checkIndexCondition(index_desc& idx, BooleanList& matches) const
 {
-	fb_assert(idx.idx_condition);
+	fb_assert(idx.idx_condition_node);
 
-	if (!idx.idx_condition->containsStream(0, true))
+	if (!idx.idx_condition_node->containsStream(0, true))
 		return false;
 
 	fb_assert(matches.isEmpty());
@@ -844,7 +844,7 @@ bool Retrieval::checkIndexCondition(index_desc& idx, BooleanList& matches) const
 	auto iter = optimizer->getConjuncts(outerFlag, innerFlag);
 
 	BoolExprNodeStack idxConjuncts;
-	const auto conjunctCount = optimizer->decomposeBoolean(idx.idx_condition, idxConjuncts);
+	const auto conjunctCount = optimizer->decomposeBoolean(idx.idx_condition_node, idxConjuncts);
 	fb_assert(conjunctCount);
 
 	idx.idx_fraction = MAXIMUM_SELECTIVITY;
@@ -911,11 +911,11 @@ bool Retrieval::checkIndexCondition(index_desc& idx, BooleanList& matches) const
 
 bool Retrieval::checkIndexExpression(const index_desc* idx, ValueExprNode* node) const
 {
-	fb_assert(idx && idx->idx_expression);
+	fb_assert(idx && idx->idx_expression_node);
 
 	// The desired expression can be hidden inside a derived expression node,
 	// so try to recover it (see CORE-4118).
-	while (!idx->idx_expression->sameAs(node, true))
+	while (!idx->idx_expression_node->sameAs(node, true))
 	{
 		const auto derivedExpr = nodeAs<DerivedExprNode>(node);
 		const auto cast = nodeAs<CastNode>(node);
@@ -930,7 +930,7 @@ bool Retrieval::checkIndexExpression(const index_desc* idx, ValueExprNode* node)
 
 	// Check the index for matching both the given stream and the given expression tree
 
-	return idx->idx_expression->containsStream(0, true) &&
+	return idx->idx_expression_node->containsStream(0, true) &&
 		node->containsStream(stream, true);
 }
 
@@ -1241,19 +1241,16 @@ InversionNode* Retrieval::makeIndexScanNode(IndexScratch* indexScratch) const
 	const auto idx = indexScratch->index;
 	auto& segments = indexScratch->segments;
 
-	// Check whether this is during a compile or during a SET INDEX operation
-	if (csb)
-		CMP_post_resource(&csb->csb_resources, relation, Resource::rsc_index, idx->idx_id);
-	else
-	{
-		CMP_post_resource(&tdbb->getRequest()->getStatement()->resources, relation,
-			Resource::rsc_index, idx->idx_id);
-	}
+	fb_assert(csb);
 
 	// For external requests, determine index name (to be reported in plans)
 	QualifiedName indexName;
-	if (!(csb->csb_g_flags & csb_internal))
-		MET_lookup_index(tdbb, indexName, relation->rel_name, idx->idx_id + 1);
+	if (relation && !(csb->csb_g_flags & csb_internal))
+	{
+		auto* idp = relation()->lookupIndex(tdbb, idx->idx_id, CacheFlag::AUTOCREATE);
+		if (idp)
+			indexName = idp->getName();
+	}
 
 	const auto retrieval =
 		FB_NEW_POOL(getPool()) IndexRetrieval(getPool(), relation, idx, indexName);
@@ -1471,7 +1468,7 @@ InversionCandidate* Retrieval::makeInversion(InversionCandidateList& inversions)
 				for (auto otherInversion : inversions)
 				{
 					if (otherInversion->boolean &&
-						idx->idx_condition->sameAs(otherInversion->boolean, true))
+						idx->idx_condition_node->sameAs(otherInversion->boolean, true))
 					{
 						otherInversion->used = true;
 					}
@@ -1795,7 +1792,7 @@ bool Retrieval::matchBoolean(IndexScratch* indexScratch,
 	{
 		// If index condition matches the boolean, this should not be
 		// considered a match. Full index scan will be used instead.
-		if (idx->idx_condition->sameAs(boolean, true))
+		if (idx->idx_condition_node->sameAs(boolean, true))
 			return false;
 	}
 

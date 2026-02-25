@@ -384,9 +384,9 @@ void SQL_adjust_field_dtype( gpre_fld* field)
 				field_length = (ULONG) field->fld_char_length * 1;
 			else
 				field_length = field->fld_length;
-			field->fld_collate_id = 0;
-			field->fld_charset_id = 0;
-			field->fld_ttype = 0;
+			field->fld_collate_id = COLLATE_NONE;
+			field->fld_charset_id = CS_NONE;
+			field->fld_ttype = CS_NONE;
 		}
 
 		if (!(field->fld_flags & FLD_meta))

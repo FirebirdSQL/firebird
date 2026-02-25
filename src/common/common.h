@@ -570,6 +570,7 @@
 
 #define MAX_USHORT		((USHORT)0xFFFF)
 #define MIN_USHORT		0x0000
+#define MAX_META_ID		MAX_USHORT
 
 #define MAX_SSHORT		0x7FFF
 #define MIN_SSHORT		(-MAX_SSHORT - 1)
@@ -851,5 +852,7 @@ namespace Firebird {
 	class IMessageMetadata;
 	static IMessageMetadata* const DELAYED_OUT_FORMAT = reinterpret_cast<IMessageMetadata*>(1);
 }
+
+//#define DEBUG_LOST_POOLS 1
 
 #endif /* COMMON_COMMON_H */

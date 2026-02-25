@@ -767,13 +767,13 @@ burp_fld* get_fields( burp_rel* relation)
 
 			if (!Y.RDB$CHARACTER_SET_ID.NULL)
 			{
-				field->fld_character_set_id = Y.RDB$CHARACTER_SET_ID;
+				field->fld_character_set_id = CSetId(Y.RDB$CHARACTER_SET_ID);
 				field->fld_flags |= FLD_charset_flag;
 			}
 
 			if (!X.RDB$COLLATION_ID.NULL)
 			{
-				field->fld_collation_id = X.RDB$COLLATION_ID;
+				field->fld_collation_id = CollId(X.RDB$COLLATION_ID);
 				field->fld_flags |= FLD_collate_flag;
 			}
 
@@ -886,13 +886,13 @@ burp_fld* get_fields( burp_rel* relation)
 
 			if (!Y.RDB$CHARACTER_SET_ID.NULL)
 			{
-				field->fld_character_set_id = Y.RDB$CHARACTER_SET_ID;
+				field->fld_character_set_id = CSetId(Y.RDB$CHARACTER_SET_ID);
 				field->fld_flags |= FLD_charset_flag;
 			}
 
 			if (!X.RDB$COLLATION_ID.NULL)
 			{
-				field->fld_collation_id = X.RDB$COLLATION_ID;
+				field->fld_collation_id = CollId(X.RDB$COLLATION_ID);
 				field->fld_flags |= FLD_collate_flag;
 			}
 
@@ -1647,7 +1647,8 @@ void put_index( burp_rel* relation)
 		FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle1)
 			X IN RDB$INDICES WITH
 			X.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
-			X.RDB$RELATION_NAME EQ relation->rel_name.object.c_str()
+			X.RDB$RELATION_NAME EQ relation->rel_name.object.c_str() AND
+			X.RDB$INDEX_NAME NOT STARTING TEMP_DEPEND
 		{
 			count = 0;
 			FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle2)

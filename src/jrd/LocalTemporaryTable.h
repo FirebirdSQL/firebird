@@ -66,8 +66,8 @@ namespace Jrd
 		public:
 			MetaName name;
 			QualifiedName source;
-			std::optional<SSHORT> collationId;
-			std::optional<SSHORT> charSetId;
+			std::optional<CollId> collationId;
+			std::optional<CSetId> charSetId;
 			USHORT id = 0;
 			USHORT position = 0;
 			USHORT segLength = 0;

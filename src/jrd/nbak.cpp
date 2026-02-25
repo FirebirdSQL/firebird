@@ -34,7 +34,7 @@
 #include "ods.h"
 #include "lck.h"
 #include "cch.h"
-#include "lck_proto.h"
+#include "lck.h"
 #include "pag_proto.h"
 #include "err_proto.h"
 #include "cch_proto.h"

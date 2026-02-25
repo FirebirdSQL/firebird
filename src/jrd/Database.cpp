@@ -36,11 +36,12 @@
 #include "../jrd/met_proto.h"
 #include "../jrd/pag_proto.h"
 #include "../jrd/tpc_proto.h"
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "../jrd/CryptoManager.h"
 #include "../jrd/os/pio_proto.h"
 #include "../common/os/os_utils.h"
-//#include "../dsql/Parser.h"
+#include "../jrd/met.h"
+#include "../jrd/Statement.h"
 
 // Thread data block
 #include "../common/ThreadData.h"
@@ -155,33 +156,24 @@ namespace Jrd
 		return dbb_file_id;
 	}
 
-	Database::~Database()
+	MemoryPool* Database::createPool(ALLOC_PARAMS1 bool separateStats)
 	{
-		if (dbb_linger_timer)
+		MemoryPool* const pool = MemoryPool::createPool(ALLOC_PASS_ARGS1 dbb_permanent, dbb_memory_stats);
+
+		if (separateStats)
 		{
-			dbb_linger_timer->destroy();
+			auto stats = FB_NEW_POOL(*pool) MemoryStats(&dbb_memory_stats);
+			pool->setStatsGroup(*stats);
 		}
 
-		{ // scope
-			SyncLockGuard guard(&dbb_sortbuf_sync, SYNC_EXCLUSIVE, "Database::~Database");
+		Firebird::SyncLockGuard guard(&dbb_pools_sync, Firebird::SYNC_EXCLUSIVE, "Database::createPool");
+		dbb_pools.add(pool);
 
-			while (dbb_sort_buffers.hasData())
-				delete[] dbb_sort_buffers.pop();
-		}
+#ifdef DEBUG_LOST_POOLS
+		fprintf(stderr, "+ D: %p\n", pool);
+#endif
 
-		{ // scope
-			SyncLockGuard guard(&dbb_pools_sync, SYNC_EXCLUSIVE, "Database::~Database");
-
-			fb_assert(dbb_pools[0] == dbb_permanent);
-
-			for (FB_SIZE_T i = 1; i < dbb_pools.getCount(); ++i)
-				MemoryPool::deletePool(dbb_pools[i]);
-		}
-
-		delete dbb_tip_cache;
-		delete dbb_monitoring_data;
-		delete dbb_backup_manager;
-		delete dbb_crypto_manager;
+		return pool;
 	}
 
 	void Database::deletePool(MemoryPool* pool)
@@ -196,8 +188,64 @@ namespace Jrd
 					dbb_pools.remove(pos);
 			}
 
+#ifdef DEBUG_LOST_POOLS
+			fprintf(stderr, "- D: %p\n", pool);
+#endif
+
 			MemoryPool::deletePool(pool);
 		}
+	}
+
+#ifdef DEBUG_LOST_POOLS
+	static Database* toCheck = nullptr;
+
+	void checkPool(MemoryPool* pool)
+	{
+		if (toCheck)
+			toCheck->checkPool(pool);
+	}
+
+	void Database::checkPool(MemoryPool* pool)
+	{
+		SyncLockGuard guard(&dbb_pools_sync, SYNC_EXCLUSIVE, "Database::checkPool");
+		FB_SIZE_T pos;
+
+		if (dbb_pools.find(pool, pos))
+			abort();
+	}
+#endif
+
+	Database::~Database()
+	{
+		if (dbb_linger_timer)
+		{
+			dbb_linger_timer->destroy();
+		}
+
+		{ // scope
+			SyncLockGuard guard(&dbb_sortbuf_sync, SYNC_EXCLUSIVE, "Database::~Database");
+
+			while (dbb_sort_buffers.hasData())
+				delete[] dbb_sort_buffers.pop();
+		}
+
+		delete dbb_tip_cache;
+		delete dbb_monitoring_data;
+		delete dbb_backup_manager;
+		delete dbb_crypto_manager;
+		delete dbb_mdc;
+
+		fb_assert(dbb_pools[0] == dbb_permanent);
+
+		for (FB_SIZE_T i = 1; i < dbb_pools.getCount(); ++i)
+		{
+			MemoryPool::deletePool(dbb_pools[i]);
+		}
+
+#ifdef DEBUG_LOST_POOLS
+		if (toCheck == this)
+			toCheck = nullptr;
+#endif
 	}
 
 	int Database::blocking_ast_sweep(void* ast_object)
@@ -475,6 +523,73 @@ namespace Jrd
 			dbb_filename, dbb_config));
 	}
 
+	// Find an inactive incarnation of a system request.
+	Request* Database::findSystemRequest(thread_db* tdbb, USHORT id, InternalRequest which)
+	{
+		fb_assert(which == IRQ_REQUESTS || which == DYN_REQUESTS || which == CACHED_REQUESTS);
+
+		auto* stPtr = &(which == IRQ_REQUESTS ? dbb_internal : dbb_dyn_req)[id];
+		if (which == CACHED_REQUESTS)
+		{
+			auto readAccessor = dbb_internal_cached_statements.readAccessor();
+			if (id >= readAccessor->getCount())
+				return nullptr;
+
+			stPtr = &(readAccessor->value(id));
+		}
+
+		Statement* statement = stPtr->load(std::memory_order_relaxed);
+
+		// If the request hasn't been compiled, there're nothing to do.
+		if (!statement)
+			return nullptr;
+
+		return statement->findRequest(tdbb);
+	}
+
+	// Store newly compiled request in the cache
+	Request* Database::cacheRequest(InternalRequest which, USHORT id, Request* req)
+	{
+		bool ok = req->setUsed();
+		fb_assert(ok);
+
+		MutexEnsureUnlock g(dbb_internal_cached_mutex, FB_FUNCTION);
+
+		auto* stPtr = &(which == IRQ_REQUESTS ? dbb_internal : dbb_dyn_req)[id];
+		if (which == CACHED_REQUESTS)
+		{
+			g.enter();
+			auto writeAccessor = dbb_internal_cached_statements.writeAccessor();
+			if (id >= writeAccessor->getCount())
+			{
+				dbb_internal_cached_statements.grow(id + 1, true);
+				writeAccessor = dbb_internal_cached_statements.writeAccessor();
+			}
+			stPtr = &(writeAccessor->value(id));
+		}
+
+		Statement* existingStmt = stPtr->load(std::memory_order_acquire);
+		Statement* const compiledStmt = req->getStatement();
+		if (!existingStmt)
+		{
+			if (stPtr->compare_exchange_strong(existingStmt, compiledStmt,
+				std::memory_order_release, std::memory_order_acquire))
+			{
+				return req;
+			}
+		}
+
+		// Someone else already stored system request in the cache
+		// Let's use it
+		fb_assert(existingStmt);
+
+		thread_db* tdbb = JRD_get_thread_data();
+		req->setUnused();
+		compiledStmt->release(tdbb);
+
+		return existingStmt->findRequest(tdbb);
+	}
+
 	// Methods encapsulating operations with vectors of known pages
 
 	ULONG Database::getKnownPagesCount(SCHAR ptype)
@@ -699,6 +814,52 @@ namespace Jrd
 		return m_replMgr;
 	}
 
+	Database::Database(MemoryPool* p, Firebird::IPluginConfig* pConf, bool shared)
+	:	dbb_permanent(p),
+		dbb_guid(Firebird::Guid::empty()),
+		dbb_page_manager(this, *p),
+		dbb_file_id(*p),
+		dbb_modules(*p),
+		dbb_internal(*p),
+		dbb_dyn_req(*p),
+		dbb_extManager(nullptr),
+		dbb_flags(shared ? DBB_shared : 0),
+		dbb_shutdown_mode(shut_mode_online),
+		dbb_filename(*p),
+		dbb_database_name(*p),
+#ifdef HAVE_ID_BY_NAME
+		dbb_id(*p),
+#endif
+		dbb_owner(*p),
+		dbb_pools(*p, 4),
+		dbb_sort_buffers(*p),
+		dbb_gc_fini(*p, garbage_collector, THREAD_medium),
+		dbb_stats(*p),
+		dbb_lock_owner_id(getLockOwnerId()),
+		dbb_tip_cache(NULL),
+		dbb_creation_date(Firebird::TimeZoneUtil::getCurrentGmtTimeStamp()),
+		dbb_external_file_directory_list(NULL),
+		dbb_init_fini(FB_NEW_POOL(*getDefaultMemoryPool()) ExistenceRefMutex()),
+		dbb_linger_seconds(0),
+		dbb_linger_end(0),
+		dbb_plugin_config(pConf),
+		dbb_repl_sequence(0),
+		dbb_replica_mode(REPLICA_NONE),
+		dbb_compatibility_index(~0U),
+		dbb_dic(*p),
+		dbb_mdc(FB_NEW_POOL(*p) MetadataCache(*p)),
+		dbb_user_ids(*p)
+	{
+		dbb_pools.add(p);
+
+		dbb_internal.grow(irq_MAX);
+		dbb_dyn_req.grow(drq_MAX);
+
+#ifdef DEBUG_LOST_POOLS
+		toCheck = this;
+#endif
+	}
+
 	bool Database::GlobalObjectHolder::incTempCacheUsage(FB_SIZE_T size)
 	{
 		if (m_tempCacheUsage + size > m_tempCacheLimit)
@@ -724,5 +885,43 @@ namespace Jrd
 	GlobalPtr<Database::GlobalObjectHolder::DbIdHash>
 		Database::GlobalObjectHolder::g_hashTable;
 	GlobalPtr<Mutex> Database::GlobalObjectHolder::g_mutex;
+
+	void Database::releaseSystemRequests(thread_db* tdbb)
+	{
+		for (auto& itr : dbb_internal)
+		{
+			auto* stmt = itr.load(std::memory_order_relaxed);
+			if (stmt)
+				stmt->release(tdbb);
+		}
+
+		for (auto& itr : dbb_dyn_req)
+		{
+			auto* stmt = itr.load(std::memory_order_relaxed);
+			if (stmt)
+				stmt->release(tdbb);
+		}
+
+		auto writeAccessor = dbb_internal_cached_statements.writeAccessor();
+		for (unsigned int n = 0; n < writeAccessor->getCount(); ++n)
+		{
+			auto* stmt = writeAccessor->value(n).load(std::memory_order_relaxed);
+			if (stmt)
+				stmt->release(tdbb);
+		}
+	}
+
+	UserId* Database::getUserId(const MetaString& userName)
+	{
+		UserId* result = NULL;
+		if (!dbb_user_ids.get(userName, result))
+		{
+			result = FB_NEW_POOL(*dbb_permanent) UserId(*dbb_permanent);
+			result->setUserName(userName);
+			dbb_user_ids.put(userName, result);
+		}
+		return result;
+	}
+
 
 } // namespace

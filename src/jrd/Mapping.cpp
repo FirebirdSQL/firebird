@@ -1660,7 +1660,7 @@ void Mapping::clearCache(const char* dbName, USHORT index)
 }
 
 
-const Format* GlobalMappingScan::getFormat(thread_db* tdbb, jrd_rel* relation) const
+const Format* GlobalMappingScan::getFormat(thread_db* tdbb, RelationPermanent* relation) const
 {
 	jrd_tra* const transaction = tdbb->getTransaction();
 	return transaction->getMappingList()->getList(tdbb, relation)->getFormat();
@@ -1670,7 +1670,7 @@ bool GlobalMappingScan::retrieveRecord(thread_db* tdbb, jrd_rel* relation,
 									FB_UINT64 position, Record* record) const
 {
 	jrd_tra* const transaction = tdbb->getTransaction();
-	return transaction->getMappingList()->getList(tdbb, relation)->fetch(position, record);
+	return transaction->getMappingList()->getList(tdbb, relation->getPermanent())->fetch(position, record);
 }
 
 MappingList::MappingList(jrd_tra* tra)
@@ -1684,10 +1684,10 @@ RecordBuffer* MappingList::makeBuffer(thread_db* tdbb)
 	return getData(rel_global_auth_mapping);
 }
 
-RecordBuffer* MappingList::getList(thread_db* tdbb, const jrd_rel* relation)
+RecordBuffer* MappingList::getList(thread_db* tdbb, const RelationPermanent* relation)
 {
 	fb_assert(relation);
-	fb_assert(relation->rel_id == rel_global_auth_mapping);
+	fb_assert(relation->getId() == rel_global_auth_mapping);
 
 	RecordBuffer* buffer = getData(relation);
 	if (buffer)

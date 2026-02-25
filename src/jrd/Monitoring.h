@@ -241,7 +241,7 @@ public:
 	void putField(thread_db*, Record*, const DumpField&);
 
 	RecordBuffer* allocBuffer(thread_db*, MemoryPool&, int);
-	RecordBuffer* getData(const jrd_rel*) const noexcept;
+	RecordBuffer* getData(const RelationPermanent*) const noexcept;
 	RecordBuffer* getData(int) const noexcept;
 	void clearSnapshot() noexcept;
 
@@ -374,12 +374,12 @@ class MonitoringTableScan final : public VirtualTableScan
 {
 public:
 	MonitoringTableScan(CompilerScratch* csb, const Firebird::string& alias,
-						StreamType stream, jrd_rel* relation)
+						StreamType stream, Rsc::Rel relation)
 		: VirtualTableScan(csb, alias, stream, relation)
 	{}
 
 protected:
-	const Format* getFormat(thread_db* tdbb, jrd_rel* relation) const override;
+	const Format* getFormat(thread_db* tdbb, RelationPermanent* relation) const override;
 	bool retrieveRecord(thread_db* tdbb, jrd_rel* relation, FB_UINT64 position,
 		Record* record) const override;
 };
@@ -421,7 +421,7 @@ public:
 private:
 	static SINT64 getGlobalId(int) noexcept;
 
-	static void putAttachment(thread_db*, SnapshotData::DumpRecord&, const Attachment*);
+	static void putAttachment(thread_db*, SnapshotData::DumpRecord&, Attachment*);
 	static void putTransaction(thread_db*, SnapshotData::DumpRecord&, const jrd_tra*);
 	static void putStatement(SnapshotData::DumpRecord&, const Statement*, const Firebird::string&);
 	static void putRequest(thread_db*, SnapshotData::DumpRecord&, const Request*, const Firebird::string&);

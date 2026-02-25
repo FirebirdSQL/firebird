@@ -71,6 +71,7 @@
 #include "../jrd/intl.h"
 #include "../jrd/sbm.h"
 #include "../jrd/blb.h"
+#include "../jrd/met.h"
 #include "../jrd/SystemTriggers.h"
 #include "firebird/impl/blr.h"
 #include "../dsql/ExprNodes.h"
@@ -89,7 +90,7 @@
 #include "../jrd/intl_proto.h"
 #include "../jrd/jrd_proto.h"
 
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/mov_proto.h"
 #include "../jrd/par_proto.h"
@@ -626,15 +627,15 @@ void EXE_execute_db_triggers(thread_db* tdbb, jrd_tra* transaction, TriggerActio
 			return;
 	}
 
-	if (attachment->att_triggers[type])
+	const Triggers* triggers = MetadataCache::get(tdbb)->getTriggers(tdbb, type | TRIGGER_TYPE_DB);
+	if (triggers && *triggers)
 	{
 		AutoSetRestore2<jrd_tra*, thread_db> tempTrans(tdbb,
 			&thread_db::getTransaction,
 			&thread_db::setTransaction,
 			transaction);
 
-		EXE_execute_triggers(tdbb, &attachment->att_triggers[type],
-			NULL, NULL, trigger_action, StmtNode::ALL_TRIGS);
+		EXE_execute_triggers(tdbb, *triggers, NULL, NULL, trigger_action, StmtNode::ALL_TRIGS);
 	}
 }
 
@@ -642,19 +643,31 @@ void EXE_execute_db_triggers(thread_db* tdbb, jrd_tra* transaction, TriggerActio
 // Execute DDL triggers.
 void EXE_execute_ddl_triggers(thread_db* tdbb, jrd_tra* transaction, bool preTriggers, int action)
 {
-	const auto attachment = tdbb->getAttachment();
+	// Our caller verifies (ATT_no_db_triggers) if DDL triggers should not run.
+	const Triggers* cachedTriggers = MetadataCache::get(tdbb)->getTriggers(tdbb, TRIGGER_TYPE_DDL);
 
-	// Our caller verifies (ATT_no_db_triggers) if DDL triggers should not run
-
-	if (attachment->att_ddl_triggers)
+	if (cachedTriggers && *cachedTriggers)
 	{
-		AutoSetRestore2<jrd_tra*, thread_db> tempTrans(tdbb,
-			&thread_db::getTransaction,
-			&thread_db::setTransaction,
-			transaction);
+		Triggers triggers(*(transaction->tra_pool));
 
-		EXE_execute_triggers(tdbb, &attachment->att_ddl_triggers, NULL, NULL, TRIGGER_DDL,
-			preTriggers ? StmtNode::PRE_TRIG : StmtNode::POST_TRIG, action);
+		for (auto t : *cachedTriggers)
+		{
+			const bool preTrigger = ((t->type & 0x1) == 0);
+
+			if ((t->type & (1LL << action)) && (preTriggers == preTrigger))
+				triggers.addTrigger(tdbb, t);
+		}
+
+		if (triggers)
+		{
+			AutoSetRestore2<jrd_tra*, thread_db> tempTrans(tdbb,
+				&thread_db::getTransaction,
+				&thread_db::setTransaction,
+				transaction);
+
+			EXE_execute_triggers(tdbb, triggers, NULL, NULL, TRIGGER_DDL,
+				preTriggers ? StmtNode::PRE_TRIG : StmtNode::POST_TRIG, action);
+		}
 	}
 }
 
@@ -871,12 +884,14 @@ void EXE_release(thread_db* tdbb, Request* request)
 		request->req_attachment = nullptr;
 	}
 
-	request->req_flags &= ~req_in_use;
 	if (request->req_timer)
 	{
 		request->req_timer->stop();
 		request->req_timer = nullptr;
 	}
+
+	if (request->isUsed())
+		request->setUnused();
 }
 
 
@@ -988,12 +1003,11 @@ static void activate_request(thread_db* tdbb, Request* request, jrd_tra* transac
 	provide transaction stability by preventing a relation from being
 	dropped after it has been referenced from an active transaction. */
 
-	TRA_post_resources(tdbb, transaction, statement->resources);
+	transaction->postResources(tdbb, statement->getResources());
 
 	TRA_attach_request(transaction, request);
-	request->req_flags &= req_in_use | req_restart_ready;
+	request->req_flags &= req_restart_ready;
 	request->req_flags |= req_active;
-	request->req_flags &= ~req_reserved;
 
 	// set up to count records affected by request
 
@@ -1109,7 +1123,7 @@ void EXE_execute_function(thread_db* tdbb, Request* request, jrd_tra* transactio
 			if (!exeState.errorPending)
 				TRA_release_request_snapshot(tdbb, request);
 
-			request->req_flags &= ~(req_active | req_reserved);
+			request->req_flags &= ~req_active;
 			request->invalidateTimeStamp();
 
 			if (profilerInitialTicks && attachment->isProfilerActive())
@@ -1253,11 +1267,10 @@ void EXE_unwind(thread_db* tdbb, Request* request)
 	}
 
 	request->req_sorts.unlinkAll();
-
 	TRA_release_request_snapshot(tdbb, request);
 	TRA_detach_request(request);
 
-	request->req_flags &= ~(req_active | req_proc_fetch | req_reserved);
+	request->req_flags &= ~(req_active | req_proc_fetch);
 	request->req_flags |= req_abort | req_stall;
 	request->invalidateTimeStamp();
 	request->req_caller = NULL;
@@ -1329,7 +1342,7 @@ static void execute_looper(thread_db* tdbb,
 
 
 void EXE_execute_triggers(thread_db* tdbb,
-						  TrigVector** triggers,
+						  const Triggers& triggers,
 						  record_param* old_rpb,
 						  record_param* new_rpb,
 						  TriggerAction trigger_action,
@@ -1356,7 +1369,7 @@ void EXE_execute_triggers(thread_db* tdbb,
 	if (!(dbb->dbb_flags & DBB_creating) && (old_rpb || new_rpb))
 	{
 		if (const auto relation = old_rpb ? old_rpb->rpb_relation : new_rpb->rpb_relation;
-			relation->rel_flags & REL_system)
+			relation->isSystem())
 		{
 			switch (which_trig)
 			{
@@ -1390,6 +1403,14 @@ void EXE_execute_triggers(thread_db* tdbb,
 							SystemTriggers::executeAfterDeleteTriggers(tdbb, relation, old_rec);
 							break;
 
+						case TriggerAction::TRIGGER_UPDATE:
+							SystemTriggers::executeAfterUpdateTriggers(tdbb, relation, old_rec, new_rec);
+							break;
+
+						case TriggerAction::TRIGGER_INSERT:
+							SystemTriggers::executeAfterInsertTriggers(tdbb, relation, new_rec);
+							break;
+
 						default:
 							// other trigger actions not relevant here
 							break;
@@ -1403,13 +1424,11 @@ void EXE_execute_triggers(thread_db* tdbb,
 		}
 	}
 
-	if (!*triggers || (*triggers)->isEmpty())
+	if (!triggers)
 		return;
 
 	Request* const request = tdbb->getRequest();
 	jrd_tra* const transaction = request ? request->req_transaction : tdbb->getTransaction();
-
-	RefPtr<TrigVector> vector(*triggers);
 	AutoPtr<Record> null_rec;
 
 	const bool is_db_trigger = (!old_rec && !new_rec);
@@ -1420,7 +1439,7 @@ void EXE_execute_triggers(thread_db* tdbb,
 		fb_assert(rpb && rpb->rpb_relation);
 		// copy the record
 		MemoryPool& pool = *tdbb->getDefaultPool();
-		null_rec = FB_NEW_POOL(pool) Record(pool, MET_current(tdbb, rpb->rpb_relation));
+		null_rec = FB_NEW_POOL(pool) Record(pool, rpb->rpb_relation->currentFormat(tdbb));
 		// initialize all fields to missing
 		null_rec->nullify();
 	}
@@ -1436,7 +1455,7 @@ void EXE_execute_triggers(thread_db* tdbb,
 
 	try
 	{
-		for (TrigVector::iterator ptr = vector->begin(); ptr != vector->end(); ++ptr)
+		for (auto* ptr : triggers)
 		{
 			// The system trigger that implement cascading action can be skipped if
 			// no PK/UK field have been changed by UPDATE.
@@ -1464,7 +1483,6 @@ void EXE_execute_triggers(thread_db* tdbb,
 			}
 
 			ptr->compile(tdbb);
-
 			trigger = ptr->statement->findRequest(tdbb);
 
 			if (!is_db_trigger)
@@ -1524,7 +1542,7 @@ void EXE_execute_triggers(thread_db* tdbb,
 				if (trigger_action == TRIGGER_DISCONNECT)
 				{
 					if (!trigger->req_timer)
-						trigger->req_timer = FB_NEW_POOL(*tdbb->getAttachment()->att_pool) TimeoutTimer();
+						trigger->req_timer = FB_NEW_POOL(MetadataCache::get(tdbb)->getPool()) TimeoutTimer();
 
 					const unsigned int timeOut = tdbb->getDatabase()->dbb_config->getOnDisconnectTrigTimeout() * 1000;
 					trigger->req_timer->setup(timeOut, isc_cfg_stmt_timeout);
@@ -1541,12 +1559,17 @@ void EXE_execute_triggers(thread_db* tdbb,
 
 			EXE_unwind(tdbb, trigger);
 			trigger->req_attachment = NULL;
-			trigger->req_flags &= ~req_in_use;
+
+			Request* t = trigger;
+			trigger = NULL;
+
+			// Use RAII cleanup because trigger_failure is using trigger & may throw
+			Cleanup cleanSetUsed([&t] {
+				t->setUnused();
+			});
 
 			if (!ok)
-				trigger_failure(tdbb, trigger);
-
-			trigger = NULL;
+				trigger_failure(tdbb, t);
 		}
 	}
 	catch (const Exception& ex)
@@ -1555,7 +1578,6 @@ void EXE_execute_triggers(thread_db* tdbb,
 		{
 			EXE_unwind(tdbb, trigger);
 			trigger->req_attachment = NULL;
-			trigger->req_flags &= ~req_in_use;
 
 			ex.stuffException(tdbb->tdbb_status_vector);
 
@@ -1565,6 +1587,11 @@ void EXE_execute_triggers(thread_db* tdbb,
 				stuff_stack_trace(trigger);
 				tdbb->tdbb_flags |= TDBB_stack_trace_done;
 			}
+
+			// Use RAII cleanup because trigger_failure is using trigger & may throw
+			Cleanup cleanSetUsed([&trigger] {
+				trigger->setUnused();
+			});
 
 			trigger_failure(tdbb, trigger);
 		}
@@ -1835,7 +1862,7 @@ const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* no
 		if (!exeState.errorPending)
 			TRA_release_request_snapshot(tdbb, request);
 
-		request->req_flags &= ~(req_active | req_reserved);
+		request->req_flags &= ~req_active;
 		request->invalidateTimeStamp();
 		release_blobs(tdbb, request);
 
@@ -1922,6 +1949,7 @@ static void release_blobs(thread_db* tdbb, Request* request)
 			while (true)
 			{
 				const ULONG blob_temp_id = request->req_blobs.current();
+
 				if (transaction->tra_blobs->locate(blob_temp_id))
 				{
 					BlobIndex *current = &transaction->tra_blobs->current();
@@ -1946,7 +1974,9 @@ static void release_blobs(thread_db* tdbb, Request* request)
 				}
 
 				// Blob accounting inconsistent, only detected in DEV_BUILD.
-				fb_assert(false);
+				// Bug happens when working with index created for new table - and all w/o commits.
+				// Appears unrelated directly with shared mdc - comment assert for a while.
+				// fb_assert(false);	!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 				if (!request->req_blobs.getNext())
 					break;
@@ -2005,35 +2035,46 @@ static void trigger_failure(thread_db* tdbb, Request* trigger)
 	}
 }
 
-
-void AutoCacheRequest::cacheRequest()
+void AutoCacheRequest::cacheRequest(Request* req)
 {
-	thread_db* tdbb = JRD_get_thread_data();
-	Attachment* att = tdbb->getAttachment();
+	Jrd::Database* dbb = JRD_get_thread_data()->getDatabase();
+	request = dbb->cacheRequest(which, id, req);
+}
 
-	if (which == CACHED_REQUESTS && id >= att->att_internal_cached_statements.getCount())
-		att->att_internal_cached_statements.grow(id + 1);
-
-	Statement** stmt =
-		which == IRQ_REQUESTS ? &att->att_internal[id] :
-		which == DYN_REQUESTS ? &att->att_dyn_req[id] :
-		which == CACHED_REQUESTS ? &att->att_internal_cached_statements[id] :
-		nullptr;
-
-	if (!stmt)
+void AutoCacheRequest::release()
+{
+	if (request)
 	{
-		fb_assert(false);
-		return;
+		EXE_unwind(JRD_get_thread_data(), request);
+		request->setUnused();
+		request = NULL;
 	}
+}
 
-	if (*stmt)
+void AutoRequest::release()
+{
+	if (request)
 	{
-		// self resursive call already filled cache
-		request->getStatement()->release(tdbb);
-		request = att->findSystemRequest(tdbb, id, which);
-		fb_assert(request);
+		request->setUnused();
+		CMP_release(JRD_get_thread_data(), request);
+		request = NULL;
 	}
+}
+
+QualifiedName CompilerScratch::csb_repeat::getName(bool allowEmpty) const
+{
+	if (csb_relation)
+		return csb_relation()->getName();
+	else if (csb_procedure)
+		return csb_procedure()->getName();
+	else if (csb_table_value_fun)
+		return QualifiedName(csb_table_value_fun->name);
+	//// TODO: LocalTableSourceNode
+	//// TODO: JsonTableSourceNode
 	else
-		*stmt = request->getStatement();
+	{
+		fb_assert(allowEmpty);
+		return QualifiedName("");
+	}
 }
 

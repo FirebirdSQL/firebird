@@ -410,7 +410,7 @@ bool AggNode::aggPass(thread_db* tdbb, Request* request) const
 				to.dsc_flags = 0;
 				to.dsc_sub_type = 0;
 				to.dsc_scale = 0;
-				to.dsc_ttype() = ttype_sort_key;
+				to.setTextType(ttype_sort_key);
 				to.dsc_length = asb->keyItems[0].getSkdLength();
 				to.dsc_address = data;
 				INTL_string_to_key(tdbb, INTL_TEXT_TO_INDEX(desc->getTextType()),

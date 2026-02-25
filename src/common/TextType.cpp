@@ -94,6 +94,7 @@
 #include "firebird.h"
 #include "iberror.h"
 #include "../jrd/intl_classes.h"
+#include "../common/TextType.h"
 #include "../common/IntlUtil.h"
 #include "../common/classes/Aligner.h"
 
@@ -101,7 +102,7 @@
 namespace Firebird {
 
 
-TextType::TextType(TTYPE_ID _type, texttype *_tt, USHORT _attributes, CharSet* _cs)
+TextType::TextType(TTypeId _type, texttype *_tt, USHORT _attributes, CharSet* _cs)
 	: tt(_tt), cs(_cs), type(_type), attributes(_attributes)
 {
 	if (cs->getSqlMatchAnyLength() != 0)

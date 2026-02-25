@@ -41,7 +41,7 @@
 #include "../jrd/pag.h"
 #include "../jrd/nbak.h"
 #include "../jrd/cch_proto.h"
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "../jrd/pag_proto.h"
 #include "firebird/impl/inf_pub.h"
 #include "../jrd/Monitoring.h"
