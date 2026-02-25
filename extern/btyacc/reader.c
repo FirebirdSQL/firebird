@@ -147,13 +147,10 @@ char *get_line() {
   /* VM: Process %include line */
   if(strncmp(&line[0], "%include ", 9)==0) {
     int ii=0;
-
-    char *inc_file_name = line+9;
-    while (isspace(*inc_file_name)) inc_file_name++;
-    i = strlen(inc_file_name);
-    while (i > 0 && isspace(inc_file_name[i-1])) --i;
-    inc_file_name[i] = 0;
-
+    for(i=9; line[i]!='\n' && line[i]!=' '; i++, ii++) {
+      inc_file_name[ii] = line[i];
+    }
+    inc_file_name[ii] = 0;	  
     if(inc_file) {
       error(lineno, 0, 0, "Nested include lines are not allowed");
     }
