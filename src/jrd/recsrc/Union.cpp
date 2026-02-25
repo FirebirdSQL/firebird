@@ -226,7 +226,7 @@ bool Union::isDependent(const StreamList& streams) const
 {
 	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
 	{
-		if (m_args[0]->isDependent(streams))
+		if (m_args[i]->isDependent(streams))
 			return true;
 	}
 
