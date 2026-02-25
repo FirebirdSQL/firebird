@@ -150,7 +150,7 @@ char *get_line() {
     for(i=9; line[i]!='\n' && line[i]!=' '; i++, ii++) {
       inc_file_name[ii] = line[i];
     }
-    inc_file_name[ii] = 0;	  
+    inc_file_name[ii] = 0;
     if(inc_file) {
       error(lineno, 0, 0, "Nested include lines are not allowed");
     }
