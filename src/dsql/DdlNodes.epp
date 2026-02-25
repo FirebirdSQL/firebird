@@ -1477,6 +1477,20 @@ DdlNode* CommentOnNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			dsqlScratch->resolveRoutineOrRelation(name, {objType});
 			break;
 
+		case obj_package_constant:
+		{
+			QualifiedName constantName(subName, name.schema, name.object); // name is a package
+			if (constantName.schema.isEmpty())
+				constantName.schema = PUBLIC_SCHEMA;
+
+			if (!PackageReferenceNode::constantExists(tdbb, transaction, constantName))
+			{
+				status_exception::raise(Arg::Gds(isc_bad_constant_name) << constantName.toQuotedString());
+			}
+			name = constantName;
+			break;
+		}
+
 		default:
 			dsqlScratch->qualifyExistingName(name, objType);
 			break;
@@ -1579,6 +1593,10 @@ void CommentOnNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 
 		case obj_package_header:
 			SCL_check_package(tdbb, name, SCL_alter);
+			break;
+
+		case obj_package_constant:
+			SCL_check_package(tdbb, QualifiedName(name.package, name.schema), SCL_alter);
 			break;
 
 		default:
@@ -1744,6 +1762,12 @@ void CommentOnNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 			status << Arg::Gds(isc_dyn_package_not_found) << Arg::Str(objNameStr);
 			break;
 
+		case obj_package_constant:
+			tableClause = "rdb$constants";
+			columnClause = "rdb$constant_name";
+			status << Arg::Gds(isc_bad_constant_name) << Arg::Str(objNameStr);
+			break;
+
 		default:
 			fb_assert(false);
 			return;
@@ -1767,7 +1791,7 @@ void CommentOnNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 			sql << "and" << subColumnClause << "=" << subName;
 	}
 
-	if (objType == obj_procedure || objType == obj_udf)
+	if (objType == obj_procedure || objType == obj_udf || objType == obj_package_constant)
 		sql << "and rdb$package_name is not distinct from nullif(" << name.package << ", '')";
 
 	if (addWhereClause)

@@ -6286,6 +6286,7 @@ ddl_type3
 	: PARAMETER				{ $$ = obj_parameter; }
 	| PROCEDURE PARAMETER	{ $$ = obj_procedure; }
 	| FUNCTION PARAMETER	{ $$ = obj_udf; }
+	| CONSTANT				{ $$ = obj_package_constant; }
 	;
 
 %type <intVal> ddl_type4

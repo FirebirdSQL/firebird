@@ -850,4 +850,5 @@ RELATION(nam_constants, rel_constants, ODS_13_1, rel_persistent)
 	FIELD(f_const_blr, nam_const_blr, fld_const_blr, 0, ODS_14_0)
 	FIELD(f_const_source, nam_const_source, fld_source, 1, ODS_14_0)
 	FIELD(f_const_package_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
+	FIELD(f_const_comment, nam_description, fld_description, 1, ODS_14_0)
 END_RELATION
