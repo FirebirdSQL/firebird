@@ -505,6 +505,11 @@ public:
 		return rse->isSpecialJoin();
 	}
 
+	bool isOuterJoin() const
+	{
+		return rse->isOuterJoin();
+	}
+
 	bool isLeftJoin() const
 	{
 		return rse->isLeftJoin();

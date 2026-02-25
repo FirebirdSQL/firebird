@@ -3381,7 +3381,7 @@ RseNode* RseNode::processPossibleJoins(thread_db* tdbb, CompilerScratch* csb)
 		rse = newRse;
 	}
 
-	rse->flags = orgFlags;
+	rse->flags |= orgFlags;
 
 	return rse;
 }

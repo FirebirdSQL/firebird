@@ -764,7 +764,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 		{
 			const auto node = iter.object();
 
-			if (!isInnerJoin() && node->possiblyUnknown())
+			if (isOuterJoin() && node->possiblyUnknown())
 			{
 				// parent missing conjunctions shouldn't be
 				// distributed to FULL OUTER JOIN streams at all
@@ -921,7 +921,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 
 				// Apply local booleans, if any. Note that it's done
 				// only for inner joins and outer streams of left joins.
-				auto iter = getConjuncts(!isInnerJoin(), false);
+				auto iter = getConjuncts(isLeftJoin(), false);
 				rsb = applyLocalBoolean(rsb, localStreams, iter);
 			}
 
@@ -980,15 +980,13 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 	}
 
 	// Outer joins are processed their own way
-	if (!isInnerJoin())
+	if (isOuterJoin())
 	{
 		rivers.join(dependentRivers);
 		rsb = generateOuterJoin(rivers, &sort);
 	}
 	else
 	{
-		JoinType joinType = INNER_JOIN;
-
 		// AB: If previous rsb's are already on the stack we can't use
 		// a navigational-retrieval for an ORDER BY because the next
 		// streams are JOINed to the previous ones
@@ -999,57 +997,60 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 
 			// AB: We could already have multiple rivers at this
 			// point so try to do some hashing or sort/merging now.
-			while (generateEquiJoin(rivers, joinType))
+			while (generateEquiJoin(rivers, INNER_JOIN))
 				;
 		}
 
 		StreamList joinStreams(compileStreams);
 
-		fb_assert(joinStreams.getCount() != 1 || csb->csb_rpt[joinStreams[0]].csb_relation);
-
-		while (true)
+		if (isInnerJoin())
 		{
-			// AB: Determine which streams have an index relationship
-			// with the currently active rivers. This is needed so that
-			// no merge is made between a new cross river and the
-			// currently active rivers. Where in the new cross river
-			// a stream depends (index) on the active rivers.
-			StreamList dependentStreams, freeStreams;
-			findDependentStreams(joinStreams, dependentStreams, freeStreams);
+			fb_assert(joinStreams.getCount() != 1 || csb->csb_rpt[joinStreams[0]].csb_relation);
 
-			// If we have dependent and free streams then we can't rely on
-			// the sort node to be used for index navigation
-			if (dependentStreams.hasData() && freeStreams.hasData())
+			while (true)
 			{
-				sort = nullptr;
-				sortCanBeUsed = false;
-			}
+				// AB: Determine which streams have an index relationship
+				// with the currently active rivers. This is needed so that
+				// no merge is made between a new cross river and the
+				// currently active rivers. Where in the new cross river
+				// a stream depends (index) on the active rivers.
+				StreamList dependentStreams, freeStreams;
+				findDependentStreams(joinStreams, dependentStreams, freeStreams);
 
-			if (dependentStreams.hasData())
-			{
-				// Copy free streams
-				joinStreams.assign(freeStreams);
-
-				// Make rivers from the dependent streams
-				generateInnerJoin(dependentStreams, rivers, &sort, rse->rse_plan);
-
-				// Generate one river which holds a cross join rsb between
-				// all currently available rivers
-
-				rivers.add(FB_NEW_POOL(getPool()) CrossJoin(this, rivers, joinType));
-				rivers.back()->activate(csb);
-			}
-			else
-			{
-				if (freeStreams.hasData())
+				// If we have dependent and free streams then we can't rely on
+				// the sort node to be used for index navigation
+				if (dependentStreams.hasData() && freeStreams.hasData())
 				{
-					// Deactivate streams from rivers on stack, because
-					// the remaining streams don't have any indexed relationship with them
-					for (const auto river : rivers)
-						river->deactivate(csb);
+					sort = nullptr;
+					sortCanBeUsed = false;
 				}
 
-				break;
+				if (dependentStreams.hasData())
+				{
+					// Copy free streams
+					joinStreams.assign(freeStreams);
+
+					// Make rivers from the dependent streams
+					generateInnerJoin(dependentStreams, rivers, &sort, rse->rse_plan);
+
+					// Generate one river which holds a cross join rsb between
+					// all currently available rivers
+
+					rivers.add(FB_NEW_POOL(getPool()) CrossJoin(this, rivers, INNER_JOIN));
+					rivers.back()->activate(csb);
+				}
+				else
+				{
+					if (freeStreams.hasData())
+					{
+						// Deactivate streams from rivers on stack, because
+						// the remaining streams don't have any indexed relationship with them
+						for (const auto river : rivers)
+							river->deactivate(csb);
+					}
+
+					break;
+				}
 			}
 		}
 
@@ -1059,10 +1060,12 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 		if (rivers.isEmpty() && dependentRivers.isEmpty())
 		{
 			// This case may look weird, but it's possible for recursive unions
-			rsb = FB_NEW_POOL(csb->csb_pool) NestedLoopJoin(csb, 0, nullptr, joinType);
+			rsb = FB_NEW_POOL(csb->csb_pool) NestedLoopJoin(csb, 0, nullptr, INNER_JOIN);
 		}
 		else
 		{
+			auto joinType = INNER_JOIN;
+
 			while (rivers.hasData() || dependentRivers.hasData())
 			{
 				// Re-activate remaining rivers to be hashable/mergeable
@@ -1075,8 +1078,6 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 
 				if (dependentRivers.hasData())
 				{
-					fb_assert(joinType == INNER_JOIN);
-
 					for (const auto depRiver : dependentRivers)
 						depRiver->activate(csb);
 
@@ -2066,7 +2067,7 @@ void Optimizer::checkSorts()
 
 					// Walk trough the relations of the RSE and see if a
 					// matching stream can be found.
-					if (newRse->rse_jointype == blr_inner)
+					if (newRse->isInnerJoin())
 					{
 						if (newRse->rse_relations.getCount() == 1)
 							node = newRse->rse_relations[0];
@@ -2095,7 +2096,7 @@ void Optimizer::checkSorts()
 							node = nullptr;
 						}
 					}
-					else if (newRse->rse_jointype == blr_left)
+					else if (newRse->isLeftJoin())
 						node = newRse->rse_relations[0];
 					else
 						node = nullptr;
@@ -2790,7 +2791,7 @@ RecordSource* Optimizer::generateOuterJoin(RiverList& rivers,
 	// the sense of inner and outer, though for a full join it doesn't
 	// matter and we should probably try both orders to see which is
 	// more efficient.
-	if (rse->rse_jointype != blr_left)
+	if (!rse->isLeftJoin())
 	{
 		stream_ptr[1] = &stream_o;
 		stream_ptr[0] = &stream_i;
