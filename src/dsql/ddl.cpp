@@ -327,7 +327,7 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 			defaultCharSet = METD_get_database_charset(dsqlScratch->getTransaction());
 		else
 		{
-			USHORT charSet = dsqlScratch->getAttachment()->dbb_attachment->att_charset;
+			auto charSet = dsqlScratch->getAttachment()->dbb_attachment->att_charset;
 			if (charSet != CS_NONE)
 				defaultCharSet = METD_get_charset_name(dsqlScratch->getTransaction(), charSet);
 		}
@@ -339,7 +339,7 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 			// If field is not specified with NATIONAL, or CHARACTER SET
 			// treat it as a single-byte-per-character field of character set NONE.
 			assign_field_length(field, 1);
-			field->textType = 0;
+			field->textType = ttype_none;
 
 			if (collation_name.object.isEmpty())
 				return;

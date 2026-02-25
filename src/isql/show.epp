@@ -2835,9 +2835,9 @@ static processing_state show_collations(const std::optional<QualifiedMetaString>
 	{
 		const QualifiedMetaString collationName(CL.RDB$COLLATION_NAME, CL.RDB$SCHEMA_NAME);
 
-		if ((!name &&
-			 ((!CL.RDB$SYSTEM_FLAG.NULL && CL.RDB$SYSTEM_FLAG != 0 && sys_flag != 0) ||
-			  (!(!CL.RDB$SYSTEM_FLAG.NULL && CL.RDB$SYSTEM_FLAG != 0) && sys_flag != 1))) ||
+		if (!name ?
+			(!CL.RDB$SYSTEM_FLAG.NULL && CL.RDB$SYSTEM_FLAG != 0 && sys_flag != 0) ||
+			(!(!CL.RDB$SYSTEM_FLAG.NULL && CL.RDB$SYSTEM_FLAG != 0) && sys_flag != 1) :
 			collationName == name ||
 			(name->schema.isEmpty() && name->object == collationName.object))
 		{
@@ -4623,7 +4623,7 @@ static processing_state show_generators(const std::optional<QualifiedMetaString>
 	{
 		const QualifiedMetaString genName(GEN.RDB$GENERATOR_NAME, GEN.RDB$SCHEMA_NAME);
 
-		if ((!name && (GEN.RDB$SYSTEM_FLAG.NULL || GEN.RDB$SYSTEM_FLAG == 0)) ||
+		if (!name ? (GEN.RDB$SYSTEM_FLAG.NULL || GEN.RDB$SYSTEM_FLAG == 0) :
 			name == genName ||
 			(name->schema.isEmpty() && name->object == genName.object))
 		{

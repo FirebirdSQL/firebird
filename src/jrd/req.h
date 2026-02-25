@@ -31,8 +31,8 @@
 #include "../jrd/exe.h"
 #include "../jrd/sort.h"
 #include "../jrd/Attachment.h"
-#include "../jrd/Statement.h"
 #include "../jrd/Record.h"
+#include "../jrd/RecordNumber.h"
 #include "../jrd/RecordNumber.h"
 #include "../common/classes/timestamp.h"
 #include "../common/TimeZoneUtil.h"
@@ -52,12 +52,13 @@ class Savepoint;
 class Cursor;
 class thread_db;
 
+
 // record parameter block
 
-struct record_param
+struct RecordParameterBase
 {
-	record_param()
-		: rpb_transaction_nr(0), rpb_relation(0), rpb_record(NULL), rpb_prior(NULL),
+	RecordParameterBase()
+		: rpb_transaction_nr(0), rpb_record(NULL), rpb_prior(NULL),
 		  rpb_undo(NULL), rpb_format_number(0),
 		  rpb_page(0), rpb_line(0),
 		  rpb_f_page(0), rpb_f_line(0),
@@ -70,11 +71,10 @@ struct record_param
 
 	RecordNumber rpb_number;		// record number in relation
 	TraNumber	rpb_transaction_nr;	// transaction number
-	jrd_rel*	rpb_relation;		// relation of record
 	Record*		rpb_record;			// final record block
 	Record*		rpb_prior;			// prior record block if this is a delta record
 	Record*		rpb_undo;			// our first version of data if this is a second modification
-	USHORT rpb_format_number;		// format number in relation
+	USHORT		rpb_format_number;	// format number in relation
 
 	ULONG rpb_page;					// page number
 	USHORT rpb_line;				// line number on page
@@ -92,17 +92,50 @@ struct record_param
 	USHORT rpb_runtime_flags;		// runtime flags
 	SSHORT rpb_org_scans;			// relation scan count at stream open
 
+	RecordParameterBase& operator=(const RecordParameterBase&) = default;
+	void assign(const RecordParameterBase& from)
+	{
+		*this = from;
+	}
+
+protected:
+	struct win rpb_window;
+};
+
+struct RecordParameter : public RecordParameterBase
+{
+	RecordParameter()
+		: RecordParameterBase(), rpb_relation()
+	{ }
+
+	WIN& getWindow(thread_db* tdbb);	// in Statement.cpp
+
+	Rsc::Rel	rpb_relation;		// relation of record
+};
+
+struct record_param : public RecordParameterBase
+{
+	record_param()
+		: RecordParameterBase(), rpb_relation(nullptr)
+	{ }
+
 	inline WIN& getWindow(thread_db* tdbb)
 	{
 		if (rpb_relation) {
-			rpb_window.win_page.setPageSpaceID(rpb_relation->getPages(tdbb)->rel_pg_space_id);
+			rpb_window.win_page.setPageSpaceID(getPermanent(rpb_relation)->getPages(tdbb)->rel_pg_space_id);
 		}
 
 		return rpb_window;
 	}
 
-private:
-	struct win rpb_window;
+	jrd_rel*	rpb_relation;		// relation of record
+
+	// rpb_relation is not assigned here!!!
+	record_param& operator=(const RecordParameter& from)
+	{
+		assign(from);
+		return *this;
+	}
 };
 
 // Record flags must be an exact replica of ODS record header flags
@@ -320,32 +353,12 @@ private:
 	};
 
 public:
-	Request(Firebird::AutoMemoryPool& pool, Attachment* attachment, /*const*/ Statement* aStatement)
-		: statement(aStatement),
-		  req_pool(pool),
-		  req_memory_stats(&aStatement->pool->getStatsGroup()),
-		  req_blobs(*req_pool),
-		  req_stats(*req_pool),
-		  req_base_stats(*req_pool),
-		  req_ext_stmt(NULL),
-		  req_cursors(*req_pool),
-		  req_ext_resultset(NULL),
-		  req_timeout(0),
-		  req_domain_validation(NULL),
-		  req_auto_trans(*req_pool),
-		  req_sorts(*req_pool, attachment->att_database),
-		  req_rpb(*req_pool),
-		  impureArea(*req_pool)
-	{
-		fb_assert(statement);
-		setAttachment(attachment);
-		req_rpb = statement->rpbsSetup;
-		impureArea.grow(statement->impureSize);
+	Request(Firebird::AutoMemoryPool& pool, Database* dbb, /*const*/ Statement* aStatement);
 
-		pool->setStatsGroup(req_memory_stats);
-		pool.release();
-	}
+private:
+	~Request();			// destroyed only by pool
 
+public:
 	Statement* getStatement() noexcept
 	{
 		return statement;
@@ -356,52 +369,37 @@ public:
 		return statement;
 	}
 
-	bool hasInternalStatement() const noexcept
-	{
-		return statement->flags & Statement::FLAG_INTERNAL;
-	}
-
-	bool hasPowerfulStatement() const noexcept
-	{
-		return statement->flags & Statement::FLAG_POWERFUL;
-	}
+	bool hasInternalStatement() const noexcept;
+	bool hasPowerfulStatement() const noexcept;
 
 	void setAttachment(Attachment* newAttachment) noexcept
 	{
 		req_attachment = newAttachment;
 	}
 
-	bool isRoot() const
-	{
-		return statement->requests.hasData() && this == statement->requests[0];
-	}
+	bool isRoot() const;
 
 	bool isRequestIdUnassigned() const noexcept
 	{
 		return req_id == 0;
 	}
 
-	StmtNumber getRequestId() const
-	{
-		if (!req_id)
-		{
-			req_id = isRoot() ?
-				statement->getStatementId() :
-				JRD_get_thread_data()->getDatabase()->generateStatementId();
-		}
-
-		return req_id;
-	}
+	StmtNumber getRequestId() const;
 
 	void setRequestId(StmtNumber id) noexcept
 	{
 		req_id = id;
 	}
 
+	bool setUsed() noexcept;
+	void setUnused() noexcept;
+	bool isUsed() const noexcept;
+
 private:
 	Statement* const statement;
 	mutable StmtNumber	req_id;			// request identifier
 	TimeStampCache req_timeStampCache;	// time stamp cache
+	std::atomic<bool> req_inUse;
 
 public:
 	MemoryPool* req_pool;
@@ -460,6 +458,18 @@ public:
 	StatusXcp req_last_xcp;			// last known exception
 	bool req_batch_mode;
 
+private:
+	Firebird::RefPtr<VersionedObjects> req_resources;
+
+public:
+	const Firebird::RefPtr<VersionedObjects>& getResources()
+	{
+		return req_resources;
+	}
+
+	typedef Firebird::Array<RecordParameter> RecordParameters;
+	void setResources(VersionedObjects* r, RecordParameters& rpbsSetup);
+
 	enum req_s {
 		req_evaluate,
 		req_return,
@@ -469,6 +479,7 @@ public:
 		req_sync,
 		req_unwind
 	} req_operation;				// operation for next node
+
 
 	template <typename T> T* getImpure(unsigned offset)
 	{
@@ -554,28 +565,24 @@ inline constexpr ULONG req_leave			= 0x4L;
 inline constexpr ULONG req_abort			= 0x8L;
 inline constexpr ULONG req_error_handler	= 0x10L;		// looper is called to handle error
 inline constexpr ULONG req_warning			= 0x20L;
-inline constexpr ULONG req_in_use			= 0x40L;
-inline constexpr ULONG req_continue_loop	= 0x80L;		// PSQL continue statement
-inline constexpr ULONG req_proc_fetch		= 0x100L;		// Fetch from procedure in progress
-inline constexpr ULONG req_proc_select		= 0x200L;		// Select from procedure in progress
-inline constexpr ULONG req_same_tx_upd		= 0x400L;		// record was updated by same transaction
-inline constexpr ULONG req_reserved			= 0x800L;		// Request reserved for client
-inline constexpr ULONG req_update_conflict	= 0x1000L;		// We need to restart request due to update conflict
-inline constexpr ULONG req_restart_ready	= 0x2000L;		// Request is ready to restart in case of update conflict
-
-
-// Index lock block
-
-class IndexLock : public pool_alloc<type_idl>
-{
-public:
-	IndexLock*	idl_next;		// Next index lock block for relation
-	Lock*		idl_lock;		// Lock block
-	jrd_rel*	idl_relation;	// Parent relation
-	USHORT		idl_id;			// Index id
-	USHORT		idl_count;		// Use count
-};
+inline constexpr ULONG req_continue_loop	= 0x40L;		// PSQL continue statement
+inline constexpr ULONG req_proc_fetch		= 0x80L;		// Fetch from procedure in progress
+inline constexpr ULONG req_proc_select		= 0x100L;		// Select from procedure in progress
+inline constexpr ULONG req_same_tx_upd		= 0x200L;		// record was updated by same transaction
+inline constexpr ULONG req_reserved			= 0x400L;		// Request reserved for client
+inline constexpr ULONG req_update_conflict	= 0x800L;		// We need to restart request due to update conflict
+inline constexpr ULONG req_restart_ready	= 0x1000L;		// Request is ready to restart in case of update conflict
 
 } //namespace Jrd
+
+namespace Firebird
+{
+template <>
+inline void SimpleDelete<Jrd::Request>::clear(Jrd::Request* req)
+{
+	req->setUnused();
+}
+
+}
 
 #endif // JRD_REQ_H

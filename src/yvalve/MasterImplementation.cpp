@@ -137,7 +137,7 @@ void abortShutdown()
 	abortShutdownFlag = true;
 }
 
-Thread::Handle timerThreadHandle = 0;
+Thread timerThread;
 
 FB_BOOLEAN MasterImplementation::getProcessExiting()
 {
@@ -149,7 +149,7 @@ FB_BOOLEAN MasterImplementation::getProcessExiting()
 	// be terminated already, wait for its handle with zero timeout returns WAIT_TIMEOUT.
 	// Usage of small non-zero timeout seems fixed such cases.
 
-	if (timerThreadHandle && WaitForSingleObject(timerThreadHandle, 10) != WAIT_TIMEOUT)
+	if (timerThread.waitFor(10))
 		return true;
 #endif
 
@@ -180,7 +180,7 @@ struct TimerEntry
 
 	static void init()
 	{
-		Thread::start(timeThread, 0, THREAD_high, &timerThreadHandle);
+		Thread::start(timeThread, 0, THREAD_high, &timerThread);
 	}
 
 	static void cleanup();
@@ -201,7 +201,7 @@ void TimerEntry::cleanup()
 	}
 
 	timerCleanup->tryEnter(5);
-	Thread::waitForCompletion(timerThreadHandle);
+	timerThread.waitForCompletion();
 
 	while (timerQueue->hasData())
 	{

@@ -54,6 +54,7 @@
 #include "../dsql/movd_proto.h"
 #include "../dsql/pass1_proto.h"
 #include "../dsql/metd_proto.h"
+#include "../jrd/Database.h"
 #include "../jrd/DataTypeUtil.h"
 #include "../jrd/blb_proto.h"
 #include "../jrd/cmp_proto.h"
@@ -74,6 +75,7 @@
 #include "../common/StatusArg.h"
 #include "../dsql/DsqlBatch.h"
 #include "../dsql/DsqlStatementCache.h"
+#include "../jrd/met.h"
 
 #ifdef HAVE_CTYPE_H
 #include <ctype.h>
@@ -113,10 +115,7 @@ IMPLEMENT_TRACE_ROUTINE(dsql_trace, "DSQL")
 #endif
 
 dsql_dbb::dsql_dbb(MemoryPool& p, Attachment* attachment)
-	: dbb_relations(p),
-	  dbb_procedures(p),
-	  dbb_functions(p),
-	  dbb_charsets(p),
+	: dbb_charsets(p),
 	  dbb_collations(p),
 	  dbb_charsets_by_id(p),
 	  dbb_cursors(p),
@@ -130,6 +129,16 @@ dsql_dbb::dsql_dbb(MemoryPool& p, Attachment* attachment)
 
 dsql_dbb::~dsql_dbb()
 {
+}
+
+MemoryPool* dsql_dbb::createPool(ALLOC_PARAMS0)
+{
+	return dbb_attachment->att_database->createPool(ALLOC_PASS_ARGS0);
+}
+
+void dsql_dbb::deletePool(MemoryPool* pool)
+{
+	dbb_attachment->att_database->deletePool(pool);
 }
 
 
@@ -430,7 +439,7 @@ static dsql_dbb* init(thread_db* tdbb, Jrd::Attachment* attachment)
 	if (attachment->att_dsql_instance)
 		return attachment->att_dsql_instance;
 
-	MemoryPool& pool = *attachment->createPool();
+	MemoryPool& pool = *attachment->att_database->createPool(ALLOC_ARGS0);
 	dsql_dbb* const database = FB_NEW_POOL(pool) dsql_dbb(pool, attachment);
 	attachment->att_dsql_instance = database;
 
@@ -449,6 +458,11 @@ static DsqlRequest* safePrepareRequest(thread_db* tdbb, dsql_dbb* database, jrd_
 {
 	if (isInternalRequest)
 		return prepareRequest(tdbb, database, transaction, textLength, text, clientDialect, prepareFlags, true);
+
+//#define SQL_LOG_PRINT
+#ifdef SQL_LOG_PRINT		// for debugging
+	fprintf(stderr, "%*.*s;\n", textLength, textLength, text);
+#endif
 
 #ifdef WIN_NT
 	START_CHECK_FOR_EXCEPTIONS(NULL);
@@ -548,7 +562,8 @@ static RefPtr<DsqlStatement> prepareStatement(thread_db* tdbb, dsql_dbb* databas
 	}
 
 	string textStr(text, textLength);
-	const bool isStatementCacheActive = database->dbb_statement_cache->isActive();
+	const bool isStatementCacheActive = database->dbb_statement_cache->isActive() &&
+		(transaction ? (!transaction->isDdl()) : true);
 
 	RefPtr<DsqlStatement> dsqlStatement;
 
@@ -564,12 +579,12 @@ static RefPtr<DsqlStatement> prepareStatement(thread_db* tdbb, dsql_dbb* databas
 
 	MemoryPool* scratchPool = nullptr;
 	DsqlCompilerScratch* scratch = nullptr;
-	MemoryPool* statementPool = database->createPool();
+	MemoryPool* statementPool = database->createPool(ALLOC_ARGS0);
 
 	Jrd::ContextPoolHolder statementContext(tdbb, statementPool);
 	try
 	{
-		scratchPool = database->createPool();
+		scratchPool = database->createPool(ALLOC_ARGS0);
 
 		if (!transaction)		// Useful for session management statements
 			transaction = database->dbb_attachment->getSysTransaction();
@@ -727,7 +742,7 @@ void IntlString::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 // Return as UTF8
 string IntlString::toUtf8(jrd_tra* transaction) const
 {
-	CHARSET_ID id = CS_dynamic;
+	CSetId id = CS_dynamic;
 
 	if (charset.object.hasData())
 	{
@@ -870,7 +885,7 @@ static void sql_info(thread_db* tdbb,
 				number = isc_info_sql_stmt_start_trans;
 				break;
 			case DsqlStatement::TYPE_SESSION_MANAGEMENT:
-				number = isc_info_sql_stmt_ddl;		// ?????????????????
+				number = isc_info_sql_stmt_ddl;		// Any better choice ?
 				break;
 			case DsqlStatement::TYPE_INSERT:
 				number = isc_info_sql_stmt_insert;
@@ -1334,4 +1349,163 @@ static UCHAR* var_info(const dsql_msg* message,
 	} // for()
 
 	return info;
+}
+
+dsql_rel::dsql_rel(MemoryPool& p, jrd_rel* jrel)
+	: rel_fields(nullptr),
+	  rel_name(p, jrel->getName()),
+	  rel_owner(p, jrel->getOwnerName()),
+	  rel_id(jrel->getId()),
+	  rel_dbkey_length(jrel->rel_dbkey_length),
+	  rel_flags((jrel->getExtFile() ? REL_external : 0) | (jrel->isView() ? REL_view : 0))
+{
+	if (!(jrel->rel_fields))
+		return;
+
+	auto* format = jrel->currentFormat(nullptr);
+	fb_assert(format->fmt_count == jrel->rel_fields->count());
+
+	for (MetaId id = 0; id < format->fmt_count; ++id)
+	{
+		const auto* jfld = (*(jrel->rel_fields))[id];
+		if (!jfld)
+		{
+			fb_assert(!format->fmt_desc[id].dsc_dtype);
+			continue;
+		}
+		auto* fld = FB_NEW_POOL(p) dsql_fld(p, format->fmt_desc[id], nullptr);
+
+		fld->fld_relation = this;
+		fld->fld_id = id;
+		fld->fld_pos = jfld->fld_pos;
+		fld->fld_name = jfld->fld_name;
+		if (!fld->length)
+			fld->length = jfld->fld_length;
+		fld->segLength = jfld->fld_segment_length;
+		fld->charLength = jfld->fld_character_length;
+		fld->fieldSource = jfld->fld_source_name;
+		fld->setExactPrecision();
+		fld->flags |= (jfld->fld_computation ? FLD_computed : 0) |
+					  (jfld->fld_not_null ? 0 : FLD_nullable);
+		if (rel_flags & REL_view)
+			fld->flags |= FLD_nullable;
+
+		if (auto* array = jfld->fld_array)
+		{
+			fld->elementDtype = array->arr_desc.iad_rpt[0].iad_desc.dsc_dtype;
+			fld->elementLength = array->arr_desc.iad_element_length;
+			fld->dimensions = array->arr_desc.iad_dimensions;
+		}
+
+		auto** iter = &rel_fields;
+		while (*iter && (*iter)->fld_pos <= fld->fld_pos)
+			iter = &(*iter)->fld_next;
+
+		fld->fld_next = *iter;
+		*iter = fld;
+	}
+}
+
+dsql_rel::dsql_rel(MemoryPool& p, const dsql_rel* rel)
+	: rel_fields(nullptr),
+	  rel_name(p, rel->rel_name),
+	  rel_owner(p, rel->rel_owner),
+	  rel_id(rel->rel_id),
+	  rel_dbkey_length(rel->rel_dbkey_length),
+	  rel_flags(rel->rel_flags)
+{
+	auto* from = rel->rel_fields;
+	auto** to = &rel_fields;
+
+	for (auto* from = rel->rel_fields; from; from = from->fld_next)
+	{
+		auto* fld = FB_NEW_POOL(p) dsql_fld(p);
+		*fld = *from;
+
+		fld->fld_relation = this;
+		fld->fld_next = nullptr;
+
+		*to = fld;
+		to = &(fld->fld_next);
+	}
+}
+
+dsql_prc::dsql_prc(MemoryPool& p, const jrd_prc* jproc)
+	: prc_inputs(cpFields(p, jproc->getInputFields())),
+	  prc_outputs(cpFields(p, jproc->getOutputFields())),
+	  prc_name(p, jproc->getName()),
+	  prc_owner(p, jproc->getPermanent()->owner),
+	  prc_in_count(jproc->getInputFields().getCount()),
+	  prc_def_count(jproc->getDefaultCount()),
+	  prc_out_count(jproc->getOutputFields().getCount()),
+	  prc_id(jproc->getId())
+{ }
+
+dsql_fld* dsql_prc::cpFields(MemoryPool& p, const Array<NestConst<Parameter>>& fields)
+{
+	dsql_fld* rc = nullptr;
+	dsql_fld** prev = &rc;
+	for (const auto& jfld : fields)
+	{
+		auto* fld = FB_NEW_POOL(p) dsql_fld(p, jfld->prm_desc, &prev);
+		fld->fld_procedure = this;
+
+		fld->fld_id = jfld->prm_number;
+		fld->fld_name = jfld->prm_name;
+		fld->segLength = jfld->prm_seg_length;
+		fld->fieldSource = jfld->prm_field_source;
+		fld->typeOfTable = jfld->prm_type_of_table;
+		fld->typeOfName = QualifiedName(jfld->prm_type_of_column);
+		if (jfld->prm_nullable)
+			fld->flags |= FLD_nullable;
+
+		fld->setExactPrecision();
+	}
+
+	return rc;
+}
+
+dsql_fld::dsql_fld(MemoryPool& p, const dsc& desc, dsql_fld*** prev)
+	: TypeClause(p, {}),
+	  fld_name(p)
+{
+	if (prev)
+	{
+		**prev = this;
+		*prev = &fld_next;
+	}
+
+	dtype = desc.getType();
+	scale = desc.getScale();
+	subType = desc.getSubType();
+	length = desc.getLength();
+	collationId = desc.getCollation();
+	textType = desc.getTextType();
+	charSetId = desc.getCharSet();
+}
+
+dsql_udf::dsql_udf(MemoryPool& p, const class Function* jfun)
+	: udf_name(p, jfun->getName()),
+	  udf_arguments(p)
+{
+	// return value
+	fb_assert(jfun->getOutputFields().getCount() == 1);
+	const dsc& desc = jfun->getOutputFields()[0]->prm_desc;
+	udf_dtype = desc.getType();
+	udf_scale = desc.getScale();
+	udf_sub_type = desc.getSubType();
+	udf_length = desc.getLength();
+	udf_character_set_id = desc.getCharSet();
+
+	// arguments
+	for (const auto& jfld : jfun->getInputFields())
+	{
+		if (jfld->prm_default_value)
+			++udf_def_count;
+
+		Argument arg(jfld->prm_name, jfld->prm_desc);
+		if (jfld->prm_nullable)
+			arg.desc.dsc_flags |= FLD_nullable;
+		udf_arguments.add(arg);
+	}
 }

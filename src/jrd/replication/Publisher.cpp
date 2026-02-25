@@ -26,6 +26,7 @@
 #include "../jrd/ods.h"
 #include "../jrd/req.h"
 #include "../jrd/tra.h"
+#include "../jrd/met.h"
 #include "firebird/impl/blr.h"
 #include "../jrd/trig.h"
 #include "../jrd/Database.h"
@@ -253,11 +254,11 @@ namespace
 			const auto attachment = tdbb->getAttachment();
 			const auto matcher = attachment->att_repl_matcher.get();
 
-			if (matcher && !matcher->matchTable(relation->rel_name))
+			if (matcher && !matcher->matchTable(relation->getName()))
 				return false;
 		}
 		// Do not replicate RDB$BACKUP_HISTORY as it describes physical-level things
-		else if (relation->rel_id == rel_backup_history)
+		else if (relation->getId() == rel_backup_history)
 			return false;
 
 		return true;
@@ -265,7 +266,7 @@ namespace
 
 	Record* upgradeRecord(thread_db* tdbb, jrd_rel* relation, Record* record)
 	{
-		const auto format = MET_current(tdbb, relation);
+		const auto format = relation->currentFormat(tdbb);
 
 		if (record->getFormat()->fmt_version == format->fmt_version)
 			return record;
@@ -529,8 +530,8 @@ void REPL_store(thread_db* tdbb, const record_param* rpb, jrd_tra* transaction)
 	ReplicatedRecordImpl replRecord(tdbb, relation, record);
 
 	replicator->insertRecord2(&status,
-							  relation->rel_name.schema.c_str(),
-							  relation->rel_name.object.c_str(),
+							  relation->getName().schema.c_str(),
+							  relation->getName().object.c_str(),
 							  &replRecord);
 
 	checkStatus(tdbb, status, transaction);
@@ -580,8 +581,8 @@ void REPL_modify(thread_db* tdbb, const record_param* orgRpb,
 	ReplicatedRecordImpl replNewRecord(tdbb, relation, newRecord);
 
 	replicator->updateRecord2(&status,
-							  relation->rel_name.schema.c_str(),
-							  relation->rel_name.object.c_str(),
+							  relation->getName().schema.c_str(),
+							  relation->getName().object.c_str(),
 							  &replOrgRecord, &replNewRecord);
 
 	checkStatus(tdbb, status, transaction);
@@ -615,8 +616,8 @@ void REPL_erase(thread_db* tdbb, const record_param* rpb, jrd_tra* transaction)
 	ReplicatedRecordImpl replRecord(tdbb, relation, record);
 
 	replicator->deleteRecord2(&status,
-							  relation->rel_name.schema.c_str(),
-							  relation->rel_name.object.c_str(),
+							  relation->getName().schema.c_str(),
+							  relation->getName().object.c_str(),
 							  &replRecord);
 
 	checkStatus(tdbb, status, transaction);
@@ -648,13 +649,13 @@ void REPL_gen_id(thread_db* tdbb, SLONG genId, SINT64 value, jrd_tra* transactio
 	if (transaction && !transaction->tra_replicator)
 		getReplicator(tdbb, status, transaction);
 
-	const auto attachment = tdbb->getAttachment();
+	const auto database = tdbb->getDatabase();
 
 	QualifiedName genName;
-	if (!attachment->att_generators.lookup(genId, genName))
+	if (!database->dbb_mdc->getSequence(tdbb, genId, genName))
 	{
 		MET_lookup_generator_id(tdbb, genId, genName, nullptr);
-		attachment->att_generators.store(genId, genName);
+		database->dbb_mdc->setSequence(tdbb, genId, genName);
 	}
 
 	fb_assert(genName.object.hasData());

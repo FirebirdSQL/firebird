@@ -2244,7 +2244,6 @@ static bool_t xdr_trrq_message( RemoteXdr* xdrs, USHORT msg_type)
 	Rpr* procedure = port->port_rpr;
 
 	// normally that never happens
-	fb_assert(procedure);
 	if (!procedure)
 		return false;
 

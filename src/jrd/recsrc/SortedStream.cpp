@@ -393,8 +393,8 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 			const auto refetch = (id == ID_TRANS);
 
 			if (refetch && relation &&
-				!relation->rel_file &&
-				!relation->rel_view_rse &&
+				!relation->getExtFile() &&
+				!relation->isView() &&
 				!relation->isVirtual())
 			{
 				if (m_map->flags & FLAG_REFETCH)
@@ -427,7 +427,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 			// BEWARE:	This check depends on the fact that ID_DBKEY_VALID flags are stored
 			//			*after* real fields and ID_TRANS / ID_DBKEY values.
 			if (relation && !rpb->rpb_number.isValid())
-				VIO_record(tdbb, rpb, MET_current(tdbb, relation), tdbb->getDefaultPool());
+				VIO_record(tdbb, rpb, relation->currentFormat(tdbb), tdbb->getDefaultPool());
 		}
 
 		const auto record = rpb->rpb_record;
@@ -456,7 +456,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 
 		// Ensure the record is still in the most recent format
 		const auto record =
-			VIO_record(tdbb, rpb, MET_current(tdbb, relation), tdbb->getDefaultPool());
+			VIO_record(tdbb, rpb, relation->currentFormat(tdbb), tdbb->getDefaultPool());
 
 		// Set all fields to NULL if the stream was originally marked as invalid
 		if (!rpb->rpb_number.isValid())
@@ -487,7 +487,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 		if (!DPM_get(tdbb, &temp, LCK_read))
 			Arg::Gds(isc_no_cur_rec).raise();
 
-		tdbb->bumpStats(RecordStatType::RPT_READS, relation->rel_id);
+		tdbb->bumpStats(RecordStatType::RPT_READS, relation->getId());
 
 		if (VIO_chase_record_version(tdbb, &temp, transaction, tdbb->getDefaultPool(), false, false))
 		{

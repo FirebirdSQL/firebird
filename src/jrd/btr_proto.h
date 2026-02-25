@@ -28,13 +28,17 @@
 #include "../jrd/ods.h"
 #include "../jrd/req.h"
 #include "../jrd/exe.h"
+#include "../jrd/QualifiedName.h"
 
-void	BTR_all(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::IndexDescList&, Jrd::RelationPages*);
+void	BTR_all(Jrd::thread_db*, Jrd::Cached::Relation*, Jrd::IndexDescList&, Jrd::RelationPages*);
+bool	BTR_activate_index(Jrd::thread_db*, Jrd::Cached::Relation*, MetaId);
+bool	BTR_cleanup_index(Jrd::thread_db*, const Jrd::QualifiedName&, Jrd::jrd_tra*, MetaId);
 void	BTR_complement_key(Jrd::temporary_key*);
 void	BTR_create(Jrd::thread_db*, Jrd::IndexCreation&, Jrd::SelectivityList&);
-bool	BTR_delete_index(Jrd::thread_db*, Jrd::win*, USHORT);
-bool	BTR_description(Jrd::thread_db*, Jrd::jrd_rel*, Ods::index_root_page*, Jrd::index_desc*, USHORT);
-dsc*	BTR_eval_expression(Jrd::thread_db*, Jrd::index_desc*, Jrd::Record*);
+bool	BTR_delete_index(Jrd::thread_db*, Jrd::win*, MetaId, bool);
+bool	BTR_description(Jrd::thread_db*, Jrd::Cached::Relation*, const Ods::index_root_page*, Jrd::index_desc*,
+						MetaId, bool raise = true);
+DSC*	BTR_eval_expression(Jrd::thread_db*, Jrd::index_desc*, Jrd::Record*);
 void	BTR_evaluate(Jrd::thread_db*, const Jrd::IndexRetrieval*, Jrd::RecordBitmap**, Jrd::RecordBitmap*);
 UCHAR*	BTR_find_leaf(Ods::btree_page*, Jrd::temporary_key*, UCHAR*, USHORT*, bool, int);
 Ods::btree_page*	BTR_find_page(Jrd::thread_db*, const Jrd::IndexRetrieval*, Jrd::win*, Jrd::index_desc*,
@@ -42,16 +46,19 @@ Ods::btree_page*	BTR_find_page(Jrd::thread_db*, const Jrd::IndexRetrieval*, Jrd:
 void	BTR_insert(Jrd::thread_db*, Jrd::win*, Jrd::index_insertion*);
 USHORT	BTR_key_length(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::index_desc*);
 Ods::btree_page*	BTR_left_handoff(Jrd::thread_db*, Jrd::win*, Ods::btree_page*, SSHORT);
-bool	BTR_lookup(Jrd::thread_db*, Jrd::jrd_rel*, USHORT, Jrd::index_desc*, Jrd::RelationPages*);
+bool	BTR_lookup(Jrd::thread_db*, Jrd::Cached::Relation*, MetaId, Jrd::index_desc*, Jrd::RelationPages*);
 bool	BTR_make_bounds(Jrd::thread_db*, const Jrd::IndexRetrieval*, Jrd::IndexScanListIterator*,
-	Jrd::temporary_key*, Jrd::temporary_key*, USHORT&);
-Jrd::idx_e	BTR_make_key(Jrd::thread_db*, USHORT, const Jrd::ValueExprNode* const*, const SSHORT* scale,
-	const Jrd::index_desc*, Jrd::temporary_key*, USHORT, bool*);
+						Jrd::temporary_key*, Jrd::temporary_key*, USHORT&);
+Jrd::idx_e	BTR_make_key(Jrd::thread_db*, USHORT, const Jrd::ValueExprNode* const*, const SSHORT*,
+						 const Jrd::index_desc*, Jrd::temporary_key*, USHORT, bool*);
 void	BTR_make_null_key(Jrd::thread_db*, const Jrd::index_desc*, Jrd::temporary_key*);
-bool	BTR_next_index(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::jrd_tra*, Jrd::index_desc*, Jrd::win*);
+void	BTR_mark_index_for_delete(Jrd::thread_db*, Jrd::Cached::Relation*, MetaId, Jrd::win*, Ods::index_root_page*);
+bool	BTR_next_index(Jrd::thread_db*, Jrd::Cached::Relation*, Jrd::jrd_tra*, Jrd::index_desc*, Jrd::win*);
 void	BTR_remove(Jrd::thread_db*, Jrd::win*, Jrd::index_insertion*);
-void	BTR_reserve_slot(Jrd::thread_db*, Jrd::IndexCreation&);
-void	BTR_selectivity(Jrd::thread_db*, Jrd::jrd_rel*, USHORT, Jrd::SelectivityList&);
+void	BTR_reserve_slot(Jrd::thread_db*, Jrd::IndexCreation&, Jrd::IndexCreateLock&);
+void	BTR_selectivity(Jrd::thread_db*, Jrd::Cached::Relation*, MetaId, Jrd::SelectivityList&);
 bool	BTR_types_comparable(const dsc& target, const dsc& source);
+Ods::index_root_page* BTR_fetch_root_for_update(const char* from, Jrd::thread_db* tdbb, Jrd::win* window);
+const Ods::index_root_page* BTR_fetch_root(const char* from, Jrd::thread_db* tdbb, Jrd::win* window);
 
 #endif // JRD_BTR_PROTO_H

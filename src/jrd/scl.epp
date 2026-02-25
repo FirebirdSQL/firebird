@@ -39,6 +39,7 @@
 #include "../jrd/obj.h"
 #include "../jrd/req.h"
 #include "../jrd/tra.h"
+#include "../jrd/met.h"
 #include "../common/gdsassert.h"
 #include "../jrd/blb_proto.h"
 #include "../jrd/cmp_proto.h"
@@ -922,11 +923,11 @@ SecurityClass::flags_t SCL_get_mask(thread_db* tdbb, const QualifiedName& relati
 
 	// If there's a relation, track it down
 	jrd_rel* relation;
-	if (relation_name.object.hasData() && (relation = MET_lookup_relation(tdbb, relation_name)))
+	if (relation_name.object.hasData() &&
+		( (relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, relation_name, CacheFlag::AUTOCREATE)) ))
 	{
-		MET_scan_relation(tdbb, relation);
 		const SecurityClass* s_class;
-		if ( (s_class = SCL_get_class(tdbb, relation->rel_security_name.object)) )
+		if ( (s_class = SCL_get_class(tdbb, relation->getPermanent()->rel_security_name.object)) )
 		{
 			access &= s_class->scl_flags;
 		}

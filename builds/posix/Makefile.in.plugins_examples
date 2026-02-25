@@ -29,6 +29,8 @@
 #
 
 ROOT=$(shell cd ..; pwd)
+SRCDIR=@abs_top_srcdir@
+SRC_ROOT=$(SRCDIR)
 
 ifeq ($(IsDeveloper), Y)
   DefaultTarget := Debug
@@ -61,7 +63,7 @@ include     $(ROOT)/gen/make.shared.variables
 all: udrcpp_example dc_example kh_example crypt_app
 
 
-UDR_Objects = $(call dirObjects,../examples/udr)
+UDR_Objects = $(call dirObjects,examples/udr)
 UDR_Plugin = $(PLUGINS)/udr/$(LIB_PREFIX)udrcpp_example.$(SHRLIB_EXT)
 AllObjects = $(UDR_Objects)
 
@@ -73,12 +75,12 @@ ifeq ($(PLATFORM),DARWIN)
 		$(FIREBIRD_LIBRARY_LINK)
 else
 	$(LIB_LINK) $(LIB_LINK_OPTIONS) $(LIB_LINK_SONAME)udrcpp_example.$(SHRLIB_EXT) \
-		$(LIB_PATH_OPTS) -o $@ $^ $(THR_LIBS) \
+		$(LINK_UDR_PLUGIN_SYMBOLS) $(LIB_PATH_OPTS) -o $@ $^ $(THR_LIBS) \
 		$(FIREBIRD_LIBRARY_LINK)
 endif
 
 
-DC_Objects = $(call makeObjects,../examples/dbcrypt,DbCrypt.cpp)
+DC_Objects = $(call makeObjects,examples/dbcrypt,DbCrypt.cpp)
 DC_Plugin = $(call makePluginName,fbSampleDbCrypt)
 AllObjects += $(DC_Objects)
 
@@ -89,7 +91,7 @@ $(DC_Plugin):	$(DC_Objects)
 	$(CP) $(EXA_ROOT)/dbcrypt/fbSampleDbCrypt.conf $(PLUGINS)
 
 
-KH_Objects = $(call makeObjects,../examples/dbcrypt,CryptKeyHolder.cpp)
+KH_Objects = $(call makeObjects,examples/dbcrypt,CryptKeyHolder.cpp)
 KH_Plugin = $(call makePluginName,fbSampleKeyHolder)
 AllObjects += $(KH_Objects)
 
@@ -100,7 +102,7 @@ $(KH_Plugin):	$(KH_Objects)
 	$(CP) $(EXA_ROOT)/dbcrypt/fbSampleKeyHolder.conf $(PLUGINS)
 
 
-CA_Objects = $(call makeObjects,../examples/dbcrypt,CryptApplication.cpp)
+CA_Objects = $(call makeObjects,examples/dbcrypt,CryptApplication.cpp)
 CRYPT_APP = $(BIN)/fbSampleDbCryptApp$(EXEC_EXT)
 AllObjects += $(CA_Objects)
 

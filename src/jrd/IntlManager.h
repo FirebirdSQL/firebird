@@ -31,6 +31,8 @@
 #include "../common/classes/MetaString.h"
 #include "../common/classes/QualifiedMetaString.h"
 #include "../common/config/config_file.h"
+#include "../jrd/intl.h"
+#include "../jrd/met_proto.h"
 
 struct charset;
 struct texttype;
@@ -44,39 +46,39 @@ public:
 
 	static bool charSetInstalled(const Firebird::QualifiedMetaString& charSetName);
 
-	static bool collationInstalled(const Firebird::string& collationName,
+	static bool collationInstalled(const Firebird::MetaString& collationName,
 								   const Firebird::QualifiedMetaString& charSetName);
 
 	static bool lookupCharSet(const Firebird::QualifiedMetaString& charSetName, charset* cs);
 
-	static void lookupCollation(const Firebird::string& collationName,
-								const Firebird::QualifiedMetaString& charSetName,
+	static void lookupCollation(const Firebird::MetaString& collationName,
+								const CharsetVariants& charsetVariants,
 								USHORT attributes, const UCHAR* specificAttributes,
 								ULONG specificAttributesLen, bool ignoreAttributes,
 								texttype* tt);
 
 	static bool setupCollationAttributes(
-		const Firebird::string& collationName, const Firebird::QualifiedMetaString& charSetName,
+		const Firebird::MetaString& collationName, const Firebird::QualifiedMetaString& charSetName,
 		const Firebird::string& specificAttributes, Firebird::string& newSpecificAttributes);
 
 public:
 	struct CharSetDefinition
 	{
 		const char* name;
-		UCHAR id;
+		CSetId id;
 		USHORT maxBytes;
 	};
 
 	struct CharSetAliasDefinition
 	{
 		const char* name;
-		UCHAR charSetId;
+		CSetId charSetId;
 	};
 
 	struct CollationDefinition
 	{
-		UCHAR charSetId;
-		UCHAR collationId;
+		CSetId charSetId;
+		CollId collationId;
 		const char* name;
 		const char* baseName;
 		USHORT attributes;

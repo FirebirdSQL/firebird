@@ -42,9 +42,10 @@
 
 TMP_ROOT=$(ROOT)/temp/$(TARGET)
 GEN_ROOT=$(ROOT)/gen
-SRC_ROOT=$(ROOT)/src
-BLD_ROOT=$(ROOT)/builds
-EXA_ROOT=$(ROOT)/examples
+SRCDIR?=$(ROOT)
+SRC_ROOT?=$(SRCDIR)/src
+BLD_ROOT?=$(SRCDIR)/builds
+EXA_ROOT?=$(SRCDIR)/examples
 
 IsCross=@IS_CROSS@
 TOMMATH_BUILD_FLG=@TOMMATH_BUILD@
@@ -186,7 +187,7 @@ CAT=			cat
 AR=			ar @AR_OPTIONS@
 LN=			@LN_S@
 RANLIB=			@RANLIB@
-BTYACC=$(ROOT)/extern/btyacc/btyacc
+BTYACC=$(GEN_ROOT)/extern/btyacc/btyacc
 CLOOP=$(GEN_ROOT)/$(TARGET)/cloop/bin/cloop
 
 AR =	@AR@
@@ -282,25 +283,32 @@ IbUtilLibraryName = $(LIB_PREFIX)ib_util.$(SHRLIB_EXT)
 LIBIBUTIL_SO = $(LIB)/$(IbUtilLibraryName)
 
 # Own tommath support
-TOMMATH=$(ROOT)/extern/libtommath
+TOMMATH=$(SRCDIR)/extern/libtommath
+TOMMATH_BUILD_DIR=$(ROOT)/temp/extern/libtommath/$(TARGET)
 TOMMATH_INC=$(TOMMATH)
 TOMMATH_VER=0
 ifeq ($(PLATFORM),DARWIN)
-TOMMATH_SO=$(TOMMATH)/.libs/libtommath.dylib
+TOMMATH_SO=$(TOMMATH_BUILD_DIR)/.libs/libtommath.dylib
 else
-TOMMATH_SO=$(TOMMATH)/.libs/libtommath.so
+TOMMATH_SO=$(TOMMATH_BUILD_DIR)/.libs/libtommath.so
 endif
 
 # Own tomcrypt support
-TOMCRYPT=$(ROOT)/extern/libtomcrypt
+TOMCRYPT=$(SRCDIR)/extern/libtomcrypt
+TOMCRYPT_BUILD_DIR=$(ROOT)/temp/extern/libtomcrypt/$(TARGET)
 TOMCRYPT_INC=$(TOMCRYPT)/src/headers
-TOMCRYPT_SO=$(TOMCRYPT)/.libs/libtomcrypt.so
+TOMCRYPT_SO=$(TOMCRYPT_BUILD_DIR)/.libs/libtomcrypt.so
 TOMCRYPT_VER=1
 
 # Own libcds support
-LIBCDS=$(ROOT)/extern/libcds
+LIBCDS=$(SRCDIR)/extern/libcds
 LIBCDS_INC=$(LIBCDS)
+LIBCDS_BUILD_DIR=$(ROOT)/temp/extern/libcds/$(TARGET)
 LIBCDS_DEF=CDS_BUILD_STATIC_LIB
+
+# Own re2 support
+RE2=$(SRCDIR)/extern/re2
+RE2_BUILD_DIR=$(ROOT)/temp/extern/re2/$(TARGET)
 
 # LINKER OPTIONS
 #

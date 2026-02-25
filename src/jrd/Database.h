@@ -35,6 +35,7 @@
 #include "../common/gdsassert.h"
 #include "../common/dsc.h"
 #include "../jrd/btn.h"
+#include "../jrd/vec.h"
 #include "../jrd/jrd_proto.h"
 #include "../jrd/val.h"
 #include "../jrd/irq.h"
@@ -72,6 +73,7 @@
 #include "../common/classes/SyncObject.h"
 #include "../common/classes/Synchronize.h"
 #include "../jrd/replication/Manager.h"
+#include "../jrd/SharedReadVector.h"
 #include "../dsql/Keywords.h"
 #include "fb_types.h"
 
@@ -92,119 +94,15 @@ class MonitoringData;
 class GarbageCollector;
 class CryptoManager;
 class KeywordsMap;
+class MetadataCache;
+class ExtEngineManager;
 
-// general purpose vector
-template <class T, BlockType TYPE = type_vec>
-class vec_base : protected pool_alloc<TYPE>
+// Flags to indicate normal internal requests vs. dyn internal requests
+// IRQ_REQUESTS & DYN_REQUESTS are depecated
+enum InternalRequest : USHORT
 {
-public:
-	typedef typename Firebird::Array<T>::iterator iterator;
-	typedef typename Firebird::Array<T>::const_iterator const_iterator;
-
-	/*
-	static vec_base* newVector(MemoryPool& p, int len)
-	{
-		return FB_NEW_POOL(p) vec_base<T, TYPE>(p, len);
-	}
-
-	static vec_base* newVector(MemoryPool& p, const vec_base& base)
-	{
-		return FB_NEW_POOL(p) vec_base<T, TYPE>(p, base);
-	}
-	*/
-
-	FB_SIZE_T count() const { return v.getCount(); }
-	T& operator[](FB_SIZE_T index) { return v[index]; }
-	const T& operator[](FB_SIZE_T index) const { return v[index]; }
-
-	iterator begin() { return v.begin(); }
-	iterator end() { return v.end(); }
-
-	const_iterator begin() const { return v.begin(); }
-	const_iterator end() const { return v.end(); }
-
-	void clear() { v.clear(); }
-
-	T* memPtr() { return &v[0]; }
-
-	void resize(FB_SIZE_T n, T val = T()) { v.resize(n, val); }
-
-	void operator delete(void* mem) { MemoryPool::globalFree(mem); }
-
-protected:
-	vec_base(MemoryPool& p, int len)
-		: v(p, len)
-	{
-		v.resize(len);
-	}
-
-	vec_base(MemoryPool& p, const vec_base& base)
-		: v(p)
-	{
-		v = base.v;
-	}
-
-private:
-	Firebird::Array<T> v;
+	NOT_REQUEST, IRQ_REQUESTS, DYN_REQUESTS, CACHED_REQUESTS
 };
-
-template <typename T>
-class vec : public vec_base<T, type_vec>
-{
-public:
-	static vec* newVector(MemoryPool& p, int len)
-	{
-		return FB_NEW_POOL(p) vec<T>(p, len);
-	}
-
-	static vec* newVector(MemoryPool& p, const vec& base)
-	{
-		return FB_NEW_POOL(p) vec<T>(p, base);
-	}
-
-	static vec* newVector(MemoryPool& p, vec* base, int len)
-	{
-		if (!base)
-			base = FB_NEW_POOL(p) vec<T>(p, len);
-		else if (len > (int) base->count())
-			base->resize(len);
-		return base;
-	}
-
-private:
-	vec(MemoryPool& p, int len) : vec_base<T, type_vec>(p, len) {}
-	vec(MemoryPool& p, const vec& base) : vec_base<T, type_vec>(p, base) {}
-};
-
-class vcl : public vec_base<ULONG, type_vcl>
-{
-public:
-	static vcl* newVector(MemoryPool& p, int len)
-	{
-		return FB_NEW_POOL(p) vcl(p, len);
-	}
-
-	static vcl* newVector(MemoryPool& p, const vcl& base)
-	{
-		return FB_NEW_POOL(p) vcl(p, base);
-	}
-
-	static vcl* newVector(MemoryPool& p, vcl* base, int len)
-	{
-		if (!base)
-			base = FB_NEW_POOL(p) vcl(p, len);
-		else if (len > (int) base->count())
-			base->resize(len);
-		return base;
-	}
-
-private:
-	vcl(MemoryPool& p, int len) : vec_base<ULONG, type_vcl>(p, len) {}
-	vcl(MemoryPool& p, const vcl& base) : vec_base<ULONG, type_vcl>(p, base) {}
-};
-
-typedef vec<TraNumber> TransactionsVector;
-
 
 //
 // bit values for dbb_flags
@@ -231,6 +129,8 @@ inline constexpr ULONG DBB_sweep_starting			= 0x40000L;		// Auto-sweep is starti
 inline constexpr ULONG DBB_creating					= 0x80000L;		// Database creation is in progress
 inline constexpr ULONG DBB_shared					= 0x100000L;	// Database object is shared among connections
 inline constexpr ULONG DBB_restoring				= 0x200000L;	// Database restore is in progress
+inline constexpr ULONG DBB_rescan_pages				= 0x400000L;	// Rescan pages after TIP cache creation
+inline constexpr ULONG DBB_dropping					= 0x800000L;	// Drop database is in progress
 
 //
 // dbb_ast_flags
@@ -395,7 +295,7 @@ public:
 	static Database* create(Firebird::IPluginConfig* pConf, bool shared)
 	{
 		Firebird::MemoryStats temp_stats;
-		MemoryPool* const pool = MemoryPool::createPool(NULL, temp_stats);
+		MemoryPool* const pool = MemoryPool::createPool(ALLOC_ARGS1 NULL, temp_stats);
 		Database* const dbb = FB_NEW_POOL(*pool) Database(pool, pConf, shared);
 		pool->setStatsGroup(dbb->dbb_memory_stats);
 		return dbb;
@@ -465,6 +365,12 @@ private:
 	Firebird::SyncObject dbb_pages_sync;	// guard access to dbb_XXX_pages vectors
 	vcl* dbb_tip_pages;						// known TIP pages
 	vcl* dbb_gen_pages;						// known generator pages
+
+	Firebird::Array<std::atomic<Statement*>> dbb_internal; // internal statements		DEPRECATED
+	Firebird::Array<std::atomic<Statement*>> dbb_dyn_req; // internal dyn statements	DEPRECATED
+	SharedReadVector<std::atomic<Statement*>, 8> dbb_internal_cached_statements; // dynamic internal statements
+	Firebird::Mutex dbb_internal_cached_mutex;
+
 public:
 	Firebird::AutoPtr<ExtEngineManager>	dbb_extManager;	// external engine manager
 
@@ -547,6 +453,13 @@ public:
 	Dictionary dbb_dic;					// metanames dictionary
 	Firebird::InitInstance<Keywords, Keywords::Allocator, Firebird::TraditionalDelete> dbb_keywords;
 
+	MetadataCache* dbb_mdc;
+
+private:
+	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
+		Firebird::MetaString, UserId*> > > dbb_user_ids;	// set of used UserIds
+
+public:
 	// returns true if primary file is located on raw device
 	bool onRawDevice() const;
 
@@ -564,16 +477,11 @@ public:
 	}
 #endif
 
-	MemoryPool* createPool()
-	{
-		MemoryPool* const pool = MemoryPool::createPool(dbb_permanent, dbb_memory_stats);
-
-		Firebird::SyncLockGuard guard(&dbb_pools_sync, Firebird::SYNC_EXCLUSIVE, "Database::createPool");
-		dbb_pools.add(pool);
-		return pool;
-	}
-
+	MemoryPool* createPool(ALLOC_PARAMS1 bool separateStats = true);
 	void deletePool(MemoryPool* pool);
+#ifdef DEBUG_LOST_POOLS
+	void checkPool(MemoryPool* pool);
+#endif
 
 	void registerModule(Module&);
 
@@ -609,41 +517,7 @@ public:
 	void copyKnownPages(SCHAR ptype, ULONG count, ULONG* data);
 
 private:
-	Database(MemoryPool* p, Firebird::IPluginConfig* pConf, bool shared)
-	:	dbb_permanent(p),
-		dbb_guid(Firebird::Guid::empty()),
-		dbb_page_manager(this, *p),
-		dbb_file_id(*p),
-		dbb_modules(*p),
-		dbb_extManager(nullptr),
-		dbb_flags(shared ? DBB_shared : 0),
-		dbb_shutdown_mode(shut_mode_online),
-		dbb_filename(*p),
-		dbb_database_name(*p),
-#ifdef HAVE_ID_BY_NAME
-		dbb_id(*p),
-#endif
-		dbb_owner(*p),
-		dbb_pools(*p, 4),
-		dbb_sort_buffers(*p),
-		dbb_gc_fini(*p, garbage_collector, THREAD_medium),
-		dbb_stats(*p),
-		dbb_lock_owner_id(getLockOwnerId()),
-		dbb_tip_cache(NULL),
-		dbb_creation_date(Firebird::TimeZoneUtil::getCurrentGmtTimeStamp()),
-		dbb_external_file_directory_list(NULL),
-		dbb_init_fini(FB_NEW_POOL(*getDefaultMemoryPool()) ExistenceRefMutex()),
-		dbb_linger_seconds(0),
-		dbb_linger_end(0),
-		dbb_plugin_config(pConf),
-		dbb_repl_sequence(0),
-		dbb_replica_mode(REPLICA_NONE),
-		dbb_compatibility_index(~0U),
-		dbb_dic(*p)
-	{
-		dbb_pools.add(p);
-	}
-
+	Database(MemoryPool* p, Firebird::IPluginConfig* pConf, bool shared);
 	~Database();
 
 public:
@@ -720,6 +594,12 @@ public:
 	{
 		dbb_gblobj_holder->decTempCacheUsage(size);
 	}
+
+	Request* findSystemRequest(thread_db* tdbb, USHORT id, InternalRequest which);
+	Request* cacheRequest(InternalRequest which, USHORT id, Request* req);
+    void releaseSystemRequests(thread_db* tdbb);
+
+	UserId* getUserId(const Firebird::MetaString& userName);
 
 	bool isRestoring() const
 	{

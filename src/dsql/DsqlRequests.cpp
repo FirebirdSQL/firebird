@@ -275,13 +275,13 @@ DsqlDmlRequest::DsqlDmlRequest(thread_db* tdbb, MemoryPool& pool, dsql_dbb* dbb,
 		Request* request = parentRequest->getRequest();
 		fb_assert(request->req_rpb.getCount() > 0 && request->req_rpb[0].rpb_relation != nullptr);
 
-		const auto& relName = request->req_rpb[0].rpb_relation->rel_name;
+		const auto& relName = request->req_rpb[0].rpb_relation->getName();
 		bool found = false;
 		for (FB_SIZE_T i = 0; i < request->req_rpb.getCount(); ++i)
 		{
 			jrd_rel* relation = request->req_rpb[i].rpb_relation;
 
-			if (relation && relation->rel_name == relName)
+			if (relation && relation->getName() == relName)
 			{
 				if (found)
 				{
@@ -855,7 +855,7 @@ void DsqlDmlRequest::metadataToFormat(Firebird::IMessageMetadata* meta, const ds
 		checkD(&st);
 		desc.dsc_sub_type = meta->getSubType(&st, index);
 		checkD(&st);
-		unsigned textType = meta->getCharSet(&st, index);
+		auto textType = CSetId(meta->getCharSet(&st, index));
 		checkD(&st);
 		desc.setTextType(textType);
 		desc.dsc_address = (UCHAR*)(IPTR) meta->getOffset(&st, index);
@@ -940,7 +940,7 @@ void DsqlDmlRequest::gatherRecordKey(RecordKey* buffer) const
 		if (rpb.rpb_relation && rpb.rpb_number.isValid() && !rpb.rpb_number.isBof())
 		{
 			buffer[i].recordNumber.bid_encode(rpb.rpb_number.getValue() + 1);
-			buffer[i].recordNumber.bid_relation_id = rpb.rpb_relation->rel_id;
+			buffer[i].recordNumber.bid_relation_id = rpb.rpb_relation->getId();
 			buffer[i].recordVersion = rpb.rpb_transaction_nr;
 		}
 	}
@@ -974,7 +974,7 @@ void DsqlDdlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 			AutoSetRestoreFlag<ULONG> execDdl(&tdbb->tdbb_flags, TDBB_repl_in_progress, true);
 
 			//// Doing it in DFW_perform_work to avoid problems with DDL+DML in the same transaction.
-			///req_dbb->dbb_attachment->att_dsql_instance->dbb_statement_cache->purgeAllAttachments(tdbb);
+			/// req_dbb->dbb_attachment->att_dsql_instance->dbb_statement_cache->purgeAllAttachments(tdbb);
 
 			node->executeDdl(tdbb, internalScratch, req_transaction);
 

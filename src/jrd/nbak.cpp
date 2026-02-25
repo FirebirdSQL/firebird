@@ -34,7 +34,7 @@
 #include "ods.h"
 #include "lck.h"
 #include "cch.h"
-#include "lck_proto.h"
+#include "lck.h"
 #include "pag_proto.h"
 #include "err_proto.h"
 #include "cch_proto.h"
@@ -120,6 +120,7 @@ void NBackupStateLock::blockingAstHandler(thread_db* tdbb)
 	}
 
 	{	// scope
+		backup_manager->stateBlocking = true;
 		Firebird::MutexUnlockGuard counterGuard(counterMutex, FB_FUNCTION);
 		backup_manager->stateBlocking = !backup_manager->localStateLock.tryBeginWrite(FB_FUNCTION);
 		if (backup_manager->stateBlocking)

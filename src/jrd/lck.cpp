@@ -35,10 +35,11 @@
 #include "../jrd/err_proto.h"
 #include "../yvalve/gds_proto.h"
 #include "../jrd/jrd_proto.h"
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "../common/gdsassert.h"
 #include "../lock/lock_proto.h"
 #include "../jrd/Attachment.h"
+#include "../jrd/tra.h"
 
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
@@ -577,18 +578,18 @@ static lck_owner_t get_owner_type(enum lck_t lock_type)
 	case LCK_tpc_init:
 	case LCK_tpc_block:
 	case LCK_repl_state:
+	case LCK_rel_gc:
+	case LCK_rel_partners:
+	case LCK_rel_rescan:
+	case LCK_idx_rescan:
+	case LCK_prc_rescan:
+	case LCK_fun_rescan:
+	case LCK_cs_rescan:
+	case LCK_dbwide_triggers:
 		owner_type = LCK_OWNER_database;
 		break;
 
 	case LCK_attachment:
-	case LCK_rel_exist:
-	case LCK_rel_partners:
-	case LCK_rel_rescan:
-	case LCK_idx_exist:
-	case LCK_expression:
-	case LCK_prc_exist:
-	case LCK_fun_exist:
-	case LCK_tt_exist:
 	case LCK_page_space:
 	case LCK_relation:
 	case LCK_tra:
@@ -598,12 +599,12 @@ static lck_owner_t get_owner_type(enum lck_t lock_type)
 	case LCK_cancel:
 	case LCK_monitor:
 	case LCK_btr_dont_gc:
-	case LCK_rel_gc:
 	case LCK_record_gc:
 	case LCK_alter_database:
 	case LCK_repl_tables:
 	case LCK_dsql_statement_cache:
 	case LCK_profiler_listener:
+	case LCK_idx_create:
 		owner_type = LCK_OWNER_attachment;
 		break;
 
@@ -1516,6 +1517,11 @@ Lock::~Lock()
 	}
 }
 
+Attachment* Lock::getLockAttachment()
+{
+	return lck_attachment ? lck_attachment->getHandle() : NULL;
+}
+
 void Lock::setLockAttachment(Jrd::Attachment* attachment)
 {
 	if (get_owner_type(lck_type) == LCK_OWNER_database)
@@ -1599,3 +1605,4 @@ Lock* Lock::detach()
 
 	return next;
 }
+

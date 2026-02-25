@@ -42,7 +42,7 @@ using namespace Jrd;
 
 Parser::Parser(thread_db* tdbb, MemoryPool& pool, MemoryPool* aStatementPool, DsqlCompilerScratch* aScratch,
 			USHORT aClientDialect, USHORT aDbDialect, bool aRequireSemicolon,
-			const TEXT* string, size_t length, SSHORT charSetId)
+			const TEXT* string, size_t length, CSetId charSetId)
 	: PermanentStorage(pool),
 	  statementPool(aStatementPool),
 	  scratch(aScratch),
@@ -1144,7 +1144,6 @@ int Parser::yylexAux()
 				if (!have_decimal && (number <= MAX_SLONG))
 				{
 					yylval.int32Val = (SLONG) number;
-					//printf ("parse.y %p %d\n", yylval.legacyStr, number);
 					return TOK_NUMBER32BIT;
 				}
 				else

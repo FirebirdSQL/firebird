@@ -298,13 +298,19 @@ void activateIndex(BurpGlobals* tdgbl, const QualifiedMetaString& indexName)
 	{
 		MODIFY IND1 USING
 			IND1.RDB$INDEX_INACTIVE = FALSE;
-		END_MODIFY
+		END_MODIFY;
+		ON_ERROR
+			fError = true;
+			fb_utils::copyStatus(&local_status_vector, isc_status);
+		END_ERROR;
 	}
-	END_FOR
+	END_FOR;
+
 	ON_ERROR
+		if (!fError)
+			fb_utils::copyStatus(&local_status_vector, isc_status);
 		fError = true;
-		fb_utils::copyStatus(&local_status_vector, isc_status);
-	END_ERROR
+	END_ERROR;
 
 	if (!fError)
 	{
@@ -4029,11 +4035,11 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation, USHORT id)
 					break;
 
 				case att_field_character_set:
-					field->fld_character_set_id = (USHORT) get_int32(tdgbl);
+					field->fld_character_set_id = CSetId(get_int32(tdgbl));
 					break;
 
 				case att_field_collation_id:
-					field->fld_collation_id = (USHORT) get_int32(tdgbl);
+					field->fld_collation_id = CollId(get_int32(tdgbl));
 					X.RDB$COLLATION_ID.NULL = FALSE;
 					X.RDB$COLLATION_ID = field->fld_collation_id;
 					break;
@@ -4236,11 +4242,11 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation, USHORT id)
 					break;
 
 				case att_field_character_set:
-					field->fld_character_set_id = (USHORT) get_int32(tdgbl);
+					field->fld_character_set_id = CSetId(get_int32(tdgbl));
 					break;
 
 				case att_field_collation_id:
-					field->fld_collation_id = (USHORT) get_int32(tdgbl);
+					field->fld_collation_id = CollId(get_int32(tdgbl));
 					X.RDB$COLLATION_ID.NULL = FALSE;
 					X.RDB$COLLATION_ID = field->fld_collation_id;
 					break;
@@ -8575,9 +8581,8 @@ bool get_schema(BurpGlobals* tdgbl)
 
 	QualifiedMetaString name;
 	bool securityClass = false;
-	ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
 
-	STORE (TRANSACTION_HANDLE local_trans REQUEST_HANDLE tdgbl->handles_get_schema_req_handle1)
+	STORE (REQUEST_HANDLE tdgbl->handles_get_schema_req_handle1)
 		X IN RDB$SCHEMAS
 	{
 		X.RDB$SCHEMA_NAME.NULL = TRUE;
@@ -13385,13 +13390,13 @@ bool WriteRelationMeta::prepareBatch(BurpGlobals* tdgbl)
 
 			SLONG sqlLength, sqlSubType, sqlScale, sqlType;
 			desc.getSqlInfo(&sqlLength, &sqlSubType, &sqlScale, &sqlType);
-			SLONG characterSetId = field->fld_character_set_id;
+			CSetId characterSetId = field->fld_character_set_id;
 
 			if (tdgbl->gbl_sw_fix_fss_data && field->fld_character_set_id == CS_UNICODE_FSS &&
 				((sqlType == SQL_BLOB && field->fld_sub_type == isc_blob_text && !(field->fld_flags & FLD_array)) ||
 				sqlType == SQL_TEXT || sqlType == SQL_VARYING))
 			{
-				characterSetId = tdgbl->gbl_sw_fix_fss_data_id;
+				characterSetId = CSetId(tdgbl->gbl_sw_fix_fss_data_id);
 			}
 			else if (field->fld_flags & FLD_array)
 			{
@@ -13507,26 +13512,26 @@ void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 
 		// arrays are of various fld_types but are really blobs
 
-		SSHORT dtype = field->fld_type;
+		auto blrType = field->fld_type;
 		length = field->fld_length;
 		SSHORT alignment = 4;
 
 		if (field->fld_flags & FLD_array)
-			dtype = blr_blob;
+			blrType = blr_blob;
 
-		if (dtype <= DTYPE_BLR_MAX)
+		if (blrType <= DTYPE_BLR_MAX)
 		{
-			USHORT l = gds_cvt_blr_dtype[dtype];
-			alignment = type_alignments[l];
-			if ((l = type_lengths[l]) != 0)
-				length = l;
+			const auto dtype = gds_cvt_blr_dtype[blrType];
+			alignment = type_alignments[dtype];
+			if (const auto len = type_lengths[dtype])
+				length = len;
 		}
 
-		switch (dtype)
+		switch (blrType)
 		{
 		case blr_text:
 		case blr_varying:
-			if (dtype == blr_text)
+			if (blrType == blr_text)
 				add_byte(blr, blr_text2);
 			else
 				add_byte(blr, blr_varying2);
@@ -13537,7 +13542,7 @@ void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 				add_word(blr, field->fld_character_set_id);
 
 			add_word(blr, field->fld_length);
-			if (dtype == blr_varying)
+			if (blrType == blr_varying)
 				length += sizeof(USHORT);
 			break;
 
@@ -13557,6 +13562,7 @@ void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 		case blr_sql_time:
 		case blr_sql_time_tz:
 		case blr_sql_date:
+		case blr_bool:
 		case blr_dec64:
 		case blr_dec128:
 			add_byte(blr, field->fld_type);
@@ -13578,11 +13584,6 @@ void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 				add_byte(blr, blr_quad);
 				add_byte(blr, 0);
 			}
-
-			break;
-
-		case blr_bool:
-			add_byte(blr, field->fld_type);
 			break;
 
 		default:
@@ -13590,8 +13591,10 @@ void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 			// msg 26 datatype %ld not understood
 			break;
 		}
+
 		if (alignment)
 			offset = FB_ALIGN(offset, alignment);
+
 		field->fld_offset = offset;
 		field->fld_parameter = count++;
 		offset += length;

@@ -1,6 +1,6 @@
 name: CI
 
-on: [push, pull_request]
+on: [push]
 
 jobs:
 
@@ -39,7 +39,7 @@ jobs:
 
   build-linux-docker:
     name: build-linux-docker-${{ matrix.arch }}
-    runs-on: ubuntu-24.04
+    runs-on: ${{ (startsWith(matrix.arch, 'arm') && 'ubuntu-24.04-arm') || 'ubuntu-24.04' }}
     env:
       FB_DOCKER_PATH: ${{ (startsWith(matrix.arch, 'arm') && 'arm32-arm64') || 'x86-x64' }}
 
@@ -281,7 +281,7 @@ jobs:
             builds/install_images/Firebird-*-windows-arm64*.zip
 
   build-windows-docker:
-    runs-on: windows-2022
+    runs-on: windows-2025
 
     strategy:
       fail-fast: false
@@ -300,6 +300,34 @@ jobs:
       - name: Get Release Notes
         uses: ./.github/actions/get-release-notes
 
+      # firebirdsql/firebird-builder-windows image is private
+      - name: Login to Docker Hub
+        id: dockerhub-login
+        uses: docker/login-action@v3
+        continue-on-error: true
+        with:
+          username: firebirdsql
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Docker pull firebirdsql/firebird-builder-windows
+        shell: cmd
+        if: ${{ steps.dockerhub-login.outcome == 'success' }}
+        run: |
+          docker pull firebirdsql/firebird-builder-windows:fb6-x86-x64-windows-v1
+
+      - name: Reclaim disk space in the runner to build the image
+        if: ${{ runner.environment == 'github-hosted' && steps.dockerhub-login.outcome != 'success' }}
+        shell: cmd
+        run: |
+          rd "C:\Program Files\Microsoft Visual Studio\2022" /s /q
+
+      - name: Build firebird-builder-windows image (fallback)
+        shell: cmd
+        if: ${{ steps.dockerhub-login.outcome != 'success' }}
+        run: |
+          cd builds\docker\windows
+          call build.bat
+
       - name: Build x86 for client package in x64
         id: build-x86
         shell: cmd
@@ -307,7 +335,6 @@ jobs:
         run: |
           mkdir builds\install_images
           cd builds\docker\windows
-          call build.bat
           call run.bat C:\fbscripts\build-x86.bat
 
       - name: Build
@@ -318,7 +345,6 @@ jobs:
         run: |
           mkdir builds\install_images
           cd builds\docker\windows
-          call build.bat
           call run.bat C:\fbscripts\build-%PLATFORM%.bat
 
       - name: Upload zip

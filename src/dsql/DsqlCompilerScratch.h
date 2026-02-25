@@ -76,6 +76,7 @@ public:
 	static const unsigned FLAG_FETCH				= 0x4000;
 	static const unsigned FLAG_VIEW_WITH_CHECK		= 0x8000;
 	static const unsigned FLAG_EXEC_BLOCK			= 0x010000;
+	static const unsigned FLAG_ALLOW_LTT_REFERENCES	= 0x020000;
 
 	static const unsigned MAX_NESTING = 512;
 
@@ -106,7 +107,9 @@ public:
 		  ctes(p),
 		  cteAliases(p),
 		  subFunctions(p),
-		  subProcedures(p)
+		  subProcedures(p),
+		  procedures(p),
+		  functions(p)
 	{
 	}
 
@@ -218,21 +221,7 @@ public:
 	SelectExprNode* findCTE(const MetaName& name);
 	void clearCTEs();
 	void checkUnusedCTEs();
-
-	// hvlad: each member of recursive CTE can refer to CTE itself (only once) via
-	// CTE name or via alias. We need to substitute this aliases when processing CTE
-	// member to resolve field names. Therefore we store all aliases in order of
-	// occurrence and later use it in backward order (since our parser is right-to-left).
-	// Also we put CTE name after all such aliases to distinguish aliases for
-	// different CTE's.
-	// We also need to repeat this process if main select expression contains union with
-	// recursive CTE
-	void addCTEAlias(const Firebird::string& alias)
-	{
-		thread_db* tdbb = JRD_get_thread_data();
-		fb_assert(currCteAlias == NULL);
-		cteAliases.add(FB_NEW_POOL(*tdbb->getDefaultPool()) Firebird::string(*tdbb->getDefaultPool(), alias));
-	}
+	void addCTEAlias(const Firebird::string& alias);
 
 	const Firebird::string* getNextCTEAlias()
 	{
@@ -360,6 +349,11 @@ private:
 	bool psql = false;
 	Firebird::LeftPooledMap<MetaName, DeclareSubFuncNode*> subFunctions;
 	Firebird::LeftPooledMap<MetaName, DeclareSubProcNode*> subProcedures;
+
+public:
+	Firebird::LeftPooledMap<QualifiedName, class dsql_prc*>	procedures;	// known procedures
+	Firebird::LeftPooledMap<QualifiedName, class dsql_udf*>	functions;	// known functions
+	bool regularCacheValid = false;										// flag for relations cache
 };
 
 class PsqlChanger

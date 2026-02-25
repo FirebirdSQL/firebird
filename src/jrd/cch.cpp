@@ -42,6 +42,7 @@
 #include "../jrd/tra.h"
 #include "../jrd/sbm.h"
 #include "../jrd/nbak.h"
+#include "../jrd/met.h"
 #include "../common/gdsassert.h"
 #include "../jrd/cch_proto.h"
 #include "../jrd/err_proto.h"
@@ -49,7 +50,7 @@
 #include "../common/isc_proto.h"
 #include "../common/isc_s_proto.h"
 #include "../jrd/jrd_proto.h"
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "../jrd/pag_proto.h"
 #include "../jrd/ods_proto.h"
 #include "../jrd/os/pio_proto.h"
@@ -3129,8 +3130,6 @@ void BufferControl::cache_writer(BufferControl* bcb)
 		Monitoring::cleanupAttachment(tdbb);
 		attachment->releaseLocks(tdbb);
 		LCK_fini(tdbb, LCK_OWNER_attachment);
-
-		attachment->releaseRelations(tdbb);
 	}	// try
 	catch (const Firebird::Exception& ex)
 	{
@@ -5169,7 +5168,7 @@ void requeueRecentlyUsed(BufferControl* bcb)
 
 BufferControl* BufferControl::create(Database* dbb)
 {
-	MemoryPool* const pool = dbb->createPool();
+	MemoryPool* const pool = dbb->createPool(ALLOC_ARGS1 false);
 	BufferControl* const bcb = FB_NEW_POOL(*pool) BufferControl(*pool, dbb->dbb_memory_stats);
 	pool->setStatsGroup(bcb->bcb_memory_stats);
 	return bcb;
@@ -5508,49 +5507,6 @@ void BCBHashTable::remove(BufferDesc* bdb)
 
 #ifdef HASH_USE_CDS_LIST
 
-///	 class ListNodeAllocator<T>
-
-class InitPool
-{
-public:
-	explicit InitPool(MemoryPool&)
-		: m_pool(InitCDS::createPool()),
-		  m_stats(m_pool->getStatsGroup())
-	{ }
-
-	~InitPool()
-	{
-		// m_pool will be deleted by InitCDS dtor after cds termination
-		// some memory could still be not freed until that moment
-
-#ifdef DEBUG_CDS_MEMORY
-		char str[256];
-		snprintf(str, sizeof(str),
-			"CCH list's common pool stats:\n"
-			"  usage         = %llu\n"
-			"  mapping       = %llu\n"
-			"  max usage     = %llu\n"
-			"  max mapping   = %llu\n"
-			"\n",
-			m_stats.getCurrentUsage(),
-			m_stats.getCurrentMapping(),
-			m_stats.getMaximumUsage(),
-			m_stats.getMaximumMapping()
-		);
-		gds__log(str);
-#endif
-	}
-
-	void* alloc(size_t size)
-	{
-		return m_pool->allocate(size ALLOC_ARGS);
-	}
-
-private:
-	MemoryPool* m_pool;
-	MemoryStats& m_stats;
-};
-
 static InitInstance<InitPool> initPool;
 
 
@@ -5565,6 +5521,11 @@ void ListNodeAllocator<T>::deallocate(T* p, std::size_t /* n */)
 {
 	// It uses the correct pool stored within memory block itself
 	MemoryPool::globalFree(p);
+}
+
+void suspend()
+{
+	cds::backoff::pause();
 }
 
 #endif // HASH_USE_CDS_LIST

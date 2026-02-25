@@ -1014,7 +1014,7 @@ namespace
 		const auto config = target->getConfig();
 		const auto dbName = config->dbName.c_str();
 
-		AutoMemoryPool workingPool(MemoryPool::createPool());
+		AutoMemoryPool workingPool(MemoryPool::createPool(ALLOC_ARGS0));
 		ContextPoolHolder threadContext(workingPool);
 
 		target->verbose("Started replication for database %s", dbName);
@@ -1054,7 +1054,7 @@ bool REPL_server(CheckStatusWrapper* status, const Replication::Config::ReplicaL
 		for (const auto replica : replicas)
 		{
 			const auto target = FB_NEW Target(replica);
-			Thread::start(process_thread, target, THREAD_medium, NULL);
+			Thread::start(process_thread, target, THREAD_medium);
 			++activeThreads;
 		}
 

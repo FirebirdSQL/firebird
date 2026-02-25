@@ -29,6 +29,7 @@
 
 #include "../common/gdsassert.h"
 #include <initializer_list>
+#include <type_traits>
 #include <string.h>
 #include "../common/classes/vector.h"
 #include "../common/classes/alloc.h"
@@ -69,8 +70,12 @@ protected:
 
 // Dynamic array of simple types
 template <typename T, typename Storage = EmptyStorage<T> >
-class Array : protected Storage
+class Array : public Storage
 {
+#ifndef _MSC_VER
+	static_assert(std::is_trivially_copyable<T>(), "Only simple (trivially copyable) types supported in array");
+#endif
+
 public:
 	typedef FB_SIZE_T size_type;
 	typedef FB_SSIZE_T difference_type;
@@ -81,6 +86,8 @@ public:
 	typedef T value_type;
 	typedef pointer iterator;
 	typedef const_pointer const_iterator;
+
+	static const size_type npos = ~size_type(0);
 
 	explicit Array(MemoryPool& p)
 		: Storage(p),
@@ -194,6 +201,15 @@ public:
 	Array<T, Storage>& operator =(const Array<T, Storage>& source)
 	{
 		copyFrom(source);
+		return *this;
+	}
+
+	template <typename T2, typename S2 >
+	Array& operator=(const Array<T2, S2>& source)
+	{
+		ensureCapacity(source.getCount(), false);
+		for (size_type index = 0; index < count; ++index)
+			data[index] = source[index];
 		return *this;
 	}
 
@@ -451,13 +467,26 @@ public:
 		data = this->getStorage();
 	}
 
-	// This method only assigns "pos" if the element is found.
+	// This methods only assigns "pos" if the element is found.
 	// Maybe we should modify it to iterate directy with "pos".
 	bool find(const T& item, size_type& pos) const
 	{
 		for (size_type i = 0; i < count; i++)
 		{
 			if (data[i] == item)
+			{
+				pos = i;
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool find(std::function<int(const T& item)> compare, size_type& pos) const
+	{
+		for (size_type i = 0; i < count; i++)
+		{
+			if (compare(data[i]) == 0)
 			{
 				pos = i;
 				return true;
@@ -488,7 +517,19 @@ public:
 	{
 		if (count != op.count)
 			return false;
-		return memcmp(data, op.data, count) == 0;
+
+		// return memcmp(data, op.data, count) == 0;
+		// fast but wrong - imagine array element with non-dense elements
+
+		auto my = begin();
+		const auto my_end = end();
+		for (auto him = op.begin(); my != my_end; ++my, ++him)
+		{
+			if (! (*my == *him))
+				return false;
+		}
+
+		return true;
 	}
 
 	// Member function only for some debugging tests. Hope nobody is bothered.
@@ -620,6 +661,18 @@ public:
 		}
 		this->insert(pos, item);
 		return pos;
+	}
+
+	size_type addUniq(const Value& item)
+	{
+		size_type pos;
+		fb_assert(sortMode == FB_ARRAY_SORT_WHEN_ADD);
+		if (!find(KeyOfValue::generate(item), pos))
+		{
+			this->insert(pos, item);
+			return pos;
+		}
+		return this->npos;
 	}
 
 	void setSortMode(int sm)

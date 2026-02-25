@@ -1661,6 +1661,12 @@ create_clause
 			node->createIfNotExistsOnly = $4;
 			$$ = node;
 		}
+	| LOCAL TEMPORARY TABLE if_not_exists_opt ltt_table_clause
+		{
+			const auto node = $5;
+			node->createIfNotExistsOnly = $4;
+			$$ = node;
+		}
 	| TRIGGER if_not_exists_opt trigger_clause
 		{
 			const auto node = $3;
@@ -1764,6 +1770,8 @@ recreate_clause
 	| TABLE table_clause
 		{ $$ = newNode<RecreateTableNode>($2); }
 	| GLOBAL TEMPORARY TABLE gtt_table_clause
+		{ $$ = newNode<RecreateTableNode>($4); }
+	| LOCAL TEMPORARY TABLE ltt_table_clause
 		{ $$ = newNode<RecreateTableNode>($4); }
 	| VIEW view_clause
 		{ $$ = newNode<RecreateViewNode>($2); }
@@ -2322,7 +2330,7 @@ db_initial_desc($alterDatabaseNode)
 	| db_initial_desc db_initial_option($alterDatabaseNode)
 	;
 
-// With the exception of LENGTH, all clauses here are handled only at the client.
+// All clauses here are handled only at the client.
 %type db_initial_option(<alterDatabaseNode>)
 db_initial_option($alterDatabaseNode)
 	: PAGE_SIZE equals u_numeric_constant
@@ -2407,13 +2415,11 @@ gtt_table_clause
 	: simple_table_name
 			{
 				$<createRelationNode>$ = newNode<CreateRelationNode>($1);
-				$<createRelationNode>$->relationType = std::nullopt;
+				$<createRelationNode>$->tempFlag = REL_temp_gtt;
 			}
 		'(' table_elements($2) ')' gtt_subclauses_opt($2)
 			{
 				$$ = $2;
-				if (!$$->relationType.has_value())
-					$$->relationType = rel_global_temp_delete;
 			}
 	;
 
@@ -2433,10 +2439,34 @@ gtt_subclauses($createRelationNode)
 gtt_subclause($createRelationNode)
 	: sql_security_clause
 		{ setClause($createRelationNode->ssDefiner, "SQL SECURITY", $1); }
-	| ON COMMIT DELETE ROWS
-		{ setClause($createRelationNode->relationType, "ON COMMIT DELETE ROWS", rel_global_temp_delete); }
+	| temp_table_rows_type($createRelationNode)
+	;
+
+%type temp_table_rows_type(<createRelationNode>)
+temp_table_rows_type($createRelationNode)
+	: ON COMMIT DELETE ROWS
+		{ setClause($createRelationNode->tempRowsFlag, "ON COMMIT DELETE ROWS", REL_temp_tran); }
 	| ON COMMIT PRESERVE ROWS
-		{ setClause($createRelationNode->relationType, "ON COMMIT PRESERVE ROWS", rel_global_temp_preserve); }
+		{ setClause($createRelationNode->tempRowsFlag, "ON COMMIT PRESERVE ROWS", REL_temp_conn); }
+	;
+
+%type <createRelationNode> ltt_table_clause
+ltt_table_clause
+	: simple_table_name
+			{
+				$<createRelationNode>$ = newNode<CreateRelationNode>($1);
+				$<createRelationNode>$->tempFlag = REL_temp_ltt;
+			}
+		'(' table_elements($2) ')' ltt_subclause_opt($2)
+			{
+				$$ = $2;
+			}
+	;
+
+%type ltt_subclause_opt(<createRelationNode>)
+ltt_subclause_opt($createRelationNode)
+	: // nothing by default. Will be set "on commit delete rows" in dsqlPass
+	| temp_table_rows_type($createRelationNode)
 	;
 
 %type <stringPtr> external_file
@@ -5422,7 +5452,7 @@ national_character_type
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_text;
-			$$->charLength = 1;
+			$$->charLength = DEFAULT_CHAR_LENGTH;
 			$$->flags |= FLD_national;
 		}
 	| national_character_keyword VARYING '(' pos_short_integer ')'
@@ -5431,6 +5461,13 @@ national_character_type
 			$$->dtype = dtype_varying;
 			$$->charLength = (USHORT) $4;
 			$$->flags |= (FLD_national | FLD_has_len);
+		}
+	| national_character_keyword VARYING
+		{
+			$$ = newNode<dsql_fld>();
+			$$->dtype = dtype_varying;
+			$$->charLength = DEFAULT_VARCHAR_LENGTH;
+			$$->flags |= FLD_national;
 		}
 	;
 
@@ -5451,8 +5488,8 @@ binary_character_type
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_text;
-			$$->charLength = 1;
-			$$->length = 1;
+			$$->charLength = DEFAULT_BINARY_LENGTH;
+			$$->length = DEFAULT_BINARY_LENGTH;
 			$$->textType = ttype_binary;
 			$$->charSetId = CS_BINARY;
 			$$->subType = fb_text_subtype_binary;
@@ -5469,6 +5506,17 @@ binary_character_type
 			$$->subType = fb_text_subtype_binary;
 			$$->flags |= (FLD_has_len | FLD_has_chset);
 		}
+	| varbinary_character_keyword
+		{
+			$$ = newNode<dsql_fld>();
+			$$->dtype = dtype_varying;
+			$$->charLength = DEFAULT_VARBINARY_LENGTH;
+			$$->length = DEFAULT_VARBINARY_LENGTH + sizeof(USHORT);
+			$$->textType = ttype_binary;
+			$$->charSetId = CS_BINARY;
+			$$->subType = fb_text_subtype_binary;
+			$$->flags |= FLD_has_chset;
+		}
 	;
 
 %type <legacyField> character_type
@@ -5484,7 +5532,7 @@ character_type
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_text;
-			$$->charLength = 1;
+			$$->charLength = DEFAULT_CHAR_LENGTH;
 		}
 	| varying_keyword '(' pos_short_integer ')'
 		{
@@ -5492,6 +5540,12 @@ character_type
 			$$->dtype = dtype_varying;
 			$$->charLength = (USHORT) $3;
 			$$->flags |= FLD_has_len;
+		}
+	| varying_keyword
+		{
+			$$ = newNode<dsql_fld>();
+			$$->dtype = dtype_varying;
+			$$->charLength = DEFAULT_VARCHAR_LENGTH;
 		}
 	;
 
@@ -5872,7 +5926,7 @@ set_bind
 
 %type <legacyField> set_bind_from
 set_bind_from
-	: bind_type
+	: non_array_type
 	| TIME ZONE
 		{
 			$$ = newNode<dsql_fld>();
@@ -5881,20 +5935,9 @@ set_bind_from
 		}
 	;
 
-%type <legacyField> bind_type
-bind_type
-	: non_array_type
-	| varying_keyword
-		{
-			$$ = newNode<dsql_fld>();
-			$$->dtype = dtype_varying;
-			$$->charLength = 0;
-		}
-	;
-
 %type <legacyField> set_bind_to
 set_bind_to
-	: bind_type
+	: non_array_type
 		{
 			$$ = $1;
 		}

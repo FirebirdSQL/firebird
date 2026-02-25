@@ -56,6 +56,7 @@
 #include "../jrd/intl.h"
 #include "../jrd/btr.h"
 #include "../jrd/sort.h"
+#include "../jrd/met.h"
 #include "../common/gdsassert.h"
 #include "../jrd/cmp_proto.h"
 #include "../common/dsc_proto.h"
@@ -67,7 +68,7 @@
 #include "../jrd/intl_proto.h"
 #include "../jrd/jrd_proto.h"
 
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "../jrd/par_proto.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/mov_proto.h"
@@ -148,11 +149,11 @@ Statement* CMP_compile(thread_db* tdbb, const UCHAR* blr, ULONG blrLength, bool 
 	Statement* statement = nullptr;
 
 	SET_TDBB(tdbb);
-	const auto att = tdbb->getAttachment();
+	const auto dbb = tdbb->getDatabase();
 
 	// 26.09.2002 Nickolay Samofatov: default memory pool will become statement pool
 	// and will be freed by CMP_release
-	const auto newPool = att->createPool();
+	const auto newPool = dbb->createPool(ALLOC_ARGS0);
 
 	try
 	{
@@ -173,9 +174,9 @@ Statement* CMP_compile(thread_db* tdbb, const UCHAR* blr, ULONG blrLength, bool 
 					"\t%2d - view_stream: %2d; alias: %s; relation: %s; procedure: %s; view: %s\n",
 					i, s.csb_view_stream,
 					(s.csb_alias ? s.csb_alias->c_str() : ""),
-					(s.csb_relation ? s.csb_relation->rel_name.c_str() : ""),
-					(s.csb_procedure ? s.csb_procedure->getName().toString().c_str() : ""),
-					(s.csb_view ? s.csb_view->rel_name.c_str() : ""));
+					(s.csb_relation ? s.csb_relation()->getName().c_str() : ""),
+					(s.csb_procedure ? s.csb_procedure()->getName().toString().c_str() : ""),
+					(s.csb_view ? s.csb_view->getName().c_str() : ""));
 			}
 
 			cmp_trace("\n%s\n", csb->csb_dump.c_str());
@@ -192,7 +193,7 @@ Statement* CMP_compile(thread_db* tdbb, const UCHAR* blr, ULONG blrLength, bool 
 		if (statement)
 			statement->release(tdbb);
 		else
-			att->deletePool(newPool);
+			dbb->deletePool(newPool);
 		ERR_punt();
 	}
 
@@ -214,7 +215,11 @@ Request* CMP_compile_request(thread_db* tdbb, const UCHAR* blr, ULONG blrLength,
 	SET_TDBB(tdbb);
 
 	auto statement = CMP_compile(tdbb, blr, blrLength, internalFlag, 0, nullptr);
-	auto request = statement->getRequest(tdbb, 0);
+	auto request = statement->makeRootRequest(tdbb);
+
+	request->setAttachment(tdbb->getAttachment());
+	request->req_stats.reset();
+	request->req_base_stats.reset();
 
 	return request;
 }
@@ -263,9 +268,9 @@ const Format* CMP_format(thread_db* tdbb, CompilerScratch* csb, StreamType strea
 	if (!tail->csb_format)
 	{
 		if (tail->csb_relation)
-			tail->csb_format = MET_current(tdbb, tail->csb_relation);
+			tail->csb_format = tail->csb_relation(tdbb)->currentFormat(tdbb);
 		else if (tail->csb_procedure)
-			tail->csb_format = tail->csb_procedure->prc_record_format;
+			tail->csb_format = tail->csb_procedure(tdbb)->prc_record_format;
 		else if (tail->csb_table_value_fun)
 			tail->csb_format = tail->csb_table_value_fun->recordFormat;
 		//// TODO: LocalTableSourceNode
@@ -275,51 +280,6 @@ const Format* CMP_format(thread_db* tdbb, CompilerScratch* csb, StreamType strea
 
 	fb_assert(tail->csb_format);
 	return tail->csb_format;
-}
-
-
-IndexLock* CMP_get_index_lock(thread_db* tdbb, jrd_rel* relation, USHORT id)
-{
-/**************************************
- *
- *	C M P _ g e t _ i n d e x _ l o c k
- *
- **************************************
- *
- * Functional description
- *	Get index lock block for index.  If one doesn't exist,
- *	make one.
- *
- **************************************/
-	SET_TDBB(tdbb);
-
-	DEV_BLKCHK(relation, type_rel);
-
-	if (relation->rel_id < (USHORT) rel_MAX) {
-		return NULL;
-	}
-
-	// for to find an existing block
-
-	for (IndexLock* index = relation->rel_index_locks; index; index = index->idl_next)
-	{
-		if (index->idl_id == id) {
-			return index;
-		}
-	}
-
-	IndexLock* index = FB_NEW_POOL(*relation->rel_pool) IndexLock();
-	index->idl_next = relation->rel_index_locks;
-	relation->rel_index_locks = index;
-	index->idl_relation = relation;
-	index->idl_id = id;
-	index->idl_count = 0;
-
-	Lock* lock = FB_NEW_RPT(*relation->rel_pool, 0) Lock(tdbb, sizeof(SLONG), LCK_idx_exist);
-	index->idl_lock = lock;
-	lock->setKey((relation->rel_id << 16) | id);
-
-	return index;
 }
 
 
@@ -360,45 +320,6 @@ void CMP_post_access(thread_db* tdbb,
 
 	if (!csb->csb_access.find(access, i))
 		csb->csb_access.insert(i, access);
-}
-
-
-void CMP_post_resource(	ResourceList* rsc_ptr, void* obj, Resource::rsc_s type, USHORT id)
-{
-/**************************************
- *
- *	C M P _ p o s t _ r e s o u r c e
- *
- **************************************
- *
- * Functional description
- *	Post a resource usage to the compiler scratch block.
- *
- **************************************/
-	// Initialize resource block
-	Resource resource(type, id, NULL, NULL, NULL);
-	switch (type)
-	{
-	case Resource::rsc_relation:
-	case Resource::rsc_index:
-		resource.rsc_rel = (jrd_rel*) obj;
-		break;
-	case Resource::rsc_procedure:
-	case Resource::rsc_function:
-		resource.rsc_routine = (Routine*) obj;
-		break;
-	case Resource::rsc_collation:
-		resource.rsc_coll = (Collation*) obj;
-		break;
-	default:
-		BUGCHECK(220);			// msg 220 unknown resource
-		break;
-	}
-
-	// Add it into list if not present already
-	FB_SIZE_T pos;
-	if (!rsc_ptr->find(resource, pos))
-		rsc_ptr->insert(pos, resource);
 }
 
 
@@ -638,7 +559,7 @@ bool CMP_procedure_arguments(
 }
 
 
-void CMP_post_procedure_access(thread_db* tdbb, CompilerScratch* csb, jrd_prc* procedure)
+void CMP_post_procedure_access(thread_db* tdbb, CompilerScratch* csb, Cached::Procedure* procedure)
 {
 /**************************************
  *
@@ -661,7 +582,7 @@ void CMP_post_procedure_access(thread_db* tdbb, CompilerScratch* csb, jrd_prc* p
 	if (csb->csb_g_flags & (csb_internal | csb_ignore_perm))
 		return;
 
-	const SLONG ssRelationId = csb->csb_view ? csb->csb_view->rel_id : 0;
+	const SLONG ssRelationId = csb->csb_view ? csb->csb_view()->getId() : 0;
 
 	CMP_post_access(tdbb, csb, procedure->getSecurityName().schema, ssRelationId,
 		SCL_usage, obj_schemas, QualifiedName(procedure->getName().schema));

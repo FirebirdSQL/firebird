@@ -40,7 +40,7 @@ using namespace Jrd;
 // ------------------------------------
 
 IndexTableScan::IndexTableScan(CompilerScratch* csb, const string& alias,
-							   StreamType stream, jrd_rel* relation,
+							   StreamType stream, Rsc::Rel relation,
 							   InversionNode* index, USHORT length,
 							   double selectivity)
 	: RecordStream(csb, stream),
@@ -69,7 +69,7 @@ void IndexTableScan::internalOpen(thread_db* tdbb) const
 	impure->irsb_flags = irsb_first | irsb_open;
 
 	record_param* const rpb = &request->req_rpb[m_stream];
-	RLCK_reserve_relation(tdbb, request->req_transaction, m_relation, false);
+	RLCK_reserve_relation(tdbb, request->req_transaction, m_relation(), false);
 
 	rpb->rpb_number.setValue(BOF_NUMBER);
 
@@ -201,7 +201,7 @@ bool IndexTableScan::internalGetRecord(thread_db* tdbb) const
 	const bool descending = (idx->idx_flags & idx_descending);
 
 	// find the last fetched position from the index
-	const USHORT pageSpaceID = m_relation->getPages(tdbb)->rel_pg_space_id;
+	const USHORT pageSpaceID = m_relation()->getPages(tdbb)->rel_pg_space_id;
 	win window(pageSpaceID, impure->irsb_nav_page);
 
 	const IndexRetrieval* const retrieval = m_index->retrieval;
@@ -229,7 +229,7 @@ bool IndexTableScan::internalGetRecord(thread_db* tdbb) const
 			memcpy(upper.key_data, impure->irsb_nav_data + m_length, upper.key_length);
 		}
 
-		IndexKey recordKey(tdbb, m_relation, idx);
+		IndexKey recordKey(tdbb, m_relation(tdbb), idx);
 
 		// Find the next interesting node. If necessary, skip to the next page.
 		RecordNumber number;
@@ -336,7 +336,7 @@ bool IndexTableScan::internalGetRecord(thread_db* tdbb) const
 			{
 				if (const auto result = recordKey.compose(rpb->rpb_record))
 				{
-					IndexErrorContext context(m_relation, idx);
+					IndexErrorContext context(m_relation(tdbb), idx);
 					context.raise(tdbb, result, rpb->rpb_record);
 				}
 
@@ -396,15 +396,15 @@ void IndexTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsi
 	planEntry.className = "IndexTableScan";
 
 	planEntry.lines.add().text = "Table " +
-		printName(tdbb, m_relation->rel_name.toQuotedString(), m_alias) + " Access By ID";
+		printName(tdbb, m_relation()->getName().toQuotedString(), m_alias) + " Access By ID";
 	printOptInfo(planEntry.lines);
 
 	printInversion(tdbb, m_index, planEntry.lines, true, 1, true);
 
-	planEntry.objectType = m_relation->getObjectType();
-	planEntry.objectName = m_relation->rel_name;
+	planEntry.objectType = m_relation()->getObjectType();
+	planEntry.objectName = m_relation()->getName();
 
-	if (m_alias.hasData() && m_alias != string(m_relation->rel_name.object))
+	if (m_alias.hasData() && m_alias != string(m_relation()->getName().object))
 		planEntry.alias = m_alias;
 
 	if (m_inversion)

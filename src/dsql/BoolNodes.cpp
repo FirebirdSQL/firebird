@@ -891,16 +891,17 @@ TriState ComparativeBoolNode::stringBoolean(thread_db* tdbb, Request* request,
 {
 	SET_TDBB(tdbb);
 
-	USHORT type1;
+	TTypeId type1;
 
 	if (!desc1->isBlob())
-		type1 = INTL_TEXT_TYPE(*desc1);
+		type1 = desc1->getTextType();
 	else
 	{
 		// No MATCHES support for blob
 		if (blrOp == blr_matching)
 			return TriState(false);
 
+		// Non-text blob is treated here as NONE, not OCTETS
 		type1 = desc1->dsc_sub_type == isc_blob_text ? desc1->dsc_blob_ttype() : ttype_none;
 	}
 
@@ -954,7 +955,7 @@ TriState ComparativeBoolNode::stringBoolean(thread_db* tdbb, Request* request,
 	}
 
 	UCHAR* patternStr = nullptr;
-	SLONG patternLen = 0;
+	ULONG patternLen = 0;
 	MoveBuffer patternBuffer;
 
 	auto createMatcher = [&]()
@@ -1103,17 +1104,7 @@ bool ComparativeBoolNode::sleuth(thread_db* tdbb, Request* request,
 
 	// Choose interpretation for the operation
 
- 	USHORT ttype;
-	if (desc1->isBlob())
-	{
-		if (desc1->dsc_sub_type == isc_blob_text)
-			ttype = desc1->dsc_blob_ttype();	// Load blob character set and collation
-		else
-			ttype = INTL_TTYPE(desc2);
-	}
-	else
-		ttype = INTL_TTYPE(desc1);
-
+ 	auto ttype = (desc1->isBlob() && (desc1->dsc_sub_type != isc_blob_text) ? desc2 : desc1)->getTextType();
 	Collation* obj = INTL_texttype_lookup(tdbb, ttype);
 
 	// Get operator definition string (control string)
@@ -1242,7 +1233,9 @@ string InListBoolNode::internalPrint(NodePrinter& printer) const
 {
 	BoolExprNode::internalPrint(printer);
 
+#ifndef TRIVIAL_NODE_PRINTER
 	NODE_PRINT(printer, blrOp);
+#endif
 	NODE_PRINT(printer, arg);
 	NODE_PRINT(printer, list);
 

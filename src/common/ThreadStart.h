@@ -57,11 +57,14 @@ typedef THREAD_ENTRY_DECLARE ThreadEntryPoint(THREAD_ENTRY_PARAM);
 
 #if defined(WIN_NT)
 typedef DWORD ThreadId;
+constexpr static ThreadId INVALID_ID = 0;
 #elif defined(LINUX) && !defined(ANDROID) && !defined(LSB_BUILD)
 #define USE_LWP_AS_THREAD_ID
 typedef int ThreadId;
+constexpr static ThreadId INVALID_ID = 0;
 #elif defined(USE_POSIX_THREADS)
 typedef pthread_t ThreadId;
+constexpr static ThreadId INVALID_ID = 0;
 #else
 error - unknown ThreadId type
 #endif
@@ -70,39 +73,149 @@ class Thread
 {
 public:
 #ifdef WIN_NT
-	typedef DWORD InternalId;
 	typedef HANDLE Handle;
+	constexpr static Handle INVALID_HANDLE = INVALID_HANDLE_VALUE;
 #endif
 #ifdef USE_POSIX_THREADS
 	typedef pthread_t Handle;
-	typedef pthread_t InternalId;
+	constexpr static Handle INVALID_HANDLE = 0;
 #endif
 
-	static Thread start(ThreadEntryPoint* routine, void* arg, int priority_arg, Handle* p_handle = NULL);
-	static void waitForCompletion(Handle& handle);
-	static void kill(Handle& handle);
+	class Mark
+	{
+		friend class Thread;
 
-	static ThreadId getId();
+	public:
+		Mark(const Thread& t);
+
+		bool operator==(const Mark&) const noexcept;
+
+	private:
+		Mark() = delete;
+		Mark(const Mark&) = delete;
+		Mark(const Mark&&) = delete;
+		Mark& operator=(const Mark&) = delete;
+		Mark& operator=(const Mark&&) = delete;
+
+#ifdef WIN_NT
+		ThreadId m_Id;
+#endif
+#ifdef USE_POSIX_THREADS
+		Thread::Handle m_handle;
+#endif
+	};
+
+	friend class Mark;
+
+	static void start(ThreadEntryPoint* routine, void* arg, int priority_arg, Thread* pThread = nullptr);
+
+#ifdef WIN_NT
+	bool waitFor(unsigned milliseconds) const noexcept;
+#endif
+	void waitForCompletion();
+	void kill() noexcept;
+
+	static ThreadId getCurrentThreadId();
+
+	Handle getHandle() const noexcept
+	{
+		return m_handle;
+	}
 
 	static void sleep(unsigned milliseconds);
 	static void yield();
 
-	static bool isCurrent(Handle threadHandle);
-	bool isCurrent();
+	bool isCurrent() const noexcept;
+
+	bool isValid() const noexcept
+	{
+		return m_handle != INVALID_HANDLE;
+	}
+
+	// invoked from dtor - ignore syscall's error
+	void detach(bool close = true) noexcept
+	{
+		if (isValid() && close)
+		{
+#ifdef WIN_NT
+			CloseHandle(m_handle);
+#endif
+#ifdef USE_POSIX_THREADS
+			pthread_detach(m_handle);
+#endif
+		}
+		m_handle = INVALID_HANDLE;
+	}
 
 	Thread() noexcept { }
 
-private:
-	Thread(InternalId iid) noexcept
-		: internalId(iid)
-	{ }
+	Thread(Thread&& other) noexcept
+	{
+		moveFrom(std::move(other));
+	}
 
-	InternalId internalId{};
+	~Thread() noexcept
+	{
+		detach();
+	}
+
+	Thread& operator= (Thread&& other) noexcept
+	{
+		detach();
+		moveFrom(std::move(other));
+		return *this;
+	}
+
+private:
+#ifdef WIN_NT
+	Thread(Handle handle, ThreadId id) noexcept
+		: m_handle(handle), m_Id(id)
+	{ }
+#endif
+
+	void moveFrom(Thread&& other) noexcept
+	{
+		fb_assert(!isValid());
+
+		m_handle = other.m_handle;
+		other.m_handle = INVALID_HANDLE;
+#ifdef WIN_NT
+		m_Id = other.m_Id;
+		other.m_Id = INVALID_ID;
+#endif
+	}
+
+	Handle m_handle = INVALID_HANDLE;
+#ifdef WIN_NT
+	ThreadId m_Id = INVALID_ID;
+#endif
 };
+
+
+inline bool Thread::Mark::operator==(const Thread::Mark& other) const noexcept
+{
+#ifdef WIN_NT
+	return m_Id == other.m_Id;
+#endif
+#ifdef USE_POSIX_THREADS
+	return pthread_equal(m_handle, other.m_handle);
+#endif
+}
+
+
+inline Thread::Mark::Mark(const Thread& t)
+#ifdef WIN_NT
+	: m_Id(t.m_Id)
+#endif
+#ifdef USE_POSIX_THREADS
+	: m_handle(t.m_handle)
+#endif
+{ }
+
 
 inline ThreadId getThreadId()
 {
-	return Thread::getId();
+	return Thread::getCurrentThreadId();
 }
 
 
@@ -113,8 +226,7 @@ public:
 	typedef void ThreadRoutine(TA);
 
 	ThreadFinishSync(Firebird::MemoryPool& pool, ThreadRoutine* routine, int priority_arg = THREAD_medium)
-		: threadHandle(0),
-		  threadRoutine(routine),
+		: threadRoutine(routine),
 		  threadPriority(priority_arg),
 		  closing(false)
 	{ }
@@ -122,7 +234,7 @@ public:
 	void run(TA arg)
 	{
 		threadArg = arg;
-		Thread::start(internalRun, this, threadPriority, &threadHandle);
+		Thread::start(internalRun, this, threadPriority, &thread);
 	}
 
 	bool tryWait()
@@ -137,15 +249,11 @@ public:
 
 	void waitForCompletion()
 	{
-		if (threadHandle)
-		{
-			Thread::waitForCompletion(threadHandle);
-			threadHandle = 0;
-		}
+		thread.waitForCompletion();
 	}
 
 private:
-	Thread::Handle threadHandle;
+	Thread thread;
 	TA threadArg;
 	ThreadRoutine* threadRoutine;
 	int threadPriority;

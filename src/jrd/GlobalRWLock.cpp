@@ -33,7 +33,7 @@
 #include "../lock/lock_proto.h"
 #include "../common/isc_proto.h"
 #include "jrd.h"
-#include "lck_proto.h"
+#include "lck.h"
 #include "err_proto.h"
 #include "Attachment.h"
 #include "../common/classes/rwlock.h"

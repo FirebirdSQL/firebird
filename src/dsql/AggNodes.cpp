@@ -410,7 +410,7 @@ bool AggNode::aggPass(thread_db* tdbb, Request* request) const
 				to.dsc_flags = 0;
 				to.dsc_sub_type = 0;
 				to.dsc_scale = 0;
-				to.dsc_ttype() = ttype_sort_key;
+				to.setTextType(ttype_sort_key);
 				to.dsc_length = asb->keyItems[0].getSkdLength();
 				to.dsc_address = data;
 				INTL_string_to_key(tdbb, INTL_TEXT_TO_INDEX(desc->getTextType()),
@@ -1647,8 +1647,8 @@ void BinAggNode::aggInit(thread_db* tdbb, Request* request) const
 	if (nodFlags & FLAG_INT128)
 	{
 		Firebird::Int128 i128;
+		i128.set(initValue, 0);
 		impure->make_decimal_fixed(i128, 0);
-		impure->vlu_misc.vlu_int128 = initValue;
 	}
 	else
 		impure->make_int64(initValue);

@@ -24,13 +24,23 @@
 #ifndef JRD_TRA_PROTO_H
 #define JRD_TRA_PROTO_H
 
-#include "../jrd/tra.h"
-
 namespace Jrd {
-	class Attachment;
-	class Database;
-	class TraceTransactionEnd;
-}
+class Attachment;
+class Database;
+class TraceTransactionEnd;
+class DsqlCursor;
+class Request;
+
+class Resources;
+class thread_db;
+class jrd_tra;
+
+enum tra_wait_t {
+	tra_no_wait,
+	tra_probe,
+	tra_wait
+};
+} // namespace Jrd
 
 bool	TRA_active_transactions(Jrd::thread_db* tdbb, Jrd::Database*);
 bool	TRA_cleanup(Jrd::thread_db*);
@@ -47,7 +57,9 @@ void	TRA_init(Jrd::Attachment*);
 void	TRA_invalidate(Jrd::thread_db* tdbb, ULONG);
 void	TRA_link_cursor(Jrd::jrd_tra*, Jrd::DsqlCursor*);
 void	TRA_unlink_cursor(Jrd::jrd_tra*, Jrd::DsqlCursor*);
-void	TRA_post_resources(Jrd::thread_db* tdbb, Jrd::jrd_tra*, Jrd::ResourceList&);
+
+void	TRA_post_resources(Jrd::thread_db* tdbb, Jrd::jrd_tra*, Jrd::Resources&);
+
 bool	TRA_is_active(Jrd::thread_db*, TraNumber);
 void	TRA_prepare(Jrd::thread_db* tdbb, Jrd::jrd_tra*, USHORT, const UCHAR*);
 Jrd::jrd_tra*	TRA_reconnect(Jrd::thread_db* tdbb, const UCHAR*, USHORT);
@@ -60,7 +72,7 @@ Jrd::jrd_tra*	TRA_start(Jrd::thread_db* tdbb, int, const UCHAR*, Jrd::jrd_tra* o
 int		TRA_state(const UCHAR*, TraNumber oldest, TraNumber number) noexcept;
 void	TRA_sweep(Jrd::thread_db* tdbb);
 void	TRA_update_counters(Jrd::thread_db*, Jrd::Database*);
-int		TRA_wait(Jrd::thread_db* tdbb, Jrd::jrd_tra* trans, TraNumber number, Jrd::jrd_tra::wait_t wait);
+int		TRA_wait(Jrd::thread_db* tdbb, Jrd::jrd_tra* trans, TraNumber number, Jrd::tra_wait_t wait);
 void	TRA_attach_request(Jrd::jrd_tra* transaction, Jrd::Request* request);
 void	TRA_detach_request(Jrd::Request* request);
 void	TRA_setup_request_snapshot(Jrd::thread_db*, Jrd::Request* request);

@@ -37,7 +37,7 @@ using namespace Jrd;
 // -------------------------------------------
 
 FullTableScan::FullTableScan(CompilerScratch* csb, const string& alias,
-							 StreamType stream, jrd_rel* relation,
+							 StreamType stream, Rsc::Rel relation,
 							 const Array<DbKeyRangeNode*>& dbkeyRanges)
 	: RecordStream(csb, stream),
 	  m_alias(csb->csb_pool, alias),
@@ -57,7 +57,7 @@ void FullTableScan::internalOpen(thread_db* tdbb) const
 
 	impure->irsb_flags = irsb_open;
 
-	RLCK_reserve_relation(tdbb, request->req_transaction, m_relation, false);
+	RLCK_reserve_relation(tdbb, request->req_transaction, m_relation(), false);
 
 	record_param* const rpb = &request->req_rpb[m_stream];
 	rpb->getWindow(tdbb).win_flags = 0;
@@ -79,10 +79,10 @@ void FullTableScan::internalOpen(thread_db* tdbb) const
 
 		BufferControl* const bcb = dbb->dbb_bcb;
 
-		if (attachment->isGbak() || DPM_data_pages(tdbb, m_relation) > bcb->bcb_count)
+		if (attachment->isGbak() || DPM_data_pages(tdbb, m_relation()) > bcb->bcb_count)
 		{
 			rpb->getWindow(tdbb).win_flags = WIN_large_scan;
-			rpb->rpb_org_scans = m_relation->rel_scan_count++;
+			rpb->rpb_org_scans = m_relation()->rel_scan_count++;
 		}
 	}
 
@@ -125,9 +125,9 @@ void FullTableScan::close(thread_db* tdbb) const
 
 		record_param* const rpb = &request->req_rpb[m_stream];
 		if ((rpb->getWindow(tdbb).win_flags & WIN_large_scan) &&
-			m_relation->rel_scan_count)
+			m_relation()->rel_scan_count)
 		{
-			m_relation->rel_scan_count--;
+			m_relation()->rel_scan_count--;
 		}
 	}
 }
@@ -192,12 +192,12 @@ void FullTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsig
 		bounds += " (upper bound)";
 
 	planEntry.lines.add().text = "Table " +
-		printName(tdbb, m_relation->rel_name.toQuotedString(), m_alias) + " Full Scan" + bounds;
+		printName(tdbb, m_relation()->getName().toQuotedString(), m_alias) + " Full Scan" + bounds;
 	printOptInfo(planEntry.lines);
 
-	planEntry.objectType = m_relation->getObjectType();
-	planEntry.objectName = m_relation->rel_name;
+	planEntry.objectType = m_relation()->getObjectType();
+	planEntry.objectName = m_relation()->getName();
 
-	if (m_alias.hasData() && m_alias != string(m_relation->rel_name.object))
+	if (m_alias.hasData() && m_alias != string(m_relation()->getName().object))
 		planEntry.alias = m_alias;
 }

@@ -146,6 +146,9 @@ endif
 
 LTC_LDFLAGS := $(LTC_LDFLAGS) $(LDFLAGS)
 
+OBJDIR ?=
+OBJDIR_PREFIX := $(if $(OBJDIR),$(OBJDIR)/,)
+
 #List of demo objects
 DSOURCES = $(wildcard demos/*.c)
 DOBJECTS = $(DSOURCES:.c=.o)
@@ -366,6 +369,10 @@ tests/modes_test.o tests/mpi_test.o tests/multi_test.o tests/no_prng.o tests/pkc
 tests/pkcs_1_emsa_test.o tests/pkcs_1_oaep_test.o tests/pkcs_1_pss_test.o tests/pkcs_1_test.o \
 tests/prng_test.o tests/rotate_test.o tests/rsa_test.o tests/store_test.o tests/test.o
 
+DOBJECTS := $(addprefix $(OBJDIR_PREFIX),$(DOBJECTS))
+OBJECTS := $(addprefix $(OBJDIR_PREFIX),$(OBJECTS))
+TOBJECTS := $(addprefix $(OBJDIR_PREFIX),$(TOBJECTS))
+
 # The following headers will be installed by "make install"
 HEADERS=src/headers/tomcrypt.h src/headers/tomcrypt_argchk.h src/headers/tomcrypt_cfg.h \
 src/headers/tomcrypt_cipher.h src/headers/tomcrypt_custom.h src/headers/tomcrypt_hash.h \
@@ -374,13 +381,13 @@ src/headers/tomcrypt_misc.h src/headers/tomcrypt_pk.h src/headers/tomcrypt_pkcs.
 src/headers/tomcrypt_prng.h
 
 #These are the rules to make certain object files.
-src/ciphers/aes/aes.o: src/ciphers/aes/aes.c src/ciphers/aes/aes_tab.c
-src/ciphers/twofish/twofish.o: src/ciphers/twofish/twofish.c src/ciphers/twofish/twofish_tab.c
-src/hashes/whirl/whirl.o: src/hashes/whirl/whirl.c src/hashes/whirl/whirltab.c
-src/hashes/sha2/sha512.o: src/hashes/sha2/sha512.c src/hashes/sha2/sha384.c
-src/hashes/sha2/sha512_224.o: src/hashes/sha2/sha512.c src/hashes/sha2/sha512_224.c
-src/hashes/sha2/sha512_256.o: src/hashes/sha2/sha512.c src/hashes/sha2/sha512_256.c
-src/hashes/sha2/sha256.o: src/hashes/sha2/sha256.c src/hashes/sha2/sha224.c
+$(OBJDIR_PREFIX)src/ciphers/aes/aes.o: src/ciphers/aes/aes.c src/ciphers/aes/aes_tab.c
+$(OBJDIR_PREFIX)src/ciphers/twofish/twofish.o: src/ciphers/twofish/twofish.c src/ciphers/twofish/twofish_tab.c
+$(OBJDIR_PREFIX)src/hashes/whirl/whirl.o: src/hashes/whirl/whirl.c src/hashes/whirl/whirltab.c
+$(OBJDIR_PREFIX)src/hashes/sha2/sha512.o: src/hashes/sha2/sha512.c src/hashes/sha2/sha384.c
+$(OBJDIR_PREFIX)src/hashes/sha2/sha512_224.o: src/hashes/sha2/sha512.c src/hashes/sha2/sha512_224.c
+$(OBJDIR_PREFIX)src/hashes/sha2/sha512_256.o: src/hashes/sha2/sha512.c src/hashes/sha2/sha512_256.c
+$(OBJDIR_PREFIX)src/hashes/sha2/sha256.o: src/hashes/sha2/sha256.c src/hashes/sha2/sha224.c
 
 $(DOBJECTS): LTC_CFLAGS := -Itests $(LTC_CFLAGS)
 $(TOBJECTS): LTC_CFLAGS := -Itests $(LTC_CFLAGS)

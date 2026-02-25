@@ -57,11 +57,13 @@
 #include "../jrd/acl.h"
 #include "../jrd/dyn.h"
 #include "../jrd/irq.h"
+#include "../jrd/met.h"
 #include "../jrd/IntlManager.h"
 #include "../jrd/PreparedStatement.h"
 #include "../jrd/constants.h"
 #include "../jrd/grant_proto.h"
 #include "../jrd/SystemPackages.h"
+#include "../dsql/DdlNodes.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -82,14 +84,14 @@ namespace
 
 	unsigned getLatestFormat(thread_db* tdbb, int relId, int maxFieldId)
 	{
-		const auto relation = MET_relation(tdbb, relId);
-		fb_assert(relation && relation->rel_formats);
-		fb_assert(relation->rel_formats->count());
+		auto* const relation = MetadataCache::getPerm<Cached::Relation>(tdbb, relId, CacheFlag::AUTOCREATE | CacheFlag::NOSCAN);
+		fb_assert(relation);
+		auto formats = relation->getFormats();
 
-		const auto formatNumber = relation->rel_formats->count() - 1;
+		const auto formatNumber = formats->getCount() - 1;
 		fb_assert(formatNumber < MAX_TABLE_VERSIONS);
 
-		const auto format = (*relation->rel_formats)[formatNumber];
+		const auto format = formats->value(formatNumber);
 		fb_assert(format->fmt_count == maxFieldId);
 		fb_assert(format->fmt_version == formatNumber);
 
@@ -609,6 +611,49 @@ namespace
 	private:
 		AutoRequest handle;
 	};
+
+	class UpdateFormats : public Array<MetaName>
+	{
+	public:
+		void addIfMissing(MetaName relName)
+		{
+			if (!exist(relName))
+				push(relName);
+		}
+
+		static void makeRelation(thread_db* tdbb, jrd_rel* oldRel)
+		{
+			// This code looks a little overcomplicated but very careful upgrade of format
+			// is required for system relations, at least for RDB$SYSTEM_SCHEMA & RDB$RELATIONS,
+			// cause HASH plan used for it tries to upgrade format version to the freshmost one
+			// which causes segfault (or assert) in MET_get_format() without this precautions.
+
+			fb_assert(oldRel);
+
+			auto* rel = oldRel->getPermanent();
+			fb_assert(rel);
+
+			auto* trans = tdbb->getTransaction();
+			if (trans)
+				RelationNode::makeVersion(tdbb, trans, rel->getName());
+
+			auto* newRel = jrd_rel::create(tdbb, rel->getPool(), rel);
+			newRel->rel_current_fmt = oldRel->rel_current_fmt;
+			newRel->rel_current_format = oldRel->rel_current_format;
+
+			rel->storeObject(tdbb, newRel, 0);
+		}
+
+		void make(thread_db* tdbb)
+		{
+			for (auto relName : *this)
+			{
+				QualifiedName name(relName, SYSTEM_SCHEMA);
+				auto* oldRel = MetadataCache::getVersioned<Cached::Relation>(tdbb, name, CacheFlag::AUTOCREATE);
+				makeRelation(tdbb, oldRel);
+			}
+		}
+	};
 }; // namespace
 
 static void store_admin_role(thread_db*, const MetaName&, RoleSecurity&);
@@ -639,6 +684,9 @@ void INI_format(thread_db* tdbb, const string& charset)
 	const auto ownerName = attachment->getUserName();
 	fb_assert(ownerName.hasData());
 
+	// Adding trigger(s) changes relation format
+	UpdateFormats updateFormats;
+
 	AutoRequest handle, reqAddSC;
 
 	{ // scope for system relations
@@ -652,7 +700,10 @@ void INI_format(thread_db* tdbb, const string& charset)
 		for (const int* relfld = relfields; relfld[RFLD_R_NAME]; relfld = fld + 1)
 		{
 			if (relfld[RFLD_R_TYPE] == rel_persistent)
-				DPM_create_relation(tdbb, MET_relation(tdbb, relfld[RFLD_R_ID]));
+			{
+				DPM_create_relation(tdbb, MetadataCache::getPerm<Cached::Relation>(tdbb, relfld[RFLD_R_ID],
+					CacheFlag::AUTOCREATE | CacheFlag::NOSCAN));
+			}
 
 			for (fld = relfld + RFLD_RPT; fld[RFLD_F_NAME]; fld += RFLD_F_LENGTH)
 				;
@@ -696,11 +747,7 @@ void INI_format(thread_db* tdbb, const string& charset)
 			store_relation(tdbb, relId, relName, fieldId, relType, handle, relSec);
 
 			if (needsRdbRuntime)
-			{
-				dsc desc;
-				desc.makeText(static_cast<USHORT>(strlen(relName)), CS_METADATA, (UCHAR*) relName);
-				DFW_post_work(transaction, dfw_update_format, &desc, &schemaDesc, 0);
-			}
+				updateFormats.push(relName);
 		}
 	}
 
@@ -864,10 +911,11 @@ void INI_format(thread_db* tdbb, const string& charset)
 
 	// Create system packages
 
-	// Reset nonRelSec for package permissions, it should be its last usage in this function
-	new(&nonRelSec) NonRelationSecurity(ownerName, reqAddSC, true);
+	// --- Reset nonRelSec for package permissions, it should be its last usage in this function
+	//new(&nonRelSec) NonRelationSecurity(ownerName, reqAddSC, true);
+	NonRelationSecurity nonRelSec2(ownerName, reqAddSC, true);
 
-	store_packages(tdbb, nonRelSec);
+	store_packages(tdbb, nonRelSec2);
 
 	// Store default publication
 
@@ -901,6 +949,8 @@ void INI_format(thread_db* tdbb, const string& charset)
 		obj_relation, ALL_PRIVILEGES);
 	GRANT_privileges(tdbb, QualifiedName("RDB$DB_CREATORS", SYSTEM_SCHEMA), obj_relation, transaction);
 
+	updateFormats.make(tdbb);
+
 	DFW_perform_work(tdbb, transaction);
 
 	tdbb->setTransaction(nullptr);
@@ -916,36 +966,49 @@ void INI_init(thread_db* tdbb)
 	const auto dbb = tdbb->getDatabase();
 	const auto attachment = tdbb->getAttachment();
 
-	const auto pool = attachment->att_pool;
+	const auto pool = dbb->dbb_permanent;
 
 	const int* fld;
 	for (const int* relfld = relfields; relfld[RFLD_R_NAME]; relfld = fld + 1)
 	{
 		const bool isPersistent = (relfld[RFLD_R_TYPE] == rel_persistent);
 
-		jrd_rel* relation = MET_relation(tdbb, relfld[RFLD_R_ID]);
-		relation->rel_flags |= REL_system;
-		relation->rel_flags |= MET_get_rel_flags_from_TYPE(relfld[RFLD_R_TYPE]);
+		jrd_rel* relVers = MetadataCache::getVersioned<Cached::Relation>(tdbb, relfld[RFLD_R_ID],
+            CacheFlag::AUTOCREATE | CacheFlag::NOSCAN);
+		auto* relation = getPermanent(relVers);
+
+		relation->rel_flags |= (MET_get_rel_flags_from_TYPE(relfld[RFLD_R_TYPE]) | REL_system);
 		relation->rel_name = QualifiedName(names[relfld[RFLD_R_NAME]], SYSTEM_SCHEMA);
 
-		HalfStaticArray<const char*, 64> fieldNames;
+		struct Field
+		{
+			const char* name;
+			const gfld* gfield;
+
+			Field(const char* name, const gfld& gfield)
+				: name(name), gfield(&gfield)
+			{ }
+			Field() = default;
+		};
+		HalfStaticArray<Field, 64> localFields;
 		for (fld = relfld + RFLD_RPT; fld[RFLD_F_NAME]; fld += RFLD_F_LENGTH)
 		{
-			fieldNames.add(names[fld[RFLD_F_NAME]]);
+			localFields.add(Field(names[fld[RFLD_F_NAME]], gfields[fld[RFLD_F_ID]]));
 		}
 
-		const auto fields = vec<jrd_fld*>::newVector(*pool, fieldNames.getCount());
-		relation->rel_fields = fields;
+		const auto fields = vec<jrd_fld*>::newVector(*pool, localFields.getCount());
+		relVers->rel_fields = fields;
 
 		ULONG fieldPos = 0;
 		for (auto iter = fields->begin(); iter != fields->end(); ++iter)
 		{
 			const auto field = FB_NEW_POOL(*pool) jrd_fld(*pool);
-			field->fld_name = fieldNames[fieldPos++];
+			field->fld_name = localFields[fieldPos].name;
+			field->fld_source_name = QualifiedName(names[localFields[fieldPos].gfield->gfld_name], SYSTEM_SCHEMA);
+			field->fld_length = localFields[fieldPos].gfield->gfld_length;
 			*iter = field;
+			++fieldPos;
 		}
-
-		relation->rel_formats = vec<Format*>::newVector(*pool, 1);
 
 		constexpr auto majorVersion = ODS_VERSION;
 		const auto dbMinorVersion = dbb->dbb_ods_version ? dbb->dbb_minor_version : ODS_CURRENT;
@@ -979,8 +1042,7 @@ void INI_init(thread_db* tdbb)
 			format->fmt_version = formatNumber;
 			format->fmt_length = FLAG_BYTES(format->fmt_count);
 
-			relation->rel_formats->resize(formatNumber + 1);
-			(*relation->rel_formats)[formatNumber] = format;
+			relation->addFormat(format);
 
 			auto desc = format->fmt_desc.begin();
 
@@ -1002,8 +1064,9 @@ void INI_init(thread_db* tdbb)
 
 				if (desc->isText())
 				{
-					if (!getCharsetByTextType(desc->dsc_sub_type, gfield->gfld_sub_type))
-						desc->dsc_sub_type = CS_NONE;
+					CSetId cs = CS_NONE;
+					getCharsetByTextType(cs, gfield->gfld_sub_type);
+					desc->setTextType(cs);
 				}
 				else
 					desc->dsc_sub_type = gfield->gfld_sub_type;
@@ -1023,9 +1086,10 @@ void INI_init(thread_db* tdbb)
 			formatNumber++;
 		}
 
-		fb_assert(currentFormat < relation->rel_formats->count());
-		relation->rel_current_fmt = currentFormat;
-		relation->rel_current_format = (*relation->rel_formats)[currentFormat];
+		const auto formats = relation->getFormats();
+		fb_assert(currentFormat < formats->getCount());
+		relVers->rel_current_fmt = currentFormat;
+		relVers->rel_current_format = formats->value(currentFormat);
 	}
 }
 
@@ -1037,8 +1101,10 @@ void INI_init_sys_relations(thread_db* tdbb)
 
 	for (const int* relfld = relfields; relfld[RFLD_R_NAME]; relfld = fld + 1)
 	{
-		jrd_rel* relation = MET_relation(tdbb, relfld[RFLD_R_ID]);
+		auto relId = relfld[RFLD_R_ID];
 		bool needsRdbRuntime = false;
+		auto relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, relId, 0);
+		fb_assert(relation);
 
 		for (fld = relfld + RFLD_RPT; fld[RFLD_F_NAME]; fld += RFLD_F_LENGTH)
 		{
@@ -1049,7 +1115,7 @@ void INI_init_sys_relations(thread_db* tdbb)
 		}
 
 		if (needsRdbRuntime)
-			MET_scan_relation(tdbb, relation);
+			UpdateFormats::makeRelation(tdbb, relation);
 	}
 }
 
@@ -1060,80 +1126,6 @@ void INI_init_sys_relations(thread_db* tdbb)
 
 void INI_init_dsql(thread_db* tdbb, dsql_dbb* database)
 {
-	const auto dbb = tdbb->getDatabase();
-
-	const auto majorVersion = dbb->dbb_ods_version;
-	const auto minorVersion = dbb->dbb_minor_version;
-
-	// Load relation and fields.
-
-	const int* fld;
-	for (const int* relfld = relfields; relfld[RFLD_R_NAME]; relfld = fld + 1)
-	{
-		if (relfld[RFLD_R_ODS] > ENCODE_ODS(majorVersion, minorVersion))
-		{
-			for (fld = relfld + RFLD_RPT; fld[RFLD_F_NAME]; fld += RFLD_F_LENGTH)
-				;
-
-			continue;
-		}
-
-		dsql_rel* relation = FB_NEW_POOL(database->dbb_pool) dsql_rel(database->dbb_pool);
-
-		relation->rel_id = relfld[RFLD_R_ID];
-		relation->rel_name = QualifiedName(names[relfld[RFLD_R_NAME]], SYSTEM_SCHEMA);
-		relation->rel_owner = DBA_USER_NAME;
-		relation->rel_dbkey_length = 8;
-
-		dsql_fld** ptr = &relation->rel_fields;
-		int n = 0;
-
-		for (fld = relfld + RFLD_RPT; fld[RFLD_F_NAME]; fld += RFLD_F_LENGTH)
-		{
-			if (fld[RFLD_F_ODS] > ENCODE_ODS(majorVersion, minorVersion))
-				continue;
-
-			dsql_fld* field = FB_NEW_POOL(database->dbb_pool) dsql_fld(database->dbb_pool);
-			field->fld_id = n++;
-
-			*ptr = field;
-			ptr = &field->fld_next;
-
-			// get field information
-
-			const gfld* gfield = &gfields[fld[RFLD_F_ID]];
-
-			field->fld_name = names[fld[RFLD_F_NAME]];
-			field->fieldSource = QualifiedName(names[gfield->gfld_name], SYSTEM_SCHEMA);
-			field->length = gfield->gfld_length;
-			field->scale = 0;
-			field->subType = gfield->gfld_sub_type;
-			field->fld_relation = relation;
-
-			field->dtype = gfield->gfld_dtype;
-
-			if (field->dtype == dtype_varying)
-				field->length += sizeof(USHORT);
-			else if (field->dtype == dtype_blob)
-			{
-				field->segLength = 80;
-				if (gfield->gfld_sub_type == isc_blob_text)
-					field->charSetId = CS_METADATA;
-			}
-
-			if (DTYPE_IS_TEXT(gfield->gfld_dtype))
-				getCharsetByTextType(field->charSetId, gfield->gfld_sub_type);
-
-			if (gfield->gfld_nullable)
-				field->flags |= FLD_nullable;
-
-			field->flags |= FLD_system;
-		}
-
-		database->dbb_relations.put(relation->rel_name, relation);
-		MET_dsql_cache_use(tdbb, SYM_relation, relation->rel_name);
-	}
-
 	// Load internal character sets and collations, necessary for engine operation.
 
 	for (const IntlManager::CharSetDefinition* csDef = IntlManager::defaultCharSets;
@@ -1146,9 +1138,8 @@ void INI_init_dsql(thread_db* tdbb, dsql_dbb* database)
 		const QualifiedName csName(csDef->name, SYSTEM_SCHEMA);
 		csSymbol->intlsym_name = csName;
 		csSymbol->intlsym_charset_id = csDef->id;
-		csSymbol->intlsym_collate_id = 0;
-		csSymbol->intlsym_ttype =
-			INTL_CS_COLL_TO_TTYPE(csSymbol->intlsym_charset_id, csSymbol->intlsym_collate_id);
+		csSymbol->intlsym_collate_id = CollId(0);
+		csSymbol->intlsym_ttype = TTypeId(csSymbol->intlsym_charset_id, csSymbol->intlsym_collate_id);
 		csSymbol->intlsym_bytes_per_char = csDef->maxBytes;
 
 		// Mark the charset as invalid to reload it ASAP. This is done because we cannot know here
@@ -1157,7 +1148,7 @@ void INI_init_dsql(thread_db* tdbb, dsql_dbb* database)
 
 		database->dbb_charsets.put(csName, csSymbol);
 		database->dbb_charsets_by_id.put(csSymbol->intlsym_charset_id, csSymbol);
-		MET_dsql_cache_use(tdbb, SYM_intlsym_charset, csName);
+		MetadataCache::dsql_cache_use(tdbb, SYM_intlsym_charset, csName);
 
 		for (const IntlManager::CollationDefinition* colDef = IntlManager::defaultCollations;
 			 colDef->name; ++colDef)
@@ -1171,12 +1162,11 @@ void INI_init_dsql(thread_db* tdbb, dsql_dbb* database)
 			colSymbol->intlsym_flags = 0;
 			colSymbol->intlsym_charset_id = csDef->id;
 			colSymbol->intlsym_collate_id = colDef->collationId;
-			colSymbol->intlsym_ttype =
-				INTL_CS_COLL_TO_TTYPE(colSymbol->intlsym_charset_id, colSymbol->intlsym_collate_id);
+			colSymbol->intlsym_ttype = TTypeId(colSymbol->intlsym_charset_id, colSymbol->intlsym_collate_id);
 			colSymbol->intlsym_bytes_per_char = csDef->maxBytes;
 
 			database->dbb_collations.put(colName, colSymbol);
-			MET_dsql_cache_use(tdbb, SYM_intlsym_collation, colName);
+			MetadataCache::dsql_cache_use(tdbb, SYM_intlsym_collation, colName);
 		}
 	}
 }
@@ -1225,6 +1215,10 @@ void INI_upgrade(thread_db* tdbb)
 
 	try {
 
+	// finally we should update formats of system relations
+
+	UpdateFormats updateFormats;
+
 	// Disable most of the deferred work processing,
 	// as we do all the underlying work ourselves
 
@@ -1250,7 +1244,10 @@ void INI_upgrade(thread_db* tdbb)
 		for (const int* relfld = relfields; relfld[RFLD_R_NAME]; relfld = fld + 1)
 		{
 			if (relfld[RFLD_R_TYPE] == rel_persistent && relfld[RFLD_R_ODS] > odsVersion)
-				DPM_create_relation(tdbb, MET_relation(tdbb, relfld[RFLD_R_ID]));
+			{
+				DPM_create_relation(tdbb, MetadataCache::getPerm<Cached::Relation>(tdbb, relfld[RFLD_R_ID],
+					CacheFlag::AUTOCREATE | CacheFlag::NOSCAN));
+			}
 
 			for (fld = relfld + RFLD_RPT; fld[RFLD_F_NAME]; fld += RFLD_F_LENGTH)
 				;
@@ -1303,12 +1300,8 @@ void INI_upgrade(thread_db* tdbb)
 				}
 				END_FOR
 
-				// Schedule metadata cache to be updated at the commit time
-
-				dsc desc;
-				desc.makeText(static_cast<USHORT>(strlen(relName)), CS_METADATA,
-							  (UCHAR*) relName);
-				DFW_post_work(transaction, dfw_update_format, &desc, &schemaDesc, 0);
+				// Schedule metadata cache to be updated
+				updateFormats.push(relName);
 			}
 		}
 	}
@@ -1345,10 +1338,11 @@ void INI_upgrade(thread_db* tdbb)
 	// Create new system packages
 
 	// Reset nonRelSec for package permissions, it should be its last usage in this function
-	new(&nonRelSec) NonRelationSecurity(ownerName, reqAddSC, true);
+	// new(&nonRelSec) NonRelationSecurity(ownerName, reqAddSC, true);
+	NonRelationSecurity nonRelSec2(ownerName, reqAddSC, true);
 
 	context = "packages";
-	store_packages(tdbb, nonRelSec, odsVersion);
+	store_packages(tdbb, nonRelSec2, odsVersion);
 
 	// There are no new built-in charsets and collations introduced in ODS 13.1.
 	// But if it happens in some future minor ODS, the corresponding INTL structures
@@ -1356,6 +1350,8 @@ void INI_upgrade(thread_db* tdbb)
 	// the missing charsets/collations.
 	//
 	// The same about the new types being introduced in minor ODS versions.
+
+	updateFormats.make(tdbb);
 
 	TRA_commit(tdbb, transaction, false);
 
@@ -1370,7 +1366,7 @@ void INI_upgrade(thread_db* tdbb)
 		{
 			if (relfld[RFLD_R_TYPE] == rel_persistent && relfld[RFLD_R_ODS] > odsVersion)
 			{
-				const auto relation = MET_relation(tdbb, relfld[RFLD_R_ID]);
+				const auto relation = MetadataCache::getPerm<Cached::Relation>(tdbb, relfld[RFLD_R_ID], CacheFlag::NOSCAN);
 				if (relation && relation->getBasePages()->rel_pages)
 					DPM_delete_relation(tdbb, relation);
 			}
@@ -1411,38 +1407,6 @@ void INI_upgrade(thread_db* tdbb)
 			   attachment->att_filename.c_str(),
 			   majorVersion, minorVersion, majorVersion, ODS_CURRENT);
 	gds__log(msg.c_str());
-
-	// Invalidate new/modified relations in the DSQL metadata cache,
-	// thus forcing them to be reloaded on demand
-
-	if (const auto dbb = attachment->att_dsql_instance)
-	{
-		for (const int* relfld = relfields; relfld[RFLD_R_NAME]; relfld = fld + 1)
-		{
-			bool invalidate = false;
-
-			if (relfld[RFLD_R_ODS] > odsVersion)
-				invalidate = true;
-
-			for (fld = relfld + RFLD_RPT; fld[RFLD_F_NAME]; fld += RFLD_F_LENGTH)
-			{
-				if (fld[RFLD_F_ODS] > odsVersion)
-					invalidate = true;
-			}
-
-			// Code below is the same as METD_drop_relation() but without a transaction
-
-			const QualifiedName relName(names[relfld[RFLD_R_NAME]], SYSTEM_SCHEMA);
-			dsql_rel* relation;
-
-			if (invalidate && dbb->dbb_relations.get(relName, relation))
-			{
-				MET_dsql_cache_use(tdbb, SYM_relation, relName);
-				relation->rel_flags |= REL_dropped;
-				dbb->dbb_relations.remove(relName);
-			}
-		}
-	}
 }
 
 
@@ -1719,7 +1683,9 @@ static void store_indices(thread_db* tdbb, USHORT odsVersion)
 	for (FB_SIZE_T n = 0; n < SYSTEM_INDEX_COUNT; n++)
 	{
 		const ini_idx_t* index = &indices[n];
-		const auto relation = MET_relation(tdbb, index->ini_idx_relid);
+		auto* relVers = MetadataCache::getVersioned<Cached::Relation>(tdbb, index->ini_idx_relid,
+			CacheFlag::AUTOCREATE | CacheFlag::NOSCAN);
+		auto* relation = getPermanent(relVers);
 
 		if (odsVersion && index->ini_idx_ods <= odsVersion)
 			continue;
@@ -1761,7 +1727,7 @@ static void store_indices(thread_db* tdbb, USHORT odsVersion)
 				STORE(REQUEST_HANDLE handle2 TRANSACTION_HANDLE transaction)
 					Y IN RDB$INDEX_SEGMENTS
 				{
-					jrd_fld* field = (*relation->rel_fields)[segment->ini_idx_rfld_id];
+					jrd_fld* field = (*relVers->rel_fields)[segment->ini_idx_rfld_id];
 
 					Y.RDB$FIELD_POSITION = position;
 					PAD(SYSTEM_SCHEMA, Y.RDB$SCHEMA_NAME);
@@ -1778,7 +1744,7 @@ static void store_indices(thread_db* tdbb, USHORT odsVersion)
 			idx.idx_flags = index->ini_idx_flags;
 			SelectivityList selectivity(*tdbb->getDefaultPool());
 
-			IDX_create_index(tdbb, relation, &idx, indexName, NULL,
+			IDX_create_index(tdbb, IdxCreate::AtOnce, relVers, &idx, indexName, NULL,
 				transaction, selectivity);
 
 			X.RDB$INDEX_ID = idx.idx_id + 1;
@@ -1878,10 +1844,25 @@ static void store_intlnames(thread_db* tdbb, NonRelationSecurity& security)
 
 			X.RDB$COLLATION_ATTRIBUTES = collation->attributes;
 
-			if (collation->specificAttributes)
+			QualifiedMetaString charSetName;
+			string modAttributes;
+			for (const auto* charSet = IntlManager::defaultCharSets;
+				charSet->name; ++charSet)
 			{
-				attachment->storeMetaDataBlob(tdbb, transaction,
-					&X.RDB$SPECIFIC_ATTRIBUTES, collation->specificAttributes);
+				if (charSet->id == collation->charSetId)
+				{
+					charSetName = QualifiedMetaString(charSet->name, SYSTEM_SCHEMA);
+					break;
+				}
+			}
+
+			fb_assert(charSetName.hasData());
+			IntlManager::setupCollationAttributes(collation->baseName ? collation->baseName : collation->name,
+				charSetName, collation->specificAttributes ? collation->specificAttributes : "", modAttributes);
+
+			if (modAttributes.hasData())
+			{
+				attachment->storeMetaDataBlob(tdbb, transaction, &X.RDB$SPECIFIC_ATTRIBUTES, modAttributes);
 				X.RDB$SPECIFIC_ATTRIBUTES.NULL = FALSE;
 			}
 			else
@@ -1890,6 +1871,12 @@ static void store_intlnames(thread_db* tdbb, NonRelationSecurity& security)
 		END_STORE
 
 		security.storePrivileges(tdbb, collation->name, obj_collation);
+	}
+
+	for (const IntlManager::CharSetDefinition* charSet = IntlManager::defaultCharSets;
+		 charSet->name; ++charSet)
+	{
+		MetadataCache::getVersioned<Cached::CharSet>(tdbb, charSet->id, CacheFlag::UPGRADE | CacheFlag::NOCOMMIT);
 	}
 }
 

@@ -177,11 +177,26 @@ LockManager::LockManager(const string& id, const Config* conf)
 	  m_config(conf),
 	  m_acquireSpins(m_config->getLockAcquireSpins()),
 	  m_memorySize(m_config->getLockMemSize()),
+	  m_hashSlots(m_config->getLockHashSlots()),
 	  m_useBlockingThread(m_config->getServerMode() != MODE_SUPER)
 #ifdef USE_SHMEM_EXT
 	  , m_extents(getPool())
 #endif
 {
+	if (m_hashSlots < HASH_MIN_SLOTS)
+		m_hashSlots = HASH_MIN_SLOTS;
+	if (m_hashSlots > HASH_MAX_SLOTS)
+		m_hashSlots = HASH_MAX_SLOTS;
+
+	// memory size required to fit all hash slots, history blocks and header blocks
+	const auto minMemory = sizeof(lhb) +
+		FB_ALIGN(sizeof(shb), FB_ALIGNMENT) +
+		sizeof(lhb::lhb_hash[0]) * m_hashSlots +
+		FB_ALIGN(sizeof(his), FB_ALIGNMENT) * HISTORY_BLOCKS * 2;
+
+	if (m_memorySize < minMemory)
+		m_memorySize = minMemory;
+
 	LocalStatus ls;
 	CheckStatusWrapper localStatus(&ls);
 	if (!init_shared_file(&localStatus))
@@ -304,6 +319,9 @@ bool LockManager::init_shared_file(CheckStatusWrapper* statusVector)
 
 		const auto header = tmp->getHeader();
 		checkHeader(header);
+
+		// Get properly aligned value
+		m_memorySize = m_sharedMemory->sh_mem_increment;
 	}
 	catch (const Exception& ex)
 	{
@@ -2330,13 +2348,7 @@ bool LockManager::initialize(SharedMemoryBase* sm, bool initializeMemory)
 	SRQ_INIT(hdr->lhb_free_locks);
 	SRQ_INIT(hdr->lhb_free_requests);
 
-	int hash_slots = m_config->getLockHashSlots();
-	if (hash_slots < HASH_MIN_SLOTS)
-		hash_slots = HASH_MIN_SLOTS;
-	if (hash_slots > HASH_MAX_SLOTS)
-		hash_slots = HASH_MAX_SLOTS;
-
-	hdr->lhb_hash_slots = (USHORT) hash_slots;
+	hdr->lhb_hash_slots = m_hashSlots;
 	hdr->lhb_scan_interval = m_config->getDeadlockTimeout();
 	hdr->lhb_acquire_spins = m_acquireSpins;
 

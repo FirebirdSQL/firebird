@@ -46,14 +46,7 @@ FilteredStream::FilteredStream(CompilerScratch* csb, RecordSource* next,
 	fb_assert(m_next && m_boolean);
 
 	m_impure = csb->allocImpure<Impure>();
-
-	auto cardinality = next->getCardinality();
-	if (selectivity)
-	{
-		Optimizer::adjustSelectivity(selectivity, MAXIMUM_SELECTIVITY, cardinality);
-		cardinality *= selectivity;
-	}
-	m_cardinality = cardinality;
+	m_cardinality = next->getCardinality() * selectivity;
 }
 
 FilteredStream::FilteredStream(CompilerScratch* csb, RecordSource* next,

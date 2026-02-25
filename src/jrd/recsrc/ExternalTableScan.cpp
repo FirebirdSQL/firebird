@@ -38,7 +38,7 @@ using namespace Jrd;
 // --------------------------------
 
 ExternalTableScan::ExternalTableScan(CompilerScratch* csb, const string& alias,
-									 StreamType stream, jrd_rel* relation)
+									 StreamType stream, Rsc::Rel relation)
 	: RecordStream(csb, stream), m_relation(relation), m_alias(csb->csb_pool, alias)
 {
 	m_impure = csb->allocImpure<Impure>();
@@ -56,9 +56,7 @@ void ExternalTableScan::internalOpen(thread_db* tdbb) const
 	record_param* const rpb = &request->req_rpb[m_stream];
 	rpb->getWindow(tdbb).win_flags = 0;
 
-	EXT_open(dbb, m_relation->rel_file);
-
-	VIO_record(tdbb, rpb, MET_current(tdbb, m_relation), request->req_pool);
+	VIO_record(tdbb, rpb, m_relation(request->getResources())->currentFormat(tdbb), request->req_pool);
 
 	impure->irsb_position = 0;
 	rpb->rpb_number.setValue(BOF_NUMBER);
@@ -92,7 +90,7 @@ bool ExternalTableScan::internalGetRecord(thread_db* tdbb) const
 
 	rpb->rpb_runtime_flags &= ~RPB_CLEAR_FLAGS;
 
-	if (EXT_get(tdbb, rpb, impure->irsb_position))
+	if (rpb->rpb_relation->getExtFile()->get(tdbb, rpb, impure->irsb_position))
 	{
 		rpb->rpb_number.increment();
 		rpb->rpb_number.setValid(true);
@@ -108,10 +106,8 @@ bool ExternalTableScan::refetchRecord(thread_db* /*tdbb*/) const
 	return true;
 }
 
-WriteLockResult ExternalTableScan::lockRecord(thread_db* tdbb) const
+WriteLockResult ExternalTableScan::lockRecord(thread_db* /*tdbb*/) const
 {
-	SET_TDBB(tdbb);
-
 	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
 }
 
@@ -131,12 +127,12 @@ void ExternalTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, u
 	planEntry.className = "ExternalTableScan";
 
 	planEntry.lines.add().text = "Table " +
-		printName(tdbb, m_relation->rel_name.toQuotedString(), m_alias) + " Full Scan";
+		printName(tdbb, m_relation()->getName().toQuotedString(), m_alias) + " Full Scan";
 	printOptInfo(planEntry.lines);
 
-	planEntry.objectType = m_relation->getObjectType();
-	planEntry.objectName = m_relation->rel_name;
+	planEntry.objectType = m_relation()->getObjectType();
+	planEntry.objectName = m_relation()->getName();
 
-	if (m_alias.hasData() && m_alias != string(m_relation->rel_name.object))
+	if (m_alias.hasData() && m_alias != string(m_relation()->getName().object))
 		planEntry.alias = m_alias;
 }
