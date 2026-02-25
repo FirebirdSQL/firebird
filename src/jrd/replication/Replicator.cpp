@@ -207,7 +207,7 @@ void Replicator::commitTransaction(CheckStatusWrapper* status, Transaction* tran
 		const auto dataLength = txnData.buffer->getCount() - sizeof(Block);
 		fb_assert(txnData.flushes || dataLength > sizeof(UCHAR));
 
-		txnData.putGenerators(&m_generators);
+		txnData.putGenerators(m_generators);
 		m_generators.clear();
 
 		txnData.putTag(opCommitTransaction);
@@ -227,7 +227,7 @@ void Replicator::rollbackTransaction(CheckStatusWrapper* status, Transaction* tr
 
 		if (txnData.flushes || m_generators.hasData())
 		{
-			txnData.putGenerators(&m_generators);
+			txnData.putGenerators(m_generators);
 			m_generators.clear();
 
 			if (txnData.flushes)

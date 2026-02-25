@@ -144,9 +144,9 @@ namespace Replication
 				buffer->add(data, length);
 			}
 
-			void putGenerators(const GeneratorCache* generators)
+			void putGenerators(const GeneratorCache& generators)
 			{
-				for (const auto& generator : *generators)
+				for (const auto& generator : generators)
 				{
 					fb_assert(generator.name.object.hasData() && generator.name.schema.hasData());
 
