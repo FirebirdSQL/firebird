@@ -115,7 +115,7 @@ public:
 	ItemsSignatureArray functions;
 	ItemsSignatureArray procedures;
 	ItemsSignatureArray constants;
-}; // PackageItemCollector
+};
 
 class PackageReferenceNode final : public TypedNode<ValueExprNode, ExprNode::TYPE_REFERENCE>
 {

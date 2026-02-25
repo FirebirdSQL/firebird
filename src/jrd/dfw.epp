@@ -402,6 +402,7 @@ static bool modify_field(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool delete_global(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool delete_parameter(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool delete_rfr(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
+static bool make_ltt_version(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool add_difference(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool delete_difference(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool begin_backup(thread_db*, SSHORT, DeferredWork*, jrd_tra*);

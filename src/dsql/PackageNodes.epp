@@ -364,7 +364,7 @@ ValueExprNode* PackageReferenceNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	bool isPrivate = false;
 	if (constantExists(tdbb, transaction, m_fullName, &isPrivate))
 	{
-		// External items have not access to private constants
+		// External objects do not have access to private constants.
 		if (isPrivate)
 		{
 			status_exception::raise(Arg::Gds(isc_private_constant) <<

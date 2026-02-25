@@ -11579,6 +11579,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 			{
 				if (!aliasName)
 					aliasName = referenceNode->getName();
+
 				nameNode = nullptr;
 			}
 		}

@@ -842,12 +842,12 @@ END_RELATION
 
 // Relation 59 (RDB$CONSTANTS)
 RELATION(nam_constants, rel_constants, ODS_13_1, rel_persistent)
-	FIELD(f_const_name, nam_const_name, fld_f_name, 0, ODS_13_1)
+	FIELD(f_const_name, nam_const_name, fld_f_name, 0, ODS_14_0)
 	FIELD(f_const_id, nam_const_id, fld_const_id, 0, ODS_14_0)
-	FIELD(f_const_package, nam_pkg_name, fld_pkg_name, 1, ODS_13_1)
-	FIELD(f_const_field, nam_f_source, fld_f_name, 0, ODS_13_1)
-	FIELD(f_const_private_flag, nam_private_flag, fld_flag_nullable, 0, ODS_13_1)
-	FIELD(f_const_blr, nam_const_blr, fld_const_blr, 0, ODS_13_1)
-	FIELD(f_const_source, nam_const_source, fld_source, 1, ODS_13_1)
+	FIELD(f_const_package, nam_pkg_name, fld_pkg_name, 1, ODS_14_0)
+	FIELD(f_const_field, nam_f_source, fld_f_name, 0, ODS_14_0)
+	FIELD(f_const_private_flag, nam_private_flag, fld_flag_nullable, 0, ODS_14_0)
+	FIELD(f_const_blr, nam_const_blr, fld_const_blr, 0, ODS_14_0)
+	FIELD(f_const_source, nam_const_source, fld_source, 1, ODS_14_0)
 	FIELD(f_const_package_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
 END_RELATION

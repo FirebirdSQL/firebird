@@ -326,7 +326,7 @@ namespace Rsc
 	typedef CachedResource<CharSetVers, CharSetContainer> CSet;
 	typedef CachedResource<DbTriggers, DbTriggersHeader> Trig;
 	typedef CachedResource<IndexVersion, IndexPermanent> Idx;
-	typedef CachedResource<Constant, RoutinePermanent> Const; // useless?
+	typedef CachedResource<Constant, RoutinePermanent> Const;
 }; //namespace Rsc
 
 
