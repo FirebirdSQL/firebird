@@ -620,6 +620,37 @@ Optimizer::Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse, boo
 }
 
 
+Optimizer::Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse,
+					 const BoolExprNodeStack& stack)
+	: PermanentStorage(*aTdbb->getDefaultPool()),
+	  tdbb(aTdbb), csb(aCsb), rse(aRse),
+	  compileStreams(getPool()),
+	  bedStreams(getPool()),
+	  keyStreams(getPool()),
+	  outerStreams(getPool()),
+	  conjuncts(getPool())
+{
+	for (BoolExprNodeStack::const_iterator iter(stack); iter.hasData(); ++iter)
+	{
+		const auto boolean = iter.object();
+
+		conjuncts.add({boolean, 0});
+		baseConjuncts++;
+		baseParentConjuncts++;
+		baseMissingConjuncts++;
+	}
+
+	StreamList rseStreams;
+	rse->computeRseStreams(rseStreams);
+
+	for (const auto stream : rseStreams)
+	{
+		if (csb->csb_rpt[stream].csb_relation)
+			compileRelation(stream);
+	}
+}
+
+
 //
 // Destructor
 //
@@ -702,7 +733,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 	// AB: If we have limit our retrieval with FIRST / SKIP syntax then
 	// we may not deliver above conditions (from higher rse's) to this
 	// rse, because the results should be consistent.
-	if (rse->rse_skip || rse->rse_first || isSemiJoined())
+	if (rse->rse_skip || rse->rse_first)
 		parentStack = nullptr;
 
 	// Set base-point before the parent/distributed nodes begin.
@@ -855,13 +886,9 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 		fb_assert(aggregate == rse->rse_aggregate);
 		fb_assert(!specialRse);
 
-		const auto subRse = nodeAs<RseNode>(node);
-		const bool semiJoin = (subRse && subRse->isSemiJoined());
-
-		if (semiJoin)
+		if (isSpecialJoin() && innerSubStream)
 		{
-			fb_assert(rse->isSpecialJoin());
-			specialRse = subRse;
+			specialRse = nodeAs<RseNode>(node);
 			fb_assert(specialRse);
 			continue;
 		}
@@ -887,7 +914,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 			bool computable = false;
 
 			// AB: Save all outer-part streams
-			if (isInnerJoin() || (isLeftJoin() && !innerSubStream))
+			if (isInnerJoin() || ((isLeftJoin() || isSpecialJoin()) && !innerSubStream))
 			{
 				if (node->computable(csb, INVALID_STREAM, false))
 					computable = true;
@@ -1060,6 +1087,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 				const auto finalRiver = FB_NEW_POOL(getPool()) CrossJoin(this, rivers, joinType);
 				fb_assert(rivers.isEmpty());
 				rsb = finalRiver->getRecordSource();
+				cardinality = rsb->getCardinality();
 
 				if (specialRse)
 				{
@@ -1174,6 +1202,29 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 		rsb = FB_NEW_POOL(getPool()) BufferedStream(csb, rsb);
 
 	return rsb;
+}
+
+
+//
+// Calculate selectivity of the dependent booleans
+//
+
+double Optimizer::getDependentSelectivity()
+{
+	StreamStateHolder stateHolder(csb, compileStreams);
+	stateHolder.activate();
+
+	double selectivity = MAXIMUM_SELECTIVITY;
+	for (const auto stream : compileStreams)
+	{
+		Retrieval retrieval(tdbb, this, stream, false, false, nullptr, true);
+		const auto candidate = retrieval.getInversion();
+
+		if (candidate->dependencies)
+			selectivity *= candidate->selectivity;
+	}
+
+	return selectivity;
 }
 
 

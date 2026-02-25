@@ -435,6 +435,28 @@ public:
 		selectivity = minSelectivity + diffSelectivity * factor;
 	}
 
+	double getDependentSelectivity();
+
+	bool deliverJoinConjuncts(RseNode* subRse, const BoolExprNodeStack& stack)
+	{
+		// Determine whether the join conjunct(s) should be delivered to the inner RSE being joined.
+		// The decision is based on the parent (outer) cardinality and selectivity of the conjunct(s).
+
+		fb_assert(stack.hasData());
+
+		const auto selectivity = Optimizer(tdbb, csb, subRse, stack).getDependentSelectivity();
+
+		if (selectivity < MAXIMUM_SELECTIVITY)
+		{
+			if (cardinality)
+				return (cardinality * selectivity < MINIMUM_CARDINALITY);
+
+			return true;
+		}
+
+		return false;
+	}
+
 	static RecordSource* compile(thread_db* tdbb, CompilerScratch* csb, RseNode* rse)
 	{
 		bool firstRows = false;
@@ -475,17 +497,22 @@ public:
 
 	bool isInnerJoin() const
 	{
-		return (rse->rse_jointype == blr_inner);
+		return rse->isInnerJoin();
+	}
+
+	bool isSpecialJoin() const
+	{
+		return rse->isSpecialJoin();
 	}
 
 	bool isLeftJoin() const
 	{
-		return (rse->rse_jointype == blr_left);
+		return rse->isLeftJoin();
 	}
 
 	bool isFullJoin() const
 	{
-		return (rse->rse_jointype == blr_full);
+		return rse->isFullJoin();
 	}
 
 	const StreamList& getOuterStreams() const
@@ -496,11 +523,6 @@ public:
 	bool favorFirstRows() const
 	{
 		return firstRows;
-	}
-
-	bool isSemiJoined() const
-	{
-		return (rse->flags & RseNode::FLAG_SEMI_JOINED) != 0;
 	}
 
 	RecordSource* applyBoolean(RecordSource* rsb, ConjunctIterator& iter);
@@ -519,6 +541,7 @@ public:
 
 private:
 	Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse, bool parentFirstRows);
+	Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse, const BoolExprNodeStack& stack);
 
 	RecordSource* compile(BoolExprNodeStack* parentStack);
 
@@ -557,6 +580,7 @@ private:
 	RseNode* const rse;
 
 	bool firstRows = false;					// optimize for first rows
+	double cardinality = 0;					// self or parent cardinality
 
 	FILE* debugFile = nullptr;
 	unsigned baseConjuncts = 0;				// number of conjuncts in our rse, next conjuncts are distributed parent

@@ -732,7 +732,7 @@ public:
 		FLAG_LATERAL			= 0x20,	// lateral derived table
 		FLAG_SKIP_LOCKED		= 0x40,	// skip locked
 		FLAG_SUB_QUERY			= 0x80,	// sub-query
-		FLAG_SEMI_JOINED		= 0x100	// participates in semi-join
+		FLAG_SPECIAL_JOIN		= 0x100	// special join (semi/anti)
 	};
 
 	bool isInvariant() const
@@ -760,9 +760,29 @@ public:
 		return (flags & FLAG_SUB_QUERY) != 0;
 	}
 
-	bool isSemiJoined() const
+	bool isInnerJoin() const
 	{
-		return (flags & FLAG_SEMI_JOINED) != 0;
+		return (rse_jointype == blr_inner && !(flags & FLAG_SPECIAL_JOIN));
+	}
+
+	bool isSpecialJoin() const
+	{
+		return (rse_jointype == blr_inner && (flags & FLAG_SPECIAL_JOIN));
+	}
+
+	bool isLeftJoin() const
+	{
+		return (rse_jointype == blr_left);
+	}
+
+	bool isOuterJoin() const
+	{
+		return (rse_jointype == blr_left || rse_jointype == blr_right || rse_jointype == blr_full);
+	}
+
+	bool isFullJoin() const
+	{
+		return (rse_jointype == blr_full);
 	}
 
 	bool hasWriteLock() const
@@ -773,23 +793,6 @@ public:
 	bool hasSkipLocked() const
 	{
 		return (flags & FLAG_SKIP_LOCKED) != 0;
-	}
-
-	bool isSpecialJoin() const
-	{
-		if (rse_jointype == blr_inner)
-		{
-			for (const auto sub : rse_relations)
-			{
-				if (const auto rse = nodeAs<RseNode>(sub))
-				{
-					if (rse->isSemiJoined())
-						return true;
-				}
-			}
-		}
-
-		return false;
 	}
 
 	explicit RseNode(MemoryPool& pool)
