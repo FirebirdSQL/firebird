@@ -2,6 +2,9 @@
 #define INCLUDE_FB_BLK
 
 #include "../common/classes/alloc.h"
+#ifdef DEBUG_GDS_ALLOC
+#include <source_location>
+#endif
 
 enum BlockType
 {
@@ -115,17 +118,10 @@ template<BlockType BLOCK_TYPE = type_unknown>
 class pool_alloc : public TypedHandle<BLOCK_TYPE>
 {
 public:
-#ifdef DEBUG_GDS_ALLOC
-	void* operator new(size_t s, MemoryPool& p, const char* file, int line)
-		{ return p.calloc(s, file, line); }
-	void* operator new[](size_t s, MemoryPool& p, const char* file, int line)
-		{ return p.calloc(s, file, line); }
-#else
-	void* operator new(size_t s, MemoryPool& p )
-		{ return p.calloc(s); }
-	void* operator new[](size_t s, MemoryPool& p)
-		{ return p.calloc(s); }
-#endif
+	void* operator new(size_t s, MemoryPool& p ALLOC_PARAMS)
+		{ return p.calloc(s ALLOC_PASS_ARGS); }
+	void* operator new[](size_t s, MemoryPool& p ALLOC_PARAMS)
+		{ return p.calloc(s ALLOC_PASS_ARGS); }
 
 	void operator delete(void* mem, MemoryPool& p)
 	{
@@ -162,13 +158,10 @@ class pool_alloc_rpt : public TypedHandle<BLOCK_TYPE>
 {
 public:
 	typedef RPT blk_repeat_type;
-#ifdef DEBUG_GDS_ALLOC
-	void* operator new(size_t s, MemoryPool& p, size_t rpt, const char* file, int line)
-		{ return p.calloc(s + sizeof(RPT) * rpt, file, line); }
-#else
-	void* operator new(size_t s, MemoryPool& p, size_t rpt)
-		{ return p.calloc(s + sizeof(RPT) * rpt); }
-#endif
+
+	void* operator new(size_t s, MemoryPool& p, size_t rpt ALLOC_PARAMS)
+		{ return p.calloc(s + sizeof(RPT) * rpt ALLOC_PASS_ARGS); }
+
 	void operator delete(void* mem, MemoryPool& p)
 	{
 		if (mem)

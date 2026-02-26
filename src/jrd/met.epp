@@ -2629,7 +2629,7 @@ ScanResult jrd_prc::scan(thread_db* tdbb, ObjectBase::Flag flags)
 					 (fb_utils::implicit_domain(F.RDB$FIELD_NAME) && !F.RDB$DEFAULT_VALUE.NULL)))
 				{
 					setDefaultCount(getDefaultCount() + 1);
-					MemoryPool* pool = dbb->createPool(ALLOC_ARGS0);
+					MemoryPool* pool = dbb->createPool();
 					Jrd::ContextPoolHolder context(tdbb, pool);
 
 					try
@@ -2683,7 +2683,7 @@ ScanResult jrd_prc::scan(thread_db* tdbb, ObjectBase::Flag flags)
 
 			if (external || !P.RDB$PROCEDURE_BLR.NULL)
 			{
-				MemoryPool* const csb_pool = dbb->createPool(ALLOC_ARGS0);
+				MemoryPool* const csb_pool = dbb->createPool();
 				Jrd::ContextPoolHolder context(tdbb, csb_pool);
 
 				try
@@ -2814,7 +2814,7 @@ ScanResult jrd_prc::reload(thread_db* tdbb, ObjectBase::Flag /*unused*/)
 		if (compiling || P.RDB$PROCEDURE_BLR.NULL)
 			return ScanResult::REPEAT;
 
-		MemoryPool* const csb_pool = tdbb->getDatabase()->createPool(ALLOC_ARGS0);
+		MemoryPool* const csb_pool = tdbb->getDatabase()->createPool();
 		Jrd::ContextPoolHolder context(tdbb, csb_pool);
 
 		try
@@ -4664,7 +4664,7 @@ void Trigger::compile(thread_db* tdbb)
 	const auto att = tdbb->getAttachment();
 
 	// Allocate statement memory pool
-	MemoryPool* new_pool = dbb->createPool(ALLOC_ARGS0);
+	MemoryPool* new_pool = dbb->createPool();
 
 	// Trigger request is not compiled yet. Lets do it now
 	USHORT par_flags = (USHORT) (flags & TRG_ignore_perm) ? csb_ignore_perm : 0;
@@ -4866,7 +4866,7 @@ ScanResult IndexVersion::scan(thread_db* tdbb, ObjectBase::Flag flags)
 
 	if (expression.hasData())
 	{
-		MemoryPool* stmtPool = dbb->createPool(ALLOC_ARGS0);
+		MemoryPool* stmtPool = dbb->createPool();
 		try
 		{
 			Jrd::ContextPoolHolder context(tdbb, stmtPool);
@@ -4885,7 +4885,7 @@ ScanResult IndexVersion::scan(thread_db* tdbb, ObjectBase::Flag flags)
 
 	if (condition.hasData())
 	{
-		MemoryPool* stmtPool = dbb->createPool(ALLOC_ARGS0);
+		MemoryPool* stmtPool = dbb->createPool();
 		try
 		{
 			Jrd::ContextPoolHolder context(tdbb, stmtPool);

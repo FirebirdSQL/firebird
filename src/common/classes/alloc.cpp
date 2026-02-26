@@ -2126,7 +2126,7 @@ void MemPool::newExtent(size_t& size, Extent** linkedList)
 	size = extent->spaceRemaining;
 }
 
-MemoryPool* MemoryPool::createPool(ALLOC_PARAMS1 MemoryPool* parentPool, MemoryStats& stats)
+MemoryPool* MemoryPool::createPool(MemoryPool* parentPool, MemoryStats& stats ALLOC_PARAMS_DEF)
 {
 	if (!parentPool)
 		parentPool = getDefaultMemoryPool();
@@ -2134,8 +2134,8 @@ MemoryPool* MemoryPool::createPool(ALLOC_PARAMS1 MemoryPool* parentPool, MemoryS
 	MemPool* p = new(*parentPool ALLOC_PASS_ARGS) MemPool(*(parentPool->pool), stats, &defaultExtentsCache);
 #ifdef MEM_DEBUG
 #ifdef DEBUG_LOST_POOLS
-	p->fileName = file;
-	p->lineNum = line;
+	p->fileName = location.file_name();
+	p->lineNum = (int) location.line();
 
 	static std::atomic<int> seqGen = 0;
 	p->seq = ++seqGen;
@@ -2231,7 +2231,7 @@ MemBlock* MemPool::allocateInternal2(size_t from, size_t& length, bool flagRedir
 	return hunk->block;
 }
 
-MemBlock* MemPool::allocateRange(size_t from, size_t& size ALLOC_PARAMS)
+MemBlock* MemPool::allocateRange(size_t from, size_t& size ALLOC_PARAMS_DEF)
 {
 	size_t length = from ? size : ROUNDUP(size + VALGRIND_REDZONE, roundingSize) + GUARD_BYTES;
 	MemBlock* memory = allocateInternal(from, length, true);
@@ -2242,8 +2242,8 @@ MemBlock* MemPool::allocateRange(size_t from, size_t& size ALLOC_PARAMS)
 #endif
 
 #ifdef DEBUG_GDS_ALLOC
-	memory->fileName = file;
-	memory->lineNumber = line;
+	memory->fileName = location.fileName;
+	memory->lineNumber = location.line;
 #endif
 
 #ifdef MEM_DEBUG
@@ -2260,7 +2260,7 @@ MemBlock* MemPool::allocateRange(size_t from, size_t& size ALLOC_PARAMS)
 }
 
 
-void* MemPool::allocate(size_t size ALLOC_PARAMS)
+void* MemPool::allocate(size_t size ALLOC_PARAMS_DEF)
 {
 #ifdef VALIDATE_POOL
 	MutexLockGuard guard(mutex, "MemPool::allocate");
@@ -2506,7 +2506,7 @@ void* MemPool::getExtent(size_t from, size_t& to)		// pass desired minimum size,
 #ifdef VALIDATE_POOL
 	MutexLockGuard guard(mutex, "MemPool::getExtent");
 #endif
-	MemBlock* extent = allocateRange(from, to ALLOC_ARGS);
+	MemBlock* extent = allocateRange(from, to);
 	extent->setExtent();
 	return &extent->body;
 }
@@ -2622,7 +2622,7 @@ void MemPool::globalFree(void* block) noexcept
 	deallocate(block);
 }
 
-void* MemoryPool::calloc(size_t size ALLOC_PARAMS)
+void* MemoryPool::calloc(size_t size ALLOC_PARAMS_DEF)
 {
 	void* block = allocate(size ALLOC_PASS_ARGS);
 	memset(block, 0, size);
@@ -2768,7 +2768,7 @@ MemoryPool& AutoStorage::getAutoMemoryPool()
 	return *p;
 }
 
-void* MemoryPool::allocate(size_t size ALLOC_PARAMS)
+void* MemoryPool::allocate(size_t size ALLOC_PARAMS_DEF)
 {
 	return pool->allocate(size ALLOC_PASS_ARGS);
 }
@@ -3037,12 +3037,12 @@ void AutoStorage::ProbeStack() const noexcept
 
 void* operator new(size_t s)
 {
-	return getExternalMemoryPool()->allocate(s ALLOC_ARGS);
+	return getExternalMemoryPool()->allocate(s);
 }
 
 void* operator new[](size_t s)
 {
-	return getExternalMemoryPool()->allocate(s ALLOC_ARGS);
+	return getExternalMemoryPool()->allocate(s);
 }
 
 void operator delete(void* mem) noexcept

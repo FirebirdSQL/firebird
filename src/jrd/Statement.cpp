@@ -531,7 +531,7 @@ Request* Statement::getRequest(thread_db* tdbb, const Requests::ReadAccessor& g,
 		return g->value(level);
 
 	// Create the request.
-	AutoMemoryPool reqPool(MemoryPool::createPool(ALLOC_ARGS1 pool));
+	AutoMemoryPool reqPool(MemoryPool::createPool(pool));
 #ifdef DEBUG_LOST_POOLS
 	fprintf(stderr, "%p %s %s\n", reqPool->mp(), sqlText ? sqlText->c_str() : "<nullptr>",
 		procedure ? procedure->getName().toQuotedString().c_str() :

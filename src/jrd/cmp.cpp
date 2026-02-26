@@ -153,7 +153,7 @@ Statement* CMP_compile(thread_db* tdbb, const UCHAR* blr, ULONG blrLength, bool 
 
 	// 26.09.2002 Nickolay Samofatov: default memory pool will become statement pool
 	// and will be freed by CMP_release
-	const auto newPool = dbb->createPool(ALLOC_ARGS0);
+	const auto newPool = dbb->createPool();
 
 	try
 	{

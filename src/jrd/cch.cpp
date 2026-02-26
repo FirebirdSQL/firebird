@@ -4269,7 +4269,7 @@ static ULONG memory_init(thread_db* tdbb, BufferControl* bcb, ULONG number)
 
 				try
 				{
-					memory = (UCHAR*) bcb->bcb_bufferpool->allocate(memory_size ALLOC_ARGS);
+					memory = (UCHAR*) bcb->bcb_bufferpool->allocate(memory_size);
 					memory_end = memory + memory_size;
 					break;
 				}
@@ -5169,7 +5169,7 @@ void requeueRecentlyUsed(BufferControl* bcb)
 
 BufferControl* BufferControl::create(Database* dbb)
 {
-	MemoryPool* const pool = dbb->createPool(ALLOC_ARGS1 false);
+	MemoryPool* const pool = dbb->createPool(false);
 	BufferControl* const bcb = FB_NEW_POOL(*pool) BufferControl(*pool, dbb->dbb_memory_stats);
 	pool->setStatsGroup(bcb->bcb_memory_stats);
 	return bcb;

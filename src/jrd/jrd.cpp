@@ -4815,7 +4815,7 @@ void JAttachment::transactRequest(CheckStatusWrapper* user_status, ITransaction*
 			const MessageNode* outMessage = NULL;
 
 			Request* request = NULL;
-			MemoryPool* new_pool = att->att_database->createPool(ALLOC_ARGS0);
+			MemoryPool* new_pool = att->att_database->createPool();
 
 			try
 			{

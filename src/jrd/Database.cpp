@@ -156,9 +156,9 @@ namespace Jrd
 		return dbb_file_id;
 	}
 
-	MemoryPool* Database::createPool(ALLOC_PARAMS1 bool separateStats)
+	MemoryPool* Database::createPool(bool separateStats ALLOC_PARAMS_DEF)
 	{
-		MemoryPool* const pool = MemoryPool::createPool(ALLOC_PASS_ARGS1 dbb_permanent, dbb_memory_stats);
+		MemoryPool* const pool = MemoryPool::createPool(dbb_permanent, dbb_memory_stats ALLOC_PASS_ARGS);
 
 		if (separateStats)
 		{

@@ -89,7 +89,7 @@ public:
 
 int main()
 {
-	MemoryPool *p = MemoryPool::createPool(ALLOC_ARGS0);
+	MemoryPool *p = MemoryPool::createPool();
 
 	// The tests below attempt to do full code coverage for the LikeEvaluator
 	// Every line of evl_string.h code is covered by the tests

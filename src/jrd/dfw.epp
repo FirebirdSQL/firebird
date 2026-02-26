@@ -718,7 +718,7 @@ namespace
 						SSHORT validBlr = FALSE;
 
 						Jrd::Database* dbb = tdbb->getDatabase();
-						MemoryPool* newPool = dbb->createPool(ALLOC_ARGS0);
+						MemoryPool* newPool = dbb->createPool();
 						try
 						{
 							Jrd::ContextPoolHolder context(tdbb, newPool);
@@ -847,7 +847,7 @@ namespace
 			{
 				Statement* statement = NULL;
 				// Nickolay Samofatov: allocate statement memory pool...
-				MemoryPool* new_pool = dbb->createPool(ALLOC_ARGS0);
+				MemoryPool* new_pool = dbb->createPool();
 				// block is used to ensure verify_cache()
 				// works in not deleted context
 				{
@@ -2946,7 +2946,7 @@ static bool create_field(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 			if (!validation.isEmpty())
 			{
 				Jrd::Database* dbb = tdbb->getDatabase();
-				MemoryPool* new_pool = dbb->createPool(ALLOC_ARGS0);
+				MemoryPool* new_pool = dbb->createPool();
 				Jrd::ContextPoolHolder context(tdbb, new_pool);
 
 				MET_get_dependencies(tdbb, nullptr, NULL, 0, NULL, &validation,
@@ -3118,7 +3118,7 @@ static bool modify_field(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 			if (!validation.isEmpty())
 			{
 				Jrd::Database* dbb = tdbb->getDatabase();
-				MemoryPool* new_pool = dbb->createPool(ALLOC_ARGS0);
+				MemoryPool* new_pool = dbb->createPool();
 				Jrd::ContextPoolHolder context(tdbb, new_pool);
 
 				MET_get_dependencies(tdbb, nullptr, NULL, 0, NULL, &validation,
@@ -4143,7 +4143,7 @@ static bool modify_trigger(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 
 						auto* rel = relation->getVersioned(tdbb, 0);
 
-						MemoryPool* new_pool = dbb->createPool(ALLOC_ARGS0);
+						MemoryPool* new_pool = dbb->createPool();
 						TrigArray triggers(*new_pool);
 
 						try
@@ -4300,7 +4300,7 @@ static void get_trigger_dependencies(DeferredWork* work, bool compile, jrd_tra* 
 	{
 		Statement* statement = NULL;
 		// Nickolay Samofatov: allocate statement memory pool...
-		MemoryPool* new_pool = dbb->createPool(ALLOC_ARGS0);
+		MemoryPool* new_pool = dbb->createPool();
 		USHORT par_flags;
 
 		Cleanup mem([&]

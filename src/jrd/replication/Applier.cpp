@@ -239,7 +239,7 @@ Applier* Applier::create(thread_db* tdbb)
 		status_exception::raise(Arg::Gds(isc_miss_prvlg) << "REPLICATE_INTO_DATABASE");
 
 	Request* request = nullptr;
-	const auto req_pool = dbb->createPool(ALLOC_ARGS0);
+	const auto req_pool = dbb->createPool();
 
 	try
 	{

@@ -58,16 +58,13 @@
 
 #include <memory.h>
 #include <memory>
-
 #ifdef DEBUG_GDS_ALLOC
-#define FB_NEW new(*getDefaultMemoryPool(), __FILE__, __LINE__)
-#define FB_NEW_POOL(pool) new(pool, __FILE__, __LINE__)
-#define FB_NEW_RPT(pool, count) new(pool, count, __FILE__, __LINE__)
-#else // DEBUG_GDS_ALLOC
+#include "../common/StdHelper.h"
+#endif
+
 #define FB_NEW new(*getDefaultMemoryPool())
 #define FB_NEW_POOL(pool) new(pool)
 #define FB_NEW_RPT(pool, count) new(pool, count)
-#endif // DEBUG_GDS_ALLOC
 
 namespace Firebird {
 
@@ -185,29 +182,23 @@ public:
 
 public:
 #ifdef DEBUG_GDS_ALLOC
-#define ALLOC_ARGS , __FILE__, __LINE__
-#define ALLOC_ARGS1 __FILE__, __LINE__,
-#define ALLOC_ARGS0 __FILE__, __LINE__
-#define ALLOC_PARAMS , const char* file, int line
-#define ALLOC_PARAMS1 const char* file, int line,
-#define ALLOC_PARAMS0 const char* file, int line
-#define ALLOC_PASS_ARGS , file, line
-#define ALLOC_PASS_ARGS1 file, line,
-#define ALLOC_PASS_ARGS0 file, line
+#define ALLOC_PARAMS , const Firebird::CustomSourceLocation location = Firebird::CustomSourceLocation::current()
+#define ALLOC_PARAMS_NO_COMMA const Firebird::CustomSourceLocation location = Firebird::CustomSourceLocation::current()
+#define ALLOC_PARAMS_DEF , const Firebird::CustomSourceLocation location
+#define ALLOC_PARAMS_NO_COMMA_DEF const Firebird::CustomSourceLocation location
+#define ALLOC_PASS_ARGS , location
+#define ALLOC_PASS_ARGS_NO_COMMA location
 #else
-#define ALLOC_ARGS
 #define ALLOC_PARAMS
+#define ALLOC_PARAMS_NO_COMMA
+#define ALLOC_PARAMS_DEF
+#define ALLOC_PARAMS_NO_COMMA_DEF
 #define ALLOC_PASS_ARGS
-#define ALLOC_ARGS1
-#define ALLOC_PARAMS1
-#define ALLOC_PASS_ARGS1
-#define ALLOC_ARGS0
-#define ALLOC_PARAMS0
-#define ALLOC_PASS_ARGS0
+#define ALLOC_PASS_ARGS_NO_COMMA
 #endif // DEBUG_GDS_ALLOC
 
 	// Create memory pool instance
-	static MemoryPool* createPool(ALLOC_PARAMS1 MemoryPool* parent = NULL, MemoryStats& stats = *default_stats_group);
+	static MemoryPool* createPool(MemoryPool* parent = NULL, MemoryStats& stats = *default_stats_group ALLOC_PARAMS);
 	// Delete memory pool instance
 	static void deletePool(MemoryPool* pool);
 
@@ -524,7 +515,7 @@ namespace Firebird
 	public:
 		constexpr pointer allocate(size_type n, const void* hint = nullptr)
 		{
-			return static_cast<T*>(pool.allocate(n * sizeof(T) ALLOC_ARGS));
+			return static_cast<T*>(pool.allocate(n * sizeof(T)));
 		}
 
 		constexpr void deallocate(pointer p, size_type n)

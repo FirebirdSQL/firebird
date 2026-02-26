@@ -1014,7 +1014,7 @@ namespace
 		const auto config = target->getConfig();
 		const auto dbName = config->dbName.c_str();
 
-		AutoMemoryPool workingPool(MemoryPool::createPool(ALLOC_ARGS0));
+		AutoMemoryPool workingPool(MemoryPool::createPool());
 		ContextPoolHolder threadContext(workingPool);
 
 		target->verbose("Started replication for database %s", dbName);

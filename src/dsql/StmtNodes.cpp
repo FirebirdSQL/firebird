@@ -7626,7 +7626,7 @@ UCHAR* MessageNode::getBuffer(Request* request) const
 	if (data->buffer == nullptr)
 	{
 		const ULONG length = data->format == nullptr ? format->fmt_length : data->format->fmt_length;
-		data->buffer = reinterpret_cast<UCHAR*>(request->req_pool->calloc(length ALLOC_ARGS));
+		data->buffer = reinterpret_cast<UCHAR*>(request->req_pool->calloc(length));
 	}
 	return data->buffer;
 }

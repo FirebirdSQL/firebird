@@ -30,6 +30,7 @@
 #include <utility>
 #include <variant>
 #include <cstddef>
+#include <source_location>
 #include <stdexcept>
 #include "boost/type_traits/copy_cv.hpp"
 
@@ -155,6 +156,22 @@ constexpr auto getVariantIndexAndSpan(V& message)
 		message
 	);
 }
+
+
+struct CustomSourceLocation
+{
+	static constexpr CustomSourceLocation current(
+		const std::source_location& location = std::source_location::current())
+	{
+		return {
+			.fileName = location.file_name(),
+			.line = static_cast<int>(location.line())
+		};
+	}
+
+    const char* fileName;
+    int line;
+};
 
 
 }	// namespace Firebird

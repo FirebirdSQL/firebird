@@ -52,7 +52,7 @@ public:
 private:
 	static void* alloc(size_t size)
 	{
-		return m_pool->allocate(size ALLOC_ARGS);
+		return m_pool->allocate(size);
 	}
 
 	static void free(void* p)
@@ -97,7 +97,7 @@ public:
 
 	void* alloc(size_t size)
 	{
-		return m_pool->allocate(size ALLOC_ARGS);
+		return m_pool->allocate(size);
 	}
 
 private:

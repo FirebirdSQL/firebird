@@ -339,7 +339,7 @@ RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tr
 		const bool poolCreated = !pool;
 
 		if (poolCreated)
-			pool = dbb->createPool(ALLOC_ARGS1 false);
+			pool = dbb->createPool(false);
 		Jrd::ContextPoolHolder context(tdbb, pool);
 
 		jrd_tra* idxTran = tdbb->getTransaction();

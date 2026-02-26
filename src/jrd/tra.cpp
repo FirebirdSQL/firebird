@@ -1159,7 +1159,7 @@ jrd_tra* TRA_reconnect(thread_db* tdbb, const UCHAR* id, USHORT length)
 				 Arg::Gds(isc_tra_state) << Arg::Int64(number) << Arg::Str(text));
 	}
 
-	MemoryPool* const pool = dbb->createPool(ALLOC_ARGS0);
+	MemoryPool* const pool = dbb->createPool();
 	Jrd::ContextPoolHolder context(tdbb, pool);
 	jrd_tra* const trans = jrd_tra::create(pool, attachment, NULL);
 	trans->tra_number = number;
@@ -1678,7 +1678,7 @@ jrd_tra* TRA_start(thread_db* tdbb, ULONG flags, SSHORT lock_timeout, Jrd::jrd_t
 	// To handle the problems of relation locks, allocate a temporary
 	// transaction block first, seize relation locks, then go ahead and
 	// make up the real transaction block.
-	MemoryPool* const pool = outer ? outer->getAutonomousPool() : dbb->createPool(ALLOC_ARGS0);
+	MemoryPool* const pool = outer ? outer->getAutonomousPool() : dbb->createPool();
 	Jrd::ContextPoolHolder context(tdbb, pool);
 	jrd_tra* const transaction = jrd_tra::create(pool, attachment, outer);
 
@@ -1735,7 +1735,7 @@ jrd_tra* TRA_start(thread_db* tdbb, int tpb_length, const UCHAR* tpb, Jrd::jrd_t
 	// To handle the problems of relation locks, allocate a temporary
 	// transaction block first, seize relation locks, then go ahead and
 	// make up the real transaction block.
-	MemoryPool* const pool = outer ? outer->getAutonomousPool() : dbb->createPool(ALLOC_ARGS0);
+	MemoryPool* const pool = outer ? outer->getAutonomousPool() : dbb->createPool();
 	Jrd::ContextPoolHolder context(tdbb, pool);
 	jrd_tra* const transaction = jrd_tra::create(pool, attachment, outer);
 
@@ -3935,7 +3935,7 @@ MemoryPool* jrd_tra::getAutonomousPool()
 			pool = outer->tra_pool;
 			outer = outer->tra_outer;
 		}
-		tra_autonomous_pool = MemoryPool::createPool(ALLOC_ARGS1 pool, tra_memory_stats);
+		tra_autonomous_pool = MemoryPool::createPool(pool, tra_memory_stats);
 		tra_autonomous_cnt = 0;
 	}
 

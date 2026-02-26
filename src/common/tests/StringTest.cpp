@@ -638,7 +638,7 @@ BOOST_AUTO_TEST_CASE(DefaultPoolMoveTest)
 
 BOOST_AUTO_TEST_CASE(NewPoolMoveTest)
 {
-	AutoMemoryPool pool(MemoryPool::createPool(ALLOC_ARGS0));
+	AutoMemoryPool pool(MemoryPool::createPool());
 	string sourceString(*pool, BigStringValue.data(), length(BigStringValue));
 
 	// Move c'tor
@@ -664,7 +664,7 @@ BOOST_AUTO_TEST_SUITE(CannotMoveTests)
 // Do not move
 BOOST_AUTO_TEST_CASE(DifferentVsDefaultPoolMove)
 {
-	AutoMemoryPool pool(MemoryPool::createPool(ALLOC_ARGS0));
+	AutoMemoryPool pool(MemoryPool::createPool());
 	string sourceString(*pool, BigStringValue.data(), length(BigStringValue));
 
 	// Move c'tor
@@ -685,8 +685,8 @@ BOOST_AUTO_TEST_CASE(DifferentVsDefaultPoolMove)
 // Do not move
 BOOST_AUTO_TEST_CASE(DifferentPoolsMove)
 {
-	AutoMemoryPool pool1(MemoryPool::createPool(ALLOC_ARGS0));
-	AutoMemoryPool pool2(MemoryPool::createPool(ALLOC_ARGS0));
+	AutoMemoryPool pool1(MemoryPool::createPool());
+	AutoMemoryPool pool2(MemoryPool::createPool());
 	string sourceString(*pool1, BigStringValue.data(), length(BigStringValue));
 
 	// Move c'tor

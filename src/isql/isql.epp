@@ -873,7 +873,7 @@ int ISQL_main(int argc, char* argv[])
 	// As ISQL can run under windows, all memory should be freed before
 	// returning.  In debug mode this call will report unfreed blocks.
 
-	//gds_alloc_report(0 ALLOC_ARGS);
+	//gds_alloc_report(0, __FILE__, __LINE__);
 	char fn[] = __FILE__;
 	fn[strlen(fn) - 8] = 0; // all isql files in gen dir
 	gds_alloc_report(0, fn, 0);

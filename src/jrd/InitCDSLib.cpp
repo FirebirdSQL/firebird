@@ -52,7 +52,7 @@ static GlobalPtr<InitCDS, InstanceControl::PRIORITY_TLS_KEY> initCDS;
 
 InitCDS::InitCDS(MemoryPool&)
 {
-	m_pool = MemoryPool::createPool(ALLOC_ARGS1 nullptr, m_stats);
+	m_pool = MemoryPool::createPool(nullptr, m_stats);
 	m_pools = FB_NEW_POOL(*m_pool) Array<MemoryPool*>(*m_pool);
 
 	cds::Initialize();
@@ -133,7 +133,7 @@ static InitInstance<Mutex> mutex;	// guard InitCDS::m_pools
 
 MemoryPool* InitCDS::createPool()
 {
-	MemoryPool* pool = MemoryPool::createPool(ALLOC_ARGS1 nullptr, m_stats);
+	MemoryPool* pool = MemoryPool::createPool(nullptr, m_stats);
 	MemoryStats* newStats = FB_NEW_POOL(*pool) MemoryStats;
 	pool->setStatsGroup(*newStats);
 

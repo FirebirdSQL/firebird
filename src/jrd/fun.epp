@@ -177,7 +177,7 @@ void* IbUtil::alloc(long size)
 {
 	thread_db* tdbb = JRD_get_thread_data();
 
-	void* const ptr = tdbb->getDefaultPool()->allocate(size ALLOC_ARGS);
+	void* const ptr = tdbb->getDefaultPool()->allocate(size);
 
 	if (ptr)
 		tdbb->getAttachment()->att_udf_pointers.add(ptr);

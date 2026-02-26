@@ -572,7 +572,7 @@ protected:
 			fb_assert(newcapacity < FB_MAX_SIZEOF / sizeof(T));
 
 			T* newdata = static_cast<T*>
-				(this->getPool().allocate(sizeof(T) * newcapacity ALLOC_ARGS));
+				(this->getPool().allocate(sizeof(T) * newcapacity));
 			if (preserve)
 				memcpy(static_cast<void*>(newdata), data, sizeof(T) * count);
 			freeData();

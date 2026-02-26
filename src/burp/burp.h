@@ -985,7 +985,7 @@ public:
 	}
 
 	explicit GblPool(bool ownPool)
-		: gbl_pool(ownPool ? MemoryPool::createPool(ALLOC_ARGS1 getDefaultMemoryPool()) : getDefaultMemoryPool())
+		: gbl_pool(ownPool ? MemoryPool::createPool(getDefaultMemoryPool()) : getDefaultMemoryPool())
 	{ }
 
 	~GblPool()
@@ -1386,13 +1386,13 @@ private:
 static inline UCHAR* BURP_alloc(ULONG size)
 {
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
-	return (UCHAR*)(tdgbl->getPool().allocate(size ALLOC_ARGS));
+	return (UCHAR*)(tdgbl->getPool().allocate(size));
 }
 
 static inline UCHAR* BURP_alloc_zero(ULONG size)
 {
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
-	return (UCHAR*)(tdgbl->getPool().calloc(size ALLOC_ARGS));
+	return (UCHAR*)(tdgbl->getPool().calloc(size));
 }
 
 static inline void BURP_free(void* block) noexcept
