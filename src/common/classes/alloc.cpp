@@ -293,8 +293,7 @@ private:
 
 public:
 #ifdef DEBUG_GDS_ALLOC
-	INT32		lineNumber = -1;
-	const char	*fileName = nullptr;
+	Firebird::CustomSourceLocation location;
 #elif (SIZEOF_VOID_P == 4)
 	FB_UINT64 dummyAlign;
 #endif
@@ -412,8 +411,8 @@ public:
 		{
 			bool filter = filter_path != NULL;
 
-			if (isActive() && filter && fileName)
-				filter = strncmp(filter_path, fileName, filter_len) != 0;
+			if (isActive() && filter && location.fileName)
+				filter = strncmp(filter_path, location.fileName, filter_len) != 0;
 
 			if (!filter)
 			{
@@ -421,7 +420,7 @@ public:
 				{
 					fprintf(file, "%s %p: size=%" SIZEFORMAT " allocated at %s:%d",
 						isExtent() ? "EXTN" : redirected() ? "RDIR" : "USED",
-						this, getSize(), fileName, lineNumber);
+						this, getSize(), location.fileName, location.line);
 				}
 				else
 					fprintf(file, "FREE %p: size=%" SIZEFORMAT, this, getSize());
@@ -2134,8 +2133,7 @@ MemoryPool* MemoryPool::createPool(MemoryPool* parentPool, MemoryStats& stats AL
 	MemPool* p = new(*parentPool ALLOC_PASS_ARGS) MemPool(*(parentPool->pool), stats, &defaultExtentsCache);
 #ifdef MEM_DEBUG
 #ifdef DEBUG_LOST_POOLS
-	p->fileName = location.file_name();
-	p->lineNum = (int) location.line();
+	p->location = location;
 
 	static std::atomic<int> seqGen = 0;
 	p->seq = ++seqGen;
@@ -2242,8 +2240,7 @@ MemBlock* MemPool::allocateRange(size_t from, size_t& size ALLOC_PARAMS_DEF)
 #endif
 
 #ifdef DEBUG_GDS_ALLOC
-	memory->fileName = location.fileName;
-	memory->lineNumber = location.line;
+	memory->location = location;
 #endif
 
 #ifdef MEM_DEBUG
@@ -2335,7 +2332,7 @@ void MemPool::releaseMemory(void* object, bool flagExtent) noexcept
 		block->valgrindInternal();
 
 #ifdef DEBUG_GDS_ALLOC
-		block->fileName = NULL;
+		block->location.fileName = nullptr;
 #endif
 
 		// Finally delete it
