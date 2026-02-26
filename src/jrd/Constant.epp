@@ -122,7 +122,10 @@ ScanResult Constant::scan(thread_db* tdbb, ObjectBase::Flag flags)
 			if (ssDefiner.asBool())
 				invoker = dbb->getUserId(getPermanent()->owner);
 
-			makeValue(tdbb, attachment, CONST.RDB$CONSTANT_BLR);
+			if ((flags & CacheFlag::MINISCAN) == 0)
+				makeValue(tdbb, attachment, CONST.RDB$CONSTANT_BLR);
+			else
+				this->flReload = true; // Call makeValue in reload
 		}
 		END_FOR
 	}
