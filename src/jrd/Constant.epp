@@ -33,7 +33,7 @@
 #include "../common/dsc_proto.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/met.h"
-#include "../jrd/Statement.h" // Jrd::Statement
+#include "../jrd/Statement.h" // Statement
 #include "../jrd/par_proto.h" // PAR_blr
 
 #include "../jrd/cvt_proto.h" // CVT_get_string_ptr
@@ -198,14 +198,14 @@ void Constant::checkReload(thread_db* tdbb) const
 class DropSavepoint
 {
 public:
-	DropSavepoint(thread_db* tdbb, Jrd::jrd_tra* transaction, const QualifiedName& name) :
+	DropSavepoint(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& name) :
 		m_savePoint(tdbb, transaction),
 		m_tdbb(tdbb)
 	{
 		MetadataCache::getVersioned<Cached::Constant>(tdbb, name, CacheFlag::OLD_DROP);
 	}
 
-	DropSavepoint(thread_db* tdbb, Jrd::jrd_tra* transaction) :
+	DropSavepoint(thread_db* tdbb, jrd_tra* transaction) :
 		m_savePoint(tdbb, transaction),
 		m_tdbb(tdbb)
 	{
@@ -231,10 +231,9 @@ private:
 	thread_db* m_tdbb;
 	MetaId m_id{};
 	bool m_found = false;
-	bool m_succeed = false;
 };
 
-void Constant::drop(thread_db* tdbb, Jrd::jrd_tra* transaction, const QualifiedName& name)
+void Constant::drop(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& name)
 {
 	// Run all statements under savepoint control
 	DropSavepoint savePoint(tdbb, transaction, name);
@@ -255,7 +254,7 @@ void Constant::drop(thread_db* tdbb, Jrd::jrd_tra* transaction, const QualifiedN
 	savePoint.release();	// everything is ok
 }
 
-void Constant::dropAllFromPackage(thread_db* tdbb, Jrd::jrd_tra* transaction, const QualifiedName& parent, bool privateFlag)
+void Constant::dropAllFromPackage(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& parent, bool privateFlag)
 {
 	AutoCacheRequest eraseConstantRequest(tdbb, drq_e_pkg_consts_by_flag, DYN_REQUESTS);
 	FOR (REQUEST_HANDLE eraseConstantRequest TRANSACTION_HANDLE transaction)
@@ -274,7 +273,7 @@ void Constant::dropAllFromPackage(thread_db* tdbb, Jrd::jrd_tra* transaction, co
 	END_FOR
 }
 
-dsc Constant::getDesc(thread_db* tdbb, Jrd::jrd_tra* transaction, const QualifiedName& name)
+dsc Constant::getDesc(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& name)
 {
 	dsc desc{};
 	bool succeed = false;
@@ -446,7 +445,7 @@ void Constant::genConstantBlr(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 
 	Attachment* attachment = tdbb->getAttachment();
 	MemoryPool* csb_pool = attachment->att_database->createPool(ALLOC_ARGS0);
-	Jrd::ContextPoolHolder context(tdbb, csb_pool);
+	ContextPoolHolder context(tdbb, csb_pool);
 
 	CompilerScratch* csb = nullptr;
 	Cleanup cc([&tdbb, requestToRestore = tdbb->getRequest(), &csb]()
@@ -477,7 +476,7 @@ void Constant::makeValue(thread_db* tdbb, Attachment* attachment, bid blob_id)
 	try
 	{
 		csb_pool = attachment->att_database->createPool(ALLOC_ARGS0);
-		Jrd::ContextPoolHolder context(tdbb, csb_pool);
+		ContextPoolHolder context(tdbb, csb_pool);
 
 		try
 		{
