@@ -591,6 +591,8 @@ FB_SIZE_T ClumpletReader::getClumpletSize(bool wTag, bool wLength, bool wData) c
 		return 0;
 	}
 
+	const FB_UINT64 maxTotalLength = buffer_end - clumplet;
+
 	FB_SIZE_T rc = wTag ? 1 : 0;
 	FB_SIZE_T lengthSize = 0;
 	FB_SIZE_T dataSize = 0;
@@ -666,15 +668,16 @@ FB_SIZE_T ClumpletReader::getClumpletSize(bool wTag, bool wLength, bool wData) c
 		invalid_structure("unknown clumplet type", t);
 	}
 
-	const FB_SIZE_T total = 1 + lengthSize + dataSize;
-	if (clumplet + total > buffer_end)
+	// Avoid possible overflow
+	FB_UINT64 totalLength = 1 + lengthSize + static_cast<FB_UINT64>(dataSize);
+	if (totalLength > maxTotalLength)
 	{
-		invalid_structure("buffer end before end of clumplet - clumplet too long", total);
-		FB_SIZE_T delta = total - (buffer_end - clumplet);
+		invalid_structure("buffer end before end of clumplet - clumplet too long", totalLength);
+		FB_UINT64 delta = totalLength - maxTotalLength;
 		if (delta > dataSize)
 			dataSize = 0;
 		else
-			dataSize -= delta;
+			dataSize -= static_cast<FB_SIZE_T>(delta);
 	}
 
 	if (wLength) {
