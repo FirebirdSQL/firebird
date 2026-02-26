@@ -1421,6 +1421,9 @@ static bool_t xdr_slice(XDR* xdrs, lstring* slice, /*USHORT sdl_length,*/ const 
 	if (!xdr_long(xdrs, reinterpret_cast<SLONG*>(&slice->lstr_length)))
 		return FALSE;
 
+	if ((xdrs->x_op != XDR_FREE) && !sdl)
+		return FALSE;
+
 	// Handle operation specific stuff, particularly memory allocation/deallocation
 
 	switch (xdrs->x_op)
