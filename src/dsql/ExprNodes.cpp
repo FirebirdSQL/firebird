@@ -456,7 +456,19 @@ bool ExprNode::unmappable(const MapNode* mapNode, StreamType shellStream) const
 	return true;
 }
 
-bool ExprNode::constant() const
+void ExprNode::collectStreams(SortedStreamList& streamList) const
+{
+	NodeRefsHolder holder;
+	getChildren(holder, false);
+
+	for (auto i : holder.refs)
+	{
+		if (*i)
+			(*i)->collectStreams(streamList);
+	}
+}
+
+bool ExprNode::isChildrenConstant() const
 {
 	NodeRefsHolder holder;
 	getChildren(holder, false);
@@ -471,18 +483,6 @@ bool ExprNode::constant() const
 	}
 
 	return true;
-}
-
-void ExprNode::collectStreams(SortedStreamList& streamList) const
-{
-	NodeRefsHolder holder;
-	getChildren(holder, false);
-
-	for (auto i : holder.refs)
-	{
-		if (*i)
-			(*i)->collectStreams(streamList);
-	}
 }
 
 bool ExprNode::computable(CompilerScratch* csb, StreamType stream,
@@ -6467,7 +6467,7 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 		}
 	}
 
-	// Check conflict beween <relation>.<field> and <package>.<constant>
+	// Use context to check conflicts beween <relation>.<field> and <package>.<constant>
 	dsql_ctx packageContext(dsqlScratch->getPool());
 	{ // Consatnts
 
@@ -12509,7 +12509,7 @@ bool SysFuncCallNode::deterministic(thread_db* tdbb) const
 
 bool SysFuncCallNode::constant() const
 {
-	return ExprNode::constant() && function->isConstant();
+	return ExprNode::isChildrenConstant() && function->isConstant();
 }
 
 void SysFuncCallNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)

@@ -53,6 +53,7 @@ private:
 		: Routine(perm->getPool()),
 		  cachedConstant(perm)
 	{
+		// Make sure the constant value will be read in at less at reload state
 		flReload = true;
 	}
 
@@ -60,6 +61,7 @@ public:
 	explicit Constant(MemoryPool& p)
 		: Routine(p)
 	{
+		// Make sure the constant value will be read in at less at reload state
 		flReload = true;
 	}
 

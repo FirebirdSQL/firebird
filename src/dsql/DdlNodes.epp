@@ -878,7 +878,7 @@ static dsql_rel* saveRelation(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 }
 
 // Update RDB$FIELDS received by reference.
-void updateRdbFields(const TypeClause* type,
+void DdlNode::updateRdbFields(const TypeClause* type,
 	SSHORT& fieldType,
 	SSHORT& fieldLength,
 	SSHORT& fieldSubTypeNull, SSHORT& fieldSubType,

@@ -42,18 +42,6 @@
 
 namespace Jrd {
 
-// Update RDB$FIELDS received by reference.
-void updateRdbFields(const Jrd::TypeClause* type,
-	SSHORT& fieldType,
-	SSHORT& fieldLength,
-	SSHORT& fieldSubTypeNull, SSHORT& fieldSubType,
-	SSHORT& fieldScaleNull, SSHORT& fieldScale,
-	SSHORT& characterSetIdNull, SSHORT& characterSetId,
-	SSHORT& characterLengthNull, SSHORT& characterLength,
-	SSHORT& fieldPrecisionNull, SSHORT& fieldPrecision,
-	SSHORT& collationIdNull, SSHORT& collationId,
-	SSHORT& segmentLengthNull, SSHORT& segmentLength);
-
 enum SqlSecurity
 {
 	SS_INVOKER,

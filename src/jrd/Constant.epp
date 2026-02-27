@@ -96,11 +96,10 @@ ScanResult Constant::scan(thread_db* tdbb, ObjectBase::Flag flags)
 
 				FOR (REQUEST_HANDLE requestHandle)
 					PKG IN RDB$PACKAGES
-					CROSS SCH IN RDB$SCHEMAS
-					OVER RDB$SCHEMA_NAME WITH
+					CROSS SCH IN RDB$SCHEMAS WITH
 						PKG.RDB$SCHEMA_NAME EQ CONST.RDB$SCHEMA_NAME AND
 						PKG.RDB$PACKAGE_NAME EQ CONST.RDB$PACKAGE_NAME
-
+				{
 
 					owner = PKG.RDB$OWNER_NAME;
 
@@ -112,7 +111,7 @@ ScanResult Constant::scan(thread_db* tdbb, ObjectBase::Flag flags)
 					// SQL SECURITY of function must be the same if it's defined in package
 					if (!PKG.RDB$SQL_SECURITY.NULL)
 						ssDefiner = (bool) PKG.RDB$SQL_SECURITY;
-
+				}
 				END_FOR
 			}
 
@@ -263,7 +262,8 @@ void Constant::drop(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& 
 
 void Constant::dropAllFromPackage(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& parent, bool privateFlag)
 {
-	AutoCacheRequest eraseConstantRequest(tdbb, drq_e_pkg_consts_by_flag, DYN_REQUESTS);
+	static const CachedRequestId requestId;
+	AutoCacheRequest eraseConstantRequest(tdbb, requestId);
 	FOR (REQUEST_HANDLE eraseConstantRequest TRANSACTION_HANDLE transaction)
 			CONST IN RDB$CONSTANTS
 			WITH CONST.RDB$SCHEMA_NAME EQ parent.schema.c_str() AND
@@ -286,7 +286,8 @@ dsc Constant::getDesc(thread_db* tdbb, jrd_tra* transaction, const QualifiedName
 	bool succeed = false;
 
 	FbLocalStatus status;
-	AutoCacheRequest getConstantDscRequest(tdbb, drq_l_pkg_const_dsc, DYN_REQUESTS);
+	static const CachedRequestId requestId;
+	AutoCacheRequest getConstantDscRequest(tdbb, requestId);
 	FOR(REQUEST_HANDLE getConstantDscRequest TRANSACTION_HANDLE transaction)
 		CONST IN RDB$CONSTANTS CROSS FLD IN RDB$FIELDS
 			WITH CONST.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
@@ -351,7 +352,7 @@ static void genConstantCompatibleBlr(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 {
 	// Make the blr with only the LiteralNode
 	{
-		Firebird::BlrWriter::BlrData& blr = dsqlScratch->getBlrData();
+		BlrWriter::BlrData& blr = dsqlScratch->getBlrData();
 		blr.clear();
 		dsqlScratch->getDebugData().clear();
 	}
@@ -376,7 +377,7 @@ static void genConstantCompatibleBlr(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 		}
 		case dtype_real:
 		{
-			double newValue = *(float*)scalar.dsc_address;
+			double newValue = *(float*) scalar.dsc_address;
 
 			dsc descForDouble{};
 			descForDouble.makeDouble();
@@ -437,13 +438,13 @@ void Constant::genConstantBlr(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	ValueExprNode* constExpr, dsql_fld* type, const MetaName& schema)
 {
 	{ // Prepare BLR writer
-		Firebird::BlrWriter::BlrData& blr = dsqlScratch->getBlrData();
+		BlrWriter::BlrData& blr = dsqlScratch->getBlrData();
 		blr.clear();
 		dsqlScratch->getDebugData().clear();
 	}
 
 	// Gen blr into dsqlScratch
-	Firebird::AutoMemoryPool tempPool(MemoryPool::createPool(ALLOC_ARGS0));
+	AutoMemoryPool tempPool(MemoryPool::createPool(ALLOC_ARGS0));
 	CastNode cast(*tempPool, constExpr, type);
 	{
 		dsqlScratch->appendUChar(dsqlScratch->isVersion4() ? blr_version4 : blr_version5);
@@ -458,8 +459,6 @@ void Constant::genConstantBlr(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	CompilerScratch* csb = nullptr;
 	Cleanup cc([&tdbb, requestToRestore = tdbb->getRequest(), &csb]()
 		{
-			// if (statement)
-			// 	statement->release(tdbb);
 			delete csb;
 			tdbb->setRequest(requestToRestore);
 		});

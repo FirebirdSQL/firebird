@@ -1149,6 +1149,7 @@ namespace
 
 		FOR(REQUEST_HANDLE handle)
 			X IN RDB$CONSTANTS WITH
+				X.RDB$SCHEMA_NAME EQ work->dfw_schema.c_str() AND
 				X.RDB$CONSTANT_NAME EQ work->dfw_name.c_str() AND
 				X.RDB$PACKAGE_NAME EQUIV NULLIF(work->dfw_package.c_str(), "")
 		{

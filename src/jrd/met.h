@@ -268,7 +268,7 @@ public:
 		return mdc_relations.getCount();
 	}
 
-	Constant* getConstant(thread_db* tdbb, MetaId id)
+	Constant* getConstant(thread_db* tdbb, const MetaId id)
 	{
 		return mdc_constants.getVersioned(tdbb, id, CacheFlag::AUTOCREATE);
 	}

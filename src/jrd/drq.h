@@ -242,17 +242,6 @@ enum drq_type_t
 	drq_e_pub_tab_all,		// erase relation from all publication
 	drq_l_rel_con,			// lookup relation constraint
 	drq_l_rel_fld_name,		// lookup relation field name
-
-	// constants
-	drq_l_pkg_consts,			// get all constants of a package
-	drq_l_pkg_const_flag,		// lookup for a flag of a package constant by its name
-	drq_l_pkg_const_dsc,		// lookup for dsc of a package constant
-	drq_l_pkg_const_blr,		// lookup for blr of a package constant
-	drq_s_pkg_const,			// store a package constant
-	drq_m_pkg_const,			// modify a package constant by its name
-	drq_e_pkg_const_name,		// erase constant by its name
-	drq_e_pkg_consts_by_flag,	// erase all public or private constants of a package
-	drq_e_pkg_const_dsc,		// erase dsc of a package constant
 	drq_g_nxt_const_id,			// lookup next constant ID
 
 	drq_MAX

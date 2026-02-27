@@ -313,14 +313,17 @@ void PackageItemsHolder::collectPackagedItems(thread_db* tdbb, jrd_tra* transact
 
 	if (collectConstants)
 	{
-		AutoCacheRequest getConstantsRequest(tdbb, drq_l_pkg_consts, DYN_REQUESTS);
-		FOR(REQUEST_HANDLE getConstantsRequest TRANSACTION_HANDLE transaction)
+		static const CachedRequestId requestId;
+		AutoCacheRequest getConstantsRequest(tdbb, requestId);
+		FOR (REQUEST_HANDLE getConstantsRequest TRANSACTION_HANDLE transaction)
 			CONST IN RDB$CONSTANTS WITH
 				CONST.RDB$SCHEMA_NAME EQ packageName.schema.c_str() AND
 				CONST.RDB$PACKAGE_NAME EQ packageName.object.c_str()
+		{
 
 			Signature constant(CONST.RDB$CONSTANT_NAME);
 			constants.add(constant);
+		}
 		END_FOR
 	}
 }
@@ -456,19 +459,22 @@ bool PackageReferenceNode::constantExists(thread_db* tdbb, Jrd::jrd_tra* transac
 
 	// Use default schema if one not specified
 	const char* schemaName = fullName.schema.hasData() ? fullName.schema.c_str() : PUBLIC_SCHEMA;
-	AutoCacheRequest getConstantRequest(tdbb, drq_l_pkg_const_flag, DYN_REQUESTS);
+
+	static const CachedRequestId requestId;
+	AutoCacheRequest getConstantRequest(tdbb, requestId);
 	FOR (REQUEST_HANDLE getConstantRequest TRANSACTION_HANDLE transaction)
 		CONST IN RDB$CONSTANTS
 		WITH CONST.RDB$SCHEMA_NAME EQ schemaName AND
 		CONST.RDB$PACKAGE_NAME EQ fullName.package.c_str() AND
 		CONST.RDB$CONSTANT_NAME EQ fullName.object.c_str()
-
+	{
 		if (isPrivate)
 		{
 			*isPrivate = !CONST.RDB$PRIVATE_FLAG.NULL && CONST.RDB$PRIVATE_FLAG;
 		}
 
 		return true;
+	}
 	END_FOR
 
 	return false;
@@ -582,7 +588,9 @@ void CreatePackageConstantNode::execute(thread_db* tdbb, DsqlCompilerScratch* ds
 void CreatePackageConstantNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
 {
 	FbLocalStatus status;
-	AutoCacheRequest storeConstantRequest(tdbb, drq_s_pkg_const, DYN_REQUESTS);
+
+	static const CachedRequestId requestId;
+	AutoCacheRequest storeConstantRequest(tdbb, requestId);
 
 	// Check uniqueness
 	if (PackageReferenceNode::constantExists(tdbb, transaction, name))
@@ -668,8 +676,12 @@ void CreatePackageConstantNode::executeCreate(thread_db* tdbb, DsqlCompilerScrat
 bool CreatePackageConstantNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
 {
 	FbLocalStatus status;
-	AutoCacheRequest eraseDscRequest(tdbb, drq_e_pkg_const_dsc, DYN_REQUESTS);
-	AutoCacheRequest modifyConstantRequest(tdbb, drq_m_pkg_const, DYN_REQUESTS);
+
+	static const CachedRequestId eraseRequestId;
+	AutoCacheRequest eraseDscRequest(tdbb, eraseRequestId);
+
+	static const CachedRequestId modifyRequestId;
+	AutoCacheRequest modifyConstantRequest(tdbb, modifyRequestId);
 	bid blobId;
 
 	bool found = false;
@@ -986,6 +998,7 @@ void CreateAlterPackageNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch*
 
 	DYN_UTIL_check_unique_name(tdbb, name, obj_package_header);
 
+	static const CachedRequestId requestId;
 	AutoCacheRequest requestHandle(tdbb, drq_s_pkg, DYN_REQUESTS);
 
 	STORE (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
@@ -1031,6 +1044,8 @@ bool CreateAlterPackageNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* 
 {
 	MemoryPool& pool = dsqlScratch->getPool();
 	Attachment* attachment = transaction->getAttachment();
+
+	static const CachedRequestId requestId;
 	AutoCacheRequest requestHandle(tdbb, drq_m_pkg, DYN_REQUESTS);
 	bool modified = false;
 
@@ -1091,6 +1106,7 @@ bool CreateAlterPackageNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* 
 
 bool CreateAlterPackageNode::executeAlterIndividualParameters(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
 {
+	static const CachedRequestId requestId;
 	AutoCacheRequest requestHandle(tdbb, drq_m_prm_pkg, DYN_REQUESTS);
 	bool modified = false;
 
@@ -1176,6 +1192,8 @@ void DropPackageNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	AutoSavePoint savePoint(tdbb, transaction);
 
 	bool found = false;
+
+	static const CachedRequestId requestId;
 	AutoCacheRequest requestHandle(tdbb, drq_e_pkg, DYN_REQUESTS);
 
 	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
@@ -1360,6 +1378,7 @@ void CreatePackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 
+	static const CachedRequestId requestId;
 	AutoCacheRequest requestHandle(tdbb, drq_m_pkg_body, DYN_REQUESTS);
 	bool modified = false;
 
@@ -1516,6 +1535,8 @@ void DropPackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 	AutoSavePoint savePoint(tdbb, transaction);
 
 	bool found = false;
+
+	static const CachedRequestId requestId;
 	AutoCacheRequest requestHandle(tdbb, drq_m_pkg_body2, DYN_REQUESTS);
 
 	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
