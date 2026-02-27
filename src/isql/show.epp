@@ -6812,7 +6812,7 @@ static processing_state show_constants(const std::optional<QualifiedMetaString>&
 			CONST.RDB$PACKAGE_NAME EQ constant.package.c_str() AND
 			CONST.RDB$CONSTANT_NAME EQ constant.object.c_str()
 			SORTED BY CONST.RDB$CONSTANT_NAME
-
+		{
 			bool isPrivate = !CONST.RDB$PRIVATE_FLAG.NULL && CONST.RDB$PRIVATE_FLAG;
 			const char* type = isPrivate ? "BODY" : "HEADER";
 
