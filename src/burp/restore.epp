@@ -323,7 +323,7 @@ void activateIndex(BurpGlobals* tdgbl, const QualifiedMetaString& indexName)
 
 	if (fError)
 	{
-		BURP_print(false, 173, indexName.toQuotedString().c_str());
+		BURP_print(true, 173, indexName.toQuotedString().c_str());
 		BURP_print_status(false, &local_status_vector);
 		tdgbl->flag_on_line = false;
 
@@ -384,25 +384,25 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 						MODIFY IDX USING
 							IDX.RDB$INDEX_INACTIVE = TRUE;
 						END_MODIFY;
-						BURP_print(false, 240, indexName.toQuotedString().c_str());
+						BURP_print(true, 240, indexName.toQuotedString().c_str());
 						// msg 240 Index \"%s\" failed to activate because:
 
 						if (error_code == isc_no_dup)
 						{
-							BURP_print(false, 241);
+							BURP_print(true, 241);
 							// msg 241 The unique index has duplicate values or NULLs
-							BURP_print(false, 242);
+							BURP_print(true, 242);
 							// msg 242 Delete or Update duplicate values or NULLs, and activate index with
 						}
 						else
 						{
-							BURP_print(false, 244);
+							BURP_print(true, 244);
 							// msg 244 Not enough disk space to create the sort file for an index
-							BURP_print(false, 245);
+							BURP_print(true, 245);
 							// msg 245 Set the TMP environment variable to a directory on a filesystem that does have enough space, and activate index with
 						}
 
-						BURP_print(false, 243, indexName.toQuotedString().c_str());
+						BURP_print(true, 243, indexName.toQuotedString().c_str());
 						// msg 243 ALTER INDEX \"%s\" ACTIVE;
 					}
 					END_FOR
@@ -771,7 +771,7 @@ void add_files(BurpGlobals* tdgbl, const char* file_name)
 		COMMIT
 		// existing ON_ERROR continues past error, beck
 		ON_ERROR
-			BURP_print (false, 174);
+			BURP_print (true, 174);
 			// msg 174 cannot commit files
 			BURP_print_status (false, &tdgbl->status_vector);
 			ROLLBACK;
@@ -2122,7 +2122,7 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 						 elements_written * field->fld_length, (*buffer) + data_at);
 			if (status_vector->hasData())
 			{
-				BURP_print (false, 81, field->fld_name);
+				BURP_print (true, 81, field->fld_name);
 				// msg 81 error accessing blob field %s -- continuing
 				BURP_print_status (true, &status_vector);
 #ifdef DEBUG
@@ -3149,9 +3149,9 @@ static void check_data_error(BurpGlobals* tdgbl, IStatus* status_vector, const b
 	{
 		if (tdgbl->gbl_sw_incremental)
 		{
-			BURP_print(false, 138, relation->rel_name.toQuotedString().c_str());
+			BURP_print(true, 138, relation->rel_name.toQuotedString().c_str());
 			// msg 138 validation error on field in relation %s
-			BURP_print_status (false, status_vector);
+			BURP_print_status(false, status_vector);
 		}
 		else
 			BURP_error_redirect(status_vector, 47);
@@ -3161,9 +3161,8 @@ static void check_data_error(BurpGlobals* tdgbl, IStatus* status_vector, const b
 	{
 		if (tdgbl->gbl_sw_incremental)
 		{
+			BURP_print(true, 114, relation->rel_name.toQuotedString().c_str());
 			// msg 114 restore failed for record in relation %s
-			BURP_print(false, 114, relation->rel_name.toQuotedString().c_str());
-
 			BURP_print_status(false, status_vector, 342);	// isc_gbak_invalid_data
 		}
 		else
@@ -3173,7 +3172,7 @@ static void check_data_error(BurpGlobals* tdgbl, IStatus* status_vector, const b
 	{
 		if (tdgbl->gbl_sw_incremental && isc_sqlcode(status_vector->getErrors()) != -902)
 		{
-			BURP_print (false, 114, relation->rel_name.toQuotedString().c_str());
+			BURP_print(true, 114, relation->rel_name.toQuotedString().c_str());
 			// msg 114 restore failed for record in relation %s
 			BURP_print_status(false, status_vector);
 		}
@@ -3220,25 +3219,25 @@ static void commit_relation_data(BurpGlobals* tdgbl, burp_rel* relation)
 					{
 						IDX.RDB$INDEX_INACTIVE = TRUE;
 
-						BURP_print(false, 240, indexName.toQuotedString().c_str());
+						BURP_print(true, 240, indexName.toQuotedString().c_str());
 						// msg 240 Index \"%s\" failed to activate because:
 
 						if (error_code == isc_no_dup)
 						{
-							BURP_print(false, 241);
+							BURP_print(true, 241);
 							// msg 241 The unique index has duplicate values or NULLs
-							BURP_print(false, 242);
+							BURP_print(true, 242);
 							// msg 242 Delete or Update duplicate values or NULLs, and activate index with
 						}
 						else
 						{
-							BURP_print(false, 244);
+							BURP_print(true, 244);
 							// msg 244 Not enough disk space to create the sort file for an index
-							BURP_print(false, 245);
+							BURP_print(true, 245);
 							// msg 245 Set the TMP environment variable to a directory on a filesystem that does have enough space, and activate index with
 						}
 
-						BURP_print(false, 243, indexName.toQuotedString().c_str());
+						BURP_print(true, 243, indexName.toQuotedString().c_str());
 						// msg 243 ALTER INDEX \"%s\" ACTIVE
 					}
 					END_MODIFY
@@ -3252,7 +3251,7 @@ static void commit_relation_data(BurpGlobals* tdgbl, burp_rel* relation)
 				break;
 
 			default:
-				BURP_print(false, 69, relation->rel_name.toQuotedString().c_str());
+				BURP_print(true, 69, relation->rel_name.toQuotedString().c_str());
 				// msg 69 commit failed on relation %s
 				BURP_print_status(false, &tdgbl->status_vector);
 				ROLLBACK;
