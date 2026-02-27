@@ -293,6 +293,7 @@ dsc Constant::getDesc(thread_db* tdbb, jrd_tra* transaction, const QualifiedName
 			WITH CONST.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 				CONST.RDB$PACKAGE_NAME EQ name.package.c_str() AND
 				CONST.RDB$CONSTANT_NAME EQ name.object.c_str() AND
+				FLD.RDB$SCHEMA_NAME EQ CONST.RDB$SCHEMA_NAME AND
 				FLD.RDB$FIELD_NAME EQ CONST.RDB$FIELD_SOURCE
 
 		succeed = DSC_make_descriptor(&desc,
