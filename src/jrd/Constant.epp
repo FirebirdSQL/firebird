@@ -311,7 +311,7 @@ dsc Constant::getDesc(thread_db* tdbb, jrd_tra* transaction, const QualifiedName
 	return desc;
 }
 
-static dsc* executeConstantExpressionFull(thread_db* tdbb, CompilerScratch* csb)
+static dsc* executeConstantExpressionWithRequest(thread_db* tdbb, CompilerScratch* csb)
 {
 	Statement* statement = Statement::makeStatement(tdbb, csb, true);
 
@@ -471,7 +471,7 @@ void Constant::genConstantBlr(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 		nullptr, false, 0);
 
 	// Execute node from BLR
-	auto output = executeConstantExpressionFull(tdbb, csb);
+	auto output = executeConstantExpressionWithRequest(tdbb, csb);
 	if (output != nullptr)
 		genConstantCompatibleBlr(tdbb, dsqlScratch, *output);
 }
