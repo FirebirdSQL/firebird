@@ -51,13 +51,17 @@ public:
 private:
 	explicit Constant(Cached::Constant* perm)
 		: Routine(perm->getPool()),
-		cachedConstant(perm)
-	{ }
+		  cachedConstant(perm)
+	{
+		flReload = true;
+	}
 
 public:
 	explicit Constant(MemoryPool& p)
 		: Routine(p)
-	{ }
+	{
+		flReload = true;
+	}
 
 	static Constant* create(thread_db* tdbb, MemoryPool& pool, Cached::Constant* perm);
 	ScanResult scan(thread_db* tdbb, ObjectBase::Flag flags);

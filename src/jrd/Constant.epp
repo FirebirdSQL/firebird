@@ -75,9 +75,10 @@ ScanResult Constant::scan(thread_db* tdbb, ObjectBase::Flag flags)
 
 	//try
 	{
-		AutoCacheRequest request_const(tdbb, irq_l_constants, IRQ_REQUESTS);
+		static const CachedRequestId requestId;
+		AutoCacheRequest requestConst(tdbb, requestId);
 
-		FOR(REQUEST_HANDLE request_const TRANSACTION_HANDLE metaTransaction)
+		FOR(REQUEST_HANDLE requestConst TRANSACTION_HANDLE metaTransaction)
 			CONST IN RDB$CONSTANTS
 			WITH CONST.RDB$CONSTANT_ID EQ this->getId()
 		{
@@ -90,7 +91,8 @@ ScanResult Constant::scan(thread_db* tdbb, ObjectBase::Flag flags)
 			TriState ssDefiner;
 			if (!CONST.RDB$PACKAGE_NAME.NULL)
 			{
-				AutoCacheRequest requestHandle(tdbb, irq_l_const_pkg_class, IRQ_REQUESTS);
+				static const CachedRequestId requestId;
+				AutoCacheRequest requestHandle(tdbb, requestId);
 
 				FOR (REQUEST_HANDLE requestHandle)
 					PKG IN RDB$PACKAGES
@@ -140,7 +142,8 @@ std::optional<MetaId> Constant::getIdByName(thread_db* tdbb, const QualifiedName
 	Attachment* attachment = tdbb->getAttachment();
 	std::optional<MetaId> id;
 
-	AutoCacheRequest request(tdbb, irq_l_const_id, IRQ_REQUESTS);
+	static const CachedRequestId requestId;
+	AutoCacheRequest request(tdbb, requestId);
 
 	FOR (REQUEST_HANDLE request)
 		CONST IN RDB$CONSTANTS
@@ -160,7 +163,9 @@ ScanResult Constant::reload(thread_db* tdbb, ObjectBase::Flag)
 	Attachment* attachment = tdbb->getAttachment();
 	Database* dbb = tdbb->getDatabase();
 	jrd_tra* metaTransaction = attachment->getMetaTransaction(tdbb);
-	AutoCacheRequest request(tdbb, irq_l_const_name, IRQ_REQUESTS);
+
+	static const CachedRequestId requestId;
+	AutoCacheRequest request(tdbb, requestId);
 
 	bool found = false;
 
@@ -195,17 +200,17 @@ void Constant::checkReload(thread_db* tdbb) const
 }
 
 
-class DropSavepoint
+class DropConstantSavepoint
 {
 public:
-	DropSavepoint(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& name) :
+	DropConstantSavepoint(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& name) :
 		m_savePoint(tdbb, transaction),
 		m_tdbb(tdbb)
 	{
 		MetadataCache::getVersioned<Cached::Constant>(tdbb, name, CacheFlag::OLD_DROP);
 	}
 
-	DropSavepoint(thread_db* tdbb, jrd_tra* transaction) :
+	DropConstantSavepoint(thread_db* tdbb, jrd_tra* transaction) :
 		m_savePoint(tdbb, transaction),
 		m_tdbb(tdbb)
 	{
@@ -236,9 +241,11 @@ private:
 void Constant::drop(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& name)
 {
 	// Run all statements under savepoint control
-	DropSavepoint savePoint(tdbb, transaction, name);
+	DropConstantSavepoint savePoint(tdbb, transaction, name);
 
-	AutoCacheRequest request(tdbb, drq_e_pkg_const_name, DYN_REQUESTS);
+	static const CachedRequestId requestId;
+	AutoCacheRequest request(tdbb, requestId);
+
 	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		CONST IN RDB$CONSTANTS
 		WITH CONST.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
@@ -263,7 +270,7 @@ void Constant::dropAllFromPackage(thread_db* tdbb, jrd_tra* transaction, const Q
 				CONST.RDB$PACKAGE_NAME EQ parent.object.c_str() AND
 				CONST.RDB$PRIVATE_FLAG EQ privateFlag
 	{
-		DropSavepoint savePoint(tdbb, transaction, QualifiedName(CONST.RDB$CONSTANT_NAME, parent.schema, parent.object));
+		DropConstantSavepoint savePoint(tdbb, transaction, QualifiedName(CONST.RDB$CONSTANT_NAME, parent.schema, parent.object));
 		savePoint.setFound(CONST.RDB$CONSTANT_ID);
 
 		ERASE CONST;
@@ -339,6 +346,7 @@ static void executeConstantExpression(thread_db* tdbb, CompilerScratch* csb, Mem
 }
 
 
+// Convert a literalNode-unsupported constant type to a supported one if necessary
 static void genConstantCompatibleBlr(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, const dsc& scalar)
 {
 	// Make the blr with only the LiteralNode

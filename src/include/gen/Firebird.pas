@@ -6226,10 +6226,10 @@ const
 	 isc_gbak_invalid_data = 336331094;
 	 isc_gbak_inv_bkup_ver2 = 336331096;
 	 isc_gbak_db_format_too_old2 = 336331100;
-	 isc_gbak_writing_constants = 336331200;
-	 isc_gbak_writing_constant = 336331201;
-	 isc_gbak_constant = 336331202;
-	 isc_gbak_restoring_constant = 336331203;
+	 isc_gbak_writing_constants = 336331175;
+	 isc_gbak_writing_constant = 336331176;
+	 isc_gbak_constant = 336331177;
+	 isc_gbak_restoring_constant = 336331178;
 	 isc_dsql_too_old_ods = 336397205;
 	 isc_dsql_table_not_found = 336397206;
 	 isc_dsql_view_not_found = 336397207;

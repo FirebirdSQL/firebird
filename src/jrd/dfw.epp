@@ -1143,7 +1143,8 @@ namespace
 		bool compile)
 	{
 		Jrd::Attachment* attachment = tdbb->getAttachment();
-		AutoCacheRequest handle(tdbb, irq_c_const_dpd, IRQ_REQUESTS);
+		CachedRequestId constDpd;
+		AutoCacheRequest handle(tdbb, constDpd);
 		Constant* routine = nullptr;
 
 		FOR(REQUEST_HANDLE handle)

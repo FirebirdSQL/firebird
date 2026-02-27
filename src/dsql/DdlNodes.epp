@@ -1596,7 +1596,7 @@ void CommentOnNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 			break;
 
 		case obj_package_constant:
-			SCL_check_package(tdbb, QualifiedName(name.package, name.schema), SCL_alter);
+			SCL_check_package(tdbb, name.getSchemaAndPackage(), SCL_alter);
 			break;
 
 		default:

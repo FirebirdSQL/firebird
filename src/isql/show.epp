@@ -6748,7 +6748,7 @@ static void print_constant_type(const char* fieldName, const char* schemaName)
 	FOR FLD IN RDB$FIELDS WITH
 		FLD.RDB$SCHEMA_NAME EQ schemaName AND
 		FLD.RDB$FIELD_NAME EQ fieldName
-
+	{
 		// Decide if this is a user-created domain
 		if (!fb_utils::implicit_domain(FLD.RDB$FIELD_NAME) || FLD.RDB$SYSTEM_FLAG == 1)
 		{
@@ -6792,7 +6792,7 @@ static void print_constant_type(const char* fieldName, const char* schemaName)
 			isqlGlob.printf(" ");
 			SHOW_print_metadata_text_blob(isqlGlob.Out, &FLD.RDB$DEFAULT_SOURCE);
 		}
-
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg (fbStatus);
@@ -6821,7 +6821,7 @@ static processing_state show_constants(const std::optional<QualifiedMetaString>&
 
 			first = false;
 			show_constant(constant.object.c_str());
-
+		}
 		END_FOR
 		ON_ERROR
 			ISQL_errmsg(fbStatus);
@@ -6836,6 +6836,7 @@ static processing_state show_constants(const std::optional<QualifiedMetaString>&
 	FOR CONST IN RDB$CONSTANTS
 		SORTED BY CONST.RDB$CONSTANT_NAME
 		bool isPrivate = !CONST.RDB$PRIVATE_FLAG.NULL && CONST.RDB$PRIVATE_FLAG;
+	{
 		const char* type = isPrivate ? "BODY" : "HEADER";
 
 		if (first && msg)
@@ -6845,6 +6846,7 @@ static processing_state show_constants(const std::optional<QualifiedMetaString>&
 		fb_utils::exact_name(CONST.RDB$CONSTANT_NAME);
 		show_constant(CONST.RDB$CONSTANT_NAME);
 
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
@@ -6859,7 +6861,7 @@ static processing_state show_constant(const SCHAR* constantName)
 	FOR CONST IN RDB$CONSTANTS
 		WITH CONST.RDB$CONSTANT_NAME EQ constantName
 			SORTED BY CONST.RDB$CONSTANT_NAME
-
+	{
 		bool isPrivate = !CONST.RDB$PRIVATE_FLAG.NULL && CONST.RDB$PRIVATE_FLAG;
 
 		if (!CONST.RDB$PACKAGE_NAME.NULL)
@@ -6876,6 +6878,7 @@ static processing_state show_constant(const SCHAR* constantName)
 
 		isqlGlob.printf(NEWLINE);
 
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);

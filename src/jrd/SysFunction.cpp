@@ -6910,7 +6910,7 @@ dsc* evlUnicodeVal(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 
 
 
-constexpr auto DEFAULT = SysFunction::DETERMINISTIC | SysFunction::CONSTANT;
+constexpr static auto DEFAULT = SysFunction::DETERMINISTIC | SysFunction::CONSTANT;
 const SysFunction SysFunction::functions[] =
 	{
 		// name, minArgCount, maxArgCount, deterministic, setParamsFunc, makeFunc, evlFunc, misc

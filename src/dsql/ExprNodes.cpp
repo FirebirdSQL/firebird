@@ -6467,24 +6467,25 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 		}
 	}
 
+	// Check conflict beween <relation>.<field> and <package>.<constant>
 	dsql_ctx packageContext(dsqlScratch->getPool());
 	{ // Consatnts
 
-		const QualifiedName consatntName(dsqlName,
+		const QualifiedName constantName(dsqlName,
 			dsqlQualifier.schema.hasData() ? dsqlQualifier.schema : (dsqlScratch->package.schema.hasData() ? dsqlScratch->package.schema : PUBLIC_SCHEMA),
 			dsqlQualifier.object.hasData() ? dsqlQualifier.object : dsqlScratch->package.object);
 
-		if (PackageReferenceNode::constantExists(tdbb, dsqlScratch->getTransaction(), consatntName))
+		if (PackageReferenceNode::constantExists(tdbb, dsqlScratch->getTransaction(), constantName))
 		{
 			packageContext.ctx_relation = nullptr;
 			packageContext.ctx_procedure = nullptr;
 			// Alias is a package name, not a constant
-			packageContext.ctx_alias.push(QualifiedName(consatntName.package, consatntName.schema));
+			packageContext.ctx_alias.push(QualifiedName(constantName.package, constantName.schema));
 			packageContext.ctx_flags |= CTX_package;
 			ambiguousCtxStack.push(&packageContext);
 
 			MemoryPool& pool = dsqlScratch->getPool();
-			node = FB_NEW_POOL(pool) PackageReferenceNode(pool, consatntName);
+			node = FB_NEW_POOL(pool) PackageReferenceNode(pool, constantName);
 		}
 	}
 
@@ -14199,11 +14200,11 @@ ValueExprNode* VariableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		if (dsqlScratch->package.object.hasData())
 		{
 			thread_db* tdbb = JRD_get_thread_data();
-			QualifiedName consatntFullName(dsqlName, dsqlScratch->package.schema, dsqlScratch->package.object);
-			if (PackageReferenceNode::constantExists(tdbb, dsqlScratch->getTransaction(), consatntFullName))
+			QualifiedName constantFullName(dsqlName, dsqlScratch->package.schema, dsqlScratch->package.object);
+			if (PackageReferenceNode::constantExists(tdbb, dsqlScratch->getTransaction(), constantFullName))
 			{
 				delete node;
-				return FB_NEW_POOL(dsqlScratch->getPool()) PackageReferenceNode(dsqlScratch->getPool(), consatntFullName);
+				return FB_NEW_POOL(dsqlScratch->getPool()) PackageReferenceNode(dsqlScratch->getPool(), constantFullName);
 			}
 		}
 
