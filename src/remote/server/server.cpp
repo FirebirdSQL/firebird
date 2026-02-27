@@ -7150,11 +7150,14 @@ SSHORT rem_port::asyncReceive(PACKET* asyncPacket, const UCHAR* buffer, SSHORT d
 			port_async->abort_aux_connection();
 		break;
 	case op_crypt_key_callback:
-		port_server_crypt_callback->wakeup(asyncPacket->p_cc.p_cc_data.cstr_length,
-			asyncPacket->p_cc.p_cc_data.cstr_address);
+		if (port_server_crypt_callback)
+		{
+			port_server_crypt_callback->wakeup(asyncPacket->p_cc.p_cc_data.cstr_length,
+				asyncPacket->p_cc.p_cc_data.cstr_address);
+		}
 		break;
 	case op_partial:
-		if (original_op == op_crypt_key_callback)
+		if (port_server_crypt_callback && original_op == op_crypt_key_callback)
 			port_server_crypt_callback->wakeup(0, NULL);
 		break;
 	default:
