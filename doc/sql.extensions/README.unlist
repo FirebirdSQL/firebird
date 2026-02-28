@@ -74,5 +74,45 @@ Unacceptable behavior:
 	SELECT UNLIST FROM UNLIST('UNLIST,A,S,A') AS A;
 
 
+Short syntax for UNLIST with IN operator:
+	Since Firebird 6.0, UNLIST can be used directly with the IN operator without requiring a full subquery.
+	Instead of writing IN (SELECT * FROM UNLIST(...) AS U), you can now use the shorter syntax IN UNLIST(...).
+
+Syntax:
+	<in predicate> ::=
+		<value> [NOT] IN <table value function unlist short>
+
+	<table value function unlist short> ::=
+		UNLIST ( <input> [, <separator>] [, <data type conversion>] )
+
+Examples:
+
+A)
+	SELECT * FROM EMPLOYEE WHERE EMP_NO IN UNLIST('2,4,5,7,11');
+B)
+	SELECT * FROM EMPLOYEE WHERE JOB_COUNTRY IN UNLIST('France,Italy,England');
+C)
+	SELECT EMP_NO FROM EMPLOYEE	WHERE JOB_COUNTRY NOT IN UNLIST('USA');
+D)
+	SELECT * FROM EMPLOYEE WHERE DEPT_NO IN UNLIST('100:110:115:120', ':' RETURNING INT);
+E)
+	SET AUTOTERM;
+	RECREATE PROCEDURE GET_EMPLOYEES_BY_PHONE_EXT (PHONE VARCHAR(1000))
+	RETURNS (EMPLOYEE_NAME VARCHAR(100))
+	AS
+	BEGIN
+		FOR
+			SELECT FIRST_NAME FROM EMPLOYEE
+			WHERE PHONE_EXT IN UNLIST(:PHONE, ',' RETURNING INT)
+			INTO :EMPLOYEE_NAME
+		DO
+			SUSPEND;
+	END;
+
+	SELECT A.EMPLOYEE_NAME FROM GET_EMPLOYEES_BY_PHONE_EXT('2,3,7') AS A;
+
+Note:
+	The short syntax automatically provides the correlation name and column name,
+	so they cannot be specified explicitly when using this form.
 
 
