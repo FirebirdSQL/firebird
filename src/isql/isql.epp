@@ -5938,6 +5938,7 @@ static processing_state help(const TEXT* what)
 		HLP_SETCOUNT,			//	SET COUNT				-- toggle count of selected rows on/off
 		HLP_SETMAXROWS,			//	SET MAXROWS [<n>]		-- toggle limit of selected rows to <n>, zero is no limit
 		HLP_SETECHO,			//	SET ECHO				-- toggle command echo on/off
+		HLP_SETEXECPATHDISPLAY,	//  SET EXEC_PATH_DISPLAY <BLR|OFF> -- toggle display of query execution path
 		HLP_SETEXPLAIN,			//	SET EXPLAIN				-- toggle display of query plan in the explained form
 		HLP_SETHEADING,			//  SET HEADING 	        -- toggle column titles display on/off
 		HLP_SETKEEPTRAN,		//	SET KEEP_TRAN_params	-- toggle to keep or not to keep text of following successful SET TRANSACTION statement
@@ -5947,6 +5948,7 @@ static processing_state help(const TEXT* what)
 		HLP_SETPLAN,			//	SET PLAN				-- toggle display of query access plan
 		HLP_SETPLANONLY,		//	SET PLANONLY			-- toggle display of query plan without executing
 		HLP_SETSQLDIALECT,		//	SET SQL DIALECT <n>		-- set sql dialect to <n>
+		HLP_SETSQLDADISPLAY,	//  SET SQLDA_DISPLAY       -- toggle display of query parameters' info
 		HLP_SETSTAT,			//	SET STATs				-- toggle display of performance statistics
 		HLP_SETTIME,			//	SET TIME				-- toggle display of timestamp with DATE values
 		HLP_SETTERM,			//	SET TERM <string>		-- change statement terminator string
