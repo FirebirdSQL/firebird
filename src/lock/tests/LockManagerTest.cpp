@@ -89,8 +89,8 @@ BOOST_AUTO_TEST_CASE(LockUnlockWaitTest)
 	const string lockManagerId(getUniqueId().c_str());
 	auto lockManager = std::make_unique<LockManager>(lockManagerId, &config);
 
-	unsigned lockSuccess = 0u;
-	std::atomic_uint lockFail = 0;
+	std::atomic_uint lockSuccess = 0u;
+	std::atomic_uint lockFail = 0u;
 
 	std::vector<std::thread> threads;
 	std::latch latch(THREAD_COUNT);
@@ -129,7 +129,7 @@ BOOST_AUTO_TEST_CASE(LockUnlockWaitTest)
 		thread.join();
 
 	BOOST_CHECK_EQUAL(lockFail.load(), 0u);
-	BOOST_CHECK_EQUAL(lockSuccess, THREAD_COUNT * ITERATION_COUNT);
+	BOOST_CHECK_EQUAL(lockSuccess.load(), THREAD_COUNT * ITERATION_COUNT);
 
 	lockManager.reset();
 }
@@ -138,8 +138,6 @@ BOOST_AUTO_TEST_CASE(LockUnlockWaitTest)
 BOOST_AUTO_TEST_CASE(LockUnlockNoWaitTest)
 {
 	constexpr unsigned THREAD_COUNT = 8u;
-	constexpr unsigned ITERATION_COUNT = 10'000u;
-
 	ConfigFile configFile(ConfigFile::USE_TEXT, "\n");
 	Config config(configFile);
 
@@ -147,37 +145,76 @@ BOOST_AUTO_TEST_CASE(LockUnlockNoWaitTest)
 	const string lockManagerId(getUniqueId().c_str());
 	auto lockManager = std::make_unique<LockManager>(lockManagerId, &config);
 
-	unsigned lockSuccess = 0u;
-	std::atomic_uint lockFail = 0;
+	std::atomic_uint lockSuccess = 0u;
+	std::atomic_uint lockFail = 0u;
 
+	constexpr unsigned CONTENDER_COUNT = THREAD_COUNT - 1;
+
+	const UCHAR LOCK_KEY[] = {'1'};
 	std::vector<std::thread> threads;
-	std::latch latch(THREAD_COUNT);
+	std::latch phase1Done(CONTENDER_COUNT);
+	std::atomic_bool lockHeld = false;
+	std::atomic_bool lockReleased = false;
 
-	for (unsigned threadNum = 0u; threadNum < THREAD_COUNT; ++threadNum)
+	threads.emplace_back([&]() {
+		FbLocalStatus statusVector;
+		LOCK_OWNER_T ownerId = 1;
+		SLONG ownerHandle = 0;
+
+		lockManager->initializeOwner(&statusVector, ownerId, LCK_OWNER_attachment, &ownerHandle);
+
+		const auto lockId = lockManager->enqueue(callbacks, &statusVector, 0,
+			LCK_tra, LOCK_KEY, sizeof(LOCK_KEY), LCK_EX, nullptr, nullptr, 0, LCK_WAIT, ownerHandle);
+
+		BOOST_REQUIRE(lockId != 0);
+
+		lockHeld.store(true);
+		phase1Done.wait();
+
+		lockManager->dequeue(lockId);
+		lockReleased.store(true);
+
+		lockManager->shutdownOwner(callbacks, &ownerHandle);
+	});
+
+	for (unsigned threadNum = 0; threadNum < CONTENDER_COUNT; ++threadNum)
 	{
 		threads.emplace_back([&, threadNum]() {
-			const UCHAR LOCK_KEY[] = {'1'};
 			FbLocalStatus statusVector;
-			LOCK_OWNER_T ownerId = threadNum + 1;
+			LOCK_OWNER_T ownerId = threadNum + 2;
 			SLONG ownerHandle = 0;
 
 			lockManager->initializeOwner(&statusVector, ownerId, LCK_OWNER_attachment, &ownerHandle);
 
-			latch.arrive_and_wait();
+			while (!lockHeld.load())
+				std::this_thread::yield();
 
-			for (unsigned i = 0; i < ITERATION_COUNT; ++i)
+			const auto firstLockId = lockManager->enqueue(callbacks, &statusVector, 0,
+				LCK_tra, LOCK_KEY, sizeof(LOCK_KEY), LCK_EX, nullptr, nullptr, 0, LCK_NO_WAIT, ownerHandle);
+
+			if (firstLockId)
 			{
-				const auto lockId = lockManager->enqueue(callbacks, &statusVector, 0,
-					LCK_tra, LOCK_KEY, sizeof(LOCK_KEY), LCK_EX, nullptr, nullptr, 0, LCK_NO_WAIT, ownerHandle);
-
-				if (lockId)
-				{
-					++lockSuccess;
-					lockManager->dequeue(lockId);
-				}
-				else
-					++lockFail;
+				++lockSuccess;
+				lockManager->dequeue(firstLockId);
 			}
+			else
+				++lockFail;
+
+			phase1Done.count_down();
+
+			while (!lockReleased.load())
+				std::this_thread::yield();
+
+			const auto secondLockId = lockManager->enqueue(callbacks, &statusVector, 0,
+				LCK_tra, LOCK_KEY, sizeof(LOCK_KEY), LCK_EX, nullptr, nullptr, 0, LCK_NO_WAIT, ownerHandle);
+
+			if (secondLockId)
+			{
+				++lockSuccess;
+				lockManager->dequeue(secondLockId);
+			}
+			else
+				++lockFail;
 
 			lockManager->shutdownOwner(callbacks, &ownerHandle);
 		});
@@ -186,9 +223,9 @@ BOOST_AUTO_TEST_CASE(LockUnlockNoWaitTest)
 	for (auto& thread : threads)
 		thread.join();
 
-	BOOST_CHECK_GT(lockFail.load(), 0u);
-	BOOST_CHECK_GT(lockSuccess, 0u);
-	BOOST_CHECK_EQUAL(lockSuccess + lockFail, THREAD_COUNT * ITERATION_COUNT);
+	BOOST_CHECK_GE(lockFail.load(), CONTENDER_COUNT);
+	BOOST_CHECK_GT(lockSuccess.load(), 0u);
+	BOOST_CHECK_EQUAL(lockSuccess.load() + lockFail.load(), CONTENDER_COUNT * 2);
 
 	lockManager.reset();
 }
