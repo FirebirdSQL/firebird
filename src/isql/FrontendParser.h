@@ -70,7 +70,7 @@ public:
 	struct SetBulkInsertNode { std::string statement; };
 	struct SetCountNode { std::string arg; };
 	struct SetEchoNode { std::string arg; };
-	struct SetExecPathDisplayNode { std::string arg; };
+	struct SetExecPathDisplayNode { std::string arg; unsigned value; };
 	struct SetExplainNode { std::string arg; };
 	struct SetHeadingNode { std::string arg; };
 	struct SetKeepTranParamsNode { std::string arg; };

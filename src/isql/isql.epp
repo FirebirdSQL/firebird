@@ -499,6 +499,13 @@ static Firebird::GlobalPtr<string> TranParams;
 class SetValues
 {
 public:
+	enum ExecPathOptions : unsigned
+	{
+		OFF = 0x00,
+		BLR = 0x01,
+		NODES = 0x02
+	};
+
 	SetValues()
 	{
 		//ColList global_Cols;
@@ -506,7 +513,8 @@ public:
 		Echo = false;
 		Time_display = false;
 		Sqlda_display = false;
-		ExecPathDisplay[0] = 0;
+		ExecPathDisplay = ExecPathOptions::OFF;
+		ExecPathDisplayLimit = 1024 * 1024;
 		Stats = false;
 		Autocommit = true;	// Commit ddl
 		Warnings = true;	// Print warnings
@@ -533,7 +541,8 @@ public:
 	bool Echo;
 	bool Time_display;
 	bool Sqlda_display;
-	UCHAR ExecPathDisplay[10];
+	unsigned ExecPathDisplay;
+	unsigned ExecPathDisplayLimit;
 	bool Stats;
 	bool Autocommit;	// Commit ddl
 	bool Warnings;		// Print warnings
@@ -4746,13 +4755,13 @@ static processing_state execSetDebugCommand()
 	if (!DB)
 		return SKIP;
 
-	const char* stmt = setValues.ExecPathDisplay[0] ?
+	const char* stmt = setValues.ExecPathDisplay ?
 		"set debug option dsql_keep_blr = true" :
 		"set debug option dsql_keep_blr = false";
 
 	DB->execute(fbStatus, nullptr, 0, stmt, isqlGlob.SQL_dialect, nullptr, nullptr, nullptr, nullptr);
 
-	if (setValues.ExecPathDisplay[0] && (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS))
+	if (setValues.ExecPathDisplay && (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS))
 	{
 		STDERROUT("SET EXEC_PATH_DISPLAY is not supported in this connection.");
 		return FAIL;
@@ -5011,17 +5020,21 @@ static processing_state frontend(const std::string& statement)
 					if (node.arg.empty())
 						return ps_ERR;
 					else if (node.arg == "OFF")
-						setValues.ExecPathDisplay[0] = 0;
-					else
+						setValues.ExecPathDisplay = SetValues::ExecPathOptions::OFF;
+					else if (node.arg == "BLR")
 					{
-						static constexpr UCHAR execPath[] = {isc_info_sql_exec_path_blr_text};
-
-						if (node.arg != "BLR")
-							return ps_ERR;
-
-						memcpy(setValues.ExecPathDisplay, execPath, FB_NELEM(execPath));
-						setValues.ExecPathDisplay[FB_NELEM(execPath)] = 0;
+						setValues.ExecPathDisplay |= SetValues::ExecPathOptions::BLR;
 					}
+					else if (node.arg == "NODES")
+					{
+						setValues.ExecPathDisplay |= SetValues::ExecPathOptions::NODES;
+					}
+					else if (node.arg == "LIMIT" && node.value > 0)
+					{
+						setValues.ExecPathDisplayLimit = node.value + 4; // item + length + overflow tag
+					}
+					else
+						return ps_ERR;
 
 					return execSetDebugCommand();
 				},
@@ -5669,7 +5682,7 @@ void ISQL_get_version(bool call_by_create_db)
 	else
 		isqlGlob.db_SQL_dialect = SQL_DIALECT_V5;
 
-	if (setValues.ExecPathDisplay[0])
+	if (setValues.ExecPathDisplay)
 		execSetDebugCommand();
 }
 
@@ -5821,6 +5834,24 @@ static processing_state print_sets()
 	print_set("Access Plan only:", setValues.Planonly);
 	print_set("Explain Access Plan:", setValues.ExplainPlan);
 
+	isqlGlob.printf("%-25s", "Execution path display:");
+	if (setValues.ExecPathDisplay == SetValues::ExecPathOptions::OFF)
+	{
+		isqlGlob.printf("OFF");
+	}
+	else
+	{
+		if (setValues.ExecPathDisplay & SetValues::ExecPathOptions::BLR)
+		{
+			isqlGlob.printf("BLR ");
+		}
+		if (setValues.ExecPathDisplay & SetValues::ExecPathOptions::NODES)
+		{
+			isqlGlob.printf("NODES");
+		}
+	}
+	isqlGlob.printf(NEWLINE);
+
 	isqlGlob.printf("%-25s", "Display BLOB type:");
 	switch (setValues.Doblob)
 	{
@@ -5938,6 +5969,7 @@ static processing_state help(const TEXT* what)
 		HLP_SETCOUNT,			//	SET COUNT				-- toggle count of selected rows on/off
 		HLP_SETMAXROWS,			//	SET MAXROWS [<n>]		-- toggle limit of selected rows to <n>, zero is no limit
 		HLP_SETECHO,			//	SET ECHO				-- toggle command echo on/off
+		HLP_SETEXECPATHDISPLAY,	//  SET EXEC_PATH_DISPLAY <BLR|NODES|OFF> -- toggle display of query execution path
 		HLP_SETEXPLAIN,			//	SET EXPLAIN				-- toggle display of query plan in the explained form
 		HLP_SETHEADING,			//  SET HEADING 	        -- toggle column titles display on/off
 		HLP_SETKEEPTRAN,		//	SET KEEP_TRAN_params	-- toggle to keep or not to keep text of following successful SET TRANSACTION statement
@@ -6373,7 +6405,7 @@ static processing_state newdb(const TEXT* dbname,
 		}
 	}
 
-	if (setValues.ExecPathDisplay[0])
+	if (setValues.ExecPathDisplay)
 		execSetDebugCommand();
 
 	global_Stmt = NULL;
@@ -8053,10 +8085,16 @@ static void process_exec_path()
 		return;
 
 	Firebird::Array<UCHAR> pathBuffer;
-	pathBuffer.getBuffer(MAX_USHORT, false);
+	pathBuffer.getBuffer(setValues.ExecPathDisplayLimit, false);
 
-	for (const UCHAR* code = setValues.ExecPathDisplay; *code; ++code)
+	static constexpr UCHAR execPath[] = { isc_info_sql_exec_path_blr_text, isc_info_sql_exec_path_nodes };
+
+	for (unsigned i = 0; i < std::size(execPath); ++i)
 	{
+		if ((setValues.ExecPathDisplay & (1 << i)) == 0)
+			continue;
+
+		const UCHAR* code = &execPath[i];
 		global_Stmt->getInfo(fbStatus, 1, code, pathBuffer.getCount(), pathBuffer.begin());
 
 		if (ISQL_errmsg(fbStatus))
@@ -8072,24 +8110,27 @@ static void process_exec_path()
 			{
 				const USHORT len = (USHORT) gds__vax_integer(ptr, sizeof(USHORT));
 				ptr += sizeof(USHORT);
-				pathString.assign((const char*) ptr, len);
+				pathString.append((const char*) ptr, len);
 				ptr += len;
 			}
 			else if (tag == isc_info_end)
 				break;
 			else if (tag == isc_info_truncated)
 			{
-				pathString = "* error: overflow *\n";
+				if (!pathString.empty())
+					pathString += '\n';
+				pathString += "* error: overflow *\n";
 				break;
 			}
 			else
-				pathString = "* unknown error *\n";
+				pathString += "* unknown error *\n";
 		}
 
 		if (pathString.hasData())
 		{
 			IUTILS_printf2(Diag, "%sExecution path (%s):%s%s%s", NEWLINE,
 				(*code == isc_info_sql_exec_path_blr_text ? "BLR" :
+				 *code == isc_info_sql_exec_path_nodes ? "Nodes" :
 				 "* unknown *"
 				),
 				NEWLINE, NEWLINE,
@@ -8534,7 +8575,7 @@ static processing_state process_statement(const std::string& str)
 			return ret;	// do not execute
 	}
 
-	if (setValues.ExecPathDisplay[0])
+	if (setValues.ExecPathDisplay)
 		process_exec_path();
 
 	// If the statement isn't a select, execute it and be done
