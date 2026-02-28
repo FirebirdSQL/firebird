@@ -3464,9 +3464,12 @@ ValueExprNode* Optimizer::optimizeLikeSimilar(ComparativeBoolNode* cmpNode)
 
 		// allocate a literal node to store the starting with string;
 		// assume it will be shorter than the pattern string
+		// This literal will be in text charset to prevent conversion on every comparison
 
 		const auto literal = FB_NEW_POOL(getPool()) LiteralNode(getPool());
 		literal->litDesc = *patternDesc;
+		literal->litDesc.setTextType(matchDesc.getTextType());
+		literal->litDesc.dsc_length = p_count;
 		UCHAR* q = literal->litDesc.dsc_address = FB_NEW_POOL(getPool()) UCHAR[literal->litDesc.dsc_length];
 
 		// Set the string length to point till the first wildcard character.
@@ -3498,8 +3501,8 @@ ValueExprNode* Optimizer::optimizeLikeSimilar(ComparativeBoolNode* cmpNode)
 				break;
 			}
 
-			q += patternCharset->substring(patternDesc->dsc_length,
-					patternDesc->dsc_address,
+			q += matchCharset->substring(p_count,
+					p,
 					literal->litDesc.dsc_length - (q - literal->litDesc.dsc_address), q,
 					(patternPtrStart - patternCanonical.begin()) / canWidth, 1);
 		}
