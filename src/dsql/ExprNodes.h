@@ -1817,11 +1817,6 @@ public:
 		return streams.exist(recStream);
 	}
 
-	bool constant() const override
-	{
-		return true;
-	}
-
 	void collectStreams(SortedStreamList& streamList) const override
 	{
 		if (!streamList.exist(recStream))
