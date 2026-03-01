@@ -49,8 +49,7 @@ DATABASE DB = FILENAME "ODS.RDB";
 
 Constant* Constant::lookup(thread_db* tdbb, MetaId id)
 {
-	Constant* constant = MetadataCache::get(tdbb)->getConstant(tdbb, id);
-	return constant;
+	return MetadataCache::getVersioned<Cached::Constant>(tdbb, id, CacheFlag::AUTOCREATE);;
 }
 
 Constant* Constant::lookup(thread_db* tdbb, const QualifiedName& name, ObjectBase::Flag flags)

@@ -2359,7 +2359,12 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			EVL_field(0, rpb->rpb_record, f_const_id, &desc2);
 			id = MOV_get_long(tdbb, &desc2, 0);
 
-			Constant::lookup(tdbb, id);
+			{
+				[[maybe_unused]]
+				auto constant =  Constant::lookup(tdbb, id);
+				fb_assert(constant);
+			}
+
 			DFW_post_work(transaction, dfw_delete_package_constant, &desc, &schemaDesc, id, object_name.package);
 			break;
 
