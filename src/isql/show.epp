@@ -118,6 +118,8 @@ static processing_state show_trigger(const std::optional<QualifiedMetaString>& n
 static processing_state show_users();
 static processing_state show_users12();
 static processing_state show_wireStats();
+static processing_state show_constants(const std::optional<QualifiedMetaString>& name, const char* msg = nullptr);
+static processing_state show_constant(const SCHAR* constantName);
 
 const char* const spaces = "                                ";
 static TEXT Print_buffer[512];
@@ -2569,6 +2571,11 @@ processing_state SHOW_metadata(const FrontendParser::AnyShowNode& node)
 		[](const FrontendParser::ShowWireStatsNode&)
 		{
 			return show_wireStats();
+		},
+
+		[](const FrontendParser::ShowConstantsNode& node)
+		{
+			return show_constants(node.name);
 		},
 
 		[](auto& arg)
@@ -6732,6 +6739,151 @@ static processing_state show_wireStats()
 	IsqlWireStats stats(DB);
 	if (!stats.print(true))
 		return ps_ERR;
+
+	return SKIP;
+}
+
+static void print_constant_type(const char* fieldName, const char* schemaName)
+{
+	FOR FLD IN RDB$FIELDS WITH
+		FLD.RDB$SCHEMA_NAME EQ schemaName AND
+		FLD.RDB$FIELD_NAME EQ fieldName
+	{
+		// Decide if this is a user-created domain
+		if (!fb_utils::implicit_domain(FLD.RDB$FIELD_NAME) || FLD.RDB$SYSTEM_FLAG == 1)
+		{
+			fb_utils::exact_name(FLD.RDB$FIELD_NAME);
+			isqlGlob.printf("%s) ", FLD.RDB$FIELD_NAME);
+		}
+
+		const QualifiedMetaString domainName(FLD.RDB$FIELD_NAME, FLD.RDB$SCHEMA_NAME);
+		if (!ISQL_printNumericType(domainName, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE,
+				FLD.RDB$FIELD_PRECISION, FLD.RDB$FIELD_SCALE))
+		{
+			return;
+		}
+
+		// Use RDB$CHARACTER_LENGTH instead of RDB$FIELD_LENGTH
+		//   FSG 19.Nov.2000
+		if ((FLD.RDB$FIELD_TYPE == blr_text || FLD.RDB$FIELD_TYPE == blr_varying) &&
+			!FLD.RDB$CHARACTER_LENGTH.NULL)
+		{
+			isqlGlob.printf("(%d)", FLD.RDB$CHARACTER_LENGTH);
+		}
+
+		// Show international character sets and collations
+
+		SSHORT char_set_id = 0;
+		if (!FLD.RDB$CHARACTER_SET_ID.NULL)
+			char_set_id = FLD.RDB$CHARACTER_SET_ID;
+
+		SSHORT collation = 0;
+		if (!FLD.RDB$COLLATION_ID.NULL)
+			collation = FLD.RDB$COLLATION_ID;
+
+		if (((FLD.RDB$FIELD_TYPE == blr_text ||
+			FLD.RDB$FIELD_TYPE == blr_varying) && FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_binary) ||
+			FLD.RDB$FIELD_TYPE == blr_blob && FLD.RDB$FIELD_SUB_TYPE == isc_blob_text)
+			show_charsets(char_set_id, collation);
+
+
+		if (fb_utils::implicit_domain(FLD.RDB$FIELD_NAME) && !FLD.RDB$DEFAULT_SOURCE.NULL)
+		{
+			isqlGlob.printf(" ");
+			SHOW_print_metadata_text_blob(isqlGlob.Out, &FLD.RDB$DEFAULT_SOURCE);
+		}
+	}
+	END_FOR
+	ON_ERROR
+		ISQL_errmsg (fbStatus);
+	END_ERROR;
+}
+
+static processing_state show_constants(const std::optional<QualifiedMetaString>& name, const char* msg)
+{
+	bool first = true;
+
+	if (name.has_value())
+	{
+		const QualifiedMetaString& constant = name.value();
+
+		FOR CONST IN RDB$CONSTANTS WITH
+			CONST.RDB$SCHEMA_NAME EQ constant.schema.c_str() AND
+			CONST.RDB$PACKAGE_NAME EQ constant.package.c_str() AND
+			CONST.RDB$CONSTANT_NAME EQ constant.object.c_str()
+			SORTED BY CONST.RDB$CONSTANT_NAME
+		{
+			bool isPrivate = !CONST.RDB$PRIVATE_FLAG.NULL && CONST.RDB$PRIVATE_FLAG;
+			const char* type = isPrivate ? "BODY" : "HEADER";
+
+			if (first && msg)
+				isqlGlob.printf("%s%s", msg, NEWLINE);
+
+			first = false;
+			show_constant(constant.object.c_str());
+		}
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return ps_ERR;
+		END_ERROR;
+
+		return SKIP;
+	}
+
+	// All constants
+
+	FOR CONST IN RDB$CONSTANTS
+		SORTED BY CONST.RDB$CONSTANT_NAME
+		bool isPrivate = !CONST.RDB$PRIVATE_FLAG.NULL && CONST.RDB$PRIVATE_FLAG;
+	{
+		const char* type = isPrivate ? "BODY" : "HEADER";
+
+		if (first && msg)
+			isqlGlob.printf("%s%s", msg, NEWLINE);
+
+		first = false;
+		fb_utils::exact_name(CONST.RDB$CONSTANT_NAME);
+		show_constant(CONST.RDB$CONSTANT_NAME);
+
+	}
+	END_FOR
+	ON_ERROR
+		ISQL_errmsg(fbStatus);
+		return ps_ERR;
+	END_ERROR;
+
+	return SKIP;
+}
+
+static processing_state show_constant(const SCHAR* constantName)
+{
+	FOR CONST IN RDB$CONSTANTS
+		WITH CONST.RDB$CONSTANT_NAME EQ constantName
+			SORTED BY CONST.RDB$CONSTANT_NAME
+	{
+		bool isPrivate = !CONST.RDB$PRIVATE_FLAG.NULL && CONST.RDB$PRIVATE_FLAG;
+
+		if (!CONST.RDB$PACKAGE_NAME.NULL)
+		{
+			MetaString packageName(CONST.RDB$PACKAGE_NAME);
+			isqlGlob.printf("%s (%s %s)%-20s", constantName, packageName.c_str(), isPrivate ? "BODY" : "HEADER", " ");
+		}
+		else
+			isqlGlob.printf("%-20s", constantName);
+
+		fb_utils::exact_name(CONST.RDB$FIELD_SOURCE);
+		fb_utils::exact_name(CONST.RDB$SCHEMA_NAME);
+		print_constant_type(CONST.RDB$FIELD_SOURCE, CONST.RDB$SCHEMA_NAME);
+
+		isqlGlob.printf(NEWLINE);
+
+	}
+	END_FOR
+	ON_ERROR
+		ISQL_errmsg(fbStatus);
+		return ps_ERR;
+	END_ERROR;
 
 	return SKIP;
 }

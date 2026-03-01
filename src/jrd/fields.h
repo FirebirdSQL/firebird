@@ -239,3 +239,8 @@
 	FIELD(fld_text_max		, nam_text_max		, dtype_varying, MAX_VARY_COLUMN_SIZE / METADATA_BYTES_PER_CHAR * METADATA_BYTES_PER_CHAR, dsc_text_type_metadata, NULL, true, ODS_14_0)
 
 	FIELD(fld_tab_type		, nam_mon_tab_type	, dtype_varying	, 32						, dsc_text_type_ascii		, NULL		, true		, ODS_14_0)
+
+	FIELD(fld_const_name	, nam_const_name	, dtype_varying	, MAX_SQL_IDENTIFIER_LEN	, dsc_text_type_metadata	, NULL		, false		, ODS_13_1)
+	FIELD(fld_const_id		, nam_const_id		, dtype_long	, sizeof(SLONG)				, 0							, NULL		, true		, ODS_14_0)
+	FIELD(fld_const_blr		, nam_const_blr		, dtype_blob	, BLOB_SIZE					, isc_blob_blr				, NULL		, true		, ODS_13_1)
+	FIELD(fld_const_source	, nam_const_source	, dtype_blob	, BLOB_SIZE					, isc_blob_text				, NULL		, true		, ODS_13_1)

@@ -538,6 +538,11 @@ enum dfw_t : int {
 	dfw_set_generator,
 	dfw_change_repl_state,
 
+	// Package constant
+	dfw_create_package_constant,
+	dfw_modify_package_constant,
+	dfw_delete_package_constant,
+
 	// deferred works argument types
 	dfw_arg_proc_name,		// procedure name for dfw_delete_prm, mandatory
 	dfw_arg_check_blr,		// check if BLR is still compilable

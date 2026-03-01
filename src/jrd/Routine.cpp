@@ -134,6 +134,9 @@ void Routine::setStatement(Statement* value)
 			statement->function = static_cast<Function*>(this);
 			break;
 
+		case obj_package_constant:
+			break;
+
 		default:
 			fb_assert(false);
 			break;

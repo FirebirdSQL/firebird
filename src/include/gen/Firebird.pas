@@ -5955,6 +5955,14 @@ const
 	 isc_no_user_att_while_restore = 335545318;
 	 isc_genseq_stepmustbe_nonzero = 335545319;
 	 isc_argmustbe_exact_function = 335545320;
+	 isc_not_defined_constant = 335545321;
+	 isc_const_name = 335545322;
+	 isc_private_constant = 335545323;
+	 isc_package_alias_help = 335545324;
+	 isc_bad_constant_blr_error = 335545325;
+	 isc_bad_constant_type_error = 335545326;
+	 isc_bad_constant_name = 335545327;
+	 isc_bad_constant_type = 335545328;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;
@@ -6219,6 +6227,10 @@ const
 	 isc_gbak_invalid_data = 336331094;
 	 isc_gbak_inv_bkup_ver2 = 336331096;
 	 isc_gbak_db_format_too_old2 = 336331100;
+	 isc_gbak_writing_constants = 336331175;
+	 isc_gbak_writing_constant = 336331176;
+	 isc_gbak_constant = 336331177;
+	 isc_gbak_restoring_constant = 336331178;
 	 isc_dsql_too_old_ods = 336397205;
 	 isc_dsql_table_not_found = 336397206;
 	 isc_dsql_view_not_found = 336397207;
@@ -6355,6 +6367,9 @@ const
 	 isc_dsql_recreate_schema_failed = 336397338;
 	 isc_dsql_alter_schema_failed = 336397339;
 	 isc_dsql_create_alter_schema_failed = 336397340;
+	 isc_dsql_create_const_failed = 336397341;
+	 isc_dsql_alter_const_failed = 336397342;
+	 isc_dsql_create_alter_const_failed = 336397343;
 	 isc_gsec_cant_open_db = 336723983;
 	 isc_gsec_switches_error = 336723984;
 	 isc_gsec_no_op_spec = 336723985;

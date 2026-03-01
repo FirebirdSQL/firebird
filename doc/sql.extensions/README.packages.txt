@@ -19,13 +19,17 @@ Syntax:
 
     <package_item> ::=
         <function_decl> ; |
-        <procedure_decl> ;
+        <procedure_decl> ; |
+        <constant_decl> ;
 
     <function_decl> ::=
         FUNCTION <name> [( <parameters> )] RETURNS <type>
 
     <procedure_decl> ::=
         PROCEDURE <name> [( <parameters> ) [RETURNS ( <parameters> )]]
+
+    <constant_decl> ::=
+        CONSTANT <name> <type> = <constant expression>
 
     <package_body> ::=
         { CREATE [OR ALTER] | ALTER | RECREATE } PACKAGE BODY <name>
@@ -37,7 +41,8 @@ Syntax:
 
     <package_body_item> ::=
         <function_impl> |
-        <procedure_impl>
+        <procedure_impl> |
+        <constant_decl>
 
     <function_impl> ::=
         FUNCTION <name> [( <parameters> )] RETURNS <type>
@@ -75,7 +80,7 @@ Objectives:
       1) The grouping is not represented in the database metadata.
       2) They all participate in a flat namespace and all routines are callable by everyone (not
          talking about security permissions here).
-    
+
     - Facilitate dependency tracking between its internal routines and between other packaged and
       unpackaged routines.
 
@@ -90,8 +95,16 @@ Objectives:
       tables that the package body depends on that object. If you want to, for example, drop that
       object, you first need to remove who depends on it. As who depends on it is a package body,
       you can just drop it even if some other database object depends on this package. When the body
-      is dropped, the header remains, allowing you to create its body again after changing it based 
+      is dropped, the header remains, allowing you to create its body again after changing it based
       on the object removal.
+
+      A package constant is a value initialized by a constant expression.
+      A constant expression is defined by a simple rule: its value does not change after recompilation.
+      Constants declared in the package specification are publicly visible and can be referenced using
+      the [<schema>.]<package>.<constant_name> notation.
+      Constants declared in the package body are private and cannot be accessed from outside the package.
+      However, they can be referenced directly by <constant_name> within <procedure_impl> and <function_impl>.
+      Header constants can also be used directly with just the name for package body elements.
 
     - Facilitate permission management.
 

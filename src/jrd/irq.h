@@ -126,6 +126,7 @@ enum irq_type_t
 	irq_m_fields7,			// process a modification of RDB$FIELDS for functions
 	irq_m_fields8,			// process a modification of RDB$FIELDS for functions (TYPE OF COLUMN)
 	irq_m_fields9,			// process a modification of RDB$FIELDS for packaged functions (TYPE OF COLUMN)
+	irq_m_fields10,			// process a modification of RDB$FIELDS for packaged constants (TYPE OF COLUMN)
 	irq_l_relfield,			// lookup a relation field
 	irq_verify_trusted_role, // ensure trusted role exists
 
@@ -178,7 +179,6 @@ enum irq_type_t
 	irq_index_id_erase,		// cleanup index ID
 	irq_get_index_by_name,	// find appropriate index
 	irq_l_index_cnstrt,     // lookup index for constraint
-
 	irq_MAX
 };
 

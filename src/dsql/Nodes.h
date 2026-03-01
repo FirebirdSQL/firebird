@@ -234,6 +234,18 @@ public:
 		DdlTriggerWhen when, int action, const QualifiedName& objectName,
 		const QualifiedName& oldNewObjectName, const Firebird::string& sqlText);
 
+	// Update RDB$FIELDS received by reference.
+	static void updateRdbFields(const Jrd::TypeClause* type,
+		SSHORT& fieldType,
+		SSHORT& fieldLength,
+		SSHORT& fieldSubTypeNull, SSHORT& fieldSubType,
+		SSHORT& fieldScaleNull, SSHORT& fieldScale,
+		SSHORT& characterSetIdNull, SSHORT& characterSetId,
+		SSHORT& characterLengthNull, SSHORT& characterLength,
+		SSHORT& fieldPrecisionNull, SSHORT& fieldPrecision,
+		SSHORT& collationIdNull, SSHORT& collationId,
+		SSHORT& segmentLengthNull, SSHORT& segmentLength);
+
 protected:
 	typedef Firebird::Pair<Firebird::Left<MetaName, bid> > MetaNameBidPair;
 	typedef Firebird::GenericMap<MetaNameBidPair> MetaNameBidMap;
@@ -519,6 +531,7 @@ public:
 		TYPE_WINDOW_CLAUSE,
 		TYPE_WINDOW_CLAUSE_FRAME,
 		TYPE_WINDOW_CLAUSE_FRAME_EXTENT,
+		TYPE_REFERENCE,
 
 		// Bool types
 		TYPE_BINARY_BOOL,
@@ -688,8 +701,16 @@ public:
 	// Verify if this node is allowed in an unmapped boolean.
 	virtual bool unmappable(const MapNode* mapNode, StreamType shellStream) const;
 
+	// Check if expression returns constant result
+	virtual bool constant() const
+	{
+		return false;
+	}
+
 	// Return all streams referenced by the expression.
 	virtual void collectStreams(SortedStreamList& streamList) const;
+
+	bool isChildrenConstant() const;
 
 	bool containsStream(StreamType stream, bool only = false) const
 	{

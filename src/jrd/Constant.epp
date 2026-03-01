@@ -1,0 +1,518 @@
+/*
+ *	PROGRAM:		Firebird CONSTANTS implementation.
+ *	MODULE:			Constant.epp
+ *	DESCRIPTION:	Routine to cache and reload constants
+ *
+ *  The contents of this file are subject to the Initial
+ *  Developer's Public License Version 1.0 (the "License");
+ *  you may not use this file except in compliance with the
+ *  License. You may obtain a copy of the License at
+ *  http://www.ibphoenix.com/main.nfs?a=ibphoenix&page=ibp_idpl.
+ *
+ *  Software distributed under the License is distributed AS IS,
+ *  WITHOUT WARRANTY OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing rights
+ *  and limitations under the License.
+ *
+ *  The Original Code was created by Artyom Abakumov
+ *  <artyom.abakumov (at) red-soft.ru> for Red Soft Corporation.
+ *
+ *  Copyright (c) 2025 Red Soft Corporation <info (at) red-soft.ru>
+ *  and all contributors signed below.
+ *
+ *  All Rights Reserved.
+ *  Contributor(s): ______________________________________.
+ */
+
+#include "firebird.h"
+#include "../jrd/Constant.h"
+
+#include "../jrd/tra.h"
+#include "../jrd/exe_proto.h"
+#include "../jrd/dfw_proto.h"
+#include "../common/dsc_proto.h"
+#include "../jrd/met_proto.h"
+#include "../jrd/met.h"
+#include "../jrd/Statement.h" // Statement
+#include "../jrd/par_proto.h" // PAR_blr
+
+#include "../jrd/cvt_proto.h" // CVT_get_string_ptr
+#include "../jrd/mov_proto.h" // MOV_get_string_ptr
+#include "../common/classes/VaryStr.h"
+
+using namespace Firebird;
+using namespace Jrd;
+
+DATABASE DB = FILENAME "ODS.RDB";
+
+//----------------------
+
+Constant* Constant::lookup(thread_db* tdbb, MetaId id)
+{
+	return MetadataCache::getVersioned<Cached::Constant>(tdbb, id, CacheFlag::AUTOCREATE);;
+}
+
+Constant* Constant::lookup(thread_db* tdbb, const QualifiedName& name, ObjectBase::Flag flags)
+{
+	return MetadataCache::getVersioned<Cached::Constant>(tdbb, name, flags);
+}
+
+Constant* Constant::create(thread_db* tdbb, MemoryPool& pool, Cached::Constant* perm)
+{
+	return FB_NEW_POOL(perm->getPool()) Constant(perm);
+}
+
+
+ScanResult Constant::scan(thread_db* tdbb, ObjectBase::Flag flags)
+{
+	Attachment* attachment = tdbb->getAttachment();
+	jrd_tra* metaTransaction = attachment->getMetaTransaction(tdbb);
+	Database* dbb = tdbb->getDatabase();
+
+	MemoryPool& pool = getPermanent()->getPool();
+	bool found = false;
+
+	//try
+	{
+		static const CachedRequestId requestId;
+		AutoCacheRequest requestConst(tdbb, requestId);
+
+		FOR(REQUEST_HANDLE requestConst TRANSACTION_HANDLE metaTransaction)
+			CONST IN RDB$CONSTANTS
+			WITH CONST.RDB$CONSTANT_ID EQ this->getId()
+		{
+			found = true;
+
+			getPermanent()->setName(QualifiedName(CONST.RDB$CONSTANT_NAME, CONST.RDB$SCHEMA_NAME,
+				(CONST.RDB$PACKAGE_NAME.NULL ? nullptr : CONST.RDB$PACKAGE_NAME)));
+
+			MetaName owner;
+			TriState ssDefiner;
+			if (!CONST.RDB$PACKAGE_NAME.NULL)
+			{
+				static const CachedRequestId requestId;
+				AutoCacheRequest requestHandle(tdbb, requestId);
+
+				FOR (REQUEST_HANDLE requestHandle)
+					PKG IN RDB$PACKAGES
+					CROSS SCH IN RDB$SCHEMAS WITH
+						PKG.RDB$SCHEMA_NAME EQ CONST.RDB$SCHEMA_NAME AND
+						PKG.RDB$PACKAGE_NAME EQ CONST.RDB$PACKAGE_NAME
+				{
+
+					owner = PKG.RDB$OWNER_NAME;
+
+					if (!PKG.RDB$SECURITY_CLASS.NULL)
+					{
+						getPermanent()->setSecurityName(QualifiedName(PKG.RDB$SECURITY_CLASS, SCH.RDB$SECURITY_CLASS));
+					}
+
+					// SQL SECURITY of function must be the same if it's defined in package
+					if (!PKG.RDB$SQL_SECURITY.NULL)
+						ssDefiner = (bool) PKG.RDB$SQL_SECURITY;
+				}
+				END_FOR
+			}
+
+			if (!ssDefiner.isAssigned())
+			{
+				ssDefiner = MET_get_ss_definer(tdbb, CONST.RDB$SCHEMA_NAME);
+			}
+
+			if (ssDefiner.asBool())
+				invoker = dbb->getUserId(getPermanent()->owner);
+
+			if ((flags & CacheFlag::MINISCAN) == 0)
+				makeValue(tdbb, attachment, CONST.RDB$CONSTANT_BLR);
+			else
+				this->flReload = true; // Call makeValue in reload
+		}
+		END_FOR
+	}
+
+	return found ? (this->flReload ? ScanResult::REPEAT : ScanResult::COMPLETE) : ScanResult::MISS;
+}
+
+
+std::optional<MetaId> Constant::getIdByName(thread_db* tdbb, const QualifiedName& name)
+{
+	SET_TDBB(tdbb);
+	Attachment* attachment = tdbb->getAttachment();
+	std::optional<MetaId> id;
+
+	static const CachedRequestId requestId;
+	AutoCacheRequest request(tdbb, requestId);
+
+	FOR (REQUEST_HANDLE request)
+		CONST IN RDB$CONSTANTS
+		WITH CONST.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			CONST.RDB$PACKAGE_NAME EQ name.package.c_str() AND
+			CONST.RDB$CONSTANT_NAME EQ name.object.c_str()
+	{
+		id = CONST.RDB$CONSTANT_ID;
+	}
+	END_FOR
+
+	return id;
+}
+
+ScanResult Constant::reload(thread_db* tdbb, ObjectBase::Flag)
+{
+	Attachment* attachment = tdbb->getAttachment();
+	Database* dbb = tdbb->getDatabase();
+	jrd_tra* metaTransaction = attachment->getMetaTransaction(tdbb);
+
+	static const CachedRequestId requestId;
+	AutoCacheRequest request(tdbb, requestId);
+
+	bool found = false;
+
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
+		CONST IN RDB$CONSTANTS
+		WITH CONST.RDB$CONSTANT_ID EQ this->getId()
+	{
+
+		if (compiling)
+		{
+			fb_assert(false);
+			return ScanResult::REPEAT;
+		}
+
+		found = true;
+		makeValue(tdbb, attachment, CONST.RDB$CONSTANT_BLR);
+	}
+	END_FOR
+
+	return found ? ScanResult::COMPLETE : ScanResult::MISS;
+}
+
+int Constant::objectType()
+{
+	return obj_package_constant;
+}
+
+void Constant::checkReload(thread_db* tdbb) const
+{
+	if (flReload)
+		getPermanent()->reload(tdbb, 0);
+}
+
+
+class DropConstantSavepoint
+{
+public:
+	DropConstantSavepoint(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& name) :
+		m_savePoint(tdbb, transaction),
+		m_tdbb(tdbb)
+	{
+		MetadataCache::getVersioned<Cached::Constant>(tdbb, name, CacheFlag::OLD_DROP);
+	}
+
+	DropConstantSavepoint(thread_db* tdbb, jrd_tra* transaction) :
+		m_savePoint(tdbb, transaction),
+		m_tdbb(tdbb)
+	{
+	}
+
+	inline void setFound(const MetaId id) noexcept
+	{
+		m_id = id;
+		m_found = true;
+	}
+
+	void release()
+	{
+		fb_assert(m_found);
+		if (m_found)
+			MetadataCache::erase<Cached::Constant>(m_tdbb, m_id);
+
+		m_savePoint.release();
+	}
+
+private:
+	AutoSavePoint m_savePoint;
+	thread_db* m_tdbb;
+	MetaId m_id{};
+	bool m_found = false;
+};
+
+void Constant::drop(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& name)
+{
+	// Run all statements under savepoint control
+	DropConstantSavepoint savePoint(tdbb, transaction, name);
+
+	static const CachedRequestId requestId;
+	AutoCacheRequest request(tdbb, requestId);
+
+	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		CONST IN RDB$CONSTANTS
+		WITH CONST.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			CONST.RDB$PACKAGE_NAME EQ name.package.c_str() AND
+			CONST.RDB$CONSTANT_NAME EQ name.object.c_str()
+	{
+		savePoint.setFound(CONST.RDB$CONSTANT_ID);
+
+		ERASE CONST;
+	}
+	END_FOR
+
+	savePoint.release();	// everything is ok
+}
+
+void Constant::dropAllFromPackage(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& parent, bool privateFlag)
+{
+	static const CachedRequestId requestId;
+	AutoCacheRequest eraseConstantRequest(tdbb, requestId);
+	FOR (REQUEST_HANDLE eraseConstantRequest TRANSACTION_HANDLE transaction)
+			CONST IN RDB$CONSTANTS
+			WITH CONST.RDB$SCHEMA_NAME EQ parent.schema.c_str() AND
+				CONST.RDB$PACKAGE_NAME EQ parent.object.c_str() AND
+				CONST.RDB$PRIVATE_FLAG EQ privateFlag
+	{
+		DropConstantSavepoint savePoint(tdbb, transaction, QualifiedName(CONST.RDB$CONSTANT_NAME, parent.schema, parent.object));
+		savePoint.setFound(CONST.RDB$CONSTANT_ID);
+
+		ERASE CONST;
+
+		savePoint.release();	// everything is ok
+	}
+	END_FOR
+}
+
+dsc Constant::getDesc(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& name)
+{
+	dsc desc{};
+	bool succeed = false;
+
+	FbLocalStatus status;
+	static const CachedRequestId requestId;
+	AutoCacheRequest getConstantDscRequest(tdbb, requestId);
+	FOR(REQUEST_HANDLE getConstantDscRequest TRANSACTION_HANDLE transaction)
+		CONST IN RDB$CONSTANTS CROSS FLD IN RDB$FIELDS
+			WITH CONST.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+				CONST.RDB$PACKAGE_NAME EQ name.package.c_str() AND
+				CONST.RDB$CONSTANT_NAME EQ name.object.c_str() AND
+				FLD.RDB$SCHEMA_NAME EQ CONST.RDB$SCHEMA_NAME AND
+				FLD.RDB$FIELD_NAME EQ CONST.RDB$FIELD_SOURCE
+
+		succeed = DSC_make_descriptor(&desc,
+								FLD.RDB$FIELD_TYPE,
+								FLD.RDB$FIELD_SCALE,
+								FLD.RDB$FIELD_LENGTH,
+								FLD.RDB$FIELD_SUB_TYPE,
+								CSetId(FLD.RDB$CHARACTER_SET_ID),
+								CollId(FLD.RDB$COLLATION_ID));
+	END_FOR
+
+	if (!succeed)
+		(Arg::Gds(isc_bad_constant_type_error) << Arg::Str(name.toQuotedString())).raise();
+
+	return desc;
+}
+
+static dsc* executeConstantExpressionWithRequest(thread_db* tdbb, CompilerScratch* csb)
+{
+	Statement* statement = Statement::makeStatement(tdbb, csb, true);
+
+	Request* request = statement->makeRootRequest(tdbb);
+	{
+		Attachment* attachment = tdbb->getAttachment();
+		jrd_tra* transaction = tdbb->getTransaction();
+
+		tdbb->setRequest(request);
+		request->setUsed();
+		request->setAttachment(attachment);
+		attachment->att_requests.add(request);
+
+		TRA_attach_request(transaction, request);
+	}
+
+
+	{ // Execute constant expr
+		ValueExprNode* valueNode = static_cast<ValueExprNode*>(csb->csb_node); // csb_node is the same as MET_parse_blob output
+		return EVL_expr(tdbb, request, valueNode);
+	}
+}
+
+static void executeConstantExpression(thread_db* tdbb, CompilerScratch* csb, MemoryPool& pool, impure_value& value)
+{
+	Statement* statement = Statement::makeStatement(tdbb, csb, true);
+
+	Request* request = statement->makeRootRequest(tdbb);
+
+	const dsc* temp = EVL_expr(tdbb, request, static_cast<LiteralNode*>(csb->csb_node));
+
+	EVL_make_value(tdbb, temp, &value, &pool);
+	statement->release(tdbb);
+}
+
+
+// Convert a literalNode-unsupported constant type to a supported one if necessary
+static void genConstantCompatibleBlr(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, const dsc& scalar)
+{
+	// Make the blr with only the LiteralNode
+	{
+		BlrWriter::BlrData& blr = dsqlScratch->getBlrData();
+		blr.clear();
+		dsqlScratch->getDebugData().clear();
+	}
+
+	dsqlScratch->appendUChar(dsqlScratch->isVersion4() ? blr_version4 : blr_version5);
+	// Convert a literalNode-unsupported constant type to a supported one if necessary
+	switch (scalar.dsc_dtype)
+	{
+		case dtype_varying:
+		case dtype_cstring:
+		{
+			// Convert to dtype_text
+			TTypeId ttype;
+			UCHAR* ptr;
+			auto& status = tdbb->getAttachment()->att_dec_status;
+			const USHORT len = CVT_get_string_ptr(&scalar, &ttype, &ptr, nullptr, 0, status);
+
+			dsc text;
+			text.makeText(len, ttype, ptr);
+			LiteralNode::genConstant(dsqlScratch, &text, false);
+			break;
+		}
+		case dtype_real:
+		{
+			double newValue = *(float*) scalar.dsc_address;
+
+			dsc descForDouble{};
+			descForDouble.makeDouble();
+
+			UCHAR* ptr;
+			VaryStr<TEMP_STR_LENGTH> temp;
+			TTypeId ttype;
+			ULONG len = MOV_get_string_ptr(tdbb, &scalar, &ttype, &ptr, &temp, sizeof(temp));
+
+			descForDouble.dsc_address = ptr;
+
+			LiteralNode::genConstant(dsqlScratch, &descForDouble, false, len);
+			break;
+		}
+		case dtype_dec64: // dtype_dec64 is not present in LiteralNode::genConstant
+		case dtype_double: // MOV_move stores double in scalar->dsc_address. Convert it to string to use genConstant
+		case dtype_dec128:
+		{
+			dsc descForDouble{};
+			descForDouble.makeDecimal128();
+
+			UCHAR* ptr;
+			VaryStr<TEMP_STR_LENGTH> temp;
+			TTypeId ttype;
+			ULONG len = MOV_get_string_ptr(tdbb, &scalar, &ttype, &ptr, &temp, sizeof(temp));
+
+			descForDouble.dsc_address = ptr;
+
+			LiteralNode::genConstant(dsqlScratch, &descForDouble, false, len);
+			break;
+		}
+		case dtype_int128:
+		{
+			dsc descForInt128{};
+			descForInt128.makeInt128(scalar.dsc_scale);
+
+			UCHAR* ptr;
+			VaryStr<TEMP_STR_LENGTH> temp;
+			TTypeId ttype;
+			ULONG len = MOV_get_string_ptr(tdbb, &scalar, &ttype, &ptr, &temp, sizeof(temp));
+
+			descForInt128.dsc_address = ptr;
+
+			LiteralNode::genConstant(dsqlScratch, &descForInt128, false, len);
+			break;
+		}
+		case dtype_blob: // Blob ID will be lost
+			status_exception::raise(Arg::Gds(isc_bad_constant_type) << scalar.typeToText());
+			break;
+		default:
+			LiteralNode::genConstant(dsqlScratch, &scalar, false);
+			break;
+	}
+	dsqlScratch->appendUChar(blr_eoc);
+}
+
+void Constant::genConstantBlr(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+	ValueExprNode* constExpr, dsql_fld* type, const MetaName& schema)
+{
+	{ // Prepare BLR writer
+		BlrWriter::BlrData& blr = dsqlScratch->getBlrData();
+		blr.clear();
+		dsqlScratch->getDebugData().clear();
+	}
+
+	// Gen blr into dsqlScratch
+	AutoMemoryPool tempPool(MemoryPool::createPool(ALLOC_ARGS0));
+	CastNode cast(*tempPool, constExpr, type);
+	{
+		dsqlScratch->appendUChar(dsqlScratch->isVersion4() ? blr_version4 : blr_version5);
+		cast.genBlr(dsqlScratch);
+		dsqlScratch->appendUChar(blr_eoc);
+	}
+
+	Attachment* attachment = tdbb->getAttachment();
+	MemoryPool* csb_pool = attachment->att_database->createPool(ALLOC_ARGS0);
+	ContextPoolHolder context(tdbb, csb_pool);
+
+	CompilerScratch* csb = nullptr;
+	Cleanup cc([&tdbb, requestToRestore = tdbb->getRequest(), &csb]()
+		{
+			delete csb;
+			tdbb->setRequest(requestToRestore);
+		});
+
+	// Parse BLR for constant expression
+	PAR_blr(tdbb, &schema, nullptr,
+		dsqlScratch->getBlrData().begin(), dsqlScratch->getBlrData().getCount(),
+		nullptr, &csb,
+		nullptr, false, 0);
+
+	// Execute node from BLR
+	auto output = executeConstantExpressionWithRequest(tdbb, csb);
+	if (output != nullptr)
+		genConstantCompatibleBlr(tdbb, dsqlScratch, *output);
+}
+
+void Constant::makeValue(thread_db* tdbb, Attachment* attachment, bid blob_id)
+{
+	m_value = {};
+
+	MemoryPool* csb_pool = nullptr;
+	try
+	{
+		csb_pool = attachment->att_database->createPool(ALLOC_ARGS0);
+		ContextPoolHolder context(tdbb, csb_pool);
+
+		try
+		{
+			CompilerScratch* csb = nullptr;
+			Cleanup cc([csb]() {delete csb;});
+
+			{ // blr
+				flReload = false;
+				MET_parse_blob(tdbb, &getName().schema, nullptr, &blob_id, &csb, nullptr, false, false);
+
+				fb_assert(csb != nullptr);
+				flReload = (csb->csb_g_flags & csb_reload);
+			}
+
+			executeConstantExpression(tdbb, csb, getPermanent()->getPool(), m_value);
+		}
+		catch (const Exception& ex)
+		{
+			StaticStatusVector temp_status;
+			ex.stuffException(temp_status);
+
+			const string name = this->getName().toQuotedString();
+			(Arg::Gds(isc_bad_constant_blr_error) << Arg::Str(name)
+				<< Arg::StatusVector(temp_status.begin())).raise();
+		}
+	}
+	catch (const Exception&)
+	{
+		attachment->att_database->deletePool(csb_pool);
+		throw;
+	}
+}

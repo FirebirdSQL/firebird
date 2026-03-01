@@ -289,3 +289,6 @@ FB_IMPL_MSG(SQLERR, 1049, dsql_drop_schema_failed, -901, "42", "000", "DROP SCHE
 FB_IMPL_MSG(SQLERR, 1050, dsql_recreate_schema_failed, -901, "42", "000", "RECREATE SCHEMA @1 failed")
 FB_IMPL_MSG(SQLERR, 1051, dsql_alter_schema_failed, -901, "42", "000", "ALTER SCHEMA @1 failed")
 FB_IMPL_MSG(SQLERR, 1052, dsql_create_alter_schema_failed, -901, "42", "000", "CREATE OR ALTER SCHEMA @1 failed")
+FB_IMPL_MSG(SQLERR, 1053, dsql_create_const_failed, -901, "42", "000", "CREATE CONSTANT @1 failed")
+FB_IMPL_MSG(SQLERR, 1054, dsql_alter_const_failed, -901, "42", "000", "ALTER CONSTANT @1 failed")
+FB_IMPL_MSG(SQLERR, 1055, dsql_create_alter_const_failed, -901, "42", "000", "CREATE OR ALTER CONSTANT @1 failed")

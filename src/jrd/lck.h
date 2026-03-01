@@ -67,6 +67,7 @@ enum lck_t : UCHAR {
 	LCK_idx_rescan,				// Index rescan lock
 	LCK_prc_rescan,				// Procedure rescan lock
 	LCK_fun_rescan,				// Function existence lock
+	LCK_constant_rescan,		// Constant existence lock
 	LCK_rel_partners,			// Relation partners lock
 	LCK_crypt,					// Crypt lock for single crypt thread
 	LCK_crypt_status,			// Notifies about changed database encryption status

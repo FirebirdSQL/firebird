@@ -133,6 +133,9 @@
 #include "../jrd/shut_proto.h"
 #include "../jrd/ProtectRelations.h"
 
+#include "../jrd/Constant.h"
+#include "../dsql/metd_proto.h"
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -464,6 +467,9 @@ static ISC_STATUS getErrorCodeByObjectType(int obj_type)
 	case obj_package_header:
 	case obj_package_body:
 		err_code = isc_package_name;
+		break;
+	case obj_package_constant:
+		err_code = isc_const_name;
 		break;
 	default:
 		fb_assert(false);
@@ -938,6 +944,21 @@ namespace
 		static void checkParamDependencies(thread_db* tdbb, DeferredWork* work, jrd_tra* transaction);
 	};
 
+	class ConstantManager : public RoutineManager<ConstantManager, Cached::Constant, obj_package_constant,
+		MetadataCache::getPerm<Cached::Constant>, MetadataCache::getPerm<Cached::Constant>>
+	{
+	public:
+		static const char* getTypeStr()
+		{
+			return "constant";
+		}
+
+		static Routine* lookupBlobId(thread_db* tdbb, DeferredWork* work, bid& blobId, bool compile);
+		static void validate(thread_db* tdbb, jrd_tra* transaction, DeferredWork* work,
+			SSHORT validBlr);
+		static void checkParamDependencies(thread_db* tdbb, DeferredWork* work, jrd_tra* transaction);
+	};
+
 	// These methods cannot be defined inline, because GPRE generates wrong code.
 
 	Routine* FunctionManager::lookupBlobId(thread_db* tdbb, DeferredWork* work, bid& blobId,
@@ -1117,6 +1138,37 @@ namespace
 			ERR_post(status);
 		}
 	}
+
+	Routine* ConstantManager::lookupBlobId(thread_db* tdbb, DeferredWork* work, bid& blobId,
+		bool compile)
+	{
+		Jrd::Attachment* attachment = tdbb->getAttachment();
+		CachedRequestId constDpd;
+		AutoCacheRequest handle(tdbb, constDpd);
+		Constant* routine = nullptr;
+
+		FOR(REQUEST_HANDLE handle)
+			X IN RDB$CONSTANTS WITH
+				X.RDB$SCHEMA_NAME EQ work->dfw_schema.c_str() AND
+				X.RDB$CONSTANT_NAME EQ work->dfw_name.c_str() AND
+				X.RDB$PACKAGE_NAME EQUIV NULLIF(work->dfw_package.c_str(), "")
+		{
+			if (!X.RDB$CONSTANT_BLR.NULL)
+				blobId = X.RDB$CONSTANT_BLR;
+
+			routine = MetadataCache::getVersioned<Cached::Constant>(tdbb,
+				work->getQualifiedName(), compile ? 0 : CacheFlag::MINISCAN);
+		}
+		END_FOR
+
+		return routine;
+	}
+
+	void ConstantManager::validate(thread_db*, jrd_tra*, DeferredWork*, SSHORT)
+	{ }
+
+	void ConstantManager::checkParamDependencies(thread_db*, DeferredWork*, jrd_tra*)
+	{ }
 } // namespace
 
 static inline constexpr deferred_task task_table[] =
@@ -1170,6 +1222,9 @@ static inline constexpr deferred_task task_table[] =
 	{ dfw_clear_cache, clear_cache },
 	{ dfw_change_repl_state, change_repl_state },
 	{ dfw_set_statistics, set_statistics },
+	{ dfw_create_package_constant, ConstantManager::createRoutine },
+	{ dfw_modify_package_constant, ConstantManager::modifyRoutine },
+	{ dfw_delete_package_constant, ConstantManager::deleteRoutine },
 	{ dfw_null, NULL }
 };
 
@@ -2810,6 +2865,9 @@ static bool find_depend_in_dfw(thread_db*	tdbb,
 	case obj_udf:
 		dfw_type = dfw_delete_function;
 		break;
+	case obj_package_constant:
+		dfw_type = dfw_delete_package_constant;
+		break;
 	default:
 		fb_assert(false);
 		break;
@@ -2823,6 +2881,7 @@ static bool find_depend_in_dfw(thread_db*	tdbb,
 			(work->dfw_type == dfw_modify_procedure && dfw_type == dfw_delete_procedure) ||
 			(work->dfw_type == dfw_modify_field && dfw_type == dfw_delete_global) ||
 			(work->dfw_type == dfw_modify_trigger && dfw_type == dfw_delete_trigger) ||
+			(work->dfw_type == dfw_modify_package_constant && dfw_type == dfw_delete_package_constant) ||
 			(work->dfw_type == dfw_modify_function && dfw_type == dfw_delete_function)) &&
 			work->dfw_schema == object_name.schema &&
 			work->dfw_name == object_name.object.c_str() && work->dfw_package.isEmpty() &&

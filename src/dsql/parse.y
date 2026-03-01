@@ -723,6 +723,7 @@ using namespace Firebird;
 %token <metaNamePtr> TRUNCATE
 %token <metaNamePtr> UNLIST
 %token <metaNamePtr> WITHIN
+%token <metaNamePtr> CONSTANT
 
 // precedence declarations for expression evaluation
 
@@ -883,6 +884,7 @@ using namespace Firebird;
 	Jrd::SetBindNode* setBindNode;
 	Jrd::SessionResetNode* sessionResetNode;
 	Jrd::ForRangeNode::Direction forRangeDirection;
+	Jrd::CreatePackageConstantNode* createPackageConstantNode;
 }
 
 %include types.y
@@ -3172,6 +3174,8 @@ package_item
 		{ $$ = CreateAlterPackageNode::Item::create($2); }
 	| PROCEDURE procedure_clause_start ';'
 		{ $$ = CreateAlterPackageNode::Item::create($2); }
+	| CONSTANT package_const_item ';'
+		{ $$ = CreateAlterPackageNode::Item::create($2); }
 	;
 
 %type <createAlterPackageNode> alter_package_clause
@@ -3259,6 +3263,13 @@ replace_package_body_clause
 		{ $$ = newNode<RecreatePackageBodyNode>($1); }
 	;
 
+%type <createPackageConstantNode> package_const_item
+package_const_item
+	: symbol_package_const_name data_type_descriptor '=' value
+		{
+			$$ = newNode<CreatePackageConstantNode>(*$1, $2, $4);
+		}
+	;
 
 %type <createAlterSchemaNode> replace_schema_clause
 replace_schema_clause
@@ -6307,6 +6318,7 @@ ddl_type3
 	: PARAMETER				{ $$ = obj_parameter; }
 	| PROCEDURE PARAMETER	{ $$ = obj_procedure; }
 	| FUNCTION PARAMETER	{ $$ = obj_udf; }
+	| CONSTANT				{ $$ = obj_package_constant; }
 	;
 
 %type <intVal> ddl_type4
@@ -9824,6 +9836,11 @@ symbol_window_name
 	: valid_symbol_name
 	;
 
+%type <metaNamePtr> symbol_package_const_name
+symbol_package_const_name
+	: valid_symbol_name
+	;
+
 // symbols
 
 %type <qualifiedNamePtr> schema_opt_qualified_name
@@ -10144,6 +10161,7 @@ non_reserved_word
 	| SCHEMA
 	| UNLIST
 	| ERROR
+	| CONSTANT
 	;
 
 %%

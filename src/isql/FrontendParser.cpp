@@ -491,6 +491,7 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 	static constexpr std::string_view TOKEN_VIEWS("VIEWS");
 	static constexpr std::string_view TOKEN_WIRE_STATISTICS("WIRE_STATISTICS");
 	static constexpr std::string_view TOKEN_WIRE_STATS("WIRE_STATS");
+	static constexpr std::string_view TOKEN_CONSTANTS("CONSTANTS");
 
 	switch (const auto showCommandToken = lexer.getToken(); showCommandToken.type)
 	{
@@ -648,6 +649,8 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 					return ShowVersionNode();
 			}
 			else if (const auto parsed = parseShowOptQualifiedName<ShowViewsNode>(text, TOKEN_VIEWS, 4))
+				return parsed.value();
+			else if (const auto parsed = parseShowOptQualifiedName<ShowConstantsNode>(text, TOKEN_CONSTANTS, 4))
 				return parsed.value();
 			else if (text.length() >= 9 && TOKEN_WIRE_STATISTICS.find(text) == 0 ||
 				text == TOKEN_WIRE_STATS)

@@ -609,6 +609,13 @@ BOOST_AUTO_TEST_CASE(ParseShowTest)
 		"show wire_stat")));
 	BOOST_TEST(std::holds_alternative<FrontendParser::ShowWireStatsNode>(parseShow(
 		"show wire_statistics")));
+
+	BOOST_TEST(std::holds_alternative<FrontendParser::ShowConstantsNode>(parseShow(
+		"show const")));
+	BOOST_TEST(std::holds_alternative<FrontendParser::ShowConstantsNode>(parseShow(
+		"show constant")));
+	BOOST_TEST(std::holds_alternative<FrontendParser::ShowConstantsNode>(parseShow(
+		"show constants")));
 }
 
 

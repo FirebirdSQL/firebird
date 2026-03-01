@@ -98,6 +98,7 @@
 #include "../jrd/trace/TraceJrdHelpers.h"
 #include "firebird/impl/msg_helper.h"
 #include "../jrd/LocalTemporaryTable.h"
+#include "../jrd/Constant.h"
 
 
 #ifdef HAVE_CTYPE_H
@@ -340,6 +341,7 @@ void MetadataCache::cleanup(thread_db* tdbb)
 	mdc_procedures.cleanup(tdbb);
 	mdc_functions.cleanup(tdbb);
 	mdc_charsets.cleanup(tdbb);
+	mdc_constants.cleanup(tdbb);
 
 	for (unsigned i = 0; i < DB_TRIGGERS_COUNT; ++i)
 	{
@@ -803,6 +805,32 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 		DFW_post_work_arg(transaction, dw2, nullptr, nullptr, 0, dfw_arg_check_blr);
 
 		MetadataCache::newVersion<Cached::Function>(tdbb, FUN.RDB$FUNCTION_ID);
+	}
+	END_FOR
+
+
+	request.reset(tdbb, irq_m_fields10, IRQ_REQUESTS);
+
+	FOR(REQUEST_HANDLE request)
+		DEP IN RDB$DEPENDENCIES CROSS
+		CONST IN RDB$CONSTANTS
+		WITH DEP.RDB$DEPENDED_ON_SCHEMA_NAME EQ schemaName->dsc_address AND
+			 DEP.RDB$DEPENDED_ON_NAME EQ fieldSource->dsc_address AND
+			 DEP.RDB$DEPENDED_ON_TYPE EQ obj_field AND
+			 (DEP.RDB$DEPENDENT_TYPE EQ obj_package_header OR
+			 	DEP.RDB$DEPENDENT_TYPE EQ obj_package_body) AND
+			 DEP.RDB$DEPENDENT_SCHEMA_NAME EQ CONST.RDB$SCHEMA_NAME AND
+			 DEP.RDB$DEPENDENT_NAME EQ CONST.RDB$PACKAGE_NAME
+	{
+		QualifiedName constantFullName(CONST.RDB$CONSTANT_NAME, CONST.RDB$SCHEMA_NAME, CONST.RDB$PACKAGE_NAME);
+
+		const auto id = CONST.RDB$CONSTANT_ID;
+
+		DeferredWork* dw2 = DFW_post_work(transaction, dfw_modify_package_constant,
+			string(constantFullName.object.c_str()), constantFullName.schema, id, constantFullName.package);
+		DFW_post_work_arg(transaction, dw2, nullptr, nullptr, 0, dfw_arg_check_blr);
+
+		MetadataCache::newVersion<Cached::Constant>(tdbb, id);
 	}
 	END_FOR
 
@@ -4269,6 +4297,10 @@ void MET_store_dependencies(thread_db* tdbb,
 			name = *dependency.name;
 			dpdo_name = &name;
 			break;
+		case obj_package_constant:
+			name = *dependency.name;
+			dpdo_name = &name;
+			break;
 		}
 
 		MetaName field_name;
@@ -4614,6 +4646,14 @@ void MetadataCache::releaseLocks(thread_db* tdbb)
 	{
 		if (charset)
 			charset->releaseLocks(tdbb);
+	}
+
+	// Release constants locks
+
+	for (auto constant : mdc_constants)
+	{
+		if (constant)
+			constant->releaseLocks(tdbb);
 	}
 
 	// Release database triggers locks

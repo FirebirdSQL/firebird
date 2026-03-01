@@ -94,6 +94,7 @@
 #include "../jrd/trace/TraceJrdHelpers.h"
 #include "../common/Task.h"
 #include "../jrd/WorkerAttachment.h"
+#include "../jrd/Constant.h"
 
 using namespace Jrd;
 using namespace Firebird;
@@ -2347,6 +2348,27 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			DFW_post_work(transaction, dfw_change_repl_state, {}, {}, 1);
 			break;
 
+		case rel_constants:
+			protect_system_table_delupd(tdbb, relation, "DELETE");
+
+			EVL_field(0, rpb->rpb_record, f_const_name, &desc);
+			EVL_field(0, rpb->rpb_record, f_const_package_schema, &schemaDesc);
+
+			if (EVL_field(0, rpb->rpb_record, f_const_package, &desc2))
+				MOV_get_metaname(tdbb, &desc2, object_name.package);
+
+			EVL_field(0, rpb->rpb_record, f_const_id, &desc2);
+			id = MOV_get_long(tdbb, &desc2, 0);
+
+			{
+				[[maybe_unused]]
+				auto constant =  Constant::lookup(tdbb, id);
+				fb_assert(constant);
+			}
+
+			DFW_post_work(transaction, dfw_delete_package_constant, &desc, &schemaDesc, id, object_name.package);
+			break;
+
 		default:    // Shut up compiler warnings
 			break;
 		}
@@ -3733,6 +3755,25 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 			check_repl_state(tdbb, transaction, org_rpb, new_rpb, f_pub_active_flag);
 			break;
 
+		case rel_constants:
+			if (!check_nullify_source(tdbb, org_rpb, new_rpb, f_const_source))
+				protect_system_table_delupd(tdbb, relation, "UPDATE");
+
+			EVL_field(0, org_rpb->rpb_record, f_const_name, &desc1);
+			EVL_field(0, org_rpb->rpb_record, f_const_package_schema, &schemaDesc);
+
+			if (EVL_field(0, org_rpb->rpb_record, f_const_package, &desc2))
+				MOV_get_metaname(tdbb, &desc2, object_name.package);
+
+			protect_system_table_delupd(tdbb, relation, "UPDATE");
+
+			{ // Send dfw
+				EVL_field(0, org_rpb->rpb_record, f_const_id, &desc2);
+				const USHORT id = MOV_get_long(tdbb, &desc2, 0);
+				DFW_post_work(transaction, Jrd::dfw_modify_package_constant, &desc1, &schemaDesc, id, object_name.package);
+			}
+			break;
+
 		default:
 			break;
 		}
@@ -4640,6 +4681,21 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		case rel_pub_tables:
 			protect_system_table_insert(tdbb, request, relation);
 			DFW_post_work(transaction, dfw_change_repl_state, {}, {}, 1);
+			break;
+
+		case rel_constants:
+			protect_system_table_insert(tdbb, request, relation);
+
+			EVL_field(0, rpb->rpb_record, f_const_name, &desc);
+			EVL_field(0, rpb->rpb_record, f_const_package_schema, &schemaDesc);
+
+			if (EVL_field(0, rpb->rpb_record, f_const_name, &desc2))
+				MOV_get_metaname(tdbb, &desc2, object_name.package);
+
+			object_id = set_metadata_id(tdbb, rpb->rpb_record,
+										f_const_id, drq_g_nxt_const_id, "RDB$CONSTANTS");
+
+			work = DFW_post_work(transaction, dfw_create_package_constant, &desc, &schemaDesc, object_id, object_name.package);
 			break;
 
 		default:    // Shut up compiler warnings
