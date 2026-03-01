@@ -1,97 +1,71 @@
-#include <tommath.h>
+#include "tommath_private.h"
 #ifdef BN_MP_DIV_2D_C
-/* LibTomMath, multiple-precision integer library -- Tom St Denis
- *
- * LibTomMath is a library that provides multiple-precision
- * integer arithmetic as well as number theoretic functionality.
- *
- * The library was designed directly after the MPI library by
- * Michael Fromberger but has been written from scratch with
- * additional optimizations in place.
- *
- * The library is free for all purposes without any express
- * guarantee it works.
- *
- * Tom St Denis, tomstdenis@gmail.com, http://libtom.org
- */
+/* LibTomMath, multiple-precision integer library -- Tom St Denis */
+/* SPDX-License-Identifier: Unlicense */
 
 /* shift right by a certain bit count (store quotient in c, optional remainder in d) */
-int mp_div_2d (mp_int * a, int b, mp_int * c, mp_int * d)
+mp_err mp_div_2d(const mp_int *a, int b, mp_int *c, mp_int *d)
 {
-  mp_digit D, r, rr;
-  int     x, res;
-  mp_int  t;
+   mp_digit D, r, rr;
+   int     x;
+   mp_err err;
 
+   /* if the shift count is <= 0 then we do no work */
+   if (b <= 0) {
+      err = mp_copy(a, c);
+      if (d != NULL) {
+         mp_zero(d);
+      }
+      return err;
+   }
 
-  /* if the shift count is <= 0 then we do no work */
-  if (b <= 0) {
-    res = mp_copy (a, c);
-    if (d != NULL) {
-      mp_zero (d);
-    }
-    return res;
-  }
+   /* copy */
+   if ((err = mp_copy(a, c)) != MP_OKAY) {
+      return err;
+   }
+   /* 'a' should not be used after here - it might be the same as d */
 
-  if ((res = mp_init (&t)) != MP_OKAY) {
-    return res;
-  }
+   /* get the remainder */
+   if (d != NULL) {
+      if ((err = mp_mod_2d(a, b, d)) != MP_OKAY) {
+         return err;
+      }
+   }
 
-  /* get the remainder */
-  if (d != NULL) {
-    if ((res = mp_mod_2d (a, b, &t)) != MP_OKAY) {
-      mp_clear (&t);
-      return res;
-    }
-  }
+   /* shift by as many digits in the bit count */
+   if (b >= MP_DIGIT_BIT) {
+      mp_rshd(c, b / MP_DIGIT_BIT);
+   }
 
-  /* copy */
-  if ((res = mp_copy (a, c)) != MP_OKAY) {
-    mp_clear (&t);
-    return res;
-  }
+   /* shift any bit count < MP_DIGIT_BIT */
+   D = (mp_digit)(b % MP_DIGIT_BIT);
+   if (D != 0u) {
+      mp_digit *tmpc, mask, shift;
 
-  /* shift by as many digits in the bit count */
-  if (b >= (int)DIGIT_BIT) {
-    mp_rshd (c, b / DIGIT_BIT);
-  }
+      /* mask */
+      mask = ((mp_digit)1 << D) - 1uL;
 
-  /* shift any bit count < DIGIT_BIT */
-  D = (mp_digit) (b % DIGIT_BIT);
-  if (D != 0) {
-    register mp_digit *tmpc, mask, shift;
+      /* shift for lsb */
+      shift = (mp_digit)MP_DIGIT_BIT - D;
 
-    /* mask */
-    mask = (((mp_digit)1) << D) - 1;
+      /* alias */
+      tmpc = c->dp + (c->used - 1);
 
-    /* shift for lsb */
-    shift = DIGIT_BIT - D;
+      /* carry */
+      r = 0;
+      for (x = c->used - 1; x >= 0; x--) {
+         /* get the lower  bits of this word in a temp */
+         rr = *tmpc & mask;
 
-    /* alias */
-    tmpc = c->dp + (c->used - 1);
+         /* shift the current word and mix in the carry bits from the previous word */
+         *tmpc = (*tmpc >> D) | (r << shift);
+         --tmpc;
 
-    /* carry */
-    r = 0;
-    for (x = c->used - 1; x >= 0; x--) {
-      /* get the lower  bits of this word in a temp */
-      rr = *tmpc & mask;
-
-      /* shift the current word and mix in the carry bits from the previous word */
-      *tmpc = (*tmpc >> D) | (r << shift);
-      --tmpc;
-
-      /* set the carry to the carry bits of the current word found above */
-      r = rr;
-    }
-  }
-  mp_clamp (c);
-  if (d != NULL) {
-    mp_exch (&t, d);
-  }
-  mp_clear (&t);
-  return MP_OKAY;
+         /* set the carry to the carry bits of the current word found above */
+         r = rr;
+      }
+   }
+   mp_clamp(c);
+   return MP_OKAY;
 }
 #endif
-
-/* $Source$ */
-/* $Revision: 0.41 $ */
-/* $Date: 2007-04-18 09:58:18 +0000 $ */
