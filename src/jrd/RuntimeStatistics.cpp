@@ -26,6 +26,7 @@
 
 #include "../jrd/RuntimeStatistics.h"
 #include "../jrd/ntrace.h"
+#include "../jrd/met.h"
 
 using namespace Firebird;
 
@@ -133,7 +134,7 @@ void RuntimeStatistics::setToDiff(const RuntimeStatistics& newStats)
 
 RuntimeStatistics::Accumulator::Accumulator(thread_db* tdbb, const jrd_rel* relation,
 											const RecordStatType type)
-	: m_tdbb(tdbb), m_type(type), m_id(relation->rel_id)
+	: m_tdbb(tdbb), m_type(type), m_id(relation->getId())
 {}
 
 RuntimeStatistics::Accumulator::~Accumulator()

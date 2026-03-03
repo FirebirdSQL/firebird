@@ -677,7 +677,7 @@ public:
 	}
 
 	// Check if expression returns deterministic result
-	virtual bool deterministic() const;
+	virtual bool deterministic(thread_db* tdbb) const;
 
 	// Check if expression could return NULL or expression can turn NULL into a true/false.
 	virtual bool possiblyUnknown() const;
@@ -1495,6 +1495,7 @@ public:
 		TYPE_SUSPEND,
 		TYPE_TRUNCATE_LOCAL_TABLE,
 		TYPE_UPDATE_OR_INSERT,
+		TYPE_USING,
 
 		TYPE_EXT_INIT_PARAMETERS,
 		TYPE_EXT_TRIGGER

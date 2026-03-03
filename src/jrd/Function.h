@@ -27,6 +27,8 @@
 #include "../jrd/QualifiedName.h"
 #include "../jrd/val.h"
 #include "../dsql/Nodes.h"
+#include "../jrd/CacheVector.h"
+#include "../jrd/lck.h"
 
 namespace Jrd
 {
@@ -37,13 +39,29 @@ namespace Jrd
 		static const char* const EXCEPTION_MESSAGE;
 
 	public:
-		static Function* lookup(thread_db* tdbb, USHORT id, bool return_deleted, bool noscan, USHORT flags);
-		static Function* lookup(thread_db* tdbb, const QualifiedName& name, bool noscan);
+		static const enum lck_t LOCKTYPE = LCK_fun_rescan;
 
-		void releaseLocks(thread_db* tdbb);
+		static Function* lookup(thread_db* tdbb, MetaId id, ObjectBase::Flag flags);
+		static Function* lookup(thread_db* tdbb, const QualifiedName& name, ObjectBase::Flag flags);
 
-		explicit Function(MemoryPool& p)
+	private:
+		explicit Function(Cached::Function* perm)
+			: Routine(perm->getPool()),
+			  cachedFunction(perm),
+			  fun_entrypoint(NULL),
+			  fun_inputs(0),
+			  fun_return_arg(0),
+			  fun_temp_length(0),
+			  fun_exception_message(perm->getPool()),
+			  fun_deterministic(false),
+			  fun_external(NULL)
+		{
+		}
+
+	public:
+		Function(MemoryPool& p)
 			: Routine(p),
+			  cachedFunction(FB_NEW_POOL(p) Cached::Function(p)),
 			  fun_entrypoint(NULL),
 			  fun_inputs(0),
 			  fun_return_arg(0),
@@ -54,13 +72,20 @@ namespace Jrd
 		{
 		}
 
-		static Function* loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT flags);
-		static int blockingAst(void*);
+		static Function* create(thread_db* tdbb, MemoryPool& pool, Cached::Function* perm);
+		ScanResult scan(thread_db* tdbb, ObjectBase::Flag flags);
+		static std::optional<MetaId> getIdByName(thread_db* tdbb, const QualifiedName& name);
+		void checkReload(thread_db* tdbb) const override;
+
+		static const char* objectFamily(void*)
+		{
+			return "function";
+		}
 
 	public:
 		int getObjectType() const noexcept override
 		{
-			return obj_udf;
+			return objectType();
 		}
 
 		SLONG getSclType() const noexcept override
@@ -68,14 +93,15 @@ namespace Jrd
 			return obj_functions;
 		}
 
-		bool checkCache(thread_db* tdbb) const override;
-		void clearCache(thread_db* tdbb) override;
+		static int objectType();
 
+	private:
 		~Function() override
 		{
 			delete fun_external;
 		}
 
+	public:
 		void releaseExternal() override
 		{
 			delete fun_external;
@@ -83,6 +109,7 @@ namespace Jrd
 		}
 
 	public:
+		Cached::Function* cachedFunction;		// entry in the cache
 		int (*fun_entrypoint)();				// function entrypoint
 		USHORT fun_inputs;						// input arguments
 		USHORT fun_return_arg;					// return argument
@@ -93,8 +120,12 @@ namespace Jrd
 		bool fun_deterministic;
 		const ExtEngineManager::Function* fun_external;
 
-	protected:
-		bool reload(thread_db* tdbb) override;
+		Cached::Function* getPermanent() const noexcept override
+		{
+			return cachedFunction;
+		}
+
+		ScanResult reload(thread_db* tdbb, ObjectBase::Flag fl);
 	};
 }
 

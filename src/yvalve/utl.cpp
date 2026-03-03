@@ -2973,7 +2973,14 @@ int API_ROUTINE gds__thread_start(FPTR_INT_VOID_PTR* entrypoint,
 	int rc = 0;
 	try
 	{
-		Thread::start((ThreadEntryPoint*) entrypoint, arg, priority, (Thread::Handle*) thd_id);
+		Thread thread;
+		Thread::start((ThreadEntryPoint*) entrypoint, arg, priority, &thread);
+
+		if (thd_id)
+		{
+			*static_cast<Thread::Handle*>(thd_id) = thread.getHandle();
+			thread.detach(false);
+		}
 	}
 	catch (const status_exception& status)
 	{

@@ -29,13 +29,13 @@
 #include "../jrd/tra.h"
 #include "../jrd/lck.h"
 #include "../jrd/err_proto.h"
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "../jrd/rlck_proto.h"
 
 using namespace Jrd;
 using namespace Firebird;
 
-Lock* RLCK_reserve_relation(thread_db* tdbb, jrd_tra* transaction, jrd_rel* relation, bool write_flag)
+Lock* RLCK_reserve_relation(thread_db* tdbb, jrd_tra* transaction, Cached::Relation* relation, bool write_flag)
 {
 /**************************************
  *
@@ -84,7 +84,7 @@ Lock* RLCK_reserve_relation(thread_db* tdbb, jrd_tra* transaction, jrd_rel* rela
 				!(tdbb->tdbb_flags & TDBB_repl_in_progress))
 			{
 				// This condition is a workaround for nbackup
-				if (relation->rel_id != rel_backup_history)
+				if (relation->getId() != rel_backup_history)
 					ERR_post(Arg::Gds(isc_read_only_trans));
 			}
 		}
@@ -126,7 +126,7 @@ Lock* RLCK_reserve_relation(thread_db* tdbb, jrd_tra* transaction, jrd_rel* rela
 	if (!result)
 	{
 		string err;
-		err.printf("Acquire lock for relation (%s) failed", relation->rel_name.toQuotedString().c_str());
+		err.printf("Acquire lock for relation (%s) failed", relation->getName().toQuotedString().c_str());
 
 		ERR_append_status(tdbb->tdbb_status_vector, Arg::Gds(isc_random) << Arg::Str(err));
 		ERR_punt();
@@ -136,7 +136,7 @@ Lock* RLCK_reserve_relation(thread_db* tdbb, jrd_tra* transaction, jrd_rel* rela
 }
 
 
-Lock* RLCK_transaction_relation_lock(thread_db* tdbb, jrd_tra* transaction, jrd_rel* relation)
+Lock* RLCK_transaction_relation_lock(thread_db* tdbb, jrd_tra* transaction, Cached::Relation* relation)
 {
 /**************************************
  *
@@ -151,7 +151,7 @@ Lock* RLCK_transaction_relation_lock(thread_db* tdbb, jrd_tra* transaction, jrd_
  **************************************/
 	SET_TDBB(tdbb);
 
-	const ULONG relId = relation->rel_id;
+	const ULONG relId = relation->getId();
 
 	Lock* lock;
 	vec<Lock*>* vector = transaction->tra_relation_locks;
@@ -162,7 +162,7 @@ Lock* RLCK_transaction_relation_lock(thread_db* tdbb, jrd_tra* transaction, jrd_
 
 	vector = transaction->tra_relation_locks =
 		vec<Lock*>::newVector(*transaction->tra_pool, transaction->tra_relation_locks, relId + 1);
-	lock = jrd_rel::createLock(tdbb, transaction->tra_pool, relation, LCK_relation, true);
+	lock = relation->createLock(tdbb, *transaction->tra_pool, LCK_relation, true);
 
 	// enter all relation locks into the intra-process lock manager and treat
 	// them as compatible within the attachment according to IPLM rules

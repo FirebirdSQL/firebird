@@ -508,6 +508,7 @@ void loginSuccess(const string& login, const string& remId)
 	remoteFailedLogins->loginSuccess(remId);
 }
 
+static constexpr unsigned SEGMENT_DATA_SIZE = 254;
 
 template <typename T>
 static void getMultiPartConnectParameter(T& putTo, ClumpletReader& id, UCHAR param)
@@ -537,9 +538,10 @@ static void getMultiPartConnectParameter(T& putTo, ClumpletReader& id, UCHAR par
 				}
 				checkBytes[offset] = 1;
 
-				offset *= 254;
+				offset *= SEGMENT_DATA_SIZE;
 				++specData;
-				putTo.grow(offset + len);
+				if (offset + len > putTo.getCount())
+					putTo.grow(offset + len);
 				memcpy(&putTo[offset], specData, len);
 			}
 		}
@@ -7193,11 +7195,14 @@ SSHORT rem_port::asyncReceive(PACKET* asyncPacket, const UCHAR* buffer, SSHORT d
 			port_async->abort_aux_connection();
 		break;
 	case op_crypt_key_callback:
-		port_server_crypt_callback->wakeup(asyncPacket->p_cc.p_cc_data.cstr_length,
-			asyncPacket->p_cc.p_cc_data.cstr_address);
+		if (port_server_crypt_callback)
+		{
+			port_server_crypt_callback->wakeup(asyncPacket->p_cc.p_cc_data.cstr_length,
+				asyncPacket->p_cc.p_cc_data.cstr_address);
+		}
 		break;
 	case op_partial:
-		if (original_op == op_crypt_key_callback)
+		if (port_server_crypt_callback && original_op == op_crypt_key_callback)
 			port_server_crypt_callback->wakeup(0, NULL);
 		break;
 	default:

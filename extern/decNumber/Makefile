@@ -1,11 +1,21 @@
-LIBRARY=libdecFloat$(CROSS).a
+SRCDIR ?= .
+OBJ_DIR ?= .
+LIBRARY ?= libdecFloat$(CROSS).a
 
-$(LIBRARY):		$(wildcard *.c) $(wildcard *.h) Makefile
-	$(RM) -f *.o
-	$(CC) $(CROSS_FLAGS) -c -O3 -fPIC $(subst decCommon.c,,$(subst decBasic.c,,$(wildcard *.c)))
-	$(AR) crs $(LIBRARY) *.o
-	$(RM) -f *.o
+SOURCES := $(filter-out $(SRCDIR)/decBasic.c $(SRCDIR)/decCommon.c,$(wildcard $(SRCDIR)/*.c))
+HEADERS := $(wildcard $(SRCDIR)/*.h)
+OBJECTS := $(addprefix $(OBJ_DIR)/,$(notdir $(SOURCES:.c=.o)))
+
+$(LIBRARY): $(SOURCES) $(HEADERS) Makefile
+	@mkdir -p $(OBJ_DIR)
+	@mkdir -p $(dir $(LIBRARY))
+	$(RM) -f $(OBJECTS)
+	$(MAKE) $(OBJECTS) SRCDIR=$(SRCDIR) OBJ_DIR=$(OBJ_DIR)
+	$(AR) crs $(LIBRARY) $(OBJECTS)
+
+$(OBJ_DIR)/%.o: $(SRCDIR)/%.c Makefile
+	$(CC) $(CROSS_FLAGS) -O3 -fPIC -c $< -o $@
 
 .PHONY:	clean
 clean:
-	$(RM) -f *.o *.a
+	$(RM) -f $(OBJ_DIR)/*.o $(LIBRARY)

@@ -134,6 +134,17 @@ protected:
 	virtual bool doFetch(Jrd::thread_db* tdbb);
 	virtual void doClose(Jrd::thread_db* tdbb, bool drop);
 
+	const char* getParameterName(unsigned index) const override
+	{
+		if (m_inMetadata && index < m_inMetadata->getCount())
+		{
+			Firebird::FbLocalStatus status;
+			return m_inMetadata->getAlias(&status, index);
+		}
+
+		return nullptr;
+	}
+
 	virtual void putExtBlob(Jrd::thread_db* tdbb, dsc& src, dsc& dst);
 	virtual void getExtBlob(Jrd::thread_db* tdbb, const dsc& src, dsc& dst);
 

@@ -828,7 +828,7 @@ public:
 		dsqlDesc = desc;
 	}
 
-	bool deterministic() const override
+	bool deterministic(thread_db*) const override
 	{
 		return true;
 	}
@@ -909,7 +909,7 @@ public:
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 
-	bool deterministic() const override
+	bool deterministic(thread_db*) const override
 	{
 		return false;
 	}
@@ -1673,7 +1673,7 @@ public:
 
 	Request* getParamRequest(Request* request) const;
 
-	bool deterministic() const override
+	bool deterministic(thread_db*) const override
 	{
 		return true;
 	}
@@ -1727,7 +1727,7 @@ public:
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 
-	bool deterministic() const override
+	bool deterministic(thread_db*) const override
 	{
 		return true;
 	}
@@ -2134,7 +2134,7 @@ public:
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 
-	bool deterministic() const override;
+	bool deterministic(thread_db* tdbb) const override;
 
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -2218,7 +2218,7 @@ public:
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 
-	bool deterministic() const override;
+	bool deterministic(thread_db* tdbb) const override;
 
 	bool possiblyUnknown() const override
 	{
@@ -2242,7 +2242,7 @@ public:
 	QualifiedName name;
 	NestConst<ValueListNode> args;
 	NestConst<Firebird::ObjectsArray<MetaName>> dsqlArgNames;
-	NestConst<Function> function;
+	SubRoutine<Function> function;
 
 private:
 	dsql_udf* dsqlFunction = nullptr;
@@ -2320,7 +2320,7 @@ public:
 
 	Request* getVarRequest(Request* request) const;
 
-	bool deterministic() const override
+	bool deterministic(thread_db*) const override
 	{
 		return false;
 	}

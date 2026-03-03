@@ -187,9 +187,13 @@
     <ClCompile Include="..\..\..\src\jrd\trace\TraceService.cpp" />
     <ClCompile Include="..\..\..\src\jrd\UserManagement.cpp" />
     <ClCompile Include="..\..\..\src\jrd\validation.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\vec.cpp" />
     <ClCompile Include="..\..\..\src\jrd\vio.cpp" />
     <ClCompile Include="..\..\..\src\jrd\VirtualTable.cpp" />
     <ClCompile Include="..\..\..\src\jrd\WorkerAttachment.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\CacheVector.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\CharSetContainer.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\Resources.cpp" />
     <ClCompile Include="..\..\..\src\lock\lock.cpp" />
     <ClCompile Include="..\..\..\src\utilities\gsec\gsec.cpp" />
     <ClCompile Include="..\..\..\src\utilities\gstat\ppg.cpp" />

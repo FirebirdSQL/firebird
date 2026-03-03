@@ -81,7 +81,7 @@ namespace Jrd
 	{
 	public:
 		VerbAction()
-			: vct_next(NULL), vct_relation(NULL), vct_records(NULL), vct_undo(NULL)
+			: vct_next(NULL), vct_records(NULL), vct_undo(NULL)
 		{}
 
 		~VerbAction()

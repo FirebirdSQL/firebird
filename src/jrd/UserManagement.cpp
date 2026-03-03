@@ -141,7 +141,7 @@ namespace
 		bool present;
 	};
 
-	class ChangeCharset : public AutoSetRestore<SSHORT>
+	class ChangeCharset : public AutoSetRestore<CSetId>
 	{
 	public:
 		ChangeCharset(Attachment* att)
@@ -150,7 +150,7 @@ namespace
 	};
 } // anonymous namespace
 
-const Format* UsersTableScan::getFormat(thread_db* tdbb, jrd_rel* relation) const
+const Format* UsersTableScan::getFormat(thread_db* tdbb, RelationPermanent* relation) const
 {
 	jrd_tra* const transaction = tdbb->getTransaction();
 	return transaction->getUserManagement()->getList(tdbb, relation)->getFormat();
@@ -161,7 +161,7 @@ bool UsersTableScan::retrieveRecord(thread_db* tdbb, jrd_rel* relation,
 									FB_UINT64 position, Record* record) const
 {
 	jrd_tra* const transaction = tdbb->getTransaction();
-	return transaction->getUserManagement()->getList(tdbb, relation)->fetch(position, record);
+	return transaction->getUserManagement()->getList(tdbb, getPermanent(relation))->fetch(position, record);
 }
 
 
@@ -582,10 +582,10 @@ void UserManagement::list(IUser* u, unsigned cachePosition)
 	}
 }
 
-RecordBuffer* UserManagement::getList(thread_db* tdbb, jrd_rel* relation)
+RecordBuffer* UserManagement::getList(thread_db* tdbb, RelationPermanent* relation)
 {
 	fb_assert(relation);
-	fb_assert(relation->rel_id == rel_sec_user_attributes || relation->rel_id == rel_sec_users);
+	fb_assert(relation->getId() == rel_sec_user_attributes || relation->getId() == rel_sec_users);
 
 	RecordBuffer* recordBuffer = getData(relation);
 	if (recordBuffer)

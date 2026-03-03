@@ -51,6 +51,7 @@
 #include "../common/isc_f_proto.h"
 #include "../jrd/vio_proto.h"
 #include "../common/utils_proto.h"
+#include "../jrd/btr_proto.h"
 
 using MsgFormat::SafeArg;
 
@@ -82,8 +83,8 @@ static const UCHAR gen_id_blr2[] =
 };
 
 // Check if an object already exists. If yes, return false.
-bool DYN_UTIL_check_unique_name_nothrow(thread_db* tdbb, const QualifiedName& object_name, int object_type,
-	USHORT* errorCode)
+bool DYN_UTIL_check_unique_name_nothrow(thread_db* tdbb,
+	const QualifiedName& object_name, int object_type, USHORT* errorCode, bool freeWhenPossible)
 {
 	SET_TDBB(tdbb);
 
@@ -150,7 +151,14 @@ bool DYN_UTIL_check_unique_name_nothrow(thread_db* tdbb, const QualifiedName& ob
 				WITH EIDX.RDB$SCHEMA_NAME EQ object_name.schema.c_str() AND
 					 EIDX.RDB$INDEX_NAME EQ object_name.object.c_str()
 			{
-				*errorCode = 251;	// isc_dyn_dup_index
+				if (!(freeWhenPossible &&
+					(MetadataCache::getIndexStatus(EIDX.RDB$INDEX_INACTIVE.NULL, EIDX.RDB$INDEX_INACTIVE) ==
+						MET_index_deferred_drop) &&
+						BTR_cleanup_index(tdbb, QualifiedName(EIDX.RDB$RELATION_NAME, EIDX.RDB$SCHEMA_NAME),
+						transaction, MetaId(EIDX.RDB$INDEX_ID - 1))))
+				{
+					*errorCode = 251;	// isc_dyn_dup_index
+				}
 			}
 			END_FOR
 
@@ -344,11 +352,12 @@ bool DYN_UTIL_check_unique_name_nothrow(thread_db* tdbb, const QualifiedName& ob
 }
 
 // Check if an object already exists. If yes, throw error.
-void DYN_UTIL_check_unique_name(thread_db* tdbb, const QualifiedName& object_name, int object_type)
+void DYN_UTIL_check_unique_name(thread_db* tdbb, const QualifiedName& object_name,
+	int object_type)
 {
 	USHORT errorCode;
 
-	if (!DYN_UTIL_check_unique_name_nothrow(tdbb, object_name, object_type, &errorCode))
+	if (!DYN_UTIL_check_unique_name_nothrow(tdbb, object_name, object_type, &errorCode, true))
 		status_exception::raise(Arg::PrivateDyn(errorCode) << object_name.toQuotedString());
 }
 

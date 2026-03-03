@@ -124,7 +124,7 @@ public:
 		const auto time = (fb_utils::query_performance_counter() - m_start_clock) * 1000 /
 			fb_utils::query_performance_frequency();
 
-		const auto attachment = m_tdbb->getAttachment();
+		auto attachment = m_tdbb->getAttachment();
 
 		TraceConnectionImpl conn(attachment);
 		TraceProcedureImpl proc(m_name, statement);
@@ -147,7 +147,7 @@ public:
 		m_tdbb(tdbb),
 		m_request(request)
 	{
-		const auto attachment = m_tdbb->getAttachment();
+		auto attachment = m_tdbb->getAttachment();
 		const auto transaction = m_tdbb->getTransaction();
 
 		const auto trace_mgr = attachment->att_trace_manager;
@@ -196,7 +196,7 @@ public:
 			return;
 		}
 
-		const auto attachment = m_tdbb->getAttachment();
+		auto attachment = m_tdbb->getAttachment();
 		const auto transaction = m_tdbb->getTransaction();
 
 		TraceRuntimeStats stats(attachment, m_request->req_fetch_baseline, &m_request->req_stats,
@@ -260,7 +260,7 @@ public:
 			return;
 		}
 
-		const auto attachment = m_tdbb->getAttachment();
+		auto attachment = m_tdbb->getAttachment();
 		const auto transaction = m_tdbb->getTransaction();
 
 		TraceRuntimeStats stats(attachment, m_request->req_fetch_baseline, &m_request->req_stats,
@@ -320,7 +320,7 @@ public:
 		const auto time = (fb_utils::query_performance_counter() - m_start_clock) * 1000 /
 			fb_utils::query_performance_frequency();
 
-		const auto attachment = m_tdbb->getAttachment();
+		auto attachment = m_tdbb->getAttachment();
 
 		TraceConnectionImpl conn(attachment);
 		TraceFunctionImpl func(m_name, statement);
@@ -346,7 +346,7 @@ public:
 		m_inMsg(inMsg),
 		m_inMsgLength(inMsgLength)
 	{
-		const auto attachment = m_tdbb->getAttachment();
+		auto attachment = m_tdbb->getAttachment();
 		const auto transaction = m_tdbb->getTransaction();
 
 		const auto trace_mgr = attachment->att_trace_manager;
@@ -391,7 +391,7 @@ public:
 
 		m_need_trace = false;
 
-		const auto attachment = m_tdbb->getAttachment();
+		auto attachment = m_tdbb->getAttachment();
 		const auto transaction = m_tdbb->getTransaction();
 
 		TraceRuntimeStats stats(attachment, m_request->req_fetch_baseline, &m_request->req_stats,
@@ -437,8 +437,8 @@ public:
 		if (!m_need_trace)
 			return;
 
-		m_name = trigger->name.toQuotedString();
-		m_relationName = trigger->relation ? trigger->relation->rel_name.toQuotedString() : "";
+		m_name = trigger->getName().toQuotedString();
+		m_relationName = trigger->relation ? trigger->relation->getName().toQuotedString() : "";
 
 		const auto type = (trigger->type & ~TRIGGER_TYPE_MASK);
 
@@ -458,7 +458,7 @@ public:
 
 			case TRIGGER_TYPE_DB:
 				{
-					m_action = type + DB_TRIGGER_MAX - 1;
+					m_action = type + TRIGGER_CONNECT;
 
 					fb_assert(m_action == TRIGGER_CONNECT ||
 							  m_action == TRIGGER_DISCONNECT ||
@@ -498,7 +498,7 @@ public:
 		const auto time = (fb_utils::query_performance_counter() - m_start_clock) * 1000 /
 			fb_utils::query_performance_frequency();
 
-		const auto attachment = m_tdbb->getAttachment();
+		auto attachment = m_tdbb->getAttachment();
 
 		TraceConnectionImpl conn(attachment);
 		TraceTriggerImpl trig(m_name, m_relationName, m_which, m_action, statement);
@@ -525,7 +525,7 @@ public:
 		m_request(request),
 		m_which(which)
 	{
-		const auto attachment = m_tdbb->getAttachment();
+		auto attachment = m_tdbb->getAttachment();
 		const auto transaction = m_tdbb->getTransaction();
 		const auto trace_mgr = attachment->att_trace_manager;
 
@@ -558,7 +558,7 @@ public:
 
 		m_need_trace = false;
 
-		const auto attachment = m_tdbb->getAttachment();
+		auto attachment = m_tdbb->getAttachment();
 		const auto transaction = m_tdbb->getTransaction();
 
 		TraceRuntimeStats stats(attachment, m_request->req_fetch_baseline, &m_request->req_stats,
@@ -722,8 +722,8 @@ public:
 		m_sweep_info.update(header);
 	}
 
-	void beginSweepRelation(jrd_rel* relation);
-	void endSweepRelation(jrd_rel* relation);
+	void beginSweepRelation(const jrd_rel* relation);
+	void endSweepRelation();
 
 	void finish()
 	{

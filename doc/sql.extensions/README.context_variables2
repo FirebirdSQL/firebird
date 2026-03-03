@@ -147,7 +147,7 @@ Usage:
                                 |
    PAGES_ALLOCATED              | Current value of allocated pages in the database.
                                 |
-   PAGES_USED                   | Current value of allocated pages in the database.
+   PAGES_USED                   | Current value of used pages in the database.
                                 |
    PAGES_FREE                   | Current value of free pages in the database.
 

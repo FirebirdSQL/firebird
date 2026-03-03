@@ -78,12 +78,13 @@
 #include "../jrd/cch.h"
 #include "../jrd/nbak.h"
 #include "../jrd/tra.h"
+#include "../jrd/met.h"
 #include "../jrd/vio_debug.h"
 #include "../jrd/cch_proto.h"
 #include "../jrd/dpm_proto.h"
 #include "../jrd/err_proto.h"
 #include "../yvalve/gds_proto.h"
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/mov_proto.h"
 #include "../jrd/ods_proto.h"
@@ -963,13 +964,13 @@ void PAG_header(thread_db* tdbb, bool info, const TriState newForceWrite)
 	if (header->hdr_flags & hdr_SQL_dialect_3)
 		dbb->dbb_flags |= DBB_DB_SQL_dialect_3;
 
-	jrd_rel* relation = MET_relation(tdbb, 0);
+	auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, 0u, CacheFlag::AUTOCREATE | CacheFlag::NOSCAN);
 	RelationPages* relPages = relation->getBasePages();
 	if (!relPages->rel_pages)
 	{
 		// NS: There's no need to reassign first page for RDB$PAGES relation since
 		// current code cannot change its location after database creation.
-		vcl* vector = vcl::newVector(*relation->rel_pool, 1);
+		vcl* vector = vcl::newVector(relation->getPool(), 1);
 		relPages->rel_pages = vector;
 		(*vector)[0] = header->hdr_PAGES;
 	}
@@ -2256,4 +2257,11 @@ void PAG_set_page_scn(thread_db* tdbb, win* window)
 
 	CCH_precedence(tdbb, window, scn_page);
 }
+
+#ifdef DEB_TDBB_BDBS
+void PageNumber::print(const char* text) const
+{
+	printf("%s %d %d\n", text, pageSpaceID, pageNum);
+}
+#endif
 

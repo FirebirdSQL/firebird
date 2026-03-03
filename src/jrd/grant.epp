@@ -53,6 +53,7 @@
 #include "../jrd/scl_proto.h"
 #include "../common/utils_proto.h"
 #include "../common/classes/array.h"
+#include "../common/classes/auto.h"
 #include "../jrd/constants.h"
 
 using namespace Firebird;
@@ -193,6 +194,18 @@ void GRANT_privileges(thread_db* tdbb, const QualifiedName& name, ObjectType id,
 }
 
 
+static void ensure_relation_reload(thread_db* tdbb, MetaId id, jrd_tra* transaction)
+{
+	Firebird::AutoSetRestore2<jrd_tra*, thread_db> tempTrans(tdbb,
+		&thread_db::getTransaction,
+		&thread_db::setTransaction,
+		transaction);
+
+	MetadataCache::newVersion<Cached::Relation>(tdbb, id);
+	DFW_post_work(transaction, dfw_commit_relation, nullptr, nullptr, id);
+}
+
+
 static void define_default_class(thread_db* tdbb,
 								 const QualifiedName& relationName,
 								 MetaName& default_class,
@@ -217,6 +230,9 @@ static void define_default_class(thread_db* tdbb,
  **************************************/
 	SET_TDBB(tdbb);
 
+	auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, relationName, CacheFlag::AUTOCREATE);
+	fb_assert(relation);
+
 	if (default_class.isEmpty())
 	{
 		default_class.printf("%s%" SQUADFORMAT, DEFAULT_CLASS,
@@ -239,10 +255,7 @@ static void define_default_class(thread_db* tdbb,
 
 	save_security_class(tdbb, default_class, acl, transaction);
 
-	dsc schemaDesc, nameDesc;
-	schemaDesc.makeText((USHORT) strlen(relationName.schema.c_str()), CS_METADATA, (UCHAR*) relationName.schema.c_str());
-	nameDesc.makeText((USHORT) strlen(relationName.object.c_str()), CS_METADATA, (UCHAR*) relationName.object.c_str());
-	DFW_post_work(transaction, dfw_scan_relation, &nameDesc, &schemaDesc, 0);
+	ensure_relation_reload(tdbb, relation->getId(), transaction);
 }
 
 
@@ -322,7 +335,7 @@ static void get_object_info(thread_db* tdbb,
  **************************************
  *
  * Functional description
- *	This could be done in MET_scan_relation () or MET_lookup_procedure,
+ *	This could be done in scan_relation () or getVersioned<Cached::Procedure> (),
  *	but presumably we wish to make sure the information we have is
  *	up-to-the-minute.
  *
@@ -752,10 +765,12 @@ static SecurityClass::flags_t save_field_privileges(thread_db* tdbb,
 
 	AutoCacheRequest request(tdbb, irq_grant6, IRQ_REQUESTS);
 	AutoRequest request2, request3;
+	MetaId relId;
 
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		FLD IN RDB$RELATION_FIELDS
 		CROSS PRV IN RDB$USER_PRIVILEGES OVER RDB$RELATION_NAME, RDB$FIELD_NAME
+		CROSS REL IN RDB$RELATIONS OVER RDB$RELATION_NAME
 		WITH PRV.RDB$RELATION_SCHEMA_NAME EQ FLD.RDB$SCHEMA_NAME AND
 			 PRV.RDB$OBJECT_TYPE EQ obj_relation AND
 			 PRV.RDB$RELATION_SCHEMA_NAME EQ relation_name.schema.c_str() AND
@@ -764,6 +779,7 @@ static SecurityClass::flags_t save_field_privileges(thread_db* tdbb,
 			 (PRV.RDB$USER NE owner.c_str() OR PRV.RDB$USER_TYPE NE obj_user)
 		SORTED BY PRV.RDB$FIELD_NAME, PRV.RDB$USER, PRV.RDB$USER_SCHEMA_NAME
 	{
+		relId = REL.RDB$RELATION_ID;
 		const QualifiedName thisUser(PRV.RDB$USER, PRV.RDB$USER_SCHEMA_NAME);
 
 		// create a control break on field_name,user
@@ -889,12 +905,7 @@ static SecurityClass::flags_t save_field_privileges(thread_db* tdbb,
 		finish_security_class(field_acl, (field_public | public_priv));
 		save_security_class(tdbb, s_class, field_acl, transaction);
 
-		dsc schemaDesc, nameDesc;
-		schemaDesc.makeText((USHORT) strlen(relation_name.schema.c_str()), CS_METADATA,
-			(UCHAR*) relation_name.schema.c_str());
-		nameDesc.makeText((USHORT) strlen(relation_name.object.c_str()), CS_METADATA,
-			(UCHAR*) relation_name.object.c_str());
-		DFW_post_work(transaction, dfw_update_format, &nameDesc, &schemaDesc, 0);
+		ensure_relation_reload(tdbb, relId, transaction);
 	}
 
 	return aggregate_public;

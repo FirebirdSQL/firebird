@@ -46,8 +46,8 @@ public:
 
 	static inline bool greaterThan(const traRpbListElement& i1, const traRpbListElement& i2)
 	{
-		return i1.lr_rpb->rpb_relation->rel_id != i2.lr_rpb->rpb_relation->rel_id ?
-			   i1.lr_rpb->rpb_relation->rel_id > i2.lr_rpb->rpb_relation->rel_id :
+		return getPermanent(i1.lr_rpb->rpb_relation)->rel_id != getPermanent(i2.lr_rpb->rpb_relation)->rel_id ?
+			   getPermanent(i1.lr_rpb->rpb_relation)->rel_id > getPermanent(i2.lr_rpb->rpb_relation)->rel_id :
 			   i1.lr_rpb->rpb_number != i2.lr_rpb->rpb_number ?
 			   i1.lr_rpb->rpb_number > i2.lr_rpb->rpb_number :
 			   i1.level > i2.level;

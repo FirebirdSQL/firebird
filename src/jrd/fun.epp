@@ -58,6 +58,7 @@
 #include "../jrd/mov_proto.h"
 #include "../common/isc_s_proto.h"
 #include "../jrd/blb.h"
+#include "../jrd/met.h"
 #include "../jrd/ExtEngineManager.h"
 #include "../common/classes/auto.h"
 #include "../common/utils_proto.h"
@@ -176,7 +177,7 @@ void* IbUtil::alloc(long size)
 {
 	thread_db* tdbb = JRD_get_thread_data();
 
-	void* const ptr = tdbb->getDefaultPool()->allocate(size ALLOC_ARGS);
+	void* const ptr = tdbb->getDefaultPool()->allocate(size);
 
 	if (ptr)
 		tdbb->getAttachment()->att_udf_pointers.add(ptr);

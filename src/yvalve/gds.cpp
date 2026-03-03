@@ -269,11 +269,15 @@ VoidPtr API_ROUTINE gds__alloc_debug(SLONG size_request, const TEXT* filename, U
 {
 	try
 	{
-		return getDefaultMemoryPool()->allocate(size_request
 #ifdef DEBUG_GDS_ALLOC
-			, filename, lineno
+		Firebird::CustomSourceLocation location{
+			.fileName = filename,
+			.line = static_cast<int>(lineno)
+		};
+		return getDefaultMemoryPool()->allocate(size_request, location);
+#else
+		return getDefaultMemoryPool()->allocate(size_request);
 #endif
-		);
 	}
 	catch (const Firebird::Exception&)
 	{
@@ -4568,7 +4572,7 @@ VoidPtr API_ROUTINE gds__alloc(SLONG size_request)
 {
 	try
 	{
-		return getDefaultMemoryPool()->allocate(size_request ALLOC_ARGS);
+		return getDefaultMemoryPool()->allocate(size_request);
 	}
 	catch (const Firebird::Exception&)
 	{

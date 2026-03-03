@@ -727,6 +727,9 @@ public:
 	void unBindFromRequest();
 
 protected:
+	virtual const char* getParameterName(unsigned index) const { return nullptr; }
+
+protected:
 	virtual void doPrepare(Jrd::thread_db* tdbb, const Firebird::string& sql) = 0;
 	virtual void doSetTimeout(Jrd::thread_db* tdbb, unsigned int timeout) = 0;
 	virtual void doExecute(Jrd::thread_db* tdbb) = 0;
