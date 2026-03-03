@@ -75,8 +75,8 @@ Unacceptable behavior:
 
 
 Short syntax for UNLIST with IN operator:
-	Since Firebird 6.0, UNLIST can be used directly with the IN operator without requiring a full subquery.
-	Instead of writing IN (SELECT * FROM UNLIST(...) AS U), you can now use the shorter syntax IN UNLIST(...).
+	UNLIST can be used directly with the IN operator without requiring a full subquery.
+	Instead of writing IN (SELECT * FROM UNLIST(...) AS U), you can use the shorter syntax IN UNLIST(...).
 
 Syntax:
 	<in predicate> ::=
