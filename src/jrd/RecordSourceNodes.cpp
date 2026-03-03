@@ -4387,7 +4387,7 @@ dsql_fld* UnlistFunctionSourceNode::makeField(DsqlCompilerScratch* dsqlScratch)
 			ttype = CS_ASCII;
 
 		const auto bytesPerChar = DSqlDataTypeUtil(dsqlScratch).maxBytesPerChar(ttype);
-		desc.makeText(bytesPerChar * DEFAULT_UNLIST_TEXT_LENGTH, ttype);
+		desc.makeVarying(bytesPerChar * DEFAULT_UNLIST_TEXT_LENGTH, ttype);
 		MAKE_field(newField, &desc);
 		newField->fld_id = 0;
 	}
