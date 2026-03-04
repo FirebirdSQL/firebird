@@ -7801,12 +7801,12 @@ in_predicate
 				ComparativeBoolNode::DFLAG_ANSI_ANY, $4);
 			$$ = newNode<NotBoolNode>(node);
 		}
-	| value IN table_value_function_unlist_short
+	| value IN table_value_function_unlist_short(NOTRIAL($1))
 		{
 			$$ = newNode<ComparativeBoolNode>(blr_eql, $1,
 				ComparativeBoolNode::DFLAG_ANSI_ANY, $3);
 		}
-	| value NOT IN table_value_function_unlist_short
+	| value NOT IN table_value_function_unlist_short(NOTRIAL($1))
 		{
 			const auto node = newNode<ComparativeBoolNode>(blr_eql, $1,
 				ComparativeBoolNode::DFLAG_ANSI_ANY, $4);
@@ -7814,22 +7814,27 @@ in_predicate
 		}
 	;
 
-%type <exprNode> table_value_function_unlist_short
-table_value_function_unlist_short
-: table_value_function_unlist
-	{
-		const auto unlistNode = nodeAs<UnlistFunctionSourceNode>($1);
-		unlistNode->alias = UnlistFunctionSourceNode::FUNC_NAME;
+%type <exprNode> table_value_function_unlist_short(<valueExprNode>)
+table_value_function_unlist_short($autoTypeFromValue)
+	: table_value_function_unlist
+		{
+			const auto unlistNode = nodeAs<UnlistFunctionSourceNode>($1);
+			unlistNode->alias = UnlistFunctionSourceNode::FUNC_NAME;
+			unlistNode->shortEntry = true;
 
-		const auto rseNode = newNode<RseNode>();
-		rseNode->dsqlFlags |= RecordSourceNode::DFLAG_BODY_WRAPPER;
-		rseNode->dsqlFrom = newNode<RecSourceListNode>(unlistNode);
+			if (unlistNode->dsqlField == nullptr)
+				unlistNode->dsqlAutoTypeFromValue = $autoTypeFromValue;
 
-		const auto selectNode = newNode<SelectExprNode>();
-		selectNode->querySpec = rseNode;
+			const auto rseNode = newNode<RseNode>();
+			rseNode->dsqlFlags |= RecordSourceNode::DFLAG_BODY_WRAPPER;
+			rseNode->dsqlFrom = newNode<RecSourceListNode>(unlistNode);
 
-		$$ = selectNode;
-	}
+			const auto selectNode = newNode<SelectExprNode>();
+			selectNode->querySpec = rseNode;
+
+			$$ = selectNode;
+		}
+	;
 
 %type <boolExprNode> exists_predicate
 exists_predicate

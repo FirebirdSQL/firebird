@@ -4380,14 +4380,22 @@ dsql_fld* UnlistFunctionSourceNode::makeField(DsqlCompilerScratch* dsqlScratch)
 		field = newField;
 
 		dsc desc;
-		DsqlDescMaker::fromNode(dsqlScratch, &desc, inputItem);
-		auto ttype = desc.getCharSet();
+		if (dsqlAutoTypeFromValue && shortEntry)
+		{
+			dsqlAutoTypeFromValue = Node::doDsqlPass(dsqlScratch, dsqlAutoTypeFromValue, false);
+			DsqlDescMaker::fromNode(dsqlScratch, &desc, dsqlAutoTypeFromValue);
+		}
+		else
+		{
+			DsqlDescMaker::fromNode(dsqlScratch, &desc, inputItem);
+			auto ttype = desc.getCharSet();
 
-		if (ttype == CS_NONE && !desc.isText() && !desc.isBlob())
-			ttype = CS_ASCII;
+			if (ttype == CS_NONE && !desc.isText() && !desc.isBlob())
+				ttype = CS_ASCII;
 
-		const auto bytesPerChar = DSqlDataTypeUtil(dsqlScratch).maxBytesPerChar(ttype);
-		desc.makeVarying(bytesPerChar * DEFAULT_UNLIST_TEXT_LENGTH, ttype);
+			const auto bytesPerChar = DSqlDataTypeUtil(dsqlScratch).maxBytesPerChar(ttype);
+			desc.makeVarying(bytesPerChar * DEFAULT_UNLIST_TEXT_LENGTH, ttype);
+		}
 		MAKE_field(newField, &desc);
 		newField->fld_id = 0;
 	}
