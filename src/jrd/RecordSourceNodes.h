@@ -1073,7 +1073,6 @@ public:
 
 public:
 	NestConst<ValueExprNode> dsqlAutoTypeFromValue;
-	bool shortEntry = false;
 };
 
 class GenSeriesFunctionSourceNode final : public TableValueFunctionSourceNode

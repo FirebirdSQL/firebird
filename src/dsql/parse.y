@@ -7820,7 +7820,6 @@ table_value_function_unlist_short($autoTypeFromValue)
 		{
 			const auto unlistNode = nodeAs<UnlistFunctionSourceNode>($1);
 			unlistNode->alias = UnlistFunctionSourceNode::FUNC_NAME;
-			unlistNode->shortEntry = true;
 
 			if (unlistNode->dsqlField == nullptr)
 				unlistNode->dsqlAutoTypeFromValue = $autoTypeFromValue;

@@ -4380,7 +4380,7 @@ dsql_fld* UnlistFunctionSourceNode::makeField(DsqlCompilerScratch* dsqlScratch)
 		field = newField;
 
 		dsc desc;
-		if (dsqlAutoTypeFromValue && shortEntry)
+		if (dsqlAutoTypeFromValue)
 		{
 			dsqlAutoTypeFromValue = Node::doDsqlPass(dsqlScratch, dsqlAutoTypeFromValue, false);
 			DsqlDescMaker::fromNode(dsqlScratch, &desc, dsqlAutoTypeFromValue);
