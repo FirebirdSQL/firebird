@@ -1056,12 +1056,12 @@ private:
 class UnlistFunctionSourceNode : public TableValueFunctionSourceNode
 {
 public:
-	explicit UnlistFunctionSourceNode(MemoryPool& pool)	: TableValueFunctionSourceNode(pool)
+	explicit UnlistFunctionSourceNode(MemoryPool& pool) : TableValueFunctionSourceNode(pool)
 	{
 	}
 
 	RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream) final;
-	dsql_fld* makeField(DsqlCompilerScratch* dsqlScratch) override;
+	dsql_fld* makeField(DsqlCompilerScratch* dsqlScratch) final;
 
 	static constexpr char const* FUNC_NAME = "UNLIST";
 	static constexpr USHORT DEFAULT_UNLIST_TEXT_LENGTH = 32;
