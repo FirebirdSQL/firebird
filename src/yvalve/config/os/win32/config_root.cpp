@@ -42,14 +42,14 @@ namespace {
 
 bool getPathFromHInstance(PathName& root)
 {
-	const HINSTANCE hDllInst = hDllInst;
-	if (!hDllInst)
+	const HINSTANCE hDllInstLocal = hDllInst;
+	if (!hDllInstLocal)
 	{
 		return false;
 	}
 
 	char* filename = root.getBuffer(MAX_PATH);
-	GetModuleFileName(hDllInst, filename, MAX_PATH);
+	GetModuleFileName(hDllInstLocal, filename, MAX_PATH);
 
 	root.recalculate_length();
 
