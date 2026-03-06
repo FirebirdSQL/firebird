@@ -427,8 +427,6 @@ private:
 };
 
 
-} // namespace Firebird
-
 #ifdef WIN_NT
 int		ISC_mutex_init(struct mtx*, const TEXT*);
 void	ISC_mutex_fini(struct mtx*);
@@ -437,5 +435,8 @@ int		ISC_mutex_unlock(struct mtx*);
 #endif
 
 ULONG	ISC_exception_post(ULONG, const TEXT*, ISC_STATUS&);
+
+
+} // namespace Firebird
 
 #endif // JRD_ISC_S_PROTO_H

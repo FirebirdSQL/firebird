@@ -61,6 +61,10 @@
 #include <aclapi.h>
 #include <lmcons.h>
 
+namespace Firebird
+{
+
+
 class SecurityAttributes
 {
 public:
@@ -169,6 +173,9 @@ private:
 };
 
 static InitInstance<SecurityAttributes> security_attributes;
+
+
+} // namespace Firebird
 
 #endif // WIN_NT
 

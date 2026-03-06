@@ -64,6 +64,9 @@
 #define SIG_ACK (void (__cdecl *)(int))4	// acknowledge
 #endif
 
+namespace Firebird
+{
+
 
 namespace {
 
@@ -246,3 +249,6 @@ void ISC_signal_init()
 
 	signalInit.init();
 }
+
+
+} // namespace Firebird

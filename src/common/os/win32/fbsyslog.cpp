@@ -25,6 +25,10 @@
 
 #include <Windows.h>
 
+namespace Firebird
+{
+
+
 namespace {
 
 typedef HANDLE WINAPI tRegisterEventSource(LPCTSTR lpUNCServerName, LPCTSTR lpSourceName);
@@ -91,8 +95,6 @@ void SyslogAccess::Record(WORD wType, const char* msg)
 InitInstance<SyslogAccess> iSyslogAccess;
 
 } // namespace
-
-namespace Firebird {
 
 void Syslog::Record(Severity level, const char* msg)
 {
