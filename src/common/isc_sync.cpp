@@ -261,8 +261,6 @@ namespace {
 } // anonymous namespace
 
 
-namespace Firebird {
-
 class SharedFileInfo : public RefCounted
 {
 	SharedFileInfo(int f, const DevNode& id)
@@ -465,8 +463,6 @@ private:
 
 GlobalPtr<SharedFileInfo::SharedFiles> SharedFileInfo::sharedFiles;
 GlobalPtr<Mutex> SharedFileInfo::sharedFilesMutex;
-
-} // namespace Firebird
 
 
 FileLock::FileLock(const char* fileName, InitFunction* init)
