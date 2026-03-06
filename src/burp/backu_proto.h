@@ -24,7 +24,9 @@
 #ifndef BURP_BACKU_PROTO_H
 #define BURP_BACKU_PROTO_H
 
-int	BACKUP_backup (const TEXT*, const TEXT*);
+namespace Firebird::Burp
+{
+	int	BACKUP_backup (const TEXT*, const TEXT*);
+} // namespace Firebird::Burp
 
 #endif	//  BURP_BACKU_PROTO_H
-

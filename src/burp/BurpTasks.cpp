@@ -32,10 +32,9 @@
 #include "../burp/burp_proto.h"
 #include "../burp/mvol_proto.h"
 
-using Firebird::MsgFormat::SafeArg;
-using namespace Firebird;
+using MsgFormat::SafeArg;
 
-namespace Burp
+namespace Firebird::Burp
 {
 
 // IO buffer should fit at least one blob segment, two is better.
@@ -1144,4 +1143,5 @@ const char* RestoreRelationTask::ExcReadDone::what() const noexcept
 	throw ExcReadDone();
 }
 
-} // namespace Firebird
+
+} // namespace Firebird::Burp

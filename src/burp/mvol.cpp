@@ -68,9 +68,11 @@
 #include "../common/status.h"
 #include "../common/classes/zip.h"
 
-using Firebird::MsgFormat::SafeArg;
-using Firebird::FbLocalStatus;
-using namespace Burp;
+using MsgFormat::SafeArg;
+
+namespace Firebird::Burp
+{
+
 
 inline constexpr int open_mask	= 0666;
 
@@ -112,7 +114,7 @@ static UCHAR debug_on = 0;		// able to turn this on in debug mode
 #endif
 
 #ifdef HAVE_ZLIB_H
-static Firebird::InitInstance<Firebird::ZLib> zlib;
+static InitInstance<ZLib> zlib;
 #endif // HAVE_ZLIB_H
 
 static void  bad_attribute(int, USHORT);
@@ -134,7 +136,7 @@ static ULONG unzip_read_block(BurpGlobals*, UCHAR*, FB_SIZE_T);
 // Portion of data passed to crypt plugin
 inline constexpr ULONG CRYPT_STEP = 256;
 
-class DbInfo final : public Firebird::RefCntIface<Firebird::IDbCryptInfoImpl<DbInfo, Firebird::CheckStatusWrapper> >
+class DbInfo final : public RefCntIface<IDbCryptInfoImpl<DbInfo, CheckStatusWrapper>>
 {
 public:
 	DbInfo(BurpGlobals* bg)
@@ -142,7 +144,7 @@ public:
 	{ }
 
 	// IDbCryptInfo implementation
-	const char* getDatabaseFullPath(Firebird::CheckStatusWrapper*)
+	const char* getDatabaseFullPath(CheckStatusWrapper*)
 	{
 		return tdgbl->gbl_database_file_name;
 	}
@@ -161,22 +163,22 @@ struct BurpCrypt
 	~BurpCrypt()
 	{
 		if (crypt_plugin)
-			Firebird::PluginManagerInterfacePtr()->releasePlugin(crypt_plugin);
+			PluginManagerInterfacePtr()->releasePlugin(crypt_plugin);
 		if (holder_plugin)
-			Firebird::PluginManagerInterfacePtr()->releasePlugin(holder_plugin);
+			PluginManagerInterfacePtr()->releasePlugin(holder_plugin);
 	}
 
-	Firebird::IDbCryptPlugin* crypt_plugin;
-	Firebird::RefPtr<DbInfo> db_info;
-	Firebird::IKeyHolderPlugin* holder_plugin;
-	Firebird::ICryptKeyCallback* crypt_callback;
+	IDbCryptPlugin* crypt_plugin;
+	RefPtr<DbInfo> db_info;
+	IKeyHolderPlugin* holder_plugin;
+	ICryptKeyCallback* crypt_callback;
 };
 
 
 //____________________________________________________________
 //
 //
-static void calc_hash(Firebird::string& valid, Firebird::IDbCryptPlugin* plugin)
+static void calc_hash(string& valid, IDbCryptPlugin* plugin)
 {
 	// crypt verifier
 	const char* sample = "0123456789ABCDEF";
@@ -187,30 +189,30 @@ static void calc_hash(Firebird::string& valid, Firebird::IDbCryptPlugin* plugin)
 	check(&sv);
 
 	// calculate its hash
-	const Firebird::string verifier(result, sizeof(result));
-	Firebird::Sha1::hashBased64(valid, verifier);
+	const string verifier(result, sizeof(result));
+	Sha1::hashBased64(valid, verifier);
 }
 
 //____________________________________________________________
 //
 //
-static Firebird::IKeyHolderPlugin* mvol_get_holder(BurpGlobals* tdgbl, Firebird::RefPtr<const Firebird::Config>& config)
+static IKeyHolderPlugin* mvol_get_holder(BurpGlobals* tdgbl, RefPtr<const Config>& config)
 {
 	fb_assert(tdgbl->gbl_sw_keyholder);
 
 	if (!tdgbl->gbl_crypt)
 	{
-		Firebird::GetPlugins<Firebird::IKeyHolderPlugin>
-			keyControl(Firebird::IPluginManager::TYPE_KEY_HOLDER, config, tdgbl->gbl_sw_keyholder);
+		GetPlugins<IKeyHolderPlugin>
+			keyControl(IPluginManager::TYPE_KEY_HOLDER, config, tdgbl->gbl_sw_keyholder);
 		if (!keyControl.hasData())
-			(Firebird::Arg::Gds(isc_no_keyholder_plugin) << tdgbl->gbl_sw_keyholder).raise();
+			(Arg::Gds(isc_no_keyholder_plugin) << tdgbl->gbl_sw_keyholder).raise();
 
 		BurpCrypt* g = tdgbl->gbl_crypt = FB_NEW_POOL(tdgbl->getPool()) BurpCrypt;
 		g->holder_plugin = keyControl.plugin();
 		g->holder_plugin->addRef();
 
 		// Also do not forget about keys from services manager
-		Firebird::ICryptKeyCallback* cb = tdgbl->uSvc->getCryptCallback();
+		ICryptKeyCallback* cb = tdgbl->uSvc->getCryptCallback();
 		if (cb)
 			g->holder_plugin->keyCallback(&tdgbl->throwStatus, cb);
 	}
@@ -221,15 +223,15 @@ static Firebird::IKeyHolderPlugin* mvol_get_holder(BurpGlobals* tdgbl, Firebird:
 //____________________________________________________________
 //
 //
-Firebird::ICryptKeyCallback* MVOL_get_crypt(BurpGlobals* tdgbl)
+ICryptKeyCallback* MVOL_get_crypt(BurpGlobals* tdgbl)
 {
 	fb_assert(tdgbl->gbl_sw_keyholder);
 
 	if (!tdgbl->gbl_crypt)
 	{
 		// Get per-DB config
-		Firebird::PathName dummy;
-		Firebird::RefPtr<const Firebird::Config> config;
+		PathName dummy;
+		RefPtr<const Config> config;
 		expandDatabaseName(tdgbl->gbl_database_file_name, dummy, &config);
 
 		mvol_get_holder(tdgbl, config);
@@ -259,12 +261,12 @@ static void start_crypt(BurpGlobals* tdgbl)
 	FbLocalStatus status;
 
 	// Get per-DB config
-	Firebird::PathName dummy;
-	Firebird::RefPtr<const Firebird::Config> config;
+	PathName dummy;
+	RefPtr<const Config> config;
 	expandDatabaseName(tdgbl->gbl_database_file_name, dummy, &config);
 
 	// Prepare key holders
-	Firebird::IKeyHolderPlugin* keyHolder = mvol_get_holder(tdgbl, config);
+	IKeyHolderPlugin* keyHolder = mvol_get_holder(tdgbl, config);
 
 	// Load crypt plugin
 	if (!tdgbl->mvol_crypt)
@@ -272,19 +274,19 @@ static void start_crypt(BurpGlobals* tdgbl)
 	if (!tdgbl->mvol_crypt)
 		BURP_error(378, true);
 
-	Firebird::GetPlugins<Firebird::IDbCryptPlugin>
-		cryptControl(Firebird::IPluginManager::TYPE_DB_CRYPT, config, tdgbl->mvol_crypt);
+	GetPlugins<IDbCryptPlugin>
+		cryptControl(IPluginManager::TYPE_DB_CRYPT, config, tdgbl->mvol_crypt);
 	if (!cryptControl.hasData())
-		(Firebird::Arg::Gds(isc_no_crypt_plugin) << tdgbl->mvol_crypt).raise();
+		(Arg::Gds(isc_no_crypt_plugin) << tdgbl->mvol_crypt).raise();
 
-	Firebird::RefPtr<DbInfo> dbInfo(FB_NEW DbInfo(tdgbl));
-	Firebird::IDbCryptPlugin* p = cryptControl.plugin();
+	RefPtr<DbInfo> dbInfo(FB_NEW DbInfo(tdgbl));
+	IDbCryptPlugin* p = cryptControl.plugin();
 	p->setInfo(&status, dbInfo);
 	if (!status.isSuccess())
 	{
 		const ISC_STATUS* v = status->getErrors();
 		if (v[0] == isc_arg_gds && v[1] != isc_arg_end && v[1] != isc_interface_version_too_old)
-			Firebird::status_exception::raise(&status);
+			status_exception::raise(&status);
 	}
 
 	// Initialize key in crypt plugin
@@ -294,10 +296,10 @@ static void start_crypt(BurpGlobals* tdgbl)
 	// Validate hash
 	if (tdgbl->gbl_key_hash[0])
 	{
-		Firebird::string hash;
+		string hash;
 		calc_hash(hash, p);
 		if (hash != tdgbl->gbl_key_hash)
-			(Firebird::Arg::Gds(isc_bad_crypt_key) << tdgbl->mvol_keyname).raise();
+			(Arg::Gds(isc_bad_crypt_key) << tdgbl->mvol_keyname).raise();
 	}
 
 	// crypt plugin is ready
@@ -485,7 +487,7 @@ static ULONG unzip_read_block(BurpGlobals* tdgbl, UCHAR* buffer, FB_SIZE_T buffe
 
 	return buffer_length - strm.avail_out;
 #else
-	(Firebird::Arg::Gds(isc_random) << "No inflate support").raise();
+	(Arg::Gds(isc_random) << "No inflate support").raise();
 #endif
 }
 
@@ -550,7 +552,7 @@ static void zip_write_block(BurpGlobals* tdgbl, const UCHAR* buffer, FB_SIZE_T b
 		}
 	}
 #else
-	(Firebird::Arg::Gds(isc_random) << "No deflate support").raise();
+	(Arg::Gds(isc_random) << "No deflate support").raise();
 #endif
 }
 
@@ -682,8 +684,8 @@ static void checkCompression()
 #ifdef HAVE_ZLIB_H
 	if (!zlib())
 	{
-		(Firebird::Arg::Gds(isc_random) << "Compession support library not loaded" <<
-		 Firebird::Arg::StatusVector(zlib().status)).raise();
+		(Arg::Gds(isc_random) << "Compession support library not loaded" <<
+		 Arg::StatusVector(zlib().status)).raise();
 	}
 #endif
 }
@@ -707,8 +709,8 @@ void MVOL_init_read(const char* file_name, USHORT* format)
 #ifdef HAVE_ZLIB_H
 		z_stream& strm = tdgbl->gbl_stream;
 
-		strm.zalloc = Firebird::ZLib::allocFunc;
-		strm.zfree = Firebird::ZLib::freeFunc;
+		strm.zalloc = ZLib::allocFunc;
+		strm.zfree = ZLib::freeFunc;
 		strm.opaque = Z_NULL;
 		strm.avail_in = 0;
 		strm.next_in = Z_NULL;
@@ -779,8 +781,8 @@ void MVOL_init_write(const char* file_name)
 	{
 		z_stream& strm = tdgbl->gbl_stream;
 
-		strm.zalloc = Firebird::ZLib::allocFunc;
-		strm.zfree = Firebird::ZLib::freeFunc;
+		strm.zalloc = ZLib::allocFunc;
+		strm.zfree = ZLib::freeFunc;
 		strm.opaque = Z_NULL;
 		checkCompression();
 		int ret = zlib().deflateInit(&strm, Z_DEFAULT_COMPRESSION);
@@ -1625,12 +1627,12 @@ static void prompt_for_name(SCHAR* name, int length)
 	// Get a location to read from.
 	fb_assert(!tdgbl->uSvc->isService());
 
-	if (isatty(fileno(stdout)) || !(term_out = Firebird::os_utils::fopen(TERM_OUTPUT, "w")))
+	if (isatty(fileno(stdout)) || !(term_out = os_utils::fopen(TERM_OUTPUT, "w")))
 	{
 		term_out = stdout;
 	}
 
-	if (isatty(fileno(stdin)) || !(term_in = Firebird::os_utils::fopen(TERM_INPUT, "r")))
+	if (isatty(fileno(stdin)) || !(term_in = os_utils::fopen(TERM_INPUT, "r")))
 	{
 		term_in = stdin;
 	}
@@ -2039,7 +2041,7 @@ static bool write_header(DESC handle, ULONG backup_buffer_size, bool full_buffer
 		{
 			start_crypt(tdgbl);
 			fb_assert(tdgbl->gbl_crypt && tdgbl->gbl_crypt->crypt_plugin);
-			Firebird::string hash;
+			string hash;
 			calc_hash(hash, tdgbl->gbl_crypt->crypt_plugin);
 			put_asciz(att_backup_hash, hash.c_str());
 		}
@@ -2118,7 +2120,7 @@ bool MVOL_split_hdr_write()
 
 	time_t seconds = time(NULL);
 
-	Firebird::string nm = tdgbl->toSystem(tdgbl->action->act_file->fil_name);
+	string nm = tdgbl->toSystem(tdgbl->action->act_file->fil_name);
 	snprintf(buffer, sizeof(buffer), "%s%.24s      , file No. %4d of %4d, %-27.27s",
 			HDR_SPLIT_TAG, ctime(&seconds), tdgbl->action->act_file->fil_seq,
 			tdgbl->action->act_total, nm.c_str());
@@ -2179,3 +2181,6 @@ bool MVOL_split_hdr_read()
 
 	return false;
 }
+
+
+} // namespace Firebird::Burp

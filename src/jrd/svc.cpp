@@ -157,8 +157,8 @@ namespace {
 namespace {
 inline constexpr serv_entry services[] =
 {
-	{ isc_action_svc_backup, "Backup Database", BURP_main },
-	{ isc_action_svc_restore, "Restore Database", BURP_main },
+	{ isc_action_svc_backup, "Backup Database", Burp::BURP_main },
+	{ isc_action_svc_restore, "Restore Database", Burp::BURP_main },
 	{ isc_action_svc_repair, "Repair Database", Alice::ALICE_main },
 	{ isc_action_svc_add_user, "Add User", GSEC_main },
 	{ isc_action_svc_delete_user, "Delete User", GSEC_main },
