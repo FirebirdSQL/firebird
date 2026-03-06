@@ -34,12 +34,14 @@
 #include "../common/classes/ImplementHelper.h"
 #include "../common/isc_f_proto.h"
 
-using namespace Firebird;
+namespace Firebird::Auth
+{
+
 
 namespace
 {
-	Firebird::SimpleFactory<Firebird::Auth::WinSspiClient> clientFactory;
-	Firebird::SimpleFactory<Firebird::Auth::WinSspiServer> serverFactory;
+	SimpleFactory<WinSspiClient> clientFactory;
+	SimpleFactory<WinSspiServer> serverFactory;
 
 	constexpr const char* plugName = "Win_Sspi";
 
@@ -64,8 +66,6 @@ namespace
 		return (ToType)rc;
 	}
 }
-
-namespace Firebird::Auth {
 
 
 static thread_local bool legacySSP = false;
@@ -377,12 +377,12 @@ bool AuthSspi::getLogin(string& login, bool& wh, GroupsList& grNames)
 }
 
 
-WinSspiServer::WinSspiServer(Firebird::IPluginConfig*)
+WinSspiServer::WinSspiServer(IPluginConfig*)
 	: sspiData(getPool()),
 	  done(false)
 { }
 
-int WinSspiServer::authenticate(Firebird::CheckStatusWrapper* status,
+int WinSspiServer::authenticate(CheckStatusWrapper* status,
 								IServerBlock* sBlock,
 								IWriter* writerInterface)
 {
@@ -426,7 +426,7 @@ int WinSspiServer::authenticate(Firebird::CheckStatusWrapper* status,
 			}
 
 			// walk groups to which login belongs and list them using writerInterface
-			Firebird::string grName;
+			string grName;
 
 			for (unsigned n = 0; n < grNames.getCount(); ++n)
 			{
@@ -465,7 +465,7 @@ int WinSspiServer::authenticate(Firebird::CheckStatusWrapper* status,
 
 		sBlock->putData(status, sspiData.getCount(), sspiData.begin());
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(status);
 		return AUTH_FAILED;
@@ -475,11 +475,11 @@ int WinSspiServer::authenticate(Firebird::CheckStatusWrapper* status,
 }
 
 
-WinSspiClient::WinSspiClient(Firebird::IPluginConfig*)
+WinSspiClient::WinSspiClient(IPluginConfig*)
 	: sspiData(getPool()), keySet(false)
 { }
 
-int WinSspiClient::authenticate(Firebird::CheckStatusWrapper* status,
+int WinSspiClient::authenticate(CheckStatusWrapper* status,
 								IClientBlock* cBlock)
 {
 	try
@@ -520,7 +520,7 @@ int WinSspiClient::authenticate(Firebird::CheckStatusWrapper* status,
 			keySet = true;
 		}
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(status);
 		return AUTH_FAILED;
@@ -530,16 +530,17 @@ int WinSspiClient::authenticate(Firebird::CheckStatusWrapper* status,
 }
 
 
-void registerTrustedClient(Firebird::IPluginManager* iPlugin)
+void registerTrustedClient(IPluginManager* iPlugin)
 {
-	iPlugin->registerPluginFactory(Firebird::IPluginManager::TYPE_AUTH_CLIENT, plugName, &clientFactory);
+	iPlugin->registerPluginFactory(IPluginManager::TYPE_AUTH_CLIENT, plugName, &clientFactory);
 }
 
-void registerTrustedServer(Firebird::IPluginManager* iPlugin)
+void registerTrustedServer(IPluginManager* iPlugin)
 {
-	iPlugin->registerPluginFactory(Firebird::IPluginManager::TYPE_AUTH_SERVER, plugName, &serverFactory);
+	iPlugin->registerPluginFactory(IPluginManager::TYPE_AUTH_SERVER, plugName, &serverFactory);
 }
 
-} // namespace Auth
+
+} // namespace Firebird::Auth
 
 #endif // TRUSTED_AUTH

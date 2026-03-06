@@ -31,27 +31,30 @@
 #include "firebird/Interface.h"
 
 
-namespace Firebird::Auth {
+namespace Firebird::Auth
+{
+
 
 class SecurityDatabaseManagement final :
-	public Firebird::StdPlugin<Firebird::IManagementImpl<SecurityDatabaseManagement, Firebird::CheckStatusWrapper> >
+	public StdPlugin<IManagementImpl<SecurityDatabaseManagement, CheckStatusWrapper>>
 {
 public:
-	explicit SecurityDatabaseManagement(Firebird::IPluginConfig* par);
+	explicit SecurityDatabaseManagement(IPluginConfig* par);
 
 	// IManagement implementation
-	void start(Firebird::CheckStatusWrapper* status, Firebird::ILogonInfo* logonInfo) override;
-	int execute(Firebird::CheckStatusWrapper* status, Firebird::IUser* user, Firebird::IListUsers* callback) override;
-	void commit(Firebird::CheckStatusWrapper* status) override;
-	void rollback(Firebird::CheckStatusWrapper* status) override;
+	void start(CheckStatusWrapper* status, ILogonInfo* logonInfo) override;
+	int execute(CheckStatusWrapper* status, IUser* user, IListUsers* callback) override;
+	void commit(CheckStatusWrapper* status) override;
+	void rollback(CheckStatusWrapper* status) override;
 
 	int release() override;
 
 private:
-	Firebird::RefPtr<Firebird::IFirebirdConf> config;
+	RefPtr<IFirebirdConf> config;
 	FB_API_HANDLE database, transaction;
 };
 
-} // namespace Auth
+
+} // namespace Firebird::Auth
 
 #endif // AUTH_LEGACY_MANAGEMENT_H

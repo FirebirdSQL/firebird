@@ -49,13 +49,15 @@
 #include <Security.h>
 #include <stdio.h>
 
-namespace Firebird::Auth {
+namespace Firebird::Auth
+{
+
 
 class AuthSspi
 {
 public:
-	typedef Firebird::ObjectsArray<Firebird::string> GroupsList;
-	typedef Firebird::UCharBuffer Key;
+	typedef ObjectsArray<string> GroupsList;
+	typedef UCharBuffer Key;
 
 private:
 	static constexpr size_t BUFSIZE = 4096;
@@ -64,7 +66,7 @@ private:
 	bool hasCredentials;
 	CtxtHandle ctxtHndl;
 	bool hasContext;
-	Firebird::string ctName;
+	string ctName;
 	bool wheel;
 	GroupsList groupNames;
 	Key sessionKey;
@@ -85,7 +87,7 @@ private:
 	bool initEntries() noexcept;
 
 public:
-	typedef Firebird::Array<unsigned char> DataHolder;
+	typedef Array<unsigned char> DataHolder;
 
 	AuthSspi();
 	~AuthSspi();
@@ -104,22 +106,22 @@ public:
 	bool accept(DataHolder& data);
 
 	// returns Windows user/group names, matching accepted security context
-	bool getLogin(Firebird::string& login, bool& wh, GroupsList& grNames);
+	bool getLogin(string& login, bool& wh, GroupsList& grNames);
 
 	// returns session key for wire encryption
 	const Key* getKey() const noexcept;
 };
 
 class WinSspiServer :
-	public Firebird::StdPlugin<Firebird::IServerImpl<WinSspiServer, Firebird::CheckStatusWrapper> >
+	public StdPlugin<IServerImpl<WinSspiServer, CheckStatusWrapper>>
 {
 public:
 	// IServer implementation
-	int authenticate(Firebird::CheckStatusWrapper* status, Firebird::IServerBlock* sBlock,
-		Firebird::IWriter* writerInterface);
-	void setDbCryptCallback(Firebird::CheckStatusWrapper* status, Firebird::ICryptKeyCallback* callback) noexcept {}; // do nothing
+	int authenticate(CheckStatusWrapper* status, IServerBlock* sBlock,
+		IWriter* writerInterface);
+	void setDbCryptCallback(CheckStatusWrapper* status, ICryptKeyCallback* callback) noexcept {}; // do nothing
 
-	WinSspiServer(Firebird::IPluginConfig*);
+	WinSspiServer(IPluginConfig*);
 
 private:
 	AuthSspi::DataHolder sspiData;
@@ -128,13 +130,13 @@ private:
 };
 
 class WinSspiClient :
-	public Firebird::StdPlugin<Firebird::IClientImpl<WinSspiClient, Firebird::CheckStatusWrapper> >
+	public StdPlugin<IClientImpl<WinSspiClient, CheckStatusWrapper>>
 {
 public:
 	// IClient implementation
-	int authenticate(Firebird::CheckStatusWrapper* status, Firebird::IClientBlock* sBlock);
+	int authenticate(CheckStatusWrapper* status, IClientBlock* sBlock);
 
-	WinSspiClient(Firebird::IPluginConfig*);
+	WinSspiClient(IPluginConfig*);
 
 private:
 	AuthSspi::DataHolder sspiData;
@@ -142,14 +144,15 @@ private:
 	bool keySet;
 };
 
-void registerTrustedClient(Firebird::IPluginManager* iPlugin);
-void registerTrustedServer(Firebird::IPluginManager* iPlugin);
+void registerTrustedClient(IPluginManager* iPlugin);
+void registerTrustedServer(IPluginManager* iPlugin);
 
 // Set per-thread flag that specify which security package should be used by
 // newly created plugin instances: true - use NTLM, false - use Negotiate.
 void setLegacySSP(bool value) noexcept;
 
-} // namespace Auth
+
+} // namespace Firebird::Auth
 
 #endif // TRUSTED_AUTH
 #endif // AUTH_SSPI_H

@@ -242,6 +242,6 @@ public:
 
 int setGsecCode(int code, unsigned int operation);
 
-} // namespace Auth
+} // namespace Firebird::Auth
 
 #endif // UTILITIES_SECUR_PROTO_H

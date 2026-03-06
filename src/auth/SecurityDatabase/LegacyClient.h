@@ -30,25 +30,28 @@
 #include "firebird/Interface.h"
 #include "../common/classes/ImplementHelper.h"
 
-namespace Firebird::Auth {
+namespace Firebird::Auth
+{
+
 
 // Required to stop analyzing rest of plugins before first roundtrip to server
 // if legacy login is present in DPB
 
 class SecurityDatabaseClient final :
-	public Firebird::StdPlugin<Firebird::IClientImpl<SecurityDatabaseClient, Firebird::CheckStatusWrapper> >
+	public StdPlugin<IClientImpl<SecurityDatabaseClient, CheckStatusWrapper>>
 {
 public:
-	explicit SecurityDatabaseClient(Firebird::IPluginConfig*)
+	explicit SecurityDatabaseClient(IPluginConfig*)
 	{
 	}
 
 	// IClient implementation
-	int authenticate(Firebird::CheckStatusWrapper*, Firebird::IClientBlock* data);
+	int authenticate(CheckStatusWrapper*, IClientBlock* data);
 };
 
-void registerLegacyClient(Firebird::IPluginManager* iPlugin);
+void registerLegacyClient(IPluginManager* iPlugin);
 
-} // namespace Auth
+
+} // namespace Firebird::Auth
 
 #endif // AUTH_LEGACY_CLIENT_H

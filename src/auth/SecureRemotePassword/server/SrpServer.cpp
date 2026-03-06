@@ -38,8 +38,9 @@
 #include "../common/constants.h"
 #include "../auth/SecDbCache.h"
 
-using namespace Firebird;
-using namespace Firebird::Auth;
+namespace Firebird::Auth
+{
+
 
 namespace {
 
@@ -70,7 +71,7 @@ struct Metadata
 InitInstance<Metadata> meta;
 
 
-class SrpServer : public StdPlugin<IServerImpl<SrpServer, CheckStatusWrapper> >
+class SrpServer : public StdPlugin<IServerImpl<SrpServer, CheckStatusWrapper>>
 {
 public:
 	explicit SrpServer(IPluginConfig* par)
@@ -141,7 +142,7 @@ public:
 
 	static void forceClean(IProvider* p, CachedSecurityDatabase::Instance& instance)
 	{
-		Firebird::PathName secDbName(instance->secureDbName);
+		PathName secDbName(instance->secureDbName);
 
 		instance.reset();
 		cleanup();
@@ -276,7 +277,7 @@ int SrpServer::authenticate(CheckStatusWrapper* status, IServerBlock* sb, IWrite
 
 			const size_t len = account.length();
 			if (len > SZ_LOGIN)
-				status_exception::raise(Firebird::Arg::Gds(isc_long_login) << Firebird::Arg::Num(len) << Firebird::Arg::Num(SZ_LOGIN));
+				status_exception::raise(Arg::Gds(isc_long_login) << Arg::Num(len) << Arg::Num(SZ_LOGIN));
 
 			unsigned int length;
 			const unsigned char* val = sb->getData(&length);
@@ -418,8 +419,6 @@ SimpleFactory<SrpServerImpl<sha512> > factory_sha512;
 } // anonymous namespace
 
 
-namespace Firebird::Auth {
-
 void registerSrpServer(IPluginManager* iPlugin)
 {
 	iPlugin->registerPluginFactory(IPluginManager::TYPE_AUTH_SERVER, RemotePassword::plugName, &factory_sha1);
@@ -429,4 +428,5 @@ void registerSrpServer(IPluginManager* iPlugin)
 	iPlugin->registerPluginFactory(IPluginManager::TYPE_AUTH_SERVER, RemotePassword::pluginName(512).c_str(), &factory_sha512);
 }
 
-} // namespace Auth
+
+} // namespace Firebird::Auth

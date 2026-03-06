@@ -121,4 +121,4 @@ int setGsecCode(int code, unsigned int operation)
 	return GsecMsg17;
 }
 
-} // namespace Auth
+} // namespace Firebird::Auth

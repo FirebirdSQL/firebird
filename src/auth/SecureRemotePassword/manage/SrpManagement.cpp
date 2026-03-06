@@ -40,26 +40,27 @@
 #include "../common/classes/auto.h"
 #include "../common/classes/ParsedList.h"
 
-namespace {
+namespace Firebird::Auth
+{
 
-typedef Field<Varying> Varfield;
-typedef Field<ISC_QUAD> Blob;
-typedef Field<FB_BOOLEAN> Boolean;
 
-Firebird::GlobalPtr<Firebird::ConfigKeys> keys;
+namespace
+{
+	typedef Field<Varying> Varfield;
+	typedef Field<ISC_QUAD> Blob;
+	typedef Field<FB_BOOLEAN> Boolean;
 
+	GlobalPtr<ConfigKeys> keys;
 } // anonymous namespace
 
-namespace Firebird::Auth {
-
-class SrpManagement final : public Firebird::StdPlugin<Firebird::IManagementImpl<SrpManagement, Firebird::CheckStatusWrapper> >
+class SrpManagement final : public StdPlugin<IManagementImpl<SrpManagement, CheckStatusWrapper>>
 {
 public:
-	explicit SrpManagement(Firebird::IPluginConfig* par)
+	explicit SrpManagement(IPluginConfig* par)
 		: curAtt(nullptr), mainTra(nullptr), grAdminTra(nullptr)
 	{
-		Firebird::LocalStatus s;
-		Firebird::CheckStatusWrapper statusWrapper(&s);
+		LocalStatus s;
+		CheckStatusWrapper statusWrapper(&s);
 		config.assignRefNoIncr(par->getFirebirdConf(&statusWrapper));
 		check(&statusWrapper);
 	}
@@ -98,9 +99,9 @@ private:
 			NULL
 		};
 
-		Firebird::LocalStatus s;
-		Firebird::CheckStatusWrapper statusWrapper(&s);
-		Firebird::ITransaction* ddlTran(curAtt->startTransaction(&statusWrapper, 0, NULL));
+		LocalStatus s;
+		CheckStatusWrapper statusWrapper(&s);
+		ITransaction* ddlTran(curAtt->startTransaction(&statusWrapper, 0, NULL));
 		check(&statusWrapper);
 
 		try
@@ -124,7 +125,7 @@ private:
 			ddlTran->commit(&statusWrapper);
 			check(&statusWrapper);
 		}
-		catch (const Firebird::Exception&)
+		catch (const Exception&)
 		{
 			if (ddlTran)
 			{
@@ -134,7 +135,7 @@ private:
 		}
 	}
 
-	void prepareName(Firebird::string& s, char c)
+	void prepareName(string& s, char c)
 	{
 		for (unsigned i = 0; i < s.length(); ++i)
 		{
@@ -145,35 +146,35 @@ private:
 		}
 	}
 
-	void grantRevokeAdmin(Firebird::IUser* user, bool ignoreRevoke = false)
+	void grantRevokeAdmin(IUser* user, bool ignoreRevoke = false)
 	{
 		if (!user->admin()->entered())
 		{
 			return;
 		}
 
-		Firebird::LocalStatus s;
-		Firebird::CheckStatusWrapper statusWrapper(&s);
+		LocalStatus s;
+		CheckStatusWrapper statusWrapper(&s);
 
-		Firebird::string userName(user->userName()->get());
+		string userName(user->userName()->get());
 		prepareName(userName, '"');
 
-		Firebird::string sql;
+		string sql;
 		if (user->admin()->get() == 0)
 		{
-			Firebird::string userName2(user->userName()->get());
+			string userName2(user->userName()->get());
 			prepareName(userName2, '\'');
-			Firebird::string selGrantor;
+			string selGrantor;
 			selGrantor.printf("SELECT RDB$GRANTOR FROM SYSTEM.RDB$USER_PRIVILEGES "
 				"WHERE RDB$USER = '%s' AND RDB$RELATION_NAME = '%s' AND RDB$PRIVILEGE = 'M'",
 				userName2.c_str(), ADMIN_ROLE);
 			Message out;
 			Field<Varying> grantor(out, MAX_SQL_IDENTIFIER_SIZE);
-			Firebird::IResultSet* curs = curAtt->openCursor(&statusWrapper, grAdminTra, selGrantor.length(),
+			IResultSet* curs = curAtt->openCursor(&statusWrapper, grAdminTra, selGrantor.length(),
 				selGrantor.c_str(), SQL_DIALECT_V6, NULL, NULL, out.getMetadata(), NULL, 0);
 			check(&statusWrapper);
 
-			const bool hasGrant = curs->fetchNext(&statusWrapper, out.getBuffer()) == Firebird::IStatus::RESULT_OK;
+			const bool hasGrant = curs->fetchNext(&statusWrapper, out.getBuffer()) == IStatus::RESULT_OK;
 			curs->close(&statusWrapper);
 			check(&statusWrapper);
 
@@ -204,7 +205,7 @@ private:
 		check(&statusWrapper);
 	}
 
-	bool getUid(Firebird::CheckStatusWrapper* status, Firebird::IAttachment* att, Firebird::UCharBuffer& uid)
+	bool getUid(CheckStatusWrapper* status, IAttachment* att, UCharBuffer& uid)
 	{
 		UCHAR item = fb_info_db_file_id;
 		UCHAR outbuf[256];
@@ -230,10 +231,9 @@ private:
 		return false;
 	}
 
-
 public:
 	// IManagement implementation
-	void start(Firebird::CheckStatusWrapper* status, Firebird::ILogonInfo* logonInfo)
+	void start(CheckStatusWrapper* status, ILogonInfo* logonInfo)
 	{
 		status->init();
 
@@ -241,19 +241,19 @@ public:
 		{
 			if (curAtt)
 			{
-				(Firebird::Arg::Gds(isc_random) << "Database is already attached in SRP user management").raise();
+				(Arg::Gds(isc_random) << "Database is already attached in SRP user management").raise();
 			}
 
 			const unsigned int secDbKey = keys->getKey(config, "SecurityDatabase");
 			const char* secDbName = config->asString(secDbKey);
 			if (!(secDbName && secDbName[0]))
 			{
-				Firebird::Arg::Gds(isc_secdb_name).raise();
+				Arg::Gds(isc_secdb_name).raise();
 			}
 
-			Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
+			ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
 			dpb.insertByte(isc_dpb_sec_attach, TRUE);
-			dpb.insertString(isc_dpb_config, Firebird::ParsedList::getNonLoopbackProviders(secDbName));
+			dpb.insertString(isc_dpb_config, ParsedList::getNonLoopbackProviders(secDbName));
 
 			unsigned int authBlockSize;
 			const unsigned char* authBlock = logonInfo->authBlock(&authBlockSize);
@@ -279,7 +279,7 @@ public:
 					dpb.insertString(isc_dpb_trusted_auth, str, fb_strlen(str));
 			}
 
-			Firebird::DispatcherPtr p;
+			DispatcherPtr p;
 			curAtt = p->attachDatabase(status, secDbName, dpb.getBufferLength(), dpb.getBuffer());
 			check(status);
 			ownAtt.reset(curAtt);
@@ -287,13 +287,13 @@ public:
 			// Check: is passed attachment OK for us?
 
 			// ID of requested sec.db
-			Firebird::UCharBuffer reqId;
+			UCharBuffer reqId;
 			if (getUid(status, curAtt, reqId))
 			{
-				Firebird::IAttachment* att = logonInfo->attachment(status);
+				IAttachment* att = logonInfo->attachment(status);
 
 				// ID of passed attachment
-				Firebird::UCharBuffer actualId;
+				UCharBuffer actualId;
 				if (att && getUid(status, att, actualId))
 				{
 					if (actualId == reqId)
@@ -321,7 +321,7 @@ public:
 			fprintf(stderr, "SrpManagement: Use own att\n");
 #endif
 		}
-		catch (const Firebird::Exception& ex)
+		catch (const Exception& ex)
 		{
 			ownTra.reset(nullptr);
 			ownAtt.reset(nullptr);
@@ -329,7 +329,7 @@ public:
 		}
 	}
 
-	int execute(Firebird::CheckStatusWrapper* status, Firebird::IUser* user, Firebird::IListUsers* callback)
+	int execute(CheckStatusWrapper* status, IUser* user, IListUsers* callback)
 	{
 		try
 		{
@@ -343,36 +343,36 @@ public:
 
 			switch(user->operation())
 			{
-			case Firebird::IUser::OP_USER_DROP_MAP:
-			case Firebird::IUser::OP_USER_SET_MAP:
+			case IUser::OP_USER_DROP_MAP:
+			case IUser::OP_USER_SET_MAP:
 				{
-					Firebird::string sql;
+					string sql;
 					sql.printf("ALTER ROLE " ADMIN_ROLE " %s AUTO ADMIN MAPPING",
-						user->operation() == Firebird::IUser::OP_USER_SET_MAP ? "SET" : "DROP");
+						user->operation() == IUser::OP_USER_SET_MAP ? "SET" : "DROP");
 					curAtt->execute(status, grAdminTra, sql.length(), sql.c_str(), SQL_DIALECT_V6, NULL, NULL, NULL, NULL);
 					check(status);
 				}
 				break;
 
-			case Firebird::IUser::OP_USER_ADD:
+			case IUser::OP_USER_ADD:
 				{
 					const char* insert =
 						"INSERT INTO plg$srp.plg$srp_view(PLG$USER_NAME, PLG$VERIFIER, PLG$SALT, PLG$FIRST, PLG$MIDDLE, PLG$LAST,"
 						"PLG$COMMENT, PLG$ATTRIBUTES, PLG$ACTIVE) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
-					Firebird::IStatement* stmt = NULL;
+					IStatement* stmt = NULL;
 					try
 					{
 						for (unsigned repeat = 0; ; ++repeat)
 						{
-							stmt = curAtt->prepare(status, mainTra, 0, insert, SQL_DIALECT_V6, Firebird::IStatement::PREPARE_PREFETCH_METADATA);
-							if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
+							stmt = curAtt->prepare(status, mainTra, 0, insert, SQL_DIALECT_V6, IStatement::PREPARE_PREFETCH_METADATA);
+							if (!(status->getState() & IStatus::STATE_ERRORS))
 							{
 								break;
 							}
 							else if (repeat > 0)
 							{
-								Firebird::status_exception::raise(status);
+								status_exception::raise(status);
 							}
 
 							if (fb_utils::containsErrorCode(status->getErrors(), isc_dsql_relation_err))
@@ -419,12 +419,12 @@ public:
 						setField(active, user->active());
 
 #if SRP_DEBUG > 1
-						Firebird::BigInteger salt("02E268803000000079A478A700000002D1A6979000000026E1601C000000054F");
+						BigInteger salt("02E268803000000079A478A700000002D1A6979000000026E1601C000000054F");
 #else
-						Firebird::BigInteger salt;
+						BigInteger salt;
 						salt.random(RemotePassword::SRP_SALT_SIZE);
 #endif
-						Firebird::UCharBuffer s;
+						UCharBuffer s;
 						salt.getBytes(s);
 						slt.set(s.getCount(), s.begin());
 
@@ -432,7 +432,7 @@ public:
 #if SRP_DEBUG > 0
 						fprintf(stderr, ">%s< >%s<\n", user->userName()->get(), user->password()->get());
 #endif
-						Firebird::string s1;
+						string s1;
 						salt.getText(s1);
 						server.computeVerifier(user->userName()->get(), s1, user->password()->get()).getBytes(s);
 						dumpIt("verifier", s);
@@ -446,7 +446,7 @@ public:
 
 						grantRevokeAdmin(user);
 					}
-					catch (const Firebird::Exception&)
+					catch (const Exception&)
 					{
 						if (stmt)
 						{
@@ -457,19 +457,19 @@ public:
 				}
 				break;
 
-			case Firebird::IUser::OP_USER_MODIFY:
+			case IUser::OP_USER_MODIFY:
 				{
-					Firebird::string update = "UPDATE plg$srp.plg$srp_view SET ";
+					string update = "UPDATE plg$srp.plg$srp_view SET ";
 
-					Firebird::AutoPtr<Varfield> verifier, slt;
+					AutoPtr<Varfield> verifier, slt;
 					if (user->password()->entered())
 					{
 						update += "PLG$VERIFIER=?,PLG$SALT=?,";
 					}
 
-					Firebird::AutoPtr<Varfield> first, middle, last;
-					Firebird::AutoPtr<Blob> comment, attr;
-					Firebird::AutoPtr<Boolean> active;
+					AutoPtr<Varfield> first, middle, last;
+					AutoPtr<Blob> comment, attr;
+					AutoPtr<Boolean> active;
 					allocField(user->firstName(), update, "PLG$FIRST");
 					allocField(user->middleName(), update, "PLG$MIDDLE");
 					allocField(user->lastName(), update, "PLG$LAST");
@@ -485,10 +485,10 @@ public:
 					update.rtrim(",");
 					update += " WHERE PLG$USER_NAME=?";
 
-					Firebird::IStatement* stmt = NULL;
+					IStatement* stmt = NULL;
 					try
 					{
-						stmt = curAtt->prepare(status, mainTra, 0, update.c_str(), SQL_DIALECT_V6, Firebird::IStatement::PREPARE_PREFETCH_METADATA);
+						stmt = curAtt->prepare(status, mainTra, 0, update.c_str(), SQL_DIALECT_V6, IStatement::PREPARE_PREFETCH_METADATA);
 						check(status);
 
 						Meta im(stmt, false);
@@ -499,12 +499,12 @@ public:
 							verifier = FB_NEW Varfield(up);
 							slt = FB_NEW Varfield(up);
 #if SRP_DEBUG > 1
-							Firebird::BigInteger salt("02E268803000000079A478A700000002D1A6979000000026E1601C000000054F");
+							BigInteger salt("02E268803000000079A478A700000002D1A6979000000026E1601C000000054F");
 #else
-							Firebird::BigInteger salt;
+							BigInteger salt;
 							salt.random(RemotePassword::SRP_SALT_SIZE);
 #endif
-							Firebird::UCharBuffer s;
+							UCharBuffer s;
 							salt.getBytes(s);
 							slt->set(s.getCount(), s.begin());
 
@@ -512,7 +512,7 @@ public:
 #if SRP_DEBUG > 0
 							fprintf(stderr, ">%s< >%s<\n", user->userName()->get(), user->password()->get());
 #endif
-							Firebird::string s1;
+							string s1;
 							salt.getText(s1);
 							server.computeVerifier(user->userName()->get(), s1, user->password()->get()).getBytes(s);
 							dumpIt("verifier", s);
@@ -549,7 +549,7 @@ public:
 
 						grantRevokeAdmin(user);
 					}
-					catch (const Firebird::Exception&)
+					catch (const Exception&)
 					{
 						if (stmt)
 						{
@@ -560,13 +560,13 @@ public:
 				}
 				break;
 
-			case Firebird::IUser::OP_USER_DELETE:
+			case IUser::OP_USER_DELETE:
 				{
 					const char* del = "DELETE FROM plg$srp.plg$srp_view WHERE PLG$USER_NAME=?";
-					Firebird::IStatement* stmt = NULL;
+					IStatement* stmt = NULL;
 					try
 					{
-						stmt = curAtt->prepare(status, mainTra, 0, del, SQL_DIALECT_V6, Firebird::IStatement::PREPARE_PREFETCH_METADATA);
+						stmt = curAtt->prepare(status, mainTra, 0, del, SQL_DIALECT_V6, IStatement::PREPARE_PREFETCH_METADATA);
 						check(status);
 
 						Meta im(stmt, false);
@@ -591,7 +591,7 @@ public:
 						check(status);
 						grantRevokeAdmin(user, true);
 					}
-					catch (const Firebird::Exception&)
+					catch (const Exception&)
 					{
 						if (stmt)
 						{
@@ -602,9 +602,9 @@ public:
 				}
 				break;
 
-			case Firebird::IUser::OP_USER_DISPLAY:
+			case IUser::OP_USER_DISPLAY:
 				{
-					Firebird::string disp =
+					string disp =
 						"WITH ADMINS AS (SELECT RDB$USER FROM SYSTEM.RDB$USER_PRIVILEGES "
 						"	WHERE RDB$RELATION_NAME = 'RDB$ADMIN' AND RDB$PRIVILEGE = 'M' GROUP BY RDB$USER) "
 						"SELECT PLG$USER_NAME, PLG$FIRST, PLG$MIDDLE, PLG$LAST, PLG$COMMENT, PLG$ATTRIBUTES, "
@@ -616,12 +616,12 @@ public:
 						disp += " WHERE PLG$USER_NAME = ?";
 					}
 
-					Firebird::IStatement* stmt = NULL;
-					Firebird::IResultSet* rs = NULL;
+					IStatement* stmt = NULL;
+					IResultSet* rs = NULL;
 					try
 					{
 						stmt = curAtt->prepare(status, mainTra, 0, disp.c_str(), SQL_DIALECT_V6,
-							Firebird::IStatement::PREPARE_PREFETCH_METADATA);
+							IStatement::PREPARE_PREFETCH_METADATA);
 						check(status);
 
 						Meta om(stmt, true);
@@ -645,7 +645,7 @@ public:
 							(par ? par->getBuffer() : NULL), om, 0);
 						check(status);
 
-						while (rs->fetchNext(status, di.getBuffer()) == Firebird::IStatus::RESULT_OK)
+						while (rs->fetchNext(status, di.getBuffer()) == IStatus::RESULT_OK)
 						{
 							listField(user->userName(), login);
 							listField(user->firstName(), first);
@@ -667,7 +667,7 @@ public:
 						stmt->free(status);
 						check(status);
 					}
-					catch (const Firebird::Exception&)
+					catch (const Exception&)
 					{
 						if (stmt)
 						{
@@ -682,7 +682,7 @@ public:
 				return -1;
 			}
 		}
-		catch (const Firebird::Exception& ex)
+		catch (const Exception& ex)
 		{
 			ex.stuffException(status);
 			return -1;
@@ -691,24 +691,24 @@ public:
 		return 0;
 	}
 
-	void commit(Firebird::CheckStatusWrapper* status)
+	void commit(CheckStatusWrapper* status)
 	{
 		if (ownTra)
 		{
 			ownTra->commit(status);
-			if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
+			if (!(status->getState() & IStatus::STATE_ERRORS))
 			{
 				ownTra.release();
 			}
 		}
 	}
 
-	void rollback(Firebird::CheckStatusWrapper* status)
+	void rollback(CheckStatusWrapper* status)
 	{
 		if (ownTra)
 		{
 			ownTra->rollback(status);
-			if (!(status->getState() & Firebird::IStatus::STATE_ERRORS))
+			if (!(status->getState() & IStatus::STATE_ERRORS))
 			{
 				ownTra.release();
 			}
@@ -716,20 +716,20 @@ public:
 	}
 
 private:
-	Firebird::RefPtr<Firebird::IFirebirdConf> config;
+	RefPtr<IFirebirdConf> config;
 
 	// attachment(s)
-	Firebird::AutoRelease<Firebird::IAttachment> ownAtt;
-	Firebird::IAttachment* curAtt;
+	AutoRelease<IAttachment> ownAtt;
+	IAttachment* curAtt;
 
 	// transactions
-	Firebird::AutoRelease<Firebird::ITransaction> ownTra;
-	Firebird::ITransaction* mainTra;
-	Firebird::ITransaction* grAdminTra;
+	AutoRelease<ITransaction> ownTra;
+	ITransaction* mainTra;
+	ITransaction* grAdminTra;
 
-	RemotePasswordImpl<Firebird::Sha1> server;
+	RemotePasswordImpl<Sha1> server;
 
-	int recordsCount(Firebird::CheckStatusWrapper* status, Firebird::IStatement* stmt, UCHAR item)
+	int recordsCount(CheckStatusWrapper* status, IStatement* stmt, UCHAR item)
 	{
 		UCHAR buffer[33];
 		const UCHAR count_info[] = { isc_info_sql_records };
@@ -753,16 +753,16 @@ private:
 		return 0;
 	}
 
-	static void check(const Firebird::CheckStatusWrapper* status)
+	static void check(const CheckStatusWrapper* status)
 	{
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 		{
 			checkStatusVectorForMissingTable(status->getErrors());
-			Firebird::status_exception::raise(status);
+			status_exception::raise(status);
 		}
 	}
 
-	static void setField(Varfield& to, Firebird::ICharUserField* from)
+	static void setField(Varfield& to, ICharUserField* from)
 	{
 		if (from->entered())
 		{
@@ -774,7 +774,7 @@ private:
 		}
 	}
 
-	static void setField(Boolean& to, Firebird::IIntUserField* from)
+	static void setField(Boolean& to, IIntUserField* from)
 	{
 		if (from->entered())
 		{
@@ -786,7 +786,7 @@ private:
 		}
 	}
 
-	void setField(Firebird::CheckStatusWrapper* st, Blob& to, Firebird::ICharUserField* from)
+	void setField(CheckStatusWrapper* st, Blob& to, ICharUserField* from)
 	{
 		if (from->entered())
 		{
@@ -798,7 +798,7 @@ private:
 		}
 	}
 
-	static void allocField(Firebird::IUserField* value, Firebird::string& update, const char* name)
+	static void allocField(IUserField* value, string& update, const char* name)
 	{
 		if (value->entered() || value->specified())
 		{
@@ -809,7 +809,7 @@ private:
 	}
 
 	template <typename FT>
-	static void allocField(Firebird::AutoPtr<FT>& field, Message& up, Firebird::IUserField* value)
+	static void allocField(AutoPtr<FT>& field, Message& up, IUserField* value)
 	{
 		if (value->entered() || value->specified())
 		{
@@ -817,7 +817,7 @@ private:
 		}
 	}
 
-	static void assignField(Firebird::AutoPtr<Varfield>& field, Firebird::ICharUserField* name)
+	static void assignField(AutoPtr<Varfield>& field, ICharUserField* name)
 	{
 		if (field.hasData())
 		{
@@ -833,7 +833,7 @@ private:
 		}
 	}
 
-	static void assignField(Firebird::AutoPtr<Boolean>& field, Firebird::IIntUserField* name)
+	static void assignField(AutoPtr<Boolean>& field, IIntUserField* name)
 	{
 		if (field.hasData())
 		{
@@ -849,7 +849,7 @@ private:
 		}
 	}
 
-	void assignField(Firebird::CheckStatusWrapper* st, Firebird::AutoPtr<Blob>& field, Firebird::ICharUserField* name)
+	void assignField(CheckStatusWrapper* st, AutoPtr<Blob>& field, ICharUserField* name)
 	{
 		if (field.hasData())
 		{
@@ -866,10 +866,10 @@ private:
 		}
 	}
 
-	static void listField(Firebird::ICharUserField* to, Varfield& from)
+	static void listField(ICharUserField* to, Varfield& from)
 	{
-		Firebird::LocalStatus st;
-		Firebird::CheckStatusWrapper statusWrapper(&st);
+		LocalStatus st;
+		CheckStatusWrapper statusWrapper(&st);
 		to->setEntered(&statusWrapper, from.null ? 0 : 1);
 		check(&statusWrapper);
 		if (!from.null)
@@ -879,10 +879,10 @@ private:
 		}
 	}
 
-	static void listField(Firebird::IIntUserField* to, Boolean& from)
+	static void listField(IIntUserField* to, Boolean& from)
 	{
-		Firebird::LocalStatus st;
-		Firebird::CheckStatusWrapper statusWrapper(&st);
+		LocalStatus st;
+		CheckStatusWrapper statusWrapper(&st);
 		to->setEntered(&statusWrapper, from.null ? 0 : 1);
 		check(&statusWrapper);
 		if (!from.null)
@@ -892,16 +892,16 @@ private:
 		}
 	}
 
-	void listField(Firebird::ICharUserField* to, Blob& from)
+	void listField(ICharUserField* to, Blob& from)
 	{
-		Firebird::LocalStatus st;
-		Firebird::CheckStatusWrapper statusWrapper(&st);
+		LocalStatus st;
+		CheckStatusWrapper statusWrapper(&st);
 		to->setEntered(&statusWrapper, from.null ? 0 : 1);
 		check(&statusWrapper);
 		if (!from.null)
 		{
-			Firebird::string s;
-			Firebird::IBlob* blob = NULL;
+			string s;
+			IBlob* blob = NULL;
 			try
 			{
 				blob = curAtt->openBlob(&statusWrapper, mainTra, &from, 0, NULL);
@@ -913,7 +913,7 @@ private:
 				{
 					const int cc = blob->getSegment(&statusWrapper, sizeof(segbuf), segbuf, &len);
 					check(&statusWrapper);
-					if (cc == Firebird::IStatus::RESULT_NO_DATA)
+					if (cc == IStatus::RESULT_NO_DATA)
 						break;
 					s.append(segbuf, len);
 				}
@@ -924,7 +924,7 @@ private:
 				to->set(&statusWrapper, s.c_str());
 				check(&statusWrapper);
 			}
-			catch (const Firebird::Exception&)
+			catch (const Exception&)
 			{
 				if (blob)
 					blob->release();
@@ -933,13 +933,13 @@ private:
 		}
 	}
 
-	void blobWrite(Firebird::CheckStatusWrapper* st, Blob& to, Firebird::ICharUserField* from)
+	void blobWrite(CheckStatusWrapper* st, Blob& to, ICharUserField* from)
 	{
 		to.null = FB_FALSE;
 		const char* ptr = from->get();
 		unsigned len = static_cast<unsigned>(strlen(ptr));
 
-		Firebird::IBlob* blob = NULL;
+		IBlob* blob = NULL;
 		try
 		{
 			blob = curAtt->createBlob(st, mainTra, &to, 0, NULL);
@@ -957,7 +957,7 @@ private:
 			blob->close(st);
 			check(st);
 		}
-		catch (const Firebird::Exception&)
+		catch (const Exception&)
 		{
 			if (blob)
 				blob->release();
@@ -967,13 +967,17 @@ private:
 };
 
 // register plugin
-static Firebird::SimpleFactory<Firebird::Auth::SrpManagement> factory;
+static SimpleFactory<Auth::SrpManagement> factory;
 
-} // namespace Auth
 
-extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(Firebird::IMaster* master)
+} // namespace Firebird::Auth
+
+
+using namespace Firebird;
+
+extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(IMaster* master)
 {
-	Firebird::CachedMasterInterface::set(master);
-	Firebird::PluginManagerInterfacePtr()->registerPluginFactory(Firebird::IPluginManager::TYPE_AUTH_USER_MANAGEMENT, Firebird::Auth::RemotePassword::plugName, &Firebird::Auth::factory);
-	Firebird::getUnloadDetector()->registerMe();
+	CachedMasterInterface::set(master);
+	PluginManagerInterfacePtr()->registerPluginFactory(IPluginManager::TYPE_AUTH_USER_MANAGEMENT, Auth::RemotePassword::plugName, &Auth::factory);
+	getUnloadDetector()->registerMe();
 }

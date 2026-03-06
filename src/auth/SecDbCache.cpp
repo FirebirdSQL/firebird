@@ -32,10 +32,9 @@
 
 #include <string.h>
 
+namespace Firebird::Auth
+{
 
-using namespace Firebird;
-
-namespace Firebird::Auth {
 
 void CachedSecurityDatabase::close()
 {
@@ -64,7 +63,7 @@ void PluginDatabases::getInstance(IPluginConfig* pluginConfig, CachedSecurityDat
 		unsigned int secDbKey = keys->getKey(config, "SecurityDatabase");
 		const char* tmp = config->asString(secDbKey);
 		if (!tmp)
-			Firebird::Arg::Gds(isc_secdb_name).raise();
+			Arg::Gds(isc_secdb_name).raise();
 
 		secDbName = tmp;
 	}
@@ -163,4 +162,5 @@ void PluginDatabases::handler(CachedSecurityDatabase* tgt)
 	}
 }
 
-} // namespace Auth
+
+} // namespace Firebird::Auth

@@ -52,7 +52,7 @@ inline constexpr unsigned int HELP_OPER		= 102;
 inline constexpr unsigned int ADDMOD_OPER	= 103;
 inline constexpr unsigned int OLD_DIS_OPER	= 104;
 
-} // namespace Auth
+} // namespace Firebird::Auth
 
 namespace Firebird
 {

@@ -128,4 +128,4 @@ void WriterImplementation::setDb(Firebird::CheckStatusWrapper* st, const char* v
 	}
 }
 
-} // namespace Auth
+} // namespace Firebird::Auth

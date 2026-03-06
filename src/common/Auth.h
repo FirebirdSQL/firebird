@@ -62,7 +62,7 @@ private:
 	void putLevel();
 };
 
-} // namespace Auth
+} // namespace Firebird::Auth
 
 
 #endif // FB_AUTH_H
