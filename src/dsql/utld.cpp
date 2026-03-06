@@ -42,9 +42,9 @@
 #include "../yvalve/gds_proto.h"
 #include "../common/classes/init.h"
 
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
 
-namespace Firebird::Jrd {
 
 /**
 
@@ -61,5 +61,6 @@ USHORT UTLD_char_length_to_byte_length(USHORT lengthInChars, USHORT maxBytesPerC
 	return MIN(((MAX_COLUMN_SIZE - overhead) / maxBytesPerChar) * maxBytesPerChar,
 			   (ULONG) lengthInChars * maxBytesPerChar);
 }
+
 
 } // namespace Firebird::Jrd

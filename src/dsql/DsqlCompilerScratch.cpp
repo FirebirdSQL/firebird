@@ -34,8 +34,8 @@
 #include "../dsql/pass1_proto.h"
 #include <unordered_set>
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
 
 
 #ifdef DSQL_DEBUG
@@ -1185,3 +1185,6 @@ void DsqlCompilerScratch::addCTEAlias(const string& alias)
 	fb_assert(currCteAlias == NULL);
 	cteAliases.add(FB_NEW_POOL(*tdbb->getDefaultPool()) string(*tdbb->getDefaultPool(), alias));
 }
+
+
+}	// namespace Firebird::Jrd

@@ -30,10 +30,8 @@
 #include "../jrd/par_proto.h"
 #include "../jrd/recsrc/RecordSource.h"
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
-
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
 
 
 WinFuncNode::WinFuncNode(MemoryPool& pool, const AggInfo& aAggInfo, ValueExprNode* aArg)

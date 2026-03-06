@@ -30,8 +30,8 @@
 #include "../dsql/gen_proto.h"
 #include "../jrd/cmp_proto.h"
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
 
 
 // Class DsqlStatement
@@ -308,3 +308,6 @@ DsqlTransactionRequest* DsqlTransactionStatement::createRequest(thread_db* tdbb,
 {
 	return FB_NEW_POOL(getPool()) DsqlTransactionRequest(getPool(), dbb, this, node);
 }
+
+
+}	// namespace Firebird::Jrd

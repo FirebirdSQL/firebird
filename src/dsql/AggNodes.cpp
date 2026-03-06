@@ -42,10 +42,8 @@
 #include "../jrd/DataTypeUtil.h"
 #include <math.h>
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
-
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
 
 
 static RegisterNode<AggNode> regAggNode({blr_agg_function});

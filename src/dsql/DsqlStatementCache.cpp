@@ -27,8 +27,8 @@
 #include "../jrd/Statement.h"
 #include "../jrd/lck.h"
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
 
 
 // Class DsqlStatementCache
@@ -358,3 +358,6 @@ void DsqlStatementCache::dump()
 	printf("\n");
 }
 #endif
+
+
+}	// namespace Firebird::Jrd

@@ -28,8 +28,8 @@
 #define _yacc_defines_yystype
 #include "parse.h"
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
 
 
 #define PARSER_TOKEN(ident, str, nonReserved) \
@@ -61,3 +61,6 @@ Keywords::Keywords(MemoryPool& pool)
 		map.put(*str, {token->tok_ident, str, token->nonReserved});
 	}
 }
+
+
+}	// namespace Firebird::Jrd

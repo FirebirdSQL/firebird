@@ -36,8 +36,8 @@
 #define DBL_MAX_10_EXP          308
 #endif
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
 
 
 Parser::Parser(thread_db* tdbb, MemoryPool& pool, MemoryPool* aStatementPool, DsqlCompilerScratch* aScratch,
@@ -1370,3 +1370,6 @@ void Parser::checkTimeDialect()
 																  Arg::Str("TIME"));
 	}
 }
+
+
+}	// namespace Firebird::Jrd
