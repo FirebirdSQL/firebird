@@ -308,8 +308,6 @@ private:
 
 	SINT64 getRequest(Request* request, unsigned flags)
 	{
-		using namespace Firebird;
-
 		if (!isActive() || (flags && !(currentSession->flags & flags)))
 			return 0;
 

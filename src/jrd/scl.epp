@@ -64,10 +64,11 @@
 
 inline constexpr int UIC_BASE = 10;
 
-using namespace Firebird::Jrd;
-using namespace Firebird;
-
 DATABASE DB = FILENAME "ODS.RDB";
+
+namespace Firebird::Jrd
+{
+
 
 static bool check_number(const UCHAR*, USHORT);
 static bool check_user_group(thread_db* tdbb, const UCHAR*, USHORT);
@@ -1817,3 +1818,5 @@ static bool check_object(thread_db* tdbb,
 	return found;
 }
 
+
+} // namespace Firebird::Jrd
