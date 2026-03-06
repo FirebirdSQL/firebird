@@ -1256,7 +1256,7 @@ namespace Firebird::Jrd {
 		attachment->att_schema_search_path = schemaSearchPath;
 		attachment->att_blr_request_schema_search_path = blrRequestSchemaSearchPath;
 	}
-}	// namespace Jrd
+}	// namespace Firebird::Jrd
 
 /// trace manager support
 

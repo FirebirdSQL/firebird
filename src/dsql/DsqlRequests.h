@@ -265,6 +265,6 @@ private:
 };
 
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd
 
 #endif // DSQL_REQUESTS_H

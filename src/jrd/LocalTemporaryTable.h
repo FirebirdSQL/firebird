@@ -145,6 +145,6 @@ namespace Firebird::Jrd {
 		USHORT nextIndexId = 0;
 		bool hasPendingChanges = false;
 	};
-}	// namespace Jrd
+}	// namespace Firebird::Jrd
 
 #endif	// JRD_LOCAL_TEMPORARY_TABLE_H

@@ -14489,4 +14489,4 @@ static void setParameterInfo(dsql_par* parameter, const dsql_ctx* context)
 }
 
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd

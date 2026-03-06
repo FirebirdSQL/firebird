@@ -78,6 +78,6 @@ namespace Firebird::Jrd {
 	private:
 		Firebird::LeftPooledMap<MetaName, Keyword> map;
 	};
-}	// namespace Jrd
+}	// namespace Firebird::Jrd
 
 #endif	// DSQL_KEYWORDS_H

@@ -291,4 +291,4 @@ BlobUtilPackage::BlobUtilPackage(Firebird::MemoryPool& pool)
 {
 }
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd

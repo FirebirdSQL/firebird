@@ -143,6 +143,6 @@ private:
 };
 
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd
 
 #endif // DSQL_STATEMENT_CACHE_H

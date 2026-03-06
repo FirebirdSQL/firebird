@@ -380,6 +380,6 @@ private:
 	const bool oldValue;
 };
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd
 
 #endif // DSQL_COMPILER_SCRATCH_H

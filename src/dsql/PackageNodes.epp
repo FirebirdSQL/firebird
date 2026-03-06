@@ -1081,4 +1081,4 @@ void DropPackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 }
 
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd

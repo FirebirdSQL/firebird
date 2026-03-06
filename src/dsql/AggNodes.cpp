@@ -2597,4 +2597,4 @@ AggNode* RegrCountAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 }
 
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd

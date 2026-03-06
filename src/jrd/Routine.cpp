@@ -276,4 +276,4 @@ void Routine::destroy(thread_db* tdbb, Routine* routine)
 	delete routine;
 }
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd

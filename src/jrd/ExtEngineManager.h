@@ -377,6 +377,6 @@ private:
 };
 
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd
 
 #endif	// JRD_EXT_ENGINE_MANAGER_H

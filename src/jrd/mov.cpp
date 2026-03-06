@@ -559,4 +559,4 @@ DescPrinter::DescPrinter(thread_db* tdbb, const dsc* desc, FB_SIZE_T mLen, TType
 	}
 }
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd

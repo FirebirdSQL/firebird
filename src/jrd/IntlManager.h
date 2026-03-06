@@ -99,6 +99,6 @@ private:
 	static bool validateCharSet(const Firebird::QualifiedMetaString& charSetName, charset* cs);
 };
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd
 
 #endif	// JRD_INTLMANAGER_H

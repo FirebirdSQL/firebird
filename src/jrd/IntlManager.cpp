@@ -884,4 +884,4 @@ bool IntlManager::validateCharSet(const QualifiedMetaString& charSetName, charse
 }
 
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd

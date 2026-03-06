@@ -398,6 +398,6 @@ namespace Firebird::Jrd {
 			return FB_NEW SystemFunctionImpl(status, inBuilder, outBuilder);
 		}
 	};
-}	// namespace Jrd
+}	// namespace Firebird::Jrd
 
 #endif	// JRD_SYSTEM_PACKAGES_H

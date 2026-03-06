@@ -95,7 +95,7 @@ public:
 	bool obsolete;
 };
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd
 
 
 #endif	// JRD_COLLATION_H

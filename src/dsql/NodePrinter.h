@@ -397,6 +397,6 @@ public:
 #endif // TRIVIAL_NODE_PRINTER
 
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd
 
 #endif	// DSQL_NODE_PRINTER_H

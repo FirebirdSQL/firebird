@@ -188,4 +188,4 @@ void BlrDebugWriter::putBlrOffset()
 	putValue(offset);
 }
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd

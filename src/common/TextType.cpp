@@ -398,4 +398,4 @@ USHORT TextType::getFlags() const
 	return tt->texttype_flags;
 }
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd

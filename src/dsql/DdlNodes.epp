@@ -17521,4 +17521,4 @@ bool DropSchemaNode::collectObjects(thread_db* tdbb, jrd_tra* transaction,
 	return objects && objects->hasData();
 }
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd

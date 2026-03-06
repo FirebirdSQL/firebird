@@ -74,6 +74,6 @@ private:
 	FB_SIZE_T maxLen;
 };
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd
 
 #endif // JRD_MOV_PROTO_H

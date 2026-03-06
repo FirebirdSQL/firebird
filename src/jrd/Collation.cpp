@@ -1136,4 +1136,4 @@ void Collation::destroy(thread_db* tdbb)
 	delete this;
 }
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd

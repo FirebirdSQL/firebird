@@ -167,7 +167,7 @@ namespace Firebird::Jrd {
 		Firebird::Mutex threadsMutex;
 	};
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd
 
 
 #endif	// JRD_THREADCOLLECT_H

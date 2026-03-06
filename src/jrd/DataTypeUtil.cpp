@@ -402,4 +402,4 @@ bool DataTypeUtil::convertToUTF8(const string& src, string& dst, CSetId charset,
 	return true;
 }
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd
