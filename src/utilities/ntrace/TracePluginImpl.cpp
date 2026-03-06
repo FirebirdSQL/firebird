@@ -50,8 +50,6 @@
 namespace Firebird::Ntrace
 {
 
-using namespace Jrd;	// FIXME:
-
 
 static const char* const DEFAULT_LOG_NAME = "default_trace.log";
 

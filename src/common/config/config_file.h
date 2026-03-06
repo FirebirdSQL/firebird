@@ -155,7 +155,4 @@ private:
 
 } // namespace Firebird
 
-// FIXME:
-using Firebird::ConfigFile;
-
 #endif	// CONFIG_CONFIG_FILE_H

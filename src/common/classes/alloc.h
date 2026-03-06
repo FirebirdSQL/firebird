@@ -366,28 +366,26 @@ private:
 
 } // namespace Firebird
 
-using Firebird::MemoryPool;	// FIXME:
-
 // operators new and delete
 
-inline void* operator new(size_t s, MemoryPool& pool ALLOC_PARAMS)
+inline void* operator new(size_t s, Firebird::MemoryPool& pool ALLOC_PARAMS)
 {
 	return pool.allocate(s ALLOC_PASS_ARGS);
 }
 
-inline void* operator new[](size_t s, MemoryPool& pool ALLOC_PARAMS)
+inline void* operator new[](size_t s, Firebird::MemoryPool& pool ALLOC_PARAMS)
 {
 	return pool.allocate(s ALLOC_PASS_ARGS);
 }
 
-inline void operator delete(void* mem, MemoryPool& pool ALLOC_PARAMS_DEF) noexcept
+inline void operator delete(void* mem, Firebird::MemoryPool& pool ALLOC_PARAMS_DEF) noexcept
 {
-	MemoryPool::globalFree(mem);
+	Firebird::MemoryPool::globalFree(mem);
 }
 
-inline void operator delete[](void* mem, MemoryPool& pool ALLOC_PARAMS_DEF) noexcept
+inline void operator delete[](void* mem, Firebird::MemoryPool& pool ALLOC_PARAMS_DEF) noexcept
 {
-	MemoryPool::globalFree(mem);
+	Firebird::MemoryPool::globalFree(mem);
 }
 
 #ifdef DEBUG_GDS_ALLOC
@@ -605,8 +603,5 @@ struct std::allocator_traits<Firebird::PoolAllocator<TAlloc>>
 	}
 };
 
-
-// FIXME:
-using Firebird::getDefaultMemoryPool;
 
 #endif // CLASSES_ALLOC_H

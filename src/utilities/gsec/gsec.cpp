@@ -57,8 +57,8 @@
 namespace Firebird::Gsec
 {
 
+using namespace Auth;
 using MsgFormat::SafeArg;
-using namespace Auth;	// FIXME:
 
 
 constexpr int MAXSTUFF = 1000;	// longest interactive command line
