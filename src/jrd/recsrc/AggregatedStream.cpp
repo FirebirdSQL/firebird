@@ -31,8 +31,9 @@
 
 #include "RecordSource.h"
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
+
 
 // ------------------------
 // Data access: aggregation
@@ -370,7 +371,7 @@ bool BaseAggWinStream<ThisType, NextType>::getNextRecord(thread_db* tdbb, Reques
 }
 
 // Export the template for WindowedStream::WindowStream.
-template class Jrd::BaseAggWinStream<WindowedStream::WindowStream, BaseBufferedStream>;
+template class BaseAggWinStream<WindowedStream::WindowStream, BaseBufferedStream>;
 
 // ------------------------------
 
@@ -423,3 +424,6 @@ bool AggregatedStream::internalGetRecord(thread_db* tdbb) const
 	rpb->rpb_number.setValid(true);
 	return true;
 }
+
+
+}	// namespace Firebird::Jrd

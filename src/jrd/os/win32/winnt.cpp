@@ -54,7 +54,9 @@
 
 #include <windows.h>
 
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
+
 
 class FileExtendLockGuard
 {
@@ -94,11 +96,6 @@ private:
 	const bool m_exclusive;
 };
 
-
-} // namespace Firebird::Jrd
-
-using namespace Firebird::Jrd;
-using namespace Firebird;
 
 #ifdef TEXT
 #undef TEXT
@@ -881,3 +878,6 @@ static bool nt_error(const TEXT* string,
 
 	return false;
 }
+
+
+}	// namespace Firebird::Jrd

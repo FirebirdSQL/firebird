@@ -34,8 +34,9 @@
 
 #include "RecordSource.h"
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
+
 
 //#define PRINT_HASH_TABLE
 
@@ -671,3 +672,6 @@ bool HashJoin::fetchRecord(thread_db* tdbb, Impure* impure, FB_SIZE_T stream) co
 		}
 	}
 }
+
+
+}	// namespace Firebird::Jrd

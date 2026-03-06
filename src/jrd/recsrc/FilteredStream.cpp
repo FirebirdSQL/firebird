@@ -29,8 +29,9 @@
 
 #include "RecordSource.h"
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
+
 
 // ------------------------------------
 // Data access: predicate driven filter
@@ -373,3 +374,6 @@ Firebird::TriState FilteredStream::evaluateBoolean(thread_db* tdbb) const
 
 	return nullFlag && !result ? TriState::empty() : TriState(result);
 }
+
+
+}	// namespace Firebird::Jrd
