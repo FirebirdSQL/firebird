@@ -68,8 +68,8 @@
 IMPLEMENT_TRACE_ROUTINE(nbak_trace, "NBAK")
 #endif
 
-using namespace Firebird::Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
 
 /******************************** NBackupStateLock ******************************/
@@ -114,14 +114,14 @@ void NBackupStateLock::blockingAstHandler(thread_db* tdbb)
 		backup_manager->beginFlush();
 		NBAK_TRACE_AST( ("backup_manager->beginFlush()") );
 
-		Firebird::MutexUnlockGuard counterGuard(counterMutex, FB_FUNCTION);
+		MutexUnlockGuard counterGuard(counterMutex, FB_FUNCTION);
 		CCH_flush_ast(tdbb);
 		NBAK_TRACE_AST(("database FLUSHED"));
 	}
 
 	{	// scope
 		backup_manager->stateBlocking = true;
-		Firebird::MutexUnlockGuard counterGuard(counterMutex, FB_FUNCTION);
+		MutexUnlockGuard counterGuard(counterMutex, FB_FUNCTION);
 		backup_manager->stateBlocking = !backup_manager->localStateLock.tryBeginWrite(FB_FUNCTION);
 		if (backup_manager->stateBlocking)
 			return;
@@ -159,7 +159,7 @@ void NBackupAllocLock::invalidate(thread_db* tdbb)
 
 /******************************** BackupManager::StateWriteGuard ******************************/
 
-BackupManager::StateWriteGuard::StateWriteGuard(thread_db* tdbb, Jrd::WIN* window)
+BackupManager::StateWriteGuard::StateWriteGuard(thread_db* tdbb, WIN* window)
 	: m_tdbb(tdbb), m_window(NULL), m_success(false)
 {
 	Database* const dbb = tdbb->getDatabase();
@@ -278,7 +278,7 @@ void BackupManager::beginBackup(thread_db* tdbb)
 		NBAK_TRACE(("Creating difference file %s", diff_name.c_str()));
 		diff_file = PIO_create(tdbb, diff_name, true, false);
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
 		// no reasons to set it to unknown if we just failed to create difference file
 		stateGuard.setSuccess();
@@ -295,7 +295,7 @@ void BackupManager::beginBackup(thread_db* tdbb)
 			PageSpace* pageSpace = database->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 			const char* func = NULL;
 
-			if (Firebird::os_utils::fstat(pageSpace->file->fil_desc, &st) != 0)
+			if (os_utils::fstat(pageSpace->file->fil_desc, &st) != 0)
 			{
 				func = "fstat";
 			}
@@ -315,7 +315,7 @@ void BackupManager::beginBackup(thread_db* tdbb)
 			if (func)
 			{
 				stateGuard.setSuccess();
-				Firebird::system_call_failed::raise(func);
+				system_call_failed::raise(func);
 			}
 		}
 #endif
@@ -495,7 +495,7 @@ void BackupManager::endBackup(thread_db* tdbb, bool recover)
 		NBAK_TRACE(("Setting state %d in header page is over", backup_state));
 		stateGuard.setSuccess();
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
 		endLock.unlockWrite(tdbb);
 		throw;
@@ -557,7 +557,7 @@ void BackupManager::endBackup(thread_db* tdbb, bool recover)
 		CCH_flush(tdbb, FLUSH_ALL, 0);
 		NBAK_TRACE(("Merging is over. Database unlocked"));
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
 		endLock.unlockWrite(tdbb);
 		throw;
@@ -604,7 +604,7 @@ void BackupManager::endBackup(thread_db* tdbb, bool recover)
 		NBAK_TRACE(("backup is over"));
 		endLock.unlockWrite(tdbb);
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
 		endLock.unlockWrite(tdbb);
 		throw;
@@ -674,7 +674,7 @@ bool BackupManager::actualizeAlloc(thread_db* tdbb, bool haveGlobalLock)
 				break;	// We finished reading allocation table
 		}
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		// Handle out of memory error, etc
 		delete alloc_table;
@@ -775,7 +775,7 @@ ULONG BackupManager::allocateDifferencePage(thread_db* tdbb, ULONG db_page)
 	{
 		alloc_table->add(AllocItem(db_page, last_allocated_page));
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		// Handle out of memory error
 		delete alloc_table;
@@ -1045,3 +1045,6 @@ void BackupManager::shutdown(thread_db* tdbb)
 	stateLock->shutdownLock(tdbb);
 	allocLock->shutdownLock(tdbb);
 }
+
+
+}	// namespace Firebird::Jrd

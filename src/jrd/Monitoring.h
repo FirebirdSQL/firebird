@@ -33,7 +33,9 @@
 #include "../jrd/TempSpace.h"
 #include <string_view>
 
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
+
 
 // forward declarations
 class jrd_rel;
@@ -141,7 +143,7 @@ public:
 			storeField(field_id, VALUE_INTEGER, sizeof(SINT64), &value);
 		}
 
-		void storeTimestamp(int field_id, const Firebird::TimeStamp& value)
+		void storeTimestamp(int field_id, const TimeStamp& value)
 		{
 			if (!value.isEmpty())
 				storeField(field_id, VALUE_TIMESTAMP, sizeof(ISC_TIMESTAMP), &value.value());
@@ -224,7 +226,7 @@ public:
 			offset += (ULONG) delta;
 		}
 
-		Firebird::HalfStaticArray<UCHAR, 1024> buffer;
+		HalfStaticArray<UCHAR, 1024> buffer;
 		ULONG offset;
 		Writer* const writer;
 	};
@@ -246,20 +248,20 @@ public:
 	void clearSnapshot() noexcept;
 
 private:
-	Firebird::Array<RelationData> m_snapshot;
-	Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<SINT64, SLONG> > > m_map;
+	Array<RelationData> m_snapshot;
+	GenericMap<Pair<NonPooled<SINT64, SLONG> > > m_map;
 	int m_counter;
 };
 
 
-struct MonitoringHeader : public Firebird::MemoryHeader
+struct MonitoringHeader : public MemoryHeader
 {
 	ULONG used;
 	ULONG allocated;
 };
 
 
-class MonitoringData final : public Firebird::PermanentStorage, public Firebird::IpcObject
+class MonitoringData final : public PermanentStorage, public IpcObject
 {
 	static constexpr USHORT MONITOR_VERSION = 6;
 	static constexpr ULONG DEFAULT_SIZE = 1048576;
@@ -330,10 +332,10 @@ public:
 	private:
 		TempSpace& source;
 		offset_t offset;
-		Firebird::UCharBuffer buffer;
+		UCharBuffer buffer;
 	};
 
-	typedef Firebird::HalfStaticArray<AttNumber, 64> SessionList;
+	typedef HalfStaticArray<AttNumber, 64> SessionList;
 
 	explicit MonitoringData(Database*);
 	~MonitoringData();
@@ -342,10 +344,10 @@ public:
 	MonitoringData(const MonitoringData&) = delete;
 	MonitoringData& operator =(const MonitoringData&) = delete;
 
-	bool initialize(Firebird::SharedMemoryBase*, bool) override;
+	bool initialize(SharedMemoryBase*, bool) override;
 	void mutexBug(int osErrorCode, const char* text) override;
 
-	USHORT getType() const override { return Firebird::SharedMemoryBase::SRAM_DATABASE_SNAPSHOT; }
+	USHORT getType() const override { return SharedMemoryBase::SRAM_DATABASE_SNAPSHOT; }
 	USHORT getVersion() const override { return MONITOR_VERSION; }
 	const char* getName() const override { return "MonitoringData"; }
 
@@ -364,16 +366,16 @@ public:
 private:
 	void ensureSpace(ULONG);
 
-	const Firebird::string& m_dbId;
-	Firebird::AutoPtr<Firebird::SharedMemory<MonitoringHeader> > m_sharedMemory;
-	Firebird::Mutex m_localMutex;
+	const string& m_dbId;
+	AutoPtr<SharedMemory<MonitoringHeader> > m_sharedMemory;
+	Mutex m_localMutex;
 };
 
 
 class MonitoringTableScan final : public VirtualTableScan
 {
 public:
-	MonitoringTableScan(CompilerScratch* csb, const Firebird::string& alias,
+	MonitoringTableScan(CompilerScratch* csb, const string& alias,
 						StreamType stream, Rsc::Rel relation)
 		: VirtualTableScan(csb, alias, stream, relation)
 	{}
@@ -423,16 +425,17 @@ private:
 
 	static void putAttachment(thread_db*, SnapshotData::DumpRecord&, Attachment*);
 	static void putTransaction(thread_db*, SnapshotData::DumpRecord&, const jrd_tra*);
-	static void putStatement(SnapshotData::DumpRecord&, const Statement*, const Firebird::string&);
-	static void putRequest(thread_db*, SnapshotData::DumpRecord&, const Request*, const Firebird::string&);
+	static void putStatement(SnapshotData::DumpRecord&, const Statement*, const string&);
+	static void putRequest(thread_db*, SnapshotData::DumpRecord&, const Request*, const string&);
 	static void putCall(thread_db*, SnapshotData::DumpRecord&, const Request*);
 	static void putStatistics(thread_db*, SnapshotData::DumpRecord&, const RuntimeStatistics&, int, int);
 	static void putLocalTempTables(thread_db*, SnapshotData::DumpRecord&, const Attachment*, const LocalTemporaryTable*);
 	static void putLocalTempTableFields(thread_db*, SnapshotData::DumpRecord&, const Attachment*, const LocalTemporaryTable*);
-	static void putContextVars(SnapshotData::DumpRecord&, const Firebird::StringMap&, SINT64, bool);
-	static void putMemoryUsage(SnapshotData::DumpRecord&, const Firebird::MemoryStats&, int, int);
+	static void putContextVars(SnapshotData::DumpRecord&, const StringMap&, SINT64, bool);
+	static void putMemoryUsage(SnapshotData::DumpRecord&, const MemoryStats&, int, int);
 };
 
-} // namespace
+
+} // namespace Firebird::Jrd
 
 #endif // JRD_DATABASE_SNAPSHOT_H

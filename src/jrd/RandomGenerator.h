@@ -24,7 +24,9 @@
 #define JRD_RANDOM_GENERATOR_H
 
 
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
+
 
 class RandomGenerator
 {
@@ -40,8 +42,8 @@ private:
 	char buffer[BUFFER_SIZE];
 };
 
-} // namespace
 
+} // namespace Firebird::Jrd
 
 #endif // JRD_RANDOM_GENERATOR_H
 

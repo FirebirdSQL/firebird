@@ -24,8 +24,8 @@
 #include "../jrd/RandomGenerator.h"
 #include "../common/os/guid.h"
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
 
 
 RandomGenerator::RandomGenerator()
@@ -53,3 +53,6 @@ void RandomGenerator::getBytes(void* p, FB_SIZE_T size)
 		size -= size2;
 	}
 }
+
+
+}	// namespace Firebird::Jrd
