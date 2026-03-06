@@ -456,14 +456,14 @@ int CCH_down_grade_dbb(void* ast_object)
 
 		dbb->dbb_ast_flags &= ~DBB_blocking;
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{} // no-op
 
 	return 0;
 }
 
 
-bool CCH_exclusive(thread_db* tdbb, USHORT level, SSHORT wait_flag, Firebird::Sync* guard)
+bool CCH_exclusive(thread_db* tdbb, USHORT level, SSHORT wait_flag, Sync* guard)
 {
 /**************************************
  *
@@ -1591,7 +1591,7 @@ void CCH_init(thread_db* tdbb, ULONG number)
 				BCBHashTable(*bcb->bcb_bufferpool, number);
 			break;
 		}
-		catch (const Firebird::Exception& ex)
+		catch (const Exception& ex)
 		{
 			ex.stuffException(tdbb->tdbb_status_vector);
 
@@ -1640,7 +1640,7 @@ void CCH_init2(thread_db* tdbb)
 	BufferControl* bcb = dbb->dbb_bcb;
 
 	// Avoid running CCH_init2() in 2 parallel threads
-	Firebird::MutexEnsureUnlock guard(bcb->bcb_threadStartup, FB_FUNCTION);
+	MutexEnsureUnlock guard(bcb->bcb_threadStartup, FB_FUNCTION);
 	guard.enter();
 
 	if (!(bcb->bcb_flags & BCB_exclusive) || (bcb->bcb_flags & (BCB_cache_writer | BCB_writer_start)))
@@ -2451,7 +2451,7 @@ bool CCH_write_all_shadows(thread_db* tdbb, Shadow* shadow, BufferDesc* bdb, Ods
 		return true;
 
 	bool result = true;
-	Firebird::UCharBuffer spare_buffer;
+	UCharBuffer spare_buffer;
 
 	if (bdb->bdb_page == HEADER_PAGE_NUMBER)
 	{
@@ -2632,7 +2632,7 @@ static int blocking_ast_bdb(void* ast_object)
 		if (tdbb->tdbb_status_vector->getState() & IStatus::STATE_ERRORS)
 			iscDbLogStatus(dbb->dbb_filename.c_str(), tdbb->tdbb_status_vector);
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
 		return -1;
 	} // no-op
@@ -2670,7 +2670,7 @@ static void flushDirty(thread_db* tdbb, SLONG transaction_mask, const bool sys_o
 	SET_TDBB(tdbb);
 	Database* dbb = tdbb->getDatabase();
 	BufferControl* bcb = dbb->dbb_bcb;
-	Firebird::HalfStaticArray<BufferDesc*, 1024> flush;
+	HalfStaticArray<BufferDesc*, 1024> flush;
 
 	{  // dirtySync scope
 		Sync dirtySync(&bcb->bcb_syncDirtyBdbs, "flushDirty");
@@ -2710,7 +2710,7 @@ static void flushAll(thread_db* tdbb, USHORT flush_flag)
 	SET_TDBB(tdbb);
 	Database* dbb = tdbb->getDatabase();
 	BufferControl* bcb = dbb->dbb_bcb;
-	Firebird::HalfStaticArray<BufferDesc*, 1024> flush(bcb->bcb_dirty_count);
+	HalfStaticArray<BufferDesc*, 1024> flush(bcb->bcb_dirty_count);
 
 	const bool all_flag = (flush_flag & FLUSH_ALL) != 0;
 	const bool sweep_flag = (flush_flag & FLUSH_SWEEP) != 0;
@@ -2898,7 +2898,7 @@ void BufferControl::cache_reader(BufferControl* bcb)
 		bcb->bcb_flags |= BCB_cache_reader;
 		dbb->dbb_reader_init.post();	// Notify our creator that we have started
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(status_vector);
 		iscDbLogStatus(dbb->dbb_filename.c_str(), status_vector);
@@ -2998,7 +2998,7 @@ void BufferControl::cache_reader(BufferControl* bcb)
 	dbb->dbb_reader_fini.post();
 
 	}	// try
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(status_vector);
 		iscDbLogStatus(dbb->dbb_filename.c_str(), status_vector);
@@ -3114,7 +3114,7 @@ void BufferControl::cache_writer(BufferControl* bcb)
 				}
 			}
 		}
-		catch (const Firebird::Exception& ex)
+		catch (const Exception& ex)
 		{
 			ex.stuffException(&status_vector);
 			iscDbLogStatus(dbb->dbb_filename.c_str(), &status_vector);
@@ -3126,7 +3126,7 @@ void BufferControl::cache_writer(BufferControl* bcb)
 		attachment->releaseLocks(tdbb);
 		LCK_fini(tdbb, LCK_OWNER_attachment);
 	}	// try
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		bcb->exceptionHandler(ex, cache_writer);
 	}
@@ -3141,14 +3141,14 @@ void BufferControl::cache_writer(BufferControl* bcb)
 			bcb->bcb_writer_init.release();
 		}
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		bcb->exceptionHandler(ex, cache_writer);
 	}
 }
 
 
-void BufferControl::exceptionHandler(const Firebird::Exception& ex, BcbThreadSync::ThreadRoutine*)
+void BufferControl::exceptionHandler(const Exception& ex, BcbThreadSync::ThreadRoutine*)
 {
 	FbLocalStatus status_vector;
 	ex.stuffException(&status_vector);
@@ -4160,7 +4160,7 @@ static LockState lock_buffer(thread_db* tdbb, BufferDesc* bdb, const SSHORT wait
 		FbStatusVector* const status = tempStatus.restore();
 
 		fb_msg_format(0, FB_IMPL_MSG_FACILITY_JRD_BUGCHK, 216, sizeof(errmsg), errmsg,
-			Firebird::MsgFormat::SafeArg() << bdb->bdb_page.getPageNum() << (int) page_type);
+			MsgFormat::SafeArg() << bdb->bdb_page.getPageNum() << (int) page_type);
 		ERR_append_status(status, Arg::Gds(isc_random) << Arg::Str(errmsg));
 		ERR_log(FB_IMPL_MSG_FACILITY_JRD_BUGCHK, 216, errmsg);	// // msg 216 page %ld, page type %ld lock denied
 
@@ -4203,7 +4203,7 @@ static LockState lock_buffer(thread_db* tdbb, BufferDesc* bdb, const SSHORT wait
 	FbStatusVector* const status = tempStatus.restore();
 
 	fb_msg_format(0, FB_IMPL_MSG_FACILITY_JRD_BUGCHK, 215, sizeof(errmsg), errmsg,
-					Firebird::MsgFormat::SafeArg() << bdb->bdb_page.getPageNum() << (int) page_type);
+					MsgFormat::SafeArg() << bdb->bdb_page.getPageNum() << (int) page_type);
 	ERR_append_status(status, Arg::Gds(isc_random) << Arg::Str(errmsg));
 	ERR_log(FB_IMPL_MSG_FACILITY_JRD_BUGCHK, 215, errmsg);	// msg 215 page %ld, page type %ld lock conversion denied
 
@@ -4267,7 +4267,7 @@ static ULONG memory_init(thread_db* tdbb, BufferControl* bcb, ULONG number)
 					memory_end = memory + memory_size;
 					break;
 				}
-				catch (Firebird::BadAlloc&)
+				catch (BadAlloc&)
 				{
 					// Either there's not enough virtual memory or there is
 					// but it's not virtually contiguous. Let's find out by

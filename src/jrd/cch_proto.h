@@ -51,8 +51,8 @@ enum LockState {
 
 void		CCH_clean_page(thread_db*, PageNumber);
 int			CCH_down_grade_dbb(void*);
-bool		CCH_exclusive(thread_db*, USHORT, SSHORT, Firebird::Sync*);
-bool		CCH_exclusive_attachment(thread_db*, USHORT, SSHORT, Firebird::Sync*);
+bool		CCH_exclusive(thread_db*, USHORT, SSHORT, Sync*);
+bool		CCH_exclusive_attachment(thread_db*, USHORT, SSHORT, Sync*);
 bool		CCH_expand(thread_db*, ULONG);
 Ods::pag*	CCH_fake(thread_db*, win*, int);
 Ods::pag*	CCH_fetch(thread_db*, win*, int, SCHAR, int, const bool);
@@ -63,7 +63,7 @@ void		CCH_forget_page(thread_db*, win*);
 void		CCH_flush(thread_db* tdbb, USHORT flush_flag, TraNumber tra_number);
 bool		CCH_free_page(thread_db*);
 SLONG		CCH_get_incarnation(win*);
-void		CCH_get_related(thread_db*, PageNumber, Firebird::Jrd::PagesArray&);
+void		CCH_get_related(thread_db*, PageNumber, Jrd::PagesArray&);
 Ods::pag*	CCH_handoff(thread_db*, win*, ULONG, int, SCHAR, int, const bool);
 void		CCH_init(thread_db*, ULONG);
 void		CCH_init2(thread_db*);
@@ -83,7 +83,7 @@ void		CCH_shutdown(thread_db*);
 void		CCH_unwind(thread_db*, const bool);
 bool		CCH_validate(win*);
 void		CCH_flush_ast(thread_db*);
-bool		CCH_write_all_shadows(thread_db*, Shadow*, BufferDesc*, Ods::pag*, Firebird::Jrd::FbStatusVector*, const bool);
+bool		CCH_write_all_shadows(thread_db*, Shadow*, BufferDesc*, Ods::pag*, Jrd::FbStatusVector*, const bool);
 
 // macros for dealing with cache pages
 

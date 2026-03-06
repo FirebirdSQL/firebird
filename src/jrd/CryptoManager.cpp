@@ -1514,7 +1514,7 @@ namespace Firebird::Jrd
 		}
 	}
 
-	const char* CryptoManager::DbInfo::getDatabaseFullPath(Firebird::CheckStatusWrapper* status)
+	const char* CryptoManager::DbInfo::getDatabaseFullPath(CheckStatusWrapper* status)
 	{
 		if (!cryptoManager)
 			return NULL;

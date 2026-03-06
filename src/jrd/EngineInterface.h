@@ -53,22 +53,22 @@ class JAttachment;
 class JProvider;
 
 class JBlob final :
-	public Firebird::RefCntIface<Firebird::IBlobImpl<JBlob, Firebird::CheckStatusWrapper> >
+	public RefCntIface<IBlobImpl<JBlob, CheckStatusWrapper>>
 {
 public:
 	// IBlob implementation
 	int release() override;
-	void getInfo(Firebird::CheckStatusWrapper* status,
+	void getInfo(CheckStatusWrapper* status,
 		unsigned int itemsLength, const unsigned char* items,
 		unsigned int bufferLength, unsigned char* buffer) override;
-	int getSegment(Firebird::CheckStatusWrapper* status, unsigned int length, void* buffer,
+	int getSegment(CheckStatusWrapper* status, unsigned int length, void* buffer,
 		unsigned int* segmentLength) override;
-	void putSegment(Firebird::CheckStatusWrapper* status, unsigned int length, const void* buffer) override;
-	void cancel(Firebird::CheckStatusWrapper* status) override;
-	void close(Firebird::CheckStatusWrapper* status) override;
-	int seek(Firebird::CheckStatusWrapper* status, int mode, int offset) override;			// returns position
-	void deprecatedCancel(Firebird::CheckStatusWrapper* status) override;
-	void deprecatedClose(Firebird::CheckStatusWrapper* status) override;
+	void putSegment(CheckStatusWrapper* status, unsigned int length, const void* buffer) override;
+	void cancel(CheckStatusWrapper* status) override;
+	void close(CheckStatusWrapper* status) override;
+	int seek(CheckStatusWrapper* status, int mode, int offset) override;			// returns position
+	void deprecatedCancel(CheckStatusWrapper* status) override;
+	void deprecatedClose(CheckStatusWrapper* status) override;
 
 public:
 	JBlob(blb* handle, StableAttachmentPart* sa);
@@ -90,34 +90,34 @@ public:
 
 private:
 	blb* blob;
-	Firebird::RefPtr<StableAttachmentPart> sAtt;
+	RefPtr<StableAttachmentPart> sAtt;
 
-	void freeEngineData(Firebird::CheckStatusWrapper* status);
-	void internalClose(Firebird::CheckStatusWrapper* status);
+	void freeEngineData(CheckStatusWrapper* status);
+	void internalClose(CheckStatusWrapper* status);
 };
 
 class JTransaction final :
-	public Firebird::RefCntIface<Firebird::ITransactionImpl<JTransaction, Firebird::CheckStatusWrapper> >
+	public RefCntIface<ITransactionImpl<JTransaction, CheckStatusWrapper> >
 {
 public:
 	// ITransaction implementation
 	int release() override;
-	void getInfo(Firebird::CheckStatusWrapper* status,
+	void getInfo(CheckStatusWrapper* status,
 		unsigned int itemsLength, const unsigned char* items,
 		unsigned int bufferLength, unsigned char* buffer) override;
-	void prepare(Firebird::CheckStatusWrapper* status,
+	void prepare(CheckStatusWrapper* status,
 		unsigned int msg_length = 0, const unsigned char* message = 0) override;
-	void commit(Firebird::CheckStatusWrapper* status) override;
-	void commitRetaining(Firebird::CheckStatusWrapper* status) override;
-	void rollback(Firebird::CheckStatusWrapper* status) override;
-	void rollbackRetaining(Firebird::CheckStatusWrapper* status) override;
-	void disconnect(Firebird::CheckStatusWrapper* status) override;
-	Firebird::ITransaction* join(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* transaction) override;
-	JTransaction* validate(Firebird::CheckStatusWrapper* status, Firebird::IAttachment* testAtt) override;
-	JTransaction* enterDtc(Firebird::CheckStatusWrapper* status) override;
-	void deprecatedCommit(Firebird::CheckStatusWrapper* status) override;
-	void deprecatedRollback(Firebird::CheckStatusWrapper* status) override;
-	void deprecatedDisconnect(Firebird::CheckStatusWrapper* status) override;
+	void commit(CheckStatusWrapper* status) override;
+	void commitRetaining(CheckStatusWrapper* status) override;
+	void rollback(CheckStatusWrapper* status) override;
+	void rollbackRetaining(CheckStatusWrapper* status) override;
+	void disconnect(CheckStatusWrapper* status) override;
+	ITransaction* join(CheckStatusWrapper* status, ITransaction* transaction) override;
+	JTransaction* validate(CheckStatusWrapper* status, IAttachment* testAtt) override;
+	JTransaction* enterDtc(CheckStatusWrapper* status) override;
+	void deprecatedCommit(CheckStatusWrapper* status) override;
+	void deprecatedRollback(CheckStatusWrapper* status) override;
+	void deprecatedDisconnect(CheckStatusWrapper* status) override;
 
 public:
 	JTransaction(jrd_tra* handle, StableAttachmentPart* sa);
@@ -145,35 +145,35 @@ public:
 
 private:
 	jrd_tra* transaction;
-	Firebird::RefPtr<StableAttachmentPart> sAtt;
+	RefPtr<StableAttachmentPart> sAtt;
 
 	JTransaction(JTransaction* from);
 
-	void freeEngineData(Firebird::CheckStatusWrapper* status);
-	void internalCommit(Firebird::CheckStatusWrapper* status);
-	void internalRollback(Firebird::CheckStatusWrapper* status);
-	void internalDisconnect(Firebird::CheckStatusWrapper* status);
+	void freeEngineData(CheckStatusWrapper* status);
+	void internalCommit(CheckStatusWrapper* status);
+	void internalRollback(CheckStatusWrapper* status);
+	void internalDisconnect(CheckStatusWrapper* status);
 };
 
 class JResultSet final :
-	public Firebird::RefCntIface<Firebird::IResultSetImpl<JResultSet, Firebird::CheckStatusWrapper> >
+	public RefCntIface<IResultSetImpl<JResultSet, CheckStatusWrapper> >
 {
 public:
 	// IResultSet implementation
 	int release() override;
-	int fetchNext(Firebird::CheckStatusWrapper* status, void* message) override;
-	int fetchPrior(Firebird::CheckStatusWrapper* status, void* message) override;
-	int fetchFirst(Firebird::CheckStatusWrapper* status, void* message) override;
-	int fetchLast(Firebird::CheckStatusWrapper* status, void* message) override;
-	int fetchAbsolute(Firebird::CheckStatusWrapper* status, int position, void* message) override;
-	int fetchRelative(Firebird::CheckStatusWrapper* status, int offset, void* message) override;
-	FB_BOOLEAN isEof(Firebird::CheckStatusWrapper* status) override;
-	FB_BOOLEAN isBof(Firebird::CheckStatusWrapper* status) override;
-	Firebird::IMessageMetadata* getMetadata(Firebird::CheckStatusWrapper* status) override;
-	void close(Firebird::CheckStatusWrapper* status) override;
-	void deprecatedClose(Firebird::CheckStatusWrapper* status) override;
-	void setDelayedOutputFormat(Firebird::CheckStatusWrapper* status, Firebird::IMessageMetadata* format) override;
-	void getInfo(Firebird::CheckStatusWrapper* status,
+	int fetchNext(CheckStatusWrapper* status, void* message) override;
+	int fetchPrior(CheckStatusWrapper* status, void* message) override;
+	int fetchFirst(CheckStatusWrapper* status, void* message) override;
+	int fetchLast(CheckStatusWrapper* status, void* message) override;
+	int fetchAbsolute(CheckStatusWrapper* status, int position, void* message) override;
+	int fetchRelative(CheckStatusWrapper* status, int offset, void* message) override;
+	FB_BOOLEAN isEof(CheckStatusWrapper* status) override;
+	FB_BOOLEAN isBof(CheckStatusWrapper* status) override;
+	IMessageMetadata* getMetadata(CheckStatusWrapper* status) override;
+	void close(CheckStatusWrapper* status) override;
+	void deprecatedClose(CheckStatusWrapper* status) override;
+	void setDelayedOutputFormat(CheckStatusWrapper* status, IMessageMetadata* format) override;
+	void getInfo(CheckStatusWrapper* status,
 		unsigned int itemsLength, const unsigned char* items,
 		unsigned int bufferLength, unsigned char* buffer) override;
 
@@ -194,37 +194,37 @@ public:
 
 private:
 	DsqlCursor* cursor;
-	Firebird::RefPtr<JStatement> statement;
+	RefPtr<JStatement> statement;
 	int state;
 
-	void freeEngineData(Firebird::CheckStatusWrapper* status);
+	void freeEngineData(CheckStatusWrapper* status);
 };
 
 class JBatch final :
-	public Firebird::RefCntIface<Firebird::IBatchImpl<JBatch, Firebird::CheckStatusWrapper> >
+	public RefCntIface<IBatchImpl<JBatch, CheckStatusWrapper> >
 {
 public:
 	// IBatch implementation
 	int release() override;
-	void add(Firebird::CheckStatusWrapper* status, unsigned count, const void* inBuffer) override;
-	void addBlob(Firebird::CheckStatusWrapper* status, unsigned length, const void* inBuffer, ISC_QUAD* blobId,
+	void add(CheckStatusWrapper* status, unsigned count, const void* inBuffer) override;
+	void addBlob(CheckStatusWrapper* status, unsigned length, const void* inBuffer, ISC_QUAD* blobId,
 		unsigned parLength, const unsigned char* par) override;
-	void appendBlobData(Firebird::CheckStatusWrapper* status, unsigned length, const void* inBuffer) override;
-	void addBlobStream(Firebird::CheckStatusWrapper* status, unsigned length, const void* inBuffer) override;
-	void registerBlob(Firebird::CheckStatusWrapper* status, const ISC_QUAD* existingBlob, ISC_QUAD* blobId) override;
-	Firebird::IBatchCompletionState* execute(Firebird::CheckStatusWrapper* status,
-		Firebird::ITransaction* transaction) override;
-	void cancel(Firebird::CheckStatusWrapper* status) override;
-	unsigned getBlobAlignment(Firebird::CheckStatusWrapper* status) override;
-	Firebird::IMessageMetadata* getMetadata(Firebird::CheckStatusWrapper* status) override;
-	void setDefaultBpb(Firebird::CheckStatusWrapper* status, unsigned parLength, const unsigned char* par) override;
-	void close(Firebird::CheckStatusWrapper* status) override;
-	void deprecatedClose(Firebird::CheckStatusWrapper* status) override;
-	void getInfo(Firebird::CheckStatusWrapper* status, unsigned int itemsLength, const unsigned char* items,
+	void appendBlobData(CheckStatusWrapper* status, unsigned length, const void* inBuffer) override;
+	void addBlobStream(CheckStatusWrapper* status, unsigned length, const void* inBuffer) override;
+	void registerBlob(CheckStatusWrapper* status, const ISC_QUAD* existingBlob, ISC_QUAD* blobId) override;
+	IBatchCompletionState* execute(CheckStatusWrapper* status,
+		ITransaction* transaction) override;
+	void cancel(CheckStatusWrapper* status) override;
+	unsigned getBlobAlignment(CheckStatusWrapper* status) override;
+	IMessageMetadata* getMetadata(CheckStatusWrapper* status) override;
+	void setDefaultBpb(CheckStatusWrapper* status, unsigned parLength, const unsigned char* par) override;
+	void close(CheckStatusWrapper* status) override;
+	void deprecatedClose(CheckStatusWrapper* status) override;
+	void getInfo(CheckStatusWrapper* status, unsigned int itemsLength, const unsigned char* items,
 		unsigned int bufferLength, unsigned char* buffer) override;
 
 public:
-	JBatch(DsqlBatch* handle, JStatement* aStatement, Firebird::IMessageMetadata* aMetadata);
+	JBatch(DsqlBatch* handle, JStatement* aStatement, IMessageMetadata* aMetadata);
 
 	StableAttachmentPart* getAttachment();
 
@@ -240,21 +240,21 @@ public:
 
 private:
 	DsqlBatch* batch;
-	Firebird::RefPtr<JStatement> statement;
-	Firebird::RefPtr<Firebird::IMessageMetadata> m_meta;
+	RefPtr<JStatement> statement;
+	RefPtr<IMessageMetadata> m_meta;
 
-	void freeEngineData(Firebird::CheckStatusWrapper* status);
+	void freeEngineData(CheckStatusWrapper* status);
 };
 
 class JReplicator final :
-	public Firebird::RefCntIface<Firebird::IReplicatorImpl<JReplicator, Firebird::CheckStatusWrapper> >
+	public RefCntIface<IReplicatorImpl<JReplicator, CheckStatusWrapper> >
 {
 public:
 	// IReplicator implementation
 	int release() override;
-	void process(Firebird::CheckStatusWrapper* status, unsigned length, const unsigned char* data) override;
-	void close(Firebird::CheckStatusWrapper* status) override;
-	void deprecatedClose(Firebird::CheckStatusWrapper* status) override;
+	void process(CheckStatusWrapper* status, unsigned length, const unsigned char* data) override;
+	void close(CheckStatusWrapper* status) override;
+	void deprecatedClose(CheckStatusWrapper* status) override;
 
 public:
 	JReplicator(Replication::Applier* appl, StableAttachmentPart* sa);
@@ -276,46 +276,46 @@ public:
 
 private:
 	Replication::Applier* applier;
-	Firebird::RefPtr<StableAttachmentPart> sAtt;
+	RefPtr<StableAttachmentPart> sAtt;
 
-	void freeEngineData(Firebird::CheckStatusWrapper* status);
+	void freeEngineData(CheckStatusWrapper* status);
 };
 
 class JStatement final :
-	public Firebird::RefCntIface<Firebird::IStatementImpl<JStatement, Firebird::CheckStatusWrapper> >
+	public RefCntIface<IStatementImpl<JStatement, CheckStatusWrapper> >
 {
 public:
 	// IStatement implementation
 	int release() override;
-	void getInfo(Firebird::CheckStatusWrapper* status,
+	void getInfo(CheckStatusWrapper* status,
 		unsigned int itemsLength, const unsigned char* items,
 		unsigned int bufferLength, unsigned char* buffer) override;
-	void free(Firebird::CheckStatusWrapper* status) override;
-	void deprecatedFree(Firebird::CheckStatusWrapper* status) override;
-	ISC_UINT64 getAffectedRecords(Firebird::CheckStatusWrapper* userStatus) override;
-	Firebird::IMessageMetadata* getOutputMetadata(Firebird::CheckStatusWrapper* userStatus) override;
-	Firebird::IMessageMetadata* getInputMetadata(Firebird::CheckStatusWrapper* userStatus) override;
-	unsigned getType(Firebird::CheckStatusWrapper* status) override;
-    const char* getPlan(Firebird::CheckStatusWrapper* status, FB_BOOLEAN detailed) override;
-	Firebird::ITransaction* execute(Firebird::CheckStatusWrapper* status,
-		Firebird::ITransaction* transaction, Firebird::IMessageMetadata* inMetadata, void* inBuffer,
-		Firebird::IMessageMetadata* outMetadata, void* outBuffer) override;
-	JResultSet* openCursor(Firebird::CheckStatusWrapper* status,
-		Firebird::ITransaction* transaction, Firebird::IMessageMetadata* inMetadata, void* inBuffer,
-		Firebird::IMessageMetadata* outMetadata, unsigned int flags) override;
-	void setCursorName(Firebird::CheckStatusWrapper* status, const char* name) override;
-	unsigned getFlags(Firebird::CheckStatusWrapper* status) override;
+	void free(CheckStatusWrapper* status) override;
+	void deprecatedFree(CheckStatusWrapper* status) override;
+	ISC_UINT64 getAffectedRecords(CheckStatusWrapper* userStatus) override;
+	IMessageMetadata* getOutputMetadata(CheckStatusWrapper* userStatus) override;
+	IMessageMetadata* getInputMetadata(CheckStatusWrapper* userStatus) override;
+	unsigned getType(CheckStatusWrapper* status) override;
+    const char* getPlan(CheckStatusWrapper* status, FB_BOOLEAN detailed) override;
+	ITransaction* execute(CheckStatusWrapper* status,
+		ITransaction* transaction, IMessageMetadata* inMetadata, void* inBuffer,
+		IMessageMetadata* outMetadata, void* outBuffer) override;
+	JResultSet* openCursor(CheckStatusWrapper* status,
+		ITransaction* transaction, IMessageMetadata* inMetadata, void* inBuffer,
+		IMessageMetadata* outMetadata, unsigned int flags) override;
+	void setCursorName(CheckStatusWrapper* status, const char* name) override;
+	unsigned getFlags(CheckStatusWrapper* status) override;
 
-	unsigned int getTimeout(Firebird::CheckStatusWrapper* status) override;
-	void setTimeout(Firebird::CheckStatusWrapper* status, unsigned int timeOut) override;
-	JBatch* createBatch(Firebird::CheckStatusWrapper* status, Firebird::IMessageMetadata* inMetadata,
+	unsigned int getTimeout(CheckStatusWrapper* status) override;
+	void setTimeout(CheckStatusWrapper* status, unsigned int timeOut) override;
+	JBatch* createBatch(CheckStatusWrapper* status, IMessageMetadata* inMetadata,
 		unsigned parLength, const unsigned char* par) override;
 
-	unsigned getMaxInlineBlobSize(Firebird::CheckStatusWrapper* status) override;
-	void setMaxInlineBlobSize(Firebird::CheckStatusWrapper* status, unsigned size) override;
+	unsigned getMaxInlineBlobSize(CheckStatusWrapper* status) override;
+	void setMaxInlineBlobSize(CheckStatusWrapper* status, unsigned size) override;
 
 public:
-	JStatement(DsqlRequest* handle, StableAttachmentPart* sa, Firebird::Array<UCHAR>& meta);
+	JStatement(DsqlRequest* handle, StableAttachmentPart* sa, Array<UCHAR>& meta);
 
 	StableAttachmentPart* getAttachment()
 	{
@@ -329,31 +329,31 @@ public:
 
 private:
 	DsqlRequest* statement;
-	Firebird::RefPtr<StableAttachmentPart> sAtt;
-	Firebird::StatementMetadata metadata;
+	RefPtr<StableAttachmentPart> sAtt;
+	StatementMetadata metadata;
 
-	void freeEngineData(Firebird::CheckStatusWrapper* status);
+	void freeEngineData(CheckStatusWrapper* status);
 };
 
 class JRequest final :
-	public Firebird::RefCntIface<Firebird::IRequestImpl<JRequest, Firebird::CheckStatusWrapper> >
+	public RefCntIface<IRequestImpl<JRequest, CheckStatusWrapper> >
 {
 public:
 	// IRequest implementation
 	int release() override;
-	void receive(Firebird::CheckStatusWrapper* status, int level, unsigned int msg_type,
+	void receive(CheckStatusWrapper* status, int level, unsigned int msg_type,
 		unsigned int length, void* message) override;
-	void send(Firebird::CheckStatusWrapper* status, int level, unsigned int msg_type,
+	void send(CheckStatusWrapper* status, int level, unsigned int msg_type,
 		unsigned int length, const void* message) override;
-	void getInfo(Firebird::CheckStatusWrapper* status, int level,
+	void getInfo(CheckStatusWrapper* status, int level,
 		unsigned int itemsLength, const unsigned char* items,
 		unsigned int bufferLength, unsigned char* buffer) override;
-	void start(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* tra, int level) override;
-	void startAndSend(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* tra, int level,
+	void start(CheckStatusWrapper* status, ITransaction* tra, int level) override;
+	void startAndSend(CheckStatusWrapper* status, ITransaction* tra, int level,
 		unsigned int msg_type, unsigned int length, const void* message) override;
-	void unwind(Firebird::CheckStatusWrapper* status, int level) override;
-	void free(Firebird::CheckStatusWrapper* status) override;
-	void deprecatedFree(Firebird::CheckStatusWrapper* status) override;
+	void unwind(CheckStatusWrapper* status, int level) override;
+	void free(CheckStatusWrapper* status) override;
+	void deprecatedFree(CheckStatusWrapper* status) override;
 
 public:
 	JRequest(Statement* handle, StableAttachmentPart* sa);
@@ -370,21 +370,21 @@ public:
 
 private:
 	Statement* rq;
-	Firebird::RefPtr<StableAttachmentPart> sAtt;
+	RefPtr<StableAttachmentPart> sAtt;
 
-	void freeEngineData(Firebird::CheckStatusWrapper* status);
+	void freeEngineData(CheckStatusWrapper* status);
 };
 
-class JEvents final : public Firebird::RefCntIface<Firebird::IEventsImpl<JEvents, Firebird::CheckStatusWrapper> >
+class JEvents final : public RefCntIface<IEventsImpl<JEvents, CheckStatusWrapper> >
 {
 public:
 	// IEvents implementation
 	int release() override;
-	void cancel(Firebird::CheckStatusWrapper* status) override;
-	void deprecatedCancel(Firebird::CheckStatusWrapper* status) override;
+	void cancel(CheckStatusWrapper* status) override;
+	void deprecatedCancel(CheckStatusWrapper* status) override;
 
 public:
-	JEvents(int aId, StableAttachmentPart* sa, Firebird::IEventCallback* aCallback);
+	JEvents(int aId, StableAttachmentPart* sa, IEventCallback* aCallback);
 
 	JEvents* getHandle() noexcept
 	{
@@ -398,79 +398,79 @@ public:
 
 private:
 	int id;
-	Firebird::RefPtr<StableAttachmentPart> sAtt;
-	Firebird::RefPtr<Firebird::IEventCallback> callback;
+	RefPtr<StableAttachmentPart> sAtt;
+	RefPtr<IEventCallback> callback;
 
-	void freeEngineData(Firebird::CheckStatusWrapper* status);
+	void freeEngineData(CheckStatusWrapper* status);
 };
 
 class JAttachment final :
-	public Firebird::RefCntIface<Firebird::IAttachmentImpl<JAttachment, Firebird::CheckStatusWrapper> >
+	public RefCntIface<IAttachmentImpl<JAttachment, CheckStatusWrapper> >
 {
 public:
 	// IAttachment implementation
 	int release() override;
 	void addRef() override;
 
-	void getInfo(Firebird::CheckStatusWrapper* status,
+	void getInfo(CheckStatusWrapper* status,
 		unsigned int itemsLength, const unsigned char* items,
 		unsigned int bufferLength, unsigned char* buffer) override;
-	JTransaction* startTransaction(Firebird::CheckStatusWrapper* status,
+	JTransaction* startTransaction(CheckStatusWrapper* status,
 		unsigned int tpbLength, const unsigned char* tpb) override;
-	JTransaction* reconnectTransaction(Firebird::CheckStatusWrapper* status,
+	JTransaction* reconnectTransaction(CheckStatusWrapper* status,
 		unsigned int length, const unsigned char* id) override;
-	JRequest* compileRequest(Firebird::CheckStatusWrapper* status,
+	JRequest* compileRequest(CheckStatusWrapper* status,
 		unsigned int blr_length, const unsigned char* blr) override;
-	void transactRequest(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* transaction,
+	void transactRequest(CheckStatusWrapper* status, ITransaction* transaction,
 		unsigned int blr_length, const unsigned char* blr,
 		unsigned int in_msg_length, const unsigned char* in_msg,
 		unsigned int out_msg_length, unsigned char* out_msg) override;
-	JBlob* createBlob(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* transaction,
+	JBlob* createBlob(CheckStatusWrapper* status, ITransaction* transaction,
 		ISC_QUAD* id, unsigned int bpbLength = 0, const unsigned char* bpb = 0) override;
-	JBlob* openBlob(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* transaction,
+	JBlob* openBlob(CheckStatusWrapper* status, ITransaction* transaction,
 		ISC_QUAD* id, unsigned int bpbLength = 0, const unsigned char* bpb = 0) override;
-	int getSlice(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* transaction, ISC_QUAD* id,
+	int getSlice(CheckStatusWrapper* status, ITransaction* transaction, ISC_QUAD* id,
 		unsigned int sdl_length, const unsigned char* sdl,
 		unsigned int param_length, const unsigned char* param,
 		int sliceLength, unsigned char* slice) override;
-	void putSlice(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* transaction, ISC_QUAD* id,
+	void putSlice(CheckStatusWrapper* status, ITransaction* transaction, ISC_QUAD* id,
 		unsigned int sdl_length, const unsigned char* sdl,
 		unsigned int param_length, const unsigned char* param,
 		int sliceLength, unsigned char* slice) override;
-	void executeDyn(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* transaction,
+	void executeDyn(CheckStatusWrapper* status, ITransaction* transaction,
 		unsigned int length, const unsigned char* dyn) override;
-	JStatement* prepare(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* tra,
+	JStatement* prepare(CheckStatusWrapper* status, ITransaction* tra,
 		unsigned int stmtLength, const char* sqlStmt, unsigned int dialect, unsigned int flags) override;
-	Firebird::ITransaction* execute(Firebird::CheckStatusWrapper* status,
-		Firebird::ITransaction* transaction, unsigned int stmtLength, const char* sqlStmt,
-		unsigned int dialect, Firebird::IMessageMetadata* inMetadata, void* inBuffer,
-		Firebird::IMessageMetadata* outMetadata, void* outBuffer) override;
-	Firebird::IResultSet* openCursor(Firebird::CheckStatusWrapper* status,
-		Firebird::ITransaction* transaction, unsigned int stmtLength, const char* sqlStmt,
-		unsigned int dialect, Firebird::IMessageMetadata* inMetadata, void* inBuffer,
-		Firebird::IMessageMetadata* outMetadata, const char* cursorName, unsigned int cursorFlags) override;
-	JEvents* queEvents(Firebird::CheckStatusWrapper* status, Firebird::IEventCallback* callback,
+	ITransaction* execute(CheckStatusWrapper* status,
+		ITransaction* transaction, unsigned int stmtLength, const char* sqlStmt,
+		unsigned int dialect, IMessageMetadata* inMetadata, void* inBuffer,
+		IMessageMetadata* outMetadata, void* outBuffer) override;
+	IResultSet* openCursor(CheckStatusWrapper* status,
+		ITransaction* transaction, unsigned int stmtLength, const char* sqlStmt,
+		unsigned int dialect, IMessageMetadata* inMetadata, void* inBuffer,
+		IMessageMetadata* outMetadata, const char* cursorName, unsigned int cursorFlags) override;
+	JEvents* queEvents(CheckStatusWrapper* status, IEventCallback* callback,
 		unsigned int length, const unsigned char* events) override;
-	void cancelOperation(Firebird::CheckStatusWrapper* status, int option) override;
-	void ping(Firebird::CheckStatusWrapper* status) override;
-	void detach(Firebird::CheckStatusWrapper* status) override;
-	void dropDatabase(Firebird::CheckStatusWrapper* status) override;
-	void deprecatedDetach(Firebird::CheckStatusWrapper* status) override;
-	void deprecatedDropDatabase(Firebird::CheckStatusWrapper* status) override;
+	void cancelOperation(CheckStatusWrapper* status, int option) override;
+	void ping(CheckStatusWrapper* status) override;
+	void detach(CheckStatusWrapper* status) override;
+	void dropDatabase(CheckStatusWrapper* status) override;
+	void deprecatedDetach(CheckStatusWrapper* status) override;
+	void deprecatedDropDatabase(CheckStatusWrapper* status) override;
 
-	unsigned int getIdleTimeout(Firebird::CheckStatusWrapper* status) override;
-	void setIdleTimeout(Firebird::CheckStatusWrapper* status, unsigned int timeOut) override;
-	unsigned int getStatementTimeout(Firebird::CheckStatusWrapper* status) override;
-	void setStatementTimeout(Firebird::CheckStatusWrapper* status, unsigned int timeOut) override;
-	Firebird::IBatch* createBatch(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* transaction,
+	unsigned int getIdleTimeout(CheckStatusWrapper* status) override;
+	void setIdleTimeout(CheckStatusWrapper* status, unsigned int timeOut) override;
+	unsigned int getStatementTimeout(CheckStatusWrapper* status) override;
+	void setStatementTimeout(CheckStatusWrapper* status, unsigned int timeOut) override;
+	IBatch* createBatch(CheckStatusWrapper* status, ITransaction* transaction,
 		unsigned stmtLength, const char* sqlStmt, unsigned dialect,
-		Firebird::IMessageMetadata* inMetadata, unsigned parLength, const unsigned char* par) override;
-	Firebird::IReplicator* createReplicator(Firebird::CheckStatusWrapper* status) override;
+		IMessageMetadata* inMetadata, unsigned parLength, const unsigned char* par) override;
+	IReplicator* createReplicator(CheckStatusWrapper* status) override;
 
-	unsigned getMaxBlobCacheSize(Firebird::CheckStatusWrapper* status) override;
-	void setMaxBlobCacheSize(Firebird::CheckStatusWrapper* status, unsigned size) override;
-	unsigned getMaxInlineBlobSize(Firebird::CheckStatusWrapper* status) override;
-	void setMaxInlineBlobSize(Firebird::CheckStatusWrapper* status, unsigned size) override;
+	unsigned getMaxBlobCacheSize(CheckStatusWrapper* status) override;
+	void setMaxBlobCacheSize(CheckStatusWrapper* status, unsigned size) override;
+	unsigned getMaxInlineBlobSize(CheckStatusWrapper* status) override;
+	void setMaxInlineBlobSize(CheckStatusWrapper* status, unsigned size) override;
 public:
 	explicit JAttachment(StableAttachmentPart* js);
 
@@ -487,54 +487,54 @@ public:
 		return att;
 	}
 
-	JTransaction* getTransactionInterface(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* tra);
-	jrd_tra* getEngineTransaction(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* tra);
+	JTransaction* getTransactionInterface(CheckStatusWrapper* status, ITransaction* tra);
+	jrd_tra* getEngineTransaction(CheckStatusWrapper* status, ITransaction* tra);
 
 private:
 	friend class StableAttachmentPart;
 
 	StableAttachmentPart* att;
 
-	void freeEngineData(Firebird::CheckStatusWrapper* status, bool forceFree);
+	void freeEngineData(CheckStatusWrapper* status, bool forceFree);
 
 	void detachEngine()
 	{
 		att = NULL;
 	}
 
-	void internalDetach(Firebird::CheckStatusWrapper* status);
-	void internalDropDatabase(Firebird::CheckStatusWrapper* status);
+	void internalDetach(CheckStatusWrapper* status);
+	void internalDropDatabase(CheckStatusWrapper* status);
 };
 
 class JService final :
-	public Firebird::RefCntIface<Firebird::IServiceImpl<JService, Firebird::CheckStatusWrapper> >
+	public RefCntIface<IServiceImpl<JService, CheckStatusWrapper> >
 {
 public:
 	// IService implementation
 	int release() override;
-	void detach(Firebird::CheckStatusWrapper* status) override;
-	void deprecatedDetach(Firebird::CheckStatusWrapper* status) override;
-	void query(Firebird::CheckStatusWrapper* status,
+	void detach(CheckStatusWrapper* status) override;
+	void deprecatedDetach(CheckStatusWrapper* status) override;
+	void query(CheckStatusWrapper* status,
 		unsigned int sendLength, const unsigned char* sendItems,
 		unsigned int receiveLength, const unsigned char* receiveItems,
 		unsigned int bufferLength, unsigned char* buffer) override;
-	void start(Firebird::CheckStatusWrapper* status,
+	void start(CheckStatusWrapper* status,
 		unsigned int spbLength, const unsigned char* spb) override;
-	void cancel(Firebird::CheckStatusWrapper* status) override;
+	void cancel(CheckStatusWrapper* status) override;
 
 public:
 	explicit JService(Jrd::Service* handle);
 	Jrd::Service* svc;
 
 private:
-	void freeEngineData(Firebird::CheckStatusWrapper* status);
+	void freeEngineData(CheckStatusWrapper* status);
 };
 
 class JProvider final :
-	public Firebird::StdPlugin<Firebird::IProviderImpl<JProvider, Firebird::CheckStatusWrapper> >
+	public StdPlugin<IProviderImpl<JProvider, CheckStatusWrapper> >
 {
 public:
-	explicit JProvider(Firebird::IPluginConfig* pConf)
+	explicit JProvider(IPluginConfig* pConf)
 		: cryptCallback(NULL), pluginConfig(pConf)
 	{ }
 
@@ -545,27 +545,27 @@ public:
 		return p;
 	}
 
-	Firebird::ICryptKeyCallback* getCryptCallback()
+	ICryptKeyCallback* getCryptCallback()
 	{
 		return cryptCallback;
 	}
 
 	// IProvider implementation
-	JAttachment* attachDatabase(Firebird::CheckStatusWrapper* status, const char* fileName,
+	JAttachment* attachDatabase(CheckStatusWrapper* status, const char* fileName,
 		unsigned int dpbLength, const unsigned char* dpb);
-	JAttachment* createDatabase(Firebird::CheckStatusWrapper* status, const char* fileName,
+	JAttachment* createDatabase(CheckStatusWrapper* status, const char* fileName,
 		unsigned int dpbLength, const unsigned char* dpb);
-	JService* attachServiceManager(Firebird::CheckStatusWrapper* status, const char* service,
+	JService* attachServiceManager(CheckStatusWrapper* status, const char* service,
 		unsigned int spbLength, const unsigned char* spb);
-	void shutdown(Firebird::CheckStatusWrapper* status, unsigned int timeout, const int reason);
-	void setDbCryptCallback(Firebird::CheckStatusWrapper* status,
-		Firebird::ICryptKeyCallback* cryptCb);
+	void shutdown(CheckStatusWrapper* status, unsigned int timeout, const int reason);
+	void setDbCryptCallback(CheckStatusWrapper* status,
+		ICryptKeyCallback* cryptCb);
 
 private:
-	JAttachment* internalAttach(Firebird::CheckStatusWrapper* status, const char* const fileName,
+	JAttachment* internalAttach(CheckStatusWrapper* status, const char* const fileName,
 		unsigned int dpbLength, const unsigned char* dpb, const UserId* existingId);
-	Firebird::ICryptKeyCallback* cryptCallback;
-	Firebird::IPluginConfig* pluginConfig;
+	ICryptKeyCallback* cryptCallback;
+	IPluginConfig* pluginConfig;
 };
 
 } // namespace Firebird::Jrd

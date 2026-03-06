@@ -147,7 +147,7 @@ public:
 
 	void ioBegin(Jrd::thread_db* tdbb)
 	{
-		Firebird::MutexLockGuard g(mutex, FB_FUNCTION);
+		MutexLockGuard g(mutex, FB_FUNCTION);
 
 		if (counter < 0)
 		{
@@ -177,7 +177,7 @@ public:
 
 	void ioEnd(Jrd::thread_db* tdbb)
 	{
-		Firebird::MutexLockGuard g(mutex, FB_FUNCTION);
+		MutexLockGuard g(mutex, FB_FUNCTION);
 
 		if (--counter < 0 && counter % BIG_VALUE == 0)
 		{
@@ -196,7 +196,7 @@ public:
 
 	void ast(Jrd::thread_db* tdbb)
 	{
-		Firebird::MutexLockGuard g(mutex, FB_FUNCTION);
+		MutexLockGuard g(mutex, FB_FUNCTION);
 		if (counter >= 0)
 		{
 			counter -= BIG_VALUE;
@@ -206,7 +206,7 @@ public:
 
 	void lockBegin(Jrd::thread_db* tdbb)
 	{
-		Firebird::MutexLockGuard g(mutex, FB_FUNCTION);
+		MutexLockGuard g(mutex, FB_FUNCTION);
 
 		if ((counter -= BIG_VALUE) != -BIG_VALUE)
 		{
@@ -215,7 +215,7 @@ public:
 			{
 				lockCond.wait(mutex);
 			}
-			catch (const Firebird::Exception&)
+			catch (const Exception&)
 			{
 				--lockMode;
 				throw;
@@ -229,7 +229,7 @@ public:
 
 	void lockEnd(Jrd::thread_db* tdbb)
 	{
-		Firebird::MutexLockGuard g(mutex, FB_FUNCTION);
+		MutexLockGuard g(mutex, FB_FUNCTION);
 
 		flagWriteLock = false;
 		finishWriteLock();
@@ -252,8 +252,8 @@ private:
 			lockCond.notifyOne();
 	}
 
-	Firebird::Condition barCond, lockCond;
-	Firebird::Mutex mutex;
+	Condition barCond, lockCond;
+	Mutex mutex;
 	IBar* callback;
 	ThreadId thread;
 	int counter;
@@ -263,10 +263,10 @@ private:
 	static const int BIG_VALUE = 1000000;
 };
 
-class CryptoManager final : public Firebird::PermanentStorage, public BarSync::IBar
+class CryptoManager final : public PermanentStorage, public BarSync::IBar
 {
 public:
-	typedef Firebird::GetPlugins<Firebird::IDbCryptPlugin> Factory;
+	typedef GetPlugins<IDbCryptPlugin> Factory;
 
 	explicit CryptoManager(thread_db* tdbb);
 	~CryptoManager();
@@ -275,7 +275,7 @@ public:
 
 	void prepareChangeCryptState(thread_db* tdbb, const MetaName& plugName,
 		const MetaName& key);
-	void changeCryptState(thread_db* tdbb, const Firebird::string& plugName);
+	void changeCryptState(thread_db* tdbb, const string& plugName);
 	void attach(thread_db* tdbb, Attachment* att);
 	void detach(thread_db* tdbb, Attachment* att);
 
@@ -294,8 +294,8 @@ public:
 
 	void cryptThreadRoutine();
 
-	bool checkValidation(Firebird::IDbCryptPlugin* crypt);
-	void setDbInfo(Firebird::IDbCryptPlugin* cp);
+	bool checkValidation(IDbCryptPlugin* crypt);
+	void setDbInfo(IDbCryptPlugin* cp);
 
 	ULONG getCurrentPage(thread_db* tdbb) const;
 	UCHAR getCurrentState(thread_db* tdbb) const;
@@ -332,7 +332,7 @@ private:
 	class DbInfo;
 	friend class DbInfo;
 
-	class DbInfo final : public Firebird::RefCntIface<Firebird::IDbCryptInfoImpl<DbInfo, Firebird::CheckStatusWrapper> >
+	class DbInfo final : public RefCntIface<IDbCryptInfoImpl<DbInfo, CheckStatusWrapper>>
 	{
 	public:
 		DbInfo(CryptoManager* cm)
@@ -345,7 +345,7 @@ private:
 		}
 
 		// IDbCryptInfo implementation
-		const char* getDatabaseFullPath(Firebird::CheckStatusWrapper* status);
+		const char* getDatabaseFullPath(CheckStatusWrapper* status);
 
 	private:
 		CryptoManager* cryptoManager;
@@ -362,7 +362,7 @@ private:
 	bool validateAttachment(thread_db* tdbb, Attachment* att, bool consume);
 	ULONG getLastPage(thread_db* tdbb);
 	void writeDbHeader(thread_db* tdbb, ULONG runpage);
-	void calcValidation(Firebird::string& valid, Firebird::IDbCryptPlugin* plugin);
+	void calcValidation(string& valid, IDbCryptPlugin* plugin);
 	void checkValidation();
 	void shutdownConsumers(thread_db* tdbb);
 
@@ -371,20 +371,20 @@ private:
 	static const unsigned CRYPT_HDR_NOWAIT =	0x02;
 	static const unsigned CRYPT_RELOAD_PLUGIN =	0x04;
 
-	void addClumplet(Firebird::string& value, Firebird::ClumpletReader& block, UCHAR tag);
-	void calcDigitalSignature(thread_db* tdbb, Firebird::string& signature, const class Header& hdr);
+	void addClumplet(string& value, ClumpletReader& block, UCHAR tag);
+	void calcDigitalSignature(thread_db* tdbb, string& signature, const class Header& hdr);
 	void digitalySignDatabase(thread_db* tdbb, class CchHdr& hdr);
 	void checkDigitalSignature(thread_db* tdbb, const class Header& hdr);
 
 	BarSync sync;
 	MetaName keyName, pluginName;
 	ULONG currentPage;
-	Firebird::Mutex pluginLoadMtx, cryptThreadMtx, holdersMutex;
+	Mutex pluginLoadMtx, cryptThreadMtx, holdersMutex;
 	AttachmentsRefHolder keyProviders, keyConsumers;
-	Firebird::string hash;
-	Firebird::RefPtr<DbInfo> dbInfo;
+	string hash;
+	RefPtr<DbInfo> dbInfo;
 	Thread cryptThread;
-	Firebird::IDbCryptPlugin* cryptPlugin;
+	IDbCryptPlugin* cryptPlugin;
 	Factory* checkFactory;
 	Database& dbb;
 	Lock* stateLock;
