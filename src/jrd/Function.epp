@@ -52,8 +52,9 @@
 
 #include "../jrd/Function.h"
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
+
 
 DATABASE DB = FILENAME "ODS.RDB";
 
@@ -462,3 +463,5 @@ void Function::checkReload(thread_db* tdbb) const
 		getPermanent()->reload(tdbb, 0);
 }
 
+
+} // namespace Firebird::Jrd

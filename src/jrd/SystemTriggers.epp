@@ -45,8 +45,8 @@
 
 DATABASE DB = FILENAME "ODS.RDB";
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
 
 
 namespace
@@ -1869,3 +1869,5 @@ void SystemTriggers::executeAfterUpdateTriggers(thread_db* tdbb, jrd_rel* relati
 	}
 }
 
+
+} // namespace Firebird::Jrd

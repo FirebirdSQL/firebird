@@ -53,10 +53,11 @@
 #include "../common/utils_proto.h"
 #include "../jrd/btr_proto.h"
 
-using Firebird::MsgFormat::SafeArg;
+namespace Firebird::Jrd
+{
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+
+using MsgFormat::SafeArg;
 
 DATABASE DB = STATIC "ODS.RDB";
 
@@ -746,3 +747,6 @@ void DYN_UTIL_store_check_constraints(thread_db* tdbb, jrd_tra* transaction,
 	}
 	END_STORE
 }
+
+
+} // namespace Firebird::Jrd

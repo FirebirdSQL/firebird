@@ -56,8 +56,9 @@
 #include "../common/classes/auto.h"
 #include "../common/constants.h"
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
+
 
 // privileges given to the owner of a relation
 
@@ -1282,3 +1283,6 @@ static bool check_string(const UCHAR* acl, const MetaName& name)
 
 	return (*string && *string != ' ') ? true : false;
 }
+
+
+} // namespace Firebird::Jrd
