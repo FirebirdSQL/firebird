@@ -11,7 +11,9 @@
 #include "../common/config/config.h"
 #include "../common/classes/ImplementHelper.h"
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 /// This is the Win32 implementation of the mod_loader abstraction.
 
@@ -282,3 +284,6 @@ bool Win32Module::getRealPath(const string& /*anySymbol*/, PathName& path)
 
 	return false;
 }
+
+
+}  // namespace Firebird

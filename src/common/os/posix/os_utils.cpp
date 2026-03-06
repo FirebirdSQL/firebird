@@ -86,9 +86,9 @@
 
 #include <stdio.h>
 
-using namespace Firebird;
+namespace Firebird::os_utils
+{
 
-namespace Firebird::os_utils {
 
 static GlobalPtr<Mutex> grMutex;
 
@@ -450,4 +450,5 @@ void CtrlCHandler::handler(void*)
 	terminated = true;
 }
 
-} // namespace os_utils
+
+} // namespace Firebird::os_utils

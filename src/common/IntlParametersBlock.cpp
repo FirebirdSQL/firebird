@@ -35,7 +35,9 @@
 #include "../common/UtilSvc.h"
 #include "../common/StatusHolder.h"
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 namespace
 {
@@ -93,10 +95,8 @@ void processCommandLine(IntlParametersBlock::ProcessString* processString, strin
 	par = result;
 }
 
-}
+}	// namespace
 
-namespace Firebird
-{
 
 void IntlParametersBlock::toUtf8(ClumpletWriter& pb)
 {
@@ -372,4 +372,5 @@ UCHAR IntlSpbStart::getUtf8Tag() noexcept
 	return 0;
 }
 
-}
+
+}  // namespace Firebird

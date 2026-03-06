@@ -8,8 +8,7 @@
 #include "../jrd/intl.h"
 
 using namespace Firebird;
-using namespace Firebird::Jrd;
-using namespace CvtTestUtils;
+using namespace Firebird::CvtTestUtils;
 
 
 BOOST_AUTO_TEST_SUITE(CVTSuite)

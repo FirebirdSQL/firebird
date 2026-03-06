@@ -33,7 +33,9 @@
 #include "sparse_bitmap.h"
 #include <stdio.h>
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 const int BITMAP_ITEMS = 1000000;
 
@@ -601,3 +603,5 @@ int main()
 	testBitmap();
 }
 
+
+}  // namespace Firebird

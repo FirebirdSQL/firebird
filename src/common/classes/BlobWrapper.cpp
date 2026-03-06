@@ -27,9 +27,12 @@
 #include "ibase.h"
 #include "firebird/Interface.h"
 
+namespace Firebird
+{
+
+
 static constexpr USHORT SEGMENT_LIMIT = 65535;
 
-using namespace Firebird;
 
 bool BlobWrapper::open(IAttachment* db, ITransaction* trans, ISC_QUAD& blobid,
 					USHORT bpb_len, const UCHAR* bpb)
@@ -278,3 +281,6 @@ bool BlobWrapper::getSize(FB_UINT64* size, ULONG* seg_count, USHORT* max_seg) co
 
 	return true;
 }
+
+
+}  // namespace Firebird

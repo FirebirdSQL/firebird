@@ -32,9 +32,11 @@
 #endif
 #endif
 
-using namespace Firebird;
-
 unsigned int CRC32C(unsigned int length, const unsigned char* value) noexcept;
+
+namespace Firebird
+{
+
 
 namespace
 {
@@ -95,7 +97,7 @@ namespace
 #endif
 	}
 
-	hash_func_t internalHash = SSE4_2Supported() ? CRC32C : basicHash;
+	hash_func_t internalHash = SSE4_2Supported() ? ::CRC32C : basicHash;
 
 #else	// architecture check
 
@@ -131,3 +133,6 @@ void WeakHashContext::finish(dsc& result)
 {
 	result.makeInt64(0, &hashNumber);
 }
+
+
+}  // namespace Firebird

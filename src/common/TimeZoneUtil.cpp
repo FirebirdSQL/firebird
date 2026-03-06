@@ -36,7 +36,9 @@
 #include "../common/os/os_utils.h"
 #include "unicode/ucal.h"
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 namespace
 {
@@ -1193,3 +1195,6 @@ static void skipSpaces(const char*& p, const char* end) noexcept
 	while (p < end && (*p == ' ' || *p == '\t'))
 		++p;
 }
+
+
+}  // namespace Firebird

@@ -37,7 +37,9 @@
 #include <stdlib.h>
 #endif
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 bool ConfigFile::getLine(Stream* stream, String& str, unsigned int& number)
 {
@@ -960,3 +962,5 @@ bool ConfigFile::Parameter::asBoolean() const
 		value.equalsNoCase("y");
 }
 
+
+}  // namespace Firebird

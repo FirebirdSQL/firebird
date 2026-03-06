@@ -52,8 +52,9 @@
 #	include <unicode/utf_old.h>
 #endif
 
+namespace Firebird
+{
 
-using namespace Firebird;
 
 namespace {
 #if defined(WIN_NT)
@@ -281,9 +282,8 @@ void BaseICU::initialize(ModuleLoader::Module* module)
 	}
 }
 
-}
+}	// namespace
 
-namespace Firebird {
 
 // encapsulate ICU collations libraries
 struct UnicodeUtil::ICU : public BaseICU
@@ -2110,4 +2110,4 @@ void UnicodeUtil::Utf16Collation::normalize(ULONG* strLen, const USHORT** str, b
 }
 
 
-}	// namespace Firebird
+}  // namespace Firebird

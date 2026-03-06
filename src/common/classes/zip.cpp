@@ -30,7 +30,9 @@
 
 #ifdef HAVE_ZLIB_H
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 ZLib::ZLib(MemoryPool&)
 {
@@ -74,3 +76,6 @@ void ZLib::freeFunc(void*, void* address)
 }
 
 #endif // HAVE_ZLIB_H
+
+
+}  // namespace Firebird

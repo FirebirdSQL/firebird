@@ -36,7 +36,9 @@
 #include "../common/prett_proto.h"
 #include "../yvalve/gds_proto.h"
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 static inline void ADVANCE_PTR(TEXT*& ptr) noexcept
 {
@@ -900,3 +902,6 @@ static int print_word( ctl* control)
 
 	return (v2 << 8) | v1;
 }
+
+
+}  // namespace Firebird

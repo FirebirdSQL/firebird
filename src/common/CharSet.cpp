@@ -95,8 +95,8 @@
 #include "../jrd/intl_classes.h"
 #include "../common/classes/Aligner.h"
 
-using namespace Firebird::Jrd;
-using namespace Firebird;
+namespace Firebird
+{
 
 
 namespace
@@ -239,9 +239,6 @@ ULONG MultiByteCharSet::substring(const ULONG srcLen, const UCHAR* src, const UL
 //-------------
 
 
-namespace Firebird {
-
-
 CharSet* CharSet::createInstance(MemoryPool& pool, USHORT id, charset* cs)
 {
 	if (cs->charset_min_bytes_per_char != cs->charset_max_bytes_per_char)
@@ -300,4 +297,4 @@ ULONG CharSet::removeTrailingSpaces(ULONG srcLen, const UCHAR* src) const
 }
 
 
-}	// namespace Firebird
+}  // namespace Firebird

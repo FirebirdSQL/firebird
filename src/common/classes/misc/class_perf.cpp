@@ -47,7 +47,9 @@ void report(int scaleNode, int scaleTree)
 		TEST_ITEMS,	scaleNode, scaleTree, (int)(d-t)*1000/CLOCKS_PER_SEC);
 }
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 static void testTree()
 {
@@ -324,3 +326,6 @@ int main()
 	testAllocatorMalloc();
 	// testAllocatorOldPool();
 }
+
+
+}  // namespace Firebird

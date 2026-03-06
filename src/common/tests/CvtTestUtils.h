@@ -6,10 +6,9 @@
 #include "../common/TimeZoneUtil.h"
 #include "../common/TimeZones.h"
 
-using NoThrowTimeStamp;
-using TimeZoneUtil;
+namespace Firebird::CvtTestUtils
+{
 
-namespace CvtTestUtils {
 
 #define DECOMPOSE_TM_STRUCT(times, fractions, timezone) "Year:" << times.tm_year + 1900 << \
 	" Month:" << times.tm_mon << \
@@ -149,6 +148,7 @@ UCHAR getDSCTypeFromDateType<ISC_TIME_TZ>() { return dtype_sql_time_tz; }
 template<>
 UCHAR getDSCTypeFromDateType<ISC_TIMESTAMP_TZ>() { return dtype_timestamp_tz; }
 
-} // namespace CvtTestUtils
+
+} // namespace Firebird::CvtTestUtils
 
 #endif // CVT_TEST_UTILS_H

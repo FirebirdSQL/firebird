@@ -311,8 +311,6 @@ static inline MemoryPool* getDefaultMemoryPool() noexcept
 
 static inline MemoryPool* getExternalMemoryPool() noexcept
 {
-	using namespace Firebird;
-
 	if (!MemoryPool::externalMemoryManager)
 		initExternalMemoryPool();
 
