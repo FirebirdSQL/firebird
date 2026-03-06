@@ -526,12 +526,4 @@ inline constexpr int EPB_version1 = 1;
 
 } // namespace Firebird
 
-// Compatibility aliases for migration (temporary).
-// FIXME: remove once all call sites are namespace-qualified.
-using Firebird::MAX_ARRAY_DIMENSIONS;
-using Firebird::MAX_KEY;
-using Firebird::MAX_SQL_IDENTIFIER_LEN;
-using Firebird::MAX_SQL_IDENTIFIER_SIZE;
-using Firebird::SYSTEM_SCHEMA;
-
 #endif // COMMON_CONSTANTS_H
